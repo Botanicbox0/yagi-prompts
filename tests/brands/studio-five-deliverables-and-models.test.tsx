@@ -18,6 +18,9 @@ import {
   MICRO_REGION_SELECTION_PRESETS,
   PINNED_COLOR_REFERENCES,
   PINNED_TEXTURE_REFERENCES,
+  STUDIO_SPLIT_PANE_MODES,
+  VIDEO_REFERENCE_TARGET_SLOTS,
+  bridgeLeftImageToRightVideoReference,
   compileSunraVideoAndUpscalePlan,
   extractBrandKitFromDomain,
   findClosestSupportedAspectRatio,
@@ -269,5 +272,50 @@ describe("Brand Studio 5 Core Deliverables & 5 Image Models (12-Round Verificati
     expect(html).toContain("data-studio-upscaling-studio");
     expect(html).toContain("data-upscale-engine-picker");
     expect(html).toContain("data-upscale-ig-logic-bar");
+  });
+
+  it("14. provides Developer-IDE Inspired Collapsible Dual Split-Pane (Left: Image <-> Right: Video) and 1-click +References bridge", () => {
+    expect(STUDIO_SPLIT_PANE_MODES.map((m) => m.id)).toEqual([
+      "dual_split",
+      "image_only",
+      "video_only",
+    ]);
+    expect(VIDEO_REFERENCE_TARGET_SLOTS.map((s) => s.id)).toEqual([
+      "first_frame",
+      "character_ref",
+      "product_ref",
+      "color_mood_ref",
+      "end_frame",
+    ]);
+
+    const bridged = bridgeLeftImageToRightVideoReference({
+      currentRefs: [],
+      slotId: "first_frame",
+      imageSrc: "/reel/brands/slot-1-subject-editorial.jpg",
+      imageLabelKo: "컷 01 · 정면 히어로",
+      imageLabelEn: "Cut 01 · Front Hero",
+      sourceModelNameKo: "GPT Image 2.6",
+      sourceModelNameEn: "GPT Image 2.6",
+    });
+    expect(bridged).toHaveLength(1);
+    expect(bridged[0]!.slotId).toBe("first_frame");
+    expect(bridged[0]!.citationKo).toContain("시작 프레임");
+
+    const html = renderToStaticMarkup(
+      <BrandBriefStudio
+        organizationId="org-yagi"
+        organizationName="YAGI"
+        locale="ko"
+        canWrite={true}
+        identityConfirmed={true}
+      />,
+    );
+    expect(html).toContain("data-studio-split-pane-toolbar");
+    expect(html).toContain('data-active-split-mode="dual_split"');
+    expect(html).toContain("data-cross-pane-image-to-video-bridge");
+    expect(html).toContain('data-split-pane="left-image"');
+    expect(html).toContain('data-split-pane="right-video"');
+    expect(html).toContain("data-video-bridged-references-tray");
+    expect(html).toContain("data-video-floating-composer-dock");
   });
 });

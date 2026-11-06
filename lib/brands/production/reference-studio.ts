@@ -2039,3 +2039,164 @@ export function compileSunraVideoAndUpscalePlan(input: {
   };
 }
 
+/**
+ * Developer-IDE Inspired Collapsible Dual Split-Pane Architecture for Self-Studio:
+ * - Left Pane: Image Studio (5 Image Models · 1-4 Reference Slots · Micro-Region Layer Edit)
+ * - Right Pane: Video & Upscale Studio (Dotted Canvas · +References Bridge · Seedance 2.5 480p/720p/1080p · IG 1080p/4K Upscaling Studio · Floating Composer Dock)
+ * - Either side can be collapsed at any time (`image_only` or `video_only`), or kept side-by-side (`dual_split`) so images generated on the left can be sent into the right video pane's `+ References` with 1 click.
+ */
+export type StudioSplitPaneMode = "dual_split" | "image_only" | "video_only";
+
+export interface StudioSplitPaneModeSpec {
+  id: StudioSplitPaneMode;
+  iconGlyph: string;
+  labelKo: string;
+  labelEn: string;
+  shortDescKo: string;
+  shortDescEn: string;
+  leftImageVisible: boolean;
+  rightVideoVisible: boolean;
+}
+
+export const STUDIO_SPLIT_PANE_MODES: readonly StudioSplitPaneModeSpec[] = [
+  {
+    id: "dual_split",
+    iconGlyph: "◫",
+    labelKo: "듀얼 스플릿 (좌: 이미지 ↔ 우: 영상)",
+    labelEn: "Dual Split (Left: Image ↔ Right: Video)",
+    shortDescKo:
+      "왼쪽에서 만든 화보·제품 컷을 클릭 한 번으로 오른쪽 Seedance 2.5 영상의 시작 프레임이나 +References에 바로 넣습니다",
+    shortDescEn:
+      "Send any image generated on the left directly into the right Seedance 2.5 video pane's First Frame or +References",
+    leftImageVisible: true,
+    rightVideoVisible: true,
+  },
+  {
+    id: "image_only",
+    iconGlyph: "◧",
+    labelKo: "이미지 스튜디오만 펼치기 (우측 접기)",
+    labelEn: "Image Studio Only (Fold Right)",
+    shortDescKo:
+      "우측 영상 탭을 접고 5종 이미지 모델·제품 교체·부분 수정 캔버스를 전체 화면으로 넓게 씁니다",
+    shortDescEn:
+      "Collapse the right video pane and focus 100% of the screen on image generation & micro-region editing",
+    leftImageVisible: true,
+    rightVideoVisible: false,
+  },
+  {
+    id: "video_only",
+    iconGlyph: "◨",
+    labelKo: "영상 · 업스케일만 펼치기 (좌측 접기)",
+    labelEn: "Video & Upscale Only (Fold Left)",
+    shortDescKo:
+      "좌측 이미지 탭을 접고 Seedance 2.5 영상 생성과 1080p(인스타 최적화)/4K 업스케일링 스튜디오에 집중합니다",
+    shortDescEn:
+      "Collapse the left image pane and focus 100% on Seedance 2.5 video & Instagram 1080p/4K upscaling",
+    leftImageVisible: false,
+    rightVideoVisible: true,
+  },
+];
+
+export type VideoReferenceTargetSlot =
+  | "first_frame"
+  | "end_frame"
+  | "character_ref"
+  | "product_ref"
+  | "color_mood_ref";
+
+export interface VideoReferenceTargetSlotSpec {
+  id: VideoReferenceTargetSlot;
+  badgeKo: string;
+  badgeEn: string;
+  roleKo: string;
+  roleEn: string;
+  promptCitationKo: string;
+  promptCitationEn: string;
+}
+
+export const VIDEO_REFERENCE_TARGET_SLOTS: readonly VideoReferenceTargetSlotSpec[] = [
+  {
+    id: "first_frame",
+    badgeKo: "시작 프레임 (First Frame)",
+    badgeEn: "First Frame",
+    roleKo: "좌측 이미지를 영상의 0.0초 첫 장면으로 고정",
+    roleEn: "Locks the left image as the 0.0s opening frame",
+    promptCitationKo: "[시작 프레임: 좌측 이미지 컷 고정 — 카메라가 부드럽게 전진하며 자연스러운 인물·옷감 모션 시작]",
+    promptCitationEn: "[First Frame locked from Left Image — smooth camera push-in with natural subject & fabric motion]",
+  },
+  {
+    id: "character_ref",
+    badgeKo: "+Ref 1 · 인물·착장 고정",
+    badgeEn: "+Ref 1 · Subject & Outfit",
+    roleKo: "좌측 이미지의 모델 얼굴·헤어·착장을 영상 내내 유지",
+    roleEn: "Preserves model likeness, hair, and outfit across the clip",
+    promptCitationKo: "[+References #1 인물·착장: 좌측 이미지의 모델 이목구비와 의류 핏 100% 유지]",
+    promptCitationEn: "[+References #1 Subject: preserve 100% facial identity and outfit fit from left image]",
+  },
+  {
+    id: "product_ref",
+    badgeKo: "+Ref 2 · 제품·라벨 고정",
+    badgeEn: "+Ref 2 · Product & Label",
+    roleKo: "좌측 이미지의 제품 형태·로고 타이포그래피를 흔들림 없이 유지",
+    roleEn: "Locks product geometry and label typography during motion",
+    promptCitationKo: "[+References #2 제품: 좌측 이미지의 제품 용기 비율과 전면 라벨 글자 왜곡 없이 유지]",
+    promptCitationEn: "[+References #2 Product: lock container geometry and label typography from left image]",
+  },
+  {
+    id: "color_mood_ref",
+    badgeKo: "+Ref 3 · 조명·색감 무드",
+    badgeEn: "+Ref 3 · Lighting & Grade",
+    roleKo: "좌측 이미지의 조명 온도와 필름 색감을 영상에 그대로 이식",
+    roleEn: "Transfers lighting temperature and film grade to video",
+    promptCitationKo: "[+References #3 색감·조명: 좌측 이미지의 하이라이트 윤기와 섀도우 색온도 그대로 유지]",
+    promptCitationEn: "[+References #3 Color & Light: match specular highlights and shadow color temperature]",
+  },
+  {
+    id: "end_frame",
+    badgeKo: "끝 프레임 (End Frame)",
+    badgeEn: "End Frame",
+    roleKo: "영상 마지막 클로즈업·제품 착지 장면을 좌측 이미지로 고정",
+    roleEn: "Locks the final landing frame of the video to the left image",
+    promptCitationKo: "[끝 프레임: 좌측 이미지 구도로 정확히 안착하며 마무리]",
+    promptCitationEn: "[End Frame: settle cleanly into the left image composition]",
+  },
+];
+
+export interface BridgedVideoReferenceItem {
+  slotId: VideoReferenceTargetSlot;
+  imageSrc: string;
+  imageLabelKo: string;
+  imageLabelEn: string;
+  sourceModelNameKo: string;
+  sourceModelNameEn: string;
+  citationKo: string;
+  citationEn: string;
+}
+
+export function bridgeLeftImageToRightVideoReference(input: {
+  currentRefs: readonly BridgedVideoReferenceItem[];
+  slotId: VideoReferenceTargetSlot;
+  imageSrc: string;
+  imageLabelKo: string;
+  imageLabelEn: string;
+  sourceModelNameKo: string;
+  sourceModelNameEn: string;
+}): BridgedVideoReferenceItem[] {
+  const spec =
+    VIDEO_REFERENCE_TARGET_SLOTS.find((s) => s.id === input.slotId) ??
+    VIDEO_REFERENCE_TARGET_SLOTS[0]!;
+  const nextItem: BridgedVideoReferenceItem = {
+    slotId: spec.id,
+    imageSrc: input.imageSrc,
+    imageLabelKo: input.imageLabelKo,
+    imageLabelEn: input.imageLabelEn,
+    sourceModelNameKo: input.sourceModelNameKo,
+    sourceModelNameEn: input.sourceModelNameEn,
+    citationKo: spec.promptCitationKo,
+    citationEn: spec.promptCitationEn,
+  };
+  const filtered = input.currentRefs.filter((r) => r.slotId !== input.slotId);
+  return [nextItem, ...filtered];
+}
+
+
