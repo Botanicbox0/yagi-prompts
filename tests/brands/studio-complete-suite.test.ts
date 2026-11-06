@@ -381,9 +381,9 @@ describe('Brand Studio Complete Suite (Video Reverse, 2D Spatial Stage, 3-Track 
     expect(html).toContain('data-brief-compile-form');
     expect(html).toContain('data-brief-compile-submit');
 
-    // Never expose internal video/upscale/backend architecture lectures in customer HTML
+    // Never expose internal backend architecture lectures or banned platforms in customer HTML
     expect(html).not.toMatch(
-      /seedance|seedvr2|comfyui|yue2|earshot|argon|higgsfield|mark_only|BRAND DNA ATTACHMENT CONTROL|2-TIER DIRECTION CASCADE/i,
+      /comfyui|yue2|earshot|argon|higgsfield|mark_only|BRAND DNA ATTACHMENT CONTROL|2-TIER DIRECTION CASCADE/i,
     );
   });
 
@@ -599,12 +599,13 @@ describe('Brand Studio Complete Suite (Video Reverse, 2D Spatial Stage, 3-Track 
     expect(studioHtml).toContain('data-pomelli-shot-templates');
     expect(studioHtml).not.toContain('BRAND DNA ATTACHMENT CONTROL');
 
-    // Guard: no internal video/upscale/backend names leaked into either customer surface
-    for (const html of [onboardingHtml, studioHtml]) {
-      expect(html).not.toMatch(
-        /Seedance|SeedVR2|ComfyUI|YuE2|earshot|Argon|Gemini|Higgsfield/i
-      );
-    }
+    // Guard: no internal video/upscale/backend names leaked into onboarding, and no banned tools in studio
+    expect(onboardingHtml).not.toMatch(
+      /Seedance|SeedVR2|ComfyUI|YuE2|earshot|Argon|Gemini|Higgsfield/i
+    );
+    expect(studioHtml).not.toMatch(
+      /ComfyUI|YuE2|earshot|Argon|Gemini|Higgsfield/i
+    );
 
     // 5. Campaign Moat Showcase & Tab Orientation Map (1080p In-House Masters + Strict Morphic Sandbox Isolation)
     const moatFullHtml = renderToStaticMarkup(
@@ -927,8 +928,6 @@ describe('Brand Studio Complete Suite (Video Reverse, 2D Spatial Stage, 3-Track 
 
     // Strictly zero internal vendor/engine jargon or backend system dumps in customer-facing HTML
     const forbiddenJargon = [
-      'Seedance',
-      'SeedVR2',
       'ComfyUI',
       'Demucs',
       'Higgsfield',
@@ -942,6 +941,10 @@ describe('Brand Studio Complete Suite (Video Reverse, 2D Spatial Stage, 3-Track 
       expect(reviewHtml).not.toContain(token);
       expect(studioHtml).not.toContain(token);
     }
+    expect(reviewHtml).not.toContain('Seedance');
+    expect(reviewHtml).not.toContain('SeedVR2');
+    expect(studioHtml).toContain('Seedance 2.5');
+    expect(studioHtml).toContain('SeedVR2');
   });
 
   it('adapts customer Studio scenes, quick prompts, and compiler guardrails by client category and enforces zero red/jargon across all customer components', () => {

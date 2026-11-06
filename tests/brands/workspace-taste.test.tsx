@@ -242,7 +242,9 @@ describe("brand workspace taste", () => {
     expect(html).toContain("Nano Banana 2.1");
     expect(html).toContain("Nano Banana 2.0");
     expect(html).toContain("Seedream 5.0 Pro");
-    expect(html).not.toMatch(/seedance|seedvr2|comfyui|higgsfield/i);
+    expect(html).toContain("Seedance 2.5");
+    expect(html).toContain("data-studio-upscaling-studio");
+    expect(html).not.toMatch(/comfyui|higgsfield/i);
     expect(html).not.toContain(".mp4");
 
     expect(BRAND_STUDIO_IMAGE_MODELS).toHaveLength(5);

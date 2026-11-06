@@ -10,11 +10,15 @@ import {
   BRAND_CORE_DELIVERABLE_TRACKS,
   BRAND_CREATOR_DISTRIBUTION_TIERS,
   BRAND_CREATOR_FORMAT_MODES,
+  BRAND_SEEDANCE_VIDEO_TIERS,
   BRAND_STUDIO_IMAGE_MODELS,
+  BRAND_UPSCALING_STUDIO_ENGINES,
   FIRST_CREATION_GOALS,
+  IG_OPTIMIZED_UPSCALE_LOGIC_MODULES,
   MICRO_REGION_SELECTION_PRESETS,
   PINNED_COLOR_REFERENCES,
   PINNED_TEXTURE_REFERENCES,
+  compileSunraVideoAndUpscalePlan,
   extractBrandKitFromDomain,
   findClosestSupportedAspectRatio,
 } from "@/lib/brands/production/reference-studio";
@@ -194,7 +198,7 @@ describe("Brand Studio 5 Core Deliverables & 5 Image Models (12-Round Verificati
 
       expect(html).not.toContain("#ED1E1E");
       expect(html).not.toMatch(
-        /Slack|슬랙|RECIPE V2|STAGE 01|\{\{selfie\}\}|Seedance|SeedVR2|ComfyUI|Higgsfield/i,
+        /Slack|슬랙|RECIPE V2|STAGE 01|\{\{selfie\}\}|ComfyUI|Higgsfield/i,
       );
     },
   );
@@ -219,5 +223,51 @@ describe("Brand Studio 5 Core Deliverables & 5 Image Models (12-Round Verificati
       );
       expect(allowed.has(ratio)).toBe(true);
     }
+  });
+
+  it("13. provides Seedance 2.5 (480p Draft, 720p Standard, 1080p Native Master) and dedicated Upscaling & Instagram Reels Optimization Studio", () => {
+    expect(BRAND_SEEDANCE_VIDEO_TIERS.map((t) => t.resolution)).toEqual([
+      "480p",
+      "720p",
+      "1080p",
+    ]);
+    expect(BRAND_SEEDANCE_VIDEO_TIERS[0]!.draft).toBe(true);
+    expect(BRAND_SEEDANCE_VIDEO_TIERS[1]!.draft).toBe(false);
+    expect(BRAND_SEEDANCE_VIDEO_TIERS[2]!.draft).toBe(false);
+
+    expect(BRAND_UPSCALING_STUDIO_ENGINES.map((e) => e.id)).toEqual([
+      "sunra_ig_1080p_upscaler",
+      "seedvr2_7b_optical_upscaler",
+      "sunra_cloud_4k_upscaler",
+    ]);
+    expect(IG_OPTIMIZED_UPSCALE_LOGIC_MODULES).toHaveLength(5);
+
+    const plan = compileSunraVideoAndUpscalePlan({
+      seedanceTierId: "seedance_2_5_720p_standard",
+      upscalerEngineId: "sunra_ig_1080p_upscaler",
+      targetResolution: "1080p",
+      aspectRatio: "9:16",
+      durationSec: 5,
+      enabledIgModules: IG_OPTIMIZED_UPSCALE_LOGIC_MODULES.map((m) => m.id),
+    });
+    expect(plan.seedanceGeneration.sunraArgs.model).toBe("seedance-2.5");
+    expect(plan.seedanceGeneration.sunraArgs.resolution).toBe("720p");
+    expect(plan.upscaleStudio.ffmpegFilterChain).toContain("scale=1080:1920");
+    expect(plan.upscaleStudio.ffmpegFilterChain).toContain("cas=0.25");
+    expect(plan.upscaleStudio.ffmpegFilterChain).toContain("noise=c0s=3.4:c0f=t+u");
+
+    const html = renderToStaticMarkup(
+      <BrandBriefStudio
+        organizationId="org-yagi"
+        organizationName="YAGI"
+        locale="ko"
+        canWrite={true}
+        identityConfirmed={true}
+      />,
+    );
+    expect(html).toContain("data-studio-seedance-tier-section");
+    expect(html).toContain("data-studio-upscaling-studio");
+    expect(html).toContain("data-upscale-engine-picker");
+    expect(html).toContain("data-upscale-ig-logic-bar");
   });
 });

@@ -51,29 +51,37 @@ import {
   BRAND_CORE_DELIVERABLE_TRACKS,
   BRAND_CREATOR_DISTRIBUTION_TIERS,
   BRAND_CREATOR_FORMAT_MODES,
+  BRAND_SEEDANCE_VIDEO_TIERS,
   BRAND_STUDIO_IMAGE_MODELS,
   BRAND_STUDIO_MICRO_EDIT_MODELS,
+  BRAND_UPSCALING_STUDIO_ENGINES,
   FIRST_CREATION_GOALS,
+  IG_OPTIMIZED_UPSCALE_LOGIC_MODULES,
   MICRO_REGION_SELECTION_PRESETS,
   PINNED_COLOR_REFERENCES,
   PINNED_TEXTURE_REFERENCES,
+  compileSunraVideoAndUpscalePlan,
   extractBrandKitFromDomain,
   findClosestSupportedAspectRatio,
   resolveCategoryReferenceWorkflows,
   type BrandAudioPresetId,
   type BrandCoreDeliverableTrackId,
+  type BrandSeedanceVideoTierId,
   type BrandStudioImageModelId,
   type BrandStudioMicroEditModelId,
+  type BrandUpscalerEngineId,
   type CreatorCampaignFormatModeId,
   type CreatorDistributionTierId,
   type FirstCreationGoalCard,
   type FirstCreationGoalId,
+  type IgUpscaleLogicModuleId,
   type MicroEditQualityTier,
   type MicroEditResolutionTier,
   type StudioCanvasToolId,
   type StudioImageSubMode,
   type StudioReferenceSlotNumber,
   type StudioReferenceWorkflowId,
+  type UpscaleTargetResolution,
 } from "@/lib/brands/production/reference-studio";
 
 export interface BrandBriefStudioProps {
@@ -430,12 +438,98 @@ export function BrandBriefStudio({
     BRAND_STUDIO_IMAGE_MODELS.find((m) => m.id === selectedImageModelId) ??
     BRAND_STUDIO_IMAGE_MODELS[0]!;
 
-  // Video production controls (Resolution + Duration + 2-Stage Approval Gate)
+  // Video production controls (Seedance 2.5 480p Draft / 720p / 1080p + Dedicated Upscaling Studio)
   const [videoResolution, setVideoResolution] =
     useState<BrandVideoResolution>("720p");
   const [videoSeconds, setVideoSeconds] =
     useState<BrandStandardDurationSeconds>(10);
   const [useTwoStageGate, setUseTwoStageGate] = useState<boolean>(true);
+  const [selectedSeedanceTierId, setSelectedSeedanceTierId] =
+    useState<BrandSeedanceVideoTierId>("seedance_2_5_720p_standard");
+  const activeSeedanceTier =
+    BRAND_SEEDANCE_VIDEO_TIERS.find((t) => t.id === selectedSeedanceTierId) ??
+    BRAND_SEEDANCE_VIDEO_TIERS[1]!;
+
+  // Dedicated Upscaling & Instagram Reels Mastering Studio State
+  const [isUpscaleStudioExpanded, setIsUpscaleStudioExpanded] =
+    useState<boolean>(true);
+  const [selectedUpscalerEngineId, setSelectedUpscalerEngineId] =
+    useState<BrandUpscalerEngineId>("sunra_ig_1080p_upscaler");
+  const [upscaleTargetResolution, setUpscaleTargetResolution] =
+    useState<UpscaleTargetResolution>("1080p");
+  const [upscaleSourceKind, setUpscaleSourceKind] = useState<
+    "seedance_720p_latest" | "seedance_480p_draft" | "custom_upload"
+  >("seedance_720p_latest");
+  const [customUpscaleVideoName, setCustomUpscaleVideoName] =
+    useState<string>("");
+  const [enabledIgModules, setEnabledIgModules] = useState<
+    IgUpscaleLogicModuleId[]
+  >(() =>
+    IG_OPTIMIZED_UPSCALE_LOGIC_MODULES.filter((m) => m.defaultEnabled).map(
+      (m) => m.id,
+    ),
+  );
+  const activeUpscalerEngine =
+    BRAND_UPSCALING_STUDIO_ENGINES.find(
+      (e) => e.id === selectedUpscalerEngineId,
+    ) ?? BRAND_UPSCALING_STUDIO_ENGINES[0]!;
+  const compiledVideoAndUpscalePlan = compileSunraVideoAndUpscalePlan({
+    seedanceTierId: selectedSeedanceTierId,
+    durationSec: videoSeconds,
+    aspectRatio: aspect,
+    upscalerEngineId: selectedUpscalerEngineId,
+    targetResolution: upscaleTargetResolution,
+    enabledIgModules,
+  });
+
+  function handleSelectSeedanceTier(tierId: BrandSeedanceVideoTierId) {
+    setSelectedSeedanceTierId(tierId);
+    const found = BRAND_SEEDANCE_VIDEO_TIERS.find((t) => t.id === tierId);
+    if (found) {
+      setVideoResolution(found.resolution);
+      if (found.resolution === "480p") {
+        setUpscaleSourceKind("seedance_480p_draft");
+        setSelectedUpscalerEngineId("sunra_ig_1080p_upscaler");
+        setUpscaleTargetResolution("1080p");
+      } else if (found.resolution === "720p") {
+        setUpscaleSourceKind("seedance_720p_latest");
+      }
+    }
+  }
+
+  function handleSelectUpscalerEngine(engineId: BrandUpscalerEngineId) {
+    setSelectedUpscalerEngineId(engineId);
+    const engine = BRAND_UPSCALING_STUDIO_ENGINES.find(
+      (e) => e.id === engineId,
+    );
+    if (
+      engine &&
+      !engine.supportedTargets.includes(upscaleTargetResolution)
+    ) {
+      setUpscaleTargetResolution(engine.defaultTarget);
+    }
+  }
+
+  function handleToggleIgLogicModule(modId: IgUpscaleLogicModuleId) {
+    setEnabledIgModules((prev) =>
+      prev.includes(modId)
+        ? prev.filter((id) => id !== modId)
+        : [...prev, modId],
+    );
+  }
+
+  function handleRunUpscaleStudioJob() {
+    const sourceLabel =
+      customUpscaleVideoName ||
+      (upscaleSourceKind === "seedance_480p_draft"
+        ? "Seedance 2.5 480p Draft 영상"
+        : "Seedance 2.5 720p 생성 영상");
+    setStatusMessage(
+      isKo
+        ? `[업스케일링 스튜디오 실행] '${sourceLabel}' → ${activeUpscalerEngine.nameKo} (${upscaleTargetResolution}) 작업이 시작되었습니다. 적용된 인스타 최적화 로직: ${enabledIgModules.length}개 모듈 활성 (${compiledVideoAndUpscalePlan.upscaleStudio.ffmpegFilterChain})`
+        : `[Upscaling Studio Started] '${sourceLabel}' -> ${activeUpscalerEngine.nameEn} (${upscaleTargetResolution}) with ${enabledIgModules.length} IG optimization modules active.`,
+    );
+  }
 
   // Active take on the right-hand live studio canvas
   const [activeTakeIndex, setActiveTakeIndex] = useState<number>(0);
@@ -1200,7 +1294,24 @@ export function BrandBriefStudio({
               onClick={() => handleSwitchMediumMode("video")}
               disabled={busy}
             >
-              {isKo ? "숏폼 · 마스터 영상 만들기" : "Create Short-Form Video"}
+              {isKo ? "Seedance 2.5 영상 만들기" : "Seedance 2.5 Video"}
+            </button>
+            <button
+              type="button"
+              role="tab"
+              className="bw-seg-btn"
+              data-studio-medium-tab="upscale"
+              aria-selected={isUpscaleStudioExpanded && isVideoMode}
+              aria-pressed={isUpscaleStudioExpanded && isVideoMode}
+              onClick={() => {
+                handleSwitchMediumMode("video");
+                setIsUpscaleStudioExpanded(true);
+              }}
+              disabled={busy}
+            >
+              {isKo
+                ? "업스케일링 · 인스타 1080p/4K 스튜디오"
+                : "Upscaling & IG 1080p/4K Studio"}
             </button>
           </div>
 
@@ -3192,6 +3303,603 @@ export function BrandBriefStudio({
             </div>
           )}
 
+          {/* SEEDANCE 2.5 VIDEO TIERS (480p Draft · 720p Standard · 1080p Native) + DEDICATED UPSCALING & INSTAGRAM REELS OPTIMIZATION STUDIO */}
+          <div
+            data-studio-video-and-upscale-hub
+            style={{
+              borderRadius: "15px",
+              padding: "14px 16px",
+              marginBottom: "14px",
+              background: "var(--ys-surface)",
+              border: isVideoMode
+                ? "1.5px solid var(--ys-brand)"
+                : "1px solid var(--ys-border)",
+              boxShadow: "var(--ys-ring)",
+              display: "grid",
+              gap: "14px",
+            }}
+          >
+            {/* Part A: Seedance 2.5 3-Tier Video Generation (480p Draft Mode / 720p Standard / 1080p Native) */}
+            <div data-studio-seedance-tier-section>
+              <div
+                style={{
+                  display: "flex",
+                  flexWrap: "wrap",
+                  alignItems: "center",
+                  justifyContent: "space-between",
+                  gap: "8px",
+                  marginBottom: "10px",
+                }}
+              >
+                <div>
+                  <span
+                    className="bw-chip"
+                    style={{
+                      background: "var(--ys-brand-tint)",
+                      color: "var(--ys-brand-text)",
+                      fontWeight: 700,
+                      marginRight: "8px",
+                    }}
+                  >
+                    {isKo
+                      ? "Seedance 2.5 영상 생성"
+                      : "Seedance 2.5 Video Generation"}
+                  </span>
+                  <strong style={{ fontSize: "13.5px", color: "var(--ys-ink)" }}>
+                    {isKo
+                      ? "480p(Draft 모드) · 720p(표준) · 1080p(본편) 3단계 해상도 제공 — 720p로 빠르게 만든 뒤 1080p/4K로 업스케일하세요"
+                      : "Choose 480p (Draft Mode), 720p (Standard), or 1080p (Native Master) — or generate in 720p and upscale to 1080p/4K"}
+                  </strong>
+                </div>
+
+                <button
+                  type="button"
+                  className="bw-quick-chip"
+                  data-studio-toggle-upscale-panel-btn
+                  aria-expanded={isUpscaleStudioExpanded}
+                  onClick={() => setIsUpscaleStudioExpanded((p) => !p)}
+                  style={{ fontWeight: 700, color: "var(--ys-brand-text)" }}
+                >
+                  {isUpscaleStudioExpanded
+                    ? isKo
+                      ? "업스케일링 스튜디오 접기"
+                      : "Collapse Upscaling Studio"
+                    : isKo
+                      ? "업스케일링 · 인스타 최적화 스튜디오 열기"
+                      : "Open Upscaling & IG Studio"}
+                </button>
+              </div>
+
+              <div
+                style={{
+                  display: "grid",
+                  gridTemplateColumns: "repeat(auto-fit, minmax(230px, 1fr))",
+                  gap: "8px",
+                }}
+                data-studio-seedance-tier-grid
+              >
+                {BRAND_SEEDANCE_VIDEO_TIERS.map((tier) => {
+                  const selected = selectedSeedanceTierId === tier.id;
+                  const tierQuote =
+                    quoteBrandVideoRender({
+                      model: "seedance-2.5",
+                      resolution: tier.resolution,
+                      seconds: videoSeconds,
+                      aspect,
+                    }) ?? activeVideoQuote;
+                  return (
+                    <button
+                      key={tier.id}
+                      type="button"
+                      className="bw-model-card"
+                      data-seedance-tier-card={tier.id}
+                      data-seedance-resolution={tier.resolution}
+                      aria-pressed={selected}
+                      onClick={() => handleSelectSeedanceTier(tier.id)}
+                      disabled={busy}
+                      style={{ padding: "11px 13px" }}
+                    >
+                      <div
+                        style={{
+                          display: "flex",
+                          alignItems: "center",
+                          justifyContent: "space-between",
+                          gap: "6px",
+                          width: "100%",
+                        }}
+                      >
+                        <strong style={{ fontSize: "13px" }}>
+                          {isKo ? tier.nameKo : tier.nameEn}
+                        </strong>
+                        <span
+                          className="bw-scene-spec"
+                          style={{ fontWeight: 700, whiteSpace: "nowrap" }}
+                        >
+                          {tierQuote.credits.toLocaleString("ko-KR")} cr ·{" "}
+                          {isKo
+                            ? `${tierQuote.priceKrw.toLocaleString("ko-KR")}원`
+                            : `KRW ${tierQuote.priceKrw}`}
+                        </span>
+                      </div>
+
+                      <span
+                        style={{
+                          fontSize: "10.5px",
+                          fontWeight: 700,
+                          color: selected
+                            ? "var(--ys-brand-text)"
+                            : "var(--ys-ink-secondary)",
+                        }}
+                      >
+                        {isKo ? tier.badgeKo : tier.badgeEn}
+                      </span>
+
+                      <span
+                        style={{
+                          fontSize: "11.5px",
+                          lineHeight: 1.42,
+                          color: "var(--ys-ink-secondary)",
+                        }}
+                      >
+                        {isKo ? tier.summaryKo : tier.summaryEn}
+                      </span>
+
+                      <span
+                        style={{
+                          fontSize: "10.5px",
+                          color: "var(--ys-ink-muted)",
+                          marginTop: "2px",
+                        }}
+                      >
+                        {isKo ? tier.turnaroundKo : tier.turnaroundEn}
+                      </span>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+
+            {/* Part B: Dedicated Upscaling & Instagram Reels Optimization Studio */}
+            {isUpscaleStudioExpanded && (
+              <div
+                data-studio-upscaling-studio
+                data-active-upscaler-engine={selectedUpscalerEngineId}
+                data-upscale-target-resolution={upscaleTargetResolution}
+                style={{
+                  borderRadius: "13px",
+                  padding: "13px 15px",
+                  background: "var(--ys-subtle-bg)",
+                  border: "1px solid var(--ys-border)",
+                  display: "grid",
+                  gap: "12px",
+                }}
+              >
+                <div
+                  style={{
+                    display: "flex",
+                    flexWrap: "wrap",
+                    alignItems: "center",
+                    justifyContent: "space-between",
+                    gap: "8px",
+                  }}
+                >
+                  <div>
+                    <span
+                      className="bw-chip"
+                      style={{
+                        background: "var(--ys-ink)",
+                        color: "#FFFFFF",
+                        fontWeight: 700,
+                        marginRight: "8px",
+                      }}
+                    >
+                      {isKo ? "전용 업스케일링 스튜디오" : "Upscaling Studio"}
+                    </span>
+                    <strong
+                      style={{ fontSize: "13.5px", color: "var(--ys-ink)" }}
+                    >
+                      {isKo
+                        ? "720p·480p 영상을 Sunra 업스케일러 & 인스타 무열화 로직으로 1080p(릴스 최적화) 또는 4K로 완성합니다"
+                        : "Upscale 720p/480p videos to Instagram-optimized 1080p or 4K via Sunra Cloud & SeedVR2"}
+                    </strong>
+                  </div>
+
+                  {/* Target Resolution Selector: 1080p (IG Master) | 2K | 4K */}
+                  <div
+                    className="bw-seg-track"
+                    data-upscale-target-picker
+                  >
+                    {(
+                      [
+                        {
+                          res: "1080p",
+                          ko: "1080p 인스타 최적화 (추천)",
+                          en: "1080p IG Optimized",
+                        },
+                        {
+                          res: "2K",
+                          ko: "2K 고화질",
+                          en: "2K QHD",
+                        },
+                        {
+                          res: "4K",
+                          ko: "4K 초고화질 마스터",
+                          en: "4K Ultra HD",
+                        },
+                      ] as const
+                    ).map((item) => (
+                      <button
+                        key={item.res}
+                        type="button"
+                        className="bw-seg-btn"
+                        data-upscale-target-btn={item.res}
+                        aria-pressed={upscaleTargetResolution === item.res}
+                        onClick={() => {
+                          setUpscaleTargetResolution(item.res);
+                          if (
+                            item.res === "4K" &&
+                            selectedUpscalerEngineId ===
+                              "sunra_ig_1080p_upscaler"
+                          ) {
+                            setSelectedUpscalerEngineId(
+                              "seedvr2_7b_optical_upscaler",
+                            );
+                          } else if (
+                            item.res === "2K" &&
+                            selectedUpscalerEngineId !==
+                              "sunra_cloud_4k_upscaler"
+                          ) {
+                            setSelectedUpscalerEngineId(
+                              "sunra_cloud_4k_upscaler",
+                            );
+                          }
+                        }}
+                        disabled={busy}
+                      >
+                        {isKo ? item.ko : item.en}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Source Video Selection Row (720p Seedance / 480p Draft / Upload MP4) */}
+                <div
+                  style={{
+                    display: "flex",
+                    flexWrap: "wrap",
+                    alignItems: "center",
+                    justifyContent: "space-between",
+                    gap: "8px",
+                    padding: "8px 10px",
+                    borderRadius: "10px",
+                    background: "var(--ys-surface)",
+                    border: "1px solid var(--ys-border-subtle)",
+                  }}
+                  data-upscale-source-bar
+                >
+                  <div
+                    style={{
+                      display: "flex",
+                      flexWrap: "wrap",
+                      alignItems: "center",
+                      gap: "6px",
+                    }}
+                  >
+                    <span
+                      style={{
+                        fontSize: "11.5px",
+                        fontWeight: 700,
+                        color: "var(--ys-ink-secondary)",
+                      }}
+                    >
+                      {isKo ? "업스케일할 원본 영상:" : "Source Video:"}
+                    </span>
+                    <button
+                      type="button"
+                      className="bw-quick-chip"
+                      aria-pressed={
+                        upscaleSourceKind === "seedance_720p_latest"
+                      }
+                      onClick={() => {
+                        setUpscaleSourceKind("seedance_720p_latest");
+                        setCustomUpscaleVideoName("");
+                      }}
+                      style={{
+                        fontWeight:
+                          upscaleSourceKind === "seedance_720p_latest"
+                            ? 700
+                            : 500,
+                      }}
+                    >
+                      {isKo
+                        ? "방금 만든 Seedance 2.5 720p 영상 (추천 프로세스)"
+                        : "Latest Seedance 2.5 720p Take"}
+                    </button>
+                    <button
+                      type="button"
+                      className="bw-quick-chip"
+                      aria-pressed={upscaleSourceKind === "seedance_480p_draft"}
+                      onClick={() => {
+                        setUpscaleSourceKind("seedance_480p_draft");
+                        setCustomUpscaleVideoName("");
+                      }}
+                      style={{
+                        fontWeight:
+                          upscaleSourceKind === "seedance_480p_draft"
+                            ? 700
+                            : 500,
+                      }}
+                    >
+                      {isKo
+                        ? "Seedance 2.5 480p Draft 시안 (동일 모션 1080p 승격)"
+                        : "Seedance 2.5 480p Draft (Finalize to 1080p)"}
+                    </button>
+                    <label
+                      className="bw-quick-chip"
+                      style={{
+                        fontWeight: 600,
+                        color: "var(--ys-brand-text)",
+                      }}
+                    >
+                      {customUpscaleVideoName
+                        ? `업로드됨: ${customUpscaleVideoName}`
+                        : isKo
+                          ? "+ 내 720p 영상 파일 직접 올리기"
+                          : "+ Upload 720p Video File"}
+                      <input
+                        type="file"
+                        accept="video/mp4,video/quicktime,video/webm"
+                        onChange={(e) => {
+                          const f = e.target.files?.[0];
+                          if (f) {
+                            setCustomUpscaleVideoName(f.name);
+                            setUpscaleSourceKind("custom_upload");
+                          }
+                        }}
+                        style={{ display: "none" }}
+                        data-upscale-video-file-input
+                      />
+                    </label>
+                  </div>
+
+                  <span
+                    style={{
+                      fontFamily: "var(--ys-mono)",
+                      fontSize: "11px",
+                      color: "var(--ys-ink-muted)",
+                    }}
+                  >
+                    {isKo
+                      ? `${compiledVideoAndUpscalePlan.upscaleStudio.sourceResolution} → ${upscaleTargetResolution} · 24fps CFR`
+                      : `${compiledVideoAndUpscalePlan.upscaleStudio.sourceResolution} -> ${upscaleTargetResolution} · 24fps CFR`}
+                  </span>
+                </div>
+
+                {/* 3 Upscaler Engine Cards (Sunra 1080p IG Optimized / SeedVR2 7B Optical / Sunra Cloud 4K) */}
+                <div
+                  style={{
+                    display: "grid",
+                    gridTemplateColumns: "repeat(auto-fit, minmax(230px, 1fr))",
+                    gap: "8px",
+                  }}
+                  data-upscale-engine-picker
+                >
+                  {BRAND_UPSCALING_STUDIO_ENGINES.map((engine) => {
+                    const selected = selectedUpscalerEngineId === engine.id;
+                    return (
+                      <button
+                        key={engine.id}
+                        type="button"
+                        className="bw-model-card"
+                        data-upscaler-engine-card={engine.id}
+                        aria-pressed={selected}
+                        onClick={() => handleSelectUpscalerEngine(engine.id)}
+                        disabled={busy}
+                        style={{ padding: "11px 13px" }}
+                      >
+                        <div
+                          style={{
+                            display: "flex",
+                            alignItems: "center",
+                            justifyContent: "space-between",
+                            gap: "6px",
+                            width: "100%",
+                          }}
+                        >
+                          <strong style={{ fontSize: "12.5px" }}>
+                            {isKo ? engine.nameKo : engine.nameEn}
+                          </strong>
+                          <span
+                            className="bw-scene-spec"
+                            style={{ fontWeight: 700, whiteSpace: "nowrap" }}
+                          >
+                            {engine.creditsPer10s} cr ·{" "}
+                            {isKo
+                              ? `${engine.priceKrwPer10s.toLocaleString("ko-KR")}원`
+                              : `KRW ${engine.priceKrwPer10s}`}
+                          </span>
+                        </div>
+
+                        <span
+                          style={{
+                            fontSize: "10.5px",
+                            fontWeight: 700,
+                            color: selected
+                              ? "var(--ys-brand-text)"
+                              : "var(--ys-ink-secondary)",
+                          }}
+                        >
+                          {isKo ? engine.providerBadgeKo : engine.providerBadgeEn}
+                        </span>
+
+                        <span
+                          style={{
+                            fontSize: "11.5px",
+                            lineHeight: 1.42,
+                            color: "var(--ys-ink-secondary)",
+                          }}
+                        >
+                          {isKo ? engine.shortTraitKo : engine.shortTraitEn}
+                        </span>
+
+                        <div
+                          style={{
+                            display: "flex",
+                            flexWrap: "wrap",
+                            gap: "4px",
+                            marginTop: "2px",
+                          }}
+                        >
+                          {(isKo ? engine.strengthsKo : engine.strengthsEn).map(
+                            (tag) => (
+                              <span
+                                key={tag}
+                                style={{
+                                  fontSize: "10px",
+                                  padding: "2px 6px",
+                                  borderRadius: "999px",
+                                  background: "var(--ys-raised)",
+                                  color: "var(--ys-ink-secondary)",
+                                  fontWeight: 500,
+                                }}
+                              >
+                                {tag}
+                              </span>
+                            ),
+                          )}
+                        </div>
+                      </button>
+                    );
+                  })}
+                </div>
+
+                {/* Our Signature Instagram Optimization Logic Modules (5 Toggle Switches + Why It Works) */}
+                <div
+                  data-upscale-ig-logic-bar
+                  style={{
+                    padding: "10px 12px",
+                    borderRadius: "10px",
+                    background: "var(--ys-surface)",
+                    border: "1px solid var(--ys-border-subtle)",
+                    display: "grid",
+                    gap: "8px",
+                  }}
+                >
+                  <div
+                    style={{
+                      display: "flex",
+                      flexWrap: "wrap",
+                      alignItems: "center",
+                      justifyContent: "space-between",
+                      gap: "6px",
+                    }}
+                  >
+                    <div>
+                      <strong
+                        style={{ fontSize: "12.5px", color: "var(--ys-ink)" }}
+                      >
+                        {isKo
+                          ? "인스타 최적화 업스케일링 로직 (Sunra 1080p 업스케일 + 5단계 화질 보호)"
+                          : "Instagram Reels De-AI Optimization Logic (Sunra 1080p + 5-Stage Guard)"}
+                      </strong>
+                      <span
+                        className="bw-muted"
+                        style={{ marginLeft: "8px", fontSize: "11.5px" }}
+                      >
+                        {isKo
+                          ? activeUpscalerEngine.whyThisUpscalerKo
+                          : activeUpscalerEngine.whyThisUpscalerEn}
+                      </span>
+                    </div>
+                  </div>
+
+                  <div
+                    style={{
+                      display: "flex",
+                      flexWrap: "wrap",
+                      alignItems: "center",
+                      gap: "6px",
+                    }}
+                  >
+                    {IG_OPTIMIZED_UPSCALE_LOGIC_MODULES.map((mod) => {
+                      const active = enabledIgModules.includes(mod.id);
+                      return (
+                        <button
+                          key={mod.id}
+                          type="button"
+                          className="bw-quick-chip"
+                          data-ig-upscale-module={mod.id}
+                          aria-pressed={active}
+                          onClick={() => handleToggleIgLogicModule(mod.id)}
+                          title={isKo ? mod.detailKo : mod.detailEn}
+                          style={{
+                            fontSize: "11px",
+                            fontWeight: active ? 700 : 500,
+                            background: active
+                              ? "var(--ys-brand-tint)"
+                              : "var(--ys-subtle-bg)",
+                            color: active
+                              ? "var(--ys-brand-text)"
+                              : "var(--ys-ink-secondary)",
+                            boxShadow: active
+                              ? "0 0 0 1px var(--ys-brand)"
+                              : undefined,
+                          }}
+                        >
+                          {active ? "✓ " : ""}
+                          {isKo ? mod.titleKo : mod.titleEn}
+                        </button>
+                      );
+                    })}
+                  </div>
+
+                  <div
+                    style={{
+                      display: "flex",
+                      flexWrap: "wrap",
+                      alignItems: "center",
+                      justifyContent: "space-between",
+                      gap: "8px",
+                      paddingTop: "6px",
+                      borderTop: "1px solid var(--ys-hairline)",
+                    }}
+                  >
+                    <span
+                      style={{
+                        fontSize: "11px",
+                        color: "var(--ys-ink-secondary)",
+                        fontWeight: 600,
+                      }}
+                    >
+                      {isKo
+                        ? compiledVideoAndUpscalePlan.upscaleStudio
+                            .igEditsExportRuleKo
+                        : compiledVideoAndUpscalePlan.upscaleStudio
+                            .igEditsExportRuleEn}
+                    </span>
+
+                    <button
+                      type="button"
+                      className="bw-button bw-primary"
+                      data-upscale-execute-btn
+                      onClick={handleRunUpscaleStudioJob}
+                      disabled={!canWrite || busy}
+                      style={{
+                        padding: "6px 14px",
+                        fontSize: "12px",
+                        whiteSpace: "nowrap",
+                      }}
+                    >
+                      {isKo
+                        ? `${activeUpscalerEngine.nameKo.split("+")[0]?.trim()} (${upscaleTargetResolution}) 실행하기 · ${activeUpscalerEngine.creditsPer10s} cr`
+                        : `Run ${upscaleTargetResolution} Upscale (${activeUpscalerEngine.creditsPer10s} cr)`}
+                    </button>
+                  </div>
+                </div>
+              </div>
+            )}
+          </div>
+
           {/* TRACK 03 · 04 · 05 Specialized Workbenches: Creator Campaign Format (Self/Commission), Creator Distribution, and Audio Studio */}
           <div
             data-studio-5track-workbench
@@ -3773,18 +4481,21 @@ export function BrandBriefStudio({
                       [
                         {
                           res: "480p",
-                          ko: "480p 구도 프리뷰",
-                          en: "480p Preview",
+                          tierId: "seedance_2_5_480p_draft",
+                          ko: "Seedance 2.5 · 480p (Draft)",
+                          en: "Seedance 2.5 · 480p (Draft)",
                         },
                         {
                           res: "720p",
-                          ko: "720p 스탠다드",
-                          en: "720p Standard",
+                          tierId: "seedance_2_5_720p_standard",
+                          ko: "Seedance 2.5 · 720p (표준)",
+                          en: "Seedance 2.5 · 720p (Standard)",
                         },
                         {
                           res: "1080p",
-                          ko: "1080p 마스터",
-                          en: "1080p Master",
+                          tierId: "seedance_2_5_1080p_master",
+                          ko: "Seedance 2.5 · 1080p (본편)",
+                          en: "Seedance 2.5 · 1080p (Master)",
                         },
                       ] as const
                     ).map((tier) => (
@@ -3793,7 +4504,7 @@ export function BrandBriefStudio({
                         type="button"
                         className="bw-seg-btn"
                         aria-pressed={videoResolution === tier.res}
-                        onClick={() => setVideoResolution(tier.res)}
+                        onClick={() => handleSelectSeedanceTier(tier.tierId)}
                         disabled={busy}
                       >
                         {isKo ? tier.ko : tier.en}
