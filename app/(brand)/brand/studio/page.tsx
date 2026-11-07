@@ -37,13 +37,19 @@ export default async function BrandStudio({
   searchParams: Promise<{
     organizationId?: string | string[];
     projectId?: string | string[];
+    track?: string | string[];
+    scenario?: string | string[];
+    mode?: string | string[];
   }>;
 }) {
   const [
-    { organizationId, projectId },
+    { organizationId, projectId, track, scenario, mode: queryMode },
     { sql, viewer, verifiedEmail, brandHost, b, locale },
   ] = await Promise.all([searchParams, brandContext()]);
   const initialProjectId = Array.isArray(projectId) ? projectId[0] : projectId;
+  const initialTrack = Array.isArray(track) ? track[0] : track;
+  const initialScenario = Array.isArray(scenario) ? scenario[0] : scenario;
+  const initialMode = Array.isArray(queryMode) ? queryMode[0] : queryMode;
   if (!sql) return <p role="alert">{b.unavailable}</p>;
   const { selection, choice, projectOrganizations } = await brandScope({ sql, verifiedEmail }, viewer, organizationId);
   if (selection.state === "unavailable") return <BrandUnavailable b={b} />;
@@ -144,6 +150,9 @@ export default async function BrandStudio({
               : undefined
           }
           initialProjectId={initialProjectId}
+          initialTrack={initialTrack}
+          initialScenario={initialScenario}
+          initialMode={initialMode}
         />
       )}
       <details className="bw-service-disclosure" style={{ marginTop: "12px" }}>

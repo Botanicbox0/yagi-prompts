@@ -72,7 +72,7 @@ export const BRAND_CORE_DELIVERABLE_TRACKS: readonly BrandCoreDeliverableTrackSp
       ],
       turnaroundKo: "즉시 생성 (15~35초)",
       turnaroundEn: "Instant (15–35s)",
-      priceGuideKo: "5장 세트 400원~ (34 cr~)",
+      priceGuideKo: "5장 세트 400원~1,100원",
       priceGuideEn: "From ₩400 / 5 cuts",
       previewImage: "/reel/brands/slot-1-subject-editorial.jpg",
     },
@@ -188,8 +188,8 @@ export const BRAND_CORE_DELIVERABLE_TRACKS: readonly BrandCoreDeliverableTrackSp
       ],
       turnaroundKo: "즉시 생성 (약 25초)",
       turnaroundEn: "Instant (~25s)",
-      priceGuideKo: "곡당 900원 (75 cr · 저작권 포함)",
-      priceGuideEn: "₩900 / track (75 cr)",
+      priceGuideKo: "곡당 900원 · 상업 저작권 포함",
+      priceGuideEn: "₩900 / track · Rights cleared",
       previewImage: "/reel/brands/slot-4-color-french-cobalt.jpg",
     },
   ];
@@ -2328,6 +2328,166 @@ export const DEFAULT_SPATIAL_BOARD_NODES: readonly SpatialBoardAssetNode[] = [
     connectedToIds: [],
   },
 ];
+
+/**
+ * Rounds 46–95 Enterprise B2B AI Media Studio Domain Constants.
+ */
+export type StudioViewDensity = "compact" | "comfortable" | "zen_canvas";
+export type StudioInspectorTabId =
+  | "layers"
+  | "brand_dna"
+  | "history_version"
+  | "export_spec";
+export type StudioAdaptiveDockMode =
+  | "global_prompt"
+  | "node_selected"
+  | "timeline_scrub";
+export type StudioCanvasThemeId =
+  | "paper_white"
+  | "studio_neutral"
+  | "oled_dark";
+export type SkuMultiAngleId =
+  | "front"
+  | "angle_45"
+  | "flatlay_top"
+  | "back_detail";
+export type VideoStoryboardCutStepId = "hook" | "body" | "cta";
+export type VideoCutTransitionMode =
+  | "morph_continuity"
+  | "match_cut"
+  | "whip_pan";
+export type VideoCinemaLutId =
+  | "kodak_2383"
+  | "clean_commercial"
+  | "neutral_arri"
+  | "cyber_noir";
+export type CreatorRightsTermId = "180d" | "365d" | "perpetual";
+export type VoiceoverToneId =
+  | "luxury_calm"
+  | "dynamic_pitch"
+  | "natural_conversational";
+export type ReviewWatermarkMode = "draft_watermark" | "clean_master";
+
+export interface SkuMultiAngleSpec {
+  id: SkuMultiAngleId;
+  labelKo: string;
+  labelEn: string;
+  cameraSpecKo: string;
+  cameraSpecEn: string;
+}
+
+export const STUDIO_SKU_MULTI_ANGLE_PACKS: readonly SkuMultiAngleSpec[] = [
+  {
+    id: "front",
+    labelKo: "정면 히어로 컷 (0°)",
+    labelEn: "Front Hero (0°)",
+    cameraSpecKo: "85mm 정면 수평 · 라벨 타이포그래피 100% 직각 정렬",
+    cameraSpecEn: "85mm eye-level front · 100% orthogonal label alignment",
+  },
+  {
+    id: "angle_45",
+    labelKo: "45° 입체 룩북 컷",
+    labelEn: "45° Dimensional Cut",
+    cameraSpecKo: "50mm 45도 사선 · 용기 입체감과 측면 실루엣 강조",
+    cameraSpecEn: "50mm 45-degree angle · highlights depth & side silhouette",
+  },
+  {
+    id: "flatlay_top",
+    labelKo: "탑다운 플랫레이 (90°)",
+    labelEn: "Top-Down Flatlay (90°)",
+    cameraSpecKo: "수직 오버헤드 뷰 · 브랜드 오브제·원료 텍스처 배치",
+    cameraSpecEn: "90-degree overhead flatlay with curated brand props",
+  },
+  {
+    id: "back_detail",
+    labelKo: "소재·제형 초근접 매크로",
+    labelEn: "Macro Texture & Detail",
+    cameraSpecKo: "100mm 매크로 · 원단 직조·수분 제형·로고 각인 클로즈업",
+    cameraSpecEn: "100mm macro close-up of fabric weave, serum, or engraving",
+  },
+];
+
+export interface VideoStoryboardCutSpec {
+  id: VideoStoryboardCutStepId;
+  timeRange: string;
+  titleKo: string;
+  titleEn: string;
+  goalKo: string;
+  goalEn: string;
+}
+
+export const VIDEO_STORYBOARD_CUT_STEPS: readonly VideoStoryboardCutSpec[] = [
+  {
+    id: "hook",
+    timeRange: "0~3s",
+    titleKo: "Cut 01 · 훅 (0~3초 시선 고정)",
+    titleEn: "Cut 01 · Hook (0–3s Stop-Scroll)",
+    goalKo: "첫 1.5초 클로즈업 모션으로 스크롤 이탈 차단 (예상 유지율 68%)",
+    goalEn: "First 1.5s macro motion stops scroll (68% retention target)",
+  },
+  {
+    id: "body",
+    timeRange: "4~10s",
+    titleKo: "Cut 02 · 본문 (4~10초 제품·착장 디테일)",
+    titleEn: "Cut 02 · Body (4–10s Product & Fit)",
+    goalKo: "우리 브랜드 제품의 질감·실루엣·사용 장면을 흔들림 없이 시연",
+    goalEn: "Demonstrates product texture, silhouette, and hero usage cleanly",
+  },
+  {
+    id: "cta",
+    timeRange: "11~15s",
+    titleKo: "Cut 03 · 엔딩 (11~15초 브랜드 각인 & 행동 유도)",
+    titleEn: "Cut 03 · CTA (11–15s Brand Lock & Action)",
+    goalKo: "고정된 끝 프레임(End Frame) 제품 정면 컷과 오디오 여운으로 마감",
+    goalEn: "Lands on locked End Frame product hero with clean audio tail",
+  },
+];
+
+export interface AnonymousCreatorCandidateSpec {
+  id: string;
+  categoryKo: string;
+  categoryEn: string;
+  followerTierKo: string;
+  followerTierEn: string;
+  avgHookRetention: string;
+  audienceFitKo: string;
+  audienceFitEn: string;
+}
+
+export const VERIFIED_CREATOR_CANDIDATES: readonly AnonymousCreatorCandidateSpec[] =
+  [
+    {
+      id: "creator_cohort_fashion_01",
+      categoryKo: "미니멀 패션 · 데일리 룩북 크리에이터 A",
+      categoryEn: "Minimal Fashion & Lookbook Creator A",
+      followerTierKo: "팔로워 1.8만 · 검증 완료 (3,000+)",
+      followerTierEn: "18K Followers · Verified (3,000+)",
+      avgHookRetention: "71%",
+      audienceFitKo: "2030 여성 82% · 평균 조회수 4.2만 회",
+      audienceFitEn: "82% Women 20–34 · Avg 42K views",
+    },
+    {
+      id: "creator_cohort_beauty_02",
+      categoryKo: "클린 뷰티 · 스킨케어 루틴 크리에이터 B",
+      categoryEn: "Clean Beauty & Skincare Routine Creator B",
+      followerTierKo: "팔로워 3.4만 · 검증 완료 (3,000+)",
+      followerTierEn: "34K Followers · Verified (3,000+)",
+      avgHookRetention: "69%",
+      audienceFitKo: "2030 여성 88% · 평균 조회수 6.8만 회",
+      audienceFitEn: "88% Women 20–34 · Avg 68K views",
+    },
+    {
+      id: "creator_cohort_lifestyle_03",
+      categoryKo: "감도 높은 라이프스타일 · 오브제 크리에이터 C",
+      categoryEn: "Editorial Lifestyle & Object Creator C",
+      followerTierKo: "팔로워 9,400명 · 검증 완료 (3,000+)",
+      followerTierEn: "9.4K Followers · Verified (3,000+)",
+      avgHookRetention: "74%",
+      audienceFitKo: "2539 남녀 · 저장률 상위 5%",
+      audienceFitEn: "Ages 25–39 · Top 5% save rate",
+    },
+  ];
+
 
 
 

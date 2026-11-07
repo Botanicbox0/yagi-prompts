@@ -461,4 +461,420 @@ describe("Brand Studio 5 Core Deliverables & 5 Image Models (12-Round Verificati
       expect(showcaseHtml).toContain(`track=${track.id}`);
     }
   });
+
+  it("18. verifies 10-Round (Rounds 16–25) Zero-Leak Surface Architecture, Smart Mask Feathering & Model Auto-Tune, FFmpeg Optical Filter Drawer & 480p->1080p ETA Badge, 3-Axis Face Angle Inspector, 3-Channel Allocation Matrix & Ad Code Copy, Audio Stem Fader & Foley Trigger Wave, Multi-Type Node Spawn & Minimap HUD, Bi-Directional Reverse Bridge, and Global 5-Track Brand Kit Lock", () => {
+    const html = renderToStaticMarkup(
+      <BrandBriefStudio
+        organizationId="org-yagi"
+        organizationName="YAGI"
+        locale="ko"
+        canWrite={true}
+        identityConfirmed={false}
+      />,
+    );
+
+    // Round 16: Zero-Leak Surface Architecture (even when identityConfirmed={false}, advanced drawer & legacy workbench stay display:none on initial split_workbench load)
+    expect(html).toContain('data-studio-identity-gate="open"');
+    expect(html).toContain('data-isolated-surface-mode="split_workbench"');
+
+    // Round 17: Smart Mask Feathering Slider & 5-Model Optimal Prompt Auto-Tune Button
+    expect(html).toContain('data-smart-mask-feather-slider="25"');
+    expect(html).toContain("data-model-prompt-autotune-btn");
+
+    // Round 18: FFmpeg Filter-Chain Code Drawer & 480p->1080p ETA/Savings Badge
+    expect(html).toContain("data-draft-to-master-eta-badge");
+    expect(html).toContain("data-upscale-ffmpeg-code-drawer");
+    expect(html).toContain("data-copy-ffmpeg-filter-btn");
+
+    // Round 19: 3-Axis Creator Face Angle Advisory Inspector
+    expect(html).toContain("data-creator-face-angle-inspector");
+
+    // Round 20: 3-Channel Seeding Allocation Matrix & 1-Click Spark/Meta Ad Auth Code Copy
+    expect(html).toContain("data-seeding-channel-allocation-matrix");
+    expect(html).toContain("data-copy-ad-auth-code-btn");
+
+    // Round 21: 3-Track Audio Stem Fader Console & Foley Trigger Wave
+    expect(html).toContain("data-audio-stem-fader-console");
+    expect(html).toContain('data-foley-trigger-wave="0.4s"');
+
+    // Round 22: Multi-Type Node Spawn (+Creator Selfie, +Audio Track) & Minimap HUD
+    expect(html).toContain("data-canvas-spawn-creator-node");
+    expect(html).toContain("data-canvas-spawn-audio-node");
+    expect(html).toContain("data-canvas-minimap-hud");
+
+    // Round 23: Bi-Directional Reverse Bridge (Right Video Frame -> Left Image Micro-Edit)
+    expect(html).toContain("data-video-to-image-reverse-bridge");
+
+    // Round 24: Enterprise Brand Kit Global 5-Track Style Pin Lock
+    expect(html).toContain("data-global-brand-kit-lock");
+  });
+
+  it("19. verifies Rounds 26–35 SSR ?track= Deep-Link Hydration, Keyboard Shortcuts HUD, 4x Parallel Batch & Model A/B Compare, 1~4 Reference Slot Weights & Swap, Seedance 2.5 End-Frame Loop Lock, 5 Camera Motion Presets, 9:16 Reels/TikTok/Shorts Safe-Zone Overlay, Batch Upscale Queue & ProRes/H.264 Codec Selector, Creator Brief Compliance Lock, and 9:16/4:5/1:1 Multi-Aspect Crop Preview", () => {
+    // Round 26: SSR ?track= deep-link hydration (no flash to split_workbench when initialTrack is passed)
+    const audioTrackSsrHtml = renderToStaticMarkup(
+      <BrandBriefStudio
+        organizationId="org-yagi"
+        organizationName="YAGI"
+        locale="ko"
+        canWrite={true}
+        identityConfirmed={true}
+        initialTrack="audio"
+      />,
+    );
+    expect(audioTrackSsrHtml).toContain('data-studio-initial-track="audio"');
+    expect(audioTrackSsrHtml).toContain('data-isolated-surface-mode="track_audio"');
+    expect(audioTrackSsrHtml).toContain('data-active-core-track="audio"');
+
+    const html = renderToStaticMarkup(
+      <BrandBriefStudio
+        organizationId="org-yagi"
+        organizationName="YAGI"
+        locale="ko"
+        canWrite={true}
+        identityConfirmed={true}
+      />,
+    );
+
+    // Round 27: Keyboard Shortcuts HUD & Command Bar
+    expect(html).toContain("data-shortcuts-toggle-btn");
+    expect(html).toContain("data-studio-keyboard-shortcuts-hud");
+
+    // Round 28: Track 01 · 1x/2x/4x Parallel Batch Generation & 2-Model A/B Compare Mode
+    expect(html).toContain('data-image-batch-parallel-switcher="4"');
+    expect(html).toContain("data-image-model-ab-compare-mode");
+
+    // Round 29: Track 01 · 1~4 Reference Slot Individual Weight Chips & 1-Click Slot Swap
+    expect(html).toContain("data-reference-slot-strength-bar");
+    expect(html).toContain('data-slot-weight-chip="1"');
+    expect(html).toContain('data-slot-weight-chip="4"');
+    expect(html).toContain("data-reference-slot-swap-btn");
+
+    // Round 30: Track 02 · Seedance 2.5 Start Frame <-> End Frame Loop Keyframe Lock
+    expect(html).toContain("data-video-end-frame-slot");
+    expect(html).toContain("data-video-keyframe-loop-toggle");
+
+    // Round 31: Track 02 · 5 Camera Motion Presets & Motion Scale Slider
+    expect(html).toContain('data-camera-motion-preset-bar="dolly_in"');
+    expect(html).toContain('data-camera-motion-scale-slider="5"');
+
+    // Round 32: Track 02 · Instagram Reels / TikTok / Shorts 9:16 UI Safe-Zone Overlay
+    expect(html).toContain('data-safe-zone-platform-picker="reels"');
+    expect(html).toContain('data-safe-zone-overlay-toggle="true"');
+
+    // Round 33: Track 02 · Batch Upscale Queue Tray & Codec Selector (H.264 14Mbps vs ProRes 422 LT)
+    expect(html).toContain('data-upscale-batch-queue-tray="4"');
+    expect(html).toContain('data-upscale-codec-selector="h264_14mbps"');
+
+    // Round 34: Track 03 · Creator Brief Mandatory Hashtag/Disclosure Lock & Prohibited Elements Bar
+    expect(html).toContain("data-creator-brief-compliance-lock");
+    expect(html).toContain("data-creator-prohibited-elements-bar");
+
+    // Round 35: Track 03 · Multi-Aspect Crop Preview (9:16 / 4:5 / 1:1)
+    expect(html).toContain('data-multi-aspect-crop-preview="9:16"');
+    expect(html).toContain('data-creator-aspect-preview-btn="4:5"');
+    expect(html).toContain('data-creator-aspect-preview-btn="1:1"');
+  });
+
+  it("20. verifies Rounds 36–45 Detailed B2B ROI Savings Matrix, Creator Cohort Tier Mix, Audio Seamless Loop & Duration Sync, Voiceover Language & Script Input, 2D Node Board Tidy Up & Storyboard Group Frame, Dual-Split Sync Zoom & 99.6% Optical Consistency Meter, Enterprise Master Campaign Zip Export, /brand 3-Scenario Launchers, and Korean Wording Purge", () => {
+    const html = renderToStaticMarkup(
+      <BrandBriefStudio
+        organizationId="org-yagi"
+        organizationName="YAGI"
+        locale="ko"
+        canWrite={true}
+        identityConfirmed={true}
+      />,
+    );
+
+    // Round 36 & Round 37: Track 04 · Detailed ROI Savings Matrix & Creator Cohort Tier Mix
+    expect(html).toContain("data-distribution-detailed-roi-matrix");
+    expect(html).toContain("data-roi-savings-vs-meta-ads");
+    expect(html).toContain('data-creator-cohort-tier-mix="nano_60_micro_30_mid_10"');
+
+    // Round 38 & Round 39: Track 05 · Audio Seamless Loop Mastering, Duration Sync & Voiceover Script Input
+    expect(html).toContain('data-audio-loop-mode-toggle="seamless_loop"');
+    expect(html).toContain('data-audio-duration-sync-bar="5s"');
+    expect(html).toContain('data-voiceover-language-selector="ko"');
+    expect(html).toContain("data-voiceover-script-input");
+
+    // Round 40: 00 · 2D Unified Node Board Auto-Layout Tidy Up & Storyboard Group Frame
+    expect(html).toContain("data-canvas-tidy-up-btn");
+    expect(html).toContain("data-canvas-storyboard-group-frame");
+
+    // Round 41: Dual-Split Workbench Sync Zoom & 99.6% Optical Consistency Meter
+    expect(html).toContain('data-dual-canvas-sync-zoom-toggle="true"');
+    expect(html).toContain("data-optical-consistency-meter");
+
+    // Round 42: Enterprise Master Campaign Package 1-Click Export Bar
+    expect(html).toContain("data-enterprise-export-package-bar");
+    expect(html).toContain("data-download-full-campaign-bundle-btn");
+
+    // Round 44: Korean localization purge (no hardcoded English MUTE ON/MUTE when locale="ko")
+    expect(html).not.toContain(">MUTE<");
+    expect(html).not.toContain(">MUTE ON<");
+    expect(html).toContain("음소거");
+
+    // Round 43 & Round 44: /brand Main Dashboard Flagship 3-Scenario 1-Click Launchers & Korean Wording Purge
+    const showcaseHtml = renderToStaticMarkup(
+      <CampaignMoatShowcase
+        locale="ko"
+        organizationId="org-yagi"
+        studioOpen={true}
+      />,
+    );
+    expect(showcaseHtml).toContain("data-brand-moat-scenario-launchers");
+    expect(showcaseHtml).toContain('data-scenario-launcher="launch_full_pack"');
+    expect(showcaseHtml).toContain('data-scenario-launcher="creator_30_seeding"');
+    expect(showcaseHtml).toContain('data-scenario-launcher="lookbook_micro_edit"');
+    expect(showcaseHtml).not.toContain("VIDEO-CREATOR DUAL STAGE");
+  });
+
+  it("21. verifies Phase I (Rounds 46–55) UX Clarity, Progressive Disclosure, Command Palette, Tabbed Inspector, Adaptive Bottom Dock, Left Asset Rail, Signal Flow, Align Bar, Minimap Reticle, Canvas Theme & BG Job Tray", () => {
+    const html = renderToStaticMarkup(
+      <BrandBriefStudio
+        organizationId="org-yagi"
+        organizationName="YAGI"
+        locale="ko"
+        canWrite={true}
+        identityConfirmed={true}
+      />,
+    );
+
+    // Round 46: Progressive Disclosure Density Switcher
+    expect(html).toContain('data-studio-view-density="comfortable"');
+    expect(html).toContain("data-view-density-toggle-btn");
+
+    // Round 47: Universal Command Palette (Ctrl+K)
+    expect(html).toContain("data-studio-command-palette");
+    expect(html).toContain("data-command-palette-input");
+
+    // Round 48: Contextual Right Inspector 4-Tab Consolidation
+    expect(html).toContain("data-inspector-tab-switcher");
+    expect(html).toContain('data-inspector-tab="layers"');
+    expect(html).toContain('data-inspector-tab="brand_dna"');
+    expect(html).toContain('data-inspector-tab="history_version"');
+    expect(html).toContain('data-inspector-tab="export_spec"');
+
+    // Round 49: Floating Bottom Dock Contextual Adaptation
+    expect(html).toContain('data-adaptive-dock-mode="node_selected"');
+
+    // Round 50: Collapsible Left Brand Asset & Reference Drawer
+    expect(html).toContain("data-studio-left-asset-rail");
+    expect(html).toContain("data-asset-rail-toggle-btn");
+
+    // Round 51: 2D Spatial Canvas Bezier Wire Live Signal Flow
+    expect(html).toContain('data-canvas-wire-signal-flow="active"');
+
+    // Round 52: Multi-Node Magnetic Snap & Distribution Bar
+    expect(html).toContain("data-canvas-align-distribute-bar");
+    expect(html).toContain('data-align-btn="distribute_horizontal"');
+
+    // Round 53: Interactive Minimap Viewport Reticle & Zoom Indicator
+    expect(html).toContain("data-minimap-reticle");
+    expect(html).toContain("data-minimap-zoom-indicator");
+
+    // Round 54: Canvas Dark/Light Studio Surface Theme Toggle
+    expect(html).toContain('data-canvas-theme-selector="paper_white"');
+
+    // Round 55: Non-Blocking Background Render Job Queue Tray
+    expect(html).toContain("data-studio-bg-job-tray");
+    expect(html).toContain("data-bg-job-progress-bar");
+  });
+
+  it("22. verifies Phase II (Rounds 56–65) Track 01 & Track 02 Enterprise Production Depth: Multi-Angle SKU Pack, Auto-Resize Banner Matrix, Logo Vector Preservation, Color Delta-E Meter, Sunra 20-Way Parallel Batch, 3-Cut Storyboard Sequencer, Transition Engine, Cinema LUTs, Meta Encoding Defense & 200% Magnifier Loupe", () => {
+    const html = renderToStaticMarkup(
+      <BrandBriefStudio
+        organizationId="org-yagi"
+        organizationName="YAGI"
+        locale="ko"
+        canWrite={true}
+        identityConfirmed={true}
+      />,
+    );
+
+    // Round 56: Product SKU Multi-Angle Pack Generator
+    expect(html).toContain('data-sku-multi-angle-selector="front"');
+
+    // Round 57: E-Commerce Marketplace Auto-Resize & Safe-Margin Pack
+    expect(html).toContain("data-ecommerce-auto-resize-pack");
+    expect(html).toContain("data-batch-banner-generator");
+
+    // Round 58: Brand Typography & Vector Logo Overlay Preservation Zone
+    expect(html).toContain("data-logo-vector-preservation-zone");
+    expect(html).toContain("data-label-sharpness-guard");
+
+    // Round 59: Color Accuracy Delta-E Verification Meter
+    expect(html).toContain("data-brand-color-delta-e-meter");
+    expect(html).toContain("data-delta-e-pass-badge");
+
+    // Round 60: Sunra 20-Concurrent Batch Variant Matrix
+    expect(html).toContain('data-sunra-concurrent-batch-grid="20"');
+    expect(html).toContain("data-sunra-concurrency-active-count");
+
+    // Round 61: Seedance 2.5 Multi-Cut Storyboard Sequencer (Cut 1 Hook -> Cut 2 Body -> Cut 3 CTA)
+    expect(html).toContain("data-video-storyboard-cut-sequencer");
+    expect(html).toContain('data-cut-step="hook"');
+    expect(html).toContain('data-cut-step="body"');
+    expect(html).toContain('data-cut-step="cta"');
+
+    // Round 62: Cut-to-Cut Optical Flow & Match-Cut Transition Engine
+    expect(html).toContain('data-cut-transition-engine="morph_continuity"');
+
+    // Round 63: Brand Cinema Color Grading LUT Selector
+    expect(html).toContain('data-video-cinema-lut-selector="clean_commercial"');
+
+    // Round 64: Instagram Reels / TikTok Compression Pre-Compensation Engine
+    expect(html).toContain("data-meta-encoding-defense-engine");
+    expect(html).toContain("data-meta-encoder-pass-check");
+
+    // Round 65: Split-Screen Before/After 720p vs 1080p/4K Interactive Magnifier Loupe
+    expect(html).toContain("data-upscale-ab-slider");
+    expect(html).toContain('data-upscale-magnifier-loupe="200%"');
+  });
+
+  it("23. verifies Phase III (Rounds 66–75) Track 03 & Track 04 B2B Campaign OS: Anonymous Verified Creator Matching Carousel, Selfie Transformation Simulation, Rights Consent Ledger, Hook Score Predictor, Spark/Meta Ad Code Simulator, Attribution Funnel, SLA Tracker, FTC Disclosure Automation, Performance Dashboard & Cohort Scale-Up", () => {
+    const html = renderToStaticMarkup(
+      <BrandBriefStudio
+        organizationId="org-yagi"
+        organizationName="YAGI"
+        locale="ko"
+        canWrite={true}
+        identityConfirmed={true}
+      />,
+    );
+
+    // Round 66: Verified 3,000+ Follower Creator Candidate Matching Carousel (Anonymous per AGENTS.md §5)
+    expect(html).toContain("data-creator-candidate-matching-carousel");
+    expect(html).toContain('data-creator-candidate-card="creator_cohort_fashion_01"');
+
+    // Round 67: Creator Selfie-to-Format Live Simulation Preview
+    expect(html).toContain("data-selfie-transformation-simulation-preview");
+    expect(html).toContain('data-simulation-selfie-dropzone="ready"');
+
+    // Round 68: Portrait Rights & Secondary Paid Ad Usage Consent Ledger (Terms §5.3)
+    expect(html).toContain("data-creator-rights-consent-ledger");
+    expect(html).toContain('data-rights-term-badge="365d"');
+
+    // Round 69: First-3-Second Hook Retention & Stop-Scroll Score Predictor
+    expect(html).toContain("data-hook-score-predictor");
+    expect(html).toContain('data-hook-retention-meter="92_exceptional"');
+
+    // Round 70: TikTok Spark Ads & Meta Partnership Ad Code Live Simulator
+    expect(html).toContain("data-partnership-ad-code-simulator");
+    expect(html).toContain("data-spark-ads-code-preview");
+
+    // Round 71: Multi-Channel UTM & Conversion Attribution Funnel Calculator
+    expect(html).toContain("data-campaign-attribution-funnel-calculator");
+    expect(html).toContain("data-blended-cpa-estimate");
+
+    // Round 72: Creator Seeding SLA Guarantee & Replacement Policy Tracker
+    expect(html).toContain("data-creator-sla-timeline-tracker");
+    expect(html).toContain("data-sla-milestone-chip");
+
+    // Round 73: Automated FTC / Fair Trade Ad Disclosure & Prohibited Claim Filter
+    expect(html).toContain("data-ftc-disclosure-automation-engine");
+    expect(html).toContain("data-prohibited-claim-filter");
+
+    // Round 74: Live Post-Seeding Performance Aggregation Dashboard Preview
+    expect(html).toContain("data-campaign-performance-mock-dashboard");
+    expect(html).toContain("data-total-reach-counter");
+
+    // Round 75: 1-Click Repeat Campaign & Cohort Scale-Up Flow
+    expect(html).toContain("data-campaign-scale-expansion-bar");
+    expect(html).toContain('data-expand-cohort-btn="add_20"');
+  });
+
+  it("24. verifies Phase IV (Rounds 76–85) Track 05 Audio Beat-Snap Scrubber, Voiceover Tone, Music License PDF, Frame.io Timecode Review Thread, External Client Share Link, Watermark Toggle, CMO Approval Gate, Budget Cap Guardrail, Version History Rollback & Brand Compliance Score", () => {
+    const html = renderToStaticMarkup(
+      <BrandBriefStudio
+        organizationId="org-yagi"
+        organizationName="YAGI"
+        locale="ko"
+        canWrite={true}
+        identityConfirmed={true}
+      />,
+    );
+
+    // Round 76: Interactive Audio Waveform Scrubber & Beat-Snap Marker Engine
+    expect(html).toContain("data-audio-waveform-scrubber");
+    expect(html).toContain("data-beat-marker-snap-engine");
+
+    // Round 77: Voiceover Emotion, Pacing & Brand Persona Selector
+    expect(html).toContain('data-voiceover-tone-selector="luxury_calm"');
+
+    // Round 78: Commercial Music Copyright Clearance Certificate Generator
+    expect(html).toContain("data-music-license-certificate-modal");
+    expect(html).toContain("data-download-license-pdf-btn");
+
+    // Round 79: Frame-Accurate Timecode Review & Pin Comment Thread (Frame.io Style)
+    expect(html).toContain("data-timecode-comment-thread");
+    expect(html).toContain("data-timecode-comment-input");
+
+    // Round 80: External Client / Executive Password-Protected Review Share Link
+    expect(html).toContain("data-external-client-review-share-sheet");
+    expect(html).toContain("data-client-review-url-copy-btn");
+
+    // Round 81: Draft Watermark Protection vs Approved Clean Master Unlock
+    expect(html).toContain('data-review-watermark-toggle="draft_watermark"');
+
+    // Round 82: Multi-Role Approval Workflow (Designer -> Brand Manager -> CMO Sign-Off)
+    expect(html).toContain("data-enterprise-approval-gate-bar");
+    expect(html).toContain("data-cmo-signoff-btn");
+
+    // Round 83: Organization Credit Budget Guardrail & Spend Cap Alert
+    expect(html).toContain("data-budget-cap-guardrail");
+    expect(html).toContain("data-spend-cap-progress-bar");
+
+    // Round 84: Non-Destructive Version History & 1-Click Snapshot Rollback
+    expect(html).toContain("data-asset-version-history-drawer");
+    expect(html).toContain("data-version-rollback-btn");
+
+    // Round 85: Automated Brand Memory Compliance Score (99.8% Brand Fit Check)
+    expect(html).toContain("data-brand-memory-compliance-validator");
+    expect(html).toContain('data-compliance-score-badge="99_8_percent"');
+  });
+
+  it("25. verifies Phase V (Rounds 86–95) /brand SKU Filter, SSR Query Hydration (initialScenario & initialMode), Library Track Filter, Bulk Package Builder, Advisory Face Angle Check & Enterprise SLA Shield", () => {
+    const showcaseHtml = renderToStaticMarkup(
+      <CampaignMoatShowcase
+        locale="ko"
+        organizationId="org-yagi"
+        studioOpen={true}
+      />,
+    );
+
+    // Round 86 & Round 87: /brand Command Center SKU Filter & Scenario Query Deep-Linking
+    expect(showcaseHtml).toContain("data-brand-home-sku-filter");
+    expect(showcaseHtml).toContain("data-project-quick-switcher");
+    expect(showcaseHtml).toContain("scenario=launch_full_pack");
+    expect(showcaseHtml).toContain("scenario=creator_30_seeding");
+    expect(showcaseHtml).toContain("scenario=lookbook_micro_edit");
+
+    // Round 87 & Round 88: Studio SSR Query Hydration (initialScenario & initialMode)
+    const hydratedHtml = renderToStaticMarkup(
+      <BrandBriefStudio
+        organizationId="org-yagi"
+        organizationName="YAGI"
+        locale="ko"
+        canWrite={true}
+        identityConfirmed={true}
+        initialScenario="creator_30_seeding"
+        initialMode="track_creator_distribution"
+      />,
+    );
+    expect(hydratedHtml).toContain('data-studio-scenario-hydrator="creator_30_seeding"');
+    expect(hydratedHtml).toContain('data-studio-surface-query-sync="track_creator_distribution"');
+
+    // Round 89 & Round 90: Brand Library Track Filter & Bulk Download Package Builder
+    expect(hydratedHtml).toContain("data-brand-library-track-filter-bar");
+    expect(hydratedHtml).toContain("data-bulk-download-package-builder");
+    expect(hydratedHtml).toContain("data-download-folder-structure-preview");
+
+    // Round 93: Advisory Face Angle Check & Zero Creator PII Guard
+    expect(hydratedHtml).toContain('data-advisory-face-check-badge="advisory_only_never_blocking"');
+
+    // Round 94: Enterprise Reliability, Zero-Training Privacy Shield & 99.9% SLA Footer
+    expect(hydratedHtml).toContain("data-enterprise-sla-guarantee-badge");
+    expect(hydratedHtml).toContain("data-data-privacy-shield-badge");
+  });
 });
