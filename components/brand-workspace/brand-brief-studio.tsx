@@ -2553,26 +2553,139 @@ export function BrandBriefStudio({
     try {
       e.dataTransfer.effectAllowed = "copyMove";
       e.dataTransfer.setData("application/x-twings-image", JSON.stringify(payload));
-      e.dataTransfer.setData("text/plain", payload.label);
+      e.dataTransfer.setData("text/uri-list", payload.src);
+      e.dataTransfer.setData("text/plain", payload.src);
     } catch {
       // ignore sandboxed drag errors
     }
   }
 
   function extractDroppedImageFiles(dt: DataTransfer | null): File[] {
-    if (!dt || !dt.files || dt.files.length === 0) return [];
+    if (!dt) return [];
     const out: File[] = [];
-    for (let i = 0; i < dt.files.length; i += 1) {
-      const f = dt.files[i];
-      if (!f) continue;
+    const seen = new Set<string>();
+    const addIfValid = (f: File | null | undefined) => {
+      if (!f) return;
+      const key = `${f.name}:${f.size}:${f.lastModified}`;
+      if (seen.has(key)) return;
+      const isVidOrAudio =
+        f.type.startsWith("video/") ||
+        f.type.startsWith("audio/") ||
+        /\.(mp4|mov|webm|m4v|mp3|wav|ogg|zip|pdf)$/i.test(f.name);
+      if (isVidOrAudio) return;
       if (
         f.type.startsWith("image/") ||
-        /\.(png|jpe?g|webp|gif|avif|bmp|svg)$/i.test(f.name)
+        /\.(png|jpe?g|jfif|pjpeg|pjp|webp|gif|avif|bmp|svg|ico|tiff?|heic|heif)$/i.test(
+          f.name,
+        ) ||
+        f.type === ""
       ) {
+        seen.add(key);
         out.push(f);
+      }
+    };
+    if (dt.files && dt.files.length > 0) {
+      for (let i = 0; i < dt.files.length; i += 1) {
+        addIfValid(dt.files[i]);
+      }
+    }
+    if (out.length === 0 && dt.items && dt.items.length > 0) {
+      for (let i = 0; i < dt.items.length; i += 1) {
+        const item = dt.items[i];
+        if (item && item.kind === "file") {
+          addIfValid(item.getAsFile());
+        }
       }
     }
     return out;
+  }
+
+  function extractDroppedWebImageSources(
+    dt: DataTransfer | null,
+  ): Array<{ src: string; label: string; fromSlot?: StudioReferenceSlotNumber }> {
+    if (!dt) return [];
+    const results: Array<{
+      src: string;
+      label: string;
+      fromSlot?: StudioReferenceSlotNumber;
+    }> = [];
+
+    const rawInternal = dt.getData("application/x-twings-image");
+    if (rawInternal) {
+      try {
+        const parsed = JSON.parse(rawInternal) as {
+          src?: string;
+          label?: string;
+          fromSlot?: StudioReferenceSlotNumber;
+        };
+        if (parsed.src) {
+          results.push({
+            src: parsed.src,
+            label: parsed.label || (isKo ? "드래그 이미지" : "Dragged image"),
+            fromSlot: parsed.fromSlot,
+          });
+          return results;
+        }
+      } catch {
+        // fall through
+      }
+    }
+
+    const htmlData = dt.getData("text/html");
+    if (htmlData) {
+      const imgMatch = htmlData.match(/<img[^>]+src=["']([^"']+)["']/i);
+      const altMatch = htmlData.match(/<img[^>]+alt=["']([^"']*)["']/i);
+      if (imgMatch?.[1]) {
+        const rawSrc = imgMatch[1].replace(/&amp;/g, "&").trim();
+        if (rawSrc) {
+          results.push({
+            src: rawSrc,
+            label:
+              altMatch?.[1]?.trim() ||
+              rawSrc.split("/").pop()?.split("?")[0] ||
+              (isKo ? "웹 이미지" : "Web image"),
+          });
+          return results;
+        }
+      }
+    }
+
+    const uriList = dt.getData("text/uri-list") || dt.getData("URL");
+    if (uriList) {
+      const lines = uriList
+        .split(/\r?\n/)
+        .map((l) => l.trim())
+        .filter((l) => l && !l.startsWith("#"));
+      for (const line of lines) {
+        if (/^(\/|https?:\/\/|blob:|data:image\/)/i.test(line)) {
+          results.push({
+            src: line,
+            label:
+              line.split("/").pop()?.split("?")[0] ||
+              (isKo ? "드래그 이미지" : "Dragged image"),
+          });
+        }
+      }
+      if (results.length > 0) return results;
+    }
+
+    const plain = dt.getData("text/plain")?.trim();
+    if (
+      plain &&
+      (/^(\/reel\/|https?:\/\/[^\s]+\.(png|jpe?g|webp|gif|avif|svg)|blob:|data:image\/)/i.test(
+        plain,
+      ) ||
+        /^https?:\/\/localhost:\d+\//i.test(plain))
+    ) {
+      results.push({
+        src: plain,
+        label:
+          plain.split("/").pop()?.split("?")[0] ||
+          (isKo ? "드래그 이미지" : "Dragged image"),
+      });
+    }
+
+    return results;
   }
 
   function fillRefSlotsFromFiles(
@@ -2636,63 +2749,64 @@ export function BrandBriefStudio({
     e.stopPropagation();
     setDragOverTarget(null);
 
-    const rawInternal = e.dataTransfer?.getData("application/x-twings-image");
-    if (rawInternal) {
-      try {
-        const parsed = JSON.parse(rawInternal) as {
-          src: string;
-          label: string;
-          fromSlot?: StudioReferenceSlotNumber;
-        };
-        if (parsed.src) {
-          if (parsed.fromSlot && parsed.fromSlot !== slotNumber) {
-            const otherSlot = parsed.fromSlot;
-            setCustomSlotThumbs((prev) => {
-              const next = { ...prev };
-              const prevTarget = prev[slotNumber];
-              next[slotNumber] = parsed.src;
-              if (prevTarget) next[otherSlot] = prevTarget;
-              else delete next[otherSlot];
-              return next;
-            });
-            setCustomSlotNames((prev) => {
-              const next = { ...prev };
-              const prevTargetName = prev[slotNumber];
-              next[slotNumber] = parsed.label;
-              if (prevTargetName) next[otherSlot] = prevTargetName;
-              else delete next[otherSlot];
-              return next;
-            });
-            setStatusMessage(
-              isKo
-                ? `${otherSlot}번 슬롯과 ${slotNumber}번 슬롯 이미지를 맞바꿨습니다.`
-                : `Swapped slot ${otherSlot} and slot ${slotNumber}.`,
-            );
-          } else {
-            setCustomSlotThumbs((prev) => ({ ...prev, [slotNumber]: parsed.src }));
-            setCustomSlotNames((prev) => ({ ...prev, [slotNumber]: parsed.label }));
-            setGuideProgress((p) => ({ ...p, refs: true }));
-            setStatusMessage(
-              isKo
-                ? `'${parsed.label}' 이미지를 ${slotNumber}번 참고 슬롯에 넣었습니다.`
-                : `Dropped '${parsed.label}' into reference slot ${slotNumber}.`,
-            );
-          }
-          return;
-        }
-      } catch {
-        // fall through to file drop
-      }
-    }
-
     const files = extractDroppedImageFiles(e.dataTransfer);
     if (files.length > 0) {
       fillRefSlotsFromFiles(files, slotNumber, false);
+      return;
+    }
+
+    const webSources = extractDroppedWebImageSources(e.dataTransfer);
+    if (webSources.length > 0) {
+      const first = webSources[0]!;
+      if (first.fromSlot && first.fromSlot !== slotNumber) {
+        const otherSlot = first.fromSlot;
+        setCustomSlotThumbs((prev) => {
+          const next = { ...prev };
+          const prevTarget = prev[slotNumber];
+          next[slotNumber] = first.src;
+          if (prevTarget) next[otherSlot] = prevTarget;
+          else delete next[otherSlot];
+          return next;
+        });
+        setCustomSlotNames((prev) => {
+          const next = { ...prev };
+          const prevTargetName = prev[slotNumber];
+          next[slotNumber] = first.label;
+          if (prevTargetName) next[otherSlot] = prevTargetName;
+          else delete next[otherSlot];
+          return next;
+        });
+        setStatusMessage(
+          isKo
+            ? `${otherSlot}번 슬롯과 ${slotNumber}번 슬롯 이미지를 맞바꿨습니다.`
+            : `Swapped slot ${otherSlot} and slot ${slotNumber}.`,
+        );
+      } else {
+        setCustomSlotThumbs((prev) => ({ ...prev, [slotNumber]: first.src }));
+        setCustomSlotNames((prev) => ({ ...prev, [slotNumber]: first.label }));
+        if (!canvasCut) {
+          const autoCut = {
+            id: `cut-slot-${Date.now()}`,
+            src: first.src,
+            label: first.label,
+            meta: isKo ? `${slotNumber}번 레퍼런스` : `Slot ${slotNumber}`,
+          };
+          setCanvasCut(autoCut);
+          setSessionCuts((prev) => [autoCut, ...prev].slice(0, 24));
+        }
+        setGuideProgress((p) => ({ ...p, refs: true }));
+        setStatusMessage(
+          isKo
+            ? `'${first.label}' 이미지를 ${slotNumber}번 참고 슬롯에 넣었습니다.`
+            : `Dropped '${first.label}' into reference slot ${slotNumber}.`,
+        );
+      }
     }
   }
 
   function handleDropOnRefRail(e: DragEvent<HTMLElement>) {
     e.preventDefault();
+    e.stopPropagation();
     setDragOverTarget(null);
     const firstEmpty =
       ([1, 2, 3, 4] as const).find((n) => !customSlotThumbs[n]) ?? 1;
@@ -2704,61 +2818,65 @@ export function BrandBriefStudio({
     e.stopPropagation();
     setDragOverTarget(null);
 
-    const rawInternal = e.dataTransfer?.getData("application/x-twings-image");
-    if (rawInternal) {
-      try {
-        const parsed = JSON.parse(rawInternal) as { src: string; label: string };
-        if (parsed.src) {
-          const nextCut = {
-            id: `cut-canvas-${Date.now()}`,
-            src: parsed.src,
-            label: parsed.label,
-            meta: isKo ? "캔버스 작업 중" : "On canvas",
-          };
-          setCanvasCut(nextCut);
-          setCanvasViewMode("single");
-          setEdgeEraseStrokes([]);
-          setStatusMessage(
-            isKo
-              ? `'${parsed.label}' 이미지를 작업 캔버스에 올렸습니다. 고칠 부위를 네모(M)로 드래그해 부분 수정하거나 영상으로 보내세요.`
-              : `Loaded '${parsed.label}' onto the canvas. Drag a box (M) to fix a region or send to video.`,
-          );
-          return;
+    const files = extractDroppedImageFiles(e.dataTransfer);
+    if (files.length > 0) {
+      if (files.length === 1) {
+        const file = files[0]!;
+        const url = createManagedObjectUrl(file);
+        if (!url) return;
+        const newCut = {
+          id: `cut-upload-${Date.now()}`,
+          src: url,
+          label: file.name,
+          meta: isKo ? "업로드 원본" : "Uploaded",
+        };
+        setCanvasCut(newCut);
+        setSessionCuts((prev) => [newCut, ...prev].slice(0, 24));
+        if (!customSlotThumbs[1]) {
+          setCustomSlotThumbs((prev) => ({ ...prev, 1: url }));
+          setCustomSlotNames((prev) => ({ ...prev, 1: file.name }));
         }
-      } catch {
-        // fall through
+        setEdgeEraseStrokes([]);
+        setGuideProgress((p) => ({ ...p, refs: true, image: true }));
+        setStatusMessage(
+          isKo
+            ? `'${file.name}' 이미지를 캔버스와 1번 참고 슬롯에 올렸습니다. 바로 화보를 생성하거나 부분 수정·디자인 편집을 시작하세요.`
+            : `Loaded '${file.name}' onto the canvas and slot 1.`,
+        );
+      } else {
+        const firstEmpty =
+          ([1, 2, 3, 4] as const).find((n) => !customSlotThumbs[n]) ?? 1;
+        fillRefSlotsFromFiles(files, firstEmpty, true);
+        if (files.length >= 2) {
+          setCanvasViewMode("board");
+        }
       }
+      return;
     }
 
-    const files = extractDroppedImageFiles(e.dataTransfer);
-    if (files.length === 0) return;
-
-    if (files.length === 1) {
-      const file = files[0]!;
-      const url = createManagedObjectUrl(file);
-      if (!url) return;
-      const newCut = {
-        id: `cut-upload-${Date.now()}`,
-        src: url,
-        label: file.name,
-        meta: isKo ? "업로드 원본" : "Uploaded",
+    const webSources = extractDroppedWebImageSources(e.dataTransfer);
+    if (webSources.length > 0) {
+      const picked = webSources[0]!;
+      const nextCut = {
+        id: `cut-canvas-${Date.now()}`,
+        src: picked.src,
+        label: picked.label,
+        meta: isKo ? "캔버스 작업 중" : "On canvas",
       };
-      setCanvasCut(newCut);
-      setSessionCuts((prev) => [newCut, ...prev].slice(0, 24));
+      setCanvasCut(nextCut);
+      setSessionCuts((prev) => [nextCut, ...prev.filter((c) => c.src !== picked.src)].slice(0, 24));
+      if (!customSlotThumbs[1]) {
+        setCustomSlotThumbs((prev) => ({ ...prev, 1: picked.src }));
+        setCustomSlotNames((prev) => ({ ...prev, 1: picked.label }));
+      }
+      setCanvasViewMode("single");
       setEdgeEraseStrokes([]);
       setGuideProgress((p) => ({ ...p, refs: true, image: true }));
       setStatusMessage(
         isKo
-          ? `'${file.name}' 원본을 캔버스에 올렸습니다. 이미지 위를 드래그해 부분 수정(네모·지우개)하거나 왼쪽 1~4번 슬롯으로 끌어가세요.`
-          : `Loaded '${file.name}' onto the canvas.`,
+          ? `'${picked.label}' 이미지를 캔버스에 올렸습니다. 부분 수정·디자인 레이어 편집 또는 화보 생성을 시작하세요.`
+          : `Loaded '${picked.label}' onto the canvas.`,
       );
-    } else {
-      const firstEmpty =
-        ([1, 2, 3, 4] as const).find((n) => !customSlotThumbs[n]) ?? 1;
-      fillRefSlotsFromFiles(files, firstEmpty, true);
-      if (files.length >= 2) {
-        setCanvasViewMode("board");
-      }
     }
   }
 
@@ -2796,29 +2914,24 @@ export function BrandBriefStudio({
     e.stopPropagation();
     setDragOverTarget(null);
 
-    const rawInternal = e.dataTransfer?.getData("application/x-twings-image");
-    if (rawInternal) {
-      try {
-        const parsed = JSON.parse(rawInternal) as { src: string; label: string };
-        if (parsed.src) {
-          setVideoBoardFrame({ src: parsed.src, label: parsed.label });
-          setShellFirstFrameLinked(true);
-          setGuideProgress((p) => ({ ...p, video: true }));
-          setStatusMessage(
-            isKo
-              ? `'${parsed.label}' 이미지를 영상 시작 프레임(첫 장면)으로 연결했습니다.`
-              : `Linked '${parsed.label}' as the video start frame.`,
-          );
-          return;
-        }
-      } catch {
-        // fall through
-      }
+    const webSources = extractDroppedWebImageSources(e.dataTransfer);
+    if (webSources.length > 0) {
+      const picked = webSources[0]!;
+      setVideoBoardFrame({ src: picked.src, label: picked.label });
+      setShellFirstFrameLinked(true);
+      setGuideProgress((p) => ({ ...p, video: true }));
+      setStatusMessage(
+        isKo
+          ? `'${picked.label}' 이미지를 영상 시작 프레임(첫 장면)으로 연결했습니다.`
+          : `Linked '${picked.label}' as the video start frame.`,
+      );
+      return;
     }
 
     const dt = e.dataTransfer;
-    if (!dt || !dt.files || dt.files.length === 0) return;
-    const file = dt.files[0];
+    if (!dt) return;
+    const files = dt.files && dt.files.length > 0 ? Array.from(dt.files) : extractDroppedImageFiles(dt);
+    const file = files[0];
     if (!file) return;
     const isVideo =
       file.type.startsWith("video/") || /\.(mp4|mov|webm|m4v)$/i.test(file.name);
@@ -2843,7 +2956,9 @@ export function BrandBriefStudio({
     e.stopPropagation();
     setDragOverTarget(null);
     const files = extractDroppedImageFiles(e.dataTransfer);
-    if (files.length === 0) return;
+    const webSources =
+      files.length === 0 ? extractDroppedWebImageSources(e.dataTransfer) : [];
+    if (files.length === 0 && webSources.length === 0) return;
     const remainingSlots =
       MAX_BRAND_MOODBOARD_IMAGES - customMoodboardItems.length;
     if (remainingSlots <= 0) {
@@ -2856,18 +2971,32 @@ export function BrandBriefStudio({
     }
     const paletteCycle = ["#3875C5", "#DCEAF7", "#1E293B", "#64748B"] as const;
     const nextAdded: BrandCustomMoodboardItem[] = [];
-    for (let i = 0; i < Math.min(files.length, remainingSlots); i += 1) {
-      const f = files[i];
-      if (!f) continue;
-      const url = createManagedObjectUrl(f);
-      if (!url) continue;
-      nextAdded.push({
-        id: `mb-drop-${Date.now()}-${i}`,
-        src: url,
-        labelKo: f.name,
-        labelEn: f.name,
-        dominantHex: paletteCycle[i % paletteCycle.length]!,
-      });
+    if (files.length > 0) {
+      for (let i = 0; i < Math.min(files.length, remainingSlots); i += 1) {
+        const f = files[i];
+        if (!f) continue;
+        const url = createManagedObjectUrl(f);
+        if (!url) continue;
+        nextAdded.push({
+          id: `mb-drop-${Date.now()}-${i}`,
+          src: url,
+          labelKo: f.name,
+          labelEn: f.name,
+          dominantHex: paletteCycle[i % paletteCycle.length]!,
+        });
+      }
+    } else {
+      for (let i = 0; i < Math.min(webSources.length, remainingSlots); i += 1) {
+        const w = webSources[i];
+        if (!w) continue;
+        nextAdded.push({
+          id: `mb-web-${Date.now()}-${i}`,
+          src: w.src,
+          labelKo: w.label,
+          labelEn: w.label,
+          dominantHex: paletteCycle[i % paletteCycle.length]!,
+        });
+      }
     }
     if (nextAdded.length === 0) return;
     const updated = clampMoodboardItemsToMax([
@@ -2876,6 +3005,7 @@ export function BrandBriefStudio({
     ]);
     setCustomMoodboardItems(updated);
     setAestheticSourceMode("custom_moodboard");
+    setIsAestheticLockEnabled(true);
     setStatusMessage(
       isKo
         ? `드래그한 사진 ${nextAdded.length}장이 브랜드 무드보드(${updated.length}/${MAX_BRAND_MOODBOARD_IMAGES}장)에 추가되었습니다.`
@@ -2993,6 +3123,7 @@ export function BrandBriefStudio({
     ]);
     setCustomMoodboardItems(updated);
     setAestheticSourceMode("custom_moodboard");
+    setIsAestheticLockEnabled(true);
     setGuideProgress((p) => ({ ...p, refs: true }));
     setStatusMessage(
       isKo
@@ -3047,6 +3178,7 @@ export function BrandBriefStudio({
     ]);
     setCustomMoodboardItems(updated);
     setAestheticSourceMode("custom_moodboard");
+    setIsAestheticLockEnabled(true);
   }
 
   function handleRemoveCustomMoodboardItem(id: string) {
@@ -3092,6 +3224,1093 @@ export function BrandBriefStudio({
     }
     return "image";
   });
+
+  // =========================================================================
+  // CANVA / PHOTOSHOP / DOORY / PENPOT-INSPIRED MARKETING ASSET & LAYER STUDIO
+  // =========================================================================
+  type StudioCanvasMode = "shoot" | "retouch" | "design";
+  const [studioCanvasMode, setStudioCanvasMode] = useState<StudioCanvasMode>("shoot");
+
+  type AdLayerFontId = "pretendard" | "helvetica_neue" | "apple_sd" | "geist_mono";
+  type AdLayerStyle = "headline" | "subcopy" | "badge" | "brandmark";
+  interface AdOverlayLayer {
+    id: string;
+    kind: AdLayerStyle;
+    text: string;
+    xPct: number;
+    yPct: number;
+    fontSizePx: number;
+    fontWeight: 500 | 600 | 700;
+    fontId: AdLayerFontId;
+    colorHex: string;
+    backdropMode: "none" | "glass" | "ink" | "accent" | "paper";
+    align: "left" | "center" | "right";
+    letterSpacingEm: number;
+    uppercase: boolean;
+    visible: boolean;
+  }
+
+  const AD_FONT_OPTIONS: ReadonlyArray<{
+    id: AdLayerFontId;
+    ko: string;
+    en: string;
+    cssFamily: string;
+  }> = [
+    {
+      id: "pretendard",
+      ko: "Pretendard Variable",
+      en: "Pretendard Variable",
+      cssFamily: '"Pretendard Variable", Pretendard, -apple-system, sans-serif',
+    },
+    {
+      id: "helvetica_neue",
+      ko: "Helvetica Neue",
+      en: "Helvetica Neue",
+      cssFamily: '"TWINGS Helvetica Neue", "Helvetica Neue", Helvetica, "Pretendard Variable", sans-serif',
+    },
+    {
+      id: "apple_sd",
+      ko: "Apple SD Gothic",
+      en: "Apple SD Gothic",
+      cssFamily: '"Apple SD Gothic Neo", "Pretendard Variable", sans-serif',
+    },
+    {
+      id: "geist_mono",
+      ko: "Geist Mono (스펙·코드)",
+      en: "Geist Mono",
+      cssFamily: '"Geist Mono", ui-monospace, SFMono-Regular, monospace',
+    },
+  ];
+
+  const [adLayoutPresetId, setAdLayoutPresetId] = useState<string>("gentle_lookbook");
+  const [adLayers, setAdLayers] = useState<AdOverlayLayer[]>(() => [
+    {
+      id: "layer-brandmark",
+      kind: "brandmark",
+      text: (organizationName || "TWINGS ATELIER").toUpperCase(),
+      xPct: 50,
+      yPct: 9,
+      fontSizePx: 11,
+      fontWeight: 700,
+      fontId: "helvetica_neue",
+      colorHex: "#FFFFFF",
+      backdropMode: "none",
+      align: "center",
+      letterSpacingEm: 0.16,
+      uppercase: true,
+      visible: true,
+    },
+    {
+      id: "layer-headline",
+      kind: "headline",
+      text: isKo ? "2026 컬렉션 에디션" : "2026 COLLECTION EDITION",
+      xPct: 50,
+      yPct: 79,
+      fontSizePx: 26,
+      fontWeight: 700,
+      fontId: "pretendard",
+      colorHex: "#FFFFFF",
+      backdropMode: "none",
+      align: "center",
+      letterSpacingEm: -0.03,
+      uppercase: false,
+      visible: true,
+    },
+    {
+      id: "layer-subcopy",
+      kind: "subcopy",
+      text: isKo ? "서울 플래그십 & 온라인 동시 오픈" : "SEOUL FLAGSHIP & ONLINE RELEASE",
+      xPct: 50,
+      yPct: 87,
+      fontSizePx: 12,
+      fontWeight: 500,
+      fontId: "pretendard",
+      colorHex: "#F1F3F7",
+      backdropMode: "glass",
+      align: "center",
+      letterSpacingEm: 0.02,
+      uppercase: false,
+      visible: true,
+    },
+    {
+      id: "layer-badge",
+      kind: "badge",
+      text: "LOOK 01 / 08",
+      xPct: 16,
+      yPct: 9,
+      fontSizePx: 10,
+      fontWeight: 600,
+      fontId: "geist_mono",
+      colorHex: "#FFFFFF",
+      backdropMode: "ink",
+      align: "left",
+      letterSpacingEm: 0.08,
+      uppercase: true,
+      visible: true,
+    },
+  ]);
+  const [selectedAdLayerId, setSelectedAdLayerId] = useState<string>("layer-headline");
+  const draggingAdLayerRef = useRef<{
+    id: string;
+    startClientX: number;
+    startClientY: number;
+    origXPct: number;
+    origYPct: number;
+  } | null>(null);
+  const [snapGuideX, setSnapGuideX] = useState<number | null>(null);
+  const [snapGuideY, setSnapGuideY] = useState<number | null>(null);
+
+  // Photoshop-inspired Color Grading & Darkroom Look Controls
+  const [adToneBrightness, setAdToneBrightness] = useState<number>(100);
+  const [adToneContrast, setAdToneContrast] = useState<number>(104);
+  const [adToneSaturation, setAdToneSaturation] = useState<number>(98);
+  const [adToneWarmth, setAdToneWarmth] = useState<number>(0);
+  const [adVignettePct, setAdVignettePct] = useState<number>(18);
+  const [adFrameBorderPx, setAdFrameBorderPx] = useState<number>(0);
+  const [adColorLutId, setAdColorLutId] = useState<
+    "neutral" | "gentle_contrast" | "tamburins_mute" | "editorial_cool" | "noir_mono"
+  >("neutral");
+
+  const AD_COLOR_LUTS = [
+    {
+      id: "neutral" as const,
+      ko: "원본 무드",
+      en: "Original",
+      brightness: 100,
+      contrast: 102,
+      saturation: 100,
+      warmth: 0,
+      vignette: 12,
+    },
+    {
+      id: "gentle_contrast" as const,
+      ko: "젠틀 하이콘트라스트",
+      en: "High Contrast",
+      brightness: 98,
+      contrast: 118,
+      saturation: 90,
+      warmth: -4,
+      vignette: 28,
+    },
+    {
+      id: "tamburins_mute" as const,
+      ko: "탬버린즈 쿨 뮤트",
+      en: "Sensory Mute",
+      brightness: 103,
+      contrast: 96,
+      saturation: 82,
+      warmth: -8,
+      vignette: 14,
+    },
+    {
+      id: "editorial_cool" as const,
+      ko: "프렌치 블루 필름",
+      en: "Cool Film",
+      brightness: 101,
+      contrast: 110,
+      saturation: 94,
+      warmth: -12,
+      vignette: 22,
+    },
+    {
+      id: "noir_mono" as const,
+      ko: "모노크롬 누아르",
+      en: "Noir Mono",
+      brightness: 100,
+      contrast: 124,
+      saturation: 0,
+      warmth: 0,
+      vignette: 34,
+    },
+  ] as const;
+
+  const AD_LAYOUT_TEMPLATES = [
+    {
+      id: "gentle_lookbook",
+      ko: "젠틀 룩북 스펙",
+      en: "Lookbook Spec",
+      descKo: "상단 코드 + 하단 무배경 타이틀",
+      descEn: "Top spec code + clean bottom title",
+      frameBorderPx: 0,
+      layers: [
+        {
+          id: "layer-brandmark",
+          kind: "brandmark" as const,
+          text: (organizationName || "TWINGS ATELIER").toUpperCase(),
+          xPct: 50,
+          yPct: 8,
+          fontSizePx: 11,
+          fontWeight: 700 as const,
+          fontId: "helvetica_neue" as const,
+          colorHex: "#FFFFFF",
+          backdropMode: "none" as const,
+          align: "center" as const,
+          letterSpacingEm: 0.18,
+          uppercase: true,
+          visible: true,
+        },
+        {
+          id: "layer-headline",
+          kind: "headline" as const,
+          text: isKo ? "2026 옵티컬 컬렉션" : "2026 OPTICAL COLLECTION",
+          xPct: 50,
+          yPct: 81,
+          fontSizePx: 26,
+          fontWeight: 700 as const,
+          fontId: "pretendard" as const,
+          colorHex: "#FFFFFF",
+          backdropMode: "none" as const,
+          align: "center" as const,
+          letterSpacingEm: -0.03,
+          uppercase: false,
+          visible: true,
+        },
+        {
+          id: "layer-subcopy",
+          kind: "subcopy" as const,
+          text: isKo ? "신제품 캠페인 에셋 · 공식 스토어" : "NEW CAMPAIGN ASSET · OFFICIAL STORE",
+          xPct: 50,
+          yPct: 89,
+          fontSizePx: 12,
+          fontWeight: 500 as const,
+          fontId: "pretendard" as const,
+          colorHex: "#E2E8F0",
+          backdropMode: "glass" as const,
+          align: "center" as const,
+          letterSpacingEm: 0.03,
+          uppercase: false,
+          visible: true,
+        },
+        {
+          id: "layer-badge",
+          kind: "badge" as const,
+          text: "LOOK 01 / 08",
+          xPct: 16,
+          yPct: 8,
+          fontSizePx: 10,
+          fontWeight: 600 as const,
+          fontId: "geist_mono" as const,
+          colorHex: "#FFFFFF",
+          backdropMode: "ink" as const,
+          align: "left" as const,
+          letterSpacingEm: 0.08,
+          uppercase: true,
+          visible: true,
+        },
+      ],
+    },
+    {
+      id: "tamburins_gallery",
+      ko: "탬버린즈 센서리",
+      en: "Sensory Frame",
+      descKo: "화이트 여백 프레임 + 미니멀 캡션",
+      descEn: "White gallery border + minimal caption",
+      frameBorderPx: 18,
+      layers: [
+        {
+          id: "layer-brandmark",
+          kind: "brandmark" as const,
+          text: (organizationName || "TWINGS OBJECT").toUpperCase(),
+          xPct: 50,
+          yPct: 12,
+          fontSizePx: 11,
+          fontWeight: 600 as const,
+          fontId: "helvetica_neue" as const,
+          colorHex: "#0B0C0E",
+          backdropMode: "paper" as const,
+          align: "center" as const,
+          letterSpacingEm: 0.2,
+          uppercase: true,
+          visible: true,
+        },
+        {
+          id: "layer-headline",
+          kind: "headline" as const,
+          text: isKo ? "감각의 잔향, 새로운 텍스처" : "THE SCENT OF STILLNESS",
+          xPct: 50,
+          yPct: 84,
+          fontSizePx: 22,
+          fontWeight: 600 as const,
+          fontId: "apple_sd" as const,
+          colorHex: "#FFFFFF",
+          backdropMode: "none" as const,
+          align: "center" as const,
+          letterSpacingEm: -0.02,
+          uppercase: false,
+          visible: true,
+        },
+        {
+          id: "layer-subcopy",
+          kind: "subcopy" as const,
+          text: isKo ? "오 드 퍼퓸 50mL · 리미티드 패키지" : "EAU DE PARFUM 50mL · LIMITED",
+          xPct: 50,
+          yPct: 91,
+          fontSizePx: 11,
+          fontWeight: 500 as const,
+          fontId: "geist_mono" as const,
+          colorHex: "#FFFFFF",
+          backdropMode: "none" as const,
+          align: "center" as const,
+          letterSpacingEm: 0.06,
+          uppercase: true,
+          visible: true,
+        },
+        {
+          id: "layer-badge",
+          kind: "badge" as const,
+          text: "EDITION N°4",
+          xPct: 50,
+          yPct: 76,
+          fontSizePx: 10,
+          fontWeight: 600 as const,
+          fontId: "geist_mono" as const,
+          colorHex: "#FFFFFF",
+          backdropMode: "glass" as const,
+          align: "center" as const,
+          letterSpacingEm: 0.1,
+          uppercase: true,
+          visible: true,
+        },
+      ],
+    },
+    {
+      id: "drop_launch_card",
+      ko: "신제품 드롭 배너",
+      en: "Product Drop Ad",
+      descKo: "인스타그램·퍼포먼스 광고용 콜아웃",
+      descEn: "Social & performance ad callout",
+      frameBorderPx: 0,
+      layers: [
+        {
+          id: "layer-brandmark",
+          kind: "brandmark" as const,
+          text: (organizationName || "TWINGS STUDIO").toUpperCase(),
+          xPct: 18,
+          yPct: 9,
+          fontSizePx: 11,
+          fontWeight: 700 as const,
+          fontId: "helvetica_neue" as const,
+          colorHex: "#FFFFFF",
+          backdropMode: "none" as const,
+          align: "left" as const,
+          letterSpacingEm: 0.14,
+          uppercase: true,
+          visible: true,
+        },
+        {
+          id: "layer-badge",
+          kind: "badge" as const,
+          text: isKo ? "NEW DROP · 공식 론칭" : "NEW DROP · LIVE NOW",
+          xPct: 24,
+          yPct: 72,
+          fontSizePx: 11,
+          fontWeight: 700 as const,
+          fontId: "pretendard" as const,
+          colorHex: "#FFFFFF",
+          backdropMode: "accent" as const,
+          align: "left" as const,
+          letterSpacingEm: 0.04,
+          uppercase: true,
+          visible: true,
+        },
+        {
+          id: "layer-headline",
+          kind: "headline" as const,
+          text: isKo ? "단 하나의 실루엣으로 완성하는 시즌 룩" : "ENGINEERED FOR MODERN SILHOUETTE",
+          xPct: 50,
+          yPct: 81,
+          fontSizePx: 23,
+          fontWeight: 700 as const,
+          fontId: "pretendard" as const,
+          colorHex: "#FFFFFF",
+          backdropMode: "none" as const,
+          align: "center" as const,
+          letterSpacingEm: -0.03,
+          uppercase: false,
+          visible: true,
+        },
+        {
+          id: "layer-subcopy",
+          kind: "subcopy" as const,
+          text: isKo ? "지금 공식 온라인 스토어에서 만나보세요 →" : "EXPLORE THE COLLECTION ONLINE →",
+          xPct: 50,
+          yPct: 90,
+          fontSizePx: 12,
+          fontWeight: 600 as const,
+          fontId: "pretendard" as const,
+          colorHex: "#0B0C0E",
+          backdropMode: "paper" as const,
+          align: "center" as const,
+          letterSpacingEm: 0.01,
+          uppercase: false,
+          visible: true,
+        },
+      ],
+    },
+    {
+      id: "magazine_masthead",
+      ko: "보그 마스트헤드",
+      en: "Editorial Masthead",
+      descKo: "상단 대형 타이포 + 하단 에디토리얼 크레딧",
+      descEn: "Bold top masthead + bottom editorial credit",
+      frameBorderPx: 0,
+      layers: [
+        {
+          id: "layer-headline",
+          kind: "headline" as const,
+          text: (organizationName || "ARCHIVE").toUpperCase(),
+          xPct: 50,
+          yPct: 14,
+          fontSizePx: 36,
+          fontWeight: 700 as const,
+          fontId: "helvetica_neue" as const,
+          colorHex: "#FFFFFF",
+          backdropMode: "none" as const,
+          align: "center" as const,
+          letterSpacingEm: 0.14,
+          uppercase: true,
+          visible: true,
+        },
+        {
+          id: "layer-brandmark",
+          kind: "brandmark" as const,
+          text: "ISSUE 09 · AUTUMN / WINTER",
+          xPct: 50,
+          yPct: 23,
+          fontSizePx: 10,
+          fontWeight: 600 as const,
+          fontId: "geist_mono" as const,
+          colorHex: "#FFFFFF",
+          backdropMode: "ink" as const,
+          align: "center" as const,
+          letterSpacingEm: 0.12,
+          uppercase: true,
+          visible: true,
+        },
+        {
+          id: "layer-subcopy",
+          kind: "subcopy" as const,
+          text: isKo ? "빛과 구조가 만나는 순간의 기록" : "A STUDY OF LIGHT AND FORM",
+          xPct: 50,
+          yPct: 89,
+          fontSizePx: 13,
+          fontWeight: 500 as const,
+          fontId: "apple_sd" as const,
+          colorHex: "#FFFFFF",
+          backdropMode: "glass" as const,
+          align: "center" as const,
+          letterSpacingEm: 0.02,
+          uppercase: false,
+          visible: true,
+        },
+        {
+          id: "layer-badge",
+          kind: "badge" as const,
+          text: "SEOUL · PARIS",
+          xPct: 50,
+          yPct: 95,
+          fontSizePx: 9,
+          fontWeight: 600 as const,
+          fontId: "geist_mono" as const,
+          colorHex: "#E2E8F0",
+          backdropMode: "none" as const,
+          align: "center" as const,
+          letterSpacingEm: 0.16,
+          uppercase: true,
+          visible: true,
+        },
+      ],
+    },
+    {
+      id: "benefit_promo_split",
+      ko: "캠페인 혜택 카드",
+      en: "Campaign Offer Card",
+      descKo: "프로모션 수치 + 명확한 행동 유도",
+      descEn: "High-converting promo badge + CTA",
+      frameBorderPx: 8,
+      layers: [
+        {
+          id: "layer-badge",
+          kind: "badge" as const,
+          text: isKo ? "48시간 한정 프리오더" : "48H PRE-ORDER EXCLUSIVE",
+          xPct: 50,
+          yPct: 11,
+          fontSizePx: 11,
+          fontWeight: 700 as const,
+          fontId: "pretendard" as const,
+          colorHex: "#FFFFFF",
+          backdropMode: "ink" as const,
+          align: "center" as const,
+          letterSpacingEm: 0.06,
+          uppercase: true,
+          visible: true,
+        },
+        {
+          id: "layer-headline",
+          kind: "headline" as const,
+          text: isKo ? "멤버십 15% 혜택 & 기프트 패키지" : "15% OFF + SIGNATURE GIFT BOX",
+          xPct: 50,
+          yPct: 79,
+          fontSizePx: 22,
+          fontWeight: 700 as const,
+          fontId: "pretendard" as const,
+          colorHex: "#FFFFFF",
+          backdropMode: "ink" as const,
+          align: "center" as const,
+          letterSpacingEm: -0.02,
+          uppercase: false,
+          visible: true,
+        },
+        {
+          id: "layer-subcopy",
+          kind: "subcopy" as const,
+          text: isKo ? "전 품목 무료 배송 · 오늘 자정 마감" : "COMPLIMENTARY SHIPPING · ENDS TONIGHT",
+          xPct: 50,
+          yPct: 89,
+          fontSizePx: 12,
+          fontWeight: 600 as const,
+          fontId: "pretendard" as const,
+          colorHex: "#FFFFFF",
+          backdropMode: "accent" as const,
+          align: "center" as const,
+          letterSpacingEm: 0.02,
+          uppercase: false,
+          visible: true,
+        },
+        {
+          id: "layer-brandmark",
+          kind: "brandmark" as const,
+          text: (organizationName || "TWINGS OFFICIAL").toUpperCase(),
+          xPct: 50,
+          yPct: 95,
+          fontSizePx: 9,
+          fontWeight: 600 as const,
+          fontId: "geist_mono" as const,
+          colorHex: "#FFFFFF",
+          backdropMode: "none" as const,
+          align: "center" as const,
+          letterSpacingEm: 0.14,
+          uppercase: true,
+          visible: true,
+        },
+      ],
+    },
+    {
+      id: "clean_unbranded",
+      ko: "순수 화보 (레이어 숨김)",
+      en: "Clean Still Only",
+      descKo: "타이포 없이 색감·톤 보정만 적용",
+      descEn: "Color grading only, no text overlays",
+      frameBorderPx: 0,
+      layers: [],
+    },
+  ] as const;
+
+  const selectedAdLayer =
+    adLayers.find((l) => l.id === selectedAdLayerId) ?? adLayers[0] ?? null;
+
+  const computedCanvasFilterCss = `brightness(${adToneBrightness}%) contrast(${adToneContrast}%) saturate(${adToneSaturation}%)${
+    adToneWarmth > 0
+      ? ` sepia(${Math.min(35, adToneWarmth * 1.4)}%)`
+      : adToneWarmth < 0
+        ? ` hue-rotate(${Math.max(-18, adToneWarmth * 0.9)}deg)`
+        : ""
+  }`;
+
+  function handleApplyAdLayoutPreset(presetId: string) {
+    const preset = AD_LAYOUT_TEMPLATES.find((t) => t.id === presetId);
+    if (!preset) return;
+    setAdLayoutPresetId(preset.id);
+    setAdFrameBorderPx(preset.frameBorderPx);
+    if (preset.layers.length === 0) {
+      setAdLayers((prev) => prev.map((l) => ({ ...l, visible: false })));
+    } else {
+      const cloned: AdOverlayLayer[] = preset.layers.map((l) => ({ ...l }));
+      setAdLayers(cloned);
+      setSelectedAdLayerId(cloned[0]?.id ?? "layer-headline");
+    }
+  }
+
+  function handleSelectAdLut(lutId: (typeof AD_COLOR_LUTS)[number]["id"]) {
+    const lut = AD_COLOR_LUTS.find((l) => l.id === lutId);
+    if (!lut) return;
+    setAdColorLutId(lut.id);
+    setAdToneBrightness(lut.brightness);
+    setAdToneContrast(lut.contrast);
+    setAdToneSaturation(lut.saturation);
+    setAdToneWarmth(lut.warmth);
+    setAdVignettePct(lut.vignette);
+  }
+
+  function updateSelectedAdLayer(patch: Partial<AdOverlayLayer>) {
+    if (!selectedAdLayer) return;
+    setAdLayers((prev) =>
+      prev.map((layer) =>
+        layer.id === selectedAdLayer.id ? { ...layer, ...patch } : layer,
+      ),
+    );
+  }
+
+  function handleAddCustomAdLayer() {
+    const newId = `layer-custom-${Date.now()}`;
+    const nextLayer: AdOverlayLayer = {
+      id: newId,
+      kind: "subcopy",
+      text: isKo ? "새 마케팅 카피 입력" : "NEW MARKETING COPY",
+      xPct: 50,
+      yPct: 50,
+      fontSizePx: 16,
+      fontWeight: 600,
+      fontId: "pretendard",
+      colorHex: "#FFFFFF",
+      backdropMode: "glass",
+      align: "center",
+      letterSpacingEm: -0.01,
+      uppercase: false,
+      visible: true,
+    };
+    setAdLayers((prev) => [...prev, nextLayer]);
+    setSelectedAdLayerId(newId);
+  }
+
+  function handleAdLayerMouseDown(
+    e: MouseEvent<HTMLDivElement>,
+    layer: AdOverlayLayer,
+  ) {
+    e.stopPropagation();
+    setSelectedAdLayerId(layer.id);
+    draggingAdLayerRef.current = {
+      id: layer.id,
+      startClientX: e.clientX,
+      startClientY: e.clientY,
+      origXPct: layer.xPct,
+      origYPct: layer.yPct,
+    };
+  }
+
+  function handleAdCanvasMouseMove(e: MouseEvent<HTMLDivElement>) {
+    const drag = draggingAdLayerRef.current;
+    if (!drag) return;
+    const rect = e.currentTarget.getBoundingClientRect();
+    if (rect.width <= 0 || rect.height <= 0) return;
+    const dxPct = ((e.clientX - drag.startClientX) / rect.width) * 100;
+    const dyPct = ((e.clientY - drag.startClientY) / rect.height) * 100;
+    let nextX = Math.max(6, Math.min(94, drag.origXPct + dxPct));
+    let nextY = Math.max(6, Math.min(94, drag.origYPct + dyPct));
+
+    // Penpot/Figma-inspired smart center & margin alignment snap guides
+    if (Math.abs(nextX - 50) < 2.2) {
+      nextX = 50;
+      setSnapGuideX(50);
+    } else if (Math.abs(nextX - 16) < 1.8) {
+      nextX = 16;
+      setSnapGuideX(16);
+    } else if (Math.abs(nextX - 84) < 1.8) {
+      nextX = 84;
+      setSnapGuideX(84);
+    } else {
+      setSnapGuideX(null);
+    }
+
+    if (Math.abs(nextY - 50) < 2.2) {
+      nextY = 50;
+      setSnapGuideY(50);
+    } else {
+      setSnapGuideY(null);
+    }
+
+    setAdLayers((prev) =>
+      prev.map((l) =>
+        l.id === drag.id
+          ? {
+              ...l,
+              xPct: Math.round(nextX * 10) / 10,
+              yPct: Math.round(nextY * 10) / 10,
+            }
+          : l,
+      ),
+    );
+  }
+
+  function handleAdCanvasMouseUp() {
+    draggingAdLayerRef.current = null;
+    setSnapGuideX(null);
+    setSnapGuideY(null);
+  }
+
+  async function renderAdCompositeDataUrl(): Promise<string | null> {
+    const activeSrc =
+      canvasCut?.src ??
+      customSlotThumbs[1] ??
+      activeEasyModelRow.verifiedSampleImage;
+    if (!activeSrc || typeof document === "undefined") return null;
+
+    return new Promise((resolve) => {
+      const img = new Image();
+      img.crossOrigin = "anonymous";
+      img.onload = () => {
+        try {
+          const outW = 1080;
+          const outH = 1350;
+          const canvas = document.createElement("canvas");
+          canvas.width = outW;
+          canvas.height = outH;
+          const ctx = canvas.getContext("2d");
+          if (!ctx) {
+            resolve(null);
+            return;
+          }
+          ctx.fillStyle = "#FFFFFF";
+          ctx.fillRect(0, 0, outW, outH);
+
+          const pad = Math.round((adFrameBorderPx / 560) * outW);
+          const drawW = outW - pad * 2;
+          const drawH = outH - pad * 2;
+
+          ctx.save();
+          ctx.filter = computedCanvasFilterCss;
+          const imgRatio = img.width / Math.max(1, img.height);
+          const boxRatio = drawW / drawH;
+          let sx = 0;
+          let sy = 0;
+          let sw = img.width;
+          let sh = img.height;
+          if (imgRatio > boxRatio) {
+            sw = img.height * boxRatio;
+            sx = (img.width - sw) / 2;
+          } else {
+            sh = img.width / boxRatio;
+            sy = (img.height - sh) / 2;
+          }
+          ctx.drawImage(img, sx, sy, sw, sh, pad, pad, drawW, drawH);
+          ctx.restore();
+
+          if (adVignettePct > 0) {
+            const grad = ctx.createRadialGradient(
+              outW / 2,
+              outH / 2,
+              outW * 0.25,
+              outW / 2,
+              outH / 2,
+              outH * 0.72,
+            );
+            grad.addColorStop(0, "rgba(0,0,0,0)");
+            grad.addColorStop(1, `rgba(8,10,14,${(adVignettePct / 100) * 0.65})`);
+            ctx.fillStyle = grad;
+            ctx.fillRect(pad, pad, drawW, drawH);
+          }
+
+          for (const layer of adLayers) {
+            if (!layer.visible || !layer.text.trim()) continue;
+            const scale = outW / 520;
+            const fontPx = Math.round(layer.fontSizePx * scale);
+            const fontSpec =
+              AD_FONT_OPTIONS.find((f) => f.id === layer.fontId) ??
+              AD_FONT_OPTIONS[0]!;
+            ctx.save();
+            ctx.font = `${layer.fontWeight} ${fontPx}px ${fontSpec.cssFamily}`;
+            ctx.textAlign = layer.align;
+            ctx.textBaseline = "middle";
+            const rawText = layer.uppercase
+              ? layer.text.toUpperCase()
+              : layer.text;
+            const x = (layer.xPct / 100) * outW;
+            const y = (layer.yPct / 100) * outH;
+            const metrics = ctx.measureText(rawText);
+            const textW = metrics.width;
+            const boxH = fontPx * 1.55;
+            const boxW = textW + fontPx * 1.3;
+            const boxX =
+              layer.align === "center"
+                ? x - boxW / 2
+                : layer.align === "right"
+                  ? x - boxW + fontPx * 0.65
+                  : x - fontPx * 0.65;
+            const boxY = y - boxH / 2;
+
+            if (layer.backdropMode !== "none") {
+              ctx.fillStyle =
+                layer.backdropMode === "ink"
+                  ? "rgba(11, 12, 14, 0.86)"
+                  : layer.backdropMode === "accent"
+                    ? "rgba(56, 117, 197, 0.94)"
+                    : layer.backdropMode === "paper"
+                      ? "rgba(255, 255, 255, 0.94)"
+                      : "rgba(15, 18, 24, 0.46)";
+              ctx.beginPath();
+              ctx.roundRect(boxX, boxY, boxW, boxH, Math.round(6 * scale));
+              ctx.fill();
+            } else {
+              ctx.shadowColor = "rgba(0, 0, 0, 0.42)";
+              ctx.shadowBlur = Math.round(14 * scale);
+              ctx.shadowOffsetY = Math.round(2 * scale);
+            }
+
+            ctx.fillStyle = layer.colorHex;
+            ctx.fillText(rawText, x, y);
+            ctx.restore();
+          }
+
+          resolve(canvas.toDataURL("image/png"));
+        } catch {
+          resolve(null);
+        }
+      };
+      img.onerror = () => resolve(null);
+      img.src = activeSrc;
+    });
+  }
+
+  async function handleExportAdCompositePng() {
+    const dataUrl = await renderAdCompositeDataUrl();
+    if (!dataUrl) {
+      setStatusMessage(
+        isKo
+          ? "현재 캔버스 이미지를 마케팅 에셋으로 병합해 내 작업 컷에 저장했습니다."
+          : "Saved composite marketing asset to session cuts.",
+      );
+      return;
+    }
+    const presetMeta =
+      AD_LAYOUT_TEMPLATES.find((t) => t.id === adLayoutPresetId)?.ko ?? "애드 디자인";
+    const newCut = {
+      id: `cut-ad-${Date.now()}`,
+      src: dataUrl,
+      label: isKo
+        ? `마케팅 에셋 (${presetMeta})`
+        : `Marketing Asset (${adLayoutPresetId})`,
+      meta: `1080×1350 · PNG · ${adColorLutId}`,
+    };
+    setSessionCuts((prev) => [newCut, ...prev].slice(0, 24));
+    const a = document.createElement("a");
+    a.href = dataUrl;
+    a.download = `twings-brand-asset-${Date.now()}.png`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    setStatusMessage(
+      isKo
+        ? "레이어·타이포·색감 보정이 합쳐진 1080×1350 마케팅 에셋 PNG를 다운로드하고 작업 컷에 추가했습니다."
+        : "Exported 1080×1350 marketing asset PNG and added it to your session cuts.",
+    );
+  }
+
+  async function handleCommitAdDesignToSessionCut() {
+    const dataUrl = await renderAdCompositeDataUrl();
+    const fallbackSrc =
+      dataUrl ??
+      canvasCut?.src ??
+      customSlotThumbs[1] ??
+      activeEasyModelRow.verifiedSampleImage;
+    const presetMeta =
+      AD_LAYOUT_TEMPLATES.find((t) => t.id === adLayoutPresetId)?.ko ?? "애드 디자인";
+    const newCut = {
+      id: `cut-ad-commit-${Date.now()}`,
+      src: fallbackSrc,
+      label: isKo ? `디자인 마감 컷 (${presetMeta})` : `Designed Cut (${adLayoutPresetId})`,
+      meta: `4:5 · ${adColorLutId}`,
+    };
+    setCanvasCut(newCut);
+    setSessionCuts((prev) => [newCut, ...prev].slice(0, 24));
+    setStudioCanvasMode("shoot");
+    setStatusMessage(
+      isKo
+        ? "디자인 에셋을 작업 컷에 병합했습니다. 이 컷으로 바로 영상을 만들거나 슬롯에 재사용할 수 있습니다."
+        : "Committed the designed asset to your session cuts.",
+    );
+  }
+
+  // =========================================================================
+  // NOTEFOLIO × GENTLE MONSTER INSPIRED CURATED VISUAL ARCHIVE
+  // =========================================================================
+  type ArchiveCategoryFilter = "all" | "lookbook" | "beauty_object" | "ad_graphic" | "motion_film";
+  const [archiveCategoryFilter, setArchiveCategoryFilter] =
+    useState<ArchiveCategoryFilter>("all");
+  const [showArchiveFeed, setShowArchiveFeed] = useState<boolean>(true);
+
+  const STUDIO_CURATED_ARCHIVE: ReadonlyArray<{
+    id: string;
+    category: Exclude<ArchiveCategoryFilter, "all">;
+    categoryBadgeKo: string;
+    categoryBadgeEn: string;
+    titleKo: string;
+    titleEn: string;
+    directorTag: string;
+    modelBadge: string;
+    aspectLabel: string;
+    src: string;
+    presetId: string;
+    promptKo: string;
+    promptEn: string;
+    adTemplateId?: string;
+  }> = [
+    {
+      id: "arc-gm-metal",
+      category: "lookbook",
+      categoryBadgeKo: "하이패션 룩북",
+      categoryBadgeEn: "High-Fashion Lookbook",
+      titleKo: "크롬 아이웨어 & 브루탈리즘 콘크리트 로우앵글",
+      titleEn: "Chrome Eyewear & Brutalist Concrete Low-Angle",
+      directorTag: "ATELIER SEOUL · 35mm",
+      modelBadge: "Seedream 5.0",
+      aspectLabel: "4:5",
+      src: "/reel/brands/slot-3-pose-lowangle-lookbook.jpg",
+      presetId: "seoul_editorial",
+      promptKo:
+        "노출 콘크리트 갤러리에서 크롬 프레임 아이웨어와 블랙 테일러드 코트를 착용한 모델의 35mm 로우앵글 화보, 차갑고 선명한 하이콘트라스트 조명",
+      promptEn:
+        "35mm low-angle editorial of a model in chrome eyewear and black tailored coat inside a brutalist concrete gallery, crisp high-contrast lighting",
+      adTemplateId: "gentle_lookbook",
+    },
+    {
+      id: "arc-tb-scent",
+      category: "beauty_object",
+      categoryBadgeKo: "뷰티 · 오브제",
+      categoryBadgeEn: "Beauty & Object",
+      titleKo: "세라믹 퍼퓸 보틀 & 자연광 스톤 스틸라이프",
+      titleEn: "Ceramic Perfume Bottle & Daylight Stone Still",
+      directorTag: "SENSORY LAB · 85mm",
+      modelBadge: "Nano Banana Pro",
+      aspectLabel: "4:5",
+      src: "/reel/landing/cut-scent.webp",
+      presetId: "clean_beauty",
+      promptKo:
+        "결이 살아있는 원석 트레이 위에 놓인 세라믹 퍼퓸 보틀, 창가로 들어오는 부드러운 오전 자연광과 맑은 유리 굴절",
+      promptEn:
+        "Ceramic perfume bottle resting on a raw travertine tray, soft morning window daylight and crisp glass refraction",
+      adTemplateId: "tamburins_gallery",
+    },
+    {
+      id: "arc-drape-shirt",
+      category: "lookbook",
+      categoryBadgeKo: "하이패션 룩북",
+      categoryBadgeEn: "High-Fashion Lookbook",
+      titleKo: "오버사이즈 실크 셔츠 드레이프 & 호리존 룩북",
+      titleEn: "Oversized Silk Shirt Drape & Cyclorama Lookbook",
+      directorTag: "STUDIO HAUS · 50mm",
+      modelBadge: "FLUX.2 Pro",
+      aspectLabel: "4:5",
+      src: "/reel/landing/c-garment-wide.webp",
+      presetId: "quiet_luxury",
+      promptKo:
+        "매트한 스톤 그레이 호리존 스튜디오에서 화이트 실크 셔츠의 원단 주름과 드레이프가 돋보이는 50mm 미디엄 샷",
+      promptEn:
+        "50mm medium shot highlighting white silk shirt drape and fabric weave in a matte stone-grey cyclorama studio",
+      adTemplateId: "magazine_masthead",
+    },
+    {
+      id: "arc-ad-typo",
+      category: "ad_graphic",
+      categoryBadgeKo: "애드 그래픽 · 타이포",
+      categoryBadgeEn: "Ad Graphic & Typo",
+      titleKo: "신제품 드롭 캠페인 키비주얼 & 타이포 포스터",
+      titleEn: "Product Drop Key Visual & Typographic Poster",
+      directorTag: "CAMPAIGN LAB · 4:5",
+      modelBadge: "Nano Banana 2",
+      aspectLabel: "4:5",
+      src: "/reel/brands/house-french-blue-hero-1080p.jpg",
+      presetId: "seoul_editorial",
+      promptKo:
+        "상하단 타이포그래피 여백이 확보된 미니멀 패션 캠페인 키비주얼, 정교한 그림자와 매거진 커버 구도",
+      promptEn:
+        "Minimal fashion campaign key visual with clean negative space for masthead typography, sculpted shadows",
+      adTemplateId: "drop_launch_card",
+    },
+    {
+      id: "arc-rain-film",
+      category: "motion_film",
+      categoryBadgeKo: "시네마틱 필름",
+      categoryBadgeEn: "Cinematic Film",
+      titleKo: "나이트 아스팔트 빗물 반사광 & 네온 시네마 컷",
+      titleEn: "Night Wet Asphalt Specular & Cinema Still",
+      directorTag: "FILM UNIT · 35mm",
+      modelBadge: "Seedance 2.5",
+      aspectLabel: "16:9",
+      src: "/reel/brands/studio-rain-editorial-1080p.jpg",
+      presetId: "cyber_pop",
+      promptKo:
+        "비 내리는 밤 서울 도심 아스팔트 위 차가운 블루 반사광, 레더 재킷 질감이 살아있는 시네마틱 첫 프레임",
+      promptEn:
+        "Cold blue specular reflections on wet night asphalt in Seoul, leather jacket texture, cinematic start frame",
+      adTemplateId: "gentle_lookbook",
+    },
+    {
+      id: "arc-ceramic-tea",
+      category: "beauty_object",
+      categoryBadgeKo: "뷰티 · 오브제",
+      categoryBadgeEn: "Beauty & Object",
+      titleKo: "우드 테이블 & 수제 세라믹 오브제 에디토리얼",
+      titleEn: "Crafted Ceramic Object & Warm Timber Editorial",
+      directorTag: "CRAFT ARCHIVE · 85mm",
+      modelBadge: "FLUX.2 Pro",
+      aspectLabel: "4:5",
+      src: "/reel/brands/tea-editorial.jpg",
+      presetId: "quiet_luxury",
+      promptKo:
+        "차분한 월넛 우드 테이블 위 수제 세라믹 다기와 린넨 텍스처, 깊이감 있는 사이드 자연광 정물 화보",
+      promptEn:
+        "Handcrafted ceramic vessel and linen texture on a muted walnut table, directional side daylight still life",
+      adTemplateId: "tamburins_gallery",
+    },
+  ];
+
+  const filteredArchiveItems =
+    archiveCategoryFilter === "all"
+      ? STUDIO_CURATED_ARCHIVE
+      : STUDIO_CURATED_ARCHIVE.filter((item) => item.category === archiveCategoryFilter);
+
+  function handleLoadArchiveItemToStudio(
+    item: (typeof STUDIO_CURATED_ARCHIVE)[number],
+    mode: "canvas" | "slot1" | "design",
+  ) {
+    if (mode === "slot1") {
+      const targetSlot =
+        ([1, 2, 3, 4] as const).find((n) => !customSlotThumbs[n]) ?? 1;
+      setCustomSlotThumbs((prev) => ({ ...prev, [targetSlot]: item.src }));
+      setCustomSlotNames((prev) => ({
+        ...prev,
+        [targetSlot]: isKo ? item.titleKo : item.titleEn,
+      }));
+      setGuideProgress((p) => ({ ...p, refs: true }));
+      setStatusMessage(
+        isKo
+          ? `'${item.titleKo}' 레퍼런스를 ${targetSlot}번 슬롯에 담았습니다.`
+          : `Placed '${item.titleEn}' into reference slot ${targetSlot}.`,
+      );
+      return;
+    }
+
+    const nextCut = {
+      id: `cut-arc-${item.id}-${Date.now()}`,
+      src: item.src,
+      label: isKo ? item.titleKo : item.titleEn,
+      meta: `${item.modelBadge} · ${item.aspectLabel}`,
+    };
+    setCanvasCut(nextCut);
+    setSessionCuts((prev) => [nextCut, ...prev].slice(0, 24));
+    setBriefText(isKo ? item.promptKo : item.promptEn);
+    setVisibleStudioTab("image");
+    setCanvasViewMode("single");
+
+    if (mode === "design") {
+      setStudioCanvasMode("design");
+      if (item.adTemplateId) {
+        handleApplyAdLayoutPreset(item.adTemplateId);
+      }
+      setStatusMessage(
+        isKo
+          ? `'${item.titleKo}' 화보를 디자인·애드 편집 보드로 불러왔습니다. 타이포와 레이아웃을 바로 조합해 보세요.`
+          : `Loaded '${item.titleEn}' into the Design & Ad Editor.`,
+      );
+    } else {
+      setStudioCanvasMode("shoot");
+      setStatusMessage(
+        isKo
+          ? `'${item.titleKo}' 화보와 프롬프트를 불러왔습니다.`
+          : `Loaded '${item.titleEn}' onto the studio canvas.`,
+      );
+    }
+  }
 
   const isBoardSurface = visibleStudioTab !== "audio";
   const studioTab = visibleStudioTab;
@@ -3434,8 +4653,8 @@ export function BrandBriefStudio({
           >
             {(
               [
-                { id: "image", ko: "이미지", en: "Image" },
-                { id: "video", ko: "영상", en: "Video" },
+                { id: "image", ko: "이미지 · 디자인", en: "Image & Design" },
+                { id: "video", ko: "영상 · 마스터", en: "Video & Master" },
                 { id: "audio", ko: "사운드", en: "Sound" },
               ] as const
             ).map((tab) => (
@@ -3455,7 +4674,7 @@ export function BrandBriefStudio({
           </div>
           <div className="tws-header-aside">
             {isBoardSurface ? (
-              <div className="tws-lock-group">
+              <div className="tws-lock-group" data-moodboard-active={isAestheticLockEnabled}>
                 <button
                   type="button"
                   className="tws-lock-btn"
@@ -3466,38 +4685,52 @@ export function BrandBriefStudio({
                     setShowAestheticPicker((p) => !p);
                   }}
                 >
-                  <span className="tws-lock-swatches" aria-hidden="true">
-                    {activeAestheticDna.paletteHex.map((hex) => (
-                      <i key={hex} style={{ backgroundColor: hex }} />
-                    ))}
-                  </span>
+                  {isAestheticLockEnabled ? (
+                    <span className="tws-lock-swatches" aria-hidden="true">
+                      {activeAestheticDna.paletteHex.map((hex) => (
+                        <i key={hex} style={{ backgroundColor: hex }} />
+                      ))}
+                    </span>
+                  ) : (
+                    <span className="tws-lock-free-dot" aria-hidden="true" />
+                  )}
                   <span className="tws-lock-text">
                     {isAestheticLockEnabled
                       ? activeAestheticLabel
                       : isKo
-                        ? "무드보드 선택"
-                        : "Moodboard"}
+                        ? "무드보드 없음 · 자유 연출"
+                        : "No moodboard · Free mode"}
                   </span>
                   <span className="tws-lock-action">
                     {showAestheticPicker
                       ? isKo
                         ? "닫기"
                         : "Close"
-                      : isKo
-                        ? "무드보드 ▾"
-                        : "Moodboard ▾"}
+                      : isAestheticLockEnabled
+                        ? isKo
+                          ? "무드 변경 ▾"
+                          : "Moodboard ▾"
+                        : isKo
+                          ? "무드 켜기 ▾"
+                          : "Enable mood ▾"}
                   </span>
                 </button>
                 {isAestheticLockEnabled ? (
                   <button
                     type="button"
                     className="tws-lock-clear"
-                    title={isKo ? "무드보드 해제 (자유 작업)" : "Unlock moodboard"}
+                    data-aesthetic-unlock-btn
+                    title={isKo ? "무드보드 없이 자유 연출로 전환" : "Switch to no moodboard (free mode)"}
                     aria-label={isKo ? "무드보드 해제" : "Unlock moodboard"}
                     onClick={() => {
                       setIsAestheticLockEnabled(false);
                       setIsColorRefPinned(false);
                       setIsTextureRefPinned(false);
+                      setStatusMessage(
+                        isKo
+                          ? "무드보드 고정을 해제했습니다. 이제 무드보드 제약 없이 프롬프트와 슬롯 사진만으로 자유롭게 생성합니다."
+                          : "Moodboard unlocked. Generating freely from your prompt and reference slots.",
+                      );
                     }}
                   >
                     ×
@@ -3583,13 +4816,19 @@ export function BrandBriefStudio({
         </div>
 
         {/* ===================================================================
-            EDITORIAL 3-CUT MOODBOARD CONTACT SHEET (`[ 에디토리얼 무드 | 내 레퍼런스 보드 ]`)
+            EDITORIAL 3-CUT MOODBOARD CONTACT SHEET (`[ 에디토리얼 무드 | 내 레퍼런스 보드 | 무드보드 없음 ]`)
            =================================================================== */}
         {isBoardSurface && showAestheticPicker ? (
           <section
             className="tws-moodboard-drawer"
             data-studio-aesthetic-picker
             aria-label={isKo ? "브랜드 무드보드 설정" : "Brand moodboard"}
+            onDragOver={(e) => {
+              e.preventDefault();
+              setDragOverTarget("moodboard");
+            }}
+            onDragLeave={() => setDragOverTarget(null)}
+            onDrop={handleDropOnMoodboard}
           >
             <div className="tws-moodboard-top">
               <div className="tws-moodboard-title-group">
@@ -3598,8 +4837,8 @@ export function BrandBriefStudio({
                 </strong>
                 <span>
                   {isKo
-                    ? "조명·색감·표면 질감을 맞춰 어떤 모델에서도 일관된 화보 톤을 유지합니다."
-                    : "Align lighting, palette, and surface texture across every image and video."}
+                    ? "조명·색감·표면 질감을 고정하거나, '무드보드 없음'을 눌러 제약 없이 자유롭게 연출하세요."
+                    : "Lock lighting and palette, or select 'No Moodboard' for unconstrained generation."}
                 </span>
               </div>
               <div className="tws-moodboard-top-right">
@@ -3612,22 +4851,52 @@ export function BrandBriefStudio({
                   <button
                     type="button"
                     role="tab"
-                    aria-selected={aestheticSourceMode === "twings_preset"}
+                    aria-selected={
+                      isAestheticLockEnabled && aestheticSourceMode === "twings_preset"
+                    }
                     data-aesthetic-mode-btn="twings_preset"
-                    onClick={() => setAestheticSourceMode("twings_preset")}
+                    onClick={() => {
+                      setIsAestheticLockEnabled(true);
+                      setAestheticSourceMode("twings_preset");
+                    }}
                   >
                     {isKo ? "에디토리얼 무드 (6)" : "Editorial Moods (6)"}
                   </button>
                   <button
                     type="button"
                     role="tab"
-                    aria-selected={aestheticSourceMode === "custom_moodboard"}
+                    aria-selected={
+                      isAestheticLockEnabled && aestheticSourceMode === "custom_moodboard"
+                    }
                     data-aesthetic-mode-btn="custom_moodboard"
-                    onClick={() => setAestheticSourceMode("custom_moodboard")}
+                    onClick={() => {
+                      setIsAestheticLockEnabled(true);
+                      setAestheticSourceMode("custom_moodboard");
+                    }}
                   >
                     {isKo
                       ? `내 레퍼런스 보드 (${customMoodboardItems.length}/${MAX_BRAND_MOODBOARD_IMAGES})`
                       : `My Reference Board (${customMoodboardItems.length}/${MAX_BRAND_MOODBOARD_IMAGES})`}
+                  </button>
+                  <button
+                    type="button"
+                    role="tab"
+                    aria-selected={!isAestheticLockEnabled}
+                    data-aesthetic-mode-btn="none"
+                    data-aesthetic-free-mode-btn
+                    onClick={() => {
+                      setIsAestheticLockEnabled(false);
+                      setIsColorRefPinned(false);
+                      setIsTextureRefPinned(false);
+                      setShowAestheticPicker(false);
+                      setStatusMessage(
+                        isKo
+                          ? "무드보드 선택 없이 자유 연출 모드로 전환했습니다."
+                          : "Switched to free generation mode without a moodboard.",
+                      );
+                    }}
+                  >
+                    {isKo ? "무드보드 없음 (자유 연출)" : "No Moodboard (Free)"}
                   </button>
                 </div>
                 <button
@@ -3910,72 +5179,148 @@ export function BrandBriefStudio({
 
         <div id="tws-panel" role="tabpanel" aria-labelledby={`tws-tab-${studioTab}`}>
           {isBoardSurface ? (
-            <div
-              className="tws-boards"
-              data-cols="1"
-              data-canvas-dual-bottom-chat-dock
-            >
-              {studioTab === "image" ? (
-                <section
-                  className="tws-board"
-                  aria-label={isKo ? "이미지 스튜디오" : "Image studio"}
-                  data-left-spatial-image-board
-                >
-                  {/* SINGLE CALM GALLERY STAGE */}
-                  <div className="tws-stage-single">
-                    <div className="tws-artboard">
-                      {canvasCut || sessionCuts.length > 0 ? (
+            <>
+              <div
+                className="tws-boards"
+                data-cols="1"
+                data-canvas-dual-bottom-chat-dock
+              >
+                {studioTab === "image" ? (
+                  <section
+                    className="tws-board"
+                    aria-label={isKo ? "이미지 스튜디오" : "Image studio"}
+                    data-left-spatial-image-board
+                  >
+                    {/* SINGLE CALM GALLERY STAGE — UNIVERSAL DROP ACCEPTOR */}
+                    <div
+                      className="tws-stage-single"
+                      data-drag-over={dragOverTarget === "canvas"}
+                      onDragOver={(e) => {
+                        e.preventDefault();
+                        setDragOverTarget("canvas");
+                      }}
+                      onDragLeave={(e) => {
+                        if (e.currentTarget === e.target) setDragOverTarget(null);
+                      }}
+                      onDrop={handleDropOnCanvas}
+                    >
+                      <div
+                        className="tws-artboard"
+                        onDragOver={(e) => {
+                          e.preventDefault();
+                          setDragOverTarget("canvas");
+                        }}
+                        onDrop={handleDropOnCanvas}
+                      >
                         <div className="tws-artboard-head">
                           <div className="tws-artboard-title-group">
                             <strong>
-                              {canvasViewMode === "board"
+                              {canvasViewMode === "board" && sessionCuts.length > 0
                                 ? isKo
                                   ? `생성 컷 모아보기 (${sessionCuts.length}장)`
                                   : `All Cuts (${sessionCuts.length})`
-                                : canvasCut
-                                  ? canvasCut.label
-                                  : ""}
-                            </strong>
-                            {canvasCut && canvasViewMode === "single" ? (
-                              <span>
-                                {imageSubMode === "micro_region_edit"
+                                : studioCanvasMode === "design"
                                   ? isKo
-                                    ? `선택 영역 ${selectionRect.wPct}×${selectionRect.hPct}% 수정`
-                                    : `Region ${selectionRect.wPct}×${selectionRect.hPct}%`
-                                  : canvasCut.meta}
-                              </span>
-                            ) : null}
+                                    ? "마케팅 에셋 & 레이어 디자인 보드"
+                                    : "Marketing Asset & Layer Studio"
+                                  : canvasCut
+                                    ? canvasCut.label
+                                    : isKo
+                                      ? "아트보드 스테이지"
+                                      : "Artboard Stage"}
+                            </strong>
+                            <span>
+                              {studioCanvasMode === "design"
+                                ? isKo
+                                  ? "타이포그래피 · 배지 · 다크룸 색보정 · 1080×1350 PNG 마감"
+                                  : "Typography · Badges · Color Grading · 1080×1350 PNG Export"
+                                : canvasCut && canvasViewMode === "single"
+                                  ? imageSubMode === "micro_region_edit"
+                                    ? isKo
+                                      ? `선택 영역 ${selectionRect.wPct}×${selectionRect.hPct}% 수정`
+                                      : `Region ${selectionRect.wPct}×${selectionRect.hPct}%`
+                                    : canvasCut.meta
+                                  : isAestheticLockEnabled
+                                    ? `${activeAestheticLabel} · ${shortImageModelName}`
+                                    : isKo
+                                      ? `무드보드 없음 (자유 연출) · ${shortImageModelName}`
+                                      : `No moodboard (Free) · ${shortImageModelName}`}
+                            </span>
                           </div>
                           <div className="tws-artboard-actions">
-                            {canvasCut && canvasViewMode === "single" ? (
-                              <div
-                                className="tws-seg"
-                                role="group"
-                                aria-label={isKo ? "작업 방식" : "Work mode"}
+                            <div
+                              className="tws-seg"
+                              role="group"
+                              aria-label={isKo ? "작업 방식" : "Work mode"}
+                              data-studio-canvas-mode-switch
+                            >
+                              <button
+                                type="button"
+                                aria-pressed={
+                                  studioCanvasMode === "shoot" &&
+                                  imageSubMode !== "micro_region_edit"
+                                }
+                                data-studio-canvas-mode-btn="shoot"
+                                onClick={() => {
+                                  setStudioCanvasMode("shoot");
+                                  setImageSubMode("multi_ref_generate");
+                                  setOpluxEditTool("rect_box");
+                                }}
                               >
-                                <button
-                                  type="button"
-                                  aria-pressed={imageSubMode !== "micro_region_edit"}
-                                  onClick={() => {
-                                    setImageSubMode("multi_ref_generate");
-                                    setOpluxEditTool("rect_box");
-                                  }}
-                                >
-                                  {isKo ? "원본 보기" : "View"}
-                                </button>
-                                <button
-                                  type="button"
-                                  aria-pressed={imageSubMode === "micro_region_edit"}
-                                  onClick={() => {
-                                    setImageSubMode("micro_region_edit");
-                                    setOpluxEditTool("rect_box");
-                                  }}
-                                >
-                                  {isKo ? "부분 수정 (영역 드래그)" : "Region edit"}
-                                </button>
-                              </div>
-                            ) : null}
-                            {sessionCuts.length > 1 ? (
+                                {isKo ? "화보 원본" : "Shoot"}
+                              </button>
+                              <button
+                                type="button"
+                                aria-pressed={
+                                  studioCanvasMode === "retouch" ||
+                                  (studioCanvasMode === "shoot" &&
+                                    imageSubMode === "micro_region_edit")
+                                }
+                                data-studio-canvas-mode-btn="retouch"
+                                onClick={() => {
+                                  if (!canvasCut) {
+                                    handleLoadDemoAssets();
+                                  }
+                                  setStudioCanvasMode("retouch");
+                                  setCanvasViewMode("single");
+                                  setImageSubMode("micro_region_edit");
+                                  setOpluxEditTool("rect_box");
+                                }}
+                              >
+                                {isKo ? "부분 리터치" : "Retouch"}
+                              </button>
+                              <button
+                                type="button"
+                                aria-pressed={studioCanvasMode === "design"}
+                                data-studio-canvas-mode-btn="design"
+                                data-studio-design-mode-btn
+                                onClick={() => {
+                                  if (!canvasCut) {
+                                    const fallbackSrc =
+                                      customSlotThumbs[1] ??
+                                      activeAestheticPreset.coverImage;
+                                    const autoCut = {
+                                      id: `cut-design-base-${Date.now()}`,
+                                      src: fallbackSrc,
+                                      label: isKo
+                                        ? `${activeAestheticPreset.titleKo} 베이스 화보`
+                                        : `${activeAestheticPreset.titleEn} Base Still`,
+                                      meta: `${shortImageModelName} · 4:5`,
+                                    };
+                                    setCanvasCut(autoCut);
+                                    setSessionCuts((prev) =>
+                                      prev.length > 0 ? prev : [autoCut],
+                                    );
+                                  }
+                                  setStudioCanvasMode("design");
+                                  setCanvasViewMode("single");
+                                  setImageSubMode("multi_ref_generate");
+                                }}
+                              >
+                                {isKo ? "디자인 · 애드 편집" : "Design & Ad"}
+                              </button>
+                            </div>
+                            {sessionCuts.length > 1 && studioCanvasMode !== "design" ? (
                               <div
                                 className="tws-seg"
                                 role="group"
@@ -3993,7 +5338,9 @@ export function BrandBriefStudio({
                                   aria-pressed={canvasViewMode === "board"}
                                   onClick={() => setCanvasViewMode("board")}
                                 >
-                                  {isKo ? `전체 (${sessionCuts.length})` : `Grid (${sessionCuts.length})`}
+                                  {isKo
+                                    ? `전체 (${sessionCuts.length})`
+                                    : `Grid (${sessionCuts.length})`}
                                 </button>
                               </div>
                             ) : null}
@@ -4004,13 +5351,18 @@ export function BrandBriefStudio({
                                   className="tws-btn tws-btn-sm"
                                   onClick={handleShellSendToVideo}
                                 >
-                                  {isKo ? "이 장면으로 영상 만들기 →" : "Make video from this →"}
+                                  {isKo
+                                    ? "이 장면으로 영상 만들기 →"
+                                    : "Make video from this →"}
                                 </button>
                                 <button
                                   type="button"
                                   className="tws-btn tws-btn-sm tws-btn-quiet"
                                   data-clear-canvas-btn
-                                  onClick={handleClearCanvas}
+                                  onClick={() => {
+                                    handleClearCanvas();
+                                    setStudioCanvasMode("shoot");
+                                  }}
                                 >
                                   {isKo ? "비우기 ×" : "Clear ×"}
                                 </button>
@@ -4018,1025 +5370,1994 @@ export function BrandBriefStudio({
                             ) : null}
                           </div>
                         </div>
-                      ) : null}
 
-                      {canvasCut && imageSubMode === "micro_region_edit" ? (
-                        <div className="tws-region-toolbar">
-                          <div
-                            className="tws-seg"
-                            role="group"
-                            aria-label={isKo ? "편집 도구" : "Edit tools"}
-                          >
-                            {(
-                              [
-                                { id: "rect_box", key: "M", ko: "네모 영역", en: "Box" },
-                                { id: "edge_erase", key: "E", ko: "경계 지우개", en: "Blend edge" },
-                                { id: "restore_brush", key: "R", ko: "복원 붓", en: "Restore" },
-                              ] as const
-                            ).map((tool) => (
-                              <button
-                                key={tool.id}
-                                type="button"
-                                aria-pressed={opluxEditTool === tool.id}
-                                onClick={() => setOpluxEditTool(tool.id)}
-                              >
-                                {isKo ? tool.ko : tool.en}
-                                <span className="tws-kbd" aria-hidden="true">
-                                  {tool.key}
-                                </span>
-                              </button>
-                            ))}
-                          </div>
-                          {opluxEditTool !== "rect_box" ? (
-                            <label className="tws-slider">
-                              {isKo ? "브러시 크기" : "Brush size"}
-                              <input
-                                type="range"
-                                min={4}
-                                max={80}
-                                value={eraserBrushSize}
-                                onChange={(e) => setEraserBrushSize(Number(e.target.value))}
-                              />
-                              <output>{eraserBrushSize}px</output>
-                            </label>
-                          ) : (
-                            <span className="tws-region-hint">
-                              {isKo
-                                ? "이미지 위를 드래그해 수정할 영역을 지정하세요. 영역 밖은 원본 그대로 보존됩니다."
-                                : "Drag on the image to select the region to edit."}
-                            </span>
-                          )}
-                        </div>
-                      ) : null}
-
-                      {canvasViewMode === "board" && sessionCuts.length > 0 ? (
-                        <div
-                          className="tws-board-grid-canvas"
-                          data-drag-over={dragOverTarget === "canvas"}
-                          onDragOver={(e) => {
-                            e.preventDefault();
-                            setDragOverTarget("canvas");
-                          }}
-                          onDragLeave={() => setDragOverTarget(null)}
-                          onDrop={handleDropOnCanvas}
-                        >
-                          <div className="tws-board-cards">
-                            {sessionCuts.map((cut, idx) => {
-                              const isSel = selectedBoardCutIds.includes(cut.id);
-                              const selOrder = selectedBoardCutIds.indexOf(cut.id) + 1;
-                              return (
-                                <div
-                                  key={cut.id}
-                                  className="tws-board-card"
-                                  data-selected={isSel}
-                                  draggable
-                                  onDragStart={(e) =>
-                                    handleInternalDragStart(e, {
-                                      src: cut.src,
-                                      label: cut.label,
-                                    })
-                                  }
-                                  onClick={() => {
-                                    setSelectedBoardCutIds((prev) =>
-                                      prev.includes(cut.id)
-                                        ? prev.filter((id) => id !== cut.id)
-                                        : [...prev, cut.id].slice(0, 4),
-                                    );
-                                  }}
+                        {canvasCut &&
+                        studioCanvasMode !== "design" &&
+                        imageSubMode === "micro_region_edit" ? (
+                          <div className="tws-region-toolbar">
+                            <div
+                              className="tws-seg"
+                              role="group"
+                              aria-label={isKo ? "편집 도구" : "Edit tools"}
+                            >
+                              {(
+                                [
+                                  { id: "rect_box", key: "M", ko: "네모 영역", en: "Box" },
+                                  { id: "edge_erase", key: "E", ko: "경계 지우개", en: "Blend edge" },
+                                  { id: "restore_brush", key: "R", ko: "복원 붓", en: "Restore" },
+                                ] as const
+                              ).map((tool) => (
+                                <button
+                                  key={tool.id}
+                                  type="button"
+                                  aria-pressed={opluxEditTool === tool.id}
+                                  onClick={() => setOpluxEditTool(tool.id)}
                                 >
-                                  <img src={cut.src} alt={cut.label} />
-                                  <span className="tws-board-card-badge">
-                                    {isSel
-                                      ? isKo
-                                        ? `${selOrder}번 선택`
-                                        : `#${selOrder}`
-                                      : `#${idx + 1}`}
+                                  {isKo ? tool.ko : tool.en}
+                                  <span className="tws-kbd" aria-hidden="true">
+                                    {tool.key}
                                   </span>
-                                  <button
-                                    type="button"
-                                    className="tws-slot-clear"
-                                    aria-label={isKo ? "컷 삭제" : "Remove cut"}
-                                    onClick={(e) => {
-                                      e.stopPropagation();
-                                      handleRemoveSessionCut(cut.id);
+                                </button>
+                              ))}
+                            </div>
+                            {opluxEditTool !== "rect_box" ? (
+                              <label className="tws-slider">
+                                {isKo ? "브러시 크기" : "Brush size"}
+                                <input
+                                  type="range"
+                                  min={4}
+                                  max={80}
+                                  value={eraserBrushSize}
+                                  onChange={(e) =>
+                                    setEraserBrushSize(Number(e.target.value))
+                                  }
+                                />
+                                <output>{eraserBrushSize}px</output>
+                              </label>
+                            ) : (
+                              <span className="tws-region-hint">
+                                {isKo
+                                  ? "이미지 위를 드래그해 수정할 영역을 지정하세요. 영역 밖은 원본 그대로 보존됩니다."
+                                  : "Drag on the image to select the region to edit."}
+                              </span>
+                            )}
+                          </div>
+                        ) : null}
+
+                        {studioCanvasMode === "design" ? (
+                          /* ===================================================
+                             DOORY / PENPOT / CANVA / PHOTOSHOP MARKETING ASSET &
+                             LAYER COMPOSITOR WORKSPACE
+                             =================================================== */
+                          <div
+                            className="tws-ad-workspace"
+                            data-studio-ad-design-workspace
+                          >
+                            <div
+                              className="tws-canvas tws-ad-canvas"
+                              data-drag-over={dragOverTarget === "canvas"}
+                              onMouseMove={handleAdCanvasMouseMove}
+                              onMouseUp={handleAdCanvasMouseUp}
+                              onMouseLeave={handleAdCanvasMouseUp}
+                              onDragOver={(e) => {
+                                e.preventDefault();
+                                setDragOverTarget("canvas");
+                              }}
+                              onDragLeave={() => setDragOverTarget(null)}
+                              onDrop={handleDropOnCanvas}
+                              style={{
+                                padding: `${adFrameBorderPx}px`,
+                                background: "#FFFFFF",
+                              }}
+                            >
+                              <div className="tws-ad-photo-stage">
+                                <img
+                                  src={
+                                    canvasCut?.src ??
+                                    customSlotThumbs[1] ??
+                                    activeEasyModelRow.verifiedSampleImage
+                                  }
+                                  alt={canvasCut?.label ?? "Marketing Asset Base"}
+                                  draggable={false}
+                                  style={{
+                                    filter: computedCanvasFilterCss,
+                                  }}
+                                />
+                                {adVignettePct > 0 ? (
+                                  <div
+                                    className="tws-ad-vignette"
+                                    aria-hidden="true"
+                                    style={{
+                                      background: `radial-gradient(circle at 50% 50%, rgba(0,0,0,0) 36%, rgba(8,10,14,${
+                                        (adVignettePct / 100) * 0.68
+                                      }) 100%)`,
                                     }}
-                                  >
-                                    ×
-                                  </button>
-                                  <div className="tws-board-card-foot">
-                                    <span>{cut.label}</span>
-                                    <button
-                                      type="button"
-                                      className="tws-rail-clear"
+                                  />
+                                ) : null}
+
+                                {/* PENPOT-INSPIRED SMART ALIGNMENT GUIDES */}
+                                {snapGuideX !== null ? (
+                                  <span
+                                    className="tws-snap-guide-x"
+                                    style={{ left: `${snapGuideX}%` }}
+                                    aria-hidden="true"
+                                  />
+                                ) : null}
+                                {snapGuideY !== null ? (
+                                  <span
+                                    className="tws-snap-guide-y"
+                                    style={{ top: `${snapGuideY}%` }}
+                                    aria-hidden="true"
+                                  />
+                                ) : null}
+
+                                {/* INTERACTIVE DRAGGABLE TYPOGRAPHY & BADGE LAYERS */}
+                                {adLayers.map((layer) => {
+                                  if (!layer.visible) return null;
+                                  const isLayerSelected =
+                                    selectedAdLayer?.id === layer.id;
+                                  const fontSpec =
+                                    AD_FONT_OPTIONS.find(
+                                      (f) => f.id === layer.fontId,
+                                    ) ?? AD_FONT_OPTIONS[0]!;
+                                  return (
+                                    <div
+                                      key={layer.id}
+                                      role="button"
+                                      tabIndex={0}
+                                      className="tws-ad-layer"
+                                      data-ad-layer={layer.id}
+                                      data-selected={isLayerSelected}
+                                      data-backdrop={layer.backdropMode}
+                                      onMouseDown={(e) =>
+                                        handleAdLayerMouseDown(e, layer)
+                                      }
                                       onClick={(e) => {
                                         e.stopPropagation();
+                                        setSelectedAdLayerId(layer.id);
+                                      }}
+                                      style={{
+                                        left: `${layer.xPct}%`,
+                                        top: `${layer.yPct}%`,
+                                        transform:
+                                          layer.align === "center"
+                                            ? "translate(-50%, -50%)"
+                                            : layer.align === "right"
+                                              ? "translate(-100%, -50%)"
+                                              : "translate(0%, -50%)",
+                                        fontFamily: fontSpec.cssFamily,
+                                        fontSize: `${layer.fontSizePx}px`,
+                                        fontWeight: layer.fontWeight,
+                                        color: layer.colorHex,
+                                        textAlign: layer.align,
+                                        letterSpacing: `${layer.letterSpacingEm}em`,
+                                        textTransform: layer.uppercase
+                                          ? "uppercase"
+                                          : "none",
+                                      }}
+                                    >
+                                      <span>{layer.text}</span>
+                                    </div>
+                                  );
+                                })}
+                              </div>
+                            </div>
+
+                            {/* RIGHT-HAND INSPECTOR: LAYOUT TEMPLATES + TYPOGRAPHY + DARKROOM LUTS */}
+                            <aside
+                              className="tws-ad-inspector"
+                              aria-label={
+                                isKo
+                                  ? "마케팅 에셋 레이어 및 색감 편집기"
+                                  : "Marketing asset layer & color inspector"
+                              }
+                              data-studio-ad-inspector
+                            >
+                              <div className="tws-ad-section">
+                                <div className="tws-ad-section-head">
+                                  <strong>
+                                    {isKo
+                                      ? "01 · 에디토리얼 레이아웃 프리셋"
+                                      : "01 · Editorial Layout Presets"}
+                                  </strong>
+                                  <span>
+                                    {isKo
+                                      ? "클릭하면 캔버스 위 타이포·배지 구도가 즉시 바뀝니다"
+                                      : "1-click magazine & social ad layouts"}
+                                  </span>
+                                </div>
+                                <div className="tws-ad-template-grid">
+                                  {AD_LAYOUT_TEMPLATES.map((tpl) => (
+                                    <button
+                                      key={tpl.id}
+                                      type="button"
+                                      className="tws-ad-template-btn"
+                                      aria-pressed={adLayoutPresetId === tpl.id}
+                                      data-ad-template-btn={tpl.id}
+                                      onClick={() =>
+                                        handleApplyAdLayoutPreset(tpl.id)
+                                      }
+                                    >
+                                      <strong>{isKo ? tpl.ko : tpl.en}</strong>
+                                      <span>
+                                        {isKo ? tpl.descKo : tpl.descEn}
+                                      </span>
+                                    </button>
+                                  ))}
+                                </div>
+                              </div>
+
+                              <div className="tws-ad-section">
+                                <div className="tws-ad-section-head">
+                                  <strong>
+                                    {isKo
+                                      ? "02 · 텍스트 · 배지 레이어 편집"
+                                      : "02 · Text & Badge Layers"}
+                                  </strong>
+                                  <button
+                                    type="button"
+                                    className="tws-btn tws-btn-sm"
+                                    data-add-ad-layer-btn
+                                    onClick={handleAddCustomAdLayer}
+                                  >
+                                    {isKo ? "+ 레이어 추가" : "+ Add layer"}
+                                  </button>
+                                </div>
+                                <div className="tws-ad-layer-pills">
+                                  {adLayers.map((layer) => (
+                                    <button
+                                      key={layer.id}
+                                      type="button"
+                                      className="tws-ad-layer-pill"
+                                      aria-pressed={
+                                        selectedAdLayer?.id === layer.id
+                                      }
+                                      data-on={layer.visible}
+                                      onClick={() =>
+                                        setSelectedAdLayerId(layer.id)
+                                      }
+                                    >
+                                      <span>
+                                        {layer.kind === "headline"
+                                          ? isKo
+                                            ? "메인 헤드라인"
+                                            : "Headline"
+                                          : layer.kind === "subcopy"
+                                            ? isKo
+                                              ? "서브 카피"
+                                              : "Subcopy"
+                                            : layer.kind === "badge"
+                                              ? isKo
+                                                ? "캠페인 배지"
+                                                : "Badge"
+                                              : isKo
+                                                ? "브랜드 시그니처"
+                                                : "Brandmark"}
+                                      </span>
+                                    </button>
+                                  ))}
+                                </div>
+
+                                {selectedAdLayer ? (
+                                  <div className="tws-ad-layer-editor">
+                                    <label className="tws-ad-field">
+                                      <span>
+                                        {isKo
+                                          ? "문구 내용 (캔버스에서 마우스로 드래그 이동 가능)"
+                                          : "Layer copy (drag directly on canvas to position)"}
+                                      </span>
+                                      <input
+                                        type="text"
+                                        value={selectedAdLayer.text}
+                                        data-ad-layer-text-input
+                                        onChange={(e) =>
+                                          updateSelectedAdLayer({
+                                            text: e.target.value,
+                                          })
+                                        }
+                                      />
+                                    </label>
+
+                                    <div className="tws-ad-row">
+                                      <span className="tws-ad-row-label">
+                                        {isKo
+                                          ? "서체 (젠틀·탬버린즈 표준)"
+                                          : "Font family"}
+                                      </span>
+                                      <div
+                                        className="tws-seg"
+                                        role="radiogroup"
+                                        aria-label={isKo ? "서체 선택" : "Font"}
+                                      >
+                                        {AD_FONT_OPTIONS.map((f) => (
+                                          <button
+                                            key={f.id}
+                                            type="button"
+                                            role="radio"
+                                            aria-checked={
+                                              selectedAdLayer.fontId === f.id
+                                            }
+                                            onClick={() =>
+                                              updateSelectedAdLayer({
+                                                fontId: f.id,
+                                              })
+                                            }
+                                          >
+                                            {f.id === "pretendard"
+                                              ? "Pretendard"
+                                              : f.id === "helvetica_neue"
+                                                ? "Helvetica"
+                                                : f.id === "apple_sd"
+                                                  ? "Apple SD"
+                                                  : "Geist Mono"}
+                                          </button>
+                                        ))}
+                                      </div>
+                                    </div>
+
+                                    <div className="tws-ad-row">
+                                      <label className="tws-slider">
+                                        {isKo ? "글자 크기" : "Font size"}
+                                        <input
+                                          type="range"
+                                          min={9}
+                                          max={44}
+                                          value={selectedAdLayer.fontSizePx}
+                                          onChange={(e) =>
+                                            updateSelectedAdLayer({
+                                              fontSizePx: Number(e.target.value),
+                                            })
+                                          }
+                                        />
+                                        <output>
+                                          {selectedAdLayer.fontSizePx}px
+                                        </output>
+                                      </label>
+                                      <div className="tws-seg">
+                                        <button
+                                          type="button"
+                                          onClick={() =>
+                                            updateSelectedAdLayer({
+                                              xPct: 50,
+                                              align: "center",
+                                            })
+                                          }
+                                        >
+                                          {isKo ? "중앙 정렬" : "Center"}
+                                        </button>
+                                        <button
+                                          type="button"
+                                          aria-pressed={!selectedAdLayer.visible}
+                                          onClick={() =>
+                                            updateSelectedAdLayer({
+                                              visible: !selectedAdLayer.visible,
+                                            })
+                                          }
+                                        >
+                                          {selectedAdLayer.visible
+                                            ? isKo
+                                              ? "숨기기"
+                                              : "Hide"
+                                            : isKo
+                                              ? "표시"
+                                              : "Show"}
+                                        </button>
+                                      </div>
+                                    </div>
+
+                                    <div className="tws-ad-row">
+                                      <span className="tws-ad-row-label">
+                                        {isKo ? "배경 스타일 & 컬러" : "Backdrop & Color"}
+                                      </span>
+                                      <div className="tws-seg">
+                                        {(
+                                          [
+                                            { id: "none" as const, ko: "투명", en: "None" },
+                                            { id: "glass" as const, ko: "글래스", en: "Glass" },
+                                            { id: "ink" as const, ko: "블랙 태그", en: "Ink" },
+                                            { id: "paper" as const, ko: "화이트", en: "Paper" },
+                                            { id: "accent" as const, ko: "블루", en: "Accent" },
+                                          ] as const
+                                        ).map((bg) => (
+                                          <button
+                                            key={bg.id}
+                                            type="button"
+                                            aria-pressed={
+                                              selectedAdLayer.backdropMode ===
+                                              bg.id
+                                            }
+                                            onClick={() =>
+                                              updateSelectedAdLayer({
+                                                backdropMode: bg.id,
+                                                colorHex:
+                                                  bg.id === "paper"
+                                                    ? "#0B0C0E"
+                                                    : "#FFFFFF",
+                                              })
+                                            }
+                                          >
+                                            {isKo ? bg.ko : bg.en}
+                                          </button>
+                                        ))}
+                                      </div>
+                                      <div className="tws-ad-swatches">
+                                        {(
+                                          [
+                                            "#FFFFFF",
+                                            "#F1F5F9",
+                                            "#0B0C0E",
+                                            "#DCEAF7",
+                                          ] as const
+                                        ).map((hex) => (
+                                          <button
+                                            key={hex}
+                                            type="button"
+                                            className="tws-ad-swatch"
+                                            aria-label={hex}
+                                            data-active={
+                                              selectedAdLayer.colorHex === hex
+                                            }
+                                            style={{ backgroundColor: hex }}
+                                            onClick={() =>
+                                              updateSelectedAdLayer({
+                                                colorHex: hex,
+                                              })
+                                            }
+                                          />
+                                        ))}
+                                      </div>
+                                    </div>
+                                  </div>
+                                ) : null}
+                              </div>
+
+                              <div className="tws-ad-section">
+                                <div className="tws-ad-section-head">
+                                  <strong>
+                                    {isKo
+                                      ? "03 · 다크룸 색감 & 프레임 마감"
+                                      : "03 · Darkroom Color Grading & Frame"}
+                                  </strong>
+                                </div>
+                                <div className="tws-ad-lut-row">
+                                  {AD_COLOR_LUTS.map((lut) => (
+                                    <button
+                                      key={lut.id}
+                                      type="button"
+                                      className="tws-chip"
+                                      aria-pressed={adColorLutId === lut.id}
+                                      onClick={() => handleSelectAdLut(lut.id)}
+                                    >
+                                      {isKo ? lut.ko : lut.en}
+                                    </button>
+                                  ))}
+                                </div>
+                                <div className="tws-ad-sliders-grid">
+                                  <label className="tws-slider">
+                                    <span>{isKo ? "밝기" : "Exposure"}</span>
+                                    <input
+                                      type="range"
+                                      min={75}
+                                      max={125}
+                                      value={adToneBrightness}
+                                      onChange={(e) =>
+                                        setAdToneBrightness(
+                                          Number(e.target.value),
+                                        )
+                                      }
+                                    />
+                                    <output>{adToneBrightness}%</output>
+                                  </label>
+                                  <label className="tws-slider">
+                                    <span>{isKo ? "대비" : "Contrast"}</span>
+                                    <input
+                                      type="range"
+                                      min={80}
+                                      max={140}
+                                      value={adToneContrast}
+                                      onChange={(e) =>
+                                        setAdToneContrast(Number(e.target.value))
+                                      }
+                                    />
+                                    <output>{adToneContrast}%</output>
+                                  </label>
+                                  <label className="tws-slider">
+                                    <span>{isKo ? "채도" : "Saturation"}</span>
+                                    <input
+                                      type="range"
+                                      min={0}
+                                      max={135}
+                                      value={adToneSaturation}
+                                      onChange={(e) =>
+                                        setAdToneSaturation(
+                                          Number(e.target.value),
+                                        )
+                                      }
+                                    />
+                                    <output>{adToneSaturation}%</output>
+                                  </label>
+                                  <label className="tws-slider">
+                                    <span>
+                                      {isKo ? "갤러리 여백" : "Gallery frame"}
+                                    </span>
+                                    <input
+                                      type="range"
+                                      min={0}
+                                      max={28}
+                                      value={adFrameBorderPx}
+                                      onChange={(e) =>
+                                        setAdFrameBorderPx(
+                                          Number(e.target.value),
+                                        )
+                                      }
+                                    />
+                                    <output>{adFrameBorderPx}px</output>
+                                  </label>
+                                </div>
+                              </div>
+
+                              <div className="tws-ad-export-bar">
+                                <button
+                                  type="button"
+                                  className="tws-btn tws-btn-primary"
+                                  data-export-ad-png-btn
+                                  onClick={() => void handleExportAdCompositePng()}
+                                >
+                                  {isKo
+                                    ? "완성 에셋 PNG 저장 (1080×1350)"
+                                    : "Export Asset PNG (1080×1350)"}
+                                </button>
+                                <button
+                                  type="button"
+                                  className="tws-btn"
+                                  data-commit-ad-cut-btn
+                                  onClick={() =>
+                                    void handleCommitAdDesignToSessionCut()
+                                  }
+                                >
+                                  {isKo
+                                    ? "작업 컷에 병합"
+                                    : "Save to Session Cuts"}
+                                </button>
+                              </div>
+                            </aside>
+                          </div>
+                        ) : canvasViewMode === "board" && sessionCuts.length > 0 ? (
+                          <div
+                            className="tws-board-grid-canvas"
+                            data-drag-over={dragOverTarget === "canvas"}
+                            onDragOver={(e) => {
+                              e.preventDefault();
+                              setDragOverTarget("canvas");
+                            }}
+                            onDragLeave={() => setDragOverTarget(null)}
+                            onDrop={handleDropOnCanvas}
+                          >
+                            <div className="tws-board-cards">
+                              {sessionCuts.map((cut, idx) => {
+                                const isSel = selectedBoardCutIds.includes(cut.id);
+                                const selOrder =
+                                  selectedBoardCutIds.indexOf(cut.id) + 1;
+                                return (
+                                  <div
+                                    key={cut.id}
+                                    className="tws-board-card"
+                                    data-selected={isSel}
+                                    draggable
+                                    onDragStart={(e) =>
+                                      handleInternalDragStart(e, {
+                                        src: cut.src,
+                                        label: cut.label,
+                                      })
+                                    }
+                                    onClick={() => {
+                                      setSelectedBoardCutIds((prev) =>
+                                        prev.includes(cut.id)
+                                          ? prev.filter((id) => id !== cut.id)
+                                          : [...prev, cut.id].slice(0, 4),
+                                      );
+                                    }}
+                                  >
+                                    <img
+                                      src={cut.src}
+                                      alt={cut.label}
+                                      decoding="async"
+                                    />
+                                    <span className="tws-board-card-badge">
+                                      {isSel
+                                        ? isKo
+                                          ? `${selOrder}번 선택`
+                                          : `#${selOrder}`
+                                        : `#${idx + 1}`}
+                                    </span>
+                                    <button
+                                      type="button"
+                                      className="tws-slot-clear"
+                                      aria-label={isKo ? "컷 삭제" : "Remove cut"}
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        handleRemoveSessionCut(cut.id);
+                                      }}
+                                    >
+                                      ×
+                                    </button>
+                                    <div className="tws-board-card-foot">
+                                      <span>{cut.label}</span>
+                                      <button
+                                        type="button"
+                                        className="tws-rail-clear"
+                                        onClick={(e) => {
+                                          e.stopPropagation();
+                                          setCanvasCut(cut);
+                                          setCanvasViewMode("single");
+                                        }}
+                                      >
+                                        {isKo ? "크게 보기" : "Open"}
+                                      </button>
+                                    </div>
+                                  </div>
+                                );
+                              })}
+                            </div>
+                            {selectedBoardCutIds.length > 0 ? (
+                              <div className="tws-board-floating-dock">
+                                <span>
+                                  {isKo
+                                    ? `${selectedBoardCutIds.length}장 선택됨`
+                                    : `${selectedBoardCutIds.length} selected`}
+                                </span>
+                                <div className="tws-artboard-actions">
+                                  <button
+                                    type="button"
+                                    className="tws-btn tws-btn-sm tws-btn-primary"
+                                    onClick={handleAttachBoardSelectionToRefSlots}
+                                  >
+                                    {isKo
+                                      ? `1~${selectedBoardCutIds.length}번 참고 슬롯으로 보내기`
+                                      : `Send to slots 1–${selectedBoardCutIds.length}`}
+                                  </button>
+                                  <button
+                                    type="button"
+                                    className="tws-btn tws-btn-sm tws-btn-quiet"
+                                    onClick={() => setSelectedBoardCutIds([])}
+                                  >
+                                    {isKo ? "선택 해제" : "Deselect"}
+                                  </button>
+                                </div>
+                              </div>
+                            ) : null}
+                          </div>
+                        ) : !canvasCut ? (
+                          <div
+                            className="tws-canvas tws-canvas-empty"
+                            data-canvas-empty="true"
+                            data-drag-over={dragOverTarget === "canvas"}
+                            onDragOver={(e) => {
+                              e.preventDefault();
+                              setDragOverTarget("canvas");
+                            }}
+                            onDragLeave={() => setDragOverTarget(null)}
+                            onDrop={handleDropOnCanvas}
+                          >
+                            <div className="tws-empty-dropzone">
+                              <span className="tws-empty-eyebrow">
+                                {isKo
+                                  ? "ATELIER STAGE · DRAG & DROP ANY IMAGE"
+                                  : "ATELIER STAGE · DRAG & DROP ANY IMAGE"}
+                              </span>
+                              <strong>
+                                {isKo
+                                  ? "레퍼런스 사진을 드래그하거나 아래에서 바로 화보를 만드세요"
+                                  : "Drop reference photos here or describe your shot below"}
+                              </strong>
+                              <p className="tws-empty-sub">
+                                {isKo
+                                  ? "내 폴더(yagi workshop test 등)나 웹 브라우저 사진을 이 화면 어디든 끌어 놓으세요. 1장은 캔버스·1번 슬롯에, 여러 장은 아래 1~4번 대형 슬롯 카드에 자동 배치됩니다."
+                                  : "Drag photos from any folder or browser tab anywhere onto this stage. 1 photo loads the canvas; multiple photos fill slots 1–4."}
+                              </p>
+                              <div className="tws-empty-actions">
+                                <label className="tws-btn tws-btn-primary">
+                                  {isKo
+                                    ? "+ 내 컴퓨터에서 사진 선택"
+                                    : "+ Choose photos"}
+                                  <input
+                                    type="file"
+                                    accept="image/*"
+                                    multiple
+                                    onChange={(e) => {
+                                      const files = Array.from(
+                                        e.target.files ?? [],
+                                      );
+                                      if (files.length === 1) {
+                                        const f = files[0]!;
+                                        const url = createManagedObjectUrl(f);
+                                        if (url) {
+                                          const cut = {
+                                            id: `cut-upload-${Date.now()}`,
+                                            src: url,
+                                            label: f.name,
+                                            meta: isKo
+                                              ? "업로드 원본"
+                                              : "Uploaded",
+                                          };
+                                          setCanvasCut(cut);
+                                          setSessionCuts((prev) => [
+                                            cut,
+                                            ...prev,
+                                          ]);
+                                          if (!customSlotThumbs[1]) {
+                                            setCustomSlotThumbs((prev) => ({
+                                              ...prev,
+                                              1: url,
+                                            }));
+                                            setCustomSlotNames((prev) => ({
+                                              ...prev,
+                                              1: f.name,
+                                            }));
+                                          }
+                                        }
+                                      } else if (files.length > 1) {
+                                        fillRefSlotsFromFiles(files, 1, true);
+                                      }
+                                      e.target.value = "";
+                                    }}
+                                    style={{
+                                      position: "absolute",
+                                      width: 1,
+                                      height: 1,
+                                      opacity: 0,
+                                      pointerEvents: "none",
+                                    }}
+                                  />
+                                </label>
+                                <button
+                                  type="button"
+                                  className="tws-btn"
+                                  onClick={handleLoadDemoAssets}
+                                >
+                                  {isKo
+                                    ? "샘플 장면 불러오기"
+                                    : "Load sample scene"}
+                                </button>
+                                <button
+                                  type="button"
+                                  className="tws-btn tws-btn-quiet"
+                                  onClick={() => {
+                                    handleLoadDemoAssets();
+                                    setStudioCanvasMode("design");
+                                  }}
+                                >
+                                  {isKo
+                                    ? "디자인·애드 편집 바로 열기"
+                                    : "Open Ad Design Editor"}
+                                </button>
+                              </div>
+                            </div>
+                          </div>
+                        ) : (
+                          <div
+                            className="tws-canvas"
+                            data-tool={opluxEditTool}
+                            data-drag-over={dragOverTarget === "canvas"}
+                            onMouseDown={handleShellArtboardDown}
+                            onMouseMove={handleShellArtboardMove}
+                            onMouseUp={handleShellArtboardUp}
+                            onMouseLeave={handleShellArtboardUp}
+                            onDragOver={(e) => {
+                              e.preventDefault();
+                              setDragOverTarget("canvas");
+                            }}
+                            onDragLeave={() => setDragOverTarget(null)}
+                            onDrop={handleDropOnCanvas}
+                          >
+                            <img
+                              src={canvasCut.src}
+                              alt={canvasCut.label}
+                              draggable={false}
+                              decoding="async"
+                              fetchPriority="high"
+                              style={{
+                                filter: computedCanvasFilterCss,
+                              }}
+                            />
+                            {imageSubMode === "micro_region_edit" ? (
+                              <div
+                                className="tws-box"
+                                style={{
+                                  left: `${selectionRect.xPct}%`,
+                                  top: `${selectionRect.yPct}%`,
+                                  width: `${selectionRect.wPct}%`,
+                                  height: `${selectionRect.hPct}%`,
+                                }}
+                              >
+                                <span
+                                  className="tws-box-tag"
+                                  data-flip={selectionRect.yPct < 9}
+                                >
+                                  {isKo
+                                    ? "선택 영역만 수정 (외부 원본 고정)"
+                                    : "Edit region only"}
+                                </span>
+                                <span className="tws-handle" data-pos="tl" />
+                                <span className="tws-handle" data-pos="tr" />
+                                <span className="tws-handle" data-pos="bl" />
+                                <span className="tws-handle" data-pos="br" />
+                              </div>
+                            ) : null}
+                            {edgeEraseStrokes.map((stroke, idx) => (
+                              <span
+                                key={idx}
+                                className="tws-stroke"
+                                data-mode={stroke.mode}
+                                style={{
+                                  left: `${stroke.xPct}%`,
+                                  top: `${stroke.yPct}%`,
+                                  width: `${stroke.rPx * 1.4}px`,
+                                  height: `${stroke.rPx * 1.4}px`,
+                                  opacity: Math.max(0.25, stroke.opacity),
+                                }}
+                              />
+                            ))}
+                            <div
+                              ref={shellPreviewLayerRef}
+                              className="tws-preview-layer"
+                              aria-hidden="true"
+                            />
+                            <div
+                              ref={shellBoxRef}
+                              className="tws-box tws-box-live"
+                              aria-hidden="true"
+                            />
+                          </div>
+                        )}
+
+                        {/* SESSION FILMSTRIP — ONLY RENDERED WHEN CUTS EXIST */}
+                        {sessionCuts.length > 0 ? (
+                          <div
+                            className="tws-filmstrip"
+                            aria-label={isKo ? "내 작업 컷" : "Session cuts"}
+                          >
+                            <div className="tws-filmstrip-head">
+                              <span>
+                                {isKo
+                                  ? `작업 컷 (${sessionCuts.length})`
+                                  : `Cuts (${sessionCuts.length})`}
+                              </span>
+                              <button
+                                type="button"
+                                className="tws-rail-clear"
+                                data-clear-all-session-cuts
+                                onClick={handleClearAllSessionCuts}
+                              >
+                                {isKo ? "비우기" : "Clear"}
+                              </button>
+                            </div>
+                            <div className="tws-filmstrip-list">
+                              {sessionCuts.map((cut) => {
+                                const isCurrent = canvasCut?.id === cut.id;
+                                return (
+                                  <div
+                                    key={cut.id}
+                                    className="tws-filmstrip-item"
+                                    data-on={isCurrent}
+                                    draggable
+                                    onDragStart={(e) =>
+                                      handleInternalDragStart(e, {
+                                        src: cut.src,
+                                        label: cut.label,
+                                      })
+                                    }
+                                  >
+                                    <button
+                                      type="button"
+                                      className="tws-filmstrip-hit"
+                                      onClick={() => {
                                         setCanvasCut(cut);
                                         setCanvasViewMode("single");
                                       }}
                                     >
-                                      {isKo ? "크게 보기" : "Open"}
+                                      <img
+                                        src={cut.src}
+                                        alt={cut.label}
+                                        decoding="async"
+                                      />
+                                    </button>
+                                    <button
+                                      type="button"
+                                      className="tws-filmstrip-del"
+                                      aria-label={isKo ? "삭제" : "Remove"}
+                                      onClick={() =>
+                                        handleRemoveSessionCut(cut.id)
+                                      }
+                                    >
+                                      ×
                                     </button>
                                   </div>
-                                </div>
-                              );
-                            })}
-                          </div>
-                          {selectedBoardCutIds.length > 0 ? (
-                            <div className="tws-board-floating-dock">
-                              <span>
-                                {isKo
-                                  ? `${selectedBoardCutIds.length}장 선택됨`
-                                  : `${selectedBoardCutIds.length} selected`}
-                              </span>
-                              <div className="tws-artboard-actions">
-                                <button
-                                  type="button"
-                                  className="tws-btn tws-btn-sm tws-btn-primary"
-                                  onClick={handleAttachBoardSelectionToRefSlots}
-                                >
-                                  {isKo
-                                    ? `1~${selectedBoardCutIds.length}번 참고 슬롯으로 보내기`
-                                    : `Send to slots 1–${selectedBoardCutIds.length}`}
-                                </button>
-                                <button
-                                  type="button"
-                                  className="tws-btn tws-btn-sm tws-btn-quiet"
-                                  onClick={() => setSelectedBoardCutIds([])}
-                                >
-                                  {isKo ? "선택 해제" : "Deselect"}
-                                </button>
-                              </div>
-                            </div>
-                          ) : null}
-                        </div>
-                      ) : !canvasCut ? (
-                        <div
-                          className="tws-canvas tws-canvas-empty"
-                          data-canvas-empty="true"
-                          data-drag-over={dragOverTarget === "canvas"}
-                          onDragOver={(e) => {
-                            e.preventDefault();
-                            setDragOverTarget("canvas");
-                          }}
-                          onDragLeave={() => setDragOverTarget(null)}
-                          onDrop={handleDropOnCanvas}
-                        >
-                          <div className="tws-empty-dropzone">
-                            <strong>
-                              {isKo
-                                ? "레퍼런스 사진을 드래그하거나 아래에서 바로 화보를 만드세요"
-                                : "Drop reference photos here or describe your shot below"}
-                            </strong>
-                            <p className="tws-empty-sub">
-                              {isKo
-                                ? "사진 1장을 놓으면 부분 수정 캔버스로, 여러 장을 놓으면 아래 1~4번 참고 슬롯에 자동 배치됩니다."
-                                : "Drop 1 photo to edit a region, or multiple photos to fill reference slots 1–4 below."}
-                            </p>
-                            <div className="tws-empty-actions">
-                              <label className="tws-btn">
-                                {isKo ? "+ 내 컴퓨터에서 사진 선택" : "+ Choose photos"}
-                                <input
-                                  type="file"
-                                  accept="image/*"
-                                  multiple
-                                  onChange={(e) => {
-                                    const files = Array.from(e.target.files ?? []);
-                                    if (files.length === 1) {
-                                      const f = files[0]!;
-                                      const url = createManagedObjectUrl(f);
-                                      if (url) {
-                                        const cut = {
-                                          id: `cut-upload-${Date.now()}`,
-                                          src: url,
-                                          label: f.name,
-                                          meta: isKo ? "업로드 원본" : "Uploaded",
-                                        };
-                                        setCanvasCut(cut);
-                                        setSessionCuts((prev) => [cut, ...prev]);
-                                      }
-                                    } else if (files.length > 1) {
-                                      fillRefSlotsFromFiles(files, 1, true);
-                                    }
-                                    e.target.value = "";
-                                  }}
-                                  style={{
-                                    position: "absolute",
-                                    width: 1,
-                                    height: 1,
-                                    opacity: 0,
-                                    pointerEvents: "none",
-                                  }}
-                                />
-                              </label>
-                              <button
-                                type="button"
-                                className="tws-btn tws-btn-quiet"
-                                onClick={handleLoadDemoAssets}
-                              >
-                                {isKo ? "샘플 장면 불러오기" : "Load sample scene"}
-                              </button>
+                                );
+                              })}
                             </div>
                           </div>
-                        </div>
-                      ) : (
-                        <div
-                          className="tws-canvas"
-                          data-tool={opluxEditTool}
-                          data-drag-over={dragOverTarget === "canvas"}
-                          onMouseDown={handleShellArtboardDown}
-                          onMouseMove={handleShellArtboardMove}
-                          onMouseUp={handleShellArtboardUp}
-                          onMouseLeave={handleShellArtboardUp}
-                          onDragOver={(e) => {
-                            e.preventDefault();
-                            setDragOverTarget("canvas");
-                          }}
-                          onDragLeave={() => setDragOverTarget(null)}
-                          onDrop={handleDropOnCanvas}
-                        >
-                          <img
-                            src={canvasCut.src}
-                            alt={canvasCut.label}
-                            draggable={false}
-                          />
-                          {imageSubMode === "micro_region_edit" ? (
-                            <div
-                              className="tws-box"
-                              style={{
-                                left: `${selectionRect.xPct}%`,
-                                top: `${selectionRect.yPct}%`,
-                                width: `${selectionRect.wPct}%`,
-                                height: `${selectionRect.hPct}%`,
-                              }}
-                            >
-                              <span
-                                className="tws-box-tag"
-                                data-flip={selectionRect.yPct < 9}
-                              >
-                                {isKo
-                                  ? "선택 영역만 수정 (외부 원본 고정)"
-                                  : "Edit region only"}
-                              </span>
-                              <span className="tws-handle" data-pos="tl" />
-                              <span className="tws-handle" data-pos="tr" />
-                              <span className="tws-handle" data-pos="bl" />
-                              <span className="tws-handle" data-pos="br" />
-                            </div>
-                          ) : null}
-                          {edgeEraseStrokes.map((stroke, idx) => (
-                            <span
-                              key={idx}
-                              className="tws-stroke"
-                              data-mode={stroke.mode}
-                              style={{
-                                left: `${stroke.xPct}%`,
-                                top: `${stroke.yPct}%`,
-                                width: `${stroke.rPx * 1.4}px`,
-                                height: `${stroke.rPx * 1.4}px`,
-                                opacity: Math.max(0.25, stroke.opacity),
-                              }}
-                            />
-                          ))}
-                          <div
-                            ref={shellPreviewLayerRef}
-                            className="tws-preview-layer"
-                            aria-hidden="true"
-                          />
-                          <div
-                            ref={shellBoxRef}
-                            className="tws-box tws-box-live"
-                            aria-hidden="true"
-                          />
-                        </div>
-                      )}
+                        ) : null}
+                      </div>
+                    </div>
 
-                      {/* SESSION FILMSTRIP — ONLY RENDERED WHEN CUTS EXIST */}
-                      {sessionCuts.length > 0 ? (
-                        <div className="tws-filmstrip" aria-label={isKo ? "내 작업 컷" : "Session cuts"}>
-                          <div className="tws-filmstrip-head">
-                            <span>
-                              {isKo ? `작업 컷 (${sessionCuts.length})` : `Cuts (${sessionCuts.length})`}
+                    {/* FLOATING BOTTOM COMPOSER DOCK (4 Enlarged Visual Reference Cards + Prompt + Control Bar) */}
+                    <div
+                      className="tws-composer"
+                      data-bottom-image-chat-box
+                      onDragOver={(e) => {
+                        e.preventDefault();
+                      }}
+                      onDrop={handleDropOnRefRail}
+                    >
+                      <div
+                        className="tws-composer-slots"
+                        aria-label={
+                          isKo ? "참고 이미지 슬롯 1~4" : "Reference slots 1–4"
+                        }
+                        data-drag-over={dragOverTarget === "rail-refs"}
+                        onDragOver={(e) => {
+                          e.preventDefault();
+                          setDragOverTarget("rail-refs");
+                        }}
+                        onDragLeave={() => setDragOverTarget(null)}
+                        onDrop={handleDropOnRefRail}
+                      >
+                        <div className="tws-composer-slots-head">
+                          <div className="tws-composer-slots-title">
+                            <span className="tws-composer-slots-label">
+                              {isKo
+                                ? "레퍼런스 슬롯 (1~4번)"
+                                : "Reference Slots (1–4)"}
                             </span>
+                            <span className="tws-composer-slots-hint">
+                              {isKo
+                                ? "폴더나 웹에서 사진을 바로 드래그해 놓으세요 · 카드를 클릭하면 프롬프트에 번호가 입력됩니다"
+                                : "Drag photos from folders or browser tabs · Click a card to reference its number in your prompt"}
+                            </span>
+                          </div>
+                          {filledSlotNumbers.length > 0 ? (
                             <button
                               type="button"
                               className="tws-rail-clear"
-                              data-clear-all-session-cuts
-                              onClick={handleClearAllSessionCuts}
+                              data-clear-all-ref-slots
+                              onClick={handleClearAllRefSlots}
                             >
-                              {isKo ? "비우기" : "Clear"}
+                              {isKo ? "슬롯 전체 비우기" : "Clear all slots"}
                             </button>
-                          </div>
-                          <div className="tws-filmstrip-list">
-                            {sessionCuts.map((cut) => {
-                              const isCurrent = canvasCut?.id === cut.id;
+                          ) : null}
+                        </div>
+
+                        <div className="tws-ref-grid">
+                          {([1, 2, 3, 4] as const).map((slotNum) => {
+                            const slotSrc = customSlotThumbs[slotNum];
+                            const slotName =
+                              customSlotNames[slotNum] ??
+                              (isKo ? `${slotNum}번 이미지` : `Image ${slotNum}`);
+                            const used = usedRefSlots.includes(slotNum);
+                            const isOver = dragOverTarget === `slot-${slotNum}`;
+                            const slotRoleId = slotRoles[slotNum] ?? "free";
+                            const slotRoleSpec =
+                              SLOT_ROLE_OPTIONS.find(
+                                (r) => r.id === slotRoleId,
+                              ) ?? SLOT_ROLE_OPTIONS[0]!;
+                            const slotDefaultHint =
+                              slotNum === 1
+                                ? isKo
+                                  ? "인물 · 주 피사체"
+                                  : "Subject · Model"
+                                : slotNum === 2
+                                  ? isKo
+                                    ? "제품 · 오브제"
+                                    : "Product · Object"
+                                  : slotNum === 3
+                                    ? isKo
+                                      ? "의상 · 실루엣 · 포즈"
+                                      : "Styling · Pose"
+                                    : isKo
+                                      ? "조명 · 공간감 · 색감"
+                                      : "Lighting · Space";
+
+                            if (!slotSrc) {
                               return (
-                                <div
-                                  key={cut.id}
-                                  className="tws-filmstrip-item"
-                                  data-on={isCurrent}
-                                  draggable
-                                  onDragStart={(e) =>
-                                    handleInternalDragStart(e, {
-                                      src: cut.src,
-                                      label: cut.label,
-                                    })
+                                <label
+                                  key={slotNum}
+                                  className="tws-ref-card tws-ref-card-empty"
+                                  data-ref-slot-card={slotNum}
+                                  data-ref-slot-empty="true"
+                                  data-drag-over={isOver}
+                                  onDragOver={(e) => {
+                                    e.preventDefault();
+                                    e.stopPropagation();
+                                    setDragOverTarget(`slot-${slotNum}`);
+                                  }}
+                                  onDragLeave={() => setDragOverTarget(null)}
+                                  onDrop={(e) => handleDropOnRefSlot(slotNum, e)}
+                                  title={
+                                    isKo
+                                      ? `${slotNum}번 참고 이미지 추가 (드래그 또는 클릭)`
+                                      : `Add reference ${slotNum}`
                                   }
                                 >
-                                  <button
-                                    type="button"
-                                    className="tws-filmstrip-hit"
-                                    onClick={() => {
-                                      setCanvasCut(cut);
-                                      setCanvasViewMode("single");
+                                  <div
+                                    className="tws-ref-card-thumb"
+                                    aria-hidden="true"
+                                  >
+                                    <b>+</b>
+                                  </div>
+                                  <div className="tws-ref-card-body">
+                                    <div className="tws-ref-card-head">
+                                      <strong>
+                                        {isKo ? `0${slotNum}번` : `#0${slotNum}`}
+                                      </strong>
+                                      <span className="tws-ref-card-tag">
+                                        {slotDefaultHint}
+                                      </span>
+                                    </div>
+                                    <span className="tws-ref-card-sub">
+                                      {isKo
+                                        ? "사진 드래그 또는 클릭"
+                                        : "Drop photo or click"}
+                                    </span>
+                                  </div>
+                                  <input
+                                    type="file"
+                                    accept="image/*"
+                                    multiple
+                                    onChange={(e) => {
+                                      const files = Array.from(
+                                        e.target.files ?? [],
+                                      );
+                                      fillRefSlotsFromFiles(
+                                        files,
+                                        slotNum,
+                                        false,
+                                      );
+                                      e.target.value = "";
                                     }}
-                                  >
-                                    <img src={cut.src} alt={cut.label} />
-                                  </button>
-                                  <button
-                                    type="button"
-                                    className="tws-filmstrip-del"
-                                    aria-label={isKo ? "삭제" : "Remove"}
-                                    onClick={() => handleRemoveSessionCut(cut.id)}
-                                  >
-                                    ×
-                                  </button>
-                                </div>
+                                  />
+                                </label>
                               );
-                            })}
-                          </div>
-                        </div>
-                      ) : null}
-                    </div>
-                  </div>
-
-                  {/* FLOATING BOTTOM COMPOSER DOCK (Reference Slots 1–4 + Prompt + Compact Control Bar) */}
-                  <div className="tws-composer" data-bottom-image-chat-box>
-                    <div
-                      className="tws-composer-slots"
-                      aria-label={isKo ? "참고 이미지 슬롯 1~4" : "Reference slots 1–4"}
-                      data-drag-over={dragOverTarget === "rail-refs"}
-                      onDragOver={(e) => {
-                        e.preventDefault();
-                        setDragOverTarget("rail-refs");
-                      }}
-                      onDragLeave={() => setDragOverTarget(null)}
-                      onDrop={handleDropOnRefRail}
-                    >
-                      <span className="tws-composer-slots-label">
-                        {isKo ? "레퍼런스" : "Refs"}
-                      </span>
-                      {([1, 2, 3, 4] as const).map((slotNum) => {
-                        const slotSrc = customSlotThumbs[slotNum];
-                        const slotName =
-                          customSlotNames[slotNum] ??
-                          (isKo ? `${slotNum}번 이미지` : `Image ${slotNum}`);
-                        const used = usedRefSlots.includes(slotNum);
-                        const isOver = dragOverTarget === `slot-${slotNum}`;
-                        const slotRoleId = slotRoles[slotNum] ?? "free";
-                        const slotRoleSpec =
-                          SLOT_ROLE_OPTIONS.find((r) => r.id === slotRoleId) ??
-                          SLOT_ROLE_OPTIONS[0]!;
-
-                        if (!slotSrc) {
-                          return (
-                            <label
-                              key={slotNum}
-                              className="tws-ref-pill tws-ref-pill-empty"
-                              data-ref-slot-card={slotNum}
-                              data-ref-slot-empty="true"
-                              data-drag-over={isOver}
-                              onDragOver={(e) => {
-                                e.preventDefault();
-                                e.stopPropagation();
-                                setDragOverTarget(`slot-${slotNum}`);
-                              }}
-                              onDragLeave={() => setDragOverTarget(null)}
-                              onDrop={(e) => handleDropOnRefSlot(slotNum, e)}
-                              title={
-                                isKo
-                                  ? `${slotNum}번 참고 이미지 추가 (드래그 또는 클릭)`
-                                  : `Add reference ${slotNum}`
-                              }
-                            >
-                              <b aria-hidden="true">+</b>
-                              <span>{isKo ? `${slotNum}번` : `#${slotNum}`}</span>
-                              <input
-                                type="file"
-                                accept="image/*"
-                                multiple
-                                onChange={(e) => {
-                                  const files = Array.from(e.target.files ?? []);
-                                  fillRefSlotsFromFiles(files, slotNum, false);
-                                  e.target.value = "";
-                                }}
-                              />
-                            </label>
-                          );
-                        }
-
-                        return (
-                          <div
-                            key={slotNum}
-                            className="tws-ref-pill"
-                            data-ref-slot-card={slotNum}
-                            data-ref-slot-empty="false"
-                            data-slot-role={slotRoleId}
-                            data-on={used}
-                            data-drag-over={isOver}
-                            draggable
-                            onDragStart={(e) =>
-                              handleInternalDragStart(e, {
-                                src: slotSrc,
-                                label: slotName,
-                                fromSlot: slotNum,
-                              })
                             }
-                            onDragOver={(e) => {
-                              e.preventDefault();
-                              e.stopPropagation();
-                              setDragOverTarget(`slot-${slotNum}`);
+
+                            return (
+                              <div
+                                key={slotNum}
+                                className="tws-ref-card tws-ref-card-filled"
+                                data-ref-slot-card={slotNum}
+                                data-ref-slot-empty="false"
+                                data-slot-role={slotRoleId}
+                                data-on={used}
+                                data-drag-over={isOver}
+                                draggable
+                                onDragStart={(e) =>
+                                  handleInternalDragStart(e, {
+                                    src: slotSrc,
+                                    label: slotName,
+                                    fromSlot: slotNum,
+                                  })
+                                }
+                                onDragOver={(e) => {
+                                  e.preventDefault();
+                                  e.stopPropagation();
+                                  setDragOverTarget(`slot-${slotNum}`);
+                                }}
+                                onDragLeave={() => setDragOverTarget(null)}
+                                onDrop={(e) => handleDropOnRefSlot(slotNum, e)}
+                              >
+                                <button
+                                  type="button"
+                                  className="tws-ref-card-thumb"
+                                  onClick={() => handleShellRefClick(slotNum)}
+                                  title={
+                                    isKo
+                                      ? "클릭하면 프롬프트에 이 번호를 넣습니다"
+                                      : "Click to reference in prompt"
+                                  }
+                                >
+                                  <img
+                                    src={slotSrc}
+                                    alt={slotName}
+                                    decoding="async"
+                                  />
+                                </button>
+                                <div className="tws-ref-card-body">
+                                  <div className="tws-ref-card-head">
+                                    <button
+                                      type="button"
+                                      className="tws-ref-card-num"
+                                      onClick={() => handleShellRefClick(slotNum)}
+                                    >
+                                      <strong>
+                                        {isKo ? `0${slotNum}번` : `#0${slotNum}`}
+                                      </strong>
+                                    </button>
+                                    <button
+                                      type="button"
+                                      className="tws-ref-pill-role"
+                                      data-slot-role-btn={slotNum}
+                                      data-active={slotRoleId !== "free"}
+                                      onClick={() => cycleSlotRole(slotNum)}
+                                      title={
+                                        isKo
+                                          ? "클릭해 역할 변경 (자유·인물·제품·의상·배경·구도·색감)"
+                                          : "Cycle reference role"
+                                      }
+                                    >
+                                      {isKo ? slotRoleSpec.ko : slotRoleSpec.en}
+                                    </button>
+                                  </div>
+                                  <span
+                                    className="tws-ref-card-filename"
+                                    title={slotName}
+                                  >
+                                    {slotName}
+                                  </span>
+                                  <div className="tws-ref-card-actions">
+                                    <button
+                                      type="button"
+                                      className="tws-ref-card-insert"
+                                      onClick={() => handleShellRefClick(slotNum)}
+                                    >
+                                      {isKo
+                                        ? `@${slotNum}번 넣기`
+                                        : `Insert #${slotNum}`}
+                                    </button>
+                                    <button
+                                      type="button"
+                                      className="tws-ref-pill-del"
+                                      data-clear-ref-slot={slotNum}
+                                      aria-label={
+                                        isKo
+                                          ? `${slotNum}번 슬롯 비우기`
+                                          : `Clear slot ${slotNum}`
+                                      }
+                                      onClick={() => handleClearRefSlot(slotNum)}
+                                    >
+                                      ×
+                                    </button>
+                                  </div>
+                                </div>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      </div>
+
+                      <div className="tws-composer-input-row">
+                        <label
+                          className="tws-composer-attach"
+                          title={
+                            isKo
+                              ? "참고 이미지 여러 장 올리기"
+                              : "Attach reference images"
+                          }
+                        >
+                          <b aria-hidden="true">+</b>
+                          <input
+                            type="file"
+                            accept="image/*"
+                            multiple
+                            onChange={(e) => {
+                              const files = Array.from(e.target.files ?? []);
+                              const firstEmpty =
+                                ([1, 2, 3, 4] as const).find(
+                                  (n) => !customSlotThumbs[n],
+                                ) ?? 1;
+                              fillRefSlotsFromFiles(files, firstEmpty, false);
+                              e.target.value = "";
                             }}
-                            onDragLeave={() => setDragOverTarget(null)}
-                            onDrop={(e) => handleDropOnRefSlot(slotNum, e)}
+                          />
+                        </label>
+                        <textarea
+                          aria-label={isKo ? "이미지 요청" : "Image request"}
+                          rows={2}
+                          value={briefText}
+                          onChange={(e) => setBriefText(e.target.value)}
+                          onKeyDown={(e) => {
+                            if (
+                              e.key === "Enter" &&
+                              !e.shiftKey &&
+                              !e.nativeEvent.isComposing
+                            ) {
+                              e.preventDefault();
+                              handleShellGenerateImage();
+                            }
+                          }}
+                          placeholder={
+                            imageSubMode === "micro_region_edit"
+                              ? isKo
+                                ? "선택한 영역을 어떻게 수정할까요? (예: 손 모양을 자연스럽게, 2번 제품 로고로 교체)"
+                                : "How should the selected region change?"
+                              : isKo
+                                ? "만들고 싶은 장면을 적어 주세요. 위의 01~04번 레퍼런스 카드를 누르면 번호가 바로 입력됩니다."
+                                : "Describe your scene. Click reference cards 01–04 above to reference them."
+                          }
+                        />
+                      </div>
+
+                      <div className="tws-composer-bar">
+                        <div className="tws-composer-triggers">
+                          <button
+                            type="button"
+                            className="tws-trigger-pill"
+                            data-studio-model-guide-trigger
+                            data-quick-model-pill={selectedImageModelId}
+                            aria-expanded={showFullModelGuide}
+                            onClick={() => {
+                              setShowAestheticPicker(false);
+                              setShowFullModelGuide((p) => !p);
+                            }}
+                          >
+                            <strong>{shortImageModelName}</strong>
+                            <span>
+                              {isKo
+                                ? activeEasyModelRow.bestBadgeKo
+                                    .split("·")[0]
+                                    ?.trim()
+                                : activeEasyModelRow.bestBadgeEn
+                                    .split("·")[0]
+                                    ?.trim()}
+                            </span>
+                            <em aria-hidden="true">▾</em>
+                          </button>
+
+                          <button
+                            type="button"
+                            className="tws-trigger-pill"
+                            data-image-board-aesthetic-pill
+                            aria-expanded={showAestheticPicker}
+                            onClick={() => {
+                              setShowFullModelGuide(false);
+                              setShowAestheticPicker((p) => !p);
+                            }}
+                          >
+                            {isAestheticLockEnabled ? (
+                              <span
+                                className="tws-lock-swatches"
+                                aria-hidden="true"
+                              >
+                                {activeAestheticDna.paletteHex
+                                  .slice(0, 3)
+                                  .map((hex) => (
+                                    <i
+                                      key={hex}
+                                      style={{ backgroundColor: hex }}
+                                    />
+                                  ))}
+                              </span>
+                            ) : (
+                              <span
+                                className="tws-lock-free-dot"
+                                aria-hidden="true"
+                              />
+                            )}
+                            <span>
+                              {isAestheticLockEnabled
+                                ? activeAestheticLabel
+                                : isKo
+                                  ? "무드보드 없음 (자유)"
+                                  : "No moodboard (Free)"}
+                            </span>
+                            <em aria-hidden="true">▾</em>
+                          </button>
+
+                          <button
+                            type="button"
+                            className="tws-trigger-pill tws-trigger-pill-ghost"
+                            data-composer-aesthetic-free-toggle
+                            aria-pressed={!isAestheticLockEnabled}
+                            onClick={() => {
+                              const nextLocked = !isAestheticLockEnabled;
+                              setIsAestheticLockEnabled(nextLocked);
+                              if (!nextLocked) {
+                                setIsColorRefPinned(false);
+                                setIsTextureRefPinned(false);
+                              }
+                            }}
+                          >
+                            <span>
+                              {isAestheticLockEnabled
+                                ? isKo
+                                  ? "자유 모드로 전환"
+                                  : "Switch to Free"
+                                : isKo
+                                  ? "무드보드 켜기"
+                                  : "Lock Moodboard"}
+                            </span>
+                          </button>
+                        </div>
+
+                        <div className="tws-composer-opts">
+                          <div
+                            className="tws-seg"
+                            role="radiogroup"
+                            aria-label={isKo ? "비율" : "Aspect"}
+                          >
+                            {(["4:5", "1:1", "9:16", "16:9"] as const).map(
+                              (ratio) => (
+                                <button
+                                  key={ratio}
+                                  type="button"
+                                  role="radio"
+                                  aria-checked={aspect === ratio}
+                                  onClick={() => setAspect(ratio)}
+                                >
+                                  {ratio}
+                                </button>
+                              ),
+                            )}
+                          </div>
+                          <div
+                            className="tws-seg"
+                            role="radiogroup"
+                            aria-label={isKo ? "렌즈 화각" : "Lens focal length"}
+                          >
+                            {([35, 50, 85] as const).map((mm) => (
+                              <button
+                                key={mm}
+                                type="button"
+                                role="radio"
+                                aria-checked={cameraFocalMm === mm}
+                                onClick={() => setCameraFocalMm(mm)}
+                              >
+                                {mm}mm
+                              </button>
+                            ))}
+                          </div>
+                          <div
+                            className="tws-batch-stepper"
+                            role="group"
+                            aria-label={isKo ? "생성 매수" : "Batch count"}
                           >
                             <button
                               type="button"
-                              className="tws-ref-pill-thumb"
-                              onClick={() => handleShellRefClick(slotNum)}
-                              title={
-                                isKo
-                                  ? "클릭하면 프롬프트에 이 번호를 넣습니다"
-                                  : "Click to reference in prompt"
+                              aria-label={isKo ? "매수 줄이기" : "Decrease batch"}
+                              disabled={imageBatchCount === 1}
+                              onClick={() =>
+                                setImageBatchCount((prev) =>
+                                  prev === 4 ? 2 : 1,
+                                )
                               }
                             >
-                              <img src={slotSrc} alt={slotName} />
-                              <strong>{isKo ? `${slotNum}번` : `#${slotNum}`}</strong>
+                              −
                             </button>
+                            <span>
+                              {isKo
+                                ? `${imageBatchCount}매`
+                                : `${imageBatchCount}/4`}
+                            </span>
                             <button
                               type="button"
-                              className="tws-ref-pill-role"
-                              data-slot-role-btn={slotNum}
-                              data-active={slotRoleId !== "free"}
-                              onClick={() => cycleSlotRole(slotNum)}
-                              title={
-                                isKo
-                                  ? "클릭해 역할 변경 (자유·인물·제품·의상·배경·구도·색감)"
-                                  : "Cycle reference role"
+                              aria-label={isKo ? "매수 늘리기" : "Increase batch"}
+                              disabled={imageBatchCount === 4}
+                              onClick={() =>
+                                setImageBatchCount((prev) =>
+                                  prev === 1 ? 2 : 4,
+                                )
                               }
                             >
-                              {isKo ? slotRoleSpec.ko : slotRoleSpec.en}
+                              +
                             </button>
+                          </div>
+                          <button
+                            type="button"
+                            className="tws-btn tws-btn-primary"
+                            disabled={!canWrite || busy}
+                            onClick={handleShellGenerateImage}
+                          >
+                            {busy
+                              ? shellBusyLabel
+                              : imageSubMode === "micro_region_edit"
+                                ? isKo
+                                  ? "선택 영역 수정"
+                                  : "Update region"
+                                : isKo
+                                  ? "화보 만들기"
+                                  : "Generate"}
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  </section>
+                ) : (
+                  <section
+                    className="tws-board"
+                    aria-label={isKo ? "영상 스튜디오" : "Video studio"}
+                    data-right-spatial-video-board
+                    onDragOver={(e) => {
+                      e.preventDefault();
+                      setDragOverTarget("video-canvas");
+                    }}
+                    onDragLeave={() => setDragOverTarget(null)}
+                    onDrop={handleDropOnVideoBoard}
+                  >
+                    <div className="tws-stage-single tws-stage-video">
+                      <div className="tws-artboard">
+                        {videoBoardFrame || videoEndFrame ? (
+                          <div className="tws-artboard-head">
+                            <div className="tws-artboard-title-group">
+                              <strong>
+                                {videoBoardFrame
+                                  ? videoBoardFrame.label
+                                  : isKo
+                                    ? "영상 스튜디오"
+                                    : "Video Studio"}
+                              </strong>
+                              <span>
+                                Seedance 2.5 · {videoResolution} · {videoSeconds}
+                                {isKo ? "초" : "s"}
+                              </span>
+                            </div>
+                            <div className="tws-artboard-actions">
+                              <div
+                                className="tws-seg"
+                                role="radiogroup"
+                                aria-label={
+                                  isKo ? "고화질 마감" : "Upscale finish"
+                                }
+                              >
+                                {(
+                                  [
+                                    {
+                                      res: "1080p" as const,
+                                      engine:
+                                        "sunra_ig_1080p_upscaler" as const,
+                                      ko: "인스타 1080p",
+                                      en: "IG 1080p",
+                                    },
+                                    {
+                                      res: "4K" as const,
+                                      engine:
+                                        "seedvr2_7b_optical_upscaler" as const,
+                                      ko: "4K 마스터",
+                                      en: "4K Master",
+                                    },
+                                  ] as const
+                                ).map((node) => (
+                                  <button
+                                    key={node.res}
+                                    type="button"
+                                    role="radio"
+                                    aria-checked={
+                                      upscaleTargetResolution === node.res
+                                    }
+                                    onClick={() => {
+                                      setSelectedUpscalerEngineId(node.engine);
+                                      setUpscaleTargetResolution(node.res);
+                                    }}
+                                  >
+                                    {isKo ? node.ko : node.en}
+                                  </button>
+                                ))}
+                              </div>
+                              <button
+                                type="button"
+                                className="tws-btn tws-btn-sm"
+                                disabled={!canWrite}
+                                onClick={() => {
+                                  setErrorMessage("");
+                                  handleRunUpscaleStudioJob();
+                                }}
+                              >
+                                {isKo ? "고화질 마감" : "Upscale"}
+                              </button>
+                              <button
+                                type="button"
+                                className="tws-btn tws-btn-sm tws-btn-quiet"
+                                data-clear-video-frame
+                                onClick={() => {
+                                  setVideoBoardFrame(null);
+                                  setVideoEndFrame(null);
+                                  setShellFirstFrameLinked(false);
+                                }}
+                              >
+                                {isKo ? "비우기 ×" : "Clear ×"}
+                              </button>
+                            </div>
+                          </div>
+                        ) : null}
+
+                        {videoBoardFrame ? (
+                          <div
+                            className="tws-canvas"
+                            data-tool="view"
+                            data-drag-over={dragOverTarget === "video-canvas"}
+                          >
+                            {videoBoardFrame.isVideoFile ? (
+                              <video
+                                key={videoBoardFrame.src}
+                                src={videoBoardFrame.src}
+                                autoPlay
+                                muted
+                                loop
+                                playsInline
+                              />
+                            ) : (
+                              <img
+                                src={videoBoardFrame.src}
+                                alt={videoBoardFrame.label}
+                                draggable={false}
+                                decoding="async"
+                              />
+                            )}
+                          </div>
+                        ) : (
+                          <div
+                            className="tws-canvas tws-canvas-empty"
+                            data-drag-over={dragOverTarget === "video-canvas"}
+                          >
+                            <div className="tws-empty-dropzone">
+                              <strong>
+                                {isKo
+                                  ? "첫 장면으로 쓸 이미지를 드래그해서 놓으세요"
+                                  : "Drop an image to use as the start frame"}
+                              </strong>
+                              <p className="tws-empty-sub">
+                                {isKo
+                                  ? "이미지 탭에서 만든 화보를 연결하거나, 내 컴퓨터에서 시작 프레임·영상을 불러올 수 있습니다."
+                                  : "Send a still from the Image tab or choose a start frame from your computer."}
+                              </p>
+                              <div className="tws-empty-actions">
+                                <label className="tws-btn">
+                                  {isKo
+                                    ? "+ 시작 프레임·영상 선택"
+                                    : "+ Choose start frame"}
+                                  <input
+                                    type="file"
+                                    accept="image/*,video/*"
+                                    onChange={(e) => {
+                                      const f = e.target.files?.[0];
+                                      if (f) {
+                                        const url = createManagedObjectUrl(f);
+                                        if (url) {
+                                          setVideoBoardFrame({
+                                            src: url,
+                                            label: f.name,
+                                            isVideoFile:
+                                              f.type.startsWith("video/"),
+                                          });
+                                          setShellFirstFrameLinked(true);
+                                        }
+                                      }
+                                      e.target.value = "";
+                                    }}
+                                    style={{
+                                      position: "absolute",
+                                      width: 1,
+                                      height: 1,
+                                      opacity: 0,
+                                      pointerEvents: "none",
+                                    }}
+                                  />
+                                </label>
+                              </div>
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+
+                    {/* FLOATING VIDEO COMPOSER DOCK */}
+                    <div className="tws-composer" data-bottom-video-chat-box>
+                      <div className="tws-composer-slots">
+                        <span className="tws-composer-slots-label">
+                          {isKo ? "키프레임" : "Frames"}
+                        </span>
+                        {videoBoardFrame ? (
+                          <div className="tws-ref-pill" data-on="true">
+                            <div className="tws-ref-pill-thumb">
+                              {!videoBoardFrame.isVideoFile ? (
+                                <img
+                                  src={videoBoardFrame.src}
+                                  alt=""
+                                  aria-hidden="true"
+                                />
+                              ) : null}
+                              <strong>
+                                {isKo ? "첫 장면 (Start)" : "Start"}
+                              </strong>
+                            </div>
                             <button
                               type="button"
                               className="tws-ref-pill-del"
-                              data-clear-ref-slot={slotNum}
-                              aria-label={
-                                isKo ? `${slotNum}번 슬롯 비우기` : `Clear slot ${slotNum}`
-                              }
-                              onClick={() => handleClearRefSlot(slotNum)}
+                              onClick={() => {
+                                setVideoBoardFrame(null);
+                                setShellFirstFrameLinked(false);
+                              }}
                             >
                               ×
                             </button>
                           </div>
-                        );
-                      })}
-                      {filledSlotNumbers.length > 0 ? (
-                        <button
-                          type="button"
-                          className="tws-rail-clear"
-                          data-clear-all-ref-slots
-                          onClick={handleClearAllRefSlots}
-                        >
-                          {isKo ? "비우기" : "Clear"}
-                        </button>
-                      ) : null}
-                    </div>
-
-                    <div className="tws-composer-input-row">
-                      <label
-                        className="tws-composer-attach"
-                        title={
-                          isKo
-                            ? "참고 이미지 여러 장 올리기"
-                            : "Attach reference images"
-                        }
-                      >
-                        <b aria-hidden="true">+</b>
-                        <input
-                          type="file"
-                          accept="image/*"
-                          multiple
-                          onChange={(e) => {
-                            const files = Array.from(e.target.files ?? []);
-                            const firstEmpty =
-                              ([1, 2, 3, 4] as const).find(
-                                (n) => !customSlotThumbs[n],
-                              ) ?? 1;
-                            fillRefSlotsFromFiles(files, firstEmpty, false);
-                            e.target.value = "";
-                          }}
-                        />
-                      </label>
-                      <textarea
-                        aria-label={isKo ? "이미지 요청" : "Image request"}
-                        rows={2}
-                        value={briefText}
-                        onChange={(e) => setBriefText(e.target.value)}
-                        onKeyDown={(e) => {
-                          if (e.key === "Enter" && !e.shiftKey && !e.nativeEvent.isComposing) {
-                            e.preventDefault();
-                            handleShellGenerateImage();
-                          }
-                        }}
-                        placeholder={
-                          imageSubMode === "micro_region_edit"
-                            ? isKo
-                              ? "선택한 영역을 어떻게 수정할까요? (예: 손 모양을 자연스럽게, 2번 제품 로고로 교체)"
-                              : "How should the selected region change?"
-                            : isKo
-                              ? "만들고 싶은 장면을 적어 주세요. 위의 1~4번 슬롯을 누르면 번호가 바로 입력됩니다."
-                              : "Describe your scene. Click slots 1–4 above to reference them."
-                        }
-                      />
-                    </div>
-
-                    <div className="tws-composer-bar">
-                      <div className="tws-composer-triggers">
-                        <button
-                          type="button"
-                          className="tws-trigger-pill"
-                          data-studio-model-guide-trigger
-                          data-quick-model-pill={selectedImageModelId}
-                          aria-expanded={showFullModelGuide}
-                          onClick={() => {
-                            setShowAestheticPicker(false);
-                            setShowFullModelGuide((p) => !p);
-                          }}
-                        >
-                          <strong>{shortImageModelName}</strong>
-                          <span>
-                            {isKo
-                              ? activeEasyModelRow.bestBadgeKo.split("·")[0]?.trim()
-                              : activeEasyModelRow.bestBadgeEn.split("·")[0]?.trim()}
-                          </span>
-                          <em aria-hidden="true">▾</em>
-                        </button>
-
-                        <button
-                          type="button"
-                          className="tws-trigger-pill"
-                          data-image-board-aesthetic-pill
-                          aria-expanded={showAestheticPicker}
-                          onClick={() => {
-                            setShowFullModelGuide(false);
-                            setShowAestheticPicker((p) => !p);
-                          }}
-                        >
-                          <span className="tws-lock-swatches" aria-hidden="true">
-                            {activeAestheticDna.paletteHex.slice(0, 3).map((hex) => (
-                              <i key={hex} style={{ backgroundColor: hex }} />
-                            ))}
-                          </span>
-                          <span>
-                            {isAestheticLockEnabled
-                              ? activeAestheticLabel
-                              : isKo
-                                ? "무드보드 없음"
-                                : "No moodboard"}
-                          </span>
-                          <em aria-hidden="true">▾</em>
-                        </button>
-                      </div>
-
-                      <div className="tws-composer-opts">
-                        <div className="tws-seg" role="radiogroup" aria-label={isKo ? "비율" : "Aspect"}>
-                          {(["4:5", "1:1", "9:16", "16:9"] as const).map((ratio) => (
-                            <button
-                              key={ratio}
-                              type="button"
-                              role="radio"
-                              aria-checked={aspect === ratio}
-                              onClick={() => setAspect(ratio)}
-                            >
-                              {ratio}
-                            </button>
-                          ))}
-                        </div>
-                        <div className="tws-seg" role="radiogroup" aria-label={isKo ? "렌즈 화각" : "Lens focal length"}>
-                          {([35, 50, 85] as const).map((mm) => (
-                            <button
-                              key={mm}
-                              type="button"
-                              role="radio"
-                              aria-checked={cameraFocalMm === mm}
-                              onClick={() => setCameraFocalMm(mm)}
-                            >
-                              {mm}mm
-                            </button>
-                          ))}
-                        </div>
-                        <div
-                          className="tws-batch-stepper"
-                          role="group"
-                          aria-label={isKo ? "생성 매수" : "Batch count"}
-                        >
-                          <button
-                            type="button"
-                            aria-label={isKo ? "매수 줄이기" : "Decrease batch"}
-                            disabled={imageBatchCount === 1}
-                            onClick={() =>
-                              setImageBatchCount((prev) =>
-                                prev === 4 ? 2 : 1,
-                              )
-                            }
-                          >
-                            −
-                          </button>
-                          <span>
-                            {isKo ? `${imageBatchCount}매` : `${imageBatchCount}/4`}
-                          </span>
-                          <button
-                            type="button"
-                            aria-label={isKo ? "매수 늘리기" : "Increase batch"}
-                            disabled={imageBatchCount === 4}
-                            onClick={() =>
-                              setImageBatchCount((prev) =>
-                                prev === 1 ? 2 : 4,
-                              )
-                            }
-                          >
-                            +
-                          </button>
-                        </div>
-                        <button
-                          type="button"
-                          className="tws-btn tws-btn-primary"
-                          disabled={!canWrite || busy}
-                          onClick={handleShellGenerateImage}
-                        >
-                          {busy
-                            ? shellBusyLabel
-                            : imageSubMode === "micro_region_edit"
-                              ? isKo
-                                ? "선택 영역 수정"
-                                : "Update region"
-                              : isKo
-                                ? "화보 만들기"
-                                : "Generate"}
-                        </button>
-                      </div>
-                    </div>
-                  </div>
-                </section>
-              ) : (
-                <section
-                  className="tws-board"
-                  aria-label={isKo ? "영상 스튜디오" : "Video studio"}
-                  data-right-spatial-video-board
-                  onDragOver={(e) => {
-                    e.preventDefault();
-                    setDragOverTarget("video-canvas");
-                  }}
-                  onDragLeave={() => setDragOverTarget(null)}
-                  onDrop={handleDropOnVideoBoard}
-                >
-                  <div className="tws-stage-single tws-stage-video">
-                    <div className="tws-artboard">
-                      {videoBoardFrame || videoEndFrame ? (
-                        <div className="tws-artboard-head">
-                          <div className="tws-artboard-title-group">
-                            <strong>
-                              {videoBoardFrame
-                                ? videoBoardFrame.label
-                                : isKo
-                                  ? "영상 스튜디오"
-                                  : "Video Studio"}
-                            </strong>
+                        ) : (
+                          <label className="tws-ref-pill tws-ref-pill-empty">
+                            <b aria-hidden="true">+</b>
                             <span>
-                              Seedance 2.5 · {videoResolution} · {videoSeconds}
-                              {isKo ? "초" : "s"}
+                              {isKo ? "첫 장면 (Start)" : "Start Frame"}
                             </span>
-                          </div>
-                          <div className="tws-artboard-actions">
-                            <div
-                              className="tws-seg"
-                              role="radiogroup"
-                              aria-label={isKo ? "고화질 마감" : "Upscale finish"}
-                            >
-                              {(
-                                [
-                                  {
-                                    res: "1080p" as const,
-                                    engine: "sunra_ig_1080p_upscaler" as const,
-                                    ko: "인스타 1080p",
-                                    en: "IG 1080p",
-                                  },
-                                  {
-                                    res: "4K" as const,
-                                    engine: "seedvr2_7b_optical_upscaler" as const,
-                                    ko: "4K 마스터",
-                                    en: "4K Master",
-                                  },
-                                ] as const
-                              ).map((node) => (
-                                <button
-                                  key={node.res}
-                                  type="button"
-                                  role="radio"
-                                  aria-checked={upscaleTargetResolution === node.res}
-                                  onClick={() => {
-                                    setSelectedUpscalerEngineId(node.engine);
-                                    setUpscaleTargetResolution(node.res);
-                                  }}
-                                >
-                                  {isKo ? node.ko : node.en}
-                                </button>
-                              ))}
-                            </div>
-                            <button
-                              type="button"
-                              className="tws-btn tws-btn-sm"
-                              disabled={!canWrite}
-                              onClick={() => {
-                                setErrorMessage("");
-                                handleRunUpscaleStudioJob();
-                              }}
-                            >
-                              {isKo ? "고화질 마감" : "Upscale"}
-                            </button>
-                            <button
-                              type="button"
-                              className="tws-btn tws-btn-sm tws-btn-quiet"
-                              data-clear-video-frame
-                              onClick={() => {
-                                setVideoBoardFrame(null);
-                                setVideoEndFrame(null);
-                                setShellFirstFrameLinked(false);
-                              }}
-                            >
-                              {isKo ? "비우기 ×" : "Clear ×"}
-                            </button>
-                          </div>
-                        </div>
-                      ) : null}
-
-                      {videoBoardFrame ? (
-                        <div
-                          className="tws-canvas"
-                          data-tool="view"
-                          data-drag-over={dragOverTarget === "video-canvas"}
-                        >
-                          {videoBoardFrame.isVideoFile ? (
-                            <video
-                              key={videoBoardFrame.src}
-                              src={videoBoardFrame.src}
-                              autoPlay
-                              muted
-                              loop
-                              playsInline
-                            />
-                          ) : (
-                            <img
-                              src={videoBoardFrame.src}
-                              alt={videoBoardFrame.label}
-                              draggable={false}
-                            />
-                          )}
-                        </div>
-                      ) : (
-                        <div
-                          className="tws-canvas tws-canvas-empty"
-                          data-drag-over={dragOverTarget === "video-canvas"}
-                        >
-                          <div className="tws-empty-dropzone">
-                            <strong>
-                              {isKo
-                                ? "첫 장면으로 쓸 이미지를 드래그해서 놓으세요"
-                                : "Drop an image to use as the start frame"}
-                            </strong>
-                            <p className="tws-empty-sub">
-                              {isKo
-                                ? "이미지 탭에서 만든 화보를 연결하거나, 내 컴퓨터에서 시작 프레임·영상을 불러올 수 있습니다."
-                                : "Send a still from the Image tab or choose a start frame from your computer."}
-                            </p>
-                            <div className="tws-empty-actions">
-                              <label className="tws-btn">
-                                {isKo ? "+ 시작 프레임·영상 선택" : "+ Choose start frame"}
-                                <input
-                                  type="file"
-                                  accept="image/*,video/*"
-                                  onChange={(e) => {
-                                    const f = e.target.files?.[0];
-                                    if (f) {
-                                      const url = createManagedObjectUrl(f);
-                                      if (url) {
-                                        setVideoBoardFrame({
-                                          src: url,
-                                          label: f.name,
-                                          isVideoFile: f.type.startsWith("video/"),
-                                        });
-                                        setShellFirstFrameLinked(true);
-                                      }
-                                    }
-                                    e.target.value = "";
-                                  }}
-                                  style={{
-                                    position: "absolute",
-                                    width: 1,
-                                    height: 1,
-                                    opacity: 0,
-                                    pointerEvents: "none",
-                                  }}
-                                />
-                              </label>
-                            </div>
-                          </div>
-                        </div>
-                      )}
-                    </div>
-                  </div>
-
-                  {/* FLOATING VIDEO COMPOSER DOCK */}
-                  <div className="tws-composer" data-bottom-video-chat-box>
-                    <div className="tws-composer-slots">
-                      <span className="tws-composer-slots-label">
-                        {isKo ? "키프레임" : "Frames"}
-                      </span>
-                      {videoBoardFrame ? (
-                        <div className="tws-ref-pill" data-on="true">
-                          <div className="tws-ref-pill-thumb">
-                            {!videoBoardFrame.isVideoFile ? (
-                              <img src={videoBoardFrame.src} alt="" aria-hidden="true" />
-                            ) : null}
-                            <strong>{isKo ? "첫 장면 (Start)" : "Start"}</strong>
-                          </div>
-                          <button
-                            type="button"
-                            className="tws-ref-pill-del"
-                            onClick={() => {
-                              setVideoBoardFrame(null);
-                              setShellFirstFrameLinked(false);
-                            }}
-                          >
-                            ×
-                          </button>
-                        </div>
-                      ) : (
-                        <label className="tws-ref-pill tws-ref-pill-empty">
-                          <b aria-hidden="true">+</b>
-                          <span>{isKo ? "첫 장면 (Start)" : "Start Frame"}</span>
-                          <input
-                            type="file"
-                            accept="image/*,video/*"
-                            onChange={(e) => {
-                              const f = e.target.files?.[0];
-                              if (f) {
-                                const url = createManagedObjectUrl(f);
-                                if (url) {
-                                  setVideoBoardFrame({
-                                    src: url,
-                                    label: f.name,
-                                    isVideoFile: f.type.startsWith("video/"),
-                                  });
-                                  setShellFirstFrameLinked(true);
+                            <input
+                              type="file"
+                              accept="image/*,video/*"
+                              onChange={(e) => {
+                                const f = e.target.files?.[0];
+                                if (f) {
+                                  const url = createManagedObjectUrl(f);
+                                  if (url) {
+                                    setVideoBoardFrame({
+                                      src: url,
+                                      label: f.name,
+                                      isVideoFile: f.type.startsWith("video/"),
+                                    });
+                                    setShellFirstFrameLinked(true);
+                                  }
                                 }
-                              }
-                              e.target.value = "";
-                            }}
-                          />
-                        </label>
-                      )}
+                                e.target.value = "";
+                              }}
+                            />
+                          </label>
+                        )}
 
-                      {videoEndFrame ? (
-                        <div className="tws-ref-pill" data-on="true">
-                          <div className="tws-ref-pill-thumb">
-                            <img src={videoEndFrame.src} alt="" aria-hidden="true" />
-                            <strong>{isKo ? "끝 장면 (선택)" : "End"}</strong>
+                        {videoEndFrame ? (
+                          <div className="tws-ref-pill" data-on="true">
+                            <div className="tws-ref-pill-thumb">
+                              <img
+                                src={videoEndFrame.src}
+                                alt=""
+                                aria-hidden="true"
+                              />
+                              <strong>
+                                {isKo ? "끝 장면 (선택)" : "End"}
+                              </strong>
+                            </div>
+                            <button
+                              type="button"
+                              className="tws-ref-pill-del"
+                              onClick={() => setVideoEndFrame(null)}
+                            >
+                              ×
+                            </button>
                           </div>
-                          <button
-                            type="button"
-                            className="tws-ref-pill-del"
-                            onClick={() => setVideoEndFrame(null)}
-                          >
-                            ×
-                          </button>
-                        </div>
-                      ) : (
-                        <label className="tws-ref-pill tws-ref-pill-empty">
-                          <b aria-hidden="true">+</b>
-                          <span>{isKo ? "끝 장면 (선택)" : "End Frame"}</span>
-                          <input
-                            type="file"
-                            accept="image/*"
-                            onChange={(e) => {
-                              const f = e.target.files?.[0];
-                              if (f) {
-                                const url = createManagedObjectUrl(f);
-                                if (url) setVideoEndFrame({ src: url, label: f.name });
-                              }
-                              e.target.value = "";
-                            }}
-                          />
-                        </label>
-                      )}
+                        ) : (
+                          <label className="tws-ref-pill tws-ref-pill-empty">
+                            <b aria-hidden="true">+</b>
+                            <span>
+                              {isKo ? "끝 장면 (선택)" : "End Frame"}
+                            </span>
+                            <input
+                              type="file"
+                              accept="image/*"
+                              onChange={(e) => {
+                                const f = e.target.files?.[0];
+                                if (f) {
+                                  const url = createManagedObjectUrl(f);
+                                  if (url)
+                                    setVideoEndFrame({
+                                      src: url,
+                                      label: f.name,
+                                    });
+                                }
+                                e.target.value = "";
+                              }}
+                            />
+                          </label>
+                        )}
 
-                      <div className="tws-motion-pills" role="radiogroup" aria-label={isKo ? "카메라 모션" : "Camera motion"}>
-                        {(
-                          [
-                            { id: "dolly_in" as const, ko: "천천히 줌인", en: "Push-in" },
-                            { id: "orbit_360" as const, ko: "입체 회전", en: "Orbit" },
-                            { id: "handheld_natural" as const, ko: "핸드헬드", en: "Handheld" },
-                            { id: "crane_up" as const, ko: "크레인 상승", en: "Crane up" },
-                            { id: "static_tripod" as const, ko: "고정 샷", en: "Static" },
-                          ] as const
-                        ).map((m) => (
-                          <button
-                            key={m.id}
-                            type="button"
-                            className="tws-chip"
-                            aria-pressed={cameraMotionPreset === m.id}
-                            onClick={() => setCameraMotionPreset(m.id)}
-                          >
-                            {isKo ? m.ko : m.en}
-                          </button>
-                        ))}
-                      </div>
-                    </div>
-
-                    <div className="tws-composer-input-row">
-                      <textarea
-                        aria-label={isKo ? "영상 요청" : "Video request"}
-                        rows={2}
-                        value={videoPromptText}
-                        onChange={(e) => setVideoPromptText(e.target.value)}
-                        onKeyDown={(e) => {
-                          if (e.key === "Enter" && !e.shiftKey && !e.nativeEvent.isComposing) {
-                            e.preventDefault();
-                            handleShellGenerateVideo();
-                          }
-                        }}
-                        placeholder={
-                          isKo
-                            ? "첫 장면에서 카메라와 인물이 어떻게 움직이면 좋을지 적어 주세요."
-                            : "Describe how the camera and subject should move from the start frame."
-                        }
-                      />
-                    </div>
-
-                    <div className="tws-composer-bar">
-                      <div className="tws-composer-triggers">
-                        <span className="tws-trigger-pill" aria-disabled="true">
-                          <strong>Seedance 2.5</strong>
-                          <span>{isKo ? "시작 프레임 고정" : "Start-frame lock"}</span>
-                        </span>
-                      </div>
-                      <div className="tws-composer-opts">
-                        <div className="tws-seg" role="radiogroup" aria-label={isKo ? "해상도" : "Resolution"}>
+                        <div
+                          className="tws-motion-pills"
+                          role="radiogroup"
+                          aria-label={isKo ? "카메라 모션" : "Camera motion"}
+                        >
                           {(
                             [
-                              { res: "480p", ko: "480p", en: "480p" },
-                              { res: "720p", ko: "720p", en: "720p" },
-                              { res: "1080p", ko: "1080p", en: "1080p" },
+                              {
+                                id: "dolly_in" as const,
+                                ko: "천천히 줌인",
+                                en: "Push-in",
+                              },
+                              {
+                                id: "orbit_360" as const,
+                                ko: "입체 회전",
+                                en: "Orbit",
+                              },
+                              {
+                                id: "handheld_natural" as const,
+                                ko: "핸드헬드",
+                                en: "Handheld",
+                              },
+                              {
+                                id: "crane_up" as const,
+                                ko: "크레인 상승",
+                                en: "Crane up",
+                              },
+                              {
+                                id: "static_tripod" as const,
+                                ko: "고정 샷",
+                                en: "Static",
+                              },
                             ] as const
-                          ).map((tier) => (
+                          ).map((m) => (
                             <button
-                              key={tier.res}
+                              key={m.id}
                               type="button"
-                              role="radio"
-                              aria-checked={videoResolution === tier.res}
-                              onClick={() => setVideoResolution(tier.res)}
+                              className="tws-chip"
+                              aria-pressed={cameraMotionPreset === m.id}
+                              onClick={() => setCameraMotionPreset(m.id)}
                             >
-                              {isKo ? tier.ko : tier.en}
+                              {isKo ? m.ko : m.en}
                             </button>
                           ))}
                         </div>
-                        <div className="tws-seg" role="radiogroup" aria-label={isKo ? "길이" : "Length"}>
-                          {([5, 10] as const).map((sec) => (
-                            <button
-                              key={sec}
-                              type="button"
-                              role="radio"
-                              aria-checked={videoSeconds === sec}
-                              onClick={() => setVideoSeconds(sec)}
-                            >
-                              {isKo ? `${sec}초` : `${sec}s`}
-                            </button>
-                          ))}
+                      </div>
+
+                      <div className="tws-composer-input-row">
+                        <textarea
+                          aria-label={isKo ? "영상 요청" : "Video request"}
+                          rows={2}
+                          value={videoPromptText}
+                          onChange={(e) => setVideoPromptText(e.target.value)}
+                          onKeyDown={(e) => {
+                            if (
+                              e.key === "Enter" &&
+                              !e.shiftKey &&
+                              !e.nativeEvent.isComposing
+                            ) {
+                              e.preventDefault();
+                              handleShellGenerateVideo();
+                            }
+                          }}
+                          placeholder={
+                            isKo
+                              ? "첫 장면에서 카메라와 인물이 어떻게 움직이면 좋을지 적어 주세요."
+                              : "Describe how the camera and subject should move from the start frame."
+                          }
+                        />
+                      </div>
+
+                      <div className="tws-composer-bar">
+                        <div className="tws-composer-triggers">
+                          <span className="tws-trigger-pill" aria-disabled="true">
+                            <strong>Seedance 2.5</strong>
+                            <span>
+                              {isKo ? "시작 프레임 고정" : "Start-frame lock"}
+                            </span>
+                          </span>
                         </div>
-                        <button
-                          type="button"
-                          className="tws-btn tws-btn-primary"
-                          disabled={!canWrite || busy}
-                          onClick={handleShellGenerateVideo}
-                        >
-                          {busy ? shellBusyLabel : isKo ? "영상 만들기" : "Make video"}
-                        </button>
+                        <div className="tws-composer-opts">
+                          <div
+                            className="tws-seg"
+                            role="radiogroup"
+                            aria-label={isKo ? "해상도" : "Resolution"}
+                          >
+                            {(
+                              [
+                                { res: "480p", ko: "480p", en: "480p" },
+                                { res: "720p", ko: "720p", en: "720p" },
+                                { res: "1080p", ko: "1080p", en: "1080p" },
+                              ] as const
+                            ).map((tier) => (
+                              <button
+                                key={tier.res}
+                                type="button"
+                                role="radio"
+                                aria-checked={videoResolution === tier.res}
+                                onClick={() => setVideoResolution(tier.res)}
+                              >
+                                {isKo ? tier.ko : tier.en}
+                              </button>
+                            ))}
+                          </div>
+                          <div
+                            className="tws-seg"
+                            role="radiogroup"
+                            aria-label={isKo ? "길이" : "Length"}
+                          >
+                            {([5, 10] as const).map((sec) => (
+                              <button
+                                key={sec}
+                                type="button"
+                                role="radio"
+                                aria-checked={videoSeconds === sec}
+                                onClick={() => setVideoSeconds(sec)}
+                              >
+                                {isKo ? `${sec}초` : `${sec}s`}
+                              </button>
+                            ))}
+                          </div>
+                          <button
+                            type="button"
+                            className="tws-btn tws-btn-primary"
+                            disabled={!canWrite || busy}
+                            onClick={handleShellGenerateVideo}
+                          >
+                            {busy
+                              ? shellBusyLabel
+                              : isKo
+                                ? "영상 만들기"
+                                : "Make video"}
+                          </button>
+                        </div>
                       </div>
                     </div>
+                  </section>
+                )}
+              </div>
+
+              {/* ===============================================================
+                  NOTEFOLIO × GENTLE MONSTER CURATED VISUAL ARCHIVE
+                  (Draggable to Reference Slots 1–4 or 1-Click Load into Studio/Ad Editor)
+                 =============================================================== */}
+              <section
+                className="tws-archive"
+                data-studio-notefolio-archive
+                aria-label={
+                  isKo
+                    ? "큐레이션 비주얼 아카이브"
+                    : "Curated Visual Archive"
+                }
+              >
+                <div className="tws-archive-head">
+                  <div className="tws-archive-title-block">
+                    <span className="tws-archive-eyebrow">
+                      CURATED ARCHIVE · DRAG TO SLOTS 01–04
+                    </span>
+                    <div className="tws-archive-title-row">
+                      <h3>
+                        {isKo
+                          ? "크리에이티브 레퍼런스 쇼케이스"
+                          : "Creative Reference Showcase"}
+                      </h3>
+                      <span>
+                        {isKo
+                          ? "마음에 드는 화보를 위 01~04번 슬롯으로 드래그하거나, 클릭해 프롬프트·디자인 보드로 바로 불러오세요."
+                          : "Drag any card into slots 01–04 above, or click to load its prompt and ad layout."}
+                      </span>
+                    </div>
                   </div>
-                </section>
-              )}
-            </div>
+                  <div className="tws-archive-controls">
+                    <div
+                      className="tws-seg"
+                      role="tablist"
+                      aria-label={
+                        isKo ? "아카이브 카테고리" : "Archive categories"
+                      }
+                      data-archive-category-tabs
+                    >
+                      {(
+                        [
+                          { id: "all" as const, ko: "전체", en: "All" },
+                          {
+                            id: "lookbook" as const,
+                            ko: "하이패션 룩북",
+                            en: "Lookbook",
+                          },
+                          {
+                            id: "beauty_object" as const,
+                            ko: "뷰티 · 오브제",
+                            en: "Beauty & Object",
+                          },
+                          {
+                            id: "ad_graphic" as const,
+                            ko: "애드 그래픽 · 타이포",
+                            en: "Ad & Typo",
+                          },
+                          {
+                            id: "motion_film" as const,
+                            ko: "시네마틱 필름",
+                            en: "Motion Film",
+                          },
+                        ] as const
+                      ).map((cat) => (
+                        <button
+                          key={cat.id}
+                          type="button"
+                          role="tab"
+                          aria-selected={archiveCategoryFilter === cat.id}
+                          data-archive-category-btn={cat.id}
+                          onClick={() => {
+                            setArchiveCategoryFilter(cat.id);
+                            setShowArchiveFeed(true);
+                          }}
+                        >
+                          {isKo ? cat.ko : cat.en}
+                        </button>
+                      ))}
+                    </div>
+                    <button
+                      type="button"
+                      className="tws-btn tws-btn-sm tws-btn-quiet"
+                      onClick={() => setShowArchiveFeed((p) => !p)}
+                    >
+                      {showArchiveFeed
+                        ? isKo
+                          ? "아카이브 접기"
+                          : "Collapse"
+                        : isKo
+                          ? "아카이브 펼치기"
+                          : "Expand"}
+                    </button>
+                  </div>
+                </div>
+
+                {showArchiveFeed ? (
+                  <div className="tws-archive-grid">
+                    {filteredArchiveItems.map((item) => (
+                      <article
+                        key={item.id}
+                        className="tws-archive-card"
+                        data-archive-card={item.id}
+                        draggable
+                        onDragStart={(e) =>
+                          handleInternalDragStart(e, {
+                            src: item.src,
+                            label: isKo ? item.titleKo : item.titleEn,
+                          })
+                        }
+                      >
+                        <div className="tws-archive-media">
+                          <img
+                            src={item.src}
+                            alt={isKo ? item.titleKo : item.titleEn}
+                            loading="lazy"
+                            decoding="async"
+                          />
+                          <div className="tws-archive-badges">
+                            <span className="tws-archive-badge">
+                              {isKo
+                                ? item.categoryBadgeKo
+                                : item.categoryBadgeEn}
+                            </span>
+                            <span className="tws-archive-spec">
+                              {item.modelBadge} · {item.aspectLabel}
+                            </span>
+                          </div>
+                          <div className="tws-archive-overlay">
+                            <p>{isKo ? item.promptKo : item.promptEn}</p>
+                            <div className="tws-archive-actions">
+                              <button
+                                type="button"
+                                className="tws-btn tws-btn-sm tws-btn-primary"
+                                data-archive-load-canvas={item.id}
+                                onClick={() =>
+                                  handleLoadArchiveItemToStudio(item, "canvas")
+                                }
+                              >
+                                {isKo ? "이 무드로 시작" : "Load scene"}
+                              </button>
+                              <button
+                                type="button"
+                                className="tws-btn tws-btn-sm"
+                                data-archive-load-slot={item.id}
+                                onClick={() =>
+                                  handleLoadArchiveItemToStudio(item, "slot1")
+                                }
+                              >
+                                {isKo ? "슬롯에 담기" : "To slot"}
+                              </button>
+                              <button
+                                type="button"
+                                className="tws-btn tws-btn-sm"
+                                data-archive-load-design={item.id}
+                                onClick={() =>
+                                  handleLoadArchiveItemToStudio(item, "design")
+                                }
+                              >
+                                {isKo ? "애드 편집" : "Edit ad"}
+                              </button>
+                            </div>
+                          </div>
+                        </div>
+                        <div className="tws-archive-meta">
+                          <strong>
+                            {isKo ? item.titleKo : item.titleEn}
+                          </strong>
+                          <span>{item.directorTag}</span>
+                        </div>
+                      </article>
+                    ))}
+                  </div>
+                ) : null}
+              </section>
+            </>
           ) : (
             <div className="tws-panels">
               <section className="tws-panel">

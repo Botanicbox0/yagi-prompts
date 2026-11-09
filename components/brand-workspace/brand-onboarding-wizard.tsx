@@ -623,6 +623,8 @@ export function BrandOnboardingWizard({
     void submitIngest(false);
   }
 
+  const [identityMoodboardLocked, setIdentityMoodboardLocked] =
+    useState<boolean>(true);
   const [identityAestheticMode, setIdentityAestheticMode] =
     useState<BrandAestheticSourceMode>("twings_preset");
   const [identityPresetId, setIdentityPresetId] =
@@ -654,7 +656,14 @@ export function BrandOnboardingWizard({
   const identityMoodboardFileInputRef = useRef<HTMLInputElement | null>(null);
 
   function handleIdentityMoodboardFiles(files: FileList | File[]) {
-    const valid = Array.from(files).filter((f) => f.type.startsWith("image/"));
+    const valid = Array.from(files).filter(
+      (f) =>
+        f.type.startsWith("image/") ||
+        /\.(png|jpe?g|jfif|pjpeg|pjp|webp|gif|avif|bmp|svg|heic|heif)$/i.test(
+          f.name,
+        ) ||
+        f.type === "",
+    );
     if (valid.length === 0) return;
     setIdentityMoodboardItems((prev) => {
       const additions: BrandCustomMoodboardItem[] = valid.map((file, idx) => ({
@@ -666,7 +675,67 @@ export function BrandOnboardingWizard({
       }));
       return clampMoodboardItemsToMax([...prev, ...additions]);
     });
+    setIdentityMoodboardLocked(true);
     setIdentityAestheticMode("custom_moodboard");
+  }
+
+  function handleIdentityMoodboardDrop(e: React.DragEvent<HTMLElement>) {
+    e.preventDefault();
+    e.stopPropagation();
+    const dt = e.dataTransfer;
+    if (!dt) return;
+    if (dt.files && dt.files.length > 0) {
+      handleIdentityMoodboardFiles(dt.files);
+      return;
+    }
+    const droppedUrls: Array<{ src: string; label: string }> = [];
+    const rawInternal = dt.getData("application/x-twings-image");
+    if (rawInternal) {
+      try {
+        const parsed = JSON.parse(rawInternal) as { src?: string; label?: string };
+        if (parsed.src) {
+          droppedUrls.push({
+            src: parsed.src,
+            label: parsed.label || "드래그 레퍼런스",
+          });
+        }
+      } catch {
+        // ignore
+      }
+    }
+    if (droppedUrls.length === 0) {
+      const uriList = dt.getData("text/uri-list") || dt.getData("URL");
+      if (uriList) {
+        const firstUrl = uriList
+          .split(/\r?\n/)
+          .map((line) => line.trim())
+          .find((line) => line && !line.startsWith("#"));
+        if (firstUrl) {
+          droppedUrls.push({ src: firstUrl, label: "웹 레퍼런스" });
+        }
+      }
+    }
+    if (droppedUrls.length === 0) {
+      const htmlData = dt.getData("text/html");
+      const imgMatch = htmlData?.match(/<img[^>]+src=["']([^"']+)["']/i);
+      if (imgMatch?.[1]) {
+        droppedUrls.push({ src: imgMatch[1], label: "웹 이미지" });
+      }
+    }
+    if (droppedUrls.length > 0) {
+      setIdentityMoodboardItems((prev) => {
+        const additions: BrandCustomMoodboardItem[] = droppedUrls.map((u, idx) => ({
+          id: `id-mb-drop-${Date.now()}-${idx}`,
+          src: u.src,
+          labelKo: u.label,
+          labelEn: u.label,
+          dominantHex: "#3875C5",
+        }));
+        return clampMoodboardItemsToMax([...prev, ...additions]);
+      });
+      setIdentityMoodboardLocked(true);
+      setIdentityAestheticMode("custom_moodboard");
+    }
   }
 
   function handleAddIdentityMoodboardSample() {
@@ -698,6 +767,7 @@ export function BrandOnboardingWizard({
         { ...pick, id: `id-mb-${Date.now()}-${prev.length + 1}` },
       ]),
     );
+    setIdentityMoodboardLocked(true);
     setIdentityAestheticMode("custom_moodboard");
   }
 
@@ -708,13 +778,15 @@ export function BrandOnboardingWizard({
       data-onboarding-status={currentStatus}
     >
       {/* =====================================================================
-          VISUAL BRAND AESTHETIC & MOODBOARD STUDIO (`[ 에디토리얼 무드 | 내 레퍼런스 보드 ]`)
+          VISUAL BRAND AESTHETIC & MOODBOARD STUDIO (`[ 무드보드 없음 | 에디토리얼 무드 | 내 레퍼런스 보드 ]`)
          ===================================================================== */}
       <div
         className="tws-moodboard-drawer"
         data-brand-identity-moodboard-studio
         data-tws
         style={{ marginBottom: 18 }}
+        onDragOver={(e) => e.preventDefault()}
+        onDrop={handleIdentityMoodboardDrop}
       >
         <input
           ref={identityMoodboardFileInputRef}
@@ -736,8 +808,8 @@ export function BrandOnboardingWizard({
             </strong>
             <span>
               {isKo
-                ? "스튜디오에서 만들 이미지와 영상의 조명·색감·질감을 한 번에 맞춥니다."
-                : "Align lighting, palette, and surface texture across every image and video."}
+                ? "프리셋이나 레퍼런스 보드로 톤을 고정하거나, 무드보드 없이 자유롭게 연출할 수 있습니다."
+                : "Lock a preset or reference board, or create freely without a moodboard."}
             </span>
           </div>
           <div className="tws-moodboard-top-right">
@@ -749,16 +821,37 @@ export function BrandOnboardingWizard({
               <button
                 type="button"
                 role="tab"
-                aria-selected={identityAestheticMode === "twings_preset"}
-                onClick={() => setIdentityAestheticMode("twings_preset")}
+                aria-selected={!identityMoodboardLocked}
+                data-identity-moodboard-free="true"
+                onClick={() => setIdentityMoodboardLocked(false)}
+              >
+                {isKo ? "무드보드 없음 (자유 연출)" : "No Moodboard (Free)"}
+              </button>
+              <button
+                type="button"
+                role="tab"
+                aria-selected={
+                  identityMoodboardLocked &&
+                  identityAestheticMode === "twings_preset"
+                }
+                onClick={() => {
+                  setIdentityMoodboardLocked(true);
+                  setIdentityAestheticMode("twings_preset");
+                }}
               >
                 {isKo ? "에디토리얼 무드 (6)" : "Editorial Moods (6)"}
               </button>
               <button
                 type="button"
                 role="tab"
-                aria-selected={identityAestheticMode === "custom_moodboard"}
-                onClick={() => setIdentityAestheticMode("custom_moodboard")}
+                aria-selected={
+                  identityMoodboardLocked &&
+                  identityAestheticMode === "custom_moodboard"
+                }
+                onClick={() => {
+                  setIdentityMoodboardLocked(true);
+                  setIdentityAestheticMode("custom_moodboard");
+                }}
               >
                 {isKo
                   ? `내 레퍼런스 보드 (${identityMoodboardItems.length}/${MAX_BRAND_MOODBOARD_IMAGES})`
@@ -771,7 +864,13 @@ export function BrandOnboardingWizard({
                 href={studioHref}
                 data-identity-open-studio-with-aesthetic
               >
-                {isKo ? "이 무드로 스튜디오 열기 →" : "Open Studio with this mood →"}
+                {!identityMoodboardLocked
+                  ? isKo
+                    ? "자유 모드로 스튜디오 열기 →"
+                    : "Open Studio in free mode →"
+                  : isKo
+                    ? "이 무드로 스튜디오 열기 →"
+                    : "Open Studio with this mood →"}
               </a>
             ) : null}
           </div>
@@ -784,7 +883,8 @@ export function BrandOnboardingWizard({
             aria-label={isKo ? "에디토리얼 무드 선택" : "Editorial mood presets"}
           >
             {BRAND_AESTHETIC_PRESETS.map((preset) => {
-              const isSelected = identityPresetId === preset.id;
+              const isSelected =
+                identityMoodboardLocked && identityPresetId === preset.id;
               const cutMain = preset.moodboardThumbs[0] ?? preset.coverImage;
               const cutTopRight = preset.moodboardThumbs[1] ?? preset.coverImage;
               const cutBottomRight = preset.moodboardThumbs[2] ?? preset.coverImage;
@@ -796,7 +896,14 @@ export function BrandOnboardingWizard({
                   aria-checked={isSelected}
                   className="tws-preset-card"
                   data-identity-aesthetic-preset={preset.id}
-                  onClick={() => setIdentityPresetId(preset.id)}
+                  onClick={() => {
+                    if (isSelected) {
+                      setIdentityMoodboardLocked(false);
+                    } else {
+                      setIdentityMoodboardLocked(true);
+                      setIdentityPresetId(preset.id);
+                    }
+                  }}
                 >
                   <div className="tws-preset-collage">
                     <div className="tws-preset-collage-main">
@@ -2076,6 +2183,18 @@ export function BrandOnboardingWizard({
                     : "Select multiple files at once or paste filenames/URLs below; auto-sorted into 4 buckets."}
                 </p>
                 <label
+                  onDragOver={(e) => e.preventDefault()}
+                  onDrop={(e) => {
+                    e.preventDefault();
+                    const files = e.dataTransfer?.files;
+                    if (files && files.length > 0) {
+                      const names = Array.from(files).map((f) => f.name);
+                      setRawDropText((prev) =>
+                        [prev.trim(), ...names].filter(Boolean).join("\n"),
+                      );
+                      handleIdentityMoodboardFiles(files);
+                    }
+                  }}
                   style={{
                     display: "flex",
                     alignItems: "center",

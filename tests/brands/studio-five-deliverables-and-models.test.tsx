@@ -1011,6 +1011,11 @@ describe("Brand Studio 5 Core Deliverables & 5 Image Models (12-Round Verificati
     expect(visibleShellHtml).not.toContain("<select");
     expect(visibleShellHtml).toContain("tws-stage-single");
     expect(visibleShellHtml).toContain("tws-composer-slots");
+    expect(visibleShellHtml).toContain("tws-ref-grid");
+    expect(visibleShellHtml).toContain("tws-ref-card");
+    expect(visibleShellHtml).toContain("data-composer-aesthetic-free-toggle");
+    expect(visibleShellHtml).toContain("data-studio-design-mode-btn");
+    expect(visibleShellHtml).toContain("data-studio-notefolio-archive");
     expect(visibleShellHtml).toContain("tws-composer-triggers");
     expect(visibleShellHtml).toContain("tws-composer-input-row");
     expect(visibleShellHtml).toContain("tws-composer-attach");
@@ -1019,7 +1024,7 @@ describe("Brand Studio 5 Core Deliverables & 5 Image Models (12-Round Verificati
     expect(visibleShellHtml).toContain("50mm");
     expect(visibleShellHtml).toContain("85mm");
 
-    // Verify /brand/identity (BrandOnboardingWizard) renders the 3-cut visual Moodboard Contact Sheet above the fold
+    // Verify /brand/identity (BrandOnboardingWizard) renders the 3-cut visual Moodboard Contact Sheet above the fold + Free Moodboard option
     const identityHtml = renderToStaticMarkup(
       <BrandOnboardingWizard
         organizationId="org-yagi"
@@ -1033,6 +1038,7 @@ describe("Brand Studio 5 Core Deliverables & 5 Image Models (12-Round Verificati
     );
     expect(identityHtml).toContain("data-brand-identity-moodboard-studio");
     expect(identityHtml).toContain('data-identity-aesthetic-preset="french_blue_glass"');
+    expect(identityHtml).toContain('data-identity-moodboard-free="true"');
     expect(identityHtml).toContain("tws-preset-collage");
     expect(identityHtml).toContain("tws-preset-collage-main");
     expect(identityHtml).toContain("tws-preset-collage-side");
