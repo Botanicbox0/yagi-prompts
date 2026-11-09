@@ -89,8 +89,8 @@ export default async function MembersPage({
                 </div>
                 <p className="bw-muted" style={{ margin: "2px 0 0", fontSize: "11.5px" }}>
                   {isKo
-                    ? "팀원을 초대해 브랜드 킷·화이트 듀얼 캔버스·캠페인 보드를 역할별 권한으로 안전하게 공동 운영하세요."
-                    : "Collaborate across your Brand Kit, Dual White Canvas, and Campaign boards with role-scoped access."}
+                    ? "팀원을 초대해 브랜드 키트·스튜디오·캠페인을 역할별 권한으로 안전하게 공동 운영하세요."
+                    : "Collaborate across your Brand Kit, Studio, and Campaigns with role-scoped access."}
                 </p>
               </div>
             </div>
@@ -139,7 +139,7 @@ export default async function MembersPage({
                     fontFamily: "var(--ys-mono)",
                   }}
                 >
-                  {isKo ? "역할별 접근 제어 (RBAC)" : "Role-Based Access"}
+                  {isKo ? "역할별 권한 안내" : "Role Permissions"}
                 </span>
               </div>
               <ActionForm
@@ -179,16 +179,16 @@ export default async function MembersPage({
                       title: b.roles.owner,
                       badgeKo: "전체 권한",
                       badgeEn: "Full Control",
-                      permsKo: "화이트 듀얼 캔버스 생성 · 브랜드 킷 고정 · 캠페인 의뢰 · 팀원 초대 및 권한 회수",
-                      permsEn: "Dual Canvas generation · Brand Kit lock · Campaign briefs · Team invite & revoke",
+                      permsKo: "스튜디오 생성 · 브랜드 키트 설정 · 캠페인 의뢰 · 팀원 초대 및 권한 관리",
+                      permsEn: "Studio generation · Brand Kit settings · Campaign briefs · Team invite & revoke",
                     },
                     {
                       roleKey: "editor",
                       title: b.roles.editor,
                       badgeKo: "실무 제작·편집",
                       badgeEn: "Create & Edit",
-                      permsKo: "화이트 듀얼 캔버스 이미지·영상 생성 · 1080p 업스케일 · 캠페인 시안 검수 및 피드백",
-                      permsEn: "Dual Canvas image & video generation · 1080p mastering · Campaign review & feedback",
+                      permsKo: "스튜디오 이미지·영상 생성 · 1080p 업스케일 · 캠페인 시안 검수 및 피드백",
+                      permsEn: "Studio image & video generation · 1080p mastering · Campaign review & feedback",
                     },
                     {
                       roleKey: "viewer",

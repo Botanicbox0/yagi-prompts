@@ -37,7 +37,7 @@ export default async function BrandSettings({
             className="bw-button"
             data-settings-identity-bridge
           >
-            {locale === "en" ? "Brand DNA & AI Style Guide →" : "브랜드 미감 · AI 스타일 설정 →"}
+            {locale === "en" ? "Open Brand Kit →" : "브랜드 키트 열기 →"}
           </a>
         )}
       </div>
@@ -50,17 +50,17 @@ export default async function BrandSettings({
           <div>
             <strong style={{ fontSize: "13.5px" }}>
               {locale === "en"
-                ? "Organization Profile vs. AI Brand Style Guide"
-                : "조직 기본 프로필과 AI 브랜드 스타일 가이드가 분리되어 있습니다"}
+                ? "Organization Profile & Brand Kit"
+                : "조직 기본 프로필과 브랜드 키트가 분리되어 있습니다"}
             </strong>
             <p className="bw-muted" style={{ margin: "2px 0 0", fontSize: "12.5px" }}>
               {locale === "en"
-                ? "Manage your official organization name, website, contact email, and primary logo here. To configure AI studio colors, fonts, and Moods A/B/C, open the Brand tab."
-                : "이 화면에서는 조직명·웹사이트·담당자 이메일·대표 로고를 관리합니다. 셀프 스튜디오에 적용할 컬러 팔레트·서체·미감 기조(A/B/C)는 [브랜드] 탭에서 설정하세요."}
+                ? "Manage your organization name, website, contact email, and primary logo here. Set studio moodboards and brand guidelines in the Brand Kit tab."
+                : "이 화면에서는 조직명·웹사이트·담당자 이메일·대표 로고를 관리합니다. 스튜디오에 적용할 무드보드와 연출 기준은 [브랜드 키트] 탭에서 설정하세요."}
             </p>
           </div>
           <a href={scopedHref("/brand/identity", choice)} className="bw-button">
-            {locale === "en" ? "Open Brand Style →" : "브랜드 탭 열기 →"}
+            {locale === "en" ? "Open Brand Kit →" : "브랜드 키트 열기 →"}
           </a>
         </aside>
       )}

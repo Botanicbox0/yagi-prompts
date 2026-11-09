@@ -597,7 +597,8 @@ export function DirectSceneStudio({
                   내가 보기에 더 닮은 첫 장면을 직접 고를 수 있어요
                 </p>
                 <p className="leading-relaxed text-black/65">
-                  조명이 화려하거나 어두운 영상에서도 얼굴이 어색해지지 않도록, 두 가지 느낌의 첫 장면을 먼저 보여드립니다. **내 실물과 더 가까운 쪽을 고르면** 그 얼굴 그대로 영상이 움직입니다.
+                  조명이 화려하거나 어두운 영상에서도 얼굴이 어색해지지 않도록, 두 가지 느낌의 첫 장면을 먼저 보여드립니다.{' '}
+                  <strong className="font-semibold text-[#0E1013]">내 실물과 더 가까운 쪽을 고르면</strong> 그 얼굴 그대로 영상이 움직입니다.
                 </p>
 
                 <div className="grid grid-cols-2 gap-2.5">
@@ -757,7 +758,11 @@ export function DirectSceneStudio({
               </h3>
 
               <p className="text-xs leading-relaxed text-black/70">
-                내 영상을 템플릿으로 올리면 **카메라 구도와 조명은 깨지지 않게 자동으로 고정**됩니다. 의상과 배경만 내 스타일로 고정할지, 다른 사람도 바꿀 수 있게 열어둘지 선택해 주세요.
+                내 영상을 템플릿으로 올리면{' '}
+                <strong className="font-semibold text-[#0E1013]">
+                  카메라 구도와 조명은 깨지지 않게 자동으로 고정
+                </strong>
+                됩니다. 의상과 배경만 내 스타일로 고정할지, 다른 사람도 바꿀 수 있게 열어둘지 선택해 주세요.
               </p>
 
               {/* Simple Friendly Toggles for Outfit & Backdrop */}

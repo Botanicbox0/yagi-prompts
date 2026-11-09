@@ -38,7 +38,7 @@ export default async function ContentLibrary({
         </div>
         {studioVisible && (
           <a href={scopedHref("/brand/studio", choice)} className="bw-button bw-primary">
-            {isKo ? "듀얼 스튜디오 열기 →" : "Open Dual Studio →"}
+            {isKo ? "스튜디오 열기 →" : "Open Studio →"}
           </a>
         )}
       </div>

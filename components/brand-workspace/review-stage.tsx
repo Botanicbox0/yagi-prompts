@@ -693,8 +693,8 @@ export function ReviewStage({
                 {
                   id: "awaiting_approval" as const,
                   label: isEn
-                    ? `⏳ Awaiting Approval (${statusCounts.awaiting_approval})`
-                    : `⏳ 검수 대기 (${statusCounts.awaiting_approval})`,
+                    ? `Awaiting Approval (${statusCounts.awaiting_approval})`
+                    : `검수 대기 (${statusCounts.awaiting_approval})`,
                 },
                 {
                   id: "needs_revision" as const,
@@ -829,7 +829,7 @@ export function ReviewStage({
                     }
                   >
                     <option value="awaiting_approval">
-                      {isEn ? "⏳ Awaiting Approval" : "⏳ 검수 대기"}
+                      {isEn ? "Awaiting Approval" : "검수 대기"}
                     </option>
                     <option value="needs_revision">
                       {isEn ? "Needs Revision" : "수정 요청"}
@@ -992,7 +992,7 @@ export function ReviewStage({
                 >
                   {(
                     [
-                      { id: "grid" as const, label: isEn ? "⊞ Grid" : "⊞ 그리드(Grid)" },
+                      { id: "grid" as const, label: isEn ? "Grid" : "그리드(Grid)" },
                       { id: "list" as const, label: isEn ? "List" : "리스트(List)" },
                       { id: "reel" as const, label: isEn ? "Reel" : "릴스(Reel)" },
                       { id: "player" as const, label: isEn ? "Player" : "플레이어(Player)" },
@@ -1121,7 +1121,7 @@ export function ReviewStage({
                           ? "Ready for Release"
                           : d.status === "needs_revision"
                             ? "Needs Revision"
-                            : "⏳ Awaiting Approval"}
+                            : "Awaiting Approval"}
                       </span>
                     </div>
                   </div>
@@ -1131,7 +1131,7 @@ export function ReviewStage({
                 <span>
                   {shareConfig.allowComments ? "Comments ON" : "Comments OFF"} ·{" "}
                   {shareConfig.allowApprovals ? "Approvals ON" : "Approvals OFF"} ·{" "}
-                  {shareConfig.allowDownloads ? "⬇ Downloads ON" : "⬇ Downloads Locked"}
+                  {shareConfig.allowDownloads ? "Downloads ON" : "Downloads Locked"}
                 </span>
               </div>
             </div>

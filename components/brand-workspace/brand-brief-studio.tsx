@@ -3697,22 +3697,45 @@ export function BrandBriefStudio({
     },
   ];
 
+  const cleanBrandMarkText = (
+    (organizationName || "")
+      .replace(/^\[local fixture\]\s*/i, "")
+      .trim() || "TWINGS ATELIER"
+  ).toUpperCase();
+
   const [adLayoutPresetId, setAdLayoutPresetId] =
     useState<string>("gentle_lookbook");
   const [adLayers, setAdLayers] = useState<AdOverlayLayer[]>(() => [
     {
+      id: "layer-badge",
+      kind: "badge",
+      text: "LOOK 01 / 08",
+      xPct: 18,
+      yPct: 7,
+      fontSizePx: 10,
+      fontWeight: 600,
+      fontId: "geist_mono",
+      colorHex: "#FFFFFF",
+      backdropMode: "ink",
+      align: "left",
+      letterSpacingEm: 0.08,
+      uppercase: true,
+      opacityPct: 100,
+      visible: true,
+    },
+    {
       id: "layer-brandmark",
       kind: "brandmark",
-      text: (organizationName || "TWINGS ATELIER").toUpperCase(),
-      xPct: 50,
-      yPct: 9,
-      fontSizePx: 11,
+      text: cleanBrandMarkText,
+      xPct: 78,
+      yPct: 7,
+      fontSizePx: 10.5,
       fontWeight: 700,
       fontId: "helvetica_neue",
-      colorHex: "#FFFFFF",
-      backdropMode: "none",
-      align: "center",
-      letterSpacingEm: 0.16,
+      colorHex: "#0B0C0E",
+      backdropMode: "paper",
+      align: "right",
+      letterSpacingEm: 0.12,
       uppercase: true,
       opacityPct: 100,
       visible: true,
@@ -3722,12 +3745,12 @@ export function BrandBriefStudio({
       kind: "headline",
       text: isKo ? "2026 컬렉션 에디션" : "2026 COLLECTION EDITION",
       xPct: 50,
-      yPct: 79,
-      fontSizePx: 26,
+      yPct: 80,
+      fontSizePx: 24,
       fontWeight: 700,
       fontId: "pretendard",
       colorHex: "#FFFFFF",
-      backdropMode: "none",
+      backdropMode: "ink",
       align: "center",
       letterSpacingEm: -0.03,
       uppercase: false,
@@ -3741,32 +3764,15 @@ export function BrandBriefStudio({
         ? "서울 플래그십 & 온라인 동시 오픈"
         : "SEOUL FLAGSHIP & ONLINE RELEASE",
       xPct: 50,
-      yPct: 87,
+      yPct: 89,
       fontSizePx: 12,
       fontWeight: 500,
       fontId: "pretendard",
-      colorHex: "#F1F3F7",
+      colorHex: "#FFFFFF",
       backdropMode: "glass",
       align: "center",
       letterSpacingEm: 0.02,
       uppercase: false,
-      opacityPct: 100,
-      visible: true,
-    },
-    {
-      id: "layer-badge",
-      kind: "badge",
-      text: "LOOK 01 / 08",
-      xPct: 16,
-      yPct: 9,
-      fontSizePx: 10,
-      fontWeight: 600,
-      fontId: "geist_mono",
-      colorHex: "#FFFFFF",
-      backdropMode: "ink",
-      align: "left",
-      letterSpacingEm: 0.08,
-      uppercase: true,
       opacityPct: 100,
       visible: true,
     },
@@ -3861,18 +3867,35 @@ export function BrandBriefStudio({
       frameBorderPx: 0,
       layers: [
         {
+          id: "layer-badge",
+          kind: "badge" as const,
+          text: "LOOK 01 / 08",
+          xPct: 18,
+          yPct: 7,
+          fontSizePx: 10,
+          fontWeight: 600 as const,
+          fontId: "geist_mono" as const,
+          colorHex: "#FFFFFF",
+          backdropMode: "ink" as const,
+          align: "left" as const,
+          letterSpacingEm: 0.08,
+          uppercase: true,
+          opacityPct: 100,
+          visible: true,
+        },
+        {
           id: "layer-brandmark",
           kind: "brandmark" as const,
-          text: (organizationName || "TWINGS ATELIER").toUpperCase(),
-          xPct: 50,
-          yPct: 8,
-          fontSizePx: 11,
+          text: cleanBrandMarkText,
+          xPct: 78,
+          yPct: 7,
+          fontSizePx: 10.5,
           fontWeight: 700 as const,
           fontId: "helvetica_neue" as const,
-          colorHex: "#FFFFFF",
-          backdropMode: "none" as const,
-          align: "center" as const,
-          letterSpacingEm: 0.18,
+          colorHex: "#0B0C0E",
+          backdropMode: "paper" as const,
+          align: "right" as const,
+          letterSpacingEm: 0.12,
           uppercase: true,
           opacityPct: 100,
           visible: true,
@@ -3882,12 +3905,12 @@ export function BrandBriefStudio({
           kind: "headline" as const,
           text: isKo ? "2026 옵티컬 컬렉션" : "2026 OPTICAL COLLECTION",
           xPct: 50,
-          yPct: 81,
-          fontSizePx: 26,
+          yPct: 80,
+          fontSizePx: 24,
           fontWeight: 700 as const,
           fontId: "pretendard" as const,
           colorHex: "#FFFFFF",
-          backdropMode: "none" as const,
+          backdropMode: "ink" as const,
           align: "center" as const,
           letterSpacingEm: -0.03,
           uppercase: false,
@@ -3905,28 +3928,11 @@ export function BrandBriefStudio({
           fontSizePx: 12,
           fontWeight: 500 as const,
           fontId: "pretendard" as const,
-          colorHex: "#E2E8F0",
+          colorHex: "#FFFFFF",
           backdropMode: "glass" as const,
           align: "center" as const,
           letterSpacingEm: 0.03,
           uppercase: false,
-          opacityPct: 100,
-          visible: true,
-        },
-        {
-          id: "layer-badge",
-          kind: "badge" as const,
-          text: "LOOK 01 / 08",
-          xPct: 16,
-          yPct: 8,
-          fontSizePx: 10,
-          fontWeight: 600 as const,
-          fontId: "geist_mono" as const,
-          colorHex: "#FFFFFF",
-          backdropMode: "ink" as const,
-          align: "left" as const,
-          letterSpacingEm: 0.08,
-          uppercase: true,
           opacityPct: 100,
           visible: true,
         },
@@ -5105,6 +5111,22 @@ export function BrandBriefStudio({
         isKo
           ? `'${item.titleKo}' 레퍼런스를 ${targetSlot}번 슬롯에 담았습니다.`
           : `Placed '${item.titleEn}' into reference slot ${targetSlot}.`,
+      );
+      return;
+    }
+
+    if (visibleStudioTab === "video" && mode === "canvas") {
+      setVideoBoardFrame({
+        src: item.src,
+        label: isKo ? item.titleKo : item.titleEn,
+        isVideoFile: false,
+      });
+      setShellFirstFrameLinked(true);
+      setVideoPromptText(isKo ? item.promptKo : item.promptEn);
+      setStatusMessage(
+        isKo
+          ? `'${item.titleKo}' 장면을 영상 시작 프레임과 모션 요청으로 불러왔습니다.`
+          : `Loaded '${item.titleEn}' as the video start frame and motion request.`,
       );
       return;
     }
@@ -9531,9 +9553,13 @@ export function BrandBriefStudio({
                           : "Creative Reference Showcase"}
                       </h3>
                       <span>
-                        {isKo
-                          ? "마음에 드는 화보를 위 레퍼런스 슬롯(최대 14장)으로 드래그하거나 클릭해 프롬프트·포토 디자인 에디터로 바로 불러오세요."
-                          : "Drag any card into up to 14 reference slots above, or click to load its prompt and design layout."}
+                        {studioTab === "video"
+                          ? isKo
+                            ? "마음에 드는 장면을 위 시작 프레임으로 드래그하거나 클릭해 모션 요청과 함께 바로 불러오세요."
+                            : "Drag any card into the start frame above, or click to load it with its motion prompt."
+                          : isKo
+                            ? "마음에 드는 화보를 위 레퍼런스 슬롯(최대 14장)으로 드래그하거나 클릭해 프롬프트·포토 디자인 에디터로 바로 불러오세요."
+                            : "Drag any card into up to 14 reference slots above, or click to load its prompt and design layout."}
                       </span>
                     </div>
                   </div>

@@ -141,8 +141,8 @@ export function getAvailableCommissionTracks(options?: {
     requiresInfluencerSteps: true,
     defaultAspect: "9:16",
     includedStructure: isEn
-      ? ["✨ 5-Step Campaign Brief", "⊞ Creator Shortlist & Approvals", "📁 3 Asset & Cut Folders"]
-      : ["✨ 5단계 캠페인 조건 설계", "⊞ 인플루언서 후보 비교 · 컨펌", "📁 3개 시사 · 납품 폴더"],
+      ? ["5-Step Campaign Brief", "Creator Shortlist & Approvals", "3 Asset & Cut Folders"]
+      : ["5단계 캠페인 조건 설계", "인플루언서 후보 비교 · 컨펌", "3개 시사 · 납품 폴더"],
     workflowSteps: isEn
       ? ["1. Format & Brief", "2. Creator Shortlist", "3. Master Cut Review", "4. Live Viral Report"]
       : ["1. 포맷 · 조건 확정", "2. 인플루언서 후보 컨펌", "3. 마스터 컷 프레임 검수", "4. 릴스·틱톡 게시 & 실시간 리포트"],
@@ -171,13 +171,13 @@ export function getAvailableCommissionTracks(options?: {
     requiresInfluencerSteps: false,
     defaultAspect: "9:16",
     includedStructure: isEn
-      ? ["✨ 1-Page Express Brief", "⊞ Sample Cut QA Room", "⚡ Auto-Mounts to Self Studio"]
-      : ["✨ 1페이지 간편 의뢰서", "⊞ 샘플 컷 프레임 시사 룸", "⚡ 승인 시 셀프 스튜디오 자동 장착"],
+      ? ["1-Page Express Brief", "Sample Cut QA Room", "Auto-Mounts to Self Studio"]
+      : ["1페이지 간편 의뢰서", "샘플 컷 프레임 시사 룸", "승인 시 셀프 스튜디오 자동 장착"],
     workflowSteps: isEn
       ? ["1. Upload Product & Mood", "2. YAGI Template Engineering", "3. Sample Cut Review", "4. Mount to Self Studio"]
       : ["1. 제품 · 무드 에셋 전달", "2. YAGI 전용 템플릿 설계", "3. 샘플 영상 타임코드 검수", "4. 셀프 스튜디오 전용 템플릿 장착"],
     deliverableDestination: {
-      badge: isEn ? "Mounts to Self Studio" : "셀프 스튜디오(/brand/studio) 자동 장착",
+      badge: isEn ? "Mounts to Self Studio" : "셀프 스튜디오 자동 장착",
       label: isEn
         ? "Approved template mounts directly into your Self Studio for unlimited in-house generation"
         : "최종 승인 즉시 브랜드의 [셀프 스튜디오] 전용 템플릿 목록에 장착되어 자체 생성 가능",
@@ -207,13 +207,13 @@ export function getAvailableCommissionTracks(options?: {
     requiresInfluencerSteps: false,
     defaultAspect: "16:9",
     includedStructure: isEn
-      ? ["✨ 1-Page Production Brief", "⊞ v1 → v2 Version Stack", "📁 1080p Master & Share Link"]
-      : ["✨ 1페이지 영상 제작 브리프", "⊞ v1 → v2 버전 비교 시사", "📁 1080p 마스터 납품 · 공유 링크"],
+      ? ["1-Page Production Brief", "v1 → v2 Version Stack", "1080p Master & Share Link"]
+      : ["1페이지 영상 제작 브리프", "v1 → v2 버전 비교 시사", "1080p 마스터 납품 · 공유 링크"],
     workflowSteps: isEn
       ? ["1. 1-Page Film Brief", "2. First Cut (v1) Delivery", "3. Timecode & Spatial Pin QA", "4. 1080p Master Download"]
       : ["1. 1페이지 영상 기획 · 에셋 전달", "2. 1차 편집본(v1) 시사 업로드", "3. 타임코드 · 화면 핀 수정 반영(v2)", "4. 1080p 최종 마스터 승인 · 다운로드"],
     deliverableDestination: {
-      badge: isEn ? "1080p Master Delivery" : "콘텐츠 보관함(/brand/library) 1080p 마스터 납품",
+      badge: isEn ? "1080p Master Delivery" : "콘텐츠 보관함 1080p 마스터 납품",
       label: isEn
         ? "Approved 1080p clean MP4 + stems archive directly in your Content Library"
         : "승인된 1080p 무로고 클린 MP4와 사운드 마스터가 [콘텐츠 보관함]에 영구 아카이빙",
@@ -255,8 +255,8 @@ export function getBrandWorkspaceTourSteps(options?: {
         ? "Explore how your brand exchanges source files with YAGI, reviews 1080p cuts with spatial pins, tracks approval states, and shares custom review links with stakeholders."
         : "복잡한 이메일·메신저 파일 주고받기 없이, 브랜드 에셋 폴더 정리부터 프레임 단위 타임코드·화면 핀 피드백, 임원진 맞춤 공유 링크 설정까지 핵심 기능을 5단계로 안내합니다.",
       highlightPills: isEn
-        ? ["📁 Collage Asset Folders", "🎯 Frame & Spatial Pin QA", "🔗 Custom Share Builder"]
-        : ["📁 비주얼 콜라주 에셋 폴더", "🎯 프레임 · 화면 좌표 핀 시사", "🔗 레이아웃 · 보안 공유 빌더"],
+        ? ["Collage Asset Folders", "Frame & Spatial Pin QA", "Custom Share Builder"]
+        : ["비주얼 콜라주 에셋 폴더", "프레임 · 화면 좌표 핀 시사", "레이아웃 · 보안 공유 빌더"],
     },
     {
       id: "tracks",
@@ -278,8 +278,8 @@ export function getBrandWorkspaceTourSteps(options?: {
           ? "Choose between a full Creator Seeding Campaign or a Master Commercial Video Production—each opens a dedicated asset & review room."
           : "Generate directly in Self Studio, or commission YAGI for (1) a Custom Template Build that mounts into your Studio, (2) a Template + Influencer Seeding Campaign, or (3) a Master Video Production."
         : generativeClosed
-          ? "① YAGI 템플릿 + 인플루언서 섭외·발행 캠페인, ② YAGI 마스터 영상 단독 제작 의뢰 중 목적에 맞는 트랙을 선택해 불필요한 입력 단계 없이 바로 시작합니다."
-          : "브랜드가 직접 에셋을 만드는 [셀프 스튜디오] 외에도 ① 전용 템플릿 제작만 의뢰(승인 후 스튜디오 장착), ② 템플릿 + 인플루언서 섭외·발행 의뢰, ③ 마스터 영상 제작만 의뢰까지 3가지 트랙이 이 시사 룸과 직결됩니다.",
+          ? "1. YAGI 템플릿 + 인플루언서 섭외·발행 캠페인, 2. YAGI 마스터 영상 단독 제작 의뢰 중 목적에 맞는 트랙을 선택해 불필요한 입력 단계 없이 바로 시작합니다."
+          : "브랜드가 직접 에셋을 만드는 [셀프 스튜디오] 외에도 1. 전용 템플릿 제작만 의뢰(승인 후 스튜디오 장착), 2. 템플릿 + 인플루언서 섭외·발행 의뢰, 3. 마스터 영상 제작만 의뢰까지 3가지 트랙이 이 시사 룸과 직결됩니다.",
       highlightPills: generativeClosed
         ? isEn
           ? ["Creator Seeding Campaign", "Master Video Production"]
@@ -303,8 +303,8 @@ export function getBrandWorkspaceTourSteps(options?: {
         ? "Source files, work-in-progress cuts, and approved 1080p masters are organized into 3 visual collage folders. Filter deliverables by status (Awaiting Approval, Needs Revision, Ready for Release) with one click."
         : "브랜드가 올린 제품·로고 원본 폴더, YAGI가 업로드한 버전별 시사 컷 폴더, 최종 납품 마스터 폴더가 3분할 썸네일 콜라주로 자동 정리됩니다. 각 영상 카드 아래에서 [검수 대기 / 수정 요청 / 최종 승인] 상태와 배포 매체를 즉시 확인·전환할 수 있습니다.",
       highlightPills: isEn
-        ? ["⏳ Awaiting Approval", "🛠 Needs Revision", "✅ Ready for Release"]
-        : ["⏳ 검수 대기", "🛠 수정 요청", "✅ 최종 승인 (납품 완료)"],
+        ? ["Awaiting Approval", "Needs Revision", "Ready for Release"]
+        : ["검수 대기", "수정 요청", "최종 승인 (납품 완료)"],
     },
     {
       id: "player",
@@ -321,8 +321,8 @@ export function getBrandWorkspaceTourSteps(options?: {
         ? "Enable Pin on Frame, click any spot on the video (e.g. logo kerning or lighting highlight), and leave a note. Clicking a comment chip jumps the player to that exact frame and highlights the pin."
         : "『몇 초쯤 로고 조금 키워주세요』처럼 모호하게 설명할 필요가 없습니다. [화면 위치 핀 찍기]를 켜고 영상 위 원하는 지점을 클릭하면 타임코드(예: 00:02.12)와 화면 좌표(x, y)가 동시에 기록되며, 코멘트 클릭 시 해당 프레임으로 즉시 이동합니다.",
       highlightPills: isEn
-        ? ["📍 Spatial Frame Pin (x, y)", "⏱ Frame Step (±1f)", "🔀 v1 ↔ v2 Version Stack"]
-        : ["📍 화면 좌표 핀(x, y)", "⏱ 1프레임 정밀 이동(±1f)", "🔀 v1 ↔ v2 버전 즉시 비교"],
+        ? ["Spatial Frame Pin (x, y)", "Frame Step (±1f)", "v1 ↔ v2 Version Stack"]
+        : ["화면 좌표 핀(x, y)", "1프레임 정밀 이동(±1f)", "v1 ↔ v2 버전 즉시 비교"],
     },
     {
       id: "share",
@@ -339,8 +339,8 @@ export function getBrandWorkspaceTourSteps(options?: {
         ? "Open the Share Builder to switch how external reviewers see your assets (Grid, List, Reel, or Cinema Player) and toggle comments, one-click approvals, MP4 downloads, passphrase lock, expiration date, and watermark."
         : "외부 임원진이나 파트너사에게 시사 링크를 보낼 때 단순 URL 복사를 넘어, 보여줄 화면 레이아웃(Grid / List / Reel / Player)을 고르고 코멘트 허용·원본 다운로드 허용·비밀번호 잠금·만료일·시사용 워터마크를 세밀하게 설정해 공유할 수 있습니다.",
       highlightPills: isEn
-        ? ["⊞ Grid · Reel · Player", "🔒 Passphrase & Expiry", "💧 Preview Watermark"]
-        : ["⊞ Grid · Reel · Player 뷰", "🔒 비밀번호 · 만료일 잠금", "💧 시사용 워터마크 토글"],
+        ? ["Grid · Reel · Player", "Passphrase & Expiry", "Preview Watermark"]
+        : ["Grid · Reel · Player 뷰", "비밀번호 · 만료일 잠금", "시사용 워터마크 토글"],
     },
   ];
 }

@@ -60,7 +60,7 @@ export default async function BrandLayout({
         <div className="bw-shell">
           <aside className="bw-sidebar">
             <Suspense fallback={null}>
-              {scope ? <WorkspaceHomeLink scope={scope}><TwingsStudioLockup size={22} /></WorkspaceHomeLink> : <a href="/brand" className="bw-lockup"><TwingsStudioLockup size={22} /></a>}
+              {scope ? <WorkspaceHomeLink scope={scope}><TwingsStudioLockup size={22} /></WorkspaceHomeLink> : <a href="/brand" className="bw-lockup" aria-label="TWINGS Studio"><TwingsStudioLockup size={22} /></a>}
             </Suspense>
             {/* URL-derived: dynamic render resolves this on the server, the empty fallback never shows. */}
             <Suspense fallback={null}>

@@ -39,7 +39,7 @@ export function WorkspaceHomeLink({ scope, children }: { scope: BrandWorkspaceSc
     return () => window.removeEventListener('twings:nav-order-changed', syncPreferred);
   }, [vis.studio]);
 
-  return <a href={scopedHref(preferredEntry, choice)} className="bw-lockup">{children}</a>;
+  return <a href={scopedHref(preferredEntry, choice)} className="bw-lockup" aria-label="TWINGS Studio">{children}</a>;
 }
 
 export function WorkspaceSupport({ scope, b, locale }: { scope: BrandWorkspaceScope; b: BrandCopy; locale: string }) {

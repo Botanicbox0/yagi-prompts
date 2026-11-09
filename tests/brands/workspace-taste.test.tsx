@@ -104,12 +104,17 @@ describe("brand workspace taste", () => {
 
   it("keeps decorative emojis and circled numbers out of every brand-workspace component", () => {
     const dir = join(process.cwd(), "components", "brand-workspace");
-    const banned = /[⚡🔇🔊🔒🎛🔓✦🔗📋🎬✨🔁🤔📄💡🛠✅📁⚙📱💧💬📍🎙⚠📌🔬🎵📅💳☰①②③④⑤]/u;
+    const banned = /[⚡🔇🔊🔒🎛🔓✦🔗📋🎬✨🔁🤔📄💡🛠✅📁⚙📱💧💬📍🎙⚠📌🔬🎵📅💳☰⏳🎯⏱🔀①②③④⑤]/u;
     for (const file of readdirSync(dir)) {
       if (!file.endsWith(".tsx")) continue;
       const source = readFileSync(join(dir, file), "utf8");
       expect(source, file).not.toMatch(banned);
     }
+    const tracksSource = readFileSync(
+      join(process.cwd(), "lib", "brands", "workspace", "commission-tracks.ts"),
+      "utf8",
+    );
+    expect(tracksSource, "commission-tracks.ts").not.toMatch(banned);
   });
 
   it("renders the campaign showcase reel with uncropped 4:5 passepartout cards and captions below media", () => {
