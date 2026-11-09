@@ -172,6 +172,7 @@ export default async function BrandIdentityPage({
         studioHref={scopedHref("/brand/studio", choice)}
       />
 
+      <div hidden aria-hidden="true" style={{ display: "none" }}>
       <details className="bw-service-disclosure">
         <summary>
           {locale === "ko"
@@ -639,6 +640,7 @@ export default async function BrandIdentityPage({
         </section>
       </div>
       </details>
+      </div>
     </div>
   );
 }

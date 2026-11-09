@@ -1008,5 +1008,17 @@ describe('Brand Studio Complete Suite (Video Reverse, 2D Spatial Stage, 3-Track 
       expect(html).not.toContain('(mark_only)');
       expect(html).not.toContain('outside_pixels_changed === 0');
     }
+
+    // Verify 14-slot expansion, AI auto-prompt synthesis bar, SOTA board mode, and zero internal stage jargon
+    expect(beautyStudioHtml).toContain('data-add-ref-slot-btn');
+    expect(beautyStudioHtml).toContain('0/14장');
+    expect(beautyStudioHtml).toContain('data-ai-auto-prompt-bar');
+    expect(beautyStudioHtml).toContain('data-ai-auto-prompt-btn');
+    expect(beautyStudioHtml).toContain('data-studio-board-mode-btn');
+    expect(beautyStudioHtml).toContain('data-studio-design-mode-btn');
+    expect(beautyStudioHtml).toContain('data-studio-generate-btn');
+    expect(beautyStudioHtml).not.toContain('ATELIER STAGE');
+    expect(beautyStudioHtml).not.toContain('CURATED ARCHIVE');
+    expect(beautyStudioHtml).not.toContain('yagi workshop test');
   });
 });

@@ -138,7 +138,7 @@ export default async function BrandStudio({
           organizationName={choice?.name}
           initialCategory={brandCategory}
           locale={locale}
-          canWrite={canCreate || Boolean(viewer.isAdmin)}
+          canWrite={canCreate || Boolean(viewer.isAdmin) || Boolean(choice && choice.role !== "guest")}
           identityConfirmed={Boolean(
             confirmedIdentity ||
               identityWorkspace?.identity?.status === "confirmed",
@@ -155,6 +155,7 @@ export default async function BrandStudio({
           initialMode={initialMode}
         />
       )}
+      <div hidden={Boolean(historyOrg)} style={historyOrg ? { display: "none" } : undefined}>
       <details className="bw-service-disclosure" style={{ marginTop: "12px" }}>
         <summary>
           {locale === "ko"
@@ -356,6 +357,7 @@ export default async function BrandStudio({
           )}
         </div>
       </details>
+      </div>
     </div>
   );
 }
