@@ -994,6 +994,15 @@ describe("Brand Studio 5 Core Deliverables & 5 Image Models (12-Round Verificati
     expect(studioHtml).toContain("2. 영상 제작");
     expect(studioHtml).toContain("3. 사운드");
     expect(studioHtml).toContain("이미지+영상 나란히");
+    expect(studioHtml).toContain('data-ref-slot-empty="true"');
+    expect(studioHtml).toContain('data-canvas-empty="true"');
+    expect(studioHtml).toContain("작업할 이미지를 여기에 드래그해서 놓으세요");
+    expect(studioHtml).toContain("내 작업 컷 (0)");
+
+    const visibleShellHtml =
+      studioHtml.split('<div hidden="" aria-hidden="true"')[0] ?? studioHtml;
+    expect(visibleShellHtml).not.toContain("예시 컷");
+    expect(visibleShellHtml).not.toContain("예시 장면");
 
     // Verify /brand/identity (BrandOnboardingWizard) renders the visual Moodboard & Aesthetic Studio above the fold
     const identityHtml = renderToStaticMarkup(
