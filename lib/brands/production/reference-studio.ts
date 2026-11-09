@@ -72,9 +72,9 @@ export const BRAND_CORE_DELIVERABLE_TRACKS: readonly BrandCoreDeliverableTrackSp
       ],
       turnaroundKo: "즉시 생성 (15~35초)",
       turnaroundEn: "Instant (15–35s)",
-      priceGuideKo: "5장 세트 400원~1,100원",
+      priceGuideKo: "5장 세트 400원~",
       priceGuideEn: "From ₩400 / 5 cuts",
-      previewImage: "/reel/brands/slot-1-subject-editorial.jpg",
+      previewImage: "/reel/landing/look-feather.webp",
     },
     {
       id: "video",
@@ -485,7 +485,7 @@ export function resolveCategoryReferenceWorkflows(
 
   const defaultModelThumb = isBeauty
     ? "/reel/landing/v7/rx-beauty-orig.jpg"
-    : "/reel/brands/slot-1-subject-editorial.jpg";
+    : "/reel/landing/look-feather.webp";
   const defaultBgThumb = isBeauty
     ? "/reel/landing/v7/rx-beauty-world.jpg"
     : isFnb
@@ -493,9 +493,9 @@ export function resolveCategoryReferenceWorkflows(
       : "/reel/brands/slot-2-space-concrete-blue.jpg";
   const defaultVibeThumb = isBeauty
     ? "/reel/landing/cut-cheek.webp"
-    : "/reel/brands/slot-3-pose-lowangle-lookbook.jpg";
+    : "/reel/landing/c-garment-wide.webp";
   const defaultColorThumb = isBeauty
-    ? "/reel/campaigns/beauty-rose.jpg"
+    ? "/reel/landing/cut-scent.webp"
     : "/reel/brands/slot-4-color-french-cobalt.jpg";
 
   const defaultBaseSceneThumb = isBeauty
@@ -512,7 +512,7 @@ export function resolveCategoryReferenceWorkflows(
     ? "/reel/landing/cut-hands.webp"
     : isFnb
       ? "/reel/landing/cut-scent.webp"
-      : "/reel/brands/pin-texture-35mm-grain-weave.jpg";
+      : "/reel/landing/c-skin-wide.webp";
 
   return {
     lookbook_composite: {

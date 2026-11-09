@@ -126,6 +126,7 @@ export interface BrandBriefStudioProps {
 
 interface CategoryVisualAssets {
   sceneThumbs: readonly [string, string, string, string];
+  videoSrc: string;
   takes: ReadonlyArray<{
     id: string;
     labelKo: string;
@@ -140,29 +141,30 @@ const CATEGORY_STUDIO_VISUALS: Record<
 > = {
   fashion_apparel: {
     sceneThumbs: [
-      "/reel/brands/slot-1-subject-editorial.jpg",
+      "/reel/landing/look-feather.webp",
       "/reel/brands/slot-2-space-concrete-blue.jpg",
-      "/reel/brands/slot-3-pose-lowangle-lookbook.jpg",
-      "/reel/brands/house-runway-1080p.jpg",
+      "/reel/landing/c-garment-wide.webp",
+      "/reel/brands/studio-editorial-blue-1080p.jpg",
     ],
+    videoSrc: "/reel/brands/studio-editorial-blue-1080p.mp4",
     takes: [
       {
         id: "take-1",
-        labelKo: "컷 01 · 정면 히어로",
-        labelEn: "Cut 01 · Front Hero",
-        src: "/reel/brands/slot-1-subject-editorial.jpg",
+        labelKo: "컷 01 · 프렌치 블루 히어로",
+        labelEn: "Cut 01 · French Blue Hero",
+        src: "/reel/landing/look-feather.webp",
       },
       {
         id: "take-2",
-        labelKo: "컷 02 · 측면 실루엣",
-        labelEn: "Cut 02 · Side Profile",
-        src: "/reel/brands/slot-3-pose-lowangle-lookbook.jpg",
+        labelKo: "컷 02 · 화이트 셔츠 룩북",
+        labelEn: "Cut 02 · White Shirt Lookbook",
+        src: "/reel/landing/c-garment-wide.webp",
       },
       {
         id: "take-3",
-        labelKo: "컷 03 · 상반신 디테일",
-        labelEn: "Cut 03 · Upper Detail",
-        src: "/reel/brands/slot-2-space-concrete-blue.jpg",
+        labelKo: "컷 03 · 클로즈업 피부결",
+        labelEn: "Cut 03 · Skin Macro",
+        src: "/reel/landing/c-skin-wide.webp",
       },
     ],
   },
@@ -171,8 +173,9 @@ const CATEGORY_STUDIO_VISUALS: Record<
       "/reel/landing/v7/rx-beauty-product.jpg",
       "/reel/landing/cut-pump.webp",
       "/reel/landing/cut-cheek.webp",
-      "/reel/campaigns/beauty-rose.jpg",
+      "/reel/brands/house-french-blue-hero-1080p.jpg",
     ],
+    videoSrc: "/reel/brands/house-french-blue-hero-1080p.mp4",
     takes: [
       {
         id: "take-1",
@@ -199,8 +202,9 @@ const CATEGORY_STUDIO_VISUALS: Record<
       "/reel/brands/tea-editorial.jpg",
       "/reel/landing/cut-scent.webp",
       "/reel/landing/v7/film-tea.jpg",
-      "/reel/brands/production-paris.jpg",
+      "/reel/brands/studio-rain-editorial-1080p.jpg",
     ],
+    videoSrc: "/reel/brands/studio-rain-editorial-1080p.mp4",
     takes: [
       {
         id: "take-1",
@@ -227,8 +231,9 @@ const CATEGORY_STUDIO_VISUALS: Record<
       "/reel/studio/vto-free-amber.webp",
       "/reel/landing/cut-beads.webp",
       "/reel/studio/vto-free-sofa.webp",
-      "/reel/studio/vto-free-mirror.webp",
+      "/reel/brands/house-french-blue-hero-1080p.jpg",
     ],
+    videoSrc: "/reel/brands/house-french-blue-hero-1080p.mp4",
     takes: [
       {
         id: "take-1",
@@ -255,8 +260,9 @@ const CATEGORY_STUDIO_VISUALS: Record<
       "/reel/brands/y2k-flip-phone.jpg",
       "/reel/landing/cut-mark.webp",
       "/reel/campaigns/retro-phone-01.jpg",
-      "/reel/campaigns/retro-phone-02.jpg",
+      "/reel/brands/house-runway-1080p.jpg",
     ],
+    videoSrc: "/reel/brands/house-runway-1080p.mp4",
     takes: [
       {
         id: "take-1",
@@ -2163,15 +2169,15 @@ export function BrandBriefStudio({
     : activeTake.src;
 
   // ---- Visible studio shell helpers -------------------------------------------------------------
-  const isBoardSurface =
-    studioSurfaceMode !== "track_creator_format" &&
-    studioSurfaceMode !== "track_creator_distribution" &&
-    studioSurfaceMode !== "track_audio";
-  const studioTab: "dual" | "image" | "video" | "audio" | "campaign" =
+  const [isClientMounted, setIsClientMounted] = useState(false);
+  useEffect(() => {
+    setIsClientMounted(true);
+  }, []);
+
+  const isBoardSurface = studioSurfaceMode !== "track_audio";
+  const studioTab: "dual" | "image" | "video" | "audio" =
     !isBoardSurface
-      ? studioSurfaceMode === "track_audio"
-        ? "audio"
-        : "campaign"
+      ? "audio"
       : splitPaneMode === "image_only"
         ? "image"
         : splitPaneMode === "video_only"
@@ -2202,11 +2208,6 @@ export function BrandBriefStudio({
     if (tab === "audio") {
       setStudioSurfaceMode("track_audio");
       handleSelectCoreTrack("audio");
-      return;
-    }
-    if (tab === "campaign") {
-      setStudioSurfaceMode("track_creator_format");
-      handleSelectCoreTrack("creator_format");
       return;
     }
     setStudioSurfaceMode("split_workbench");
@@ -2449,7 +2450,6 @@ export function BrandBriefStudio({
                 { id: "image", ko: "이미지 · 부분 수정", en: "Image & edit" },
                 { id: "video", ko: "영상 · 업스케일", en: "Video & upscale" },
                 { id: "audio", ko: "사운드", en: "Sound" },
-                { id: "campaign", ko: "크리에이터 캠페인", en: "Creator campaign" },
               ] as const
             ).map((tab) => (
               <button
@@ -2499,13 +2499,9 @@ export function BrandBriefStudio({
                 ? isKo
                   ? "첫 장면을 정해 720p로 움직임을 확인하고, 마음에 들면 1080p나 4K로 마감합니다."
                   : "Set the first frame, check motion at 720p, then finish in 1080p or 4K."
-                : studioTab === "audio"
-                  ? isKo
-                    ? "영상 길이에 맞춰 배경음악과 현장 효과음을 만들어 붙입니다."
-                    : "Make background music and on-set sound that fit the video length."
-                  : isKo
-                    ? "크리에이터가 셀카 한 장으로 참여하는 캠페인 영상을 만들고, 게시와 리포트까지 맡깁니다."
-                    : "Build a campaign video creators join with one selfie, then hand off posting and reporting."}
+                : isKo
+                  ? "영상 길이에 맞춰 배경음악과 현장 효과음을 만들어 붙입니다."
+                  : "Make background music and on-set sound that fit the video length."}
         </p>
         )}
 
@@ -3069,11 +3065,24 @@ export function BrandBriefStudio({
                         </span>
                       </div>
                       <div className="tws-canvas" data-tool="view">
-                        <img
-                          src={studioVisuals.sceneThumbs[3]}
-                          alt={isKo ? "영상 예시 장면" : "Sample video scene"}
-                          draggable={false}
-                        />
+                        {isClientMounted ? (
+                          <video
+                            key={studioVisuals.videoSrc}
+                            src={studioVisuals.videoSrc}
+                            poster={studioVisuals.sceneThumbs[3]}
+                            autoPlay
+                            muted
+                            loop
+                            playsInline
+                            aria-label={isKo ? "영상 예시 장면" : "Sample video scene"}
+                          />
+                        ) : (
+                          <img
+                            src={studioVisuals.sceneThumbs[3]}
+                            alt={isKo ? "영상 예시 장면" : "Sample video scene"}
+                            draggable={false}
+                          />
+                        )}
                       </div>
                       <div className="tws-artboard-foot">
                         <p className="tws-hint">
@@ -3234,7 +3243,7 @@ export function BrandBriefStudio({
                 </section>
               ) : null}
             </div>
-          ) : studioTab === "audio" ? (
+          ) : (
             <div className="tws-panels">
               <section className="tws-panel">
                 <h3>
@@ -3242,7 +3251,22 @@ export function BrandBriefStudio({
                   {isKo ? "소리를 입힐 영상" : "Video to score"}
                 </h3>
                 <figure className="tws-media">
-                  <img src={studioVisuals.sceneThumbs[3]} alt={isKo ? "영상 예시 장면" : "Sample video scene"} />
+                  <div className="tws-media-frame">
+                    {isClientMounted ? (
+                      <video
+                        key={studioVisuals.videoSrc}
+                        src={studioVisuals.videoSrc}
+                        poster={studioVisuals.sceneThumbs[3]}
+                        autoPlay
+                        muted
+                        loop
+                        playsInline
+                        aria-label={isKo ? "영상 예시 장면" : "Sample video scene"}
+                      />
+                    ) : (
+                      <img src={studioVisuals.sceneThumbs[3]} alt={isKo ? "영상 예시 장면" : "Sample video scene"} />
+                    )}
+                  </div>
                   <figcaption>
                     {isKo
                       ? `${videoSeconds}초 · 고른 소리: ${activeAudioPreset.titleKo}`
@@ -3319,133 +3343,6 @@ export function BrandBriefStudio({
                       {isKo ? "사운드 만들기" : "Make sound"}
                     </button>
                   </div>
-                </div>
-              </section>
-            </div>
-          ) : (
-            <div className="tws-panels">
-              <section className="tws-panel">
-                <h3>
-                  <span className="tws-step" aria-hidden="true">01</span>
-                  {isKo ? "캠페인 영상 포맷" : "Campaign video format"}
-                </h3>
-                <p>
-                  {isKo
-                    ? "제품, 배경, 색감은 그대로 두고 참여 크리에이터의 얼굴만 주인공으로 들어갑니다. 크리에이터는 정면 셀카 한 장만 올리면 됩니다."
-                    : "Product, set and colour stay fixed; each creator becomes the lead with one front selfie."}
-                </p>
-                <div className="tws-formula">
-                  <figure>
-                    <img src={studioVisuals.sceneThumbs[0]} alt="" />
-                    <figcaption>{isKo ? "크리에이터 셀카" : "Creator selfie"}</figcaption>
-                  </figure>
-                  <span className="tws-formula-op" aria-hidden="true">+</span>
-                  <figure>
-                    <img src={studioVisuals.sceneThumbs[1]} alt="" />
-                    <figcaption>{isKo ? "우리 제품·배경" : "Our product & set"}</figcaption>
-                  </figure>
-                  <span className="tws-formula-op" aria-hidden="true">→</span>
-                  <figure>
-                    <img src={studioVisuals.sceneThumbs[3]} alt="" />
-                    <figcaption>{isKo ? "캠페인 영상" : "Campaign video"}</figcaption>
-                  </figure>
-                </div>
-                <div className="tws-options" role="radiogroup" aria-label={isKo ? "제작 방식" : "How to build"}>
-                  {(
-                    [
-                      {
-                        id: "self_build" as const,
-                        ko: "직접 만들기",
-                        en: "Build it myself",
-                        subKo: "듀얼 보드에서 화보와 영상을 만들어 포맷으로 저장",
-                        subEn: "Make it on the dual board and save as a format",
-                      },
-                      {
-                        id: "studio_commission" as const,
-                        ko: "전담팀에 맡기기",
-                        en: "Commission our team",
-                        subKo: "제품 사진과 원하는 분위기만 보내면 3일 안에 완성",
-                        subEn: "Send product photos and a mood, ready in 3 days",
-                      },
-                    ] as const
-                  ).map((mode) => (
-                    <button
-                      key={mode.id}
-                      type="button"
-                      role="radio"
-                      aria-checked={creatorFormatMode === mode.id}
-                      className="tws-option"
-                      onClick={() => setCreatorFormatMode(mode.id)}
-                    >
-                      <strong>{isKo ? mode.ko : mode.en}</strong>
-                      <span>{isKo ? mode.subKo : mode.subEn}</span>
-                    </button>
-                  ))}
-                </div>
-                <div className="tws-actions">
-                  {creatorFormatMode === "self_build" ? (
-                    <button type="button" className="tws-btn" onClick={() => selectStudioTab("dual")}>
-                      {isKo ? "듀얼 보드에서 만들기 →" : "Open the dual board →"}
-                    </button>
-                  ) : (
-                    <a className="tws-btn" href="/brand/projects/new">
-                      {isKo ? "제작 의뢰서 쓰기 →" : "Write a commission brief →"}
-                    </a>
-                  )}
-                </div>
-              </section>
-              <section className="tws-panel">
-                <h3>
-                  <span className="tws-step" aria-hidden="true">02</span>
-                  {isKo ? "크리에이터 게시와 리포트" : "Creator posting & report"}
-                </h3>
-                <p>
-                  {isKo
-                    ? "팔로워 3,000명 이상 크리에이터가 릴스·틱톡·쇼츠에 동시에 올리고, 성과를 리포트로 받습니다."
-                    : "Creators with 3,000+ followers post across Reels, TikTok and Shorts, and you get a report."}
-                </p>
-                <div className="tws-options" role="radiogroup" aria-label={isKo ? "패키지" : "Package"}>
-                  {BRAND_CREATOR_DISTRIBUTION_TIERS.map((tier) => (
-                    <button
-                      key={tier.id}
-                      type="button"
-                      role="radio"
-                      aria-checked={distributionTierId === tier.id}
-                      className="tws-option"
-                      onClick={() => setDistributionTierId(tier.id)}
-                    >
-                      <strong>{isKo ? tier.titleKo : tier.titleEn}</strong>
-                      <span>{isKo ? tier.creatorCountLabelKo : tier.creatorCountLabelEn}</span>
-                    </button>
-                  ))}
-                </div>
-                <div>
-                  <span className="tws-rail-label">
-                    {isKo ? "예상 일정 (의뢰 후 협의해 확정)" : "Expected timeline (confirmed after kickoff)"}
-                  </span>
-                  <ol className="tws-timeline">
-                    {(
-                      [
-                        { d: "D+0", ko: "의뢰", en: "Brief" },
-                        { d: "D+3", ko: "포맷 확정", en: "Format" },
-                        { d: "D+7", ko: "크리에이터 모집", en: "Creators" },
-                        { d: "D+14", ko: "동시 게시", en: "Posting" },
-                        { d: "D+21", ko: "리포트", en: "Report" },
-                      ] as const
-                    ).map((s) => (
-                      <li key={s.d}>
-                        <b>{s.d}</b>
-                        {isKo ? s.ko : s.en}
-                      </li>
-                    ))}
-                  </ol>
-                </div>
-                <div className="tws-actions">
-                  <a className="tws-btn tws-btn-primary" href="/brand/projects/new">
-                    {isKo
-                      ? `${activeDistributionTier.titleKo.replace(/\s*팩$/, "")} 패키지로 의뢰하기`
-                      : `Start with ${activeDistributionTier.titleEn}`}
-                  </a>
                 </div>
               </section>
             </div>

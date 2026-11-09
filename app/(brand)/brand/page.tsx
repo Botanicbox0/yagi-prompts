@@ -41,16 +41,6 @@ export default async function BrandHome({
         {access.staff && viewer.isAdmin && <a href={newProject} className="bw-button bw-primary" data-studio-prep-link>{b.studioPrep.cta}</a>}
       </div>
       {access.staff && choice && <StaffNotice b={b} manageHref={viewer.isAdmin ? adminOrganizationHref(choice.id, brandHost) : null} />}
-      {choice && studioOpen && (
-        <CampaignMoatShowcase
-          locale={locale === "en" ? "en" : "ko"}
-          organizationId={choice.id}
-          studioOpen={studioOpen}
-          canRequest={access.canRequest}
-          membersOpen={sectionVisibility(choice).members}
-          settingsOpen={sectionVisibility(choice).settings}
-        />
-      )}
       {workspace.projects.length === 0 && !choice && (
         <ServiceGuide kind="campaign" b={b} studioAllowed={studioOpen} showOther={!access.projectScopedOnly && studioOpen} />
       )}
@@ -106,6 +96,16 @@ export default async function BrandHome({
             )
           ) : (
             <CampaignList projects={workspace.projects} b={b} locale={locale}/>
+          )}
+          {choice && studioOpen && (
+            <CampaignMoatShowcase
+              locale={locale === "en" ? "en" : "ko"}
+              organizationId={choice.id}
+              studioOpen={studioOpen}
+              canRequest={access.canRequest}
+              membersOpen={sectionVisibility(choice).members}
+              settingsOpen={sectionVisibility(choice).settings}
+            />
           )}
           <details className="bw-service-disclosure" data-brand-service-disclosure>
             <summary>{b.dashboard.serviceGuideToggle}</summary>
