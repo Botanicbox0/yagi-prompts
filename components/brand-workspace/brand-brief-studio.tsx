@@ -2921,9 +2921,9 @@ export function BrandBriefStudio({
   }
 
   function handleLoadDemoAssets() {
-    const s1 = activeRefWorkflow.slots[0]?.defaultThumb ?? studioVisuals.sceneThumbs[0];
-    const s2 = activeRefWorkflow.slots[1]?.defaultThumb ?? studioVisuals.sceneThumbs[1];
-    const demoMain = activeEasyModelRow.verifiedSampleImage;
+    const s1 = activeAestheticPreset.slotDefaults[1] ?? "/reel/landing/look-knit.webp";
+    const s2 = activeAestheticPreset.slotDefaults[2] ?? "/reel/landing/cut-scent.webp";
+    const demoMain = activeAestheticPreset.coverImage;
     setCustomSlotThumbs({ 1: s1, 2: s2 });
     setCustomSlotNames({
       1: isKo ? "샘플 인물·배경 컷" : "Sample Subject/Scene",
@@ -2933,8 +2933,8 @@ export function BrandBriefStudio({
       {
         id: `demo-cut-1-${Date.now()}`,
         src: demoMain,
-        label: isKo ? `${shortImageModelName} 샘플 화보` : `${shortImageModelName} Sample`,
-        meta: `${shortImageModelName} · 2K`,
+        label: isKo ? `${activeAestheticPreset.titleKo} 샘플 화보` : `${activeAestheticPreset.titleEn} Sample`,
+        meta: `${shortImageModelName} · 4:5 · 2K`,
       },
       {
         id: `demo-cut-2-${Date.now()}`,
@@ -2952,11 +2952,6 @@ export function BrandBriefStudio({
     setCanvasCut(demoCuts[0]!);
     setSessionCuts(demoCuts);
     setGuideProgress((p) => ({ ...p, refs: true, image: true }));
-    setStatusMessage(
-      isKo
-        ? "테스트용 샘플 에셋을 불러왔습니다. 언제든 각 슬롯의 × 버튼이나 '전체 비우기'로 즉시 비울 수 있습니다."
-        : "Loaded sample assets for testing. Click × or 'Clear all' anytime to empty.",
-    );
   }
 
   function handleMoodboardMultiUpload(e: ChangeEvent<HTMLInputElement>) {
@@ -3077,15 +3072,29 @@ export function BrandBriefStudio({
     );
   }
 
-  const isBoardSurface = studioSurfaceMode !== "track_audio";
-  const studioTab: "dual" | "image" | "video" | "audio" =
-    !isBoardSurface
-      ? "audio"
-      : splitPaneMode === "image_only"
-        ? "image"
-        : splitPaneMode === "video_only"
-          ? "video"
-          : "dual";
+  const [visibleStudioTab, setVisibleStudioTab] = useState<
+    "image" | "video" | "audio"
+  >(() => {
+    if (
+      initialTrack === "video" ||
+      initialTrack === "video_upscale" ||
+      initialTrack === "track_video_upscale" ||
+      initialMode === "track_video_upscale"
+    ) {
+      return "video";
+    }
+    if (
+      initialTrack === "audio" ||
+      initialTrack === "track_audio" ||
+      initialMode === "track_audio"
+    ) {
+      return "audio";
+    }
+    return "image";
+  });
+
+  const isBoardSurface = visibleStudioTab !== "audio";
+  const studioTab = visibleStudioTab;
   const usedRefSlots = ([1, 2, 3, 4] as const).filter((n) =>
     briefText.includes(isKo ? `${n}번 이미지` : `Image ${n}`),
   );
@@ -3097,7 +3106,7 @@ export function BrandBriefStudio({
   const shortImageModelName =
     (isKo ? activeImageModel.nameKo : activeImageModel.nameEn).split("·")[0]?.trim() ??
     activeImageModel.id;
-  const shellBusyLabel = isKo ? "요청서 만드는 중…" : "Preparing…";
+  const shellBusyLabel = isKo ? "생성 중…" : "Generating…";
   const shellPaintingRef = useRef(false);
   const shellDragStartRef = useRef<{ x: number; y: number } | null>(null);
   const shellDragEndRef = useRef<{ x: number; y: number } | null>(null);
@@ -3107,16 +3116,17 @@ export function BrandBriefStudio({
     Array<{ xPct: number; yPct: number; rPx: number; opacity: number; mode: "erase" | "brush" }>
   >([]);
 
-  function selectStudioTab(tab: typeof studioTab) {
+  function selectStudioTab(tab: "image" | "video" | "audio") {
+    setVisibleStudioTab(tab);
+    setShowFullModelGuide(false);
+    setShowAestheticPicker(false);
     if (tab === "audio") {
       setStudioSurfaceMode("track_audio");
       handleSelectCoreTrack("audio");
       return;
     }
     setStudioSurfaceMode("split_workbench");
-    setSplitPaneMode(
-      tab === "image" ? "image_only" : tab === "video" ? "video_only" : "dual_split",
-    );
+    setSplitPaneMode(tab === "image" ? "image_only" : "video_only");
   }
 
   function handleShellRefClick(slot: StudioReferenceSlotNumber) {
@@ -3201,8 +3211,8 @@ export function BrandBriefStudio({
     if (!sourceCut) {
       setStatusMessage(
         isKo
-          ? "먼저 캔버스에 이미지를 드래그해 놓거나 새 화보를 만든 뒤 영상 보드로 보내 주세요."
-          : "Drop an image onto the canvas or generate a still first, then send it to the video board.",
+          ? "먼저 캔버스에 이미지를 놓거나 새 화보를 만든 뒤 영상으로 연결해 주세요."
+          : "Drop an image or generate a still first, then send it to Video.",
       );
       return;
     }
@@ -3215,6 +3225,7 @@ export function BrandBriefStudio({
     setVideoBoardFrame({ src: sourceCut.src, label: sourceCut.label });
     setBriefText(imageChat);
     setShellFirstFrameLinked(true);
+    setVisibleStudioTab("video");
     setGuideProgress((p) => ({ ...p, refs: true, image: true, video: true }));
   }
 
@@ -3423,10 +3434,9 @@ export function BrandBriefStudio({
           >
             {(
               [
-                { id: "image", ko: "1. 이미지 제작", en: "1. Image" },
-                { id: "video", ko: "2. 영상 제작", en: "2. Video" },
-                { id: "audio", ko: "3. 사운드", en: "3. Sound" },
-                { id: "dual", ko: "이미지+영상 나란히", en: "Side-by-side" },
+                { id: "image", ko: "이미지", en: "Image" },
+                { id: "video", ko: "영상", en: "Video" },
+                { id: "audio", ko: "사운드", en: "Sound" },
               ] as const
             ).map((tab) => (
               <button
@@ -3451,23 +3461,22 @@ export function BrandBriefStudio({
                   className="tws-lock-btn"
                   data-studio-aesthetic-trigger
                   aria-expanded={showAestheticPicker}
-                  onClick={() => setShowAestheticPicker((p) => !p)}
+                  onClick={() => {
+                    setShowFullModelGuide(false);
+                    setShowAestheticPicker((p) => !p);
+                  }}
                 >
-                  <img
-                    src={activeAestheticThumb}
-                    alt=""
-                    aria-hidden="true"
-                    className="tws-lock-thumb"
-                  />
-                  <span className="tws-lock-text">
-                    {isKo
-                      ? `미감 고정: ${activeAestheticLabel}`
-                      : `Aesthetic: ${activeAestheticLabel}`}
-                  </span>
                   <span className="tws-lock-swatches" aria-hidden="true">
                     {activeAestheticDna.paletteHex.map((hex) => (
                       <i key={hex} style={{ backgroundColor: hex }} />
                     ))}
+                  </span>
+                  <span className="tws-lock-text">
+                    {isAestheticLockEnabled
+                      ? activeAestheticLabel
+                      : isKo
+                        ? "무드보드 선택"
+                        : "Moodboard"}
                   </span>
                   <span className="tws-lock-action">
                     {showAestheticPicker
@@ -3475,16 +3484,16 @@ export function BrandBriefStudio({
                         ? "닫기"
                         : "Close"
                       : isKo
-                        ? "미감 바꾸기"
-                        : "Change"}
+                        ? "무드보드 ▾"
+                        : "Moodboard ▾"}
                   </span>
                 </button>
                 {isAestheticLockEnabled ? (
                   <button
                     type="button"
                     className="tws-lock-clear"
-                    title={isKo ? "미감 프리셋 해제 (자유 작업)" : "Unlock aesthetic preset"}
-                    aria-label={isKo ? "미감 프리셋 해제" : "Unlock aesthetic preset"}
+                    title={isKo ? "무드보드 해제 (자유 작업)" : "Unlock moodboard"}
+                    aria-label={isKo ? "무드보드 해제" : "Unlock moodboard"}
                     onClick={() => {
                       setIsAestheticLockEnabled(false);
                       setIsColorRefPinned(false);
@@ -3498,58 +3507,42 @@ export function BrandBriefStudio({
             ) : (
               <span className="tws-lock">
                 {isKo
-                  ? `${organizationName || "우리"} 브랜드 색감 적용 중`
-                  : `${organizationName || "Brand"} look applied`}
+                  ? `${organizationName || "우리"} 브랜드 톤`
+                  : `${organizationName || "Brand"} tone`}
               </span>
             )}
-            {isBoardSurface ? (
-              <>
-                <button
-                  type="button"
-                  className="tws-btn tws-btn-sm"
-                  data-studio-model-guide-trigger
-                  aria-expanded={showFullModelGuide}
-                  onClick={() => setShowFullModelGuide((p) => !p)}
-                >
-                  {isKo ? "모델별 특징 · 실증 비교" : "Model traits & proof"}
-                </button>
-                {filledSlotNumbers.length > 0 || canvasCut || sessionCuts.length > 0 || videoBoardFrame || videoEndFrame ? (
-                  <button
-                    type="button"
-                    className="tws-btn tws-btn-sm tws-btn-quiet"
-                    onClick={() => {
-                      setCustomSlotThumbs({});
-                      setCustomSlotNames({});
-                      setPinnedSlotNumbers({ 1: false, 2: false, 3: false, 4: false });
-                      setSlotRoles({ 1: "free", 2: "free", 3: "free", 4: "free" });
-                      setCanvasCut(null);
-                      setSessionCuts([]);
-                      setSelectedBoardCutIds([]);
-                      setVideoBoardFrame(null);
-                      setVideoEndFrame(null);
-                      setShellFirstFrameLinked(false);
-                      setEdgeEraseStrokes([]);
-                      setBriefText("");
-                      setVideoPromptText("");
-                      setStatusMessage(
-                        isKo
-                          ? "작업 보드의 모든 슬롯과 캔버스를 초기 상태로 비웠습니다."
-                          : "Reset all reference slots and canvases to empty.",
-                      );
-                    }}
-                  >
-                    {isKo ? "보드 초기화 ×" : "Reset board ×"}
-                  </button>
-                ) : (
-                  <button
-                    type="button"
-                    className="tws-btn tws-btn-sm tws-btn-quiet"
-                    onClick={handleLoadDemoAssets}
-                  >
-                    {isKo ? "샘플 에셋 불러오기" : "Load sample assets"}
-                  </button>
-                )}
-              </>
+            {isBoardSurface &&
+            (filledSlotNumbers.length > 0 ||
+              canvasCut ||
+              sessionCuts.length > 0 ||
+              videoBoardFrame ||
+              videoEndFrame) ? (
+              <button
+                type="button"
+                className="tws-btn tws-btn-sm tws-btn-quiet"
+                onClick={() => {
+                  setCustomSlotThumbs({});
+                  setCustomSlotNames({});
+                  setPinnedSlotNumbers({ 1: false, 2: false, 3: false, 4: false });
+                  setSlotRoles({ 1: "free", 2: "free", 3: "free", 4: "free" });
+                  setCanvasCut(null);
+                  setSessionCuts([]);
+                  setSelectedBoardCutIds([]);
+                  setVideoBoardFrame(null);
+                  setVideoEndFrame(null);
+                  setShellFirstFrameLinked(false);
+                  setEdgeEraseStrokes([]);
+                  setBriefText("");
+                  setVideoPromptText("");
+                  setStatusMessage(
+                    isKo
+                      ? "슬롯과 캔버스를 비웠습니다."
+                      : "Cleared all slots and canvas.",
+                  );
+                }}
+              >
+                {isKo ? "초기화" : "Reset"}
+              </button>
             ) : null}
           </div>
         </header>
@@ -3590,74 +3583,77 @@ export function BrandBriefStudio({
         </div>
 
         {/* ===================================================================
-            MOODBOARD & AESTHETIC STYLE PICKER (`[ TWINGS 프리셋 | 우리 브랜드 무드보드 (최대 20장) ]`)
-            Fixes context-less image models by locking reverse-engineered visual DNA before generation.
+            EDITORIAL 3-CUT MOODBOARD CONTACT SHEET (`[ 에디토리얼 무드 | 내 레퍼런스 보드 ]`)
            =================================================================== */}
         {isBoardSurface && showAestheticPicker ? (
           <section
             className="tws-moodboard-drawer"
             data-studio-aesthetic-picker
-            aria-label={isKo ? "미감 프리셋 및 브랜드 무드보드 설정" : "Aesthetic presets & custom moodboard"}
+            aria-label={isKo ? "브랜드 무드보드 설정" : "Brand moodboard"}
           >
             <div className="tws-moodboard-top">
               <div className="tws-moodboard-title-group">
                 <strong>
-                  {isKo
-                    ? "이미지 미감 프리셋 · 무드보드 고정"
-                    : "Lock Image Aesthetic Preset or Moodboard"}
+                  {isKo ? "브랜드 무드보드" : "Brand Moodboard"}
                 </strong>
                 <span>
                   {isKo
-                    ? "맥락이 없는 이미지 모델도 일관된 톤을 내도록, 촬영 전 미감을 프리셋처럼 장착하고 모델별 최적 프롬프트로 자동 변환합니다."
-                    : "Lock a curated aesthetic preset or up to 20 project moodboard images before generating."}
+                    ? "조명·색감·표면 질감을 맞춰 어떤 모델에서도 일관된 화보 톤을 유지합니다."
+                    : "Align lighting, palette, and surface texture across every image and video."}
                 </span>
               </div>
-              <div
-                className="tws-seg"
-                role="tablist"
-                aria-label={isKo ? "미감 설정 방식" : "Aesthetic mode"}
-                data-aesthetic-mode-toggle
-              >
+              <div className="tws-moodboard-top-right">
+                <div
+                  className="tws-seg"
+                  role="tablist"
+                  aria-label={isKo ? "무드보드 방식" : "Moodboard mode"}
+                  data-aesthetic-mode-toggle
+                >
+                  <button
+                    type="button"
+                    role="tab"
+                    aria-selected={aestheticSourceMode === "twings_preset"}
+                    data-aesthetic-mode-btn="twings_preset"
+                    onClick={() => setAestheticSourceMode("twings_preset")}
+                  >
+                    {isKo ? "에디토리얼 무드 (6)" : "Editorial Moods (6)"}
+                  </button>
+                  <button
+                    type="button"
+                    role="tab"
+                    aria-selected={aestheticSourceMode === "custom_moodboard"}
+                    data-aesthetic-mode-btn="custom_moodboard"
+                    onClick={() => setAestheticSourceMode("custom_moodboard")}
+                  >
+                    {isKo
+                      ? `내 레퍼런스 보드 (${customMoodboardItems.length}/${MAX_BRAND_MOODBOARD_IMAGES})`
+                      : `My Reference Board (${customMoodboardItems.length}/${MAX_BRAND_MOODBOARD_IMAGES})`}
+                  </button>
+                </div>
                 <button
                   type="button"
-                  role="tab"
-                  aria-selected={aestheticSourceMode === "twings_preset"}
-                  data-aesthetic-mode-btn="twings_preset"
-                  onClick={() => setAestheticSourceMode("twings_preset")}
+                  className="tws-btn tws-btn-sm tws-btn-quiet"
+                  onClick={() => setShowAestheticPicker(false)}
                 >
-                  {isKo ? "TWINGS 프리셋 (6종)" : "TWINGS Presets (6)"}
-                </button>
-                <button
-                  type="button"
-                  role="tab"
-                  aria-selected={aestheticSourceMode === "custom_moodboard"}
-                  data-aesthetic-mode-btn="custom_moodboard"
-                  onClick={() => setAestheticSourceMode("custom_moodboard")}
-                >
-                  {isKo
-                    ? `우리 브랜드 무드보드 (${customMoodboardItems.length}/${MAX_BRAND_MOODBOARD_IMAGES}장)`
-                    : `Custom Moodboard (${customMoodboardItems.length}/${MAX_BRAND_MOODBOARD_IMAGES})`}
+                  {isKo ? "닫기" : "Close"}
                 </button>
               </div>
-              <button
-                type="button"
-                className="tws-btn tws-btn-sm tws-btn-quiet"
-                onClick={() => setShowAestheticPicker(false)}
-              >
-                {isKo ? "접기" : "Collapse"}
-              </button>
             </div>
 
             {aestheticSourceMode === "twings_preset" ? (
               <div
                 className="tws-preset-grid"
                 role="radiogroup"
-                aria-label={isKo ? "TWINGS 미감 프리셋" : "TWINGS aesthetic presets"}
+                aria-label={isKo ? "에디토리얼 무드 선택" : "Editorial mood presets"}
               >
                 {BRAND_AESTHETIC_PRESETS.map((preset) => {
                   const isSelected =
+                    isAestheticLockEnabled &&
                     aestheticSourceMode === "twings_preset" &&
                     activeAestheticPresetId === preset.id;
+                  const cutMain = preset.moodboardThumbs[0] ?? preset.coverImage;
+                  const cutTopRight = preset.moodboardThumbs[1] ?? preset.coverImage;
+                  const cutBottomRight = preset.moodboardThumbs[2] ?? preset.coverImage;
                   return (
                     <button
                       key={preset.id}
@@ -3666,46 +3662,41 @@ export function BrandBriefStudio({
                       aria-checked={isSelected}
                       className="tws-preset-card"
                       data-aesthetic-preset-card={preset.id}
-                      onClick={() => handleSelectAestheticPreset(preset.id)}
+                      onClick={() => {
+                        handleSelectAestheticPreset(preset.id);
+                        setShowAestheticPicker(false);
+                      }}
                     >
-                      <div className="tws-preset-media">
-                        <img
-                          src={preset.coverImage}
-                          alt={isKo ? preset.titleKo : preset.titleEn}
-                        />
-                        <span className="tws-preset-badge">
-                          {isSelected
-                            ? isKo
-                              ? "미감 장착됨"
-                              : "Locked"
-                            : isKo
-                              ? preset.badgeKo
-                              : preset.badgeEn}
-                        </span>
-                        <div className="tws-preset-overlay">
-                          <strong className="tws-preset-overlay-title">
-                            {preset.cardOverlayTitle}
-                          </strong>
+                      <div className="tws-preset-collage">
+                        <div className="tws-preset-collage-main">
+                          <img
+                            src={cutMain}
+                            alt={isKo ? preset.titleKo : preset.titleEn}
+                            loading="lazy"
+                          />
+                        </div>
+                        <div className="tws-preset-collage-side">
+                          <div className="tws-preset-collage-sub">
+                            <img src={cutTopRight} alt="" loading="lazy" />
+                          </div>
+                          <div className="tws-preset-collage-sub">
+                            <img src={cutBottomRight} alt="" loading="lazy" />
+                          </div>
+                        </div>
+                      </div>
+                      <div className="tws-preset-meta">
+                        <div className="tws-preset-meta-head">
+                          <div className="tws-preset-title-wrap">
+                            <strong>{isKo ? preset.titleKo : preset.titleEn}</strong>
+                            <span className="tws-preset-cat">
+                              {isKo ? preset.badgeKo : preset.badgeEn}
+                            </span>
+                          </div>
                           <span className="tws-preset-swatches" aria-hidden="true">
                             {preset.dna.paletteHex.map((hex) => (
                               <i key={hex} style={{ backgroundColor: hex }} />
                             ))}
                           </span>
-                        </div>
-                      </div>
-                      <div className="tws-preset-meta">
-                        <div className="tws-preset-meta-head">
-                          <strong>{isKo ? preset.titleKo : preset.titleEn}</strong>
-                          <small>
-                            {isKo ? "추천:" : "Best:"}{" "}
-                            {preset.recommendedModelId === "seedream_5_0_pro"
-                              ? "Seedream 5.0 Pro"
-                              : preset.recommendedModelId === "gpt_image_2_6"
-                                ? "GPT Image 2.6"
-                                : preset.recommendedModelId === "nano_banana_2_1"
-                                  ? "Nano Banana 2.1"
-                                  : "Nano Banana Pro"}
-                          </small>
                         </div>
                         <p>{isKo ? preset.summaryKo : preset.summaryEn}</p>
                       </div>
@@ -3727,7 +3718,7 @@ export function BrandBriefStudio({
               >
                 <div className="tws-custom-moodboard-bar">
                   <label className="tws-custom-moodboard-title">
-                    <span>{isKo ? "무드보드 이름" : "Moodboard name"}</span>
+                    <span>{isKo ? "보드 이름" : "Board name"}</span>
                     <input
                       type="text"
                       value={customMoodboardTitle}
@@ -3741,18 +3732,35 @@ export function BrandBriefStudio({
                       data-moodboard-count-badge
                     >
                       {isKo
-                        ? `${customMoodboardItems.length} / 최대 ${MAX_BRAND_MOODBOARD_IMAGES}장`
-                        : `${customMoodboardItems.length} / Max ${MAX_BRAND_MOODBOARD_IMAGES} images`}
+                        ? `${customMoodboardItems.length} / ${MAX_BRAND_MOODBOARD_IMAGES}장`
+                        : `${customMoodboardItems.length} / ${MAX_BRAND_MOODBOARD_IMAGES}`}
                     </span>
-                    <label
+                    {customMoodboardItems.length > 0 ? (
+                      <button
+                        type="button"
+                        className="tws-btn tws-btn-sm tws-btn-quiet"
+                        onClick={handleClearCustomMoodboard}
+                      >
+                        {isKo ? "전체 비우기" : "Clear all"}
+                      </button>
+                    ) : null}
+                    <button
+                      type="button"
                       className="tws-btn tws-btn-sm"
+                      disabled={
+                        customMoodboardItems.length >= MAX_BRAND_MOODBOARD_IMAGES
+                      }
+                      onClick={handleAddSampleMoodboardPhoto}
+                    >
+                      {isKo ? "샘플 추가" : "Add sample"}
+                    </button>
+                    <label
+                      className="tws-btn tws-btn-primary tws-btn-sm"
                       aria-disabled={
                         customMoodboardItems.length >= MAX_BRAND_MOODBOARD_IMAGES
                       }
                     >
-                      {isKo
-                        ? `+ 사진 드래그 · 추가 (최대 ${MAX_BRAND_MOODBOARD_IMAGES}장)`
-                        : `+ Drag or add photos (Max ${MAX_BRAND_MOODBOARD_IMAGES})`}
+                      {isKo ? "+ 사진 올리기" : "+ Upload photos"}
                       <input
                         type="file"
                         accept="image/*"
@@ -3770,25 +3778,6 @@ export function BrandBriefStudio({
                         }}
                       />
                     </label>
-                    <button
-                      type="button"
-                      className="tws-btn tws-btn-sm"
-                      disabled={
-                        customMoodboardItems.length >= MAX_BRAND_MOODBOARD_IMAGES
-                      }
-                      onClick={handleAddSampleMoodboardPhoto}
-                    >
-                      {isKo ? "+ 샘플 추가" : "+ Add sample"}
-                    </button>
-                    {customMoodboardItems.length > 0 ? (
-                      <button
-                        type="button"
-                        className="tws-btn tws-btn-sm tws-btn-quiet"
-                        onClick={handleClearCustomMoodboard}
-                      >
-                        {isKo ? "전체 비우기" : "Clear all"}
-                      </button>
-                    ) : null}
                   </div>
                 </div>
 
@@ -3796,8 +3785,8 @@ export function BrandBriefStudio({
                   <label className="tws-empty-dropzone tws-empty-dropzone-compact">
                     <strong>
                       {isKo
-                        ? "무드보드에 넣을 레퍼런스 사진을 여기에 드래그해서 놓으세요 (최대 20장)"
-                        : "Drag and drop up to 20 moodboard reference photos here"}
+                        ? "레퍼런스 사진을 여기에 드래그해서 놓으세요 (최대 20장)"
+                        : "Drag and drop up to 20 reference photos here"}
                     </strong>
                     <span>
                       {isKo
@@ -3835,61 +3824,33 @@ export function BrandBriefStudio({
                         >
                           ×
                         </button>
-                        <span className="tws-moodboard-item-cap">
-                          {isKo ? item.labelKo : item.labelEn}
-                        </span>
                       </div>
                     ))}
                   </div>
                 )}
               </div>
             )}
-
-            <div
-              className="tws-moodboard-dna-bar"
-              data-model-optimized-prompt-preview
-            >
-              <div className="tws-moodboard-dna-summary">
-                <span className="tws-moodboard-dna-kicker">
-                  {isKo
-                    ? `역설계 미감 고정 · ${shortImageModelName} 자동 최적화 (${compiledModelAestheticPreview.structureBadge})`
-                    : `Reverse-Engineered DNA · Optimized for ${shortImageModelName}`}
-                </span>
-                <p>{compiledModelAestheticPreview.compiledPrompt}</p>
-              </div>
-              <button
-                type="button"
-                className="tws-btn tws-btn-sm"
-                onClick={handleApplyModelOptimizedAestheticPrompt}
-              >
-                {isKo
-                  ? "이 최적화 문구를 요청창에 넣기"
-                  : "Insert optimized prompt"}
-              </button>
-            </div>
           </section>
         ) : null}
 
         {/* ===================================================================
-            USER-FRIENDLY 5-MODEL COMPARISON & EMPIRICAL VERIFICATION DRAWER
+            COMPACT 5-MODEL SELECTOR POPOVER (`[data-studio-model-comparison-drawer]`)
            =================================================================== */}
         {isBoardSurface && showFullModelGuide ? (
           <section
             className="tws-model-guide-drawer"
             data-studio-model-comparison-drawer
-            aria-label={isKo ? "이미지 모델별 특징 및 실증 비교" : "Image model comparison & empirical proof"}
+            aria-label={isKo ? "이미지 모델 선택" : "Select image model"}
           >
             <div className="tws-model-guide-head">
               <div>
                 <strong>
-                  {isKo
-                    ? "어떤 이미지 모델을 고르면 좋을까요? (역설계 프롬프트 실증 비교)"
-                    : "Which image model should you pick? (Empirical prompt optimization guide)"}
+                  {isKo ? "이미지 모델 선택" : "Select Image Model"}
                 </strong>
                 <span>
                   {isKo
-                    ? "같은 미감 프리셋이라도 모델마다 가장 잘 알아듣는 프롬프트 구조가 다릅니다. 원하는 강점에 맞춰 모델을 골라 보세요."
-                    : "Each model excels at a distinct visual task and automatically receives its optimal prompt structure."}
+                    ? "작업 목적에 맞는 모델을 고르면 해당 모델에 최적화된 구조로 화보를 생성합니다."
+                    : "Choose the model that fits your shot; prompts adapt automatically."}
                 </span>
               </div>
               <button
@@ -3906,9 +3867,6 @@ export function BrandBriefStudio({
               aria-label={isKo ? "이미지 모델 선택" : "Image model selection"}
             >
               {MODEL_EASY_COMPARISON_MATRIX.map((row) => {
-                const fullSpec =
-                  BRAND_STUDIO_IMAGE_MODELS.find((m) => m.id === row.modelId) ??
-                  BRAND_STUDIO_IMAGE_MODELS[0]!;
                 const isSelected = selectedImageModelId === row.modelId;
                 return (
                   <button
@@ -3918,7 +3876,10 @@ export function BrandBriefStudio({
                     aria-checked={isSelected}
                     className="tws-model-guide-card"
                     data-model-comparison-card={row.modelId}
-                    onClick={() => setSelectedImageModelId(row.modelId)}
+                    onClick={() => {
+                      setSelectedImageModelId(row.modelId);
+                      setShowFullModelGuide(false);
+                    }}
                   >
                     <div className="tws-model-guide-thumb">
                       <img
@@ -3926,27 +3887,19 @@ export function BrandBriefStudio({
                         alt={row.shortName}
                         loading="lazy"
                       />
-                      <span className="tws-model-guide-badge">
-                        {isKo ? row.bestBadgeKo : row.bestBadgeEn}
-                      </span>
                     </div>
                     <div className="tws-model-guide-body">
                       <div className="tws-model-guide-title">
                         <strong>{row.shortName}</strong>
-                        <small>
-                          {isKo ? row.speedBadgeKo : row.speedBadgeEn} · 5
-                          {isKo ? "장 " : " cuts "}₩
-                          {fullSpec.priceKrwPer5Set.toLocaleString()}
-                        </small>
+                        <span className="tws-model-guide-tag">
+                          {isKo
+                            ? row.bestBadgeKo.split("·")[0]?.trim()
+                            : row.bestBadgeEn.split("·")[0]?.trim()}
+                        </span>
                       </div>
                       <p className="tws-model-guide-when">
                         {isKo ? row.oneLineWhenKo : row.oneLineWhenEn}
                       </p>
-                      <span className="tws-model-guide-formula">
-                        {isKo
-                          ? `최적화: ${row.promptStructureLabelKo}`
-                          : `Format: ${row.promptStructureLabelEn}`}
-                      </span>
                     </div>
                   </button>
                 );
@@ -3959,532 +3912,162 @@ export function BrandBriefStudio({
           {isBoardSurface ? (
             <div
               className="tws-boards"
-              data-cols={studioTab === "dual" ? "2" : "1"}
+              data-cols="1"
               data-canvas-dual-bottom-chat-dock
             >
-              {studioTab !== "video" ? (
+              {studioTab === "image" ? (
                 <section
                   className="tws-board"
-                  aria-label={isKo ? "이미지 보드" : "Image board"}
+                  aria-label={isKo ? "이미지 스튜디오" : "Image studio"}
                   data-left-spatial-image-board
                 >
-                  <div className="tws-board-head">
-                    <div className="tws-board-title-wrap">
-                      <span className="tws-board-title">
-                        {isKo ? "이미지 보드" : "Image board"}
-                        <small>{shortImageModelName} · 2K</small>
-                      </span>
-                      <button
-                        type="button"
-                        className="tws-board-aesthetic-pill"
-                        data-image-board-aesthetic-pill
-                        aria-expanded={showAestheticPicker}
-                        onClick={() => setShowAestheticPicker((p) => !p)}
-                        title={
-                          isKo
-                            ? "이미지 만들기 전 프로젝트 미감 프리셋 또는 최대 20장 무드보드를 설정합니다"
-                            : "Lock aesthetic preset or 20-image moodboard before generating"
-                        }
-                      >
-                        <img src={activeAestheticThumb} alt="" aria-hidden="true" />
-                        <span>
-                          {isKo
-                            ? `미감: ${activeAestheticLabel}`
-                            : `Mood: ${activeAestheticLabel}`}
-                        </span>
-                        <em>
-                          {showAestheticPicker
-                            ? isKo
-                              ? "접기"
-                              : "Hide"
-                            : isKo
-                              ? "무드보드"
-                              : "Moodboard"}
-                        </em>
-                      </button>
-                    </div>
-                    <div
-                      className="tws-seg"
-                      role="group"
-                      aria-label={isKo ? "작업 방식" : "Work mode"}
-                    >
-                      <button
-                        type="button"
-                        aria-pressed={imageSubMode !== "micro_region_edit"}
-                        onClick={() => {
-                          setImageSubMode("multi_ref_generate");
-                          setOpluxEditTool("rect_box");
-                        }}
-                      >
-                        {isKo ? "새 화보 만들기" : "Generate still"}
-                      </button>
-                      <button
-                        type="button"
-                        aria-pressed={imageSubMode === "micro_region_edit"}
-                        onClick={() => {
-                          setImageSubMode("micro_region_edit");
-                          setOpluxEditTool("rect_box");
-                        }}
-                      >
-                        {isKo ? "부분 수정 (네모·지우개)" : "Region edit"}
-                      </button>
-                    </div>
-                  </div>
-
-                  <div className="tws-toolrow" data-quick-aesthetic-strip>
-                    {imageSubMode !== "micro_region_edit" ? (
-                      <>
-                        <span className="tws-toolrow-label">
-                          {isKo ? "미감 프리셋" : "Aesthetic"}
-                        </span>
-                        {BRAND_AESTHETIC_PRESETS.map((preset) => {
-                          const isSelected =
-                            isAestheticLockEnabled &&
-                            aestheticSourceMode === "twings_preset" &&
-                            activeAestheticPresetId === preset.id;
-                          return (
-                            <button
-                              key={preset.id}
-                              type="button"
-                              role="radio"
-                              aria-checked={isSelected}
-                              className="tws-preset-chip"
-                              data-quick-preset-chip={preset.id}
-                              onClick={() => handleSelectAestheticPreset(preset.id)}
-                            >
-                              <img src={preset.coverImage} alt="" aria-hidden="true" />
-                              <span>{isKo ? preset.titleKo : preset.titleEn}</span>
-                            </button>
-                          );
-                        })}
-                        {isAestheticLockEnabled ? (
-                          <button
-                            type="button"
-                            className="tws-btn tws-btn-sm tws-btn-quiet"
-                            onClick={() => {
-                              setIsAestheticLockEnabled(false);
-                              setIsColorRefPinned(false);
-                              setIsTextureRefPinned(false);
-                            }}
-                          >
-                            {isKo ? "선택 해제 ×" : "Clear preset ×"}
-                          </button>
-                        ) : null}
-                        <button
-                          type="button"
-                          className="tws-btn tws-btn-sm tws-btn-quiet"
-                          onClick={() => {
-                            setIsAestheticLockEnabled(true);
-                            setAestheticSourceMode("custom_moodboard");
-                            setShowAestheticPicker(true);
-                          }}
-                        >
-                          {isKo
-                            ? `+ 내 무드보드 (${customMoodboardItems.length}/${MAX_BRAND_MOODBOARD_IMAGES}장)`
-                            : `+ My Moodboard (${customMoodboardItems.length}/${MAX_BRAND_MOODBOARD_IMAGES})`}
-                        </button>
-                      </>
-                    ) : (
-                      <>
-                        <div
-                          className="tws-seg"
-                          role="group"
-                          aria-label={isKo ? "편집 도구" : "Edit tools"}
-                        >
-                          {(
-                            [
-                              {
-                                id: "rect_box",
-                                key: "M",
-                                ko: "네모 선택",
-                                en: "Box",
-                                tipKo: "고칠 부분을 네모로 지정",
-                                tipEn: "Box the area to fix",
-                              },
-                              {
-                                id: "edge_erase",
-                                key: "E",
-                                ko: "가장자리 지우개",
-                                en: "Edge eraser",
-                                tipKo: "수정한 부분의 경계를 원본과 섞기",
-                                tipEn: "Blend the patch edge into the original",
-                              },
-                              {
-                                id: "restore_brush",
-                                key: "R",
-                                ko: "복원 붓",
-                                en: "Restore",
-                                tipKo: "지운 부분을 수정본으로 되돌리기",
-                                tipEn: "Bring the patch back",
-                              },
-                            ] as const
-                          ).map((tool) => (
-                            <button
-                              key={tool.id}
-                              type="button"
-                              aria-pressed={opluxEditTool === tool.id}
-                              title={`${isKo ? tool.tipKo : tool.tipEn} (${tool.key})`}
-                              onClick={() => {
-                                setOpluxEditTool(tool.id);
-                                setImageSubMode("micro_region_edit");
-                              }}
-                            >
-                              {isKo ? tool.ko : tool.en}
-                              <span className="tws-kbd" aria-hidden="true">
-                                {tool.key}
+                  {/* SINGLE CALM GALLERY STAGE */}
+                  <div className="tws-stage-single">
+                    <div className="tws-artboard">
+                      {canvasCut || sessionCuts.length > 0 ? (
+                        <div className="tws-artboard-head">
+                          <div className="tws-artboard-title-group">
+                            <strong>
+                              {canvasViewMode === "board"
+                                ? isKo
+                                  ? `생성 컷 모아보기 (${sessionCuts.length}장)`
+                                  : `All Cuts (${sessionCuts.length})`
+                                : canvasCut
+                                  ? canvasCut.label
+                                  : ""}
+                            </strong>
+                            {canvasCut && canvasViewMode === "single" ? (
+                              <span>
+                                {imageSubMode === "micro_region_edit"
+                                  ? isKo
+                                    ? `선택 영역 ${selectionRect.wPct}×${selectionRect.hPct}% 수정`
+                                    : `Region ${selectionRect.wPct}×${selectionRect.hPct}%`
+                                  : canvasCut.meta}
                               </span>
-                            </button>
-                          ))}
-                        </div>
-                        {opluxEditTool === "rect_box" ? (
-                          <>
-                            <span className="tws-toolrow-label">
-                              {isKo ? "부위 바로 선택" : "Quick area"}
-                            </span>
-                            {MICRO_REGION_SELECTION_PRESETS.map((preset) => (
-                              <button
-                                key={preset.id}
-                                type="button"
-                                className="tws-chip"
-                                aria-pressed={
-                                  imageSubMode === "micro_region_edit" &&
-                                  activeRegionPresetId === preset.id
-                                }
-                                onClick={() => handleSelectRegionPreset(preset.id)}
+                            ) : null}
+                          </div>
+                          <div className="tws-artboard-actions">
+                            {canvasCut && canvasViewMode === "single" ? (
+                              <div
+                                className="tws-seg"
+                                role="group"
+                                aria-label={isKo ? "작업 방식" : "Work mode"}
                               >
-                                {(isKo ? preset.labelKo : preset.labelEn)
-                                  .split("·")[0]
-                                  ?.trim()}
+                                <button
+                                  type="button"
+                                  aria-pressed={imageSubMode !== "micro_region_edit"}
+                                  onClick={() => {
+                                    setImageSubMode("multi_ref_generate");
+                                    setOpluxEditTool("rect_box");
+                                  }}
+                                >
+                                  {isKo ? "원본 보기" : "View"}
+                                </button>
+                                <button
+                                  type="button"
+                                  aria-pressed={imageSubMode === "micro_region_edit"}
+                                  onClick={() => {
+                                    setImageSubMode("micro_region_edit");
+                                    setOpluxEditTool("rect_box");
+                                  }}
+                                >
+                                  {isKo ? "부분 수정 (영역 드래그)" : "Region edit"}
+                                </button>
+                              </div>
+                            ) : null}
+                            {sessionCuts.length > 1 ? (
+                              <div
+                                className="tws-seg"
+                                role="group"
+                                aria-label={isKo ? "보기 방식" : "View mode"}
+                              >
+                                <button
+                                  type="button"
+                                  aria-pressed={canvasViewMode === "single"}
+                                  onClick={() => setCanvasViewMode("single")}
+                                >
+                                  {isKo ? "1장 크게" : "Single"}
+                                </button>
+                                <button
+                                  type="button"
+                                  aria-pressed={canvasViewMode === "board"}
+                                  onClick={() => setCanvasViewMode("board")}
+                                >
+                                  {isKo ? `전체 (${sessionCuts.length})` : `Grid (${sessionCuts.length})`}
+                                </button>
+                              </div>
+                            ) : null}
+                            {canvasCut ? (
+                              <>
+                                <button
+                                  type="button"
+                                  className="tws-btn tws-btn-sm"
+                                  onClick={handleShellSendToVideo}
+                                >
+                                  {isKo ? "이 장면으로 영상 만들기 →" : "Make video from this →"}
+                                </button>
+                                <button
+                                  type="button"
+                                  className="tws-btn tws-btn-sm tws-btn-quiet"
+                                  data-clear-canvas-btn
+                                  onClick={handleClearCanvas}
+                                >
+                                  {isKo ? "비우기 ×" : "Clear ×"}
+                                </button>
+                              </>
+                            ) : null}
+                          </div>
+                        </div>
+                      ) : null}
+
+                      {canvasCut && imageSubMode === "micro_region_edit" ? (
+                        <div className="tws-region-toolbar">
+                          <div
+                            className="tws-seg"
+                            role="group"
+                            aria-label={isKo ? "편집 도구" : "Edit tools"}
+                          >
+                            {(
+                              [
+                                { id: "rect_box", key: "M", ko: "네모 영역", en: "Box" },
+                                { id: "edge_erase", key: "E", ko: "경계 지우개", en: "Blend edge" },
+                                { id: "restore_brush", key: "R", ko: "복원 붓", en: "Restore" },
+                              ] as const
+                            ).map((tool) => (
+                              <button
+                                key={tool.id}
+                                type="button"
+                                aria-pressed={opluxEditTool === tool.id}
+                                onClick={() => setOpluxEditTool(tool.id)}
+                              >
+                                {isKo ? tool.ko : tool.en}
+                                <span className="tws-kbd" aria-hidden="true">
+                                  {tool.key}
+                                </span>
                               </button>
                             ))}
-                          </>
-                        ) : (
-                          <>
+                          </div>
+                          {opluxEditTool !== "rect_box" ? (
                             <label className="tws-slider">
-                              {isKo ? "크기" : "Size"}
+                              {isKo ? "브러시 크기" : "Brush size"}
                               <input
                                 type="range"
                                 min={4}
                                 max={80}
                                 value={eraserBrushSize}
-                                onChange={(e) =>
-                                  setEraserBrushSize(Number(e.target.value))
-                                }
+                                onChange={(e) => setEraserBrushSize(Number(e.target.value))}
                               />
                               <output>{eraserBrushSize}px</output>
                             </label>
-                            <label className="tws-slider">
-                              {isKo ? "세기" : "Strength"}
-                              <input
-                                type="range"
-                                min={10}
-                                max={100}
-                                step={5}
-                                value={eraserOpacityPct}
-                                onChange={(e) =>
-                                  setEraserOpacityPct(Number(e.target.value))
-                                }
-                              />
-                              <output>{eraserOpacityPct}%</output>
-                            </label>
-                            <button
-                              type="button"
-                              className="tws-btn tws-btn-sm"
-                              disabled={edgeEraseStrokes.length === 0}
-                              onClick={() =>
-                                setEdgeEraseStrokes((p) => p.slice(0, -1))
-                              }
-                            >
-                              {isKo ? "되돌리기" : "Undo"}
-                            </button>
-                          </>
-                        )}
-                      </>
-                    )}
-                  </div>
-
-                  <div className="tws-stage">
-                    <div
-                      className="tws-rail"
-                      aria-label={isKo ? "참고 이미지" : "References"}
-                      data-drag-over={dragOverTarget === "rail-refs"}
-                      onDragOver={(e) => {
-                        e.preventDefault();
-                        setDragOverTarget("rail-refs");
-                      }}
-                      onDragLeave={() => setDragOverTarget(null)}
-                      onDrop={handleDropOnRefRail}
-                    >
-                      <div className="tws-rail-head">
-                        <span className="tws-rail-label">
-                          {isKo
-                            ? `참고 이미지 (${filledSlotNumbers.length}/4)`
-                            : `References (${filledSlotNumbers.length}/4)`}
-                        </span>
-                        {filledSlotNumbers.length > 0 ? (
-                          <button
-                            type="button"
-                            className="tws-rail-clear"
-                            data-clear-all-ref-slots
-                            onClick={handleClearAllRefSlots}
-                          >
-                            {isKo ? "전체 비우기" : "Clear all"}
-                          </button>
-                        ) : null}
-                      </div>
-                      {([1, 2, 3, 4] as const).map((slotNum) => {
-                        const slotSrc = customSlotThumbs[slotNum];
-                        const slotName =
-                          customSlotNames[slotNum] ??
-                          (isKo ? `${slotNum}번 이미지` : `Image ${slotNum}`);
-                        const used = usedRefSlots.includes(slotNum);
-                        const isPinned = pinnedSlotNumbers[slotNum];
-                        const isOver = dragOverTarget === `slot-${slotNum}`;
-
-                        if (!slotSrc) {
-                          return (
-                            <label
-                              key={slotNum}
-                              className="tws-thumb tws-thumb-empty"
-                              data-ref-slot-card={slotNum}
-                              data-ref-slot-empty="true"
-                              data-drag-over={isOver}
-                              onDragOver={(e) => {
-                                e.preventDefault();
-                                e.stopPropagation();
-                                setDragOverTarget(`slot-${slotNum}`);
-                              }}
-                              onDragLeave={() => setDragOverTarget(null)}
-                              onDrop={(e) => handleDropOnRefSlot(slotNum, e)}
-                              title={
-                                isKo
-                                  ? `${slotNum}번 슬롯에 이미지 파일을 드래그하거나 클릭해 넣으세요`
-                                  : `Drag an image file here or click to fill slot ${slotNum}`
-                              }
-                            >
-                              <span className="tws-slot-badge">
-                                {isKo ? `${slotNum}번 이미지` : `Image ${slotNum}`}
-                              </span>
-                              <span className="tws-empty-plus" aria-hidden="true">
-                                +
-                              </span>
-                              <span className="tws-empty-hint">
-                                {isKo ? "드래그 · 클릭" : "Drop / Click"}
-                              </span>
-                              <input
-                                type="file"
-                                accept="image/*"
-                                multiple
-                                onChange={(e) => {
-                                  const files = Array.from(e.target.files ?? []);
-                                  fillRefSlotsFromFiles(files, slotNum, false);
-                                  e.target.value = "";
-                                }}
-                              />
-                            </label>
-                          );
-                        }
-
-                        const slotRoleId = slotRoles[slotNum] ?? "free";
-                        const slotRoleSpec =
-                          SLOT_ROLE_OPTIONS.find((r) => r.id === slotRoleId) ??
-                          SLOT_ROLE_OPTIONS[0]!;
-
-                        return (
-                          <div
-                            key={slotNum}
-                            className="tws-thumb"
-                            data-ref-slot-card={slotNum}
-                            data-ref-slot-empty="false"
-                            data-slot-role={slotRoleId}
-                            data-on={used}
-                            data-pinned={isPinned}
-                            data-drag-over={isOver}
-                            draggable
-                            onDragStart={(e) =>
-                              handleInternalDragStart(e, {
-                                src: slotSrc,
-                                label: slotName,
-                                fromSlot: slotNum,
-                              })
-                            }
-                            onDragOver={(e) => {
-                              e.preventDefault();
-                              e.stopPropagation();
-                              setDragOverTarget(`slot-${slotNum}`);
-                            }}
-                            onDragLeave={() => setDragOverTarget(null)}
-                            onDrop={(e) => handleDropOnRefSlot(slotNum, e)}
-                          >
-                            <button
-                              type="button"
-                              className="tws-slot-pin"
-                              aria-pressed={isPinned}
-                              title={
-                                isKo
-                                  ? "이 슬롯 고정(Pin): 전체 비우기를 눌러도 유지됩니다"
-                                  : "Pin slot across clears and runs"
-                              }
-                              onClick={() => handleTogglePinSlot(slotNum)}
-                            >
-                              {isPinned
-                                ? isKo
-                                  ? `${slotNum}번 고정`
-                                  : `#${slotNum} Pin`
-                                : isKo
-                                  ? `${slotNum}번`
-                                  : `#${slotNum}`}
-                            </button>
-                            <button
-                              type="button"
-                              className="tws-slot-clear"
-                              data-clear-ref-slot={slotNum}
-                              aria-label={
-                                isKo ? `${slotNum}번 슬롯 비우기` : `Clear slot ${slotNum}`
-                              }
-                              title={isKo ? "이 슬롯 비우기 (×)" : "Clear this slot (×)"}
-                              onClick={() => handleClearRefSlot(slotNum)}
-                            >
-                              ×
-                            </button>
-                            <button
-                              type="button"
-                              className="tws-thumb-hit"
-                              aria-pressed={used}
-                              title={
-                                isKo
-                                  ? "클릭하면 요청창에 이 번호를 넣고, 캔버스로 드래그하면 부분 수정할 수 있습니다"
-                                  : "Click to insert into prompt, or drag onto canvas to edit"
-                              }
-                              onClick={() => handleShellRefClick(slotNum)}
-                            >
-                              <img src={slotSrc} alt={slotName} />
-                            </button>
-                            <div className="tws-slot-role-bar">
-                              <button
-                                type="button"
-                                className="tws-slot-role-btn"
-                                data-slot-role-btn={slotNum}
-                                data-active={slotRoleId !== "free"}
-                                title={
-                                  isKo
-                                    ? "클릭해 이 사진의 역할(자유·인물·제품·의상·배경·구도·색감)을 지정합니다"
-                                    : "Click to cycle reference role (Free, Subject, Product, Outfit, Scene, Pose, Color)"
-                                }
-                                onClick={() => cycleSlotRole(slotNum)}
-                              >
-                                {isKo ? `역할: ${slotRoleSpec.ko}` : slotRoleSpec.en}
-                              </button>
-                              <button
-                                type="button"
-                                className="tws-slot-insert-btn"
-                                data-on={used}
-                                onClick={() => handleShellRefClick(slotNum)}
-                              >
-                                {used
-                                  ? isKo
-                                    ? "넣음"
-                                  : "Added"
-                                  : isKo
-                                    ? "+ 넣기"
-                                    : "+ Add"}
-                              </button>
-                            </div>
-                          </div>
-                        );
-                      })}
-                      <label className="tws-upload">
-                        <b aria-hidden="true">+</b>
-                        {isKo
-                          ? "사진 드래그 · 여러 장 올리기"
-                          : "Drop or upload photos"}
-                        <input
-                          type="file"
-                          accept="image/*"
-                          multiple
-                          onChange={(e) => {
-                            const files = Array.from(e.target.files ?? []);
-                            const firstEmpty =
-                              ([1, 2, 3, 4] as const).find(
-                                (n) => !customSlotThumbs[n],
-                              ) ?? 1;
-                            fillRefSlotsFromFiles(files, firstEmpty, false);
-                            e.target.value = "";
-                          }}
-                        />
-                      </label>
-                    </div>
-
-                    <div className="tws-artboard">
-                      <div className="tws-artboard-head">
-                        <div className="tws-artboard-title-group">
-                          <strong>
-                            {canvasViewMode === "board"
-                              ? isKo
-                                ? `캔버스 보드 (${sessionCuts.length}장)`
-                                : `Canvas Board (${sessionCuts.length})`
-                              : canvasCut
-                                ? canvasCut.label
-                                : isKo
-                                  ? "작업 캔버스 (비어 있음)"
-                                  : "Working Canvas (Empty)"}
-                          </strong>
-                          {canvasCut && canvasViewMode === "single" ? (
-                            <span>
-                              {imageSubMode === "micro_region_edit"
-                                ? isKo
-                                  ? `네모 수정 영역 ${selectionRect.wPct}×${selectionRect.hPct}% (영역 밖 원본 100% 보존)`
-                                  : `Box edit ${selectionRect.wPct}×${selectionRect.hPct}%`
-                                : canvasCut.meta}
+                          ) : (
+                            <span className="tws-region-hint">
+                              {isKo
+                                ? "이미지 위를 드래그해 수정할 영역을 지정하세요. 영역 밖은 원본 그대로 보존됩니다."
+                                : "Drag on the image to select the region to edit."}
                             </span>
-                          ) : null}
+                          )}
                         </div>
-                        <div className="tws-artboard-actions">
-                          {sessionCuts.length > 1 ? (
-                            <div
-                              className="tws-seg"
-                              role="group"
-                              aria-label={isKo ? "캔버스 보기 방식" : "Canvas view"}
-                            >
-                              <button
-                                type="button"
-                                aria-pressed={canvasViewMode === "single"}
-                                onClick={() => setCanvasViewMode("single")}
-                              >
-                                {isKo ? "1장 크게 편집" : "Single edit"}
-                              </button>
-                              <button
-                                type="button"
-                                aria-pressed={canvasViewMode === "board"}
-                                onClick={() => setCanvasViewMode("board")}
-                              >
-                                {isKo
-                                  ? `보드 뷰 (${sessionCuts.length}장)`
-                                  : `Board (${sessionCuts.length})`}
-                              </button>
-                            </div>
-                          ) : null}
-                          {canvasCut && canvasViewMode === "single" ? (
-                            <>
-                              <button
-                                type="button"
-                                className="tws-btn tws-btn-sm"
-                                onClick={() => handleSendCutToNextRefSlot(canvasCut)}
-                              >
-                                {isKo ? "1~4번 슬롯에 넣기" : "To slot 1–4"}
-                              </button>
-                              <button
-                                type="button"
-                                className="tws-btn tws-btn-sm tws-btn-quiet"
-                                data-clear-canvas-btn
-                                onClick={handleClearCanvas}
-                              >
-                                {isKo ? "캔버스 비우기 ×" : "Clear canvas ×"}
-                              </button>
-                            </>
-                          ) : null}
-                        </div>
-                      </div>
+                      ) : null}
 
                       {canvasViewMode === "board" && sessionCuts.length > 0 ? (
                         <div
@@ -4525,8 +4108,8 @@ export function BrandBriefStudio({
                                   <span className="tws-board-card-badge">
                                     {isSel
                                       ? isKo
-                                        ? `${selOrder}번 선택됨`
-                                        : `#${selOrder} Selected`
+                                        ? `${selOrder}번 선택`
+                                        : `#${selOrder}`
                                       : `#${idx + 1}`}
                                   </span>
                                   <button
@@ -4549,27 +4132,22 @@ export function BrandBriefStudio({
                                         e.stopPropagation();
                                         setCanvasCut(cut);
                                         setCanvasViewMode("single");
-                                        setImageSubMode("micro_region_edit");
                                       }}
                                     >
-                                      {isKo ? "네모 수정" : "Box edit"}
+                                      {isKo ? "크게 보기" : "Open"}
                                     </button>
                                   </div>
                                 </div>
                               );
                             })}
                           </div>
-                          <div className="tws-board-floating-dock">
-                            <span>
-                              {selectedBoardCutIds.length > 0
-                                ? isKo
-                                  ? `보드에서 ${selectedBoardCutIds.length}장 선택됨 — 1~${selectedBoardCutIds.length}번 참고 슬롯으로 바로 연결할 수 있습니다`
-                                  : `${selectedBoardCutIds.length} cut(s) selected on board`
-                                : isKo
-                                  ? "카드를 클릭해 여러 장(최대 4장)을 고르면 1~4번 참고 슬롯에 한 번에 들어갑니다"
-                                  : "Select up to 4 cards to attach them to reference slots 1–4 at once"}
-                            </span>
-                            {selectedBoardCutIds.length > 0 ? (
+                          {selectedBoardCutIds.length > 0 ? (
+                            <div className="tws-board-floating-dock">
+                              <span>
+                                {isKo
+                                  ? `${selectedBoardCutIds.length}장 선택됨`
+                                  : `${selectedBoardCutIds.length} selected`}
+                              </span>
                               <div className="tws-artboard-actions">
                                 <button
                                   type="button"
@@ -4577,8 +4155,8 @@ export function BrandBriefStudio({
                                   onClick={handleAttachBoardSelectionToRefSlots}
                                 >
                                   {isKo
-                                    ? `선택한 ${selectedBoardCutIds.length}장을 1~${selectedBoardCutIds.length}번 참고 슬롯에 넣기`
-                                    : `Attach ${selectedBoardCutIds.length} to slots 1–${selectedBoardCutIds.length}`}
+                                    ? `1~${selectedBoardCutIds.length}번 참고 슬롯으로 보내기`
+                                    : `Send to slots 1–${selectedBoardCutIds.length}`}
                                 </button>
                                 <button
                                   type="button"
@@ -4588,8 +4166,8 @@ export function BrandBriefStudio({
                                   {isKo ? "선택 해제" : "Deselect"}
                                 </button>
                               </div>
-                            ) : null}
-                          </div>
+                            </div>
+                          ) : null}
                         </div>
                       ) : !canvasCut ? (
                         <div
@@ -4604,26 +4182,19 @@ export function BrandBriefStudio({
                           onDrop={handleDropOnCanvas}
                         >
                           <div className="tws-empty-dropzone">
-                            <span className="tws-empty-kicker">
-                              {isKo
-                                ? "드래그 앤 드롭 · Ctrl+V 붙여넣기"
-                                : "Drag & Drop · Ctrl+V Paste"}
-                            </span>
                             <strong>
                               {isKo
-                                ? "작업할 이미지를 여기에 드래그해서 놓으세요"
-                                : "Drag and drop your image(s) here"}
+                                ? "레퍼런스 사진을 드래그하거나 아래에서 바로 화보를 만드세요"
+                                : "Drop reference photos here or describe your shot below"}
                             </strong>
                             <p className="tws-empty-sub">
                               {isKo
-                                ? "1장은 네모(M)·지우개(E) 부분 수정으로, 여러 장은 1~4번 참고 슬롯과 보드로 자동 배치됩니다."
-                                : "Drop 1 photo to region-edit (M/E), or multiple photos to auto-fill slots 1–4 and the board."}
+                                ? "사진 1장을 놓으면 부분 수정 캔버스로, 여러 장을 놓으면 아래 1~4번 참고 슬롯에 자동 배치됩니다."
+                                : "Drop 1 photo to edit a region, or multiple photos to fill reference slots 1–4 below."}
                             </p>
                             <div className="tws-empty-actions">
-                              <label className="tws-btn tws-btn-primary">
-                                {isKo
-                                  ? "+ 내 컴퓨터에서 사진 불러오기"
-                                  : "+ Choose photos from computer"}
+                              <label className="tws-btn">
+                                {isKo ? "+ 내 컴퓨터에서 사진 선택" : "+ Choose photos"}
                                 <input
                                   type="file"
                                   accept="image/*"
@@ -4645,7 +4216,6 @@ export function BrandBriefStudio({
                                       }
                                     } else if (files.length > 1) {
                                       fillRefSlotsFromFiles(files, 1, true);
-                                      setCanvasViewMode("board");
                                     }
                                     e.target.value = "";
                                   }}
@@ -4663,7 +4233,7 @@ export function BrandBriefStudio({
                                 className="tws-btn tws-btn-quiet"
                                 onClick={handleLoadDemoAssets}
                               >
-                                {isKo ? "샘플 에셋 불러오기" : "Load sample assets"}
+                                {isKo ? "샘플 장면 불러오기" : "Load sample scene"}
                               </button>
                             </div>
                           </div>
@@ -4689,17 +4259,6 @@ export function BrandBriefStudio({
                             alt={canvasCut.label}
                             draggable={false}
                           />
-                          <button
-                            type="button"
-                            className="tws-canvas-corner-clear"
-                            title={isKo ? "캔버스 비우기 (×)" : "Clear canvas (×)"}
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              handleClearCanvas();
-                            }}
-                          >
-                            {isKo ? "비우기 ×" : "Clear ×"}
-                          </button>
                           {imageSubMode === "micro_region_edit" ? (
                             <div
                               className="tws-box"
@@ -4715,8 +4274,8 @@ export function BrandBriefStudio({
                                 data-flip={selectionRect.yPct < 9}
                               >
                                 {isKo
-                                  ? "여기만 2K 크롭 수정 (밖은 원본 유지)"
-                                  : "Fix only here (outside locked)"}
+                                  ? "선택 영역만 수정 (외부 원본 고정)"
+                                  : "Edit region only"}
                               </span>
                               <span className="tws-handle" data-pos="tl" />
                               <span className="tws-handle" data-pos="tr" />
@@ -4751,247 +4310,218 @@ export function BrandBriefStudio({
                         </div>
                       )}
 
-                      <div className="tws-artboard-foot">
-                        <p className="tws-hint">
-                          {!canvasCut
-                            ? isKo
-                              ? "왼쪽 1~4번 슬롯에 참고 사진을 드래그해 조합하거나, 수정할 원본 사진을 캔버스에 놓으세요."
-                              : "Drag reference photos into slots 1–4 on the left, or drop a photo on the canvas to region-edit."
-                            : opluxEditTool === "edge_erase"
-                              ? isKo
-                                ? "네모 경계를 문지르면 원본이 비쳐 경계선이 자연스럽게 섞입니다."
-                                : "Brush the box edge to blend seamlessly into the original."
-                              : opluxEditTool === "restore_brush"
-                                ? isKo
-                                  ? "너무 지운 곳을 문지르면 수정본이 돌아옵니다."
-                                  : "Brush over-erased spots to restore the edited patch."
-                                : imageSubMode === "micro_region_edit"
-                                  ? isKo
-                                    ? "네모 밖은 1픽셀도 변하지 않고 네모 안쪽만 2K로 확대해 정밀 수정합니다."
-                                    : "Outside pixels stay 100% untouched; only the inside box is upscaled and edited."
-                                  : isKo
-                                    ? "이미지 위를 드래그하면 고칠 부위만 네모(M)로 지정해 부분 수정할 수 있습니다."
-                                    : "Drag on the image to box only the part you want to fix."}
-                        </p>
-                        <button
-                          type="button"
-                          className="tws-btn tws-btn-sm"
-                          onClick={handleShellSendToVideo}
-                        >
-                          {isKo ? "영상 보드로 보내기 →" : "Send to video →"}
-                        </button>
-                      </div>
-                    </div>
-
-                    <div
-                      className="tws-rail"
-                      aria-label={isKo ? "내 작업 컷" : "My session cuts"}
-                      data-drag-over={dragOverTarget === "history"}
-                      onDragOver={(e) => {
-                        e.preventDefault();
-                        setDragOverTarget("history");
-                      }}
-                      onDragLeave={() => setDragOverTarget(null)}
-                      onDrop={handleDropOnSessionTray}
-                    >
-                      <div className="tws-rail-head">
-                        <span className="tws-rail-label">
-                          {isKo
-                            ? `내 작업 컷 (${sessionCuts.length})`
-                            : `My cuts (${sessionCuts.length})`}
-                        </span>
-                        {sessionCuts.length > 0 ? (
-                          <button
-                            type="button"
-                            className="tws-rail-clear"
-                            data-clear-all-session-cuts
-                            onClick={handleClearAllSessionCuts}
-                          >
-                            {isKo ? "비우기" : "Clear"}
-                          </button>
-                        ) : null}
-                      </div>
-                      {sessionCuts.length === 0 ? (
-                        <label
-                          className="tws-thumb tws-thumb-empty tws-history-empty"
-                          title={
-                            isKo
-                              ? "올리거나 생성한 컷이 여기에 쌓입니다. 파일을 드래그해 추가하세요"
-                              : "Uploaded and generated cuts appear here. Drop files to add"
-                          }
-                        >
-                          <span className="tws-empty-plus" aria-hidden="true">
-                            +
-                          </span>
-                          <span className="tws-empty-hint">
-                            {isKo
-                              ? "올리거나 만든 컷이 여기에 보관됩니다"
-                              : "Your uploaded & generated cuts"}
-                          </span>
-                          <input
-                            type="file"
-                            accept="image/*"
-                            multiple
-                            onChange={(e) => {
-                              const files = Array.from(e.target.files ?? []);
-                              if (files.length > 0) {
-                                const added = files
-                                  .map((f, i) => {
-                                    const url = createManagedObjectUrl(f);
-                                    return url
-                                      ? {
-                                          id: `cut-tray-${Date.now()}-${i}`,
-                                          src: url,
-                                          label: f.name,
-                                          meta: isKo ? "업로드 원본" : "Uploaded",
-                                        }
-                                      : null;
-                                  })
-                                  .filter(Boolean) as Array<{
-                                  id: string;
-                                  src: string;
-                                  label: string;
-                                  meta: string;
-                                }>;
-                                setSessionCuts((prev) => [...added, ...prev]);
-                                if (!canvasCut && added[0]) setCanvasCut(added[0]);
-                              }
-                              e.target.value = "";
-                            }}
-                          />
-                        </label>
-                      ) : (
-                        sessionCuts.map((cut) => {
-                          const isCurrent = canvasCut?.id === cut.id;
-                          return (
-                            <div
-                              key={cut.id}
-                              className="tws-thumb"
-                              data-on={isCurrent}
-                              draggable
-                              onDragStart={(e) =>
-                                handleInternalDragStart(e, {
-                                  src: cut.src,
-                                  label: cut.label,
-                                })
-                              }
+                      {/* SESSION FILMSTRIP — ONLY RENDERED WHEN CUTS EXIST */}
+                      {sessionCuts.length > 0 ? (
+                        <div className="tws-filmstrip" aria-label={isKo ? "내 작업 컷" : "Session cuts"}>
+                          <div className="tws-filmstrip-head">
+                            <span>
+                              {isKo ? `작업 컷 (${sessionCuts.length})` : `Cuts (${sessionCuts.length})`}
+                            </span>
+                            <button
+                              type="button"
+                              className="tws-rail-clear"
+                              data-clear-all-session-cuts
+                              onClick={handleClearAllSessionCuts}
                             >
-                              <button
-                                type="button"
-                                className="tws-slot-clear"
-                                aria-label={isKo ? "컷 지우기" : "Remove cut"}
-                                onClick={() => handleRemoveSessionCut(cut.id)}
-                              >
-                                ×
-                              </button>
-                              <button
-                                type="button"
-                                className="tws-thumb-hit"
-                                aria-pressed={isCurrent}
-                                onClick={() => {
-                                  setCanvasCut(cut);
-                                  setCanvasViewMode("single");
-                                }}
-                              >
-                                <img src={cut.src} alt={cut.label} />
-                                <span className="tws-thumb-cap">
-                                  <span>{cut.label}</span>
-                                </span>
-                              </button>
-                              <button
-                                type="button"
-                                className="tws-cut-to-slot"
-                                title={
-                                  isKo
-                                    ? "왼쪽 1~4번 참고 슬롯으로 보내기"
-                                    : "Send to reference slot 1–4"
-                                }
-                                onClick={() => handleSendCutToNextRefSlot(cut)}
-                              >
-                                {isKo ? "← 슬롯에 넣기" : "← To slot"}
-                              </button>
-                            </div>
-                          );
-                        })
-                      )}
+                              {isKo ? "비우기" : "Clear"}
+                            </button>
+                          </div>
+                          <div className="tws-filmstrip-list">
+                            {sessionCuts.map((cut) => {
+                              const isCurrent = canvasCut?.id === cut.id;
+                              return (
+                                <div
+                                  key={cut.id}
+                                  className="tws-filmstrip-item"
+                                  data-on={isCurrent}
+                                  draggable
+                                  onDragStart={(e) =>
+                                    handleInternalDragStart(e, {
+                                      src: cut.src,
+                                      label: cut.label,
+                                    })
+                                  }
+                                >
+                                  <button
+                                    type="button"
+                                    className="tws-filmstrip-hit"
+                                    onClick={() => {
+                                      setCanvasCut(cut);
+                                      setCanvasViewMode("single");
+                                    }}
+                                  >
+                                    <img src={cut.src} alt={cut.label} />
+                                  </button>
+                                  <button
+                                    type="button"
+                                    className="tws-filmstrip-del"
+                                    aria-label={isKo ? "삭제" : "Remove"}
+                                    onClick={() => handleRemoveSessionCut(cut.id)}
+                                  >
+                                    ×
+                                  </button>
+                                </div>
+                              );
+                            })}
+                          </div>
+                        </div>
+                      ) : null}
                     </div>
                   </div>
 
-                  {/* UNIFIED SOTA COMPOSER DOCK (Attached Media Strip + Prompt Input + Single Control Bar) */}
+                  {/* FLOATING BOTTOM COMPOSER DOCK (Reference Slots 1–4 + Prompt + Compact Control Bar) */}
                   <div className="tws-composer" data-bottom-image-chat-box>
-                    {filledSlotNumbers.length > 0 || imageSubMode === "micro_region_edit" ? (
-                      <div
-                        className="tws-composer-media-strip"
-                        aria-label={isKo ? "첨부된 참고 이미지 및 수정 영역" : "Attached references and edit region"}
-                      >
-                        {filledSlotNumbers.map((slotNum) => {
-                          const src = customSlotThumbs[slotNum];
-                          const roleId = slotRoles[slotNum] ?? "free";
-                          const roleSpec =
-                            SLOT_ROLE_OPTIONS.find((r) => r.id === roleId) ??
-                            SLOT_ROLE_OPTIONS[0]!;
+                    <div
+                      className="tws-composer-slots"
+                      aria-label={isKo ? "참고 이미지 슬롯 1~4" : "Reference slots 1–4"}
+                      data-drag-over={dragOverTarget === "rail-refs"}
+                      onDragOver={(e) => {
+                        e.preventDefault();
+                        setDragOverTarget("rail-refs");
+                      }}
+                      onDragLeave={() => setDragOverTarget(null)}
+                      onDrop={handleDropOnRefRail}
+                    >
+                      <span className="tws-composer-slots-label">
+                        {isKo ? "레퍼런스" : "Refs"}
+                      </span>
+                      {([1, 2, 3, 4] as const).map((slotNum) => {
+                        const slotSrc = customSlotThumbs[slotNum];
+                        const slotName =
+                          customSlotNames[slotNum] ??
+                          (isKo ? `${slotNum}번 이미지` : `Image ${slotNum}`);
+                        const used = usedRefSlots.includes(slotNum);
+                        const isOver = dragOverTarget === `slot-${slotNum}`;
+                        const slotRoleId = slotRoles[slotNum] ?? "free";
+                        const slotRoleSpec =
+                          SLOT_ROLE_OPTIONS.find((r) => r.id === slotRoleId) ??
+                          SLOT_ROLE_OPTIONS[0]!;
+
+                        if (!slotSrc) {
                           return (
-                            <div
+                            <label
                               key={slotNum}
-                              className="tws-media-chip"
-                              data-attached-slot-chip={slotNum}
+                              className="tws-ref-pill tws-ref-pill-empty"
+                              data-ref-slot-card={slotNum}
+                              data-ref-slot-empty="true"
+                              data-drag-over={isOver}
+                              onDragOver={(e) => {
+                                e.preventDefault();
+                                e.stopPropagation();
+                                setDragOverTarget(`slot-${slotNum}`);
+                              }}
+                              onDragLeave={() => setDragOverTarget(null)}
+                              onDrop={(e) => handleDropOnRefSlot(slotNum, e)}
+                              title={
+                                isKo
+                                  ? `${slotNum}번 참고 이미지 추가 (드래그 또는 클릭)`
+                                  : `Add reference ${slotNum}`
+                              }
                             >
-                              {src ? <img src={src} alt="" aria-hidden="true" /> : null}
-                              <button
-                                type="button"
-                                className="tws-media-chip-text"
-                                onClick={() => handleShellRefClick(slotNum)}
-                              >
-                                <strong>{isKo ? `${slotNum}번` : `#${slotNum}`}</strong>
-                              </button>
-                              <button
-                                type="button"
-                                className="tws-media-chip-role"
-                                data-active={roleId !== "free"}
-                                onClick={() => cycleSlotRole(slotNum)}
-                                title={
-                                  isKo
-                                    ? "클릭해 슬롯 역할(자유·인물·제품·의상·배경·구도·색감) 변경"
-                                    : "Cycle slot role"
-                                }
-                              >
-                                {isKo ? roleSpec.ko : roleSpec.en}
-                              </button>
-                              <button
-                                type="button"
-                                className="tws-media-chip-del"
-                                aria-label={isKo ? `${slotNum}번 슬롯 비우기` : `Remove slot ${slotNum}`}
-                                onClick={() => handleClearRefSlot(slotNum)}
-                              >
-                                ×
-                              </button>
-                            </div>
+                              <b aria-hidden="true">+</b>
+                              <span>{isKo ? `${slotNum}번` : `#${slotNum}`}</span>
+                              <input
+                                type="file"
+                                accept="image/*"
+                                multiple
+                                onChange={(e) => {
+                                  const files = Array.from(e.target.files ?? []);
+                                  fillRefSlotsFromFiles(files, slotNum, false);
+                                  e.target.value = "";
+                                }}
+                              />
+                            </label>
                           );
-                        })}
-                        {imageSubMode === "micro_region_edit" ? (
-                          <div className="tws-media-chip tws-media-chip-region">
-                            <strong>
-                              {isKo
-                                ? `네모 영역 ${selectionRect.wPct}×${selectionRect.hPct}%`
-                                : `Box ${selectionRect.wPct}×${selectionRect.hPct}%`}
-                            </strong>
-                            <span>{isKo ? "외부 원본 고정" : "Outside locked"}</span>
+                        }
+
+                        return (
+                          <div
+                            key={slotNum}
+                            className="tws-ref-pill"
+                            data-ref-slot-card={slotNum}
+                            data-ref-slot-empty="false"
+                            data-slot-role={slotRoleId}
+                            data-on={used}
+                            data-drag-over={isOver}
+                            draggable
+                            onDragStart={(e) =>
+                              handleInternalDragStart(e, {
+                                src: slotSrc,
+                                label: slotName,
+                                fromSlot: slotNum,
+                              })
+                            }
+                            onDragOver={(e) => {
+                              e.preventDefault();
+                              e.stopPropagation();
+                              setDragOverTarget(`slot-${slotNum}`);
+                            }}
+                            onDragLeave={() => setDragOverTarget(null)}
+                            onDrop={(e) => handleDropOnRefSlot(slotNum, e)}
+                          >
+                            <button
+                              type="button"
+                              className="tws-ref-pill-thumb"
+                              onClick={() => handleShellRefClick(slotNum)}
+                              title={
+                                isKo
+                                  ? "클릭하면 프롬프트에 이 번호를 넣습니다"
+                                  : "Click to reference in prompt"
+                              }
+                            >
+                              <img src={slotSrc} alt={slotName} />
+                              <strong>{isKo ? `${slotNum}번` : `#${slotNum}`}</strong>
+                            </button>
+                            <button
+                              type="button"
+                              className="tws-ref-pill-role"
+                              data-slot-role-btn={slotNum}
+                              data-active={slotRoleId !== "free"}
+                              onClick={() => cycleSlotRole(slotNum)}
+                              title={
+                                isKo
+                                  ? "클릭해 역할 변경 (자유·인물·제품·의상·배경·구도·색감)"
+                                  : "Cycle reference role"
+                              }
+                            >
+                              {isKo ? slotRoleSpec.ko : slotRoleSpec.en}
+                            </button>
+                            <button
+                              type="button"
+                              className="tws-ref-pill-del"
+                              data-clear-ref-slot={slotNum}
+                              aria-label={
+                                isKo ? `${slotNum}번 슬롯 비우기` : `Clear slot ${slotNum}`
+                              }
+                              onClick={() => handleClearRefSlot(slotNum)}
+                            >
+                              ×
+                            </button>
                           </div>
-                        ) : null}
-                      </div>
-                    ) : null}
+                        );
+                      })}
+                      {filledSlotNumbers.length > 0 ? (
+                        <button
+                          type="button"
+                          className="tws-rail-clear"
+                          data-clear-all-ref-slots
+                          onClick={handleClearAllRefSlots}
+                        >
+                          {isKo ? "비우기" : "Clear"}
+                        </button>
+                      ) : null}
+                    </div>
 
                     <div className="tws-composer-input-row">
                       <label
                         className="tws-composer-attach"
                         title={
                           isKo
-                            ? "참고 이미지 추가 (최대 4장 · 드래그 앤 드롭 또는 Ctrl+V 가능)"
-                            : "Attach reference images (up to 4)"
+                            ? "참고 이미지 여러 장 올리기"
+                            : "Attach reference images"
                         }
                       >
                         <b aria-hidden="true">+</b>
-                        <span>{isKo ? "사진" : "Photo"}</span>
                         <input
                           type="file"
                           accept="image/*"
@@ -5021,71 +4551,61 @@ export function BrandBriefStudio({
                         placeholder={
                           imageSubMode === "micro_region_edit"
                             ? isKo
-                              ? "네모 안을 어떻게 고칠까요? 예: 손가락을 자연스럽게, 1번 이미지의 로고 글자를 선명하게"
-                              : "How should the boxed area change?"
+                              ? "선택한 영역을 어떻게 수정할까요? (예: 손 모양을 자연스럽게, 2번 제품 로고로 교체)"
+                              : "How should the selected region change?"
                             : isKo
-                              ? "어떤 장면을 만들까요? 1~4번 이미지를 클릭해 조합하거나 Ctrl+V로 사진을 바로 붙여넣으세요."
-                              : "Describe the still. Click slots 1–4 to reference them or paste photos with Ctrl+V."
+                              ? "만들고 싶은 장면을 적어 주세요. 위의 1~4번 슬롯을 누르면 번호가 바로 입력됩니다."
+                              : "Describe your scene. Click slots 1–4 above to reference them."
                         }
                       />
                     </div>
 
-                    {briefText.trim() === "" ? (
-                      <div className="tws-chips" aria-label={isKo ? "자주 쓰는 작업 방식" : "Quick workflows"}>
-                        {(
-                          [
-                            {
-                              ko: "1번 이미지의 인물이 2번 이미지 배경에서 3번 조명과 4번 색감으로 서 있는 화보",
-                              en: "Subject from Image 1 in Image 2 background with Image 3 lighting and Image 4 color grade",
-                            },
-                            {
-                              ko: "1번 이미지의 제품을 2번 이미지의 제품으로 형태·로고 왜곡 없이 교체",
-                              en: "Replace the product in Image 1 with Image 2 keeping exact logo geometry",
-                            },
-                            {
-                              ko: "네모로 지정한 부위의 손 모양과 로고 디테일만 자연스럽게 수정",
-                              en: "Fix only the hand shape and logo detail inside the selected box",
-                            },
-                          ] as const
-                        ).map((ex) => (
-                          <button
-                            key={ex.ko}
-                            type="button"
-                            className="tws-chip"
-                            onClick={() => setBriefText(isKo ? ex.ko : ex.en)}
-                          >
-                            {isKo ? ex.ko : ex.en}
-                          </button>
-                        ))}
-                      </div>
-                    ) : null}
-
                     <div className="tws-composer-bar">
-                      <div
-                        className="tws-model-pills"
-                        role="radiogroup"
-                        aria-label={isKo ? "이미지 모델 선택" : "Select image model"}
-                      >
-                        {MODEL_EASY_COMPARISON_MATRIX.map((row) => {
-                          const isSelected = selectedImageModelId === row.modelId;
-                          const shortBadge = isKo
-                            ? row.bestBadgeKo.split("·")[0]?.trim()
-                            : row.bestBadgeEn.split("·")[0]?.trim();
-                          return (
-                            <button
-                              key={row.modelId}
-                              type="button"
-                              role="radio"
-                              aria-checked={isSelected}
-                              className="tws-model-pill"
-                              data-quick-model-pill={row.modelId}
-                              onClick={() => setSelectedImageModelId(row.modelId)}
-                            >
-                              <span>{row.shortName}</span>
-                              <em>{shortBadge}</em>
-                            </button>
-                          );
-                        })}
+                      <div className="tws-composer-triggers">
+                        <button
+                          type="button"
+                          className="tws-trigger-pill"
+                          data-studio-model-guide-trigger
+                          data-quick-model-pill={selectedImageModelId}
+                          aria-expanded={showFullModelGuide}
+                          onClick={() => {
+                            setShowAestheticPicker(false);
+                            setShowFullModelGuide((p) => !p);
+                          }}
+                        >
+                          <strong>{shortImageModelName}</strong>
+                          <span>
+                            {isKo
+                              ? activeEasyModelRow.bestBadgeKo.split("·")[0]?.trim()
+                              : activeEasyModelRow.bestBadgeEn.split("·")[0]?.trim()}
+                          </span>
+                          <em aria-hidden="true">▾</em>
+                        </button>
+
+                        <button
+                          type="button"
+                          className="tws-trigger-pill"
+                          data-image-board-aesthetic-pill
+                          aria-expanded={showAestheticPicker}
+                          onClick={() => {
+                            setShowFullModelGuide(false);
+                            setShowAestheticPicker((p) => !p);
+                          }}
+                        >
+                          <span className="tws-lock-swatches" aria-hidden="true">
+                            {activeAestheticDna.paletteHex.slice(0, 3).map((hex) => (
+                              <i key={hex} style={{ backgroundColor: hex }} />
+                            ))}
+                          </span>
+                          <span>
+                            {isAestheticLockEnabled
+                              ? activeAestheticLabel
+                              : isKo
+                                ? "무드보드 없음"
+                                : "No moodboard"}
+                          </span>
+                          <em aria-hidden="true">▾</em>
+                        </button>
                       </div>
 
                       <div className="tws-composer-opts">
@@ -5150,14 +4670,6 @@ export function BrandBriefStudio({
                         </div>
                         <button
                           type="button"
-                          className="tws-chip"
-                          data-apply-model-aesthetic-btn
-                          onClick={handleApplyModelOptimizedAestheticPrompt}
-                        >
-                          {isKo ? "미감 문구 적용" : "Apply mood prompt"}
-                        </button>
-                        <button
-                          type="button"
                           className="tws-btn tws-btn-primary"
                           disabled={!canWrite || busy}
                           onClick={handleShellGenerateImage}
@@ -5166,31 +4678,20 @@ export function BrandBriefStudio({
                             ? shellBusyLabel
                             : imageSubMode === "micro_region_edit"
                               ? isKo
-                                ? "네모 안만 고치기"
-                                : "Fix the box"
+                                ? "선택 영역 수정"
+                                : "Update region"
                               : isKo
                                 ? "화보 만들기"
-                                : "Make still"}
+                                : "Generate"}
                         </button>
                       </div>
                     </div>
-
-                    <div className="tws-model-easy-bar" data-active-model-easy-bar>
-                      <span className="tws-model-easy-badge">
-                        {isKo ? activeEasyModelRow.bestBadgeKo : activeEasyModelRow.bestBadgeEn}
-                      </span>
-                      <span className="tws-model-easy-desc">
-                        {isKo ? activeEasyModelRow.oneLineWhenKo : activeEasyModelRow.oneLineWhenEn}
-                      </span>
-                    </div>
                   </div>
                 </section>
-              ) : null}
-
-              {studioTab !== "image" ? (
+              ) : (
                 <section
                   className="tws-board"
-                  aria-label={isKo ? "영상 보드" : "Video board"}
+                  aria-label={isKo ? "영상 스튜디오" : "Video studio"}
                   data-right-spatial-video-board
                   onDragOver={(e) => {
                     e.preventDefault();
@@ -5199,279 +4700,86 @@ export function BrandBriefStudio({
                   onDragLeave={() => setDragOverTarget(null)}
                   onDrop={handleDropOnVideoBoard}
                 >
-                  <div className="tws-board-head">
-                    <span className="tws-board-title">
-                      {isKo ? "영상 보드" : "Video board"}
-                      <small>
-                        Seedance 2.5 · {videoResolution} · {videoSeconds}
-                        {isKo ? "초" : "s"}
-                      </small>
-                    </span>
-                    <div className="tws-artboard-actions">
-                      {videoBoardFrame || videoEndFrame ? (
-                        <button
-                          type="button"
-                          className="tws-btn tws-btn-sm tws-btn-quiet"
-                          data-clear-video-frame
-                          onClick={() => {
-                            setVideoBoardFrame(null);
-                            setVideoEndFrame(null);
-                            setShellFirstFrameLinked(false);
-                          }}
-                        >
-                          {isKo ? "비우기 ×" : "Clear ×"}
-                        </button>
-                      ) : null}
-                      <button
-                        type="button"
-                        className="tws-btn tws-btn-sm"
-                        onClick={() => {
-                          setErrorMessage("");
-                          handleReverseBridgeVideoFrameToLeftImage();
-                        }}
-                        title={isKo ? "지금 장면을 이미지 보드에서 부분 수정" : "Fix this frame on the image board"}
-                      >
-                        {isKo ? "← 이 장면 이미지로 고치기" : "← Fix this frame as image"}
-                      </button>
-                    </div>
-                  </div>
-
-                  <div className="tws-toolrow">
-                    <span className="tws-toolrow-label">
-                      {isKo ? "카메라 모션" : "Camera motion"}
-                    </span>
-                    {(
-                      [
-                        { id: "dolly_in" as const, ko: "천천히 줌인", en: "Push-in" },
-                        { id: "orbit_360" as const, ko: "입체 회전", en: "Orbit" },
-                        { id: "handheld_natural" as const, ko: "자연스러운 핸드헬드", en: "Handheld" },
-                        { id: "crane_up" as const, ko: "크레인 상승", en: "Crane up" },
-                        { id: "static_tripod" as const, ko: "고정 샷", en: "Static" },
-                      ] as const
-                    ).map((m) => (
-                      <button
-                        key={m.id}
-                        type="button"
-                        className="tws-chip"
-                        aria-pressed={cameraMotionPreset === m.id}
-                        onClick={() => setCameraMotionPreset(m.id)}
-                      >
-                        {isKo ? m.ko : m.en}
-                      </button>
-                    ))}
-                    <div className="tws-video-finish-inline" role="radiogroup" aria-label={isKo ? "고화질 마감" : "Finish"}>
-                      <span className="tws-toolrow-label">
-                        {isKo ? "고화질 마감" : "Master"}
-                      </span>
-                      {(
-                        [
-                          {
-                            res: "1080p" as const,
-                            engine: "sunra_ig_1080p_upscaler" as const,
-                            ko: "인스타 1080p",
-                            en: "IG 1080p",
-                          },
-                          {
-                            res: "4K" as const,
-                            engine: "seedvr2_7b_optical_upscaler" as const,
-                            ko: "4K 원본",
-                            en: "4K Master",
-                          },
-                        ] as const
-                      ).map((node) => (
-                        <button
-                          key={node.res}
-                          type="button"
-                          role="radio"
-                          aria-checked={upscaleTargetResolution === node.res}
-                          className="tws-chip"
-                          onClick={() => {
-                            setSelectedUpscalerEngineId(node.engine);
-                            setUpscaleTargetResolution(node.res);
-                          }}
-                        >
-                          {isKo ? node.ko : node.en}
-                        </button>
-                      ))}
-                      <button
-                        type="button"
-                        className="tws-btn tws-btn-sm"
-                        disabled={!canWrite}
-                        onClick={() => {
-                          setErrorMessage("");
-                          handleRunUpscaleStudioJob();
-                        }}
-                      >
-                        {isKo ? "업스케일 요청" : "Upscale"}
-                      </button>
-                    </div>
-                  </div>
-
-                  <div className="tws-stage tws-stage-video">
-                    <div className="tws-rail" aria-label={isKo ? "시작·끝 프레임" : "Keyframes"}>
-                      <div className="tws-rail-head">
-                        <span className="tws-rail-label">{isKo ? "키프레임" : "Keyframes"}</span>
-                        {videoBoardFrame || videoEndFrame ? (
-                          <button
-                            type="button"
-                            className="tws-rail-clear"
-                            onClick={() => {
-                              setVideoBoardFrame(null);
-                              setVideoEndFrame(null);
-                              setShellFirstFrameLinked(false);
-                            }}
-                          >
-                            {isKo ? "비우기" : "Clear"}
-                          </button>
-                        ) : null}
-                      </div>
-                      {videoBoardFrame ? (
-                        <figure className="tws-thumb tws-thumb-static">
-                          <span className="tws-slot-pin">
-                            {isKo ? "첫 장면" : "Start"}
-                          </span>
-                          <button
-                            type="button"
-                            className="tws-slot-clear"
-                            aria-label={isKo ? "시작 프레임 비우기" : "Clear start frame"}
-                            onClick={() => {
-                              setVideoBoardFrame(null);
-                              setShellFirstFrameLinked(false);
-                            }}
-                          >
-                            ×
-                          </button>
-                          {videoBoardFrame.isVideoFile ? (
-                            <video src={videoBoardFrame.src} muted playsInline />
-                          ) : (
-                            <img src={videoBoardFrame.src} alt={videoBoardFrame.label} />
-                          )}
-                          <figcaption className="tws-thumb-cap">
-                            <span>{videoBoardFrame.label}</span>
-                          </figcaption>
-                        </figure>
-                      ) : (
-                        <label className="tws-thumb tws-thumb-empty">
-                          <span className="tws-slot-badge">
-                            {isKo ? "첫 장면 (Start)" : "Start Frame"}
-                          </span>
-                          <span className="tws-empty-plus" aria-hidden="true">
-                            +
-                          </span>
-                          <span className="tws-empty-hint">
-                            {isKo ? "드래그 · 클릭" : "Drop / Click"}
-                          </span>
-                          <input
-                            type="file"
-                            accept="image/*,video/*"
-                            onChange={(e) => {
-                              const f = e.target.files?.[0];
-                              if (f) {
-                                const url = createManagedObjectUrl(f);
-                                if (url) {
-                                  setVideoBoardFrame({
-                                    src: url,
-                                    label: f.name,
-                                    isVideoFile: f.type.startsWith("video/"),
-                                  });
-                                  setShellFirstFrameLinked(true);
-                                }
-                              }
-                              e.target.value = "";
-                            }}
-                          />
-                        </label>
-                      )}
-
-                      {videoEndFrame ? (
-                        <figure className="tws-thumb tws-thumb-static">
-                          <span className="tws-slot-pin">
-                            {isKo ? "끝 장면" : "End"}
-                          </span>
-                          <button
-                            type="button"
-                            className="tws-slot-clear"
-                            aria-label={isKo ? "끝 장면 비우기" : "Clear end frame"}
-                            onClick={() => setVideoEndFrame(null)}
-                          >
-                            ×
-                          </button>
-                          <img src={videoEndFrame.src} alt={videoEndFrame.label} />
-                          <figcaption className="tws-thumb-cap">
-                            <span>{videoEndFrame.label}</span>
-                          </figcaption>
-                        </figure>
-                      ) : (
-                        <label
-                          className="tws-thumb tws-thumb-empty"
-                          onDragOver={(e) => {
-                            e.preventDefault();
-                            e.stopPropagation();
-                            setDragOverTarget("video-end");
-                          }}
-                          onDragLeave={() => setDragOverTarget(null)}
-                          onDrop={(e) => {
-                            e.preventDefault();
-                            e.stopPropagation();
-                            setDragOverTarget(null);
-                            const rawInternal = e.dataTransfer?.getData("application/x-twings-image");
-                            if (rawInternal) {
-                              try {
-                                const parsed = JSON.parse(rawInternal) as { src: string; label: string };
-                                if (parsed.src) {
-                                  setVideoEndFrame({ src: parsed.src, label: parsed.label });
-                                  return;
-                                }
-                              } catch {
-                                // fall through
-                              }
-                            }
-                            const files = extractDroppedImageFiles(e.dataTransfer);
-                            if (files[0]) {
-                              const url = createManagedObjectUrl(files[0]);
-                              if (url) setVideoEndFrame({ src: url, label: files[0].name });
-                            }
-                          }}
-                        >
-                          <span className="tws-slot-badge">
-                            {isKo ? "끝 장면 (선택)" : "End Frame (Opt)"}
-                          </span>
-                          <span className="tws-empty-plus" aria-hidden="true">
-                            +
-                          </span>
-                          <span className="tws-empty-hint">
-                            {isKo ? "드래그 · 클릭" : "Drop / Click"}
-                          </span>
-                          <input
-                            type="file"
-                            accept="image/*"
-                            onChange={(e) => {
-                              const f = e.target.files?.[0];
-                              if (f) {
-                                const url = createManagedObjectUrl(f);
-                                if (url) setVideoEndFrame({ src: url, label: f.name });
-                              }
-                              e.target.value = "";
-                            }}
-                          />
-                        </label>
-                      )}
-                    </div>
-
+                  <div className="tws-stage-single tws-stage-video">
                     <div className="tws-artboard">
-                      <div className="tws-artboard-head">
-                        <strong>
-                          {videoBoardFrame
-                            ? videoBoardFrame.label
-                            : isKo
-                              ? "영상 캔버스 (첫 장면을 드래그해 놓으세요)"
-                              : "Video Canvas (Drop start frame)"}
-                        </strong>
-                        <span>
-                          {videoResolution} · {videoSeconds}
-                          {isKo ? "초 · Seedance 2.5" : "s · Seedance 2.5"}
-                        </span>
-                      </div>
+                      {videoBoardFrame || videoEndFrame ? (
+                        <div className="tws-artboard-head">
+                          <div className="tws-artboard-title-group">
+                            <strong>
+                              {videoBoardFrame
+                                ? videoBoardFrame.label
+                                : isKo
+                                  ? "영상 스튜디오"
+                                  : "Video Studio"}
+                            </strong>
+                            <span>
+                              Seedance 2.5 · {videoResolution} · {videoSeconds}
+                              {isKo ? "초" : "s"}
+                            </span>
+                          </div>
+                          <div className="tws-artboard-actions">
+                            <div
+                              className="tws-seg"
+                              role="radiogroup"
+                              aria-label={isKo ? "고화질 마감" : "Upscale finish"}
+                            >
+                              {(
+                                [
+                                  {
+                                    res: "1080p" as const,
+                                    engine: "sunra_ig_1080p_upscaler" as const,
+                                    ko: "인스타 1080p",
+                                    en: "IG 1080p",
+                                  },
+                                  {
+                                    res: "4K" as const,
+                                    engine: "seedvr2_7b_optical_upscaler" as const,
+                                    ko: "4K 마스터",
+                                    en: "4K Master",
+                                  },
+                                ] as const
+                              ).map((node) => (
+                                <button
+                                  key={node.res}
+                                  type="button"
+                                  role="radio"
+                                  aria-checked={upscaleTargetResolution === node.res}
+                                  onClick={() => {
+                                    setSelectedUpscalerEngineId(node.engine);
+                                    setUpscaleTargetResolution(node.res);
+                                  }}
+                                >
+                                  {isKo ? node.ko : node.en}
+                                </button>
+                              ))}
+                            </div>
+                            <button
+                              type="button"
+                              className="tws-btn tws-btn-sm"
+                              disabled={!canWrite}
+                              onClick={() => {
+                                setErrorMessage("");
+                                handleRunUpscaleStudioJob();
+                              }}
+                            >
+                              {isKo ? "고화질 마감" : "Upscale"}
+                            </button>
+                            <button
+                              type="button"
+                              className="tws-btn tws-btn-sm tws-btn-quiet"
+                              data-clear-video-frame
+                              onClick={() => {
+                                setVideoBoardFrame(null);
+                                setVideoEndFrame(null);
+                                setShellFirstFrameLinked(false);
+                              }}
+                            >
+                              {isKo ? "비우기 ×" : "Clear ×"}
+                            </button>
+                          </div>
+                        </div>
+                      ) : null}
+
                       {videoBoardFrame ? (
                         <div
                           className="tws-canvas"
@@ -5494,16 +4802,6 @@ export function BrandBriefStudio({
                               draggable={false}
                             />
                           )}
-                          <button
-                            type="button"
-                            className="tws-canvas-corner-clear"
-                            onClick={() => {
-                              setVideoBoardFrame(null);
-                              setShellFirstFrameLinked(false);
-                            }}
-                          >
-                            {isKo ? "비우기 ×" : "Clear ×"}
-                          </button>
                         </div>
                       ) : (
                         <div
@@ -5511,9 +4809,6 @@ export function BrandBriefStudio({
                           data-drag-over={dragOverTarget === "video-canvas"}
                         >
                           <div className="tws-empty-dropzone">
-                            <span className="tws-empty-kicker">
-                              {isKo ? "드래그 앤 드롭 · 시작 프레임" : "Drag & Drop · Start Frame"}
-                            </span>
                             <strong>
                               {isKo
                                 ? "첫 장면으로 쓸 이미지를 드래그해서 놓으세요"
@@ -5521,12 +4816,12 @@ export function BrandBriefStudio({
                             </strong>
                             <p className="tws-empty-sub">
                               {isKo
-                                ? "이미지 보드에서 만든 화보를 드래그해 오거나 '영상 보드로 보내기 →'를 누르면 첫 장면으로 연결됩니다."
-                                : "Drag a still from the image board or upload a photo/video from your computer."}
+                                ? "이미지 탭에서 만든 화보를 연결하거나, 내 컴퓨터에서 시작 프레임·영상을 불러올 수 있습니다."
+                                : "Send a still from the Image tab or choose a start frame from your computer."}
                             </p>
                             <div className="tws-empty-actions">
-                              <label className="tws-btn tws-btn-primary">
-                                {isKo ? "+ 시작 프레임·영상 파일 불러오기" : "+ Upload start frame or video"}
+                              <label className="tws-btn">
+                                {isKo ? "+ 시작 프레임·영상 선택" : "+ Choose start frame"}
                                 <input
                                   type="file"
                                   accept="image/*,video/*"
@@ -5558,82 +4853,117 @@ export function BrandBriefStudio({
                           </div>
                         </div>
                       )}
-                      <div className="tws-artboard-foot">
-                        <p className="tws-hint">
-                          {isKo
-                            ? "연결한 첫 장면을 기준으로 480p 초안이나 720p 모션을 먼저 확인한 뒤 1080p·4K로 마감합니다."
-                            : "Generate motion from your locked start frame at 480p/720p, then upscale to 1080p or 4K."}
-                        </p>
-                      </div>
                     </div>
                   </div>
 
+                  {/* FLOATING VIDEO COMPOSER DOCK */}
                   <div className="tws-composer" data-bottom-video-chat-box>
-                    {videoBoardFrame || videoEndFrame ? (
-                      <div className="tws-composer-media-strip">
-                        {videoBoardFrame ? (
-                          <div className="tws-media-chip">
+                    <div className="tws-composer-slots">
+                      <span className="tws-composer-slots-label">
+                        {isKo ? "키프레임" : "Frames"}
+                      </span>
+                      {videoBoardFrame ? (
+                        <div className="tws-ref-pill" data-on="true">
+                          <div className="tws-ref-pill-thumb">
                             {!videoBoardFrame.isVideoFile ? (
                               <img src={videoBoardFrame.src} alt="" aria-hidden="true" />
                             ) : null}
-                            <strong>{isKo ? "첫 장면" : "Start"}</strong>
-                            <span>{videoBoardFrame.label}</span>
-                            <button
-                              type="button"
-                              className="tws-media-chip-del"
-                              onClick={() => {
-                                setVideoBoardFrame(null);
-                                setShellFirstFrameLinked(false);
-                              }}
-                            >
-                              ×
-                            </button>
+                            <strong>{isKo ? "첫 장면 (Start)" : "Start"}</strong>
                           </div>
-                        ) : null}
-                        {videoEndFrame ? (
-                          <div className="tws-media-chip">
+                          <button
+                            type="button"
+                            className="tws-ref-pill-del"
+                            onClick={() => {
+                              setVideoBoardFrame(null);
+                              setShellFirstFrameLinked(false);
+                            }}
+                          >
+                            ×
+                          </button>
+                        </div>
+                      ) : (
+                        <label className="tws-ref-pill tws-ref-pill-empty">
+                          <b aria-hidden="true">+</b>
+                          <span>{isKo ? "첫 장면 (Start)" : "Start Frame"}</span>
+                          <input
+                            type="file"
+                            accept="image/*,video/*"
+                            onChange={(e) => {
+                              const f = e.target.files?.[0];
+                              if (f) {
+                                const url = createManagedObjectUrl(f);
+                                if (url) {
+                                  setVideoBoardFrame({
+                                    src: url,
+                                    label: f.name,
+                                    isVideoFile: f.type.startsWith("video/"),
+                                  });
+                                  setShellFirstFrameLinked(true);
+                                }
+                              }
+                              e.target.value = "";
+                            }}
+                          />
+                        </label>
+                      )}
+
+                      {videoEndFrame ? (
+                        <div className="tws-ref-pill" data-on="true">
+                          <div className="tws-ref-pill-thumb">
                             <img src={videoEndFrame.src} alt="" aria-hidden="true" />
-                            <strong>{isKo ? "끝 장면" : "End"}</strong>
-                            <span>{videoEndFrame.label}</span>
-                            <button
-                              type="button"
-                              className="tws-media-chip-del"
-                              onClick={() => setVideoEndFrame(null)}
-                            >
-                              ×
-                            </button>
+                            <strong>{isKo ? "끝 장면 (선택)" : "End"}</strong>
                           </div>
-                        ) : null}
+                          <button
+                            type="button"
+                            className="tws-ref-pill-del"
+                            onClick={() => setVideoEndFrame(null)}
+                          >
+                            ×
+                          </button>
+                        </div>
+                      ) : (
+                        <label className="tws-ref-pill tws-ref-pill-empty">
+                          <b aria-hidden="true">+</b>
+                          <span>{isKo ? "끝 장면 (선택)" : "End Frame"}</span>
+                          <input
+                            type="file"
+                            accept="image/*"
+                            onChange={(e) => {
+                              const f = e.target.files?.[0];
+                              if (f) {
+                                const url = createManagedObjectUrl(f);
+                                if (url) setVideoEndFrame({ src: url, label: f.name });
+                              }
+                              e.target.value = "";
+                            }}
+                          />
+                        </label>
+                      )}
+
+                      <div className="tws-motion-pills" role="radiogroup" aria-label={isKo ? "카메라 모션" : "Camera motion"}>
+                        {(
+                          [
+                            { id: "dolly_in" as const, ko: "천천히 줌인", en: "Push-in" },
+                            { id: "orbit_360" as const, ko: "입체 회전", en: "Orbit" },
+                            { id: "handheld_natural" as const, ko: "핸드헬드", en: "Handheld" },
+                            { id: "crane_up" as const, ko: "크레인 상승", en: "Crane up" },
+                            { id: "static_tripod" as const, ko: "고정 샷", en: "Static" },
+                          ] as const
+                        ).map((m) => (
+                          <button
+                            key={m.id}
+                            type="button"
+                            className="tws-chip"
+                            aria-pressed={cameraMotionPreset === m.id}
+                            onClick={() => setCameraMotionPreset(m.id)}
+                          >
+                            {isKo ? m.ko : m.en}
+                          </button>
+                        ))}
                       </div>
-                    ) : null}
+                    </div>
 
                     <div className="tws-composer-input-row">
-                      <label
-                        className="tws-composer-attach"
-                        title={isKo ? "첫 장면(시작 프레임) 이미지 추가" : "Attach start frame image"}
-                      >
-                        <b aria-hidden="true">+</b>
-                        <span>{isKo ? "첫 장면" : "Start"}</span>
-                        <input
-                          type="file"
-                          accept="image/*,video/*"
-                          onChange={(e) => {
-                            const f = e.target.files?.[0];
-                            if (f) {
-                              const url = createManagedObjectUrl(f);
-                              if (url) {
-                                setVideoBoardFrame({
-                                  src: url,
-                                  label: f.name,
-                                  isVideoFile: f.type.startsWith("video/"),
-                                });
-                                setShellFirstFrameLinked(true);
-                              }
-                            }
-                            e.target.value = "";
-                          }}
-                        />
-                      </label>
                       <textarea
                         aria-label={isKo ? "영상 요청" : "Video request"}
                         rows={2}
@@ -5647,52 +4977,24 @@ export function BrandBriefStudio({
                         }}
                         placeholder={
                           isKo
-                            ? "첫 장면이 어떻게 움직이면 좋을까요? 카메라와 인물의 움직임을 적어 주세요."
-                            : "How should the first frame move? Describe camera and subject motion."
+                            ? "첫 장면에서 카메라와 인물이 어떻게 움직이면 좋을지 적어 주세요."
+                            : "Describe how the camera and subject should move from the start frame."
                         }
                       />
                     </div>
-                    {videoPromptText.trim() === "" ? (
-                      <div className="tws-chips" aria-label={isKo ? "자주 쓰는 모션" : "Quick motions"}>
-                        {(
-                          [
-                            {
-                              ko: "카메라가 천천히 다가오고 옷자락이 바람에 흔들림",
-                              en: "Slow push-in, fabric moving in the wind",
-                            },
-                            {
-                              ko: "모델이 천천히 정면을 바라보며 미소",
-                              en: "Model slowly turns to camera and smiles",
-                            },
-                            {
-                              ko: "첫 장면에서 끝 장면 구도로 매끄럽게 카메라가 이동",
-                              en: "Smooth camera transition from start frame to end frame",
-                            },
-                          ] as const
-                        ).map((ex) => (
-                          <button
-                            key={ex.ko}
-                            type="button"
-                            className="tws-chip"
-                            onClick={() => setVideoPromptText(isKo ? ex.ko : ex.en)}
-                          >
-                            {isKo ? ex.ko : ex.en}
-                          </button>
-                        ))}
-                      </div>
-                    ) : null}
+
                     <div className="tws-composer-bar">
-                      <div className="tws-model-pills">
-                        <span className="tws-model-pill" aria-checked="true">
-                          <span>Seedance 2.5</span>
-                          <em>{isKo ? "시작 프레임 고정" : "Start-frame lock"}</em>
+                      <div className="tws-composer-triggers">
+                        <span className="tws-trigger-pill" aria-disabled="true">
+                          <strong>Seedance 2.5</strong>
+                          <span>{isKo ? "시작 프레임 고정" : "Start-frame lock"}</span>
                         </span>
                       </div>
                       <div className="tws-composer-opts">
                         <div className="tws-seg" role="radiogroup" aria-label={isKo ? "해상도" : "Resolution"}>
                           {(
                             [
-                              { res: "480p", ko: "480p 초안", en: "480p draft" },
+                              { res: "480p", ko: "480p", en: "480p" },
                               { res: "720p", ko: "720p", en: "720p" },
                               { res: "1080p", ko: "1080p", en: "1080p" },
                             ] as const
@@ -5733,15 +5035,12 @@ export function BrandBriefStudio({
                     </div>
                   </div>
                 </section>
-              ) : null}
+              )}
             </div>
           ) : (
             <div className="tws-panels">
               <section className="tws-panel">
-                <h3>
-                  <span className="tws-step" aria-hidden="true">01</span>
-                  {isKo ? "소리를 입힐 영상" : "Video to score"}
-                </h3>
+                <h3>{isKo ? "사운드를 입힐 영상" : "Video to score"}</h3>
                 {videoBoardFrame ? (
                   <figure className="tws-media">
                     <div className="tws-media-frame">
@@ -5761,7 +5060,7 @@ export function BrandBriefStudio({
                     </div>
                     <figcaption>
                       {isKo
-                        ? `${videoSeconds}초 · 고른 소리: ${activeAudioPreset.titleKo}`
+                        ? `${videoSeconds}초 · ${activeAudioPreset.titleKo}`
                         : `${videoSeconds}s · ${activeAudioPreset.titleEn}`}
                     </figcaption>
                   </figure>
@@ -5774,8 +5073,8 @@ export function BrandBriefStudio({
                     </strong>
                     <span>
                       {isKo
-                        ? `${videoSeconds}초 길이 · 선택한 분위기: ${activeAudioPreset.titleKo}`
-                        : `${videoSeconds}s · Selected mood: ${activeAudioPreset.titleEn}`}
+                        ? `${videoSeconds}초 · 선택한 무드: ${activeAudioPreset.titleKo}`
+                        : `${videoSeconds}s · Mood: ${activeAudioPreset.titleEn}`}
                     </span>
                     <input
                       type="file"
@@ -5799,11 +5098,8 @@ export function BrandBriefStudio({
                 )}
               </section>
               <section className="tws-panel">
-                <h3>
-                  <span className="tws-step" aria-hidden="true">02</span>
-                  {isKo ? "분위기 고르기" : "Pick a mood"}
-                </h3>
-                <div className="tws-options" data-cols="2" role="radiogroup" aria-label={isKo ? "사운드 분위기" : "Sound mood"}>
+                <h3>{isKo ? "사운드 무드" : "Sound mood"}</h3>
+                <div className="tws-options" data-cols="2" role="radiogroup" aria-label={isKo ? "사운드 무드" : "Sound mood"}>
                   {BRAND_AUDIO_STUDIO_PRESETS.map((preset) => (
                     <button
                       key={preset.id}
@@ -5826,15 +5122,10 @@ export function BrandBriefStudio({
                   />
                   <span>
                     {isKo
-                      ? "말소리가 나오면 배경음악을 자동으로 줄이기"
-                      : "Lower the music while someone speaks"}
+                      ? "내레이션이 나오면 배경음악 볼륨 자동 낮추기"
+                      : "Automatically duck music under voiceover"}
                   </span>
                 </label>
-                <h3>
-                  <span className="tws-step" aria-hidden="true">03</span>
-                  {isKo ? "원하는 소리 적고 붙이기" : "Describe and add"}
-                  <em className="tws-tag">{isKo ? "얼리 액세스" : "Early access"}</em>
-                </h3>
                 <div className="tws-composer tws-composer-flat">
                   <textarea
                     aria-label={isKo ? "사운드 요청" : "Sound request"}
@@ -5843,13 +5134,13 @@ export function BrandBriefStudio({
                     onChange={(e) => setAudioPromptText(e.target.value)}
                     placeholder={
                       isKo
-                        ? "예: 잔잔한 피아노에 구두 발걸음과 카메라 셔터 소리"
-                        : "e.g. soft piano with footsteps and a camera shutter"
+                        ? "예: 미니멀한 피아노 선율과 구두 발걸음, 유리 보틀 내려놓는 소리"
+                        : "e.g. minimal piano with footsteps and glass bottle foley"
                     }
                   />
                   <div className="tws-composer-bar">
                     <span className="tws-composer-note">
-                      {isKo ? "상업용 사용 권리를 포함합니다." : "Commercial use included."}
+                      {isKo ? "얼리 액세스 · 상업용 음원 권리 포함" : "Early access · Commercial rights included"}
                     </span>
                     <button
                       type="button"
@@ -5859,8 +5150,8 @@ export function BrandBriefStudio({
                         setErrorMessage("");
                         setStatusMessage(
                           isKo
-                            ? `사운드 생성은 얼리 액세스로 준비 중입니다. 고른 분위기는 이 화면에 그대로 남아 있습니다.`
-                            : `Sound generation is in early access. Your mood '${activeAudioPreset.titleEn}' stays selected here.`,
+                            ? `사운드 생성은 얼리 액세스로 준비 중입니다. 선택한 '${activeAudioPreset.titleKo}' 무드가 저장되었습니다.`
+                            : `Sound generation is in early access. Saved '${activeAudioPreset.titleEn}'.`,
                         );
                       }}
                     >

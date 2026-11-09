@@ -972,9 +972,18 @@ describe("Brand Studio 5 Core Deliverables & 5 Image Models (12-Round Verificati
     }
     for (const preset of BRAND_AESTHETIC_PRESETS) {
       expect(brandRouteAllowed(preset.coverImage, "GET")).toBe(true);
+      for (const sampleUrl of preset.moodboardThumbs) {
+        expect(brandRouteAllowed(sampleUrl, "GET")).toBe(true);
+        const sampleDisk = path.join(
+          process.cwd(),
+          "public",
+          sampleUrl.replace(/^\//, ""),
+        );
+        expect(fs.existsSync(sampleDisk)).toBe(true);
+      }
     }
 
-    // Verify /brand/studio renders the aesthetic trigger, image board aesthetic pill, and model easy guide bar
+    // Verify /brand/studio renders the distilled single-stage shell and bottom floating composer dock
     const studioHtml = renderToStaticMarkup(
       <BrandBriefStudio
         organizationId="org-yagi"
@@ -986,38 +995,31 @@ describe("Brand Studio 5 Core Deliverables & 5 Image Models (12-Round Verificati
     );
     expect(studioHtml).toContain("data-studio-aesthetic-trigger");
     expect(studioHtml).toContain("data-image-board-aesthetic-pill");
-    expect(studioHtml).toContain("data-quick-aesthetic-strip");
-    expect(studioHtml).toContain('data-quick-preset-chip="french_blue_glass"');
-    expect(studioHtml).toContain('data-quick-model-pill="nano_banana_pro"');
-    expect(studioHtml).toContain("data-active-model-easy-bar");
-    expect(studioHtml).toContain("1. 이미지 제작");
-    expect(studioHtml).toContain("2. 영상 제작");
-    expect(studioHtml).toContain("3. 사운드");
-    expect(studioHtml).toContain("이미지+영상 나란히");
+    expect(studioHtml).toContain("data-studio-model-guide-trigger");
     expect(studioHtml).toContain('data-ref-slot-empty="true"');
     expect(studioHtml).toContain('data-canvas-empty="true"');
-    expect(studioHtml).toContain("작업할 이미지를 여기에 드래그해서 놓으세요");
-    expect(studioHtml).toContain("내 작업 컷 (0)");
+    expect(studioHtml).toContain("레퍼런스 사진을 드래그하거나 아래에서 바로 화보를 만드세요");
 
     const visibleShellHtml =
       studioHtml.split('<div hidden="" aria-hidden="true"')[0] ?? studioHtml;
     expect(visibleShellHtml).not.toContain("예시 컷");
     expect(visibleShellHtml).not.toContain("예시 장면");
+    expect(visibleShellHtml).not.toContain("내 작업 컷 (0)");
+    expect(visibleShellHtml).not.toContain("이미지+영상 나란히");
     expect(visibleShellHtml).not.toContain("tws-intro");
     expect(visibleShellHtml).not.toContain("tws-guide");
     expect(visibleShellHtml).not.toContain("<select");
+    expect(visibleShellHtml).toContain("tws-stage-single");
+    expect(visibleShellHtml).toContain("tws-composer-slots");
+    expect(visibleShellHtml).toContain("tws-composer-triggers");
     expect(visibleShellHtml).toContain("tws-composer-input-row");
     expect(visibleShellHtml).toContain("tws-composer-attach");
     expect(visibleShellHtml).toContain("tws-batch-stepper");
     expect(visibleShellHtml).toContain("35mm");
     expect(visibleShellHtml).toContain("50mm");
     expect(visibleShellHtml).toContain("85mm");
-    expect(visibleShellHtml).toContain("tws-stage-video");
-    expect(visibleShellHtml).toContain("첫 장면 (Start)");
-    expect(visibleShellHtml).toContain("끝 장면 (선택)");
-    expect(visibleShellHtml).toContain("천천히 줌인");
 
-    // Verify /brand/identity (BrandOnboardingWizard) renders the visual Moodboard & Aesthetic Studio above the fold
+    // Verify /brand/identity (BrandOnboardingWizard) renders the 3-cut visual Moodboard Contact Sheet above the fold
     const identityHtml = renderToStaticMarkup(
       <BrandOnboardingWizard
         organizationId="org-yagi"
@@ -1031,6 +1033,9 @@ describe("Brand Studio 5 Core Deliverables & 5 Image Models (12-Round Verificati
     );
     expect(identityHtml).toContain("data-brand-identity-moodboard-studio");
     expect(identityHtml).toContain('data-identity-aesthetic-preset="french_blue_glass"');
+    expect(identityHtml).toContain("tws-preset-collage");
+    expect(identityHtml).toContain("tws-preset-collage-main");
+    expect(identityHtml).toContain("tws-preset-collage-side");
     expect(identityHtml).toContain("data-identity-open-studio-with-aesthetic");
   });
 });
