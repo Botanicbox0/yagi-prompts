@@ -147,7 +147,7 @@ export function CampaignMoatShowcase({
             data-home-onboarding-cta
             data-tab-guide-card="identity"
           >
-            {isKo ? "브랜드 스타일" : "Brand style"}
+            {isKo ? "브랜드 키트" : "Brand Kit"}
           </a>
           <a
             href={studioHref}
@@ -155,7 +155,7 @@ export function CampaignMoatShowcase({
             data-home-studio-cta
             data-tab-guide-card="studio"
           >
-            {isKo ? "직접 제작은 셀프 스튜디오 →" : "Self Studio →"}
+            {isKo ? "스튜디오에서 직접 제작 →" : "Open Studio →"}
           </a>
         </div>
       </div>

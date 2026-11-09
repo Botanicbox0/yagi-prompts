@@ -49,6 +49,7 @@ import {
   type BrandVideoResolution,
 } from "@/lib/brands/production/pricing";
 import {
+  BRAND_AESTHETIC_PRESETS,
   BRAND_AUDIO_STUDIO_PRESETS,
   BRAND_CORE_DELIVERABLE_TRACKS,
   BRAND_CREATOR_DISTRIBUTION_TIERS,
@@ -57,10 +58,13 @@ import {
   BRAND_STUDIO_IMAGE_MODELS,
   BRAND_STUDIO_MICRO_EDIT_MODELS,
   BRAND_UPSCALING_STUDIO_ENGINES,
+  DEFAULT_CUSTOM_MOODBOARD_ITEMS,
   DEFAULT_SPATIAL_BOARD_NODES,
   FIRST_CREATION_GOALS,
   IG_OPTIMIZED_UPSCALE_LOGIC_MODULES,
+  MAX_BRAND_MOODBOARD_IMAGES,
   MICRO_REGION_SELECTION_PRESETS,
+  MODEL_EASY_COMPARISON_MATRIX,
   PINNED_COLOR_REFERENCES,
   PINNED_TEXTURE_REFERENCES,
   STUDIO_SKU_MULTI_ANGLE_PACKS,
@@ -69,12 +73,18 @@ import {
   VIDEO_REFERENCE_TARGET_SLOTS,
   VIDEO_STORYBOARD_CUT_STEPS,
   bridgeLeftImageToRightVideoReference,
+  clampMoodboardItemsToMax,
+  compileAestheticPromptForModel,
   compileSunraVideoAndUpscalePlan,
   extractBrandKitFromDomain,
   findClosestSupportedAspectRatio,
   resolveCategoryReferenceWorkflows,
+  synthesizeCustomMoodboardDna,
+  type BrandAestheticPresetId,
+  type BrandAestheticSourceMode,
   type BrandAudioPresetId,
   type BrandCoreDeliverableTrackId,
+  type BrandCustomMoodboardItem,
   type BrandSeedanceVideoTierId,
   type BrandStudioImageModelId,
   type BrandStudioMicroEditModelId,
@@ -2174,6 +2184,195 @@ export function BrandBriefStudio({
     setIsClientMounted(true);
   }, []);
 
+  // Brand Aesthetic Moodboard & Preset Lock State (Image Side Preset Picker + Max 20 Custom Moodboard)
+  const defaultPresetId: BrandAestheticPresetId =
+    activeCategory === "beauty_skincare"
+      ? "french_blue_glass"
+      : activeCategory === "fnb_hospitality"
+        ? "botanical_amber_film"
+        : "cool_daylight_lookbook";
+  const [showAestheticPicker, setShowAestheticPicker] = useState<boolean>(false);
+  const [aestheticSourceMode, setAestheticSourceMode] =
+    useState<BrandAestheticSourceMode>("twings_preset");
+  const [activeAestheticPresetId, setActiveAestheticPresetId] =
+    useState<BrandAestheticPresetId>(defaultPresetId);
+  const [customMoodboardTitle, setCustomMoodboardTitle] = useState<string>(
+    organizationName
+      ? `${organizationName} 프로젝트 무드보드`
+      : isKo
+        ? "우리 브랜드 프로젝트 무드보드"
+        : "Project Moodboard",
+  );
+  const [customMoodboardItems, setCustomMoodboardItems] = useState<
+    BrandCustomMoodboardItem[]
+  >(() => clampMoodboardItemsToMax(DEFAULT_CUSTOM_MOODBOARD_ITEMS));
+
+  const activeAestheticPreset =
+    BRAND_AESTHETIC_PRESETS.find((p) => p.id === activeAestheticPresetId) ??
+    BRAND_AESTHETIC_PRESETS[0]!;
+  const synthesizedCustomMoodboard = synthesizeCustomMoodboardDna(
+    customMoodboardItems,
+    customMoodboardTitle,
+  );
+  const activeAestheticDna =
+    aestheticSourceMode === "custom_moodboard"
+      ? synthesizedCustomMoodboard.dna
+      : activeAestheticPreset.dna;
+  const activeAestheticLabel =
+    aestheticSourceMode === "custom_moodboard"
+      ? isKo
+        ? `커스텀 무드보드 (${customMoodboardItems.length}/${MAX_BRAND_MOODBOARD_IMAGES}장)`
+        : `Custom Moodboard (${customMoodboardItems.length}/${MAX_BRAND_MOODBOARD_IMAGES})`
+      : isKo
+        ? activeAestheticPreset.titleKo
+        : activeAestheticPreset.titleEn;
+  const activeAestheticThumb =
+    aestheticSourceMode === "custom_moodboard"
+      ? customMoodboardItems[0]?.src ?? activeAestheticPreset.coverImage
+      : activeAestheticPreset.coverImage;
+  const activeEasyModelRow =
+    MODEL_EASY_COMPARISON_MATRIX.find(
+      (r) => r.modelId === selectedImageModelId,
+    ) ?? MODEL_EASY_COMPARISON_MATRIX[0]!;
+  const compiledModelAestheticPreview = compileAestheticPromptForModel({
+    modelId: selectedImageModelId,
+    mode: aestheticSourceMode,
+    presetId: activeAestheticPresetId,
+    customItems: customMoodboardItems,
+    customTitle: customMoodboardTitle,
+    userBrief: briefText,
+    locale,
+  });
+
+  function handleSelectAestheticPreset(presetId: BrandAestheticPresetId) {
+    const found =
+      BRAND_AESTHETIC_PRESETS.find((p) => p.id === presetId) ??
+      BRAND_AESTHETIC_PRESETS[0]!;
+    setAestheticSourceMode("twings_preset");
+    setActiveAestheticPresetId(found.id);
+    setPinnedColorRefId(found.pinnedColorId);
+    setPinnedTextureRefId(found.pinnedTextureId);
+    setIsColorRefPinned(true);
+    setIsTextureRefPinned(true);
+    setCustomSlotThumbs(found.slotDefaults);
+    setGuideProgress((p) => ({ ...p, refs: true }));
+    setStatusMessage(
+      isKo
+        ? `'${found.titleKo}' 미감 프리셋이 이미지 보드에 고정되었습니다. 선택한 모델(${shortImageModelName})에 맞춰 조명·팔레트·피부결 규칙이 자동 최적화됩니다.`
+        : `'${found.titleEn}' aesthetic preset locked on the image board and optimized for ${shortImageModelName}.`,
+    );
+  }
+
+  function handleMoodboardMultiUpload(e: ChangeEvent<HTMLInputElement>) {
+    const fileList = e.target.files;
+    if (!fileList || fileList.length === 0) return;
+    const remainingSlots =
+      MAX_BRAND_MOODBOARD_IMAGES - customMoodboardItems.length;
+    if (remainingSlots <= 0) {
+      setStatusMessage(
+        isKo
+          ? `무드보드는 최대 ${MAX_BRAND_MOODBOARD_IMAGES}장까지만 등록할 수 있습니다. 기존 이미지를 지운 뒤 추가해 주세요.`
+          : `Moodboards support up to ${MAX_BRAND_MOODBOARD_IMAGES} images maximum.`,
+      );
+      return;
+    }
+    const nextAdded: BrandCustomMoodboardItem[] = [];
+    const paletteCycle = ["#3875C5", "#DCEAF7", "#1E293B", "#64748B"] as const;
+    for (
+      let i = 0;
+      i < Math.min(fileList.length, remainingSlots);
+      i += 1
+    ) {
+      const file = fileList[i];
+      if (!file) continue;
+      const url = createManagedObjectUrl(file);
+      if (!url) continue;
+      nextAdded.push({
+        id: `mb-upload-${Date.now()}-${i}`,
+        src: url,
+        labelKo: file.name,
+        labelEn: file.name,
+        dominantHex: paletteCycle[i % paletteCycle.length]!,
+      });
+    }
+    if (nextAdded.length === 0) return;
+    const updated = clampMoodboardItemsToMax([
+      ...customMoodboardItems,
+      ...nextAdded,
+    ]);
+    setCustomMoodboardItems(updated);
+    setAestheticSourceMode("custom_moodboard");
+    setGuideProgress((p) => ({ ...p, refs: true }));
+    setStatusMessage(
+      isKo
+        ? `무드보드 사진 ${nextAdded.length}장이 추가되어 총 ${updated.length}/${MAX_BRAND_MOODBOARD_IMAGES}장 미감으로 고정되었습니다.`
+        : `Added ${nextAdded.length} photos (${updated.length}/${MAX_BRAND_MOODBOARD_IMAGES} locked in custom moodboard).`,
+    );
+  }
+
+  function handleAddSampleMoodboardPhoto() {
+    if (customMoodboardItems.length >= MAX_BRAND_MOODBOARD_IMAGES) {
+      setStatusMessage(
+        isKo
+          ? `무드보드는 최대 ${MAX_BRAND_MOODBOARD_IMAGES}장까지만 넣을 수 있습니다.`
+          : `Maximum ${MAX_BRAND_MOODBOARD_IMAGES} moodboard images reached.`,
+      );
+      return;
+    }
+    const samplePool: ReadonlyArray<Omit<BrandCustomMoodboardItem, "id">> = [
+      {
+        src: "/reel/brands/slot-3-pose-lowangle-lookbook.jpg",
+        labelKo: "로우앵글 전신 구도",
+        labelEn: "Low-Angle Full-Body Ref",
+        dominantHex: "#2A3648",
+      },
+      {
+        src: "/reel/landing/c-garment-wide.webp",
+        labelKo: "화이트 셔츠 드레이프",
+        labelEn: "Crisp Shirt Drape",
+        dominantHex: "#ECEFF3",
+      },
+      {
+        src: "/reel/brands/tea-editorial.jpg",
+        labelKo: "세라믹 & 자연광 정물",
+        labelEn: "Ceramic & Daylight Still",
+        dominantHex: "#C89B6E",
+      },
+      {
+        src: "/reel/brands/studio-rain-editorial-1080p.jpg",
+        labelKo: "나이트 빗물 반사광",
+        labelEn: "Night Rain Specular",
+        dominantHex: "#0E1522",
+      },
+    ];
+    const pick =
+      samplePool[customMoodboardItems.length % samplePool.length]!;
+    const updated = clampMoodboardItemsToMax([
+      ...customMoodboardItems,
+      {
+        ...pick,
+        id: `mb-sample-${Date.now()}-${customMoodboardItems.length + 1}`,
+      },
+    ]);
+    setCustomMoodboardItems(updated);
+    setAestheticSourceMode("custom_moodboard");
+  }
+
+  function handleRemoveCustomMoodboardItem(id: string) {
+    if (customMoodboardItems.length <= 1) return;
+    setCustomMoodboardItems((prev) => prev.filter((item) => item.id !== id));
+  }
+
+  function handleApplyModelOptimizedAestheticPrompt() {
+    setBriefText(compiledModelAestheticPreview.compiledPrompt);
+    setGuideProgress((p) => ({ ...p, refs: true }));
+    setStatusMessage(
+      isKo
+        ? `'${activeAestheticLabel}' 미감을 ${shortImageModelName} 전용 프롬프트 구조(${compiledModelAestheticPreview.structureBadge})로 변환해 요청창에 적용했습니다.`
+        : `Applied ${shortImageModelName}-optimized prompt for '${activeAestheticLabel}'.`,
+    );
+  }
+
   const isBoardSurface = studioSurfaceMode !== "track_audio";
   const studioTab: "dual" | "image" | "video" | "audio" =
     !isBoardSurface
@@ -2446,10 +2645,10 @@ export function BrandBriefStudio({
           >
             {(
               [
-                { id: "dual", ko: "듀얼 보드", en: "Dual board" },
-                { id: "image", ko: "이미지 · 부분 수정", en: "Image & edit" },
-                { id: "video", ko: "영상 · 업스케일", en: "Video & upscale" },
-                { id: "audio", ko: "사운드", en: "Sound" },
+                { id: "image", ko: "1. 이미지 제작", en: "1. Image" },
+                { id: "video", ko: "2. 영상 제작", en: "2. Video" },
+                { id: "audio", ko: "3. 사운드", en: "3. Sound" },
+                { id: "dual", ko: "이미지+영상 나란히", en: "Side-by-side" },
               ] as const
             ).map((tab) => (
               <button
@@ -2467,19 +2666,56 @@ export function BrandBriefStudio({
             ))}
           </div>
           <div className="tws-header-aside">
-            <span className="tws-lock">
-              {isKo
-                ? `${organizationName || "우리"} 브랜드 색감 적용 중`
-                : `${organizationName || "Brand"} look applied`}
-            </span>
+            {isBoardSurface ? (
+              <button
+                type="button"
+                className="tws-lock-btn"
+                data-studio-aesthetic-trigger
+                aria-expanded={showAestheticPicker}
+                onClick={() => setShowAestheticPicker((p) => !p)}
+              >
+                <img
+                  src={activeAestheticThumb}
+                  alt=""
+                  aria-hidden="true"
+                  className="tws-lock-thumb"
+                />
+                <span className="tws-lock-text">
+                  {isKo
+                    ? `미감 고정: ${activeAestheticLabel}`
+                    : `Aesthetic: ${activeAestheticLabel}`}
+                </span>
+                <span className="tws-lock-swatches" aria-hidden="true">
+                  {activeAestheticDna.paletteHex.map((hex) => (
+                    <i key={hex} style={{ backgroundColor: hex }} />
+                  ))}
+                </span>
+                <span className="tws-lock-action">
+                  {showAestheticPicker
+                    ? isKo
+                      ? "닫기"
+                      : "Close"
+                    : isKo
+                      ? "미감 바꾸기"
+                      : "Change"}
+                </span>
+              </button>
+            ) : (
+              <span className="tws-lock">
+                {isKo
+                  ? `${organizationName || "우리"} 브랜드 색감 적용 중`
+                  : `${organizationName || "Brand"} look applied`}
+              </span>
+            )}
             {isBoardSurface ? (
               <button
                 type="button"
                 className="tws-btn tws-btn-sm"
+                data-studio-model-guide-trigger
                 aria-expanded={showFullModelGuide}
                 onClick={() => setShowFullModelGuide((p) => !p)}
               >
-                {isKo ? "이미지 모델 비교" : "Compare image models"}
+                {isKo ? "모델별 특징 · 실증 비교" : "Model traits & proof"}
               </button>
             ) : null}
           </div>
@@ -2489,12 +2725,12 @@ export function BrandBriefStudio({
         <p className="tws-intro">
           {studioTab === "dual"
             ? isKo
-              ? "왼쪽에서 화보를 만들고 고친 뒤, 그 장면을 오른쪽에서 영상으로 움직입니다."
-              : "Make and fix the still on the left, then move that frame into video on the right."
+              ? "왼쪽에서 미감 프리셋과 참고 사진으로 화보를 만들고, 그 장면을 오른쪽에서 영상으로 움직입니다."
+              : "Lock an aesthetic preset and make the still on the left, then move that frame into video on the right."
             : studioTab === "image"
               ? isKo
-                ? "참고 사진으로 화보를 만들고, 고칠 곳만 네모로 지정해 다시 그립니다. 경계는 지우개로 부드럽게 섞습니다."
-                : "Generate from reference photos, redraw only the boxed area, then feather the edges."
+                ? "만들기 전에 프로젝트 미감(TWINGS 프리셋 또는 최대 20장 무드보드)을 먼저 잠그고, 선택한 모델에 맞춰 최적화된 화보를 만듭니다."
+                : "Lock your aesthetic preset or 20-image moodboard first, then generate and box-edit with model-optimized prompts."
               : studioTab === "video"
                 ? isKo
                   ? "첫 장면을 정해 720p로 움직임을 확인하고, 마음에 들면 1080p나 4K로 마감합니다."
@@ -2516,14 +2752,14 @@ export function BrandBriefStudio({
                   {
                     n: 1,
                     done: guideProgress.refs,
-                    ko: "참고 사진 고르기",
-                    en: "Pick reference photos",
+                    ko: "미감 프리셋 · 참고 사진 고르기",
+                    en: "Lock aesthetic & reference photos",
                   },
                   {
                     n: 2,
                     done: guideProgress.image,
-                    ko: "화보 만들기 · 고칠 곳은 네모로",
-                    en: "Make the still · box what to fix",
+                    ko: "모델 고르고 화보 만들기 · 부분 수정",
+                    en: "Pick model & make the still",
                   },
                   {
                     n: 3,
@@ -2592,24 +2828,332 @@ export function BrandBriefStudio({
           ) : null}
         </div>
 
-        {isBoardSurface && showFullModelGuide ? (
-          <div className="tws-panel tws-panel-compact">
-            <div className="tws-options" role="radiogroup" aria-label={isKo ? "이미지 모델" : "Image model"}>
-              {BRAND_STUDIO_IMAGE_MODELS.map((m) => (
+        {/* ===================================================================
+            MOODBOARD & AESTHETIC STYLE PICKER (`[ TWINGS 프리셋 | 우리 브랜드 무드보드 (최대 20장) ]`)
+            Fixes context-less image models by locking reverse-engineered visual DNA before generation.
+           =================================================================== */}
+        {isBoardSurface && showAestheticPicker ? (
+          <section
+            className="tws-moodboard-drawer"
+            data-studio-aesthetic-picker
+            aria-label={isKo ? "미감 프리셋 및 브랜드 무드보드 설정" : "Aesthetic presets & custom moodboard"}
+          >
+            <div className="tws-moodboard-top">
+              <div className="tws-moodboard-title-group">
+                <strong>
+                  {isKo
+                    ? "이미지 미감 프리셋 · 무드보드 고정"
+                    : "Lock Image Aesthetic Preset or Moodboard"}
+                </strong>
+                <span>
+                  {isKo
+                    ? "맥락이 없는 이미지 모델도 일관된 톤을 내도록, 촬영 전 미감을 프리셋처럼 장착하고 모델별 최적 프롬프트로 자동 변환합니다."
+                    : "Lock a curated aesthetic preset or up to 20 project moodboard images before generating."}
+                </span>
+              </div>
+              <div
+                className="tws-seg"
+                role="tablist"
+                aria-label={isKo ? "미감 설정 방식" : "Aesthetic mode"}
+                data-aesthetic-mode-toggle
+              >
                 <button
-                  key={m.id}
                   type="button"
-                  role="radio"
-                  aria-checked={selectedImageModelId === m.id}
-                  className="tws-option"
-                  onClick={() => setSelectedImageModelId(m.id)}
+                  role="tab"
+                  aria-selected={aestheticSourceMode === "twings_preset"}
+                  data-aesthetic-mode-btn="twings_preset"
+                  onClick={() => setAestheticSourceMode("twings_preset")}
                 >
-                  <strong>{(isKo ? m.nameKo : m.nameEn).split("·")[0]?.trim()}</strong>
-                  <span>{isKo ? m.tierBadgeKo : m.tierBadgeEn}</span>
+                  {isKo ? "TWINGS 프리셋 (6종)" : "TWINGS Presets (6)"}
                 </button>
-              ))}
+                <button
+                  type="button"
+                  role="tab"
+                  aria-selected={aestheticSourceMode === "custom_moodboard"}
+                  data-aesthetic-mode-btn="custom_moodboard"
+                  onClick={() => setAestheticSourceMode("custom_moodboard")}
+                >
+                  {isKo
+                    ? `우리 브랜드 무드보드 (${customMoodboardItems.length}/${MAX_BRAND_MOODBOARD_IMAGES}장)`
+                    : `Custom Moodboard (${customMoodboardItems.length}/${MAX_BRAND_MOODBOARD_IMAGES})`}
+                </button>
+              </div>
+              <button
+                type="button"
+                className="tws-btn tws-btn-sm tws-btn-quiet"
+                onClick={() => setShowAestheticPicker(false)}
+              >
+                {isKo ? "접기" : "Collapse"}
+              </button>
             </div>
-          </div>
+
+            {aestheticSourceMode === "twings_preset" ? (
+              <div
+                className="tws-preset-grid"
+                role="radiogroup"
+                aria-label={isKo ? "TWINGS 미감 프리셋" : "TWINGS aesthetic presets"}
+              >
+                {BRAND_AESTHETIC_PRESETS.map((preset) => {
+                  const isSelected =
+                    aestheticSourceMode === "twings_preset" &&
+                    activeAestheticPresetId === preset.id;
+                  return (
+                    <button
+                      key={preset.id}
+                      type="button"
+                      role="radio"
+                      aria-checked={isSelected}
+                      className="tws-preset-card"
+                      data-aesthetic-preset-card={preset.id}
+                      onClick={() => handleSelectAestheticPreset(preset.id)}
+                    >
+                      <div className="tws-preset-media">
+                        <img
+                          src={preset.coverImage}
+                          alt={isKo ? preset.titleKo : preset.titleEn}
+                        />
+                        <span className="tws-preset-badge">
+                          {isSelected
+                            ? isKo
+                              ? "미감 장착됨"
+                              : "Locked"
+                            : isKo
+                              ? preset.badgeKo
+                              : preset.badgeEn}
+                        </span>
+                        <div className="tws-preset-overlay">
+                          <strong className="tws-preset-overlay-title">
+                            {preset.cardOverlayTitle}
+                          </strong>
+                          <span className="tws-preset-swatches" aria-hidden="true">
+                            {preset.dna.paletteHex.map((hex) => (
+                              <i key={hex} style={{ backgroundColor: hex }} />
+                            ))}
+                          </span>
+                        </div>
+                      </div>
+                      <div className="tws-preset-meta">
+                        <div className="tws-preset-meta-head">
+                          <strong>{isKo ? preset.titleKo : preset.titleEn}</strong>
+                          <small>
+                            {isKo ? "추천:" : "Best:"}{" "}
+                            {preset.recommendedModelId === "seedream_5_0_pro"
+                              ? "Seedream 5.0 Pro"
+                              : preset.recommendedModelId === "gpt_image_2_6"
+                                ? "GPT Image 2.6"
+                                : preset.recommendedModelId === "nano_banana_2_1"
+                                  ? "Nano Banana 2.1"
+                                  : "Nano Banana Pro"}
+                          </small>
+                        </div>
+                        <p>{isKo ? preset.summaryKo : preset.summaryEn}</p>
+                      </div>
+                    </button>
+                  );
+                })}
+              </div>
+            ) : (
+              <div className="tws-custom-moodboard" data-custom-moodboard-panel>
+                <div className="tws-custom-moodboard-bar">
+                  <label className="tws-custom-moodboard-title">
+                    <span>{isKo ? "무드보드 이름" : "Moodboard name"}</span>
+                    <input
+                      type="text"
+                      value={customMoodboardTitle}
+                      maxLength={60}
+                      onChange={(e) => setCustomMoodboardTitle(e.target.value)}
+                    />
+                  </label>
+                  <div className="tws-custom-moodboard-actions">
+                    <span
+                      className="tws-moodboard-counter"
+                      data-moodboard-count-badge
+                    >
+                      {isKo
+                        ? `${customMoodboardItems.length} / 최대 ${MAX_BRAND_MOODBOARD_IMAGES}장`
+                        : `${customMoodboardItems.length} / Max ${MAX_BRAND_MOODBOARD_IMAGES} images`}
+                    </span>
+                    <label
+                      className="tws-btn tws-btn-sm"
+                      aria-disabled={
+                        customMoodboardItems.length >= MAX_BRAND_MOODBOARD_IMAGES
+                      }
+                    >
+                      {isKo
+                        ? `+ 내 레퍼런스 사진 추가 (최대 ${MAX_BRAND_MOODBOARD_IMAGES}장)`
+                        : `+ Add moodboard photos (Max ${MAX_BRAND_MOODBOARD_IMAGES})`}
+                      <input
+                        type="file"
+                        accept="image/*"
+                        multiple
+                        disabled={
+                          customMoodboardItems.length >= MAX_BRAND_MOODBOARD_IMAGES
+                        }
+                        onChange={handleMoodboardMultiUpload}
+                        style={{
+                          position: "absolute",
+                          width: 1,
+                          height: 1,
+                          opacity: 0,
+                          pointerEvents: "none",
+                        }}
+                      />
+                    </label>
+                    <button
+                      type="button"
+                      className="tws-btn tws-btn-sm"
+                      disabled={
+                        customMoodboardItems.length >= MAX_BRAND_MOODBOARD_IMAGES
+                      }
+                      onClick={handleAddSampleMoodboardPhoto}
+                    >
+                      {isKo ? "+ 샘플 화보 추가" : "+ Add sample ref"}
+                    </button>
+                  </div>
+                </div>
+
+                <div className="tws-custom-moodboard-grid">
+                  {customMoodboardItems.map((item, idx) => (
+                    <div
+                      key={item.id}
+                      className="tws-moodboard-item"
+                      data-moodboard-item-index={idx + 1}
+                    >
+                      <img
+                        src={item.src}
+                        alt={isKo ? item.labelKo : item.labelEn}
+                        loading="lazy"
+                      />
+                      <span className="tws-moodboard-item-num">
+                        {String(idx + 1).padStart(2, "0")}
+                      </span>
+                      {customMoodboardItems.length > 1 ? (
+                        <button
+                          type="button"
+                          className="tws-moodboard-item-del"
+                          aria-label={isKo ? "사진 제외" : "Remove photo"}
+                          onClick={() => handleRemoveCustomMoodboardItem(item.id)}
+                        >
+                          ×
+                        </button>
+                      ) : null}
+                      <span className="tws-moodboard-item-cap">
+                        {isKo ? item.labelKo : item.labelEn}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            <div
+              className="tws-moodboard-dna-bar"
+              data-model-optimized-prompt-preview
+            >
+              <div className="tws-moodboard-dna-summary">
+                <span className="tws-moodboard-dna-kicker">
+                  {isKo
+                    ? `역설계 미감 고정 · ${shortImageModelName} 자동 최적화 (${compiledModelAestheticPreview.structureBadge})`
+                    : `Reverse-Engineered DNA · Optimized for ${shortImageModelName}`}
+                </span>
+                <p>{compiledModelAestheticPreview.compiledPrompt}</p>
+              </div>
+              <button
+                type="button"
+                className="tws-btn tws-btn-sm"
+                onClick={handleApplyModelOptimizedAestheticPrompt}
+              >
+                {isKo
+                  ? "이 최적화 문구를 요청창에 넣기"
+                  : "Insert optimized prompt"}
+              </button>
+            </div>
+          </section>
+        ) : null}
+
+        {/* ===================================================================
+            USER-FRIENDLY 5-MODEL COMPARISON & EMPIRICAL VERIFICATION DRAWER
+           =================================================================== */}
+        {isBoardSurface && showFullModelGuide ? (
+          <section
+            className="tws-model-guide-drawer"
+            data-studio-model-comparison-drawer
+            aria-label={isKo ? "이미지 모델별 특징 및 실증 비교" : "Image model comparison & empirical proof"}
+          >
+            <div className="tws-model-guide-head">
+              <div>
+                <strong>
+                  {isKo
+                    ? "어떤 이미지 모델을 고르면 좋을까요? (역설계 프롬프트 실증 비교)"
+                    : "Which image model should you pick? (Empirical prompt optimization guide)"}
+                </strong>
+                <span>
+                  {isKo
+                    ? "같은 미감 프리셋이라도 모델마다 가장 잘 알아듣는 프롬프트 구조가 다릅니다. 원하는 강점에 맞춰 모델을 골라 보세요."
+                    : "Each model excels at a distinct visual task and automatically receives its optimal prompt structure."}
+                </span>
+              </div>
+              <button
+                type="button"
+                className="tws-btn tws-btn-sm tws-btn-quiet"
+                onClick={() => setShowFullModelGuide(false)}
+              >
+                {isKo ? "닫기" : "Close"}
+              </button>
+            </div>
+            <div
+              className="tws-model-guide-grid"
+              role="radiogroup"
+              aria-label={isKo ? "이미지 모델 선택" : "Image model selection"}
+            >
+              {MODEL_EASY_COMPARISON_MATRIX.map((row) => {
+                const fullSpec =
+                  BRAND_STUDIO_IMAGE_MODELS.find((m) => m.id === row.modelId) ??
+                  BRAND_STUDIO_IMAGE_MODELS[0]!;
+                const isSelected = selectedImageModelId === row.modelId;
+                return (
+                  <button
+                    key={row.modelId}
+                    type="button"
+                    role="radio"
+                    aria-checked={isSelected}
+                    className="tws-model-guide-card"
+                    data-model-comparison-card={row.modelId}
+                    onClick={() => setSelectedImageModelId(row.modelId)}
+                  >
+                    <div className="tws-model-guide-thumb">
+                      <img
+                        src={row.verifiedSampleImage}
+                        alt={row.shortName}
+                        loading="lazy"
+                      />
+                      <span className="tws-model-guide-badge">
+                        {isKo ? row.bestBadgeKo : row.bestBadgeEn}
+                      </span>
+                    </div>
+                    <div className="tws-model-guide-body">
+                      <div className="tws-model-guide-title">
+                        <strong>{row.shortName}</strong>
+                        <small>
+                          {isKo ? row.speedBadgeKo : row.speedBadgeEn} · 5
+                          {isKo ? "장 " : " cuts "}₩
+                          {fullSpec.priceKrwPer5Set.toLocaleString()}
+                        </small>
+                      </div>
+                      <p className="tws-model-guide-when">
+                        {isKo ? row.oneLineWhenKo : row.oneLineWhenEn}
+                      </p>
+                      <span className="tws-model-guide-formula">
+                        {isKo
+                          ? `최적화: ${row.promptStructureLabelKo}`
+                          : `Format: ${row.promptStructureLabelEn}`}
+                      </span>
+                    </div>
+                  </button>
+                );
+              })}
+            </div>
+          </section>
         ) : null}
 
         <div id="tws-panel" role="tabpanel" aria-labelledby={`tws-tab-${studioTab}`}>
@@ -2626,113 +3170,230 @@ export function BrandBriefStudio({
                   data-left-spatial-image-board
                 >
                   <div className="tws-board-head">
-                    <span className="tws-board-title">
-                      {isKo ? "이미지" : "Image"}
-                      <small>{shortImageModelName} · 2K</small>
-                    </span>
-                    <div className="tws-seg" role="group" aria-label={isKo ? "편집 도구" : "Edit tools"}>
-                      {(
-                        [
-                          { id: "rect_box", key: "M", ko: "네모 선택", en: "Box", tipKo: "고칠 부분을 네모로 지정", tipEn: "Box the area to fix" },
-                          { id: "edge_erase", key: "E", ko: "가장자리 지우개", en: "Edge eraser", tipKo: "수정한 부분의 경계를 원본과 섞기", tipEn: "Blend the patch edge into the original" },
-                          { id: "restore_brush", key: "R", ko: "복원 붓", en: "Restore", tipKo: "지운 부분을 수정본으로 되돌리기", tipEn: "Bring the patch back" },
-                        ] as const
-                      ).map((tool) => (
-                        <button
-                          key={tool.id}
-                          type="button"
-                          aria-pressed={opluxEditTool === tool.id}
-                          title={`${isKo ? tool.tipKo : tool.tipEn} (${tool.key})`}
-                          onClick={() => {
-                            setOpluxEditTool(tool.id);
-                            setImageSubMode("micro_region_edit");
-                          }}
-                        >
-                          {isKo ? tool.ko : tool.en}
-                          <span className="tws-kbd" aria-hidden="true">
-                            {tool.key}
-                          </span>
-                        </button>
-                      ))}
+                    <div className="tws-board-title-wrap">
+                      <span className="tws-board-title">
+                        {isKo ? "이미지 보드" : "Image board"}
+                        <small>{shortImageModelName} · 2K</small>
+                      </span>
+                      <button
+                        type="button"
+                        className="tws-board-aesthetic-pill"
+                        data-image-board-aesthetic-pill
+                        aria-expanded={showAestheticPicker}
+                        onClick={() => setShowAestheticPicker((p) => !p)}
+                        title={
+                          isKo
+                            ? "이미지 만들기 전 프로젝트 미감 프리셋 또는 최대 20장 무드보드를 설정합니다"
+                            : "Lock aesthetic preset or 20-image moodboard before generating"
+                        }
+                      >
+                        <img src={activeAestheticThumb} alt="" aria-hidden="true" />
+                        <span>
+                          {isKo
+                            ? `미감: ${activeAestheticLabel}`
+                            : `Mood: ${activeAestheticLabel}`}
+                        </span>
+                        <em>
+                          {showAestheticPicker
+                            ? isKo
+                              ? "접기"
+                              : "Hide"
+                            : isKo
+                              ? "무드보드"
+                              : "Moodboard"}
+                        </em>
+                      </button>
+                    </div>
+                    <div
+                      className="tws-seg"
+                      role="group"
+                      aria-label={isKo ? "작업 방식" : "Work mode"}
+                    >
+                      <button
+                        type="button"
+                        aria-pressed={imageSubMode !== "micro_region_edit"}
+                        onClick={() => {
+                          setImageSubMode("multi_ref_generate");
+                          setOpluxEditTool("rect_box");
+                        }}
+                      >
+                        {isKo ? "새 화보 만들기" : "Generate still"}
+                      </button>
+                      <button
+                        type="button"
+                        aria-pressed={imageSubMode === "micro_region_edit"}
+                        onClick={() => {
+                          setImageSubMode("micro_region_edit");
+                          setOpluxEditTool("rect_box");
+                        }}
+                      >
+                        {isKo ? "부분 수정 (네모·지우개)" : "Region edit"}
+                      </button>
                     </div>
                   </div>
 
-                  <div className="tws-toolrow">
-                    {opluxEditTool === "rect_box" ? (
+                  <div className="tws-toolrow" data-quick-aesthetic-strip>
+                    {imageSubMode !== "micro_region_edit" ? (
                       <>
-                        <span className="tws-toolrow-label">{isKo ? "빠른 선택" : "Quick pick"}</span>
-                        {MICRO_REGION_SELECTION_PRESETS.map((preset) => (
-                          <button
-                            key={preset.id}
-                            type="button"
-                            className="tws-chip"
-                            aria-pressed={
-                              imageSubMode === "micro_region_edit" && activeRegionPresetId === preset.id
-                            }
-                            onClick={() => handleSelectRegionPreset(preset.id)}
-                          >
-                            {(isKo ? preset.labelKo : preset.labelEn).split("·")[0]?.trim()}
-                          </button>
-                        ))}
-                        {imageSubMode === "micro_region_edit" ? (
-                          <button
-                            type="button"
-                            className="tws-btn tws-btn-sm tws-btn-quiet"
-                            onClick={() => setImageSubMode("multi_ref_generate")}
-                          >
-                            {isKo ? "네모 해제" : "Clear box"}
-                          </button>
-                        ) : null}
-                      </>
-                    ) : (
-                      <>
-                        <label className="tws-slider">
-                          {isKo ? "크기" : "Size"}
-                          <input
-                            type="range"
-                            min={4}
-                            max={80}
-                            value={eraserBrushSize}
-                            onChange={(e) => setEraserBrushSize(Number(e.target.value))}
-                          />
-                          <output>{eraserBrushSize}px</output>
-                        </label>
-                        <label className="tws-slider">
-                          {isKo ? "세기" : "Strength"}
-                          <input
-                            type="range"
-                            min={10}
-                            max={100}
-                            step={5}
-                            value={eraserOpacityPct}
-                            onChange={(e) => setEraserOpacityPct(Number(e.target.value))}
-                          />
-                          <output>{eraserOpacityPct}%</output>
-                        </label>
-                        <button
-                          type="button"
-                          className="tws-btn tws-btn-sm"
-                          disabled={edgeEraseStrokes.length === 0}
-                          onClick={() => setEdgeEraseStrokes((p) => p.slice(0, -1))}
-                          title={isKo ? "한 번 되돌리기 (Ctrl+Z)" : "Undo (Ctrl+Z)"}
-                        >
-                          {isKo ? "되돌리기" : "Undo"}
-                        </button>
+                        <span className="tws-toolrow-label">
+                          {isKo ? "미감 프리셋" : "Aesthetic"}
+                        </span>
+                        {BRAND_AESTHETIC_PRESETS.map((preset) => {
+                          const isSelected =
+                            aestheticSourceMode === "twings_preset" &&
+                            activeAestheticPresetId === preset.id;
+                          return (
+                            <button
+                              key={preset.id}
+                              type="button"
+                              role="radio"
+                              aria-checked={isSelected}
+                              className="tws-preset-chip"
+                              data-quick-preset-chip={preset.id}
+                              onClick={() => handleSelectAestheticPreset(preset.id)}
+                            >
+                              <img src={preset.coverImage} alt="" aria-hidden="true" />
+                              <span>{isKo ? preset.titleKo : preset.titleEn}</span>
+                            </button>
+                          );
+                        })}
                         <button
                           type="button"
                           className="tws-btn tws-btn-sm tws-btn-quiet"
-                          disabled={edgeEraseStrokes.length === 0}
-                          onClick={() => setEdgeEraseStrokes([])}
+                          onClick={() => {
+                            setAestheticSourceMode("custom_moodboard");
+                            setShowAestheticPicker(true);
+                          }}
                         >
-                          {isKo ? "모두 지우기" : "Clear"}
+                          {isKo
+                            ? `+ 무드보드 (${customMoodboardItems.length}/${MAX_BRAND_MOODBOARD_IMAGES}장)`
+                            : `+ Moodboard (${customMoodboardItems.length}/${MAX_BRAND_MOODBOARD_IMAGES})`}
                         </button>
+                      </>
+                    ) : (
+                      <>
+                        <div
+                          className="tws-seg"
+                          role="group"
+                          aria-label={isKo ? "편집 도구" : "Edit tools"}
+                        >
+                          {(
+                            [
+                              {
+                                id: "rect_box",
+                                key: "M",
+                                ko: "네모 선택",
+                                en: "Box",
+                                tipKo: "고칠 부분을 네모로 지정",
+                                tipEn: "Box the area to fix",
+                              },
+                              {
+                                id: "edge_erase",
+                                key: "E",
+                                ko: "가장자리 지우개",
+                                en: "Edge eraser",
+                                tipKo: "수정한 부분의 경계를 원본과 섞기",
+                                tipEn: "Blend the patch edge into the original",
+                              },
+                              {
+                                id: "restore_brush",
+                                key: "R",
+                                ko: "복원 붓",
+                                en: "Restore",
+                                tipKo: "지운 부분을 수정본으로 되돌리기",
+                                tipEn: "Bring the patch back",
+                              },
+                            ] as const
+                          ).map((tool) => (
+                            <button
+                              key={tool.id}
+                              type="button"
+                              aria-pressed={opluxEditTool === tool.id}
+                              title={`${isKo ? tool.tipKo : tool.tipEn} (${tool.key})`}
+                              onClick={() => {
+                                setOpluxEditTool(tool.id);
+                                setImageSubMode("micro_region_edit");
+                              }}
+                            >
+                              {isKo ? tool.ko : tool.en}
+                              <span className="tws-kbd" aria-hidden="true">
+                                {tool.key}
+                              </span>
+                            </button>
+                          ))}
+                        </div>
+                        {opluxEditTool === "rect_box" ? (
+                          <>
+                            <span className="tws-toolrow-label">
+                              {isKo ? "부위 바로 선택" : "Quick area"}
+                            </span>
+                            {MICRO_REGION_SELECTION_PRESETS.map((preset) => (
+                              <button
+                                key={preset.id}
+                                type="button"
+                                className="tws-chip"
+                                aria-pressed={
+                                  imageSubMode === "micro_region_edit" &&
+                                  activeRegionPresetId === preset.id
+                                }
+                                onClick={() => handleSelectRegionPreset(preset.id)}
+                              >
+                                {(isKo ? preset.labelKo : preset.labelEn)
+                                  .split("·")[0]
+                                  ?.trim()}
+                              </button>
+                            ))}
+                          </>
+                        ) : (
+                          <>
+                            <label className="tws-slider">
+                              {isKo ? "크기" : "Size"}
+                              <input
+                                type="range"
+                                min={4}
+                                max={80}
+                                value={eraserBrushSize}
+                                onChange={(e) =>
+                                  setEraserBrushSize(Number(e.target.value))
+                                }
+                              />
+                              <output>{eraserBrushSize}px</output>
+                            </label>
+                            <label className="tws-slider">
+                              {isKo ? "세기" : "Strength"}
+                              <input
+                                type="range"
+                                min={10}
+                                max={100}
+                                step={5}
+                                value={eraserOpacityPct}
+                                onChange={(e) =>
+                                  setEraserOpacityPct(Number(e.target.value))
+                                }
+                              />
+                              <output>{eraserOpacityPct}%</output>
+                            </label>
+                            <button
+                              type="button"
+                              className="tws-btn tws-btn-sm"
+                              disabled={edgeEraseStrokes.length === 0}
+                              onClick={() =>
+                                setEdgeEraseStrokes((p) => p.slice(0, -1))
+                              }
+                            >
+                              {isKo ? "되돌리기" : "Undo"}
+                            </button>
+                          </>
+                        )}
                       </>
                     )}
                   </div>
 
                   <div className="tws-stage">
                     <div className="tws-rail" aria-label={isKo ? "참고 사진" : "References"}>
-                      <span className="tws-rail-label">{isKo ? "참고 사진" : "References"}</span>
+                      <span className="tws-rail-label">
+                        {isKo ? "1. 참고 사진 (1~4)" : "1. References"}
+                      </span>
                       {activeRefWorkflow.slots.map((slot) => {
                         const role = (
                           {
@@ -2904,6 +3565,35 @@ export function BrandBriefStudio({
                   </div>
 
                   <div className="tws-composer" data-bottom-image-chat-box>
+                    <div
+                      className="tws-model-pills"
+                      role="radiogroup"
+                      aria-label={isKo ? "3. 이미지 모델 선택" : "3. Select image model"}
+                    >
+                      <span className="tws-toolrow-label">
+                        {isKo ? "3. 모델 선택" : "3. Model"}
+                      </span>
+                      {MODEL_EASY_COMPARISON_MATRIX.map((row) => {
+                        const isSelected = selectedImageModelId === row.modelId;
+                        const shortBadge = isKo
+                          ? row.bestBadgeKo.split("·")[0]?.trim()
+                          : row.bestBadgeEn.split("·")[0]?.trim();
+                        return (
+                          <button
+                            key={row.modelId}
+                            type="button"
+                            role="radio"
+                            aria-checked={isSelected}
+                            className="tws-model-pill"
+                            data-quick-model-pill={row.modelId}
+                            onClick={() => setSelectedImageModelId(row.modelId)}
+                          >
+                            <span>{row.shortName}</span>
+                            <em>{shortBadge}</em>
+                          </button>
+                        );
+                      })}
+                    </div>
                     <textarea
                       aria-label={isKo ? "이미지 요청" : "Image request"}
                       rows={2}
@@ -2921,8 +3611,8 @@ export function BrandBriefStudio({
                             ? "네모 안을 어떻게 고칠까요? 예: 손가락을 자연스럽게, 로고 글자를 선명하게"
                             : "How should the boxed area change?"
                           : isKo
-                            ? "어떤 화보를 만들까요? 왼쪽 참고 사진을 누르면 요청에 들어갑니다."
-                            : "Describe the still. Tap a reference photo to add it."
+                            ? "어떤 화보를 만들까요? 왼쪽 1~4번 참고 사진을 누르면 요청에 바로 들어갑니다."
+                            : "Describe the still. Tap reference photos 1–4 on the left to add them."
                       }
                     />
                     {briefText.trim() === "" ? (
@@ -2979,6 +3669,14 @@ export function BrandBriefStudio({
                             </button>
                           ))}
                         </div>
+                        <button
+                          type="button"
+                          className="tws-chip"
+                          data-apply-model-aesthetic-btn
+                          onClick={handleApplyModelOptimizedAestheticPrompt}
+                        >
+                          {isKo ? "미감+모델 최적화 적용" : "Apply mood+model prompt"}
+                        </button>
                       </div>
                       <button
                         type="button"
@@ -2996,6 +3694,14 @@ export function BrandBriefStudio({
                               ? "화보 만들기"
                               : "Make still"}
                       </button>
+                    </div>
+                    <div className="tws-model-easy-bar" data-active-model-easy-bar>
+                      <span className="tws-model-easy-badge">
+                        {isKo ? activeEasyModelRow.bestBadgeKo : activeEasyModelRow.bestBadgeEn}
+                      </span>
+                      <span className="tws-model-easy-desc">
+                        {isKo ? activeEasyModelRow.oneLineWhenKo : activeEasyModelRow.oneLineWhenEn}
+                      </span>
                     </div>
                     <p className="tws-composer-note">
                       {canWrite

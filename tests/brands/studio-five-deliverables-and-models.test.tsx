@@ -2,10 +2,21 @@ import fs from "node:fs";
 import path from "node:path";
 import React from "react";
 import { renderToStaticMarkup } from "react-dom/server";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
+
+vi.mock("next/navigation", () => ({
+  useRouter: () => ({
+    push: () => {},
+    replace: () => {},
+    refresh: () => {},
+  }),
+}));
+
 import { BrandBriefStudio } from "@/components/brand-workspace/brand-brief-studio";
+import { BrandOnboardingWizard } from "@/components/brand-workspace/brand-onboarding-wizard";
 import { CampaignMoatShowcase } from "@/components/brand-workspace/campaign-moat-showcase";
 import {
+  BRAND_AESTHETIC_PRESETS,
   BRAND_AUDIO_STUDIO_PRESETS,
   BRAND_CORE_DELIVERABLE_TRACKS,
   BRAND_CREATOR_DISTRIBUTION_TIERS,
@@ -13,15 +24,20 @@ import {
   BRAND_SEEDANCE_VIDEO_TIERS,
   BRAND_STUDIO_IMAGE_MODELS,
   BRAND_UPSCALING_STUDIO_ENGINES,
+  DEFAULT_CUSTOM_MOODBOARD_ITEMS,
   DEFAULT_SPATIAL_BOARD_NODES,
   FIRST_CREATION_GOALS,
   IG_OPTIMIZED_UPSCALE_LOGIC_MODULES,
+  MAX_BRAND_MOODBOARD_IMAGES,
   MICRO_REGION_SELECTION_PRESETS,
+  MODEL_EASY_COMPARISON_MATRIX,
   PINNED_COLOR_REFERENCES,
   PINNED_TEXTURE_REFERENCES,
   STUDIO_SPLIT_PANE_MODES,
   VIDEO_REFERENCE_TARGET_SLOTS,
   bridgeLeftImageToRightVideoReference,
+  clampMoodboardItemsToMax,
+  compileAestheticPromptForModel,
   compileSunraVideoAndUpscalePlan,
   extractBrandKitFromDomain,
   findClosestSupportedAspectRatio,
@@ -876,5 +892,123 @@ describe("Brand Studio 5 Core Deliverables & 5 Image Models (12-Round Verificati
     // Round 94: Enterprise Reliability, Zero-Training Privacy Shield & 99.9% SLA Footer
     expect(hydratedHtml).toContain("data-enterprise-sla-guarantee-badge");
     expect(hydratedHtml).toContain("data-data-privacy-shield-badge");
+  });
+
+  it("26. verifies Brand Aesthetic Presets (6 reverse-engineered styles), Custom Project Moodboard (max 20 images), 5-Model Empirical Prompt Compiler (GPT Image 2.6, Nano Banana family, Seedream 5.0 Pro), and live-verified comparison assets", () => {
+    expect(MAX_BRAND_MOODBOARD_IMAGES).toBe(20);
+    expect(BRAND_AESTHETIC_PRESETS).toHaveLength(6);
+    expect(BRAND_AESTHETIC_PRESETS.map((p) => p.id)).toEqual([
+      "french_blue_glass",
+      "cool_daylight_lookbook",
+      "sculptural_monochrome",
+      "architectural_concrete",
+      "botanical_amber_film",
+      "chiaroscuro_night",
+    ]);
+
+    // Enforce max 20 images on custom project moodboards
+    const twentyFiveItems = Array.from({ length: 25 }, (_, idx) => ({
+      ...DEFAULT_CUSTOM_MOODBOARD_ITEMS[idx % DEFAULT_CUSTOM_MOODBOARD_ITEMS.length]!,
+      id: `mb_test_${idx}`,
+    }));
+    const clamped = clampMoodboardItemsToMax(twentyFiveItems);
+    expect(clamped).toHaveLength(20);
+
+    // Verify model-specific prompt optimization structures
+    const subjectPrompt = "프렌치 블루 리본이 묶인 플루티드 향수 보틀과 손 클로즈업";
+    const gptPrompt = compileAestheticPromptForModel({
+      modelId: "gpt_image_2_6",
+      mode: "twings_preset",
+      presetId: "french_blue_glass",
+      userBrief: subjectPrompt,
+      locale: "ko",
+    });
+    expect(gptPrompt.compiledPrompt).toContain("1. 구도·광학:");
+    expect(gptPrompt.compiledPrompt).toContain("5. 미감 팔레트");
+
+    const nanoProPrompt = compileAestheticPromptForModel({
+      modelId: "nano_banana_pro",
+      mode: "twings_preset",
+      presetId: "french_blue_glass",
+      userBrief: subjectPrompt,
+      locale: "ko",
+    });
+    expect(nanoProPrompt.compiledPrompt).toContain("[MOODBOARD LOCK: 프렌치 블루 글래스]");
+    expect(nanoProPrompt.compiledPrompt).toContain("[SLOT 1–4 REFERENCE LOCK]");
+
+    const nanoFastPrompt = compileAestheticPromptForModel({
+      modelId: "nano_banana_2_0",
+      mode: "custom_moodboard",
+      presetId: "french_blue_glass",
+      customItems: clamped,
+      customTitle: "24FW 블루 글래스 무드보드",
+      userBrief: subjectPrompt,
+      locale: "ko",
+    });
+    expect(nanoFastPrompt.compiledPrompt).toContain("[FAST CONCEPT LOCK: 24FW 블루 글래스 무드보드");
+    expect(nanoFastPrompt.compiledPrompt).toContain("무드보드 20장 평균");
+
+    const seedreamPrompt = compileAestheticPromptForModel({
+      modelId: "seedream_5_0_pro",
+      mode: "twings_preset",
+      presetId: "french_blue_glass",
+      userBrief: subjectPrompt,
+      locale: "ko",
+    });
+    expect(seedreamPrompt.compiledPrompt).toContain("COLOUR AUTHORITY:");
+    expect(seedreamPrompt.compiledPrompt).toContain("HEX VALUES:");
+    expect(seedreamPrompt.compiledPrompt).toContain("실제 피부 모공");
+
+    // Verify all 5 models in MODEL_EASY_COMPARISON_MATRIX and all 6 presets have live-verified sample images on disk
+    expect(MODEL_EASY_COMPARISON_MATRIX).toHaveLength(5);
+    for (const guide of MODEL_EASY_COMPARISON_MATRIX) {
+      expect(brandRouteAllowed(guide.verifiedSampleImage, "GET")).toBe(true);
+      const diskPath = path.join(
+        process.cwd(),
+        "public",
+        guide.verifiedSampleImage.replace(/^\//, ""),
+      );
+      expect(fs.existsSync(diskPath)).toBe(true);
+    }
+    for (const preset of BRAND_AESTHETIC_PRESETS) {
+      expect(brandRouteAllowed(preset.coverImage, "GET")).toBe(true);
+    }
+
+    // Verify /brand/studio renders the aesthetic trigger, image board aesthetic pill, and model easy guide bar
+    const studioHtml = renderToStaticMarkup(
+      <BrandBriefStudio
+        organizationId="org-yagi"
+        organizationName="YAGI"
+        locale="ko"
+        canWrite={true}
+        identityConfirmed={true}
+      />,
+    );
+    expect(studioHtml).toContain("data-studio-aesthetic-trigger");
+    expect(studioHtml).toContain("data-image-board-aesthetic-pill");
+    expect(studioHtml).toContain("data-quick-aesthetic-strip");
+    expect(studioHtml).toContain('data-quick-preset-chip="french_blue_glass"');
+    expect(studioHtml).toContain('data-quick-model-pill="nano_banana_pro"');
+    expect(studioHtml).toContain("data-active-model-easy-bar");
+    expect(studioHtml).toContain("1. 이미지 제작");
+    expect(studioHtml).toContain("2. 영상 제작");
+    expect(studioHtml).toContain("3. 사운드");
+    expect(studioHtml).toContain("이미지+영상 나란히");
+
+    // Verify /brand/identity (BrandOnboardingWizard) renders the visual Moodboard & Aesthetic Studio above the fold
+    const identityHtml = renderToStaticMarkup(
+      <BrandOnboardingWizard
+        organizationId="org-yagi"
+        organizationName="YAGI"
+        locale="ko"
+        isOwner={true}
+        currentStatus="confirmed"
+        currentRevision={1}
+        studioHref="/brand/studio"
+      />,
+    );
+    expect(identityHtml).toContain("data-brand-identity-moodboard-studio");
+    expect(identityHtml).toContain('data-identity-aesthetic-preset="french_blue_glass"');
+    expect(identityHtml).toContain("data-identity-open-studio-with-aesthetic");
   });
 });

@@ -14,6 +14,18 @@ import {
   type RawOmniDropItem,
   type SynthesizedBrandOnboarding,
 } from "@/lib/brands/identity/onboarding";
+import {
+  BRAND_AESTHETIC_PRESETS,
+  DEFAULT_CUSTOM_MOODBOARD_ITEMS,
+  MAX_BRAND_MOODBOARD_IMAGES,
+  MODEL_EASY_COMPARISON_MATRIX,
+  clampMoodboardItemsToMax,
+  compileAestheticPromptForModel,
+  type BrandAestheticPresetId,
+  type BrandAestheticSourceMode,
+  type BrandCustomMoodboardItem,
+  type BrandStudioImageModelId,
+} from "@/lib/brands/production/reference-studio";
 
 export interface BrandOnboardingWizardProps {
   organizationId: string;
@@ -611,39 +623,308 @@ export function BrandOnboardingWizard({
     void submitIngest(false);
   }
 
+  const [identityAestheticMode, setIdentityAestheticMode] =
+    useState<BrandAestheticSourceMode>("twings_preset");
+  const [identityPresetId, setIdentityPresetId] =
+    useState<BrandAestheticPresetId>(
+      initialCategory === "beauty_skincare"
+        ? "french_blue_glass"
+        : initialCategory === "fnb_hospitality"
+          ? "botanical_amber_film"
+          : "cool_daylight_lookbook",
+    );
+  const [identityMoodboardTitle, setIdentityMoodboardTitle] = useState<string>(
+    `${initialBrandTitle} 프로젝트 무드보드`,
+  );
+  const [identityMoodboardItems, setIdentityMoodboardItems] = useState<
+    BrandCustomMoodboardItem[]
+  >(() => clampMoodboardItemsToMax(DEFAULT_CUSTOM_MOODBOARD_ITEMS));
+  const [identityPreviewModelId, setIdentityPreviewModelId] =
+    useState<BrandStudioImageModelId>("seedream_5_0_pro");
+
+  const compiledIdentityPreview = compileAestheticPromptForModel({
+    modelId: identityPreviewModelId,
+    mode: identityAestheticMode,
+    presetId: identityPresetId,
+    customItems: identityMoodboardItems,
+    customTitle: identityMoodboardTitle,
+    locale,
+  });
+
+  function handleAddIdentityMoodboardSample() {
+    if (identityMoodboardItems.length >= MAX_BRAND_MOODBOARD_IMAGES) return;
+    const pool: ReadonlyArray<Omit<BrandCustomMoodboardItem, "id">> = [
+      {
+        src: "/reel/brands/slot-3-pose-lowangle-lookbook.jpg",
+        labelKo: "로우앵글 전신 구도",
+        labelEn: "Low-Angle Full-Body",
+        dominantHex: "#2A3648",
+      },
+      {
+        src: "/reel/landing/c-garment-wide.webp",
+        labelKo: "화이트 셔츠 드레이프",
+        labelEn: "Crisp Shirt Drape",
+        dominantHex: "#ECEFF3",
+      },
+      {
+        src: "/reel/brands/tea-editorial.jpg",
+        labelKo: "세라믹 & 자연광 정물",
+        labelEn: "Ceramic & Daylight Still",
+        dominantHex: "#C89B6E",
+      },
+    ];
+    const pick = pool[identityMoodboardItems.length % pool.length]!;
+    setIdentityMoodboardItems((prev) =>
+      clampMoodboardItemsToMax([
+        ...prev,
+        { ...pick, id: `id-mb-${Date.now()}-${prev.length + 1}` },
+      ]),
+    );
+    setIdentityAestheticMode("custom_moodboard");
+  }
+
   return (
     <section
       className="bw-panel"
       data-brand-onboarding-wizard
       data-onboarding-status={currentStatus}
     >
-      <div className="bw-row">
-        <div>
-          <p className="bw-kicker">
-            {isKo ? "브랜드 프로필 설정" : "BRAND PROFILE SETUP"}
-          </p>
-          <h2>
-            {isKo
-              ? "브랜드 에셋과 웹사이트·핀터레스트 링크를 넣으면 브랜드 톤을 자동으로 정리합니다"
-              : "Add your brand assets, website & Pinterest links to organize your brand tone automatically"}
-          </h2>
-          <p className="bw-muted">
-            {isKo
-              ? "로고와 제품은 흔들리지 않게 고정하고, 화보와 레퍼런스 보드는 3가지 무드(A / B / C)로 정리해 스튜디오에서 바로 쓸 수 있게 준비합니다."
-              : "We keep your logos and products consistent while organizing your lookbooks and reference boards into 3 ready-to-use moods (A / B / C)."}
-          </p>
+      {/* =====================================================================
+          VISUAL BRAND AESTHETIC & MOODBOARD STUDIO (`[ TWINGS 프리셋 | 우리 브랜드 무드보드 (최대 20장) ]`)
+         ===================================================================== */}
+      <div
+        className="tws-moodboard-drawer"
+        data-brand-identity-moodboard-studio
+        data-tws
+        style={{ marginBottom: 18 }}
+      >
+        <div className="tws-moodboard-top">
+          <div className="tws-moodboard-title-group">
+            <p className="bw-kicker" style={{ margin: 0 }}>
+              {isKo ? "브랜드 미감 프리셋 · 무드보드" : "BRAND AESTHETIC & MOODBOARD"}
+            </p>
+            <strong>
+              {isKo
+                ? "이미지·영상 제작 전, 우리 브랜드의 미감을 프리셋처럼 고정하세요"
+                : "Lock your brand aesthetic preset or 20-image moodboard before generating"}
+            </strong>
+            <span>
+              {isKo
+                ? "TWINGS가 검증한 6가지 에디토리얼 미감을 고르거나, 프로젝트 레퍼런스 이미지를 최대 20장까지 묶어 모델별 최적 프롬프트로 고정합니다."
+                : "Choose from 6 reverse-engineered TWINGS presets or build a custom moodboard up to 20 images."}
+            </span>
+          </div>
+          <div
+            className="tws-seg"
+            role="tablist"
+            aria-label={isKo ? "미감 모드" : "Aesthetic mode"}
+          >
+            <button
+              type="button"
+              role="tab"
+              aria-selected={identityAestheticMode === "twings_preset"}
+              onClick={() => setIdentityAestheticMode("twings_preset")}
+            >
+              {isKo ? "TWINGS 프리셋 (6종)" : "TWINGS Presets (6)"}
+            </button>
+            <button
+              type="button"
+              role="tab"
+              aria-selected={identityAestheticMode === "custom_moodboard"}
+              onClick={() => setIdentityAestheticMode("custom_moodboard")}
+            >
+              {isKo
+                ? `우리 브랜드 무드보드 (${identityMoodboardItems.length}/${MAX_BRAND_MOODBOARD_IMAGES}장)`
+                : `Custom Moodboard (${identityMoodboardItems.length}/${MAX_BRAND_MOODBOARD_IMAGES})`}
+            </button>
+          </div>
+          {studioHref ? (
+            <a
+              className="tws-btn tws-btn-primary"
+              href={studioHref}
+              data-identity-open-studio-with-aesthetic
+            >
+              {isKo ? "이 미감으로 스튜디오 열기 →" : "Open Studio with this look →"}
+            </a>
+          ) : null}
         </div>
-        <span className="bw-badge">
-          {
-            (
-              CATEGORY_OPTIONS.find((opt) => opt.value === category) ??
-              CATEGORY_OPTIONS[0]!
-            )[isKo ? "ko" : "en"]
-          }
-        </span>
+
+        {identityAestheticMode === "twings_preset" ? (
+          <div
+            className="tws-preset-grid"
+            role="radiogroup"
+            aria-label={isKo ? "TWINGS 미감 프리셋" : "TWINGS aesthetic presets"}
+          >
+            {BRAND_AESTHETIC_PRESETS.map((preset) => {
+              const isSelected = identityPresetId === preset.id;
+              return (
+                <button
+                  key={preset.id}
+                  type="button"
+                  role="radio"
+                  aria-checked={isSelected}
+                  className="tws-preset-card"
+                  data-identity-aesthetic-preset={preset.id}
+                  onClick={() => setIdentityPresetId(preset.id)}
+                >
+                  <div className="tws-preset-media">
+                    <img
+                      src={preset.coverImage}
+                      alt={isKo ? preset.titleKo : preset.titleEn}
+                    />
+                    <span className="tws-preset-badge">
+                      {isSelected
+                        ? isKo
+                          ? "선택된 미감"
+                          : "Selected"
+                        : isKo
+                          ? preset.badgeKo
+                          : preset.badgeEn}
+                    </span>
+                    <div className="tws-preset-overlay">
+                      <strong className="tws-preset-overlay-title">
+                        {preset.cardOverlayTitle}
+                      </strong>
+                      <span className="tws-preset-swatches" aria-hidden="true">
+                        {preset.dna.paletteHex.map((hex) => (
+                          <i key={hex} style={{ backgroundColor: hex }} />
+                        ))}
+                      </span>
+                    </div>
+                  </div>
+                  <div className="tws-preset-meta">
+                    <div className="tws-preset-meta-head">
+                      <strong>{isKo ? preset.titleKo : preset.titleEn}</strong>
+                      <small>{preset.dna.paletteHex[0]}</small>
+                    </div>
+                    <p>{isKo ? preset.summaryKo : preset.summaryEn}</p>
+                  </div>
+                </button>
+              );
+            })}
+          </div>
+        ) : (
+          <div className="tws-custom-moodboard">
+            <div className="tws-custom-moodboard-bar">
+              <label className="tws-custom-moodboard-title">
+                <span>{isKo ? "프로젝트 무드보드 이름" : "Project moodboard name"}</span>
+                <input
+                  type="text"
+                  value={identityMoodboardTitle}
+                  maxLength={60}
+                  onChange={(e) => setIdentityMoodboardTitle(e.target.value)}
+                />
+              </label>
+              <div className="tws-custom-moodboard-actions">
+                <span className="tws-moodboard-counter">
+                  {isKo
+                    ? `${identityMoodboardItems.length} / 최대 ${MAX_BRAND_MOODBOARD_IMAGES}장`
+                    : `${identityMoodboardItems.length} / Max ${MAX_BRAND_MOODBOARD_IMAGES}`}
+                </span>
+                <button
+                  type="button"
+                  className="tws-btn tws-btn-sm"
+                  disabled={
+                    identityMoodboardItems.length >= MAX_BRAND_MOODBOARD_IMAGES
+                  }
+                  onClick={handleAddIdentityMoodboardSample}
+                >
+                  {isKo ? "+ 레퍼런스 컷 추가" : "+ Add reference cut"}
+                </button>
+              </div>
+            </div>
+            <div className="tws-custom-moodboard-grid">
+              {identityMoodboardItems.map((item, idx) => (
+                <div key={item.id} className="tws-moodboard-item">
+                  <img
+                    src={item.src}
+                    alt={isKo ? item.labelKo : item.labelEn}
+                    loading="lazy"
+                  />
+                  <span className="tws-moodboard-item-num">
+                    {String(idx + 1).padStart(2, "0")}
+                  </span>
+                  {identityMoodboardItems.length > 1 ? (
+                    <button
+                      type="button"
+                      className="tws-moodboard-item-del"
+                      aria-label={isKo ? "제외" : "Remove"}
+                      onClick={() =>
+                        setIdentityMoodboardItems((prev) =>
+                          prev.filter((x) => x.id !== item.id),
+                        )
+                      }
+                    >
+                      ×
+                    </button>
+                  ) : null}
+                  <span className="tws-moodboard-item-cap">
+                    {isKo ? item.labelKo : item.labelEn}
+                  </span>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        <div className="tws-moodboard-dna-bar">
+          <div className="tws-moodboard-dna-summary">
+            <span className="tws-moodboard-dna-kicker">
+              {isKo
+                ? `모델별 자동 최적화 미리보기 (${compiledIdentityPreview.structureBadge})`
+                : `Model-Specific Prompt Optimization (${compiledIdentityPreview.structureBadge})`}
+            </span>
+            <p>{compiledIdentityPreview.compiledPrompt}</p>
+          </div>
+          <div className="tws-seg" role="radiogroup" aria-label={isKo ? "모델별 변환 확인" : "Preview model"}>
+            {MODEL_EASY_COMPARISON_MATRIX.map((m) => (
+              <button
+                key={m.modelId}
+                type="button"
+                role="radio"
+                aria-checked={identityPreviewModelId === m.modelId}
+                onClick={() => setIdentityPreviewModelId(m.modelId)}
+              >
+                {m.shortName}
+              </button>
+            ))}
+          </div>
+        </div>
       </div>
 
-      <form onSubmit={onFormSubmit} className="bw-form bw-fields" data-onboarding-form>
+      <details className="bw-service-disclosure" open={currentStatus === "none"}>
+        <summary>
+          {isKo
+            ? "웹사이트·인스타그램 자동 추출 및 로고·제품·금칙어 세부 등록 열기"
+            : "Open Website & Instagram Auto-Extractor and Detailed Asset Rules"}
+        </summary>
+        <div className="bw-row" style={{ marginTop: 12 }}>
+          <div>
+            <p className="bw-kicker">
+              {isKo ? "브랜드 프로필 설정" : "BRAND PROFILE SETUP"}
+            </p>
+            <h2>
+              {isKo
+                ? "브랜드 에셋과 웹사이트·핀터레스트 링크를 넣으면 브랜드 톤을 자동으로 정리합니다"
+                : "Add your brand assets, website & Pinterest links to organize your brand tone automatically"}
+            </h2>
+            <p className="bw-muted">
+              {isKo
+                ? "로고와 제품은 흔들리지 않게 고정하고, 화보와 레퍼런스 보드는 3가지 무드(A / B / C)로 정리해 스튜디오에서 바로 쓸 수 있게 준비합니다."
+                : "We keep your logos and products consistent while organizing your lookbooks and reference boards into 3 ready-to-use moods (A / B / C)."}
+            </p>
+          </div>
+          <span className="bw-badge">
+            {
+              (
+                CATEGORY_OPTIONS.find((opt) => opt.value === category) ??
+                CATEGORY_OPTIONS[0]!
+              )[isKo ? "ko" : "en"]
+            }
+          </span>
+        </div>
+
+        <form onSubmit={onFormSubmit} className="bw-form bw-fields" data-onboarding-form>
         <div
           style={{
             display: "grid",
@@ -2249,6 +2530,7 @@ export function BrandOnboardingWizard({
           </div>
         )}
       </form>
+      </details>
     </section>
   );
 }

@@ -2488,6 +2488,615 @@ export const VERIFIED_CREATOR_CANDIDATES: readonly AnonymousCreatorCandidateSpec
     },
   ];
 
+/**
+ * ============================================================================
+ * Brand Aesthetic Moodboard & Preset Lock System (`미감 프리셋 · 우리 브랜드 무드보드`)
+ * ============================================================================
+ * Context-less image models (GPT Image 2.6, Nano Banana Pro/2.1/2.0, Seedream 5.0 Pro)
+ * lose brand consistency unless a reverse-engineered Visual DNA preset is locked
+ * before generation and compiled into each model's native prompt architecture.
+ */
+export const MAX_BRAND_MOODBOARD_IMAGES = 20 as const;
+
+export type BrandAestheticSourceMode = "twings_preset" | "custom_moodboard";
+
+export type BrandAestheticPresetId =
+  | "french_blue_glass"
+  | "cool_daylight_lookbook"
+  | "sculptural_monochrome"
+  | "architectural_concrete"
+  | "botanical_amber_film"
+  | "chiaroscuro_night";
+
+export interface BrandAestheticVisualDna {
+  paletteHex: readonly [string, string, string, string];
+  lightingKo: string;
+  lightingEn: string;
+  opticsKo: string;
+  opticsEn: string;
+  surfaceSkinKo: string;
+  surfaceSkinEn: string;
+  negativeRuleKo: string;
+  negativeRuleEn: string;
+}
+
+export interface BrandAestheticPreset {
+  id: BrandAestheticPresetId;
+  /** Bold uppercase card overlay title (inspired by visual style pickers) */
+  cardOverlayTitle: string;
+  titleKo: string;
+  titleEn: string;
+  badgeKo: string;
+  badgeEn: string;
+  summaryKo: string;
+  summaryEn: string;
+  coverImage: string;
+  moodboardThumbs: readonly [string, string, string, string];
+  recommendedModelId: BrandStudioImageModelId;
+  pinnedColorId: string;
+  pinnedTextureId: string;
+  slotDefaults: Record<StudioReferenceSlotNumber, string>;
+  dna: BrandAestheticVisualDna;
+}
+
+export const BRAND_AESTHETIC_PRESETS: ReadonlyArray<BrandAestheticPreset> = [
+  {
+    id: "french_blue_glass",
+    cardOverlayTitle: "FRENCH BLUE GLASS",
+    titleKo: "프렌치 블루 글래스",
+    titleEn: "French Blue Glass & Skin",
+    badgeKo: "뷰티 · 향수 · 시그니처",
+    badgeEn: "Beauty · Perfume · Signature",
+    summaryKo: "맑은 아이스블루 배경 · 코발트 유리 굴절 · 번들거림 없는 보송한 피부결",
+    summaryEn: "Cool ice-blue backdrop · cobalt glass refraction · matte-satin skin",
+    coverImage: "/reel/brands/house-french-blue-hero-1080p.jpg",
+    moodboardThumbs: [
+      "/reel/brands/house-french-blue-hero-1080p.jpg",
+      "/reel/brands/slot-4-color-french-cobalt.jpg",
+      "/reel/landing/cut-pump.webp",
+      "/reel/landing/cut-cheek.webp",
+    ],
+    recommendedModelId: "seedream_5_0_pro",
+    pinnedColorId: "color_editorial_cobalt",
+    pinnedTextureId: "texture_dewy_glass_smear",
+    slotDefaults: {
+      1: "/reel/landing/cut-cheek.webp",
+      2: "/reel/brands/swap-product-luxury-bottle.jpg",
+      3: "/reel/landing/cut-pump.webp",
+      4: "/reel/brands/slot-4-color-french-cobalt.jpg",
+    },
+    dna: {
+      paletteHex: ["#DCEAF7", "#3875C5", "#10141C", "#F5F8FC"],
+      lightingKo: "5600K 대형 확산 탑라이트 + 실버 바운스 필 (노란 색번짐 0%)",
+      lightingEn: "5600K diffused overhead octabox + silver bounce fill (zero warm cast)",
+      opticsKo: "85mm f/2.8 매크로 포트레이트 · 투명 유리 굴절광 선명 유지",
+      opticsEn: "85mm f/2.8 macro-portrait · crisp glass caustics & shallow depth",
+      surfaceSkinKo: "실제 모공이 살아있는 세미매트 피부결 · 인위적인 플라스틱 광택 차단",
+      surfaceSkinEn: "Living matte-satin skin pores · low specular-to-diffuse ratio, zero plastic sheen",
+      negativeRuleKo: "주황/노란 색번짐, 뷰티 필터 왁스 피부, 라벨 글자 깨짐 제외",
+      negativeRuleEn: "No warm orange cast, no waxy airbrushed skin, no distorted label text",
+    },
+  },
+  {
+    id: "cool_daylight_lookbook",
+    cardOverlayTitle: "COOL DAYLIGHT LOOKBOOK",
+    titleKo: "쿨 데이라이트 룩북",
+    titleEn: "Cool Daylight Lookbook",
+    badgeKo: "패션 · 전신 룩북 · 의류 핏",
+    badgeEn: "Fashion · Full-Body Lookbook",
+    summaryKo: "5500K 화이트 호리존 · 8등신 전신 비례 · 원단 주름과 봉제선 정밀 고정",
+    summaryEn: "5500K white cyclorama · 8-head full-body proportion · crisp pleat & seam lock",
+    coverImage: "/reel/studio/vto-set-front.webp",
+    moodboardThumbs: [
+      "/reel/studio/vto-set-front.webp",
+      "/reel/landing/c-garment-wide.webp",
+      "/reel/studio/vto-garment.webp",
+      "/reel/brands/slot-1-subject-editorial.jpg",
+    ],
+    recommendedModelId: "seedream_5_0_pro",
+    pinnedColorId: "color_crisp_studio_neutral",
+    pinnedTextureId: "texture_macro_fabric_weave",
+    slotDefaults: {
+      1: "/reel/brands/slot-1-subject-editorial.jpg",
+      2: "/reel/studio/vto-set-front.webp",
+      3: "/reel/landing/c-garment-wide.webp",
+      4: "/reel/brands/pin-texture-35mm-grain-weave.jpg",
+    },
+    dna: {
+      paletteHex: ["#F2F4F6", "#1B2430", "#2C302E", "#CDD3DC"],
+      lightingKo: "5500K 좌상단 디렉셔널 키라이트 + 자연스러운 바닥 접지 그림자",
+      lightingEn: "5500K upper-left directional key light with grounded floor shadow",
+      opticsKo: "70mm f/4 전신 룩북 표준 화각 · 왜곡 없는 수직 비례",
+      opticsEn: "70mm f/4 full-length lookbook lens · zero barrel distortion",
+      surfaceSkinKo: "자연스러운 쇄골·피부 톤 + 울·코튼 직조 및 플리츠 주름 선명화",
+      surfaceSkinEn: "Natural skin tone + crisp wool/cotton weave and pleat geometry",
+      negativeRuleKo: "과장된 광각 다리 늘림, 의류 기장 변형, 뜬 발바닥 그림자 제외",
+      negativeRuleEn: "No wide-angle distortion, no garment length drift, no floating feet",
+    },
+  },
+  {
+    id: "sculptural_monochrome",
+    cardOverlayTitle: "SCULPTURAL MONOCHROME",
+    titleKo: "조각적 모노크롬 화보",
+    titleEn: "Sculptural Monochrome Editorial",
+    badgeKo: "하이패션 · 매거진 · 질감",
+    badgeEn: "High Fashion · Magazine · Grain",
+    summaryKo: "쿨 그레이 플라스터 여백 · 로우앵글 조형미 · 35mm 아날로그 필름 입자",
+    summaryEn: "Cool plaster grey · sculptural low-angle stance · 35mm fine film grain",
+    coverImage: "/reel/landing/look-feather.webp",
+    moodboardThumbs: [
+      "/reel/landing/look-feather.webp",
+      "/reel/landing/c-skin-wide.webp",
+      "/reel/brands/slot-3-pose-lowangle-lookbook.jpg",
+      "/reel/brands/pin-texture-35mm-grain-weave.jpg",
+    ],
+    recommendedModelId: "nano_banana_pro",
+    pinnedColorId: "color_crisp_studio_neutral",
+    pinnedTextureId: "texture_matte_skin_35mm",
+    slotDefaults: {
+      1: "/reel/landing/look-feather.webp",
+      2: "/reel/brands/slot-2-space-concrete-blue.jpg",
+      3: "/reel/brands/slot-3-pose-lowangle-lookbook.jpg",
+      4: "/reel/brands/pin-texture-35mm-grain-weave.jpg",
+    },
+    dna: {
+      paletteHex: ["#D8DDE4", "#121316", "#686E76", "#ECEFF3"],
+      lightingKo: "부드러운 측면 확산광 + 반대편 뺨 네거티브 필(입체 음영)",
+      lightingEn: "Soft side window wrap light + negative fill for sculptural relief",
+      opticsKo: "50mm f/2.8 세미 로우앵글 · 잔잔한 35mm 아날로그 필름 그레인",
+      opticsEn: "50mm f/2.8 slight low-angle · fine 35mm analog film grain",
+      surfaceSkinKo: "깃털·니트 올 하나까지 살아있는 초근접 질감 + 무광 매트 피부",
+      surfaceSkinEn: "Tactile feather/knit micro-fibers + zero-gloss matte skin",
+      negativeRuleKo: "번들거리는 하이라이트, 평면 플래시, 디지털 과샤프닝 제외",
+      negativeRuleEn: "No specular skin hot-spots, no flat flash, no digital oversharpening",
+    },
+  },
+  {
+    id: "architectural_concrete",
+    cardOverlayTitle: "ARCHITECTURAL CONCRETE",
+    titleKo: "성수 아키텍처 콘크리트",
+    titleEn: "Architectural Concrete Daylight",
+    badgeKo: "스트리트 · 테크 · 공간 화보",
+    badgeEn: "Street · Tech · Spatial Set",
+    summaryKo: "노출 콘크리트 채광 · 차분한 슬레이트 블루 · 도시적 공간 깊이감",
+    summaryEn: "Raw concrete skylight · slate blue shadows · architectural spatial depth",
+    coverImage: "/reel/brands/slot-2-space-concrete-blue.jpg",
+    moodboardThumbs: [
+      "/reel/brands/slot-2-space-concrete-blue.jpg",
+      "/reel/brands/studio-editorial-blue-1080p.jpg",
+      "/reel/brands/city-fashion.jpg",
+      "/reel/brands/slot-3-pose-lowangle-lookbook.jpg",
+    ],
+    recommendedModelId: "nano_banana_pro",
+    pinnedColorId: "color_editorial_cobalt",
+    pinnedTextureId: "texture_macro_fabric_weave",
+    slotDefaults: {
+      1: "/reel/brands/slot-1-subject-editorial.jpg",
+      2: "/reel/brands/slot-2-space-concrete-blue.jpg",
+      3: "/reel/brands/slot-3-pose-lowangle-lookbook.jpg",
+      4: "/reel/brands/slot-4-color-french-cobalt.jpg",
+    },
+    dna: {
+      paletteHex: ["#CFD6DF", "#2A3648", "#4A6B9C", "#161B22"],
+      lightingKo: "5800K 천장 채광창 자연광 + 콘크리트 벽면 확산 반사광",
+      lightingEn: "5800K skylight daylight + raw architectural concrete bounce",
+      opticsKo: "35mm f/2.8 공간감 있는 환경 포트레이트 · 건축 수직선 유지",
+      opticsEn: "35mm f/2.8 environmental editorial · crisp architectural verticals",
+      surfaceSkinKo: "매트한 콘크리트·브러시드 스틸 질감 대비 + 중성적인 실제 피부톤",
+      surfaceSkinEn: "Raw concrete & brushed steel contrast + protected neutral skin tone",
+      negativeRuleKo: "복잡한 거리 간판, 과도한 네온 조명, 배경 수직선 왜곡 제외",
+      negativeRuleEn: "No cluttered street signage, no neon tint, no warped walls",
+    },
+  },
+  {
+    id: "botanical_amber_film",
+    cardOverlayTitle: "BOTANICAL AMBER FILM",
+    titleKo: "보태니컬 앰버 필름",
+    titleEn: "Botanical Amber 2383 Film",
+    badgeKo: "라이프스타일 · F&B · 패키지",
+    badgeEn: "Lifestyle · F&B · Still Life",
+    summaryKo: "올리브·앰버 회화적 배경 · 코닥 2383 필름 색감 · 오후 자연광 온기",
+    summaryEn: "Painterly olive-amber backdrop · Kodak 2383 roll-off · warm afternoon light",
+    coverImage: "/reel/studio/vto-free-amber.webp",
+    moodboardThumbs: [
+      "/reel/studio/vto-free-amber.webp",
+      "/reel/brands/tea-editorial.jpg",
+      "/reel/landing/v7/film-tea.jpg",
+      "/reel/landing/cut-scent.webp",
+    ],
+    recommendedModelId: "gpt_image_2_6",
+    pinnedColorId: "color_warm_film_2383",
+    pinnedTextureId: "texture_matte_skin_35mm",
+    slotDefaults: {
+      1: "/reel/studio/vto-free-amber.webp",
+      2: "/reel/brands/tea-editorial.jpg",
+      3: "/reel/landing/v7/film-tea.jpg",
+      4: "/reel/landing/cut-scent.webp",
+    },
+    dna: {
+      paletteHex: ["#6E7D4E", "#D8C1B8", "#C89B6E", "#F3EFEA"],
+      lightingKo: "4900K 오후 확산 자연광 + 부드러운 필름 하이라이트 롤오프",
+      lightingEn: "4900K warm afternoon window light + soft Kodak 2383 highlight roll-off",
+      opticsKo: "50mm f/2 아날로그 렌즈 보케 · 은은한 하이라이트 할레이션",
+      opticsEn: "50mm f/2 analog prime bokeh · gentle highlight halation",
+      surfaceSkinKo: "회화적인 캔버스 배경 질감 + 벨벳처럼 부드러운 피부·세라믹 표면",
+      surfaceSkinEn: "Painterly canvas backdrop texture + velvety skin and ceramic glaze",
+      negativeRuleKo: "차가운 형광등 색감, 과도한 채도 폭발, 인위적인 HDR 대비 제외",
+      negativeRuleEn: "No harsh fluorescent tint, no oversaturation, no artificial HDR",
+    },
+  },
+  {
+    id: "chiaroscuro_night",
+    cardOverlayTitle: "DEEP NAVY CHIAROSCURO",
+    titleKo: "딥 네이비 나이트",
+    titleEn: "Deep Navy Chiaroscuro",
+    badgeKo: "나이트 캠페인 · 크롬 · 럭셔리",
+    badgeEn: "Night Campaign · Chrome · Luxury",
+    summaryKo: "깊은 미드나잇 그림자 · 빗물·유리창 반사광 · 4:1 시네마틱 명암비",
+    summaryEn: "Deep midnight shadows · wet glass reflections · 4:1 cinematic contrast",
+    coverImage: "/reel/brands/studio-rain-editorial-1080p.jpg",
+    moodboardThumbs: [
+      "/reel/brands/studio-rain-editorial-1080p.jpg",
+      "/reel/brands/production-paris.jpg",
+      "/reel/brands/house-runway-1080p.jpg",
+      "/reel/brands/y2k-flip-phone.jpg",
+    ],
+    recommendedModelId: "nano_banana_2_1",
+    pinnedColorId: "color_editorial_cobalt",
+    pinnedTextureId: "texture_dewy_glass_smear",
+    slotDefaults: {
+      1: "/reel/brands/studio-rain-editorial-1080p.jpg",
+      2: "/reel/brands/house-runway-1080p.jpg",
+      3: "/reel/brands/morphic-september-01.jpg",
+      4: "/reel/brands/slot-4-color-french-cobalt.jpg",
+    },
+    dna: {
+      paletteHex: ["#0E1522", "#3875C5", "#8DA9C4", "#EEF3F9"],
+      lightingKo: "단일 측면 창문광 4:1 키아로스쿠로 대비 + 젖은 바닥·유리 하이라이트",
+      lightingEn: "Single side-window 4:1 chiaroscuro contrast + wet glass speculars",
+      opticsKo: "35mm f/1.8 나이트 시네마 렌즈 · 암부 디테일이 살아있는 깊은 블랙",
+      opticsEn: "35mm f/1.8 night cinema prime · rich shadow detail without crushed blacks",
+      surfaceSkinKo: "조각 같은 얼굴 음영 + 크롬·가죽·실크 표면의 선명한 림라이트",
+      surfaceSkinEn: "Sculpted facial shadow planes + crisp rim light on chrome, leather & silk",
+      negativeRuleKo: "뭉개진 암부 노이즈, 보라/마젠타 네온 색번짐, 평면 조명 제외",
+      negativeRuleEn: "No muddy shadow noise, no magenta neon cast, no flat lighting",
+    },
+  },
+];
+
+export interface BrandCustomMoodboardItem {
+  id: string;
+  src: string;
+  labelKo: string;
+  labelEn: string;
+  dominantHex: string;
+}
+
+export const DEFAULT_CUSTOM_MOODBOARD_ITEMS: ReadonlyArray<BrandCustomMoodboardItem> = [
+  {
+    id: "mb-01",
+    src: "/reel/brands/house-french-blue-hero-1080p.jpg",
+    labelKo: "시즌 키비주얼 · 프렌치 블루",
+    labelEn: "Season Key Visual · French Blue",
+    dominantHex: "#3875C5",
+  },
+  {
+    id: "mb-02",
+    src: "/reel/landing/look-feather.webp",
+    labelKo: "조형적 포즈 · 35mm 그레인",
+    labelEn: "Sculptural Pose · 35mm Grain",
+    dominantHex: "#D8DDE4",
+  },
+  {
+    id: "mb-03",
+    src: "/reel/studio/vto-set-front.webp",
+    labelKo: "쿨 데이라이트 호리존",
+    labelEn: "Cool Daylight Cyclorama",
+    dominantHex: "#F2F4F6",
+  },
+  {
+    id: "mb-04",
+    src: "/reel/brands/verified-nano-banana-pro.png",
+    labelKo: "투명 유리 · 전면 로고 마스터",
+    labelEn: "Glass Refraction & Front Logo",
+    dominantHex: "#1E293B",
+  },
+  {
+    id: "mb-05",
+    src: "/reel/landing/cut-cheek.webp",
+    labelKo: "보송한 실제 피부결 클로즈업",
+    labelEn: "Natural Matte Skin Macro",
+    dominantHex: "#E2E8F0",
+  },
+  {
+    id: "mb-06",
+    src: "/reel/brands/slot-2-space-concrete-blue.jpg",
+    labelKo: "노출 콘크리트 공간 여백",
+    labelEn: "Architectural Concrete Space",
+    dominantHex: "#475569",
+  },
+];
+
+/**
+ * Enforces the 20-image maximum (`MAX_BRAND_MOODBOARD_IMAGES = 20`) on any custom project moodboard.
+ */
+export function clampMoodboardItemsToMax(
+  items: readonly BrandCustomMoodboardItem[],
+): BrandCustomMoodboardItem[] {
+  return items.slice(0, MAX_BRAND_MOODBOARD_IMAGES);
+}
+
+/**
+ * Reverse-engineers a unified Visual DNA contract from the user's custom moodboard (1..20 images).
+ */
+export function synthesizeCustomMoodboardDna(
+  items: readonly BrandCustomMoodboardItem[],
+  customTitle?: string,
+): {
+  titleKo: string;
+  titleEn: string;
+  imageCount: number;
+  maxImages: number;
+  dna: BrandAestheticVisualDna;
+} {
+  const clamped = clampMoodboardItemsToMax(items);
+  const hexes = clamped.map((i) => i.dominantHex).filter(Boolean);
+  const p0 = hexes[0] ?? "#DCEAF7";
+  const p1 = hexes[1] ?? "#3875C5";
+  const p2 = hexes[2] ?? "#10141C";
+  const p3 = hexes[3] ?? "#F5F8FC";
+  const count = clamped.length;
+  const cleanTitle = (customTitle ?? "").trim();
+
+  return {
+    titleKo: cleanTitle || `우리 브랜드 커스텀 무드보드 (${count}장 고정)`,
+    titleEn: cleanTitle || `Custom Brand Moodboard (${count} refs locked)`,
+    imageCount: count,
+    maxImages: MAX_BRAND_MOODBOARD_IMAGES,
+    dna: {
+      paletteHex: [p0, p1, p2, p3],
+      lightingKo: `무드보드 ${count}장 평균 5500K 확산 채광 & 일관된 그림자 농도 유지`,
+      lightingEn: `5500K diffused key light & shadow density extracted across ${count} moodboard refs`,
+      opticsKo: "50mm–85mm 에디토리얼 표준 화각 · 왜곡 없는 피사체 비례 고정",
+      opticsEn: "50mm–85mm editorial prime framing · zero perspective distortion",
+      surfaceSkinKo: "실제 피부 모공·원단 직조·유리 굴절 질감 유지 (인위적 AI 광택 제거)",
+      surfaceSkinEn: "Authentic matte skin pores, fabric weave & glass refraction (zero plastic sheen)",
+      negativeRuleKo: "무드보드 외 이질적인 네온 조명, 과장된 채도, 라벨 글자 왜곡 제외",
+      negativeRuleEn: "No off-board neon cast, no oversaturation, no garbled typography",
+    },
+  };
+}
+
+export interface ModelEasyComparisonRow {
+  modelId: BrandStudioImageModelId;
+  shortName: string;
+  oneLineWhenKo: string;
+  oneLineWhenEn: string;
+  bestBadgeKo: string;
+  bestBadgeEn: string;
+  speedBadgeKo: string;
+  speedBadgeEn: string;
+  promptStructureLabelKo: string;
+  promptStructureLabelEn: string;
+  empiricalStrengthKo: string;
+  empiricalStrengthEn: string;
+  verifiedSampleImage: string;
+}
+
+export const MODEL_EASY_COMPARISON_MATRIX: ReadonlyArray<ModelEasyComparisonRow> = [
+  {
+    modelId: "gpt_image_2_6",
+    shortName: "GPT Image 2.6",
+    oneLineWhenKo: "제품 로고·영문/한글 글자를 1글자도 안 틀리고 넣거나, 네모 친 부위만 정밀 수정할 때",
+    oneLineWhenEn: "When front package text/logos must be 100% accurate or when fixing a boxed region",
+    bestBadgeKo: "로고 글자 · 부분 수정 1위",
+    bestBadgeEn: "Best for Text & Region Edit",
+    speedBadgeKo: "약 18초 · 정밀 추론",
+    speedBadgeEn: "~18s · High Precision",
+    promptStructureLabelKo: "5단계 디렉터 지시서 (구도 → 로고/레퍼런스 → 피사체 → 공간 → #HEX 조명)",
+    promptStructureLabelEn: "5-Tier Director Brief (Framing -> Label Lock -> Subject -> Space -> #HEX Light)",
+    empiricalStrengthKo: "복잡한 다중 조건과 제품 전면 타이포그래피 보존율 가장 높음",
+    empiricalStrengthEn: "Highest letterform accuracy and multi-constraint instruction adherence",
+    verifiedSampleImage: "/reel/brands/verified-gpt-image-2-6.png",
+  },
+  {
+    modelId: "nano_banana_pro",
+    shortName: "Nano Banana Pro",
+    oneLineWhenKo: "1~4번 참고 사진(인물+제품+포즈+색감)을 한 번에 합쳐 4K 메인 화보를 만들 때",
+    oneLineWhenEn: "When fusing Slots 1–4 (Model + Product + Pose + Color) into a 4K campaign cut",
+    bestBadgeKo: "4장 동시 조합 · 4K 화보 1위",
+    bestBadgeEn: "Best for 1–4 Multi-Ref & 4K",
+    speedBadgeKo: "약 11초 · 2K/4K",
+    speedBadgeEn: "~11s · Native 2K/4K",
+    promptStructureLabelKo: "역할 잠금 블록 ([MOODBOARD LOCK] · [IDENTITY LOCK] · [COLOR GRADE])",
+    promptStructureLabelEn: "ALL-CAPS Compartment Locks ([MOODBOARD LOCK] · [IDENTITY LOCK] · [COLOR GRADE])",
+    empiricalStrengthKo: "원본 구도·손 모양·조명을 픽셀 단위로 유지하면서 색감과 텍스트만 정교하게 전환",
+    empiricalStrengthEn: "Preserves pixel-level framing and hand geometry while locking moodboard color grade",
+    verifiedSampleImage: "/reel/brands/verified-nano-banana-pro.png",
+  },
+  {
+    modelId: "nano_banana_2_1",
+    shortName: "Nano Banana 2.1",
+    oneLineWhenKo: "1번 사진의 배경·손 모양은 그대로 두고, 들려 있는 제품만 2번 우리 제품으로 바꿀 때",
+    oneLineWhenEn: "When keeping Image 1's scene and hand grip while swapping in your SKU from Image 2",
+    bestBadgeKo: "1→2번 제품 교체 · 가성비 주력",
+    bestBadgeEn: "Best for 1->2 Product Swap",
+    speedBadgeKo: "약 9초 · 실무 주력",
+    speedBadgeEn: "~9s · Workhorse",
+    promptStructureLabelKo: "1번 장면 잠금 + 2번 제품 1:1 교체 프로토콜",
+    promptStructureLabelEn: "Scene & Hand Lock (Slot 1) + 1:1 Target SKU Swap (Slot 2)",
+    empiricalStrengthKo: "손가락 가림(Occlusion)과 바닥 접촉 그림자를 깨뜨리지 않고 제품만 자연스럽게 교체",
+    empiricalStrengthEn: "Swaps held or tabletop products without breaking finger occlusion or contact shadows",
+    verifiedSampleImage: "/reel/brands/swap-product-luxury-bottle.jpg",
+  },
+  {
+    modelId: "nano_banana_2_0",
+    shortName: "Nano Banana 2.0",
+    oneLineWhenKo: "본 화보 촬영 전에 가장 저렴한 비용으로 여러 구도·배경 시안을 빠르게 뽑아볼 때",
+    oneLineWhenEn: "When exploring angles and moodboard drafts in under 10 seconds at lowest cost",
+    bestBadgeKo: "10초 초고속 시안 · 최저 비용",
+    bestBadgeEn: "Fastest Drafts · Lowest Cost",
+    speedBadgeKo: "약 6초 · 초고속",
+    speedBadgeEn: "~6s · Ultra-Fast",
+    promptStructureLabelKo: "경량 구도 · 무드보드 컬러칩 잠금",
+    promptStructureLabelEn: "Lightweight Framing + Moodboard Palette Lock",
+    empiricalStrengthKo: "릴스 표지나 촬영 스토리보드용 다중 구도 시안을 가장 빠르게 대량 생성",
+    empiricalStrengthEn: "Fastest batch ideation for Reels covers and pre-production storyboards",
+    verifiedSampleImage: "/reel/brands/house-french-blue-hero-1080p.jpg",
+  },
+  {
+    modelId: "seedream_5_0_pro",
+    shortName: "Seedream 5.0 Pro",
+    oneLineWhenKo: "번들거리는 AI 광택 없이 실제 카메라로 찍은 듯한 보송한 피부결과 전신 착장 핏을 원할 때",
+    oneLineWhenEn: "When you need authentic matte skin pores (zero plastic sheen) and true garment fit",
+    bestBadgeKo: "실제 피부결 · 전신 착장 1위",
+    bestBadgeEn: "Best for Real Skin & Lookbook Fit",
+    speedBadgeKo: "약 20초 · 2K 마스터",
+    speedBadgeEn: "~20s · 2K Editorial Master",
+    promptStructureLabelKo: "4단 자연어 산문 + 실제 피부결 보호 규칙 + COLOUR AUTHORITY & HEX 배열",
+    promptStructureLabelEn: "4-Part Cohesive Prose + Matte Skin Contract + COLOUR AUTHORITY & HEX Array",
+    empiricalStrengthKo: "실제 모공·솜털·새틴 리본 직조 결까지 살아나며 AI 특유의 플라스틱 피부 광택 0%",
+    empiricalStrengthEn: "Renders living skin pores, fine fabric weave, and glass caustics with zero AI waxiness",
+    verifiedSampleImage: "/reel/brands/verified-seedream-5-0-pro.png",
+  },
+];
+
+/**
+ * Compiles a locked Brand Aesthetic (either a TWINGS Preset or Custom Moodboard up to 20 images)
+ * into the model-specific optimal prompt format for:
+ *   - `gpt_image_2_6` (5-Tier Numbered Director Brief)
+ *   - `nano_banana_pro` (ALL-CAPS Compartment Locks)
+ *   - `nano_banana_2_1` (Scene Lock + 1->2 SKU Swap Protocol)
+ *   - `nano_banana_2_0` (Fast Concept & Palette Lock)
+ *   - `seedream_5_0_pro` (4-Part Cohesive Natural-Language Prose + Matte Skin Contract + COLOUR AUTHORITY + HEX VALUES)
+ */
+export function compileAestheticPromptForModel(opts: {
+  modelId: BrandStudioImageModelId;
+  mode: BrandAestheticSourceMode;
+  presetId?: BrandAestheticPresetId;
+  customItems?: readonly BrandCustomMoodboardItem[];
+  customTitle?: string;
+  userBrief?: string;
+  locale: "ko" | "en";
+}): {
+  modelId: BrandStudioImageModelId;
+  aestheticTitle: string;
+  paletteHex: readonly [string, string, string, string];
+  structureBadge: string;
+  compiledPrompt: string;
+} {
+  const { modelId, mode, presetId, customItems, customTitle, userBrief, locale } = opts;
+  const isKo = locale === "ko";
+  const preset =
+    BRAND_AESTHETIC_PRESETS.find((p) => p.id === presetId) ??
+    BRAND_AESTHETIC_PRESETS[0]!;
+  const customSynthesized = synthesizeCustomMoodboardDna(
+    customItems ?? DEFAULT_CUSTOM_MOODBOARD_ITEMS,
+    customTitle,
+  );
+
+  const aestheticTitle =
+    mode === "custom_moodboard"
+      ? isKo
+        ? customSynthesized.titleKo
+        : customSynthesized.titleEn
+      : isKo
+        ? preset.titleKo
+        : preset.titleEn;
+  const dna = mode === "custom_moodboard" ? customSynthesized.dna : preset.dna;
+  const hexList = dna.paletteHex.join(", ");
+  const cleanBrief =
+    (userBrief ?? "").trim() ||
+    (isKo
+      ? "1번 인물과 2번 우리 제품을 중심으로 브랜드 화보 촬영"
+      : "Brand editorial featuring Subject 1 and Product 2");
+
+  const easyRow =
+    MODEL_EASY_COMPARISON_MATRIX.find((r) => r.modelId === modelId) ??
+    MODEL_EASY_COMPARISON_MATRIX[0]!;
+  const structureBadge = isKo
+    ? easyRow.promptStructureLabelKo
+    : easyRow.promptStructureLabelEn;
+
+  if (modelId === "gpt_image_2_6") {
+    const compiledPrompt = isKo
+      ? [
+          `1. 구도·광학: ${dna.opticsKo}`,
+          `2. 레퍼런스·로고 고정: 2번 제품의 용기 비례와 전면 로고 타이포그래피 100% 정확히 보존`,
+          `3. 피사체·표면 질감: ${cleanBrief} (${dna.surfaceSkinKo})`,
+          `4. 배경·조명 설계: ${dna.lightingKo}`,
+          `5. 미감 팔레트(${hexList}) & 금지: [${aestheticTitle}] 적용 · ${dna.negativeRuleKo}`,
+        ].join(" / ")
+      : [
+          `1. Deliverable & Optics: ${dna.opticsEn}`,
+          `2. Reference & Typography Lock: Preserve 100% package geometry and crisp front label lettering from Slot 2`,
+          `3. Subject & Surface: ${cleanBrief} (${dna.surfaceSkinEn})`,
+          `4. Environment & Light: ${dna.lightingEn}`,
+          `5. Palette (${hexList}) & Exclusions: [${aestheticTitle}] · ${dna.negativeRuleEn}`,
+        ].join(" / ");
+    return {
+      modelId,
+      aestheticTitle,
+      paletteHex: dna.paletteHex,
+      structureBadge,
+      compiledPrompt,
+    };
+  }
+
+  if (modelId === "nano_banana_pro") {
+    const compiledPrompt = isKo
+      ? `[MOODBOARD LOCK: ${aestheticTitle}] [SLOT 1–4 REFERENCE LOCK] ${cleanBrief} [COLOR & LIGHT: ${hexList} · ${dna.lightingKo}] [OPTICS & TEXTURE: ${dna.opticsKo} · ${dna.surfaceSkinKo}] [NEGATIVE: ${dna.negativeRuleKo}]`
+      : `[MOODBOARD LOCK: ${aestheticTitle}] [SLOT 1–4 REFERENCE LOCK] ${cleanBrief} [COLOR & LIGHT: ${hexList} · ${dna.lightingEn}] [OPTICS & TEXTURE: ${dna.opticsEn} · ${dna.surfaceSkinEn}] [NEGATIVE: ${dna.negativeRuleEn}]`;
+    return {
+      modelId,
+      aestheticTitle,
+      paletteHex: dna.paletteHex,
+      structureBadge,
+      compiledPrompt,
+    };
+  }
+
+  if (modelId === "nano_banana_2_1") {
+    const compiledPrompt = isKo
+      ? `[SCENE & HAND LOCK (1번 이미지)] 원본 배경·조명·손 모양과 접촉 그림자 유지 [TARGET SKU SWAP (2번 제품)] ${cleanBrief} [MOODBOARD GRADE: ${aestheticTitle} (${hexList}) · ${dna.lightingKo}]`
+      : `[SCENE & HAND LOCK (Image 1)] Preserve background, lighting, hand grip & contact shadows [TARGET SKU SWAP (Image 2)] ${cleanBrief} [MOODBOARD GRADE: ${aestheticTitle} (${hexList}) · ${dna.lightingEn}]`;
+    return {
+      modelId,
+      aestheticTitle,
+      paletteHex: dna.paletteHex,
+      structureBadge,
+      compiledPrompt,
+    };
+  }
+
+  if (modelId === "nano_banana_2_0") {
+    const compiledPrompt = isKo
+      ? `[FAST CONCEPT LOCK: ${aestheticTitle} (${hexList})] ${dna.opticsKo} · ${dna.lightingKo} · ${cleanBrief}`
+      : `[FAST CONCEPT LOCK: ${aestheticTitle} (${hexList})] ${dna.opticsEn} · ${dna.lightingEn} · ${cleanBrief}`;
+    return {
+      modelId,
+      aestheticTitle,
+      paletteHex: dna.paletteHex,
+      structureBadge,
+      compiledPrompt,
+    };
+  }
+
+  // seedream_5_0_pro — 4-Part Cohesive Natural-Language Prose + Matte Skin Contract + COLOUR AUTHORITY + HEX VALUES
+  const compiledPrompt = isKo
+    ? `${cleanBrief}. ${dna.opticsKo}, ${dna.lightingKo}. ${dna.surfaceSkinKo}(번들거리는 인위적 광택 없이 실제 피부 모공과 원단·유리 질감 보존). COLOUR AUTHORITY: ${aestheticTitle}. HEX VALUES: [${hexList}].`
+    : `${cleanBrief}. Shot with ${dna.opticsEn} under ${dna.lightingEn}. Preserve ${dna.surfaceSkinEn} with zero synthetic plastic sheen. COLOUR AUTHORITY: ${aestheticTitle}. HEX VALUES: [${hexList}].`;
+
+  return {
+    modelId,
+    aestheticTitle,
+    paletteHex: dna.paletteHex,
+    structureBadge,
+    compiledPrompt,
+  };
+}
+
+
 
 
 
