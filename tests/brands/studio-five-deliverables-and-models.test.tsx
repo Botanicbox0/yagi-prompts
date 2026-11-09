@@ -1003,6 +1003,19 @@ describe("Brand Studio 5 Core Deliverables & 5 Image Models (12-Round Verificati
       studioHtml.split('<div hidden="" aria-hidden="true"')[0] ?? studioHtml;
     expect(visibleShellHtml).not.toContain("예시 컷");
     expect(visibleShellHtml).not.toContain("예시 장면");
+    expect(visibleShellHtml).not.toContain("tws-intro");
+    expect(visibleShellHtml).not.toContain("tws-guide");
+    expect(visibleShellHtml).not.toContain("<select");
+    expect(visibleShellHtml).toContain("tws-composer-input-row");
+    expect(visibleShellHtml).toContain("tws-composer-attach");
+    expect(visibleShellHtml).toContain("tws-batch-stepper");
+    expect(visibleShellHtml).toContain("35mm");
+    expect(visibleShellHtml).toContain("50mm");
+    expect(visibleShellHtml).toContain("85mm");
+    expect(visibleShellHtml).toContain("tws-stage-video");
+    expect(visibleShellHtml).toContain("첫 장면 (Start)");
+    expect(visibleShellHtml).toContain("끝 장면 (선택)");
+    expect(visibleShellHtml).toContain("천천히 줌인");
 
     // Verify /brand/identity (BrandOnboardingWizard) renders the visual Moodboard & Aesthetic Studio above the fold
     const identityHtml = renderToStaticMarkup(
