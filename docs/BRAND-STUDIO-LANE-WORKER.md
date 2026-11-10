@@ -43,6 +43,8 @@ pythonw.exe D:/dev/agent-harnesses/windows-background/agent-harness/quiet_run.py
   Seedance 2.5 480p 4초 42, 720p 5초 117, 1080p 10초 571).
 - 480p 시안은 `draft: true`, 1080p 완성은 시안의 작업 id를 `draft_source_task_id`로 넘긴다. "영상을 고친다"(edit)는 원본 길이를
   따르므로 시안이 될 수 없고 일반 480p로 나간다.
+- CLI는 `--no-download`로 부른다. 끝난 파일을 워커 PC에 먼저 내려받게 두면 제공사 파일 서버가 느려서(연결당 초당 약 50KB)
+  결과 확인 한 번이 수십 초씩 걸린다. 파일은 앱이 조각으로 나눠 직접 받는다.
 - 안전 검수는 Sunra 쪽에서 항상 돈다. 워커에 끄는 옵션은 없다.
 - 고객 문장은 CLI에 stdin으로 넘긴다(셸 인용 문제 없음). 로그에는 작업 id와 종류만 남고 문장·주소·비밀값은 남기지 않는다.
 - PC가 꺼지거나 CLI 로그인이 풀리면 이 경로만 멈춘다. `sunra status`로 로그인 상태를 본다.
