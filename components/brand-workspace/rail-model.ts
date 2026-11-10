@@ -7,7 +7,23 @@
  */
 import type { StudioJobKind } from '@/lib/brand-studio/contracts';
 
-export type RailItemId = 'image' | 'video' | 'review' | 'campaigns' | 'creators' | 'assets' | 'brandKit';
+export type RailItemId = 'image' | 'video' | 'review' | 'campaigns' | 'creators' | 'assets' | 'brandKit' | 'messages';
+
+/**
+ * Project rooms (docs/BRAND-ROOMS.md §2): with rooms open the rail splits in two. What the brand makes
+ * itself, and what it does with the YAGI team. Without rooms there are no groups and no `messages`.
+ */
+export type RailGroupId = 'make' | 'team';
+export const RAIL_GROUP: Readonly<Record<RailItemId, RailGroupId>> = {
+  image: 'make',
+  video: 'make',
+  assets: 'make',
+  brandKit: 'make',
+  campaigns: 'team',
+  messages: 'team',
+  review: 'team',
+  creators: 'team',
+};
 
 /** localStorage: `{ expanded: boolean }`. */
 export const RAIL_STORAGE_KEY = 'twings_brand_rail_v1';
@@ -26,10 +42,13 @@ export const RAIL_HREF: Readonly<Record<RailItemId, string>> = {
   creators: '/brand/creators',
   assets: '/brand/library',
   brandKit: '/brand/identity',
+  messages: '/brand/rooms',
 };
 
 /** 18px stroke icons on a 20-unit grid. */
-export const RAIL_ICON: Readonly<Record<RailItemId | 'team' | 'settings' | 'create' | 'more' | 'toggle', string>> = {
+export const RAIL_ICON: Readonly<Record<RailItemId | 'team' | 'settings' | 'create' | 'more' | 'toggle' | 'commission', string>> = {
+  messages: 'M3.5 4.5h10v7.5H8l-3 2.5v-2.5H3.5z M13.5 7.5h3v7H15v2l-2.6-2H9.5v-2.5',
+  commission: 'M4 4.5h9.5l2.5 2.5v8.5H4z M7 9h6M7 12h4 M13.5 4.5V7H16',
   image: 'M3.5 4.5h13v11h-13z M3.5 13l3.8-3.6 3 2.8 2.2-2 4 3.6 M12.6 7.4h.1',
   video: 'M3 5.5h10v9H3z M13 8.6l4-2.4v7.6l-4-2.4',
   review: 'M4 4.5h12v8.5H9l-3.5 3v-3H4z M7 8h6M7 10.5h4',
@@ -50,10 +69,28 @@ export interface RailVisibility {
   /** The creator pool is open and this role may use it. */
   creators: boolean;
   identity: boolean;
+  /** Project rooms are open for this brand (docs/BRAND-ROOMS.md §2): the two groups and 메시지. */
+  rooms?: boolean;
 }
 
-/** Default order (§3): 이미지 · 영상 · 리뷰 · 캠페인 · 크리에이터 · 에셋 · 브랜드 키트. */
+/**
+ * Default order (§3): 이미지 · 영상 · 리뷰 · 캠페인 · 크리에이터 · 에셋 · 브랜드 키트.
+ * With rooms: 이미지 · 영상 · 에셋 · 브랜드 키트 | 의뢰 · 메시지 · 리뷰 · 크리에이터 (BRAND-ROOMS §2).
+ */
 export function railItems(visible: RailVisibility): RailItemId[] {
+  if (visible.rooms) {
+    const grouped: Array<[RailItemId, boolean]> = [
+      ['image', visible.studio],
+      ['video', visible.studio],
+      ['assets', true],
+      ['brandKit', visible.identity],
+      ['campaigns', true],
+      ['messages', true],
+      ['review', visible.studio],
+      ['creators', visible.creators],
+    ];
+    return grouped.filter(([, shown]) => shown).map(([id]) => id);
+  }
   const all: Array<[RailItemId, boolean]> = [
     ['image', visible.studio],
     ['video', visible.studio],
@@ -73,7 +110,10 @@ const under = (path: string, base: string) => path === base || path.startsWith(`
  * `/brand/studio/video` or `/brand/studio/review`; campaigns own `/brand` and every campaign page.
  */
 export function railActive(href: string, path: string): boolean {
-  if (href === '/brand') return path === '/brand' || under(path, '/brand/projects');
+  // A project's room (`/brand/rooms/<id>`) is part of that commission: 의뢰 is current there, and
+  // 메시지 only on the inbox itself.
+  if (href === '/brand') return path === '/brand' || under(path, '/brand/projects') || /^\/brand\/rooms\/[^/]+/.test(path);
+  if (href === '/brand/rooms') return path === '/brand/rooms' || path === '/brand/rooms/';
   if (href === '/brand/studio') {
     return under(path, '/brand/studio') && !under(path, '/brand/studio/video') && !under(path, '/brand/studio/review');
   }
@@ -122,6 +162,74 @@ export function dropItem(items: readonly RailItemId[], source: RailItemId, targe
   next.splice(from, 1);
   next.splice(to, 0, source);
   return next;
+}
+
+/* ------------------------------------------------------------- groups (project rooms) */
+
+export interface RailGroups {
+  make: RailItemId[];
+  team: RailItemId[];
+}
+
+/**
+ * The saved order applied inside each group. An item never leaves its group, whatever an older saved
+ * order says: the order only decides positions among the items of the same group.
+ */
+export function groupItems(items: readonly RailItemId[], order: readonly string[]): RailGroups {
+  return {
+    make: orderItems(
+      items.filter((id) => RAIL_GROUP[id] === 'make'),
+      order,
+    ),
+    team: orderItems(
+      items.filter((id) => RAIL_GROUP[id] === 'team'),
+      order,
+    ),
+  };
+}
+
+/** The whole saved order after moving `id` by one place within its group. Unchanged at the group's ends. */
+export function moveInGroup(groups: RailGroups, id: RailItemId, direction: -1 | 1): RailItemId[] {
+  const group = RAIL_GROUP[id];
+  const moved = moveItem(groups[group], id, direction);
+  return group === 'make' ? [...moved, ...groups.team] : [...groups.make, ...moved];
+}
+
+/** The whole saved order after dropping `source` on `target`; null when they sit in different groups. */
+export function dropInGroup(groups: RailGroups, source: RailItemId, target: RailItemId): RailItemId[] | null {
+  const group = RAIL_GROUP[source];
+  if (group !== RAIL_GROUP[target]) return null;
+  const dropped = dropItem(groups[group], source, target);
+  return group === 'make' ? [...dropped, ...groups.team] : [...groups.make, ...dropped];
+}
+
+export type RailCreateKey = 'image' | 'video' | 'reverse' | 'campaign' | 'commission';
+export interface RailCreateLink {
+  key: RailCreateKey;
+  href: string;
+  icon: string;
+}
+
+/**
+ * The "+" menu. Without rooms: 이미지 만들기 · 영상 만들기 · 참고 영상으로 만들기 · 캠페인 의뢰. With rooms the
+ * request is what the brand hands to the YAGI team, so it leaves the list and becomes the last entry,
+ * 야기 팀에 의뢰하기 (`commission`), which the menu shows under a divider.
+ */
+export function railCreateLinks(rooms: boolean): RailCreateLink[] {
+  const make: RailCreateLink[] = [
+    { key: 'image', href: '/brand/studio', icon: RAIL_ICON.image },
+    { key: 'video', href: '/brand/studio/video', icon: RAIL_ICON.video },
+    { key: 'reverse', href: '/brand/studio/video?start=reverse', icon: RAIL_ICON.review },
+  ];
+  return rooms
+    ? [...make, { key: 'commission', href: '/brand/projects/new', icon: RAIL_ICON.commission }]
+    : [...make, { key: 'campaign', href: '/brand/projects/new', icon: RAIL_ICON.campaigns }];
+}
+
+/** Phone tab bar with rooms: 이미지 · 영상 · 의뢰 · 메시지 when they exist, filled up from the rest. */
+export function groupedTabIds(items: readonly RailItemId[]): RailItemId[] {
+  const first: RailItemId[] = ['image', 'video', 'campaigns', 'messages'];
+  return [...first.filter((id) => items.includes(id)), ...items.filter((id) => !first.includes(id))].slice(0, 4);
 }
 
 export function parseOrder(raw: string | null): string[] {

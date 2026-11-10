@@ -9,7 +9,9 @@ import { BrandUnavailable } from "@/components/brand-workspace/brand-unavailable
 import { scopedHref, sectionVisibility } from "@/lib/brands/workspace/selection";
 import { StaffNotice, adminOrganizationHref } from "@/components/brand-workspace/staff-notice";
 import { CAMPAIGN_LIST_ANCHOR } from "@/components/brand-studio/doors";
-import { brandStudioV2Open } from "@/lib/flags";
+import { brandRoomsOpen, brandStudioV2Open } from "@/lib/flags";
+import { roomsOpenFor } from "@/components/brand-rooms/room/visibility";
+import { roomUnreadCounts } from "@/lib/brand-rooms/overview";
 import { studioV2Visible } from "@/lib/brand-studio/visibility";
 import { getDictionary } from "@/lib/i18n/dictionaries";
 export default async function BrandHome({
@@ -17,7 +19,7 @@ export default async function BrandHome({
 }: {
   searchParams: Promise<{ organizationId?: string | string[] }>;
 }) {
-  const [{ organizationId }, { sql, viewer, verifiedEmail, brandHost, b, locale }] = await Promise.all([searchParams, brandContext()]);
+  const [{ organizationId }, { sql, viewer, verifiedEmail, brandHost, b, dict, locale }] = await Promise.all([searchParams, brandContext()]);
   if (!sql) return <p role="alert">{b.unavailable}</p>;
   const { selection, choice } = await brandScope({ sql, verifiedEmail }, viewer, organizationId);
   if (selection.state === "unavailable") return <BrandUnavailable b={b} />;
@@ -33,7 +35,16 @@ export default async function BrandHome({
   // Studio v2 (docs/BRAND-STUDIO-V2.md §5.1): three doors replace the showcase. A sandboxed or
   // generation-closed brand fails studioV2Visible and keeps exactly the page below.
   const doors = choice && brandStudioV2Open() && studioV2Visible(choice, true) ? choice : null;
-  const campaignList = <CampaignList projects={workspace.projects} b={b} locale={locale}/>;
+  // Project rooms (docs/BRAND-ROOMS.md §3): "룸 열기" on each card, only while rooms are open for this
+  // brand (flag on, not sandboxed, generation allowed, not the team view). Closed: the list is unchanged.
+  const rooms = choice && roomsOpenFor(choice, brandRoomsOpen())
+    ? {
+        organizationId: choice.id,
+        unread: await roomUnreadCounts(sql, { organizationId: choice.id, userId: viewer.userId, projectIds: workspace.projects.map((p) => p.id) }),
+        copy: dict.roomsShell.entry,
+      }
+    : null;
+  const campaignList = rooms ? <CampaignList projects={workspace.projects} b={b} locale={locale} rooms={rooms}/> : <CampaignList projects={workspace.projects} b={b} locale={locale}/>;
   return (
     <div data-brand-home>
       <div className="bw-heading">

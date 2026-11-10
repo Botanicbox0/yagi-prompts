@@ -15,6 +15,7 @@ import { loadFeaturePolicies, type BrandFeature } from "@/lib/brands/entitlement
 import { BRAND_PLANS, loadPlanAssignment } from "@/lib/brands/plans";
 import { loadBrandIdentity } from "@/lib/brands/identity/service";
 import { interpolate } from "@/lib/i18n/format";
+import { brandRoomsOpen } from "@/lib/flags";
 
 export const dynamic = "force-dynamic";
 
@@ -53,6 +54,11 @@ export default async function StudioBrands() {
               <a className="admin-btn" href="/admin/brand-studio/reviews" data-studio-reviews-link>
                 {dict.studioReview.admin.navLink} →
               </a>
+              {brandRoomsOpen() && (
+                <a className="admin-btn" href="/admin/brand-rooms" data-brand-rooms-link>
+                  {dict.roomsChat.admin.navLink} →
+                </a>
+              )}
             </>
           }
         />

@@ -5,6 +5,7 @@ import { featureDenied, isSandboxedClientOrganization } from '@/lib/brands/featu
 import { poolVisible, scopedHref, sectionVisibility, selectedChoice, type BrandWorkspaceScope } from '@/lib/brands/workspace/selection';
 import { studioV2Visible } from '@/lib/brand-studio/visibility';
 import type { StudioShellCopy } from '@/messages/studio-shell';
+import type { RoomsShellCopy } from '@/messages/rooms-shell';
 import { useWorkspaceSelection } from './identity';
 import type { NavigationVisibility } from './access';
 import { RailNavigation } from './rail-nav';
@@ -257,9 +258,21 @@ function Links({
  * layout on the server; `shell` is `dict.studioShell`; `railExpanded` is the layout's cookie mirror of
  * the rail width. Without `studioV2` and `shell` nothing about the two existing modes changes.
  */
-type RailInputs = { studioV2?: boolean; shell?: StudioShellCopy; locale?: 'ko' | 'en'; railExpanded?: boolean };
+type RailInputs = {
+  studioV2?: boolean;
+  shell?: StudioShellCopy;
+  locale?: 'ko' | 'en';
+  railExpanded?: boolean;
+  /**
+   * Project rooms (docs/BRAND-ROOMS.md §2): `brandRoomsOpen()` AND-ed with the layout's studio-copy rule,
+   * and the rail's room words (`dict.roomsShell.nav`), given only when that is true. The rail alone uses
+   * them; the `topbar` and `sidebar` modes never see them.
+   */
+  rooms?: boolean;
+  roomsCopy?: RoomsShellCopy['nav'];
+};
 
-function Scoped({ scope, studioV2 = false, shell, locale = 'ko', railExpanded = false, ...labels }: Labels & RailInputs & { scope: BrandWorkspaceScope }) {
+function Scoped({ scope, studioV2 = false, shell, locale = 'ko', railExpanded = false, rooms = false, roomsCopy, ...labels }: Labels & RailInputs & { scope: BrandWorkspaceScope }) {
   const choice = selectedChoice(useWorkspaceSelection(scope).selection);
   const isMorphic = Boolean(
     choice && (isSandboxedClientOrganization(choice) || featureDenied(choice.denied, 'generative_media')),
@@ -282,6 +295,9 @@ function Scoped({ scope, studioV2 = false, shell, locale = 'ko', railExpanded = 
         locale={locale}
         initialExpanded={railExpanded}
         scope={(path) => scopedHref(path, choice)}
+        // The TWINGS team view reads a brand through its own console, not the brand's rooms.
+        rooms={Boolean(rooms && roomsCopy && choice && choice.role !== 'studio')}
+        roomsCopy={roomsCopy}
       />
     );
   }
@@ -304,10 +320,12 @@ export function WorkspaceNavigation({
   shell,
   locale,
   railExpanded,
+  rooms,
+  roomsCopy,
   ...labels
 }: Labels & RailInputs & { scope?: BrandWorkspaceScope | null }) {
   return scope ? (
-    <Scoped scope={scope} studioV2={studioV2} shell={shell} locale={locale} railExpanded={railExpanded} {...labels} />
+    <Scoped scope={scope} studioV2={studioV2} shell={shell} locale={locale} railExpanded={railExpanded} rooms={rooms} roomsCopy={roomsCopy} {...labels} />
   ) : (
     <Links labels={labels} visible={ALL} pool layoutMode="topbar" scope={(path) => path} />
   );

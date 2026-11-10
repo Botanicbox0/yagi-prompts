@@ -59,7 +59,8 @@ export function isBrandPath(pathname: string): boolean {
   // `usage`: the payment provider's return page for secondary usage (docs/SECONDARY-USAGE.md).
   // `creators`: the creator pool (docs/PLATFORM-2.0.md §17.3).
   // `identity`: the fixed brand identity layer, memory, and looks (docs/BRAND-PRODUCT.md §5).
-  return pathname === '/brand' || /^\/brand\/(?:projects|members|invite|settings|library|studio|usage|creators|identity)(?:\/|$)/.test(pathname);
+  // `rooms`: messages and project rooms (docs/BRAND-ROOMS.md §3); each page gates itself.
+  return pathname === '/brand' || /^\/brand\/(?:projects|members|invite|settings|library|studio|usage|creators|identity|rooms)(?:\/|$)/.test(pathname);
 }
 
 const AUTH_METHODS: Record<string, readonly string[]> = {
@@ -79,6 +80,8 @@ export function adminRouteAllowed(pathname: string, method: string): boolean {
   if (pathname === '/admin/do') return method === 'POST';
   if (isAdminPath(pathname)) return read;
   if (pathname === '/api/admin/staging-url') return method === 'POST';
+  // The team's deliverable upload for project rooms (docs/BRAND-ROOMS.md §6): an address, then local bytes.
+  if (pathname === '/api/brand-rooms/reviews/upload') return method === 'POST' || method === 'PUT';
   if (pathname === '/api/admin/brand-workspace') return method === 'POST';
   if (/^\/api\/admin\/brand-workspace\/attachments\/[^/]+$/.test(pathname)) return method === 'POST';
   if (/^\/api\/admin\/media\/[^/]+$/.test(pathname)) return read;
@@ -225,7 +228,28 @@ export function brandRouteAllowed(pathname: string, method: string): boolean {
   if (pathname === '/api/brand-studio/summary') return read;
   if (/^\/api\/brand-studio\/assets\/[a-f0-9-]{36}$/.test(pathname)) return method === 'POST';
   if (/^\/api\/brand-studio\/media\/st\/[a-f0-9]{64}\.(?:png|jpg|webp|mp4|mov|mp3|wav)$/.test(pathname)) return read;
+  // Project room conversations (docs/BRAND-ROOMS.md §4): the stream, a thread, the lines about one thing
+  // and the operations; the rail's and the inbox's unread summary; the local attachment gateway.
+  if (pathname === '/api/brand-rooms/messages') return read || method === 'POST';
+  if (pathname === '/api/brand-rooms/messages/upload') return method === 'POST';
+  if (pathname === '/api/brand-rooms/summary') return read;
+  // Project room storyboards (docs/BRAND-ROOMS.md §5): boards, one board, operations, the local upload
+  // gateway. The command-line door (/api/brand-rooms/ingest) is deliberately NOT reachable on this host.
+  if (pathname === '/api/brand-rooms/storyboards') return read || method === 'POST';
+  if (/^\/api\/brand-rooms\/storyboards\/upload\/[a-f0-9-]{36}$/.test(pathname)) return method === 'POST';
+  // Project room deliverables and share links (docs/BRAND-ROOMS.md §6): stacks, one version, operations;
+  // a link's list, create and revoke; the share page and its own door (view, passphrase, guest note).
+  // The team's delivery upload (/api/brand-rooms/reviews/upload) is NOT reachable on this host.
+  if (pathname === '/api/brand-rooms/reviews') return read || method === 'POST';
+  if (pathname === '/api/brand-rooms/shares') return read || method === 'POST';
+  if (pathname === '/api/brand-rooms/shares/public') return method === 'POST';
+  if (isSharePath(pathname)) return read;
   return read && !pathname.startsWith('/api/') && !isAdminPath(pathname) && adminRouteAllowed(pathname, method);
+}
+
+/** A share link's page (`/s/<43-character token>`, docs/BRAND-ROOMS.md §6): no sign-in, no locale prefix. */
+export function isSharePath(pathname: string): boolean {
+  return /^\/s\/[A-Za-z0-9_-]{43}$/.test(pathname);
 }
 
 /** Former matcher exclusions now run only AFTER the host policy, preserving consumer behavior. */
@@ -235,6 +259,8 @@ export function bypassConsumerLocale(pathname: string): boolean {
     /^\/vendor\/face-1\.1\.0\/(?:vision_bundle\.js|wasm\/vision_wasm_(?:nosimd_)?internal\.(?:js|wasm))$/.test(pathname)) return true;
   if (pathname === '/llms.txt' || pathname === '/llms-full.txt') return true;
   if (pathname === '/.well-known/assetlinks.json' || pathname === '/.well-known/apple-app-site-association') return true;
+  // A share link's page is not a locale page and needs no session (docs/BRAND-ROOMS.md §6).
+  if (isSharePath(pathname)) return true;
   return /^\/(?:_next\/static|_next\/image|favicon\.ico|sitemap\.xml|robots\.txt|sw\.js|offline\.html|manifest\.webmanifest|fonts\/|\.storage\/|api\/|auth\/|r\/)/.test(pathname)
     || /\.(?:svg|png|jpg|jpeg|gif|webp|mp4|webm|woff2?)$/.test(pathname);
 }

@@ -590,5 +590,8 @@ describe('studio copy never reaches a viewer whose brands are all closed', () =>
     expect(layout).toContain('studioCopyAllowed(scope.choices)');
     expect(layout).toContain('shell={studioCopy?d.studioShell:undefined}');
     expect(layout).toContain('const studioV2=brandStudioV2Open()&&studioCopy;');
+    // Project rooms (docs/BRAND-ROOMS.md §2): the same rule, and the room words only with it.
+    expect(layout).toContain('const rooms=brandRoomsOpen()&&studioCopy;');
+    expect(layout).toContain('roomsCopy={rooms?d.roomsShell.nav:undefined}');
   });
 });

@@ -116,6 +116,7 @@ export function ProjectDetail({
   shortlistCount = 0,
   formatTitle = null,
   staffTools = null,
+  roomEntry = null,
 }: {
   project: BrandProjectDetail;
   b: BrandCopy;
@@ -144,6 +145,11 @@ export function ProjectDetail({
   formatTitle?: string | null;
   /** DB admins in the TWINGS team view only: the studio's own panels for this campaign (the shortlist). */
   staffTools?: ReactNode;
+  /**
+   * "룸 열기" (docs/BRAND-ROOMS.md §3), beside the status. Given only while rooms are open for this brand;
+   * null keeps the header exactly as before.
+   */
+  roomEntry?: ReactNode;
 }) {
   // `role: "studio"` outside /admin is the TWINGS team's read-only view: it is not the customer's seat.
   const staffView = !studio && p.role === "studio";
@@ -185,9 +191,18 @@ export function ProjectDetail({
             {b.latestUpdate} {formatBrandTimestamp(p.updatedAt, locale)}
           </p>
         </div>
-        <span className="bw-status" data-state={p.status}>
-          {b.status[p.status]}
-        </span>
+        {roomEntry ? (
+          <div className="brr-head-actions" data-project-room-entry>
+            <span className="bw-status" data-state={p.status}>
+              {b.status[p.status]}
+            </span>
+            {roomEntry}
+          </div>
+        ) : (
+          <span className="bw-status" data-state={p.status}>
+            {b.status[p.status]}
+          </span>
+        )}
       </div>
       </Masthead>
       {staffView && <StaffNotice b={b} manageHref={staffManageHref} />}

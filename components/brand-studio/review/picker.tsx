@@ -6,7 +6,7 @@
 import "./review.css";
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { StudioAssetView, StudioState } from "@/lib/brand-studio/contracts";
-import { REVIEW_LIMITS, type ReviewCreated } from "@/lib/brand-studio/review-contracts";
+import { REVIEW_LIMITS, type ReviewCreated, type ReviewFailure } from "@/lib/brand-studio/review-contracts";
 import { postReview } from "./api";
 import { fill, reviewErrorText, type ReviewCopy } from "./stage";
 
@@ -64,12 +64,18 @@ export function ReviewPicker({
   locale,
   onClose,
   onCreated,
+  create,
+  heading,
 }: {
   organizationId: string;
   copy: ReviewCopy;
   locale: "ko" | "en";
   onClose(): void;
   onCreated(created: ReviewCreated): void;
+  /** Rooms: put the chosen piece into a project or onto a stack instead of the studio review list. */
+  create?: (input: { title: string; assetId?: string; outputId?: string }) => Promise<ReviewCreated | ReviewFailure>;
+  /** Rooms: the dialog's own title. */
+  heading?: string;
 }) {
   const dialogRef = useRef<HTMLDialogElement>(null);
   const [state, setState] = useState<"loading" | "failed" | "ready">("loading");
@@ -120,7 +126,7 @@ export function ReviewPicker({
     if (!chosen || !title.trim() || busy) return;
     setBusy(true);
     setError(null);
-    const result = await postReview("review.create", { organizationId, title: title.trim(), ...chosen.ref });
+    const result = create ? await create({ title: title.trim(), ...chosen.ref }) : await postReview("review.create", { organizationId, title: title.trim(), ...chosen.ref });
     setBusy(false);
     if (!result.ok) {
       setError(reviewErrorText(copy, result.code));
@@ -133,7 +139,7 @@ export function ReviewPicker({
     <dialog ref={dialogRef} className="bsv-dialog" aria-labelledby="bsv-picker-title" onCancel={onClose} data-review-picker>
       <div className="bsv-dialog-head">
         <h2 id="bsv-picker-title" className="bsv-dialog-title">
-          {copy.picker.title}
+          {heading ?? copy.picker.title}
         </h2>
         <button type="button" className="bsv-icon-btn" onClick={onClose} aria-label={copy.picker.close}>
           <svg className="bsv-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false">

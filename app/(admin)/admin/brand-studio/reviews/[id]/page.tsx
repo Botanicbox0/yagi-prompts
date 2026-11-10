@@ -9,6 +9,8 @@ import { AdminReviewStage } from "@/components/brand-studio/review/admin-stage";
 import { createStudioMediaStore } from "@/lib/brand-studio/media-store";
 import { staffReviewDetail } from "@/lib/brand-studio/review";
 import { parseReviewTime } from "@/lib/brand-studio/review-contracts";
+import { staffListShares } from "@/lib/brand-rooms/shares";
+import { AdminShareLinks } from "@/components/brand-rooms/share/admin-links";
 
 /**
  * `/admin/brand-studio/reviews/[id]` — one piece under review, the team's side of the same stage the
@@ -30,6 +32,9 @@ export default async function StudioReviewDetail({
   if (!sql) return <p role="alert">{dict.brandWorkspace.unavailable}</p>;
   const detail = await staffReviewDetail({ sql, media: createStudioMediaStore() }, viewer, id);
   if (!detail.ok) notFound();
+  // Rooms (docs/BRAND-ROOMS.md §6): the links the brand made for this draft, with the kill switch.
+  const listed = detail.extended ? await staffListShares({ sql, media: createStudioMediaStore() }, viewer, { kind: "review", targetId: detail.review.id }) : null;
+  const shares = listed && listed.ok ? listed.shares : null;
   return (
     <AdminShell dict={dict.admin} locale={locale} active="brandWorkspace">
       <OutcomeBanner
@@ -51,7 +56,10 @@ export default async function StudioReviewDetail({
           locale={locale === "en" ? "en" : "ko"}
           eyebrow={interpolate(r.admin.brandOf, { name: detail.organizationName })}
           initialMs={parseReviewTime(typeof search.t === "string" ? search.t : undefined)}
+          extended={detail.extended === true}
+          versions={detail.versions}
         />
+        {shares && <AdminShareLinks shares={shares} reviewId={detail.review.id} locale={locale === "en" ? "en" : "ko"} copy={dict.roomsReview} />}
       </div>
     </AdminShell>
   );
