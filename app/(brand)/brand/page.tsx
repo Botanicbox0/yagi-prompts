@@ -8,6 +8,10 @@ import { brandScope, selectedAccess } from "@/components/brand-workspace/scope";
 import { BrandUnavailable } from "@/components/brand-workspace/brand-unavailable";
 import { scopedHref, sectionVisibility } from "@/lib/brands/workspace/selection";
 import { StaffNotice, adminOrganizationHref } from "@/components/brand-workspace/staff-notice";
+import { BrandDoors, CAMPAIGN_LIST_ANCHOR } from "@/components/brand-studio/doors";
+import { brandStudioV2Open } from "@/lib/flags";
+import { studioV2Visible } from "@/lib/brand-studio/visibility";
+import { getDictionary } from "@/lib/i18n/dictionaries";
 export default async function BrandHome({
   searchParams,
 }: {
@@ -26,6 +30,10 @@ export default async function BrandHome({
   const pendingShares = access.staff ? 0 : await countPendingSharedCampaigns({ sql }, viewer);
   const newProject = scopedHref("/brand/projects/new", choice);
   const studioOpen = !choice || sectionVisibility(choice).studio;
+  // Studio v2 (docs/BRAND-STUDIO-V2.md §5.1): three doors replace the showcase. A sandboxed or
+  // generation-closed brand fails studioV2Visible and keeps exactly the page below.
+  const doors = choice && brandStudioV2Open() && studioV2Visible(choice, true) ? choice : null;
+  const campaignList = <CampaignList projects={workspace.projects} b={b} locale={locale}/>;
   return (
     <div data-brand-home>
       <div className="bw-heading">
@@ -74,6 +82,14 @@ export default async function BrandHome({
         </section>
       ) : (
         <>
+          {doors && (
+            <BrandDoors
+              copy={getDictionary(locale).brandStudio}
+              choice={doors}
+              hasCampaigns={workspace.projects.length > 0}
+              canRequest={access.canRequest}
+            />
+          )}
           {workspace.projects.length === 0 ? (
             access.staff ? (
               <section className="bw-empty" data-brand-empty="staff">
@@ -94,10 +110,12 @@ export default async function BrandHome({
                 <p>{b.access.viewerEmptyBody}</p>
               </section>
             )
+          ) : doors ? (
+            <section id={CAMPAIGN_LIST_ANCHOR} data-brand-campaigns>{campaignList}</section>
           ) : (
-            <CampaignList projects={workspace.projects} b={b} locale={locale}/>
+            campaignList
           )}
-          {choice && studioOpen && (
+          {!doors && choice && studioOpen && (
             <CampaignMoatShowcase
               locale={locale === "en" ? "en" : "ko"}
               organizationId={choice.id}

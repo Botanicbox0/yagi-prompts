@@ -6,6 +6,7 @@ import { getSqlRunner } from '@/lib/db/connect';
 import { loadCachedBrandWorkspaceScope } from '@/components/brand-workspace/scope';
 import "@/app/globals.css";
 import "./workspace.css";
+import "./studio-v2.css";
 import { WorkspaceLanguage } from '@/components/brand-workspace/language';
 import { WorkspaceNavigation } from '@/components/brand-workspace/navigation';
 import { WorkspaceIdentity } from '@/components/brand-workspace/identity';

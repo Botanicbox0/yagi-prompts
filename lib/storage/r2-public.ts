@@ -12,7 +12,7 @@ const PAGE = 500;
  * the same address a visitor uses, because that is the address being vouched for. `has` asks the S3
  * endpoint: the public host caches a 404 for a few minutes, which would hide a file about to be written.
  */
-export function createR2PublicMediaStore(config: PublicMediaR2Config): PublicMediaStore {
+export function createR2PublicMediaStore(config: PublicMediaR2Config): PublicMediaStore & { delete(key: string): Promise<void> } {
   const objectUrl = (key: string) => `https://${config.accountId}.r2.cloudflarestorage.com/${config.bucket}/${key}`;
   const mediaBase = config.mediaBaseUrl.replace(/\/$/, '');
   const r2 = new AwsClient({ accessKeyId: config.accessKeyId, secretAccessKey: config.secretAccessKey, service: 's3', region: 'auto' });
@@ -38,6 +38,12 @@ export function createR2PublicMediaStore(config: PublicMediaR2Config): PublicMed
         },
       });
       if (!response.ok) throw new Error(`put ${response.status}`);
+    },
+
+    /** Brand studio v2 only (lib/brand-studio/media-store.ts): its random-key objects are deletable. A missing key is a success. */
+    async delete(key) {
+      const response = await r2.fetch(objectUrl(key), { method: 'DELETE', cache: 'no-store' });
+      if (!response.ok && response.status !== 404) throw new Error(`delete ${response.status}`);
     },
 
     async publicGet(key, range): Promise<PublicMediaRead> {

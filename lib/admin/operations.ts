@@ -8,6 +8,7 @@ import { BRAND_OPERATIONS } from './brand-operations';
 import { BRAND_WORKSPACE_OPERATIONS } from './brand-workspace-operations';
 import { BRAND_USAGE_OPERATIONS } from './brand-usage-operations';
 import { BRAND_ENGINE_OPERATIONS } from './brand-engine-operations';
+import { BRAND_STUDIO_OPERATIONS } from './brand-studio-operations';
 import { BRAND_PRODUCTION_OPERATIONS } from './brand-production-operations';
 import { PLATFORM_OPERATIONS } from './platform-operations';
 import { CAMPAIGN_RISK_OPERATIONS } from './campaign-risk-operations';
@@ -57,6 +58,8 @@ export const ADMIN_OPERATIONS = {
   ...BRAND_PRODUCTION_OPERATIONS,
   // docs/BRAND-PRODUCT.md — per-brand feature policy (deny-list) and B2B plan assignment.
   ...BRAND_ENGINE_OPERATIONS,
+  // docs/BRAND-STUDIO-V2.md §9 — the studio v2 monthly allowance and preferred lane per organization.
+  ...BRAND_STUDIO_OPERATIONS,
   ...PLATFORM_OPERATIONS,
   ...CAMPAIGN_RISK_OPERATIONS,
   ...CAMPAIGN_COLLABORATION_OPERATIONS,

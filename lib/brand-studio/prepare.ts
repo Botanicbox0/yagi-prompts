@@ -1,0 +1,194 @@
+/**
+ * Getting a queued job ready to send (docs/BRAND-STUDIO-V2.md §8): resolve the references again (a
+ * deleted one fails the job here, not at the provider), read a reference film, cut the region-edit
+ * crop, and run the prompt enhancer. Enhancement never blocks a run: a model failure falls back to the
+ * deterministic composer, and a composer failure sends the customer's own words.
+ */
+import { confirmedIdentityFor } from '@/lib/brands/identity/service';
+import type { FilmSheet, StudioErrorCode } from './contracts';
+import { imageInfo } from './files';
+import { studioModel, type StudioImageModel, type StudioModel } from './models';
+import { resolveReferences, type ResolvedRef } from './plan';
+import { StudioDenied } from './access';
+import type { EnhanceInput, EnhanceResult, JobRow, StudioDeps, StudioJobWork } from './types';
+
+export class PrepareFailure extends Error {
+  constructor(readonly code: StudioErrorCode, readonly detail: string) {
+    super(`${code}: ${detail}`);
+    this.name = 'PrepareFailure';
+  }
+}
+
+/** Media addresses a provider can fetch: the local gateway path gains the app origin when one is set. */
+export function providerUrl(deps: Pick<StudioDeps, 'env'>, url: string): string {
+  return url.startsWith('/') && deps.env.appOrigin ? `${deps.env.appOrigin}${url}` : url;
+}
+
+/** What is sent when the enhancer is off (or was never asked): the customer's words, then the change note. */
+export function sendPrompt(job: Pick<JobRow, 'final_prompt' | 'prompt' | 'params'>): string {
+  if (job.final_prompt) return job.final_prompt;
+  return [job.prompt, job.params?.change ?? ''].map((s) => s.trim()).filter(Boolean).join('\n');
+}
+
+/** The confirmed brand identity in the enhancer's words; null when there is none or brand learning is closed. */
+export async function brandSummary(deps: Pick<StudioDeps, 'sql'>, organizationId: string, name: string): Promise<EnhanceInput['brand']> {
+  try {
+    const identity = await confirmedIdentityFor(deps.sql, organizationId);
+    if (!identity) return { name };
+    const c = identity.colour;
+    return {
+      name,
+      tone: identity.voice.tone,
+      palette: [c.accent, c.ink, c.paper, c.canvas, c.sky],
+      rules: [
+        ...identity.rules.never,
+        ...identity.rules.forbiddenTerms.map((t) => `never write "${t}"`),
+        ...identity.rules.competitorExclusions.map((t) => `never show ${t}`),
+      ].slice(0, 12),
+    };
+  } catch {
+    return { name };
+  }
+}
+
+export async function enhanceReferences(deps: Pick<StudioDeps, 'media'>, refs: readonly ResolvedRef[]): Promise<EnhanceInput['references']> {
+  const out: EnhanceInput['references'] = [];
+  for (const r of refs) {
+    let thumb: { bytes: Uint8Array; mime: string } | undefined;
+    if (r.thumbKey) {
+      try {
+        thumb = { bytes: await deps.media.read(r.thumbKey), mime: 'image/webp' };
+      } catch {
+        thumb = undefined;
+      }
+    }
+    out.push({
+      index: r.index,
+      kind: r.kind,
+      label: r.label,
+      ...(r.role ? { role: r.role } : {}),
+      ...(r.use ? { use: r.use } : {}),
+      ...(r.avoid ? { avoid: r.avoid } : {}),
+      ...(r.frame ? { frame: r.frame } : {}),
+      ...(thumb ? { thumb } : {}),
+    });
+  }
+  return out;
+}
+
+export async function runEnhancer(deps: Pick<StudioDeps, 'intel' | 'intelDeps' | 'log'>, input: EnhanceInput): Promise<EnhanceResult> {
+  try {
+    const result = await deps.intel.enhancePrompt(input, deps.intelDeps);
+    if (result && typeof result.prompt === 'string' && result.prompt.trim()) return result;
+  } catch (error) {
+    deps.log?.('studio_enhance_failed', { message: error instanceof Error ? error.message.slice(0, 200) : 'unknown' });
+  }
+  try {
+    return deps.intel.composeFallbackPrompt(input);
+  } catch {
+    return { prompt: input.prompt, notes: '', source: 'fallback' };
+  }
+}
+
+export async function readSheet(deps: Pick<StudioDeps, 'intel' | 'intelDeps' | 'media' | 'env'>, ref: ResolvedRef, locale: 'ko' | 'en'): Promise<FilmSheet | null> {
+  try {
+    const video =
+      deps.media.kind === 'r2'
+        ? { url: providerUrl(deps, ref.url) }
+        : { bytes: await deps.media.read(ref.key), mime: ref.key.endsWith('.mov') ? 'video/quicktime' : 'video/mp4' };
+    return await deps.intel.readFilm({ video, locale }, deps.intelDeps);
+  } catch {
+    return null;
+  }
+}
+
+export function enhanceKind(kind: JobRow['kind']): EnhanceInput['kind'] | null {
+  return kind === 'video_final' ? null : kind;
+}
+
+export function enhanceInputOf(
+  job: Pick<JobRow, 'kind' | 'prompt' | 'params'>,
+  model: StudioModel,
+  references: EnhanceInput['references'],
+  brand: EnhanceInput['brand'],
+  sheet: FilmSheet | null,
+): EnhanceInput {
+  const p = job.params;
+  const kind = enhanceKind(job.kind) ?? 'image';
+  const video = kind === 'video' || kind === 'video_remix';
+  return {
+    kind,
+    profile: model.promptProfile,
+    locale: p.locale ?? 'ko',
+    prompt: job.prompt,
+    references,
+    brand,
+    video: video
+      ? {
+          seconds: p.seconds ?? null,
+          aspect: p.aspect ?? 'adaptive',
+          audio: p.audio ?? 'native',
+          ...(p.method ? { method: p.method } : {}),
+          ...(p.keep ? { keep: p.keep } : {}),
+          ...(p.change ? { change: p.change } : {}),
+          sheet,
+        }
+      : null,
+  };
+}
+
+export async function prepareJob(deps: StudioDeps, job: JobRow): Promise<{ finalPrompt: string | null; work: StudioJobWork }> {
+  const model = studioModel(job.model);
+  if (!model) throw new PrepareFailure('failed', `unknown model ${job.model}`);
+  const locale = job.params?.locale ?? 'ko';
+  let resolved: ResolvedRef[];
+  try {
+    resolved = await resolveReferences(deps.sql, job.organization_id, job.refs ?? [], deps.media, locale);
+  } catch (error) {
+    if (error instanceof StudioDenied) throw new PrepareFailure(error.code, 'a reference is gone');
+    throw error;
+  }
+  const work: StudioJobWork = {
+    ...job.work,
+    inputs: resolved.map((r) => ({ kind: r.kind, url: providerUrl(deps, r.url), ...(r.frame ? { frame: r.frame } : {}) })),
+  };
+
+  if (job.kind === 'video_final') {
+    const draft = (
+      await deps.sql.query<{ draft_task_id: string | null }>(
+        "select draft_task_id from brand_studio_outputs where id = $1 and organization_id = $2 and status = 'ready'",
+        [job.parent_output_id, job.organization_id],
+      )
+    ).rows[0];
+    if (!draft?.draft_task_id) throw new PrepareFailure('reference_missing', 'the draft is gone');
+    return { finalPrompt: null, work: { ...work, draftTaskId: draft.draft_task_id, prepared: true } };
+  }
+
+  if (job.kind === 'region_edit') {
+    const source = job.params.source ?? {};
+    const row = source.assetId
+      ? (await deps.sql.query<{ storage_key: string }>("select storage_key from brand_studio_assets where id = $1 and organization_id = $2 and status = 'ready' and deleted_at is null", [source.assetId, job.organization_id])).rows[0]
+      : (await deps.sql.query<{ storage_key: string }>("select storage_key from brand_studio_outputs where id = $1 and organization_id = $2 and status = 'ready' and deleted_at is null", [source.outputId, job.organization_id])).rows[0];
+    if (!row?.storage_key || !job.params.box) throw new PrepareFailure('reference_missing', 'the picture to edit is gone');
+    const original = await deps.media.read(row.storage_key);
+    const size = await imageInfo(original);
+    if (!size) throw new PrepareFailure('failed', 'the picture to edit does not decode');
+    const plan = deps.intel.planRegion(size, job.params.box, (model as StudioImageModel).aspects);
+    const crop = await deps.intel.cropForEdit(original, plan);
+    const { key: cropKey } = await deps.media.put(crop.bytes, crop.mime);
+    work.region = { plan, cropKey, sourceKey: row.storage_key };
+  }
+
+  let sheet: FilmSheet | null = null;
+  if (job.kind === 'video_remix' && job.enhance) {
+    const film = resolved.find((r) => r.kind === 'video');
+    if (film) sheet = await readSheet(deps, film, locale);
+    work.sheet = sheet;
+  }
+
+  if (!job.enhance) return { finalPrompt: null, work: { ...work, prepared: true } };
+  const organization = (await deps.sql.query<{ name: string }>('select name from brand_organizations where id = $1', [job.organization_id])).rows[0];
+  const input = enhanceInputOf(job, model, await enhanceReferences(deps, resolved), await brandSummary(deps, job.organization_id, organization?.name ?? ''), sheet);
+  const result = await runEnhancer(deps, input);
+  return { finalPrompt: result.prompt.slice(0, 8000), work: { ...work, enhanceNotes: result.notes.slice(0, 2000), prepared: true } };
+}

@@ -2,6 +2,7 @@ import { timingSafeEqual } from 'node:crypto';
 import { NextResponse } from 'next/server';
 import { getSqlRunner } from '@/lib/db/connect';
 import { runLiveBrandInquiryDelivery } from '@/lib/brands/slack-runtime';
+import { sweepStudioLive } from '@/lib/brand-studio/runtime';
 
 export const dynamic = 'force-dynamic';
 export const maxDuration = 60;
@@ -16,15 +17,25 @@ async function tick(request: Request) {
   if (expected.length !== received.length || !timingSafeEqual(expected, received)) {
     return NextResponse.json({ ok: false, code: 'unauthorized' }, { status: 401, headers: HEADERS });
   }
+  const sql = await getSqlRunner().catch(() => null);
+  if (!sql) return NextResponse.json({ ok: false, code: 'unavailable' }, { status: 503, headers: HEADERS });
+  let report: Awaited<ReturnType<typeof runLiveBrandInquiryDelivery>> | null = null;
   try {
-    const sql = await getSqlRunner();
-    if (!sql) return NextResponse.json({ ok: false, code: 'unavailable' }, { status: 503, headers: HEADERS });
-    const report = await runLiveBrandInquiryDelivery(sql, { limit: 5 });
-    return NextResponse.json({ ok: true, report }, { headers: HEADERS });
+    report = await runLiveBrandInquiryDelivery(sql, { limit: 5 });
   } catch {
     console.warn('[brands] inquiry Slack recovery pass failed');
-    return NextResponse.json({ ok: false, code: 'unavailable' }, { status: 503, headers: HEADERS });
   }
+  // Brand studio v2 daily sweep (docs/BRAND-STUDIO-V2.md §7): stale leases, lane failover, expiry.
+  // Hobby allows two crons, so it rides here. Each pass is isolated: one failing (or the studio tables
+  // not migrated yet) never stops the other.
+  let studio: unknown = null;
+  try {
+    studio = await sweepStudioLive(sql);
+  } catch {
+    console.warn('[brand-studio] daily sweep failed');
+  }
+  if (!report) return NextResponse.json({ ok: false, code: 'unavailable' }, { status: 503, headers: HEADERS });
+  return NextResponse.json({ ok: true, report, studio }, { headers: HEADERS });
 }
 
 export const GET = tick;

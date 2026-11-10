@@ -42,6 +42,8 @@ v2는 기존 파일을 고치지 않고 **새 파일**(`lib/brand-studio/*`, `co
    하나도 보이지 않는다. API는 `feature_unavailable`을 404로 답한다(존재를 알리지 않는다).
 4. 일반 B2B 화면의 예시·빈 상태·쇼케이스에 모픽 캠페인 영상이나 "글로벌 AI 플랫폼 · 영상 9편 · 200만 뷰+" 문구를
    쓰지 않는다. 야기 인하우스 에셋만 쓴다. v2 빈 상태는 미디어 없이 예시 문장만 둔다.
+   범위는 로그인한 워크스페이스다. 공개 마케팅 페이지(`/[locale]/brands`의 사례와 실적 수치)는 그대로 둔다
+   (2026-11-10 대표 결정).
 5. `tests/brand-studio/sandbox.test.ts`가 1~4를 고정한다. 이 테스트를 약하게 고쳐서 통과시키지 않는다.
 
 ## 4. 모델
@@ -60,7 +62,8 @@ v2는 기존 파일을 고치지 않고 **새 파일**(`lib/brand-studio/*`, `co
   `https://docs.sunra.ai/llms-full.txt`를 본다.
 - 이미지는 요청 한 번에 한 장이다. 장수 N은 요청 N개로 보낸다.
 - 안전 검수(`enable_safety_checker`)는 항상 켠다. 끄는 코드 경로를 만들지 않는다.
-- Seedream 5.5: `npm run studio:catalog`가 Sunra 카탈로그에서 새 모델을 찾아 알려 준다. 목록에 뜨면 규격을 다시 읽고
+- Seedream 5.5: 2026-11-10 기준 ModelArk에도 없다(계정의 `GET {ARK_BASE_URL}/models` 60개 중 최신 Seedream은
+  `dola-seedream-5-0-flash-260915`, `dola-seedream-5-0-pro-260628`). `npm run studio:catalog`가 Sunra 카탈로그에서 새 모델을 찾아 알려 준다. 목록에 뜨면 규격을 다시 읽고
   `availability: 'live'`로 바꾼 뒤 한 장 스모크로 확인한다. 고객 화면에는 그 전까지 나타나지 않는다.
 - 고객 화면에 보이는 것은 모델의 제품명뿐이다. 제공사(Sunra), 경로, 엔드포인트, 내부 id는 보이지 않는다.
 
@@ -296,7 +299,6 @@ export function compositeRegion(input: { original: Uint8Array; edited: Uint8Arra
 3. 고객 조직의 기본 경로(지금은 API 우선, 넘치면 계정 경로). 계정 구독 크레딧을 고객 물량에 쓰는 것이 Sunra 약관에 맞는지.
 4. 에셋·결과 저장을 비공개 버킷 + 서명 URL로 올릴 시점.
 5. 메이커 템플릿을 브랜드가 쓰는 흐름과 로열티.
-6. 공개 페이지(`/[locale]/brands` 사례)의 모픽 캠페인 언급을 §3-4에 맞춰 뺄지.
 
 ## 15. 완료 기준
 

@@ -11,8 +11,11 @@ import { brandContext } from "@/components/brand-workspace/context";
 import { brandScope, membershipOf, selectedAccess } from "@/components/brand-workspace/scope";
 import { BrandUnavailable } from "@/components/brand-workspace/brand-unavailable";
 import { scopedHref, sectionVisibility } from "@/lib/brands/workspace/selection";
-import { ProductionCreate } from "@/components/brand-workspace/production-create";
 import { BrandBriefStudio } from "@/components/brand-workspace/brand-brief-studio";
+import { ContractProduction } from "@/components/brand-studio/contract-production";
+import { brandStudioV2 } from "@/components/brand-studio/v2-page";
+import { brandStudioV2Open } from "@/lib/flags";
+import { studioV2Visible } from "@/lib/brand-studio/visibility";
 import { inferBrandCategoryFromWorkspace } from "@/lib/brands/category-experience";
 import {
   confirmedIdentityFor,
@@ -24,7 +27,6 @@ import { studioRequestStatus, studioStage } from "@/lib/brands/production/stage"
 import { formatBrandTimestamp } from "@/components/brand-workspace/format";
 import { StaffNotice, adminOrganizationHref } from "@/components/brand-workspace/staff-notice";
 import { StudioHelp, StudioIntro } from "@/components/brand-workspace/studio-onboarding";
-import { studioIdentityHref } from "@/lib/brands/workspace/links";
 import { currentSelfie } from "@/lib/identity/selfie-service";
 import { getDictionary } from "@/lib/i18n/dictionaries";
 
@@ -40,10 +42,11 @@ export default async function BrandStudio({
     track?: string | string[];
     scenario?: string | string[];
     mode?: string | string[];
+    tab?: string | string[];
   }>;
 }) {
   const [
-    { organizationId, projectId, track, scenario, mode: queryMode },
+    { organizationId, projectId, track, scenario, mode: queryMode, tab },
     { sql, viewer, verifiedEmail, brandHost, b, locale },
   ] = await Promise.all([searchParams, brandContext()]);
   const initialProjectId = Array.isArray(projectId) ? projectId[0] : projectId;
@@ -78,6 +81,9 @@ export default async function BrandStudio({
         </section>
       </div>
     );
+  // Studio v2 (docs/BRAND-STUDIO-V2.md §5.2): behind its flag, and never for a sandboxed or generation-closed brand.
+  if (choice && brandStudioV2Open() && studioV2Visible(choice, true))
+    return brandStudioV2({ deps: { sql, verifiedEmail }, viewer, choice, access, locale, brandHost, tab, mode: queryMode });
   // The TWINGS team reads the brand's templates, remaining count and history; it never generates here.
   const staffOrgId = access.staff ? choice?.id : undefined;
   const historyOrg = orgId ?? staffOrgId;
@@ -219,142 +225,21 @@ export default async function BrandStudio({
           ) : (
             <StudioHelp t={o} stage={stage} guide={guide} />
           )}
-          {production && contracts.length > 0 && (
-            <>
-              {stage === "ready" && canCreate && (
-                <aside className="bw-note bw-production-identity">
-                  <div>
-                    <strong>
-                      {verifyRequired
-                        ? t.verifyRequired
-                        : selfie
-                          ? t.identityReady
-                          : t.identityNeeded}
-                    </strong>
-                    <p>{t.identityHint}</p>
-                  </div>
-                  <a
-                    className="bw-button"
-                    href={studioIdentityHref(verifyRequired ? "verify" : "selfie", locale, brandHost)}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                  >
-                    {verifyRequired ? t.verifyAction : t.identityAction} ↗
-                  </a>
-                </aside>
-              )}
-              {!access.staff && !canCreate && (
-                <p className="bw-note" data-studio-viewer-note>{o.viewerCannotCreate}</p>
-              )}
-              {contracts.map((c) => (
-                <section key={c.id} className="bw-production-contract">
-                  <div className="bw-row">
-                    <div>
-                      <h2>{c.title}</h2>
-                      <p className="bw-muted">
-                        {formatBrandTimestamp(c.startsAt, locale)} —{" "}
-                        {formatBrandTimestamp(c.endsAt, locale)}
-                      </p>
-                    </div>
-                    <div className="bw-production-remaining">
-                      <strong>{c.remaining}</strong>
-                      <span>{t.remaining}</span>
-                      <small>
-                        {t.total} {c.limit}
-                      </small>
-                    </div>
-                  </div>
-                  {!c.active ? (
-                    <p className="bw-note">{t.inactive}</p>
-                  ) : c.remaining < 1 ? (
-                    <p className="bw-note" data-contract-exhausted>{t.exhausted}</p>
-                  ) : null}
-                  <div className="bw-production-grid">
-                    {c.templates.map((v) => (
-                      <article
-                        key={v.id}
-                        className="bw-panel bw-production-template"
-                      >
-                        {v.previewUrl ? (
-                          <div className="bw-production-preview">
-                            {v.previewMime?.startsWith("video/") ? (
-                              <video
-                                src={v.previewUrl.includes("#") ? v.previewUrl : `${v.previewUrl}#t=0.1`}
-                                controls
-                                playsInline
-                                preload="metadata"
-                                aria-label={locale === "ko" ? v.titleKo : v.title}
-                              />
-                            ) : (
-                              <img
-                                src={v.previewUrl}
-                                alt={locale === "ko" ? v.titleKo : v.title}
-                                loading="lazy"
-                              />
-                            )}
-                            <span>
-                              {v.seconds}
-                              {t.secondsUnit} · {v.aspect}
-                            </span>
-                          </div>
-                        ) : (
-                          <div className="bw-production-format">
-                            <span data-preview-pending>{t.previewPending}</span>
-                            <strong>{v.aspect}</strong>
-                            <span>
-                              {v.seconds}
-                              {t.secondsUnit}
-                            </span>
-                          </div>
-                        )}
-                        <h3>{locale === "ko" ? v.titleKo : v.title}</h3>
-                        <p>{t.oneUse}</p>
-                        <ProductionCreate
-                          contractId={c.id}
-                          organizationId={orgId ?? null}
-                          templateId={v.id}
-                          selfieId={selfie}
-                          locale={locale}
-                          t={t}
-                          disabled={
-                            verifyRequired ||
-                            !c.active ||
-                            c.remaining < 1 ||
-                            !selfie ||
-                            production.role === "viewer" ||
-                            production.role === "studio"
-                          }
-                        />
-                      </article>
-                    ))}
-                  </div>
-                  {!c.templates.length && (
-                    <p className="bw-note">{t.templatesPending}</p>
-                  )}
-                </section>
-              ))}
-              <section className="bw-panel" id="studio-history">
-                <h2>{t.history}</h2>
-                <ul className="bw-list">
-                  {production.jobs.map((j) => (
-                    <li className="bw-row" key={j.id}>
-                      <a href={`/brand/studio/${j.id}?organizationId=${historyOrg}&locale=${locale}`}>
-                        {locale === "ko" ? j.titleKo : j.title}
-                      </a>
-                      <span>
-                        {t.states[j.status as keyof typeof t.states]}
-                        {j.released ? ` · ${t.restoredShort}` : ""}
-                      </span>
-                      <time>{formatBrandTimestamp(j.createdAt, locale)}</time>
-                    </li>
-                  ))}
-                </ul>
-                {!production.jobs.length && (
-                  <p className="bw-muted">{t.noHistory}</p>
-                )}
-              </section>
-            </>
-          )}
+          <ContractProduction
+            production={production}
+            contracts={contracts}
+            stage={stage}
+            canCreate={canCreate}
+            staff={access.staff}
+            verifyRequired={verifyRequired}
+            selfie={selfie}
+            orgId={orgId}
+            historyOrg={historyOrg}
+            locale={locale}
+            brandHost={brandHost}
+            t={t}
+            o={o}
+          />
         </div>
       </details>
       </div>
