@@ -275,7 +275,7 @@ function escapeRegExp(literal: string): string {
   return literal.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
 
-export function sanitizeRewrittenPrompt(rawPrompt: string, hasPersonSlot: boolean): string {
+export function sanitizeRewrittenPrompt(rawPrompt: string, hasPersonSlot: boolean, cast: 'solo' | 'couple' | 'pet' = 'solo'): string {
   let cleaned = rawPrompt.trim();
   for (const buzz of BANNED_AI_BUZZWORDS) {
     cleaned = cleaned.replace(new RegExp(`\\b${escapeRegExp(buzz)}\\b`, 'gi'), '');
@@ -287,7 +287,7 @@ export function sanitizeRewrittenPrompt(rawPrompt: string, hasPersonSlot: boolea
   if (hasPersonSlot && !cleaned.includes('Natural matte skin texture with visible pores')) {
     cleaned = `${cleaned}\n\n${SKIN_MATTE_CONTRACT_A10}`;
   }
-  return enforcePersonalMorphicGuardrails(cleaned, { hasPersonSlot });
+  return enforcePersonalMorphicGuardrails(cleaned, { hasPersonSlot, cast });
 }
 
 export function verifyRewrittenPrompt(
@@ -335,7 +335,8 @@ interface GeminiCandidateResponse {
   }>;
 }
 
-async function callGeminiStructuredJson<T>(
+/** Also used by lib/renders/pet-photo-check.ts (docs/CAST-CATEGORIES.md §3) — one Gemini JSON call, one shape. */
+export async function callGeminiStructuredJson<T>(
   config: DirectorConfig,
   fetchImpl: typeof fetch,
   systemText: string,
@@ -527,8 +528,10 @@ export function createFlashTemplateDirector(
         (json) => rawStage2RewriteSchema.parse(json)
       );
 
-      const hasPerson = input.referenceSlots.some((slot) => slot.role === 'person');
-      const sanitized = sanitizeRewrittenPrompt(raw.rewrittenPrompt, hasPerson);
+      const hasPerson = input.referenceSlots.some((slot) => slot.role === 'person' || slot.role === 'partner');
+      // docs/CAST-CATEGORIES.md §3: the locks follow who is in it, not one assumed person.
+      const cast = input.referenceSlots.some((slot) => slot.role === 'partner') ? 'couple' : input.referenceSlots.some((slot) => slot.role === 'pet') ? 'pet' : 'solo';
+      const sanitized = sanitizeRewrittenPrompt(raw.rewrittenPrompt, hasPerson, cast);
       const check = verifyRewrittenPrompt(sanitized);
       if (!check.ok) {
         throw new Error(`stage2_prompt_verification_failed:${check.reason}`);

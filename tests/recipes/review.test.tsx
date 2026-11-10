@@ -86,6 +86,15 @@ describe('studio review and acceptance of a maker recipe', () => {
     await expect(startReviewRenders({ sql: h.sql, store, faces: async () => [] }, ADMIN_VIEWER, { action: 'render', id, reason })).rejects.toThrow('no_faces');
   });
 
+  // docs/CAST-CATEGORIES.md §3: review renders send studio faces only, so a pet recipe is refused up front.
+  it('refuses review renders for a pet recipe before making any', async () => {
+    const { id } = await submitted();
+    const pet = { version: 2, slots: { pet: { kind: 'image', source: 'user', required: true, role: 'pet' } }, steps: [{ id: 'step1', kind: 'image', engine: 'gpt-image-2', inputs: ['pet'], prompt: 'A studio portrait of {{pet}} in soft light.', params: { aspect: '4:5' } }], output: { from: 'step1' } };
+    await h.sql.query('update platform_formats set recipe_v2=$2::jsonb where id=$1', [id, JSON.stringify(pet)]);
+    await expect(startReviewRenders({ sql: h.sql, store, faces }, ADMIN_VIEWER, { action: 'render', id, reason: 'Face retention check' })).rejects.toThrow('cast_test_unavailable');
+    expect((await h.sql.query<{ n: number }>('select count(*)::int as n from render_jobs')).rows[0]!.n).toBe(0);
+  });
+
   it('accepts with a price at or above the floor and copies recipe, page choices, price and author', async () => {
     const { id } = await submitted({ prompts: true, assets: true });
     const entry = (await loadReviewEntries(h.sql, [id])).get(id)!;

@@ -18,6 +18,8 @@ import type { EditScope } from '@/lib/premium-editing/contract';
 import { getPremiumEditBudget, type PremiumEditBudget } from '@/lib/premium-editing/budget';
 import { getDictionary } from '@/lib/i18n/dictionaries';
 import { loadPublicRecipe, recordRecipeOpen, type PublicRecipe } from '@/lib/recipes/public';
+import { loadTemplateRecipe } from '@/lib/recipes/repo';
+import { recipeNeedsIdentity } from '@/lib/recipes/schema';
 
 /**
  * `GET /api/renders/access?template=slug` — what THIS viewer's make button should do on THIS
@@ -103,7 +105,10 @@ export async function GET(request: Request): Promise<NextResponse> {
       if (template !== null) {
         // Only the liveness mode has a camera step to announce; the virtual library needs nothing from the person.
         const mode = assetLibraryMode();
-        identityRequired = needsLiveness(resolveEngine(template.engine, template.medium), mode);
+        // The render service's own rule (lib/renders/service.ts): a recipe needs the check only when a
+        // face reaches ModelArk — never for a pet (docs/CAST-CATEGORIES.md §3).
+        const recipe = await loadTemplateRecipe(sql, template.id);
+        identityRequired = recipe ? mode === 'liveness' && recipeNeedsIdentity(recipe) : needsLiveness(resolveEngine(template.engine, template.medium), mode);
         if (identityRequired) identity = await identityStatusFor(sql, viewer.userId, mode);
       }
     }

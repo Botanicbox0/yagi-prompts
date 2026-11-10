@@ -18,7 +18,7 @@ import {
   type EdgePlaybookSpec,
   type PlaybookSpec,
 } from './fixtures';
-import { PROMPT_FIXTURES } from './prompt-fixtures';
+import { PROMPT_FIXTURES, type PromptFixture } from './prompt-fixtures';
 import { insertContest, upsertEntry } from '@/lib/contests/repo';
 import { publishContestMedia } from '@/lib/contests/media';
 import type { ContestMedia } from '@/lib/contests/schemas';
@@ -543,12 +543,15 @@ export interface PromptSeedResult {
  * Published rows are backdated by `publishedDaysAgo` so the gallery order and the 14-day NEW badge
  * window are deterministic rather than "whatever `now()` was when the snapshot was built".
  */
-export async function seedPrompts(opts: SeedOptions): Promise<PromptSeedResult[]> {
+export async function seedPrompts(
+  opts: SeedOptions,
+  fixtures: readonly PromptFixture[] = PROMPT_FIXTURES,
+): Promise<PromptSeedResult[]> {
   const { sql, storage } = opts;
   const log = opts.log ?? (() => {});
   const results: PromptSeedResult[] = [];
 
-  for (const fixture of PROMPT_FIXTURES) {
+  for (const fixture of fixtures) {
     const existing = await sql.query<{ id: string }>('select id from prompt_items where slug = $1', [
       fixture.slug,
     ]);
@@ -610,6 +613,7 @@ export async function seedPrompts(opts: SeedOptions): Promise<PromptSeedResult[]
       featured: fixture.featured,
       rejectReason: fixture.rejectReason ?? null,
       medium: fixture.medium ?? 'video',
+      cast: fixture.cast ?? 'solo',
       priceCents: fixture.priceCents ?? 0,
       priceKrw: fixture.priceKrw ?? 0,
       price1080Cents: fixture.price1080Cents ?? 0,

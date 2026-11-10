@@ -414,3 +414,52 @@ describe('POST /api/billing/toss/orders/[id] — the withdrawal consent', () => 
     expect(new Date((await row(id)).consent_at!).toISOString()).toBe(new Date(earlier!).toISOString());
   });
 });
+
+// docs/CAST-CATEGORIES.md §3 — 다시 결제하기 on a person + pet order: the second photo follows the new
+// order (copied onto its render_ref), or the retry is refused when that photo is already gone. The solo
+// retry above is untouched by this.
+describe('POST /api/billing/toss/orders/[id]/retry — a pet order', () => {
+  async function petOrder() {
+    vi.stubEnv('TWINGS_PET_TEMPLATES', 'on');
+    const { insertPrompt } = await import('@/lib/prompts/repo');
+    const { storeSlotPhotos } = await import('@/lib/renders/cast-inputs');
+    const id = crypto.randomUUID(), slug = `pet-${id.slice(0, 8)}`;
+    await insertPrompt(h.sql, { id, slug, source: 'yagi', authorId: null, authorHandle: null, status: 'published', publishedAt: 'now', models: ['gpt-image-2'], title: 'Pet order', titleKo: null, promptText: 'legacy prompt text', textVisibility: 'hidden', media: null, useCase: [], featured: false, medium: 'image', engine: 'gpt-image-2', aspectDefault: '4:5', priceCents: 500, priceKrw: 6900, cast: 'pet' });
+    const recipe = { version: 2, slots: { selfie: { kind: 'image', source: 'user', required: true }, pet: { kind: 'image', source: 'user', required: true, role: 'pet' } }, steps: [{ id: 'still', kind: 'image', engine: 'gpt-image-2', inputs: ['selfie', 'pet'], prompt: '{{selfie}} walks {{pet}} through a quiet park.', params: { aspect: '4:5' } }], output: { from: 'still' } };
+    await h.sql.query('update prompt_items set recipe=$2::jsonb where id=$1', [id, JSON.stringify(recipe)]);
+    const created = await createTossOrder(deps(), buyer, { ...input, templateSlug: slug });
+    if (!created.ok) throw new Error(created.code);
+    const ref = (await h.sql.query<{ render_ref: string }>('select render_ref from billing_payments where id=$1', [created.order.id])).rows[0]!.render_ref;
+    await storeSlotPhotos(h.sql, createLocalRenderStore(h.root), { renderId: ref, userId: buyer.userId!, templateId: id, photos: { pet: { bytes: new Uint8Array([1, 2, 3, 4]), mime: 'image/jpeg' } }, partnerConsentAt: null, now: new Date() });
+    // Refused at approval, the way a real decline arrives (the same path as `refusedAtApproval`).
+    await h.sql.query("update billing_payments set consent_at=now(), consent_version='fixture' where id=$1", [created.order.id]);
+    const original = fake().confirm;
+    fake().confirm = async () => { throw new TossError('HTTP_403', false, 'REJECT_CARD_COMPANY'); };
+    mocks.viewer.mockResolvedValue(buyer);
+    await confirm(json('/api/billing/toss/confirm', { orderId: created.order.id, paymentKey: 'from-the-window', amount: created.order.amountKrw }));
+    fake().confirm = original;
+    return { order: created.order, ref };
+  }
+
+  it('copies the pet photo onto the new order', async () => {
+    const { order, ref } = await petOrder();
+    const made = await retry(json(`/api/billing/toss/orders/${order.id}/retry`, {}), params(order.id));
+    expect(made.status).toBe(201);
+    const fresh = (await made.json()).href.split('/').pop();
+    const newRef = (await h.sql.query<{ render_ref: string }>('select render_ref from billing_payments where id=$1', [fresh])).rows[0]!.render_ref;
+    expect(newRef).not.toBe(ref);
+    const rows = (await h.sql.query<{ storage_key: string }>("select storage_key from render_slot_inputs where render_id=$1 and slot='pet' and deleted_at is null", [newRef])).rows;
+    expect(rows).toHaveLength(1);
+    expect(rows[0]!.storage_key).toBe(`${newRef}/slot-pet.jpg`);
+    expect(Array.from(await createLocalRenderStore(h.root).read(rows[0]!.storage_key))).toEqual([1, 2, 3, 4]);
+  });
+
+  it('refuses the retry when the pet photo is already gone — the reader starts a new order', async () => {
+    const { order, ref } = await petOrder();
+    await h.sql.query('update render_slot_inputs set deleted_at=now() where render_id=$1', [ref]);
+    const refused = await retry(json(`/api/billing/toss/orders/${order.id}/retry`, {}), params(order.id));
+    expect(refused.status).toBe(410);
+    expect(await refused.json()).toEqual({ ok: false, code: 'photos_gone' });
+    expect(await row(order.id)).toMatchObject({ retried_by: null });
+  });
+});

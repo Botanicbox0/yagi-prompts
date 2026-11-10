@@ -17,7 +17,8 @@ import { loadMakerDraft, MAKER_TEST_RENDERS } from '@/lib/recipes/maker';
 import { recipeSchemaReady } from '@/lib/recipes/repo';
 import { MAKER_ENGINE_IDS } from '@/lib/recipes/schema';
 import { AppHeader } from '@/components/app/app-header';
-import { RecipeEditor, type EngineOption } from '@/components/recipes/recipe-editor';
+import { RecipeEditor, editorCasts, type EngineOption } from '@/components/recipes/recipe-editor';
+import { coupleTemplatesOpen, petTemplatesOpen } from '@/lib/flags';
 import { selfPublishOpen } from '@/lib/recipes/self-publish';
 
 /**
@@ -72,6 +73,7 @@ export default async function RecipeEditorPage({ params, searchParams }: { param
     testLimit={MAKER_TEST_RENDERS}
     selfPublish={selfPublishOpen()}
     company={company}
+    casts={editorCasts({ pet: petTemplatesOpen(), couple: coupleTemplatesOpen() })}
     revisionOf={revisionOf}
     locale={locale}
   />);

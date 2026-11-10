@@ -7,7 +7,7 @@ import { imageOfferFingerprint } from './offer';
 import { demand } from './contract';
 import { audit, approvedCreator, lockUser, onboardingReady } from './service';
 import { marginSplit, rewardQuote } from './economics';
-import { legacyPromptText, parseRecipe, primaryStep } from '@/lib/recipes/schema';
+import { legacyPromptText, parseRecipe, primaryStep, recipeCast } from '@/lib/recipes/schema';
 import { centsForKrw, quoteRecipe } from '@/lib/recipes/pricing';
 import { parseDisclosure, parsePresentation } from '@/lib/recipes/repo';
 
@@ -149,7 +149,7 @@ async function acceptRecipe(tx:SqlRunner,templateId:string,row:{user_id:string;t
  demand(priceKrw!==undefined,'price_required');
  const quote=quoteRecipe(recipe,row.v2.royalty_krw??0);demand(priceKrw>=quote.floorKrw,'price_below_floor');
  await insertPrompt(tx,{id:templateId,slug:`format-${templateId}`,source:'yagi',authorId:row.user_id,authorHandle:null,status:'pending',models:[primary.engine],title:row.title,titleKo:row.v2.title_ko??null,promptText:legacyPromptText(recipe),textVisibility:'hidden',media:null,useCase:[],featured:false,
-  medium:primary.kind,engine:primary.engine,aspectDefault:primary.params.aspect,runtimeSeconds:film?.kind==='video'?film.params.duration:null,priceKrw,priceCents:centsForKrw(priceKrw)});
+  medium:primary.kind,engine:primary.engine,aspectDefault:primary.params.aspect,runtimeSeconds:film?.kind==='video'?film.params.duration:null,priceKrw,priceCents:centsForKrw(priceKrw),cast:recipeCast(recipe)});
  await tx.query('update prompt_items set recipe=$2::jsonb,disclosure=$3::jsonb,presentation=$4 where id=$1',[templateId,JSON.stringify(recipe),JSON.stringify(parseDisclosure(row.v2.disclosure)),parsePresentation(row.v2.presentation)]);
 }
 export async function revokeClaim(sql:SqlRunner,id:string,userId:string,credits:number) {

@@ -150,6 +150,7 @@ export function TemplateGallery({
   labels,
   makeHref,
   setSize,
+  selfieTile = true,
 }: {
   frames: GalleryFrame[];
   initialIndex?: number;
@@ -160,6 +161,8 @@ export function TemplateGallery({
   setSize?: number | null;
   /** `#make` when the template is on sale: the selfie tile is the way in. */
   makeHref?: string | null;
+  /** docs/CAST-CATEGORIES.md §3 — false on a pet-only template: no selfie goes in, so none is drawn. */
+  selfieTile?: boolean;
 }) {
   const n = frames.length;
   const start = Math.min(Math.max(initialIndex, 0), Math.max(n - 1, 0));
@@ -361,8 +364,8 @@ export function TemplateGallery({
       <div data-template-transform className="mt-4 flex flex-col gap-2.5 sm:mt-5">
         <p className="text-sm font-semibold tracking-[-0.01em] text-black/85">{interpolate(labels.lead, { n: String(n) })}</p>
         <div className="-mx-[var(--spacing-gutter)] flex items-end gap-2.5 overflow-x-auto px-[var(--spacing-gutter)] pb-1 [scrollbar-width:none] sm:mx-0 sm:px-0 [&::-webkit-scrollbar]:hidden">
-          <SelfieTile label={labels.selfie} href={makeHref} />
-          <StripArrow />
+          {selfieTile && <SelfieTile label={labels.selfie} href={makeHref} />}
+          {selfieTile && <StripArrow />}
           {frames.map((frame, i) => (
             <button
               key={frame.src}

@@ -3,7 +3,7 @@ import type { RenderProvider } from '@/lib/renders/repo';
 import { RenderFailure, runImageRender, startVideoRender, type EngineOutput, type RenderEngineDeps, type RenderPhoto, type StepReference } from '@/lib/renders/engines';
 import { extensionFor, type RenderStore } from '@/lib/renders/store';
 import { assetReference } from '@/lib/identity/service';
-import { engineStepPrompt, identityPath, isMakerEngine, isStudioRecipeEngine, outputSteps, personInputs, SELFIE_SLOT, type Recipe, type RecipeStep } from './schema';
+import { engineStepPrompt, identityPath, isMakerEngine, isStudioRecipeEngine, outputSteps, partnerInputs, personInputs, SELFIE_SLOT, type Recipe, type RecipeStep } from './schema';
 import type { RecipeState, StepRecord } from './repo';
 
 /**
@@ -83,6 +83,9 @@ function tagged(error: unknown, step: string): RenderFailure {
 export async function runRecipe(ctx: RecipeRunContext): Promise<RecipeRun> {
   const { recipe } = ctx;
   const person = personInputs(recipe);
+  // docs/CAST-CATEGORIES.md §4: a partner's face (or anything made from it) never reaches the verified
+  // library — that library is the account's own face. The recipe rules refuse it; this refuses it again.
+  const partners = partnerInputs(recipe);
   const shown = new Set(outputSteps(recipe));
   const records: Record<string, StepRecord> = { ...(ctx.state.steps ?? {}) };
   const assets: string[] = [];
@@ -98,6 +101,7 @@ export async function runRecipe(ctx: RecipeRunContext): Promise<RecipeRun> {
       if (!isMakerEngine(step.engine) && !isStudioRecipeEngine(step.engine)) throw new RenderFailure('engine_error', `engine ${step.engine} is not a recipe engine`, false);
       const inputs = await gather(ctx, step, records);
       const viaAsset = identityPath(step.engine) === 'asset';
+      if (viaAsset && step.inputs.some((input) => partners.has(input))) throw new RenderFailure('engine_error', 'a partner photo never goes to the verified library', false);
       const prompt = engineStepPrompt(recipe, step);
 
       if (step.kind === 'image') {

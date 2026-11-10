@@ -1,6 +1,7 @@
 import type { MetadataRoute } from 'next';
 import type { CatalogCard } from '@/lib/content/catalog';
-import type { PromptCard, PublicMaker } from '@/lib/prompts/catalog';
+import { CAST_SECTIONS, cardCast, type PromptCard, type PublicMaker } from '@/lib/prompts/catalog';
+import { castRest } from '@/lib/prompts/links';
 import { makerRest } from '@/lib/makers/links';
 import { TEMPLATE_LISTING_REST, templateRest } from '@/lib/prompts/links';
 import { LEGAL_DOCS } from '@/lib/legal/documents';
@@ -102,6 +103,21 @@ export function buildSitemap(input: SitemapInput): MetadataRoute.Sitemap {
         changeFrequency: page.changeFrequency,
         priority: page.priority,
         alternates: { languages: absoluteAlternates(origin, page.rest) },
+      });
+    }
+  }
+
+  // docs/CAST-CATEGORIES.md §5 — a cast page exists only while it has a published template (the
+  // catalogue already dropped couple templates while their flag is off, so their page stays out too).
+  for (const cast of CAST_SECTIONS) {
+    if (!templates.some((template) => cardCast(template) === cast)) continue;
+    const rest = castRest(cast);
+    for (const locale of LOCALES as readonly Locale[]) {
+      entries.push({
+        url: absolute(origin, `/${locale}${rest}`),
+        changeFrequency: 'weekly',
+        priority: 0.8,
+        alternates: { languages: absoluteAlternates(origin, rest) },
       });
     }
   }
