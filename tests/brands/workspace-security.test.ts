@@ -88,9 +88,12 @@ describe('brand invitations, attachment bytes and database boundary', () => {
     await db.exec(readMigration('0152_glue_brand_studio.sql'));
     await db.exec(readMigration('0154_glue_brand_studio_library.sql'));
     await db.exec(readMigration('0155_glue_brand_studio_review.sql'));
+    await db.exec(readMigration('0156_glue_brand_room_messages.sql'));
+    await db.exec(readMigration('0157_glue_brand_storyboards.sql'));
+    await db.exec(readMigration('0158_glue_brand_room_review.sql'));
     const tables =(await sql.query<{ relname: string; relrowsecurity: boolean; relforcerowsecurity: boolean }>("select relname,relrowsecurity,relforcerowsecurity from pg_class where relkind='r' and relname like 'brand_%' and relname not in ('brand_inquiries', 'brand_inquiry_deliveries') and relname not like 'brand_usage_%'")).rows; // Inquiry delivery and brand_usage_* have their own RLS tests.
-    expect(tables.map(t=>t.relname)).toEqual(expect.arrayContaining(['brand_project_members','brand_contract_documents','brand_contract_sharing_events','brand_support_messages','brand_shortlist_candidates','brand_feature_policies','brand_feature_policy_events','brand_plan_assignments','brand_plan_events','brand_identities','brand_identity_events','brand_memory_events','brand_looks','brand_studio_assets','brand_studio_jobs','brand_studio_outputs','brand_studio_allowances','brand_studio_lanes','brand_studio_folders','brand_studio_folder_items','brand_studio_likes','brand_studio_reviews','brand_studio_review_comments']));
-    expect(tables.length).toBe(40);
+    expect(tables.map(t=>t.relname)).toEqual(expect.arrayContaining(['brand_project_members','brand_contract_documents','brand_contract_sharing_events','brand_support_messages','brand_shortlist_candidates','brand_feature_policies','brand_feature_policy_events','brand_plan_assignments','brand_plan_events','brand_identities','brand_identity_events','brand_memory_events','brand_looks','brand_studio_assets','brand_studio_jobs','brand_studio_outputs','brand_studio_allowances','brand_studio_lanes','brand_studio_folders','brand_studio_folder_items','brand_studio_likes','brand_studio_reviews','brand_studio_review_comments','brand_room_messages','brand_room_reactions','brand_room_reads']));
+    expect(tables.length).toBe(47); // + rooms: three conversation tables (0082/0156), two storyboard tables (0083/0157), shares and share visits (0084/0158)
     for (const table of tables) {
       expect(table.relrowsecurity && table.relforcerowsecurity).toBe(true);
       for (const role of ['anon', 'authenticated']) {

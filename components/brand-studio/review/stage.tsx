@@ -15,6 +15,7 @@ import "./review.css";
 import { useCallback, useEffect, useMemo, useRef, useState, type KeyboardEvent, type MouseEvent, type ReactNode } from "react";
 import {
   REVIEW_FRAME_MS,
+  REVIEW_LIMITS,
   formatTimecode,
   nextStatuses,
   spotVisibleAt,
@@ -22,19 +23,37 @@ import {
   type ReviewComment,
   type ReviewItem,
   type ReviewStatus,
+  type ReviewStroke,
   type ReviewThread,
+  type ReviewVersion,
 } from "@/lib/brand-studio/review-contracts";
 import type { studioReviewEn } from "@/messages/studio-review";
+import { CompareView } from "./compare";
+import { InkLayer, InkTools, useInk } from "./ink";
 
 export type ReviewCopy = typeof studioReviewEn;
 export type ReviewActionResult = { ok: true } | { ok: false; code: string };
 
+export interface ReviewNoteInput {
+  body: string;
+  parentId?: string | null;
+  atMs?: number | null;
+  /** Rooms: a range ends here. */
+  endMs?: number | null;
+  x?: number | null;
+  y?: number | null;
+  /** Rooms: a drawing on the frame. */
+  strokes?: ReviewStroke[] | null;
+}
+
 export interface ReviewActions {
-  addComment(input: { body: string; parentId?: string | null; atMs?: number | null; x?: number | null; y?: number | null }): Promise<ReviewActionResult>;
-  resolveComment(commentId: string): Promise<ReviewActionResult>;
+  addComment(input: ReviewNoteInput): Promise<ReviewActionResult>;
+  /** Absent where the viewer may not resolve (a share link). */
+  resolveComment?(commentId: string): Promise<ReviewActionResult>;
   /** Absent on screens where the viewer cannot delete their own notes. */
   deleteComment?(commentId: string): Promise<ReviewActionResult>;
-  setStatus(status: ReviewStatus): Promise<ReviewActionResult>;
+  /** Absent where the viewer may not move the status (a share link). */
+  setStatus?(status: ReviewStatus): Promise<ReviewActionResult>;
 }
 
 export interface ReviewStageProps {
@@ -46,12 +65,27 @@ export interface ReviewStageProps {
   /** `?t=` on arrival: the film opens paused at this moment. */
   initialMs?: number | null;
   actions: ReviewActions;
-  /** The address of this piece at a moment (a path; the stage makes it absolute). */
-  linkFor(atMs: number | null): string;
+  /** The address of this piece at a moment (a path; the stage makes it absolute). Absent: no "링크 복사". */
+  linkFor?: (atMs: number | null) => string;
   /** A line above the title (the team page names the brand here). */
   eyebrow?: ReactNode;
   /** Phones: back to the list. */
   onBack?: () => void;
+  /** Rooms (docs/BRAND-ROOMS.md §6): ranges, drawings, the version switcher and "나란히 비교". Off: the v3 screen as it was. */
+  extended?: boolean;
+  /** Who may write notes and replies. Defaults to `canWrite`. */
+  canComment?: boolean;
+  /** Who may resolve notes and move the status. Defaults to `canWrite`. */
+  canManage?: boolean;
+  /** A share link's guest: the name they sign their notes with. */
+  guest?: { name: string; onName(name: string): void } | null;
+  /** The stack, newest first. The switcher shows once there are two. */
+  versions?: ReviewVersion[];
+  onVersion?: (reviewId: string) => void;
+  /** More controls at the end of the header (the room's 공유 button). */
+  tools?: ReactNode;
+  /** A share link that allows download. */
+  downloadUrl?: string | null;
 }
 
 export function fill(template: string, values: Record<string, string | number>): string {
@@ -116,21 +150,51 @@ const ICONS = {
   close: "M6 6l12 12M18 6L6 18",
   check: "M5 12.5l4.5 4.5L19 7.5",
   arrowLeft: "M19 12H5M11 6l-6 6 6 6",
+  compare: "M4 5h7v14H4zM13 5h7v14h-7",
+  download: "M12 4v11M7 10l5 5 5-5M5 20h14",
+  pen: "M4 20l4-1 10.5-10.5a2.1 2.1 0 0 0-3-3L5 16l-1 4zM14 7l3 3",
 } as const;
 
-export function ReviewStage({ review, comments, canWrite, copy, locale, initialMs, actions, linkFor, eyebrow, onBack }: ReviewStageProps) {
+type Mark = { atMs: number | null; endMs?: number | null; x: number | null; y: number | null; strokes?: ReviewStroke[] | null };
+
+export function ReviewStage({
+  review,
+  comments,
+  canWrite,
+  copy,
+  locale,
+  initialMs,
+  actions,
+  linkFor,
+  eyebrow,
+  onBack,
+  extended = false,
+  canComment = canWrite,
+  canManage = canWrite,
+  guest = null,
+  versions,
+  onVersion,
+  tools,
+  downloadUrl,
+}: ReviewStageProps) {
   const isVideo = review.kind === "video";
   const media = review.mediaUrl;
   const videoRef = useRef<HTMLVideoElement>(null);
   const textRef = useRef<HTMLTextAreaElement>(null);
+  const laneRef = useRef<HTMLDivElement>(null);
   const [ratio, setRatio] = useState(() => (review.width && review.height ? review.width / review.height : isVideo ? 16 / 9 : 1));
   const { wrapRef, box } = useFitBox(ratio);
   const [playing, setPlaying] = useState(false);
   const [muted, setMuted] = useState(false);
   const [currentMs, setCurrentMs] = useState(isVideo ? Math.max(0, initialMs ?? 0) : 0);
   const [durationMs, setDurationMs] = useState(review.seconds ? Math.round(review.seconds * 1000) : 0);
-  const [mark, setMark] = useState<{ atMs: number | null; x: number | null; y: number | null } | null>(null);
+  const [mark, setMark] = useState<Mark | null>(null);
   const [spotMode, setSpotMode] = useState(false);
+  const [comparing, setComparing] = useState(false);
+  const [dragRange, setDragRange] = useState<{ from: number; to: number } | null>(null);
+  const ink = useInk();
+  const canDraw = extended && canComment && media != null;
+  const stack = extended && versions && versions.length > 1 ? versions : null;
   const [filter, setFilter] = useState<"open" | "all">("all");
   const [activeId, setActiveId] = useState<string | null>(null);
   const [draft, setDraft] = useState("");
@@ -151,7 +215,12 @@ export function ReviewStage({ review, comments, canWrite, copy, locale, initialM
     setPlaying(false);
     setRatio(review.width && review.height ? review.width / review.height : review.kind === "video" ? 16 / 9 : 1);
     setDurationMs(review.seconds ? Math.round(review.seconds * 1000) : 0);
+    setComparing(false);
+    setDragRange(null);
+    ink.reset();
     seededRef.current = false;
+    // `ink.reset` is stable (useInk).
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [review.id, review.width, review.height, review.kind, review.seconds]);
 
   useEffect(() => {
@@ -176,8 +245,21 @@ export function ReviewStage({ review, comments, canWrite, copy, locale, initialM
   const threads = useMemo(() => threadComments(comments), [comments]);
   const numberOf = useMemo(() => new Map(threads.map((t, i) => [t.root.id, i + 1])), [threads]);
   const openThreads = threads.filter((t) => !t.root.resolved && !t.root.deleted);
-  const shown = filter === "open" ? openThreads : threads;
+  const shownAll = filter === "open" ? openThreads : threads;
+  // Notes carried over from an earlier version sit in their own group, oldest version first.
+  const shown = shownAll.filter((t) => !t.root.carriedFrom);
+  const carriedGroups = useMemo(() => {
+    const groups = new Map<number, ReviewThread[]>();
+    for (const t of shownAll) {
+      if (!t.root.carriedFrom) continue;
+      const list = groups.get(t.root.carriedFrom.version) ?? [];
+      list.push(t);
+      groups.set(t.root.carriedFrom.version, list);
+    }
+    return [...groups.entries()].sort((a, b) => a[0] - b[0]);
+  }, [shownAll]);
   const timed = threads.filter((t) => !t.root.deleted && t.root.atMs != null);
+  const activeThread = activeId ? threads.find((t) => t.root.id === activeId) ?? null : null;
 
   const seek = useCallback(
     (ms: number) => {
@@ -233,23 +315,68 @@ export function ReviewStage({ review, comments, canWrite, copy, locale, initialM
   }
 
   function markMoment() {
+    ink.stop();
     if (isVideo) {
       videoRef.current?.pause();
-      setMark({ atMs: Math.round(currentMs), x: null, y: null });
+      setMark((m) => ({ atMs: Math.round(currentMs), endMs: null, x: null, y: null, strokes: m?.strokes ?? null }));
     } else {
-      setMark({ atMs: null, x: null, y: null });
+      setMark((m) => ({ atMs: null, x: null, y: null, strokes: m?.strokes ?? null }));
     }
     setSpotMode(true);
     setError(null);
   }
 
+  /** I / O and the lane: a range of the film. The in-point keeps a drawing already made. */
+  const setRange = useCallback(
+    (from: number, to: number | null) => {
+      const start = Math.max(0, Math.round(Math.min(from, to ?? from)));
+      const end = to == null ? null : Math.round(Math.max(from, to));
+      setMark((m) => ({
+        atMs: start,
+        endMs: end != null && end - start >= 100 ? end : null,
+        x: m?.x ?? null,
+        y: m?.y ?? null,
+        strokes: m?.strokes ?? null,
+      }));
+      setError(null);
+    },
+    [],
+  );
+
+  const msAtLane = (clientX: number) => {
+    const rect = laneRef.current?.getBoundingClientRect();
+    if (!rect || !rect.width || durationMs <= 0) return 0;
+    return clamp01((clientX - rect.left) / rect.width) * durationMs;
+  };
+
+  function startDrawing() {
+    if (!canDraw) return;
+    if (isVideo) {
+      videoRef.current?.pause();
+      setMark((m) => ({ atMs: m?.atMs ?? Math.round(currentMs), endMs: m?.endMs ?? null, x: m?.x ?? null, y: m?.y ?? null, strokes: m?.strokes ?? null }));
+    }
+    setSpotMode(false);
+    ink.start(mark?.strokes ?? []);
+    setError(null);
+  }
+
+  function finishDrawing() {
+    const strokes = ink.finish();
+    setMark((m) => {
+      const base: Mark = m ?? { atMs: isVideo ? Math.round(currentMs) : null, x: null, y: null };
+      return { ...base, strokes: strokes.length ? strokes : null };
+    });
+    textRef.current?.focus();
+  }
+
   function onFrameClick(event: MouseEvent<HTMLDivElement>) {
-    if (spotMode && canWrite) {
+    if (ink.active) return;
+    if (spotMode && canComment) {
       const rect = event.currentTarget.getBoundingClientRect();
       if (!rect.width || !rect.height) return;
       const x = round4(clamp01((event.clientX - rect.left) / rect.width));
       const y = round4(clamp01((event.clientY - rect.top) / rect.height));
-      setMark((m) => ({ atMs: isVideo ? (m?.atMs ?? Math.round(currentMs)) : null, x, y }));
+      setMark((m) => ({ ...(m ?? {}), atMs: isVideo ? (m?.atMs ?? Math.round(currentMs)) : null, x, y }));
       setSpotMode(false);
       textRef.current?.focus();
       return;
@@ -259,12 +386,29 @@ export function ReviewStage({ review, comments, canWrite, copy, locale, initialM
 
   function onKeyDown(event: KeyboardEvent<HTMLDivElement>) {
     const target = event.target as HTMLElement;
-    if (target.closest("textarea, input[type='text'], select")) return;
+    if (target.closest("textarea, input[type='text'], input[type='password'], select")) return;
+    if (event.key === "Escape" && ink.active) {
+      finishDrawing();
+      return;
+    }
     if (event.key === "Escape" && spotMode) {
       setSpotMode(false);
       return;
     }
     if (!isVideo || event.metaKey || event.ctrlKey || event.altKey) return;
+    if (extended && canComment && (event.key === "i" || event.key === "I")) {
+      event.preventDefault();
+      videoRef.current?.pause();
+      setRange(currentMs, null);
+      return;
+    }
+    if (extended && canComment && (event.key === "o" || event.key === "O")) {
+      event.preventDefault();
+      videoRef.current?.pause();
+      const from = mark?.atMs ?? 0;
+      if (currentMs > from) setRange(from, currentMs);
+      return;
+    }
     const onControl = Boolean(target.closest("button, a, input"));
     const onRange = target.matches("input[type='range']");
     switch (event.key) {
@@ -318,17 +462,35 @@ export function ReviewStage({ review, comments, canWrite, copy, locale, initialM
   async function send() {
     const body = draft.trim();
     if (!body || busy) return;
-    const ok = await run("send", () => actions.addComment({ body, atMs: mark?.atMs ?? null, x: mark?.x ?? null, y: mark?.y ?? null }));
+    if (guest && !guest.name.trim()) {
+      setError(copy.guest.nameNeeded);
+      return;
+    }
+    const pending = ink.active ? ink.finish() : null;
+    const strokes = pending && pending.length ? pending : (mark?.strokes ?? null);
+    const note: ReviewNoteInput = { body, atMs: mark?.atMs ?? null, x: mark?.x ?? null, y: mark?.y ?? null };
+    if (extended) {
+      note.endMs = mark?.endMs ?? null;
+      note.strokes = strokes;
+      // A drawing on a film belongs to the frame it was drawn on.
+      if (strokes && isVideo && note.atMs == null) note.atMs = Math.round(currentMs);
+    }
+    const ok = await run("send", () => actions.addComment(note));
     if (ok) {
       setDraft("");
       setMark(null);
       setSpotMode(false);
+      ink.reset();
     }
   }
 
   async function sendReply(rootId: string) {
     const body = replyDraft.trim();
     if (!body || busy) return;
+    if (guest && !guest.name.trim()) {
+      setError(copy.guest.nameNeeded);
+      return;
+    }
     const ok = await run(`reply:${rootId}`, () => actions.addComment({ body, parentId: rootId }));
     if (ok) {
       setReplyDraft("");
@@ -337,6 +499,7 @@ export function ReviewStage({ review, comments, canWrite, copy, locale, initialM
   }
 
   async function copyLink() {
+    if (!linkFor) return;
     const path = linkFor(isVideo ? Math.round(currentMs) : null);
     try {
       await navigator.clipboard.writeText(new URL(path, window.location.origin).toString());
@@ -366,6 +529,14 @@ export function ReviewStage({ review, comments, canWrite, copy, locale, initialM
     }
   }
 
+  const setStatus = actions.setStatus;
+  const resolveComment = canManage ? actions.resolveComment : undefined;
+  const activeStrokes =
+    activeThread && !activeThread.root.deleted && activeThread.root.strokes && !playing && (!isVideo || activeThread.root.atMs == null || Math.abs(activeThread.root.atMs - currentMs) <= 400)
+      ? activeThread.root.strokes
+      : null;
+  const spans = extended ? timed.filter((t) => t.root.endMs != null) : [];
+
   return (
     <section className="bsv-stage" data-review-stage={review.id} data-review-kind={review.kind} aria-labelledby={`bsv-title-${review.id}`}>
       <header className="bsv-stage-head">
@@ -382,11 +553,36 @@ export function ReviewStage({ review, comments, canWrite, copy, locale, initialM
           </h2>
         </div>
         <div className="bsv-stage-tools" data-review-status={review.status}>
+          {stack && (
+            <div className="bsv-versions" data-review-versions>
+              <label className="bsv-visually-hidden" htmlFor={`bsv-version-${review.id}`}>
+                {copy.versions.label}
+              </label>
+              <select
+                id={`bsv-version-${review.id}`}
+                className="bsv-version-select"
+                value={review.id}
+                onChange={(e) => onVersion?.(e.target.value)}
+                disabled={!onVersion}
+              >
+                {stack.map((v) => (
+                  <option key={v.id} value={v.id}>
+                    {`v${v.version} · ${copy.status[v.status]}`}
+                  </option>
+                ))}
+              </select>
+              <button type="button" className="bsv-pill" aria-pressed={comparing} onClick={() => setComparing((c) => !c)} data-review-compare-open>
+                <Icon d={ICONS.compare} />
+                {comparing ? copy.versions.closeCompare : copy.versions.compare}
+              </button>
+            </div>
+          )}
           <span className="bsv-status" data-state={review.status}>
             <span className="bsv-visually-hidden">{copy.statusLabel}: </span>
             {copy.status[review.status]}
           </span>
-          {canWrite &&
+          {canManage &&
+            setStatus &&
             nextStatuses(review.status).map((s) => (
               <button
                 key={s}
@@ -394,19 +590,31 @@ export function ReviewStage({ review, comments, canWrite, copy, locale, initialM
                 className="bsv-pill"
                 data-review-status-action={s}
                 disabled={busy !== null}
-                onClick={() => void run(`status:${s}`, () => actions.setStatus(s))}
+                onClick={() => void run(`status:${s}`, () => setStatus(s))}
               >
                 {s === "approved" && <Icon d={ICONS.check} />}
                 {copy.statusActions[s]}
               </button>
             ))}
-          <button type="button" className="bsv-pill" onClick={() => void copyLink()} data-review-copy-link>
-            <Icon d={ICONS.link} />
-            {copy.copyLink}
-          </button>
+          {linkFor && (
+            <button type="button" className="bsv-pill" onClick={() => void copyLink()} data-review-copy-link>
+              <Icon d={ICONS.link} />
+              {copy.copyLink}
+            </button>
+          )}
+          {downloadUrl && (
+            <a className="bsv-pill" href={downloadUrl} download rel="noreferrer" data-review-download>
+              <Icon d={ICONS.download} />
+              {copy.download}
+            </a>
+          )}
+          {tools}
         </div>
       </header>
 
+      {comparing && stack ? (
+        <CompareView versions={stack} currentId={review.id} copy={copy} onClose={() => setComparing(false)} />
+      ) : (
       <div className="bsv-stage-body">
         <div className="bsv-player" onKeyDown={onKeyDown} data-review-player>
           <div className="bsv-mat">
@@ -482,6 +690,15 @@ export function ReviewStage({ review, comments, canWrite, copy, locale, initialM
                     {copy.spotHint}
                   </p>
                 )}
+                {extended && (
+                  <InkLayer
+                    ratio={ratio}
+                    ink={ink}
+                    strokes={ink.active ? null : (mark?.strokes ?? activeStrokes)}
+                    label={copy.draw.layer}
+                    hint={copy.draw.hint}
+                  />
+                )}
               </div>
             ) : (
               <div className="bsv-frame bsv-frame-missing" style={{ aspectRatio: String(ratio) }}>
@@ -511,6 +728,72 @@ export function ReviewStage({ review, comments, canWrite, copy, locale, initialM
                 </button>
               </div>
               <div className="bsv-track">
+                {extended && (
+                  <div
+                    ref={laneRef}
+                    className="bsv-lane"
+                    data-review-range-lane
+                    role="group"
+                    aria-label={copy.range.lane}
+                    aria-describedby={`bsv-keys-${review.id}`}
+                    data-active={dragRange ? "" : undefined}
+                    onPointerDown={(e) => {
+                      if (!canComment || durationMs <= 0 || e.button !== 0) return;
+                      e.currentTarget.setPointerCapture?.(e.pointerId);
+                      videoRef.current?.pause();
+                      const at = msAtLane(e.clientX);
+                      setDragRange({ from: at, to: at });
+                    }}
+                    onPointerMove={(e) => {
+                      if (!dragRange) return;
+                      setDragRange({ from: dragRange.from, to: msAtLane(e.clientX) });
+                    }}
+                    onPointerUp={() => {
+                      if (!dragRange) return;
+                      const { from, to } = dragRange;
+                      setDragRange(null);
+                      if (Math.abs(to - from) < 100) {
+                        seek(from);
+                        setRange(from, null);
+                      } else {
+                        seek(Math.min(from, to));
+                        setRange(from, to);
+                      }
+                    }}
+                    onPointerCancel={() => setDragRange(null)}
+                  >
+                    {spans.map((t) => (
+                      <button
+                        key={t.root.id}
+                        type="button"
+                        className="bsv-span"
+                        data-review-span={t.root.id}
+                        data-role={t.root.authorRole}
+                        data-resolved={t.root.resolved ? "" : undefined}
+                        data-active={activeId === t.root.id ? "" : undefined}
+                        style={{ left: pct(t.root.atMs ?? 0), width: `calc(${pct(t.root.endMs ?? 0)} - ${pct(t.root.atMs ?? 0)})` }}
+                        aria-label={fill(copy.range.spanLabel, { start: formatTimecode(t.root.atMs), end: formatTimecode(t.root.endMs), text: t.root.body.slice(0, 80) })}
+                        onPointerDown={(e) => e.stopPropagation()}
+                        onClick={() => focusThread(t)}
+                      />
+                    ))}
+                    {(dragRange || mark?.endMs != null) && (
+                      <span
+                        className="bsv-span"
+                        data-pending=""
+                        aria-hidden="true"
+                        style={
+                          dragRange
+                            ? { left: pct(Math.min(dragRange.from, dragRange.to)), width: `calc(${pct(Math.max(dragRange.from, dragRange.to))} - ${pct(Math.min(dragRange.from, dragRange.to))})` }
+                            : { left: pct(mark?.atMs ?? 0), width: `calc(${pct(mark?.endMs ?? 0)} - ${pct(mark?.atMs ?? 0)})` }
+                        }
+                      />
+                    )}
+                    <span className="bsv-lane-label" aria-hidden="true">
+                      {copy.range.lane}
+                    </span>
+                  </div>
+                )}
                 <div className="bsv-pins">
                   {timed.map((t) => (
                     <button
@@ -548,6 +831,7 @@ export function ReviewStage({ review, comments, canWrite, copy, locale, initialM
               </div>
               <p className="bsv-keys" id={`bsv-keys-${review.id}`}>
                 {copy.player.keys}
+                {extended && canComment ? ` ${copy.range.keys}` : ""}
               </p>
             </div>
           )}
@@ -568,108 +852,24 @@ export function ReviewStage({ review, comments, canWrite, copy, locale, initialM
             </div>
           </div>
 
-          {shown.length === 0 ? (
+          {shown.length === 0 && carriedGroups.length === 0 ? (
             <p className="bsv-quiet">{threads.length === 0 ? copy.noComments : copy.noOpen}</p>
           ) : (
-            <ol className="bsv-threads">
-              {shown.map((t) => (
-                <li
-                  key={t.root.id}
-                  id={`bsv-thread-${t.root.id}`}
-                  className="bsv-thread"
-                  data-review-thread={t.root.id}
-                  data-active={activeId === t.root.id ? "" : undefined}
-                  data-resolved={t.root.resolved ? "" : undefined}
-                  onClick={(e) => {
-                    // A click on the note itself (not on one of its controls) brings the film to it;
-                    // the timecode button is the keyboard path to the same thing.
-                    if ((e.target as HTMLElement).closest("button, a, textarea, input, form")) return;
-                    if (!t.root.deleted) focusThread(t);
-                  }}
-                >
-                  <CommentBody
-                    comment={t.root}
-                    number={numberOf.get(t.root.id) ?? 0}
-                    copy={copy}
-                    locale={locale}
-                    onSeek={() => focusThread(t)}
-                  />
-                  {canWrite && !t.root.deleted && (
-                    <div className="bsv-thread-actions">
-                      <button type="button" className="bsv-text-btn" onClick={() => setReplyTo((v) => (v === t.root.id ? null : t.root.id))} aria-expanded={replyTo === t.root.id} aria-label={copy.replyLabel}>
-                        {copy.reply}
-                      </button>
-                      <button
-                        type="button"
-                        className="bsv-text-btn"
-                        data-review-resolve={t.root.id}
-                        disabled={busy !== null}
-                        onClick={() => void run(`resolve:${t.root.id}`, () => actions.resolveComment(t.root.id))}
-                      >
-                        {t.root.resolved ? copy.reopenThread : copy.resolve}
-                      </button>
-                      {t.root.mine && actions.deleteComment && (
-                        <DeleteButton copy={copy} disabled={busy !== null} onConfirm={() => void run(`delete:${t.root.id}`, () => actions.deleteComment!(t.root.id))} />
-                      )}
-                    </div>
-                  )}
-                  {t.replies.length > 0 && (
-                    <ul className="bsv-replies">
-                      {t.replies.map((r) => (
-                        <li key={r.id} className="bsv-reply" data-review-reply={r.id}>
-                          <CommentBody comment={r} copy={copy} locale={locale} />
-                          {canWrite && r.mine && actions.deleteComment && (
-                            <div className="bsv-thread-actions">
-                              <DeleteButton copy={copy} disabled={busy !== null} onConfirm={() => void run(`delete:${r.id}`, () => actions.deleteComment!(r.id))} />
-                            </div>
-                          )}
-                        </li>
-                      ))}
-                    </ul>
-                  )}
-                  {canWrite && replyTo === t.root.id && (
-                    <form
-                      className="bsv-reply-form"
-                      onSubmit={(e) => {
-                        e.preventDefault();
-                        void sendReply(t.root.id);
-                      }}
-                    >
-                      <label className="bsv-visually-hidden" htmlFor={`bsv-reply-${t.root.id}`}>
-                        {copy.replyLabel}
-                      </label>
-                      <textarea
-                        id={`bsv-reply-${t.root.id}`}
-                        className="bsv-input"
-                        rows={2}
-                        maxLength={2000}
-                        value={replyDraft}
-                        placeholder={copy.replyPlaceholder}
-                        onChange={(e) => setReplyDraft(e.target.value)}
-                        onKeyDown={(e) => {
-                          if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) {
-                            e.preventDefault();
-                            void sendReply(t.root.id);
-                          }
-                        }}
-                        autoFocus
-                      />
-                      <div className="bsv-form-row">
-                        <button type="button" className="bsv-text-btn" onClick={() => setReplyTo(null)}>
-                          {copy.cancel}
-                        </button>
-                        <button type="submit" className="bsv-pill" disabled={!replyDraft.trim() || busy !== null}>
-                          {copy.sendReply}
-                        </button>
-                      </div>
-                    </form>
-                  )}
-                </li>
+            <div className="bsv-thread-scroll">
+              {shown.length > 0 && <ol className="bsv-threads">{shown.map((t) => renderThread(t, false))}</ol>}
+              {carriedGroups.map(([version, group]) => (
+                <section key={version} className="bsv-carried" data-review-carried={version} aria-labelledby={`bsv-carried-${review.id}-${version}`}>
+                  <h4 className="bsv-carried-title" id={`bsv-carried-${review.id}-${version}`}>
+                    {fill(copy.carried.title, { version })}
+                  </h4>
+                  {resolveComment && <p className="bsv-carried-hint">{copy.carried.hint}</p>}
+                  <ol className="bsv-threads">{group.map((t) => renderThread(t, true))}</ol>
+                </section>
               ))}
-            </ol>
+            </div>
           )}
 
-          {canWrite ? (
+          {canComment ? (
             <form
               className="bsv-composer"
               data-review-composer
@@ -678,15 +878,53 @@ export function ReviewStage({ review, comments, canWrite, copy, locale, initialM
                 void send();
               }}
             >
-              {mark && (
+              {guest && (
+                <div className="bsv-guest-name">
+                  <label htmlFor={`bsv-guest-${review.id}`}>{copy.guest.nameLabel}</label>
+                  <input
+                    id={`bsv-guest-${review.id}`}
+                    className="bsv-input"
+                    type="text"
+                    autoComplete="name"
+                    maxLength={40}
+                    value={guest.name}
+                    placeholder={copy.guest.namePlaceholder}
+                    onChange={(e) => guest.onName(e.target.value)}
+                    data-review-guest-name
+                  />
+                </div>
+              )}
+              {(mark || ink.active) && (
                 <div className="bsv-marks">
-                  {mark.atMs != null && <span className="bsv-chip">{fill(copy.momentChip, { time: formatTimecode(mark.atMs) })}</span>}
-                  {mark.x != null && <span className="bsv-chip">{copy.spotChip}</span>}
-                  <button type="button" className="bsv-icon-btn bsv-chip-clear" onClick={() => (setMark(null), setSpotMode(false))} aria-label={copy.clearMark}>
+                  {mark?.atMs != null &&
+                    (mark.endMs != null ? (
+                      <span className="bsv-chip" data-review-range-chip>
+                        {fill(copy.range.chip, { start: formatTimecode(mark.atMs), end: formatTimecode(mark.endMs) })}
+                      </span>
+                    ) : (
+                      <span className="bsv-chip">{fill(copy.momentChip, { time: formatTimecode(mark.atMs) })}</span>
+                    ))}
+                  {mark?.x != null && <span className="bsv-chip">{copy.spotChip}</span>}
+                  {(ink.active ? ink.strokes.length : (mark?.strokes?.length ?? 0)) > 0 && (
+                    <span className="bsv-chip" data-review-drawing-chip>
+                      {fill(copy.draw.chip, { count: ink.active ? ink.strokes.length : (mark?.strokes?.length ?? 0) })}
+                    </span>
+                  )}
+                  <button
+                    type="button"
+                    className="bsv-icon-btn bsv-chip-clear"
+                    onClick={() => {
+                      setMark(null);
+                      setSpotMode(false);
+                      ink.reset();
+                    }}
+                    aria-label={copy.clearMark}
+                  >
                     <Icon d={ICONS.close} />
                   </button>
                 </div>
               )}
+              {ink.active && <InkTools ink={ink} copy={copy.draw} onDone={finishDrawing} />}
               <label className="bsv-visually-hidden" htmlFor={`bsv-draft-${review.id}`}>
                 {copy.composer.label}
               </label>
@@ -695,7 +933,7 @@ export function ReviewStage({ review, comments, canWrite, copy, locale, initialM
                 ref={textRef}
                 className="bsv-input"
                 rows={3}
-                maxLength={2000}
+                maxLength={guest ? 1000 : REVIEW_LIMITS.bodyMax}
                 value={draft}
                 placeholder={copy.composer.placeholder}
                 onChange={(e) => setDraft(e.target.value)}
@@ -713,6 +951,12 @@ export function ReviewStage({ review, comments, canWrite, copy, locale, initialM
                     {isVideo ? copy.markMoment : copy.markSpot}
                   </button>
                 )}
+                {canDraw && !ink.active && (
+                  <button type="button" className="bsv-pill" onClick={startDrawing} data-review-draw>
+                    <Icon d={ICONS.pen} />
+                    {mark?.strokes?.length ? copy.draw.edit : copy.draw.open}
+                  </button>
+                )}
                 <button type="submit" className="bsv-primary" disabled={!draft.trim() || busy !== null}>
                   {busy === "send" ? copy.composer.sending : copy.composer.send}
                 </button>
@@ -728,11 +972,108 @@ export function ReviewStage({ review, comments, canWrite, copy, locale, initialM
           </p>
         </aside>
       </div>
+      )}
       <p className="bsv-toast" role="status" aria-live="polite" data-visible={toast ? "" : undefined}>
         {toast ?? ""}
       </p>
     </section>
   );
+
+  function renderThread(t: ReviewThread, carried: boolean) {
+    return (
+      <li
+        key={t.root.id}
+        id={`bsv-thread-${t.root.id}`}
+        className="bsv-thread"
+        data-review-thread={t.root.id}
+        data-carried={carried ? "" : undefined}
+        data-active={activeId === t.root.id ? "" : undefined}
+        data-resolved={t.root.resolved ? "" : undefined}
+        onClick={(e) => {
+          // A click on the note itself (not on one of its controls) brings the film to it;
+          // the timecode button is the keyboard path to the same thing.
+          if ((e.target as HTMLElement).closest("button, a, textarea, input, form")) return;
+          if (!t.root.deleted) focusThread(t);
+        }}
+      >
+        <CommentBody comment={t.root} number={numberOf.get(t.root.id) ?? 0} copy={copy} locale={locale} onSeek={() => focusThread(t)} />
+        {!t.root.deleted && (canComment || canManage) && (
+          <div className="bsv-thread-actions">
+            {canComment && !carried && (
+              <button type="button" className="bsv-text-btn" onClick={() => setReplyTo((v) => (v === t.root.id ? null : t.root.id))} aria-expanded={replyTo === t.root.id} aria-label={copy.replyLabel}>
+                {copy.reply}
+              </button>
+            )}
+            {resolveComment && (
+              <button
+                type="button"
+                className="bsv-text-btn"
+                data-review-resolve={t.root.id}
+                disabled={busy !== null}
+                onClick={() => void run(`resolve:${t.root.id}`, () => resolveComment(t.root.id))}
+              >
+                {t.root.resolved ? copy.reopenThread : copy.resolve}
+              </button>
+            )}
+            {canComment && !carried && t.root.mine && actions.deleteComment && (
+              <DeleteButton copy={copy} disabled={busy !== null} onConfirm={() => void run(`delete:${t.root.id}`, () => actions.deleteComment!(t.root.id))} />
+            )}
+          </div>
+        )}
+        {t.replies.length > 0 && (
+          <ul className="bsv-replies">
+            {t.replies.map((r) => (
+              <li key={r.id} className="bsv-reply" data-review-reply={r.id}>
+                <CommentBody comment={r} copy={copy} locale={locale} />
+                {canComment && r.mine && actions.deleteComment && (
+                  <div className="bsv-thread-actions">
+                    <DeleteButton copy={copy} disabled={busy !== null} onConfirm={() => void run(`delete:${r.id}`, () => actions.deleteComment!(r.id))} />
+                  </div>
+                )}
+              </li>
+            ))}
+          </ul>
+        )}
+        {canComment && !carried && replyTo === t.root.id && (
+          <form
+            className="bsv-reply-form"
+            onSubmit={(e) => {
+              e.preventDefault();
+              void sendReply(t.root.id);
+            }}
+          >
+            <label className="bsv-visually-hidden" htmlFor={`bsv-reply-${t.root.id}`}>
+              {copy.replyLabel}
+            </label>
+            <textarea
+              id={`bsv-reply-${t.root.id}`}
+              className="bsv-input"
+              rows={2}
+              maxLength={guest ? 1000 : REVIEW_LIMITS.bodyMax}
+              value={replyDraft}
+              placeholder={copy.replyPlaceholder}
+              onChange={(e) => setReplyDraft(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) {
+                  e.preventDefault();
+                  void sendReply(t.root.id);
+                }
+              }}
+              autoFocus
+            />
+            <div className="bsv-form-row">
+              <button type="button" className="bsv-text-btn" onClick={() => setReplyTo(null)}>
+                {copy.cancel}
+              </button>
+              <button type="submit" className="bsv-pill" disabled={!replyDraft.trim() || busy !== null}>
+                {copy.sendReply}
+              </button>
+            </div>
+          </form>
+        )}
+      </li>
+    );
+  }
 }
 
 const STAMP = new Map<string, Intl.DateTimeFormat>();
@@ -760,8 +1101,10 @@ function CommentBody({
   /** Thread heads only: the moment (or spot) is a button that brings the film or the pin to it. */
   onSeek?: () => void;
 }) {
+  const role = comment.guest ? "guest" : comment.authorRole;
+  const timecode = comment.atMs == null ? "" : comment.endMs != null ? `${formatTimecode(comment.atMs)}–${formatTimecode(comment.endMs)}` : formatTimecode(comment.atMs);
   return (
-    <article className="bsv-comment" data-role={comment.authorRole}>
+    <article className="bsv-comment" data-role={role}>
       <header className="bsv-comment-head">
         {number ? (
           <span className="bsv-num" aria-hidden="true">
@@ -771,8 +1114,8 @@ function CommentBody({
         {!comment.deleted && (
           <>
             {comment.authorName && <span className="bsv-author">{comment.authorName}</span>}
-            <span className="bsv-role" data-role={comment.authorRole}>
-              {copy.roles[comment.authorRole]}
+            <span className="bsv-role" data-role={role}>
+              {copy.roles[role]}
             </span>
           </>
         )}
@@ -787,10 +1130,10 @@ function CommentBody({
           {onSeek && (
             <div className="bsv-meta">
               {comment.atMs != null ? (
-                <button type="button" className="bsv-timecode" onClick={onSeek} aria-label={fill(copy.seekTo, { time: formatTimecode(comment.atMs) })}>
-                  {formatTimecode(comment.atMs)}
+                <button type="button" className="bsv-timecode" onClick={onSeek} aria-label={fill(copy.seekTo, { time: timecode })} data-range={comment.endMs != null ? "" : undefined}>
+                  {timecode}
                 </button>
-              ) : comment.x == null ? (
+              ) : comment.x == null && !comment.strokes?.length ? (
                 <span className="bsv-timecode" data-whole="">
                   {copy.wholePiece}
                 </span>
@@ -807,6 +1150,12 @@ function CommentBody({
                     {copy.spotChip}
                   </span>
                 ))}
+              {comment.strokes?.length ? (
+                <button type="button" className="bsv-spot-tag" onClick={onSeek} data-review-drawing-tag aria-label={copy.draw.show}>
+                  <Icon d={ICONS.pen} />
+                  {copy.draw.tag}
+                </button>
+              ) : null}
               {comment.resolved && <span className="bsv-resolved">{copy.resolvedTag}</span>}
             </div>
           )}

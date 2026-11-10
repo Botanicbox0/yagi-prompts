@@ -1,5 +1,9 @@
 import type { Dictionary } from './en';
 import { adminWorkflowKo } from './admin-workflow';
+import { roomsChatKo } from './rooms-chat';
+import { roomsStoryboardKo } from './rooms-storyboard';
+import { roomsReviewKo } from './rooms-review';
+import { roomsShellKo } from './rooms-shell';
 import { studioShellKo } from './studio-shell';
 import { studioLibraryKo } from './studio-library';
 import { studioVideoKo } from './studio-video';
@@ -48,6 +52,10 @@ const T = KO_TERMS;
 
 export const ko: Dictionary = {
   adminWorkflow: adminWorkflowKo,
+  roomsChat: roomsChatKo,
+  roomsStoryboard: roomsStoryboardKo,
+  roomsReview: roomsReviewKo,
+  roomsShell: roomsShellKo,
   studioShell: studioShellKo,
   studioLibrary: studioLibraryKo,
   studioVideo: studioVideoKo,

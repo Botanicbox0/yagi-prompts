@@ -1,5 +1,9 @@
 /** PLAN §3.9 — UI strings as dictionary modules. `en` is the shape; `ko` must match it. */
 import { adminWorkflowEn } from './admin-workflow';
+import { roomsChatEn } from './rooms-chat';
+import { roomsStoryboardEn } from './rooms-storyboard';
+import { roomsReviewEn } from './rooms-review';
+import { roomsShellEn } from './rooms-shell';
 import { studioShellEn } from './studio-shell';
 import { studioLibraryEn } from './studio-library';
 import { studioVideoEn } from './studio-video';
@@ -39,6 +43,10 @@ const T = EN_TERMS;
 
 export const en = {
   adminWorkflow: adminWorkflowEn,
+  roomsChat: roomsChatEn,
+  roomsStoryboard: roomsStoryboardEn,
+  roomsReview: roomsReviewEn,
+  roomsShell: roomsShellEn,
   studioShell: studioShellEn,
   studioLibrary: studioLibraryEn,
   studioVideo: studioVideoEn,

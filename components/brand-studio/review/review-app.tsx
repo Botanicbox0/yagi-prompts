@@ -214,6 +214,9 @@ export function ReviewApp({ organizationId, locale, copy, initialList, initialDe
                 initialMs={detail.review.id === initialDetail?.review.id ? initialMs : null}
                 actions={actions}
                 linkFor={(ms) => reviewHref(organizationId, detail.review.id, ms)}
+                extended={detail.extended === true}
+                versions={detail.versions}
+                onVersion={select}
               />
             ) : loading ? (
               <p className="bsv-quiet bsv-main-note" role="status">

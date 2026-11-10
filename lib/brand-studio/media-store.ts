@@ -36,10 +36,20 @@ const EXTENSIONS: Readonly<Record<string, string>> = {
   'video/quicktime': 'mov',
   'audio/mpeg': 'mp3',
   'audio/wav': 'wav',
+  // Project room attachments (docs/BRAND-ROOMS.md §4): documents a brand and the team pass in a conversation.
+  'application/pdf': 'pdf',
+  'application/vnd.openxmlformats-officedocument.wordprocessingml.document': 'docx',
+  'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet': 'xlsx',
+  'application/vnd.openxmlformats-officedocument.presentationml.presentation': 'pptx',
+  'application/x-hwp': 'hwp',
+  'application/hwp+zip': 'hwpx',
+  'text/plain': 'txt',
+  'text/csv': 'csv',
+  'application/zip': 'zip',
 };
 const MIMES: Readonly<Record<string, string>> = Object.fromEntries(Object.entries(EXTENSIONS).map(([m, e]) => [e, m]));
 
-export const STUDIO_MEDIA_KEY = /^st\/[0-9a-f]{64}\.(?:png|jpg|webp|mp4|mov|mp3|wav)$/;
+export const STUDIO_MEDIA_KEY = /^st\/[0-9a-f]{64}\.(?:png|jpg|webp|mp4|mov|mp3|wav|pdf|docx|xlsx|pptx|hwp|hwpx|txt|csv|zip)$/;
 
 export function isStudioMediaKey(key: string): boolean {
   return STUDIO_MEDIA_KEY.test(key);

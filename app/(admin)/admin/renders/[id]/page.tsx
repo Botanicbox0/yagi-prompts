@@ -1,3 +1,4 @@
+import { requireAdmin } from "@/lib/auth/viewer";
 import { notFound } from "next/navigation";
 import { getSqlRunner } from "@/lib/db/connect";
 import { getDictionary } from "@/lib/i18n/dictionaries";
@@ -22,6 +23,9 @@ import { formatAdminTime, formatKrw, formatUsd, shortId } from "@/lib/admin/form
 export const dynamic = "force-dynamic";
 
 export default async function RenderDetailPage({ params }: { params: Promise<{ id: string }> }) {
+  // The layout's check is not enough on its own: a client navigation request can ask for this page
+  // segment alone, and then the layout does not run. Every admin page verifies the admin itself.
+  await requireAdmin();
   const [{ id }, locale, sql] = await Promise.all([params, getLocaleFromHeaders(), getSqlRunner()]);
   if (sql === null) notFound();
   const job = await loadRenderDetail(sql, id);

@@ -53,6 +53,19 @@ describe('feature catalogue', () => {
   });
 });
 
+describe('the sandboxed client is recognised by name as well as by id', () => {
+  it('refuses the sandbox features through the server gate for a same-named organization with a new id', async () => {
+    const twin = idOf(await createStudioOrganization({ sql }, admin, { name: 'Morphic Studios Korea', requestId: randomUUID() }));
+    const denied = Object.values(await loadFeaturePolicies(sql, [twin]))[0] ?? [];
+    expect(denied).toContain('generative_media');
+    expect((await loadFeaturePolicy(sql, twin)).denied).toEqual(denied);
+    for (const feature of denied) await expect(assertBrandFeature(sql, twin, feature)).rejects.toBeInstanceOf(BrandFeatureDenied);
+    // An ordinary organization is still open.
+    await expect(assertBrandFeature(sql, orgId, 'generative_media')).resolves.toBeUndefined();
+    expect(await loadFeaturePolicies(sql, [orgId])).toEqual({});
+  });
+});
+
 describe('feature policy: a deny-list, open by default', () => {
   it('has no exceptions until the studio writes one', async () => {
     expect(await loadFeaturePolicies(sql, [orgId])).toEqual({});

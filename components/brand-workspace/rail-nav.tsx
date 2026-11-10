@@ -25,20 +25,29 @@ import {
 import { usePathname } from 'next/navigation';
 import { interpolate } from '@/lib/i18n/format';
 import type { StudioShellCopy } from '@/messages/studio-shell';
-import { CreditsMeter, RailToasts, useStudioActivity } from './rail-activity';
+import type { RoomsShellCopy } from '@/messages/rooms-shell';
+import { CreditsMeter, RailToasts, useRoomUnread, useStudioActivity } from './rail-activity';
 import {
   NAV_ORDER_STORAGE_KEY,
   RAIL_COOKIE,
+  RAIL_GROUP,
   RAIL_HREF,
   RAIL_ICON,
   RAIL_STORAGE_KEY,
+  dropInGroup,
   dropItem,
+  groupItems,
+  groupedTabIds,
+  moveInGroup,
   moveItem,
   orderItems,
   parseOrder,
   parseRailState,
   railActive,
+  railCreateLinks,
   railItems,
+  type RailCreateKey,
+  type RailGroupId,
   type RailItemId,
 } from './rail-model';
 
@@ -59,6 +68,13 @@ export interface RailNavigationProps {
   /** From the cookie mirror, so the server renders the width this browser chose. */
   initialExpanded: boolean;
   scope: (path: string) => string;
+  /**
+   * Project rooms are open for this brand (docs/BRAND-ROOMS.md §2): the rail splits into 직접 만들기 and
+   * 야기 팀과, 메시지 appears with its unread badge, and "+" gains 야기 팀에 의뢰하기. Needs `roomsCopy`;
+   * without both the rail is exactly the ungrouped one.
+   */
+  rooms?: boolean;
+  roomsCopy?: RoomsShellCopy['nav'];
 }
 
 function Icon({ d }: { d: string }) {
@@ -103,8 +119,11 @@ export function RailNavigation(props: RailNavigationProps) {
   const menuId = useId();
   const sheetId = useId();
   const sheetTitleId = useId();
+  const groupTitleId = useId();
 
+  const nav = props.rooms && props.roomsCopy ? props.roomsCopy : null;
   const activity = useStudioActivity({ organizationId: props.organizationId, enabled: studio, path });
+  const unread = useRoomUnread({ organizationId: props.organizationId, enabled: nav !== null });
 
   // What this browser chose last time (the cookie may be missing on a first visit after an update).
   // `initialExpanded` comes from the server once per page, so this runs once.
@@ -122,9 +141,21 @@ export function RailNavigation(props: RailNavigationProps) {
     }
   }, [initialExpanded]);
 
-  const items = orderItems(railItems({ studio, creators: props.creators, identity: props.identity }), order);
-  const label = (id: RailItemId) => copy.rail[id];
-  const badge = (id: RailItemId) => (id === 'image' ? activity.counts.image : id === 'video' ? activity.counts.video : 0);
+  const visibleItems = railItems({ studio, creators: props.creators, identity: props.identity, rooms: nav !== null });
+  // With rooms, the saved order applies inside each group and never moves an item across groups.
+  const groups = nav ? groupItems(visibleItems, order) : null;
+  const items = groups ? [...groups.make, ...groups.team] : orderItems(visibleItems, order);
+  const label = (id: RailItemId): string => {
+    if (id === 'messages') return nav?.messages ?? '';
+    if (id === 'campaigns' && nav) return nav.commissions;
+    return copy.rail[id];
+  };
+  const groupTitle = (group: RailGroupId) => (nav ? (group === 'make' ? nav.groupMake : nav.groupTeam) : '');
+  const badge = (id: RailItemId) =>
+    id === 'image' ? activity.counts.image : id === 'video' ? activity.counts.video : id === 'messages' ? unread : 0;
+  /** What the badge says to a screen reader and in the collapsed tooltip. */
+  const badgeText = (id: RailItemId, count: number, short = false) =>
+    count <= 0 ? '' : id === 'messages' && nav ? interpolate(short ? nav.unreadShort : nav.unread, { count }) : interpolate(copy.rail.running, { count });
 
   const saveOrder = useCallback((next: RailItemId[]) => {
     const hrefs = next.map((id) => RAIL_HREF[id]);
@@ -205,12 +236,17 @@ export function RailNavigation(props: RailNavigationProps) {
     };
   }, [createAt, closeCreate]);
 
-  const createLinks: Array<{ key: string; href: string; text: string; icon: string }> = [
-    { key: 'image', href: '/brand/studio', text: copy.create.image, icon: RAIL_ICON.image },
-    { key: 'video', href: '/brand/studio/video', text: copy.create.video, icon: RAIL_ICON.video },
-    { key: 'reverse', href: '/brand/studio/video?start=reverse', text: copy.create.fromReference, icon: RAIL_ICON.review },
-    { key: 'campaign', href: '/brand/projects/new', text: copy.create.campaign, icon: RAIL_ICON.campaigns },
-  ];
+  const createText: Record<RailCreateKey, string> = {
+    image: copy.create.image,
+    video: copy.create.video,
+    reverse: copy.create.fromReference,
+    campaign: copy.create.campaign,
+    commission: nav?.commission ?? '',
+  };
+  const allCreateLinks = railCreateLinks(nav !== null).map((link) => ({ ...link, text: createText[link.key] }));
+  // With rooms the request sits below a divider as 야기 팀에 의뢰하기.
+  const createLinks = allCreateLinks.filter((link) => link.key !== 'commission');
+  const commissionLink = allCreateLinks.find((link) => link.key === 'commission') ?? null;
 
   /* ---------------------------------------------------------- phone sheet */
   const closeSheet = useCallback(() => {
@@ -268,8 +304,16 @@ export function RailNavigation(props: RailNavigationProps) {
     const source = dragged ?? (Object.keys(RAIL_HREF) as RailItemId[]).find((id) => RAIL_HREF[id] === href) ?? null;
     setDragged(null);
     if (!source || source === target) return;
+    if (groups) {
+      // A drop on the other group is no move at all: items stay in their own group.
+      const next = dropInGroup(groups, source, target);
+      if (next) saveOrder(next);
+      return;
+    }
     saveOrder(dropItem(items, source, target));
   };
+  const move = (id: RailItemId, direction: -1 | 1) => saveOrder(groups ? moveInGroup(groups, id, direction) : moveItem(items, id, direction));
+  const canDropOn = (id: RailItemId) => Boolean(dragged && dragged !== id && (!groups || RAIL_GROUP[dragged] === RAIL_GROUP[id]));
 
   const utilities: Array<{ key: 'team' | 'settings'; href: string; shown: boolean }> = [
     { key: 'team', href: '/brand/members', shown: props.team },
@@ -279,7 +323,10 @@ export function RailNavigation(props: RailNavigationProps) {
   const itemLink = (id: RailItemId, extra: ReactNode = null) => {
     const href = RAIL_HREF[id];
     const count = badge(id);
-    const runningText = count > 0 ? interpolate(copy.rail.running, { count }) : '';
+    const runningText = badgeText(id, count);
+    // Grouped, the tooltip names the group too ("야기 팀과 · 메시지") so the split reads without labels.
+    const tipBase = nav ? `${groupTitle(RAIL_GROUP[id])} · ${label(id)}` : label(id);
+    const tipCount = nav ? badgeText(id, count, true) : runningText;
     return (
       <a
         href={scope(href)}
@@ -287,13 +334,13 @@ export function RailNavigation(props: RailNavigationProps) {
         data-nav-item={href}
         data-nav-group="primary"
         data-rail-item={id}
-        data-rail-tip={runningText ? `${label(id)} · ${runningText}` : label(id)}
+        data-rail-tip={tipCount ? `${tipBase} · ${tipCount}` : tipBase}
         aria-current={railActive(href, path) ? 'page' : undefined}
         draggable
         onDragStart={(event) => onDragStart(event, id)}
         onDragOver={(event) => {
           event.preventDefault();
-          if (dragged && dragged !== id) setDragOver(id);
+          if (canDropOn(id)) setDragOver(id);
         }}
         onDragLeave={() => setDragOver(null)}
         onDrop={(event) => onDrop(event, id)}
@@ -316,11 +363,44 @@ export function RailNavigation(props: RailNavigationProps) {
   };
 
   // Phone tab bar: 이미지 · 영상 · 리뷰 · 캠페인 when they exist, filled up from the rest; the others go in 더보기.
-  const tabIds = [
-    ...(['image', 'video', 'review', 'campaigns'] as RailItemId[]).filter((id) => items.includes(id)),
-    ...items.filter((id) => !['image', 'video', 'review', 'campaigns'].includes(id)),
-  ].slice(0, 4);
+  // With rooms: 이미지 · 영상 · 의뢰 · 메시지 (rail-model `groupedTabIds`).
+  const tabIds = nav
+    ? groupedTabIds(items)
+    : [
+        ...(['image', 'video', 'review', 'campaigns'] as RailItemId[]).filter((id) => items.includes(id)),
+        ...items.filter((id) => !['image', 'video', 'review', 'campaigns'].includes(id)),
+      ].slice(0, 4);
   const sheetIds = items.filter((id) => !tabIds.includes(id));
+
+  const row = (id: RailItemId, index: number, list: readonly RailItemId[]) => (
+    <li key={id} className="bw-rail-row" data-drag-over={dragOver === id ? 'true' : undefined}>
+      {itemLink(id)}
+      {reordering && expanded ? (
+        <span className="bw-rail-move" role="group" aria-label={label(id)}>
+          <button
+            type="button"
+            disabled={index === 0}
+            aria-label={interpolate(copy.rail.moveUp, { label: label(id) })}
+            onClick={() => move(id, -1)}
+          >
+            <svg viewBox="0 0 20 20" aria-hidden="true">
+              <path d="M10 15V5M5.5 9.5 10 5l4.5 4.5" />
+            </svg>
+          </button>
+          <button
+            type="button"
+            disabled={index === list.length - 1}
+            aria-label={interpolate(copy.rail.moveDown, { label: label(id) })}
+            onClick={() => move(id, 1)}
+          >
+            <svg viewBox="0 0 20 20" aria-hidden="true">
+              <path d="M10 5v10M5.5 10.5 10 15l4.5-4.5" />
+            </svg>
+          </button>
+        </span>
+      ) : null}
+    </li>
+  );
 
   return (
     <>
@@ -334,37 +414,30 @@ export function RailNavigation(props: RailNavigationProps) {
         onKeyDown={navKeys}
         {...tipHandlers}
       >
-        <ul className="bw-rail-list" data-rail-group="primary">
-          {items.map((id, index) => (
-            <li key={id} className="bw-rail-row" data-drag-over={dragOver === id ? 'true' : undefined}>
-              {itemLink(id)}
-              {reordering && expanded ? (
-                <span className="bw-rail-move" role="group" aria-label={label(id)}>
-                  <button
-                    type="button"
-                    disabled={index === 0}
-                    aria-label={interpolate(copy.rail.moveUp, { label: label(id) })}
-                    onClick={() => saveOrder(moveItem(items, id, -1))}
-                  >
-                    <svg viewBox="0 0 20 20" aria-hidden="true">
-                      <path d="M10 15V5M5.5 9.5 10 5l4.5 4.5" />
-                    </svg>
-                  </button>
-                  <button
-                    type="button"
-                    disabled={index === items.length - 1}
-                    aria-label={interpolate(copy.rail.moveDown, { label: label(id) })}
-                    onClick={() => saveOrder(moveItem(items, id, 1))}
-                  >
-                    <svg viewBox="0 0 20 20" aria-hidden="true">
-                      <path d="M10 5v10M5.5 10.5 10 15l4.5-4.5" />
-                    </svg>
-                  </button>
-                </span>
-              ) : null}
-            </li>
-          ))}
-        </ul>
+        {groups ? (
+          (['make', 'team'] as const).map((group) =>
+            groups[group].length > 0 ? (
+              <div
+                key={group}
+                className="bw-rail-group"
+                data-rail-section={group}
+                role="group"
+                aria-labelledby={`${groupTitleId}-${group}`}
+              >
+                <p id={`${groupTitleId}-${group}`} className="bw-rail-group-title">
+                  {groupTitle(group)}
+                </p>
+                <ul className="bw-rail-list" data-rail-group="primary">
+                  {groups[group].map((id, index) => row(id, index, groups[group]))}
+                </ul>
+              </div>
+            ) : null,
+          )
+        ) : (
+          <ul className="bw-rail-list" data-rail-group="primary">
+            {items.map((id, index) => row(id, index, items))}
+          </ul>
+        )}
 
         {expanded && items.length > 1 ? (
           <div className="bw-rail-order" data-rail-order>
@@ -470,6 +543,15 @@ export function RailNavigation(props: RailNavigationProps) {
               <span>{link.text}</span>
             </a>
           ))}
+          {commissionLink ? (
+            <>
+              <hr className="bw-rail-create-divider" />
+              <a href={scope(commissionLink.href)} data-rail-create-link={commissionLink.key}>
+                <Icon d={commissionLink.icon} />
+                <span>{commissionLink.text}</span>
+              </a>
+            </>
+          ) : null}
         </div>
       ) : null}
 
@@ -485,7 +567,7 @@ export function RailNavigation(props: RailNavigationProps) {
                   {count > 0 ? (
                     <span className="bw-rail-badge">
                       <span aria-hidden="true">{count}</span>
-                      <span className="bw-rail-sr">{interpolate(copy.rail.running, { count })}</span>
+                      <span className="bw-rail-sr">{badgeText(id, count)}</span>
                     </span>
                   ) : null}
                 </a>
@@ -538,10 +620,36 @@ export function RailNavigation(props: RailNavigationProps) {
                     <span>{link.text}</span>
                   </a>
                 ))}
+                {commissionLink ? (
+                  <a href={scope(commissionLink.href)} data-rail-create-link={commissionLink.key} data-rail-create-commission>
+                    <Icon d={commissionLink.icon} />
+                    <span>{commissionLink.text}</span>
+                  </a>
+                ) : null}
               </div>
             ) : null}
+            {groups
+              ? (['make', 'team'] as const).map((group) => {
+                  const ids = sheetIds.filter((id) => RAIL_GROUP[id] === group);
+                  return ids.length > 0 ? (
+                    <div key={group} className="bw-rail-sheet-group" data-rail-section={group}>
+                      <p className="bw-rail-sheet-group-title">{groupTitle(group)}</p>
+                      <ul className="bw-rail-sheet-list">
+                        {ids.map((id) => (
+                          <li key={id}>
+                            <a href={scope(RAIL_HREF[id])} aria-current={railActive(RAIL_HREF[id], path) ? 'page' : undefined}>
+                              <Icon d={RAIL_ICON[id]} />
+                              <span>{label(id)}</span>
+                            </a>
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  ) : null;
+                })
+              : null}
             <ul className="bw-rail-sheet-list">
-              {sheetIds.map((id) => (
+              {(groups ? [] : sheetIds).map((id) => (
                 <li key={id}>
                   <a href={scope(RAIL_HREF[id])} aria-current={railActive(RAIL_HREF[id], path) ? 'page' : undefined}>
                     <Icon d={RAIL_ICON[id]} />

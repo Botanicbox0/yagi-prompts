@@ -1,3 +1,4 @@
+import { requireAdmin } from '@/lib/auth/viewer';
 import { getDictionary } from '@/lib/i18n/dictionaries';
 import { getLocaleFromHeaders } from '@/lib/i18n/server';
 import { interpolate } from '@/lib/i18n/format';
@@ -38,6 +39,9 @@ const one = (params: SearchParams, key: string): string | undefined => {
 };
 
 export default async function AdminPromptNewPage({ searchParams }: { searchParams: Promise<SearchParams> }) {
+  // The layout's check is not enough on its own: a client navigation request can ask for this page
+  // segment alone, and then the layout does not run. Every admin page verifies the admin itself.
+  await requireAdmin();
   const [locale, params] = await Promise.all([getLocaleFromHeaders(), searchParams]);
   const dict = getDictionary(locale);
   const a = dict.admin;

@@ -43,7 +43,31 @@ export const REVIEW_LIMITS = {
   atMsMax: 86_400_000,
   /** How many reviews the list returns. */
   listMax: 200,
+  /** A drawing: lines per note, points per line, points per note (docs/BRAND-ROOMS.md §6). */
+  strokesMax: 24,
+  pointsPerStroke: 240,
+  pointsMax: 1200,
+  /** Versions of one deliverable. */
+  versionMax: 999,
 } as const;
+
+/** Where a review item came from: put up from the studio, or delivered by the YAGI team (rooms). */
+export const REVIEW_SOURCES = ['studio', 'delivery'] as const;
+export type ReviewSource = (typeof REVIEW_SOURCES)[number];
+
+/** The drawing tools and their two colours (blue is the one TWINGS blue; white reads on dark footage). */
+export const STROKE_TOOLS = ['pen', 'arrow'] as const;
+export type StrokeTool = (typeof STROKE_TOOLS)[number];
+export const STROKE_COLORS = ['blue', 'white'] as const;
+export type StrokeColor = (typeof STROKE_COLORS)[number];
+export const STROKE_HEX: Record<StrokeColor, string> = { blue: '#3875C5', white: '#FFFFFF' };
+
+/** One line drawn on the frame: points in 0..1 of the frame's width and height. An arrow has two points. */
+export interface ReviewStroke {
+  tool: StrokeTool;
+  color: StrokeColor;
+  points: Array<[number, number]>;
+}
 
 /** About one frame at 24 fps: the ←/→ step on the player. */
 export const REVIEW_FRAME_MS = Math.round(1000 / 24);
@@ -74,25 +98,75 @@ export const ReviewRefSchema = z.object({ organizationId: Id, reviewId: Id });
 
 export const ReviewStatusSchema = z.object({ organizationId: Id, reviewId: Id, status: z.enum(REVIEW_STATUSES) });
 
+const Point = z.tuple([Unit, Unit]).transform(([x, y]) => [Math.round(x * 10_000) / 10_000, Math.round(y * 10_000) / 10_000] as [number, number]);
+
+export const StrokeSchema = z
+  .object({
+    tool: z.enum(STROKE_TOOLS),
+    color: z.enum(STROKE_COLORS),
+    points: z.array(Point).min(2).max(REVIEW_LIMITS.pointsPerStroke),
+  })
+  .strict()
+  .refine((s) => s.tool !== 'arrow' || s.points.length === 2, { message: 'an arrow is two points', path: ['points'] });
+
+export const StrokesSchema = z
+  .array(StrokeSchema)
+  .min(1)
+  .max(REVIEW_LIMITS.strokesMax)
+  .refine((lines) => lines.reduce((n, l) => n + l.points.length, 0) <= REVIEW_LIMITS.pointsMax, { message: 'too many points' });
+
+const AtMs = z.number().int().min(0).max(REVIEW_LIMITS.atMsMax);
+
 export const CommentAddSchema = z
   .object({
     organizationId: Id,
     reviewId: Id,
     body: Body,
     parentId: Id.nullish(),
-    atMs: z.number().int().min(0).max(REVIEW_LIMITS.atMsMax).nullish(),
+    atMs: AtMs.nullish(),
+    /** A range ends here (rooms, 0084). */
+    endMs: AtMs.nullish(),
     x: Unit.nullish(),
     y: Unit.nullish(),
+    /** A drawing on the frame (rooms, 0084). */
+    strokes: StrokesSchema.nullish(),
   })
   .refine((v) => (v.x == null) === (v.y == null), { message: 'x and y together', path: ['x'] })
   // A reply answers its thread; the moment and the spot belong to the thread's first comment.
-  .refine((v) => !v.parentId || (v.atMs == null && v.x == null), { message: 'a reply has no moment or spot', path: ['parentId'] });
+  .refine((v) => !v.parentId || (v.atMs == null && v.x == null && v.endMs == null && v.strokes == null), { message: 'a reply has no moment or spot', path: ['parentId'] })
+  .refine((v) => v.endMs == null || (v.atMs != null && v.endMs > v.atMs), { message: 'a range ends after it starts', path: ['endMs'] });
 
 export const CommentRefSchema = z.object({ organizationId: Id, reviewId: Id, commentId: Id });
 
 export type ReviewCreateInput = z.input<typeof ReviewCreateSchema>;
 export type ReviewStatusInput = z.input<typeof ReviewStatusSchema>;
 export type CommentAddInput = z.input<typeof CommentAddSchema>;
+
+/* ------------------------------------------------- project rooms (0084) */
+
+/**
+ * `POST /api/brand-rooms/reviews` (docs/BRAND-ROOMS.md §6). Every input names the project; the route
+ * seats the viewer in the room first. `review.version` posts a new version of the stack `reviewId`
+ * belongs to, from another asset or result of the organization.
+ */
+export const ROOM_REVIEW_OPERATIONS = ['review.create', 'review.version', 'review.status', 'comment.add', 'comment.resolve', 'comment.delete'] as const;
+export type RoomReviewOperation = (typeof ROOM_REVIEW_OPERATIONS)[number];
+
+const InProject = { organizationId: Id, projectId: Id };
+
+export const RoomReviewCreateSchema = z
+  .object({ ...InProject, title: Title, assetId: Id.optional(), outputId: Id.optional() })
+  .refine((v) => Number(Boolean(v.assetId)) + Number(Boolean(v.outputId)) === 1, { message: 'exactly one of assetId and outputId', path: ['assetId'] });
+
+export const ReviewVersionSchema = z
+  .object({ ...InProject, reviewId: Id, title: Title.optional(), assetId: Id.optional(), outputId: Id.optional() })
+  .refine((v) => Number(Boolean(v.assetId)) + Number(Boolean(v.outputId)) === 1, { message: 'exactly one of assetId and outputId', path: ['assetId'] });
+
+export type RoomReviewCreateInput = z.input<typeof RoomReviewCreateSchema>;
+export type ReviewVersionInput = z.input<typeof ReviewVersionSchema>;
+
+/** Every room input names its project; the rest of each input is the studio shape above. */
+export const RoomScopeSchema = z.object(InProject);
 
 /* --------------------------------------------------------------- views */
 
@@ -112,6 +186,28 @@ export interface ReviewListItem {
   commentsTotal: number;
   /** The newest of: the review's own change, the newest comment. */
   lastActivityAt: string;
+  createdAt: string;
+  /** Rooms (0084): the project it belongs to, its stack, its place in the stack and who put it up. */
+  projectId?: string | null;
+  stackId?: string;
+  version?: number;
+  source?: ReviewSource;
+}
+
+/** One version of a deliverable, as the version switcher and "나란히 비교" need it. */
+export interface ReviewVersion {
+  id: string;
+  version: number;
+  title: string;
+  status: ReviewStatus;
+  kind: ReviewKind;
+  available: boolean;
+  mediaUrl: string | null;
+  thumbUrl: string | null;
+  width: number | null;
+  height: number | null;
+  seconds: number | null;
+  commentsOpen: number;
   createdAt: string;
 }
 
@@ -143,6 +239,14 @@ export interface ReviewComment {
   deleted: boolean;
   /** The viewer wrote it (may delete it). */
   mine: boolean;
+  /** Rooms (0084): a range ends here. */
+  endMs?: number | null;
+  /** Rooms (0084): a drawing on the frame, replayed when the note is selected. */
+  strokes?: ReviewStroke[] | null;
+  /** Rooms (0084): left through a share link by someone outside the workspace (`authorRole` is 'brand'). */
+  guest?: boolean;
+  /** Rooms (0084): an open note of an earlier version, shown here read-only until resolved. */
+  carriedFrom?: { version: number } | null;
 }
 
 export interface ReviewFailure {
@@ -161,6 +265,32 @@ export interface ReviewDetail {
   canWrite: boolean;
   review: ReviewItem;
   comments: ReviewComment[];
+  /**
+   * Rooms (0084 applied and BRAND_ROOMS on): ranges and drawings may be written, and `versions` lists the
+   * stack newest first. Absent or false: the screen is exactly the v3 studio review.
+   */
+  extended?: boolean;
+  versions?: ReviewVersion[];
+}
+
+/** One deliverable of a project room: its versions, newest first (`versions[0]` is the one to open). */
+export interface ReviewStack {
+  stackId: string;
+  versions: ReviewListItem[];
+}
+
+/** `GET /api/brand-rooms/reviews?organizationId=&projectId=` */
+export interface RoomReviewList {
+  ok: true;
+  canEdit: boolean;
+  canTalk: boolean;
+  stacks: ReviewStack[];
+}
+
+/** `GET /api/brand-rooms/reviews?organizationId=&projectId=&review=` */
+export interface RoomReviewDetail extends ReviewDetail {
+  canEdit: boolean;
+  canTalk: boolean;
 }
 
 export interface ReviewCreated {
@@ -191,6 +321,17 @@ export function reviewHref(organizationId: string, reviewId?: string | null, atM
   if (reviewId) params.set('review', reviewId);
   if (reviewId && atMs != null && Number.isFinite(atMs) && atMs > 0) params.set('t', String(Math.round(atMs)));
   return `${REVIEW_PATH}?${params.toString()}`;
+}
+
+/**
+ * A deliverable in its project room (docs/BRAND-ROOMS.md §3: `/brand/rooms/[projectId]?tab=`), at one
+ * moment. The room page (slice H) reads `review` and `t` and hands them to the deliverables tab.
+ */
+export function roomReviewHref(organizationId: string, projectId: string, reviewId?: string | null, atMs?: number | null): string {
+  const params = new URLSearchParams({ organizationId, tab: 'review' });
+  if (reviewId) params.set('review', reviewId);
+  if (reviewId && atMs != null && Number.isFinite(atMs) && atMs > 0) params.set('t', String(Math.round(atMs)));
+  return `/brand/rooms/${projectId}?${params.toString()}`;
 }
 
 /** `?t=` back to milliseconds; anything odd is ignored. */

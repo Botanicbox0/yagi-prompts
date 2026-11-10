@@ -3,6 +3,8 @@ import { prerender } from 'react-dom/static';
 import type { BrandInquiry } from '@/lib/brands/repo';
 import type { RenderFeedbackRow } from '@/lib/renders/feedback';
 const fixture = vi.hoisted(() => ({ brands: [] as BrandInquiry[], feedback: [] as RenderFeedbackRow[] }));
+// Each admin page verifies the admin itself; these tests render the page as one.
+vi.mock('@/lib/auth/viewer', () => ({ requireAdmin: async () => ({ isAdmin: true }) }));
 vi.mock('@/lib/db/connect', () => ({ getSqlRunner: async () => ({}) }));
 vi.mock('@/lib/i18n/server', () => ({ getLocaleFromHeaders: async () => 'ko' }));
 vi.mock('@/lib/brands/repo', () => ({ listBrandInquiries: async (_sql: unknown, args: { statuses: string[] }) => fixture.brands.filter(row => args.statuses.includes(row.status)) }));

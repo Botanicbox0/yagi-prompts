@@ -162,3 +162,12 @@ export function coupleTemplatesOpen(env: Record<string, string | undefined> = pr
 export function petTemplatesOpen(env: Record<string, string | undefined> = process.env): boolean {
   return env.TWINGS_PET_TEMPLATES === 'on';
 }
+
+/**
+ * docs/BRAND-ROOMS.md — project rooms (messages, storyboards and deliverable review with the YAGI
+ * team). Default OFF: open only when the server environment says exactly `BRAND_ROOMS=on`. Off means
+ * no room page, no messages item in the rail and every `/api/brand-rooms/*` answers 404.
+ */
+export function brandRoomsOpen(env: NodeJS.ProcessEnv = process.env): boolean {
+  return env.BRAND_ROOMS === 'on';
+}

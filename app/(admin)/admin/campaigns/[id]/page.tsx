@@ -4,7 +4,7 @@ import { linkedParticipationIds } from "@/lib/campaigns/collaboration/service";
 import { collaborationCopy } from "@/messages/campaign-collaboration";
 import { campaignWorkflow } from "@/lib/admin/campaign-workflow";
 import { PublicLink } from "@/components/admin/public-link";
-import { getViewer } from "@/lib/auth/viewer";
+import { getViewer, requireAdmin } from "@/lib/auth/viewer";
 import { loadCampaignProductionAdmin } from "@/lib/campaigns/production-admin";
 import { CampaignProductionAdmin } from "@/components/campaigns/production-admin";
 import { notFound } from "next/navigation";
@@ -344,6 +344,9 @@ export default async function AdminCampaignPage({
   params: Promise<{ id: string }>;
   searchParams: Promise<SearchParams>;
 }) {
+  // The layout's check is not enough on its own: a client navigation request can ask for this page
+  // segment alone, and then the layout does not run. Every admin page verifies the admin itself.
+  await requireAdmin();
   const [{ id }, locale, query, sql] = await Promise.all([
     params,
     getLocaleFromHeaders(),

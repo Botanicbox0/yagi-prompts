@@ -215,6 +215,43 @@ export async function markRenderWaitingForAsset(sql: SqlRunner, id: string, asse
   await sql.query(`update render_jobs set provider = 'modelark', provider_task_id = $2 where id = $1`, [id, `${ASSET_TASK_PREFIX}${assetId}`]);
 }
 
+/** How long one pass may hold a parked job while it sends it on. Longer than any function can run (300 s). */
+export const ASSET_DISPATCH_LEASE_MINUTES = 10;
+
+/** A parked job's asset id, and when a pass last took the right to send it on (null: nobody has yet). */
+export function parseAssetTask(providerTaskId: string): { assetId: string; dispatchClaimedAtMs: number | null } {
+  const rest = providerTaskId.slice(ASSET_TASK_PREFIX.length);
+  const mark = rest.lastIndexOf('#');
+  const at = mark < 0 ? Number.NaN : Number(rest.slice(mark + 1));
+  return Number.isFinite(at) ? { assetId: rest.slice(0, mark), dispatchClaimedAtMs: at } : { assetId: rest, dispatchClaimedAtMs: null };
+}
+
+/**
+ * The photo is cleared and the job is about to leave the asset wait. A parked job has no queue lease,
+ * and the owner's open page, a provider callback and the tick all poll it — so without this, each of
+ * them sends the same paid job to the provider and all but the last task are billed and never collected.
+ *
+ * Compare-and-swap on the exact marker this pass read: one pass wins, the rest keep waiting. The
+ * winner's stamp (`asset:{id}#{ms}`) is a lease, not a state: the job is still "parked" to every
+ * reader (`like 'asset:%'`, the "checking the photo" stage), and it ends when the winner records the
+ * provider task, finishes, requeues or fails the job. If the winner dies, the job is free again after
+ * the lease — unless the queue has claimed it since (a recipe that yielded and came back).
+ */
+export async function claimAssetDispatch(sql: SqlRunner, job: { id: string; providerTaskId: string | null }, now: Date): Promise<boolean> {
+  if (!job.providerTaskId?.startsWith(ASSET_TASK_PREFIX)) return false;
+  const { assetId, dispatchClaimedAtMs } = parseAssetTask(job.providerTaskId);
+  const first = dispatchClaimedAtMs === null;
+  if (!first && now.getTime() - dispatchClaimedAtMs < ASSET_DISPATCH_LEASE_MINUTES * 60_000) return false;
+  const { rows } = await sql.query<{ id: string }>(
+    `update render_jobs set provider_task_id = $3
+      where id = $1 and status = 'running' and provider_task_id = $2
+        and ($4::boolean or claimed_at is null or claimed_at <= $5::timestamptz - make_interval(mins => $6::int))
+      returning id`,
+    [job.id, job.providerTaskId, `${ASSET_TASK_PREFIX}${assetId}#${now.getTime()}`, first, now.toISOString(), ASSET_DISPATCH_LEASE_MINUTES],
+  );
+  return rows.length > 0;
+}
+
 /** Films: the task is created and the job waits on the provider; the poll finishes it later. */
 export async function markRenderRunningWithTask(sql: SqlRunner, id: string, args: { provider: RenderProvider; taskId: string }): Promise<void> {
   await sql.query(`update render_jobs set provider = $2, provider_task_id = $3 where id = $1`, [id, args.provider, args.taskId]);
@@ -231,31 +268,44 @@ export interface MarkSucceededArgs {
   finishedAt: Date;
 }
 
-export async function markRenderSucceeded(sql: SqlRunner, id: string, args: MarkSucceededArgs): Promise<void> {
-  await sql.query(
+/**
+ * Polls of one provider task overlap (open page, callback, tick), so two passes can reach an ending
+ * for the same job. With `onlyRunning` (the render pass) only a job that is still running takes one: the first ending stands, and the
+ * caller of the second gets `false` and writes nothing else. Without this a film was delivered and
+ * then marked failed (and refunded), or a finished job went back to the queue and was made again.
+ */
+export async function markRenderSucceeded(sql: SqlRunner, id: string, args: MarkSucceededArgs, opts: { onlyRunning?: boolean } = {}): Promise<boolean> {
+  const { rows } = await sql.query<{ id: string }>(
     `update render_jobs
         set status = 'succeeded', result_key = $2, result_mime = $3, result_bytes = $4, provider = $5, cost_usd = $6,
             share_token = coalesce(share_token, $7), share_expires_at = coalesce(share_expires_at, $8::timestamptz),
             finished_at = coalesce(finished_at, $9::timestamptz),
             error_code = null, error_message = null
-      where id = $1`,
-    [id, args.resultKey, args.resultMime, args.resultBytes, args.provider, args.costUsd, args.shareToken, args.shareExpiresAt.toISOString(), args.finishedAt.toISOString()],
+      where id = $1 and ($10::boolean is not true or status = 'running')
+      returning id`,
+    [id, args.resultKey, args.resultMime, args.resultBytes, args.provider, args.costUsd, args.shareToken, args.shareExpiresAt.toISOString(), args.finishedAt.toISOString(), opts.onlyRunning === true],
   );
+  return rows.length > 0;
 }
 
-export async function markRenderFailed(sql: SqlRunner, id: string, args: { code: string; message: string; finishedAt: Date }): Promise<void> {
-  await sql.query(
-    `update render_jobs set status = 'failed', error_code = $2, error_message = $3, finished_at = $4::timestamptz where id = $1`,
-    [id, args.code, args.message.slice(0, 1000), args.finishedAt.toISOString()],
+/** `onlyRunning`: the render pass's own failures (see `markRenderSucceeded`). Operator and expiry paths end a job from any open state. */
+export async function markRenderFailed(sql: SqlRunner, id: string, args: { code: string; message: string; finishedAt: Date; onlyRunning?: boolean }): Promise<boolean> {
+  const { rows } = await sql.query<{ id: string }>(
+    `update render_jobs set status = 'failed', error_code = $2, error_message = $3, finished_at = $4::timestamptz
+      where id = $1 and ($5::boolean is not true or status = 'running') returning id`,
+    [id, args.code, args.message.slice(0, 1000), args.finishedAt.toISOString(), args.onlyRunning === true],
   );
+  return rows.length > 0;
 }
 
 /** A retryable failure: back to the queue with the reason kept, so the next pass tries again. */
-export async function requeueRenderJob(sql: SqlRunner, id: string, args: { code: string; message: string }): Promise<void> {
-  await sql.query(
-    `update render_jobs set status = 'queued', claimed_at = null, provider_task_id = null, error_code = $2, error_message = $3 where id = $1`,
+export async function requeueRenderJob(sql: SqlRunner, id: string, args: { code: string; message: string }): Promise<boolean> {
+  const { rows } = await sql.query<{ id: string }>(
+    `update render_jobs set status = 'queued', claimed_at = null, provider_task_id = null, error_code = $2, error_message = $3
+      where id = $1 and status = 'running' returning id`,
     [id, args.code, args.message.slice(0, 1000)],
   );
+  return rows.length > 0;
 }
 
 /**

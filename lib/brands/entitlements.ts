@@ -6,6 +6,7 @@ import {
   BRAND_FEATURES,
   DEFAULT_SANDBOX_DENIED,
   SANDBOXED_CLIENT_ORG_IDS,
+  isSandboxedClientOrganization,
   normalizeDenied,
   type BrandFeature,
 } from './features';
@@ -70,6 +71,26 @@ export function isMissingTable(error: unknown): boolean {
 const stamp = (v: unknown): string | null => (v == null ? null : v instanceof Date ? v.toISOString() : String(v));
 
 /**
+ * Which of these organizations are the sandboxed client — by id, and by name. Pages already match
+ * both (`isSandboxedClientOrganization`); the server-side gates here matched the two known ids only,
+ * so an organization created later for the same client under a new id passed every API check.
+ * Keys are lower-cased ids.
+ */
+async function sandboxedAmong(sql: SqlRunner, organizationIds: readonly string[]): Promise<Set<string>> {
+  const out = new Set<string>();
+  const unknown: string[] = [];
+  for (const raw of organizationIds) {
+    const id = raw.toLowerCase();
+    if (SANDBOXED_CLIENT_ORG_IDS.has(id)) out.add(id);
+    else if (uuid.safeParse(raw).success) unknown.push(raw);
+  }
+  if (unknown.length === 0) return out;
+  const { rows } = await sql.query<{ id: string; name: string | null }>('select id, name from brand_organizations where id = any($1::uuid[])', [unknown]);
+  for (const row of rows) if (isSandboxedClientOrganization({ id: String(row.id), name: row.name })) out.add(String(row.id).toLowerCase());
+  return out;
+}
+
+/**
  * Denied features per organization, for the organizations that have an exception only. Outside any
  * transaction on purpose: a missing table is tolerated here, and inside a transaction it could not be.
  */
@@ -77,8 +98,9 @@ export async function loadFeaturePolicies(sql: SqlRunner, organizationIds: reado
   const ids = [...new Set(organizationIds.filter((id) => uuid.safeParse(id).success))];
   if (ids.length === 0) return {};
   const out: Record<string, BrandFeature[]> = {};
+  const sandboxed = await sandboxedAmong(sql, ids);
   for (const id of ids) {
-    if (SANDBOXED_CLIENT_ORG_IDS.has(id.toLowerCase())) {
+    if (sandboxed.has(id.toLowerCase())) {
       out[id] = [...DEFAULT_SANDBOX_DENIED];
     }
   }
@@ -97,7 +119,7 @@ export async function loadFeaturePolicies(sql: SqlRunner, organizationIds: reado
   for (const row of rows) {
     const orgId = String(row.organization_id);
     const dbDenied = deniedOf(row.denied_features);
-    const merged = SANDBOXED_CLIENT_ORG_IDS.has(orgId.toLowerCase())
+    const merged = sandboxed.has(orgId.toLowerCase())
       ? normalizeDenied([...DEFAULT_SANDBOX_DENIED, ...dbDenied])
       : dbDenied;
     if (merged.length > 0) out[orgId] = merged;
@@ -107,7 +129,7 @@ export async function loadFeaturePolicies(sql: SqlRunner, organizationIds: reado
 
 /** The admin form's view of one organization's policy; the empty policy when there is no row. */
 export async function loadFeaturePolicy(sql: SqlRunner, organizationId: string): Promise<BrandFeaturePolicy> {
-  const isSandboxed = SANDBOXED_CLIENT_ORG_IDS.has(organizationId.toLowerCase());
+  const isSandboxed = (await sandboxedAmong(sql, [organizationId])).has(organizationId.toLowerCase());
   const empty: BrandFeaturePolicy = {
     organizationId,
     denied: isSandboxed ? [...DEFAULT_SANDBOX_DENIED] : [],
@@ -152,7 +174,7 @@ export class BrandFeatureDenied extends Error {
  * work share one view of the row.
  */
 export async function assertBrandFeature(sql: SqlRunner, organizationId: string, feature: BrandFeature): Promise<void> {
-  if (SANDBOXED_CLIENT_ORG_IDS.has(organizationId.toLowerCase()) && DEFAULT_SANDBOX_DENIED.includes(feature)) {
+  if (DEFAULT_SANDBOX_DENIED.includes(feature) && (await sandboxedAmong(sql, [organizationId])).has(organizationId.toLowerCase())) {
     throw new BrandFeatureDenied(feature);
   }
   const row = (

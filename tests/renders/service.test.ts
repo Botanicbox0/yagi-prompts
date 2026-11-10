@@ -10,6 +10,7 @@ import { createFakeMailer, type FakeMailer } from '@/lib/notify/mailer-fake';
 import { createEmailRenderNotifier, renderIdempotencyKey, type RenderNotifier } from '@/lib/renders/notify';
 import { loadRenderJob } from '@/lib/renders/repo';
 import { loadRenderExtras } from '@/lib/renders/extras';
+import { renderStage } from '@/components/renders/stage';
 import {
   MAX_ATTEMPTS,
   RENDER_JOBS_PER_DAY,
@@ -395,6 +396,93 @@ describe('the render queue', () => {
     expect((await loadRenderJob(h.sql, created.id))!).toMatchObject({ status: 'succeeded', resultMime: 'video/mp4' });
     const { rows } = await h.sql.query<{ last_used_at: string | null }>('select last_used_at from identity_assets where asset_id = $1', ['asset-1']);
     expect(rows[0]?.last_used_at).not.toBeNull();
+  });
+
+  it('sends a film to the provider once when two passes see the photo turn Active together', async () => {
+    await h.sql.query(`insert into identity_groups (user_id, status, group_id, verified_at) values ($1, 'active', 'grp-1', now())`, [ADMIN_VIEWER.userId]);
+    const created = await enqueue(VIDEO_TEMPLATE, '9:16');
+    if (!created.ok) throw new Error(created.code);
+    const bank = { status: 'Processing' as ArkAssetStatus, created: 0 };
+    const assets = fakeAssets(bank);
+    const bankStore = { ...store, url: async () => 'https://store.test/photo.jpg' };
+    let tasks = 0;
+    const ark: ArkClient = {
+      async createVideoTask() {
+        tasks += 1;
+        // A slow create, so the other pass is well inside its own turn before this one records the task.
+        await new Promise((resolve) => setTimeout(resolve, 20));
+        return { id: `cgt-${tasks}` };
+      },
+      async getVideoTask() {
+        return task('queued');
+      },
+    };
+    const doFetch: typeof fetch = async () => new Response(VIDEO_BYTES, { status: 200, headers: { 'content-type': 'video/mp4' } });
+    await runRenderPass(deps({ ark, fetch: doFetch }, { assets, store: bankStore }), { jobId: created.id });
+    expect((await loadRenderJob(h.sql, created.id))!.providerTaskId).toBe('asset:asset-1');
+
+    // The owner's open page, a provider callback and the tick all poll the same parked job.
+    bank.status = 'Active';
+    const pass = () => runRenderPass(deps({ ark, fetch: doFetch }, { assets, store: bankStore }), { limit: 0 });
+    await Promise.all([pass(), pass(), pass()]);
+
+    expect(tasks).toBe(1);
+    expect((await loadRenderJob(h.sql, created.id))!).toMatchObject({ status: 'running', providerTaskId: 'cgt-1' });
+  });
+
+  it('keeps a delivered film delivered when an overlapping poll of the same task fails afterwards', async () => {
+    await h.sql.query(`insert into identity_groups (user_id, status, group_id, verified_at) values ($1, 'active', 'grp-1', now())`, [ADMIN_VIEWER.userId]);
+    const created = await enqueue(VIDEO_TEMPLATE, '9:16');
+    if (!created.ok) throw new Error(created.code);
+    const assets = fakeAssets({ status: 'Active', created: 0 });
+    const bankStore = { ...store, url: async () => 'https://store.test/photo.jpg' };
+    let state: ArkTask = task('queued');
+    const ark: ArkClient = { async createVideoTask() { return { id: 'cgt-1' }; }, async getVideoTask() { return state; } };
+    let downloads = 0;
+    // The first pass downloads the film; the second one's link is refused a moment later.
+    const doFetch: typeof fetch = async () => {
+      downloads += 1;
+      if (downloads === 1) return new Response(VIDEO_BYTES, { status: 200, headers: { 'content-type': 'video/mp4' } });
+      await new Promise((resolve) => setTimeout(resolve, 40));
+      return new Response('expired', { status: 403 });
+    };
+    await runRenderPass(deps({ ark, fetch: doFetch }, { assets, store: bankStore }), { jobId: created.id });
+    expect((await loadRenderJob(h.sql, created.id))!).toMatchObject({ status: 'running', providerTaskId: 'cgt-1' });
+    state = task('succeeded', 'https://ark.example/out.mp4');
+
+    const pass = () => runRenderPass(deps({ ark, fetch: doFetch }, { assets, store: bankStore }), { limit: 0 });
+    const reports = await Promise.all([pass(), pass()]);
+
+    expect(downloads).toBe(2);
+    expect((await loadRenderJob(h.sql, created.id))!).toMatchObject({ status: 'succeeded', resultMime: 'video/mp4', errorCode: null });
+    expect(reports.reduce((sum, report) => sum + report.failed, 0)).toBe(0);
+  });
+
+  it('lets a later pass take over a parked job whose dispatching pass died', async () => {
+    await h.sql.query(`insert into identity_groups (user_id, status, group_id, verified_at) values ($1, 'active', 'grp-1', now())`, [ADMIN_VIEWER.userId]);
+    const created = await enqueue(VIDEO_TEMPLATE, '9:16');
+    if (!created.ok) throw new Error(created.code);
+    const bank = { status: 'Processing' as ArkAssetStatus, created: 0 };
+    const assets = fakeAssets(bank);
+    const bankStore = { ...store, url: async () => 'https://store.test/photo.jpg' };
+    let tasks = 0;
+    const ark: ArkClient = { async createVideoTask() { tasks += 1; return { id: `cgt-${tasks}` }; }, async getVideoTask() { return task('queued'); } };
+    await runRenderPass(deps({ ark }, { assets, store: bankStore }), { jobId: created.id });
+    bank.status = 'Active';
+
+    // A pass claimed the dispatch a minute ago and never came back.
+    const minuteAgo = NOW.getTime() - 60_000;
+    await h.sql.query(`update render_jobs set provider_task_id = $2 where id = $1`, [created.id, `asset:asset-1#${minuteAgo}`]);
+    await runRenderPass(deps({ ark }, { assets, store: bankStore }), { limit: 0 });
+    expect(tasks).toBe(0);
+    expect(renderStage((await loadRenderJob(h.sql, created.id))!)).toBe('check');
+
+    // Past the lease (longer than any function can run), the job is free again.
+    const longAgo = NOW.getTime() - 11 * 60_000;
+    await h.sql.query(`update render_jobs set provider_task_id = $2, claimed_at = $3::timestamptz where id = $1`, [created.id, `asset:asset-1#${longAgo}`, new Date(longAgo).toISOString()]);
+    await runRenderPass(deps({ ark }, { assets, store: bankStore }), { limit: 0 });
+    expect(tasks).toBe(1);
+    expect((await loadRenderJob(h.sql, created.id))!).toMatchObject({ status: 'running', providerTaskId: 'cgt-1' });
   });
 
   it('automatically attaches the beauty product as Image 2 after the verified customer face, even after a title/slug edit', async () => {

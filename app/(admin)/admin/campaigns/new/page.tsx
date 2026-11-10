@@ -6,7 +6,7 @@ import { ADMIN_CAMPAIGNS_PATH } from '@/lib/campaigns/links';
 import { AdminShell, BUTTON_PRIMARY, OpForm, OutcomeBanner } from '@/components/admin/chrome';
 import { CampaignFields } from '@/components/admin/campaign-fields';
 import { loadCampaignPrefill } from '@/components/admin/campaign-prefill';
-import { getViewer } from '@/lib/auth/viewer';
+import { getViewer, requireAdmin } from '@/lib/auth/viewer';
 import { interpolate } from '@/lib/i18n/format';
 
 /**
@@ -23,6 +23,9 @@ const one = (params: SearchParams, key: string): string | undefined => {
 };
 
 export default async function NewCampaignPage({ searchParams }: { searchParams: Promise<SearchParams> }) {
+  // The layout's check is not enough on its own: a client navigation request can ask for this page
+  // segment alone, and then the layout does not run. Every admin page verifies the admin itself.
+  await requireAdmin();
   const [locale, params, sql, viewer] = await Promise.all([getLocaleFromHeaders(), searchParams, getSqlRunner(), getViewer()]);
   const dict = getDictionary(locale);
   const a = dict.admin;
