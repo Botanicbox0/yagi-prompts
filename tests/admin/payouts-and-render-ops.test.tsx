@@ -5,6 +5,8 @@ import type { ReactNode } from "react";
 import type { SqlRunner } from "@/lib/db/sql-runner";
 
 const db = vi.hoisted(() => ({ sql: null as SqlRunner | null }));
+// Each admin page verifies the admin itself; these tests render the page as one.
+vi.mock("@/lib/auth/viewer", () => ({ requireAdmin: async () => ({ isAdmin: true }) }));
 vi.mock("@/lib/db/connect", () => ({ getSqlRunner: async () => db.sql }));
 vi.mock("@/lib/i18n/server", () => ({ getLocaleFromHeaders: async () => "ko" }));
 vi.mock("@/lib/routing/request-surface", () => ({

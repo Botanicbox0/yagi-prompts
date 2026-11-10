@@ -1,3 +1,4 @@
+import { requireAdmin } from '@/lib/auth/viewer';
 import { PublicLink } from '@/components/admin/public-link';
 import { notFound } from 'next/navigation';
 import { getSqlRunner } from '@/lib/db/connect';
@@ -89,6 +90,9 @@ export default async function AdminPromptItemPage({
   params: Promise<{ id: string }>;
   searchParams: Promise<SearchParams>;
 }) {
+  // The layout's check is not enough on its own: a client navigation request can ask for this page
+  // segment alone, and then the layout does not run. Every admin page verifies the admin itself.
+  await requireAdmin();
   const [locale, { id }, query, sql] = await Promise.all([
     getLocaleFromHeaders(),
     params,

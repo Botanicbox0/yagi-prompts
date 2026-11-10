@@ -1,3 +1,4 @@
+import { requireAdmin } from "@/lib/auth/viewer";
 import { getSqlRunner } from "@/lib/db/connect";
 import { getDictionary } from "@/lib/i18n/dictionaries";
 import { getLocaleFromHeaders } from "@/lib/i18n/server";
@@ -19,6 +20,9 @@ import { formatAdminTime, formatCount, formatKrw, shortId } from "@/lib/admin/fo
 export const dynamic = "force-dynamic";
 
 export default async function PaymentChecksPage() {
+  // The layout's check is not enough on its own: a client navigation request can ask for this page
+  // segment alone, and then the layout does not run. Every admin page verifies the admin itself.
+  await requireAdmin();
   const [locale, sql] = await Promise.all([getLocaleFromHeaders(), getSqlRunner()]);
   const dict = getDictionary(locale);
   const a = dict.admin;
