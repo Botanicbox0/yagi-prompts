@@ -175,7 +175,7 @@ export const studioLayersKo: typeof studioLayersEn = {
   zoomLevel: "배율 {percent}",
   reset: "처음부터",
   save: "저장하기",
-  restored: "지난번 편집을 이어서 열었어요.",
+  restored: "지난번 편집을 불러왔어요.",
   resetDone: "처음부터 시작해요. 실행 취소를 누르면 되돌아가요.",
 
   add: {
@@ -315,7 +315,7 @@ export const studioLayersKo: typeof studioLayersEn = {
   },
 
   confirm: {
-    title: "편집을 닫을까요?",
+    title: "꾸미기를 닫을까요?",
     body: "아직 저장하지 않았어요. 지금까지 한 편집은 이 기기에 남아 있어서 다시 열면 이어서 할 수 있어요.",
     keep: "계속 편집하기",
     close: "닫기",
