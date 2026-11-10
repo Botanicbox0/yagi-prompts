@@ -5,6 +5,7 @@
  *
  * The client-safe mention helpers live in `./mentions` (import that file directly from the browser).
  */
+import { blueprintShape, blueprintShots, isBlueprint } from './blueprint';
 import { composeFallbackPrompt } from './fallback';
 import { callGeminiJson, inlinePart, studioGeminiConfig, type GeminiPart } from './gemini';
 import { effectiveSeconds, keepPhrase, planShots, type PlannedShot } from './lines';
@@ -69,7 +70,13 @@ function payload(input: EnhanceInput, binding: Binding, seconds: number | null, 
           keep: keepPhrase(video.keep) || null,
           change: video.change?.trim() ? mapCustomerMentions(video.change.trim(), binding.bound) : null,
           reference: video.sheet
-            ? { seconds: video.sheet.seconds, look: video.sheet.look, sound: video.sheet.audio }
+            ? {
+                seconds: video.sheet.seconds,
+                look: video.sheet.look,
+                sound: video.sheet.audio,
+                ...(video.sheet.subjects ? { subjects: video.sheet.subjects } : {}),
+                ...(video.sheet.setting ? { setting: video.sheet.setting } : {}),
+              }
             : null,
           shots: shots.length ? shots : null,
         }
@@ -106,10 +113,16 @@ export async function enhancePrompt(input: EnhanceInput, deps: EnhanceDeps): Pro
   try {
     const config = studioGeminiConfig(deps.env);
     if (!config) return fallback('no_key');
-    if (!input.prompt.trim() && !input.video?.change?.trim()) return fallback('empty_prompt');
+    // A blueprint with nothing to change is still a remake to write: the blueprint is the request.
+    const blueprint = isBlueprint(input);
+    if (!input.prompt.trim() && !input.video?.change?.trim() && !blueprint) return fallback('empty_prompt');
     const binding = bindReferences(input);
     const seconds = effectiveSeconds(input.kind, input.video);
-    const shots = input.kind === 'video_remix' && input.video?.method !== 'edit' ? planShots(seconds, input.video) : [];
+    const shots = blueprint
+      ? blueprintShots(seconds, input.video)
+      : input.kind === 'video_remix' && input.video?.method !== 'edit'
+        ? planShots(seconds, input.video)
+        : [];
     const raw = await callGeminiJson(config, deps.fetch, {
       system: buildSystemInstruction(input, binding, seconds, shots),
       parts: [{ text: JSON.stringify(payload(input, binding, seconds, shots)) }, ...thumbParts(binding)],
@@ -121,6 +134,7 @@ export async function enhancePrompt(input: EnhanceInput, deps: EnhanceDeps): Pro
     if (!parsed.success) return fallback('bad_shape');
     const checked = checkEnhancedPrompt(parsed.data.prompt, input, binding);
     if (!checked.ok) return fallback(checked.reason);
+    if (blueprint && !blueprintShape(checked.prompt, seconds, input.video?.keep)) return fallback('blueprint_shape');
     return {
       prompt: checked.prompt,
       notes: cleanNotes(parsed.data.notes, input.locale, MODEL_NOTES[input.locale]),

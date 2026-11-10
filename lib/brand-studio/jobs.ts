@@ -23,7 +23,7 @@ import { lockOrganization, requireCreate, studioSeat, StudioDenied } from './acc
 import { dropWorkingFiles, LEASE_SECONDS } from './job-store';
 import { routeJob } from './lanes';
 import { planFinal, planJob, type JobPlan } from './plan';
-import { brandSummary, enhanceInputOf, enhanceReferences, filmSheetFor, keepSheet, readSheet, runEnhancer, storedSheet } from './prepare';
+import { brandSummary, enhanceInputOf, enhanceReferences, keepSheet, readSheet, remixContext, runEnhancer, storedSheet } from './prepare';
 import { jobView, openJobCount, readyAsset } from './repo';
 import type { JobRow, OutputRow, StudioDeps } from './types';
 import { reserveAllowance } from './usage';
@@ -144,16 +144,17 @@ export async function previewStudioPrompt(deps: StudioDeps, viewer: Viewer, raw:
   );
   if ('ok' in ready) return ready;
   const { seat, plan } = ready;
-  const film = plan.kind === 'video_remix' ? plan.resolved.find((r) => r.kind === 'video') : undefined;
-  const sheet = film
-    ? await filmSheetFor(deps, { organizationId: seat.organizationId, assetId: plan.refs[film.index - 1]?.assetId ?? null, ref: film, locale })
-    : null;
+  // A remix is previewed exactly as it will be sent: the same reading and, for a blueprint, no video token.
+  const remix =
+    plan.kind === 'video_remix'
+      ? await remixContext(deps, { organizationId: seat.organizationId, params: plan.params, refs: plan.refs, resolved: plan.resolved, locale })
+      : null;
   const input = enhanceInputOf(
     { kind: plan.kind, prompt: plan.prompt, params: plan.params },
     plan.model,
-    await enhanceReferences(deps, plan.resolved),
+    await enhanceReferences(deps, remix?.resolved ?? plan.resolved),
     await brandSummary(deps, seat.organizationId, seat.organizationName),
-    sheet,
+    remix?.sheet ?? null,
   );
   const result = await runEnhancer(deps, input);
   return { ok: true, prompt: result.prompt, notes: result.notes };
@@ -173,8 +174,9 @@ export async function analyzeStudioFilm(deps: StudioDeps, viewer: Viewer, raw: u
   );
   if ('ok' in asset) return asset;
   const locale = localeOf(viewer);
-  // Read once per asset and language: the kept reading answers every later call (./prepare.ts).
-  const kept = storedSheet(asset, locale);
+  const depth = v.depth ?? 'basic';
+  // Read once per asset, language and depth: the kept reading answers every later call (./prepare.ts).
+  const kept = storedSheet(asset, locale, depth);
   if (kept) return { ok: true, sheet: kept };
   const sheet = await readSheet(
     deps,
@@ -183,7 +185,8 @@ export async function analyzeStudioFilm(deps: StudioDeps, viewer: Viewer, raw: u
       label: 'Video 1', durationMs: asset.duration_ms, width: asset.width, height: asset.height,
     },
     locale,
+    depth,
   );
-  if (sheet) await keepSheet(deps.sql, v.organizationId, asset.id, locale, sheet);
+  if (sheet) await keepSheet(deps.sql, v.organizationId, asset.id, locale, sheet, depth);
   return { ok: true, sheet };
 }

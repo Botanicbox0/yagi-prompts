@@ -8,6 +8,7 @@
  * Client-safe: zod and types only (no env, no db).
  */
 import { z } from 'zod';
+import { STUDIO_IMAGE_QUALITIES, type StudioImageQuality } from './models';
 
 /* ---------------------------------------------------------------- vocab */
 
@@ -50,13 +51,31 @@ export const STUDIO_JOB_OPEN_STATUSES: readonly StudioJobStatus[] = ['held', 'qu
 export const STUDIO_AUDIO_MODES = ['native', 'ambient', 'silent'] as const;
 export type StudioAudioMode = (typeof STUDIO_AUDIO_MODES)[number];
 
-/** How a reference video is used. `edit` keeps the footage and changes what was asked; `reference` makes a new take that follows it. */
-export const STUDIO_REMIX_METHODS = ['edit', 'reference'] as const;
+/**
+ * How a reference video is used.
+ * `edit`       keeps the footage and changes what was asked (the video is sent to the provider)
+ * `reference`  makes a new take that follows it (the video is sent to the provider)
+ * `blueprint`  the video is only read: its shot table becomes the blueprint and the new take is made from
+ *              that text (plus reference images) alone, so the video never reaches the provider
+ *              (docs/BRAND-STUDIO-V3.md §6)
+ */
+export const STUDIO_REMIX_METHODS = ['edit', 'reference', 'blueprint'] as const;
 export type StudioRemixMethod = (typeof STUDIO_REMIX_METHODS)[number];
 
 /** What to carry over from a reference video. */
 export const STUDIO_KEEP_KEYS = ['camera', 'timing', 'composition', 'motion', 'look'] as const;
 export type StudioKeepKey = (typeof STUDIO_KEEP_KEYS)[number];
+
+/**
+ * How closely a reference video is read. `basic` is the sheet the remix panel always had; `blueprint`
+ * adds what a remake from text needs (how each shot hands over, the camera split into travel / turn /
+ * zoom, who and what is on screen and how many). Each depth is read and kept separately.
+ */
+export const FILM_DEPTHS = ['basic', 'blueprint'] as const;
+export type FilmDepth = (typeof FILM_DEPTHS)[number];
+
+/** Bounds of a shot table a customer sends back (lib/brand-studio/reference-video.ts cleans it). */
+export const STUDIO_SHOT_LIMITS = { shotsMax: 40, fieldMax: 200, secondsMax: 600 } as const;
 
 /** Codes a customer can act on. Anything else surfaces as `failed`. */
 export const STUDIO_ERROR_CODES = [
@@ -161,6 +180,8 @@ export const ImageJobSchema = z.object({
   aspect: z.string().max(8),
   resolution: z.string().max(8),
   count: z.number().int().min(1).max(STUDIO_LIMITS.imageCountMax).default(1),
+  /** Only for models that declare `qualities` (GPT Image); the planner refuses it for any other. */
+  quality: z.enum(STUDIO_IMAGE_QUALITIES).optional(),
 });
 
 export const RegionEditJobSchema = z.object({
@@ -172,6 +193,8 @@ export const RegionEditJobSchema = z.object({
     .object({ assetId: Id.optional(), outputId: Id.optional() })
     .refine((s) => (s.assetId === undefined) !== (s.outputId === undefined), { error: 'assetId or outputId' }),
   box: RegionBoxSchema,
+  /** As on an image job: only for an edit model that declares `qualities`. */
+  quality: z.enum(STUDIO_IMAGE_QUALITIES).optional(),
 });
 
 const VideoBase = {
@@ -189,6 +212,25 @@ export const VideoJobSchema = z.object({
   seconds: z.number().int().min(4).max(15),
 });
 
+const ShotText = z.string().trim().max(STUDIO_SHOT_LIMITS.fieldMax);
+const ShotTime = z.number().min(0).max(STUDIO_SHOT_LIMITS.secondsMax);
+
+/** One row of a reference video's shot table, in seconds of the reference. */
+export const FilmShotSchema = z
+  .object({
+    start: ShotTime,
+    end: ShotTime,
+    framing: ShotText,
+    camera: ShotText,
+    action: ShotText,
+    /** How this shot hands over to the next ("hard cut", "dissolve", "continuous"). */
+    transition: ShotText.optional(),
+    /** The camera split apart: body travel, pan/tilt/roll, lens zoom ("none" when it does not happen). */
+    move: z.object({ travel: ShotText, turn: ShotText, zoom: ShotText }).optional(),
+  })
+  .refine((s) => s.end - s.start >= 0.1, { error: 'shot shorter than 0.1 s' });
+export type FilmShot = z.infer<typeof FilmShotSchema>;
+
 export const VideoRemixJobSchema = z.object({
   kind: z.literal('video_remix'),
   ...VideoBase,
@@ -199,6 +241,8 @@ export const VideoRemixJobSchema = z.object({
   change: z.string().trim().max(STUDIO_LIMITS.promptMax).default(''),
   /** Ignored for `edit` (the result follows the source length). */
   seconds: z.number().int().min(4).max(15).optional(),
+  /** The shot table as the customer left it (reference seconds). Used by `blueprint` and `reference`; ignored for `edit`. */
+  shots: z.array(FilmShotSchema).min(1).max(STUDIO_SHOT_LIMITS.shotsMax).optional(),
 });
 
 export const VideoFinalJobSchema = z.object({
@@ -252,8 +296,8 @@ export const AssetCompleteSchema = z.object({
   seconds: z.number().positive().max(600).optional(),
 });
 
-/** Read a reference video already in the library. */
-export const FilmAnalyzeSchema = z.object({ organizationId: Id, assetId: Id });
+/** Read a reference video already in the library. `depth` defaults to `basic`. */
+export const FilmAnalyzeSchema = z.object({ organizationId: Id, assetId: Id, depth: z.enum(FILM_DEPTHS).optional() });
 
 export const AssetRefSchema = z.object({ organizationId: Id, assetId: Id });
 export const OutputRefSchema = z.object({ organizationId: Id, outputId: Id });
@@ -355,6 +399,8 @@ export interface StudioJobView {
   expected: number;
   aspect: string | null;
   resolution: string | null;
+  /** Image and partial-edit runs on a model with qualities: the quality it ran at, so "설정 다시 쓰기" restores it. */
+  quality?: StudioImageQuality | null;
   seconds: number | null;
   audio: StudioAudioMode | null;
   /** References as sent, so "use these settings again" can rebuild the tray. */
@@ -369,6 +415,8 @@ export interface StudioJobView {
   method: StudioRemixMethod | null;
   keep: StudioKeepKey[];
   change: string | null;
+  /** Remix only: the shot table the customer sent, so the reference-video panel can be set up again. */
+  shots?: FilmShot[];
   outputs: StudioOutputView[];
   /** Usage this run is expected to take from the monthly allowance, in KRW. */
   estimateKrw: number;
@@ -382,11 +430,24 @@ export interface StudioJobView {
 export interface FilmSheet {
   seconds: number;
   aspect: string;
-  shots: Array<{ start: number; end: number; framing: string; camera: string; action: string }>;
+  /** `transition` and `move` are filled by a `blueprint` reading only. */
+  shots: Array<{
+    start: number;
+    end: number;
+    framing: string;
+    camera: string;
+    action: string;
+    transition?: string;
+    move?: { travel: string; turn: string; zoom: string };
+  }>;
   look: { lighting: string; palette: string; texture: string };
   audio: { music: boolean; speech: boolean; effects: string };
   /** Two or three plain sentences in the viewer's language. */
   summary: string;
+  /** `blueprint` reading only: every person and object that matters, with how many appear (ids "A", "B", …). */
+  subjects?: Array<{ id: string; what: string; count: number }>;
+  /** `blueprint` reading only: where it happens, one sentence. */
+  setting?: string;
 }
 
 export interface StudioAllowanceView {

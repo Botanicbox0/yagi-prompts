@@ -1,64 +1,123 @@
+"use client";
 /**
- * The reference tray: numbered chips in order ("이미지 1", "영상 1"), then "+", all on one row (with
- * one quiet hint while it is empty). A chip opens a small popover for its role, what to take and what
- * to leave out, and in a video run whether a picture opens or closes the shot. Drops land on the whole
- * dock; the tray only shows that it will take them.
+ * The reference row of the prompt bar (docs/BRAND-STUDIO-V3.md §4): small square thumbnails, each
+ * with just its number underneath (1, 2, 3 … per kind, the number the prompt can name), then "+".
+ * Hover or focus shows ✕; a thumbnail is dragged to reorder (or moved with Alt + arrow keys); a press
+ * opens a small popover for its role, what to take and what to leave out, and in a video run whether a
+ * picture opens or closes the shot. Drops of new references land on the whole bar.
  */
-import { useEffect, useId, useLayoutEffect, useRef, useState } from "react";
+import { useEffect, useId, useLayoutEffect, useRef, useState, type DragEvent } from "react";
 import { STUDIO_ASSET_ROLES, STUDIO_LIMITS, type StudioAssetRole } from "@/lib/brand-studio/contracts";
 import type { StudioMedium } from "@/lib/brand-studio/models";
 import { fill, type StudioCopy } from "./copy";
 import { StudioIcon } from "./icons";
-import type { TrayItem } from "./refs";
+import { TRAY_MOVE_TYPE, trayNumbers, type TrayItem } from "./refs";
 
 export interface TrayProps {
   items: readonly TrayItem[];
+  /** Per-kind labels ("이미지 1"), for screen readers and the popover title. */
   labels: readonly string[];
   medium: StudioMedium;
   copy: StudioCopy;
   dropActive: boolean;
   uploading: readonly string[];
-  /** Opens the chip popover for this key first (tests and "use these settings again"). */
+  /** Opens the popover for this key first (tests and "설정 다시 쓰기"). */
   initialOpen?: string | null;
   onUpdate(key: string, patch: Partial<Pick<TrayItem, "role" | "use" | "avoid" | "frame">>): void;
   onRemove(key: string): void;
+  onMove(from: number, to: number): void;
   onBrowse(): void;
 }
 
-function ChipMedia({ item }: { item: TrayItem }) {
-  if (item.thumbUrl || item.kind === "image") return <img src={item.thumbUrl ?? item.url} alt="" />;
+function ThumbMedia({ item }: { item: TrayItem }) {
+  if (item.thumbUrl || item.kind === "image") return <img src={item.thumbUrl ?? item.url} alt="" draggable={false} />;
   if (item.kind === "video") return <video src={`${item.url}#t=0.1`} muted playsInline preload="metadata" tabIndex={-1} aria-hidden="true" />;
-  return <span className="bs-chip-dot" aria-hidden="true" />;
+  return <span className="bs-thumb-audio" aria-hidden="true" />;
 }
 
-export function Tray({ items, labels, medium, copy, dropActive, uploading, initialOpen = null, onUpdate, onRemove, onBrowse }: TrayProps) {
+export function Tray({ items, labels, medium, copy, dropActive, uploading, initialOpen = null, onUpdate, onRemove, onMove, onBrowse }: TrayProps) {
   const t = copy.tray;
   const [open, setOpen] = useState<string | null>(initialOpen);
+  const [dragging, setDragging] = useState<number | null>(null);
+  const [over, setOver] = useState<number | null>(null);
+  const [said, setSaid] = useState("");
   const base = useId();
+  const numbers = trayNumbers(items);
+  const empty = !items.length && !uploading.length;
+
+  const dropAt = (event: DragEvent, to: number) => {
+    if (!event.dataTransfer.types.includes(TRAY_MOVE_TYPE)) return;
+    event.preventDefault();
+    event.stopPropagation();
+    const from = Number(event.dataTransfer.getData(TRAY_MOVE_TYPE));
+    setDragging(null);
+    setOver(null);
+    if (Number.isInteger(from) && from !== to) onMove(from, to);
+  };
+
   return (
-    <div className="bs-tray" data-studio-tray data-drop-target={dropActive ? "" : undefined} aria-label={t.label} role="group">
+    <div className="bs-tray" data-studio-tray data-empty={empty ? "" : undefined} data-drop-target={dropActive ? "" : undefined} aria-label={t.label} role="group">
       <ul className="bs-tray-list">
         {items.map((item, i) => {
           const label = labels[i] ?? "";
           const popoverId = `${base}-ref-${i}`;
           const expanded = open === item.key;
           return (
-            <li key={item.key} className="bs-tray-item" data-ref-kind={item.kind}>
+            <li
+              key={item.key}
+              className="bs-tray-item"
+              data-ref-kind={item.kind}
+              data-dragging={dragging === i ? "" : undefined}
+              data-drop-before={over === i && dragging !== null && dragging !== i ? "" : undefined}
+              onDragOver={(event) => {
+                if (!event.dataTransfer.types.includes(TRAY_MOVE_TYPE)) return;
+                event.preventDefault();
+                event.dataTransfer.dropEffect = "move";
+                setOver(i);
+              }}
+              onDrop={(event) => dropAt(event, i)}
+            >
               <button
                 type="button"
-                className="bs-chip"
+                className="bs-thumb"
                 data-selected={expanded ? "" : undefined}
+                draggable
+                aria-label={fill(t.edit, { label })}
+                aria-describedby={`${base}-move`}
                 aria-expanded={expanded}
                 aria-haspopup="dialog"
                 aria-controls={expanded ? popoverId : undefined}
                 onClick={() => setOpen(expanded ? null : item.key)}
+                onDragStart={(event) => {
+                  event.dataTransfer.setData(TRAY_MOVE_TYPE, String(i));
+                  event.dataTransfer.effectAllowed = "move";
+                  setDragging(i);
+                }}
+                onDragEnd={() => {
+                  setDragging(null);
+                  setOver(null);
+                }}
+                onKeyDown={(event) => {
+                  if (!event.altKey || (event.key !== "ArrowLeft" && event.key !== "ArrowRight")) return;
+                  event.preventDefault();
+                  const to = event.key === "ArrowLeft" ? i - 1 : i + 1;
+                  if (to < 0 || to >= items.length) return;
+                  onMove(i, to);
+                  setSaid(fill(t.moved, { label, n: to + 1 }));
+                }}
               >
-                <ChipMedia item={item} />
-                <span className="bs-chip-label">{label}</span>
-                {item.role && <span className="bs-chip-role">{copy.roles[item.role]}</span>}
-                {item.kind === "image" && medium === "video" && item.frame && (
-                  <span className="bs-chip-role">{item.frame === "start" ? t.frameStart : t.frameEnd}</span>
+                <ThumbMedia item={item} />
+                {item.kind !== "image" && (
+                  <span className="bs-thumb-kind" aria-hidden="true">
+                    <StudioIcon name={item.kind === "video" ? "play" : "spark"} />
+                  </span>
                 )}
+              </button>
+              <span className="bs-thumb-n bs-num" aria-hidden="true">
+                {numbers[i]}
+              </span>
+              <button type="button" className="bs-thumb-x" aria-label={fill(t.removeOne, { label })} onClick={() => onRemove(item.key)}>
+                <StudioIcon name="close" />
               </button>
               {expanded && (
                 <RefPopover
@@ -80,16 +139,25 @@ export function Tray({ items, labels, medium, copy, dropActive, uploading, initi
         })}
         {uploading.map((name) => (
           <li key={`up-${name}`} className="bs-tray-item" data-state="pending">
-            <span className="bs-chip" aria-live="polite">{fill(t.uploading, { name })}</span>
+            <span className="bs-thumb" data-state="pending" role="status" aria-label={fill(t.uploading, { name })} />
+            <span className="bs-thumb-n" aria-hidden="true">
+              …
+            </span>
           </li>
         ))}
-        <li>
-          <button type="button" className="bs-chip bs-chip-add" data-variant="ghost" onClick={onBrowse} aria-label={copy.assets.toggle}>
+        <li className="bs-tray-item">
+          <button type="button" className="bs-thumb bs-thumb-add" onClick={onBrowse} aria-label={copy.dock.addRef} title={copy.dock.addRef}>
             <StudioIcon name="plus" />
           </button>
         </li>
-        {!items.length && !uploading.length && <li className="bs-tray-hint">{dropActive ? t.drop : t.hint}</li>}
+        {empty && <li className="bs-tray-hint">{dropActive ? t.drop : t.hint}</li>}
       </ul>
+      <span id={`${base}-move`} className="bs-sr">
+        {t.moveHint}
+      </span>
+      <span className="bs-sr" role="status" aria-live="polite">
+        {said}
+      </span>
     </div>
   );
 }
@@ -122,13 +190,13 @@ function RefPopover({
   close.current = onClose;
 
   useEffect(() => first.current?.focus(), []);
-  // Opens upward over the board; when that would run under the workspace bar at the top of the
-  // screen, it opens downward instead (a phone shows it as a bottom sheet either way).
+  // Opens upward over the wall; when that would run under the top of the screen, it opens downward
+  // instead (a phone shows it as a bottom sheet either way).
   useLayoutEffect(() => {
     const rect = box.current?.getBoundingClientRect();
     if (rect && rect.top < 72 && getComputedStyle(box.current!).position === "absolute") setBelow(true);
   }, []);
-  // Escape or a press anywhere outside the chip and the popover closes it.
+  // Escape or a press anywhere outside the thumbnail and the popover closes it.
   useEffect(() => {
     const down = (event: PointerEvent) => {
       const owner = box.current?.parentElement;
@@ -160,6 +228,7 @@ function RefPopover({
         }
       }}
     >
+      <p className="bs-popover-title">{label}</p>
       <label htmlFor={`${fields}-role`}>{t.role}</label>
       <select
         id={`${fields}-role`}

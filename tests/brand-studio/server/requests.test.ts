@@ -43,13 +43,18 @@ function expectValid(request: { endpoint: string; body: Record<string, unknown> 
   for (const [key, param] of schema!) if (param.required) expect(request.body, `${request.endpoint} requires ${key}`).toHaveProperty(key);
 }
 
+/**
+ * Live models whose schemas are in the 2026-11-10 snapshot. GPT Image 2.6 (pixel-sized, read 2026-11-11)
+ * is checked against its own catalogue copy in ./models-gpt-image.test.ts.
+ */
+const SNAPSHOT_MODELS = STUDIO_MODELS.filter((m) => m.availability === 'live' && !('pixels' in m));
 const params = (p: Partial<StudioJobParams> = {}): StudioJobParams => ({ aspect: null, resolution: null, seconds: null, audio: null, count: 1, locale: 'ko', ...p });
 const input = (p: Partial<StudioRequestInput>): StudioRequestInput => ({ kind: 'image', model: 'seedream-5-pro', prompt: 'a bottle on stone', params: params(), images: [], videos: [], ...p });
 const img = (n: number) => `https://media.example.test/st/${String(n).repeat(64).slice(0, 64)}.png`;
 
 describe('the schema file parses', () => {
   it('knows the endpoints the registry names', () => {
-    for (const model of STUDIO_MODELS.filter((m) => m.availability === 'live')) {
+    for (const model of SNAPSHOT_MODELS) {
       for (const endpoint of Object.values(model.endpoints)) expect(SCHEMAS.has(`${model.api.alias}/${endpoint}`), `${model.api.alias}/${endpoint}`).toBe(true);
     }
   });
@@ -70,7 +75,7 @@ describe('image requests', () => {
   });
 
   it('sends the safety checker as true on every Seedream endpoint and never on Gemini (it has no such field)', () => {
-    for (const model of STUDIO_MODELS.filter((m) => m.medium === 'image' && m.availability === 'live')) {
+    for (const model of SNAPSHOT_MODELS.filter((m) => m.medium === 'image')) {
       for (const images of [[], [{ url: img(3) }]]) {
         const request = buildStudioRequest(input({ model: model.id, images, params: params({ aspect: '1:1', resolution: '2K' }) }));
         expectValid(request);

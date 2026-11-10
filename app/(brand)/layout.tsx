@@ -6,7 +6,11 @@ import { getSqlRunner } from '@/lib/db/connect';
 import { loadCachedBrandWorkspaceScope } from '@/components/brand-workspace/scope';
 import "@/app/globals.css";
 import "./workspace.css";
+import "./rail.css";
 import "./studio-v2.css";
+import { cookies } from "next/headers";
+import { brandStudioV2Open } from "@/lib/flags";
+import { RAIL_COOKIE, railCookieExpanded } from "@/components/brand-workspace/rail-model";
 import { WorkspaceLanguage } from '@/components/brand-workspace/language';
 import { WorkspaceNavigation } from '@/components/brand-workspace/navigation';
 import { WorkspaceIdentity } from '@/components/brand-workspace/identity';
@@ -44,6 +48,10 @@ export default async function BrandLayout({
   const sql=viewer.userId?await getSqlRunner():null;
   // Choices only (ids, names, roles, logo routes): deduplicated per server render with the child page.
   const scope=sql?await loadCachedBrandWorkspaceScope(sql,await getVerifiedEmail(viewer.userId),viewer):null;
+  // Studio v2 brings the left rail (docs/BRAND-STUDIO-V3.md §3); the navigation still keeps a sandboxed or
+  // generation-closed brand on its own sidebar. The cookie only mirrors the rail width for the first paint.
+  const studioV2=brandStudioV2Open();
+  const railExpanded=studioV2&&scope?railCookieExpanded((await cookies()).get(RAIL_COOKIE)?.value):false;
   return (
     <html lang={locale} className={fontVariables} data-brand-workspace>
       <head>
@@ -66,7 +74,7 @@ export default async function BrandLayout({
             {/* URL-derived: dynamic render resolves this on the server, the empty fallback never shows. */}
             <Suspense fallback={null}>
               {scope?<WorkspaceIdentity scope={scope} copy={b.identity} roles={b.roles}/>:<p className="bw-kicker">{b.title}</p>}
-              <WorkspaceNavigation home={b.home} members={b.members} settings={b.managed.settings} library={b.managed.library} studio={b.productionStudio.title} identity={b.identityLayer.nav} creators={influencersOpen() ? b.creatorPool.nav : undefined} scope={scope}/>
+              <WorkspaceNavigation home={b.home} members={b.members} settings={b.managed.settings} library={b.managed.library} studio={b.productionStudio.title} identity={b.identityLayer.nav} creators={influencersOpen() ? b.creatorPool.nav : undefined} scope={scope} studioV2={studioV2} shell={d.studioShell} locale={locale==="en"?"en":"ko"} railExpanded={railExpanded}/>
             </Suspense>
             <div className="bw-sidebar-utilities">
               <WorkspaceLanguage locale={locale} label={d.nav.localeToggle} compact applyLabel={b.languageApply}/>

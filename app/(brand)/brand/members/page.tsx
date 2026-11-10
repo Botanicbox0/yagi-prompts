@@ -7,12 +7,38 @@ import { brandScope } from "@/components/brand-workspace/scope";
 import { BrandUnavailable } from "@/components/brand-workspace/brand-unavailable";
 import { scopedHref } from "@/lib/brands/workspace/selection";
 import { StaffNotice, adminOrganizationHref } from "@/components/brand-workspace/staff-notice";
+import { MemberUsageSection } from "@/components/brand-workspace/rail-usage";
+import { brandStudioV2Open } from "@/lib/flags";
+import { studioV2Visible } from "@/lib/brand-studio/visibility";
+import { studioEnv } from "@/lib/brand-studio/env";
+import { allowanceView, loadAllowance } from "@/lib/brand-studio/usage";
+import { memberUsage } from "@/lib/brand-studio/member-usage";
+import type { SqlRunner } from "@/lib/db/sql-runner";
+
+/**
+ * "이번 달 크레딧 사용" (docs/BRAND-STUDIO-V3.md §3): only while studio v2 is visible for this brand (flag
+ * on, not sandboxed, generation allowed) and its monthly allowance is above 0. The caller has already
+ * authorized the team view. A database without the studio tables hides the section instead of the page.
+ */
+async function teamCreditUsage(sql: SqlRunner, choice: { id: string; name: string; denied?: readonly string[] }) {
+  if (!(brandStudioV2Open() && studioV2Visible(choice, true))) return null;
+  try {
+    const now = new Date();
+    const allowance = await loadAllowance(sql, choice.id, studioEnv(), now);
+    if (!(allowance.capKrw > 0)) return null;
+    return { allowance: allowanceView(allowance), rows: await memberUsage(sql, choice.id, now) };
+  } catch (error) {
+    console.warn("[brand-members] credit usage unavailable", error instanceof Error ? error.message.slice(0, 160) : "unknown");
+    return null;
+  }
+}
+
 export default async function MembersPage({
   searchParams,
 }: {
   searchParams: Promise<{ organizationId?: string | string[] }>;
 }) {
-  const [{ organizationId }, { sql, viewer, verifiedEmail, brandHost, b, locale }] = await Promise.all([
+  const [{ organizationId }, { sql, viewer, verifiedEmail, brandHost, b, locale, dict }] = await Promise.all([
     searchParams,
     brandContext(),
   ]);
@@ -25,6 +51,7 @@ export default async function MembersPage({
   const staff = choice?.role === "studio";
   const team = choice?.role === "owner" || staff ? await loadBrandMembers({ sql, verifiedEmail }, viewer, choice!.id) : null;
   const activeMembers = team ? team.members.filter((m) => m.status === "active") : [];
+  const creditUsage = team && choice ? await teamCreditUsage(sql, choice) : null;
   const orgInitial = (team?.organization.name ?? "B").trim().slice(0, 1).toUpperCase() || "B";
   return (
     <div data-brand-members className="bw-sota-team-shell">
@@ -268,6 +295,18 @@ export default async function MembersPage({
               ))}
             </ul>
           </section>
+
+          {/* Credits each member used this month (studio v2 brands with an allowance only). */}
+          {creditUsage && (
+            <MemberUsageSection
+              rows={creditUsage.rows}
+              members={team.members}
+              allowance={creditUsage.allowance}
+              copy={dict.studioShell.usage}
+              otherOwner={b.otherOwner}
+              locale={isKo ? "ko" : "en"}
+            />
+          )}
 
           {/* 4. Pending & Sent Invitations */}
           {team.invitations.length > 0 && (

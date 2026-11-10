@@ -5,12 +5,12 @@
  * deterministic composer, and a composer failure sends the customer's own words.
  */
 import { confirmedIdentityFor } from '@/lib/brands/identity/service';
-import type { FilmSheet, StudioErrorCode } from './contracts';
+import type { FilmDepth, FilmSheet, FilmShot, StudioErrorCode, StudioReference } from './contracts';
 import { imageInfo } from './files';
 import { studioModel, type StudioImageModel, type StudioModel } from './models';
 import { resolveReferences, type ResolvedRef } from './plan';
 import { StudioDenied } from './access';
-import type { EnhanceInput, EnhanceResult, JobRow, StudioDeps, StudioJobWork } from './types';
+import type { EnhanceInput, EnhanceResult, JobRow, StudioDeps, StudioJobParams, StudioJobWork } from './types';
 
 export class PrepareFailure extends Error {
   constructor(readonly code: StudioErrorCode, readonly detail: string) {
@@ -90,47 +90,60 @@ export async function runEnhancer(deps: Pick<StudioDeps, 'intel' | 'intelDeps' |
   }
 }
 
-export async function readSheet(deps: Pick<StudioDeps, 'intel' | 'intelDeps' | 'media' | 'env'>, ref: ResolvedRef, locale: 'ko' | 'en'): Promise<FilmSheet | null> {
+export async function readSheet(
+  deps: Pick<StudioDeps, 'intel' | 'intelDeps' | 'media' | 'env'>,
+  ref: ResolvedRef,
+  locale: 'ko' | 'en',
+  depth: FilmDepth = 'basic',
+): Promise<FilmSheet | null> {
   try {
     const video =
       deps.media.kind === 'r2'
         ? { url: providerUrl(deps, ref.url) }
         : { bytes: await deps.media.read(ref.key), mime: ref.key.endsWith('.mov') ? 'video/quicktime' : 'video/mp4' };
-    return await deps.intel.readFilm({ video, locale }, deps.intelDeps);
+    return await deps.intel.readFilm(depth === 'basic' ? { video, locale } : { video, locale, depth }, deps.intelDeps);
   } catch {
     return null;
   }
 }
 
-/* A library video is read once per language: the sheet is kept on the asset (`film_sheets`, migration
- * 0077) and reused by the remix panel, the prompt preview and the job that sends the video. A failed
- * reading is not kept, so a later call may try again. Before 0077 the column is missing and every call
- * simply reads afresh. */
+/* A library video is read once per language and depth: the sheet is kept on the asset (`film_sheets`,
+ * migration 0077, keyed "ko" / "en" for the basic reading and "blueprint:ko" / "blueprint:en" for the
+ * deeper one) and reused by the remix panel, the prompt preview and the job. A failed reading is not
+ * kept, so a later call may try again. Before 0077 the column is missing and every call reads afresh. */
 const UNDEFINED_COLUMN = '42703';
 const missingColumn = (error: unknown) => (error as { code?: string } | null)?.code === UNDEFINED_COLUMN;
+const sheetKey = (locale: 'ko' | 'en', depth: FilmDepth) => (depth === 'basic' ? locale : `${depth}:${locale}`);
 
-export function storedSheet(row: { film_sheets?: unknown } | null | undefined, locale: 'ko' | 'en'): FilmSheet | null {
+export function storedSheet(row: { film_sheets?: unknown } | null | undefined, locale: 'ko' | 'en', depth: FilmDepth = 'basic'): FilmSheet | null {
   const all = row?.film_sheets;
-  const sheet = all && typeof all === 'object' ? (all as Record<string, unknown>)[locale] : null;
+  const sheet = all && typeof all === 'object' ? (all as Record<string, unknown>)[sheetKey(locale, depth)] : null;
   return sheet && typeof sheet === 'object' && typeof (sheet as FilmSheet).summary === 'string' ? (sheet as FilmSheet) : null;
 }
 
-async function cachedSheet(sql: StudioDeps['sql'], organizationId: string, assetId: string, locale: 'ko' | 'en'): Promise<FilmSheet | null> {
+async function cachedSheet(sql: StudioDeps['sql'], organizationId: string, assetId: string, locale: 'ko' | 'en', depth: FilmDepth): Promise<FilmSheet | null> {
   try {
     const row = (await sql.query<{ film_sheets: unknown }>('select film_sheets from brand_studio_assets where id = $1 and organization_id = $2', [assetId, organizationId])).rows[0];
-    return storedSheet(row, locale);
+    return storedSheet(row, locale, depth);
   } catch (error) {
     if (missingColumn(error)) return null;
     throw error;
   }
 }
 
-export async function keepSheet(sql: StudioDeps['sql'], organizationId: string, assetId: string, locale: 'ko' | 'en', sheet: FilmSheet): Promise<void> {
+export async function keepSheet(
+  sql: StudioDeps['sql'],
+  organizationId: string,
+  assetId: string,
+  locale: 'ko' | 'en',
+  sheet: FilmSheet,
+  depth: FilmDepth = 'basic',
+): Promise<void> {
   try {
     await sql.query(
       `update brand_studio_assets set film_sheets = coalesce(film_sheets, '{}'::jsonb) || jsonb_build_object($3::text, $4::jsonb)
         where id = $1 and organization_id = $2`,
-      [assetId, organizationId, locale, JSON.stringify(sheet)],
+      [assetId, organizationId, sheetKey(locale, depth), JSON.stringify(sheet)],
     );
   } catch (error) {
     if (!missingColumn(error)) throw error;
@@ -140,15 +153,68 @@ export async function keepSheet(sql: StudioDeps['sql'], organizationId: string, 
 /** The sheet of a reference video: the asset's kept reading when there is one, else a fresh reading (kept for next time). */
 export async function filmSheetFor(
   deps: Pick<StudioDeps, 'sql' | 'intel' | 'intelDeps' | 'media' | 'env'>,
-  input: { organizationId: string; assetId: string | null; ref: ResolvedRef; locale: 'ko' | 'en' },
+  input: { organizationId: string; assetId: string | null; ref: ResolvedRef; locale: 'ko' | 'en'; depth?: FilmDepth },
 ): Promise<FilmSheet | null> {
+  const depth = input.depth ?? 'basic';
   if (input.assetId) {
-    const kept = await cachedSheet(deps.sql, input.organizationId, input.assetId, input.locale);
+    const kept = await cachedSheet(deps.sql, input.organizationId, input.assetId, input.locale, depth);
     if (kept) return kept;
   }
-  const sheet = await readSheet(deps, input.ref, input.locale);
-  if (sheet && input.assetId) await keepSheet(deps.sql, input.organizationId, input.assetId, input.locale, sheet);
+  const sheet = await readSheet(deps, input.ref, input.locale, depth);
+  if (sheet && input.assetId) await keepSheet(deps.sql, input.organizationId, input.assetId, input.locale, sheet, depth);
   return sheet;
+}
+
+/**
+ * The reading with the customer's own shot table laid over it: their rows replace the read shots (a
+ * reading that failed becomes a sheet of those rows alone). Without rows, the reading as it is.
+ */
+export function withShots(sheet: FilmSheet | null, shots: readonly FilmShot[] | undefined): FilmSheet | null {
+  if (!shots?.length) return sheet;
+  const rows = shots.map((s) => ({ ...s }));
+  const lastEnd = Math.max(...rows.map((s) => s.end));
+  return {
+    seconds: sheet && sheet.seconds > 0 ? sheet.seconds : lastEnd,
+    aspect: sheet?.aspect ?? '',
+    shots: rows,
+    look: sheet?.look ?? { lighting: '', palette: '', texture: '' },
+    audio: sheet?.audio ?? { music: false, speech: false, effects: '' },
+    summary: sheet?.summary ?? '',
+    ...(sheet?.subjects ? { subjects: sheet.subjects } : {}),
+    ...(sheet?.setting ? { setting: sheet.setting } : {}),
+  };
+}
+
+/**
+ * What the prompt writer gets for a remix: the film sheet (the deeper reading for a blueprint) with the
+ * customer's shot table over it, and the references the provider will actually receive. A blueprint
+ * never sends its video, so the video is not among them and the prompt names no video token.
+ */
+export async function remixContext(
+  deps: Pick<StudioDeps, 'sql' | 'intel' | 'intelDeps' | 'media' | 'env'>,
+  input: { organizationId: string; params: Pick<StudioJobParams, 'method' | 'shots'>; refs: readonly StudioReference[]; resolved: readonly ResolvedRef[]; locale: 'ko' | 'en' },
+): Promise<{ sheet: FilmSheet | null; resolved: ResolvedRef[] }> {
+  const blueprint = input.params.method === 'blueprint';
+  const film = input.resolved.find((r) => r.kind === 'video');
+  const read = film
+    ? await filmSheetFor(deps, {
+        organizationId: input.organizationId,
+        assetId: input.refs[film.index - 1]?.assetId ?? null,
+        ref: film,
+        locale: input.locale,
+        depth: blueprint ? 'blueprint' : 'basic',
+      })
+    : null;
+  const sheet = input.params.method === 'edit' ? read : withShots(read, input.params.shots);
+  return { sheet, resolved: blueprint ? input.resolved.filter((r) => r.kind !== 'video') : [...input.resolved] };
+}
+
+/** Inputs as sent to the provider (and to the account-lane worker): a blueprint leaves its video out. */
+export function sentInputs(deps: Pick<StudioDeps, 'env'>, job: Pick<JobRow, 'kind' | 'params'>, resolved: readonly ResolvedRef[]): NonNullable<StudioJobWork['inputs']> {
+  const blueprint = job.kind === 'video_remix' && job.params?.method === 'blueprint';
+  return resolved
+    .filter((r) => !(blueprint && r.kind === 'video'))
+    .map((r) => ({ kind: r.kind, url: providerUrl(deps, r.url), ...(r.frame ? { frame: r.frame } : {}) }));
 }
 
 export function enhanceKind(kind: JobRow['kind']): EnhanceInput['kind'] | null {
@@ -199,7 +265,7 @@ export async function prepareJob(deps: StudioDeps, job: JobRow): Promise<{ final
   }
   const work: StudioJobWork = {
     ...job.work,
-    inputs: resolved.map((r) => ({ kind: r.kind, url: providerUrl(deps, r.url), ...(r.frame ? { frame: r.frame } : {}) })),
+    inputs: sentInputs(deps, job, resolved),
   };
 
   if (job.kind === 'video_final') {
@@ -229,15 +295,17 @@ export async function prepareJob(deps: StudioDeps, job: JobRow): Promise<{ final
   }
 
   let sheet: FilmSheet | null = null;
+  let toEnhance = resolved;
   if (job.kind === 'video_remix' && job.enhance) {
-    const film = resolved.find((r) => r.kind === 'video');
-    if (film) sheet = await filmSheetFor(deps, { organizationId: job.organization_id, assetId: job.refs?.[film.index - 1]?.assetId ?? null, ref: film, locale });
+    const remix = await remixContext(deps, { organizationId: job.organization_id, params: job.params, refs: job.refs ?? [], resolved, locale });
+    sheet = remix.sheet;
+    toEnhance = remix.resolved;
     work.sheet = sheet;
   }
 
   if (!job.enhance) return { finalPrompt: null, work: { ...work, prepared: true } };
   const organization = (await deps.sql.query<{ name: string }>('select name from brand_organizations where id = $1', [job.organization_id])).rows[0];
-  const input = enhanceInputOf(job, model, await enhanceReferences(deps, resolved), await brandSummary(deps, job.organization_id, organization?.name ?? ''), sheet);
+  const input = enhanceInputOf(job, model, await enhanceReferences(deps, toEnhance), await brandSummary(deps, job.organization_id, organization?.name ?? ''), sheet);
   const result = await runEnhancer(deps, input);
   return { finalPrompt: result.prompt.slice(0, 8000), work: { ...work, enhanceNotes: result.notes.slice(0, 2000), prepared: true } };
 }

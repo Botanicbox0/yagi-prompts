@@ -1,10 +1,11 @@
 /**
- * Copy helpers for the brand studio (docs/BRAND-STUDIO-V2.md §5.4). Every visible string comes from
- * `messages/*.ts` under `brandStudio`; these helpers only fill placeholders and format the numbers
- * the server returns (KRW amounts, the refill date). They never compute a price.
+ * Copy helpers for the brand studio (docs/BRAND-STUDIO-V3.md §2, V2 §5.4). Every visible string comes
+ * from `messages/*.ts` under `brandStudio`; these helpers only fill placeholders and format the numbers
+ * the server returns. Amounts are always credits (lib/brand-studio/credits.ts), never money.
  */
 import type { Dictionary } from "@/lib/i18n/dictionaries";
 import type { StudioErrorCode } from "@/lib/brand-studio/contracts";
+import { formatCredits } from "@/lib/brand-studio/credits";
 
 export type StudioCopy = Dictionary["brandStudio"];
 export type StudioLocale = "ko" | "en";
@@ -20,12 +21,9 @@ export function errorLine(copy: StudioCopy, code: string | null | undefined): st
   return (code && Object.hasOwn(errors, code) ? errors[code as StudioErrorCode] : undefined) ?? errors.failed;
 }
 
-export function formatKrw(amount: number, locale: StudioLocale): string {
-  return new Intl.NumberFormat(locale === "ko" ? "ko-KR" : "en-US", {
-    style: "currency",
-    currency: "KRW",
-    maximumFractionDigits: 0,
-  }).format(Math.max(0, Math.round(amount)));
+/** "15 크레딧" / "15 credits": a credit count in a sentence of the dictionary (`{n}` is the number). */
+export function credits(template: string, count: number, locale: StudioLocale): string {
+  return fill(template, { n: formatCredits(count, locale) });
 }
 
 /** The allowance refill day in Seoul time ("12월 1일" / "Dec 1"). */

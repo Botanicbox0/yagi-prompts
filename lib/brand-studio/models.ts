@@ -17,7 +17,7 @@ export const STUDIO_LANES = ['sunra_api', 'sunra_mcp'] as const;
 export type StudioLane = (typeof STUDIO_LANES)[number];
 
 /** Which house style the enhancer writes in (lib/brand-studio/enhancer). */
-export type StudioPromptProfile = 'seedream' | 'nano-banana' | 'seedance';
+export type StudioPromptProfile = 'seedream' | 'nano-banana' | 'gpt-image' | 'seedance';
 
 /**
  * `live`: selectable. `awaiting_provider`: declared so the day the provider lists it only this flag
@@ -49,7 +49,19 @@ export interface StudioImageModel extends StudioModelBase {
   /** True when the model follows "change only this" well enough for the region edit default. */
   regionEdit: boolean;
   endpoints: { textToImage: string; edit: string };
+  /**
+   * Models that take exact pixels (`width` / `height`) instead of `aspect_ratio` + `resolution`: the
+   * size for each resolution and aspect the screen offers. Absent for the aspect-ratio models.
+   */
+  pixels?: Readonly<Record<string, Readonly<Record<string, readonly [number, number]>>>>;
+  /** Rendering qualities the customer may pick (GPT Image); absent for models without the choice. */
+  qualities?: readonly StudioImageQuality[];
+  defaultQuality?: StudioImageQuality;
 }
+
+/** Rendering quality of the models that offer one (both lanes call the field `quality`). */
+export const STUDIO_IMAGE_QUALITIES = ['low', 'medium', 'high'] as const;
+export type StudioImageQuality = (typeof STUDIO_IMAGE_QUALITIES)[number];
 
 export interface StudioVideoModel extends StudioModelBase {
   medium: 'video';
@@ -76,6 +88,54 @@ export type StudioVideoResolution = '480p' | '720p' | '1080p';
 const SEEDREAM_ASPECTS = ['1:1', '4:3', '3:4', '16:9', '9:16', '3:2', '2:3', '21:9'] as const;
 const GEMINI_PRO_ASPECTS = ['1:1', '4:5', '3:4', '2:3', '9:16', '5:4', '4:3', '3:2', '16:9', '21:9'] as const;
 const SEEDANCE_ASPECTS = ['9:16', '3:4', '1:1', '4:3', '16:9', '21:9'] as const;
+/**
+ * GPT Image 2.6: the account lane takes `aspect_ratio` + `resolution` (1K / 2K / 4K) + `quality`; the
+ * API lane takes exact `width` / `height` (16–3840 each, OpenAPI document) + `quality`. Aspects and tiers
+ * are the account lane's `list_models` answer (2026-11-11). Sizes are the ones Sunra's documentation
+ * lists for the GPT Image family (docs.sunra.ai, "gpt-image-2 and gpt-image-2.5 token pricing"; width and
+ * height swapped is the same request). Sizes the documentation does not list are marked "derived": the
+ * same tier's long edge (1K 1536, 2K 2048) or pixel count (4K ≈ 8.2 MP), multiples of 16, ratio within 1%.
+ */
+const GPT_IMAGE_ASPECTS = ['1:1', '4:3', '3:4', '16:9', '9:16', '3:2', '2:3'] as const;
+const GPT_IMAGE_PIXELS = {
+  '1K': {
+    '1:1': [1024, 1024],
+    '3:2': [1536, 1024],
+    '2:3': [1024, 1536],
+    '16:9': [1360, 768],
+    '9:16': [768, 1360],
+    '4:3': [1536, 1152], // derived
+    '3:4': [1152, 1536], // derived
+  },
+  '2K': {
+    '1:1': [2048, 2048],
+    '4:3': [2048, 1536],
+    '3:4': [1536, 2048],
+    '16:9': [2048, 1152],
+    '9:16': [1152, 2048],
+    '3:2': [2048, 1360], // derived
+    '2:3': [1360, 2048], // derived
+  },
+  '4K': {
+    '1:1': [2880, 2880],
+    '3:4': [2448, 3264],
+    '4:3': [3264, 2448],
+    '9:16': [2160, 3840],
+    '16:9': [3840, 2160],
+    '3:2': [3504, 2336], // derived
+    '2:3': [2336, 3504], // derived
+  },
+} as const satisfies Record<string, Record<(typeof GPT_IMAGE_ASPECTS)[number], readonly [number, number]>>;
+
+/**
+ * GPT Image 2.6 price per image, identical for Flare and Sunburst: the account lane's `estimate_cost`
+ * (2026-11-11) in account credits, 1 credit = US$0.01 of list price. No reference surcharge.
+ */
+const GPT_IMAGE_26_CENTS: Readonly<Record<StudioImageQuality, Readonly<Record<string, number>>>> = {
+  low: { '1K': 3, '2K': 6, '4K': 9 },
+  medium: { '1K': 5, '2K': 9, '4K': 15 },
+  high: { '1K': 6, '2K': 11, '4K': 18 },
+};
 
 export const STUDIO_MODELS = [
   {
@@ -144,6 +204,49 @@ export const STUDIO_MODELS = [
     regionEdit: false,
     endpoints: { textToImage: 'text-to-image', edit: 'image-editing' },
   },
+  // GPT Image 2.6. API lane (catalogue, 2026-11-11): `openai/gpt-image-2.6-{flare,sunburst}`, endpoints
+  // text-to-image / image-editing, `width`/`height`/`quality`/`n`, edits take `images` (up to 16).
+  // Account lane (`list_models`, 2026-11-11): ids `gpt-image-2.6-flare` / `-sunburst`, the aspects and
+  // tiers below, qualities low/medium/high, 16 references, image editing. Flare is the fast tier; Sunburst
+  // the precision tier for detailed edits (slower, same price).
+  {
+    id: 'gpt-image-2.6-flare',
+    medium: 'image',
+    label: 'GPT Image 2.6 Flare',
+    hintKey: 'gptImageFlare',
+    availability: 'live',
+    promptProfile: 'gpt-image',
+    api: { alias: 'openai/gpt-image-2.6-flare' },
+    mcp: { model: 'gpt-image-2.6-flare' },
+    aspects: GPT_IMAGE_ASPECTS,
+    resolutions: ['1K', '2K', '4K'],
+    defaultResolution: '1K',
+    maxReferences: 16,
+    regionEdit: true,
+    endpoints: { textToImage: 'text-to-image', edit: 'image-editing' },
+    pixels: GPT_IMAGE_PIXELS,
+    qualities: STUDIO_IMAGE_QUALITIES,
+    defaultQuality: 'medium',
+  },
+  {
+    id: 'gpt-image-2.6-sunburst',
+    medium: 'image',
+    label: 'GPT Image 2.6 Sunburst',
+    hintKey: 'gptImageSunburst',
+    availability: 'live',
+    promptProfile: 'gpt-image',
+    api: { alias: 'openai/gpt-image-2.6-sunburst' },
+    mcp: { model: 'gpt-image-2.6-sunburst' },
+    aspects: GPT_IMAGE_ASPECTS,
+    resolutions: ['1K', '2K', '4K'],
+    defaultResolution: '1K',
+    maxReferences: 16,
+    regionEdit: true,
+    endpoints: { textToImage: 'text-to-image', edit: 'image-editing' },
+    pixels: GPT_IMAGE_PIXELS,
+    qualities: STUDIO_IMAGE_QUALITIES,
+    defaultQuality: 'medium',
+  },
   {
     id: 'seedance-2.5',
     medium: 'video',
@@ -191,6 +294,30 @@ export function selectableModels(medium?: StudioMedium): StudioModel[] {
   );
 }
 
+/** Live image models a partial edit may run on, in registry order. */
+export function regionEditModels(): StudioImageModel[] {
+  return selectableModels('image').filter((m): m is StudioImageModel => m.medium === 'image' && m.regionEdit);
+}
+
+/**
+ * Width x height for a pixel-sized model (`pixels`), or null for the aspect-ratio models. An aspect
+ * outside the table (a region crop's own shape) takes the listed size whose shape is closest.
+ */
+export function pixelSize(model: StudioImageModel, resolution: string, aspect: string): readonly [number, number] | null {
+  if (!model.pixels) return null;
+  const table = model.pixels[resolution] ?? model.pixels[model.defaultResolution];
+  if (!table) return null;
+  const exact = table[aspect];
+  if (exact) return exact;
+  const m = /^(\d+(?:\.\d+)?):(\d+(?:\.\d+)?)$/.exec(aspect);
+  const wanted = m ? Number(m[1]) / Number(m[2]) : 1;
+  let best: readonly [number, number] | null = null;
+  for (const size of Object.values(table)) {
+    if (!best || Math.abs(Math.log(size[0] / size[1] / wanted)) < Math.abs(Math.log(best[0] / best[1] / wanted))) best = size;
+  }
+  return best;
+}
+
 /* ------------------------------------------------------------------ cost */
 
 /** Provider list price for one image, in USD (Sunra price cards, 2026-11-10). */
@@ -199,6 +326,8 @@ export function estimateImageUsd(input: {
   resolution: string;
   /** Reference images sent with an edit (0 for text-to-image). */
   references: number;
+  /** Models with `qualities` only; their default when absent. */
+  quality?: string | null;
 }): number {
   const refs = Math.max(0, input.references);
   switch (input.model) {
@@ -211,6 +340,15 @@ export function estimateImageUsd(input: {
       return 0.027;
     case 'nano-banana-pro':
       return input.resolution === '4K' ? 0.24 : 0.134;
+    case 'gpt-image-2.6-flare':
+    case 'gpt-image-2.6-sunburst': {
+      // The account lane's per-image credits (1 credit = US$0.01), used for both lanes. The API lane
+      // settles post-calculated ("$1 x upstream units", a $4.00 hold per request): the first live API
+      // run must be compared against this estimate before it is trusted.
+      const quality = (STUDIO_IMAGE_QUALITIES as readonly string[]).includes(input.quality ?? '') ? (input.quality as StudioImageQuality) : 'medium';
+      const table = GPT_IMAGE_26_CENTS[quality];
+      return (table[input.resolution] ?? table['1K']!) / 100;
+    }
     default:
       return 0.134;
   }

@@ -20,7 +20,9 @@ vi.mock("next/navigation", () => ({
   useRouter: () => ({ refresh: vi.fn(), push: vi.fn() }),
   usePathname: () => "/brand/studio",
   useSearchParams: () => new URLSearchParams(),
-  redirect: vi.fn(),
+  redirect: vi.fn((url: string) => {
+    throw new Error(`NEXT_REDIRECT:${url}`);
+  }),
   notFound: vi.fn(() => {
     throw new Error("NEXT_NOT_FOUND");
   }),
@@ -102,39 +104,40 @@ describe("/brand/studio", () => {
     expect(html).not.toContain("data-studio-dock");
   });
 
-  it.each(["ko", "en"] as const)("opens the v2 create tab for an ordinary brand (%s)", async (locale) => {
+  it.each(["ko", "en"] as const)("opens the image screen for an ordinary brand, with no tab bar (%s)", async (locale) => {
     vi.stubEnv("BRAND_STUDIO_V2", "on");
     state.locale = locale;
     const html = await studio();
+    const { getDictionary } = await import("@/lib/i18n/dictionaries");
     expect(html).toContain("data-brand-studio-v2");
-    expect(html).toContain('data-studio-tab="create"');
+    expect(html).toContain('data-studio-screen="image"');
+    expect(html).toContain(`<h1 class="bs-title">${getDictionary(locale).brandStudio.title}</h1>`);
     expect(html).toContain("data-studio-skeleton");
+    expect(html).toContain("data-studio-head-slot");
     expect(html).not.toContain("data-brand-brief-studio");
-    expect(html).toContain(`href="/brand/studio?tab=formats&amp;organizationId=${ORG}"`);
-    expect(html).toMatch(/aria-current="page"[^>]*>[^<]*<\/a>/);
+    expect(html).not.toContain("bs-tabs");
+    expect(html).not.toContain("tab=formats");
   });
 
-  it("shows the real contract production on the formats tab", async () => {
+  it("sends an old ?mode=video link to the video screen", async () => {
+    vi.stubEnv("BRAND_STUDIO_V2", "on");
+    await expect(studio({ mode: "video" })).rejects.toThrow(`NEXT_REDIRECT:/brand/studio/video?organizationId=${ORG}`);
+  });
+
+  it("keeps the contract templates on ?tab=formats for a brand with a contract, own-face checks untouched", async () => {
     vi.stubEnv("BRAND_STUDIO_V2", "on");
     const html = await studio({ tab: "formats" });
     expect(html).toContain('data-studio-formats="contracts"');
     expect(html).toContain("bw-production-contract");
     expect(html).toContain("픽스처 포맷");
+    expect(html).toContain(`href="/brand/studio?organizationId=${ORG}"`);
     expect(html).not.toContain("data-studio-dock");
   });
 
-  it("offers two ways to start a format when there is no contract, the request only to those who may ask", async () => {
+  it("sends ?tab=formats back to the image screen when there is no contract", async () => {
     vi.stubEnv("BRAND_STUDIO_V2", "on");
     state.contracts = false;
-    const owner = await studio({ tab: "formats" });
-    expect(owner).toContain('data-studio-format-entry="video"');
-    expect(owner).toContain(`href="/brand/studio?mode=video&amp;organizationId=${ORG}"`);
-    expect(owner).toContain('data-studio-format-entry="commission"');
-    expect(owner).toContain(`href="/brand/projects/new?track=template_build&amp;organizationId=${ORG}"`);
-    state.org = { ...ORDINARY, role: "viewer" };
-    const viewer = await studio({ tab: "formats" });
-    expect(viewer).toContain('data-studio-format-entry="video"');
-    expect(viewer).not.toContain('data-studio-format-entry="commission"');
+    await expect(studio({ tab: "formats" })).rejects.toThrow(`NEXT_REDIRECT:/brand/studio?organizationId=${ORG}`);
   });
 
   it.each(CLOSED)("answers %s with notFound even with the flag on", async (_label, org) => {
@@ -154,25 +157,15 @@ describe("/brand home", () => {
     expect(html).not.toContain("data-brand-doors");
   });
 
-  it.each(["ko", "en"] as const)("puts three doors above the campaign list in place of the showcase (%s)", async (locale) => {
+  it.each(["ko", "en"] as const)("is the campaign list alone once the rail carries the studio: no doors, no showcase (%s)", async (locale) => {
     vi.stubEnv("BRAND_STUDIO_V2", "on");
     state.locale = locale;
     state.projects = 2;
     const html = await home();
-    expect(html).toContain("data-brand-doors");
+    expect(html).not.toContain("data-brand-doors");
+    expect(html).not.toContain("data-brand-door=");
     expect(html).not.toContain("data-brand-quick-dock");
-    for (const door of ["create", "formats", "campaign"]) expect(html).toContain(`data-brand-door="${door}"`);
-    expect(html).toContain('href="#brand-campaigns"');
-    expect(html.indexOf("data-brand-doors")).toBeLessThan(html.indexOf('id="brand-campaigns"'));
-  });
-
-  it("points the campaign door at a new request when there is no campaign, and drops it for a viewer", async () => {
-    vi.stubEnv("BRAND_STUDIO_V2", "on");
-    expect(await home()).toContain(`href="/brand/projects/new?organizationId=${ORG}" data-brand-door="campaign"`);
-    state.org = { ...ORDINARY, role: "viewer" };
-    const viewer = await home();
-    expect(viewer).toContain('data-brand-door="create"');
-    expect(viewer).not.toContain('data-brand-door="campaign"');
+    expect(html).toContain('id="brand-campaigns"');
   });
 
   it.each(CLOSED)("shows %s exactly today's home, with no door and no studio link", async (_label, org) => {

@@ -1,7 +1,10 @@
 "use client";
 /**
- * The dock's own state: the draft, the tray and one press of "만들기". A press keeps its request id
- * until it succeeds, so sending the same thing again after a lost answer cannot start a second run.
+ * The prompt bar's own state: the draft, the references and one press of "만들기". A press keeps its
+ * request id until it succeeds, so sending the same thing again after a lost answer cannot start a
+ * second run. The ✨ button asks `prompt.enhance` for the improved sentence (free for the customer);
+ * that sentence is then sent with `enhance: false` so it is not rewritten twice, and editing it drops
+ * that state again.
  */
 import { useCallback, useRef, useState } from "react";
 import { STUDIO_LIMITS, type StudioAssetView, type StudioJobView, type StudioOutputView } from "@/lib/brand-studio/contracts";
@@ -9,8 +12,18 @@ import type { StudioMedium } from "@/lib/brand-studio/models";
 import { isFailure } from "./api";
 import { errorLine, fill, newRequestId, type StudioCopy } from "./copy";
 import type { ReferenceVideoProblem } from "@/lib/brand-studio/reference-video";
-import { buildJob, draftAfterAttach, draftFromJob, initialDraft, type DockDraft, type DockProblem, type FilmLimits } from "./dock-model";
-import { addToTray, mentionLabel, removeFromTray, trayFromReferences, updateTrayItem, type TrayItem } from "./refs";
+import {
+  attachRefusal,
+  buildJob,
+  draftAfterAttach,
+  draftFromJob,
+  enhancePreviewInput,
+  initialDraft,
+  type DockDraft,
+  type DockProblem,
+  type FilmLimits,
+} from "./dock-model";
+import { addToTray, mentionLabel, moveInTray, removeFromTray, trayFromReferences, updateTrayItem, type TrayItem } from "./refs";
 import type { StudioController } from "./use-studio";
 
 export function problemLine(problem: DockProblem, copy: StudioCopy): string {
@@ -48,13 +61,37 @@ export function filmLimitLine(problem: ReferenceVideoProblem | "edit", limits: F
   }
 }
 
-export function useDock({ studio, copy, organizationId, initialMedium }: { studio: StudioController; copy: StudioCopy; organizationId: string; initialMedium: StudioMedium }) {
-  const [draft, setDraft] = useState<DockDraft>(() => initialDraft(initialMedium));
+/** The improved sentence and what was written before it. */
+export interface Enhanced {
+  original: string;
+  improved: string;
+}
+
+/** True while the field still holds exactly the sentence the ✨ button wrote. */
+export const isPreEnhanced = (enhanced: Enhanced | null, prompt: string) => Boolean(enhanced && enhanced.improved === prompt);
+
+export function useDock({
+  studio,
+  copy,
+  organizationId,
+  initialMedium,
+  mode,
+}: {
+  studio: StudioController;
+  copy: StudioCopy;
+  organizationId: string;
+  initialMedium: StudioMedium;
+  /** The screen's medium. When set, the bar never switches medium. */
+  mode?: StudioMedium;
+}) {
+  const [draft, setDraft] = useState<DockDraft>(() => initialDraft(mode ?? initialMedium));
   const [tray, setTray] = useState<TrayItem[]>([]);
   const [message, setMessage] = useState<string | null>(null);
-  /** A quiet line about something the dock did on its own (switching to video). */
+  /** A quiet line about something the bar did on its own (switching to video). */
   const [notice, setNotice] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const [enhancing, setEnhancing] = useState(false);
+  const [enhanced, setEnhanced] = useState<Enhanced | null>(null);
   const press = useRef<{ fingerprint: string; id: string } | null>(null);
   // Several files can finish uploading in one tick; each attach must see the ones before it.
   const latest = useRef(tray);
@@ -64,26 +101,32 @@ export function useDock({ studio, copy, organizationId, initialMedium }: { studi
 
   const attach = useCallback(
     (item: TrayItem, first = false) => {
+      if (mode && attachRefusal(mode, item)) {
+        setMessage(copy.dock.videoNotHere);
+        return;
+      }
       const next = addToTray(latest.current, item, first);
       latest.current = next.items;
       setTray(next.items);
       setMessage(next.full ? fill(copy.tray.tooMany, { n: STUDIO_LIMITS.referencesMax }) : null);
       setNotice(null);
-      // A picture run cannot carry a video: a video coming in means the customer wants a video.
-      const switched = draftAfterAttach(latestDraft.current, item);
+      // Without a fixed screen a video coming in means the customer wants a video.
+      const switched = draftAfterAttach(latestDraft.current, item, Boolean(mode));
       if (!next.full && switched !== latestDraft.current) {
         latestDraft.current = switched;
-        setDraft((current) => draftAfterAttach(current, item));
+        setDraft((current) => draftAfterAttach(current, item, Boolean(mode)));
         setNotice(copy.dock.switchedToVideo);
       }
     },
-    [copy],
+    [copy, mode, setDraft],
   );
+
+  const preEnhanced = isPreEnhanced(enhanced, draft.prompt);
 
   /** True when a run started. */
   const submit = useCallback(async (): Promise<boolean> => {
-    if (busy) return false;
-    const probe = buildJob(draft, tray, { organizationId, requestId: "probe" });
+    if (busy || enhancing) return false;
+    const probe = buildJob(draft, tray, { organizationId, requestId: "probe" }, { preEnhanced });
     if (!probe.ok) {
       setMessage(problemLine(probe.problem, copy));
       return false;
@@ -101,20 +144,52 @@ export function useDock({ studio, copy, organizationId, initialMedium }: { studi
     }
     press.current = null;
     return true;
-  }, [busy, copy, draft, organizationId, studio, tray]);
+  }, [busy, copy, draft, enhancing, organizationId, preEnhanced, studio, tray]);
 
-  /** "이 설정 다시 쓰기" and a reference-video run's "같은 설정으로 다시 만들기": its settings and references back in the dock. */
+  /** ✨: the sentence the model will read, in the field, with the original one kept for "원래 문장으로". */
+  const enhanceNow = useCallback(async () => {
+    if (enhancing || !draft.prompt.trim()) return;
+    const preview = enhancePreviewInput(draft, tray, organizationId);
+    if (!preview.ok) {
+      setMessage(problemLine(preview.problem, copy));
+      return;
+    }
+    const original = draft.prompt;
+    setEnhancing(true);
+    setMessage(null);
+    const result = await studio.enhancePrompt(preview.input);
+    setEnhancing(false);
+    if (isFailure(result) || !result.prompt.trim()) {
+      setNotice(copy.dock.enhanceFailed);
+      return;
+    }
+    const improved = result.prompt.trim().slice(0, STUDIO_LIMITS.promptMax);
+    // The customer may have kept typing elsewhere; only replace the sentence that was sent.
+    setDraft((current) => (current.prompt === original ? { ...current, prompt: improved } : current));
+    setEnhanced({ original, improved });
+    setNotice(null);
+  }, [copy, draft, enhancing, organizationId, studio, tray]);
+
+  const undoEnhance = useCallback(() => {
+    if (!enhanced) return;
+    setDraft((current) => ({ ...current, prompt: enhanced.original }));
+    setEnhanced(null);
+  }, [enhanced]);
+
+  /** "설정 다시 쓰기" and a reference-video run's "다시 만들기": its settings and references back in the bar. */
   const reuse = useCallback(
     (job: StudioJobView, lookup: { asset(id: string): StudioAssetView | null; output(id: string): StudioOutputView | null }) => {
       setDraft((current) => draftFromJob(job, current));
       setTray(trayFromReferences(job.references, lookup, copy.viewer.label));
+      setEnhanced(null);
       setMessage(null);
       setNotice(null);
     },
-    [copy],
+    [copy, setDraft],
   );
 
   return {
+    mode,
     draft,
     setDraft,
     tray,
@@ -122,11 +197,19 @@ export function useDock({ studio, copy, organizationId, initialMedium }: { studi
     attach,
     update: (key: string, patch: Partial<Pick<TrayItem, "role" | "use" | "avoid" | "frame">>) => setTray((t) => updateTrayItem(t, key, patch)),
     remove: (key: string) => setTray((t) => removeFromTray(t, key)),
+    move: (from: number, to: number) => setTray((t) => moveInTray(t, from, to)),
     message,
     setMessage,
     notice,
+    setNotice,
     busy,
     submit,
     reuse,
+    enhancing,
+    enhanced: preEnhanced,
+    enhanceNow,
+    undoEnhance,
   };
 }
+
+export type DockController = ReturnType<typeof useDock>;

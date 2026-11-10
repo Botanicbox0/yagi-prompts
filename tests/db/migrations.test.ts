@@ -64,9 +64,14 @@ describe('migrations apply on a fresh database (PLAN §6)', () => {
       // 2026-11-10 — brand studio v2 (docs/BRAND-STUDIO-V2.md §6).
       'brand_studio_allowances',
       'brand_studio_assets',
+      'brand_studio_folder_items',
+      'brand_studio_folders',
       'brand_studio_jobs',
       'brand_studio_lanes',
+      'brand_studio_likes',
       'brand_studio_outputs',
+      'brand_studio_review_comments',
+      'brand_studio_reviews',
       'brand_support_messages',
       // 2026-09-23 — secondary usage (docs/SECONDARY-USAGE.md): inquiry case → studio scope, creator
       // compensation and consent (studio-only) → brand quote → payment → grants, plus history/outcomes.

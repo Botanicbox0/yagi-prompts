@@ -1,0 +1,311 @@
+/*
+ * First-use explainer (components/brand-studio/explainer.tsx). Workspace tokens only
+ * (app/(brand)/workspace.css). Techniques (docs/design/TOOLBOX.md §1-3):
+ *   1. Alabaster/white layering: a quiet sky band for the hero, white cards for the steps.
+ *   2. Concentric radius: hero 24 = media 18 + 6 of mat; step cards 24, step media 18, buttons pill.
+ *   3. Tabular numerals on the step numbers (mono, the one place IDENTITY allows it).
+ *   4. Blur-to-sharp reveal when it opens; reduced motion shows the final state at once.
+ */
+
+.root {
+  display: grid;
+  gap: 12px;
+  margin: 0 0 20px;
+  min-width: 0;
+}
+.root[hidden] {
+  display: none;
+}
+
+.hero {
+  position: relative;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 20px;
+  align-items: center;
+  padding: 28px 28px 26px;
+  border-radius: 24px;
+  background: color-mix(in srgb, var(--ys-accent, #3875c5) 7%, var(--ys-surface, #ffffff));
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--ys-accent, #3875c5) 10%, transparent);
+  animation: explainer-reveal 520ms var(--ys-spring, cubic-bezier(0.22, 1, 0.36, 1)) both;
+}
+.hero[data-has-media="true"] {
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1.05fr);
+  padding: 6px 6px 6px 28px;
+  gap: 24px;
+}
+
+.copy {
+  display: grid;
+  gap: 10px;
+  align-content: center;
+  min-width: 0;
+  max-width: 560px;
+  padding: 8px 0;
+}
+.hero[data-has-media="true"] .copy {
+  padding: 28px 0 28px;
+}
+.title {
+  margin: 0;
+  padding-right: 120px;
+  font-size: clamp(22px, 2.1vw, 28px);
+  font-weight: 560;
+  line-height: 1.12;
+  letter-spacing: -0.045em;
+  color: var(--ys-ink, #111114);
+  text-wrap: balance;
+  outline: none;
+}
+.hero[data-has-media="true"] .title {
+  padding-right: 0;
+}
+.title:focus-visible {
+  outline: 2px solid var(--ys-focus, #3875c5);
+  outline-offset: 4px;
+  border-radius: 6px;
+}
+.line {
+  margin: 0;
+  font-size: 14.5px;
+  line-height: 1.62;
+  letter-spacing: -0.01em;
+  color: var(--ys-ink-secondary, #55555f);
+  text-wrap: pretty;
+}
+
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 6px;
+}
+.primary,
+.secondary {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 40px;
+  padding: 0 18px;
+  border-radius: 999px;
+  border: 0;
+  font: inherit;
+  font-size: 13.5px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  text-decoration: none;
+  cursor: pointer;
+  transition: background-color var(--ys-dur, 220ms) var(--ys-ease, ease-out), transform 150ms var(--ys-ease, ease-out);
+}
+.primary {
+  background: var(--ys-accent, #3875c5);
+  color: #ffffff;
+}
+.primary:hover {
+  background: color-mix(in srgb, var(--ys-accent, #3875c5) 88%, #000);
+  color: #ffffff;
+}
+.secondary {
+  background: var(--ys-surface, #ffffff);
+  color: var(--ys-ink, #111114);
+  box-shadow: inset 0 0 0 1px var(--ys-line-strong, rgba(0, 0, 0, 0.16));
+}
+.secondary:hover {
+  background: var(--ys-raised, #f3f4f6);
+  color: var(--ys-ink, #111114);
+}
+.primary:active,
+.secondary:active {
+  transform: scale(0.98);
+}
+
+.media {
+  position: relative;
+  min-width: 0;
+  aspect-ratio: 16 / 10;
+  overflow: hidden;
+  border-radius: 18px;
+  background: var(--ys-media-bg, #eef0f3);
+}
+.media > :is(img, video, picture) {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  object-position: 50% 30%;
+}
+
+.dismiss {
+  position: absolute;
+  top: 14px;
+  right: 14px;
+  z-index: 1;
+  min-height: 32px;
+  padding: 0 12px;
+  border: 0;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--ys-surface, #ffffff) 82%, transparent);
+  color: var(--ys-ink-secondary, #55555f);
+  font: inherit;
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+  box-shadow: inset 0 0 0 1px var(--ys-hairline, rgba(0, 0, 0, 0.06));
+  -webkit-backdrop-filter: blur(16px) saturate(170%);
+  backdrop-filter: blur(16px) saturate(170%);
+}
+.dismiss:hover {
+  color: var(--ys-ink, #111114);
+  background: var(--ys-surface, #ffffff);
+}
+
+.steps {
+  display: grid;
+  gap: 10px;
+  animation: explainer-reveal 620ms var(--ys-spring, cubic-bezier(0.22, 1, 0.36, 1)) 60ms both;
+}
+.stepsTitle {
+  margin: 6px 2px 0;
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  color: var(--ys-ink-secondary, #55555f);
+}
+.stepList {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
+  gap: 10px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  counter-reset: none;
+}
+.step {
+  display: grid;
+  align-content: start;
+  gap: 6px;
+  min-width: 0;
+  padding: 16px 18px 18px;
+  border-radius: 24px;
+  background: var(--ys-surface, #ffffff);
+  box-shadow: inset 0 0 0 1px var(--ys-line, rgba(0, 0, 0, 0.08));
+}
+.stepMedia {
+  overflow: hidden;
+  margin: -10px -12px 8px;
+  aspect-ratio: 16 / 10;
+  border-radius: 18px;
+  background: var(--ys-media-bg, #eef0f3);
+}
+.stepMedia > :is(img, video, picture) {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+.stepNumber {
+  display: inline-grid;
+  place-items: center;
+  width: 24px;
+  height: 24px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--ys-accent, #3875c5) 10%, transparent);
+  color: var(--ys-accent-text, #3063a7);
+  font-family: var(--ys-mono, ui-monospace, monospace);
+  font-size: 11.5px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+.stepTitle {
+  font-size: 14px;
+  font-weight: 600;
+  letter-spacing: -0.02em;
+  color: var(--ys-ink, #111114);
+}
+.stepLine {
+  margin: 0;
+  font-size: 12.5px;
+  line-height: 1.55;
+  color: var(--ys-ink-secondary, #55555f);
+}
+
+.reopen {
+  justify-self: start;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 32px;
+  padding: 0 12px 0 8px;
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  color: var(--ys-ink-secondary, #55555f);
+  font: inherit;
+  font-size: 12.5px;
+  font-weight: 500;
+  cursor: pointer;
+}
+.reopen:hover {
+  background: var(--ys-raised, #f3f4f6);
+  color: var(--ys-ink, #111114);
+}
+.reopenIcon {
+  width: 16px;
+  height: 16px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.6;
+  stroke-linecap: round;
+}
+
+@keyframes explainer-reveal {
+  from {
+    opacity: 0;
+    filter: blur(8px);
+    transform: translateY(4px);
+  }
+  to {
+    opacity: 1;
+    filter: blur(0);
+    transform: none;
+  }
+}
+
+@media (max-width: 760px) {
+  .hero,
+  .hero[data-has-media="true"] {
+    grid-template-columns: minmax(0, 1fr);
+    padding: 20px;
+    gap: 16px;
+  }
+  .hero[data-has-media="true"] .copy {
+    padding: 0;
+  }
+  .hero[data-has-media="true"] .media {
+    order: -1;
+    margin: -14px -14px 0;
+  }
+  .title {
+    padding-right: 0;
+    font-size: 22px;
+  }
+  .dismiss {
+    position: static;
+    justify-self: start;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .hero,
+  .steps {
+    animation: none;
+  }
+  .primary,
+  .secondary {
+    transition: none;
+  }
+  .primary:active,
+  .secondary:active {
+    transform: none;
+  }
+}

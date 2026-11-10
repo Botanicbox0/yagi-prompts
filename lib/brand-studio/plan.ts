@@ -11,12 +11,13 @@ import {
   estimateVideoUsd,
   studioModel,
   type StudioImageModel,
+  type StudioImageQuality,
   type StudioLane,
   type StudioModel,
   type StudioVideoModel,
   type StudioVideoResolution,
 } from './models';
-import { referenceVideoFit } from './reference-video';
+import { blueprintFit, normalizeShots, referenceVideoFit, remakeSeconds } from './reference-video';
 import { readyAsset, readyOutput } from './repo';
 import type { JobRow, StudioJobParams } from './types';
 import { imageRunUsd, regionEditRun, remixRunUsd, usageKrw, videoRunUsd } from './usage-rate';
@@ -126,6 +127,19 @@ function liveModel(id: string, medium: 'image' | 'video'): StudioModel {
   return model;
 }
 
+/**
+ * The quality an image run is made at: refused for a model without qualities, the model's default when
+ * the request names none (so the estimate, the request and "설정 다시 쓰기" agree).
+ */
+function qualityFor(model: StudioImageModel, asked: StudioImageQuality | undefined): StudioImageQuality | undefined {
+  if (!model.qualities?.length) {
+    if (asked !== undefined) throw new StudioDenied('invalid');
+    return undefined;
+  }
+  if (asked !== undefined && !model.qualities.includes(asked)) throw new StudioDenied('invalid');
+  return asked ?? model.defaultQuality ?? model.qualities[0];
+}
+
 function count(refs: readonly ResolvedRef[], kind: StudioAssetKind): number {
   return refs.filter((r) => r.kind === kind).length;
 }
@@ -162,17 +176,20 @@ export async function planJob(
     const model = liveModel(input.model, 'image') as StudioImageModel;
     if (!(model.aspects as readonly string[]).includes(input.aspect) || !(model.resolutions as readonly string[]).includes(input.resolution)) throw new StudioDenied('invalid');
     if (resolved.some((r) => r.kind !== 'image' || r.frame) || resolved.length > model.maxReferences) throw new StudioDenied('invalid');
-    const usd = imageRunUsd({ model: model.id, resolution: input.resolution, references: resolved.length, count: input.count });
+    const quality = qualityFor(model, input.quality);
+    const usd = imageRunUsd({ model: model.id, resolution: input.resolution, references: resolved.length, count: input.count, quality });
     return {
       ...shared, kind: 'image', model,
-      params: { ...base, aspect: input.aspect, resolution: input.resolution, count: input.count },
+      params: { ...base, aspect: input.aspect, resolution: input.resolution, count: input.count, ...(quality ? { quality } : {}) },
       estimateUsd: usd, estimateKrw: usageKrw(usd, 'image'),
       outputs: { count: input.count, kind: 'image', isDraft: false },
     };
   }
 
   if (input.kind === 'region_edit') {
-    const { model, resolution, usd } = regionEditRun(input.model, resolved.length);
+    const edit = regionEditRun(input.model, resolved.length);
+    const quality = qualityFor(edit.model, input.quality);
+    const { model, resolution, usd } = quality ? regionEditRun(input.model, resolved.length, quality) : edit;
     if (resolved.some((r) => r.kind !== 'image' || r.frame) || resolved.length + 1 > model.maxReferences) throw new StudioDenied('invalid');
     const source = input.source.assetId
       ? await readyAsset(sql, organizationId, input.source.assetId)
@@ -181,7 +198,7 @@ export async function planJob(
     return {
       ...shared, kind: 'region_edit', model,
       parentOutputId: input.source.outputId ?? null,
-      params: { ...base, resolution, box: input.box, source: { ...input.source } },
+      params: { ...base, resolution, box: input.box, source: { ...input.source }, ...(quality ? { quality } : {}) },
       estimateUsd: usd, estimateKrw: usageKrw(usd, 'image'),
       outputs: { count: 1, kind: 'image', isDraft: false },
     };
@@ -210,8 +227,29 @@ export async function planJob(
   // video_remix
   const videos = resolved.filter((r) => r.kind === 'video');
   if (videos.length !== 1 || videos.length > model.maxReferenceVideos) throw new StudioDenied(videos.length === 0 ? 'reference_missing' : 'invalid');
-  if (input.method === 'reference' && !(model.aspects as readonly string[]).includes(input.aspect)) throw new StudioDenied('invalid');
+  if (input.method !== 'edit' && !(model.aspects as readonly string[]).includes(input.aspect)) throw new StudioDenied('invalid');
   const refSeconds = videos[0]!.durationMs != null ? videos[0]!.durationMs / 1000 : null;
+  const shots = input.method !== 'edit' && input.shots?.length ? normalizeShots(input.shots, refSeconds) : [];
+
+  if (input.method === 'blueprint') {
+    // The video is only read (./prepare.ts never sends it), so the provider's limits on an attached video do
+    // not apply: only the length the shot plan works with. It is billed as the text/image run it is, with
+    // no reference-video input, and it always goes through the prompt writer (the blueprint is the prompt).
+    if (!blueprintFit(model, { seconds: refSeconds }).readable) throw new StudioDenied('invalid');
+    const secs = input.seconds === undefined ? remakeSeconds(model, refSeconds) : videoSecondsOf(model, input.seconds);
+    const usd = videoRunUsd({ resolution: input.resolution, seconds: secs });
+    return {
+      ...shared, kind: 'video_remix', model, enhance: true,
+      params: {
+        ...base, aspect: input.aspect, resolution: input.resolution, seconds: secs, audio: input.audio,
+        method: 'blueprint', keep: [...new Set(input.keep)], change: input.change,
+        ...(shots.length ? { shots } : {}),
+      },
+      estimateUsd: usd, estimateKrw: usageKrw(usd, 'video'),
+      outputs: { count: 1, kind: 'video', isDraft },
+    };
+  }
+
   // The provider's limits on a reference video (length, size, and the longer minimum for an edit):
   // refused here, before anything is reserved, exactly as the dock warns about them.
   const fit = referenceVideoFit(model, { seconds: refSeconds, width: videos[0]!.width, height: videos[0]!.height });
@@ -224,6 +262,7 @@ export async function planJob(
       ...base, aspect: input.method === 'edit' ? null : input.aspect, resolution: input.resolution, seconds: secs, audio: input.audio,
       method: input.method, keep: [...new Set(input.keep)], change: input.change,
       ...(refSeconds !== null ? { referenceVideoSeconds: refSeconds } : {}),
+      ...(shots.length ? { shots } : {}),
     },
     estimateUsd: usd, estimateKrw: usageKrw(usd, 'video'),
     outputs: { count: 1, kind: 'video', isDraft },
