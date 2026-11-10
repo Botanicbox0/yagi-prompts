@@ -80,12 +80,24 @@ export function railActive(href: string, path: string): boolean {
   return under(path, href);
 }
 
-/** Items in the saved order; items the saved order does not know keep their default order after it. */
+/**
+ * Items in the saved order. An item the saved order does not know (a screen added after the person
+ * arranged their menu) sits right after the nearest item before it in the default order, so 영상 and
+ * 리뷰 appear next to 이미지 instead of at the end of an old arrangement.
+ */
 export function orderItems(items: readonly RailItemId[], order: readonly string[]): RailItemId[] {
   if (order.length === 0) return [...items];
-  const rank = (id: RailItemId) => {
-    const at = order.indexOf(RAIL_HREF[id]);
-    return at === -1 ? order.length + items.indexOf(id) : at;
+  const known = (id: RailItemId) => order.indexOf(RAIL_HREF[id]);
+  const rank = (id: RailItemId): number => {
+    const at = known(id);
+    if (at !== -1) return at;
+    const index = items.indexOf(id);
+    for (let i = index - 1; i >= 0; i -= 1) {
+      const anchor = known(items[i]!);
+      // A fraction keeps it after its anchor and before the next saved item; `index` keeps default order among newcomers.
+      if (anchor !== -1) return anchor + (index - i) / (items.length + 1);
+    }
+    return -1 + (index + 1) / (items.length + 1);
   };
   return [...items].sort((a, b) => rank(a) - rank(b));
 }

@@ -1,3 +1,4 @@
+import { readFileSync } from 'node:fs';
 import { randomUUID } from 'node:crypto';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { NextRequest } from 'next/server';
@@ -5,7 +6,7 @@ import type { Viewer } from '@/lib/auth/identity';
 import type { SqlRunner } from '@/lib/db/sql-runner';
 import { SANDBOXED_CLIENT_ORG_IDS } from '@/lib/brands/features';
 import { STUDIO_OPERATIONS, type StudioOperation } from '@/lib/brand-studio/contracts';
-import { studioV2Visible } from '@/lib/brand-studio/visibility';
+import { studioCopyAllowed, studioV2Visible } from '@/lib/brand-studio/visibility';
 import { brandRouteAllowed } from '@/lib/routing/surfaces';
 import { requestId, studioFixture, viewerOf, type StudioFixture } from './server/helpers';
 import { LIBRARY_OPERATIONS, type LibraryOperation } from '@/lib/brand-studio/library-contracts';
@@ -567,5 +568,27 @@ describe('the video screen: the flag, invitees, the control and the route', () =
     expect(isBrandPath('/brand/studio/video')).toBe(true);
     expect(brandRouteAllowed('/brand/studio/video', 'GET')).toBe(true);
     expect(brandRouteAllowed('/brand/studio/video', 'POST')).toBe(false);
+  });
+});
+
+describe('studio copy never reaches a viewer whose brands are all closed', () => {
+  const MORPHIC = { id: 'deb648e9-c2df-43d4-b2a7-7f9eff8180d9', name: 'Morphic' };
+  const OPEN = { id: '00000000-0000-4000-8000-0000000000aa', name: 'Ordinary brand' };
+  it('refuses a sandboxed-only viewer, by id and by name', () => {
+    expect(studioCopyAllowed([MORPHIC])).toBe(false);
+    expect(studioCopyAllowed([{ id: OPEN.id, name: '모픽 코리아' }])).toBe(false);
+    expect(studioCopyAllowed([])).toBe(false);
+  });
+  it('refuses a viewer whose only brand closes generative media', () => {
+    expect(studioCopyAllowed([{ ...OPEN, denied: ['generative_media'] }])).toBe(false);
+  });
+  it('allows a viewer with at least one open brand', () => {
+    expect(studioCopyAllowed([MORPHIC, OPEN])).toBe(true);
+  });
+  it('the workspace layout asks this before handing the navigation any studio copy', () => {
+    const layout = readFileSync('app/(brand)/layout.tsx', 'utf8');
+    expect(layout).toContain('studioCopyAllowed(scope.choices)');
+    expect(layout).toContain('shell={studioCopy?d.studioShell:undefined}');
+    expect(layout).toContain('const studioV2=brandStudioV2Open()&&studioCopy;');
   });
 });
