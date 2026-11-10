@@ -21,6 +21,11 @@ export const adminWorkflowEn = {
       hint: "Failures from the last seven days. Read the reason and the payment before a customer asks.",
       action: "Open render board",
     },
+    accountDeletions: {
+      title: "Finish account deletions",
+      hint: "A request something holds, or a cleanup that did not finish. The privacy policy promises deletion within 7 days.",
+      action: "Open deletion queue",
+    },
     risk: {
       title: "Review conversation signals",
       hint: "Read the evidence and record a human review. Signals do not impose sanctions.",
@@ -168,6 +173,11 @@ export const adminWorkflowKo: typeof adminWorkflowEn = {
       title: "실패한 렌더를 확인하세요",
       hint: "최근 7일 동안 실패한 렌더입니다. 고객이 묻기 전에 실패 사유와 결제 상태를 봅니다.",
       action: "렌더 보드 열기",
+    },
+    accountDeletions: {
+      title: "계정 삭제를 마무리하세요",
+      hint: "보류 사유가 있거나 정리가 끝나지 않은 요청입니다. 개인정보처리방침은 요청 후 7일 안에 삭제한다고 약속합니다.",
+      action: "삭제 대기열 열기",
     },
     risk: {
       title: "대화의 위험 신호를 검토하세요",

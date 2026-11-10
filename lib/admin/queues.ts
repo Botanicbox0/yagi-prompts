@@ -10,6 +10,7 @@
 export type AdminQueueKey =
   | "paymentsManual"
   | "renderFailures"
+  | "accountDeletions"
   | "risk"
   | "feedback"
   | "studio"
@@ -39,6 +40,8 @@ export const ADMIN_QUEUES: readonly AdminQueueDefinition[] = [
   // A customer paid and the automatic refund or fulfilment gave up (docs/PLATFORM-2.0.md §2.2-4).
   { key: "paymentsManual", group: "customers", href: "/admin/payments" },
   { key: "renderFailures", group: "customers", href: "/admin/renders?status=failed" },
+  // The privacy policy promises deletion within 7 days: a request something holds, or a cleanup that did not finish.
+  { key: "accountDeletions", group: "customers", href: "/admin/account-deletions" },
   { key: "risk", group: "safety", href: "/admin/risk" },
   { key: "feedback", group: "customers", href: "/admin/inquiries?kind=feedback&status=new" },
   { key: "studio", group: "brands", href: "/admin/brand-workspace#studio-inbox" },

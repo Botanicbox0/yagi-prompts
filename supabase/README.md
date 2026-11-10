@@ -89,4 +89,4 @@ operation for a superuser, and it is not something app code can do — that is t
 | 2026-11-10 | `0076_core_brand_studio` · `0077_core_brand_studio_film` · `0152_glue_brand_studio` | 0076 + 0077 + 0152 (`brand_studio_assets`·`brand_studio_jobs`·`brand_studio_outputs`·`brand_studio_allowances`·`brand_studio_lanes`, 에셋의 `film_sheets`; RLS 강제, 정책 없음, 서버 롤 전용). 브랜드 스튜디오 v2(`docs/BRAND-STUDIO-V2.md`). 적용 뒤 다섯 테이블 모두 anon·authenticated 권한 없음 확인 |
 | 2026-11-06 | `0042`~`0044` · `0127`~`0129` | 0042~0044 + 0127~0129 (월 구독·프리미엄 수정·출시 증빙 테이블, RLS 강제, 서버 롤 전용) | 정기결제(`bill_twinglnyl`) 심사 반영 |
 
-미적용: 0029/0115(옛 portrait 비교, 폐지 경로). 0063(prom-queen 비율)은 원장에 없지만 운영 데이터에는 이미 반영돼 있다. 0064·0144는 열린 브랜치가 쓰는 번호. 0074·0075와 0150·0151은 브랜드 제품화 브랜치(docs/BRAND-PRODUCT.md)가 쓴다. 다음 번호: core 0076, glue 0152.
+미적용: 0029/0115(옛 portrait 비교, 폐지 경로). 0063(prom-queen 비율)은 원장에 없지만 운영 데이터에는 이미 반영돼 있다. 0064+0144(셀프 계정 삭제 요청 `account_deletion_requests`, docs/RUNBOOK-deletion.md)는 **클라우드 적용 필요** — 적용 전에는 `/account`가 메일 요청으로 남고 일일 삭제 패스가 건너뛴다. 다음 번호: core 0078, glue 0153.

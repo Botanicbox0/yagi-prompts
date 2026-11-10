@@ -23,6 +23,8 @@ describe('migrations apply on a fresh database (PLAN §6)', () => {
         where table_schema = 'public' and table_type = 'BASE TABLE' order by table_name`,
     );
     expect(rows.map((r) => r.table_name)).toEqual([
+      // docs/RUNBOOK-deletion.md (2026-11-11) — self-serve account deletion: the request, its queue and its 7-day record.
+      'account_deletion_requests',
       'billing_payments',
       'blocks',
       'brand_attachments',

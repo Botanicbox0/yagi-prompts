@@ -8,6 +8,8 @@ import type { RenderPassReport } from '@/lib/renders/service';
 import { getTossGateway } from '@/lib/billing/toss-gateway';
 import { reconcileBrandUsagePayments } from '@/lib/brands/usage/payment';
 import { runLiveFxThresholdAlertCheck, type FxThresholdAlertPassReport } from '@/lib/twings/fx-rate-alert';
+import { runDeletionPass, type DeletionPassReport } from '@/lib/account/deletion';
+import { liveDeletionDeps } from '@/lib/account/deletion-runtime';
 
 /**
  * `GET|POST /api/renders/tick` — one pass of the render queue (docs/TEMPLATES-IA.md §8).
@@ -50,12 +52,19 @@ async function tick(request: Request): Promise<NextResponse> {
   let fxAlert: FxThresholdAlertPassReport | null = null;
   try { fxAlert = await runLiveFxThresholdAlertCheck(); }
   catch { console.warn('[fx-alert] USD/KRW threshold check failed'); }
-  if (report === null) return NextResponse.json({ ok: false, code: 'pass_failed', brandUsage, fxAlert }, { status: 503, headers: HEADERS });
+  // Account deletion (docs/RUNBOOK-deletion.md): requests past their grace period, and cleanups left over.
+  // After the render and payment passes on purpose, so an order they just settled no longer holds an account.
+  // Counts only in the response and the log: no id, no address.
+  let accountDeletion: DeletionPassReport | null = null;
+  try { accountDeletion = await runDeletionPass(await liveDeletionDeps(sql)); }
+  catch { console.warn('[account-deletion] pass failed'); }
+  if (accountDeletion && (accountDeletion.held > 0 || accountDeletion.failed > 0)) console.warn(`[account-deletion] ${JSON.stringify({ event: 'deletion_pass', ...accountDeletion })}`);
+  if (report === null) return NextResponse.json({ ok: false, code: 'pass_failed', brandUsage, fxAlert, accountDeletion }, { status: 503, headers: HEADERS });
   for (const line of report.errors) console.warn(`[renders] ${line}`);
   const { errors, ...counts } = report;
   // Presence only, never a value: which engines this deployment can actually reach.
   const config = { openai: openAiConfigFromEnv() !== null, ark: arkConfigFromEnv() !== null, arkAssets: arkAssetsConfigFromEnv() !== null };
-  return NextResponse.json({ ok: true, summary: formatPassReport(report), report: counts, errorCount: errors.length, config, brandUsage, fxAlert }, { headers: HEADERS });
+  return NextResponse.json({ ok: true, summary: formatPassReport(report), report: counts, errorCount: errors.length, config, brandUsage, fxAlert, accountDeletion }, { headers: HEADERS });
 }
 
 export const GET = tick;

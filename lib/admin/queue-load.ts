@@ -13,6 +13,7 @@ import { countSocialQueue } from "@/lib/influencers/admin";
 import { platformReady } from "@/lib/creator-platform/service";
 import { creatorApplicationCount } from "@/lib/creator-platform/onboarding";
 import { countManualTossPayments } from "@/lib/billing/toss-service";
+import { countDeletionQueue, deletionReady } from "@/lib/account/deletion";
 import { campaignWorkCounts } from "./workflow";
 import { countRecentRenderFailures } from "./render-board";
 import type { AdminQueueCounts } from "./queues";
@@ -54,10 +55,15 @@ export async function loadAdminQueues(sql: SqlRunner, viewer: Viewer, now: Date 
   })().catch(() => null);
   const creatorTables = platformReady(sql).catch(() => false);
 
-  const [paymentsManual, renderFailures, risk, feedback, studio, inquiries, work, payouts, socialAccounts, creatorApplications, formats, templates] =
+  const [paymentsManual, renderFailures, accountDeletions, risk, feedback, studio, inquiries, work, payouts, socialAccounts, creatorApplications, formats, templates] =
     await Promise.all([
       counted(() => countManualTossPayments(sql)),
       counted(() => countRecentRenderFailures(sql, now)),
+      // Before 0064 the table is missing: "could not count", never a zero.
+      counted(async () => {
+        if (!(await deletionReady(sql))) throw new Error("account deletion table unavailable");
+        return countDeletionQueue(sql, now);
+      }),
       loadRiskQueueSummary(sql, viewer, now).catch(() => null),
       counted(() => countRenderFeedback(sql, "new")),
       counted(async () => {
@@ -82,6 +88,7 @@ export async function loadAdminQueues(sql: SqlRunner, viewer: Viewer, now: Date 
     counts: {
       paymentsManual,
       renderFailures,
+      accountDeletions,
       risk: risk === null ? null : risk.ready ? risk.open : null,
       feedback,
       studio,
