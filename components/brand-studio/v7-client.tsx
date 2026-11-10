@@ -38,6 +38,8 @@ export function Film({ src, poster, label, className, eager = false }: { src: st
     if (!video || reducedMotion()) return;
     const observer = new IntersectionObserver(([entry]) => {
       if (entry?.isIntersecting) {
+        video.defaultMuted = true;
+        video.muted = true;
         if (video.preload !== 'auto') video.preload = 'auto';
         void video.play().catch(() => {});
       } else video.pause();
@@ -316,9 +318,20 @@ export function HeroFilm({ src, srcSmall, srcLarge, poster, posterSmall, label, 
   const [cue, setCue] = useState(0);
   useEffect(() => {
     const video = ref.current;
-    if (!video || reducedMotion()) return;
+    if (!video) return;
+    let inView = true;
+    const tryPlay = () => {
+      if (!inView || document.hidden) return;
+      video.defaultMuted = true;
+      video.muted = true;
+      if (video.preload !== 'auto') video.preload = 'auto';
+      if (video.networkState === 0) video.load();
+      void video.play().catch(() => {});
+    };
+    tryPlay();
     const observer = new IntersectionObserver(([entry]) => {
-      if (entry?.isIntersecting) void video.play().catch(() => {});
+      inView = Boolean(entry?.isIntersecting);
+      if (inView) tryPlay();
       else video.pause();
     });
     observer.observe(video);
@@ -327,8 +340,17 @@ export function HeroFilm({ src, srcSmall, srcLarge, poster, posterSmall, label, 
       cues.forEach((item, index) => { if (video.currentTime >= item.at) next = index; });
       setCue(next);
     };
+    video.addEventListener('loadeddata', tryPlay);
+    video.addEventListener('canplay', tryPlay);
     video.addEventListener('timeupdate', onTime);
-    return () => { observer.disconnect(); video.removeEventListener('timeupdate', onTime); };
+    document.addEventListener('visibilitychange', tryPlay);
+    return () => {
+      observer.disconnect();
+      video.removeEventListener('loadeddata', tryPlay);
+      video.removeEventListener('canplay', tryPlay);
+      video.removeEventListener('timeupdate', onTime);
+      document.removeEventListener('visibilitychange', tryPlay);
+    };
   }, [cues]);
   return (
     <>
@@ -336,7 +358,7 @@ export function HeroFilm({ src, srcSmall, srcLarge, poster, posterSmall, label, 
         <source srcSet={posterSmall} media="(max-width: 759px)" />
         <img className={className} src={poster} alt="" fetchPriority="high" decoding="async" />
       </picture>
-      <video ref={ref} className={className} muted loop playsInline preload="metadata" aria-label={label} data-loop-video>
+      <video ref={ref} className={className} autoPlay muted loop playsInline preload="auto" aria-label={label} data-hero-video>
         <source src={srcSmall} media="(max-width: 759px)" type="video/mp4" />
         <source src={srcLarge} media="(min-width: 1700px) and (min-resolution: 1.5dppx), (min-width: 2400px)" type="video/mp4" />
         <source src={src} type="video/mp4" />
@@ -418,6 +440,8 @@ export function Remix({ formats, labels }: {
     films.current.forEach((video, index) => {
       if (!video) return;
       if (index === edit + 1 && visible && !reducedMotion()) {
+        video.defaultMuted = true;
+        video.muted = true;
         video.preload = 'auto';
         void video.play().catch(() => {});
       } else {
@@ -431,8 +455,12 @@ export function Remix({ formats, labels }: {
   useEffect(() => {
     const video = originalFilm.current;
     if (!video) return;
-    if (edit >= 0 && visible && !reducedMotion()) void video.play().catch(() => {});
-    else video.pause();
+    if (edit >= 0 && visible && !reducedMotion()) {
+      video.defaultMuted = true;
+      video.muted = true;
+      if (video.preload !== 'auto') video.preload = 'auto';
+      void video.play().catch(() => {});
+    } else video.pause();
   }, [edit, format, visible]);
 
   // Walks through the edits until the visitor picks one.

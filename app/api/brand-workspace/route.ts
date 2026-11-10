@@ -25,6 +25,32 @@ import {
 import { usagePaymentsOpen } from "@/lib/brands/usage/runtime";
 import { chooseShortlistCandidates, pickShortlistCandidate } from "@/lib/brands/shortlist/service";
 import {
+  coerceIdentityPayload,
+  confirmBrandIdentity,
+  draftFromTwingsDefaults,
+  ingestBrandOnboarding,
+  loadBrandIdentity,
+  promoteProjectDirectionToBase,
+  recordMemory,
+  saveBrandIdentity,
+  saveLook,
+  saveProjectDirectionOverride,
+} from "@/lib/brands/identity/service";
+import {
+  approveBrandBrief,
+  compileBrandBrief,
+  compileBrandSpatialStageBrief,
+  compileBrandVideoReverseBrief,
+  promoteBrandBrief,
+  reviseBrandBrief,
+} from "@/lib/brands/briefs/service";
+import { planBrandMicroRoiRepair } from "@/lib/brands/finish";
+import { planBrandSoundAndMusicStudio } from "@/lib/brands/sound";
+import {
+  createStakeholderReviewShare,
+  recordSpatialFramePin,
+} from "@/lib/brands/review";
+import {
   notifySlackBrandConcierge,
   syncSlackConciergeReplies,
 } from "@/lib/brands/concierge-slack";
@@ -80,7 +106,7 @@ export async function POST(request: NextRequest) {
             userId: viewer.userId,
             body: input.body,
             messageId: String((result as { id?: string }).id ?? ""),
-          });
+          }).catch(() => ({ sent: false }));
         }
         break;
       case "organization.create":
@@ -126,6 +152,115 @@ export async function POST(request: NextRequest) {
         break;
       case "shortlist.choose":
         result = await chooseShortlistCandidates({ sql }, viewer, input);
+        break;
+      case "identity.draftDefaults":
+        result = await draftFromTwingsDefaults({ sql }, viewer, input);
+        break;
+      case "identity.ingest":
+        result = await ingestBrandOnboarding({ sql }, viewer, input);
+        break;
+      case "projectDirection.save":
+        result = await saveProjectDirectionOverride({ sql }, viewer, input);
+        break;
+      case "projectDirection.promoteToBase":
+        result = await promoteProjectDirectionToBase({ sql }, viewer, input);
+        break;
+      case "identity.save": {
+        const existing =
+          typeof input.organizationId === "string"
+            ? await loadBrandIdentity(sql, input.organizationId)
+            : null;
+        result = await saveBrandIdentity({ sql }, viewer, {
+          organizationId: input.organizationId,
+          expectedRevision:
+            typeof input.expectedRevision === "number"
+              ? input.expectedRevision
+              : Number(input.expectedRevision ?? 0),
+          identity: coerceIdentityPayload(input, existing?.identity),
+          status: "draft",
+        });
+        break;
+      }
+      case "identity.confirm":
+        result = await confirmBrandIdentity({ sql }, viewer, {
+          organizationId: input.organizationId,
+          expectedRevision:
+            typeof input.expectedRevision === "number"
+              ? input.expectedRevision
+              : Number(input.expectedRevision ?? 0),
+        });
+        break;
+      case "memory.record": {
+        const payload =
+          input.payload && typeof input.payload === "object"
+            ? input.payload
+            : {
+                summary:
+                  typeof input.summary === "string" ? input.summary.trim() : "",
+              };
+        result = await recordMemory({ sql }, viewer, {
+          organizationId: input.organizationId,
+          kind: input.kind,
+          payload,
+        });
+        break;
+      }
+      case "look.save":
+        result = await saveLook({ sql }, viewer, {
+          organizationId: input.organizationId,
+          title: input.title,
+          lutKey: input.lutKey,
+          intensity:
+            input.intensity !== undefined && input.intensity !== ""
+              ? Number(input.intensity)
+              : 1,
+          skinProtect:
+            input.skinProtect === undefined
+              ? true
+              : input.skinProtect === true ||
+                input.skinProtect === "on" ||
+                input.skinProtect === "true",
+          source: input.source,
+        });
+        break;
+      case "brief.compile":
+        result = await compileBrandBrief({ sql }, viewer, input);
+        break;
+      case "brief.revise":
+        result = await reviseBrandBrief({ sql }, viewer, input);
+        break;
+      case "brief.approve":
+        result = await approveBrandBrief({ sql }, viewer, input);
+        break;
+      case "brief.promoteFinal":
+        result = await promoteBrandBrief({ sql }, viewer, input);
+        break;
+      case "brief.videoReverse":
+        result = await compileBrandVideoReverseBrief({ sql }, viewer, input);
+        break;
+      case "brief.spatialStage":
+        result = await compileBrandSpatialStageBrief({ sql }, viewer, input);
+        break;
+      case "soundStudio.plan":
+        result = await planBrandSoundAndMusicStudio({ sql }, viewer, input);
+        break;
+      case "reviewShare.create":
+        result = await createStakeholderReviewShare({ sql }, viewer, input);
+        break;
+      case "reviewShare.pin":
+        result = await recordSpatialFramePin({ sql }, viewer, input);
+        break;
+      case "microRoi.plan":
+        result = await planBrandMicroRoiRepair({ sql }, viewer, {
+          ...input,
+          enqueueWorkstationJob: false,
+        });
+        break;
+      case "microRoi.queue":
+        result = await planBrandMicroRoiRepair({ sql }, viewer, {
+          ...input,
+          enqueueWorkstationJob: true,
+        });
         break;
       case "attachment.reserve": {
         const reserved = await reserveBrandAttachment({ sql }, viewer, input);
@@ -180,9 +315,12 @@ export async function GET(request:NextRequest) {
  const [viewer,sql]=await Promise.all([getViewer(),getSqlRunner()]);
  if(!sql||!viewer.userId)return json({ok:false},404);
  const organizationId = request.nextUrl.searchParams.get('organizationId') ?? '';
+ const verifiedEmail = await getVerifiedEmail(viewer.userId);
+ const initialMessages=await loadBrandSupport({sql,verifiedEmail},viewer,organizationId);
+ if(!initialMessages)return json({ok:false},404);
  if (organizationId) {
   await syncSlackConciergeReplies(sql, organizationId);
  }
- const messages=await loadBrandSupport({sql,verifiedEmail:await getVerifiedEmail(viewer.userId)},viewer,organizationId);
+ const messages=await loadBrandSupport({sql,verifiedEmail},viewer,organizationId);
  return messages?json({ok:true,messages}):json({ok:false},404);
 }

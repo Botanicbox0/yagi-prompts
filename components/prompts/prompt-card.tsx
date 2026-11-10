@@ -85,13 +85,13 @@ export function PromptCardView({
         </a>
       </h3>
       {/* Length, shape and the open recipe sit under the title: the picture stays clean. */}
-      <p className="mt-1 flex flex-wrap gap-x-1.5 text-xs text-[#676b75] tabular-nums">
+      <p className="mt-1 flex flex-wrap gap-x-1.5 text-xs text-muted tabular-nums">
         {seconds !== null && <span data-card-duration>{labels.cardSeconds.replace('{seconds}', String(seconds))}</span>}
         <span data-card-aspect>{cardAspect(card)}</span>
         {card.recipeOpen && <span data-card-recipe>{labels.cardRecipe}</span>}
       </p>
       {author && (
-        <p data-card-author className="mt-0.5 truncate text-xs text-[#676b75]">
+        <p data-card-author className="mt-0.5 truncate text-xs text-muted">
           {author.handle ? labels.cardAuthor.replace('{handle}', author.handle) : labels.cardAuthorAnonymous}
         </p>
       )}

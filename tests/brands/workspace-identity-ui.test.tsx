@@ -95,9 +95,9 @@ describe('selection rule', () => {
   });
 
   it('shows sections by the selected brand role and keeps the brand when switching', () => {
-    expect(sectionVisibility(choices[0]!)).toEqual({ studio: true, settings: true, members: true });
-    expect(sectionVisibility(choices[1]!)).toEqual({ studio: true, settings: true, members: false });
-    expect(sectionVisibility(choices[2]!)).toEqual({ studio: false, settings: false, members: false });
+    expect(sectionVisibility(choices[0]!)).toEqual({ studio: true, identity: true, settings: true, members: true });
+    expect(sectionVisibility(choices[1]!)).toEqual({ studio: true, identity: true, settings: true, members: false });
+    expect(sectionVisibility(choices[2]!)).toEqual({ studio: false, identity: false, settings: false, members: false });
     expect(switchHref('/brand/members', choices[1]!)).toBe(`/brand?organizationId=${B}`);
     expect(switchHref('/brand/settings', choices[1]!)).toBe(`/brand/settings?organizationId=${B}`);
     expect(switchHref('/brand/settings', choices[2]!)).toBe(`/brand?organizationId=${G}`);
@@ -186,8 +186,9 @@ describe('pages scoped to the selected brand', () => {
   });
 
   it('library loads the selected brand only, with all of its content', async () => {
-    await html(ContentLibrary(search(G)));
+    const page = await html(ContentLibrary(search(G)));
     expect(state.workspaceCalls).toEqual([{ includeAllContent: true, organizationId: G }]);
+    expect(page).toContain('data-library-summary-bar');
   });
 
   it('library points members and the TWINGS team at the selected brand\'s studio history, never campaign-only guests', async () => {
@@ -216,13 +217,18 @@ describe('pages scoped to the selected brand', () => {
   });
 
   it('team and settings follow the selected role, and back links keep the brand', async () => {
-    expect(await html(MembersPage(search(A)))).toContain(b.createInvite);
+    const ownerTeam = await html(MembersPage(search(A)));
+    expect(ownerTeam).toContain(b.createInvite);
+    expect(ownerTeam).toContain('data-team-summary-bar');
+    expect(ownerTeam).toContain('data-sota-invite-composer');
+    expect(ownerTeam).toContain('data-team-role-matrix');
     const viewerTeam = await html(MembersPage(search(B)));
     expect(viewerTeam).toContain(b.access.ownerOnlyTeam);
     expect(viewerTeam).toContain(`href="/brand?organizationId=${B}"`);
     expect(await html(MembersPage(search(G)))).toContain(b.access.sharedOnly);
     const ownerSettings = await html(BrandSettings(search(A)));
     expect(ownerSettings).toContain('data-brand-logo-control');
+    expect(ownerSettings).toContain('data-settings-sota-grid');
     const viewerSettings = await html(BrandSettings(search(B)));
     expect(viewerSettings).toContain('data-brand-settings-read-only');
     expect(viewerSettings).not.toContain('data-brand-logo-control');
@@ -236,5 +242,77 @@ describe('pages scoped to the selected brand', () => {
     expect(owned).not.toContain(`value="${B}"`);
     expect(await html(NewBrandProject(search(B)))).toContain(b.access.viewerCannotRequest);
     expect(await html(NewBrandProject(search(G)))).toContain(b.access.sharedOnly);
+  });
+
+  it('hides every trace of studio, identity, and generative video production for a brand with Morphic policy', async () => {
+    const M = 'deb648e9-c2df-43d4-b2a7-7f9eff8180d9';
+    const morphicChoice: BrandWorkspaceChoice = {
+      id: M,
+      name: 'Morphic fixture',
+      role: 'owner',
+      logoUrl: null,
+      denied: ['generative_media', 'sound', 'color_grading'],
+    };
+    state.scope = {
+      choices: [morphicChoice],
+      projectOrganizations: {},
+    };
+    state.projects = [];
+
+    expect(sectionVisibility(morphicChoice)).toEqual({
+      studio: false,
+      identity: false,
+      settings: true,
+      members: true,
+    });
+
+    const navHtml = renderToStaticMarkup(
+      <WorkspaceNavigation
+        home="Home"
+        members="Team"
+        settings="Settings"
+        library="Library"
+        studio="Studio"
+        identity="Brand"
+        scope={state.scope}
+      />
+    );
+    expect(navHtml).not.toContain('/brand/studio');
+    expect(navHtml).not.toContain('/brand/identity');
+    expect(navHtml).toContain('data-brand-layout-mode="sidebar"');
+
+    const standardNavHtml = renderToStaticMarkup(
+      <WorkspaceNavigation
+        home="Home"
+        members="Team"
+        settings="Settings"
+        library="Library"
+        studio="Studio"
+        identity="Brand"
+        scope={{
+          choices: [
+            {
+              id: A,
+              name: 'Alpha',
+              role: 'owner',
+              logoUrl: null,
+              denied: [],
+            },
+          ],
+          projectOrganizations: {},
+        }}
+      />
+    );
+    expect(standardNavHtml).toContain('data-brand-layout-mode="topbar"');
+
+    const homeHtml = await html(BrandHome(search(M)));
+    expect(homeHtml).not.toContain('data-track="studio"');
+    expect(homeHtml).not.toContain('/brand/studio');
+    expect(homeHtml).not.toContain('YAGI PRODUCTION');
+    expect(homeHtml).not.toContain('포맷 영상 생성');
+
+    const libHtml = await html(ContentLibrary(search(M)));
+    expect(libHtml).not.toContain('data-library-studio-link');
+    expect(libHtml).not.toContain('/brand/studio');
   });
 });

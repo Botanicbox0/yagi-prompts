@@ -5,6 +5,7 @@ import type { Viewer } from "@/lib/auth/identity";
 import type { SqlRunner } from "@/lib/db/sql-runner";
 import { loadPromptById, type PromptRow } from "@/lib/prompts/repo";
 import { hasStaffReadAccess } from "@/lib/brands/workspace/staff";
+import { assertBrandFeature, BrandFeatureDenied } from "@/lib/brands/entitlements";
 
 export interface ProductionDeps {
   sql: SqlRunner;
@@ -22,7 +23,9 @@ export type ProductionCode =
   | "invalid"
   | "conflict"
   | "contract_inactive"
-  | "quota_exhausted";
+  | "quota_exhausted"
+  /** The organization's feature policy closes generative media (lib/brands/entitlements.ts). */
+  | "feature_unavailable";
 export type ProductionResult<T = { id: string }> =
   ({ ok: true } & T) | { ok: false; code: ProductionCode };
 type Row = Record<string, unknown>;
@@ -326,6 +329,9 @@ export async function loadProductionWorkspace(
           ? "studio"
           : await reader(sql, user, organizationId, deps.verifiedEmail),
         internal = role === "studio";
+      if (!studio) {
+        await assertBrandFeature(sql, organizationId, "generative_media");
+      }
       const now = +(deps.now ?? new Date());
       const rows = (
         await sql.query<Row>(
@@ -386,7 +392,7 @@ export async function loadProductionWorkspace(
       return { role, contracts, jobs };
     });
   } catch (e) {
-    if (e instanceof Denied) return null;
+    if (e instanceof Denied || e instanceof BrandFeatureDenied) return null;
     throw e;
   }
 }
@@ -433,6 +439,8 @@ export async function reserveProduction<F extends string>(
       ).rows[0];
       if (!contract) throw new Denied("not_found");
       await member(sql, user, String(contract.organization_id), true);
+      // A closed door, not a quota: the policy is checked where the work would start.
+      await assertBrandFeature(sql, String(contract.organization_id), "generative_media");
       const prior = (
         await sql.query<Row>(
           "select r.*,j.status from brand_production_reservations r join render_jobs j on j.id=r.render_id where r.user_id=$1 and r.request_id=$2",
@@ -502,6 +510,7 @@ export async function reserveProduction<F extends string>(
     });
   } catch (e) {
     if (e instanceof Denied) return { ok: false, code: e.code };
+    if (e instanceof BrandFeatureDenied) return { ok: false, code: "feature_unavailable" };
     if ((e as { code?: string }).code === "23505")
       return { ok: false, code: "conflict" };
     throw e;
@@ -526,6 +535,7 @@ export async function loadProductionOutput(
       ).rows[0];
       if (!row) return null;
       await reader(sql, user, String(row.organization_id), deps.verifiedEmail);
+      await assertBrandFeature(sql, String(row.organization_id), "generative_media");
       return {
         id: String(row.id),
         organizationId: String(row.organization_id),
@@ -538,7 +548,7 @@ export async function loadProductionOutput(
       };
     });
   } catch (e) {
-    if (e instanceof Denied) return null;
+    if (e instanceof Denied || e instanceof BrandFeatureDenied) return null;
     throw e;
   }
 }

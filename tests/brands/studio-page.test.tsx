@@ -45,7 +45,15 @@ describe("brand studio page", () => {
     const html = await render();
     expect(html).toContain(`<p class="bw-kicker">${t.eyebrow}</p>`);
     expect(html).toContain(t.previewPending);
-    expect(html).not.toMatch(/seedance/i);
+    expect(html).toContain("data-brand-brief-studio");
+    expect(html).toContain("data-studio-core-tracks");
+    expect(html).toContain("GPT Image 2.6");
+    expect(html).toContain("Nano Banana Pro");
+    expect(html).toContain("Nano Banana 2.1");
+    expect(html).toContain("Nano Banana 2.0");
+    expect(html).toContain("Seedream 5.0 Pro");
+    expect(html).toContain("Seedance 2.5");
+    expect(html).not.toMatch(/comfyui|higgsfield/i);
   });
 
   it("keeps the face setup link relative off the brand host, through sign-in with the workspace language", async () => {

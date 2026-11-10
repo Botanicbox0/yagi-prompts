@@ -6,6 +6,7 @@ import { ScrollProvider } from '@/components/motion/scroll-provider';
 import { Notice } from '@/components/marketing/notice';
 import { RegisterServiceWorker } from '@/components/pwa/register-sw';
 import { BottomTabs } from '@/components/app/bottom-tabs';
+import { TwingsAiConcierge } from '@/components/support/twings-ai-concierge';
 import { noticeLabels } from '@/components/marketing/notice-codes';
 import { LOCALES, isLocale, DEFAULT_LOCALE, type Locale } from '@/lib/i18n/config';
 import { getDictionary } from '@/lib/i18n/dictionaries';
@@ -100,6 +101,7 @@ export default async function MarketingRootLayout({
           {children}
         </ScrollProvider>
         <RegisterServiceWorker />
+        <TwingsAiConcierge locale={locale} />
         {/* Standalone only — renders nothing in a browser tab or in this static HTML. */}
         <BottomTabs locale={locale} labels={dict.appShell.tabs} />
       </body>

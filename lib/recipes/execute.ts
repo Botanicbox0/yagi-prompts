@@ -38,6 +38,8 @@ export interface RecipeRunContext {
   engines: RenderEngineDeps;
   /** The customer's photo as stored on the job (`{job}/input.*`). */
   selfie: (RenderPhoto & { key: string }) | null;
+  /** Optional non-person user slot files (`product | scene | look | mask`) for faceless brand recipes. */
+  userSlots?: Record<string, RenderPhoto & { key: string }>;
   /** A maker file by its `ast_…` handle (private bucket), or null when it is gone. */
   makerFile(handle: string): Promise<MakerFile | null>;
   /** The customer's face (selfie or a result made from it) as a verified-library asset. Throws RenderFailure on refusal. */
@@ -172,6 +174,12 @@ async function gather(ctx: RecipeRunContext, step: RecipeStep, records: Record<s
       continue;
     }
     const slot = ctx.recipe.slots[name];
+    if (slot?.source === 'user') {
+      const file = ctx.userSlots?.[name];
+      if (!file) throw new RenderFailure('engine_error', `user slot ${name} is missing`, false);
+      inputs.push({ name, key: file.key, mime: file.mime, kind: 'image', bytes: file.bytes });
+      continue;
+    }
     if (slot?.source === 'creator') {
       const file = await ctx.makerFile(slot.asset);
       if (!file || file.kind !== slot.kind) throw new RenderFailure('engine_error', `maker file ${slot.asset} is missing`, false);

@@ -10,7 +10,7 @@ export default async function ContentLibrary({
 }: {
   searchParams: Promise<{ organizationId?: string | string[] }>;
 }) {
-  const [{ organizationId }, { sql, viewer, verifiedEmail, b }] = await Promise.all([searchParams, brandContext()]);
+  const [{ organizationId }, { sql, viewer, verifiedEmail, b, locale }] = await Promise.all([searchParams, brandContext()]);
   if (!sql) return <p role="alert">{b.unavailable}</p>;
   const { selection, choice } = await brandScope({ sql, verifiedEmail }, viewer, organizationId);
   if (selection.state === "unavailable") return <BrandUnavailable b={b} />;
@@ -20,7 +20,12 @@ export default async function ContentLibrary({
       : { organizations: [], projects: [] },
     contents = w.projects.flatMap((p) =>
       (p.overview?.contents ?? []).map((c) => ({ p, c })),
-    );
+    ),
+    approvedCount = contents.filter(({ c }) => c.decision === "approved").length,
+    pendingCount = contents.filter(({ c }) => c.decision === "pending").length,
+    changesCount = contents.filter(({ c }) => c.decision === "changes_requested").length,
+    studioVisible = Boolean(choice && sectionVisibility(choice).studio),
+    isKo = locale !== "en";
   return (
     <div data-brand-library>
       <div className="bw-heading">
@@ -31,15 +36,40 @@ export default async function ContentLibrary({
           </div>
           <p>{b.managed.libraryHint}</p>
         </div>
+        {studioVisible && (
+          <a href={scopedHref("/brand/studio", choice)} className="bw-button bw-primary">
+            {isKo ? "스튜디오 열기 →" : "Open Studio →"}
+          </a>
+        )}
       </div>
       {choice?.role === "studio" && <StaffNotice b={b} />}
-      {/* Studio-made videos live in the studio history. Same rule as the sidebar: campaign-only guests have no studio. */}
-      {choice && sectionVisibility(choice).studio && (
-        <p className="bw-note" data-library-studio-link>
-          {b.managed.libraryStudio}{" "}
-          <a href={scopedHref("/brand/studio#studio-history", choice)}>{b.managed.libraryStudioLink} →</a>
-        </p>
-      )}
+      <div className="bw-sota-library-bar" data-library-summary-bar>
+        <div className="bw-sota-library-pills">
+          <span className="bw-sota-stat-pill" data-state="all">
+            <span>{isKo ? "전체 에셋" : "All Assets"}</span>
+            <strong>{contents.length}</strong>
+          </span>
+          <span className="bw-sota-stat-pill" data-state="approved">
+            <span>{b.decisionStates.approved}</span>
+            <strong>{approvedCount}</strong>
+          </span>
+          <span className="bw-sota-stat-pill" data-state="pending">
+            <span>{b.decisionStates.pending}</span>
+            <strong>{pendingCount}</strong>
+          </span>
+          <span className="bw-sota-stat-pill" data-state="changes_requested">
+            <span>{b.decisionStates.changes_requested}</span>
+            <strong>{changesCount}</strong>
+          </span>
+        </div>
+        {/* Studio-made videos live in the studio history. Same rule as the sidebar: campaign-only guests have no studio. */}
+        {studioVisible && (
+          <p className="bw-note" data-library-studio-link style={{ margin: 0 }}>
+            {b.managed.libraryStudio}{" "}
+            <a href={scopedHref("/brand/studio#studio-history", choice)}>{b.managed.libraryStudioLink} →</a>
+          </p>
+        )}
+      </div>
       {contents.length ? (
         <div className="bw-content-grid">
           {contents.map(({ p, c }) => (

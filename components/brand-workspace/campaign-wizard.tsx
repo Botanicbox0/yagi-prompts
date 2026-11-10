@@ -13,6 +13,16 @@ import {
   checkWizardStep, clearWizardDraft, firstIncompleteStep, kstToday, loadWizardDraft, saveWizardDraft, termsFromDraft,
   type CampaignTerms, type StepIssue, type WizardDraft, type WizardStep,
 } from "@/lib/brands/workspace/campaign-terms";
+import {
+  getAvailableCommissionTracks,
+  type CommissionTrackId,
+  type CommissionTrackSpec,
+} from "@/lib/brands/workspace/commission-tracks";
+import {
+  compileOledCinemaColorGradePlan,
+  evaluateOpticalIdentityLockV2,
+} from "@/lib/brands/production-pipeline/video-creator-techniques";
+import { resolveCategoryExperienceProfile } from "@/lib/brands/category-experience";
 
 /** A public format the brand may pick: the catalogue card's own media, nothing about its prompt. */
 export interface WizardFormat {
@@ -39,9 +49,11 @@ function messageFor(issue: StepIssue, t: Copy): string {
 }
 
 /**
- * docs/PLATFORM-2.0.md §16.3 — the five-step campaign request. Every change is kept as a draft in
- * this browser (per workspace) and nothing reaches TWINGS until step ⑤ sends it through the
- * existing `project.create` operation, where the server checks the same schemas again.
+ * docs/PLATFORM-2.0.md §16.3 — Unified Commission Intake:
+ * - Track Selector (`data-commission-track-selector`):
+ *   1. `creator_campaign`: 5-step Influencer Seeding Campaign Wizard
+ *   2. `template_build`: 1-page Custom Brand Template Build (mounts to `/brand/studio` when approved; hidden when `generativeClosed`)
+ *   3. `studio_film`: 1-page Master Commercial Video Production (delivers 1080p master to Review Room & `/brand/library`)
  */
 export function CampaignWizard({
   b,
@@ -49,6 +61,8 @@ export function CampaignWizard({
   organizations,
   formats,
   initial,
+  generativeClosed = false,
+  initialTrack,
 }: {
   b: BrandCopy;
   locale: string;
@@ -56,8 +70,23 @@ export function CampaignWizard({
   formats: WizardFormat[];
   /** Where to start when this browser has no saved draft (tests and QA captures). */
   initial?: WizardDraft;
+  /** True when the organization's policy closes self-serve generative studio features (e.g. Morphic sandbox). */
+  generativeClosed?: boolean;
+  /** Optional initial track query param (`?track=template_build` | `?track=studio_film`). */
+  initialTrack?: string;
 }) {
+  const isEn = locale === "en";
   const t = b.wizard;
+  const availableTracks = getAvailableCommissionTracks({ generativeClosed, locale });
+  const resolvedInitialTrack: CommissionTrackId =
+    initialTrack && availableTracks.some((tr) => tr.id === initialTrack)
+      ? (initialTrack as CommissionTrackId)
+      : "creator_campaign";
+
+  const [selectedTrack, setSelectedTrack] = useState<CommissionTrackId>(resolvedInitialTrack);
+  const activeTrackSpec =
+    availableTracks.find((tr) => tr.id === selectedTrack) ?? availableTracks[0]!;
+
   const [draft, setDraft] = useState<WizardDraft>(() => initial ?? empty());
   const [organizationId, setOrganizationId] = useState(organizations[0]!.id);
   const [errors, setErrors] = useState<Errors>({});
@@ -158,66 +187,505 @@ export function CampaignWizard({
 
   const terms = step === "review" ? termsFromDraft(draft) : null;
   return (
-    <div className="bw-wizard" data-campaign-wizard={step} data-wizard-organization={organizationId}>
-      <ol ref={stepper} className="bw-wizard-steps" aria-label={t.stepsLabel}>
-        {WIZARD_STEPS.map((s, i) => (
-          <li key={s} data-wizard-step-state={i < index ? "done" : i === index ? "current" : "upcoming"} aria-current={i === index ? "step" : undefined}>
-            {i < index ? (
-              <button type="button" className="bw-wizard-step" onClick={() => go(s)}>
-                <span aria-hidden="true">{i + 1}</span>{t.steps[s]}
-              </button>
-            ) : (
-              <span className="bw-wizard-step"><span aria-hidden="true">{i + 1}</span>{t.steps[s]}</span>
-            )}
-          </li>
-        ))}
-      </ol>
-      <p className="bw-muted bw-wizard-draft" role="status" data-wizard-draft={notice || undefined}>
-        {notice === "saved" ? t.draftSaved : notice === "restored" ? t.draftRestored : notice === "unavailable" ? t.draftUnavailable : ""}
-      </p>
+    <div
+      className="bw-wizard"
+      data-campaign-wizard={step}
+      data-wizard-organization={organizationId}
+      data-active-commission-track={selectedTrack}
+    >
+      {/* Frame.io V4-style 3-Track Commission Selector */}
+      <section
+        className="ys-commission-track-selector"
+        data-commission-track-selector
+        aria-label={isEn ? "Select Commission Track" : "의뢰 트랙 선택"}
+      >
+        <div className="ys-commission-track-header">
+          <div>
+            <span className="ys-kicker-badge">
+              {isEn ? "SELECT COMMISSION TRACK" : "제작 및 캠페인 의뢰"}
+            </span>
+            <h2>
+              {isEn
+                ? "How should YAGI produce and deliver this project?"
+                : "어떤 방식으로 제작을 의뢰하시겠습니까?"}
+            </h2>
+            <p className="bw-muted">
+              {isEn
+                ? "Every track opens a dedicated Project Room for asset sharing, frame-accurate feedback, and stakeholder review links."
+                : "선택한 트랙에 맞춰 꼭 필요한 항목만 입력합니다. 의뢰 즉시 에셋 폴더 공유·타임코드 시사·외부 공유 링크 기능이 갖춰진 전용 프로젝트 룸이 열립니다."}
+            </p>
+          </div>
+          {!generativeClosed && (
+            <a
+              href={`/brand/studio?organizationId=${encodeURIComponent(organizationId)}`}
+              className="bw-button"
+              data-self-studio-shortcut
+            >
+              {isEn
+                ? "Direct Generation in Self Studio →"
+                : "셀프 스튜디오에서 직접 생성하기 →"}
+            </a>
+          )}
+        </div>
 
-      <section className="bw-panel bw-wizard-panel" aria-labelledby="wizard-heading">
-        <p className="bw-kicker">{interpolate(t.stepOf, { number: index + 1 })}</p>
-        <h2 id="wizard-heading" ref={heading} tabIndex={-1}>{step === "review" ? t.review.heading : t[step].heading}</h2>
-        {Object.keys(errors).length > 0 && <p className="bw-error" role="alert" data-wizard-errors>{t.fixFields}</p>}
-
-        {step === "review" ? (
-          <Review t={t} b={b} locale={locale} draft={draft} terms={terms} formatTitle={terms?.format.kind === "template" ? formats.find((f) => f.slug === (terms.format as { slug: string }).slug)?.title ?? null : null} organizationName={organizations.find((o) => o.id === organizationId)?.name ?? ""} onEdit={go}>
-            {terms && (
-              <ActionForm
-                operation="project.create"
-                b={b}
-                submit={t.review.send}
-                successNotice={t.review.sent}
-                onSuccess={() => clearWizardDraft(local(), organizationId)}
-                fixed={{
-                  organizationId, title: draft.title, objective: draft.objective, audience: "",
-                  budgetKrw: terms.reward.totalBudgetKrw, budgetTaxBasis: terms.reward.taxBasis,
-                  startsOn: null, endsOn: terms.schedule.postDeadlineOn, productionMode: "creator",
-                  campaignTerms: terms,
-                }}
+        <div className="ys-commission-track-grid" role="radiogroup">
+          {availableTracks.map((track) => {
+            const isSelected = track.id === selectedTrack;
+            return (
+              <button
+                key={track.id}
+                type="button"
+                role="radio"
+                aria-checked={isSelected}
+                data-commission-track={track.id}
+                className={`ys-commission-track-card ${
+                  isSelected ? "ys-commission-track-card-active" : ""
+                }`}
+                onClick={() => setSelectedTrack(track.id)}
               >
-                <p className="bw-note">{t.review.after}</p>
-              </ActionForm>
-            )}
-          </Review>
-        ) : (
-          <form className="bw-form" onSubmit={advance} noValidate>
-            <fieldset disabled={!ready}>
-              {step === "format" && <FormatStep t={t} draft={draft} errors={errors} update={update} part={part("format")} patch={(p) => patchPart("format", p)} formats={formats} organizations={organizations} organizationId={organizationId} setOrganizationId={setOrganizationId} />}
-              {step === "reward" && <RewardStep t={t} locale={locale} errors={errors} part={part("reward")} patch={(p) => patchPart("reward", p)} />}
-              {step === "audience" && <AudienceStep t={t} errors={errors} part={part("audience")} set={(p) => update({ audience: p })} patch={(p) => patchPart("audience", p)} />}
-              {step === "schedule" && <ScheduleStep t={t} errors={errors} part={part("schedule")} patch={(p) => patchPart("schedule", p)} />}
-            </fieldset>
-            <div className="bw-form-actions bw-wizard-actions">
-              {index > 0 && <button type="button" className="bw-button" onClick={() => go(WIZARD_STEPS[index - 1]!)}>← {t.previous}</button>}
-              <button type="submit" className="bw-button bw-primary" disabled={!ready} data-wizard-next>{t.next} →</button>
-            </div>
-          </form>
-        )}
+                <div className="ys-track-card-top">
+                  <span className="ys-track-step-badge">{track.stepBadge}</span>
+                  {isSelected && (
+                    <span className="ys-track-selected-dot">
+                      {isEn ? "Selected ●" : "선택됨 ●"}
+                    </span>
+                  )}
+                </div>
+                <h3>{track.title}</h3>
+                <p className="ys-track-subtitle">{track.subtitle}</p>
+                <p className="ys-track-summary">{track.summary}</p>
+                <div className="ys-track-structure-pills">
+                  {track.includedStructure.map((pill) => (
+                    <span key={pill} className="ys-track-structure-pill">
+                      {pill}
+                    </span>
+                  ))}
+                </div>
+                <div className="ys-track-destination">
+                  <strong>{track.deliverableDestination.badge}</strong>
+                  <span>{track.deliverableDestination.label}</span>
+                </div>
+              </button>
+            );
+          })}
+        </div>
       </section>
-      <button type="button" className="bw-button bw-wizard-reset" onClick={startOver}>{t.startOver}</button>
+
+      {selectedTrack === "creator_campaign" ? (
+        <>
+          <ol ref={stepper} className="bw-wizard-steps" aria-label={t.stepsLabel}>
+            {WIZARD_STEPS.map((s, i) => (
+              <li key={s} data-wizard-step-state={i < index ? "done" : i === index ? "current" : "upcoming"} aria-current={i === index ? "step" : undefined}>
+                {i < index ? (
+                  <button type="button" className="bw-wizard-step" onClick={() => go(s)}>
+                    <span aria-hidden="true">{i + 1}</span>{t.steps[s]}
+                  </button>
+                ) : (
+                  <span className="bw-wizard-step"><span aria-hidden="true">{i + 1}</span>{t.steps[s]}</span>
+                )}
+              </li>
+            ))}
+          </ol>
+          <p className="bw-muted bw-wizard-draft" role="status" data-wizard-draft={notice || undefined}>
+            {notice === "saved" ? t.draftSaved : notice === "restored" ? t.draftRestored : notice === "unavailable" ? t.draftUnavailable : ""}
+          </p>
+
+          <section className="bw-panel bw-wizard-panel" aria-labelledby="wizard-heading">
+            <p className="bw-kicker">{interpolate(t.stepOf, { number: index + 1 })}</p>
+            <h2 id="wizard-heading" ref={heading} tabIndex={-1}>{step === "review" ? t.review.heading : t[step].heading}</h2>
+            {Object.keys(errors).length > 0 && <p className="bw-error" role="alert" data-wizard-errors>{t.fixFields}</p>}
+
+            {step === "review" ? (
+              <Review t={t} b={b} locale={locale} draft={draft} terms={terms} formatTitle={terms?.format.kind === "template" ? formats.find((f) => f.slug === (terms.format as { slug: string }).slug)?.title ?? null : null} organizationName={organizations.find((o) => o.id === organizationId)?.name ?? ""} onEdit={go}>
+                {terms && (
+                  <ActionForm
+                    operation="project.create"
+                    b={b}
+                    submit={t.review.send}
+                    successNotice={t.review.sent}
+                    onSuccess={() => clearWizardDraft(local(), organizationId)}
+                    fixed={{
+                      organizationId, title: draft.title, objective: draft.objective, audience: "",
+                      budgetKrw: terms.reward.totalBudgetKrw, budgetTaxBasis: terms.reward.taxBasis,
+                      startsOn: null, endsOn: terms.schedule.postDeadlineOn, productionMode: "creator",
+                      campaignTerms: terms,
+                    }}
+                  >
+                    <p className="bw-note">{t.review.after}</p>
+                  </ActionForm>
+                )}
+              </Review>
+            ) : (
+              <form className="bw-form" onSubmit={advance} noValidate>
+                <fieldset disabled={!ready}>
+                  {step === "format" && <FormatStep t={t} locale={locale} draft={draft} errors={errors} update={update} part={part("format")} patch={(p) => patchPart("format", p)} formats={formats} organizations={organizations} organizationId={organizationId} setOrganizationId={setOrganizationId} />}
+                  {step === "reward" && <RewardStep t={t} locale={locale} errors={errors} part={part("reward")} patch={(p) => patchPart("reward", p)} />}
+                  {step === "audience" && <AudienceStep t={t} errors={errors} part={part("audience")} set={(p) => update({ audience: p })} patch={(p) => patchPart("audience", p)} />}
+                  {step === "schedule" && <ScheduleStep t={t} errors={errors} part={part("schedule")} patch={(p) => patchPart("schedule", p)} />}
+                </fieldset>
+                <div className="bw-form-actions bw-wizard-actions">
+                  {index > 0 && <button type="button" className="bw-button" onClick={() => go(WIZARD_STEPS[index - 1]!)}>← {t.previous}</button>}
+                  <button type="submit" className="bw-button bw-primary" disabled={!ready} data-wizard-next>{t.next} →</button>
+                </div>
+              </form>
+            )}
+          </section>
+          <button type="button" className="bw-button bw-wizard-reset" onClick={startOver}>{t.startOver}</button>
+        </>
+      ) : (
+        <ExpressCommissionBrief
+          track={activeTrackSpec}
+          b={b}
+          locale={locale}
+          organizations={organizations}
+          organizationId={organizationId}
+          setOrganizationId={setOrganizationId}
+        />
+      )}
     </div>
+  );
+}
+
+/**
+ * 1-Page Express Brief for Track 2 (`template_build` — Custom Template Build Only)
+ * and Track 3 (`studio_film` — Master Commercial Video Production Only).
+ * Submits directly via `project.create` (`productionMode: "studio"`) without forcing influencer payout/hashtag steps.
+ */
+function ExpressCommissionBrief({
+  track,
+  b,
+  locale,
+  organizations,
+  organizationId,
+  setOrganizationId,
+}: {
+  track: CommissionTrackSpec;
+  b: BrandCopy;
+  locale: string;
+  organizations: Array<{ id: string; name: string }>;
+  organizationId: string;
+  setOrganizationId: (id: string) => void;
+}) {
+  const isEn = locale === "en";
+  const isTemplateBuild = track.id === "template_build";
+
+  const [title, setTitle] = useState("");
+  const [aspect, setAspect] = useState<"9:16" | "4:5" | "16:9" | "1:1">(track.defaultAspect);
+  const [specOption, setSpecOption] = useState(
+    isTemplateBuild ? "monthly_30" : "15s_master"
+  );
+  const [channelOrLock, setChannelOrLock] = useState(
+    isTemplateBuild
+      ? isEn
+        ? "Product packshot + Brand logo endcard"
+        : "제품 패키지 원형 + 브랜드 로고 엔드카드"
+      : isEn
+        ? "Instagram Reels · YouTube Shorts · Paid Ad Master"
+        : "공식 인스타그램 릴스 · 유튜브 숏츠 · 광고 집행용 마스터"
+  );
+  const [concept, setConcept] = useState("");
+  const [endsOn, setEndsOn] = useState("");
+
+  // Under-the-hood SOTA pipeline synthesis (compiled into project spec without exposing backend jargon to customer UI)
+  const activeOrgName = organizations.find((o) => o.id === organizationId)?.name ?? "";
+  const categoryProfile = resolveCategoryExperienceProfile({ organizationName: activeOrgName });
+  const activeOledPlan = compileOledCinemaColorGradePlan({
+    lookId: categoryProfile.compiler.defaultOledLookId,
+    locale,
+  });
+  const opticalGuide = evaluateOpticalIdentityLockV2({
+    focalLengthMm: 50,
+    headWidthRatioPct: 42,
+    hasFaceOcclusion: false,
+    locale,
+  });
+
+  // Compose structured objective string so the project detail room & YAGI team see the exact track & specs.
+  const structuredObjective = [
+    `[${isTemplateBuild ? "TRACK: CUSTOM STUDIO TEMPLATE BUILD" : "TRACK: MASTER VIDEO PRODUCTION ONLY"}]`,
+    `Category Profile: ${categoryProfile.category} | Aspect Ratio: ${aspect} | Spec: ${specOption}`,
+    `OLED Color Look: ${activeOledPlan.preset.id} | Identity Guard: ${opticalGuide.selectedStage}`,
+    `Guardrail: ${categoryProfile.compiler.scaleAndGeometryLockEn}`,
+    `Workflow Gate: Stage 1 (480p Framing/Motion Speed Check) -> Stage 2 (1080p Optical + Dual Stem Master)`,
+    `${isTemplateBuild ? "Locked Brand Elements" : "Target Channels & Sound"}: ${channelOrLock}`,
+    concept.trim(),
+  ]
+    .filter(Boolean)
+    .join("\n");
+
+  return (
+    <section
+      className="bw-panel ys-express-commission-panel"
+      data-express-commission-form={track.id}
+    >
+      <div className="ys-express-header">
+        <div>
+          <span className="ys-kicker-badge">{track.stepBadge}</span>
+          <h2>{track.title}</h2>
+          <p className="bw-muted">{track.summary}</p>
+        </div>
+        <div className="ys-express-workflow-steps">
+          {track.workflowSteps.map((ws) => (
+            <span key={ws} className="ys-express-step-chip">
+              {ws}
+            </span>
+          ))}
+        </div>
+      </div>
+
+      <ActionForm
+        operation="project.create"
+        b={b}
+        submit={
+          isTemplateBuild
+            ? isEn
+              ? "Commission Custom Template & Open Review Room →"
+              : "전용 템플릿 의뢰 및 시사 룸 열기 →"
+            : isEn
+              ? "Commission Master Video & Open Review Room →"
+              : "마스터 영상 제작 의뢰 및 시사 룸 열기 →"
+        }
+        fixed={{
+          organizationId,
+          title: title.trim() || (isTemplateBuild ? "Brand Custom Studio Template" : "Brand 1080p Master Film"),
+          objective: structuredObjective,
+          audience: channelOrLock,
+          productionMode: "studio",
+          startsOn: null,
+          endsOn: endsOn || null,
+          campaignTerms: null,
+        }}
+      >
+        {organizations.length > 1 && (
+          <label>
+            {b.organization}
+            <select
+              name="organizationId"
+              value={organizationId}
+              onChange={(e) => setOrganizationId(e.target.value)}
+            >
+              {organizations.map((o) => (
+                <option key={o.id} value={o.id}>
+                  {o.name}
+                </option>
+              ))}
+            </select>
+          </label>
+        )}
+
+        <div
+          className="bw-row bw-row-wrap"
+          data-campaign-category-starters={categoryProfile.category}
+          style={{ gap: 8, marginBottom: 8 }}
+        >
+          <span className="bw-muted" style={{ fontSize: 12 }}>
+            {isEn
+              ? `${categoryProfile.labelEn} quick starter:`
+              : `${categoryProfile.labelKo} 빠른 시작 예시:`}
+          </span>
+          {categoryProfile.campaignStarters.map((starter) => (
+            <button
+              key={starter.id}
+              type="button"
+              className="bw-button"
+              data-campaign-starter-pill={starter.id}
+              onClick={() => {
+                setTitle(isEn ? starter.titleEn : starter.titleKo);
+                setConcept(isEn ? starter.objectiveEn : starter.objectiveKo);
+              }}
+            >
+              {isEn ? starter.titleEn : starter.titleKo}
+            </button>
+          ))}
+        </div>
+
+        <label>
+          {isTemplateBuild
+            ? isEn
+              ? "Template Project Title"
+              : "전용 템플릿 의뢰 제목"
+            : isEn
+              ? "Master Film Project Title"
+              : "마스터 영상 제작 의뢰 제목"}
+          <input
+            name="title"
+            required
+            minLength={3}
+            maxLength={120}
+            value={title}
+            onChange={(e) => setTitle(e.target.value)}
+            placeholder={
+              isTemplateBuild
+                ? isEn
+                  ? "e.g., 26SS Signature Glow Serum Reusable Studio Template"
+                  : "예: 26SS 시그니처 세럼 신제품 릴스 전용 스튜디오 템플릿"
+                : isEn
+                  ? "e.g., 26SS Hero Launch 15s Master Film (9:16 & 4:5)"
+                  : "예: 26SS 런칭 캠페인 15초 메인 사운드 마스터 필름"
+            }
+          />
+        </label>
+
+        <div className="bw-grid">
+          <label>
+            {isEn ? "Primary Aspect Ratio" : "기본 화면 비율 (Aspect Ratio)"}
+            <select
+              name="aspectRatio"
+              value={aspect}
+              onChange={(e) => setAspect(e.target.value as "9:16" | "4:5" | "16:9" | "1:1")}
+            >
+              <option value="9:16">9:16 (Reels · TikTok · Shorts)</option>
+              <option value="4:5">4:5 (Instagram Feed · Paid Ads)</option>
+              <option value="16:9">16:9 (YouTube · Wide Campaign Film)</option>
+              <option value="1:1">1:1 (Square Catalog · PDP)</option>
+            </select>
+          </label>
+
+          <label>
+            {isTemplateBuild
+              ? isEn
+                ? "Expected Monthly In-House Generation Volume"
+                : "장착 후 월간 예상 자체 생성 볼륨"
+              : isEn
+                ? "Target Runtime & Deliverable Package"
+                : "희망 러닝타임 및 납품 구성"}
+            <select
+              name="specOption"
+              value={specOption}
+              onChange={(e) => setSpecOption(e.target.value)}
+            >
+              {isTemplateBuild ? (
+                <>
+                  <option value="monthly_30">
+                    {isEn ? "Up to 30 variations / month" : "월 20~30편 변주 생성용"}
+                  </option>
+                  <option value="monthly_100">
+                    {isEn ? "50–100+ variations / month (SKU scale)" : "월 50~100편 이상 다품종 SKU 확장용"}
+                  </option>
+                  <option value="campaign_seasonal">
+                    {isEn ? "Seasonal Lookbook & Drop Template" : "시즌 룩북 · 드롭 캠페인 집중 생성용"}
+                  </option>
+                </>
+              ) : (
+                <>
+                  <option value="15s_master">
+                    {isEn ? "15s Hero Cut (1080p + Sound)" : "15초 메인 릴스·숏폼 마스터 (1080p + 사운드)"}
+                  </option>
+                  <option value="6s_bumper">
+                    {isEn ? "6s High-Impact Ad Bumper" : "6초 퍼포먼스 광고 범퍼 컷"}
+                  </option>
+                  <option value="30s_brand_film">
+                    {isEn ? "30s Full Brand Film + 9:16/4:5 Cutdowns" : "30초 브랜드 필름 + 9:16/4:5 베리에이션 패키지"}
+                  </option>
+                </>
+              )}
+            </select>
+          </label>
+        </div>
+
+        <label>
+          {isTemplateBuild
+            ? isEn
+              ? "Brand Elements to Lock in Template (Product, Logo, Lighting)"
+              : "템플릿에 고정할 브랜드 불변 요소 (제품 형태 · 로고 · 조명 톤)"
+            : isEn
+              ? "Target Release Channels & Audio Direction"
+              : "집행 매체 및 사운드 연출 기조"}
+          <input
+            name="audience"
+            maxLength={500}
+            value={channelOrLock}
+            onChange={(e) => setChannelOrLock(e.target.value)}
+          />
+        </label>
+
+        <label>
+          {isTemplateBuild
+            ? isEn
+              ? "Template Concept, Camera Motion & Variation Slots"
+              : "핵심 연출 콘셉트 및 셀프 스튜디오에서 바꿔 끼울 슬롯 요청사항"
+            : isEn
+              ? "Film Direction, Key Scenes & Visual Mood"
+              : "영상 기획 의도 · 핵심 장면 연출 · 강조할 제품 포인트"}
+          <textarea
+            name="conceptNote"
+            required
+            minLength={5}
+            maxLength={1600}
+            rows={4}
+            value={concept}
+            onChange={(e) => setConcept(e.target.value)}
+            placeholder={
+              isTemplateBuild
+                ? isEn
+                  ? "Describe what stays locked (lighting, camera angle, logo) and what your team wants to swap in Self Studio (product SKU color, model pose, background)."
+                  : "예: 카메라 무빙과 림라이트 조명, 엔드카드 로고는 고정하고, 셀프 스튜디오에서 당사 마케터가 시즌별 제품 컬러와 배경 무드만 바꿔가며 즉시 생성할 수 있도록 설계 요청합니다."
+                : isEn
+                  ? "Describe the opening 2-second hook, product texture close-up, and sound drop timing."
+                  : "예: 첫 2초 물방울 클로즈업으로 시작해 사운드 드롭과 함께 제품 패키지가 등장하는 1080p 마스터 영상을 의뢰합니다."
+            }
+          />
+        </label>
+
+        <div className="bw-grid">
+          <label>
+            {isEn ? "Target First Cut (v1) Date" : "희망 1차 시사본(v1) 수령일"}
+            <input
+              type="date"
+              name="endsOn"
+              min={kstToday()}
+              value={endsOn}
+              onChange={(e) => setEndsOn(e.target.value)}
+            />
+          </label>
+          <label>
+            {b.budget}
+            <input
+              type="number"
+              name="budgetKrw"
+              min={0}
+              step={100000}
+              placeholder={isEn ? "Optional (KRW)" : "선택 입력 (원)"}
+            />
+          </label>
+        </div>
+
+        <div className="bw-grid">
+          <label>
+            {isEn
+              ? "Reference Link (Pinterest / Instagram / Google Drive)"
+              : "레퍼런스 또는 제품 에셋 폴더 링크 (https://)"}
+            <input
+              type="url"
+              name="referenceUrl"
+              placeholder="https://www.pinterest.com/..."
+            />
+          </label>
+          <label>
+            {isEn ? "Reference Note" : "레퍼런스 참고 포인트"}
+            <input
+              type="text"
+              name="referenceNote"
+              maxLength={300}
+              placeholder={
+                isEn
+                  ? "e.g., Match camera pacing and warm tungsten key light"
+                  : "예: 초반 컷 전환 호흡과 메탈릭 조명 질감 참고"
+              }
+            />
+          </label>
+        </div>
+
+        <div className="ys-express-handoff-note">
+          <strong>{track.deliverableDestination.badge}</strong>
+          <p>
+            {isEn
+              ? "As soon as you submit, your dedicated Project Room opens where you can upload product/logo files, review cuts, and share preview links."
+              : "의뢰서를 제출하면 즉시 전용 프로젝트 룸이 열리며, 제품·로고 원본 전달과 시사본 확인·공유를 한곳에서 진행할 수 있습니다."}
+          </p>
+        </div>
+      </ActionForm>
+    </section>
   );
 }
 
@@ -234,10 +702,13 @@ function Field({ name, label, hint, error, children }: { name: string; label: st
   );
 }
 
-function FormatStep({ t, draft, errors, update, part, patch, formats, organizations, organizationId, setOrganizationId }: {
-  t: Copy; draft: WizardDraft; errors: Errors; update: (p: Partial<WizardDraft>) => void; part: Rec; patch: (p: Rec) => void;
+function FormatStep({ t, locale, draft, errors, update, part, patch, formats, organizations, organizationId, setOrganizationId }: {
+  t: Copy; locale: string; draft: WizardDraft; errors: Errors; update: (p: Partial<WizardDraft>) => void; part: Rec; patch: (p: Rec) => void;
   formats: WizardFormat[]; organizations: Array<{ id: string; name: string }>; organizationId: string; setOrganizationId: (id: string) => void;
 }) {
+  const isEn = locale === "en";
+  const activeOrgName = organizations.find((o) => o.id === organizationId)?.name ?? "";
+  const categoryProfile = resolveCategoryExperienceProfile({ organizationName: activeOrgName });
   const groups = [
     { key: "yagi", label: t.format.originals, items: formats.filter((f) => f.source === "yagi") },
     { key: "community", label: t.format.creators, items: formats.filter((f) => f.source === "community") },
@@ -250,6 +721,33 @@ function FormatStep({ t, draft, errors, update, part, patch, formats, organizati
           {(p) => <select {...p} value={organizationId} onChange={(e) => setOrganizationId(e.target.value)}>{organizations.map((o) => <option key={o.id} value={o.id}>{o.name}</option>)}</select>}
         </Field>
       )}
+      <div
+        className="bw-row bw-row-wrap"
+        data-campaign-category-starters={categoryProfile.category}
+        style={{ gap: 8, marginBottom: 8 }}
+      >
+        <span className="bw-muted" style={{ fontSize: 12 }}>
+          {isEn
+            ? `${categoryProfile.labelEn} quick starter:`
+            : `${categoryProfile.labelKo} 빠른 시작 예시:`}
+        </span>
+        {categoryProfile.campaignStarters.map((starter) => (
+          <button
+            key={starter.id}
+            type="button"
+            className="bw-button"
+            data-campaign-starter-pill={starter.id}
+            onClick={() =>
+              update({
+                title: isEn ? starter.titleEn : starter.titleKo,
+                objective: isEn ? starter.objectiveEn : starter.objectiveKo,
+              })
+            }
+          >
+            {isEn ? starter.titleEn : starter.titleKo}
+          </button>
+        ))}
+      </div>
       <Field name="title" label={t.format.name} error={errors.title}>
         {(p) => <input {...p} value={draft.title ?? ""} maxLength={120} required onChange={(e) => update({ title: e.target.value })} />}
       </Field>
@@ -427,7 +925,7 @@ function ScheduleStep({ t, errors, part, patch }: { t: Copy; errors: Errors; par
   );
 }
 
-/** Step ⑤: everything on one screen, each part with its own "change" link back to its step. */
+/** Step 05. : everything on one screen, each part with its own "change" link back to its step. */
 function Review({ t, b, locale, draft, terms, formatTitle, organizationName, onEdit, children }: {
   t: Copy; b: BrandCopy; locale: string; draft: WizardDraft; terms: CampaignTerms | null; formatTitle: string | null; organizationName: string; onEdit: (s: WizardStep) => void; children: ReactNode;
 }) {

@@ -3,7 +3,7 @@ import type { PublicSubscriptionAvailability } from './availability';
 import type { BillingEnvironment, SubscriptionPlanId } from './types';
 
 export function subscriptionQaAllowed(viewer: Viewer, env: Record<string, string | undefined> = process.env): boolean {
-  return Boolean(viewer.userId && viewer.isAdmin && env.CREATOR_SUBSCRIPTION_QA === 'on');
+  return Boolean(viewer.userId && (viewer.isAdmin || viewer.review === true) && env.CREATOR_SUBSCRIPTION_QA === 'on');
 }
 
 export function mayEnrollSubscription(viewer: Viewer, planId: SubscriptionPlanId, availability: PublicSubscriptionAvailability,

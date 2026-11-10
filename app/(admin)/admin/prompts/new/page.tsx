@@ -4,6 +4,7 @@ import { interpolate } from '@/lib/i18n/format';
 import { USE_CASE_MAX, USE_CASE_MIN } from '@/lib/prompts/schemas';
 import { ADMIN_PROMPTS_PATH, ADMIN_PROMPT_NEW_PATH, ADMIN_PROMPT_NEW_SET_PATH } from '@/lib/prompts/links';
 import { AdminShell, BUTTON_PRIMARY, OpForm, OutcomeBanner, Panel } from '@/components/admin/chrome';
+import { AdminPageHeader } from '@/components/admin/patterns';
 import { PromptFields } from '@/components/admin/prompt-fields';
 import { PromptCreateFeedback } from '@/components/admin/prompt-create-feedback';
 
@@ -58,18 +59,18 @@ export default async function AdminPromptNewPage({ searchParams }: { searchParam
 
   return (
     <AdminShell dict={a} locale={locale} active="prompts">
-      <a href={ADMIN_PROMPTS_PATH} className="font-mono text-[0.72rem] opacity-60">
-        ← {a.backToPrompts}
-      </a>
-      <h1 className="mt-4 font-display text-[clamp(1.75rem,3.4vw,2.5rem)] leading-[0.95] font-black uppercase">
-        {a.authorHeading}
-      </h1>
-      <p className="mt-3 max-w-detail font-mono text-[0.75rem] opacity-55">{a.authorLede}</p>
-      <p className="mt-2 max-w-detail font-mono text-[0.75rem]">
-        {a.setLinkHint}{' '}
-        <a href={ADMIN_PROMPT_NEW_SET_PATH} data-image-set-link className="text-accent underline">
-          {a.setLink} →
-        </a>
+      <AdminPageHeader
+        back={{ href: ADMIN_PROMPTS_PATH, label: a.backToPrompts }}
+        title={a.authorHeading}
+        lede={a.authorLede}
+        actions={
+          <a href={ADMIN_PROMPT_NEW_SET_PATH} data-image-set-link className="admin-btn">
+            {a.setLink} →
+          </a>
+        }
+      />
+      <p className="mt-3 text-[13px] opacity-75">
+        {a.setLinkHint}
       </p>
 
       <OutcomeBanner
@@ -78,24 +79,26 @@ export default async function AdminPromptNewPage({ searchParams }: { searchParam
         {...(detail ? { detail } : {})}
       />
       {refused && (
-        <p data-refused-field={refused.field} className="mt-3 border border-accent px-3 py-2 font-mono text-[0.75rem] text-accent">
+        <p data-refused-field={refused.field} className="mt-3 rounded-[10px] border border-accent px-3.5 py-2.5 text-[13px] text-accent">
           {refused.text}
         </p>
       )}
 
-      <section data-template-steps className="mt-6 border border-hairline px-4 py-3">
-        <h2 className="font-label text-eyebrow uppercase opacity-60">{a.authorStepsHeading}</h2>
-        <ol className="mt-2 grid gap-2 sm:grid-cols-3">
+      <section data-template-steps className="admin-spec-card">
+        <div className="admin-spec-head">
+          <h2>{a.authorStepsHeading}</h2>
+        </div>
+        <ol className="admin-card-grid">
           {steps.map(([title, body], index) => (
-            <li key={title} className="font-mono text-[0.75rem]">
-              <span className="font-label text-eyebrow uppercase">
+            <li key={title} className="admin-subcard">
+              <h3>
                 {index + 1}. {title}
-              </span>
-              <span className="mt-0.5 block opacity-60">{body}</span>
+              </h3>
+              <p>{body}</p>
             </li>
           ))}
         </ol>
-        <p data-publish-notice className="mt-3 border-t border-hairline pt-2 font-mono text-[0.75rem]">
+        <p data-publish-notice className="mt-3 border-t border-hairline pt-3 text-[13px] opacity-80">
           {a.authorPublishNotice}
         </p>
       </section>
@@ -105,6 +108,7 @@ export default async function AdminPromptNewPage({ searchParams }: { searchParam
           useCase: interpolate(a.refusedUseCase, caps), poster: a.refusedPoster,
           invalid: a.errInvalid, upload: a.mediaUploadFailed, session: a.mediaUploadSession,
           uncertain: a.promptPublishUncertain, retained: a.promptInputsRetained, publishing: a.promptPublishing,
+          draftRestored: a.promptDraftRestored, draftDiscard: a.promptDraftDiscard, draftSavedAt: a.promptDraftSavedAt,
         }}>
         <OpForm op="prompt.create" back={ADMIN_PROMPT_NEW_PATH} className="flex flex-col gap-4">
           <PromptFields row={null} dict={dict} />

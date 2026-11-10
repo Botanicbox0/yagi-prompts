@@ -58,7 +58,7 @@ const RULES: Rule[] = [
   { code: 'duplicateSlug', pattern: /playbooks_slug_key|duplicate key value.*slug/i },
   // Before `notFound`: "storage object not found" contains it, and a missing OBJECT is a different
   // problem for the author than a missing ROW.
-  { code: 'storage', pattern: /storage object not found|illegal storage key/i },
+  { code: 'storage', pattern: /storage object not found|illegal storage key|public media|^(?:put|head) \d{3}$/i },
   { code: 'notFound', pattern: /not found/i },
 ];
 

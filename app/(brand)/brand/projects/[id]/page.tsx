@@ -21,6 +21,8 @@ import { ShortlistAdmin } from "@/components/brand-workspace/shortlist-admin";
 import { OutcomeBanner } from "@/components/admin/chrome";
 import { BrandStatusForms } from "@/components/admin/brand-status";
 import { StudioCoverForm } from "@/components/brand-workspace/studio-cover-forms";
+import { loadFeaturePolicy } from "@/lib/brands/entitlements";
+import { featureDenied, isSandboxedClientOrganization } from "@/lib/brands/features";
 export default async function BrandProject({
   params,
   searchParams,
@@ -41,14 +43,18 @@ export default async function BrandProject({
   // A DB admin in the TWINGS team view manages the shortlist here too (docs/BRAND-STAFF-ACCESS.md).
   const studioTools = project.role === "studio" && viewer.isAdmin;
   // The shortlist is for everyone who can see the campaign, guests included: comparing candidates is why they were invited.
-  const [usage, collaboration, applicants, funding, shortlist, studioShortlist] = await Promise.all([
+  const [usage, collaboration, applicants, funding, shortlist, studioShortlist, policy] = await Promise.all([
     loadBrandUsage({ sql, verifiedEmail, paymentsOpen: usagePaymentsOpen() }, viewer, id),
     member ? loadProjectCollaboration({ sql }, viewer, id) : Promise.resolve(null),
     member ? loadProjectApplicants({ sql }, viewer, id) : Promise.resolve(null),
     member ? loadFundingProject({ sql }, viewer, id) : Promise.resolve(null),
     loadBrandShortlist({ sql, verifiedEmail }, viewer, id),
     studioTools ? loadStudioShortlist({ sql }, viewer, id) : Promise.resolve(null),
+    loadFeaturePolicy(sql, project.organizationId).catch(() => ({ denied: [] as const })),
   ]);
+  const generativeMediaAllowed =
+    !isSandboxedClientOrganization({ id: project.organizationId, name: project.organizationName }) &&
+    !featureDenied(policy.denied, "generative_media");
   const deps = member ? fundingDeps(sql) : null;
   const requested = project.campaignTerms?.format.kind === "template" ? await loadPromptBySlug(sql, project.campaignTerms.format.slug).catch(() => null) : null;
   const formatTitle = requested ? (locale === "ko" && requested.titleKo ? requested.titleKo : requested.title) : null;
@@ -59,6 +65,7 @@ export default async function BrandProject({
       project={project}
       b={b}
       locale={locale}
+      generativeMediaAllowed={generativeMediaAllowed}
       usage={usage}
       formatTitle={formatTitle}
       staffManageHref={project.role === "studio" && viewer.isAdmin ? adminProjectHref(project.id, brandHost) : null}

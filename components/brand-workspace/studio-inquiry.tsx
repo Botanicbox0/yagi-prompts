@@ -75,6 +75,14 @@ export function StudioInquiry({ organizations, organizationId, b, allowSetup = f
         </ActionForm>
       </> : <>
         <p>{t.intro}</p>
+        <p className="bw-note">
+          <a
+            href={`/brand/projects/new?track=template_build${organizationId ? `&organizationId=${encodeURIComponent(organizationId)}` : ""}`}
+            data-template-track-shortcut
+          >
+            브랜드 전용 템플릿 제작 의뢰하기 →
+          </a>
+        </p>
         <form className="bw-form" onSubmit={send} aria-busy={busy}>
           <fieldset disabled={!ready || busy}>
             <label>{b.organization}<select name="organizationId" defaultValue={writable.find(o => o.id === organizationId)?.id ?? writable[0]?.id ?? ""}>

@@ -105,6 +105,7 @@ export function ProjectDetail({
   b,
   locale,
   studio = false,
+  generativeMediaAllowed = true,
   backHref,
   studioReply,
   staffManageHref = null,
@@ -120,6 +121,8 @@ export function ProjectDetail({
   b: BrandCopy;
   locale: string;
   studio?: boolean;
+  /** False when the organization's feature policy closes generative studio production (e.g. Morphic). */
+  generativeMediaAllowed?: boolean;
   /** Validated list context; checked again against the loaded project before rendering. */
   backHref?: string;
   /** The studio's own comment form, rendered where the conversation is instead of a separate panel. */
@@ -167,14 +170,14 @@ export function ProjectDetail({
           <a href={campaignListReturnPath(backHref, p.organizationId, studio)}>← {b.back}</a>
           <div className="ys-project-track-row">
             <p className="bw-kicker">{p.organizationName}</p>
-            <span className="ys-track-pill" data-track={p.productionMode}>
-              {p.productionMode === "studio"
+            <span className="ys-track-pill" data-track={generativeMediaAllowed ? p.productionMode : "creator"}>
+              {generativeMediaAllowed && p.productionMode === "studio"
                 ? locale === "en"
-                  ? "YAGI PRODUCTION · Studio Film"
-                  : "YAGI PRODUCTION · 스튜디오 제작"
+                  ? "Studio Film Production"
+                  : "스튜디오 영상 제작"
                 : locale === "en"
-                  ? "CREATOR CAMPAIGN · Creator Seeding"
-                  : "CREATOR CAMPAIGN · 인플루언서 게시"}
+                  ? "Creator Seeding Campaign"
+                  : "크리에이터 캠페인"}
             </span>
           </div>
           <h1>{p.title}</h1>
@@ -195,15 +198,52 @@ export function ProjectDetail({
       {next && (
         <div className="bw-note bw-row bw-no-print bw-tab-next" data-project-next-action={next.kind}>
           <div><strong>{b.performance.nextAction}</strong><p>{next.text}</p></div>
-          {next.href && <a className="bw-button" href={next.href}>{next.label} →</a>}
+          <div className="bw-row">
+            {next.href && <a className="bw-button" href={next.href}>{next.label} →</a>}
+            {generativeMediaAllowed && p.productionMode === "studio" && (
+              <a
+                className="bw-button bw-primary"
+                href={`/brand/studio?organizationId=${encodeURIComponent(p.organizationId)}`}
+                data-studio-commission-handoff
+              >
+                {locale === "en" ? "Self Studio →" : "셀프 스튜디오 →"}
+              </a>
+            )}
+          </div>
         </div>
       )}
-      <HumanHandoff
-        organizationId={p.organizationId}
-        projectId={p.id}
-        locale={locale}
-        refCount={Math.max(p.referenceLinks.length, 3)}
-      />
+      {generativeMediaAllowed && !next && p.productionMode === "studio" && (
+        <div
+          className="bw-note bw-row bw-no-print"
+          data-studio-commission-handoff
+          style={{ padding: "10px 16px" }}
+        >
+          <span style={{ fontSize: "13.5px", fontWeight: 600 }}>
+            {locale === "en"
+              ? "Review cuts in the Review tab or open Self Studio."
+              : "콘텐츠 확인 탭에서 시사본을 검수하거나 셀프 스튜디오에서 직접 제작할 수 있습니다."}
+          </span>
+          <div className="bw-row">
+            <a className="bw-button" href="#review">
+              {locale === "en" ? "Open Review Room →" : "시사 룸 열기 →"}
+            </a>
+            <a
+              className="bw-button bw-primary"
+              href={`/brand/studio?organizationId=${encodeURIComponent(p.organizationId)}`}
+            >
+              {locale === "en" ? "Self Studio →" : "셀프 스튜디오 →"}
+            </a>
+          </div>
+        </div>
+      )}
+      {generativeMediaAllowed && (
+        <HumanHandoff
+          organizationId={p.organizationId}
+          projectId={p.id}
+          locale={locale}
+          refCount={Math.max(p.referenceLinks.length, 3)}
+        />
+      )}
       <ProjectTabs b={b} pendingReviews={p.status === "active" ? p.contents.filter(c => c.version === newest.get(c.slotKey) && c.decision === "pending").length : 0} comments={p.messages.length} usage={usage !== null} campaign={applicants !== null} shortlist={shortlist ? shortlistCount : 0}>
       <section id="performance" className="bw-panel">
         <CampaignTimelineView timeline={campaignTimeline(p)} b={b} />
@@ -315,15 +355,48 @@ export function ProjectDetail({
                 </ul>
               </>
             )}
-            <BriefConcierge
-              brandName={p.organizationName}
-              projectTitle={p.title}
-              objective={p.objective}
-              organizationId={p.organizationId}
-              projectId={p.id}
-              locale={locale}
-            />
-            <AestheticEngine locale={locale} referenceLinks={p.referenceLinks} />
+            {generativeMediaAllowed && (
+              <>
+                <BriefConcierge
+                  brandName={p.organizationName}
+                  projectTitle={p.title}
+                  objective={p.objective}
+                  organizationId={p.organizationId}
+                  projectId={p.id}
+                  locale={locale}
+                />
+                <AestheticEngine locale={locale} referenceLinks={p.referenceLinks} />
+                {!studio && (
+                  <div
+                    className="bw-note bw-row"
+                    data-project-direction-card
+                    data-project-id={p.id}
+                  >
+                    <div>
+                      <strong>
+                        {locale === "en"
+                          ? "Project-Specific Mood & Direction"
+                          : "이 프로젝트 전용 무드 · 스튜디오 연동"}
+                      </strong>
+                      <p className="bw-muted">
+                        {locale === "en"
+                          ? "Keep your brand essentials (logos, products, and guidelines) while tailoring the lighting, framing, and mood specifically for this project."
+                          : "브랜드 로고·제품·핵심 원칙은 유지하면서, 이번 프로젝트에 맞는 조명·구도·분위기만 골라 스튜디오에서 바로 제작합니다."}
+                      </p>
+                    </div>
+                    <a
+                      className="bw-button"
+                      data-project-direction-studio-link
+                      href={`/brand/studio?organizationId=${encodeURIComponent(p.organizationId)}&projectId=${encodeURIComponent(p.id)}`}
+                    >
+                      {locale === "en"
+                        ? "Open Project Direction in Studio →"
+                        : "이 프로젝트 전용 연출로 스튜디오 열기 →"}
+                    </a>
+                  </div>
+                )}
+              </>
+            )}
           </section>
           <section id="review" className="bw-panel">
             <h2>{b.review}</h2>
@@ -334,6 +407,8 @@ export function ProjectDetail({
               messages={p.messages}
               decisions={p.decisions}
               locale={locale}
+              generativeMediaAllowed={generativeMediaAllowed}
+              productionMode={p.productionMode}
             />
             {p.contents.length === 0 ? (
               <p className="bw-note">{b.noContent}</p>

@@ -2,100 +2,27 @@ import { getSqlRunner } from "@/lib/db/connect";
 import { getDictionary } from "@/lib/i18n/dictionaries";
 import { getLocaleFromHeaders } from "@/lib/i18n/server";
 import { interpolate } from "@/lib/i18n/format";
-import {
-  loadAllCampaigns,
-  loadCampaignCounts,
-  loadPayoutQueue,
-} from "@/lib/campaigns/repo";
-import {
-  ADMIN_CAMPAIGNS_PATH,
-  ADMIN_INQUIRIES_PATH,
-} from "@/lib/campaigns/links";
-import { loadAllPrompts } from "@/lib/prompts/repo";
-import { summarizeRenderJobs } from "@/lib/renders/repo";
-import { countBrandInquiries } from "@/lib/brands/repo";
-import { countRenderFeedback } from "@/lib/renders/feedback";
-import { AdminShell, BUTTON, BUTTON_PRIMARY } from "@/components/admin/chrome";
-import { ADMIN_PROMPTS_PATH, ADMIN_PROMPT_NEW_PATH } from "@/lib/prompts/links";
 import { requireAdmin } from "@/lib/auth/viewer";
-import { loadStudioInbox } from "@/lib/brands/workspace/inbox";
-import { adminNextActions, campaignWorkCounts } from "@/lib/admin/workflow";
-import { loadRiskQueueSummary } from "@/lib/campaigns/risk/admin";
-import { countSocialQueue } from "@/lib/influencers/admin";
-import { countManualTossPayments } from "@/lib/billing/toss-service";
-import { platformReady } from "@/lib/creator-platform/service";
-import { creatorApplicationCount } from "@/lib/creator-platform/onboarding";
+import { AdminShell } from "@/components/admin/chrome";
+import { AdminPageHeader, QueueCard } from "@/components/admin/patterns";
+import { ADMIN_PROMPTS_PATH, ADMIN_PROMPT_NEW_PATH } from "@/lib/prompts/links";
+import {
+  ADMIN_QUEUE_GROUPS,
+  adminNextActions,
+  adminQueueStates,
+} from "@/lib/admin/queues";
+import { loadAdminQueues } from "@/lib/admin/queue-load";
 
 /**
- * `/admin` — the dashboard (founder, 2026-09-11). The old front door was the playbook list, a
- * screen from a product TWINGS no longer is; it lives at /admin/playbooks now.
+ * `/admin` — the queue (docs/ADMIN.md §2.2). One question: who is waiting on the studio, most urgent
+ * first. "Handle now" lists the queues with work in them; "Every queue" shows all of them by who is
+ * waiting, with "not counted" instead of a zero when a source could not be read. Every number is a
+ * link to the list it counts, and nothing here approves or pays.
  *
- * Four panels, one question each: is anything waiting on the campaigns board, on the template
- * queue, in the render pipeline, in the brand inbox. Every number is a link to the list it counts.
+ * It replaced a dashboard that showed the same counts twice and sent the render-failure and
+ * payment numbers to the feedback inbox (audit 2026-11-03 §0).
  */
 export const dynamic = "force-dynamic";
-
-const WEEK_MS = 7 * 24 * 60 * 60 * 1000;
-
-function Stat({
-  href,
-  label,
-  count,
-  hot,
-}: {
-  href: string | null;
-  label: string;
-  count: number;
-  hot?: boolean;
-}) {
-  const text = interpolate(label, { count: count.toLocaleString() });
-  const className = [
-    "font-mono text-code",
-    hot && count > 0 ? "text-accent" : "opacity-80",
-  ].join(" ");
-  return (
-    <li data-admin-stat={count}>
-      {href ? (
-        <a
-          href={href}
-          className={`${className} underline-offset-4 hover:underline`}
-        >
-          {text}
-        </a>
-      ) : (
-        <span className={className}>{text}</span>
-      )}
-    </li>
-  );
-}
-
-function Card({
-  title,
-  href,
-  children,
-}: {
-  title: string;
-  href: string | null;
-  children: React.ReactNode;
-}) {
-  return (
-    <section data-admin-card className="border border-hairline">
-      <header className="flex items-center justify-between border-b border-hairline px-4 py-2.5">
-        <h2 className="font-label text-eyebrow uppercase">{title}</h2>
-        {href && (
-          <a
-            href={href}
-            aria-label={title}
-            className="text-accent font-label text-[0.62rem] tracking-[0.1em] uppercase"
-          >
-            →
-          </a>
-        )}
-      </header>
-      <ul className="flex flex-col gap-2 p-4">{children}</ul>
-    </section>
-  );
-}
 
 export default async function AdminHomePage() {
   const [locale, sql, viewer] = await Promise.all([
@@ -105,170 +32,180 @@ export default async function AdminHomePage() {
   ]);
   const dict = getDictionary(locale);
   const a = dict.admin;
-  const now = new Date();
-
   const w = dict.adminWorkflow;
-  const [
-    campaigns,
-    payoutQueue,
-    prompts,
-    renders,
-    inquiries,
-    feedback,
-    inbox,
-    risk,
-    paymentsManual,
-    creatorApplications,
-    socialAccounts,
-  ] =
-    sql === null
-      ? ([
-          [],
-          [],
-          [],
-          { recent: 0, failed: 0, held: 0, running: 0 },
-          0,
-          0,
-          [],
-          null,
-          0,
-          0,
-          0,
-        ] as const)
-      : await Promise.all([
-          loadAllCampaigns(sql),
-          loadPayoutQueue(sql, now),
-          loadAllPrompts(sql),
-          summarizeRenderJobs(sql, new Date(now.getTime() - WEEK_MS)),
-          countBrandInquiries(sql, "new"),
-          countRenderFeedback(sql, "new"),
-          loadStudioInbox({ sql }, viewer),
-          loadRiskQueueSummary(sql, viewer, now),
-          // docs/PLATFORM-2.0.md §2.2-4: refunds and renders automation handed to an operator.
-          countManualTossPayments(sql),
-          // 0 when 0046/0051 are absent; the queue then stays out of the list instead of failing the page.
-          platformReady(sql)
-            .then((ready) => (ready ? creatorApplicationCount(sql) : 0))
-            .catch(() => 0),
-          // docs/PLATFORM-2.0.md §17.1 — 0 before 0057; the SNS queue line then stays out.
-          countSocialQueue(sql).catch(() => 0),
-        ]);
-  const counts =
-    sql === null
-      ? new Map()
-      : await loadCampaignCounts(
-          sql,
-          campaigns.map((row) => row.id),
-        );
-  const { applicants, posts } = campaignWorkCounts(counts.values());
-  const recruiting = campaigns.filter(
-    (row) => row.status === "recruiting",
-  ).length;
-  const payouts = payoutQueue.length;
-  const pending = prompts.filter((row) => row.status === "pending").length;
-  const published = prompts.filter((row) => row.status === "published").length;
-  const waiting = inbox?.length ?? 0;
-  const tasks = adminNextActions({
-    posts,
-    applicants,
-    payouts,
-    studio: waiting,
-    inquiries,
-    feedback,
-    templates: pending,
-    risk: risk?.ready ? risk.open : 0,
-    creatorApplications,
-    socialAccounts,
-  });
+  const c = dict.adminConsole;
+
+  const loaded = sql === null ? null : await loadAdminQueues(sql, viewer, new Date());
+  const counts = loaded?.counts ?? {};
+  const next = adminNextActions(counts);
+  const states = adminQueueStates(counts);
+  const waiting = next.reduce((sum, queue) => sum + queue.count, 0);
+  const risk = loaded?.risk ?? null;
+  const waitingText = interpolate(c.home.waiting, { count: waiting.toLocaleString(locale) });
+
+  const riskNotes =
+    risk === null
+      ? []
+      : !risk.ready
+        ? [w.riskUnavailable]
+        : [
+            ...(!risk.enabled ? [w.riskDisabled] : []),
+            ...(risk.enabled && risk.workerUnavailable ? [w.riskWorker] : []),
+            ...(risk.dead > 0 ? [interpolate(w.riskDead, { count: risk.dead.toLocaleString(locale) })] : []),
+          ];
 
   return (
     <AdminShell dict={a} locale={locale} active="home">
-      <h1 className="text-3xl font-semibold leading-tight">{a.dashHeading}</h1>
-      <p className="mt-3 max-w-detail text-body opacity-60">{a.dashLede}</p>
+      <AdminPageHeader
+        title={c.home.title}
+        {...(sql !== null && waiting > 0
+          ? { count: waiting.toLocaleString(locale), countLabel: waitingText }
+          : {})}
+        lede={c.home.lede}
+        actions={
+          // Discoverability (2026-09-25): registering a template is the most common admin task, so
+          // it stays one press away from the first screen.
+          <div data-admin-template-actions className="admin-action-row">
+            <a href={ADMIN_PROMPT_NEW_PATH} data-admin-new-template className="admin-btn admin-btn-primary">
+              + {a.promptsNew}
+            </a>
+            <a href={ADMIN_PROMPTS_PATH} className="admin-btn">
+              {a.dashTemplateManage}
+            </a>
+            <a href="/admin/campaigns/new" className="admin-btn">
+              + {a.newCampaign}
+            </a>
+          </div>
+        }
+      />
 
       <section
-        data-admin-next-actions
-        className="admin-next-actions"
-        aria-labelledby="admin-next-heading"
+        className="admin-quick-search"
+        data-admin-quick-search
+        aria-label={c.home.quickSearchHeading}
       >
-        <h2 id="admin-next-heading">{w.nextHeading}</h2>
-        <p className="admin-section-hint">{w.nextHint}</p>
+        <form method="get" action="/admin/renders" role="search">
+          <input
+            type="search"
+            name="q"
+            placeholder={c.home.quickSearchRenders}
+            aria-label={c.home.quickSearchRenders}
+          />
+          <button type="submit" className="admin-btn">
+            {c.nav.renders}
+          </button>
+        </form>
+        <form method="get" action="/admin/users" role="search">
+          <input
+            type="search"
+            name="q"
+            placeholder={c.home.quickSearchUsers}
+            aria-label={c.home.quickSearchUsers}
+          />
+          <button type="submit" className="admin-btn">
+            {c.nav.users}
+          </button>
+        </form>
+        <form method="get" action={ADMIN_PROMPTS_PATH} role="search">
+          <input
+            type="search"
+            name="q"
+            placeholder={c.home.quickSearchPrompts}
+            aria-label={c.home.quickSearchPrompts}
+          />
+          <button type="submit" className="admin-btn">
+            {c.nav.prompts}
+          </button>
+        </form>
+        <form method="get" action="/admin/inquiries" role="search">
+          <input
+            type="search"
+            name="q"
+            placeholder={c.home.quickSearchInquiries}
+            aria-label={c.home.quickSearchInquiries}
+          />
+          <button type="submit" className="admin-btn">
+            {c.nav.inquiries}
+          </button>
+        </form>
+      </section>
+
+      <section className="admin-section" data-admin-next-actions aria-labelledby="admin-next-heading">
+        <h2 id="admin-next-heading">{c.home.nextHeading}</h2>
         {sql === null ? (
-          <p role="status" className="admin-empty-state">
+          <p role="status" className="admin-notice">
             {w.unavailable}
           </p>
-        ) : tasks.length === 0 ? (
-          <p className="admin-empty-state">{w.empty}</p>
+        ) : next.length === 0 ? (
+          <p className="admin-empty">{c.home.empty}</p>
         ) : (
-          <ul className="admin-task-list">
-            {tasks.map((task, index) => (
-              <li key={task.key} data-admin-task={task.key}>
-                <div>
-                  <h3>
-                    {w.tasks[task.key].title}{" "}
-                    <span className="admin-task-count">
-                      {interpolate(w.queueCount, {
-                        count: task.count.toLocaleString(locale),
-                      })}
+          <ol className="admin-next-list">
+            {next.map((queue, index) => (
+              <li key={queue.key} data-admin-task={queue.key}>
+                <span className="admin-next-count" aria-hidden="true">
+                  {queue.count.toLocaleString(locale)}
+                </span>
+                <div className="admin-next-text">
+                  <h3>{w.tasks[queue.key].title}</h3>
+                  <p>
+                    {w.tasks[queue.key].hint}{" "}
+                    <span className="admin-visually-hidden">
+                      {interpolate(c.home.waiting, { count: queue.count.toLocaleString(locale) })}
                     </span>
-                  </h3>
-                  <p>{w.tasks[task.key].hint}</p>
+                  </p>
                 </div>
                 <a
-                  href={task.href}
-                  className={index === 0 ? BUTTON_PRIMARY : BUTTON}
+                  href={queue.href}
+                  className={index === 0 ? "admin-btn admin-btn-primary" : "admin-btn"}
                 >
-                  {w.tasks[task.key].action}
+                  {w.tasks[queue.key].action}
                 </a>
               </li>
             ))}
-          </ul>
-        )}
-        {risk && (
-          <div className="admin-section-hint" data-admin-risk-status>
-            {!risk.ready ? (
-              <p>
-                <a href="/admin/risk" className="underline">
-                  {w.riskUnavailable}
-                </a>
-              </p>
-            ) : (
-              <>
-                {!risk.enabled && (
-                  <p>
-                    <a href="/admin/risk" className="underline">
-                      {w.riskDisabled}
-                    </a>
-                  </p>
-                )}
-                {risk.enabled && risk.workerUnavailable && (
-                  <p>
-                    <a href="/admin/risk" className="underline">
-                      {w.riskWorker}
-                    </a>
-                  </p>
-                )}
-                {risk.dead > 0 && (
-                  <p>
-                    <a href="/admin/risk" className="underline">
-                      {interpolate(w.riskDead, {
-                        count: risk.dead.toLocaleString(locale),
-                      })}
-                    </a>
-                  </p>
-                )}
-              </>
-            )}
-          </div>
+          </ol>
         )}
       </section>
 
-      <section
-        className="admin-getting-started"
-        aria-labelledby="admin-start-heading"
-      >
-        <h2 id="admin-start-heading">{w.startHeading}</h2>
-        <p className="admin-section-hint">{w.startHint}</p>
+      {sql !== null && (
+        <section className="admin-section" data-admin-queue-board aria-labelledby="admin-board-heading">
+          <h2 id="admin-board-heading">{c.home.boardHeading}</h2>
+          <div className="admin-board-grid">
+            {ADMIN_QUEUE_GROUPS.map((group) => (
+              <QueueCard
+                key={group}
+                title={c.queueGroups[group]}
+                locale={locale}
+                labels={{ clear: c.home.clear, unknown: c.home.unknown, unknownHint: c.home.unknownHint }}
+                rows={states
+                  .filter((state) => state.group === group)
+                  .map((state) => ({
+                    key: state.key,
+                    label: c.queues[state.key],
+                    href: state.href,
+                    count: state.count,
+                  }))}
+              />
+            ))}
+          </div>
+        </section>
+      )}
+
+      {riskNotes.length > 0 && (
+        <section className="admin-section" data-admin-risk-status aria-labelledby="admin-system-heading">
+          <h2 id="admin-system-heading">{c.home.systemHeading}</h2>
+          <ul className="admin-system-list">
+            {riskNotes.map((note) => (
+              <li key={note}>
+                <a href="/admin/risk">{note}</a>
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
+
+      <details className="admin-help">
+        <summary>{w.startHeading}</summary>
+        <p className="admin-help-lede">{w.startHint}</p>
         <ol>
           {(
             [
@@ -282,125 +219,13 @@ export default async function AdminHomePage() {
                 <h3>{w.start[key].title}</h3>
                 <p>{w.start[key].hint}</p>
               </div>
-              <a href={href} className={BUTTON}>
+              <a href={href} className="admin-btn">
                 {w.start[key].action}
               </a>
             </li>
           ))}
         </ol>
-      </section>
-
-      {/* Discoverability (2026-09-25): registering a template was only reachable through the small
-          arrow on the templates card. It is the most common admin task, so it gets its own row. */}
-      <div
-        data-admin-template-actions
-        className="mt-6 flex flex-wrap items-center gap-3 border border-hairline px-4 py-3"
-      >
-        <p className="min-w-48 flex-1 font-mono text-[0.75rem] opacity-70">
-          {a.dashTemplateAction}
-        </p>
-        <a
-          href={ADMIN_PROMPT_NEW_PATH}
-          data-admin-new-template
-          className={BUTTON_PRIMARY}
-        >
-          + {a.promptsNew}
-        </a>
-        <a href={ADMIN_PROMPTS_PATH} className={BUTTON}>
-          {a.dashTemplateManage}
-        </a>
-      </div>
-
-      {sql !== null && (
-        <>
-          <h2 className="mt-10 text-lg font-semibold">{w.overview}</h2>
-          <div
-            data-admin-dashboard
-            className="mt-8 grid gap-4 sm:grid-cols-2 lg:grid-cols-4"
-          >
-            <Card title={a.dashCampaigns} href={ADMIN_CAMPAIGNS_PATH}>
-              <Stat
-                href={`${ADMIN_CAMPAIGNS_PATH}#status-recruiting`}
-                label={a.dashRecruiting}
-                count={recruiting}
-              />
-              <Stat
-                href={ADMIN_CAMPAIGNS_PATH}
-                label={a.dashApplicants}
-                count={applicants}
-                hot
-              />
-              <Stat
-                href={
-                  payouts > 0
-                    ? `${ADMIN_CAMPAIGNS_PATH}#payout-queue`
-                    : ADMIN_CAMPAIGNS_PATH
-                }
-                label={a.dashPayouts}
-                count={payouts}
-                hot
-              />
-            </Card>
-            <Card title={a.dashTemplates} href="/admin/prompts">
-              <Stat
-                href="/admin/prompts?tab=pending"
-                label={a.dashPending}
-                count={pending}
-                hot
-              />
-              <Stat
-                href="/admin/prompts?tab=published"
-                label={a.dashPublished}
-                count={published}
-              />
-            </Card>
-            <Card title={a.dashRenders} href={`${ADMIN_INQUIRIES_PATH}?kind=feedback`}>
-              <Stat
-                href={`${ADMIN_INQUIRIES_PATH}?kind=feedback`}
-                label={a.dashRendersWeek}
-                count={renders.recent}
-              />
-              <Stat
-                href={`${ADMIN_INQUIRIES_PATH}?kind=feedback&status=new`}
-                label={a.dashRendersFailed}
-                count={renders.failed}
-                hot
-              />
-              <Stat
-                href="/admin/community#claims"
-                label={a.dashRendersHeld}
-                count={renders.held}
-              />
-              <Stat
-                href={`${ADMIN_INQUIRIES_PATH}?kind=feedback&status=new`}
-                label={a.dashPaymentsManual}
-                count={paymentsManual}
-                hot
-              />
-              <Stat
-                href={`${ADMIN_INQUIRIES_PATH}?kind=feedback&status=new`}
-                label={a.dashFeedbackNew}
-                count={feedback}
-                hot
-              />
-            </Card>
-            <Card title={a.dashInquiries} href={ADMIN_INQUIRIES_PATH}>
-              <Stat
-                href={`${ADMIN_INQUIRIES_PATH}?kind=brand&status=new`}
-                label={a.dashInquiriesNew}
-                count={inquiries}
-                hot
-              />
-              <Stat
-                href="/admin/brand-workspace#studio-inbox"
-                label={a.dashInbox}
-                count={waiting}
-                hot
-              />
-            </Card>
-          </div>
-        </>
-      )}
+      </details>
     </AdminShell>
   );
 }

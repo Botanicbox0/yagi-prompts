@@ -15,6 +15,7 @@
   --color-white: #ffffff;
   --color-blue: #3875c5; /* COLOUR.accent, lib/design/identity.ts */
   --color-sky: #e8eff7; /* COLOUR.sky: the quiet ground behind media */
+  --color-muted: #676b75; /* COLOUR.muted: captions and card meta, instead of a hex in the markup */
   --color-workspace-canvas: #f7f7f8;
   --color-workspace-paper: #ffffff;
   --color-workspace-ink: #202126;
@@ -197,7 +198,7 @@ html:lang(ko) {
 .audience-shell { width: calc(100% - var(--spacing-gutter) * 2); max-width: var(--container-audience); margin-inline: auto; }
 /* Justified film rows: a card's width grows in proportion to its ratio, so a row shares one height
    and fills the width without cropping anything. The filler stops the last row from stretching. */
-.film-rows { --film-row-h: clamp(9rem, 24vw, 30rem); display: flex; flex-wrap: wrap; align-items: flex-start; gap: 1.75rem 0.75rem; }
+.film-rows { --film-row-h: clamp(8.5rem, 16vw, 19.5rem); display: flex; flex-wrap: wrap; align-items: flex-start; gap: 1.5rem 0.75rem; }
 .film-rows > li { flex: var(--r, 0.8) 1 calc(var(--r, 0.8) * var(--film-row-h)); min-width: 0; max-width: 100%; }
 .film-rows::after { content: ''; flex-grow: 9999; }
 /* A modal that reaches its end must not hand the scroll to the page behind it. */
@@ -205,9 +206,20 @@ dialog, [role='dialog'] { overscroll-behavior: contain; }
 
 .audience-title { font-size: var(--text-audience-title); font-weight: 540; line-height: 1.02; letter-spacing: -0.052em; text-wrap: balance; }
 .audience-heading { font-size: var(--text-audience-heading); font-weight: 560; line-height: 1.06; letter-spacing: -0.045em; text-wrap: balance; }
+/* Card and block titles under a heading (v7 `.h3`); the size stays with the call site. */
+.audience-subheading { font-weight: 600; line-height: 1.15; letter-spacing: -0.035em; text-wrap: balance; }
 .audience-eyebrow { font-size: 0.72rem; font-weight: 500; letter-spacing: 0.04em; opacity: 0.55; }
-.audience-button { display: inline-flex; min-height: 3rem; align-items: center; justify-content: center; border-radius: 999px; background: var(--color-blue); color: var(--color-white); padding: 0.75rem 1.5rem; font-size: 0.875rem; font-weight: 500; transition: background-color 240ms var(--ease-out-quint); }
-.audience-button:hover { background: color-mix(in srgb, var(--color-blue) 82%, #000000); }
+/* The two buttons of the identity (components/brand-studio/v7.module.css `.cta` and `.ghost`): the one
+   blue fill for the screen's main action, and a white pill with the line for everything beside it.
+   In the components layer, so a call site can still size one with utilities (`text-sm`, `px-4`, `w-full`). */
+@layer components {
+  .audience-button { display: inline-flex; min-height: 3rem; align-items: center; justify-content: center; gap: 0.75rem; border-radius: 999px; background: var(--color-blue); color: var(--color-white); padding: 0 1.5rem; font-size: 0.9375rem; font-weight: 620; transition: background-color 240ms var(--ease-out-quint), transform 520ms var(--ease-out-quint); }
+  .audience-button:hover { background: color-mix(in srgb, var(--color-blue) 82%, #000000); }
+  .audience-button:active { background: color-mix(in srgb, var(--color-blue) 66%, #000000); transform: scale(0.98); }
+  .audience-button-quiet { display: inline-flex; min-height: 3rem; align-items: center; justify-content: center; gap: 0.75rem; border-radius: 999px; background: var(--color-white); color: var(--on-surface); box-shadow: inset 0 0 0 1px var(--hairline); padding: 0 1.25rem; font-size: 0.9375rem; font-weight: 560; transition: background-color 240ms var(--ease-out-quint), box-shadow 240ms var(--ease-out-quint); }
+  .audience-button-quiet:hover { background: color-mix(in srgb, var(--color-blue) 9%, #ffffff); }
+  .audience-button:focus-visible, .audience-button-quiet:focus-visible { outline: 2px solid var(--color-blue); outline-offset: 3px; }
+}
 
 /* docs/design/IDENTITY.md §3 on the personal side: the old poster display (900, uppercase) and label
    (wide-tracked caps) slots now carry the identity's heading and a quiet label. The specificity beats

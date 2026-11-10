@@ -10,6 +10,7 @@ type LookbookPreset = {
   subtitleKo: string;
   subtitleEn: string;
   videoUrl: string;
+  posterUrl: string;
   palette: readonly [string, string, string, string, string];
   lightingKo: string;
   lightingEn: string;
@@ -38,6 +39,7 @@ const LOOKBOOK_PRESETS: readonly LookbookPreset[] = [
     subtitleKo: "따뜻한 필름 톤 · 자연광 림라이트 · 50mm 클로즈업",
     subtitleEn: "Warm film grade · tungsten rim · 50mm close-up",
     videoUrl: "/reel/brands/production-paris.mp4",
+    posterUrl: "/reel/brands/production-paris.jpg",
     palette: ["#0E0D0C", "#2B211B", "#8C583A", "#D9A773", "#F4ECE1"],
     lightingKo: "창가 확산 자연광 + 3200K 웜 림라이트 (콘트라스트 1:3)",
     lightingEn: "Diffused window key + 3200K warm rim light (1:3 contrast)",
@@ -81,12 +83,13 @@ const LOOKBOOK_PRESETS: readonly LookbookPreset[] = [
     id: "city-neon-pace",
     titleKo: "도심 나이트 하이콘트라스트",
     titleEn: "Urban Night High-Contrast",
-    subtitleKo: "쿨 차콜 & 레드 포인트 · 빠른 비트 컷 · 와이드 무빙",
-    subtitleEn: "Cool charcoal & red accent · fast beat cuts · dynamic wide",
+    subtitleKo: "쿨 차콜 & 프렌치 블루 포인트 · 빠른 비트 컷 · 와이드 무빙",
+    subtitleEn: "Cool charcoal & French blue accent · fast beat cuts · dynamic wide",
     videoUrl: "/reel/brands/city-fashion.mp4",
-    palette: ["#07080C", "#181C26", "#3E4A63", "#ED1E1E", "#ECEFF4"],
-    lightingKo: "웻 아스팔트 반사광 + 레드·아이스블루 탑 라이트 (하이콘트라스트)",
-    lightingEn: "Wet asphalt specular bounce + red/ice-blue top light (high contrast)",
+    posterUrl: "/reel/brands/city-fashion.jpg",
+    palette: ["#07080C", "#181C26", "#3E4A63", "#3875C5", "#ECEFF4"],
+    lightingKo: "웻 아스팔트 반사광 + 프렌치 블루·아이스 탑 라이트 (하이콘트라스트)",
+    lightingEn: "Wet asphalt specular bounce + French blue/ice top light (high contrast)",
     cameraKo: "24mm 광각 로우앵글 · 빠른 휩팬(Whip Pan) & 줌 스냅",
     cameraEn: "24mm wide low-angle · fast whip-pan & zoom snap",
     pacingKo: "0.7초 단위 빠른 매치컷 진입 → 2초 슬로우 모션 드롭",
@@ -117,9 +120,9 @@ const LOOKBOOK_PRESETS: readonly LookbookPreset[] = [
         timecode: "00:08 — 00:15",
         roleKo: "시그니처 포즈 엔딩 (Payoff)",
         roleEn: "Signature Freeze Payoff",
-        cameraBadge: "Center Hero · Red Rim",
-        descKo: "강렬한 레드 림라이트 아래 시그니처 포즈로 정지하며 브랜드 슬로건이 선명하게 각인됩니다.",
-        descEn: "Hard stop under signature red rim light with crisp center composition.",
+        cameraBadge: "Center Hero · Blue Rim",
+        descKo: "강렬한 블루 림라이트 아래 시그니처 포즈로 정지하며 브랜드 슬로건이 선명하게 각인됩니다.",
+        descEn: "Hard stop under signature blue rim light with crisp center composition.",
       },
     ],
   },
@@ -130,6 +133,7 @@ const LOOKBOOK_PRESETS: readonly LookbookPreset[] = [
     subtitleKo: "맑은 정오 채광 · 클린 아이보리 · 매크로 디테일",
     subtitleEn: "Clean noon daylight · warm ivory · macro product texture",
     videoUrl: "/reel/brands/tea-editorial.mp4",
+    posterUrl: "/reel/brands/tea-editorial.jpg",
     palette: ["#161A16", "#3A473B", "#7FA07E", "#D8E2D1", "#F8F7F2"],
     lightingKo: "5600K 데이라이트 소프트박스 + 화이트 바운스 (그림자 최소화)",
     lightingEn: "5600K daylight softbox + white bounce fill (minimal shadow)",
@@ -176,6 +180,7 @@ const LOOKBOOK_PRESETS: readonly LookbookPreset[] = [
     subtitleKo: "스킨 스페큘러 광채 · 샴페인 골드 · 시네마틱 슬로우",
     subtitleEn: "Specular skin glow · champagne gold · cinematic slow-mo",
     videoUrl: "/reel/campaigns/beauty-rose.mp4",
+    posterUrl: "/reel/campaigns/beauty-rose.jpg",
     palette: ["#140D10", "#42212B", "#9E5869", "#E5B2B8", "#FFF5F6"],
     lightingKo: "뷰티 디쉬 정면 키라이트 + 샴페인 골드 백라이트 (피부 윤광 강조)",
     lightingEn: "Front beauty-dish key + champagne gold backlight (skin specular glow)",
@@ -292,7 +297,7 @@ export function AestheticEngine({
         <div>
           <span className="ys-kicker-badge">
             <span className="ys-brand-live-dot" aria-hidden="true" />
-            {isKo ? "YAGI 미감 구현 엔진 · VLM Shot Director" : "YAGI Aesthetic Engine · VLM Shot Director"}
+            {isKo ? "YAGI 미감 디렉터 · 촬영·조명·3컷 콘티 설계" : "YAGI Aesthetic Director · Shot & Mood Builder"}
           </span>
           <h3>
             {isKo
@@ -330,7 +335,8 @@ export function AestheticEngine({
                 <div className="ys-lookbook-media">
                   {playing ? (
                     <video
-                      src={item.videoUrl}
+                      src={`${item.videoUrl}#t=0.1`}
+                      poster={item.posterUrl}
                       autoPlay
                       muted
                       loop
@@ -341,7 +347,9 @@ export function AestheticEngine({
                     <div
                       className="ys-lookbook-swatch-preview"
                       style={{
-                        background: `linear-gradient(135deg, ${item.palette[0]} 0%, ${item.palette[1]} 35%, ${item.palette[2]} 70%, ${item.palette[3]} 100%)`,
+                        backgroundImage: `linear-gradient(180deg, rgba(10, 12, 18, 0.18) 0%, rgba(10, 12, 18, 0.68) 100%), url(${item.posterUrl})`,
+                        backgroundSize: "cover",
+                        backgroundPosition: "center",
                       }}
                     >
                       <button
@@ -389,8 +397,8 @@ export function AestheticEngine({
           <div className="ys-attached-refs">
             <small>
               {isKo
-                ? `브랜드가 첨부한 외부 레퍼런스 (${referenceLinks.length}건) — VLM 9프레임 분석 연동됨`
-                : `Attached brand references (${referenceLinks.length}) — linked to VLM 9-frame analysis`}
+                ? `브랜드가 첨부한 외부 레퍼런스 (${referenceLinks.length}건) — 화면 구도·조명 분석 반영됨`
+                : `Attached brand references (${referenceLinks.length}) — camera & lighting mood linked`}
             </small>
           </div>
         )}
@@ -432,7 +440,7 @@ export function AestheticEngine({
         <div className="ys-dna-card" data-mood-dna={preset.id}>
           <div className="ys-dna-palette-col">
             <span className="ys-dna-label">
-              {isKo ? "① 5색 컬러 팔레트 (CIE Lab)" : "① 5-Color Lab Palette"}
+              {isKo ? "01. 5색 브랜드 컬러 팔레트" : "01. 5-Color Brand Palette"}
             </span>
             <div className="ys-dna-swatches">
               {preset.palette.map((hex) => (
@@ -445,19 +453,19 @@ export function AestheticEngine({
           </div>
           <dl className="ys-dna-specs">
             <div>
-              <dt>{isKo ? "② 조명 설계 (Lighting)" : "② Lighting Setup"}</dt>
+              <dt>{isKo ? "02. 조명 설계 (Lighting)" : "02. Lighting Setup"}</dt>
               <dd>{isKo ? preset.lightingKo : preset.lightingEn}</dd>
             </div>
             <div>
-              <dt>{isKo ? "③ 카메라·렌즈 (Camera & Lens)" : "③ Camera & Lens"}</dt>
+              <dt>{isKo ? "03. 카메라·렌즈 (Camera & Lens)" : "03. Camera & Lens"}</dt>
               <dd>{isKo ? preset.cameraKo : preset.cameraEn}</dd>
             </div>
             <div>
-              <dt>{isKo ? "④ 편집 호흡 (Cut Rhythm)" : "④ Editing Rhythm"}</dt>
+              <dt>{isKo ? "04. 편집 호흡 (Cut Rhythm)" : "04. Editing Rhythm"}</dt>
               <dd>{isKo ? preset.pacingKo : preset.pacingEn}</dd>
             </div>
             <div>
-              <dt>{isKo ? "⑤ 질감·그레인 (Texture)" : "⑤ Texture & Grain"}</dt>
+              <dt>{isKo ? "05. 질감·그레인 (Texture)" : "05. Texture & Grain"}</dt>
               <dd>{isKo ? preset.textureKo : preset.textureEn}</dd>
             </div>
           </dl>

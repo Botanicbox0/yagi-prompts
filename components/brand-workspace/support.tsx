@@ -25,17 +25,17 @@ function toSlackHandle(name: string): string {
 }
 
 const QUICK_TOPICS_KO = [
-  { label: "📅 일정·납기 문의", text: "안녕하세요, 이번 캠페인 첫 시안(v1) 및 최종 납기 일정이 궁금합니다." },
-  { label: "🎬 크리에이터 리스트", text: "캠페인에 매칭 가능한 추천 크리에이터 리스트를 받아볼 수 있을까요?" },
-  { label: "💳 견적·예산 상담", text: "예산 범위에 따른 제작 편수 및 시딩 구성을 상담하고 싶습니다." },
-  { label: "✨ 시안 수정 피드백", text: "전달주신 시안 관련하여 추가 연출 피드백 드립니다: " },
+  { label: "일정·납기 문의", text: "안녕하세요, 이번 캠페인 첫 시안(v1) 및 최종 납기 일정이 궁금합니다." },
+  { label: "크리에이터 리스트", text: "캠페인에 매칭 가능한 추천 크리에이터 리스트를 받아볼 수 있을까요?" },
+  { label: "견적·예산 상담", text: "예산 범위에 따른 제작 편수 및 시딩 구성을 상담하고 싶습니다." },
+  { label: "시안 수정 피드백", text: "전달주신 시안 관련하여 추가 연출 피드백 드립니다: " },
 ] as const;
 
 const QUICK_TOPICS_EN = [
-  { label: "📅 Timeline & Delivery", text: "Hi, could we check the schedule for Cut v1 and final delivery?" },
-  { label: "🎬 Creator Lineup", text: "Could you share the recommended creator list for our campaign?" },
-  { label: "💳 Quote & Scope", text: "We'd like to discuss production volume and seeding options for our budget." },
-  { label: "✨ Cut Feedback", text: "Sharing additional direction feedback on the latest cut: " },
+  { label: "Timeline & Delivery", text: "Hi, could we check the schedule for Cut v1 and final delivery?" },
+  { label: "Creator Lineup", text: "Could you share the recommended creator list for our campaign?" },
+  { label: "Quote & Scope", text: "We'd like to discuss production volume and seeding options for our budget." },
+  { label: "Cut Feedback", text: "Sharing additional direction feedback on the latest cut: " },
 ] as const;
 
 export function SupportDrawer({
@@ -102,13 +102,23 @@ export function SupportDrawer({
     [organizationId, isOpen],
   );
 
-  // Live poll every 4s while the ChannelTalk/Sendbird widget is open so Slack replies appear in real time
+  // Live poll every 4s while the ChannelTalk/Sendbird widget is open and tab is visible
   useEffect(() => {
     if (!isOpen || !organizationId) return;
     const timer = setInterval(() => {
+      if (typeof document !== "undefined" && document.hidden) return;
       void refresh(organizationId, true);
     }, 4000);
-    return () => clearInterval(timer);
+    const onVisible = () => {
+      if (typeof document !== "undefined" && !document.hidden) {
+        void refresh(organizationId, true);
+      }
+    };
+    document.addEventListener("visibilitychange", onVisible);
+    return () => {
+      clearInterval(timer);
+      document.removeEventListener("visibilitychange", onVisible);
+    };
   }, [isOpen, organizationId, refresh]);
 
   if (!organizations.length) return null;
@@ -244,13 +254,13 @@ export function SupportDrawer({
               <div className="bw-concierge-title-row">
                 <strong id={titleId}>{b.managed.support}</strong>
                 <span className="bw-concierge-slack-pill">
-                  Slack · {brandHandle}
+                  1:1 · {brandHandle}
                 </span>
               </div>
               <p>
                 {isKo
-                  ? "담당 PD 슬랙 채널과 실시간 연동됩니다"
-                  : "Connected live with your YAGI PD on Slack"}
+                  ? "전담 프로듀서와 1:1 실시간 연동됩니다"
+                  : "Connected live with your dedicated YAGI PD"}
               </p>
             </div>
           </div>
@@ -315,8 +325,8 @@ export function SupportDrawer({
             </div>
             <p>
               {isKo
-                ? `${currentOrg?.name ?? "고객사"} 전용 실시간 문의창입니다. 메시지를 남기시면 담당 프로듀서 Slack으로 즉시 전달되며, 답변도 이곳으로 바로 도착합니다.`
-                : `Direct line for ${currentOrg?.name ?? "your team"}. Messages go straight to our producers on Slack and replies appear here live.`}
+                ? `${currentOrg?.name ?? "고객사"} 전용 실시간 문의창입니다. 메시지를 남기시면 전담 프로듀서에게 즉시 전달되며, 답변도 이곳으로 바로 도착합니다.`
+                : `Direct line for ${currentOrg?.name ?? "your team"}. Messages go straight to our producers and replies appear here live.`}
             </p>
           </div>
 
@@ -342,7 +352,7 @@ export function SupportDrawer({
               <div className="bw-support-bubble-meta">
                 <strong>
                   {m.authorRole === "studio"
-                    ? `${b.dashboard.studio} · Slack`
+                    ? b.dashboard.studio
                     : currentOrg?.name}
                 </strong>
                 <time>{formatBrandTimestamp(m.createdAt, locale)}</time>

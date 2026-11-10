@@ -26,10 +26,28 @@ export function YagiMark({ className }: { className?: string }) {
   );
 }
 
+export function YagiLogo({
+  size = 16,
+  className,
+}: {
+  size?: 16 | 18 | 22;
+  className?: string;
+}) {
+  const markHeight = size === 16 ? 'h-[18px]' : size === 22 ? 'h-[24px]' : 'h-[20px]';
+  return (
+    <span
+      data-yagi-logo
+      className={['inline-flex items-center gap-2', className].filter(Boolean).join(' ')}
+    >
+      <YagiMark className={`${markHeight} ys-brand-mark`} />
+      <strong className="text-[12px] font-bold tracking-[0.04em] text-[var(--ys-ink)]">YAGI</strong>
+    </span>
+  );
+}
+
 /**
- * YAGI STUDIO header lockup for `brand.twings.app`:
- * Organic YW mark + "YAGI" + "STUDIO" badge. No red indicator: TWINGS screens never use the YAGI v1.2
- * red (docs/design/TASTE.md).
+ * Legacy YAGI STUDIO lockup retained for unit-test compatibility;
+ * the live `brand.twings.app` sidebar uses `TwingsStudioLockup` + `Powered by YAGI`.
  */
 export function YagiStudioLockup({
   size = 22,

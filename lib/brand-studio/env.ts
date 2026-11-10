@@ -1,0 +1,76 @@
+/**
+ * Brand studio server settings (docs/BRAND-STUDIO-V2.md §7, §11), read once per request from the
+ * environment. Server-only: names and booleans leave this module, secret values never do (the two
+ * secrets are compared in constant time by `secretMatches`).
+ */
+import { timingSafeEqual } from 'node:crypto';
+import { STUDIO_LANES, type StudioLane } from './models';
+
+export type StudioEnvSource = Record<string, string | undefined>;
+
+export interface StudioEnv {
+  /** `fake` never spends money: placeholders after a couple of polls. */
+  provider: 'live' | 'fake';
+  defaultLane: StudioLane;
+  defaultMonthlyKrw: number;
+  caps: Record<StudioLane, number>;
+  /** True when the API lane can submit (a Sunra key is configured, or the fake provider is on). */
+  apiConfigured: boolean;
+  /** Absolute https origin the provider can call back, or null (no webhook; polling still works). */
+  webhookUrl: string | null;
+  /** Origin used to turn a relative media URL into one a provider can fetch (null = keep as is). */
+  appOrigin: string | null;
+}
+
+function whole(value: string | undefined, fallback: number, max: number): number {
+  const n = Number(value);
+  return value !== undefined && value.trim() !== '' && Number.isInteger(n) && n >= 0 ? Math.min(n, max) : fallback;
+}
+
+function httpsOrigin(value: string | undefined): string | null {
+  if (!value) return null;
+  try {
+    const url = new URL(value.trim());
+    return url.protocol === 'https:' ? url.origin : null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * `BRAND_STUDIO_PROVIDER`: `fake` or `live`. Unset means `live`, except in local mode
+ * (`PLAYBOOK_MODE=local`) where an unset value means `fake` so a laptop never spends by accident.
+ */
+export function studioEnv(env: StudioEnvSource = process.env): StudioEnv {
+  const explicit = env.BRAND_STUDIO_PROVIDER?.trim();
+  const provider: 'live' | 'fake' =
+    explicit === 'fake' ? 'fake' : explicit === 'live' ? 'live' : env.PLAYBOOK_MODE?.trim() === 'local' ? 'fake' : 'live';
+  const lane = env.BRAND_STUDIO_DEFAULT_LANE?.trim();
+  const defaultLane: StudioLane = (STUDIO_LANES as readonly string[]).includes(lane ?? '') ? (lane as StudioLane) : 'sunra_api';
+  const appOrigin = httpsOrigin(env.NEXT_PUBLIC_APP_URL);
+  const secret = env.BRAND_STUDIO_WEBHOOK_SECRET?.trim();
+  return {
+    provider,
+    defaultLane,
+    defaultMonthlyKrw: whole(env.BRAND_STUDIO_DEFAULT_MONTHLY_KRW, 0, 100_000_000),
+    caps: {
+      sunra_api: whole(env.BRAND_STUDIO_API_CONCURRENCY, 20, 200),
+      sunra_mcp: whole(env.BRAND_STUDIO_MCP_CONCURRENCY, 20, 200),
+    },
+    apiConfigured: provider === 'fake' || Boolean(env.SUNRA_API_KEY?.trim()),
+    webhookUrl:
+      provider === 'live' && appOrigin && secret
+        ? `${appOrigin}/api/brand-studio/webhook?token=${encodeURIComponent(secret)}`
+        : null,
+    appOrigin,
+  };
+}
+
+/** Constant-time comparison against a configured secret; false when the secret is not configured. */
+export function secretMatches(configured: string | undefined, received: string | null | undefined): boolean {
+  const expected = configured?.trim();
+  if (!expected || !received) return false;
+  const a = Buffer.from(expected);
+  const b = Buffer.from(received);
+  return a.length === b.length && timingSafeEqual(a, b);
+}

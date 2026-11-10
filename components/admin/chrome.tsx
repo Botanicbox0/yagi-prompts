@@ -1,10 +1,12 @@
 import {
   ADMIN_NAV_GROUPS,
   ADMIN_NAV_PATHS,
-  type AdminNavKey,
+  adminNavGroupOf,
+  type AdminShellKey,
 } from "@/lib/admin/workflow";
 import { WorkspaceLanguage } from "@/components/brand-workspace/language";
 import { PublicLink } from "@/components/admin/public-link";
+import { NavIcon } from "@/components/admin/icons";
 import type { ReactNode } from "react";
 import { TwingsLogo } from "@/components/brand/twings-mark";
 import type { Dictionary } from "@/lib/i18n/dictionaries";
@@ -75,12 +77,12 @@ export function ConfirmCheck({ label }: { label: string }) {
 }
 
 export const BUTTON =
-  "border border-hairline px-3 py-1.5 font-label text-eyebrow uppercase hover:border-accent hover:text-accent";
+  "admin-btn border border-hairline px-3.5 py-1.5 text-[13px] font-medium hover:border-accent hover:text-accent";
 export const BUTTON_PRIMARY =
-  "border border-accent bg-accent px-4 py-2 font-label text-eyebrow uppercase text-white";
+  "admin-btn admin-btn-primary border border-accent bg-accent px-4 py-2 text-[13px] font-medium text-white";
 export const INPUT =
-  "w-full border border-hairline bg-transparent px-2.5 py-1.5 font-mono text-code outline-none focus:border-accent";
-export const LABEL = "block font-label text-eyebrow uppercase opacity-60";
+  "admin-input w-full border border-hairline bg-transparent px-3 py-2 text-[13.5px] outline-none focus:border-accent";
+export const LABEL = "admin-field-label block text-[12px] font-semibold";
 
 export function Field({
   label,
@@ -92,11 +94,11 @@ export function Field({
   children: ReactNode;
 }) {
   return (
-    <label className="block">
+    <label className="admin-field block">
       <span className={LABEL}>{label}</span>
       <span className="mt-1.5 block">{children}</span>
       {hint && (
-        <span className="mt-1 block font-mono text-[0.72rem] opacity-50">
+        <span className="admin-field-hint mt-1 block text-[12px] opacity-65">
           {hint}
         </span>
       )}
@@ -125,7 +127,7 @@ export function LocalePair({
     const current = value?.[locale] ?? "";
     return (
       <label className="block">
-        <span className="font-label text-[0.68rem] uppercase tracking-[0.12em] opacity-45">
+        <span className="admin-locale-tag font-label text-[0.68rem] uppercase tracking-[0.08em]">
           {tag}
         </span>
         {multiline ? (
@@ -133,14 +135,14 @@ export function LocalePair({
             name={field}
             rows={rows}
             defaultValue={current}
-            className={`${INPUT} mt-1`}
+            className={`${INPUT} mt-1.5`}
           />
         ) : (
           <input
             type="text"
             name={field}
             defaultValue={current}
-            className={`${INPUT} mt-1`}
+            className={`${INPUT} mt-1.5`}
           />
         )}
       </label>
@@ -148,14 +150,14 @@ export function LocalePair({
   };
 
   return (
-    <div>
+    <div className="admin-locale-pair">
       <span className={LABEL}>{label}</span>
       <div className="mt-1.5 grid gap-3 sm:grid-cols-2">
         {cell("en", "EN")}
         {cell("ko", "KO")}
       </div>
       {hint && (
-        <p className="mt-1 font-mono text-[0.72rem] opacity-50">{hint}</p>
+        <p className="admin-field-hint mt-1 text-[12px] opacity-65">{hint}</p>
       )}
     </div>
   );
@@ -165,18 +167,20 @@ export function Panel({
   title,
   action,
   children,
+  id,
 }: {
   title: string;
   action?: ReactNode;
   children: ReactNode;
+  id?: string;
 }) {
   return (
-    <section className="mt-8 border border-hairline">
-      <header className="flex flex-wrap items-center justify-between gap-3 border-b border-hairline px-4 py-2.5">
-        <h2 className="font-label text-eyebrow uppercase">{title}</h2>
+    <section id={id} className="admin-panel mt-7 border border-hairline">
+      <header className="admin-panel-head flex flex-wrap items-center justify-between gap-3 border-b border-hairline px-5 py-3">
+        <h2 className="admin-panel-title text-[14px] font-semibold">{title}</h2>
         {action}
       </header>
-      <div className="p-4">{children}</div>
+      <div className="admin-panel-body p-5">{children}</div>
     </section>
   );
 }
@@ -271,12 +275,12 @@ export function OutcomeBanner({
     <div
       role="status"
       data-outcome={failed ? "error" : "ok"}
-      className={`mt-6 border px-4 py-3 ${failed ? "border-accent" : "border-hairline"}`}
+      className={`admin-outcome mt-5 rounded-[14px] border px-4 py-3 text-[13.5px] ${failed ? "border-ink" : "border-hairline"}`}
     >
-      <p className="font-label text-eyebrow uppercase">{String(message)}</p>
+      <p className="admin-outcome-title font-medium">{String(message)}</p>
       {/* The database's sentence matters when something failed; a slug under "Created." is noise (2026-09-11). */}
       {failed && detail && (
-        <p className="mt-1.5 font-mono text-[0.75rem] break-words opacity-60">
+        <p className="admin-outcome-detail mt-1.5 font-mono text-[12px] break-words opacity-75">
           {dict.detailLabel}: {detail}
         </p>
       )}
@@ -317,6 +321,17 @@ export function AdminSignOut({
   );
 }
 
+const LEGACY_PATHS = { playbooks: "/admin/playbooks", policy: "/admin/policy" } as const;
+
+/**
+ * Every admin page sits in this frame (docs/ADMIN.md §5): a quiet grouped rail on the canvas, one
+ * white work surface with the location and the language switch, then the page. On a phone the rail
+ * folds behind a "Menu" control — a checkbox and its label, so it opens with scripts disabled — and
+ * the page starts on the first screen instead of under twelve menu entries (audit §3.1).
+ *
+ * `active` may be a legacy key (the playbook editor and its policy): those pages keep their routes
+ * but no menu entry, so nothing in the rail is marked current for them.
+ */
 export function AdminShell({
   dict,
   locale,
@@ -325,59 +340,19 @@ export function AdminShell({
 }: {
   dict: AdminDict;
   locale: string;
-  active: AdminNavKey | "contests";
+  active: AdminShellKey;
   children: ReactNode;
 }) {
-  // "Refresh caches" used to send every page back to /admin; it returns to where it was pressed.
-  const refreshBack =
-    active === "funding"
-      ? "/admin/funding"
-      : active === "risk"
-        ? "/admin/risk"
-        : active === "community"
-          ? "/admin/community"
-          : active === "landingMedia"
-            ? "/admin/landing-media"
-          : active === "subscriptions"
-            ? "/admin/subscriptions"
-            : active === "brandWorkspace"
-              ? "/admin/brand-workspace"
-              : active === "prompts"
-                ? "/admin/prompts"
-                : active === "contests"
-                  ? "/admin/contests"
-                  : active === "campaigns"
-                    ? "/admin/campaigns"
-                    : active === "inquiries"
-                      ? "/admin/inquiries"
-                      : active === "policy"
-                        ? "/admin/policy"
-                        : active === "playbooks"
-                          ? "/admin/playbooks"
-                          : "/admin";
   const dictionary = getDictionary(isLocale(locale) ? locale : "en");
   const workflow = dictionary.adminWorkflow;
-  const entries = [
-    ["home", "/admin", dict.navHome],
-    ["risk", "/admin/risk", workflow.riskNav],
-    ["funding", "/admin/funding", workflow.fundingNav],
-    [
-      "brandWorkspace",
-      "/admin/brand-workspace",
-      dictionary.brandWorkspace.studioQueue,
-    ],
-    ["prompts", "/admin/prompts", dict.navPrompts],
-    ["campaigns", "/admin/campaigns", dict.navCampaigns],
-    ["inquiries", "/admin/inquiries", dict.navInquiries],
-    ["community", "/admin/community", dictionary.community.adminTitle],
-    ["landingMedia", "/admin/landing-media", dictionary.landingMedia.nav],
-    ["subscriptions", "/admin/subscriptions", dictionary.creatorLaunch.nav],
-    ["playbooks", "/admin/playbooks", dict.navPlaybooks],
-    ["policy", "/admin/policy", dict.navPolicy],
-  ] as const;
+  const c = dictionary.adminConsole;
+  const group = adminNavGroupOf(active);
+  // "Refresh caches" returns to where it was pressed.
+  const here =
+    active === "playbooks" || active === "policy" ? LEGACY_PATHS[active] : ADMIN_NAV_PATHS[active];
   return (
     <div
-      className="admin-workspace"
+      className="admin-console"
       data-admin-active={active}
       data-section
       data-theme="light"
@@ -385,46 +360,65 @@ export function AdminShell({
       <a href="#main" className="admin-skip-link">
         {workflow.skip}
       </a>
-      <aside className="admin-sidebar">
-        <AdminBrand dict={dict} />
-        <nav data-admin-navigation aria-label={workflow.navigation}>
-          {ADMIN_NAV_GROUPS.map((group) => (
-            <section
-              key={group.key}
-              className="admin-nav-group"
-              aria-labelledby={`admin-nav-${group.key}`}
-            >
-              <h2 id={`admin-nav-${group.key}`}>
-                {workflow.groups[group.key]}
-              </h2>
-              {group.items.map((key) => (
-                <a
-                  key={key}
-                  href={ADMIN_NAV_PATHS[key]}
-                  aria-current={active === key ? "page" : undefined}
-                >
-                  <span>{entries.find(([entry]) => entry === key)?.[2]}</span>
-                  <span className="admin-nav-description">
-                    {workflow.descriptions[key]}
-                  </span>
-                </a>
-              ))}
-            </section>
-          ))}
-        </nav>
-        <div className="admin-utilities">
-          <PublicLink href={`/${locale}`}>{dict.navSite} ↗</PublicLink>
-          <OpForm op="caches.refresh" back={refreshBack}>
-            <button type="submit">{dict.refreshCaches}</button>
-          </OpForm>
-          <AdminSignOut dict={dict} />
+      <aside className="admin-rail">
+        <div className="admin-rail-head">
+          <AdminBrand dict={dict} />
+          <input
+            type="checkbox"
+            id="admin-menu-toggle"
+            className="admin-menu-toggle"
+            aria-controls="admin-navigation"
+          />
+          <label htmlFor="admin-menu-toggle" className="admin-menu-button">
+            <span>{c.menu}</span>
+            <span className="admin-menu-here">{c.nav[active]}</span>
+          </label>
+          <nav
+            id="admin-navigation"
+            data-admin-navigation
+            aria-label={workflow.navigation}
+            className="admin-nav"
+          >
+            {ADMIN_NAV_GROUPS.map((navGroup) => (
+              <section
+                key={navGroup.key}
+                className="admin-nav-group"
+                aria-labelledby={`admin-nav-${navGroup.key}`}
+              >
+                <h2 id={`admin-nav-${navGroup.key}`}>{c.groups[navGroup.key]}</h2>
+                <ul>
+                  {navGroup.items.map((key) => (
+                    <li key={key}>
+                      <a
+                        href={ADMIN_NAV_PATHS[key]}
+                        data-admin-nav={key}
+                        aria-current={active === key ? "page" : undefined}
+                      >
+                        <NavIcon name={key} />
+                        <span>{c.nav[key]}</span>
+                      </a>
+                    </li>
+                  ))}
+                </ul>
+              </section>
+            ))}
+            <div className="admin-rail-foot">
+              <PublicLink href={`/${locale}`}>{dict.navSite} ↗</PublicLink>
+              <OpForm op="caches.refresh" back={here}>
+                <button type="submit">{dict.refreshCaches}</button>
+              </OpForm>
+              <AdminSignOut dict={dict} />
+            </div>
+          </nav>
         </div>
       </aside>
-      <div className="admin-body">
+      <div className="admin-stage">
         <header className="admin-topbar">
-          <span>
-            {entries.find(([key]) => key === active)?.[2] ?? dict.brand}
-          </span>
+          <p className="admin-crumbs" aria-label={c.location}>
+            <span>{group ? c.groups[group] : c.legacy}</span>
+            <span aria-hidden="true">›</span>
+            <span className="admin-crumbs-here">{c.nav[active]}</span>
+          </p>
           <WorkspaceLanguage
             locale={locale}
             label={dictionary.nav.localeToggle}

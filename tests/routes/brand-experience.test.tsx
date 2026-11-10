@@ -117,7 +117,8 @@ describe('the brand page shows the service before asking visitors to enquire', (
     expect(html).toContain('playsInline=""');
     expect(html).toContain('poster="/reel/campaigns/highteen.jpg"');
     expect(html).toContain('poster="/reel/landing/v7/hero.jpg"');
-    // The landing's own loops start only when on screen (Film), never from the markup.
+    // The hero film starts immediately on the first screen; below-the-fold loops start only when on screen.
+    expect(html).toMatch(/<video[^>]*autoPlay=""[^>]*preload="auto"[^>]*data-hero-video="true"/);
     expect(html).not.toMatch(/<video[^>]*data-loop-video[^>]*autoPlay|<video[^>]*autoPlay[^>]*data-loop-video/);
   });
 

@@ -13,11 +13,13 @@ describe('subscription entry is server controlled', () => {
     expect(mayEnrollSubscription(viewer,'creator',live,'live',{})).toBe(true);
     expect(mayEnrollSubscription(viewer,'premium',live,'live',{})).toBe(false);
   });
-  it('closed test mode is limited to actual administrators with explicit QA flag', () => {
+  it('closed test mode is limited to actual administrators or the PG review account with explicit QA flag', () => {
     const env={CREATOR_SUBSCRIPTION_QA:'on'};
     expect(mayEnrollSubscription(viewer,'creator',PREPARING_SUBSCRIPTION_AVAILABILITY,'test',env)).toBe(false);
     expect(mayEnrollSubscription({...viewer,isAdmin:true},'creator',PREPARING_SUBSCRIPTION_AVAILABILITY,'test',env)).toBe(true);
+    expect(mayEnrollSubscription({...viewer,review:true},'creator',PREPARING_SUBSCRIPTION_AVAILABILITY,'test',env)).toBe(true);
     expect(subscriptionQaAllowed({...viewer,isAdmin:true},{})).toBe(false);
+    expect(subscriptionQaAllowed({...viewer,review:true},{})).toBe(false);
   });
   it('an explicit pause also blocks administrator new enrollment', () => {
     const paused={...PREPARING_SUBSCRIPTION_AVAILABILITY,status:'paused' as const};

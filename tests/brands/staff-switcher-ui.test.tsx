@@ -117,7 +117,7 @@ describe('logo switcher in the TWINGS team view', () => {
   });
 
   it('shows every section for the team view and scopes each link to the browsed brand', () => {
-    expect(sectionVisibility(choices[1]!)).toEqual({ studio: true, settings: true, members: true });
+    expect(sectionVisibility(choices[1]!)).toEqual({ studio: true, identity: true, settings: true, members: true });
     state.query = `organizationId=${C}`;
     const nav = renderToStaticMarkup(<WorkspaceNavigation home="Home" members="Team" settings="Settings" library="Library" studio="Studio" scope={state.scope} />);
     for (const path of ['/brand', '/brand/studio', '/brand/library', '/brand/settings', '/brand/members']) expect(nav).toContain(`href="${path}?organizationId=${C}"`);

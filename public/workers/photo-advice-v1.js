@@ -25,7 +25,14 @@ self.onmessage=async({data:file})=>{
    runningMode:'IMAGE',numFaces:2,outputFaceBlendshapes:false,outputFacialTransformationMatrixes:true,
   });
   const result=detector.detect(canvas);
-  self.postMessage({ok:true,faces:result.faceLandmarks.length,matrix:result.facialTransformationMatrixes[0]?.data});
+  const pts=result.faceLandmarks[0];
+  let size;
+  if(pts?.length){
+   let minX=Infinity,maxX=-Infinity,minY=Infinity,maxY=-Infinity;
+   for(const p of pts){if(p.x<minX)minX=p.x;if(p.x>maxX)maxX=p.x;if(p.y<minY)minY=p.y;if(p.y>maxY)maxY=p.y;}
+   size=Math.sqrt(Math.max(0,maxX-minX)*Math.max(0,maxY-minY));
+  }
+  self.postMessage({ok:true,faces:result.faceLandmarks.length,matrix:result.facialTransformationMatrixes[0]?.data,size});
  }catch{
   self.postMessage({ok:false});
  }finally{image?.close();detector?.close();self.close();}

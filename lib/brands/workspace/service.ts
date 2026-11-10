@@ -7,6 +7,7 @@ import type { SqlRunner } from '@/lib/db/sql-runner';
 import { STAGING_BUCKET, type StorageDriver } from '@/lib/storage';
 import type { BrandWorkspaceChoice, BrandWorkspaceScope } from './selection';
 import { hasStaffReadAccess } from './staff';
+import { DEFAULT_SANDBOX_DENIED, isSandboxedClientOrganization, loadFeaturePolicies, normalizeDenied } from '../entitlements';
 import { UNKNOWN_POST_PRESENTATION } from './performance';
 import {
   BrandHttpsUrlSchema, BrandOrganizationSchema, BrandProjectSchema, BrandProjectStatusSchema, BrandContentSchema,
@@ -260,8 +261,28 @@ const logoUrl = (r: Row): string | null => r.logo_id ? `/api/brand-workspace/org
  * The TWINGS team (./staff.ts) instead lists every other brand, empty ones included, as `studio`
  * (which replaces `guest`), and every campaign maps to its brand whether shared or not.
  */
+/**
+ * Attach each brand's closed features (lib/brands/entitlements.ts) so the sidebar and the section
+ * rules see them. Outside the transaction: before migration 0074 the table may not exist, and that
+ * must leave every brand open rather than break the workspace.
+ */
+async function withFeaturePolicies(sql: SqlRunner, scope: BrandWorkspaceScope): Promise<BrandWorkspaceScope> {
+  const policies = await loadFeaturePolicies(sql, scope.choices.map((c) => c.id));
+  for (const choice of scope.choices) {
+    const denied = policies[choice.id];
+    if (isSandboxedClientOrganization(choice)) {
+      choice.denied = normalizeDenied([...(denied ?? []), ...DEFAULT_SANDBOX_DENIED]);
+    } else if (denied && denied.length > 0) {
+      choice.denied = denied;
+    }
+  }
+  return scope;
+}
 export async function loadBrandWorkspaceScope(deps: BrandWorkspaceDeps, viewer: Viewer): Promise<BrandWorkspaceScope> {
   if (!uuid(viewer.userId)) return { choices: [], projectOrganizations: {} };
+  return withFeaturePolicies(deps.sql, await loadBrandWorkspaceChoices(deps, viewer));
+}
+async function loadBrandWorkspaceChoices(deps: BrandWorkspaceDeps, viewer: Viewer): Promise<BrandWorkspaceScope> {
   return deps.sql.transaction(async sql => {
     const memberships = (await sql.query(`select o.id,o.name,o.logo_id,o.logo_revision,m.role from brand_organizations o join brand_memberships m on m.organization_id=o.id
       where m.user_id=$1 and m.status='active' order by o.created_at,o.id`, [viewer.userId])).rows;

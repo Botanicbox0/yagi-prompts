@@ -75,3 +75,129 @@ export function quoteRecipe(recipe: Recipe, royaltyKrw: number): RecipeQuote {
 export function centsForKrw(krw: number): number {
   return Math.ceil(krw / COST_ASSUMPTIONS.krwPerUsd * 100);
 }
+
+/**
+ * Slices a multi-frame carousel Recipe v2 (`output: { frames: [...] }`) down to the subset of
+ * 0-based frame indices chosen by the user (e.g., picking 2 or 3 shots out of a 5-shot series).
+ * Preserves any prerequisite intermediate steps referenced by the selected frames and keeps the
+ * resulting recipe valid under `parseRecipe(sliced, { studio: true })`.
+ */
+export function sliceImageSetRecipe(
+  recipe: Recipe,
+  selectedFrameIndices: readonly number[]
+): Recipe {
+  if (!('frames' in recipe.output)) {
+    return recipe;
+  }
+
+  const allFrames = recipe.output.frames;
+  const totalFrames = allFrames.length;
+  const normalizedIndices = Array.from(
+    new Set(
+      selectedFrameIndices
+        .map((i) => Math.floor(i))
+        .filter((i) => i >= 0 && i < totalFrames)
+    )
+  ).sort((a, b) => a - b);
+
+  const activeIndices = normalizedIndices.length > 0 ? normalizedIndices : [0];
+  if (activeIndices.length === totalFrames) {
+    return recipe;
+  }
+
+  const chosenFrameStepIds = activeIndices.map((idx) => allFrames[idx]!);
+  const neededStepIds = new Set<string>(chosenFrameStepIds);
+
+  // Walk backwards through steps so any prerequisite image step read by a chosen frame is retained.
+  for (let i = recipe.steps.length - 1; i >= 0; i -= 1) {
+    const step = recipe.steps[i]!;
+    if (neededStepIds.has(step.id)) {
+      for (const inputName of step.inputs) {
+        if (!recipe.slots[inputName]) {
+          neededStepIds.add(inputName);
+        }
+      }
+    }
+  }
+
+  const slicedSteps = recipe.steps.filter((step) => neededStepIds.has(step.id));
+  const usedSlots = new Set<string>();
+  for (const step of slicedSteps) {
+    for (const inputName of step.inputs) {
+      if (recipe.slots[inputName]) {
+        usedSlots.add(inputName);
+      }
+    }
+  }
+
+  const slicedSlots = Object.fromEntries(
+    Object.entries(recipe.slots).filter(([slotName]) => usedSlots.has(slotName))
+  );
+
+  return {
+    ...recipe,
+    slots: slicedSlots,
+    steps: slicedSteps,
+    output: { frames: chosenFrameStepIds },
+  };
+}
+
+/**
+ * Quotes a multi-shot image recipe when the user selects only a subset of frames (`selectedFrameIndices`).
+ * Prorates any maker raise (`royaltyKrw`) proportionally to the number of selected frames.
+ */
+export function quoteSelectiveRecipe(
+  recipe: Recipe,
+  selectedFrameIndices: readonly number[],
+  royaltyKrw = 0
+): RecipeQuote & {
+  totalFrames: number;
+  selectedCount: number;
+  selectedFrameIndices: number[];
+  fullSetCredits: number;
+  savedCredits: number;
+  fullSetKrw: number;
+  savedKrw: number;
+} {
+  const totalFrames = 'frames' in recipe.output ? recipe.output.frames.length : 1;
+  const normalizedIndices = Array.from(
+    new Set(
+      selectedFrameIndices
+        .map((i) => Math.floor(i))
+        .filter((i) => i >= 0 && i < totalFrames)
+    )
+  ).sort((a, b) => a - b);
+  const activeIndices = normalizedIndices.length > 0 ? normalizedIndices : [0];
+  const selectedCount = activeIndices.length;
+
+  const fullQuote = quoteRecipe(recipe, royaltyKrw);
+  if (selectedCount === totalFrames) {
+    return {
+      ...fullQuote,
+      totalFrames,
+      selectedCount,
+      selectedFrameIndices: activeIndices,
+      fullSetCredits: fullQuote.baseCredits,
+      savedCredits: 0,
+      fullSetKrw: fullQuote.proposedKrw,
+      savedKrw: 0,
+    };
+  }
+
+  const sliced = sliceImageSetRecipe(recipe, activeIndices);
+  const proratedRoyalty =
+    Math.round(((royaltyKrw * selectedCount) / totalFrames) / ROYALTY_STEP_KRW) *
+    ROYALTY_STEP_KRW;
+  const slicedQuote = quoteRecipe(sliced, proratedRoyalty);
+
+  return {
+    ...slicedQuote,
+    totalFrames,
+    selectedCount,
+    selectedFrameIndices: activeIndices,
+    fullSetCredits: fullQuote.baseCredits,
+    savedCredits: Math.max(0, fullQuote.baseCredits - slicedQuote.baseCredits),
+    fullSetKrw: fullQuote.proposedKrw,
+    savedKrw: Math.max(0, fullQuote.proposedKrw - slicedQuote.proposedKrw),
+  };
+}

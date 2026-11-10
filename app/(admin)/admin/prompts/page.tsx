@@ -7,7 +7,9 @@ import {
   ADMIN_PROMPT_NEW_PATH,
   adminPromptPath,
 } from '@/lib/prompts/links';
-import { AdminShell, BUTTON_PRIMARY, INPUT, OutcomeBanner } from '@/components/admin/chrome';
+import { AdminShell, OutcomeBanner } from '@/components/admin/chrome';
+import { AdminPageHeader } from '@/components/admin/patterns';
+import { formatCount } from '@/lib/admin/format';
 import { PromptCard } from '@/components/admin/prompt-fields';
 
 /**
@@ -16,19 +18,6 @@ import { PromptCard } from '@/components/admin/prompt-fields';
  * Founder direction, with a reference screenshot: "관리자 페이지에서 프롬프트 등록하는 거 방식
  * 불편함. 내가 스크롤 계속 내려서 추가 등록해야 해서… 지금 공개된 프롬프트 박스로 볼 수 있고 새로
  * 추가 가능한 구조."
- *
- * What this replaced: ONE page that rendered the moderation queue, then a complete inline editor for
- * every published prompt, then — at the very bottom — the authoring form. Publishing a prompt meant
- * scrolling past the entire catalogue, and the page grew a screenful longer with each one. That is a
- * layout whose cost rises with success.
- *
- * The board is a wall of cards with the ADD button in the header, and the two things a card can lead
- * to are their own routes: `/admin/prompts/new` and `/admin/prompts/{id}`. Consequences worth
- * naming:
- *   · the page no longer grows an editor per row, so it stays one screen tall at any catalogue size;
- *   · a card is poster-led, because the founder recognises their own work by the frame, not the slug;
- *   · filtering and search are LINKS and a GET form. §3.8's no-JS rule is not relaxed for the admin,
- *     and a tab that is a link is also a URL a moderator can bookmark or send to themselves.
  */
 export const dynamic = 'force-dynamic';
 
@@ -43,12 +32,36 @@ const one = (params: SearchParams, key: string): string | undefined => {
 const TABS = ['all', 'pending', 'published', 'archived', 'rejected'] as const;
 type Tab = (typeof TABS)[number];
 
+const MEDIA_FILTERS = ['all', 'video', 'image'] as const;
+type MediumFilter = (typeof MEDIA_FILTERS)[number];
+
+const SOURCE_FILTERS = ['all', 'yagi', 'community', 'featured'] as const;
+type SourceFilter = (typeof SOURCE_FILTERS)[number];
+
 function isTab(value: string | undefined): value is Tab {
   return value !== undefined && (TABS as readonly string[]).includes(value);
 }
 
+function isMediumFilter(value: string | undefined): value is MediumFilter {
+  return value !== undefined && (MEDIA_FILTERS as readonly string[]).includes(value);
+}
+
+function isSourceFilter(value: string | undefined): value is SourceFilter {
+  return value !== undefined && (SOURCE_FILTERS as readonly string[]).includes(value);
+}
+
 function inTab(row: PromptRow, tab: Tab): boolean {
   return tab === 'all' ? true : row.status === tab;
+}
+
+function inMedium(row: PromptRow, medium: MediumFilter): boolean {
+  return medium === 'all' ? true : row.medium === medium;
+}
+
+function inSource(row: PromptRow, source: SourceFilter): boolean {
+  if (source === 'all') return true;
+  if (source === 'featured') return row.featured;
+  return row.source === source;
 }
 
 /** Substring over the fields a moderator actually remembers: both titles, the slug, the handle. */
@@ -72,10 +85,15 @@ export default async function AdminPromptsPage({
   ]);
   const dict = getDictionary(locale);
   const a = dict.admin;
+  const c = dict.adminConsole;
   const rows: PromptRow[] = sql === null ? [] : await loadAllPrompts(sql);
 
   const rawTab = one(params, 'tab');
   const tab: Tab = isTab(rawTab) ? rawTab : 'all';
+  const rawMedium = one(params, 'medium');
+  const medium: MediumFilter = isMediumFilter(rawMedium) ? rawMedium : 'all';
+  const rawSource = one(params, 'source');
+  const source: SourceFilter = isSourceFilter(rawSource) ? rawSource : 'all';
   const query = (one(params, 'q') ?? '').trim().toLowerCase();
 
   const counts: Record<Tab, number> = {
@@ -85,11 +103,26 @@ export default async function AdminPromptsPage({
     archived: rows.filter((row) => row.status === 'archived').length,
     rejected: rows.filter((row) => row.status === 'rejected').length,
   };
-  const shown = rows.filter((row) => inTab(row, tab) && matches(row, query));
+  const shown = rows.filter(
+    (row) =>
+      inTab(row, tab) &&
+      inMedium(row, medium) &&
+      inSource(row, source) &&
+      matches(row, query)
+  );
 
-  const tabHref = (value: Tab) => {
+  const buildHref = (next: {
+    tab?: Tab;
+    medium?: MediumFilter;
+    source?: SourceFilter;
+  }) => {
+    const t = next.tab ?? tab;
+    const m = next.medium ?? medium;
+    const s = next.source ?? source;
     const search = new URLSearchParams();
-    if (value !== 'all') search.set('tab', value);
+    if (t !== 'all') search.set('tab', t);
+    if (m !== 'all') search.set('medium', m);
+    if (s !== 'all') search.set('source', s);
     if (query !== '') search.set('q', query);
     const rest = search.toString();
     return rest === '' ? ADMIN_PROMPTS_PATH : `${ADMIN_PROMPTS_PATH}?${rest}`;
@@ -97,21 +130,18 @@ export default async function AdminPromptsPage({
 
   return (
     <AdminShell dict={a} locale={locale} active="prompts">
-      <div className="flex flex-wrap items-start justify-between gap-4">
-        <div>
-          <p className="text-accent font-label text-eyebrow uppercase">{a.navPrompts}</p>
-          <h1 className="mt-3 font-display text-[clamp(2rem,4vw,3rem)] leading-[0.95] font-black uppercase">
-            {a.promptsHeading}
-          </h1>
-          <p className="mt-3 max-w-detail text-body opacity-60">{a.promptsLede}</p>
-        </div>
-
-        {/* The whole point of the rebuild: adding a prompt is a button in the header, not a form
-            below the catalogue. */}
-        <a href={ADMIN_PROMPT_NEW_PATH} data-prompt-new className={BUTTON_PRIMARY}>
-          + {a.promptsNew}
-        </a>
-      </div>
+      <AdminPageHeader
+        eyebrow={a.navPrompts}
+        title={a.promptsHeading}
+        count={formatCount(shown.length, locale)}
+        countLabel={a.promptsCount.replace('{count}', String(shown.length))}
+        lede={a.promptsLede}
+        actions={
+          <a href={ADMIN_PROMPT_NEW_PATH} data-prompt-new className="admin-btn admin-btn-primary">
+            + {a.promptsNew}
+          </a>
+        }
+      />
 
       <OutcomeBanner
         dict={a}
@@ -120,45 +150,82 @@ export default async function AdminPromptsPage({
         {...(one(params, 'detail') ? { detail: one(params, 'detail')! } : {})}
       />
 
-      <div className="mt-8 flex flex-wrap items-center justify-between gap-4 border-b border-hairline pb-4">
-        <nav className="flex flex-wrap gap-1.5" aria-label={a.promptsFilterLabel}>
-          {TABS.map((value) => (
-            <a
-              key={value}
-              href={tabHref(value)}
-              data-tab={value}
-              aria-current={value === tab ? 'page' : undefined}
-              className={[
-                'border px-3 py-1.5 font-label text-[0.65rem] tracking-[0.1em] uppercase',
-                value === tab ? 'border-current bg-black text-white' : 'border-hairline opacity-60',
-              ].join(' ')}
-            >
-              {a.promptTabs[value]} {counts[value]}
-            </a>
-          ))}
+      <div className="admin-toolbar mt-6">
+        <nav className="admin-filters" aria-label={a.promptsFilterLabel}>
+          <ul>
+            {TABS.map((value) => (
+              <li key={value}>
+                <a
+                  href={buildHref({ tab: value })}
+                  data-tab={value}
+                  data-filter={value}
+                  aria-current={value === tab ? 'true' : undefined}
+                >
+                  {a.promptTabs[value]}
+                  <span className="admin-filter-count">{formatCount(counts[value], locale)}</span>
+                </a>
+              </li>
+            ))}
+          </ul>
+        </nav>
+
+        <nav className="admin-filters" aria-label={c.prompts.mediumFilter}>
+          <ul>
+            {MEDIA_FILTERS.map((value) => (
+              <li key={value}>
+                <a
+                  href={buildHref({ medium: value })}
+                  data-medium-filter={value}
+                  aria-current={value === medium ? 'true' : undefined}
+                >
+                  {value === 'all' ? c.list.all : a.templateMedia[value]}
+                </a>
+              </li>
+            ))}
+          </ul>
+        </nav>
+
+        <nav className="admin-filters" aria-label={c.prompts.sourceFilter}>
+          <ul>
+            {SOURCE_FILTERS.map((value) => (
+              <li key={value}>
+                <a
+                  href={buildHref({ source: value })}
+                  data-source-filter={value}
+                  aria-current={value === source ? 'true' : undefined}
+                >
+                  {c.prompts.sources[value]}
+                </a>
+              </li>
+            ))}
+          </ul>
         </nav>
 
         {/* A GET form: the query lands in the URL, which is what makes a filtered board shareable
             and survivable across the redirect every mutation performs. */}
-        <form method="get" action={ADMIN_PROMPTS_PATH} className="flex items-center gap-2">
+        <form method="get" action={ADMIN_PROMPTS_PATH} className="admin-search" role="search">
           {tab !== 'all' && <input type="hidden" name="tab" value={tab} />}
+          {medium !== 'all' && <input type="hidden" name="medium" value={medium} />}
+          {source !== 'all' && <input type="hidden" name="source" value={source} />}
           <input
             type="search"
             name="q"
             defaultValue={query}
             placeholder={a.promptsSearch}
             aria-label={a.promptsSearch}
-            className={`${INPUT} w-48`}
           />
+          <button type="submit" className="admin-btn">
+            {c.list.find}
+          </button>
         </form>
       </div>
 
-      <p className="mt-5 font-mono text-[0.72rem] opacity-50">
+      <p className="mt-4 font-mono text-[0.72rem] opacity-50">
         {a.promptsCount.replace('{count}', String(shown.length))}
       </p>
 
       {shown.length === 0 ? (
-        <p className="mt-6 font-mono text-code opacity-60">
+        <p className="admin-empty mt-6">
           {rows.length === 0 ? a.publishedEmpty : a.promptsNoMatch}
         </p>
       ) : (

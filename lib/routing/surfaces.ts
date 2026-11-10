@@ -58,7 +58,8 @@ export function isAdminPath(pathname: string): boolean {
 export function isBrandPath(pathname: string): boolean {
   // `usage`: the payment provider's return page for secondary usage (docs/SECONDARY-USAGE.md).
   // `creators`: the creator pool (docs/PLATFORM-2.0.md §17.3).
-  return pathname === '/brand' || /^\/brand\/(?:projects|members|invite|settings|library|studio|usage|creators)(?:\/|$)/.test(pathname);
+  // `identity`: the fixed brand identity layer, memory, and looks (docs/BRAND-PRODUCT.md §5).
+  return pathname === '/brand' || /^\/brand\/(?:projects|members|invite|settings|library|studio|usage|creators|identity)(?:\/|$)/.test(pathname);
 }
 
 const AUTH_METHODS: Record<string, readonly string[]> = {
@@ -106,12 +107,90 @@ export function adminRouteAllowed(pathname: string, method: string): boolean {
 }
 
 /**
- * Public example media shown in the brand self-serve studio (components/brand-workspace/studio-showcase.tsx).
+ * Public example media shown in the brand self-serve studio and workspace showcases.
  * Exact file names only: no other /reel path, extension or directory opens on the brand host.
  */
-const STUDIO_DEMO_FILES = new Set(
-  ['designed-format.jpg', 'designed-format.mp4', 'different-person.jpg', 'different-person.mp4', 'reference-selfie.jpeg'].map((f) => `/reel/studio-demo/${f}`),
-);
+const STUDIO_DEMO_FILES = new Set([
+  ...['designed-format.jpg', 'designed-format.mp4', 'different-person.jpg', 'different-person.mp4', 'reference-selfie.jpeg'].map((f) => `/reel/studio-demo/${f}`),
+  ...[
+    'vto-free-alley.webp',
+    'vto-free-amber.webp',
+    'vto-free-drape.webp',
+    'vto-free-mirror.webp',
+    'vto-free-sofa.webp',
+    'vto-garment.webp',
+    'vto-look-front.webp',
+    'vto-look-side.webp',
+    'vto-look-upper.webp',
+    'vto-set-front.webp',
+    'vto-set-side.webp',
+    'vto-set-upper.webp',
+  ].map((f) => `/reel/studio/${f}`),
+  ...[
+    'house-runway-1080p.mp4',
+    'house-runway-1080p.jpg',
+    'studio-editorial-blue-1080p.mp4',
+    'studio-editorial-blue-1080p.jpg',
+    'house-french-blue-hero-1080p.mp4',
+    'house-french-blue-hero-1080p.jpg',
+    'studio-rain-editorial-1080p.mp4',
+    'studio-rain-editorial-1080p.jpg',
+    'production-paris.mp4',
+    'production-paris.jpg',
+    'city-fashion.mp4',
+    'city-fashion.jpg',
+    'tea-editorial.mp4',
+    'tea-editorial.jpg',
+    'y2k-flip-phone.mp4',
+    'y2k-flip-phone.jpg',
+    'slot-1-subject-editorial.jpg',
+    'slot-2-space-concrete-blue.jpg',
+    'slot-3-pose-lowangle-lookbook.jpg',
+    'slot-4-color-french-cobalt.jpg',
+    'pin-texture-35mm-grain-weave.jpg',
+    'swap-product-luxury-bottle.jpg',
+    'verified-gpt-image-2-6.png',
+    'verified-nano-banana-pro.png',
+    'verified-seedream-5-0-pro.png',
+  ].map((f) => `/reel/brands/${f}`),
+  '/reel/campaigns/beauty-rose.mp4',
+  '/reel/campaigns/beauty-rose.jpg',
+  '/reel/campaigns/highteen.jpg',
+  '/reel/campaigns/retro-phone-01.jpg',
+  '/reel/campaigns/retro-phone-02.jpg',
+  ...[
+    'c-logo-wide.webp',
+    'c-logo-raw.webp',
+    'c-logo-ours.webp',
+    'c-garment-wide.webp',
+    'c-garment-raw.webp',
+    'c-garment-ours.webp',
+    'c-skin-wide.webp',
+    'c-skin-raw.webp',
+    'c-skin-ours.webp',
+    'cut-beads.webp',
+    'cut-cheek.webp',
+    'cut-hands.webp',
+    'cut-mark.webp',
+    'cut-pump.webp',
+    'cut-scent.webp',
+    'look-carpet.webp',
+    'look-drape.webp',
+    'look-feather.webp',
+    'look-knit.webp',
+    'look-sculpt.webp',
+    'look-street.webp',
+    'v7/film-tea.jpg',
+    'v7/rx-beauty-orig.jpg',
+    'v7/rx-beauty-product.jpg',
+    'v7/rx-beauty-world.jpg',
+    'v7/rx-runway-duo.jpg',
+    'v7/rx-runway-model.jpg',
+    'v7/rx-runway-orig.jpg',
+    'v7/rx-runway-outfit.jpg',
+    'v7/rx-runway-set.jpg',
+  ].map((f) => `/reel/landing/${f}`),
+]);
 
 export function brandRouteAllowed(pathname: string, method: string): boolean {
   const read = method === 'GET' || method === 'HEAD';
@@ -135,6 +214,11 @@ export function brandRouteAllowed(pathname: string, method: string): boolean {
   if (/^\/api\/brand-workspace\/attachments\/[^/]+$/.test(pathname)) return read || method === 'POST';
   if (/^\/api\/brand-workspace\/organizations\/[^/]+\/logo$/.test(pathname)) return read || method === 'POST';
   if (/^\/api\/brand-workspace\/shortlist\/[a-f0-9-]+\/avatar$/.test(pathname)) return read;
+  // Brand studio v2 (docs/BRAND-STUDIO-V2.md): state, poll and operations; the local upload and media
+  // gateways. Its provider webhook and account-lane door are deliberately NOT reachable on this host.
+  if (pathname === '/api/brand-studio') return read || method === 'POST';
+  if (/^\/api\/brand-studio\/assets\/[a-f0-9-]{36}$/.test(pathname)) return method === 'POST';
+  if (/^\/api\/brand-studio\/media\/st\/[a-f0-9]{64}\.(?:png|jpg|webp|mp4|mov|mp3|wav)$/.test(pathname)) return read;
   return read && !pathname.startsWith('/api/') && !isAdminPath(pathname) && adminRouteAllowed(pathname, method);
 }
 

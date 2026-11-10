@@ -5,6 +5,7 @@ import { directUploadFailure, uploadMime } from '@/lib/admin/direct-upload';
 import { imageFitsAspect, type ImageAspect } from '@/lib/images/engines';
 import { IMAGE_SET_FRAMES_MAX, IMAGE_SET_FRAMES_MIN, normalizeSetPrompt, PROMPT_TEXT_MIN, setPromptIssue } from '@/lib/prompts/schemas';
 import { interpolate } from '@/lib/i18n/format';
+import { MAX_STEP_PROMPT_CHARS, setPromptTooLong } from '@/lib/recipes/schema';
 
 import { put, sha256Hex, STAGING_URL_PATH, UploadRefused } from '@/components/admin/media-drop';
 
@@ -20,7 +21,7 @@ import { put, sha256Hex, STAGING_URL_PATH, UploadRefused } from '@/components/ad
 
 export type ImageSetLabels = Record<
   | 'engine' | 'aspect' | 'frames' | 'dropZone' | 'promptHint' | 'frameLabel' | 'thumbnail' | 'moveUp' | 'moveDown' | 'remove' | 'promptLabel'
-  | 'publish' | 'errCount' | 'errTitles' | 'errImage' | 'errAspect' | 'errPromptShort' | 'errNoPhoto' | 'errOtherReference' | 'errBraces'
+  | 'publish' | 'errCount' | 'errTitles' | 'errImage' | 'errAspect' | 'errPromptShort' | 'errPromptLong' | 'errNoPhoto' | 'errOtherReference' | 'errBraces'
   | 'errManifest' | 'errFile' | 'uploading' | 'done' | 'failed' | 'invalid' | 'upload' | 'session' | 'uncertain' | 'retained' | 'publishing',
   string
 >;
@@ -95,6 +96,82 @@ function parseManifest(text: string): Map<string, { prompt: string; aspect: stri
   }
 }
 
+export interface FrameCheck {
+  phase: 'uploading' | 'done' | 'failed';
+  width: number;
+  height: number;
+  prompt: string;
+}
+
+/**
+ * Aggregates all validation problems across the title, frame count, and every individual frame
+ * so the operator can see and resolve all issues at once rather than one-by-one.
+ */
+export function findImageSetProblems({
+  title,
+  titleKo,
+  frames,
+  aspect,
+  labels,
+}: {
+  title: string;
+  titleKo: string;
+  frames: ReadonlyArray<FrameCheck>;
+  aspect: ImageAspect;
+  labels: Pick<
+    ImageSetLabels,
+    | 'errTitles'
+    | 'errCount'
+    | 'errImage'
+    | 'errAspect'
+    | 'errPromptShort'
+    | 'errPromptLong'
+    | 'errNoPhoto'
+    | 'errOtherReference'
+    | 'errBraces'
+  >;
+}): string[] {
+  const problems: string[] = [];
+  const caps = { min: IMAGE_SET_FRAMES_MIN, max: IMAGE_SET_FRAMES_MAX };
+
+  if (title.trim().length < 3 || !titleKo.trim()) {
+    problems.push(labels.errTitles);
+  }
+
+  if (frames.length < IMAGE_SET_FRAMES_MIN || frames.length > IMAGE_SET_FRAMES_MAX) {
+    problems.push(interpolate(labels.errCount, caps));
+  }
+
+  for (const [index, frame] of frames.entries()) {
+    const vars = { n: index + 1 };
+    if (frame.phase !== 'done') {
+      problems.push(interpolate(labels.errImage, vars));
+    }
+    if (!imageFitsAspect(frame.width, frame.height, aspect)) {
+      problems.push(interpolate(labels.errAspect, { ...vars, aspect }));
+    }
+    const prompt = frame.prompt.trim();
+    if (prompt.length < PROMPT_TEXT_MIN) {
+      problems.push(interpolate(labels.errPromptShort, vars));
+    } else {
+      const normalized = normalizeSetPrompt(prompt);
+      if (setPromptTooLong(normalized)) {
+        problems.push(interpolate(labels.errPromptLong, { ...vars, max: MAX_STEP_PROMPT_CHARS }));
+      }
+      const issue = setPromptIssue(normalized);
+      if (issue === 'no_photo') {
+        problems.push(interpolate(labels.errNoPhoto, vars));
+      } else if (issue === 'other_reference') {
+        problems.push(interpolate(labels.errOtherReference, vars));
+      } else if (issue === 'braces') {
+        problems.push(interpolate(labels.errBraces, vars));
+      }
+    }
+  }
+
+  return problems;
+}
+
 export function ImageSetFields({
   labels,
   engines,
@@ -112,7 +189,7 @@ export function ImageSetFields({
   const [thumbnail, setThumbnail] = useState(0);
   const [aspect, setAspect] = useState<ImageAspect>(defaultAspect);
   const [dragging, setDragging] = useState(false);
-  const [error, setError] = useState('');
+  const [errors, setErrors] = useState<string[]>([]);
   const [pending, setPending] = useState(false);
   const busy = useRef(false);
   const rootRef = useRef<HTMLDivElement>(null);
@@ -124,11 +201,22 @@ export function ImageSetFields({
   framesRef.current = frames;
   useEffect(() => () => framesRef.current.forEach((frame) => URL.revokeObjectURL(frame.preview)), []);
 
+  useEffect(() => {
+    const onBeforeUnload = (e: BeforeUnloadEvent) => {
+      if (frames.length > 0) {
+        e.preventDefault();
+        e.returnValue = '';
+      }
+    };
+    window.addEventListener('beforeunload', onBeforeUnload);
+    return () => window.removeEventListener('beforeunload', onBeforeUnload);
+  }, [frames.length]);
+
   const caps = { min: IMAGE_SET_FRAMES_MIN, max: IMAGE_SET_FRAMES_MAX };
   const patch = (id: string, change: Partial<Frame>) => setFrames((list) => list.map((frame) => (frame.id === id ? { ...frame, ...change } : frame)));
 
-  function showError(message: string) {
-    setError(message);
+  function showError(message: string | string[]) {
+    setErrors(Array.isArray(message) ? message : [message]);
     requestAnimationFrame(() => {
       alertRef.current?.focus();
       alertRef.current?.scrollIntoView({ block: 'nearest' });
@@ -136,7 +224,7 @@ export function ImageSetFields({
   }
 
   async function take(files: File[]) {
-    setError('');
+    setErrors([]);
     const json = files.find((file) => file.name.toLowerCase().endsWith('.json'));
     if (json) {
       const parsed = parseManifest(await json.text());
@@ -183,39 +271,27 @@ export function ImageSetFields({
     setThumbnail((current) => (current === index ? 0 : current > index ? current - 1 : current));
   }
 
-  /** The refusals an operator can fix here, in their words, before anything is posted. */
-  function firstProblem(form: HTMLFormElement): string | null {
-    const data = new FormData(form);
-    if (String(data.get('title') ?? '').trim().length < 3 || !String(data.get('titleKo') ?? '').trim()) return labels.errTitles;
-    if (frames.length < IMAGE_SET_FRAMES_MIN || frames.length > IMAGE_SET_FRAMES_MAX) return interpolate(labels.errCount, caps);
-    for (const [index, frame] of frames.entries()) {
-      const vars = { n: index + 1 };
-      if (frame.phase !== 'done') return interpolate(labels.errImage, vars);
-      if (!imageFitsAspect(frame.width, frame.height, aspect)) return interpolate(labels.errAspect, { ...vars, aspect });
-      const prompt = frame.prompt.trim();
-      if (prompt.length < PROMPT_TEXT_MIN) return interpolate(labels.errPromptShort, vars);
-      const issue = setPromptIssue(normalizeSetPrompt(prompt));
-      if (issue === 'no_photo') return interpolate(labels.errNoPhoto, vars);
-      if (issue === 'other_reference') return interpolate(labels.errOtherReference, vars);
-      if (issue === 'braces') return interpolate(labels.errBraces, vars);
-    }
-    return null;
-  }
-
   async function submit(event: Event) {
     if (!(event.target instanceof HTMLFormElement)) return;
     event.preventDefault();
     if (busy.current) return;
     const form = event.target;
-    const problem = firstProblem(form);
-    if (problem) return showError(problem);
+    const data = new FormData(form);
+    const problems = findImageSetProblems({
+      title: String(data.get('title') ?? ''),
+      titleKo: String(data.get('titleKo') ?? ''),
+      frames,
+      aspect,
+      labels,
+    });
+    if (problems.length > 0) return showError(problems);
     const body = new FormData(form);
     frames.forEach((frame, index) => {
       if (frame.inline) body.set(`frame${index}`, frame.inline);
     });
     busy.current = true;
     setPending(true);
-    setError('');
+    setErrors([]);
     let navigating = false;
     try {
       const response = await fetch(form.action, { method: 'POST', body, headers: { accept: 'application/vnd.twings.admin-form+json' } });
@@ -227,7 +303,7 @@ export function ImageSetFields({
         return;
       }
       if (result.ok === false) {
-        const lead = result.code === 'upload' ? labels.upload : result.code === 'invalid' ? labels.invalid : labels.uncertain;
+        const lead = result.code === 'upload' || result.code === 'storage' ? labels.upload : result.code === 'invalid' ? labels.invalid : labels.uncertain;
         showError(result.detail ? `${lead} (${result.detail})` : lead);
       } else showError(labels.uncertain);
     } catch {
@@ -260,10 +336,21 @@ export function ImageSetFields({
 
   return (
     <div ref={rootRef}>
-      {error && (
+      {errors.length > 0 && (
         <div ref={alertRef} role="alert" tabIndex={-1} data-image-set-error className="mb-4 border border-accent p-3 font-mono text-[0.75rem]">
-          <p>{error}</p>
-          <p className="mt-1 opacity-60">{labels.retained}</p>
+          {errors.length === 1 ? (
+            <p>{errors[0]}</p>
+          ) : (
+            <ul className="flex flex-col gap-1.5">
+              {errors.map((msg, index) => (
+                <li key={index} className="flex items-start gap-1.5">
+                  <span className="opacity-60">•</span>
+                  <span>{msg}</span>
+                </li>
+              ))}
+            </ul>
+          )}
+          <p className="mt-2 opacity-60">{labels.retained}</p>
         </div>
       )}
       {pending && <p role="status" className="mb-3 font-mono text-[0.75rem]">{labels.publishing}</p>}

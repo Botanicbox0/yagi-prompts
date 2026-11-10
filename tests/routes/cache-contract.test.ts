@@ -168,9 +168,6 @@ describe('route cache modes (§3.4 / §4)', () => {
       ['app', '(admin)', 'layout.tsx'],
       ['app', '(admin)', 'admin', 'page.tsx'],
       // M4: the rest of the CMS surface.
-      ['app', '(admin)', 'admin', 'p', '[id]', 'page.tsx'],
-      ['app', '(admin)', 'admin', 'p', '[id]', 'preview', 'page.tsx'],
-      ['app', '(admin)', 'admin', 'policy', 'page.tsx'],
       ['app', 'api', 'admin', 'media', '[ref]', 'route.ts'],
       ['app', 'api', 'media', '[blockId]', 'route.ts'],
       ['app', 'api', 'stripe', 'webhook', 'route.ts'],
@@ -557,10 +554,14 @@ describe('notification surface (§3.5, M5)', () => {
   it('gives the admin publish form a notify checkbox but never a kind picker', () => {
     const panel = read('components', 'admin', 'editor-panels.tsx');
     expect(panel).toContain('name="notify"');
-    // The kind is derived in `lib/admin/operations.ts` from `published_revision_id`.
+    // The kind is derived in `lib/admin/playbook-operations.ts` from `published_revision_id`.
     expect(panel).not.toContain('new_playbook');
     expect(panel).not.toContain('playbook_update');
-    expect(read('lib', 'admin', 'operations.ts')).toContain('notifyKindFor(');
+    const opsSource = [
+      read('lib', 'admin', 'operations.ts'),
+      read('lib', 'admin', 'playbook-operations.ts'),
+    ].join('\n');
+    expect(opsSource).toContain('notifyKindFor(');
   });
 
   it('keeps the unsubscribe endpoint out of every cache and every index', () => {

@@ -3,7 +3,7 @@ import { IMAGE_ASPECTS, IMAGE_ENGINES, IMAGE_ENGINE_IDS, VIDEO_ASPECTS, VIDEO_EN
 import { formatDate, interpolate } from '@/lib/i18n/format';
 import { formatKrw, suggestedKrw } from '@/lib/twings/products';
 import { costFloor } from '@/lib/twings/cost-model';
-import { baseKrw } from '@/lib/twings/template-price';
+import { baseKrw, makeEarning, providerKrw } from '@/lib/twings/template-price';
 import { videoModelForEngine } from '@/lib/video/models';
 import { PROMPT_TEXT_MAX, PROMPT_TEXT_MIN, TEMPLATE_MEDIA } from '@/lib/prompts/schemas';
 import { promptHref } from '@/lib/prompts/links';
@@ -22,6 +22,7 @@ import {
   parsePromptMedia,
 } from '@/lib/prompts/schemas';
 import { Field, INPUT, LABEL, OpForm } from '@/components/admin/chrome';
+import { StatusPill } from '@/components/admin/patterns';
 import { MediaDrop, type MediaDropLabels } from '@/components/admin/media-drop';
 import { AdminPosterFrame } from '@/components/admin/poster-frame';
 import { useCaseLabel } from '@/components/prompts/labels';
@@ -63,6 +64,7 @@ export function mediaDropLabels(a: Dictionary['admin']): MediaDropLabels {
     audioUnavailable: a.mediaAudioUnavailable,
     uploading: a.mediaUploading,
     uploaded: a.mediaUploaded,
+    uploadedRetained: a.mediaUploadedRetained,
     uploadFailed: a.mediaUploadFailed,
     // The same caps the signing route enforces, so the refusal names the real limit.
     uploadTooLarge: a.mediaUploadTooLarge
@@ -456,6 +458,9 @@ export function PromptCard({
   const a = dict.admin;
   const media = parsePromptMedia(row.media);
   const poster = media.poster ? adminMediaPath(promptAdminRef(row.id, 'poster')) : null;
+  const cardTitle = row.titleKo || row.title;
+  const displayKrw =
+    row.priceKrw > 0 ? row.priceKrw : suggestedKrw(row.priceCents ?? 0);
   const marker =
     row.status === 'pending'
       ? { 'data-prompt-queue': row.slug || row.id }
@@ -466,9 +471,15 @@ export function PromptCard({
       {...marker}
       data-prompt-card={row.id}
       data-status={row.status}
-      className="flex flex-col border border-hairline"
+      className="flex flex-col overflow-hidden rounded-[14px] bg-white shadow-[var(--admin-ring)]"
     >
-      <a href={href} className="block border-b border-hairline bg-black" aria-hidden={poster === null}>
+      <a
+        href={href}
+        className="block border-b border-hairline bg-black"
+        aria-label={cardTitle}
+        aria-hidden={poster === null}
+        tabIndex={poster === null ? -1 : undefined}
+      >
         {poster ? (
           <AdminPosterFrame src={poster} focus={media.posterFocus} />
         ) : (
@@ -480,39 +491,72 @@ export function PromptCard({
         )}
       </a>
 
-      <div className="flex flex-1 flex-col gap-2 p-3">
-        <div className="flex flex-wrap items-center gap-1.5 font-label text-[0.6rem] tracking-[0.1em] uppercase">
-          <span data-status-chip={row.status} className="border border-hairline px-1.5 py-0.5">
+      <div className="flex flex-1 flex-col gap-2 p-3.5">
+        <div className="flex flex-wrap items-center gap-1.5 text-[11px] font-medium">
+          <span
+            data-status-chip={row.status}
+            className="rounded-full border border-hairline px-2 py-0.5"
+          >
             {a.statusLabels[row.status]}
           </span>
-          <span className="border border-hairline px-1.5 py-0.5 opacity-60">
+          <span className="rounded-full border border-hairline px-2 py-0.5 opacity-70">
             {visibilityLabel(a, row.textVisibility)}
           </span>
-          {row.featured && <span className="text-accent">★</span>}
+          <span className="rounded-full bg-[var(--admin-wash)] px-2 py-0.5 text-[11px] opacity-80">
+            {a.templateMedia[row.medium]}
+            {row.engine ? ` · ${row.engine}` : ''}
+          </span>
+          {row.featured && <span className="text-accent font-semibold">★</span>}
         </div>
 
-        <a href={href} className="font-mono text-[0.8rem] leading-snug break-words">
-          {row.titleKo || row.title}
+        <a
+          href={href}
+          className="text-[13.5px] font-semibold leading-snug break-words"
+        >
+          {cardTitle}
         </a>
 
-        <p className="mt-auto font-mono text-[0.68rem] opacity-45">
-          {row.source === 'yagi' ? a.sourceYagi : a.sourceCommunity}
-          {' · '}
-          {formatDate(row.publishedAt ?? row.createdAt, locale) ?? '—'}
+        <p className="mt-auto flex items-center justify-between gap-2 text-[11.5px] opacity-65">
+          <span>
+            {row.source === 'yagi' ? a.sourceYagi : a.sourceCommunity}
+            {' · '}
+            {formatDate(row.publishedAt ?? row.createdAt, locale) ?? '—'}
+          </span>
+          {displayKrw > 0 && (
+            <span className="admin-nowrap font-semibold">
+              {formatKrw(displayKrw)}
+            </span>
+          )}
         </p>
 
         {/* The two things an admin does from the wall without opening the editor (2026-09-03):
             see it live, and star it. An OpForm, not a link — a form inside an <li> is fine, an
             anchor inside an anchor is not. */}
         {row.status === 'published' && (
-          <div className="flex items-center justify-between gap-2 border-t border-hairline pt-2 font-label text-[0.6rem] tracking-[0.1em] uppercase">
-            <PublicLink href={promptHref(locale, row.slug)} className="opacity-60 hover:opacity-100" data-card-live={row.slug}>
+          <div className="flex items-center justify-between gap-2 border-t border-hairline pt-2 text-[11.5px] font-medium">
+            <PublicLink
+              href={promptHref(locale, row.slug)}
+              className="opacity-70 hover:opacity-100"
+              data-card-live={row.slug}
+            >
               {a.viewLive} →
             </PublicLink>
             <OpForm op="prompt.feature" back="/admin/prompts">
               <input type="hidden" name="id" value={row.id} />
-              <input type="hidden" name="featured" value={row.featured ? 'false' : 'true'} />
-              <button type="submit" data-card-feature={row.slug} className={row.featured ? 'text-accent' : 'opacity-60 hover:opacity-100'}>
+              <input
+                type="hidden"
+                name="featured"
+                value={row.featured ? 'false' : 'true'}
+              />
+              <button
+                type="submit"
+                data-card-feature={row.slug}
+                className={
+                  row.featured
+                    ? 'text-accent font-semibold'
+                    : 'opacity-70 hover:opacity-100'
+                }
+              >
                 {row.featured ? a.unfeature : a.feature}
               </button>
             </OpForm>
@@ -520,5 +564,150 @@ export function PromptCard({
         )}
       </div>
     </li>
+  );
+}
+
+/**
+ * Operate v2: Template Spec, Unit Economics & Zero-Leak Prompt Director Inspector Card
+ * (`app/(admin)/admin/prompts/[id]/page.tsx`).
+ */
+export function TemplateSpecSummaryCard({
+  row,
+  dict,
+}: {
+  row: PromptRow;
+  dict: Dict;
+}) {
+  const a = dict.admin;
+  const p = dict.adminConsole.prompts;
+  const price720 =
+    row.priceKrw > 0 ? row.priceKrw : suggestedKrw(row.priceCents ?? 0);
+  const price1080 =
+    row.price1080Krw > 0
+      ? row.price1080Krw
+      : suggestedKrw(row.price1080Cents ?? 0);
+
+  let cost720Usd = 0;
+  let cost1080Usd = 0;
+  let floor720Krw = 0;
+  let floor1080Krw = 0;
+  if (row.medium === 'image') {
+    const engine = resolveEngine(row.engine, 'image');
+    if (isImageEngine(engine)) {
+      const frames = Math.max(
+        1,
+        parsePromptMedia(row.media).gallery?.length ?? 1
+      );
+      cost720Usd = estimateImageUsd(engine, 1) * frames;
+      floor720Krw = baseKrw({ medium: 'image', providerUsd: cost720Usd });
+    }
+  } else if (row.runtimeSeconds) {
+    const { model, seconds } = videoModelForEngine(
+      row.engine,
+      row.runtimeSeconds
+    );
+    const q720 = costFloor({
+      model,
+      resolution: '720p',
+      seconds,
+      aspect: row.aspectDefault ?? '9:16',
+    });
+    const q1080 = costFloor({
+      model,
+      resolution: '1080p',
+      seconds,
+      aspect: row.aspectDefault ?? '9:16',
+    });
+    if (q720) {
+      cost720Usd = q720.providerUsd;
+      floor720Krw = baseKrw({ medium: 'video', providerUsd: cost720Usd });
+    }
+    if (q1080) {
+      cost1080Usd = q1080.providerUsd;
+      floor1080Krw = baseKrw({ medium: 'video', providerUsd: cost1080Usd });
+    }
+  }
+
+  const earning720 =
+    price720 > 0 && cost720Usd > 0
+      ? makeEarning({
+          medium: row.medium,
+          providerUsd: cost720Usd,
+          priceKrw: price720,
+          company: row.source === 'yagi',
+        })
+      : null;
+  const earning1080 =
+    price1080 > 0 && cost1080Usd > 0
+      ? makeEarning({
+          medium: row.medium,
+          providerUsd: cost1080Usd,
+          priceKrw: price1080,
+          company: row.source === 'yagi',
+        })
+      : null;
+  const zeroLeakProtected = row.textVisibility !== 'public';
+
+  return (
+    <section className="admin-spec-card" data-template-spec-summary>
+      <div className="admin-spec-head">
+        <div>
+          <h2>{p.specHeading}</h2>
+          <p className="admin-field-hint mt-1">{p.specLede}</p>
+        </div>
+        <StatusPill tone={zeroLeakProtected ? 'action' : 'hold'}>
+          {zeroLeakProtected ? 'Zero-Leak Protected' : 'Public Prompt'}
+        </StatusPill>
+      </div>
+
+      <div className="admin-card-grid">
+        <div className="admin-subcard">
+          <h3>{p.price720}</h3>
+          <p className="admin-nowrap font-semibold">
+            {price720 > 0 ? formatKrw(price720) : '—'}
+            {earning720 ? ` · net ${formatKrw(earning720.margin)}` : ''}
+          </p>
+          <p>
+            {p.providerCost}:{' '}
+            {cost720Usd > 0
+              ? `~${formatKrw(Math.ceil(providerKrw(cost720Usd)))} (base ${formatKrw(floor720Krw)})`
+              : '—'}
+          </p>
+        </div>
+
+        <div className="admin-subcard">
+          <h3>{p.price1080}</h3>
+          <p className="admin-nowrap font-semibold">
+            {price1080 > 0 ? formatKrw(price1080) : '—'}
+            {earning1080 ? ` · net ${formatKrw(earning1080.margin)}` : ''}
+          </p>
+          <p>
+            {p.providerCost}:{' '}
+            {cost1080Usd > 0
+              ? `~${formatKrw(Math.ceil(providerKrw(cost1080Usd)))} (base ${formatKrw(floor1080Krw)})`
+              : '—'}
+          </p>
+        </div>
+
+        <div className="admin-subcard">
+          <h3>{p.zeroLeakVault}</h3>
+          <p>{zeroLeakProtected ? p.zeroLeakActive : p.zeroLeakPublic}</p>
+          <p>
+            {a.templateMedia[row.medium]} · {row.engine ?? 'default'} ·{' '}
+            {row.aspectDefault ?? 'auto'}
+            {row.runtimeSeconds ? ` · ${row.runtimeSeconds}s` : ''}
+          </p>
+        </div>
+
+        <div className="admin-subcard">
+          <h3>{p.photoCleanup}</h3>
+          <p>{p.photoCleanupDesc}</p>
+          <p>
+            {row.source === 'yagi' ? a.sourceYagi : a.sourceCommunity} ·{' '}
+            {visibilityLabel(a, row.textVisibility)}
+          </p>
+        </div>
+      </div>
+    </section>
   );
 }

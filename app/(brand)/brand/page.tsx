@@ -1,12 +1,17 @@
 import { ServiceGuide } from "@/components/brand-workspace/service-guide";
+import { CampaignMoatShowcase } from "@/components/brand-workspace/campaign-moat-showcase";
 import { brandContext } from "@/components/brand-workspace/context";
 import { ActionForm } from "@/components/brand-workspace/action-form";
 import { countPendingSharedCampaigns, loadBrandWorkspace } from "@/lib/brands/workspace/service";
 import { CampaignList } from "@/components/brand-workspace/campaign-list";
 import { brandScope, selectedAccess } from "@/components/brand-workspace/scope";
 import { BrandUnavailable } from "@/components/brand-workspace/brand-unavailable";
-import { scopedHref } from "@/lib/brands/workspace/selection";
+import { scopedHref, sectionVisibility } from "@/lib/brands/workspace/selection";
 import { StaffNotice, adminOrganizationHref } from "@/components/brand-workspace/staff-notice";
+import { BrandDoors, CAMPAIGN_LIST_ANCHOR } from "@/components/brand-studio/doors";
+import { brandStudioV2Open } from "@/lib/flags";
+import { studioV2Visible } from "@/lib/brand-studio/visibility";
+import { getDictionary } from "@/lib/i18n/dictionaries";
 export default async function BrandHome({
   searchParams,
 }: {
@@ -24,6 +29,11 @@ export default async function BrandHome({
   // Accepted campaign invitations the studio has not shared yet: honest waiting, never a "create a workspace" start.
   const pendingShares = access.staff ? 0 : await countPendingSharedCampaigns({ sql }, viewer);
   const newProject = scopedHref("/brand/projects/new", choice);
+  const studioOpen = !choice || sectionVisibility(choice).studio;
+  // Studio v2 (docs/BRAND-STUDIO-V2.md §5.1): three doors replace the showcase. A sandboxed or
+  // generation-closed brand fails studioV2Visible and keeps exactly the page below.
+  const doors = choice && brandStudioV2Open() && studioV2Visible(choice, true) ? choice : null;
+  const campaignList = <CampaignList projects={workspace.projects} b={b} locale={locale}/>;
   return (
     <div data-brand-home>
       <div className="bw-heading">
@@ -39,7 +49,9 @@ export default async function BrandHome({
         {access.staff && viewer.isAdmin && <a href={newProject} className="bw-button bw-primary" data-studio-prep-link>{b.studioPrep.cta}</a>}
       </div>
       {access.staff && choice && <StaffNotice b={b} manageHref={viewer.isAdmin ? adminOrganizationHref(choice.id, brandHost) : null} />}
-      {workspace.projects.length === 0 && <ServiceGuide kind="campaign" b={b} showOther={!access.projectScopedOnly} organizationId={choice?.id} />}
+      {workspace.projects.length === 0 && !choice && (
+        <ServiceGuide kind="campaign" b={b} studioAllowed={studioOpen} showOther={!access.projectScopedOnly && studioOpen} />
+      )}
       {pendingShares > 0 && (
         <section className={access.fresh ? "bw-empty" : "bw-note"} data-brand-pending-share={pendingShares}>
           <h2>{b.pendingShareTitle}</h2>
@@ -70,6 +82,14 @@ export default async function BrandHome({
         </section>
       ) : (
         <>
+          {doors && (
+            <BrandDoors
+              copy={getDictionary(locale).brandStudio}
+              choice={doors}
+              hasCampaigns={workspace.projects.length > 0}
+              canRequest={access.canRequest}
+            />
+          )}
           {workspace.projects.length === 0 ? (
             access.staff ? (
               <section className="bw-empty" data-brand-empty="staff">
@@ -90,10 +110,25 @@ export default async function BrandHome({
                 <p>{b.access.viewerEmptyBody}</p>
               </section>
             )
+          ) : doors ? (
+            <section id={CAMPAIGN_LIST_ANCHOR} data-brand-campaigns>{campaignList}</section>
           ) : (
-            <CampaignList projects={workspace.projects} b={b} locale={locale}/>
+            campaignList
           )}
-          {workspace.projects.length > 0 && <details className="bw-service-disclosure" data-brand-service-disclosure><summary>{b.dashboard.serviceGuideToggle}</summary><ServiceGuide kind="campaign" b={b} showOther={!access.projectScopedOnly} organizationId={choice?.id} /></details>}
+          {!doors && choice && studioOpen && (
+            <CampaignMoatShowcase
+              locale={locale === "en" ? "en" : "ko"}
+              organizationId={choice.id}
+              studioOpen={studioOpen}
+              canRequest={access.canRequest}
+              membersOpen={sectionVisibility(choice).members}
+              settingsOpen={sectionVisibility(choice).settings}
+            />
+          )}
+          <details className="bw-service-disclosure" data-brand-service-disclosure>
+            <summary>{b.dashboard.serviceGuideToggle}</summary>
+            <ServiceGuide kind="campaign" b={b} studioAllowed={studioOpen} showOther={!access.projectScopedOnly && studioOpen} organizationId={choice?.id} />
+          </details>
           {access.hasOrganization && workspace.organizations.length > 0 && (
             <section className="bw-team-footer">
               <h2>{b.organizations}</h2>

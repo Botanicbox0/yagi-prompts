@@ -30,15 +30,26 @@ describe('migrations apply on a fresh database (PLAN §6)', () => {
       'brand_content_versions',
       'brand_contract_documents',
       'brand_contract_sharing_events',
+      // 2026-11-03 — per-brand feature policy (deny-list; no row = everything open) and its history.
+      'brand_feature_policies',
+      'brand_feature_policy_events',
+      // 2026-11-03 — S2 fixed brand identity layer, memory events, and deterministic colour looks.
+      'brand_identities',
+      'brand_identity_events',
       // 2026-09-11 — the brand enquiry form on the campaigns page: one row per enquiry, studio-only.
       'brand_inquiries',
       'brand_inquiry_deliveries',
       'brand_invites',
+      'brand_looks',
       'brand_memberships',
+      'brand_memory_events',
       'brand_messages',
       // 2026-09-23 — a brand's own logo history; the organization points at the current one.
       'brand_organization_logos',
       'brand_organizations',
+      // 2026-11-03 — the brand's B2B plan (390k/690k/990k KRW per month) and its history.
+      'brand_plan_assignments',
+      'brand_plan_events',
       // 2026-09-22 — one ledger row per studio collection-console save (idempotency + batch time).
       'brand_post_collection_batches',
       'brand_post_measurements',
@@ -50,6 +61,12 @@ describe('migrations apply on a fresh database (PLAN §6)', () => {
       'brand_projects',
       'brand_reports',
       'brand_shortlist_candidates',
+      // 2026-11-10 — brand studio v2 (docs/BRAND-STUDIO-V2.md §6).
+      'brand_studio_allowances',
+      'brand_studio_assets',
+      'brand_studio_jobs',
+      'brand_studio_lanes',
+      'brand_studio_outputs',
       'brand_support_messages',
       // 2026-09-23 — secondary usage (docs/SECONDARY-USAGE.md): inquiry case → studio scope, creator
       // compensation and consent (studio-only) → brand quote → payment → grants, plus history/outcomes.

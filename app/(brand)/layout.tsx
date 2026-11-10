@@ -3,9 +3,10 @@ import { getViewer } from '@/lib/auth/viewer';
 import { influencersOpen } from '@/lib/influencers/rules';
 import { getVerifiedEmail } from '@/lib/auth/verified-email';
 import { getSqlRunner } from '@/lib/db/connect';
-import { loadBrandWorkspaceScope } from '@/lib/brands/workspace/service';
+import { loadCachedBrandWorkspaceScope } from '@/components/brand-workspace/scope';
 import "@/app/globals.css";
 import "./workspace.css";
+import "./studio-v2.css";
 import { WorkspaceLanguage } from '@/components/brand-workspace/language';
 import { WorkspaceNavigation } from '@/components/brand-workspace/navigation';
 import { WorkspaceIdentity } from '@/components/brand-workspace/identity';
@@ -14,8 +15,8 @@ import { WorkspaceSpotlight } from '@/components/brand-workspace/spotlight';
 import { Suspense, type ReactNode } from "react";
 import type { Metadata, Viewport } from "next";
 import { fontVariables } from "@/app/fonts";
-import { TwingsLogo } from "@/components/brand/twings-mark";
-import { YagiStudioLockup } from "@/components/brand/yagi-mark";
+import { TwingsStudioLockup } from "@/components/brand/twings-mark";
+import { YagiLogo } from "@/components/brand/yagi-mark";
 import { getRequestLocale } from "@/lib/i18n/server";
 import { getDictionary } from "@/lib/i18n/dictionaries";
 export const dynamic = "force-dynamic";
@@ -41,8 +42,8 @@ export default async function BrandLayout({
   const b = d.brandWorkspace;
   const viewer=await getViewer();
   const sql=viewer.userId?await getSqlRunner():null;
-  // Choices only (ids, names, roles, logo routes): the page itself loads the selected brand's data.
-  const scope=sql?await loadBrandWorkspaceScope({sql,verifiedEmail:await getVerifiedEmail(viewer.userId)},viewer):null;
+  // Choices only (ids, names, roles, logo routes): deduplicated per server render with the child page.
+  const scope=sql?await loadCachedBrandWorkspaceScope(sql,await getVerifiedEmail(viewer.userId),viewer):null;
   return (
     <html lang={locale} className={fontVariables} data-brand-workspace>
       <head>
@@ -60,12 +61,12 @@ export default async function BrandLayout({
         <div className="bw-shell">
           <aside className="bw-sidebar">
             <Suspense fallback={null}>
-              {scope ? <WorkspaceHomeLink scope={scope}><YagiStudioLockup size={22} /></WorkspaceHomeLink> : <a href="/brand" className="bw-lockup"><YagiStudioLockup size={22} /></a>}
+              {scope ? <WorkspaceHomeLink scope={scope}><TwingsStudioLockup size={22} /></WorkspaceHomeLink> : <a href="/brand" className="bw-lockup" aria-label="TWINGS Studio"><TwingsStudioLockup size={22} /></a>}
             </Suspense>
             {/* URL-derived: dynamic render resolves this on the server, the empty fallback never shows. */}
             <Suspense fallback={null}>
               {scope?<WorkspaceIdentity scope={scope} copy={b.identity} roles={b.roles}/>:<p className="bw-kicker">{b.title}</p>}
-              <WorkspaceNavigation home={b.home} members={b.members} settings={b.managed.settings} library={b.managed.library} studio={b.productionStudio.title} creators={influencersOpen() ? b.creatorPool.nav : undefined} scope={scope}/>
+              <WorkspaceNavigation home={b.home} members={b.members} settings={b.managed.settings} library={b.managed.library} studio={b.productionStudio.title} identity={b.identityLayer.nav} creators={influencersOpen() ? b.creatorPool.nav : undefined} scope={scope}/>
             </Suspense>
             <div className="bw-sidebar-utilities">
               <WorkspaceLanguage locale={locale} label={d.nav.localeToggle} compact applyLabel={b.languageApply}/>
@@ -75,9 +76,9 @@ export default async function BrandLayout({
                   <span>{b.signOut}</span>
                 </button>
               </form>
-              <div className="ys-powered-by" aria-label="Powered by TWINGS">
+              <div className="ys-powered-by" aria-label="Powered by YAGI">
                 <span>Powered by</span>
-                <TwingsLogo size={16} />
+                <YagiLogo size={16} />
               </div>
             </div>
           </aside>

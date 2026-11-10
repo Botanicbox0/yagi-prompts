@@ -9,6 +9,11 @@ import { getLocaleFromHeaders } from "@/lib/i18n/server";
 import { getDictionary } from "@/lib/i18n/dictionaries";
 import { loadStudioProject } from "@/lib/brands/workspace/service";
 import { AdminShell, ConfirmCheck, OpForm, OutcomeBanner } from "@/components/admin/chrome";
+import {
+  AdminPageHeader,
+  SectionJumpBar,
+  StatusPill,
+} from "@/components/admin/patterns";
 import { BrandStatusForms, brandRefusals } from "@/components/admin/brand-status";
 import type { AdminOperationName } from "@/lib/admin/operations";
 import { ProjectDetail } from "@/components/brand-workspace/project-detail";
@@ -19,8 +24,19 @@ import { postShortId } from "@/lib/brands/workspace/performance";
 import { loadStudioShortlist } from "@/lib/brands/shortlist/service";
 import { ShortlistAdmin } from "@/components/brand-workspace/shortlist-admin";
 import { CampaignShortlist } from "@/components/brand-workspace/shortlist";
+import {
+  loadBrandIdentity,
+  markConfirmedBrandIdentity,
+  twingsDefaultIdentity,
+} from "@/lib/brands/identity/service";
+import {
+  loadProjectDirectionForProject,
+  resolveEffectiveBrandDirection,
+} from "@/lib/brands/identity/project-direction";
 import type { ReactNode } from "react";
+
 export const dynamic = "force-dynamic";
+
 export default async function StudioBrandProject({
   params,
   searchParams,
@@ -36,7 +52,8 @@ export default async function StudioBrandProject({
     searchParams,
   ]);
   const dict = getDictionary(locale),
-    b = dict.brandWorkspace;
+    b = dict.brandWorkspace,
+    be = dict.adminConsole.brandEngine;
   if (!sql) return <p role="alert">{b.unavailable}</p>;
   const p = await loadStudioProject({ sql }, viewer, id);
   if (!p) notFound();
@@ -44,9 +61,20 @@ export default async function StudioBrandProject({
   const formBack = `/admin/brand-workspace/${id}?${new URLSearchParams({ returnTo: listReturn })}`;
   const refusals = brandRefusals(dict.admin);
   const covers = p.attachments.filter((a) => ["image/jpeg", "image/png", "image/webp"].includes(a.mime));
-  // The client's view of the shortlist (shared candidates only) sits in the campaign preview below.
-  const shortlist = await loadStudioShortlist({ sql }, viewer, id);
+  // The client's view of the shortlist (shared candidates only) + S2 2-Tier Brand Direction Cascade.
+  const [shortlist, brandIdentity, projectDirection] = await Promise.all([
+    loadStudioShortlist({ sql }, viewer, id),
+    loadBrandIdentity(sql, p.organizationId),
+    loadProjectDirectionForProject(sql, p.organizationId, p.id),
+  ]);
   const sharedShortlist = shortlist?.candidates.filter((c) => c.shared) ?? [];
+  const baseIdentity = markConfirmedBrandIdentity(
+    brandIdentity?.identity ?? twingsDefaultIdentity()
+  );
+  const effectiveDirection = resolveEffectiveBrandDirection(
+    baseIdentity,
+    projectDirection
+  );
   const Form = ({
     op,
     submit,
@@ -70,16 +98,83 @@ export default async function StudioBrandProject({
   );
   return (
     <AdminShell dict={dict.admin} locale={locale} active="brandWorkspace">
+      <AdminPageHeader
+        back={{ href: listReturn, label: b.back }}
+        eyebrow={p.organizationName}
+        title={p.title}
+        status={
+          <StatusPill
+            tone={
+              p.status === "active"
+                ? "action"
+                : p.status === "requested"
+                  ? "progress"
+                  : "done"
+            }
+          >
+            {b.status[p.status]}
+          </StatusPill>
+        }
+        lede={p.objective}
+        actions={
+          <>
+            <a
+              className="admin-btn"
+              href={`/admin/brand-workspace/organizations/${p.organizationId}`}
+            >
+              {b.managed.access}
+            </a>
+            <a
+              className="admin-btn"
+              href={`/admin/brand-workspace/usage?projectId=${p.id}`}
+              data-usage-queue-link
+            >
+              {b.secondaryUsage.admin.openQueue}
+            </a>
+          </>
+        }
+      />
+
+      <SectionJumpBar
+        label={dict.adminConsole.location}
+        items={[
+          { id: "sharing-status", label: be.projectJump.status },
+          { id: "project-direction", label: be.projectJump.direction },
+          { id: "project-preview", label: be.projectJump.preview },
+          {
+            id: "files-shortlist",
+            label: be.projectJump.files,
+            count: p.attachments.length + (shortlist?.candidates.length ?? 0),
+          },
+          {
+            id: "content-posts",
+            label: be.projectJump.content,
+            count: p.contents.length + p.posts.length,
+          },
+          {
+            id: "metrics-report",
+            label: be.projectJump.metrics,
+            count: p.reports.length,
+          },
+          {
+            id: "conversation",
+            label: be.projectJump.messages,
+            count: p.messages.length,
+          },
+        ]}
+      />
+
       <OutcomeBanner
         dict={dict.admin}
         ok={typeof search.ok === "string" ? search.ok : undefined}
         err={typeof search.err === "string" ? search.err : undefined}
         detail={typeof search.detail === "string" ? search.detail : undefined}
       />
-      <section className="bw-panel bw-sharing" data-managed-sharing>
+
+      <section id="sharing-status" className="bw-panel bw-sharing" data-managed-sharing>
         <div><strong>{p.clientVisible?b.managed.visible:b.managed.prepared}</strong><p className="bw-muted">{b.managed.visibilityHint}</p></div>
         <ManagedForm op="brandWorkspace.visibility" b={b} messages={refusals} submit={p.clientVisible?b.managed.hide:b.managed.publish} tone={p.clientVisible?"danger":"primary"} confirm={p.clientVisible?{prompt:b.confirm.hide,action:b.confirm.hideAction}:{prompt:b.confirm.publish,action:b.confirm.publishAction}}><input type="hidden" name="projectId" value={p.id}/><input type="hidden" name="expectedRevision" value={p.revision}/><input type="hidden" name="visible" value={String(!p.clientVisible)}/></ManagedForm>
-        <a className="bw-button" href={`/admin/brand-workspace/organizations/${p.organizationId}`}>{b.managed.access}</a><a className="bw-button" href={`/admin/brand-workspace/usage?projectId=${p.id}`} data-usage-queue-link>{b.secondaryUsage.admin.openQueue}</a><details><summary>{b.managed.invite}</summary><p className="bw-muted">{b.managed.inviteHint}</p>
+        <a className="bw-button" href={`/admin/brand-workspace/organizations/${p.organizationId}`}>{b.managed.access}</a><a className="bw-button" href={`/admin/brand-workspace/usage?projectId=${p.id}`}>{b.secondaryUsage.admin.openQueue}</a><details><summary>{b.managed.invite}</summary><p className="bw-muted">{b.managed.inviteHint}</p>
           {/* P2-3: a campaign-only guest of a campaign the client cannot see would land on nothing.
               Until it is shared, the campaign-scope invite is off; brand-wide invites stay on the brand page. */}
           {p.clientVisible ? <ManagedForm op="brandWorkspace.invite" b={b} submit={b.managed.invite} messages={refusals}>
@@ -88,18 +183,101 @@ export default async function StudioBrandProject({
           <label>{b.managed.scope}<select name="access" defaultValue="comment"><option value="comment">{b.managed.scopeProjectComment}</option><option value="read">{b.managed.scopeProject}</option><option value="brand">{b.managed.scopeBrand}</option></select><span className="bw-muted">{b.managed.scopeCommentHint}</span></label><input type="hidden" name="role" value="viewer"/>
         </ManagedForm> : <p className="bw-note" data-invite-hidden-campaign>{dict.admin.inviteHiddenCampaign} <a href={`/admin/brand-workspace/organizations/${p.organizationId}`}>{b.managed.access} →</a></p>}</details>
       </section>
-      <ProjectDetail backHref={listReturn} project={p} b={b} locale={locale} studio
-        shortlistCount={sharedShortlist.length}
-        shortlist={sharedShortlist.length > 0 ? <CampaignShortlist candidates={sharedShortlist} canPick={false} copy={b.shortlist} locale={locale} /> : null}
-        studioReply={
-        <Form op="brandWorkspace.message" submit={b.sendComment}>
-          <label>
-            {b.studioMessage}
-            <textarea name="body" required maxLength={4000} />
-          </label>
-        </Form>
-      } />
-      <section className="bw-panel">
+
+      {/* S2 2-Tier Brand Direction Cascade Inspector */}
+      <section
+        id="project-direction"
+        className="admin-spec-card"
+        data-project-direction-summary
+      >
+        <div className="admin-spec-head">
+          <div>
+            <h2>{be.projectDirectionHeading}</h2>
+            <p className="admin-field-hint mt-1">{be.projectDirectionLede}</p>
+          </div>
+          <StatusPill
+            tone={
+              effectiveDirection.cascade.mode === "project_override"
+                ? "action"
+                : "done"
+            }
+          >
+            {effectiveDirection.cascade.mode === "project_override"
+              ? be.projectLayer
+              : be.noOverride}
+          </StatusPill>
+        </div>
+        <div className="admin-card-grid">
+          <div className="admin-subcard">
+            <h3>{be.orgLayer}</h3>
+            <p>
+              <strong>Status:</strong>{" "}
+              {brandIdentity
+                ? `${be.dnaStatus[brandIdentity.status]} (r${brandIdentity.revision})`
+                : `${be.dnaStatus.none} (TWINGS Default)`}
+            </p>
+            <p>
+              <strong>Hard locks:</strong>{" "}
+              {effectiveDirection.cascade.lockedFromBase.join(" · ")}
+            </p>
+          </div>
+          <div className="admin-subcard">
+            <h3>{be.projectLayer}</h3>
+            <p>
+              <strong>Direction:</strong>{" "}
+              {projectDirection ? projectDirection.title : be.noOverride}
+            </p>
+            <p>
+              <strong>Shot defaults:</strong>{" "}
+              {effectiveDirection.shotDefaults.cameraFocalMm}mm ·{" "}
+              {effectiveDirection.shotDefaults.lightColourK}K ·{" "}
+              {effectiveDirection.shotDefaults.lookPresetId}
+            </p>
+            {effectiveDirection.cascade.overriddenByProject.length > 0 && (
+              <p>
+                <strong>Overridden:</strong>{" "}
+                {effectiveDirection.cascade.overriddenByProject.join(", ")}
+              </p>
+            )}
+          </div>
+          <div className="admin-subcard">
+            <h3>{be.effectiveAccent}</h3>
+            <div className="admin-swatch-row">
+              <span className="admin-swatch">
+                <span
+                  className="admin-swatch-chip"
+                  style={{
+                    backgroundColor:
+                      effectiveDirection.effectiveIdentity.colour.accent,
+                  }}
+                  aria-hidden="true"
+                />
+                <code>{effectiveDirection.effectiveIdentity.colour.accent}</code>
+              </span>
+            </div>
+            <p className="mt-2">
+              Hue {effectiveDirection.effectiveIdentity.world.ownedHue[0]}°–
+              {effectiveDirection.effectiveIdentity.world.ownedHue[1]}° · Memory
+              isolated: {String(effectiveDirection.cascade.isolateProjectMemory)}
+            </p>
+          </div>
+        </div>
+      </section>
+
+      <div id="project-preview">
+        <ProjectDetail backHref={listReturn} project={p} b={b} locale={locale} studio
+          shortlistCount={sharedShortlist.length}
+          shortlist={sharedShortlist.length > 0 ? <CampaignShortlist candidates={sharedShortlist} canPick={false} copy={b.shortlist} locale={locale} /> : null}
+          studioReply={
+          <Form op="brandWorkspace.message" submit={b.sendComment}>
+            <label>
+              {b.studioMessage}
+              <textarea name="body" required maxLength={4000} />
+            </label>
+          </Form>
+        } />
+      </div>
+      <section id="files-shortlist" className="bw-panel">
         <h2>{b.files}</h2>
         <BrandUpload projectId={id} b={b} studio />
       </section>
@@ -136,184 +314,109 @@ export default async function StudioBrandProject({
           )}
         </div>
       </section>
-      {p.status === "active" && (
-        <section className="bw-panel" data-external-posts>
-          <h2>{b.externalPosts.title}</h2>
-          <p className="bw-note">{b.externalPosts.hint}</p>
-          <Form op="brandWorkspace.externalPosts" submit={b.externalPosts.submit}>
-            <label>
-              {b.externalPosts.links}
-              <textarea name="links" required rows={6} spellCheck={false} placeholder={b.externalPosts.placeholder} />
-              <span className="bw-muted">{b.externalPosts.format}</span>
-            </label>
-            <label>
-              {b.verification}
-              <select name="verification">
-                <option value="unverified">{b.verificationLabels.unverified}</option>
-                <option value="manual">{b.verificationLabels.manual}</option>
-              </select>
-            </label>
-          </Form>
-        </section>
-      )}
-      {p.status === "active" && (
-        <section className="bw-panel">
-          <h2>{b.addContent}</h2>
-          <Form op="brandWorkspace.content" submit={b.publishContent}>
-            <div className="bw-grid">
+      <div id="content-posts">
+        {p.status === "active" && (
+          <section className="bw-panel" data-external-posts>
+            <h2>{b.externalPosts.title}</h2>
+            <p className="bw-note">{b.externalPosts.hint}</p>
+            <Form op="brandWorkspace.externalPosts" submit={b.externalPosts.submit}>
               <label>
-                {b.slotKey}
-                <input
-                  name="slotKey"
-                  required
-                  maxLength={60}
-                  pattern="[a-zA-Z0-9_-]+"
-                />
-                <span className="bw-muted">{b.slotHint}</span>
+                {b.externalPosts.links}
+                <textarea name="links" required rows={6} spellCheck={false} placeholder={b.externalPosts.placeholder} />
+                <span className="bw-muted">{b.externalPosts.format}</span>
               </label>
               <label>
-                {b.contentTitle}
-                <input name="title" required maxLength={120} />
+                {b.verification}
+                <select name="verification">
+                  <option value="unverified">{b.verificationLabels.unverified}</option>
+                  <option value="manual">{b.verificationLabels.manual}</option>
+                </select>
               </label>
-            </div>
-            <label>
-              {b.files}
-              <select name="attachmentId" required>
-                <option value="">{b.upload}</option>
-                {p.attachments.map((a) => (
-                  <option value={a.id} key={a.id}>
-                    {a.name}
-                  </option>
-                ))}
-              </select>
-            </label>
-            <label>
-              {b.caption}
-              <textarea name="caption" maxLength={4000} />
-            </label>
-            <label>
-              {b.usage}
-              <textarea name="usageRights" required maxLength={2000} />
-            </label>
-            {p.productionMode === "studio" && (
-              <label className="bw-check">
-                <input
-                  type="checkbox"
-                  name="creatorConsentConfirmed"
-                  required
-                />
-                {b.consent}
-              </label>
-            )}
-          </Form>
-        </section>
-      )}
-      {p.status === "active" && <section className="bw-panel">
-        <h2>{b.recordPost}</h2>
-        <p className="bw-note">{b.postHint}</p>
-        <Form op="brandWorkspace.post" submit={b.recordMetrics}>
-          <label>
-            {b.contentVersion}
-            <select name="contentVersionId" required>
-              <option value="">{b.contentVersion}</option>
-              {p.contents
-                .filter((c) => c.decision === "approved")
-                .map((c) => (
-                  <option value={c.id} key={c.id}>
-                    {c.title} ·{" "}
-                    {b.version.replace("{number}", String(c.version))}
-                  </option>
-                ))}
-            </select>
-          </label>
-          <label>
-            {b.postUrl}
-            <input name="url" type="url" required maxLength={2048} />
-          </label>
-          <label>
-            {b.postPublishedAt} · {b.koreaTime}
-            <input name="publishedAt" type="datetime-local" required />
-          </label>
-          <div className="bw-grid">
-            <label>
-              {b.verification}
-              <select name="verification">
-                <option value="unverified">
-                  {b.verificationLabels.unverified}
-                </option>
-                <option value="manual">{b.verificationLabels.manual}</option>
-              </select>
-            </label>
-            <label>
-              {b.source}
-              <select name="metricsSource">
-                <option value="unavailable">
-                  {b.sourceLabels.unavailable}
-                </option>
-                <option value="creator_evidence">
-                  {b.sourceLabels.creator_evidence}
-                </option>
-                <option value="studio_review">
-                  {b.sourceLabels.studio_review}
-                </option>
-              </select>
-            </label>
-          </div>
-          <label>
-            {b.measuredAt} · {b.koreaTime}
-            <input name="measuredAt" type="datetime-local" />
-          </label>
-          <div className="bw-grid">
-            {(["views", "likes", "comments", "shares", "saves"] as const).map(
-              (k) => (
-                <label key={k}>
-                  {b[k]}
-                  <input name={k} type="number" min={0} step={1} />
+            </Form>
+          </section>
+        )}
+        {p.status === "active" && (
+          <section className="bw-panel">
+            <h2>{b.addContent}</h2>
+            <Form op="brandWorkspace.content" submit={b.publishContent}>
+              <div className="bw-grid">
+                <label>
+                  {b.slotKey}
+                  <input
+                    name="slotKey"
+                    required
+                    maxLength={60}
+                    pattern="[a-zA-Z0-9_-]+"
+                  />
+                  <span className="bw-muted">{b.slotHint}</span>
                 </label>
-              ),
-            )}
-          </div>
-          <label className="bw-check">
-            <input type="checkbox" name="viewsApproximate" value="true" />
-            {b.viewsApproximate}
-          </label>
-          <p className="bw-muted">{b.viewsApproximateHint}</p>
-        </Form>
-      </section>}
-      <CollectionConsole
-        back={formBack}
-        projectId={id}
-        status={p.status}
-        posts={p.posts}
-        b={b}
-        locale={locale}
-      />
-      <PostPresentationAdmin projectId={id} posts={p.posts} attachments={p.attachments} b={b} />
-      {/* The single operation stays for a genuinely historical measurement time. It is frozen with
-          the console, so it is not offered once the campaign is no longer active. */}
-      {p.status === "active" && p.posts.map((post) => (
-        <details className="bw-panel" key={post.id}>
-          <summary>
-            {b.collectionHistorical} · {b.platforms[post.platform]} · {postShortId(post.url)}
-          </summary>
-          <h2>{b.updateMetrics}</h2>
-          <p>
-            <a href={post.url} target="_blank" rel="noopener noreferrer">
-              {post.url} ↗
-            </a>
-          </p>
-          <p className="bw-note">{b.collectionHistoricalHint}</p>
+                <label>
+                  {b.contentTitle}
+                  <input name="title" required maxLength={120} />
+                </label>
+              </div>
+              <label>
+                {b.files}
+                <select name="attachmentId" required>
+                  <option value="">{b.upload}</option>
+                  {p.attachments.map((a) => (
+                    <option value={a.id} key={a.id}>
+                      {a.name}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label>
+                {b.caption}
+                <textarea name="caption" maxLength={4000} />
+              </label>
+              <label>
+                {b.usage}
+                <textarea name="usageRights" required maxLength={2000} />
+              </label>
+              {p.productionMode === "studio" && (
+                <label className="bw-check">
+                  <input
+                    type="checkbox"
+                    name="creatorConsentConfirmed"
+                    required
+                  />
+                  {b.consent}
+                </label>
+              )}
+            </Form>
+          </section>
+        )}
+        {p.status === "active" && <section className="bw-panel">
+          <h2>{b.recordPost}</h2>
           <p className="bw-note">{b.postHint}</p>
-          <Form
-            op="brandWorkspace.metrics"
-            submit={b.recordMetrics}
-            revision={post.metricRevision}
-          >
-            <input type="hidden" name="postId" value={post.id} />
+          <Form op="brandWorkspace.post" submit={b.recordMetrics}>
+            <label>
+              {b.contentVersion}
+              <select name="contentVersionId" required>
+                <option value="">{b.contentVersion}</option>
+                {p.contents
+                  .filter((c) => c.decision === "approved")
+                  .map((c) => (
+                    <option value={c.id} key={c.id}>
+                      {c.title} ·{" "}
+                      {b.version.replace("{number}", String(c.version))}
+                    </option>
+                  ))}
+              </select>
+            </label>
+            <label>
+              {b.postUrl}
+              <input name="url" type="url" required maxLength={2048} />
+            </label>
+            <label>
+              {b.postPublishedAt} · {b.koreaTime}
+              <input name="publishedAt" type="datetime-local" required />
+            </label>
             <div className="bw-grid">
               <label>
                 {b.verification}
-                <select name="verification" defaultValue={post.verification}>
+                <select name="verification">
                   <option value="unverified">
                     {b.verificationLabels.unverified}
                   </option>
@@ -322,7 +425,7 @@ export default async function StudioBrandProject({
               </label>
               <label>
                 {b.source}
-                <select name="metricsSource" defaultValue={post.metricsSource}>
+                <select name="metricsSource">
                   <option value="unavailable">
                     {b.sourceLabels.unavailable}
                   </option>
@@ -337,63 +440,142 @@ export default async function StudioBrandProject({
             </div>
             <label>
               {b.measuredAt} · {b.koreaTime}
-              <input
-                name="measuredAt"
-                type="datetime-local"
-                defaultValue={
-                  post.measuredAt
-                    ? new Date(+new Date(post.measuredAt) + 9 * 3600000)
-                        .toISOString()
-                        .slice(0, 16)
-                    : ""
-                }
-              />
+              <input name="measuredAt" type="datetime-local" />
             </label>
             <div className="bw-grid">
               {(["views", "likes", "comments", "shares", "saves"] as const).map(
                 (k) => (
                   <label key={k}>
                     {b[k]}
-                    <input
-                      name={k}
-                      type="number"
-                      min={0}
-                      step={1}
-                      defaultValue={post[k] ?? ""}
-                    />
+                    <input name={k} type="number" min={0} step={1} />
                   </label>
                 ),
               )}
             </div>
             <label className="bw-check">
-              <input type="checkbox" name="viewsApproximate" value="true" defaultChecked={post.viewsApproximate} />
+              <input type="checkbox" name="viewsApproximate" value="true" />
               {b.viewsApproximate}
             </label>
             <p className="bw-muted">{b.viewsApproximateHint}</p>
           </Form>
-        </details>
-      ))}
-      <section className="bw-panel">
-        <h2>{b.publishReport}</h2>
-        <p className="bw-note">{b.reportNotice}</p>
-        <Form op="brandWorkspace.report" submit={b.publishReport}>
-          <label>
-            {b.reportSummary}
-            <textarea name="summary" maxLength={4000} required />
-          </label>
-          <div className="bw-grid">
+        </section>}
+      </div>
+      <div id="metrics-report">
+        <CollectionConsole
+          back={formBack}
+          projectId={id}
+          status={p.status}
+          posts={p.posts}
+          b={b}
+          locale={locale}
+        />
+        <PostPresentationAdmin projectId={id} posts={p.posts} attachments={p.attachments} b={b} />
+        {/* The single operation stays for a genuinely historical measurement time. It is frozen with
+            the console, so it is not offered once the campaign is no longer active. */}
+        {p.status === "active" && p.posts.map((post) => (
+          <details className="bw-panel" key={post.id}>
+            <summary>
+              {b.collectionHistorical} · {b.platforms[post.platform]} · {postShortId(post.url)}
+            </summary>
+            <h2>{b.updateMetrics}</h2>
+            <p>
+              <a href={post.url} target="_blank" rel="noopener noreferrer">
+                {post.url} ↗
+              </a>
+            </p>
+            <p className="bw-note">{b.collectionHistoricalHint}</p>
+            <p className="bw-note">{b.postHint}</p>
+            <Form
+              op="brandWorkspace.metrics"
+              submit={b.recordMetrics}
+              revision={post.metricRevision}
+            >
+              <input type="hidden" name="postId" value={post.id} />
+              <div className="bw-grid">
+                <label>
+                  {b.verification}
+                  <select name="verification" defaultValue={post.verification}>
+                    <option value="unverified">
+                      {b.verificationLabels.unverified}
+                    </option>
+                    <option value="manual">{b.verificationLabels.manual}</option>
+                  </select>
+                </label>
+                <label>
+                  {b.source}
+                  <select name="metricsSource" defaultValue={post.metricsSource}>
+                    <option value="unavailable">
+                      {b.sourceLabels.unavailable}
+                    </option>
+                    <option value="creator_evidence">
+                      {b.sourceLabels.creator_evidence}
+                    </option>
+                    <option value="studio_review">
+                      {b.sourceLabels.studio_review}
+                    </option>
+                  </select>
+                </label>
+              </div>
+              <label>
+                {b.measuredAt} · {b.koreaTime}
+                <input
+                  name="measuredAt"
+                  type="datetime-local"
+                  defaultValue={
+                    post.measuredAt
+                      ? new Date(+new Date(post.measuredAt) + 9 * 3600000)
+                          .toISOString()
+                          .slice(0, 16)
+                      : ""
+                  }
+                />
+              </label>
+              <div className="bw-grid">
+                {(["views", "likes", "comments", "shares", "saves"] as const).map(
+                  (k) => (
+                    <label key={k}>
+                      {b[k]}
+                      <input
+                        name={k}
+                        type="number"
+                        min={0}
+                        step={1}
+                        defaultValue={post[k] ?? ""}
+                      />
+                    </label>
+                  ),
+                )}
+              </div>
+              <label className="bw-check">
+                <input type="checkbox" name="viewsApproximate" value="true" defaultChecked={post.viewsApproximate} />
+                {b.viewsApproximate}
+              </label>
+              <p className="bw-muted">{b.viewsApproximateHint}</p>
+            </Form>
+          </details>
+        ))}
+        <section className="bw-panel">
+          <h2>{b.publishReport}</h2>
+          <p className="bw-note">{b.reportNotice}</p>
+          <Form op="brandWorkspace.report" submit={b.publishReport}>
             <label>
-              {b.reportStart}
-              <input name="periodStart" type="date" required />
+              {b.reportSummary}
+              <textarea name="summary" maxLength={4000} required />
             </label>
-            <label>
-              {b.reportEnd}
-              <input name="periodEnd" type="date" required />
-            </label>
-          </div>
-          <ConfirmCheck label={dict.admin.confirmReportPublish} />
-        </Form>
-      </section>
+            <div className="bw-grid">
+              <label>
+                {b.reportStart}
+                <input name="periodStart" type="date" required />
+              </label>
+              <label>
+                {b.reportEnd}
+                <input name="periodEnd" type="date" required />
+              </label>
+            </div>
+            <ConfirmCheck label={dict.admin.confirmReportPublish} />
+          </Form>
+        </section>
+      </div>
     </AdminShell>
   );
 }

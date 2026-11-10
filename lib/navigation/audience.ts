@@ -27,6 +27,7 @@ export function audienceNavigation(locale: Locale, dict: Dictionary, rest: strin
     ] : [
       { href: templatesHref(locale, 'video'), label: dict.nav.video },
       { href: templatesHref(locale, 'image'), label: dict.nav.image },
+      { href: `/${locale}/direct`, label: dict.nav.direct },
       { href: campaignsHref(locale), label: dict.nav.campaigns },
       { href: `/${locale}/pricing`, label: dict.nav.pricing },
     ],

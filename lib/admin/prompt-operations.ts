@@ -344,13 +344,21 @@ const createImageSet: AdminOperation<{ input: z.infer<typeof ImageSetForm>; form
     }));
     const slug = await freeSlug(ctx.sql, slugify(input.title, `set-${randomUUID().slice(0, 8)}`));
     const built = buildImageTemplateSet({ slug, title_en: input.title, title_ko: input.titleKo, thumbnail: fileName(input.thumbnail) }, frames);
-    if (!built.ok) return fail('invalid', built.errors.slice(0, 4).join('; '));
+    const validationErrors: string[] = [];
+    if (!built.ok) validationErrors.push(...built.errors);
 
-    const id = randomUUID();
-    const staged = new Map<string, AssetRef>();
     for (let index = 0; index < frames.length; index += 1) {
       const size = frameSize(form, index);
-      if (size !== null && !imageFitsAspect(size.w, size.h, aspect)) return fail('invalid', `frame ${index + 1}: ${size.w}x${size.h} is not ${aspect}`);
+      if (size !== null && !imageFitsAspect(size.w, size.h, aspect)) {
+        validationErrors.push(`frame ${index + 1}: ${size.w}x${size.h} is not ${aspect}`);
+      }
+    }
+    if (validationErrors.length > 0 || !built.ok) return fail('invalid', validationErrors.join('; '));
+
+    const id = randomUUID();
+
+    const staged = new Map<string, AssetRef>();
+    for (let index = 0; index < frames.length; index += 1) {
       const frame = await stageFrame(ctx, id, form, index);
       if (!frame.ok) return fail('upload', frame.detail);
       staged.set(fileName(index), frame.ref);

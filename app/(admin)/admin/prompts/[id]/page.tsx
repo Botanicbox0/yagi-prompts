@@ -19,7 +19,13 @@ import {
   OutcomeBanner,
   Panel,
 } from '@/components/admin/chrome';
-import { PromptFields, StagedMedia, UseCaseChecks } from '@/components/admin/prompt-fields';
+import { AdminPageHeader, StatusPill, type AdminTone } from '@/components/admin/patterns';
+import {
+  PromptFields,
+  StagedMedia,
+  TemplateSpecSummaryCard,
+  UseCaseChecks,
+} from '@/components/admin/prompt-fields';
 import { visibilityLabel } from '@/components/admin/labels';
 
 /**
@@ -48,31 +54,31 @@ const one = (params: SearchParams, key: string): string | undefined => {
 
 type Dict = ReturnType<typeof getDictionary>;
 
+const STATUS_TONE: Record<PromptRow['status'], AdminTone> = {
+  pending: 'action',
+  published: 'done',
+  archived: 'hold',
+  rejected: 'fail',
+};
+
 function Header({ row, dict, locale }: { row: PromptRow; dict: Dict; locale: string }) {
   const a = dict.admin;
   return (
-    <>
-      <a href={ADMIN_PROMPTS_PATH} className="font-mono text-[0.72rem] opacity-60">
-        ← {a.backToPrompts}
-      </a>
-      <div className="mt-4 flex flex-wrap items-start justify-between gap-4">
-        <div>
-          <h1 className="font-display text-[clamp(1.75rem,3.4vw,2.5rem)] leading-[0.95] font-black uppercase">
-            {row.titleKo || row.title}
-          </h1>
-          <p className="mt-2 font-mono text-[0.72rem] opacity-50">
-            {a.statusLabels[row.status]} · {visibilityLabel(a, row.textVisibility)} ·{' '}
-            {row.source === 'yagi' ? a.sourceYagi : a.sourceCommunity} ·{' '}
-            {formatDate(row.publishedAt ?? row.createdAt, locale) ?? '—'}
-          </p>
-        </div>
-        {row.status === 'published' && (
+    <AdminPageHeader
+      back={{ href: ADMIN_PROMPTS_PATH, label: a.backToPrompts }}
+      title={row.titleKo || row.title}
+      status={<StatusPill tone={STATUS_TONE[row.status]}>{a.statusLabels[row.status]}</StatusPill>}
+      lede={`${visibilityLabel(a, row.textVisibility)} · ${
+        row.source === 'yagi' ? a.sourceYagi : a.sourceCommunity
+      } · ${formatDate(row.publishedAt ?? row.createdAt, locale) ?? '—'}`}
+      actions={
+        row.status === 'published' ? (
           <PublicLink href={promptHref(locale, row.slug)} className={BUTTON} target="_blank" rel="noopener noreferrer">
             {a.viewLive}
           </PublicLink>
-        )}
-      </div>
-    </>
+        ) : undefined
+      }
+    />
   );
 }
 
@@ -220,6 +226,8 @@ export default async function AdminPromptItemPage({
     <AdminShell dict={a} locale={locale} active="prompts">
       <Header row={row} dict={dict} locale={locale} />
       {banner}
+
+      <TemplateSpecSummaryCard row={row} dict={dict} />
 
     {/* Quick actions FIRST (2026-09-03): they were the last thing on the page, under a
         12-row textarea and two 10-row ones. Feature / open / archive are one press each. */}

@@ -7,6 +7,7 @@ import { formatPassReport, runLiveRenderPass } from '@/lib/renders/runtime';
 import type { RenderPassReport } from '@/lib/renders/service';
 import { getTossGateway } from '@/lib/billing/toss-gateway';
 import { reconcileBrandUsagePayments } from '@/lib/brands/usage/payment';
+import { runLiveFxThresholdAlertCheck, type FxThresholdAlertPassReport } from '@/lib/twings/fx-rate-alert';
 
 /**
  * `GET|POST /api/renders/tick` — one pass of the render queue (docs/TEMPLATES-IA.md §8).
@@ -45,12 +46,16 @@ async function tick(request: Request): Promise<NextResponse> {
   let brandUsage: { checked: number } | null = null;
   try { const gateway = getTossGateway(); if (gateway) brandUsage = await reconcileBrandUsagePayments({ sql, gateway }); }
   catch { console.warn('[brand-usage] reconcile pass failed'); }
-  if (report === null) return NextResponse.json({ ok: false, code: 'pass_failed', brandUsage }, { status: 503, headers: HEADERS });
+  // Daily USD/KRW > 1,400원 threshold guard: sends 1 email/day to founder if exchange rate crosses 1,400 KRW.
+  let fxAlert: FxThresholdAlertPassReport | null = null;
+  try { fxAlert = await runLiveFxThresholdAlertCheck(); }
+  catch { console.warn('[fx-alert] USD/KRW threshold check failed'); }
+  if (report === null) return NextResponse.json({ ok: false, code: 'pass_failed', brandUsage, fxAlert }, { status: 503, headers: HEADERS });
   for (const line of report.errors) console.warn(`[renders] ${line}`);
   const { errors, ...counts } = report;
   // Presence only, never a value: which engines this deployment can actually reach.
   const config = { openai: openAiConfigFromEnv() !== null, ark: arkConfigFromEnv() !== null, arkAssets: arkAssetsConfigFromEnv() !== null };
-  return NextResponse.json({ ok: true, summary: formatPassReport(report), report: counts, errorCount: errors.length, config, brandUsage }, { headers: HEADERS });
+  return NextResponse.json({ ok: true, summary: formatPassReport(report), report: counts, errorCount: errors.length, config, brandUsage, fxAlert }, { headers: HEADERS });
 }
 
 export const GET = tick;

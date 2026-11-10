@@ -17,7 +17,7 @@
 
 ## 1. 먼저 읽을 문서
 
-0. `docs/INDEX.md` — 문서 색인(무엇을 언제 읽는지). 그다음 `docs/PLATFORM-2.0.md` — 2026-10-22 이후 설계·단계·대표 결정 대기(§13)의 단일 원본.
+0. `ARCHITECTURE.md` — 저장소 지도(표면→route group→lib→테이블, 요청 흐름, 어디를 고치면 되나). 그다음 `docs/INDEX.md` — 문서 색인(무엇을 언제 읽는지), `docs/PLATFORM-2.0.md` — 2026-10-22 이후 설계·단계·대표 결정 대기(§13)의 단일 원본, 브랜드 제품화는 `docs/BRAND-PRODUCT.md`.
 1. `docs/TEMPLATES-IA.md` — 제품 정보구조와 **§12 대표 결정 사항**(포지션, 로드맵, 과금, 자산 경로). 결정을 뒤집는 작업은 하지 않는다.
 2. `docs/CAMPAIGNS.md` — 캠페인 도메인(§1~§10), 브랜드 의뢰 폼(§11), 알림 메일(§12), 브랜드 랜딩(§13).
 3. `README.md` "Where things are" 표, `docs/SETUP.md`(환경), `docs/CONTENT-SLOTS.md`(미디어 슬롯).
@@ -25,9 +25,9 @@
 
 ## 2. 역할
 
-- **Claude Opus 5.5(Director)**: 제품·도메인 설계, 스펙, 코드 리뷰, 성능·운영 검증. 커밋 해시와 실제 테스트 결과를 직접 확인한다. 기술 검토에는 `claude-opus-5-5`를 명시한다.
-- **Claude Opus 4.6(문구 검토)**: 한국어의 자연스러움과 문장 다듬기만 맡긴다(`claude-opus-4-6`). 코드 리뷰·설계·성능 검증·법적 판단에는 쓰지 않는다. 문구 검토에서 가격·환불 조건·기간·권한을 바꾸지 않는다.
-- **Codex(Executor)**: 구현, 리팩터링, 테스트 작성, 로컬 검증, 브라우저 확인. 자기 보고를 근거로 "완료"라고 하지 않고 실제 산출물(diff, 해시, 테스트 출력)을 낸다.
+- **Claude (`claude-opus-5-5` / Claude Code — Director & Primary Developer)**: 제품·도메인 설계, 스펙, **기능 개발·구현 주도**, 코드 리뷰, 성능·운영 검증. 개발 혼선을 막기 위해 코드 구현과 설계는 원칙적으로 Claude에게 맡긴다. 커밋 해시와 실제 테스트 결과를 직접 확인한다.
+- **Gemma 4 (`yagi-crm-gemma4:31b-q8_0` — 워딩·문구 자연스러움 설계)**: 로컬 `http://127.0.0.1:11434`(gpu-arbiter 경유)의 Gemma 4 모델이 한국어·영어 사용자 노출 워딩의 자연스러움 설계와 문장 다듬기를 맡는다(`docs/wording/naming-review-2026-10-24-gemma.md` 참조). 코드 리뷰·설계·성능 검증·법적 판단에는 쓰지 않으며, 문구 설계에서 가격·환불 조건·기간·권한을 바꾸지 않는다.
+- **Codex / Antigravity (보조 Executor & 미디어·검증)**: 미디어/사운드 엔지니어링, 로컬 환경 검증, 테스트·스윕 실행 등 보조 역할만 수행하며 Claude의 개발 작업과 충돌하지 않도록 핸드오프(`docs/HANDOFF-*.md` 및 ICM)로 상태를 공유한다.
 - 대표(윤병삼)가 최종 결정권자. 아래 §5의 "대표 결정 필요" 항목은 임의로 정하지 않고 질문으로 남긴다.
 
 ## 3. 브랜치·커밋·검증
@@ -38,7 +38,7 @@
 
 ```powershell
 npx tsc --noEmit
-npx vitest run                 # 2026-10-23 기준 290+ 파일 / 2,800+ 테스트. 하나라도 빨간색이면 끝난 게 아니다
+npx vitest run                 # 2026-11-03 기준 370 파일 / 3,600 테스트. 하나라도 빨간색이면 끝난 게 아니다
 npm run build:local            # 프로덕션 빌드(로컬 모드)
 npm run start:local            # 별도 터미널, 3000 포트(다른 포트면 빌드·실행 모두 NEXT_PUBLIC_APP_URL=http://localhost:<port>, 스윕은 SWEEP_BASE_URL)
 npm run sweep:anon             # 익명 방문자 스윕 1,000+ 체크, "SWEEP PASSED"가 나와야 한다
@@ -89,7 +89,7 @@ npm run sweep:anon             # 익명 방문자 스윕 1,000+ 체크, "SWEEP P
 | 5 | **템플릿 메이커(AI 크리에이티브)** | PR #54 플랫폼 테이블 + PR #79 지원·작업공간·정산 현황(0051/0138) + PR #94 카탈로그 분리(오리지널/메이커 레일·칩 — 2026-10-30 대표 요청으로 한 피드로 합침, PLATFORM-2.0 §7.5)·메이커 공개 프로필 `/{locale}/makers/[handle]`(0060/0143) 운영 반영. PR #95 레시피 v2(단계·슬롯·공개 선택·캐러셀·등록 화면·검수 렌더, 0059/0142) + PR #97 엔진 어댑터(Kling 공식 API `kling-omni`·Nano Banana 2.1 `nano-banana-2.1`, 0061) 운영 반영. 두 엔진은 키(`KLING_API_KEY`·`GEMINI_API_KEY`)가 Vercel에 없어 스모크 미실행이며 메이커 허용 엔진 목록(`MAKER_ENGINE_IDS`)에는 아직 없다. 플래그 `TWINGS_COMMUNITY`·`TWINGS_FORMAT_CREATORS`·`TWINGS_CREATOR_APPLICATIONS`·`TWINGS_IMAGE_REWARDS` 전부 **off**. 호칭은 PLATFORM-2.0 §14.2가 원본: 공급자 "메이커"(ko)/"Maker"(en), 캠페인 참여자 "크리에이터", 헤더 "개인 | 브랜드", 일반 사용자에게 역할 호칭 없음. 로열티 범위·기본값·테스트 렌더 횟수는 §18 제안값이며 대표 결정(§13-2) 대기. |
 | 6 | **인플루언서·캠페인·브랜드** | 미구현(Phase 3). 인플루언서 자격(연동 IG/TikTok 팔로워 3,000+)·캠페인 탭 가시성·brand.twings.app 캠페인 마법사 설계는 §6. KAIPER 셀프서비스 코드는 로컬 검증만. |
 | 7 | **관리자** | Phase 4(§10) 대기. 결제 "확인 필요" 카운트와 작가 지원 큐는 `/admin` 홈에 있다. |
-| 8 | **브랜드 에셋 스튜디오** | 2026-10-28 대표 결정(PLATFORM-2.0 §21). S0 방향 문서 + 랜딩 리디자인은 `claude/brand-asset-studio` PR. 디자인 원칙은 화이트 + 반투명 패널 + TWINGS 블루 하나(#3875C5, 글자는 #3063A7) + Pretendard Variable(§21.4, docs/design/TOOLBOX.md). 에셋 태깅·검색·메모리·생성 캔버스(S2~S5)는 미구현이고, 크리에이터 후보 공유(PR #113)와 캠페인·리뷰·리포트는 운영 중이다. |
+| 8 | **브랜드 미디어 엔진(brand.twings.app 제품화)** | 단일 원본 `docs/BRAND-PRODUCT.md`(2026-11-03). 대표 결정: B2B 플랜 월 390,000/690,000/990,000원, 기능은 **기본 전체 개방 + 조직별 차단 목록**(Morphic: 생성형 미디어·사운드·컬러 그레이딩 비공개), AI 모델은 Argon(듣고 판단하는 디렉터, 생성은 별도 엔진). S1(기능 정책·플랜 기록, 0074/0150 **클라우드 적용 필요**, 관리자 조직 페이지 패널 2개)은 `claude/brand-entitlements` PR. S2 고정 층 스키마(0075/0151)·S3 얼굴 없는 생성·지시서·S4 로컬 GPU 마감 워커·S5 사운드 디렉터·S6 과금은 §12 순서, 대표 결정 11개는 §13. 디자인 원칙은 화이트 + 반투명 패널 + TWINGS 블루 하나(#3875C5, 글자는 #3063A7) + Pretendard Variable(docs/design/TOOLBOX.md·IDENTITY.md). 크리에이터 후보 공유(PR #113)와 캠페인·리뷰·리포트는 운영 중이다. |
 
 **대표 결정 대기**: PLATFORM-2.0 §13(작가 배분 모델, 정산, 인플루언서 기준, 캠페인 티저, 검수 기준, 가격 결정권, 엔진 순서, 약관 문안, 라이브 키 전환 시점)과 §15.5-16(히어로 증거 인물).
 

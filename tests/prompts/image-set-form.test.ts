@@ -6,6 +6,7 @@ import { loadPromptBySlug } from '@/lib/prompts/repo';
 import { normalizeSetPrompt, parsePromptMedia, setPromptIssue } from '@/lib/prompts/schemas';
 import { loadTemplateRecipe } from '@/lib/recipes/repo';
 import { parseRecipe } from '@/lib/recipes/schema';
+import { findImageSetProblems } from '@/components/admin/image-set-form';
 import { adminHarness, upload, type AdminHarness } from '../helpers/admin';
 import { runner } from '../helpers/pglite';
 
@@ -102,6 +103,42 @@ describe('prompt.createSet', () => {
     const again = await harness.run('prompt.createSet', fields());
     expect(again).toMatchObject({ ok: true, detail: 'three-quiet-portraits-2' });
   });
+
+  it('aggregates multiple aspect errors across frames into one error detail', async () => {
+    const outcome = await harness.run(
+      'prompt.createSet',
+      fields({
+        frame0Size: '1000x1000',
+        frame2Size: '1920x1080',
+      }),
+    );
+    expect(outcome.ok).toBe(false);
+    expect(outcome).toMatchObject({
+      code: 'invalid',
+      detail: expect.stringContaining('frame 1: 1000x1000 is not 4:5'),
+    });
+    expect(outcome).toMatchObject({
+      detail: expect.stringContaining('frame 3: 1920x1080 is not 4:5'),
+    });
+  });
+
+  it('aggregates prompt recipe validation errors and aspect errors together', async () => {
+    const outcome = await harness.run(
+      'prompt.createSet',
+      fields({
+        frame0Size: '1000x1000',
+        frame2Prompt: 'A quiet mountain without the photo reference.',
+      }),
+    );
+    expect(outcome.ok).toBe(false);
+    expect(outcome).toMatchObject({
+      code: 'invalid',
+      detail: expect.stringContaining('frame 1: 1000x1000 is not 4:5'),
+    });
+    expect(outcome).toMatchObject({
+      detail: expect.stringContaining('shot3: the prompt never names the photo as "Image 1"'),
+    });
+  });
 });
 
 describe('the studio-only engine', () => {
@@ -155,5 +192,75 @@ describe('normalizeSetPrompt', () => {
   it('turns a handle into the words the check reads', () => {
     expect(setPromptIssue(normalizeSetPrompt('@image1 smiles at the camera.'))).toBeNull();
     expect(setPromptIssue(normalizeSetPrompt('@image1 holds the bag from @image2.'))).toBe('other_reference');
+  });
+});
+
+describe('findImageSetProblems', () => {
+  const dummyLabels = {
+    errTitles: 'errTitles',
+    errCount: 'errCount {min}-{max}',
+    errImage: 'errImage {n}',
+    errAspect: 'errAspect {n} {aspect}',
+    errPromptShort: 'errPromptShort {n}',
+    errPromptLong: 'errPromptLong {n} {max}',
+    errNoPhoto: 'errNoPhoto {n}',
+    errOtherReference: 'errOtherReference {n}',
+    errBraces: 'errBraces {n}',
+  };
+
+  it('aggregates multiple validation problems across frames at once', () => {
+    const problems = findImageSetProblems({
+      title: 'Valid Title',
+      titleKo: '유효한 한글 제목',
+      aspect: '4:5',
+      labels: dummyLabels,
+      frames: [
+        // Frame 1: Wrong aspect (1000x1000 is 1:1, not 4:5)
+        { phase: 'done', width: 1000, height: 1000, prompt: 'Image 1 smiles at the camera.' },
+        // Frame 2: Prompt too long (>8000 chars)
+        { phase: 'done', width: 1856, height: 2304, prompt: `Image 1 ${'a'.repeat(8100)}` },
+        // Frame 3: Missing photo reference (no_photo)
+        { phase: 'done', width: 1856, height: 2304, prompt: 'A quiet sunset over the mountains.' },
+      ],
+    });
+
+    expect(problems).toHaveLength(3);
+    expect(problems[0]).toBe('errAspect 1 4:5');
+    expect(problems[1]).toBe('errPromptLong 2 8000');
+    expect(problems[2]).toBe('errNoPhoto 3');
+  });
+
+  it('reports title and frame count errors together with frame-level issues', () => {
+    const problems = findImageSetProblems({
+      title: 'ab', // too short (<3)
+      titleKo: '', // empty
+      aspect: '4:5',
+      labels: dummyLabels,
+      frames: [
+        // Only 1 frame (min is 2) and wrong aspect
+        { phase: 'uploading', width: 1000, height: 1000, prompt: 'Short' },
+      ],
+    });
+
+    expect(problems).toContain('errTitles');
+    expect(problems).toContain('errCount 2-10');
+    expect(problems).toContain('errImage 1');
+    expect(problems).toContain('errAspect 1 4:5');
+    expect(problems).toContain('errPromptShort 1');
+  });
+
+  it('returns an empty array when everything is valid', () => {
+    const problems = findImageSetProblems({
+      title: 'Valid Title',
+      titleKo: '유효한 한글 제목',
+      aspect: '4:5',
+      labels: dummyLabels,
+      frames: [
+        { phase: 'done', width: 1856, height: 2304, prompt: 'Image 1 is the person in a studio.' },
+        { phase: 'done', width: 1856, height: 2304, prompt: '@image1 is smiling quietly.' },
+      ],
+    });
+
+    expect(problems).toEqual([]);
   });
 });

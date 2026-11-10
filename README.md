@@ -31,13 +31,15 @@ PGlite in-process, and storage uses the local filesystem driver under `.storage/
 
 | Path | What |
 |---|---|
+| `ARCHITECTURE.md` | the repository map: surfaces → hosts → route groups → `lib/` domains → tables, three request flows, where to change what, legacy names |
 | `app/(marketing)/[locale]/` | public, locale-prefixed, static + `catalog` tag + 1h TTL |
+| `app/(brand)/brand/` | brand.twings.app workspace (campaigns, creators, library, members, settings, studio); product design in `docs/BRAND-PRODUCT.md` |
 | `app/(marketing)/[locale]/brands/` | brand campaign services and public enquiry; `/campaigns` is creator discovery |
 | `app/(app)/`, `app/(admin)/` | authenticated surfaces, `force-dynamic` + `private, no-store` |
 | `app/globals.css` | the single design-token source (Tailwind v4 CSS-first, section 5.1/5.2) |
 | `lib/content/` | zod block contracts, the shared visibility resolver, the pure `shapeRevision` |
 | `lib/publish/` | phase B of publication (the storage copier) around the two DB RPCs |
-| `lib/storage/` | bucket semantics behind one interface; local driver now, Supabase driver later |
+| `lib/storage/` | bucket semantics behind one interface: local driver, Supabase driver, direct R2 writes for public media |
 | `supabase/migrations/` | core (PGlite-testable) + supabase-glue split — see `supabase/README.md` |
 | `scripts/seed.ts` | 2 fixture playbooks, every block kind x visibility, published for real |
 | `docs/` | `VERSIONS.md` (why each pin), `SETUP.md` (manual steps remaining) |

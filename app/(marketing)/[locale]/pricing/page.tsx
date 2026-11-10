@@ -6,6 +6,7 @@ import { getPromptCatalog } from '@/lib/prompts/public-catalog';
 import { templateHref, templatesHref } from '@/lib/prompts/links';
 import { SITE_TWITTER_CARD, siteOgImage } from '@/lib/seo/og';
 import { MarketingFooter, MarketingNav } from '@/components/marketing/chrome';
+import { PersonalIdentity } from '@/components/audience/personal-identity';
 import { FaqSection } from '@/lib/seo/faq-section';
 import { CREATOR_PLANS, quoteSubscriptionVideo, type CreatorPlanId } from '@/lib/twings/subscription-plan';
 import { SubscriptionPlanComparison, SubscriptionPricingText, SubscriptionEditingPreview, type PublicCreatorPlan } from '@/components/twings/subscription-plan-comparison';
@@ -90,13 +91,13 @@ export default async function PricingPage({ params }: { params: Promise<{ locale
 
   // Single films: what a reader can buy today when the storefront is open — a card on top, then.
   const singleBlock = (
-    <aside data-pricing-films data-pricing-films-open={shopOpen ? 'true' : 'false'} className={singleFirst ? 'rounded-2xl border border-hairline p-6 sm:p-8' : 'mt-9 flex flex-wrap items-center justify-between gap-5'}>
+    <aside data-pricing-films data-pricing-films-open={shopOpen ? 'true' : 'false'} className={singleFirst ? 'rounded-3xl border border-hairline bg-white p-6 sm:p-8' : 'mt-9 flex flex-wrap items-center justify-between gap-5'}>
       <div className="max-w-2xl">
-        <h2 className={singleFirst ? 'text-xl font-semibold sm:text-2xl' : 'text-lg font-semibold'}>{singleFirst ? p.singleTitle : p.filmsTitle}</h2>
+        <h2 className={singleFirst ? 'audience-subheading text-xl sm:text-2xl' : 'audience-subheading text-lg'}>{singleFirst ? p.singleTitle : p.filmsTitle}</h2>
         <p className="mt-2 text-sm leading-relaxed text-black/65"><SubscriptionPricingText copy={textCopy} field="single" oneTimeAvailable={shopOpen} /></p>
         {singleFirst && shopOpen && <p data-pricing-refund className="mt-2 text-sm leading-relaxed text-black/65">{dict.renders.notCharged}</p>}
       </div>
-      <a href={templatesHref(locale)} className={singleFirst ? 'mt-5 inline-flex min-h-12 items-center gap-3 rounded-full bg-black px-6 text-sm font-semibold text-white focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-accent' : 'inline-flex min-h-12 items-center gap-3 text-sm font-medium underline underline-offset-4'}>{p.filmsCta}<span aria-hidden="true">↗</span></a>
+      <a href={templatesHref(locale)} className={singleFirst ? 'audience-button mt-5' : 'inline-flex min-h-12 items-center gap-3 text-sm font-medium underline underline-offset-4'}>{p.filmsCta}<span aria-hidden="true">↗</span></a>
     </aside>
   );
   // Monthly plans: below as a "준비 중" teaser while preparing; first only when they are the open offer.
@@ -115,7 +116,7 @@ export default async function PricingPage({ params }: { params: Promise<{ locale
   );
 
   return (
-    <>
+    <PersonalIdentity>
       <MarketingNav locale={locale} dict={dict} rest="/pricing" initialTheme="light" />
 
       <SubscriptionAvailabilityProvider initialAvailability={availability}>
@@ -138,7 +139,7 @@ export default async function PricingPage({ params }: { params: Promise<{ locale
 
         <section data-section data-theme="light" data-pricing-examples className="section">
           <div className="audience-shell py-14 lg:py-20">
-            <div className="flex flex-wrap items-end justify-between gap-5"><div><h2 className="text-2xl leading-snug font-semibold tracking-tight sm:text-3xl">{p.examplesTitle}</h2><p className="mt-3 text-sm leading-relaxed text-black/65">{p.examplesBody}</p></div><a href={templatesHref(locale)} className="inline-flex min-h-11 items-center gap-3 text-sm underline underline-offset-4">{p.filmsCta}<span aria-hidden="true">↗</span></a></div>
+            <div className="flex flex-wrap items-end justify-between gap-5"><div><h2 className="audience-subheading text-2xl sm:text-3xl">{p.examplesTitle}</h2><p className="mt-3 text-sm leading-relaxed text-black/65">{p.examplesBody}</p></div><a href={templatesHref(locale)} className="inline-flex min-h-11 items-center gap-3 text-sm underline underline-offset-4">{p.filmsCta}<span aria-hidden="true">↗</span></a></div>
             {examples.length ? <div className="mt-7 grid gap-6 sm:grid-cols-3">{examples.map(card => {
               const title = locale === 'ko' ? card.titleKo || card.title : card.title;
               return <article key={card.slug} data-pricing-example={card.slug} className="min-w-0">
@@ -155,6 +156,6 @@ export default async function PricingPage({ params }: { params: Promise<{ locale
       </SubscriptionAvailabilityProvider>
 
       <MarketingFooter locale={locale} dict={dict} />
-    </>
+    </PersonalIdentity>
   );
 }
