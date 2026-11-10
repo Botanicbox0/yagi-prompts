@@ -146,6 +146,8 @@ export interface StudioJobWork {
   draftTaskId?: string;
   results?: Record<string, StudioPendingResult>;
   failures?: Record<string, { code: StudioProviderFailure; detail: string }>;
+  /** How many times storing each result has failed; a paid result is retried before it is given up. */
+  storeAttempts?: Record<string, number>;
 }
 
 export interface JobRow {

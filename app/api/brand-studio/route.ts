@@ -60,6 +60,15 @@ export async function GET(request: NextRequest) {
   }
 }
 
+/** The language of the screen the request came from; the profile's language when there is no request scope. */
+async function screenLocale(profileLocale: string | null | undefined): Promise<'ko' | 'en'> {
+  try {
+    return (await getRequestLocale(profileLocale)) === 'en' ? 'en' : 'ko';
+  } catch {
+    return profileLocale === 'en' ? 'en' : 'ko';
+  }
+}
+
 export async function POST(request: NextRequest) {
   const origin = resolveRequestUrl(new URL(request.url), request.headers);
   if (!origin || !sameOriginMutation(origin, request.headers)) return studioJson({ ok: false, code: 'forbidden' }, 403);
@@ -82,7 +91,7 @@ export async function POST(request: NextRequest) {
     const deps = await studioRuntimeDeps(sql);
     // What the customer reads back (the note under a prompt, a film summary, a handoff sentence) follows the
     // language of the screen they are on, which can differ from the language saved on their profile.
-    const actor = { ...viewer, locale: await getRequestLocale() };
+    const actor = { ...viewer, locale: await screenLocale(viewer.locale) };
     const result = await runStudioOperation(deps, actor, body.operation, body.input);
     if (!result.ok) return studioJson(result, studioStatus(result.code));
     if (body.operation === 'job.create' && 'job' in result) {

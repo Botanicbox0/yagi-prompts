@@ -65,10 +65,24 @@ async function storeOne(deps: StudioDeps, job: JobRow, output: OutputRow, result
   }
 }
 
+/** Tries per result before a stored-result failure is final. */
+const STORE_ATTEMPTS = 3;
+/** Failures another try cannot fix: the file is the wrong kind, refused, or too large. */
+const PERMANENT_STORE_ERROR = /^result is not |refused address|too large|no longer pending/;
+
+function hostOf(url: string): string {
+  try {
+    return new URL(url).host;
+  } catch {
+    return 'unknown';
+  }
+}
+
 /** Store every pending output that has a result; returns the job after settling, or null when it lost the lease. */
 export async function finishJob(deps: StudioDeps, job: JobRow, token: string): Promise<JobRow | null> {
   const outputs = (await deps.sql.query<OutputRow>('select * from brand_studio_outputs where job_id = $1 order by idx', [job.id])).rows;
   const work = { ...job.work, results: { ...(job.work.results ?? {}) }, failures: { ...(job.work.failures ?? {}) } };
+  let retry = false;
   for (const output of outputs.filter((o) => o.status === 'pending')) {
     const key = String(output.idx);
     const result = work.results[key];
@@ -77,14 +91,24 @@ export async function finishJob(deps: StudioDeps, job: JobRow, token: string): P
         await storeOne(deps, job, output, result);
         continue;
       } catch (error) {
-        deps.log?.('studio_store_failed', { jobId: job.id, idx: output.idx, message: error instanceof Error ? error.message.slice(0, 200) : 'unknown' });
-        work.failures[key] = { code: 'failed', detail: error instanceof Error ? error.message.slice(0, 300) : 'store failed' };
+        const message = error instanceof Error ? error.message : 'store failed';
+        const attempts = (work.storeAttempts?.[key] ?? 0) + 1;
+        work.storeAttempts = { ...(work.storeAttempts ?? {}), [key]: attempts };
+        deps.log?.('studio_store_failed', { jobId: job.id, idx: output.idx, attempt: attempts, host: hostOf(result.url), message: message.slice(0, 200) });
+        // The provider already made (and charged for) this result. A slow or dropped download is ours to
+        // retry, not the customer's failure: the job stays `finishing` and the next pass tries again.
+        if (attempts < STORE_ATTEMPTS && !PERMANENT_STORE_ERROR.test(message)) {
+          retry = true;
+          continue;
+        }
+        work.failures[key] = { code: 'failed', detail: message.slice(0, 300) };
       }
     } else if (!work.failures[key]) {
       work.failures[key] = { code: 'failed', detail: 'no result for this slot' };
     }
     await deps.sql.query("update brand_studio_outputs set status = 'failed' where id = $1 and status = 'pending'", [output.id]);
   }
+  if (retry) return saveJob(deps.sql, job, token, { work });
   return settleJob(deps, job, token, work);
 }
 

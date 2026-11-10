@@ -100,7 +100,9 @@ describe("dock controls from the registry", () => {
     const video = normalizeDraft({ ...withMedium(initialDraft(), "video"), seconds: 99, resolution: "4K" });
     const model = STUDIO_MODELS.find((m) => m.id === video.model) as StudioVideoModel;
     expect(video.seconds).toBe(model.maxSeconds);
-    expect(video.resolution).toBe(model.defaultResolution);
+    // A value the model cannot do falls back to the 480p draft: the cheap first pass, not a full-price run.
+    expect(video.resolution).toBe(model.supportsDraft ? "draft" : model.defaultResolution);
+    expect(withMedium(initialDraft(), "video").resolution).toBe("draft");
     expect(normalizeDraft({ ...initialDraft(), count: 9 }).count).toBe(4);
   });
 });

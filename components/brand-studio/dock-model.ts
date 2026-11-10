@@ -95,7 +95,13 @@ export function normalizeDraft(draft: DockDraft): DockDraft {
   const controls = dockControls(draft);
   const model = controls.model;
   const aspect = controls.aspects.includes(draft.aspect) ? draft.aspect : controls.aspects.includes("1:1") ? "1:1" : controls.aspects[0]!;
-  const fallbackResolution = model.medium === "image" ? (model as StudioImageModel).defaultResolution : (model as StudioVideoModel).defaultResolution;
+  // A video starts as the 480p draft when the model has one: the cheap first pass, finished at 1080p once it looks right.
+  const fallbackResolution =
+    model.medium === "image"
+      ? (model as StudioImageModel).defaultResolution
+      : (model as StudioVideoModel).supportsDraft
+        ? DRAFT_RESOLUTION
+        : (model as StudioVideoModel).defaultResolution;
   const resolution = controls.resolutions.includes(draft.resolution) ? draft.resolution : fallbackResolution;
   const video = model.medium === "video" ? (model as StudioVideoModel) : null;
   const seconds = video ? Math.min(video.maxSeconds, Math.max(video.minSeconds, draft.seconds || video.defaultSeconds)) : draft.seconds;
