@@ -42,6 +42,8 @@ import type { RenderNotifier } from './notify';
 import { buildRenderPrompt } from './prompt';
 import {
   ASSET_TASK_PREFIX,
+  claimAssetDispatch,
+  parseAssetTask,
   claimRenderJobs,
   countRenderJobsSince,
   insertRenderJob,
@@ -786,7 +788,7 @@ async function pollAwaiting(deps: RenderPassDeps, job: RenderJob, now: Date, rep
   if (!job.providerTaskId) return;
   if (job.providerTaskId.startsWith(CAMPAIGN_DISPATCH_PREFIX)) { report.waiting += 1; return; }
   if (job.providerTaskId.startsWith(ASSET_TASK_PREFIX)) {
-    await pollAssetWait(deps, job, job.providerTaskId.slice(ASSET_TASK_PREFIX.length), now, report);
+    await pollAssetWait(deps, job, parseAssetTask(job.providerTaskId).assetId, now, report);
     return;
   }
   if (!isVideoEngine(job.engine)) return;
@@ -825,6 +827,8 @@ async function pollAssetWait(deps: RenderPassDeps, job: RenderJob, assetId: stri
   try {
     const status = await pollIdentityAsset(identityDeps(deps), assetId);
     if (status === 'Active') {
+      // Polls of a parked job overlap (open page, provider callback, tick). One of them sends it on.
+      if (!(await claimAssetDispatch(deps.sql, job, now))) { report.waiting += 1; return; }
       const template = await loadPromptById(deps.sql, job.templateId);
       if (template === null) throw new RenderFailure('engine_error', 'the template no longer exists', false);
       const recipe = await jobRecipeFor(deps, job);
@@ -930,7 +934,7 @@ async function finishRecipe(deps: RenderPassDeps, job: RenderJob, results: Recip
     keys.push(key);
   }
   await deps.sql.transaction(async sql => {
-    await markRenderSucceeded(sql, job.id, {
+    const ended = await markRenderSucceeded(sql, job.id, {
       resultKey: keys[0]!,
       resultMime: results[0]!.mime,
       resultBytes: first.bytes.byteLength,
@@ -939,7 +943,8 @@ async function finishRecipe(deps: RenderPassDeps, job: RenderJob, results: Recip
       shareToken: newShareToken(),
       shareExpiresAt: shareExpiresAt(now),
       finishedAt: now,
-    });
+    }, { onlyRunning: true });
+    if (!ended) return; // another pass already ended this job
     // Several steps are several provider calls: the sum stays an estimate until each has an invoice line.
     await sql.query('update render_jobs set provider_completion_tokens=$2,cost_source=$3 where id=$1', [job.id, results.length === 1 && first.completionTokens ? first.completionTokens : null, usd === null ? null : 'estimate']);
     await insertJobOutputs(sql, job.id, results.map((result, index) => ({ stepId: result.step, key: keys[index]!, mime: result.mime, bytes: result.bytes })));
@@ -957,7 +962,7 @@ async function finish(deps: RenderPassDeps, job: RenderJob, output: EngineOutput
   const resultKey = `${job.id}/result.${extensionFor(output.mime)}`;
   await deps.store.put(resultKey, output.bytes, output.mime);
   await deps.sql.transaction(async sql => {
-    await markRenderSucceeded(sql, job.id, {
+    const ended = await markRenderSucceeded(sql, job.id, {
       resultKey,
       resultMime: output.mime,
       resultBytes: output.bytes.byteLength,
@@ -966,7 +971,8 @@ async function finish(deps: RenderPassDeps, job: RenderJob, output: EngineOutput
       shareToken: newShareToken(),
       shareExpiresAt: shareExpiresAt(now),
       finishedAt: now,
-    });
+    }, { onlyRunning: true });
+    if (!ended) return; // another pass already ended this job
     if (deps.subscriptionSchemaReady || await platformReady(sql)) await sql.query('update render_jobs set provider_completion_tokens=$2,cost_source=$3 where id=$1', [job.id, output.completionTokens ?? null, output.costSource ?? (output.costUsd === null ? null : 'estimate')]);
     if (deps.subscriptionSchemaReady) await settleSubscriptionUsage(sql, job.id, 'completed');
   });
@@ -981,16 +987,17 @@ async function settleFailure(deps: RenderPassDeps, job: RenderJob, error: unknow
   // A recipe step failure is recorded as `code:step`; readers strip the step (`baseFailureCode`).
   const code = failure.step ? `${failure.code}:${failure.step}` : failure.code;
   report.errors.push(`${job.id}: ${code} — ${failure.message}`);
+  // Overlapping polls: when another pass has already ended or requeued this job, this failure is not the job's.
   if (failure.retryable && job.attempts < MAX_ATTEMPTS) {
-    await requeueRenderJob(deps.sql, job.id, { code, message: failure.message });
-    report.requeued += 1;
+    if (await requeueRenderJob(deps.sql, job.id, { code, message: failure.message })) report.requeued += 1;
     return;
   }
-  await deps.sql.transaction(async sql => {
-    await markRenderFailed(sql, job.id, { code, message: failure.message, finishedAt: now });
+  const failed = await deps.sql.transaction(async sql => {
+    if (!(await markRenderFailed(sql, job.id, { code, message: failure.message, finishedAt: now, onlyRunning: true }))) return false;
     if (deps.subscriptionSchemaReady) await settleSubscriptionUsage(sql, job.id, 'failed');
+    return true;
   });
-  report.failed += 1;
+  if (failed) report.failed += 1;
 }
 
 /** Handles jobs failed by stale recovery, plus a worker that died after its terminal row write. */
