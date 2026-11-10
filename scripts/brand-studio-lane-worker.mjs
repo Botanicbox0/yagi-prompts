@@ -78,7 +78,10 @@ async function lane(op, body = {}) {
 /** Run one CLI tool with its arguments on stdin (no shell quoting of customer text). */
 function sunra(tool, input, { spend = false } = {}) {
   return new Promise((resolve, reject) => {
-    const argv = ['call', tool, '-', '--json', ...(spend ? ['--yes'] : [])];
+    // --no-download: the CLI would otherwise save every finished file here first, and the provider's file
+    // host is slow per connection (measured 2026-11-10: a 2 MB picture held a get_job call for 50 s).
+    // The app fetches the result itself, in parallel pieces.
+    const argv = ['call', tool, '-', '--json', '--no-download', ...(spend ? ['--yes'] : [])];
     // The CLI is an npm shim (.cmd) on Windows, which needs a shell; every argument here is fixed text.
     const child = spawn(SUNRA, argv, { cwd: WORK_DIR, shell: process.platform === 'win32', windowsHide: true });
     let out = '';
@@ -142,7 +145,8 @@ function toolCall(job, project) {
         ...(p.aspect ? { aspect_ratio: p.aspect } : {}),
         ...(p.resolution ? { resolution: p.resolution } : {}),
         ...(urls.length ? { image_urls: urls } : {}),
-        output_format: 'png',
+        // A region edit is pasted back into the original, so it stays lossless; a plain picture travels lighter.
+        output_format: job.kind === 'region_edit' ? 'png' : 'jpeg',
       },
     };
   }
@@ -186,9 +190,24 @@ function mimeOf(url, type) {
 
 async function waitFor(taskId) {
   const deadline = Date.now() + JOB_TIMEOUT_MS;
+  let misses = 0;
   for (;;) {
     await sleep(5000);
-    const job = await sunra('get_job', { task_id: taskId });
+    let job;
+    try {
+      job = await sunra('get_job', { task_id: taskId });
+      misses = 0;
+    } catch (error) {
+      // A refusal is an answer. Anything else (the provider answering 5xx, an unreadable line) is a bad
+      // moment, and the task is already paid for: keep asking instead of throwing the result away.
+      // Seen in production on 2026-11-10: one "HTTP 520" from the provider failed a finished picture.
+      if (error instanceof CliRefusal) throw error;
+      misses += 1;
+      log('poll_retry', { misses, message: String(error instanceof Error ? error.message : error).slice(0, 120) });
+      if (misses >= 12 || Date.now() > deadline) throw error;
+      await sleep(Math.min(30_000, 5000 * misses));
+      continue;
+    }
     const status = String(job.status ?? '').toUpperCase();
     if (status === 'COMPLETED') {
       const url = job.urls?.[0] ?? job.out_video ?? job.out_image;

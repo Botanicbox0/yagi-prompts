@@ -19,7 +19,14 @@ export function useStudio({ organizationId, initialState, api: injected }: { org
 
   const load = useCallback(async () => {
     dispatch({ type: "load" });
-    const result = await api.loadState();
+    let result = await api.loadState();
+    // The first request after a quiet period can fail while the server wakes up (seen in production on
+    // 2026-11-10: the first load failed, the next one answered in 0.2 s). One quiet second try before
+    // showing an error.
+    if (isFailure(result) && (result.code === "failed" || result.code === "provider_unavailable")) {
+      await new Promise((resolve) => setTimeout(resolve, 1500));
+      result = await api.loadState();
+    }
     dispatch(isFailure(result) ? { type: "loadFailed", code: result.code } : { type: "loaded", state: result });
   }, [api]);
 
