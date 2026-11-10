@@ -5,7 +5,7 @@ import { formatKrw, suggestedKrw } from '@/lib/twings/products';
 import { costFloor } from '@/lib/twings/cost-model';
 import { baseKrw, makeEarning, providerKrw } from '@/lib/twings/template-price';
 import { videoModelForEngine } from '@/lib/video/models';
-import { PROMPT_TEXT_MAX, PROMPT_TEXT_MIN, TEMPLATE_MEDIA } from '@/lib/prompts/schemas';
+import { PROMPT_TEXT_MAX, PROMPT_TEXT_MIN, TEMPLATE_CASTS, TEMPLATE_MEDIA } from '@/lib/prompts/schemas';
 import { promptHref } from '@/lib/prompts/links';
 import { visibilityLabel, visibilityOptions } from '@/components/admin/labels';
 import type { Dictionary } from '@/lib/i18n/dictionaries';
@@ -326,6 +326,16 @@ export function PromptFields({ row, dict }: { row: PromptRow | null; dict: Dict 
             {TEMPLATE_MEDIA.map((medium) => (
               <option key={medium} value={medium}>
                 {a.templateMedia[medium]}
+              </option>
+            ))}
+          </select>
+        </Field>
+        {/* docs/CAST-CATEGORIES.md §1 — who is in it. A pet or couple template also needs a matching recipe to be made. */}
+        <Field label={a.fieldTemplateCast} hint={a.templateCastHint}>
+          <select name="cast" defaultValue={row?.cast ?? 'solo'} data-admin-cast className={INPUT}>
+            {TEMPLATE_CASTS.map((cast) => (
+              <option key={cast} value={cast}>
+                {a.templateCasts[cast]}
               </option>
             ))}
           </select>

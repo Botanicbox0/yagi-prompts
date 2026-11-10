@@ -21,8 +21,10 @@ export function WorkspaceHomeLink({ scope, children }: { scope: BrandWorkspaceSc
         if (raw) {
           const parsed = JSON.parse(raw) as unknown;
           if (Array.isArray(parsed) && typeof parsed[0] === 'string' && parsed[0].startsWith('/brand')) {
-            if (parsed[0] === '/brand/studio' && !vis.studio) {
-              setPreferredEntry('/brand');
+            // The rail (docs/BRAND-STUDIO-V3.md §3) can put a studio sub-screen first; the lockup only
+            // ever lands on the image studio, and never on any studio address for a brand without it.
+            if (parsed[0].startsWith('/brand/studio')) {
+              setPreferredEntry(vis.studio ? '/brand/studio' : '/brand');
               return;
             }
             setPreferredEntry(parsed[0]);

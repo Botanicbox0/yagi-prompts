@@ -43,7 +43,9 @@ export function seedanceReferenceMode(
   kind: EnhanceKind,
   references: readonly Pick<EnhanceReference, 'kind' | 'frame'>[],
 ): SeedanceReferenceMode {
-  if (kind === 'video_remix') return 'reference';
+  // A remix with its video attached is always a reference run. A blueprint remix reaches here without its
+  // video (it is only read, never sent) and is decided like any other video run.
+  if (kind === 'video_remix' && references.some((r) => r.kind === 'video')) return 'reference';
   if (references.length === 0) return 'text';
   const onlyFrames = references.every((r) => r.kind === 'image' && r.frame !== undefined);
   const starts = references.filter((r) => r.frame === 'start').length;
@@ -62,6 +64,7 @@ function tokenFor(
     case 'seedream':
       return ref.kind === 'image' ? `Figure ${ordinal + offset}` : null;
     case 'nano-banana':
+    case 'gpt-image':
       return ref.kind === 'image' ? `image ${ordinal + offset}` : null;
     case 'seedance': {
       if (mode !== 'reference') return null;
@@ -121,7 +124,7 @@ export function tokensIn(
   const re =
     profile === 'seedream'
       ? /\bFigure\s*(\d{1,2})\b/gi
-      : profile === 'nano-banana'
+      : profile === 'nano-banana' || profile === 'gpt-image'
         ? /\bimage\s*(\d{1,2})\b/gi
         : /@(Image|Video|Audio)\s?(\d{1,2})\b/gi;
   for (let m = re.exec(text); m; m = re.exec(text)) {

@@ -29,6 +29,8 @@ describe('prompt catalog projection (§13.2)', () => {
     expect(Object.keys(card).sort()).toEqual([
       'aspectDefault',
       'authorHandle',
+      // docs/CAST-CATEGORIES.md: who is in it (solo · couple · pet).
+      'cast',
       'engine',
       'featured',
       // A set template's public example frames (2026-10-27); [] for every other card.

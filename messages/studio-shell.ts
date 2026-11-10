@@ -1,0 +1,136 @@
+/**
+ * Brand studio v3 copy, slice A (docs/BRAND-STUDIO-V3.md §8). Wired into the dictionaries as `studioShell`.
+ * Both languages live here so one owner edits one file. Korean is a draft until the Gemma wording pass.
+ *
+ * The workspace rail, the "+" create menu, the credits meter, the background-job toast, the phone tab
+ * bar and the team page's monthly usage. Amounts are credits, never won.
+ */
+export const studioShellEn = {
+  rail: {
+    label: 'Workspace menu',
+    image: 'Image',
+    video: 'Video',
+    review: 'Review',
+    campaigns: 'Campaigns',
+    creators: 'Creators',
+    assets: 'Assets',
+    brandKit: 'Brand kit',
+    team: 'Team',
+    settings: 'Settings',
+    more: 'More',
+    expand: 'Show menu names',
+    collapse: 'Hide menu names',
+    reorder: 'Edit order',
+    reorderDone: 'Done',
+    reorderReset: 'Back to the default order',
+    moveUp: 'Move {label} up',
+    moveDown: 'Move {label} down',
+    dragHint: 'Drag to change the order',
+    running: '{count} in progress',
+  },
+  create: {
+    button: 'Create',
+    menu: 'What would you like to make?',
+    image: 'Make an image',
+    video: 'Make a video',
+    fromReference: 'Make from a reference video',
+    campaign: 'Request a campaign',
+  },
+  credits: {
+    label: 'Credits',
+    refill: 'Refills on {date}',
+    summary: '{left} of {total} credits left. Refills on {date}.',
+  },
+  toast: {
+    imageDone: 'Your image is ready',
+    videoDone: 'Your video is ready',
+    imageFailed: "We couldn't make your image",
+    videoFailed: "We couldn't make your video",
+    view: 'View',
+    dismiss: 'Close',
+  },
+  sheet: {
+    title: 'More',
+    close: 'Close',
+  },
+  usage: {
+    title: 'Credits used this month',
+    hint: 'What each person has used since the 1st, Korea time. Failed and canceled runs are not counted.',
+    total: 'Whole team',
+    totalAmount: '{used} / {cap} credits',
+    refill: 'Refills on {date}',
+    member: 'Member',
+    credits: 'Credits',
+    runs: 'Runs',
+    runsCount: '{count} runs',
+    share: '{percent}% of the team',
+    formerMember: 'Former member',
+    empty: 'Nobody has used credits this month yet.',
+  },
+};
+
+export const studioShellKo: typeof studioShellEn = {
+  rail: {
+    label: '작업 메뉴',
+    image: '이미지',
+    video: '영상',
+    review: '리뷰',
+    campaigns: '캠페인',
+    creators: '크리에이터',
+    assets: '에셋',
+    brandKit: '브랜드 키트',
+    team: '팀',
+    settings: '설정',
+    more: '더보기',
+    expand: '메뉴 이름 보기',
+    collapse: '메뉴 이름 숨기기',
+    reorder: '순서 편집',
+    reorderDone: '완료',
+    reorderReset: '처음 순서로',
+    moveUp: '{label} 위로',
+    moveDown: '{label} 아래로',
+    dragHint: '끌어서 순서를 바꿀 수 있어요',
+    running: '{count}개 만드는 중',
+  },
+  create: {
+    button: '만들기',
+    menu: '무엇을 만들까요?',
+    image: '이미지 만들기',
+    video: '영상 만들기',
+    fromReference: '참고 영상으로 만들기',
+    campaign: '캠페인 의뢰',
+  },
+  credits: {
+    label: '크레딧',
+    refill: '{date}에 다시 채워져요',
+    summary: '크레딧 {total} 중 {left} 남았어요. {date}에 다시 채워져요.',
+  },
+  toast: {
+    imageDone: '이미지가 완성됐어요',
+    videoDone: '영상이 완성됐어요',
+    imageFailed: '이미지를 만들지 못했어요',
+    videoFailed: '영상을 만들지 못했어요',
+    view: '보기',
+    dismiss: '닫기',
+  },
+  sheet: {
+    title: '더보기',
+    close: '닫기',
+  },
+  usage: {
+    title: '이번 달 크레딧 사용',
+    hint: '이번 달 1일부터 멤버마다 쓴 크레딧이에요. 실패하거나 취소한 작업은 세지 않아요.',
+    total: '팀 전체',
+    totalAmount: '{used} / {cap} 크레딧',
+    refill: '{date}에 다시 채워져요',
+    member: '멤버',
+    credits: '크레딧',
+    runs: '실행',
+    runsCount: '{count}회',
+    share: '팀 사용량의 {percent}%',
+    formerMember: '이전 멤버',
+    empty: '이번 달에는 아직 쓴 크레딧이 없어요.',
+  },
+};
+
+export type StudioShellCopy = typeof studioShellEn;

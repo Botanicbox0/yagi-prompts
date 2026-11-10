@@ -30,6 +30,8 @@ export interface LaneJob {
   params: {
     aspect: string | null;
     resolution: string | null;
+    /** Image / region edit on a model with qualities (GPT Image): `create_image`'s `quality`. */
+    quality: string | null;
     seconds: number | null;
     audio: string | null;
     count: number;
@@ -88,6 +90,7 @@ function laneJob(deps: Pick<StudioDeps, 'media' | 'env'>, job: JobRow, outputs: 
     params: {
       aspect: p.aspect ?? null,
       resolution: p.resolution === 'draft' ? '480p' : (p.resolution ?? null),
+      quality: p.quality ?? null,
       seconds: p.seconds ?? null,
       audio: p.audio ?? null,
       count: outputs.length,

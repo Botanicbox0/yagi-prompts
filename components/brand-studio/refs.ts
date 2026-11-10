@@ -69,6 +69,26 @@ export function trayLabels(items: readonly Pick<TrayItem, "kind">[], copy: Studi
   return items.map((item) => fill(copy.tray[item.kind], { n: ++seen[item.kind] }));
 }
 
+/** The number under each thumbnail: per kind, in tray order (an image run reads 1, 2, 3 …). */
+export function trayNumbers(items: readonly Pick<TrayItem, "kind">[]): number[] {
+  const seen: Record<StudioAssetKind, number> = { image: 0, video: 0, audio: 0 };
+  return items.map((item) => ++seen[item.kind]);
+}
+
+/** Moves one item to another place in the tray (drag to reorder, or the arrow keys). */
+export function moveInTray<T>(items: readonly T[], from: number, to: number): T[] {
+  const next = [...items];
+  if (from < 0 || from >= next.length) return next;
+  const [item] = next.splice(from, 1);
+  next.splice(Math.max(0, Math.min(next.length, to)), 0, item!);
+  return next;
+}
+
+/** The library's key for a tray item (`a:<id>` / `o:<id>`), so the tray can tell which source it holds. */
+export function refSourceOf(item: Pick<TrayItem, "assetId" | "outputId">): RefSource {
+  return item.assetId ? { assetId: item.assetId } : { outputId: item.outputId! };
+}
+
 export function mentionLabel(kind: MentionKind | "any", n: number, copy: StudioCopy): string {
   return fill(kind === "any" ? copy.tray.any : copy.tray[kind], { n });
 }
@@ -135,6 +155,8 @@ export function trayFromReferences(
 
 /** The typed payload assets and results carry when dragged into the tray. */
 export const REF_DRAG_TYPE = "application/x-twings-studio-ref";
+/** A tray thumbnail being moved inside its own row (never accepted as a new reference). */
+export const TRAY_MOVE_TYPE = "application/x-twings-tray-move";
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 export function encodeRefDrag(source: RefSource): string {

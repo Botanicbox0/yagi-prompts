@@ -8,6 +8,7 @@ import { renderHref } from '@/lib/renders/share';
 import { identityVerifyHref } from '@/lib/identity/links';
 import { getRenderStore } from '@/lib/renders/store';
 import { savedSelfiePhoto } from '@/lib/identity/selfie-service';
+import { castFormPhotos } from '@/lib/renders/cast-form';
 
 /**
  * `POST /api/renders` — the studio hands over the photo, the template and the aspect; the
@@ -41,6 +42,11 @@ const STATUS: Record<CreateRenderFailure, number> = {
   photo_too_large: 413,
   rate_limited: 429,
   identity_required: 403,
+  slot_missing: 400,
+  bad_slot_photo: 400,
+  partner_consent_required: 400,
+  not_a_pet: 400,
+  pet_check_unavailable: 503,
 };
 
 function json(body: unknown, status: number): NextResponse {
@@ -66,12 +72,18 @@ export async function POST(request: Request): Promise<NextResponse> {
   const selfieId = String(form.get('selfieId') ?? '');
   const saved = !(photo instanceof File) && selfieId ? await savedSelfiePhoto(sql, store, viewer.userId, selfieId) : null;
   if (selfieId && !saved && !(photo instanceof File)) return json({ ok: false, code: 'selfie_required' }, 400);
+  // docs/CAST-CATEGORIES.md §3: the pet or partner photo. A pet-only template has no selfie: its pet
+  // is the one photo. The service checks the template's cast (couples 404 while their flag is off).
+  const cast = await castFormPhotos(form);
+  const primary = saved ?? (photo instanceof File ? { bytes: new Uint8Array(await photo.arrayBuffer()), mime: photo.type } : null) ?? (selfieId ? null : cast.slots.pet ?? null);
 
   const outcome = await createRenderJob({ sql, store }, viewer, {
     templateSlug: String(form.get('template') ?? ''),
     aspect: String(form.get('aspect') ?? ''),
-    photo: saved ?? (photo instanceof File ? { bytes: new Uint8Array(await photo.arrayBuffer()), mime: photo.type } : null),
+    photo: primary,
     selfieId: saved ? selfieId : undefined,
+    slots: cast.slots,
+    partnerConsent: cast.partnerConsent,
     locale: typeof rawLocale === 'string' && isLocale(rawLocale) ? rawLocale : null,
     holdForIdentity: form.get('hold') === '1',
     // Read only on an operator's free render; a paid render takes the order's own value.

@@ -10,7 +10,7 @@ import { probeVideoDurationSeconds, promptStagingKey, publishPromptMedia, sha256
 import { AssetRefSchema } from '@/lib/content/schemas';
 import { centsForKrw, isRoyalty, quoteRecipe } from './pricing';
 import { parseDisclosure, parsePresentation } from './repo';
-import { legacyPromptText, primaryStep, type Recipe } from './schema';
+import { legacyPromptText, primaryStep, recipeCast, type Recipe } from './schema';
 
 /**
  * docs/PLATFORM-2.0.md §20.6 — an AI creative publishes their own template, no studio review in
@@ -91,6 +91,8 @@ export async function selfPublishFormat(
     models: [primary.engine], title: row.title, titleKo: row.title_ko, promptText: legacyPromptText(recipe), textVisibility: 'hidden',
     media, useCase: [], featured: false, medium: primary.kind, engine: primary.engine, aspectDefault: primary.params.aspect,
     runtimeSeconds: film?.kind === 'video' ? film.params.duration : null, priceKrw, priceCents: centsForKrw(priceKrw),
+    // docs/CAST-CATEGORIES.md §1: the recipe's photo slots say who is in it.
+    cast: recipeCast(recipe),
   });
   // Written before the format links to the row, so 0059's guard freezes it from then on (as at acceptance).
   await tx.query('update prompt_items set recipe=$2::jsonb,disclosure=$3::jsonb,presentation=$4 where id=$1',

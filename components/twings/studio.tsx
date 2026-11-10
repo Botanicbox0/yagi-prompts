@@ -14,6 +14,7 @@ export { shrinkPhoto } from '@/lib/images/client-photo';
 import type { EditScope } from '@/lib/premium-editing/contract';
 import { publishViewerSelfie } from '@/lib/twings/viewer-selfie';
 import { publishViewerAccess } from '@/lib/twings/viewer-access';
+import { CastPhotoFields, castPhotoHint, castPhotosReady, EMPTY_CAST_PHOTOS, type CastPhotoState } from './cast-photos';
 
 /**
  * TWINGS — the make loop, as a four-step demo (founder, 2026-08-16: "사진만 넣으면 완성도 높은
@@ -50,6 +51,11 @@ export interface StudioStyle {
   resolutions?: Array<{ id: string; price: string }>;
   /** Optional multi-shot image set specification (e.g., 5-shot series) so the user can pick 1..N frames. */
   imageSetSpec?: DirectorImageSetSpec | null;
+  /**
+   * docs/CAST-CATEGORIES.md §3 — what this template asks for. Absent = the classic one-selfie template.
+   * `selfie: false` is a pet-only template: no selfie panel at all, the pet photo is the one photo.
+   */
+  castInputs?: { selfie: boolean; pet: boolean; partner: boolean };
 }
 
 export interface StudioLabels {
@@ -112,6 +118,8 @@ export interface StudioLive {
   identityHref: string;
   /** The one photo, uploaded inline and reused by every order (docs/IDENTITY-SELFIE.md). */
   selfie?: Dictionary['selfie'];
+  /** docs/CAST-CATEGORIES.md §3 — the pet and partner photo fields' words. */
+  cast?: Dictionary['cast']['photo'];
   subscription?: { copy: Dictionary['creatorSubscription']; editorCopy: Dictionary['premiumEditor'] };
   labels: {
     badge: string;
@@ -236,7 +244,7 @@ export interface StudioAccessSnapshot {
 }
 
 /** Where the phone's sticky CTA hands the focus: the first thing to press in the make card, in page order. */
-const MAKE_FOCUS = '[data-selfie-use], [data-selfie-camera], [data-selfie-choose], [data-pay-cta]:not(:disabled), [data-studio-signin], [data-studio-interest]:not(:disabled)';
+const MAKE_FOCUS = '[data-selfie-use], [data-selfie-camera], [data-selfie-choose], [data-cast-photo-choose], [data-pay-cta]:not(:disabled), [data-studio-signin], [data-studio-interest]:not(:disabled)';
 
 export function TwingsStudio({
   styles,
@@ -313,10 +321,17 @@ export function TwingsStudio({
   const [selfieEpoch, setSelfieEpoch] = useState(0);
 
   const chosen = styles.find((item) => item.id === styleId) ?? styles[0] ?? null;
+  // docs/CAST-CATEGORIES.md §3: the selfie, the pet, the partner — whichever this template takes.
+  const needs = chosen?.castInputs ?? { selfie: true, pet: false, partner: false };
+  const needsCast = needs.pet || needs.partner;
+  const [castPhotos, setCastPhotos] = useState<CastPhotoState>(EMPTY_CAST_PHOTOS);
+  const castReady = castPhotosReady(needs, castPhotos);
+  const selfieReady = !needs.selfie || chosenSelfie !== null;
   // The price the button names: the chosen resolution's, else a selective frame override, else the style's base price.
   const chosenResolution = chosen?.resolutions?.find((option) => option.id === resolution) ?? chosen?.resolutions?.[0] ?? null;
   const chosenPrice = selectivePriceOverride ?? chosenResolution?.price ?? chosen?.price ?? '';
-  const subscriptionAvailable = Boolean(live?.subscription && subscription?.hasAccess && subscriptionEligible);
+  // A pet or couple template is a recipe template: no monthly edit path takes it (lib/renders/service.ts).
+  const subscriptionAvailable = Boolean(live?.subscription && subscription?.hasAccess && subscriptionEligible) && needs.selfie && !needsCast;
   const monthly = subscriptionAvailable && paymentMode === 'monthly';
   const subscriptionCopy = live?.subscription?.copy;
   const editorAvailable = monthly && subscription?.planId === 'premium' && editing && editFields.length > 0;
@@ -452,7 +467,7 @@ export function TwingsStudio({
   };
 
   const submitLive = async () => {
-    if (!live || !chosenSelfie || !chosen) return;
+    if (!live || !chosen || !selfieReady || !castReady) return;
     if (subscriptionAvailable && !ownFaceConsent) return;
     if (monthly && (edit.editText.trim() || edit.references.length) && !editorOpen) {
       setLiveError((editorAvailable ? editBudgetExhausted ? subscriptionCopy?.premiumEditLimitReached : subscriptionCopy?.premiumEditBudgetUnavailable : subscriptionCopy?.studioEditUnavailable) ?? live.labels.errors.generic ?? null);
@@ -477,7 +492,7 @@ export function TwingsStudio({
           setLiveError(subscriptionCopy?.studioReferenceLarge ?? live.labels.errors.generic ?? null);
           return;
         }
-        form = buildSubscriptionRenderForm({ requestId, template: live.template, locale: live.locale, selfieId: chosenSelfie.id, editText: edit.editText, references, referencesConsent: edit.referencesConsent });
+        form = buildSubscriptionRenderForm({ requestId, template: live.template, locale: live.locale, selfieId: chosenSelfie!.id, editText: edit.editText, references, referencesConsent: edit.referencesConsent });
       } else {
         form = new FormData();
         form.set('template', live.template);
@@ -487,7 +502,13 @@ export function TwingsStudio({
           form.set('selectedFrames', selectedFrames.join(','));
         }
         form.set('locale', live.locale);
-        form.set('selfieId', chosenSelfie.id);
+        if (needs.selfie && chosenSelfie) form.set('selfieId', chosenSelfie.id);
+        // The pet and partner photos travel with this request (a pet-only order's one photo is the pet).
+        if (needs.pet && castPhotos.pet) form.set('slot_pet', await shrinkPhoto(castPhotos.pet, 1_400_000));
+        if (needs.partner && castPhotos.partner) {
+          form.set('slot_partner', await shrinkPhoto(castPhotos.partner, 1_400_000));
+          if (castPhotos.partnerConsent) form.set('partnerConsent', 'yes');
+        }
       }
       // Behind the face check: hold the job with its photo and go verify — the callback starts it.
       if (identityBlocked && !monthly) form.set('hold', '1');
@@ -713,7 +734,7 @@ export function TwingsStudio({
       {/* The template page stacks photo over pay: the make card is one column wide (PLATFORM-2.0 §15.3-1). */}
       <div className={single ? 'mt-5 flex flex-col gap-5' : 'mt-6 grid gap-6 lg:grid-cols-[minmax(0,0.9fr)_minmax(0,1.1fr)]'}>
         {/* The photo column: "이 얼굴로 만들까요?" over the saved photos, or the uploader when there is none. */}
-        <div ref={selfiePanelRef} data-selfie-panel data-selfie-present={selfie ? 'true' : 'false'} className={single ? 'scroll-mt-24' : 'scroll-mt-6 border border-hairline p-5'}>
+        {needs.selfie && <div ref={selfiePanelRef} data-selfie-panel data-selfie-present={selfie ? 'true' : 'false'} className={single ? 'scroll-mt-24' : 'scroll-mt-6 border border-hairline p-5'}>
           <h3 className="text-sm font-semibold">{live.selfie?.panelTitle ?? labels.stepPhoto}</h3>
           {live.selfie ? (
             <div className="mt-3">
@@ -744,7 +765,20 @@ export function TwingsStudio({
           ) : (
             <p className="mt-4 text-sm leading-relaxed opacity-70">{labels.dropHint}</p>
           )}
-        </div>
+        </div>}
+        {needsCast && live.cast && (
+          <CastPhotoFields
+            need={needs}
+            value={castPhotos}
+            onChange={(next) => {
+              setCastPhotos(next);
+              setLiveError(null);
+              if (castPhotosReady(needs, next) && selfieReady) setPhase((current) => (current === 'photo' ? (single ? 'pay' : 'style') : current));
+            }}
+            copy={live.cast}
+            disabled={submitting}
+          />
+        )}
         <div className="flex flex-col">
           {(phase === 'photo' || phase === 'style' || phase === 'pay') && (
             <>
@@ -892,8 +926,8 @@ export function TwingsStudio({
                   ref={payRef}
                   type="button"
                   data-pay-cta
-                  disabled={!chosenSelfie || selfieEditing || !chosen || submitting || (subscriptionAvailable && !ownFaceConsent) || (monthly && (edit.references.length > 0 && (!edit.referencesConsent || !edit.editText.trim())))}
-                  aria-describedby={photo ? undefined : 'studio-cta-hint'}
+                  disabled={!selfieReady || !castReady || selfieEditing || !chosen || submitting || (subscriptionAvailable && !ownFaceConsent) || (monthly && (edit.references.length > 0 && (!edit.referencesConsent || !edit.editText.trim())))}
+                  aria-describedby={selfieReady && castReady ? undefined : 'studio-cta-hint'}
                   onClick={() => void submitLive()}
                   data-make-cta="card"
                   className="flex min-h-12 w-full items-center justify-center rounded-full bg-accent px-5 py-3 font-label text-[0.9rem] tracking-[0.1em] text-white uppercase transition-opacity hover:opacity-85 disabled:bg-black/10 disabled:text-black/55"
@@ -916,9 +950,14 @@ export function TwingsStudio({
                     {liveError}
                   </p>
                 )}
-                {!chosenSelfie && (
+                {needs.selfie && !chosenSelfie && (
                   <p id="studio-cta-hint" data-studio-hint className="mt-2 text-sm text-accent">
                     {selfie ? live.selfie?.needChoice ?? labels.needPhoto : live.selfie?.needSelfie ?? labels.needPhoto}
+                  </p>
+                )}
+                {selfieReady && live.cast && castPhotoHint(needs, castPhotos, live.cast) && (
+                  <p id="studio-cta-hint" data-studio-hint data-cast-hint className="mt-2 text-sm text-accent">
+                    {castPhotoHint(needs, castPhotos, live.cast)}
                   </p>
                 )}
                 {subscriptionAvailable && photo && !ownFaceConsent && subscriptionCopy && <p className="mt-2 text-xs text-accent">{subscriptionCopy.studioConsentHint}</p>}

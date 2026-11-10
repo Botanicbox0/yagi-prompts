@@ -1,8 +1,8 @@
 import type { Metadata } from 'next';
 import type { Locale } from '@/lib/i18n/config';
 import type { PromptCard } from '@/lib/prompts/catalog';
-import type { TemplateMedium } from '@/lib/prompts/schemas';
-import { TEMPLATE_LISTING_REST, templateRest } from '@/lib/prompts/links';
+import type { TemplateCast, TemplateMedium } from '@/lib/prompts/schemas';
+import { CAST_LISTING_REST, TEMPLATE_LISTING_REST, templateRest } from '@/lib/prompts/links';
 import { localeAlternates } from './playbook-metadata';
 import { SITE_TWITTER_CARD, siteOgImage } from './og';
 import { makerRest } from '@/lib/makers/links';
@@ -104,6 +104,33 @@ export function makerMetadata(input: {
       siteName: input.siteName,
       username: input.handle,
       images: [input.poster ? { url: input.poster } : siteOgImage(input.locale)],
+    },
+    twitter: { card: SITE_TWITTER_CARD },
+  };
+}
+
+/** docs/CAST-CATEGORIES.md §5 — a cast page: indexable, self-canonical, reciprocal alternates. */
+export function castListingMetadata(input: {
+  locale: Locale;
+  cast: Exclude<TemplateCast, 'solo'>;
+  title: string;
+  ogTitle?: string;
+  description: string;
+  siteName: string;
+}): Metadata {
+  const rest = CAST_LISTING_REST[input.cast];
+  return {
+    title: input.title,
+    description: input.description,
+    alternates: { canonical: `/${input.locale}${rest}`, languages: localeAlternates(rest) },
+    openGraph: {
+      type: 'website',
+      locale: input.locale === 'ko' ? 'ko_KR' : 'en_US',
+      url: `/${input.locale}${rest}`,
+      title: input.ogTitle ?? input.title,
+      description: input.description,
+      siteName: input.siteName,
+      images: [siteOgImage(input.locale)],
     },
     twitter: { card: SITE_TWITTER_CARD },
   };

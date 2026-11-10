@@ -354,6 +354,33 @@ describe('deleting the account', () => {
     expect(await row()).toMatchObject({ status: 'requested', user_id: USER.buyer });
   });
 
+  it('takes a pet or partner photo with it, though those rows hang on the sign-in account and not on the profile', async () => {
+    // docs/CAST-CATEGORIES.md — an extra photo for one render; the render id here has no job yet.
+    const ref = '51070000-0000-4000-8000-000000000001';
+    await h.sql.query(
+      `insert into render_slot_inputs (render_id, slot, user_id, template_id, storage_key, mime, partner_consent_at, expires_at)
+       values ($1, 'partner', $2, $3, $4, 'image/jpeg', now(), now() + interval '7 days')`,
+      [ref, USER.buyer, account.template.id, `${ref}/slot-partner.jpg`],
+    );
+    const { deps, seen } = fakes(h.sql);
+    expect(await deleteAccountNow(deps, id, { now: later(3) })).toMatchObject({ ok: true });
+    // Gone with the profile, before the sign-in account is touched.
+    expect((await h.db.query('select count(*)::int n from render_slot_inputs')).rows[0]).toEqual({ n: 0 });
+    expect(seen.users).toEqual([]);
+    expect(((await row()).cleanup as { folders: string[] }).folders).toContain(ref);
+    await finishDeletion(deps, id, later(3));
+    expect(seen.folders).toContain(ref);
+  });
+
+  it('holds an account that a table hung straight on the sign-in row would strand', async () => {
+    await h.db.query('create table later_ledger (owner uuid not null references auth.users(id))');
+    await h.db.query('insert into later_ledger values ($1)', [USER.buyer]);
+    const holds = await deletionHolds(h.sql, USER.buyer, now);
+    expect(holds).toEqual({ wait: [], review: ['records'], tables: ['later_ledger'] });
+    expect(await deleteAccountNow(fakes(h.sql).deps, id, { now: later(3) })).toEqual({ ok: false, code: 'held', hold: ['records'] });
+    expect((await h.db.query('select count(*)::int n from profiles where id=$1', [USER.buyer])).rows[0]).toEqual({ n: 1 });
+  });
+
   it('destroys nothing when a row it did not know about refuses the delete', async () => {
     // A second-level reference the catalogue scan cannot see: something that restricts a render.
     await h.db.query('create table later_feature (render_id uuid not null references render_jobs(id) on delete restrict)');

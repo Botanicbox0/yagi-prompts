@@ -4,9 +4,11 @@ import { createStudioMediaStore, isStudioMediaKey, mimeForStudioKey } from '@/li
 import { STUDIO_HEADERS } from '@/lib/brand-studio/http';
 
 /**
- * Local media gateway for `.storage/content/st/…` (docs/BRAND-STUDIO-V2.md §6). In production the
- * files live on R2 behind PUBLIC_MEDIA_BASE_URL and this route answers 404. Like the R2 objects, a
- * file is reachable by its unguessable 256-bit key only; nothing here lists or searches.
+ * Studio media gateway (docs/BRAND-STUDIO-V2.md §6). Locally it serves `.storage/content/st/…`.
+ * In production the files live on R2 behind PUBLIC_MEDIA_BASE_URL and pages load them from there; this
+ * route then serves PICTURES only, for the layer editor, which must draw them from its own origin to
+ * export a canvas (the media host sends no CORS headers). Video and audio stay 404 here in production.
+ * Like the R2 objects, a file is reachable by its unguessable 256-bit key only; nothing lists or searches.
  */
 export const dynamic = 'force-dynamic';
 
@@ -18,7 +20,7 @@ async function serve(request: NextRequest, context: Context, head: boolean) {
   const key = (await context.params).key.join('/');
   if (!isStudioMediaKey(key)) return missing();
   const media = createStudioMediaStore();
-  if (media.kind !== 'local') return missing();
+  if (media.kind !== 'local' && !mimeForStudioKey(key).startsWith('image/')) return missing();
   let bytes: Uint8Array;
   try {
     bytes = await media.read(key);

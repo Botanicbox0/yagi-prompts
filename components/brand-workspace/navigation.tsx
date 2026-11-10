@@ -3,8 +3,11 @@ import { useEffect, useState, type DragEvent } from 'react';
 import { usePathname } from 'next/navigation';
 import { featureDenied, isSandboxedClientOrganization } from '@/lib/brands/features';
 import { poolVisible, scopedHref, sectionVisibility, selectedChoice, type BrandWorkspaceScope } from '@/lib/brands/workspace/selection';
+import { studioV2Visible } from '@/lib/brand-studio/visibility';
+import type { StudioShellCopy } from '@/messages/studio-shell';
 import { useWorkspaceSelection } from './identity';
 import type { NavigationVisibility } from './access';
+import { RailNavigation } from './rail-nav';
 
 const ALL: NavigationVisibility = { studio: true, identity: true, settings: true, members: true };
 const NAV_ORDER_STORAGE_KEY = 'twings_brand_nav_order_v1';
@@ -249,11 +252,39 @@ function Links({
   );
 }
 
-function Scoped({ scope, ...labels }: Labels & { scope: BrandWorkspaceScope }) {
+/**
+ * The rail's extra inputs (docs/BRAND-STUDIO-V3.md §3). `studioV2` is `brandStudioV2Open()` read by the
+ * layout on the server; `shell` is `dict.studioShell`; `railExpanded` is the layout's cookie mirror of
+ * the rail width. Without `studioV2` and `shell` nothing about the two existing modes changes.
+ */
+type RailInputs = { studioV2?: boolean; shell?: StudioShellCopy; locale?: 'ko' | 'en'; railExpanded?: boolean };
+
+function Scoped({ scope, studioV2 = false, shell, locale = 'ko', railExpanded = false, ...labels }: Labels & RailInputs & { scope: BrandWorkspaceScope }) {
   const choice = selectedChoice(useWorkspaceSelection(scope).selection);
   const isMorphic = Boolean(
     choice && (isSandboxedClientOrganization(choice) || featureDenied(choice.denied, 'generative_media')),
   );
+  // Layout modes: a sandboxed or generation-denied brand keeps 'sidebar' exactly as before (hardline);
+  // every other signed-in brand gets the 'rail' while studio v2 is on, else the 'topbar' as before.
+  if (!isMorphic && studioV2 && shell) {
+    const visible = sectionVisibility(choice);
+    const studio = visible.studio && studioV2Visible(choice, true);
+    return (
+      <RailNavigation
+        organizationId={choice?.id ?? null}
+        studio={studio}
+        creators={poolVisible(choice) && Boolean(labels.creators)}
+        identity={Boolean(visible.identity && labels.identity)}
+        team={visible.members}
+        settings={visible.settings}
+        canCreate={studio && (choice?.role === 'owner' || choice?.role === 'editor')}
+        copy={shell}
+        locale={locale}
+        initialExpanded={railExpanded}
+        scope={(path) => scopedHref(path, choice)}
+      />
+    );
+  }
   // Sections follow the role in the SELECTED brand, and every link keeps that brand.
   return (
     <Links
@@ -267,6 +298,17 @@ function Scoped({ scope, ...labels }: Labels & { scope: BrandWorkspaceScope }) {
 }
 
 /** Without a scope (signed out, e.g. the invitation landing) every destination is shown; each page authorizes itself. */
-export function WorkspaceNavigation({ scope, ...labels }: Labels & { scope?: BrandWorkspaceScope | null }) {
-  return scope ? <Scoped scope={scope} {...labels} /> : <Links labels={labels} visible={ALL} pool layoutMode="topbar" scope={(path) => path} />;
+export function WorkspaceNavigation({
+  scope,
+  studioV2,
+  shell,
+  locale,
+  railExpanded,
+  ...labels
+}: Labels & RailInputs & { scope?: BrandWorkspaceScope | null }) {
+  return scope ? (
+    <Scoped scope={scope} studioV2={studioV2} shell={shell} locale={locale} railExpanded={railExpanded} {...labels} />
+  ) : (
+    <Links labels={labels} visible={ALL} pool layoutMode="topbar" scope={(path) => path} />
+  );
 }

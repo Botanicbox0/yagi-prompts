@@ -1,20 +1,40 @@
 /**
  * `npm run studio:catalog` — is every brand studio model still on Sunra, and is there a new
- * Seedream/Seedance we have not registered yet (docs/BRAND-STUDIO-V2.md §4: this is how Seedream 5.5
- * gets noticed)?
+ * Seedream / Seedance / GPT Image we have not registered yet (docs/BRAND-STUDIO-V2.md §4: this is how
+ * Seedream 5.5 gets noticed)?
  *
- * Read-only: one public GET of the Sunra catalogue (`/v1/models`, no key needed). Spends nothing and
- * prints no secrets. Exit code 1 when a `live` model is missing from the catalogue.
+ * Read-only: public GETs of the Sunra catalogue (`/v1/models`) and of each registered endpoint's
+ * price card (`/v1/pricing/model/{id}/endpoint/{name}`). No key needed; spends nothing and prints no
+ * secrets. Exit code 1 when a `live` model is missing from the catalogue.
  */
 import { STUDIO_MODELS } from '../lib/brand-studio/models';
 
-const CATALOGUE = 'https://api.sunra.ai/v1/models?limit=300';
-const WATCHED = /^bytedance\/seed(?:ream|ance)-/;
+const API = 'https://api.sunra.ai/v1';
+const CATALOGUE = `${API}/models?limit=300`;
+const WATCHED = /^(?:bytedance\/seed(?:ream|ance)-|openai\/gpt-image-)/;
 
 interface CatalogueModel {
   id?: string;
   alias?: string;
   endpoints?: Array<{ name?: string }>;
+}
+
+interface PriceCard {
+  type?: string;
+  display?: string;
+  freeze_amount?: string;
+}
+
+async function priceCard(modelId: string, endpoint: string): Promise<string> {
+  try {
+    const response = await fetch(`${API}/pricing/model/${modelId}/endpoint/${encodeURIComponent(endpoint)}`, { headers: { Accept: 'application/json' } });
+    if (!response.ok) return `price card ${response.status}`;
+    const card = (await response.json()) as PriceCard;
+    const hold = card.freeze_amount ? `, hold $${card.freeze_amount}` : '';
+    return `${card.type ?? '?'}: ${(card.display ?? '').slice(0, 90)}${hold}`;
+  } catch {
+    return 'price card unreadable';
+  }
 }
 
 async function main(): Promise<void> {
@@ -33,13 +53,14 @@ async function main(): Promise<void> {
     const lacking = hit ? wanted.filter((e) => !endpoints.has(e)) : wanted;
     const state = hit ? (lacking.length ? `listed, missing endpoints: ${lacking.join(', ')}` : 'listed') : 'NOT LISTED';
     if (!hit && model.availability === 'live') missingLive += 1;
-    const note = !hit && model.availability === 'awaiting_provider' ? ' (awaiting provider: expected)' : hit && model.availability === 'awaiting_provider' ? ' <- now listed: re-read its schema, then set availability to live' : '';
-    console.log(`  ${model.id.padEnd(18)} ${model.availability.padEnd(18)} ${model.api.alias.padEnd(32)} ${state}${note}`);
+    const note = !hit && model.availability === 'awaiting_provider' ? ' (awaiting provider: expected)' : hit && model.availability === 'awaiting_provider' ? ' <- listed: re-read its schema and price, then decide on live' : '';
+    console.log(`  ${model.id.padEnd(24)} ${model.availability.padEnd(18)} ${model.api.alias.padEnd(34)} ${state}${note}`);
+    if (hit?.id) for (const endpoint of wanted.filter((e) => endpoints.has(e))) console.log(`      ${endpoint.padEnd(20)} ${await priceCard(hit.id, endpoint)}`);
   }
 
   const registered = new Set<string>(STUDIO_MODELS.map((m) => m.api.alias));
   const fresh = [...listed.keys()].filter((alias) => WATCHED.test(alias) && !registered.has(alias)).sort();
-  console.log(`\nSeedream / Seedance aliases on Sunra that the registry does not have: ${fresh.length}`);
+  console.log(`\nSeedream / Seedance / GPT Image aliases on Sunra that the registry does not have: ${fresh.length}`);
   for (const alias of fresh) console.log(`  ${alias}  (${listed.get(alias)?.id ?? '?'})`);
 
   if (missingLive > 0) {

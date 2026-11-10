@@ -10,6 +10,7 @@ import { BRAND_WORKSPACE_OPERATIONS } from './brand-workspace-operations';
 import { BRAND_USAGE_OPERATIONS } from './brand-usage-operations';
 import { BRAND_ENGINE_OPERATIONS } from './brand-engine-operations';
 import { BRAND_STUDIO_OPERATIONS } from './brand-studio-operations';
+import { BRAND_STUDIO_REVIEW_OPERATIONS } from './brand-studio-review-operations';
 import { BRAND_PRODUCTION_OPERATIONS } from './brand-production-operations';
 import { PLATFORM_OPERATIONS } from './platform-operations';
 import { CAMPAIGN_RISK_OPERATIONS } from './campaign-risk-operations';
@@ -61,6 +62,8 @@ export const ADMIN_OPERATIONS = {
   ...BRAND_ENGINE_OPERATIONS,
   // docs/BRAND-STUDIO-V2.md §9 — the studio v2 monthly allowance and preferred lane per organization.
   ...BRAND_STUDIO_OPERATIONS,
+  // docs/BRAND-STUDIO-V3.md §7 — the review space, team side: reply, resolve, status, open a review.
+  ...BRAND_STUDIO_REVIEW_OPERATIONS,
   ...PLATFORM_OPERATIONS,
   ...CAMPAIGN_RISK_OPERATIONS,
   ...CAMPAIGN_COLLABORATION_OPERATIONS,

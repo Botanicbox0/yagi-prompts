@@ -157,7 +157,7 @@ export const NO_HOLDS: DeletionHolds = { wait: [], review: [], tables: [] };
  * Everything that stops this account from being deleted right now.
  *
  * Besides the explicit checks, it reads the catalogue for every foreign key that points at
- * `profiles` and would REFUSE the delete (no action / restrict) and asks whether this account has
+ * `profiles` (or straight at `auth.users`) and would REFUSE the delete (no action / restrict) and asks whether this account has
  * a row there. Those are exactly the rows the schema says must outlive the account or be dealt with
  * first — brand workspaces, subscriptions, settlements — and a table added later is covered
  * without anyone remembering this file.
@@ -185,8 +185,10 @@ export async function deletionHolds(sql: SqlRunner, userId: string, now: Date = 
        from pg_constraint c
        join pg_class cl on cl.oid = c.conrelid
        join pg_attribute a on a.attrelid = c.conrelid and a.attnum = c.conkey[1]
-      where c.contype = 'f' and c.confrelid = 'public.profiles'::regclass
-        and c.confdeltype in ('a','r') and array_length(c.conkey, 1) = 1
+      where c.contype = 'f' and c.confdeltype in ('a','r') and array_length(c.conkey, 1) = 1
+        -- The sign-in row too: a table hung on auth.users would refuse the last step, after the profile is gone.
+        and c.confrelid in (select r from (values (to_regclass('public.profiles')), (to_regclass('auth.users'))) as known(r) where r is not null)
+        and cl.relnamespace = 'public'::regnamespace
       order by 1, 3`,
   )).rows;
   if (refs.length > 0) {
@@ -291,6 +293,8 @@ async function ownedFolders(tx: SqlRunner, userId: string): Promise<string[]> {
     ['identity_portrait_attempts', `select input_key as key from identity_portrait_attempts where user_id=$1
        union all select result_key from identity_portrait_attempts where user_id=$1 and result_key is not null`],
     ['social_accounts', 'select evidence_key as key from social_accounts where user_id=$1 and evidence_key is not null'],
+    // A pet's or a partner's photo for one render (docs/CAST-CATEGORIES.md): someone else's face, so it must not be missed.
+    ['render_slot_inputs', 'select storage_key as key from render_slot_inputs where user_id=$1'],
   ];
   const present = new Set(
     (await tx.query<{ name: string }>("select t.name from unnest($1::text[]) as t(name) where to_regclass('public.' || t.name) is not null", [sources.map(([table]) => table)])).rows.map((r) => r.name),
@@ -391,6 +395,11 @@ export async function deleteAccountNow(
 
       // The order's own copy of the photo goes with the folders; the order itself stays.
       await tx.query('update billing_payments set input_deleted_at=$2 where user_id=$1 and input_key is not null and input_deleted_at is null', [userId, now]);
+      // These rows hang on auth.users, not on profiles, so the cascade below would not reach them until the
+      // sign-in account goes. Their files are already on the list; the rows go now.
+      if ((await tx.query<{ ready: boolean }>("select to_regclass('public.render_slot_inputs') is not null as ready")).rows[0]?.ready) {
+        await tx.query('delete from render_slot_inputs where user_id=$1', [userId]);
+      }
       // `events.user_id` has no foreign key on purpose (analytics outlive the account), so it is emptied by hand.
       await tx.query('update events set user_id=null where user_id=$1', [userId]);
       try {

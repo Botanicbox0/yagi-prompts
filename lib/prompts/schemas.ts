@@ -111,6 +111,24 @@ export function isUseCase(value: unknown): value is UseCase {
 export const TEMPLATE_MEDIA = ['video', 'image'] as const;
 export type TemplateMedium = (typeof TEMPLATE_MEDIA)[number];
 
+/**
+ * docs/CAST-CATEGORIES.md — WHO is in it, the third axis beside `medium` and `use_case` (0078,
+ * column `cast_kind`). `solo` is every template that existed before 2026-11-11; `couple` stays off
+ * behind `coupleTemplatesOpen()`; `pet` is a pet alone or with the buyer (the recipe's slots say which).
+ */
+export const TEMPLATE_CASTS = ['solo', 'couple', 'pet'] as const;
+export type TemplateCast = (typeof TEMPLATE_CASTS)[number];
+export const DEFAULT_TEMPLATE_CAST: TemplateCast = 'solo';
+
+export function isTemplateCast(value: unknown): value is TemplateCast {
+  return typeof value === 'string' && (TEMPLATE_CASTS as readonly string[]).includes(value);
+}
+
+/** Anything unknown (an old row, a form that predates the field) reads as `solo`. */
+export function toTemplateCast(value: unknown): TemplateCast {
+  return isTemplateCast(value) ? value : DEFAULT_TEMPLATE_CAST;
+}
+
 export const PROMPT_SOURCES = ['yagi', 'community'] as const;
 export type PromptSource = (typeof PROMPT_SOURCES)[number];
 

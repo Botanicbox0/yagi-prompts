@@ -20,7 +20,8 @@ import { SELFIE_SLOT, creatorSlotNames, displayStepPrompt, parseRecipe, type Rec
  * `disclosure.prompts` on, and never with files: studio-held references stay private.
  */
 
-export type RecipeInput = { kind: 'selfie' } | { kind: 'reference'; n: number } | { kind: 'step'; n: number };
+/** `pet` and `partner` are the buyer's other two photos (docs/CAST-CATEGORIES.md §3). */
+export type RecipeInput = { kind: 'selfie' } | { kind: 'pet' } | { kind: 'partner' } | { kind: 'reference'; n: number } | { kind: 'step'; n: number };
 export interface PublicRecipeStep { n: number; kind: 'image' | 'video'; engine: string; inputs: RecipeInput[]; prompt: string; note: string | null }
 export interface PublicRecipeFile { n: number; kind: 'image' | 'video'; href: string; download: string }
 export interface PublicRecipe {
@@ -30,12 +31,14 @@ export interface PublicRecipe {
   steps: PublicRecipeStep[] | null;
   files: PublicRecipeFile[] | null;
 }
-export interface PublicRecipeLabels { selfie: string; reference: string; step: string }
+export interface PublicRecipeLabels { selfie: string; reference: string; step: string; pet?: string; partner?: string }
 
 function inputsOf(recipe: Recipe, inputs: readonly string[]): RecipeInput[] {
   const creators = creatorSlotNames(recipe);
   return inputs.map((name): RecipeInput => {
     if (name === SELFIE_SLOT) return { kind: 'selfie' };
+    const role = recipe.slots[name]?.role;
+    if (role === 'pet' || role === 'partner') return { kind: role };
     const creator = creators.indexOf(name);
     if (creator >= 0) return { kind: 'reference', n: creator + 1 };
     return { kind: 'step', n: recipe.steps.findIndex((step) => step.id === name) + 1 };
@@ -94,7 +97,7 @@ export function recipeTeaser(recipe: PublicRecipe): PublicRecipe | null {
     outro: null,
     steps: first ? [{
       n: first.n, kind: first.kind, engine: first.engine,
-      inputs: first.inputs.map((input): RecipeInput => (input.kind === 'selfie' ? { kind: 'selfie' } : { kind: input.kind, n: input.n })),
+      inputs: first.inputs.map((input): RecipeInput => (input.kind === 'selfie' || input.kind === 'pet' || input.kind === 'partner' ? { kind: input.kind } : { kind: input.kind, n: input.n })),
       prompt: teaserPrompt(first.prompt), note: null,
     }] : null,
     files: null,

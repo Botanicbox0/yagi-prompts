@@ -6,7 +6,8 @@ import { makeSingleConnectionRunner, type SqlRunner } from '@/lib/db/sql-runner'
 import { DEFAULT_LOCAL_SNAPSHOT, LOCAL_DB_DIR_ENV } from '@/lib/db/connect-shared';
 import { createLocalStorageDriver } from '@/lib/storage/local-driver';
 import { RUNTIME_MODE_ENV } from '@/lib/runtime-mode';
-import { seed, seedContests, seedEdgeFixtures } from './seed';
+import { seed, seedContests, seedEdgeFixtures, seedPrompts } from './seed';
+import { CAST_PROMPT_FIXTURES } from './cast-fixtures';
 import { seedBrandWorkspaceFixtures } from './brand-workspace-fixtures';
 import { seedMakerFixtures } from './maker-fixtures';
 
@@ -82,10 +83,15 @@ async function main(): Promise<void> {
   await seedBrandWorkspaceFixtures(sql, storage);
   // PLATFORM-2.0 §7.5: one public maker (`/makers/jun`), local only.
   await seedMakerFixtures(sql);
+  // docs/CAST-CATEGORIES.md §5: sample pet and couple templates, local only, so the screens can be reviewed.
+  const castSeeded = await seedPrompts(options, CAST_PROMPT_FIXTURES);
+  for (const fixture of CAST_PROMPT_FIXTURES) {
+    if (fixture.recipe) await sql.query('update prompt_items set recipe = $2::jsonb where id = $1', [fixture.id, JSON.stringify(fixture.recipe)]);
+  }
 
   const inventory =
     `${result.playbooks.length} core playbooks, ${edges.length} edge fixtures, ` +
-    `${result.prompts.length} prompt items, ${contests.length} contest(s) ` +
+    `${result.prompts.length} prompt items (+${castSeeded.length} pet/couple samples), ${contests.length} contest(s) ` +
     `(${contests.map((c) => c.status).join('/')}), 3 entitlement fixtures`;
 
   if (dir === null) {

@@ -1,3 +1,5 @@
+import { studioVideoEn, studioVideoKo } from "@/messages/studio-video";
+
 /**
  * Unified 3-Track Commission Architecture + Frame.io V4 / Playbook.com Asset & Share Room Model.
  *
@@ -117,6 +119,10 @@ export const DEFAULT_SHARE_LINK_CONFIG: ShareLinkConfig = {
  * Returns the commission tracks available to the current organization.
  * When `generativeClosed` is true (e.g. Morphic sandbox), `template_build` (Self-Studio template commissioning)
  * is strictly excluded so self-serve AI capabilities are never exposed.
+ *
+ * Titles, one-liners and summaries are the wording of the video screen's "제작 의뢰" cards
+ * (messages/studio-video.ts `requests.tracks`, docs/BRAND-STUDIO-V3.md §6), so the screen and this wizard
+ * say the same thing. Counts, versions and resolutions below are unchanged from before.
  */
 export function getAvailableCommissionTracks(options?: {
   generativeClosed?: boolean;
@@ -124,96 +130,73 @@ export function getAvailableCommissionTracks(options?: {
 }): CommissionTrackSpec[] {
   const isEn = options?.locale === "en";
   const generativeClosed = Boolean(options?.generativeClosed);
+  const words = (isEn ? studioVideoEn : studioVideoKo).requests.tracks;
 
   const creatorCampaign: CommissionTrackSpec = {
     id: "creator_campaign",
-    stepBadge: isEn ? "TRACK 01 · TEMPLATE + CREATOR SEEDING" : "트랙 1 · 템플릿 제작 + 인플루언서 시딩 발행",
-    title: isEn
-      ? "Template + Influencer Seeding Campaign"
-      : "YAGI 템플릿 제작 + 인플루언서 섭외 · 콘텐츠 발행 의뢰",
-    subtitle: isEn
-      ? "Format lock + verified creator recruitment + simultaneous Reels/TikTok wave"
-      : "1080p 브랜드 포맷 설계부터 검증된 인플루언서 섭외·릴스/틱톡 동시 게시·성과 집계까지 풀케어",
-    summary: isEn
-      ? "YAGI designs your 1080p sound-on master format, recruits verified creators who appear with their own consented faces, and tracks live views, saves, and 2nd-party ad rights."
-      : "YAGI가 브랜드 전용 1080p 마스터 포맷을 제작한 뒤, 사전 검증된 인플루언서를 섭외해 각자의 본계정(릴스·틱톡)에 동시 업로드하고 실시간 조회수·저장수·2차 광고 권한까지 한곳에서 관리합니다.",
+    stepBadge: isEn ? "Creator campaign" : "크리에이터 캠페인",
+    title: words.creator_campaign.title,
+    subtitle: words.creator_campaign.line,
+    summary: words.creator_campaign.summary,
     productionMode: "creator",
     requiresInfluencerSteps: true,
     defaultAspect: "9:16",
     includedStructure: isEn
-      ? ["5-Step Campaign Brief", "Creator Shortlist & Approvals", "3 Asset & Cut Folders"]
-      : ["5단계 캠페인 조건 설계", "인플루언서 후보 비교 · 컨펌", "3개 시사 · 납품 폴더"],
+      ? ["5-step campaign brief", "Creator shortlist and approvals", "3 asset and cut folders"]
+      : ["5단계 캠페인 조건", "크리에이터 후보 비교와 확정", "시사·납품 폴더 3개"],
     workflowSteps: isEn
-      ? ["1. Format & Brief", "2. Creator Shortlist", "3. Master Cut Review", "4. Live Viral Report"]
-      : ["1. 포맷 · 조건 확정", "2. 인플루언서 후보 컨펌", "3. 마스터 컷 프레임 검수", "4. 릴스·틱톡 게시 & 실시간 리포트"],
+      ? ["1. Format and brief", "2. Creator shortlist", "3. Master cut review", "4. Posts and live report"]
+      : ["1. 포맷과 조건 확정", "2. 크리에이터 후보 확정", "3. 마스터 컷 검수", "4. 릴스·틱톡 게시와 실시간 리포트"],
     deliverableDestination: {
-      badge: isEn ? "Creator Wave + Live ROI" : "인플루언서 동시 게시 + 성과 리포트",
+      badge: isEn ? "Creator posts and report" : "크리에이터 게시와 성과 리포트",
       label: isEn
-        ? "Publishes to creator Reels/TikTok accounts & tracks live ROI in Campaigns"
-        : "인플루언서 본계정 동시 업로드 및 프로젝트 룸 실시간 성과 리포트 연동",
+        ? "Creators post on their own Reels and TikTok accounts; views and saves come back to the campaign page"
+        : "크리에이터가 각자 릴스·틱톡 계정에 올리고, 조회수와 저장 수는 캠페인 화면에 모여요",
       targetPath: "/brand",
     },
   };
 
   const templateBuild: CommissionTrackSpec = {
     id: "template_build",
-    stepBadge: isEn ? "TRACK 02 · CUSTOM STUDIO TEMPLATE ONLY" : "트랙 2 · 전용 템플릿 제작만 의뢰",
-    title: isEn
-      ? "Custom Brand Template Build Only"
-      : "YAGI에 브랜드 전용 템플릿 생성만 의뢰 (셀프 스튜디오 장착용)",
-    subtitle: isEn
-      ? "1-page brief -> sample cut review -> mounts directly into your Self Studio"
-      : "인플루언서 섭외 없이 브랜드 맞춤형 워크플로·카메라·조명·제품 고정 템플릿만 의뢰",
-    summary: isEn
-      ? "Drop your product photos, logo, and reference mood. YAGI engineers a locked brand template, reviews sample cuts with you in the Review Room, and mounts the approved template directly into your Self Studio."
-      : "제품 사진·로고·레퍼런스만 전달하면 YAGI 전담 디렉터가 브랜드 전용 템플릿을 설계합니다. 프로젝트 룸에서 샘플 영상을 프레임 단위로 시사·승인하면 곧바로 [셀프 스튜디오]에 전용 템플릿으로 장착되어 브랜드가 직접 무제한 변주 생성할 수 있습니다.",
+    stepBadge: isEn ? "Scale production" : "스케일 제작",
+    title: words.template_build.title,
+    subtitle: words.template_build.line,
+    summary: words.template_build.summary,
     productionMode: "studio",
     requiresInfluencerSteps: false,
     defaultAspect: "9:16",
     includedStructure: isEn
-      ? ["1-Page Express Brief", "Sample Cut QA Room", "Auto-Mounts to Self Studio"]
-      : ["1페이지 간편 의뢰서", "샘플 컷 프레임 시사 룸", "승인 시 셀프 스튜디오 자동 장착"],
+      ? ["1-page brief", "Sample cut review", "Arrives in your studio once approved"]
+      : ["1페이지 의뢰서", "샘플 컷 시사", "승인하면 스튜디오에 들어가요"],
     workflowSteps: isEn
-      ? ["1. Upload Product & Mood", "2. YAGI Template Engineering", "3. Sample Cut Review", "4. Mount to Self Studio"]
-      : ["1. 제품 · 무드 에셋 전달", "2. YAGI 전용 템플릿 설계", "3. 샘플 영상 타임코드 검수", "4. 셀프 스튜디오 전용 템플릿 장착"],
+      ? ["1. Send the product and mood", "2. We design the master format", "3. Sample cut review", "4. Your template in the studio"]
+      : ["1. 제품과 분위기 보내기", "2. 마스터 포맷 설계", "3. 샘플 영상 타임코드 검수", "4. 스튜디오 전용 템플릿으로 받기"],
     deliverableDestination: {
-      badge: isEn ? "Mounts to Self Studio" : "셀프 스튜디오 자동 장착",
+      badge: isEn ? "Your template in the studio" : "스튜디오 전용 템플릿",
       label: isEn
-        ? "Approved template mounts directly into your Self Studio for unlimited in-house generation"
-        : "최종 승인 즉시 브랜드의 [셀프 스튜디오] 전용 템플릿 목록에 장착되어 자체 생성 가능",
+        ? "Once approved, the master format arrives in your studio as your own template, ready to vary"
+        : "승인하면 마스터 포맷이 스튜디오에 전용 템플릿으로 들어와, 그다음부터 직접 바꿔 만들 수 있어요",
       targetPath: "/brand/studio",
     },
   };
 
   const studioFilm: CommissionTrackSpec = {
     id: "studio_film",
-    stepBadge: isEn
-      ? generativeClosed
-        ? "TRACK 02 · MASTER VIDEO PRODUCTION ONLY"
-        : "TRACK 03 · MASTER VIDEO PRODUCTION ONLY"
-      : generativeClosed
-        ? "트랙 2 · 마스터 영상 제작만 의뢰"
-        : "트랙 3 · 마스터 영상 제작만 의뢰",
-    title: isEn
-      ? "Master Commercial Video Production Only"
-      : "YAGI에 마스터 영상 제작만 의뢰 (단품 · 캠페인 필름 납품)",
-    subtitle: isEn
-      ? "1-page brief -> v1/v2 timecode & spatial pin review -> 1080p clean master delivery"
-      : "인플루언서 시딩 없이 브랜드 공식 계정·광고 집행용 1080p 완제품 영상 제작만 단독 의뢰",
-    summary: isEn
-      ? "Need a hero launch film, lookbook reel, or paid-ad video without influencer seeding? Submit a 1-page brief, exchange assets and frame-accurate notes in the Review Room, and download the 1080p master."
-      : "인플루언서 섭외나 템플릿 구축 없이, 브랜드 공식 인스타그램·유튜브·자사몰·퍼포먼스 광고에 즉시 집행할 고감도 1080p 사운드 마스터 영상을 의뢰합니다. 타임코드·화면 위치 핀 피드백으로 v1→v2 수정 후 최종 MP4를 납품받습니다.",
+    stepBadge: isEn ? "Single video" : "단일 영상",
+    title: words.studio_film.title,
+    subtitle: words.studio_film.line,
+    summary: words.studio_film.summary,
     productionMode: "studio",
     requiresInfluencerSteps: false,
     defaultAspect: "16:9",
     includedStructure: isEn
-      ? ["1-Page Production Brief", "v1 → v2 Version Stack", "1080p Master & Share Link"]
-      : ["1페이지 영상 제작 브리프", "v1 → v2 버전 비교 시사", "1080p 마스터 납품 · 공유 링크"],
+      ? ["1-page production brief", "v1 → v2 version review", "1080p master and share link"]
+      : ["1페이지 영상 브리프", "v1 → v2 버전 비교 시사", "1080p 마스터 납품과 공유 링크"],
     workflowSteps: isEn
-      ? ["1. 1-Page Film Brief", "2. First Cut (v1) Delivery", "3. Timecode & Spatial Pin QA", "4. 1080p Master Download"]
-      : ["1. 1페이지 영상 기획 · 에셋 전달", "2. 1차 편집본(v1) 시사 업로드", "3. 타임코드 · 화면 핀 수정 반영(v2)", "4. 1080p 최종 마스터 승인 · 다운로드"],
+      ? ["1. 1-page film brief", "2. First cut (v1)", "3. Timecode and on-screen notes (v2)", "4. 1080p master download"]
+      : ["1. 1페이지 영상 기획과 에셋 전달", "2. 1차 편집본(v1) 시사", "3. 타임코드·화면 위치 의견 반영(v2)", "4. 1080p 최종 마스터 승인과 다운로드"],
     deliverableDestination: {
-      badge: isEn ? "1080p Master Delivery" : "콘텐츠 보관함 1080p 마스터 납품",
+      badge: isEn ? "1080p master delivery" : "1080p 마스터 납품",
       label: isEn
         ? "Approved 1080p clean MP4 + stems archive directly in your Content Library"
         : "승인된 1080p 무로고 클린 MP4와 사운드 마스터가 [콘텐츠 보관함]에 영구 아카이빙",
@@ -265,28 +248,28 @@ export function getBrandWorkspaceTourSteps(options?: {
       type: "POINT",
       anchor: "BOTTOM",
       targetSection: "tour-tracks",
-      kicker: isEn ? "STEP 2 · COMMISSION TRACKS" : "STEP 2 · 의뢰 방식과 제작 트랙 구조",
+      kicker: isEn ? "Step 2 · Ways to ask our team" : "2단계 · 저희 팀에 맡기는 방법",
       title: isEn
         ? generativeClosed
-          ? "Two Dedicated Commission Tracks Tailored to Your Goal"
-          : "Self Studio + 3 Commission Tracks (Template · Creator Wave · Master Film)"
+          ? "Two ways to work with our team"
+          : "Make it yourself, or ask our team in three ways"
         : generativeClosed
-          ? "목적에 맞춘 2가지 전담 의뢰 트랙 (인플루언서 시딩 · 마스터 영상 제작)"
-          : "셀프 스튜디오 + 3가지 YAGI 의뢰 트랙 (전용 템플릿 · 인플루언서 시딩 · 마스터 영상)",
+          ? "저희 팀에 맡기는 두 가지 방법"
+          : "직접 만들거나, 저희 팀에 세 가지로 맡겨요",
       body: isEn
         ? generativeClosed
-          ? "Choose between a full Creator Seeding Campaign or a Master Commercial Video Production—each opens a dedicated asset & review room."
-          : "Generate directly in Self Studio, or commission YAGI for (1) a Custom Template Build that mounts into your Studio, (2) a Template + Influencer Seeding Campaign, or (3) a Master Video Production."
+          ? "A creator campaign or a single brand film. Each one opens its own room for assets and review."
+          : "Make it yourself in the studio, or ask our team for a creator campaign, scale production from one master format, or a single brand film. Each one opens this review room."
         : generativeClosed
-          ? "1. YAGI 템플릿 + 인플루언서 섭외·발행 캠페인, 2. YAGI 마스터 영상 단독 제작 의뢰 중 목적에 맞는 트랙을 선택해 불필요한 입력 단계 없이 바로 시작합니다."
-          : "브랜드가 직접 에셋을 만드는 [셀프 스튜디오] 외에도 1. 전용 템플릿 제작만 의뢰(승인 후 스튜디오 장착), 2. 템플릿 + 인플루언서 섭외·발행 의뢰, 3. 마스터 영상 제작만 의뢰까지 3가지 트랙이 이 시사 룸과 직결됩니다.",
+          ? "크리에이터 캠페인 제작과 단일 브랜드 필름 중 목적에 맞는 쪽을 고르면, 필요한 입력만 받고 바로 시작해요."
+          : "스튜디오에서 직접 만들 수도 있고, 크리에이터 캠페인 제작, 마스터 포맷 하나로 여러 편을 만드는 스케일 제작, 단일 브랜드 필름을 저희 팀에 맡길 수도 있어요. 셋 다 이 시사 룸으로 이어져요.",
       highlightPills: generativeClosed
         ? isEn
-          ? ["Creator Seeding Campaign", "Master Video Production"]
-          : ["트랙 1 · 인플루언서 시딩 캠페인", "트랙 2 · 마스터 영상 제작 의뢰"]
+          ? ["Creator campaign", "Single video: a brand film"]
+          : ["크리에이터 캠페인 제작", "단일 영상: 브랜드 필름"]
         : isEn
-          ? ["Track 1 · Creator Seeding", "Track 2 · Custom Template Build", "Track 3 · Master Video Only"]
-          : ["트랙 1 · 템플릿+인플루언서 발행", "트랙 2 · 전용 템플릿만 의뢰", "트랙 3 · 마스터 영상만 의뢰"],
+          ? ["Creator campaign", "Scale production", "Single video: a brand film"]
+          : ["크리에이터 캠페인 제작", "스케일 제작", "단일 영상: 브랜드 필름"],
     },
     {
       id: "collections",

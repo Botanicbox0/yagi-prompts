@@ -10,7 +10,9 @@
 import type { SqlRunner } from '@/lib/db/sql-runner';
 import type { StorageDriver } from '@/lib/storage';
 import type {
+  FilmDepth,
   FilmSheet,
+  FilmShot,
   RegionBox,
   StudioAssetKind,
   StudioAssetRole,
@@ -25,7 +27,7 @@ import type {
 import type { BlockedInput, BlockedRewrite } from './enhancer/blocked';
 import type { StudioEnv } from './env';
 import type { StudioMediaStore } from './media-store';
-import type { StudioLane, StudioPromptProfile } from './models';
+import type { StudioImageQuality, StudioLane, StudioPromptProfile } from './models';
 import type { StudioProvider, StudioProviderFailure } from './provider/types';
 
 /* ------------------------------------------------------------ intelligence (S2) */
@@ -74,7 +76,7 @@ export interface IntelDeps {
 export interface StudioIntel {
   enhancePrompt(input: EnhanceInput, deps: IntelDeps): Promise<EnhanceResult>;
   composeFallbackPrompt(input: EnhanceInput): EnhanceResult;
-  readFilm(input: { video: { bytes: Uint8Array; mime: string } | { url: string }; locale: 'ko' | 'en' }, deps: IntelDeps): Promise<FilmSheet | null>;
+  readFilm(input: { video: { bytes: Uint8Array; mime: string } | { url: string }; locale: 'ko' | 'en'; depth?: FilmDepth }, deps: IntelDeps): Promise<FilmSheet | null>;
   /** Optional so a test double may leave it out; without it a blocked run is simply not retried. */
   rewriteBlockedPrompt?(input: BlockedInput, deps: IntelDeps): Promise<BlockedRewrite>;
   planRegion(image: { width: number; height: number }, box: RegionBox, aspects: readonly string[]): RegionPlan;
@@ -112,6 +114,8 @@ export interface StudioDeps {
 export interface StudioJobParams {
   aspect: string | null;
   resolution: string | null;
+  /** Image / region edit on a model with `qualities` (GPT Image): the quality asked for. */
+  quality?: StudioImageQuality;
   seconds: number | null;
   audio: StudioAudioMode | null;
   count: number;
@@ -122,8 +126,10 @@ export interface StudioJobParams {
   box?: RegionBox;
   source?: { assetId?: string; outputId?: string };
   draftOutputId?: string;
-  /** Seconds of the attached reference video (estimates, the film reader). */
+  /** Seconds of the attached reference video (estimates, the film reader). Never set for `blueprint`: its video is not attached. */
   referenceVideoSeconds?: number;
+  /** Remix (`blueprint`, `reference`): the shot table the customer sent, cleaned (lib/brand-studio/reference-video.ts). */
+  shots?: FilmShot[];
 }
 
 /** A provider (or worker) result waiting to be stored, per output slot. */

@@ -74,6 +74,7 @@ export function jobView(row: JobRow, outputs: OutputRow[], media: StudioMediaSto
     expected: row.kind === 'image' ? Math.max(1, Number(p.count ?? 1)) : 1,
     aspect: p.aspect ?? null,
     resolution: p.resolution ?? null,
+    ...(p.quality ? { quality: p.quality } : {}),
     seconds: p.seconds ?? null,
     audio: (p.audio ?? null) as StudioAudioMode | null,
     references: (Array.isArray(row.refs) ? row.refs : []) as StudioReference[],
@@ -83,6 +84,7 @@ export function jobView(row: JobRow, outputs: OutputRow[], media: StudioMediaSto
     method: remix ? (p.method ?? null) : null,
     keep: remix && Array.isArray(p.keep) ? [...p.keep] : [],
     change: remix ? (p.change ?? '') : null,
+    ...(remix && Array.isArray(p.shots) && p.shots.length ? { shots: p.shots.map((s) => ({ ...s })) } : {}),
     outputs: outputs
       .filter((o) => o.job_id === row.id && o.status === 'ready' && !o.deleted_at && o.storage_key)
       .sort((a, b) => a.idx - b.idx)
