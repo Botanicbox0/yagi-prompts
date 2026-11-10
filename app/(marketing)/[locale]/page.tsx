@@ -70,6 +70,16 @@ export default async function LandingPage({ params }: { params: Promise<{ locale
             cardSecondsPattern={labels.cardSeconds}
             cardAuthorPattern={labels.cardAuthor}
             cardAuthorAnonymous={labels.cardAuthorAnonymous}
+            filterLabels={{
+              label: dict.creatorJourney.filterLabel,
+              all: dict.creatorJourney.filterAll,
+              video: dict.creatorJourney.filterVideo,
+              image: dict.creatorJourney.filterImage,
+              runway: dict.creatorJourney.filterRunway,
+              retro: dict.creatorJourney.filterRetro,
+              fantasy: dict.creatorJourney.filterFantasy,
+              celeb: dict.creatorJourney.filterCeleb
+            }}
           />
           <PromptRail id="video" heading={t.video.rail} lede={t.video.railLede} cards={templates.video} locale={locale} labels={labels} useCaseLabels={useCaseLabels} emptyLabel={t.video.emptyTitle} filteredEmptyLabel={dict.prompts.filterEmpty} topClassName="mt-0" />
           <div className="mt-8 flex flex-wrap items-center gap-6">
@@ -82,6 +92,10 @@ export default async function LandingPage({ params }: { params: Promise<{ locale
           </div>
           {templates.image.length > 0 ? <PromptRail id="image" heading={t.image.rail} lede={t.image.railLede} cards={templates.image} locale={locale} labels={labels} useCaseLabels={useCaseLabels} emptyLabel={t.image.emptyTitle} filteredEmptyLabel={dict.prompts.filterEmpty} />
             : <aside data-image-soon className="mt-10 flex flex-wrap items-center justify-between gap-4 border-t border-hairline pt-6"><p className="max-w-xl text-sm opacity-55">{t.imageSoonTitle}</p><a href={templatesHref(locale,'image')} className="text-sm underline underline-offset-4">{t.ctaImage} ↗</a></aside>}
+          <div data-direct-scene-door className="mt-12 flex flex-wrap items-center justify-between gap-4 rounded-[18px] border border-[#3875C5]/25 bg-[#F3F7FA] px-5 py-4">
+            <p className="text-sm font-semibold tracking-[-0.01em] text-[#0E1013]">{dict.creatorJourney.directText}</p>
+            <a href={`/${locale}/direct`} data-direct-scene-link className="inline-flex min-h-10 shrink-0 items-center rounded-full bg-[#3875C5] px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-[#3063A7]">{dict.creatorJourney.directCta}</a>
+          </div>
         </div>
       </section>
       <CreatorHowItWorks dict={dict} />

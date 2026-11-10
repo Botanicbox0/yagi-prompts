@@ -3,8 +3,9 @@ import { describe, expect, it } from 'vitest';
 import type { PromptCard } from '@/lib/prompts/catalog';
 import { PROMPT_MODEL_LABEL } from '@/lib/prompts/schemas';
 import {
-  EDITORIAL_MOOD_OPTIONS,
   HERO_EDITORIAL_PRIORITY,
+  HOME_FILTER_IDS,
+  matchesHomeFilter,
   SequenceDispatchSection,
   pickHeroFeaturedTemplate,
   resolveDefaultMediumForPlan,
@@ -40,6 +41,17 @@ function makeCard(overrides: Partial<PromptCard> = {}): PromptCard {
     ...overrides
   };
 }
+
+const FILTER_LABELS = {
+  label: '템플릿 필터',
+  all: '전체',
+  video: '영상',
+  image: '화보',
+  runway: '패션',
+  retro: '레트로',
+  fantasy: '판타지',
+  celeb: '셀럽'
+};
 
 describe('SequenceDispatchSection & personal home editorial curation (2026-11-04)', () => {
   it('prioritizes top-ranked aesthetic editorial films over legacy you-are-a-prom-queen for the hero showcase', () => {
@@ -100,6 +112,7 @@ describe('SequenceDispatchSection & personal home editorial curation (2026-11-04
         cardSecondsPattern="{seconds}초"
         cardAuthorPattern="by @{handle}"
         cardAuthorAnonymous="메이커 제작"
+        filterLabels={FILTER_LABELS}
       />
     );
 
@@ -116,22 +129,20 @@ describe('SequenceDispatchSection & personal home editorial curation (2026-11-04
     expect(htmlKo).toContain('data-dispatch-video="city-fashion-montage"');
     expect(htmlKo).toContain('data-dispatch-video="fashion-show-arrival"');
 
-    // Instant medium switcher (Video ⇄ 5-Shot Photo Series) + Image-Only plan priority toggle
-    expect(htmlKo).toContain('data-gallery-medium-switcher');
-    expect(htmlKo).toContain('data-medium-tab="video"');
-    expect(htmlKo).toContain('data-medium-tab="image"');
-    expect(htmlKo).toContain('data-plan-tier-toggle="image_only"');
-
     expect(htmlKo).toContain('data-dispatch-image-spotlight');
     expect(htmlKo).toContain('data-dispatch-image-featured="bridal-editorial-5-shots"');
     expect(htmlKo).toContain('5장 에디토리얼 화보 세트');
-    expect(htmlKo).toContain('FRAMES 01–05');
 
-    // Meaningful mood curator pills
-    expect(htmlKo).toContain('data-editorial-mood-curator');
-    for (const option of EDITORIAL_MOOD_OPTIONS) {
-      expect(htmlKo).toContain(`data-mood-pill="${option.id}"`);
-      expect(htmlKo).toContain(option.labelKo.replaceAll('&', '&amp;'));
+    // Founder review 2026-11-10: one row of plain chips, no numbering, no plan pill, no frame tag
+    expect(htmlKo).toContain('data-home-filter');
+    for (const id of HOME_FILTER_IDS) {
+      expect(htmlKo).toContain(`data-home-filter-chip="${id}"`);
+    }
+    for (const label of ['전체', '영상', '화보', '패션', '레트로', '판타지', '셀럽']) {
+      expect(htmlKo).toContain(`>${label}</button>`);
+    }
+    for (const gone of ['FRAMES 01', 'Image-Only', 'data-plan-tier-toggle', '분위기와 세계관', '전체 에디션', '순수익', 'data-mood-pill', 'data-direct-scene-door']) {
+      expect(htmlKo).not.toContain(gone);
     }
 
     // TWINGS Identity compliance: no YAGI red (#ED1E1E), no internal engine names
@@ -151,12 +162,22 @@ describe('SequenceDispatchSection & personal home editorial curation (2026-11-04
         cardSecondsPattern="{seconds}초"
         cardAuthorPattern="by @{handle}"
         cardAuthorAnonymous="메이커 제작"
+        filterLabels={FILTER_LABELS}
         initialPlanTier="image_only"
       />
     );
 
     expect(htmlImageOnly).toContain('data-plan-tier="image_only"');
     expect(htmlImageOnly).toContain('data-image-priority="first"');
-    expect(htmlImageOnly).toContain('data-medium-tab="image" aria-selected="true"');
+    expect(htmlImageOnly).toContain('data-home-filter-chip="image" aria-pressed="true"');
+  });
+
+  it('filters by medium and by mood with one selection', () => {
+    expect(matchesHomeFilter('all', 'aquarium-goldfish', 'video')).toBe(true);
+    expect(matchesHomeFilter('video', 'bridal-editorial-5-shots', 'image')).toBe(false);
+    expect(matchesHomeFilter('image', 'bridal-editorial-5-shots', 'image')).toBe(true);
+    expect(matchesHomeFilter('dream-fantasy', 'aquarium-goldfish', 'video')).toBe(true);
+    expect(matchesHomeFilter('retro-youth', 'aquarium-goldfish', 'video')).toBe(false);
+    expect(matchesHomeFilter('runway-editorial', 'bridal-editorial-5-shots', 'image')).toBe(true);
   });
 });
