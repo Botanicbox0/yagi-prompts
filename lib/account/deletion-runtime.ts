@@ -11,9 +11,9 @@ import type { DeletionDeps } from './deletion';
  *   files     the private `renders` bucket (or `.storage/renders/` locally).
  *   auth      Supabase Auth's admin API in cloud mode — deleting the user ends every session and
  *             removes the Google/Kakao identity link. Local mode has only the `auth.users` stub.
- *   provider  the engine provider's asset group (the member's face, privacy policy §3). `null` when
- *             this deployment has no provider credentials: a request that lists a group then stays
- *             open in the admin queue instead of pretending the group was removed.
+ *   provider  the engine provider's copies of the member's face (privacy policy §3): each asset, then
+ *             its group. `null` when this deployment has no provider credentials: a request that
+ *             lists one then stays open in the admin queue instead of pretending it was removed.
  */
 export async function liveDeletionDeps(sql: SqlRunner): Promise<DeletionDeps> {
   const store = await getRenderStore();
@@ -38,18 +38,22 @@ export async function liveDeletionDeps(sql: SqlRunner): Promise<DeletionDeps> {
         };
 
   const config = arkAssetsConfigFromEnv();
+  // The provider already forgot it: as good as deleted (the same reading as lib/identity/rotation.ts).
+  const forgiving = async (call: () => Promise<void>) => {
+    try {
+      await call();
+    } catch (error) {
+      if (error instanceof ArkOpenApiError && (error.httpStatus === 404 || /notfound|not.?exist/i.test(error.code))) return;
+      throw new Error(error instanceof ArkOpenApiError ? `ark ${error.code}` : 'ark request failed');
+    }
+  };
+  // Each asset, then the group that held them — the order the rotation and reclaim paths use.
   const provider: DeletionDeps['provider'] =
     config === null
       ? null
       : {
-          async deleteAssetGroup(groupId) {
-            try {
-              await createArkAssetsClient(config).deleteAssetGroup(groupId);
-            } catch (error) {
-              if (error instanceof ArkOpenApiError && (error.httpStatus === 404 || /notfound|not_found/i.test(error.code))) return;
-              throw new Error(error instanceof ArkOpenApiError ? `ark ${error.code}` : 'ark request failed');
-            }
-          },
+          deleteAsset: (assetId) => forgiving(() => createArkAssetsClient(config).deleteAsset(assetId)),
+          deleteAssetGroup: (groupId) => forgiving(() => createArkAssetsClient(config).deleteAssetGroup(groupId)),
         };
 
   return { sql, files, auth, provider };

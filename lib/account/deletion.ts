@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import type { SqlRunner } from '@/lib/db/sql-runner';
 import type { Viewer } from '@/lib/auth/identity';
+import { isReviewAccountEmail } from '@/lib/auth/review-login';
 
 /**
  * Self-serve account deletion (docs/RUNBOOK-deletion.md; Apple 5.1.1(v), Google Play's
@@ -55,8 +56,18 @@ const HOLDS = new Set<string>([...WAITS, ...REVIEWS]);
 interface Cleanup {
   authUserId: string | null;
   folders: string[];
+  /** The provider's copies of the member's face, removed before the group that holds them. */
+  providerAssets: string[];
   providerGroups: string[];
 }
+type StoredCleanup = Partial<Cleanup> | null;
+/** The list as stored, with every part present (a row written before a part existed has none). */
+const cleanupOf = (stored: StoredCleanup): Cleanup => ({
+  authUserId: stored?.authUserId ?? null,
+  folders: [...(stored?.folders ?? [])],
+  providerAssets: [...(stored?.providerAssets ?? [])],
+  providerGroups: [...(stored?.providerGroups ?? [])],
+});
 
 interface DeletionRow {
   id: string;
@@ -71,7 +82,7 @@ interface DeletionRow {
   last_attempt_at: Date | string | null;
   last_error: string | null;
   started_at: Date | string | null;
-  cleanup: Cleanup | null;
+  cleanup: StoredCleanup;
   removed: Record<string, number> | null;
   completed_at: Date | string | null;
   cancelled_at: Date | string | null;
@@ -114,26 +125,36 @@ export async function openDeletionRequest(sql: SqlRunner, userId: string): Promi
 // ---------------------------------------------------------------------------
 
 /**
- * The explicit checks, one statement per table (`$1` the account, `$2` now). A test reads the status
- * names out of these and compares them with the tables' own CHECK constraints.
+ * The explicit checks (`$1` the account, `$2` now). A test reads the status names out of these and
+ * compares them with the tables' own CHECK constraints.
  */
-export const DELETION_HOLD_QUERIES = {
+export const DELETION_HOLD_CHECKS: ReadonlyArray<{ table: string; hold: DeletionHold; sql: string }> = [
   // A video in the oven: deleting now would throw away something the member paid for.
-  render_jobs: "select 1 from render_jobs where user_id=$1 and status in ('held','queued','running') and $2::timestamptz is not null limit 1",
+  { table: 'render_jobs', hold: 'render', sql: "select 1 from render_jobs where user_id=$1 and status in ('held','queued','running') and $2::timestamptz is not null limit 1" },
   // Money in flight: an open checkout, an approval being confirmed, a paid order not yet delivered
-  // (the render or its automatic refund is still owed), a refund on its way.
-  billing_payments: `select 1 from billing_payments where user_id=$1 and (
+  // (the render or its automatic refund is still owed), a refund on its way — and a delivered order
+  // whose render then FAILED. `reconcileTossPayments` finds that last one through its render
+  // (`r.status='failed'`); were the render to cascade away, `render_id` would empty itself, the order
+  // would never be selected again and the refund would never be sent.
+  { table: 'billing_payments', hold: 'payment', sql: `select 1 from billing_payments where user_id=$1 and (
       (status = 'pending' and expires_at > $2::timestamptz)
       or status in ('confirming','refund_pending')
-      or (status = 'paid' and fulfilled_at is null)) limit 1`,
+      or (status = 'paid' and fulfilled_at is null)
+      or (status = 'paid' and exists (select 1 from render_jobs r where r.id = billing_payments.render_id and r.status = 'failed'))) limit 1` },
   // Selected, posted or verified: a brand is waiting or a payout is owed. Paid: a settlement record
   // the privacy policy keeps for 5 years, which the cascade from `profiles` would erase.
-  campaign_applications: "select 1 from campaign_applications where creator_id=$1 and status in ('selected','posted','verified','paid') and $2::timestamptz is not null limit 1",
+  { table: 'campaign_applications', hold: 'campaign', sql: "select 1 from campaign_applications where creator_id=$1 and status in ('selected','posted','verified','paid') and $2::timestamptz is not null limit 1" },
   // A creative: public templates, files other members rendered from, royalties.
-  platform_creators: 'select 1 from platform_creators where user_id=$1 and $2::timestamptz is not null limit 1',
-} as const;
-type HoldTable = keyof typeof DELETION_HOLD_QUERIES;
-const HOLD_OF: Record<HoldTable, DeletionHold> = { render_jobs: 'render', billing_payments: 'payment', campaign_applications: 'campaign', platform_creators: 'creative' };
+  { table: 'platform_creators', hold: 'creative', sql: 'select 1 from platform_creators where user_id=$1 and $2::timestamptz is not null limit 1' },
+  // The cookie-and-subscription era (0002, 0008). These rows cascade from `profiles`, so nothing in
+  // the schema would stop the delete: a plan the old payment provider is still charging has to be
+  // stopped by a person first, and an ended plan or a paid cookie pack is a transaction record the
+  // company keeps for 5 years. Free cookies and what they opened (`prompt_unlocks`) go with the account.
+  { table: 'subscriptions', hold: 'subscription', sql: "select 1 from subscriptions where user_id=$1 and status in ('active','past_due') and $2::timestamptz is not null limit 1" },
+  { table: 'subscriptions', hold: 'records', sql: "select 1 from subscriptions where user_id=$1 and status not in ('active','past_due') and $2::timestamptz is not null limit 1" },
+  { table: 'cookie_purchase_events', hold: 'records', sql: 'select 1 from cookie_purchase_events where profile_id=$1 and $2::timestamptz is not null limit 1' },
+  { table: 'cookie_ledger', hold: 'records', sql: "select 1 from cookie_ledger where profile_id=$1 and reason = 'purchase' and $2::timestamptz is not null limit 1" },
+];
 
 /** A table found by the catalogue scan, named for the member in broad terms. */
 function reviewOf(table: string): DeletionReview {
@@ -166,18 +187,20 @@ export async function deletionHolds(sql: SqlRunner, userId: string, now: Date = 
   const found = new Set<DeletionHold>();
   const tables = new Set<string>();
 
-  const staff = (await sql.query<{ is_admin: boolean }>('select is_admin from profiles where id=$1', [userId])).rows[0]?.is_admin === true;
-  if (staff) found.add('staff');
+  const profile = (await sql.query<{ is_admin: boolean; email: string | null }>('select is_admin, email from profiles where id=$1', [userId])).rows[0];
+  // Staff, and the account the payment provider and the app stores review the service with
+  // (lib/auth/review-login.ts): deleting either by a button press would lock a review out.
+  if (profile?.is_admin === true || isReviewAccountEmail(profile?.email)) found.add('staff');
 
-  const names = Object.keys(DELETION_HOLD_QUERIES) as HoldTable[];
+  const names = [...new Set(DELETION_HOLD_CHECKS.map((check) => check.table))];
   const present = new Set(
     (await sql.query<{ name: string }>("select t.name from unnest($1::text[]) as t(name) where to_regclass('public.' || t.name) is not null", [names])).rows.map((r) => r.name),
   );
-  for (const table of names) {
-    if (!present.has(table)) continue;
-    if ((await sql.query(DELETION_HOLD_QUERIES[table], [userId, now])).rows.length === 0) continue;
-    found.add(HOLD_OF[table]);
-    if (!WAITS.includes(HOLD_OF[table] as DeletionWait)) tables.add(table);
+  for (const check of DELETION_HOLD_CHECKS) {
+    if (!present.has(check.table)) continue;
+    if ((await sql.query(check.sql, [userId, now])).rows.length === 0) continue;
+    found.add(check.hold);
+    if (!WAITS.includes(check.hold as DeletionWait)) tables.add(check.table);
   }
 
   const refs = (await sql.query<{ tbl: string; name: string; col: string }>(
@@ -271,9 +294,40 @@ export interface DeletionDeps {
   files: { deleteFolder(folder: string): Promise<void> } | null;
   /** The sign-in account (Supabase Auth in production). */
   auth: { deleteUser(userId: string): Promise<void> } | null;
-  /** The engine provider's asset group holding the member's face; `null` when no provider is configured. */
-  provider: { deleteAssetGroup(groupId: string): Promise<void> } | null;
+  /**
+   * The engine provider's copies of the member's face: each asset, then the group that held them
+   * (the order lib/identity/rotation.ts uses). `null` when no provider is configured.
+   */
+  provider: { deleteAsset(assetId: string): Promise<void>; deleteAssetGroup(groupId: string): Promise<void> } | null;
 }
+
+/**
+ * Is this sign-in account on a deletion's cleanup list? Its rows are gone and the sign-in account
+ * itself is about to be removed (or the removal failed and is retried daily). Until the request
+ * closes, nothing may start a new profile on that id — the retry would cascade it away.
+ * `/auth/callback` asks before it creates a profile.
+ */
+export async function deletionInProgress(sql: SqlRunner, authUserId: string): Promise<boolean> {
+  if (!(await deletionReady(sql))) return false;
+  const { rows } = await sql.query(
+    "select 1 from account_deletion_requests where status='processing' and cleanup->>'authUserId' = $1 limit 1", [authUserId],
+  );
+  return rows.length > 0;
+}
+
+/**
+ * May the daily tick run the deletion pass? Only behind the cron secret — an unauthenticated tick
+ * was "open but harmless" while every step was idempotent, and deleting accounts is not that — and
+ * only when the render and payment pass before it went through: that pass settles the refunds the
+ * holds wait for, and a pass that threw says nothing about what is still owed.
+ */
+export function deletionPassGate(input: { cronSecret: string | undefined; renderPassOk: boolean }): 'run' | 'no_secret' | 'render_pass_failed' {
+  if (!input.cronSecret?.trim()) return 'no_secret';
+  return input.renderPassOk ? 'run' : 'render_pass_failed';
+}
+
+/** What an operator types before "delete now" skips the grace period: the account's address. */
+export const deletionConfirmPhrase = (email: string | null): string => email?.trim().toLowerCase() || 'DELETE';
 
 const FOLDER = /^(?:social\/)?[0-9a-f-]{36}$/i;
 
@@ -323,8 +377,10 @@ const isForeignKeyRefusal = (error: unknown) =>
 
 export type DeleteOutcome =
   | { ok: true; status: 'processing' | 'completed' }
-  | { ok: false; code: 'notFound' | 'notDue' | 'unavailable' | 'badTransition'; from?: DeletionStatus }
+  | { ok: false; code: 'notFound' | 'notDue' | 'unavailable' | 'badTransition' | 'removedElsewhere'; from?: DeletionStatus }
   | { ok: false; code: 'held'; hold: DeletionHold[] };
+
+const REMOVED_ELSEWHERE = 'account removed outside this flow: its storage folders and provider assets were not checked — follow docs/RUNBOOK-deletion.md, then mark done with a note';
 
 /** The delete was refused by a row we did not know about; carries the database's words across the rollback. */
 class Refused extends Error {
@@ -362,12 +418,11 @@ export async function deleteAccountNow(
       if (!row) return { ok: false, code: 'notFound' } as const;
       if (row.status !== 'requested') return { ok: false, code: 'badTransition', from: row.status } as const;
       if (row.user_id === null) {
-        // The account was removed some other way (the runbook, by hand): nothing left that we know of.
-        await tx.query(
-          `update account_deletion_requests set status='completed', completed_at=$2, email=null, hold='{}', last_error=null, updated_at=$2 where id=$1`,
-          [requestId, now],
-        );
-        return { ok: true, status: 'completed' } as const;
+        // The account was removed some other way (a console, by hand). The rows that knew where its
+        // files and provider assets were went with it, so nothing here can vouch that those are gone:
+        // the request stays open for an operator instead of being called done.
+        if (row.last_error !== REMOVED_ELSEWHERE) await hold(tx, [], REMOVED_ELSEWHERE);
+        return { ok: false, code: 'removedElsewhere' } as const;
       }
       if (!options.force && new Date(row.scheduled_for).getTime() > now.getTime()) return { ok: false, code: 'notDue' } as const;
       const userId = row.user_id;
@@ -382,8 +437,16 @@ export async function deleteAccountNow(
       }
 
       const folders = await ownedFolders(tx, userId);
+      // The provider's side of the face: every asset, and every group the provider may still hold —
+      // a failed or revoked group exists there too; only an evicted one was already removed
+      // (lib/identity/repo.ts evictIdentityGroup). The cascade below takes these ids with it.
+      const providerAssets = (await tx.query<{ asset_id: string }>(
+        'select asset_id from identity_assets where user_id=$1 order by asset_id', [userId],
+      )).rows.map((r) => r.asset_id);
       const providerGroups = (await tx.query<{ group_id: string }>(
-        "select group_id from identity_groups where user_id=$1 and status='active' and group_id is not null", [userId],
+        `select group_id from identity_groups where user_id=$1 and group_id is not null and status <> 'evicted'
+         union select group_id from identity_assets where user_id=$1
+         order by 1`, [userId],
       )).rows.map((r) => r.group_id);
       const removed = {
         selfies: await count(tx, 'select count(*)::int n from identity_selfies where user_id=$1', userId),
@@ -391,7 +454,7 @@ export async function deleteAccountNow(
         folders: folders.length,
         paymentsKept: await count(tx, 'select count(*)::int n from billing_payments where user_id=$1', userId),
       };
-      const cleanup: Cleanup = { authUserId: userId, folders, providerGroups };
+      const cleanup: Cleanup = { authUserId: userId, folders, providerAssets, providerGroups };
 
       // The order's own copy of the photo goes with the folders; the order itself stays.
       await tx.query('update billing_payments set input_deleted_at=$2 where user_id=$1 and input_key is not null and input_deleted_at is null', [userId, now]);
@@ -432,25 +495,31 @@ export type FinishOutcome =
   | { ok: false; code: 'notFound' | 'badTransition'; from?: DeletionStatus }
   | { ok: false; code: 'cleanupLeft'; left: number };
 
-const left = (cleanup: Cleanup) => (cleanup.authUserId ? 1 : 0) + cleanup.folders.length + cleanup.providerGroups.length;
+const left = (cleanup: Cleanup) => (cleanup.authUserId ? 1 : 0) + cleanup.folders.length + cleanup.providerAssets.length + cleanup.providerGroups.length;
 const label = (kind: string, error: unknown) => `${kind}: ${refusal(error)}`.slice(0, 300);
 
 /**
  * Remove what the request lists, outside the database: the sign-in account first (so the session
- * dies), then the files, then the provider's group. A failed item stays on the list with the first
- * error; when the list is empty the request closes and forgets the address.
+ * dies), then the files, then the provider's assets and their group. A failed item stays on the list
+ * with the first error; when the list is empty the request closes and forgets the address.
+ *
+ * The sign-in account is never removed while a profile exists on its id. Ours was deleted before
+ * this list was written, so a profile there now is a NEW account (the person came back after a
+ * failed try); removing the sign-in account would cascade it away. That item waits for an operator.
  */
 export async function finishDeletion(deps: DeletionDeps, requestId: string, now: Date = new Date()): Promise<FinishOutcome> {
   const row = (await deps.sql.query<DeletionRow>('select * from account_deletion_requests where id=$1', [requestId])).rows[0];
   if (!row) return { ok: false, code: 'notFound' };
   if (row.status !== 'processing' || row.cleanup === null) return { ok: false, code: 'badTransition', from: row.status };
 
-  const todo: Cleanup = { authUserId: row.cleanup.authUserId ?? null, folders: [...(row.cleanup.folders ?? [])], providerGroups: [...(row.cleanup.providerGroups ?? [])] };
+  const todo = cleanupOf(row.cleanup);
   let firstError: string | null = null;
   const fail = (text: string) => { firstError ??= text; };
 
   if (todo.authUserId) {
-    if (deps.auth === null) fail('auth: unavailable');
+    const reborn = (await deps.sql.query('select 1 from profiles where id=$1', [todo.authUserId])).rows.length > 0;
+    if (reborn) fail('auth: this person signed in again and has a new account on the same sign-in — not removed; decide by hand');
+    else if (deps.auth === null) fail('auth: unavailable');
     else {
       try { await deps.auth.deleteUser(todo.authUserId); todo.authUserId = null; }
       catch (error) { fail(label('auth', error)); }
@@ -463,13 +532,23 @@ export async function finishDeletion(deps: DeletionDeps, requestId: string, now:
     catch (error) { fail(label('files', error)); foldersLeft.push(folder); }
   }
   todo.folders = foldersLeft;
-  const groupsLeft: string[] = [];
-  for (const group of todo.providerGroups) {
-    if (deps.provider === null) { fail('provider: unavailable'); groupsLeft.push(group); continue; }
-    try { await deps.provider.deleteAssetGroup(group); }
-    catch (error) { fail(label('provider', error)); groupsLeft.push(group); }
+  const assetsLeft: string[] = [];
+  for (const asset of todo.providerAssets) {
+    if (deps.provider === null) { fail('provider: unavailable'); assetsLeft.push(asset); continue; }
+    try { await deps.provider.deleteAsset(asset); }
+    catch (error) { fail(label('provider', error)); assetsLeft.push(asset); }
   }
-  todo.providerGroups = groupsLeft;
+  todo.providerAssets = assetsLeft;
+  // A group goes only after its assets: while one is left, the groups wait for the next try.
+  if (assetsLeft.length === 0) {
+    const groupsLeft: string[] = [];
+    for (const group of todo.providerGroups) {
+      if (deps.provider === null) { fail('provider: unavailable'); groupsLeft.push(group); continue; }
+      try { await deps.provider.deleteAssetGroup(group); }
+      catch (error) { fail(label('provider', error)); groupsLeft.push(group); }
+    }
+    todo.providerGroups = groupsLeft;
+  }
 
   const remaining = left(todo);
   if (remaining === 0) {
@@ -529,7 +608,8 @@ export async function runDeletionPass(deps: DeletionDeps, options: { now?: Date;
     if (outcome === null) report.failed += 1;
     else if (outcome.ok && outcome.status === 'completed') report.completed += 1;
     else if (outcome.ok) { report.deleted += 1; await finish(id); }
-    else if (outcome.code === 'held') report.held += 1;
+    // Removed by hand: it waits for an operator like any other hold.
+    else if (outcome.code === 'held' || outcome.code === 'removedElsewhere') report.held += 1;
     else if (outcome.code === 'unavailable') report.failed += 1;
   }
   return report;
@@ -565,7 +645,7 @@ function queueItem(row: DeletionRow): DeletionQueueItem {
     attempts: row.attempts,
     lastAttemptAt: isoOrNull(row.last_attempt_at),
     lastError: row.last_error,
-    cleanupLeft: row.cleanup ? left({ authUserId: row.cleanup.authUserId ?? null, folders: row.cleanup.folders ?? [], providerGroups: row.cleanup.providerGroups ?? [] }) : 0,
+    cleanupLeft: row.cleanup ? left(cleanupOf(row.cleanup)) : 0,
     removed: row.removed,
     startedAt: isoOrNull(row.started_at),
     completedAt: isoOrNull(row.completed_at),
@@ -599,10 +679,12 @@ export async function countDeletionQueue(sql: SqlRunner, now: Date = new Date())
 export const DeletionDecision = z.object({
   id: z.string().uuid(),
   note: z.string().trim().max(500).optional(),
+  /** "Delete now" only: the account's address, typed by the operator (`deletionConfirmPhrase`). */
+  confirm: z.string().trim().max(320).optional(),
 }).strict();
 export type DeletionOutcome =
   | { ok: true; status: DeletionStatus }
-  | { ok: false; code: 'invalid' | 'forbidden' | 'notFound' | 'badTransition' | 'accountExists' | 'unavailable' | 'notDue'; from?: DeletionStatus }
+  | { ok: false; code: 'invalid' | 'forbidden' | 'notFound' | 'badTransition' | 'accountExists' | 'unavailable' | 'notDue' | 'unconfirmed' | 'removedElsewhere'; from?: DeletionStatus }
   | { ok: false; code: 'held'; hold: DeletionHold[] }
   | { ok: false; code: 'cleanupLeft'; left: number };
 
@@ -636,6 +718,8 @@ export async function decideDeletion(deps: DeletionDeps, viewer: Viewer, move: D
     const row = (await sql.query<DeletionRow>('select * from account_deletion_requests where id=$1', [id])).rows[0];
     if (!row) return { ok: false, code: 'notFound' };
     if (row.status === 'requested') {
+      // One click must not skip a member's grace period: the operator types whose account this is.
+      if ((parsed.data.confirm ?? '').toLowerCase() !== deletionConfirmPhrase(row.email).toLowerCase()) return { ok: false, code: 'unconfirmed' };
       const deleted = await deleteAccountNow(deps, id, { now, force: true, actorId: viewer.userId });
       if (!deleted.ok) return deleted;
       if (deleted.status === 'completed') return deleted;
@@ -649,8 +733,10 @@ export async function decideDeletion(deps: DeletionDeps, viewer: Viewer, move: D
     if (move === 'complete') {
       if (row.status !== 'requested' && row.status !== 'processing') return { ok: false, code: 'badTransition', from: row.status };
       if (row.user_id !== null) return { ok: false, code: 'accountExists', from: row.status };
-      // Writing off what the list still holds needs the operator's word for where it went.
-      if (row.cleanup !== null && left({ authUserId: row.cleanup.authUserId ?? null, folders: row.cleanup.folders ?? [], providerGroups: row.cleanup.providerGroups ?? [] }) > 0 && !note) return { ok: false, code: 'invalid' };
+      // Writing off what the list still holds needs the operator's word for where it went — and so
+      // does an account removed by hand, whose files and provider assets this flow never listed.
+      const unchecked = row.status === 'requested' || (row.cleanup !== null && left(cleanupOf(row.cleanup)) > 0);
+      if (unchecked && !note) return { ok: false, code: 'invalid' };
       await tx.query(
         `update account_deletion_requests set status='completed', completed_at=$2, closed_by=$3, email=null, cleanup=null, hold='{}', note=coalesce($4, note), updated_at=$2 where id=$1`,
         [id, now, viewer.userId, note],

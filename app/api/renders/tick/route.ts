@@ -8,7 +8,7 @@ import type { RenderPassReport } from '@/lib/renders/service';
 import { getTossGateway } from '@/lib/billing/toss-gateway';
 import { reconcileBrandUsagePayments } from '@/lib/brands/usage/payment';
 import { runLiveFxThresholdAlertCheck, type FxThresholdAlertPassReport } from '@/lib/twings/fx-rate-alert';
-import { runDeletionPass, type DeletionPassReport } from '@/lib/account/deletion';
+import { deletionPassGate, runDeletionPass, type DeletionPassReport } from '@/lib/account/deletion';
 import { liveDeletionDeps } from '@/lib/account/deletion-runtime';
 
 /**
@@ -17,8 +17,10 @@ import { liveDeletionDeps } from '@/lib/account/deletion-runtime';
  * Invoked by Vercel Cron (daily on the Hobby plan — `vercel.json`; per-minute once the project is
  * on Pro), by an operator with curl, and by nothing else that matters: the enqueue request, the
  * provider callback and the result page call the pass directly. When `CRON_SECRET` is set,
- * Vercel sends it as a bearer token and anything else is refused; when it is not set, the tick
- * is open but harmless — every step is idempotent and a pass with nothing to do changes nothing.
+ * Vercel sends it as a bearer token and anything else is refused. When it is not set the tick is
+ * open: the render, payment and exchange-rate steps are idempotent and a pass with nothing to do
+ * changes nothing — but the account deletion pass is not harmless, and does not run without the
+ * secret (`deletionPassGate`).
  */
 export const dynamic = 'force-dynamic';
 export const maxDuration = 300;
@@ -53,18 +55,23 @@ async function tick(request: Request): Promise<NextResponse> {
   try { fxAlert = await runLiveFxThresholdAlertCheck(); }
   catch { console.warn('[fx-alert] USD/KRW threshold check failed'); }
   // Account deletion (docs/RUNBOOK-deletion.md): requests past their grace period, and cleanups left over.
-  // After the render and payment passes on purpose, so an order they just settled no longer holds an account.
-  // Counts only in the response and the log: no id, no address.
+  // After the render and payment passes on purpose, so an order they just settled no longer holds an account —
+  // and not at all when that pass threw (a refund it owed may not have been sent) or when this tick is not
+  // behind the cron secret. Counts only in the response and the log: no id, no address.
   let accountDeletion: DeletionPassReport | null = null;
-  try { accountDeletion = await runDeletionPass(await liveDeletionDeps(sql)); }
-  catch { console.warn('[account-deletion] pass failed'); }
+  const deletionGate = deletionPassGate({ cronSecret: secret, renderPassOk: report !== null });
+  if (deletionGate === 'run') {
+    try { accountDeletion = await runDeletionPass(await liveDeletionDeps(sql)); }
+    catch { console.warn('[account-deletion] pass failed'); }
+  } else console.warn(`[account-deletion] ${JSON.stringify({ event: 'deletion_pass_skipped', reason: deletionGate })}`);
+  const accountDeletionSkipped = deletionGate === 'run' ? null : deletionGate;
   if (accountDeletion && (accountDeletion.held > 0 || accountDeletion.failed > 0)) console.warn(`[account-deletion] ${JSON.stringify({ event: 'deletion_pass', ...accountDeletion })}`);
-  if (report === null) return NextResponse.json({ ok: false, code: 'pass_failed', brandUsage, fxAlert, accountDeletion }, { status: 503, headers: HEADERS });
+  if (report === null) return NextResponse.json({ ok: false, code: 'pass_failed', brandUsage, fxAlert, accountDeletion, accountDeletionSkipped }, { status: 503, headers: HEADERS });
   for (const line of report.errors) console.warn(`[renders] ${line}`);
   const { errors, ...counts } = report;
   // Presence only, never a value: which engines this deployment can actually reach.
   const config = { openai: openAiConfigFromEnv() !== null, ark: arkConfigFromEnv() !== null, arkAssets: arkAssetsConfigFromEnv() !== null };
-  return NextResponse.json({ ok: true, summary: formatPassReport(report), report: counts, errorCount: errors.length, config, brandUsage, fxAlert, accountDeletion }, { headers: HEADERS });
+  return NextResponse.json({ ok: true, summary: formatPassReport(report), report: counts, errorCount: errors.length, config, brandUsage, fxAlert, accountDeletion, accountDeletionSkipped }, { headers: HEADERS });
 }
 
 export const GET = tick;

@@ -8,7 +8,8 @@ import { liveDeletionDeps } from '@/lib/account/deletion-runtime';
  * docs/RUNBOOK-deletion.md — the account deletion queue's three buttons, in the one registry so the
  * admin auth enumeration covers them.
  *
- *   run      — delete now (skips the grace period, never a hold), or retry an unfinished cleanup.
+ *   run      — delete now (skips the grace period, never a hold; the operator types the account's
+ *              address first), or retry an unfinished cleanup.
  *   complete — mark done by hand; refused while the account still exists.
  *   cancel   — close a request the member withdrew by mail; refused once the account is gone.
  */
@@ -17,10 +18,12 @@ const str = (form: FormData, key: string) => {
   const value = form.get(key);
   return typeof value === 'string' ? value : '';
 };
-type Input = { id: string; note?: string };
+type Input = { id: string; note?: string; confirm?: string };
 const input = (form: FormData): Input => {
   const note = str(form, 'note').trim();
-  return note ? { id: str(form, 'id'), note } : { id: str(form, 'id') };
+  // "Delete now" only: the account's address, typed by the operator.
+  const confirm = str(form, 'confirm').trim();
+  return { id: str(form, 'id'), ...(note ? { note } : {}), ...(confirm ? { confirm } : {}) };
 };
 
 function mark(move: DeletionMove): AdminOperation<Input> {
@@ -40,6 +43,8 @@ function mark(move: DeletionMove): AdminOperation<Input> {
         case 'unavailable': return fail('badTransition', 'storage or sign-in removal is not configured in this environment');
         case 'badTransition': return fail('badTransition', `${r.from} → ${move}`);
         case 'notDue': return fail('badTransition', 'not due');
+        case 'unconfirmed': return fail('invalid', 'confirm: type the address of the account to delete it before its grace period ends');
+        case 'removedElsewhere': return fail('badTransition', 'the account was removed outside this flow — check storage and the provider by hand, then mark done with a note');
         default: return fail(r.code);
       }
     },

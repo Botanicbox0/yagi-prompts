@@ -115,6 +115,26 @@ describe('the admin queue', () => {
     expect(html).toContain(en.accountDeletion.admin.run);
   });
 
+  it('makes the operator type the account before "delete now", and only there', () => {
+    const waiting = renderToStaticMarkup(<AccountDeletionQueue copy={ko.accountDeletion.admin} locale="ko" queue={{ open: [item({ email: 'Mina.QA@example.test' })], closed: [] }} now={new Date('2026-11-02T00:00:00Z')} />);
+    const field = waiting.match(/data-deletion-confirm[\s\S]*?<input[^>]*>/)?.[0] ?? '';
+    expect(field).toContain('mina.qa@example.test');
+    expect(field).toContain('name="confirm"');
+    expect(field).toContain('required=""');
+    expect(waiting).not.toContain('{phrase}');
+    // A cleanup retry deletes no account: nothing to type.
+    const retry = renderToStaticMarkup(<AccountDeletionQueue copy={ko.accountDeletion.admin} locale="ko" queue={{ open: [item({ status: 'processing', accountExists: false, userId: null, cleanupLeft: 1 })], closed: [] }} now={now} />);
+    expect(retry).not.toContain('name="confirm"');
+  });
+
+  it('shuts "delete now" on an account removed by hand and asks for a note to close it', () => {
+    const html = renderToStaticMarkup(<AccountDeletionQueue copy={ko.accountDeletion.admin} locale="ko" queue={{ open: [item({ accountExists: false, userId: null, lastError: 'account removed outside this flow' })], closed: [] }} now={now} />);
+    expect(html).toContain(ko.accountDeletion.admin.removedElsewhere);
+    expect(html).not.toContain('name="confirm"');
+    expect(html).toMatch(/value="account\.deletion\.run"[\s\S]*?<button[^>]*disabled=""/);
+    expect(html).toMatch(/value="account\.deletion\.complete"[\s\S]*?<textarea[^>]*required=""/);
+  });
+
   it('offers a cleanup retry once the account is gone, never a cancel, and shows closed rows without forms', () => {
     const html = renderToStaticMarkup(<AccountDeletionQueue copy={en.accountDeletion.admin} locale="en" queue={{
       open: [item({ status: 'processing', accountExists: false, userId: null, cleanupLeft: 2, lastError: 'files: storage refused', removed: { selfies: 1, renders: 4, folders: 6, paymentsKept: 2 } })],

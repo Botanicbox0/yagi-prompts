@@ -1,5 +1,5 @@
 import type { Dictionary } from '@/messages/en';
-import type { DeletionQueueItem } from '@/lib/account/deletion';
+import { deletionConfirmPhrase, type DeletionQueueItem } from '@/lib/account/deletion';
 import { interpolate } from '@/lib/i18n/format';
 import { ADMIN_NAV_PATHS } from '@/lib/admin/workflow';
 import { OpForm, INPUT, BUTTON, BUTTON_PRIMARY } from '@/components/admin/chrome';
@@ -67,14 +67,21 @@ export function AccountDeletionQueue({ copy, locale, queue, now }: {
           <div className="grid gap-3 sm:grid-cols-3">
             <OpForm op="account.deletion.run" back={BACK} className="space-y-2 rounded-lg border border-hairline p-3">
               <input type="hidden" name="id" value={item.id} />
-              <p className="text-xs opacity-65">{item.status === 'processing' ? copy.retryHint : copy.runHint}</p>
-              <button className={`${BUTTON_PRIMARY} min-h-10`}>{item.status === 'processing' ? copy.retry : copy.run}</button>
+              <p className="text-xs opacity-65">{item.status === 'processing' ? copy.retryHint : item.accountExists ? copy.runHint : copy.removedElsewhere}</p>
+              {/* Skipping a member's grace period takes more than one click: the operator types whose account it is. */}
+              {item.status === 'requested' && item.accountExists ? (
+                <label className="block text-sm" data-deletion-confirm>
+                  {interpolate(copy.runConfirm, { phrase: deletionConfirmPhrase(item.email) })}
+                  <input name="confirm" required autoComplete="off" autoCapitalize="off" spellCheck={false} className={`${INPUT} mt-1`} />
+                </label>
+              ) : null}
+              <button className={`${BUTTON_PRIMARY} min-h-10`} disabled={item.status === 'requested' && !item.accountExists}>{item.status === 'processing' ? copy.retry : copy.run}</button>
             </OpForm>
             <OpForm op="account.deletion.complete" back={BACK} className="space-y-2 rounded-lg border border-hairline p-3">
               <input type="hidden" name="id" value={item.id} />
               <p className="text-xs opacity-65">{copy.completeHint}</p>
               <label className="block text-sm">{copy.note}
-                <textarea name="note" maxLength={500} rows={2} required={item.cleanupLeft > 0} className={`${INPUT} mt-1`} />
+                <textarea name="note" maxLength={500} rows={2} required={item.cleanupLeft > 0 || item.status === 'requested'} className={`${INPUT} mt-1`} />
               </label>
               <button className={`${BUTTON} min-h-10`} disabled={item.accountExists}>{copy.complete}</button>
             </OpForm>

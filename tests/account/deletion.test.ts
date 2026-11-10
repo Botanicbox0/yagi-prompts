@@ -7,13 +7,16 @@ import { MIGRATIONS_DIR, expectReject } from '@/tests/helpers/pglite';
 import type { Viewer } from '@/lib/auth/identity';
 import {
   DELETION_DAYS,
-  DELETION_HOLD_QUERIES,
+  DELETION_HOLD_CHECKS,
   cancelAccountDeletion,
   countDeletionQueue,
   decideDeletion,
   deleteAccountNow,
   deletionGraceDays,
+  deletionConfirmPhrase,
   deletionHolds,
+  deletionInProgress,
+  deletionPassGate,
   deletionReady,
   finishDeletion,
   loadDeletionQueue,
@@ -183,18 +186,22 @@ async function seedAccount(h: PromptHarness, userId = USER.buyer): Promise<Accou
     [ORDER, userId, template.id, template.slug, `${ORDER}/input.jpg`, new Date(now.getTime() - DAY)],
   );
   await h.sql.query(`insert into identity_groups (user_id, status, group_id, verified_at) values ($1, 'active', 'grp-buyer', now())`, [userId]);
+  await h.sql.query(`insert into identity_assets (user_id, group_id, asset_id, photo_sha256, status) values ($1, 'grp-buyer', 'ast-buyer-1', $2, 'Active')`, [userId, 'b'.repeat(64)]);
   await h.sql.query(`insert into push_subscriptions (user_id, endpoint, p256dh, auth) values ($1, 'https://push.test/abc', 'p', 'a')`, [userId]);
   await h.sql.query(`insert into events (type, user_id) values ('start_checkout', $1)`, [userId]);
   return { render, template };
 }
 
-function fakes(sql: PromptHarness['sql'], failing: { folder?: string; auth?: boolean; provider?: boolean } = {}) {
-  const seen = { folders: [] as string[], users: [] as string[], groups: [] as string[] };
+function fakes(sql: PromptHarness['sql'], failing: { folder?: string; auth?: boolean; provider?: boolean; asset?: boolean } = {}) {
+  const seen = { folders: [] as string[], users: [] as string[], assets: [] as string[], groups: [] as string[] };
   const deps: DeletionDeps = {
     sql,
     files: { async deleteFolder(folder) { if (folder === failing.folder) throw new Error('storage refused'); seen.folders.push(folder); } },
     auth: { async deleteUser(id) { if (failing.auth) throw new Error('auth refused'); seen.users.push(id); await sql.query('delete from auth.users where id=$1', [id]); } },
-    provider: { async deleteAssetGroup(id) { if (failing.provider) throw new Error('provider refused'); seen.groups.push(id); } },
+    provider: {
+      async deleteAsset(id) { if (failing.provider || failing.asset) throw new Error('provider refused'); seen.assets.push(id); },
+      async deleteAssetGroup(id) { if (failing.provider) throw new Error('provider refused'); seen.groups.push(id); },
+    },
   };
   return { deps, seen };
 }
@@ -213,9 +220,11 @@ describe('what holds an account back', () => {
   });
 
   it('only names states the tables can actually hold', async () => {
-    for (const [table, query] of Object.entries(DELETION_HOLD_QUERIES)) {
+    for (const { table, sql: query } of DELETION_HOLD_CHECKS) {
       const { rows } = await h.db.query<{ def: string }>(`select pg_get_constraintdef(c.oid) def from pg_constraint c where c.conrelid=$1::regclass and c.contype='c'`, [table]);
       const defs = rows.map((r) => r.def).join('\n');
+      // subscriptions.status is the old provider's word verbatim: no CHECK to compare with.
+      if (!/status/.test(defs)) continue;
       const states = [...query.matchAll(/status\s*(?:in \(([^)]+)\)|=\s*('[a-z_]+'))/g)].flatMap((m) => (m[1] ?? m[2])!.split(',').map((s) => s.trim()));
       for (const state of states) expect(defs, `${table} ${state}`).toContain(`${state}::text`);
     }
@@ -239,6 +248,58 @@ describe('what holds an account back', () => {
     expect((await deletionHolds(h.sql, USER.buyer, now)).wait).toEqual([]);
     await h.sql.query(`update billing_payments set status='refund_pending' where id=$1`, [ORDER]);
     expect((await deletionHolds(h.sql, USER.buyer, now)).wait).toEqual(['payment']);
+  });
+
+  it('waits for a refund that is still owed: a delivered order whose render then failed', async () => {
+    // reconcileTossPayments picks this order up through its render (`r.status='failed'`). If the render
+    // cascaded away with the account, `render_id` would empty itself and the refund would never be sent.
+    await h.sql.query(
+      `update billing_payments set status='paid', failure_code=null, payment_key='pk_1', approved_at=now(), consent_at=now(), fulfilled_at=now(), render_id=$2 where id=$1`,
+      [ORDER, account.render],
+    );
+    expect((await deletionHolds(h.sql, USER.buyer, now)).wait).toEqual(['payment']);
+    // Refunded: the money went back, nothing is owed.
+    await h.sql.query(`update billing_payments set status='refunded', refunded_at=now() where id=$1`, [ORDER]);
+    expect((await deletionHolds(h.sql, USER.buyer, now)).wait).toEqual([]);
+  });
+
+  it('keeps the records of the old cookie and subscription era out of the cascade', async () => {
+    // Free cookies and what they opened are not money: they go with the account.
+    await h.sql.query(`insert into cookie_ledger (profile_id, delta, reason) values ($1, 3, 'signup')`, [USER.buyer]);
+    await h.sql.query(`insert into prompt_unlocks (profile_id, prompt_id) values ($1, $2)`, [USER.buyer, account.template.id]);
+    expect(await deletionHolds(h.sql, USER.buyer, now)).toEqual({ wait: [], review: [], tables: [] });
+
+    // A paid pack is a transaction record (5 years): an operator decides, the cascade does not.
+    await h.sql.query(`insert into cookie_purchase_events (event_id, profile_id, cookies) values ('evt_1', $1, 20)`, [USER.buyer]);
+    expect(await deletionHolds(h.sql, USER.buyer, now)).toEqual({ wait: [], review: ['records'], tables: ['cookie_purchase_events'] });
+    await h.sql.query('delete from cookie_purchase_events');
+    await h.sql.query(`insert into cookie_ledger (profile_id, delta, reason) values ($1, 20, 'purchase')`, [USER.buyer]);
+    expect(await deletionHolds(h.sql, USER.buyer, now)).toEqual({ wait: [], review: ['records'], tables: ['cookie_ledger'] });
+    await h.sql.query(`delete from cookie_ledger where reason='purchase'`);
+
+    // A plan the old provider is still charging must be stopped by a person first; an ended one is a record.
+    await h.sql.query(`insert into subscriptions (user_id, stripe_subscription_id, status, stripe_fetched_at) values ($1, 'sub_1', 'active', now())`, [USER.buyer]);
+    expect(await deletionHolds(h.sql, USER.buyer, now)).toEqual({ wait: [], review: ['subscription'], tables: ['subscriptions'] });
+    await h.sql.query(`update subscriptions set status='past_due'`);
+    expect((await deletionHolds(h.sql, USER.buyer, now)).review).toEqual(['subscription']);
+    await h.sql.query(`update subscriptions set status='canceled'`);
+    expect(await deletionHolds(h.sql, USER.buyer, now)).toEqual({ wait: [], review: ['records'], tables: ['subscriptions'] });
+  });
+
+  it('never deletes the payment reviewer account by itself', async () => {
+    // lib/auth/review-login.ts — the account the payment provider and the app stores sign in with.
+    for (const email of ['pg-review@twings.app', 'pg-review-toss-2@twings.app']) {
+      await h.sql.query('update profiles set email=$2 where id=$1', [USER.buyer, email]);
+      expect((await deletionHolds(h.sql, USER.buyer, now)).review, email).toEqual(['staff']);
+    }
+    // The request itself is accepted like anyone's; the hold is written on it.
+    const asked = await requestAccountDeletion(h.sql, { ...member, email: 'pg-review@twings.app' }, true, now, 0);
+    expect(asked).toMatchObject({ ok: true, request: { hold: ['staff'] } });
+    expect(await runDeletionPass(fakes(h.sql).deps, { now: later(1) })).toMatchObject({ deleted: 0, held: 1 });
+    expect((await h.db.query('select count(*)::int n from profiles where id=$1', [USER.buyer])).rows[0]).toEqual({ n: 1 });
+    // A look-alike address on another domain is an ordinary member.
+    await h.sql.query(`update profiles set email='pg-review@example.test' where id=$1`, [USER.buyer]);
+    expect((await deletionHolds(h.sql, USER.buyer, now)).review).toEqual([]);
   });
 
   it('sends a staff account, a campaign with money in it, a brand member and a creative to an operator', async () => {
@@ -298,7 +359,7 @@ describe('deleting the account', () => {
     const { deps, seen } = fakes(h.sql);
     expect(await deleteAccountNow(deps, id, { now: later(3) })).toEqual({ ok: false, code: 'held', hold: ['render'] });
     expect(await row()).toMatchObject({ status: 'requested', hold: ['render'], attempts: 1, user_id: USER.buyer });
-    expect(seen).toEqual({ folders: [], users: [], groups: [] });
+    expect(seen).toEqual({ folders: [], users: [], assets: [], groups: [] });
     // The member can still change their mind.
     expect(await cancelAccountDeletion(h.sql, USER.buyer, later(3))).toBe(true);
   });
@@ -309,7 +370,7 @@ describe('deleting the account', () => {
 
     const count = async (table: string, where: string) => (await h.db.query<{ n: number }>(`select count(*)::int n from ${table} where ${where}`)).rows[0]!.n;
     expect(await count('profiles', `id='${USER.buyer}'`)).toBe(0);
-    for (const table of ['identity_selfies', 'render_jobs', 'identity_groups', 'push_subscriptions']) expect(await count(table, 'true'), table).toBe(0);
+    for (const table of ['identity_selfies', 'render_jobs', 'identity_groups', 'identity_assets', 'push_subscriptions']) expect(await count(table, 'true'), table).toBe(0);
     // The order stays for its retention period: no owner, no render, and its photo marked as gone.
     const order = (await h.db.query('select user_id, render_id, amount_krw, status, input_deleted_at is not null as photo_gone from billing_payments where id=$1', [ORDER])).rows[0];
     expect(order).toEqual({ user_id: null, render_id: null, amount_krw: 2500, status: 'failed', photo_gone: true });
@@ -317,18 +378,19 @@ describe('deleting the account', () => {
     expect(await count('events', "type='start_checkout'")).toBe(1);
 
     // Nothing outside the database has been touched yet; the request remembers what is left.
-    expect(seen).toEqual({ folders: [], users: [], groups: [] });
+    expect(seen).toEqual({ folders: [], users: [], assets: [], groups: [] });
     const after = await row();
     expect(after).toMatchObject({ status: 'processing', user_id: null, hold: [], email: 'me@twings.test' });
     expect(after.cleanup).toEqual({
       authUserId: USER.buyer,
       folders: [ORDER, SELFIE, account.render].sort(),
+      providerAssets: ['ast-buyer-1'],
       providerGroups: ['grp-buyer'],
     });
     expect(after.removed).toEqual({ selfies: 1, renders: 1, folders: 3, paymentsKept: 1 });
 
     expect(await finishDeletion(deps, id, later(3))).toEqual({ ok: true, status: 'completed' });
-    expect(seen).toEqual({ folders: [ORDER, SELFIE, account.render].sort(), users: [USER.buyer], groups: ['grp-buyer'] });
+    expect(seen).toEqual({ folders: [ORDER, SELFIE, account.render].sort(), users: [USER.buyer], assets: ['ast-buyer-1'], groups: ['grp-buyer'] });
     expect(await row()).toMatchObject({ status: 'completed', email: null, cleanup: null, last_error: null });
     expect(await count('auth.users', `id='${USER.buyer}'`)).toBe(0);
     expect(await count('billing_payments', 'true')).toBe(1);
@@ -337,16 +399,76 @@ describe('deleting the account', () => {
   it('keeps a failed cleanup item on the list and finishes on a later pass', async () => {
     const broken = fakes(h.sql, { folder: SELFIE, provider: true });
     expect(await deleteAccountNow(broken.deps, id, { now: later(3) })).toMatchObject({ ok: true });
-    expect(await finishDeletion(broken.deps, id, later(3))).toEqual({ ok: false, code: 'cleanupLeft', left: 2 });
+    expect(await finishDeletion(broken.deps, id, later(3))).toEqual({ ok: false, code: 'cleanupLeft', left: 3 });
     const stuck = await row();
-    expect(stuck).toMatchObject({ status: 'processing', cleanup: { authUserId: null, folders: [SELFIE], providerGroups: ['grp-buyer'] } });
+    expect(stuck).toMatchObject({ status: 'processing', cleanup: { authUserId: null, folders: [SELFIE], providerAssets: ['ast-buyer-1'], providerGroups: ['grp-buyer'] } });
     expect(String(stuck.last_error)).toMatch(/^files: /);
     expect(await countDeletionQueue(h.sql)).toBe(1);
 
     const fixed = fakes(h.sql);
     expect(await runDeletionPass(fixed.deps, { now: later(4) })).toMatchObject({ ready: true, completed: 1, deleted: 0 });
-    expect(fixed.seen).toEqual({ folders: [SELFIE], users: [], groups: ['grp-buyer'] });
+    expect(fixed.seen).toEqual({ folders: [SELFIE], users: [], assets: ['ast-buyer-1'], groups: ['grp-buyer'] });
     expect(await row()).toMatchObject({ status: 'completed' });
+  });
+
+  it('never removes a sign-in account whose owner has come back', async () => {
+    // The first try at the sign-in account fails; the rows are already gone.
+    const broken = fakes(h.sql, { auth: true });
+    expect(await deleteAccountNow(broken.deps, id, { now: later(3) })).toMatchObject({ ok: true });
+    expect(await finishDeletion(broken.deps, id, later(3))).toEqual({ ok: false, code: 'cleanupLeft', left: 1 });
+    // Everything else on the list went; only the sign-in account is left.
+    expect(broken.seen.folders).toHaveLength(3);
+    expect(broken.seen.groups).toEqual(['grp-buyer']);
+    // While the request lists that sign-in account, the callback must not start a new profile on it.
+    expect(await deletionInProgress(h.sql, USER.buyer)).toBe(true);
+    expect(await deletionInProgress(h.sql, USER.other)).toBe(false);
+
+    // Suppose a profile appeared anyway (another path, a manual insert). Deleting the sign-in account
+    // now would cascade a NEW account away, with whatever it has paid for since.
+    await seedProfile(h.sql, { id: USER.buyer, email: 'back@twings.test' });
+    const next = fakes(h.sql);
+    expect(await finishDeletion(next.deps, id, later(4))).toMatchObject({ ok: false, code: 'cleanupLeft', left: 1 });
+    expect(next.seen.users).toEqual([]);
+    expect((await h.db.query('select count(*)::int n from profiles where id=$1', [USER.buyer])).rows[0]).toEqual({ n: 1 });
+    const stuck = await row();
+    expect(stuck).toMatchObject({ status: 'processing', cleanup: { authUserId: USER.buyer, folders: [], providerAssets: [], providerGroups: [] } });
+    expect(String(stuck.last_error)).toMatch(/^auth: .*signed in again/);
+    // An operator decides; the daily pass keeps saying so and keeps its hands off.
+    expect(await runDeletionPass(next.deps, { now: later(5) })).toMatchObject({ completed: 0, failed: 1 });
+    expect(next.seen.users).toEqual([]);
+  });
+
+  it('removes every face asset at the provider before its group, whatever state the group is in', async () => {
+    // A group that failed or was revoked still exists at the provider; an evicted one was already removed there.
+    await h.sql.query(`update identity_groups set status='revoked' where user_id=$1`, [USER.buyer]);
+    await h.sql.query(`insert into identity_assets (user_id, group_id, asset_id, photo_sha256, status) values ($1, 'grp-buyer', 'ast-buyer-2', $2, 'Failed')`, [USER.buyer, 'c'.repeat(64)]);
+    const order: string[] = [];
+    const { deps } = fakes(h.sql);
+    deps.provider = {
+      async deleteAsset(assetId) { order.push(`asset:${assetId}`); },
+      async deleteAssetGroup(groupId) { order.push(`group:${groupId}`); },
+    };
+    expect(await deleteAccountNow(deps, id, { now: later(3) })).toMatchObject({ ok: true });
+    expect((await row()).cleanup).toMatchObject({ providerAssets: ['ast-buyer-1', 'ast-buyer-2'], providerGroups: ['grp-buyer'] });
+    expect(await finishDeletion(deps, id, later(3))).toEqual({ ok: true, status: 'completed' });
+    expect(order).toEqual(['asset:ast-buyer-1', 'asset:ast-buyer-2', 'group:grp-buyer']);
+  });
+
+  it('does not list a group the provider has already forgotten, and leaves a group alone while one of its assets is left', async () => {
+    await h.sql.query('delete from identity_assets where user_id=$1', [USER.buyer]);
+    await h.sql.query(`update identity_groups set status='evicted' where user_id=$1`, [USER.buyer]);
+    const evicted = fakes(h.sql);
+    expect(await deleteAccountNow(evicted.deps, id, { now: later(3) })).toMatchObject({ ok: true });
+    expect((await row()).cleanup).toMatchObject({ providerAssets: [], providerGroups: [] });
+  });
+
+  it('keeps the group on the list while an asset refuses to go', async () => {
+    const broken = fakes(h.sql, { asset: true });
+    expect(await deleteAccountNow(broken.deps, id, { now: later(3) })).toMatchObject({ ok: true });
+    expect(await finishDeletion(broken.deps, id, later(3))).toEqual({ ok: false, code: 'cleanupLeft', left: 2 });
+    expect(broken.seen.groups).toEqual([]);
+    expect(await row()).toMatchObject({ cleanup: { providerAssets: ['ast-buyer-1'], providerGroups: ['grp-buyer'] } });
+    expect(String((await row()).last_error)).toMatch(/^provider: /);
   });
 
   it('leaves the account whole when the cleanup tools are missing, rather than orphaning files', async () => {
@@ -390,7 +512,7 @@ describe('deleting the account', () => {
     const after = await row();
     expect(after).toMatchObject({ status: 'requested', user_id: USER.buyer, hold: ['records'], attempts: 1, cleanup: null });
     expect(String(after.last_error)).toContain('later_feature');
-    expect(seen).toEqual({ folders: [], users: [], groups: [] });
+    expect(seen).toEqual({ folders: [], users: [], assets: [], groups: [] });
     // Nothing moved: the photo marker and the analytics rows are as they were.
     expect((await h.db.query('select input_deleted_at from billing_payments where id=$1', [ORDER])).rows[0]).toEqual({ input_deleted_at: null });
     expect((await h.db.query('select count(*)::int n from events where user_id=$1', [USER.buyer])).rows[0]).toEqual({ n: 1 });
@@ -416,12 +538,37 @@ describe('the daily pass', () => {
     expect(await countDeletionQueue(h.sql)).toBe(0);
   });
 
-  it('closes a request whose account an operator already removed by hand', async () => {
+  it('does not call a hand-removed account done: its files and provider assets were never checked', async () => {
     const r = await requestAccountDeletion(h.sql, member, true, now, 3);
     if (!r.ok) throw new Error('request failed');
+    await seedProfile(h.sql, { id: ADMIN, isAdmin: true });
+    // Removed in a console: the rows that knew where the files were went with it.
     await h.db.query('delete from auth.users where id=$1', [USER.buyer]);
-    expect(await runDeletionPass(fakes(h.sql).deps, { now: later(1) })).toMatchObject({ completed: 1, deleted: 0 });
+    const { deps, seen } = fakes(h.sql);
+    expect(await runDeletionPass(deps, { now: later(1) })).toEqual({ ready: true, deleted: 0, completed: 0, held: 1, failed: 0 });
+    expect(seen).toEqual({ folders: [], users: [], assets: [], groups: [] });
+    const waiting = (await h.db.query<{ status: string; last_error: string; attempts: number }>('select status, last_error, attempts from account_deletion_requests')).rows[0]!;
+    expect(waiting).toMatchObject({ status: 'requested', attempts: 1 });
+    expect(waiting.last_error).toMatch(/removed outside/);
+    expect(await countDeletionQueue(h.sql, later(1))).toBe(1);
+    // The next day says the same thing without counting another attempt.
+    await runDeletionPass(deps, { now: later(2) });
+    expect((await h.db.query('select attempts from account_deletion_requests')).rows[0]).toEqual({ attempts: 1 });
+
+    // "Delete now" has nothing to delete; an operator closes it with a word on what they checked.
+    expect(await decideDeletion(deps, admin, 'run', { id: r.request.id, confirm: 'me@twings.test' }, later(2))).toEqual({ ok: false, code: 'removedElsewhere' });
+    expect(await decideDeletion(deps, admin, 'complete', { id: r.request.id }, later(2))).toEqual({ ok: false, code: 'invalid' });
+    expect(await decideDeletion(deps, admin, 'complete', { id: r.request.id, note: 'storage and provider console checked by hand' }, later(2))).toEqual({ ok: true, status: 'completed' });
     expect((await h.db.query('select status, email from account_deletion_requests')).rows[0]).toEqual({ status: 'completed', email: null });
+  });
+
+  it('runs only behind the cron secret, and only after the render and payment pass went through', () => {
+    // The tick used to be "open but harmless" without a secret. It deletes accounts now.
+    expect(deletionPassGate({ cronSecret: undefined, renderPassOk: true })).toBe('no_secret');
+    expect(deletionPassGate({ cronSecret: '  ', renderPassOk: true })).toBe('no_secret');
+    // A pass that threw may not have settled a refund: an account it would have held must not go today.
+    expect(deletionPassGate({ cronSecret: 's3cret', renderPassOk: false })).toBe('render_pass_failed');
+    expect(deletionPassGate({ cronSecret: 's3cret', renderPassOk: true })).toBe('run');
   });
 
   it('counts a held account and tries again the next day', async () => {
@@ -454,19 +601,32 @@ describe('the operator works the queue', () => {
   it('shows what the request is waiting on, and deletes now without waiting for the grace period', async () => {
     await h.sql.query(`update render_jobs set status='running', error_code=null`);
     const { deps } = fakes(h.sql);
-    expect(await decideDeletion(deps, admin, 'run', { id }, now)).toEqual({ ok: false, code: 'held', hold: ['render'] });
+    expect(await decideDeletion(deps, admin, 'run', { id, confirm: 'me@twings.test' }, now)).toEqual({ ok: false, code: 'held', hold: ['render'] });
     const waiting = await loadDeletionQueue(h.sql);
     expect(waiting?.open[0]).toMatchObject({ email: 'me@twings.test', accountExists: true, status: 'requested', hold: ['render'], attempts: 1, cleanupLeft: 0 });
 
     await h.sql.query(`update render_jobs set status='failed', error_code='fixture'`);
-    expect(await decideDeletion(deps, admin, 'run', { id }, now)).toEqual({ ok: true, status: 'completed' });
+    expect(await decideDeletion(deps, admin, 'run', { id, confirm: 'me@twings.test' }, now)).toEqual({ ok: true, status: 'completed' });
     expect((await h.db.query('select started_by, status from account_deletion_requests')).rows[0]).toEqual({ started_by: ADMIN, status: 'completed' });
     expect((await loadDeletionQueue(h.sql))?.closed[0]).toMatchObject({ status: 'completed', accountExists: false, removed: { selfies: 1, renders: 1 } });
   });
 
+  it('asks the operator to type the account before skipping the grace period', async () => {
+    const { deps, seen } = fakes(h.sql);
+    expect(deletionConfirmPhrase('Me@Twings.test ')).toBe('me@twings.test');
+    expect(deletionConfirmPhrase(null)).toBe('DELETE');
+    for (const confirm of [undefined, '', 'someone@else.test', 'DELETE']) {
+      expect(await decideDeletion(deps, admin, 'run', confirm === undefined ? { id } : { id, confirm }, now), String(confirm)).toEqual({ ok: false, code: 'unconfirmed' });
+    }
+    expect(seen.users).toEqual([]);
+    expect((await h.db.query('select status, attempts from account_deletion_requests')).rows[0]).toEqual({ status: 'requested', attempts: 0 });
+    // Case and stray spaces do not matter; the address does.
+    expect(await decideDeletion(deps, admin, 'run', { id, confirm: ' ME@twings.test' }, now)).toEqual({ ok: true, status: 'completed' });
+  });
+
   it('retries the cleanup of a request already past the point of no return', async () => {
     const broken = fakes(h.sql, { auth: true });
-    expect(await decideDeletion(broken.deps, admin, 'run', { id }, now)).toEqual({ ok: false, code: 'cleanupLeft', left: 1 });
+    expect(await decideDeletion(broken.deps, admin, 'run', { id, confirm: 'me@twings.test' }, now)).toEqual({ ok: false, code: 'cleanupLeft', left: 1 });
     expect((await loadDeletionQueue(h.sql))?.open[0]).toMatchObject({ status: 'processing', accountExists: false, cleanupLeft: 1 });
     expect(await decideDeletion(fakes(h.sql).deps, admin, 'run', { id }, now)).toEqual({ ok: true, status: 'completed' });
   });
@@ -475,7 +635,7 @@ describe('the operator works the queue', () => {
     const { deps } = fakes(h.sql);
     expect(await decideDeletion(deps, admin, 'complete', { id }, now)).toEqual({ ok: false, code: 'accountExists', from: 'requested' });
     const broken = fakes(h.sql, { provider: true });
-    await decideDeletion(broken.deps, admin, 'run', { id }, now);
+    await decideDeletion(broken.deps, admin, 'run', { id, confirm: 'me@twings.test' }, now);
     expect(await decideDeletion(deps, admin, 'complete', { id }, now)).toEqual({ ok: false, code: 'invalid' });
     expect(await decideDeletion(deps, admin, 'complete', { id, note: 'group removed in the provider console' }, now)).toEqual({ ok: true, status: 'completed' });
     expect((await h.db.query('select status, email, cleanup, closed_by, note from account_deletion_requests')).rows[0]).toEqual({
@@ -491,7 +651,7 @@ describe('the operator works the queue', () => {
 
     const again = await requestAccountDeletion(h.sql, member, true, now, 3);
     if (!again.ok) throw new Error('request failed');
-    await decideDeletion(fakes(h.sql, { auth: true }).deps, admin, 'run', { id: again.request.id }, now);
+    await decideDeletion(fakes(h.sql, { auth: true }).deps, admin, 'run', { id: again.request.id, confirm: 'me@twings.test' }, now);
     expect(await decideDeletion(deps, admin, 'cancel', { id: again.request.id, note: 'too late' }, now)).toEqual({ ok: false, code: 'badTransition', from: 'processing' });
   });
 
