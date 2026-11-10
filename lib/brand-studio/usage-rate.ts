@@ -9,6 +9,10 @@
  * tests/brand-studio/server/estimate.test.ts fails the moment they drift apart. No new price lives here.
  *
  * Client-safe on purpose: no db, no env, no server imports (`npm run security:client`).
+ *
+ * A screen shows the result as credits (lib/brand-studio/credits.ts), never as money.
+ * Per-model prices live in `estimateImageUsd` (models.ts); a model with `qualities` is priced at the
+ * quality asked for (its default when none was).
  */
 import {
   DEFAULT_REGION_EDIT_MODEL,
@@ -20,6 +24,7 @@ import {
   type StudioVideoModel,
   type StudioVideoResolution,
 } from './models';
+import type { StudioRemixMethod } from './contracts';
 
 export const STUDIO_USAGE_FACTORS = {
   krwPerUsd: 1400,
@@ -39,8 +44,8 @@ export function tenthsOfSeconds(seconds: number | null): number | null {
   return seconds === null || !Number.isFinite(seconds) ? null : Math.round(seconds * 10) / 10;
 }
 
-export function imageRunUsd(input: { model: string; resolution: string; references: number; count: number }): number {
-  return estimateImageUsd({ model: input.model, resolution: input.resolution, references: input.references }) * input.count;
+export function imageRunUsd(input: { model: string; resolution: string; references: number; count: number; quality?: string | null }): number {
+  return estimateImageUsd({ model: input.model, resolution: input.resolution, references: input.references, quality: input.quality ?? null }) * input.count;
 }
 
 /** The model a partial edit runs on: the picked one when it edits well, else the registry default. */
@@ -50,10 +55,10 @@ export function regionEditModel(id: string): StudioImageModel {
 }
 
 /** A partial edit is one edit call at 2K (or the model's default), the picture itself counting as a reference. */
-export function regionEditRun(id: string, references: number): { model: StudioImageModel; resolution: string; usd: number } {
+export function regionEditRun(id: string, references: number, quality?: string | null): { model: StudioImageModel; resolution: string; usd: number } {
   const model = regionEditModel(id);
   const resolution = (model.resolutions as readonly string[]).includes('2K') ? '2K' : model.defaultResolution;
-  return { model, resolution, usd: estimateImageUsd({ model: model.id, resolution, references: references + 1 }) };
+  return { model, resolution, usd: estimateImageUsd({ model: model.id, resolution, references: references + 1, quality: quality ?? null }) };
 }
 
 /** `draft` is billed as the 480p pass it is. */
@@ -67,12 +72,13 @@ export function videoRunUsd(input: { resolution: string; seconds: number }): num
 
 /**
  * A run with a reference video. An edit follows the source length (clamped to the model); a new take
- * uses the seconds asked for. The source is billed for at least one second.
+ * uses the seconds asked for. The source is billed for at least one second. A blueprint run never
+ * attaches the video (docs/BRAND-STUDIO-V3.md §6), so it is billed as a plain video run.
  */
 export function remixRunUsd(input: {
   model: Pick<StudioVideoModel, 'minSeconds' | 'maxSeconds' | 'defaultSeconds'>;
   resolution: string;
-  method: 'edit' | 'reference';
+  method: StudioRemixMethod;
   seconds: number | null;
   /** The reference video's length, or null when it was never measured. */
   referenceSeconds: number | null;
@@ -81,6 +87,7 @@ export function remixRunUsd(input: {
   const ref = tenthsOfSeconds(input.referenceSeconds);
   const asked = input.method === 'edit' ? null : input.seconds;
   const outputSeconds = asked ?? Math.min(model.maxSeconds, Math.max(model.minSeconds, Math.round(ref ?? model.defaultSeconds)));
+  if (input.method === 'blueprint') return { usd: videoRunUsd({ resolution: input.resolution, seconds: outputSeconds }), outputSeconds };
   const usd = estimateVideoUsd({
     resolution: billedResolution(input.resolution),
     seconds: outputSeconds,

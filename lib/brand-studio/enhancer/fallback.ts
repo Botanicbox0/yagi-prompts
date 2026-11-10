@@ -4,6 +4,7 @@
  * model's syntax and adds only the structural lines each kind needs (reference roles, keep and
  * change, sound). It never adds description the customer did not give.
  */
+import { composeBlueprintPrompt, isBlueprint } from './blueprint';
 import { audioLine, effectiveSeconds, formatRange, keepPhrase, planShots, referenceClause } from './lines';
 import { bindReferences, mapCustomerMentions, type Binding, type BoundReference } from './references';
 import type { EnhanceInput, EnhanceResult } from './types';
@@ -55,6 +56,7 @@ function videoPrompt(input: EnhanceInput, binding: Binding, request: string): st
   const seconds = effectiveSeconds(input.kind, video);
   const lines: string[] = [];
 
+  if (isBlueprint(input)) return composeBlueprintPrompt(input, binding, request, seconds);
   if (input.kind === 'video_remix') {
     const ref = binding.bound.find((b) => b.ref.kind === 'video')?.token ?? '@Video1';
     const change = mapCustomerMentions(video?.change?.trim() ?? '', binding.bound);

@@ -11,7 +11,7 @@
  * There is deliberately no parameter that could turn it off.
  */
 import type { StudioJobKind } from '../contracts';
-import { studioModel, type StudioImageModel, type StudioModel, type StudioVideoModel } from '../models';
+import { pixelSize, studioModel, type StudioImageModel, type StudioModel, type StudioVideoModel } from '../models';
 import type { StudioJobParams } from '../types';
 import type { StudioProviderRequest } from './types';
 
@@ -63,10 +63,28 @@ function safety(model: StudioModel): Record<string, unknown> {
   return hasSafetyChecker(model) ? { enable_safety_checker: true } : {};
 }
 
+/**
+ * GPT Image 2.6 (catalogue schema, 2026-11-11): the tier and ratio become exact `width` / `height`
+ * (models.ts sizes), `quality` is the one the run was planned at (low|medium|high; sent explicitly so a
+ * default change upstream cannot move it), one image per request (`n` left at 1), edits take `images`
+ * (up to 16). No safety field exists on these endpoints. The output stays PNG (SVG is never asked for).
+ */
+function pixelShape(model: StudioImageModel, resolution: string | null | undefined, aspect: string, quality: string | null | undefined): Record<string, unknown> {
+  const size = pixelSize(model, pick(resolution, model.resolutions, model.defaultResolution), aspect);
+  if (!size) throw new StudioRequestError(`no size for ${model.id}`);
+  const qualities = model.qualities ?? [];
+  return { width: size[0], height: size[1], quality: pick(quality, qualities, model.defaultQuality ?? 'medium') };
+}
+
 function imageRequest(input: StudioRequestInput): StudioProviderRequest {
   const model = imageModel(input.model);
   const urls = input.images.map((i) => i.url);
   if (urls.length > model.maxReferences) throw new StudioRequestError('too many reference images');
+  if (model.pixels) {
+    const body = { prompt: input.prompt, ...pixelShape(model, input.params.resolution, pick(input.params.aspect, model.aspects, model.aspects[0]!), input.params.quality) };
+    if (urls.length === 0) return { endpoint: `${model.api.alias}/${model.endpoints.textToImage}`, body };
+    return { endpoint: `${model.api.alias}/${model.endpoints.edit}`, body: { ...body, images: urls } };
+  }
   const common = {
     prompt: input.prompt,
     aspect_ratio: pick(input.params.aspect, model.aspects, model.aspects[0]!),
@@ -81,6 +99,11 @@ function regionRequest(input: StudioRequestInput): StudioProviderRequest {
   const model = imageModel(input.model);
   if (!input.regionCrop) throw new StudioRequestError('region edit without a crop');
   const urls = [input.regionCrop.url, ...input.images.map((i) => i.url)].slice(0, model.maxReferences);
+  if (model.pixels)
+    return {
+      endpoint: `${model.api.alias}/${model.endpoints.edit}`,
+      body: { prompt: input.prompt, images: urls, ...pixelShape(model, input.params.resolution ?? '2K', input.regionCrop.aspect, input.params.quality), output_format: 'png' },
+    };
   return {
     endpoint: `${model.api.alias}/${model.endpoints.edit}`,
     body: {
@@ -188,7 +211,9 @@ export function buildStudioRequest(input: StudioRequestInput): StudioProviderReq
     case 'video':
       return videoRequest(input);
     case 'video_remix':
-      return remixRequest(input);
+      // A blueprint was only read; it goes out as the text / image / reference-image run it is, and
+      // `videoRequest` refuses it outright if a video ever reached its inputs (docs/BRAND-STUDIO-V3.md §6).
+      return input.params.method === 'blueprint' ? videoRequest(input) : remixRequest(input);
     case 'video_final':
       return finalRequest(input);
   }

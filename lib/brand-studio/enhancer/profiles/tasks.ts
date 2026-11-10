@@ -66,9 +66,43 @@ ${lengthRule(seconds)}
 ${soundRule(audio)}`;
 }
 
+/**
+ * A remake written from the reading alone (docs/BRAND-STUDIO-V3.md §6). The blueprint itself travels in
+ * the user turn ("video.shots", "video.reference"), as the customer may have edited it; these rules only
+ * say how to write it out.
+ */
+function blueprintTask(input: EnhanceInput, binding: Binding, seconds: number | null, shots: readonly PlannedShot[]): string {
+  const video = input.video;
+  const audio = video?.audio ?? 'native';
+  const keep = new Set(video?.keep ?? []);
+  const kept = keepPhrase(video?.keep) || 'nothing in particular';
+  const changeLine = video?.change?.trim()
+    ? 'What to replace is given in "video.change"; the request may add to it.'
+    : 'Nothing is replaced unless the request says so: remake the blueprint as it is.';
+  let refs: string;
+  if (binding.seedanceMode === 'reference') refs = 'Attached pictures are named by their tokens; use them for what each one supplies.';
+  else if (binding.seedanceMode === 'frames') refs = 'The opening (and any closing) frame is supplied as a picture without a token: write no tokens, start from it and move on.';
+  else refs = 'Nothing is attached: write no reference tokens.';
+  const length = seconds ? `${seconds.toFixed(1)}s` : 'the full length';
+  return `Task: remake a reference video from its blueprint alone. The video itself is NOT attached and the generator never sees it, so write every subject, move and handover out in words. Never mention a reference video, an original or a video token.
+${changeLine}
+${refs}
+The blueprint: "video.shots" are the ranges, already fitted to the new length (framing, action, camera, and, when read, "transition" and "move" with travel / turn / zoom); "video.reference" has the look, the sound, the subjects with their counts and the setting.
+Write, in this order:
+1. One line per attached picture, if any: what it supplies and what it does not.
+2. "Visual style:" one or two sentences: the world, where the light comes from and how soft it is, which colours sit where, the texture of the picture.${keep.has('look') ? ' Take it from the blueprint\'s look and setting.' : ' The look is not kept: take the world from the request, the change and the brand, not from the blueprint.'}
+3. "On screen:" each subject once with its count ("one woman in a white shirt; two glass bottles"). Keep those counts in every range. A replaced subject takes the place and the count of the one it replaces unless the change says otherwise.
+4. The timeline, one line per range, using exactly the ${shots.length || 'given'} ranges in "video.shots" from 0.0s to ${length}, with no gaps or overlaps, even when it is five seconds or shorter. Each line: the framing, ONE action, then "Camera —" with travel (the camera body moving through space: push in, pull back, track, crane, orbit, handheld follow, or none), pan/tilt (turning in place, or none) and zoom (the lens only, or none) as three separate parts, each with where it starts and where it ends. End every line except the last with its handover: "Hard cut.", "Continuous into the next range, no cut." or the named transition and what drives it.
+5. "Last frame:" one sentence on what is on screen when the video ends.
+6. The sound line.
+Kept from the blueprint: ${kept}. For each kept item carry the blueprint's words over in plain language; rewrite only what the change replaces, and keep a replaced product the same shape, label and size in every range.
+${soundRule(audio)}`;
+}
+
 function remixTask(input: EnhanceInput, binding: Binding, seconds: number | null, shots: readonly PlannedShot[]): string {
   const video = input.video;
   const audio = video?.audio ?? 'native';
+  if (video?.method === 'blueprint') return blueprintTask(input, binding, seconds, shots);
   const ref = binding.bound.find((b) => b.ref.kind === 'video')?.token ?? '@Video1';
   // The customer's words stay in the user turn (`video.change`, `request`), never in these rules.
   const changeLine = video?.change?.trim()

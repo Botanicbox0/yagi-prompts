@@ -116,7 +116,7 @@
 - 모든 썸네일은 끌 수 있고(`startRefDrag`), 누르면 프롬프트 바 참조에 붙는다. 폴더 위에 카드를 떨어뜨리면 담긴다.
 - 접기 가능(48px 손잡이). 전화에서는 아래 시트.
 - 서버: `brand_studio_folders`, `brand_studio_folder_items`, `brand_studio_likes`
-  (`0079_core_brand_studio_library.sql` + `0154_glue_brand_studio_library.sql`, RLS 강제·정책 없음·service role만),
+  (`0081_core_brand_studio_library.sql` + `0154_glue_brand_studio_library.sql`, RLS 강제·정책 없음·service role만),
   `lib/brand-studio/library.ts`, `POST/GET /api/brand-studio/library`. 권한·샌드박스 확인은 기존 서비스와 같은 가드.
 
 ## 5. 레이어 편집 "꾸미기" (슬라이스 E)
@@ -182,7 +182,7 @@
 | --- | --- |
 | A | `components/brand-workspace/navigation.tsx`, `app/(brand)/layout.tsx`, `app/(brand)/rail.css`, `components/brand-workspace/rail-*.tsx`, `components/brand-studio/explainer.tsx`, `app/(brand)/brand/members/page.tsx`, `lib/brand-studio/member-usage.ts`, `messages/studio-shell.ts`, 테스트 `tests/brand-studio/shell/*` |
 | B1 | `components/brand-studio/{studio-app,board,dock,dock-model,tray,viewer,region-editor,use-dock,use-viewer,use-studio,store,refs,copy,api,v2-page,icons,poller}.ts(x)`, 새 `components/brand-studio/gallery/*`, `app/(brand)/studio-v2.css`, `lib/brand-studio/{models,usage-rate}.ts`, `lib/brand-studio/provider/requests.ts`, `lib/brand-studio/enhancer/profiles/*`(영상 프로필 제외), `messages/*`의 `brandStudio`, `scripts/studio-catalog.ts`, 테스트 `tests/brand-studio/ui/*`, `tests/brand-studio/server/models*` |
-| B2 | `components/brand-studio/rail/*`, `components/brand-studio/{asset-panel,asset-editor}.tsx`, `lib/brand-studio/{library,library-contracts}.ts`, `app/api/brand-studio/library/*`, 마이그레이션 0079/0154, `messages/studio-library.ts`, 테스트 `tests/brand-studio/library/*` |
+| B2 | `components/brand-studio/rail/*`, `components/brand-studio/{asset-panel,asset-editor}.tsx`, `lib/brand-studio/{library,library-contracts}.ts`, `app/api/brand-studio/library/*`, 마이그레이션 0081/0154, `messages/studio-library.ts`, 테스트 `tests/brand-studio/library/*` |
 | C | `app/(brand)/brand/studio/video/*`, `components/brand-studio/video/*`, `components/brand-studio/remix-panel.tsx`, `lib/brand-studio/{plan,prepare,reference-video}.ts`의 리믹스 부분, `lib/brand-studio/film-sheet/*`, `lib/brand-studio/enhancer/profiles/seedance.ts`·`tasks.ts`, `lib/brand-studio/contracts.ts`의 리믹스 부분, `lib/brands/workspace/commission-tracks.ts` 문구, `messages/studio-video.ts`, 테스트 `tests/brand-studio/video/*` |
 | D | `app/(brand)/brand/studio/review/*`, `components/brand-studio/review/*`, `lib/brand-studio/{review,review-contracts}.ts`, `app/api/brand-studio/review/*`, `app/(admin)/admin/brand-studio/*`, 관리자 오퍼레이션 등록, 마이그레이션 0080/0155, `messages/studio-review.ts`, 테스트 `tests/brand-studio/review/*` |
 | E | `components/brand-studio/layers/*`, `messages/studio-layers.ts`, 테스트 `tests/brand-studio/layers/*` |

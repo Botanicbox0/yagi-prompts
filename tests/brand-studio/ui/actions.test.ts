@@ -5,10 +5,21 @@ import {
   AssetReserveSchema,
   CampaignHandoffSchema,
   FilmAnalyzeSchema,
+  RegionEditJobSchema,
   StudioJobCreateSchema,
 } from "@/lib/brand-studio/contracts";
 import { createStudioApi, uploadProblem } from "@/components/brand-studio/api";
-import { finalInput, initialDraft, regionEditInput, rerunInput, withModel } from "@/components/brand-studio/dock-model";
+import {
+  finalInput,
+  initialDraft,
+  regionEditInput,
+  regionInstructionForForm,
+  regionInstructionForServer,
+  regionProblem,
+  rerunInput,
+  withModel,
+} from "@/components/brand-studio/dock-model";
+import { trayItemFromAsset, trayItemFromOutput } from "@/components/brand-studio/refs";
 import { handoffInput } from "@/components/brand-studio/handoff-dialog";
 import { canRerun } from "@/components/brand-studio/viewer";
 import { ORG, asset, id, job, output, studioState } from "./fixtures";
@@ -50,8 +61,46 @@ describe("viewer actions", () => {
     const box = { x: 0.2, y: 0.25, w: 0.3, h: 0.2 };
     const onOutput = regionEditInput({ ids: ids(), source: { outputId: output(1).id }, box, instruction: " 라벨을 또렷하게 ", draft: initialDraft() });
     const onAsset = regionEditInput({ ids: ids(), source: { assetId: asset(1).id }, box, instruction: "logo", draft: withModel(initialDraft(), "nano-banana-pro") });
-    for (const input of [onOutput, onAsset]) expect(StudioJobCreateSchema.parse(input)).toMatchObject({ kind: "region_edit", model: "nano-banana-pro", box });
+    for (const input of [onOutput, onAsset]) expect(StudioJobCreateSchema.parse(input)).toMatchObject({ kind: "region_edit", model: "nano-banana-pro", box, references: [] });
     expect(onOutput).toMatchObject({ prompt: "라벨을 또렷하게", source: { outputId: output(1).id } });
+  });
+
+  it("sends the partial edit's references, numbered for the server (the cut-out is the form's 1)", () => {
+    const box = { x: 0.2, y: 0.25, w: 0.3, h: 0.2 };
+    const logo = { ...trayItemFromAsset(asset(2)), role: "logo" as const };
+    const product = trayItemFromOutput(output(3), "결과");
+    const input = regionEditInput({
+      ids: ids(),
+      source: { outputId: output(1).id },
+      box,
+      instruction: "2번 이미지 로고를 라벨 가운데에, 이미지 3의 병 모양은 그대로",
+      draft: initialDraft(),
+      model: "nano-banana-pro",
+      references: [logo, { ...product, role: "product" }],
+      locale: "ko",
+    });
+    expect(RegionEditJobSchema.parse(input)).toMatchObject({ references: [{ assetId: asset(2).id, role: "logo" }, { outputId: output(3).id, role: "product" }] });
+    expect(input.kind === "region_edit" && input.prompt).toBe("이미지 1 로고를 라벨 가운데에, 이미지 2의 병 모양은 그대로");
+    expect(regionInstructionForServer("이미지 1만 밝게", "ko")).toBe("선택한 부분만 밝게");
+    expect(regionInstructionForForm("이미지 1 로고를", "ko")).toBe("이미지 2 로고를");
+    expect(regionInstructionForServer("put image 2 here", "en")).toBe("put image 1 here");
+    // A quality goes along only for an edit model that has one.
+    expect(regionEditInput({ ids: ids(), source: { outputId: output(1).id }, box, instruction: "x", draft: initialDraft(), model: "gpt-image-2.6-flare", quality: "high" })).toMatchObject({ model: "gpt-image-2.6-flare", quality: "high" });
+    expect(regionEditInput({ ids: ids(), source: { outputId: output(1).id }, box, instruction: "x", draft: initialDraft(), model: "nano-banana-pro", quality: "high" })).not.toHaveProperty("quality");
+    // A model that cannot edit a part well never runs one: the default edit model does.
+    expect(regionEditInput({ ids: ids(), source: { outputId: output(1).id }, box, instruction: "x", draft: initialDraft(), model: "seedream-5-pro" })).toMatchObject({ model: "nano-banana-pro" });
+  });
+
+  it("checks a partial edit before it leaves: a box, words, pictures only and numbers that exist", () => {
+    const base = { box: { x: 0.1, y: 0.1, w: 0.3, h: 0.3 }, instruction: "로고를 또렷하게", model: "nano-banana-pro", references: [trayItemFromAsset(asset(2))] };
+    expect(regionProblem(base)).toBeNull();
+    expect(regionProblem({ ...base, box: null })).toEqual({ kind: "need_box" });
+    expect(regionProblem({ ...base, instruction: " " })).toEqual({ kind: "empty_prompt" });
+    expect(regionProblem({ ...base, references: [trayItemFromAsset(asset(3, { kind: "video" }))] })).toEqual({ kind: "image_only" });
+    expect(regionProblem({ ...base, instruction: "이미지 2 로고를" })).toBeNull();
+    expect(regionProblem({ ...base, instruction: "이미지 3 로고를" })).toEqual({ kind: "missing", mentions: [{ kind: "image", number: 3 }] });
+    const many = Array.from({ length: 10 }, (_, i) => trayItemFromAsset(asset(10 + i)));
+    expect(regionProblem({ ...base, references: many })).toMatchObject({ kind: "too_many_images" });
   });
 
   it("finishes a draft at 1080p, saves a result and hands it to a campaign", async () => {

@@ -305,6 +305,24 @@ describe('pages scoped to the selected brand', () => {
     );
     expect(standardNavHtml).toContain('data-brand-layout-mode="topbar"');
 
+    // Studio v2 on (docs/BRAND-STUDIO-V3.md §3): an ordinary brand moves to the rail, the Morphic brand
+    // keeps the sidebar markup byte for byte (tests/brand-studio/shell/navigation-modes.test.tsx has the rest).
+    const shell = getDictionary('ko').studioShell;
+    const railNavHtml = renderToStaticMarkup(
+      <WorkspaceNavigation
+        home="Home" members="Team" settings="Settings" library="Library" studio="Studio" identity="Brand"
+        studioV2 shell={shell} locale="ko"
+        scope={{ choices: [{ id: A, name: 'Alpha', role: 'owner', logoUrl: null, denied: [] }], projectOrganizations: {} }}
+      />
+    );
+    expect(railNavHtml).toContain('data-brand-layout-mode="rail"');
+    expect(renderToStaticMarkup(
+      <WorkspaceNavigation
+        home="Home" members="Team" settings="Settings" library="Library" studio="Studio" identity="Brand"
+        studioV2 shell={shell} locale="ko" scope={state.scope}
+      />
+    )).toBe(navHtml);
+
     const homeHtml = await html(BrandHome(search(M)));
     expect(homeHtml).not.toContain('data-track="studio"');
     expect(homeHtml).not.toContain('/brand/studio');

@@ -8,7 +8,7 @@ import { brandScope, selectedAccess } from "@/components/brand-workspace/scope";
 import { BrandUnavailable } from "@/components/brand-workspace/brand-unavailable";
 import { scopedHref, sectionVisibility } from "@/lib/brands/workspace/selection";
 import { StaffNotice, adminOrganizationHref } from "@/components/brand-workspace/staff-notice";
-import { BrandDoors, CAMPAIGN_LIST_ANCHOR } from "@/components/brand-studio/doors";
+import { CAMPAIGN_LIST_ANCHOR } from "@/components/brand-studio/doors";
 import { brandStudioV2Open } from "@/lib/flags";
 import { studioV2Visible } from "@/lib/brand-studio/visibility";
 import { getDictionary } from "@/lib/i18n/dictionaries";
@@ -82,14 +82,6 @@ export default async function BrandHome({
         </section>
       ) : (
         <>
-          {doors && (
-            <BrandDoors
-              copy={getDictionary(locale).brandStudio}
-              choice={doors}
-              hasCampaigns={workspace.projects.length > 0}
-              canRequest={access.canRequest}
-            />
-          )}
           {workspace.projects.length === 0 ? (
             access.staff ? (
               <section className="bw-empty" data-brand-empty="staff">

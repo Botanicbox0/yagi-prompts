@@ -4,11 +4,12 @@
  * screen runs. Components get answers already merged into the store; they never fetch on their own.
  */
 import { useCallback, useEffect, useMemo, useReducer, useRef, useState } from "react";
-import type { FilmSheet, StudioJobCreate, StudioState } from "@/lib/brand-studio/contracts";
+import type { FilmSheet, StudioJobCreate, StudioJobView, StudioState } from "@/lib/brand-studio/contracts";
 import { createStudioApi, isFailure, measureInBrowser, type StudioApi, type StudioOps } from "./api";
 import { newRequestId } from "./copy";
 import { createPollLoop, type PollLoop } from "./poller";
-import { initialStore, studioReducer } from "./store";
+import { STUDIO_JOB_SETTLED, STUDIO_JOB_STARTED, announce } from "./seams";
+import { initialStore, isOpen, studioReducer } from "./store";
 
 export type FilmState = { status: "loading" } | { status: "done"; sheet: FilmSheet | null };
 
@@ -61,6 +62,22 @@ export function useStudio({ organizationId, initialState, api: injected }: { org
     if (jobs) loop.current?.update(jobs);
   }, [jobs]);
 
+  // A run this screen watched has settled: tell the workspace (its rail shows a toast elsewhere).
+  const seen = useRef<Map<string, StudioJobView["status"]> | null>(null);
+  useEffect(() => {
+    if (!jobs) return;
+    const before = seen.current;
+    for (const event of settledJobs(before, jobs)) announce(STUDIO_JOB_SETTLED, event);
+    seen.current = new Map(jobs.map((job) => [job.id, job.status]));
+  }, [jobs]);
+
+  // Another screen started a run (the reverse panel, a partial edit elsewhere): read the board again.
+  useEffect(() => {
+    const reload = () => void load();
+    window.addEventListener(STUDIO_JOB_STARTED, reload);
+    return () => window.removeEventListener(STUDIO_JOB_STARTED, reload);
+  }, [load]);
+
   const createJob = useCallback(
     async (input: StudioJobCreate) => {
       const result = await api.call("job.create", input);
@@ -101,6 +118,9 @@ export function useStudio({ organizationId, initialState, api: injected }: { org
   );
 
   const handoff = useCallback((input: StudioOps["handoff.campaign"][0]) => api.call("handoff.campaign", input), [api]);
+
+  /** ✨ in the prompt bar: the sentence the enhancer would send, without starting anything. */
+  const enhancePrompt = useCallback((input: StudioOps["prompt.enhance"][0]) => api.call("prompt.enhance", input), [api]);
 
   /** Stops a run that has not reached the maker yet; either way the job is read again (status and usage). */
   const cancelJob = useCallback(
@@ -153,7 +173,25 @@ export function useStudio({ organizationId, initialState, api: injected }: { org
     [api],
   );
 
-  return { store, load, createJob, cancelJob, saveOutput, deleteOutput, updateAsset, deleteAsset, handoff, films, analyzeFilm, uploads, upload };
+  return { store, load, createJob, cancelJob, saveOutput, deleteOutput, updateAsset, deleteAsset, handoff, enhancePrompt, films, analyzeFilm, uploads, upload };
+}
+
+/**
+ * Runs that were open in the previous view of the board and are closed now. The first view settles
+ * nothing (a run already finished before the screen opened was not watched).
+ */
+export function settledJobs(
+  before: ReadonlyMap<string, StudioJobView["status"]> | null,
+  jobs: readonly Pick<StudioJobView, "id" | "status" | "kind">[],
+): Array<{ jobId: string; status: "succeeded" | "failed" | "canceled"; kind: string }> {
+  if (!before) return [];
+  const out: Array<{ jobId: string; status: "succeeded" | "failed" | "canceled"; kind: string }> = [];
+  for (const job of jobs) {
+    const was = before.get(job.id);
+    if (was && isOpen({ status: was }) && !isOpen(job) && (job.status === "succeeded" || job.status === "failed" || job.status === "canceled"))
+      out.push({ jobId: job.id, status: job.status, kind: job.kind });
+  }
+  return out;
 }
 
 export type StudioController = ReturnType<typeof useStudio>;

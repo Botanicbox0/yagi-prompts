@@ -1,48 +1,70 @@
+"use client";
 /**
- * The prompt dock (docs/BRAND-STUDIO-V2.md §5.2): one dock for images and video. Three rows: the
- * reference tray, the prompt, then the controls from the model registry with this run's expected usage
- * and the screen's single solid button. The month's usage is a hairline meter on the top edge and one
- * small line under the controls.
+ * The prompt bar (docs/BRAND-STUDIO-V3.md §4): one rounded translucent panel floating over the bottom
+ * centre of the wall. Top: the reference row (square thumbnails, a number under each). Middle: the
+ * text. Bottom: one row of compact chips (model, ratio, quality, count — length and sound on the video
+ * screen), prompt polishing (the "자동 개선" switch with its "!" explanation and the ✨ button), and on
+ * the right the screen's one solid button with this run's cost in credits.
+ *
+ * The screen fixes the medium (`mode`): there is no image/video switch here.
  */
 import { useEffect, useId, useRef, useState, type DragEvent, type ReactNode } from "react";
 import { STUDIO_AUDIO_MODES, STUDIO_LIMITS, type StudioAllowanceView } from "@/lib/brand-studio/contracts";
+import { creditsLeft } from "@/lib/brand-studio/credits";
+import type { StudioMedium, StudioVideoModel } from "@/lib/brand-studio/models";
+import type { Dictionary } from "@/lib/i18n/dictionaries";
 import { uploadKind } from "./api";
-import { fill, formatDay, formatKrw, type StudioCopy, type StudioLocale } from "./copy";
-import { DRAFT_RESOLUTION, dockControls, remixActive, remixFit, withMedium, withModel, type DockDraft } from "./dock-model";
+import { credits, fill, formatDay, type StudioCopy, type StudioLocale } from "./copy";
+import { DRAFT_RESOLUTION, dockControls, remixActive, remixBlocking, remixFit, withModel, type DockDraft } from "./dock-model";
+import { ModelMenu } from "./gallery/model-menu";
 import { StudioIcon } from "./icons";
 import { RemixPanel } from "./remix-panel";
 import { REF_DRAG_TYPE, acceptsDrag, decodeRefDrag, type RefSource, type TrayItem } from "./refs";
 import { Tray } from "./tray";
 import { filmLimitLine } from "./use-dock";
 import type { FilmState } from "./use-studio";
-import type { StudioVideoModel } from "@/lib/brand-studio/models";
 
 export interface DockProps {
+  /** The screen's medium; the bar never offers the other one. */
+  mode?: StudioMedium;
   draft: DockDraft;
   tray: readonly TrayItem[];
   labels: readonly string[];
   copy: StudioCopy;
   locale: StudioLocale;
   allowance: StudioAllowanceView;
-  /** This run's expected usage in KRW (dock-model.ts `dockEstimateKrw`, the server's arithmetic). */
-  quoteKrw: number;
+  /** This run's expected cost in credits (dock-model.ts `dockCredits`, the server's arithmetic). */
+  credits: number;
   busy: boolean;
   message: string | null;
-  /** A quiet line about something the dock did on its own. */
+  /** A quiet line about something the bar did on its own. */
   notice?: string | null;
+  /** The screen's latest status line, shown as a small pill above the bar (the screen announces it). */
+  toast?: string | null;
   film: FilmState | null;
   uploading: readonly string[];
   initialOpenRef?: string | null;
+  /** The ✨ button is waiting for the improved sentence. */
+  enhancing?: boolean;
+  /** The text in the field is the improved sentence (offer "원래 문장으로"). */
+  enhanced?: boolean;
+  /** Opens the model list first (tests). */
+  initialModelMenu?: boolean;
+  /** `dict.studioVideo`, for the reference-video panel's link to the full reverse panel (video screen). */
+  videoCopy?: Dictionary["studioVideo"];
   onDraft(next: DockDraft): void;
   onTrayUpdate(key: string, patch: Partial<Pick<TrayItem, "role" | "use" | "avoid" | "frame">>): void;
   onTrayRemove(key: string): void;
+  onTrayMove?(from: number, to: number): void;
   onSubmit(): void;
   onDropSource(source: RefSource): void;
   onFiles(files: File[]): void;
   onBrowse(): void;
+  onEnhance?(): void;
+  onUndoEnhance?(): void;
 }
 
-/** The dock's real height as `--bs-dock-h` on the page, so the board, popovers and the help launcher clear it. */
+/** The bar's real height as `--bs-dock-h` on the page, so the wall, popovers and the help launcher clear it. */
 function useDockHeight() {
   const ref = useRef<HTMLFormElement>(null);
   useEffect(() => {
@@ -61,21 +83,37 @@ function useDockHeight() {
   return ref;
 }
 
+/** Grows the text field with what is typed, up to six lines. */
+function useAutoGrow(value: string) {
+  const ref = useRef<HTMLTextAreaElement>(null);
+  useEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    el.style.height = "auto";
+    el.style.height = `${Math.min(el.scrollHeight, 6 * 24 + 20)}px`;
+  }, [value]);
+  return ref;
+}
+
 export function Dock(props: DockProps) {
-  const { draft, tray, copy, locale, busy, message, onDraft } = props;
+  const { draft, tray, copy, locale, busy, message, onDraft, mode = draft.medium, enhancing = false, enhanced = false } = props;
   const d = copy.dock;
   const id = useId();
   const form = useDockHeight();
+  const field = useAutoGrow(draft.prompt);
   const controls = dockControls(draft);
   const remix = remixActive(draft, tray);
   const fit = remix ? remixFit(draft, tray) : null;
   const limits = controls.model.medium === "video" ? (controls.model as StudioVideoModel).referenceVideoSeconds : null;
-  const filmLimit = fit && limits ? (fit.problem ? filmLimitLine(fit.problem, limits, copy) : !fit.editable ? filmLimitLine("edit", limits, copy) : null) : null;
+  // A blueprint only reads the clip, so its pixel size is no reason to stop (dock-model.ts `remixBlocking`).
+  const blocking = remixBlocking(draft, fit);
+  const filmLimit = fit && limits ? (blocking ? filmLimitLine(blocking, limits, copy) : !fit.editable && draft.method !== "blueprint" ? filmLimitLine("edit", limits, copy) : null) : null;
+  const filmAsset = remix ? (tray.find((item) => item.kind === "video")?.assetId ?? null) : null;
   const [dropActive, setDropActive] = useState(false);
   const depth = useRef(0);
   const set = (patch: Partial<DockDraft>) => onDraft({ ...draft, ...patch });
-  const hint = (key: string) => copy.models[key as keyof StudioCopy["models"]];
-  const quote = formatKrw(props.quoteKrw, locale);
+  const cost = credits(copy.credits.amount, props.credits, locale);
+  const canEnhance = Boolean(props.onEnhance) && draft.prompt.trim().length > 0 && !enhancing && !busy;
 
   const dragIn = (event: DragEvent) => {
     if (!acceptsDrag(event.dataTransfer?.types)) return;
@@ -107,7 +145,8 @@ export function Dock(props: DockProps) {
       ref={form}
       className="bs-dock"
       data-studio-dock
-      data-mode={draft.medium}
+      data-mode={mode}
+      data-drop-target={dropActive ? "" : undefined}
       aria-label={d.label}
       aria-busy={busy}
       onSubmit={(event) => {
@@ -119,6 +158,11 @@ export function Dock(props: DockProps) {
       onDragLeave={dragOut}
       onDrop={drop}
     >
+      {props.toast && (
+        <p className="bs-dock-toast" aria-hidden="true" data-studio-toast>
+          {props.toast}
+        </p>
+      )}
       <UsageMeter allowance={props.allowance} copy={copy} locale={locale} />
       <Tray
         items={tray}
@@ -130,63 +174,86 @@ export function Dock(props: DockProps) {
         initialOpen={props.initialOpenRef ?? null}
         onUpdate={props.onTrayUpdate}
         onRemove={props.onTrayRemove}
+        onMove={props.onTrayMove ?? (() => {})}
         onBrowse={props.onBrowse}
       />
-      {remix && <RemixPanel draft={draft} film={props.film} copy={copy} disabled={busy} limit={filmLimit} editable={fit?.editable ?? true} onChange={set} />}
-      <label className="bs-sr" htmlFor={`${id}-prompt`}>
-        {d.label}
-      </label>
-      <textarea
-        id={`${id}-prompt`}
-        className="bs-prompt"
-        rows={2}
-        maxLength={STUDIO_LIMITS.promptMax}
-        value={draft.prompt}
-        placeholder={d.placeholder}
-        aria-describedby={message ? `${id}-message` : undefined}
-        aria-keyshortcuts="Control+Enter Meta+Enter"
-        onChange={(event) => set({ prompt: event.target.value })}
-        onKeyDown={(event) => {
-          if (event.key === "Enter" && (event.ctrlKey || event.metaKey)) {
+      {remix && (
+        <RemixPanel
+          draft={draft}
+          film={props.film}
+          copy={copy}
+          disabled={busy}
+          limit={filmLimit}
+          editable={fit?.editable ?? true}
+          videoCopy={props.videoCopy}
+          videoAssetId={filmAsset}
+          onChange={set}
+        />
+      )}
+      <div className="bs-prompt-wrap" data-enhancing={enhancing ? "" : undefined} data-enhanced={enhanced ? "" : undefined}>
+        <label className="bs-sr" htmlFor={`${id}-prompt`}>
+          {d.label}
+        </label>
+        <textarea
+          ref={field}
+          id={`${id}-prompt`}
+          className="bs-prompt"
+          rows={1}
+          maxLength={STUDIO_LIMITS.promptMax}
+          value={draft.prompt}
+          placeholder={mode === "video" ? d.placeholderVideo : d.placeholder}
+          aria-describedby={[message ? `${id}-message` : "", enhanced || enhancing ? `${id}-enhanced` : ""].filter(Boolean).join(" ") || undefined}
+          aria-busy={enhancing}
+          readOnly={enhancing}
+          aria-keyshortcuts="Control+Enter Meta+Enter"
+          onChange={(event) => set({ prompt: event.target.value })}
+          onKeyDown={(event) => {
+            if (event.key === "Enter" && (event.ctrlKey || event.metaKey)) {
+              event.preventDefault();
+              event.currentTarget.form?.requestSubmit();
+            }
+          }}
+          onPaste={(event) => {
+            const files = Array.from(event.clipboardData?.files ?? []).filter((file) => uploadKind(file.type) !== null);
+            if (!files.length) return;
             event.preventDefault();
-            event.currentTarget.form?.requestSubmit();
-          }
-        }}
-        onPaste={(event) => {
-          const files = Array.from(event.clipboardData?.files ?? []).filter((file) => uploadKind(file.type) !== null);
-          if (!files.length) return;
-          event.preventDefault();
-          props.onFiles(files);
-        }}
-      />
+            props.onFiles(files);
+          }}
+        />
+      </div>
+      {(enhancing || enhanced) && (
+        <p id={`${id}-enhanced`} className="bs-dock-note bs-enhanced-note" role="status" data-studio-enhanced>
+          <span>{enhancing ? d.enhancing : d.enhanced}</span>
+          {enhanced && props.onUndoEnhance && (
+            <button type="button" className="bs-link-btn" data-studio-undo-enhance onClick={props.onUndoEnhance}>
+              <StudioIcon name="undo" />
+              {d.undoEnhance}
+            </button>
+          )}
+        </p>
+      )}
       {message && (
         <p id={`${id}-message`} className="bs-dock-message" role="alert" data-studio-dock-message>
           {message}
         </p>
       )}
-      {props.notice && draft.medium === "video" && (
+      {props.notice && (
         <p className="bs-dock-note" role="status" data-studio-dock-notice>
           {props.notice}
         </p>
       )}
       <div className="bs-controls">
         <div className="bs-controls-set" data-studio-controls>
-          <fieldset className="bs-seg" data-studio-mode>
-            <legend className="bs-sr">{d.mode}</legend>
-            {(["image", "video"] as const).map((medium) => (
-              <label key={medium} className="bs-seg-option">
-                <input type="radio" name={`${id}-mode`} value={medium} checked={draft.medium === medium} onChange={() => onDraft(withMedium(draft, medium))} />
-                <span>{d[medium]}</span>
-              </label>
-            ))}
-          </fieldset>
-          <Select id={`${id}-model`} label={d.model} quietLabel value={controls.model.id} display={controls.model.label} onChange={(value) => onDraft(withModel(draft, value))} data="model">
-            {controls.models.map((model) => (
-              <option key={model.id} value={model.id}>
-                {`${model.label} · ${hint(model.hintKey)}`}
-              </option>
-            ))}
-          </Select>
+          <ModelMenu
+            models={controls.models}
+            value={controls.model.id}
+            draft={draft}
+            references={tray.length}
+            copy={copy}
+            locale={locale}
+            initialOpen={props.initialModelMenu}
+            onChange={(value) => onDraft(withModel(draft, value))}
+          />
           <Select id={`${id}-aspect`} label={d.aspect} value={draft.aspect} display={draft.aspect} onChange={(aspect) => set({ aspect })} data="aspect">
             {controls.aspects.map((aspect) => (
               <option key={aspect} value={aspect}>
@@ -208,6 +275,22 @@ export function Dock(props: DockProps) {
               </option>
             ))}
           </Select>
+          {controls.qualities.length > 0 && (
+            <Select
+              id={`${id}-quality`}
+              label={d.quality}
+              value={draft.quality}
+              display={copy.qualities[draft.quality as keyof StudioCopy["qualities"]] ?? draft.quality}
+              onChange={(quality) => set({ quality })}
+              data="quality"
+            >
+              {controls.qualities.map((quality) => (
+                <option key={quality} value={quality}>
+                  {copy.qualities[quality as keyof StudioCopy["qualities"]] ?? quality}
+                </option>
+              ))}
+            </Select>
+          )}
           {draft.medium === "image" ? (
             <Select id={`${id}-count`} label={d.count} value={String(draft.count)} display={fill(d.countValue, { n: draft.count })} onChange={(value) => set({ count: Number(value) })} data="count">
               {controls.counts.map((n) => (
@@ -236,42 +319,79 @@ export function Dock(props: DockProps) {
               ))}
             </Select>
           )}
-          <button
-            type="button"
-            role="switch"
-            className="bs-switch"
-            aria-checked={draft.enhance}
-            aria-describedby={`${id}-enhance`}
-            title={d.enhanceHint}
-            data-studio-enhance
-            onClick={() => set({ enhance: !draft.enhance })}
-          >
-            <span className="bs-switch-knob" aria-hidden="true" />
-            {d.enhance}
-          </button>
-          <span id={`${id}-enhance`} className="bs-sr">
-            {d.enhanceHint}
+          <span className="bs-enhance" data-studio-enhance-group>
+            <button
+              type="button"
+              role="switch"
+              className="bs-switch"
+              aria-checked={draft.enhance}
+              data-studio-enhance
+              onClick={() => set({ enhance: !draft.enhance })}
+            >
+              <span className="bs-switch-knob" aria-hidden="true" />
+              {d.enhance}
+            </button>
+            <Tip id={`${id}-enhance-tip`} label={d.enhanceInfo}>
+              <span>{mode === "video" ? d.enhanceTipVideo : d.enhanceTip}</span>
+              <span>{d.enhanceTipFree}</span>
+            </Tip>
+            {props.onEnhance && (
+              <button
+                type="button"
+                className="bs-chip-btn bs-enhance-now"
+                data-studio-enhance-now
+                aria-label={d.enhanceNow}
+                title={d.enhanceNow}
+                disabled={!canEnhance}
+                aria-busy={enhancing}
+                onClick={props.onEnhance}
+              >
+                <StudioIcon name="sparkles" />
+              </button>
+            )}
           </span>
         </div>
         <div className="bs-controls-end">
-          <span className="bs-num bs-quote" title={fill(d.expectedLabel, { amount: quote })} data-studio-quote>
-            <span aria-hidden="true">{fill(d.expected, { amount: quote })}</span>
-            <span className="bs-sr">{fill(d.expectedLabel, { amount: quote })}</span>
-          </span>
-          <button type="submit" className="bs-btn" data-variant="solid" data-size="md" disabled={busy || Boolean(fit?.problem)} data-studio-submit>
-            {busy ? d.submitting : d.submit}
+          <button
+            type="submit"
+            className="bs-btn bs-submit"
+            data-variant="solid"
+            data-size="md"
+            disabled={busy || enhancing || Boolean(blocking)}
+            aria-label={busy ? d.submitting : fill(d.submitLabel, { cost })}
+            data-studio-submit
+          >
+            <span>{busy ? d.submitting : d.submit}</span>
+            {!busy && (
+              <span className="bs-submit-cost bs-num" data-studio-quote>
+                {cost}
+              </span>
+            )}
           </button>
         </div>
       </div>
-      <UsageLine allowance={props.allowance} copy={copy} locale={locale} />
     </form>
+  );
+}
+
+/** A "!" button whose tooltip opens on hover and on keyboard focus (and stays readable by screen readers). */
+export function Tip({ id, label, children }: { id: string; label: string; children: ReactNode }) {
+  return (
+    <span className="bs-tip" data-studio-tip>
+      <button type="button" className="bs-tip-btn" aria-label={label} aria-describedby={id}>
+        <span aria-hidden="true">!</span>
+      </button>
+      <span id={id} role="tooltip" className="bs-tip-body">
+        {children}
+      </span>
+    </span>
   );
 }
 
 function Select({
   id,
   label,
-  quietLabel = false,
+  quietLabel = true,
   value,
   display,
   onChange,
@@ -280,7 +400,7 @@ function Select({
 }: {
   id: string;
   label: string;
-  /** The value says what it is (a model name, a sound): keep the label for screen readers only. */
+  /** The value says what it is (a ratio, a quality): keep the label for screen readers only. */
   quietLabel?: boolean;
   value: string;
   display: string;
@@ -304,29 +424,31 @@ function Select({
   );
 }
 
-function usageText(allowance: StudioAllowanceView, copy: StudioCopy, locale: StudioLocale) {
-  const used = Math.max(0, allowance.usedKrw);
+function allowanceText(allowance: StudioAllowanceView, copy: StudioCopy, locale: StudioLocale) {
   const cap = Math.max(0, allowance.capKrw);
-  return { used, cap, value: fill(copy.dock.usageValue, { used: formatKrw(used, locale), cap: formatKrw(cap, locale) }) };
+  const used = Math.max(0, allowance.usedKrw);
+  const left = creditsLeft(cap, used);
+  const total = creditsLeft(cap, 0);
+  return { left, total, value: credits(copy.credits.left, left, locale) };
 }
 
-/** The month's usage as a hairline along the dock's top edge. */
+/** The month's credits as a hairline along the bar's top edge (what is left, out of the month's credits). */
 export function UsageMeter({ allowance, copy, locale }: { allowance: StudioAllowanceView; copy: StudioCopy; locale: StudioLocale }) {
-  const { used, cap, value } = usageText(allowance, copy, locale);
-  const share = cap > 0 ? Math.min(100, (used / cap) * 100) : 0;
+  const { left, total, value } = allowanceText(allowance, copy, locale);
+  const share = total > 0 ? Math.min(100, ((total - left) / total) * 100) : 0;
   return (
-    <div className="bs-meter" role="meter" aria-label={copy.dock.usage} aria-valuemin={0} aria-valuemax={cap} aria-valuenow={used} aria-valuetext={value} data-studio-meter>
+    <div className="bs-meter" role="meter" aria-label={copy.dock.usage} aria-valuemin={0} aria-valuemax={total} aria-valuenow={left} aria-valuetext={value} data-studio-meter>
       <span style={{ width: `${share}%` }} />
     </div>
   );
 }
 
-/** One small line under the controls; the refill day is in its tooltip. */
-function UsageLine({ allowance, copy, locale }: { allowance: StudioAllowanceView; copy: StudioCopy; locale: StudioLocale }) {
-  const { value } = usageText(allowance, copy, locale);
+/** "남은 크레딧 12,340" with the refill day in its tooltip (the page header shows it). */
+export function AllowanceLine({ allowance, copy, locale }: { allowance: StudioAllowanceView; copy: StudioCopy; locale: StudioLocale }) {
+  const { value } = allowanceText(allowance, copy, locale);
   const day = formatDay(allowance.resetsAt, locale);
   return (
-    <p className="bs-usage-line bs-num" title={day ? fill(copy.dock.resets, { date: day }) : undefined} data-studio-allowance>
+    <p className="bs-allowance bs-num" title={day ? fill(copy.dock.resets, { date: day }) : undefined} data-studio-allowance>
       {value}
     </p>
   );

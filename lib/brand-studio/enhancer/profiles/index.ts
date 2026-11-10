@@ -4,6 +4,7 @@ import type { PlannedShot } from '../lines';
 import type { Binding } from '../references';
 import type { EnhanceInput } from '../types';
 import { coreBlock } from './core';
+import { GPT_IMAGE_PROFILE } from './gpt-image';
 import { NANO_BANANA_PROFILE } from './nano-banana';
 import { SEEDANCE_PROFILE } from './seedance';
 import { SEEDREAM_PROFILE } from './seedream';
@@ -12,6 +13,7 @@ import { taskBlock } from './tasks';
 export const PROFILE_BLOCKS: Record<StudioPromptProfile, string> = {
   seedream: SEEDREAM_PROFILE,
   'nano-banana': NANO_BANANA_PROFILE,
+  'gpt-image': GPT_IMAGE_PROFILE,
   seedance: SEEDANCE_PROFILE,
 };
 

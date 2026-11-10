@@ -46,9 +46,14 @@ export default async function StudioBrands() {
           {...(workspace ? { count: formatCount(workspace.projects.length, locale) } : {})}
           lede={b.dashboard.studioSubtitle}
           actions={
-            <a className="admin-btn" href="/admin/brand-workspace/usage" data-usage-queue-link>
-              {b.secondaryUsage.admin.openQueue} →
-            </a>
+            <>
+              <a className="admin-btn" href="/admin/brand-workspace/usage" data-usage-queue-link>
+                {b.secondaryUsage.admin.openQueue} →
+              </a>
+              <a className="admin-btn" href="/admin/brand-studio/reviews" data-studio-reviews-link>
+                {dict.studioReview.admin.navLink} →
+              </a>
+            </>
           }
         />
         {/* The language switcher lives once, in the shell's top bar (AdminShell). */}
