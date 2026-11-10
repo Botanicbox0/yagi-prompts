@@ -1,0 +1,486 @@
+===== create_image
+create_image: Create image
+
+Generate images on a project with models such as FLUX, GPT Image, Nano Banana, Seedream, Midjourney, Ideogram, Krea and Grok Imagine (model ids from list_models). count is how many images, the same number as the web quantity control. Omit count for one task. The credit total is the price of one task times the number of tasks. A model that returns several images per task snaps count onto whole tasks, and the result says how many images that is. A count above the model limit is an error. Personal stages one hidden node per task. Team creates an Assets plan without a Canvas node or edit lease; specify an explicitly supported model, and read results with get_job. Both return the total credit cost. Pass auto_confirm=true to spend immediately. Otherwise call confirm_execution once, with any returned plan_id, to start every task from this request. Personal uses wait_for_nodes for the output URL. Team get_job returns COMPLETED with downloadable urls after publication; list_workspace_assets and the authenticated project_url locate the assets. Lands on the Project tab (asset list), not a timeline. Running generations are capped per plan, by type and in total. Personal: get_balance and estimate_cost show how many can start; wait for running nodes with wait_for_nodes before sending the rest. Team: get_balance reads Team/member quotas; get_job polls admitted task_ids. After a partial or unknown Team submission, reuse the original plan_id; do not create replacement plans automatically.
+
+Arguments (JSON schema):
+{
+  "type": "object",
+  "required": [
+    "project_id"
+  ],
+  "properties": {
+    "project_id": {
+      "type": "string"
+    },
+    "prompt": {
+      "type": "string",
+      "description": "What to generate. Required."
+    },
+    "aspect_ratio": {
+      "type": "string",
+      "description": "Shape, e.g. '1:1', '3:4', '16:9', '9:16'."
+    },
+    "quality": {
+      "type": "string",
+      "description": "Model quality (low / medium / high). Pixel tiers also accepted (1K / 2K / 4K)."
+    },
+    "resolution": {
+      "type": "string",
+      "description": "Pixel tier from get_model_schema.supported_resolutions. Omit to use the model's default_resolution, else its first listed tier. A tier the model does not list is an error. Models that list no tiers, and Midjourney, ignore this field."
+    },
+    "model": {
+      "type": "string",
+      "description": "Catalog image model id. Omit to use nano-banana-pro when enabled; Team uses its current adapter support and never substitutes another model."
+    },
+    "image_urls": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "description": "Team accepts visible READY /api/workspace-media/<asset_id> from any project in the selected workspace, or an allowed public HTTP(S) source. Copy reference_url from folder/search results; source access is rechecked at execution. Personal: optional https reference image URLs. An address already on our CDN is kept. Any other https image is copied onto our CDN before the quote, and the response image_urls are those CDN addresses. The copy has to succeed before anything is staged. The count follows get_model_schema.max_ref_images. An unset field means 10. 0 means none. Extra URLs are an error."
+    },
+    "image_weight": {
+      "type": "number",
+      "minimum": 0,
+      "maximum": 2,
+      "description": "midjourney-v8 only. How strongly reference images influence the result, from 0 to 2. Omit to use 1 when image_urls is set. Ignored when there are no reference images."
+    },
+    "output_format": {
+      "type": "string",
+      "enum": [
+        "png",
+        "jpeg",
+        "webp",
+        "svg"
+      ],
+      "description": "Image output format. Default PNG. SVG requires an enabled imageOutputPolicy, text only, count 1; same base price."
+    },
+    "reasoning_effort": {
+      "type": "string",
+      "enum": [
+        "low",
+        "medium",
+        "high"
+      ],
+      "description": "Reasoning effort for models whose capabilities include reasoning-effort (GPT Image 2.6): low, medium or high, default high. Same price at every level. Other models reject it."
+    },
+    "count": {
+      "type": "integer",
+      "minimum": 1,
+      "description": "How many images. Same as the web quantity. Omit for one task. Above the model limit is an error. A model that returns several images per task snaps count to whole tasks, and output_count in the result (and in estimate_cost) says how many."
+    },
+    "auto_confirm": {
+      "type": "boolean",
+      "default": false,
+      "description": "Confirm and spend immediately."
+    }
+  }
+}
+
+This tool only spends credits when auto_confirm=true; otherwise it stages the work and quotes the cost. Before anything that spends credits, tell the user the cost and wait for their OK; calls that spend need --yes.
+
+===== create_video
+create_video: Create video
+
+Generate videos on a project with models such as Kling, Veo, Seedance, FLUX, Wan, MiniMax, Grok Imagine and Happy Horse (model ids from list_models). count is how many videos, the same number as the web quantity control. Omit count for one video. The credit total is the price of one video times count. A count above the model limit is an error. One confirm_execution on any returned plan_id starts every video from this request. Pass auto_confirm=true to spend immediately. Lands on the Project tab, not a timeline. Choose the input with start_image, end_image, reference_images, reference_videos, reference_audios, or source_video. image_urls is the old compatibility field and is ignored when any of those is set. seedance-2.5 at 480p with a fixed duration is a preview unless draft is false. The preview price matches a standard 480p video. Pass draft_source_task_id (our preview task id) to make a separate 1080p final at the 1080p price. Or pass the task_id of a finished Pika H3 Flex 480p or 768p video as draft_source_task_id, with resolution 1080p, 2k or 4k, to upgrade that video; the charge is only the price difference per second of the source. A final or an upgrade is one video. Running generations are capped per plan, by type and in total. Personal: get_balance and estimate_cost show how many can start; wait for running nodes with wait_for_nodes before sending the rest. Team: get_balance reads Team/member quotas; get_job polls admitted task_ids. After a partial or unknown Team submission, reuse the original plan_id; do not create replacement plans automatically.
+
+Arguments (JSON schema):
+{
+  "type": "object",
+  "required": [
+    "project_id",
+    "prompt"
+  ],
+  "properties": {
+    "project_id": {
+      "type": "string"
+    },
+    "prompt": {
+      "type": "string",
+      "description": "What to generate."
+    },
+    "aspect_ratio": {
+      "type": "string",
+      "description": "Shape, e.g. '16:9', '9:16'. Omit to use the model's default_settings ratio, else the first entry of get_model_schema.supported_aspect_ratios. Pass the ratio you want, e.g. 16:9 for standard widescreen."
+    },
+    "duration": {
+      "type": "number",
+      "description": "Output length in seconds, one of get_model_schema.supported_durations. Omit to use the model's default_settings duration, else its shortest positive duration, else 5. Only seedance-2.5 takes -1 (follow a reference video, the same sentinel the web sends), with reference_videos or source_video: the estimate then prices the reference video's length (rounded up, 4 to 30 s) and the task settles on the real output length. Other models refuse -1 when the task is sent. Happy Horse, Grok and Kling edits with a source_video are priced and charged on the measured length of that video, not on this value."
+    },
+    "generate_audio": {
+      "type": "boolean",
+      "description": "Include sound. Omit to use the model's default_settings, else on (the web default). Native-audio models stay on. Models with no audio capability do not receive true. Explicit false is kept on other models."
+    },
+    "resolution": {
+      "type": "string",
+      "description": "Pixel tier, e.g. 720p / 1080p. With draft_source_task_id on a Pika H3 Flex video: the upgrade target, 1080p, 2k or 4k."
+    },
+    "draft": {
+      "type": "boolean",
+      "description": "seedance-2.5 at 480p only. Omit for a preview, the same default as the web. false is a standard 480p video at the same price. true on any other model or resolution is rejected before any charge. Duration -1 cannot be a preview."
+    },
+    "draft_source_task_id": {
+      "type": "string",
+      "description": "Our preview task id from get_job or create_video. Makes a separate 1080p final and charges the 1080p price. The preview must be completed, unexpired, and not already finalized. Or the task id of a finished Pika H3 Flex 480p or 768p video: upgrades it to resolution (1080p, 2k or 4k) at the price difference per source second; the same video can be upgraded again. Prompt, duration, and aspect ratio on this call are ignored. Do not pass an upstream draft id."
+    },
+    "model": {
+      "type": "string",
+      "description": "Catalog video model id from list_models. Omit to use seedance-2.0 when that video model is enabled."
+    },
+    "start_image": {
+      "type": "string",
+      "description": "Https URL of the first frame. Routes to image-to-video. On a motion model this is the character image."
+    },
+    "end_image": {
+      "type": "string",
+      "description": "Https URL of the last frame. Sent with start_image as the web does (image-to-video, both frames). Alone: Minimax H3 sends it as settings.end_image; Happy Horse and Grok use it as the only input image, so it becomes the first frame; motion models ignore it; other models refuse it. Seedance 2.0 and 2.5 with both frames use aspect ratio adaptive."
+    },
+    "reference_images": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "description": "Https reference images, up to get_model_schema.max_ref_images (unset means 4, or 9 on Happy Horse; 0 means none). Extra URLs are an error. One image is still a reference and uses reference-to-video, not the first frame. A model whose get_model_schema capabilities do not list reference-images takes no reference images and refuses these (Kling 3.0 pro, standard and 4k, Kling 2.6 Pro, Veo 3.1 Fast, FLUX 3, Seedance 2.0 Fast, Seedance 1.5 Pro); use start_image. A motion model takes one character image, here or as start_image. Happy Horse video edit keeps the first 5. Kling omni and Kling o1 send these as settings.image_urls. Kling 4.0 takes up to 10 and cannot combine them with start_image or end_image."
+    },
+    "reference_videos": {
+      "type": "array",
+      "maxItems": 10,
+      "items": {
+        "type": "string"
+      },
+      "description": "Https reference videos for Seedance, Minimax H3, Wan 3.0, HeyGen Video 1 and Kling 4.0 (settings.reference_videos, reference-to-video), up to get_model_schema.max_ref_videos (0 means none). Kling 4.0 takes 3-30 s per video, 30 s in total, and prices the reference seconds together with the output (the create quote measures them; Personal also has estimate_cost). Happy Horse (not 1.1) takes one as the web video-edit source. A motion model takes one plus a character image and uses motion-control. Personal: use asset_url from get_upload_url or a previous result. Team: use a READY same-project /api/workspace-media/<asset_id> or supported public HTTPS source; new uploads use get_upload_url, PUT, then publish_workspace_upload. For both contexts, Seedance, Minimax H3 and Wan 3.0 refuse other URLs when quoting (Reference video must be an uploaded asset), and Happy Horse, Grok and Kling video edits refuse them when the task is sent."
+    },
+    "reference_video_durations": {
+      "type": "array",
+      "maxItems": 11,
+      "items": {
+        "type": "number"
+      },
+      "description": "Optional, and not used for the price: the server measures uploaded videos itself. If passed: one positive value per reference video, same order, including a source_video folded into that list."
+    },
+    "reference_audios": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "description": "Https reference audio for Seedance, Minimax H3, Wan 3.0, and HeyGen Video 1, within each model's catalog limit (some models take none). Sent as settings.reference_audios. HeyGen Video 1 needs at least one reference image or video with it, and takes at most 12 references in total."
+    },
+    "operation": {
+      "type": "string",
+      "enum": [
+        "extend"
+      ],
+      "description": "Explicit tail extension; requires extend-video capability and one source_video. duration is NEW seconds (3–10, default 10), not the complete output length."
+    },
+    "source_video": {
+      "type": "string",
+      "description": "Https source video for video-to-video or edit. Sent as top-level referenceVideoUrl. Kling video-to-video also sends keepAudio true (not Kling 4.0). A Kling 4.0 edit follows the source length (3-30 s source, duration is ignored) and prices the source seconds with the output; it cannot be combined with reference_videos. On Seedance, Minimax H3, Wan, and HeyGen Video 1 this is a reference video instead, because those models have no video-to-video endpoint. Happy Horse 1.1 takes no video. Use an asset_url: Happy Horse, Grok and Kling edits refuse other URLs when the task is sent."
+    },
+    "image_urls": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "description": "Legacy https image list. The count follows the same max_ref_images rule as reference_images. Two or more images on Seedance are reference images, so a model without reference-to-video refuses them; use start_image and end_image. Ignored when start_image, end_image, reference_images, reference_videos, reference_audios, or source_video is set. A video file left here is a reference video on Seedance, Minimax H3, Wan 3.0, and HeyGen Video 1, and the source video on other models."
+    },
+    "count": {
+      "type": "integer",
+      "minimum": 1,
+      "description": "How many videos. Same as the web quantity. Omit for 1. Above the model limit is an error. The credit total is one video times this count."
+    },
+    "auto_confirm": {
+      "type": "boolean",
+      "default": false,
+      "description": "Confirm and spend immediately."
+    }
+  }
+}
+
+This tool only spends credits when auto_confirm=true; otherwise it stages the work and quotes the cost. Before anything that spends credits, tell the user the cost and wait for their OK; calls that spend need --yes.
+
+===== get_job
+get_job: Get job
+
+Look up one generation job by task_id. Own jobs only. Team generation jobs (Assets or original Canvas) are read-only: published READY outputs return COMPLETED with urls/out_* using the same download convention as Personal, plus workspace_status, asset metadata and project_url; no Canvas or lease is involved. Personal also writes completed results or failure status back to the job's canvas node. Personal and Team jobs have draftFinalize (eligible, reason, expiresAt, finalizedTaskId); only a finished seedance-2.5 preview, or a finished Pika H3 Flex 480p or 768p video (then upgrade gives its source resolution and seconds), can be eligible. That object never includes an upstream draft id. A failed job may have error_reason and error_hint, which say what was wrong with the input and how to fix it; follow error_hint before retrying.
+
+Arguments (JSON schema):
+{
+  "type": "object",
+  "required": [
+    "task_id"
+  ],
+  "properties": {
+    "task_id": {
+      "type": "string",
+      "description": "Returned by a create with auto_confirm, by confirm_execution, and by wait_for_nodes."
+    }
+  }
+}
+
+===== estimate_cost
+estimate_cost: Estimate cost
+
+Personal only; Team creates with auto_confirm=false return the authoritative estimate and maximum. Price an image, video, audio, or 3D generation before running it, in credits. For images and videos, count uses the same task count and the same limit as create_image and create_video. The total is one task times that count. Audio ignores count. Audio still uses the same units as a web audio task. Browsing prices is free. For image quotes, external reference images are downloaded and copied to Sunra storage, even when no generation is started. concurrency.can_start is how many generations of this type can start at the moment, and concurrency_note appears when this request has more tasks than that.
+
+Arguments (JSON schema):
+{
+  "type": "object",
+  "properties": {
+    "textured": {
+      "type": "boolean",
+      "description": "Texture switch. Omit to use catalog defaults."
+    },
+    "detail": {
+      "type": "string",
+      "enum": [
+        "draft",
+        "standard",
+        "high"
+      ],
+      "description": "Meshy only: 10000, 30000, or 100000 target polygons. Omit to use catalog defaults. Cannot combine with parameters.target_polycount."
+    },
+    "input_mode": {
+      "type": "string",
+      "enum": [
+        "text-to-3d",
+        "image-to-3d",
+        "multi-image-to-3d",
+        "multiview-to-3d"
+      ],
+      "description": "Omit to infer from reference count and catalog capabilities. Tripo multiview references are Front, Left, Back, Right in that order."
+    },
+    "parameters": {
+      "type": "object",
+      "description": "Model-specific settings from get_model_schema.parameters. Unknown keys and invalid combinations are rejected before quoting."
+    },
+    "model": {
+      "type": "string",
+      "description": "Catalog model id. Omit for nano-banana-pro on an image quote, or seedance-2.0 on a video quote. An omitted audio model stays elevenlabs-tts; an omitted 3D model is meshy-v6."
+    },
+    "type": {
+      "type": "string",
+      "enum": [
+        "image",
+        "video",
+        "audio",
+        "model3d"
+      ]
+    },
+    "prompt": {
+      "type": "string",
+      "description": "Prompt that would be sent. Image quotes use its trimmed length. Audio text-to-speech is priced by character count."
+    },
+    "duration_seconds": {
+      "type": "number",
+      "description": "Sound-effects length, 0.5 to 22. Omit to price 5 seconds."
+    },
+    "music_length_ms": {
+      "type": "number",
+      "description": "elevenlabs-music length in milliseconds. Omit to price 30000."
+    },
+    "dialogue_inputs": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "voice": {
+            "type": "string"
+          },
+          "text": {
+            "type": "string"
+          }
+        }
+      },
+      "description": "Dialogue turns. Priced from the text lengths."
+    },
+    "input_seconds": {
+      "type": "number",
+      "description": "Input length for voice-changer and dubbing quotes. The task itself probes the file."
+    },
+    "count": {
+      "type": "integer",
+      "minimum": 1,
+      "default": 1,
+      "description": "How many images or videos. Same limit and task count as create_image and create_video. Omit for 1. Audio ignores this."
+    },
+    "duration": {
+      "type": "number",
+      "description": "Video length in seconds. Omitted, it follows create_video: the model's default_settings duration, else its shortest positive duration, else 5. -1 is quoted from the reference video's length on seedance-2.5; other models refuse -1 when the task is sent. Happy Horse, Grok and Kling edits with a source_video are quoted on the measured length of that video, the seconds the task is charged, not on this value."
+    },
+    "aspect_ratio": {
+      "type": "string",
+      "description": "Video shape. Omitted, it follows create_video: the model's default_settings ratio, else its first listed ratio. An omitted image shape uses the model's default_settings ratio, else the square ratio when listed, else the first listed ratio."
+    },
+    "generate_audio": {
+      "type": "boolean",
+      "description": "Same default as create_video. The quote uses the value that dispatch will send."
+    },
+    "quality": {
+      "type": "string"
+    },
+    "resolution": {
+      "type": "string"
+    },
+    "output_format": {
+      "type": "string",
+      "enum": [
+        "png",
+        "jpeg",
+        "webp",
+        "svg"
+      ],
+      "description": "Image output format. Default PNG. SVG requires an enabled imageOutputPolicy, text only, count 1; same base price."
+    },
+    "reasoning_effort": {
+      "type": "string",
+      "enum": [
+        "low",
+        "medium",
+        "high"
+      ],
+      "description": "Image only, same as create_image reasoning_effort."
+    },
+    "image_urls": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "description": "Reference images, same as create_image or create_video image_urls."
+    },
+    "start_image": {
+      "type": "string"
+    },
+    "end_image": {
+      "type": "string"
+    },
+    "reference_images": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "reference_videos": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "reference_audios": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "operation": {
+      "type": "string",
+      "enum": [
+        "extend"
+      ],
+      "description": "Explicit tail extension; requires extend-video capability and one source_video. duration is NEW seconds (3–10, default 10), not the complete output length."
+    },
+    "source_video": {
+      "type": "string"
+    }
+  }
+}
+
+===== get_upload_url
+get_upload_url: Get upload URL
+
+Presigned PUT for a local file. PUT bytes to upload_url with every returned header. Personal: pass asset_url as a generation input, including create_audio source_url for voice-changer and dubbing. Selected Team: also supply project_id, stable request_id, exact size_bytes and lowercase SHA-256; then publish_workspace_upload with upload_id and returned catalog_revision/membership_version. Use read_workspace_asset for the published URL. Retry an ambiguous PUT with the same request_id; FileAlreadyExists means try publication, never remove the signed overwrite-protection header.
+
+Arguments (JSON schema):
+{
+  "type": "object",
+  "required": [
+    "content_type"
+  ],
+  "properties": {
+    "content_type": {
+      "type": "string",
+      "description": "Personal: image/jpeg, image/png, image/webp, image/gif, video/mp4, video/webm, video/quicktime, or audio (audio/mpeg, audio/wav, audio/mp4, audio/aac, audio/flac, audio/ogg). Team also follows the shared upload-file MIME/filename rules for documents and GLB; provide filename when the MIME is generic."
+    },
+    "filename": {
+      "type": "string"
+    },
+    "workspace_id": {
+      "type": "string",
+      "description": "Optional selected Team ID; must match the current selection."
+    },
+    "project_id": {
+      "type": "string",
+      "description": "Required for Team."
+    },
+    "request_id": {
+      "type": "string",
+      "description": "Required for Team: stable 16–128 character upload ID (letters, digits, underscore or hyphen)."
+    },
+    "size_bytes": {
+      "type": "integer",
+      "minimum": 1,
+      "description": "Required for Team: exact file size. Same Personal per-kind caps: image 20 MiB, video 100 MiB, audio/document/GLB 50 MiB."
+    },
+    "sha256": {
+      "type": "string",
+      "pattern": "^[a-f0-9]{64}$",
+      "description": "Required for Team: SHA-256 of the actual file bytes."
+    }
+  }
+}
+
+===== create_project
+create_project: Create project
+
+Create a project in this MCP connection's selected workspace. Team projects require workspace_id matching the selected workspace and a stable request_id reused on retries, so switching connections/selections cannot redirect a retry. Team generation availability is reported by capabilities as a feature hint, not authorization for every model or balance. For Team Assets generation use create_image/create_video/create_audio/create_model3d with explicit model, show estimated_credits and maximum_credits, then confirm_execution; no editor lease or Canvas is required. Explicit Canvas editing/generation keeps its lease and quote_workspace_generation workflow. For both Team and Personal projects, project_url opens the project's authenticated page in this environment's Sunra web app; the sidebar also lists projects under Recents and Projects.
+
+Arguments (JSON schema):
+{
+  "type": "object",
+  "properties": {
+    "name": {
+      "type": "string",
+      "description": "Project name."
+    },
+    "request_id": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9_-]{1,128}$",
+      "description": "Required for Team: a stable unique request id; reuse the same id and name on retry."
+    },
+    "workspace_id": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "description": "Required for Team creation: copy the selected workspace id from list_workspaces. This is a consistency check, not a selection change. Personal may omit it."
+    }
+  }
+}
+
+===== get_model_schema
+get_model_schema: Get model schema
+
+Legal inputs for one catalog model (aspect ratios, durations, resolutions, reference image and video limits). Does not include prices. Reference image count follows max_ref_images, but some video routes take fewer (see create_video reference_images). max_ref_videos is the catalog cap for reference_videos. When present, reference_image_rules, reference_video_rules and reference_audio_rules are the file size, dimension, aspect ratio, length and format limits the model enforces on those inputs, duration_range is the accepted length and step for sound effects, and max_source_video_seconds caps a source video. Check inputs against them before creating; a file outside them makes the job fail.
+
+Arguments (JSON schema):
+{
+  "type": "object",
+  "required": [
+    "model"
+  ],
+  "properties": {
+    "model": {
+      "type": "string",
+      "description": "Catalog model id. A model omitted from list_models can still be passed here."
+    }
+  }
+}
+
+===== get_model_schema seedance-2.5
+{"model_id":"seedance-2.5","name":"Seedance 2.5","type":"video","description":"ByteDance flagship: up to 30s coherent video with synced audio and multimodal references (30 images / 10 videos / 10 audios)","capabilities":["image-to-video","end-frame","reference-images","audio-generation"],"supported_aspect_ratios":["21:9","16:9","4:3","1:1","3:4","9:16","adaptive"],"supported_resolutions":["480p","720p","1080p"],"default_resolution":"720p","supported_qualities":[],"supported_durations":[4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,26,27,28,29,30],"max_ref_images":30,"max_ref_videos":10,"max_prompt_length":null,"requires_subscription":true,"default_settings":{},"imageOutputPolicy":null,"reference_image_rules":{"max_file_mb":30,"min_side_px":300,"max_side_px":6000,"min_aspect_ratio":0.4,"max_aspect_ratio":2.5},"reference_video_rules":{"formats":["mp4","mov"],"max_file_mb":100,"min_seconds":2,"max_seconds":30,"max_total_seconds":30,"min_side_px":300,"max_side_px":6000,"min_total_pixels":409600,"max_total_pixels":8847360,"min_aspect_ratio":0.4,"max_aspect_ratio":2.5,"min_fps":24,"max_fps":60},"reference_audio_rules":{"formats":["wav","mp3"],"max_file_mb":15,"min_seconds":2,"max_seconds":30,"max_total_seconds":30}}
+
+===== get_model_schema nano-banana-pro
+{"model_id":"nano-banana-pro","name":"Nano Banana Pro","type":"image","description":"Maximum detail and photorealism","capabilities":["image-editing"],"supported_aspect_ratios":["21:9","16:9","3:2","4:3","5:4","1:1","4:5","3:4","2:3","9:16"],"supported_resolutions":["1K","2K","4K"],"default_resolution":"1K","supported_qualities":[],"supported_durations":[],"max_ref_images":10,"max_ref_videos":0,"max_prompt_length":null,"requires_subscription":false,"default_settings":{},"imageOutputPolicy":null}
+
+===== get_model_schema seedream-5-pro
+{"model_id":"seedream-5-pro","name":"Seedream 5.0 Pro","type":"image","description":"Flagship Seedream — precision editing, dense text, and multilingual generation","capabilities":["image-editing"],"supported_aspect_ratios":["21:9","16:9","3:2","4:3","1:1","3:4","2:3","9:16"],"supported_resolutions":["1K","2K"],"default_resolution":"2K","supported_qualities":[],"supported_durations":[],"max_ref_images":10,"max_ref_videos":0,"max_prompt_length":null,"requires_subscription":false,"default_settings":{},"imageOutputPolicy":null}

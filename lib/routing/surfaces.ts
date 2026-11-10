@@ -214,6 +214,11 @@ export function brandRouteAllowed(pathname: string, method: string): boolean {
   if (/^\/api\/brand-workspace\/attachments\/[^/]+$/.test(pathname)) return read || method === 'POST';
   if (/^\/api\/brand-workspace\/organizations\/[^/]+\/logo$/.test(pathname)) return read || method === 'POST';
   if (/^\/api\/brand-workspace\/shortlist\/[a-f0-9-]+\/avatar$/.test(pathname)) return read;
+  // Brand studio v2 (docs/BRAND-STUDIO-V2.md): state, poll and operations; the local upload and media
+  // gateways. Its provider webhook and account-lane door are deliberately NOT reachable on this host.
+  if (pathname === '/api/brand-studio') return read || method === 'POST';
+  if (/^\/api\/brand-studio\/assets\/[a-f0-9-]{36}$/.test(pathname)) return method === 'POST';
+  if (/^\/api\/brand-studio\/media\/st\/[a-f0-9]{64}\.(?:png|jpg|webp|mp4|mov|mp3|wav)$/.test(pathname)) return read;
   return read && !pathname.startsWith('/api/') && !isAdminPath(pathname) && adminRouteAllowed(pathname, method);
 }
 

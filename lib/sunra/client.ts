@@ -133,10 +133,73 @@ export class SunraError extends Error {
   }
 }
 
+/** The queue `/status` body, with the failure object Sunra publishes since 2026-08-17. */
+export interface SunraQueueState {
+  status: SunraStatus;
+  success: boolean | null;
+  error: { code: string | null; reason: string | null; retryable: boolean | null; message: string | null } | null;
+  /** Settled charge in USD (`billing.amount`), when the status reports it. */
+  billingUsd: number | null;
+}
+
+/** The result body of a completed prediction: every file it produced, plus the fields the brand studio needs. */
+export interface SunraQueueResult {
+  files: Array<{ url: string; contentType: string | null }>;
+  draftTaskId: string | null;
+  /** Billing units (1000 units = $1), when reported. */
+  units: number | null;
+  durationSeconds: number | null;
+}
+
 export interface SunraClient {
-  submit(endpoint: string, input: Record<string, unknown>): Promise<{ id: string }>;
+  /** `options.webhook`: Sunra POSTs the terminal state there (docs.sunra.ai — Webhooks). */
+  submit(endpoint: string, input: Record<string, unknown>, options?: { webhook?: string | null }): Promise<{ id: string }>;
   getTask(id: string): Promise<SunraTask>;
   fetchPricing?(modelId: string, operation: string): Promise<SunraEndpointPricing | null>;
+  /** Brand studio v2 (lib/brand-studio/provider/sunra-api.ts). */
+  queueStatus?(id: string): Promise<SunraQueueState>;
+  queueResult?(id: string): Promise<SunraQueueResult>;
+  cancel?(id: string): Promise<void>;
+}
+
+function numberOf(value: unknown): number | null {
+  const n = typeof value === 'number' ? value : typeof value === 'string' && value.trim() !== '' ? Number(value) : NaN;
+  return Number.isFinite(n) ? n : null;
+}
+
+export function parseSunraQueueState(raw: unknown): SunraQueueState {
+  const record = asRecord(raw);
+  const base = parseSunraStatus(raw);
+  const error = record.error && typeof record.error === 'object' ? asRecord(record.error) : null;
+  const billing = asRecord(record.billing);
+  return {
+    status: base.status,
+    success: base.success,
+    error: error
+      ? {
+          code: typeof error.code === 'string' ? error.code : null,
+          reason: typeof error.reason === 'string' ? error.reason : null,
+          retryable: typeof error.retryable === 'boolean' ? error.retryable : null,
+          message: typeof error.message === 'string' ? error.message : null,
+        }
+      : null,
+    billingUsd: billing.currency === undefined || billing.currency === 'USD' ? numberOf(billing.amount) : null,
+  };
+}
+
+export function parseSunraQueueResult(raw: unknown): SunraQueueResult {
+  const result = asRecord(raw);
+  const files: SunraQueueResult['files'] = [];
+  const push = (file: unknown) => {
+    const f = asRecord(file);
+    if (typeof f.url === 'string' && f.url) files.push({ url: f.url, contentType: typeof f.content_type === 'string' ? f.content_type : null });
+  };
+  if (Array.isArray(result.images)) result.images.forEach(push);
+  if (result.video) push(result.video);
+  if (result.image) push(result.image);
+  const video = asRecord(result.video);
+  const draft = typeof result.draft_task_id === 'string' ? result.draft_task_id : typeof video.draft_task_id === 'string' ? video.draft_task_id : null;
+  return { files, draftTaskId: draft || null, units: numberOf(result.units), durationSeconds: numberOf(result.duration) };
 }
 
 export function createSunraClient(
@@ -187,8 +250,9 @@ export function createSunraClient(
   }
 
   return {
-    async submit(endpoint, input) {
-      const json = await call(`/v1/queue/${endpoint}`, {
+    async submit(endpoint, input, options) {
+      const webhook = options?.webhook ? `?webhook=${encodeURIComponent(options.webhook)}` : '';
+      const json = await call(`/v1/queue/${endpoint}${webhook}`, {
         method: 'POST',
         body: JSON.stringify(input)
       });
@@ -237,6 +301,18 @@ export function createSunraClient(
         effectiveUsdWithFee,
         totalTokens
       };
+    },
+
+    async queueStatus(id) {
+      return parseSunraQueueState(await call(`/v1/queue/requests/${encodeURIComponent(id)}/status`, { method: 'GET' }));
+    },
+
+    async queueResult(id) {
+      return parseSunraQueueResult(await call(`/v1/queue/requests/${encodeURIComponent(id)}`, { method: 'GET' }));
+    },
+
+    async cancel(id) {
+      await call(`/v1/queue/requests/${encodeURIComponent(id)}/cancel`, { method: 'PUT' });
     },
 
     async fetchPricing(modelId, operation) {

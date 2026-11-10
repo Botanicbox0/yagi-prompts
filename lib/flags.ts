@@ -132,3 +132,12 @@ export const ASSET_RELEASE_AFTER_USE = true;
 export function brandUsagePaymentsOpen(env: NodeJS.ProcessEnv = process.env): boolean {
   return env.BRAND_USAGE_PAYMENTS === 'on';
 }
+
+/**
+ * docs/BRAND-STUDIO-V2.md — the brand studio v2 (real generation, asset library, campaign handoff).
+ * Default OFF: open only when the server environment says exactly `BRAND_STUDIO_V2=on`. Off means
+ * every studio v2 API answers `studio_closed` and the screens stay as they were.
+ */
+export function brandStudioV2Open(env: NodeJS.ProcessEnv = process.env): boolean {
+  return env.BRAND_STUDIO_V2 === 'on';
+}

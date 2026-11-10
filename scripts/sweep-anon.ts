@@ -384,7 +384,8 @@ async function sweepNotFound(privateKeys: string[], brandWorkspace: BrandWorkspa
     // The campaign wizard and the pages absorbed into the campaign tabs (docs/PLATFORM-2.0.md §16.6)
     // stay on the brand host: an anonymous visitor is asked to sign in and comes back to the same path.
     const project = '00000000-0000-4000-8000-000000000000';
-    for (const path of ['/brand/projects/new', `/brand/projects/${project}`, `/brand/projects/${project}/participants`, `/brand/projects/${project}/funding`, '/brand/creators']) {
+    // docs/BRAND-STUDIO-V2.md §5: the studio and its formats tab ask for sign-in like every brand page.
+    for (const path of ['/brand/projects/new', `/brand/projects/${project}`, `/brand/projects/${project}/participants`, `/brand/projects/${project}/funding`, '/brand/creators', '/brand/studio', '/brand/studio?tab=formats']) {
       const page = await request(path, { headers: { host: 'brand.twings.app' } });
       const next = page.location ? new URL(page.location, BASE).searchParams.get('next') : null;
       expectEqual(`brand.twings.app${path}: asks to sign in and returns here`, page.status >= 300 && page.status < 400 && next === path, true);
@@ -396,7 +397,21 @@ async function sweepNotFound(privateKeys: string[], brandWorkspace: BrandWorkspa
     expectPresent('brand.twings.app /api/brand-creators: private', poolInvite.cacheControl ?? '', 'no-store');
     const poolRead = await request('/api/brand-creators', { headers: { host: 'brand.twings.app' } });
     expectEqual('brand.twings.app /api/brand-creators: no reads', poolRead.status, 404);
+    // docs/BRAND-STUDIO-V2.md §3, §5: the studio API never answers a stranger and is never cached.
+    const anyOrg = '00000000-0000-4000-8000-000000000000';
+    for (const path of ['/api/brand-studio', `/api/brand-studio?organizationId=${anyOrg}`, `/api/brand-studio?organizationId=${anyOrg}&jobs=${anyOrg}`]) {
+      const studio = await request(path, { headers: { host: 'brand.twings.app' } });
+      expectOneOf(`brand.twings.app ${path}: refuses anonymous (closed or sign-in)`, studio.status, [401, 404]);
+      expectPresent(`brand.twings.app ${path}: no-store`, studio.cacheControl ?? '', 'no-store');
+      expectEqual(`brand.twings.app ${path}: no private content or storage keys`, forbidden.some((value) => value.length > 0 && studio.body.includes(value)), false);
+    }
+    const studioWrite = await request('/api/brand-studio', { method: 'POST', headers: { host: 'brand.twings.app', 'content-type': 'application/json' }, body: JSON.stringify({ operation: 'job.create', input: {} }) });
+    expectOneOf('brand.twings.app /api/brand-studio POST: refuses anonymous', studioWrite.status, [401, 404]);
+    expectPresent('brand.twings.app /api/brand-studio POST: no-store', studioWrite.cacheControl ?? '', 'no-store');
   }
+  const studioApi = await get('/api/brand-studio');
+  expectOneOf('/api/brand-studio refuses anonymous (closed or sign-in)', studioApi.status, [401, 404]);
+  expectPresent('/api/brand-studio is never cached', studioApi.cacheControl ?? '', 'no-store');
 }
 
 async function sweepGateway(assets: AssetBlockRow[]): Promise<void> {

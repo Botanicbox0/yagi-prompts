@@ -1,0 +1,195 @@
+/**
+ * Pure builders: (job kind + params + resolved input URLs + final prompt) -> the exact Sunra request.
+ *
+ * Shapes follow docs/research/SUNRA-API-SCHEMAS-2026-11-10.txt and the per-model OpenAPI documents
+ * of the Sunra catalogue (read 2026-11-10): image inputs are arrays of URL strings; Seedance's
+ * image-to-video takes no `ratio` (it follows the start frame); an explicit edit needs `duration: -1`
+ * and `ratio: 'adaptive'`; a draft is `draft: true` at 480p; a final is `draft-to-video` with the
+ * draft id only.
+ *
+ * `enable_safety_checker` is sent as `true` on every endpoint that has the field (the Seedream family).
+ * There is deliberately no parameter that could turn it off.
+ */
+import type { StudioJobKind } from '../contracts';
+import { studioModel, type StudioImageModel, type StudioModel, type StudioVideoModel } from '../models';
+import type { StudioJobParams } from '../types';
+import type { StudioProviderRequest } from './types';
+
+export interface StudioRequestInput {
+  kind: StudioJobKind;
+  model: string;
+  /** What is sent: the enhanced prompt, or the customer's words when enhancement is off. */
+  prompt: string;
+  params: StudioJobParams;
+  /** Reference images in tray order. `frame` marks an opening/closing still for a video. */
+  images: ReadonlyArray<{ url: string; frame?: 'start' | 'end' }>;
+  videos: ReadonlyArray<{ url: string }>;
+  audios?: ReadonlyArray<{ url: string }>;
+  /** region_edit: the enlarged crop; it is image 1, the references follow. */
+  regionCrop?: { url: string; aspect: string } | null;
+  /** video_final: the draft to finish. */
+  draftTaskId?: string | null;
+}
+
+export class StudioRequestError extends Error {
+  constructor(readonly reason: string) {
+    super(`studio request: ${reason}`);
+    this.name = 'StudioRequestError';
+  }
+}
+
+/** Endpoints whose input schema carries `enable_safety_checker` (the Seedream family). */
+export function hasSafetyChecker(model: StudioModel): boolean {
+  return model.promptProfile === 'seedream';
+}
+
+function imageModel(id: string): StudioImageModel {
+  const model = studioModel(id);
+  if (!model || model.medium !== 'image') throw new StudioRequestError(`not an image model: ${id}`);
+  return model;
+}
+
+function videoModel(id: string): StudioVideoModel {
+  const model = studioModel(id);
+  if (!model || model.medium !== 'video') throw new StudioRequestError(`not a video model: ${id}`);
+  return model;
+}
+
+function pick<T extends string>(value: string | null | undefined, allowed: readonly T[], fallback: T): T {
+  return value && (allowed as readonly string[]).includes(value) ? (value as T) : fallback;
+}
+
+function safety(model: StudioModel): Record<string, unknown> {
+  return hasSafetyChecker(model) ? { enable_safety_checker: true } : {};
+}
+
+function imageRequest(input: StudioRequestInput): StudioProviderRequest {
+  const model = imageModel(input.model);
+  const urls = input.images.map((i) => i.url);
+  if (urls.length > model.maxReferences) throw new StudioRequestError('too many reference images');
+  const common = {
+    prompt: input.prompt,
+    aspect_ratio: pick(input.params.aspect, model.aspects, model.aspects[0]!),
+    resolution: pick(input.params.resolution, model.resolutions, model.defaultResolution),
+    ...safety(model),
+  };
+  if (urls.length === 0) return { endpoint: `${model.api.alias}/${model.endpoints.textToImage}`, body: common };
+  return { endpoint: `${model.api.alias}/${model.endpoints.edit}`, body: { ...common, images: urls } };
+}
+
+function regionRequest(input: StudioRequestInput): StudioProviderRequest {
+  const model = imageModel(input.model);
+  if (!input.regionCrop) throw new StudioRequestError('region edit without a crop');
+  const urls = [input.regionCrop.url, ...input.images.map((i) => i.url)].slice(0, model.maxReferences);
+  return {
+    endpoint: `${model.api.alias}/${model.endpoints.edit}`,
+    body: {
+      prompt: input.prompt,
+      images: urls,
+      aspect_ratio: pick(input.regionCrop.aspect, model.aspects, model.aspects[0]!),
+      // The crop is worked at 1,536-2,048 px on its long side (docs/BRAND-STUDIO-V2.md §8.3).
+      resolution: pick('2K', model.resolutions, model.defaultResolution),
+      output_format: 'png',
+      ...safety(model),
+    },
+  };
+}
+
+/** `draft` means the 480p first pass a final is made from. */
+function videoQuality(model: StudioVideoModel, resolution: string | null): { resolution: string; draft: boolean } {
+  if (resolution === 'draft') {
+    if (!model.supportsDraft) throw new StudioRequestError('model has no draft mode');
+    return { resolution: '480p', draft: true };
+  }
+  return { resolution: pick(resolution, model.resolutions, model.defaultResolution), draft: false };
+}
+
+function seconds(model: StudioVideoModel, value: number | null | undefined): number {
+  const n = typeof value === 'number' && Number.isInteger(value) ? value : model.defaultSeconds;
+  return Math.min(model.maxSeconds, Math.max(model.minSeconds, n));
+}
+
+function videoRequest(input: StudioRequestInput): StudioProviderRequest {
+  const model = videoModel(input.model);
+  const p = input.params;
+  const quality = videoQuality(model, p.resolution);
+  const sound = { generate_audio: p.audio !== 'silent' };
+  const audios = (input.audios ?? []).map((a) => a.url);
+  if (input.videos.length > 0) throw new StudioRequestError('a reference video belongs to video_remix');
+  if (input.images.length > model.maxReferenceImages) throw new StudioRequestError('too many reference images');
+  const start = input.images.filter((i) => i.frame === 'start');
+  const end = input.images.filter((i) => i.frame === 'end');
+  const plainImages = input.images.filter((i) => i.frame === undefined);
+  const base = { prompt: input.prompt, resolution: quality.resolution, duration: seconds(model, p.seconds), draft: quality.draft, output_format: 'mp4', ...sound };
+  // Opening (and optionally closing) still only: image-to-video, which follows the still's shape.
+  if (start.length === 1 && end.length <= 1 && plainImages.length === 0 && audios.length === 0) {
+    return {
+      endpoint: `${model.api.alias}/${model.endpoints.image}`,
+      body: { ...base, start_image: start[0]!.url, ...(end[0] ? { end_image: end[0].url } : {}) },
+    };
+  }
+  const ratio = pick(p.aspect, model.aspects, model.aspects[0]!);
+  if (input.images.length === 0 && audios.length === 0) {
+    return { endpoint: `${model.api.alias}/${model.endpoints.text}`, body: { ...base, ratio } };
+  }
+  // Anything else is a reference generation; the prompt names them @Image1, @Audio1 in tray order.
+  return {
+    endpoint: `${model.api.alias}/${model.endpoints.reference}`,
+    body: {
+      ...base,
+      ratio,
+      ...(input.images.length ? { reference_images: input.images.map((i) => i.url) } : {}),
+      ...(audios.length ? { reference_audios: audios } : {}),
+    },
+  };
+}
+
+function remixRequest(input: StudioRequestInput): StudioProviderRequest {
+  const model = videoModel(input.model);
+  const p = input.params;
+  if (input.videos.length !== 1) throw new StudioRequestError('a remix needs exactly one reference video');
+  if (input.images.length > model.maxReferenceImages) throw new StudioRequestError('too many reference images');
+  const quality = videoQuality(model, p.resolution);
+  const audios = (input.audios ?? []).map((a) => a.url);
+  const edit = p.method === 'edit';
+  return {
+    endpoint: `${model.api.alias}/${model.endpoints.reference}`,
+    body: {
+      prompt: input.prompt,
+      reference_videos: [input.videos[0]!.url],
+      ...(input.images.length ? { reference_images: input.images.map((i) => i.url) } : {}),
+      ...(audios.length ? { reference_audios: audios } : {}),
+      resolution: quality.resolution,
+      // An explicit edit follows the source: its length and its shape.
+      ratio: edit ? 'adaptive' : pick(p.aspect, model.aspects, model.aspects[0]!),
+      duration: edit ? -1 : typeof p.seconds === 'number' ? seconds(model, p.seconds) : -1,
+      omni_reference_task_type: edit ? 'edit' : 'reference',
+      draft: quality.draft,
+      output_format: 'mp4',
+      generate_audio: p.audio !== 'silent',
+    },
+  };
+}
+
+function finalRequest(input: StudioRequestInput): StudioProviderRequest {
+  const model = videoModel(input.model);
+  if (!model.supportsDraft) throw new StudioRequestError('model has no draft mode');
+  const draft = input.draftTaskId?.trim();
+  if (!draft) throw new StudioRequestError('final without a draft id');
+  return { endpoint: `${model.api.alias}/${model.endpoints.finalize}`, body: { draft_task_id: draft, output_format: 'mp4' } };
+}
+
+export function buildStudioRequest(input: StudioRequestInput): StudioProviderRequest {
+  switch (input.kind) {
+    case 'image':
+      return imageRequest(input);
+    case 'region_edit':
+      return regionRequest(input);
+    case 'video':
+      return videoRequest(input);
+    case 'video_remix':
+      return remixRequest(input);
+    case 'video_final':
+      return finalRequest(input);
+  }
+}

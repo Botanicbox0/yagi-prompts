@@ -1,0 +1,257 @@
+
+### bytedance/seedance-2.5 (model_ba3689b67e66)
+  POST /requests/{request_id}/cancel
+    ?
+  POST /bytedance/seedance-2.5/text-to-video
+    *prompt: string  // Text prompt for video generation. Supports 11 languages including Chinese and English.
+     resolution: string enum[480p,720p,1080p] def="720p"  // Video resolution. 1080p output is 10-bit with H.265/HEVC encoding and may require a compatible player.
+     ratio: string enum[21:9,16:9,4:3,1:1,3:4,9:16,adaptive] def="adaptive"  // Aspect ratio of the video. 'adaptive' will auto-select based on prompt.
+     duration: integer [-1..30] def=5  // Duration of the video in seconds (4-30, or -1 for auto). Must be >= 4 unless -1.
+     output_format: string enum[mp4,mov] def="mp4"  // Output video format. 'mov' (H.264 + yuv444p + PCM) preserves color fidelity for professional editing workflows.
+     draft: boolean def=false  // Generate a 480p-only draft. The draft id is returned as draft_task_id, is valid for 7 days, and can be finalized with draft-to-video. Supported by byteplus and volcengine
+     generate_audio: boolean def=true  // Whether to generate synchronized audio for the video
+  POST /bytedance/seedance-2.5/image-to-video
+     prompt: string|null  // Text prompt for video generation (optional)
+    *start_image: string|string  // URL of the image to use as the first frame. Formats: jpeg/png/webp/bmp/tiff/gif/heic/heif, aspect ratio 0.4-2.5, size 300-6000px, max 30MB.
+     end_image: string|string|null  // URL of the image to use as the last frame (optional). Same requirements as start_image.
+     resolution: string enum[480p,720p,1080p] def="720p"  // Video resolution. 1080p output is 10-bit with H.265/HEVC encoding and may require a compatible player.
+     duration: integer [-1..30] def=5  // Duration of the video in seconds (4-30, or -1 for auto). Must be >= 4 unless -1.
+     output_format: string enum[mp4,mov] def="mp4"  // Output video format. 'mov' (H.264 + yuv444p + PCM) preserves color fidelity for professional editing workflows.
+     draft: boolean def=false  // Generate a 480p-only draft. The draft id is returned as draft_task_id, is valid for 7 days, and can be finalized with draft-to-video. Supported by byteplus and volcengine
+     generate_audio: boolean def=true  // Whether to generate synchronized audio for the video
+  POST /bytedance/seedance-2.5/reference-to-video
+     prompt: string|null  // Text prompt for video generation (optional). Use @Image1, @Video1, @Audio1 to reference uploaded media. Seedance infers the task type (generate / extend / edit) from the 
+     reference_images: array|null  // Reference images (0-30). Formats: jpeg/png/webp/bmp/tiff/gif/heic/heif, aspect ratio 0.4-2.5, 300-6000px, max 30MB each.
+     reference_videos: array|null  // Reference videos (0-10). Formats: mp4/mov; width and height 300-6000px; aspect ratio 0.4-2.5; pixel count 407696-8295044; 2-30s each (4-30s for explicit edit), total dura
+     reference_audios: array|null  // Reference audios (0-10). Formats: wav/mp3, 2-30s each, total duration <= 30s, max 15MB each. Audio-only input is supported.
+     resolution: string enum[480p,720p,1080p] def="720p"  // Video resolution. 1080p output is 10-bit with H.265/HEVC encoding and may require a compatible player.
+     ratio: string enum[21:9,16:9,4:3,1:1,3:4,9:16,adaptive] def="adaptive"  // Aspect ratio of the video. Editing/extension tasks only accept 'adaptive' (follows the input video).
+     duration: integer [-1..30] def=-1  // Duration of the video in seconds (4-30, or -1 for auto). Editing tasks only accept -1 (follows the input video).
+     omni_reference_task_type: string|null  // Pins the Ark task type. Omit or use 'auto' to let the model decide. 'edit' requires duration=-1 and ratio='adaptive' (output follows the selected input video). For 'refer
+     output_format: string enum[mp4,mov] def="mp4"  // Output video format. 'mov' (H.264 + yuv444p + PCM) preserves color fidelity; recommended for editing/extension workflows.
+     draft: boolean def=false  // Generate a 480p-only draft. The draft id is returned as draft_task_id, is valid for 7 days, and can be finalized with draft-to-video. Supported by byteplus and volcengine
+     generate_audio: boolean def=true  // Whether to generate synchronized audio for the video
+  POST /bytedance/seedance-2.5/draft-to-video
+    *draft_task_id: string  // Draft id returned as draft_task_id, valid for 7 days from creation and usable only on the same upstream account/service-provider route that generated it (byteplus or volc
+     output_format: string enum[mp4,mov] def="mp4"  // Output video format for the 1080p final. 'mov' (H.264 + yuv444p + PCM) preserves color fidelity for professional editing workflows.
+  PRICE text-to-video: $6.40-$11.70 per M tokens — Without input video: $10.70/M tokens (480p/720p) or $11.70/M (1080p). With input video: $6.40/M tokens (480p/720p) or $7.00/M (1080p).
+  PRICE image-to-video: $6.40-$11.70 per M tokens — Without input video: $10.70/M tokens (480p/720p) or $11.70/M (1080p). With input video: $6.40/M tokens (480p/720p) or $7.00/M (1080p).
+  PRICE reference-to-video: $6.40-$11.70 per M tokens — Without input video: $10.70/M tokens (480p/720p) or $11.70/M (1080p). With input video: $6.40/M tokens (480p/720p) or $7.00/M (1080p). Video input is billed for at least ceil(output seconds × 2/3) s — see docs.sunra.ai/p
+  PRICE draft-to-video: $7.00-$11.70 per M tokens — Finals are always 1080p: $11.70/M tokens without input video, $7.00/M with input video (the draft's reference videos are re-counted into the final's tokens, so the with-video rate applies whenever the draft used referenc
+
+### bytedance/seedream-5.0-pro (model_b63ac71d3992)
+  POST /requests/{request_id}/cancel
+    ?
+  POST /bytedance/seedream-5.0-pro/text-to-image
+    *prompt: string  // The text prompt used to generate the image.
+     aspect_ratio: string enum[1:1,4:3,3:4,16:9,9:16,3:2,2:3,21:9] def="1:1"  // Image aspect ratio.
+     resolution: string enum[1K,2K] def="2K"  // Image resolution. 1K (~1024px) or 2K (~2048px).
+     output_format: string enum[jpeg,png] def="jpeg"  // The file format of the generated image.
+     enable_safety_checker: boolean def=true  // If set to true, the safety checker will be enabled.
+  POST /bytedance/seedream-5.0-pro/image-editing
+    *prompt: string  // The text prompt used to edit the image. Reference images as Figure 1, Figure 2, etc.
+    *images: array<obj>(max 10)  // List of URLs of input images for editing. Up to 10 image inputs are allowed.
+     aspect_ratio: string enum[1:1,4:3,3:4,16:9,9:16,3:2,2:3,21:9] def="1:1"  // Image aspect ratio.
+     resolution: string enum[1K,2K] def="2K"  // Image resolution. 1K (~1024px) or 2K (~2048px).
+     output_format: string enum[jpeg,png] def="jpeg"  // The file format of the generated image.
+     enable_safety_checker: boolean def=true  // If set to true, the safety checker will be enabled.
+  POST /bytedance/seedream-5.0-pro/layerize
+     prompt: string def=""  // Optional instructions describing which elements to separate. When empty, the model automatically separates the major elements. Normalized <bbox>left top right bottom</bbo
+    *image: string|string  // URL of the image to decompose into a base image and independently editable layers. The image must contain between 512x512 and 6000x6000 total pixels, have an aspect ratio
+     resolution: string enum[auto,1K,1.5K,2K] def="auto"  // Resolution tier for the output base image and layers. auto adapts to the input image while preserving each element's aspect ratio.
+     enhance_prompt_mode: string enum[standard,fast] def="standard"  // Prompt optimization mode. standard prioritizes image quality; fast reduces generation time.
+     enable_safety_checker: boolean def=true  // If set to true, the safety checker will be enabled.
+  PRICE text-to-image: $0.045-$0.09 per image — 1K: $0.045 per image, 2K: $0.09 per image
+  PRICE image-editing: $0.045-$0.126 per image — 1K: $0.045, 2K: $0.09 per image, +$0.004 per reference image from the 2nd
+  PRICE layerize: $0.03375-$0.0675 per generated layer — Base image ≤1536×1536 px: $0.03375 per layer; larger: $0.0675 per layer. Each request returns 2-17 layers (base + up to 16).
+
+### bytedance/seedream-5.0-flash (model_dac69a11f75c)
+  POST /requests/{request_id}/cancel
+    ?
+  POST /bytedance/seedream-5.0-flash/text-to-image
+    *prompt: string  // The text prompt used to generate the image.
+     aspect_ratio: string enum[1:1,4:3,3:4,16:9,9:16,3:2,2:3,21:9] def="1:1"  // Image aspect ratio.
+     resolution: string enum[1K,2K] def="2K"  // Image resolution. 1K (~1024px) or 2K (~2048px).
+     output_format: string enum[jpeg,png] def="jpeg"  // The file format of the generated image.
+     enable_safety_checker: boolean def=true  // Whether to enable the safety checker.
+  POST /bytedance/seedream-5.0-flash/image-editing
+    *prompt: string  // The text prompt used to edit the image. Reference images as Figure 1, Figure 2, etc.
+     aspect_ratio: string enum[1:1,4:3,3:4,16:9,9:16,3:2,2:3,21:9] def="1:1"  // Image aspect ratio.
+     resolution: string enum[1K,2K] def="2K"  // Image resolution. 1K (~1024px) or 2K (~2048px).
+     output_format: string enum[jpeg,png] def="jpeg"  // The file format of the generated image.
+     enable_safety_checker: boolean def=true  // Whether to enable the safety checker.
+    *images: array<obj>(max 10)  // Input image URLs. Up to 10 references are allowed.
+  POST /bytedance/seedream-5.0-flash/layerize
+     prompt: string def=""  // Optional instructions describing which elements to separate.
+    *image: string|string  // URL of the image to decompose into a base image and independently editable layers.
+     resolution: string enum[auto,1K,1.5K,2K] def="auto"  // Resolution tier for the base image and layers.
+     enable_safety_checker: boolean def=true  // Whether to enable the safety checker.
+  PRICE text-to-image: $0.027 per image — $0.027 per image
+  PRICE image-editing: $0.027 per image — $0.027 per edited image
+  PRICE layerize: $0.027 per generated layer — $0.027 per generated layer; each request returns a base image plus up to 16 layers
+
+### bytedance/seedream-5.0-lite (model_YhbbWc4hUvAj)
+  POST /requests/{request_id}/cancel
+    ?
+  POST /bytedance/seedream-5.0-lite/text-to-image
+    *prompt: string  // The text prompt used to generate the image.
+     aspect_ratio: string enum[1:1,4:3,3:4,16:9,9:16,3:2,2:3,21:9] def="1:1"  // Image aspect ratio.
+     resolution: string enum[2K,3K] def="2K"  // Image resolution. 2K (~2048px) or 3K (~3072px).
+     enable_safety_checker: boolean def=true  // If set to true, the safety checker will be enabled.
+  POST /bytedance/seedream-5.0-lite/image-editing
+    *prompt: string  // The text prompt used to edit the image. Reference images as Figure 1, Figure 2, etc.
+    *images: array<obj>(max 10)  // List of URLs of input images for editing. Up to 10 image inputs are allowed.
+     aspect_ratio: string enum[1:1,4:3,3:4,16:9,9:16,3:2,2:3,21:9] def="1:1"  // Image aspect ratio.
+     resolution: string enum[2K,3K] def="2K"  // Image resolution. 2K (~2048px) or 3K (~3072px).
+     enable_safety_checker: boolean def=true  // If set to true, the safety checker will be enabled.
+  PRICE text-to-image: $0.035 per image — $0.035 per image
+  PRICE image-editing: $0.035 per image — $0.035 per image
+
+### google/gemini-3-pro-image (model_0CGUEqC4wKcg)
+  POST /requests/{request_id}/cancel
+    ?
+  POST /google/gemini-3-pro-image/text-to-image
+    *prompt: string  // The prompt for the image
+     aspect_ratio: string enum[21:9,16:9,3:2,4:3,5:4,1:1,4:5,3:4,2:3,9:16] def="1:1"  // The aspect ratio of the generated image
+     output_format: string enum[jpeg,png] def="png"  // The output format of the generated image
+     resolution: string enum[1K,2K,4K] def="1K"  // The resolution of the generated image
+     enable_web_search: boolean def=false  // Enable web search for the image generation task
+  POST /google/gemini-3-pro-image/image-editing
+    *prompt: string  // The prompt for the image
+    *images: array<obj>(max 10)  // The images to edit
+     aspect_ratio: string enum[21:9,16:9,3:2,4:3,5:4,1:1,4:5,3:4,2:3,9:16] def="1:1"  // The aspect ratio of the generated image
+     output_format: string enum[jpeg,png] def="png"  // The output format of the generated image
+     resolution: string enum[1K,2K,4K] def="1K"  // The resolution of the generated image
+     enable_web_search: boolean def=false  // Enable web search for the image generation task
+  PRICE text-to-image: $0.134-$0.24 per image — $0.134 per image (1K/2K), $0.24 per image (4K); Google list price
+  PRICE image-editing: $0.134-$0.24 per image — $0.134 per image (1K/2K), $0.24 per image (4K); Google list price
+
+### google/gemini-nano-banana-2.1 (model_a5ffbf74212d)
+  POST /requests/{request_id}/cancel
+    ?
+  POST /google/gemini-nano-banana-2.1/text-to-image
+    *prompt: string  // The prompt for the image
+     aspect_ratio: string enum[1:1,1:4,1:8,2:3,3:2,3:4,4:1,4:3,4:5,5:4,8:1,9:16,16:9,21:9] def="1:1"  // The aspect ratio of the generated image
+     resolution: string enum[1K,2K,4K] def="1K"  // The resolution of the generated image
+     enable_web_search: boolean def=false  // Enable web search for the image generation task
+     thinking_level: string|null  // When set, controls how much the model thinks before generating (upstream default: medium)
+  POST /google/gemini-nano-banana-2.1/image-editing
+    *prompt: string  // The prompt for the image
+    *images: array<obj>(max 14)  // The images to edit
+     aspect_ratio: string enum[1:1,1:4,1:8,2:3,3:2,3:4,4:1,4:3,4:5,5:4,8:1,9:16,16:9,21:9] def="1:1"  // The aspect ratio of the generated image
+     resolution: string enum[1K,2K,4K] def="1K"  // The resolution of the generated image
+     enable_web_search: boolean def=false  // Enable web search for the image generation task
+     thinking_level: string|null  // When set, controls how much the model thinks before generating (upstream default: medium)
+  PRICE text-to-image: $0.034-$0.128 per image — $0.034 per image (1K), $0.050 (2K), $0.113 (4K); +$0.015 with web search
+  PRICE image-editing: $0.034-$0.128 per image — $0.034 per image (1K), $0.050 (2K), $0.113 (4K); +$0.015 with web search
+
+### meta/sam-3.1 (model_bd03e67869be)
+  POST /requests/{request_id}/cancel
+    ?
+  POST /meta/sam-3.1/image
+    *image_url: string|string  // Image to segment.
+     output_format: string enum[jpeg,png,webp] def="png"
+     include_boxes: boolean def=false
+     max_masks: integer [1..32] def=3
+     prompt: string def="wheel"
+     point_prompts: array<object>
+     box_prompts: array<object>
+     sync_mode: boolean def=false
+     return_multiple_masks: boolean def=false
+     include_scores: boolean def=false
+     apply_mask: boolean def=true
+  POST /meta/sam-3.1/image-rle
+    *image_url: string|string  // Image to segment.
+     output_format: string enum[jpeg,png,webp] def="png"
+     include_boxes: boolean def=false
+     max_masks: integer [1..32] def=3
+     prompt: string def="wheel"
+     point_prompts: array<object>
+     box_prompts: array<object>
+     sync_mode: boolean def=false
+     return_multiple_masks: boolean def=false
+     include_scores: boolean def=false
+     apply_mask: boolean def=true
+  POST /meta/sam-3.1/video
+    *video_url: string|string  // Video to segment; at most 10 seconds and 240 counted input frames.
+     prompt: string def=""
+     box_prompts: array<object>
+     detection_threshold: number [0.1..1] def=0.5
+     apply_mask: boolean def=true
+     video_output_type: string enum[X264 (.mp4),VP9 (.webm)] def="X264 (.mp4)"
+     point_prompts: array<object>
+     max_num_objects: integer [1..128] def=16
+  POST /meta/sam-3.1/video-rle
+    *video_url: string|string  // Video to segment; at most 10 seconds and 240 counted input frames.
+     prompt: string def=""
+     mask_url: string|string|null
+     detection_threshold: number [0.01..1] def=0.5
+     box_prompts: array<object>
+     boundingbox_zip: boolean def=false
+     apply_mask: boolean def=false
+     frame_index: integer def=0
+     point_prompts: array<object>
+     max_num_objects: integer [1..128] def=16
+     return_object_rles: boolean def=false
+  PRICE image: $0.01 per image — $0.01 per image request
+  PRICE image-rle: $0.01 per image — $0.01 per image request
+  PRICE video: $0.01 per 16 input frames — $0.01 per started block of 16 counted input frames; maximum 240 frames
+  PRICE video-rle: $0.01 per 16 input frames — $0.01 per started block of 16 counted input frames; maximum 240 frames
+
+### topazlabs/image-upscaler (model_hNqJ3wpIfkjI)
+  POST /requests/{request_id}/cancel
+    ?
+  POST /topazlabs/image-upscaler/image-upscale
+    *image: string|string  // Image to enhance
+     enhance_model: string enum[Standard V2,Low Resolution V2,CGI,High Fidelity V2,Text Refine,Recovery,Recovery V2,Redefine,Standard MAX,Wonder] def="Standard V2"  // Enhancement model: Standard V2 (general purpose), Low Resolution V2 (for low-res inputs), CGI (for digital art/renders), High Fidelity V2 (preserves fine details), Text R
+     upscale_factor: string|number def="None"  // How much to upscale the image. None = enhance only (no resize), 2x = double resolution, 4x = quadruple resolution, or a float between 1.0–4.0
+     subject_detecting: string enum[None,All,Foreground,Background] def="None"  // Subject detection mode. None/All = process entire image, Foreground = enhance foreground only, Background = enhance background only
+     face_enhancement: boolean def=true  // Apply AI face enhancement. Applies to Standard, Low Resolution, CGI, High Fidelity, and Recovery V2 models
+     face_enhancement_creativity: number [0..1] def=0  // Creativity level for face enhancement (0–1). Ignored if face_enhancement is disabled
+     face_enhancement_strength: number [0..1] def=0.8  // How sharp enhanced faces appear relative to the background (0–1). Ignored if face_enhancement is disabled
+     sharpen: number|null  // Sharpening level (0–1). Applies to Standard V2, Low Resolution V2, CGI, High Fidelity V2, Text Refine, and Redefine
+     denoise: number|null  // Denoising level (0–1). Applies to Standard V2, Low Resolution V2, CGI, High Fidelity V2, Text Refine, and Redefine
+     fix_compression: number|null  // Compression artifact removal level (0–1). Applies to Standard V2, Low Resolution V2, High Fidelity V2, and Text Refine
+     crop_to_fill: boolean def=false  // Whether to crop the output to fill the target dimensions.
+     strength: number|null  // Enhancement strength (0.01–1). Applies to Text Refine model only.
+     creativity: integer|null  // Creativity level for generative upscaling (1–6). Applies to Redefine model only.
+     texture: integer|null  // Texture detail level for generative upscaling (1–5). Applies to Redefine model only.
+     prompt: string|null  // Text prompt to guide generative upscaling (max 1024 chars). Applies to Redefine model only.
+     autoprompt: boolean|null  // Enable automatic prompt generation for generative upscaling. Applies to Redefine model only.
+     output_format: string enum[jpeg,jpg,png] def="jpeg"  // Output image format
+  PRICE image-upscale: $0.01 per output megapixel — $0.01 per output megapixel (e.g. 24MP = $0.24); output capped at 96MP for png / 400MP for jpeg
+
+### recraft/crisp-upscale (model_Qyty5SAaJ9J2)
+  POST /requests/{request_id}/cancel
+    ?
+  POST /recraft/crisp-upscale/upscale-image
+    *image: string|string  // The URL of the image to be upscaled. Must be in PNG format.
+  PRICE upscale-image: $0.004 per image — $0.004 per image
+
+### bria/bria-remove-background (model_34j3u9hkYOTD)
+  POST /requests/{request_id}/cancel
+    ?
+  POST /bria/bria-remove-background/image
+    *image: string|string  // Input Image to erase from
+  POST /bria/bria-remove-background/video
+    *video: string|string  // Input video to remove background from. Size should be less than 4000x4000 and duration less than 30s.
+     background_color: string|null  // Background color to use after removal.
+     output_container_and_codec: string|null  // Output container and codec format.
+  PRICE image: $0.018 per image — $0.018 per image
+  PRICE video: $0.14 per second — $0.14 per input video second (~$8.40 per minute)
+
+### topazlabs/video-upscaler (model_BxFFFZdSNq78)
+  POST /requests/{request_id}/cancel
+    ?
+  POST /topazlabs/video-upscaler/video-upscale
+    *video: string|string  // Video file to upscale
+     upscale_factor: string|number def="2x"  // How much to upscale the video. None = enhance only (no resize), 2x = double resolution, 4x = quadruple resolution, or a float between 1.0–4.0. Billing depends on the resu
+     enhance_model: string enum[Proteus,Artemis HQ,Artemis MQ,Artemis LQ,Nyx,Nyx Fast,Nyx XL,Nyx HF,Gaia HQ,Gaia CG,Gaia 2,Starlight Precise 1,Starlight Precise 2,Starlight Precise 2.5,Starlight HQ,Starlight Mini,Starlight Sharp,Starlight Fast 1,Starlight Fast 2] def="Proteus"  // Video enhancement model: Proteus (best for most videos), Artemis HQ/MQ/LQ (denoise + sharpen, high/medium/low quality), Nyx/Nyx Fast/Nyx XL/Nyx HF (dedicated denoising va
+     target_fps: integer|null  // Target FPS for frame interpolation (16–60). If set, frame interpolation is enabled. Frame interpolation is free — it does not change the price
+     compression: number|null  // Compression artifact removal level (0–1)
+     noise: number|null  // Noise reduction level (0–1)
+     halo: number|null  // Halo reduction level (0–1)
+     grain: number|null  // Film grain amount (0–1)
+     recover_detail: number|null  // Recover original detail level (0–1). Higher values preserve more of the source detail
+     H264_output: boolean def=false  // Output using H264 codec instead of the default H265
+  PRICE video-upscale: $0.005-$0.16 per second — Per second of output video, rounded up. $0.01/s up to 1280×720 output pixels, $0.02/s up to 1920×1080, $0.08/s above. Starlight models ×2, Gaia 2 ×0.5. Frame interpolation (target_fps) is free
