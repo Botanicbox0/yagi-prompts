@@ -1,13 +1,12 @@
 "use client";
 /**
  * The three ways to start on the video screen (docs/BRAND-STUDIO-V3.md §6): write it (focus the prompt
- * bar), start from a reference video (open the reverse drawer), or ask the team (jump to the request
- * section). Plain buttons and one in-page link; nothing here talks to the server.
+ * bar), start from a reference video (open the reverse drawer), or ask the team (the request view).
+ * Plain buttons and one link; nothing here talks to the server.
  */
 import type { StudioVideoCopy } from "@/messages/studio-video";
 import { StudioIcon, type StudioIconName } from "../icons";
 import { STUDIO_OPEN_REVERSE, announce } from "../seams";
-import { VIDEO_REQUESTS_ANCHOR } from "./anchors";
 import s from "./video.module.css";
 
 function reducedMotion(): boolean {
@@ -26,11 +25,11 @@ export function focusPromptBar(): void {
   document.querySelector("[data-studio-video-gallery]")?.scrollIntoView({ block: "start", behavior });
 }
 
-export function VideoStarts({ t, requests }: { t: StudioVideoCopy; requests: boolean }) {
+export function VideoStarts({ t, requestHref }: { t: StudioVideoCopy; requestHref: string | null }) {
   const cards: Array<{ key: string; icon: StudioIconName; title: string; line: string; run?: () => void; href?: string }> = [
     { key: "prompt", icon: "sparkles", ...t.starts.prompt, run: focusPromptBar },
     { key: "reverse", icon: "video", ...t.starts.reverse, run: () => announce(STUDIO_OPEN_REVERSE) },
-    ...(requests ? [{ key: "request", icon: "send" as const, ...t.starts.request, href: `#${VIDEO_REQUESTS_ANCHOR}` }] : []),
+    ...(requestHref ? [{ key: "request", icon: "send" as const, ...t.starts.request, href: requestHref }] : []),
   ];
   return (
     <nav aria-label={t.starts.label} data-studio-video-starts>

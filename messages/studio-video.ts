@@ -8,6 +8,7 @@
  */
 export const studioVideoEn = {
   title: 'Video',
+  views: { label: 'Video screens', make: 'Make', request: 'Ask our team' },
   intro: {
     title: 'Remake a scene from one reference video',
     line: 'We read the video into a shot table and remake it with your product and people from that blueprint. A finished video can become the format of a campaign on twings.app.',
@@ -209,6 +210,7 @@ export const studioVideoEn = {
 
 export const studioVideoKo: typeof studioVideoEn = {
   title: '영상',
+  views: { label: '영상 화면', make: '만들기', request: '제작 의뢰' },
   intro: {
     title: '참고 영상 하나로 같은 장면을 다시 찍어요',
     line: '영상을 읽어 샷 표로 바꾸고, 그 설계도대로 우리 제품과 인물을 넣어 새로 만들어요. 완성한 영상은 twings.app 캠페인의 포맷이 될 수 있어요.',

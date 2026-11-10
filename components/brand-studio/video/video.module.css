@@ -15,6 +15,14 @@
 .headEnd { display: flex; align-items: center; gap: 8px; }
 .headEnd:empty { display: none; }
 
+/* 만들기 | 제작 의뢰: a segmented switch beside the title. */
+.views { display: inline-flex; gap: 2px; padding: 3px; border-radius: var(--ys-r-pill); background: var(--ys-fill, rgba(0, 0, 0, 0.05)); margin-right: auto; }
+.view { display: inline-flex; align-items: center; min-height: 32px; padding: 0 14px; border-radius: var(--ys-r-pill); font-size: 13px; font-weight: 500; color: var(--ys-ink-secondary); text-decoration: none; transition: background 150ms var(--ys-ease), color 150ms var(--ys-ease); }
+.view:hover { color: var(--ys-ink); }
+.view[aria-current="page"] { background: var(--ys-surface); color: var(--ys-ink); box-shadow: var(--ys-shadow-1, 0 1px 2px rgba(0, 0, 0, 0.08)); }
+.view:focus-visible { outline: 2px solid var(--ys-focus); outline-offset: 2px; }
+@media (max-width: 640px) { .view { min-height: 44px; } }
+
 .starts { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; margin: 0; padding: 0; list-style: none; }
 .start {
   display: grid; grid-template-columns: auto minmax(0, 1fr); align-items: start; gap: 4px 12px; width: 100%; min-height: 88px;

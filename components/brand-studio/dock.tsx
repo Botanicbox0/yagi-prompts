@@ -163,7 +163,6 @@ export function Dock(props: DockProps) {
           {props.toast}
         </p>
       )}
-      <UsageMeter allowance={props.allowance} copy={copy} locale={locale} />
       <Tray
         items={tray}
         labels={props.labels}
@@ -430,17 +429,6 @@ function allowanceText(allowance: StudioAllowanceView, copy: StudioCopy, locale:
   const left = creditsLeft(cap, used);
   const total = creditsLeft(cap, 0);
   return { left, total, value: credits(copy.credits.left, left, locale) };
-}
-
-/** The month's credits as a hairline along the bar's top edge (what is left, out of the month's credits). */
-export function UsageMeter({ allowance, copy, locale }: { allowance: StudioAllowanceView; copy: StudioCopy; locale: StudioLocale }) {
-  const { left, total, value } = allowanceText(allowance, copy, locale);
-  const share = total > 0 ? Math.min(100, ((total - left) / total) * 100) : 0;
-  return (
-    <div className="bs-meter" role="meter" aria-label={copy.dock.usage} aria-valuemin={0} aria-valuemax={total} aria-valuenow={left} aria-valuetext={value} data-studio-meter>
-      <span style={{ width: `${share}%` }} />
-    </div>
-  );
 }
 
 /** "남은 크레딧 12,340" with the refill day in its tooltip (the page header shows it). */

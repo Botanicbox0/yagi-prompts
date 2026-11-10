@@ -54,10 +54,10 @@ describe("the remix panel in the prompt bar", () => {
 
 describe("the video screen's parts", () => {
   it("starts: three cards, the request one only when the brand may ask", () => {
-    const html = renderToStaticMarkup(<VideoStarts t={studioVideoKo} requests />);
+    const html = renderToStaticMarkup(<VideoStarts t={studioVideoKo} requestHref="/brand/studio/video?view=request" />);
     expect(html.match(/data-studio-video-start=/g)).toHaveLength(3);
-    expect(html).toContain('href="#studio-video-requests"');
-    expect(renderToStaticMarkup(<VideoStarts t={studioVideoKo} requests={false} />).match(/data-studio-video-start=/g)).toHaveLength(2);
+    expect(html).toContain('href="/brand/studio/video?view=request"');
+    expect(renderToStaticMarkup(<VideoStarts t={studioVideoKo} requestHref={null} />).match(/data-studio-video-start=/g)).toHaveLength(2);
   });
 
   it("campaign road: five steps ending in the send action; sends finished videos before drafts", () => {

@@ -293,11 +293,9 @@ describe("what the bar sends and what it costs", () => {
     expect(html.match(/data-variant="solid"/g)).toHaveLength(1);
   });
 
-  it("shows the credits left from the server's allowance, as a hairline and in the header line", () => {
+  it("shows the credits left from the server's allowance in the header line, and no meter on the bar", () => {
     const html = render({}, "en");
-    expect(html).toContain('role="meter"');
-    expect(html).toContain('aria-valuenow="28760"');
-    expect(html).toContain('aria-valuemax="30000"');
+    expect(html).not.toContain('role="meter"');
     expect(html).not.toMatch(/\$|USD|₩/);
     const line = renderToStaticMarkup(<AllowanceLine allowance={allowance()} copy={copyFor("ko")} locale="ko" />);
     expect(line).toContain("남은 크레딧 28,760");

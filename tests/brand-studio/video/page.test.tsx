@@ -61,7 +61,7 @@ vi.mock("@/components/brand-studio/studio-app", () => ({
 
 import StudioVideoPage from "@/app/(brand)/brand/studio/video/page";
 
-type Query = { start?: string; asset?: string };
+type Query = { start?: string; asset?: string; view?: string };
 const page = async (query: Query = {}) =>
   renderToStaticMarkup(await (StudioVideoPage({ searchParams: Promise.resolve({ organizationId: state.org.id, ...query }) }) as Promise<ReactElement>));
 
@@ -77,12 +77,24 @@ beforeEach(() => {
 afterEach(() => vi.unstubAllEnvs());
 
 describe("/brand/studio/video for an ordinary brand", () => {
-  it("has the three starts, the gallery in video mode, the road to a campaign and the three requests", async () => {
+  it("make view: the three starts, the gallery in video mode and the reference drawer; no request cards under the floating bar", async () => {
     const html = await page();
     expect(html).toContain("data-brand-studio-video");
+    expect(html).toContain('data-studio-video-view="make"');
     expect(html).toContain(`<h1 class="bs-title">${studioVideoKo.title}</h1>`);
     for (const start of ["prompt", "reverse", "request"]) expect(html).toContain(`data-studio-video-start="${start}"`);
+    expect(html).toContain(`href="/brand/studio/video?view=request&amp;organizationId=${ORG}" data-studio-video-start="request"`);
     expect(html).toContain(`data-mock-studio-app="video" data-org="${ORG}" data-has-library="" data-has-layers=""`);
+    expect(html).toContain("data-studio-reverse");
+    expect(html).not.toContain("data-studio-reverse-panel");
+    expect(html).not.toContain("data-studio-video-path");
+    expect(html).not.toContain("data-studio-video-requests");
+  });
+
+  it("request view: the road to a campaign and the three requests, without the gallery", async () => {
+    const html = await page({ view: "request" });
+    expect(html).toContain('data-studio-video-view="request"');
+    expect(html).toContain('aria-current="page" data-studio-video-view-link="request"');
     expect(html).toContain("data-studio-video-path");
     expect(html.match(/data-studio-video-path-step="\d"/g)).toHaveLength(5);
     expect(html).toContain("data-studio-video-path-send");
@@ -91,8 +103,8 @@ describe("/brand/studio/video for an ordinary brand", () => {
       expect(html).toContain(`href="/brand/projects/new?track=${track}&amp;organizationId=${ORG}"`);
     }
     expect(html).toContain('id="studio-video-requests"');
-    expect(html).toContain("data-studio-reverse");
-    expect(html).not.toContain("data-studio-reverse-panel");
+    expect(html).not.toContain("data-mock-studio-app");
+    expect(html).not.toContain("data-studio-reverse");
   });
 
   it("shows the contract link only to a brand with a production contract", async () => {
@@ -107,20 +119,22 @@ describe("/brand/studio/video for an ordinary brand", () => {
     const html = await page({ start: "reverse", asset: "not-a-uuid" });
     expect(html).toContain("data-studio-reverse-open");
     expect(html).toContain("data-studio-reverse-panel");
+    // The drawer lives in the make view, so it wins over a request view in the same address.
+    expect(await page({ start: "reverse", view: "request" })).toContain('data-studio-video-view="make"');
   });
 
   it("keeps requests and sending to viewers out, but not the explanation", async () => {
     state.org = { ...ORDINARY, role: "viewer" };
-    const html = await page();
+    expect(await page()).not.toContain('data-studio-video-start="request"');
+    const html = await page({ view: "request" });
     expect(html).toContain("data-studio-video-path");
     expect(html).not.toContain("data-studio-video-path-send");
     expect(html).not.toContain("data-studio-video-requests");
-    expect(html).not.toContain('data-studio-video-start="request"');
   });
 
   it.each(["ko", "en"] as const)("names no client, supplier, won amount or old framing (%s)", async (locale) => {
     state.locale = locale;
-    const html = await page({ start: "reverse" });
+    const html = (await page({ start: "reverse" })) + (await page({ view: "request" }));
     expect(html).toContain(locale === "ko" ? studioVideoKo.path.title : studioVideoEn.path.title);
     for (const banned of [/9편|200만|2M\+? views/i, /morphic|모픽/i, /sunra|higgsfield|seedance|gemini/i, /브랜드 전용 포맷|인하우스 패키지/, /₩|\d원\b/]) {
       expect(html).not.toMatch(banned);
