@@ -13,6 +13,7 @@
  * Everything that can wait returns: nothing here sleeps.
  */
 import { STUDIO_JOB_OPEN_STATUSES } from './contracts';
+import { planBlockRetry } from './block-retry';
 import { failJob, finishJob } from './finish';
 import { claimJobs, releaseJob, saveJob, tokenOf, failPendingOutputs } from './job-store';
 import { closeLane, failoverLane, heartbeatFresh, lanesUp, loadLaneClosures, loadLaneHeartbeats, routeJob } from './lanes';
@@ -130,6 +131,10 @@ async function submit(deps: StudioDeps, job: JobRow, token: string): Promise<Job
       await saveJob(deps.sql, job, token, { attempts: job.attempts + 1 });
       return null;
     }
+    if (inFlight === 0 && failure.code === 'provider_rejected') {
+      const retry = await planBlockRetry(deps, job);
+      if (retry) return saveJob(deps.sql, job, token, { final_prompt: retry.finalPrompt, attempts: 0, work: retry.work });
+    }
     if (inFlight === 0) return failJob(deps, job, token, failure.code, failure.detail);
     // Some slots are already with the provider: keep them, give up on the rest.
     const failures = { ...(job.work.failures ?? {}) };
@@ -160,6 +165,15 @@ async function poll(deps: StudioDeps, job: JobRow, token: string): Promise<JobRo
   }
   const done = outputs.every((o) => results[String(o.idx)] || failures[String(o.idx)]);
   if (!changed && !done) return null;
+  // Every result was stopped by the safety review and nothing came back: one retry with the wording
+  // looked over (lib/brand-studio/block-retry.ts). The retry is reviewed again like any other run.
+  if (done && outputs.length > 0 && Object.keys(results).length === 0 && outputs.every((o) => failures[String(o.idx)]?.code === 'provider_rejected')) {
+    const retry = await planBlockRetry(deps, job);
+    if (retry) {
+      await deps.sql.query("update brand_studio_outputs set provider_task_id = null where job_id = $1 and status = 'pending'", [job.id]);
+      return saveJob(deps.sql, job, token, { status: 'queued', final_prompt: retry.finalPrompt, attempts: 0, work: retry.work });
+    }
+  }
   const saved = await saveJob(deps.sql, job, token, { work: { ...job.work, results, failures }, ...(done ? { status: 'finishing' as const } : {}) });
   return done ? saved : null;
 }

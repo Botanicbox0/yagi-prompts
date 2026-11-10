@@ -1618,6 +1618,7 @@ export const ko: Dictionary = {
         finishing: '마무리하는 중',
       },
       canceled: '끝나기 전에 멈췄어요.',
+      rejectedWithReferences: '이 내용은 만들 수 없었어요. 참조한 사진이나 영상 때문일 수 있어요. 사람이 또렷하게 나오는 자료는 통과하지 못할 때가 있어요.',
       cancel: '취소',
       cancelLabel: '이 요청 취소',
       cancelLate: '이미 만들기 시작해서 멈출 수 없어요.',

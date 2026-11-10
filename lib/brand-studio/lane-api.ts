@@ -12,6 +12,7 @@
  * to `finishing`, the engine stores them) or `fail`. Job ids are the only handles the worker holds.
  */
 import { z } from 'zod';
+import { planBlockRetry, type BlockRetryPlan } from './block-retry';
 import { closeLane, failoverLane, recordLaneHeartbeat } from './lanes';
 import { dropWorkingFiles } from './job-store';
 import { studioModel } from './models';
@@ -156,10 +157,24 @@ export async function laneFail(deps: StudioDeps, raw: unknown): Promise<LaneOutc
   const parsed = FailInput.safeParse(raw);
   if (!parsed.success) return { ok: false, code: 'invalid' };
   const v = parsed.data;
+  // A safety-review block gets one retry with the wording looked over. The rewrite is a network call,
+  // so it is planned before the transaction and applied inside it only if the run is still the same.
+  let blockRetry: BlockRetryPlan | null = null;
+  if (v.code === 'provider_rejected') {
+    const peek = (await deps.sql.query<JobRow>('select * from brand_studio_jobs where id = $1', [v.jobId])).rows[0];
+    if (peek && peek.lane === 'sunra_mcp' && (peek.status === 'running' || peek.status === 'queued')) blockRetry = await planBlockRetry(deps, peek);
+  }
   const outcome = await deps.sql.transaction(async (sql) => {
     const job = (await sql.query<JobRow>('select * from brand_studio_jobs where id = $1 for update', [v.jobId])).rows[0];
     if (!job || job.lane !== 'sunra_mcp') return { ok: false as const, code: 'not_found' as const };
     if (job.status !== 'running' && job.status !== 'queued') return { ok: false as const, code: 'conflict' as const };
+    if (blockRetry && !job.work.blockRetry) {
+      await sql.query(
+        `update brand_studio_jobs set status = 'queued', final_prompt = $2, started_at = null, claimed_at = null, attempts = 0, work = $3::jsonb where id = $1`,
+        [job.id, blockRetry.finalPrompt, JSON.stringify(blockRetry.work)],
+      );
+      return { ok: true as const, jobId: job.id, work: null };
+    }
     if (v.code === 'provider_unavailable') {
       // The account could not take it (no credits, account trouble): close the lane for a while and
       // hand the job to the API lane when it can run there; a final, or nowhere left to go, fails.

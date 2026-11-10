@@ -22,6 +22,7 @@ import type {
   StudioReference,
   StudioRemixMethod,
 } from './contracts';
+import type { BlockedInput, BlockedRewrite } from './enhancer/blocked';
 import type { StudioEnv } from './env';
 import type { StudioMediaStore } from './media-store';
 import type { StudioLane, StudioPromptProfile } from './models';
@@ -74,6 +75,8 @@ export interface StudioIntel {
   enhancePrompt(input: EnhanceInput, deps: IntelDeps): Promise<EnhanceResult>;
   composeFallbackPrompt(input: EnhanceInput): EnhanceResult;
   readFilm(input: { video: { bytes: Uint8Array; mime: string } | { url: string }; locale: 'ko' | 'en' }, deps: IntelDeps): Promise<FilmSheet | null>;
+  /** Optional so a test double may leave it out; without it a blocked run is simply not retried. */
+  rewriteBlockedPrompt?(input: BlockedInput, deps: IntelDeps): Promise<BlockedRewrite>;
   planRegion(image: { width: number; height: number }, box: RegionBox, aspects: readonly string[]): RegionPlan;
   cropForEdit(original: Uint8Array, plan: RegionPlan): Promise<{ bytes: Uint8Array; mime: 'image/png' }>;
   compositeRegion(input: { original: Uint8Array; edited: Uint8Array; plan: RegionPlan; feather?: number }): Promise<{
@@ -148,6 +151,10 @@ export interface StudioJobWork {
   failures?: Record<string, { code: StudioProviderFailure; detail: string }>;
   /** How many times storing each result has failed; a paid result is retried before it is given up. */
   storeAttempts?: Record<string, number>;
+  /** Set once a run was retried after a safety-review block; a run is never retried twice. */
+  blockRetry?: { source: 'model' | 'same' };
+  /** The text that was blocked, kept for support (internal). */
+  blockedPrompt?: string;
 }
 
 export interface JobRow {
