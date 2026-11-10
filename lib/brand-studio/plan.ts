@@ -8,8 +8,6 @@ import type { StudioAssetKind, StudioAssetRole, StudioJobCreate, StudioJobKind, 
 import { StudioDenied } from './access';
 import type { StudioMediaStore } from './media-store';
 import {
-  DEFAULT_REGION_EDIT_MODEL,
-  estimateImageUsd,
   estimateVideoUsd,
   studioModel,
   type StudioImageModel,
@@ -18,9 +16,10 @@ import {
   type StudioVideoModel,
   type StudioVideoResolution,
 } from './models';
+import { referenceVideoFit } from './reference-video';
 import { readyAsset, readyOutput } from './repo';
 import type { JobRow, StudioJobParams } from './types';
-import { usageKrw } from './usage';
+import { imageRunUsd, regionEditRun, remixRunUsd, usageKrw, videoRunUsd } from './usage-rate';
 
 export interface ResolvedRef {
   /** Position in the tray (1-based, across kinds). */
@@ -163,7 +162,7 @@ export async function planJob(
     const model = liveModel(input.model, 'image') as StudioImageModel;
     if (!(model.aspects as readonly string[]).includes(input.aspect) || !(model.resolutions as readonly string[]).includes(input.resolution)) throw new StudioDenied('invalid');
     if (resolved.some((r) => r.kind !== 'image' || r.frame) || resolved.length > model.maxReferences) throw new StudioDenied('invalid');
-    const usd = estimateImageUsd({ model: model.id, resolution: input.resolution, references: resolved.length }) * input.count;
+    const usd = imageRunUsd({ model: model.id, resolution: input.resolution, references: resolved.length, count: input.count });
     return {
       ...shared, kind: 'image', model,
       params: { ...base, aspect: input.aspect, resolution: input.resolution, count: input.count },
@@ -173,15 +172,12 @@ export async function planJob(
   }
 
   if (input.kind === 'region_edit') {
-    const picked = studioModel(input.model);
-    const model = (picked && picked.medium === 'image' && picked.availability === 'live' && picked.regionEdit ? picked : studioModel(DEFAULT_REGION_EDIT_MODEL)) as StudioImageModel;
+    const { model, resolution, usd } = regionEditRun(input.model, resolved.length);
     if (resolved.some((r) => r.kind !== 'image' || r.frame) || resolved.length + 1 > model.maxReferences) throw new StudioDenied('invalid');
     const source = input.source.assetId
       ? await readyAsset(sql, organizationId, input.source.assetId)
       : await readyOutput(sql, organizationId, input.source.outputId!);
     if (!source || source.kind !== 'image' || !source.width || !source.height) throw new StudioDenied('reference_missing');
-    const resolution = (model.resolutions as readonly string[]).includes('2K') ? '2K' : model.defaultResolution;
-    const usd = estimateImageUsd({ model: model.id, resolution, references: resolved.length + 1 });
     return {
       ...shared, kind: 'region_edit', model,
       parentOutputId: input.source.outputId ?? null,
@@ -192,7 +188,7 @@ export async function planJob(
   }
 
   const model = liveModel(input.model, 'video') as StudioVideoModel;
-  const billed = videoResolution(model, input.resolution);
+  videoResolution(model, input.resolution);
   if (count(resolved, 'image') > model.maxReferenceImages) throw new StudioDenied('invalid');
   if (resolved.some((r) => r.frame && r.kind !== 'image')) throw new StudioDenied('invalid');
   if (resolved.filter((r) => r.frame === 'start').length > 1 || resolved.filter((r) => r.frame === 'end').length > 1) throw new StudioDenied('invalid');
@@ -202,7 +198,7 @@ export async function planJob(
     if (count(resolved, 'video') > 0) throw new StudioDenied('invalid');
     if (!(model.aspects as readonly string[]).includes(input.aspect)) throw new StudioDenied('invalid');
     const secs = videoSecondsOf(model, input.seconds);
-    const usd = estimateVideoUsd({ resolution: billed, seconds: secs, referenceVideoSeconds: 0 });
+    const usd = videoRunUsd({ resolution: input.resolution, seconds: secs });
     return {
       ...shared, kind: 'video', model,
       params: { ...base, aspect: input.aspect, resolution: input.resolution, seconds: secs, audio: input.audio },
@@ -216,11 +212,12 @@ export async function planJob(
   if (videos.length !== 1 || videos.length > model.maxReferenceVideos) throw new StudioDenied(videos.length === 0 ? 'reference_missing' : 'invalid');
   if (input.method === 'reference' && !(model.aspects as readonly string[]).includes(input.aspect)) throw new StudioDenied('invalid');
   const refSeconds = videos[0]!.durationMs != null ? videos[0]!.durationMs / 1000 : null;
-  const bounds = model.referenceVideoSeconds;
-  if (refSeconds !== null && (refSeconds < (input.method === 'edit' ? bounds.editMin : bounds.min) || refSeconds > bounds.max)) throw new StudioDenied('invalid');
+  // The provider's limits on a reference video (length, size, and the longer minimum for an edit):
+  // refused here, before anything is reserved, exactly as the dock warns about them.
+  const fit = referenceVideoFit(model, { seconds: refSeconds, width: videos[0]!.width, height: videos[0]!.height });
+  if (fit.problem || (input.method === 'edit' && !fit.editable)) throw new StudioDenied('invalid');
   const secs = input.method === 'edit' ? null : input.seconds === undefined ? null : videoSecondsOf(model, input.seconds);
-  const outputSeconds = secs ?? Math.min(model.maxSeconds, Math.max(model.minSeconds, Math.round(refSeconds ?? model.defaultSeconds)));
-  const usd = estimateVideoUsd({ resolution: billed, seconds: outputSeconds, referenceVideoSeconds: Math.max(1, Math.round(refSeconds ?? outputSeconds)) });
+  const { usd } = remixRunUsd({ model, resolution: input.resolution, method: input.method, seconds: secs, referenceSeconds: refSeconds });
   return {
     ...shared, kind: 'video_remix', model,
     params: {

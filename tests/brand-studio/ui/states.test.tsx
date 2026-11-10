@@ -1,8 +1,10 @@
 import { describe, expect, it } from "vitest";
 import { renderToStaticMarkup } from "react-dom/server";
-import { STUDIO_ERROR_CODES, type StudioState } from "@/lib/brand-studio/contracts";
+import { STUDIO_ERROR_CODES, type StudioJobView, type StudioState } from "@/lib/brand-studio/contracts";
 import { STUDIO_MODELS } from "@/lib/brand-studio/models";
 import { StudioApp } from "@/components/brand-studio/studio-app";
+import { Board, canCancel, type BoardProps } from "@/components/brand-studio/board";
+import { studioReducer } from "@/components/brand-studio/store";
 import { errorLine } from "@/components/brand-studio/copy";
 import { ORG, allowance, asset, copyFor, job, output, studioState } from "./fixtures";
 import { ko } from "@/messages/ko";
@@ -90,6 +92,32 @@ describe("studio states", () => {
     expect(html).toContain(copy.errors.provider_rejected);
     expect(html).toContain(copy.board.retry);
     expect(html).not.toContain("provider_rejected");
+  });
+});
+
+describe("stopping and deleting", () => {
+  const board = (jobs: StudioJobView[], patch: Partial<BoardProps> = {}) =>
+    renderToStaticMarkup(
+      <Board jobs={jobs} copy={copyFor("ko")} locale="ko" canCreate canStop parentOf={() => null} onOpen={() => {}} onRetry={() => {}} onCancel={() => {}} onExample={() => {}} {...patch} />,
+    );
+
+  it("offers a quiet cancel only while a run waits, and says why when it could not stop", () => {
+    const copy = copyFor("ko");
+    const html = board([job(3, { status: "held", outputs: [] }), job(2, { status: "queued", outputs: [] }), job(1, { status: "running", outputs: [] })], { notes: { [job(1).id]: copy.board.cancelLate } });
+    expect(html.match(/data-studio-cancel/g)).toHaveLength(2);
+    expect(html).toContain(`aria-label="${copy.board.cancelLabel}"`);
+    expect(html).not.toMatch(/data-studio-cancel[^>]*data-variant="solid"|data-variant="solid"[^>]*data-studio-cancel/);
+    expect(html).toContain(copy.board.cancelLate);
+    expect(board([job(3, { status: "held" })], { canStop: false })).not.toContain("data-studio-cancel");
+    expect(canCancel({ status: "running" })).toBe(false);
+  });
+
+  it("drops a deleted result from the board, and a finished run with nothing left", () => {
+    const two = job(1, { outputs: [output(1), output(2)] });
+    const state = studioState({ jobs: [two] });
+    const after = studioReducer({ phase: "ready", state }, { type: "outputRemoved", outputId: output(1).id });
+    expect(after.state!.jobs[0]!.outputs.map((o) => o.id)).toEqual([output(2).id]);
+    expect(board([job(1, { outputs: [] })])).toContain('data-state="empty"');
   });
 });
 

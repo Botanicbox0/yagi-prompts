@@ -1,11 +1,12 @@
 /**
  * The viewer (docs/BRAND-STUDIO-V2.md §5.2): one result or asset, large, with the actions that apply
- * to it. Esc closes, ←/→ move between results, focus stays inside and returns to where it was.
+ * to it. A centred dialog (full screen on a phone); only the side column scrolls. Esc closes, ←/→ move
+ * between results, focus stays inside and returns to where it was.
  */
 import { useId, useState, type KeyboardEvent } from "react";
 import type { RegionBox, StudioAssetView, StudioJobView, StudioOutputView } from "@/lib/brand-studio/contracts";
 import type { StudioCopy } from "./copy";
-import { StudioIcon } from "./icons";
+import { StudioIcon, type StudioIconName } from "./icons";
 import { useModal } from "./modal";
 import { RegionEditor } from "./region-editor";
 import { centeredBox } from "./region-math";
@@ -14,6 +15,7 @@ export type ViewerItem = { type: "output"; output: StudioOutputView; job: Studio
 
 export interface ViewerActions {
   regionEdit(item: ViewerItem, box: RegionBox, instruction: string): Promise<boolean>;
+  /** Plain runs start again as they were; a partial edit reopens its box; a reference-video run goes back to the dock. */
   rerun(job: StudioJobView): void;
   toVideo(item: ViewerItem): void;
   /** The press alternative to dragging this result or asset into the tray. */
@@ -22,19 +24,31 @@ export interface ViewerActions {
   campaign(item: ViewerItem): void;
   finalize(output: StudioOutputView): void;
   reuse(job: StudioJobView): void;
+  /** True when the result is gone. */
+  remove(output: StudioOutputView): Promise<boolean>;
+}
+
+/** Opens the partial-edit form on one item with a box and an instruction already in place. */
+export interface RegionPreset {
+  key: string;
+  box: RegionBox | null;
+  instruction: string;
 }
 
 export interface ViewerProps {
   items: readonly ViewerItem[];
   index: number;
   copy: StudioCopy;
-  /** Owner or editor: may save results and send them to a campaign. */
+  /** Owner or editor: may save results, delete them and send them to a campaign. */
   canCreate: boolean;
   /** `canCreate` and an open usage limit: may start new runs from here. */
   canGenerate: boolean;
   /** The action currently running, so its button shows it and cannot be pressed twice. */
   busy: string | null;
   notice: string | null;
+  /** What one partial edit takes from the allowance, already formatted ("약 ₩211"). */
+  regionQuote?: string | null;
+  regionPreset?: RegionPreset | null;
   parentOf(outputId: string | null): StudioOutputView | null;
   onIndex(index: number): void;
   onClose(): void;
@@ -43,8 +57,8 @@ export interface ViewerProps {
 
 export const itemKey = (item: ViewerItem) => (item.type === "output" ? `o:${item.output.id}` : `a:${item.asset.id}`);
 const media = (item: ViewerItem) => (item.type === "output" ? item.output : item.asset);
-/** Plain image and video runs can run again as they were; edits and remixes go back to the dock. */
-export const canRerun = (job: StudioJobView) => job.kind === "image" || job.kind === "video";
+/** Everything but a 1080p final can be made again with the settings it had. */
+export const canRerun = (job: StudioJobView) => job.kind !== "video_final";
 
 export function Viewer(props: ViewerProps) {
   const { items, index, copy, onIndex, onClose } = props;
@@ -73,17 +87,17 @@ export function Viewer(props: ViewerProps) {
         <h2 id={`${id}-title`} className="bs-sr">
           {item.type === "output" ? copy.viewer.label : copy.viewer.assetLabel}
         </h2>
-        <button type="button" className="bs-btn" data-variant="ghost" data-size="sm" aria-label={copy.viewer.prev} disabled={index === 0} onClick={() => onIndex(index - 1)}>
+        <button type="button" className="bs-btn bs-icon-btn" data-variant="ghost" data-size="sm" aria-label={copy.viewer.prev} disabled={index === 0} onClick={() => onIndex(index - 1)}>
           <StudioIcon name="prev" />
         </button>
         <span className="bs-num bs-muted">
           {index + 1} / {items.length}
         </span>
-        <button type="button" className="bs-btn" data-variant="ghost" data-size="sm" aria-label={copy.viewer.next} disabled={index >= items.length - 1} onClick={() => onIndex(index + 1)}>
+        <button type="button" className="bs-btn bs-icon-btn" data-variant="ghost" data-size="sm" aria-label={copy.viewer.next} disabled={index >= items.length - 1} onClick={() => onIndex(index + 1)}>
           <StudioIcon name="next" />
         </button>
         <span className="bs-spacer" />
-        <button type="button" className="bs-btn" data-variant="ghost" data-size="sm" aria-label={copy.viewer.close} onClick={onClose}>
+        <button type="button" className="bs-btn bs-icon-btn" data-variant="ghost" data-size="sm" aria-label={copy.viewer.close} onClick={onClose}>
           <StudioIcon name="close" />
         </button>
       </div>
@@ -92,13 +106,15 @@ export function Viewer(props: ViewerProps) {
   );
 }
 
-function ViewerContent({ item, copy, canCreate, canGenerate, busy, notice, parentOf, actions }: ViewerProps & { item: ViewerItem }) {
+function ViewerContent({ item, copy, canCreate, canGenerate, busy, notice, regionQuote = null, regionPreset = null, parentOf, actions }: ViewerProps & { item: ViewerItem }) {
   const v = copy.viewer;
-  const [region, setRegion] = useState(false);
-  const [box, setBox] = useState<RegionBox | null>(null);
-  const [instruction, setInstruction] = useState("");
+  const preset = regionPreset?.key === itemKey(item) ? regionPreset : null;
+  const [region, setRegion] = useState(Boolean(preset));
+  const [box, setBox] = useState<RegionBox | null>(preset?.box ?? null);
+  const [instruction, setInstruction] = useState(preset?.instruction ?? "");
   const [regionNote, setRegionNote] = useState<string | null>(null);
   const [side, setSide] = useState<"after" | "before">("after");
+  const [confirming, setConfirming] = useState(false);
   const id = useId();
   const file = media(item);
   const job = item.type === "output" ? item.job : null;
@@ -126,6 +142,17 @@ function ViewerContent({ item, copy, canCreate, canGenerate, busy, notice, paren
       setInstruction("");
     }
   }
+
+  const tiles: Array<{ name: string; icon: StudioIconName; label: string; run(): void; show: boolean }> = [
+    { name: "region", icon: "region", label: v.regionEdit, run: () => setRegion(true), show: canGenerate && image },
+    { name: "rerun", icon: "rerun", label: v.rerun, run: () => job && actions.rerun(job), show: canGenerate && Boolean(job && canRerun(job)) },
+    { name: "to-video", icon: "video", label: v.toVideo, run: () => actions.toVideo(item), show: canGenerate && image },
+    { name: "reference", icon: "attach", label: v.reference, run: () => actions.reference(item), show: canGenerate },
+    { name: "save", icon: "save", label: v.save, run: () => item.type === "output" && actions.save(item.output), show: canCreate && item.type === "output" && !item.output.savedAssetId },
+    { name: "finalize", icon: "spark", label: v.finalize, run: () => item.type === "output" && actions.finalize(item.output), show: canGenerate && item.type === "output" && item.output.draft },
+    { name: "campaign", icon: "send", label: v.campaign, run: () => actions.campaign(item), show: canCreate },
+  ];
+  const saved = canCreate && item.type === "output" && Boolean(item.output.savedAssetId);
 
   return (
     <div className="bs-viewer-body">
@@ -155,6 +182,7 @@ function ViewerContent({ item, copy, canCreate, canGenerate, busy, notice, paren
             <p className="bs-muted">{copy.region.hint}</p>
             {!box && (
               <button type="button" className="bs-btn" data-variant="soft" data-size="sm" onClick={() => setBox(centeredBox())}>
+                <StudioIcon name="region" />
                 {copy.region.place}
               </button>
             )}
@@ -174,6 +202,8 @@ function ViewerContent({ item, copy, canCreate, canGenerate, busy, notice, paren
               <button type="button" className="bs-btn" data-variant="ghost" data-size="md" onClick={() => setRegion(false)}>
                 {copy.region.cancel}
               </button>
+              <span className="bs-spacer" />
+              {regionQuote && <span className="bs-num bs-quote" data-studio-region-quote>{regionQuote}</span>}
               <button type="button" className="bs-btn" data-variant="solid" data-size="md" disabled={busy === "region"} onClick={() => void sendRegion()} data-studio-region-send>
                 {copy.region.send}
               </button>
@@ -181,23 +211,54 @@ function ViewerContent({ item, copy, canCreate, canGenerate, busy, notice, paren
           </div>
         ) : (
           <div className="bs-viewer-actions" data-studio-viewer-actions>
-            {canGenerate && image && <Action name="region" label={v.regionEdit} onClick={() => setRegion(true)} />}
-            {canGenerate && job && canRerun(job) && <Action name="rerun" label={v.rerun} busy={busy} onClick={() => actions.rerun(job)} />}
-            {canGenerate && image && <Action name="to-video" label={v.toVideo} onClick={() => actions.toVideo(item)} />}
-            {canGenerate && <Action name="reference" label={v.reference} onClick={() => actions.reference(item)} />}
-            {canCreate && item.type === "output" &&
-              (item.output.savedAssetId ? (
-                <p className="bs-saved" data-studio-saved>{v.saved}</p>
-              ) : (
-                <Action name="save" label={v.save} busy={busy} onClick={() => actions.save(item.output)} />
+            <div className="bs-action-grid">
+              {tiles.filter((tile) => tile.show).map((tile) => (
+                <button
+                  key={tile.name}
+                  type="button"
+                  className="bs-btn bs-action"
+                  data-variant="soft"
+                  data-action={tile.name}
+                  disabled={busy === tile.name}
+                  aria-busy={busy === tile.name}
+                  onClick={tile.run}
+                >
+                  <StudioIcon name={tile.icon} />
+                  <span>{tile.label}</span>
+                </button>
               ))}
-            {canGenerate && item.type === "output" && item.output.draft && (
-              <Action name="finalize" label={v.finalize} busy={busy} onClick={() => actions.finalize(item.output)} />
+              {saved && (
+                <p className="bs-action bs-action-done" data-studio-saved>
+                  <StudioIcon name="save" />
+                  <span>{v.saved}</span>
+                </p>
+              )}
+            </div>
+            <div className="bs-row bs-quiet-actions">
+              <a className="bs-btn" data-variant="ghost" data-size="sm" href={file.url} download target="_blank" rel="noopener noreferrer" data-action="download">
+                <StudioIcon name="download" />
+                {v.download}
+              </a>
+              {canCreate && item.type === "output" && !confirming && (
+                <button type="button" className="bs-btn" data-variant="ghost" data-size="sm" data-action="delete" onClick={() => setConfirming(true)}>
+                  <StudioIcon name="trash" />
+                  {v.delete}
+                </button>
+              )}
+            </div>
+            {confirming && item.type === "output" && (
+              <div className="bs-confirm-box" role="group" aria-label={v.delete} data-studio-delete-confirm>
+                <p>{v.deleteConfirm}</p>
+                <div className="bs-row">
+                  <button type="button" className="bs-btn" data-variant="soft" data-size="sm" data-tone="danger" disabled={busy === "delete"} onClick={() => void actions.remove(item.output).then((gone) => !gone && setConfirming(false))}>
+                    {v.delete}
+                  </button>
+                  <button type="button" className="bs-btn" data-variant="ghost" data-size="sm" onClick={() => setConfirming(false)}>
+                    {v.cancel}
+                  </button>
+                </div>
+              </div>
             )}
-            {canCreate && <Action name="campaign" label={v.campaign} onClick={() => actions.campaign(item)} />}
-            <a className="bs-btn" data-variant="ghost" data-size="md" href={file.url} download target="_blank" rel="noopener noreferrer" data-action="download">
-              {v.download}
-            </a>
           </div>
         )}
         {notice && <p className="bs-notice" role="status">{notice}</p>}
@@ -217,13 +278,5 @@ function ViewerContent({ item, copy, canCreate, canGenerate, busy, notice, paren
         )}
       </div>
     </div>
-  );
-}
-
-function Action({ name, label, busy = null, onClick }: { name: string; label: string; busy?: string | null; onClick(): void }) {
-  return (
-    <button type="button" className="bs-btn" data-variant="soft" data-size="md" data-action={name} disabled={busy === name} aria-busy={busy === name} onClick={onClick}>
-      {label}
-    </button>
   );
 }

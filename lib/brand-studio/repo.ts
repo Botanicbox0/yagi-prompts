@@ -61,6 +61,7 @@ export function outputView(row: OutputRow, media: StudioMediaStore): StudioOutpu
 export function jobView(row: JobRow, outputs: OutputRow[], media: StudioMediaStore): StudioJobView {
   const p = row.params ?? ({} as JobRow['params']);
   const closed = row.status === 'failed' || row.status === 'canceled';
+  const remix = row.kind === 'video_remix';
   return {
     id: row.id,
     kind: row.kind,
@@ -75,6 +76,11 @@ export function jobView(row: JobRow, outputs: OutputRow[], media: StudioMediaSto
     audio: (p.audio ?? null) as StudioAudioMode | null,
     references: (Array.isArray(row.refs) ? row.refs : []) as StudioReference[],
     parentOutputId: row.parent_output_id,
+    parentAssetId: row.kind === 'region_edit' ? (p.source?.assetId ?? null) : null,
+    box: row.kind === 'region_edit' ? (p.box ?? null) : null,
+    method: remix ? (p.method ?? null) : null,
+    keep: remix && Array.isArray(p.keep) ? [...p.keep] : [],
+    change: remix ? (p.change ?? '') : null,
     outputs: outputs
       .filter((o) => o.job_id === row.id && o.status === 'ready' && !o.deleted_at && o.storage_key)
       .sort((a, b) => a.idx - b.idx)

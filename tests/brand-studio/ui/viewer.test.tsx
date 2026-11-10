@@ -8,7 +8,7 @@ import { asset, copyFor, job, output } from "./fixtures";
 
 /** docs/BRAND-STUDIO-V2.md §5.2 — the viewer's actions and the asset library. */
 const noop = () => {};
-const actions: ViewerActions = { regionEdit: async () => true, rerun: noop, toVideo: noop, reference: noop, save: noop, campaign: noop, finalize: noop, reuse: noop };
+const actions: ViewerActions = { regionEdit: async () => true, rerun: noop, toVideo: noop, reference: noop, save: noop, campaign: noop, finalize: noop, reuse: noop, remove: async () => true };
 const actionNames = (html: string) => [...html.matchAll(/data-action="([^"]+)"/g)].map((m) => m[1]);
 
 function render(items: ViewerItem[], patch: Partial<ViewerProps> = {}, locale: "ko" | "en" = "ko") {
@@ -27,7 +27,10 @@ describe("viewer", () => {
     const html = render([{ type: "output", output: picture, job: imageJob }, { type: "output", output: output(2), job: imageJob }]);
     expect(html).toMatch(/<dialog[^>]*aria-labelledby=/);
     expect(html).toContain(copy.viewer.label);
-    expect(actionNames(html)).toEqual(["region", "rerun", "to-video", "reference", "save", "campaign", "download"]);
+    expect(actionNames(html)).toEqual(["region", "rerun", "to-video", "reference", "save", "campaign", "download", "delete"]);
+    expect(html).toContain('class="bs-action-grid"');
+    expect(html.match(/class="bs-btn bs-action" data-variant="soft"/g)).toHaveLength(6);
+    expect(html.match(/<svg class="bs-icon"/g)!.length).toBeGreaterThanOrEqual(8);
     expect(html).toContain(`aria-label="${copy.viewer.prev}" disabled=""`);
     expect(html).not.toContain(`aria-label="${copy.viewer.next}" disabled=""`);
     expect(html).toContain(copy.viewer.promptToggle);
@@ -53,13 +56,27 @@ describe("viewer", () => {
     const html = render([{ type: "output", output: edited, job: job(4, { kind: "region_edit", parentOutputId: parent.id, outputs: [edited] }) }], { parentOf: (id) => (id === parent.id ? parent : null) });
     expect(html).toContain("data-studio-compare");
     expect(html).toContain(copyFor("ko").viewer.before);
-    expect(actionNames(html)).not.toContain("rerun");
+    expect(actionNames(html)).toContain("rerun");
+  });
+
+  it("opens a set-up partial edit with its box and words, its usage next to the one solid button", () => {
+    const parent = output(9);
+    const box = { x: 0.1, y: 0.2, w: 0.3, h: 0.4 };
+    const html = render([{ type: "output", output: parent, job: job(9, { outputs: [parent] }) }], {
+      regionPreset: { key: `o:${parent.id}`, box, instruction: "라벨을 또렷하게" },
+      regionQuote: "약 ₩211",
+    });
+    expect(html).toContain("data-studio-region-form");
+    expect(html).toContain('data-box="0.1,0.2,0.3,0.4"');
+    expect(html).toContain("라벨을 또렷하게");
+    expect(html).toContain("약 ₩211");
+    expect(html.match(/data-variant="solid"/g)).toHaveLength(1);
   });
 
   it("lets a viewer only look and download, and keeps generation closed while the limit is", () => {
     const item: ViewerItem = { type: "output", output: picture, job: imageJob };
     expect(actionNames(render([item], { canCreate: false, canGenerate: false }))).toEqual(["download"]);
-    expect(actionNames(render([item], { canGenerate: false }))).toEqual(["save", "campaign", "download"]);
+    expect(actionNames(render([item], { canGenerate: false }))).toEqual(["save", "campaign", "download", "delete"]);
     expect(actionNames(render([{ type: "asset", asset: asset(1) }]))).toEqual(["region", "to-video", "reference", "campaign", "download"]);
   });
 });

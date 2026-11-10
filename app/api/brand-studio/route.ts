@@ -1,5 +1,6 @@
 import { after, type NextRequest } from 'next/server';
 import { getViewer } from '@/lib/auth/viewer';
+import { getRequestLocale } from '@/lib/i18n/server';
 import { getSqlRunner } from '@/lib/db/connect';
 import { brandStudioV2Open } from '@/lib/flags';
 import { resolveRequestUrl, sameOriginMutation } from '@/lib/routing/surfaces';
@@ -79,7 +80,10 @@ export async function POST(request: NextRequest) {
   if (!sql) return studioJson({ ok: false, code: 'provider_unavailable' }, 503);
   try {
     const deps = await studioRuntimeDeps(sql);
-    const result = await runStudioOperation(deps, viewer, body.operation, body.input);
+    // What the customer reads back (the note under a prompt, a film summary, a handoff sentence) follows the
+    // language of the screen they are on, which can differ from the language saved on their profile.
+    const actor = { ...viewer, locale: await getRequestLocale() };
+    const result = await runStudioOperation(deps, actor, body.operation, body.input);
     if (!result.ok) return studioJson(result, studioStatus(result.code));
     if (body.operation === 'job.create' && 'job' in result) {
       if (STUDIO_JOB_OPEN_STATUSES.includes(result.job.status)) advanceLater(deps, [result.job.id]);

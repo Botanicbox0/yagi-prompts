@@ -20,9 +20,10 @@ import {
   type StudioPromptPreview,
 } from './contracts';
 import { lockOrganization, requireCreate, studioSeat, StudioDenied } from './access';
-import { dropWorkingFiles } from './job-store';
+import { dropWorkingFiles, LEASE_SECONDS } from './job-store';
+import { routeJob } from './lanes';
 import { planFinal, planJob, type JobPlan } from './plan';
-import { brandSummary, enhanceInputOf, enhanceReferences, readSheet, runEnhancer } from './prepare';
+import { brandSummary, enhanceInputOf, enhanceReferences, filmSheetFor, keepSheet, readSheet, runEnhancer, storedSheet } from './prepare';
 import { jobView, openJobCount, readyAsset } from './repo';
 import type { JobRow, OutputRow, StudioDeps } from './types';
 import { reserveAllowance } from './usage';
@@ -31,16 +32,28 @@ import { failure, guarded } from './outcome';
 const localeOf = (viewer: Viewer): 'ko' | 'en' => (viewer.locale === 'en' ? 'en' : 'ko');
 
 async function insertJob(deps: StudioDeps, sql: StudioDeps['sql'], userId: string, organizationId: string, requestId: string, plan: JobPlan) {
+  // A free lane now means the job starts `queued`; `held` only while every lane is full.
+  const lane = await routeJob(sql, {
+    organizationId,
+    model: plan.model,
+    defaultLane: deps.env.defaultLane,
+    caps: deps.env.caps,
+    apiUp: deps.env.apiConfigured && deps.provider !== null,
+    now: deps.now?.() ?? new Date(),
+    stick: plan.kind === 'video_final' ? (plan.stickLane ?? 'sunra_api') : null,
+    place: null,
+  });
   const job = (
     await sql.query<JobRow>(
-      `insert into brand_studio_jobs (organization_id, created_by, request_id, kind, status, model, prompt, enhance, params, refs,
+      `insert into brand_studio_jobs (organization_id, created_by, request_id, kind, status, lane, model, prompt, enhance, params, refs,
           parent_output_id, estimate_usd, estimate_krw, work)
-        values ($1, $2, $3, $4, 'held', $5, $6, $7, $8::jsonb, $9::jsonb, $10, $11, $12, $13::jsonb) returning *`,
+        values ($1, $2, $3, $4, $14, $15, $5, $6, $7, $8::jsonb, $9::jsonb, $10, $11, $12, $13::jsonb) returning *`,
       [
         organizationId, userId, requestId, plan.kind, plan.model.id, plan.prompt, plan.enhance,
         JSON.stringify(plan.params), JSON.stringify(plan.refs), plan.parentOutputId,
         Math.round(plan.estimateUsd * 10_000) / 10_000, plan.estimateKrw,
         JSON.stringify(plan.stickLane ? { stickLane: plan.stickLane } : {}),
+        lane ? 'queued' : 'held', lane,
       ],
     )
   ).rows[0]!;
@@ -90,22 +103,29 @@ export async function cancelStudioJob(deps: StudioDeps, viewer: Viewer, raw: unk
   const outcome = await guarded(() =>
     deps.sql.transaction(async (sql) => {
       requireCreate(await studioSeat(sql, viewer.userId, v.organizationId));
-      const job = (await sql.query<JobRow>('select * from brand_studio_jobs where id = $1 and organization_id = $2 for update', [v.jobId, v.organizationId])).rows[0];
+      const job = (
+        await sql.query<JobRow & { leased: boolean }>(
+          `select *, (claimed_at is not null and claimed_at > now() - interval '${LEASE_SECONDS} seconds') as leased
+             from brand_studio_jobs where id = $1 and organization_id = $2 for update`,
+          [v.jobId, v.organizationId],
+        )
+      ).rows[0];
       if (!job) throw new StudioDenied('not_found');
-      if (job.status === 'canceled') return { job, tasks: [] as string[] };
-      // `finishing` means the provider already made it: let it land rather than throw it away.
-      if (!['held', 'queued', 'running'].includes(job.status)) throw new StudioDenied('conflict');
-      const tasks = job.lane === 'sunra_api'
-        ? (await sql.query<{ provider_task_id: string }>("select provider_task_id from brand_studio_outputs where job_id = $1 and status = 'pending' and provider_task_id is not null", [job.id])).rows.map((r) => r.provider_task_id)
-        : [];
+      if (job.status === 'canceled') return job;
+      // Only while nothing has reached a provider. Once it has (running, finishing, any slot sent, or a
+      // prepared API-lane job under a live lease, which may be sending this very moment) the run is
+      // paid for, so it is left to land.
+      if (job.status !== 'held' && job.status !== 'queued') throw new StudioDenied('conflict');
+      if (job.status === 'queued' && job.lane === 'sunra_api' && job.work?.prepared && job.leased) throw new StudioDenied('conflict');
+      const sent = (await sql.query('select 1 from brand_studio_outputs where job_id = $1 and provider_task_id is not null limit 1', [job.id])).rows[0];
+      if (sent) throw new StudioDenied('conflict');
       await sql.query("update brand_studio_jobs set status = 'canceled', usage_krw = 0, finished_at = now() where id = $1", [job.id]);
       await sql.query("update brand_studio_outputs set status = 'failed' where job_id = $1 and status = 'pending'", [job.id]);
-      return { job, tasks };
+      return job;
     }),
   );
   if ('ok' in outcome) return outcome;
-  for (const task of outcome.tasks) await deps.provider?.cancel?.(task).catch(() => undefined);
-  await dropWorkingFiles(deps.media, outcome.job.work);
+  await dropWorkingFiles(deps.media, outcome.work);
   return { ok: true };
 }
 
@@ -125,7 +145,9 @@ export async function previewStudioPrompt(deps: StudioDeps, viewer: Viewer, raw:
   if ('ok' in ready) return ready;
   const { seat, plan } = ready;
   const film = plan.kind === 'video_remix' ? plan.resolved.find((r) => r.kind === 'video') : undefined;
-  const sheet = film ? await readSheet(deps, film, locale) : null;
+  const sheet = film
+    ? await filmSheetFor(deps, { organizationId: seat.organizationId, assetId: plan.refs[film.index - 1]?.assetId ?? null, ref: film, locale })
+    : null;
   const input = enhanceInputOf(
     { kind: plan.kind, prompt: plan.prompt, params: plan.params },
     plan.model,
@@ -150,13 +172,18 @@ export async function analyzeStudioFilm(deps: StudioDeps, viewer: Viewer, raw: u
     }),
   );
   if ('ok' in asset) return asset;
+  const locale = localeOf(viewer);
+  // Read once per asset and language: the kept reading answers every later call (./prepare.ts).
+  const kept = storedSheet(asset, locale);
+  if (kept) return { ok: true, sheet: kept };
   const sheet = await readSheet(
     deps,
     {
       index: 1, ordinal: 1, kind: 'video', key: asset.storage_key, thumbKey: null, url: deps.media.url(asset.storage_key),
       label: 'Video 1', durationMs: asset.duration_ms, width: asset.width, height: asset.height,
     },
-    localeOf(viewer),
+    locale,
   );
+  if (sheet) await keepSheet(deps.sql, v.organizationId, asset.id, locale, sheet);
   return { ok: true, sheet };
 }

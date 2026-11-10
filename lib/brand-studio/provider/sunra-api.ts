@@ -28,7 +28,7 @@ export function mapSunraSubmitError(error: unknown, log?: Log): StudioProviderEr
   if (error.moderated || UNSAFE.has(error.code)) return new StudioProviderError('provider_rejected', detail, false);
   if (insufficient(error)) {
     log?.('studio_provider_balance', { lane: 'sunra_api', status: error.status, code: error.code });
-    return new StudioProviderError('provider_unavailable', detail, false);
+    return new StudioProviderError('provider_unavailable', detail, false, 'balance');
   }
   if (error.status === 401 || error.status === 403) return new StudioProviderError('provider_unavailable', detail, false);
   if (error.retryable || error.status === 0) return new StudioProviderError('provider_unavailable', detail, true);

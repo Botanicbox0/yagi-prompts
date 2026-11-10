@@ -136,6 +136,8 @@ export interface StudioJobWork {
   prepared?: boolean;
   /** video_final: the lane its draft ran on (a draft id only finalizes on that account). */
   stickLane?: StudioLane | null;
+  /** Lanes that could not pay for this job; it never goes back to one of them (no ping-pong). */
+  triedLanes?: StudioLane[];
   /** Resolved input addresses as sent (also what the account-lane worker receives). */
   inputs?: Array<{ kind: StudioAssetKind; url: string; frame?: 'start' | 'end' }>;
   sheet?: FilmSheet | null;
@@ -217,6 +219,8 @@ export interface AssetRow {
   source_output_id: string | null;
   status: 'pending' | 'ready';
   duplicate_of: string | null;
+  /** Readings of a reference video per language (migration 0077); absent before it. */
+  film_sheets?: Partial<Record<'ko' | 'en', FilmSheet>> | null;
   created_by: string | null;
   request_id: string | null;
   created_at: Date | string;

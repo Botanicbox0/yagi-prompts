@@ -278,6 +278,8 @@ export const CampaignHandoffSchema = z
     newProject: z
       .object({ title: z.string().trim().min(3).max(120), objective: z.string().trim().min(3).max(2000) })
       .optional(),
+    /** Tell the studio this file is the format creators should follow, not just a reference. */
+    asFormat: z.boolean().default(false),
   })
   .refine((v) => (v.assetId === undefined) !== (v.outputId === undefined), { error: 'assetId or outputId' })
   .refine((v) => (v.projectId === undefined) !== (v.newProject === undefined), { error: 'projectId or newProject' });
@@ -359,6 +361,14 @@ export interface StudioJobView {
   references: StudioReference[];
   /** For a region edit or a final: the result it was made from. */
   parentOutputId: string | null;
+  /** For a region edit of a library picture: that picture (an edit of a result uses `parentOutputId`). */
+  parentAssetId: string | null;
+  /** Region edit only: the box that was changed, so the same edit can be set up again. */
+  box: RegionBox | null;
+  /** Remix only: how the reference video was used, what was kept and what was changed. */
+  method: StudioRemixMethod | null;
+  keep: StudioKeepKey[];
+  change: string | null;
   outputs: StudioOutputView[];
   /** Usage this run is expected to take from the monthly allowance, in KRW. */
   estimateKrw: number;

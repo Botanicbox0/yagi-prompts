@@ -1,9 +1,10 @@
 /**
- * The reference tray: numbered chips in order ("이미지 1", "영상 1"). A chip opens a small popover
- * for its role, what to take and what to leave out, and in a video run whether a picture opens or
- * closes the shot. Drops land on the whole dock; the tray only shows that it will take them.
+ * The reference tray: numbered chips in order ("이미지 1", "영상 1"), then "+", all on one row (with
+ * one quiet hint while it is empty). A chip opens a small popover for its role, what to take and what
+ * to leave out, and in a video run whether a picture opens or closes the shot. Drops land on the whole
+ * dock; the tray only shows that it will take them.
  */
-import { useEffect, useId, useRef, useState } from "react";
+import { useEffect, useId, useLayoutEffect, useRef, useState } from "react";
 import { STUDIO_ASSET_ROLES, STUDIO_LIMITS, type StudioAssetRole } from "@/lib/brand-studio/contracts";
 import type { StudioMedium } from "@/lib/brand-studio/models";
 import { fill, type StudioCopy } from "./copy";
@@ -22,6 +23,12 @@ export interface TrayProps {
   onUpdate(key: string, patch: Partial<Pick<TrayItem, "role" | "use" | "avoid" | "frame">>): void;
   onRemove(key: string): void;
   onBrowse(): void;
+}
+
+function ChipMedia({ item }: { item: TrayItem }) {
+  if (item.thumbUrl || item.kind === "image") return <img src={item.thumbUrl ?? item.url} alt="" />;
+  if (item.kind === "video") return <video src={`${item.url}#t=0.1`} muted playsInline preload="metadata" tabIndex={-1} aria-hidden="true" />;
+  return <span className="bs-chip-dot" aria-hidden="true" />;
 }
 
 export function Tray({ items, labels, medium, copy, dropActive, uploading, initialOpen = null, onUpdate, onRemove, onBrowse }: TrayProps) {
@@ -46,7 +53,7 @@ export function Tray({ items, labels, medium, copy, dropActive, uploading, initi
                 aria-controls={expanded ? popoverId : undefined}
                 onClick={() => setOpen(expanded ? null : item.key)}
               >
-                {item.thumbUrl || item.kind === "image" ? <img src={item.thumbUrl ?? item.url} alt="" /> : <span className="bs-chip-dot" aria-hidden="true" />}
+                <ChipMedia item={item} />
                 <span className="bs-chip-label">{label}</span>
                 {item.role && <span className="bs-chip-role">{copy.roles[item.role]}</span>}
                 {item.kind === "image" && medium === "video" && item.frame && (
@@ -77,12 +84,12 @@ export function Tray({ items, labels, medium, copy, dropActive, uploading, initi
           </li>
         ))}
         <li>
-          <button type="button" className="bs-chip" data-variant="ghost" onClick={onBrowse} aria-label={copy.assets.toggle}>
+          <button type="button" className="bs-chip bs-chip-add" data-variant="ghost" onClick={onBrowse} aria-label={copy.assets.toggle}>
             <StudioIcon name="plus" />
           </button>
         </li>
+        {!items.length && !uploading.length && <li className="bs-tray-hint">{dropActive ? t.drop : t.hint}</li>}
       </ul>
-      {!items.length && <p className="bs-tray-hint">{dropActive ? t.drop : t.hint}</p>}
     </div>
   );
 }
@@ -107,15 +114,45 @@ function RefPopover({
   onClose(): void;
 }) {
   const t = copy.tray;
+  const box = useRef<HTMLDivElement>(null);
   const first = useRef<HTMLSelectElement>(null);
-  useEffect(() => first.current?.focus(), []);
+  const [below, setBelow] = useState(false);
   const fields = useId();
+  const close = useRef(onClose);
+  close.current = onClose;
+
+  useEffect(() => first.current?.focus(), []);
+  // Opens upward over the board; when that would run under the workspace bar at the top of the
+  // screen, it opens downward instead (a phone shows it as a bottom sheet either way).
+  useLayoutEffect(() => {
+    const rect = box.current?.getBoundingClientRect();
+    if (rect && rect.top < 72 && getComputedStyle(box.current!).position === "absolute") setBelow(true);
+  }, []);
+  // Escape or a press anywhere outside the chip and the popover closes it.
+  useEffect(() => {
+    const down = (event: PointerEvent) => {
+      const owner = box.current?.parentElement;
+      if (owner && event.target instanceof Node && !owner.contains(event.target)) close.current();
+    };
+    const key = (event: KeyboardEvent) => {
+      if (event.key === "Escape") close.current();
+    };
+    document.addEventListener("pointerdown", down);
+    document.addEventListener("keydown", key);
+    return () => {
+      document.removeEventListener("pointerdown", down);
+      document.removeEventListener("keydown", key);
+    };
+  }, []);
+
   return (
     <div
+      ref={box}
       id={id}
       className="bs-popover"
       role="dialog"
       aria-label={fill(t.edit, { label })}
+      data-place={below ? "below" : undefined}
       onKeyDown={(event) => {
         if (event.key === "Escape") {
           event.stopPropagation();
@@ -173,10 +210,11 @@ function RefPopover({
           ))}
         </fieldset>
       )}
-      <div className="bs-row">
+      <div className="bs-row bs-popover-actions">
         <button type="button" className="bs-btn" data-variant="ghost" data-size="sm" onClick={onRemove}>
           {t.remove}
         </button>
+        <span className="bs-spacer" />
         <button type="button" className="bs-btn" data-variant="soft" data-size="sm" onClick={onClose}>
           {t.done}
         </button>

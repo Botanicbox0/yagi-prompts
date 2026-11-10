@@ -12,7 +12,7 @@
  * to `finishing`, the engine stores them) or `fail`. Job ids are the only handles the worker holds.
  */
 import { z } from 'zod';
-import { recordLaneHeartbeat } from './lanes';
+import { closeLane, failoverLane, recordLaneHeartbeat } from './lanes';
 import { dropWorkingFiles } from './job-store';
 import { studioModel } from './models';
 import { requestInputOf } from './engine';
@@ -160,6 +160,29 @@ export async function laneFail(deps: StudioDeps, raw: unknown): Promise<LaneOutc
     const job = (await sql.query<JobRow>('select * from brand_studio_jobs where id = $1 for update', [v.jobId])).rows[0];
     if (!job || job.lane !== 'sunra_mcp') return { ok: false as const, code: 'not_found' as const };
     if (job.status !== 'running' && job.status !== 'queued') return { ok: false as const, code: 'conflict' as const };
+    if (v.code === 'provider_unavailable') {
+      // The account could not take it (no credits, account trouble): close the lane for a while and
+      // hand the job to the API lane when it can run there; a final, or nowhere left to go, fails.
+      const now = deps.now?.() ?? new Date();
+      await closeLane(sql, 'sunra_mcp', now);
+      deps.log?.('studio_lane_closed', { lane: 'sunra_mcp', jobId: job.id });
+      const model = studioModel(job.model);
+      const next = model
+        ? await failoverLane(sql, {
+            from: 'sunra_mcp', kind: job.kind, tried: job.work.triedLanes ?? [], organizationId: job.organization_id, model,
+            defaultLane: deps.env.defaultLane, caps: deps.env.caps, apiUp: deps.env.apiConfigured && deps.provider !== null, now,
+            createdAt: job.created_at instanceof Date ? job.created_at.toISOString() : String(job.created_at), id: job.id,
+          })
+        : ({ action: 'fail' } as const);
+      if (next.action === 'route') {
+        deps.log?.('studio_lane_rerouted', { jobId: job.id, from: 'sunra_mcp', to: next.lane });
+        await sql.query(
+          `update brand_studio_jobs set status = $2, lane = $3, started_at = null, claimed_at = null, attempts = 0, work = $4::jsonb where id = $1`,
+          [job.id, next.lane ? 'queued' : 'held', next.lane, JSON.stringify({ ...job.work, triedLanes: next.tried })],
+        );
+        return { ok: true as const, jobId: job.id, work: null };
+      }
+    }
     await sql.query(
       "update brand_studio_jobs set status = 'failed', error_code = $2, error_detail = $3, usage_krw = 0, finished_at = now() where id = $1",
       [job.id, v.code, `lane: ${v.detail}`.slice(0, 1000)],

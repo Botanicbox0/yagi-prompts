@@ -17,7 +17,6 @@ import {
 } from "@/lib/brand-studio/contracts";
 import {
   DEFAULT_IMAGE_MODEL,
-  DEFAULT_REGION_EDIT_MODEL,
   DEFAULT_VIDEO_MODEL,
   selectableModels,
   studioModel,
@@ -27,6 +26,8 @@ import {
   type StudioVideoModel,
 } from "@/lib/brand-studio/models";
 import { findMissingReferences, type MentionKind } from "@/lib/brand-studio/enhancer/mentions";
+import { referenceVideoFit, type ReferenceVideoFit, type ReferenceVideoProblem } from "@/lib/brand-studio/reference-video";
+import { imageRunUsd, regionEditRun, remixRunUsd, usageKrw, videoRunUsd, regionEditModel as editModelFor } from "@/lib/brand-studio/usage-rate";
 import { toReferences, type RefSource, type TrayItem } from "./refs";
 
 export interface DockDraft {
@@ -129,13 +130,31 @@ export function withModel(draft: DockDraft, id: string): DockDraft {
   return normalizeDraft({ ...draft, model: id });
 }
 
+/** A video coming into a picture run makes it a video run (a picture run cannot carry one); the rest stays as typed. */
+export function draftAfterAttach(draft: DockDraft, item: Pick<TrayItem, "kind">): DockDraft {
+  return item.kind === "video" && draft.medium === "image" ? withMedium(draft, "video") : draft;
+}
+
 /** A video run with a reference video becomes a remix; the panel defaults it to the 480p draft. */
 export function remixActive(draft: Pick<DockDraft, "medium">, tray: readonly Pick<TrayItem, "kind">[]): boolean {
   return draft.medium === "video" && tray.some((item) => item.kind === "video");
 }
 
+/** The registry's reference-video seconds, for the customer's sentence. */
+export type FilmLimits = StudioVideoModel["referenceVideoSeconds"];
+
+/** The reference video in a video run against the model's limits; null when there is none. */
+export function remixFit(draft: Pick<DockDraft, "medium" | "model">, tray: readonly TrayItem[]): ReferenceVideoFit | null {
+  const film = draft.medium === "video" ? tray.find((item) => item.kind === "video") : undefined;
+  const model = dockControls(draft).model;
+  if (!film || model.medium !== "video") return null;
+  return referenceVideoFit(model as StudioVideoModel, { seconds: film.seconds, width: film.width ?? null, height: film.height ?? null });
+}
+
 export type DockProblem =
   | { kind: "empty_prompt" }
+  | { kind: "film_unusable"; problem: ReferenceVideoProblem; limits: FilmLimits }
+  | { kind: "film_edit_short"; limits: FilmLimits }
   | { kind: "need_change" }
   | { kind: "image_only" }
   | { kind: "too_many_videos" }
@@ -145,6 +164,10 @@ export type DockProblem =
 export function dockProblem(draft: DockDraft, tray: readonly TrayItem[]): DockProblem | null {
   const remix = remixActive(draft, tray);
   if (!remix && !draft.prompt.trim()) return { kind: "empty_prompt" };
+  const fit = remix ? remixFit(draft, tray) : null;
+  const limits = (dockControls(draft).model as StudioVideoModel).referenceVideoSeconds;
+  if (fit?.problem) return { kind: "film_unusable", problem: fit.problem, limits };
+  if (fit && draft.method === "edit" && !fit.editable) return { kind: "film_edit_short", limits };
   if (remix && !draft.prompt.trim() && !draft.change.trim()) return { kind: "need_change" };
   if (draft.medium === "image" && tray.some((item) => item.kind !== "image")) return { kind: "image_only" };
   const model = dockControls(draft).model;
@@ -199,7 +222,10 @@ export function buildJob(
   return { ok: true, input: { kind: "video", ...base, resolution, audio: clean.audio, seconds: clean.seconds } };
 }
 
-/** "같은 설정으로 다시": a direct re-run for plain image and video jobs; null for the others. */
+/**
+ * "같은 설정으로 다시 만들기": a direct re-run for plain image and video jobs; null for the others (a
+ * partial edit reopens its box, a reference-video run goes back to the dock).
+ */
 export function rerunInput(job: StudioJobView, ids: { organizationId: string; requestId: string }): StudioJobCreate | null {
   const enhance = job.finalPrompt !== null;
   const base = { organizationId: ids.organizationId, requestId: ids.requestId, model: job.model, prompt: job.prompt, enhance, references: job.references };
@@ -231,26 +257,34 @@ export function draftFromJob(job: StudioJobView, current: DockDraft): DockDraft 
     seconds: job.seconds ?? current.seconds,
     audio: job.audio ?? current.audio,
     enhance: job.finalPrompt !== null,
+    ...(job.kind === "video_remix"
+      ? { method: job.method ?? current.method, keep: [...job.keep], change: job.change ?? "" }
+      : {}),
   });
 }
 
 /**
- * This run's expected usage, as the server priced it for an earlier run with the same settings; null
- * when no earlier run matches. The screen never prices a run itself.
+ * What this press will take from the monthly allowance, in KRW, computed with the server's own
+ * arithmetic (lib/brand-studio/usage-rate.ts) from the same inputs: count, quality, references,
+ * length, the reference video's length, and the 480p draft billed as 480p.
  */
-export function knownEstimate(jobs: readonly StudioJobView[], draft: DockDraft, tray: readonly TrayItem[]): number | null {
+export function dockEstimateKrw(draft: DockDraft, tray: readonly TrayItem[]): number {
   const clean = normalizeDraft(draft);
-  const kind = clean.medium === "image" ? "image" : remixActive(clean, tray) ? "video_remix" : "video";
-  const match = jobs.find(
-    (job) =>
-      job.kind === kind &&
-      job.model === clean.model &&
-      job.resolution === clean.resolution &&
-      job.references.length === tray.length &&
-      (kind === "image" ? job.expected === clean.count : job.seconds === clean.seconds) &&
-      job.estimateKrw > 0,
-  );
-  return match ? match.estimateKrw : null;
+  const model = dockControls(clean).model;
+  if (model.medium === "image")
+    return usageKrw(imageRunUsd({ model: model.id, resolution: clean.resolution, references: tray.length, count: clean.count }), "image");
+  const film = tray.find((item) => item.kind === "video");
+  if (film)
+    return usageKrw(
+      remixRunUsd({ model: model as StudioVideoModel, resolution: clean.resolution, method: clean.method, seconds: clean.method === "reference" ? clean.seconds : null, referenceSeconds: film.seconds }).usd,
+      "video",
+    );
+  return usageKrw(videoRunUsd({ resolution: clean.resolution, seconds: clean.seconds }), "video");
+}
+
+/** What one partial edit takes from the allowance (one edit call; the picture counts as a reference). */
+export function regionEstimateKrw(draft: Pick<DockDraft, "medium" | "model">): number {
+  return usageKrw(regionEditRun(regionEditModel(draft), 0).usd, "image");
 }
 
 /** "부분 수정": the box and the instruction on one result or library picture. */
@@ -281,8 +315,5 @@ export function finalInput(ids: { organizationId: string; requestId: string }, d
 
 /** The region edit model: the dock's image model when it edits well, otherwise the registry default. */
 export function regionEditModel(draft: Pick<DockDraft, "medium" | "model">): string {
-  const chosen = studioModel(draft.model);
-  return chosen?.medium === "image" && chosen.availability === "live" && (chosen as StudioImageModel).regionEdit
-    ? chosen.id
-    : DEFAULT_REGION_EDIT_MODEL;
+  return editModelFor(draft.model).id;
 }

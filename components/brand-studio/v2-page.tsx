@@ -53,13 +53,17 @@ export async function brandStudioV2(input: StudioV2Input): Promise<ReactElement>
     <div className="bs-page" data-brand-studio-v2 data-studio-tab={tab}>
       <header className="bs-head">
         <h1 className="bs-title">{copy.title}</h1>
-        <nav className="bs-tabs" aria-label={copy.tabs.label}>
-          {tabs.map((t) => (
-            <a key={t.key} className="bs-tab" href={t.href} aria-current={tab === t.key ? "page" : undefined} data-selected={tab === t.key ? "" : undefined}>
-              {t.label}
-            </a>
-          ))}
-        </nav>
+        <div className="bs-head-end">
+          <nav className="bs-tabs" aria-label={copy.tabs.label}>
+            {tabs.map((t) => (
+              <a key={t.key} className="bs-tab" href={t.href} aria-current={tab === t.key ? "page" : undefined} data-selected={tab === t.key ? "" : undefined}>
+                {t.label}
+              </a>
+            ))}
+          </nav>
+          {/* The phone's "에셋 보기" button is placed here by the studio (studio-app.tsx). */}
+          {tab === "create" && <div className="bs-head-slot" data-studio-head-slot />}
+        </div>
       </header>
       {tab === "formats" ? (
         await formatsTab(input)
@@ -91,7 +95,7 @@ async function formatsTab({ deps, viewer, choice, access, locale, brandHost }: S
 
   if (contracts.length)
     return (
-      <section className="bs-formats" data-studio-formats="contracts" data-brand-production>
+      <section className="bs-formats" data-studio-formats="contracts">
         <ContractProduction
           production={production}
           contracts={contracts}

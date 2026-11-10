@@ -2,10 +2,9 @@
  * Monthly usage allowance (docs/BRAND-STUDIO-V2.md §9).
  *
  * Usage (KRW) = provider cost (USD) x the existing exchange rate x (1 + the existing brand margin).
- * No new price is invented here: the rate is `COST_ASSUMPTIONS.krwPerUsd` (lib/twings/cost-model.ts),
- * the margins are `BRAND_IMAGE_MARKUP.target` and `BRAND_VIDEO_MARGIN.target`
- * (lib/brands/production/pricing.ts). The number is a deduction from a monthly allowance the studio
- * sets per organization, not a charge.
+ * The arithmetic lives in ./usage-rate.ts (client-safe, so the prompt dock shows the same figure the
+ * server reserves) and is re-exported here. The number is a deduction from a monthly allowance the
+ * studio sets per organization, not a charge.
  *
  * A job reserves its estimate when it is created (the organization row is locked, so two requests
  * cannot both spend the last of the month), and the estimate is replaced by the settled amount when
@@ -14,16 +13,10 @@
 import { z } from 'zod';
 import type { Viewer } from '@/lib/auth/identity';
 import type { SqlRunner } from '@/lib/db/sql-runner';
-import { BRAND_IMAGE_MARKUP, BRAND_VIDEO_MARGIN } from '@/lib/brands/production/pricing';
-import { COST_ASSUMPTIONS } from '@/lib/twings/cost-model';
 import type { StudioAllowanceView } from './contracts';
-import { STUDIO_LANES, type StudioLane, type StudioMedium } from './models';
+import { STUDIO_LANES, type StudioLane } from './models';
 
-export function usageKrw(usd: number, medium: StudioMedium): number {
-  if (!Number.isFinite(usd) || usd <= 0) return 0;
-  const factor = medium === 'image' ? BRAND_IMAGE_MARKUP.target : 1 + BRAND_VIDEO_MARGIN.target;
-  return Math.ceil(usd * COST_ASSUMPTIONS.krwPerUsd * factor - 1e-9);
-}
+export { usageKrw } from './usage-rate';
 
 const KST_OFFSET_MS = 9 * 3_600_000;
 

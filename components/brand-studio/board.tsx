@@ -28,19 +28,31 @@ export const EXAMPLES: ReadonlyArray<{ key: "one" | "two" | "three"; medium: Stu
   { key: "three", medium: "video" },
 ];
 
+/** A run can be stopped only before anything reached the maker (the server says so when it has). */
+export const canCancel = (job: Pick<StudioJobView, "status">) => job.status === "held" || job.status === "queued";
+
 export interface BoardProps {
   jobs: readonly StudioJobView[];
   copy: StudioCopy;
   locale: StudioLocale;
   canCreate: boolean;
+  /** Owner or editor: may stop their team's waiting runs. */
+  canStop?: boolean;
+  /** The run whose cancel is on its way. */
+  stopping?: string | null;
+  /** A line under a run (why it could not be stopped). */
+  notes?: Readonly<Record<string, string>>;
   parentOf(outputId: string | null): StudioOutputView | null;
   onOpen(outputId: string): void;
   onRetry(job: StudioJobView): void;
+  onCancel?(job: StudioJobView): void;
   onExample(text: string, medium: StudioMedium): void;
 }
 
-export function Board({ jobs, copy, locale, canCreate, parentOf, onOpen, onRetry, onExample }: BoardProps) {
+export function Board({ jobs: all, copy, locale, canCreate, canStop = false, stopping = null, notes = {}, parentOf, onOpen, onRetry, onCancel, onExample }: BoardProps) {
   const c = copy.board;
+  // A finished run whose results were all deleted leaves nothing to show.
+  const jobs = all.filter((job) => !(job.status === "succeeded" && job.outputs.length === 0));
   if (!jobs.length)
     return (
       <section className="bs-board" data-studio-board data-state="empty" aria-label={c.label}>
@@ -76,14 +88,36 @@ export function Board({ jobs, copy, locale, canCreate, parentOf, onOpen, onRetry
         return (
           <article key={job.id} className="bs-job" data-job-status={job.status} data-job-kind={job.kind} data-studio-job={job.id}>
             <header className="bs-job-head">
-              <p className="bs-job-prompt">{job.prompt || c.noPrompt}</p>
-              <p className="bs-job-meta">
-                {model && <span>{model.label}</span>}
-                {job.kind === "region_edit" && <span>{c.editBadge}</span>}
-                {job.kind === "video_final" && <span>{c.finalBadge}</span>}
-                {job.estimateKrw > 0 && <span className="bs-num">{fill(c.usage, { amount: formatKrw(job.estimateKrw, locale) })}</span>}
-              </p>
+              <div className="bs-job-text">
+                <p className="bs-job-prompt">{job.prompt || c.noPrompt}</p>
+                <p className="bs-job-meta">
+                  {model && <span>{model.label}</span>}
+                  {job.kind === "region_edit" && <span>{c.editBadge}</span>}
+                  {job.kind === "video_final" && <span>{c.finalBadge}</span>}
+                  {job.estimateKrw > 0 && <span className="bs-num">{fill(c.usage, { amount: formatKrw(job.estimateKrw, locale) })}</span>}
+                </p>
+              </div>
+              {canStop && onCancel && canCancel(job) && (
+                <button
+                  type="button"
+                  className="bs-btn"
+                  data-variant="ghost"
+                  data-size="sm"
+                  data-studio-cancel
+                  aria-label={c.cancelLabel}
+                  disabled={stopping === job.id}
+                  aria-busy={stopping === job.id}
+                  onClick={() => onCancel(job)}
+                >
+                  {c.cancel}
+                </button>
+              )}
             </header>
+            {notes[job.id] && (
+              <p className="bs-job-note" role="status" data-studio-job-note>
+                {notes[job.id]}
+              </p>
+            )}
             {job.status === "failed" && (
               <div className="bs-job-note" data-state="failed">
                 <p>{errorLine(copy, job.errorCode)}</p>

@@ -39,10 +39,11 @@ describe("viewer actions", () => {
       expect(StudioJobCreateSchema.safeParse(input).success).toBe(true);
     }
     expect(rerunInput(image, ids())).toMatchObject({ kind: "image", count: 3, enhance: true, references: image.references });
-    for (const kind of ["region_edit", "video_remix", "video_final"] as const) {
-      expect(canRerun(job(3, { kind }))).toBe(false);
-      expect(rerunInput(job(3, { kind }), ids())).toBeNull();
-    }
+    // A partial edit reopens its box and a reference-video run goes back to the dock: no direct re-run body.
+    for (const kind of ["region_edit", "video_remix", "video_final"] as const) expect(rerunInput(job(3, { kind }), ids())).toBeNull();
+    expect(canRerun(job(3, { kind: "region_edit" }))).toBe(true);
+    expect(canRerun(job(3, { kind: "video_remix" }))).toBe(true);
+    expect(canRerun(job(3, { kind: "video_final" }))).toBe(false);
   });
 
   it("sends a partial edit on a result or a library picture with the edit model", () => {
@@ -129,5 +130,25 @@ describe("typed client", () => {
     const before = calls.length;
     expect(await api.upload(new File([new Uint8Array(4)], "a.gif", { type: "image/gif" }))).toEqual({ ok: false, code: "unsupported_file" });
     expect(calls.length).toBe(before);
+  });
+});
+
+describe("campaign handoff carries the format intent", () => {
+  it("offers the format checkbox for a video only, checked, and sends it", async () => {
+    const { renderToStaticMarkup } = await import("react-dom/server");
+    const { createElement } = await import("react");
+    const { HandoffDialog } = await import("@/components/brand-studio/handoff-dialog");
+    const { copyFor } = await import("./fixtures");
+    const copy = copyFor("ko");
+    const props = { campaigns: [{ id: id(77), title: "가을 출시" }], copy, onSend: async () => ({ ok: true as const, projectId: id(77), href: "/" }), onDone: () => {}, onClose: () => {} };
+    const forVideo = renderToStaticMarkup(createElement(HandoffDialog, { ...props, kind: "video" }));
+    expect(forVideo).toContain("data-studio-handoff-format");
+    expect(forVideo).toContain(copy.handoff.asFormat);
+    expect(forVideo).toMatch(/type="checkbox" checked=""/);
+    expect(renderToStaticMarkup(createElement(HandoffDialog, { ...props, kind: "image" }))).not.toContain("data-studio-handoff-format");
+    expect(forVideo.match(/data-variant="solid"/g)).toHaveLength(1);
+    const input = handoffInput({ outputId: output(1).id }, { projectId: id(77) }, ids(), true);
+    expect(CampaignHandoffSchema.parse(input)).toMatchObject({ asFormat: true });
+    expect(CampaignHandoffSchema.parse(handoffInput({ outputId: output(1).id }, { projectId: id(77) }, ids()))).toMatchObject({ asFormat: false });
   });
 });

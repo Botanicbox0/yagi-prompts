@@ -7,13 +7,18 @@ import {
   DRAFT_RESOLUTION,
   buildJob,
   dockControls,
+  dockEstimateKrw,
+  draftAfterAttach,
+  draftFromJob,
   initialDraft,
-  knownEstimate,
   normalizeDraft,
+  regionEstimateKrw,
   withMedium,
   withModel,
 } from "@/components/brand-studio/dock-model";
 import { trayItemFromAsset, trayLabels } from "@/components/brand-studio/refs";
+import { fill } from "@/components/brand-studio/copy";
+import { referenceVideoFit } from "@/lib/brand-studio/reference-video";
 import { ORG, allowance, asset, copyFor, id, job } from "./fixtures";
 
 /** docs/BRAND-STUDIO-V2.md §4–§5.2: every control comes from the model registry, nothing else. */
@@ -29,7 +34,7 @@ function render(patch: Partial<DockProps> = {}, locale: "ko" | "en" = "ko") {
     copy,
     locale,
     allowance: allowance(),
-    quoteKrw: null,
+    quoteKrw: 142,
     busy: false,
     message: null,
     film: null,
@@ -123,24 +128,86 @@ describe("what the dock sends", () => {
     expect(buildJob(withMedium(initialDraft(), "video"), [film], ids)).toEqual({ ok: false, problem: { kind: "need_change" } });
   });
 
-  it("shows the expected usage only when the server priced the same settings before", () => {
+  it("always shows this run's expected usage next to the one solid button", () => {
     const draft = { ...initialDraft(), prompt: "x" };
-    expect(knownEstimate([], draft, [])).toBeNull();
-    const priced = job(1, { model: draft.model, resolution: draft.resolution, expected: 1, estimateKrw: 1_300 });
-    expect(knownEstimate([priced], draft, [])).toBe(1_300);
-    expect(knownEstimate([priced], { ...draft, count: 2 }, [])).toBeNull();
+    expect(dockEstimateKrw(draft, [])).toBeGreaterThan(0);
+    expect(dockEstimateKrw({ ...draft, count: 2 }, [])).toBeGreaterThan(dockEstimateKrw(draft, []));
     const html = render({ quoteKrw: 1_300 });
     expect(html).toContain("data-studio-quote");
-    expect(html).toContain("₩1,300");
-    expect(render()).not.toContain("data-studio-quote");
+    expect(html).toContain("약 ₩1,300");
+    expect(html.indexOf("data-studio-quote")).toBeLessThan(html.indexOf("data-studio-submit"));
   });
 
-  it("shows the month's usage the server returned, never a provider price", () => {
+  it("shows the month's usage the server returned as a hairline and one line, never a provider price", () => {
     const html = render({}, "en");
-    expect(html).toContain("₩12,400 of ₩300,000");
+    expect(html).toContain("This month ₩12,400 / ₩300,000");
+    expect(html).toContain('role="meter"');
     expect(html).toContain('aria-valuenow="12400"');
+    expect(html).toMatch(/data-studio-allowance[^>]*title="Refills on Dec 1"|title="Refills on Dec 1"[^>]*data-studio-allowance/);
     expect(html).not.toMatch(/\$|USD/);
     expect(html.match(/data-variant="solid"/g)).toHaveLength(1);
+  });
+
+  it("puts the model's strength in its menu, not on a line of its own", () => {
+    const copy = copyFor("ko");
+    const html = render();
+    expect(html).toContain(`Seedream 5.0 Pro · ${copy.models.seedreamPro}`);
+    expect(html).not.toContain("bs-model-hint");
+  });
+
+  it("turns a picture run into a video run when a video comes in, keeping what was typed", () => {
+    const typed = { ...initialDraft("image"), prompt: "병이 천천히 돈다", enhance: false };
+    const film = trayItemFromAsset(asset(2, { kind: "video", seconds: 6 }));
+    const switched = draftAfterAttach(typed, film);
+    expect(switched).toMatchObject({ medium: "video", prompt: "병이 천천히 돈다", enhance: false });
+    expect(draftAfterAttach(typed, trayItemFromAsset(asset(1)))).toBe(typed);
+    const video = withMedium(typed, "video");
+    expect(draftAfterAttach(video, film)).toBe(video);
+    const html = render({ draft: switched, tray: [film], labels: ["영상 1"], notice: copyFor("ko").dock.switchedToVideo });
+    expect(html).toContain("data-studio-dock-notice");
+  });
+
+  it("brings a reference-video run back with its method, keep, change and sound", () => {
+    const remix = job(5, { kind: "video_remix", model: "seedance-2.5", aspect: null, resolution: "draft", audio: "ambient", method: "edit", keep: ["camera", "look"], change: "병만 파랗게" });
+    const back = draftFromJob(remix, initialDraft("image"));
+    expect(back).toMatchObject({ medium: "video", method: "edit", keep: ["camera", "look"], change: "병만 파랗게", audio: "ambient", resolution: DRAFT_RESOLUTION });
+  });
+
+  it("prices a partial edit as one edit call on the edit model", () => {
+    expect(regionEstimateKrw(initialDraft("image"))).toBe(regionEstimateKrw(withModel(initialDraft("image"), "nano-banana-pro")));
+    expect(regionEstimateKrw(initialDraft("image"))).toBeGreaterThan(0);
+  });
+
+  it("tells the customer, before they spend, when a reference video is outside the limits", () => {
+    const seedance = STUDIO_MODELS.find((m) => m.id === "seedance-2.5") as StudioVideoModel;
+    const { min, max, editMin } = seedance.referenceVideoSeconds;
+    expect(referenceVideoFit(seedance, { seconds: min - 0.5, width: 720, height: 1280 }).problem).toBe("length");
+    expect(referenceVideoFit(seedance, { seconds: max + 1, width: 720, height: 1280 }).problem).toBe("length");
+    expect(referenceVideoFit(seedance, { seconds: 6, width: 400, height: 600 }).problem).toBe("small");
+    expect(referenceVideoFit(seedance, { seconds: 6, width: 4096, height: 2160 }).problem).toBe("large");
+    expect(referenceVideoFit(seedance, { seconds: editMin - 1, width: 720, height: 1280 })).toEqual({ problem: null, editable: false });
+    expect(referenceVideoFit(seedance, { seconds: null, width: null, height: null })).toEqual({ problem: null, editable: true });
+
+    const copy = copyFor("ko");
+    const draft = { ...withMedium(initialDraft(), "video"), change: "병만 파랗게" };
+    const short = trayItemFromAsset(asset(2, { kind: "video", seconds: editMin - 1, width: 720, height: 1280 }));
+    expect(buildJob({ ...draft, method: "edit" }, [short], ids)).toEqual({ ok: false, problem: { kind: "film_edit_short", limits: seedance.referenceVideoSeconds } });
+    expect(buildJob({ ...draft, method: "reference" }, [short], ids).ok).toBe(true);
+    const shortHtml = render({ draft: { ...draft, method: "reference" }, tray: [short], labels: ["영상 1"] });
+    expect(shortHtml).toContain(fill(copy.remix.limitEdit, { n: editMin, method: copy.remix.methods.reference }).replace(/'/g, "&#x27;"));
+    expect(shortHtml).toMatch(/<input type="radio" disabled="" name="[^"]*" value="edit"\/>/);
+    expect(shortHtml).not.toMatch(/data-studio-submit[^>]*disabled|disabled=""[^>]*data-studio-submit/);
+
+    const tiny = trayItemFromAsset(asset(3, { kind: "video", seconds: 6, width: 400, height: 600 }));
+    expect(buildJob(draft, [tiny], ids)).toMatchObject({ ok: false, problem: { kind: "film_unusable", problem: "small" } });
+    const tinyHtml = render({ draft, tray: [tiny], labels: ["영상 1"] });
+    expect(tinyHtml).toContain(copy.remix.limitSmall);
+    expect(tinyHtml).toMatch(/disabled=""[^>]*data-studio-submit/);
+    const long = trayItemFromAsset(asset(4, { kind: "video", seconds: max + 5, width: 720, height: 1280 }));
+    expect(render({ draft, tray: [long], labels: ["영상 1"] })).toContain(fill(copy.remix.limitLength, { min, max }));
+    // Unmeasured: never blocks.
+    const unknown = trayItemFromAsset(asset(5, { kind: "video", seconds: null, width: null, height: null }));
+    expect(buildJob({ ...draft, method: "edit" }, [unknown], ids).ok).toBe(true);
   });
 
   it("labels the tray chips in order and keeps them in the dock", () => {

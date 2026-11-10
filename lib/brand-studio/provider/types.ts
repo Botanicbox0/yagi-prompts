@@ -32,6 +32,8 @@ export class StudioProviderError extends Error {
     readonly detail: string,
     /** True when the same request may succeed later (network, 429, 5xx). */
     readonly retryable: boolean,
+    /** `balance`: the account behind this lane cannot pay; the job may move to another lane. */
+    readonly reason?: 'balance',
   ) {
     super(`${code}: ${detail}`);
     this.name = 'StudioProviderError';

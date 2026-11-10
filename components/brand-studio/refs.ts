@@ -23,6 +23,9 @@ export interface TrayItem {
   url: string;
   thumbUrl: string | null;
   seconds: number | null;
+  /** Measured size, when known (a reference video's limits use it). */
+  width?: number | null;
+  height?: number | null;
   role?: StudioAssetRole;
   use?: string;
   avoid?: string;
@@ -40,6 +43,8 @@ export function trayItemFromAsset(asset: StudioAssetView): TrayItem {
     url: asset.url,
     thumbUrl: asset.thumbUrl,
     seconds: asset.seconds,
+    width: asset.width,
+    height: asset.height,
     ...(asset.role ? { role: asset.role } : {}),
   };
 }
@@ -53,6 +58,8 @@ export function trayItemFromOutput(output: StudioOutputView, name: string): Tray
     url: output.url,
     thumbUrl: output.thumbUrl,
     seconds: output.seconds,
+    width: output.width,
+    height: output.height,
   };
 }
 

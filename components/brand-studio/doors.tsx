@@ -5,6 +5,7 @@
  */
 import { scopedHref, type BrandWorkspaceChoice } from "@/lib/brands/workspace/selection";
 import type { StudioCopy } from "./copy";
+import { StudioIcon } from "./icons";
 
 /** The campaign list the campaign door scrolls to when there is one. */
 export const CAMPAIGN_LIST_ANCHOR = "brand-campaigns";
@@ -33,7 +34,10 @@ export function BrandDoors({
         {doors.map((door) => (
           <li key={door.key}>
             <a className="bs-door" href={door.href} data-brand-door={door.key}>
-              <span className="bs-door-title">{door.title}</span>
+              <span className="bs-door-title">
+                {door.title}
+                <StudioIcon name="arrow" />
+              </span>
               <span className="bs-door-line">{door.line}</span>
             </a>
           </li>

@@ -23,6 +23,8 @@ const ACCEPT = Object.values(STUDIO_UPLOAD_MIMES).flat().join(",");
 const mb = (bytes: number) => Math.round(bytes / 1_000_000);
 
 export interface AssetPanelProps {
+  /** So the phone's "에셋 보기" button can point at the sheet it opens. */
+  id?: string;
   assets: readonly StudioAssetView[];
   copy: StudioCopy;
   canCreate: boolean;
@@ -54,6 +56,7 @@ export function AssetPanel(props: AssetPanelProps) {
 
   return (
     <aside
+      id={props.id}
       className="bs-assets"
       data-studio-assets
       data-open={props.open ? "" : undefined}

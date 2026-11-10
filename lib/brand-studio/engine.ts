@@ -1,6 +1,7 @@
 /**
  * The job state machine (docs/BRAND-STUDIO-V2.md §7):
  *
+ *   (created) -> queued     a lane had a free slot at creation (./jobs.ts), else the job starts `held`
  *   held      -> queued     a lane has a free slot (preferred, else the other; a final keeps its draft's lane)
  *   queued    -> queued     prepared: references re-resolved, film read, crop cut, prompt enhanced
  *   queued    -> running    API lane: every slot submitted (the account-lane worker claims instead)
@@ -14,7 +15,7 @@
 import { STUDIO_JOB_OPEN_STATUSES } from './contracts';
 import { failJob, finishJob } from './finish';
 import { claimJobs, releaseJob, saveJob, tokenOf, failPendingOutputs } from './job-store';
-import { heartbeatFresh, laneLoad, lanesUp, loadLaneHeartbeats, pickLane } from './lanes';
+import { closeLane, failoverLane, heartbeatFresh, lanesUp, loadLaneClosures, loadLaneHeartbeats, routeJob } from './lanes';
 import { studioModel, type StudioLane } from './models';
 import { PrepareFailure, prepareJob, providerUrl, sendPrompt } from './prepare';
 import { buildStudioRequest, StudioRequestError, type StudioRequestInput } from './provider/requests';
@@ -46,30 +47,53 @@ async function laneUpNow(deps: StudioDeps): Promise<Record<StudioLane, boolean>>
     apiConfigured: deps.env.apiConfigured && deps.provider !== null,
     heartbeats: await loadLaneHeartbeats(deps.sql),
     now: nowOf(deps),
+    closedUntil: await loadLaneClosures(deps.sql),
   });
+}
+
+/**
+ * The API lane's account could not pay: close the lane for a while and move the job, prepared as it is,
+ * to the account lane (or hold it there), unless it is a final or has nowhere left to go (./lanes.ts
+ * `failoverLane`). The customer only ever sees the usual progress line.
+ */
+async function failover(deps: StudioDeps, job: JobRow, token: string, detail: string): Promise<JobRow | null> {
+  const now = nowOf(deps);
+  await closeLane(deps.sql, 'sunra_api', now);
+  deps.log?.('studio_lane_closed', { lane: 'sunra_api', jobId: job.id });
+  const model = studioModel(job.model);
+  const next = model
+    ? await failoverLane(deps.sql, {
+        from: 'sunra_api',
+        kind: job.kind,
+        tried: job.work.triedLanes ?? [],
+        organizationId: job.organization_id,
+        model,
+        defaultLane: deps.env.defaultLane,
+        caps: deps.env.caps,
+        apiUp: deps.env.apiConfigured && deps.provider !== null,
+        now,
+        createdAt: job.created_at instanceof Date ? job.created_at.toISOString() : String(job.created_at),
+        id: job.id,
+      })
+    : ({ action: 'fail' } as const);
+  if (next.action === 'fail') return failJob(deps, job, token, 'provider_unavailable', detail);
+  deps.log?.('studio_lane_rerouted', { jobId: job.id, from: 'sunra_api', to: next.lane });
+  return saveJob(deps.sql, job, token, { status: next.lane ? 'queued' : 'held', lane: next.lane, attempts: 0, work: { ...job.work, triedLanes: next.tried } });
 }
 
 async function route(deps: StudioDeps, job: JobRow, token: string): Promise<JobRow | null> {
   const model = studioModel(job.model);
   if (!model) return failJob(deps, job, token, 'failed', `unknown model ${job.model}`);
-  const pref = (await deps.sql.query<{ preferred_lane: StudioLane | null }>('select preferred_lane from brand_studio_allowances where organization_id = $1', [job.organization_id])).rows[0]?.preferred_lane;
-  const counts = await laneLoad(deps.sql);
-  // First come, first served: older held jobs are ahead in the line on whichever lane frees up.
-  const ahead = Number(
-    (
-      await deps.sql.query<{ n: number }>(
-        "select count(*)::int as n from brand_studio_jobs where status = 'held' and (created_at, id) < ($1::timestamptz, $2::uuid)",
-        [job.created_at instanceof Date ? job.created_at.toISOString() : job.created_at, job.id],
-      )
-    ).rows[0]?.n ?? 0,
-  );
-  const lane = pickLane({
-    preferred: pref ?? deps.env.defaultLane,
+  const lane = await routeJob(deps.sql, {
+    organizationId: job.organization_id,
     model,
-    counts: { sunra_api: counts.sunra_api + ahead, sunra_mcp: counts.sunra_mcp + ahead },
+    defaultLane: deps.env.defaultLane,
     caps: deps.env.caps,
-    laneUp: await laneUpNow(deps),
+    apiUp: deps.env.apiConfigured && deps.provider !== null,
+    now: nowOf(deps),
     stick: job.kind === 'video_final' ? (job.work.stickLane ?? 'sunra_api') : null,
+    place: { createdAt: job.created_at instanceof Date ? job.created_at.toISOString() : String(job.created_at), id: job.id },
+    exclude: job.work.triedLanes ?? [],
   });
   if (!lane) return null;
   return saveJob(deps.sql, job, token, { status: 'queued', lane });
@@ -101,6 +125,7 @@ async function submit(deps: StudioDeps, job: JobRow, token: string): Promise<Job
   const inFlight = outputs.filter((o) => o.status === 'pending' && o.provider_task_id).length;
   if (failure) {
     deps.log?.('studio_submit_failed', { jobId: job.id, code: failure.code, retryable: failure.retryable, detail: failure.detail });
+    if (failure.reason === 'balance' && inFlight === 0) return failover(deps, job, token, failure.detail);
     if (failure.retryable && job.attempts + 1 < MAX_ATTEMPTS) {
       await saveJob(deps.sql, job, token, { attempts: job.attempts + 1 });
       return null;

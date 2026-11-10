@@ -96,7 +96,7 @@ describe('the lease', () => {
     const job = await create({ ...image, count: 1 });
     await f.sql.query('update brand_studio_jobs set claimed_at = now() where id = $1', [job.id]);
     expect(await advanceStudioJobsWith(deps, { jobIds: [job.id] })).toEqual({ advanced: 0 });
-    expect((await view(job.id)).status).toBe('held');
+    expect((await view(job.id)).status).toBe('queued');
     await f.sql.query("update brand_studio_jobs set claimed_at = now() - interval '10 minutes' where id = $1", [job.id]);
     expect(await advanceStudioJobsWith(deps, { jobIds: [job.id] })).toEqual({ advanced: 1 });
     expect((await view(job.id)).status).toBe('succeeded');

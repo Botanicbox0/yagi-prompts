@@ -39,13 +39,26 @@ describe('usage arithmetic (existing FX and margins only)', () => {
 });
 
 describe('job.create', () => {
-  it('creates a held job with its slots and an estimate, without touching a provider', async () => {
+  it('creates a job with its slots and an estimate, without touching a provider', async () => {
     const created = await createStudioJob(deps, viewerOf(f.ids.editor), image());
-    expect(created).toMatchObject({ ok: true, job: { kind: 'image', status: 'held', expected: 2, aspect: '3:4', resolution: '2K', outputs: [], errorCode: null } });
+    // A lane is free, so it starts `queued` on it rather than flashing "waiting for a slot".
+    expect(created).toMatchObject({ ok: true, job: { kind: 'image', status: 'queued', expected: 2, aspect: '3:4', resolution: '2K', outputs: [], errorCode: null } });
     if (!created.ok) throw new Error();
     expect(created.job.estimateKrw).toBe(usageKrw(0.09 * 2, 'image'));
     expect(deps.provider.tasks.size).toBe(0);
     expect((await f.sql.query('select count(*)::int as n from brand_studio_outputs where job_id = $1', [created.job.id])).rows[0]).toEqual({ n: 2 });
+    expect((await f.sql.query('select lane from brand_studio_jobs where id = $1', [created.job.id])).rows[0]).toEqual({ lane: 'sunra_api' });
+  });
+
+  it('starts held only while every lane is full, and then waits behind older held jobs', async () => {
+    const full = studioDeps(f.sql, { env: studioEnv({ BRAND_STUDIO_PROVIDER: 'fake', BRAND_STUDIO_API_CONCURRENCY: '1', BRAND_STUDIO_MCP_CONCURRENCY: '1' }) });
+    const first = await createStudioJob(full, viewerOf(f.ids.owner), image({ count: 1 }));
+    const second = await createStudioJob(full, viewerOf(f.ids.owner), image({ count: 1 }));
+    expect(first).toMatchObject({ ok: true, job: { status: 'queued' } });
+    // The account lane has no worker heartbeat, so the API lane's one slot is all there is.
+    expect(second).toMatchObject({ ok: true, job: { status: 'held' } });
+    if (!second.ok) throw new Error();
+    expect((await f.sql.query('select lane from brand_studio_jobs where id = $1', [second.job.id])).rows[0]).toEqual({ lane: null });
   });
 
   it('is idempotent per member and request id; a different kind under the same key is a conflict', async () => {

@@ -4,20 +4,22 @@
  * asset library, plus the viewer and the campaign handoff. The only client island on the page.
  */
 import { useCallback, useEffect, useId, useMemo, useState } from "react";
-import type { RegionBox, StudioState } from "@/lib/brand-studio/contracts";
+import { createPortal } from "react-dom";
+import type { StudioJobView, StudioState } from "@/lib/brand-studio/contracts";
 import type { StudioMedium } from "@/lib/brand-studio/models";
 import { isFailure, uploadProblem, type StudioApi } from "./api";
 import { AssetPanel } from "./asset-panel";
 import { Board } from "./board";
-import { errorLine, newRequestId, type StudioCopy, type StudioLocale } from "./copy";
+import { errorLine, fill, formatKrw, type StudioCopy, type StudioLocale } from "./copy";
 import { Dock } from "./dock";
-import { DRAFT_RESOLUTION, finalInput, knownEstimate, regionEditInput, remixActive, rerunInput, withMedium } from "./dock-model";
+import { DRAFT_RESOLUTION, dockEstimateKrw, regionEstimateKrw, remixActive, remixFit, withMedium } from "./dock-model";
 import { HandoffDialog, handoffInput } from "./handoff-dialog";
-import { trayItemFromAsset, trayItemFromOutput, trayLabels, withStartFrame, type RefSource } from "./refs";
-import { boardOutputs, findOutput } from "./store";
+import { trayItemFromAsset, trayItemFromOutput, trayLabels, type RefSource } from "./refs";
+import { findOutput } from "./store";
 import { useDock } from "./use-dock";
 import { useStudio } from "./use-studio";
-import { Viewer, canRerun, itemKey, type ViewerActions, type ViewerItem } from "./viewer";
+import { useViewer } from "./use-viewer";
+import { Viewer, canRerun, itemKey } from "./viewer";
 
 export interface StudioAppProps {
   organizationId: string;
@@ -34,23 +36,32 @@ function openSupport() {
   document.querySelector<HTMLButtonElement>("[data-concierge-launcher]")?.click();
 }
 
+const focusPrompt = () => document.querySelector<HTMLTextAreaElement>("[data-studio-dock] textarea.bs-prompt")?.focus();
+
+/** The studio header's slot (v2-page.tsx), where the phone's "에셋 보기" button lives. */
+function useHeadSlot() {
+  const [slot, setSlot] = useState<Element | null>(null);
+  useEffect(() => setSlot(document.querySelector("[data-studio-head-slot]")), []);
+  return slot;
+}
+
 export function StudioApp({ organizationId, locale, copy, initialMedium = "image", initialState = null, api }: StudioAppProps) {
   const studio = useStudio({ organizationId, initialState, api });
   const dock = useDock({ studio, copy, organizationId, initialMedium });
   const state = studio.store.state;
-  const jobs = state?.jobs ?? [];
-  const assets = state?.assets ?? [];
+  const jobs = useMemo(() => state?.jobs ?? [], [state?.jobs]);
+  const assets = useMemo(() => state?.assets ?? [], [state?.assets]);
   const canCreate = state?.canCreate ?? false;
   const dockOpen = canCreate && (state?.allowance.capKrw ?? 0) > 0;
-  const [viewer, setViewer] = useState<{ list: "outputs" | "assets"; key: string } | null>(null);
-  const [viewerBusy, setViewerBusy] = useState<string | null>(null);
-  const [viewerNotice, setViewerNotice] = useState<string | null>(null);
   const [handoff, setHandoff] = useState<RefSource | null>(null);
   const [sheet, setSheet] = useState(false);
   const [panelNotice, setPanelNotice] = useState<string | null>(null);
   const [status, setStatus] = useState<string | null>(null);
+  const [stopping, setStopping] = useState<string | null>(null);
+  const [jobNotes, setJobNotes] = useState<Record<string, string>>({});
   const searchId = useId();
-  const promptFocus = () => document.querySelector<HTMLTextAreaElement>("[data-studio-dock] textarea.bs-prompt")?.focus();
+  const panelId = useId();
+  const headSlot = useHeadSlot();
 
   // A reference video in a video run: read it once, and start from the 480p draft.
   const remixOn = remixActive(dock.draft, dock.tray);
@@ -63,20 +74,18 @@ export function StudioApp({ organizationId, locale, copy, initialMedium = "image
   useEffect(() => {
     if (remixOn) setDraft((current) => ({ ...current, resolution: DRAFT_RESOLUTION }));
   }, [remixOn, setDraft]);
+  // A clip too short to edit can only be followed in a new take.
+  const editable = remixFit(dock.draft, dock.tray)?.editable ?? true;
+  useEffect(() => {
+    if (!editable) setDraft((current) => (current.method === "edit" ? { ...current, method: "reference" } : current));
+  }, [editable, setDraft]);
 
   const parentOf = useCallback((outputId: string | null) => findOutput(jobs, outputId), [jobs]);
   const lookup = useMemo(
     () => ({ asset: (id: string) => assets.find((a) => a.id === id) ?? null, output: (id: string) => findOutput(jobs, id) }),
     [assets, jobs],
   );
-  const viewerItems: ViewerItem[] = useMemo(
-    () =>
-      viewer?.list === "assets"
-        ? assets.map((asset) => ({ type: "asset" as const, asset }))
-        : boardOutputs(jobs).map(({ output, job }) => ({ type: "output" as const, output, job })),
-    [viewer?.list, assets, jobs],
-  );
-  const viewerIndex = viewer ? viewerItems.findIndex((item) => itemKey(item) === viewer.key) : -1;
+  const viewer = useViewer({ studio, dock, copy, organizationId, jobs, assets, lookup, onCampaign: setHandoff, focusPrompt });
 
   const attachSource = useCallback(
     (source: RefSource) => {
@@ -105,71 +114,42 @@ export function StudioApp({ organizationId, locale, copy, initialMedium = "image
     [copy, dock, studio],
   );
 
-  const run = useCallback(async (key: string, work: () => Promise<string | null>) => {
-    setViewerBusy(key);
-    setViewerNotice(null);
-    const notice = await work();
-    setViewerBusy(null);
-    setViewerNotice(notice);
-    return notice === copy.state.started || notice === null;
-  }, [copy]);
+  const cancel = useCallback(
+    async (job: StudioJobView) => {
+      setStopping(job.id);
+      const result = await studio.cancelJob(job.id);
+      setStopping(null);
+      setJobNotes((notes) => {
+        const { [job.id]: _dropped, ...rest } = notes;
+        if (!isFailure(result)) return rest;
+        return { ...rest, [job.id]: result.code === "conflict" ? copy.board.cancelLate : errorLine(copy, result.code) };
+      });
+    },
+    [copy, studio],
+  );
 
-  const actions: ViewerActions = {
-    regionEdit: (item, box: RegionBox, instruction) =>
-      run("region", async () => {
-        const source = item.type === "output" ? { outputId: item.output.id } : { assetId: item.asset.id };
-        const ids = { organizationId, requestId: newRequestId() };
-        const result = await studio.createJob(regionEditInput({ ids, source, box, instruction, draft: dock.draft }));
-        return isFailure(result) ? errorLine(copy, result.code) : copy.state.started;
-      }),
-    rerun: (job) =>
-      void run("rerun", async () => {
-        const input = rerunInput(job, { organizationId, requestId: newRequestId() });
-        if (!input) return null;
-        const result = await studio.createJob(input);
-        return isFailure(result) ? errorLine(copy, result.code) : copy.state.started;
-      }),
-    toVideo: (item) => {
-      const tile = item.type === "output" ? trayItemFromOutput(item.output, copy.viewer.label) : trayItemFromAsset(item.asset);
-      dock.setDraft((current) => withMedium(current, "video"));
-      dock.setTray((current) => withStartFrame(current, tile));
-      setViewer(null);
-      promptFocus();
-    },
-    reference: (item) => {
-      dock.attach(item.type === "output" ? trayItemFromOutput(item.output, copy.viewer.label) : trayItemFromAsset(item.asset));
-      setViewer(null);
-      promptFocus();
-    },
-    save: (output) =>
-      void run("save", async () => {
-        const result = await studio.saveOutput(output.id);
-        return isFailure(result) ? errorLine(copy, result.code) : null;
-      }),
-    campaign: (item) => {
-      setHandoff(item.type === "output" ? { outputId: item.output.id } : { assetId: item.asset.id });
-    },
-    finalize: (output) =>
-      void run("finalize", async () => {
-        const result = await studio.createJob(finalInput({ organizationId, requestId: newRequestId() }, output.id));
-        return isFailure(result) ? errorLine(copy, result.code) : copy.state.started;
-      }),
-    reuse: (job) => {
-      dock.reuse(job, lookup);
-      setViewer(null);
-      promptFocus();
-    },
-  };
+  const assetsToggle = (
+    <button
+      type="button"
+      className="bs-btn bs-assets-toggle"
+      data-variant="soft"
+      data-size="sm"
+      aria-expanded={sheet}
+      aria-controls={panelId}
+      onClick={() => setSheet(true)}
+    >
+      {copy.assets.toggle}
+    </button>
+  );
 
+  const handoffKind = handoff
+    ? (("assetId" in handoff ? lookup.asset(handoff.assetId)?.kind : lookup.output(handoff.outputId)?.kind) === "video" ? "video" : "image")
+    : "image";
   const loading = studio.store.phase === "loading" && !state;
   return (
     <div className="bs-studio" data-studio-phase={studio.store.phase} data-studio-can-create={canCreate ? "" : undefined}>
       <div className="bs-main">
-        <div className="bs-toolbar">
-          <button type="button" className="bs-btn bs-assets-toggle" data-variant="ghost" data-size="sm" aria-expanded={sheet} onClick={() => setSheet(true)}>
-            {copy.assets.toggle}
-          </button>
-        </div>
+        {headSlot ? createPortal(assetsToggle, headSlot) : <div className="bs-toolbar">{assetsToggle}</div>}
         {loading && (
           <div className="bs-skeleton" aria-busy="true" data-studio-skeleton>
             <span className="bs-sr" role="status">{copy.state.loading}</span>
@@ -184,22 +164,26 @@ export function StudioApp({ organizationId, locale, copy, initialMedium = "image
             </button>
           </div>
         )}
+        {status && <p className="bs-notice" role="status">{status}</p>}
         {state && (
           <Board
             jobs={jobs}
             copy={copy}
             locale={locale}
             canCreate={dockOpen}
+            canStop={canCreate}
+            stopping={stopping}
+            notes={jobNotes}
             parentOf={parentOf}
-            onOpen={(outputId) => setViewer({ list: "outputs", key: `o:${outputId}` })}
-            onRetry={(job) => (canRerun(job) ? actions.rerun(job) : actions.reuse(job))}
+            onOpen={(outputId) => viewer.show({ list: "outputs", key: `o:${outputId}` })}
+            onRetry={(job) => (canRerun(job) ? viewer.rerun(job) : viewer.reuse(job))}
+            onCancel={(job) => void cancel(job)}
             onExample={(text, medium) => {
               dock.setDraft((current) => ({ ...withMedium(current, medium), prompt: text }));
-              promptFocus();
+              focusPrompt();
             }}
           />
         )}
-        {status && <p className="bs-notice" role="status">{status}</p>}
         {state && dockOpen && (
           <Dock
             draft={dock.draft}
@@ -208,9 +192,10 @@ export function StudioApp({ organizationId, locale, copy, initialMedium = "image
             copy={copy}
             locale={locale}
             allowance={state.allowance}
-            quoteKrw={knownEstimate(jobs, dock.draft, dock.tray)}
+            quoteKrw={dockEstimateKrw(dock.draft, dock.tray)}
             busy={dock.busy}
             message={dock.message}
+            notice={dock.notice}
             film={remixVideo?.assetId ? studio.films[remixVideo.assetId] ?? null : null}
             uploading={studio.uploads.map((u) => u.name)}
             onDraft={dock.setDraft}
@@ -245,6 +230,7 @@ export function StudioApp({ organizationId, locale, copy, initialMedium = "image
       </div>
       {state && (
         <AssetPanel
+          id={panelId}
           assets={assets}
           copy={copy}
           canCreate={canCreate}
@@ -258,39 +244,38 @@ export function StudioApp({ organizationId, locale, copy, initialMedium = "image
             dock.attach(trayItemFromAsset(asset));
             setSheet(false);
           }}
-          onView={(asset) => setViewer({ list: "assets", key: `a:${asset.id}` })}
+          onView={(asset) => viewer.show({ list: "assets", key: `a:${asset.id}` })}
           onFiles={(files) => void uploadFiles(files, false)}
           onUpdate={studio.updateAsset}
           onDelete={studio.deleteAsset}
         />
       )}
-      {viewer && viewerIndex >= 0 && (
+      {viewer.open && viewer.index >= 0 && (
         <Viewer
-          items={viewerItems}
-          index={viewerIndex}
+          items={viewer.items}
+          index={viewer.index}
           copy={copy}
           canCreate={canCreate}
           canGenerate={dockOpen}
-          busy={viewerBusy}
-          notice={viewerNotice}
+          busy={viewer.busy}
+          notice={viewer.notice}
+          regionQuote={fill(copy.board.usage, { amount: formatKrw(regionEstimateKrw(dock.draft), locale) })}
+          regionPreset={viewer.preset}
           parentOf={parentOf}
           onIndex={(index) => {
-            const item = viewerItems[index];
-            if (item) setViewer({ list: viewer.list, key: itemKey(item) });
-            setViewerNotice(null);
+            const item = viewer.items[index];
+            if (item && viewer.open) viewer.show({ list: viewer.open.list, key: itemKey(item) });
           }}
-          onClose={() => {
-            setViewer(null);
-            setViewerNotice(null);
-          }}
-          actions={actions}
+          onClose={() => viewer.show(null)}
+          actions={viewer.actions}
         />
       )}
       {handoff && state && (
         <HandoffDialog
           campaigns={state.campaigns}
           copy={copy}
-          onSend={(choice, requestId) => studio.handoff(handoffInput(handoff, choice, { organizationId, requestId }))}
+          kind={handoffKind}
+          onSend={(choice, requestId, asFormat) => studio.handoff(handoffInput(handoff, choice, { organizationId, requestId }, asFormat))}
           onDone={(href) => window.location.assign(href)}
           onClose={() => setHandoff(null)}
         />

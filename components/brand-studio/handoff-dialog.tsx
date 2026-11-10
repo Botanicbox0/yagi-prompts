@@ -11,24 +11,27 @@ import type { RefSource } from "./refs";
 
 export type HandoffChoice = { projectId: string } | { newProject: { title: string; objective: string } };
 
-/** The `handoff.campaign` input for one result or asset. */
+/** The `handoff.campaign` input for one result or asset; `asFormat` asks the team to use a video as the format. */
 export function handoffInput(
   target: RefSource,
   choice: HandoffChoice,
   ids: { organizationId: string; requestId: string },
+  asFormat = false,
 ): StudioOps["handoff.campaign"][0] {
-  return { organizationId: ids.organizationId, requestId: ids.requestId, ...target, ...choice };
+  return { organizationId: ids.organizationId, requestId: ids.requestId, ...target, ...choice, asFormat };
 }
 
 export interface HandoffDialogProps {
   campaigns: ReadonlyArray<{ id: string; title: string }>;
   copy: StudioCopy;
-  onSend(choice: HandoffChoice, requestId: string): Promise<ApiResult<StudioHandoffDone>>;
+  /** What is being sent: a video may be offered as the format creators follow. */
+  kind?: "image" | "video";
+  onSend(choice: HandoffChoice, requestId: string, asFormat: boolean): Promise<ApiResult<StudioHandoffDone>>;
   onDone(href: string): void;
   onClose(): void;
 }
 
-export function HandoffDialog({ campaigns, copy, onSend, onDone, onClose }: HandoffDialogProps) {
+export function HandoffDialog({ campaigns, copy, kind = "image", onSend, onDone, onClose }: HandoffDialogProps) {
   const h = copy.handoff;
   const ref = useModal();
   const id = useId();
@@ -37,6 +40,7 @@ export function HandoffDialog({ campaigns, copy, onSend, onDone, onClose }: Hand
   const [objective, setObjective] = useState("");
   const [busy, setBusy] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
+  const [asFormat, setAsFormat] = useState(kind === "video");
   const press = useRef<{ fingerprint: string; id: string } | null>(null);
 
   async function send() {
@@ -44,11 +48,12 @@ export function HandoffDialog({ campaigns, copy, onSend, onDone, onClose }: Hand
     const choice: HandoffChoice =
       selected === "new" ? { newProject: { title: title.trim(), objective: objective.trim() } } : { projectId: selected };
     if ("newProject" in choice && (choice.newProject.title.length < 3 || choice.newProject.objective.length < 3)) return setNotice(h.needFields);
-    const fingerprint = JSON.stringify(choice);
+    const format = kind === "video" && asFormat;
+    const fingerprint = JSON.stringify({ choice, format });
     if (press.current?.fingerprint !== fingerprint) press.current = { fingerprint, id: newRequestId() };
     setBusy(true);
     setNotice(null);
-    const result = await onSend(choice, press.current.id);
+    const result = await onSend(choice, press.current.id, format);
     setBusy(false);
     if (isFailure(result)) return setNotice(errorLine(copy, result.code));
     onDone(result.href);
@@ -103,6 +108,12 @@ export function HandoffDialog({ campaigns, copy, onSend, onDone, onClose }: Hand
               onChange={(event) => setObjective(event.target.value)}
             />
           </>
+        )}
+        {kind === "video" && (
+          <label className="bs-check" data-studio-handoff-format>
+            <input type="checkbox" checked={asFormat} onChange={(event) => setAsFormat(event.target.checked)} />
+            <span>{h.asFormat}</span>
+          </label>
         )}
         {notice && <p className="bs-dock-message" role="alert">{notice}</p>}
         <div className="bs-row bs-dialog-actions">

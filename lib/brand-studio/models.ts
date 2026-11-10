@@ -64,6 +64,8 @@ export interface StudioVideoModel extends StudioModelBase {
   maxReferenceVideos: number;
   /** Seconds a reference video may run (an explicit edit needs at least `editMin`). */
   referenceVideoSeconds: { min: number; editMin: number; max: number };
+  /** Width x height a reference video must fall within, and the shortest side allowed (provider limits). */
+  referenceVideoPixels: { min: number; max: number; minSide: number };
   supportsDraft: boolean;
   endpoints: { text: string; image: string; reference: string; finalize: string };
 }
@@ -160,6 +162,7 @@ export const STUDIO_MODELS = [
     maxReferenceImages: 9,
     maxReferenceVideos: 1,
     referenceVideoSeconds: { min: 2, editMin: 4, max: 30 },
+    referenceVideoPixels: { min: 407_696, max: 8_295_044, minSide: 300 },
     supportsDraft: true,
     endpoints: {
       text: 'text-to-video',

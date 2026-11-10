@@ -12,7 +12,7 @@
 import { randomBytes } from 'node:crypto';
 import { rm } from 'node:fs/promises';
 import { join, resolve } from 'node:path';
-import { publicMediaR2Config, type EnvLike } from '@/lib/runtime-mode';
+import { publicMediaR2Config, type EnvLike, type PublicMediaR2Config } from '@/lib/runtime-mode';
 import { STAGING_BUCKET, StorageObjectNotFound } from '@/lib/storage';
 import { createLocalStorageDriver } from '@/lib/storage/local-driver';
 import { createR2PublicMediaStore } from '@/lib/storage/r2-public';
@@ -89,8 +89,8 @@ export function createLocalMediaStore(rootDir?: string): StudioMediaStore {
   };
 }
 
-export function createR2MediaStore(env: EnvLike = process.env): StudioMediaStore | null {
-  const config = publicMediaR2Config(env);
+export function createR2MediaStore(env: EnvLike = process.env, forced?: PublicMediaR2Config | null): StudioMediaStore | null {
+  const config = forced ?? publicMediaR2Config(env);
   if (!config) return null;
   const store = createR2PublicMediaStore(config);
   const base = config.mediaBaseUrl.replace(/\/$/, '');
@@ -116,9 +116,27 @@ export function createR2MediaStore(env: EnvLike = process.env): StudioMediaStore
   };
 }
 
+/**
+ * Local mode hides the media host on purpose, so a laptop writes to `.storage/`. A live check against
+ * the real provider from a laptop needs files the provider can fetch: `BRAND_STUDIO_MEDIA=r2` opts in
+ * and reads the same five values directly. It writes into the real bucket, so it belongs in a one-off
+ * shell or launch entry, never in a shared or deployed environment.
+ */
+function optedInR2Config(env: EnvLike): PublicMediaR2Config | null {
+  if (env.BRAND_STUDIO_MEDIA?.trim() !== 'r2') return null;
+  const value = (name: string) => env[name]?.trim() || null;
+  const mediaBaseUrl = value('PUBLIC_MEDIA_BASE_URL');
+  const accountId = value('R2_ACCOUNT_ID');
+  const accessKeyId = value('R2_ACCESS_KEY_ID');
+  const secretAccessKey = value('R2_SECRET_ACCESS_KEY');
+  const bucket = value('R2_PUBLIC_BUCKET');
+  if (!mediaBaseUrl?.startsWith('https://') || !accountId || !accessKeyId || !secretAccessKey || !bucket) return null;
+  return { accountId, accessKeyId, secretAccessKey, bucket, mediaBaseUrl };
+}
+
 /** R2 when the four keys and the media host are configured, else the local directory. */
 export function createStudioMediaStore(env: EnvLike = process.env): StudioMediaStore {
-  return createR2MediaStore(env) ?? createLocalMediaStore();
+  return createR2MediaStore(env, optedInR2Config(env)) ?? createLocalMediaStore();
 }
 
 /** In-memory store for tests and the fake provider path. */

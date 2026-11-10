@@ -95,6 +95,26 @@ export function useStudio({ organizationId, initialState, api: injected }: { org
 
   const handoff = useCallback((input: StudioOps["handoff.campaign"][0]) => api.call("handoff.campaign", input), [api]);
 
+  /** Stops a run that has not reached the maker yet; either way the job is read again (status and usage). */
+  const cancelJob = useCallback(
+    async (jobId: string) => {
+      const result = await api.call("job.cancel", { organizationId, jobId });
+      const fresh = await api.poll([jobId]);
+      if (!isFailure(fresh)) dispatch({ type: "polled", poll: fresh });
+      return result;
+    },
+    [api, organizationId],
+  );
+
+  const deleteOutput = useCallback(
+    async (outputId: string) => {
+      const result = await api.call("output.delete", { organizationId, outputId });
+      if (!isFailure(result)) dispatch({ type: "outputRemoved", outputId });
+      return result;
+    },
+    [api, organizationId],
+  );
+
   // A reference video is read once per asset; a failed reading is simply no reading.
   const [films, setFilms] = useState<Record<string, FilmState>>({});
   const asked = useRef(new Set<string>());
@@ -126,7 +146,7 @@ export function useStudio({ organizationId, initialState, api: injected }: { org
     [api],
   );
 
-  return { store, load, createJob, saveOutput, updateAsset, deleteAsset, handoff, films, analyzeFilm, uploads, upload };
+  return { store, load, createJob, cancelJob, saveOutput, deleteOutput, updateAsset, deleteAsset, handoff, films, analyzeFilm, uploads, upload };
 }
 
 export type StudioController = ReturnType<typeof useStudio>;

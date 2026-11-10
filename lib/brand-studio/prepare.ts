@@ -102,6 +102,55 @@ export async function readSheet(deps: Pick<StudioDeps, 'intel' | 'intelDeps' | '
   }
 }
 
+/* A library video is read once per language: the sheet is kept on the asset (`film_sheets`, migration
+ * 0077) and reused by the remix panel, the prompt preview and the job that sends the video. A failed
+ * reading is not kept, so a later call may try again. Before 0077 the column is missing and every call
+ * simply reads afresh. */
+const UNDEFINED_COLUMN = '42703';
+const missingColumn = (error: unknown) => (error as { code?: string } | null)?.code === UNDEFINED_COLUMN;
+
+export function storedSheet(row: { film_sheets?: unknown } | null | undefined, locale: 'ko' | 'en'): FilmSheet | null {
+  const all = row?.film_sheets;
+  const sheet = all && typeof all === 'object' ? (all as Record<string, unknown>)[locale] : null;
+  return sheet && typeof sheet === 'object' && typeof (sheet as FilmSheet).summary === 'string' ? (sheet as FilmSheet) : null;
+}
+
+async function cachedSheet(sql: StudioDeps['sql'], organizationId: string, assetId: string, locale: 'ko' | 'en'): Promise<FilmSheet | null> {
+  try {
+    const row = (await sql.query<{ film_sheets: unknown }>('select film_sheets from brand_studio_assets where id = $1 and organization_id = $2', [assetId, organizationId])).rows[0];
+    return storedSheet(row, locale);
+  } catch (error) {
+    if (missingColumn(error)) return null;
+    throw error;
+  }
+}
+
+export async function keepSheet(sql: StudioDeps['sql'], organizationId: string, assetId: string, locale: 'ko' | 'en', sheet: FilmSheet): Promise<void> {
+  try {
+    await sql.query(
+      `update brand_studio_assets set film_sheets = coalesce(film_sheets, '{}'::jsonb) || jsonb_build_object($3::text, $4::jsonb)
+        where id = $1 and organization_id = $2`,
+      [assetId, organizationId, locale, JSON.stringify(sheet)],
+    );
+  } catch (error) {
+    if (!missingColumn(error)) throw error;
+  }
+}
+
+/** The sheet of a reference video: the asset's kept reading when there is one, else a fresh reading (kept for next time). */
+export async function filmSheetFor(
+  deps: Pick<StudioDeps, 'sql' | 'intel' | 'intelDeps' | 'media' | 'env'>,
+  input: { organizationId: string; assetId: string | null; ref: ResolvedRef; locale: 'ko' | 'en' },
+): Promise<FilmSheet | null> {
+  if (input.assetId) {
+    const kept = await cachedSheet(deps.sql, input.organizationId, input.assetId, input.locale);
+    if (kept) return kept;
+  }
+  const sheet = await readSheet(deps, input.ref, input.locale);
+  if (sheet && input.assetId) await keepSheet(deps.sql, input.organizationId, input.assetId, input.locale, sheet);
+  return sheet;
+}
+
 export function enhanceKind(kind: JobRow['kind']): EnhanceInput['kind'] | null {
   return kind === 'video_final' ? null : kind;
 }
@@ -182,7 +231,7 @@ export async function prepareJob(deps: StudioDeps, job: JobRow): Promise<{ final
   let sheet: FilmSheet | null = null;
   if (job.kind === 'video_remix' && job.enhance) {
     const film = resolved.find((r) => r.kind === 'video');
-    if (film) sheet = await readSheet(deps, film, locale);
+    if (film) sheet = await filmSheetFor(deps, { organizationId: job.organization_id, assetId: job.refs?.[film.index - 1]?.assetId ?? null, ref: film, locale });
     work.sheet = sheet;
   }
 
