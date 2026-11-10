@@ -500,28 +500,18 @@ export function DirectSceneStudio({
                 </div>
               </div>
 
-              {/* Step 2B: 3-Tier Video Resolution & Credit Mode Switcher (480p Draft · 720p Standard · 1080p Masterpiece) */}
+              {/* Step 2B: 3-Tier Video Resolution Switcher (480p Draft · 720p Standard · 1080p Masterpiece) */}
               <div
                 data-direct-resolution-tiers
                 data-direct-selected-resolution={selectedResolution}
                 className="space-y-2.5 rounded-[16px] border border-hairline bg-white p-4 text-xs"
               >
-                <div className="flex flex-wrap items-center justify-between gap-1.5">
-                  <p className="font-semibold text-[#3063A7]">
-                    {locale === 'en'
-                      ? 'Choose Video Resolution & Credit Mode'
-                      : '화질 · 크레딧 모드 선택 (480p Draft · 720p · 1080p)'}
-                  </p>
-                  <span className="rounded-full bg-[#E8EFF7] px-2 py-0.5 font-mono text-[0.65rem] font-semibold text-[#3063A7] tabular-nums">
-                    {locale === 'en'
-                      ? `480p saves ${compiled.resolutionTiers.draftWorkflow.draftSavedPercentVs720p}%`
-                      : `480p Draft · ${compiled.resolutionTiers.draftWorkflow.draftSavedPercentVs720p}% 크레딧 절약`}
-                  </span>
-                </div>
+                <p className="font-semibold text-[#3063A7]">
+                  {locale === 'en' ? 'Choose resolution' : '화질 선택'}
+                </p>
 
                 <div className="grid grid-cols-3 gap-2">
                   {(['480p', '720p', '1080p'] as const).map((res) => {
-                    const tier = compiled.resolutionTiers.tiers[res];
                     const active = selectedResolution === res;
                     return (
                       <button
@@ -538,14 +528,7 @@ export function DirectSceneStudio({
                         ].join(' ')}
                       >
                         <div>
-                          <div className="flex items-center justify-between gap-1">
-                            <span className="font-mono text-xs font-bold text-[#0E1013] tabular-nums">
-                              {res}
-                            </span>
-                            <span className="rounded-full bg-white px-1.5 py-0.5 font-mono text-[0.58rem] font-semibold text-[#3063A7]">
-                              {res === '480p' ? 'DRAFT' : res === '720p' ? 'STD' : 'MAX'}
-                            </span>
-                          </div>
+                          <span className="text-xs font-bold text-[#0E1013] tabular-nums">{res}</span>
                           <p className="mt-1 text-[0.7rem] font-semibold text-[#0E1013]">
                             {res === '480p'
                               ? '사전 테스트'
@@ -554,9 +537,6 @@ export function DirectSceneStudio({
                                 : '최고 화질'}
                           </p>
                         </div>
-                        <p className="mt-2 font-mono text-[0.72rem] font-bold text-[#3063A7] tabular-nums">
-                          {tier.totalCredits} cr
-                        </p>
                       </button>
                     );
                   })}
