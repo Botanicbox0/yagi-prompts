@@ -22,9 +22,16 @@ import { isReviewAccountEmail } from '@/lib/auth/review-login';
  * marked `input_deleted_at`. Nothing here reads or changes a payment's status.
  *
  * What is never deleted automatically: an account with money or other people attached — a campaign
- * past selection, a brand membership, a creative's templates and settlements, a monthly plan, a
- * staff account. Those rows are records the company keeps (privacy policy §3) or belong to someone
- * else's workspace, so the request waits for an operator (`review` holds).
+ * past selection, a brand membership, a creative's templates and settlements, a monthly plan, a paid
+ * cookie pack or a plan from the old payment provider, a staff or reviewer account. Those rows are
+ * records the company keeps (privacy policy §3) or belong to someone else's workspace, so the request
+ * waits for an operator (`review` holds).
+ *
+ * Two things guard the last step. A sign-in account is never removed while a profile exists on its
+ * id, and `/auth/callback` starts no profile on an id a request still lists (`deletionInProgress`):
+ * a person who comes back after a failed try cannot have a new account deleted under them. And the
+ * daily pass runs only behind the cron secret, after a render and payment pass that went through
+ * (`deletionPassGate`).
  */
 export const DELETION_DAYS = 7;
 export const DEFAULT_GRACE_DAYS = 3;

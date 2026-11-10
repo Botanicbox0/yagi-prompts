@@ -4816,7 +4816,7 @@ export const ko: Dictionary = {
       removed: '사진 {selfies}장, 결과물 {renders}건, 저장 폴더 {folders}개 삭제 · 결제 기록 {payments}건 보관',
       run: '지금 삭제',
       runHint: '남은 유예 기간을 건너뜁니다. 보류 사유는 건너뛰지 않으니 먼저 정리하세요.',
-      runConfirm: '되돌릴 수 없습니다. 삭제할 계정을 확인하려면 {phrase} 을(를) 입력하세요.',
+      runConfirm: '되돌릴 수 없습니다. 삭제할 계정이 맞는지 확인하려면 아래 칸에 그대로 입력하세요: {phrase}',
       removedElsewhere: '이 화면 밖에서 이미 지워진 계정입니다. 저장 파일과 제공사 자산은 확인되지 않았으니 런북대로 직접 확인한 뒤 메모와 함께 완료 표시하세요.',
       retry: '정리 다시 시도',
       retryHint: '계정 데이터는 이미 지워졌습니다. 남은 로그인 계정, 파일, 제공사 자산과 자산 그룹을 지웁니다.',
