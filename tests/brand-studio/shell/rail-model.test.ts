@@ -65,8 +65,10 @@ describe('the current item', () => {
 describe('order', () => {
   const all = railItems({ studio: true, creators: true, identity: true });
 
-  it('applies the saved order and keeps unknown items in their default order after it', () => {
-    expect(orderItems(all, ['/brand', '/brand/studio/video'])).toEqual(['campaigns', 'video', 'image', 'review', 'creators', 'assets', 'brandKit']);
+  it('applies the saved order and seats unknown items beside their default neighbour', () => {
+    expect(orderItems(all, ['/brand', '/brand/studio/video'])).toEqual(['image', 'campaigns', 'creators', 'assets', 'brandKit', 'video', 'review']);
+    // An order saved before video and review existed: they appear next to image, not at the end.
+    expect(orderItems(all, ['/brand/studio', '/brand', '/brand/library', '/brand/identity'])).toEqual(['image', 'video', 'review', 'campaigns', 'creators', 'assets', 'brandKit']);
     // The topbar's older order (no video or review) still applies to what it knows.
     expect(orderItems(all, ['/brand/identity', '/brand/library', '/brand/studio'])).toEqual(['brandKit', 'assets', 'image', 'video', 'review', 'campaigns', 'creators']);
     expect(orderItems(all, [])).toEqual(all);

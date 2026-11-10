@@ -22,3 +22,13 @@ export function studioV2Visible(org: StudioVisibilityOrg | null | undefined, fla
   if (isSandboxedClientOrganization(org)) return false;
   return !featureDenied(org.denied, 'generative_media');
 }
+
+/**
+ * May this viewer's pages carry studio copy at all? The workspace layout serializes its navigation
+ * copy into the page, so a viewer whose brands are ALL sandboxed or generation-closed must not be
+ * handed the strings in the first place: hiding the markup is not enough. A viewer with at least one
+ * open brand (or the TWINGS team) gets the copy; which brand is selected is decided in the browser.
+ */
+export function studioCopyAllowed(choices: readonly StudioVisibilityOrg[]): boolean {
+  return choices.some((org) => !isSandboxedClientOrganization(org) && !featureDenied(org.denied, 'generative_media'));
+}
