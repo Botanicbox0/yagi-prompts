@@ -1,5 +1,10 @@
 /** PLAN §3.9 — UI strings as dictionary modules. `en` is the shape; `ko` must match it. */
 import { adminWorkflowEn } from './admin-workflow';
+import { studioShellEn } from './studio-shell';
+import { studioLibraryEn } from './studio-library';
+import { studioVideoEn } from './studio-video';
+import { studioReviewEn } from './studio-review';
+import { studioLayersEn } from './studio-layers';
 import { adminConsoleEn } from './admin-console';
 /**
  * docs/PLATFORM-2.0.md §14.1 — the names live in this one object (founder decision 2026-10-24). Every
@@ -34,6 +39,11 @@ const T = EN_TERMS;
 
 export const en = {
   adminWorkflow: adminWorkflowEn,
+  studioShell: studioShellEn,
+  studioLibrary: studioLibraryEn,
+  studioVideo: studioVideoEn,
+  studioReview: studioReviewEn,
+  studioLayers: studioLayersEn,
   adminConsole: adminConsoleEn,
   landingMedia: {
     nav: 'Landing images',

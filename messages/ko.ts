@@ -1,5 +1,10 @@
 import type { Dictionary } from './en';
 import { adminWorkflowKo } from './admin-workflow';
+import { studioShellKo } from './studio-shell';
+import { studioLibraryKo } from './studio-library';
+import { studioVideoKo } from './studio-video';
+import { studioReviewKo } from './studio-review';
+import { studioLayersKo } from './studio-layers';
 import { adminConsoleKo } from './admin-console';
 
 /**
@@ -43,6 +48,11 @@ const T = KO_TERMS;
 
 export const ko: Dictionary = {
   adminWorkflow: adminWorkflowKo,
+  studioShell: studioShellKo,
+  studioLibrary: studioLibraryKo,
+  studioVideo: studioVideoKo,
+  studioReview: studioReviewKo,
+  studioLayers: studioLayersKo,
   adminConsole: adminConsoleKo,
   landingMedia: {
     nav: '랜딩 이미지',
