@@ -3558,6 +3558,7 @@ export const en = {
       metaDescription: 'Video and image templates made from a photo of your pet — your pet alone, or the two of you together.',
       definition: 'TWINGS pet templates turn one photo of your pet into trending video and image formats. Templates where you appear together take one photo of you as well.',
       transform: 'One photo and your pet is the lead',
+      templateDescription: 'Make this scene with one photo of your pet. Find the single-video price on the template and compare monthly plans on the pricing page.',
     },
     couple: {
       title: 'Together',

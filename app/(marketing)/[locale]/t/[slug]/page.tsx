@@ -101,8 +101,10 @@ export async function generateMetadata({ params }: RouteParams): Promise<Metadat
   const dict = getDictionary(locale);
   const { card } = await resolve(slug);
   if (card === null) return unresolvedTemplateMetadata(dict.meta.siteName);
-  const availability = await cachedSubscriptionAvailability();
-  return templateMetadata({ card, locale, description: templateDescription(dict, availability.status === 'open'), siteName: dict.meta.siteName });
+  const [availability, makeInputs] = await Promise.all([cachedSubscriptionAvailability(), cachedMakeInputs(card.id, card.cast ?? 'solo')]);
+  // docs/CAST-CATEGORIES.md §5: a pet-only template asks for no face, and its description says so.
+  const petOnly = makeInputs !== null && makeInputs.pet && !makeInputs.selfie;
+  return templateMetadata({ card, locale, description: petOnly ? dict.cast.pet.templateDescription : templateDescription(dict, availability.status === 'open'), siteName: dict.meta.siteName });
 }
 
 export default async function TemplatePage({ params }: RouteParams) {
@@ -154,7 +156,7 @@ export default async function TemplatePage({ params }: RouteParams) {
   const moreFromMaker = maker ? all.filter((item) => item.slug !== card.slug && item.makerProfile && item.authorHandle === maker.handle).slice(0, 4) : [];
   const shopOpen = storefrontOpen();
   const subscriptionOpen = availability.status === 'open';
-  const description = templateDescription(dict, subscriptionOpen);
+  const description = petOnly ? dict.cast.pet.templateDescription : templateDescription(dict, subscriptionOpen);
   const resolutions = isForSale(card) ? offeredResolutions(card) : [];
   // A set template (2026-10-27): one order, one example per frame it makes.
   const gallery = card.gallery ?? [];
@@ -446,7 +448,8 @@ export default async function TemplatePage({ params }: RouteParams) {
                         <p data-template-sale-state className="mt-3 text-xs leading-relaxed text-black/60">
                           <TemplateMakeAvailability copy={makeAvailabilityCopy} oneTimeAvailable={shopOpen} subscriptionEligible={subscriptionQuote !== null} field="body" />
                         </p>
-                        <section data-template-photo-guide className="mt-5 rounded-3xl border border-hairline bg-white p-4 sm:p-5">
+                        {/* The face photo guide is for a selfie; a pet-only card has its own tips beside the pet photo. */}
+                        {!petOnly && <section data-template-photo-guide className="mt-5 rounded-3xl border border-hairline bg-white p-4 sm:p-5">
                           <h2 className="text-xs font-semibold text-black/85">{dict.selfie.goodExamples}</h2>
                           <p className="mt-2 text-xs leading-relaxed text-black/70">{dict.studio.signedOutBody}</p>
                           <ul data-studio-photo-examples className="mt-3 grid grid-cols-3 gap-2.5">
@@ -464,7 +467,7 @@ export default async function TemplatePage({ params }: RouteParams) {
                               </li>
                             ))}
                           </ul>
-                        </section>
+                        </section>}
                       </section>
                     </MakeSheet>
                   </>

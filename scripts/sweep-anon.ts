@@ -1464,6 +1464,8 @@ async function sweepCastCategories(): Promise<void> {
   expectEqual('renders 200', petOnly.status, 200);
   expectAbsent('no "my selfie" tile on a pet-only template', petOnly.body, 'data-selfie-tile');
   expectPresent('…the pet line instead', petOnly.body, 'One photo and your pet is the lead');
+  expectAbsent('…no face photo guide', petOnly.body, 'data-template-photo-guide');
+  expectAbsent('…and no face wording in its description', petOnly.body, 'with your own face using one photo');
 
   console.log('\n/sitemap.xml — the pet page, never the couple page');
   const sitemap = await get('/sitemap.xml');
