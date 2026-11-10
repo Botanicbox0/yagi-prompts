@@ -47,7 +47,19 @@ const nextConfig: NextConfig = {
         { key: 'Referrer-Policy', value: 'strict-origin-when-cross-origin' },
         { key: 'X-Frame-Options', value: 'SAMEORIGIN' },
         { key: 'Content-Security-Policy', value: "base-uri 'self'; object-src 'none'; frame-ancestors 'self'" },
+        // No page calls getUserMedia or geolocation (selfies come through a file input, which this
+        // header does not govern). The camera stays available to our own origin for the planned
+        // identity check. `payment` is left alone: the Toss widget runs in its own cross-origin frame.
+        { key: 'Permissions-Policy', value: 'camera=(self), microphone=(), geolocation=()' },
       ] },
+      // Files under /public are served `max-age=0, must-revalidate` by default, so every visit
+      // re-asks for each landing image, reel clip and font file (the brands page alone has 55).
+      // Their names carry no content hash, so they cannot be `immutable`: an hour in the browser,
+      // then a background refresh for a day. A replaced clip is at most an hour stale. Font subset
+      // files change only with a font upgrade.
+      { source: '/reel/:path*', headers: [{ key: 'Cache-Control', value: 'public, max-age=3600, stale-while-revalidate=86400' }] },
+      { source: '/images/:path*', headers: [{ key: 'Cache-Control', value: 'public, max-age=3600, stale-while-revalidate=86400' }] },
+      { source: '/fonts/:path*', headers: [{ key: 'Cache-Control', value: 'public, max-age=2592000, stale-while-revalidate=31536000' }] },
       { source: '/workers/photo-advice-v1.js', headers: [
         { key: 'Content-Security-Policy', value: "default-src 'none'; script-src 'self' 'wasm-unsafe-eval'; connect-src 'self'" },
         { key: 'Cache-Control', value: 'no-cache' },

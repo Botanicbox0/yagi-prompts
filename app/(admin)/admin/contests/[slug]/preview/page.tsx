@@ -1,4 +1,5 @@
 import { notFound } from 'next/navigation';
+import { requireAdmin } from '@/lib/auth/viewer';
 import { getContestPreview } from '@/lib/contests/facade';
 import { getDictionary } from '@/lib/i18n/dictionaries';
 import { getLocaleFromHeaders } from '@/lib/i18n/server';
@@ -34,6 +35,9 @@ export default async function AdminContestPreviewPage({
 }: {
   params: Promise<{ slug: string }>;
 }) {
+  // The layout's check is not enough on its own: a client navigation request can ask for this page
+  // segment alone, and then the layout does not run. Every admin page verifies the admin itself.
+  await requireAdmin();
   const [{ slug }, locale] = await Promise.all([params, getLocaleFromHeaders()]);
   const dict = getDictionary(locale);
   const result = await getContestPreview(slug);

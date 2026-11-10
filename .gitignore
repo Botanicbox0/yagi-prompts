@@ -23,3 +23,9 @@ coverage/
 
 # Generated pinned MediaPipe runtime (prepared before build/dev)
 /public/vendor/face-1.1.0/
+
+# Local working folders that are not part of the product
+/instagram uploader/
+/TEMP/
+/tmp/
+/.tmp/

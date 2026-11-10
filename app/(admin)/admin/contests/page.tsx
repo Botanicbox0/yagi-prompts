@@ -1,3 +1,4 @@
+import { requireAdmin } from '@/lib/auth/viewer';
 import { PublicLink } from '@/components/admin/public-link';
 import { getSqlRunner } from '@/lib/db/connect';
 import { getDictionary, type Dictionary } from '@/lib/i18n/dictionaries';
@@ -491,6 +492,9 @@ export default async function AdminContestsPage({
 }: {
   searchParams: Promise<SearchParams>;
 }) {
+  // The layout's check is not enough on its own: a client navigation request can ask for this page
+  // segment alone, and then the layout does not run. Every admin page verifies the admin itself.
+  await requireAdmin();
   const [locale, params, sql] = await Promise.all([
     getLocaleFromHeaders(),
     searchParams,

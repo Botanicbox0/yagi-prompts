@@ -1,5 +1,5 @@
 import { notFound } from "next/navigation";
-import { getViewer } from "@/lib/auth/viewer";
+import { getViewer, requireAdmin } from "@/lib/auth/viewer";
 import { getSqlRunner } from "@/lib/db/connect";
 import { getLocaleFromHeaders } from "@/lib/i18n/server";
 import { getDictionary } from "@/lib/i18n/dictionaries";
@@ -15,6 +15,9 @@ export default async function AdminParticipant({
   params: Promise<{ id: string }>;
   searchParams: Promise<Record<string, string | string[] | undefined>>;
 }) {
+  // The layout's check is not enough on its own: a client navigation request can ask for this page
+  // segment alone, and then the layout does not run. Every admin page verifies the admin itself.
+  await requireAdmin();
   const [{ id }, viewer, sql, locale, search] = await Promise.all([
     params,
     getViewer(),
