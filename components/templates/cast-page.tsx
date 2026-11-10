@@ -1,7 +1,7 @@
 import { notFound } from 'next/navigation';
 import type { Locale } from '@/lib/i18n/config';
 import { getDictionary } from '@/lib/i18n/dictionaries';
-import { coupleTemplatesOpen } from '@/lib/flags';
+import { coupleTemplatesOpen, petTemplatesOpen } from '@/lib/flags';
 import { castShelf, castShelfSize, type CastSection } from '@/lib/prompts/catalog';
 import { getPromptCatalog } from '@/lib/prompts/public-catalog';
 import { castRest } from '@/lib/prompts/links';
@@ -19,7 +19,7 @@ import { CastShelfSection } from './cast-shelf';
  * and, for couples, whenever `TWINGS_COUPLE_TEMPLATES` is off.
  */
 export async function CastPage({ locale, cast }: { locale: Locale; cast: CastSection }) {
-  if (cast === 'couple' && !coupleTemplatesOpen()) notFound();
+  if (cast === 'couple' ? !coupleTemplatesOpen() : !petTemplatesOpen()) notFound();
   const dict = getDictionary(locale);
   const catalog = await getPromptCatalog();
   const shelf = castShelf(catalog, cast);

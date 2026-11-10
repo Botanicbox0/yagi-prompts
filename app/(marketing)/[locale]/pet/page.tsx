@@ -2,7 +2,8 @@ import type { Metadata } from 'next';
 import { notFound } from 'next/navigation';
 import { DEFAULT_LOCALE, isLocale, type Locale } from '@/lib/i18n/config';
 import { getDictionary } from '@/lib/i18n/dictionaries';
-import { castListingMetadata } from '@/lib/seo/template-metadata';
+import { castListingMetadata, unresolvedTemplateMetadata } from '@/lib/seo/template-metadata';
+import { petTemplatesOpen } from '@/lib/flags';
 import { CastPage } from '@/components/templates/cast-page';
 
 /**
@@ -24,6 +25,7 @@ export async function generateMetadata({ params }: RouteParams): Promise<Metadat
   const { locale: raw } = await params;
   const locale = localeOf(raw);
   const dict = getDictionary(locale);
+  if (!petTemplatesOpen()) return unresolvedTemplateMetadata(dict.meta.siteName);
   return castListingMetadata({
     locale,
     cast: 'pet',

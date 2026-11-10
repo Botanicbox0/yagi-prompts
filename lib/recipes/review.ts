@@ -9,7 +9,7 @@ import { createRecipeSandboxRender } from '@/lib/renders/service';
 import { listMakerFiles, type MakerAsset } from './assets';
 import { quoteRecipe, type RecipeQuote } from './pricing';
 import { parseDisclosure, parsePresentation, recipeSchemaReady, type Disclosure, type Presentation } from './repo';
-import { parseRecipe, recipeMedium, type Recipe, type RecipeMedium } from './schema';
+import { parseRecipe, recipeCast, recipeMedium, type Recipe, type RecipeMedium } from './schema';
 
 /**
  * The studio's review of a maker recipe (docs/PLATFORM-2.0.md §7.4, §18 R1): three review renders
@@ -59,6 +59,9 @@ export async function startReviewRenders(deps: { sql: SqlRunner; store: RenderSt
     demand(row.status === 'submitted', 'conflict');
     const checked = parseRecipe(row.recipe_v2);
     demand(checked.ok, 'recipe_invalid');
+    // docs/CAST-CATEGORIES.md §3: review renders send studio faces only; a pet or couple recipe would fail
+    // every one of them ("user slot pet is missing"), so it is refused before any render is made.
+    demand(recipeCast(checked.recipe) === 'solo', 'cast_test_unavailable');
     const renderIds: string[] = [];
     for (const face of faces) {
       const created = await createRecipeSandboxRender({ sql: tx, store: deps.store }, { userId: viewer.userId!, locale: viewer.locale ?? null, formatId: input.id, purpose: 'studio_review', recipe: checked.recipe, photo: face, selfieId: face.selfieId });

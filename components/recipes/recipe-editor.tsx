@@ -33,13 +33,18 @@ const ACTIONS = '/api/makers/formats';
 const PENDING = new Set(['held', 'queued', 'running']);
 const escape = (value: string) => value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 
-export function RecipeEditor({ copy, formatId, draft, engines, aspects, hasSelfie, selfieHref, workspaceHref, testLimit, revisionOf, locale, selfPublish = false, company = false }: {
+export function RecipeEditor({ copy, formatId, draft, engines, aspects, hasSelfie, selfieHref, workspaceHref, testLimit, revisionOf, locale, selfPublish = false, company = false, casts = ['solo'] }: {
   copy: Copy; formatId: string; draft: EditorDraft | null; engines: EngineOption[]; aspects: { image: string[]; video: string[] };
   hasSelfie: boolean; selfieHref: string; workspaceHref: string; testLimit: number; revisionOf?: string; locale: string;
   /** docs/PLATFORM-2.0.md §20.6 — the creative publishes it themself (no studio review in between). */
   selfPublish?: boolean;
   /** A studio-owned profile (`platform_creators.payout = 'company'`): its margin is the company's, so no earnings line. */
   company?: boolean;
+  /**
+   * docs/CAST-CATEGORIES.md §1 — the casts on offer, from the server's flags (`editorCasts`). Solo only by
+   * default; a closed cast is not offered (a draft already saved with one keeps showing it).
+   */
+  casts?: readonly EditorCast[];
 }) {
   const imageEngines = engines.filter((e) => e.kind === 'image'), videoEngines = engines.filter((e) => e.kind === 'video');
   const label = useMemo(() => ({
@@ -63,6 +68,7 @@ export function RecipeEditor({ copy, formatId, draft, engines, aspects, hasSelfi
   const [medium, setMedium] = useState<EditorMedium>(initial?.medium ?? 'video');
   // docs/CAST-CATEGORIES.md §1·§3: who is in it decides the customer's photo slots.
   const [cast, setCast] = useState<EditorCast>(initial?.cast ?? 'solo');
+  const offered = EDITOR_CASTS.filter((c) => c === 'solo' || casts.includes(c) || c === initial?.cast);
   const [steps, setSteps] = useState<StepState[]>(initial?.steps ?? [newStep('video')]);
   const [notes, setNotes] = useState<RecipeNotes>(initial?.notes ?? { intro: '', outro: '' });
   const [title, setTitle] = useState(draft?.title ?? '');
@@ -255,13 +261,13 @@ export function RecipeEditor({ copy, formatId, draft, engines, aspects, hasSelfi
               <input type="radio" name="medium" value={m} checked={medium === m} onChange={() => changeMedium(m)} className="sr-only" />{m === 'video' ? copy.mediumVideo : m === 'image' ? copy.mediumImage : copy.mediumCarousel}
             </label>)}</div>
           </div>
-          <div role="radiogroup" aria-label={copy.cast} data-recipe-cast-picker className="space-y-2">
+          {offered.length > 1 ? <div role="radiogroup" aria-label={copy.cast} data-recipe-cast-picker className="space-y-2">
             <p className="text-sm">{copy.cast}</p>
-            <div className="flex flex-wrap gap-2">{EDITOR_CASTS.map((c) => <label key={c} data-recipe-cast={c} className={`inline-flex min-h-11 cursor-pointer items-center rounded-full border px-4 text-sm ${cast === c ? 'border-accent text-accent' : 'border-hairline'}`}>
+            <div className="flex flex-wrap gap-2">{offered.map((c) => <label key={c} data-recipe-cast={c} className={`inline-flex min-h-11 cursor-pointer items-center rounded-full border px-4 text-sm ${cast === c ? 'border-accent text-accent' : 'border-hairline'}`}>
               <input type="radio" name="cast" value={c} checked={cast === c} onChange={() => setCast(c)} className="sr-only" />{c === 'solo' ? copy.castSolo : c === 'pet' ? copy.castPet : c === 'pet_with_me' ? copy.castPetWithMe : copy.castCouple}
             </label>)}</div>
             <span className={HINT}>{copy.castHint}</span>
-          </div>
+          </div> : null}
         </section>
 
         <section data-recipe-files className={PANEL}>
@@ -418,6 +424,10 @@ type Labels = { selfie: string; pet?: string; partner?: string; reference: (n: n
 /** docs/CAST-CATEGORIES.md §3 — the four shapes a creative picks from; each fixes the customer's photo slots. */
 export const EDITOR_CASTS = ['solo', 'pet', 'pet_with_me', 'couple'] as const;
 export type EditorCast = (typeof EDITOR_CASTS)[number];
+/** The casts a creative may pick, by the server's flags (pet and couple templates stay off until opened). */
+export function editorCasts(open: { pet: boolean; couple: boolean }): EditorCast[] {
+  return EDITOR_CASTS.filter((c) => c === 'solo' || (c === 'couple' ? open.couple : open.pet));
+}
 const USER_SLOT = { kind: 'image', source: 'user', required: true } as const;
 function castSlots(cast: EditorCast): Array<[string, Record<string, unknown>]> {
   if (cast === 'pet') return [[PET_SLOT, { ...USER_SLOT, role: 'pet' }]];

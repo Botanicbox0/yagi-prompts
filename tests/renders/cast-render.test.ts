@@ -34,6 +34,8 @@ let PET: { bytes: Uint8Array; mime: string };
 let FACE: { bytes: Uint8Array; mime: string };
 let PARTNER: { bytes: Uint8Array; mime: string };
 const VIDEO = new Uint8Array([0x00, 0x00, 0x00, 0x18, 0x66, 0x74, 0x79, 0x70]);
+/** The person check answers "a pet, no person" — its own behaviour is pinned in pet-photo-check.test.ts. */
+const PET_OK = async () => ({ ok: true }) as const;
 
 async function jpeg(r: number, g: number, b: number) {
   const data = await sharp({ create: { width: 400, height: 500, channels: 3, background: { r, g, b } } }).jpeg().withMetadata({ exif: { IFD0: { Make: 'PhoneCo' } } }).toBuffer();
@@ -79,6 +81,7 @@ describe('pet and couple renders', () => {
     root = await mkdtemp(join(tmpdir(), 'twings-cast-'));
     const local = createLocalRenderStore(root);
     store = { ...local, url: async () => 'https://store.test/object' };
+    vi.stubEnv('TWINGS_PET_TEMPLATES', 'on');
   });
   afterEach(async () => {
     vi.unstubAllEnvs();
@@ -107,7 +110,7 @@ describe('pet and couple renders', () => {
     it('a pet-only template takes the pet as its one photo: no selfie, no face check, no face asset', async () => {
       const slug = await template('pet', petOnly);
       // Liveness mode with nobody verified: a person template would be held. A pet is not.
-      const created = await createRenderJob({ sql: h.sql, store, mode: 'liveness' }, ADMIN_VIEWER, { templateSlug: slug, aspect: '4:5', photo: PET, locale: 'ko' });
+      const created = await createRenderJob({ sql: h.sql, store, mode: 'liveness', petCheck: PET_OK }, ADMIN_VIEWER, { templateSlug: slug, aspect: '4:5', photo: PET, locale: 'ko' });
       expect(created).toMatchObject({ ok: true, held: false });
       if (!created.ok) return;
       const log: Array<{ prompt: string; references: number }> = [];
@@ -122,7 +125,7 @@ describe('pet and couple renders', () => {
 
     it('…its photo is stripped of metadata and deleted once the render is finished', async () => {
       const slug = await template('pet', petOnly);
-      const created = await createRenderJob({ sql: h.sql, store, mode: 'virtual' }, ADMIN_VIEWER, { templateSlug: slug, aspect: '4:5', photo: PET, locale: 'ko' });
+      const created = await createRenderJob({ sql: h.sql, store, mode: 'virtual', petCheck: PET_OK }, ADMIN_VIEWER, { templateSlug: slug, aspect: '4:5', photo: PET, locale: 'ko' });
       if (!created.ok) throw new Error(created.code);
       const job = (await loadRenderJob(h.sql, created.id))!;
       const stored = await store.read(job.inputKey!);
@@ -135,7 +138,7 @@ describe('pet and couple renders', () => {
 
     it('a pet photo still goes through the provider’s moderation: a refusal fails the job', async () => {
       const slug = await template('pet', petOnly);
-      const created = await createRenderJob({ sql: h.sql, store, mode: 'virtual' }, ADMIN_VIEWER, { templateSlug: slug, aspect: '4:5', photo: PET, locale: 'ko' });
+      const created = await createRenderJob({ sql: h.sql, store, mode: 'virtual', petCheck: PET_OK }, ADMIN_VIEWER, { templateSlug: slug, aspect: '4:5', photo: PET, locale: 'ko' });
       if (!created.ok) throw new Error(created.code);
       const openai = fakeOpenAi([], () => new OpenAiImageError('Your request was rejected by the safety system.', 400, 'moderation_blocked', 'invalid_request_error'));
       const report = await runRenderPass(deps({ openai }), { jobId: created.id });
@@ -145,7 +148,7 @@ describe('pet and couple renders', () => {
 
     it('a pet film sends the pet to the video engine as a plain reference, never as a face asset', async () => {
       const slug = await template('pet', { version: 2, slots: { pet }, steps: [{ id: 'run', kind: 'video', engine: 'seedance-2.5', inputs: ['pet'], prompt: 'The dog from {{pet}} runs along a beach at dawn.', params: { aspect: '9:16', duration: 10, resolution: '720p' } }], output: { from: 'run' } }, 'video');
-      const created = await createRenderJob({ sql: h.sql, store, mode: 'virtual' }, ADMIN_VIEWER, { templateSlug: slug, aspect: '9:16', photo: PET, locale: 'ko' });
+      const created = await createRenderJob({ sql: h.sql, store, mode: 'virtual', petCheck: PET_OK }, ADMIN_VIEWER, { templateSlug: slug, aspect: '9:16', photo: PET, locale: 'ko' });
       if (!created.ok) throw new Error(created.code);
       const calls: CreateVideoTaskInput[] = [];
       let state = task('running');
@@ -162,8 +165,8 @@ describe('pet and couple renders', () => {
 
     it('a person + pet template needs both photos, and only the selfie is the face', async () => {
       const slug = await template('pet', personAndPet);
-      expect(await createRenderJob({ sql: h.sql, store, mode: 'virtual' }, ADMIN_VIEWER, { templateSlug: slug, aspect: '4:5', photo: FACE, locale: 'ko' })).toEqual({ ok: false, code: 'slot_missing' });
-      const created = await createRenderJob({ sql: h.sql, store, mode: 'virtual' }, ADMIN_VIEWER, { templateSlug: slug, aspect: '4:5', photo: FACE, locale: 'ko', slots: { pet: PET } });
+      expect(await createRenderJob({ sql: h.sql, store, mode: 'virtual', petCheck: PET_OK }, ADMIN_VIEWER, { templateSlug: slug, aspect: '4:5', photo: FACE, locale: 'ko' })).toEqual({ ok: false, code: 'slot_missing' });
+      const created = await createRenderJob({ sql: h.sql, store, mode: 'virtual', petCheck: PET_OK }, ADMIN_VIEWER, { templateSlug: slug, aspect: '4:5', photo: FACE, locale: 'ko', slots: { pet: PET } });
       if (!created.ok) throw new Error(created.code);
       const log: Array<{ prompt: string; references: number }> = [];
       await runRenderPass(deps({ openai: fakeOpenAi(log) }), { jobId: created.id });
@@ -177,13 +180,31 @@ describe('pet and couple renders', () => {
 
     it('a pet-only job never carries a saved selfie', async () => {
       const slug = await template('pet', petOnly);
-      expect(await createRenderJob({ sql: h.sql, store, mode: 'virtual' }, ADMIN_VIEWER, { templateSlug: slug, aspect: '4:5', photo: FACE, selfieId: randomUUID(), locale: 'ko' })).toEqual({ ok: false, code: 'bad_photo' });
+      expect(await createRenderJob({ sql: h.sql, store, mode: 'virtual', petCheck: PET_OK }, ADMIN_VIEWER, { templateSlug: slug, aspect: '4:5', photo: FACE, selfieId: randomUUID(), locale: 'ko' })).toEqual({ ok: false, code: 'bad_photo' });
+    });
+
+    it('with the pet flag off a pet template does not exist', async () => {
+      vi.stubEnv('TWINGS_PET_TEMPLATES', '');
+      const slug = await template('pet', petOnly);
+      expect(await createRenderJob({ sql: h.sql, store, mode: 'virtual', petCheck: PET_OK }, ADMIN_VIEWER, { templateSlug: slug, aspect: '4:5', photo: PET, locale: 'ko' })).toEqual({ ok: false, code: 'not_found' });
+    });
+
+    it('a person in the pet slot is refused before anything is stored — and so is an unchecked photo', async () => {
+      const slug = await template('pet', petOnly);
+      const person = async () => ({ ok: false, reason: 'person' }) as const;
+      const unchecked = async () => ({ ok: false, reason: 'unchecked' }) as const;
+      expect(await createRenderJob({ sql: h.sql, store, mode: 'virtual', petCheck: person }, ADMIN_VIEWER, { templateSlug: slug, aspect: '4:5', photo: FACE, locale: 'ko' })).toEqual({ ok: false, code: 'not_a_pet' });
+      expect(await createRenderJob({ sql: h.sql, store, mode: 'virtual', petCheck: unchecked }, ADMIN_VIEWER, { templateSlug: slug, aspect: '4:5', photo: PET, locale: 'ko' })).toEqual({ ok: false, code: 'pet_check_unavailable' });
+      const both = await template('pet', personAndPet);
+      expect(await createRenderJob({ sql: h.sql, store, mode: 'virtual', petCheck: person }, ADMIN_VIEWER, { templateSlug: both, aspect: '4:5', photo: FACE, locale: 'ko', slots: { pet: FACE } })).toEqual({ ok: false, code: 'not_a_pet' });
+      expect((await h.sql.query<{ n: number }>('select count(*)::int as n from render_slot_inputs')).rows[0]!.n).toBe(0);
+      expect((await h.sql.query<{ n: number }>('select count(*)::int as n from render_jobs')).rows[0]!.n).toBe(0);
     });
 
     it('a pet template without a matching recipe cannot be made', async () => {
-      expect(await createRenderJob({ sql: h.sql, store, mode: 'virtual' }, ADMIN_VIEWER, { templateSlug: await template('pet', null), aspect: '4:5', photo: PET, locale: 'ko' })).toEqual({ ok: false, code: 'not_for_sale' });
+      expect(await createRenderJob({ sql: h.sql, store, mode: 'virtual', petCheck: PET_OK }, ADMIN_VIEWER, { templateSlug: await template('pet', null), aspect: '4:5', photo: PET, locale: 'ko' })).toEqual({ ok: false, code: 'not_for_sale' });
       // A solo-marked template whose recipe takes a pet is an authoring mistake, not a guess.
-      expect(await createRenderJob({ sql: h.sql, store, mode: 'virtual' }, ADMIN_VIEWER, { templateSlug: await template('solo', petOnly), aspect: '4:5', photo: PET, locale: 'ko' })).toEqual({ ok: false, code: 'not_for_sale' });
+      expect(await createRenderJob({ sql: h.sql, store, mode: 'virtual', petCheck: PET_OK }, ADMIN_VIEWER, { templateSlug: await template('solo', petOnly), aspect: '4:5', photo: PET, locale: 'ko' })).toEqual({ ok: false, code: 'not_for_sale' });
     });
   });
 
@@ -191,20 +212,20 @@ describe('pet and couple renders', () => {
     it('with the flag off a couple template does not exist, partner photo or not', async () => {
       vi.stubEnv('TWINGS_COUPLE_TEMPLATES', '');
       const slug = await template('couple', couple);
-      expect(await createRenderJob({ sql: h.sql, store, mode: 'virtual' }, ADMIN_VIEWER, { templateSlug: slug, aspect: '4:5', photo: FACE, locale: 'ko', slots: { partner: PARTNER }, partnerConsent: true })).toEqual({ ok: false, code: 'not_found' });
+      expect(await createRenderJob({ sql: h.sql, store, mode: 'virtual', petCheck: PET_OK }, ADMIN_VIEWER, { templateSlug: slug, aspect: '4:5', photo: FACE, locale: 'ko', slots: { partner: PARTNER }, partnerConsent: true })).toEqual({ ok: false, code: 'not_found' });
     });
 
     it('with the flag on: the partner needs the uploader’s confirmation', async () => {
       vi.stubEnv('TWINGS_COUPLE_TEMPLATES', 'on');
       const slug = await template('couple', couple);
-      expect(await createRenderJob({ sql: h.sql, store, mode: 'virtual' }, ADMIN_VIEWER, { templateSlug: slug, aspect: '4:5', photo: FACE, locale: 'ko' })).toEqual({ ok: false, code: 'slot_missing' });
-      expect(await createRenderJob({ sql: h.sql, store, mode: 'virtual' }, ADMIN_VIEWER, { templateSlug: slug, aspect: '4:5', photo: FACE, locale: 'ko', slots: { partner: PARTNER } })).toEqual({ ok: false, code: 'partner_consent_required' });
+      expect(await createRenderJob({ sql: h.sql, store, mode: 'virtual', petCheck: PET_OK }, ADMIN_VIEWER, { templateSlug: slug, aspect: '4:5', photo: FACE, locale: 'ko' })).toEqual({ ok: false, code: 'slot_missing' });
+      expect(await createRenderJob({ sql: h.sql, store, mode: 'virtual', petCheck: PET_OK }, ADMIN_VIEWER, { templateSlug: slug, aspect: '4:5', photo: FACE, locale: 'ko', slots: { partner: PARTNER } })).toEqual({ ok: false, code: 'partner_consent_required' });
     });
 
     it('…the partner never joins the identity group, and the photo is deleted after the render', async () => {
       vi.stubEnv('TWINGS_COUPLE_TEMPLATES', 'on');
       const slug = await template('couple', couple);
-      const created = await createRenderJob({ sql: h.sql, store, mode: 'virtual' }, ADMIN_VIEWER, { templateSlug: slug, aspect: '4:5', photo: FACE, locale: 'ko', slots: { partner: PARTNER }, partnerConsent: true });
+      const created = await createRenderJob({ sql: h.sql, store, mode: 'virtual', petCheck: PET_OK }, ADMIN_VIEWER, { templateSlug: slug, aspect: '4:5', photo: FACE, locale: 'ko', slots: { partner: PARTNER }, partnerConsent: true });
       if (!created.ok) throw new Error(created.code);
       const consent = await h.sql.query<{ partner_consent_at: Date | null }>("select partner_consent_at from render_slot_inputs where render_id=$1 and slot='partner'", [created.id]);
       expect(consent.rows[0]!.partner_consent_at).not.toBeNull();
@@ -220,7 +241,7 @@ describe('pet and couple renders', () => {
     it('…and a failed render deletes it too', async () => {
       vi.stubEnv('TWINGS_COUPLE_TEMPLATES', 'on');
       const slug = await template('couple', couple);
-      const created = await createRenderJob({ sql: h.sql, store, mode: 'virtual' }, ADMIN_VIEWER, { templateSlug: slug, aspect: '4:5', photo: FACE, locale: 'ko', slots: { partner: PARTNER }, partnerConsent: true });
+      const created = await createRenderJob({ sql: h.sql, store, mode: 'virtual', petCheck: PET_OK }, ADMIN_VIEWER, { templateSlug: slug, aspect: '4:5', photo: FACE, locale: 'ko', slots: { partner: PARTNER }, partnerConsent: true });
       if (!created.ok) throw new Error(created.code);
       const openai = fakeOpenAi([], () => new OpenAiImageError('Your request was rejected by the safety system.', 400, 'moderation_blocked', 'invalid_request_error'));
       await runRenderPass(deps({ openai }), { jobId: created.id });
@@ -234,6 +255,9 @@ describe('pet and couple renders', () => {
     const renderRef = randomUUID();
     await storeSlotPhotos(h.sql, store, { renderId: renderRef, userId: ADMIN_VIEWER.userId!, templateId: rows[0]!.id, photos: { pet: PET }, partnerConsentAt: null, now: NOW });
     expect(await deleteSpentSlotPhotos(h.sql, store, new Date(NOW.getTime() + 60_000))).toBe(0);
+    // Deleting the template must not delete the row the sweep reads (no cascade), or the file is orphaned.
+    await h.sql.query('delete from prompt_items where id=$1', [rows[0]!.id]);
+    expect((await h.sql.query<{ n: number }>('select count(*)::int as n from render_slot_inputs where render_id=$1', [renderRef])).rows[0]!.n).toBe(1);
     expect(await deleteSpentSlotPhotos(h.sql, store, new Date(NOW.getTime() + (UNCLAIMED_SLOT_HOURS + 1) * 3_600_000))).toBe(1);
     expect(await exists(`${renderRef}/slot-pet.jpg`)).toBe(false);
   });

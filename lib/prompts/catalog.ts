@@ -160,6 +160,8 @@ export interface PromptCatalogOptions {
    * show one: the catalogue is the one filter every public surface reads.
    */
   coupleOpen?: boolean;
+  /** `petTemplatesOpen()` — the same rule for pet templates (docs/CAST-CATEGORIES.md §3). */
+  petOpen?: boolean;
 }
 
 /** A card's cast, `solo` when the card predates the field. */
@@ -276,7 +278,7 @@ export async function loadPromptCatalog(
   const openRecipes = await loadOpenRecipeIds(sql);
   const makerHandles = new Map(makerRows.map((maker) => [maker.userId, maker.handle]));
   const cards = rows
-    .filter((row) => row.cast !== 'couple' || options.coupleOpen === true)
+    .filter((row) => (row.cast !== 'couple' || options.coupleOpen === true) && (row.cast !== 'pet' || options.petOpen === true))
     .map((row) => toPromptCard(row, options, makerHandles, openRecipes));
 
   // The two rails are by ORIGIN: a maker's template is a `source='yagi'` row too (0046).

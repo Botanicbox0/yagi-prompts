@@ -1,6 +1,6 @@
 import sharp from 'sharp';
 import type { SqlRunner } from '@/lib/db/sql-runner';
-import { coupleTemplatesOpen } from '@/lib/flags';
+import { coupleTemplatesOpen, petTemplatesOpen } from '@/lib/flags';
 import type { PromptRow } from '@/lib/prompts/repo';
 import type { TemplateCast } from '@/lib/prompts/schemas';
 import { loadTemplateRecipe } from '@/lib/recipes/repo';
@@ -37,9 +37,11 @@ export interface CastMakeInputs {
 
 const SOLO: Omit<CastMakeInputs, 'cast'> = { selfie: true, pet: false, partner: false };
 
-/** Couples exist only while their flag is on (docs/CAST-CATEGORIES.md §4). Solo and pet are always open. */
+/** Pets and couples exist only while their flag is on (docs/CAST-CATEGORIES.md §3·§4). Solo is always open. */
 export function castOpen(cast: TemplateCast, env: Record<string, string | undefined> = process.env): boolean {
-  return cast !== 'couple' || coupleTemplatesOpen(env);
+  if (cast === 'couple') return coupleTemplatesOpen(env);
+  if (cast === 'pet') return petTemplatesOpen(env);
+  return true;
 }
 
 /**

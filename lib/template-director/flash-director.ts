@@ -335,7 +335,8 @@ interface GeminiCandidateResponse {
   }>;
 }
 
-async function callGeminiStructuredJson<T>(
+/** Also used by lib/renders/pet-photo-check.ts (docs/CAST-CATEGORIES.md §3) — one Gemini JSON call, one shape. */
+export async function callGeminiStructuredJson<T>(
   config: DirectorConfig,
   fetchImpl: typeof fetch,
   systemText: string,

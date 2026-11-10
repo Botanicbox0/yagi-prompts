@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { createElement } from 'react';
-import { EDITOR_CASTS, castTokens, fromRecipe, toRecipe } from '@/components/recipes/recipe-editor';
+import { EDITOR_CASTS, castTokens, editorCasts, fromRecipe, toRecipe } from '@/components/recipes/recipe-editor';
 import { PromptFields } from '@/components/admin/prompt-fields';
 import { getDictionary } from '@/lib/i18n/dictionaries';
 import { loadPromptBySlug } from '@/lib/prompts/repo';
@@ -33,6 +33,12 @@ describe('the creative’s recipe editor', () => {
       expect(back?.steps[0]!.text).toBe(prompts[cast]);
     });
   }
+
+  it('offers only the casts whose flag is open; solo always', () => {
+    expect(editorCasts({ pet: false, couple: false })).toEqual(['solo']);
+    expect(editorCasts({ pet: true, couple: false })).toEqual(['solo', 'pet', 'pet_with_me']);
+    expect(editorCasts({ pet: false, couple: true })).toEqual(['solo', 'couple']);
+  });
 
   it('offers the insert buttons of the chosen cast only', () => {
     expect(castTokens('solo', label)).toEqual(['[내 사진]']);

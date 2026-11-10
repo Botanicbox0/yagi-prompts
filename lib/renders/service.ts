@@ -68,7 +68,8 @@ import {
   castOpen, cleanSlotPhoto, deleteSpentSlotPhotos, extraSlots, liveSlotRows, loadSlotPhotos, makeInputsFrom, petIsPrimary,
   recordPrimaryPetPhoto, storeSlotPhotos, type CastSlot, type SlotPhoto,
 } from './cast-inputs';
-import { PARTNER_SLOT } from '@/lib/recipes/schema';
+import { PARTNER_SLOT, PET_SLOT } from '@/lib/recipes/schema';
+import { checkPetPhoto, petRefusal, type PetPhotoVerdict } from './pet-photo-check';
 
 /**
  * The render queue (docs/TEMPLATES-IA.md §8): enqueue, run, tell, show.
@@ -117,6 +118,8 @@ export interface RenderServiceDeps {
   now?: Date;
   /** Which asset library a photo goes through (lib/flags.ts); tests pin it, production reads the flag. */
   mode?: AssetLibraryMode;
+  /** docs/CAST-CATEGORIES.md §3 — the "is this really a pet" check; tests inject it, production calls Gemini. */
+  petCheck?: (photo: SlotPhoto) => Promise<PetPhotoVerdict>;
 }
 
 export interface CreateCampaignRenderInput {
@@ -183,7 +186,11 @@ export type CreateRenderFailure =
   /** The pet or partner photo is not a usable image. */
   | 'bad_slot_photo'
   /** A couple template: the uploader did not confirm the partner agreed. */
-  | 'partner_consent_required';
+  | 'partner_consent_required'
+  /** The pet photo shows a person, or no animal (lib/renders/pet-photo-check.ts). */
+  | 'not_a_pet'
+  /** The pet check could not run; fail-closed, so the photo is refused. */
+  | 'pet_check_unavailable';
 
 /** `held`: stored and waiting for the person's face check — the studio sends them there and the job starts itself afterwards. */
 export type CreateRenderOutcome = { ok: true; id: string; held: boolean } | { ok: false; code: CreateRenderFailure };
@@ -379,6 +386,12 @@ async function createAuthorizedRender(deps: RenderServiceDeps, viewer: Viewer, i
     // A pet-only job never carries the buyer's face: a saved selfie posted here is the wrong photo.
     if (input.selfieId) return { ok: false, code: 'bad_photo' };
     try { primary = await cleanSlotPhoto(input.photo); } catch { return { ok: false, code: 'bad_photo' }; }
+    // A paid render's pet was checked when its order was made (lib/renders/cast-form.ts); a photo posted
+    // straight here is checked now. A person in the pet slot would skip every face rule.
+    if (reservedId === undefined) {
+      const refused = petRefusal(await (deps.petCheck ?? checkPetPhoto)(primary));
+      if (refused) return { ok: false, code: refused };
+    }
   }
   const slotPhotos: Partial<Record<CastSlot, SlotPhoto>> = {};
   const needed = extraSlots(makeInputs);
@@ -389,6 +402,10 @@ async function createAuthorizedRender(deps: RenderServiceDeps, viewer: Viewer, i
       const given = input.slots?.[slot];
       if (given) {
         try { slotPhotos[slot] = await cleanSlotPhoto(given); } catch { return { ok: false, code: 'bad_slot_photo' }; }
+        if (slot === PET_SLOT) {
+          const refused = petRefusal(await (deps.petCheck ?? checkPetPhoto)(slotPhotos[slot]!));
+          if (refused) return { ok: false, code: refused };
+        }
       } else if (!bound.some((row) => row.slot === slot)) return { ok: false, code: 'slot_missing' };
     }
     if (needed.includes(PARTNER_SLOT)) {

@@ -7,6 +7,7 @@ import {
   TOSS_HEADERS,
 } from '@/lib/billing/toss-runtime';
 import { retryTossOrder } from '@/lib/billing/toss-service';
+import { copyRetryPhotos, planRetryPhotos } from '@/lib/renders/cast-form';
 
 export const dynamic = 'force-dynamic';
 type Context = { params: Promise<{ id: string }> };
@@ -18,6 +19,7 @@ const STATUS: Record<string, number> = {
   not_found: 404,
   not_retryable: 409,
   photo_gone: 410,
+  photos_gone: 410,
   rate_limited: 429,
 };
 
@@ -34,7 +36,15 @@ export async function POST(request: Request, { params }: Context) {
   try {
     const deps = await getTossContext();
     if (!deps) return json({ ok: false, code: 'unavailable' }, 503);
-    const result = await retryTossOrder(deps, viewer, (await params).id);
+    const id = (await params).id;
+    // docs/CAST-CATEGORIES.md §3: a pet or couple order's second photo is bound to the old render_ref.
+    // A solo order (plan 'solo') goes straight to the retry, exactly as before.
+    const plan = await planRetryPhotos(deps.sql, viewer.userId, id);
+    if (plan.kind === 'refuse') return json({ ok: false, code: plan.code }, STATUS[plan.code] ?? 400);
+    const result = await retryTossOrder(deps, viewer, id);
+    if (result.ok && plan.kind === 'copy') {
+      await copyRetryPhotos(deps.sql, deps.store, { plan, newOrderId: result.order.id, userId: viewer.userId, now: new Date() });
+    }
     return result.ok
       ? json({ ok: true, href: `/billing/toss/${result.order.id}` }, 201)
       : json(result, STATUS[result.code] ?? 400);

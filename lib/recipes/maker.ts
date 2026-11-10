@@ -11,7 +11,7 @@ import { createRecipeSandboxRender } from '@/lib/renders/service';
 import { listMakerFiles, storeMakerFile, deleteMakerFiles, type MakerAsset } from './assets';
 import { isRoyalty, quoteRecipe, ROYALTY_DEFAULT_KRW } from './pricing';
 import { parseDisclosure, parsePresentation, recipeSchemaReady, type Disclosure, type Presentation } from './repo';
-import { MAX_RECIPE_BYTES, parseRecipe, recipeMedium, type Recipe, type RecipeIssue, type RecipeMedium } from './schema';
+import { MAX_RECIPE_BYTES, parseRecipe, recipeCast, recipeMedium, type Recipe, type RecipeIssue, type RecipeMedium } from './schema';
 import { selfPublishFormat, selfPublishOpen } from './self-publish';
 
 /**
@@ -177,6 +177,9 @@ export async function makerAction(deps: { sql: SqlRunner; store: RenderStore; st
     const row = await ownFormat(tx, userId, input.id, true);
     demand(row.status === 'draft' || row.status === 'submitted', 'conflict');
     const { recipe } = await checkedRecipe(tx, row);
+    // docs/CAST-CATEGORIES.md §3: a test render sends only the maker's own selfie. A pet or couple recipe
+    // also needs the pet or partner photo, so it is refused here — before a test render is counted.
+    demand(recipeCast(recipe) === 'solo', 'cast_test_unavailable');
     const used = await tx.query<{ n: number }>("update platform_formats set test_renders_used=test_renders_used+1 where id=$1 and test_renders_used<$2 returning test_renders_used n", [row.id, MAKER_TEST_RENDERS]);
     demand(used.rows.length, 'test_limit');
     const selfieId = input.selfieId ?? (await currentSelfie(tx, userId))?.id;

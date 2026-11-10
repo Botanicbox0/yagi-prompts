@@ -3,7 +3,7 @@ import { castShelf, castShelfSize, landingPromptCards, loadPromptCatalog, soloCa
 import { loadPromptBySlug, setPromptCast } from '@/lib/prompts/repo';
 import { isTemplateCast, toTemplateCast } from '@/lib/prompts/schemas';
 import { buildSitemap } from '@/lib/seo/sitemap';
-import { coupleTemplatesOpen } from '@/lib/flags';
+import { coupleTemplatesOpen, petTemplatesOpen } from '@/lib/flags';
 import { seedPrompts } from '../../scripts/seed';
 import { CAST_PROMPT_FIXTURES } from '../../scripts/cast-fixtures';
 import { promptHarness, type PromptHarness } from '../helpers/prompts';
@@ -32,7 +32,7 @@ describe('the catalogue by cast', () => {
   });
 
   it('couples off: the projection holds no couple template at all', async () => {
-    const catalog = await loadPromptCatalog(h.sql, { publicUrl: () => null });
+    const catalog = await loadPromptCatalog(h.sql, { publicUrl: () => null, petOpen: true });
     const all = [...catalog.video, ...catalog.image, ...catalog.yagi, ...catalog.community];
     expect(all.some((card) => card.cast === 'couple')).toBe(false);
     expect(castShelfSize(castShelf(catalog, 'couple'))).toBe(0);
@@ -42,21 +42,31 @@ describe('the catalogue by cast', () => {
     expect(sitemap.some((entry) => entry.url.endsWith('/ko/pet'))).toBe(true);
   });
 
-  it('the flag is off unless the environment says exactly "on"', () => {
+  it('pets off: the projection holds no pet template, and the sitemap no pet page', async () => {
+    const catalog = await loadPromptCatalog(h.sql, { publicUrl: () => null });
+    expect([...catalog.video, ...catalog.image].some((card) => card.cast === 'pet')).toBe(false);
+    const sitemap = buildSitemap({ origin: 'https://twings.test', cards: [], templates: [...catalog.video, ...catalog.image] });
+    expect(sitemap.some((entry) => entry.url.includes('/pet') || entry.url.includes('sample-pet'))).toBe(false);
+  });
+
+  it('the flags are off unless the environment says exactly "on"', () => {
+    expect(petTemplatesOpen({})).toBe(false);
+    expect(petTemplatesOpen({ TWINGS_PET_TEMPLATES: '1' })).toBe(false);
+    expect(petTemplatesOpen({ TWINGS_PET_TEMPLATES: 'on' })).toBe(true);
     expect(coupleTemplatesOpen({})).toBe(false);
     expect(coupleTemplatesOpen({ TWINGS_COUPLE_TEMPLATES: 'true' })).toBe(false);
     expect(coupleTemplatesOpen({ TWINGS_COUPLE_TEMPLATES: 'on' })).toBe(true);
   });
 
   it('couples on: their shelf splits by medium like every other', async () => {
-    const catalog = await loadPromptCatalog(h.sql, { publicUrl: () => null, coupleOpen: true });
+    const catalog = await loadPromptCatalog(h.sql, { publicUrl: () => null, coupleOpen: true, petOpen: true });
     const shelf = castShelf(catalog, 'couple');
     expect(shelf.video.map((card) => card.slug).sort()).toEqual(['sample-couple-rooftop', 'sample-couple-subway']);
     expect(shelf.image.map((card) => card.slug).sort()).toEqual(['sample-couple-photo-booth', 'sample-couple-umbrella']);
   });
 
   it('pets split into a video rail and an image rail, nothing else in them', async () => {
-    const catalog = await loadPromptCatalog(h.sql, { publicUrl: () => null });
+    const catalog = await loadPromptCatalog(h.sql, { publicUrl: () => null, petOpen: true });
     const shelf = castShelf(catalog, 'pet');
     expect(shelf.video.every((card) => card.medium === 'video' && card.cast === 'pet')).toBe(true);
     expect(shelf.image.every((card) => card.medium === 'image' && card.cast === 'pet')).toBe(true);
@@ -65,7 +75,7 @@ describe('the catalogue by cast', () => {
   });
 
   it('the home gallery and the medium tabs show only solo templates; the landing strip too', async () => {
-    const catalog = await loadPromptCatalog(h.sql, { publicUrl: () => null, coupleOpen: true });
+    const catalog = await loadPromptCatalog(h.sql, { publicUrl: () => null, coupleOpen: true, petOpen: true });
     const solo = soloCatalog(catalog);
     for (const list of [solo.video, solo.image, solo.yagi, solo.community]) expect(list.every((card) => (card.cast ?? 'solo') === 'solo')).toBe(true);
     expect(solo.image.map((card) => card.slug)).toEqual(['static-portrait-window-light']);

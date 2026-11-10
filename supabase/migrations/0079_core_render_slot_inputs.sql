@@ -15,6 +15,8 @@
 --   expires_at  the hard cap. Files go as soon as the render is finished (succeeded or failed); this
 --               catches a job that never finishes and an order that was never paid.
 --   deleted_at  when the file was removed; the row stays as the record that it existed and was removed.
+--   template_id which template it was for. Deliberately NO foreign key: a cascade would delete the row
+--               the deletion sweep reads before the file goes, leaving the file orphaned in the bucket.
 --
 -- Not an identity table: nothing here is registered with a provider's face library, and a pet photo
 -- is never face-checked. Provider moderation still applies to every image an engine receives.
@@ -23,7 +25,7 @@ create table if not exists render_slot_inputs (
   render_id uuid not null,
   slot text not null constraint render_slot_inputs_slot_known check (slot in ('pet', 'partner')),
   user_id uuid not null references auth.users (id) on delete cascade,
-  template_id uuid not null references prompt_items (id) on delete cascade,
+  template_id uuid not null,
   storage_key text not null,
   mime text not null constraint render_slot_inputs_mime_known check (mime in ('image/jpeg', 'image/png', 'image/webp')),
   partner_consent_at timestamptz,

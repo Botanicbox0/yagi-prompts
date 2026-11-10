@@ -5,7 +5,7 @@ import { resolveRuntimeMode } from '@/lib/runtime-mode';
 import { CATALOG_TTL_SECONDS, PROMPTS_TAG } from '@/lib/cache';
 import { getSqlRunner } from '@/lib/db/connect';
 import { readPublicProjection } from '@/lib/db/read-policy';
-import { coupleTemplatesOpen } from '@/lib/flags';
+import { coupleTemplatesOpen, petTemplatesOpen } from '@/lib/flags';
 import { EMPTY_PROMPT_CATALOG, loadPromptCatalog, type PromptCatalog } from './catalog';
 
 /**
@@ -23,7 +23,7 @@ import { EMPTY_PROMPT_CATALOG, loadPromptCatalog, type PromptCatalog } from './c
 
 async function readPromptCatalog(): Promise<PromptCatalog> {
   return readPublicProjection(await getSqlRunner(), EMPTY_PROMPT_CATALOG, (sql) =>
-    loadPromptCatalog(sql, { coupleOpen: coupleTemplatesOpen() }),
+    loadPromptCatalog(sql, { coupleOpen: coupleTemplatesOpen(), petOpen: petTemplatesOpen() }),
   );
 }
 
@@ -59,10 +59,10 @@ async function readPromptCatalog(): Promise<PromptCatalog> {
 /** 2026-10-29 (`v11-recipe-hub`): `PromptCard.recipeOpen`, `PublicMaker.bioEn`/`openRecipeCount`. */
 /** 2026-10-29 (`v12-creative-cover`): `PublicMaker` carries the 0065 profile (name, place, links, avatar…) and the 0071 cover; both addresses are `/creative-media/…`. */
 /** 2026-11-02 (`v13-remove-goldfish-daydream`): drop duplicate `aquarium-goldfish-daydream` from the catalog cache. */
-/** 2026-11-11 (`v14-cast`): `PromptCard.cast`; couple templates leave the projection while `TWINGS_COUPLE_TEMPLATES` is off (part of the key). */
+/** 2026-11-11 (`v14-cast`): `PromptCard.cast`; couple and pet templates leave the projection while their flag is off (both part of the key). */
 export const getPromptCatalog = unstable_cache(
   readPromptCatalog,
-  ['prompt-catalog', 'v14-cast', resolveRuntimeMode(), publicMediaCacheKey(), coupleTemplatesOpen() ? 'couple-on' : 'couple-off'],
+  ['prompt-catalog', 'v14-cast', resolveRuntimeMode(), publicMediaCacheKey(), coupleTemplatesOpen() ? 'couple-on' : 'couple-off', petTemplatesOpen() ? 'pet-on' : 'pet-off'],
   {
     tags: [PROMPTS_TAG],
     revalidate: CATALOG_TTL_SECONDS,

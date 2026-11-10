@@ -34,7 +34,7 @@ export async function POST(request: Request) {
     // person + pet) or the pet (pet-only) — and the second photo, if the template takes one.
     // A solo template keeps exactly the old rule: the saved selfie or `selfie_required`.
     const photos = await orderPhotos(deps.sql, deps.store, viewer.userId, form);
-    if (!photos.ok) return json({ ok: false, code: photos.code }, photos.code === 'not_found' ? 404 : 400);
+    if (!photos.ok) return json({ ok: false, code: photos.code }, photos.code === 'not_found' ? 404 : photos.code === 'pet_check_unavailable' ? 503 : 400);
     const result = await createTossOrder(deps, viewer, {
       templateSlug: String(form.get('template') ?? ''),
       aspect: String(form.get('aspect') ?? ''),

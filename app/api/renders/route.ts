@@ -45,6 +45,8 @@ const STATUS: Record<CreateRenderFailure, number> = {
   slot_missing: 400,
   bad_slot_photo: 400,
   partner_consent_required: 400,
+  not_a_pet: 400,
+  pet_check_unavailable: 503,
 };
 
 function json(body: unknown, status: number): NextResponse {

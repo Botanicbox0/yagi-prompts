@@ -1410,6 +1410,32 @@ async function sweepMakers(): Promise<void> {
  */
 async function sweepCastCategories(): Promise<void> {
   const couples = CAST_SENTINELS.filter((item) => item.cast === 'couple');
+  const pets = CAST_SENTINELS.filter((item) => item.cast === 'pet');
+  // Pets are off by default (TWINGS_PET_TEMPLATES): then they must not exist anywhere. Run the sweep
+  // against a server built and started with the flag on, plus SWEEP_PET_TEMPLATES=on, for the pet screens.
+  if (process.env.SWEEP_PET_TEMPLATES !== 'on') {
+    for (const locale of ['en', 'ko'] as const) {
+      console.log(`\n/${locale} — pets and couples off (the default)`);
+      const home = await get(`/${locale}`);
+      expectEqual('home renders 200', home.status, 200);
+      expectAbsent('no cast section at all', home.body, 'data-cast-home');
+      expectAbsent('…no door to the pet page', home.body, `href="/${locale}/pet"`);
+      for (const item of [...pets, ...couples]) expectAbsent(`…no ${item.slug} card`, home.body, item.slug);
+      expectEqual('the pet page is a 404', (await get(`/${locale}/pet`)).status, 404);
+      expectEqual('the couple page is a 404', (await get(`/${locale}/couple`)).status, 404);
+      for (const item of [...pets, ...couples]) expectEqual(`…and so is ${item.slug}`, (await get(`/${locale}/t/${item.slug}`)).status, 404);
+    }
+    for (const tab of ['/en/video', '/en/image']) {
+      const page = await get(tab);
+      expectAbsent(`${tab}: no cast rail`, page.body, 'data-cast-rail=');
+      for (const item of [...pets, ...couples]) expectAbsent(`${tab}: no ${item.slug} card`, page.body, item.slug);
+    }
+    const sitemap = await get('/sitemap.xml');
+    expectAbsent('the sitemap names no pet page', sitemap.body, '/pet<');
+    expectAbsent('…no couple page', sitemap.body, '/couple<');
+    expectAbsent('…and no sample pet or couple template', sitemap.body, 'sample-pet-');
+    return;
+  }
   for (const locale of ['en', 'ko'] as const) {
     console.log(`\n/${locale} — the pet section on the home, no couples`);
     const home = await get(`/${locale}`);

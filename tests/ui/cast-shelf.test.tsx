@@ -68,7 +68,14 @@ describe('cast shelves (docs/CAST-CATEGORIES.md §5)', () => {
     await expect(CastPage({ locale: 'ko', cast: 'couple' })).rejects.toThrow('NEXT_NOT_FOUND');
   });
 
-  it('the pet page is a 404 with no pet template; renders with one', async () => {
+  it('the pet page is a 404 while the pet flag is off, even with pet templates in hand', async () => {
+    vi.stubEnv('TWINGS_PET_TEMPLATES', '');
+    catalog.video = [card('pv1', 'video', 'pet')];
+    await expect(CastPage({ locale: 'ko', cast: 'pet' })).rejects.toThrow('NEXT_NOT_FOUND');
+  });
+
+  it('pets on: a 404 with no pet template; renders with one', async () => {
+    vi.stubEnv('TWINGS_PET_TEMPLATES', 'on');
     await expect(CastPage({ locale: 'ko', cast: 'pet' })).rejects.toThrow('NEXT_NOT_FOUND');
     catalog.video = [card('pv1', 'video', 'pet')];
     const html = renderToStaticMarkup(await CastPage({ locale: 'ko', cast: 'pet' }));
