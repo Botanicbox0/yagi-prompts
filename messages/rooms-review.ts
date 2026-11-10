@@ -227,7 +227,7 @@ export const roomsReviewKo: typeof roomsReviewEn = {
     project: '프로젝트',
     choose: '보기',
     file: '파일',
-    fileHint: '영상 200MB, 이미지 50MB까지. mp4·mov·png·jpg·webp 파일이에요.',
+    fileHint: '영상 200MB, 이미지 50MB까지. mp4·mov·png·jpg·webp만 돼요.',
     titleLabel: '제목',
     stack: '올리는 방식',
     stackNew: '새 시안',

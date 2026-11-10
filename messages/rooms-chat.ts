@@ -231,7 +231,7 @@ export const roomsChatKo: typeof roomsChatEn = {
     cut: '컷 {cut}',
     review: '시안',
     reviewVersion: '시안 v{version}',
-    note: '시안의 의견',
+    note: '시안 의견',
     unavailable: '더 이상 볼 수 없어요',
     open: '보기',
   },
