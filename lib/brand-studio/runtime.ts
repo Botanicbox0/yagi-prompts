@@ -6,6 +6,7 @@
 import type { SqlRunner } from '@/lib/db/sql-runner';
 import { getStorage } from '@/lib/storage';
 import { composeFallbackPrompt, enhancePrompt } from './enhancer';
+import { rewriteBlockedPrompt } from './enhancer/blocked';
 import { readFilm } from './film-sheet';
 import { compositeRegion, cropForEdit, planRegion } from './region-edit';
 import { advanceStudioJobsWith, sweepStudio } from './engine';
@@ -19,7 +20,7 @@ export function studioLog(event: string, detail: Record<string, unknown> = {}): 
   console.warn(`[brand-studio] ${event}`, JSON.stringify(detail).slice(0, 600));
 }
 
-const intel: StudioIntel = { enhancePrompt, composeFallbackPrompt, readFilm, planRegion, cropForEdit, compositeRegion };
+const intel: StudioIntel = { enhancePrompt, composeFallbackPrompt, readFilm, rewriteBlockedPrompt, planRegion, cropForEdit, compositeRegion };
 
 export async function studioRuntimeDeps(sql: SqlRunner, source: Record<string, string | undefined> = process.env): Promise<StudioDeps> {
   const env = studioEnv(source);

@@ -1607,6 +1607,7 @@ export const en = {
         finishing: 'Almost done',
       },
       canceled: 'Stopped before it finished.',
+      rejectedWithReferences: 'This could not be made. A reference photo or video may be the reason: material that clearly shows a person is sometimes not accepted.',
       cancel: 'Cancel',
       cancelLabel: 'Cancel this request',
       cancelLate: 'It has already started, so it cannot be stopped.',

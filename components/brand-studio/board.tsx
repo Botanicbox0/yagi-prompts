@@ -120,7 +120,8 @@ export function Board({ jobs: all, copy, locale, canCreate, canStop = false, sto
             )}
             {job.status === "failed" && (
               <div className="bs-job-note" data-state="failed">
-                <p>{errorLine(copy, job.errorCode)}</p>
+                {/* A block with attachments usually comes from the attachment, so say where to look. */}
+                <p>{job.errorCode === "provider_rejected" && job.references.length > 0 ? copy.board.rejectedWithReferences : errorLine(copy, job.errorCode)}</p>
                 {canCreate && (
                   <button type="button" className="bs-btn" data-variant="soft" data-size="sm" onClick={() => onRetry(job)}>
                     {c.retry}
