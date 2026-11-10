@@ -33,7 +33,8 @@ const labels = {
   creators: b.creatorPool.nav,
 };
 const scopeOf = (choice: BrandWorkspaceChoice): BrandWorkspaceScope => ({ choices: [choice], projectOrganizations: {} });
-const render = (choice: BrandWorkspaceChoice | null, rail: { studioV2?: boolean; withShell?: boolean } = {}) =>
+const rooms = getDictionary('ko').roomsShell.nav;
+const render = (choice: BrandWorkspaceChoice | null, rail: { studioV2?: boolean; withShell?: boolean; rooms?: boolean } = {}) =>
   renderToStaticMarkup(
     <WorkspaceNavigation
       {...labels}
@@ -41,6 +42,9 @@ const render = (choice: BrandWorkspaceChoice | null, rail: { studioV2?: boolean;
       studioV2={rail.studioV2}
       shell={rail.withShell === false ? undefined : shell}
       locale="ko"
+      // Project rooms (docs/BRAND-ROOMS.md §2): the room words travel only with the flag.
+      rooms={rail.rooms}
+      roomsCopy={rail.rooms ? rooms : undefined}
     />,
   );
 
@@ -57,6 +61,13 @@ const RAIL_ONLY = [
   'href="/brand/studio/video',
   'href="/brand/studio/review',
   shell.create.button,
+  // Project rooms: the groups, 메시지 and its address.
+  'data-rail-section',
+  'data-rail-item="messages"',
+  'href="/brand/rooms',
+  rooms.groupMake,
+  rooms.groupTeam,
+  rooms.messages,
 ];
 
 const sandboxedChoices: Array<[string, BrandWorkspaceChoice]> = [
@@ -74,21 +85,23 @@ beforeEach(() => {
 
 describe.each(sandboxedChoices)('hardline: %s', (_label, choice) => {
   it("stays in 'sidebar' with the flag on and renders nothing of the rail", () => {
-    for (const path of ['/brand', '/brand/studio', '/brand/studio/video', '/brand/members']) {
+    for (const path of ['/brand', '/brand/studio', '/brand/studio/video', '/brand/members', '/brand/rooms']) {
       state.path = path;
-      const html = render(choice, { studioV2: true });
-      expect(html, path).toContain('data-brand-layout-mode="sidebar"');
-      for (const marker of RAIL_ONLY) expect(html, `${path} ${marker}`).not.toContain(marker);
-      expect(html).not.toContain('/brand/studio');
+      for (const html of [render(choice, { studioV2: true }), render(choice, { studioV2: true, rooms: true })]) {
+        expect(html, path).toContain('data-brand-layout-mode="sidebar"');
+        for (const marker of RAIL_ONLY) expect(html, `${path} ${marker}`).not.toContain(marker);
+        expect(html).not.toContain('/brand/studio');
+      }
     }
   });
 
-  it('renders exactly the same markup whether studio v2 is on or off', () => {
-    for (const path of ['/brand', '/brand/library', '/brand/settings']) {
+  it('renders exactly the same markup whether studio v2 and rooms are on or off', () => {
+    for (const path of ['/brand', '/brand/library', '/brand/settings', '/brand/rooms']) {
       state.path = path;
       const off = render(choice, { studioV2: false, withShell: false });
       expect(render(choice, { studioV2: true }), path).toBe(off);
       expect(render(choice, { studioV2: false }), path).toBe(off);
+      expect(render(choice, { studioV2: true, rooms: true }), path).toBe(off);
     }
   });
 });

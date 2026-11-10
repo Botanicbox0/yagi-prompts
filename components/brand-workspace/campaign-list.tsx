@@ -6,6 +6,9 @@ import { interpolate } from '@/lib/i18n/format';
 import { WorkspacePreview } from './preview';
 import { campaignListReturnPath } from '@/lib/brands/workspace/navigation';
 import { campaignDateLine } from '@/lib/brands/workspace/schedule';
+import { RoomEntry } from '@/components/brand-rooms/room/room-entry';
+import { roomHref } from '@/components/brand-rooms/room/visibility';
+import type { RoomsShellCopy } from '@/messages/rooms-shell';
 
 const campaignStatuses = ['all', 'requested', 'active', 'completed', 'cancelled'] as const;
 type CampaignFilters = { query: string; status: string };
@@ -21,7 +24,18 @@ export function campaignFilterHref(href: string, filters: CampaignFilters): stri
   return `${url.pathname}${url.search}${url.hash}`;
 }
 
-export function CampaignList({ projects, b, locale, studio = false }: { projects: BrandProjectSummary[]; b: BrandCopy; locale: string; studio?: boolean }) {
+/**
+ * Project rooms (docs/BRAND-ROOMS.md §3): a "룸 열기" chip on each shared campaign card, with that room's
+ * unread count. Given by the page only while rooms are open for the selected brand; absent, the list
+ * renders exactly as before.
+ */
+export interface CampaignListRooms {
+  organizationId: string;
+  unread: Record<string, number>;
+  copy: RoomsShellCopy['entry'];
+}
+
+export function CampaignList({ projects, b, locale, studio = false, rooms = null }: { projects: BrandProjectSummary[]; b: BrandCopy; locale: string; studio?: boolean; rooms?: CampaignListRooms | null }) {
   const [{ query, status }, setFilters] = useState<CampaignFilters>({ query: '', status: 'all' });
   const [returnLocation, setReturnLocation] = useState<string | null>(null);
   useEffect(() => {
@@ -80,7 +94,7 @@ export function CampaignList({ projects, b, locale, studio = false }: { projects
       </div> : <ul className="bw-campaign-grid">{sorted.map(p => <li key={p.id}><a className="bw-campaign-card" href={link(p)}>
         <div className="bw-campaign-art"><WorkspacePreview cover={p.coverUrl} content={p.overview?.contents.find(c => c.mime?.startsWith('image/')) ?? p.overview?.contents[0]} b={b} title={p.organizationName}/><span className="bw-status" data-state={p.status}>{b.status[p.status]}</span></div>
         <div className="bw-card-copy"><p>{p.organizationName}{p.clientVisible===false&&<small className="bw-private-label" data-campaign-unshared>{b.managed.prepared}</small>}</p><h2>{p.title}</h2>{campaignDateLine(p) && <span data-campaign-date={campaignDateLine(p)!.kind}>{dateLine(p)}</span>}<footer><strong className={needsAction(p) ? 'bw-action-needed' : ''}>{activity(p)}</strong><span aria-hidden="true">↗</span></footer></div>
-      </a></li>)}</ul>}
+      </a>{rooms && p.clientVisible !== false ? <RoomEntry href={roomHref(p.id, rooms.organizationId)} unread={rooms.unread[p.id] ?? 0} copy={rooms.copy} variant="card"/> : null}</li>)}</ul>}
     </section>
     {!studio && <section className="bw-recent" data-home-recent><header><h2>{d.recent}</h2><p>{d.recentNote}</p></header>{latest.length ? <div className="bw-content-grid">{latest.map(({ p, content }) => <a key={content.id} href={`${link(p)}#review`} className="bw-content-card"><WorkspacePreview content={content} poster={p.coverUrl} b={b} title={p.organizationName}/><div><span className="bw-status" data-state={content.decision}>{b.decisionStates[content.decision]}</span><h3>{content.title}</h3><p>{p.title}</p><small>{interpolate(b.version, { number: content.version })}</small></div></a>)}</div> : <p className="bw-board-empty">{d.noRecent}</p>}</section>}
   </div>;

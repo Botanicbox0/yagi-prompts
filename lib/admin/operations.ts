@@ -10,6 +10,9 @@ import { BRAND_USAGE_OPERATIONS } from './brand-usage-operations';
 import { BRAND_ENGINE_OPERATIONS } from './brand-engine-operations';
 import { BRAND_STUDIO_OPERATIONS } from './brand-studio-operations';
 import { BRAND_STUDIO_REVIEW_OPERATIONS } from './brand-studio-review-operations';
+import { BRAND_ROOM_MESSAGE_OPERATIONS } from './brand-room-message-operations';
+import { BRAND_ROOMS_STORYBOARD_OPERATIONS } from './brand-rooms-storyboard-operations';
+import { BRAND_ROOMS_REVIEW_OPERATIONS } from './brand-rooms-review-operations';
 import { BRAND_PRODUCTION_OPERATIONS } from './brand-production-operations';
 import { PLATFORM_OPERATIONS } from './platform-operations';
 import { CAMPAIGN_RISK_OPERATIONS } from './campaign-risk-operations';
@@ -63,6 +66,12 @@ export const ADMIN_OPERATIONS = {
   ...BRAND_STUDIO_OPERATIONS,
   // docs/BRAND-STUDIO-V3.md §7 — the review space, team side: reply, resolve, status, open a review.
   ...BRAND_STUDIO_REVIEW_OPERATIONS,
+  // docs/BRAND-ROOMS.md §4 — project room conversations, team side: send, pin, take down, read mark.
+  ...BRAND_ROOM_MESSAGE_OPERATIONS,
+  // docs/BRAND-ROOMS.md §5 — project room storyboards, team side: create, title, cuts, share, version, delete.
+  ...BRAND_ROOMS_STORYBOARD_OPERATIONS,
+  // docs/BRAND-ROOMS.md §6 — project room deliverables, team side: deliver a file or a new version, revoke a share link.
+  ...BRAND_ROOMS_REVIEW_OPERATIONS,
   ...PLATFORM_OPERATIONS,
   ...CAMPAIGN_RISK_OPERATIONS,
   ...CAMPAIGN_COLLABORATION_OPERATIONS,

@@ -11,6 +11,7 @@
  */
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { STUDIO_JOB_SETTLED, STUDIO_JOB_STARTED } from '@/components/brand-studio/seams';
+import { ROOM_ACTIVITY, type RoomSummary } from '@/components/brand-rooms/seams';
 import { creditsLeft, creditsOf, formatCredits } from '@/lib/brand-studio/credits';
 import type { StudioSummary } from '@/lib/brand-studio/summary';
 import { interpolate } from '@/lib/i18n/format';
@@ -174,6 +175,77 @@ export function useStudioActivity({ organizationId, enabled, path }: { organizat
     toasts,
     dismiss,
   };
+}
+
+/* ----------------------------------------------------------------- room unread (docs/BRAND-ROOMS.md §2) */
+
+export const ROOM_UNREAD_POLL_MS = 30_000;
+const ROOM_SUMMARY_ENDPOINT = '/api/brand-rooms/summary';
+
+/** The total from a summary body; anything unexpected reads as zero. */
+export function unreadFrom(body: unknown): number {
+  if (!body || typeof body !== 'object') return 0;
+  const { ok, unread } = body as Partial<RoomSummary>;
+  return ok === true && typeof unread === 'number' && Number.isFinite(unread) && unread > 0 ? Math.floor(unread) : 0;
+}
+
+/**
+ * Unread messages across every room this person may open, for the 메시지 badge. Read on load, every
+ * 30 s while the tab is visible, on ROOM_ACTIVITY, when the window gets focus and when the tab returns.
+ * A 401/403/404 (rooms closed, a sandboxed brand, the route not deployed yet) or any failure reads as
+ * zero; the first three also stop the polling for this page.
+ */
+export function useRoomUnread({ organizationId, enabled }: { organizationId: string | null; enabled: boolean }): number {
+  const [unread, setUnread] = useState(0);
+  const stopped = useRef(false);
+  const inflight = useRef(false);
+  const active = Boolean(enabled && organizationId);
+
+  const load = useCallback(async () => {
+    if (!active || stopped.current || inflight.current) return;
+    inflight.current = true;
+    try {
+      const response = await fetch(`${ROOM_SUMMARY_ENDPOINT}?organizationId=${encodeURIComponent(organizationId!)}`, {
+        cache: 'no-store',
+        credentials: 'same-origin',
+        headers: { accept: 'application/json' },
+      });
+      if (response.status === 401 || response.status === 403 || response.status === 404) {
+        stopped.current = true;
+        setUnread(0);
+        return;
+      }
+      setUnread(response.ok ? unreadFrom(await response.json().catch(() => null)) : 0);
+    } catch {
+      setUnread(0);
+    } finally {
+      inflight.current = false;
+    }
+  }, [active, organizationId]);
+
+  useEffect(() => {
+    if (!active) return;
+    stopped.current = false;
+    void load();
+    const refresh = () => void load();
+    const visible = () => {
+      if (document.visibilityState === 'visible') void load();
+    };
+    const timer = window.setInterval(() => {
+      if (document.visibilityState !== 'hidden') void load();
+    }, ROOM_UNREAD_POLL_MS);
+    window.addEventListener(ROOM_ACTIVITY, refresh);
+    window.addEventListener('focus', refresh);
+    document.addEventListener('visibilitychange', visible);
+    return () => {
+      window.clearInterval(timer);
+      window.removeEventListener(ROOM_ACTIVITY, refresh);
+      window.removeEventListener('focus', refresh);
+      document.removeEventListener('visibilitychange', visible);
+    };
+  }, [active, load]);
+
+  return active ? unread : 0;
 }
 
 /* ----------------------------------------------------------------- meter */

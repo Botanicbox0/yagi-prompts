@@ -19,7 +19,8 @@ export type StudioAssetKind = (typeof STUDIO_ASSET_KINDS)[number];
 export const STUDIO_ASSET_ROLES = ['product', 'person', 'logo', 'style', 'place', 'other'] as const;
 export type StudioAssetRole = (typeof STUDIO_ASSET_ROLES)[number];
 
-export const STUDIO_ASSET_SOURCES = ['upload', 'generation'] as const;
+/** `delivery`: a file the YAGI team delivered into a project room (docs/BRAND-ROOMS.md §6). */
+export const STUDIO_ASSET_SOURCES = ['upload', 'generation', 'delivery'] as const;
 export type StudioAssetSource = (typeof STUDIO_ASSET_SOURCES)[number];
 
 /**

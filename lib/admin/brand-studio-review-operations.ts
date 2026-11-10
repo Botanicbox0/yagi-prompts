@@ -36,18 +36,32 @@ interface ReplyInput {
   body: string;
   parentId: string | null;
   atMs: number | null;
+  endMs: number | null;
   x: number | null;
   y: number | null;
+  /** A drawing (rooms, docs/BRAND-ROOMS.md §6), sent as JSON; the review contract checks its shape. */
+  strokes: unknown;
 }
 
 const reply: AdminOperation<ReplyInput> = {
   parse(form) {
     const atMs = optionalNumber(form, 'atMs'),
+      endMs = optionalNumber(form, 'endMs'),
       x = optionalNumber(form, 'x'),
       y = optionalNumber(form, 'y');
-    if (!atMs.ok || !x.ok || !y.ok) return { ok: false, detail: 'atMs, x and y must be numbers' };
+    if (!atMs.ok || !endMs.ok || !x.ok || !y.ok) return { ok: false, detail: 'atMs, endMs, x and y must be numbers' };
     const body = f.text(form, 'body');
     if (!body) return { ok: false, detail: 'body is required' };
+    let strokes: unknown = null;
+    const rawStrokes = f.str(form, 'strokes');
+    if (rawStrokes) {
+      if (rawStrokes.length > 32_768) return { ok: false, detail: 'the drawing is too large' };
+      try {
+        strokes = JSON.parse(rawStrokes);
+      } catch {
+        return { ok: false, detail: 'strokes must be JSON' };
+      }
+    }
     return {
       ok: true,
       value: {
@@ -55,8 +69,10 @@ const reply: AdminOperation<ReplyInput> = {
         body,
         parentId: f.str(form, 'parentId') || null,
         atMs: atMs.value == null ? null : Math.round(atMs.value),
+        endMs: endMs.value == null ? null : Math.round(endMs.value),
         x: x.value,
         y: y.value,
+        strokes,
       },
     };
   },

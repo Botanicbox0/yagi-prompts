@@ -60,8 +60,16 @@ describe('migrations apply on a fresh database (PLAN §6)', () => {
       'brand_project_members',
       'brand_projects',
       'brand_reports',
+      // 2026-11-11 — project room conversations (docs/BRAND-ROOMS.md §4, slice M).
+      'brand_room_messages',
+      'brand_room_reactions',
+      'brand_room_reads',
+      'brand_room_share_visits',
+      'brand_room_shares',
       'brand_shortlist_candidates',
       // 2026-11-10 — brand studio v2 (docs/BRAND-STUDIO-V2.md §6).
+      'brand_storyboard_frames',
+      'brand_storyboards',
       'brand_studio_allowances',
       'brand_studio_assets',
       'brand_studio_folder_items',

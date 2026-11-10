@@ -8,8 +8,9 @@ import "@/app/globals.css";
 import "./workspace.css";
 import "./rail.css";
 import "./studio-v2.css";
+import "@/components/brand-rooms/room/room.css";
 import { cookies } from "next/headers";
-import { brandStudioV2Open } from "@/lib/flags";
+import { brandRoomsOpen, brandStudioV2Open } from "@/lib/flags";
 import { RAIL_COOKIE, railCookieExpanded } from "@/components/brand-workspace/rail-model";
 import { WorkspaceLanguage } from '@/components/brand-workspace/language';
 import { WorkspaceNavigation } from '@/components/brand-workspace/navigation';
@@ -55,6 +56,9 @@ export default async function BrandLayout({
   // not in the markup, and not in the props serialized into the page either (hardline, V3 §9-1).
   const studioCopy=!scope||studioCopyAllowed(scope.choices);
   const studioV2=brandStudioV2Open()&&studioCopy;
+  // Project rooms (docs/BRAND-ROOMS.md §2) split the rail in two; same copy rule: a sandboxed-only
+  // viewer never receives a word of room copy either.
+  const rooms=brandRoomsOpen()&&studioCopy;
   const railExpanded=studioV2&&scope?railCookieExpanded((await cookies()).get(RAIL_COOKIE)?.value):false;
   return (
     <html lang={locale} className={fontVariables} data-brand-workspace>
@@ -78,7 +82,7 @@ export default async function BrandLayout({
             {/* URL-derived: dynamic render resolves this on the server, the empty fallback never shows. */}
             <Suspense fallback={null}>
               {scope?<WorkspaceIdentity scope={scope} copy={b.identity} roles={b.roles}/>:<p className="bw-kicker">{b.title}</p>}
-              <WorkspaceNavigation home={b.home} members={b.members} settings={b.managed.settings} library={b.managed.library} studio={studioCopy?b.productionStudio.title:""} identity={studioCopy?b.identityLayer.nav:undefined} creators={influencersOpen() ? b.creatorPool.nav : undefined} scope={scope} studioV2={studioV2} shell={studioCopy?d.studioShell:undefined} locale={locale==="en"?"en":"ko"} railExpanded={railExpanded}/>
+              <WorkspaceNavigation home={b.home} members={b.members} settings={b.managed.settings} library={b.managed.library} studio={studioCopy?b.productionStudio.title:""} identity={studioCopy?b.identityLayer.nav:undefined} creators={influencersOpen() ? b.creatorPool.nav : undefined} scope={scope} studioV2={studioV2} shell={studioCopy?d.studioShell:undefined} locale={locale==="en"?"en":"ko"} railExpanded={railExpanded} rooms={rooms} roomsCopy={rooms?d.roomsShell.nav:undefined}/>
             </Suspense>
             <div className="bw-sidebar-utilities">
               <WorkspaceLanguage locale={locale} label={d.nav.localeToggle} compact applyLabel={b.languageApply}/>

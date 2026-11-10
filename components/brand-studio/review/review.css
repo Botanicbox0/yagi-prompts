@@ -1130,3 +1130,287 @@ button.bsv-spot-tag {
     animation: none !important;
   }
 }
+
+/* ------------------------------------------------------------ rooms (docs/BRAND-ROOMS.md §6) */
+/*
+ * Ranges ride a recessed lane under the pins; a drawing sits on the frame with a thin dark halo so the
+ * one blue and white both read on any footage; versions are a quiet select; side-by-side is two mats on
+ * one clock. Carried notes are grouped under a hairline, read-only. A guest wears a dashed role tag.
+ */
+.bsv-lane {
+  position: relative;
+  height: 16px;
+  margin: 0 8px 8px;
+  border-radius: 999px;
+  background: var(--bsv-raised);
+  box-shadow: var(--bsv-well);
+  cursor: crosshair;
+  touch-action: none;
+}
+.bsv-lane[data-active] {
+  background: var(--bsv-accent-soft);
+}
+.bsv-lane-label {
+  position: absolute;
+  right: 8px;
+  top: 50%;
+  transform: translateY(-50%);
+  color: var(--bsv-muted);
+  font-size: 10.5px;
+  letter-spacing: 0.02em;
+  pointer-events: none;
+}
+.bsv-span {
+  position: absolute;
+  top: 3px;
+  height: 10px;
+  min-width: 4px;
+  padding: 0;
+  border: 0;
+  border-radius: 999px;
+  background: var(--bsv-ink);
+  opacity: 0.78;
+  cursor: pointer;
+}
+.bsv-span[data-role="studio"] {
+  background: var(--bsv-accent);
+}
+.bsv-span[data-resolved] {
+  opacity: 0.28;
+}
+.bsv-span[data-active] {
+  opacity: 1;
+  box-shadow: 0 0 0 2px var(--bsv-surface), 0 0 0 4px var(--bsv-accent-line);
+}
+.bsv-span[data-pending] {
+  background: var(--bsv-accent);
+  opacity: 0.45;
+  cursor: default;
+  pointer-events: none;
+}
+.bsv-span:focus-visible {
+  outline: 2px solid var(--bsv-accent);
+  outline-offset: 2px;
+}
+
+.bsv-ink {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+  pointer-events: none;
+}
+.bsv-ink[data-drawing] {
+  pointer-events: auto;
+  cursor: crosshair;
+  touch-action: none;
+}
+.bsv-ink-halo,
+.bsv-ink-line {
+  fill: none;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  vector-effect: non-scaling-stroke;
+}
+.bsv-ink-halo {
+  stroke: rgba(14, 16, 19, 0.42);
+  stroke-width: 6px;
+}
+.bsv-ink-line {
+  stroke-width: 3px;
+}
+.bsv-ink-tools {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  padding: 8px;
+  border-radius: 16px;
+  background: var(--bsv-raised);
+  box-shadow: var(--bsv-well);
+}
+.bsv-swatches {
+  display: inline-flex;
+  gap: 6px;
+}
+.bsv-swatch {
+  width: 26px;
+  height: 26px;
+  padding: 0;
+  border: 0;
+  border-radius: 999px;
+  background: var(--bsv-swatch);
+  box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.18);
+  cursor: pointer;
+}
+.bsv-swatch[aria-pressed="true"] {
+  box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.18), 0 0 0 2px var(--bsv-surface), 0 0 0 4px var(--bsv-accent);
+}
+.bsv-swatch:focus-visible {
+  outline: 2px solid var(--bsv-accent);
+  outline-offset: 3px;
+}
+
+.bsv-versions {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+.bsv-version-select {
+  height: 36px;
+  padding: 0 32px 0 14px;
+  border: 0;
+  border-radius: 999px;
+  background: var(--bsv-surface);
+  box-shadow: 0 0 0 1px var(--bsv-line);
+  color: var(--bsv-ink);
+  font: inherit;
+  font-size: 13px;
+  font-weight: 500;
+  font-variant-numeric: tabular-nums;
+  cursor: pointer;
+}
+.bsv-version-select:focus-visible {
+  outline: 2px solid var(--bsv-accent);
+  outline-offset: 2px;
+}
+
+.bsv-compare {
+  display: grid;
+  gap: 14px;
+}
+.bsv-compare-panes {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px;
+}
+.bsv-compare-pane {
+  display: grid;
+  gap: 10px;
+  margin: 0;
+  padding: 12px;
+  border-radius: 24px;
+  background: var(--bsv-canvas);
+  box-shadow: inset 0 0 0 1px var(--bsv-hairline);
+}
+.bsv-compare-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+.bsv-compare-media {
+  display: grid;
+  place-items: center;
+  max-height: 62vh;
+  overflow: hidden;
+  border-radius: 18px;
+  background: var(--bsv-media-bg);
+}
+.bsv-compare-media video,
+.bsv-compare-media img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+}
+
+.bsv-carried {
+  display: grid;
+  gap: 6px;
+  margin-top: 14px;
+  padding-top: 12px;
+  border-top: 1px solid var(--bsv-line);
+}
+.bsv-carried-title {
+  margin: 0;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--bsv-ink);
+}
+.bsv-carried-hint {
+  margin: 0 0 4px;
+  color: var(--bsv-muted);
+  font-size: 12.5px;
+  line-height: 1.5;
+}
+.bsv-thread[data-carried] > .bsv-comment {
+  opacity: 0.86;
+}
+.bsv-role[data-role="guest"] {
+  background: transparent;
+  box-shadow: inset 0 0 0 1px var(--bsv-line-strong);
+  color: var(--bsv-body);
+}
+.bsv-guest-name {
+  display: grid;
+  gap: 6px;
+  font-size: 13px;
+  color: var(--bsv-body);
+}
+.bsv-guest-name .bsv-input {
+  min-height: 0;
+  height: 40px;
+}
+
+/* One scroll for the notes and the carried group, so neither list collapses the other. */
+.bsv-thread-scroll {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  gap: 8px;
+  min-height: 0;
+  overflow: auto;
+}
+.bsv-thread-scroll > .bsv-threads,
+.bsv-thread-scroll > .bsv-carried {
+  flex: none;
+  min-height: auto;
+  overflow: visible;
+}
+.bsv-thread-scroll > .bsv-carried:first-child {
+  margin-top: 0;
+  padding-top: 0;
+  border-top: 0;
+}
+
+/* The deliverables tab inside a room: the room supplies the page padding and the big title. */
+.bsv-room-review {
+  padding: 0;
+  max-width: none;
+}
+.bsv-room-title {
+  font-size: clamp(22px, 2.2vw, 28px);
+}
+.bsv-version-chip {
+  padding: 1px 7px;
+  border-radius: 999px;
+  background: var(--bsv-raised);
+  color: var(--bsv-body);
+  font-size: 11.5px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+.bsv-item-source {
+  color: var(--bsv-muted);
+  font-size: 12px;
+}
+
+@media (max-width: 900px) {
+  .bsv-compare-panes {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .bsv-versions {
+    flex-wrap: wrap;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .bsv-compare *,
+  .bsv-ink-tools * {
+    transition: none !important;
+  }
+}
+.bsv-compare-controls .bsv-track {
+  padding-top: 0;
+}

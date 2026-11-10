@@ -6,7 +6,7 @@
  */
 import { useRouter } from "next/navigation";
 import { useMemo } from "react";
-import type { ReviewComment, ReviewItem } from "@/lib/brand-studio/review-contracts";
+import type { ReviewComment, ReviewItem, ReviewVersion } from "@/lib/brand-studio/review-contracts";
 import { ReviewStage, type ReviewActionResult, type ReviewActions, type ReviewCopy } from "./stage";
 
 const ADMIN_CODES: Record<string, string> = {
@@ -27,6 +27,8 @@ export function AdminReviewStage({
   locale,
   eyebrow,
   initialMs,
+  extended = false,
+  versions,
 }: {
   review: ReviewItem;
   comments: ReviewComment[];
@@ -34,6 +36,9 @@ export function AdminReviewStage({
   locale: "ko" | "en";
   eyebrow: string;
   initialMs: number | null;
+  /** Rooms on and 0084 applied: ranges, drawings and the version tools (docs/BRAND-ROOMS.md §6). */
+  extended?: boolean;
+  versions?: ReviewVersion[];
 }) {
   const router = useRouter();
   const actions = useMemo<ReviewActions>(() => {
@@ -56,7 +61,16 @@ export function AdminReviewStage({
     };
     return {
       addComment: (input) =>
-        post("brand_studio.review.reply", { reviewId: review.id, body: input.body, parentId: input.parentId, atMs: input.atMs, x: input.x, y: input.y }),
+        post("brand_studio.review.reply", {
+          reviewId: review.id,
+          body: input.body,
+          parentId: input.parentId,
+          atMs: input.atMs,
+          endMs: input.endMs,
+          x: input.x,
+          y: input.y,
+          strokes: input.strokes?.length ? JSON.stringify(input.strokes) : null,
+        }),
       resolveComment: (commentId) => post("brand_studio.review.resolve", { reviewId: review.id, commentId }),
       setStatus: (status) => post("brand_studio.review.status", { reviewId: review.id, status }),
     };
@@ -73,6 +87,9 @@ export function AdminReviewStage({
       actions={actions}
       linkFor={(ms) => adminReviewPath(review.id, ms)}
       eyebrow={eyebrow}
+      extended={extended}
+      versions={versions}
+      onVersion={(id) => router.push(adminReviewPath(id))}
     />
   );
 }
