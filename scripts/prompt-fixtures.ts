@@ -1,5 +1,5 @@
 import type { Visibility } from '@/lib/content/visibility';
-import type { PromptSource, PromptStatus, TemplateMedium, UseCase } from '@/lib/prompts/schemas';
+import type { PromptSource, PromptStatus, TemplateCast, TemplateMedium, UseCase } from '@/lib/prompts/schemas';
 import type { AssetSpec } from './fixtures';
 
 /**
@@ -51,6 +51,8 @@ export interface PromptFixture {
   publishedDaysAgo?: number;
   /** docs/TEMPLATES-IA.md — default video / not for sale; the priced ones exercise the studio. */
   medium?: TemplateMedium;
+  /** docs/CAST-CATEGORIES.md — default 'solo'; the cast fixtures live in `scripts/cast-fixtures.ts`. */
+  cast?: TemplateCast;
   priceCents?: number;
   /** The fixed won price (0018); the one fixture that sets it proves the override beats the suggestion. */
   priceKrw?: number;

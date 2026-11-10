@@ -280,6 +280,8 @@ export function enforcePersonalMorphicGuardrails(
   rawPrompt: string,
   options: {
     hasPersonSlot: boolean;
+    /** docs/CAST-CATEGORIES.md §3 — who the template features; absent = `solo`, the original locks. */
+    cast?: 'solo' | 'couple' | 'pet';
     hasOutfitSlot?: boolean;
     hasLookReferenceSlot?: boolean;
     hasSlenderArmLock?: boolean;
@@ -305,8 +307,17 @@ export function enforcePersonalMorphicGuardrails(
     out = `${out}\n\nNECK-DOWN GARMENT LOCK: Use the outfit reference strictly for neck-down garment silhouette, fabric, and color; ignore any chin, lips, or face at the top edge of the outfit photo.`;
   }
 
+  // 2b. docs/CAST-CATEGORIES.md §3 — the solo locks speak of one person in @Image 1. A couple keeps two
+  // people distinct; a pet keeps the animal exactly as photographed and is never given a human body lock.
+  if (options.cast === 'couple' && !out.toLowerCase().includes('two-person lock')) {
+    out = `${out}\n\nTWO-PERSON LOCK: Exactly two people. Keep each person's identity, face and hairstyle exactly as in their own photo, keep them visibly two distinct people, and never blend their features.`;
+  }
+  if (options.cast === 'pet' && !out.toLowerCase().includes('pet lock')) {
+    out = `${out}\n\nPET LOCK: Keep the pet's species, breed, coat colour, markings and proportions exactly as in its photo; no extra animals.`;
+  }
+
   // 3. When slender arm lock is active, enforce tight head-and-neck sleeve isolation
-  if (options.hasSlenderArmLock && !out.toLowerCase().includes('slender silhouette lock')) {
+  if (options.hasSlenderArmLock && options.cast !== 'pet' && !out.toLowerCase().includes('slender silhouette lock')) {
     out = `${out}\n\nSLENDER SILHOUETTE LOCK: Ignore any wide blouse or puff sleeves from @Image 1 and maintain naturally slender shoulders, collarbones, and slim toned arms (no random moles or blemishes on face or neck).`;
   }
 

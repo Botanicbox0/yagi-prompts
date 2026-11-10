@@ -10,21 +10,22 @@ import { loadPublicRecipe, type PublicRecipe, type PublicRecipeLabels } from './
  * The page renders only `recipeTeaser` of it; the rest goes to members through /api/renders/access.
  */
 const cached = unstable_cache(
-  async (templateId: string, selfie: string, reference: string, step: string): Promise<PublicRecipe | null> => {
+  async (templateId: string, selfie: string, reference: string, step: string, pet: string, partner: string): Promise<PublicRecipe | null> => {
     const sql = await getSqlRunner();
-    return sql ? loadPublicRecipe(sql, templateId, { selfie, reference, step }) : null;
+    return sql ? loadPublicRecipe(sql, templateId, { selfie, reference, step, pet, partner }) : null;
   },
   // v3 (2026-10-30): a step prompt may run to 8,000 characters; v2 entries made under the 4,000 cap
   // hold `null` for a longer recipe and would outlive the deploy that raised it.
   // v4 (2026-10-30, #111): the projection carries the creative's notes (intro, step tips, outro) and each
   // file's number and download address — a v3 entry has none of them.
-  ['public-recipe-v4', resolveRuntimeMode()],
+  // v5 (2026-11-11, docs/CAST-CATEGORIES.md): the pet and partner photos have their own labels.
+  ['public-recipe-v5', resolveRuntimeMode()],
   { tags: ['prompts'], revalidate: 3600 },
 );
 
 export async function cachedPublicRecipe(templateId: string, labels: PublicRecipeLabels): Promise<PublicRecipe | null> {
   try {
-    return await cached(templateId, labels.selfie, labels.reference, labels.step);
+    return await cached(templateId, labels.selfie, labels.reference, labels.step, labels.pet ?? labels.selfie, labels.partner ?? labels.selfie);
   } catch {
     // No cache outside a Next request, or a read that failed: show nothing rather than guess.
     return null;

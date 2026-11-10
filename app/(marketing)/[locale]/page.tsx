@@ -2,6 +2,8 @@ import type { Metadata } from 'next';
 import { DEFAULT_LOCALE, isLocale, type Locale } from '@/lib/i18n/config';
 import { getDictionary } from '@/lib/i18n/dictionaries';
 import { getPromptCatalog } from '@/lib/prompts/public-catalog';
+import { CAST_SECTIONS, castShelf, castShelfSize, soloCatalog } from '@/lib/prompts/catalog';
+import { CastShelfSection } from '@/components/templates/cast-shelf';
 import { getCampaignCatalog } from '@/lib/campaigns/public-catalog';
 import { USE_CASES } from '@/lib/prompts/schemas';
 import { templatesHref } from '@/lib/prompts/links';
@@ -41,11 +43,15 @@ export default async function LandingPage({ params }: { params: Promise<{ locale
   const { locale: raw } = await params;
   const locale: Locale = isLocale(raw) ? raw : DEFAULT_LOCALE;
   const dict = getDictionary(locale), t = dict.templates;
-  const [templates, campaigns, availability, media] = await Promise.all([getPromptCatalog(), getCampaignCatalog(), cachedSubscriptionAvailability(), getLandingMedia()]);
+  const [catalog, campaigns, availability, media] = await Promise.all([getPromptCatalog(), getCampaignCatalog(), cachedSubscriptionAvailability(), getLandingMedia()]);
+  // docs/CAST-CATEGORIES.md §5: the gallery is the solo catalogue; pets and couples get their own sections
+  // below it, each only when it has a published template (couples only while their flag is on).
+  const templates = soloCatalog(catalog);
+  const castShelves = CAST_SECTIONS.map((cast) => ({ cast, shelf: castShelf(catalog, cast) })).filter(({ shelf }) => castShelfSize(shelf) > 0);
   const labels = promptLabels(dict);
   const useCaseLabels = Object.fromEntries(USE_CASES.map(value => [value, useCaseLabel(dict, value)]));
   const recruiting = campaigns.campaigns.filter(campaign => campaign.status === 'recruiting');
-  const styles = new Map([...templates.video, ...templates.image].map(card => [card.slug, card]));
+  const styles = new Map([...catalog.video, ...catalog.image].map(card => [card.slug, card]));
   // §7.5 (founder 2026-10-30 & 2026-11-04): one feed per medium — originals and AI creatives' templates mixed by `railOrder`.
   // The hero showcases the top editorial studio original (`city-fashion-montage` / `aquarium-goldfish` / `fashion-show-arrival`).
   const featured = pickHeroFeaturedTemplate(templates.video);
@@ -84,6 +90,7 @@ export default async function LandingPage({ params }: { params: Promise<{ locale
             : <aside data-image-soon className="mt-10 flex flex-wrap items-center justify-between gap-4 border-t border-hairline pt-6"><p className="max-w-xl text-sm opacity-55">{t.imageSoonTitle}</p><a href={templatesHref(locale,'image')} className="text-sm underline underline-offset-4">{t.ctaImage} ↗</a></aside>}
         </div>
       </section>
+      {castShelves.length > 0 && <section data-cast-home data-section data-theme="light" className="section"><div className="audience-shell pb-16 lg:pb-24">{castShelves.map(({ cast, shelf }) => <CastShelfSection key={cast} locale={locale} dict={dict} cast={cast} shelf={shelf} mode="home" />)}</div></section>}
       <CreatorHowItWorks dict={dict} />
       {recruiting.length > 0 ? <section data-section data-theme="light" className="section"><div className="audience-shell py-16"><CampaignRail id="campaigns" heading={dict.campaigns.railRecruiting} lede={dict.campaigns.railRecruitingLede} cards={recruiting} styles={styles} locale={locale} labels={campaignLabels(dict)} now={Date.now()} /><a href={campaignsHref(locale)} className="mt-8 inline-flex min-h-11 items-center text-sm underline underline-offset-4">{dict.creatorJourney.campaignCta} ↗</a></div></section> : <CreatorCampaignDoor dict={dict} locale={locale} />}
       <FaqSection dict={dict} locale={locale} placement="landing" path={`/${locale}`} availability={availability} />

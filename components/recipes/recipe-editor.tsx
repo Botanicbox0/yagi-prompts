@@ -4,7 +4,7 @@ import type { Dictionary } from '@/messages/en';
 import { interpolate } from '@/lib/i18n/format';
 import { isRoyalty, quoteRecipe, ROYALTY_DEFAULT_KRW, ROYALTY_MAX_KRW, ROYALTY_STEP_KRW } from '@/lib/recipes/pricing';
 import { makeEarning } from '@/lib/twings/template-price';
-import { exportRecipe, INTRO_MAX, MAX_RECIPE_STEPS, MAX_STEP_PROMPT_CHARS, NOTE_MAX, OUTRO_MAX, parseRecipe, recipeMedium, SELFIE_SLOT, type Recipe, type RecipeIssue } from '@/lib/recipes/schema';
+import { exportRecipe, INTRO_MAX, MAX_RECIPE_STEPS, MAX_STEP_PROMPT_CHARS, NOTE_MAX, OUTRO_MAX, PARTNER_SLOT, parseRecipe, PET_SLOT, recipeMedium, SELFIE_SLOT, type Recipe, type RecipeIssue } from '@/lib/recipes/schema';
 import { BUTTON, BUTTON_OUTLINE, FIELD, HINT, PANEL } from '@/components/creators/styles';
 
 /**
@@ -33,17 +33,24 @@ const ACTIONS = '/api/makers/formats';
 const PENDING = new Set(['held', 'queued', 'running']);
 const escape = (value: string) => value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 
-export function RecipeEditor({ copy, formatId, draft, engines, aspects, hasSelfie, selfieHref, workspaceHref, testLimit, revisionOf, locale, selfPublish = false, company = false }: {
+export function RecipeEditor({ copy, formatId, draft, engines, aspects, hasSelfie, selfieHref, workspaceHref, testLimit, revisionOf, locale, selfPublish = false, company = false, casts = ['solo'] }: {
   copy: Copy; formatId: string; draft: EditorDraft | null; engines: EngineOption[]; aspects: { image: string[]; video: string[] };
   hasSelfie: boolean; selfieHref: string; workspaceHref: string; testLimit: number; revisionOf?: string; locale: string;
   /** docs/PLATFORM-2.0.md §20.6 — the creative publishes it themself (no studio review in between). */
   selfPublish?: boolean;
   /** A studio-owned profile (`platform_creators.payout = 'company'`): its margin is the company's, so no earnings line. */
   company?: boolean;
+  /**
+   * docs/CAST-CATEGORIES.md §1 — the casts on offer, from the server's flags (`editorCasts`). Solo only by
+   * default; a closed cast is not offered (a draft already saved with one keeps showing it).
+   */
+  casts?: readonly EditorCast[];
 }) {
   const imageEngines = engines.filter((e) => e.kind === 'image'), videoEngines = engines.filter((e) => e.kind === 'video');
   const label = useMemo(() => ({
     selfie: `[${copy.selfieLabel}]`,
+    pet: `[${copy.petLabel}]`,
+    partner: `[${copy.partnerLabel}]`,
     reference: (n: number) => `[${interpolate(copy.referenceLabel, { n: String(n) })}]`,
     step: (n: number) => `[${interpolate(copy.stepResultLabel, { n: String(n) })}]`,
   }), [copy]);
@@ -59,6 +66,9 @@ export function RecipeEditor({ copy, formatId, draft, engines, aspects, hasSelfi
   // Load: tokens → readable labels (by file and step position).
   const [initial] = useState(() => fromRecipe(draft?.recipe, draft?.files ?? [], label));
   const [medium, setMedium] = useState<EditorMedium>(initial?.medium ?? 'video');
+  // docs/CAST-CATEGORIES.md §1·§3: who is in it decides the customer's photo slots.
+  const [cast, setCast] = useState<EditorCast>(initial?.cast ?? 'solo');
+  const offered = EDITOR_CASTS.filter((c) => c === 'solo' || casts.includes(c) || c === initial?.cast);
   const [steps, setSteps] = useState<StepState[]>(initial?.steps ?? [newStep('video')]);
   const [notes, setNotes] = useState<RecipeNotes>(initial?.notes ?? { intro: '', outro: '' });
   const [title, setTitle] = useState(draft?.title ?? '');
@@ -80,7 +90,7 @@ export function RecipeEditor({ copy, formatId, draft, engines, aspects, hasSelfi
   useEffect(() => setReady(true), []);
   const editable = status === null || status === 'draft';
 
-  const recipe = useMemo(() => toRecipe(steps, medium, references, label, notes), [steps, medium, references, label, notes]);
+  const recipe = useMemo(() => toRecipe(steps, medium, references, label, notes, cast), [steps, medium, references, label, notes, cast]);
   const checked = useMemo(() => parseRecipe(recipe), [recipe]);
   const quote = checked.ok && isRoyalty(royalty) ? quoteRecipe(checked.recipe, royalty) : null;
   const won = (n: number) => interpolate(copy.royaltyValue, { amount: n.toLocaleString(locale === 'ko' ? 'ko-KR' : 'en-US') });
@@ -188,7 +198,7 @@ export function RecipeEditor({ copy, formatId, draft, engines, aspects, hasSelfi
     if (!file || file.size > 24_000) { if (file) setNotice({ tone: 'error', text: copy.importFailed }); return; }
     const loaded = fromRecipe(await file.text(), files, label);
     if (!loaded) { setNotice({ tone: 'error', text: copy.importFailed }); return; }
-    setMedium(loaded.medium); setSteps(loaded.steps); setNotes(loaded.notes);
+    setMedium(loaded.medium); setSteps(loaded.steps); setNotes(loaded.notes); setCast(loaded.cast);
     setNotice(loaded.missingFile ? { tone: 'error', text: copy.importMissingFile } : null);
   }
 
@@ -251,6 +261,13 @@ export function RecipeEditor({ copy, formatId, draft, engines, aspects, hasSelfi
               <input type="radio" name="medium" value={m} checked={medium === m} onChange={() => changeMedium(m)} className="sr-only" />{m === 'video' ? copy.mediumVideo : m === 'image' ? copy.mediumImage : copy.mediumCarousel}
             </label>)}</div>
           </div>
+          {offered.length > 1 ? <div role="radiogroup" aria-label={copy.cast} data-recipe-cast-picker className="space-y-2">
+            <p className="text-sm">{copy.cast}</p>
+            <div className="flex flex-wrap gap-2">{offered.map((c) => <label key={c} data-recipe-cast={c} className={`inline-flex min-h-11 cursor-pointer items-center rounded-full border px-4 text-sm ${cast === c ? 'border-accent text-accent' : 'border-hairline'}`}>
+              <input type="radio" name="cast" value={c} checked={cast === c} onChange={() => setCast(c)} className="sr-only" />{c === 'solo' ? copy.castSolo : c === 'pet' ? copy.castPet : c === 'pet_with_me' ? copy.castPetWithMe : copy.castCouple}
+            </label>)}</div>
+            <span className={HINT}>{copy.castHint}</span>
+          </div> : null}
         </section>
 
         <section data-recipe-files className={PANEL}>
@@ -287,7 +304,7 @@ export function RecipeEditor({ copy, formatId, draft, engines, aspects, hasSelfi
               <div className="space-y-2">
                 <p className="text-sm">{copy.prompt}</p>
                 <div className="flex flex-wrap gap-2" aria-label={copy.insert}>
-                  {[label.selfie, ...references.map((_, i) => label.reference(i + 1)), ...steps.slice(0, index).filter((s) => s.kind === 'image').map((_, i) => label.step(i + 1))].map((token) =>
+                  {[...castTokens(cast, label), ...references.map((_, i) => label.reference(i + 1)), ...steps.slice(0, index).filter((s) => s.kind === 'image').map((_, i) => label.step(i + 1))].map((token) =>
                     <button key={token} type="button" data-insert-token={token} onClick={() => insert(index, token)} className="inline-flex min-h-9 items-center rounded-full border border-hairline px-3 text-xs">{token}</button>)}
                 </div>
                 <textarea ref={(node) => { textareas.current[index] = node; }} value={step.text} onChange={(e) => update(index, { text: e.target.value })} rows={6} maxLength={MAX_STEP_PROMPT_CHARS} aria-label={`${interpolate(copy.stepLabel, { n: String(index + 1) })} ${copy.prompt}`} className={FIELD} autoComplete="off" spellCheck={false} />
@@ -402,11 +419,31 @@ function FileThumb({ file, alt, large = false }: { file: EditorFile; alt: string
     : <video src={src} aria-label={alt} className={`${size} rounded-xl border border-hairline object-cover`} muted playsInline preload="metadata" controls={large} />;
 }
 
-type Labels = { selfie: string; reference: (n: number) => string; step: (n: number) => string };
+type Labels = { selfie: string; pet?: string; partner?: string; reference: (n: number) => string; step: (n: number) => string };
+
+/** docs/CAST-CATEGORIES.md §3 — the four shapes a creative picks from; each fixes the customer's photo slots. */
+export const EDITOR_CASTS = ['solo', 'pet', 'pet_with_me', 'couple'] as const;
+export type EditorCast = (typeof EDITOR_CASTS)[number];
+/** The casts a creative may pick, by the server's flags (pet and couple templates stay off until opened). */
+export function editorCasts(open: { pet: boolean; couple: boolean }): EditorCast[] {
+  return EDITOR_CASTS.filter((c) => c === 'solo' || (c === 'couple' ? open.couple : open.pet));
+}
+const USER_SLOT = { kind: 'image', source: 'user', required: true } as const;
+function castSlots(cast: EditorCast): Array<[string, Record<string, unknown>]> {
+  if (cast === 'pet') return [[PET_SLOT, { ...USER_SLOT, role: 'pet' }]];
+  if (cast === 'pet_with_me') return [[SELFIE_SLOT, USER_SLOT], [PET_SLOT, { ...USER_SLOT, role: 'pet' }]];
+  if (cast === 'couple') return [[SELFIE_SLOT, USER_SLOT], [PARTNER_SLOT, { ...USER_SLOT, role: 'partner' }]];
+  return [[SELFIE_SLOT, USER_SLOT]];
+}
+/** The customer-photo insert buttons for this cast, in slot order. */
+export function castTokens(cast: EditorCast, label: Labels): string[] {
+  return castSlots(cast).map(([name]) => (name === PET_SLOT ? label.pet ?? label.selfie : name === PARTNER_SLOT ? label.partner ?? label.selfie : label.selfie));
+}
 
 /** Editor state → the §7.3 recipe. Inputs are the references a prompt mentions, in order of first mention. */
-export function toRecipe(steps: StepState[], medium: EditorMedium, references: EditorFile[], label: Labels, notes?: RecipeNotes): Recipe {
-  const pairs: Array<[string, string]> = [[label.selfie, SELFIE_SLOT], ...references.map((_, i) => [label.reference(i + 1), `ref${i + 1}`] as [string, string])];
+export function toRecipe(steps: StepState[], medium: EditorMedium, references: EditorFile[], label: Labels, notes?: RecipeNotes, cast: EditorCast = 'solo'): Recipe {
+  const customer = castSlots(cast);
+  const pairs: Array<[string, string]> = [...customer.map(([name], i) => [castTokens(cast, label)[i]!, name] as [string, string]), ...references.map((_, i) => [label.reference(i + 1), `ref${i + 1}`] as [string, string])];
   let images = 0;
   steps.forEach((step, i) => { if (step.kind === 'image') pairs.push([label.step(++images), `step${i + 1}`]); });
   const pattern = new RegExp(pairs.map(([text]) => escape(text)).sort((a, b) => b.length - a.length).join('|'), 'g');
@@ -424,7 +461,7 @@ export function toRecipe(steps: StepState[], medium: EditorMedium, references: E
     const note = step.note?.trim();
     return { id: `step${i + 1}`, kind: step.kind, engine: step.engine, inputs, prompt, ...(note ? { note } : {}), params };
   });
-  const slots: Record<string, unknown> = { [SELFIE_SLOT]: { kind: 'image', source: 'user', required: true } };
+  const slots: Record<string, unknown> = Object.fromEntries(customer);
   references.forEach((file, i) => { if (used.has(`ref${i + 1}`)) slots[`ref${i + 1}`] = { kind: file.kind, source: 'creator', asset: file.id }; });
   const output = medium === 'carousel' ? { frames: built.map((s) => s.id) } : { from: built[built.length - 1]?.id ?? 'step1' };
   const intro = notes?.intro.trim(), outro = notes?.outro.trim();
@@ -433,7 +470,7 @@ export function toRecipe(steps: StepState[], medium: EditorMedium, references: E
 }
 
 /** A stored or imported recipe → editor state, naming each maker file by its place in this draft's files. */
-export function fromRecipe(raw: unknown, files: EditorFile[], label: Labels): { medium: EditorMedium; steps: StepState[]; missingFile: boolean; notes: RecipeNotes } | null {
+export function fromRecipe(raw: unknown, files: EditorFile[], label: Labels): { medium: EditorMedium; steps: StepState[]; missingFile: boolean; notes: RecipeNotes; cast: EditorCast } | null {
   if (raw === null || raw === undefined) return null;
   const checked = parseRecipe(raw);
   // A draft may be saved mid-edit; read what parses and let the checks list say the rest.
@@ -450,6 +487,8 @@ export function fromRecipe(raw: unknown, files: EditorFile[], label: Labels): { 
     text: step.prompt.replace(/\{\{\s*([a-z][a-z0-9_]*)\s*\}\}/g, (_m, name: string) => {
       if (name === SELFIE_SLOT) return label.selfie;
       const slot = recipe.slots[name];
+      if (slot?.role === 'pet') return label.pet ?? label.selfie;
+      if (slot?.role === 'partner') return label.partner ?? label.selfie;
       if (slot?.source === 'creator') {
         const at = references.findIndex((f) => f.id === slot.asset);
         if (at < 0) { missingFile = true; return `[?]`; }
@@ -460,7 +499,9 @@ export function fromRecipe(raw: unknown, files: EditorFile[], label: Labels): { 
     }),
   }));
   const notes = { intro: typeof recipe.notes?.intro === 'string' ? recipe.notes.intro : '', outro: typeof recipe.notes?.outro === 'string' ? recipe.notes.outro : '' };
-  return { medium: checked.ok ? recipeMedium(recipe) : 'frames' in recipe.output ? 'carousel' : recipe.steps.some((s) => s.kind === 'video') ? 'video' : 'image', steps, missingFile, notes };
+  const roles = Object.values(recipe.slots).map((slot) => slot.role);
+  const cast: EditorCast = roles.includes('partner') ? 'couple' : roles.includes('pet') ? (recipe.slots[SELFIE_SLOT] ? 'pet_with_me' : 'pet') : 'solo';
+  return { medium: checked.ok ? recipeMedium(recipe) : 'frames' in recipe.output ? 'carousel' : recipe.steps.some((s) => s.kind === 'video') ? 'video' : 'image', steps, missingFile, notes, cast };
 }
 
 function lenient(raw: unknown): Recipe | null {

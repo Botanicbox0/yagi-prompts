@@ -26,6 +26,7 @@ import {
   PROMPT_TEXT_MIN,
   PROMPT_TITLE_MAX,
   RejectionSchema,
+  TEMPLATE_CASTS,
   TEMPLATE_MEDIA,
   USE_CASES,
   USE_CASE_MAX,
@@ -103,6 +104,8 @@ function chips(form: FormData, name: string): string[] {
 const TemplateFields = z
   .object({
     medium: z.enum(TEMPLATE_MEDIA),
+    /** docs/CAST-CATEGORIES.md §1 — who is in it. Absent (a form without the field) = unchanged / solo. */
+    cast: z.enum(TEMPLATE_CASTS).optional(),
     priceCents: z.number().int().min(0).max(1_000_000),
     /** The fixed won price (0018); 0 = suggested from the dollar price. */
     priceKrw: z.number().int().min(0).max(100_000_000),
@@ -139,6 +142,7 @@ function templateFields(form: FormData): ParseResult<z.infer<typeof TemplateFiel
   const runtime = f.optionalInt(form, 'runtimeSeconds');
   return parsed(TemplateFields, {
     medium,
+    cast: f.str(form, 'cast') || undefined,
     priceCents: f.optionalInt(form, 'priceCents') ?? 0,
     priceKrw: f.optionalInt(form, 'priceKrw') ?? 0,
     price1080Cents: medium === 'image' ? 0 : (f.optionalInt(form, 'price1080Cents') ?? 0),

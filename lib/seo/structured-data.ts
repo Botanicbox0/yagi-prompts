@@ -183,3 +183,37 @@ export function brandCaseStudiesStructuredData(input: {
     })),
   };
 }
+
+/**
+ * docs/CAST-CATEGORIES.md §5 — a cast page (`/{locale}/pet`, `/{locale}/couple`): a CollectionPage
+ * whose ItemList names its templates in page order. Names and links only — no price (cards carry none).
+ */
+export function castCollectionStructuredData(input: {
+  origin: string;
+  locale: Locale;
+  path: string;
+  name: string;
+  description: string;
+  cards: Pick<PromptCard, 'slug' | 'title' | 'titleKo'>[];
+}): StructuredData {
+  const url = seoUrl(input.origin, input.path);
+  return {
+    '@context': CONTEXT,
+    '@type': 'CollectionPage',
+    '@id': `${url}#collection`,
+    url,
+    name: input.name,
+    description: input.description,
+    inLanguage: input.locale,
+    mainEntity: {
+      '@type': 'ItemList',
+      numberOfItems: input.cards.length,
+      itemListElement: input.cards.map((card, index) => ({
+        '@type': 'ListItem',
+        position: index + 1,
+        name: input.locale === 'ko' && card.titleKo ? card.titleKo : card.title,
+        url: seoUrl(input.origin, `/${input.locale}/t/${card.slug}`),
+      })),
+    },
+  };
+}

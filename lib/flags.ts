@@ -141,3 +141,24 @@ export function brandUsagePaymentsOpen(env: NodeJS.ProcessEnv = process.env): bo
 export function brandStudioV2Open(env: NodeJS.ProcessEnv = process.env): boolean {
   return env.BRAND_STUDIO_V2 === 'on';
 }
+
+/**
+ * docs/CAST-CATEGORIES.md §4 — couple templates (the buyer and one partner). Default OFF: open only
+ * when the server environment says exactly `TWINGS_COUPLE_TEMPLATES=on`. Terms §5.3 say "your own
+ * face only" and cannot change while Toss reviews subscription billing, so off means couples do not
+ * exist anywhere: the catalogue drops couple templates, `/{locale}/couple` and their template pages
+ * answer 404, no chip or section mentions them, and the make and render APIs refuse a partner photo.
+ */
+export function coupleTemplatesOpen(env: Record<string, string | undefined> = process.env): boolean {
+  return env.TWINGS_COUPLE_TEMPLATES === 'on';
+}
+
+/**
+ * docs/CAST-CATEGORIES.md §3 — pet templates. Default OFF: open only when the server environment says
+ * exactly `TWINGS_PET_TEMPLATES=on`. Off means the same as couples off: the catalogue drops pet
+ * templates, `/{locale}/pet` and their template pages answer 404, and the make and render APIs refuse.
+ * A pet photo skips the face rules, so it is accepted only after the person check (lib/renders/pet-photo-check.ts).
+ */
+export function petTemplatesOpen(env: Record<string, string | undefined> = process.env): boolean {
+  return env.TWINGS_PET_TEMPLATES === 'on';
+}

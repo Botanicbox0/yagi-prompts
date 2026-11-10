@@ -64,6 +64,12 @@ import { markRenderFinishing } from './extras';
 import { loadRenderFrames } from './frames';
 import { constantTimeEqual, isRenderId, isShareExpired, isShareTokenShape, newShareToken, shareExpiresAt } from './share';
 import { extensionFor, type RenderStore } from './store';
+import {
+  castOpen, cleanSlotPhoto, deleteSpentSlotPhotos, extraSlots, liveSlotRows, loadSlotPhotos, makeInputsFrom, petIsPrimary,
+  recordPrimaryPetPhoto, storeSlotPhotos, type CastSlot, type SlotPhoto,
+} from './cast-inputs';
+import { PARTNER_SLOT, PET_SLOT } from '@/lib/recipes/schema';
+import { checkPetPhoto, petRefusal, type PetPhotoVerdict } from './pet-photo-check';
 
 /**
  * The render queue (docs/TEMPLATES-IA.md §8): enqueue, run, tell, show.
@@ -112,6 +118,8 @@ export interface RenderServiceDeps {
   now?: Date;
   /** Which asset library a photo goes through (lib/flags.ts); tests pin it, production reads the flag. */
   mode?: AssetLibraryMode;
+  /** docs/CAST-CATEGORIES.md §3 — the "is this really a pet" check; tests inject it, production calls Gemini. */
+  petCheck?: (photo: SlotPhoto) => Promise<PetPhotoVerdict>;
 }
 
 export interface CreateCampaignRenderInput {
@@ -172,7 +180,17 @@ export type CreateRenderFailure =
   | 'photo_too_large'
   | 'rate_limited'
   /** The template renders on ModelArk, which takes only a verified face (docs §8.2). */
-  | 'identity_required';
+  | 'identity_required'
+  /** docs/CAST-CATEGORIES.md §3 — a pet or partner template without that photo. */
+  | 'slot_missing'
+  /** The pet or partner photo is not a usable image. */
+  | 'bad_slot_photo'
+  /** A couple template: the uploader did not confirm the partner agreed. */
+  | 'partner_consent_required'
+  /** The pet photo shows a person, or no animal (lib/renders/pet-photo-check.ts). */
+  | 'not_a_pet'
+  /** The pet check could not run; fail-closed, so the photo is refused. */
+  | 'pet_check_unavailable';
 
 /** `held`: stored and waiting for the person's face check — the studio sends them there and the job starts itself afterwards. */
 export type CreateRenderOutcome = { ok: true; id: string; held: boolean } | { ok: false; code: CreateRenderFailure };
@@ -193,6 +211,14 @@ export interface CreateRenderInput {
    * render takes it from the ORDER row (below) — whatever the caller passed is overwritten.
    */
   resolution?: string | null;
+  /**
+   * docs/CAST-CATEGORIES.md §3 — the pet or partner photo, posted with this request (an operator's
+   * free render). A paid render binds them to the order's render id before payment instead
+   * (lib/renders/cast-inputs.ts), and they are read from there.
+   */
+  slots?: Partial<Record<CastSlot, SlotPhoto>>;
+  /** The uploader confirmed the partner agreed to their photo being used (a couple template). */
+  partnerConsent?: boolean;
 }
 
 export async function createRenderJob(deps: RenderServiceDeps, viewer: Viewer, input: CreateRenderInput): Promise<CreateRenderOutcome> {
@@ -347,12 +373,53 @@ async function createAuthorizedRender(deps: RenderServiceDeps, viewer: Viewer, i
   if (input.photo === null || input.photo.bytes.byteLength === 0 || !isPhotoMime(input.photo.mime)) return { ok: false, code: 'bad_photo' };
   if (input.photo.bytes.byteLength > MAX_PHOTO_BYTES) return { ok: false, code: 'photo_too_large' };
 
+  // docs/CAST-CATEGORIES.md §3·§4 — who is in it decides which photos the job needs. Couples do not
+  // exist while their flag is off; a pet or couple template without a matching recipe is not makeable.
+  if (!castOpen(template.cast)) return { ok: false, code: 'not_found' };
+  const recipe = await loadTemplateRecipe(deps.sql, template.id);
+  const makeInputs = makeInputsFrom(template, recipe);
+  if (makeInputs === null) return { ok: false, code: 'not_for_sale' };
+  const id = reservedId ?? randomUUID();
+  let primary = input.photo;
+  // A pet-only template's one photo is the pet: cleaned of its metadata like every slot photo.
+  if (petIsPrimary(makeInputs)) {
+    // A pet-only job never carries the buyer's face: a saved selfie posted here is the wrong photo.
+    if (input.selfieId) return { ok: false, code: 'bad_photo' };
+    try { primary = await cleanSlotPhoto(input.photo); } catch { return { ok: false, code: 'bad_photo' }; }
+    // A paid render's pet was checked when its order was made (lib/renders/cast-form.ts); a photo posted
+    // straight here is checked now. A person in the pet slot would skip every face rule.
+    if (reservedId === undefined) {
+      const refused = petRefusal(await (deps.petCheck ?? checkPetPhoto)(primary));
+      if (refused) return { ok: false, code: refused };
+    }
+  }
+  const slotPhotos: Partial<Record<CastSlot, SlotPhoto>> = {};
+  const needed = extraSlots(makeInputs);
+  if (needed.length > 0) {
+    // A paid render's photos were bound to its render id when the order was made.
+    const bound = await liveSlotRows(deps.sql, id);
+    for (const slot of needed) {
+      const given = input.slots?.[slot];
+      if (given) {
+        try { slotPhotos[slot] = await cleanSlotPhoto(given); } catch { return { ok: false, code: 'bad_slot_photo' }; }
+        if (slot === PET_SLOT) {
+          const refused = petRefusal(await (deps.petCheck ?? checkPetPhoto)(slotPhotos[slot]!));
+          if (refused) return { ok: false, code: refused };
+        }
+      } else if (!bound.some((row) => row.slot === slot)) return { ok: false, code: 'slot_missing' };
+    }
+    if (needed.includes(PARTNER_SLOT)) {
+      const consented = slotPhotos.partner ? input.partnerConsent === true : Boolean(bound.find((row) => row.slot === PARTNER_SLOT)?.partner_consent_at);
+      if (!consented) return { ok: false, code: 'partner_consent_required' };
+    }
+  }
+
   // ModelArk refuses a real person's photo in the bytes: the person verifies their face once
   // (docs/TEMPLATES-IA.md §8.2) and the pass sends an asset reference instead. Asked to, the job
   // is HELD with its photo until the check completes — one upload, no second visit to the studio.
   const mode = deps.mode ?? assetLibraryMode();
   // A recipe sends the face to ModelArk if ANY step does (an OpenAI result can still feed a Seedance film).
-  const recipe = await loadTemplateRecipe(deps.sql, template.id);
+  // A pet is never a face (lib/recipes/schema.ts), so a pet-only recipe never waits for the check.
   const viaLibrary = recipe ? mode === 'liveness' && recipeNeedsIdentity(recipe) : needsLiveness(engine, mode);
   // Only the liveness mode has a door to hold a job behind; the virtual library makes the group on the way.
   const held = viaLibrary && (await identityStatusFor(deps.sql, viewer.userId, mode)) !== 'active';
@@ -361,9 +428,15 @@ async function createAuthorizedRender(deps: RenderServiceDeps, viewer: Viewer, i
   const recent = await countRenderJobsSince(deps.sql, viewer.userId, new Date(now.getTime() - 24 * 60 * 60 * 1000));
   if (recent >= RENDER_JOBS_PER_DAY) return { ok: false, code: 'rate_limited' };
 
-  const id = reservedId ?? randomUUID();
-  const inputKey = `${id}/input.${extensionFor(input.photo.mime)}`;
-  await deps.store.put(inputKey, input.photo.bytes, input.photo.mime);
+  const inputKey = `${id}/input.${extensionFor(primary.mime)}`;
+  await deps.store.put(inputKey, primary.bytes, primary.mime);
+  // Slot photos go in before the job does, so no pass can claim a job whose photos are not there yet.
+  if (Object.keys(slotPhotos).length > 0) {
+    await storeSlotPhotos(deps.sql, deps.store, { renderId: id, userId: viewer.userId, templateId: template.id, photos: slotPhotos, partnerConsentAt: input.partnerConsent === true ? now : null, now });
+  }
+  if (petIsPrimary(makeInputs)) {
+    await recordPrimaryPetPhoto(deps.sql, { renderId: id, userId: viewer.userId, templateId: template.id, key: inputKey, mime: primary.mime, now });
+  }
   await insertRenderJob(deps.sql, {
     id,
     userId: viewer.userId!,
@@ -375,7 +448,7 @@ async function createAuthorizedRender(deps: RenderServiceDeps, viewer: Viewer, i
     resolution: resolution.resolution,
     locale: isLocale(input.locale) ? input.locale : (viewer.locale ?? DEFAULT_LOCALE),
     inputKey,
-    inputMime: input.photo.mime,
+    inputMime: primary.mime,
     status: held ? 'held' : 'queued',
   });
   if (input.selfieId) await deps.sql.query('update render_jobs set identity_selfie_id=$2 where id=$1',[id,input.selfieId]);
@@ -570,6 +643,12 @@ export async function runRenderPass(deps: RenderPassDeps, options: RenderPassOpt
     if (deps.subscriptionSchemaReady) {
       await reconcileFinishedSubscriptionRenders(deps.sql);
       if (!isTargetedPoll) await deleteExpiredEditReferences(deps.sql, deps.store, now);
+    }
+    // 3c — docs/CAST-CATEGORIES.md §3: a pet or partner photo goes once its render is finished.
+    try {
+      await deleteSpentSlotPhotos(deps.sql, deps.store, now);
+    } catch (error) {
+      report.errors.push(`slot photos: ${error instanceof Error ? error.message : String(error)}`);
     }
     // 4 — say so.
     if (!isTargetedPoll) await reconcileRewards(deps.sql);
@@ -798,6 +877,8 @@ async function renderRecipe(deps: RenderPassDeps, job: RenderJob, recipe: JobRec
     store: deps.store,
     engines: deps.engines ?? {},
     selfie: photo && job.inputKey ? { ...photo, key: job.inputKey } : null,
+    // docs/CAST-CATEGORIES.md §3 — the pet or partner photo (a pet-only job's pet is its input photo).
+    userSlots: await loadSlotPhotos(deps.sql, deps.store, job.id),
     makerFile: (handle) => readMakerFile(deps.sql, deps.store, handle),
     person: async ({ bytes, key }) => {
       const reference = await personAsset(deps, job, bytes, key);

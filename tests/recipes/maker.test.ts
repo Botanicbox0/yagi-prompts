@@ -105,6 +105,19 @@ describe('maker recipe editor — server', () => {
     expect(await makerFileObject(h.sql, ANON_VIEWER, stored.id)).toBeNull();
   });
 
+  // docs/CAST-CATEGORIES.md §3: a test render carries only the maker's selfie, so a pet recipe is refused
+  // before a test render is counted (it would otherwise fail on the missing pet photo after spending one).
+  it('refuses a test render of a pet recipe without spending one', async () => {
+    await approve();
+    const id = randomUUID();
+    const pet = { version: 2, slots: { pet: { kind: 'image', source: 'user', required: true, role: 'pet' } }, steps: [{ id: 'step1', kind: 'image', engine: 'gpt-image-2', inputs: ['pet'], prompt: 'A studio portrait of {{pet}} in soft light.', params: { aspect: '4:5' } }], output: { from: 'step1' } };
+    await makerAction(deps, maker, save(id, { recipe: pet }), open);
+    expect(await saveSelfie({ sql: h.sql, store }, maker.userId, { bytes: await png(), mime: 'image/png', consent: true })).toMatchObject({ ok: true });
+    await expect(makerAction(deps, maker, { action: 'test', id }, open)).rejects.toThrow('cast_test_unavailable');
+    expect((await loadMakerDraft(h.sql, maker, id, open))!.testRendersUsed).toBe(0);
+    expect((await h.sql.query<{ n: number }>('select count(*)::int as n from render_jobs')).rows[0]!.n).toBe(0);
+  });
+
   it('test-renders with the maker’s own saved photo, three times a format, results for the maker only', async () => {
     await approve();
     const id = randomUUID();

@@ -184,6 +184,8 @@ describe('migrations apply on a fresh database (PLAN §6)', () => {
       'render_job_outputs',
       'render_job_recipes',
       'render_jobs',
+      // docs/CAST-CATEGORIES.md §3 (2026-11-11) — a render's pet or partner photo, deleted once the render is finished.
+      'render_slot_inputs',
       // docs/PLATFORM-2.0.md §17.1 (2026-10-23) — linked SNS accounts, their write ledger, the local worker's heartbeat.
       'social_account_writes',
       'social_accounts',

@@ -1,5 +1,5 @@
 import type { Locale } from '@/lib/i18n/config';
-import { MEDIA_KINDS, PROMPT_GALLERY_MAX, type MediaKind, type TemplateMedium } from './schemas';
+import { MEDIA_KINDS, PROMPT_GALLERY_MAX, type MediaKind, type TemplateCast, type TemplateMedium } from './schemas';
 
 /**
  * Every path the template surface uses, spelled once (docs/TEMPLATES-IA.md §2).
@@ -17,6 +17,17 @@ import { MEDIA_KINDS, PROMPT_GALLERY_MAX, type MediaKind, type TemplateMedium } 
 
 /** The two tabs — the catalogue's first split is what a template PRODUCES. */
 export const TEMPLATE_LISTING_REST: Record<TemplateMedium, string> = { video: '/video', image: '/image' };
+/** docs/CAST-CATEGORIES.md §5 — the two cast pages, beside the medium tabs. */
+export const CAST_LISTING_REST: Record<Exclude<TemplateCast, 'solo'>, string> = { pet: '/pet', couple: '/couple' };
+
+export function castRest(cast: Exclude<TemplateCast, 'solo'>): string {
+  return CAST_LISTING_REST[cast];
+}
+
+export function castHref(locale: Locale | string, cast: Exclude<TemplateCast, 'solo'>): string {
+  return `/${locale}${castRest(cast)}`;
+}
+
 /** One template's public page, which is also where it is made. */
 export const TEMPLATE_REST = '/t';
 
