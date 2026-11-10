@@ -1273,7 +1273,8 @@ async function sweepMakers(): Promise<void> {
   // §7.5 (founder 2026-10-30): one feed — originals and AI creatives mixed, no origin rails or chips.
   console.log(`\n/ko/video — ${KO_TERMS.studioCollection} and ${KO_TERMS.maker} templates in one grid`);
   const video = await get('/ko/video');
-  expectEqual('one grid on the listing', video.body.split('data-rail="').length - 1, 1);
+  // The pet and couple shelves under the grid (docs/CAST-CATEGORIES.md §5) are their own sections, not origin rails.
+  expectEqual('one grid on the listing', video.body.split('data-rail="').length - 1 - (video.body.split('data-rail="cast-').length - 1), 1);
   expectAbsent('…no origin rails', video.body, 'data-rail-origin');
   expectAbsent('…no origin chips', video.body, 'data-origin-filter');
   expectAbsent('…no collection headings', video.body, `>${KO_TERMS.makerCollection}</h2>`);
