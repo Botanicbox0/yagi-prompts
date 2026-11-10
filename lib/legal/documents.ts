@@ -29,7 +29,8 @@ import type { Locale } from '@/lib/i18n/config';
  *
  * 상호 · 대표자 · 본점 주소 are transcribed from the corporate registry certificate
  * (등기사항전부증명서, 등기번호 0940868 / 법인등록번호 110111-0940868, 발급 2026-11-03): the head
- * office moved to 영등포구 on 2026-10-29 and was registered the same day. Every earlier line on that
+ * office moved to 영등포구 on 2026-10-29 and was registered the same day; the 사업자등록증 was
+ * reissued with this address on 2026-11-06 (영등포세무서). Every earlier line on that
  * certificate (양천구 → 구로구 → 양천구) is struck through and must never appear here. Nothing else
  * from the registry is copied — a director's resident number and home address are on that document
  * and have no business on a public page.
@@ -48,7 +49,8 @@ export const BUSINESS = {
   /** 통신판매업신고증 제 2026-서울구로-1618 호 (구로구청, 신고 2026-09-10). */
   mailOrderNumber: '2026-서울구로-1618',
   address: '서울특별시 영등포구 양평로 110, 5층 씨06호 (양평동4가)',
-  addressEn: '110 Yangpyeong-ro, Yeongdeungpo-gu, Seoul, Republic of Korea',
+  /** Same line as the English address filed with D&B and the app stores (unit and postal code included). */
+  addressEn: '5F C06, 110, Yangpyeong-ro, Yeongdeungpo-gu, Seoul, 07208, Republic of Korea',
   phone: '010-6599-4020',
   phoneEn: '+82 10-6599-4020',
   email: 'hello@yagiworkshop.xyz',
