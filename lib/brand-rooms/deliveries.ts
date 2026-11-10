@@ -1,5 +1,5 @@
 /**
- * The YAGI team delivers a file into a project room (docs/BRAND-ROOMS.md §6): a film up to 500 MB or an
+ * The YAGI team delivers a file into a project room (docs/BRAND-ROOMS.md §6): a film up to 200 MB or an
  * image up to 50 MB. The browser (or the command line) never sends the bytes through a function:
  *
  *   1. ask for an upload address (`/api/brand-rooms/reviews/upload` from /admin, `review.push` from the
@@ -23,7 +23,7 @@ import type { IngestHandler, IngestResult } from './ingest';
 
 export const DELIVERY_LIMITS = {
   imageBytesMax: 50_000_000,
-  videoBytesMax: 500_000_000,
+  videoBytesMax: 200_000_000,
   /** Ten minutes is the studio's longest film. */
   videoMsMax: 600_000,
 } as const;

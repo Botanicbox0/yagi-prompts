@@ -48,7 +48,7 @@ async function staged(bytes?: Uint8Array, mime = 'image/png'): Promise<string> {
 }
 
 describe('the upload address', () => {
-  it('takes films up to 500 MB and images up to 50 MB of the studio types only', () => {
+  it('takes films up to 200 MB and images up to 50 MB of the studio types only', () => {
     expect(deliveryRefusal('video/mp4', DELIVERY_LIMITS.videoBytesMax)).toBeNull();
     expect(deliveryRefusal('video/mp4', DELIVERY_LIMITS.videoBytesMax + 1)).toBe('too_large');
     expect(deliveryRefusal('image/png', 50_000_000)).toBeNull();

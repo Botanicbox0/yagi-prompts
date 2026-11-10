@@ -11,7 +11,7 @@ import type { StoryboardList } from '@/lib/brand-rooms/storyboard-contracts';
 import { SANDBOXED_CLIENT_ORG_IDS } from '@/lib/brands/features';
 import { memoryStaging, pngBytes, studioFixture, viewerOf, type StudioFixture } from '../../brand-studio/server/helpers';
 // @ts-expect-error -- plain Node script without type declarations
-import { parseBoardMarkdown, pictureFiles, readBoardText } from '@/scripts/twings-room.mjs';
+import { parseBoardMarkdown, pictureFiles, readBoardText, reviewFileProblem } from '@/scripts/twings-room.mjs';
 
 /**
  * docs/BRAND-ROOMS.md §5, §9-2 — the command-line door: only the server secret opens it (constant-time,
@@ -185,6 +185,16 @@ describe('scripts/twings-room.mjs reading a folder', () => {
       { scene: '1', shot: '1', description: 'The bottle turns in the light.\n\nStill turning.', camera: 'slow push in', audio: null, seconds: 2.5 },
       { scene: '1', shot: '2', description: '라벨을 가까이.', camera: null, audio: '잔잔한 피아노', seconds: null },
     ]);
+  });
+
+  it('checks a review file before any byte moves: films up to 200 MB, pictures up to 50 MB, nothing else', () => {
+    expect(reviewFileProblem('film.mp4', 200_000_000)).toBeNull();
+    expect(reviewFileProblem('cut.MOV', 12_000)).toBeNull();
+    expect(reviewFileProblem('still.webp', 50_000_000)).toBeNull();
+    expect(reviewFileProblem('film.mp4', 230_400_000)).toBe('film.mp4 is 230.4 MB; a film can be at most 200 MB. Export a smaller file and try again.');
+    expect(reviewFileProblem('still.png', 50_000_001)).toMatch(/a picture can be at most 50 MB/);
+    expect(reviewFileProblem('notes.pdf', 10)).toMatch(/not a film \(mp4, mov\) or a picture/);
+    expect(reviewFileProblem('empty.mp4', 0)).toBe('empty.mp4 is empty.');
   });
 
   it('reads board.json as a list or as { title, cuts }, and refuses a bad length', () => {

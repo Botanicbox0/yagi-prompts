@@ -4,6 +4,8 @@
  *
  *   node scripts/twings-room.mjs storyboard push --project <uuid> --title "…" --dir <folder>
  *        [--share] [--version-of <storyboardId>] [--env-file <path>]
+ *   node scripts/twings-room.mjs review push --project <uuid> --title "…" --file <path>
+ *        [--version-of <reviewId>] [--env-file <path>]
  *
  * Reads the folder's pictures (`01.png, 02.jpg …`, jpg/png/webp, sorted by name with numbers by value)
  * and their words from `board.json` (an array of { scene, shot, description, camera, audio, seconds },
@@ -11,6 +13,9 @@
  * camera, audio, seconds; every other line is the description). Makes a draft board as the YAGI team,
  * uploads each picture, then shares it when `--share` is given. Prints the board's admin and brand
  * addresses.
+ *
+ * `review push` puts one deliverable (a film mp4/mov up to 200 MB, or a picture png/jpg/webp up to
+ * 50 MB) in front of the brand in the project's room, or as the next version of `--version-of`.
  *
  * Plain Node, no dependencies. Environment (from the process, or from --env-file; values never printed):
  *   ROOM_INGEST_URL            the app origin or the full door, e.g. https://twings.app or
@@ -20,19 +25,27 @@
  *   ROOM_BRAND_ORIGIN          optional; default brand.twings.app for twings.app, else the same origin
  */
 import { existsSync, readFileSync, readdirSync, statSync } from 'node:fs';
-import { extname, join, resolve } from 'node:path';
+import { basename, extname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const MIMES = { '.png': 'image/png', '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg', '.webp': 'image/webp' };
 const BYTES_MAX = 25 * 1024 * 1024;
 const CUTS_MAX = 200;
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+/** Deliverables (lib/brand-rooms/deliveries.ts DELIVERY_LIMITS): films 200 MB, pictures 50 MB. */
+const DELIVERY_MIMES = { '.mp4': 'video/mp4', '.mov': 'video/quicktime', '.png': 'image/png', '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg', '.webp': 'image/webp' };
+const DELIVERY_FILM_MAX = 200_000_000;
+const DELIVERY_PICTURE_MAX = 50_000_000;
 
 const USAGE = `Usage:
   node scripts/twings-room.mjs storyboard push --project <uuid> --title "<title>" --dir <folder>
        [--share] [--version-of <storyboardId>] [--env-file <path>]
 
-  The folder holds the pictures (01.png, 02.jpg, …) and board.json or board.md with their words.
+  node scripts/twings-room.mjs review push --project <uuid> --title "<title>" --file <path>
+       [--version-of <reviewId>] [--env-file <path>]
+
+  The folder holds the pictures (01.png, 02.jpg, ...) and board.json or board.md with their words.
+  A review file is a film (mp4, mov; up to 200 MB) or a picture (png, jpg, webp; up to 50 MB).
   Needs ROOM_INGEST_URL and BRAND_ROOM_INGEST_SECRET (from the environment or --env-file).`;
 
 /* ------------------------------------------------------------------ args */
@@ -204,15 +217,16 @@ async function call(api, operation, input) {
   return json;
 }
 
-async function upload(api, target, bytes, mime) {
+/** A signed address takes a plain PUT; this app's own local address wants the same Bearer secret. */
+async function upload(api, target, bytes, mime, { what, localMethod = 'POST' }) {
   const res = target.direct
     ? await fetch(target.url, { method: 'PUT', headers: { 'content-type': mime }, body: bytes })
     : await fetch(new URL(target.url, api.origin), {
-        method: 'POST',
+        method: localMethod,
         headers: { 'content-type': mime, authorization: `Bearer ${api.secret}` },
         body: bytes,
       });
-  if (!res.ok) throw new Error(`upload of cut ${target.idx + 1} -> ${res.status}`);
+  if (!res.ok) throw new Error(`upload of ${what} -> ${res.status}${res.status === 413 ? ' (too large)' : ''}`);
 }
 
 async function inBatches(items, size, fn) {
@@ -260,7 +274,7 @@ async function storyboardPush(flags) {
   console.log(`Board ${pushed.storyboardId} (v${pushed.version}): uploading ${pictures.length} pictures...`);
   await inBatches(pushed.uploads, 4, async (target) => {
     const picture = pictures[target.idx];
-    await upload(api, target, readFileSync(picture.path), picture.mime);
+    await upload(api, target, readFileSync(picture.path), picture.mime, { what: `cut ${target.idx + 1}` });
   });
 
   let finished = null;
@@ -281,6 +295,52 @@ async function storyboardPush(flags) {
   if (failed.length > 0) process.exitCode = 1;
 }
 
+/* ------------------------------------------------------------------ review push */
+
+const MB = (bytes) => (bytes < 1_000_000 ? `${Math.max(1, Math.round(bytes / 1000))} KB` : `${Math.round((bytes / 1_000_000) * 10) / 10} MB`);
+
+/** What is wrong with a deliverable before any byte moves, as a sentence; null when it can go. */
+export function reviewFileProblem(name, sizeBytes) {
+  const mime = DELIVERY_MIMES[extname(name).toLowerCase()];
+  if (!mime) return `${name} is not a film (mp4, mov) or a picture (png, jpg, webp).`;
+  if (!(sizeBytes > 0)) return `${name} is empty.`;
+  const film = mime.startsWith('video/');
+  const max = film ? DELIVERY_FILM_MAX : DELIVERY_PICTURE_MAX;
+  if (sizeBytes > max) return `${name} is ${MB(sizeBytes)}; a ${film ? 'film' : 'picture'} can be at most ${MB(max)}. Export a smaller file and try again.`;
+  return null;
+}
+
+async function reviewPush(flags) {
+  const project = flags.project;
+  if (!project || !UUID.test(project)) fail('--project <uuid> is required.');
+  if (flags['version-of'] && !UUID.test(flags['version-of'])) fail('--version-of takes a review id.');
+  const title = (flags.title ?? '').trim();
+  if (!title) fail('--title is required.');
+  if (!flags.file) fail('--file <path> is required.');
+  const path = resolve(flags.file);
+  if (!existsSync(path) || !statSync(path).isFile()) fail(`not a file: ${path}`);
+  const name = basename(path);
+  const size = statSync(path).size;
+  const problem = reviewFileProblem(name, size);
+  if (problem) fail(problem);
+  const mime = DELIVERY_MIMES[extname(name).toLowerCase()];
+
+  const api = endpoints();
+  const target = await call(api, 'review.push', { projectId: project, mime, sizeBytes: size });
+  console.log(`Uploading ${name} (${MB(size)})...`);
+  await upload(api, target, readFileSync(path), mime, { what: name, localMethod: 'PUT' });
+  const done = await call(api, 'review.finish', {
+    projectId: project,
+    title,
+    stagingKey: target.key,
+    versionOf: flags['version-of'] ?? null,
+    name,
+  });
+  console.log(`Done: "${title}" v${done.version}${done.existing ? ' (this file was already there)' : ''}, ready for the brand to review.`);
+  console.log(`  admin: ${api.adminOrigin}${done.adminPath}`);
+  console.log(`  brand: ${api.brandOrigin}${done.brandPath}`);
+}
+
 /* ------------------------------------------------------------------ main */
 
 async function main() {
@@ -292,6 +352,7 @@ async function main() {
     return;
   }
   if (noun === 'storyboard' && verb === 'push') return storyboardPush(flags);
+  if (noun === 'review' && verb === 'push') return reviewPush(flags);
   fail(`unknown command: ${positional.join(' ')}\n\n${USAGE}`);
 }
 

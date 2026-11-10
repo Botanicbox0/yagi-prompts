@@ -61,4 +61,18 @@ shot: 2
 2. 그림을 4장씩 동시에 보낸다.
 3. `storyboard.finish` — 도착한 그림을 바이트로 확인·측정해 컷으로 만든다. 한 번에 12컷씩 처리하므로 남은 컷이 없을 때까지 다시 부르고, 마지막에 `--share`면 공유한다.
 
-다른 명령(`message post`, `review push`)은 해당 슬라이스가 같은 문(`INGEST_OPERATIONS`에 한 줄)과 이 스크립트에 더한다.
+## 시안 올리기
+
+```text
+node scripts/twings-room.mjs review push --project <프로젝트 id> --title "봄 런칭 필름 1차" --file <파일> [--version-of <시안 id>] [--env-file <경로>]
+```
+
+- 영상(mp4, mov)은 **200MB까지**, 이미지(png, jpg, webp)는 50MB까지. 넘으면 아무것도 보내기 전에 "film.mp4 is 230.4 MB; a film can be at most 200 MB."처럼 알려 주고 멈춘다. 영상 길이는 10분까지(서버가 확인한다).
+- 프로젝트 룸의 시안 탭에 바로 올라가 브랜드가 의견을 남길 수 있다. `--version-of <시안 id>`를 주면 그 시안의 다음 버전(v2, v3 …)으로 쌓인다.
+- 만든 사람은 야기 팀으로 남고, 끝나면 시안의 관리자 주소와 브랜드 주소를 출력한다.
+- 순서: `review.push`(보낼 주소: 운영은 서명된 주소, 로컬은 같은 비밀값을 붙여 `PUT /api/brand-rooms/reviews/upload?key=…`) → 파일 보내기 → `review.finish`.
+
+## 아직 없는 명령
+
+`message post`(대화에 야기 팀 이름으로 한 줄 남기기)는 아직 없다. 대화 서비스(lib/brand-rooms/messages.ts)의 작성은 사람(관리자 프로필) 기준이라 명령줄에는 작성자가 없고,
+몇 줄로 붙이면 대화 쪽 규칙(멘션, 알림, 중복 방지)을 건너뛰게 된다. 대화 슬라이스가 작성자 없는 야기 팀 줄을 받는 함수를 내면 `INGEST_OPERATIONS`에 한 줄과 이 스크립트의 명령 하나로 붙인다.

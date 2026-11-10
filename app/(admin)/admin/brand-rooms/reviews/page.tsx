@@ -14,7 +14,7 @@ import { DeliveryUpload } from "@/components/brand-studio/review/delivery-upload
 
 /**
  * `/admin/brand-rooms/reviews` — the team's delivery desk (docs/BRAND-ROOMS.md §6): pick a project of an
- * open brand, upload a draft (film up to 500 MB, image up to 50 MB) as a new deliverable or the next
+ * open brand, upload a draft (film up to 200 MB, image up to 50 MB) as a new deliverable or the next
  * version of one, and see the project's drafts. Share links show on each draft's review page. Sandboxed
  * and generation-closed brands never appear (the service drops them, and delivery refuses them).
  */

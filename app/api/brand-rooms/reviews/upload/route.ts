@@ -17,7 +17,7 @@ import { INGEST_SECRET_ENV, ingestSecretMatches, presentedSecret, readCappedBody
  *   PUT  ?key=<staging key>     local mode only: the file itself (cloud storage takes the signed PUT)
  *
  * The key is minted on the server, so a caller cannot choose where in the bucket it writes. The type and
- * the size limits (film 500 MB, image 50 MB) are checked here and again on the bytes at delivery.
+ * the size limits (film 200 MB, image 50 MB) are checked here and again on the bytes at delivery.
  */
 export const dynamic = 'force-dynamic';
 export const maxDuration = 300;
