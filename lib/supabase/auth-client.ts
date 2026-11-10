@@ -1,3 +1,4 @@
+import { cache } from 'react';
 import { createServerClient } from '@supabase/ssr';
 import { cookies } from 'next/headers';
 
@@ -78,8 +79,11 @@ export async function createAuthServerClient() {
  *   · no Supabase project configured at all (§11) — see `isAuthConfigured`.
  * The auth server is the only authority; a transport failure resolves anon rather than throwing,
  * because a 500 on the detail route would be a worse answer than the locked render.
+ *
+ * Memoised per request (React `cache`): a layout, its page and their helpers each ask who the viewer
+ * is, and every uncached ask was one more round trip to the auth server for the same answer.
  */
-export async function getSessionUser() {
+export const getSessionUser = cache(async () => {
   if (!isAuthConfigured()) return null;
   try {
     const cookieStore = await cookies();
@@ -92,4 +96,4 @@ export async function getSessionUser() {
   } catch {
     return null;
   }
-}
+});

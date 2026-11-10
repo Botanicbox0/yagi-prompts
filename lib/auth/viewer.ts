@@ -1,4 +1,5 @@
 import 'server-only';
+import { cache } from 'react';
 import { createDataClient } from '@/lib/supabase/data-client';
 import { getSessionUser, isAuthConfigured } from '@/lib/supabase/auth-client';
 import { getSqlRunner } from '@/lib/db/connect';
@@ -85,8 +86,8 @@ async function identitySource(local: boolean): Promise<IdentitySource | null> {
   return isAuthConfigured() ? supabaseIdentitySource() : null;
 }
 
-/** anon | free | pro | admin, derived server-side. `anon` is the absence of a user. */
-export async function getViewer(): Promise<Viewer> {
+/** anon | free | pro | admin, derived server-side. `anon` is the absence of a user. Memoised per request. */
+export const getViewer = cache(async (): Promise<Viewer> => {
   const sessionUser = await getSessionUser();
 
   // Dev-only, and only when there is no real session to speak of. See lib/auth/dev-identity.ts for
@@ -106,7 +107,7 @@ export async function getViewer(): Promise<Viewer> {
   // REVIEW-ACCOUNT.md); `user_metadata` would be, so it is never consulted here.
   const review = sessionUser?.app_metadata?.purpose === 'toss_review';
   return resolveViewer({ id: userId, email: sessionUser?.email ?? null }, identity, { review });
-}
+});
 
 /** §3.7 — `/admin/*` is gated at the edge on session, and HERE on `is_admin`. */
 export async function requireAdmin(): Promise<Viewer> {
