@@ -2,7 +2,7 @@ import type { SqlRunner } from '@/lib/db/sql-runner';
 import { publicContentUrl } from '@/lib/content/asset-url';
 import { shapePromptMedia, type ShapedPromptMedia } from './shape';
 import { loadPublishedPrompts, type PromptRow } from './repo';
-import { PROMPT_MODEL_LABEL, promptModelLabel, type PromptSource, type TemplateMedium } from './schemas';
+import { PROMPT_MODEL_LABEL, promptModelLabel, type PromptSource, type TemplateCast, type TemplateMedium } from './schemas';
 import { promptLock, type PromptLock } from './lock';
 import { loadPublicMakerRows } from '@/lib/makers/profile';
 import { makerAvatarSrc, makerCoverSrc } from '@/lib/makers/links';
@@ -46,6 +46,11 @@ export interface PromptCard {
   useCase: string[];
   /** docs/TEMPLATES-IA.md — the catalogue's first split, and whether a runtime makes sense. */
   medium: TemplateMedium;
+  /**
+   * docs/CAST-CATEGORIES.md — who is in it. Optional so a card built anywhere but `toPromptCard`
+   * (a test double) still types; absent reads as `solo`.
+   */
+  cast?: TemplateCast;
   /** One render in USD cents; 0 = not for sale yet. */
   priceCents: number;
   /** The fixed won price for Korean pages; 0 = suggested from the dollar price (lib/twings/products.ts). */
@@ -149,6 +154,49 @@ export const EMPTY_PROMPT_CATALOG: PromptCatalog = {
 export interface PromptCatalogOptions {
   /** Injected so the projection is testable without an env var. */
   publicUrl?: (key: string) => string | null;
+  /**
+   * docs/CAST-CATEGORIES.md §4 — `coupleTemplatesOpen()`. False (the default) drops every couple
+   * template from the projection, so no listing, template page, sitemap entry or maker page can
+   * show one: the catalogue is the one filter every public surface reads.
+   */
+  coupleOpen?: boolean;
+}
+
+/** A card's cast, `solo` when the card predates the field. */
+export function cardCast(card: Pick<PromptCard, 'cast'>): TemplateCast {
+  return card.cast ?? 'solo';
+}
+
+/** The non-solo casts that get their own section and page. */
+export const CAST_SECTIONS = ['pet', 'couple'] as const satisfies readonly TemplateCast[];
+export type CastSection = (typeof CAST_SECTIONS)[number];
+
+/** One cast's templates split by what they produce — the two rails of a cast page. */
+export interface CastShelf {
+  video: PromptCard[];
+  image: PromptCard[];
+}
+
+export function castShelf(catalog: Pick<PromptCatalog, 'video' | 'image'>, cast: TemplateCast): CastShelf {
+  return {
+    video: (catalog.video ?? []).filter((card) => cardCast(card) === cast),
+    image: (catalog.image ?? []).filter((card) => cardCast(card) === cast),
+  };
+}
+
+export function castShelfSize(shelf: CastShelf): number {
+  return shelf.video.length + shelf.image.length;
+}
+
+/**
+ * The solo catalogue — what the home gallery and the `/video`·`/image` listings show. Pet and couple
+ * templates live in their own sections (docs/CAST-CATEGORIES.md §5); the template page, the sitemap
+ * and maker pages keep reading the whole catalogue.
+ */
+export function soloCatalog(catalog: PromptCatalog): PromptCatalog {
+  // `?? []`: test doubles hand over only the lists a page reads.
+  const solo = (cards: PromptCard[] | undefined) => (cards ?? []).filter((card) => cardCast(card) === 'solo');
+  return { ...catalog, yagi: solo(catalog.yagi), community: solo(catalog.community), video: solo(catalog.video), image: solo(catalog.image) };
 }
 
 export function promptOrigin(row: Pick<PromptRow, 'source' | 'authorId'>): PromptOrigin {
@@ -185,6 +233,7 @@ export function toPromptCard(
     modelLabels: row.models.map(promptModelLabel),
     useCase: row.useCase,
     medium: row.medium,
+    cast: row.cast,
     priceCents: row.priceCents,
     priceKrw: row.priceKrw,
     price1080Cents: row.price1080Cents,
@@ -226,7 +275,9 @@ export async function loadPromptCatalog(
   const makerRows = await loadPublicMakerRows(sql);
   const openRecipes = await loadOpenRecipeIds(sql);
   const makerHandles = new Map(makerRows.map((maker) => [maker.userId, maker.handle]));
-  const cards = rows.map((row) => toPromptCard(row, options, makerHandles, openRecipes));
+  const cards = rows
+    .filter((row) => row.cast !== 'couple' || options.coupleOpen === true)
+    .map((row) => toPromptCard(row, options, makerHandles, openRecipes));
 
   // The two rails are by ORIGIN: a maker's template is a `source='yagi'` row too (0046).
   const yagi = cards.filter((card) => card.origin === 'studio');
@@ -282,5 +333,5 @@ export function landingPromptCards(
   catalog: PromptCatalog,
   max = LANDING_PROMPTS_MAX,
 ): PromptCard[] {
-  return catalog.yagi.slice(0, max);
+  return catalog.yagi.filter((card) => cardCast(card) === 'solo').slice(0, max);
 }

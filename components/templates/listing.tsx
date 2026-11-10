@@ -1,3 +1,4 @@
+import type { ReactNode } from 'react';
 import type { Locale } from '@/lib/i18n/config';
 import type { Dictionary } from '@/lib/i18n/dictionaries';
 import type { PromptCard } from '@/lib/prompts/catalog';
@@ -47,11 +48,14 @@ export function TemplatesListing({
   dict,
   medium,
   cards,
+  after,
 }: {
   locale: Locale;
   dict: Dictionary;
   medium: TemplateMedium;
   cards: PromptCard[];
+  /** docs/CAST-CATEGORIES.md §5 — the pet and couple shelves for this medium, between the grid and the definition. */
+  after?: ReactNode;
 }) {
   const t = dict.templates[medium];
   const labels = promptLabels(dict);
@@ -94,6 +98,8 @@ export function TemplatesListing({
           topClassName="mt-4"
         />
       )}
+
+      {after}
 
       {/* §15.3-5: the GEO definition ("TWINGS는 …") stays in the HTML for search and llms.txt
           readers, but under the grid — the first screen is the formats themselves. */}

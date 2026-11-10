@@ -81,8 +81,16 @@ export function maxImageInputs(engine: EngineId): number {
   return Math.min(MAX_STEP_INPUTS, videoEngineSpec(engine).maxReferenceImages);
 }
 
-export const RECIPE_SLOT_ROLES = ['person', 'product', 'scene', 'look', 'mask'] as const;
+/**
+ * `pet` and `partner` (docs/CAST-CATEGORIES.md §3): the two buyer photos beside the selfie. A pet is
+ * not a person — no face check, no identity group, only the provider's moderation. A partner IS a
+ * person, but never the account's own face, so it never goes to the verified library.
+ */
+export const RECIPE_SLOT_ROLES = ['person', 'product', 'scene', 'look', 'mask', 'pet', 'partner'] as const;
 export type RecipeSlotRole = (typeof RECIPE_SLOT_ROLES)[number];
+/** The fixed slot names of the two cast photos — one pet, one partner, each named after its role. */
+export const PET_SLOT = 'pet';
+export const PARTNER_SLOT = 'partner';
 
 const Name = z.string().regex(NAME);
 const SlotRole = z.enum(RECIPE_SLOT_ROLES).optional();
@@ -130,7 +138,9 @@ export type RecipeIssueCode =
   | 'selfie_missing' | 'user_slot' | 'name_clash' | 'duplicate_step' | 'unused_slot'
   | 'engine' | 'engine_kind' | 'unknown_input' | 'forward_input' | 'video_input' | 'too_many_inputs'
   | 'bad_token' | 'unknown_token' | 'unused_input' | 'raw_handle'
-  | 'step_layout' | 'output' | 'no_identity' | 'duration' | 'resolution' | 'aspect';
+  | 'step_layout' | 'output' | 'no_identity' | 'duration' | 'resolution' | 'aspect'
+  // docs/CAST-CATEGORIES.md §3 — the pet and partner slots.
+  | 'cast_slot' | 'cast_mix' | 'no_pet' | 'no_partner' | 'partner_asset';
 export interface RecipeIssue { code: RecipeIssueCode; step?: string; slot?: string }
 export type RecipeCheck = { ok: true; recipe: Recipe; medium: RecipeMedium } | { ok: false; issues: RecipeIssue[] };
 
@@ -166,13 +176,58 @@ export function slotRole(name: string, slot: RecipeSlot): RecipeSlotRole {
   return slot.role ?? 'scene';
 }
 
-/** Slot names that carry a real person's face (`selfie` or any slot with `role: 'person'`). */
+/** Slot names that carry a real person's face (`selfie`, any `role: 'person'` slot, and the partner). A pet is never one. */
 export function personSlots(recipe: Pick<Recipe, 'slots'>): Set<string> {
   const person = new Set<string>();
   for (const [name, slot] of Object.entries(recipe.slots)) {
-    if (name === SELFIE_SLOT || slot.role === 'person') person.add(name);
+    if (name === SELFIE_SLOT || slot.role === 'person' || slot.role === 'partner') person.add(name);
   }
   return person;
+}
+
+/** The slot names with this role. */
+function slotsWithRole(recipe: Pick<Recipe, 'slots'>, role: RecipeSlotRole): Set<string> {
+  return new Set(Object.entries(recipe.slots).filter(([, slot]) => slot.role === role).map(([name]) => name));
+}
+
+/** `seeds` plus every step that (transitively) read one of them. */
+function carriedBy(recipe: Recipe, seeds: Set<string>): Set<string> {
+  const carried = new Set(seeds);
+  for (const step of recipe.steps) if (step.inputs.some((input) => carried.has(input))) carried.add(step.id);
+  return carried;
+}
+
+/** Inputs that carry the pet: the pet slot, or a step that (transitively) read it. */
+export function petInputs(recipe: Recipe): Set<string> {
+  return carriedBy(recipe, slotsWithRole(recipe, 'pet'));
+}
+
+/** Inputs that carry the partner's face: the partner slot, or a step that (transitively) read it. */
+export function partnerInputs(recipe: Recipe): Set<string> {
+  return carriedBy(recipe, slotsWithRole(recipe, 'partner'));
+}
+
+/** Inputs that carry the buyer's own face (the selfie or a `role: 'person'` slot), never the partner's. */
+function buyerInputs(recipe: Recipe): Set<string> {
+  const seeds = new Set(Object.entries(recipe.slots).filter(([name, slot]) => name === SELFIE_SLOT || slot.role === 'person').map(([name]) => name));
+  return carriedBy(recipe, seeds);
+}
+
+/** docs/CAST-CATEGORIES.md — who the recipe features: a partner makes it a couple, a pet a pet template. */
+export function recipeCast(recipe: Pick<Recipe, 'slots'>): 'solo' | 'couple' | 'pet' {
+  if (slotsWithRole(recipe, 'partner').size > 0) return 'couple';
+  if (slotsWithRole(recipe, 'pet').size > 0) return 'pet';
+  return 'solo';
+}
+
+/** What the make step asks the buyer for. Display-safe: names no prompt, engine or file. */
+export interface RecipeMakeInputs { selfie: boolean; pet: boolean; partner: boolean }
+export function recipeMakeInputs(recipe: Pick<Recipe, 'slots'>): RecipeMakeInputs {
+  return {
+    selfie: recipe.slots[SELFIE_SLOT] !== undefined,
+    pet: slotsWithRole(recipe, 'pet').size > 0,
+    partner: slotsWithRole(recipe, 'partner').size > 0,
+  };
 }
 
 /** True when the recipe includes any person slot (so face consent & identity checks apply). */
@@ -232,17 +287,28 @@ export function parseRecipe(raw: unknown, options: ParseRecipeOptions = {}): Rec
 
   // Slots: in consumer/maker mode `selfie` is the one user input; in faceless brand mode, `selfie` is optional
   // when no person is in the shot, while any `selfie` or `person` slot keeps the full identity rules.
+  // docs/CAST-CATEGORIES.md §3: a solo or couple recipe requires the selfie; a pet-only recipe requires
+  // the pet instead. A partner slot never stands in for the selfie.
   const selfie = recipe.slots[SELFIE_SLOT];
+  const castSlots = slots.filter(([, slot]) => slot.role === 'pet' || slot.role === 'partner');
+  const hasPet = castSlots.some(([, slot]) => slot.role === 'pet');
+  const hasPartner = castSlots.some(([, slot]) => slot.role === 'partner');
   if (selfie) {
     if (selfie.source !== 'user' || selfie.required !== true || (selfie.role !== undefined && selfie.role !== 'person')) {
       issues.push({ code: 'selfie_missing' });
     }
-  } else if (!options.allowFaceless) {
+  } else if (!options.allowFaceless && !(hasPet && !hasPartner)) {
     issues.push({ code: 'selfie_missing' });
   }
+  for (const [name, slot] of castSlots) {
+    // One pet, one partner, each a required buyer photo under its own name.
+    const fixedName = slot.role === 'pet' ? PET_SLOT : PARTNER_SLOT;
+    if (name !== fixedName || slot.source !== 'user' || slot.required !== true) issues.push({ code: 'cast_slot', slot: name });
+  }
+  if (hasPet && hasPartner) issues.push({ code: 'cast_mix' });
   let extraUserSlots = 0;
   for (const [name, slot] of slots) {
-    if (slot.source === 'user' && name !== SELFIE_SLOT) {
+    if (slot.source === 'user' && name !== SELFIE_SLOT && slot.role !== 'pet' && slot.role !== 'partner') {
       extraUserSlots += 1;
       const validExtraRole = slot.role && slot.role !== 'person';
       const allowedByFaceless = options.allowFaceless && slot.required === true && validExtraRole;
@@ -317,10 +383,25 @@ export function parseRecipe(raw: unknown, options: ParseRecipeOptions = {}): Rec
     for (const step of recipe.steps) if (!frames.includes(step.id) && !read.has(step.id)) issues.push({ code: 'output', step: step.id });
   }
 
-  // Whenever a person slot is present (or in consumer mode), every result must feature the person.
+  // Whenever a person slot is present (or in consumer mode), every result must feature the person —
+  // except a pet-only recipe, whose results feature the pet (checked below).
   const person = personInputs(recipe);
-  if (personSlotSet.size > 0 || !options.allowFaceless) {
+  if (personSlotSet.size > 0 || (!options.allowFaceless && !hasPet)) {
     for (const id of outputSteps(recipe)) if (seen.has(id) && !person.has(id)) issues.push({ code: 'no_identity', step: id });
+  }
+  // The cast is in every result: a pet template's frames all show the pet, a couple's both people.
+  const pets = petInputs(recipe), partners = partnerInputs(recipe);
+  for (const id of outputSteps(recipe)) {
+    if (!seen.has(id)) continue;
+    if (hasPet && !pets.has(id)) issues.push({ code: 'no_pet', step: id });
+    if (hasPartner && !partners.has(id)) issues.push({ code: 'no_partner', step: id });
+  }
+  // The verified library holds the account's own face and nothing else: no step may send the partner
+  // (or anything made from the partner) to an engine that registers faces there.
+  for (const step of recipe.steps) {
+    if (isEngineId(step.engine) && identityPath(step.engine) === 'asset' && step.inputs.some((input) => partners.has(input))) {
+      issues.push({ code: 'partner_asset', step: step.id });
+    }
   }
 
   return issues.length ? { ok: false, issues } : { ok: true, recipe, medium: recipeMedium(recipe) };
@@ -360,17 +441,35 @@ export function engineStepPrompt(recipe: Recipe, step: RecipeStep): string {
     position.set(input, kind === 'video' ? `Video ${++videos}` : `Image ${++images}`);
   }
   const text = step.prompt.replace(TOKEN, (_match, name: string) => position.get(name.trim()) ?? '');
-  const faces = step.inputs.filter((input) => person.has(input)).map((input) => position.get(input)!);
-  if (!faces.length) return text;
-  return `${text}\n\n${faces.join(', ')} ${faces.length > 1 ? 'show' : 'shows'} the person to feature. Keep their identity, face and features exactly as photographed.`;
+  const lines: string[] = [];
+  const faces = step.inputs.filter((input) => person.has(input));
+  if (faces.length) {
+    const named = faces.map((input) => position.get(input)!);
+    const verb = named.length > 1 ? 'show' : 'shows';
+    // docs/CAST-CATEGORIES.md §3: two people when the step carries both the buyer and the partner.
+    const partners = partnerInputs(recipe), buyer = buyerInputs(recipe);
+    const two = faces.some((input) => partners.has(input)) && faces.some((input) => buyer.has(input));
+    lines.push(two
+      ? `${named.join(', ')} ${verb} the two people to feature. Keep each person’s identity, face and features exactly as photographed, and keep them two distinct people.`
+      : `${named.join(', ')} ${verb} the person to feature. Keep their identity, face and features exactly as photographed.`);
+  }
+  const pets = petInputs(recipe);
+  const animals = step.inputs.filter((input) => pets.has(input) && !person.has(input)).map((input) => position.get(input)!);
+  if (animals.length) {
+    lines.push(`${animals.join(', ')} ${animals.length > 1 ? 'show' : 'shows'} the pet to feature. Keep its species, breed, coat colour, markings and proportions exactly as photographed.`);
+  }
+  return lines.length ? `${text}\n\n${lines.join('\n')}` : text;
 }
 
 /** The same prompt for a person to read: slots become `[내 사진]`, `[참조 1]`, steps `[1단계 결과]`. */
-export function displayStepPrompt(recipe: Recipe, step: RecipeStep, labels: { selfie: string; reference: string; step: string }): string {
+export function displayStepPrompt(recipe: Recipe, step: RecipeStep, labels: { selfie: string; reference: string; step: string; pet?: string; partner?: string }): string {
   const creators = creatorSlotNames(recipe);
   return step.prompt.replace(TOKEN, (_match, raw: string) => {
     const name = raw.trim();
     if (name === SELFIE_SLOT) return `[${labels.selfie}]`;
+    const role = recipe.slots[name]?.role;
+    if (role === 'pet') return `[${labels.pet ?? labels.selfie}]`;
+    if (role === 'partner') return `[${labels.partner ?? labels.selfie}]`;
     const creator = creators.indexOf(name);
     if (creator >= 0) return `[${labels.reference.replace('{n}', String(creator + 1))}]`;
     const at = recipe.steps.findIndex((other) => other.id === name);

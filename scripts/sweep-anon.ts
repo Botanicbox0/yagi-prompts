@@ -7,6 +7,7 @@ import { DEFAULT_LOCAL_SNAPSHOT } from '@/lib/db/connect-shared';
 import { FIXTURE_SENTINELS } from './fixtures';
 import { HIDDEN_PROMPT_SLUGS, PROMPT_SENTINELS } from './prompt-fixtures';
 import { LOCAL_MAKER, LOCAL_RECIPE_CANARY, LOCAL_RECIPE_SLUG } from './maker-fixtures';
+import { CAST_SENTINELS } from './cast-fixtures';
 import { RUNTIME_MODE_ENV } from '@/lib/runtime-mode';
 import { KO_TERMS } from '@/messages/ko';
 import { EN_TERMS } from '@/messages/en';
@@ -1401,6 +1402,75 @@ async function sweepMakers(): Promise<void> {
 }
 
 /** Public monthly outcomes, no per-template price table or account data. */
+/**
+ * docs/CAST-CATEGORIES.md §4·§5 — pets have their own section and page, each split into a labelled
+ * 영상 rail and 이미지 rail; couples do not exist while TWINGS_COUPLE_TEMPLATES is off (the default,
+ * and how this sweep runs). The local snapshot carries sample templates for both casts.
+ */
+async function sweepCastCategories(): Promise<void> {
+  const couples = CAST_SENTINELS.filter((item) => item.cast === 'couple');
+  for (const locale of ['en', 'ko'] as const) {
+    console.log(`\n/${locale} — the pet section on the home, no couples`);
+    const home = await get(`/${locale}`);
+    expectEqual('home renders 200', home.status, 200);
+    expectPresent('the cast sections sit under the gallery', home.body, 'data-cast-home');
+    expectPresent('…a pet section', home.body, 'data-cast-section="pet"');
+    expectPresent('…with a labelled video rail', home.body, 'data-cast-rail="pet-video"');
+    expectPresent('…and a labelled image rail', home.body, 'data-cast-rail="pet-image"');
+    expectPresent('…and a door to the pet page', home.body, `href="/${locale}/pet"`);
+    {
+      const section = home.body.indexOf('data-cast-home');
+      const firstPet = home.body.indexOf('data-prompt-card="sample-pet-');
+      if (firstPet > section && section > -1) ok('the gallery above holds no pet card', `${firstPet} > ${section}`);
+      else fail('the gallery above holds no pet card', `first pet card at ${firstPet}, section at ${section}`);
+    }
+    expectAbsent('no couple section while the flag is off', home.body, 'data-cast-section="couple"');
+    expectAbsent('…no door to it', home.body, `href="/${locale}/couple"`);
+    for (const item of couples) expectAbsent(`…no couple card (${item.slug})`, home.body, item.slug);
+    for (const item of CAST_SENTINELS) expectAbsent(`no recipe text on a card (${item.token})`, home.body, item.token);
+
+    console.log(`\n/${locale}/pet — the pet page`);
+    const pet = await get(`/${locale}/pet`);
+    expectEqual('renders 200', pet.status, 200);
+    expectPresent('is the pet page', pet.body, 'data-cast-page="pet"');
+    expectPresent('…with the video rail', pet.body, 'data-cast-rail="pet-video"');
+    expectPresent('…and the image rail', pet.body, 'data-cast-rail="pet-image"');
+    expectPresent('…one pill row that jumps between them', pet.body, 'data-cast-jump');
+    expectPresent('…a CollectionPage for search', pet.body, '"@type":"CollectionPage"');
+    expectPresent('…self-canonical', pet.body, `/${locale}/pet"`);
+    expectPresent('…and the GEO definition', pet.body, 'data-service-definition');
+    expectAbsent('cards wear no price', pet.body, 'data-price-chip');
+    if (locale === 'ko') expectAbsent('…not even the number', pet.body, '2,500원');
+    for (const item of CAST_SENTINELS) expectAbsent(`no recipe text (${item.token})`, pet.body, item.token);
+    expectAbsent('no couple card on the pet page', pet.body, 'sample-couple-');
+
+    console.log(`\n/${locale}/couple — off`);
+    expectEqual('the couple page is a 404 while the flag is off', (await get(`/${locale}/couple`)).status, 404);
+    for (const item of couples) expectEqual(`…and so is ${item.slug}`, (await get(`/${locale}/t/${item.slug}`)).status, 404);
+  }
+
+  console.log('\n/en/video and /en/image — each tab keeps its own cast rail under the grid');
+  const video = await get('/en/video');
+  expectPresent('the video tab shows the pet video rail', video.body, 'data-cast-rail="pet-video"');
+  expectAbsent('…not the pet image rail', video.body, 'data-cast-rail="pet-image"');
+  const image = await get('/en/image');
+  expectPresent('the image tab shows the pet image rail', image.body, 'data-cast-rail="pet-image"');
+  expectAbsent('…not the pet video rail', image.body, 'data-cast-rail="pet-video"');
+  for (const page of [video, image]) for (const item of couples) expectAbsent(`no couple card on a tab (${item.slug})`, page.body, item.slug);
+
+  console.log('\n/en/t/sample-pet-studio-portrait — a pet-only template page');
+  const petOnly = await get('/en/t/sample-pet-studio-portrait');
+  expectEqual('renders 200', petOnly.status, 200);
+  expectAbsent('no "my selfie" tile on a pet-only template', petOnly.body, 'data-selfie-tile');
+  expectPresent('…the pet line instead', petOnly.body, 'One photo and your pet is the lead');
+
+  console.log('\n/sitemap.xml — the pet page, never the couple page');
+  const sitemap = await get('/sitemap.xml');
+  expectPresent('lists /ko/pet', sitemap.body, '/ko/pet<');
+  expectAbsent('never /couple while off', sitemap.body, '/couple<');
+  expectAbsent('…nor a couple template', sitemap.body, 'sample-couple-');
+}
+
 async function sweepPricingTemplates(): Promise<void> {
   console.log('\n/en/pricing + /ko/pricing — monthly plan comparison, anonymous');
   for (const locale of ['en', 'ko']) {
@@ -1892,6 +1962,7 @@ async function main(): Promise<void> {
   await sweepLandingTemplates();
   await sweepPricingTemplates();
   await sweepMakers();
+  await sweepCastCategories();
 
 
   // --- docs/CAMPAIGNS.md: the campaigns surface --------------------------

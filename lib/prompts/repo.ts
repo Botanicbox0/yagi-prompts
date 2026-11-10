@@ -1,6 +1,6 @@
 import type { SqlRunner } from '@/lib/db/sql-runner';
 import type { Visibility } from '@/lib/content/visibility';
-import type { PromptSource, PromptStatus, TemplateMedium } from './schemas';
+import { toTemplateCast, type PromptSource, type PromptStatus, type TemplateCast, type TemplateMedium } from './schemas';
 
 /**
  * PLAN §13 — every `prompt_items` query, in one driver-agnostic module.
@@ -37,6 +37,8 @@ export interface PromptRow {
   featured: boolean;
   /** docs/TEMPLATES-IA.md — what this template produces; the catalogue's first split. */
   medium: TemplateMedium;
+  /** docs/CAST-CATEGORIES.md — who is in it; `solo` for every row older than 0078. */
+  cast: TemplateCast;
   /** One render, in USD cents. 0 = not for sale yet (the detail page says so, no button). */
   priceCents: number;
   /** The fixed won price a Korean page shows (0018, founder 2026-09-07); 0 = the x,900 suggestion from the dollar price. */
@@ -77,6 +79,7 @@ interface RawRow {
   use_case: string[] | null;
   featured: boolean;
   medium: TemplateMedium;
+  cast_kind?: string | null;
   price_cents: number;
   price_krw: number | null;
   price_1080_cents?: number | null;
@@ -98,11 +101,18 @@ interface RawRow {
 const PRICE_1080_COLUMNS = `coalesce((to_jsonb(prompt_items.*)->>'price_1080_cents')::int, 0) as price_1080_cents,
                  coalesce((to_jsonb(prompt_items.*)->>'price_1080_krw')::int, 0) as price_1080_krw`;
 
+/**
+ * docs/CAST-CATEGORIES.md — who is in it (0078). Read through the row's JSON like the 1080p price, so
+ * a database without 0078 serves every template as `solo`, which is what every row was before it.
+ */
+const CAST_COLUMN = `coalesce(to_jsonb(prompt_items.*)->>'cast_kind', 'solo') as cast_kind`;
+
 const COLUMNS = `id, audience, slug, source, author_id, author_handle, status, models, title, title_ko,
                  prompt_text, process_md, process_md_ko, source_url,
                  text_visibility::text as text_visibility, media, use_case, featured,
                  medium, price_cents, price_krw, runtime_seconds, engine, aspect_default,
                  ${PRICE_1080_COLUMNS},
+                 ${CAST_COLUMN},
                  reject_reason, created_at, published_at, announced_at`;
 
 /** §13.2 — the one ordering, so the gallery, the admin list and the sitemap never disagree. */
@@ -134,6 +144,7 @@ function toRow(raw: RawRow): PromptRow {
     useCase: raw.use_case ?? [],
     featured: raw.featured,
     medium: raw.medium,
+    cast: toTemplateCast(raw.cast_kind),
     priceCents: raw.price_cents,
     priceKrw: raw.price_krw ?? 0,
     price1080Cents: raw.price_1080_cents ?? 0,
@@ -301,6 +312,8 @@ export interface InsertPromptArgs {
   featured: boolean;
   /** docs/TEMPLATES-IA.md — default 'video' / 0 / null: a row born before templates is a video not yet for sale. */
   medium?: TemplateMedium;
+  /** docs/CAST-CATEGORIES.md — default 'solo'. A non-solo cast needs 0078 and says so loudly without it. */
+  cast?: TemplateCast;
   priceCents?: number;
   priceKrw?: number;
   price1080Cents?: number;
@@ -360,6 +373,30 @@ export async function insertPrompt(sql: SqlRunner, args: InsertPromptArgs): Prom
       args.price1080Krw ?? 0,
     ],
   );
+  // The column defaults to 'solo', so only another cast needs the second statement.
+  if (args.cast !== undefined && args.cast !== 'solo') await setPromptCast(sql, args.id, args.cast);
+}
+
+/** Whether 0078 is applied — the cloud can run this code between merge and migration. */
+export async function castSchemaReady(sql: SqlRunner): Promise<boolean> {
+  const { rows } = await sql.query<{ ready: boolean }>(
+    `select exists (select 1 from information_schema.columns
+                     where table_name = 'prompt_items' and column_name = 'cast_kind') as ready`,
+  );
+  return rows[0]?.ready === true;
+}
+
+/**
+ * docs/CAST-CATEGORIES.md — who is in it. A database without 0078 holds only `solo` templates, so
+ * writing `solo` there is a no-op; any other cast refuses with the migration's name instead of
+ * silently publishing a pet or couple template as a solo one.
+ */
+export async function setPromptCast(sql: SqlRunner, id: string, cast: TemplateCast): Promise<void> {
+  if (!(await castSchemaReady(sql))) {
+    if (cast === 'solo') return;
+    throw new Error('prompt_items.cast_kind is missing — apply 0078_core_template_cast first');
+  }
+  await sql.query('update prompt_items set cast_kind = $2 where id = $1', [id, cast]);
 }
 
 /** Stamp the published media refs back onto the row after the copier has run (§13.1 lifecycle). */
@@ -390,6 +427,8 @@ export interface UpdatePromptArgs {
   models: string[];
   /** Omitted ⇒ unchanged (a form that predates templates keeps what the row had). */
   medium?: TemplateMedium;
+  /** Omitted ⇒ unchanged, like `medium`. */
+  cast?: TemplateCast;
   priceCents?: number;
   priceKrw?: number;
   price1080Cents?: number;
@@ -442,6 +481,7 @@ export async function updatePrompt(sql: SqlRunner, args: UpdatePromptArgs): Prom
       args.price1080Krw ?? null,
     ],
   );
+  if (rows.length > 0 && args.cast !== undefined) await setPromptCast(sql, args.id, args.cast);
   return rows.length > 0;
 }
 

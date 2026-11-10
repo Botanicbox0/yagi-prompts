@@ -6,6 +6,8 @@ import { templatesListingMetadata } from '@/lib/seo/template-metadata';
 import { MarketingFooter, MarketingNav } from '@/components/marketing/chrome';
 import { PersonalIdentity } from '@/components/audience/personal-identity';
 import { TemplatesListing } from '@/components/templates/listing';
+import { CastShelfSection } from '@/components/templates/cast-shelf';
+import { CAST_SECTIONS, castShelf, soloCatalog } from '@/lib/prompts/catalog';
 import { FaqSection } from '@/lib/seo/faq-section';
 import { FirstRunSheet } from '@/components/onboarding/first-run-sheet';
 
@@ -49,7 +51,13 @@ export default async function VideoTemplatesPage({ params }: RouteParams) {
     <PersonalIdentity>
       <MarketingNav locale={locale} dict={dict} rest="/video" initialTheme="light" />
       <main id="main" data-templates="video" data-section data-theme="light" className="section">
-        <TemplatesListing locale={locale} dict={dict} medium="video" cards={catalog.video} />
+        <TemplatesListing
+          locale={locale}
+          dict={dict}
+          medium="video"
+          cards={soloCatalog(catalog).video}
+          after={CAST_SECTIONS.map((cast) => <CastShelfSection key={cast} locale={locale} dict={dict} cast={cast} shelf={castShelf(catalog, cast)} mode="listing" medium="video" />)}
+        />
       </main>
       <FaqSection dict={dict} locale={locale} placement="template" path={`/${locale}/video`} />
       <MarketingFooter locale={locale} dict={dict} />

@@ -39,6 +39,7 @@
 | 문서 | 읽는 때 |
 | --- | --- |
 | `CREATOR-PLATFORM.md` | 플랫폼 테이블·80/20 정산·이미지 보상 크레딧·플래그. |
+| `CAST-CATEGORIES.md` | 누가 나오나요(혼자·둘이서·반려동물): `cast` 축, pet·partner 사진 자리, 슬롯 사진 수명, 둘이서 플래그, 화면. |
 | `qa/catalog-makers/PR.md`, `qa/recipe-v2/PR.md` | 카탈로그 분리·메이커 프로필(PR #94)과 레시피 v2(PR #95)의 구현 범위·검증·남은 위험. 해당 화면을 만질 때 먼저. |
 | `CREATOR-ONBOARDING-PLAN.md`, `CREATOR-ONBOARDING-REVIEW-NOTES.md`, `qa/creator-onboarding.md` | 지원·작업공간·정산 현황 화면(PR #79). |
 | `CREATOR-PROFILE.md` | 계정 페이지·SNS 주소 저장(인증 아님). |

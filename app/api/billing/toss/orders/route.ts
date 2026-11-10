@@ -7,7 +7,7 @@ import {
 } from '@/lib/billing/toss-runtime';
 import { createTossOrder } from '@/lib/billing/toss-service';
 import { canStartRender } from '@/lib/renders/service';
-import { savedSelfiePhoto } from '@/lib/identity/selfie-service';
+import { bindOrderPhotos, orderPhotos } from '@/lib/renders/cast-form';
 
 /**
  * `POST /api/billing/toss/orders` — an order for one template, paid with the saved selfie.
@@ -30,18 +30,23 @@ export async function POST(request: Request) {
     const deps = await getTossContext();
     if (!deps) return json({ ok: false, code: 'unavailable' }, 503);
     const form = await request.formData();
-    const selfieId = String(form.get('selfieId') ?? '');
-    const saved = selfieId ? await savedSelfiePhoto(deps.sql, deps.store, viewer.userId, selfieId) : null;
-    if (!saved) return json({ ok: false, code: 'selfie_required' }, 400);
+    // docs/CAST-CATEGORIES.md §3: which photo the order carries — the saved selfie (solo, couple,
+    // person + pet) or the pet (pet-only) — and the second photo, if the template takes one.
+    // A solo template keeps exactly the old rule: the saved selfie or `selfie_required`.
+    const photos = await orderPhotos(deps.sql, deps.store, viewer.userId, form);
+    if (!photos.ok) return json({ ok: false, code: photos.code }, photos.code === 'not_found' ? 404 : 400);
     const result = await createTossOrder(deps, viewer, {
       templateSlug: String(form.get('template') ?? ''),
       aspect: String(form.get('aspect') ?? ''),
       // A name, never a price: the service prices it from the template row (lib/twings/resolution.ts).
       resolution: String(form.get('resolution') ?? ''),
       locale: String(form.get('locale') ?? ''),
-      selfieId,
-      photo: saved,
+      ...(photos.selfieId ? { selfieId: photos.selfieId } : {}),
+      photo: photos.photo,
     });
+    if (result.ok && photos.templateId) {
+      await bindOrderPhotos(deps.sql, deps.store, { orderId: result.order.id, userId: viewer.userId, templateId: photos.templateId, extras: photos.extras, partnerConsent: photos.partnerConsent, now: new Date() });
+    }
     return result.ok
       ? json({ ok: true, href: `/billing/toss/${result.order.id}` }, 201)
       : json(result, 400);

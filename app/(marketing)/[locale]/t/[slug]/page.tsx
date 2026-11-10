@@ -39,6 +39,7 @@ import { SubscriptionAvailabilityProvider } from '@/components/twings/subscripti
 import { TemplateMakeAvailability } from '@/components/twings/subscription-public-notices';
 import { cachedTypicalWaitMinutes } from '@/lib/twings/cached-typical-wait';
 import { cachedPublicRecipe } from '@/lib/recipes/cached-public';
+import { cachedMakeInputs } from '@/lib/renders/cached-make-inputs';
 import { recipeTeaser } from '@/lib/recipes/public';
 import { HowItWasMade } from '@/components/recipes/how-it-was-made';
 import { RecipeActions } from '@/components/recipes/recipe-actions';
@@ -117,7 +118,11 @@ export default async function TemplatePage({ params }: RouteParams) {
   // One gate: the static HTML carries the teaser (the intro, the opening of step 1 and its BGM line); a
   // signed-in member gets the rest — every prompt, the tips, the files — from /api/renders/access.
   const mr = dict.makerRecipe;
-  const recipe = await cachedPublicRecipe(card.id, { selfie: mr.selfieLabel, reference: mr.referenceLabel, step: mr.stepResultLabel });
+  const recipe = await cachedPublicRecipe(card.id, { selfie: mr.selfieLabel, reference: mr.referenceLabel, step: mr.stepResultLabel, pet: dict.cast.photo.petTitle, partner: dict.cast.photo.partnerTitle });
+  // docs/CAST-CATEGORIES.md §3: what the make card asks for (selfie · pet · partner). Null = a pet or
+  // couple template without a matching recipe — shown, but not offered for making.
+  const makeInputs = await cachedMakeInputs(card.id, card.cast ?? 'solo');
+  const petOnly = makeInputs !== null && makeInputs.pet && !makeInputs.selfie;
   const teaserRecipe = recipe ? recipeTeaser(recipe) : null;
   // Story-first (founder, 2026-10-29): the result, then how it was made, then "one selfie and it's
   // you" with the make box — the recipe sits in the column under the title, ahead of any cost.
@@ -168,8 +173,9 @@ export default async function TemplatePage({ params }: RouteParams) {
   const cLabels = campaignLabels(dict);
 
   const resolvedEngine = resolveEngine(card.engine, card.medium);
-  const style: StudioStyle | null = isForSale(card)
+  const style: StudioStyle | null = isForSale(card) && makeInputs !== null
     ? {
+        castInputs: { selfie: makeInputs.selfie, pet: makeInputs.pet, partner: makeInputs.partner },
         id: card.slug,
         title,
         price: formatTemplatePrice(card, locale),
@@ -231,9 +237,10 @@ export default async function TemplatePage({ params }: RouteParams) {
                     title={title}
                     aspect={mediaAspect}
                     makeHref={style !== null ? '#make' : null}
+                    selfieTile={!petOnly}
                     labels={{
                       ...galleryLabels,
-                      lead: setSize ? galleryLabels.transformSet : galleryLabels.transformImage,
+                      lead: petOnly ? dict.cast.pet.transform : setSize ? galleryLabels.transformSet : galleryLabels.transformImage,
                       position: dict.renders.frames.position,
                       selfie: dict.creatorJourney.evidenceSelfie,
                     }}
@@ -258,7 +265,7 @@ export default async function TemplatePage({ params }: RouteParams) {
                     </div>
                     {/* A film with no poster still gets the promise, without the result tile. Story-first
                         moves it under the recipe, into the make box. */}
-                    {!recipeFirst && (
+                    {!recipeFirst && !petOnly && (
                       <TransformStrip
                         lead={galleryLabels.transformVideo}
                         selfieLabel={dict.creatorJourney.evidenceSelfie}
@@ -349,7 +356,7 @@ export default async function TemplatePage({ params }: RouteParams) {
                       signinHref={signInHref(`${templateHref(locale, slug)}#make`, locale)}
                       labels={{ subscribeCta: subscriptionOpen ? t.subscribeCta : t.makeCta, credits: t.credits, makeCta: t.makeCta, makeCtaClosed: t.makeCtaClosed }}
                       stickyAfter={recipeFirst}
-                      lead={recipeFirst && !stageFrames ? (
+                      lead={recipeFirst && !stageFrames && !petOnly ? (
                         <TransformStrip
                           lead={galleryLabels.transformVideo}
                           selfieLabel={dict.creatorJourney.evidenceSelfie}
@@ -388,6 +395,7 @@ export default async function TemplatePage({ params }: RouteParams) {
                             signinHref: signInHref(`${templateHref(locale, slug)}#make`, locale),
                             identityHref: identityVerifyHref(`${templateHref(locale, slug)}#make`),
                             selfie: dict.selfie,
+                            cast: dict.cast.photo,
                             subscription: { copy: dict.creatorSubscription, editorCopy: dict.premiumEditor },
                             labels: {
                               badge: dict.renders.studio.badge,

@@ -141,3 +141,14 @@ export function brandUsagePaymentsOpen(env: NodeJS.ProcessEnv = process.env): bo
 export function brandStudioV2Open(env: NodeJS.ProcessEnv = process.env): boolean {
   return env.BRAND_STUDIO_V2 === 'on';
 }
+
+/**
+ * docs/CAST-CATEGORIES.md §4 — couple templates (the buyer and one partner). Default OFF: open only
+ * when the server environment says exactly `TWINGS_COUPLE_TEMPLATES=on`. Terms §5.3 say "your own
+ * face only" and cannot change while Toss reviews subscription billing, so off means couples do not
+ * exist anywhere: the catalogue drops couple templates, `/{locale}/couple` and their template pages
+ * answer 404, no chip or section mentions them, and the make and render APIs refuse a partner photo.
+ */
+export function coupleTemplatesOpen(env: Record<string, string | undefined> = process.env): boolean {
+  return env.TWINGS_COUPLE_TEMPLATES === 'on';
+}

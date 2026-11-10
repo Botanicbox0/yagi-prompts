@@ -238,3 +238,40 @@ describe('PromptDetailMedia hero video', () => {
     expect(html).not.toContain('data-detail-sound');
   });
 });
+
+// docs/CAST-CATEGORIES.md §3 — the make card asks for the photos this template takes, and only those.
+describe('the studio for pet and couple templates (live, signed in)', () => {
+  const castLive: StudioLive = { ...live, cast: dict.cast.photo };
+  const render = (castInputs: StudioStyle['castInputs']) => renderToStaticMarkup(
+    <TwingsStudio styles={[{ ...styles[0]!, castInputs }]} labels={labels} initialStyleId="seoul-90s" live={castLive} initialAccess={{ open: true, live: true, signedIn: true }} />,
+  );
+
+  it('a pet-only template asks for the pet photo and never for a selfie', () => {
+    const html = render({ selfie: false, pet: true, partner: false });
+    expect(html).toContain('data-cast-photo="pet"');
+    expect(html).toContain('data-cast-photo-tips');
+    expect(html).not.toContain('data-selfie-panel');
+    expect(html).toMatch(/<button[^>]*data-pay-cta[^>]*disabled=""/);
+    expect(html).toContain(dict.cast.photo.needPet);
+  });
+
+  it('a person + pet template asks for the selfie and the pet', () => {
+    const html = render({ selfie: true, pet: true, partner: false });
+    expect(html).toContain('data-selfie-panel');
+    expect(html).toContain('data-cast-photo="pet"');
+    expect(html).not.toContain('data-cast-photo="partner"');
+  });
+
+  it('a couple template asks for the partner photo with one plain confirmation', () => {
+    const html = render({ selfie: true, pet: false, partner: true });
+    expect(html).toContain('data-cast-photo="partner"');
+    expect(html).toContain('data-partner-consent');
+    expect(html).toContain(dict.cast.photo.partnerConsent);
+  });
+
+  it('a solo template is exactly as before: no cast fields', () => {
+    const html = render(undefined);
+    expect(html).not.toContain('data-cast-photo');
+    expect(html).toContain('data-selfie-panel');
+  });
+});
