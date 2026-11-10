@@ -113,7 +113,7 @@ export function DirectSceneStudio({
 
   return (
     <div data-direct-scene-studio className="space-y-14">
-      {/* SECTION 0: Warm Consumer Value Proposition + Maker 80% Revenue Highlight */}
+      {/* SECTION 0: Warm Consumer Value Proposition */}
       <section
         data-direct-wording-rationale
         className="rounded-[24px] border border-[#3875C5]/25 bg-[#F3F7FA] p-6 sm:p-8"
@@ -123,8 +123,8 @@ export function DirectSceneStudio({
             <span className="inline-flex items-center gap-1.5 rounded-full bg-[#E8EFF7] px-3 py-1 text-xs font-semibold text-[#3063A7]">
               <span aria-hidden="true" className="size-1.5 rounded-full bg-[#3875C5]" />
               {locale === 'en'
-                ? 'MAKE YOUR OWN VIDEO & EARN 80% AS A TEMPLATE MAKER'
-                : '나만의 영상 제작하기 · 내 영상을 템플릿으로 올리고 80% 수익 받기'}
+                ? 'Make Your Own Video'
+                : '나만의 영상 제작하기'}
             </span>
             <h2 className="mt-3 text-lg font-bold tracking-[-0.015em] text-[#0E1013] sm:text-xl">
               {locale === 'en'
@@ -149,159 +149,9 @@ export function DirectSceneStudio({
               <p className="mt-0.5 text-[0.72rem] text-black/60">완성된 영상만 예시로 올라가고 구도는 자동 고정</p>
             </div>
             <div className="rounded-[16px] border border-[#3875C5]/30 bg-white px-4 py-3.5 text-xs shadow-sm">
-              <p className="font-semibold text-[#3063A7]">3단계 · 만들 때마다 수익 정산</p>
-              <p className="mt-1 font-bold text-[#0E1013]">순수익의 80%가 내 통장으로</p>
-              <p className="mt-0.5 text-[0.72rem] text-black/60">누군가 내 템플릿으로 만들 때마다 자동 적립</p>
-            </div>
-          </div>
-        </div>
-      </section>
-
-      {/* SECTION 1: Maker Revenue Calculator — Earn 80% Every Time Someone Uses Your Template */}
-      <section
-        data-maker-revenue-calculator
-        aria-labelledby="maker-revenue-heading"
-        className="rounded-[24px] border border-[#3875C5]/30 bg-white p-6 shadow-[0_18px_42px_-28px_rgba(12,15,20,0.12)] sm:p-8 lg:p-10"
-      >
-        <div className="flex flex-wrap items-end justify-between gap-4 border-b border-hairline pb-6">
-          <div className="max-w-2xl">
-            <span className="inline-flex items-center gap-1.5 rounded-full bg-[#E8EFF7] px-3 py-1 text-xs font-semibold text-[#3063A7]">
-              {locale === 'en'
-                ? 'CREATOR REVENUE SHARE · 80% NET MARGIN'
-                : '템플릿 수익 시뮬레이터 · 순이익의 80% 정산'}
-            </span>
-            <h2
-              id="maker-revenue-heading"
-              className="mt-3 font-display text-[clamp(1.45rem,2.6vw,2.15rem)] leading-[1.1] font-black tracking-[-0.025em] text-[#0E1013]"
-            >
-              {locale === 'en'
-                ? 'Someone makes a video with your template? You earn 80% of the profit.'
-                : '내가 올린 템플릿으로 다른 사람이 만들 때마다 수익이 쌓입니다'}
-            </h2>
-            <p className="mt-2 text-sm leading-relaxed text-black/65">
-              {locale === 'en'
-                ? 'Set your own template bonus (+0 to +5,000 KRW). You receive 80% of the entire net margin after VAT, payment fee, and generation cost.'
-                : '내 영상을 템플릿으로 올릴 때 기본 가격 위에 내 추가 수익금(0원~5,000원)을 직접 정할 수 있어요. 결제 금액에서 세금·결제수수료·제작원가를 뺀 전체 순이익의 80%가 내 수익으로 정산됩니다.'}
-            </p>
-          </div>
-
-          <a
-            href={creatorWorkspaceHref}
-            data-maker-start-cta
-            className="audience-button shrink-0"
-          >
-            {locale === 'en' ? 'Publish My Template & Earn →' : '내 영상 올리고 수익 만들기 →'}
-          </a>
-        </div>
-
-        <div className="mt-6 grid gap-6 lg:grid-cols-12">
-          {/* Left 5 cols: Choose your template price raise */}
-          <div className="flex flex-col justify-between rounded-[20px] border border-hairline bg-[#F6F7F9] p-5 lg:col-span-5">
-            <div>
-              <p className="text-xs font-semibold text-[#3063A7]">
-                {locale === 'en'
-                  ? '1. Choose how much bonus to add to your template'
-                  : '1. 내 템플릿에 붙일 추가 수익금을 골라보세요'}
-              </p>
-              <p className="mt-1 text-xs leading-relaxed text-black/65">
-                {locale === 'en'
-                  ? `Base film price: ₩${revenueSim.floorKrw.toLocaleString('en-US')} (${revenueSim.baseCredits} credits)`
-                  : `현재 선택한 영상(${activePreset.badgeKo}) 기본가: ${revenueSim.floorKrw.toLocaleString('ko-KR')}원 (${revenueSim.baseCredits} 크레딧)`}
-              </p>
-
-              <div className="mt-3.5 flex flex-wrap gap-2" role="group" aria-label="추가 수익금 선택">
-                {RAISE_OPTIONS_KRW.map((raise) => {
-                  const active = royaltyKrw === raise;
-                  return (
-                    <button
-                      key={raise}
-                      type="button"
-                      data-maker-raise-option={raise}
-                      aria-pressed={active}
-                      onClick={() => setRoyaltyKrw(raise)}
-                      className={[
-                        'inline-flex min-h-10 items-center rounded-full border px-3.5 py-1.5 text-xs font-semibold transition-colors tabular-nums',
-                        active
-                          ? 'border-[#3875C5] bg-[#3875C5] text-white'
-                          : 'border-hairline bg-white text-[#0E1013] hover:border-[#3875C5]'
-                      ].join(' ')}
-                    >
-                      {raise === 0
-                        ? locale === 'en'
-                          ? 'Base price (+₩0)'
-                          : '기본가 그대로 (+0원)'
-                        : `+${raise.toLocaleString('ko-KR')}원`}
-                    </button>
-                  );
-                })}
-              </div>
-            </div>
-
-            <div className="mt-5 rounded-[16px] border border-[#3875C5]/25 bg-white p-4">
-              <div className="flex items-baseline justify-between gap-2">
-                <span className="text-xs font-medium text-black/65">
-                  {locale === 'en' ? 'Template Sale Price' : '구매자에게 보이는 템플릿 가격'}
-                </span>
-                <span className="font-mono text-sm font-bold text-[#0E1013] tabular-nums">
-                  {revenueSim.salePriceKrw.toLocaleString('ko-KR')}원 ({revenueSim.totalCredits} 크레딧)
-                </span>
-              </div>
-              <div className="mt-2 flex items-baseline justify-between gap-2 border-t border-hairline pt-2">
-                <span className="text-xs font-semibold text-[#3063A7]">
-                  {locale === 'en' ? 'Your 80% Share per 1 Make' : '누군가 1번 만들 때마다 내가 받는 수익 (80%)'}
-                </span>
-                <span
-                  data-maker-earning-per-make
-                  className="font-display text-lg font-black text-[#3063A7] tabular-nums"
-                >
-                  +{revenueSim.perMake.creator.toLocaleString('ko-KR')}원
-                </span>
-              </div>
-            </div>
-          </div>
-
-          {/* Right 7 cols: Cumulative Earnings Milestones (10, 50, 100, 500 makes) */}
-          <div className="flex flex-col justify-between rounded-[20px] border border-[#3875C5]/25 bg-[#F3F7FA] p-5 lg:col-span-7">
-            <div>
-              <p className="text-xs font-semibold text-[#3063A7]">
-                {locale === 'en'
-                  ? '2. Estimated Cumulative Earnings by Number of Makes'
-                  : '2. 내 템플릿으로 사람들이 만들었을 때 예상 누적 정산금'}
-              </p>
-              <div className="mt-3.5 grid grid-cols-2 gap-3 sm:grid-cols-4">
-                {revenueSim.milestones.map((m) => (
-                  <div
-                    key={m.makes}
-                    data-maker-milestone={m.makes}
-                    className="rounded-[16px] border border-white bg-white p-4 shadow-sm"
-                  >
-                    <p className="text-xs font-semibold text-black/60">
-                      {locale === 'en' ? `${m.makes} makes` : `${m.makes}명이 만들면`}
-                    </p>
-                    <p className="mt-2 font-display text-xl font-black tracking-tight text-[#0E1013] tabular-nums">
-                      {m.creatorTotalKrw.toLocaleString('ko-KR')}원
-                    </p>
-                    <p className="mt-1 text-[0.7rem] text-[#3063A7]">
-                      {locale === 'en' ? '80% Maker Payout' : '내 정산 수익 (80%)'}
-                    </p>
-                  </div>
-                ))}
-              </div>
-            </div>
-
-            {/* Maker Account Connection Assurance */}
-            <div
-              data-maker-db-pipeline
-              className="mt-4 rounded-[14px] border border-white bg-white px-4 py-3 text-xs leading-relaxed text-black/70"
-            >
-              <span className="font-semibold text-[#0E1013]">
-                {locale === 'en'
-                  ? 'Connected directly to your Maker Profile (@handle): '
-                  : '내 크리에이티브 프로필(@핸들)과 자동 연동됩니다: '}
-              </span>
-              {locale === 'en'
-                ? 'Every time a buyer renders your template, 80% of the net profit is automatically recorded in your settlement ledger.'
-                : '템플릿이 공개되면 카드에 내 @핸들이 함께 표시되고, 다른 사람이 내 템플릿으로 제작할 때마다 순이익의 80%가 내 정산 내역에 투명하게 자동 적립됩니다.'}
+              <p className="font-semibold text-[#3063A7]">3단계 · 템플릿 공개</p>
+              <p className="mt-1 font-bold text-[#0E1013]">내 영상을 템플릿으로 만들기</p>
+              <p className="mt-0.5 text-[0.72rem] text-black/60">내 핸들이 표시된 템플릿으로 다른 사람도 영상을 만들어요</p>
             </div>
           </div>
         </div>
@@ -744,16 +594,16 @@ export function DirectSceneStudio({
             <div className="space-y-4">
               <div className="flex items-center justify-between">
                 <span className="rounded-full bg-[#3875C5] px-3 py-1 text-xs font-bold text-white">
-                  3단계 · 템플릿 등록 & 수익화
+                  3단계 · 템플릿 공개
                 </span>
                 <span className="rounded-full bg-white px-2.5 py-0.5 text-xs font-semibold text-[#3063A7]">
-                  순수익 80% 정산
+                  공개하기
                 </span>
               </div>
 
               <h3 className="text-base font-bold text-[#0E1013]">
                 {locale === 'en'
-                  ? '3. Publish as Your Template & Earn'
+                  ? '3. Publish as Your Template'
                   : '3. 다른 사람이 만들 때 어디까지 바꿀 수 있게 할까요?'}
               </h3>
 
@@ -862,11 +712,9 @@ export function DirectSceneStudio({
               {compiled.personalToTemplateSummary.templateBuyerExperienceKo}
             </p>
             <p className="text-xs text-black/60">
-              누군가 이 템플릿({revenueSim.salePriceKrw.toLocaleString('ko-KR')}원)으로 영상을 만들 때마다{' '}
-              <strong className="font-semibold text-[#3063A7]">
-                +{revenueSim.perMake.creator.toLocaleString('ko-KR')}원(순이익의 80%)
-              </strong>
-              이 내 크리에이티브 정산금으로 적립됩니다.
+              {locale === 'en'
+                ? 'Once published, others can make their own video with your template.'
+                : '공개하면 다른 사람도 이 템플릿으로 자기 영상을 만들 수 있어요.'}
             </p>
           </div>
 

@@ -63,14 +63,14 @@ export const DIRECT_SCENE_WORDING_CANDIDATES: readonly TabWordingCandidate[] = [
     recommended: true,
     navKo: '나만의 영상 제작하기',
     navEn: 'Make Your Own Video',
-    headlineKo: '저장해 둔 영상으로 내 장면을 만들고, 템플릿으로 올려 80% 수익도 받으세요',
-    headlineEn: 'Make Your Own Video — Turn any reference clip into your scene, then earn 80% when others use your template',
+    headlineKo: '나만의 감각을 템플릿으로 공유하세요',
+    headlineEn: 'Share your style as a template',
     subcopyKo:
-      '평소 저장해 둔 멋진 영상에 내 정면 사진 한 장을 올려 내가 주인공인 영상을 완성해 보세요. 완성된 영상이 마음에 들면 템플릿으로 공개할 수 있고, 다른 사람이 내 템플릿으로 만들 때마다 순이익의 80%가 내 수익으로 정산됩니다.',
+      '내가 만든 영상을 템플릿으로 공개하면, 다른 사람들도 내 스타일대로 영상을 만들 수 있어요.',
     subcopyEn:
-      'Upload a reference video you love and one front selfie to star in your own scene. Publish the finished video as a template and earn 80% of the net margin every time someone makes it.',
+      'Publish your video as a template and let others recreate your vibe.',
     rationaleKo:
-      '어려운 기술 용어 없이 누구나 원하는 레퍼런스 영상으로 자기 영상을 만들고, 그대로 템플릿으로 등록해 수익(순마진 80%)까지 얻을 수 있다는 가치를 직관적으로 전달합니다.'
+      '어려운 기술 용어 없이 누구나 원하는 레퍼런스 영상으로 자기 영상을 만들고, 그대로 템플릿으로 공개할 수 있다는 가치를 직관적으로 전달합니다.'
   },
   {
     id: 'direct-scene',

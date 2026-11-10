@@ -14,12 +14,13 @@ import { TemplateDirectorPanel } from '@/components/twings/template-director-pan
 import { CreatorCampaignHub } from '@/components/campaigns/creator-campaign-hub';
 
 describe('Make Your Own Video & Maker 80% Revenue Engine + Selective Frame Picker + Creator Campaign Hub (2026-11-04)', () => {
-  it('positions "나만의 영상 제작하기 · Make Your Own Video" with consumer-friendly copy and Maker 80% revenue share', () => {
+  it('positions "나만의 영상 제작하기 · Make Your Own Video" with consumer-friendly copy without payout numbers', () => {
     const recommended = DIRECT_SCENE_WORDING_CANDIDATES.find((c) => c.recommended);
     expect(recommended?.id).toBe('freestyle-yourself');
     expect(recommended?.navKo).toBe('나만의 영상 제작하기');
     expect(recommended?.navEn).toBe('Make Your Own Video');
-    expect(recommended?.headlineKo).toContain('저장해 둔 영상으로 내 장면을 만들고');
+    expect(recommended?.headlineKo).toContain('템플릿으로 공유');
+    expect(recommended?.headlineKo).not.toContain('80%');
     expect(HIGH_QUALITY_REQUEST_GUIDE).toHaveLength(3);
     expect(MAKER_DB_ARCHITECTURE_READINESS.map((t) => t.table)).toEqual([
       'platform_creators',
@@ -89,7 +90,7 @@ describe('Make Your Own Video & Maker 80% Revenue Engine + Selective Frame Picke
     expect(backdropFreeze?.status).toBe('open_user_reference');
   });
 
-  it('renders DirectSceneStudio with the Maker 80% Revenue Calculator, friendly 3 tips, and 3-step simulator without tech jargon', () => {
+  it('renders DirectSceneStudio with friendly 3 tips, and 3-step simulator without tech jargon', () => {
     const html = renderToStaticMarkup(
       <DirectSceneStudio
         locale="ko"
@@ -99,9 +100,9 @@ describe('Make Your Own Video & Maker 80% Revenue Engine + Selective Frame Picke
     );
 
     expect(html).toContain('data-direct-scene-studio');
-    expect(html).toContain('data-maker-revenue-calculator');
-    expect(html).toContain('data-maker-earning-per-make');
-    expect(html).toContain('data-maker-db-pipeline');
+    // 2026-11-11: no payout numbers on /direct until the creative revenue programme opens
+    expect(html).not.toContain('data-maker-revenue-calculator');
+    expect(html).not.toContain('80%');
     expect(html).toContain('data-high-quality-guide');
     expect(html).toContain('data-quality-rule="01"');
     expect(html).toContain('data-quality-rule="02"');
