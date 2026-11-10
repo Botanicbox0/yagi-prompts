@@ -88,4 +88,6 @@ operation for a superuser, and it is not something app code can do — that is t
 | 2026-11-03 | `0075_core_brand_identity` · `0151_glue_brand_identity` | 0075 + 0151 (`brand_identities`·`brand_identity_events`·`brand_memory_events`·`brand_looks`, RLS 강제, 서버 롤 전용) | #181 |
 | 2026-11-06 | `0042`~`0044` · `0127`~`0129` | 0042~0044 + 0127~0129 (월 구독·프리미엄 수정·출시 증빙 테이블, RLS 강제, 서버 롤 전용) | 정기결제(`bill_twinglnyl`) 심사 반영 |
 
+미적용(적용 예정): `0076_core_brand_studio` · `0077_core_brand_studio_film` · `0152_glue_brand_studio` — 브랜드 스튜디오 v2(`docs/BRAND-STUDIO-V2.md`). 적용하면 위 표에 날짜와 함께 옮긴다.
+
 미적용: 0029/0115(옛 portrait 비교, 폐지 경로). 0063(prom-queen 비율)은 원장에 없지만 운영 데이터에는 이미 반영돼 있다. 0064·0144는 열린 브랜치가 쓰는 번호. 0074·0075와 0150·0151은 브랜드 제품화 브랜치(docs/BRAND-PRODUCT.md)가 쓴다. 다음 번호: core 0076, glue 0152.

@@ -138,8 +138,8 @@ v2는 기존 파일을 고치지 않고 **새 파일**(`lib/brand-studio/*`, `co
 
 ## 6. 데이터
 
-마이그레이션 `0076_core_brand_studio.sql`(스키마) + `0152_glue_brand_studio.sql`(RLS: 서비스 롤만, 정책 없음 = 닫힘).
-**클라우드 적용 필요.**
+마이그레이션 `0076_core_brand_studio.sql`(스키마) + `0077_core_brand_studio_film.sql`(에셋에 영상 읽기 결과 보관) +
+`0152_glue_brand_studio.sql`(RLS: 서비스 롤만, 정책 없음 = 닫힘). 운영 적용 여부는 `supabase/README.md` 원장을 본다.
 
 - `brand_studio_assets` — 회사 에셋. `id, organization_id, kind(image|video|audio), role(null 가능), name, tags text[],
   mime, size_bytes, width, height, duration_ms, storage_key unique, thumb_key, sha256, source(upload|generation),
@@ -180,6 +180,12 @@ v2는 기존 파일을 고치지 않고 **새 파일**(`lib/brand-studio/*`, `co
   작업을 한 걸음 전진) + 하루 한 번 크론 청소. Vercel Hobby라 분 단위 크론은 없다.
 - 실패한 작업과 취소한 작업은 사용량에서 뺀다. 제공사 잔액 부족은 `provider_unavailable`로 답하고 서버 로그에
   `studio_provider_balance`를 남긴다(고객에게 제공사 사정을 말하지 않는다).
+- **잔액 부족이면 경로를 바꾼다.** 한 경로가 돈을 못 내면(API 계정 잔액 0, 계정 크레딧 소진) 그 경로를 10분 닫고 작업을 다른 경로로
+  한 번 옮긴다. 둘 다 닫혔으면 `provider_unavailable`. `video_final`은 옮기지 않는다.
+- **결과 파일은 조각으로 나눠 동시에 받는다.** 2026-11-10 실측에서 제공사 파일 서버가 연결 하나당 초당 약 50KB였다(2K PNG가 2분 제한을
+  넘겨 결제된 결과를 잃었다). 범위 요청 10개를 동시에 보내고, 저장에 실패한 결과는 세 번까지 다시 시도한다(이미 과금된 결과다).
+- 취소는 제공사에 넘어가기 전(`held`·`queued`)에만 된다. 결과 삭제는 파일까지 지운다.
+- 영상은 기본이 480p 시안이다. 모델 기본값(720p)으로 두면 설정 없이 누른 한 번이 시안의 두 배 넘게 든다.
 - 로컬·테스트는 `BRAND_STUDIO_PROVIDER=fake`: 돈을 쓰지 않고 몇 초 뒤 자리표시 결과를 돌려준다. 운영 기본은 `live`.
 
 ## 8. 지능 — 보강, 영상 읽기, 부분 수정
