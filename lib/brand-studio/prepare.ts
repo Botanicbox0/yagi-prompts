@@ -227,6 +227,7 @@ export function enhanceInputOf(
   references: EnhanceInput['references'],
   brand: EnhanceInput['brand'],
   sheet: FilmSheet | null,
+  editCropThumb?: EnhanceInput['editCropThumb'],
 ): EnhanceInput {
   const p = job.params;
   const kind = enhanceKind(job.kind) ?? 'image';
@@ -238,6 +239,7 @@ export function enhanceInputOf(
     prompt: job.prompt,
     references,
     brand,
+    ...(editCropThumb ? { editCropThumb } : {}),
     video: video
       ? {
           seconds: p.seconds ?? null,
@@ -279,6 +281,7 @@ export async function prepareJob(deps: StudioDeps, job: JobRow): Promise<{ final
     return { finalPrompt: null, work: { ...work, draftTaskId: draft.draft_task_id, prepared: true } };
   }
 
+  let editCropThumb: EnhanceInput['editCropThumb'] = null;
   if (job.kind === 'region_edit') {
     const source = job.params.source ?? {};
     const row = source.assetId
@@ -291,7 +294,8 @@ export async function prepareJob(deps: StudioDeps, job: JobRow): Promise<{ final
     const plan = deps.intel.planRegion(size, job.params.box, (model as StudioImageModel).aspects);
     const crop = await deps.intel.cropForEdit(original, plan);
     const { key: cropKey } = await deps.media.put(crop.bytes, crop.mime);
-    work.region = { plan, cropKey, sourceKey: row.storage_key };
+    editCropThumb = { bytes: crop.bytes, mime: crop.mime };
+    work.region = { ...(work.region ?? {}), plan, cropKey, sourceKey: row.storage_key };
   }
 
   let sheet: FilmSheet | null = null;
@@ -305,7 +309,14 @@ export async function prepareJob(deps: StudioDeps, job: JobRow): Promise<{ final
 
   if (!job.enhance) return { finalPrompt: null, work: { ...work, prepared: true } };
   const organization = (await deps.sql.query<{ name: string }>('select name from brand_organizations where id = $1', [job.organization_id])).rows[0];
-  const input = enhanceInputOf(job, model, await enhanceReferences(deps, toEnhance), await brandSummary(deps, job.organization_id, organization?.name ?? ''), sheet);
+  const input = enhanceInputOf(
+    job,
+    model,
+    await enhanceReferences(deps, toEnhance),
+    await brandSummary(deps, job.organization_id, organization?.name ?? ''),
+    sheet,
+    editCropThumb,
+  );
   const result = await runEnhancer(deps, input);
   return { finalPrompt: result.prompt.slice(0, 8000), work: { ...work, enhanceNotes: result.notes.slice(0, 2000), prepared: true } };
 }

@@ -49,6 +49,8 @@ export interface ViewerActions {
   remove(output: StudioOutputView): Promise<boolean>;
   /** "꾸미기": the layer editor on this picture. */
   decorate?(item: ViewerItem): void;
+  /** Opens unified region edit inside the layer editor when wired by the screen. */
+  openRegionInLayers?(item: ViewerItem): void;
   /** "리뷰에 올리기". */
   review?(item: ViewerItem): void;
 }
@@ -269,9 +271,21 @@ function ViewerContent({
 
   const output = item.type === "output" ? item.output : null;
   const tiles: Array<{ name: string; icon: StudioIconName; label: string; run(): void; show: boolean }> = [
-    { name: "region", icon: "region", label: v.regionEdit, run: () => setRegion(true), show: canGenerate && image && Boolean(support) },
+    {
+      name: "region",
+      icon: "region",
+      label: v.regionEdit,
+      run: () => (actions.openRegionInLayers ? actions.openRegionInLayers(item) : setRegion(true)),
+      show: canGenerate && image && Boolean(support || actions.openRegionInLayers),
+    },
     { name: "rerun", icon: "rerun", label: v.rerun, run: () => job && actions.rerun(job), show: canGenerate && Boolean(job && canRerun(job)) },
-    { name: "decorate", icon: "layers", label: v.decorate, run: () => actions.decorate?.(item), show: canCreate && image && Boolean(actions.decorate) && Boolean(file.width && file.height) },
+    {
+      name: "decorate",
+      icon: "layers",
+      label: v.decorate,
+      run: () => actions.decorate?.(item),
+      show: canCreate && image && Boolean(actions.decorate) && Boolean(actions.openRegionInLayers || (file.width && file.height)),
+    },
     { name: "to-video", icon: "video", label: v.toVideo, run: () => actions.toVideo(item), show: canGenerate && image },
     { name: "reference", icon: "attach", label: v.reference, run: () => actions.reference(item), show: canGenerate },
     { name: "save", icon: "save", label: v.save, run: () => output && actions.save(output), show: canCreate && Boolean(output) && !output?.savedAssetId },

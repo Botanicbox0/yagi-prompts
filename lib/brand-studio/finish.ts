@@ -19,7 +19,21 @@ export async function fetchResult(deps: StudioDeps, url: string): Promise<{ byte
   return deps.provider ? deps.provider.download(url) : downloadResult(globalThis.fetch, url);
 }
 
-async function storeOne(deps: StudioDeps, job: JobRow, output: OutputRow, result: StudioPendingResult): Promise<void> {
+class RegionMisalignedError extends Error {
+  readonly residual: number;
+  constructor(residual: number) {
+    super(`region_misaligned (residual=${residual.toFixed(2)})`);
+    this.residual = residual;
+  }
+}
+
+interface StoredPatch {
+  patchKey: string;
+  maskKey: string | null;
+  box: { left: number; top: number; width: number; height: number };
+}
+
+async function storeOne(deps: StudioDeps, job: JobRow, output: OutputRow, result: StudioPendingResult): Promise<StoredPatch | null> {
   const fetched = await fetchResult(deps, result.url);
   let bytes = fetched.bytes;
   let mime = sniffMime(bytes);
@@ -27,23 +41,42 @@ async function storeOne(deps: StudioDeps, job: JobRow, output: OutputRow, result
     throw new Error(`result is not ${output.kind} (${fetched.mime ?? 'unknown'})`);
   }
   const region = job.kind === 'region_edit' ? job.work.region : undefined;
+  let patchPng: Buffer | undefined;
+  let maskPng: Buffer | undefined;
   if (region) {
     const original = await deps.media.read(region.sourceKey);
     const composed = await deps.intel.compositeRegion({ original, edited: bytes, plan: region.plan });
+    const bypassFake = deps.provider?.name === 'fake' && !job.prompt.includes('[[fake:misalign]]');
+    if (composed.misaligned && !bypassFake) {
+      throw new RegionMisalignedError(composed.ringResidual ?? 0);
+    }
     bytes = composed.bytes;
     mime = composed.mime;
+    patchPng = composed.patchPng;
+    maskPng = composed.maskPng;
   }
   const keys: string[] = [];
   try {
     const { key } = await deps.media.put(bytes, mime!);
     keys.push(key);
     let width: number | null = null, height: number | null = null, durationMs: number | null = null, thumbKey: string | null = null;
+    let storedPatch: StoredPatch | null = null;
     if (output.kind === 'image') {
       const size = await imageInfo(bytes);
       width = size?.width ?? null;
       height = size?.height ?? null;
       thumbKey = (await deps.media.put(await thumbnailWebp(bytes), 'image/webp')).key;
       keys.push(thumbKey);
+      if (region && patchPng) {
+        const patchKey = (await deps.media.put(patchPng, 'image/png')).key;
+        keys.push(patchKey);
+        let maskKey: string | null = null;
+        if (maskPng) {
+          maskKey = (await deps.media.put(maskPng, 'image/png')).key;
+          keys.push(maskKey);
+        }
+        storedPatch = { patchKey, maskKey, box: { ...region.plan.box } };
+      }
     } else {
       const info = videoInfo(bytes);
       width = info?.width ?? null;
@@ -59,6 +92,7 @@ async function storeOne(deps: StudioDeps, job: JobRow, output: OutputRow, result
       )
     ).rows[0];
     if (!stored) throw new Error('output no longer pending');
+    return storedPatch;
   } catch (error) {
     for (const key of keys) await deps.media.delete(key).catch(() => undefined);
     throw error;
@@ -83,14 +117,48 @@ export async function finishJob(deps: StudioDeps, job: JobRow, token: string): P
   const outputs = (await deps.sql.query<OutputRow>('select * from brand_studio_outputs where job_id = $1 order by idx', [job.id])).rows;
   const work = { ...job.work, results: { ...(job.work.results ?? {}) }, failures: { ...(job.work.failures ?? {}) } };
   let retry = false;
+  let requeueForAlign = false;
   for (const output of outputs.filter((o) => o.status === 'pending')) {
     const key = String(output.idx);
     const result = work.results[key];
     if (result) {
       try {
-        await storeOne(deps, job, output, result);
+        const storedPatch = await storeOne(deps, job, output, result);
+        if (storedPatch && work.region) {
+          work.region = {
+            ...work.region,
+            patches: { ...(work.region.patches ?? {}), [key]: storedPatch },
+          };
+        }
         continue;
       } catch (error) {
+        if (error instanceof RegionMisalignedError && work.region) {
+          const prevAlignAttempts = work.region.alignAttempts?.[key] ?? 0;
+          deps.log?.('studio_region_misaligned', {
+            jobId: job.id,
+            idx: output.idx,
+            attempt: prevAlignAttempts + 1,
+            residual: Math.round(error.residual * 100) / 100,
+          });
+          if (prevAlignAttempts < 1) {
+            work.region = {
+              ...work.region,
+              alignAttempts: { ...(work.region.alignAttempts ?? {}), [key]: prevAlignAttempts + 1 },
+            };
+            delete work.results[key];
+            delete work.failures[key];
+            await deps.sql.query(
+              "update brand_studio_outputs set provider_task_id = null where id = $1 and status = 'pending'",
+              [output.id],
+            );
+            requeueForAlign = true;
+            continue;
+          }
+          work.region = { ...work.region, misaligned: true };
+          work.failures[key] = { code: 'failed', detail: error.message.slice(0, 300) };
+          await deps.sql.query("update brand_studio_outputs set status = 'failed' where id = $1 and status = 'pending'", [output.id]);
+          continue;
+        }
         const message = error instanceof Error ? error.message : 'store failed';
         const attempts = (work.storeAttempts?.[key] ?? 0) + 1;
         work.storeAttempts = { ...(work.storeAttempts ?? {}), [key]: attempts };
@@ -108,6 +176,9 @@ export async function finishJob(deps: StudioDeps, job: JobRow, token: string): P
     }
     await deps.sql.query("update brand_studio_outputs set status = 'failed' where id = $1 and status = 'pending'", [output.id]);
   }
+  if (requeueForAlign) {
+    return saveJob(deps.sql, job, token, { status: 'queued', started_at: null, attempts: 0, work });
+  }
   if (retry) return saveJob(deps.sql, job, token, { work });
   return settleJob(deps, job, token, work);
 }
@@ -119,8 +190,9 @@ async function settleJob(deps: StudioDeps, job: JobRow, token: string, work: Job
   const detail = failures.map(([idx, f]) => `#${idx} ${f.code}: ${f.detail}`).join(' | ').slice(0, 1000) || null;
   await dropWorkingFiles(deps.media, work);
   if (ready.length === 0) {
-    const code: StudioErrorCode = failures.find(([, f]) => f.code !== 'failed')?.[1].code ?? 'failed';
-    return saveJob(deps.sql, job, token, { status: 'failed', error_code: code, error_detail: detail, work, finished_at: now(deps), usage_krw: 0 });
+    const rawCode: StudioErrorCode = failures.find(([, f]) => f.code !== 'failed')?.[1].code ?? 'failed';
+    const dbCode: StudioErrorCode = rawCode === 'region_misaligned' ? 'failed' : rawCode;
+    return saveJob(deps.sql, job, token, { status: 'failed', error_code: dbCode, error_detail: detail, work, finished_at: now(deps), usage_krw: 0 });
   }
   const share = Number(job.estimate_usd) / Math.max(1, outputs.length);
   const cost = ready.reduce((sum, o) => {
@@ -141,16 +213,23 @@ async function settleJob(deps: StudioDeps, job: JobRow, token: string, work: Job
 
 /** A job that cannot go on: every pending slot fails, nothing is counted. */
 export async function failJob(deps: StudioDeps, job: JobRow, token: string, code: StudioErrorCode, detail: string): Promise<JobRow | null> {
+  const isMisaligned = code === 'region_misaligned';
+  const dbCode: StudioErrorCode = isMisaligned ? 'failed' : code;
+  const work =
+    isMisaligned && job.work.region
+      ? { ...job.work, region: { ...job.work.region, misaligned: true } }
+      : undefined;
   const saved = await saveJob(deps.sql, job, token, {
     status: 'failed',
-    error_code: code,
+    error_code: dbCode,
     error_detail: detail.slice(0, 1000),
+    ...(work ? { work } : {}),
     finished_at: now(deps),
     usage_krw: 0,
   });
   if (saved) {
     await failPendingOutputs(deps.sql, job.id);
-    await dropWorkingFiles(deps.media, job.work);
+    await dropWorkingFiles(deps.media, saved.work);
   }
   return saved;
 }

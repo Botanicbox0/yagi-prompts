@@ -5,8 +5,16 @@
  * side through this file, so two people can build against each other without reading each other's code.
  * Change a shape here first and tell the other owner.
  */
-import type { StudioAssetView, StudioFailure, StudioOutputView } from "@/lib/brand-studio/contracts";
-import type { RefSource } from "./refs";
+import type {
+  RegionBox,
+  StudioAssetView,
+  StudioErrorCode,
+  StudioFailure,
+  StudioJobView,
+  StudioOutputView,
+} from "@/lib/brand-studio/contracts";
+import type { StudioImageModel } from "@/lib/brand-studio/models";
+import type { RefSource, TrayItem } from "./refs";
 
 /* ------------------------------------------------------------------ events */
 
@@ -106,9 +114,58 @@ export interface LibraryRailProps {
   onFiles(files: File[]): void;
   onUpdate(assetId: string, patch: { name?: string; role?: StudioAssetView["role"]; tags?: string[] }): Promise<unknown>;
   onDelete(assetId: string): Promise<unknown>;
+  onRegionEdit?(ref: RefSource): void;
+  onDecorate?(ref: RefSource): void;
 }
 
 /* ------------------------------------------------------------------ layers */
+
+export interface LayerEditorInitialPatch {
+  id?: string;
+  url: string;
+  maskUrl: string | null;
+  /** Pixel coordinates on `base` (`0..base.width`, `0..base.height`). */
+  box: { x: number; y: number; w: number; h: number };
+  name?: string;
+  ref?: RefSource | null;
+}
+
+export interface LayerEditorRegionPreset {
+  box: RegionBox | null;
+  instruction: string;
+  serverNumbered?: boolean;
+  model?: string;
+  quality?: string | null;
+  references?: TrayItem[];
+}
+
+export interface LayerEditorRegionSupport {
+  sourceRef: RefSource;
+  previewUrl: string;
+  models: readonly StudioImageModel[];
+  defaultModel: string;
+  defaultQuality?: string | null;
+  /** Live jobs from `StudioApp` so settled `region_edit` runs arrive as layers without blocking. */
+  jobs: readonly StudioJobView[];
+  errorText(code: StudioErrorCode | null): string;
+  submit(request: {
+    source: RefSource;
+    box: RegionBox;
+    instruction: string;
+    model: string;
+    quality: string;
+    references: TrayItem[];
+    enhance: boolean;
+  }): Promise<{ ok: true; job: StudioJobView } | { ok: false; message: string }>;
+  enhancePrompt(request: {
+    source: RefSource;
+    box: RegionBox;
+    instruction: string;
+    model: string;
+    quality: string;
+    references: TrayItem[];
+  }): Promise<{ ok: true; finalPrompt: string } | { ok: false; message: string }>;
+}
 
 /** What `StudioApp` (B1) hands the layer editor (E). The editor reads its own copy from `copy.layers`. */
 export interface LayerEditorProps {
@@ -119,6 +176,10 @@ export interface LayerEditorProps {
   /** Images the person can drop in as layers (uploads and saved results). */
   assets: StudioAssetView[];
   library: StudioLibrary | null;
+  initialTool?: "move" | "marquee";
+  initialPatch?: LayerEditorInitialPatch | null;
+  initialRegionPreset?: LayerEditorRegionPreset | null;
+  region?: LayerEditorRegionSupport | null;
   /** Stores the exported PNG as a new asset. */
   upload(file: File): Promise<{ ok: true; asset: StudioAssetView } | StudioFailure>;
   onSaved(asset: StudioAssetView): void;

@@ -30,14 +30,15 @@ function regionTask(input: EnhanceInput, binding: Binding): string {
   const target = binding.editTarget ?? 'image 1';
   const others = binding.bound.filter((b) => b.token).map((b) => b.token as string);
   const sources = others.length
-    ? ` ${others.join(', ')} ${others.length === 1 ? 'is a source' : 'are sources'} for the change (a logo, a product, a texture); take only what the change needs from ${others.length === 1 ? 'it' : 'them'}.`
+    ? ` ${others.join(', ')} ${others.length === 1 ? 'is a source' : 'are sources'} for the change (a logo, a product, a person, a texture); take only what the change needs from ${others.length === 1 ? 'it' : 'them'}.`
     : '';
   const opening =
     input.profile === 'seedream'
       ? `"In ${target}, change only <the change>; do not move or resize anything else."`
       : `"Using ${target}, change only <the change>; do not move or resize anything else."`;
-  return `Task: change one boxed part of an existing picture. ${target} is that part, cut out and enlarged. The result is pasted back over the same spot, so it must keep ${target}'s framing, scale, perspective and position exactly.${sources}
-Start with ${opening} Then say how the changed part must look, then the keep-list (light direction, colour, shadows, texture and grain of ${target}).
+  return `Task: change one boxed part of an existing picture.${sources}
+Image 1 (${target}) is an enlarged crop cut out from a larger photograph, so it may look soft. Keep ${target}'s exact framing, camera angle, object scale, outer silhouette, contours, lighting direction, colour palette, and pixel positions completely unchanged. Never redraw, enlarge, or re-shape the surrounding object (never invent curvature or new geometry). Apply ONLY the requested local change, then keep every surrounding pixel identical to ${target}.
+Start with ${opening} Then say how the changed part must look, then the keep-list (exact object scale, outer silhouette, contours, light direction, colour, shadows, texture, grain and pixel positions of ${target}).
 Never zoom, crop, reframe, extend, rotate or change the aspect. Do not describe or change anything outside the change.`;
 }
 

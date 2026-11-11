@@ -93,9 +93,9 @@ const MENTIONS: Array<[StudioAssetKind, RegExp]> = [
 ];
 
 /** "이미지 3" in the prompt with only two images in the tray: refuse before sending. */
-export function mentionsMissing(prompt: string, refs: readonly ResolvedRef[]): boolean {
+export function mentionsMissing(prompt: string, refs: readonly ResolvedRef[], imageOffset = 0): boolean {
   for (const [kind, pattern] of MENTIONS) {
-    const have = refs.filter((r) => r.kind === kind).length;
+    const have = refs.filter((r) => r.kind === kind).length + (kind === 'image' ? imageOffset : 0);
     for (const match of prompt.matchAll(pattern)) {
       const n = Number(match[1]);
       if (n >= 1 && n > have) return true;
@@ -168,7 +168,8 @@ export async function planJob(
   locale: 'ko' | 'en',
 ): Promise<JobPlan> {
   const resolved = await resolveReferences(sql, organizationId, input.references, media, locale);
-  if (mentionsMissing(input.prompt, resolved)) throw new StudioDenied('reference_missing');
+  const imageOffset = input.kind === 'region_edit' && !input.enhance ? 1 : 0;
+  if (mentionsMissing(input.prompt, resolved, imageOffset)) throw new StudioDenied('reference_missing');
   const base = { aspect: null, resolution: null, seconds: null, audio: null, count: 1, locale } satisfies StudioJobParams;
   const shared = { prompt: input.prompt, enhance: input.enhance, refs: input.references, resolved, parentOutputId: null, stickLane: null };
 

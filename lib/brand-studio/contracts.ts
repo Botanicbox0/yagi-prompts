@@ -96,6 +96,7 @@ export const STUDIO_ERROR_CODES = [
   'reference_missing',
   'provider_rejected',
   'provider_unavailable',
+  'region_misaligned',
   'failed',
 ] as const;
 export type StudioErrorCode = (typeof STUDIO_ERROR_CODES)[number];
@@ -384,6 +385,17 @@ export interface StudioOutputView {
   draft: boolean;
   /** The library asset this result was saved as, if any. */
   savedAssetId: string | null;
+  /** Region edit only: aligned unmasked patch PNG + initial soft mask PNG over `box` (0..1 fractions). */
+  regionPatch?: {
+    url: string;
+    maskUrl: string | null;
+    x: number;
+    y: number;
+    w: number;
+    h: number;
+  } | null;
+  /** Region edit only: the source asset or output this result was cut from. */
+  sourceRef?: { assetId?: string; outputId?: string } | null;
   createdAt: string;
 }
 

@@ -1961,6 +1961,7 @@ export const ko: Dictionary = {
       reference_missing: '참조 중 하나를 찾을 수 없어요. 다시 넣어 주세요.',
       provider_rejected: '이 내용은 만들 수 없었어요. 문장이나 참조를 바꿔 다시 해 주세요.',
       provider_unavailable: '지금은 잠시 만들 수 없어요. 조금 뒤에 다시 해 주세요.',
+      region_misaligned: '이 부분은 정확히 맞추지 못했어요. 고칠 부위만 조금 더 작게 골라 다시 시도해 주세요.',
       failed: '이번에는 만들지 못했어요. 다시 해 주세요.',
     },
   },

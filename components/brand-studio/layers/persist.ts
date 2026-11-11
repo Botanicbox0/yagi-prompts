@@ -38,14 +38,25 @@ interface StoredDraft {
   height: number;
   savedAt: number;
   layers: Layer[];
+  baseHidden?: boolean;
 }
 
 export function serializeDraft(doc: LayerDoc, baseKey: string, now = Date.now()): string {
-  const stored: StoredDraft = { v: LAYER_DOC_VERSION, base: baseKey, width: doc.width, height: doc.height, savedAt: now, layers: doc.layers };
+  const stored: StoredDraft = {
+    v: LAYER_DOC_VERSION,
+    base: baseKey,
+    width: doc.width,
+    height: doc.height,
+    savedAt: now,
+    layers: doc.layers,
+    ...(doc.baseHidden ? { baseHidden: true } : {}),
+  };
   return JSON.stringify(stored);
 }
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+const SAFE_MASK_DATA_URL = /^data:image\/(?:png|webp);base64,[A-Za-z0-9+/=]+$/;
+const MASK_DATA_URL_MAX = 180_000;
 
 /** Same-site paths and https addresses only: no data:, blob: or script URLs. */
 export function safeUrl(value: unknown): string | null {
@@ -57,6 +68,13 @@ export function safeUrl(value: unknown): string | null {
   } catch {
     return null;
   }
+}
+
+/** Alpha mask URL: either a `safeUrl` or a bounded PNG/WebP base64 data URL. */
+export function safeMaskUrl(value: unknown): string | null {
+  if (typeof value !== "string" || !value || value.length > MASK_DATA_URL_MAX) return null;
+  if (SAFE_MASK_DATA_URL.test(value)) return value;
+  return safeUrl(value);
 }
 
 function safeRef(value: unknown): RefSource | null {
@@ -95,7 +113,13 @@ export function sanitizeLayer(raw: unknown): Layer | null {
     const src = (r.src ?? {}) as Record<string, unknown>;
     const url = safeUrl(src.url);
     if (!url) return null;
-    return normalizeLayer({ ...base, kind: "image", src: { ref: safeRef(src.ref), url } });
+    const maskDataUrl = safeMaskUrl(r.maskDataUrl);
+    return normalizeLayer({
+      ...base,
+      kind: "image",
+      src: { ref: safeRef(src.ref), url },
+      ...(maskDataUrl ? { maskDataUrl } : {}),
+    });
   }
   if (r.kind === "text") {
     const plateRaw = r.plate as Record<string, unknown> | null | undefined;
@@ -161,7 +185,13 @@ export function parseDraft(raw: string | null, expected: { baseKey: string; widt
     const sy = expected.height / height;
     layers = layers.map((layer) => scaleLayer(layer, sx, sy));
   }
-  return { v: LAYER_DOC_VERSION, width: expected.width, height: expected.height, layers };
+  return {
+    v: LAYER_DOC_VERSION,
+    width: expected.width,
+    height: expected.height,
+    layers,
+    ...(v.baseHidden === true ? { baseHidden: true } : {}),
+  };
 }
 
 function scaleLayer(layer: Layer, sx: number, sy: number): Layer {
@@ -181,11 +211,18 @@ function scaleLayer(layer: Layer, sx: number, sy: number): Layer {
 export function saveDraft(storage: StorageLike | null, baseKey: string, doc: LayerDoc, now = Date.now()): boolean {
   if (!storage) return false;
   try {
-    if (doc.layers.length === 0) {
+    if (doc.layers.length === 0 && !doc.baseHidden) {
       storage.removeItem(draftKey(baseKey));
       return true;
     }
-    const raw = serializeDraft(doc, baseKey, now);
+    let raw = serializeDraft(doc, baseKey, now);
+    if (raw.length > DRAFT_MAX_CHARS && doc.layers.some((l) => l.kind === "image" && l.maskDataUrl)) {
+      const stripped: LayerDoc = {
+        ...doc,
+        layers: doc.layers.map((l) => (l.kind === "image" && l.maskDataUrl ? { ...l, maskDataUrl: undefined } : l)),
+      };
+      raw = serializeDraft(stripped, baseKey, now);
+    }
     if (raw.length > DRAFT_MAX_CHARS) return false;
     storage.setItem(draftKey(baseKey), raw);
     pruneDrafts(storage, DRAFTS_KEPT);

@@ -84,10 +84,20 @@ function payload(input: EnhanceInput, binding: Binding, seconds: number | null, 
   };
 }
 
-function thumbParts(binding: Binding): GeminiPart[] {
+function thumbParts(input: EnhanceInput, binding: Binding): GeminiPart[] {
   const parts: GeminiPart[] = [];
+  const cropThumb = input.kind === 'region_edit' ? input.editCropThumb : null;
+  const hasCrop = Boolean(cropThumb && THUMB_MIMES.has(cropThumb.mime));
+  if (hasCrop && cropThumb) {
+    const target = binding.editTarget ?? 'image 1';
+    parts.push({
+      text: `Picture of ${target} (the enlarged region crop cut out from the customer's photograph — keep its framing, scale, outer silhouette, contours and surrounding pixels identical):`,
+    });
+    parts.push(inlinePart(cropThumb.bytes, cropThumb.mime));
+  }
+  const maxRefThumbs = THUMBS_MAX + (hasCrop ? 1 : 0);
   for (const b of binding.bound) {
-    if (parts.length / 2 >= THUMBS_MAX) break;
+    if (parts.length / 2 >= maxRefThumbs) break;
     const thumb = b.ref.thumb;
     if (!thumb || b.ref.kind !== 'image' || !THUMB_MIMES.has(thumb.mime)) continue;
     const name = b.token ?? b.name;
@@ -125,7 +135,7 @@ export async function enhancePrompt(input: EnhanceInput, deps: EnhanceDeps): Pro
         : [];
     const raw = await callGeminiJson(config, deps.fetch, {
       system: buildSystemInstruction(input, binding, seconds, shots),
-      parts: [{ text: JSON.stringify(payload(input, binding, seconds, shots)) }, ...thumbParts(binding)],
+      parts: [{ text: JSON.stringify(payload(input, binding, seconds, shots)) }, ...thumbParts(input, binding)],
       schema: ENHANCER_RESPONSE_SCHEMA,
       thinking: 'LOW',
       timeoutMs: ENHANCE_TIMEOUT_MS,

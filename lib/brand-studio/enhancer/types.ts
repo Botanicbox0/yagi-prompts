@@ -52,6 +52,8 @@ export interface EnhanceInput {
   prompt: string;
   references: EnhanceReference[];
   brand?: { name?: string; tone?: string; palette?: string[]; rules?: string[] } | null;
+  /** Region edit only: the enlarged cropped region sent as image 1 / Figure 1 so Gemini sees the cut-out. */
+  editCropThumb?: { bytes: Uint8Array; mime: string } | null;
   video?: EnhanceVideo | null;
 }
 

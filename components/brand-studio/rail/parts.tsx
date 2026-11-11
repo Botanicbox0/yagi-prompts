@@ -106,6 +106,8 @@ export interface RailKit {
   likeAction(item: LibraryItemView): ThumbAction;
   /** "폴더에 담기" entries for a thumbnail's menu (empty when the member cannot file). */
   fileItems(item: LibraryItemView): MenuItem[];
+  /** "부분 수정" / "꾸미기" entries for an image thumbnail's menu. */
+  editItems?(item: LibraryItemView): MenuItem[];
   menu: string | null;
   setMenu(key: string | null): void;
   /** One short line in the rail's live region. */

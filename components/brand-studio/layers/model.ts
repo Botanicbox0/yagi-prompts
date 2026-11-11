@@ -18,6 +18,7 @@ export const NAME_MAX = 60;
 export const MIN_SIDE = 4;
 
 export type LayerKind = "image" | "text" | "shape";
+export type LayerTool = "move" | "marquee" | "eraser" | "restore";
 export type TextAlign = "left" | "center" | "right";
 export type ShapeKind = "rect" | "ellipse";
 
@@ -45,6 +46,8 @@ export interface ImageLayer extends LayerBase {
   kind: "image";
   /** Where the picture comes from. Only a reference and an address are kept, never the bytes. */
   src: { ref: RefSource | null; url: string };
+  /** Non-destructive alpha mask PNG Data URL (or same-origin mask URL) in layer local pixels. */
+  maskDataUrl?: string | null;
 }
 
 export interface TextPlate {
@@ -88,6 +91,8 @@ export interface LayerDoc {
   width: number;
   height: number;
   layers: Layer[];
+  /** Hides the base image on stage (showing checkerboard) so patch edges can be inspected and erased. */
+  baseHidden?: boolean;
 }
 
 /* ------------------------------------------------------------------ fonts */
@@ -239,6 +244,36 @@ export function createImageLayer(
   };
 }
 
+/** Places a region-edit patch at exact pixel coordinates (`box`) on the base document, optionally pre-masked. */
+export function createPatchLayer(
+  _doc: LayerDoc,
+  opts: {
+    url: string;
+    ref?: RefSource | null;
+    box: Box;
+    name: string;
+    maskDataUrl?: string | null;
+    id?: string;
+  },
+): ImageLayer {
+  const layer: ImageLayer = {
+    id: opts.id ?? newLayerId(),
+    kind: "image",
+    name: opts.name.slice(0, NAME_MAX),
+    x: round(opts.box.x),
+    y: round(opts.box.y),
+    w: Math.max(MIN_SIDE, round(opts.box.w)),
+    h: Math.max(MIN_SIDE, round(opts.box.h)),
+    rotation: 0,
+    opacity: 1,
+    locked: false,
+    hidden: false,
+    src: { ref: opts.ref ?? null, url: opts.url },
+  };
+  if (opts.maskDataUrl) layer.maskDataUrl = opts.maskDataUrl;
+  return layer;
+}
+
 /* ------------------------------------------------------------------ edits */
 
 export function findLayer(doc: LayerDoc, id: string | null): Layer | null {
@@ -280,6 +315,10 @@ export function normalizeLayer<T extends Layer>(layer: T): T {
   out.rotation = normalizeAngle(finite(out.rotation, 0));
   out.opacity = clamp(finite(out.opacity, 1), 0, 1);
   out.name = String(out.name ?? "").slice(0, NAME_MAX);
+  if (out.kind === "image") {
+    const img = out as ImageLayer;
+    if (img.maskDataUrl === null || img.maskDataUrl === "") delete img.maskDataUrl;
+  }
   if (out.kind === "text") {
     const t = out as TextLayer;
     t.size = clamp(finite(t.size, 32), 4, 2000);
@@ -338,6 +377,72 @@ export function moveLayer(doc: LayerDoc, id: string, step: 1 | -1): LayerDoc {
 export function canMove(doc: LayerDoc, id: string, step: 1 | -1): boolean {
   const index = doc.layers.findIndex((l) => l.id === id);
   return index >= 0 && index + step >= 0 && index + step < doc.layers.length;
+}
+
+/** Toggles base visibility on stage while keeping clean `emptyDoc` shape when `hidden === false`. */
+export function setBaseHidden(doc: LayerDoc, hidden: boolean): LayerDoc {
+  if (Boolean(doc.baseHidden) === hidden) return doc;
+  if (!hidden) {
+    const { baseHidden: _removed, ...rest } = doc;
+    return rest;
+  }
+  return { ...doc, baseHidden: true };
+}
+
+/** Topmost visible unlocked `ImageLayer` id, used when hiding base or switching to a mask brush with no selection. */
+export function topVisibleImageLayerId(doc: LayerDoc): string | null {
+  for (let i = doc.layers.length - 1; i >= 0; i--) {
+    const layer = doc.layers[i]!;
+    if (layer.kind === "image" && !layer.hidden && !layer.locked) return layer.id;
+  }
+  return null;
+}
+
+export function canMergeDown(doc: LayerDoc, id: string): boolean {
+  const index = doc.layers.findIndex((l) => l.id === id);
+  if (index < 0) return false;
+  const upper = doc.layers[index]!;
+  if (upper.locked || upper.hidden) return false;
+  if (index > 0) {
+    const lower = doc.layers[index - 1]!;
+    return !lower.locked && !lower.hidden;
+  }
+  return true;
+}
+
+/**
+ * Merges the selected layer (`id`) into the layer right beneath it (`index > 0`), or flattens `layers[0]`
+ * with the base beneath it into a single unmasked `ImageLayer` right above base (`index === 0`).
+ */
+export function mergeLayerDown(
+  doc: LayerDoc,
+  id: string,
+  merged: { url: string; box: Box; name?: string; newId?: string },
+): { doc: LayerDoc; id: string | null } {
+  if (!canMergeDown(doc, id)) return { doc, id: null };
+  const index = doc.layers.findIndex((l) => l.id === id);
+  const upper = doc.layers[index]!;
+  const replacement: ImageLayer = normalizeLayer({
+    id: merged.newId ?? newLayerId(),
+    kind: "image",
+    name: (merged.name ?? upper.name).slice(0, NAME_MAX),
+    x: round(merged.box.x),
+    y: round(merged.box.y),
+    w: Math.max(MIN_SIDE, round(merged.box.w)),
+    h: Math.max(MIN_SIDE, round(merged.box.h)),
+    rotation: 0,
+    opacity: 1,
+    locked: false,
+    hidden: false,
+    src: { ref: null, url: merged.url },
+  });
+  const layers = [...doc.layers];
+  if (index > 0) {
+    layers.splice(index - 1, 2, replacement);
+  } else {
+    layers.splice(0, 1, replacement);
+  }
+  return { doc: { ...doc, layers }, id: replacement.id };
 }
 
 export const DEFAULT_PLATE: TextPlate = { color: SWATCHES.white, padding: 0.4, radius: 0.25 };

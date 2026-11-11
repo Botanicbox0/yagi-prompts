@@ -48,6 +48,8 @@ export interface EnhanceInput {
     thumb?: { bytes: Uint8Array; mime: string };
   }>;
   brand?: { name?: string; tone?: string; palette?: string[]; rules?: string[] } | null;
+  /** Region edit only: the enlarged cropped region sent as image 1 / Figure 1 to the model. */
+  editCropThumb?: { bytes: Uint8Array; mime: string } | null;
   video?: {
     seconds: number | null;
     aspect: string;
@@ -86,6 +88,11 @@ export interface StudioIntel {
     mime: 'image/png';
     width: number;
     height: number;
+    patchPng?: Buffer;
+    maskPng?: Buffer;
+    misaligned?: boolean;
+    ringResidual?: number;
+    transform?: { sx: number; sy: number; dx: number; dy: number };
   }>;
 }
 
@@ -151,10 +158,24 @@ export interface StudioJobWork {
   inputs?: Array<{ kind: StudioAssetKind; url: string; frame?: 'start' | 'end' }>;
   sheet?: FilmSheet | null;
   enhanceNotes?: string;
-  region?: { plan: RegionPlan; cropKey: string; sourceKey: string };
+  region?: {
+    plan: RegionPlan;
+    cropKey: string;
+    sourceKey: string;
+    alignAttempts?: Record<string, number>;
+    misaligned?: boolean;
+    patches?: Record<
+      string,
+      {
+        patchKey: string;
+        maskKey: string | null;
+        box: { left: number; top: number; width: number; height: number };
+      }
+    >;
+  };
   draftTaskId?: string;
   results?: Record<string, StudioPendingResult>;
-  failures?: Record<string, { code: StudioProviderFailure; detail: string }>;
+  failures?: Record<string, { code: StudioProviderFailure | 'region_misaligned'; detail: string }>;
   /** How many times storing each result has failed; a paid result is retried before it is given up. */
   storeAttempts?: Record<string, number>;
   /** Set once a run was retried after a safety-review block; a run is never retried twice. */

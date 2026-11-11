@@ -9,7 +9,8 @@
  * low-frequency tone transfer of the hand script, which would also undo an intended colour change.
  */
 import sharp from 'sharp';
-import { decodeRgba, encodePng, SHARP_INPUT, type RgbaImage } from './pixels';
+import { alignEditedRoi, computeDiffMask, type AlignTransform } from './align';
+import { decodeRgba, encodePng, type RgbaImage } from './pixels';
 import type { PixelRect, RegionPlan } from './plan';
 
 /** Gain and offset limits for the tone match: correct drift, never repaint. */
@@ -130,48 +131,91 @@ export function defaultFeather(box: PixelRect, requested?: number): number {
   return Math.max(0, Math.min(wanted, Math.floor((short - 1) / 2)));
 }
 
+export interface CompositeRegionResult {
+  bytes: Uint8Array;
+  mime: 'image/png';
+  width: number;
+  height: number;
+  patchPng?: Buffer;
+  maskPng?: Buffer;
+  misaligned?: boolean;
+  ringResidual?: number;
+  transform?: AlignTransform;
+}
+
 export async function compositeRegion(input: {
   original: Uint8Array;
   edited: Uint8Array;
   plan: RegionPlan;
   feather?: number;
-}): Promise<{ bytes: Uint8Array; mime: 'image/png'; width: number; height: number }> {
+}): Promise<CompositeRegionResult> {
   const { plan } = input;
   const src = await decodeRgba(input.original);
   assertPlan(src, plan);
   const { roi, box } = plan;
 
-  const edit = await sharp(input.edited, SHARP_INPUT)
-    .rotate()
-    .toColourspace('srgb')
-    .flatten({ background: '#ffffff' })
-    .resize(roi.width, roi.height, { fit: 'fill', kernel: 'lanczos3' })
-    .raw({ depth: 'uchar' })
-    .toBuffer({ resolveWithObject: true });
-  const channels = edit.info.channels;
-  if (channels < 3 || edit.info.width !== roi.width || edit.info.height !== roi.height) {
-    throw new Error('region_edit_decode');
-  }
-
-  const feather = defaultFeather(box, input.feather);
+  const aligned = await alignEditedRoi({ original: src, edited: input.edited, plan });
   const ringWidth = Math.max(2, Math.round(Math.min(box.width, box.height) * 0.06));
-  const tone = matchTone(src, { data: edit.data, channels }, plan, ringWidth);
+  const tone = matchTone(src, { data: aligned.alignedRoi, channels: aligned.channels }, plan, ringWidth);
+  const mask = await computeDiffMask({
+    original: src,
+    alignedRoi: aligned.alignedRoi,
+    plan,
+    feather: input.feather,
+    tone,
+  });
 
   const out = Buffer.from(src.data);
-  for (let y = box.top; y < box.top + box.height; y += 1) {
-    for (let x = box.left; x < box.left + box.width; x += 1) {
-      const d = Math.min(x - box.left + 1, box.left + box.width - x, y - box.top + 1, box.top + box.height - y);
-      const m = featherWeight(d, feather);
+  const patchCh = src.hasAlpha ? 4 : 3;
+  const patchRaw = Buffer.allocUnsafe(box.width * box.height * patchCh);
+  const maskRaw = Buffer.allocUnsafe(box.width * box.height * 4);
+
+  for (let by = 0; by < box.height; by += 1) {
+    const y = box.top + by;
+    for (let bx = 0; bx < box.width; bx += 1) {
+      const x = box.left + bx;
+      const mi = by * box.width + bx;
+      const alphaByte = mask[mi]!;
+      const m = alphaByte / 255;
       const oi = (y * src.width + x) * 4;
-      const ei = ((y - roi.top) * roi.width + (x - roi.left)) * channels;
+      const ei = ((y - roi.top) * roi.width + (x - roi.left)) * aligned.channels;
+      const pi = mi * patchCh;
       for (let c = 0; c < 3; c += 1) {
-        const e = Math.min(255, Math.max(0, edit.data[ei + c]! * tone.gain[c]! + tone.offset[c]!));
+        const e = Math.min(255, Math.max(0, aligned.alignedRoi[ei + c]! * tone.gain[c]! + tone.offset[c]!));
         out[oi + c] = Math.round(src.data[oi + c]! * (1 - m) + e * m);
+        patchRaw[pi + c] = Math.round(e);
       }
+      if (patchCh === 4) {
+        patchRaw[pi + 3] = src.data[oi + 3]!;
+      }
+      const mri = mi * 4;
+      maskRaw[mri] = 255;
+      maskRaw[mri + 1] = 255;
+      maskRaw[mri + 2] = 255;
+      maskRaw[mri + 3] = alphaByte;
       // Alpha stays the original's: an edit changes colour, not where the picture is transparent.
     }
   }
 
-  const bytes = await encodePng({ data: out, width: src.width, height: src.height, hasAlpha: src.hasAlpha });
-  return { bytes, mime: 'image/png', width: src.width, height: src.height };
+  const [bytes, patchPng, maskPng] = await Promise.all([
+    encodePng({ data: out, width: src.width, height: src.height, hasAlpha: src.hasAlpha }),
+    sharp(patchRaw, { raw: { width: box.width, height: box.height, channels: patchCh } })
+      .png({ compressionLevel: 6 })
+      .toBuffer(),
+    sharp(maskRaw, { raw: { width: box.width, height: box.height, channels: 4 } })
+      .png({ compressionLevel: 6 })
+      .toBuffer(),
+  ]);
+
+  return {
+    bytes,
+    mime: 'image/png',
+    width: src.width,
+    height: src.height,
+    patchPng,
+    maskPng,
+    misaligned: aligned.misaligned,
+    ringResidual: aligned.ringResidual,
+    transform: aligned.transform,
+  };
 }

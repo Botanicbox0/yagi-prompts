@@ -31,6 +31,12 @@ const PATHS = {
   reset: "M4 12a8 8 0 108-8H8M8 4L5 7l3 3",
   ratio: "M5 5h14v14H5zM5 5l14 14",
   check: "M5 12.5l4.5 4.5L19 7.5",
+  move: "M12 3v18M3 12h18M9 6l3-3 3 3M9 18l3 3 3-3M6 9l-3 3 3 3M18 9l3 3-3 3",
+  marquee: "M4 8V5h3M17 5h3v3M4 16v3h3M17 19h3v-3M10 5h4M10 19h4M4 10v4M20 10v4",
+  eraser: "M16.2 4.8l3 3a2 2 0 010 2.8L10.6 19.2a2 2 0 01-1.4.6H5.8a2 2 0 01-1.4-.6l-1.6-1.6a2 2 0 010-2.8l10.6-10a2 2 0 012.8 0zM8 14l4 4M11 20h9",
+  restore: "M18.4 5.6a2.2 2.2 0 010 3.1L10 17.1l-4.5 1.4 1.4-4.5 8.4-8.4a2.2 2.2 0 013.1 0zM4 20h6",
+  mergeDown: "M12 4v10M8 10l4 4 4-4M4 17l8 3 8-3",
+  info: "M12 12m-9 0a9 9 0 1018 0 9 9 0 10-18 0M12 8v4.5M12 16v.01",
 } as const;
 
 export type LayerIconName = keyof typeof PATHS;

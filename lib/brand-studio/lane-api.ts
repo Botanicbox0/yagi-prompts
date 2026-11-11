@@ -88,7 +88,7 @@ function laneJob(deps: Pick<StudioDeps, 'media' | 'env'>, job: JobRow, outputs: 
     model: studioModel(job.model)?.mcp?.model ?? job.model,
     prompt: sendPrompt(job),
     params: {
-      aspect: p.aspect ?? null,
+      aspect: request.regionCrop?.aspect ?? p.aspect ?? null,
       resolution: p.resolution === 'draft' ? '480p' : (p.resolution ?? null),
       quality: p.quality ?? null,
       seconds: p.seconds ?? null,

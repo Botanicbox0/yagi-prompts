@@ -103,7 +103,11 @@ export function UploadsTab({ kit, assets, notice, uploading, searchId, dropActiv
           {shown.map((asset) => {
             const item = itemOfAsset(asset);
             const menuKey = `asset:${asset.id}`;
-            const items = [...(canCreate ? [{ key: "edit", label: u.edit, run: () => setEditing(asset) }] : []), ...kit.fileItems(item)];
+            const items = [
+              ...(kit.editItems?.(item) ?? []),
+              ...(canCreate ? [{ key: "edit", label: u.edit, run: () => setEditing(asset) }] : []),
+              ...kit.fileItems(item),
+            ];
             return (
               <Thumb
                 key={asset.id}

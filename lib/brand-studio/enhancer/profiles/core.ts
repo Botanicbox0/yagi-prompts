@@ -3,12 +3,16 @@
  * per-kind task follow it in the system instruction.
  */
 
-export function coreBlock(locale: 'ko' | 'en'): string {
+export function coreBlock(locale: 'ko' | 'en', kind: 'image' | 'region_edit' | 'video' | 'video_remix' = 'image'): string {
   const language = locale === 'ko' ? 'Korean (polite 해요체)' : 'English';
+  const openRule =
+    kind === 'region_edit'
+      ? '- Make ONLY the requested local change concrete and visible. Never invent new framing, camera angles, object shapes, curvature, setting details, or lighting; everything outside the requested change stays locked to the input crop.'
+      : '- Make the request concrete and visible. Choose what the request leaves open (framing, light, materials, setting details, camera) so that it serves what was asked, and stay with the plainest choice when unsure.';
   return `You turn a brand's request into the prompt that one image or video model receives. The brand's marketing team wrote the request; the result is used in their own marketing.
 
 You may:
-- Make the request concrete and visible. Choose what the request leaves open (framing, light, materials, setting details, camera) so that it serves what was asked, and stay with the plainest choice when unsure.
+${openRule}
 - Write in English for the model. Text that must appear in the picture or be spoken stays verbatim, in its original language and spelling.
 - Bind every attached reference with the exact token given for it, and say what to take from it and what not to take.
 - Let the brand notes steer tone, palette and choices quietly. Never quote them, list them or mention that they exist.

@@ -164,6 +164,31 @@ export function LibraryRail(props: LibraryRailProps & { copy: Dictionary["studio
         run: () => void file(folder, item.ref),
       }));
     },
+    editItems(item: LibraryItemView): MenuItem[] {
+      if (!canCreate || item.kind !== "image") return [];
+      const entries: MenuItem[] = [];
+      if (props.onRegionEdit) {
+        entries.push({
+          key: "region",
+          label: copy.item.regionEdit,
+          run: () => {
+            props.onClose();
+            props.onRegionEdit?.(item.ref);
+          },
+        });
+      }
+      if (props.onDecorate) {
+        entries.push({
+          key: "decorate",
+          label: copy.item.decorate,
+          run: () => {
+            props.onClose();
+            props.onDecorate?.(item.ref);
+          },
+        });
+      }
+      return entries;
+    },
   };
 
   // Liked items, with a stand-in for anything liked a moment ago that the server has not answered yet.
@@ -355,7 +380,7 @@ export function LibraryRail(props: LibraryRailProps & { copy: Dictionary["studio
               <ul className="bsr-grid" data-library-liked>
                 {liked.map((item) => {
                   const menuKey = `liked:${item.key}`;
-                  const items = kit.fileItems(item);
+                  const items = [...(kit.editItems?.(item) ?? []), ...kit.fileItems(item)];
                   return (
                     <Thumb
                       key={item.key}
