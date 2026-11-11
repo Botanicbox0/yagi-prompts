@@ -467,7 +467,7 @@ export function regionEditInput(input: {
     organizationId: input.ids.organizationId,
     requestId: input.ids.requestId,
     model: model.id,
-    prompt: regionInstructionForServer(prompt, input.locale ?? "ko"),
+    prompt: input.draft.enhance ? regionInstructionForServer(prompt, input.locale ?? "ko") : prompt,
     enhance: input.draft.enhance,
     references: toReferences(references, "image"),
     source: "assetId" in input.source ? { assetId: input.source.assetId } : { outputId: input.source.outputId },

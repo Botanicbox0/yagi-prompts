@@ -271,14 +271,21 @@ export async function deleteStudioOutput(deps: StudioDeps, viewer: Viewer, raw: 
   const outcome = await guarded(() =>
     deps.sql.transaction(async (sql) => {
       requireCreate(await studioSeat(sql, viewer.userId, v.organizationId));
-      const row = (await sql.query<{ id: string; storage_key: string | null; thumb_key: string | null }>('select id, storage_key, thumb_key from brand_studio_outputs where id = $1 and organization_id = $2 and deleted_at is null for update', [v.outputId, v.organizationId])).rows[0];
+      const row = (
+        await sql.query<{ id: string; job_id: string; idx: number; storage_key: string | null; thumb_key: string | null }>(
+          'select id, job_id, idx, storage_key, thumb_key from brand_studio_outputs where id = $1 and organization_id = $2 and deleted_at is null for update',
+          [v.outputId, v.organizationId],
+        )
+      ).rows[0];
       if (!row) throw new StudioDenied('not_found');
       if ((await sql.query(openRefsTo('outputId'), [v.organizationId, v.outputId])).rows[0]) throw new StudioDenied('conflict');
+      const job = (await sql.query<Pick<JobRow, 'work'>>('select work from brand_studio_jobs where id = $1', [row.job_id])).rows[0];
+      const patch = job?.work?.region?.patches?.[String(row.idx)];
       await sql.query('update brand_studio_outputs set deleted_at = now() where id = $1', [row.id]);
-      return row;
+      return { ...row, patch_key: patch?.patchKey ?? null, mask_key: patch?.maskKey ?? null };
     }),
   );
   if ('ok' in outcome) return outcome;
-  await dropKeys(deps, [outcome.storage_key, outcome.thumb_key], { outputId: outcome.id });
+  await dropKeys(deps, [outcome.storage_key, outcome.thumb_key, outcome.patch_key, outcome.mask_key], { outputId: outcome.id });
   return { ok: true };
 }

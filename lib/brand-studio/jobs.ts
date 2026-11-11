@@ -20,12 +20,14 @@ import {
   type StudioPromptPreview,
 } from './contracts';
 import { lockOrganization, requireCreate, studioSeat, StudioDenied } from './access';
+import { imageInfo } from './files';
 import { dropWorkingFiles, LEASE_SECONDS } from './job-store';
 import { routeJob } from './lanes';
+import type { StudioImageModel } from './models';
 import { planFinal, planJob, type JobPlan } from './plan';
 import { brandSummary, enhanceInputOf, enhanceReferences, keepSheet, readSheet, remixContext, runEnhancer, storedSheet } from './prepare';
-import { jobView, openJobCount, readyAsset } from './repo';
-import type { JobRow, OutputRow, StudioDeps } from './types';
+import { jobView, openJobCount, readyAsset, readyOutput } from './repo';
+import type { EnhanceInput, JobRow, OutputRow, StudioDeps } from './types';
 import { reserveAllowance } from './usage';
 import { failure, guarded } from './outcome';
 
@@ -149,12 +151,35 @@ export async function previewStudioPrompt(deps: StudioDeps, viewer: Viewer, raw:
     plan.kind === 'video_remix'
       ? await remixContext(deps, { organizationId: seat.organizationId, params: plan.params, refs: plan.refs, resolved: plan.resolved, locale })
       : null;
+  let editCropThumb: EnhanceInput['editCropThumb'] = null;
+  if (plan.kind === 'region_edit' && plan.params.box) {
+    try {
+      const source = plan.params.source ?? {};
+      const srcRow = source.assetId
+        ? await readyAsset(deps.sql, seat.organizationId, source.assetId)
+        : source.outputId
+          ? await readyOutput(deps.sql, seat.organizationId, source.outputId)
+          : null;
+      if (srcRow?.storage_key) {
+        const original = await deps.media.read(srcRow.storage_key);
+        const size = await imageInfo(original);
+        if (size) {
+          const regionPlan = deps.intel.planRegion(size, plan.params.box, (plan.model as StudioImageModel).aspects);
+          const crop = await deps.intel.cropForEdit(original, regionPlan);
+          editCropThumb = { bytes: crop.bytes, mime: crop.mime };
+        }
+      }
+    } catch {
+      editCropThumb = null;
+    }
+  }
   const input = enhanceInputOf(
     { kind: plan.kind, prompt: plan.prompt, params: plan.params },
     plan.model,
     await enhanceReferences(deps, remix?.resolved ?? plan.resolved),
     await brandSummary(deps, seat.organizationId, seat.organizationName),
     remix?.sheet ?? null,
+    editCropThumb,
   );
   const result = await runEnhancer(deps, input);
   return { ok: true, prompt: result.prompt, notes: result.notes };

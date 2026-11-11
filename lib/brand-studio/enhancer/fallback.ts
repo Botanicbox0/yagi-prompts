@@ -35,7 +35,7 @@ function imagePrompt(input: EnhanceInput, binding: Binding, request: string): st
       `${lead}: ${sentence(request)}`,
       'Do not move or resize anything else.',
       ...refs,
-      `Keep the framing, perspective, light direction, colour, shadows, texture and grain of ${target}.`,
+      `Keep the exact framing, camera angle, object scale, outer silhouette, contours, perspective, light direction, colour, shadows, texture, grain and pixel positions of ${target}; never redraw, enlarge or reshape the surrounding object.`,
     ].join(input.profile === 'seedream' ? ' ' : '\n');
   }
   if (input.profile === 'seedream') return [sentence(request), ...refs].join(' ');

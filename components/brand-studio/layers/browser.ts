@@ -70,7 +70,12 @@ export function warmFonts(): void {
   for (const font of FONTS) for (const weight of font.weights) void document.fonts.load(`${weight} 16px ${resolveFamily(font.id)}`, "Aa가").catch(() => undefined);
 }
 
+export function isLocalInlineUrl(url: string): boolean {
+  return url.startsWith("data:") || url.startsWith("blob:");
+}
+
 export function isSameOrigin(url: string): boolean {
+  if (isLocalInlineUrl(url)) return true;
   try {
     return new URL(url, window.location.href).origin === window.location.origin;
   } catch {
@@ -87,7 +92,7 @@ const STUDIO_IMAGE_PATH = /^\/st\/[0-9a-f]{64}\.(png|jpg|webp)$/;
  * gateway (`/api/brand-studio/media/st/…`) serves the same bytes from this origin.
  */
 export function drawableUrl(url: string): string {
-  if (isSameOrigin(url)) return url;
+  if (isLocalInlineUrl(url) || isSameOrigin(url)) return url;
   try {
     const { pathname } = new URL(url);
     return STUDIO_IMAGE_PATH.test(pathname) ? `/api/brand-studio/media${pathname}` : url;
@@ -105,7 +110,7 @@ export function loadImage(source: string): Promise<HTMLImageElement> {
     const img = new Image();
     const url = drawableUrl(source);
     let src = url;
-    if (!isSameOrigin(url)) {
+    if (!isLocalInlineUrl(url) && !isSameOrigin(url)) {
       img.crossOrigin = "anonymous";
       src = `${url}${url.includes("?") ? "&" : "?"}canvas=1`;
     }
@@ -117,6 +122,26 @@ export function loadImage(source: string): Promise<HTMLImageElement> {
     img.onerror = () => reject(new Error(`load failed: ${url}`));
     img.src = src;
   });
+}
+
+/** Converts a server mask image URL into an editable PNG Data URL at its natural pixel dimensions. */
+export async function loadMaskAsDataUrl(maskUrl: string): Promise<string | null> {
+  if (typeof document === "undefined") return drawableUrl(maskUrl);
+  try {
+    if (maskUrl.startsWith("data:image/")) return maskUrl;
+    const img = await loadImage(maskUrl);
+    const w = Math.max(1, img.naturalWidth || img.width || 1);
+    const h = Math.max(1, img.naturalHeight || img.height || 1);
+    const canvas = document.createElement("canvas");
+    canvas.width = w;
+    canvas.height = h;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return drawableUrl(maskUrl);
+    ctx.drawImage(img, 0, 0, w, h);
+    return canvas.toDataURL("image/png");
+  } catch {
+    return drawableUrl(maskUrl);
+  }
 }
 
 /** The natural size of a picture (for layers added from items without a stored size). Display only: no CORS needed. */

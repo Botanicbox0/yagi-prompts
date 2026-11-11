@@ -1950,6 +1950,7 @@ export const en = {
       reference_missing: 'A reference is missing or was deleted. Add it again.',
       provider_rejected: 'This could not be made. Change the words or references and try again.',
       provider_unavailable: 'We cannot make this right now. Please try again shortly.',
+      region_misaligned: 'We could not align this area cleanly. Select a slightly smaller box around just the part to change and try again.',
       failed: 'It did not work this time. Please try again.',
     },
   },

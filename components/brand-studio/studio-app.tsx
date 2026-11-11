@@ -13,17 +13,18 @@ import type { StudioMedium } from "@/lib/brand-studio/models";
 import type { Dictionary } from "@/lib/i18n/dictionaries";
 import { isFailure, uploadProblem, type StudioApi } from "./api";
 import { EXAMPLES, jobsFor } from "./board";
-import { errorLine, type StudioCopy, type StudioLocale } from "./copy";
+import { errorLine, newRequestId, type StudioCopy, type StudioLocale } from "./copy";
 import { AllowanceLine, Dock } from "./dock";
-import { DRAFT_RESOLUTION, dockCredits, regionEditModel, regionEditModels, remixActive, remixFit, withMedium } from "./dock-model";
+import { DRAFT_RESOLUTION, dockCredits, regionEditInput, regionEditModel, regionEditModels, remixActive, remixFit, withMedium, type EnhancePreviewInput } from "./dock-model";
 import { Explainer } from "./explainer";
 import { Wall, type SendingTile, type TileAction, type WallTileItem } from "./gallery/wall";
 import { HandoffDialog, handoffInput } from "./handoff-dialog";
+import { naturalSize } from "./layers/browser";
 import { LibraryRail } from "./rail";
 import { useStudioLibrary } from "./rail/use-library";
 import { trayItemFromAsset, trayItemFromOutput, trayLabels, withStartFrame, type RefSource, type TrayItem } from "./refs";
 import { sendToReview } from "./review/send";
-import type { LayerEditorProps } from "./seams";
+import { libraryKey, type LayerEditorProps, type LayerEditorRegionPreset } from "./seams";
 import { findOutput } from "./store";
 import { useDock } from "./use-dock";
 import { useStudio } from "./use-studio";
@@ -150,7 +151,14 @@ export function StudioApp({ organizationId, locale, copy, mode, libraryCopy, lay
   const canCreate = state?.canCreate ?? false;
   const dockOpen = canCreate && (state?.allowance.capKrw ?? 0) > 0;
   const [handoff, setHandoff] = useState<RefSource | null>(null);
-  const [decorating, setDecorating] = useState<LayerEditorProps["base"] | null>(null);
+  const [editorState, setEditorState] = useState<{
+    nonce: number;
+    base: LayerEditorProps["base"];
+    initialTool: "move" | "marquee";
+    initialPatch: LayerEditorProps["initialPatch"];
+    initialRegionPreset: LayerEditorProps["initialRegionPreset"];
+  } | null>(null);
+  const editorNonceRef = useRef(0);
   const [sheet, setSheet] = useState(false);
   const [panelNotice, setPanelNotice] = useState<string | null>(null);
   const [status, setStatus] = useState<string | null>(null);
@@ -217,16 +225,77 @@ export function StudioApp({ organizationId, locale, copy, mode, libraryCopy, lay
     [copy, organizationId],
   );
 
-  const decorate = useCallback(
-    (source: RefSource) => {
+  const openLayerEditor = useCallback(
+    async (source: RefSource, opts: { tool: "move" | "marquee"; preset?: LayerEditorRegionPreset | null }) => {
       const asset = "assetId" in source ? lookup.asset(source.assetId) : null;
       const output = "outputId" in source ? lookup.output(source.outputId) : null;
       const file = asset ?? output;
-      if (!file || file.kind !== "image" || !file.width || !file.height) return;
-      setDecorating({ ref: source, url: file.url, width: file.width, height: file.height, name: asset?.name ?? null });
+      if (!file || file.kind !== "image") return;
+
+      // When opening "꾸미기" on a completed region_edit output that stored a patch, load its parent picture
+      // as Base and the patch as a masked layer so seams can be inspected (Base eye) and erased/restored.
+      if (opts.tool === "move" && output?.regionPatch) {
+        const originJob = allJobs.find((j) => j.id === output.jobId) ?? null;
+        if (originJob?.kind === "region_edit") {
+          const parentOut = originJob.parentOutputId ? parentOf(originJob.parentOutputId) : null;
+          const parentAst = !parentOut && originJob.parentAssetId ? parentAssetOf(originJob.parentAssetId) : null;
+          const parent = parentOut ?? parentAst;
+          if (parent && parent.kind === "image") {
+            const pSize = parent.width && parent.height ? { width: parent.width, height: parent.height } : await naturalSize(parent.url);
+            if (pSize) {
+              const rp = output.regionPatch;
+              editorNonceRef.current += 1;
+              setEditorState({
+                nonce: editorNonceRef.current,
+                base: {
+                  ref: parentOut ? { outputId: parentOut.id } : { assetId: parentAst!.id },
+                  url: parent.url,
+                  width: pSize.width,
+                  height: pSize.height,
+                  name: parentAst?.name ?? null,
+                },
+                initialTool: "move",
+                initialPatch: {
+                  id: `patch-${output.id}`,
+                  url: rp.url,
+                  maskUrl: rp.maskUrl,
+                  box: {
+                    x: rp.x * pSize.width,
+                    y: rp.y * pSize.height,
+                    w: rp.w * pSize.width,
+                    h: rp.h * pSize.height,
+                  },
+                  ref: { outputId: output.id },
+                },
+                initialRegionPreset: null,
+              });
+              return;
+            }
+          }
+        }
+      }
+
+      const size = file.width && file.height ? { width: file.width, height: file.height } : await naturalSize(file.url);
+      if (!size) return;
+      editorNonceRef.current += 1;
+      setEditorState({
+        nonce: editorNonceRef.current,
+        base: { ref: source, url: file.url, width: size.width, height: size.height, name: asset?.name ?? null },
+        initialTool: opts.tool,
+        initialPatch: null,
+        initialRegionPreset: opts.preset ?? null,
+      });
     },
-    [lookup],
+    [allJobs, lookup, parentAssetOf, parentOf],
   );
+
+  const onRegionSending = useCallback((event: { key: string; ratio: string } | { done: string; line: string | null }) => {
+    if ("key" in event) setSending((current) => [{ key: event.key, ratio: event.ratio }, ...current]);
+    else {
+      setSending((current) => current.filter((tile) => tile.key !== event.done));
+      if (event.line) setStatus(event.line);
+    }
+  }, []);
 
   const viewer = useViewer({
     studio,
@@ -239,16 +308,11 @@ export function StudioApp({ organizationId, locale, copy, mode, libraryCopy, lay
     assets,
     lookup,
     onCampaign: setHandoff,
-    onDecorate: (item) => decorate(sourceOf(item)),
+    onDecorate: (item) => void openLayerEditor(sourceOf(item), { tool: "move" }),
+    onOpenRegionEditor: dockOpen && mode === "image" ? (src, preset) => void openLayerEditor(src, { tool: "marquee", preset }) : undefined,
     onReview: (item) => void onReview(sourceOf(item), item.type === "output" ? item.job.prompt : item.asset.name),
     onToVideoScreen: (source) => window.location.assign(videoScreenHref(organizationId, source)),
-    onRegionSending: (event) => {
-      if ("key" in event) setSending((current) => [{ key: event.key, ratio: event.ratio }, ...current]);
-      else {
-        setSending((current) => current.filter((tile) => tile.key !== event.done));
-        if (event.line) setStatus(event.line);
-      }
-    },
+    onRegionSending,
     focusPrompt,
   });
 
@@ -338,9 +402,9 @@ export function StudioApp({ organizationId, locale, copy, mode, libraryCopy, lay
       case "reuse":
         return viewer.reuse(job);
       case "region":
-        return viewer.openRegion(key);
+        return void openLayerEditor({ outputId: output.id }, { tool: "marquee" });
       case "decorate":
-        return decorate({ outputId: output.id });
+        return void openLayerEditor({ outputId: output.id }, { tool: "move" });
       case "toVideo":
         return viewer.actions.toVideo(item);
       case "review":
@@ -544,6 +608,8 @@ export function StudioApp({ organizationId, locale, copy, mode, libraryCopy, lay
             onFiles={(files) => void uploadFiles(files, false)}
             onUpdate={(assetId, patch) => studio.updateAsset({ assetId, ...patch })}
             onDelete={studio.deleteAsset}
+            onRegionEdit={dockOpen && mode === "image" ? (src) => void openLayerEditor(src, { tool: "marquee" }) : undefined}
+            onDecorate={canCreate ? (src) => void openLayerEditor(src, { tool: "move" }) : undefined}
             copy={libraryCopy}
           />
         )}
@@ -594,19 +660,81 @@ export function StudioApp({ organizationId, locale, copy, mode, libraryCopy, lay
           onClose={() => setHandoff(null)}
         />
       )}
-      {decorating && (
+      {editorState && (
         <LayerEditor
+          key={`${libraryKey(editorState.base.ref)}:${editorState.nonce}`}
           organizationId={organizationId}
           locale={locale}
-          base={decorating}
+          base={editorState.base}
           assets={assets}
           library={library}
+          initialTool={editorState.initialTool}
+          initialPatch={editorState.initialPatch}
+          initialRegionPreset={editorState.initialRegionPreset}
+          region={
+            dockOpen && mode === "image"
+              ? {
+                  sourceRef: editorState.base.ref,
+                  previewUrl: editorState.base.url,
+                  models: regionEditModels(),
+                  defaultModel: regionEditModel(dock.draft),
+                  defaultQuality: dock.draft.quality,
+                  jobs: allJobs,
+                  errorText: (code) => errorLine(copy, code ?? "failed"),
+                  submit: async (req) => {
+                    const key = newRequestId();
+                    const ratio = `${editorState.base.width} / ${editorState.base.height}`;
+                    onRegionSending({ key, ratio });
+                    const body = regionEditInput({
+                      ids: { organizationId, requestId: key },
+                      source: req.source,
+                      box: req.box,
+                      instruction: req.instruction,
+                      draft: { ...dock.draft, enhance: req.enhance },
+                      model: req.model,
+                      quality: req.quality || null,
+                      references: req.references,
+                      locale,
+                    });
+                    const result = await studio.createJob(body);
+                    const line = isFailure(result) ? errorLine(copy, result.code) : null;
+                    onRegionSending({ done: key, line });
+                    if (isFailure(result)) {
+                      return { ok: false, message: line ?? errorLine(copy, "failed") };
+                    }
+                    return { ok: true, job: result.job };
+                  },
+                  enhancePrompt: async (req) => {
+                    const built = regionEditInput({
+                      ids: { organizationId, requestId: "preview-0" },
+                      source: req.source,
+                      box: req.box,
+                      instruction: req.instruction,
+                      draft: { ...dock.draft, enhance: true },
+                      model: req.model,
+                      quality: req.quality || null,
+                      references: req.references,
+                      locale,
+                    });
+                    if (built.kind === "video_final") {
+                      return { ok: false, message: copy.dock.enhanceFailed };
+                    }
+                    const { requestId: _dropped, ...previewInput } = built;
+                    const result = await studio.enhancePrompt(previewInput as EnhancePreviewInput);
+                    if (isFailure(result) || !result.prompt.trim()) {
+                      return { ok: false, message: copy.dock.enhanceFailed };
+                    }
+                    return { ok: true, finalPrompt: result.prompt.trim() };
+                  },
+                }
+              : null
+          }
           upload={(file) => studio.upload(file)}
           onSaved={(asset) => {
             setStatus(copy.gallery.decorated);
             void asset;
           }}
-          onClose={() => setDecorating(null)}
+          onClose={() => setEditorState(null)}
           copy={layersCopy}
         />
       )}

@@ -1,52 +1,70 @@
 "use client";
 /**
- * "꾸미기" (docs/BRAND-STUDIO-V3.md §5): a full-screen layer editor over a finished picture. Logo,
- * headline, product cut, shapes; then one PNG at the picture's stored size, saved as a new asset.
- * DOM for editing, canvas for export, no new dependency. The document, geometry, history, text
- * layout, export and draft storage are pure modules next to this file; this component holds state
- * and wiring only. Loaded by the studio with next/dynamic (default export).
+ * Unified "꾸미기 + 부분 수정" Layer Editor (`docs/BRAND-STUDIO-REGION-LAYERS.md` §1–§4, V3 §5):
+ * - Full-screen zoomed/panned stage with `move`, `marquee` (RegionBox), `eraser` and `restore` brush tools
+ * - Top Floating Contextual Island toolbar (smoothly expands Size `8..300px` & Hardness `0..100%`, default `30%`)
+ * - Base visibility toggle (`baseHidden` -> checkerboard) + non-destructive alpha-mask layers (`maskDataUrl`)
+ * - In-editor Oplux Region Edit panel + non-blocking job tracking that lands finished patches as new layers
+ * - `mergeDown` ("아래로 합치기") and full-resolution PNG export.
  */
 import { useCallback, useEffect, useId, useMemo, useRef, useState, type KeyboardEvent } from "react";
-import { STUDIO_UPLOAD_MIMES, type StudioAssetView } from "@/lib/brand-studio/contracts";
+import { STUDIO_UPLOAD_MIMES, type RegionBox, type StudioAssetView } from "@/lib/brand-studio/contracts";
 import type { Dictionary } from "@/lib/i18n/dictionaries";
 import { useModal } from "../modal";
-import type { RefSource } from "../refs";
+import { trayItemFromAsset, type RefSource, type TrayItem } from "../refs";
+import { nudgeBox } from "../region-math";
 import { libraryKey, type LayerEditorProps, type LibraryItemView } from "../seams";
-import { browserRenderDeps, measurerFor, naturalSize, waitForLayerFonts, warmFonts } from "./browser";
+import { browserRenderDeps, loadMaskAsDataUrl, measurerFor, naturalSize, waitForLayerFonts, warmFonts } from "./browser";
 import { pushRecent } from "./colors";
-import { EXPORT_STEPS, exportFileName, planExport, renderPlan, type ExportStep, type RenderResult } from "./export";
+import { EXPORT_STEPS, exportFileName, planExport, planMergeDown, renderPlan, type ExportStep, type RenderResult } from "./export";
 import { ZOOM_STEP, fitView, nudgeDelta, zoomCentered, type Insets, type Point, type View } from "./geometry";
 import { canRedo, canUndo, commit, createHistory, preview, redo, settle, undo, type History } from "./history";
-import { LayerIcon } from "./icons";
+import { LayerIcon, type LayerIconName } from "./icons";
+import {
+  BRUSH_HARDNESS_MAX,
+  BRUSH_HARDNESS_MIN,
+  BRUSH_SIZE_MAX,
+  BRUSH_SIZE_MIN,
+  DEFAULT_BRUSH_HARDNESS,
+  DEFAULT_BRUSH_SIZE,
+} from "./mask";
 import {
   DEFAULT_PLATE,
   MAX_LAYERS,
   addLayer,
+  canMergeDown,
+  clamp,
   createImageLayer,
+  createPatchLayer,
   createShapeLayer,
   createTextLayer,
   duplicateLayer,
   emptyDoc,
   findLayer,
+  mergeLayerDown,
   moveLayer,
   newLayerId,
   nextName,
   removeLayer,
+  setBaseHidden,
+  topVisibleImageLayerId,
   updateLayer,
   withPlate,
   type Frame,
   type LayerDoc,
   type LayerPatch,
+  type LayerTool,
   type TextLayer,
 } from "./model";
 import { AddPanel, IconButton, LayersPanel, PropsPanel, fill, type PickItem } from "./panels";
 import { browserStorage, clearDraft, loadDraft, loadRecentColors, saveDraft, saveRecentColors } from "./persist";
+import { RegionEditPanel } from "./region-panel";
 import { Stage } from "./stage";
 import { layoutText, type TextLayout } from "./text-layout";
 import "./layers.css";
 
-type Sheet = "add" | "layers" | "props";
-const NOTICE_MS = 4200;
+type Sheet = "add" | "region" | "layers" | "props";
+const NOTICE_MS = 4600;
 const ROLE_ORDER: Record<string, number> = { logo: 0, product: 1 };
 
 const fromAsset = (asset: StudioAssetView): PickItem => ({
@@ -70,6 +88,31 @@ const fromLibrary = (item: LibraryItemView, fallback: string): PickItem => ({
   height: item.height,
 });
 
+function pickToTray(item: PickItem): TrayItem | null {
+  if (!item.ref) return null;
+  return {
+    key: item.key,
+    kind: "image",
+    name: item.name,
+    url: item.url,
+    thumbUrl: item.thumbUrl,
+    width: item.width,
+    height: item.height,
+    seconds: null,
+    role: item.role ?? undefined,
+    ...("assetId" in item.ref ? { assetId: item.ref.assetId } : { outputId: item.ref.outputId }),
+  };
+}
+
+function blobToDataUrl(blob: Blob): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => (typeof reader.result === "string" ? resolve(reader.result) : reject(new Error("read failed")));
+    reader.onerror = () => reject(new Error("read failed"));
+    reader.readAsDataURL(blob);
+  });
+}
+
 /** A reopened draft points its pictures at the current asset addresses where it can. */
 function refreshUrls(doc: LayerDoc, assets: readonly StudioAssetView[]): LayerDoc {
   let next = doc;
@@ -82,13 +125,21 @@ function refreshUrls(doc: LayerDoc, assets: readonly StudioAssetView[]): LayerDo
   return next;
 }
 
+interface TrackedRegionJob {
+  jobId: string;
+  autoFlatten: boolean;
+  box: RegionBox;
+}
+
 export default function LayerEditor(props: LayerEditorProps & { copy: Dictionary["studioLayers"] }) {
   const { base, copy } = props;
   const baseKey = libraryKey(base.ref);
   const storage = useMemo(() => browserStorage(), []);
   const dialogRef = useModal();
   const stageRef = useRef<HTMLDivElement>(null);
+  const baseImgRef = useRef<HTMLImageElement>(null);
   const topRef = useRef<HTMLDivElement>(null);
+  const islandRef = useRef<HTMLDivElement>(null);
   const leftRef = useRef<HTMLElement>(null);
   const rightRef = useRef<HTMLElement>(null);
   const barRef = useRef<HTMLDivElement>(null);
@@ -98,8 +149,30 @@ export default function LayerEditor(props: LayerEditorProps & { copy: Dictionary
 
   const [initial] = useState(() => {
     const restored = loadDraft(storage, { baseKey, width: base.width, height: base.height });
-    return { doc: restored ? refreshUrls(restored, props.assets) : emptyDoc(base.width, base.height), restored: Boolean(restored?.layers.length) };
+    let doc = restored ? refreshUrls(restored, props.assets) : emptyDoc(base.width, base.height);
+    let initialSelected: string | null = null;
+    if (props.initialPatch) {
+      const existing = doc.layers.find(
+        (l) => (props.initialPatch?.id && l.id === props.initialPatch.id) || (l.kind === "image" && l.src.url === props.initialPatch?.url),
+      );
+      if (existing) {
+        initialSelected = existing.id;
+      } else {
+        const patchLayer = createPatchLayer(doc, {
+          id: props.initialPatch.id,
+          url: props.initialPatch.url,
+          ref: props.initialPatch.ref ?? null,
+          box: props.initialPatch.box,
+          name: props.initialPatch.name ?? nextName(doc, copy.names.regionPatch),
+          maskDataUrl: props.initialPatch.maskUrl,
+        });
+        doc = addLayer(doc, patchLayer);
+        initialSelected = patchLayer.id;
+      }
+    }
+    return { doc, restored: Boolean(restored?.layers.length), initialSelected };
   });
+
   const [history, setHistory] = useState<History<LayerDoc>>(() => createHistory(initial.doc));
   const doc = history.present;
   const historyRef = useRef(history);
@@ -111,8 +184,16 @@ export default function LayerEditor(props: LayerEditorProps & { copy: Dictionary
   const editStartRef = useRef<LayerDoc | null>(null);
   const pendingEditRef = useRef<string | null>(null);
   const autoFitRef = useRef(true);
+  const handledJobsRef = useRef<Set<string>>(new Set());
 
-  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [tool, setToolState] = useState<LayerTool>(props.initialTool ?? "move");
+  const [brushSize, setBrushSize] = useState<number>(DEFAULT_BRUSH_SIZE);
+  const [brushHardness, setBrushHardness] = useState<number>(DEFAULT_BRUSH_HARDNESS);
+  const [regionBox, setRegionBox] = useState<RegionBox | null>(props.initialRegionPreset?.box ?? null);
+  const [autoFlatten, setAutoFlatten] = useState<boolean>(false);
+  const [pendingRegionJobs, setPendingRegionJobs] = useState<TrackedRegionJob[]>([]);
+
+  const [selectedId, setSelectedId] = useState<string | null>(initial.initialSelected);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [view, setView] = useState<View>({ zoom: 0.2, panX: 0, panY: 0 });
   const [spaceDown, setSpaceDown] = useState(false);
@@ -125,7 +206,7 @@ export default function LayerEditor(props: LayerEditorProps & { copy: Dictionary
   const [step, setStep] = useState<ExportStep | null>(null);
   const [exportError, setExportError] = useState<string | null>(null);
   const [confirming, setConfirming] = useState(false);
-  const [sheet, setSheet] = useState<Sheet | null>(null);
+  const [sheet, setSheet] = useState<Sheet | null>(props.initialTool === "marquee" && props.region ? "region" : null);
 
   const say = useCallback((message: string) => setNotice(message), []);
   useEffect(() => {
@@ -133,6 +214,25 @@ export default function LayerEditor(props: LayerEditorProps & { copy: Dictionary
     const t = window.setTimeout(() => setNotice(null), NOTICE_MS);
     return () => window.clearTimeout(t);
   }, [notice]);
+
+  // Convert server mask URL on `initialPatch` into an inline PNG Data URL so brush strokes never taint.
+  useEffect(() => {
+    const patchInfo = props.initialPatch;
+    if (!patchInfo?.maskUrl || patchInfo.maskUrl.startsWith("data:image/")) return;
+    const targetId = initial.initialSelected;
+    if (!targetId) return;
+    let alive = true;
+    void loadMaskAsDataUrl(patchInfo.maskUrl).then((dataUrl) => {
+      if (!alive || !dataUrl || !dataUrl.startsWith("data:image/")) return;
+      setHistory((h) => {
+        const nextPresent = updateLayer(h.present, targetId, { maskDataUrl: dataUrl });
+        return { ...h, present: nextPresent };
+      });
+    });
+    return () => {
+      alive = false;
+    };
+  }, [props.initialPatch, initial.initialSelected]);
 
   /* ------------------------------------------------------------ fonts and layout */
 
@@ -185,11 +285,13 @@ export default function LayerEditor(props: LayerEditorProps & { copy: Dictionary
     if (!stage) return { top: 0, right: 0, bottom: 0, left: 0 };
     const phone = window.matchMedia("(max-width: 720px)").matches;
     const top = topRef.current?.getBoundingClientRect();
+    const island = islandRef.current?.getBoundingClientRect();
     const bar = barRef.current?.getBoundingClientRect();
     const left = leftRef.current?.getBoundingClientRect();
     const right = rightRef.current?.getBoundingClientRect();
+    const topBottom = Math.max(top ? top.bottom - stage.top : 0, island ? island.bottom - stage.top : 0);
     return {
-      top: top ? Math.max(0, top.bottom - stage.top) : 0,
+      top: Math.max(0, topBottom),
       bottom: phone && bar ? Math.max(0, stage.bottom - bar.top) : 0,
       left: !phone && left ? Math.max(0, left.right - stage.left) : 0,
       right: !phone && right ? Math.max(0, stage.right - right.left) : 0,
@@ -200,7 +302,6 @@ export default function LayerEditor(props: LayerEditorProps & { copy: Dictionary
     const el = stageRef.current;
     if (!el) return;
     const phone = window.matchMedia("(max-width: 720px)").matches;
-    // Small pictures may be shown up to 200% so there is room to place things; export stays at the stored size.
     setView(fitView({ width: el.clientWidth, height: el.clientHeight }, { width: base.width, height: base.height }, insets(), phone ? 12 : 28, 2));
   }, [base.width, base.height, insets]);
 
@@ -236,6 +337,7 @@ export default function LayerEditor(props: LayerEditorProps & { copy: Dictionary
     editStartRef.current = historyRef.current.present;
     setSelectedId(id);
     setEditingId(id);
+    setToolState("move");
   }, []);
 
   const stopEdit = useCallback(() => {
@@ -246,14 +348,37 @@ export default function LayerEditor(props: LayerEditorProps & { copy: Dictionary
     if (!id) return;
     setHistory((h) => {
       const layer = findLayer(h.present, id);
-      // An emptied text box goes away with the same undo step.
       const present = layer?.kind === "text" && !layer.text.trim() ? removeLayer(h.present, id) : h.present;
       const shown = preview(h, present);
       return start ? settle(shown, start) : shown;
     });
   }, [editingId]);
 
-  // A text layer just added opens for typing once it exists in the rendered document.
+  const selectTool = useCallback(
+    (nextTool: LayerTool) => {
+      if (editingId && nextTool !== "move") stopEdit();
+      setToolState(nextTool);
+      if (nextTool === "eraser" || nextTool === "restore") {
+        const cur = findLayer(historyRef.current.present, selectedId);
+        if (!cur || cur.kind !== "image" || cur.hidden) {
+          const topId = topVisibleImageLayerId(historyRef.current.present);
+          if (topId) setSelectedId(topId);
+        }
+      }
+    },
+    [editingId, selectedId, stopEdit],
+  );
+
+  const toggleBase = useCallback(() => {
+    const curDoc = historyRef.current.present;
+    const nextHidden = !curDoc.baseHidden;
+    edit((d) => setBaseHidden(d, nextHidden));
+    if (nextHidden && !selectedId) {
+      const topId = topVisibleImageLayerId(curDoc);
+      if (topId) setSelectedId(topId);
+    }
+  }, [edit, selectedId]);
+
   useEffect(() => {
     const id = pendingEditRef.current;
     if (id && findLayer(doc, id)) {
@@ -271,6 +396,71 @@ export default function LayerEditor(props: LayerEditorProps & { copy: Dictionary
     setHistory(redo);
   };
 
+  /* --------------------------------------------------- non-blocking region jobs */
+
+  useEffect(() => {
+    if (!pendingRegionJobs.length || !props.region) return;
+    const liveJobs = props.region.jobs;
+    const settledEntries = pendingRegionJobs.filter((entry) => {
+      const hit = liveJobs.find((j) => j.id === entry.jobId);
+      return hit && (hit.status === "succeeded" || hit.status === "failed" || hit.status === "canceled");
+    });
+    if (!settledEntries.length) return;
+
+    const settledIds = new Set(settledEntries.map((e) => e.jobId));
+    setPendingRegionJobs((cur) => cur.filter((e) => !settledIds.has(e.jobId)));
+
+    for (const entry of settledEntries) {
+      if (handledJobsRef.current.has(entry.jobId)) continue;
+      handledJobsRef.current.add(entry.jobId);
+      const job = liveJobs.find((j) => j.id === entry.jobId);
+      if (!job) continue;
+
+      if (job.status === "failed") {
+        setExportError(null);
+        say(props.region.errorText(job.errorCode) || copy.region.failedToast);
+        continue;
+      }
+      if (job.status !== "succeeded") continue;
+
+      const output = job.outputs.find((o) => o.kind === "image");
+      if (entry.autoFlatten || !output) {
+        say(copy.region.autoFlattenedDone);
+        continue;
+      }
+
+      void (async () => {
+        const rp = output.regionPatch;
+        const maskDataUrl = rp?.maskUrl ? await loadMaskAsDataUrl(rp.maskUrl) : null;
+        const normBox = rp ? { x: rp.x, y: rp.y, w: rp.w, h: rp.h } : entry.box;
+        const pxBox = {
+          x: normBox.x * base.width,
+          y: normBox.y * base.height,
+          w: normBox.w * base.width,
+          h: normBox.h * base.height,
+        };
+        const patchUrl = rp?.url ?? output.url;
+        const newId = newLayerId();
+        edit((d) => {
+          if (d.layers.length >= MAX_LAYERS) return d;
+          const layer = createPatchLayer(d, {
+            id: newId,
+            url: patchUrl,
+            ref: { outputId: output.id },
+            box: pxBox,
+            name: nextName(d, copy.names.regionPatch),
+            maskDataUrl,
+          });
+          return addLayer(d, layer);
+        });
+        setSelectedId(newId);
+        setRegionBox(null);
+        setToolState("eraser");
+        say(copy.region.patchArrived);
+      })();
+    }
+  }, [pendingRegionJobs, props.region, base.width, base.height, copy.names.regionPatch, copy.region, edit, say]);
+
   /* ------------------------------------------------------------------- adding */
 
   const atLimit = () => {
@@ -285,6 +475,7 @@ export default function LayerEditor(props: LayerEditorProps & { copy: Dictionary
     const layer = createTextLayer(d, { text: copy.names.defaultText, name: nextName(d, copy.names.text) });
     edit((x) => addLayer(x, layer));
     setSelectedId(layer.id);
+    setToolState("move");
     pendingEditRef.current = layer.id;
     setSheet(null);
   };
@@ -295,6 +486,7 @@ export default function LayerEditor(props: LayerEditorProps & { copy: Dictionary
     const layer = createShapeLayer(d, { shape, name: nextName(d, shape === "rect" ? copy.names.rect : copy.names.ellipse) });
     edit((x) => addLayer(x, layer));
     setSelectedId(layer.id);
+    setToolState("move");
     setSheet(null);
   };
 
@@ -305,6 +497,7 @@ export default function LayerEditor(props: LayerEditorProps & { copy: Dictionary
     const layer = createImageLayer(d, { url: item.url, ref: item.ref, name: item.name || nextName(d, copy.names.image), natural, ...(at ? { at } : {}) });
     edit((x) => addLayer(x, layer));
     setSelectedId(layer.id);
+    setToolState("move");
     setSheet(null);
   };
 
@@ -321,6 +514,20 @@ export default function LayerEditor(props: LayerEditorProps & { copy: Dictionary
     [props.library?.likedItems, copy.names.image],
   );
   const folderItems = (folderId: string) => props.library?.folderItems(folderId)?.filter((i) => i.kind === "image").map((i) => fromLibrary(i, copy.names.image)) ?? null;
+
+  const quickTrayItems = useMemo(() => {
+    const out: TrayItem[] = [];
+    const seen = new Set<string>([baseKey]);
+    for (const item of [...assetItems, ...likedItems]) {
+      if (seen.has(item.key)) continue;
+      const tray = pickToTray(item);
+      if (tray) {
+        seen.add(item.key);
+        out.push(tray);
+      }
+    }
+    return out;
+  }, [assetItems, likedItems, baseKey]);
 
   const resolveRef = (ref: RefSource): PickItem | null => {
     const key = libraryKey(ref);
@@ -355,6 +562,30 @@ export default function LayerEditor(props: LayerEditorProps & { copy: Dictionary
     }
   };
 
+  const uploadRegionRefFiles = async (files: File[]): Promise<TrayItem[]> => {
+    const added: TrayItem[] = [];
+    for (const file of files) {
+      if (!(STUDIO_UPLOAD_MIMES.image as readonly string[]).includes(file.type)) {
+        say(copy.stage.notImage);
+        continue;
+      }
+      setUploading((u) => [...u, file.name]);
+      try {
+        const result = await props.upload(file);
+        if (result.ok) added.push(trayItemFromAsset(result.asset));
+        else say(fill(copy.stage.uploadFailed, { name: file.name }));
+      } catch {
+        say(fill(copy.stage.uploadFailed, { name: file.name }));
+      } finally {
+        setUploading((u) => {
+          const i = u.indexOf(file.name);
+          return i < 0 ? u : [...u.slice(0, i), ...u.slice(i + 1)];
+        });
+      }
+    }
+    return added;
+  };
+
   /* -------------------------------------------------------------- layer edits */
 
   const duplicate = (id: string) => {
@@ -373,6 +604,26 @@ export default function LayerEditor(props: LayerEditorProps & { copy: Dictionary
     setSelectedId(null);
   };
   const reorder = (id: string, stepBy: 1 | -1) => edit((d) => moveLayer(d, id, stepBy));
+  const mergeDown = async (id: string) => {
+    const current = historyRef.current.present;
+    if (!canMergeDown(current, id)) return;
+    if (editingId) stopEdit();
+    try {
+      const textLayers = current.layers.filter((l): l is TextLayer => l.kind === "text" && !l.hidden);
+      if (textLayers.length) await waitForLayerFonts(textLayers);
+      const planned = planMergeDown(current, id, { url: base.url, width: base.width, height: base.height, name: copy.names.base }, measurerFor);
+      if (!planned) return say(copy.layers.mergeFailed);
+      const rendered = await renderPlan(planned.plan, browserRenderDeps(() => {}));
+      if (!rendered.ok) return say(copy.layers.mergeFailed);
+      const dataUrl = await blobToDataUrl(rendered.blob);
+      const newId = newLayerId();
+      edit((d) => mergeLayerDown(d, id, { url: dataUrl, box: planned.box, name: nextName(d, copy.names.merged), newId }).doc);
+      setSelectedId(newId);
+      say(copy.layers.mergedDone);
+    } catch {
+      say(copy.layers.mergeFailed);
+    }
+  };
   const nudge = (id: string, delta: Point) =>
     edit((d) => {
       const layer = findLayer(d, id);
@@ -402,12 +653,12 @@ export default function LayerEditor(props: LayerEditorProps & { copy: Dictionary
       return next;
     });
   const reset = () => {
-    if (!historyRef.current.present.layers.length) return;
+    if (!historyRef.current.present.layers.length && !historyRef.current.present.baseHidden) return;
     if (editingId) {
       editStartRef.current = null;
       setEditingId(null);
     }
-    edit((d) => ({ ...d, layers: [] }));
+    edit((d) => ({ v: d.v, width: d.width, height: d.height, layers: [] }));
     setSelectedId(null);
     say(copy.resetDone);
   };
@@ -428,7 +679,10 @@ export default function LayerEditor(props: LayerEditorProps & { copy: Dictionary
 
   /* -------------------------------------------------------------------- close */
 
-  const dirty = () => JSON.stringify(historyRef.current.present.layers) !== JSON.stringify(savedRef.current.layers);
+  const dirty = () =>
+    JSON.stringify(historyRef.current.present.layers) !== JSON.stringify(savedRef.current.layers) ||
+    Boolean(historyRef.current.present.baseHidden) !== Boolean(savedRef.current.baseHidden);
+
   const finishClose = (mode: "keep" | "discard") => {
     if (mode === "discard") {
       discardedRef.current = true;
@@ -451,6 +705,7 @@ export default function LayerEditor(props: LayerEditorProps & { copy: Dictionary
     if (step) return;
     if (editingId) return stopEdit();
     if (sheet) return setSheet(null);
+    if (regionBox) return setRegionBox(null);
     if (selectedId) return setSelectedId(null);
     requestClose();
   };
@@ -533,10 +788,27 @@ export default function LayerEditor(props: LayerEditorProps & { copy: Dictionary
     if (mod && key === "]") return act(() => selectedId && reorder(selectedId, 1));
     if (mod && key === "[") return act(() => selectedId && reorder(selectedId, -1));
     if (mod) return;
-    if ((event.key === "Delete" || event.key === "Backspace") && selectedId) return act(() => remove(selectedId));
+
+    if (key === "v") return act(() => selectTool("move"));
+    if (key === "m" && props.region) return act(() => selectTool("marquee"));
+    if (key === "e") return act(() => selectTool("eraser"));
+    if (key === "b" || key === "r") return act(() => selectTool("restore"));
+    if ((tool === "eraser" || tool === "restore") && event.key === "[") {
+      return act(() => setBrushSize((s) => clamp(s - 8, BRUSH_SIZE_MIN, BRUSH_SIZE_MAX)));
+    }
+    if ((tool === "eraser" || tool === "restore") && event.key === "]") {
+      return act(() => setBrushSize((s) => clamp(s + 8, BRUSH_SIZE_MIN, BRUSH_SIZE_MAX)));
+    }
+
+    if (tool === "marquee" && regionBox) {
+      const nextBox = nudgeBox(regionBox, event.key, event.shiftKey);
+      if (nextBox) return act(() => setRegionBox(nextBox));
+    }
+
+    if ((event.key === "Delete" || event.key === "Backspace") && selectedId && tool === "move") return act(() => remove(selectedId));
     const delta = nudgeDelta(event.key, event.shiftKey);
-    if (delta && selectedId) return act(() => nudge(selectedId, delta));
-    if (event.key === "Enter" && selected?.kind === "text" && target === stageRef.current) return act(() => startEdit(selected.id));
+    if (delta && selectedId && tool === "move") return act(() => nudge(selectedId, delta));
+    if (event.key === "Enter" && selected?.kind === "text" && target === stageRef.current && tool === "move") return act(() => startEdit(selected.id));
     if (event.key === " " && (target === stageRef.current || target === dialogRef.current)) return act(() => setSpaceDown(true));
   };
 
@@ -552,6 +824,17 @@ export default function LayerEditor(props: LayerEditorProps & { copy: Dictionary
   const stepIndex = step ? EXPORT_STEPS.indexOf(step) + 1 : 0;
   const zoomPercent = `${Math.round(view.zoom * 100)}%`;
   const frameHeight = selected ? (frames.get(selected.id)?.h ?? selected.h) : 0;
+  const showRegionSection = Boolean(props.region && (tool === "marquee" || regionBox !== null));
+  const brushActive = tool === "eraser" || tool === "restore";
+
+  const toolButtons: Array<{ id: LayerTool; icon: LayerIconName; label: string; show: boolean }> = [
+    { id: "move", icon: "move", label: copy.tools.move, show: true },
+    { id: "marquee", icon: "marquee", label: copy.tools.marquee, show: Boolean(props.region) },
+    { id: "eraser", icon: "eraser", label: copy.tools.eraser, show: true },
+    { id: "restore", icon: "restore", label: copy.tools.restore, show: true },
+  ];
+
+  const barSheets: Sheet[] = props.region ? ["add", "region", "layers", "props"] : ["add", "layers", "props"];
 
   return (
     <dialog
@@ -567,8 +850,6 @@ export default function LayerEditor(props: LayerEditorProps & { copy: Dictionary
         handleEscape();
       }}
       onClose={() => {
-        // The browser closed it on its own (a repeated Esc): reopen and ask, unless we were closing.
-        // A dialog that is open again by now was only closed by a remount (StrictMode runs effects twice).
         const dialog = dialogRef.current;
         if (closingRef.current || !dialog?.isConnected || dialog.open) return;
         try {
@@ -588,6 +869,12 @@ export default function LayerEditor(props: LayerEditorProps & { copy: Dictionary
           layouts={layouts}
           view={view}
           onView={onView}
+          tool={tool}
+          brushSize={brushSize}
+          brushHardness={brushHardness}
+          regionBox={regionBox}
+          onRegionBox={setRegionBox}
+          baseImgRef={baseImgRef}
           selectedId={selectedId}
           editingId={editingId}
           spaceDown={spaceDown}
@@ -615,7 +902,7 @@ export default function LayerEditor(props: LayerEditorProps & { copy: Dictionary
         <div className="bsl-top" ref={topRef}>
           <IconButton icon="close" label={copy.close} onClick={requestClose} data="close" />
           <h2 id={titleId} className="bsl-title">
-            {copy.title}
+            {tool === "marquee" ? copy.regionModeTitle : copy.title}
             {base.name && <span className="bsl-title-name">{base.name}</span>}
           </h2>
           <span className="bsl-spacer" />
@@ -631,7 +918,15 @@ export default function LayerEditor(props: LayerEditorProps & { copy: Dictionary
             <IconButton icon="plus" label={copy.zoomIn} onClick={() => zoomBy(ZOOM_STEP)} data="zoom-in" />
             <IconButton icon="fit" label={copy.zoomFit} onClick={zoomFit} data="zoom-fit" />
           </div>
-          <button type="button" className="bsl-btn bsl-reset" data-variant="ghost" data-size="sm" onClick={reset} disabled={!doc.layers.length} data-action="reset">
+          <button
+            type="button"
+            className="bsl-btn bsl-reset"
+            data-variant="ghost"
+            data-size="sm"
+            onClick={reset}
+            disabled={!doc.layers.length && !doc.baseHidden}
+            data-action="reset"
+          >
             <LayerIcon name="reset" />
             <span>{copy.reset}</span>
           </button>
@@ -640,8 +935,66 @@ export default function LayerEditor(props: LayerEditorProps & { copy: Dictionary
           </button>
         </div>
 
+        <div
+          ref={islandRef}
+          className="bsl-island"
+          role="toolbar"
+          aria-label={copy.tools.label}
+          data-layers-island
+          data-expanded={brushActive || undefined}
+        >
+          <div className="bsl-island-tools">
+            {toolButtons
+              .filter((t) => t.show)
+              .map((t) => (
+                <button
+                  key={t.id}
+                  type="button"
+                  className="bsl-tool-btn"
+                  aria-pressed={tool === t.id}
+                  title={t.label}
+                  data-tool-btn={t.id}
+                  onClick={() => selectTool(t.id)}
+                >
+                  <LayerIcon name={t.icon} />
+                  <span>{t.label}</span>
+                </button>
+              ))}
+          </div>
+          <div className="bsl-island-brush" aria-hidden={!brushActive}>
+            <label className="bsl-brush-slider">
+              <span className="bsl-label">{copy.tools.brushSize}</span>
+              <input
+                type="range"
+                className="bsl-range"
+                min={BRUSH_SIZE_MIN}
+                max={BRUSH_SIZE_MAX}
+                value={brushSize}
+                tabIndex={brushActive ? 0 : -1}
+                aria-label={copy.tools.brushSize}
+                onChange={(event) => setBrushSize(clamp(Number(event.target.value), BRUSH_SIZE_MIN, BRUSH_SIZE_MAX))}
+              />
+              <span className="bsl-brush-val bsl-num">{`${brushSize}px`}</span>
+            </label>
+            <label className="bsl-brush-slider">
+              <span className="bsl-label">{copy.tools.brushHardness}</span>
+              <input
+                type="range"
+                className="bsl-range"
+                min={BRUSH_HARDNESS_MIN}
+                max={BRUSH_HARDNESS_MAX}
+                value={brushHardness}
+                tabIndex={brushActive ? 0 : -1}
+                aria-label={copy.tools.brushHardness}
+                onChange={(event) => setBrushHardness(clamp(Number(event.target.value), BRUSH_HARDNESS_MIN, BRUSH_HARDNESS_MAX))}
+              />
+              <span className="bsl-brush-val bsl-num">{`${brushHardness}%`}</span>
+            </label>
+          </div>
+        </div>
+
         {(notice || exportError) && (
-          <div className="bsl-toast-wrap">
+          <div className="bsl-toast-wrap" data-brush-open={brushActive || undefined}>
             {exportError ? (
               <p className="bsl-toast" data-tone="error" role="alert" data-layers-error>
                 {exportError}
@@ -672,39 +1025,81 @@ export default function LayerEditor(props: LayerEditorProps & { copy: Dictionary
 
         <aside className="bsl-panel bsl-right" ref={rightRef} data-panel="right" aria-label={`${copy.layers.title} · ${copy.props.title}`}>
           <SheetHead copy={copy} onClose={() => setSheet(null)} />
+          {props.region && showRegionSection && (
+            <section data-section="region">
+              <RegionEditPanel
+                copy={copy}
+                locale={props.locale}
+                baseSize={{ width: base.width, height: base.height }}
+                baseImgRef={baseImgRef}
+                region={props.region}
+                box={regionBox}
+                preset={props.initialRegionPreset}
+                autoFlatten={autoFlatten}
+                quickItems={quickTrayItems}
+                uploading={uploading.length > 0}
+                onBox={setRegionBox}
+                onAutoFlatten={setAutoFlatten}
+                resolveRef={(ref) => {
+                  const hit = resolveRef(ref);
+                  return hit ? pickToTray(hit) : null;
+                }}
+                onUploadRefs={uploadRegionRefFiles}
+                onSubmitted={(jobId, meta) => {
+                  setPendingRegionJobs((cur) => [...cur, { jobId, autoFlatten: meta.autoFlatten, box: meta.box }]);
+                  setSheet(null);
+                }}
+              />
+            </section>
+          )}
           <section data-section="layers">
-            <LayersPanel copy={copy} doc={doc} baseThumb={base.url} selectedId={selectedId} onSelect={setSelectedId} onPatch={(id, p) => patch(id, p)} />
-          </section>
-          <section data-section="props">
-            <PropsPanel
+            <LayersPanel
               copy={copy}
               doc={doc}
-              layer={selected}
-              frameHeight={frameHeight}
-              recent={recent}
-              onPatch={patch}
-              onColorUsed={colorUsed}
-              onEditText={startEdit}
-              onTogglePlate={togglePlate}
-              onRestoreRatio={(id) => void restoreRatio(id)}
-              onDuplicate={duplicate}
-              onDelete={remove}
-              onMove={reorder}
+              baseThumb={base.url}
+              selectedId={selectedId}
+              runningCount={pendingRegionJobs.length}
+              onSelect={setSelectedId}
+              onPatch={(id, p) => patch(id, p)}
+              onToggleBase={toggleBase}
             />
           </section>
+          {(!showRegionSection || selected !== null) && (
+            <section data-section="props">
+              <PropsPanel
+                copy={copy}
+                doc={doc}
+                layer={selected}
+                frameHeight={frameHeight}
+                recent={recent}
+                onPatch={patch}
+                onColorUsed={colorUsed}
+                onEditText={startEdit}
+                onTogglePlate={togglePlate}
+                onRestoreRatio={(id) => void restoreRatio(id)}
+                onDuplicate={duplicate}
+                onDelete={remove}
+                onMove={reorder}
+                onMergeDown={(id) => void mergeDown(id)}
+              />
+            </section>
+          )}
         </aside>
 
         <div className="bsl-bar" ref={barRef} role="toolbar" aria-label={copy.title}>
-          {(["add", "layers", "props"] as const).map((value) => (
+          {barSheets.map((value) => (
             <button
               key={value}
               type="button"
               className="bsl-bar-btn"
               aria-pressed={sheet === value}
               disabled={value === "props" && !selected}
-              onClick={() => setSheet((s) => (s === value ? null : value))}
+              onClick={() => {
+                if (value === "region" && tool !== "marquee") selectTool("marquee");
+                setSheet((s) => (s === value ? null : value));
+              }}
             >
-              <LayerIcon name={value === "add" ? "plus" : value === "layers" ? "layers" : "sliders"} />
+              <LayerIcon name={value === "add" ? "plus" : value === "region" ? "marquee" : value === "layers" ? "layers" : "sliders"} />
               <span>{copy.sheet[value]}</span>
             </button>
           ))}

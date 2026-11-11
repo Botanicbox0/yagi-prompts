@@ -40,6 +40,7 @@ export function studioStatus(code: StudioErrorCode): number {
       return 415;
     case 'reference_missing':
     case 'provider_rejected':
+    case 'region_misaligned':
       return 422;
     case 'too_many_running':
       return 429;

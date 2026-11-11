@@ -42,7 +42,14 @@ export function assetView(row: AssetRow, media: StudioMediaStore): StudioAssetVi
   };
 }
 
-export function outputView(row: OutputRow, media: StudioMediaStore): StudioOutputView {
+export function outputView(
+  row: OutputRow,
+  media: StudioMediaStore,
+  extra?: {
+    regionPatch?: StudioOutputView['regionPatch'];
+    sourceRef?: StudioOutputView['sourceRef'];
+  },
+): StudioOutputView {
   return {
     id: row.id,
     jobId: row.job_id,
@@ -54,6 +61,8 @@ export function outputView(row: OutputRow, media: StudioMediaStore): StudioOutpu
     seconds: seconds(row.duration_ms),
     draft: row.is_draft && Boolean(row.draft_task_id),
     savedAssetId: row.saved_asset_id,
+    ...(extra?.regionPatch !== undefined ? { regionPatch: extra.regionPatch } : {}),
+    ...(extra?.sourceRef !== undefined ? { sourceRef: extra.sourceRef } : {}),
     createdAt: iso(row.created_at)!,
   };
 }
@@ -62,6 +71,16 @@ export function jobView(row: JobRow, outputs: OutputRow[], media: StudioMediaSto
   const p = row.params ?? ({} as JobRow['params']);
   const closed = row.status === 'failed' || row.status === 'canceled';
   const remix = row.kind === 'video_remix';
+  const regionSourceRef =
+    row.kind === 'region_edit'
+      ? p.source?.assetId
+        ? { assetId: p.source.assetId }
+        : row.parent_output_id
+          ? { outputId: row.parent_output_id }
+          : p.source?.outputId
+            ? { outputId: p.source.outputId }
+            : null
+      : undefined;
   return {
     id: row.id,
     kind: row.kind,
@@ -88,9 +107,29 @@ export function jobView(row: JobRow, outputs: OutputRow[], media: StudioMediaSto
     outputs: outputs
       .filter((o) => o.job_id === row.id && o.status === 'ready' && !o.deleted_at && o.storage_key)
       .sort((a, b) => a.idx - b.idx)
-      .map((o) => outputView(o, media)),
+      .map((o) => {
+        const patch = row.work?.region?.patches?.[String(o.idx)];
+        const regionPatch = patch
+          ? {
+              url: media.url(patch.patchKey),
+              maskUrl: patch.maskKey ? media.url(patch.maskKey) : null,
+              x: o.width && o.width > 0 ? patch.box.left / o.width : (p.box?.x ?? 0),
+              y: o.height && o.height > 0 ? patch.box.top / o.height : (p.box?.y ?? 0),
+              w: o.width && o.width > 0 ? patch.box.width / o.width : (p.box?.w ?? 1),
+              h: o.height && o.height > 0 ? patch.box.height / o.height : (p.box?.h ?? 1),
+            }
+          : row.kind === 'region_edit'
+            ? null
+            : undefined;
+        return outputView(o, media, { regionPatch, sourceRef: regionSourceRef });
+      }),
     estimateKrw: closed ? 0 : Number(row.usage_krw ?? row.estimate_krw ?? 0),
-    errorCode: row.status === 'failed' ? (row.error_code ?? 'failed') : null,
+    errorCode:
+      row.status === 'failed'
+        ? row.work?.region?.misaligned
+          ? 'region_misaligned'
+          : (row.error_code ?? 'failed')
+        : null,
     createdAt: iso(row.created_at)!,
     finishedAt: iso(row.finished_at),
   };

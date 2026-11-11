@@ -1,8 +1,9 @@
 "use client";
 /**
  * The stage: the base picture with its layers in DOM, scaled by the view, plus the selection frame,
- * handles and smart guides drawn in screen space on top. Pointer work (move, resize, rotate, pan,
- * drop) happens here and goes back to the editor as preview/settle calls on the history.
+ * marquee selection, non-destructive alpha-mask brush, handles and smart guides drawn in screen space.
+ * Pointer work (move, resize, rotate, pan, marquee, brush, drop) happens here and goes back to the editor
+ * as preview/settle calls on the history.
  */
 import {
   useEffect,
@@ -14,7 +15,10 @@ import {
   type PointerEvent as ReactPointerEvent,
   type RefObject,
 } from "react";
+import type { RegionBox } from "@/lib/brand-studio/contracts";
 import { REF_DRAG_TYPE, acceptsDrag, decodeRefDrag, type RefSource } from "../refs";
+import { containsPoint as containsRegionPoint, drawBox, moveBox, resizeBox } from "../region-math";
+import { drawableUrl } from "./browser";
 import { shapeGeometry } from "./export";
 import {
   boundsOf,
@@ -35,11 +39,45 @@ import {
   type SnapTargets,
   type View,
 } from "./geometry";
-import { findLayer, fontChoice, updateLayer, type Frame, type ImageLayer, type Layer, type LayerDoc, type ShapeLayer, type TextLayer } from "./model";
+import { paintMaskStrokeOnContext, worldPointToMask, type MaskBrushMode } from "./mask";
+import {
+  clamp,
+  findLayer,
+  fontChoice,
+  topVisibleImageLayerId,
+  updateLayer,
+  type Frame,
+  type ImageLayer,
+  type Layer,
+  type LayerDoc,
+  type LayerTool,
+  type ShapeLayer,
+  type TextLayer,
+} from "./model";
 import type { LayersCopy } from "./panels";
 import type { TextLayout } from "./text-layout";
 
-type DragMode = "move" | "resize" | "rotate" | "pan" | "locked";
+type DragMode =
+  | "move"
+  | "resize"
+  | "rotate"
+  | "pan"
+  | "locked"
+  | "marqueeDraw"
+  | "marqueeMove"
+  | "marqueeResize"
+  | "brush";
+
+interface BrushSession {
+  layerId: string;
+  mode: MaskBrushMode;
+  frame: Frame;
+  maskCanvas: HTMLCanvasElement;
+  maskCtx: CanvasRenderingContext2D;
+  sourceImg: HTMLImageElement | null;
+  lastMaskPt: Point;
+  maskScale: number;
+}
 
 interface Drag {
   mode: DragMode;
@@ -52,6 +90,7 @@ interface Drag {
   startClient: Point;
   startWorld: Point;
   startView: View;
+  startRegionBox: RegionBox | null;
   moved: boolean;
 }
 
@@ -63,6 +102,12 @@ export interface StageProps {
   layouts: ReadonlyMap<string, TextLayout>;
   view: View;
   onView(update: (view: View) => View): void;
+  tool?: LayerTool;
+  brushSize?: number;
+  brushHardness?: number;
+  regionBox?: RegionBox | null;
+  onRegionBox?(box: RegionBox | null): void;
+  baseImgRef?: RefObject<HTMLImageElement | null>;
   selectedId: string | null;
   editingId: string | null;
   spaceDown: boolean;
@@ -82,13 +127,57 @@ export interface StageProps {
 
 /** Screen pixels within which an edge or centre line catches. */
 const SNAP_PX = 6;
+const MARQUEE_HANDLES: readonly Handle[] = ["nw", "n", "ne", "e", "se", "s", "sw", "w"];
+
+function resizeRegionHandle(box: RegionBox, handle: Handle, to: Point): RegionBox {
+  if (handle === "nw" || handle === "ne" || handle === "sw" || handle === "se") {
+    return resizeBox(box, handle, to);
+  }
+  if (handle === "n") return drawBox({ x: box.x, y: box.y + box.h }, { x: box.x + box.w, y: to.y });
+  if (handle === "s") return drawBox({ x: box.x, y: box.y }, { x: box.x + box.w, y: to.y });
+  if (handle === "w") return drawBox({ x: box.x + box.w, y: box.y }, { x: to.x, y: box.y + box.h });
+  return drawBox({ x: box.x, y: box.y }, { x: to.x, y: box.y + box.h });
+}
 
 export function Stage(props: StageProps) {
-  const { copy, doc, frames, layouts, view, onView, selectedId, editingId, stageRef } = props;
+  const {
+    copy,
+    doc,
+    frames,
+    layouts,
+    view,
+    onView,
+    tool = "move",
+    brushSize = 48,
+    brushHardness = 30,
+    regionBox = null,
+    selectedId,
+    editingId,
+    stageRef,
+  } = props;
   const dragRef = useRef<Drag | null>(null);
+  const brushSessionRef = useRef<BrushSession | null>(null);
+  const liveBrushCanvasRef = useRef<HTMLCanvasElement | null>(null);
+  const maskCacheRef = useRef<Map<string, HTMLImageElement>>(new Map());
   const [dragging, setDragging] = useState<DragMode | null>(null);
+  const [brushingLayerId, setBrushingLayerId] = useState<string | null>(null);
+  const [cursor, setCursor] = useState<Point | null>(null);
   const [guides, setGuides] = useState<Guides | null>(null);
   const [dropActive, setDropActive] = useState(false);
+
+  // Preload existing layer masks so the first brush stroke has a decoded image immediately.
+  useEffect(() => {
+    if (typeof Image === "undefined") return;
+    const cache = maskCacheRef.current;
+    for (const layer of doc.layers) {
+      if (layer.kind !== "image" || !layer.maskDataUrl || cache.has(layer.maskDataUrl)) continue;
+      const im = new Image();
+      const src = drawableUrl(layer.maskDataUrl);
+      im.decoding = "async";
+      im.src = src;
+      cache.set(layer.maskDataUrl, im);
+    }
+  }, [doc.layers]);
 
   // Wheel: Ctrl/⌘ (and trackpad pinch) zooms around the pointer, plain wheel pans. Needs a non-passive listener.
   useEffect(() => {
@@ -118,11 +207,92 @@ export function Stage(props: StageProps) {
     return { x: clientX - (rect?.left ?? 0), y: clientY - (rect?.top ?? 0) };
   };
 
+  const toNorm = (world: Point): Point => ({
+    x: doc.width > 0 ? clamp(world.x / doc.width, 0, 1) : 0,
+    y: doc.height > 0 ? clamp(world.y / doc.height, 0, 1) : 0,
+  });
+
+  const renderLiveBrushPreview = (session: BrushSession) => {
+    const canvas = liveBrushCanvasRef.current;
+    if (!canvas) return;
+    const mw = session.maskCanvas.width;
+    const mh = session.maskCanvas.height;
+    if (canvas.width !== mw) canvas.width = mw;
+    if (canvas.height !== mh) canvas.height = mh;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return;
+    ctx.clearRect(0, 0, mw, mh);
+    if (session.sourceImg && session.sourceImg.complete && session.sourceImg.naturalWidth > 0) {
+      ctx.globalCompositeOperation = "source-over";
+      ctx.drawImage(session.sourceImg, 0, 0, mw, mh);
+      ctx.globalCompositeOperation = "destination-in";
+      ctx.drawImage(session.maskCanvas, 0, 0, mw, mh);
+      ctx.globalCompositeOperation = "source-over";
+    }
+  };
+
+  // Paint initial preview frame as soon as the live `<canvas>` mounts for `brushingLayerId`.
+  useEffect(() => {
+    if (brushingLayerId && brushSessionRef.current?.layerId === brushingLayerId) {
+      renderLiveBrushPreview(brushSessionRef.current);
+    }
+  }, [brushingLayerId]);
+
+  function startBrushSession(layer: ImageLayer, frame: Frame, world: Point, mode: MaskBrushMode): boolean {
+    if (typeof document === "undefined") return false;
+    const domImg = stageRef.current?.querySelector<HTMLImageElement>(`[data-layer-id="${layer.id}"] img`) ?? null;
+    const cachedMask = layer.maskDataUrl ? maskCacheRef.current.get(layer.maskDataUrl) ?? null : null;
+    const baseW = cachedMask?.naturalWidth || domImg?.naturalWidth || Math.round(frame.w) || 256;
+    const baseH = cachedMask?.naturalHeight || domImg?.naturalHeight || Math.round(frame.h) || 256;
+    const scaleDown = Math.min(1, 2048 / Math.max(1, baseW, baseH));
+    const mw = Math.max(8, Math.round(baseW * scaleDown));
+    const mh = Math.max(8, Math.round(baseH * scaleDown));
+
+    const maskCanvas = document.createElement("canvas");
+    maskCanvas.width = mw;
+    maskCanvas.height = mh;
+    const maskCtx = maskCanvas.getContext("2d");
+    if (!maskCtx) return false;
+
+    if (layer.maskDataUrl && cachedMask && cachedMask.complete && cachedMask.naturalWidth > 0) {
+      maskCtx.drawImage(cachedMask, 0, 0, mw, mh);
+    } else {
+      maskCtx.fillStyle = "#ffffff";
+      maskCtx.fillRect(0, 0, mw, mh);
+    }
+
+    const mapped = worldPointToMask(world, frame, { width: mw, height: mh });
+    const radius = Math.max(1, (brushSize / 2) * mapped.scale);
+    paintMaskStrokeOnContext(maskCtx, {
+      from: { x: mapped.x, y: mapped.y },
+      to: { x: mapped.x, y: mapped.y },
+      radius,
+      hardness: brushHardness,
+      mode,
+    });
+
+    const session: BrushSession = {
+      layerId: layer.id,
+      mode,
+      frame,
+      maskCanvas,
+      maskCtx,
+      sourceImg: domImg,
+      lastMaskPt: { x: mapped.x, y: mapped.y },
+      maskScale: mapped.scale,
+    };
+    brushSessionRef.current = session;
+    setBrushingLayerId(layer.id);
+    return true;
+  }
+
   function onPointerDown(event: ReactPointerEvent<HTMLDivElement>) {
     if (event.button !== 0 && event.button !== 1) return;
     const target = event.target as HTMLElement;
     if (target.closest("textarea")) return;
-    const world = toWorld(view, local(event.clientX, event.clientY));
+    const loc = local(event.clientX, event.clientY);
+    setCursor(loc);
+    const world = toWorld(view, loc);
     const base: Omit<Drag, "mode"> = {
       pointerId: event.pointerId,
       start: doc,
@@ -133,37 +303,78 @@ export function Stage(props: StageProps) {
       startClient: { x: event.clientX, y: event.clientY },
       startWorld: world,
       startView: view,
+      startRegionBox: regionBox,
       moved: false,
     };
-    const handleEl = target.closest<HTMLElement>("[data-handle]");
-    const layerEl = target.closest<HTMLElement>("[data-layer-id]");
+
     let drag: Drag | null = null;
-    if (event.button === 1 || props.spaceDown) drag = { ...base, mode: "pan" };
-    else if (handleEl && selectedId) {
-      const layer = findLayer(doc, selectedId);
-      const frame = frames.get(selectedId);
-      if (layer && frame && !layer.locked) {
-        const handle = handleEl.dataset.handle as Handle | "rotate";
-        drag = handle === "rotate" ? { ...base, mode: "rotate", layer, frame } : { ...base, mode: "resize", layer, frame, handle };
-      }
-    } else if (layerEl?.dataset.layerId) {
-      const id = layerEl.dataset.layerId;
-      if (editingId && editingId !== id) props.onEditText(null);
-      props.onSelect(id);
-      const layer = findLayer(doc, id);
-      const frame = frames.get(id);
-      if (layer && frame && editingId !== id) {
-        if (layer.locked) drag = { ...base, mode: "locked", layer };
-        else {
-          const others = doc.layers.filter((l) => l.id !== id && !l.hidden).map((l) => boundsOf(frames.get(l.id) ?? l));
-          drag = { ...base, mode: "move", layer, frame, targets: snapTargets(doc, others) };
-        }
-      }
-    } else {
-      if (editingId) props.onEditText(null);
-      props.onSelect(null);
+    if (event.button === 1 || props.spaceDown) {
       drag = { ...base, mode: "pan" };
+    } else if (tool === "marquee" && props.onRegionBox) {
+      if (editingId) props.onEditText(null);
+      const marqueeHandleEl = target.closest<HTMLElement>("[data-marquee-handle]");
+      const norm = toNorm(world);
+      if (marqueeHandleEl && regionBox) {
+        drag = {
+          ...base,
+          mode: "marqueeResize",
+          handle: marqueeHandleEl.dataset.marqueeHandle as Handle,
+        };
+      } else if (regionBox && (target.closest("[data-marquee-box]") || containsRegionPoint(regionBox, norm))) {
+        drag = { ...base, mode: "marqueeMove" };
+      } else {
+        drag = { ...base, mode: "marqueeDraw" };
+      }
+    } else if (tool === "eraser" || tool === "restore") {
+      if (editingId) props.onEditText(null);
+      let candidate = findLayer(doc, selectedId);
+      if (!candidate || candidate.kind !== "image" || candidate.hidden) {
+        const fallbackId = topVisibleImageLayerId(doc);
+        candidate = fallbackId ? findLayer(doc, fallbackId) : null;
+        if (candidate) props.onSelect(candidate.id);
+      }
+      if (!candidate || candidate.kind !== "image" || candidate.hidden) {
+        props.onNotice(copy.stage.needImageLayer);
+        return;
+      }
+      if (candidate.locked) {
+        props.onNotice(copy.stage.locked);
+        return;
+      }
+      const frame = frames.get(candidate.id) ?? candidate;
+      const mode: MaskBrushMode = tool === "eraser" ? "erase" : "restore";
+      if (!startBrushSession(candidate, frame, world, mode)) return;
+      drag = { ...base, mode: "brush", layer: candidate, frame, moved: true };
+    } else {
+      const handleEl = target.closest<HTMLElement>("[data-handle]");
+      const layerEl = target.closest<HTMLElement>("[data-layer-id]");
+      if (handleEl && selectedId) {
+        const layer = findLayer(doc, selectedId);
+        const frame = frames.get(selectedId);
+        if (layer && frame && !layer.locked) {
+          const handle = handleEl.dataset.handle as Handle | "rotate";
+          drag = handle === "rotate" ? { ...base, mode: "rotate", layer, frame } : { ...base, mode: "resize", layer, frame, handle };
+        }
+      } else if (layerEl?.dataset.layerId) {
+        const id = layerEl.dataset.layerId;
+        if (editingId && editingId !== id) props.onEditText(null);
+        props.onSelect(id);
+        const layer = findLayer(doc, id);
+        const frame = frames.get(id);
+        if (layer && frame && editingId !== id) {
+          if (layer.locked) drag = { ...base, mode: "locked", layer };
+          else {
+            const others = doc.layers.filter((l) => l.id !== id && !l.hidden).map((l) => boundsOf(frames.get(l.id) ?? l));
+            drag = { ...base, mode: "move", layer, frame, targets: snapTargets(doc, others) };
+          }
+        }
+      } else {
+        if (editingId) props.onEditText(null);
+        props.onSelect(null);
+        drag = { ...base, mode: "pan" };
+      }
     }
+
     if (!drag) return;
     event.preventDefault();
     stageRef.current?.focus({ preventScroll: true });
@@ -177,8 +388,32 @@ export function Stage(props: StageProps) {
   }
 
   function onPointerMove(event: ReactPointerEvent<HTMLDivElement>) {
+    const loc = local(event.clientX, event.clientY);
+    if (tool === "eraser" || tool === "restore") setCursor(loc);
     const drag = dragRef.current;
     if (!drag || event.pointerId !== drag.pointerId) return;
+
+    if (drag.mode === "brush") {
+      const session = brushSessionRef.current;
+      if (!session) return;
+      const world = toWorld(view, loc);
+      const mapped = worldPointToMask(world, session.frame, {
+        width: session.maskCanvas.width,
+        height: session.maskCanvas.height,
+      });
+      const radius = Math.max(1, (brushSize / 2) * session.maskScale);
+      paintMaskStrokeOnContext(session.maskCtx, {
+        from: session.lastMaskPt,
+        to: { x: mapped.x, y: mapped.y },
+        radius,
+        hardness: brushHardness,
+        mode: session.mode,
+      });
+      session.lastMaskPt = { x: mapped.x, y: mapped.y };
+      renderLiveBrushPreview(session);
+      return;
+    }
+
     if (!drag.moved && Math.hypot(event.clientX - drag.startClient.x, event.clientY - drag.startClient.y) < 3) return;
     const first = !drag.moved;
     drag.moved = true;
@@ -192,10 +427,25 @@ export function Stage(props: StageProps) {
       if (first) props.onNotice(copy.stage.locked);
       return;
     }
+    const world = toWorld(view, loc);
+    if (drag.mode === "marqueeDraw" && props.onRegionBox) {
+      props.onRegionBox(drawBox(toNorm(drag.startWorld), toNorm(world)));
+      return;
+    }
+    if (drag.mode === "marqueeMove" && props.onRegionBox && drag.startRegionBox) {
+      const dx = doc.width > 0 ? (world.x - drag.startWorld.x) / doc.width : 0;
+      const dy = doc.height > 0 ? (world.y - drag.startWorld.y) / doc.height : 0;
+      props.onRegionBox(moveBox(drag.startRegionBox, dx, dy));
+      return;
+    }
+    if (drag.mode === "marqueeResize" && props.onRegionBox && drag.startRegionBox && drag.handle) {
+      props.onRegionBox(resizeRegionHandle(drag.startRegionBox, drag.handle, toNorm(world)));
+      return;
+    }
+
     const layer = drag.layer;
     const frame = drag.frame;
     if (!layer || !frame) return;
-    const world = toWorld(view, local(event.clientX, event.clientY));
     if (drag.mode === "move") {
       let dx = world.x - drag.startWorld.x;
       let dy = world.y - drag.startWorld.y;
@@ -226,10 +476,35 @@ export function Stage(props: StageProps) {
     } catch {
       /* already released */
     }
+    if (drag.mode === "brush") {
+      const session = brushSessionRef.current;
+      brushSessionRef.current = null;
+      setBrushingLayerId(null);
+      if (session && drag.layer?.kind === "image") {
+        try {
+          const dataUrl = session.maskCanvas.toDataURL("image/png");
+          if (typeof Image !== "undefined") {
+            const im = new Image();
+            im.src = dataUrl;
+            maskCacheRef.current.set(dataUrl, im);
+          }
+          props.onPreview(updateLayer(drag.start, drag.layer.id, { maskDataUrl: dataUrl }));
+          props.onSettle(drag.start);
+        } catch {
+          /* ignore encode error */
+        }
+      }
+      return;
+    }
+    if (drag.mode === "marqueeDraw" && !drag.moved && props.onRegionBox && drag.startRegionBox) {
+      props.onRegionBox(null);
+      return;
+    }
     if (drag.moved && (drag.mode === "move" || drag.mode === "resize" || drag.mode === "rotate")) props.onSettle(drag.start);
   }
 
   function onDoubleClick(event: ReactMouseEvent<HTMLDivElement>) {
+    if (tool !== "move") return;
     const id = (event.target as HTMLElement).closest<HTMLElement>("[data-layer-id]")?.dataset.layerId;
     const layer = id ? findLayer(doc, id) : null;
     if (layer?.kind === "text" && !layer.locked) props.onEditText(layer.id);
@@ -256,6 +531,7 @@ export function Stage(props: StageProps) {
   const selected = findLayer(doc, selectedId);
   const selectedFrame = selected ? frames.get(selected.id) : undefined;
   const editing = Boolean(editingId && editingId === selectedId);
+  const showBrushCursor = (tool === "eraser" || tool === "restore") && !props.spaceDown && dragging !== "pan" && cursor !== null;
 
   return (
     <div
@@ -266,12 +542,14 @@ export function Stage(props: StageProps) {
       aria-label={copy.stage.label}
       aria-describedby={props.hintId}
       data-layers-stage
+      data-tool={tool}
       data-panning={props.spaceDown || dragging === "pan" || undefined}
       data-dragging={dragging ?? undefined}
       onPointerDown={onPointerDown}
       onPointerMove={onPointerMove}
       onPointerUp={endDrag}
       onPointerCancel={endDrag}
+      onPointerLeave={() => setCursor(null)}
       onDoubleClick={onDoubleClick}
       onDragOver={onDragOver}
       onDragLeave={(event) => {
@@ -281,11 +559,25 @@ export function Stage(props: StageProps) {
     >
       <div
         className="bsl-world"
-        style={{ width: doc.width, height: doc.height, transform: `translate(${view.panX}px, ${view.panY}px) scale(${view.zoom})`, ["--bsl-zoom" as string]: view.zoom } as CSSProperties}
+        data-base-hidden={doc.baseHidden || undefined}
+        style={{
+          width: doc.width,
+          height: doc.height,
+          transform: `translate(${view.panX}px, ${view.panY}px) scale(${view.zoom})`,
+          ["--bsl-zoom" as string]: view.zoom,
+        } as CSSProperties}
       >
-        <img className="bsl-base" src={props.baseUrl} alt="" draggable={false} />
+        <img
+          ref={props.baseImgRef}
+          className="bsl-base"
+          src={drawableUrl(props.baseUrl)}
+          alt=""
+          draggable={false}
+          style={{ display: doc.baseHidden ? "none" : undefined }}
+        />
         {doc.layers.map((layer) => {
           const frame = frames.get(layer.id) ?? layer;
+          const activeBrush = brushingLayerId === layer.id;
           return (
             <div
               key={layer.id}
@@ -305,7 +597,16 @@ export function Stage(props: StageProps) {
                 display: layer.hidden ? "none" : undefined,
               }}
             >
-              {layer.kind === "image" && <ImageNode layer={layer} failed={props.failed.has(layer.src.url)} missing={copy.stage.missing} onError={props.onImageError} />}
+              {layer.kind === "image" && (
+                <ImageNode
+                  layer={layer}
+                  activeBrush={activeBrush}
+                  liveCanvasRef={activeBrush ? liveBrushCanvasRef : undefined}
+                  failed={props.failed.has(layer.src.url)}
+                  missing={copy.stage.missing}
+                  onError={props.onImageError}
+                />
+              )}
               {layer.kind === "shape" && <ShapeNode layer={layer} w={frame.w} h={frame.h} />}
               {layer.kind === "text" && (
                 <TextNode
@@ -336,8 +637,31 @@ export function Stage(props: StageProps) {
         </svg>
       )}
 
-      {selected && selectedFrame && !selected.hidden && (
+      {tool === "move" && selected && selectedFrame && !selected.hidden && (
         <Selection layer={selected} frame={selectedFrame} view={view} editing={editing} dragging={dragging} />
+      )}
+
+      {regionBox && (
+        <MarqueeSelection
+          box={regionBox}
+          doc={doc}
+          view={view}
+          interactive={tool === "marquee"}
+        />
+      )}
+
+      {showBrushCursor && cursor && (
+        <span
+          className="bsl-brush-cursor"
+          data-mode={tool}
+          aria-hidden="true"
+          style={{
+            left: cursor.x,
+            top: cursor.y,
+            width: Math.max(4, brushSize * view.zoom),
+            height: Math.max(4, brushSize * view.zoom),
+          }}
+        />
       )}
 
       {dropActive && (
@@ -364,7 +688,15 @@ function Selection({ layer, frame, view, editing, dragging }: { layer: Layer; fr
     >
       {handles.map((hd) => {
         const at = handleAnchor(hd);
-        return <span key={hd} className="bsl-handle" data-handle={hd} data-edge={hd.length === 1 ? (hd === "n" || hd === "s" ? "h" : "v") : undefined} style={{ left: `${at.x * 100}%`, top: `${at.y * 100}%`, cursor: handleCursor(hd, frame.rotation) }} />;
+        return (
+          <span
+            key={hd}
+            className="bsl-handle"
+            data-handle={hd}
+            data-edge={hd.length === 1 ? (hd === "n" || hd === "s" ? "h" : "v") : undefined}
+            style={{ left: `${at.x * 100}%`, top: `${at.y * 100}%`, cursor: handleCursor(hd, frame.rotation) }}
+          />
+        );
       })}
       {!layer.locked && !editing && (
         <span className="bsl-rotate" data-handle="rotate">
@@ -380,14 +712,94 @@ function Selection({ layer, frame, view, editing, dragging }: { layer: Layer; fr
   );
 }
 
-function ImageNode({ layer, failed, missing, onError }: { layer: ImageLayer; failed: boolean; missing: string; onError(url: string): void }) {
+function MarqueeSelection({
+  box,
+  doc,
+  view,
+  interactive,
+}: {
+  box: RegionBox;
+  doc: LayerDoc;
+  view: View;
+  interactive: boolean;
+}) {
+  const left = view.panX + box.x * doc.width * view.zoom;
+  const top = view.panY + box.y * doc.height * view.zoom;
+  const width = box.w * doc.width * view.zoom;
+  const height = box.h * doc.height * view.zoom;
+  const pxW = Math.max(1, Math.round(box.w * doc.width));
+  const pxH = Math.max(1, Math.round(box.h * doc.height));
+  const small = Math.min(width, height) < 36;
+  const handles = interactive ? MARQUEE_HANDLES.filter((hd) => !small || hd.length === 2) : [];
+
+  return (
+    <div
+      className="bsl-marquee"
+      data-marquee-box
+      data-interactive={interactive || undefined}
+      data-box={`${box.x},${box.y},${box.w},${box.h}`}
+      aria-hidden="true"
+      style={{ left, top, width, height }}
+    >
+      <span className="bsl-marquee-badge bsl-num">1</span>
+      {handles.map((hd) => {
+        const at = handleAnchor(hd);
+        return (
+          <span
+            key={hd}
+            className="bsl-handle"
+            data-marquee-handle={hd}
+            data-edge={hd.length === 1 ? (hd === "n" || hd === "s" ? "h" : "v") : undefined}
+            style={{ left: `${at.x * 100}%`, top: `${at.y * 100}%`, cursor: handleCursor(hd, 0) }}
+          />
+        );
+      })}
+      <span className="bsl-size-tag bsl-num">{`${pxW} × ${pxH}`}</span>
+    </div>
+  );
+}
+
+function ImageNode({
+  layer,
+  activeBrush,
+  liveCanvasRef,
+  failed,
+  missing,
+  onError,
+}: {
+  layer: ImageLayer;
+  activeBrush: boolean;
+  liveCanvasRef?: RefObject<HTMLCanvasElement | null>;
+  failed: boolean;
+  missing: string;
+  onError(url: string): void;
+}) {
   if (failed)
     return (
       <div className="bsl-missing">
         <span>{missing}</span>
       </div>
     );
-  return <img src={layer.src.url} alt="" draggable={false} onError={() => onError(layer.src.url)} />;
+  const maskUrl = layer.maskDataUrl ? drawableUrl(layer.maskDataUrl).replace(/"/g, "%22") : null;
+  const maskStyle: CSSProperties | undefined =
+    !activeBrush && maskUrl
+      ? {
+          WebkitMaskImage: `url("${maskUrl}")`,
+          maskImage: `url("${maskUrl}")`,
+          WebkitMaskSize: "100% 100%",
+          maskSize: "100% 100%",
+          WebkitMaskRepeat: "no-repeat",
+          maskRepeat: "no-repeat",
+        }
+      : activeBrush
+        ? { opacity: 0 }
+        : undefined;
+  return (
+    <>
+      <img src={drawableUrl(layer.src.url)} alt="" draggable={false} style={maskStyle} onError={() => onError(layer.src.url)} />
+      {activeBrush && <canvas ref={liveCanvasRef} className="bsl-brush-canvas" />}
+    </>
+  );
 }
 
 function ShapeNode({ layer, w, h }: { layer: ShapeLayer; w: number; h: number }) {

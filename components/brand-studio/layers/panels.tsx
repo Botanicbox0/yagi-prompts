@@ -13,6 +13,7 @@ import { LayerIcon, type LayerIconName } from "./icons";
 import {
   FONTS,
   SWATCHES,
+  canMergeDown,
   canMove,
   clamp,
   fontChoice,
@@ -196,11 +197,13 @@ export interface LayersPanelProps {
   doc: LayerDoc;
   baseThumb: string;
   selectedId: string | null;
+  runningCount?: number;
   onSelect(id: string): void;
   onPatch(id: string, patch: LayerPatch): void;
+  onToggleBase?(): void;
 }
 
-export function LayersPanel({ copy, doc, baseThumb, selectedId, onSelect, onPatch }: LayersPanelProps) {
+export function LayersPanel({ copy, doc, baseThumb, selectedId, runningCount = 0, onSelect, onPatch, onToggleBase }: LayersPanelProps) {
   const l = copy.layers;
   const [renaming, setRenaming] = useState<string | null>(null);
   const top = [...doc.layers].reverse();
@@ -210,6 +213,12 @@ export function LayersPanel({ copy, doc, baseThumb, selectedId, onSelect, onPatc
         {l.title}
         <span className="bsl-count bsl-num">{doc.layers.length}</span>
       </h2>
+      {runningCount > 0 && (
+        <p className="bsl-running-pill bsl-num" role="status" data-layers-running>
+          <span className="bsl-running-dot" aria-hidden="true" />
+          <span>{runningCount === 1 ? l.runningOne : fill(l.runningMany, { n: runningCount })}</span>
+        </p>
+      )}
       {!doc.layers.length && <p className="bsl-hint">{l.empty}</p>}
       <ul className="bsl-layer-list">
         {top.map((layer) => (
@@ -241,13 +250,23 @@ export function LayersPanel({ copy, doc, baseThumb, selectedId, onSelect, onPatc
             <IconButton icon={layer.locked ? "lock" : "unlock"} label={`${layer.name} · ${layer.locked ? l.unlock : l.lock}`} on={layer.locked} onClick={() => onPatch(layer.id, { locked: !layer.locked })} quiet />
           </li>
         ))}
-        <li className="bsl-layer-row" data-base>
+        <li className="bsl-layer-row" data-base data-hidden={doc.baseHidden || undefined}>
           <span className="bsl-layer-pick" aria-disabled="true">
             <span className="bsl-layer-thumb">
               <img src={baseThumb} alt="" draggable={false} />
             </span>
             <span className="bsl-ellipsis">{copy.names.base}</span>
           </span>
+          {onToggleBase && (
+            <IconButton
+              icon={doc.baseHidden ? "eyeOff" : "eye"}
+              label={doc.baseHidden ? l.showBase : l.hideBase}
+              on={Boolean(doc.baseHidden)}
+              onClick={onToggleBase}
+              quiet
+              data="toggle-base"
+            />
+          )}
           <span className="bsl-layer-fixed">
             <LayerIcon name="lock" />
           </span>
@@ -330,6 +349,7 @@ export interface PropsPanelProps {
   onDuplicate(id: string): void;
   onDelete(id: string): void;
   onMove(id: string, step: 1 | -1): void;
+  onMergeDown?(id: string): void;
 }
 
 export function PropsPanel(props: PropsPanelProps) {
@@ -354,6 +374,9 @@ export function PropsPanel(props: PropsPanelProps) {
       <div className="bsl-toolrow" role="group" aria-label={p.title}>
         <IconButton icon="up" label={l.forward} disabled={!canMove(doc, layer.id, 1)} onClick={() => props.onMove(layer.id, 1)} data="forward" />
         <IconButton icon="down" label={l.backward} disabled={!canMove(doc, layer.id, -1)} onClick={() => props.onMove(layer.id, -1)} data="backward" />
+        {props.onMergeDown && (
+          <IconButton icon="mergeDown" label={l.mergeDown} disabled={!canMergeDown(doc, layer.id)} onClick={() => props.onMergeDown?.(layer.id)} data="merge-down" />
+        )}
         <IconButton icon="copy" label={l.duplicate} onClick={() => props.onDuplicate(layer.id)} data="duplicate" />
         <IconButton icon={layer.locked ? "lock" : "unlock"} label={layer.locked ? l.unlock : l.lock} on={layer.locked} onClick={() => set({ locked: !layer.locked })} data="lock" />
         <IconButton icon={layer.hidden ? "eyeOff" : "eye"} label={layer.hidden ? l.show : l.hide} on={layer.hidden} onClick={() => set({ hidden: !layer.hidden })} data="hide" />

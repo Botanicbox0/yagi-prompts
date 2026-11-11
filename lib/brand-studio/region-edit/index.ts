@@ -10,5 +10,21 @@
  * Pixels outside `plan.box` in `result` are identical to the decoded original.
  */
 export { planRegion, boxToPixels, parseAspect, type PixelRect, type RegionPlan } from './plan';
-export { cropForEdit, compositeRegion, matchTone, featherWeight, defaultFeather, type Tone } from './composite';
+export {
+  cropForEdit,
+  compositeRegion,
+  matchTone,
+  featherWeight,
+  defaultFeather,
+  type Tone,
+  type CompositeRegionResult,
+} from './composite';
+export {
+  alignEditedRoi,
+  computeDiffMask,
+  diffMaskAt,
+  MAX_RING_RESIDUAL,
+  type AlignTransform,
+  type AlignedRoiResult,
+} from './align';
 export { measureImage, decodeRgba } from './pixels';

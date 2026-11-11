@@ -203,8 +203,8 @@ async function step(deps: StudioDeps, job: JobRow, token: string): Promise<JobRo
     case 'running':
       return job.lane === 'sunra_api' ? poll(deps, job, token) : null;
     case 'finishing': {
-      await finishJob(deps, job, token);
-      return null;
+      const finished = await finishJob(deps, job, token);
+      return finished?.status === 'queued' ? finished : null;
     }
     default:
       return null;

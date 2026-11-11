@@ -5,7 +5,8 @@
  * injected dependencies so the failure paths can be tested too.
  */
 import { STUDIO_LIMITS } from "@/lib/brand-studio/contracts";
-import type { FontId, Frame, LayerDoc, ShapeKind, TextLayer } from "./model";
+import { boundsOf } from "./geometry";
+import { MIN_SIDE, canMergeDown, type Box, type FontId, type Frame, type Layer, type LayerDoc, type ShapeKind, type TextLayer } from "./model";
 import { layoutText, fontShorthand, graphemes, type Measure, type TextLayout } from "./text-layout";
 
 export const BASE_OP_ID = "base";
@@ -21,6 +22,7 @@ interface OpBase {
 export interface ImageOp extends OpBase {
   kind: "image";
   url: string;
+  maskUrl?: string;
 }
 
 export interface ShapeOp extends OpBase {
@@ -58,6 +60,44 @@ export interface ExportBase {
   name: string;
 }
 
+function layerToOp(layer: Layer, measureFor: (layer: TextLayer) => Measure): DrawOp {
+  const common = { layerId: layer.id, name: layer.name, opacity: layer.opacity };
+  if (layer.kind === "image") {
+    return {
+      ...common,
+      kind: "image",
+      url: layer.src.url,
+      frame: frameOf(layer),
+      ...(layer.maskDataUrl ? { maskUrl: layer.maskDataUrl } : {}),
+    };
+  }
+  if (layer.kind === "shape") {
+    return {
+      ...common,
+      kind: "shape",
+      frame: frameOf(layer),
+      shape: layer.shape,
+      fill: layer.fill,
+      stroke: layer.stroke,
+      strokeWidth: layer.strokeWidth,
+      radius: layer.radius,
+    };
+  }
+  const layout = layoutText(layer, measureFor(layer));
+  return {
+    ...common,
+    kind: "text",
+    frame: { ...frameOf(layer), h: layout.height },
+    font: layer.font,
+    weight: layer.weight,
+    size: layer.size,
+    color: layer.color,
+    spacingPx: layer.letterSpacing * layer.size,
+    layout,
+    plate: layer.plate ? { color: layer.plate.color, radius: layer.plate.radius * layer.size } : null,
+  };
+}
+
 /** What gets drawn, in order: the base, then every visible layer bottom to top. Text is laid out here. */
 export function planExport(doc: LayerDoc, base: ExportBase, measureFor: (layer: TextLayer) => Measure): ExportPlan {
   const ops: DrawOp[] = [
@@ -65,36 +105,81 @@ export function planExport(doc: LayerDoc, base: ExportBase, measureFor: (layer: 
   ];
   for (const layer of doc.layers) {
     if (layer.hidden || layer.opacity <= 0) continue;
-    const common = { layerId: layer.id, name: layer.name, opacity: layer.opacity };
-    if (layer.kind === "image") {
-      ops.push({ ...common, kind: "image", url: layer.src.url, frame: frameOf(layer) });
-    } else if (layer.kind === "shape") {
-      ops.push({ ...common, kind: "shape", frame: frameOf(layer), shape: layer.shape, fill: layer.fill, stroke: layer.stroke, strokeWidth: layer.strokeWidth, radius: layer.radius });
-    } else {
-      const layout = layoutText(layer, measureFor(layer));
-      ops.push({
-        ...common,
-        kind: "text",
-        frame: { ...frameOf(layer), h: layout.height },
-        font: layer.font,
-        weight: layer.weight,
-        size: layer.size,
-        color: layer.color,
-        spacingPx: layer.letterSpacing * layer.size,
-        layout,
-        plate: layer.plate ? { color: layer.plate.color, radius: layer.plate.radius * layer.size } : null,
-      });
-    }
+    ops.push(layerToOp(layer, measureFor));
   }
   return { width: base.width, height: base.height, ops };
 }
 
+/**
+ * Plans merging the selected layer (`id`) into the layer right beneath it (`index > 0`),
+ * or baking `layers[0]` onto the base region beneath it (`index === 0`) as a flattened layer above base.
+ */
+export function planMergeDown(
+  doc: LayerDoc,
+  id: string,
+  base: ExportBase,
+  measureFor: (layer: TextLayer) => Measure,
+): { plan: ExportPlan; box: Box } | null {
+  if (!canMergeDown(doc, id)) return null;
+  const index = doc.layers.findIndex((l) => l.id === id);
+  const upperOp = layerToOp(doc.layers[index]!, measureFor);
+
+  if (index > 0) {
+    const lowerOp = layerToOp(doc.layers[index - 1]!, measureFor);
+    const b1 = boundsOf(lowerOp.frame);
+    const b2 = boundsOf(upperOp.frame);
+    const x = Math.floor(Math.min(b1.x, b2.x));
+    const y = Math.floor(Math.min(b1.y, b2.y));
+    const right = Math.ceil(Math.max(b1.x + b1.w, b2.x + b2.w));
+    const bottom = Math.ceil(Math.max(b1.y + b1.h, b2.y + b2.h));
+    const w = Math.max(MIN_SIDE, right - x);
+    const h = Math.max(MIN_SIDE, bottom - y);
+    const shift = (op: DrawOp): DrawOp => ({
+      ...op,
+      frame: { ...op.frame, x: op.frame.x - x, y: op.frame.y - y },
+    });
+    const ops: DrawOp[] = [];
+    if (lowerOp.opacity > 0) ops.push(shift(lowerOp));
+    if (upperOp.opacity > 0) ops.push(shift(upperOp));
+    return { plan: { width: w, height: h, ops }, box: { x, y, w, h } };
+  }
+
+  const ub = boundsOf(upperOp.frame);
+  const x = Math.max(0, Math.floor(ub.x));
+  const y = Math.max(0, Math.floor(ub.y));
+  const right = Math.min(base.width, Math.ceil(ub.x + ub.w));
+  const bottom = Math.min(base.height, Math.ceil(ub.y + ub.h));
+  const w = Math.max(MIN_SIDE, right - x);
+  const h = Math.max(MIN_SIDE, bottom - y);
+  const ops: DrawOp[] = [
+    {
+      kind: "image",
+      layerId: BASE_OP_ID,
+      name: base.name,
+      url: base.url,
+      frame: { x: -x, y: -y, w: base.width, h: base.height, rotation: 0 },
+      opacity: 1,
+    },
+  ];
+  if (upperOp.opacity > 0) {
+    ops.push({
+      ...upperOp,
+      frame: { ...upperOp.frame, x: upperOp.frame.x - x, y: upperOp.frame.y - y },
+    });
+  }
+  return { plan: { width: w, height: h, ops }, box: { x, y, w, h } };
+}
+
 const frameOf = (f: Frame): Frame => ({ x: f.x, y: f.y, w: f.w, h: f.h, rotation: f.rotation });
 
-/** Unique picture addresses with the names of the layers that use them. */
+/** Unique picture addresses (including layer alpha masks) with the names of the layers that use them. */
 export function imageSources(plan: ExportPlan): Map<string, string[]> {
   const map = new Map<string, string[]>();
-  for (const op of plan.ops) if (op.kind === "image") map.set(op.url, [...(map.get(op.url) ?? []), op.name]);
+  for (const op of plan.ops) {
+    if (op.kind !== "image") continue;
+    map.set(op.url, [...(map.get(op.url) ?? []), op.name]);
+    if (op.maskUrl) map.set(op.maskUrl, [...(map.get(op.maskUrl) ?? []), op.name]);
+  }
   return map;
 }
 
@@ -166,8 +251,27 @@ function drawLine(ctx: Ctx, text: string, x: number, y: number, spacing: number)
   });
 }
 
+function defaultOffscreen(ctx: Ctx, width: number, height: number): CanvasLike | null {
+  try {
+    const doc = (ctx as { canvas?: { ownerDocument?: Document } }).canvas?.ownerDocument ?? (typeof document !== "undefined" ? document : undefined);
+    if (!doc) return null;
+    const canvas = doc.createElement("canvas");
+    canvas.width = Math.max(1, Math.round(width));
+    canvas.height = Math.max(1, Math.round(height));
+    return canvas;
+  } catch {
+    return null;
+  }
+}
+
 /** Draws a plan onto a context whose canvas is `plan.width` × `plan.height`. */
-export function drawPlan(ctx: Ctx, plan: ExportPlan, images: ReadonlyMap<string, CanvasImageSource>, family: (font: FontId) => string): void {
+export function drawPlan(
+  ctx: Ctx,
+  plan: ExportPlan,
+  images: ReadonlyMap<string, CanvasImageSource>,
+  family: (font: FontId) => string,
+  createOffscreen?: (width: number, height: number) => CanvasLike | null,
+): void {
   for (const op of plan.ops) {
     const f = op.frame;
     ctx.save();
@@ -177,7 +281,26 @@ export function drawPlan(ctx: Ctx, plan: ExportPlan, images: ReadonlyMap<string,
     ctx.translate(-f.w / 2, -f.h / 2);
     if (op.kind === "image") {
       const image = images.get(op.url);
-      if (image) ctx.drawImage(image, 0, 0, f.w, f.h);
+      const mask = op.maskUrl ? images.get(op.maskUrl) : undefined;
+      if (image && mask) {
+        const mw = Math.max(1, Math.round(f.w));
+        const mh = Math.max(1, Math.round(f.h));
+        const off = createOffscreen ? createOffscreen(mw, mh) : defaultOffscreen(ctx, mw, mh);
+        const offCtx = off?.getContext("2d") ?? null;
+        if (off && offCtx) {
+          offCtx.clearRect?.(0, 0, mw, mh);
+          offCtx.globalCompositeOperation = "source-over";
+          offCtx.drawImage(image, 0, 0, mw, mh);
+          offCtx.globalCompositeOperation = "destination-in";
+          offCtx.drawImage(mask, 0, 0, mw, mh);
+          offCtx.globalCompositeOperation = "source-over";
+          ctx.drawImage(off as unknown as CanvasImageSource, 0, 0, f.w, f.h);
+        } else {
+          ctx.drawImage(image, 0, 0, f.w, f.h);
+        }
+      } else if (image) {
+        ctx.drawImage(image, 0, 0, f.w, f.h);
+      }
     } else if (op.kind === "shape") {
       const g = shapeGeometry(op, f.w, f.h);
       if (g.kind === "ellipse") {
@@ -273,7 +396,7 @@ export async function renderPlan(plan: ExportPlan, deps: RenderDeps, maxBytes: n
   const canvas = deps.createCanvas(plan.width, plan.height);
   const ctx = canvas?.getContext("2d") ?? null;
   if (!canvas || !ctx) return { ok: false, reason: "canvas" };
-  drawPlan(ctx, plan, images, deps.family);
+  drawPlan(ctx, plan, images, deps.family, (w, h) => deps.createCanvas(w, h));
 
   deps.onStep?.("saving");
   const attempts: Array<[ExportMime, number | undefined]> = [

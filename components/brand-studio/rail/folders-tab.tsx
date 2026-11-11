@@ -94,33 +94,47 @@ export function FoldersTab({ kit, library, openId, onOpen, creating, onCreating 
           <p className="bsr-empty">{f.emptyFolder}</p>
         ) : (
           <ul className="bsr-grid">
-            {items.map((item) => (
-              <Thumb
-                key={item.key}
-                item={item}
-                copy={copy}
-                draggable={canCreate}
-                attachOnPress={kit.attachOnPress}
-                onAttach={kit.onAttach}
-                onView={kit.onView}
-                actions={[
-                  kit.likeAction(item),
-                  ...(canCreate
-                    ? [
-                        {
-                          key: "remove",
-                          label: fill(f.remove, { name: item.name ?? copy.item[item.kind] }),
-                          icon: "remove" as const,
-                          run: () =>
-                            void library.removeFromFolder(open.id, item.ref).then((done) => {
-                              if (!done) kit.say(writeError(copy, lastError(library), "remove"));
-                            }),
-                        },
-                      ]
-                    : []),
-                ]}
-              />
-            ))}
+            {items.map((item) => {
+              const editMenu = kit.editItems?.(item) ?? [];
+              const menuKey = `folder-item:${open.id}:${item.key}`;
+              return (
+                <Thumb
+                  key={item.key}
+                  item={item}
+                  copy={copy}
+                  draggable={canCreate}
+                  attachOnPress={kit.attachOnPress}
+                  onAttach={kit.onAttach}
+                  onView={kit.onView}
+                  actions={[
+                    kit.likeAction(item),
+                    ...(canCreate
+                      ? [
+                          {
+                            key: "remove",
+                            label: fill(f.remove, { name: item.name ?? copy.item[item.kind] }),
+                            icon: "remove" as const,
+                            run: () =>
+                              void library.removeFromFolder(open.id, item.ref).then((done) => {
+                                if (!done) kit.say(writeError(copy, lastError(library), "remove"));
+                              }),
+                          },
+                        ]
+                      : []),
+                  ]}
+                  menu={
+                    editMenu.length > 0 && (
+                      <RailMenu
+                        open={kit.menu === menuKey}
+                        label={fill(copy.uploads.more, { name: item.name ?? copy.item[item.kind] })}
+                        items={editMenu}
+                        onToggle={(next) => kit.setMenu(next ? menuKey : null)}
+                      />
+                    )
+                  }
+                />
+              );
+            })}
           </ul>
         )}
       </section>

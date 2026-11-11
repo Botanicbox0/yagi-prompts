@@ -14,7 +14,7 @@ import { isFailure } from "./api";
 import { errorLine, newRequestId, type StudioCopy } from "./copy";
 import { finalInput, regionEditInput, rerunInput, withMedium } from "./dock-model";
 import { trayFromReferences, trayItemFromAsset, trayItemFromOutput, withStartFrame, type RefSource } from "./refs";
-import { STUDIO_OPEN_REVERSE, announce } from "./seams";
+import { STUDIO_OPEN_REVERSE, announce, type LayerEditorRegionPreset } from "./seams";
 import { boardOutputs } from "./store";
 import type { DockController } from "./use-dock";
 import type { StudioController } from "./use-studio";
@@ -37,6 +37,7 @@ export function useViewer(input: {
   lookup: Lookup;
   onCampaign(source: RefSource): void;
   onDecorate(item: ViewerItem): void;
+  onOpenRegionEditor?(source: RefSource, preset?: LayerEditorRegionPreset | null): void;
   onReview(item: ViewerItem): void;
   /** "영상으로 만들기" on the image screen: the video screen with this picture as the opening frame. */
   onToVideoScreen(source: RefSource): void;
@@ -80,19 +81,38 @@ export function useViewer(input: {
 
   /** A partial edit set up again: its picture open, the same box, words and references. */
   const reopenRegion = (job: StudioJobView) => {
-    const target = job.parentOutputId && lookup.output(job.parentOutputId)
-      ? { list: "outputs" as const, key: `o:${job.parentOutputId}` }
+    const resolved = job.parentOutputId && lookup.output(job.parentOutputId)
+      ? { list: "outputs" as const, key: `o:${job.parentOutputId}`, source: { outputId: job.parentOutputId } as RefSource }
       : job.parentAssetId && lookup.asset(job.parentAssetId)
-        ? { list: "assets" as const, key: `a:${job.parentAssetId}` }
+        ? { list: "assets" as const, key: `a:${job.parentAssetId}`, source: { assetId: job.parentAssetId } as RefSource }
         : null;
-    if (!target) return setNotice(errorLine(copy, "not_found"));
-    setPreset({ key: target.key, box: job.box, instruction: job.prompt, model: job.model, quality: job.quality ?? null, references: trayFromReferences(job.references, lookup, copy.viewer.label) });
-    setOpen(target);
+    if (!resolved) return setNotice(errorLine(copy, "not_found"));
+    const references = trayFromReferences(job.references, lookup, copy.viewer.label);
+    if (input.onOpenRegionEditor) {
+      show(null);
+      input.onOpenRegionEditor(resolved.source, {
+        box: job.box,
+        instruction: job.prompt,
+        serverNumbered: job.finalPrompt !== null,
+        model: job.model,
+        quality: job.quality ?? null,
+        references,
+      });
+      return;
+    }
+    setPreset({ key: resolved.key, box: job.box, instruction: job.prompt, model: job.model, quality: job.quality ?? null, references });
+    setOpen({ list: resolved.list, key: resolved.key });
     setNotice(null);
   };
 
   /** Opens a picture straight on its partial-edit form (the wall's "부분 수정"). */
   const openRegion = (key: string, list: "outputs" | "assets" = "outputs") => {
+    if (input.onOpenRegionEditor) {
+      const source: RefSource = key.startsWith("a:") ? { assetId: key.slice(2) } : { outputId: key.slice(2) };
+      show(null);
+      input.onOpenRegionEditor(source, null);
+      return;
+    }
     setPreset({ key, box: null, instruction: "" });
     setOpen({ list, key });
     setNotice(null);
@@ -189,6 +209,14 @@ export function useViewer(input: {
       show(null);
       input.onDecorate(item);
     },
+    ...(input.onOpenRegionEditor
+      ? {
+          openRegionInLayers: (item: ViewerItem) => {
+            show(null);
+            input.onOpenRegionEditor?.(sourceOf(item), null);
+          },
+        }
+      : {}),
     review: (item) => input.onReview(item),
   };
 
