@@ -87,7 +87,7 @@ describe.each(sandboxedChoices)('hardline with rooms on: %s', (_label, choice) =
 });
 
 describe('the grouped rail', () => {
-  it('splits into 직접 만들기 and 야기 팀과 with 의뢰 · 메시지 · 크리에이터', () => {
+  it('splits into 직접 만들기 and 야기 팀과 with 프로젝트 · 알림함', () => {
     const html = render(owner, { studioV2: true, rooms: true });
     expect(html).toContain('data-brand-layout-mode="rail"');
     const sections = [...html.matchAll(/data-rail-section="(\w+)"/g)].map((m) => m[1]);
@@ -96,7 +96,7 @@ describe('the grouped rail', () => {
     const team = html.slice(html.indexOf('data-rail-section="team"'));
     const ids = (part: string) => [...part.matchAll(/data-rail-item="(\w+)"/g)].map((m) => m[1]);
     expect(ids(make)).toEqual(['image', 'video', 'assets']);
-    expect(ids(team)).toEqual(['campaigns', 'messages', 'creators']);
+    expect(ids(team)).toEqual(['campaigns', 'messages']);
     expect(make).toContain(nav.groupMake);
     expect(team).toContain(nav.groupTeam);
     // 의뢰 is the renamed 캠페인 item, only in this mode; 메시지 is the inbox.
@@ -125,11 +125,18 @@ describe('the grouped rail', () => {
     expect(current(render(owner, { studioV2: true, rooms: true }))).toEqual(['campaigns']);
   });
 
-  it('gives a campaign-only guest 에셋, 의뢰 and 메시지, still nothing of the studio', () => {
+  it('gives a campaign-only guest 에셋, 프로젝트 and 알림함, still nothing of the studio', () => {
     const html = render({ ...owner, role: 'guest' }, { studioV2: true, rooms: true });
     expect([...html.matchAll(/data-rail-item="(\w+)"/g)].map((m) => m[1])).toEqual(['assets', 'campaigns', 'messages']);
     expect(html).not.toContain('/brand/studio');
     expect(html).not.toContain('data-rail-create');
+  });
+
+  it('gives a project-only owner (self_studio denied) 에셋 · 프로젝트 · 알림함 and the + brief button without studio links', () => {
+    const html = render({ ...owner, denied: ['self_studio'] }, { studioV2: true, rooms: true });
+    expect([...html.matchAll(/data-rail-item="(\w+)"/g)].map((m) => m[1])).toEqual(['assets', 'campaigns', 'messages']);
+    expect(html).not.toContain('/brand/studio');
+    expect(html).toContain('data-rail-create');
   });
 
   it('is not grouped for the TWINGS team view', () => {

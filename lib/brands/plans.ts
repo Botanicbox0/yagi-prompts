@@ -16,10 +16,14 @@ import { isMissingTable } from './entitlements';
  * card billing, per contract); the row tells the product and the admin console which plan a brand
  * is on and since when.
  */
-export const BRAND_PLAN_IDS = ['b2b_39', 'b2b_69', 'b2b_99'] as const;
+export const BRAND_PLAN_IDS = ['b2b_39', 'b2b_69', 'b2b_99', 'project_only'] as const;
 export type BrandPlanId = (typeof BRAND_PLAN_IDS)[number];
 
-export const BRAND_PLANS: Record<BrandPlanId, { monthlyKrw: number; rank: 1 | 2 | 3 }> = {
+/** Proposed post-delivery room retention window for non-subscribing project-only clients (founder decision Q5 pending; zero auto-deletion until confirmed). */
+export const PROJECT_ONLY_RETENTION_DAYS_PROPOSED = 90;
+
+export const BRAND_PLANS: Record<BrandPlanId, { monthlyKrw: number; rank: 0 | 1 | 2 | 3 }> = {
+  project_only: { monthlyKrw: 0, rank: 0 },
   b2b_39: { monthlyKrw: 390_000, rank: 1 },
   b2b_69: { monthlyKrw: 690_000, rank: 2 },
   b2b_99: { monthlyKrw: 990_000, rank: 3 },

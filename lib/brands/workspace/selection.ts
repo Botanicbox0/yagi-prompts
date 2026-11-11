@@ -102,13 +102,18 @@ export function sectionVisibility(
 ): SectionVisibility {
   if (!choice) return { studio: true, identity: false, settings: false, members: false };
   const sandboxed = isSandboxedClientOrganization(choice);
-  // The studio and the fixed generative identity layer are hidden whenever generative_media is denied or the client is sandboxed.
-  const studio = !sandboxed && choice.role !== 'guest' && !featureDenied(choice.denied, 'generative_media');
+  // The studio and the fixed generative identity layer are hidden whenever generative_media or self_studio is denied or the client is sandboxed.
+  const studio =
+    !sandboxed &&
+    choice.role !== 'guest' &&
+    !featureDenied(choice.denied, 'generative_media') &&
+    !featureDenied(choice.denied, 'self_studio');
   const identity =
     !sandboxed &&
     choice.role !== 'guest' &&
     !featureDenied(choice.denied, 'brand_learning') &&
-    !featureDenied(choice.denied, 'generative_media');
+    !featureDenied(choice.denied, 'generative_media') &&
+    !featureDenied(choice.denied, 'self_studio');
   return { studio, identity, settings: choice.role !== 'guest', members: choice.role === 'owner' || choice.role === 'studio' };
 }
 

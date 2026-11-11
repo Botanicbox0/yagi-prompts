@@ -20,6 +20,19 @@ export interface StudioVisibilityOrg {
 export function studioV2Visible(org: StudioVisibilityOrg | null | undefined, flagOn: boolean): boolean {
   if (!flagOn || !org) return false;
   if (isSandboxedClientOrganization(org)) return false;
+  if (featureDenied(org.denied, 'generative_media')) return false;
+  return !featureDenied(org.denied, 'self_studio');
+}
+
+/**
+ * Whether the unified Brand Asset Hub (`/brand/library`) is available for this organization.
+ * Non-subscribing commissioned clients (`self_studio` denied, `generative_media` open) keep the Asset Hub
+ * so they can upload brand packshots/logos and pick them in project briefs, while Morphic and
+ * `generative_media`-denied organizations stay on the legacy campaign library.
+ */
+export function assetHubVisible(org: StudioVisibilityOrg | null | undefined, flagOn: boolean): boolean {
+  if (!flagOn || !org) return false;
+  if (isSandboxedClientOrganization(org)) return false;
   return !featureDenied(org.denied, 'generative_media');
 }
 

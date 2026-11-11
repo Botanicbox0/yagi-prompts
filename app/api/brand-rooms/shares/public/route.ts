@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto';
 import { NextResponse, type NextRequest } from 'next/server';
 import { getSqlRunner } from '@/lib/db/connect';
 import { brandRoomsOpen } from '@/lib/flags';
@@ -68,16 +69,18 @@ export async function POST(request: NextRequest) {
   const deps: ShareDeps = { sql, media: createStudioMediaStore() };
   const cookies = { get: (name: string) => request.cookies.get(name)?.value };
   const secure = origin.protocol === 'https:';
+  const clientKey = createHash('sha256').update(address).digest('hex').slice(0, 16);
+  const userAgent = request.headers.get('user-agent');
   try {
     if (op === 'view') {
-      const result = await countShareView(deps, body, cookies);
+      const result = await countShareView(deps, body, cookies, { userAgent });
       if (!result.ok) return fail(result.code);
       const response = json({ ok: true });
       response.cookies.set(VISITOR_COOKIE, result.visitor, { httpOnly: true, sameSite: 'lax', secure, path: '/', maxAge: 30 * 86_400 });
       return response;
     }
     if (op === 'unlock') {
-      const result = await unlockShare(deps, body);
+      const result = await unlockShare(deps, body, { clientKey });
       if (!result.ok) return fail(result.code);
       const response = json({ ok: true });
       response.cookies.set(result.cookie.name, result.cookie.value, { httpOnly: true, sameSite: 'lax', secure, path: '/', maxAge: result.cookie.maxAge });

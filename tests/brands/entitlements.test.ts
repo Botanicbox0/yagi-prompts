@@ -45,11 +45,12 @@ afterEach(async () => {
 
 describe('feature catalogue', () => {
   it('normalizes to known features in catalogue order', () => {
-    expect(BRAND_FEATURES).toHaveLength(7);
-    expect(normalizeDenied(['sound', 'generative_media', 'sound', 'bogus', 42])).toEqual(['generative_media', 'sound']);
+    expect(BRAND_FEATURES).toHaveLength(8);
+    expect(normalizeDenied(['sound', 'self_studio', 'generative_media', 'sound', 'bogus', 42])).toEqual(['generative_media', 'self_studio', 'sound']);
     expect(featureDenied(undefined, 'sound')).toBe(false);
     expect(featureDenied([], 'sound')).toBe(false);
     expect(featureDenied(['sound'], 'sound')).toBe(true);
+    expect(featureDenied(['self_studio'], 'self_studio')).toBe(true);
   });
 });
 
@@ -160,7 +161,9 @@ describe('plan assignment', () => {
     expect(await setPlanAssignment({ sql }, admin, { organizationId: orgId, planId: 'b2b_99', startedOn: '2026-12-01', endsOn: '2027-12-01', expectedRevision: 0 })).toMatchObject({ ok: false, code: 'conflict' });
     expect(await setPlanAssignment({ sql }, admin, { organizationId: orgId, planId: 'b2b_99', startedOn: '2026-12-01', endsOn: '2027-12-01', expectedRevision: 1 })).toEqual({ ok: true, id: orgId, revision: 2 });
     expect(planActiveOn(await loadPlanAssignment(sql, orgId), '2027-12-01')).toBe(false);
-    expect((await sql.query<{ plan_id: string }>('select plan_id from brand_plan_events where organization_id=$1 order by created_at', [orgId])).rows.map((r) => r.plan_id)).toEqual(['b2b_69', 'b2b_99']);
+    expect(await setPlanAssignment({ sql }, admin, { organizationId: orgId, planId: 'project_only', startedOn: '2026-12-02', expectedRevision: 2 })).toEqual({ ok: true, id: orgId, revision: 3 });
+    expect(BRAND_PLANS.project_only.monthlyKrw).toBe(0);
+    expect((await sql.query<{ plan_id: string }>('select plan_id from brand_plan_events where organization_id=$1 order by created_at', [orgId])).rows.map((r) => r.plan_id)).toEqual(['b2b_69', 'b2b_99', 'project_only']);
   });
 });
 

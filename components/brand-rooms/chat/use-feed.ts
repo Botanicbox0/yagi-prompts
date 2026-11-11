@@ -9,7 +9,6 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { ROOM_ACTIVITY } from "../seams";
 import {
   mergeMessages,
-  ROOM_POLL_HIDDEN_MS,
   ROOM_POLL_VISIBLE_MS,
   type RoomLegacyMessage,
   type RoomMessage,
@@ -181,21 +180,21 @@ export function useFeed(transport: ChatTransport, channel: string, mode: FeedMod
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [channel, modeKey, transport]);
 
-  // Polling: 4 s on screen, 20 s in the background, at once when the tab comes back.
+  // Polling: 4 s on screen; paused completely when hidden (R-05), catching up immediately when visible again.
   useEffect(() => {
     let timer: number | undefined;
     let cancelled = false;
     const schedule = () => {
       if (cancelled) return;
-      const delay = document.visibilityState === "visible" ? ROOM_POLL_VISIBLE_MS : ROOM_POLL_HIDDEN_MS;
+      if (document.visibilityState !== "visible") return;
       timer = window.setTimeout(async () => {
         await poll();
         schedule();
-      }, delay);
+      }, ROOM_POLL_VISIBLE_MS);
     };
     const visible = () => {
+      window.clearTimeout(timer);
       if (document.visibilityState === "visible") {
-        window.clearTimeout(timer);
         void poll().then(schedule);
       }
     };

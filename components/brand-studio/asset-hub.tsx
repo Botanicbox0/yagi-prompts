@@ -164,6 +164,8 @@ export interface BrandAssetHubProps {
   initialState?: StudioState | null;
   deliverableCount?: number;
   deliverablesNode?: ReactNode;
+  /** False for project-only clients (`self_studio` denied) so dead links to `/brand/studio` are hidden. */
+  canOpenStudio?: boolean;
   /** Optional test injection so server/unit tests render without network calls. */
   injectedLibrary?: StudioLibrary;
   api?: StudioApi;
@@ -176,6 +178,7 @@ export function BrandAssetHub({
   initialState = null,
   deliverableCount = 0,
   deliverablesNode = null,
+  canOpenStudio = true,
   injectedLibrary,
   api,
 }: BrandAssetHubProps) {
@@ -274,8 +277,12 @@ export function BrandAssetHub({
     copy: libraryCopy,
     canCreate,
     attachOnPress: false,
-    onAttach: (source) => window.location.assign(imageScreenRefHref(organizationId, source)),
-    onView: (source) => window.location.assign(imageScreenRefHref(organizationId, source)),
+    onAttach: (source) => {
+      if (canOpenStudio) window.location.assign(imageScreenRefHref(organizationId, source));
+    },
+    onView: (source) => {
+      if (canOpenStudio) window.location.assign(imageScreenRefHref(organizationId, source));
+    },
     menu: folderMenu,
     setMenu: setFolderMenu,
     say: (msg) => setNotice(msg || null),
@@ -345,9 +352,11 @@ export function BrandAssetHub({
           <p className={s.subtitle}>{h.subtitle}</p>
         </div>
         <div className={s.headActions}>
-          <a className={s.ghostBtn} href={studioHref} data-asset-hub-open-studio>
-            {h.openStudio}
-          </a>
+          {canOpenStudio && (
+            <a className={s.ghostBtn} href={studioHref} data-asset-hub-open-studio>
+              {h.openStudio}
+            </a>
+          )}
           {canCreate && (
             <>
               <input
@@ -505,7 +514,7 @@ export function BrandAssetHub({
                     ? libraryCopy.liked.empty
                     : h.emptyAll}
           </p>
-          {!query && kindFilter === "all" && roleFilter === "all" && !similarAnchor && (
+          {canOpenStudio && !query && kindFilter === "all" && roleFilter === "all" && !similarAnchor && (
             <a className={s.ghostBtn} href={studioHref}>
               {h.openStudio}
             </a>
@@ -571,7 +580,7 @@ export function BrandAssetHub({
                   )}
 
                   <div className={s.cardActions}>
-                    {entry.kind === "image" && (
+                    {canOpenStudio && entry.kind === "image" && (
                       <>
                         <a className={s.miniAction} href={imageScreenRefHref(organizationId, entry.source)} data-asset-hub-use-image>
                           {h.openInImage}
@@ -581,7 +590,7 @@ export function BrandAssetHub({
                         </a>
                       </>
                     )}
-                    {reverseHref && (
+                    {canOpenStudio && reverseHref && (
                       <a className={s.miniAction} href={reverseHref} data-asset-hub-reverse>
                         {h.reverseVideo}
                       </a>

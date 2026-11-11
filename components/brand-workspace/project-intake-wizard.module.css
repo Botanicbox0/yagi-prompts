@@ -1,0 +1,192 @@
+.wizard {
+  display: grid;
+  gap: 16px;
+  min-width: 0;
+}
+
+.topBar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.stepNav {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.stepList {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.stepButton {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 40px;
+  padding: 8px 16px;
+  border-radius: 999px;
+  border: 1px solid var(--ys-line-strong);
+  background: var(--ys-surface);
+  color: var(--ys-ink-secondary);
+  font: inherit;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  transition:
+    border-color var(--ys-dur, 180ms) var(--ys-ease, ease),
+    background-color var(--ys-dur, 180ms) var(--ys-ease, ease),
+    color var(--ys-dur, 180ms) var(--ys-ease, ease),
+    box-shadow var(--ys-dur, 180ms) var(--ys-ease, ease);
+}
+
+.stepButton:hover {
+  border-color: var(--ys-ink);
+  color: var(--ys-ink);
+}
+
+.stepButtonActive {
+  border-color: var(--ys-ink);
+  background: var(--ys-ink);
+  color: var(--ys-bg);
+  font-weight: 600;
+}
+
+.stepButtonActive:hover {
+  color: var(--ys-bg);
+}
+
+.trackGrid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+@media (max-width: 680px) {
+  .trackGrid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+.trackCard {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  justify-content: flex-start;
+  gap: 6px;
+  min-height: 92px;
+  padding: 16px 18px;
+  border-radius: 14px;
+  border: 1px solid var(--ys-line-strong);
+  background: var(--ys-subtle-bg);
+  color: var(--ys-ink);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  transition:
+    border-color var(--ys-dur, 180ms) var(--ys-ease, ease),
+    background-color var(--ys-dur, 180ms) var(--ys-ease, ease),
+    box-shadow var(--ys-dur, 180ms) var(--ys-ease, ease);
+}
+
+.trackCard:hover {
+  background: var(--ys-surface);
+  border-color: var(--ys-ink-secondary);
+}
+
+.trackCardActive {
+  background: var(--ys-surface);
+  border-color: var(--ys-accent);
+  box-shadow: 0 0 0 1.5px var(--ys-accent), var(--ys-shadow-1);
+}
+
+.trackCardTitle {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 650;
+  letter-spacing: -0.015em;
+  color: var(--ys-ink);
+}
+
+.trackCardActive .trackCardTitle {
+  color: var(--ys-accent-text);
+}
+
+.trackCardLine {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--ys-ink-secondary);
+}
+
+.chipGroup {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.chip {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  min-height: 38px;
+  padding: 6px 14px;
+  border-radius: 999px;
+  border: 1px solid var(--ys-line-strong);
+  background: var(--ys-subtle-bg);
+  color: var(--ys-ink-secondary);
+  font: inherit;
+  font-size: 13px;
+  font-weight: 500;
+  line-height: 1.25;
+  cursor: pointer;
+  transition:
+    border-color var(--ys-dur, 180ms) var(--ys-ease, ease),
+    background-color var(--ys-dur, 180ms) var(--ys-ease, ease),
+    color var(--ys-dur, 180ms) var(--ys-ease, ease),
+    box-shadow var(--ys-dur, 180ms) var(--ys-ease, ease);
+}
+
+.chip:hover {
+  background: var(--ys-surface);
+  border-color: var(--ys-ink-secondary);
+  color: var(--ys-ink);
+}
+
+.chipSelected {
+  background: var(--ys-accent-soft);
+  border-color: var(--ys-accent);
+  color: var(--ys-accent-text);
+  font-weight: 600;
+  box-shadow: inset 0 0 0 0.5px var(--ys-accent);
+}
+
+.chipSelected:hover {
+  background: var(--ys-accent-soft);
+  border-color: var(--ys-accent);
+  color: var(--ys-accent-text);
+}
+
+.dropzone {
+  padding: 20px;
+  border-radius: 14px;
+  border: 1.5px dashed var(--ys-line-strong);
+  background: var(--ys-subtle-bg);
+}
+
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding-top: 6px;
+}

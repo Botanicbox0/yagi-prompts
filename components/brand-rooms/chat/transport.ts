@@ -45,7 +45,7 @@ export interface ChatTransport {
   read(channel: string, at: string): Promise<void>;
   upload?(channel: string, file: File, mime: string, onProgress: (ratio: number) => void): Promise<{ ok: true; attachment: RoomAttachment } | Fail>;
   /** Where a ref card leads, or null. */
-  refHref(projectId: string, ref: RoomRef): string | null;
+  refHref(projectId: string, ref: RoomRef, atMs?: number | null): string | null;
 }
 
 const failOf = (body: unknown): Fail => {
@@ -144,7 +144,7 @@ export function brandTransport(organizationId: string): ChatTransport {
       const done = await post("attachment.complete", { projectId: channel, stagingKey, name: file.name, mime, size: file.size });
       return done.ok === true ? { ok: true, attachment: (done as { attachment: RoomAttachment }).attachment } : (done as Fail);
     },
-    refHref: (projectId, ref) => roomRefHref(projectId, ref, organizationId),
+    refHref: (projectId, ref, atMs) => roomRefHref(projectId, ref, organizationId, atMs),
   };
 }
 

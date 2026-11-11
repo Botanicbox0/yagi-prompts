@@ -4,6 +4,7 @@ import { roomsChatEn } from './rooms-chat';
 import { roomsStoryboardEn } from './rooms-storyboard';
 import { roomsReviewEn } from './rooms-review';
 import { roomsShellEn } from './rooms-shell';
+import { intakeBriefEn } from './intake-brief';
 import { studioShellEn } from './studio-shell';
 import { studioLibraryEn } from './studio-library';
 import { studioVideoEn } from './studio-video';
@@ -47,6 +48,7 @@ export const en = {
   roomsStoryboard: roomsStoryboardEn,
   roomsReview: roomsReviewEn,
   roomsShell: roomsShellEn,
+  intakeBrief: intakeBriefEn,
   studioShell: studioShellEn,
   studioLibrary: studioLibraryEn,
   studioVideo: studioVideoEn,
@@ -2273,6 +2275,7 @@ export const en = {
     /** lib/brands/features.ts — what an organization can use; the admin console names each group. */
     features: {
       generative_media: 'Generative media: image and video generation, self-serve studio, remix, partial edits, upscaling',
+      self_studio: 'Self-serve studio: direct image and video generation (closing keeps Project Rooms & Assets open)',
       sound: 'Sound finishing: music, effects, mix, mastering',
       color_grading: 'Colour grading: reference matching, saved brand looks',
       brand_learning: 'Brand learning: identity, hard rules, memory',
@@ -2281,7 +2284,7 @@ export const en = {
       agent_access: 'Team AI agent access',
     },
     /** lib/brands/plans.ts — the three price points are the founder's decision; names are provisional. */
-    planNames: { b2b_39: 'Plan 39', b2b_69: 'Plan 69', b2b_99: 'Plan 99' },
+    planNames: { project_only: 'Project-only (commissioned)', b2b_39: 'Plan 39', b2b_69: 'Plan 69', b2b_99: 'Plan 99' },
     billingModes: { invoice: 'Tax invoice, paid by transfer', card: 'Recurring card billing' },
     identityLayer: {
       nav: 'Brand Kit',

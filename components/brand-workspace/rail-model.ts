@@ -75,7 +75,8 @@ export interface RailVisibility {
 
 /**
  * Default order (§3): 이미지 스튜디오 · 비디오 스튜디오 · 캠페인 · 크리에이터 · 에셋.
- * With rooms: 이미지 스튜디오 · 비디오 스튜디오 · 에셋 | 의뢰 · 메시지 · 크리에이터 (BRAND-ROOMS §2, 묶음 B).
+ * With rooms (묶음 E, docs/BRAND-PROJECTS-E.md): 이미지 스튜디오 · 비디오 스튜디오 · 에셋 | 프로젝트 · 알림함.
+ * (`크리에이터` moves into the Project Space `/brand` header toolbar so `야기 팀과` stays clean.)
  */
 export function railItems(visible: RailVisibility): RailItemId[] {
   if (visible.rooms) {
@@ -85,7 +86,6 @@ export function railItems(visible: RailVisibility): RailItemId[] {
       ['assets', true],
       ['campaigns', true],
       ['messages', true],
-      ['creators', visible.creators],
     ];
     return grouped.filter(([, shown]) => shown).map(([id]) => id);
   }
@@ -211,12 +211,14 @@ export interface RailCreateLink {
  * request is what the brand hands to the YAGI team, so it leaves the list and becomes the last entry,
  * 야기 팀에 의뢰하기 (`commission`), which the menu shows under a divider.
  */
-export function railCreateLinks(rooms: boolean): RailCreateLink[] {
-  const make: RailCreateLink[] = [
-    { key: 'image', href: '/brand/studio', icon: RAIL_ICON.image },
-    { key: 'video', href: '/brand/studio/video', icon: RAIL_ICON.video },
-    { key: 'reverse', href: '/brand/studio/video?start=reverse', icon: RAIL_ICON.review },
-  ];
+export function railCreateLinks(rooms: boolean, studio = true): RailCreateLink[] {
+  const make: RailCreateLink[] = studio
+    ? [
+        { key: 'image', href: '/brand/studio', icon: RAIL_ICON.image },
+        { key: 'video', href: '/brand/studio/video', icon: RAIL_ICON.video },
+        { key: 'reverse', href: '/brand/studio/video?start=reverse', icon: RAIL_ICON.review },
+      ]
+    : [];
   return rooms
     ? [...make, { key: 'commission', href: '/brand/projects/new', icon: RAIL_ICON.commission }]
     : [...make, { key: 'campaign', href: '/brand/projects/new', icon: RAIL_ICON.campaigns }];

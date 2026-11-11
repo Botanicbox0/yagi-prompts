@@ -70,8 +70,14 @@ export default async function BrandStudio({
   if (!sql) return <p role="alert">{b.unavailable}</p>;
   const { selection, choice, projectOrganizations } = await brandScope({ sql, verifiedEmail }, viewer, organizationId);
   if (selection.state === "unavailable") return <BrandUnavailable b={b} />;
-  // A brand whose policy closes generative media (or is a sandboxed client) has no studio: not a notice, no page at all.
-  if (choice && (isSandboxedClientOrganization(choice) || featureDenied(choice.denied, "generative_media"))) notFound();
+  // A brand whose policy closes generative media or self-serve studio (or is a sandboxed client) has no studio: not a notice, no page at all.
+  if (
+    choice &&
+    (isSandboxedClientOrganization(choice) ||
+      featureDenied(choice.denied, "generative_media") ||
+      featureDenied(choice.denied, "self_studio"))
+  )
+    notFound();
   // Role and requests follow the SELECTED brand only. A guest brand has no membership here.
   const organizations = membershipOf(choice),
     access = selectedAccess(choice, Object.values(projectOrganizations).filter((o) => o === choice?.id)),

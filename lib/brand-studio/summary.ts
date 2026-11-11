@@ -52,8 +52,8 @@ const isKind = (value: string): value is StudioJobKind => (STUDIO_JOB_KINDS as r
 export async function loadStudioSummary(deps: StudioSummaryDeps, viewer: Viewer, organizationId: string): Promise<StudioSummary | StudioFailure> {
   return guarded(() =>
     deps.sql.transaction(async (sql) => {
-      // The gate before anything about the organization is read. A sandboxed client stops here.
-      const seat = await studioSeat(sql, viewer.userId, organizationId);
+      // The gate before anything about the organization is read. A sandboxed or project-only client stops here.
+      const seat = await studioSeat(sql, viewer.userId, organizationId, { requireSelfStudio: true });
       const now = deps.now?.() ?? new Date();
       const allowance = await loadAllowance(sql, organizationId, deps.env, now);
       const open = (

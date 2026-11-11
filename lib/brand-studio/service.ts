@@ -44,13 +44,25 @@ export type StudioOperationResult =
   | StudioAssetSaved
   | StudioHandoffDone;
 
+const SELF_STUDIO_OPS: ReadonlySet<StudioOperation> = new Set([
+  'job.create',
+  'job.cancel',
+  'prompt.enhance',
+  'film.analyze',
+  'handoff.campaign',
+]);
+
 /** One `POST /api/brand-studio` operation. Unknown names are `invalid`. */
 export async function runStudioOperation(deps: StudioDeps, viewer: Viewer, operation: unknown, input: unknown): Promise<StudioOperationResult> {
   if (!isStudioOperation(operation)) return failure('invalid');
   // The gate before any input detail is judged: a closed organization gets the same 404 whatever it sent.
   const organizationId = (input as { organizationId?: unknown } | null)?.organizationId;
   if (typeof organizationId !== 'string' || !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(organizationId)) return failure('invalid');
-  const gate = await guarded(() => deps.sql.transaction((sql) => studioSeat(sql, viewer.userId, organizationId)));
+  const gate = await guarded(() =>
+    deps.sql.transaction((sql) =>
+      studioSeat(sql, viewer.userId, organizationId, { requireSelfStudio: SELF_STUDIO_OPS.has(operation) }),
+    ),
+  );
   if ('ok' in gate) return gate;
   switch (operation) {
     case 'job.create':
@@ -106,7 +118,7 @@ export async function pollStudioJobs(deps: StudioDeps, viewer: Viewer, organizat
   const ids = [...new Set(jobIds.filter((id) => /^[0-9a-f-]{36}$/i.test(id)))].slice(0, 50);
   return guarded(() =>
     deps.sql.transaction(async (sql) => {
-      await studioSeat(sql, viewer.userId, organizationId);
+      await studioSeat(sql, viewer.userId, organizationId, { requireSelfStudio: true });
       const jobs = await jobsByIds(sql, organizationId, ids);
       return {
         ok: true as const,

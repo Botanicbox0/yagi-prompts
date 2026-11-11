@@ -16,6 +16,7 @@ export const ROOM_EVENT_KINDS = [
   'review_version',
   'review_approved',
   'review_changes_requested',
+  'review_commented',
 ] as const;
 export type RoomEventKind = (typeof ROOM_EVENT_KINDS)[number];
 

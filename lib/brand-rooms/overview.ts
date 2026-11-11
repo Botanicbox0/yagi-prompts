@@ -13,11 +13,13 @@
  */
 import type { SqlRunner } from '@/lib/db/sql-runner';
 import type { RoomStage } from '@/components/brand-rooms/seams';
+import { IntakeBriefSchema, type IntakeBrief } from '@/lib/brands/workspace/intake-brief';
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 export const ROOM_STAGES: readonly RoomStage[] = ['requested', 'storyboard', 'draft', 'revision', 'done'];
-export const ROOM_TABS = ['overview', 'storyboard', 'review', 'chat'] as const;
+export const ROOM_TABS = ['overview', 'files', 'storyboard', 'review', 'chat'] as const;
+export const VISIBLE_ROOM_TABS = ['overview', 'files', 'chat'] as const;
 export type RoomTab = (typeof ROOM_TABS)[number];
 
 /** `?tab=` from the address; anything else is the overview. */
@@ -28,7 +30,7 @@ export function roomTab(value: string | string[] | undefined): RoomTab {
 
 /* ------------------------------------------------------------------ the project */
 
-export type RoomTrack = 'creator_campaign' | 'template_build' | 'studio_film';
+export type RoomTrack = 'creator_campaign' | 'template_build' | 'studio_film' | 'other';
 export type RoomProjectStatus = 'requested' | 'active' | 'completed' | 'cancelled';
 
 export interface RoomProject {
@@ -38,6 +40,8 @@ export interface RoomProject {
   status: RoomProjectStatus;
   productionMode: 'creator' | 'studio';
   track: RoomTrack;
+  objective?: string | null;
+  intakeBrief?: IntakeBrief | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -46,11 +50,13 @@ export interface RoomProject {
 const TEMPLATE_BUILD_MARKER = '[TRACK: CUSTOM STUDIO TEMPLATE BUILD]';
 
 /**
- * The commission track of a project (lib/brands/workspace/commission-tracks.ts): a creator project is a
- * creator campaign; a studio project whose brief the scale-production form wrote is scale production;
- * every other studio project is a single video.
+ * The commission track of a project (lib/brands/workspace/commission-tracks.ts): a structured intake brief
+ * wins first; otherwise a creator project is a creator campaign, a studio project whose brief starts with
+ * the scale-production marker is scale production, and every other studio project is a single video.
  */
-export function roomTrack(project: { productionMode: string; objective?: string | null }): RoomTrack {
+export function roomTrack(project: { productionMode: string; objective?: string | null; intakeBrief?: unknown }): RoomTrack {
+  const parsed = project.intakeBrief ? IntakeBriefSchema.safeParse(project.intakeBrief) : null;
+  if (parsed?.success) return parsed.data.track;
   if (project.productionMode !== 'studio') return 'creator_campaign';
   return (project.objective ?? '').trimStart().startsWith(TEMPLATE_BUILD_MARKER) ? 'template_build' : 'studio_film';
 }
@@ -61,34 +67,53 @@ const iso = (value: unknown): string | null => {
   return Number.isNaN(date.getTime()) ? null : date.toISOString();
 };
 
+interface RawRoomProjectRow {
+  id: string;
+  organization_id: string;
+  title: string;
+  status: string;
+  production_mode: string;
+  objective: string | null;
+  intake_brief?: unknown;
+  created_at: unknown;
+  updated_at: unknown;
+}
+
 /** The project when it is this organization's and the brand may see it; null otherwise. */
 export async function loadRoomProject(sql: SqlRunner, organizationId: string, projectId: string): Promise<RoomProject | null> {
   if (!UUID.test(projectId) || !UUID.test(organizationId)) return null;
-  const row = (
-    await sql.query<{
-      id: string;
-      organization_id: string;
-      title: string;
-      status: string;
-      production_mode: string;
-      objective: string | null;
-      created_at: unknown;
-      updated_at: unknown;
-    }>(
-      `select id, organization_id, title, status, production_mode, objective, created_at, updated_at
-         from brand_projects where id = $1 and organization_id = $2 and client_visible`,
-      [projectId, organizationId],
-    )
-  ).rows[0];
+  let row: RawRoomProjectRow | undefined;
+  try {
+    row = (
+      await sql.query<RawRoomProjectRow>(
+        `select id, organization_id, title, status, production_mode, objective, intake_brief, created_at, updated_at
+           from brand_projects where id = $1 and organization_id = $2 and client_visible`,
+        [projectId, organizationId],
+      )
+    ).rows[0];
+  } catch (error) {
+    if (!isSchemaGap(error)) throw error;
+    row = (
+      await sql.query<RawRoomProjectRow>(
+        `select id, organization_id, title, status, production_mode, objective, created_at, updated_at
+           from brand_projects where id = $1 and organization_id = $2 and client_visible`,
+        [projectId, organizationId],
+      )
+    ).rows[0];
+  }
   if (!row) return null;
   const productionMode = row.production_mode === 'studio' ? 'studio' : 'creator';
+  const parsedBrief = row.intake_brief ? IntakeBriefSchema.safeParse(row.intake_brief) : null;
+  const intakeBrief = parsedBrief?.success ? parsedBrief.data : null;
   return {
     id: String(row.id),
     organizationId: String(row.organization_id),
     title: String(row.title),
     status: (['requested', 'active', 'completed', 'cancelled'].includes(row.status) ? row.status : 'requested') as RoomProjectStatus,
     productionMode,
-    track: roomTrack({ productionMode, objective: row.objective }),
+    track: roomTrack({ productionMode, objective: row.objective, intakeBrief }),
+    objective: row.objective ?? null,
+    intakeBrief,
     createdAt: iso(row.created_at) ?? new Date(0).toISOString(),
     updatedAt: iso(row.updated_at) ?? iso(row.created_at) ?? new Date(0).toISOString(),
   };
@@ -417,6 +442,34 @@ export async function loadRoomOverview(sql: SqlRunner, input: OverviewInput): Pr
     counts: { storyboard: boardTodos.length, review: reviewTodos.length, chat: unread },
     empty: boards.length === 0 && reviews.length === 0 && messages.length === 0 && unread === 0,
   };
+}
+
+export interface RoomBriefFile {
+  id: string;
+  name: string;
+  mime: string;
+  sizeBytes: number;
+  createdAt: string;
+}
+
+/** Ready brief & reference files uploaded on the project (`/api/brand-workspace/attachments/<id>`). */
+export async function loadRoomBriefFiles(sql: SqlRunner, organizationId: string, projectId: string): Promise<RoomBriefFile[]> {
+  if (!UUID.test(organizationId) || !UUID.test(projectId)) return [];
+  const rows = await rowsOrEmpty<{ id: string; name: string; mime: string; size_bytes: number; created_at: unknown }>(
+    sql,
+    `select id, name, mime, size_bytes, created_at
+       from brand_attachments
+      where organization_id = $1 and project_id = $2 and status = 'ready' and access_scope = 'workspace'
+      order by created_at desc limit 50`,
+    [organizationId, projectId],
+  );
+  return rows.map((r) => ({
+    id: String(r.id),
+    name: String(r.name),
+    mime: String(r.mime),
+    sizeBytes: Number(r.size_bytes ?? 0),
+    createdAt: iso(r.created_at) ?? new Date(0).toISOString(),
+  }));
 }
 
 /* ------------------------------------------------------------------ unread */

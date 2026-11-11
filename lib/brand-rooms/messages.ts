@@ -22,7 +22,7 @@ import { featureDenied, isSandboxedClientOrganization } from '@/lib/brands/featu
 import { loadFeaturePolicies } from '@/lib/brands/entitlements';
 import { imageInfo, sniffMime, videoInfo } from '@/lib/brand-studio/files';
 import { isStudioMediaKey, type StudioMediaStore } from '@/lib/brand-studio/media-store';
-import type { RoomSummary } from '@/components/brand-rooms/seams';
+import type { RoomAlertItem, RoomSummary } from '@/components/brand-rooms/seams';
 import { requireRoomProject, RoomDenied, roomSeat, type RoomSeat } from './access';
 import type { RoomEventKind, RoomRef } from './events';
 import {
@@ -72,7 +72,13 @@ export interface RoomMessageDeps {
   sql: SqlRunner;
   media: StudioMediaStore;
   /** Uploads only (`attachment.*`): the staging bucket the browser puts bytes in. */
+<<<<<<< HEAD
   staging?: Pick<StorageDriver, 'read' | 'putStaging' | 'signedUploadUrl' | 'servesSignedUrls' | 'releaseStaging'>;
+=======
+  staging?: Pick<StorageDriver, 'read' | 'putStaging' | 'signedUploadUrl' | 'servesSignedUrls'>;
+  /** Optional best-effort cleanup of staging objects once copied to `media`. */
+  purgeStagingKey?: (key: string) => Promise<void>;
+>>>>>>> 0e03cafa (feat(brand-rooms): rebuild project space, 3-step brief intake, deliverable files tab, and unified activity inbox)
 }
 
 /** What the team is told after a brand member writes. Internal only. */
@@ -323,11 +329,28 @@ async function refViews(sql: SqlRunner, media: StudioMediaStore, organizationId:
         )
       ).rows.map((r) => [r.id, r]),
     );
+    const commentIds = [...new Set(reviewRefs.map((r) => r.commentId?.toLowerCase()).filter((id): id is string => Boolean(id)))];
+    const comments =
+      commentIds.length && (await tableExists(sql, 'brand_studio_review_comments'))
+        ? new Map(
+            (
+              await sql.query<{ id: string; row: Json }>(
+                'select c.id::text as id, to_jsonb(c) as row from brand_studio_review_comments c where c.id = any($1::uuid[]) and c.organization_id = $2',
+                [commentIds, organizationId],
+              )
+            ).rows.map((r) => [r.id, r.row]),
+          )
+        : new Map<string, Json>();
     for (const ref of reviewRefs) {
       const hit = rows.get(ref.reviewId.toLowerCase());
       if (!hit || jsonString(hit.row, 'deleted_at')) continue;
       // Only a deliverable of this project (the column arrives with slice R; before it, the organization's own).
       if ('project_id' in hit.row && jsonString(hit.row, 'project_id')?.toLowerCase() !== projectId) continue;
+      const note = ref.commentId ? comments.get(ref.commentId.toLowerCase()) : undefined;
+      const validNote =
+        note && !jsonString(note, 'deleted_at') && jsonString(note, 'review_id')?.toLowerCase() === ref.reviewId.toLowerCase() ? note : undefined;
+      const rawBody = validNote ? jsonString(validNote, 'body')?.replace(/\s+/g, ' ').trim() : null;
+      const strokes = validNote?.strokes;
       out.set(refKeyOf(ref), {
         ref,
         available: true,
@@ -337,6 +360,15 @@ async function refViews(sql: SqlRunner, media: StudioMediaStore, organizationId:
         scene: null,
         shot: null,
         thumbUrl: mediaUrlOf(media, hit.thumb),
+        ...(validNote
+          ? {
+              noteBody: rawBody ? rawBody.slice(0, 120) : null,
+              atMs: jsonInt(validNote, 'at_ms'),
+              endMs: jsonInt(validNote, 'end_ms'),
+              hasSpot: validNote.x !== null && validNote.x !== undefined,
+              hasDrawing: Array.isArray(strokes) && strokes.length > 0,
+            }
+          : {}),
       });
     }
   }
@@ -917,7 +949,11 @@ async function completeUpload(deps: RoomMessageDeps, reader: Reader, raw: unknow
     height = info?.height ?? null;
   }
   const { key } = await deps.media.put(bytes, verdict.mime);
-  await deps.staging.releaseStaging?.(parsed.data.stagingKey).catch(() => undefined);
+  if (deps.staging.releaseStaging) {
+    await deps.staging.releaseStaging(parsed.data.stagingKey).catch(() => undefined);
+  } else if (deps.purgeStagingKey) {
+    await deps.purgeStagingKey(parsed.data.stagingKey).catch(() => undefined);
+  }
   return {
     ok: true,
     attachment: attachmentView({ key, name: parsed.data.name, mime: verdict.mime, size: bytes.byteLength, width, height }, deps.media),
@@ -1086,6 +1122,94 @@ const lastLineOf = (line: string | null): string | null => {
   return flat ? flat.slice(0, 120) : null;
 };
 
+async function loadRoomAlerts(
+  sql: SqlRunner,
+  organizationId: string,
+  channels: ReadonlyArray<{ projectId: string | null; title: string }>,
+): Promise<RoomAlertItem[]> {
+  const projectTitles = new Map<string, string>();
+  for (const c of channels) if (c.projectId) projectTitles.set(c.projectId.toLowerCase(), c.title);
+  const projectIds = [...projectTitles.keys()];
+  if (projectIds.length === 0) return [];
+  const alerts: RoomAlertItem[] = [];
+  let sp = false;
+  try {
+    await sql.query('savepoint brand_room_alerts');
+    sp = true;
+  } catch {
+    sp = false;
+  }
+  try {
+    if (await tableExists(sql, 'brand_storyboards')) {
+      const boards = (
+        await sql.query<{ id: string; project_id: string; title: string; version: number; status: string; updated_at: Date | string }>(
+          `select distinct on (coalesce(s.lineage_id, s.id))
+                  s.id::text as id, s.project_id::text as project_id, s.title, s.version, s.status, s.updated_at
+             from brand_storyboards s
+            where s.organization_id = $1 and s.project_id = any($2::uuid[]) and s.deleted_at is null and s.status <> 'draft'
+            order by coalesce(s.lineage_id, s.id), s.version desc`,
+          [organizationId, projectIds],
+        )
+      ).rows;
+      for (const b of boards) {
+        if (b.status !== 'shared') continue;
+        alerts.push({
+          id: `storyboard:${b.id}`,
+          kind: 'storyboard',
+          projectId: b.project_id.toLowerCase(),
+          projectTitle: projectTitles.get(b.project_id.toLowerCase()) ?? '',
+          targetId: b.id,
+          title: b.title,
+          version: Number(b.version ?? 1),
+          status: b.status,
+          openNotes: 0,
+          updatedAt: iso(b.updated_at),
+        });
+      }
+    }
+    if (await tableExists(sql, 'brand_studio_reviews')) {
+      const hasComments = await tableExists(sql, 'brand_studio_review_comments');
+      const reviews = (
+        await sql.query<{ id: string; project_id: string; title: string; version: number | null; status: string; open_notes: number; updated_at: Date | string }>(
+          `select distinct on (coalesce(r.stack_id, r.id))
+                  r.id::text as id, r.project_id::text as project_id, r.title, r.version, r.status, r.updated_at,
+                  ${
+                    hasComments
+                      ? `(select count(*)::int from brand_studio_review_comments c
+                          where c.review_id = r.id and c.parent_id is null and c.deleted_at is null and c.resolved_at is null)`
+                      : '0'
+                  } as open_notes
+             from brand_studio_reviews r
+            where r.organization_id = $1 and r.project_id = any($2::uuid[]) and r.deleted_at is null
+            order by coalesce(r.stack_id, r.id), coalesce(r.version, 1) desc`,
+          [organizationId, projectIds],
+        )
+      ).rows;
+      for (const r of reviews) {
+        const openNotes = Number(r.open_notes ?? 0);
+        if (r.status !== 'open' && openNotes === 0) continue;
+        alerts.push({
+          id: `review:${r.id}`,
+          kind: 'review',
+          projectId: r.project_id.toLowerCase(),
+          projectTitle: projectTitles.get(r.project_id.toLowerCase()) ?? '',
+          targetId: r.id,
+          title: r.title,
+          version: Number(r.version ?? 1),
+          status: r.status,
+          openNotes,
+          updatedAt: iso(r.updated_at),
+        });
+      }
+    }
+    if (sp) await sql.query('release savepoint brand_room_alerts');
+  } catch {
+    if (sp) await sql.query('rollback to savepoint brand_room_alerts').catch(() => undefined);
+    return [];
+  }
+  return alerts.sort((a, b) => b.updatedAt.localeCompare(a.updatedAt)).slice(0, 20);
+}
+
 /** `GET /api/brand-rooms/summary?organizationId=` — what the rail and the inbox's channel list read. */
 export async function loadRoomSummary(deps: Pick<RoomMessageDeps, 'sql'>, viewer: Viewer, organizationId: string): Promise<RoomSummary | RoomFailure> {
   if (!UUID.test(organizationId)) return failure('invalid');
@@ -1100,7 +1224,8 @@ export async function loadRoomSummary(deps: Pick<RoomMessageDeps, 'sql'>, viewer
         lastAt: isoOrNull(r.last_at),
         lastLine: lastLineOf(r.last_line),
       }));
-      return { ok: true as const, unread: channels.reduce((n, c) => n + c.unread, 0), channels };
+      const alerts = await loadRoomAlerts(sql, organizationId, channels);
+      return { ok: true as const, unread: channels.reduce((n, c) => n + c.unread, 0), channels, alerts };
     }),
   );
 }

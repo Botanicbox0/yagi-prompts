@@ -282,6 +282,7 @@ function Scoped({ scope, studioV2 = false, shell, locale = 'ko', railExpanded = 
   if (!isMorphic && studioV2 && shell) {
     const visible = sectionVisibility(choice);
     const studio = visible.studio && studioV2Visible(choice, true);
+    const roomsActive = Boolean(rooms && roomsCopy && choice && choice.role !== 'studio');
     return (
       <RailNavigation
         organizationId={choice?.id ?? null}
@@ -290,13 +291,13 @@ function Scoped({ scope, studioV2 = false, shell, locale = 'ko', railExpanded = 
         identity={Boolean(visible.identity && labels.identity)}
         team={visible.members}
         settings={visible.settings}
-        canCreate={studio && (choice?.role === 'owner' || choice?.role === 'editor')}
+        canCreate={(studio || roomsActive) && (choice?.role === 'owner' || choice?.role === 'editor')}
         copy={shell}
         locale={locale}
         initialExpanded={railExpanded}
         scope={(path) => scopedHref(path, choice)}
         // The TWINGS team view reads a brand through its own console, not the brand's rooms.
-        rooms={Boolean(rooms && roomsCopy && choice && choice.role !== 'studio')}
+        rooms={roomsActive}
         roomsCopy={roomsCopy}
       />
     );

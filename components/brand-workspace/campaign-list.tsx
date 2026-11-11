@@ -56,6 +56,7 @@ export function CampaignList({ projects, b, locale, studio = false, rooms = null
   }
   const d = b.dashboard;
   const link = (p: BrandProjectSummary) => {
+    if (rooms && !studio && p.clientVisible !== false) return roomHref(p.id, rooms.organizationId);
     const detail = `${studio ? '/admin/brand-workspace' : '/brand/projects'}/${p.id}`;
     return returnLocation === null ? detail : `${detail}?${new URLSearchParams({ returnTo: campaignListReturnPath(returnLocation, p.organizationId, studio) })}`;
   };

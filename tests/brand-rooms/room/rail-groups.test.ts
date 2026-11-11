@@ -15,10 +15,10 @@ import { unreadFrom } from '@/components/brand-workspace/rail-activity';
 
 /** docs/BRAND-ROOMS.md §2 — the rail in two groups, without React. */
 describe('the two groups', () => {
-  it('splits 직접 만들기 and 야기 팀과, with 메시지 at /brand/rooms (no studio review or brandKit)', () => {
+  it('splits 직접 만들기 and 야기 팀과, with 프로젝트 at /brand and 알림함 at /brand/rooms', () => {
     const all = railItems({ studio: true, creators: true, identity: true, rooms: true });
-    expect(all).toEqual(['image', 'video', 'assets', 'campaigns', 'messages', 'creators']);
-    expect(groupItems(all, [])).toEqual({ make: ['image', 'video', 'assets'], team: ['campaigns', 'messages', 'creators'] });
+    expect(all).toEqual(['image', 'video', 'assets', 'campaigns', 'messages']);
+    expect(groupItems(all, [])).toEqual({ make: ['image', 'video', 'assets'], team: ['campaigns', 'messages'] });
     expect(RAIL_HREF.messages).toBe('/brand/rooms');
     expect(RAIL_HREF.campaigns).toBe('/brand');
   });
@@ -30,7 +30,7 @@ describe('the two groups', () => {
     expect(railItems({ studio: true, creators: true, identity: true })).not.toContain('messages');
   });
 
-  it('shows a campaign-only guest 에셋 · 의뢰 · 메시지 and nothing of the studio', () => {
+  it('shows a campaign-only guest or project-only client 에셋 · 프로젝트 · 알림함 and nothing of the studio', () => {
     const guest = railItems({ studio: false, creators: false, identity: false, rooms: true });
     expect(guest).toEqual(['assets', 'campaigns', 'messages']);
     expect(groupItems(guest, [])).toEqual({ make: ['assets'], team: ['campaigns', 'messages'] });
@@ -38,18 +38,18 @@ describe('the two groups', () => {
 
   it('applies a saved order inside each group and never moves an item across groups', () => {
     const all = railItems({ studio: true, creators: true, identity: true, rooms: true });
-    // An order saved by the ungrouped rail, with 의뢰 first and 에셋 before 이미지.
+    // An order saved by the ungrouped rail, with 프로젝트 first and 에셋 before 이미지.
     const old = ['/brand', '/brand/library', '/brand/studio', '/brand/studio/video', '/brand/studio/review', '/brand/creators', '/brand/identity'];
     const groups = groupItems(all, old);
     expect(groups.make).toEqual(['assets', 'image', 'video']);
-    expect(groups.team).toEqual(['campaigns', 'messages', 'creators']);
+    expect(groups.team).toEqual(['campaigns', 'messages']);
     for (const id of groups.make) expect(RAIL_GROUP[id]).toBe('make');
     for (const id of groups.team) expect(RAIL_GROUP[id]).toBe('team');
-    // 크리에이터 saved first of all still stays with the team; 이미지 leads its own group.
-    const creatorsFirst = groupItems(all, ['/brand/creators', '/brand', '/brand/studio']);
-    expect(creatorsFirst.make[0]).toBe('image');
-    expect(creatorsFirst.make).not.toContain('creators');
-    expect(creatorsFirst.team[0]).toBe('creators');
+    // 알림함 saved first still stays with the team; 이미지 leads its own group.
+    const messagesFirst = groupItems(all, ['/brand/rooms', '/brand', '/brand/studio']);
+    expect(messagesFirst.make[0]).toBe('image');
+    expect(messagesFirst.make).not.toContain('messages');
+    expect(messagesFirst.team[0]).toBe('messages');
     // orderItems itself is unchanged for the ungrouped rail.
     expect(orderItems(railItems({ studio: true, creators: true, identity: true }), ['/brand', '/brand/studio/video'])).toEqual([
       'image',
@@ -62,11 +62,11 @@ describe('the two groups', () => {
 
   it('moves within a group and stops at its ends; a drop on the other group does nothing', () => {
     const groups = groupItems(railItems({ studio: true, creators: true, identity: true, rooms: true }), []);
-    expect(moveInGroup(groups, 'assets', 1)).toEqual(['image', 'video', 'assets', 'campaigns', 'messages', 'creators']);
-    expect(moveInGroup(groups, 'campaigns', -1)).toEqual(['image', 'video', 'assets', 'campaigns', 'messages', 'creators']);
-    expect(moveInGroup(groups, 'messages', -1)).toEqual(['image', 'video', 'assets', 'messages', 'campaigns', 'creators']);
-    expect(dropInGroup(groups, 'creators', 'campaigns')).toEqual(['image', 'video', 'assets', 'creators', 'campaigns', 'messages']);
-    expect(dropInGroup(groups, 'creators', 'image')).toBeNull();
+    expect(moveInGroup(groups, 'assets', 1)).toEqual(['image', 'video', 'assets', 'campaigns', 'messages']);
+    expect(moveInGroup(groups, 'campaigns', -1)).toEqual(['image', 'video', 'assets', 'campaigns', 'messages']);
+    expect(moveInGroup(groups, 'messages', -1)).toEqual(['image', 'video', 'assets', 'messages', 'campaigns']);
+    expect(dropInGroup(groups, 'messages', 'campaigns')).toEqual(['image', 'video', 'assets', 'messages', 'campaigns']);
+    expect(dropInGroup(groups, 'messages', 'image')).toBeNull();
     expect(dropInGroup(groups, 'assets', 'messages')).toBeNull();
     // The saved list, read back, lands in the same groups.
     const saved = dropInGroup(groups, 'video', 'image')!.map((id) => RAIL_HREF[id]);
@@ -103,6 +103,9 @@ describe('the "+" menu', () => {
       ['image', '/brand/studio'],
       ['video', '/brand/studio/video'],
       ['reverse', '/brand/studio/video?start=reverse'],
+      ['commission', '/brand/projects/new'],
+    ]);
+    expect(railCreateLinks(true, false).map((l) => [l.key, l.href])).toEqual([
       ['commission', '/brand/projects/new'],
     ]);
   });

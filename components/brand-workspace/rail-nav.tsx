@@ -243,8 +243,8 @@ export function RailNavigation(props: RailNavigationProps) {
     campaign: copy.create.campaign,
     commission: nav?.commission ?? '',
   };
-  const allCreateLinks = railCreateLinks(nav !== null).map((link) => ({ ...link, text: createText[link.key] }));
-  // With rooms the request sits below a divider as 야기 팀에 의뢰하기.
+  const allCreateLinks = railCreateLinks(nav !== null, studio).map((link) => ({ ...link, text: createText[link.key] }));
+  // With rooms the request sits below a divider as 새 프로젝트 의뢰 (unless studio is closed, where it is the sole entry).
   const createLinks = allCreateLinks.filter((link) => link.key !== 'commission');
   const commissionLink = allCreateLinks.find((link) => link.key === 'commission') ?? null;
 
@@ -545,7 +545,7 @@ export function RailNavigation(props: RailNavigationProps) {
           ))}
           {commissionLink ? (
             <>
-              <hr className="bw-rail-create-divider" />
+              {createLinks.length > 0 ? <hr className="bw-rail-create-divider" /> : null}
               <a href={scope(commissionLink.href)} data-rail-create-link={commissionLink.key}>
                 <Icon d={commissionLink.icon} />
                 <span>{commissionLink.text}</span>

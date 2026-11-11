@@ -18,8 +18,15 @@ import {
   BrandPostMetricsSchema, BrandPostMetricsBatchSchema,
   BrandExternalPostsSchema, BrandProjectCoverSchema, BRAND_COVER_MIMES,
   BrandPostPresentationSchema, BRAND_POST_HANDLE_PATTERN,
+  BrandIntakeAttachSchema,
 } from './schemas';
 import { CampaignTermsSchema, briefColumnsFromTerms, kstToday } from './campaign-terms';
+import {
+  IntakeBriefSchema,
+  budgetKrwFromIntakeBand,
+  objectiveFromIntakeBrief,
+  productionModeForIntakeTrack,
+} from './intake-brief';
 import type {
   BrandOutcome, BrandFailureCode, BrandRole, BrandProjectStatus, BrandProjectSummary, BrandProjectDetail, BrandWorkspace,
   BrandContentVersion, BrandDecision, BrandMessage, BrandAttachment, BrandPost, BrandReport, BrandReportSnapshot,
@@ -140,6 +147,7 @@ function summary(row: Row): BrandProjectSummary {
     revision: Number(row.revision), createdAt: stamp(row.created_at), updatedAt: stamp(row.updated_at),
     // Briefs sent before the wizard (or before 0056) carry none; a stored value that no longer parses is dropped, never shown half.
     campaignTerms: row.campaign_terms == null ? null : (CampaignTermsSchema.safeParse(row.campaign_terms).data ?? null),
+    intakeBrief: row.intake_brief == null ? null : (IntakeBriefSchema.safeParse(row.intake_brief).data ?? null),
     // Only ever this project's own attachment (composite key); the route re-authorizes every read.
     coverUrl: row.cover_attachment_id ? `/api/brand-workspace/attachments/${row.cover_attachment_id}` : null,
   };
@@ -365,12 +373,55 @@ async function createProject(deps: BrandWorkspaceDeps, viewer: Viewer, input: un
     if (count >= 20) throw new Denied('rate_limited');
     const id = randomUUID();
     // A wizard brief: the columns follow the validated terms, whatever else the client sent.
-    const c = v.campaignTerms ? { ...v, ...briefColumnsFromTerms(v.campaignTerms) } : v;
+    const fromIntake = v.intakeBrief
+      ? {
+          budgetKrw: v.budgetKrw ?? budgetKrwFromIntakeBand(v.intakeBrief.budgetBand),
+          startsOn: v.startsOn ?? v.intakeBrief.schedule.startsOn,
+          endsOn: v.endsOn ?? v.intakeBrief.schedule.dueOn,
+          productionMode: productionModeForIntakeTrack(v.intakeBrief.track),
+          objective: v.objective || objectiveFromIntakeBrief(v.intakeBrief),
+        }
+      : {};
+    const c = v.campaignTerms ? { ...v, ...briefColumnsFromTerms(v.campaignTerms) } : { ...v, ...fromIntake };
     await sql.query(`insert into brand_projects(id,organization_id,title,objective,audience,budget_krw,budget_tax_basis,starts_on,ends_on,production_mode,reference_links,created_by,request_id,criteria${v.campaignTerms ? ',campaign_terms' : ''})
-      values($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11::jsonb,$12,$13,$14::jsonb${v.campaignTerms ? ',$15::jsonb' : ''})`, [id, v.organizationId, v.title, v.objective, v.audience, c.budgetKrw, c.budgetTaxBasis, c.startsOn, c.endsOn, c.productionMode, JSON.stringify(v.referenceLinks), userId, v.requestId, JSON.stringify(c.criteria), ...(v.campaignTerms ? [JSON.stringify(v.campaignTerms)] : [])]);
+      values($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11::jsonb,$12,$13,$14::jsonb${v.campaignTerms ? ',$15::jsonb' : ''})`, [id, v.organizationId, v.title, c.objective, v.audience, c.budgetKrw, c.budgetTaxBasis, c.startsOn, c.endsOn, c.productionMode, JSON.stringify(v.referenceLinks), userId, v.requestId, JSON.stringify(c.criteria), ...(v.campaignTerms ? [JSON.stringify(v.campaignTerms)] : [])]);
+    if (v.intakeBrief) {
+      await sql.query('savepoint sp_intake_brief');
+      try {
+        await sql.query('update brand_projects set intake_brief=$2::jsonb where id=$1', [id, JSON.stringify(v.intakeBrief)]);
+        await sql.query('release savepoint sp_intake_brief');
+      } catch (err) {
+        await sql.query('rollback to savepoint sp_intake_brief');
+        if ((err as { code?: string }).code !== '42703') throw err;
+      }
+    }
     if(managed) await sql.query('update brand_projects set client_visible=false where id=$1',[id]);
     else await event(sql, { id, organization_id: v.organizationId }, 'project_requested', id);
     return { id };
+  });
+}
+
+/** Links uploaded brief attachments onto `brand_projects.intake_brief.briefAttachmentIds` after reserve -> put -> complete. */
+export async function attachIntakeBriefFiles(deps: BrandWorkspaceDeps, viewer: Viewer, input: unknown): Promise<BrandOutcome> {
+  return mutation(deps, viewer, BrandIntakeAttachSchema, input, async (sql, userId, v) => {
+    const p = await project(sql, userId, v.projectId, { write: true });
+    const ready = (
+      await sql.query<{ id: string }>(
+        "select id from brand_attachments where project_id=$1 and id=any($2::uuid[]) and status='ready' and access_scope='workspace'",
+        [p.id, v.attachmentIds],
+      )
+    ).rows.map((r) => String(r.id));
+    if (ready.length > 0 && p.intake_brief && typeof p.intake_brief === 'object') {
+      const current = IntakeBriefSchema.safeParse(p.intake_brief);
+      if (current.success) {
+        const merged = [...new Set([...current.data.briefAttachmentIds, ...ready])].slice(0, 10);
+        await sql.query('update brand_projects set intake_brief=$2::jsonb where id=$1', [
+          p.id,
+          JSON.stringify({ ...current.data, briefAttachmentIds: merged }),
+        ]);
+      }
+    }
+    return { id: String(p.id) };
   });
 }
 /** A wizard brief whose application deadline has already passed (Korea time) cannot be honoured. */

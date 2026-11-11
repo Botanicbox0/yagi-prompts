@@ -250,7 +250,7 @@ export function parseRefKey(value: string | null | undefined): RoomRef | null {
 }
 
 /** The room tab that shows what a ref points at (`/brand/rooms/<project>?tab=storyboard&board=…&frame=…`). */
-export function roomRefHref(projectId: string, ref: RoomRef, organizationId?: string | null): string {
+export function roomRefHref(projectId: string, ref: RoomRef, organizationId?: string | null, atMs?: number | null): string {
   const params = new URLSearchParams();
   if (organizationId) params.set('organizationId', organizationId);
   if (ref.kind === 'storyboard') {
@@ -261,6 +261,7 @@ export function roomRefHref(projectId: string, ref: RoomRef, organizationId?: st
     params.set('tab', 'review');
     params.set('review', ref.reviewId);
     if (ref.commentId) params.set('comment', ref.commentId);
+    if (atMs != null && Number.isFinite(atMs) && atMs >= 0) params.set('t', String(Math.round(atMs)));
   }
   return `/brand/rooms/${projectId}?${params.toString()}`;
 }
@@ -296,6 +297,12 @@ export interface RoomRefView {
   scene: string | null;
   shot: string | null;
   thumbUrl: string | null;
+  /** Present when `ref` narrows to one deliverable comment (`review:<id>:<comment>`). */
+  noteBody?: string | null;
+  atMs?: number | null;
+  endMs?: number | null;
+  hasSpot?: boolean;
+  hasDrawing?: boolean;
 }
 
 export interface RoomEventDetail {

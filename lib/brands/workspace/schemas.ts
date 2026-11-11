@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import { isIP } from 'node:net';
 import { CampaignTermsSchema } from './campaign-terms';
+import { IntakeBriefSchema } from './intake-brief';
 
 /** Link-only references: no crawling, oEmbed, server downloads or implied usage rights. */
 export function normalizeBrandHttpsUrl(raw: string): string | null {
@@ -39,7 +40,13 @@ export const BrandProjectSchema = z.object({
   productionMode: z.enum(['creator', 'studio']), referenceLinks: z.array(BrandReferenceLinkSchema).max(10).default([]),
   /** The wizard's request (docs/PLATFORM-2.0.md §16.3). When present, the server derives budget, dates and criteria from it. */
   campaignTerms: CampaignTermsSchema.nullable().default(null),
+  /** Structured 3-step project brief intake (docs/BRAND-PROJECTS-E.md §4). */
+  intakeBrief: IntakeBriefSchema.nullable().default(null),
 }).refine(v => !v.startsOn || !v.endsOn || v.endsOn >= v.startsOn, { path: ['endsOn'], message: 'End must follow start' });
+export const BrandIntakeAttachSchema = z.object({
+  projectId: id,
+  attachmentIds: z.array(id).min(1).max(10),
+});
 export const BrandProjectStatusSchema = z.object({ projectId: id, expectedRevision: z.number().int().nonnegative(), status: z.enum(['active', 'completed', 'cancelled']) });
 export const BrandContentSchema = z.object({
   projectId: id, requestId: id, slotKey: text(1, 60).regex(/^[a-zA-Z0-9_-]+$/), title: text(1, 120),

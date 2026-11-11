@@ -28,6 +28,7 @@ import type { StudioMediaStore } from '@/lib/brand-studio/media-store';
 import { addGuestComment, reviewTarget, sharedReviewView } from '@/lib/brand-studio/review';
 import type { ReviewComment, ReviewCommentAdded, ReviewItem } from '@/lib/brand-studio/review-contracts';
 import { RoomDenied, requireEdit, requireRoomProject, roomSeat, type RoomSeat } from './access';
+import { postRoomEvent } from './events';
 import type { StoryboardView } from '@/components/brand-rooms/seams';
 import { storyboardForShare } from './storyboards';
 import {
@@ -149,6 +150,7 @@ interface ShareRow {
   last_viewed_at: Date | string | null;
   unlock_failures: number;
   unlock_window_at: Date | string | null;
+  unlock_buckets?: Record<string, { count?: number; windowAt?: string }> | null;
   created_role: 'brand' | 'studio';
   created_at: Date | string;
 }
@@ -388,21 +390,73 @@ export async function loadSharePage(deps: ShareDeps, token: string, cookies: { g
   return { state: 'open', share: publicShare(row), storyboard: board };
 }
 
+export interface SharePublicOptions {
+  /** Privacy-safe client hash (`sha256` 16-hex of client address) so one address cannot lock out everyone (`R-09`). */
+  clientKey?: string | null;
+  /** Request User-Agent so link preview bots do not inflate view counts (`R-09`). */
+  userAgent?: string | null;
+}
+
+const SHARE_BOT_UA = /bot|crawler|spider|preview|slackbot|kakaotalk|facebookexternalhit|discordbot|whatsapp|telegrambot|twitterbot|linkedinbot/i;
+
+export function isSharePreviewBot(userAgent: string | null | undefined): boolean {
+  return typeof userAgent === 'string' && SHARE_BOT_UA.test(userAgent);
+}
+
 /** The right passphrase: the proof to set as a cookie. A wrong one counts toward the link's pause. */
 export async function unlockShare(
   deps: ShareDeps,
   raw: unknown,
+  options?: SharePublicOptions,
 ): Promise<{ ok: true; cookie: { name: string; value: string; maxAge: number } } | ShareFailure> {
   const parsed = ShareUnlockSchema.safeParse(raw);
   if (!parsed.success) return failure('invalid');
   const windowMs = SHARE_LIMITS.unlockWindowMinutes * 60_000;
+  const clientKey = options?.clientKey?.trim() || null;
   // Read and count under the row lock so parallel guesses cannot each see "not paused yet".
   const outcome = await deps.sql.transaction(async (sql): Promise<{ row: ShareRow } | { code: 'not_found' | 'locked' | 'wrong_passphrase' }> => {
     const row = await resolveShare(sql, parsed.data.token, true);
     if (!row) return { code: 'not_found' as const };
     if (!row.passphrase_hash) return { row };
+
+    const now = Date.now();
+    const hasBuckets = clientKey !== null && 'unlock_buckets' in row && row.unlock_buckets !== null && typeof row.unlock_buckets === 'object';
+    if (hasBuckets && clientKey) {
+      const rawBuckets = (row.unlock_buckets ?? {}) as Record<string, { count?: number; windowAt?: string }>;
+      const entry = rawBuckets[clientKey];
+      const entryWindowAt = entry?.windowAt ? new Date(entry.windowAt).getTime() : 0;
+      const inBucketWindow = Number.isFinite(entryWindowAt) && now - entryWindowAt < windowMs;
+      const bucketCount = inBucketWindow ? Number(entry?.count ?? 0) : 0;
+      if (bucketCount >= SHARE_LIMITS.unlockFailuresMax) return { code: 'locked' as const };
+
+      if (await verifyPassphrase(parsed.data.passphrase, row.passphrase_hash)) {
+        if (clientKey in rawBuckets) {
+          const next = { ...rawBuckets };
+          delete next[clientKey];
+          await sql.query('update brand_room_shares set unlock_buckets = $2::jsonb where id = $1', [row.id, JSON.stringify(next)]);
+        }
+        return { row };
+      }
+
+      const next: Record<string, { count: number; windowAt: string }> = {};
+      for (const [k, v] of Object.entries(rawBuckets)) {
+        const ts = v?.windowAt ? new Date(v.windowAt).getTime() : 0;
+        if (Number.isFinite(ts) && now - ts < windowMs && Number(v?.count ?? 0) > 0) {
+          next[k] = { count: Number(v.count), windowAt: v.windowAt! };
+        }
+      }
+      const keys = Object.keys(next);
+      if (keys.length >= 200) delete next[keys[0]!];
+      next[clientKey] = {
+        count: bucketCount + 1,
+        windowAt: inBucketWindow && entry?.windowAt ? entry.windowAt : new Date(now).toISOString(),
+      };
+      await sql.query('update brand_room_shares set unlock_buckets = $2::jsonb where id = $1', [row.id, JSON.stringify(next)]);
+      return { code: 'wrong_passphrase' as const };
+    }
+
     const windowAt = row.unlock_window_at ? new Date(iso(row.unlock_window_at)).getTime() : 0;
-    const inWindow = Date.now() - windowAt < windowMs;
+    const inWindow = now - windowAt < windowMs;
     if (inWindow && Number(row.unlock_failures) >= SHARE_LIMITS.unlockFailuresMax) return { code: 'locked' as const };
     if (await verifyPassphrase(parsed.data.passphrase, row.passphrase_hash)) {
       if (Number(row.unlock_failures) > 0) await sql.query('update brand_room_shares set unlock_failures = 0, unlock_window_at = null where id = $1', [row.id]);
@@ -431,7 +485,8 @@ export async function guestComment(
   const parsed = ShareCommentSchema.safeParse(raw);
   if (!parsed.success) return failure('invalid');
   const v = parsed.data;
-  return guard(() =>
+  let roomEvent: { organizationId: string; projectId: string; reviewId: string; commentId: string } | null = null;
+  const result = await guard(() =>
     deps.sql.transaction(async (sql) => {
       const row = await resolveShare(sql, v.token, true);
       if (!row || row.kind !== 'review') throw new ShareDenied('not_found');
@@ -454,9 +509,29 @@ export async function guestComment(
         comment: guestNoteOf(v) as Record<string, unknown>,
       });
       if (!added.ok) throw new ShareDenied(added.code === 'not_found' ? 'not_found' : added.code === 'invalid' ? 'invalid' : 'failed');
+      if (row.project_id) {
+        roomEvent = {
+          organizationId: String(row.organization_id),
+          projectId: String(row.project_id),
+          reviewId: String(row.target_id),
+          commentId: added.comment.id,
+        };
+      }
       return added;
     }),
   );
+  if (result.ok && roomEvent) {
+    const ev: { organizationId: string; projectId: string; reviewId: string; commentId: string } = roomEvent;
+    await postRoomEvent(deps.sql, {
+      organizationId: ev.organizationId,
+      projectId: ev.projectId,
+      event: 'review_commented',
+      ref: { kind: 'review', reviewId: ev.reviewId, commentId: ev.commentId },
+      actorId: null,
+      actorRole: 'brand',
+    });
+  }
+  return result;
 }
 
 /** One view per visitor per hour. Returns the visitor id to keep in the cookie. */
@@ -464,6 +539,7 @@ export async function countShareView(
   deps: ShareDeps,
   raw: unknown,
   cookies: { get(name: string): string | undefined },
+  options?: SharePublicOptions,
 ): Promise<{ ok: true; visitor: string } | ShareFailure> {
   const parsed = ShareViewSchema.safeParse(raw);
   if (!parsed.success) return failure('invalid');
@@ -473,6 +549,7 @@ export async function countShareView(
     deps.sql.transaction(async (sql) => {
       const row = await resolveShare(sql, parsed.data.token);
       if (!row) throw new ShareDenied('not_found');
+      if (isSharePreviewBot(options?.userAgent)) return { ok: true as const, visitor };
       // A locked link's page has shown nothing yet: no view.
       if (!proofMatches(row, cookies.get(unlockCookieName(String(row.id))))) return { ok: true as const, visitor };
       const visitorHash = createHash('sha256').update(`${row.id}:${visitor}`).digest('hex');

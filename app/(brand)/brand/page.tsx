@@ -6,10 +6,12 @@ import { countPendingSharedCampaigns, loadBrandWorkspace } from "@/lib/brands/wo
 import { CampaignList } from "@/components/brand-workspace/campaign-list";
 import { brandScope, selectedAccess } from "@/components/brand-workspace/scope";
 import { BrandUnavailable } from "@/components/brand-workspace/brand-unavailable";
-import { scopedHref, sectionVisibility } from "@/lib/brands/workspace/selection";
+import { poolVisible, scopedHref, sectionVisibility } from "@/lib/brands/workspace/selection";
 import { StaffNotice, adminOrganizationHref } from "@/components/brand-workspace/staff-notice";
 import { CAMPAIGN_LIST_ANCHOR } from "@/components/brand-studio/doors";
 import { brandRoomsOpen, brandStudioV2Open } from "@/lib/flags";
+import { influencersOpen } from "@/lib/influencers/rules";
+import { featureDenied } from "@/lib/brands/features";
 import { roomsOpenFor } from "@/components/brand-rooms/room/visibility";
 import { roomUnreadCounts } from "@/lib/brand-rooms/overview";
 import { studioV2Visible } from "@/lib/brand-studio/visibility";
@@ -45,20 +47,52 @@ export default async function BrandHome({
       }
     : null;
   const campaignList = rooms ? <CampaignList projects={workspace.projects} b={b} locale={locale} rooms={rooms}/> : <CampaignList projects={workspace.projects} b={b} locale={locale}/>;
+  const totalRoomUnread = rooms ? Object.values(rooms.unread).reduce((sum, n) => sum + (Number.isFinite(n) ? n : 0), 0) : 0;
+  const creatorsEntry = Boolean(rooms && choice && influencersOpen() && poolVisible(choice) && !featureDenied(choice.denied, "creator_pool"));
+  const sp = dict.roomsShell.space;
   return (
-    <div data-brand-home>
-      <div className="bw-heading">
-        <div>
-          <div className="bw-title">
-            <h1>{b.dashboard.title}</h1>
-            {workspace.projects.length > 0 && <span className="bw-count-chip" data-campaign-total>{workspace.projects.length}</span>}
+    <div data-brand-home data-project-space={rooms ? "" : undefined}>
+      {rooms ? (
+        <div className="bw-heading" data-project-space-header>
+          <div>
+            <p className="bw-kicker">{sp.eyebrow}</p>
+            <div className="bw-title">
+              <h1>{sp.title}</h1>
+              {workspace.projects.length > 0 && <span className="bw-count-chip" data-campaign-total>{workspace.projects.length}</span>}
+            </div>
+            <p>{sp.subtitle}</p>
           </div>
-          <p>{b.dashboard.subtitle}</p>
+          <div className="bw-row">
+            <a href={scopedHref("/brand/rooms", choice)} className="bw-button" data-project-space-inbox>
+              {sp.inboxLink}
+              {totalRoomUnread > 0 ? ` (${totalRoomUnread})` : ""}
+            </a>
+            {creatorsEntry && (
+              <a href={scopedHref("/brand/creators", choice)} className="bw-button" data-project-space-creators>
+                {sp.creatorsLink}
+              </a>
+            )}
+            {access.canRequest && (
+              <a href={newProject} className="bw-button bw-primary" data-project-space-new>
+                {sp.newBrief}
+              </a>
+            )}
+          </div>
         </div>
-        {workspace.projects.length > 0 && access.canRequest && <a href={newProject} className="bw-button bw-primary">{b.newProject}</a>}
-        {/* DB admins prepare campaigns as the studio (docs/BRAND-STAFF-ACCESS.md); team-domain readers do not. */}
-        {access.staff && viewer.isAdmin && <a href={newProject} className="bw-button bw-primary" data-studio-prep-link>{b.studioPrep.cta}</a>}
-      </div>
+      ) : (
+        <div className="bw-heading">
+          <div>
+            <div className="bw-title">
+              <h1>{b.dashboard.title}</h1>
+              {workspace.projects.length > 0 && <span className="bw-count-chip" data-campaign-total>{workspace.projects.length}</span>}
+            </div>
+            <p>{b.dashboard.subtitle}</p>
+          </div>
+          {workspace.projects.length > 0 && access.canRequest && <a href={newProject} className="bw-button bw-primary">{b.newProject}</a>}
+          {/* DB admins prepare campaigns as the studio (docs/BRAND-STAFF-ACCESS.md); team-domain readers do not. */}
+          {access.staff && viewer.isAdmin && <a href={newProject} className="bw-button bw-primary" data-studio-prep-link>{b.studioPrep.cta}</a>}
+        </div>
+      )}
       {access.staff && choice && <StaffNotice b={b} manageHref={viewer.isAdmin ? adminOrganizationHref(choice.id, brandHost) : null} />}
       {workspace.projects.length === 0 && !choice && (
         <ServiceGuide kind="campaign" b={b} studioAllowed={studioOpen} showOther={!access.projectScopedOnly && studioOpen} />

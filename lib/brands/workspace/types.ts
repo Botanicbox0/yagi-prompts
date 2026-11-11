@@ -21,6 +21,8 @@ export interface BrandProjectSummary {
   status: BrandProjectStatus; revision: number; createdAt: string; updatedAt: string;
   /** What the brand asked for in the campaign wizard; null for older briefs (docs/PLATFORM-2.0.md §16.3). */
   campaignTerms?: import('./campaign-terms').CampaignTerms | null;
+  /** Structured 3-step project brief intake (docs/BRAND-PROJECTS-E.md §4); null for older briefs. */
+  intakeBrief?: import('./intake-brief').IntakeBrief | null;
 }
 export interface BrandHomeContent {
   id: string; title: string; version: number; decision: BrandContentVersion['decision'];
