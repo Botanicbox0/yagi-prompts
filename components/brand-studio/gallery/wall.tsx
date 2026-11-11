@@ -130,7 +130,7 @@ export function tileMenuKeys(input: {
   if (canGenerate && image) keys.push("region");
   if (canEdit && image && sized) keys.push("decorate");
   if (canGenerate && image) keys.push("to-video");
-  if (canEdit) keys.push("folder", "review", "campaign");
+  if (canEdit) keys.push("folder", "campaign");
   if (canEdit && !saved) keys.push("save");
   keys.push("download");
   if (canEdit) keys.push("delete");

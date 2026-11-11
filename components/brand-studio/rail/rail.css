@@ -89,7 +89,32 @@
 .bsr-status { margin: 0; color: var(--ys-accent-text); font-size: 12px; line-height: 1.4; }
 .bsr-status:empty { height: 0; margin: -4px 0 0; overflow: hidden; }
 
-.bsr-panel { flex: 1; min-height: 0; overflow: auto; margin: 0 -12px -12px; padding: 2px 12px 12px; overscroll-behavior: contain; scrollbar-width: thin; }
+.bsr-panel { flex: 1; min-height: 0; overflow: auto; margin: 0 -12px; padding: 2px 12px 10px; overscroll-behavior: contain; scrollbar-width: thin; }
+
+.bsr-foot {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  padding-top: 6px;
+  border-top: 1px solid var(--ys-hairline);
+}
+.bsr-all-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  min-height: 28px;
+  padding: 0 8px;
+  border-radius: var(--ys-r-pill);
+  color: var(--ys-ink-secondary);
+  font-size: 12px;
+  font-weight: 500;
+  text-decoration: none;
+  transition: color var(--ys-dur) var(--ys-ease), background-color var(--ys-dur) var(--ys-ease);
+}
+.bsr-all-link:hover {
+  color: var(--ys-accent-text);
+  background: var(--ys-hover);
+}
 
 /* ------------------------------------------------------------- controls */
 

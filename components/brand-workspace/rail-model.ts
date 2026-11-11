@@ -74,8 +74,8 @@ export interface RailVisibility {
 }
 
 /**
- * Default order (§3): 이미지 · 영상 · 리뷰 · 캠페인 · 크리에이터 · 에셋 · 브랜드 키트.
- * With rooms: 이미지 · 영상 · 에셋 · 브랜드 키트 | 의뢰 · 메시지 · 리뷰 · 크리에이터 (BRAND-ROOMS §2).
+ * Default order (§3): 이미지 스튜디오 · 비디오 스튜디오 · 캠페인 · 크리에이터 · 에셋.
+ * With rooms: 이미지 스튜디오 · 비디오 스튜디오 · 에셋 | 의뢰 · 메시지 · 크리에이터 (BRAND-ROOMS §2, 묶음 B).
  */
 export function railItems(visible: RailVisibility): RailItemId[] {
   if (visible.rooms) {
@@ -83,10 +83,8 @@ export function railItems(visible: RailVisibility): RailItemId[] {
       ['image', visible.studio],
       ['video', visible.studio],
       ['assets', true],
-      ['brandKit', visible.identity],
       ['campaigns', true],
       ['messages', true],
-      ['review', visible.studio],
       ['creators', visible.creators],
     ];
     return grouped.filter(([, shown]) => shown).map(([id]) => id);
@@ -94,11 +92,9 @@ export function railItems(visible: RailVisibility): RailItemId[] {
   const all: Array<[RailItemId, boolean]> = [
     ['image', visible.studio],
     ['video', visible.studio],
-    ['review', visible.studio],
     ['campaigns', true],
     ['creators', visible.creators],
     ['assets', true],
-    ['brandKit', visible.identity],
   ];
   return all.filter(([, shown]) => shown).map(([id]) => id);
 }

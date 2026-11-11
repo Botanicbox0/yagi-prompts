@@ -1,16 +1,36 @@
+import type { Metadata } from "next";
+import { BrandAssetHub } from "@/components/brand-studio/asset-hub";
 import { brandContext } from "@/components/brand-workspace/context";
 import { loadBrandWorkspace } from "@/lib/brands/workspace/service";
 import { WorkspacePreview } from "@/components/brand-workspace/preview";
 import { brandScope } from "@/components/brand-workspace/scope";
 import { BrandUnavailable } from "@/components/brand-workspace/brand-unavailable";
 import { StaffNotice } from "@/components/brand-workspace/staff-notice";
+import { studioRuntimeDeps } from "@/lib/brand-studio/runtime";
+import { loadStudioState } from "@/lib/brand-studio/service";
+import { studioV2Visible } from "@/lib/brand-studio/visibility";
 import { scopedHref, sectionVisibility } from "@/lib/brands/workspace/selection";
+import { brandStudioV2Open } from "@/lib/flags";
+
+export async function generateMetadata({
+  searchParams,
+}: {
+  searchParams: Promise<{ organizationId?: string | string[] }>;
+}): Promise<Metadata> {
+  if (!brandStudioV2Open()) return {};
+  const [{ organizationId }, { sql, viewer, verifiedEmail, dict }] = await Promise.all([searchParams, brandContext()]);
+  if (!sql) return {};
+  const { choice } = await brandScope({ sql, verifiedEmail }, viewer, organizationId);
+  if (!choice || !sectionVisibility(choice).studio || !studioV2Visible(choice, true)) return {};
+  return { title: dict.studioLibrary.label };
+}
+
 export default async function ContentLibrary({
   searchParams,
 }: {
   searchParams: Promise<{ organizationId?: string | string[] }>;
 }) {
-  const [{ organizationId }, { sql, viewer, verifiedEmail, b, locale }] = await Promise.all([searchParams, brandContext()]);
+  const [{ organizationId }, { sql, viewer, verifiedEmail, b, dict, locale }] = await Promise.all([searchParams, brandContext()]);
   if (!sql) return <p role="alert">{b.unavailable}</p>;
   const { selection, choice } = await brandScope({ sql, verifiedEmail }, viewer, organizationId);
   if (selection.state === "unavailable") return <BrandUnavailable b={b} />;
@@ -26,6 +46,45 @@ export default async function ContentLibrary({
     changesCount = contents.filter(({ c }) => c.decision === "changes_requested").length,
     studioVisible = Boolean(choice && sectionVisibility(choice).studio),
     isKo = locale !== "en";
+
+  if (choice && studioVisible && brandStudioV2Open() && studioV2Visible(choice, true)) {
+    const canTransact = typeof (sql as { transaction?: unknown }).transaction === "function";
+    const loaded = canTransact
+      ? await loadStudioState(await studioRuntimeDeps(sql), viewer, choice.id).catch(() => null)
+      : null;
+    const initialState = loaded && loaded.ok ? loaded : null;
+    const deliverablesGrid = contents.length ? (
+      <div className="bw-content-grid">
+        {contents.map(({ p, c }) => (
+          <a className="bw-content-card" key={c.id} href={`/brand/projects/${p.id}#review`}>
+            <WorkspacePreview content={c} b={b} title={p.organizationName} />
+            <div>
+              <span className="bw-status" data-state={c.decision}>
+                {b.decisionStates[c.decision]}
+              </span>
+              <h3>{c.title}</h3>
+              <p>{p.title}</p>
+            </div>
+          </a>
+        ))}
+      </div>
+    ) : null;
+
+    return (
+      <>
+        {choice.role === "studio" && <StaffNotice b={b} />}
+        <BrandAssetHub
+          organizationId={choice.id}
+          studioCopy={dict.brandStudio}
+          libraryCopy={dict.studioLibrary}
+          initialState={initialState}
+          deliverableCount={contents.length}
+          deliverablesNode={deliverablesGrid}
+        />
+      </>
+    );
+  }
+
   return (
     <div data-brand-library>
       <div className="bw-heading">

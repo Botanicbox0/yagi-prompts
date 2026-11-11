@@ -109,14 +109,16 @@ describe.each(sandboxedChoices)('hardline: %s', (_label, choice) => {
 describe('the rail', () => {
   const owner: BrandWorkspaceChoice = { id: OWNER, name: 'Alpha fixture', role: 'owner', logoUrl: null, denied: [] };
 
-  it('is the mode for every other signed-in brand while studio v2 is on', () => {
+  it('is the mode for every other signed-in brand while studio v2 is on, omitting studio review and brand kit', () => {
     const html = render(owner, { studioV2: true });
     expect(html).toContain('data-brand-layout-mode="rail"');
     expect(html).toContain('data-rail-expanded="false"');
-    for (const href of ['/brand/studio', '/brand/studio/video', '/brand/studio/review', '/brand', '/brand/creators', '/brand/library', '/brand/identity', '/brand/members', '/brand/settings']) {
+    for (const href of ['/brand/studio', '/brand/studio/video', '/brand', '/brand/creators', '/brand/library', '/brand/members', '/brand/settings']) {
       expect(html, href).toContain(`href="${href}?organizationId=${OWNER}"`);
     }
-    for (const word of [shell.rail.image, shell.rail.video, shell.rail.review, shell.rail.campaigns, shell.rail.assets, shell.rail.brandKit, shell.rail.team, shell.rail.settings]) {
+    expect(html).not.toContain('/brand/studio/review');
+    expect(html).not.toContain('/brand/identity');
+    for (const word of [shell.rail.image, shell.rail.video, shell.rail.campaigns, shell.rail.assets, shell.rail.team, shell.rail.settings]) {
       expect(html).toContain(word);
     }
     expect(html).toContain('data-rail-create');
@@ -140,7 +142,7 @@ describe('the rail', () => {
     state.path = '/brand/studio/video';
     expect(current(render(owner, { studioV2: true }))).toEqual(['video']);
     state.path = '/brand/studio/review';
-    expect(current(render(owner, { studioV2: true }))).toEqual(['review']);
+    expect(current(render(owner, { studioV2: true }))).toEqual([]);
     state.path = '/brand/projects/new';
     expect(current(render(owner, { studioV2: true }))).toEqual(['campaigns']);
   });

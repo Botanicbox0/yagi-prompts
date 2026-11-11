@@ -87,7 +87,7 @@ describe.each(sandboxedChoices)('hardline with rooms on: %s', (_label, choice) =
 });
 
 describe('the grouped rail', () => {
-  it('splits into 직접 만들기 and 야기 팀과 with 의뢰 · 메시지 · 리뷰 · 크리에이터', () => {
+  it('splits into 직접 만들기 and 야기 팀과 with 의뢰 · 메시지 · 크리에이터', () => {
     const html = render(owner, { studioV2: true, rooms: true });
     expect(html).toContain('data-brand-layout-mode="rail"');
     const sections = [...html.matchAll(/data-rail-section="(\w+)"/g)].map((m) => m[1]);
@@ -95,8 +95,8 @@ describe('the grouped rail', () => {
     const make = html.slice(html.indexOf('data-rail-section="make"'), html.indexOf('data-rail-section="team"'));
     const team = html.slice(html.indexOf('data-rail-section="team"'));
     const ids = (part: string) => [...part.matchAll(/data-rail-item="(\w+)"/g)].map((m) => m[1]);
-    expect(ids(make)).toEqual(['image', 'video', 'assets', 'brandKit']);
-    expect(ids(team)).toEqual(['campaigns', 'messages', 'review', 'creators']);
+    expect(ids(make)).toEqual(['image', 'video', 'assets']);
+    expect(ids(team)).toEqual(['campaigns', 'messages', 'creators']);
     expect(make).toContain(nav.groupMake);
     expect(team).toContain(nav.groupTeam);
     // 의뢰 is the renamed 캠페인 item, only in this mode; 메시지 is the inbox.

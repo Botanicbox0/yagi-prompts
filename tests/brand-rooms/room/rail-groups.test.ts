@@ -15,17 +15,17 @@ import { unreadFrom } from '@/components/brand-workspace/rail-activity';
 
 /** docs/BRAND-ROOMS.md §2 — the rail in two groups, without React. */
 describe('the two groups', () => {
-  it('splits 직접 만들기 and 야기 팀과, with 메시지 at /brand/rooms', () => {
+  it('splits 직접 만들기 and 야기 팀과, with 메시지 at /brand/rooms (no studio review or brandKit)', () => {
     const all = railItems({ studio: true, creators: true, identity: true, rooms: true });
-    expect(all).toEqual(['image', 'video', 'assets', 'brandKit', 'campaigns', 'messages', 'review', 'creators']);
-    expect(groupItems(all, [])).toEqual({ make: ['image', 'video', 'assets', 'brandKit'], team: ['campaigns', 'messages', 'review', 'creators'] });
+    expect(all).toEqual(['image', 'video', 'assets', 'campaigns', 'messages', 'creators']);
+    expect(groupItems(all, [])).toEqual({ make: ['image', 'video', 'assets'], team: ['campaigns', 'messages', 'creators'] });
     expect(RAIL_HREF.messages).toBe('/brand/rooms');
     expect(RAIL_HREF.campaigns).toBe('/brand');
   });
 
   it('keeps the ungrouped rail exactly as it was when rooms are closed', () => {
     for (const rooms of [false, undefined]) {
-      expect(railItems({ studio: true, creators: true, identity: true, rooms })).toEqual(['image', 'video', 'review', 'campaigns', 'creators', 'assets', 'brandKit']);
+      expect(railItems({ studio: true, creators: true, identity: true, rooms })).toEqual(['image', 'video', 'campaigns', 'creators', 'assets']);
     }
     expect(railItems({ studio: true, creators: true, identity: true })).not.toContain('messages');
   });
@@ -41,34 +41,32 @@ describe('the two groups', () => {
     // An order saved by the ungrouped rail, with 의뢰 first and 에셋 before 이미지.
     const old = ['/brand', '/brand/library', '/brand/studio', '/brand/studio/video', '/brand/studio/review', '/brand/creators', '/brand/identity'];
     const groups = groupItems(all, old);
-    expect(groups.make).toEqual(['assets', 'image', 'video', 'brandKit']);
-    expect(groups.team).toEqual(['campaigns', 'messages', 'review', 'creators']);
+    expect(groups.make).toEqual(['assets', 'image', 'video']);
+    expect(groups.team).toEqual(['campaigns', 'messages', 'creators']);
     for (const id of groups.make) expect(RAIL_GROUP[id]).toBe('make');
     for (const id of groups.team) expect(RAIL_GROUP[id]).toBe('team');
-    // 리뷰 saved first of all still stays with the team; 이미지 leads its own group.
-    const reviewFirst = groupItems(all, ['/brand/studio/review', '/brand/studio']);
-    expect(reviewFirst.make[0]).toBe('image');
-    expect(reviewFirst.make).not.toContain('review');
-    expect(reviewFirst.team).toContain('review');
+    // 크리에이터 saved first of all still stays with the team; 이미지 leads its own group.
+    const creatorsFirst = groupItems(all, ['/brand/creators', '/brand', '/brand/studio']);
+    expect(creatorsFirst.make[0]).toBe('image');
+    expect(creatorsFirst.make).not.toContain('creators');
+    expect(creatorsFirst.team[0]).toBe('creators');
     // orderItems itself is unchanged for the ungrouped rail.
     expect(orderItems(railItems({ studio: true, creators: true, identity: true }), ['/brand', '/brand/studio/video'])).toEqual([
       'image',
       'campaigns',
       'creators',
       'assets',
-      'brandKit',
       'video',
-      'review',
     ]);
   });
 
   it('moves within a group and stops at its ends; a drop on the other group does nothing', () => {
     const groups = groupItems(railItems({ studio: true, creators: true, identity: true, rooms: true }), []);
-    expect(moveInGroup(groups, 'brandKit', 1)).toEqual(['image', 'video', 'assets', 'brandKit', 'campaigns', 'messages', 'review', 'creators']);
-    expect(moveInGroup(groups, 'campaigns', -1)).toEqual(['image', 'video', 'assets', 'brandKit', 'campaigns', 'messages', 'review', 'creators']);
-    expect(moveInGroup(groups, 'messages', -1)).toEqual(['image', 'video', 'assets', 'brandKit', 'messages', 'campaigns', 'review', 'creators']);
-    expect(dropInGroup(groups, 'review', 'campaigns')).toEqual(['image', 'video', 'assets', 'brandKit', 'review', 'campaigns', 'messages', 'creators']);
-    expect(dropInGroup(groups, 'review', 'image')).toBeNull();
+    expect(moveInGroup(groups, 'assets', 1)).toEqual(['image', 'video', 'assets', 'campaigns', 'messages', 'creators']);
+    expect(moveInGroup(groups, 'campaigns', -1)).toEqual(['image', 'video', 'assets', 'campaigns', 'messages', 'creators']);
+    expect(moveInGroup(groups, 'messages', -1)).toEqual(['image', 'video', 'assets', 'messages', 'campaigns', 'creators']);
+    expect(dropInGroup(groups, 'creators', 'campaigns')).toEqual(['image', 'video', 'assets', 'creators', 'campaigns', 'messages']);
+    expect(dropInGroup(groups, 'creators', 'image')).toBeNull();
     expect(dropInGroup(groups, 'assets', 'messages')).toBeNull();
     // The saved list, read back, lands in the same groups.
     const saved = dropInGroup(groups, 'video', 'image')!.map((id) => RAIL_HREF[id]);

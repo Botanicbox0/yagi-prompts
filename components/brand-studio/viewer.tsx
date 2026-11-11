@@ -290,7 +290,6 @@ function ViewerContent({
     { name: "reference", icon: "attach", label: v.reference, run: () => actions.reference(item), show: canGenerate },
     { name: "save", icon: "save", label: v.save, run: () => output && actions.save(output), show: canCreate && Boolean(output) && !output?.savedAssetId },
     { name: "finalize", icon: "spark", label: v.finalize, run: () => output && actions.finalize(output), show: canGenerate && Boolean(output?.draft) },
-    { name: "review", icon: "review", label: v.review, run: () => actions.review?.(item), show: canCreate && Boolean(actions.review) },
     { name: "campaign", icon: "send", label: v.campaign, run: () => actions.campaign(item), show: canCreate },
   ];
   const saved = canCreate && Boolean(output?.savedAssetId);

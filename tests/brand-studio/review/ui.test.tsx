@@ -67,6 +67,8 @@ vi.mock("@/lib/brand-studio/review", () => ({
 }));
 
 import StudioReviewPage from "@/app/(brand)/brand/studio/review/page";
+import { ReviewApp } from "@/components/brand-studio/review/review-app";
+import { getDictionary } from "@/lib/i18n/dictionaries";
 
 function item(id: string, kind: "image" | "video", extra: Partial<ReviewItem> = {}): ReviewItem {
   return {
@@ -150,11 +152,29 @@ describe("/brand/studio/review", () => {
     expect(state.calls).toEqual([]);
   });
 
-  it.each(["ko", "en"] as const)("opens the newest piece with its timeline, spot pins, notes and composer (%s)", async (locale) => {
+  it("is closed on /brand/studio/review for ordinary brands too (묶음 B: review lives in project rooms only)", async () => {
     vi.stubEnv("BRAND_STUDIO_V2", "on");
-    state.locale = locale;
-    const html = await page();
-    expect(state.calls).toEqual(["list", `detail:${R1}`]);
+    await expect(page()).rejects.toThrow("NEXT_NOT_FOUND");
+    expect(state.calls).toEqual([]);
+  });
+});
+
+describe("ReviewApp component (preserved for room/shared review)", () => {
+  const renderApp = (locale: "ko" | "en", list: ReviewList, detail: ReviewDetail | null, initialMs: number | null = null) =>
+    renderToStaticMarkup(
+      <ReviewApp
+        organizationId={ORG}
+        locale={locale}
+        copy={getDictionary(locale).studioReview}
+        initialList={list}
+        initialDetail={detail}
+        initialMs={initialMs}
+      />,
+    );
+
+  it.each(["ko", "en"] as const)("opens the newest piece with its timeline, spot pins, notes and composer (%s)", (locale) => {
+    seed(true);
+    const html = renderApp(locale, state.list as ReviewList, state.details[R1] as ReviewDetail);
     for (const marker of ["data-studio-review", "data-review-list", `data-review-item="${R1}"`, `data-review-stage="${R1}"`, "data-review-timeline", "data-review-comments", "data-review-composer", "data-review-mark"]) {
       expect(html, marker).toContain(marker);
     }
@@ -170,10 +190,9 @@ describe("/brand/studio/review", () => {
     expect(html).not.toMatch(/slack|슬랙|webhook|웹훅|admin\/brand-studio/i);
   });
 
-  it("opens the piece named in the link and shows a still's spot pins", async () => {
-    vi.stubEnv("BRAND_STUDIO_V2", "on");
-    const html = await page({ review: R2, t: "500" });
-    expect(state.calls).toEqual(["list", `detail:${R2}`]);
+  it("opens the piece named in the link and shows a still's spot pins", () => {
+    seed(true);
+    const html = renderApp("ko", state.list as ReviewList, state.details[R2] as ReviewDetail, 500);
     expect(html).toContain(`data-review-stage="${R2}"`);
     expect(html).toContain(`data-review-spot="${note(3).id}"`);
     expect(html).not.toContain("data-review-timeline");
@@ -183,21 +202,18 @@ describe("/brand/studio/review", () => {
     expect(html).not.toContain('data-review-status-action="approved"');
   });
 
-  it("lets a viewer read without writing", async () => {
-    vi.stubEnv("BRAND_STUDIO_V2", "on");
+  it("lets a viewer read without writing", () => {
     seed(false);
-    const html = await page();
+    const html = renderApp("ko", state.list as ReviewList, state.details[R1] as ReviewDetail);
     expect(html).toContain("data-review-read-only");
     expect(html).not.toContain("data-review-composer");
     expect(html).not.toContain("data-review-status-action");
     expect(html).not.toContain("data-review-pick-open");
   });
 
-  it("shows the empty state with the way in when nothing is under review", async () => {
-    vi.stubEnv("BRAND_STUDIO_V2", "on");
-    state.list = { ok: true, canWrite: true, reviews: [] };
-    const html = await page();
-    expect(state.calls).toEqual(["list"]);
+  it("shows the empty state with the way in when nothing is under review", () => {
+    const emptyList: ReviewList = { ok: true, canWrite: true, reviews: [] };
+    const html = renderApp("ko", emptyList, null);
     expect(html).toContain("data-review-empty");
     expect(html).toContain("data-review-pick-open");
     expect(html).toContain("리뷰할 작업 고르기");

@@ -1608,7 +1608,7 @@ export const en = {
   },
   /** Brand studio v2 (docs/BRAND-STUDIO-V2.md §5). Not final: a wording pass follows. */
   brandStudio: {
-    title: 'Images',
+    title: 'Image studio',
     doors: {
       label: 'What would you like to do?',
       create: { title: 'Create', line: 'Make images and videos for your brand.' },
@@ -1649,7 +1649,7 @@ export const en = {
       folder: 'Add to folder',
       reference: 'Use as reference',
       more: 'More',
-      library: 'Library',
+      library: 'Assets',
       menu: {
         open: 'Open',
         rerun: 'Make again',
@@ -1731,7 +1731,7 @@ export const en = {
       undoEnhance: 'Back to my sentence',
       enhanceFailed: 'Could not polish it right now. You can make it as written.',
       addRef: 'Add a reference',
-      videoNotHere: 'Videos go on the video screen. Only pictures can be references here.',
+      videoNotHere: 'Videos go in Video studio. Only pictures can be references here.',
       submit: 'Create',
       submitLabel: 'Create, uses {cost}',
       submitting: 'Sending',
@@ -1919,7 +1919,7 @@ export const en = {
     },
     formats: {
       title: 'Your contract templates',
-      back: 'Back to images',
+      back: 'Back to Image studio',
       lead: 'A format is a video template creators follow. Start from your own video or have us build one for your brand.',
       fromVideo: { title: 'Make a format from my video', line: 'Add a reference video and say only what should change.', action: 'Start' },
       commission: { title: 'Commission a format', line: 'We build a format made for your brand.', action: 'Request it' },
@@ -1944,7 +1944,7 @@ export const en = {
       allowance_closed: 'Your usage limit has not been set yet.',
       allowance_exhausted: 'This run would go over this month’s limit.',
       too_many_running: 'Too many runs are open. Try again when one finishes.',
-      asset_limit: 'The asset library is full. Delete assets you no longer use.',
+      asset_limit: 'Your assets are full. Delete assets you no longer use.',
       unsupported_file: 'This file type cannot be uploaded.',
       file_too_large: 'This file is too large.',
       reference_missing: 'A reference is missing or was deleted. Add it again.',

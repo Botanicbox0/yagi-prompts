@@ -8,8 +8,8 @@
 export const studioShellEn = {
   rail: {
     label: 'Workspace menu',
-    image: 'Image',
-    video: 'Video',
+    image: 'Image studio',
+    video: 'Video studio',
     review: 'Review',
     campaigns: 'Campaigns',
     creators: 'Creators',
@@ -72,8 +72,8 @@ export const studioShellEn = {
 export const studioShellKo: typeof studioShellEn = {
   rail: {
     label: '작업 메뉴',
-    image: '이미지',
-    video: '영상',
+    image: '이미지 스튜디오',
+    video: '비디오 스튜디오',
     review: '리뷰',
     campaigns: '캠페인',
     creators: '크리에이터',

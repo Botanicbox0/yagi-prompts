@@ -116,8 +116,8 @@ export default async function MembersPage({
                 </div>
                 <p className="bw-muted" style={{ margin: "2px 0 0", fontSize: "11.5px" }}>
                   {isKo
-                    ? "팀원을 초대해 브랜드 키트·스튜디오·캠페인을 역할별 권한으로 안전하게 공동 운영하세요."
-                    : "Collaborate across your Brand Kit, Studio, and Campaigns with role-scoped access."}
+                    ? "팀원을 초대해 에셋·스튜디오·캠페인을 역할별 권한으로 안전하게 공동 운영하세요."
+                    : "Collaborate across your Assets, Studio, and Campaigns with role-scoped access."}
                 </p>
               </div>
             </div>
@@ -206,8 +206,8 @@ export default async function MembersPage({
                       title: b.roles.owner,
                       badgeKo: "전체 권한",
                       badgeEn: "Full Control",
-                      permsKo: "스튜디오 생성 · 브랜드 키트 설정 · 캠페인 의뢰 · 팀원 초대 및 권한 관리",
-                      permsEn: "Studio generation · Brand Kit settings · Campaign briefs · Team invite & revoke",
+                      permsKo: "스튜디오 생성 · 에셋 관리 · 캠페인 의뢰 · 팀원 초대 및 권한 관리",
+                      permsEn: "Studio generation · Asset management · Campaign briefs · Team invite & revoke",
                     },
                     {
                       roleKey: "editor",
