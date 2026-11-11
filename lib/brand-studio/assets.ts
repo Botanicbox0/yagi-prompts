@@ -10,6 +10,11 @@
  */
 import { randomUUID } from 'node:crypto';
 import type { Viewer } from '@/lib/auth/identity';
+import {
+  adjustOrganizationStorageBytes,
+  checkStorageQuotaForUpload,
+  reconcileOrganizationStorage,
+} from '@/lib/brands/storage-quota';
 import { STAGING_BUCKET } from '@/lib/storage';
 import {
   AssetCompleteSchema,
@@ -26,9 +31,9 @@ import {
 } from './contracts';
 import { lockOrganization, requireCreate, studioSeat, StudioDenied } from './access';
 import { bytesLimit, checkUpload, imageInfo, kindOfMime, sha256Hex, thumbnailWebp, videoInfo } from './files';
-import { isStudioMediaKey } from './media-store';
 import { failure, guarded } from './outcome';
-import { assetView, keyStillUsed, readyOutput } from './repo';
+import { dropUnreferencedStudioKeys, type PhysicalCleanupExclusion } from './physical-cleanup';
+import { assetView, readyOutput } from './repo';
 import type { AssetRow, JobRow, StudioDeps } from './types';
 
 /** Local mode only: the browser POSTs the file here (app/api/brand-studio/assets/[id]/route.ts). */
@@ -44,15 +49,8 @@ async function bySha(sql: StudioDeps['sql'], organizationId: string, sha: string
   );
 }
 
-async function dropKeys(deps: StudioDeps, keys: Array<string | null | undefined>, except: { assetId?: string; outputId?: string }): Promise<void> {
-  for (const key of keys) {
-    if (!key || !isStudioMediaKey(key)) continue;
-    try {
-      if (!(await keyStillUsed(deps.sql, key, except))) await deps.media.delete(key);
-    } catch (error) {
-      deps.log?.('studio_media_delete_failed', { message: error instanceof Error ? error.message.slice(0, 200) : 'unknown' });
-    }
-  }
+async function dropKeys(deps: StudioDeps, keys: Array<string | null | undefined>, except: PhysicalCleanupExclusion): Promise<void> {
+  await dropUnreferencedStudioKeys(deps.sql, deps.media, keys, except, deps.log);
 }
 
 export async function reserveStudioAsset(deps: StudioDeps, viewer: Viewer, raw: unknown): Promise<StudioAssetReserved | StudioFailure> {
@@ -72,6 +70,8 @@ export async function reserveStudioAsset(deps: StudioDeps, viewer: Viewer, raw: 
         return { id: prior.id, key: prior.storage_key, pending: prior.status === 'pending' && !prior.deleted_at };
       }
       if ((await liveAssetCount(sql, v.organizationId)) >= STUDIO_LIMITS.assetsPerOrganization) throw new StudioDenied('asset_limit');
+      const quota = await checkStorageQuotaForUpload(sql, v.organizationId, v.sizeBytes);
+      if (!quota.allowed) throw new StudioDenied('storage_quota_exceeded');
       const id = randomUUID();
       const key = `brand-studio/${v.organizationId}/${id}`;
       await sql.query(
@@ -79,6 +79,7 @@ export async function reserveStudioAsset(deps: StudioDeps, viewer: Viewer, raw: 
           values ($1, $2, $3, $4, $5, $6, $7, $8, 'upload', 'pending', $9, $10)`,
         [id, v.organizationId, kind, v.role ?? null, v.name, v.mime, v.sizeBytes, key, viewer.userId, v.requestId],
       );
+      await adjustOrganizationStorageBytes(sql, v.organizationId, v.sizeBytes);
       return { id, key, pending: true };
     }),
   );
@@ -138,6 +139,7 @@ async function completeOnce(deps: StudioDeps, viewer: Viewer, raw: unknown, atte
       if (same) {
         await sql.query('update brand_studio_assets set deleted_at = now(), duplicate_of = $2 where id = $1', [row.id, same.id]);
         releasedStagingKey = row.storage_key;
+        await adjustOrganizationStorageBytes(sql, v.organizationId, -Number(row.size_bytes));
         return same;
       }
       let width: number | null = null, height: number | null = null, durationMs: number | null = null, thumbKey: string | null = null;
@@ -222,6 +224,7 @@ export async function deleteStudioAsset(deps: StudioDeps, viewer: Viewer, raw: u
       if ((await sql.query(openRefsTo('assetId'), [v.organizationId, v.assetId])).rows[0]) throw new StudioDenied('conflict');
       await sql.query('update brand_studio_assets set deleted_at = now() where id = $1', [row.id]);
       await sql.query('update brand_studio_outputs set saved_asset_id = null where saved_asset_id = $1', [row.id]);
+      await reconcileOrganizationStorage(sql, v.organizationId);
       return row;
     }),
   );
@@ -288,6 +291,7 @@ export async function deleteStudioOutput(deps: StudioDeps, viewer: Viewer, raw: 
       const job = (await sql.query<Pick<JobRow, 'work'>>('select work from brand_studio_jobs where id = $1', [row.job_id])).rows[0];
       const patch = job?.work?.region?.patches?.[String(row.idx)];
       await sql.query('update brand_studio_outputs set deleted_at = now() where id = $1', [row.id]);
+      await reconcileOrganizationStorage(sql, v.organizationId);
       return { ...row, patch_key: patch?.patchKey ?? null, mask_key: patch?.maskKey ?? null };
     }),
   );

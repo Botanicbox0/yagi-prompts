@@ -29,8 +29,14 @@ import type { SqlRunner } from '@/lib/db/sql-runner';
 import { STAGING_BUCKET } from '@/lib/storage';
 import { featureDenied, isSandboxedClientOrganization } from '@/lib/brands/features';
 import { loadFeaturePolicies } from '@/lib/brands/entitlements';
+import {
+  adjustOrganizationStorageBytes,
+  checkStorageQuotaForUpload,
+  reconcileOrganizationStorage,
+} from '@/lib/brands/storage-quota';
 import { imageInfo, sha256Hex, sniffMime, thumbnailWebp } from '@/lib/brand-studio/files';
 import { isStudioMediaKey, type StudioMediaStore } from '@/lib/brand-studio/media-store';
+import { dropUnreferencedStudioKeys } from '@/lib/brand-studio/physical-cleanup';
 import type { StudioStaging } from '@/lib/brand-studio/types';
 import { RoomDenied, requireEdit, requireRoomProject, roomSeat, type RoomSeat } from './access';
 import { postRoomEvent, type RoomEventInput, type RoomEventKind } from './events';
@@ -364,25 +370,12 @@ async function dropStored(media: StudioMediaStore, keys: readonly string[]): Pro
   for (const key of keys) await media.delete(key).catch(() => undefined);
 }
 
-/** Delete the objects no cut, asset or result points at any more. Best effort, after the commit. */
-async function dropUnusedKeys(deps: StoryboardDeps, keys: ReadonlyArray<string | null | undefined>): Promise<void> {
-  for (const key of new Set(keys)) {
-    if (!key || !isStudioMediaKey(key)) continue;
-    try {
-      const used = (
-        await deps.sql.query(
-          `select 1 from brand_storyboard_frames where storage_key = $1 or thumb_key = $1
-           union all select 1 from brand_studio_assets where storage_key = $1 or thumb_key = $1
-           union all select 1 from brand_studio_outputs where storage_key = $1 or thumb_key = $1
-           limit 1`,
-          [key],
-        )
-      ).rows[0];
-      if (!used) await deps.media.delete(key);
-    } catch (error) {
-      deps.log?.('storyboard_media_delete_failed', { message: error instanceof Error ? error.message.slice(0, 200) : 'unknown' });
-    }
-  }
+/** Delete the objects no live cut, asset, output, or message points at any more. Best effort, after commit. */
+async function dropUnusedKeys(
+  deps: Pick<StoryboardDeps, 'sql' | 'media'> & { log?: StoryboardDeps['log'] },
+  keys: ReadonlyArray<string | null | undefined>,
+): Promise<void> {
+  await dropUnreferencedStudioKeys(deps.sql, deps.media, keys, {}, deps.log);
 }
 
 /* --------------------------------------------------------------- shared writes */
@@ -561,6 +554,10 @@ async function reserveFrame(
 ): Promise<{ frameId: string; stagingKey: string; mime: string }> {
   if (input.sizeBytes > STORYBOARD_LIMITS.imageBytesMax) throw new StoryboardDenied('file_too_large');
   if (!(STORYBOARD_UPLOAD_MIMES as readonly string[]).includes(input.mime)) throw new StoryboardDenied('unsupported_file');
+  if (actor.role === 'brand') {
+    const quota = await checkStorageQuotaForUpload(sql, board.organization_id, input.sizeBytes);
+    if (!quota.allowed) throw new StoryboardDenied('storage_quota_exceeded');
+  }
   await sql.query(
     `delete from brand_storyboard_frames where storyboard_id = $1 and status = 'pending' and created_at < now() - make_interval(hours => $2)`,
     [board.id, STORYBOARD_LIMITS.pendingHours],
@@ -575,6 +572,7 @@ async function reserveFrame(
      values ($1, $2, $3, $4, 'pending', $5, $6, $7, $8, $9, $10, coalesce($11, ''), $12, $13, $14)`,
     [frameId, board.id, board.organization_id, idx, stagingKey, input.mime, input.sizeBytes, actor.userId, text?.scene ?? null, text?.shot ?? null, text?.description ?? null, text?.camera ?? null, text?.audio ?? null, text?.seconds ?? null],
   );
+  await adjustOrganizationStorageBytes(sql, board.organization_id, input.sizeBytes);
   return { frameId, stagingKey, mime: input.mime };
 }
 
@@ -642,8 +640,12 @@ async function addFromStudio(
   } catch {
     throw new StoryboardDenied('not_found');
   }
+  if (actor.role === 'brand') {
+    const quota = await checkStorageQuotaForUpload(sql, board.organization_id, bytes.byteLength);
+    if (!quota.allowed) throw new StoryboardDenied('storage_quota_exceeded');
+  }
   const picture = await storePicture(deps.media, bytes, null, stored);
-  return insertReadyFrame(
+  const inserted = await insertReadyFrame(
     sql,
     board,
     picture,
@@ -651,6 +653,8 @@ async function addFromStudio(
     input.assetId ? { source: 'asset', assetId: input.assetId } : { source: 'output', outputId: input.outputId },
     actor,
   );
+  await adjustOrganizationStorageBytes(sql, board.organization_id, picture.sizeBytes);
+  return inserted;
 }
 
 async function updateFrameTexts(sql: SqlRunner, board: BoardRow, updates: Array<FrameText & { frameId: string }>): Promise<FrameRow[]> {
@@ -697,6 +701,7 @@ async function deleteFrame(sql: SqlRunner, board: BoardRow, frameId: string): Pr
   ).rows[0];
   if (!gone) throw new StoryboardDenied('not_found');
   await touch(sql, board.id);
+  await reconcileOrganizationStorage(sql, board.organization_id);
   return [gone.storage_key, gone.thumb_key];
 }
 
@@ -846,7 +851,15 @@ export async function runStoryboardOperation(deps: StoryboardDeps, viewer: Viewe
           const v = parse(BoardRefSchema, input);
           const row = await board(v.storyboardId);
           requireBrandBoard(row);
+          const frameKeys = (
+            await sql.query<{ storage_key: string | null; thumb_key: string | null }>(
+              'select storage_key, thumb_key from brand_storyboard_frames where storyboard_id = $1',
+              [row.id],
+            )
+          ).rows;
           await sql.query('update brand_storyboards set deleted_at = now(), updated_at = now() where id = $1', [row.id]);
+          await reconcileOrganizationStorage(sql, row.organization_id);
+          after.dropped = frameKeys.flatMap((f) => [f.storage_key, f.thumb_key]);
           return { ok: true as const } satisfies StoryboardDone;
         }
         case 'frame.reserve': {
@@ -1149,15 +1162,30 @@ export async function staffNewVersion(deps: Pick<StoryboardDeps, 'sql' | 'media'
   );
 }
 
-export async function staffDeleteStoryboard(deps: Pick<StoryboardDeps, 'sql' | 'media'>, viewer: Viewer, input: { storyboardId: string }): Promise<StoryboardDone | StoryboardFailure> {
-  return guard(() =>
+export async function staffDeleteStoryboard(
+  deps: Pick<StoryboardDeps, 'sql' | 'media'> & { log?: StoryboardDeps['log'] },
+  viewer: Viewer,
+  input: { storyboardId: string },
+): Promise<StoryboardDone | StoryboardFailure> {
+  let dropped: Array<string | null> = [];
+  const result = await guard(() =>
     deps.sql.transaction(async (sql) => {
       await requireStaff(sql, viewer);
       const row = await staffBoard(sql, input.storyboardId);
+      const frameKeys = (
+        await sql.query<{ storage_key: string | null; thumb_key: string | null }>(
+          'select storage_key, thumb_key from brand_storyboard_frames where storyboard_id = $1',
+          [row.id],
+        )
+      ).rows;
       await sql.query('update brand_storyboards set deleted_at = now(), updated_at = now() where id = $1', [row.id]);
+      await reconcileOrganizationStorage(sql, row.organization_id);
+      dropped = frameKeys.flatMap((f) => [f.storage_key, f.thumb_key]);
       return { ok: true as const };
     }),
   );
+  if (result.ok && dropped.length > 0) await dropUnusedKeys(deps, dropped);
+  return result;
 }
 
 /** One cut in the team editor's save: an existing cut by id, or a new picture, with its text. */

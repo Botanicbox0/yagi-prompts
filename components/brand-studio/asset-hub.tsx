@@ -24,6 +24,7 @@ import { useStudioLibrary } from "./rail/use-library";
 import type { RefSource } from "./refs";
 import type { LibraryItemView, StudioFolderView, StudioLibrary } from "./seams";
 import { imageScreenRefHref, videoScreenHref } from "./studio-app";
+import { StorageMeterCard } from "./storage-meter";
 import { useStudio } from "./use-studio";
 
 export type HubSection = "all" | "uploads" | "generated" | "folders" | "liked" | "deliverables";
@@ -189,6 +190,8 @@ export function BrandAssetHub({
   const assets = useMemo(() => state?.assets ?? [], [state?.assets]);
   const jobs = useMemo(() => state?.jobs ?? [], [state?.jobs]);
   const canCreate = state?.canCreate ?? false;
+  const uploadBlocked = Boolean(state?.storage?.uploadBlocked);
+  const hubLocale: "ko" | "en" = libraryCopy.label === "Assets" ? "en" : "ko";
   const h = libraryCopy.hub;
 
   const [section, setSection] = useState<HubSection>("all");
@@ -229,6 +232,10 @@ export function BrandAssetHub({
   const handleFiles = useCallback(
     async (files: File[]) => {
       setNotice(null);
+      if (uploadBlocked) {
+        setNotice(errorLine(studioCopy, "storage_quota_exceeded"));
+        return;
+      }
       for (const file of files) {
         const problem = uploadProblem(file);
         if (problem) {
@@ -239,7 +246,7 @@ export function BrandAssetHub({
         if (isFailure(res)) setNotice(errorLine(studioCopy, res.code));
       }
     },
-    [studio, studioCopy],
+    [studio, studioCopy, uploadBlocked],
   );
 
   const onDrop = (event: DragEvent<HTMLDivElement>) => {
@@ -374,7 +381,7 @@ export function BrandAssetHub({
               <button
                 type="button"
                 className={s.primaryBtn}
-                disabled={studio.uploads.length > 0}
+                disabled={studio.uploads.length > 0 || uploadBlocked}
                 onClick={() => fileInputRef.current?.click()}
                 data-asset-hub-upload
               >
@@ -384,6 +391,10 @@ export function BrandAssetHub({
           )}
         </div>
       </header>
+
+      {state?.storage && (
+        <StorageMeterCard storage={state.storage} copy={libraryCopy.storage} locale={hubLocale} />
+      )}
 
       <section className={s.toolbar} aria-label={h.sectionsLabel}>
         <div className={s.topBar}>

@@ -22,6 +22,7 @@ import {
   type StudioState,
 } from './contracts';
 import { studioSeat } from './access';
+import { loadOrganizationStorageSummary, toStudioStorageQuotaView } from '@/lib/brands/storage-quota';
 import { assetFromOutput, completeStudioAsset, deleteStudioAsset, deleteStudioOutput, reserveStudioAsset, updateStudioAsset } from './assets';
 import { handoffToCampaign } from './handoff';
 import { analyzeStudioFilm, cancelStudioJob, createStudioJob, previewStudioPrompt } from './jobs';
@@ -95,8 +96,10 @@ export async function loadStudioState(deps: StudioDeps, viewer: Viewer, organiza
   return guarded(() =>
     deps.sql.transaction(async (sql) => {
       const seat = await studioSeat(sql, viewer.userId, organizationId);
-      const [allowance, assets, jobs, campaigns] = [
-        await loadAllowance(sql, organizationId, deps.env, deps.now?.() ?? new Date()),
+      const now = deps.now?.() ?? new Date();
+      const [allowance, storageSummary, assets, jobs, campaigns] = [
+        await loadAllowance(sql, organizationId, deps.env, now),
+        await loadOrganizationStorageSummary(sql, organizationId, now),
         await assetsOf(sql, organizationId),
         await jobsOfStudioState(sql, organizationId),
         await campaignsOf(sql, organizationId),
@@ -105,6 +108,7 @@ export async function loadStudioState(deps: StudioDeps, viewer: Viewer, organiza
         ok: true as const,
         canCreate: seat.canCreate,
         allowance: allowanceView(allowance),
+        storage: toStudioStorageQuotaView(storageSummary),
         assets: assets.map((a) => assetView(a, deps.media)),
         jobs: await viewsOf(sql, jobs, deps.media),
         campaigns,

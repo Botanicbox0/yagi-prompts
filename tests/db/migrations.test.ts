@@ -67,6 +67,9 @@ describe('migrations apply on a fresh database (PLAN §6)', () => {
       'brand_room_share_visits',
       'brand_room_shares',
       'brand_shortlist_candidates',
+      // 2026-11-11 — per-organization storage quotas and audit log (docs/BRAND-STORAGE-QUOTAS-F.md).
+      'brand_storage_quota_events',
+      'brand_storage_quotas',
       // 2026-11-10 — brand studio v2 (docs/BRAND-STUDIO-V2.md §6).
       'brand_storyboard_frames',
       'brand_storyboards',

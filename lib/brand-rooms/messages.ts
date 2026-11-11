@@ -20,8 +20,14 @@ import type { SqlRunner } from '@/lib/db/sql-runner';
 import { STAGING_BUCKET, type StorageDriver } from '@/lib/storage';
 import { featureDenied, isSandboxedClientOrganization } from '@/lib/brands/features';
 import { loadFeaturePolicies } from '@/lib/brands/entitlements';
+import {
+  adjustOrganizationStorageBytes,
+  checkStorageQuotaForUpload,
+  reconcileOrganizationStorage,
+} from '@/lib/brands/storage-quota';
 import { imageInfo, sniffMime, videoInfo } from '@/lib/brand-studio/files';
 import { isStudioMediaKey, type StudioMediaStore } from '@/lib/brand-studio/media-store';
+import { dropUnreferencedStudioKeys } from '@/lib/brand-studio/physical-cleanup';
 import type { RoomAlertItem, RoomSummary } from '@/components/brand-rooms/seams';
 import { requireRoomProject, RoomDenied, roomSeat, type RoomSeat } from './access';
 import type { RoomEventKind, RoomRef } from './events';
@@ -770,6 +776,10 @@ async function insertMessage(sql: SqlRunner, media: StudioMediaStore, reader: Re
     )
   ).rows[0]!.id;
   if (parentId) await sql.query('update brand_room_messages set updated_at = now() where id = $1', [parentId]);
+  if (attachments.length > 0) {
+    const totalBytes = attachments.reduce((sum, a) => sum + a.size, 0);
+    await adjustOrganizationStorageBytes(sql, reader.organizationId, totalBytes);
+  }
   return { message: await oneView(sql, media, reader, String(id)), created: true };
 }
 
@@ -786,16 +796,19 @@ async function editMessage(sql: SqlRunner, media: StudioMediaStore, reader: Read
   return oneView(sql, media, reader, String(row.id));
 }
 
-async function deleteMessage(sql: SqlRunner, reader: Reader, messageId: string, anyAuthor: boolean): Promise<void> {
+async function deleteMessage(sql: SqlRunner, reader: Reader, messageId: string, anyAuthor: boolean): Promise<{ messageId: string; keys: string[] }> {
   const row = await messageRow(sql, reader, messageId, true);
   if (!row) throw new MessageDenied('not_found');
-  if (row.deleted_at) return;
+  if (row.deleted_at) return { messageId: String(row.id), keys: [] };
   if (!anyAuthor && (row.kind !== 'text' || String(row.author_id) !== reader.viewerId)) throw new MessageDenied('forbidden');
+  const keys = storedAttachments(row.attachments).map((a) => a.key);
   await sql.query('update brand_room_messages set deleted_at = now(), deleted_by = $2, pinned_at = null, pinned_by = null, updated_at = now() where id = $1', [
     row.id,
     reader.viewerId,
   ]);
   if (row.parent_id) await sql.query('update brand_room_messages set updated_at = now() where id = $1', [row.parent_id]);
+  if (keys.length > 0) await reconcileOrganizationStorage(sql, reader.organizationId);
+  return { messageId: String(row.id), keys };
 }
 
 async function pinMessage(sql: SqlRunner, media: StudioMediaStore, reader: Reader, messageId: string, pinned: boolean): Promise<RoomMessage> {
@@ -898,12 +911,14 @@ export function roomFileVerdict(bytes: Uint8Array, declared: string): { ok: true
   }
 }
 
-async function reserveUpload(deps: RoomMessageDeps, reader: Reader, raw: unknown): Promise<RoomUploadReserved> {
+async function reserveUpload(sql: SqlRunner, deps: RoomMessageDeps, reader: Reader, raw: unknown): Promise<RoomUploadReserved> {
   const parsed = AttachmentReserveSchema.safeParse(raw);
   if (!parsed.success) throw new MessageDenied('invalid');
   if (!reader.canTalk) throw new MessageDenied('forbidden');
   if (parsed.data.size > ROOM_LIMITS.attachmentBytesMax) throw new MessageDenied('file_too_large');
   if (!deps.staging) throw new MessageDenied('provider_unavailable');
+  const quota = await checkStorageQuotaForUpload(sql, reader.organizationId, parsed.data.size);
+  if (!quota.allowed) throw new MessageDenied('storage_quota_exceeded');
   const stagingKey = stagingKeyFor(reader.organizationId, reader.viewerId);
   const url = await deps.staging.signedUploadUrl(stagingKey, parsed.data.mime);
   if (url) return { ok: true, stagingKey, url, direct: true };
@@ -917,7 +932,7 @@ async function reserveUpload(deps: RoomMessageDeps, reader: Reader, raw: unknown
   return { ok: true, stagingKey, url: `${ROOM_LOCAL_UPLOAD_ROUTE}?${params.toString()}`, direct: false };
 }
 
-async function completeUpload(deps: RoomMessageDeps, reader: Reader, raw: unknown): Promise<RoomAttachmentDone> {
+async function completeUpload(sql: SqlRunner, deps: RoomMessageDeps, reader: Reader, raw: unknown): Promise<RoomAttachmentDone> {
   const parsed = AttachmentCompleteSchema.safeParse(raw);
   if (!parsed.success) throw new MessageDenied('invalid');
   if (!reader.canTalk) throw new MessageDenied('forbidden');
@@ -932,6 +947,8 @@ async function completeUpload(deps: RoomMessageDeps, reader: Reader, raw: unknow
   if (bytes.byteLength !== parsed.data.size) throw new MessageDenied(bytes.byteLength > ROOM_LIMITS.attachmentBytesMax ? 'file_too_large' : 'invalid');
   const verdict = roomFileVerdict(bytes, parsed.data.mime);
   if (!verdict.ok) throw new MessageDenied(verdict.code);
+  const quota = await checkStorageQuotaForUpload(sql, reader.organizationId, bytes.byteLength);
+  if (!quota.allowed) throw new MessageDenied('storage_quota_exceeded');
   let width: number | null = null;
   let height: number | null = null;
   const kind = attachmentKindOf(verdict.mime);
@@ -1018,6 +1035,7 @@ export async function runRoomOperation(deps: RoomMessageDeps, viewer: Viewer, op
   if (channelId !== GENERAL_CHANNEL && !UUID.test(channelId)) return quiet(failure('invalid'));
 
   let notice: RoomNotice | null = null;
+  let deletedAttachmentInfo: { messageId: string; keys: string[] } | null = null;
   const result = await guard<RoomOperationResult>(() =>
     deps.sql.transaction(async (sql) => {
       const seat = await roomSeat(sql, viewer.userId, organizationId);
@@ -1033,7 +1051,7 @@ export async function runRoomOperation(deps: RoomMessageDeps, viewer: Viewer, op
         case 'message.delete': {
           const parsed = MessageRefSchema.safeParse(input);
           if (!parsed.success) throw new MessageDenied('invalid');
-          await deleteMessage(sql, reader, parsed.data.messageId, false);
+          deletedAttachmentInfo = await deleteMessage(sql, reader, parsed.data.messageId, false);
           return { ok: true as const } satisfies RoomDone;
         }
         case 'message.pin': {
@@ -1049,12 +1067,16 @@ export async function runRoomOperation(deps: RoomMessageDeps, viewer: Viewer, op
           return markRead(sql, reader, parsed.data.at);
         }
         case 'attachment.reserve':
-          return reserveUpload(deps, reader, input);
+          return reserveUpload(sql, deps, reader, input);
         case 'attachment.complete':
-          return completeUpload(deps, reader, input);
+          return completeUpload(sql, deps, reader, input);
       }
     }),
   );
+  const dropped = deletedAttachmentInfo as { messageId: string; keys: string[] } | null;
+  if (result.ok && dropped && dropped.keys.length > 0) {
+    await dropUnreferencedStudioKeys(deps.sql, deps.media, dropped.keys, { messageId: dropped.messageId });
+  }
   return { result, notice: result.ok ? notice : null };
 }
 
@@ -1449,13 +1471,19 @@ export async function staffPinMessage(
 
 /** Take down any line, the team's own or a brand's (`brand_rooms.message.delete`). `deleted_by` is the audit. */
 export async function staffDeleteMessage(deps: RoomMessageDeps, viewer: Viewer, input: { organizationId: string; projectId: string; messageId: string }): Promise<RoomDone | RoomFailure> {
-  return guard(() =>
+  let deletedAttachmentInfo: { messageId: string; keys: string[] } | null = null;
+  const result = await guard(() =>
     deps.sql.transaction(async (sql) => {
       const reader = await staffReader(sql, viewer, input.organizationId, input.projectId);
-      await deleteMessage(sql, reader, input.messageId, true);
+      deletedAttachmentInfo = await deleteMessage(sql, reader, input.messageId, true);
       return { ok: true as const };
     }),
   );
+  const dropped = deletedAttachmentInfo as { messageId: string; keys: string[] } | null;
+  if (result.ok && dropped && dropped.keys.length > 0) {
+    await dropUnreferencedStudioKeys(deps.sql, deps.media, dropped.keys, { messageId: dropped.messageId });
+  }
+  return result;
 }
 
 /** The team has read a channel up to `at` (`brand_rooms.channel.read`): team unread counts start after it. */

@@ -1947,6 +1947,7 @@ export const en = {
       allowance_exhausted: 'This run would go over this month’s limit.',
       too_many_running: 'Too many runs are open. Try again when one finishes.',
       asset_limit: 'Your assets are full. Delete assets you no longer use.',
+      storage_quota_exceeded: 'Your organization storage is full. Viewing and downloads stay open — delete unused files to upload new ones right away.',
       unsupported_file: 'This file type cannot be uploaded.',
       file_too_large: 'This file is too large.',
       reference_missing: 'A reference is missing or was deleted. Add it again.',

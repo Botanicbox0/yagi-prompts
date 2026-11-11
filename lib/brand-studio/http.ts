@@ -33,6 +33,7 @@ export function studioStatus(code: StudioErrorCode): number {
     case 'allowance_closed':
     case 'allowance_exhausted':
     case 'asset_limit':
+    case 'storage_quota_exceeded':
       return 409;
     case 'file_too_large':
       return 413;

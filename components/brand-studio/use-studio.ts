@@ -108,13 +108,22 @@ export function useStudio({ organizationId, initialState, api: injected }: { org
     [api, organizationId],
   );
 
+  const refreshSilently = useCallback(() => {
+    void api.loadState().then((fresh) => {
+      if (!isFailure(fresh)) dispatch({ type: "loaded", state: fresh });
+    });
+  }, [api]);
+
   const deleteAsset = useCallback(
     async (assetId: string) => {
       const result = await api.call("asset.delete", { organizationId, assetId });
-      if (!isFailure(result)) dispatch({ type: "assetRemoved", id: assetId });
+      if (!isFailure(result)) {
+        dispatch({ type: "assetRemoved", id: assetId });
+        refreshSilently();
+      }
       return result;
     },
-    [api, organizationId],
+    [api, organizationId, refreshSilently],
   );
 
   const handoff = useCallback((input: StudioOps["handoff.campaign"][0]) => api.call("handoff.campaign", input), [api]);
@@ -136,10 +145,13 @@ export function useStudio({ organizationId, initialState, api: injected }: { org
   const deleteOutput = useCallback(
     async (outputId: string) => {
       const result = await api.call("output.delete", { organizationId, outputId });
-      if (!isFailure(result)) dispatch({ type: "outputRemoved", outputId });
+      if (!isFailure(result)) {
+        dispatch({ type: "outputRemoved", outputId });
+        refreshSilently();
+      }
       return result;
     },
-    [api, organizationId],
+    [api, organizationId, refreshSilently],
   );
 
   // A reference video is read once per asset; a failed reading is simply no reading.
@@ -164,13 +176,16 @@ export function useStudio({ organizationId, initialState, api: injected }: { org
       setUploads((current) => [...current, { id, name: file.name }]);
       try {
         const result = await api.upload(file, { requestId: id, measure: measureInBrowser });
-        if (!isFailure(result)) dispatch({ type: "assetUpserted", asset: result.asset });
+        if (!isFailure(result)) {
+          dispatch({ type: "assetUpserted", asset: result.asset });
+          refreshSilently();
+        }
         return result;
       } finally {
         setUploads((current) => current.filter((u) => u.id !== id));
       }
     },
-    [api],
+    [api, refreshSilently],
   );
 
   return { store, load, createJob, cancelJob, saveOutput, deleteOutput, updateAsset, deleteAsset, handoff, enhancePrompt, films, analyzeFilm, uploads, upload };

@@ -17,6 +17,7 @@ import type { Viewer } from '@/lib/auth/identity';
 import type { SqlRunner } from '@/lib/db/sql-runner';
 import { featureDenied, isSandboxedClientOrganization } from '@/lib/brands/features';
 import { loadFeaturePolicies } from '@/lib/brands/entitlements';
+import { adjustOrganizationStorageBytes } from '@/lib/brands/storage-quota';
 import { RoomDenied, requireEdit, requireRoomProject, roomSeat, type RoomSeat } from '@/lib/brand-rooms/access';
 import { postRoomEvent, type RoomEventInput } from '@/lib/brand-rooms/events';
 import { brandRoomsOpen } from '@/lib/flags';
@@ -1239,6 +1240,7 @@ export async function staffDeliver(
             [input.organizationId, f.kind, (f.name.trim() || title).slice(0, 80), f.mime, f.sizeBytes, f.width, f.height, f.durationMs, f.key, f.thumbKey, f.sha256, userId],
           )
         ).rows[0]!.id;
+        await adjustOrganizationStorageBytes(sql, input.organizationId, f.sizeBytes);
       }
       const result = input.stackReviewId
         ? await postVersion(

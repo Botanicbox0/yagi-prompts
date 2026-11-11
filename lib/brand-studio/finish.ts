@@ -4,6 +4,7 @@
  * in the media store, and settle the usage at the real cost. Each output is stored once: a retry only
  * touches outputs still `pending`.
  */
+import { adjustOrganizationStorageBytes } from '@/lib/brands/storage-quota';
 import type { StudioErrorCode } from './contracts';
 import { kindOfMime, imageInfo, sha256Hex, sniffMime, thumbnailWebp, videoInfo } from './files';
 import { dropWorkingFiles, failPendingOutputs, saveJob } from './job-store';
@@ -92,6 +93,7 @@ async function storeOne(deps: StudioDeps, job: JobRow, output: OutputRow, result
       )
     ).rows[0];
     if (!stored) throw new Error('output no longer pending');
+    await adjustOrganizationStorageBytes(deps.sql, job.organization_id, bytes.byteLength);
     return storedPatch;
   } catch (error) {
     for (const key of keys) await deps.media.delete(key).catch(() => undefined);

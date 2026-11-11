@@ -5,14 +5,18 @@ import { brandScope } from "@/components/brand-workspace/scope";
 import { BrandUnavailable } from "@/components/brand-workspace/brand-unavailable";
 import { LogoControl } from "@/components/brand-workspace/logo-control";
 import { BrandAvatar } from "@/components/brand-workspace/brand-avatar";
-import { scopedHref } from "@/lib/brands/workspace/selection";
+import { scopedHref, sectionVisibility } from "@/lib/brands/workspace/selection";
 import { StaffNotice, adminOrganizationHref } from "@/components/brand-workspace/staff-notice";
+import { StorageMeterCard } from "@/components/brand-studio/storage-meter";
+import { studioV2Visible } from "@/lib/brand-studio/visibility";
+import { loadOrganizationStorageSummary, toStudioStorageQuotaView } from "@/lib/brands/storage-quota";
+import { brandStudioV2Open } from "@/lib/flags";
 export default async function BrandSettings({
   searchParams,
 }: {
   searchParams: Promise<{ organizationId?: string | string[] }>;
 }) {
-  const [{ organizationId }, { sql, viewer, verifiedEmail, brandHost, b, locale }] = await Promise.all([
+  const [{ organizationId }, { sql, viewer, verifiedEmail, brandHost, b, dict, locale }] = await Promise.all([
     searchParams,
     brandContext(),
   ]);
@@ -23,7 +27,11 @@ export default async function BrandSettings({
   // The TWINGS team reads them here; edits stay with owners and the admin console.
   const org = choice && choice.role !== "guest" ? await loadBrandSettings({ sql, verifiedEmail }, viewer, choice.id) : null,
     c = b.managed,
-    showIdentityBridge = false;
+    showIdentityBridge = false,
+    showStorageMeter = Boolean(org && choice && sectionVisibility(choice).studio && brandStudioV2Open() && studioV2Visible(choice, true)),
+    storageSummary = showStorageMeter && org
+      ? await loadOrganizationStorageSummary(sql, org.id).catch(() => null)
+      : null;
   return (
     <div data-brand-settings>
       <div className="bw-heading">
@@ -136,6 +144,16 @@ export default async function BrandSettings({
                 </div>
               )}
             </section>
+            {storageSummary && (
+              <div style={{ marginTop: 16 }}>
+                <StorageMeterCard
+                  storage={toStudioStorageQuotaView(storageSummary)}
+                  copy={dict.studioLibrary.storage}
+                  locale={locale === "en" ? "en" : "ko"}
+                  assetsHref={scopedHref("/brand/library", choice)}
+                />
+              </div>
+            )}
           </aside>
         </div>
       )}

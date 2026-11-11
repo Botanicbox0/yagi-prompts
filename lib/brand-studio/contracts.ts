@@ -8,7 +8,10 @@
  * Client-safe: zod and types only (no env, no db).
  */
 import { z } from 'zod';
+import type { StudioStorageQuotaView } from '@/lib/brands/storage-quota-format';
 import { STUDIO_IMAGE_QUALITIES, type StudioImageQuality } from './models';
+
+export type { StudioStorageQuotaView };
 
 /* ---------------------------------------------------------------- vocab */
 
@@ -91,6 +94,7 @@ export const STUDIO_ERROR_CODES = [
   'allowance_exhausted',
   'too_many_running',
   'asset_limit',
+  'storage_quota_exceeded',
   'unsupported_file',
   'file_too_large',
   'reference_missing',
@@ -477,6 +481,7 @@ export interface StudioState {
   /** False for viewers and guests: they see the board and the library, and cannot run or upload. */
   canCreate: boolean;
   allowance: StudioAllowanceView;
+  storage?: StudioStorageQuotaView;
   assets: StudioAssetView[];
   /** Newest first. */
   jobs: StudioJobView[];

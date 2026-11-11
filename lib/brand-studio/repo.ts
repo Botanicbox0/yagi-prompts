@@ -11,6 +11,7 @@ import type {
   StudioReference,
 } from './contracts';
 import type { StudioMediaStore } from './media-store';
+import { isStudioMediaKeyReferenced } from './physical-cleanup';
 import type { AssetRow, JobRow, OutputRow } from './types';
 
 const iso = (v: Date | string | null | undefined): string | null => (v == null ? null : v instanceof Date ? v.toISOString() : new Date(String(v)).toISOString());
@@ -245,16 +246,7 @@ export async function openJobCount(sql: SqlRunner, organizationId: string): Prom
   );
 }
 
-/** True when a live asset or output other than the one being deleted still points at `key`. */
+/** True when a live asset, output, storyboard cut, or room message other than the one being deleted still points at `key`. */
 export async function keyStillUsed(sql: SqlRunner, key: string, except: { assetId?: string; outputId?: string }): Promise<boolean> {
-  const row = (
-    await sql.query(
-      `select 1 from brand_studio_assets where deleted_at is null and (storage_key = $1 or thumb_key = $1) and id <> coalesce($2::uuid, '00000000-0000-0000-0000-000000000000'::uuid)
-       union all
-       select 1 from brand_studio_outputs where deleted_at is null and (storage_key = $1 or thumb_key = $1) and id <> coalesce($3::uuid, '00000000-0000-0000-0000-000000000000'::uuid)
-       limit 1`,
-      [key, except.assetId ?? null, except.outputId ?? null],
-    )
-  ).rows[0];
-  return Boolean(row);
+  return isStudioMediaKeyReferenced(sql, key, except);
 }
