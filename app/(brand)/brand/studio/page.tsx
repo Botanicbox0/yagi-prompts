@@ -1,3 +1,4 @@
+import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import { StudioInquiry } from "@/components/brand-workspace/studio-inquiry";
 import { ServiceGuide } from "@/components/brand-workspace/service-guide";
@@ -32,6 +33,19 @@ import { getDictionary } from "@/lib/i18n/dictionaries";
 
 /** Template requests are support messages headed in the sender's language; either heading counts. */
 const REQUEST_TITLES = [getDictionary("ko"), getDictionary("en")].map((d) => d.brandWorkspace.studioInquiry.messageTitle);
+
+export async function generateMetadata({
+  searchParams,
+}: {
+  searchParams: Promise<{ organizationId?: string | string[] }>;
+}): Promise<Metadata> {
+  if (!brandStudioV2Open()) return {};
+  const [{ organizationId }, { sql, viewer, verifiedEmail, dict }] = await Promise.all([searchParams, brandContext()]);
+  if (!sql) return {};
+  const { choice } = await brandScope({ sql, verifiedEmail }, viewer, organizationId);
+  if (!choice || !studioV2Visible(choice, true)) return {};
+  return { title: dict.brandStudio.title };
+}
 
 export default async function BrandStudio({
   searchParams,
@@ -150,11 +164,7 @@ export default async function BrandStudio({
               identityWorkspace?.identity?.status === "confirmed",
           )}
           defaultChecklist={activeIdentity?.productChecklist}
-          identityHref={
-            choice && sectionVisibility(choice).identity
-              ? scopedHref("/brand/identity", choice)
-              : undefined
-          }
+          identityHref={undefined}
           initialProjectId={initialProjectId}
           initialTrack={initialTrack}
           initialScenario={initialScenario}

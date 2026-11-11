@@ -12,6 +12,8 @@ import { parseReviewTime } from "@/lib/brand-studio/review-contracts";
  */
 export const dynamic = "force-dynamic";
 
+const STUDIO_REVIEW_PAGE_OPEN = false;
+
 export default async function StudioReviewPage({
   searchParams,
 }: {
@@ -19,6 +21,7 @@ export default async function StudioReviewPage({
 }) {
   const params = await searchParams;
   const ctx = await studioRouteContext(params.organizationId);
+  if (!STUDIO_REVIEW_PAGE_OPEN) notFound();
   const deps = { sql: ctx.deps.sql, media: createStudioMediaStore() };
   const organizationId = ctx.choice.id;
   const list = await loadReviewList(deps, ctx.viewer, organizationId);

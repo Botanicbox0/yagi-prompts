@@ -1,7 +1,11 @@
+import type { Metadata } from "next";
+import { brandContext } from "@/components/brand-workspace/context";
+import { brandScope } from "@/components/brand-workspace/scope";
 import { Explainer, type ExplainerAction } from "@/components/brand-studio/explainer";
 import { studioRouteContext } from "@/components/brand-studio/route-context";
 import { STUDIO_OPEN_REVERSE } from "@/components/brand-studio/seams";
 import { StudioApp } from "@/components/brand-studio/studio-app";
+import { studioV2Visible } from "@/lib/brand-studio/visibility";
 import { VIDEO_INTRO_KEY } from "@/components/brand-studio/video/anchors";
 import { CampaignPath } from "@/components/brand-studio/video/campaign-path";
 import { hasProductionContracts } from "@/components/brand-studio/video/contracts-link";
@@ -11,6 +15,7 @@ import { fillText, reverseModel } from "@/components/brand-studio/video/reverse-
 import { VideoStarts } from "@/components/brand-studio/video/starts";
 import s from "@/components/brand-studio/video/video.module.css";
 import { scopedHref } from "@/lib/brands/workspace/selection";
+import { brandStudioV2Open } from "@/lib/flags";
 
 /**
  * `/brand/studio/video` — the video screen (docs/BRAND-STUDIO-V3.md §6), in two views.
@@ -27,6 +32,19 @@ export const dynamic = "force-dynamic";
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const first = (value: string | string[] | undefined) => (Array.isArray(value) ? value[0] : value);
+
+export async function generateMetadata({
+  searchParams,
+}: {
+  searchParams: Promise<{ organizationId?: string | string[] }>;
+}): Promise<Metadata> {
+  if (!brandStudioV2Open()) return {};
+  const [{ organizationId }, { sql, viewer, verifiedEmail, dict }] = await Promise.all([searchParams, brandContext()]);
+  if (!sql) return {};
+  const { choice } = await brandScope({ sql, verifiedEmail }, viewer, organizationId);
+  if (!choice || !studioV2Visible(choice, true)) return {};
+  return { title: dict.studioVideo.title };
+}
 
 export default async function StudioVideoPage({
   searchParams,

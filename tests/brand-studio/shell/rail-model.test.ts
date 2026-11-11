@@ -19,8 +19,8 @@ import {
 
 /** docs/BRAND-STUDIO-V3.md §3 — the rail's rules, without React. */
 describe('rail items', () => {
-  it('lists 이미지 · 영상 · 리뷰 · 캠페인 · 크리에이터 · 에셋 · 브랜드 키트 in that order', () => {
-    expect(railItems({ studio: true, creators: true, identity: true })).toEqual(['image', 'video', 'review', 'campaigns', 'creators', 'assets', 'brandKit']);
+  it('lists 이미지 스튜디오 · 비디오 스튜디오 · 캠페인 · 크리에이터 · 에셋 in that order (리뷰 and 브랜드 키트 hidden)', () => {
+    expect(railItems({ studio: true, creators: true, identity: true })).toEqual(['image', 'video', 'campaigns', 'creators', 'assets']);
     expect(RAIL_HREF).toMatchObject({
       image: '/brand/studio',
       video: '/brand/studio/video',
@@ -32,9 +32,9 @@ describe('rail items', () => {
     });
   });
 
-  it('shows the three studio items only while the studio is visible, creators only while the pool is', () => {
+  it('shows the two studio items only while the studio is visible, creators only while the pool is', () => {
     expect(railItems({ studio: false, creators: false, identity: false })).toEqual(['campaigns', 'assets']);
-    expect(railItems({ studio: false, creators: true, identity: true })).toEqual(['campaigns', 'creators', 'assets', 'brandKit']);
+    expect(railItems({ studio: false, creators: true, identity: true })).toEqual(['campaigns', 'creators', 'assets']);
   });
 });
 
@@ -66,19 +66,19 @@ describe('order', () => {
   const all = railItems({ studio: true, creators: true, identity: true });
 
   it('applies the saved order and seats unknown items beside their default neighbour', () => {
-    expect(orderItems(all, ['/brand', '/brand/studio/video'])).toEqual(['image', 'campaigns', 'creators', 'assets', 'brandKit', 'video', 'review']);
-    // An order saved before video and review existed: they appear next to image, not at the end.
-    expect(orderItems(all, ['/brand/studio', '/brand', '/brand/library', '/brand/identity'])).toEqual(['image', 'video', 'review', 'campaigns', 'creators', 'assets', 'brandKit']);
-    // The topbar's older order (no video or review) still applies to what it knows.
-    expect(orderItems(all, ['/brand/identity', '/brand/library', '/brand/studio'])).toEqual(['brandKit', 'assets', 'image', 'video', 'review', 'campaigns', 'creators']);
+    expect(orderItems(all, ['/brand', '/brand/studio/video'])).toEqual(['image', 'campaigns', 'creators', 'assets', 'video']);
+    // An order saved before video existed: it appears next to image, not at the end.
+    expect(orderItems(all, ['/brand/studio', '/brand', '/brand/library'])).toEqual(['image', 'video', 'campaigns', 'creators', 'assets']);
+    // The topbar's older order (no video) still applies to what it knows.
+    expect(orderItems(all, ['/brand/library', '/brand/studio'])).toEqual(['assets', 'image', 'video', 'campaigns', 'creators']);
     expect(orderItems(all, [])).toEqual(all);
   });
 
   it('moves one place and stops at the ends; drops onto a target', () => {
     expect(moveItem(all, 'video', -1).slice(0, 2)).toEqual(['video', 'image']);
     expect(moveItem(all, 'image', -1)).toEqual(all);
-    expect(moveItem(all, 'brandKit', 1)).toEqual(all);
-    expect(dropItem(all, 'brandKit', 'image').slice(0, 2)).toEqual(['brandKit', 'image']);
+    expect(moveItem(all, 'assets', 1)).toEqual(all);
+    expect(dropItem(all, 'assets', 'image').slice(0, 2)).toEqual(['assets', 'image']);
     expect(dropItem(all, 'image', 'image')).toEqual(all);
   });
 

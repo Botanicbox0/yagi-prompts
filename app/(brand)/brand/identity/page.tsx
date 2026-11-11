@@ -33,6 +33,8 @@ const COLOUR_KEYS = [
   ["accent", "colourAccent"],
 ] as const;
 
+const BRAND_IDENTITY_PAGE_OPEN = false;
+
 export default async function BrandIdentityPage({
   searchParams,
 }: {
@@ -40,6 +42,7 @@ export default async function BrandIdentityPage({
 }) {
   const [{ organizationId }, { sql, viewer, verifiedEmail, brandHost, b, locale }] =
     await Promise.all([searchParams, brandContext()]);
+  if (!BRAND_IDENTITY_PAGE_OPEN) notFound();
   if (!sql) return <p role="alert">{b.unavailable}</p>;
 
   const { selection, choice } = await brandScope(

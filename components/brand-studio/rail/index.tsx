@@ -407,6 +407,16 @@ export function LibraryRail(props: LibraryRailProps & { copy: Dictionary["studio
               </ul>
             )}
           </div>
+          <div className="bsr-foot">
+            <a
+              className="bsr-all-link"
+              href={`/brand/library?organizationId=${encodeURIComponent(props.organizationId)}`}
+              data-library-all-link
+            >
+              <span>{copy.allAssets}</span>
+              <span aria-hidden="true">→</span>
+            </a>
+          </div>
         </>
       )}
     </aside>

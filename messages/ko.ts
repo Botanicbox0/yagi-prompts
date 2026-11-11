@@ -1619,7 +1619,7 @@ export const ko: Dictionary = {
   },
   /** 브랜드 스튜디오 v2 (docs/BRAND-STUDIO-V2.md §5). 확정 문구 아님: 워딩 패스가 뒤따른다. */
   brandStudio: {
-    title: '이미지',
+    title: '이미지 스튜디오',
     doors: {
       label: '무엇을 할까요?',
       create: { title: '만들기', line: '브랜드에 쓸 이미지와 영상을 직접 만들어요.' },
@@ -1660,7 +1660,7 @@ export const ko: Dictionary = {
       folder: '폴더에 담기',
       reference: '참조로 쓰기',
       more: '더보기',
-      library: '보관함',
+      library: '에셋',
       menu: {
         open: '열기',
         rerun: '다시 만들기',
@@ -1742,7 +1742,7 @@ export const ko: Dictionary = {
       undoEnhance: '원래 문장으로',
       enhanceFailed: '지금은 문장을 다듬지 못했어요. 그대로 만들어도 돼요.',
       addRef: '참조 넣기',
-      videoNotHere: '영상은 영상 화면에서 쓸 수 있어요. 여기서는 사진만 참조로 넣어요.',
+      videoNotHere: '영상은 비디오 스튜디오에서 쓸 수 있어요. 이미지 스튜디오에서는 사진만 참조로 넣어요.',
       submit: '만들기',
       submitLabel: '만들기, {cost} 사용',
       submitting: '보내는 중',
@@ -1930,7 +1930,7 @@ export const ko: Dictionary = {
     },
     formats: {
       title: '계약한 전용 템플릿',
-      back: '이미지 화면으로',
+      back: '이미지 스튜디오로',
       lead: '포맷은 크리에이터가 따라 찍는 영상 틀이에요. 내 영상으로 시작하거나, 브랜드 전용 포맷을 맡길 수 있어요.',
       fromVideo: { title: '내 영상으로 포맷 만들기', line: '참고 영상을 넣고 바꿀 것만 말하면 돼요.', action: '시작하기' },
       commission: { title: '전용 포맷 의뢰', line: '브랜드에 맞춘 포맷을 저희가 만들어 드려요.', action: '의뢰하기' },
@@ -1955,7 +1955,7 @@ export const ko: Dictionary = {
       allowance_closed: '아직 사용 한도가 정해지지 않았어요.',
       allowance_exhausted: '이번 달 한도를 넘어서 만들 수 없어요.',
       too_many_running: '진행 중인 작업이 많아요. 하나가 끝나면 다시 해 주세요.',
-      asset_limit: '에셋 보관함이 가득 찼어요. 안 쓰는 에셋을 지워 주세요.',
+      asset_limit: '에셋 한도가 가득 찼어요. 안 쓰는 에셋을 지워 주세요.',
       unsupported_file: '올릴 수 없는 파일 형식이에요.',
       file_too_large: '파일이 너무 커요.',
       reference_missing: '참조 중 하나를 찾을 수 없어요. 다시 넣어 주세요.',

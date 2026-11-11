@@ -119,6 +119,12 @@ function useTabBarHeight() {
   }, []);
 }
 
+/** `/brand/studio?organizationId=…&ref=a:<id>`: the image screen with a picture attached to its references. */
+export function imageScreenRefHref(organizationId: string, source: RefSource): string {
+  const params = new URLSearchParams({ organizationId, ref: "assetId" in source ? `a:${source.assetId}` : `o:${source.outputId}` });
+  return `/brand/studio?${params.toString()}`;
+}
+
 /** `/brand/studio/video?organizationId=…&from=o:<id>`: the video screen with a picture as its opening frame. */
 export function videoScreenHref(organizationId: string, source: RefSource): string {
   const params = new URLSearchParams({ organizationId, from: "assetId" in source ? `a:${source.assetId}` : `o:${source.outputId}` });
@@ -338,6 +344,23 @@ export function StudioApp({ organizationId, locale, copy, mode, libraryCopy, lay
       dock.setTray((current) => withStartFrame(current, tile));
     }
     url.searchParams.delete("from");
+    window.history.replaceState(window.history.state, "", `${url.pathname}${url.search}${url.hash}`);
+  }, [dock, mode, sourceItem, state]);
+
+  // Opened from unified Assets (`/brand/library`) with `?ref=a:<id>|o:<id>`: attach into prompt references.
+  const refDone = useRef(false);
+  useEffect(() => {
+    if (refDone.current || !state) return;
+    refDone.current = true;
+    const url = new URL(window.location.href);
+    const source = parseFrom(url.searchParams.get("ref"));
+    if (!source) return;
+    const tile = sourceItem(source);
+    if (tile && (mode === "video" || tile.kind === "image")) {
+      dock.attach(tile);
+      focusPrompt();
+    }
+    url.searchParams.delete("ref");
     window.history.replaceState(window.history.state, "", `${url.pathname}${url.search}${url.hash}`);
   }, [dock, mode, sourceItem, state]);
 

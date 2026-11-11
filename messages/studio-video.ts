@@ -7,8 +7,8 @@
  * Amounts are credits only. No engine, lane or supplier names, no client names.
  */
 export const studioVideoEn = {
-  title: 'Video',
-  views: { label: 'Video screens', make: 'Make', request: 'Ask our team' },
+  title: 'Video studio',
+  views: { label: 'Video studio screens', make: 'Make', request: 'Ask our team' },
   intro: {
     title: 'Remake a scene from one reference video',
     line: 'We read the video into a shot table and remake it with your product and people from that blueprint. A finished video can become the format of a campaign on twings.app.',
@@ -16,7 +16,7 @@ export const studioVideoEn = {
     request: 'Ask our team',
     stepsTitle: 'How it works',
     steps: [
-      { title: 'Add a reference', line: 'Upload a video you want to follow, or pick one from your library. Clips of {min} to {max} seconds work best.' },
+      { title: 'Add a reference', line: 'Upload a video you want to follow, or pick one from your assets. Clips of {min} to {max} seconds work best.' },
       { title: 'Check the shot table', line: 'We read every cut: framing, camera and action. Fix any cell that is wrong.' },
       { title: 'Choose what changes', line: 'Swap in your product, people and place, and keep the camera and timing.' },
       { title: 'See a draft, then finish', line: 'A 480p draft comes first. If you like it, finish it at 1080p.' },
@@ -33,8 +33,8 @@ export const studioVideoEn = {
   reverse: {
     title: 'Start from a reference video',
     close: 'Close',
-    loading: 'Loading your library',
-    loadFailed: "We couldn't load your library.",
+    loading: 'Loading your assets',
+    loadFailed: "We couldn't load your assets.",
     retry: 'Try again',
     sections: {
       video: 'Reference video',
@@ -47,8 +47,8 @@ export const studioVideoEn = {
       upload: 'Upload a video',
       uploading: 'Uploading…',
       hint: 'MP4 or MOV up to {mb} MB. Clips of {min} to {max} seconds work best.',
-      library: 'Videos in your library',
-      empty: 'There are no videos in your library yet.',
+      library: 'Videos in your assets',
+      empty: 'There are no videos in your assets yet.',
       choose: 'Use {name}',
       chosen: 'Selected',
       replace: 'Pick another video',
@@ -113,8 +113,8 @@ export const studioVideoEn = {
       placePlaceholder: 'e.g. a white bathroom in morning light',
       addImage: 'Add a picture for {slot}',
       upload: 'Upload a picture',
-      library: 'Pictures in your library',
-      libraryEmpty: 'There are no pictures in your library yet.',
+      library: 'Pictures in your assets',
+      libraryEmpty: 'There are no pictures in your assets yet.',
       pick: 'Use {name}',
       removeImage: 'Remove picture {n}',
       imageWord: 'image',
@@ -209,8 +209,8 @@ export const studioVideoEn = {
 };
 
 export const studioVideoKo: typeof studioVideoEn = {
-  title: '영상',
-  views: { label: '영상 화면', make: '만들기', request: '제작 의뢰' },
+  title: '비디오 스튜디오',
+  views: { label: '비디오 스튜디오 화면', make: '만들기', request: '제작 의뢰' },
   intro: {
     title: '참고 영상 하나로 같은 장면을 다시 찍어요',
     line: '영상을 읽어 샷 표로 바꾸고, 그 설계도대로 우리 제품과 인물을 넣어 새로 만들어요. 완성한 영상은 twings.app 캠페인의 포맷이 될 수 있어요.',
@@ -218,7 +218,7 @@ export const studioVideoKo: typeof studioVideoEn = {
     request: '제작 의뢰하기',
     stepsTitle: '이렇게 만들어요',
     steps: [
-      { title: '참고 영상 올리기', line: '따라 하고 싶은 영상을 올리거나 보관함에서 골라요. {min}~{max}초짜리가 잘 맞아요.' },
+      { title: '참고 영상 올리기', line: '따라 하고 싶은 영상을 올리거나 에셋에서 골라요. {min}~{max}초짜리가 잘 맞아요.' },
       { title: '샷 표 확인하기', line: '컷마다 구도, 카메라, 동작을 읽어 표로 보여 드려요. 틀린 칸은 바로 고치면 돼요.' },
       { title: '바꿀 것 고르기', line: '제품, 인물, 장소를 우리 것으로 바꾸고 카메라와 타이밍은 그대로 지켜요.' },
       { title: '시안 보고 완성하기', line: '480p 시안을 먼저 보고, 마음에 들면 1080p로 완성해요.' },
@@ -235,8 +235,8 @@ export const studioVideoKo: typeof studioVideoEn = {
   reverse: {
     title: '참고 영상으로 만들기',
     close: '닫기',
-    loading: '보관함을 불러오는 중이에요',
-    loadFailed: '보관함을 불러오지 못했어요.',
+    loading: '에셋을 불러오는 중이에요',
+    loadFailed: '에셋을 불러오지 못했어요.',
     retry: '다시 시도',
     sections: {
       video: '참고 영상',
@@ -249,8 +249,8 @@ export const studioVideoKo: typeof studioVideoEn = {
       upload: '영상 올리기',
       uploading: '올리는 중…',
       hint: 'MP4나 MOV, {mb}MB까지 올릴 수 있어요. {min}~{max}초짜리가 잘 맞아요.',
-      library: '보관함의 영상',
-      empty: '보관함에 영상이 아직 없어요.',
+      library: '에셋의 영상',
+      empty: '에셋에 영상이 아직 없어요.',
       choose: '{name} 쓰기',
       chosen: '고른 영상',
       replace: '다른 영상 고르기',
@@ -315,8 +315,8 @@ export const studioVideoKo: typeof studioVideoEn = {
       placePlaceholder: '예: 아침 햇빛이 드는 흰 욕실',
       addImage: '{slot} 이미지 붙이기',
       upload: '이미지 올리기',
-      library: '보관함의 이미지',
-      libraryEmpty: '보관함에 이미지가 아직 없어요.',
+      library: '에셋의 이미지',
+      libraryEmpty: '에셋에 이미지가 아직 없어요.',
       pick: '{name} 쓰기',
       removeImage: '{n}번 이미지 빼기',
       imageWord: '이미지',

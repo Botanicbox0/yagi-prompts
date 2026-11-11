@@ -362,13 +362,13 @@ export function RailNavigation(props: RailNavigationProps) {
     );
   };
 
-  // Phone tab bar: 이미지 · 영상 · 리뷰 · 캠페인 when they exist, filled up from the rest; the others go in 더보기.
-  // With rooms: 이미지 · 영상 · 의뢰 · 메시지 (rail-model `groupedTabIds`).
+  // Phone tab bar: 이미지 스튜디오 · 비디오 스튜디오 · 캠페인 · 에셋 when they exist, filled up from the rest; the others go in 더보기.
+  // With rooms: 이미지 스튜디오 · 비디오 스튜디오 · 의뢰 · 메시지 (rail-model `groupedTabIds`).
   const tabIds = nav
     ? groupedTabIds(items)
     : [
-        ...(['image', 'video', 'review', 'campaigns'] as RailItemId[]).filter((id) => items.includes(id)),
-        ...items.filter((id) => !['image', 'video', 'review', 'campaigns'].includes(id)),
+        ...(['image', 'video', 'campaigns', 'assets'] as RailItemId[]).filter((id) => items.includes(id)),
+        ...items.filter((id) => !['image', 'video', 'campaigns', 'assets'].includes(id)),
       ].slice(0, 4);
   const sheetIds = items.filter((id) => !tabIds.includes(id));
 

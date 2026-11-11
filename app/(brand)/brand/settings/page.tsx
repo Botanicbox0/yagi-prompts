@@ -5,7 +5,7 @@ import { brandScope } from "@/components/brand-workspace/scope";
 import { BrandUnavailable } from "@/components/brand-workspace/brand-unavailable";
 import { LogoControl } from "@/components/brand-workspace/logo-control";
 import { BrandAvatar } from "@/components/brand-workspace/brand-avatar";
-import { scopedHref, sectionVisibility } from "@/lib/brands/workspace/selection";
+import { scopedHref } from "@/lib/brands/workspace/selection";
 import { StaffNotice, adminOrganizationHref } from "@/components/brand-workspace/staff-notice";
 export default async function BrandSettings({
   searchParams,
@@ -23,7 +23,7 @@ export default async function BrandSettings({
   // The TWINGS team reads them here; edits stay with owners and the admin console.
   const org = choice && choice.role !== "guest" ? await loadBrandSettings({ sql, verifiedEmail }, viewer, choice.id) : null,
     c = b.managed,
-    showIdentityBridge = Boolean(choice && sectionVisibility(choice).identity);
+    showIdentityBridge = false;
   return (
     <div data-brand-settings>
       <div className="bw-heading">
