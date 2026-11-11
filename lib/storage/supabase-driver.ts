@@ -84,6 +84,13 @@ export function createSupabaseStorageDriver(client?: SupabaseClient): StorageDri
       }
     },
 
+    async releaseStaging(key: string) {
+      const { error } = await db().storage.from(STAGING_BUCKET).remove([key]);
+      if (error && !isMissing(error)) {
+        throw new Error(`storage releaseStaging failed: ${STAGING_BUCKET}/${key} — ${error.message}`);
+      }
+    },
+
     /**
      * `createSignedUploadUrl` — the browser PUTs the bytes straight to Supabase (2026-08-15).
      *

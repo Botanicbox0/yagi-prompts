@@ -72,7 +72,7 @@ export interface RoomMessageDeps {
   sql: SqlRunner;
   media: StudioMediaStore;
   /** Uploads only (`attachment.*`): the staging bucket the browser puts bytes in. */
-  staging?: Pick<StorageDriver, 'read' | 'putStaging' | 'signedUploadUrl' | 'servesSignedUrls'>;
+  staging?: Pick<StorageDriver, 'read' | 'putStaging' | 'signedUploadUrl' | 'servesSignedUrls' | 'releaseStaging'>;
 }
 
 /** What the team is told after a brand member writes. Internal only. */
@@ -917,6 +917,7 @@ async function completeUpload(deps: RoomMessageDeps, reader: Reader, raw: unknow
     height = info?.height ?? null;
   }
   const { key } = await deps.media.put(bytes, verdict.mime);
+  await deps.staging.releaseStaging?.(parsed.data.stagingKey).catch(() => undefined);
   return {
     ok: true,
     attachment: attachmentView({ key, name: parsed.data.name, mime: verdict.mime, size: bytes.byteLength, width, height }, deps.media),

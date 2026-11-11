@@ -592,9 +592,10 @@ async function completeFrame(deps: StoryboardDeps, sql: SqlRunner, board: BoardR
   const row = (await sql.query<FrameRow>('select * from brand_storyboard_frames where id = $1 and storyboard_id = $2 for update', [frameId, board.id])).rows[0];
   if (!row) throw new StoryboardDenied('not_found');
   if (row.status === 'ready') return row;
+  const stagedKey = row.staging_key!;
   let bytes: Uint8Array;
   try {
-    bytes = await deps.staging.read(STAGING_BUCKET, row.staging_key!);
+    bytes = await deps.staging.read(STAGING_BUCKET, stagedKey);
   } catch {
     throw new StoryboardDenied('invalid');
   }
@@ -607,6 +608,7 @@ async function completeFrame(deps: StoryboardDeps, sql: SqlRunner, board: BoardR
     )
   ).rows[0]!;
   await touch(sql, board.id);
+  await deps.staging.releaseStaging?.(stagedKey).catch(() => undefined);
   return ready;
 }
 

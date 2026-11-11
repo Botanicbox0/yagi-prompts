@@ -11,7 +11,7 @@
 | 작업 경로 | `D:\dev\twings` (Windows). **`D:\dev\twiin`은 이전 제품이며 현재 TWINGS 저장소가 아니다.** |
 | 분리 작업 | `D:\dev\.worktrees\twings\<작업명>`. 보관 작업은 그 아래 `archive/`. [작업 공간 안내](docs/WORKSPACE.md)를 먼저 확인한다. |
 | GitHub | `Botanicbox0/yagi-prompts`, 기본 브랜치 `main` |
-| 배포 | Vercel 프로젝트 `yagi-prompts`(Hobby). `main`에 push되면 곧바로 twings.app에 반영된다. 브랜치 push는 프리뷰 URL이 생긴다. |
+| 배포 | Vercel 프로젝트 `yagi-prompts`(Pro, 서울 `icn1`). `main`에 push되면 곧바로 twings.app에 반영된다. 브랜치 push는 프리뷰 URL이 생긴다. |
 | DB·스토리지 | Supabase 프로젝트 `nhokkikjkzjalxqsbzuk`. 로컬은 PGlite 스냅샷(`npm run db:local`)과 `.storage/`. |
 | 비밀값 | Vercel 환경변수와 `.env.local`에만 있다. 채팅·코드·로그·커밋에 값을 옮기지 않는다. 스크립트는 존재 여부(boolean)만 출력한다. 서버 키에 `NEXT_PUBLIC_` 접두사를 붙이지 않는다. |
 

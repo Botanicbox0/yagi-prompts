@@ -52,6 +52,10 @@ async function checkOnPublicHost(store: PublicMediaStore, key: string, bytes: Ui
   if (problem) throw new Error(`public media check failed: ${key} — ${problem}`);
 }
 
+function isEphemeralPublishStagingKey(key: string): boolean {
+  return key.startsWith('content/prompt/') || key.startsWith('content/landing/');
+}
+
 export function withPublicMediaDirect(driver: StorageDriver, store: PublicMediaStore): StorageDriver {
   return {
     ...driver,
@@ -63,7 +67,12 @@ export function withPublicMediaDirect(driver: StorageDriver, store: PublicMediaS
       if (!address) throw new Error(`public media key is not a content address: ${toKey}`);
 
       // An identical content-addressed key is already the right bytes, as on Supabase.
-      if (await store.has(toKey)) return 'exists';
+      if (await store.has(toKey)) {
+        if (isEphemeralPublishStagingKey(fromKey)) {
+          await driver.releaseStaging?.(fromKey).catch(() => undefined);
+        }
+        return 'exists';
+      }
 
       const bytes = await driver.read(STAGING_BUCKET, fromKey);
       if (bytes.length === 0) throw new Error(`public media file is empty: ${fromKey}`);
@@ -74,6 +83,9 @@ export function withPublicMediaDirect(driver: StorageDriver, store: PublicMediaS
       const mime = mimeForPublicKey(toKey);
       await store.put(toKey, bytes, { mime, cacheControl: PUBLIC_MEDIA_CACHE_CONTROL });
       await checkOnPublicHost(store, toKey, bytes, mime);
+      if (isEphemeralPublishStagingKey(fromKey)) {
+        await driver.releaseStaging?.(fromKey).catch(() => undefined);
+      }
       return 'copied';
     },
 

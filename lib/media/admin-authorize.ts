@@ -92,9 +92,10 @@ export function adminMediaPath(ref: string): string {
 export interface AdminMediaObject {
   ref: string;
   kind: BlockKind | 'hero';
-  /** Always the private staging bucket — this endpoint never serves a published copy. */
+  /** Always the private staging bucket — this endpoint never serves a published copy unless staging was released after R2 verification. */
   bucket: typeof STAGING_BUCKET;
   key: string;
+  publishedKey?: string;
   mime: string;
   filename: string | null;
   revisionId: string;
@@ -152,6 +153,7 @@ export async function authorizeAdminMedia(
         kind: 'asset',
         bucket: STAGING_BUCKET,
         key,
+        ...(asset.published_key && asset.bucket === 'public-content' ? { publishedKey: asset.published_key } : {}),
         mime: asset.mime,
         filename: null,
         revisionId: promptRef.id,

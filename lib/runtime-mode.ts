@@ -92,15 +92,38 @@ export function selectDbDriver(env: EnvLike = process.env): DbSelection {
 // storage
 // ---------------------------------------------------------------------------
 
-export type StorageDriverName = 'local' | 'supabase';
+export type StorageDriverName = 'local' | 'supabase' | 'r2';
+
+export interface PrivateStorageR2Config {
+  accountId: string;
+  accessKeyId: string;
+  secretAccessKey: string;
+  bucket: string;
+}
+
+/**
+ * Private R2 bucket configuration (`twings-private-apac`) for multi-brand attachments, staging, and rooms.
+ * Disabled in `PLAYBOOK_MODE=local` unless `STORAGE_DRIVER=r2` explicitly opts in, preserving M7 hermetic local runs.
+ */
+export function privateStorageR2Config(env: EnvLike = process.env): PrivateStorageR2Config | null {
+  const override = trimmed(env.STORAGE_DRIVER)?.toLowerCase();
+  if (override !== 'r2' && resolveRuntimeMode(env) === 'local') return null;
+  const accountId = trimmed(env.R2_ACCOUNT_ID);
+  const accessKeyId = trimmed(env.R2_PRIVATE_ACCESS_KEY_ID) ?? trimmed(env.R2_ACCESS_KEY_ID);
+  const secretAccessKey = trimmed(env.R2_PRIVATE_SECRET_ACCESS_KEY) ?? trimmed(env.R2_SECRET_ACCESS_KEY);
+  const bucket = trimmed(env.R2_PRIVATE_BUCKET);
+  if (!accountId || !accessKeyId || !secretAccessKey || !bucket) return null;
+  return { accountId, accessKeyId, secretAccessKey, bucket };
+}
 
 export function selectStorageDriver(env: EnvLike = process.env): StorageDriverName {
   const override = trimmed(env.STORAGE_DRIVER)?.toLowerCase();
-  if (override === 'local' || override === 'supabase') return override;
+  if (override === 'local' || override === 'supabase' || override === 'r2') return override;
   if (override !== undefined) {
-    warnOnce(`[mode] STORAGE_DRIVER="${override}" is not 'local' or 'supabase' — using the mode.`);
+    warnOnce(`[mode] STORAGE_DRIVER="${override}" is not 'local', 'supabase' or 'r2' — using the mode.`);
   }
-  return resolveRuntimeMode(env) === 'cloud' ? 'supabase' : 'local';
+  if (resolveRuntimeMode(env) === 'local') return 'local';
+  return privateStorageR2Config(env) !== null ? 'r2' : 'supabase';
 }
 
 /**

@@ -1,5 +1,5 @@
 import type { PublishedBucket } from '@/lib/content/schemas';
-import { publicMediaR2Config, selectStorageDriver } from '@/lib/runtime-mode';
+import { privateStorageR2Config, publicMediaR2Config, selectStorageDriver } from '@/lib/runtime-mode';
 
 /**
  * PLAN §6 — asset lifecycle behind one interface.
@@ -62,6 +62,8 @@ export interface StorageDriver {
    * Optional for existing driver doubles; local returns null and the authenticated route streams.
    */
   signedStagingUrl?(key: string, expiresInSeconds: number): Promise<string | null>;
+  /** Release an ephemeral staging object after its permanent copy is verified. Never touches published buckets. */
+  releaseStaging?(key: string): Promise<void>;
   exists(bucket: Bucket, key: string): Promise<boolean>;
   read(bucket: Bucket, key: string): Promise<Uint8Array>;
   /** Phase B of publication. Idempotent: identical key already present => 'exists'. */
@@ -83,15 +85,35 @@ export class StorageObjectNotFound extends Error {
  * Driver selection — M7 routes it through the one mode switch (`lib/runtime-mode.ts`).
  *
  * `local` writes under `.storage/`; `supabase` talks to the project's buckets with the service-role
- * key. `PLAYBOOK_MODE` decides, `STORAGE_DRIVER` overrides it if you really mean to mix (cloud DB +
- * local bytes, or the reverse). Both drivers are imported lazily so a local process never loads the
- * Supabase SDK and a cloud process never loads `node:fs` paths it will not use.
+ * key; `r2` uses the dedicated private R2 bucket (`R2_PRIVATE_BUCKET`) with optional legacy read/sign
+ * fallback to Supabase for pre-migration brand attachments.
  *
- * With the R2 keys set, public files go straight to R2 (docs/BRAND-MOAT-AND-STORAGE.md). Without them
- * publishing works as it always has, so the code can ship before the keys do.
+ * With the public R2 keys set, public files go straight to R2 (docs/BRAND-MOAT-AND-STORAGE.md).
  */
 export async function getStorage(): Promise<StorageDriver> {
-  if (selectStorageDriver(process.env) === 'supabase') {
+  const mode = selectStorageDriver(process.env);
+  if (mode === 'r2') {
+    const priv = privateStorageR2Config(process.env);
+    if (priv !== null) {
+      const { createR2PrivateStorageDriver } = await import('./r2-private');
+      const pubR2 = publicMediaR2Config();
+      const hasSupabaseLegacy = Boolean(
+        process.env.NEXT_PUBLIC_SUPABASE_URL?.trim() && process.env.SUPABASE_SERVICE_ROLE_KEY?.trim(),
+      );
+      const legacyFallback = hasSupabaseLegacy
+        ? (await import('./supabase-driver')).createSupabaseStorageDriver()
+        : undefined;
+      const driver = createR2PrivateStorageDriver(priv, {
+        ...(pubR2 ? { publicMediaBaseUrl: pubR2.mediaBaseUrl } : {}),
+        ...(legacyFallback ? { legacyFallback } : {}),
+      });
+      if (pubR2 === null) return driver;
+      const { createR2PublicMediaStore } = await import('./r2-public');
+      const { withPublicMediaDirect } = await import('./public-media-direct');
+      return withPublicMediaDirect(driver, createR2PublicMediaStore(pubR2));
+    }
+  }
+  if (mode === 'supabase' || mode === 'r2') {
     const { createSupabaseStorageDriver } = await import('./supabase-driver');
     const driver = createSupabaseStorageDriver();
     const r2 = publicMediaR2Config();

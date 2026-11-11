@@ -110,6 +110,7 @@ async function completeOnce(deps: StudioDeps, viewer: Viewer, raw: unknown, atte
   if (!parsed.success) return failure('invalid');
   const v = parsed.data;
   const stored: string[] = [];
+  let releasedStagingKey: string | null = null;
   const outcome = await guarded(() =>
     deps.sql.transaction(async (sql) => {
       requireCreate(await studioSeat(sql, viewer.userId, v.organizationId));
@@ -136,6 +137,7 @@ async function completeOnce(deps: StudioDeps, viewer: Viewer, raw: unknown, atte
       const same = await bySha(sql, v.organizationId, sha);
       if (same) {
         await sql.query('update brand_studio_assets set deleted_at = now(), duplicate_of = $2 where id = $1', [row.id, same.id]);
+        releasedStagingKey = row.storage_key;
         return same;
       }
       let width: number | null = null, height: number | null = null, durationMs: number | null = null, thumbKey: string | null = null;
@@ -156,6 +158,7 @@ async function completeOnce(deps: StudioDeps, viewer: Viewer, raw: unknown, atte
       if (durationMs !== null && durationMs > 600_000) throw new StudioDenied('unsupported_file');
       const { key } = await deps.media.put(bytes, verdict.mime);
       stored.push(key);
+      releasedStagingKey = row.storage_key;
       return (
         await sql.query<AssetRow>(
           `update brand_studio_assets set status = 'ready', kind = $2, mime = $3, storage_key = $4, thumb_key = $5, sha256 = $6,
@@ -173,6 +176,9 @@ async function completeOnce(deps: StudioDeps, viewer: Viewer, raw: unknown, atte
     // Two uploads of the same bytes raced: the other one won; fold into it.
     if (outcome.code === 'conflict' && attempt === 0) return completeOnce(deps, viewer, raw, 1);
     return outcome;
+  }
+  if (releasedStagingKey && releasedStagingKey !== outcome.storage_key) {
+    await deps.staging.releaseStaging?.(releasedStagingKey).catch(() => undefined);
   }
   return { ok: true, asset: assetView(outcome, deps.media) };
 }

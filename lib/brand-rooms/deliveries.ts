@@ -144,6 +144,9 @@ export async function deliverFile(
     });
     const drop = outcome.ok ? outcome.unusedKeys : stored;
     for (const k of drop) await deps.media.delete(k).catch((error) => deps.log?.('delivery_media_delete_failed', { message: error instanceof Error ? error.message.slice(0, 200) : 'unknown' }));
+    if (outcome.ok) {
+      await deps.staging.releaseStaging?.(input.stagingKey).catch(() => undefined);
+    }
     return outcome;
   } catch (error) {
     for (const k of stored) await deps.media.delete(k).catch(() => undefined);
