@@ -250,6 +250,7 @@ export function RailNavigation(props: RailNavigationProps) {
     image: copy.create.image,
     video: copy.create.video,
     reverse: copy.create.fromReference,
+    compose: copy.create.compose,
     campaign: copy.create.campaign,
     commission: nav?.commission ?? '',
   };

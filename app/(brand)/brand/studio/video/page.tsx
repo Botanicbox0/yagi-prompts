@@ -91,6 +91,15 @@ export default async function StudioVideoPage({
               {t.contracts}
             </a>
           )}
+          <a
+            className="bs-btn"
+            data-variant="soft"
+            data-size="sm"
+            href={scopedHref("/brand/studio/compose", choice)}
+            data-studio-video-compose-link
+          >
+            {t.views.compose}
+          </a>
           {canRequest && (
             <a
               className="bs-btn"

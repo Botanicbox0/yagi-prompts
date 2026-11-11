@@ -10,6 +10,7 @@ import { studioLibraryKo } from './studio-library';
 import { studioVideoKo } from './studio-video';
 import { studioReviewKo } from './studio-review';
 import { studioLayersKo } from './studio-layers';
+import { studioComposeKo } from './studio-compose';
 import { adminConsoleKo } from './admin-console';
 
 /**
@@ -63,6 +64,7 @@ export const ko: Dictionary = {
   studioVideo: studioVideoKo,
   studioReview: studioReviewKo,
   studioLayers: studioLayersKo,
+  studioCompose: studioComposeKo,
   adminConsole: adminConsoleKo,
   landingMedia: {
     nav: '랜딩 이미지',

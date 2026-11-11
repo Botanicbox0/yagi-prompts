@@ -42,9 +42,11 @@ describe('the current item', () => {
   it('keeps 이미지 off on the video and review screens', () => {
     expect(railActive('/brand/studio', '/brand/studio')).toBe(true);
     expect(railActive('/brand/studio', '/brand/studio/video')).toBe(false);
+    expect(railActive('/brand/studio', '/brand/studio/compose')).toBe(false);
     expect(railActive('/brand/studio', '/brand/studio/review')).toBe(false);
     expect(railActive('/brand/studio', '/brand/studio/review/abc')).toBe(false);
     expect(railActive('/brand/studio/video', '/brand/studio/video')).toBe(true);
+    expect(railActive('/brand/studio/video', '/brand/studio/compose')).toBe(true);
     expect(railActive('/brand/studio/review', '/brand/studio/review/abc')).toBe(true);
     expect(railActive('/brand/studio/video', '/brand/studio')).toBe(false);
     // An older studio sub-page is still the image studio, and a sibling path is not a child.

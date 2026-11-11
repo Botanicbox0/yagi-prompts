@@ -34,6 +34,7 @@ export const studioShellEn = {
     image: 'Make an image',
     video: 'Make a video',
     fromReference: 'Make from a reference video',
+    compose: 'Compose clips',
     campaign: 'Request a campaign',
   },
   credits: {
@@ -158,6 +159,7 @@ export const studioShellKo: typeof studioShellEn = {
     image: '이미지 만들기',
     video: '영상 만들기',
     fromReference: '참고 영상으로 만들기',
+    compose: '영상 합치기',
     campaign: '캠페인 의뢰',
   },
   credits: {
