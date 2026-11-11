@@ -25,14 +25,15 @@
 
 ## 2. 역할
 
-- **Claude (`claude-opus-5-5` / Claude Code — Director & Primary Developer)**: 제품·도메인 설계, 스펙, **기능 개발·구현 주도**, 코드 리뷰, 성능·운영 검증. 개발 혼선을 막기 위해 코드 구현과 설계는 원칙적으로 Claude에게 맡긴다. 커밋 해시와 실제 테스트 결과를 직접 확인한다.
+- **Gemini Carbon (Antigravity — Director & Primary Developer, 2026-11-11 대표 지시, 당분간)**: 제품·도메인 설계, 스펙, **기능 개발·구현 주도**, 워딩, 디자인, 코드 리뷰, 성능·운영 검증, PR 병합과 배포, 클라우드 마이그레이션 적용까지 전부 맡는다. 병합 전 §3 검증 루프를 통과시키고, 커밋 해시와 실제 테스트 결과를 직접 확인한다. 진행 중인 작업 지시는 `docs/HANDOFF-2026-11-11-GEMINI.md`.
+- **Claude (Claude Code)**: 대표가 따로 요청할 때 설계 검토, 코드 리뷰, 구현을 맡는다. 같은 영역을 동시에 고치지 않도록 핸드오프(`docs/HANDOFF-*.md` 및 ICM)로 상태를 주고받는다.
 - **Gemma 4 (`yagi-crm-gemma4:31b-q8_0` — 워딩·문구 자연스러움 설계)**: 로컬 `http://127.0.0.1:11434`(gpu-arbiter 경유)의 Gemma 4 모델이 한국어·영어 사용자 노출 워딩의 자연스러움 설계와 문장 다듬기를 맡는다(`docs/wording/naming-review-2026-10-24-gemma.md` 참조). 코드 리뷰·설계·성능 검증·법적 판단에는 쓰지 않으며, 문구 설계에서 가격·환불 조건·기간·권한을 바꾸지 않는다.
-- **Codex / Antigravity (보조 Executor & 미디어·검증)**: 미디어/사운드 엔지니어링, 로컬 환경 검증, 테스트·스윕 실행 등 보조 역할만 수행하며 Claude의 개발 작업과 충돌하지 않도록 핸드오프(`docs/HANDOFF-*.md` 및 ICM)로 상태를 공유한다.
+- **Codex (보조 Executor & 미디어·검증)**: 미디어/사운드 엔지니어링, 로컬 환경 검증, 테스트·스윕 실행 등 보조 역할만 수행하며 Director의 개발 작업과 충돌하지 않도록 핸드오프(`docs/HANDOFF-*.md` 및 ICM)로 상태를 공유한다.
 - 대표(윤병삼)가 최종 결정권자. 아래 §5의 "대표 결정 필요" 항목은 임의로 정하지 않고 질문으로 남긴다.
 
 ## 3. 브랜치·커밋·검증
 
-- 기능 작업은 `codex/<topic>` 브랜치에서 한다. **Executor는 `main`에 직접 push하지 않는다.** PR을 열고 프리뷰 URL과 검증 결과를 PR 본문에 적는다. 병합은 대표 또는 Director.
+- 기능 작업은 `gemini/<topic>`(Codex는 `codex/<topic>`, Claude는 `claude/<topic>`) 브랜치에서 한다. **Executor는 `main`에 직접 push하지 않는다.** PR을 열고 프리뷰 URL과 검증 결과를 PR 본문에 적는다. 병합은 대표 또는 Director.
 - 커밋 메시지: `feat(scope): 한 줄 요약` + 본문에 무엇을 왜. 기존 로그의 톤을 따른다.
 - **완료 선언 전 필수 검증 루프**(순서대로, 전부 통과해야 한다):
 
