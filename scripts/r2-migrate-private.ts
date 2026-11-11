@@ -2,12 +2,13 @@ import { createHash } from 'node:crypto';
 import { config as loadEnv } from 'dotenv';
 import { createClient, type SupabaseClient } from '@supabase/supabase-js';
 import { privateStorageR2Config } from '../lib/runtime-mode';
+import { RENDERS_BUCKET, createR2RenderStore, createSupabaseRenderStore } from '../lib/renders/store';
 import { STAGING_BUCKET } from '../lib/storage';
 import { createR2PrivateStorageDriver } from '../lib/storage/r2-private';
 import { createSupabaseStorageDriver } from '../lib/storage/supabase-driver';
 
 /**
- * `npm run r2:migrate-private` — copies remaining private `content` objects (e.g. brand attachments)
+ * `npm run r2:migrate-private` — copies remaining private `content` and `renders` objects
  * from Supabase Storage into `R2_PRIVATE_BUCKET` (`twings-private-apac`) and verifies SHA-256 byte-for-byte.
  * Does NOT delete Supabase originals unless `--delete-verified` is explicitly passed after founder approval.
  */
@@ -80,7 +81,38 @@ async function main(): Promise<void> {
     }
   }
 
-  console.log(JSON.stringify({ totalScanned: keys.length, copied, alreadyThere, removed, deleteVerified }));
+  const renderSource = createSupabaseRenderStore(supabase);
+  const renderDest = createR2RenderStore(r2Cfg);
+  const renderKeys = await listAllSupabaseKeys(supabase, RENDERS_BUCKET);
+  let rendersCopied = 0;
+  let rendersRemoved = 0;
+
+  for (const key of renderKeys) {
+    const srcBytes = await renderSource.read(key);
+    await renderDest.put(key, srcBytes, 'application/octet-stream');
+    rendersCopied += 1;
+    const dstBytes = await renderDest.read(key);
+    if (sha256(srcBytes) !== sha256(dstBytes)) {
+      throw new Error(`SHA-256 mismatch after copying renders/${key}`);
+    }
+    if (deleteVerified) {
+      await renderSource.delete?.(key);
+      rendersRemoved += 1;
+    }
+  }
+
+  console.log(
+    JSON.stringify({
+      totalScanned: keys.length,
+      copied,
+      alreadyThere,
+      removed,
+      rendersScanned: renderKeys.length,
+      rendersCopied,
+      rendersRemoved,
+      deleteVerified,
+    }),
+  );
 }
 
 main().catch((err) => {

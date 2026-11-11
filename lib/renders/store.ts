@@ -1,8 +1,9 @@
 import { access, mkdir, readFile, writeFile, unlink } from 'node:fs/promises';
 import { constants } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
+import { AwsClient } from 'aws4fetch';
 import type { SupabaseClient } from '@supabase/supabase-js';
-import { selectStorageDriver } from '@/lib/runtime-mode';
+import { privateStorageR2Config, selectStorageDriver, type PrivateStorageR2Config } from '@/lib/runtime-mode';
 
 /**
  * Where a render's bytes live — the visitor's photo going in, the finished object coming out.
@@ -18,13 +19,14 @@ import { selectStorageDriver } from '@/lib/runtime-mode';
  *     mid-seek) — or returns null on the local driver, where the gateway streams the bytes itself.
  *
  * Same mode switch as everything else (`lib/runtime-mode.ts`): local mode writes under
- * `.storage/renders/`, cloud mode talks to the project's bucket with the service-role key.
+ * `.storage/renders/`, cloud mode writes under `renders/` in `R2_PRIVATE_BUCKET` (`twings-private-apac`)
+ * when configured, or falls back to the Supabase `renders` bucket.
  */
 
 export const RENDERS_BUCKET = 'renders';
 
 export interface RenderStore {
-  readonly name: 'local' | 'supabase';
+  readonly name: 'local' | 'supabase' | 'r2';
   put(key: string, bytes: Uint8Array, contentType: string): Promise<void>;
   read(key: string): Promise<Uint8Array>;
   /** Optional for test stores; runtime drivers delete expired private edit references. */
@@ -144,6 +146,100 @@ export function createSupabaseRenderStore(client?: SupabaseClient): RenderStore 
   };
 }
 
+export interface CreateR2RenderStoreOptions {
+  fetcher?: typeof fetch;
+  legacyFallback?: RenderStore;
+}
+
+function encodeRenderPath(key: string): string {
+  assertRenderKey(key);
+  return `${RENDERS_BUCKET}/${key.split('/').map((part) => encodeURIComponent(part)).join('/')}`;
+}
+
+function attachmentDisposition(filename: string): string {
+  const ascii = filename.replace(/["\\]/g, '').replace(/[^\x20-\x7e]/g, '_');
+  return `attachment; filename="${ascii}"; filename*=UTF-8''${encodeURIComponent(filename)}`;
+}
+
+export function createR2RenderStore(
+  config: PrivateStorageR2Config,
+  options: CreateR2RenderStoreOptions = {},
+): RenderStore {
+  const fetcher = options.fetcher ?? globalThis.fetch;
+  const r2 = new AwsClient({
+    accessKeyId: config.accessKeyId,
+    secretAccessKey: config.secretAccessKey,
+    service: 's3',
+    region: 'auto',
+  });
+  const baseUrl = `https://${config.accountId}.r2.cloudflarestorage.com/${config.bucket}`;
+
+  const urlFor = (key: string, query?: URLSearchParams): string => {
+    const encoded = encodeRenderPath(key);
+    const qs = query ? `?${query.toString()}` : '';
+    return `${baseUrl}/${encoded}${qs}`;
+  };
+
+  async function headObject(key: string): Promise<boolean> {
+    const signed = await r2.sign(new Request(urlFor(key), { method: 'HEAD' }));
+    const res = await fetcher(signed);
+    if (res.status === 404) return false;
+    if (!res.ok) throw new Error(`r2 render head failed: ${key} — status ${res.status}`);
+    return true;
+  }
+
+  return {
+    name: 'r2',
+    async put(key, bytes, contentType) {
+      const body = Buffer.from(bytes);
+      const signed = await r2.sign(
+        new Request(urlFor(key), {
+          method: 'PUT',
+          body,
+          headers: {
+            'Content-Type': contentType,
+            'Cache-Control': 'private, no-store',
+            'Content-Length': String(body.byteLength),
+          },
+        }),
+      );
+      const res = await fetcher(signed);
+      if (!res.ok) throw new Error(`render upload failed: ${key} — status ${res.status}`);
+    },
+    async read(key) {
+      const signed = await r2.sign(new Request(urlFor(key), { method: 'GET' }));
+      const res = await fetcher(signed);
+      if (res.status === 404) {
+        if (options.legacyFallback) return options.legacyFallback.read(key);
+        throw new RenderObjectNotFound(key);
+      }
+      if (!res.ok) throw new Error(`render download failed: ${key} — status ${res.status}`);
+      return new Uint8Array(await res.arrayBuffer());
+    },
+    async delete(key) {
+      const signed = await r2.sign(new Request(urlFor(key), { method: 'DELETE' }));
+      const res = await fetcher(signed);
+      if (!res.ok && res.status !== 404) throw new Error('private edit reference deletion failed');
+      await options.legacyFallback?.delete?.(key).catch(() => undefined);
+    },
+    async url(key, ttlSeconds, signOptions = {}) {
+      const expiresIn = Math.max(1, Math.min(Math.floor(ttlSeconds), 604800));
+      if (!(await headObject(key))) {
+        if (options.legacyFallback) return options.legacyFallback.url(key, expiresIn, signOptions);
+        throw new RenderObjectNotFound(key);
+      }
+      const params = new URLSearchParams({ 'X-Amz-Expires': String(expiresIn) });
+      if (signOptions.download) {
+        params.set('response-content-disposition', attachmentDisposition(signOptions.download));
+      }
+      const signed = await r2.sign(new Request(urlFor(key, params), { method: 'GET' }), {
+        aws: { signQuery: true },
+      });
+      return signed.url;
+    },
+  };
+}
+
 /** Memoised per process, like the other resolvers (`lib/db/connect.ts`). */
 const cache = ((globalThis as Record<string, unknown>).__playbookRenderStore ??= { store: null as RenderStore | null }) as {
   store: RenderStore | null;
@@ -151,7 +247,19 @@ const cache = ((globalThis as Record<string, unknown>).__playbookRenderStore ??=
 
 export async function getRenderStore(): Promise<RenderStore> {
   if (cache.store !== null) return cache.store;
-  cache.store = selectStorageDriver(process.env) === 'supabase' ? createSupabaseRenderStore() : createLocalRenderStore();
+  const mode = selectStorageDriver(process.env);
+  if (mode === 'r2') {
+    const cfg = privateStorageR2Config(process.env);
+    if (cfg) {
+      const legacyFallback =
+        process.env.NEXT_PUBLIC_SUPABASE_URL?.trim() && process.env.SUPABASE_SERVICE_ROLE_KEY?.trim()
+          ? createSupabaseRenderStore()
+          : undefined;
+      cache.store = createR2RenderStore(cfg, { legacyFallback });
+      return cache.store;
+    }
+  }
+  cache.store = mode === 'supabase' ? createSupabaseRenderStore() : createLocalRenderStore();
   return cache.store;
 }
 
