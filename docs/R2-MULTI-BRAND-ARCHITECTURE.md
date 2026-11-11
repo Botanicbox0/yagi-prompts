@@ -17,9 +17,9 @@
 | 비공개 권한 제어 | 서비스 롤 서명 URL | S3 Presigned `GET` / `PUT` URL (`≤60s` / `900s`) |
 
 - **Supabase의 역할 고정**: Postgres DB(`27.6 MB / 500 MB`), 로그인 인증(Auth), RLS 권한 검증만 담당한다. 바이트(파일)는 R2가 전담한다.
-- **유일한 법무 게이트 1줄**:
-  - **공개 템플릿·랜딩 미디어, 관리자 스테이징, B2B 브랜드 에셋·프로젝트 룸·시안 파일**: 지금 즉시 R2 100% 전환 가능.
-  - **개인 회원 셀카(`identity_selfies`) 및 개인 생성 결과물(`renders`, 현재 총 6개 · 22.9 MB)**: `lib/legal/documents.ts` 개인정보처리방침 §5 수탁자 표의 `Cloudflare, Inc.` 행(`공개 미디어 전송 | 접속 기록`)을 **`클라우드 미디어 저장(암호화 비공개 버킷) 및 전송 | 얼굴 사진, 결과물, 접속 기록`**으로 개정(대표 승인 사항)한 직후 `twings-private-apac`으로 옮기면 Supabase Storage는 **완전 0 MB**가 된다.
+- **2026-11-12 전량 R2 단일화 및 법무 개정 완료**:
+  - 대표 승인에 따라 `lib/legal/documents.ts` 개인정보처리방침 §5(`LEGAL_EFFECTIVE = '2026-11-12'`)의 `Supabase Inc.` 행을 `데이터베이스·인증 | 회원 정보`로, `Cloudflare, Inc.` 행을 **`암호화 비공개 미디어 저장 및 공개 미디어 전송 | 얼굴 사진, 결과물, 접속 기록`**으로 개정했다.
+  - 공개 미디어(`twings-media-apac`)뿐 아니라 브랜드 첨부·스테이징(`lib/storage/r2-private.ts`)과 개인 셀카·생성 결과물(`lib/renders/store.ts` `createR2RenderStore`)까지 전부 비공개 버킷 **`twings-private-apac`**으로 일원화해 Supabase Storage를 **완전 0 MB**로 회수했다.
 
 ---
 
