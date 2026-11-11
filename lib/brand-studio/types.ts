@@ -98,7 +98,10 @@ export interface StudioIntel {
 
 /* ------------------------------------------------------------------- deps */
 
-export type StudioStaging = Pick<StorageDriver, 'read' | 'putStaging' | 'signedUploadUrl' | 'servesSignedUrls'>;
+export type StudioStaging = Pick<
+  StorageDriver,
+  'read' | 'putStaging' | 'signedUploadUrl' | 'servesSignedUrls' | 'releaseStaging'
+>;
 
 export interface StudioDeps {
   sql: SqlRunner;

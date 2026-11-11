@@ -1,4 +1,4 @@
-import { mkdir, readFile, writeFile, access } from 'node:fs/promises';
+import { mkdir, readFile, rm, writeFile, access } from 'node:fs/promises';
 import { constants } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import type { PublishedBucket } from '@/lib/content/schemas';
@@ -62,6 +62,10 @@ export function createLocalStorageDriver(rootDir?: string): StorageDriver {
       // A retried upload may not replace an attachment whose hash/version was already approved.
       try { await writeFile(path, bytes, { flag: 'wx' }); }
       catch (error) { if ((error as NodeJS.ErrnoException).code !== 'EEXIST') throw error; }
+    },
+
+    async releaseStaging(key: string) {
+      await rm(objectPath(root, STAGING_BUCKET, key), { force: true });
     },
 
     async exists(bucket: Bucket, key: string) {

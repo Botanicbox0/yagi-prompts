@@ -1,6 +1,6 @@
 import { createHash, randomUUID } from 'node:crypto';
 import { AssetRefSchema, type AssetRef } from '@/lib/content/schemas';
-import { STAGING_BUCKET, type StorageDriver } from '@/lib/storage';
+import { STAGING_BUCKET, StorageObjectNotFound, type StorageDriver } from '@/lib/storage';
 
 /**
  * PLAN §6 asset lifecycle — the upload half, which M4 owns.
@@ -80,7 +80,16 @@ export async function rekeyAsset(
   ref: AssetRef,
   targetRevisionId: string,
 ): Promise<AssetRef> {
-  const bytes = await storage.read(STAGING_BUCKET, ref.staging_key);
+  let bytes: Uint8Array;
+  try {
+    bytes = await storage.read(STAGING_BUCKET, ref.staging_key);
+  } catch (err) {
+    if (err instanceof StorageObjectNotFound && ref.published_key && ref.bucket) {
+      bytes = await storage.read(ref.bucket, ref.published_key);
+    } else {
+      throw err;
+    }
+  }
   const ext = extensionFor(ref.staging_key, ref.mime);
   const key = stagingKey(targetRevisionId, ext);
   await storage.putStaging(key, bytes, ref.mime);

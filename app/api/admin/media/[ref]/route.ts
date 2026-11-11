@@ -7,6 +7,7 @@ import {
   type AdminMediaObject,
 } from '@/lib/media/admin-authorize';
 import { mintMediaToken, verifyMediaToken } from '@/lib/media/token';
+import { publicMediaBaseUrl } from '@/lib/runtime-mode';
 import { getStorage, STAGING_BUCKET, StorageObjectNotFound } from '@/lib/storage';
 
 /**
@@ -130,7 +131,19 @@ export async function GET(
       return refuse(401, 'sign_in_required');
     case 'forbidden':
       return refuse(403, 'admin_only');
-    case 'ok':
+    case 'ok': {
+      if (decision.object.publishedKey) {
+        const storage = await getStorage();
+        const stillInStaging = await storage.exists(STAGING_BUCKET, decision.object.key).catch(() => false);
+        if (!stillInStaging) {
+          const mediaBase = publicMediaBaseUrl();
+          const location = mediaBase
+            ? `${mediaBase.replace(/\/$/, '')}/${decision.object.publishedKey}`
+            : storage.publicUrl(decision.object.publishedKey);
+          return redirect(location);
+        }
+      }
       return handOut(decision.object);
+    }
   }
 }
