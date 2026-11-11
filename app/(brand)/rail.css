@@ -292,9 +292,9 @@
   .bw-shell:has([data-brand-layout-mode="rail"]) .bw-rail-move button {
     display: grid;
     place-items: center;
-    width: 28px;
-    height: 28px;
-    border-radius: 14px;
+    width: 32px;
+    height: 32px;
+    border-radius: 16px;
     background: var(--ys-surface);
     color: var(--ys-ink-secondary);
     box-shadow: var(--ys-ring);
@@ -324,9 +324,9 @@
     margin: -4px var(--bw-rail-pad) 0;
   }
   .bw-shell:has([data-brand-layout-mode="rail"]) .bw-rail-order button {
-    min-height: 28px;
+    min-height: 32px;
     padding: 0 10px;
-    border-radius: 14px;
+    border-radius: 16px;
     color: var(--ys-ink-muted);
     font-size: 12px;
     font-weight: 500;

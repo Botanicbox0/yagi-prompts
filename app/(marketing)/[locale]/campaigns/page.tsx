@@ -56,7 +56,7 @@ export default async function CampaignsListingPage({ params }: RouteParams) {
                   href={`/${locale}/direct`}
                   className="inline-flex min-h-11 items-center rounded-full border border-hairline bg-white px-5 py-2.5 text-xs font-semibold text-[#0E1013] transition-colors hover:border-[#3875C5]"
                 >
-                  {locale === 'en' ? 'Make My Own Video & Earn 80% →' : '나만의 영상 제작 & 템플릿 수익 보기 →'}
+                  {c.directEarnCta}
                 </a>
               </div>
             </div>
@@ -64,6 +64,7 @@ export default async function CampaignsListingPage({ params }: RouteParams) {
             {/* Creator Campaign Monetization Hub: 2 Ways to Earn (Official Format vs Guided Custom Video) + Checklist */}
             <CreatorCampaignHub
               locale={locale}
+              copy={c.hub}
               featuredFormats={featuredFormats}
               myCampaignsHref="/campaigns/mine"
               directVideoHref={`/${locale}/direct`}

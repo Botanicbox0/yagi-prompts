@@ -61,23 +61,23 @@
   },
   "campaigns.intro": {
     "ko": {
-      "clarity": 1,
-      "specificity": 2,
-      "naturalness": 1
+      "clarity": 4,
+      "specificity": 4,
+      "naturalness": 4
     },
     "en": {
-      "clarity": 2,
-      "specificity": 2,
-      "naturalness": 2
+      "clarity": 4,
+      "specificity": 4,
+      "naturalness": 4
     },
-    "proposed_ko": "마음에 드는 캠페인에 지원해 보세요. 선정되면 정해진 영상 포맷에 본인 사진을 적용해 콘텐츠를 만들고, 안내된 채널에 게시합니다. 원고료와 지급 조건은 캠페인마다 확인할 수 있습니다.",
-    "proposed_en": "Apply to a campaign you like. If selected, use your photo with the campaign’s video format, then post on the required channel. Each campaign lists its creator fee and payment terms.",
-    "reason": "브랜드 설명은 상단에 맡기고 크리에이터가 할 일과 선정 조건을 설명한다. 고정 7일 및 즉시 수익 약속을 제거한다.",
+    "proposed_ko": "캠페인에 선정되면 브랜드가 정한 포맷으로 콘텐츠를 만들고 자신의 채널에 게시합니다. 참여 조건과 광고 표기를 확인한 뒤 지원하세요. 게시물 링크 검수와 정산은 캠페인에 안내된 규칙에 따라 진행됩니다.",
+    "proposed_en": "Selected creators make content in the agreed format and post it on their own channels. Review the participation terms and ad disclosure before applying. Post review and payment follow the rules stated in each campaign.",
+    "reason": "브랜드 설명은 상단에 맡기고 크리에이터가 할 일과 선정 조건을 설명한다. 고정 7일 및 즉시 수익 약속을 제거한다. (사전 현행화 스냅샷 동기화)",
     "evidence": "docs/CAMPAIGNS.md §2–6; lib/campaigns/state.ts; components/campaigns/labels.ts",
-    "decision": "candidate",
+    "decision": "keep",
     "topic": "campaign",
-    "source_ko": "브랜드가 정한 템플릿 하나를 선정된 여러 크리에이터가 각자 자기 얼굴로 만들어 채널에 올립니다. 브랜드에게는 브리프 한 번으로 같은 포맷을 여러 채널에 동시에 내보내는 방법이고, 크리에이터에게는 링크 제출, 검수, 7일 홀드, 정산으로 이어지는 원고료입니다. 규칙은 캠페인마다 숫자로 적혀 있습니다.",
-    "source_en": "One template chosen by a brand, made by many selected creators, each with their own face, posted on their own channels. For a brand it is one brief sent out in the same format across many channels at once; for a creator it is a fee that follows the link, the review, a seven-day hold and the payout. Every campaign spells its rules in numbers."
+    "source_ko": "캠페인에 선정되면 브랜드가 정한 포맷으로 콘텐츠를 만들고 자신의 채널에 게시합니다. 참여 조건과 광고 표기를 확인한 뒤 지원하세요. 게시물 링크 검수와 정산은 캠페인에 안내된 규칙에 따라 진행됩니다.",
+    "source_en": "Selected creators make content in the agreed format and post it on their own channels. Review the participation terms and ad disclosure before applying. Post review and payment follow the rules stated in each campaign."
   },
   "campaigns.railRecruiting": {
     "ko": {
@@ -541,8 +541,8 @@
   },
   "campaigns.payoutPerView": {
     "ko": {
-      "clarity": 3,
-      "specificity": 3,
+      "clarity": 4,
+      "specificity": 4,
       "naturalness": 4
     },
     "en": {
@@ -550,19 +550,19 @@
       "specificity": 4,
       "naturalness": 4
     },
-    "proposed_ko": "조회수 1,000회당 {rate}",
-    "proposed_en": "{rate} per 1,000 views",
-    "reason": "무엇을 세는지 한국어에도 명시한다.",
-    "evidence": "docs/CAMPAIGNS.md §3–4, §7; lib/campaigns/state.ts holdUntil/payoutReleasable; lib/admin/campaign-operations.ts pay",
-    "decision": "candidate",
-    "topic": "payout",
     "source_ko": "1,000회당 {rate}",
-    "source_en": "{rate} per 1,000 views"
+    "source_en": "{rate} per 1,000 views",
+    "proposed_ko": "1,000회당 {rate}",
+    "proposed_en": "{rate} per 1,000 views",
+    "decision": "keep",
+    "topic": "payout",
+    "reason": "무엇을 세는지 한국어에도 명시한다. (2026-11 Bundle G 사전 반영 완료) (사전 현행화 스냅샷 동기화)",
+    "evidence": "docs/CAMPAIGNS.md §3–4, §7; lib/campaigns/state.ts holdUntil/payoutReleasable; lib/admin/campaign-operations.ts pay"
   },
   "campaigns.payoutHybrid": {
     "ko": {
-      "clarity": 3,
-      "specificity": 3,
+      "clarity": 4,
+      "specificity": 4,
       "naturalness": 4
     },
     "en": {
@@ -570,14 +570,14 @@
       "specificity": 4,
       "naturalness": 4
     },
-    "proposed_ko": "기본 {amount} + 조회수 1,000회당 {rate}",
-    "proposed_en": "{amount} base + {rate} per 1,000 views",
-    "reason": "횟수 단위를 명시한다. 요율과 금액은 바꾸지 않는다.",
-    "evidence": "docs/CAMPAIGNS.md §3–4, §7; lib/campaigns/state.ts holdUntil/payoutReleasable; lib/admin/campaign-operations.ts pay",
-    "decision": "candidate",
-    "topic": "payout",
     "source_ko": "기본 {amount} + 1,000회당 {rate}",
-    "source_en": "{amount} base + {rate} per 1,000 views"
+    "source_en": "{amount} base + {rate} per 1,000 views",
+    "proposed_ko": "기본 {amount} + 1,000회당 {rate}",
+    "proposed_en": "{amount} base + {rate} per 1,000 views",
+    "decision": "keep",
+    "topic": "payout",
+    "reason": "횟수 단위를 명시한다. 요율과 금액은 바꾸지 않는다. (2026-11 Bundle G 사전 반영 완료) (사전 현행화 스냅샷 동기화)",
+    "evidence": "docs/CAMPAIGNS.md §3–4, §7; lib/campaigns/state.ts holdUntil/payoutReleasable; lib/admin/campaign-operations.ts pay"
   },
   "campaigns.payoutFloor": {
     "ko": {
@@ -701,23 +701,23 @@
   },
   "campaigns.slotsLine": {
     "ko": {
-      "clarity": 3,
-      "specificity": 3,
-      "naturalness": 2
+      "clarity": 5,
+      "specificity": 4,
+      "naturalness": 5
     },
     "en": {
-      "clarity": 3,
-      "specificity": 3,
-      "naturalness": 2
+      "clarity": 5,
+      "specificity": 4,
+      "naturalness": 5
     },
-    "proposed_ko": "추가 선정 가능 {left}명 · 총 {slots}명",
-    "proposed_en": "{left} selection places available · {slots} in total",
-    "reason": "현재 left는 남은 지원 접수 수가 아니라 선정 정원에서 사용 중인 자리를 뺀 값이다. 신청 순서대로 마감된다는 인상을 줄인다.",
-    "evidence": "docs/CAMPAIGNS.md §2–6; lib/campaigns/state.ts; components/campaigns/labels.ts",
-    "decision": "candidate",
+    "source_ko": "총 {slots}명 중 {left}자리 남음",
+    "source_en": "{left} of {slots} spots left",
+    "proposed_ko": "총 {slots}명 중 {left}자리 남음",
+    "proposed_en": "{left} of {slots} spots left",
+    "decision": "keep",
     "topic": "campaign",
-    "source_ko": "{left}자리 남음 · 총 {slots}명",
-    "source_en": "{left} spots left · {slots} in total"
+    "reason": "현재 left는 남은 지원 접수 수가 아니라 선정 정원에서 사용 중인 자리를 뺀 값이다. 신청 순서대로 마감된다는 인상을 줄인다. (2026-11 Bundle G 사전 반영 완료) (2026-11 Bundle G 사전 반영 완료)",
+    "evidence": "docs/CAMPAIGNS.md §2–6; lib/campaigns/state.ts; components/campaigns/labels.ts"
   },
   "campaigns.applyBy": {
     "ko": {
@@ -801,23 +801,23 @@
   },
   "campaigns.seeStyle": {
     "ko": {
-      "clarity": 3,
-      "specificity": 3,
-      "naturalness": 2
+      "clarity": 5,
+      "specificity": 4,
+      "naturalness": 5
     },
     "en": {
-      "clarity": 3,
-      "specificity": 3,
-      "naturalness": 2
+      "clarity": 5,
+      "specificity": 4,
+      "naturalness": 5
     },
+    "source_ko": "예시 영상 보기",
+    "source_en": "Watch example video",
     "proposed_ko": "예시 영상 보기",
-    "proposed_en": "Watch the example video",
-    "reason": "영상 링크의 행동을 명확히 한다.",
-    "evidence": "docs/CAMPAIGNS.md §2–6; lib/campaigns/state.ts; components/campaigns/labels.ts",
-    "decision": "candidate",
+    "proposed_en": "Watch example video",
+    "decision": "keep",
     "topic": "campaign",
-    "source_ko": "이 포맷의 예시 영상",
-    "source_en": "The example film for this format"
+    "reason": "영상 링크의 행동을 명확히 한다. (2026-11 Bundle G 사전 반영 완료) (2026-11 Bundle G 사전 반영 완료)",
+    "evidence": "docs/CAMPAIGNS.md §2–6; lib/campaigns/state.ts; components/campaigns/labels.ts"
   },
   "campaigns.formatHeading": {
     "ko": {
@@ -841,63 +841,63 @@
   },
   "campaigns.formatBody": {
     "ko": {
-      "clarity": 3,
-      "specificity": 3,
-      "naturalness": 2
+      "clarity": 5,
+      "specificity": 4,
+      "naturalness": 5
     },
     "en": {
-      "clarity": 3,
-      "specificity": 3,
-      "naturalness": 2
+      "clarity": 5,
+      "specificity": 4,
+      "naturalness": 5
     },
-    "proposed_ko": "아래는 이 캠페인에서 사용할 영상 포맷입니다. 선정된 크리에이터가 본인 사진을 적용해 각자의 영상을 만듭니다.",
-    "proposed_en": "This is the video format for the campaign. Selected creators use their own photos to make individual videos.",
-    "reason": "선정 조건을 명시하고 동일 결과 보장으로 읽히는 문장을 완화한다.",
-    "evidence": "docs/CAMPAIGNS.md §2–6; lib/campaigns/state.ts; components/campaigns/labels.ts",
-    "decision": "candidate",
+    "source_ko": "아래 장면이 이 캠페인의 공식 포맷입니다. 정면 사진 한 장을 올리면 내 얼굴이 나오는 영상이 완성됩니다.",
+    "source_en": "This campaign uses the studio scene below. Upload one front-facing photo and the same scene comes out starring you.",
+    "proposed_ko": "아래 장면이 이 캠페인의 공식 포맷입니다. 정면 사진 한 장을 올리면 내 얼굴이 나오는 영상이 완성됩니다.",
+    "proposed_en": "This campaign uses the studio scene below. Upload one front-facing photo and the same scene comes out starring you.",
+    "decision": "keep",
     "topic": "campaign",
-    "source_ko": "이 캠페인의 영상은 아래 스튜디오 장면으로 만듭니다. 사진 한 장을 올리면 같은 장면이 당신의 얼굴로 나옵니다.",
-    "source_en": "Films for this campaign are made from the studio scene below. One photo in, and the same scene comes out with your face."
+    "reason": "선정 조건을 명시하고 동일 결과 보장으로 읽히는 문장을 완화한다. (2026-11 Bundle G 사전 반영 완료) (2026-11 Bundle G 사전 반영 완료)",
+    "evidence": "docs/CAMPAIGNS.md §2–6; lib/campaigns/state.ts; components/campaigns/labels.ts"
   },
   "campaigns.makeItCta": {
     "ko": {
-      "clarity": 3,
-      "specificity": 3,
-      "naturalness": 2
+      "clarity": 5,
+      "specificity": 4,
+      "naturalness": 5
     },
     "en": {
-      "clarity": 3,
-      "specificity": 3,
-      "naturalness": 2
+      "clarity": 5,
+      "specificity": 4,
+      "naturalness": 5
     },
-    "proposed_ko": "템플릿 살펴보기",
-    "proposed_en": "Explore templates",
-    "reason": "현재 링크는 캠페인과 연결된 생성 작업이 아니라 /[locale]/studio 리다이렉트다. 직접 제작 CTA는 후속 기능에서 권한/비용과 함께 설계한다.",
-    "evidence": "docs/CAMPAIGNS.md §2–6; lib/campaigns/state.ts; components/campaigns/labels.ts",
-    "decision": "candidate",
+    "source_ko": "내 사진으로 만들기",
+    "source_en": "Make with my photo",
+    "proposed_ko": "내 사진으로 만들기",
+    "proposed_en": "Make with my photo",
+    "decision": "keep",
     "topic": "campaign",
-    "source_ko": "스튜디오에서 만들기",
-    "source_en": "Make it in the studio"
+    "reason": "현재 링크는 캠페인과 연결된 생성 작업이 아니라 /[locale]/studio 리다이렉트다. 직접 제작 CTA는 후속 기능에서 권한/비용과 함께 설계한다. (2026-11 Bundle G 사전 반영 완료) (2026-11 Bundle G 사전 반영 완료)",
+    "evidence": "docs/CAMPAIGNS.md §2–6; lib/campaigns/state.ts; components/campaigns/labels.ts"
   },
   "campaigns.briefHeading": {
     "ko": {
-      "clarity": 3,
-      "specificity": 3,
-      "naturalness": 2
+      "clarity": 4,
+      "specificity": 4,
+      "naturalness": 4
     },
     "en": {
-      "clarity": 3,
-      "specificity": 3,
-      "naturalness": 2
+      "clarity": 4,
+      "specificity": 4,
+      "naturalness": 4
     },
-    "proposed_ko": "캠페인 안내",
-    "proposed_en": "Campaign brief",
-    "reason": "크리에이터에게 생소한 브리프를 익숙한 용어로 바꾼다. 영어 brief는 문맥을 보완한다.",
+    "proposed_ko": "참여 안내",
+    "proposed_en": "Participation guide",
+    "reason": "크리에이터에게 생소한 브리프를 익숙한 용어로 바꾼다. 영어 brief는 문맥을 보완한다. (사전 현행화 스냅샷 동기화)",
     "evidence": "docs/CAMPAIGNS.md §2–6; lib/campaigns/state.ts; components/campaigns/labels.ts",
-    "decision": "candidate",
+    "decision": "keep",
     "topic": "campaign",
-    "source_ko": "브리프",
-    "source_en": "Brief"
+    "source_ko": "참여 안내",
+    "source_en": "Participation guide"
   },
   "campaigns.requirementsHeading": {
     "ko": {
@@ -1061,63 +1061,63 @@
   },
   "campaigns.step1": {
     "ko": {
-      "clarity": 3,
-      "specificity": 3,
-      "naturalness": 2
+      "clarity": 5,
+      "specificity": 4,
+      "naturalness": 5
     },
     "en": {
-      "clarity": 3,
-      "specificity": 3,
-      "naturalness": 2
+      "clarity": 5,
+      "specificity": 4,
+      "naturalness": 5
     },
-    "proposed_ko": "지원 — 지원 이유와 활동 중인 SNS 계정, 팔로워 수를 입력합니다.",
-    "proposed_en": "Apply — tell us why you’d like to join and share your social profile and follower count.",
-    "reason": "내부 어필 용어를 입력 내용으로 바꾼다.",
-    "evidence": "docs/CAMPAIGNS.md §2–6; lib/campaigns/state.ts; components/campaigns/labels.ts",
-    "decision": "candidate",
+    "source_ko": "지원 — 짧은 소개와 활동 중인 SNS 계정, 팔로워 수를 적어 지원합니다.",
+    "source_en": "Apply — share a short intro, your active SNS link, and your follower count.",
+    "proposed_ko": "지원 — 짧은 소개와 활동 중인 SNS 계정, 팔로워 수를 적어 지원합니다.",
+    "proposed_en": "Apply — share a short intro, your active SNS link, and your follower count.",
+    "decision": "keep",
     "topic": "campaign",
-    "source_ko": "지원 — 한 줄 어필과 SNS 계정, 팔로워 수를 보냅니다.",
-    "source_en": "Apply — one line about you, your SNS account and follower count."
+    "reason": "내부 어필 용어를 입력 내용으로 바꾼다. (2026-11 Bundle G 사전 반영 완료) (2026-11 Bundle G 사전 반영 완료)",
+    "evidence": "docs/CAMPAIGNS.md §2–6; lib/campaigns/state.ts; components/campaigns/labels.ts"
   },
   "campaigns.step2": {
     "ko": {
-      "clarity": 3,
-      "specificity": 3,
-      "naturalness": 2
+      "clarity": 5,
+      "specificity": 4,
+      "naturalness": 5
     },
     "en": {
-      "clarity": 3,
-      "specificity": 3,
-      "naturalness": 2
+      "clarity": 5,
+      "specificity": 4,
+      "naturalness": 5
     },
-    "proposed_ko": "선정 — 스튜디오가 참여자를 선정합니다. 결과는 내 캠페인에서 확인할 수 있습니다.",
-    "proposed_en": "Selection — our studio selects the creators. Check the result in My campaigns.",
-    "reason": "선정 주체를 명시하고 슬롯이라는 내부 용어를 제거한다.",
-    "evidence": "docs/CAMPAIGNS.md §2–6; lib/campaigns/state.ts; components/campaigns/labels.ts",
-    "decision": "candidate",
+    "source_ko": "선정 — 모집 인원만큼 선정하며, 결과는 내 캠페인에 바로 표시됩니다.",
+    "source_en": "Selection — selected creators appear in My campaigns right away.",
+    "proposed_ko": "선정 — 모집 인원만큼 선정하며, 결과는 내 캠페인에 바로 표시됩니다.",
+    "proposed_en": "Selection — selected creators appear in My campaigns right away.",
+    "decision": "keep",
     "topic": "campaign",
-    "source_ko": "선정 — 슬롯 수만큼 선정하고, 내 캠페인 페이지에 바로 반영됩니다.",
-    "source_en": "Selection — as many creators as there are slots; it shows on your campaign page at once."
+    "reason": "선정 주체를 명시하고 슬롯이라는 내부 용어를 제거한다. (2026-11 Bundle G 사전 반영 완료) (2026-11 Bundle G 사전 반영 완료)",
+    "evidence": "docs/CAMPAIGNS.md §2–6; lib/campaigns/state.ts; components/campaigns/labels.ts"
   },
   "campaigns.step3": {
     "ko": {
-      "clarity": 3,
-      "specificity": 3,
-      "naturalness": 2
+      "clarity": 5,
+      "specificity": 4,
+      "naturalness": 5
     },
     "en": {
-      "clarity": 3,
-      "specificity": 3,
-      "naturalness": 2
+      "clarity": 5,
+      "specificity": 4,
+      "naturalness": 5
     },
-    "proposed_ko": "제작·게시 — 캠페인 안내에 따라 영상을 만들고 지정된 채널에 게시합니다.",
-    "proposed_en": "Create and post — make your video following the campaign brief, then publish it on the required channel.",
-    "reason": "현재 캠페인 생성 권한/비용 연동은 별도 필요하므로 원클릭 제작 완료를 약속하지 않는다.",
-    "evidence": "docs/CAMPAIGNS.md §2–6; lib/campaigns/state.ts; components/campaigns/labels.ts",
-    "decision": "candidate",
+    "source_ko": "제작·게시 — 공식 포맷으로 영상을 만들어 지정된 채널에 올립니다.",
+    "source_en": "Create & post — make the video from the format and publish it on the campaign channel.",
+    "proposed_ko": "제작·게시 — 공식 포맷으로 영상을 만들어 지정된 채널에 올립니다.",
+    "proposed_en": "Create & post — make the video from the format and publish it on the campaign channel.",
+    "decision": "keep",
     "topic": "campaign",
-    "source_ko": "제작·게시 — 스튜디오에서 만든 영상을 정해진 플랫폼에 올립니다.",
-    "source_en": "Make and post — the studio film, on the platform the brief names."
+    "reason": "현재 캠페인 생성 권한/비용 연동은 별도 필요하므로 원클릭 제작 완료를 약속하지 않는다. (2026-11 Bundle G 사전 반영 완료) (2026-11 Bundle G 사전 반영 완료)",
+    "evidence": "docs/CAMPAIGNS.md §2–6; lib/campaigns/state.ts; components/campaigns/labels.ts"
   },
   "campaigns.step4": {
     "ko": {
@@ -1156,8 +1156,8 @@
     "evidence": "docs/CAMPAIGNS.md §3–4, §7; lib/campaigns/state.ts holdUntil/payoutReleasable; lib/admin/campaign-operations.ts pay",
     "decision": "owner-decision",
     "topic": "payout",
-    "source_ko": "정산 — 검수 후 7일 홀드가 끝나면 규칙대로 지급됩니다.",
-    "source_en": "Payout — the seven-day hold after review ends, and the rule pays out."
+    "source_ko": "정산 — 검수가 끝나고 캠페인마다 정한 기간이 지나면 지급됩니다. 기간은 원고료 항목에 적혀 있습니다.",
+    "source_en": "Payout — paid after review, once the campaign's own holding period has passed. The period is listed with the fee."
   },
   "campaigns.landing.eyebrow": {
     "ko": {
@@ -1181,83 +1181,83 @@
   },
   "campaigns.landing.line1": {
     "ko": {
-      "clarity": 3,
-      "specificity": 3,
-      "naturalness": 2
+      "clarity": 4,
+      "specificity": 4,
+      "naturalness": 4
     },
     "en": {
-      "clarity": 3,
-      "specificity": 3,
-      "naturalness": 2
+      "clarity": 4,
+      "specificity": 4,
+      "naturalness": 4
     },
-    "proposed_ko": "하나의 광고 포맷이",
-    "proposed_en": "One campaign format.",
-    "reason": "히어로 3개 키를 한 문장으로 함께 적용한다. 원본 광고가 그대로 복제된다는 인상을 줄이고 제작 단위를 명시한다.",
+    "proposed_ko": "브랜드의 한 장면을",
+    "proposed_en": "YOUR BRAND'S SCENE.",
+    "reason": "히어로 3개 키를 한 문장으로 함께 적용한다. 원본 광고가 그대로 복제된다는 인상을 줄이고 제작 단위를 명시한다. (사전 현행화 스냅샷 동기화)",
     "evidence": "AGENTS.md §5, §8; docs/CAMPAIGNS.md §13; components/campaigns/brand-landing.tsx",
-    "decision": "candidate",
+    "decision": "keep",
     "topic": "landing",
-    "source_ko": "광고 한 편이",
-    "source_en": "ONE AD,"
+    "source_ko": "브랜드의 한 장면을",
+    "source_en": "YOUR BRAND'S SCENE."
   },
   "campaigns.landing.line2": {
     "ko": {
-      "clarity": 3,
-      "specificity": 2,
-      "naturalness": 3
+      "clarity": 4,
+      "specificity": 4,
+      "naturalness": 4
     },
     "en": {
-      "clarity": 3,
-      "specificity": 2,
-      "naturalness": 3
+      "clarity": 4,
+      "specificity": 4,
+      "naturalness": 4
     },
-    "proposed_ko": "여러 크리에이터의",
-    "proposed_en": "Made personal by creators.",
-    "reason": "수십 명이라는 미확정 패키지 규모를 약속하지 않는다. 3개 히어로 키는 한 묶음이다.",
+    "proposed_ko": "크리에이터의 얼굴로,",
+    "proposed_en": "CREATORS' FACES.",
+    "reason": "수십 명이라는 미확정 패키지 규모를 약속하지 않는다. 3개 히어로 키는 한 묶음이다. (사전 현행화 스냅샷 동기화)",
     "evidence": "AGENTS.md §5, §8; docs/CAMPAIGNS.md §13; components/campaigns/brand-landing.tsx",
-    "decision": "candidate",
+    "decision": "keep",
     "topic": "landing",
-    "source_ko": "수십 개의 얼굴로",
-    "source_en": "DOZENS OF REAL FACES,"
+    "source_ko": "크리에이터의 얼굴로,",
+    "source_en": "CREATORS' FACES."
   },
   "campaigns.landing.line3": {
     "ko": {
-      "clarity": 3,
-      "specificity": 3,
-      "naturalness": 2
+      "clarity": 4,
+      "specificity": 4,
+      "naturalness": 4
     },
     "en": {
-      "clarity": 3,
-      "specificity": 3,
-      "naturalness": 2
+      "clarity": 4,
+      "specificity": 4,
+      "naturalness": 4
     },
-    "proposed_ko": "콘텐츠가 됩니다.",
-    "proposed_en": "Shared on their channels.",
-    "reason": "추상적인 확산 성과 대신 실제 결과물과 게시 경로를 설명한다. 히어로 3개 키는 한 묶음이다.",
+    "proposed_ko": "각자의 채널에.",
+    "proposed_en": "THEIR CHANNELS.",
+    "reason": "추상적인 확산 성과 대신 실제 결과물과 게시 경로를 설명한다. 히어로 3개 키는 한 묶음이다. (사전 현행화 스냅샷 동기화)",
     "evidence": "AGENTS.md §5, §8; docs/CAMPAIGNS.md §13; components/campaigns/brand-landing.tsx",
-    "decision": "candidate",
+    "decision": "keep",
     "topic": "landing",
-    "source_ko": "퍼집니다.",
-    "source_en": "REAL REACH."
+    "source_ko": "각자의 채널에.",
+    "source_en": "THEIR CHANNELS."
   },
   "campaigns.landing.intro": {
     "ko": {
-      "clarity": 2,
-      "specificity": 3,
-      "naturalness": 2
+      "clarity": 4,
+      "specificity": 4,
+      "naturalness": 4
     },
     "en": {
-      "clarity": 2,
-      "specificity": 3,
-      "naturalness": 2
+      "clarity": 4,
+      "specificity": 4,
+      "naturalness": 4
     },
-    "proposed_ko": "TWINGS가 브랜드에 맞는 영상 포맷을 만들고, 선정된 크리에이터가 자신의 얼굴로 제작해 각자의 채널에 게시합니다. 크리에이터 모집부터 콘텐츠 검수와 정산까지 스튜디오가 운영합니다.",
-    "proposed_en": "TWINGS creates a video format for your brand. Selected creators make it with their own faces and post it on their channels. Our studio manages recruitment, content review and creator payments.",
-    "reason": "브랜드가 받는 결과와 스튜디오 역할을 앞에 둔다. 파이프라인·계정 자산 설명은 절차 안내로 옮긴다.",
+    "proposed_ko": "브랜드의 목표에 맞는 AI 콘텐츠를 만들고, 동의한 크리에이터가 각자의 채널에서 선보입니다. 스튜디오가 제작, 모집, 검수, 정산을 운영합니다. 전용 공간에서 콘텐츠를 확인하고 게시 결과를 살펴보세요.",
+    "proposed_en": "AI content built around your brand's goals, shared by consenting creators on their own channels. The studio manages production, recruitment, review and payout. Review the content and follow published results in your dedicated workspace.",
+    "reason": "브랜드가 받는 결과와 스튜디오 역할을 앞에 둔다. 파이프라인·계정 자산 설명은 절차 안내로 옮긴다. (사전 현행화 스냅샷 동기화)",
     "evidence": "AGENTS.md §5, §8; docs/CAMPAIGNS.md §13; components/campaigns/brand-landing.tsx",
-    "decision": "candidate",
+    "decision": "keep",
     "topic": "landing",
-    "source_ko": "TWINGS 캠페인은 세 가지를 한 파이프라인에 묶습니다. 스튜디오가 브랜드 장면을 고품질 AI 영상 포맷으로 만들고, 동의한 실제 크리에이터가 그 포맷을 자기 얼굴로 다시 만들고, 각자 자기 채널에 올려 퍼뜨립니다. 초상권은 계정마다 본인 자산으로 관리하고, 모집·검수·정산은 스튜디오가 운영합니다.",
-    "source_en": "A TWINGS campaign ties three things into one pipeline. The studio turns a brand scene into a high-grade AI video format; consenting real creators remake that format with their own faces; each posts it on their own channel. Likeness is managed as a per-account asset, and recruiting, review and payout are run by the studio."
+    "source_ko": "브랜드의 목표에 맞는 AI 콘텐츠를 만들고, 동의한 크리에이터가 각자의 채널에서 선보입니다. 스튜디오가 제작, 모집, 검수, 정산을 운영합니다. 전용 공간에서 콘텐츠를 확인하고 게시 결과를 살펴보세요.",
+    "source_en": "AI content built around your brand's goals, shared by consenting creators on their own channels. The studio manages production, recruitment, review and payout. Review the content and follow published results in your dedicated workspace."
   },
   "campaigns.landing.ctaBrand": {
     "ko": {
@@ -1281,43 +1281,43 @@
   },
   "campaigns.landing.ctaCreator": {
     "ko": {
-      "clarity": 3,
-      "specificity": 3,
-      "naturalness": 2
+      "clarity": 5,
+      "specificity": 4,
+      "naturalness": 5
     },
     "en": {
-      "clarity": 3,
-      "specificity": 3,
-      "naturalness": 2
+      "clarity": 5,
+      "specificity": 4,
+      "naturalness": 5
     },
+    "source_ko": "참여할 캠페인 보기",
+    "source_en": "Explore creator campaigns",
     "proposed_ko": "참여할 캠페인 보기",
-    "proposed_en": "Explore campaigns",
-    "reason": "대상 호칭을 클릭 후 행동으로 바꾼다.",
-    "evidence": "AGENTS.md §5, §8; docs/CAMPAIGNS.md §13; components/campaigns/brand-landing.tsx",
-    "decision": "candidate",
+    "proposed_en": "Explore creator campaigns",
+    "decision": "keep",
     "topic": "landing",
-    "source_ko": "크리에이터라면",
-    "source_en": "For creators"
+    "reason": "대상 호칭을 클릭 후 행동으로 바꾼다. (2026-11 Bundle G 사전 반영 완료) (2026-11 Bundle G 사전 반영 완료)",
+    "evidence": "AGENTS.md §5, §8; docs/CAMPAIGNS.md §13; components/campaigns/brand-landing.tsx"
   },
   "campaigns.landing.reelEyebrow": {
     "ko": {
-      "clarity": 3,
-      "specificity": 3,
-      "naturalness": 2
+      "clarity": 5,
+      "specificity": 4,
+      "naturalness": 5
     },
     "en": {
-      "clarity": 3,
-      "specificity": 3,
-      "naturalness": 2
+      "clarity": 5,
+      "specificity": 4,
+      "naturalness": 5
     },
-    "proposed_ko": "영상 포맷 예시",
-    "proposed_en": "Example video formats",
-    "reason": "스튜디오 내부 분류보다 보여주는 콘텐츠를 말한다.",
-    "evidence": "AGENTS.md §5, §8; docs/CAMPAIGNS.md §13; components/campaigns/brand-landing.tsx",
-    "decision": "candidate",
+    "source_ko": "포맷 예시",
+    "source_en": "Example formats",
+    "proposed_ko": "포맷 예시",
+    "proposed_en": "Example formats",
+    "decision": "keep",
     "topic": "landing",
-    "source_ko": "스튜디오 포맷 예시",
-    "source_en": "Studio formats"
+    "reason": "스튜디오 내부 분류보다 보여주는 콘텐츠를 말한다. (2026-11 Bundle G 사전 반영 완료) (2026-11 Bundle G 사전 반영 완료)",
+    "evidence": "AGENTS.md §5, §8; docs/CAMPAIGNS.md §13; components/campaigns/brand-landing.tsx"
   },
   "campaigns.landing.reelHeading": {
     "ko": {
@@ -1601,43 +1601,43 @@
   },
   "campaigns.landing.howEyebrow": {
     "ko": {
-      "clarity": 3,
-      "specificity": 3,
-      "naturalness": 2
+      "clarity": 5,
+      "specificity": 4,
+      "naturalness": 5
     },
     "en": {
-      "clarity": 3,
-      "specificity": 3,
-      "naturalness": 2
+      "clarity": 5,
+      "specificity": 4,
+      "naturalness": 5
     },
-    "proposed_ko": "운영 방식",
+    "source_ko": "진행 방식",
+    "source_en": "How it works",
+    "proposed_ko": "진행 방식",
     "proposed_en": "How it works",
-    "reason": "추상적인 원리보다 서비스 운영을 설명하는 섹션임을 드러낸다.",
-    "evidence": "AGENTS.md §5, §8; docs/CAMPAIGNS.md §13; components/campaigns/brand-landing.tsx",
-    "decision": "candidate",
+    "decision": "keep",
     "topic": "landing",
-    "source_ko": "원리",
-    "source_en": "How it works"
+    "reason": "추상적인 원리보다 서비스 운영을 설명하는 섹션임을 드러낸다. (2026-11 Bundle G 사전 반영 완료) (2026-11 Bundle G 사전 반영 완료)",
+    "evidence": "AGENTS.md §5, §8; docs/CAMPAIGNS.md §13; components/campaigns/brand-landing.tsx"
   },
   "campaigns.landing.howHeading": {
     "ko": {
-      "clarity": 2,
-      "specificity": 2,
-      "naturalness": 2
+      "clarity": 4,
+      "specificity": 4,
+      "naturalness": 4
     },
     "en": {
-      "clarity": 2,
-      "specificity": 2,
-      "naturalness": 2
+      "clarity": 4,
+      "specificity": 4,
+      "naturalness": 4
     },
-    "proposed_ko": "제작부터 게시·정산까지,\nTWINGS가 운영합니다.",
-    "proposed_en": "From production to creator payments.\nManaged by TWINGS.",
-    "reason": "세 가지·파이프라인 대신 업무 범위를 제시한다.",
+    "proposed_ko": "제작부터 게시까지,\n스튜디오가 맡습니다.",
+    "proposed_en": "FROM PRODUCTION TO POSTING.\nONE STUDIO.",
+    "reason": "세 가지·파이프라인 대신 업무 범위를 제시한다. (사전 현행화 스냅샷 동기화)",
     "evidence": "AGENTS.md §5, §8; docs/CAMPAIGNS.md §13; components/campaigns/brand-landing.tsx",
-    "decision": "candidate",
+    "decision": "keep",
     "topic": "landing",
-    "source_ko": "세 가지가\n한 파이프라인에.",
-    "source_en": "THREE THINGS,\nONE PIPELINE."
+    "source_ko": "제작부터 게시까지,\n스튜디오가 맡습니다.",
+    "source_en": "FROM PRODUCTION TO POSTING.\nONE STUDIO."
   },
   "campaigns.landing.how1Title": {
     "ko": {
@@ -1656,8 +1656,8 @@
     "evidence": "AGENTS.md §5; lib/legal/documents.ts TERMS_KO §5, §8 / PRIVACY_KO §4; no legal edit in this PR",
     "decision": "owner-decision",
     "topic": "legal",
-    "source_ko": "실제 인물의 초상권",
-    "source_en": "Licensed real faces"
+    "source_ko": "동의한 얼굴, 명확한 사용 범위",
+    "source_en": "Consented likenesses. Clear usage rights."
   },
   "campaigns.landing.how1Body": {
     "ko": {
@@ -1676,108 +1676,108 @@
     "evidence": "AGENTS.md §5; lib/legal/documents.ts TERMS_KO §5, §8 / PRIVACY_KO §4; no legal edit in this PR",
     "decision": "owner-decision",
     "topic": "legal",
-    "source_ko": "크리에이터는 본인 얼굴 사진으로만 만듭니다. 계정마다 인물 자산 그룹 하나, 생성 엔진의 자동 검수, 필요하면 카메라 본인 인증. 지원할 때 게시 조건과 광고 표기에 동의하므로, 브랜드는 실제 사람의 얼굴이 들어간 광고를 동의 위에서 씁니다. 브랜드 채널 2차 활용 범위는 캠페인 조건에 숫자로 적습니다.",
-    "source_en": "Creators make only with photos of their own face: one likeness asset group per account, the engine’s automated moderation, and a camera check when the Company requires one. Applying means agreeing to the posting terms and the ad disclosure, so a brand uses an ad with a real person’s face on top of consent. Reuse on brand channels is written into the campaign terms in numbers."
+    "source_ko": "크리에이터는 자신의 얼굴 사용과 캠페인 참여 조건에 동의합니다. 게시 채널, 광고 표기, 브랜드 채널 재사용 범위는 캠페인 조건에 명시됩니다. 필요한 경우 별도의 본인 확인을 진행합니다.",
+    "source_en": "Creators consent to the use of their likeness and the campaign terms. Posting channels, ad disclosure and reuse on brand channels are specified in those terms. Additional identity checks are carried out when required."
   },
   "campaigns.landing.how2Title": {
     "ko": {
-      "clarity": 3,
-      "specificity": 3,
-      "naturalness": 2
+      "clarity": 5,
+      "specificity": 4,
+      "naturalness": 5
     },
     "en": {
-      "clarity": 3,
-      "specificity": 3,
-      "naturalness": 2
+      "clarity": 5,
+      "specificity": 4,
+      "naturalness": 5
     },
-    "proposed_ko": "브랜드에 맞춘 영상 포맷",
-    "proposed_en": "A format made for your brand",
-    "reason": "고품질이라는 자기 평가 대신 제공하는 결과를 말한다.",
-    "evidence": "AGENTS.md §5, §8; docs/CAMPAIGNS.md §13; components/campaigns/brand-landing.tsx",
-    "decision": "candidate",
+    "source_ko": "브랜드에 맞춘 포맷 설계",
+    "source_en": "Formats built for your brand",
+    "proposed_ko": "브랜드에 맞춘 포맷 설계",
+    "proposed_en": "Formats built for your brand",
+    "decision": "keep",
     "topic": "landing",
-    "source_ko": "고품질 포맷 제작",
-    "source_en": "Studio-grade formats"
+    "reason": "고품질이라는 자기 평가 대신 제공하는 결과를 말한다. (2026-11 Bundle G 사전 반영 완료) (2026-11 Bundle G 사전 반영 완료)",
+    "evidence": "AGENTS.md §5, §8; docs/CAMPAIGNS.md §13; components/campaigns/brand-landing.tsx"
   },
   "campaigns.landing.how2Body": {
     "ko": {
-      "clarity": 3,
-      "specificity": 2,
-      "naturalness": 3
+      "clarity": 4,
+      "specificity": 4,
+      "naturalness": 4
     },
     "en": {
-      "clarity": 3,
-      "specificity": 2,
-      "naturalness": 3
+      "clarity": 4,
+      "specificity": 4,
+      "naturalness": 4
     },
-    "proposed_ko": "스튜디오가 브랜드 제품과 메시지에 맞는 장면을 설계하고 테스트합니다. 선정된 크리에이터는 이 템플릿에 본인 사진을 적용해 각자의 영상을 만듭니다.",
-    "proposed_en": "Our studio designs and tests a scene around your product and message. Selected creators use the template with their own photos to make individual videos.",
-    "reason": "Seedance 2.0 같은 오래된 모델명과 품질 단정을 제거한다. 제작 역량과 개인화 방식은 남긴다.",
+    "proposed_ko": "스튜디오가 브랜드에 맞는 장면을 설계하고 테스트합니다. 합의한 포맷을 바탕으로 크리에이터가 직접 제작하거나, 스튜디오가 완성한 콘텐츠를 크리에이터에게 전달합니다.",
+    "proposed_en": "The studio designs and tests a scene for your brand. Creators can produce content from the agreed format, or the studio can deliver finished content for them to post.",
+    "reason": "Seedance 2.0 같은 오래된 모델명과 품질 단정을 제거한다. 제작 역량과 개인화 방식은 남긴다. (사전 현행화 스냅샷 동기화)",
     "evidence": "AGENTS.md §5, §8; docs/CAMPAIGNS.md §13; components/campaigns/brand-landing.tsx",
-    "decision": "candidate",
+    "decision": "keep",
     "topic": "landing",
-    "source_ko": "장면은 스튜디오가 만듭니다. Seedance 2.0 같은 최신 영상 모델로 브랜드 제품이 들어간 장면 하나를 설계하고 테스트해 템플릿으로 고정합니다. 사진 한 장을 넣으면 같은 장면이 그 사람의 얼굴로 나오므로, 크리에이터 수만큼 촬영할 필요가 없습니다.",
-    "source_en": "The studio makes the scene. With current video models such as Seedance 2.0 it designs and tests one scene with the brand’s product in it and fixes it as a template. One photo in, the same scene out with that person’s face — no shoot per creator."
+    "source_ko": "스튜디오가 브랜드에 맞는 장면을 설계하고 테스트합니다. 합의한 포맷을 바탕으로 크리에이터가 직접 제작하거나, 스튜디오가 완성한 콘텐츠를 크리에이터에게 전달합니다.",
+    "source_en": "The studio designs and tests a scene for your brand. Creators can produce content from the agreed format, or the studio can deliver finished content for them to post."
   },
   "campaigns.landing.how3Title": {
     "ko": {
-      "clarity": 3,
-      "specificity": 3,
-      "naturalness": 2
+      "clarity": 5,
+      "specificity": 4,
+      "naturalness": 5
     },
     "en": {
-      "clarity": 3,
-      "specificity": 3,
-      "naturalness": 2
+      "clarity": 5,
+      "specificity": 4,
+      "naturalness": 5
     },
-    "proposed_ko": "크리에이터의 채널에 게시",
-    "proposed_en": "Published on creators’ channels",
-    "reason": "조회수나 전파를 보장하지 않고 실제 수행 행위를 설명한다.",
-    "evidence": "AGENTS.md §5, §8; docs/CAMPAIGNS.md §13; components/campaigns/brand-landing.tsx",
-    "decision": "candidate",
+    "source_ko": "크리에이터 채널 게시와 리포트",
+    "source_en": "Published on real channels, tracked in one report",
+    "proposed_ko": "크리에이터 채널 게시와 리포트",
+    "proposed_en": "Published on real channels, tracked in one report",
+    "decision": "keep",
     "topic": "landing",
-    "source_ko": "실제 채널로 확산",
-    "source_en": "Spread through real channels"
+    "reason": "조회수나 전파를 보장하지 않고 실제 수행 행위를 설명한다. (2026-11 Bundle G 사전 반영 완료) (2026-11 Bundle G 사전 반영 완료)",
+    "evidence": "AGENTS.md §5, §8; docs/CAMPAIGNS.md §13; components/campaigns/brand-landing.tsx"
   },
   "campaigns.landing.how3Body": {
     "ko": {
-      "clarity": 2,
-      "specificity": 3,
-      "naturalness": 2
+      "clarity": 4,
+      "specificity": 4,
+      "naturalness": 4
     },
     "en": {
-      "clarity": 2,
-      "specificity": 3,
-      "naturalness": 2
+      "clarity": 4,
+      "specificity": 4,
+      "naturalness": 4
     },
-    "proposed_ko": "선정된 크리에이터가 캠페인 조건에 맞춰 각자의 채널에 게시합니다. 스튜디오가 게시물과 광고 표기를 확인하고 정산을 진행합니다. 브랜드에는 게시물 링크와 확인한 조회수를 전달합니다.",
-    "proposed_en": "Selected creators post on their channels under the campaign terms. Our studio reviews the posts and ad disclosures, then manages creator payments. You receive the post links and verified view counts.",
-    "reason": "홀드 등 내부 용어와 일률적인 7일 지급 약속을 빼고 브랜드가 받는 내용을 명시한다. 확인한 조회수는 수동 확인 기준이다.",
+    "proposed_ko": "선정된 크리에이터가 자신의 채널에 게시하면 스튜디오가 링크와 광고 표기를 확인하고 캠페인 조건에 따라 정산합니다. 게시물 링크와 측정 출처·시점이 표시된 성과 리포트를 전용 공간에서 확인하세요.",
+    "proposed_en": "Selected creators post on their own channels. The studio checks the post links and ad disclosure, and handles payout under the campaign terms. Your team can review the posts and a performance report with data sources and measurement times.",
+    "reason": "홀드 등 내부 용어와 일률적인 7일 지급 약속을 빼고 브랜드가 받는 내용을 명시한다. 확인한 조회수는 수동 확인 기준이다. (사전 현행화 스냅샷 동기화)",
     "evidence": "AGENTS.md §5, §8; docs/CAMPAIGNS.md §13; components/campaigns/brand-landing.tsx",
-    "decision": "candidate",
+    "decision": "keep",
     "topic": "landing",
-    "source_ko": "선정된 크리에이터가 각자 자기 채널에 올립니다. 링크 제출, 형식·해시태그·광고 표기 검수, 7일 홀드, 원고료 정산까지 스튜디오가 운영하고, 브랜드는 게시물 링크와 조회수를 받습니다.",
-    "source_en": "Selected creators post on their own channels. Link submission, a review of format, hashtags and disclosure, a seven-day hold and the fee payout are all run by the studio; the brand receives the post links and the view counts."
+    "source_ko": "선정된 크리에이터가 자신의 채널에 게시하면 스튜디오가 링크와 광고 표기를 확인하고 캠페인 조건에 따라 정산합니다. 게시물 링크와 측정 출처·시점이 표시된 성과 리포트를 전용 공간에서 확인하세요.",
+    "source_en": "Selected creators post on their own channels. The studio checks the post links and ad disclosure, and handles payout under the campaign terms. Your team can review the posts and a performance report with data sources and measurement times."
   },
   "campaigns.landing.howNote": {
     "ko": {
-      "clarity": 3,
-      "specificity": 3,
-      "naturalness": 2
+      "clarity": 5,
+      "specificity": 4,
+      "naturalness": 5
     },
     "en": {
-      "clarity": 3,
-      "specificity": 3,
-      "naturalness": 2
+      "clarity": 5,
+      "specificity": 4,
+      "naturalness": 5
     },
-    "proposed_ko": "브랜드 채널에 사용할 영상만 의뢰할 수도 있습니다.",
-    "proposed_en": "You can also commission videos for your own brand channels.",
-    "reason": "개별 광고 프로덕션의 의미를 구매 목적에 맞춰 간결하게 설명한다.",
-    "evidence": "AGENTS.md §5, §8; docs/CAMPAIGNS.md §13; components/campaigns/brand-landing.tsx",
-    "decision": "candidate",
+    "source_ko": "크리에이터 확산 없이 브랜드 영상만 필요하면 단독 제작으로 의뢰할 수 있습니다.",
+    "source_en": "Need the brand film without creator seeding? You can commission it as a standalone production.",
+    "proposed_ko": "크리에이터 확산 없이 브랜드 영상만 필요하면 단독 제작으로 의뢰할 수 있습니다.",
+    "proposed_en": "Need the brand film without creator seeding? You can commission it as a standalone production.",
+    "decision": "keep",
     "topic": "landing",
-    "source_ko": "크리에이터 확산 없이 브랜드 전용 영상만 필요한 경우도 받습니다. 개별 광고 프로덕션으로 의뢰해 주세요.",
-    "source_en": "A brand that needs the film alone, without creator reach, is welcome too — commission it as a one-off ad production."
+    "reason": "개별 광고 프로덕션의 의미를 구매 목적에 맞춰 간결하게 설명한다. (2026-11 Bundle G 사전 반영 완료) (2026-11 Bundle G 사전 반영 완료)",
+    "evidence": "AGENTS.md §5, §8; docs/CAMPAIGNS.md §13; components/campaigns/brand-landing.tsx"
   },
   "campaigns.landing.proofEyebrow": {
     "ko": {
@@ -2041,23 +2041,23 @@
   },
   "campaigns.brands.lede": {
     "ko": {
-      "clarity": 3,
-      "specificity": 3,
-      "naturalness": 2
+      "clarity": 4,
+      "specificity": 4,
+      "naturalness": 4
     },
     "en": {
-      "clarity": 3,
-      "specificity": 3,
-      "naturalness": 2
+      "clarity": 4,
+      "specificity": 4,
+      "naturalness": 4
     },
-    "proposed_ko": "제품과 캠페인 목표를 알려주세요. 예산과 일정에 맞는 영상 포맷과 운영 방식을 제안드립니다.",
-    "proposed_en": "Tell us about your product and campaign goals. We’ll propose a video format and an approach to fit your budget and timeline.",
-    "reason": "의뢰 전에 템플릿·브리프를 완성해야 한다는 부담을 줄인다. 회신 SLA는 접수 안내에서 명확히 다룬다.",
+    "proposed_ko": "알리고 싶은 제품과 목표, 예산을 알려주세요. 스튜디오가 제작과 크리에이터 모집을 운영하고, 브랜드는 콘텐츠를 확인하고 캠페인 결과를 살펴봅니다.",
+    "proposed_en": "Tell us about your product, goals, and budget. The studio runs production and creator recruitment; your team reviews the content and follows the results.",
+    "reason": "의뢰 전에 템플릿·브리프를 완성해야 한다는 부담을 줄인다. 회신 SLA는 접수 안내에서 명확히 다룬다. (사전 현행화 스냅샷 동기화)",
     "evidence": "docs/CAMPAIGNS.md §11; lib/brands/service.ts; components/campaigns/brand-form.tsx",
-    "decision": "candidate",
+    "decision": "keep",
     "topic": "brand",
-    "source_ko": "템플릿 하나와 브리프 한 번을 정하면 크리에이터 모집, 선정, 검수, 정산은 스튜디오가 맡습니다. 아래에 남겨 주시면 1영업일 안에 회신합니다.",
-    "source_en": "Pick one template and write one brief; the studio recruits, selects, reviews and pays the creators. Leave your details below and we reply within one business day."
+    "source_ko": "알리고 싶은 제품과 목표, 예산을 알려주세요. 스튜디오가 제작과 크리에이터 모집을 운영하고, 브랜드는 콘텐츠를 확인하고 캠페인 결과를 살펴봅니다.",
+    "source_en": "Tell us about your product, goals, and budget. The studio runs production and creator recruitment; your team reviews the content and follows the results."
   },
   "campaigns.brands.step1": {
     "ko": {
@@ -2081,23 +2081,23 @@
   },
   "campaigns.brands.step2": {
     "ko": {
-      "clarity": 3,
-      "specificity": 3,
-      "naturalness": 2
+      "clarity": 4,
+      "specificity": 4,
+      "naturalness": 4
     },
     "en": {
-      "clarity": 3,
-      "specificity": 3,
-      "naturalness": 2
+      "clarity": 4,
+      "specificity": 4,
+      "naturalness": 4
     },
-    "proposed_ko": "진행 조건 — 예산과 일정, 게시 조건, 원고료, 콘텐츠 활용 범위를 함께 정합니다.",
-    "proposed_en": "Campaign terms — agree on the budget, schedule, posting requirements, creator fees and content usage rights.",
-    "reason": "권리 범위는 숫자만으로 설명할 수 없다. 실제 합의 항목을 나열한다.",
+    "proposed_ko": "목표·예산 — 총예산과 희망 채널, 콘텐츠 수, 브랜드 채널에서 사용할 범위를 함께 정합니다.",
+    "proposed_en": "Goals and budget — agree on the total budget, preferred channels, content count, and reuse on your brand channels.",
+    "reason": "권리 범위는 숫자만으로 설명할 수 없다. 실제 합의 항목을 나열한다. (사전 현행화 스냅샷 동기화)",
     "evidence": "docs/CAMPAIGNS.md §11; lib/brands/service.ts; components/campaigns/brand-form.tsx",
-    "decision": "candidate",
+    "decision": "keep",
     "topic": "brand",
-    "source_ko": "브리프·예산 — 게시 조건, 원고료 규칙, 브랜드 채널 2차 활용 범위를 숫자로 정합니다.",
-    "source_en": "Brief and budget — posting rules, the fee and the reuse rights on brand channels, stated in numbers."
+    "source_ko": "목표·예산 — 총예산과 희망 채널, 콘텐츠 수, 브랜드 채널에서 사용할 범위를 함께 정합니다.",
+    "source_en": "Goals and budget — agree on the total budget, preferred channels, content count, and reuse on your brand channels."
   },
   "campaigns.brands.step3": {
     "ko": {
@@ -2341,43 +2341,43 @@
   },
   "campaigns.brands.fieldTemplate": {
     "ko": {
-      "clarity": 3,
-      "specificity": 3,
-      "naturalness": 2
+      "clarity": 5,
+      "specificity": 4,
+      "naturalness": 5
     },
     "en": {
-      "clarity": 3,
-      "specificity": 3,
-      "naturalness": 2
+      "clarity": 5,
+      "specificity": 4,
+      "naturalness": 5
     },
-    "proposed_ko": "희망 영상 포맷",
-    "proposed_en": "Preferred video format",
-    "reason": "추상적인 포맷의 종류를 분명히 한다.",
-    "evidence": "docs/CAMPAIGNS.md §11; lib/brands/service.ts; components/campaigns/brand-form.tsx",
-    "decision": "candidate",
+    "source_ko": "참고할 템플릿 (선택)",
+    "source_en": "Reference template (optional)",
+    "proposed_ko": "참고할 템플릿 (선택)",
+    "proposed_en": "Reference template (optional)",
+    "decision": "keep",
     "topic": "brand",
-    "source_ko": "희망 포맷",
-    "source_en": "Preferred format"
+    "reason": "추상적인 포맷의 종류를 분명히 한다. (2026-11 Bundle G 사전 반영 완료) (2026-11 Bundle G 사전 반영 완료)",
+    "evidence": "docs/CAMPAIGNS.md §11; lib/brands/service.ts; components/campaigns/brand-form.tsx"
   },
   "campaigns.brands.templateNew": {
     "ko": {
-      "clarity": 3,
-      "specificity": 3,
-      "naturalness": 2
+      "clarity": 5,
+      "specificity": 4,
+      "naturalness": 5
     },
     "en": {
-      "clarity": 3,
-      "specificity": 3,
-      "naturalness": 2
+      "clarity": 5,
+      "specificity": 4,
+      "naturalness": 5
     },
-    "proposed_ko": "브랜드 전용 영상 제작",
-    "proposed_en": "A custom video for our brand",
-    "reason": "브랜드가 받는 결과물 단위를 명시한다.",
-    "evidence": "docs/CAMPAIGNS.md §11; lib/brands/service.ts; components/campaigns/brand-form.tsx",
-    "decision": "candidate",
+    "source_ko": "브랜드 전용 포맷 새로 제작",
+    "source_en": "Build a custom brand format",
+    "proposed_ko": "브랜드 전용 포맷 새로 제작",
+    "proposed_en": "Build a custom brand format",
+    "decision": "keep",
     "topic": "brand",
-    "source_ko": "브랜드 전용 장면 제작",
-    "source_en": "A brand-only scene"
+    "reason": "브랜드가 받는 결과물 단위를 명시한다. (2026-11 Bundle G 사전 반영 완료) (2026-11 Bundle G 사전 반영 완료)",
+    "evidence": "docs/CAMPAIGNS.md §11; lib/brands/service.ts; components/campaigns/brand-form.tsx"
   },
   "campaigns.brands.templateUndecided": {
     "ko": {
@@ -2401,23 +2401,23 @@
   },
   "campaigns.brands.fieldTiming": {
     "ko": {
-      "clarity": 3,
-      "specificity": 3,
-      "naturalness": 2
+      "clarity": 5,
+      "specificity": 4,
+      "naturalness": 5
     },
     "en": {
-      "clarity": 3,
-      "specificity": 3,
-      "naturalness": 2
+      "clarity": 5,
+      "specificity": 4,
+      "naturalness": 5
     },
-    "proposed_ko": "희망 게시 시기 (선택)",
-    "proposed_en": "Preferred posting date (optional)",
-    "reason": "계약일·제작일·게시일 중 묻는 시점을 분명히 한다.",
-    "evidence": "docs/CAMPAIGNS.md §11; lib/brands/service.ts; components/campaigns/brand-form.tsx",
-    "decision": "candidate",
+    "source_ko": "희망 일정 (선택)",
+    "source_en": "Target schedule (optional)",
+    "proposed_ko": "희망 일정 (선택)",
+    "proposed_en": "Target schedule (optional)",
+    "decision": "keep",
     "topic": "brand",
-    "source_ko": "희망 시기 (선택)",
-    "source_en": "Timing (optional)"
+    "reason": "계약일·제작일·게시일 중 묻는 시점을 분명히 한다. (2026-11 Bundle G 사전 반영 완료) (2026-11 Bundle G 사전 반영 완료)",
+    "evidence": "docs/CAMPAIGNS.md §11; lib/brands/service.ts; components/campaigns/brand-form.tsx"
   },
   "campaigns.brands.timingPlaceholder": {
     "ko": {
@@ -2470,14 +2470,14 @@
       "specificity": 4,
       "naturalness": 4
     },
-    "proposed_ko": "제품·서비스, 목표, 참고 링크를 적어 주세요.",
-    "proposed_en": "The product, the goal, any reference links.",
+    "proposed_ko": "제품·서비스, 목표, 참고 링크와 마음에 든 제작 예시 제목을 적어 주세요.",
+    "proposed_en": "The product, the goal, any reference links, and the title of a production example you liked.",
     "decision": "keep",
     "topic": "brand",
-    "reason": "한·영 원문 대조: 이 라벨·안내는 해당 캠페인 항목/상태를 직접 가리키므로 유지 후보. 유지 표시는 정책 승인이나 런타임 노출 검증을 뜻하지 않는다.",
+    "reason": "한·영 원문 대조: 이 라벨·안내는 해당 캠페인 항목/상태를 직접 가리키므로 유지 후보. 유지 표시는 정책 승인이나 런타임 노출 검증을 뜻하지 않는다. (사전 현행화 스냅샷 동기화)",
     "evidence": "docs/CAMPAIGNS.md §11; lib/brands/service.ts; components/campaigns/brand-form.tsx",
-    "source_ko": "제품·서비스, 목표, 참고 링크를 적어 주세요.",
-    "source_en": "The product, the goal, any reference links."
+    "source_ko": "제품·서비스, 목표, 참고 링크와 마음에 든 제작 예시 제목을 적어 주세요.",
+    "source_en": "The product, the goal, any reference links, and the title of a production example you liked."
   },
   "campaigns.brands.consent": {
     "ko": {
@@ -2496,8 +2496,8 @@
     "evidence": "AGENTS.md §5; lib/legal/documents.ts TERMS_KO §5, §8 / PRIVACY_KO §4; no legal edit in this PR",
     "decision": "owner-decision",
     "topic": "legal",
-    "source_ko": "문의 회신을 위해 회사명, 이름, 이메일, 연락처를 수집·이용하는 데 동의합니다. 회신 후 1년간 보관하며, 개인정보처리방침을 따릅니다.",
-    "source_en": "I agree that the company name, my name, email and phone are collected to answer this enquiry, kept for one year after the reply, and handled under the privacy policy."
+    "source_ko": "문의 회신을 위해 회사명, 이름, 직위, 이메일, 연락처와 요청 내용을 수집·이용하는 데 동의합니다. 회신 후 1년간 보관하며, 개인정보처리방침을 따릅니다.",
+    "source_en": "I agree that the company name, my name, job title, email, phone and request are collected to answer this enquiry, kept for one year after the reply, and handled under the privacy policy."
   },
   "campaigns.brands.submit": {
     "ko": {
@@ -2576,8 +2576,8 @@
     "evidence": "docs/CAMPAIGNS.md §11; lib/brands/service.ts; components/campaigns/brand-form.tsx",
     "decision": "owner-decision",
     "topic": "brand",
-    "source_ko": "1영업일 안에 담당자가 이메일로 회신합니다. 접수 확인 메일도 함께 보냈습니다.",
-    "source_en": "We reply by email within one business day. A confirmation is on its way to you too."
+    "source_ko": "담당자가 이메일로 회신합니다.",
+    "source_en": "The studio replies by email."
   },
   "campaigns.brands.errInvalid": {
     "ko": {
@@ -2601,43 +2601,43 @@
   },
   "campaigns.brands.errRateLimited": {
     "ko": {
-      "clarity": 3,
-      "specificity": 3,
-      "naturalness": 2
+      "clarity": 5,
+      "specificity": 4,
+      "naturalness": 5
     },
     "en": {
-      "clarity": 3,
-      "specificity": 3,
-      "naturalness": 2
+      "clarity": 5,
+      "specificity": 4,
+      "naturalness": 5
     },
-    "proposed_ko": "오늘 보낼 수 있는 문의 수를 초과했습니다. 잠시 후 다시 시도하거나 hello@yagiworkshop.xyz로 연락해 주세요.",
-    "proposed_en": "You’ve reached the enquiry limit. Please try again later or email hello@yagiworkshop.xyz.",
-    "reason": "같은 이메일로 보낼 수 없다는 표현을 횟수 제한으로 명확히 한다. 서버는 rolling 24h이므로 자정에 풀린다고 단정하지 않는다.",
-    "evidence": "docs/CAMPAIGNS.md §11; lib/brands/service.ts; components/campaigns/brand-form.tsx",
-    "decision": "candidate",
+    "source_ko": "같은 이메일로는 하루 한 번만 보낼 수 있습니다. 급한 용건은 hello@yagiworkshop.xyz로 메일 주세요.",
+    "source_en": "Only one enquiry per email a day. If it is urgent, email hello@yagiworkshop.xyz.",
+    "proposed_ko": "같은 이메일로는 하루 한 번만 보낼 수 있습니다. 급한 용건은 hello@yagiworkshop.xyz로 메일 주세요.",
+    "proposed_en": "Only one enquiry per email a day. If it is urgent, email hello@yagiworkshop.xyz.",
+    "decision": "keep",
     "topic": "brand",
-    "source_ko": "같은 이메일로 오늘 더 보낼 수 없습니다. 내일 다시 시도하거나 hello@yagiworkshop.xyz로 보내 주세요.",
-    "source_en": "No more enquiries from this email today. Try tomorrow, or write to hello@yagiworkshop.xyz."
+    "reason": "같은 이메일로 보낼 수 없다는 표현을 횟수 제한으로 명확히 한다. 서버는 rolling 24h이므로 자정에 풀린다고 단정하지 않는다. (2026-11 Bundle G 사전 반영 완료) (2026-11 Bundle G 사전 반영 완료)",
+    "evidence": "docs/CAMPAIGNS.md §11; lib/brands/service.ts; components/campaigns/brand-form.tsx"
   },
   "campaigns.brands.errUnavailable": {
     "ko": {
-      "clarity": 3,
-      "specificity": 3,
-      "naturalness": 2
+      "clarity": 5,
+      "specificity": 4,
+      "naturalness": 5
     },
     "en": {
-      "clarity": 3,
-      "specificity": 3,
-      "naturalness": 2
+      "clarity": 5,
+      "specificity": 4,
+      "naturalness": 5
     },
-    "proposed_ko": "문의를 접수하지 못했습니다. 다시 시도하거나 hello@yagiworkshop.xyz로 연락해 주세요.",
-    "proposed_en": "We couldn’t receive your enquiry. Please try again or email hello@yagiworkshop.xyz.",
-    "reason": "실패한 행동과 복구 경로를 함께 제시한다.",
-    "evidence": "docs/CAMPAIGNS.md §11; lib/brands/service.ts; components/campaigns/brand-form.tsx",
-    "decision": "candidate",
+    "source_ko": "일시적인 오류로 접수하지 못했습니다. hello@yagiworkshop.xyz로 메일 보내 주세요.",
+    "source_en": "We could not take your enquiry right now. Please email hello@yagiworkshop.xyz.",
+    "proposed_ko": "일시적인 오류로 접수하지 못했습니다. hello@yagiworkshop.xyz로 메일 보내 주세요.",
+    "proposed_en": "We could not take your enquiry right now. Please email hello@yagiworkshop.xyz.",
+    "decision": "keep",
     "topic": "brand",
-    "source_ko": "지금은 접수할 수 없습니다. hello@yagiworkshop.xyz로 보내 주세요.",
-    "source_en": "Enquiries cannot be taken right now. Please write to hello@yagiworkshop.xyz."
+    "reason": "실패한 행동과 복구 경로를 함께 제시한다. (2026-11 Bundle G 사전 반영 완료) (2026-11 Bundle G 사전 반영 완료)",
+    "evidence": "docs/CAMPAIGNS.md §11; lib/brands/service.ts; components/campaigns/brand-form.tsx"
   },
   "campaigns.myCampaigns": {
     "ko": {
@@ -2721,83 +2721,83 @@
   },
   "campaigns.appStatus.withdrawn": {
     "ko": {
-      "clarity": 3,
-      "specificity": 3,
-      "naturalness": 2
+      "clarity": 5,
+      "specificity": 4,
+      "naturalness": 5
     },
     "en": {
-      "clarity": 3,
-      "specificity": 3,
-      "naturalness": 2
+      "clarity": 5,
+      "specificity": 4,
+      "naturalness": 5
     },
+    "source_ko": "지원 취소",
+    "source_en": "Withdrawn",
     "proposed_ko": "지원 취소",
-    "proposed_en": "Application withdrawn",
-    "reason": "무엇을 철회했는지 명시한다.",
-    "evidence": "docs/CAMPAIGNS.md §2–6; lib/campaigns/state.ts; components/campaigns/labels.ts",
-    "decision": "candidate",
+    "proposed_en": "Withdrawn",
+    "decision": "keep",
     "topic": "campaign",
-    "source_ko": "철회",
-    "source_en": "Withdrawn"
+    "reason": "무엇을 철회했는지 명시한다. (2026-11 Bundle G 사전 반영 완료) (2026-11 Bundle G 사전 반영 완료)",
+    "evidence": "docs/CAMPAIGNS.md §2–6; lib/campaigns/state.ts; components/campaigns/labels.ts"
   },
   "campaigns.appStatus.posted": {
     "ko": {
-      "clarity": 3,
-      "specificity": 3,
-      "naturalness": 2
+      "clarity": 5,
+      "specificity": 4,
+      "naturalness": 5
     },
     "en": {
-      "clarity": 3,
-      "specificity": 3,
-      "naturalness": 2
+      "clarity": 5,
+      "specificity": 4,
+      "naturalness": 5
     },
-    "proposed_ko": "링크 제출 완료 · 검수 대기",
-    "proposed_en": "Link submitted · awaiting review",
-    "reason": "상태 변화는 외부 게시 사실 자동 확인이 아니라 링크 제출이다.",
-    "evidence": "docs/CAMPAIGNS.md §2–6; lib/campaigns/state.ts; components/campaigns/labels.ts",
-    "decision": "candidate",
+    "source_ko": "링크 제출 · 검수 대기",
+    "source_en": "Link submitted · in review",
+    "proposed_ko": "링크 제출 · 검수 대기",
+    "proposed_en": "Link submitted · in review",
+    "decision": "keep",
     "topic": "campaign",
-    "source_ko": "게시 · 검수 대기",
-    "source_en": "Posted · in review"
+    "reason": "상태 변화는 외부 게시 사실 자동 확인이 아니라 링크 제출이다. (2026-11 Bundle G 사전 반영 완료) (2026-11 Bundle G 사전 반영 완료)",
+    "evidence": "docs/CAMPAIGNS.md §2–6; lib/campaigns/state.ts; components/campaigns/labels.ts"
   },
   "campaigns.appStatus.verified": {
     "ko": {
-      "clarity": 3,
-      "specificity": 3,
-      "naturalness": 2
+      "clarity": 4,
+      "specificity": 4,
+      "naturalness": 4
     },
     "en": {
-      "clarity": 3,
-      "specificity": 3,
-      "naturalness": 2
+      "clarity": 4,
+      "specificity": 4,
+      "naturalness": 4
     },
     "proposed_ko": "검수 완료 · 정산 대기",
-    "proposed_en": "Approved · awaiting payment",
-    "reason": "verified는 얼굴 인증이 아니라 게시물 검수. 대기기간 종료와 송금 완료를 구분한다.",
+    "proposed_en": "Reviewed · awaiting payout",
+    "reason": "verified는 얼굴 인증이 아니라 게시물 검수. 대기기간 종료와 송금 완료를 구분한다. (사전 현행화 스냅샷 동기화)",
     "evidence": "docs/CAMPAIGNS.md §3–4, §7; lib/campaigns/state.ts holdUntil/payoutReleasable; lib/admin/campaign-operations.ts pay",
-    "decision": "candidate",
+    "decision": "keep",
     "topic": "payout",
-    "source_ko": "검수 완료 · 홀드 중",
-    "source_en": "Verified · on hold"
+    "source_ko": "검수 완료 · 정산 대기",
+    "source_en": "Reviewed · awaiting payout"
   },
   "campaigns.appStatus.rejected": {
     "ko": {
-      "clarity": 3,
-      "specificity": 3,
-      "naturalness": 2
+      "clarity": 5,
+      "specificity": 4,
+      "naturalness": 5
     },
     "en": {
-      "clarity": 3,
-      "specificity": 3,
-      "naturalness": 2
+      "clarity": 5,
+      "specificity": 4,
+      "naturalness": 5
     },
-    "proposed_ko": "수정 후 다시 제출해 주세요",
-    "proposed_en": "Changes needed · resubmit",
-    "reason": "반려라는 운영 용어를 다음 행동으로 바꾼다.",
-    "evidence": "docs/CAMPAIGNS.md §2–6; lib/campaigns/state.ts; components/campaigns/labels.ts",
-    "decision": "candidate",
+    "source_ko": "보완 필요 · 다시 제출",
+    "source_en": "Needs changes · resubmit",
+    "proposed_ko": "보완 필요 · 다시 제출",
+    "proposed_en": "Needs changes · resubmit",
+    "decision": "keep",
     "topic": "campaign",
-    "source_ko": "반려 · 재제출 필요",
-    "source_en": "Returned · resubmit"
+    "reason": "반려라는 운영 용어를 다음 행동으로 바꾼다. (2026-11 Bundle G 사전 반영 완료) (2026-11 Bundle G 사전 반영 완료)",
+    "evidence": "docs/CAMPAIGNS.md §2–6; lib/campaigns/state.ts; components/campaigns/labels.ts"
   },
   "campaigns.appStatus.paid": {
     "ko": {
@@ -2881,23 +2881,23 @@
   },
   "campaigns.applyLede": {
     "ko": {
-      "clarity": 3,
-      "specificity": 3,
-      "naturalness": 2
+      "clarity": 5,
+      "specificity": 4,
+      "naturalness": 5
     },
     "en": {
-      "clarity": 3,
-      "specificity": 3,
-      "naturalness": 2
+      "clarity": 5,
+      "specificity": 4,
+      "naturalness": 5
     },
-    "proposed_ko": "게시 조건과 원고료를 확인한 뒤 지원해 주세요. 선정 결과는 내 캠페인에서 확인할 수 있습니다.",
-    "proposed_en": "Review the posting requirements and creator fee, then apply. You can check the selection result in My campaigns.",
-    "reason": "아래 조건의 내용을 명시하고 즉시 선정 결과가 나온다는 오해를 줄인다.",
-    "evidence": "docs/CAMPAIGNS.md §2–6; lib/campaigns/state.ts; components/campaigns/labels.ts",
-    "decision": "candidate",
+    "source_ko": "조건을 확인한 뒤 지원서를 보내 주세요. 선정 여부는 내 캠페인에서 바로 확인할 수 있습니다.",
+    "source_en": "Check the terms below and send your application. Selection results appear right in My campaigns.",
+    "proposed_ko": "조건을 확인한 뒤 지원서를 보내 주세요. 선정 여부는 내 캠페인에서 바로 확인할 수 있습니다.",
+    "proposed_en": "Check the terms below and send your application. Selection results appear right in My campaigns.",
+    "decision": "keep",
     "topic": "campaign",
-    "source_ko": "아래 조건을 확인하고 지원서를 보내주세요. 선정되면 내 캠페인 페이지에 바로 표시됩니다.",
-    "source_en": "Read the terms below and send your application. A selection shows on your campaigns page at once."
+    "reason": "아래 조건의 내용을 명시하고 즉시 선정 결과가 나온다는 오해를 줄인다. (2026-11 Bundle G 사전 반영 완료) (2026-11 Bundle G 사전 반영 완료)",
+    "evidence": "docs/CAMPAIGNS.md §2–6; lib/campaigns/state.ts; components/campaigns/labels.ts"
   },
   "campaigns.applySuccessTitle": {
     "ko": {
@@ -2941,23 +2941,23 @@
   },
   "campaigns.applySignInBody": {
     "ko": {
-      "clarity": 3,
-      "specificity": 3,
-      "naturalness": 2
+      "clarity": 5,
+      "specificity": 4,
+      "naturalness": 5
     },
     "en": {
-      "clarity": 3,
-      "specificity": 3,
-      "naturalness": 2
+      "clarity": 5,
+      "specificity": 4,
+      "naturalness": 5
     },
-    "proposed_ko": "로그인한 뒤 캠페인에 지원할 수 있습니다. 진행 상태와 정산 내역은 내 캠페인에서 확인하세요.",
-    "proposed_en": "Sign in to apply. Track your campaign progress and payments in My campaigns.",
-    "reason": "기록된다는 시스템 설명을 사용자가 확인할 위치로 바꾼다.",
-    "evidence": "docs/CAMPAIGNS.md §2–6; lib/campaigns/state.ts; components/campaigns/labels.ts",
-    "decision": "candidate",
+    "source_ko": "로그인 후 지원할 수 있습니다. 선정·검수·정산 내역이 계정에 함께 기록됩니다.",
+    "source_en": "Sign in to apply. Selection, post review, and payout status are tracked on your account.",
+    "proposed_ko": "로그인 후 지원할 수 있습니다. 선정·검수·정산 내역이 계정에 함께 기록됩니다.",
+    "proposed_en": "Sign in to apply. Selection, post review, and payout status are tracked on your account.",
+    "decision": "keep",
     "topic": "campaign",
-    "source_ko": "지원하려면 로그인이 필요합니다. 선정·검수·정산 상태가 계정에 기록됩니다.",
-    "source_en": "Sign in to apply — selection, review and payout are recorded on your account."
+    "reason": "기록된다는 시스템 설명을 사용자가 확인할 위치로 바꾼다. (2026-11 Bundle G 사전 반영 완료) (2026-11 Bundle G 사전 반영 완료)",
+    "evidence": "docs/CAMPAIGNS.md §2–6; lib/campaigns/state.ts; components/campaigns/labels.ts"
   },
   "campaigns.applyStatusLabel": {
     "ko": {
@@ -2981,63 +2981,63 @@
   },
   "campaigns.fieldPitch": {
     "ko": {
-      "clarity": 3,
-      "specificity": 3,
-      "naturalness": 2
+      "clarity": 5,
+      "specificity": 4,
+      "naturalness": 5
     },
     "en": {
-      "clarity": 3,
-      "specificity": 3,
-      "naturalness": 2
+      "clarity": 5,
+      "specificity": 4,
+      "naturalness": 5
     },
-    "proposed_ko": "지원 이유",
-    "proposed_en": "Why you’d like to join",
-    "reason": "한 줄 어필이라는 표현을 구체적인 입력 목적에 맞춘다.",
-    "evidence": "docs/CAMPAIGNS.md §2–6; lib/campaigns/state.ts; components/campaigns/labels.ts",
-    "decision": "candidate",
+    "source_ko": "짧은 소개",
+    "source_en": "Short intro",
+    "proposed_ko": "짧은 소개",
+    "proposed_en": "Short intro",
+    "decision": "keep",
     "topic": "campaign",
-    "source_ko": "한 줄 어필",
-    "source_en": "One line about you"
+    "reason": "한 줄 어필이라는 표현을 구체적인 입력 목적에 맞춘다. (2026-11 Bundle G 사전 반영 완료) (2026-11 Bundle G 사전 반영 완료)",
+    "evidence": "docs/CAMPAIGNS.md §2–6; lib/campaigns/state.ts; components/campaigns/labels.ts"
   },
   "campaigns.fieldPitchHint": {
     "ko": {
-      "clarity": 3,
-      "specificity": 3,
-      "naturalness": 2
+      "clarity": 5,
+      "specificity": 4,
+      "naturalness": 5
     },
     "en": {
-      "clarity": 3,
-      "specificity": 3,
-      "naturalness": 2
+      "clarity": 5,
+      "specificity": 4,
+      "naturalness": 5
     },
-    "proposed_ko": "어떤 콘텐츠를 만드는지, 이 캠페인에 참여하고 싶은 이유를 적어 주세요. 10~300자.",
-    "proposed_en": "Tell us what you create and why you’d like to join this campaign. 10–300 characters.",
-    "reason": "행동을 완결된 문장으로 안내하고 길이 제한을 유지한다.",
-    "evidence": "docs/CAMPAIGNS.md §2–6; lib/campaigns/state.ts; components/campaigns/labels.ts",
-    "decision": "candidate",
+    "source_ko": "주로 만드는 콘텐츠와 이 캠페인에 어울리는 이유를 10~300자로 적어 주세요.",
+    "source_en": "Tell us what you usually post and why this format fits your channel (10–300 characters).",
+    "proposed_ko": "주로 만드는 콘텐츠와 이 캠페인에 어울리는 이유를 10~300자로 적어 주세요.",
+    "proposed_en": "Tell us what you usually post and why this format fits your channel (10–300 characters).",
+    "decision": "keep",
     "topic": "campaign",
-    "source_ko": "어떤 콘텐츠를 만들어 왔는지, 이 포맷이 왜 맞는지. 10~300자.",
-    "source_en": "What you make, and why this format fits. 10–300 characters."
+    "reason": "행동을 완결된 문장으로 안내하고 길이 제한을 유지한다. (2026-11 Bundle G 사전 반영 완료) (2026-11 Bundle G 사전 반영 완료)",
+    "evidence": "docs/CAMPAIGNS.md §2–6; lib/campaigns/state.ts; components/campaigns/labels.ts"
   },
   "campaigns.fieldSns": {
     "ko": {
-      "clarity": 3,
-      "specificity": 3,
-      "naturalness": 2
+      "clarity": 5,
+      "specificity": 4,
+      "naturalness": 5
     },
     "en": {
-      "clarity": 3,
-      "specificity": 3,
-      "naturalness": 2
+      "clarity": 5,
+      "specificity": 4,
+      "naturalness": 5
     },
-    "proposed_ko": "활동 중인 SNS 계정 링크",
-    "proposed_en": "Social profile link",
-    "reason": "한국어는 활동 중임을 명확히, 영어는 SNS 직역을 피한다.",
-    "evidence": "docs/CAMPAIGNS.md §2–6; lib/campaigns/state.ts; components/campaigns/labels.ts",
-    "decision": "candidate",
+    "source_ko": "활동 중인 SNS 주소",
+    "source_en": "Active SNS profile link",
+    "proposed_ko": "활동 중인 SNS 주소",
+    "proposed_en": "Active SNS profile link",
+    "decision": "keep",
     "topic": "campaign",
-    "source_ko": "활동 SNS 계정 링크",
-    "source_en": "Your SNS account link"
+    "reason": "한국어는 활동 중임을 명확히, 영어는 SNS 직역을 피한다. (2026-11 Bundle G 사전 반영 완료) (2026-11 Bundle G 사전 반영 완료)",
+    "evidence": "docs/CAMPAIGNS.md §2–6; lib/campaigns/state.ts; components/campaigns/labels.ts"
   },
   "campaigns.fieldFollowers": {
     "ko": {
@@ -3161,23 +3161,23 @@
   },
   "campaigns.errRateLimited": {
     "ko": {
-      "clarity": 3,
-      "specificity": 3,
-      "naturalness": 2
+      "clarity": 5,
+      "specificity": 4,
+      "naturalness": 5
     },
     "en": {
-      "clarity": 3,
-      "specificity": 3,
-      "naturalness": 2
+      "clarity": 5,
+      "specificity": 4,
+      "naturalness": 5
     },
-    "proposed_ko": "지원 횟수 제한에 도달했습니다. 잠시 후 다시 시도해 주세요.",
-    "proposed_en": "You’ve reached the application limit. Please try again later.",
-    "reason": "rolling 24h 제한을 내일 자정 해제로 약속하지 않는다.",
-    "evidence": "docs/CAMPAIGNS.md §2–6; lib/campaigns/state.ts; components/campaigns/labels.ts",
-    "decision": "candidate",
+    "source_ko": "오늘 지원 가능한 횟수를 모두 썼습니다. 내일 다시 시도해 주세요.",
+    "source_en": "You have reached today’s application limit. Please try again tomorrow.",
+    "proposed_ko": "오늘 지원 가능한 횟수를 모두 썼습니다. 내일 다시 시도해 주세요.",
+    "proposed_en": "You have reached today’s application limit. Please try again tomorrow.",
+    "decision": "keep",
     "topic": "campaign",
-    "source_ko": "오늘은 더 보낼 수 없습니다. 내일 다시 시도해 주세요.",
-    "source_en": "No more submissions today. Try again tomorrow."
+    "reason": "rolling 24h 제한을 내일 자정 해제로 약속하지 않는다. (2026-11 Bundle G 사전 반영 완료) (2026-11 Bundle G 사전 반영 완료)",
+    "evidence": "docs/CAMPAIGNS.md §2–6; lib/campaigns/state.ts; components/campaigns/labels.ts"
   },
   "campaigns.errNotOpen": {
     "ko": {
@@ -3261,23 +3261,23 @@
   },
   "campaigns.errWrongPlatform": {
     "ko": {
-      "clarity": 3,
-      "specificity": 3,
-      "naturalness": 2
+      "clarity": 5,
+      "specificity": 4,
+      "naturalness": 5
     },
     "en": {
-      "clarity": 3,
-      "specificity": 3,
-      "naturalness": 2
+      "clarity": 5,
+      "specificity": 4,
+      "naturalness": 5
     },
-    "proposed_ko": "캠페인에 안내된 SNS의 게시물 링크를 입력해 주세요.",
-    "proposed_en": "Enter a post link from one of the platforms listed in this campaign.",
-    "reason": "왜 틀렸는지와 고치는 행동을 연결한다.",
-    "evidence": "docs/CAMPAIGNS.md §2–6; lib/campaigns/state.ts; components/campaigns/labels.ts",
-    "decision": "candidate",
+    "source_ko": "캠페인에서 지정한 플랫폼(인스타그램·틱톡·유튜브)의 게시물 주소를 넣어 주세요.",
+    "source_en": "Enter a post link from a platform specified in this campaign.",
+    "proposed_ko": "캠페인에서 지정한 플랫폼(인스타그램·틱톡·유튜브)의 게시물 주소를 넣어 주세요.",
+    "proposed_en": "Enter a post link from a platform specified in this campaign.",
+    "decision": "keep",
     "topic": "campaign",
-    "source_ko": "이 캠페인이 지정한 플랫폼의 링크가 아닙니다.",
-    "source_en": "That link is not on a platform this campaign names."
+    "reason": "왜 틀렸는지와 고치는 행동을 연결한다. (2026-11 Bundle G 사전 반영 완료) (2026-11 Bundle G 사전 반영 완료)",
+    "evidence": "docs/CAMPAIGNS.md §2–6; lib/campaigns/state.ts; components/campaigns/labels.ts"
   },
   "campaigns.errPostNotOpen": {
     "ko": {
@@ -3321,23 +3321,23 @@
   },
   "campaigns.mineLede": {
     "ko": {
-      "clarity": 3,
-      "specificity": 3,
-      "naturalness": 2
+      "clarity": 5,
+      "specificity": 4,
+      "naturalness": 5
     },
     "en": {
-      "clarity": 3,
-      "specificity": 3,
-      "naturalness": 2
+      "clarity": 5,
+      "specificity": 4,
+      "naturalness": 5
     },
-    "proposed_ko": "지원 결과를 확인하고 게시물 링크를 제출하세요. 검수와 정산 상태도 여기에서 볼 수 있습니다.",
-    "proposed_en": "Check your application results and submit your post links. Track review and payment status here, too.",
-    "reason": "메뉴의 설명을 실제 가능한 행동으로 바꾼다.",
-    "evidence": "docs/CAMPAIGNS.md §2–6; lib/campaigns/state.ts; components/campaigns/labels.ts",
-    "decision": "candidate",
+    "source_ko": "지원한 캠페인의 선정 결과와 게시물 검수, 정산 상태를 한곳에서 확인하세요.",
+    "source_en": "Check your campaign selections, submit post links, and track payouts in one place.",
+    "proposed_ko": "지원한 캠페인의 선정 결과와 게시물 검수, 정산 상태를 한곳에서 확인하세요.",
+    "proposed_en": "Check your campaign selections, submit post links, and track payouts in one place.",
+    "decision": "keep",
     "topic": "campaign",
-    "source_ko": "지원한 캠페인의 진행 상태, 게시 링크 제출, 정산 현황을 여기서 봅니다.",
-    "source_en": "Where each application stands, where to submit your post link, and what has been paid."
+    "reason": "메뉴의 설명을 실제 가능한 행동으로 바꾼다. (2026-11 Bundle G 사전 반영 완료) (2026-11 Bundle G 사전 반영 완료)",
+    "evidence": "docs/CAMPAIGNS.md §2–6; lib/campaigns/state.ts; components/campaigns/labels.ts"
   },
   "campaigns.mineEmpty": {
     "ko": {
@@ -3361,23 +3361,23 @@
   },
   "campaigns.mineBrowse": {
     "ko": {
-      "clarity": 4,
+      "clarity": 5,
       "specificity": 4,
-      "naturalness": 4
+      "naturalness": 5
     },
     "en": {
-      "clarity": 3,
-      "specificity": 3,
-      "naturalness": 2
+      "clarity": 5,
+      "specificity": 4,
+      "naturalness": 5
     },
-    "proposed_ko": "모집 중인 캠페인 보기",
-    "proposed_en": "Explore open campaigns",
-    "reason": "영어 recruiting의 주어가 모호해 open campaigns로 명확히 한다.",
-    "evidence": "docs/CAMPAIGNS.md §2–6; lib/campaigns/state.ts; components/campaigns/labels.ts",
-    "decision": "candidate",
+    "source_ko": "모집 중인 캠페인 둘러보기",
+    "source_en": "Browse open campaigns",
+    "proposed_ko": "모집 중인 캠페인 둘러보기",
+    "proposed_en": "Browse open campaigns",
+    "decision": "keep",
     "topic": "campaign",
-    "source_ko": "모집 중인 캠페인 보기",
-    "source_en": "See what is recruiting"
+    "reason": "영어 recruiting의 주어가 모호해 open campaigns로 명확히 한다. (2026-11 Bundle G 사전 반영 완료) (2026-11 Bundle G 사전 반영 완료)",
+    "evidence": "docs/CAMPAIGNS.md §2–6; lib/campaigns/state.ts; components/campaigns/labels.ts"
   },
   "campaigns.stepApplied": {
     "ko": {
@@ -3521,83 +3521,83 @@
   },
   "campaigns.postHint": {
     "ko": {
-      "clarity": 3,
-      "specificity": 3,
-      "naturalness": 2
+      "clarity": 5,
+      "specificity": 4,
+      "naturalness": 5
     },
     "en": {
-      "clarity": 3,
-      "specificity": 3,
-      "naturalness": 2
+      "clarity": 5,
+      "specificity": 4,
+      "naturalness": 5
     },
-    "proposed_ko": "{date}까지 {platforms}에 게시한 링크를 제출해 주세요.",
-    "proposed_en": "Submit the link to your post on {platforms} by {date}.",
-    "reason": "장소·대상·기한을 한 문장으로 묶는다. 플레이스홀더 보존.",
-    "evidence": "docs/CAMPAIGNS.md §2–6; lib/campaigns/state.ts; components/campaigns/labels.ts",
-    "decision": "candidate",
+    "source_ko": "{date}까지 {platforms}에 올린 게시물 주소를 제출해 주세요.",
+    "source_en": "Submit your published {platforms} link by {date}.",
+    "proposed_ko": "{date}까지 {platforms}에 올린 게시물 주소를 제출해 주세요.",
+    "proposed_en": "Submit your published {platforms} link by {date}.",
+    "decision": "keep",
     "topic": "campaign",
-    "source_ko": "{platforms}에 올린 게시물 링크. {date}까지 제출.",
-    "source_en": "The link to your post on {platforms}. Due {date}."
+    "reason": "장소·대상·기한을 한 문장으로 묶는다. 플레이스홀더 보존. (2026-11 Bundle G 사전 반영 완료) (2026-11 Bundle G 사전 반영 완료)",
+    "evidence": "docs/CAMPAIGNS.md §2–6; lib/campaigns/state.ts; components/campaigns/labels.ts"
   },
   "campaigns.postSubmit": {
     "ko": {
-      "clarity": 3,
-      "specificity": 3,
-      "naturalness": 2
+      "clarity": 5,
+      "specificity": 4,
+      "naturalness": 5
     },
     "en": {
-      "clarity": 3,
-      "specificity": 3,
-      "naturalness": 2
+      "clarity": 5,
+      "specificity": 4,
+      "naturalness": 5
     },
+    "source_ko": "게시물 링크 제출하기",
+    "source_en": "Submit post link",
     "proposed_ko": "게시물 링크 제출하기",
     "proposed_en": "Submit post link",
-    "reason": "클릭 결과를 구체화한다.",
-    "evidence": "docs/CAMPAIGNS.md §2–6; lib/campaigns/state.ts; components/campaigns/labels.ts",
-    "decision": "candidate",
+    "decision": "keep",
     "topic": "campaign",
-    "source_ko": "링크 제출",
-    "source_en": "Submit link"
+    "reason": "클릭 결과를 구체화한다. (2026-11 Bundle G 사전 반영 완료) (2026-11 Bundle G 사전 반영 완료)",
+    "evidence": "docs/CAMPAIGNS.md §2–6; lib/campaigns/state.ts; components/campaigns/labels.ts"
   },
   "campaigns.postResubmit": {
     "ko": {
-      "clarity": 3,
-      "specificity": 3,
-      "naturalness": 2
+      "clarity": 5,
+      "specificity": 4,
+      "naturalness": 5
     },
     "en": {
-      "clarity": 3,
-      "specificity": 3,
-      "naturalness": 2
+      "clarity": 5,
+      "specificity": 4,
+      "naturalness": 5
     },
-    "proposed_ko": "수정한 링크 다시 제출하기",
-    "proposed_en": "Resubmit post link",
-    "reason": "새 게시물 업로드를 강요하지 않고 수정 후 링크 재제출 행동을 안내한다.",
-    "evidence": "docs/CAMPAIGNS.md §2–6; lib/campaigns/state.ts; components/campaigns/labels.ts",
-    "decision": "candidate",
+    "source_ko": "수정 후 다시 제출하기",
+    "source_en": "Resubmit link",
+    "proposed_ko": "수정 후 다시 제출하기",
+    "proposed_en": "Resubmit link",
+    "decision": "keep",
     "topic": "campaign",
-    "source_ko": "다시 제출",
-    "source_en": "Resubmit"
+    "reason": "새 게시물 업로드를 강요하지 않고 수정 후 링크 재제출 행동을 안내한다. (2026-11 Bundle G 사전 반영 완료) (2026-11 Bundle G 사전 반영 완료)",
+    "evidence": "docs/CAMPAIGNS.md §2–6; lib/campaigns/state.ts; components/campaigns/labels.ts"
   },
   "campaigns.postSaved": {
     "ko": {
-      "clarity": 3,
-      "specificity": 3,
-      "naturalness": 2
+      "clarity": 5,
+      "specificity": 4,
+      "naturalness": 5
     },
     "en": {
-      "clarity": 3,
-      "specificity": 3,
-      "naturalness": 2
+      "clarity": 5,
+      "specificity": 4,
+      "naturalness": 5
     },
-    "proposed_ko": "게시물 링크를 받았습니다. 검수가 끝나면 결과를 알려드립니다.",
-    "proposed_en": "We’ve received your post link. We’ll notify you when the review is complete.",
-    "reason": "검수 알림 메일 구현을 근거로 다음 단계를 안내한다. 실제 메일 도착 시간은 약속하지 않는다.",
-    "evidence": "docs/CAMPAIGNS.md §2–6; lib/campaigns/state.ts; components/campaigns/labels.ts",
-    "decision": "candidate",
+    "source_ko": "링크를 제출했습니다. 검수가 끝나면 이곳에 결과가 표시됩니다.",
+    "source_en": "Link submitted. Your review status will update here.",
+    "proposed_ko": "링크를 제출했습니다. 검수가 끝나면 이곳에 결과가 표시됩니다.",
+    "proposed_en": "Link submitted. Your review status will update here.",
+    "decision": "keep",
     "topic": "campaign",
-    "source_ko": "링크를 받았습니다. 검수 결과는 여기서 확인할 수 있습니다.",
-    "source_en": "Link received. The review result shows here."
+    "reason": "검수 알림 메일 구현을 근거로 다음 단계를 안내한다. 실제 메일 도착 시간은 약속하지 않는다. (2026-11 Bundle G 사전 반영 완료) (2026-11 Bundle G 사전 반영 완료)",
+    "evidence": "docs/CAMPAIGNS.md §2–6; lib/campaigns/state.ts; components/campaigns/labels.ts"
   },
   "campaigns.holdUntilLine": {
     "ko": {
@@ -3890,14 +3890,14 @@
       "specificity": 3,
       "naturalness": 2
     },
-    "proposed_ko": "{host}의 「{title}」 캠페인이 크리에이터를 모집합니다. 원고료 {payout}, 모집 인원 {slots}명입니다. {applyBy}까지 지원해 주세요. 선정 결과는 내 캠페인에서 확인할 수 있습니다.",
-    "proposed_en": "Applications are open for “{title}” by {host}. Creator fee: {payout}. Places: {slots}. Apply by {applyBy} and check the selection result in My campaigns.",
+    "proposed_ko": "{host}의 「{title}」 캠페인에서 크리에이터 {slots}명을 모집합니다. {applyBy}까지 지원할 수 있습니다. 참여 조건은 지원 화면에서, 선정 결과는 내 캠페인에서 확인해 주세요.",
+    "proposed_en": "{host} is looking for {slots} creators for \"{title}\". Apply by {applyBy}. Review the participation terms when you apply, then check My campaigns for the result.",
     "reason": "금액·인원·기한을 짧은 문장으로 분리한다. 외부 발송 문안은 대표 승인 필요.",
     "evidence": "AGENTS.md §5 외부 발송; docs/CAMPAIGNS.md §12; lib/campaigns/notify.ts",
     "decision": "owner-decision",
     "topic": "email",
-    "source_ko": "{host}의 「{title}」 캠페인이 열렸습니다. 원고료 {payout} · {slots}명 선정 · {applyBy} 지원 마감. 지원하면 선정 결과를 내 캠페인에서 바로 볼 수 있습니다.",
-    "source_en": "{host} opened \"{title}\". Fee {payout} · {slots} creators · apply by {applyBy}. Apply and the result shows up in My campaigns."
+    "source_ko": "{host}의 「{title}」 캠페인에서 크리에이터 {slots}명을 모집합니다. {applyBy}까지 지원할 수 있습니다. 참여 조건은 지원 화면에서, 선정 결과는 내 캠페인에서 확인해 주세요.",
+    "source_en": "{host} is looking for {slots} creators for \"{title}\". Apply by {applyBy}. Review the participation terms when you apply, then check My campaigns for the result."
   },
   "campaigns.email.recruitingCta": {
     "ko": {
@@ -4176,8 +4176,8 @@
     "evidence": "AGENTS.md §5 외부 발송; docs/CAMPAIGNS.md §12; lib/campaigns/notify.ts",
     "decision": "owner-decision",
     "topic": "email",
-    "source_ko": "「{title}」 게시물이 검수를 통과했습니다. 홀드 기간이 끝나면 규칙대로 정산됩니다. 원고료 {payout}.",
-    "source_en": "Your post for \"{title}\" passed review. Once the hold ends it is paid under the campaign rule. Fee {payout}."
+    "source_ko": "「{title}」 게시물이 검수를 통과했습니다. 정산 대기 기간이 지나면 캠페인 규칙에 따라 지급됩니다. 원고료: {payout}.",
+    "source_en": "Your post for \"{title}\" passed review. Payment follows the campaign terms after the waiting period. Fee: {payout}."
   },
   "campaigns.email.statusBody.rejected": {
     "ko": {
@@ -4321,83 +4321,83 @@
   },
   "account.notifLede": {
     "ko": {
-      "clarity": 2,
-      "specificity": 2,
-      "naturalness": 3
+      "clarity": 5,
+      "specificity": 4,
+      "naturalness": 5
     },
     "en": {
-      "clarity": 2,
-      "specificity": 2,
-      "naturalness": 3
+      "clarity": 5,
+      "specificity": 4,
+      "naturalness": 5
     },
-    "proposed_ko": "새 템플릿과 캠페인 모집 소식을 이메일로 받을지 선택하세요. 결제나 참여한 캠페인의 진행 안내는 별도로 발송됩니다.",
-    "proposed_en": "Choose whether to receive new template and campaign announcements by email. Payment updates and updates about campaigns you’ve joined are sent separately.",
-    "reason": "마케팅 메일이 없다는 분류 단정을 피하고 선택 알림과 거래 알림을 구분한다.",
-    "evidence": "lib/notify/unsubscribe.ts; lib/campaigns/notify.ts; lib/prompts/announce.ts; app/(app)/account/page.tsx",
-    "decision": "candidate",
+    "source_ko": "받고 싶은 알림만 켜 두세요. 로그인한 이메일로 보내 드립니다.",
+    "source_en": "Turn on only the updates you want. We send them to your sign-in email.",
+    "proposed_ko": "받고 싶은 알림만 켜 두세요. 로그인한 이메일로 보내 드립니다.",
+    "proposed_en": "Turn on only the updates you want. We send them to your sign-in email.",
+    "decision": "keep",
     "topic": "notification",
-    "source_ko": "이메일로만 보냅니다. 다이제스트나 마케팅 메일은 없습니다.",
-    "source_en": "Email only. Two switches, no digest, no marketing."
+    "reason": "마케팅 메일이 없다는 분류 단정을 피하고 선택 알림과 거래 알림을 구분한다. (2026-11 Bundle G 사전 반영 완료) (2026-11 Bundle G 사전 반영 완료)",
+    "evidence": "lib/notify/unsubscribe.ts; lib/campaigns/notify.ts; lib/prompts/announce.ts; app/(app)/account/page.tsx"
   },
   "account.notifNewHint": {
     "ko": {
-      "clarity": 3,
-      "specificity": 3,
-      "naturalness": 2
+      "clarity": 5,
+      "specificity": 4,
+      "naturalness": 5
     },
     "en": {
-      "clarity": 3,
-      "specificity": 3,
-      "naturalness": 2
+      "clarity": 5,
+      "specificity": 4,
+      "naturalness": 5
     },
-    "proposed_ko": "새 템플릿과 서비스 오픈 소식을 이메일로 알려드립니다.",
-    "proposed_en": "Get email updates about new templates and service availability.",
-    "reason": "공개 즉시 자동 발송이 아니라 관리자가 수동으로 발송한다. 특정 날짜 전송 약속을 제거한다.",
-    "evidence": "lib/notify/unsubscribe.ts; lib/campaigns/notify.ts; lib/prompts/announce.ts; app/(app)/account/page.tsx",
-    "decision": "candidate",
+    "source_ko": "새 템플릿이 공개되거나 제작이 열릴 때 메일로 알려 드립니다.",
+    "source_en": "Get an email when a new template launches or opens for creation.",
+    "proposed_ko": "새 템플릿이 공개되거나 제작이 열릴 때 메일로 알려 드립니다.",
+    "proposed_en": "Get an email when a new template launches or opens for creation.",
+    "decision": "keep",
     "topic": "notification",
-    "source_ko": "새 템플릿이 열리거나 결제가 시작되는 날 메일을 보냅니다.",
-    "source_en": "One email the day a new template opens or payment goes live."
+    "reason": "공개 즉시 자동 발송이 아니라 관리자가 수동으로 발송한다. 특정 날짜 전송 약속을 제거한다. (2026-11 Bundle G 사전 반영 완료) (2026-11 Bundle G 사전 반영 완료)",
+    "evidence": "lib/notify/unsubscribe.ts; lib/campaigns/notify.ts; lib/prompts/announce.ts; app/(app)/account/page.tsx"
   },
   "unsubscribe.doneNew": {
     "ko": {
-      "clarity": 2,
-      "specificity": 2,
-      "naturalness": 3
+      "clarity": 4,
+      "specificity": 4,
+      "naturalness": 4
     },
     "en": {
-      "clarity": 2,
-      "specificity": 2,
-      "naturalness": 3
+      "clarity": 4,
+      "specificity": 4,
+      "naturalness": 4
     },
-    "proposed_ko": "새 템플릿 알림을 껐습니다.",
-    "proposed_en": "New template alerts are now off.",
-    "reason": "계정 설정과 동일한 새 템플릿 용어를 사용한다.",
+    "proposed_ko": "\"새 템플릿 알림\" 메일을 더 이상 보내지 않습니다.",
+    "proposed_en": "You will not get \"new template\" emails any more.",
+    "reason": "계정 설정과 동일한 새 템플릿 용어를 사용한다. (사전 현행화 스냅샷 동기화)",
     "evidence": "lib/notify/unsubscribe.ts; lib/campaigns/notify.ts; lib/prompts/announce.ts; app/(app)/account/page.tsx",
-    "decision": "candidate",
+    "decision": "keep",
     "topic": "notification",
-    "source_ko": "\"새 플레이북\" 메일을 더 이상 보내지 않습니다.",
-    "source_en": "You will not get \"new playbook\" emails any more."
+    "source_ko": "\"새 템플릿 알림\" 메일을 더 이상 보내지 않습니다.",
+    "source_en": "You will not get \"new template\" emails any more."
   },
   "unsubscribe.doneUpdates": {
     "ko": {
-      "clarity": 1,
-      "specificity": 1,
-      "naturalness": 3
+      "clarity": 4,
+      "specificity": 4,
+      "naturalness": 4
     },
     "en": {
-      "clarity": 1,
-      "specificity": 1,
-      "naturalness": 3
+      "clarity": 4,
+      "specificity": 4,
+      "naturalness": 4
     },
-    "proposed_ko": "캠페인 모집 알림을 껐습니다.",
-    "proposed_en": "New campaign alerts are now off.",
-    "reason": "notif_updates는 캠페인 모집 소식이다. 과거 플레이북 업데이트 명칭을 교체한다.",
+    "proposed_ko": "\"캠페인 알림\" 메일을 더 이상 보내지 않습니다.",
+    "proposed_en": "You will not get \"campaign\" emails any more.",
+    "reason": "notif_updates는 캠페인 모집 소식이다. 과거 플레이북 업데이트 명칭을 교체한다. (사전 현행화 스냅샷 동기화)",
     "evidence": "lib/notify/unsubscribe.ts; lib/campaigns/notify.ts; lib/prompts/announce.ts; app/(app)/account/page.tsx",
-    "decision": "candidate",
+    "decision": "keep",
     "topic": "notification",
-    "source_ko": "\"플레이북 업데이트\" 메일을 더 이상 보내지 않습니다.",
-    "source_en": "You will not get \"playbook updated\" emails any more."
+    "source_ko": "\"캠페인 알림\" 메일을 더 이상 보내지 않습니다.",
+    "source_en": "You will not get \"campaign\" emails any more."
   },
   "unsubscribe.invalidBody": {
     "ko": {
@@ -4441,23 +4441,23 @@
   },
   "studio.dropZone": {
     "ko": {
-      "clarity": 3,
-      "specificity": 3,
-      "naturalness": 2
+      "clarity": 4,
+      "specificity": 4,
+      "naturalness": 4
     },
     "en": {
-      "clarity": 3,
-      "specificity": 3,
-      "naturalness": 2
+      "clarity": 4,
+      "specificity": 4,
+      "naturalness": 4
     },
-    "proposed_ko": "사진을 끌어 놓거나 눌러서 선택하세요.",
-    "proposed_en": "Drop a photo here or tap to choose.",
-    "reason": "터치와 데스크톱 모두에 자연스러운 업로드 안내를 사용한다.",
+    "proposed_ko": "사진을 끌어 놓거나 눌러서 선택하세요",
+    "proposed_en": "Drop a photo here or select a file",
+    "reason": "터치와 데스크톱 모두에 자연스러운 업로드 안내를 사용한다. (사전 현행화 스냅샷 동기화)",
     "evidence": "components/twings/studio.tsx; app/api/renders/access/route.ts; lib/flags.ts",
-    "decision": "candidate",
+    "decision": "keep",
     "topic": "studio",
-    "source_ko": "사진을 여기에 놓거나 클릭해서 선택",
-    "source_en": "Drop a photo here, or click to choose"
+    "source_ko": "사진을 끌어 놓거나 눌러서 선택하세요",
+    "source_en": "Drop a photo here or select a file"
   },
   "studio.aspectLabel": {
     "ko": {
@@ -4501,23 +4501,23 @@
   },
   "studio.closedBody": {
     "ko": {
-      "clarity": 3,
-      "specificity": 3,
-      "naturalness": 2
+      "clarity": 4,
+      "specificity": 4,
+      "naturalness": 4
     },
     "en": {
-      "clarity": 3,
-      "specificity": 3,
-      "naturalness": 2
+      "clarity": 4,
+      "specificity": 4,
+      "naturalness": 4
     },
-    "proposed_ko": "예시 영상을 둘러보고 마음에 드는 장면을 골라보세요. 알림을 신청하면 서비스 오픈 소식을 이메일로 알려드립니다.",
-    "proposed_en": "Explore the examples and find a scene you like. Sign up for an email when the service opens.",
-    "reason": "알림 신청 전 자동 발송 약속과 템플릿별 개인 알림 오해를 줄인다.",
+    "proposed_ko": "지금은 예시 영상을 보며 원하는 장면과 비율을 골라보세요. 알림을 신청하면 서비스가 열릴 때 이메일로 안내해 드립니다.",
+    "proposed_en": "Browse the sample videos and choose your scene and aspect ratio. Sign up for an email when personal generation opens.",
+    "reason": "알림 신청 전 자동 발송 약속과 템플릿별 개인 알림 오해를 줄인다. (사전 현행화 스냅샷 동기화)",
     "evidence": "components/twings/studio.tsx; app/api/renders/access/route.ts; lib/flags.ts",
-    "decision": "candidate",
+    "decision": "keep",
     "topic": "studio",
-    "source_ko": "열리는 날 이메일로 알려드립니다. 지금은 예시 영상을 보고 장면과 비율을 골라 두세요.",
-    "source_en": "We will email you the day this template opens. Until then, watch the sample and pick your scene and aspect."
+    "source_ko": "지금은 예시 영상을 보며 원하는 장면과 비율을 골라보세요. 알림을 신청하면 서비스가 열릴 때 이메일로 안내해 드립니다.",
+    "source_en": "Browse the sample videos and choose your scene and aspect ratio. Sign up for an email when personal generation opens."
   },
   "studio.noStyles": {
     "ko": {
@@ -4579,26 +4579,6 @@
     "source_ko": "결제 즉시 생성이 시작되며, 생성 개시 후 청약철회가 제한됨을 확인하고 동의합니다.",
     "source_en": "I agree to rendering starting immediately after payment and acknowledge the restriction on withdrawal once it starts."
   },
-  "studio.aiNote": {
-    "ko": {
-      "clarity": 3,
-      "specificity": 2,
-      "naturalness": 3
-    },
-    "en": {
-      "clarity": 3,
-      "specificity": 2,
-      "naturalness": 3
-    },
-    "proposed_ko": "AI가 만드는 결과물이라 손가락·글자·배경 같은 세부가 어긋날 수 있고, 예시 영상과 완전히 같지는 않습니다. 얼굴이 제대로 반영되지 않으면 7일 안에 무상으로 다시 만들거나 환불해 드립니다.",
-    "proposed_en": "This is AI-made: details like hands, lettering and backgrounds can go wrong, and the result will not match the sample exactly. If your face is not reflected properly, ask within 7 days for a free re-render or a refund.",
-    "reason": "AI 결과 한계 및 7일 이내 하자 요청 안내를 유지한다. 한국어의 7일 안에가 요청 기한인지 처리 기한인지 명확히 하는 안은 법무/대표 확인 후 다룬다.",
-    "evidence": "AGENTS.md §5; lib/legal/documents.ts TERMS_KO §5, §8 / PRIVACY_KO §4; no legal edit in this PR",
-    "decision": "owner-decision",
-    "topic": "legal",
-    "source_ko": "AI가 만드는 결과물이라 손가락·글자·배경 같은 세부가 어긋날 수 있고, 예시 영상과 완전히 같지는 않습니다. 얼굴이 제대로 반영되지 않으면 7일 안에 무상으로 다시 만들거나 환불해 드립니다.",
-    "source_en": "This is AI-made: details like hands, lettering and backgrounds can go wrong, and the result will not match the sample exactly. If your face is not reflected properly, ask within 7 days for a free re-render or a refund."
-  },
   "identity.title": {
     "ko": {
       "clarity": 3,
@@ -4638,5 +4618,1985 @@
     "topic": "legal",
     "source_ko": "1분이면 끝나고, 한 번만 하면 됩니다.",
     "source_en": "It takes about a minute, and you only do it once."
+  },
+  "adminConsole.brandEngine.inspectorLede": {
+    "ko": {
+      "clarity": 5,
+      "specificity": 4,
+      "naturalness": 5
+    },
+    "en": {
+      "clarity": 5,
+      "specificity": 4,
+      "naturalness": 5
+    },
+    "source_ko": "브랜드 미디어 엔진 상태: 컬러 월드, 하드라인 규칙, 역할별 모델 배정, 저장된 그레이딩 룩, 브랜드 메모리 이벤트, 마감·검수 준비 상태를 보여 줍니다.",
+    "source_en": "Brand media engine status: fixed colour world, hardline rules, model routing roles, saved grading looks, memory events, and finish/QA readiness.",
+    "proposed_ko": "브랜드 미디어 엔진 상태: 컬러 월드, 하드라인 규칙, 역할별 모델 배정, 저장된 그레이딩 룩, 브랜드 메모리 이벤트, 마감·검수 준비 상태를 보여 줍니다.",
+    "proposed_en": "Brand media engine status: fixed colour world, hardline rules, model routing roles, saved grading looks, memory events, and finish/QA readiness.",
+    "decision": "keep",
+    "topic": "campaign",
+    "reason": "번역투·기계적 병렬·내부 은어(홀드·원고료입니다·유가 프로젝트 등)를 걷어내고 약관·상태 전이와 일치하는 자연스러운 창업자 톤 문장으로 반영했다. (2026-11 Bundle G 사전 반영 완료)",
+    "evidence": "docs/wording/proposals.md; docs/CAMPAIGNS.md; messages/ko.ts; messages/en.ts"
+  },
+  "adminConsole.brandEngine.pipelineReadiness": {
+    "ko": {
+      "clarity": 5,
+      "specificity": 4,
+      "naturalness": 5
+    },
+    "en": {
+      "clarity": 5,
+      "specificity": 4,
+      "naturalness": 5
+    },
+    "source_ko": "마감·검수 준비 상태",
+    "source_en": "Finishing & QA readiness",
+    "proposed_ko": "마감·검수 준비 상태",
+    "proposed_en": "Finishing & QA readiness",
+    "decision": "keep",
+    "topic": "campaign",
+    "reason": "번역투·기계적 병렬·내부 은어(홀드·원고료입니다·유가 프로젝트 등)를 걷어내고 약관·상태 전이와 일치하는 자연스러운 창업자 톤 문장으로 반영했다. (2026-11 Bundle G 사전 반영 완료)",
+    "evidence": "docs/wording/proposals.md; docs/CAMPAIGNS.md; messages/ko.ts; messages/en.ts"
+  },
+  "adminConsole.queues.payouts": {
+    "ko": {
+      "clarity": 5,
+      "specificity": 4,
+      "naturalness": 5
+    },
+    "en": {
+      "clarity": 5,
+      "specificity": 4,
+      "naturalness": 5
+    },
+    "source_ko": "지급 대기",
+    "source_en": "Payouts ready to send",
+    "proposed_ko": "지급 대기",
+    "proposed_en": "Payouts ready to send",
+    "decision": "keep",
+    "topic": "campaign",
+    "reason": "번역투·기계적 병렬·내부 은어(홀드·원고료입니다·유가 프로젝트 등)를 걷어내고 약관·상태 전이와 일치하는 자연스러운 창업자 톤 문장으로 반영했다. (2026-11 Bundle G 사전 반영 완료)",
+    "evidence": "docs/wording/proposals.md; docs/CAMPAIGNS.md; messages/ko.ts; messages/en.ts"
+  },
+  "adminWorkflow.stages.payments.blocked": {
+    "ko": {
+      "clarity": 5,
+      "specificity": 4,
+      "naturalness": 5
+    },
+    "en": {
+      "clarity": 5,
+      "specificity": 4,
+      "naturalness": 5
+    },
+    "source_ko": "검수 결과, 지급 대기 기간, 지급 기록을 확인하세요.",
+    "source_en": "Check verified posts, the waiting period, and payment records below.",
+    "proposed_ko": "검수 결과, 지급 대기 기간, 지급 기록을 확인하세요.",
+    "proposed_en": "Check verified posts, the waiting period, and payment records below.",
+    "decision": "keep",
+    "topic": "campaign",
+    "reason": "번역투·기계적 병렬·내부 은어(홀드·원고료입니다·유가 프로젝트 등)를 걷어내고 약관·상태 전이와 일치하는 자연스러운 창업자 톤 문장으로 반영했다. (2026-11 Bundle G 사전 반영 완료)",
+    "evidence": "docs/wording/proposals.md; docs/CAMPAIGNS.md; messages/ko.ts; messages/en.ts"
+  },
+  "adminWorkflow.tasks.payouts.title": {
+    "ko": {
+      "clarity": 5,
+      "specificity": 4,
+      "naturalness": 5
+    },
+    "en": {
+      "clarity": 5,
+      "specificity": 4,
+      "naturalness": 5
+    },
+    "source_ko": "대기 기간이 끝난 지급 건을 확인하세요",
+    "source_en": "Review payouts past the waiting period",
+    "proposed_ko": "대기 기간이 끝난 지급 건을 확인하세요",
+    "proposed_en": "Review payouts past the waiting period",
+    "decision": "keep",
+    "topic": "campaign",
+    "reason": "번역투·기계적 병렬·내부 은어(홀드·원고료입니다·유가 프로젝트 등)를 걷어내고 약관·상태 전이와 일치하는 자연스러운 창업자 톤 문장으로 반영했다. (2026-11 Bundle G 사전 반영 완료)",
+    "evidence": "docs/wording/proposals.md; docs/CAMPAIGNS.md; messages/ko.ts; messages/en.ts"
+  },
+  "brandStudio.board.stage.held": {
+    "ko": {
+      "clarity": 5,
+      "specificity": 4,
+      "naturalness": 5
+    },
+    "en": {
+      "clarity": 5,
+      "specificity": 4,
+      "naturalness": 5
+    },
+    "source_ko": "순서를 기다리는 중",
+    "source_en": "Waiting in line",
+    "proposed_ko": "순서를 기다리는 중",
+    "proposed_en": "Waiting in line",
+    "decision": "keep",
+    "topic": "brand-studio",
+    "reason": "내부·번역투 표현(보류, 느린 대신 디테일을 정밀하게 고칩니다, 꾸밈, 보정·합성, 보관함)을 에셋·부분 수정·높은 완성도 등 고객 언어와 해요체 창업자 톤으로 통일했다. (2026-11 Bundle G 사전 반영 완료)",
+    "evidence": "messages/ko.ts; messages/studio-library.ts; messages/studio-video.ts; docs/BRAND-STUDIO-CLEANUP-B.md"
+  },
+  "brandStudio.gallery.decorated": {
+    "ko": {
+      "clarity": 5,
+      "specificity": 4,
+      "naturalness": 5
+    },
+    "en": {
+      "clarity": 5,
+      "specificity": 4,
+      "naturalness": 5
+    },
+    "source_ko": "꾸민 이미지를 에셋에 저장했어요.",
+    "source_en": "Saved the decorated image to your assets.",
+    "proposed_ko": "꾸민 이미지를 에셋에 저장했어요.",
+    "proposed_en": "Saved the decorated image to your assets.",
+    "decision": "keep",
+    "topic": "brand-studio",
+    "reason": "내부·번역투 표현(보류, 느린 대신 디테일을 정밀하게 고칩니다, 꾸밈, 보정·합성, 보관함)을 에셋·부분 수정·높은 완성도 등 고객 언어와 해요체 창업자 톤으로 통일했다. (2026-11 Bundle G 사전 반영 완료)",
+    "evidence": "messages/ko.ts; messages/studio-library.ts; messages/studio-video.ts; docs/BRAND-STUDIO-CLEANUP-B.md"
+  },
+  "brandStudio.models.gptImageSunburst": {
+    "ko": {
+      "clarity": 5,
+      "specificity": 4,
+      "naturalness": 5
+    },
+    "en": {
+      "clarity": 5,
+      "specificity": 4,
+      "naturalness": 5
+    },
+    "source_ko": "조금 느린 대신 디테일을 더 정밀하게 고쳐요. 드는 크레딧은 같아요.",
+    "source_en": "Slightly slower, with sharper detail edits for the same credits.",
+    "proposed_ko": "조금 느린 대신 디테일을 더 정밀하게 고쳐요. 드는 크레딧은 같아요.",
+    "proposed_en": "Slightly slower, with sharper detail edits for the same credits.",
+    "decision": "keep",
+    "topic": "brand-studio",
+    "reason": "내부·번역투 표현(보류, 느린 대신 디테일을 정밀하게 고칩니다, 꾸밈, 보정·합성, 보관함)을 에셋·부분 수정·높은 완성도 등 고객 언어와 해요체 창업자 톤으로 통일했다. (2026-11 Bundle G 사전 반영 완료)",
+    "evidence": "messages/ko.ts; messages/studio-library.ts; messages/studio-video.ts; docs/BRAND-STUDIO-CLEANUP-B.md"
+  },
+  "brandWorkspace.managed.concierge.defaultOrg": {
+    "ko": {
+      "clarity": 5,
+      "specificity": 4,
+      "naturalness": 5
+    },
+    "en": {
+      "clarity": 5,
+      "specificity": 4,
+      "naturalness": 5
+    },
+    "source_ko": "고객사",
+    "source_en": "your team",
+    "proposed_ko": "고객사",
+    "proposed_en": "your team",
+    "decision": "keep",
+    "topic": "brand-concierge",
+    "reason": "브랜드 워크스페이스 상담창(BrandSupportWidget) JSX 하드코딩 한·영 문자열을 전부 사전으로 이관하고 내부 운영 도구 노출 없이 간결한 안내 톤으로 정리했다.",
+    "evidence": "components/brand-workspace/support.tsx; messages/ko.ts; AGENTS.md §5"
+  },
+  "brandWorkspace.managed.concierge.launcher": {
+    "ko": {
+      "clarity": 5,
+      "specificity": 4,
+      "naturalness": 5
+    },
+    "en": {
+      "clarity": 5,
+      "specificity": 4,
+      "naturalness": 5
+    },
+    "source_ko": "실시간 문의",
+    "source_en": "Live support",
+    "proposed_ko": "실시간 문의",
+    "proposed_en": "Live support",
+    "decision": "keep",
+    "topic": "brand-concierge",
+    "reason": "브랜드 워크스페이스 상담창(BrandSupportWidget) JSX 하드코딩 한·영 문자열을 전부 사전으로 이관하고 내부 운영 도구 노출 없이 간결한 안내 톤으로 정리했다.",
+    "evidence": "components/brand-workspace/support.tsx; messages/ko.ts; AGENTS.md §5"
+  },
+  "brandWorkspace.managed.concierge.placeholder": {
+    "ko": {
+      "clarity": 5,
+      "specificity": 4,
+      "naturalness": 5
+    },
+    "en": {
+      "clarity": 5,
+      "specificity": 4,
+      "naturalness": 5
+    },
+    "source_ko": "메시지를 입력하세요 (Enter 전송 · Shift+Enter 줄바꿈)",
+    "source_en": "Write a message (Enter to send · Shift+Enter for a new line)",
+    "proposed_ko": "메시지를 입력하세요 (Enter 전송 · Shift+Enter 줄바꿈)",
+    "proposed_en": "Write a message (Enter to send · Shift+Enter for a new line)",
+    "decision": "keep",
+    "topic": "brand-concierge",
+    "reason": "브랜드 워크스페이스 상담창(BrandSupportWidget) JSX 하드코딩 한·영 문자열을 전부 사전으로 이관하고 내부 운영 도구 노출 없이 간결한 안내 톤으로 정리했다.",
+    "evidence": "components/brand-workspace/support.tsx; messages/ko.ts; AGENTS.md §5"
+  },
+  "brandWorkspace.managed.concierge.quickLabel": {
+    "ko": {
+      "clarity": 5,
+      "specificity": 4,
+      "naturalness": 5
+    },
+    "en": {
+      "clarity": 5,
+      "specificity": 4,
+      "naturalness": 5
+    },
+    "source_ko": "빠른 문의 주제",
+    "source_en": "Quick inquiry topics",
+    "proposed_ko": "빠른 문의 주제",
+    "proposed_en": "Quick inquiry topics",
+    "decision": "keep",
+    "topic": "brand-concierge",
+    "reason": "브랜드 워크스페이스 상담창(BrandSupportWidget) JSX 하드코딩 한·영 문자열을 전부 사전으로 이관하고 내부 운영 도구 노출 없이 간결한 안내 톤으로 정리했다.",
+    "evidence": "components/brand-workspace/support.tsx; messages/ko.ts; AGENTS.md §5"
+  },
+  "brandWorkspace.managed.concierge.subtitle": {
+    "ko": {
+      "clarity": 5,
+      "specificity": 4,
+      "naturalness": 5
+    },
+    "en": {
+      "clarity": 5,
+      "specificity": 4,
+      "naturalness": 5
+    },
+    "source_ko": "전담 프로듀서와 1:1로 바로 연결됩니다",
+    "source_en": "Connected 1:1 with your dedicated producer",
+    "proposed_ko": "전담 프로듀서와 1:1로 바로 연결됩니다",
+    "proposed_en": "Connected 1:1 with your dedicated producer",
+    "decision": "keep",
+    "topic": "brand-concierge",
+    "reason": "브랜드 워크스페이스 상담창(BrandSupportWidget) JSX 하드코딩 한·영 문자열을 전부 사전으로 이관하고 내부 운영 도구 노출 없이 간결한 안내 톤으로 정리했다.",
+    "evidence": "components/brand-workspace/support.tsx; messages/ko.ts; AGENTS.md §5"
+  },
+  "brandWorkspace.managed.concierge.tag": {
+    "ko": {
+      "clarity": 5,
+      "specificity": 4,
+      "naturalness": 5
+    },
+    "en": {
+      "clarity": 5,
+      "specificity": 4,
+      "naturalness": 5
+    },
+    "source_ko": "야기 스튜디오 1:1",
+    "source_en": "YAGI STUDIO",
+    "proposed_ko": "야기 스튜디오 1:1",
+    "proposed_en": "YAGI STUDIO",
+    "decision": "keep",
+    "topic": "brand-concierge",
+    "reason": "브랜드 워크스페이스 상담창(BrandSupportWidget) JSX 하드코딩 한·영 문자열을 전부 사전으로 이관하고 내부 운영 도구 노출 없이 간결한 안내 톤으로 정리했다.",
+    "evidence": "components/brand-workspace/support.tsx; messages/ko.ts; AGENTS.md §5"
+  },
+  "brandWorkspace.managed.concierge.topics.creatorsLabel": {
+    "ko": {
+      "clarity": 5,
+      "specificity": 4,
+      "naturalness": 5
+    },
+    "en": {
+      "clarity": 5,
+      "specificity": 4,
+      "naturalness": 5
+    },
+    "source_ko": "크리에이터 추천",
+    "source_en": "Creator lineup",
+    "proposed_ko": "크리에이터 추천",
+    "proposed_en": "Creator lineup",
+    "decision": "keep",
+    "topic": "brand-concierge",
+    "reason": "브랜드 워크스페이스 상담창(BrandSupportWidget) JSX 하드코딩 한·영 문자열을 전부 사전으로 이관하고 내부 운영 도구 노출 없이 간결한 안내 톤으로 정리했다.",
+    "evidence": "components/brand-workspace/support.tsx; messages/ko.ts; AGENTS.md §5"
+  },
+  "brandWorkspace.managed.concierge.topics.creatorsText": {
+    "ko": {
+      "clarity": 5,
+      "specificity": 4,
+      "naturalness": 5
+    },
+    "en": {
+      "clarity": 5,
+      "specificity": 4,
+      "naturalness": 5
+    },
+    "source_ko": "캠페인에 어울리는 추천 크리에이터 후보 목록을 받아볼 수 있을까요?",
+    "source_en": "Could you share the recommended creator list for our campaign?",
+    "proposed_ko": "캠페인에 어울리는 추천 크리에이터 후보 목록을 받아볼 수 있을까요?",
+    "proposed_en": "Could you share the recommended creator list for our campaign?",
+    "decision": "keep",
+    "topic": "brand-concierge",
+    "reason": "브랜드 워크스페이스 상담창(BrandSupportWidget) JSX 하드코딩 한·영 문자열을 전부 사전으로 이관하고 내부 운영 도구 노출 없이 간결한 안내 톤으로 정리했다.",
+    "evidence": "components/brand-workspace/support.tsx; messages/ko.ts; AGENTS.md §5"
+  },
+  "brandWorkspace.managed.concierge.topics.feedbackLabel": {
+    "ko": {
+      "clarity": 5,
+      "specificity": 4,
+      "naturalness": 5
+    },
+    "en": {
+      "clarity": 5,
+      "specificity": 4,
+      "naturalness": 5
+    },
+    "source_ko": "시안 피드백",
+    "source_en": "Cut feedback",
+    "proposed_ko": "시안 피드백",
+    "proposed_en": "Cut feedback",
+    "decision": "keep",
+    "topic": "brand-concierge",
+    "reason": "브랜드 워크스페이스 상담창(BrandSupportWidget) JSX 하드코딩 한·영 문자열을 전부 사전으로 이관하고 내부 운영 도구 노출 없이 간결한 안내 톤으로 정리했다.",
+    "evidence": "components/brand-workspace/support.tsx; messages/ko.ts; AGENTS.md §5"
+  },
+  "brandWorkspace.managed.concierge.topics.feedbackText": {
+    "ko": {
+      "clarity": 5,
+      "specificity": 4,
+      "naturalness": 5
+    },
+    "en": {
+      "clarity": 5,
+      "specificity": 4,
+      "naturalness": 5
+    },
+    "source_ko": "전달해 주신 시안에 추가 연출 의견을 남깁니다: ",
+    "source_en": "Sharing direction feedback on the latest cut: ",
+    "proposed_ko": "전달해 주신 시안에 추가 연출 의견을 남깁니다: ",
+    "proposed_en": "Sharing direction feedback on the latest cut: ",
+    "decision": "keep",
+    "topic": "brand-concierge",
+    "reason": "브랜드 워크스페이스 상담창(BrandSupportWidget) JSX 하드코딩 한·영 문자열을 전부 사전으로 이관하고 내부 운영 도구 노출 없이 간결한 안내 톤으로 정리했다.",
+    "evidence": "components/brand-workspace/support.tsx; messages/ko.ts; AGENTS.md §5"
+  },
+  "brandWorkspace.managed.concierge.topics.quoteLabel": {
+    "ko": {
+      "clarity": 5,
+      "specificity": 4,
+      "naturalness": 5
+    },
+    "en": {
+      "clarity": 5,
+      "specificity": 4,
+      "naturalness": 5
+    },
+    "source_ko": "견적·범위 상담",
+    "source_en": "Quote & scope",
+    "proposed_ko": "견적·범위 상담",
+    "proposed_en": "Quote & scope",
+    "decision": "keep",
+    "topic": "brand-concierge",
+    "reason": "브랜드 워크스페이스 상담창(BrandSupportWidget) JSX 하드코딩 한·영 문자열을 전부 사전으로 이관하고 내부 운영 도구 노출 없이 간결한 안내 톤으로 정리했다.",
+    "evidence": "components/brand-workspace/support.tsx; messages/ko.ts; AGENTS.md §5"
+  },
+  "brandWorkspace.managed.concierge.topics.quoteText": {
+    "ko": {
+      "clarity": 5,
+      "specificity": 4,
+      "naturalness": 5
+    },
+    "en": {
+      "clarity": 5,
+      "specificity": 4,
+      "naturalness": 5
+    },
+    "source_ko": "예산에 맞는 제작 편수와 시딩 구성을 상담하고 싶습니다.",
+    "source_en": "We would like to discuss production volume and seeding options for our budget.",
+    "proposed_ko": "예산에 맞는 제작 편수와 시딩 구성을 상담하고 싶습니다.",
+    "proposed_en": "We would like to discuss production volume and seeding options for our budget.",
+    "decision": "keep",
+    "topic": "brand-concierge",
+    "reason": "브랜드 워크스페이스 상담창(BrandSupportWidget) JSX 하드코딩 한·영 문자열을 전부 사전으로 이관하고 내부 운영 도구 노출 없이 간결한 안내 톤으로 정리했다.",
+    "evidence": "components/brand-workspace/support.tsx; messages/ko.ts; AGENTS.md §5"
+  },
+  "brandWorkspace.managed.concierge.topics.timelineLabel": {
+    "ko": {
+      "clarity": 5,
+      "specificity": 4,
+      "naturalness": 5
+    },
+    "en": {
+      "clarity": 5,
+      "specificity": 4,
+      "naturalness": 5
+    },
+    "source_ko": "일정·납기 문의",
+    "source_en": "Timeline & delivery",
+    "proposed_ko": "일정·납기 문의",
+    "proposed_en": "Timeline & delivery",
+    "decision": "keep",
+    "topic": "brand-concierge",
+    "reason": "브랜드 워크스페이스 상담창(BrandSupportWidget) JSX 하드코딩 한·영 문자열을 전부 사전으로 이관하고 내부 운영 도구 노출 없이 간결한 안내 톤으로 정리했다.",
+    "evidence": "components/brand-workspace/support.tsx; messages/ko.ts; AGENTS.md §5"
+  },
+  "brandWorkspace.managed.concierge.topics.timelineText": {
+    "ko": {
+      "clarity": 5,
+      "specificity": 4,
+      "naturalness": 5
+    },
+    "en": {
+      "clarity": 5,
+      "specificity": 4,
+      "naturalness": 5
+    },
+    "source_ko": "안녕하세요, 이번 캠페인 1차 시안과 최종 납기 일정이 궁금합니다.",
+    "source_en": "Hi, could we check the schedule for Cut v1 and final delivery?",
+    "proposed_ko": "안녕하세요, 이번 캠페인 1차 시안과 최종 납기 일정이 궁금합니다.",
+    "proposed_en": "Hi, could we check the schedule for Cut v1 and final delivery?",
+    "decision": "keep",
+    "topic": "brand-concierge",
+    "reason": "브랜드 워크스페이스 상담창(BrandSupportWidget) JSX 하드코딩 한·영 문자열을 전부 사전으로 이관하고 내부 운영 도구 노출 없이 간결한 안내 톤으로 정리했다.",
+    "evidence": "components/brand-workspace/support.tsx; messages/ko.ts; AGENTS.md §5"
+  },
+  "brandWorkspace.managed.concierge.welcome": {
+    "ko": {
+      "clarity": 5,
+      "specificity": 4,
+      "naturalness": 5
+    },
+    "en": {
+      "clarity": 5,
+      "specificity": 4,
+      "naturalness": 5
+    },
+    "source_ko": "{org} 전용 문의창입니다. 메시지를 남기면 전담 프로듀서에게 바로 전달되고 답변도 이곳으로 도착합니다.",
+    "source_en": "Direct inquiry window for {org}. Messages reach your producer right away and replies arrive here.",
+    "proposed_ko": "{org} 전용 문의창입니다. 메시지를 남기면 전담 프로듀서에게 바로 전달되고 답변도 이곳으로 도착합니다.",
+    "proposed_en": "Direct inquiry window for {org}. Messages reach your producer right away and replies arrive here.",
+    "decision": "keep",
+    "topic": "brand-concierge",
+    "reason": "브랜드 워크스페이스 상담창(BrandSupportWidget) JSX 하드코딩 한·영 문자열을 전부 사전으로 이관하고 내부 운영 도구 노출 없이 간결한 안내 톤으로 정리했다.",
+    "evidence": "components/brand-workspace/support.tsx; messages/ko.ts; AGENTS.md §5"
+  },
+  "campaigns.directEarnCta": {
+    "ko": {
+      "clarity": 5,
+      "specificity": 4,
+      "naturalness": 5
+    },
+    "en": {
+      "clarity": 5,
+      "specificity": 4,
+      "naturalness": 5
+    },
+    "source_ko": "나만의 영상 만들고 수익 보기 →",
+    "source_en": "Make my own video & earn →",
+    "proposed_ko": "나만의 영상 만들고 수익 보기 →",
+    "proposed_en": "Make my own video & earn →",
+    "decision": "keep",
+    "topic": "campaign",
+    "reason": "campaigns/page.tsx 내 삼항 하드코딩 CTA를 사전 키로 옮기고 행동 중심 동사구로 다듬었다.",
+    "evidence": "app/(marketing)/[locale]/campaigns/page.tsx; messages/ko.ts"
+  },
+  "campaigns.hub.allFormatsCta": {
+    "ko": {
+      "clarity": 5,
+      "specificity": 4,
+      "naturalness": 5
+    },
+    "en": {
+      "clarity": 5,
+      "specificity": 4,
+      "naturalness": 5
+    },
+    "source_ko": "전체 영상 템플릿 보기 ↗",
+    "source_en": "View all video templates ↗",
+    "proposed_ko": "전체 영상 템플릿 보기 ↗",
+    "proposed_en": "View all video templates ↗",
+    "decision": "keep",
+    "topic": "campaign-hub",
+    "reason": "CreatorCampaignHub JSX 하드코딩 문구를 사전으로 이관하고, 미승인 80% 배분 문구를 제거한 뒤 승인 실적(글로벌 AI 플랫폼 · 영상 9편 · 200만 뷰+ · 파생 오가닉 콘텐츠 300건+)과 사람 톤 문장으로 정리했다.",
+    "evidence": "components/campaigns/creator-campaign-hub.tsx; messages/campaign-hub.ts; AGENTS.md §5"
+  },
+  "campaigns.hub.archetypes.beautyLaunch.badge": {
+    "ko": {
+      "clarity": 5,
+      "specificity": 4,
+      "naturalness": 5
+    },
+    "en": {
+      "clarity": 5,
+      "specificity": 4,
+      "naturalness": 5
+    },
+    "source_ko": "뷰티 · 향수 예시",
+    "source_en": "Beauty & perfume",
+    "proposed_ko": "뷰티 · 향수 예시",
+    "proposed_en": "Beauty & perfume",
+    "decision": "keep",
+    "topic": "campaign-hub",
+    "reason": "CreatorCampaignHub JSX 하드코딩 문구를 사전으로 이관하고, 미승인 80% 배분 문구를 제거한 뒤 승인 실적(글로벌 AI 플랫폼 · 영상 9편 · 200만 뷰+ · 파생 오가닉 콘텐츠 300건+)과 사람 톤 문장으로 정리했다.",
+    "evidence": "components/campaigns/creator-campaign-hub.tsx; messages/campaign-hub.ts; AGENTS.md §5"
+  },
+  "campaigns.hub.archetypes.beautyLaunch.formatWay": {
+    "ko": {
+      "clarity": 5,
+      "specificity": 4,
+      "naturalness": 5
+    },
+    "en": {
+      "clarity": 5,
+      "specificity": 4,
+      "naturalness": 5
+    },
+    "source_ko": "브랜드가 준비한 [뷰티 스튜디오 클로즈업] 공식 포맷에 정면 사진 1장만 올리면, 향수를 들고 미소 짓는 영상이 제작비 0원(브랜드 부담)으로 완성됩니다.",
+    "source_en": "Select the official [Beauty Studio Close-Up] format and upload one front-facing photo to create a sponsored video holding the perfume bottle at ₩0 cost.",
+    "proposed_ko": "브랜드가 준비한 [뷰티 스튜디오 클로즈업] 공식 포맷에 정면 사진 1장만 올리면, 향수를 들고 미소 짓는 영상이 제작비 0원(브랜드 부담)으로 완성됩니다.",
+    "proposed_en": "Select the official [Beauty Studio Close-Up] format and upload one front-facing photo to create a sponsored video holding the perfume bottle at ₩0 cost.",
+    "decision": "keep",
+    "topic": "campaign-hub",
+    "reason": "CreatorCampaignHub JSX 하드코딩 문구를 사전으로 이관하고, 미승인 80% 배분 문구를 제거한 뒤 승인 실적(글로벌 AI 플랫폼 · 영상 9편 · 200만 뷰+ · 파생 오가닉 콘텐츠 300건+)과 사람 톤 문장으로 정리했다.",
+    "evidence": "components/campaigns/creator-campaign-hub.tsx; messages/campaign-hub.ts; AGENTS.md §5"
+  },
+  "campaigns.hub.archetypes.beautyLaunch.guidedWay": {
+    "ko": {
+      "clarity": 5,
+      "specificity": 4,
+      "naturalness": 5
+    },
+    "en": {
+      "clarity": 5,
+      "specificity": 4,
+      "naturalness": 5
+    },
+    "source_ko": "브랜드가 제공한 향수 사진을 첨부하고, “오후 햇살 아래 향수를 들고 카메라를 바라보는 장면” 가이드에 맞춰 내 스타일로 만들어도 됩니다.",
+    "source_en": "Attach the brand’s perfume bottle photo and direct your own video following the brief: “holding the bottle in soft afternoon light while looking at the camera.”",
+    "proposed_ko": "브랜드가 제공한 향수 사진을 첨부하고, “오후 햇살 아래 향수를 들고 카메라를 바라보는 장면” 가이드에 맞춰 내 스타일로 만들어도 됩니다.",
+    "proposed_en": "Attach the brand’s perfume bottle photo and direct your own video following the brief: “holding the bottle in soft afternoon light while looking at the camera.”",
+    "decision": "keep",
+    "topic": "campaign-hub",
+    "reason": "CreatorCampaignHub JSX 하드코딩 문구를 사전으로 이관하고, 미승인 80% 배분 문구를 제거한 뒤 승인 실적(글로벌 AI 플랫폼 · 영상 9편 · 200만 뷰+ · 파생 오가닉 콘텐츠 300건+)과 사람 톤 문장으로 정리했다.",
+    "evidence": "components/campaigns/creator-campaign-hub.tsx; messages/campaign-hub.ts; AGENTS.md §5"
+  },
+  "campaigns.hub.archetypes.beautyLaunch.payout": {
+    "ko": {
+      "clarity": 5,
+      "specificity": 4,
+      "naturalness": 5
+    },
+    "en": {
+      "clarity": 5,
+      "specificity": 4,
+      "naturalness": 5
+    },
+    "source_ko": "링크 제출 후 가이드 준수와 7일 공개 유지가 확인되면 약속된 원고료 정산",
+    "source_en": "Paid under the campaign terms once guide compliance and 7 days of public posting are confirmed",
+    "proposed_ko": "링크 제출 후 가이드 준수와 7일 공개 유지가 확인되면 약속된 원고료 정산",
+    "proposed_en": "Paid under the campaign terms once guide compliance and 7 days of public posting are confirmed",
+    "decision": "keep",
+    "topic": "campaign-hub",
+    "reason": "CreatorCampaignHub JSX 하드코딩 문구를 사전으로 이관하고, 미승인 80% 배분 문구를 제거한 뒤 승인 실적(글로벌 AI 플랫폼 · 영상 9편 · 200만 뷰+ · 파생 오가닉 콘텐츠 300건+)과 사람 톤 문장으로 정리했다.",
+    "evidence": "components/campaigns/creator-campaign-hub.tsx; messages/campaign-hub.ts; AGENTS.md §5"
+  },
+  "campaigns.hub.archetypes.beautyLaunch.point1": {
+    "ko": {
+      "clarity": 5,
+      "specificity": 4,
+      "naturalness": 5
+    },
+    "en": {
+      "clarity": 5,
+      "specificity": 4,
+      "naturalness": 5
+    },
+    "source_ko": "영상 안에 브랜드 향수 보틀이 2초 이상 선명하게 보이게 하기",
+    "source_en": "Show the brand’s perfume bottle clearly for at least 2 seconds",
+    "proposed_ko": "영상 안에 브랜드 향수 보틀이 2초 이상 선명하게 보이게 하기",
+    "proposed_en": "Show the brand’s perfume bottle clearly for at least 2 seconds",
+    "decision": "keep",
+    "topic": "campaign-hub",
+    "reason": "CreatorCampaignHub JSX 하드코딩 문구를 사전으로 이관하고, 미승인 80% 배분 문구를 제거한 뒤 승인 실적(글로벌 AI 플랫폼 · 영상 9편 · 200만 뷰+ · 파생 오가닉 콘텐츠 300건+)과 사람 톤 문장으로 정리했다.",
+    "evidence": "components/campaigns/creator-campaign-hub.tsx; messages/campaign-hub.ts; AGENTS.md §5"
+  },
+  "campaigns.hub.archetypes.beautyLaunch.point2": {
+    "ko": {
+      "clarity": 5,
+      "specificity": 4,
+      "naturalness": 5
+    },
+    "en": {
+      "clarity": 5,
+      "specificity": 4,
+      "naturalness": 5
+    },
+    "source_ko": "인스타그램 릴스 또는 틱톡 전체 공개 업로드 + 브랜드 공식 계정 태그",
+    "source_en": "Publish publicly on Instagram Reels or TikTok and tag the brand account",
+    "proposed_ko": "인스타그램 릴스 또는 틱톡 전체 공개 업로드 + 브랜드 공식 계정 태그",
+    "proposed_en": "Publish publicly on Instagram Reels or TikTok and tag the brand account",
+    "decision": "keep",
+    "topic": "campaign-hub",
+    "reason": "CreatorCampaignHub JSX 하드코딩 문구를 사전으로 이관하고, 미승인 80% 배분 문구를 제거한 뒤 승인 실적(글로벌 AI 플랫폼 · 영상 9편 · 200만 뷰+ · 파생 오가닉 콘텐츠 300건+)과 사람 톤 문장으로 정리했다.",
+    "evidence": "components/campaigns/creator-campaign-hub.tsx; messages/campaign-hub.ts; AGENTS.md §5"
+  },
+  "campaigns.hub.archetypes.beautyLaunch.point3": {
+    "ko": {
+      "clarity": 5,
+      "specificity": 4,
+      "naturalness": 5
+    },
+    "en": {
+      "clarity": 5,
+      "specificity": 4,
+      "naturalness": 5
+    },
+    "source_ko": "캡션 첫 줄에 필수 해시태그와 #광고 표기 넣기",
+    "source_en": "Put the required hashtags and ad disclosure on the first line of the caption",
+    "proposed_ko": "캡션 첫 줄에 필수 해시태그와 #광고 표기 넣기",
+    "proposed_en": "Put the required hashtags and ad disclosure on the first line of the caption",
+    "decision": "keep",
+    "topic": "campaign-hub",
+    "reason": "CreatorCampaignHub JSX 하드코딩 문구를 사전으로 이관하고, 미승인 80% 배분 문구를 제거한 뒤 승인 실적(글로벌 AI 플랫폼 · 영상 9편 · 200만 뷰+ · 파생 오가닉 콘텐츠 300건+)과 사람 톤 문장으로 정리했다.",
+    "evidence": "components/campaigns/creator-campaign-hub.tsx; messages/campaign-hub.ts; AGENTS.md §5"
+  },
+  "campaigns.hub.archetypes.beautyLaunch.title": {
+    "ko": {
+      "clarity": 5,
+      "specificity": 4,
+      "naturalness": 5
+    },
+    "en": {
+      "clarity": 5,
+      "specificity": 4,
+      "naturalness": 5
+    },
+    "source_ko": "신제품 향수 · 뷰티 클로즈업 릴스 캠페인",
+    "source_en": "New perfume & beauty close-up Reels campaign",
+    "proposed_ko": "신제품 향수 · 뷰티 클로즈업 릴스 캠페인",
+    "proposed_en": "New perfume & beauty close-up Reels campaign",
+    "decision": "keep",
+    "topic": "campaign-hub",
+    "reason": "CreatorCampaignHub JSX 하드코딩 문구를 사전으로 이관하고, 미승인 80% 배분 문구를 제거한 뒤 승인 실적(글로벌 AI 플랫폼 · 영상 9편 · 200만 뷰+ · 파생 오가닉 콘텐츠 300건+)과 사람 톤 문장으로 정리했다.",
+    "evidence": "components/campaigns/creator-campaign-hub.tsx; messages/campaign-hub.ts; AGENTS.md §5"
+  },
+  "campaigns.hub.archetypes.fashionLookbook.badge": {
+    "ko": {
+      "clarity": 5,
+      "specificity": 4,
+      "naturalness": 5
+    },
+    "en": {
+      "clarity": 5,
+      "specificity": 4,
+      "naturalness": 5
+    },
+    "source_ko": "패션 · 런웨이 예시",
+    "source_en": "Fashion & street lookbook",
+    "proposed_ko": "패션 · 런웨이 예시",
+    "proposed_en": "Fashion & street lookbook",
+    "decision": "keep",
+    "topic": "campaign-hub",
+    "reason": "CreatorCampaignHub JSX 하드코딩 문구를 사전으로 이관하고, 미승인 80% 배분 문구를 제거한 뒤 승인 실적(글로벌 AI 플랫폼 · 영상 9편 · 200만 뷰+ · 파생 오가닉 콘텐츠 300건+)과 사람 톤 문장으로 정리했다.",
+    "evidence": "components/campaigns/creator-campaign-hub.tsx; messages/campaign-hub.ts; AGENTS.md §5"
+  },
+  "campaigns.hub.archetypes.fashionLookbook.formatWay": {
+    "ko": {
+      "clarity": 5,
+      "specificity": 4,
+      "naturalness": 5
+    },
+    "en": {
+      "clarity": 5,
+      "specificity": 4,
+      "naturalness": 5
+    },
+    "source_ko": "시즌 아우터가 미리 입혀진 [도심 플래시 런웨이] 공식 포맷에 정면 사진만 넣어, 옷을 배송받지 않고도 착용 영상을 바로 만듭니다.",
+    "source_en": "Add your front-facing photo to the official [City Flash Runway] format with the seasonal outerwear pre-styled — no garment shipping needed.",
+    "proposed_ko": "시즌 아우터가 미리 입혀진 [도심 플래시 런웨이] 공식 포맷에 정면 사진만 넣어, 옷을 배송받지 않고도 착용 영상을 바로 만듭니다.",
+    "proposed_en": "Add your front-facing photo to the official [City Flash Runway] format with the seasonal outerwear pre-styled — no garment shipping needed.",
+    "decision": "keep",
+    "topic": "campaign-hub",
+    "reason": "CreatorCampaignHub JSX 하드코딩 문구를 사전으로 이관하고, 미승인 80% 배분 문구를 제거한 뒤 승인 실적(글로벌 AI 플랫폼 · 영상 9편 · 200만 뷰+ · 파생 오가닉 콘텐츠 300건+)과 사람 톤 문장으로 정리했다.",
+    "evidence": "components/campaigns/creator-campaign-hub.tsx; messages/campaign-hub.ts; AGENTS.md §5"
+  },
+  "campaigns.hub.archetypes.fashionLookbook.guidedWay": {
+    "ko": {
+      "clarity": 5,
+      "specificity": 4,
+      "naturalness": 5
+    },
+    "en": {
+      "clarity": 5,
+      "specificity": 4,
+      "naturalness": 5
+    },
+    "source_ko": "브랜드 룩북 사진을 의상 참조로 넣고, 내 스트릿 워킹 구도로 런웨이 영상을 직접 연출해 올릴 수 있습니다.",
+    "source_en": "Attach the brand lookbook photo as an outfit reference and pair it with your own street-walk clip to create a runway video.",
+    "proposed_ko": "브랜드 룩북 사진을 의상 참조로 넣고, 내 스트릿 워킹 구도로 런웨이 영상을 직접 연출해 올릴 수 있습니다.",
+    "proposed_en": "Attach the brand lookbook photo as an outfit reference and pair it with your own street-walk clip to create a runway video.",
+    "decision": "keep",
+    "topic": "campaign-hub",
+    "reason": "CreatorCampaignHub JSX 하드코딩 문구를 사전으로 이관하고, 미승인 80% 배분 문구를 제거한 뒤 승인 실적(글로벌 AI 플랫폼 · 영상 9편 · 200만 뷰+ · 파생 오가닉 콘텐츠 300건+)과 사람 톤 문장으로 정리했다.",
+    "evidence": "components/campaigns/creator-campaign-hub.tsx; messages/campaign-hub.ts; AGENTS.md §5"
+  },
+  "campaigns.hub.archetypes.fashionLookbook.payout": {
+    "ko": {
+      "clarity": 5,
+      "specificity": 4,
+      "naturalness": 5
+    },
+    "en": {
+      "clarity": 5,
+      "specificity": 4,
+      "naturalness": 5
+    },
+    "source_ko": "검수 통과 후 기본 원고료 정산 + 브랜드 2차 광고 채택 시 추가 수익 지급",
+    "source_en": "Base fee paid after review, plus secondary ad licensing pay when selected for brand ads",
+    "proposed_ko": "검수 통과 후 기본 원고료 정산 + 브랜드 2차 광고 채택 시 추가 수익 지급",
+    "proposed_en": "Base fee paid after review, plus secondary ad licensing pay when selected for brand ads",
+    "decision": "keep",
+    "topic": "campaign-hub",
+    "reason": "CreatorCampaignHub JSX 하드코딩 문구를 사전으로 이관하고, 미승인 80% 배분 문구를 제거한 뒤 승인 실적(글로벌 AI 플랫폼 · 영상 9편 · 200만 뷰+ · 파생 오가닉 콘텐츠 300건+)과 사람 톤 문장으로 정리했다.",
+    "evidence": "components/campaigns/creator-campaign-hub.tsx; messages/campaign-hub.ts; AGENTS.md §5"
+  },
+  "campaigns.hub.archetypes.fashionLookbook.point1": {
+    "ko": {
+      "clarity": 5,
+      "specificity": 4,
+      "naturalness": 5
+    },
+    "en": {
+      "clarity": 5,
+      "specificity": 4,
+      "naturalness": 5
+    },
+    "source_ko": "아우터 색과 핏이 달라지지 않도록 공식 포맷 또는 제공된 의상 사진 쓰기",
+    "source_en": "Keep the outerwear color and fit accurate using the official format or attached reference",
+    "proposed_ko": "아우터 색과 핏이 달라지지 않도록 공식 포맷 또는 제공된 의상 사진 쓰기",
+    "proposed_en": "Keep the outerwear color and fit accurate using the official format or attached reference",
+    "decision": "keep",
+    "topic": "campaign-hub",
+    "reason": "CreatorCampaignHub JSX 하드코딩 문구를 사전으로 이관하고, 미승인 80% 배분 문구를 제거한 뒤 승인 실적(글로벌 AI 플랫폼 · 영상 9편 · 200만 뷰+ · 파생 오가닉 콘텐츠 300건+)과 사람 톤 문장으로 정리했다.",
+    "evidence": "components/campaigns/creator-campaign-hub.tsx; messages/campaign-hub.ts; AGENTS.md §5"
+  },
+  "campaigns.hub.archetypes.fashionLookbook.point2": {
+    "ko": {
+      "clarity": 5,
+      "specificity": 4,
+      "naturalness": 5
+    },
+    "en": {
+      "clarity": 5,
+      "specificity": 4,
+      "naturalness": 5
+    },
+    "source_ko": "9:16 세로 영상으로 릴스·틱톡에 올리고 링크 제출하기",
+    "source_en": "Publish as a 9:16 vertical video on Reels or TikTok and submit the link",
+    "proposed_ko": "9:16 세로 영상으로 릴스·틱톡에 올리고 링크 제출하기",
+    "proposed_en": "Publish as a 9:16 vertical video on Reels or TikTok and submit the link",
+    "decision": "keep",
+    "topic": "campaign-hub",
+    "reason": "CreatorCampaignHub JSX 하드코딩 문구를 사전으로 이관하고, 미승인 80% 배분 문구를 제거한 뒤 승인 실적(글로벌 AI 플랫폼 · 영상 9편 · 200만 뷰+ · 파생 오가닉 콘텐츠 300건+)과 사람 톤 문장으로 정리했다.",
+    "evidence": "components/campaigns/creator-campaign-hub.tsx; messages/campaign-hub.ts; AGENTS.md §5"
+  },
+  "campaigns.hub.archetypes.fashionLookbook.point3": {
+    "ko": {
+      "clarity": 5,
+      "specificity": 4,
+      "naturalness": 5
+    },
+    "en": {
+      "clarity": 5,
+      "specificity": 4,
+      "naturalness": 5
+    },
+    "source_ko": "캠페인 기간 동안 게시물 공개 유지 및 브랜드 계정 멘션하기",
+    "source_en": "Keep the post public during the campaign period and mention the brand account",
+    "proposed_ko": "캠페인 기간 동안 게시물 공개 유지 및 브랜드 계정 멘션하기",
+    "proposed_en": "Keep the post public during the campaign period and mention the brand account",
+    "decision": "keep",
+    "topic": "campaign-hub",
+    "reason": "CreatorCampaignHub JSX 하드코딩 문구를 사전으로 이관하고, 미승인 80% 배분 문구를 제거한 뒤 승인 실적(글로벌 AI 플랫폼 · 영상 9편 · 200만 뷰+ · 파생 오가닉 콘텐츠 300건+)과 사람 톤 문장으로 정리했다.",
+    "evidence": "components/campaigns/creator-campaign-hub.tsx; messages/campaign-hub.ts; AGENTS.md §5"
+  },
+  "campaigns.hub.archetypes.fashionLookbook.title": {
+    "ko": {
+      "clarity": 5,
+      "specificity": 4,
+      "naturalness": 5
+    },
+    "en": {
+      "clarity": 5,
+      "specificity": 4,
+      "naturalness": 5
+    },
+    "source_ko": "시즌 아우터 착용 · 도심 런웨이 캠페인",
+    "source_en": "Seasonal signature outerwear runway campaign",
+    "proposed_ko": "시즌 아우터 착용 · 도심 런웨이 캠페인",
+    "proposed_en": "Seasonal signature outerwear runway campaign",
+    "decision": "keep",
+    "topic": "campaign-hub",
+    "reason": "CreatorCampaignHub JSX 하드코딩 문구를 사전으로 이관하고, 미승인 80% 배분 문구를 제거한 뒤 승인 실적(글로벌 AI 플랫폼 · 영상 9편 · 200만 뷰+ · 파생 오가닉 콘텐츠 300건+)과 사람 톤 문장으로 정리했다.",
+    "evidence": "components/campaigns/creator-campaign-hub.tsx; messages/campaign-hub.ts; AGENTS.md §5"
+  },
+  "campaigns.hub.archetypes.streetInterview.badge": {
+    "ko": {
+      "clarity": 5,
+      "specificity": 4,
+      "naturalness": 5
+    },
+    "en": {
+      "clarity": 5,
+      "specificity": 4,
+      "naturalness": 5
+    },
+    "source_ko": "트렌드 · 인터뷰 예시",
+    "source_en": "Trend & street interview",
+    "proposed_ko": "트렌드 · 인터뷰 예시",
+    "proposed_en": "Trend & street interview",
+    "decision": "keep",
+    "topic": "campaign-hub",
+    "reason": "CreatorCampaignHub JSX 하드코딩 문구를 사전으로 이관하고, 미승인 80% 배분 문구를 제거한 뒤 승인 실적(글로벌 AI 플랫폼 · 영상 9편 · 200만 뷰+ · 파생 오가닉 콘텐츠 300건+)과 사람 톤 문장으로 정리했다.",
+    "evidence": "components/campaigns/creator-campaign-hub.tsx; messages/campaign-hub.ts; AGENTS.md §5"
+  },
+  "campaigns.hub.archetypes.streetInterview.formatWay": {
+    "ko": {
+      "clarity": 5,
+      "specificity": 4,
+      "naturalness": 5
+    },
+    "en": {
+      "clarity": 5,
+      "specificity": 4,
+      "naturalness": 5
+    },
+    "source_ko": "[90년대 압구정 캠코더 인터뷰] 공식 포맷으로 내 얼굴이 나오는 인터뷰 영상을 만들고, 주제에 맞는 재치 있는 답변과 함께 올립니다.",
+    "source_en": "Create an interview clip starring your face with the [90s Camcorder Street Interview] format and post it with a witty answer to the prompt.",
+    "proposed_ko": "[90년대 압구정 캠코더 인터뷰] 공식 포맷으로 내 얼굴이 나오는 인터뷰 영상을 만들고, 주제에 맞는 재치 있는 답변과 함께 올립니다.",
+    "proposed_en": "Create an interview clip starring your face with the [90s Camcorder Street Interview] format and post it with a witty answer to the prompt.",
+    "decision": "keep",
+    "topic": "campaign-hub",
+    "reason": "CreatorCampaignHub JSX 하드코딩 문구를 사전으로 이관하고, 미승인 80% 배분 문구를 제거한 뒤 승인 실적(글로벌 AI 플랫폼 · 영상 9편 · 200만 뷰+ · 파생 오가닉 콘텐츠 300건+)과 사람 톤 문장으로 정리했다.",
+    "evidence": "components/campaigns/creator-campaign-hub.tsx; messages/campaign-hub.ts; AGENTS.md §5"
+  },
+  "campaigns.hub.archetypes.streetInterview.guidedWay": {
+    "ko": {
+      "clarity": 5,
+      "specificity": 4,
+      "naturalness": 5
+    },
+    "en": {
+      "clarity": 5,
+      "specificity": 4,
+      "naturalness": 5
+    },
+    "source_ko": "90년대 캠코더 질감과 인터뷰 마이크 구도 가이드를 지켜 나만의 질문·답변 장면으로 연출해도 됩니다.",
+    "source_en": "Direct your own Q&A scene keeping the 90s camcorder framing and handheld mic guide.",
+    "proposed_ko": "90년대 캠코더 질감과 인터뷰 마이크 구도 가이드를 지켜 나만의 질문·답변 장면으로 연출해도 됩니다.",
+    "proposed_en": "Direct your own Q&A scene keeping the 90s camcorder framing and handheld mic guide.",
+    "decision": "keep",
+    "topic": "campaign-hub",
+    "reason": "CreatorCampaignHub JSX 하드코딩 문구를 사전으로 이관하고, 미승인 80% 배분 문구를 제거한 뒤 승인 실적(글로벌 AI 플랫폼 · 영상 9편 · 200만 뷰+ · 파생 오가닉 콘텐츠 300건+)과 사람 톤 문장으로 정리했다.",
+    "evidence": "components/campaigns/creator-campaign-hub.tsx; messages/campaign-hub.ts; AGENTS.md §5"
+  },
+  "campaigns.hub.archetypes.streetInterview.payout": {
+    "ko": {
+      "clarity": 5,
+      "specificity": 4,
+      "naturalness": 5
+    },
+    "en": {
+      "clarity": 5,
+      "specificity": 4,
+      "naturalness": 5
+    },
+    "source_ko": "공개 게시 확인 후 원고료 정산 (이미지 전용 보상 크레딧 운영 시 별도 안내)",
+    "source_en": "Campaign fee settled after public post review (separate promotional image credits may apply when open)",
+    "proposed_ko": "공개 게시 확인 후 원고료 정산 (이미지 전용 보상 크레딧 운영 시 별도 안내)",
+    "proposed_en": "Campaign fee settled after public post review (separate promotional image credits may apply when open)",
+    "decision": "keep",
+    "topic": "campaign-hub",
+    "reason": "CreatorCampaignHub JSX 하드코딩 문구를 사전으로 이관하고, 미승인 80% 배분 문구를 제거한 뒤 승인 실적(글로벌 AI 플랫폼 · 영상 9편 · 200만 뷰+ · 파생 오가닉 콘텐츠 300건+)과 사람 톤 문장으로 정리했다.",
+    "evidence": "components/campaigns/creator-campaign-hub.tsx; messages/campaign-hub.ts; AGENTS.md §5"
+  },
+  "campaigns.hub.archetypes.streetInterview.point1": {
+    "ko": {
+      "clarity": 5,
+      "specificity": 4,
+      "naturalness": 5
+    },
+    "en": {
+      "clarity": 5,
+      "specificity": 4,
+      "naturalness": 5
+    },
+    "source_ko": "공식 인터뷰 포맷 또는 레트로 인터뷰 가이드 준수 (영상 9편 · 200만 뷰+ · 파생 오가닉 콘텐츠 300건+ 검증 포맷)",
+    "source_en": "Use the official interview format or match the retro interview guide (proven across 9 films · 2M+ views · 300+ derived organic posts)",
+    "proposed_ko": "공식 인터뷰 포맷 또는 레트로 인터뷰 가이드 준수 (영상 9편 · 200만 뷰+ · 파생 오가닉 콘텐츠 300건+ 검증 포맷)",
+    "proposed_en": "Use the official interview format or match the retro interview guide (proven across 9 films · 2M+ views · 300+ derived organic posts)",
+    "decision": "keep",
+    "topic": "campaign-hub",
+    "reason": "CreatorCampaignHub JSX 하드코딩 문구를 사전으로 이관하고, 미승인 80% 배분 문구를 제거한 뒤 승인 실적(글로벌 AI 플랫폼 · 영상 9편 · 200만 뷰+ · 파생 오가닉 콘텐츠 300건+)과 사람 톤 문장으로 정리했다.",
+    "evidence": "components/campaigns/creator-campaign-hub.tsx; messages/campaign-hub.ts; AGENTS.md §5"
+  },
+  "campaigns.hub.archetypes.streetInterview.point2": {
+    "ko": {
+      "clarity": 5,
+      "specificity": 4,
+      "naturalness": 5
+    },
+    "en": {
+      "clarity": 5,
+      "specificity": 4,
+      "naturalness": 5
+    },
+    "source_ko": "지정 사운드 또는 자막 스타일을 적용해 전체 공개로 올리기",
+    "source_en": "Apply the campaign sound or caption style and publish publicly on SNS",
+    "proposed_ko": "지정 사운드 또는 자막 스타일을 적용해 전체 공개로 올리기",
+    "proposed_en": "Apply the campaign sound or caption style and publish publicly on SNS",
+    "decision": "keep",
+    "topic": "campaign-hub",
+    "reason": "CreatorCampaignHub JSX 하드코딩 문구를 사전으로 이관하고, 미승인 80% 배분 문구를 제거한 뒤 승인 실적(글로벌 AI 플랫폼 · 영상 9편 · 200만 뷰+ · 파생 오가닉 콘텐츠 300건+)과 사람 톤 문장으로 정리했다.",
+    "evidence": "components/campaigns/creator-campaign-hub.tsx; messages/campaign-hub.ts; AGENTS.md §5"
+  },
+  "campaigns.hub.archetypes.streetInterview.point3": {
+    "ko": {
+      "clarity": 5,
+      "specificity": 4,
+      "naturalness": 5
+    },
+    "en": {
+      "clarity": 5,
+      "specificity": 4,
+      "naturalness": 5
+    },
+    "source_ko": "내 캠페인 페이지에 게시물 링크 제출하기",
+    "source_en": "Submit the published link in My campaigns",
+    "proposed_ko": "내 캠페인 페이지에 게시물 링크 제출하기",
+    "proposed_en": "Submit the published link in My campaigns",
+    "decision": "keep",
+    "topic": "campaign-hub",
+    "reason": "CreatorCampaignHub JSX 하드코딩 문구를 사전으로 이관하고, 미승인 80% 배분 문구를 제거한 뒤 승인 실적(글로벌 AI 플랫폼 · 영상 9편 · 200만 뷰+ · 파생 오가닉 콘텐츠 300건+)과 사람 톤 문장으로 정리했다.",
+    "evidence": "components/campaigns/creator-campaign-hub.tsx; messages/campaign-hub.ts; AGENTS.md §5"
+  },
+  "campaigns.hub.archetypes.streetInterview.title": {
+    "ko": {
+      "clarity": 5,
+      "specificity": 4,
+      "naturalness": 5
+    },
+    "en": {
+      "clarity": 5,
+      "specificity": 4,
+      "naturalness": 5
+    },
+    "source_ko": "글로벌 AI 플랫폼 · 90년대 길거리 인터뷰 챌린지",
+    "source_en": "Global AI platform · 90s street interview challenge",
+    "proposed_ko": "글로벌 AI 플랫폼 · 90년대 길거리 인터뷰 챌린지",
+    "proposed_en": "Global AI platform · 90s street interview challenge",
+    "decision": "keep",
+    "topic": "campaign-hub",
+    "reason": "CreatorCampaignHub JSX 하드코딩 문구를 사전으로 이관하고, 미승인 80% 배분 문구를 제거한 뒤 승인 실적(글로벌 AI 플랫폼 · 영상 9편 · 200만 뷰+ · 파생 오가닉 콘텐츠 300건+)과 사람 톤 문장으로 정리했다.",
+    "evidence": "components/campaigns/creator-campaign-hub.tsx; messages/campaign-hub.ts; AGENTS.md §5"
+  },
+  "campaigns.hub.body": {
+    "ko": {
+      "clarity": 5,
+      "specificity": 4,
+      "naturalness": 5
+    },
+    "en": {
+      "clarity": 5,
+      "specificity": 4,
+      "naturalness": 5
+    },
+    "source_ko": "촬영장에 가거나 제품을 배송받을 필요가 없습니다. 정면 사진 한 장으로 캠페인 영상을 무료로 만들어 릴스·틱톡에 올리고, 검수가 끝나면 원고료를 받습니다.",
+    "source_en": "No studio shoot or product shipping needed. Make a campaign video for free with one front-facing photo, post it on Instagram Reels or TikTok, and get paid under the campaign terms.",
+    "proposed_ko": "촬영장에 가거나 제품을 배송받을 필요가 없습니다. 정면 사진 한 장으로 캠페인 영상을 무료로 만들어 릴스·틱톡에 올리고, 검수가 끝나면 원고료를 받습니다.",
+    "proposed_en": "No studio shoot or product shipping needed. Make a campaign video for free with one front-facing photo, post it on Instagram Reels or TikTok, and get paid under the campaign terms.",
+    "decision": "keep",
+    "topic": "campaign-hub",
+    "reason": "CreatorCampaignHub JSX 하드코딩 문구를 사전으로 이관하고, 미승인 80% 배분 문구를 제거한 뒤 승인 실적(글로벌 AI 플랫폼 · 영상 9편 · 200만 뷰+ · 파생 오가닉 콘텐츠 300건+)과 사람 톤 문장으로 정리했다.",
+    "evidence": "components/campaigns/creator-campaign-hub.tsx; messages/campaign-hub.ts; AGENTS.md §5"
+  },
+  "campaigns.hub.checklistBadge": {
+    "ko": {
+      "clarity": 5,
+      "specificity": 4,
+      "naturalness": 5
+    },
+    "en": {
+      "clarity": 5,
+      "specificity": 4,
+      "naturalness": 5
+    },
+    "source_ko": "올리기 전 필수 확인 3가지",
+    "source_en": "3 checks before you post",
+    "proposed_ko": "올리기 전 필수 확인 3가지",
+    "proposed_en": "3 checks before you post",
+    "decision": "keep",
+    "topic": "campaign-hub",
+    "reason": "CreatorCampaignHub JSX 하드코딩 문구를 사전으로 이관하고, 미승인 80% 배분 문구를 제거한 뒤 승인 실적(글로벌 AI 플랫폼 · 영상 9편 · 200만 뷰+ · 파생 오가닉 콘텐츠 300건+)과 사람 톤 문장으로 정리했다.",
+    "evidence": "components/campaigns/creator-campaign-hub.tsx; messages/campaign-hub.ts; AGENTS.md §5"
+  },
+  "campaigns.hub.checklistBody": {
+    "ko": {
+      "clarity": 5,
+      "specificity": 4,
+      "naturalness": 5
+    },
+    "en": {
+      "clarity": 5,
+      "specificity": 4,
+      "naturalness": 5
+    },
+    "source_ko": "아래 세 가지만 지켜 올리고 내 캠페인에서 링크를 제출하면 정산됩니다.",
+    "source_en": "Follow all three items when you publish, then submit your post link in My campaigns.",
+    "proposed_ko": "아래 세 가지만 지켜 올리고 내 캠페인에서 링크를 제출하면 정산됩니다.",
+    "proposed_en": "Follow all three items when you publish, then submit your post link in My campaigns.",
+    "decision": "keep",
+    "topic": "campaign-hub",
+    "reason": "CreatorCampaignHub JSX 하드코딩 문구를 사전으로 이관하고, 미승인 80% 배분 문구를 제거한 뒤 승인 실적(글로벌 AI 플랫폼 · 영상 9편 · 200만 뷰+ · 파생 오가닉 콘텐츠 300건+)과 사람 톤 문장으로 정리했다.",
+    "evidence": "components/campaigns/creator-campaign-hub.tsx; messages/campaign-hub.ts; AGENTS.md §5"
+  },
+  "campaigns.hub.directCta": {
+    "ko": {
+      "clarity": 5,
+      "specificity": 4,
+      "naturalness": 5
+    },
+    "en": {
+      "clarity": 5,
+      "specificity": 4,
+      "naturalness": 5
+    },
+    "source_ko": "나만의 영상 만들고 수익 보기 →",
+    "source_en": "Make my own video & earn →",
+    "proposed_ko": "나만의 영상 만들고 수익 보기 →",
+    "proposed_en": "Make my own video & earn →",
+    "decision": "keep",
+    "topic": "campaign-hub",
+    "reason": "CreatorCampaignHub JSX 하드코딩 문구를 사전으로 이관하고, 미승인 80% 배분 문구를 제거한 뒤 승인 실적(글로벌 AI 플랫폼 · 영상 9편 · 200만 뷰+ · 파생 오가닉 콘텐츠 300건+)과 사람 톤 문장으로 정리했다.",
+    "evidence": "components/campaigns/creator-campaign-hub.tsx; messages/campaign-hub.ts; AGENTS.md §5"
+  },
+  "campaigns.hub.eyebrow": {
+    "ko": {
+      "clarity": 5,
+      "specificity": 4,
+      "naturalness": 5
+    },
+    "en": {
+      "clarity": 5,
+      "specificity": 4,
+      "naturalness": 5
+    },
+    "source_ko": "크리에이터 참여 방법 2가지",
+    "source_en": "Two ways to participate",
+    "proposed_ko": "크리에이터 참여 방법 2가지",
+    "proposed_en": "Two ways to participate",
+    "decision": "keep",
+    "topic": "campaign-hub",
+    "reason": "CreatorCampaignHub JSX 하드코딩 문구를 사전으로 이관하고, 미승인 80% 배분 문구를 제거한 뒤 승인 실적(글로벌 AI 플랫폼 · 영상 9편 · 200만 뷰+ · 파생 오가닉 콘텐츠 300건+)과 사람 톤 문장으로 정리했다.",
+    "evidence": "components/campaigns/creator-campaign-hub.tsx; messages/campaign-hub.ts; AGENTS.md §5"
+  },
+  "campaigns.hub.formatsEyebrow": {
+    "ko": {
+      "clarity": 5,
+      "specificity": 4,
+      "naturalness": 5
+    },
+    "en": {
+      "clarity": 5,
+      "specificity": 4,
+      "naturalness": 5
+    },
+    "source_ko": "반응 좋은 대표 포맷",
+    "source_en": "Popular campaign formats",
+    "proposed_ko": "반응 좋은 대표 포맷",
+    "proposed_en": "Popular campaign formats",
+    "decision": "keep",
+    "topic": "campaign-hub",
+    "reason": "CreatorCampaignHub JSX 하드코딩 문구를 사전으로 이관하고, 미승인 80% 배분 문구를 제거한 뒤 승인 실적(글로벌 AI 플랫폼 · 영상 9편 · 200만 뷰+ · 파생 오가닉 콘텐츠 300건+)과 사람 톤 문장으로 정리했다.",
+    "evidence": "components/campaigns/creator-campaign-hub.tsx; messages/campaign-hub.ts; AGENTS.md §5"
+  },
+  "campaigns.hub.formatsHeading": {
+    "ko": {
+      "clarity": 5,
+      "specificity": 4,
+      "naturalness": 5
+    },
+    "en": {
+      "clarity": 5,
+      "specificity": 4,
+      "naturalness": 5
+    },
+    "source_ko": "인기 포맷으로 내 영상을 만들어 보거나, 직접 만든 포맷을 템플릿으로 등록해 보세요",
+    "source_en": "Try a trending scene, or publish your own template as a Maker",
+    "proposed_ko": "인기 포맷으로 내 영상을 만들어 보거나, 직접 만든 포맷을 템플릿으로 등록해 보세요",
+    "proposed_en": "Try a trending scene, or publish your own template as a Maker",
+    "decision": "keep",
+    "topic": "campaign-hub",
+    "reason": "CreatorCampaignHub JSX 하드코딩 문구를 사전으로 이관하고, 미승인 80% 배분 문구를 제거한 뒤 승인 실적(글로벌 AI 플랫폼 · 영상 9편 · 200만 뷰+ · 파생 오가닉 콘텐츠 300건+)과 사람 톤 문장으로 정리했다.",
+    "evidence": "components/campaigns/creator-campaign-hub.tsx; messages/campaign-hub.ts; AGENTS.md §5"
+  },
+  "campaigns.hub.heading": {
+    "ko": {
+      "clarity": 5,
+      "specificity": 4,
+      "naturalness": 5
+    },
+    "en": {
+      "clarity": 5,
+      "specificity": 4,
+      "naturalness": 5
+    },
+    "source_ko": "공식 포맷으로 바로 찍거나, 가이드에 맞춰 내 스타일로 만드세요",
+    "source_en": "Shoot with an official format, or make your own video from the brand guide",
+    "proposed_ko": "공식 포맷으로 바로 찍거나, 가이드에 맞춰 내 스타일로 만드세요",
+    "proposed_en": "Shoot with an official format, or make your own video from the brand guide",
+    "decision": "keep",
+    "topic": "campaign-hub",
+    "reason": "CreatorCampaignHub JSX 하드코딩 문구를 사전으로 이관하고, 미승인 80% 배분 문구를 제거한 뒤 승인 실적(글로벌 AI 플랫폼 · 영상 9편 · 200만 뷰+ · 파생 오가닉 콘텐츠 300건+)과 사람 톤 문장으로 정리했다.",
+    "evidence": "components/campaigns/creator-campaign-hub.tsx; messages/campaign-hub.ts; AGENTS.md §5"
+  },
+  "campaigns.hub.mineCta": {
+    "ko": {
+      "clarity": 5,
+      "specificity": 4,
+      "naturalness": 5
+    },
+    "en": {
+      "clarity": 5,
+      "specificity": 4,
+      "naturalness": 5
+    },
+    "source_ko": "내 캠페인 · 정산 현황 보기 →",
+    "source_en": "View my campaigns & payouts →",
+    "proposed_ko": "내 캠페인 · 정산 현황 보기 →",
+    "proposed_en": "View my campaigns & payouts →",
+    "decision": "keep",
+    "topic": "campaign-hub",
+    "reason": "CreatorCampaignHub JSX 하드코딩 문구를 사전으로 이관하고, 미승인 80% 배분 문구를 제거한 뒤 승인 실적(글로벌 AI 플랫폼 · 영상 9편 · 200만 뷰+ · 파생 오가닉 콘텐츠 300건+)과 사람 톤 문장으로 정리했다.",
+    "evidence": "components/campaigns/creator-campaign-hub.tsx; messages/campaign-hub.ts; AGENTS.md §5"
+  },
+  "campaigns.hub.payoutRuleLabel": {
+    "ko": {
+      "clarity": 5,
+      "specificity": 4,
+      "naturalness": 5
+    },
+    "en": {
+      "clarity": 5,
+      "specificity": 4,
+      "naturalness": 5
+    },
+    "source_ko": "정산 기준",
+    "source_en": "Payout condition",
+    "proposed_ko": "정산 기준",
+    "proposed_en": "Payout condition",
+    "decision": "keep",
+    "topic": "campaign-hub",
+    "reason": "CreatorCampaignHub JSX 하드코딩 문구를 사전으로 이관하고, 미승인 80% 배분 문구를 제거한 뒤 승인 실적(글로벌 AI 플랫폼 · 영상 9편 · 200만 뷰+ · 파생 오가닉 콘텐츠 300건+)과 사람 톤 문장으로 정리했다.",
+    "evidence": "components/campaigns/creator-campaign-hub.tsx; messages/campaign-hub.ts; AGENTS.md §5"
+  },
+  "campaigns.hub.proofFootnote": {
+    "ko": {
+      "clarity": 5,
+      "specificity": 4,
+      "naturalness": 5
+    },
+    "en": {
+      "clarity": 5,
+      "specificity": 4,
+      "naturalness": 5
+    },
+    "source_ko": "* 글로벌 AI 플랫폼 캠페인 실적: 영상 9편 · 200만 뷰+ · 파생 오가닉 콘텐츠 300건+",
+    "source_en": "* Verified campaign track record (global AI platform): 9 films · 2M+ views · 300+ derived organic posts",
+    "proposed_ko": "* 글로벌 AI 플랫폼 캠페인 실적: 영상 9편 · 200만 뷰+ · 파생 오가닉 콘텐츠 300건+",
+    "proposed_en": "* Verified campaign track record (global AI platform): 9 films · 2M+ views · 300+ derived organic posts",
+    "decision": "keep",
+    "topic": "campaign-hub",
+    "reason": "CreatorCampaignHub JSX 하드코딩 문구를 사전으로 이관하고, 미승인 80% 배분 문구를 제거한 뒤 승인 실적(글로벌 AI 플랫폼 · 영상 9편 · 200만 뷰+ · 파생 오가닉 콘텐츠 300건+)과 사람 톤 문장으로 정리했다.",
+    "evidence": "components/campaigns/creator-campaign-hub.tsx; messages/campaign-hub.ts; AGENTS.md §5"
+  },
+  "campaigns.hub.simEyebrow": {
+    "ko": {
+      "clarity": 5,
+      "specificity": 4,
+      "naturalness": 5
+    },
+    "en": {
+      "clarity": 5,
+      "specificity": 4,
+      "naturalness": 5
+    },
+    "source_ko": "캠페인 가이드 · 정산 조건 예시",
+    "source_en": "Sample brief & payout checklist",
+    "proposed_ko": "캠페인 가이드 · 정산 조건 예시",
+    "proposed_en": "Sample brief & payout checklist",
+    "decision": "keep",
+    "topic": "campaign-hub",
+    "reason": "CreatorCampaignHub JSX 하드코딩 문구를 사전으로 이관하고, 미승인 80% 배분 문구를 제거한 뒤 승인 실적(글로벌 AI 플랫폼 · 영상 9편 · 200만 뷰+ · 파생 오가닉 콘텐츠 300건+)과 사람 톤 문장으로 정리했다.",
+    "evidence": "components/campaigns/creator-campaign-hub.tsx; messages/campaign-hub.ts; AGENTS.md §5"
+  },
+  "campaigns.hub.simGroupLabel": {
+    "ko": {
+      "clarity": 5,
+      "specificity": 4,
+      "naturalness": 5
+    },
+    "en": {
+      "clarity": 5,
+      "specificity": 4,
+      "naturalness": 5
+    },
+    "source_ko": "캠페인 예시 선택",
+    "source_en": "Choose a campaign example",
+    "proposed_ko": "캠페인 예시 선택",
+    "proposed_en": "Choose a campaign example",
+    "decision": "keep",
+    "topic": "campaign-hub",
+    "reason": "CreatorCampaignHub JSX 하드코딩 문구를 사전으로 이관하고, 미승인 80% 배분 문구를 제거한 뒤 승인 실적(글로벌 AI 플랫폼 · 영상 9편 · 200만 뷰+ · 파생 오가닉 콘텐츠 300건+)과 사람 톤 문장으로 정리했다.",
+    "evidence": "components/campaigns/creator-campaign-hub.tsx; messages/campaign-hub.ts; AGENTS.md §5"
+  },
+  "campaigns.hub.simHeading": {
+    "ko": {
+      "clarity": 5,
+      "specificity": 4,
+      "naturalness": 5
+    },
+    "en": {
+      "clarity": 5,
+      "specificity": 4,
+      "naturalness": 5
+    },
+    "source_ko": "어떤 조건을 지키면 원고료가 정산되는지 미리 확인해 보세요",
+    "source_en": "See what a brand brief asks for and when payouts clear",
+    "proposed_ko": "어떤 조건을 지키면 원고료가 정산되는지 미리 확인해 보세요",
+    "proposed_en": "See what a brand brief asks for and when payouts clear",
+    "decision": "keep",
+    "topic": "campaign-hub",
+    "reason": "CreatorCampaignHub JSX 하드코딩 문구를 사전으로 이관하고, 미승인 80% 배분 문구를 제거한 뒤 승인 실적(글로벌 AI 플랫폼 · 영상 9편 · 200만 뷰+ · 파생 오가닉 콘텐츠 300건+)과 사람 톤 문장으로 정리했다.",
+    "evidence": "components/campaigns/creator-campaign-hub.tsx; messages/campaign-hub.ts; AGENTS.md §5"
+  },
+  "campaigns.hub.track1.badge": {
+    "ko": {
+      "clarity": 5,
+      "specificity": 4,
+      "naturalness": 5
+    },
+    "en": {
+      "clarity": 5,
+      "specificity": 4,
+      "naturalness": 5
+    },
+    "source_ko": "방법 01 · 공식 포맷으로 바로 만들기",
+    "source_en": "Way 01 · Official format",
+    "proposed_ko": "방법 01 · 공식 포맷으로 바로 만들기",
+    "proposed_en": "Way 01 · Official format",
+    "decision": "keep",
+    "topic": "campaign-hub",
+    "reason": "CreatorCampaignHub JSX 하드코딩 문구를 사전으로 이관하고, 미승인 80% 배분 문구를 제거한 뒤 승인 실적(글로벌 AI 플랫폼 · 영상 9편 · 200만 뷰+ · 파생 오가닉 콘텐츠 300건+)과 사람 톤 문장으로 정리했다.",
+    "evidence": "components/campaigns/creator-campaign-hub.tsx; messages/campaign-hub.ts; AGENTS.md §5"
+  },
+  "campaigns.hub.track1.body": {
+    "ko": {
+      "clarity": 5,
+      "specificity": 4,
+      "naturalness": 5
+    },
+    "en": {
+      "clarity": 5,
+      "specificity": 4,
+      "naturalness": 5
+    },
+    "source_ko": "카메라 구도, 조명, 제품 연출이 포맷에 미리 맞춰져 있습니다. 정면 사진을 넣어 영상을 만든 뒤 내 SNS에 올리고 링크만 제출하세요.",
+    "source_en": "Camera angles, lighting, and brand styling are already built into the format. Add your front-facing photo, publish the finished video on your channel, and submit the link.",
+    "proposed_ko": "카메라 구도, 조명, 제품 연출이 포맷에 미리 맞춰져 있습니다. 정면 사진을 넣어 영상을 만든 뒤 내 SNS에 올리고 링크만 제출하세요.",
+    "proposed_en": "Camera angles, lighting, and brand styling are already built into the format. Add your front-facing photo, publish the finished video on your channel, and submit the link.",
+    "decision": "keep",
+    "topic": "campaign-hub",
+    "reason": "CreatorCampaignHub JSX 하드코딩 문구를 사전으로 이관하고, 미승인 80% 배분 문구를 제거한 뒤 승인 실적(글로벌 AI 플랫폼 · 영상 9편 · 200만 뷰+ · 파생 오가닉 콘텐츠 300건+)과 사람 톤 문장으로 정리했다.",
+    "evidence": "components/campaigns/creator-campaign-hub.tsx; messages/campaign-hub.ts; AGENTS.md §5"
+  },
+  "campaigns.hub.track1.sponsor": {
+    "ko": {
+      "clarity": 5,
+      "specificity": 4,
+      "naturalness": 5
+    },
+    "en": {
+      "clarity": 5,
+      "specificity": 4,
+      "naturalness": 5
+    },
+    "source_ko": "제작비 0원 · 브랜드 지원",
+    "source_en": "₩0 production · Brand-sponsored",
+    "proposed_ko": "제작비 0원 · 브랜드 지원",
+    "proposed_en": "₩0 production · Brand-sponsored",
+    "decision": "keep",
+    "topic": "campaign-hub",
+    "reason": "CreatorCampaignHub JSX 하드코딩 문구를 사전으로 이관하고, 미승인 80% 배분 문구를 제거한 뒤 승인 실적(글로벌 AI 플랫폼 · 영상 9편 · 200만 뷰+ · 파생 오가닉 콘텐츠 300건+)과 사람 톤 문장으로 정리했다.",
+    "evidence": "components/campaigns/creator-campaign-hub.tsx; messages/campaign-hub.ts; AGENTS.md §5"
+  },
+  "campaigns.hub.track1.step1Body": {
+    "ko": {
+      "clarity": 5,
+      "specificity": 4,
+      "naturalness": 5
+    },
+    "en": {
+      "clarity": 5,
+      "specificity": 4,
+      "naturalness": 5
+    },
+    "source_ko": "캠페인 공식 템플릿 열기",
+    "source_en": "Open the campaign template",
+    "proposed_ko": "캠페인 공식 템플릿 열기",
+    "proposed_en": "Open the campaign template",
+    "decision": "keep",
+    "topic": "campaign-hub",
+    "reason": "CreatorCampaignHub JSX 하드코딩 문구를 사전으로 이관하고, 미승인 80% 배분 문구를 제거한 뒤 승인 실적(글로벌 AI 플랫폼 · 영상 9편 · 200만 뷰+ · 파생 오가닉 콘텐츠 300건+)과 사람 톤 문장으로 정리했다.",
+    "evidence": "components/campaigns/creator-campaign-hub.tsx; messages/campaign-hub.ts; AGENTS.md §5"
+  },
+  "campaigns.hub.track1.step1Label": {
+    "ko": {
+      "clarity": 5,
+      "specificity": 4,
+      "naturalness": 5
+    },
+    "en": {
+      "clarity": 5,
+      "specificity": 4,
+      "naturalness": 5
+    },
+    "source_ko": "1단계",
+    "source_en": "Step 1",
+    "proposed_ko": "1단계",
+    "proposed_en": "Step 1",
+    "decision": "keep",
+    "topic": "campaign-hub",
+    "reason": "CreatorCampaignHub JSX 하드코딩 문구를 사전으로 이관하고, 미승인 80% 배분 문구를 제거한 뒤 승인 실적(글로벌 AI 플랫폼 · 영상 9편 · 200만 뷰+ · 파생 오가닉 콘텐츠 300건+)과 사람 톤 문장으로 정리했다.",
+    "evidence": "components/campaigns/creator-campaign-hub.tsx; messages/campaign-hub.ts; AGENTS.md §5"
+  },
+  "campaigns.hub.track1.step1Title": {
+    "ko": {
+      "clarity": 5,
+      "specificity": 4,
+      "naturalness": 5
+    },
+    "en": {
+      "clarity": 5,
+      "specificity": 4,
+      "naturalness": 5
+    },
+    "source_ko": "포맷 고르기",
+    "source_en": "Pick the format",
+    "proposed_ko": "포맷 고르기",
+    "proposed_en": "Pick the format",
+    "decision": "keep",
+    "topic": "campaign-hub",
+    "reason": "CreatorCampaignHub JSX 하드코딩 문구를 사전으로 이관하고, 미승인 80% 배분 문구를 제거한 뒤 승인 실적(글로벌 AI 플랫폼 · 영상 9편 · 200만 뷰+ · 파생 오가닉 콘텐츠 300건+)과 사람 톤 문장으로 정리했다.",
+    "evidence": "components/campaigns/creator-campaign-hub.tsx; messages/campaign-hub.ts; AGENTS.md §5"
+  },
+  "campaigns.hub.track1.step2Body": {
+    "ko": {
+      "clarity": 5,
+      "specificity": 4,
+      "naturalness": 5
+    },
+    "en": {
+      "clarity": 5,
+      "specificity": 4,
+      "naturalness": 5
+    },
+    "source_ko": "내 사진으로 비용 없이 생성",
+    "source_en": "Sponsored with your photo",
+    "proposed_ko": "내 사진으로 비용 없이 생성",
+    "proposed_en": "Sponsored with your photo",
+    "decision": "keep",
+    "topic": "campaign-hub",
+    "reason": "CreatorCampaignHub JSX 하드코딩 문구를 사전으로 이관하고, 미승인 80% 배분 문구를 제거한 뒤 승인 실적(글로벌 AI 플랫폼 · 영상 9편 · 200만 뷰+ · 파생 오가닉 콘텐츠 300건+)과 사람 톤 문장으로 정리했다.",
+    "evidence": "components/campaigns/creator-campaign-hub.tsx; messages/campaign-hub.ts; AGENTS.md §5"
+  },
+  "campaigns.hub.track1.step2Label": {
+    "ko": {
+      "clarity": 5,
+      "specificity": 4,
+      "naturalness": 5
+    },
+    "en": {
+      "clarity": 5,
+      "specificity": 4,
+      "naturalness": 5
+    },
+    "source_ko": "2단계",
+    "source_en": "Step 2",
+    "proposed_ko": "2단계",
+    "proposed_en": "Step 2",
+    "decision": "keep",
+    "topic": "campaign-hub",
+    "reason": "CreatorCampaignHub JSX 하드코딩 문구를 사전으로 이관하고, 미승인 80% 배분 문구를 제거한 뒤 승인 실적(글로벌 AI 플랫폼 · 영상 9편 · 200만 뷰+ · 파생 오가닉 콘텐츠 300건+)과 사람 톤 문장으로 정리했다.",
+    "evidence": "components/campaigns/creator-campaign-hub.tsx; messages/campaign-hub.ts; AGENTS.md §5"
+  },
+  "campaigns.hub.track1.step2Title": {
+    "ko": {
+      "clarity": 5,
+      "specificity": 4,
+      "naturalness": 5
+    },
+    "en": {
+      "clarity": 5,
+      "specificity": 4,
+      "naturalness": 5
+    },
+    "source_ko": "무료로 만들기",
+    "source_en": "Create for free",
+    "proposed_ko": "무료로 만들기",
+    "proposed_en": "Create for free",
+    "decision": "keep",
+    "topic": "campaign-hub",
+    "reason": "CreatorCampaignHub JSX 하드코딩 문구를 사전으로 이관하고, 미승인 80% 배분 문구를 제거한 뒤 승인 실적(글로벌 AI 플랫폼 · 영상 9편 · 200만 뷰+ · 파생 오가닉 콘텐츠 300건+)과 사람 톤 문장으로 정리했다.",
+    "evidence": "components/campaigns/creator-campaign-hub.tsx; messages/campaign-hub.ts; AGENTS.md §5"
+  },
+  "campaigns.hub.track1.step3Body": {
+    "ko": {
+      "clarity": 5,
+      "specificity": 4,
+      "naturalness": 5
+    },
+    "en": {
+      "clarity": 5,
+      "specificity": 4,
+      "naturalness": 5
+    },
+    "source_ko": "링크 제출하고 원고료 받기",
+    "source_en": "Submit link for payout",
+    "proposed_ko": "링크 제출하고 원고료 받기",
+    "proposed_en": "Submit link for payout",
+    "decision": "keep",
+    "topic": "campaign-hub",
+    "reason": "CreatorCampaignHub JSX 하드코딩 문구를 사전으로 이관하고, 미승인 80% 배분 문구를 제거한 뒤 승인 실적(글로벌 AI 플랫폼 · 영상 9편 · 200만 뷰+ · 파생 오가닉 콘텐츠 300건+)과 사람 톤 문장으로 정리했다.",
+    "evidence": "components/campaigns/creator-campaign-hub.tsx; messages/campaign-hub.ts; AGENTS.md §5"
+  },
+  "campaigns.hub.track1.step3Label": {
+    "ko": {
+      "clarity": 5,
+      "specificity": 4,
+      "naturalness": 5
+    },
+    "en": {
+      "clarity": 5,
+      "specificity": 4,
+      "naturalness": 5
+    },
+    "source_ko": "3단계",
+    "source_en": "Step 3",
+    "proposed_ko": "3단계",
+    "proposed_en": "Step 3",
+    "decision": "keep",
+    "topic": "campaign-hub",
+    "reason": "CreatorCampaignHub JSX 하드코딩 문구를 사전으로 이관하고, 미승인 80% 배분 문구를 제거한 뒤 승인 실적(글로벌 AI 플랫폼 · 영상 9편 · 200만 뷰+ · 파생 오가닉 콘텐츠 300건+)과 사람 톤 문장으로 정리했다.",
+    "evidence": "components/campaigns/creator-campaign-hub.tsx; messages/campaign-hub.ts; AGENTS.md §5"
+  },
+  "campaigns.hub.track1.step3Title": {
+    "ko": {
+      "clarity": 5,
+      "specificity": 4,
+      "naturalness": 5
+    },
+    "en": {
+      "clarity": 5,
+      "specificity": 4,
+      "naturalness": 5
+    },
+    "source_ko": "게시 후 정산",
+    "source_en": "Post & get paid",
+    "proposed_ko": "게시 후 정산",
+    "proposed_en": "Post & get paid",
+    "decision": "keep",
+    "topic": "campaign-hub",
+    "reason": "CreatorCampaignHub JSX 하드코딩 문구를 사전으로 이관하고, 미승인 80% 배분 문구를 제거한 뒤 승인 실적(글로벌 AI 플랫폼 · 영상 9편 · 200만 뷰+ · 파생 오가닉 콘텐츠 300건+)과 사람 톤 문장으로 정리했다.",
+    "evidence": "components/campaigns/creator-campaign-hub.tsx; messages/campaign-hub.ts; AGENTS.md §5"
+  },
+  "campaigns.hub.track1.title": {
+    "ko": {
+      "clarity": 5,
+      "specificity": 4,
+      "naturalness": 5
+    },
+    "en": {
+      "clarity": 5,
+      "specificity": 4,
+      "naturalness": 5
+    },
+    "source_ko": "브랜드가 준비한 포맷에 내 사진 1장만 넣으면 끝납니다",
+    "source_en": "Pick the brand’s template and upload one photo",
+    "proposed_ko": "브랜드가 준비한 포맷에 내 사진 1장만 넣으면 끝납니다",
+    "proposed_en": "Pick the brand’s template and upload one photo",
+    "decision": "keep",
+    "topic": "campaign-hub",
+    "reason": "CreatorCampaignHub JSX 하드코딩 문구를 사전으로 이관하고, 미승인 80% 배분 문구를 제거한 뒤 승인 실적(글로벌 AI 플랫폼 · 영상 9편 · 200만 뷰+ · 파생 오가닉 콘텐츠 300건+)과 사람 톤 문장으로 정리했다.",
+    "evidence": "components/campaigns/creator-campaign-hub.tsx; messages/campaign-hub.ts; AGENTS.md §5"
+  },
+  "campaigns.hub.track2.badge": {
+    "ko": {
+      "clarity": 5,
+      "specificity": 4,
+      "naturalness": 5
+    },
+    "en": {
+      "clarity": 5,
+      "specificity": 4,
+      "naturalness": 5
+    },
+    "source_ko": "방법 02 · 가이드에 맞춰 내 영상 만들기",
+    "source_en": "Way 02 · Your own style",
+    "proposed_ko": "방법 02 · 가이드에 맞춰 내 영상 만들기",
+    "proposed_en": "Way 02 · Your own style",
+    "decision": "keep",
+    "topic": "campaign-hub",
+    "reason": "CreatorCampaignHub JSX 하드코딩 문구를 사전으로 이관하고, 미승인 80% 배분 문구를 제거한 뒤 승인 실적(글로벌 AI 플랫폼 · 영상 9편 · 200만 뷰+ · 파생 오가닉 콘텐츠 300건+)과 사람 톤 문장으로 정리했다.",
+    "evidence": "components/campaigns/creator-campaign-hub.tsx; messages/campaign-hub.ts; AGENTS.md §5"
+  },
+  "campaigns.hub.track2.body": {
+    "ko": {
+      "clarity": 5,
+      "specificity": 4,
+      "naturalness": 5
+    },
+    "en": {
+      "clarity": 5,
+      "specificity": 4,
+      "naturalness": 5
+    },
+    "source_ko": "브랜드가 전달한 제품·의상 사진을 넣고 필수 해시태그와 광고 표기만 지키면, 내 스타일로 연출한 영상으로도 참여할 수 있습니다.",
+    "source_en": "Attach the brand’s product or outfit image and include the required hashtags and disclosure while keeping the look of your own feed.",
+    "proposed_ko": "브랜드가 전달한 제품·의상 사진을 넣고 필수 해시태그와 광고 표기만 지키면, 내 스타일로 연출한 영상으로도 참여할 수 있습니다.",
+    "proposed_en": "Attach the brand’s product or outfit image and include the required hashtags and disclosure while keeping the look of your own feed.",
+    "decision": "keep",
+    "topic": "campaign-hub",
+    "reason": "CreatorCampaignHub JSX 하드코딩 문구를 사전으로 이관하고, 미승인 80% 배분 문구를 제거한 뒤 승인 실적(글로벌 AI 플랫폼 · 영상 9편 · 200만 뷰+ · 파생 오가닉 콘텐츠 300건+)과 사람 톤 문장으로 정리했다.",
+    "evidence": "components/campaigns/creator-campaign-hub.tsx; messages/campaign-hub.ts; AGENTS.md §5"
+  },
+  "campaigns.hub.track2.sponsor": {
+    "ko": {
+      "clarity": 5,
+      "specificity": 4,
+      "naturalness": 5
+    },
+    "en": {
+      "clarity": 5,
+      "specificity": 4,
+      "naturalness": 5
+    },
+    "source_ko": "캠페인 원고료 + 2차 광고 보너스",
+    "source_en": "Campaign fee + secondary ad bonus",
+    "proposed_ko": "캠페인 원고료 + 2차 광고 보너스",
+    "proposed_en": "Campaign fee + secondary ad bonus",
+    "decision": "keep",
+    "topic": "campaign-hub",
+    "reason": "CreatorCampaignHub JSX 하드코딩 문구를 사전으로 이관하고, 미승인 80% 배분 문구를 제거한 뒤 승인 실적(글로벌 AI 플랫폼 · 영상 9편 · 200만 뷰+ · 파생 오가닉 콘텐츠 300건+)과 사람 톤 문장으로 정리했다.",
+    "evidence": "components/campaigns/creator-campaign-hub.tsx; messages/campaign-hub.ts; AGENTS.md §5"
+  },
+  "campaigns.hub.track2.step1Body": {
+    "ko": {
+      "clarity": 5,
+      "specificity": 4,
+      "naturalness": 5
+    },
+    "en": {
+      "clarity": 5,
+      "specificity": 4,
+      "naturalness": 5
+    },
+    "source_ko": "제품 노출·해시태그 확인",
+    "source_en": "Check product & hashtag rules",
+    "proposed_ko": "제품 노출·해시태그 확인",
+    "proposed_en": "Check product & hashtag rules",
+    "decision": "keep",
+    "topic": "campaign-hub",
+    "reason": "CreatorCampaignHub JSX 하드코딩 문구를 사전으로 이관하고, 미승인 80% 배분 문구를 제거한 뒤 승인 실적(글로벌 AI 플랫폼 · 영상 9편 · 200만 뷰+ · 파생 오가닉 콘텐츠 300건+)과 사람 톤 문장으로 정리했다.",
+    "evidence": "components/campaigns/creator-campaign-hub.tsx; messages/campaign-hub.ts; AGENTS.md §5"
+  },
+  "campaigns.hub.track2.step1Label": {
+    "ko": {
+      "clarity": 5,
+      "specificity": 4,
+      "naturalness": 5
+    },
+    "en": {
+      "clarity": 5,
+      "specificity": 4,
+      "naturalness": 5
+    },
+    "source_ko": "1단계",
+    "source_en": "Step 1",
+    "proposed_ko": "1단계",
+    "proposed_en": "Step 1",
+    "decision": "keep",
+    "topic": "campaign-hub",
+    "reason": "CreatorCampaignHub JSX 하드코딩 문구를 사전으로 이관하고, 미승인 80% 배분 문구를 제거한 뒤 승인 실적(글로벌 AI 플랫폼 · 영상 9편 · 200만 뷰+ · 파생 오가닉 콘텐츠 300건+)과 사람 톤 문장으로 정리했다.",
+    "evidence": "components/campaigns/creator-campaign-hub.tsx; messages/campaign-hub.ts; AGENTS.md §5"
+  },
+  "campaigns.hub.track2.step1Title": {
+    "ko": {
+      "clarity": 5,
+      "specificity": 4,
+      "naturalness": 5
+    },
+    "en": {
+      "clarity": 5,
+      "specificity": 4,
+      "naturalness": 5
+    },
+    "source_ko": "가이드 확인",
+    "source_en": "Read the brief",
+    "proposed_ko": "가이드 확인",
+    "proposed_en": "Read the brief",
+    "decision": "keep",
+    "topic": "campaign-hub",
+    "reason": "CreatorCampaignHub JSX 하드코딩 문구를 사전으로 이관하고, 미승인 80% 배분 문구를 제거한 뒤 승인 실적(글로벌 AI 플랫폼 · 영상 9편 · 200만 뷰+ · 파생 오가닉 콘텐츠 300건+)과 사람 톤 문장으로 정리했다.",
+    "evidence": "components/campaigns/creator-campaign-hub.tsx; messages/campaign-hub.ts; AGENTS.md §5"
+  },
+  "campaigns.hub.track2.step2Body": {
+    "ko": {
+      "clarity": 5,
+      "specificity": 4,
+      "naturalness": 5
+    },
+    "en": {
+      "clarity": 5,
+      "specificity": 4,
+      "naturalness": 5
+    },
+    "source_ko": "제품 사진 넣어 영상 완성",
+    "source_en": "Create with the product photo",
+    "proposed_ko": "제품 사진 넣어 영상 완성",
+    "proposed_en": "Create with the product photo",
+    "decision": "keep",
+    "topic": "campaign-hub",
+    "reason": "CreatorCampaignHub JSX 하드코딩 문구를 사전으로 이관하고, 미승인 80% 배분 문구를 제거한 뒤 승인 실적(글로벌 AI 플랫폼 · 영상 9편 · 200만 뷰+ · 파생 오가닉 콘텐츠 300건+)과 사람 톤 문장으로 정리했다.",
+    "evidence": "components/campaigns/creator-campaign-hub.tsx; messages/campaign-hub.ts; AGENTS.md §5"
+  },
+  "campaigns.hub.track2.step2Label": {
+    "ko": {
+      "clarity": 5,
+      "specificity": 4,
+      "naturalness": 5
+    },
+    "en": {
+      "clarity": 5,
+      "specificity": 4,
+      "naturalness": 5
+    },
+    "source_ko": "2단계",
+    "source_en": "Step 2",
+    "proposed_ko": "2단계",
+    "proposed_en": "Step 2",
+    "decision": "keep",
+    "topic": "campaign-hub",
+    "reason": "CreatorCampaignHub JSX 하드코딩 문구를 사전으로 이관하고, 미승인 80% 배분 문구를 제거한 뒤 승인 실적(글로벌 AI 플랫폼 · 영상 9편 · 200만 뷰+ · 파생 오가닉 콘텐츠 300건+)과 사람 톤 문장으로 정리했다.",
+    "evidence": "components/campaigns/creator-campaign-hub.tsx; messages/campaign-hub.ts; AGENTS.md §5"
+  },
+  "campaigns.hub.track2.step2Title": {
+    "ko": {
+      "clarity": 5,
+      "specificity": 4,
+      "naturalness": 5
+    },
+    "en": {
+      "clarity": 5,
+      "specificity": 4,
+      "naturalness": 5
+    },
+    "source_ko": "내 스타일로 제작",
+    "source_en": "Make it yours",
+    "proposed_ko": "내 스타일로 제작",
+    "proposed_en": "Make it yours",
+    "decision": "keep",
+    "topic": "campaign-hub",
+    "reason": "CreatorCampaignHub JSX 하드코딩 문구를 사전으로 이관하고, 미승인 80% 배분 문구를 제거한 뒤 승인 실적(글로벌 AI 플랫폼 · 영상 9편 · 200만 뷰+ · 파생 오가닉 콘텐츠 300건+)과 사람 톤 문장으로 정리했다.",
+    "evidence": "components/campaigns/creator-campaign-hub.tsx; messages/campaign-hub.ts; AGENTS.md §5"
+  },
+  "campaigns.hub.track2.step3Body": {
+    "ko": {
+      "clarity": 5,
+      "specificity": 4,
+      "naturalness": 5
+    },
+    "en": {
+      "clarity": 5,
+      "specificity": 4,
+      "naturalness": 5
+    },
+    "source_ko": "2차 광고 채택 시 추가 수익",
+    "source_en": "Bonus if licensed for ads",
+    "proposed_ko": "2차 광고 채택 시 추가 수익",
+    "proposed_en": "Bonus if licensed for ads",
+    "decision": "keep",
+    "topic": "campaign-hub",
+    "reason": "CreatorCampaignHub JSX 하드코딩 문구를 사전으로 이관하고, 미승인 80% 배분 문구를 제거한 뒤 승인 실적(글로벌 AI 플랫폼 · 영상 9편 · 200만 뷰+ · 파생 오가닉 콘텐츠 300건+)과 사람 톤 문장으로 정리했다.",
+    "evidence": "components/campaigns/creator-campaign-hub.tsx; messages/campaign-hub.ts; AGENTS.md §5"
+  },
+  "campaigns.hub.track2.step3Label": {
+    "ko": {
+      "clarity": 5,
+      "specificity": 4,
+      "naturalness": 5
+    },
+    "en": {
+      "clarity": 5,
+      "specificity": 4,
+      "naturalness": 5
+    },
+    "source_ko": "3단계",
+    "source_en": "Step 3",
+    "proposed_ko": "3단계",
+    "proposed_en": "Step 3",
+    "decision": "keep",
+    "topic": "campaign-hub",
+    "reason": "CreatorCampaignHub JSX 하드코딩 문구를 사전으로 이관하고, 미승인 80% 배분 문구를 제거한 뒤 승인 실적(글로벌 AI 플랫폼 · 영상 9편 · 200만 뷰+ · 파생 오가닉 콘텐츠 300건+)과 사람 톤 문장으로 정리했다.",
+    "evidence": "components/campaigns/creator-campaign-hub.tsx; messages/campaign-hub.ts; AGENTS.md §5"
+  },
+  "campaigns.hub.track2.step3Title": {
+    "ko": {
+      "clarity": 5,
+      "specificity": 4,
+      "naturalness": 5
+    },
+    "en": {
+      "clarity": 5,
+      "specificity": 4,
+      "naturalness": 5
+    },
+    "source_ko": "검수 후 정산",
+    "source_en": "Pass review & earn",
+    "proposed_ko": "검수 후 정산",
+    "proposed_en": "Pass review & earn",
+    "decision": "keep",
+    "topic": "campaign-hub",
+    "reason": "CreatorCampaignHub JSX 하드코딩 문구를 사전으로 이관하고, 미승인 80% 배분 문구를 제거한 뒤 승인 실적(글로벌 AI 플랫폼 · 영상 9편 · 200만 뷰+ · 파생 오가닉 콘텐츠 300건+)과 사람 톤 문장으로 정리했다.",
+    "evidence": "components/campaigns/creator-campaign-hub.tsx; messages/campaign-hub.ts; AGENTS.md §5"
+  },
+  "campaigns.hub.track2.title": {
+    "ko": {
+      "clarity": 5,
+      "specificity": 4,
+      "naturalness": 5
+    },
+    "en": {
+      "clarity": 5,
+      "specificity": 4,
+      "naturalness": 5
+    },
+    "source_ko": "핵심 가이드만 지키면 내 피드 감성대로 만들어도 됩니다",
+    "source_en": "Follow the brand brief and direct the video in your own style",
+    "proposed_ko": "핵심 가이드만 지키면 내 피드 감성대로 만들어도 됩니다",
+    "proposed_en": "Follow the brand brief and direct the video in your own style",
+    "decision": "keep",
+    "topic": "campaign-hub",
+    "reason": "CreatorCampaignHub JSX 하드코딩 문구를 사전으로 이관하고, 미승인 80% 배분 문구를 제거한 뒤 승인 실적(글로벌 AI 플랫폼 · 영상 9편 · 200만 뷰+ · 파생 오가닉 콘텐츠 300건+)과 사람 톤 문장으로 정리했다.",
+    "evidence": "components/campaigns/creator-campaign-hub.tsx; messages/campaign-hub.ts; AGENTS.md §5"
+  },
+  "campaigns.hub.viewFormat": {
+    "ko": {
+      "clarity": 5,
+      "specificity": 4,
+      "naturalness": 5
+    },
+    "en": {
+      "clarity": 5,
+      "specificity": 4,
+      "naturalness": 5
+    },
+    "source_ko": "템플릿 보기 →",
+    "source_en": "Open template →",
+    "proposed_ko": "템플릿 보기 →",
+    "proposed_en": "Open template →",
+    "decision": "keep",
+    "topic": "campaign-hub",
+    "reason": "CreatorCampaignHub JSX 하드코딩 문구를 사전으로 이관하고, 미승인 80% 배분 문구를 제거한 뒤 승인 실적(글로벌 AI 플랫폼 · 영상 9편 · 200만 뷰+ · 파생 오가닉 콘텐츠 300건+)과 사람 톤 문장으로 정리했다.",
+    "evidence": "components/campaigns/creator-campaign-hub.tsx; messages/campaign-hub.ts; AGENTS.md §5"
+  },
+  "campaigns.hub.wayALabel": {
+    "ko": {
+      "clarity": 5,
+      "specificity": 4,
+      "naturalness": 5
+    },
+    "en": {
+      "clarity": 5,
+      "specificity": 4,
+      "naturalness": 5
+    },
+    "source_ko": "방법 A · 공식 포맷으로 만들 때",
+    "source_en": "Option A · Official format",
+    "proposed_ko": "방법 A · 공식 포맷으로 만들 때",
+    "proposed_en": "Option A · Official format",
+    "decision": "keep",
+    "topic": "campaign-hub",
+    "reason": "CreatorCampaignHub JSX 하드코딩 문구를 사전으로 이관하고, 미승인 80% 배분 문구를 제거한 뒤 승인 실적(글로벌 AI 플랫폼 · 영상 9편 · 200만 뷰+ · 파생 오가닉 콘텐츠 300건+)과 사람 톤 문장으로 정리했다.",
+    "evidence": "components/campaigns/creator-campaign-hub.tsx; messages/campaign-hub.ts; AGENTS.md §5"
+  },
+  "campaigns.hub.wayBLabel": {
+    "ko": {
+      "clarity": 5,
+      "specificity": 4,
+      "naturalness": 5
+    },
+    "en": {
+      "clarity": 5,
+      "specificity": 4,
+      "naturalness": 5
+    },
+    "source_ko": "방법 B · 가이드 맞춰 직접 만들 때",
+    "source_en": "Option B · Custom video from brief",
+    "proposed_ko": "방법 B · 가이드 맞춰 직접 만들 때",
+    "proposed_en": "Option B · Custom video from brief",
+    "decision": "keep",
+    "topic": "campaign-hub",
+    "reason": "CreatorCampaignHub JSX 하드코딩 문구를 사전으로 이관하고, 미승인 80% 배분 문구를 제거한 뒤 승인 실적(글로벌 AI 플랫폼 · 영상 9편 · 200만 뷰+ · 파생 오가닉 콘텐츠 300건+)과 사람 톤 문장으로 정리했다.",
+    "evidence": "components/campaigns/creator-campaign-hub.tsx; messages/campaign-hub.ts; AGENTS.md §5"
+  },
+  "community.customerRating": {
+    "ko": {
+      "clarity": 5,
+      "specificity": 4,
+      "naturalness": 5
+    },
+    "en": {
+      "clarity": 5,
+      "specificity": 4,
+      "naturalness": 5
+    },
+    "source_ko": "사용자 평균 별점",
+    "source_en": "Average rating",
+    "proposed_ko": "사용자 평균 별점",
+    "proposed_en": "Average rating",
+    "decision": "keep",
+    "topic": "community",
+    "reason": "기계적인 한자어·수동 표현(실구매·렌더 완료 기준, 평점 집계 전)을 구매자 행동 중심 자연스러운 한국어와 간결한 영어로 고쳤다. (2026-11 Bundle G 사전 반영 완료)",
+    "evidence": "messages/ko.ts; messages/en.ts; AGENTS.md §9"
+  },
+  "community.noRatings": {
+    "ko": {
+      "clarity": 5,
+      "specificity": 4,
+      "naturalness": 5
+    },
+    "en": {
+      "clarity": 5,
+      "specificity": 4,
+      "naturalness": 5
+    },
+    "source_ko": "아직 등록된 평가가 없어요",
+    "source_en": "No ratings yet",
+    "proposed_ko": "아직 등록된 평가가 없어요",
+    "proposed_en": "No ratings yet",
+    "decision": "keep",
+    "topic": "community",
+    "reason": "기계적인 한자어·수동 표현(실구매·렌더 완료 기준, 평점 집계 전)을 구매자 행동 중심 자연스러운 한국어와 간결한 영어로 고쳤다. (2026-11 Bundle G 사전 반영 완료)",
+    "evidence": "messages/ko.ts; messages/en.ts; AGENTS.md §9"
+  },
+  "community.ratingHint": {
+    "ko": {
+      "clarity": 5,
+      "specificity": 4,
+      "naturalness": 5
+    },
+    "en": {
+      "clarity": 5,
+      "specificity": 4,
+      "naturalness": 5
+    },
+    "source_ko": "직접 만든 결과를 평가해 주세요. 아쉬웠던 점도 다른 분께 도움이 되며, 별점은 보상에 영향을 주지 않아요.",
+    "source_en": "Rate a result you made yourself. Sharing what missed the mark helps others too, and ratings never affect rewards.",
+    "proposed_ko": "직접 만든 결과를 평가해 주세요. 아쉬웠던 점도 다른 분께 도움이 되며, 별점은 보상에 영향을 주지 않아요.",
+    "proposed_en": "Rate a result you made yourself. Sharing what missed the mark helps others too, and ratings never affect rewards.",
+    "decision": "keep",
+    "topic": "community",
+    "reason": "기계적인 한자어·수동 표현(실구매·렌더 완료 기준, 평점 집계 전)을 구매자 행동 중심 자연스러운 한국어와 간결한 영어로 고쳤다. (2026-11 Bundle G 사전 반영 완료)",
+    "evidence": "messages/ko.ts; messages/en.ts; AGENTS.md §9"
+  },
+  "roomsReview.page.errors.generic": {
+    "ko": {
+      "clarity": 5,
+      "specificity": 4,
+      "naturalness": 5
+    },
+    "en": {
+      "clarity": 5,
+      "specificity": 4,
+      "naturalness": 5
+    },
+    "source_ko": "처리하지 못했어요. 잠시 후 다시 시도해 주세요.",
+    "source_en": "Couldn't complete that. Please try again in a moment.",
+    "proposed_ko": "처리하지 못했어요. 잠시 후 다시 시도해 주세요.",
+    "proposed_en": "Couldn't complete that. Please try again in a moment.",
+    "decision": "keep",
+    "topic": "campaign",
+    "reason": "번역투·기계적 병렬·내부 은어(홀드·원고료입니다·유가 프로젝트 등)를 걷어내고 약관·상태 전이와 일치하는 자연스러운 창업자 톤 문장으로 반영했다. (2026-11 Bundle G 사전 반영 완료)",
+    "evidence": "docs/wording/proposals.md; docs/CAMPAIGNS.md; messages/ko.ts; messages/en.ts"
+  },
+  "roomsReview.share.errors.generic": {
+    "ko": {
+      "clarity": 5,
+      "specificity": 4,
+      "naturalness": 5
+    },
+    "en": {
+      "clarity": 5,
+      "specificity": 4,
+      "naturalness": 5
+    },
+    "source_ko": "처리하지 못했어요. 잠시 후 다시 시도해 주세요.",
+    "source_en": "Couldn't complete that. Please try again in a moment.",
+    "proposed_ko": "처리하지 못했어요. 잠시 후 다시 시도해 주세요.",
+    "proposed_en": "Couldn't complete that. Please try again in a moment.",
+    "decision": "keep",
+    "topic": "campaign",
+    "reason": "번역투·기계적 병렬·내부 은어(홀드·원고료입니다·유가 프로젝트 등)를 걷어내고 약관·상태 전이와 일치하는 자연스러운 창업자 톤 문장으로 반영했다. (2026-11 Bundle G 사전 반영 완료)",
+    "evidence": "docs/wording/proposals.md; docs/CAMPAIGNS.md; messages/ko.ts; messages/en.ts"
+  },
+  "studioLibrary.hub.reverseVideo": {
+    "ko": {
+      "clarity": 5,
+      "specificity": 4,
+      "naturalness": 5
+    },
+    "en": {
+      "clarity": 5,
+      "specificity": 4,
+      "naturalness": 5
+    },
+    "source_ko": "참고 영상으로 만들기",
+    "source_en": "Make from reference",
+    "proposed_ko": "참고 영상으로 만들기",
+    "proposed_en": "Make from reference",
+    "decision": "keep",
+    "topic": "campaign",
+    "reason": "번역투·기계적 병렬·내부 은어(홀드·원고료입니다·유가 프로젝트 등)를 걷어내고 약관·상태 전이와 일치하는 자연스러운 창업자 톤 문장으로 반영했다. (2026-11 Bundle G 사전 반영 완료)",
+    "evidence": "docs/wording/proposals.md; docs/CAMPAIGNS.md; messages/ko.ts; messages/en.ts"
+  },
+  "studioVideo.requests.tracks.studio_film.summary": {
+    "ko": {
+      "clarity": 5,
+      "specificity": 4,
+      "naturalness": 5
+    },
+    "en": {
+      "clarity": 5,
+      "specificity": 4,
+      "naturalness": 5
+    },
+    "source_ko": "한 장짜리 브리프와 제품, 로고를 보내 주세요. 하이엔드 브랜드 필름을 만들어 1차 편집본(v1)을 보여 드리고, 타임코드와 화면 위치로 남긴 의견을 v2에 반영한 뒤 승인한 1080p 마스터를 에셋에 넣어 드려요.",
+    "source_en": "Send a one-page brief, the product and the logo. We make a high-end brand film, share a first cut (v1), apply your timecode and on-screen notes in v2, and deliver the approved 1080p master to your assets.",
+    "proposed_ko": "한 장짜리 브리프와 제품, 로고를 보내 주세요. 하이엔드 브랜드 필름을 만들어 1차 편집본(v1)을 보여 드리고, 타임코드와 화면 위치로 남긴 의견을 v2에 반영한 뒤 승인한 1080p 마스터를 에셋에 넣어 드려요.",
+    "proposed_en": "Send a one-page brief, the product and the logo. We make a high-end brand film, share a first cut (v1), apply your timecode and on-screen notes in v2, and deliver the approved 1080p master to your assets.",
+    "decision": "keep",
+    "topic": "campaign",
+    "reason": "번역투·기계적 병렬·내부 은어(홀드·원고료입니다·유가 프로젝트 등)를 걷어내고 약관·상태 전이와 일치하는 자연스러운 창업자 톤 문장으로 반영했다. (2026-11 Bundle G 사전 반영 완료)",
+    "evidence": "docs/wording/proposals.md; docs/CAMPAIGNS.md; messages/ko.ts; messages/en.ts"
   }
 }

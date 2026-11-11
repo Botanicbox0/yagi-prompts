@@ -75,31 +75,31 @@ export function SiteFooter({
             </p>
           </div>
 
-          <nav aria-label={labels.navHeading} className="flex flex-col gap-3">
-            <p className="font-label text-eyebrow uppercase opacity-60">{labels.navHeading}</p>
+          <nav aria-label={labels.navHeading} className="flex flex-col gap-1">
+            <p className="mb-1 font-label text-eyebrow uppercase opacity-60">{labels.navHeading}</p>
             {links.map((link) => (
-              <a key={link.href} href={link.href} className="font-label text-eyebrow uppercase">
+              <a key={link.href} href={link.href} className="inline-flex min-h-9 items-center font-label text-eyebrow uppercase">
                 <TextSwap>{link.label}</TextSwap>
               </a>
             ))}
             {labels.account && (
-              <a href={labels.account.href} data-footer-account className="font-label text-eyebrow uppercase">
+              <a href={labels.account.href} data-footer-account className="inline-flex min-h-9 items-center font-label text-eyebrow uppercase">
                 <TextSwap>{labels.account.label}</TextSwap>
               </a>
             )}
           </nav>
 
-          <div className="flex flex-col gap-3">
-            <p className="font-label text-eyebrow uppercase opacity-60">{labels.contactHeading}</p>
+          <div className="flex flex-col gap-1">
+            <p className="mb-1 font-label text-eyebrow uppercase opacity-60">{labels.contactHeading}</p>
             <HireClickBeacon>
               <a
                 href={`mailto:hello@yagiworkshop.xyz?subject=${encodeURIComponent(labels.mailSubject)}`}
-                className="font-mono text-code"
+                className="inline-flex min-h-9 items-center font-mono text-code"
               >
                 hello@yagiworkshop.xyz
               </a>
             </HireClickBeacon>
-            <a href={labels.adHref} data-footer-brands className="text-accent font-label text-eyebrow uppercase">
+            <a href={labels.adHref} data-footer-brands className="inline-flex min-h-9 items-center text-accent font-label text-eyebrow uppercase">
               <TextSwap>{labels.advertise} →</TextSwap>
             </a>
           </div>
@@ -108,14 +108,14 @@ export function SiteFooter({
         {legalLinks.length > 0 && (
           <nav
             data-legal-nav
-            className="mt-10 flex flex-wrap gap-x-6 gap-y-2 border-t border-hairline pt-6"
+            className="mt-10 flex flex-wrap gap-x-6 gap-y-1 border-t border-hairline pt-6"
           >
             {legalLinks.map((link) => (
               <a
                 key={link.href}
                 href={link.href}
                 data-legal-link={link.doc}
-                className="font-mono text-code opacity-60 underline-offset-4 hover:opacity-100 hover:underline"
+                className="inline-flex min-h-9 items-center font-mono text-code opacity-60 underline-offset-4 hover:opacity-100 hover:underline"
               >
                 {link.label}
               </a>

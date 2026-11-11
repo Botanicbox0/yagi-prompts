@@ -512,7 +512,7 @@ export function BrandAssetHub({
             onCreating={setCreatingFolder}
           />
         </section>
-      ) : filtered.length === 0 ? (
+      ) : studio.store.phase === "failed" && !state ? null : filtered.length === 0 ? (
         <section className={s.empty} data-asset-hub-empty={section}>
           <p>
             {similarAnchor

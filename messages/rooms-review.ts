@@ -60,7 +60,7 @@ export const roomsReviewEn = {
     revokeConfirm: 'Turn this link off? Anyone holding it will no longer be able to open it.',
     close: 'Close',
     errors: {
-      generic: "That didn't work. Try again in a moment.",
+      generic: "Couldn't complete that. Please try again in a moment.",
       forbidden: 'Only owners and editors can share.',
       not_found: "This piece isn't here any more.",
       invalid: 'Check the options and try again.',
@@ -87,7 +87,7 @@ export const roomsReviewEn = {
     notFoundLine: 'It was turned off or it expired. Ask the person who sent it for a new one.',
     footer: 'Shared with TWINGS',
     errors: {
-      generic: "That didn't work. Try again in a moment.",
+      generic: "Couldn't complete that. Please try again in a moment.",
       invalid: 'Check what you wrote and try again.',
       rate_limited: 'Too many notes at once. Wait a minute and send again.',
       not_found: "This link can't be opened any more.",
@@ -183,7 +183,7 @@ export const roomsReviewKo: typeof roomsReviewEn = {
     revokeConfirm: '이 링크를 끊을까요? 링크를 가진 사람은 더 이상 열 수 없어요.',
     close: '닫기',
     errors: {
-      generic: '잘 되지 않았어요. 잠시 뒤에 다시 해 주세요.',
+      generic: '처리하지 못했어요. 잠시 후 다시 시도해 주세요.',
       forbidden: '소유자와 편집자만 공유할 수 있어요.',
       not_found: '이 작업이 더 이상 없어요.',
       invalid: '옵션을 확인하고 다시 해 주세요.',
@@ -210,7 +210,7 @@ export const roomsReviewKo: typeof roomsReviewEn = {
     notFoundLine: '링크가 끊겼거나 기간이 끝났어요. 보낸 사람에게 새 링크를 받아 주세요.',
     footer: 'TWINGS로 공유한 작업이에요',
     errors: {
-      generic: '잘 되지 않았어요. 잠시 뒤에 다시 해 주세요.',
+      generic: '처리하지 못했어요. 잠시 후 다시 시도해 주세요.',
       invalid: '적은 내용을 확인하고 다시 해 주세요.',
       rate_limited: '의견을 너무 빨리 보냈어요. 1분 뒤에 다시 보내 주세요.',
       not_found: '이 링크는 더 이상 열 수 없어요.',

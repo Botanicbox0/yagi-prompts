@@ -53,7 +53,6 @@ export default async function AppRootLayout({ children }: { children: ReactNode 
   return (
     <html lang={locale} className={fontVariables} data-workspace-admin={workspace || undefined}>
       <head>
-        {workspace && <link rel="stylesheet" href="/fonts/helvetica-neue/helvetica-neue.css" />}
         <link rel="stylesheet" href="/fonts/pretendard/pretendard-dynamic-subset.css" />
         <link rel="stylesheet" href="/fonts/pretendard/pretendard-hangul-mono.css" />
       </head>

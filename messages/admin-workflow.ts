@@ -37,7 +37,7 @@ export const adminWorkflowEn = {
       action: "Review applicants",
     },
     payouts: {
-      title: "Review payments after the hold",
+      title: "Review payouts past the waiting period",
       hint: "Check metrics and the amount, then record an actual payment. This queue does not transfer funds.",
       action: "Review payments",
     },
@@ -140,7 +140,7 @@ export const adminWorkflowEn = {
       title: "Payment records",
       ready:
         "All currently eligible selected participants have a payment record.",
-      blocked: "Review verified posts, the hold and payment records below.",
+      blocked: "Check verified posts, the waiting period, and payment records below.",
       waiting: "There are no payment records yet.",
     },
   },
@@ -185,7 +185,7 @@ export const adminWorkflowKo: typeof adminWorkflowEn = {
       action: "지원자 확인하기",
     },
     payouts: {
-      title: "홀드가 끝난 지급 건을 확인하세요",
+      title: "대기 기간이 끝난 지급 건을 확인하세요",
       hint: "조회수와 금액을 확인하고 실제 지급 내역을 기록합니다. 여기서 돈이 이체되지는 않습니다.",
       action: "지급 대기 확인하기",
     },
@@ -285,7 +285,7 @@ export const adminWorkflowKo: typeof adminWorkflowEn = {
     payments: {
       title: "지급 기록",
       ready: "현재 지급 대상 참여자 모두에게 지급 기록이 있습니다.",
-      blocked: "검수 결과, 홀드 기간과 지급 기록을 확인하세요.",
+      blocked: "검수 결과, 지급 대기 기간, 지급 기록을 확인하세요.",
       waiting: "아직 지급 기록이 없습니다.",
     },
   },
