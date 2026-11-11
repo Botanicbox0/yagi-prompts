@@ -1,14 +1,15 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { randomUUID } from 'node:crypto';
-import { createStudioJob, cancelStudioJob } from '@/lib/brand-studio/jobs';
+import { createStudioJob, cancelStudioJob, previewStudioPrompt, analyzeStudioFilm, resetFreeIntelRateLimits } from '@/lib/brand-studio/jobs';
 import { loadStudioState, runStudioOperation } from '@/lib/brand-studio/service';
 import { loadAllowance, studioMonthWindow, usageKrw } from '@/lib/brand-studio/usage';
 import { studioEnv } from '@/lib/brand-studio/env';
-import { requestId, seedImageAsset, studioDeps, studioFixture, viewerOf, type StudioFixture } from './helpers';
+import { requestId, seedImageAsset, seedVideoAsset, studioDeps, studioFixture, viewerOf, type StudioFixture } from './helpers';
 
 let f: StudioFixture;
 let deps: ReturnType<typeof studioDeps>;
 beforeEach(async () => {
+  resetFreeIntelRateLimits();
   f = await studioFixture();
   deps = studioDeps(f.sql);
 });
@@ -137,5 +138,75 @@ describe('the monthly allowance', () => {
     expect(await cancelStudioJob(deps, viewerOf(f.ids.owner), { organizationId: f.orgId, jobId: winner.job.id })).toEqual({ ok: true });
     expect((await loadAllowance(f.sql, f.orgId, deps.env)).usedKrw).toBe(0);
     expect((await createStudioJob(deps, viewerOf(f.ids.owner), image({ count: 1 }))).ok).toBe(true);
+  });
+});
+
+describe('scale hardening R-03 & R-08', () => {
+  it('R-03: blocks prompt.enhance and film.analyze when allowance cap <= 0, rate-limits uncached bursts, and serves cached film sheets freely', async () => {
+    const clip = await seedVideoAsset(deps, f.orgId, f.ids.owner, 6);
+    const previewInput = (prompt: string) => ({
+      kind: 'video' as const,
+      organizationId: f.orgId,
+      model: 'seedance-2.5',
+      prompt,
+      aspect: '9:16',
+      resolution: 'draft' as const,
+      seconds: 5,
+    });
+    await f.sql.query('update brand_studio_allowances set monthly_cap_krw = 0 where organization_id = $1', [f.orgId]);
+    expect(await previewStudioPrompt(deps, viewerOf(f.ids.owner), previewInput('rain on glass'))).toEqual({
+      ok: false,
+      code: 'allowance_closed',
+    });
+    expect(await analyzeStudioFilm(deps, viewerOf(f.ids.owner), { organizationId: f.orgId, assetId: clip, depth: 'blueprint' })).toEqual({
+      ok: false,
+      code: 'allowance_closed',
+    });
+
+    await f.sql.query('update brand_studio_allowances set monthly_cap_krw = 500000 where organization_id = $1', [f.orgId]);
+    for (let i = 0; i < 20; i++) {
+      const ok = await previewStudioPrompt(deps, viewerOf(f.ids.owner), previewInput(`studio bottle take ${i}`));
+      expect(ok.ok).toBe(true);
+    }
+    expect(await previewStudioPrompt(deps, viewerOf(f.ids.owner), previewInput('studio bottle overflow'))).toEqual({
+      ok: false,
+      code: 'too_many_running',
+    });
+
+    // First film.analyze populates storedSheet; subsequent cached reads bypass the uncached rate limit.
+    const firstRead = await analyzeStudioFilm(deps, viewerOf(f.ids.owner), { organizationId: f.orgId, assetId: clip, depth: 'blueprint' });
+    expect(firstRead.ok).toBe(true);
+    for (let i = 0; i < 10; i++) {
+      const cached = await analyzeStudioFilm(deps, viewerOf(f.ids.owner), { organizationId: f.orgId, assetId: clip, depth: 'blueprint' });
+      expect(cached.ok).toBe(true);
+    }
+    expect(deps.intel.calls.film).toBe(1);
+  });
+
+  it('R-08: loadStudioState keeps video jobs visible even after more than 60 newer image jobs', async () => {
+    const videoRes = await createStudioJob(deps, viewerOf(f.ids.owner), {
+      kind: 'video',
+      organizationId: f.orgId,
+      requestId: requestId(),
+      model: 'seedance-2.5',
+      prompt: 'a perfume bottle in morning mist',
+      aspect: '9:16',
+      resolution: 'draft',
+      seconds: 5,
+    });
+    expect(videoRes.ok).toBe(true);
+    if (!videoRes.ok) throw new Error('expected video job');
+    await f.sql.query("update brand_studio_jobs set status = 'canceled', finished_at = now() where id = $1", [videoRes.job.id]);
+
+    for (let i = 0; i < 65; i++) {
+      const img = await createStudioJob(deps, viewerOf(f.ids.owner), image({ count: 1, prompt: 'clean ceramic bottle on stone' }));
+      if (!img.ok) throw new Error(`img ${i}: ${img.code}`);
+      await f.sql.query("update brand_studio_jobs set status = 'canceled', finished_at = now() where id = $1", [img.job.id]);
+    }
+
+    const loaded = await loadStudioState(deps, viewerOf(f.ids.owner), f.orgId);
+    expect(loaded.ok).toBe(true);
+    if (!loaded.ok) throw new Error('expected state');
+    expect(loaded.jobs.some((j) => j.id === videoRes.job.id)).toBe(true);
   });
 });

@@ -119,19 +119,34 @@ export async function laneClaim(deps: StudioDeps, raw: unknown): Promise<LaneOut
   const parsed = ClaimInput.safeParse(raw ?? {});
   if (!parsed.success) return { ok: false, code: 'invalid' };
   await laneHeartbeat(deps, parsed.data.info);
+  const runningSlots = typeof parsed.data.info?.runningSlots === 'number' ? Math.max(0, Math.floor(parsed.data.info.runningSlots)) : 0;
   const claimed = await deps.sql.transaction(async (sql) => {
-    const jobs = (
+    const candidates = (
       await sql.query<JobRow>(
         `select * from brand_studio_jobs where lane = 'sunra_mcp' and status = 'queued' and (work ->> 'prepared') = 'true'
           order by created_at, id limit $1 for update skip locked`,
         [parsed.data.limit],
       )
     ).rows;
+    if (candidates.length === 0) return [];
+    const candidateIds = candidates.map((j) => j.id);
+    const candidateOutputs = (
+      await sql.query<OutputRow>("select * from brand_studio_outputs where job_id = any($1::uuid[]) and status = 'pending' order by idx", [candidateIds])
+    ).rows;
+    const jobs: JobRow[] = [];
+    let budget = parsed.data.limit;
+    for (const candidate of candidates) {
+      const slots = Math.max(1, candidateOutputs.filter((o) => o.job_id === candidate.id).length);
+      if (slots <= budget || (jobs.length === 0 && runningSlots === 0 && budget >= 1)) {
+        jobs.push(candidate);
+        budget -= slots;
+        if (budget <= 0) break;
+      }
+    }
     if (jobs.length === 0) return [];
     const ids = jobs.map((j) => j.id);
     await sql.query("update brand_studio_jobs set status = 'running', started_at = now() where id = any($1::uuid[])", [ids]);
-    const outputs = (await sql.query<OutputRow>("select * from brand_studio_outputs where job_id = any($1::uuid[]) and status = 'pending' order by idx", [ids])).rows;
-    return jobs.map((job) => laneJob(deps, job, outputs.filter((o) => o.job_id === job.id)));
+    return jobs.map((job) => laneJob(deps, job, candidateOutputs.filter((o) => o.job_id === job.id)));
   });
   return { ok: true, jobs: claimed };
 }

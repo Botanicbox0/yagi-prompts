@@ -6,14 +6,19 @@ import { getAvailableCommissionTracks } from "@/lib/brands/workspace/commission-
 import { studioVideoEn, studioVideoKo } from "@/messages/studio-video";
 
 /**
- * docs/BRAND-STUDIO-V3.md §6 and §9 — `/brand/studio/video` through the real page with the data layer
- * stubbed: the route context 404s every closed case before anything renders, and an ordinary brand
- * gets the three starts, the gallery in video mode, the road to a campaign, the three requests and,
- * only with a production contract, the small contract link. Nothing on it names a client, a supplier,
- * a won amount or the old "브랜드 전용 포맷 / 인하우스 패키지" framing.
+ * Bundle C (`docs/BRAND-STUDIO-VIDEO-C.md`) — `/brand/studio/video` mounts the 2-column Video Studio
+ * workspace (`영상 만들기` [`문장·참조로 만들기` | `설계도로 재현`] and `영상 편집`), redirects legacy `?view=request`
+ * to `/brand/projects/new`, 404s every closed/sandboxed case before rendering, and leaks zero client names,
+ * provider/model names, won amounts, or deprecated framing in SSR markup.
  */
 const ORG = "a0000000-0000-4000-8000-00000000000c";
+const ASSET = "b0000000-0000-4000-8000-00000000000d";
 const MORPHIC_ID = [...SANDBOXED_CLIENT_ORG_IDS][0]!;
+const redirectSpy = vi.hoisted(() =>
+  vi.fn((href: string) => {
+    throw new Error(`NEXT_REDIRECT:${href}`);
+  }),
+);
 const state = vi.hoisted(() => ({
   locale: "ko" as "ko" | "en",
   org: { id: "", name: "Fixture brand", role: "owner", denied: undefined as string[] | undefined },
@@ -24,7 +29,7 @@ vi.mock("next/navigation", () => ({
   useRouter: () => ({ refresh: vi.fn(), push: vi.fn() }),
   usePathname: () => "/brand/studio/video",
   useSearchParams: () => new URLSearchParams(),
-  redirect: vi.fn(),
+  redirect: redirectSpy,
   notFound: vi.fn(() => {
     throw new Error("NEXT_NOT_FOUND");
   }),
@@ -52,16 +57,10 @@ vi.mock("@/lib/brands/workspace/service", () => ({
   loadBrandWorkspaceScope: async () => ({ choices: [{ ...state.org, logoUrl: null }], projectOrganizations: state.projectOrganizations }),
   loadBrandWorkspace: async () => ({ organizations: [], projects: [] }),
 }));
-// The gallery is slice B1's; this page only has to hand it the video mode and the copy.
-vi.mock("@/components/brand-studio/studio-app", () => ({
-  StudioApp: (props: { mode: string; organizationId: string; libraryCopy?: unknown; layersCopy?: unknown }) => (
-    <div data-mock-studio-app={props.mode} data-org={props.organizationId} data-has-library={props.libraryCopy ? "" : undefined} data-has-layers={props.layersCopy ? "" : undefined} />
-  ),
-}));
 
 import StudioVideoPage from "@/app/(brand)/brand/studio/video/page";
 
-type Query = { start?: string; asset?: string; view?: string };
+type Query = { start?: string; asset?: string; view?: string; tab?: string };
 const page = async (query: Query = {}) =>
   renderToStaticMarkup(await (StudioVideoPage({ searchParams: Promise.resolve({ organizationId: state.org.id, ...query }) }) as Promise<ReactElement>));
 
@@ -69,6 +68,7 @@ const ORDINARY = { id: ORG, name: "Fixture brand", role: "owner", denied: undefi
 
 beforeEach(() => {
   vi.stubEnv("BRAND_STUDIO_V2", "on");
+  redirectSpy.mockClear();
   state.locale = "ko";
   state.org = { ...ORDINARY };
   state.projectOrganizations = {};
@@ -77,34 +77,35 @@ beforeEach(() => {
 afterEach(() => vi.unstubAllEnvs());
 
 describe("/brand/studio/video for an ordinary brand", () => {
-  it("make view: the three starts, the gallery in video mode and the reference drawer; no request cards under the floating bar", async () => {
+  it("renders the 2-column Video Studio workspace with create/edit tabs, frames, prompt dock, and history/guide tabs", async () => {
     const html = await page();
     expect(html).toContain("data-brand-studio-video");
-    expect(html).toContain('data-studio-video-view="make"');
     expect(html).toContain(`<h1 class="bs-title">${studioVideoKo.title}</h1>`);
-    for (const start of ["prompt", "reverse", "request"]) expect(html).toContain(`data-studio-video-start="${start}"`);
-    expect(html).toContain(`href="/brand/studio/video?view=request&amp;organizationId=${ORG}" data-studio-video-start="request"`);
-    expect(html).toContain(`data-mock-studio-app="video" data-org="${ORG}" data-has-library="" data-has-layers=""`);
-    expect(html).toContain("data-studio-reverse");
-    expect(html).not.toContain("data-studio-reverse-panel");
-    expect(html).not.toContain("data-studio-video-path");
-    expect(html).not.toContain("data-studio-video-requests");
+    expect(html).toContain("data-video-studio-workspace");
+    expect(html).toContain('data-video-tab="create"');
+    expect(html).toContain('data-video-tab="edit"');
+    expect(html).toContain('data-video-create-mode="prompt"');
+    expect(html).toContain('data-video-create-mode="blueprint"');
+    expect(html).toContain("data-video-start-frame");
+    expect(html).toContain("data-video-end-frame");
+    expect(html).toContain('data-video-stage-tab="history"');
+    expect(html).toContain('data-video-stage-tab="guide"');
+    expect(html).toContain(`href="/brand/projects/new?organizationId=${ORG}"`);
+    expect(html).toContain("data-studio-video-request-link");
   });
 
-  it("request view: the road to a campaign and the three requests, without the gallery", async () => {
-    const html = await page({ view: "request" });
-    expect(html).toContain('data-studio-video-view="request"');
-    expect(html).toContain('aria-current="page" data-studio-video-view-link="request"');
-    expect(html).toContain("data-studio-video-path");
-    expect(html.match(/data-studio-video-path-step="\d"/g)).toHaveLength(5);
-    expect(html).toContain("data-studio-video-path-send");
-    for (const track of ["creator_campaign", "template_build", "studio_film"]) {
-      expect(html).toContain(`data-studio-video-request="${track}"`);
-      expect(html).toContain(`href="/brand/projects/new?track=${track}&amp;organizationId=${ORG}"`);
-    }
-    expect(html).toContain('id="studio-video-requests"');
-    expect(html).not.toContain("data-mock-studio-app");
-    expect(html).not.toContain("data-studio-reverse");
+  it("redirects legacy ?view=request to /brand/projects/new (Bundle E project intake)", async () => {
+    await expect(page({ view: "request" })).rejects.toThrow(`NEXT_REDIRECT:/brand/projects/new?organizationId=${ORG}`);
+    expect(redirectSpy).toHaveBeenCalledWith(`/brand/projects/new?organizationId=${ORG}`);
+  });
+
+  it("opens blueprint remake mode on ?start=reverse (winning over ?view=request) and edit mode on ?tab=edit", async () => {
+    const blueprintHtml = await page({ start: "reverse", asset: ASSET, view: "request" });
+    expect(blueprintHtml).toContain("data-video-blueprint-panel");
+    expect(redirectSpy).not.toHaveBeenCalled();
+
+    const editHtml = await page({ tab: "edit" });
+    expect(editHtml).toContain("data-video-edit-panel");
   });
 
   it("shows the contract link only to a brand with a production contract", async () => {
@@ -115,27 +116,17 @@ describe("/brand/studio/video for an ordinary brand", () => {
     expect(without).not.toContain("tab=formats");
   });
 
-  it("opens the reference-video drawer from the address", async () => {
-    const html = await page({ start: "reverse", asset: "not-a-uuid" });
-    expect(html).toContain("data-studio-reverse-open");
-    expect(html).toContain("data-studio-reverse-panel");
-    // The drawer lives in the make view, so it wins over a request view in the same address.
-    expect(await page({ start: "reverse", view: "request" })).toContain('data-studio-video-view="make"');
-  });
-
-  it("keeps requests and sending to viewers out, but not the explanation", async () => {
+  it("hides the project request link from viewers while keeping the workspace readable", async () => {
     state.org = { ...ORDINARY, role: "viewer" };
-    expect(await page()).not.toContain('data-studio-video-start="request"');
-    const html = await page({ view: "request" });
-    expect(html).toContain("data-studio-video-path");
-    expect(html).not.toContain("data-studio-video-path-send");
-    expect(html).not.toContain("data-studio-video-requests");
+    const html = await page();
+    expect(html).toContain("data-video-studio-workspace");
+    expect(html).not.toContain("data-studio-video-request-link");
   });
 
   it.each(["ko", "en"] as const)("names no client, supplier, won amount or old framing (%s)", async (locale) => {
     state.locale = locale;
-    const html = (await page({ start: "reverse" })) + (await page({ view: "request" }));
-    expect(html).toContain(locale === "ko" ? studioVideoKo.path.title : studioVideoEn.path.title);
+    const html = (await page()) + (await page({ start: "reverse" })) + (await page({ tab: "edit" }));
+    expect(html).toContain(locale === "ko" ? studioVideoKo.workspace.tabs.create : studioVideoEn.workspace.tabs.create);
     for (const banned of [/9편|200만|2M\+? views/i, /morphic|모픽/i, /sunra|higgsfield|seedance|gemini/i, /브랜드 전용 포맷|인하우스 패키지/, /₩|\d원\b/]) {
       expect(html).not.toMatch(banned);
     }

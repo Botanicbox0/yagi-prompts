@@ -28,10 +28,46 @@ import { planFinal, planJob, type JobPlan } from './plan';
 import { brandSummary, enhanceInputOf, enhanceReferences, keepSheet, readSheet, remixContext, runEnhancer, storedSheet } from './prepare';
 import { jobView, openJobCount, readyAsset, readyOutput } from './repo';
 import type { EnhanceInput, JobRow, OutputRow, StudioDeps } from './types';
-import { reserveAllowance } from './usage';
+import { loadAllowance, reserveAllowance } from './usage';
 import { failure, guarded } from './outcome';
 
 const localeOf = (viewer: Viewer): 'ko' | 'en' => (viewer.locale === 'en' ? 'en' : 'ko');
+
+/**
+ * R-03 guardrails: free Gemini intelligence operations (`prompt.enhance`, `film.analyze`) require an
+ * open monthly allowance (`capKrw > 0`) and enforce a sliding-window per-organization rate cap so
+ * automated scripts cannot burn Gemini API budget without spending studio credits.
+ */
+export const FREE_INTEL_LIMITS = {
+  windowMs: 60_000,
+  enhancePerMinute: 20,
+  analyzePerMinute: 6,
+} as const;
+
+const freeIntelBuckets = new Map<string, number[]>();
+
+export function resetFreeIntelRateLimits(): void {
+  freeIntelBuckets.clear();
+}
+
+function takeFreeIntelSlot(key: string, maxPerWindow: number, nowMs: number): boolean {
+  const cutoff = nowMs - FREE_INTEL_LIMITS.windowMs;
+  const recent = (freeIntelBuckets.get(key) ?? []).filter((ts) => ts > cutoff);
+  if (recent.length >= maxPerWindow) {
+    freeIntelBuckets.set(key, recent);
+    return false;
+  }
+  recent.push(nowMs);
+  freeIntelBuckets.set(key, recent);
+  if (freeIntelBuckets.size > 500) {
+    for (const [k, list] of freeIntelBuckets) {
+      const kept = list.filter((ts) => ts > cutoff);
+      if (kept.length === 0) freeIntelBuckets.delete(k);
+      else freeIntelBuckets.set(k, kept);
+    }
+  }
+  return true;
+}
 
 async function insertJob(deps: StudioDeps, sql: StudioDeps['sql'], userId: string, organizationId: string, requestId: string, plan: JobPlan) {
   // A free lane now means the job starts `queued`; `held` only while every lane is full.
@@ -136,10 +172,16 @@ export async function previewStudioPrompt(deps: StudioDeps, viewer: Viewer, raw:
   if (!parsed.success) return failure('invalid');
   const v = parsed.data;
   const locale = localeOf(viewer);
+  const now = deps.now?.() ?? new Date();
   const ready = await guarded(() =>
     deps.sql.transaction(async (sql) => {
       const seat = await studioSeat(sql, viewer.userId, v.organizationId);
       requireCreate(seat);
+      const allowance = await loadAllowance(sql, v.organizationId, deps.env, now);
+      if (allowance.capKrw <= 0) throw new StudioDenied('allowance_closed');
+      if (!takeFreeIntelSlot(`enhance:${v.organizationId}`, FREE_INTEL_LIMITS.enhancePerMinute, now.getTime())) {
+        throw new StudioDenied('too_many_running');
+      }
       const plan = await planJob(sql, v.organizationId, { ...v, requestId: 'preview' }, deps.media, locale);
       return { seat, plan };
     }),
@@ -189,9 +231,12 @@ export async function analyzeStudioFilm(deps: StudioDeps, viewer: Viewer, raw: u
   const parsed = FilmAnalyzeSchema.safeParse(raw);
   if (!parsed.success) return failure('invalid');
   const v = parsed.data;
+  const now = deps.now?.() ?? new Date();
   const asset = await guarded(() =>
     deps.sql.transaction(async (sql) => {
       requireCreate(await studioSeat(sql, viewer.userId, v.organizationId));
+      const allowance = await loadAllowance(sql, v.organizationId, deps.env, now);
+      if (allowance.capKrw <= 0) throw new StudioDenied('allowance_closed');
       const row = await readyAsset(sql, v.organizationId, v.assetId);
       if (!row || row.kind !== 'video') throw new StudioDenied('not_found');
       return row;
@@ -203,6 +248,9 @@ export async function analyzeStudioFilm(deps: StudioDeps, viewer: Viewer, raw: u
   // Read once per asset, language and depth: the kept reading answers every later call (./prepare.ts).
   const kept = storedSheet(asset, locale, depth);
   if (kept) return { ok: true, sheet: kept };
+  if (!takeFreeIntelSlot(`analyze:${v.organizationId}`, FREE_INTEL_LIMITS.analyzePerMinute, now.getTime())) {
+    return failure('too_many_running');
+  }
   const sheet = await readSheet(
     deps,
     {
