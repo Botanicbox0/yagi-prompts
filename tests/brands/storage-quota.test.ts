@@ -9,10 +9,11 @@ import {
 import { advanceStudioJobsWith } from '@/lib/brand-studio/engine';
 import { createStudioJob } from '@/lib/brand-studio/jobs';
 import { loadStudioState } from '@/lib/brand-studio/service';
-import { studioV2Visible } from '@/lib/brand-studio/visibility';
+import { assetHubVisible, studioV2Visible } from '@/lib/brand-studio/visibility';
 import { runRoomOperation } from '@/lib/brand-rooms/messages';
 import { runStoryboardOperation } from '@/lib/brand-rooms/storyboards';
 import { setPlanAssignment } from '@/lib/brands/plans';
+import { reserveBrandAttachment } from '@/lib/brands/workspace/service';
 import {
   adminReconcileOrganizationStorage,
   BYTES_PER_GB,
@@ -64,27 +65,33 @@ async function uploadImage(bytes: Uint8Array, name = 'bottle.png') {
 }
 
 describe('plan storage defaults & admin overrides (docs/BRAND-STORAGE-QUOTAS-F.md)', () => {
-  it('resolves proposed defaults per plan tier and enforces admin-only optimistic concurrency + audit log', async () => {
+  it('resolves confirmed defaults per plan tier (29->200GB, 49->400GB, 69->800GB, project_only->50GB+90d) and enforces admin-only optimistic concurrency + audit log', async () => {
     const initial = await loadOrganizationStorageSummary(f.sql, f.orgId);
     expect(initial.tier).toBe('unassigned');
-    expect(initial.effectiveQuotaBytes).toBe(10 * BYTES_PER_GB);
+    expect(initial.effectiveQuotaBytes).toBe(50 * BYTES_PER_GB);
     expect(initial.state).toBe('ok');
+
+    expect(PROPOSED_PLAN_STORAGE_QUOTAS.b2b_29.defaultQuotaBytes).toBe(200 * BYTES_PER_GB);
+    expect(PROPOSED_PLAN_STORAGE_QUOTAS.b2b_49.defaultQuotaBytes).toBe(400 * BYTES_PER_GB);
+    expect(PROPOSED_PLAN_STORAGE_QUOTAS.b2b_69.defaultQuotaBytes).toBe(800 * BYTES_PER_GB);
+    expect(PROPOSED_PLAN_STORAGE_QUOTAS.project_only.defaultQuotaBytes).toBe(50 * BYTES_PER_GB);
+    expect(PROPOSED_PLAN_STORAGE_QUOTAS.project_only.defaultRetentionDays).toBe(90);
 
     const today = new Date(Date.now() + 9 * 3_600_000).toISOString().slice(0, 10);
     await setPlanAssignment({ sql: f.sql }, admin(), {
       organizationId: f.orgId,
-      planId: 'b2b_69',
+      planId: 'b2b_49',
       billingMode: 'invoice',
       startedOn: today,
       endsOn: null,
       seats: 10,
-      note: 'Growth contract',
+      note: '49 plan contract',
       expectedRevision: 0,
     });
     const growth = await loadOrganizationStorageSummary(f.sql, f.orgId);
-    expect(growth.tier).toBe('b2b_69');
-    expect(growth.effectiveQuotaBytes).toBe(PROPOSED_PLAN_STORAGE_QUOTAS.b2b_69.defaultQuotaBytes);
-    expect(growth.effectiveQuotaBytes).toBe(200 * BYTES_PER_GB);
+    expect(growth.tier).toBe('b2b_49');
+    expect(growth.effectiveQuotaBytes).toBe(PROPOSED_PLAN_STORAGE_QUOTAS.b2b_49.defaultQuotaBytes);
+    expect(growth.effectiveQuotaBytes).toBe(400 * BYTES_PER_GB);
 
     // Non-admins cannot override quotas.
     expect(
@@ -253,6 +260,17 @@ describe('deduplicated byte aggregation, 80% warn vs 100% upload block, and phys
     );
     expect(frameBlocked).toEqual({ ok: false, code: 'storage_quota_exceeded' });
 
+    // Project brief/workspace attachment upload is also refused for customer, while studio staff delivery remains allowed!
+    const projAttBlocked = await reserveBrandAttachment({ sql: f.sql }, owner(), {
+      projectId: f.projectId,
+      purpose: 'workspace',
+      requestId: randomUUID(),
+      name: 'brief.pdf',
+      mime: 'application/pdf',
+      sizeBytes: img2.byteLength,
+    });
+    expect(projAttBlocked).toEqual({ ok: false, code: 'storage_quota_exceeded' });
+
     // Lower quota to <= img1.byteLength so state is 'exceeded' (100%): reads & deletes MUST still work!
     const cur = await loadOrganizationStorageSummary(f.sql, f.orgId);
     await setOrganizationStorageQuota({ sql: f.sql }, admin(), {
@@ -351,15 +369,21 @@ describe('project-only retention dry-run & Morphic isolation', () => {
     expect(report.daysSinceLastDelivery).toBeGreaterThanOrEqual(95);
     expect(report.expired).toBe(true);
 
-    // Morphic / sandbox / generative_media-denied choices never pass studioV2Visible on /brand/settings or /brand/library.
+    // Project-only orgs (`self_studio` denied) keep Asset Hub + Storage Meter visible, while Morphic / sandbox / `generative_media`-denied choices get false everywhere.
     expect(
-      studioV2Visible(
+      assetHubVisible(
+        { id: randomUUID(), name: 'Project Only Corp', denied: ['self_studio'] },
+        true,
+      ),
+    ).toBe(true);
+    expect(
+      assetHubVisible(
         { id: 'd425c3b1-4066-4970-8a3b-93c52b3eef70', name: 'Client A', denied: [] },
         true,
       ),
     ).toBe(false);
     expect(
-      studioV2Visible(
+      assetHubVisible(
         { id: randomUUID(), name: 'Morphic Studio', denied: [] },
         true,
       ),

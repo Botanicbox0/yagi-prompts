@@ -2430,6 +2430,7 @@ export const ko: Dictionary = {
     },
     errors: {
       rateLimited: '요청이 많습니다. 잠시 후 다시 시도해 주세요.',
+      storageQuotaExceeded: '조직 저장 공간 한도가 가득 찼습니다. 사용하지 않는 파일을 정리한 뒤 다시 시도해 주세요.',
       adminInvalid: '저장하지 못했습니다. 필수 항목과 입력 형식을 확인해 주세요.',
       adminDenied: '이 작업을 할 수 없거나 대상을 찾을 수 없습니다. 새로고침해 현재 상태를 확인해 주세요.',
       studioRateLimited: '짧은 시간에 너무 많이 바꿨어요. 10분 뒤에 다시 해 주세요.',

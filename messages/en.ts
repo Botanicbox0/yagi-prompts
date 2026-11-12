@@ -2419,6 +2419,7 @@ export const en = {
     },
     errors: {
       rateLimited: 'Too many requests. Please try again shortly.',
+      storageQuotaExceeded: 'Organization storage is full. Remove unused files and try again.',
       adminInvalid: 'This couldn’t be saved. Check the required fields and formats.',
       adminDenied: 'This action isn’t available or the item no longer exists. Refresh to see the current state.',
       studioRateLimited: 'Too many changes in a short time. Try again in 10 minutes.',

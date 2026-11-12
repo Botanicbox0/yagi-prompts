@@ -20,11 +20,11 @@ const COPY = {
     title: '저장 공간 한도',
     hint: '배정 플랜 기본값을 따르며 조직별 GB·보관 일수를 덮어쓸 수 있습니다. 80% 이상은 안내만 띄우고, 100% 이상에서는 새 파일 업로드만 막습니다(열람·내려받기·삭제는 유지).',
     tiers: {
-      b2b_39: 'Starter (기본 50 GB)',
-      b2b_69: 'Growth (기본 200 GB)',
-      b2b_99: 'Scale (기본 500 GB)',
-      project_only: '프로젝트 전용 (기본 30 GB · 90일 보관)',
-      unassigned: '플랜 미배정 (기본 10 GB)',
+      b2b_29: '29 플랜 (기본 200 GB)',
+      b2b_49: '49 플랜 (기본 400 GB)',
+      b2b_69: '69 플랜 (기본 800 GB)',
+      project_only: '프로젝트 전용 (기본 50 GB · 90일 보관)',
+      unassigned: '플랜 미배정 (기본 50 GB)',
     } satisfies Record<StorageQuotaTier, string>,
     states: {
       ok: '정상',
@@ -61,11 +61,11 @@ const COPY = {
     title: 'Storage quota',
     hint: 'Follows the assigned plan default unless overridden per organization. 80%+ shows a calm notice; 100%+ pauses new uploads only while keeping viewing, downloads, and deletes open.',
     tiers: {
-      b2b_39: 'Starter (default 50 GB)',
-      b2b_69: 'Growth (default 200 GB)',
-      b2b_99: 'Scale (default 500 GB)',
-      project_only: 'Project-only (default 30 GB · 90d retention)',
-      unassigned: 'Unassigned (default 10 GB)',
+      b2b_29: 'Plan 29 (default 200 GB)',
+      b2b_49: 'Plan 49 (default 400 GB)',
+      b2b_69: 'Plan 69 (default 800 GB)',
+      project_only: 'Project-only (default 50 GB · 90d retention)',
+      unassigned: 'Unassigned (default 50 GB)',
     } satisfies Record<StorageQuotaTier, string>,
     states: {
       ok: 'Healthy',

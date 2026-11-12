@@ -8,6 +8,7 @@ import { STAGING_BUCKET, type StorageDriver } from '@/lib/storage';
 import type { BrandWorkspaceChoice, BrandWorkspaceScope } from './selection';
 import { hasStaffReadAccess } from './staff';
 import { DEFAULT_SANDBOX_DENIED, isSandboxedClientOrganization, loadFeaturePolicies, normalizeDenied } from '../entitlements';
+import { adjustOrganizationStorageBytes, checkStorageQuotaForUpload } from '../storage-quota';
 import { UNKNOWN_POST_PRESENTATION } from './performance';
 import {
   BrandHttpsUrlSchema, BrandOrganizationSchema, BrandProjectSchema, BrandProjectStatusSchema, BrandContentSchema,
@@ -728,8 +729,13 @@ export async function reserveBrandAttachment(deps: BrandWorkspaceDeps, viewer: V
     }
     const count = (await sql.query<{ n: number }>('select count(*)::int as n from brand_attachments where project_id=$1', [p.id])).rows[0]!.n;
     if (count >= 100) throw new Denied('rate_limited');
+    if (!isStudio) {
+      const quota = await checkStorageQuotaForUpload(sql, String(p.organization_id), v.sizeBytes);
+      if (!quota.allowed) throw new Denied('storage_quota_exceeded');
+    }
     const id = randomUUID(), storageKey = `brands/${p.organization_id}/${p.id}/${id}`;
     await sql.query('insert into brand_attachments(id,organization_id,project_id,name,mime,size_bytes,storage_key,created_by,request_id,access_scope) values($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)', [id, p.organization_id, p.id, v.name, v.mime, v.sizeBytes, storageKey, userId, v.requestId,v.purpose]);
+    await adjustOrganizationStorageBytes(sql, String(p.organization_id), v.sizeBytes);
     return { id, storageKey };
   });
 }

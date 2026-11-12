@@ -5,10 +5,10 @@ import { brandScope } from "@/components/brand-workspace/scope";
 import { BrandUnavailable } from "@/components/brand-workspace/brand-unavailable";
 import { LogoControl } from "@/components/brand-workspace/logo-control";
 import { BrandAvatar } from "@/components/brand-workspace/brand-avatar";
-import { scopedHref, sectionVisibility } from "@/lib/brands/workspace/selection";
+import { scopedHref } from "@/lib/brands/workspace/selection";
 import { StaffNotice, adminOrganizationHref } from "@/components/brand-workspace/staff-notice";
 import { StorageMeterCard } from "@/components/brand-studio/storage-meter";
-import { studioV2Visible } from "@/lib/brand-studio/visibility";
+import { assetHubVisible } from "@/lib/brand-studio/visibility";
 import { loadOrganizationStorageSummary, toStudioStorageQuotaView } from "@/lib/brands/storage-quota";
 import { brandStudioV2Open } from "@/lib/flags";
 export default async function BrandSettings({
@@ -28,7 +28,7 @@ export default async function BrandSettings({
   const org = choice && choice.role !== "guest" ? await loadBrandSettings({ sql, verifiedEmail }, viewer, choice.id) : null,
     c = b.managed,
     showIdentityBridge = false,
-    showStorageMeter = Boolean(org && choice && sectionVisibility(choice).studio && brandStudioV2Open() && studioV2Visible(choice, true)),
+    showStorageMeter = Boolean(org && choice && choice.role !== "guest" && brandStudioV2Open() && assetHubVisible(choice, true)),
     storageSummary = showStorageMeter && org
       ? await loadOrganizationStorageSummary(sql, org.id).catch(() => null)
       : null;

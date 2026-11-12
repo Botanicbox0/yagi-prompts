@@ -2,15 +2,18 @@
 import { useRef, useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import type { BrandCopy } from "./action-form";
-/** Why an upload stopped: the person cancelled, the campaign's file limit was reached, or it failed. */
-export type UploadStop = "aborted" | "rate_limited" | "failed";
+/** Why an upload stopped: the person cancelled, the campaign's file limit or storage quota was reached, or it failed. */
+export type UploadStop = "aborted" | "rate_limited" | "storage_quota_exceeded" | "failed";
 export function uploadStopNotice(stop: UploadStop, b: BrandCopy): { notice: string; failed: boolean } {
   if (stop === "aborted") return { notice: "", failed: false };
   if (stop === "rate_limited") return { notice: b.errors.rateLimited, failed: true };
+  if (stop === "storage_quota_exceeded") return { notice: b.errors.storageQuotaExceeded, failed: true };
   return { notice: b.uploadFailed, failed: true };
 }
 const stopOf = (error: unknown): UploadStop =>
-  error instanceof Error && (error.message === "aborted" || error.message === "rate_limited") ? error.message : "failed";
+  error instanceof Error && (error.message === "aborted" || error.message === "rate_limited" || error.message === "storage_quota_exceeded")
+    ? error.message
+    : "failed";
 const CAPS: Record<string, number> = {
   "image/jpeg": 15 * 1024 * 1024,
   "image/png": 15 * 1024 * 1024,
@@ -98,7 +101,15 @@ export function BrandUpload({
           }),
         });
         const target = await response.json();
-        if (!response.ok || !target.ok) throw Error(target?.code === "rate_limited" ? "rate_limited" : "upload");
+        if (!response.ok || !target.ok) {
+          throw Error(
+            target?.code === "rate_limited"
+              ? "rate_limited"
+              : target?.code === "storage_quota_exceeded"
+                ? "storage_quota_exceeded"
+                : "upload",
+          );
+        }
         attempt.id = target.id;
         await new Promise<void>((resolve, reject) => {
           const xhr = new XMLHttpRequest();

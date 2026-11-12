@@ -1,8 +1,8 @@
 /**
  * Per-organization storage quota service (docs/BRAND-STORAGE-QUOTAS-F.md).
  *
- * - Defaults come from the organization's active plan (`b2b_39`: 50 GB, `b2b_69`: 200 GB, `b2b_99`: 500 GB,
- *   `project_only`: 30 GB + 90-day post-delivery retention, `unassigned`: 10 GB; founder confirmation Q5 pending).
+ * - Defaults come from the organization's active plan (`b2b_29`: 200 GB, `b2b_49`: 400 GB, `b2b_69`: 800 GB,
+ *   `project_only`: 50 GB + 90-day post-delivery retention, `unassigned`: 50 GB; founder decision 2026-11-12 §5).
  * - Admins may override `quota_bytes` (`null` = plan default) and `retention_days` per organization with
  *   optimistic concurrency (`revision`) and an append-only audit log (`brand_storage_quota_events`).
  * - Usage combines an `O(1)` cached counter (`brand_storage_quotas.used_bytes`) with an exact deduplicated

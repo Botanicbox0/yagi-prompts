@@ -12,15 +12,15 @@ export const STORAGE_WARN_RATIO = 0.8;
 /** 100%: block new file uploads only; viewing, downloading, reviewing, and deleting stay open. */
 export const STORAGE_BLOCK_RATIO = 1.0;
 
-export const STORAGE_QUOTA_TIERS = ['b2b_39', 'b2b_69', 'b2b_99', 'project_only', 'unassigned'] as const;
+export const STORAGE_QUOTA_TIERS = ['b2b_29', 'b2b_49', 'b2b_69', 'project_only', 'unassigned'] as const;
 export type StorageQuotaTier = (typeof STORAGE_QUOTA_TIERS)[number];
 
 export type StorageQuotaState = 'ok' | 'near_limit' | 'exceeded';
 
 /**
- * Proposed plan storage defaults (docs/BRAND-STORAGE-QUOTAS-F.md §3.2 — founder confirmation Q5 pending).
+ * Confirmed plan storage defaults (docs/BRAND-STORAGE-QUOTAS-F.md §3.2 — founder decision 2026-11-12 §5).
  * Monthly R2 cost is based on Cloudflare R2 Standard $0.015 / GB-month (~21 KRW / GB-month at 1,400 KRW/USD,
- * $0 egress) so 100% utilization stays <= 1.06% of monthly plan revenue.
+ * $0 egress): 29만 -> 200 GB, 49만 -> 400 GB, 69만 -> 800 GB, project_only -> 50 GB (90d), unassigned -> 50 GB.
  */
 export const PROPOSED_PLAN_STORAGE_QUOTAS: Readonly<
   Record<
@@ -33,37 +33,39 @@ export const PROPOSED_PLAN_STORAGE_QUOTAS: Readonly<
     }
   >
 > = {
-  b2b_39: {
-    defaultQuotaBytes: 50 * BYTES_PER_GB,
-    defaultQuotaGb: 50,
-    defaultRetentionDays: null,
-    estimatedFullR2MonthlyKrw: 1_050,
-  },
-  b2b_69: {
+  b2b_29: {
     defaultQuotaBytes: 200 * BYTES_PER_GB,
     defaultQuotaGb: 200,
     defaultRetentionDays: null,
     estimatedFullR2MonthlyKrw: 4_200,
   },
-  b2b_99: {
-    defaultQuotaBytes: 500 * BYTES_PER_GB,
-    defaultQuotaGb: 500,
+  b2b_49: {
+    defaultQuotaBytes: 400 * BYTES_PER_GB,
+    defaultQuotaGb: 400,
     defaultRetentionDays: null,
-    estimatedFullR2MonthlyKrw: 10_500,
+    estimatedFullR2MonthlyKrw: 8_400,
+  },
+  b2b_69: {
+    defaultQuotaBytes: 800 * BYTES_PER_GB,
+    defaultQuotaGb: 800,
+    defaultRetentionDays: null,
+    estimatedFullR2MonthlyKrw: 16_800,
   },
   project_only: {
-    defaultQuotaBytes: 30 * BYTES_PER_GB,
-    defaultQuotaGb: 30,
+    defaultQuotaBytes: 50 * BYTES_PER_GB,
+    defaultQuotaGb: 50,
     defaultRetentionDays: 90,
-    estimatedFullR2MonthlyKrw: 630,
+    estimatedFullR2MonthlyKrw: 1_050,
   },
   unassigned: {
-    defaultQuotaBytes: 10 * BYTES_PER_GB,
-    defaultQuotaGb: 10,
+    defaultQuotaBytes: 50 * BYTES_PER_GB,
+    defaultQuotaGb: 50,
     defaultRetentionDays: null,
-    estimatedFullR2MonthlyKrw: 210,
+    estimatedFullR2MonthlyKrw: 1_050,
   },
 };
+
+export const PLAN_STORAGE_QUOTAS = PROPOSED_PLAN_STORAGE_QUOTAS;
 
 export interface StorageBreakdown {
   studioUploadsBytes: number;
