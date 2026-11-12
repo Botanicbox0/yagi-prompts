@@ -10,9 +10,9 @@
 
 /* ------------------------------------------------------------ the screen */
 
-.page { display: grid; gap: 20px; }
-.head { display: flex; align-items: center; justify-content: space-between; gap: 12px 16px; flex-wrap: wrap; }
-.headEnd { display: flex; align-items: center; gap: 8px; }
+.page { display: grid; grid-template-columns: minmax(0, 1fr); gap: 20px; min-width: 0; }
+.head { display: flex; align-items: center; justify-content: space-between; gap: 12px 16px; flex-wrap: wrap; min-width: 0; }
+.headEnd { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; max-width: 100%; min-width: 0; }
 .headEnd:empty { display: none; }
 
 /* 만들기 | 제작 의뢰: a segmented switch beside the title. */

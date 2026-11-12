@@ -12,36 +12,39 @@ html[data-brand-workspace] {
   /* TWINGS Studio UI v4 tokens (docs/STUDIO-UI-V4.md): 95% Monochrome + 5% Electric Ultramarine (#0033FF).
      Pure white (#FFFFFF) canvas, borderless cool-grey (#F4F4F5) panels, Rich Black (#09090B) active states,
      and Electric Ultramarine reserved exclusively for the primary final-generation CTA. */
-  --ys-stage: #09090b;
-  --ys-canvas: #ffffff;
-  --ys-bg: #ffffff;
+  --ys-stage: #111113;
+  --ys-stage-surface: #161618;
+  --ys-stage-vignette: radial-gradient(circle at 50% 38%, #18181b 0%, #141416 54%, #111113 100%);
+  --ys-stage-border: rgba(255, 255, 255, 0.09);
+  --ys-canvas: #faf9f7;
+  --ys-bg: #faf9f7;
   --ys-surface: #ffffff;
-  --ys-sidebar: #f4f4f5;
-  --ys-panel: #f4f4f5;
-  --ys-raised: #f4f4f5;
-  --ys-hover: #e4e4e7;
+  --ys-sidebar: #faf9f7;
+  --ys-panel: #ffffff;
+  --ys-raised: #f4f3ef;
+  --ys-hover: #ebe9e3;
   --ys-input-bg: #ffffff;
-  --ys-subtle-bg: #f4f4f5;
-  --ys-media-bg: #f4f4f5;
-  --ys-card-media: #f8f8fa;
-  --ys-glass: rgba(255, 255, 255, 0.88);
-  --ys-glass-dark: rgba(0, 0, 0, 0.65);
-  --ys-hairline: rgba(0, 0, 0, 0.04);
-  --ys-line: rgba(0, 0, 0, 0.04);
-  --ys-line-strong: rgba(0, 0, 0, 0.12);
-  --ys-ink: #09090b;
-  --ys-ink-hover: #27272a;
-  --ys-ink-secondary: #52525b;
-  --ys-ink-muted: #71717a;
-  --ys-placeholder: #a1a1aa;
-  --ys-active-bg: #09090b;
+  --ys-subtle-bg: #f4f3ef;
+  --ys-media-bg: #141416;
+  --ys-card-media: #f4f3ef;
+  --ys-glass: rgba(255, 255, 255, 0.92);
+  --ys-glass-dark: rgba(20, 20, 22, 0.78);
+  --ys-hairline: rgba(20, 20, 19, 0.08);
+  --ys-line: rgba(20, 20, 19, 0.08);
+  --ys-line-strong: rgba(20, 20, 19, 0.14);
+  --ys-ink: #141413;
+  --ys-ink-hover: #292826;
+  --ys-ink-secondary: #6b6a67;
+  --ys-ink-muted: #6b6a67;
+  --ys-placeholder: #9c9a95;
+  --ys-active-bg: #141413;
   --ys-active-fg: #ffffff;
   --ys-accent: #0033ff;
   --ys-accent-hover: #0026cc;
-  --ys-cta-shadow: 0 4px 14px rgba(0, 51, 255, 0.28);
-  /* Pastel blue tints are strictly banned: soft/line tokens resolve to neutral monochrome surfaces. */
-  --ys-accent-soft: #f4f4f5;
-  --ys-accent-line: rgba(9, 9, 11, 0.12);
+  --ys-cta-shadow: none;
+  /* Pastel blue tints are strictly banned: soft/line tokens resolve to neutral tinted surfaces. */
+  --ys-accent-soft: #f4f3ef;
+  --ys-accent-line: rgba(20, 20, 19, 0.14);
   --ys-accent-text: color-mix(in srgb, var(--ys-accent) 85%, #000);
   --ys-select: var(--ys-ink);
   --ys-select-soft: #f4f4f5;
@@ -71,14 +74,14 @@ html[data-brand-workspace] {
 
   /* Borderless elevation: surface contrast instead of grey 1px boxes; ring shadow reserved for floating HUDs. */
   --ys-ring: 0 0 0 1px var(--ys-hairline);
-  --ys-rim: inset 0 1px 0 0 rgba(255, 255, 255, 0.9);
-  --ys-shadow-1: 0 1px 2px rgba(9, 9, 11, 0.03), 0 4px 12px rgba(9, 9, 11, 0.03);
-  --ys-shadow-2: 0 2px 6px rgba(9, 9, 11, 0.04), 0 12px 28px rgba(9, 9, 11, 0.06);
-  --ys-shadow-3: 0 0 0 1px rgba(0, 0, 0, 0.06), 0 20px 48px -12px rgba(0, 0, 0, 0.12);
-  --ys-dock-shadow: 0 0 0 1px rgba(0, 0, 0, 0.06), 0 20px 48px -12px rgba(0, 0, 0, 0.12);
+  --ys-rim: none;
+  --ys-shadow-1: none;
+  --ys-shadow-2: none;
+  --ys-shadow-3: 0 0 0 1px var(--ys-line-strong);
+  --ys-dock-shadow: 0 0 0 1px var(--ys-hairline);
   --ys-card: none;
-  --ys-card-hover: var(--ys-shadow-1);
-  --ys-float: var(--ys-dock-shadow);
+  --ys-card-hover: none;
+  --ys-float: 0 0 0 1px var(--ys-line-strong);
   --ys-well: none;
 
   /* Concentric radius: outer = inner + padding. */
@@ -91,7 +94,7 @@ html[data-brand-workspace] {
   --ys-r-pill: 999px;
 
   /* One spring. linear() where supported, an out-expo cubic-bezier otherwise; never linear/ease. */
-  --ys-ease: cubic-bezier(0.22, 1, 0.36, 1);
+  --ys-ease: cubic-bezier(0.16, 1, 0.3, 1);
   --ys-spring: cubic-bezier(0.22, 1, 0.36, 1);
   --ys-dur: 220ms;
   --ys-dur-spring: 560ms;
@@ -191,7 +194,7 @@ html[data-workspace-admin] {
   color: var(--ys-ink);
 }
 .bw-sidebar {
-  border-right: 0;
+  border-right: 1px solid var(--ys-hairline);
   padding: 26px 20px 20px;
   background: var(--ys-sidebar, var(--ys-subtle-bg));
   display: flex;
@@ -335,10 +338,10 @@ html[data-workspace-admin] {
   min-width: 0;
 }
 .bw-topbar {
-  min-height: 72px;
+  min-height: 68px;
   background: var(--ys-surface);
   padding: 14px 32px;
-  border-bottom: 0;
+  border-bottom: 1px solid var(--ys-hairline);
   display: flex;
   justify-content: space-between;
   align-items: center;
@@ -364,7 +367,7 @@ html[data-workspace-admin] {
 .bw-heading h1 {
   font-size: clamp(24px, 2vw, 30px);
   line-height: 1.22;
-  letter-spacing: -0.03em;
+  letter-spacing: -0.025em;
   font-weight: 600;
   color: var(--ys-ink);
   margin: 0 0 8px;
@@ -387,7 +390,7 @@ html[data-workspace-admin] {
   color: var(--ys-ink);
   background: var(--ys-raised);
   cursor: pointer;
-  transition: border-color 0.15s, background-color 0.15s, transform 0.1s;
+  transition: border-color 180ms var(--ys-ease), background-color 180ms var(--ys-ease), transform 180ms var(--ys-ease);
 }
 .bw-primary {
   background: var(--ys-accent);
