@@ -8,7 +8,7 @@ import { BrandUnavailable } from "@/components/brand-workspace/brand-unavailable
 import { StaffNotice } from "@/components/brand-workspace/staff-notice";
 import { studioRuntimeDeps } from "@/lib/brand-studio/runtime";
 import { loadStudioState } from "@/lib/brand-studio/service";
-import { studioV2Visible } from "@/lib/brand-studio/visibility";
+import { assetHubVisible, studioV2Visible } from "@/lib/brand-studio/visibility";
 import { scopedHref, sectionVisibility } from "@/lib/brands/workspace/selection";
 import { brandStudioV2Open } from "@/lib/flags";
 
@@ -21,7 +21,7 @@ export async function generateMetadata({
   const [{ organizationId }, { sql, viewer, verifiedEmail, dict }] = await Promise.all([searchParams, brandContext()]);
   if (!sql) return {};
   const { choice } = await brandScope({ sql, verifiedEmail }, viewer, organizationId);
-  if (!choice || !sectionVisibility(choice).studio || !studioV2Visible(choice, true)) return {};
+  if (!choice || choice.role === "guest" || !assetHubVisible(choice, true)) return {};
   return { title: dict.studioLibrary.label };
 }
 
@@ -45,9 +45,11 @@ export default async function ContentLibrary({
     pendingCount = contents.filter(({ c }) => c.decision === "pending").length,
     changesCount = contents.filter(({ c }) => c.decision === "changes_requested").length,
     studioVisible = Boolean(choice && sectionVisibility(choice).studio),
+    hubVisible = Boolean(choice && choice.role !== "guest" && brandStudioV2Open() && assetHubVisible(choice, true)),
+    canOpenStudio = Boolean(choice && studioVisible && brandStudioV2Open() && studioV2Visible(choice, true)),
     isKo = locale !== "en";
 
-  if (choice && studioVisible && brandStudioV2Open() && studioV2Visible(choice, true)) {
+  if (choice && hubVisible) {
     const canTransact = typeof (sql as { transaction?: unknown }).transaction === "function";
     const loaded = canTransact
       ? await loadStudioState(await studioRuntimeDeps(sql), viewer, choice.id).catch(() => null)
@@ -80,6 +82,7 @@ export default async function ContentLibrary({
           initialState={initialState}
           deliverableCount={contents.length}
           deliverablesNode={deliverablesGrid}
+          canOpenStudio={canOpenStudio}
         />
       </>
     );

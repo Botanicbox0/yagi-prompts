@@ -26,6 +26,7 @@ import { ReviewStage } from './review-stage';
 import { BriefConcierge } from './brief-concierge';
 import { HumanHandoff } from './human-handoff';
 import { AmbientBleed } from './ambient-bleed';
+import { IntakeBriefSummary } from './intake-brief-summary';
 import type { BrandUsageView } from "@/lib/brands/usage/types";
 import type { ReactNode } from "react";
 
@@ -272,6 +273,12 @@ export function ProjectDetail({
         <div>
           <section id="brief" className="bw-panel">
             <h2>{b.overview}</h2>
+            {p.intakeBrief && (
+              <>
+                <h3>{locale === "en" ? "Project intake brief" : "접수된 프로젝트 기획 요약"}</h3>
+                <IntakeBriefSummary brief={p.intakeBrief} locale={locale} />
+              </>
+            )}
             {p.campaignTerms && (
               <>
                 <h3>{b.timeline.terms}</h3>

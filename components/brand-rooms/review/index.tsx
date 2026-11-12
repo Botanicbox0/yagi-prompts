@@ -32,7 +32,18 @@ function rememberInAddress(reviewId: string | null) {
   }
 }
 
-export function ProjectReviewTab({ organizationId, projectId, locale, copy, reviewCopy, canEdit, canTalk, initial }: ProjectReviewTabProps) {
+export function ProjectReviewTab({
+  organizationId,
+  projectId,
+  locale,
+  copy,
+  reviewCopy,
+  canEdit,
+  canTalk,
+  initial,
+  filterStatus,
+  finalsEmptyText,
+}: ProjectReviewTabProps) {
   const t = copy.tab;
   const [stacks, setStacks] = useState<ReviewStack[] | null>(null);
   const [rights, setRights] = useState({ canEdit, canTalk });
@@ -42,6 +53,11 @@ export function ProjectReviewTab({ organizationId, projectId, locale, copy, revi
   const [detailError, setDetailError] = useState<string | null>(null);
   const [picking, setPicking] = useState<null | "new" | "version">(null);
   const [arrivalMs] = useState<number | null>(initial?.atMs ?? null);
+  const [arrivalCommentId] = useState<string | null>(initial?.commentId ?? null);
+  const visibleStacks = useMemo(
+    () => (stacks === null ? null : filterStatus ? stacks.filter((s) => s.versions[0]?.status === filterStatus) : stacks),
+    [stacks, filterStatus],
+  );
 
   const loadList = useCallback(async () => {
     const result = await fetchRoomReviews(organizationId, projectId);
@@ -86,7 +102,8 @@ export function ProjectReviewTab({ organizationId, projectId, locale, copy, revi
     void (async () => {
       const list = await loadList();
       if (!live || !list) return;
-      const first = initial?.reviewId ?? list[0]?.versions[0]?.id ?? null;
+      const shown = filterStatus ? list.filter((s) => s.versions[0]?.status === filterStatus) : list;
+      const first = initial?.reviewId ?? shown[0]?.versions[0]?.id ?? null;
       if (first) {
         setSelectedId(first);
         void loadDetail(first);
@@ -157,7 +174,7 @@ export function ProjectReviewTab({ organizationId, projectId, locale, copy, revi
         )}
       </header>
 
-      {stacks === null ? (
+      {visibleStacks === null ? (
         listError ? (
           <div className="bsv-empty" role="alert">
             <p className="bsv-error">{listError}</p>
@@ -170,16 +187,16 @@ export function ProjectReviewTab({ organizationId, projectId, locale, copy, revi
             {t.loading}
           </p>
         )
-      ) : stacks.length === 0 ? (
+      ) : visibleStacks.length === 0 ? (
         <section className="bsv-empty" data-room-review-empty>
           <h3 className="bsv-empty-title">{t.empty.title}</h3>
-          <p className="bsv-lede">{t.empty.line}</p>
+          <p className="bsv-lede">{finalsEmptyText ?? t.empty.line}</p>
         </section>
       ) : (
         <div className="bsv-layout">
           <nav className="bsv-list" aria-label={t.listLabel} data-room-review-list>
             <ul>
-              {stacks.map((stack) => {
+              {visibleStacks.map((stack) => {
                 const latest = stack.versions[0]!;
                 const current = stack.versions.some((v) => v.id === selectedId);
                 return (
@@ -234,6 +251,7 @@ export function ProjectReviewTab({ organizationId, projectId, locale, copy, revi
                 copy={reviewCopy}
                 locale={locale}
                 initialMs={detail.review.id === initial?.reviewId ? arrivalMs : null}
+                initialCommentId={detail.review.id === initial?.reviewId ? arrivalCommentId : null}
                 actions={actions}
                 linkFor={(ms) => roomReviewHref(organizationId, projectId, detail.review.id, ms)}
                 tools={

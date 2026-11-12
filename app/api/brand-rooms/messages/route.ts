@@ -9,6 +9,7 @@ import { studioJson } from '@/lib/brand-studio/http';
 import { createStudioMediaStore } from '@/lib/brand-studio/media-store';
 import { loadRoomMessages, runRoomOperation, type RoomMessageDeps, type RoomNotice } from '@/lib/brand-rooms/messages';
 import { roomErrorStatus } from '@/lib/brand-rooms/message-contracts';
+import { purgeStagingObject } from '@/lib/brand-rooms/staging-cleanup';
 
 /**
  * Project room conversations (docs/BRAND-ROOMS.md §4). Checks, in order: the flag (`rooms_closed`, 404),
@@ -32,7 +33,7 @@ function log(event: string, detail: Record<string, unknown>): void {
 }
 
 async function depsOf(sql: RoomMessageDeps['sql'], withStaging: boolean): Promise<RoomMessageDeps> {
-  return { sql, media: createStudioMediaStore(), ...(withStaging ? { staging: await getStorage() } : {}) };
+  return { sql, media: createStudioMediaStore(), ...(withStaging ? { staging: await getStorage(), purgeStagingKey: purgeStagingObject } : {}) };
 }
 
 function tellTheTeam(sql: RoomMessageDeps['sql'], notice: RoomNotice | null): void {

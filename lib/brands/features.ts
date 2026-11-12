@@ -11,6 +11,8 @@
 export const BRAND_FEATURES = [
   /** Image and video generation, the self-serve studio, remix, partial edits, upscaling. */
   'generative_media',
+  /** Self-serve studio (image/video creation). Closing it alone keeps Project Rooms & Asset Hub open for commissioned-only clients. */
+  'self_studio',
   /** Sound finishing: music, effects, mix, mastering. */
   'sound',
   /** Colour grading: reference matching and saved brand looks. */

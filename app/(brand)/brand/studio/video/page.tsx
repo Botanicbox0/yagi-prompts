@@ -2,10 +2,11 @@ import type { Metadata } from "next";
 import { brandContext } from "@/components/brand-workspace/context";
 import { brandScope } from "@/components/brand-workspace/scope";
 import { Explainer, type ExplainerAction } from "@/components/brand-studio/explainer";
-import { studioRouteContext } from "@/components/brand-studio/route-context";
+import { studioRouteOrShowroom } from "@/components/brand-studio/route-context";
 import { STUDIO_OPEN_REVERSE } from "@/components/brand-studio/seams";
 import { StudioApp } from "@/components/brand-studio/studio-app";
-import { studioV2Visible } from "@/lib/brand-studio/visibility";
+import { StudioShowroom } from "@/components/brand-studio/studio-showroom";
+import { studioShowroomVisible, studioV2Visible } from "@/lib/brand-studio/visibility";
 import { VIDEO_INTRO_KEY } from "@/components/brand-studio/video/anchors";
 import { CampaignPath } from "@/components/brand-studio/video/campaign-path";
 import { hasProductionContracts } from "@/components/brand-studio/video/contracts-link";
@@ -42,7 +43,7 @@ export async function generateMetadata({
   const [{ organizationId }, { sql, viewer, verifiedEmail, dict }] = await Promise.all([searchParams, brandContext()]);
   if (!sql) return {};
   const { choice } = await brandScope({ sql, verifiedEmail }, viewer, organizationId);
-  if (!choice || !studioV2Visible(choice, true)) return {};
+  if (!choice || (!studioV2Visible(choice, true) && !studioShowroomVisible(choice, true))) return {};
   return { title: dict.studioVideo.title };
 }
 
@@ -52,8 +53,23 @@ export default async function StudioVideoPage({
   searchParams: Promise<{ organizationId?: string | string[]; start?: string | string[]; asset?: string | string[]; view?: string | string[] }>;
 }) {
   const params = await searchParams;
-  const ctx = await studioRouteContext(params.organizationId);
+  const ctx = await studioRouteOrShowroom(params.organizationId);
   const { choice, access, locale, dict } = ctx;
+  if (ctx.kind === "showroom") {
+    return (
+      <StudioShowroom
+        focus="video"
+        organizationId={choice.id}
+        organizationName={choice.name}
+        canRequest={!access.staff && access.canRequest}
+        imageHref={scopedHref("/brand/studio", choice)}
+        videoHref={scopedHref("/brand/studio/video", choice)}
+        projectSpaceHref={scopedHref("/brand", choice)}
+        newBriefHref={scopedHref("/brand/projects/new", choice)}
+        copy={dict.studioShell.showroom}
+      />
+    );
+  }
   const t = dict.studioVideo;
   // Owners and editors send briefs and campaigns; viewers and the TWINGS team read.
   const canRequest = !access.staff && access.canRequest;

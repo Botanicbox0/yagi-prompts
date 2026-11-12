@@ -14,6 +14,57 @@ import { ADMIN_INQUIRIES_PATH } from '@/lib/campaigns/links';
 import { AdminShell, BUTTON, BUTTON_PRIMARY, OpForm, OutcomeBanner, Panel } from '@/components/admin/chrome';
 import { AdminPageHeader } from '@/components/admin/patterns';
 import { formatCount } from '@/lib/admin/format';
+import { IntakeBriefSummary } from '@/components/brand-workspace/intake-brief-summary';
+import { IntakeBriefSchema, type IntakeBrief } from '@/lib/brands/workspace/intake-brief';
+
+interface WorkspaceBriefInboxRow {
+  id: string;
+  organizationId: string;
+  organizationName: string;
+  title: string;
+  createdAt: string;
+  brief: IntakeBrief;
+}
+
+async function loadRequestedWorkspaceBriefs(
+  sql: Awaited<ReturnType<typeof getSqlRunner>>,
+): Promise<WorkspaceBriefInboxRow[]> {
+  if (!sql || typeof sql.query !== 'function') return [];
+  try {
+    const { rows } = await sql.query<{
+      id: string;
+      organization_id: string;
+      organization_name: string;
+      title: string;
+      created_at: string;
+      intake_brief: unknown;
+    }>(
+      `select p.id, p.organization_id, o.name as organization_name, p.title, p.created_at, p.intake_brief
+         from public.brand_projects p
+         join public.brand_organizations o on o.id = p.organization_id
+        where p.status = 'requested'
+          and p.intake_brief is not null
+        order by p.created_at desc
+        limit 50`,
+    );
+    const out: WorkspaceBriefInboxRow[] = [];
+    for (const row of rows) {
+      const parsed = IntakeBriefSchema.safeParse(row.intake_brief);
+      if (!parsed.success) continue;
+      out.push({
+        id: row.id,
+        organizationId: row.organization_id,
+        organizationName: row.organization_name,
+        title: row.title,
+        createdAt: typeof row.created_at === 'string' ? row.created_at : new Date(row.created_at).toISOString(),
+        brief: parsed.data,
+      });
+    }
+    return out;
+  } catch {
+    return [];
+  }
+}
 
 /**
  * `/admin/inquiries` — the brand inbox (founder, 2026-09-11: "의뢰나 캠페인이 구분이 안 되어서").
@@ -48,6 +99,7 @@ export default async function AdminInquiriesPage({ searchParams }: { searchParam
 
   // Result feedback (2026-09-11): the other kind of mail the studio owes an answer to.
   const feedback: RenderFeedbackRow[] = sql === null ? [] : await listRenderFeedback(sql, { statuses: ['new', 'replied'], limit: 200 });
+  const workspaceBriefs = await loadRequestedWorkspaceBriefs(sql);
   const brandRows = [...open, ...closed];
   const brandMatches = (q: BrandInquiry, selection = filters) => matchesInboxItem('brand', q.status, [q.company, q.contactName, q.email, q.phone, q.message, q.templateSlug].filter(Boolean).join(' '), selection);
   const feedbackMatches = (f: RenderFeedbackRow, selection = filters) => matchesInboxItem('feedback', f.status, [f.email, f.templateSlug, f.message, f.renderId, f.userId, dict.renders.feedback.reasons[f.reason]].filter(Boolean).join(' '), selection);
@@ -201,7 +253,40 @@ export default async function AdminInquiriesPage({ searchParams }: { searchParam
           {...(one(params, 'detail') ? { detail: one(params, 'detail')! } : {})}
         />
         <p role="status" className="mt-6 text-sm">{interpolate(t.resultCount, { count: shown })}</p>
-        {shown === 0 && <p className="mt-5 border border-hairline p-6 text-sm">{t.noResults}</p>}
+        {shown === 0 && workspaceBriefs.length === 0 && <p className="mt-5 border border-hairline p-6 text-sm">{t.noResults}</p>}
+        {shown === 0 && workspaceBriefs.length > 0 && <p className="mt-5 border border-hairline p-6 text-sm">{t.noResults}</p>}
+        {filters.kind !== 'feedback' && workspaceBriefs.length > 0 && (
+          <Panel
+            title={
+              locale === 'en'
+                ? `Workspace Project Briefs (${workspaceBriefs.length})`
+                : `워크스페이스 프로젝트 의뢰 접수 (${workspaceBriefs.length})`
+            }
+          >
+            <ul data-admin-workspace-briefs className="flex flex-col divide-y divide-hairline">
+              {workspaceBriefs.map((item) => (
+                <li key={item.id} id={`workspace-brief-${item.id}`} className="flex flex-wrap items-start justify-between gap-4 py-4">
+                  <div className="min-w-0 max-w-detail">
+                    <p className="font-mono text-code">
+                      <strong>{item.organizationName}</strong> · {item.title} · {formatDate(item.createdAt, locale)}
+                    </p>
+                    <div className="mt-2">
+                      <IntakeBriefSummary brief={item.brief} locale={locale} copy={dict.intakeBrief} />
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <a href={`/admin/brand-workspace/${item.id}`} className={BUTTON_PRIMARY}>
+                      {locale === 'en' ? 'Open project' : '프로젝트 열기'}
+                    </a>
+                    <a href={`/admin/brand-rooms/${item.organizationId}?channel=project:${item.id}`} className={BUTTON}>
+                      {locale === 'en' ? 'Open room' : '룸 열기'}
+                    </a>
+                  </div>
+                </li>
+              ))}
+            </ul>
+          </Panel>
+        )}
         {fresh.length > 0 && <Panel title={`${a.inquiriesBrandsHeading} · ${a.inquiryStatuses.new} (${fresh.length})`}><ul data-brand-inquiries="new" className="flex flex-col divide-y divide-hairline">{fresh.map(q => <Row key={q.id} q={q} />)}</ul></Panel>}
         {feedbackNew.length > 0 && <Panel title={`${a.feedbackHeading} · ${a.feedbackStatuses.new} (${feedbackNew.length})`}><ul data-render-feedback-list="new" className="flex flex-col divide-y divide-hairline">{feedbackNew.map(f => <FeedbackRow key={f.id} f={f} />)}</ul></Panel>}
         {contacted.length > 0 && <Panel title={`${a.inquiriesBrandsHeading} · ${a.inquiryStatuses.contacted} (${contacted.length})`}><ul data-brand-inquiries="contacted" className="flex flex-col divide-y divide-hairline">{contacted.map(q => <Row key={q.id} q={q} />)}</ul></Panel>}

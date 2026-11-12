@@ -1,14 +1,24 @@
 import { notFound } from "next/navigation";
 import { roomRouteContext } from "@/components/brand-rooms/route-context";
 import { RoomChannel } from "@/components/brand-rooms/chat";
-import { StoryboardTab } from "@/components/brand-rooms/storyboard";
-import { ProjectReviewTab } from "@/components/brand-rooms/review";
+import { ProjectFilesTab } from "@/components/brand-rooms/files";
 import { RoomHeader, RoomTabs, type RoomTabLink } from "@/components/brand-rooms/room/room-header";
 import { RoomOverview } from "@/components/brand-rooms/room/room-overview";
 import { roomHref } from "@/components/brand-rooms/room/visibility";
-import { ROOM_TABS, loadRoomOverview, loadRoomPeople, loadRoomProject, roomTab, type RoomTab } from "@/lib/brand-rooms/overview";
+import {
+  VISIBLE_ROOM_TABS,
+  loadRoomBriefFiles,
+  loadRoomOverview,
+  loadRoomPeople,
+  loadRoomProject,
+  roomTab,
+  type RoomTab,
+} from "@/lib/brand-rooms/overview";
 import { parseReviewTime } from "@/lib/brand-studio/review-contracts";
+import { isProjectOnlyArchived, studioShowroomVisible } from "@/lib/brand-studio/visibility";
+import { PROJECT_ONLY_RETENTION_DAYS } from "@/lib/brands/plans";
 import { scopedHref } from "@/lib/brands/workspace/selection";
+import { brandStudioV2Open } from "@/lib/flags";
 
 /**
  * `/brand/rooms/[projectId]` — one project's room (docs/BRAND-ROOMS.md §3, §7, slice H).
@@ -47,31 +57,39 @@ export default async function ProjectRoomPage({
   const project = await loadRoomProject(sql, choice.id, projectId);
   if (!project) notFound();
 
-  const [people, overview] = await Promise.all([
+  const [people, overview, briefFiles] = await Promise.all([
     loadRoomPeople(sql, choice.id, project.id),
     loadRoomOverview(sql, { organizationId: choice.id, project, userId: ctx.userId }),
+    loadRoomBriefFiles(sql, choice.id, project.id),
   ]);
   const tab = roomTab(query.tab);
-  const canEdit = choice.role === "owner" || choice.role === "editor";
-  // Everyone seated in the room talks: owners, editors, viewers and invited guests (BRAND-ROOMS §9-1).
-  const canTalk = true;
+  const activeTab: RoomTab = tab === "storyboard" || tab === "review" ? "files" : tab;
+  const isProjectOnlyOrg = studioShowroomVisible(choice, true);
+  const archivedReadOnly = isProjectOnlyOrg && isProjectOnlyArchived(project, PROJECT_ONLY_RETENTION_DAYS);
+  const canEdit = !archivedReadOnly && (choice.role === "owner" || choice.role === "editor");
+  // Everyone seated in the room talks unless a project-only project has entered post-90d read-only archive mode.
+  const canTalk = !archivedReadOnly;
   const href = (target: RoomTab, extra: Record<string, string> = {}) => roomHref(project.id, choice.id, target, extra);
   const counts: Record<RoomTab, number> = {
     overview: 0,
+    files: overview.counts.storyboard + overview.counts.review,
     storyboard: overview.counts.storyboard,
     review: overview.counts.review,
     chat: overview.counts.chat,
   };
-  const tabs: RoomTabLink[] = ROOM_TABS.map((t) => ({ tab: t, href: href(t), count: counts[t] }));
+  const tabs: RoomTabLink[] = VISIBLE_ROOM_TABS.map((t) => ({ tab: t, href: href(t), count: counts[t] }));
   const shell = dict.roomsShell;
 
   const boardId = one(query.board);
   const frameId = one(query.frame);
   const reviewId = one(query.review);
+  const commentId = one(query.comment);
   const atMs = parseReviewTime(query.t);
+  const initialCategory =
+    tab === "storyboard" || boardId ? "storyboard" : tab === "review" || reviewId ? "drafts" : "all";
 
   return (
-    <div className="brr-room" data-project-room={project.id} data-room-tab-current={tab}>
+    <div className="brr-room" data-project-room={project.id} data-room-tab-current={activeTab}>
       <RoomHeader
         project={project}
         people={people}
@@ -80,33 +98,47 @@ export default async function ProjectRoomPage({
         backHref={scopedHref("/brand", choice)}
         detailHref={scopedHref(`/brand/projects/${project.id}`, choice)}
       />
-      <RoomTabs tabs={tabs} current={tab} copy={shell.room} />
+      {isProjectOnlyOrg && (
+        <section
+          className="bw-note"
+          data-project-only-retention-notice
+          data-project-only-archived={archivedReadOnly ? "true" : "false"}
+        >
+          <p style={{ margin: 0 }}>
+            {archivedReadOnly ? shell.space.archivedNotice : shell.space.retentionNotice}{" "}
+            {brandStudioV2Open() && choice.role !== "guest" && (
+              <a href={scopedHref("/brand/studio", choice)} style={{ fontWeight: 600, color: "#3063A7" }}>
+                {shell.space.retentionCta}
+              </a>
+            )}
+          </p>
+        </section>
+      )}
+      <RoomTabs tabs={tabs} current={activeTab} copy={shell.room} />
       <section className="brr-panel" data-room-panel={tab}>
-        {tab === "overview" ? (
+        {activeTab === "overview" ? (
           <RoomOverview overview={overview} copy={shell.overview} locale={locale} href={href} />
-        ) : tab === "storyboard" ? (
-          <StoryboardTab
+        ) : activeTab === "files" ? (
+          <ProjectFilesTab
             organizationId={choice.id}
-            projectId={project.id}
+            project={project}
+            briefFiles={briefFiles}
             locale={locale}
-            copy={dict.roomsStoryboard}
-            chatCopy={dict.roomsChat}
-            shareCopy={dict.roomsReview}
-            canEdit={canEdit}
-            canTalk={canTalk}
-            initial={{ ...(boardId ? { boardId } : {}), ...(frameId ? { frameId } : {}) }}
-          />
-        ) : tab === "review" ? (
-          <ProjectReviewTab
-            organizationId={choice.id}
-            projectId={project.id}
-            locale={locale}
-            copy={dict.roomsReview}
-            reviewCopy={dict.studioReview}
+            filesCopy={shell.files}
+            intakeCopy={dict.intakeBrief}
+            storyboardCopy={dict.roomsStoryboard}
+            reviewCopy={dict.roomsReview}
+            studioReviewCopy={dict.studioReview}
             chatCopy={dict.roomsChat}
             canEdit={canEdit}
             canTalk={canTalk}
-            initial={{ ...(reviewId ? { reviewId } : {}), ...(atMs !== null ? { atMs } : {}) }}
+            initialCategory={initialCategory}
+            initialStoryboard={{ ...(boardId ? { boardId } : {}), ...(frameId ? { frameId } : {}) }}
+            initialReview={{
+              ...(reviewId ? { reviewId } : {}),
+              ...(atMs !== null ? { atMs } : {}),
+              ...(commentId ? { commentId } : {}),
+            }}
           />
         ) : (
           <RoomChannel

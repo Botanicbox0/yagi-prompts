@@ -40,7 +40,7 @@ export interface MessageItemProps extends MessageActions {
   canPin: boolean;
   /** The team may take down any line. */
   canDeleteAny: boolean;
-  refHref: (projectId: string, ref: RoomRef) => string | null;
+  refHref: (projectId: string, ref: RoomRef, atMs?: number | null) => string | null;
   /** Where the viewer had stopped reading: newer replies are marked. */
   lastReadAt?: string | null;
   /** Inside a thread or a cut's column: no thread summary. */
@@ -166,17 +166,31 @@ export function Attachments({ items, locale }: { items: readonly RoomAttachment[
   );
 }
 
+function formatRefTime(ms: number): string {
+  const totalSec = Math.max(0, Math.floor(ms / 1000));
+  const min = Math.floor(totalSec / 60);
+  const sec = String(totalSec % 60).padStart(2, "0");
+  return `${min}:${sec}`;
+}
+
 export function refLabel(view: RoomRefView, copy: RoomsChatCopy): string {
   if (view.ref.kind === "storyboard") {
     const board = view.version != null ? interpolate(copy.ref.storyboardVersion, { version: view.version }) : copy.ref.storyboard;
     return view.cut != null ? `${board} · ${interpolate(copy.ref.cut, { cut: view.cut })}` : board;
   }
   const item = view.version != null ? interpolate(copy.ref.reviewVersion, { version: view.version }) : copy.ref.review;
-  return view.ref.commentId ? `${item} · ${copy.ref.note}` : item;
+  if (!view.ref.commentId) return item;
+  const timePart =
+    view.atMs != null
+      ? view.endMs != null
+        ? `${formatRefTime(view.atMs)}–${formatRefTime(view.endMs)}`
+        : formatRefTime(view.atMs)
+      : null;
+  return [item, copy.ref.note, timePart].filter(Boolean).join(" · ");
 }
 
-export function RefCard({ view, projectId, copy, refHref }: { view: RoomRefView; projectId: string | null; copy: RoomsChatCopy; refHref: (projectId: string, ref: RoomRef) => string | null }) {
-  const href = view.available && projectId ? refHref(projectId, view.ref) : null;
+export function RefCard({ view, projectId, copy, refHref }: { view: RoomRefView; projectId: string | null; copy: RoomsChatCopy; refHref: (projectId: string, ref: RoomRef, atMs?: number | null) => string | null }) {
+  const href = view.available && projectId ? refHref(projectId, view.ref, view.atMs) : null;
   const inner = (
     <>
       <span className="brc-ref-thumb" aria-hidden="true">
@@ -185,6 +199,11 @@ export function RefCard({ view, projectId, copy, refHref }: { view: RoomRefView;
       <span className="brc-ref-text">
         <span className="brc-ref-kind">{refLabel(view, copy)}</span>
         <span className="brc-ref-title">{view.available ? (view.title ?? "") : copy.ref.unavailable}</span>
+        {view.available && view.noteBody ? (
+          <span className="brc-ref-note" data-room-ref-note>
+            {view.noteBody}
+          </span>
+        ) : null}
       </span>
       {href && <span className="brc-ref-open">{copy.ref.open}</span>}
     </>

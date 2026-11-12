@@ -10,12 +10,12 @@ import { notFound } from "next/navigation";
 import { brandContext } from "@/components/brand-workspace/context";
 import { brandScope, selectedAccess } from "@/components/brand-workspace/scope";
 import { featureDenied, isSandboxedClientOrganization } from "@/lib/brands/features";
-import { studioV2Visible } from "@/lib/brand-studio/visibility";
+import { studioShowroomVisible, studioV2Visible } from "@/lib/brand-studio/visibility";
 import { brandStudioV2Open } from "@/lib/flags";
 import { getDictionary } from "@/lib/i18n/dictionaries";
 import type { StudioLocale } from "./copy";
 
-export async function studioRouteContext(organizationId: string | string[] | undefined) {
+export async function studioRouteOrShowroom(organizationId: string | string[] | undefined) {
   const { sql, viewer, verifiedEmail, brandHost, locale } = await brandContext();
   if (!sql) notFound();
   const { selection, choice, projectOrganizations } = await brandScope({ sql, verifiedEmail }, viewer, organizationId);
@@ -24,9 +24,23 @@ export async function studioRouteContext(organizationId: string | string[] | und
   if (isSandboxedClientOrganization(choice) || featureDenied(choice.denied, "generative_media")) notFound();
   const access = selectedAccess(choice, Object.values(projectOrganizations).filter((o) => o === choice.id));
   if (access.projectScopedOnly) notFound();
-  if (!(brandStudioV2Open() && studioV2Visible(choice, true))) notFound();
+  if (!brandStudioV2Open()) notFound();
   const studioLocale: StudioLocale = locale === "en" ? "en" : "ko";
+  if (studioShowroomVisible(choice, true) && !access.staff) {
+    return {
+      kind: "showroom" as const,
+      deps: { sql, verifiedEmail },
+      viewer,
+      choice,
+      access,
+      locale: studioLocale,
+      brandHost,
+      dict: getDictionary(studioLocale),
+    };
+  }
+  if (!studioV2Visible(choice, true)) notFound();
   return {
+    kind: "studio" as const,
     deps: { sql, verifiedEmail },
     viewer,
     choice,
@@ -35,6 +49,13 @@ export async function studioRouteContext(organizationId: string | string[] | und
     brandHost,
     dict: getDictionary(studioLocale),
   };
+}
+
+export async function studioRouteContext(organizationId: string | string[] | undefined) {
+  const resolved = await studioRouteOrShowroom(organizationId);
+  if (resolved.kind !== "studio") notFound();
+  const { kind: _kind, ...rest } = resolved;
+  return rest;
 }
 
 export type StudioRouteContext = Awaited<ReturnType<typeof studioRouteContext>>;

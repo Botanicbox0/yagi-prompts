@@ -4,6 +4,7 @@ import { roomsChatKo } from './rooms-chat';
 import { roomsStoryboardKo } from './rooms-storyboard';
 import { roomsReviewKo } from './rooms-review';
 import { roomsShellKo } from './rooms-shell';
+import { intakeBriefKo } from './intake-brief';
 import { studioShellKo } from './studio-shell';
 import { studioLibraryKo } from './studio-library';
 import { studioVideoKo } from './studio-video';
@@ -56,6 +57,7 @@ export const ko: Dictionary = {
   roomsStoryboard: roomsStoryboardKo,
   roomsReview: roomsReviewKo,
   roomsShell: roomsShellKo,
+  intakeBrief: intakeBriefKo,
   studioShell: studioShellKo,
   studioLibrary: studioLibraryKo,
   studioVideo: studioVideoKo,
@@ -2284,6 +2286,7 @@ export const ko: Dictionary = {
     /** lib/brands/features.ts — what an organization can use; the admin console names each group. */
     features: {
       generative_media: '생성형 미디어: 이미지·영상 생성, 셀프 스튜디오, 리믹스, 부분 수정, 업스케일',
+      self_studio: '셀프 스튜디오: 이미지·비디오 스튜디오 직접 생성 (차단 시 프로젝트·에셋 개방, 스튜디오는 쇼룸 안내 노출)',
       sound: '사운드 마감: 음악·효과음·믹스·마스터',
       color_grading: '색 보정: 레퍼런스 매칭, 브랜드 룩 저장',
       brand_learning: '브랜드 학습: 아이덴티티·절대 규칙·메모리',
@@ -2291,8 +2294,8 @@ export const ko: Dictionary = {
       creator_pool: '크리에이터 풀: 후보 선별·초대',
       agent_access: '팀 AI 에이전트 연결',
     },
-    /** lib/brands/plans.ts — the three price points are the founder's decision; names are provisional. */
-    planNames: { b2b_39: '39 플랜', b2b_69: '69 플랜', b2b_99: '99 플랜' },
+    /** lib/brands/plans.ts — founder decision (2026-11-12): 290,000 / 490,000 / 690,000 KRW + project_only. */
+    planNames: { project_only: '프로젝트 전용 (외주)', b2b_29: '29 플랜', b2b_49: '49 플랜', b2b_69: '69 플랜' },
     billingModes: { invoice: '세금계산서 후불', card: '카드 자동결제' },
     identityLayer: {
       nav: '브랜드 키트',

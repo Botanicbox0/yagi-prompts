@@ -7,6 +7,7 @@ import { resolveRequestUrl, sameOriginMutation } from "@/lib/routing/surfaces";
 import {
   updateBrandSettings, removeBrandOrganizationLogo, sendBrandSupport, loadBrandSupport, createBrandOrganization,
   createBrandProject,
+  attachIntakeBriefFiles,
   approveBrandContent,
   sendBrandMessage,
   reserveBrandAttachment,
@@ -114,6 +115,9 @@ export async function POST(request: NextRequest) {
         break;
       case "project.create":
         result = await createBrandProject({ sql }, viewer, input);
+        break;
+      case "intake.attachFiles":
+        result = await attachIntakeBriefFiles({ sql }, viewer, input);
         break;
       case "content.decide":
         result = await approveBrandContent({ sql }, viewer, input);

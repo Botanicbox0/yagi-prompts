@@ -813,15 +813,20 @@ export async function staffAddComment(
     strokes?: unknown;
   },
 ): Promise<ReviewCommentAdded | ReviewFailure> {
-  return guard(() =>
+  let event: RoomEventInput | null = null;
+  const result = await guard(() =>
     deps.sql.transaction(async (sql) => {
       const userId = await requireStaff(sql, viewer);
       const review = await staffReview(sql, input.reviewId);
       const parsed = CommentAddSchema.safeParse({ ...input, organizationId: review.organization_id });
       if (!parsed.success) throw new ReviewDenied('invalid');
-      return { ok: true as const, comment: await insertComment(sql, review, parsed.data, { userId, role: 'studio' }) };
+      const comment = await insertComment(sql, review, parsed.data, { userId, role: 'studio' });
+      event = commentEvent(review, comment.id, userId, 'studio');
+      return { ok: true as const, comment };
     }),
   );
+  if (result.ok) await sendRoomEvent(deps.sql, event);
+  return result;
 }
 
 /** Resolve or reopen a thread (`brand_studio.review.resolve`). */
@@ -888,6 +893,19 @@ function statusEvent(review: ReviewRow, status: ReviewStatus, actorId: string, a
     projectId: String(review.project_id),
     event: status === 'approved' ? 'review_approved' : 'review_changes_requested',
     ref: { kind: 'review', reviewId: String(review.id) },
+    actorId,
+    actorRole,
+    detail: { title: String(review.title), version: Number(review.version ?? 1) },
+  };
+}
+
+function commentEvent(review: ReviewRow, commentId: string, actorId: string | null, actorRole: 'brand' | 'studio'): RoomEventInput | null {
+  if (!review.project_id) return null;
+  return {
+    organizationId: String(review.organization_id),
+    projectId: String(review.project_id),
+    event: 'review_commented',
+    ref: { kind: 'review', reviewId: String(review.id), commentId },
     actorId,
     actorRole,
     detail: { title: String(review.title), version: Number(review.version ?? 1) },
@@ -1126,6 +1144,7 @@ export async function runRoomReviewOperation(deps: ReviewDeps, viewer: Viewer, o
             messageId: comment.id,
             body: reviewNoticeBody(review, { kind: 'comment', body: comment.body, atMs: comment.atMs, spot: comment.x != null, reply: comment.parentId != null }),
           };
+          event = commentEvent(review, comment.id, userId, 'brand');
           return { ok: true as const, comment } satisfies ReviewCommentAdded;
         }
         case 'comment.resolve': {

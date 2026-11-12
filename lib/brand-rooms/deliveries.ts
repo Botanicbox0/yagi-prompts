@@ -20,6 +20,7 @@ import { checkDeliveryGate, staffDeliver, type DeliveryActor, type DeliveryOutco
 import { roomReviewHref, type ReviewFailure } from '@/lib/brand-studio/review-contracts';
 import type { SqlRunner } from '@/lib/db/sql-runner';
 import type { IngestHandler, IngestResult } from './ingest';
+import { purgeStagingObject } from './staging-cleanup';
 
 export const DELIVERY_LIMITS = {
   imageBytesMax: 50_000_000,
@@ -76,6 +77,7 @@ export async function deliveryUploadAddress(staging: StudioStaging, mime: string
 
 export interface DeliveryDeps extends ReviewDeps {
   staging: StudioStaging;
+  purgeStagingKey?: (key: string) => Promise<void>;
   log?: (event: string, detail?: Record<string, unknown>) => void;
 }
 
@@ -145,7 +147,11 @@ export async function deliverFile(
     const drop = outcome.ok ? outcome.unusedKeys : stored;
     for (const k of drop) await deps.media.delete(k).catch((error) => deps.log?.('delivery_media_delete_failed', { message: error instanceof Error ? error.message.slice(0, 200) : 'unknown' }));
     if (outcome.ok) {
-      await deps.staging.releaseStaging?.(input.stagingKey).catch(() => undefined);
+      if (deps.staging.releaseStaging) {
+        await deps.staging.releaseStaging(input.stagingKey).catch(() => undefined);
+      } else if (deps.purgeStagingKey) {
+        await deps.purgeStagingKey(input.stagingKey).catch(() => undefined);
+      }
     }
     return outcome;
   } catch (error) {
@@ -188,7 +194,7 @@ export const ingestReviewFinish: IngestHandler = async (ctx, raw) => {
   const v = parsed.data;
   const organizationId = await organizationOfProject(ctx.sql, v.projectId);
   if (!organizationId) return { ok: false, code: 'not_found' };
-  const result = await deliverFile({ sql: ctx.sql, media: ctx.media, staging: ctx.staging, log: ctx.log }, { ingest: true }, {
+  const result = await deliverFile({ sql: ctx.sql, media: ctx.media, staging: ctx.staging, purgeStagingKey: purgeStagingObject, log: ctx.log }, { ingest: true }, {
     organizationId,
     projectId: v.projectId,
     title: v.title,

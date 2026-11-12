@@ -1,6 +1,7 @@
 import { createStudioMediaStore } from '@/lib/brand-studio/media-store';
 import { reviewAdminPath } from '@/lib/brand-studio/review';
 import { deliverFile } from '@/lib/brand-rooms/deliveries';
+import { purgeStagingObject } from '@/lib/brand-rooms/staging-cleanup';
 import { staffRevokeShare } from '@/lib/brand-rooms/shares';
 import { storyboardAdminHref } from '@/lib/brand-rooms/storyboard-contracts';
 import { brandRoomsOpen } from '@/lib/flags';
@@ -67,7 +68,7 @@ const deliver: AdminOperation<DeliveryInput> = {
   },
   async run(ctx: AdminContext, input) {
     if (!brandRoomsOpen()) return fail('notFound', 'BRAND_ROOMS is off');
-    const result = await deliverFile({ sql: ctx.sql, media: createStudioMediaStore(), staging: ctx.storage }, { viewer: ctx.viewer }, input);
+    const result = await deliverFile({ sql: ctx.sql, media: createStudioMediaStore(), staging: ctx.storage, purgeStagingKey: purgeStagingObject }, { viewer: ctx.viewer }, input);
     if (!result.ok) return failure(result.code);
     return ok(result.created.existing ? 'saved' : 'created', { to: reviewAdminPath(result.created.review.id) });
   },

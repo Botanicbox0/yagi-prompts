@@ -32,7 +32,12 @@ export interface StudioSeat {
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
-export async function studioSeat(sql: SqlRunner, userId: string | null | undefined, organizationId: string): Promise<StudioSeat> {
+export async function studioSeat(
+  sql: SqlRunner,
+  userId: string | null | undefined,
+  organizationId: string,
+  options?: { requireSelfStudio?: boolean },
+): Promise<StudioSeat> {
   if (!userId || !UUID.test(userId)) throw new StudioDenied('sign_in_required');
   if (!UUID.test(organizationId)) throw new StudioDenied('not_found');
   if (!(await sql.query('select id from profiles where id = $1', [userId])).rows[0]) throw new StudioDenied('sign_in_required');
@@ -60,6 +65,7 @@ export async function studioSeat(sql: SqlRunner, userId: string | null | undefin
   if (isSandboxedClientOrganization(org)) throw new StudioDenied('feature_unavailable');
   try {
     await assertBrandFeature(sql, organizationId, 'generative_media');
+    if (options?.requireSelfStudio) await assertBrandFeature(sql, organizationId, 'self_studio');
   } catch (error) {
     if (error instanceof BrandFeatureDenied) throw new StudioDenied('feature_unavailable');
     throw error;

@@ -64,6 +64,8 @@ export interface ReviewStageProps {
   locale: "ko" | "en";
   /** `?t=` on arrival: the film opens paused at this moment. */
   initialMs?: number | null;
+  /** `?comment=` on arrival: highlights and scrolls to that comment thread. */
+  initialCommentId?: string | null;
   actions: ReviewActions;
   /** The address of this piece at a moment (a path; the stage makes it absolute). Absent: no "링크 복사". */
   linkFor?: (atMs: number | null) => string;
@@ -90,6 +92,87 @@ export interface ReviewStageProps {
 
 export function fill(template: string, values: Record<string, string | number>): string {
   return template.replace(/\{(\w+)\}/g, (match, key: string) => (key in values ? String(values[key]) : match));
+}
+
+export type ReviewExportFormat = "csv" | "markdown" | "markers";
+
+function formatMarkerMs(ms: number | null | undefined): string {
+  if (ms == null || !Number.isFinite(ms) || ms < 0) return "";
+  const total = Math.round(ms);
+  const hours = Math.floor(total / 3_600_000);
+  const minutes = Math.floor((total % 3_600_000) / 60_000);
+  const seconds = Math.floor((total % 60_000) / 1000);
+  const millis = total % 1000;
+  return `${String(hours).padStart(2, "0")}:${String(minutes).padStart(2, "0")}:${String(seconds).padStart(2, "0")}.${String(millis).padStart(3, "0")}`;
+}
+
+function csvCell(value: string | number | boolean): string {
+  const raw = String(value);
+  return /[",\r\n]/.test(raw) ? `"${raw.replace(/"/g, '""')}"` : raw;
+}
+
+export function exportReviewComments(
+  reviewTitle: string,
+  comments: readonly ReviewComment[],
+  format: ReviewExportFormat,
+): { filename: string; mime: string; content: string } {
+  const safeBase =
+    reviewTitle
+      .replace(/[\\/:*?"<>|]+/g, " ")
+      .replace(/\s+/g, "-")
+      .replace(/^-+|-+$/g, "")
+      .slice(0, 60) || "review";
+  const threads = threadComments(comments as ReviewComment[]).filter((t) => !t.root.deleted);
+
+  if (format === "csv") {
+    const header = ["#", "Timecode", "End", "Status", "Author", "Role", "Spot", "Drawing", "Comment"].join(",");
+    const rows = threads.map((t, index) => {
+      const author = t.root.authorName ?? (t.root.authorRole === "studio" ? "YAGI team" : t.root.guest ? "Guest" : "Brand");
+      return [
+        index + 1,
+        formatMarkerMs(t.root.atMs),
+        formatMarkerMs(t.root.endMs),
+        t.root.resolved ? "resolved" : "open",
+        author,
+        t.root.guest ? "guest" : t.root.authorRole,
+        t.root.x != null ? `${Math.round(t.root.x * 100)}%,${Math.round((t.root.y ?? 0) * 100)}%` : "",
+        Boolean(t.root.strokes?.length),
+        t.root.body,
+      ]
+        .map(csvCell)
+        .join(",");
+    });
+    return { filename: `${safeBase}-notes.csv`, mime: "text/csv;charset=utf-8", content: `\uFEFF${[header, ...rows].join("\r\n")}` };
+  }
+
+  if (format === "markdown") {
+    const lines = [`# ${reviewTitle}`, ""];
+    threads.forEach((t, index) => {
+      const check = t.root.resolved ? "x" : " ";
+      const author = t.root.authorName ?? (t.root.authorRole === "studio" ? "YAGI team" : t.root.guest ? "Guest" : "Brand");
+      const time =
+        t.root.atMs != null
+          ? t.root.endMs != null
+            ? `[${formatTimecode(t.root.atMs)}–${formatTimecode(t.root.endMs)}] `
+            : `[${formatTimecode(t.root.atMs)}] `
+          : "";
+      lines.push(`- [${check}] **#${index + 1}** ${time}(${author}): ${t.root.body.replace(/\s+/g, " ").trim()}`);
+      for (const reply of t.replies) {
+        if (reply.deleted) continue;
+        const replyAuthor = reply.authorName ?? (reply.authorRole === "studio" ? "YAGI team" : reply.guest ? "Guest" : "Brand");
+        lines.push(`  - (${replyAuthor}): ${reply.body.replace(/\s+/g, " ").trim()}`);
+      }
+    });
+    return { filename: `${safeBase}-notes.md`, mime: "text/markdown;charset=utf-8", content: `${lines.join("\n")}\n` };
+  }
+
+  const markerLines = threads.map((t, index) => {
+    const start = formatMarkerMs(t.root.atMs ?? 0);
+    const end = formatMarkerMs(t.root.endMs ?? t.root.atMs ?? 0);
+    const author = t.root.authorName ?? (t.root.authorRole === "studio" ? "YAGI team" : t.root.guest ? "Guest" : "Brand");
+    return `${start}\t${end}\t#${index + 1} ${author}\t${t.root.body.replace(/\s+/g, " ").trim()}`;
+  });
+  return { filename: `${safeBase}-markers.txt`, mime: "text/plain;charset=utf-8", content: `${markerLines.join("\n")}\n` };
 }
 
 export function reviewErrorText(copy: ReviewCopy, code: string): string {
@@ -164,6 +247,7 @@ export function ReviewStage({
   copy,
   locale,
   initialMs,
+  initialCommentId,
   actions,
   linkFor,
   eyebrow,
@@ -186,6 +270,7 @@ export function ReviewStage({
   const { wrapRef, box } = useFitBox(ratio);
   const [playing, setPlaying] = useState(false);
   const [muted, setMuted] = useState(false);
+  const [speed, setSpeed] = useState<number>(1);
   const [currentMs, setCurrentMs] = useState(isVideo ? Math.max(0, initialMs ?? 0) : 0);
   const [durationMs, setDurationMs] = useState(review.seconds ? Math.round(review.seconds * 1000) : 0);
   const [mark, setMark] = useState<Mark | null>(null);
@@ -195,7 +280,9 @@ export function ReviewStage({
   const ink = useInk();
   const canDraw = extended && canComment && media != null;
   const stack = extended && versions && versions.length > 1 ? versions : null;
-  const [filter, setFilter] = useState<"open" | "all">("all");
+  const [filter, setFilter] = useState<"open" | "resolved" | "all">("all");
+  const [drawingOnly, setDrawingOnly] = useState(false);
+  const [authorFilter, setAuthorFilter] = useState<string>("all");
   const [activeId, setActiveId] = useState<string | null>(null);
   const [draft, setDraft] = useState("");
   const [replyTo, setReplyTo] = useState<string | null>(null);
@@ -204,6 +291,7 @@ export function ReviewStage({
   const [error, setError] = useState<string | null>(null);
   const [toast, setToast] = useState<string | null>(null);
   const seededRef = useRef(false);
+  const seededCommentRef = useRef<string | null>(null);
 
   // A different piece: start clean.
   useEffect(() => {
@@ -245,7 +333,25 @@ export function ReviewStage({
   const threads = useMemo(() => threadComments(comments), [comments]);
   const numberOf = useMemo(() => new Map(threads.map((t, i) => [t.root.id, i + 1])), [threads]);
   const openThreads = threads.filter((t) => !t.root.resolved && !t.root.deleted);
-  const shownAll = filter === "open" ? openThreads : threads;
+  const resolvedThreads = threads.filter((t) => t.root.resolved && !t.root.deleted);
+  const authorOptions = useMemo(() => {
+    const names = new Set<string>();
+    for (const t of threads) {
+      if (t.root.deleted) continue;
+      const label = t.root.authorName ?? (t.root.authorRole === "studio" ? copy.roles.studio : t.root.guest ? copy.roles.guest : copy.roles.brand);
+      if (label) names.add(label);
+    }
+    return [...names];
+  }, [threads, copy.roles]);
+  const statusFiltered = filter === "open" ? openThreads : filter === "resolved" ? resolvedThreads : threads;
+  const shownAll = statusFiltered.filter((t) => {
+    if (extended && drawingOnly && !(t.root.strokes && t.root.strokes.length > 0)) return false;
+    if (extended && authorFilter !== "all") {
+      const label = t.root.authorName ?? (t.root.authorRole === "studio" ? copy.roles.studio : t.root.guest ? copy.roles.guest : copy.roles.brand);
+      if (label !== authorFilter) return false;
+    }
+    return true;
+  });
   // Notes carried over from an earlier version sit in their own group, oldest version first.
   const shown = shownAll.filter((t) => !t.root.carriedFrom);
   const carriedGroups = useMemo(() => {
@@ -298,9 +404,36 @@ export function ReviewStage({
     [isVideo, seek],
   );
 
+  useEffect(() => {
+    if (!initialCommentId || seededCommentRef.current === initialCommentId || threads.length === 0) return;
+    const hit = threads.find((t) => t.root.id === initialCommentId || t.replies.some((r) => r.id === initialCommentId));
+    if (!hit) return;
+    seededCommentRef.current = initialCommentId;
+    focusThread(hit);
+  }, [initialCommentId, threads, focusThread]);
+
+  function changeSpeed(next: number) {
+    setSpeed(next);
+    if (videoRef.current) videoRef.current.playbackRate = next;
+  }
+
+  function downloadExport(format: ReviewExportFormat) {
+    const out = exportReviewComments(review.title, comments, format);
+    const blob = new Blob([out.content], { type: out.mime });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = out.filename;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    window.setTimeout(() => URL.revokeObjectURL(url), 1000);
+  }
+
   function onLoadedMetadata() {
     const v = videoRef.current;
     if (!v) return;
+    v.playbackRate = speed;
     if (Number.isFinite(v.duration) && v.duration > 0) setDurationMs(Math.round(v.duration * 1000));
     if (v.videoWidth && v.videoHeight) setRatio(v.videoWidth / v.videoHeight);
     if (!seededRef.current) {
@@ -427,6 +560,12 @@ export function ReviewStage({
         if (onRange) return;
         event.preventDefault();
         step(event.key === "ArrowLeft" ? -1 : 1);
+        break;
+      case ",":
+      case ".":
+        if (!extended || onRange) return;
+        event.preventDefault();
+        step(event.key === "," ? -1 : 1);
         break;
       case "j":
       case "J":
@@ -723,6 +862,22 @@ export function ReviewStage({
                 <span className="bsv-time" aria-live="off">
                   {formatTimecode(currentMs)} <span className="bsv-time-total">/ {formatTimecode(durationMs)}</span>
                 </span>
+                {extended && (
+                  <select
+                    className="bsv-version-select"
+                    aria-label={copy.player.speed}
+                    data-review-speed
+                    value={String(speed)}
+                    onChange={(e) => changeSpeed(Number(e.target.value))}
+                    style={{ marginLeft: "auto", fontSize: 12, padding: "2px 8px", height: 28 }}
+                  >
+                    {[0.5, 1, 1.5, 2].map((rate) => (
+                      <option key={rate} value={String(rate)}>
+                        {`${rate}×`}
+                      </option>
+                    ))}
+                  </select>
+                )}
                 <button type="button" className="bsv-icon-btn bsv-mute" onClick={() => setMuted((m) => !m)} aria-label={muted ? copy.player.unmute : copy.player.mute} aria-pressed={muted}>
                   <Icon d={muted ? ICONS.muted : ICONS.sound} />
                 </button>
@@ -843,7 +998,7 @@ export function ReviewStage({
               {copy.commentsTitle} <span className="bsv-count">{threads.filter((t) => !t.root.deleted).length}</span>
             </h3>
             <div className="bsv-seg" role="group" aria-label={copy.filter.label}>
-              {(["open", "all"] as const).map((f) => (
+              {(extended ? (["open", "resolved", "all"] as const) : (["open", "all"] as const)).map((f) => (
                 <button key={f} type="button" className="bsv-seg-btn" aria-pressed={filter === f} onClick={() => setFilter(f)} data-review-filter={f}>
                   {copy.filter[f]}
                   {f === "open" && <span className="bsv-seg-count">{openThreads.length}</span>}
@@ -851,6 +1006,56 @@ export function ReviewStage({
               ))}
             </div>
           </div>
+
+          {extended && threads.some((t) => !t.root.deleted) ? (
+            <div
+              className="bsv-comments-tools"
+              data-review-comments-tools
+              style={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: 6, padding: "0 0 10px" }}
+            >
+              <button
+                type="button"
+                className="bsv-pill"
+                aria-pressed={drawingOnly}
+                data-review-filter-drawing
+                onClick={() => setDrawingOnly((v) => !v)}
+                style={{ fontSize: 12, padding: "4px 10px" }}
+              >
+                {copy.filter.drawingOnly}
+              </button>
+              {authorOptions.length > 1 ? (
+                <select
+                  className="bsv-version-select"
+                  aria-label={copy.filter.authorLabel}
+                  data-review-filter-author
+                  value={authorFilter}
+                  onChange={(e) => setAuthorFilter(e.target.value)}
+                  style={{ fontSize: 12, padding: "4px 8px" }}
+                >
+                  <option value="all">{copy.filter.authorAll}</option>
+                  {authorOptions.map((name) => (
+                    <option key={name} value={name}>
+                      {name}
+                    </option>
+                  ))}
+                </select>
+              ) : null}
+              <div style={{ marginLeft: "auto", display: "inline-flex", gap: 4 }} role="group" aria-label={copy.exportNotes.label}>
+                {(["csv", "markdown", "markers"] as const).map((fmt) => (
+                  <button
+                    key={fmt}
+                    type="button"
+                    className="bsv-pill"
+                    data-review-export={fmt}
+                    onClick={() => downloadExport(fmt)}
+                    style={{ fontSize: 11, padding: "4px 8px" }}
+                  >
+                    {copy.exportNotes[fmt]}
+                  </button>
+                ))}
+              </div>
+            </div>
+          ) : null}
 
           {shown.length === 0 && carriedGroups.length === 0 ? (
             <p className="bsv-quiet">{threads.length === 0 ? copy.noComments : copy.noOpen}</p>

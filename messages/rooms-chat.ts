@@ -6,17 +6,27 @@
  */
 export const roomsChatEn = {
   inbox: {
-    title: 'Messages',
+    title: 'Activity',
     channels: 'Conversations',
     general: 'General',
     generalHint: 'Anything not about one project',
     empty: 'No commissioned projects yet. Ask anything in General.',
     openRoom: 'Open room',
-    back: 'All conversations',
+    back: 'All activity',
     unread: '{count} unread',
     noMessages: 'No messages yet',
-    pick: 'Pick a conversation on the left.',
-    listLabel: 'Conversations with the YAGI team',
+    pick: 'Pick a project or conversation on the left.',
+    listLabel: 'Notifications and conversations with the YAGI team',
+    filters: {
+      all: 'All',
+      action: 'Needs review',
+      conversations: 'Conversations',
+    },
+    alertsHeading: 'Waiting for your review',
+    alertsEmpty: 'No deliverables are waiting for your decision right now.',
+    alertStoryboard: 'Storyboard v{version} ready for review',
+    alertReview: 'Draft v{version} waiting for review',
+    alertReviewNotes: 'Draft v{version} · {count} open notes',
   },
   channel: {
     generalLede: 'Ask the YAGI team anything that is not about one project.',
@@ -107,6 +117,7 @@ export const roomsChatEn = {
     review_version: 'posted a new version of a deliverable',
     review_approved: 'approved a deliverable',
     review_changes_requested: 'asked for changes to a deliverable',
+    review_commented: 'pinned a note on a deliverable',
   },
   errors: {
     failed: "Couldn't send. What you wrote is back in the box.",
@@ -143,17 +154,27 @@ export const roomsChatEn = {
 
 export const roomsChatKo: typeof roomsChatEn = {
   inbox: {
-    title: '메시지',
+    title: '알림함',
     channels: '대화',
     general: '일반 문의',
     generalHint: '프로젝트와 상관없는 질문',
     empty: '아직 맡긴 프로젝트가 없어요. 궁금한 건 일반 문의에 남겨 주세요.',
     openRoom: '룸 열기',
-    back: '대화 목록',
+    back: '전체 알림',
     unread: '안 읽은 메시지 {count}개',
     noMessages: '아직 메시지가 없어요',
-    pick: '왼쪽에서 대화를 골라 주세요.',
-    listLabel: '야기 팀과 나누는 대화',
+    pick: '왼쪽에서 프로젝트나 대화를 골라 주세요.',
+    listLabel: '야기 팀 작업물 알림과 대화',
+    filters: {
+      all: '전체',
+      action: '확인 필요',
+      conversations: '대화',
+    },
+    alertsHeading: '바로 확인할 작업물',
+    alertsEmpty: '지금 결정을 기다리는 작업물이 없어요.',
+    alertStoryboard: '스토리보드 v{version} 확인 대기',
+    alertReview: '시안 v{version} 확인 대기',
+    alertReviewNotes: '시안 v{version} · 열린 의견 {count}개',
   },
   channel: {
     generalLede: '프로젝트와 상관없는 건 여기서 야기 팀에 물어보세요.',
@@ -244,6 +265,7 @@ export const roomsChatKo: typeof roomsChatEn = {
     review_version: '시안 새 버전을 올렸어요',
     review_approved: '시안을 승인했어요',
     review_changes_requested: '시안 수정을 요청했어요',
+    review_commented: '작업물 위에 의견을 남겼어요',
   },
   errors: {
     failed: '보내지 못했어요. 쓰던 글은 입력창에 다시 넣어 뒀어요.',

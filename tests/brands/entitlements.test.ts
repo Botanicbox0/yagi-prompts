@@ -45,11 +45,12 @@ afterEach(async () => {
 
 describe('feature catalogue', () => {
   it('normalizes to known features in catalogue order', () => {
-    expect(BRAND_FEATURES).toHaveLength(7);
-    expect(normalizeDenied(['sound', 'generative_media', 'sound', 'bogus', 42])).toEqual(['generative_media', 'sound']);
+    expect(BRAND_FEATURES).toHaveLength(8);
+    expect(normalizeDenied(['sound', 'self_studio', 'generative_media', 'sound', 'bogus', 42])).toEqual(['generative_media', 'self_studio', 'sound']);
     expect(featureDenied(undefined, 'sound')).toBe(false);
     expect(featureDenied([], 'sound')).toBe(false);
     expect(featureDenied(['sound'], 'sound')).toBe(true);
+    expect(featureDenied(['self_studio'], 'self_studio')).toBe(true);
   });
 });
 
@@ -145,22 +146,30 @@ describe('feature policy: a deny-list, open by default', () => {
 describe('plan assignment', () => {
   it('records the plan as a calendar day, administrators only, with the revision rule', async () => {
     expect(await loadPlanAssignment(sql, orgId)).toBeNull();
-    expect(await setPlanAssignment({ sql }, owner, { organizationId: orgId, planId: 'b2b_39', startedOn: '2026-11-01', expectedRevision: 0 })).toMatchObject({ ok: false, code: 'forbidden' });
+    expect(await setPlanAssignment({ sql }, owner, { organizationId: orgId, planId: 'b2b_29', startedOn: '2026-11-01', expectedRevision: 0 })).toMatchObject({ ok: false, code: 'forbidden' });
     expect(await setPlanAssignment({ sql }, admin, { organizationId: orgId, planId: 'b2b_12', startedOn: '2026-11-01', expectedRevision: 0 })).toMatchObject({ ok: false, code: 'invalid' });
-    expect(await setPlanAssignment({ sql }, admin, { organizationId: orgId, planId: 'b2b_69', startedOn: '2026-11-31', expectedRevision: 0 })).toMatchObject({ ok: false, code: 'invalid', field: 'startedOn' });
-    expect(await setPlanAssignment({ sql }, admin, { organizationId: orgId, planId: 'b2b_69', startedOn: '2026-11-01', endsOn: '2026-10-01', expectedRevision: 0 })).toMatchObject({ ok: false, code: 'invalid', field: 'endsOn' });
+    expect(await setPlanAssignment({ sql }, admin, { organizationId: orgId, planId: 'b2b_39', startedOn: '2026-11-01', expectedRevision: 0 })).toMatchObject({ ok: false, code: 'invalid' });
+    expect(await setPlanAssignment({ sql }, admin, { organizationId: orgId, planId: 'b2b_49', startedOn: '2026-11-31', expectedRevision: 0 })).toMatchObject({ ok: false, code: 'invalid', field: 'startedOn' });
+    expect(await setPlanAssignment({ sql }, admin, { organizationId: orgId, planId: 'b2b_49', startedOn: '2026-11-01', endsOn: '2026-10-01', expectedRevision: 0 })).toMatchObject({ ok: false, code: 'invalid', field: 'endsOn' });
+    expect(BRAND_PLANS.b2b_29.monthlyKrw).toBe(290_000);
+    expect(BRAND_PLANS.b2b_49.monthlyKrw).toBe(490_000);
+    expect(BRAND_PLANS.b2b_69.monthlyKrw).toBe(690_000);
     expect(
-      await setPlanAssignment({ sql }, admin, { organizationId: orgId, planId: 'b2b_69', billingMode: 'invoice', startedOn: '2026-11-01', seats: 5, note: 'annual', expectedRevision: 0 }),
+      await setPlanAssignment({ sql }, admin, { organizationId: orgId, planId: 'b2b_49', billingMode: 'invoice', startedOn: '2026-11-01', seats: 5, note: 'annual', expectedRevision: 0 }),
     ).toEqual({ ok: true, id: orgId, revision: 1 });
     const plan = await loadPlanAssignment(sql, orgId);
-    expect(plan).toMatchObject({ planId: 'b2b_69', billingMode: 'invoice', startedOn: '2026-11-01', endsOn: null, seats: 5, note: 'annual', revision: 1 });
-    expect(BRAND_PLANS[plan!.planId].monthlyKrw).toBe(690_000);
+    expect(plan).toMatchObject({ planId: 'b2b_49', billingMode: 'invoice', startedOn: '2026-11-01', endsOn: null, seats: 5, note: 'annual', revision: 1 });
+    expect(BRAND_PLANS[plan!.planId].monthlyKrw).toBe(490_000);
     expect(planActiveOn(plan, '2026-11-03')).toBe(true);
     expect(planActiveOn(plan, '2026-10-31')).toBe(false);
-    expect(await setPlanAssignment({ sql }, admin, { organizationId: orgId, planId: 'b2b_99', startedOn: '2026-12-01', endsOn: '2027-12-01', expectedRevision: 0 })).toMatchObject({ ok: false, code: 'conflict' });
-    expect(await setPlanAssignment({ sql }, admin, { organizationId: orgId, planId: 'b2b_99', startedOn: '2026-12-01', endsOn: '2027-12-01', expectedRevision: 1 })).toEqual({ ok: true, id: orgId, revision: 2 });
+    expect(await setPlanAssignment({ sql }, admin, { organizationId: orgId, planId: 'b2b_69', startedOn: '2026-12-01', endsOn: '2027-12-01', expectedRevision: 0 })).toMatchObject({ ok: false, code: 'conflict' });
+    expect(await setPlanAssignment({ sql }, admin, { organizationId: orgId, planId: 'b2b_69', startedOn: '2026-12-01', endsOn: '2027-12-01', expectedRevision: 1 })).toEqual({ ok: true, id: orgId, revision: 2 });
     expect(planActiveOn(await loadPlanAssignment(sql, orgId), '2027-12-01')).toBe(false);
-    expect((await sql.query<{ plan_id: string }>('select plan_id from brand_plan_events where organization_id=$1 order by created_at', [orgId])).rows.map((r) => r.plan_id)).toEqual(['b2b_69', 'b2b_99']);
+    expect(await setPlanAssignment({ sql }, admin, { organizationId: orgId, planId: 'project_only', startedOn: '2026-11-01', expectedRevision: 2 })).toEqual({ ok: true, id: orgId, revision: 3 });
+    expect(BRAND_PLANS.project_only.monthlyKrw).toBe(0);
+    await expect(assertBrandFeature(sql, orgId, 'generative_media')).resolves.toBeUndefined();
+    await expect(assertBrandFeature(sql, orgId, 'self_studio')).rejects.toMatchObject({ code: 'feature_unavailable', feature: 'self_studio' });
+    expect((await sql.query<{ plan_id: string }>('select plan_id from brand_plan_events where organization_id=$1 order by created_at', [orgId])).rows.map((r) => r.plan_id)).toEqual(['b2b_49', 'b2b_69', 'project_only']);
   });
 });
 
@@ -185,8 +194,8 @@ describe('admin registry', () => {
     expectOk(await harness.run('brandEngine.featurePolicy', { organizationId: org, expectedRevision: 1 }));
     expect((await loadFeaturePolicy(hsql, org)).denied).toEqual([]);
     expect(await harness.run('brandEngine.featurePolicy', { organizationId: org, expectedRevision: 'x' })).toMatchObject({ ok: false, code: 'invalid' });
-    expectOk(await harness.run('brandEngine.plan', { organizationId: org, expectedRevision: 0, planId: 'b2b_39', billingMode: 'card', startedOn: '2026-11-03', endsOn: '', seats: '', note: '' }));
-    expect(await loadPlanAssignment(hsql, org)).toMatchObject({ planId: 'b2b_39', billingMode: 'card', startedOn: '2026-11-03', endsOn: null, seats: null });
-    expect(await harness.run('brandEngine.plan', { organizationId: org, expectedRevision: 1, planId: 'b2b_39', startedOn: '2026-11-03', seats: 'many' })).toMatchObject({ ok: false, code: 'invalid' });
+    expectOk(await harness.run('brandEngine.plan', { organizationId: org, expectedRevision: 0, planId: 'b2b_29', billingMode: 'card', startedOn: '2026-11-03', endsOn: '', seats: '', note: '' }));
+    expect(await loadPlanAssignment(hsql, org)).toMatchObject({ planId: 'b2b_29', billingMode: 'card', startedOn: '2026-11-03', endsOn: null, seats: null });
+    expect(await harness.run('brandEngine.plan', { organizationId: org, expectedRevision: 1, planId: 'b2b_29', startedOn: '2026-11-03', seats: 'many' })).toMatchObject({ ok: false, code: 'invalid' });
   });
 });

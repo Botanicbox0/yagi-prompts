@@ -40,12 +40,27 @@ export interface RoomThreadProps {
   label: string;
 }
 
+export interface RoomAlertItem {
+  id: string;
+  kind: "storyboard" | "review";
+  projectId: string;
+  projectTitle: string;
+  targetId: string;
+  title: string;
+  version: number;
+  status?: string;
+  openNotes: number;
+  updatedAt: string;
+}
+
 /** `GET /api/brand-rooms/summary?organizationId=` — what the rail and the room overview read. */
 export interface RoomSummary {
   ok: true;
   /** Unread messages across every channel the viewer may open. */
   unread: number;
   channels: Array<{ projectId: string | null; title: string; unread: number; lastAt: string | null; lastLine: string | null }>;
+  /** Deliverables waiting for the brand's review or decision across accessible rooms. */
+  alerts?: RoomAlertItem[];
 }
 
 /* ------------------------------------------------------------ storyboard (S) */
@@ -110,7 +125,9 @@ export interface ProjectReviewTabProps {
   chatCopy: Dictionary["roomsChat"];
   canEdit: boolean;
   canTalk: boolean;
-  initial?: { reviewId?: string; atMs?: number };
+  initial?: { reviewId?: string; atMs?: number; commentId?: string };
+  filterStatus?: "approved";
+  finalsEmptyText?: string;
 }
 
 /** The share button + dialog for one storyboard or one review item. */

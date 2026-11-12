@@ -4,15 +4,19 @@ import { brandScope, membershipOf } from "@/components/brand-workspace/scope";
 import { BrandUnavailable } from "@/components/brand-workspace/brand-unavailable";
 import { scopedHref } from "@/lib/brands/workspace/selection";
 import { CampaignWizard, type WizardFormat } from "@/components/brand-workspace/campaign-wizard";
+import { ProjectIntakeWizard } from "@/components/brand-workspace/project-intake-wizard";
+import { roomsOpenFor } from "@/components/brand-rooms/room/visibility";
+import { brandRoomsOpen } from "@/lib/flags";
 import { featureDenied, isSandboxedClientOrganization } from "@/lib/brands/features";
 import { loadPromptCatalog } from "@/lib/prompts/catalog";
 import { StudioPrep } from "@/components/brand-workspace/studio-prep";
+import { intakeBriefEn, intakeBriefKo } from "@/messages/intake-brief";
 export default async function NewBrandProject({
   searchParams,
 }: {
   searchParams: Promise<{ organizationId?: string | string[]; track?: string | string[] }>;
 }) {
-  const [{ organizationId, track }, { sql, viewer, verifiedEmail, b, locale }] = await Promise.all([searchParams, brandContext()]);
+  const [{ organizationId, track }, { sql, viewer, verifiedEmail, b, dict, locale }] = await Promise.all([searchParams, brandContext()]);
   if (!sql) return <p role="alert">{b.unavailable}</p>;
   const { selection, choice, choices } = await brandScope({ sql, verifiedEmail }, viewer, organizationId);
   if (selection.state === "unavailable") return <BrandUnavailable b={b} />;
@@ -25,12 +29,15 @@ export default async function NewBrandProject({
   // A DB admin looking at a brand they are not a member of prepares the campaign as the studio
   // (hidden from the client), through the brand host's studio door. Team-domain readers stay read-only.
   const studioPrep = viewer.isAdmin && (choice?.role === "studio" || choices.length === 0);
-  // Step ① shows the public video formats as the catalogue does (docs/PLATFORM-2.0.md §16.3): media and title only.
+  // Step 1 shows the public video formats as the catalogue does (docs/PLATFORM-2.0.md §16.3): media and title only.
   // A catalogue that cannot be read, or a brand whose policy closes generative media, leaves the custom request only.
   const generativeClosed = Boolean(
     choice && (isSandboxedClientOrganization(choice) || featureDenied(choice.denied, "generative_media")),
   );
-  const formats: WizardFormat[] = organizations.length === 0 || generativeClosed ? [] : (await loadPromptCatalog(sql).catch(() => ({ video: [] as Awaited<ReturnType<typeof loadPromptCatalog>>["video"] }))).video.map((card) => ({
+  const useIntakeBrief = Boolean(choice && roomsOpenFor(choice, brandRoomsOpen()));
+  const selfStudioClosed = Boolean(choice && featureDenied(choice.denied, "self_studio"));
+  const intakeCopy = dict?.intakeBrief ?? (locale === "en" ? intakeBriefEn : intakeBriefKo);
+  const formats: WizardFormat[] = organizations.length === 0 || generativeClosed || useIntakeBrief ? [] : (await loadPromptCatalog(sql).catch(() => ({ video: [] as Awaited<ReturnType<typeof loadPromptCatalog>>["video"] }))).video.map((card) => ({
     slug: card.slug, title: locale === "ko" && card.titleKo ? card.titleKo : card.title, source: card.source,
     authorHandle: card.source === "community" ? card.authorHandle : null, poster: card.poster, video: card.video,
   }));
@@ -39,8 +46,8 @@ export default async function NewBrandProject({
       <div className="bw-heading">
         <div>
           <a href={back}>← {b.back}</a>
-          <h1>{studioPrep ? b.studioPrep.title : organizations.length ? b.wizard.title : b.newProject}</h1>
-          <p>{studioPrep ? b.studioPrep.intro : organizations.length ? b.wizard.intro : b.emptyBody}</p>
+          <h1>{studioPrep ? b.studioPrep.title : organizations.length ? (useIntakeBrief ? intakeCopy.title : b.wizard.title) : b.newProject}</h1>
+          <p>{studioPrep ? b.studioPrep.intro : organizations.length ? (useIntakeBrief ? intakeCopy.intro : b.wizard.intro) : b.emptyBody}</p>
         </div>
       </div>
       {studioPrep ? (
@@ -70,6 +77,13 @@ export default async function NewBrandProject({
             {b.back}
           </a>
         </section>
+      ) : useIntakeBrief ? (
+        <ProjectIntakeWizard
+          copy={intakeCopy}
+          organizations={organizations.map(({ id, name }) => ({ id, name }))}
+          initialTrack={typeof track === "string" ? track : undefined}
+          selfStudioClosed={selfStudioClosed}
+        />
       ) : (
         <CampaignWizard
           b={b}

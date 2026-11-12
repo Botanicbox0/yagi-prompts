@@ -1037,6 +1037,33 @@
   color: var(--ys-accent-text);
 }
 
+@media (min-width: 641px) and (max-height: 940px) {
+  .bw-shell:has([data-brand-layout-mode="rail"]) > .bw-sidebar {
+    gap: 6px;
+    padding: 12px 0 8px;
+  }
+  .bw-shell:has([data-brand-layout-mode="rail"]) .bw-rail {
+    gap: 6px;
+  }
+  .bw-shell:has([data-brand-layout-mode="rail"]) .bw-rail-list {
+    gap: 2px;
+    padding-block: 2px;
+  }
+  .bw-shell:has([data-brand-layout-mode="rail"]) .bw-sidebar nav .bw-rail-item {
+    height: 36px;
+    min-height: 36px;
+  }
+  .bw-shell:has([data-brand-layout-mode="rail"]) .bw-rail .bw-rail-credits {
+    padding: 8px 10px 9px;
+  }
+  .bw-shell:has([data-brand-layout-mode="rail"]) .bw-sidebar-utilities .bw-language-select label,
+  .bw-shell:has([data-brand-layout-mode="rail"]) .bw-sidebar-utilities .bw-language-select select,
+  .bw-shell:has([data-brand-layout-mode="rail"]) .bw-sidebar-utilities .bw-signout button,
+  .bw-shell:has([data-brand-layout-mode="rail"]) .bw-sidebar > .bw-rail-toggle {
+    min-height: 36px;
+  }
+}
+
 /* ------------------------------------------------------------------ motion */
 @keyframes bw-rail-tip-in {
   from { opacity: 0; transform: translate(-4px, -50%); }

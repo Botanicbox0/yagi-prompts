@@ -5,24 +5,27 @@ import type { BrandOutcome } from './workspace/types';
 import { isMissingTable } from './entitlements';
 
 /**
- * B2B plans for brand.twings.app (docs/BRAND-PRODUCT.md §6). Founder decision (2026-11-03): three
- * monthly price points, 390,000 / 690,000 / 990,000 KRW, enterprise B2B. The ids name the price
- * points, which are the decision; display names live in the dictionary and may change freely. What
- * each plan includes (credits, seats, finishing steps) is a proposal in the document until the
- * founder settles it, so nothing here gates a feature by plan: the deny-list in entitlements.ts is
- * the only gate today.
+ * B2B plans for brand.twings.app (docs/BRAND-PRODUCT.md §6). Founder decision (2026-11-12): three
+ * monthly subscription price points, 290,000 / 490,000 / 690,000 KRW, plus `project_only` (0 KRW/month
+ * commissioned project workspace with 90-day post-completion retention and read-only archive thereafter).
+ * The ids name the price points; display names live in the dictionary.
  *
  * An assignment is a record, not a payment: the studio sells and invoices the plan (tax invoice or
  * card billing, per contract); the row tells the product and the admin console which plan a brand
  * is on and since when.
  */
-export const BRAND_PLAN_IDS = ['b2b_39', 'b2b_69', 'b2b_99'] as const;
+export const BRAND_PLAN_IDS = ['b2b_29', 'b2b_49', 'b2b_69', 'project_only'] as const;
 export type BrandPlanId = (typeof BRAND_PLAN_IDS)[number];
 
-export const BRAND_PLANS: Record<BrandPlanId, { monthlyKrw: number; rank: 1 | 2 | 3 }> = {
-  b2b_39: { monthlyKrw: 390_000, rank: 1 },
-  b2b_69: { monthlyKrw: 690_000, rank: 2 },
-  b2b_99: { monthlyKrw: 990_000, rank: 3 },
+/** Post-completion room retention window for non-subscribing project-only clients (founder decision 2026-11-12: 90 days, then read-only archive). */
+export const PROJECT_ONLY_RETENTION_DAYS = 90;
+export const PROJECT_ONLY_RETENTION_DAYS_PROPOSED = PROJECT_ONLY_RETENTION_DAYS;
+
+export const BRAND_PLANS: Record<BrandPlanId, { monthlyKrw: number; rank: 0 | 1 | 2 | 3 }> = {
+  project_only: { monthlyKrw: 0, rank: 0 },
+  b2b_29: { monthlyKrw: 290_000, rank: 1 },
+  b2b_49: { monthlyKrw: 490_000, rank: 2 },
+  b2b_69: { monthlyKrw: 690_000, rank: 3 },
 };
 
 /** `invoice`: tax invoice, paid by transfer. `card`: recurring card billing once the gateway allows it. */

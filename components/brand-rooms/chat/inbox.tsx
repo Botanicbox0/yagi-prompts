@@ -71,6 +71,7 @@ export function RoomInbox({
 }) {
   const [summary, setSummary] = useState(initial);
   const [selected, setSelected] = useState<string | null>(selectedFromUrl);
+  const [filter, setFilter] = useState<"all" | "action" | "conversations">("all");
   const transport = useMemo(() => brandTransport(organizationId), [organizationId]);
   const fitRef = useFitHeight();
 
@@ -139,14 +140,117 @@ export function RoomInbox({
   const current = summary.channels.find((c) => keyOf(c.projectId) === selected) ?? null;
   const title = selected === GENERAL_CHANNEL ? copy.inbox.general : (current?.title ?? null);
   const projectChannels = summary.channels.filter((c) => c.projectId);
+  const alerts = summary.alerts ?? [];
+  const showAlerts = filter !== "conversations";
+  const showConversations = filter !== "action";
+  const alertHref = (alert: (typeof alerts)[number]) => {
+    const params = new URLSearchParams({
+      organizationId,
+      tab: alert.kind === "storyboard" ? "storyboard" : "review",
+      [alert.kind === "storyboard" ? "board" : "review"]: alert.targetId,
+    });
+    return `/brand/rooms/${encodeURIComponent(alert.projectId)}?${params.toString()}`;
+  };
 
   return (
     <div className="brc-inbox" ref={fitRef} data-view={selected ? "channel" : "list"} data-room-inbox>
       <nav className="brc-inbox-list" aria-label={copy.inbox.listLabel}>
         <header className="brc-inbox-head">
           <h1>{copy.inbox.title}</h1>
+          <div
+            role="group"
+            aria-label={copy.inbox.title}
+            style={{
+              display: "flex",
+              gap: 4,
+              marginTop: 8,
+              padding: 3,
+              borderRadius: 999,
+              background: "var(--ys-raised, rgba(15, 23, 42, 0.05))",
+            }}
+          >
+            {(["all", "action", "conversations"] as const).map((mode) => {
+              const active = filter === mode;
+              return (
+                <button
+                  key={mode}
+                  type="button"
+                  data-inbox-filter={mode}
+                  aria-pressed={active}
+                  onClick={() => setFilter(mode)}
+                  style={{
+                    flex: 1,
+                    border: 0,
+                    borderRadius: 999,
+                    padding: "5px 10px",
+                    fontSize: 12,
+                    fontWeight: active ? 600 : 500,
+                    cursor: "pointer",
+                    background: active ? "#FFFFFF" : "transparent",
+                    color: active ? "var(--ys-ink, #111827)" : "var(--ys-muted, #6B7280)",
+                  }}
+                >
+                  {copy.inbox.filters[mode]}
+                  {mode === "action" && alerts.length > 0 ? ` (${alerts.length})` : ""}
+                </button>
+              );
+            })}
+          </div>
         </header>
-        <ul>
+
+        {showAlerts && (alerts.length > 0 || filter === "action") ? (
+          <section data-inbox-alerts style={{ padding: "8px 12px 4px" }}>
+            <h2 style={{ fontSize: 11, fontWeight: 600, color: "var(--ys-muted, #6B7280)", margin: "0 0 6px", padding: "0 4px" }}>
+              {copy.inbox.alertsHeading}
+            </h2>
+            {alerts.length > 0 ? (
+              <ul style={{ listStyle: "none", padding: 0, margin: 0, display: "grid", gap: 6 }}>
+                {alerts.map((alert) => {
+                  const detailLine =
+                    alert.kind === "storyboard"
+                      ? interpolate(copy.inbox.alertStoryboard, { version: alert.version })
+                      : alert.openNotes > 0
+                        ? interpolate(copy.inbox.alertReviewNotes, { version: alert.version, count: alert.openNotes })
+                        : interpolate(copy.inbox.alertReview, { version: alert.version });
+                  return (
+                    <li key={alert.id}>
+                      <a
+                        href={alertHref(alert)}
+                        data-inbox-alert={alert.kind}
+                        style={{
+                          display: "block",
+                          padding: "10px 12px",
+                          borderRadius: 12,
+                          border: "1px solid rgba(56, 117, 197, 0.22)",
+                          background: "rgba(56, 117, 197, 0.04)",
+                          textDecoration: "none",
+                          color: "var(--ys-ink, #111827)",
+                        }}
+                      >
+                        <span style={{ display: "block", fontSize: 11, fontWeight: 600, color: "#3063A7" }}>
+                          {alert.projectTitle}
+                        </span>
+                        <span style={{ display: "block", fontSize: 13, fontWeight: 600, marginTop: 2 }}>
+                          {alert.title}
+                        </span>
+                        <span style={{ display: "block", fontSize: 12, color: "var(--ys-muted, #6B7280)", marginTop: 2 }}>
+                          {detailLine}
+                        </span>
+                      </a>
+                    </li>
+                  );
+                })}
+              </ul>
+            ) : (
+              <p className="brc-inbox-empty" style={{ margin: "6px 0" }}>
+                {copy.inbox.alertsEmpty}
+              </p>
+            )}
+          </section>
+        ) : null}
+
+        {showConversations ? (
+          <ul>
           {summary.channels.map((c) => {
             const key = keyOf(c.projectId);
             const name = c.projectId ? c.title : copy.inbox.general;
@@ -192,8 +296,9 @@ export function RoomInbox({
               </li>
             );
           })}
-        </ul>
-        {projectChannels.length === 0 && <p className="brc-inbox-empty">{copy.inbox.empty}</p>}
+          </ul>
+        ) : null}
+        {showConversations && projectChannels.length === 0 && <p className="brc-inbox-empty">{copy.inbox.empty}</p>}
       </nav>
       <div className="brc-inbox-pane">
         {selected ? (
