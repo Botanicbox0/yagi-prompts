@@ -74,6 +74,8 @@ export interface RegionPlan {
 export interface IntelDeps {
   fetch: typeof fetch;
   env: Record<string, string | undefined>;
+  sql?: SqlRunner;
+  organizationId?: string;
 }
 export interface StudioIntel {
   enhancePrompt(input: EnhanceInput, deps: IntelDeps): Promise<EnhanceResult>;

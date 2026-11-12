@@ -22,6 +22,19 @@ import {
 
 export { probeMp4, aspectLabel } from './probe';
 export { geminiVideoMime, INLINE_VIDEO_MAX_BYTES, FILM_VIDEO_MAX_BYTES } from './upload';
+export {
+  FILM_SHEET_TTL_DAYS,
+  FILM_SHEET_TTL_MS,
+  compactFilmSheet,
+  extractStoredFilmSheet,
+  filmSheetCacheKey,
+  isFilmSheetExpired,
+  nextFilmSheetExpiry,
+  purgeProjectFilmSheets,
+  readCachedFilmSheet,
+  sweepExpiredFilmSheets,
+  writeCachedFilmSheet,
+} from './lifecycle';
 
 export interface ReadFilmInput {
   video: { bytes: Uint8Array; mime: string } | { url: string };

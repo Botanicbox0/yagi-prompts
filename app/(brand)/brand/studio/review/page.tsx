@@ -12,7 +12,7 @@ import { parseReviewTime } from "@/lib/brand-studio/review-contracts";
  */
 export const dynamic = "force-dynamic";
 
-const STUDIO_REVIEW_PAGE_OPEN = false;
+export const STUDIO_REVIEW_PAGE_OPEN = true;
 
 export default async function StudioReviewPage({
   searchParams,

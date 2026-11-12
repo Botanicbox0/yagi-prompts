@@ -16,7 +16,7 @@ import { getDictionary } from "@/lib/i18n/dictionaries";
 import type { StudioLocale } from "./copy";
 
 export async function studioRouteOrShowroom(organizationId: string | string[] | undefined) {
-  const { sql, viewer, verifiedEmail, brandHost, locale } = await brandContext();
+  const { sql, viewer, verifiedEmail, brandHost, requestOrigin, locale } = await brandContext();
   if (!sql) notFound();
   const { selection, choice, projectOrganizations } = await brandScope({ sql, verifiedEmail }, viewer, organizationId);
   if (selection.state === "unavailable" || !choice) notFound();
@@ -35,6 +35,7 @@ export async function studioRouteOrShowroom(organizationId: string | string[] | 
       access,
       locale: studioLocale,
       brandHost,
+      requestOrigin: requestOrigin ?? null,
       dict: getDictionary(studioLocale),
     };
   }
@@ -47,6 +48,7 @@ export async function studioRouteOrShowroom(organizationId: string | string[] | 
     access,
     locale: studioLocale,
     brandHost,
+    requestOrigin: requestOrigin ?? null,
     dict: getDictionary(studioLocale),
   };
 }

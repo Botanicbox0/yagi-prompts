@@ -153,10 +153,26 @@ textarea.bs-field { resize: vertical; }
   .bs-dock { background: rgba(255, 255, 255, 0.88); -webkit-backdrop-filter: blur(20px); backdrop-filter: blur(20px); }
 }
 .bs-dock[data-drop-target] { box-shadow: 0 0 0 2px var(--ys-ink), 0 20px 48px -12px rgba(0, 0, 0, 0.12); }
+/* Collapsed 1-line floating pill when Video Studio's Sequence Rail expands to full timeline height. */
+.bs-dock.bs-dock-collapsed { display: inline-flex; width: auto; max-width: min(560px, calc(100vw - 32px)); min-height: 44px; align-items: center; gap: 10px; padding: 6px 16px 6px 10px; border-radius: 9999px; color: var(--ys-ink); font: inherit; font-size: 13.5px; font-weight: 600; letter-spacing: -0.02em; cursor: pointer; transition: transform 150ms var(--ys-ease), box-shadow 150ms var(--ys-ease), background-color 150ms var(--ys-ease); }
+.bs-dock.bs-dock-collapsed:hover { background: rgba(255, 255, 255, 0.98); box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.1), 0 22px 48px -12px rgba(0, 0, 0, 0.16); }
+.bs-dock.bs-dock-collapsed:focus-visible { outline: 2px solid var(--ys-focus); outline-offset: 2px; }
+.bs-dock-collapsed-plus { display: grid; place-items: center; width: 28px; height: 28px; flex: none; border-radius: 50%; background: var(--ys-panel); color: var(--ys-ink); }
+.bs-dock-collapsed-plus .bs-icon { width: 15px; height: 15px; }
+.bs-dock-collapsed-label { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.bs-dock-collapsed-meta { display: inline-flex; align-items: center; gap: 8px; margin-left: 4px; padding-left: 10px; border-left: 1px solid var(--ys-hairline); font-size: 12px; font-weight: 500; color: var(--ys-ink-secondary); white-space: nowrap; }
+.bs-dock-collapsed-tray { padding: 2px 7px; border-radius: 9999px; background: color-mix(in srgb, var(--ys-cta-bg, #0033FF) 11%, transparent); color: var(--ys-cta-bg, #0033FF); font-weight: 600; }
 .bs-dock-toast { position: absolute; bottom: calc(100% + 10px); left: 50%; z-index: 2; max-width: min(560px, calc(100vw - 48px)); margin: 0; padding: 8px 14px; border-radius: var(--ys-r-pill); background: var(--ys-active-bg); box-shadow: var(--ys-float); color: var(--ys-active-fg); font-size: 13px; font-weight: 500; transform: translateX(-50%); animation: bs-rise 260ms var(--ys-ease); }
 @keyframes bs-rise { from { opacity: 0; transform: translate(-50%, 6px); } }
 .bs-prompt-wrap { position: relative; border-radius: 14px; background: transparent; }
-.bs-prompt { display: block; width: 100%; min-height: 44px; max-height: 164px; padding: 6px 4px 10px; border: 0; border-radius: 12px; background: transparent; box-shadow: none; color: var(--ys-ink); font: inherit; font-size: 15px; line-height: 24px; letter-spacing: -0.02em; resize: none; overflow-y: auto; field-sizing: content; }
+/* Zero-drift mirror geometry: identical font, weight, line-height, letter-spacing, padding, white-space and word-break. */
+.bs-prompt, .bs-prompt-backdrop { box-sizing: border-box; width: 100%; min-height: 44px; max-height: 164px; margin: 0; padding: 6px 4px 10px; border: 0; border-radius: 12px; font: inherit; font-size: 15px; font-weight: 400; line-height: 24px; letter-spacing: -0.02em; white-space: pre-wrap; word-break: break-word; overflow-wrap: break-word; font-kerning: normal; font-variant-ligatures: normal; scrollbar-gutter: stable; }
+.bs-prompt-backdrop { position: absolute; inset: 0; z-index: 0; overflow-y: auto; overflow-x: hidden; background: transparent; color: transparent; pointer-events: none; user-select: none; scrollbar-width: none; }
+.bs-prompt-backdrop::-webkit-scrollbar { display: none; }
+.bs-mention-mark { margin: 0; padding: 0; font: inherit; letter-spacing: inherit; line-height: inherit; color: transparent; background: transparent; }
+.bs-mention-mark[data-mention-bound="true"] { background: color-mix(in srgb, var(--ys-cta-bg, #0033FF) 11%, transparent); border-radius: 5px; box-shadow: 0 0 0 2px color-mix(in srgb, var(--ys-cta-bg, #0033FF) 11%, transparent); color: transparent; }
+.bs-mention-mark[data-mention-bound="false"] { background: transparent; border-bottom: 1.5px dotted #D97706; color: transparent; }
+.bs-prompt { position: relative; z-index: 1; display: block; background: transparent; box-shadow: none; color: var(--ys-ink); resize: none; overflow-y: auto; field-sizing: content; }
 .bs-prompt::placeholder { color: var(--ys-placeholder); }
 .bs-prompt:focus-visible { outline: none; }
 /* ✨ waiting: the border glows and flows round the field. */
@@ -226,6 +242,7 @@ textarea.bs-field { resize: vertical; }
 .bs-thumb[data-static] { cursor: default; }
 .bs-thumb img, .bs-thumb video { display: block; width: 100%; height: 100%; object-fit: cover; }
 .bs-thumb[data-selected] { box-shadow: 0 0 0 1.5px var(--ys-ink); }
+.bs-tray-item[data-mentioned] .bs-thumb, .bs-thumb[data-mentioned] { box-shadow: 0 0 0 2px color-mix(in srgb, var(--ys-cta-bg, #0033FF) 55%, transparent); }
 .bs-thumb[data-state="pending"] { background: linear-gradient(100deg, var(--ys-raised) 35%, color-mix(in srgb, var(--ys-raised) 55%, #fff) 50%, var(--ys-raised) 65%) 0 0 / 220% 100%; animation: bs-shimmer 1.4s var(--ys-ease) infinite; }
 .bs-thumb:disabled { opacity: 0.4; cursor: not-allowed; }
 .bs-thumb-add { display: grid; place-items: center; background: #fafafa; border: 1px dashed rgba(0, 0, 0, 0.12); box-shadow: none; }
@@ -234,7 +251,8 @@ textarea.bs-field { resize: vertical; }
 .bs-thumb-kind { position: absolute; left: 3px; bottom: 3px; display: grid; place-items: center; width: 16px; height: 16px; border-radius: 50%; background: rgba(0, 0, 0, 0.65); color: #fff; }
 .bs-thumb-kind .bs-icon { width: 10px; height: 10px; fill: currentColor; }
 .bs-thumb-audio { display: block; width: 100%; height: 100%; background: var(--ys-raised); }
-.bs-thumb-n { min-width: 14px; font-family: var(--ys-mono); font-size: 11px; line-height: 14px; font-variant-numeric: tabular-nums; text-align: center; color: var(--ys-ink-muted); }
+.bs-thumb-n { min-width: 14px; font-family: var(--ys-mono); font-size: 11px; line-height: 14px; font-variant-numeric: tabular-nums; text-align: center; color: var(--ys-ink-muted); transition: background-color 150ms var(--ys-ease), color 150ms var(--ys-ease); }
+.bs-tray-item[data-mentioned] .bs-thumb-n { padding: 0 5px; border-radius: 5px; background: color-mix(in srgb, var(--ys-cta-bg, #0033FF) 11%, transparent); color: var(--ys-cta-bg, #0033FF); font-weight: 600; }
 .bs-thumb-x { position: absolute; top: -6px; right: -6px; z-index: 2; display: grid; place-items: center; width: 20px; height: 20px; padding: 0; border: 0; border-radius: 50%; background: var(--ys-surface); box-shadow: 0 0 0 1px var(--ys-line-strong), var(--ys-card); color: var(--ys-ink); cursor: pointer; opacity: 0; transition: opacity 150ms var(--ys-ease); }
 .bs-thumb-x .bs-icon { width: 11px; height: 11px; stroke-width: 2.4; }
 .bs-tray-item:hover .bs-thumb-x, .bs-tray-item:focus-within .bs-thumb-x, .bs-region-ref:hover .bs-thumb-x, .bs-region-ref:focus-within .bs-thumb-x { opacity: 1; }
@@ -426,6 +444,7 @@ textarea.bs-field { resize: vertical; }
   .bs-popover { position: fixed; inset: auto 12px 12px 12px; width: auto; z-index: 50; }
   .bs-sheet-close { display: inline-flex; }
   .bs-dock { bottom: var(--bs-tabbar-h, 0px); width: calc(100% + 24px); margin-left: -12px; margin-right: -12px; padding-bottom: calc(10px + env(safe-area-inset-bottom)); border-radius: 22px 22px 0 0; }
+  .bs-dock.bs-dock-collapsed { bottom: calc(var(--bs-tabbar-h, 0px) + 12px); width: auto; margin-left: 0; margin-right: 0; padding-bottom: 6px; border-radius: 9999px; }
   .bs-wall { padding-bottom: calc(var(--bs-dock-h, 0px) + var(--bs-tabbar-h, 0px) + 24px); }
   /* A phone tile keeps two buttons: like and the menu (which also files and sends). */
   .bs-tile [data-studio-use], .bs-tile [data-studio-file] { display: none; }

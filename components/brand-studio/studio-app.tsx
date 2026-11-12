@@ -8,6 +8,7 @@
 import dynamic from "next/dynamic";
 import { useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
+import { extractClipboardImages, isEditableTextTarget, prepareClipboardUploadFiles } from "@/lib/brand-studio/clipboard-image";
 import type { StudioAssetView, StudioJobView, StudioOutputView, StudioState } from "@/lib/brand-studio/contracts";
 import type { StudioMedium } from "@/lib/brand-studio/models";
 import type { Dictionary } from "@/lib/i18n/dictionaries";
@@ -23,7 +24,7 @@ import { naturalSize } from "./layers/browser";
 import { LibraryRail } from "./rail";
 import { useStudioLibrary } from "./rail/use-library";
 import { trayItemFromAsset, trayItemFromOutput, trayLabels, withStartFrame, type RefSource, type TrayItem } from "./refs";
-import { sendToReview } from "./review/send";
+import { ShareReviewDialog, useShareReviewEvent, type ShareReviewTarget } from "./share-review-dialog";
 import { libraryKey, type LayerEditorProps, type LayerEditorRegionPreset } from "./seams";
 import { findOutput } from "./store";
 import { useDock } from "./use-dock";
@@ -125,10 +126,61 @@ export function imageScreenRefHref(organizationId: string, source: RefSource): s
   return `/brand/studio?${params.toString()}`;
 }
 
+/** `/brand/studio?organizationId=…&canvas=a:<id>`: the image screen opening the picture directly in OpenCanva (`LayerEditor`). */
+export function imageCanvasHref(organizationId: string, source: RefSource): string {
+  const params = new URLSearchParams({ organizationId, canvas: "assetId" in source ? `a:${source.assetId}` : `o:${source.outputId}` });
+  return `/brand/studio?${params.toString()}`;
+}
+
 /** `/brand/studio/video?organizationId=…&from=o:<id>`: the video screen with a picture as its opening frame. */
 export function videoScreenHref(organizationId: string, source: RefSource): string {
   const params = new URLSearchParams({ organizationId, from: "assetId" in source ? `a:${source.assetId}` : `o:${source.outputId}` });
   return `/brand/studio/video?${params.toString()}`;
+}
+
+/** `/brand/studio/compose?organizationId=…&clip=a:<id>`: the video editing studio with a clip ready on arrival. */
+export function videoComposeClipHref(organizationId: string, source: RefSource): string {
+  const params = new URLSearchParams({ organizationId, clip: "assetId" in source ? `a:${source.assetId}` : `o:${source.outputId}` });
+  return `/brand/studio/compose?${params.toString()}`;
+}
+
+export const BLANK_CANVAS_PRESETS = [
+  { id: "4:5", label: "4:5 · 1080×1350", width: 1080, height: 1350, syntheticAssetId: "00000000-0000-4000-8000-00000000c405" },
+  { id: "9:16", label: "9:16 · 1080×1920", width: 1080, height: 1920, syntheticAssetId: "00000000-0000-4000-8000-00000000c916" },
+  { id: "16:9", label: "16:9 · 1920×1080", width: 1920, height: 1080, syntheticAssetId: "00000000-0000-4000-8000-0000000c1609" },
+  { id: "1:1", label: "1:1 · 1080×1080", width: 1080, height: 1080, syntheticAssetId: "00000000-0000-4000-8000-00000000c101" },
+] as const;
+
+export type BlankCanvasPresetId = (typeof BLANK_CANVAS_PRESETS)[number]["id"];
+
+/** Generates a clean white `#FFFFFF` PNG data URL via `<canvas>` (with 1x1 white PNG fallback in SSR/test DOMs). */
+export function createBlankCanvasDataUrl(width: number, height: number): string {
+  if (typeof document !== "undefined") {
+    try {
+      const canvas = document.createElement("canvas");
+      canvas.width = width;
+      canvas.height = height;
+      const ctx = canvas.getContext("2d");
+      if (ctx) {
+        ctx.fillStyle = "#FFFFFF";
+        ctx.fillRect(0, 0, width, height);
+        const url = canvas.toDataURL("image/png");
+        if (url.startsWith("data:image/png")) return url;
+      }
+    } catch {
+      // Fallback below when canvas 2d context is unavailable (e.g. jsdom).
+    }
+  }
+  return "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8/5+hHgAHggJ/PchI7wAAAABJRU5ErkJggg==";
+}
+
+async function dataUrlToPngFile(dataUrl: string, fileName: string): Promise<File> {
+  const comma = dataUrl.indexOf(",");
+  const b64 = comma >= 0 ? dataUrl.slice(comma + 1) : "";
+  const binary = typeof atob === "function" ? atob(b64) : "";
+  const bytes = new Uint8Array(binary.length);
+  for (let i = 0; i < binary.length; i += 1) bytes[i] = binary.charCodeAt(i);
+  return new File([bytes], fileName, { type: "image/png" });
 }
 
 /** `from=o:<id>` / `from=a:<id>` from the address, or null. */
@@ -157,14 +209,39 @@ export function StudioApp({ organizationId, locale, copy, mode, libraryCopy, lay
   const canCreate = state?.canCreate ?? false;
   const dockOpen = canCreate && (state?.allowance.capKrw ?? 0) > 0;
   const [handoff, setHandoff] = useState<RefSource | null>(null);
+  const [shareTarget, setShareTarget] = useState<ShareReviewTarget | null>(null);
+  const [canvasMenuOpen, setCanvasMenuOpen] = useState(false);
+  const canvasMenuWrapRef = useRef<HTMLDivElement>(null);
   const [editorState, setEditorState] = useState<{
     nonce: number;
     base: LayerEditorProps["base"];
+    isBlankCanvas?: boolean;
     initialTool: "move" | "marquee";
     initialPatch: LayerEditorProps["initialPatch"];
     initialRegionPreset: LayerEditorProps["initialRegionPreset"];
   } | null>(null);
+  const blankUploadedAssetRef = useRef<Record<string, string>>({});
   const editorNonceRef = useRef(0);
+
+  useShareReviewEvent(organizationId, setShareTarget);
+
+  useEffect(() => {
+    if (!canvasMenuOpen) return;
+    const onPointerDown = (event: PointerEvent) => {
+      const target = event.target as Node | null;
+      if (target && canvasMenuWrapRef.current?.contains(target)) return;
+      setCanvasMenuOpen(false);
+    };
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setCanvasMenuOpen(false);
+    };
+    document.addEventListener("pointerdown", onPointerDown);
+    window.addEventListener("keydown", onKeyDown);
+    return () => {
+      document.removeEventListener("pointerdown", onPointerDown);
+      window.removeEventListener("keydown", onKeyDown);
+    };
+  }, [canvasMenuOpen]);
   const [sheet, setSheet] = useState(false);
   const [panelNotice, setPanelNotice] = useState<string | null>(null);
   const [status, setStatus] = useState<string | null>(null);
@@ -223,12 +300,39 @@ export function StudioApp({ organizationId, locale, copy, mode, libraryCopy, lay
   );
 
   const onReview = useCallback(
-    async (source: RefSource, title: string) => {
-      const result = await sendToReview({ organizationId, ref: source, title: title.slice(0, 120) || copy.gallery.reviewTitle });
-      if (isFailure(result)) setStatus(errorLine(copy, result.code));
-      else window.location.assign(result.href);
+    (source: RefSource, title: string) => {
+      setShareTarget({
+        organizationId,
+        assetId: "assetId" in source ? source.assetId : null,
+        outputId: "outputId" in source ? source.outputId : null,
+        title: title.slice(0, 120) || copy.gallery.reviewTitle,
+      });
     },
     [copy, organizationId],
+  );
+
+  const openBlankCanvas = useCallback(
+    (presetId: BlankCanvasPresetId = "4:5") => {
+      const preset = BLANK_CANVAS_PRESETS.find((p) => p.id === presetId) ?? BLANK_CANVAS_PRESETS[0];
+      const url = createBlankCanvasDataUrl(preset.width, preset.height);
+      setCanvasMenuOpen(false);
+      editorNonceRef.current += 1;
+      setEditorState({
+        nonce: editorNonceRef.current,
+        base: {
+          ref: { assetId: preset.syntheticAssetId },
+          url,
+          width: preset.width,
+          height: preset.height,
+          name: locale === "en" ? `Canvas ${preset.label}` : `빈 캔버스 ${preset.label}`,
+        },
+        isBlankCanvas: true,
+        initialTool: "move",
+        initialPatch: null,
+        initialRegionPreset: null,
+      });
+    },
+    [locale],
   );
 
   const openLayerEditor = useCallback(
@@ -364,6 +468,21 @@ export function StudioApp({ organizationId, locale, copy, mode, libraryCopy, lay
     window.history.replaceState(window.history.state, "", `${url.pathname}${url.search}${url.hash}`);
   }, [dock, mode, sourceItem, state]);
 
+  // Opened from unified Assets (`/brand/library`) with `?canvas=a:<id>|o:<id>`: auto-open `LayerEditor` immediately.
+  const canvasDone = useRef(false);
+  useEffect(() => {
+    if (canvasDone.current || mode !== "image" || !state) return;
+    canvasDone.current = true;
+    const url = new URL(window.location.href);
+    const source = parseFrom(url.searchParams.get("canvas"));
+    if (!source) return;
+    if (canCreate) {
+      void openLayerEditor(source, { tool: "move" });
+    }
+    url.searchParams.delete("canvas");
+    window.history.replaceState(window.history.state, "", `${url.pathname}${url.search}${url.hash}`);
+  }, [canCreate, mode, openLayerEditor, state]);
+
   const uploadFiles = useCallback(
     async (files: File[], attach: boolean) => {
       const say = attach ? dock.setMessage : setPanelNotice;
@@ -380,6 +499,26 @@ export function StudioApp({ organizationId, locale, copy, mode, libraryCopy, lay
     },
     [copy, dock, studio],
   );
+
+  // Allow Ctrl+V / Cmd+V anywhere on the Studio canvas (when no modal/editor consumed it) to attach copied images into Dock's tray.
+  useEffect(() => {
+    if (!dockOpen || editorState || viewer.open || handoff || shareTarget || typeof window === "undefined") return;
+    const onWindowPaste = (event: ClipboardEvent) => {
+      if (event.defaultPrevented) return;
+      const inDock = Boolean(event.target && typeof (event.target as HTMLElement).closest === "function" && (event.target as HTMLElement).closest("[data-studio-dock]"));
+      if (inDock || isEditableTextTarget(event.target)) return;
+      const pasted = extractClipboardImages(event.clipboardData);
+      if (!pasted.length) return;
+      event.preventDefault();
+      event.stopPropagation();
+      void prepareClipboardUploadFiles(pasted).then(async (ready) => {
+        await uploadFiles(ready, true);
+        setStatus(copy.tray.pasted);
+      });
+    };
+    window.addEventListener("paste", onWindowPaste);
+    return () => window.removeEventListener("paste", onWindowPaste);
+  }, [dockOpen, editorState, viewer.open, handoff, shareTarget, uploadFiles, copy.tray.pasted]);
 
   /** Pictures picked in the partial-edit form: uploaded, then handed back as references. */
   const uploadForRegion = useCallback(
@@ -448,6 +587,75 @@ export function StudioApp({ organizationId, locale, copy, mode, libraryCopy, lay
     }
   };
 
+  const openCanvasLabel = locale === "en" ? "Canvas Editor" : "캔버스 편집";
+  const canvasLauncher =
+    mode === "image" && canCreate ? (
+      <div ref={canvasMenuWrapRef} style={{ position: "relative", display: "inline-flex", alignItems: "center" }}>
+        <button
+          type="button"
+          className="bs-btn"
+          data-variant="soft"
+          data-size="sm"
+          aria-haspopup="menu"
+          aria-expanded={canvasMenuOpen}
+          onClick={() => setCanvasMenuOpen((open) => !open)}
+          data-studio-open-canvas
+        >
+          {openCanvasLabel}
+        </button>
+        {canvasMenuOpen && (
+          <div
+            role="menu"
+            aria-label={openCanvasLabel}
+            data-studio-canvas-presets
+            style={{
+              position: "absolute",
+              top: "calc(100% + 6px)",
+              right: 0,
+              zIndex: 50,
+              minWidth: 184,
+              padding: 6,
+              borderRadius: 14,
+              background: "#ffffff",
+              boxShadow: "0 18px 42px rgba(9, 9, 11, 0.14)",
+              display: "grid",
+              gap: 2,
+            }}
+          >
+            {BLANK_CANVAS_PRESETS.map((preset) => (
+              <button
+                key={preset.id}
+                type="button"
+                role="menuitem"
+                data-studio-canvas-preset={preset.id}
+                onClick={() => openBlankCanvas(preset.id)}
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "space-between",
+                  width: "100%",
+                  minHeight: 34,
+                  padding: "0 12px",
+                  border: 0,
+                  borderRadius: 10,
+                  background: "transparent",
+                  color: "#09090b",
+                  fontFamily: "'Geist Mono', 'Geist', 'Pretendard Variable', sans-serif",
+                  fontSize: 12.5,
+                  fontWeight: 600,
+                  fontVariantNumeric: "tabular-nums",
+                  cursor: "pointer",
+                  textAlign: "left",
+                }}
+              >
+                {preset.label}
+              </button>
+            ))}
+          </div>
+        )}
+      </div>
+    ) : null;
+
   const libraryToggle = (
     <button type="button" className="bs-btn bs-library-toggle" data-variant="soft" data-size="sm" aria-expanded={sheet} aria-controls={panelId} onClick={() => setSheet(true)}>
       {copy.gallery.library}
@@ -456,6 +664,7 @@ export function StudioApp({ organizationId, locale, copy, mode, libraryCopy, lay
   const head = (
     <>
       {state && state.allowance.capKrw > 0 && <AllowanceLine allowance={state.allowance} copy={copy} locale={locale} />}
+      {state && canvasLauncher}
       {state && libraryToggle}
     </>
   );
@@ -481,7 +690,21 @@ export function StudioApp({ organizationId, locale, copy, mode, libraryCopy, lay
       )}
       {dockOpen ? (
         <div className="bs-examples-block">
-          <p>{copy.board.emptyBody}</p>
+          <div style={{ display: "flex", flexWrap: "wrap", alignItems: "center", justifyContent: "space-between", gap: 10 }}>
+            <p style={{ margin: 0 }}>{copy.board.emptyBody}</p>
+            {mode === "image" && canCreate && (
+              <button
+                type="button"
+                className="bs-btn"
+                data-variant="soft"
+                data-size="sm"
+                onClick={() => openBlankCanvas("4:5")}
+                data-studio-empty-open-canvas
+              >
+                {openCanvasLabel} · 4:5
+              </button>
+            )}
+          </div>
           <ul className="bs-examples" data-studio-examples>
             {examples.map((key) => (
               <li key={key}>
@@ -683,6 +906,13 @@ export function StudioApp({ organizationId, locale, copy, mode, libraryCopy, lay
           onClose={() => setHandoff(null)}
         />
       )}
+      {shareTarget && (
+        <ShareReviewDialog
+          target={shareTarget}
+          locale={locale}
+          onClose={() => setShareTarget(null)}
+        />
+      )}
       {editorState && (
         <LayerEditor
           key={`${libraryKey(editorState.base.ref)}:${editorState.nonce}`}
@@ -705,12 +935,27 @@ export function StudioApp({ organizationId, locale, copy, mode, libraryCopy, lay
                   jobs: allJobs,
                   errorText: (code) => errorLine(copy, code ?? "failed"),
                   submit: async (req) => {
+                    let effectiveSource = req.source;
+                    if (editorState.isBlankCanvas && "assetId" in effectiveSource) {
+                      const cachedId = blankUploadedAssetRef.current[effectiveSource.assetId];
+                      if (cachedId) {
+                        effectiveSource = { assetId: cachedId };
+                      } else {
+                        const file = await dataUrlToPngFile(editorState.base.url, "blank-canvas.png");
+                        const uploaded = await studio.upload(file);
+                        if (isFailure(uploaded)) {
+                          return { ok: false, message: errorLine(copy, uploaded.code) };
+                        }
+                        blankUploadedAssetRef.current[effectiveSource.assetId] = uploaded.asset.id;
+                        effectiveSource = { assetId: uploaded.asset.id };
+                      }
+                    }
                     const key = newRequestId();
                     const ratio = `${editorState.base.width} / ${editorState.base.height}`;
                     onRegionSending({ key, ratio });
                     const body = regionEditInput({
                       ids: { organizationId, requestId: key },
-                      source: req.source,
+                      source: effectiveSource,
                       box: req.box,
                       instruction: req.instruction,
                       draft: { ...dock.draft, enhance: req.enhance },
@@ -728,9 +973,14 @@ export function StudioApp({ organizationId, locale, copy, mode, libraryCopy, lay
                     return { ok: true, job: result.job };
                   },
                   enhancePrompt: async (req) => {
+                    let effectiveSource = req.source;
+                    if (editorState.isBlankCanvas && "assetId" in effectiveSource) {
+                      const cachedId = blankUploadedAssetRef.current[effectiveSource.assetId];
+                      if (cachedId) effectiveSource = { assetId: cachedId };
+                    }
                     const built = regionEditInput({
                       ids: { organizationId, requestId: "preview-0" },
-                      source: req.source,
+                      source: effectiveSource,
                       box: req.box,
                       instruction: req.instruction,
                       draft: { ...dock.draft, enhance: true },

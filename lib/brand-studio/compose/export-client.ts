@@ -5,12 +5,16 @@
  * `OfflineAudioContext` mix) -> `muxAvc1ToMp4` (~3.9s for 30s 1080p on workstation Chromium).
  * Automatic fallback: real-time `<canvas>.captureStream` + `MediaRecorder` when WebCodecs is unavailable.
  */
+import { applyColorGradeToCanvasContext } from './color-grade';
 import { muxAvc1ToMp4, type EncodedAudioSample, type EncodedVideoSample } from './mp4-muxer';
 import {
   COMPOSE_DIMENSIONS,
   frameStateAtTime,
+  normalizeColorGradeState,
   projectDurationSec,
+  toColorGradeSpec,
   type ComposeCaption,
+  type ComposeClip,
   type ComposerProject,
 } from './timeline';
 
@@ -125,6 +129,51 @@ export function drawCaptionsOverlay(
     });
     ctx.restore();
   }
+}
+
+export function applyProjectColorGradeFrame(
+  ctx: CanvasRenderingContext2D,
+  canvasWidth: number,
+  canvasHeight: number,
+  project: ComposerProject,
+  activeClip: { clip: ComposeClip; index: number } | null,
+): boolean {
+  const grade = normalizeColorGradeState(project.colorGrade);
+  const spec = toColorGradeSpec(grade);
+  if (!grade || !spec || !spec.enabled) return false;
+
+  const isSelectedClip = Boolean(
+    activeClip &&
+      (grade.clipId
+        ? activeClip.clip.id === grade.clipId
+        : grade.clipIndex !== null && grade.clipIndex !== undefined
+          ? activeClip.index === grade.clipIndex
+          : grade.scope === 'selected_clip'
+            ? activeClip.index === 0
+            : true),
+  );
+
+  if (spec.scope === 'selected_clip' && !isSelectedClip) return false;
+  if (
+    spec.scope === 'region' &&
+    (grade.clipId || (grade.clipIndex !== null && grade.clipIndex !== undefined)) &&
+    !isSelectedClip
+  ) {
+    return false;
+  }
+
+  const effectiveSpec = {
+    ...spec,
+    targetClipId:
+      spec.targetClipId ??
+      (grade.clipIndex !== null && grade.clipIndex !== undefined && activeClip
+        ? isSelectedClip
+          ? activeClip.clip.id
+          : '__other_clip__'
+        : null),
+  };
+  applyColorGradeToCanvasContext(ctx, canvasWidth, canvasHeight, effectiveSpec, isSelectedClip);
+  return true;
 }
 
 async function loadReadyVideo(srcUrl: string): Promise<HTMLVideoElement> {
@@ -402,6 +451,7 @@ export async function exportCompositionMp4(
           drawVideoCover(ctx, videoEl, width, height);
         }
       }
+      applyProjectColorGradeFrame(ctx, width, height, project, state.activeClip);
       drawCaptionsOverlay(ctx, state.activeCaptions, width, height);
 
       const frame = new VideoFrame(canvas, {
@@ -480,6 +530,7 @@ export async function exportCompositionMp4(
         drawVideoCover(ctx, videoEl, width, height);
       }
     }
+    applyProjectColorGradeFrame(ctx, width, height, project, state.activeClip);
     drawCaptionsOverlay(ctx, state.activeCaptions, width, height);
     onProgress?.((frameIdx + 1) / totalFrames);
     await new Promise((r) => window.setTimeout(r, Math.round(1000 / EXPORT_FPS)));

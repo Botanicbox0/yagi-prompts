@@ -102,16 +102,15 @@ describe("the wall", () => {
     expect(wall({ library: library({ ready: false }), jobs: [job(1, { outputs: [output(1)] })] })).toMatch(/data-studio-like="true"[^>]*disabled=""/);
   });
 
-  it("orders the more-menu without studio review, and narrows it by role and limit", () => {
+  it("orders the more-menu with studio review & share, and narrows it by role and limit", () => {
     const base = { kind: "image" as const, image: true, sized: true, saved: false };
     expect(tileMenuKeys({ ...base, canGenerate: true, canEdit: true })).toEqual([
-      "open", "rerun", "reuse", "region", "decorate", "to-video", "folder", "campaign", "save", "download", "delete",
+      "open", "rerun", "reuse", "region", "decorate", "to-video", "folder", "review", "campaign", "save", "download", "delete",
     ]);
-    expect(tileMenuKeys({ ...base, canGenerate: true, canEdit: true })).not.toContain("review");
-    expect(tileMenuKeys({ ...base, canGenerate: false, canEdit: true })).toEqual(["open", "decorate", "folder", "campaign", "save", "download", "delete"]);
+    expect(tileMenuKeys({ ...base, canGenerate: false, canEdit: true })).toEqual(["open", "decorate", "folder", "review", "campaign", "save", "download", "delete"]);
     expect(tileMenuKeys({ ...base, canGenerate: false, canEdit: false })).toEqual(["open", "download"]);
     expect(tileMenuKeys({ ...base, canGenerate: true, canEdit: true, sized: false, saved: true })).not.toContain("decorate");
-    expect(tileMenuKeys({ kind: "video_final", image: false, sized: true, saved: false, canGenerate: true, canEdit: true })).toEqual(["open", "folder", "campaign", "save", "download", "delete"]);
+    expect(tileMenuKeys({ kind: "video_final", image: false, sized: true, saved: false, canGenerate: true, canEdit: true })).toEqual(["open", "folder", "review", "campaign", "save", "download", "delete"]);
   });
 
   it("holds a place for a partial edit on its way", () => {

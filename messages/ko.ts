@@ -11,6 +11,7 @@ import { studioVideoKo } from './studio-video';
 import { studioReviewKo } from './studio-review';
 import { studioLayersKo } from './studio-layers';
 import { studioComposeKo } from './studio-compose';
+import { studioWorkflowsKo } from './studio-workflows';
 import { adminConsoleKo } from './admin-console';
 import { campaignHubKo } from './campaign-hub';
 
@@ -66,6 +67,7 @@ export const ko: Dictionary = {
   studioReview: studioReviewKo,
   studioLayers: studioLayersKo,
   studioCompose: studioComposeKo,
+  studioWorkflows: studioWorkflowsKo,
   adminConsole: adminConsoleKo,
   landingMedia: {
     nav: '랜딩 이미지',
@@ -1747,7 +1749,7 @@ export const ko: Dictionary = {
       undoEnhance: '원래 문장으로',
       enhanceFailed: '지금은 문장을 다듬지 못했어요. 그대로 만들어도 돼요.',
       addRef: '참조 넣기',
-      videoNotHere: '영상은 비디오 스튜디오에서 쓸 수 있어요. 이미지 스튜디오에서는 사진만 참조로 넣어요.',
+      videoNotHere: '영상은 영상 스튜디오에서 쓸 수 있어요. 이미지 스튜디오에서는 사진만 참조로 넣어요.',
       submit: '만들기',
       submitLabel: '만들기, {cost} 사용',
       submitting: '보내는 중',
@@ -1803,6 +1805,7 @@ export const ko: Dictionary = {
       tooManyVideos: '참조 영상은 한 번에 하나만 쓸 수 있어요.',
       tooManyImages: '이 모델은 사진을 {n}장까지 받아요.',
       uploading: '{name} 올리는 중',
+      pasted: '클립보드 이미지를 참조에 추가했어요.',
     },
     roles: {
       product: '제품',
@@ -1872,6 +1875,9 @@ export const ko: Dictionary = {
       compareHint: '가운데 선을 좌우로 끌어 수정 전과 후를 비교해요.',
       before: '수정 전',
       after: '수정 후',
+      copyImage: '이미지 복사',
+      copiedImage: '이미지를 클립보드에 복사했어요.',
+      copyFailed: '클립보드에 복사하지 못했어요.',
     },
     region: {
       hint: '바꿀 부분에 상자를 그려 주세요. 상자 밖은 그대로 둬요.',
@@ -1880,7 +1886,7 @@ export const ko: Dictionary = {
       keys: '방향키로 상자를 옮기고, Shift와 방향키로 크기를 바꿔요.',
       preview: '입력 미리보기',
       refs: '참조',
-      refsHint: '로고·제품·인물 사진을 끌어오거나 골라요. 문장에서는 2번부터 불러요.',
+      refsHint: '로고·제품·인물 사진을 끌어오거나 Ctrl+V로 붙여 넣어 주세요. 문장에서는 2번부터 불러요.',
       dropHere: '놓으면 참조로 들어가요',
       addRefs: '사진 고르기',
       addOne: '참조로 넣기: {name}',
@@ -2290,7 +2296,7 @@ export const ko: Dictionary = {
     /** lib/brands/features.ts — what an organization can use; the admin console names each group. */
     features: {
       generative_media: '생성형 미디어: 이미지·영상 생성, 셀프 스튜디오, 리믹스, 부분 수정, 업스케일',
-      self_studio: '셀프 스튜디오: 이미지·비디오 스튜디오 직접 생성 (차단 시 프로젝트·에셋 개방, 스튜디오는 쇼룸 안내 노출)',
+      self_studio: '셀프 스튜디오: 이미지·영상 스튜디오 직접 생성 (차단 시 프로젝트·에셋 개방, 스튜디오는 쇼룸 안내 노출)',
       sound: '사운드 마감: 음악·효과음·믹스·마스터',
       color_grading: '색 보정: 레퍼런스 매칭, 브랜드 룩 저장',
       brand_learning: '브랜드 학습: 아이덴티티·절대 규칙·메모리',

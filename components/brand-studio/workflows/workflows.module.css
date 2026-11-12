@@ -1,0 +1,940 @@
+/* Studio UI v4 — Org Workflows, Knowledge Hub & Multi-Client MCP Connect
+   95% Monochrome (#FFFFFF canvas, #F4F4F5 borderless surfaces, #09090B active ink)
+   + 5% Electric Ultramarine (#0033FF single primary CTA). */
+
+.page {
+  min-height: 100%;
+  background: #ffffff;
+  color: #09090b;
+  font-family: var(--font-sans, 'Pretendard Variable', 'Geist', sans-serif);
+  padding: 28px clamp(20px, 3vw, 40px) 72px;
+  box-sizing: border-box;
+}
+
+.container {
+  max-width: 1280px;
+  margin: 0 auto;
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+}
+
+.topbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.titleGroup {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  max-width: 680px;
+}
+
+.titleRow {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.title {
+  margin: 0;
+  font-size: 24px;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  line-height: 1.25;
+  color: #09090b;
+}
+
+.creditPill {
+  display: inline-flex;
+  align-items: center;
+  height: 28px;
+  padding: 0 11px;
+  border-radius: 999px;
+  background: #f4f4f5;
+  color: #09090b;
+  font-family: var(--font-mono, 'Geist Mono', monospace);
+  font-size: 12px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+.subtitle {
+  margin: 0;
+  font-size: 14px;
+  line-height: 1.55;
+  color: #52525b;
+}
+
+.headerActions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.secondaryBtn {
+  height: 38px;
+  padding: 0 14px;
+  border: 0;
+  border-radius: 11px;
+  background: #f4f4f5;
+  color: #09090b;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  transition: background-color 140ms ease, opacity 140ms ease;
+  text-decoration: none;
+}
+
+.secondaryBtn:hover:not(:disabled) {
+  background: #e4e4e7;
+}
+
+.secondaryBtn:disabled {
+  opacity: 0.48;
+  cursor: not-allowed;
+}
+
+.darkBtn {
+  height: 38px;
+  padding: 0 15px;
+  border: 0;
+  border-radius: 11px;
+  background: #09090b;
+  color: #ffffff;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  transition: opacity 140ms ease;
+}
+
+.darkBtn:hover:not(:disabled) {
+  opacity: 0.88;
+}
+
+.darkBtn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.primaryCta {
+  height: 40px;
+  padding: 0 18px;
+  border: 0;
+  border-radius: 12px;
+  background: #0033ff;
+  color: #ffffff;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  transition: opacity 140ms ease;
+}
+
+.primaryCta:hover:not(:disabled) {
+  opacity: 0.92;
+}
+
+.primaryCta:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+/* Hero AI Workflow Builder */
+.builderHero {
+  background: #f4f4f5;
+  border-radius: 20px;
+  padding: 22px 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.builderTop {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+
+.eyebrow {
+  margin: 0 0 4px;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: #71717a;
+}
+
+.builderHeading {
+  margin: 0;
+  font-size: 18px;
+  font-weight: 700;
+  letter-spacing: -0.015em;
+  color: #09090b;
+}
+
+.builderLead {
+  margin: 4px 0 0;
+  font-size: 13px;
+  line-height: 1.5;
+  color: #52525b;
+}
+
+.builderForm {
+  display: flex;
+  gap: 10px;
+  align-items: stretch;
+  flex-wrap: wrap;
+}
+
+.builderInput {
+  flex: 1 1 360px;
+  min-height: 44px;
+  padding: 10px 14px;
+  border: 0;
+  border-radius: 12px;
+  background: #ffffff;
+  color: #09090b;
+  font-size: 14px;
+  font-family: inherit;
+  outline: none;
+}
+
+.builderInput:focus {
+  box-shadow: 0 0 0 2px #09090b;
+}
+
+.chipRow {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.promptChip {
+  height: 30px;
+  padding: 0 12px;
+  border: 0;
+  border-radius: 999px;
+  background: #ffffff;
+  color: #52525b;
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: color 120ms ease, background-color 120ms ease;
+}
+
+.promptChip:hover {
+  color: #09090b;
+  background: #e4e4e7;
+}
+
+/* Tabs & Category Filters */
+.controlsBar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.tabList {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px;
+  border-radius: 13px;
+  background: #f4f4f5;
+}
+
+.tabBtn {
+  height: 34px;
+  padding: 0 14px;
+  border: 0;
+  border-radius: 9px;
+  background: transparent;
+  color: #52525b;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.tabBtnActive {
+  background: #09090b;
+  color: #ffffff;
+}
+
+.tabCount {
+  font-family: var(--font-mono, 'Geist Mono', monospace);
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+  opacity: 0.78;
+}
+
+.categoryRow {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.catPill {
+  height: 30px;
+  padding: 0 12px;
+  border: 0;
+  border-radius: 999px;
+  background: #f4f4f5;
+  color: #52525b;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.catPillActive {
+  background: #09090b;
+  color: #ffffff;
+}
+
+/* Main Split Workspace: Cards + Active Runner */
+.workspaceSplit {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 20px;
+  align-items: start;
+}
+
+.workspaceSplitOpen {
+  grid-template-columns: minmax(0, 1.1fr) minmax(360px, 0.9fr);
+}
+
+@media (max-width: 1024px) {
+  .workspaceSplitOpen {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+.cardGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+  gap: 14px;
+}
+
+.workflowCard {
+  background: #f4f4f5;
+  border-radius: 18px;
+  padding: 20px;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  gap: 16px;
+  transition: background-color 140ms ease;
+}
+
+.workflowCardSelected {
+  box-shadow: inset 0 0 0 2px #09090b;
+  background: #ffffff;
+}
+
+.cardTop {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.badgeRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.badgeGroup {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.badge {
+  display: inline-flex;
+  align-items: center;
+  height: 22px;
+  padding: 0 8px;
+  border-radius: 6px;
+  background: #ffffff;
+  color: #52525b;
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.workflowCardSelected .badge {
+  background: #f4f4f5;
+}
+
+.badgeDark {
+  background: #09090b;
+  color: #ffffff;
+}
+
+.cardTitle {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 700;
+  line-height: 1.35;
+  letter-spacing: -0.01em;
+  color: #09090b;
+}
+
+.cardSummary {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.55;
+  color: #52525b;
+}
+
+.stepPills {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 4px;
+}
+
+.stepMini {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 4px 8px;
+  border-radius: 7px;
+  background: #ffffff;
+  color: #09090b;
+  font-size: 11px;
+  font-weight: 500;
+}
+
+.workflowCardSelected .stepMini {
+  background: #f4f4f5;
+}
+
+.stepNum {
+  font-family: var(--font-mono, 'Geist Mono', monospace);
+  font-size: 10px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  color: #71717a;
+}
+
+.cardFooter {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding-top: 4px;
+}
+
+.metaNums {
+  font-family: var(--font-mono, 'Geist Mono', monospace);
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+  color: #52525b;
+}
+
+.cardBtnRow {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.ghostBtn {
+  height: 32px;
+  padding: 0 10px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: #52525b;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.ghostBtn:hover {
+  background: #e4e4e7;
+  color: #09090b;
+}
+
+/* Runner Panel */
+.runnerPanel {
+  background: #f4f4f5;
+  border-radius: 20px;
+  padding: 22px;
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+  position: sticky;
+  top: 20px;
+}
+
+.runnerHeader {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.runnerTitle {
+  margin: 4px 0 0;
+  font-size: 18px;
+  font-weight: 700;
+  color: #09090b;
+}
+
+.runnerGuide {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.55;
+  color: #52525b;
+  background: #ffffff;
+  border-radius: 12px;
+  padding: 12px 14px;
+}
+
+.sectionLabel {
+  margin: 0 0 8px;
+  font-size: 12px;
+  font-weight: 700;
+  color: #09090b;
+}
+
+.pipelineList {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.pipelineItem {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 9px 12px;
+  border-radius: 10px;
+  background: #ffffff;
+  font-size: 12px;
+  color: #09090b;
+}
+
+.pipelineLeft {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.indexPill {
+  width: 20px;
+  height: 20px;
+  border-radius: 6px;
+  background: #09090b;
+  color: #ffffff;
+  font-family: var(--font-mono, 'Geist Mono', monospace);
+  font-size: 11px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.fieldStack {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.fieldLabel {
+  font-size: 12px;
+  font-weight: 600;
+  color: #09090b;
+}
+
+.textInput,
+.selectInput,
+.textareaInput {
+  width: 100%;
+  box-sizing: border-box;
+  border: 0;
+  border-radius: 11px;
+  background: #ffffff;
+  color: #09090b;
+  font-family: inherit;
+  font-size: 13px;
+  padding: 10px 12px;
+  outline: none;
+}
+
+.textInput,
+.selectInput {
+  height: 40px;
+  padding: 0 12px;
+}
+
+.textareaInput {
+  min-height: 82px;
+  resize: vertical;
+  line-height: 1.5;
+}
+
+.textInput:focus,
+.selectInput:focus,
+.textareaInput:focus {
+  box-shadow: 0 0 0 2px #09090b;
+}
+
+.packChecks {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.packOption {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  padding: 9px 12px;
+  border-radius: 10px;
+  background: #ffffff;
+  font-size: 13px;
+  font-weight: 500;
+  color: #09090b;
+  cursor: pointer;
+}
+
+.runnerFooter {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding-top: 6px;
+}
+
+.estimateBar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 12px;
+  color: #52525b;
+}
+
+.estimateNums {
+  font-family: var(--font-mono, 'Geist Mono', monospace);
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  color: #09090b;
+}
+
+.resultBox {
+  background: #ffffff;
+  border-radius: 14px;
+  padding: 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.resultTitle {
+  margin: 0;
+  font-size: 13px;
+  font-weight: 700;
+  color: #09090b;
+}
+
+.resultBody {
+  margin: 0;
+  font-size: 12px;
+  line-height: 1.5;
+  color: #52525b;
+}
+
+.errorBanner {
+  background: #09090b;
+  color: #ffffff;
+  border-radius: 12px;
+  padding: 10px 14px;
+  font-size: 13px;
+}
+
+/* Empty State & Guides */
+.emptyBox {
+  background: #f4f4f5;
+  border-radius: 18px;
+  padding: 36px 24px;
+  text-align: center;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+}
+
+.emptyTitle {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 700;
+  color: #09090b;
+}
+
+.emptyBody {
+  margin: 0;
+  max-width: 480px;
+  font-size: 13px;
+  line-height: 1.55;
+  color: #52525b;
+}
+
+.guidesGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+  gap: 14px;
+}
+
+.guideCard {
+  background: #f4f4f5;
+  border-radius: 18px;
+  padding: 20px;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  gap: 14px;
+}
+
+.guideBodyPreview {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.6;
+  color: #52525b;
+  white-space: pre-wrap;
+  display: -webkit-box;
+  -webkit-line-clamp: 5;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+/* Modal Backdrop & Dialog (shared by MCP Connect, Recent Run, Custom Workflow, Playbook Editor) */
+.modalBackdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 80;
+  background: rgba(9, 9, 11, 0.48);
+  display: grid;
+  place-items: center;
+  padding: 20px;
+  overflow-y: auto;
+}
+
+.modalDialog {
+  width: 100%;
+  max-width: 720px;
+  background: #ffffff;
+  color: #09090b;
+  border-radius: 22px;
+  padding: 26px;
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+  max-height: calc(100vh - 40px);
+  overflow-y: auto;
+}
+
+.modalHeader {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.modalTitle {
+  margin: 0;
+  font-size: 20px;
+  font-weight: 700;
+  letter-spacing: -0.015em;
+  color: #09090b;
+}
+
+.modalLead {
+  margin: 6px 0 0;
+  font-size: 13px;
+  line-height: 1.55;
+  color: #52525b;
+}
+
+.surfaceBlock {
+  background: #f4f4f5;
+  border-radius: 16px;
+  padding: 16px 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.clientTabs {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.clientPill {
+  height: 32px;
+  padding: 0 13px;
+  border: 0;
+  border-radius: 999px;
+  background: #f4f4f5;
+  color: #52525b;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.clientPillActive {
+  background: #09090b;
+  color: #ffffff;
+}
+
+.stepsList {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.stepRow {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  font-size: 13px;
+  line-height: 1.5;
+  color: #09090b;
+}
+
+.codeBox {
+  background: #09090b;
+  color: #ffffff;
+  border-radius: 13px;
+  padding: 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.codeTop {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.codeLang {
+  font-family: var(--font-mono, 'Geist Mono', monospace);
+  font-size: 11px;
+  color: #a1a1aa;
+  text-transform: uppercase;
+}
+
+.copyBtn {
+  height: 28px;
+  padding: 0 11px;
+  border: 0;
+  border-radius: 7px;
+  background: #ffffff;
+  color: #09090b;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.codePre {
+  margin: 0;
+  font-family: var(--font-mono, 'Geist Mono', monospace);
+  font-size: 12px;
+  line-height: 1.55;
+  white-space: pre-wrap;
+  word-break: break-all;
+  color: #f4f4f5;
+}
+
+.tokenRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 12px;
+  border-radius: 11px;
+  background: #ffffff;
+  font-size: 12px;
+}
+
+.tokenMeta {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.monoText {
+  font-family: var(--font-mono, 'Geist Mono', monospace);
+  font-variant-numeric: tabular-nums;
+}
+
+.recentRunItem {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 11px 13px;
+  border-radius: 12px;
+  background: #ffffff;
+  cursor: pointer;
+  text-align: left;
+  border: 0;
+  width: 100%;
+}
+
+.recentRunSelected {
+  box-shadow: inset 0 0 0 2px #09090b;
+}
+
+.modalFooter {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+}

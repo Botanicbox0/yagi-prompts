@@ -176,13 +176,13 @@ describe('enhancePrompt — request', () => {
     expect(String(fetchMock.mock.calls[0]![0])).toBe('https://proxy.example/v1beta/models/gemini-3.9-flash:generateContent');
   });
 
-  it('sends at most four reference pictures, each labelled with its token', async () => {
+  it('sends at most nine reference pictures, each labelled with its token', async () => {
     const thumb = { bytes: new Uint8Array([1, 2, 3]), mime: 'image/jpeg' };
-    const references = [1, 2, 3, 4, 5].map((i) => ({ index: i, kind: 'image' as const, label: `이미지 ${i}`, thumb }));
-    const fetchMock = mockGemini({ prompt: 'Figure 1 to Figure 5 arranged in a row on a table, soft daylight.', notes: NOTE });
-    await enhancePrompt(input({ prompt: '다섯 개를 나란히', references }), { fetch: fetchMock as unknown as typeof fetch, env: ENV });
+    const references = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map((i) => ({ index: i, kind: 'image' as const, label: `이미지 ${i}`, thumb }));
+    const fetchMock = mockGemini({ prompt: 'Figure 1 to Figure 10 arranged in a row on a table, soft daylight.', notes: NOTE });
+    await enhancePrompt(input({ prompt: '열 개를 나란히', references }), { fetch: fetchMock as unknown as typeof fetch, env: ENV });
     const parts = sentBody(fetchMock).contents[0]!.parts;
-    expect(parts.filter((p) => 'inlineData' in p)).toHaveLength(4);
+    expect(parts.filter((p) => 'inlineData' in p)).toHaveLength(9);
     expect(parts[1]).toMatchObject({ text: expect.stringContaining('Figure 1') });
   });
 

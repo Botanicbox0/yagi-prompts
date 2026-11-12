@@ -10,6 +10,8 @@
 import {
   STUDIO_KEEP_KEYS,
   STUDIO_LIMITS,
+  STUDIO_SHOT_LIMITS,
+  type FilmSheet,
   type RegionBox,
   type StudioAudioMode,
   type StudioJobCreate,
@@ -31,7 +33,16 @@ import {
   type StudioVideoModel,
 } from "@/lib/brand-studio/models";
 import { findMissingReferences, rewriteReferenceMentions, type MentionKind } from "@/lib/brand-studio/enhancer/mentions";
-import { referenceVideoFit, type ReferenceVideoFit, type ReferenceVideoProblem } from "@/lib/brand-studio/reference-video";
+import {
+  blueprintFit,
+  planMultiClipGeneration,
+  referenceVideoFit,
+  remakeSeconds,
+  sliceShotsForWindow,
+  type MultiClipPlan,
+  type ReferenceVideoFit,
+  type ReferenceVideoProblem,
+} from "@/lib/brand-studio/reference-video";
 import { imageRunUsd, regionEditRun, remixRunUsd, usageKrw, videoRunUsd, regionEditModel as editModelFor } from "@/lib/brand-studio/usage-rate";
 import type { StudioOps } from "./api";
 import { toReferences, type RefSource, type TrayItem } from "./refs";
@@ -52,6 +63,12 @@ export interface DockDraft {
   method: StudioRemixMethod;
   keep: StudioKeepKey[];
   change: string;
+  /** True once the customer explicitly clicked a method pill in the unified remix toggle. */
+  methodPinned?: boolean;
+  /** AI Director planned total output seconds (`5..60`). */
+  targetTotalSeconds?: number | null;
+  /** AI Director planned clip count (`1` single clip, `2..4` concurrent multi-clip). */
+  clipCount?: number;
 }
 
 /** The 480p first pass a final is made from (contracts.ts `VideoBase.resolution`). */
@@ -160,12 +177,51 @@ export function withModel(draft: DockDraft, id: string): DockDraft {
 
 /**
  * What a new reference does to the bar. The screen fixes the medium, so a video never turns the image
- * screen into a video run: it is refused there (`attachRefusal`). Without a fixed screen (older callers)
- * a video still switches a picture run to video.
+ * screen into a video run: it is refused there (`attachRefusal`). On the video screen, attaching a
+ * reference video prepares the 480p draft and AI Director duration/clip defaults; attaching a reference
+ * image alongside a reference video defaults unpinned runs to `blueprint`.
  */
-export function draftAfterAttach(draft: DockDraft, item: Pick<TrayItem, "kind">, locked = false): DockDraft {
-  if (locked) return draft;
-  return item.kind === "video" && draft.medium === "image" ? withMedium(draft, "video") : draft;
+export function draftAfterAttach(
+  draft: DockDraft,
+  item: Pick<TrayItem, "kind"> & Partial<Pick<TrayItem, "seconds">>,
+  locked = false,
+  nextTray?: readonly Pick<TrayItem, "kind">[],
+): DockDraft {
+  if (locked && draft.medium === "image") return draft;
+  const base = !locked && item.kind === "video" && draft.medium === "image" ? withMedium(draft, "video") : draft;
+  if (base.medium !== "video") return base;
+
+  if (item.kind === "video") {
+    const videoModel = dockControls(base).model as StudioVideoModel;
+    const refSec = typeof item.seconds === "number" && Number.isFinite(item.seconds) ? item.seconds : null;
+    if (refSec !== null && refSec > videoModel.maxSeconds) {
+      return normalizeDraft({
+        ...base,
+        resolution: DRAFT_RESOLUTION,
+        method: "blueprint",
+        methodPinned: false,
+        keep: base.keep.length ? base.keep : [...STUDIO_KEEP_KEYS],
+        seconds: videoModel.maxSeconds,
+        targetTotalSeconds: 30,
+        clipCount: 2,
+      });
+    }
+    const dur = remakeSeconds(videoModel, refSec);
+    const hasImage = nextTray ? nextTray.some((t) => t.kind === "image") : false;
+    return normalizeDraft({
+      ...base,
+      resolution: DRAFT_RESOLUTION,
+      method: hasImage && !base.methodPinned ? "blueprint" : base.method,
+      seconds: dur,
+      targetTotalSeconds: dur,
+      clipCount: 1,
+    });
+  }
+
+  if (item.kind === "image" && !base.methodPinned && nextTray?.some((t) => t.kind === "video")) {
+    return { ...base, method: "blueprint" };
+  }
+  return base;
 }
 
 /** True when the image screen must turn a reference away (only pictures belong there). */
@@ -176,6 +232,30 @@ export function attachRefusal(mode: StudioMedium, item: Pick<TrayItem, "kind">):
 /** A video run with a reference video becomes a remix; the panel defaults it to the 480p draft. */
 export function remixActive(draft: Pick<DockDraft, "medium">, tray: readonly Pick<TrayItem, "kind">[]): boolean {
   return draft.medium === "video" && tray.some((item) => item.kind === "video");
+}
+
+/**
+ * Unified Seedance 2.5 routing:
+ *  - `@video1` > 30s (`referenceVideoSeconds.max`) or multi-clip (`clipCount >= 2` / `targetTotalSeconds > 15s`)
+ *    automatically uses `blueprint` (never blocked by the 30s raw-video input cap).
+ *  - `@video1` <= 30s with `@image` references defaults to `blueprint` until the user explicitly picks
+ *    another method pill (`methodPinned: true`).
+ */
+export function resolveUnifiedRemixMethod(
+  draft: Pick<DockDraft, "medium" | "model" | "method" | "methodPinned" | "clipCount" | "targetTotalSeconds">,
+  tray: readonly TrayItem[],
+): StudioRemixMethod {
+  if (draft.medium !== "video") return draft.method;
+  const film = tray.find((item) => item.kind === "video");
+  if (!film) return draft.method;
+  const model = dockControls(draft).model as StudioVideoModel;
+  const overRawLimit = typeof film.seconds === "number" && film.seconds > model.referenceVideoSeconds.max;
+  const multiClip =
+    (draft.clipCount ?? 1) >= 2 ||
+    (typeof draft.targetTotalSeconds === "number" && draft.targetTotalSeconds > model.maxSeconds);
+  if (overRawLimit || multiClip) return "blueprint";
+  if (!draft.methodPinned && tray.some((item) => item.kind === "image")) return "blueprint";
+  return draft.method;
 }
 
 /** The registry's reference-video seconds, for the customer's sentence. */
@@ -189,14 +269,54 @@ export function remixFit(draft: Pick<DockDraft, "medium" | "model">, tray: reado
   return referenceVideoFit(model as StudioVideoModel, { seconds: film.seconds, width: film.width ?? null, height: film.height ?? null });
 }
 
+/** Whether the reference video in the bar fits `blueprint` (`2..600s`, picture size ignored). */
+export function remixBlueprintFit(
+  draft: Pick<DockDraft, "medium" | "model">,
+  tray: readonly TrayItem[],
+): { readable: boolean; problem: "length" | null } | null {
+  const film = draft.medium === "video" ? tray.find((item) => item.kind === "video") : undefined;
+  const model = dockControls(draft).model;
+  if (!film || model.medium !== "video") return null;
+  return blueprintFit(model as StudioVideoModel, { seconds: film.seconds });
+}
+
 /**
  * What about the reference video stops this run. A blueprint only reads the clip and never sends it
- * (docs/BRAND-STUDIO-V3.md §6), so its pixel size cannot block one; its length still can.
+ * (docs/BRAND-STUDIO-V3.md §6), so its pixel size cannot block one and lengths up to 600s are allowed.
  */
-export function remixBlocking(draft: Pick<DockDraft, "method">, fit: ReferenceVideoFit | null): ReferenceVideoProblem | null {
-  if (!fit?.problem) return null;
-  if (draft.method === "blueprint" && (fit.problem === "small" || fit.problem === "large")) return null;
-  return fit.problem;
+export function remixBlocking(
+  draft: Pick<DockDraft, "method">,
+  fit: ReferenceVideoFit | null,
+  bpFitResult?: { readable: boolean; problem: "length" | null } | null,
+): ReferenceVideoProblem | null {
+  if (draft.method === "blueprint") {
+    if (bpFitResult !== undefined) return bpFitResult?.problem ?? null;
+    if (!fit?.problem || fit.problem === "small" || fit.problem === "large") return null;
+    return fit.problem;
+  }
+  return fit?.problem ?? null;
+}
+
+/** Active AI Director multi-clip generation plan when `blueprint` is selected on a reference video. */
+export function activeMultiClipPlan(draft: DockDraft, tray: readonly TrayItem[]): MultiClipPlan | null {
+  if (!remixActive(draft, tray)) return null;
+  const method = resolveUnifiedRemixMethod(draft, tray);
+  if (method !== "blueprint") return null;
+  const clean = normalizeDraft(draft);
+  const videoModel = dockControls(clean).model as StudioVideoModel;
+  const film = tray.find((item) => item.kind === "video");
+  const targetTotalSeconds =
+    typeof draft.targetTotalSeconds === "number" && draft.targetTotalSeconds > 0
+      ? draft.targetTotalSeconds
+      : (draft.clipCount ?? 1) >= 2
+        ? (draft.clipCount ?? 2) * clean.seconds
+        : clean.seconds;
+  return planMultiClipGeneration({
+    referenceSeconds: film?.seconds ?? null,
+    targetTotalSeconds,
+    clipCount: draft.clipCount,
+    maxPerClipSeconds: videoModel.maxSeconds,
+  });
 }
 
 export type DockProblem =
@@ -212,11 +332,16 @@ export type DockProblem =
 export function dockProblem(draft: DockDraft, tray: readonly TrayItem[]): DockProblem | null {
   const remix = remixActive(draft, tray);
   if (!remix && !draft.prompt.trim()) return { kind: "empty_prompt" };
-  const fit = remix ? remixFit(draft, tray) : null;
-  const limits = (dockControls(draft).model as StudioVideoModel).referenceVideoSeconds;
-  const problem = remixBlocking(draft, fit);
+  const effectiveMethod = remix ? resolveUnifiedRemixMethod(draft, tray) : draft.method;
+  const effectiveDraft = remix && effectiveMethod !== draft.method ? { ...draft, method: effectiveMethod } : draft;
+  const fit = remix ? remixFit(effectiveDraft, tray) : null;
+  const bpFit = remix ? remixBlueprintFit(effectiveDraft, tray) : null;
+  const rawLimits = (dockControls(effectiveDraft).model as StudioVideoModel).referenceVideoSeconds;
+  const limits: FilmLimits =
+    effectiveMethod === "blueprint" ? { ...rawLimits, max: STUDIO_SHOT_LIMITS.secondsMax } : rawLimits;
+  const problem = remixBlocking(effectiveDraft, fit, bpFit);
   if (problem) return { kind: "film_unusable", problem, limits };
-  if (fit && draft.method === "edit" && !fit.editable) return { kind: "film_edit_short", limits };
+  if (fit && effectiveMethod === "edit" && !fit.editable) return { kind: "film_edit_short", limits: rawLimits };
   if (remix && !draft.prompt.trim() && !draft.change.trim()) return { kind: "need_change" };
   if (draft.medium === "image" && tray.some((item) => item.kind !== "image")) return { kind: "image_only" };
   const model = dockControls(draft).model;
@@ -259,7 +384,10 @@ export function buildJob(
   if (clean.medium === "image")
     return { ok: true, input: { kind: "image", ...base, resolution: clean.resolution, count: clean.count, ...(clean.quality ? { quality: clean.quality as StudioImageQuality } : {}) } };
   const resolution = clean.resolution as "draft" | "480p" | "720p" | "1080p";
-  if (remixActive(clean, tray))
+  if (remixActive(clean, tray)) {
+    const method = resolveUnifiedRemixMethod(clean, tray);
+    const plan = activeMultiClipPlan(clean, tray);
+    const clipSeconds = method !== "edit" ? (plan && plan.clipCount === 1 ? plan.clipDurations[0]! : clean.seconds) : undefined;
     return {
       ok: true,
       input: {
@@ -267,13 +395,86 @@ export function buildJob(
         ...base,
         resolution,
         audio: clean.audio,
-        method: clean.method,
+        method,
         keep: STUDIO_KEEP_KEYS.filter((key) => clean.keep.includes(key)),
         change: clean.change.trim(),
-        ...(clean.method !== "edit" ? { seconds: clean.seconds } : {}),
+        ...(clipSeconds !== undefined ? { seconds: clipSeconds } : {}),
       },
     };
+  }
   return { ok: true, input: { kind: "video", ...base, resolution, audio: clean.audio, seconds: clean.seconds } };
+}
+
+/**
+ * Compiles 1 or `N` (`2..4`) concurrent `StudioJobCreate` payloads for `useDock.submit()`.
+ * When a multi-clip plan (`clipCount >= 2`) is active, every clip receives:
+ *  - A shared `Reference authority` header locking attached `@image1`, `@image2` identities and tone
+ *  - Its exact window marker (`[Part 1/2 · 0.0s–15.0s]`, `[Part 2/2 · 15.0s–30.0s]`)
+ *  - Identical `references` (`@video1`, `@image1`, `@image2`, …)
+ *  - Its corresponding `sliceShotsForWindow` cuts when the reference video's `FilmSheet` is ready
+ */
+export function buildMultiClipJobs(
+  draft: DockDraft,
+  tray: readonly TrayItem[],
+  ids: { organizationId: string; requestIds: readonly string[] },
+  options: { preEnhanced?: boolean; sheet?: FilmSheet | null } = {},
+): { ok: true; inputs: StudioJobCreate[]; plan: MultiClipPlan | null } | { ok: false; problem: DockProblem } {
+  const plan = activeMultiClipPlan(draft, tray);
+  if (!plan || plan.clipCount < 2) {
+    const single = buildJob(
+      draft,
+      tray,
+      { organizationId: ids.organizationId, requestId: ids.requestIds[0] ?? "req-0" },
+      { preEnhanced: options.preEnhanced },
+    );
+    if (!single.ok) return single;
+    return { ok: true, inputs: [single.input], plan };
+  }
+
+  const clean = normalizeDraft(draft);
+  const problem = dockProblem(clean, tray);
+  if (problem) return { ok: false, problem };
+
+  const film = tray.find((item) => item.kind === "video");
+  const imageCount = tray.filter((item) => item.kind === "image").length;
+  const imageTokens = Array.from({ length: imageCount }, (_, idx) => `@image${idx + 1}`);
+  const authorityLine =
+    imageTokens.length > 0
+      ? `Reference authority: keep ${imageTokens.join(", ")} identity, product details, wardrobe, camera world, lighting, and color tone locked across all ${plan.clipCount} parts.`
+      : `Reference authority: keep subject appearance, camera world, lighting, and color tone locked across all ${plan.clipCount} parts.`;
+
+  const references = toReferences(tray, "video");
+  const resolution = clean.resolution as "draft" | "480p" | "720p" | "1080p";
+  const keep = STUDIO_KEEP_KEYS.filter((key) => clean.keep.includes(key));
+  const totalPlanned = plan.clipDurations.reduce((sum, n) => sum + n, 0);
+
+  const inputs: StudioJobCreate[] = plan.windows.map((win, idx) => {
+    const partHeader = `[Part ${idx + 1}/${plan.clipCount} · ${win.startSec.toFixed(1)}s–${win.endSec.toFixed(1)}s]`;
+    const promptBody = [authorityLine, partHeader, clean.prompt.trim()].filter(Boolean).join("\n").slice(0, STUDIO_LIMITS.promptMax);
+    const sliced =
+      options.sheet?.shots && options.sheet.shots.length > 0
+        ? sliceShotsForWindow(options.sheet.shots, film?.seconds ?? options.sheet.seconds, win, totalPlanned)
+        : [];
+    return {
+      kind: "video_remix",
+      organizationId: ids.organizationId,
+      requestId: ids.requestIds[idx] ?? `${ids.requestIds[0] ?? "req"}-${idx + 1}`,
+      model: clean.model,
+      prompt: promptBody,
+      enhance: options.preEnhanced ? false : clean.enhance,
+      references,
+      aspect: clean.aspect,
+      resolution,
+      audio: clean.audio,
+      method: "blueprint",
+      keep,
+      change: clean.change.trim(),
+      seconds: win.durationSec,
+      ...(sliced.length > 0 ? { shots: sliced } : {}),
+    };
+  });
+
+  return { ok: true, inputs, plan };
 }
 
 /** The `prompt.enhance` input for what the bar would send: the same request without its id, enhancement on. */
@@ -333,9 +534,16 @@ export function draftFromJob(job: StudioJobView, current: DockDraft): DockDraft 
     count: job.kind === "image" ? job.expected : current.count,
     seconds: job.seconds ?? current.seconds,
     audio: job.audio ?? current.audio,
-    enhance: job.finalPrompt !== null,
+    enhance: true,
     ...(job.kind === "video_remix"
-      ? { method: job.method ?? current.method, keep: [...job.keep], change: job.change ?? "" }
+      ? {
+          method: job.method ?? current.method,
+          methodPinned: true,
+          clipCount: 1,
+          targetTotalSeconds: job.seconds ?? null,
+          keep: [...job.keep],
+          change: job.change ?? "",
+        }
       : {}),
   });
 }
@@ -343,7 +551,8 @@ export function draftFromJob(job: StudioJobView, current: DockDraft): DockDraft 
 /**
  * What this press will take from the monthly allowance, in KRW, computed with the server's own
  * arithmetic (lib/brand-studio/usage-rate.ts) from the same inputs: count, quality, references,
- * length, the reference video's length, and the 480p draft billed as 480p. Screens show `dockCredits`.
+ * length, the reference video's length, and the 480p draft billed as 480p. When a multi-clip plan
+ * (`clipCount >= 2`) is active, sums the KRW across all planned clips. Screens show `dockCredits`.
  */
 export function dockEstimateKrw(draft: DockDraft, tray: readonly TrayItem[]): number {
   const clean = normalizeDraft(draft);
@@ -351,11 +560,38 @@ export function dockEstimateKrw(draft: DockDraft, tray: readonly TrayItem[]): nu
   if (model.medium === "image")
     return usageKrw(imageRunUsd({ model: model.id, resolution: clean.resolution, references: tray.length, count: clean.count, quality: clean.quality || null }), "image");
   const film = tray.find((item) => item.kind === "video");
-  if (film)
+  if (film) {
+    const method = resolveUnifiedRemixMethod(clean, tray);
+    const plan = activeMultiClipPlan(clean, tray);
+    if (plan && plan.clipCount >= 2) {
+      return plan.clipDurations.reduce(
+        (sum, dur) =>
+          sum +
+          usageKrw(
+            remixRunUsd({
+              model: model as StudioVideoModel,
+              resolution: clean.resolution,
+              method: "blueprint",
+              seconds: dur,
+              referenceSeconds: film.seconds,
+            }).usd,
+            "video",
+          ),
+        0,
+      );
+    }
+    const singleSeconds = method !== "edit" ? (plan?.clipDurations[0] ?? clean.seconds) : null;
     return usageKrw(
-      remixRunUsd({ model: model as StudioVideoModel, resolution: clean.resolution, method: clean.method, seconds: clean.method !== "edit" ? clean.seconds : null, referenceSeconds: film.seconds }).usd,
+      remixRunUsd({
+        model: model as StudioVideoModel,
+        resolution: clean.resolution,
+        method,
+        seconds: singleSeconds,
+        referenceSeconds: film.seconds,
+      }).usd,
       "video",
     );
+  }
   return usageKrw(videoRunUsd({ resolution: clean.resolution, seconds: clean.seconds }), "video");
 }
 

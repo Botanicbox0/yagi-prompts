@@ -8,6 +8,7 @@ import {
   bypassConsumerLocale,
   isAdminPath,
   isBrandPath,
+  isExternalMcpEndpoint,
   REQUEST_ORIGIN_HEADER,
   resolveRequestUrl,
   resolveSurface,
@@ -67,7 +68,10 @@ export async function middleware(request: NextRequest) {
     if (pathname === '/' && ['GET', 'HEAD'].includes(request.method)) {
       return NextResponse.redirect(new URL('/brand', requestUrl), { status: 307, headers: privateHeaders });
     }
-    if (!brandRouteAllowed(pathname, request.method) || (!['GET', 'HEAD'].includes(request.method) && !sameOriginMutation(requestUrl, request.headers))) return new NextResponse(null, { status: 404, headers: privateHeaders });
+    if (
+      !brandRouteAllowed(pathname, request.method) ||
+      (!['GET', 'HEAD'].includes(request.method) && !isExternalMcpEndpoint(pathname) && !sameOriginMutation(requestUrl, request.headers))
+    ) return new NextResponse(null, { status: 404, headers: privateHeaders });
   }
   if (surface === 'admin') {
     if (pathname === '/' && ['GET', 'HEAD'].includes(request.method)) {

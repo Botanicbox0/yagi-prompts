@@ -20,6 +20,15 @@ export const brandContext = cache(async () => {
   // Auth-server-confirmed only; the service decides whether it opens the TWINGS team view.
   const verifiedEmail = await getVerifiedEmail(viewer.userId);
   const dict = getDictionary(locale);
-  return { viewer, sql, verifiedEmail, brandHost: surface.brand, locale, dict, b: dict.brandWorkspace };
+  return {
+    viewer,
+    sql,
+    verifiedEmail,
+    brandHost: surface.brand,
+    requestOrigin: surface.origin,
+    locale,
+    dict,
+    b: dict.brandWorkspace,
+  };
 });
 

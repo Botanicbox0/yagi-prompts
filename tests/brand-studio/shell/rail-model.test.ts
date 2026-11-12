@@ -19,11 +19,21 @@ import {
 
 /** docs/BRAND-STUDIO-V3.md §3 — the rail's rules, without React. */
 describe('rail items', () => {
-  it('lists 이미지 스튜디오 · 비디오 스튜디오 · 캠페인 · 크리에이터 · 에셋 in that order (리뷰 and 브랜드 키트 hidden)', () => {
-    expect(railItems({ studio: true, creators: true, identity: true })).toEqual(['image', 'video', 'campaigns', 'creators', 'assets']);
+  it('lists 이미지 스튜디오 · 영상 스튜디오 · 편집 스튜디오 · 워크플로우 · 캠페인 · 크리에이터 · 에셋 in that order (리뷰 and 브랜드 키트 hidden)', () => {
+    expect(railItems({ studio: true, creators: true, identity: true })).toEqual([
+      'image',
+      'video',
+      'compose',
+      'workflows',
+      'campaigns',
+      'creators',
+      'assets',
+    ]);
     expect(RAIL_HREF).toMatchObject({
       image: '/brand/studio',
       video: '/brand/studio/video',
+      compose: '/brand/studio/compose',
+      workflows: '/brand/studio/workflows',
       review: '/brand/studio/review',
       campaigns: '/brand',
       creators: '/brand/creators',
@@ -32,21 +42,28 @@ describe('rail items', () => {
     });
   });
 
-  it('shows the two studio items only while the studio is visible, creators only while the pool is', () => {
+  it('shows the studio items only while the studio is visible, creators only while the pool is', () => {
     expect(railItems({ studio: false, creators: false, identity: false })).toEqual(['campaigns', 'assets']);
     expect(railItems({ studio: false, creators: true, identity: true })).toEqual(['campaigns', 'creators', 'assets']);
   });
 });
 
 describe('the current item', () => {
-  it('keeps 이미지 off on the video and review screens', () => {
+  it('keeps 이미지 off on the video, compose, workflows and review screens, and activates workflows on /brand/studio/workflows', () => {
     expect(railActive('/brand/studio', '/brand/studio')).toBe(true);
     expect(railActive('/brand/studio', '/brand/studio/video')).toBe(false);
     expect(railActive('/brand/studio', '/brand/studio/compose')).toBe(false);
+    expect(railActive('/brand/studio', '/brand/studio/workflows')).toBe(false);
+    expect(railActive('/brand/studio', '/brand/studio/workflows/sub')).toBe(false);
     expect(railActive('/brand/studio', '/brand/studio/review')).toBe(false);
     expect(railActive('/brand/studio', '/brand/studio/review/abc')).toBe(false);
     expect(railActive('/brand/studio/video', '/brand/studio/video')).toBe(true);
-    expect(railActive('/brand/studio/video', '/brand/studio/compose')).toBe(true);
+    expect(railActive('/brand/studio/video', '/brand/studio/compose')).toBe(false);
+    expect(railActive('/brand/studio/video', '/brand/studio/workflows')).toBe(false);
+    expect(railActive('/brand/studio/compose', '/brand/studio/compose')).toBe(true);
+    expect(railActive('/brand/studio/workflows', '/brand/studio/workflows')).toBe(true);
+    expect(railActive('/brand/studio/workflows', '/brand/studio/workflows/sub')).toBe(true);
+    expect(railActive('/brand/studio/workflows', '/brand/studio')).toBe(false);
     expect(railActive('/brand/studio/review', '/brand/studio/review/abc')).toBe(true);
     expect(railActive('/brand/studio/video', '/brand/studio')).toBe(false);
     // An older studio sub-page is still the image studio, and a sibling path is not a child.
@@ -68,11 +85,35 @@ describe('order', () => {
   const all = railItems({ studio: true, creators: true, identity: true });
 
   it('applies the saved order and seats unknown items beside their default neighbour', () => {
-    expect(orderItems(all, ['/brand', '/brand/studio/video'])).toEqual(['image', 'campaigns', 'creators', 'assets', 'video']);
-    // An order saved before video existed: it appears next to image, not at the end.
-    expect(orderItems(all, ['/brand/studio', '/brand', '/brand/library'])).toEqual(['image', 'video', 'campaigns', 'creators', 'assets']);
-    // The topbar's older order (no video) still applies to what it knows.
-    expect(orderItems(all, ['/brand/library', '/brand/studio'])).toEqual(['assets', 'image', 'video', 'campaigns', 'creators']);
+    expect(orderItems(all, ['/brand', '/brand/studio/video'])).toEqual([
+      'image',
+      'campaigns',
+      'creators',
+      'assets',
+      'video',
+      'compose',
+      'workflows',
+    ]);
+    // An order saved before video, compose and workflows existed: they appear next to image, not at the end.
+    expect(orderItems(all, ['/brand/studio', '/brand', '/brand/library'])).toEqual([
+      'image',
+      'video',
+      'compose',
+      'workflows',
+      'campaigns',
+      'creators',
+      'assets',
+    ]);
+    // The topbar's older order (no video/compose/workflows) still applies to what it knows.
+    expect(orderItems(all, ['/brand/library', '/brand/studio'])).toEqual([
+      'assets',
+      'image',
+      'video',
+      'compose',
+      'workflows',
+      'campaigns',
+      'creators',
+    ]);
     expect(orderItems(all, [])).toEqual(all);
   });
 

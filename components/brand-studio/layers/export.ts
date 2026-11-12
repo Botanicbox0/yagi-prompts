@@ -111,6 +111,42 @@ export function planExport(doc: LayerDoc, base: ExportBase, measureFor: (layer: 
 }
 
 /**
+ * Plans rendering a normalized marquee selection (`box`, fractions `0..1`) of the current composite
+ * into a cropped pixel rectangle, respecting `doc.baseHidden`.
+ */
+export function planCropExport(
+  doc: LayerDoc,
+  base: ExportBase,
+  box: { x: number; y: number; w: number; h: number },
+  measureFor: (layer: TextLayer) => Measure,
+): { plan: ExportPlan; box: Box } {
+  const x = Math.max(0, Math.min(base.width - MIN_SIDE, Math.round(box.x * base.width)));
+  const y = Math.max(0, Math.min(base.height - MIN_SIDE, Math.round(box.y * base.height)));
+  const w = Math.max(MIN_SIDE, Math.min(base.width - x, Math.round(box.w * base.width)));
+  const h = Math.max(MIN_SIDE, Math.min(base.height - y, Math.round(box.h * base.height)));
+  const ops: DrawOp[] = [];
+  if (!doc.baseHidden) {
+    ops.push({
+      kind: "image",
+      layerId: BASE_OP_ID,
+      name: base.name,
+      url: base.url,
+      frame: { x: -x, y: -y, w: base.width, h: base.height, rotation: 0 },
+      opacity: 1,
+    });
+  }
+  for (const layer of doc.layers) {
+    if (layer.hidden || layer.opacity <= 0) continue;
+    const op = layerToOp(layer, measureFor);
+    ops.push({
+      ...op,
+      frame: { ...op.frame, x: op.frame.x - x, y: op.frame.y - y },
+    });
+  }
+  return { plan: { width: w, height: h, ops }, box: { x, y, w, h } };
+}
+
+/**
  * Plans merging the selected layer (`id`) into the layer right beneath it (`index > 0`),
  * or baking `layers[0]` onto the base region beneath it (`index === 0`) as a flattened layer above base.
  */

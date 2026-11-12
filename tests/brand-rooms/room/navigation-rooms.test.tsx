@@ -59,6 +59,7 @@ const ROOMS_ONLY = [
   nav.groupMake,
   nav.groupTeam,
   nav.messages,
+  shell.rail.messages,
 ];
 
 const owner: BrandWorkspaceChoice = { id: OWNER, name: 'Alpha fixture', role: 'owner', logoUrl: null, denied: [] };
@@ -87,7 +88,7 @@ describe.each(sandboxedChoices)('hardline with rooms on: %s', (_label, choice) =
 });
 
 describe('the grouped rail', () => {
-  it('splits into 직접 만들기 and 야기 팀과 with 프로젝트 · 알림함', () => {
+  it('splits into 직접 만들기 and 야기 팀과 with 프로젝트 · 리뷰 and 대화 · 피드백', () => {
     const html = render(owner, { studioV2: true, rooms: true });
     expect(html).toContain('data-brand-layout-mode="rail"');
     const sections = [...html.matchAll(/data-rail-section="(\w+)"/g)].map((m) => m[1]);
@@ -95,18 +96,18 @@ describe('the grouped rail', () => {
     const make = html.slice(html.indexOf('data-rail-section="make"'), html.indexOf('data-rail-section="team"'));
     const team = html.slice(html.indexOf('data-rail-section="team"'));
     const ids = (part: string) => [...part.matchAll(/data-rail-item="(\w+)"/g)].map((m) => m[1]);
-    expect(ids(make)).toEqual(['image', 'video', 'assets']);
+    expect(ids(make)).toEqual(['image', 'video', 'compose', 'workflows', 'assets']);
     expect(ids(team)).toEqual(['campaigns', 'messages']);
     expect(make).toContain(nav.groupMake);
+    expect(make).toContain(`>${shell.rail.compose}<`);
     expect(team).toContain(nav.groupTeam);
-    // 의뢰 is the renamed 캠페인 item, only in this mode; 메시지 is the inbox.
+    // Clear client room labels: 프로젝트 · 리뷰 at /brand, 대화 · 피드백 at /brand/rooms.
     expect(team).toContain(`href="/brand?organizationId=${OWNER}"`);
-    expect(team).toContain(`>${nav.commissions}<`);
-    expect(team).not.toContain(`>${shell.rail.campaigns}<`);
+    expect(team).toContain(`>${shell.rail.campaigns}<`);
     expect(team).toContain(`href="/brand/rooms?organizationId=${OWNER}"`);
-    expect(team).toContain(`>${nav.messages}<`);
+    expect(team).toContain(`>${shell.rail.messages}<`);
     // Collapsed tooltips name the group.
-    expect(html).toContain(`data-rail-tip="${nav.groupTeam} · ${nav.messages}"`);
+    expect(html).toContain(`data-rail-tip="${nav.groupTeam} · ${shell.rail.messages}"`);
     expect(html).toContain(`data-rail-tip="${nav.groupMake} · ${shell.rail.image}"`);
     // Each group is a labelled group for assistive technology.
     expect(html).toMatch(/role="group" aria-labelledby="[^"]+-make"/);
@@ -132,7 +133,7 @@ describe('the grouped rail', () => {
     expect(html).not.toContain('data-rail-create');
   });
 
-  it('puts 야기 팀과 (프로젝트 · 알림함) first and keeps 스튜디오 showroom tabs for a project-only owner (self_studio denied)', () => {
+  it('puts 야기 팀과 (프로젝트 · 리뷰 · 대화 · 피드백) first and keeps 스튜디오 showroom tabs for a project-only owner (self_studio denied)', () => {
     const html = render({ ...owner, denied: ['self_studio'] }, { studioV2: true, rooms: true });
     const sections = [...html.matchAll(/data-rail-section="(\w+)"/g)].map((m) => m[1]);
     expect(sections[0]).toBe('team');
@@ -143,6 +144,8 @@ describe('the grouped rail', () => {
       'assets',
       'image',
       'video',
+      'compose',
+      'workflows',
     ]);
     expect([...html.matchAll(/data-rail-tab="(\w+)"/g)].map((m) => m[1])).toEqual([
       'campaigns',

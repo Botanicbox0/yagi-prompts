@@ -9,9 +9,12 @@
 import { useEffect, useId, useLayoutEffect, useRef, useState, type DragEvent } from "react";
 import { STUDIO_ASSET_ROLES, STUDIO_LIMITS, type StudioAssetRole } from "@/lib/brand-studio/contracts";
 import type { StudioMedium } from "@/lib/brand-studio/models";
+import { studioVideoEn, studioVideoKo } from "@/messages/studio-video";
+import { virtualMentionTag } from "./at-mention-menu";
 import { fill, type StudioCopy } from "./copy";
 import { StudioIcon } from "./icons";
 import { TRAY_MOVE_TYPE, trayNumbers, type TrayItem } from "./refs";
+import w from "./video/video-workspace.module.css";
 
 export interface TrayProps {
   items: readonly TrayItem[];
@@ -23,6 +26,11 @@ export interface TrayProps {
   uploading: readonly string[];
   /** Opens the popover for this key first (tests and "설정 다시 쓰기"). */
   initialOpen?: string | null;
+  /** Keys of tray items currently referenced by `@` / natural mentions in the prompt bar. */
+  mentionedKeys?: ReadonlySet<string>;
+  /** Optional segment & crop trigger for `@video1` on the video screen. */
+  onTrimVideo?(item: TrayItem): void;
+  trimLabel?: string;
   onUpdate(key: string, patch: Partial<Pick<TrayItem, "role" | "use" | "avoid" | "frame">>): void;
   onRemove(key: string): void;
   onMove(from: number, to: number): void;
@@ -35,8 +43,24 @@ function ThumbMedia({ item }: { item: TrayItem }) {
   return <span className="bs-thumb-audio" aria-hidden="true" />;
 }
 
-export function Tray({ items, labels, medium, copy, dropActive, uploading, initialOpen = null, onUpdate, onRemove, onMove, onBrowse }: TrayProps) {
+export function Tray({
+  items,
+  labels,
+  medium,
+  copy,
+  dropActive,
+  uploading,
+  initialOpen = null,
+  mentionedKeys,
+  onTrimVideo,
+  trimLabel,
+  onUpdate,
+  onRemove,
+  onMove,
+  onBrowse,
+}: TrayProps) {
   const t = copy.tray;
+  const resolvedTrimLabel = trimLabel ?? (/[가-힣]/.test(t.label) ? studioVideoKo.remix.trayTrim : studioVideoEn.remix.trayTrim);
   const [open, setOpen] = useState<string | null>(initialOpen);
   const [dragging, setDragging] = useState<number | null>(null);
   const [over, setOver] = useState<number | null>(null);
@@ -60,13 +84,17 @@ export function Tray({ items, labels, medium, copy, dropActive, uploading, initi
       <ul className="bs-tray-list">
         {items.map((item, i) => {
           const label = labels[i] ?? "";
+          const virtualTag = virtualMentionTag(item.kind, numbers[i] ?? 1);
           const popoverId = `${base}-ref-${i}`;
           const expanded = open === item.key;
+          const mentioned = Boolean(mentionedKeys?.has(item.key));
           return (
             <li
               key={item.key}
               className="bs-tray-item"
               data-ref-kind={item.kind}
+              data-virtual-tag={virtualTag}
+              data-mentioned={mentioned ? "" : undefined}
               data-dragging={dragging === i ? "" : undefined}
               data-drop-before={over === i && dragging !== null && dragging !== i ? "" : undefined}
               onDragOver={(event) => {
@@ -80,6 +108,7 @@ export function Tray({ items, labels, medium, copy, dropActive, uploading, initi
               <button
                 type="button"
                 className="bs-thumb"
+                data-mentioned={mentioned ? "" : undefined}
                 data-selected={expanded ? "" : undefined}
                 draggable
                 aria-label={fill(t.edit, { label })}
@@ -112,10 +141,25 @@ export function Tray({ items, labels, medium, copy, dropActive, uploading, initi
                     <StudioIcon name={item.kind === "video" ? "play" : "spark"} />
                   </span>
                 )}
+                {medium === "video" && item.kind === "image" && item.frame && (
+                  <span className={w.trayFrameBadge} data-tray-frame={item.frame} aria-hidden="true">
+                    {item.frame}
+                  </span>
+                )}
               </button>
               <span className="bs-thumb-n bs-num" aria-hidden="true">
-                {numbers[i]}
+                {virtualTag}
               </span>
+              {medium === "video" && item.kind === "video" && onTrimVideo && (
+                <button
+                  type="button"
+                  className={w.trayTrimBtn}
+                  data-tray-trim={item.key}
+                  onClick={() => onTrimVideo(item)}
+                >
+                  {resolvedTrimLabel}
+                </button>
+              )}
               <button type="button" className="bs-thumb-x" aria-label={fill(t.removeOne, { label })} onClick={() => onRemove(item.key)}>
                 <StudioIcon name="close" />
               </button>
@@ -124,8 +168,18 @@ export function Tray({ items, labels, medium, copy, dropActive, uploading, initi
                   id={popoverId}
                   item={item}
                   label={label}
+                  virtualTag={virtualTag}
                   medium={medium}
                   copy={copy}
+                  trimLabel={medium === "video" && item.kind === "video" && onTrimVideo ? resolvedTrimLabel : null}
+                  onTrim={
+                    medium === "video" && item.kind === "video" && onTrimVideo
+                      ? () => {
+                          setOpen(null);
+                          onTrimVideo(item);
+                        }
+                      : undefined
+                  }
                   onUpdate={(patch) => onUpdate(item.key, patch)}
                   onRemove={() => {
                     setOpen(null);
@@ -166,8 +220,11 @@ function RefPopover({
   id,
   item,
   label,
+  virtualTag,
   medium,
   copy,
+  trimLabel,
+  onTrim,
   onUpdate,
   onRemove,
   onClose,
@@ -175,8 +232,11 @@ function RefPopover({
   id: string;
   item: TrayItem;
   label: string;
+  virtualTag: string;
   medium: StudioMedium;
   copy: StudioCopy;
+  trimLabel?: string | null;
+  onTrim?(): void;
   onUpdate(patch: Partial<Pick<TrayItem, "role" | "use" | "avoid" | "frame">>): void;
   onRemove(): void;
   onClose(): void;
@@ -228,7 +288,14 @@ function RefPopover({
         }
       }}
     >
-      <p className="bs-popover-title">{label}</p>
+      <p className="bs-popover-title">
+        {label} <span className="bs-num">({virtualTag})</span>
+      </p>
+      {trimLabel && onTrim && (
+        <button type="button" className="bs-btn" data-variant="soft" data-size="sm" onClick={onTrim} data-popover-trim>
+          {trimLabel}
+        </button>
+      )}
       <label htmlFor={`${fields}-role`}>{t.role}</label>
       <select
         id={`${fields}-role`}

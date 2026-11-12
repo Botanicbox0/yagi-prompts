@@ -117,8 +117,10 @@ export const FILM_BLUEPRINT_RESPONSE_SCHEMA = {
   required: [...FILM_RESPONSE_SCHEMA.required, 'subjects', 'setting'],
 } as const;
 
+const DATA_URI_RE = /data:(?:image|video|audio)\/[a-z0-9.+-]+;base64,[A-Za-z0-9+/=\s]+/gi;
+
 function field(text: string, max = FIELD_MAX): string {
-  const flat = text.replace(/\s+/g, ' ').trim();
+  const flat = text.replace(DATA_URI_RE, '').replace(/\s+/g, ' ').trim();
   return flat.length <= max ? flat : `${flat.slice(0, max - 1).trimEnd()}…`;
 }
 
