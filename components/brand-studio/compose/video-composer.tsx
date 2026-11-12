@@ -3,16 +3,19 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ChangeEvent, type FormEvent } from 'react';
 import { createStudioApi, isFailure, measureInBrowser } from '@/components/brand-studio/api';
 import { fill as interpolate } from '@/components/brand-studio/copy';
-import type { StudioAssetView, StudioOutputView } from '@/lib/brand-studio/contracts';
+import type { StudioAllowanceView, StudioAssetView, StudioOutputView } from '@/lib/brand-studio/contracts';
+import { creditsLeft, formatCredits } from '@/lib/brand-studio/credits';
 import {
   COMPOSE_ASPECTS,
   appendClip,
   applyTimelinePatches,
   clipPlayDuration,
+  composeFinalRenderCredits,
   composeStorageKey,
   emptyComposerProject,
   frameStateAtTime,
   parseStoredProject,
+  parseComposeChatCommand,
   projectDurationSec,
   roundTenths,
   serializeProjectForStorage,
@@ -23,11 +26,6 @@ import {
   type ComposerProject,
   type TimelinePatch,
 } from '@/lib/brand-studio/compose';
-import {
-  parseComposeChatCommand,
-  requestByokTimelinePatches,
-  type ByokProvider,
-} from '@/lib/brand-studio/compose/chat-intent';
 import { exportCompositionMp4, type ComposeExportResult } from '@/lib/brand-studio/compose/export-client';
 import type { StudioComposeCopy } from '@/messages/studio-compose';
 import s from './video-composer.module.css';
@@ -38,6 +36,7 @@ export interface VideoComposerProps {
   canCreate: boolean;
   copy: StudioComposeCopy;
   videoStudioHref: string;
+  initialAllowance: StudioAllowanceView;
   initialAssets: StudioAssetView[];
   initialVideoOutputs: Array<StudioOutputView & { label: string }>;
 }
@@ -53,16 +52,35 @@ function sameOriginComposeUrl(organizationId: string, source: 'asset' | 'output'
   return `/api/brand-studio/compose?${q.toString()}`;
 }
 
+function makeComposeRequestId(): string {
+  if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
+    return `cmp_${crypto.randomUUID().replace(/-/g, '')}`;
+  }
+  return `cmp_${Date.now()}_${Math.random().toString(36).slice(2, 12)}`;
+}
+
+async function postComposeOperation(operation: string, input: Record<string, unknown>): Promise<Record<string, unknown>> {
+  const res = await fetch('/api/brand-studio/compose', {
+    method: 'POST',
+    credentials: 'same-origin',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ operation, input }),
+  });
+  return (await res.json()) as Record<string, unknown>;
+}
+
 export function VideoComposer({
   organizationId,
   locale,
   canCreate,
   copy,
   videoStudioHref,
+  initialAllowance,
   initialAssets,
   initialVideoOutputs,
 }: VideoComposerProps) {
   const api = useMemo(() => createStudioApi({ organizationId }), [organizationId]);
+  const [allowance, setAllowance] = useState<StudioAllowanceView>(initialAllowance);
   const [sourceTab, setSourceTab] = useState<'clips' | 'music' | 'captions'>('clips');
   const [project, setProject] = useState<ComposerProject>(() => emptyComposerProject('9:16'));
   const [undoStack, setUndoStack] = useState<ComposerProject[]>([]);
@@ -81,18 +99,12 @@ export function VideoComposer({
   const [captionPos, setCaptionPos] = useState<CaptionPosition>('bottom');
   const [captionSize, setCaptionSize] = useState<CaptionSize>('md');
 
-  // Chat state
+  // Chat state (TWINGS built-in + server free chat with per-minute rate limit; zero BYOK)
   const [chatInput, setChatInput] = useState('');
   const [chatBusy, setChatBusy] = useState(false);
   const [chatMessages, setChatMessages] = useState<ChatEntry[]>(() => [
     { id: 'welcome', role: 'assistant', text: copy.chat.welcome },
   ]);
-
-  // Optional browser-memory BYOK state (never persisted to localStorage or server)
-  const [byokOpen, setByokOpen] = useState(false);
-  const [byokProvider, setByokProvider] = useState<ByokProvider>('openai');
-  const [byokDraftKey, setByokDraftKey] = useState('');
-  const [byokActiveKey, setByokActiveKey] = useState('');
 
   // Export & save state
   const [exportingRatio, setExportingRatio] = useState<number | null>(null);
@@ -140,6 +152,11 @@ export function VideoComposer({
   const totalSec = useMemo(() => projectDurationSec(project), [project]);
   const spans = useMemo(() => timelineSpans(project), [project]);
   const frameAtPlayhead = useMemo(() => frameStateAtTime(project, playheadSec), [project, playheadSec]);
+  const remainingCredits = useMemo(() => creditsLeft(allowance.capKrw, allowance.usedKrw), [allowance]);
+  const renderCostCredits = useMemo(
+    () => (project.clips.length > 0 ? composeFinalRenderCredits(totalSec) : 0),
+    [project.clips.length, totalSec],
+  );
 
   const commitProject = useCallback((next: ComposerProject) => {
     setProject((prev) => {
@@ -367,8 +384,13 @@ export function VideoComposer({
     setChatMessages((prev) => [...prev, userMsg]);
     setChatInput('');
 
-    const parsed = parseComposeChatCommand(text, project, locale);
-    if (parsed.kind === 'undo') {
+    if (!canCreate) {
+      setChatMessages((prev) => [...prev, { id: `a_${Date.now()}`, role: 'assistant', text: copy.chat.readOnly }]);
+      return;
+    }
+
+    const localUndo = parseComposeChatCommand(text, project, locale);
+    if (localUndo.kind === 'undo') {
       if (undoStack.length > 0) {
         handleUndo();
         setChatMessages((prev) => [...prev, { id: `a_${Date.now()}`, role: 'assistant', text: copy.chat.undone }]);
@@ -378,41 +400,65 @@ export function VideoComposer({
       return;
     }
 
-    if (parsed.kind === 'patches') {
-      const count = applyPatches(parsed.patches);
-      const reply =
-        count > 0
-          ? interpolate(copy.chat.appliedSummary, { count, detail: parsed.detail })
-          : copy.chat.unrecognized;
-      setChatMessages((prev) => [...prev, { id: `a_${Date.now()}`, role: 'assistant', text: reply }]);
-      return;
-    }
-
-    // Fallback to optional browser-memory BYOK key when connected
-    if (byokActiveKey) {
-      setChatBusy(true);
-      const byokResult = await requestByokTimelinePatches({
-        provider: byokProvider,
-        apiKey: byokActiveKey,
+    setChatBusy(true);
+    try {
+      const res = await postComposeOperation('chat.edit', {
+        organizationId,
         message: text,
-        project,
         locale,
+        project,
       });
-      setChatBusy(false);
-      if (byokResult.ok) {
-        const count = applyPatches(byokResult.patches);
+
+      if (res.ok === false) {
         const reply =
-          count > 0
-            ? interpolate(copy.chat.appliedSummary, { count, detail: byokResult.detail })
+          res.code === 'rate_limited'
+            ? interpolate(copy.chat.rateLimited, {
+                seconds: typeof res.retryAfterSec === 'number' ? res.retryAfterSec : 60,
+              })
             : copy.chat.unrecognized;
         setChatMessages((prev) => [...prev, { id: `a_${Date.now()}`, role: 'assistant', text: reply }]);
         return;
       }
-      setChatMessages((prev) => [...prev, { id: `a_${Date.now()}`, role: 'assistant', text: copy.chat.byokFailed }]);
-      return;
-    }
 
-    setChatMessages((prev) => [...prev, { id: `a_${Date.now()}`, role: 'assistant', text: copy.chat.unrecognized }]);
+      if (res.kind === 'undo') {
+        if (undoStack.length > 0) {
+          handleUndo();
+          setChatMessages((prev) => [...prev, { id: `a_${Date.now()}`, role: 'assistant', text: copy.chat.undone }]);
+        } else {
+          setChatMessages((prev) => [...prev, { id: `a_${Date.now()}`, role: 'assistant', text: copy.chat.nothingToUndo }]);
+        }
+        return;
+      }
+
+      if (res.kind === 'patches' && Array.isArray(res.patches)) {
+        const count = applyPatches(res.patches as TimelinePatch[]);
+        const reply =
+          count > 0
+            ? interpolate(copy.chat.appliedSummary, {
+                count,
+                detail: typeof res.detail === 'string' ? res.detail : '',
+              })
+            : copy.chat.unrecognized;
+        setChatMessages((prev) => [...prev, { id: `a_${Date.now()}`, role: 'assistant', text: reply }]);
+        return;
+      }
+
+      setChatMessages((prev) => [...prev, { id: `a_${Date.now()}`, role: 'assistant', text: copy.chat.unrecognized }]);
+    } catch {
+      const fallback = parseComposeChatCommand(text, project, locale);
+      if (fallback.kind === 'patches') {
+        const count = applyPatches(fallback.patches);
+        const reply =
+          count > 0
+            ? interpolate(copy.chat.appliedSummary, { count, detail: fallback.detail })
+            : copy.chat.unrecognized;
+        setChatMessages((prev) => [...prev, { id: `a_${Date.now()}`, role: 'assistant', text: reply }]);
+      } else {
+        setChatMessages((prev) => [...prev, { id: `a_${Date.now()}`, role: 'assistant', text: copy.chat.unrecognized }]);
+      }
+    } finally {
+      setChatBusy(false);
+    }
   };
 
   const triggerDownload = (url: string, filename: string) => {
@@ -425,12 +471,45 @@ export function VideoComposer({
   };
 
   const handleExport = async () => {
-    if (project.clips.length === 0 || exportingRatio !== null) return;
+    if (!canCreate || project.clips.length === 0 || exportingRatio !== null) return;
     setPlaying(false);
     setExportingRatio(0.02);
     setStatusMessage(null);
     setSavedAssetId(null);
+
+    let reservedJobId: string | null = null;
+    let creditsUsed = renderCostCredits;
+
     try {
+      const reserve = await postComposeOperation('render.reserve', {
+        organizationId,
+        requestId: makeComposeRequestId(),
+        durationSec: Math.max(0.3, totalSec),
+      });
+
+      if (reserve.ok !== true || typeof reserve.jobId !== 'string') {
+        if (reserve.code === 'allowance_exhausted') {
+          setStatusMessage(
+            interpolate(copy.status.exportAllowanceExhausted, {
+              credits: formatCredits(renderCostCredits, locale),
+            }),
+          );
+        } else if (reserve.code === 'allowance_closed') {
+          setStatusMessage(copy.status.exportAllowanceClosed);
+        } else {
+          setStatusMessage(copy.status.exportFailed);
+        }
+        return;
+      }
+
+      reservedJobId = reserve.jobId;
+      if (typeof reserve.creditsUsed === 'number') {
+        creditsUsed = reserve.creditsUsed;
+      }
+      if (reserve.allowance && typeof reserve.allowance === 'object') {
+        setAllowance(reserve.allowance as StudioAllowanceView);
+      }
+
       const result = await exportCompositionMp4(project, (ratio) => setExportingRatio(ratio));
       const objectUrl = URL.createObjectURL(result.blob);
       setLastExport((prev) => {
@@ -440,13 +519,41 @@ export function VideoComposer({
       triggerDownload(objectUrl, result.filename);
       const mb = (result.blob.size / (1024 * 1024)).toFixed(1);
       const elapsed = (result.elapsedMs / 1000).toFixed(1);
+      const creditsText = formatCredits(creditsUsed, locale);
       setStatusMessage(
         result.mime === 'video/mp4'
-          ? interpolate(copy.status.exportedReady, { seconds: result.durationSec, mb, elapsed })
-          : interpolate(copy.status.exportWebmFallback, { seconds: result.durationSec }),
+          ? interpolate(copy.status.exportedReady, {
+              seconds: result.durationSec,
+              mb,
+              elapsed,
+              credits: creditsText,
+            })
+          : interpolate(copy.status.exportWebmFallback, {
+              seconds: result.durationSec,
+              credits: creditsText,
+            }),
       );
     } catch {
-      setStatusMessage(copy.status.exportFailed);
+      if (reservedJobId) {
+        try {
+          const refund = await postComposeOperation('render.refund', {
+            organizationId,
+            jobId: reservedJobId,
+          });
+          if (refund.ok === true && refund.allowance && typeof refund.allowance === 'object') {
+            setAllowance(refund.allowance as StudioAllowanceView);
+          }
+          setStatusMessage(
+            interpolate(copy.status.exportFailedRefunded, {
+              credits: formatCredits(creditsUsed, locale),
+            }),
+          );
+        } catch {
+          setStatusMessage(copy.status.exportFailed);
+        }
+      } else {
+        setStatusMessage(copy.status.exportFailed);
+      }
     } finally {
       setExportingRatio(null);
     }
@@ -465,7 +572,11 @@ export function VideoComposer({
         }),
       });
       if (isFailure(res)) {
-        setStatusMessage(res.code === 'asset_limit' ? copy.status.saveQuotaExceeded : copy.status.saveFailed);
+        setStatusMessage(
+          res.code === 'asset_limit' || res.code === 'storage_quota_exceeded'
+            ? copy.status.saveQuotaExceeded
+            : copy.status.saveFailed,
+        );
       } else {
         setSavedAssetId(res.asset.id);
       }
@@ -505,6 +616,9 @@ export function VideoComposer({
         </div>
 
         <div className={s.headerActions}>
+          <span className={s.creditBadge} data-compose-credits>
+            {interpolate(copy.credits.remaining, { credits: formatCredits(remainingCredits, locale) })}
+          </span>
           <a className={s.pillBtn} href={videoStudioHref} data-compose-back-video>
             {copy.backToVideo}
           </a>
@@ -536,12 +650,16 @@ export function VideoComposer({
             type="button"
             className={s.primaryBtn}
             onClick={handleExport}
-            disabled={project.clips.length === 0 || exportingRatio !== null}
+            disabled={!canCreate || project.clips.length === 0 || exportingRatio !== null}
             data-compose-export
           >
             {exportingRatio !== null
               ? interpolate(copy.actions.exporting, { percent: Math.round(exportingRatio * 100) })
-              : copy.actions.exportMp4}
+              : project.clips.length > 0
+                ? interpolate(copy.actions.exportMp4WithCredits, {
+                    credits: formatCredits(renderCostCredits, locale),
+                  })
+                : copy.actions.exportMp4}
           </button>
         </div>
       </header>
@@ -1057,6 +1175,7 @@ export function VideoComposer({
                   key={example}
                   type="button"
                   className={s.exampleChip}
+                  disabled={!canCreate || chatBusy}
                   onClick={() => void runChatInstruction(example)}
                 >
                   {example}
@@ -1086,77 +1205,22 @@ export function VideoComposer({
               onChange={(e) => setChatInput(e.target.value)}
               placeholder={copy.chat.placeholder}
               rows={2}
+              disabled={!canCreate}
               data-compose-chat-input
             />
             <button
               type="submit"
               className={s.primaryBtn}
-              disabled={!chatInput.trim() || chatBusy}
+              disabled={!canCreate || !chatInput.trim() || chatBusy}
               data-compose-chat-send
             >
               {chatBusy ? copy.chat.running : copy.chat.send}
             </button>
           </form>
 
-          <div className={s.byokBox}>
-            <button
-              type="button"
-              className={s.smallBtn}
-              onClick={() => setByokOpen((open) => !open)}
-              aria-expanded={byokOpen}
-              data-compose-byok-toggle
-            >
-              {byokActiveKey ? copy.chat.byokConnected : copy.chat.byokToggle}
-            </button>
-
-            {byokOpen ? (
-              <div className={s.captionItem} data-compose-byok-panel>
-                <p className={s.sectionLabel}>{copy.chat.byokTitle}</p>
-                <p className={s.byokNotice}>{copy.chat.byokNotice}</p>
-                <select
-                  className={s.selectInput}
-                  value={byokProvider}
-                  onChange={(e) => setByokProvider(e.target.value as ByokProvider)}
-                >
-                  <option value="openai">{copy.chat.byokProviderOpenai}</option>
-                  <option value="anthropic">{copy.chat.byokProviderAnthropic}</option>
-                </select>
-                <input
-                  type="password"
-                  autoComplete="off"
-                  className={s.textInput}
-                  value={byokDraftKey}
-                  onChange={(e) => setByokDraftKey(e.target.value)}
-                  placeholder={copy.chat.byokPlaceholder}
-                />
-                <div className={s.headerActions}>
-                  <button
-                    type="button"
-                    className={s.smallBtn}
-                    disabled={!byokDraftKey.trim()}
-                    onClick={() => {
-                      setByokActiveKey(byokDraftKey.trim());
-                      setByokDraftKey('');
-                    }}
-                  >
-                    {copy.chat.byokSave}
-                  </button>
-                  {byokActiveKey ? (
-                    <button
-                      type="button"
-                      className={s.smallBtn}
-                      onClick={() => {
-                        setByokActiveKey('');
-                        setByokDraftKey('');
-                      }}
-                    >
-                      {copy.chat.byokClear}
-                    </button>
-                  ) : null}
-                </div>
-              </div>
-            ) : null}
-          </div>
+          <p className={s.chatRateHint} data-compose-chat-policy>
+            {copy.credits.chatFreeNotice}
+          </p>
         </aside>
       </div>
     </div>

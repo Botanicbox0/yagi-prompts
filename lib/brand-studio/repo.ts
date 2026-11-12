@@ -140,7 +140,12 @@ export function jobView(row: JobRow, outputs: OutputRow[], media: StudioMediaSto
 
 export async function jobsOf(sql: SqlRunner, organizationId: string, limit = 60): Promise<JobRow[]> {
   return (
-    await sql.query<JobRow>('select * from brand_studio_jobs where organization_id = $1 order by created_at desc, id limit $2', [organizationId, limit])
+    await sql.query<JobRow>(
+      `select * from brand_studio_jobs
+        where organization_id = $1 and model <> 'compose-1080p'
+        order by created_at desc, id limit $2`,
+      [organizationId, limit],
+    )
   ).rows;
 }
 
@@ -158,7 +163,7 @@ export async function jobsOfStudioState(sql: SqlRunner, organizationId: string, 
     ),
     sql.query<JobRow>(
       `select * from brand_studio_jobs
-        where organization_id = $1 and kind in ('video', 'video_remix', 'video_final')
+        where organization_id = $1 and kind in ('video', 'video_remix', 'video_final') and model <> 'compose-1080p'
         order by created_at desc, id limit $2`,
       [organizationId, perMediumLimit],
     ),

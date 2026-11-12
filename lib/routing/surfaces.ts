@@ -226,8 +226,8 @@ export function brandRouteAllowed(pathname: string, method: string): boolean {
   if (pathname === '/api/brand-studio/library') return read || method === 'POST';
   // The workspace rail's credits and background-job summary (docs/BRAND-STUDIO-V3.md §3). Read only.
   if (pathname === '/api/brand-studio/summary') return read;
-  // Same-origin authenticated clip/audio stream for the video composer (docs/BRAND-VIDEO-COMPOSE-D.md §3).
-  if (pathname === '/api/brand-studio/compose') return read;
+  // Same-origin authenticated clip/audio stream + TWINGS credit & chat operations for the video composer (docs/BRAND-VIDEO-COMPOSE-D.md §3).
+  if (pathname === '/api/brand-studio/compose') return read || method === 'POST';
   if (/^\/api\/brand-studio\/assets\/[a-f0-9-]{36}$/.test(pathname)) return method === 'POST';
   if (/^\/api\/brand-studio\/media\/st\/[a-f0-9]{64}\.(?:png|jpg|webp|mp4|mov|mp3|wav)$/.test(pathname)) return read;
   // Project room conversations (docs/BRAND-ROOMS.md §4): the stream, a thread, the lines about one thing

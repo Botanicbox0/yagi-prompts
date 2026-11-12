@@ -1,12 +1,12 @@
 /**
- * Chat-based timeline editing engine (`docs/BRAND-VIDEO-COMPOSE-D.md` §2-2).
+ * Chat-based timeline editing engine (`docs/BRAND-VIDEO-COMPOSE-D.md` §2-2, Founder Decision 3).
  *
  * 1. Deterministic Korean + English parser (`parseComposeChatCommand`) runs with zero latency and zero
- *    API cost for everyday editing instructions (trim, reorder/swap, delete, captions, music/clip volume,
+ *    credit cost for everyday editing instructions (trim, reorder/swap, delete, captions, music/clip volume,
  *    aspect ratio, undo, and multi-clause instructions).
- * 2. Optional user-supplied BYOK API key adapter (`requestByokTimelinePatches`) runs strictly in browser
- *    memory against OpenAI or Anthropic official APIs and validates structured `TimelinePatch[]` output
- *    with Zod — never touching consumer OAuth tokens or TWINGS backend storage.
+ * 2. When a natural-language edit goes beyond deterministic patterns, `/api/brand-studio/compose` (`chat.edit`)
+ *    translates it into Zod-validated `TimelinePatch[]` server-side under a per-minute rate limit — with zero
+ *    credit charge for timeline/caption chat and zero external API keys exposed in the UI.
  */
 import { z } from 'zod';
 import {
@@ -27,7 +27,7 @@ const KOR_ORDINAL_WORDS: ReadonlyArray<[RegExp, number]> = [
   [/(?:첫\s*번째|첫째|맨\s*앞|처음\s*(?:컷|클립|장면))/i, 0],
   [/(?:두\s*번째|둘째)/i, 1],
   [/(?:세\s*번째|셋째)/i, 2],
-  [/(?:네\s*번째|넷째)/i, 3],
+  [/(?:네\s*번째|셋째\s*다음|넷째)/i, 3],
   [/(?:다섯\s*번째|다섯째)/i, 4],
   [/(?:여섯\s*번째|여섯째)/i, 5],
 ];
@@ -110,6 +110,10 @@ function describePatch(patch: TimelinePatch, locale: 'ko' | 'en'): string {
     case 'remove_bgm':
       return ko ? '배경음악 제거' : 'removed music';
   }
+}
+
+export function describeTimelinePatches(patches: readonly TimelinePatch[], locale: 'ko' | 'en' = 'ko'): string {
+  return patches.map((patch) => describePatch(patch, locale)).join(', ');
 }
 
 function parseSingleClause(clause: string, project: ComposerProject): TimelinePatch | null {
@@ -335,15 +339,11 @@ export function parseComposeChatCommand(
     return { kind: 'unrecognized' };
   }
 
-  const detail = patches.map((patch) => describePatch(patch, locale)).join(', ');
+  const detail = describeTimelinePatches(patches, locale);
   return { kind: 'patches', patches, detail };
 }
 
-/* ---------------------------------------------------------- Optional Browser-Only BYOK Adapter */
-
-export type ByokProvider = 'openai' | 'anthropic';
-
-const TimelinePatchSchema: z.ZodType<TimelinePatch> = z.discriminatedUnion('op', [
+export const TimelinePatchSchema: z.ZodType<TimelinePatch> = z.discriminatedUnion('op', [
   z.object({ op: z.literal('set_aspect'), aspect: z.enum(COMPOSE_ASPECTS) }),
   z.object({
     op: z.literal('trim_clip'),
@@ -388,110 +388,6 @@ const TimelinePatchSchema: z.ZodType<TimelinePatch> = z.discriminatedUnion('op',
   z.object({ op: z.literal('remove_bgm') }),
 ]);
 
-const ByokResponseSchema = z.object({
+export const ComposePatchesEnvelopeSchema = z.object({
   patches: z.array(TimelinePatchSchema).min(1).max(12),
 });
-
-export async function requestByokTimelinePatches(options: {
-  provider: ByokProvider;
-  apiKey: string;
-  message: string;
-  project: ComposerProject;
-  locale: 'ko' | 'en';
-  fetchImpl?: typeof fetch;
-}): Promise<{ ok: true; patches: TimelinePatch[]; detail: string } | { ok: false }> {
-  const key = options.apiKey.trim();
-  if (!key) return { ok: false };
-  const fetcher = options.fetchImpl ?? fetch;
-  const stateSummary = {
-    aspect: options.project.aspect,
-    clips: options.project.clips.map((c, idx) => ({
-      clipIndex: idx,
-      label: c.label,
-      durationSec: c.durationSec,
-      trimStartSec: c.trimStartSec,
-      trimEndSec: c.trimEndSec,
-      volume: c.volume,
-      muted: c.muted,
-    })),
-    captions: options.project.captions.map((c, idx) => ({
-      captionIndex: idx,
-      text: c.text,
-      startSec: c.startSec,
-      endSec: c.endSec,
-      position: c.position,
-    })),
-    hasBgm: Boolean(options.project.bgm),
-    bgmVolume: options.project.bgm?.volume ?? null,
-  };
-
-  const systemPrompt = [
-    'Convert the user video timeline editing request into JSON matching {"patches":[...]} only.',
-    'Allowed patch ops (0-based indices):',
-    '- {"op":"set_aspect","aspect":"9:16"|"16:9"|"4:5"|"1:1"}',
-    '- {"op":"trim_clip","clipIndex":0,"trimStartSec":0,"trimEndSec":3,"targetDurationSec":3}',
-    '- {"op":"move_clip","fromIndex":2,"toIndex":0}',
-    '- {"op":"swap_clips","indexA":0,"indexB":1}',
-    '- {"op":"remove_clip","clipIndex":0}',
-    '- {"op":"set_clip_audio","clipIndex":0|"all","volume":0.8,"muted":false}',
-    '- {"op":"add_caption","text":"...","anchor":"start"|"end"|"full","durationSec":2.5,"position":"bottom"|"center"|"top","size":"sm"|"md"|"lg"}',
-    '- {"op":"remove_caption","captionIndex":0|"all"}',
-    '- {"op":"set_bgm_volume","volume":0.3}',
-    '- {"op":"remove_bgm"}',
-    `Current timeline: ${JSON.stringify(stateSummary)}`,
-  ].join('\n');
-
-  try {
-    let rawJson = '';
-    if (options.provider === 'openai') {
-      const res = await fetcher('https://api.openai.com/v1/chat/completions', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${key}`,
-        },
-        body: JSON.stringify({
-          model: 'gpt-4o-mini',
-          response_format: { type: 'json_object' },
-          temperature: 0,
-          messages: [
-            { role: 'system', content: systemPrompt },
-            { role: 'user', content: options.message.slice(0, 500) },
-          ],
-        }),
-      });
-      if (!res.ok) return { ok: false };
-      const data = (await res.json()) as { choices?: Array<{ message?: { content?: string } }> };
-      rawJson = data.choices?.[0]?.message?.content ?? '';
-    } else {
-      const res = await fetcher('https://api.anthropic.com/v1/messages', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'x-api-key': key,
-          'anthropic-version': '2023-06-01',
-          'anthropic-dangerous-direct-browser-access': 'true',
-        },
-        body: JSON.stringify({
-          model: 'claude-3-5-haiku-latest',
-          max_tokens: 600,
-          temperature: 0,
-          system: systemPrompt,
-          messages: [{ role: 'user', content: options.message.slice(0, 500) }],
-        }),
-      });
-      if (!res.ok) return { ok: false };
-      const data = (await res.json()) as { content?: Array<{ type?: string; text?: string }> };
-      const textBlock = data.content?.find((b) => b.type === 'text')?.text ?? '';
-      const jsonMatch = /\{[\s\S]*\}/.exec(textBlock);
-      rawJson = jsonMatch ? jsonMatch[0] : textBlock;
-    }
-
-    const parsed = ByokResponseSchema.safeParse(JSON.parse(rawJson));
-    if (!parsed.success) return { ok: false };
-    const detail = parsed.data.patches.map((p) => describePatch(p, options.locale)).join(', ');
-    return { ok: true, patches: parsed.data.patches, detail };
-  } catch {
-    return { ok: false };
-  }
-}

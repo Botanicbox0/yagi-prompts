@@ -1,3 +1,5 @@
+import { readFileSync } from 'node:fs';
+import { resolve } from 'node:path';
 import { describe, expect, it, vi } from 'vitest';
 import {
   appendClip,
@@ -8,10 +10,11 @@ import {
   projectDurationSec,
   serializeProjectForStorage,
 } from '@/lib/brand-studio/compose/timeline';
-import {
-  parseComposeChatCommand,
-  requestByokTimelinePatches,
-} from '@/lib/brand-studio/compose/chat-intent';
+import { composeFinalRenderCredits, composeFinalRenderKrw } from '@/lib/brand-studio/compose/credits';
+import { parseComposeChatCommand } from '@/lib/brand-studio/compose/chat-intent';
+import { resetComposeChatRateLimitsForTest, runComposeOperation } from '@/lib/brand-studio/compose/service';
+import { studioFixture, viewerOf } from '../server/helpers';
+import { studioRuntimeDeps } from '@/lib/brand-studio/runtime';
 
 describe('composer timeline model', () => {
   it('computes spans, active frames, captions, BGM looping, and drops local blob URLs on persist', () => {
@@ -78,7 +81,7 @@ describe('composer timeline model', () => {
   });
 });
 
-describe('chat timeline command parser & optional BYOK adapter', () => {
+describe('chat timeline command parser & TWINGS credit policy (Decision 3)', () => {
   function sampleProject() {
     let p = emptyComposerProject('9:16');
     p = appendClip(p, {
@@ -161,39 +164,76 @@ describe('chat timeline command parser & optional BYOK adapter', () => {
     expect(parseComposeChatCommand('undo', project, 'en')).toEqual({ kind: 'undo' });
   });
 
-  it('validates structured BYOK responses and rejects malformed payloads without hitting TWINGS servers', async () => {
-    const project = sampleProject();
-    const calls: string[] = [];
-    const fakeFetch = vi.fn(async (url: RequestInfo | URL) => {
-      calls.push(String(url));
-      return new Response(
-        JSON.stringify({
-          choices: [
-            {
-              message: {
-                content: JSON.stringify({
-                  patches: [{ op: 'trim_clip', clipIndex: 0, targetDurationSec: 2.5 }],
-                }),
-              },
-            },
-          ],
-        }),
-        { status: 200, headers: { 'Content-Type': 'application/json' } },
-      );
-    }) as unknown as typeof fetch;
+  it('computes deterministic TWINGS credits for 1080p final render and exposes zero BYOK or vendor names in UI/copy', () => {
+    expect(composeFinalRenderKrw(5)).toBe(200);
+    expect(composeFinalRenderCredits(5)).toBe(20);
+    expect(composeFinalRenderKrw(30)).toBe(700);
+    expect(composeFinalRenderCredits(30)).toBe(70);
 
-    const ok = await requestByokTimelinePatches({
-      provider: 'openai',
-      apiKey: 'sk-test-memory-only',
-      message: 'make the opening punchier around two and a half seconds',
-      project,
-      locale: 'en',
-      fetchImpl: fakeFetch,
-    });
-    expect(ok.ok).toBe(true);
-    if (ok.ok) {
-      expect(ok.patches).toEqual([{ op: 'trim_clip', clipIndex: 0, targetDurationSec: 2.5 }]);
+    const copySource = readFileSync(resolve(process.cwd(), 'messages/studio-compose.ts'), 'utf8');
+    const uiSource = readFileSync(resolve(process.cwd(), 'components/brand-studio/compose/video-composer.tsx'), 'utf8');
+    for (const forbidden of ['OpenAI', 'Anthropic', 'ChatGPT', 'Claude', 'byok', 'BYOK']) {
+      expect(copySource).not.toContain(forbidden);
     }
-    expect(calls).toEqual(['https://api.openai.com/v1/chat/completions']);
+    for (const forbidden of ['OpenAI', 'Anthropic', 'ChatGPT', 'Claude', 'byokOpen', 'requestByokTimelinePatches']) {
+      expect(uiSource).not.toContain(forbidden);
+    }
+  });
+
+  it('translates free-form server chat instructions via structured schema at 0 credit cost', async () => {
+    resetComposeChatRateLimitsForTest();
+    const f = await studioFixture({ capKrw: 5_000 });
+    try {
+      const deps = await studioRuntimeDeps(f.sql);
+      const project = sampleProject();
+      const fakeFetch = vi.fn(async () => {
+        return new Response(
+          JSON.stringify({
+            candidates: [
+              {
+                finishReason: 'STOP',
+                content: {
+                  parts: [
+                    {
+                      text: JSON.stringify({
+                        patches: [{ op: 'trim_clip', clipIndex: 0, targetDurationSec: 2.5 }],
+                      }),
+                    },
+                  ],
+                },
+              },
+            ],
+          }),
+          { status: 200, headers: { 'Content-Type': 'application/json' } },
+        );
+      }) as unknown as typeof fetch;
+
+      const res = await runComposeOperation(
+        deps,
+        viewerOf(f.ids.owner),
+        'chat.edit',
+        {
+          organizationId: f.orgId,
+          message: 'make the opening punchier around two and a half seconds please',
+          locale: 'en',
+          project,
+        },
+        {
+          env: { GEMINI_API_KEY: 'test-gemini-key' },
+          fetchImpl: fakeFetch,
+        },
+      );
+
+      expect(res).toMatchObject({
+        ok: true,
+        kind: 'patches',
+        creditsUsed: 0,
+        patches: [{ op: 'trim_clip', clipIndex: 0, targetDurationSec: 2.5 }],
+      });
+      expect(fakeFetch).toHaveBeenCalledTimes(1);
+    } finally {
+      await f.db.close();
+      resetComposeChatRateLimitsForTest();
+    }
   });
 });

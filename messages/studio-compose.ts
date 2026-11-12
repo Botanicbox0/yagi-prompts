@@ -1,9 +1,9 @@
 /**
- * Brand studio v3 — simple video composer copy (`docs/BRAND-VIDEO-COMPOSE-D.md`).
+ * Brand studio v3 — simple video composer copy (`docs/BRAND-VIDEO-COMPOSE-D.md`, Founder Decision 3).
  *
  * Natural founder Korean: one thought per sentence, verbs on action buttons, no internal engine or
- * backend jargon, no won/dollar amounts. Every leaf in `studioComposeKo` differs from `studioComposeEn`
- * so `tests/i18n/dictionary.test.ts` passes without exceptions.
+ * backend jargon, no external AI vendor names, no won/dollar amounts (TWINGS credits only). Every leaf in
+ * `studioComposeKo` differs from `studioComposeEn` so `tests/i18n/dictionary.test.ts` passes cleanly.
  */
 export const studioComposeEn = {
   title: 'Compose clips',
@@ -11,6 +11,10 @@ export const studioComposeEn = {
   backToVideo: 'Back to Video studio',
   summary: '{clips} clips · {seconds}s total',
   emptySummary: 'Add clips to begin',
+  credits: {
+    remaining: '{credits} credits left',
+    chatFreeNotice: 'Timeline & caption chat is free (per-minute limit). Credits apply only when rendering the 1080p MP4.',
+  },
   aspects: {
     label: 'Frame shape',
     r9x16: '9:16 vertical',
@@ -20,7 +24,8 @@ export const studioComposeEn = {
   },
   actions: {
     exportMp4: 'Export 1080p MP4',
-    exporting: 'Exporting {percent}%…',
+    exportMp4WithCredits: 'Render 1080p MP4 · {credits} credits',
+    exporting: 'Rendering {percent}%…',
     saveToAssets: 'Save to assets',
     savingToAssets: 'Saving…',
     savedToAssets: 'Saved to assets',
@@ -99,26 +104,21 @@ export const studioComposeEn = {
       swap: 'Swap cut 1 and cut 2',
       bgm: 'Lower music volume to 30%',
     },
-    welcome: 'Describe an edit in plain words. Every change can be undone in one click.',
+    welcome: 'Describe an edit in plain words. Timeline and caption chat uses zero credits, and every step can be undone.',
     undone: 'Reverted the last timeline change.',
     nothingToUndo: 'There is no earlier step to return to.',
     appliedSummary: 'Updated timeline ({count} changes): {detail}',
     unrecognized: "Couldn't read that as a timeline edit. Try naming the cut number, seconds, caption text in quotes, or music volume.",
-    byokToggle: 'Connect my API key (optional)',
-    byokTitle: 'Optional API key for free-form chat',
-    byokNotice: 'Personal ChatGPT or Claude subscription sign-ins cannot be used on third-party web services under provider terms. If you want free-form AI parsing, enter an API key kept only in this tab.',
-    byokProviderOpenai: 'OpenAI API key',
-    byokProviderAnthropic: 'Anthropic API key',
-    byokPlaceholder: 'Paste key (kept in browser memory only)',
-    byokSave: 'Use in this tab',
-    byokClear: 'Disconnect key',
-    byokConnected: 'Connected in this tab only',
-    byokFailed: 'API key request failed. Built-in timeline commands still work.',
+    rateLimited: 'Too many chat edit requests this minute. Wait {seconds}s and try again.',
+    readOnly: 'Only workspace owners and editors can edit or render timelines.',
   },
   status: {
-    exportedReady: 'Exported 1080p MP4 ({seconds}s · {mb} MB) in {elapsed}s.',
-    exportWebmFallback: 'Exported video ({seconds}s). Your browser recorded WebM, so download it to your device.',
-    exportFailed: 'Could not finish exporting the video. Check the clips and try again.',
+    exportedReady: 'Rendered 1080p MP4 ({seconds}s · {mb} MB) in {elapsed}s ({credits} credits used).',
+    exportWebmFallback: 'Exported video ({seconds}s). Your browser recorded WebM, so download it to your device ({credits} credits used).',
+    exportFailed: 'Could not finish rendering the video. Check the clips and try again.',
+    exportFailedRefunded: 'Could not finish rendering the video, so {credits} credits were refunded right away.',
+    exportAllowanceExhausted: 'Not enough credits left this month to render this 1080p MP4 ({credits} credits needed).',
+    exportAllowanceClosed: 'Studio credits are not enabled for this workspace yet.',
     saveQuotaExceeded: 'Downloaded to your device, but your organization storage is full so it was not added to assets.',
     saveFailed: 'Could not save to assets. You can still download the MP4 file.',
     localClipAdded: 'Added {name} to the timeline.',
@@ -132,6 +132,10 @@ export const studioComposeKo: typeof studioComposeEn = {
   backToVideo: '비디오 스튜디오로',
   summary: '{clips}개 컷 · 총 {seconds}초',
   emptySummary: '합칠 영상을 골라 주세요',
+  credits: {
+    remaining: '잔여 {credits} 크레딧',
+    chatFreeNotice: '타임라인·자막 채팅 지시는 무료예요(분당 횟수 제한). 1080p 최종 렌더링 실행 시에만 크레딧이 차감돼요.',
+  },
   aspects: {
     label: '화면 비율',
     r9x16: '9:16 세로',
@@ -141,7 +145,8 @@ export const studioComposeKo: typeof studioComposeEn = {
   },
   actions: {
     exportMp4: '1080p MP4 내보내기',
-    exporting: '{percent}% 내보내는 중…',
+    exportMp4WithCredits: '1080p MP4 렌더링 · {credits} 크레딧',
+    exporting: '{percent}% 렌더링 중…',
     saveToAssets: '에셋에 저장하기',
     savingToAssets: '저장하는 중…',
     savedToAssets: '에셋에 저장됨',
@@ -220,26 +225,21 @@ export const studioComposeKo: typeof studioComposeEn = {
       swap: '1번과 2번 순서 바꿔줘',
       bgm: '배경음악 볼륨 30%로 낮춰줘',
     },
-    welcome: '바꾸고 싶은 내용을 편하게 적어 주세요. 마음에 안 들면 한 번에 되돌릴 수 있어요.',
+    welcome: '바꾸고 싶은 내용을 편하게 적어 주세요. 타임라인·자막 채팅은 크레딧이 들지 않고 한 번에 되돌릴 수 있어요.',
     undone: '방금 바꾼 편집을 이전 상태로 되돌렸어요.',
     nothingToUndo: '더 되돌릴 이전 편집 내역이 없어요.',
     appliedSummary: '타임라인에 반영했어요 ({count}건): {detail}',
     unrecognized: '타임라인 명령으로 읽지 못했어요. 몇 번 컷인지, 몇 초인지, 따옴표 안 자막 문구, 또는 볼륨 %를 함께 적어 주세요.',
-    byokToggle: '내 API 키 연결 (선택)',
-    byokTitle: '자유 문장용 내 API 키 연결',
-    byokNotice: 'OpenAI·Anthropic 약관상 개인 ChatGPT·Claude 구독 로그인을 외부 웹 서비스에 직접 연결하는 것은 제한돼요. 더 자유로운 문장 해석이 필요할 때만 본인 API 키를 현재 탭 메모리에 연결해 쓸 수 있어요.',
-    byokProviderOpenai: 'OpenAI API 키',
-    byokProviderAnthropic: 'Anthropic API 키',
-    byokPlaceholder: '키 붙여넣기 (현재 브라우저 탭 메모리에만 유지)',
-    byokSave: '이 탭에만 연결하기',
-    byokClear: '연결 해제하기',
-    byokConnected: '현재 탭에만 연결됨',
-    byokFailed: 'API 키 호출에 실패했어요. 기본 채팅 편집 명령은 그대로 쓸 수 있어요.',
+    rateLimited: '이번 분에 채팅 편집 요청이 많았어요. {seconds}초 뒤에 다시 시도해 주세요.',
+    readOnly: '오너와 에디터 권한 멤버만 타임라인 편집과 렌더링을 실행할 수 있어요.',
   },
   status: {
-    exportedReady: '1080p MP4 내보내기가 끝났어요 ({seconds}초 · {mb}MB, {elapsed}초 소요).',
-    exportWebmFallback: '영상 내보내기가 끝났어요 ({seconds}초). 현재 브라우저는 WebM 형식으로 저장되어 기기로 바로 내려받아요.',
-    exportFailed: '영상을 내보내지 못했어요. 클립 상태를 확인한 뒤 다시 시도해 주세요.',
+    exportedReady: '1080p MP4 렌더링이 끝났어요 ({seconds}초 · {mb}MB, {elapsed}초 소요 · {credits} 크레딧 사용).',
+    exportWebmFallback: '영상 내보내기가 끝났어요 ({seconds}초, {credits} 크레딧 사용). 현재 브라우저는 WebM 형식으로 기기에 바로 내려받아요.',
+    exportFailed: '영상을 렌더링하지 못했어요. 클립 상태를 확인한 뒤 다시 시도해 주세요.',
+    exportFailedRefunded: '영상을 렌더링하지 못해 차감된 {credits} 크레딧을 바로 돌려드렸어요.',
+    exportAllowanceExhausted: '이번 달 남은 크레딧이 부족해 1080p MP4를 렌더링할 수 없어요 (필요 {credits} 크레딧).',
+    exportAllowanceClosed: '현재 조직에 스튜디오 크레딧 한도가 열려 있지 않아요.',
     saveQuotaExceeded: '파일은 내 기기로 내려받았지만, 조직 저장 공간이 가득 차 에셋에는 올리지 못했어요.',
     saveFailed: '에셋에 저장하지 못했어요. 내보낸 MP4 파일은 바로 내려받을 수 있어요.',
     localClipAdded: '{name} 파일을 타임라인에 담았어요.',

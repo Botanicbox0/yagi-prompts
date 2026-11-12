@@ -3,25 +3,29 @@ import { getViewer } from '@/lib/auth/viewer';
 import { getSqlRunner } from '@/lib/db/connect';
 import { brandStudioV2Open } from '@/lib/flags';
 import { StudioDenied, studioSeat } from '@/lib/brand-studio/access';
+import { runComposeOperation } from '@/lib/brand-studio/compose/service';
 import { STUDIO_HEADERS, studioJson, studioStatus } from '@/lib/brand-studio/http';
 import { isStudioMediaKey, mimeForStudioKey } from '@/lib/brand-studio/media-store';
 import { readyAsset, readyOutput } from '@/lib/brand-studio/repo';
 import { studioLog, studioRuntimeDeps } from '@/lib/brand-studio/runtime';
+import { resolveRequestUrl, sameOriginMutation } from '@/lib/routing/surfaces';
 
 /**
- * Same-origin media stream for Brand Studio Video Composer (`docs/BRAND-VIDEO-COMPOSE-D.md` §3).
+ * Brand Studio Video Composer gateway (`docs/BRAND-VIDEO-COMPOSE-D.md` §3, Founder Decision 3).
  *
- * Production R2 (`media.twings.app`) intentionally omits CORS headers and `/api/brand-studio/media/[...key]`
- * serves pictures only in production. This route streams video and audio bytes ONLY after verifying:
- * 1. `BRAND_STUDIO_V2` flag is on (`404` otherwise)
- * 2. Viewer is signed in (`401` otherwise)
- * 3. Active organization membership + Morphic/sandbox hardline + `generative_media` policy (`404` otherwise)
- * 4. Campaign-only guests are excluded (`404`)
- * 5. The requested `asset` or `output` belongs to `organizationId` and is a live video/audio file.
+ * - `GET` / `HEAD`: Same-origin media byte stream (`Range` supported) for organization-owned video/audio
+ *   assets & outputs so browser `<video>`/`<audio>`/Canvas can composite without R2 CORS or tainted canvas.
+ * - `POST`: TWINGS compose operations (`chat.edit` free + per-minute rate limit, `render.reserve` credit
+ *   deduction on 1080p MP4 render, `render.refund` 100% auto-refund on client export failure).
+ *
+ * Every path enforces: `BRAND_STUDIO_V2` (`404`), sign-in (`401`), membership + Morphic/sandbox hardline +
+ * `generative_media` policy (`404`), and campaign-only guest exclusion (`404`). `POST` additionally enforces
+ * `sameOriginMutation` (`403`) and `self_studio` (`404`).
  */
 export const dynamic = 'force-dynamic';
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+const BODY_MAX = 65_536;
 
 async function serve(request: NextRequest, head: boolean): Promise<NextResponse> {
   if (!brandStudioV2Open()) return studioJson({ ok: false, code: 'studio_closed' }, 404);
@@ -36,7 +40,7 @@ async function serve(request: NextRequest, head: boolean): Promise<NextResponse>
   try {
     const deps = await studioRuntimeDeps(sql);
     const storageKey = await deps.sql.transaction(async (tx) => {
-      const seat = await studioSeat(tx, viewer.userId, organizationId);
+      const seat = await studioSeat(tx, viewer.userId, organizationId, { requireSelfStudio: true });
       if (seat.role === 'guest') throw new StudioDenied('not_found');
 
       const source = request.nextUrl.searchParams.get('source');
@@ -104,3 +108,55 @@ async function serve(request: NextRequest, head: boolean): Promise<NextResponse>
 
 export const GET = (request: NextRequest) => serve(request, false);
 export const HEAD = (request: NextRequest) => serve(request, true);
+
+export async function POST(request: NextRequest): Promise<NextResponse> {
+  const origin = resolveRequestUrl(new URL(request.url), request.headers);
+  if (!origin || !sameOriginMutation(origin, request.headers)) {
+    return studioJson({ ok: false, code: 'forbidden' }, 403);
+  }
+  if (!brandStudioV2Open()) return studioJson({ ok: false, code: 'studio_closed' }, 404);
+  const viewer = await getViewer();
+  if (!viewer.userId) return studioJson({ ok: false, code: 'sign_in_required' }, 401);
+  if (Number(request.headers.get('content-length') ?? 0) > BODY_MAX) {
+    return studioJson({ ok: false, code: 'invalid' }, 413);
+  }
+
+  let body: { operation?: unknown; input?: unknown };
+  try {
+    const raw = await request.text();
+    if (Buffer.byteLength(raw) > BODY_MAX) return studioJson({ ok: false, code: 'invalid' }, 413);
+    body = JSON.parse(raw);
+    if (!body || typeof body !== 'object' || !body.input || typeof body.input !== 'object') {
+      throw new Error('shape');
+    }
+  } catch {
+    return studioJson({ ok: false, code: 'invalid' }, 400);
+  }
+
+  const sql = await getSqlRunner();
+  if (!sql) return studioJson({ ok: false, code: 'provider_unavailable' }, 503);
+
+  try {
+    const deps = await studioRuntimeDeps(sql);
+    const result = await runComposeOperation(deps, viewer, body.operation, body.input);
+    if (!result.ok) {
+      if (result.code === 'rate_limited') {
+        return NextResponse.json(result, {
+          status: 429,
+          headers: {
+            ...STUDIO_HEADERS,
+            'Retry-After': String(result.retryAfterSec),
+          },
+        });
+      }
+      return studioJson(result, studioStatus(result.code));
+    }
+    return studioJson(result, 200);
+  } catch (error) {
+    studioLog('studio_compose_post_failed', {
+      operation: String(body.operation).slice(0, 40),
+      message: error instanceof Error ? error.message.slice(0, 200) : 'unknown',
+    });
+    return studioJson({ ok: false, code: 'failed' }, 500);
+  }
+}
