@@ -45,20 +45,31 @@ export function clampTrimRange(
   total: number,
   minSeconds = 4,
   maxSeconds = 30,
+  movedHandle: "start" | "end" = "end",
 ): { start: number; end: number; duration: number } {
-  const safeTotal = Math.max(0.1, Number.isFinite(total) && total > 0 ? total : minSeconds);
-  if (safeTotal <= minSeconds) {
-    return { start: 0, end: round1(safeTotal), duration: round1(safeTotal) };
+  const minS = round1(Math.max(0.1, minSeconds));
+  const maxS = round1(Math.max(minS, maxSeconds));
+  const tot = round1(Math.max(0.1, Number.isFinite(total) && total > 0 ? total : minS));
+  if (tot <= minS) {
+    return { start: 0, end: tot, duration: tot };
   }
-  let s = Math.max(0, Math.min(safeTotal - minSeconds, Number.isFinite(start) ? start : 0));
-  let e = Math.max(s + minSeconds, Math.min(safeTotal, Number.isFinite(end) ? end : Math.min(safeTotal, maxSeconds)));
-  if (e - s > maxSeconds) {
-    e = Math.min(safeTotal, s + maxSeconds);
-    if (e - s < minSeconds) s = Math.max(0, e - minSeconds);
+  if (movedHandle === "start") {
+    const fallbackEnd = round1(Math.min(tot, maxS));
+    const rawEnd = Number.isFinite(end) ? round1(end) : fallbackEnd;
+    const e = round1(Math.max(minS, Math.min(tot, rawEnd)));
+    const minStart = round1(Math.max(0, e - maxS));
+    const maxStart = round1(Math.max(0, e - minS));
+    const rawStart = Number.isFinite(start) ? round1(start) : 0;
+    const s = round1(Math.max(minStart, Math.min(maxStart, rawStart)));
+    return { start: s, end: e, duration: round1(Math.max(minS, e - s)) };
   }
-  s = round1(s);
-  e = round1(e);
-  return { start: s, end: e, duration: round1(Math.max(0.1, e - s)) };
+  const rawStart = Number.isFinite(start) ? round1(start) : 0;
+  const s = round1(Math.max(0, Math.min(round1(tot - minS), rawStart)));
+  const minEnd = round1(s + minS);
+  const maxEnd = round1(Math.min(tot, s + maxS));
+  const rawEnd = Number.isFinite(end) ? round1(end) : maxEnd;
+  const e = round1(Math.max(minEnd, Math.min(maxEnd, rawEnd)));
+  return { start: s, end: e, duration: round1(Math.max(minS, e - s)) };
 }
 
 export function isFullFrameAndRange(
@@ -119,12 +130,26 @@ export function insertAssetMention(
 
 export type VideoEditProblem =
   | { kind: "need_video" }
+  | { kind: "unmeasured"; min: number; max: number }
   | { kind: "too_short"; min: number }
   | { kind: "too_long"; max: number }
   | { kind: "bad_dimensions"; reason: "small" | "large" }
   | { kind: "empty_prompt" }
   | { kind: "too_many_images"; max: number }
   | { kind: "missing_mentions"; mentions: Array<{ kind: MentionKind | "any"; number: number }> };
+
+export function validateVideoEditDurationSeconds(
+  seconds: number | null | undefined,
+  minSeconds = 4,
+  maxSeconds = 30,
+): Extract<VideoEditProblem, { kind: "unmeasured" | "too_short" | "too_long" }> | null {
+  if (seconds === null || seconds === undefined || !Number.isFinite(seconds) || seconds <= 0) {
+    return { kind: "unmeasured", min: minSeconds, max: maxSeconds };
+  }
+  if (seconds < minSeconds) return { kind: "too_short", min: minSeconds };
+  if (seconds > maxSeconds) return { kind: "too_long", max: maxSeconds };
+  return null;
+}
 
 export interface VideoEditDraft {
   model: string;
@@ -159,8 +184,8 @@ export function checkVideoEditClip(
   if (!video) return { kind: "need_video" };
   const model = resolveVideoModel(modelId);
   const limits = model.referenceVideoSeconds;
-  if (video.seconds !== null && video.seconds > limits.max) return { kind: "too_long", max: limits.max };
-  if (video.seconds !== null && video.seconds < limits.editMin) return { kind: "too_short", min: limits.editMin };
+  const durationProblem = validateVideoEditDurationSeconds(video.seconds, limits.editMin, limits.max);
+  if (durationProblem) return durationProblem;
   const fit = referenceVideoFit(model, video);
   if (fit.problem === "small" || fit.problem === "large") return { kind: "bad_dimensions", reason: fit.problem };
   if (!fit.editable) return { kind: "too_short", min: limits.editMin };

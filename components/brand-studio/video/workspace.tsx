@@ -23,7 +23,7 @@ import { selectableModels, type StudioVideoModel, type StudioVideoResolution } f
 import { remakeSeconds } from "@/lib/brand-studio/reference-video";
 import type { Dictionary } from "@/lib/i18n/dictionaries";
 import type { StudioVideoCopy } from "@/messages/studio-video";
-import { createStudioApi, isFailure, uploadKind, uploadProblem, type StudioApi } from "../api";
+import { createStudioApi, isFailure, measureInBrowser, uploadKind, uploadProblem, type StudioApi } from "../api";
 import { EXAMPLES, jobsFor } from "../board";
 import { credits as formatCreditLine, errorLine, fill, newRequestId, type StudioCopy, type StudioLocale } from "../copy";
 import { AllowanceLine, Tip } from "../dock";
@@ -80,6 +80,7 @@ import {
   defaultVideoEditDraft,
   detectAtMentionQuery,
   insertAssetMention,
+  validateVideoEditDurationSeconds,
   videoEditCredits,
   type VideoEditDraft,
   type VideoEditProblem,
@@ -250,6 +251,50 @@ export function VideoStudioWorkspace({
     [bpModel, readBlueprintClip],
   );
 
+  const editProblemLine = useCallback(
+    (problem: VideoEditProblem): string => {
+      switch (problem.kind) {
+        case "need_video":
+          return videoCopy.reverse.run.needVideo;
+        case "unmeasured":
+          return fillText(wc.editSource.unmeasured, { min: problem.min, max: problem.max });
+        case "too_short":
+          return fillText(wc.editSource.tooShort, { min: problem.min });
+        case "too_long":
+          return fillText(wc.editSource.tooLong, { max: problem.max });
+        case "bad_dimensions":
+          return problem.reason === "small" ? copy.remix.limitSmall : copy.remix.limitLarge;
+        case "empty_prompt":
+          return copy.dock.needChange;
+        case "too_many_images":
+          return fill(copy.tray.tooManyImages, { n: problem.max });
+        case "missing_mentions":
+          return fill(copy.tray.missing, {
+            label: problem.mentions.map((m) => mentionLabel(m.kind, m.number, copy)).join(", "),
+          });
+      }
+    },
+    [copy, videoCopy.reverse.run.needVideo, wc.editSource.tooLong, wc.editSource.tooShort, wc.editSource.unmeasured],
+  );
+
+  const selectEditVideoClip = useCallback(
+    (asset: StudioAssetView, openTrim = true): boolean => {
+      const clipProblem = checkVideoEditClip(asset, editDraft.model);
+      if (clipProblem) {
+        const line = editProblemLine(clipProblem);
+        setEditMessage(line);
+        setStatus(line);
+        return false;
+      }
+      setEditMessage(null);
+      setEditClip(asset);
+      setEditClipTrimmed(false);
+      if (openTrim) setTrimModalClip(asset);
+      return true;
+    },
+    [editDraft.model, editProblemLine],
+  );
+
   // Initial asset preselection (`?start=reverse&asset=<uuid>` or `?tab=edit&asset=<uuid>`)
   const initAssetDone = useRef(false);
   useEffect(() => {
@@ -258,12 +303,11 @@ export function VideoStudioWorkspace({
     const found = state.assets.find((a) => a.id === initialAssetId && a.kind === "video");
     if (!found) return;
     if (initialTab === "edit") {
-      setEditClip(found);
-      setTrimModalClip(found);
+      selectEditVideoClip(found, true);
     } else if (initialCreateMode === "blueprint") {
       chooseBlueprintClip(found);
     }
-  }, [chooseBlueprintClip, initialAssetId, initialCreateMode, initialTab, state]);
+  }, [chooseBlueprintClip, initialAssetId, initialCreateMode, initialTab, selectEditVideoClip, state]);
 
   // URL `?from=` (opening frame from Image Studio) & `?ref=` (from Brand Asset Hub)
   const urlAttachDone = useRef(false);
@@ -292,8 +336,7 @@ export function VideoStudioWorkspace({
           const vid = lookup.asset(refSrc.assetId);
           if (vid) {
             setTab("edit");
-            setEditClip(vid);
-            setTrimModalClip(vid);
+            selectEditVideoClip(vid, true);
           }
         } else if (tile.kind === "image") {
           setTab("create");
@@ -305,7 +348,7 @@ export function VideoStudioWorkspace({
       url.searchParams.delete("ref");
       window.history.replaceState(window.history.state, "", `${url.pathname}${url.search}${url.hash}`);
     }
-  }, [dock, lookup, sourceItem, state]);
+  }, [dock, lookup, selectEditVideoClip, sourceItem, state]);
 
   const viewer = useViewer({
     studio,
@@ -334,9 +377,7 @@ export function VideoStudioWorkspace({
         if (item.kind === "video" && "assetId" in source) {
           const vid = lookup.asset(source.assetId);
           if (vid) {
-            setEditClip(vid);
-            setEditClipTrimmed(false);
-            setTrimModalClip(vid);
+            selectEditVideoClip(vid, true);
           }
         } else if (item.kind === "image") {
           setEditRefs((cur) => addToTray(cur, item).items);
@@ -371,7 +412,7 @@ export function VideoStudioWorkspace({
       if (item.kind === "image") setFrameMode("refs");
       dock.attach(item);
     },
-    [bpModel.maxReferenceImages, chooseBlueprintClip, createMode, dock, frameMode, lookup, sourceItem, tab],
+      [bpModel.maxReferenceImages, chooseBlueprintClip, createMode, dock, frameMode, lookup, selectEditVideoClip, sourceItem, tab],
   );
 
   // Upload helper routing to the requested slot
@@ -393,9 +434,7 @@ export function VideoStudioWorkspace({
           break;
         case "editVideo":
           if (asset.kind === "video") {
-            setEditClip(asset);
-            setEditClipTrimmed(false);
-            setTrimModalClip(asset);
+            selectEditVideoClip(asset, true);
           }
           break;
         case "editRefs":
@@ -418,7 +457,7 @@ export function VideoStudioWorkspace({
           break;
       }
     },
-    [bpModel.maxReferenceImages, chooseBlueprintClip, dock],
+    [bpModel.maxReferenceImages, chooseBlueprintClip, dock, selectEditVideoClip],
   );
 
   const triggerFileUpload = (target: AssetPickerTarget, accept: string) => {
@@ -433,18 +472,36 @@ export function VideoStudioWorkspace({
     async (file: File, target: AssetPickerTarget | null) => {
       const problem = uploadProblem(file);
       if (problem) {
-        setStatus(errorLine(copy, problem));
+        const line = errorLine(copy, problem);
+        if (target?.kind === "editVideo") setEditMessage(line);
+        setStatus(line);
         return null;
+      }
+      if (target?.kind === "editVideo" && file.type.startsWith("video/")) {
+        const measured = await measureInBrowser(file, "video").catch(() => ({ seconds: undefined }));
+        const durProblem = validateVideoEditDurationSeconds(
+          measured.seconds,
+          bpModel.referenceVideoSeconds.editMin,
+          bpModel.referenceVideoSeconds.max,
+        );
+        if (durProblem) {
+          const line = editProblemLine(durProblem);
+          setEditMessage(line);
+          setStatus(line);
+          return null;
+        }
       }
       const res = await studio.upload(file);
       if (isFailure(res)) {
-        setStatus(errorLine(copy, res.code));
+        const line = errorLine(copy, res.code);
+        if (target?.kind === "editVideo") setEditMessage(line);
+        setStatus(line);
         return null;
       }
       if (target) handleUploadedAsset(res.asset, target);
       return res.asset;
     },
-    [copy, handleUploadedAsset, studio],
+    [bpModel.referenceVideoSeconds.editMin, bpModel.referenceVideoSeconds.max, copy, editProblemLine, handleUploadedAsset, studio],
   );
 
   const uploadTrimmedClip = useCallback(
@@ -454,6 +511,16 @@ export function VideoStudioWorkspace({
         setEditMessage(errorLine(copy, problem));
         return null;
       }
+      const measured = await measureInBrowser(file, "video").catch(() => ({ seconds: undefined }));
+      const durProblem = validateVideoEditDurationSeconds(
+        measured.seconds,
+        bpModel.referenceVideoSeconds.editMin,
+        bpModel.referenceVideoSeconds.max,
+      );
+      if (durProblem) {
+        setEditMessage(editProblemLine(durProblem));
+        return null;
+      }
       const res = await studio.upload(file);
       if (isFailure(res)) {
         setEditMessage(errorLine(copy, res.code));
@@ -461,7 +528,7 @@ export function VideoStudioWorkspace({
       }
       return res.asset;
     },
-    [copy, studio],
+    [bpModel.referenceVideoSeconds.editMin, bpModel.referenceVideoSeconds.max, copy, editProblemLine, studio],
   );
 
   const uploadRailFiles = useCallback(
@@ -511,7 +578,10 @@ export function VideoStudioWorkspace({
 
       // Edit mode mention (`@영상 1` for editClip, `@이미지 N` for editRefs)
       if (asset.kind === "video") {
-        setEditClip(asset);
+        if (!selectEditVideoClip(asset, false)) {
+          setMentionOpen(null);
+          return;
+        }
         const tag = fillText(wc.mention.videoTag, { n: 1 });
         const el = editPromptRef.current;
         const cursor = el?.selectionStart ?? editDraft.prompt.length;
@@ -545,34 +615,11 @@ export function VideoStudioWorkspace({
         }
       });
     },
-    [dock, editDraft.prompt, editRefs, frameMode, wc.mention.imageTag, wc.mention.videoTag],
+    [dock, editDraft.prompt, editRefs, frameMode, selectEditVideoClip, wc.mention.imageTag, wc.mention.videoTag],
   );
 
   // Edit mode prompt enhancer & submit
   const editPreEnhanced = isPreEnhanced(editEnhanced, editDraft.prompt);
-  const editProblemLine = useCallback(
-    (problem: VideoEditProblem): string => {
-      switch (problem.kind) {
-        case "need_video":
-          return videoCopy.reverse.run.needVideo;
-        case "too_short":
-          return fillText(wc.editSource.tooShort, { min: problem.min });
-        case "too_long":
-          return fillText(wc.editSource.tooLong, { max: problem.max });
-        case "bad_dimensions":
-          return problem.reason === "small" ? copy.remix.limitSmall : copy.remix.limitLarge;
-        case "empty_prompt":
-          return copy.dock.needChange;
-        case "too_many_images":
-          return fill(copy.tray.tooManyImages, { n: problem.max });
-        case "missing_mentions":
-          return fill(copy.tray.missing, {
-            label: problem.mentions.map((m) => mentionLabel(m.kind, m.number, copy)).join(", "),
-          });
-      }
-    },
-    [copy, videoCopy.reverse.run.needVideo, wc.editSource.tooLong, wc.editSource.tooShort],
-  );
 
   const enhanceEditPrompt = useCallback(async () => {
     if (editEnhancing || !editDraft.prompt.trim()) return;
@@ -799,7 +846,7 @@ export function VideoStudioWorkspace({
             <div className={w.guideArt} aria-hidden="true">
               {idx === 0 && (
                 <div className={w.guideArtFrames}>
-                  <span className={w.guideFrameBox}>01</span>
+                  <span className={w.guideFrameBox}>START</span>
                   <span className={w.guideArrow}>→</span>
                   <span className={w.guideFrameBox}>@1</span>
                 </div>
@@ -819,7 +866,6 @@ export function VideoStudioWorkspace({
                 </div>
               )}
             </div>
-            <span className={w.guideStepNo}>{`0${idx + 1}`}</span>
             <h3>{step.title}</h3>
             <p>{step.body}</p>
             <span className={w.guideTag}>{step.tag}</span>

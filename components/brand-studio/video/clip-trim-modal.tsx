@@ -322,8 +322,8 @@ export function ClipTrimModal({
       const sec = frac * total;
       setRange((cur) => {
         const next = which === "start"
-          ? clampTrimRange(sec, cur.end, total, minSeconds, maxSeconds)
-          : clampTrimRange(cur.start, sec, total, minSeconds, maxSeconds);
+          ? clampTrimRange(sec, cur.end, total, minSeconds, maxSeconds, "start")
+          : clampTrimRange(cur.start, sec, total, minSeconds, maxSeconds, "end");
         if (videoRef.current) videoRef.current.currentTime = which === "start" ? next.start : Math.max(next.start, next.end - 0.05);
         return next;
       });
@@ -530,20 +530,24 @@ export function ClipTrimModal({
             id={`${id}-range-start`}
             type="range"
             min={0}
-            max={Math.max(0, total - minSeconds)}
+            max={Math.round(Math.max(0, range.end - minSeconds) * 10) / 10}
             step={0.1}
             value={range.start}
-            onChange={(ev) => setRange((cur) => clampTrimRange(Number(ev.target.value), cur.end, total, minSeconds, maxSeconds))}
+            onChange={(ev) =>
+              setRange((cur) => clampTrimRange(Number(ev.target.value), cur.end, total, minSeconds, maxSeconds, "start"))
+            }
           />
           <label htmlFor={`${id}-range-end`}>{copy.rangeLabel} end</label>
           <input
             id={`${id}-range-end`}
             type="range"
-            min={Math.min(total, minSeconds)}
+            min={Math.round(Math.min(total, range.start + minSeconds) * 10) / 10}
             max={total}
             step={0.1}
             value={range.end}
-            onChange={(ev) => setRange((cur) => clampTrimRange(cur.start, Number(ev.target.value), total, minSeconds, maxSeconds))}
+            onChange={(ev) =>
+              setRange((cur) => clampTrimRange(cur.start, Number(ev.target.value), total, minSeconds, maxSeconds, "end"))
+            }
           />
         </div>
         {!validSelection && (

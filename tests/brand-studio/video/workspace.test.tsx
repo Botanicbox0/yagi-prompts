@@ -16,6 +16,7 @@ import {
   detectAtMentionQuery,
   insertAssetMention,
   isFullFrameAndRange,
+  validateVideoEditDurationSeconds,
   videoEditCredits,
 } from "@/components/brand-studio/video/workspace-model";
 
@@ -69,8 +70,11 @@ describe("@ asset mentions in video prompts", () => {
 });
 
 describe("trim & crop range math", () => {
-  it("clamps segment range to [4s, 30s] and bounds crop box within the frame", () => {
+  it("clamps segment range to [4.0s, 30.0s], locks start/end handles at 4.0s min span, and bounds crop box", () => {
     expect(clampTrimRange(1, 2, 18, 4, 30)).toEqual({ start: 1, end: 5, duration: 4 });
+    expect(clampTrimRange(8.5, 10, 18, 4, 30, "start")).toEqual({ start: 6, end: 10, duration: 4 });
+    expect(clampTrimRange(4, 6.2, 18, 4, 30, "end")).toEqual({ start: 4, end: 8, duration: 4 });
+    expect(clampTrimRange(1.06, 5.04, 18, 4, 30, "end")).toEqual({ start: 1.1, end: 5.1, duration: 4 });
     expect(clampTrimRange(5, 45, 50, 4, 30)).toEqual({ start: 5, end: 35, duration: 30 });
     expect(clampCropRect({ x: 0.85, y: -0.2, w: 0.4, h: 0.1 })).toEqual({ x: 0.6, y: 0, w: 0.4, h: 0.2 });
     expect(isFullFrameAndRange({ start: 0, end: 12 }, 12, FULL_CROP, 30)).toBe(true);
@@ -80,8 +84,16 @@ describe("trim & crop range math", () => {
 });
 
 describe("Seedance-based Video Edit job builder & credits", () => {
-  it("validates 4–30s clip duration, dimensions, prompt, and up to 9 reference images", () => {
+  it("validates 4.0–30.0s clip duration (including unmeasured rejection), dimensions, prompt, and up to 9 reference images", () => {
+    expect(validateVideoEditDurationSeconds(undefined)).toEqual({ kind: "unmeasured", min: 4, max: 30 });
+    expect(validateVideoEditDurationSeconds(null)).toEqual({ kind: "unmeasured", min: 4, max: 30 });
+    expect(validateVideoEditDurationSeconds(3.9)).toEqual({ kind: "too_short", min: 4 });
+    expect(validateVideoEditDurationSeconds(4)).toBeNull();
+    expect(validateVideoEditDurationSeconds(30)).toBeNull();
+    expect(validateVideoEditDurationSeconds(30.1)).toEqual({ kind: "too_long", max: 30 });
+
     expect(checkVideoEditClip(null)).toEqual({ kind: "need_video" });
+    expect(checkVideoEditClip(videoAsset({ seconds: null }))).toEqual({ kind: "unmeasured", min: 4, max: 30 });
     expect(checkVideoEditClip(videoAsset({ seconds: 2.5 }))).toEqual({ kind: "too_short", min: 4 });
     expect(checkVideoEditClip(videoAsset({ seconds: 34 }))).toEqual({ kind: "too_long", max: 30 });
     expect(checkVideoEditClip(videoAsset({ width: 200, height: 200 }))).toEqual({ kind: "bad_dimensions", reason: "small" });
