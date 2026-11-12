@@ -306,31 +306,31 @@ export function TwingsAiConcierge({
           aria-modal="false"
           aria-labelledby={titleId}
           data-twings-ai-concierge-dialog
-          className="mb-3 flex max-h-[min(640px,calc(100dvh-6.5rem))] w-[min(392px,calc(100vw-2rem))] flex-col overflow-hidden rounded-[24px] border border-[rgba(11,13,18,0.1)] bg-white text-[#0B0D12] shadow-[0_24px_60px_-15px_rgba(11,13,18,0.22)]"
+          className="mb-3 flex max-h-[min(640px,calc(100dvh-6.5rem))] w-[min(392px,calc(100vw-2rem))] flex-col overflow-hidden rounded-[24px] bg-white text-[#09090B] shadow-[0_0_0_1px_rgba(0,0,0,0.06),0_20px_48px_-12px_rgba(0,0,0,0.12)]"
         >
           {/* ChannelTalk / Sendbird-style Top Header with Circular TWINGS Mark */}
-          <header className="flex items-center justify-between gap-3 border-b border-[rgba(11,13,18,0.08)] bg-[#F6F7F9] px-4 py-3.5">
+          <header className="flex items-center justify-between gap-3 bg-[#F4F4F5] px-4 py-3.5">
             <div className="flex items-center gap-3">
               <div
                 data-concierge-logo-circle
-                className="relative flex size-10 shrink-0 items-center justify-center rounded-full bg-[#3875C5] text-white shadow-sm"
+                className="relative flex size-10 shrink-0 items-center justify-center rounded-full bg-[#09090B] text-white"
               >
                 <TwingsMark className="h-[16px] text-white" />
                 <span
                   aria-hidden="true"
-                  className="absolute -right-0.5 -bottom-0.5 size-3 rounded-full border-2 border-white bg-[#3875C5]"
+                  className="absolute -right-0.5 -bottom-0.5 size-3 rounded-full border-2 border-white bg-[#0033FF]"
                 />
               </div>
               <div>
                 <div className="flex items-center gap-1.5">
-                  <h2 id={titleId} className="text-[0.9375rem] font-semibold tracking-tight text-[#0B0D12]">
+                  <h2 id={titleId} className="text-[0.9375rem] font-semibold tracking-tight text-[#09090B]">
                     {isKo ? 'TWINGS AI 상담센터' : 'TWINGS AI Concierge'}
                   </h2>
-                  <span className="rounded-full bg-[rgba(56,117,197,0.12)] px-2 py-0.5 font-mono text-[0.625rem] font-semibold text-[#3063A7]">
+                  <span className="rounded-full bg-[#09090B] px-2 py-0.5 font-mono text-[0.625rem] font-semibold text-white">
                     24/7 LIVE
                   </span>
                 </div>
-                <p className="mt-0.5 text-[0.75rem] text-[#5B606B]">
+                <p className="mt-0.5 text-[0.75rem] text-[#71717A]">
                   {isKo
                     ? 'AI 즉시 답변 · 미해결 시 담당 상담원 1:1 연결'
                     : 'Instant AI answers · 1:1 specialist handoff'}
@@ -342,7 +342,7 @@ export function TwingsAiConcierge({
               type="button"
               onClick={() => setIsOpen(false)}
               aria-label={isKo ? '상담센터 닫기' : 'Close support center'}
-              className="flex size-8 items-center justify-center rounded-full border border-[rgba(11,13,18,0.1)] bg-white text-sm font-semibold text-[#5B606B] transition-colors hover:border-[#3875C5] hover:text-[#3063A7]"
+              className="flex size-8 items-center justify-center rounded-full bg-white text-sm font-semibold text-[#52525B] transition-colors hover:bg-[#E4E4E7] hover:text-[#09090B]"
             >
               ×
             </button>
@@ -354,16 +354,16 @@ export function TwingsAiConcierge({
             className="flex-1 space-y-3.5 overflow-y-auto px-4 py-4"
           >
             {/* Welcome Greeting Card */}
-            <div className="rounded-[18px] border border-[rgba(11,13,18,0.08)] bg-[#F6F7F9] p-3.5">
+            <div className="rounded-[18px] bg-[#F4F4F5] p-3.5">
               <div className="flex items-center gap-2">
-                <span className="inline-flex size-6 items-center justify-center rounded-full bg-[#3875C5] text-white">
+                <span className="inline-flex size-6 items-center justify-center rounded-full bg-[#09090B] text-white">
                   <TwingsMark className="h-[10px] text-white" />
                 </span>
-                <span className="text-xs font-semibold text-[#0B0D12]">
+                <span className="text-xs font-semibold text-[#09090B]">
                   {isKo ? '무엇을 도와드릴까요?' : 'How can we help you today?'}
                 </span>
               </div>
-              <p className="mt-2 text-xs leading-relaxed text-[#5B606B]">
+              <p className="mt-2 text-xs leading-relaxed text-[#71717A]">
                 {isKo
                   ? '자주 묻는 질문을 눌러 바로 확인하거나 궁금한 점을 입력해 보세요. AI가 답변하기 어려운 문의나 사람과의 대화가 필요하시면 담당 상담원에게 바로 연결해 드립니다.'
                   : 'Tap a frequently asked question below or ask anything. If AI cannot resolve your issue or you prefer a human, we connect you straight to a support specialist.'}
@@ -373,14 +373,14 @@ export function TwingsAiConcierge({
             {/* Frequently Asked Questions (자주 묻는 질문) */}
             <div data-concierge-faq-list className="space-y-2">
               <div className="flex items-center justify-between">
-                <span className="font-mono text-[0.6875rem] font-semibold uppercase tracking-wider text-[#3063A7]">
+                <span className="font-mono text-[0.6875rem] font-semibold uppercase tracking-wider text-[#52525B]">
                   {isKo ? '자주 묻는 질문 (FAQ)' : 'Frequently Asked Questions'}
                 </span>
                 {bubbles.length > 0 && (
                   <button
                     type="button"
                     onClick={() => setShowAllFaqs((prev) => !prev)}
-                    className="text-[0.75rem] font-medium text-[#3063A7] underline underline-offset-2"
+                    className="text-[0.75rem] font-medium text-[#09090B] underline underline-offset-2"
                   >
                     {showAllFaqs
                       ? isKo
@@ -401,10 +401,10 @@ export function TwingsAiConcierge({
                       type="button"
                       data-concierge-faq-item={faq.id}
                       onClick={() => handleSelectFaq(faq)}
-                      className="flex w-full items-center justify-between gap-2 rounded-[14px] border border-[rgba(11,13,18,0.08)] bg-white px-3 py-2.5 text-left text-xs font-medium text-[#0B0D12] transition-colors hover:border-[#3875C5] hover:bg-[#F6F7F9]"
+                      className="flex w-full items-center justify-between gap-2 rounded-[14px] bg-[#F4F4F5] px-3 py-2.5 text-left text-xs font-medium text-[#09090B] transition-colors hover:bg-[#E4E4E7]"
                     >
                       <span>{faq.shortLabel}</span>
-                      <span aria-hidden="true" className="shrink-0 font-mono text-[#3063A7]">
+                      <span aria-hidden="true" className="shrink-0 font-mono text-[#52525B]">
                         →
                       </span>
                     </button>
@@ -422,23 +422,21 @@ export function TwingsAiConcierge({
                   bubble.role === 'user' ? 'items-end' : 'items-start'
                 }`}
               >
-                <span className="mb-1 px-1 text-[0.6875rem] font-medium text-[#5B606B]">
+                <span className="mb-1 px-1 text-[0.6875rem] font-medium text-[#71717A]">
                   {bubble.authorLabel}
                 </span>
                 <div
                   className={`max-w-[88%] rounded-[16px] px-3.5 py-2.5 text-xs leading-relaxed ${
                     bubble.role === 'user'
-                      ? 'bg-[#3875C5] text-white'
-                      : bubble.role === 'human_agent'
-                        ? 'border border-[#3875C5] bg-[rgba(56,117,197,0.08)] text-[#0B0D12]'
-                        : 'border border-[rgba(11,13,18,0.08)] bg-[#F6F7F9] text-[#0B0D12]'
+                      ? 'bg-[#09090B] text-white'
+                      : 'bg-[#F4F4F5] text-[#09090B]'
                   }`}
                 >
                   <p>{bubble.text}</p>
                   {bubble.actionHref && bubble.actionLabel && (
                     <a
                       href={bubble.actionHref}
-                      className="mt-2 inline-flex items-center rounded-full bg-white px-3 py-1 text-[0.6875rem] font-semibold text-[#3063A7] shadow-xs hover:underline"
+                      className="mt-2 inline-flex items-center rounded-full bg-white px-3 py-1 text-[0.6875rem] font-semibold text-[#09090B] hover:underline"
                     >
                       {bubble.actionLabel}
                     </a>
@@ -454,10 +452,10 @@ export function TwingsAiConcierge({
                 data-concierge-bubble="slack_reply"
                 className="flex flex-col items-start"
               >
-                <span className="mb-1 px-1 text-[0.6875rem] font-semibold text-[#3063A7]">
+                <span className="mb-1 px-1 text-[0.6875rem] font-semibold text-[#09090B]">
                   {reply.authorLabel}
                 </span>
-                <div className="max-w-[88%] rounded-[16px] border border-[#3875C5] bg-[rgba(56,117,197,0.08)] px-3.5 py-2.5 text-xs leading-relaxed text-[#0B0D12]">
+                <div className="max-w-[88%] rounded-[16px] bg-[#F4F4F5] px-3.5 py-2.5 text-xs leading-relaxed text-[#09090B]">
                   <p>{reply.body}</p>
                 </div>
               </article>
@@ -467,13 +465,13 @@ export function TwingsAiConcierge({
             {humanModeRequested && (
               <div
                 data-concierge-escalation-panel
-                className="rounded-[18px] border border-[#3875C5] bg-[#F6F7F9] p-3.5"
+                className="rounded-[18px] bg-[#F4F4F5] p-3.5"
               >
                 <div className="flex items-center justify-between gap-2">
-                  <span className="font-mono text-[0.6875rem] font-semibold uppercase tracking-wider text-[#3063A7]">
+                  <span className="font-mono text-[0.6875rem] font-semibold uppercase tracking-wider text-[#52525B]">
                     {isKo ? '1:1 담당 상담원 연결' : 'LIVE SPECIALIST HANDOFF'}
                   </span>
-                  <span className="rounded-full bg-white px-2 py-0.5 text-[0.6875rem] font-semibold text-[#0B0D12]">
+                  <span className="rounded-full bg-white px-2 py-0.5 text-[0.6875rem] font-semibold text-[#09090B]">
                     {signedIn
                       ? isKo
                         ? '로그인 확인됨'
@@ -487,7 +485,7 @@ export function TwingsAiConcierge({
                 {!signedIn ? (
                   /* Login Gate: Require sign-in before connecting to a human specialist */
                   <div data-concierge-login-gate className="mt-2.5 space-y-2.5">
-                    <p className="text-xs leading-relaxed text-[#0B0D12]">
+                    <p className="text-xs leading-relaxed text-[#09090B]">
                       {isKo
                         ? '상담원(사람)과 실시간으로 대화하려면 로그인이 필요합니다. 로그인하시면 회원님의 계정·제작 내역을 확인하고 담당 상담원과 바로 연결해 드립니다.'
                         : 'Please sign in to talk with a human specialist. Once signed in, we verify your account and connect you straight to our support team.'}
@@ -495,7 +493,7 @@ export function TwingsAiConcierge({
                     <a
                       href={signInHref}
                       data-concierge-login-cta
-                      className="inline-flex min-h-10 w-full items-center justify-center rounded-full bg-[#3875C5] px-4 py-2 text-xs font-semibold text-white transition-opacity hover:opacity-95"
+                      className="inline-flex min-h-10 w-full items-center justify-center rounded-full bg-[#0033FF] px-4 py-2 text-xs font-semibold text-white shadow-[0_4px_14px_rgba(0,51,255,0.28)] transition-colors hover:bg-[#0026CC]"
                     >
                       {isKo ? '로그인하고 상담원 연결하기 →' : 'Sign in to connect with a specialist →'}
                     </a>
@@ -507,7 +505,7 @@ export function TwingsAiConcierge({
                     data-concierge-slack-form
                     className="mt-2.5 space-y-2.5"
                   >
-                    <p className="text-xs leading-relaxed text-[#5B606B]">
+                    <p className="text-xs leading-relaxed text-[#71717A]">
                       {isKo
                         ? `${displayName ?? '회원'}님 계정으로 담당 상담원에게 문의를 접수합니다. 내용을 남겨주시면 이 채팅창으로 바로 답변이 도착합니다.`
                         : `Connected as ${displayName ?? 'Member'}. Send your message below and our specialist will reply right here.`}
@@ -521,10 +519,10 @@ export function TwingsAiConcierge({
                           ? '상담원에게 전달할 문의 내용을 입력해 주세요...'
                           : 'Describe what you need help with for our team...'
                       }
-                      className="w-full rounded-[12px] border border-[rgba(11,13,18,0.12)] bg-white px-3 py-2 text-xs text-[#0B0D12] placeholder:text-[#5B606B]/60 focus:border-[#3875C5] focus:outline-none"
+                      className="w-full rounded-[12px] bg-white px-3 py-2 text-xs text-[#09090B] placeholder:text-[#A1A1AA] focus:outline-2 focus:outline-[#09090B]"
                     />
                     {slackNotice && (
-                      <p role="alert" className="text-[0.6875rem] font-medium text-[#3063A7]">
+                      <p role="alert" className="text-[0.6875rem] font-medium text-[#09090B]">
                         {slackNotice}
                       </p>
                     )}
@@ -532,7 +530,7 @@ export function TwingsAiConcierge({
                       type="submit"
                       disabled={sendingSlack || !humanMessageDraft.trim()}
                       data-concierge-slack-submit
-                      className="inline-flex min-h-9 w-full items-center justify-center rounded-full bg-[#3875C5] px-4 py-2 text-xs font-semibold text-white transition-opacity disabled:opacity-50"
+                      className="inline-flex min-h-9 w-full items-center justify-center rounded-full bg-[#0033FF] px-4 py-2 text-xs font-semibold text-white shadow-[0_4px_14px_rgba(0,51,255,0.28)] transition-colors hover:bg-[#0026CC] disabled:opacity-50"
                     >
                       {sendingSlack
                         ? isKo
@@ -549,20 +547,20 @@ export function TwingsAiConcierge({
           </div>
 
           {/* Bottom Action Bar: Direct Human Request Button + AI Chat Input */}
-          <footer className="border-t border-[rgba(11,13,18,0.08)] bg-white p-3">
+          <footer className="bg-white p-3">
             <div className="mb-2 flex items-center justify-between gap-2">
               <button
                 type="button"
                 data-concierge-request-human
                 onClick={() => activateHumanEscalation('user_requested_human')}
-                className="inline-flex items-center gap-1.5 rounded-full border border-[rgba(11,13,18,0.1)] bg-[#F6F7F9] px-3 py-1 text-[0.6875rem] font-semibold text-[#0B0D12] transition-colors hover:border-[#3875C5] hover:text-[#3063A7]"
+                className="inline-flex items-center gap-1.5 rounded-full bg-[#F4F4F5] px-3 py-1 text-[0.6875rem] font-semibold text-[#09090B] transition-colors hover:bg-[#E4E4E7]"
               >
-                <span aria-hidden="true" className="size-1.5 rounded-full bg-[#3875C5]" />
+                <span aria-hidden="true" className="size-1.5 rounded-full bg-[#09090B]" />
                 {isKo ? '사람(상담원)과 1:1 대화하기' : 'Talk to a human specialist'}
               </button>
               <a
                 href={`/${resolvedLocale}/faq`}
-                className="text-[0.6875rem] font-medium text-[#5B606B] hover:text-[#3063A7] hover:underline"
+                className="text-[0.6875rem] font-medium text-[#52525B] hover:text-[#09090B] hover:underline"
               >
                 {isKo ? '전체 FAQ ↗' : 'All FAQs ↗'}
               </a>
@@ -583,12 +581,12 @@ export function TwingsAiConcierge({
                     ? '궁금한 점을 물어보세요 (예: 옷 변경, 5장 선택, 상담원 연결)'
                     : 'Ask anything (e.g. outfit change, 5-shot pick, human agent)'
                 }
-                className="min-h-10 flex-1 rounded-full border border-[rgba(11,13,18,0.12)] bg-[#F6F7F9] px-3.5 py-2 text-xs text-[#0B0D12] placeholder:text-[#5B606B]/65 focus:border-[#3875C5] focus:bg-white focus:outline-none"
+                className="min-h-10 flex-1 rounded-full bg-[#F4F4F5] px-3.5 py-2 text-xs text-[#09090B] placeholder:text-[#A1A1AA] focus:bg-white focus:outline-2 focus:outline-[#09090B]"
               />
               <button
                 type="submit"
                 data-concierge-ask-submit
-                className="inline-flex min-h-10 shrink-0 items-center justify-center rounded-full bg-[#3875C5] px-4 py-2 text-xs font-semibold text-white transition-opacity hover:opacity-95"
+                className="inline-flex min-h-10 shrink-0 items-center justify-center rounded-full bg-[#0033FF] px-4 py-2 text-xs font-semibold text-white shadow-[0_4px_14px_rgba(0,51,255,0.28)] transition-colors hover:bg-[#0026CC]"
               >
                 {isKo ? '질문' : 'Ask'}
               </button>
@@ -604,7 +602,7 @@ export function TwingsAiConcierge({
         aria-expanded={isOpen}
         aria-label={isKo ? 'TWINGS AI 상담센터 열기' : 'Open TWINGS AI Support Center'}
         data-twings-ai-concierge-launcher
-        className="group relative flex size-14 items-center justify-center rounded-full border-2 border-white bg-[#3875C5] text-white shadow-[0_14px_34px_-8px_rgba(56,117,197,0.65)] transition-transform duration-200 hover:scale-105 focus:outline-none"
+        className="group relative flex size-14 items-center justify-center rounded-full border-2 border-white bg-[#09090B] text-white shadow-[0_14px_34px_-8px_rgba(9,9,11,0.38)] transition-transform duration-200 hover:scale-105 focus:outline-none"
       >
         <TwingsMark className="h-[22px] text-white transition-transform duration-200 group-hover:scale-110" />
         <span

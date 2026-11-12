@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { COLOUR, IMAGERY, MODEL_ROLES, TYPE, contrast } from '@/lib/design/identity';
+import { COLOUR, IMAGERY, MODEL_ROLES, TYPE, WORLD, contrast } from '@/lib/design/identity';
 
 const HexColourSchema = z
   .string()
@@ -184,7 +184,7 @@ export function twingsDefaultIdentity(): BrandIdentity {
       muted: COLOUR.muted,
       line: COLOUR.line,
       lineStrong: COLOUR.lineStrong,
-      accent: COLOUR.accent
+      accent: WORLD.french
     },
     type: {
       sans: TYPE.sans,

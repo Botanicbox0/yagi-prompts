@@ -62,7 +62,7 @@ describe('TWINGS design identity', () => {
 
   it('keeps every pair the page relies on readable', () => {
     for (const pair of CONTRAST_PAIRS) expect(contrast(pair.fg, pair.bg), pair.use).toBeGreaterThanOrEqual(pair.min);
-    expect(mixAccent(85, '#000000')).toBe('#3063a7');
+    expect(mixAccent(85, '#000000')).toBe('#002bd9');
   });
 
   // 2026-10-30 founder: another AI must be able to read how TWINGS looks and how to generate for it.

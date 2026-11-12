@@ -253,7 +253,7 @@ export function Dock(props: DockProps) {
             initialOpen={props.initialModelMenu}
             onChange={(value) => onDraft(withModel(draft, value))}
           />
-          <Select id={`${id}-aspect`} label={d.aspect} value={draft.aspect} display={draft.aspect} onChange={(aspect) => set({ aspect })} data="aspect">
+          <Select id={`${id}-aspect`} label={d.aspect} value={draft.aspect} display={draft.aspect} onChange={(aspect) => set({ aspect })} data="aspect" mono>
             {controls.aspects.map((aspect) => (
               <option key={aspect} value={aspect}>
                 {aspect}
@@ -267,6 +267,7 @@ export function Dock(props: DockProps) {
             display={draft.resolution === DRAFT_RESOLUTION ? d.draft : draft.resolution}
             onChange={(resolution) => set({ resolution })}
             data="resolution"
+            mono
           >
             {controls.resolutions.map((resolution) => (
               <option key={resolution} value={resolution}>
@@ -291,7 +292,7 @@ export function Dock(props: DockProps) {
             </Select>
           )}
           {draft.medium === "image" ? (
-            <Select id={`${id}-count`} label={d.count} value={String(draft.count)} display={fill(d.countValue, { n: draft.count })} onChange={(value) => set({ count: Number(value) })} data="count">
+            <Select id={`${id}-count`} label={d.count} value={String(draft.count)} display={fill(d.countValue, { n: draft.count })} onChange={(value) => set({ count: Number(value) })} data="count" mono>
               {controls.counts.map((n) => (
                 <option key={n} value={n}>
                   {fill(d.countValue, { n })}
@@ -300,7 +301,7 @@ export function Dock(props: DockProps) {
             </Select>
           ) : (
             !(remix && draft.method === "edit") && (
-              <Select id={`${id}-seconds`} label={d.seconds} value={String(draft.seconds)} display={fill(d.secondsValue, { n: draft.seconds })} onChange={(value) => set({ seconds: Number(value) })} data="seconds">
+              <Select id={`${id}-seconds`} label={d.seconds} value={String(draft.seconds)} display={fill(d.secondsValue, { n: draft.seconds })} onChange={(value) => set({ seconds: Number(value) })} data="seconds" mono>
                 {controls.seconds.map((n) => (
                   <option key={n} value={n}>
                     {fill(d.secondsValue, { n })}
@@ -395,6 +396,7 @@ function Select({
   display,
   onChange,
   data,
+  mono = false,
   children,
 }: {
   id: string;
@@ -405,10 +407,11 @@ function Select({
   display: string;
   onChange(value: string): void;
   data: string;
+  mono?: boolean;
   children: ReactNode;
 }) {
   return (
-    <span className="bs-select" data-control={data}>
+    <span className="bs-select" data-control={data} data-mono={mono ? "" : undefined}>
       <label htmlFor={id} className={quietLabel ? "bs-sr" : undefined}>
         {label}
       </label>

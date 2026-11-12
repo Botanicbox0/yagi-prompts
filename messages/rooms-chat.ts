@@ -159,7 +159,7 @@ export const roomsChatKo: typeof roomsChatEn = {
     channels: '대화',
     general: '일반 문의',
     generalHint: '프로젝트와 상관없는 질문',
-    empty: '아직 맡긴 프로젝트가 없어요. 궁금한 건 일반 문의에 남겨 주세요.',
+    empty: '진행 중인 프로젝트가 없어요. 궁금한 점은 일반 문의에 남겨 주세요.',
     openRoom: '룸 열기',
     back: '전체 알림',
     unread: '안 읽은 메시지 {count}개',

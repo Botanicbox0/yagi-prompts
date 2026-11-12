@@ -12,29 +12,28 @@
 .brc-channel,
 .brc-refthread,
 .brc-admin-room {
-  --brc-accent: var(--ys-accent, var(--admin-accent, #3875c5));
-  --brc-accent-text: color-mix(in srgb, var(--brc-accent) 85%, #000000);
-  --brc-accent-soft: color-mix(in srgb, var(--brc-accent) 8%, transparent);
-  --brc-accent-mid: color-mix(in srgb, var(--brc-accent) 14%, transparent);
-  --brc-accent-line: color-mix(in srgb, var(--brc-accent) 32%, transparent);
-  --brc-ink: var(--ys-ink, var(--admin-ink, #0e1013));
-  --brc-body: var(--ys-ink-secondary, var(--admin-body, #41444d));
-  --brc-muted: var(--ys-ink-muted, var(--admin-muted, #676b75));
+  --brc-accent: var(--ys-accent, var(--admin-accent, #0033ff));
+  --brc-accent-text: var(--ys-ink, var(--admin-ink, #09090b));
+  --brc-accent-soft: var(--ys-panel, #f4f4f5);
+  --brc-accent-mid: var(--ys-hover, #e4e4e7);
+  --brc-accent-line: rgba(9, 9, 11, 0.14);
+  --brc-ink: var(--ys-ink, var(--admin-ink, #09090b));
+  --brc-body: var(--ys-ink-secondary, var(--admin-body, #52525b));
+  --brc-muted: var(--ys-ink-muted, var(--admin-muted, #71717a));
   --brc-surface: var(--ys-surface, var(--admin-paper, #ffffff));
-  --brc-canvas: var(--ys-canvas, var(--admin-canvas, #f6f7f9));
-  --brc-raised: var(--ys-raised, #f1f2f4);
-  --brc-hover: color-mix(in srgb, var(--brc-ink) 3%, transparent);
-  --brc-hairline: var(--ys-hairline, rgba(0, 0, 0, 0.06));
-  --brc-line: var(--ys-line, rgba(0, 0, 0, 0.08));
-  --brc-line-strong: var(--ys-line-strong, rgba(0, 0, 0, 0.16));
+  --brc-canvas: var(--ys-canvas, var(--admin-canvas, #ffffff));
+  --brc-raised: var(--ys-raised, #f4f4f5);
+  --brc-hover: var(--ys-hover, #e4e4e7);
+  --brc-hairline: var(--ys-hairline, rgba(0, 0, 0, 0.04));
+  --brc-line: var(--ys-line, rgba(0, 0, 0, 0.04));
+  --brc-line-strong: var(--ys-line-strong, rgba(0, 0, 0, 0.12));
   --brc-danger: var(--ys-danger, #a3392f);
-  --brc-glass: rgba(255, 255, 255, 0.82);
+  --brc-glass: rgba(255, 255, 255, 0.88);
   --brc-ease: var(--ys-spring, cubic-bezier(0.22, 1, 0.36, 1));
   --brc-dur: 200ms;
-  --brc-well: inset 0 1px 2px rgba(16, 18, 24, 0.06), inset 0 0 0 1px rgba(0, 0, 0, 0.08);
-  --brc-ring: 0 0 0 1px var(--brc-hairline), inset 0 1px 0 0 rgba(255, 255, 255, 0.9), 0 1px 1px rgba(16, 18, 24, 0.03), 0 2px 8px rgba(16, 18, 24, 0.03);
-  --brc-float: 0 0 0 1px var(--brc-hairline), inset 0 1px 0 0 rgba(255, 255, 255, 0.9), 0 2px 4px rgba(16, 18, 24, 0.05), 0 10px 24px rgba(16, 18, 24, 0.06),
-    0 24px 56px rgba(16, 18, 24, 0.06);
+  --brc-well: none;
+  --brc-ring: 0 0 0 1px var(--brc-hairline);
+  --brc-float: 0 0 0 1px rgba(0, 0, 0, 0.06), 0 20px 48px -12px rgba(0, 0, 0, 0.12);
   color: var(--brc-ink);
 }
 

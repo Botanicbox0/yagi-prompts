@@ -137,7 +137,7 @@ export const intakeBriefEn = {
 export const intakeBriefKo: typeof intakeBriefEn = {
   eyebrow: '야기 팀과 · 새 프로젝트 의뢰',
   title: '프로젝트 의뢰하기',
-  intro: '무엇을 만들지 3단계로 간단히 알려 주세요. 가지고 계신 기획서 파일을 올리면 2·3단계를 미리 채워 드리며, 작성 중인 내용은 이 브라우저에 자동 저장됩니다.',
+  intro: '제작하실 내용을 3단계로 간단히 알려 주세요. 기획서를 첨부하시면 2·3단계를 미리 채워 드리며, 작성 중인 내용은 이 브라우저에 자동 저장됩니다.',
   draftSaved: '작성 내용 자동 저장됨',
   clearDraft: '임시 저장 비우기',
   stepsLabel: '의뢰 단계',

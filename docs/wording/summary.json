@@ -1,18 +1,18 @@
 {
   "source": {
     "en_sha256": "5f965cfc63f4d08e74527aaeb5f90fbb0c18506f3a3f0fc2c97ae8386ad3b1be",
-    "ko_sha256": "4f2566de9d74fd80ab890ed7d36062a2fc1b1f7fb4c980800a687d318a1c1ddf"
+    "ko_sha256": "9722e983177d09b06e1356f32d9e2ae3974f0d92294061eb286ee5b02ae624f1"
   },
   "dictionaryKeys": 7268,
   "stringValues": 14536,
   "referencedKeys": 4620,
   "noStaticReferenceCandidates": 2648,
-  "contextReviewedKeys": 330,
-  "ruleTriageOnlyKeys": 6938,
+  "contextReviewedKeys": 369,
+  "ruleTriageOnlyKeys": 6899,
   "changedProposalKeys": 56,
-  "reviewPriorityKeys": 251,
+  "reviewPriorityKeys": 249,
   "routeEntries": 220,
-  "hardcodedCandidates": 3727,
+  "hardcodedCandidates": 3721,
   "sections": {
     "account": 34,
     "ad": 4,

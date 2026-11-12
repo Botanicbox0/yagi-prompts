@@ -221,13 +221,13 @@ export function RoomInbox({
                           display: "block",
                           padding: "10px 12px",
                           borderRadius: 12,
-                          border: "1px solid rgba(56, 117, 197, 0.22)",
-                          background: "rgba(56, 117, 197, 0.04)",
+                          border: "0",
+                          background: "var(--ys-panel, #F4F4F5)",
                           textDecoration: "none",
-                          color: "var(--ys-ink, #111827)",
+                          color: "var(--ys-ink, #09090B)",
                         }}
                       >
-                        <span style={{ display: "block", fontSize: 11, fontWeight: 600, color: "#3063A7" }}>
+                        <span style={{ display: "block", fontSize: 11, fontWeight: 600, color: "var(--ys-ink-secondary, #52525B)" }}>
                           {alert.projectTitle}
                         </span>
                         <span style={{ display: "block", fontSize: 13, fontWeight: 600, marginTop: 2 }}>

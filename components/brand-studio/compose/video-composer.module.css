@@ -38,8 +38,9 @@
   min-height: 28px;
   padding: 0 10px;
   border-radius: var(--ys-r-pill);
-  background: var(--ys-canvas);
-  border: 1px solid var(--ys-hairline, var(--ys-line));
+  background: var(--ys-panel);
+  border: 0;
+  font-family: var(--ys-mono);
   font-size: 12px;
   font-weight: 500;
   color: var(--ys-ink-secondary);
@@ -49,8 +50,10 @@
 .subtitle {
   margin: 0;
   font-size: 13px;
+  font-weight: 400;
+  letter-spacing: -0.02em;
   line-height: 1.5;
-  color: var(--ys-ink-secondary);
+  color: var(--ys-ink-helper, #71717a);
 }
 
 .headerActions {
@@ -61,7 +64,8 @@
 }
 
 .pillBtn,
-.primaryBtn {
+.primaryBtn,
+.chatApplyBtn {
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -71,17 +75,17 @@
   border-radius: var(--ys-r-pill);
   font-size: 13px;
   font-weight: 600;
-  letter-spacing: -0.01em;
+  letter-spacing: -0.02em;
   text-decoration: none;
   cursor: pointer;
-  transition: background 150ms var(--ys-ease), border-color 150ms var(--ys-ease), opacity 150ms var(--ys-ease);
+  transition: background 150ms var(--ys-ease), box-shadow 150ms var(--ys-ease), opacity 150ms var(--ys-ease);
   font-variant-numeric: tabular-nums;
 }
 
 .pillBtn {
-  background: var(--ys-surface);
+  background: var(--ys-panel);
   color: var(--ys-ink);
-  border: 1px solid var(--ys-line);
+  border: 0;
 }
 
 :global(.bw-main) a.pillBtn.pillBtn {
@@ -90,22 +94,41 @@
 }
 
 .pillBtn:hover:not(:disabled) {
-  background: var(--ys-raised);
+  background: var(--ys-hover);
 }
 
 .primaryBtn {
   background: var(--ys-accent);
   color: var(--ys-on-accent);
-  border: 1px solid transparent;
+  border: 0;
+  box-shadow: var(--ys-cta-shadow);
 }
 
 .primaryBtn:hover:not(:disabled) {
-  opacity: 0.92;
+  background: var(--ys-accent-hover);
 }
 
-.pillBtn:disabled,
-.primaryBtn:disabled {
+.chatApplyBtn {
+  background: var(--ys-active-bg);
+  color: var(--ys-active-fg);
+  border: 0;
+}
+
+.chatApplyBtn:hover:not(:disabled) {
+  background: #18181b;
+}
+
+.pillBtn:disabled {
   opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.primaryBtn:disabled,
+.chatApplyBtn:disabled {
+  background: var(--ys-hover);
+  color: var(--ys-ink-muted);
+  box-shadow: none;
+  opacity: 1;
   cursor: not-allowed;
 }
 
@@ -123,8 +146,8 @@
   gap: 10px 16px;
   padding: 12px 16px;
   border-radius: 14px;
-  background: var(--ys-surface);
-  border: 1px solid var(--ys-line);
+  background: var(--ys-panel);
+  border: 0;
   font-size: 13px;
   color: var(--ys-ink);
 }
@@ -134,7 +157,7 @@
 .workbench {
   display: grid;
   grid-template-columns: minmax(250px, 290px) minmax(0, 1fr) minmax(280px, 330px);
-  gap: 14px;
+  gap: 16px;
   align-items: start;
 }
 
@@ -143,8 +166,8 @@
   gap: 12px;
   padding: 16px;
   border-radius: var(--ys-r-card, 20px);
-  background: var(--ys-surface);
-  box-shadow: var(--ys-card);
+  background: var(--ys-panel);
+  box-shadow: none;
   min-width: 0;
 }
 
@@ -158,8 +181,9 @@
 .panelTitle {
   margin: 0;
   font-size: 15px;
-  font-weight: 600;
-  letter-spacing: -0.02em;
+  font-weight: 650;
+  letter-spacing: -0.035em;
+  line-height: 1.25;
   color: var(--ys-ink);
 }
 
@@ -169,8 +193,8 @@
   gap: 2px;
   padding: 3px;
   border-radius: var(--ys-r-pill);
-  background: var(--ys-canvas);
-  border: 1px solid var(--ys-hairline, var(--ys-line));
+  background: rgba(9, 9, 11, 0.05);
+  border: 0;
 }
 
 .segTab {
@@ -182,14 +206,15 @@
   font: inherit;
   font-size: 12px;
   font-weight: 600;
+  letter-spacing: -0.02em;
   color: var(--ys-ink-secondary);
   cursor: pointer;
 }
 
 .segTab[aria-selected="true"] {
-  background: var(--ys-surface);
-  color: var(--ys-ink);
-  box-shadow: var(--ys-shadow-1, 0 1px 2px rgba(0, 0, 0, 0.06));
+  background: var(--ys-active-bg);
+  color: var(--ys-active-fg);
+  box-shadow: none;
 }
 
 .uploadBox {
@@ -197,8 +222,8 @@
   gap: 4px;
   padding: 12px;
   border-radius: 14px;
-  background: var(--ys-canvas);
-  border: 1px dashed var(--ys-line);
+  background: #fafafa;
+  border: 1px dashed rgba(0, 0, 0, 0.12);
 }
 
 .uploadHint {
@@ -234,8 +259,8 @@
   gap: 6px;
   padding: 8px;
   border-radius: 12px;
-  background: var(--ys-canvas);
-  border: 1px solid var(--ys-hairline, var(--ys-line));
+  background: var(--ys-surface);
+  border: 0;
   text-align: left;
 }
 
@@ -262,8 +287,9 @@
   bottom: 6px;
   padding: 2px 6px;
   border-radius: 999px;
-  background: var(--ys-glass-dark);
-  color: var(--ys-on-accent);
+  background: rgba(0, 0, 0, 0.65);
+  color: #ffffff;
+  font-family: var(--ys-mono);
   font-size: 11px;
   font-variant-numeric: tabular-nums;
 }
@@ -282,21 +308,22 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  min-height: 34px;
+  min-height: 32px;
   padding: 0 10px;
   border-radius: 999px;
-  border: 1px solid var(--ys-line);
-  background: var(--ys-surface);
+  border: 0;
+  background: var(--ys-panel);
   color: var(--ys-ink);
   font: inherit;
   font-size: 12px;
   font-weight: 600;
+  letter-spacing: -0.02em;
   cursor: pointer;
 }
 
 .smallBtn:hover:not(:disabled) {
-  border-color: var(--ys-accent);
-  color: var(--ys-accent-text);
+  background: var(--ys-hover);
+  color: var(--ys-ink);
 }
 
 .smallBtn:disabled {
@@ -318,8 +345,8 @@
   gap: 8px;
   padding: 10px 12px;
   border-radius: 12px;
-  background: var(--ys-canvas);
-  border: 1px solid var(--ys-hairline, var(--ys-line));
+  background: var(--ys-surface);
+  border: 0;
 }
 
 .audioRowHead {
@@ -352,8 +379,8 @@
   gap: 12px;
   padding: 16px;
   border-radius: var(--ys-r-card, 20px);
-  background: var(--ys-surface);
-  box-shadow: var(--ys-card);
+  background: var(--ys-panel);
+  box-shadow: none;
 }
 
 .stageToolbar {
@@ -371,13 +398,14 @@
 }
 
 .aspectPill {
-  min-height: 34px;
+  min-height: 32px;
   padding: 0 12px;
   border-radius: var(--ys-r-pill);
-  border: 1px solid var(--ys-line);
-  background: var(--ys-canvas);
+  border: 0;
+  background: var(--ys-surface);
   color: var(--ys-ink-secondary);
   font: inherit;
+  font-family: var(--ys-mono);
   font-size: 12px;
   font-weight: 600;
   cursor: pointer;
@@ -385,9 +413,8 @@
 }
 
 .aspectPill[aria-pressed="true"] {
-  background: var(--ys-surface);
-  border-color: var(--ys-accent);
-  color: var(--ys-accent-text);
+  background: var(--ys-active-bg);
+  color: var(--ys-active-fg);
 }
 
 .viewportWell {
@@ -396,8 +423,8 @@
   min-height: 340px;
   padding: 16px;
   border-radius: 16px;
-  background: var(--ys-canvas);
-  border: 1px solid var(--ys-hairline, var(--ys-line));
+  background: var(--ys-surface);
+  border: 0;
 }
 
 .frameShell {
@@ -513,10 +540,11 @@
 
 .scrubber {
   width: 100%;
-  accent-color: var(--ys-accent);
+  accent-color: var(--ys-ink);
 }
 
 .timecode {
+  font-family: var(--ys-mono);
   font-size: 12px;
   font-weight: 600;
   color: var(--ys-ink-secondary);
@@ -530,8 +558,8 @@
   gap: 12px;
   padding: 16px;
   border-radius: var(--ys-r-card, 20px);
-  background: var(--ys-surface);
-  box-shadow: var(--ys-card);
+  background: var(--ys-panel);
+  box-shadow: none;
 }
 
 .clipStrip {
@@ -547,14 +575,13 @@
   gap: 8px;
   padding: 10px;
   border-radius: 14px;
-  background: var(--ys-canvas);
-  border: 1.5px solid var(--ys-hairline, var(--ys-line));
+  background: var(--ys-surface);
+  border: 0;
   cursor: pointer;
 }
 
 .clipBlock[data-selected="true"] {
-  border-color: var(--ys-accent);
-  background: var(--ys-surface);
+  box-shadow: 0 0 0 1.5px var(--ys-ink);
 }
 
 .clipBlockHead {
@@ -565,9 +592,10 @@
 }
 
 .cutBadge {
+  font-family: var(--ys-mono);
   font-size: 11px;
   font-weight: 700;
-  color: var(--ys-accent-text);
+  color: var(--ys-ink);
   font-variant-numeric: tabular-nums;
 }
 
@@ -583,8 +611,8 @@
   min-height: 30px;
   padding: 0 6px;
   border-radius: 8px;
-  border: 1px solid var(--ys-line);
-  background: var(--ys-surface);
+  border: 0;
+  background: var(--ys-panel);
   color: var(--ys-ink-secondary);
   font-size: 12px;
   cursor: pointer;
@@ -592,7 +620,7 @@
 
 .iconBtn:hover:not(:disabled) {
   color: var(--ys-ink);
-  border-color: var(--ys-ink-secondary);
+  background: var(--ys-hover);
 }
 
 .iconBtn:disabled {
@@ -623,12 +651,16 @@
   min-height: 36px;
   padding: 0 10px;
   border-radius: 10px;
-  border: 1px solid var(--ys-line);
-  background: var(--ys-surface);
+  border: 0;
+  background: var(--ys-panel);
   color: var(--ys-ink);
   font: inherit;
   font-size: 13px;
   font-variant-numeric: tabular-nums;
+}
+
+.numInput {
+  font-family: var(--ys-mono);
 }
 
 .clipFoot {
@@ -636,6 +668,7 @@
   align-items: center;
   justify-content: space-between;
   gap: 6px;
+  font-family: var(--ys-mono);
   font-size: 12px;
   color: var(--ys-ink-secondary);
   font-variant-numeric: tabular-nums;
@@ -649,8 +682,8 @@
   gap: 10px 14px;
   padding: 10px 12px;
   border-radius: 12px;
-  background: var(--ys-canvas);
-  border: 1px solid var(--ys-hairline, var(--ys-line));
+  background: var(--ys-surface);
+  border: 0;
   font-size: 12px;
 }
 
@@ -660,7 +693,7 @@
   margin: 0;
   font-size: 13px;
   line-height: 1.5;
-  color: var(--ys-ink-secondary);
+  color: var(--ys-ink-helper, #71717a);
 }
 
 .exampleChips {
@@ -671,20 +704,21 @@
 
 .exampleChip {
   min-height: 32px;
-  padding: 4px 10px;
+  padding: 4px 12px;
   border-radius: 999px;
-  border: 1px solid var(--ys-line);
-  background: var(--ys-canvas);
+  border: 0;
+  background: var(--ys-surface);
   color: var(--ys-ink);
   font: inherit;
   font-size: 12px;
+  letter-spacing: -0.02em;
   text-align: left;
   cursor: pointer;
 }
 
 .exampleChip:hover {
-  border-color: var(--ys-accent);
-  color: var(--ys-accent-text);
+  background: var(--ys-hover);
+  color: var(--ys-ink);
 }
 
 .chatLog {
@@ -694,8 +728,8 @@
   overflow-y: auto;
   padding: 10px;
   border-radius: 14px;
-  background: var(--ys-canvas);
-  border: 1px solid var(--ys-hairline, var(--ys-line));
+  background: var(--ys-surface);
+  border: 0;
 }
 
 .chatBubble {
@@ -707,15 +741,15 @@
 
 .chatBubble[data-role="user"] {
   justify-self: end;
-  background: var(--ys-accent);
-  color: var(--ys-on-accent);
+  background: var(--ys-active-bg);
+  color: var(--ys-active-fg);
 }
 
 .chatBubble[data-role="assistant"] {
   justify-self: start;
-  background: var(--ys-surface);
+  background: var(--ys-panel);
   color: var(--ys-ink);
-  border: 1px solid var(--ys-hairline, var(--ys-line));
+  border: 0;
 }
 
 .chatForm {
@@ -728,8 +762,8 @@
   min-height: 68px;
   padding: 10px 12px;
   border-radius: 12px;
-  border: 1px solid var(--ys-line);
-  background: var(--ys-canvas);
+  border: 0;
+  background: var(--ys-surface);
   color: var(--ys-ink);
   font: inherit;
   font-size: 13px;
@@ -741,9 +775,8 @@
 .numInput:focus-visible,
 .textInput:focus-visible,
 .selectInput:focus-visible {
-  outline: 2px solid var(--ys-focus);
-  outline-offset: 1px;
-  background: var(--ys-surface);
+  outline: 1.5px solid var(--ys-ink);
+  outline-offset: 0;
 }
 
 .creditBadge {
@@ -751,9 +784,10 @@
   align-items: center;
   padding: 6px 11px;
   border-radius: 999px;
-  border: 1px solid var(--ys-line);
-  background: var(--ys-canvas);
+  border: 0;
+  background: var(--ys-surface);
   color: var(--ys-ink-secondary);
+  font-family: var(--ys-mono);
   font-size: 12px;
   font-weight: 600;
   font-variant-numeric: tabular-nums;
@@ -762,10 +796,10 @@
 .chatRateHint {
   margin: 0;
   padding-top: 8px;
-  border-top: 1px solid var(--ys-hairline, var(--ys-line));
+  border-top: 1px solid var(--ys-hairline);
   font-size: 12px;
   line-height: 1.5;
-  color: var(--ys-ink-secondary);
+  color: var(--ys-ink-helper, #71717a);
 }
 
 @media (max-width: 1180px) {

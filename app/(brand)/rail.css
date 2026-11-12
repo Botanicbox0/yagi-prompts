@@ -17,7 +17,7 @@
      colour runs the full height of the page. The width changes at once; nothing slides under the page. */
   .bw-shell:has([data-brand-layout-mode="rail"]) {
     --ys-sidebar-w: 72px;
-    --bw-rail-bg: color-mix(in srgb, var(--ys-hover) 70%, var(--ys-raised));
+    --bw-rail-bg: var(--ys-panel);
     --ys-sidebar: var(--bw-rail-bg);
     --bw-rail-pad: 15px;
     grid-template-columns: var(--ys-sidebar-w) minmax(0, 1fr);
@@ -109,8 +109,8 @@
     border-radius: 21px;
   }
   .bw-shell:has([data-brand-layout-mode="rail"]) .bw-rail-row[data-drag-over="true"] {
-    box-shadow: 0 0 0 1.5px var(--ys-accent-line);
-    background: var(--ys-accent-soft);
+    box-shadow: 0 0 0 1.5px var(--ys-ink);
+    background: var(--ys-hover);
   }
   .bw-shell:has([data-brand-layout-mode="rail"]) .bw-sidebar nav .bw-rail-item {
     position: relative;
@@ -142,24 +142,17 @@
     padding: 0;
   }
   .bw-shell:has([data-brand-layout-mode="rail"]) .bw-sidebar nav .bw-rail-item:hover {
-    background: rgba(17, 17, 20, 0.05);
+    background: var(--ys-hover);
     color: var(--ys-ink);
   }
   .bw-shell:has([data-brand-layout-mode="rail"]) .bw-sidebar nav .bw-rail-item[aria-current="page"] {
-    background: var(--ys-surface);
-    color: var(--ys-ink);
+    background: var(--ys-active-bg);
+    color: var(--ys-active-fg);
     font-weight: 600;
-    box-shadow: var(--ys-ring), var(--ys-rim), var(--ys-shadow-1);
+    box-shadow: none;
   }
   .bw-shell:has([data-brand-layout-mode="rail"]) .bw-sidebar nav .bw-rail-item[aria-current="page"]::before {
-    content: "";
-    position: absolute;
-    top: 11px;
-    bottom: 11px;
-    left: calc(-1 * var(--bw-rail-pad));
-    width: 3px;
-    border-radius: 0 3px 3px 0;
-    background: var(--ys-accent);
+    display: none;
   }
   .bw-shell:has([data-brand-layout-mode="rail"]) .bw-sidebar nav .bw-rail-icon {
     width: 18px;
@@ -173,8 +166,11 @@
     color: var(--ys-ink-muted);
     transition: color var(--ys-dur) var(--ys-ease);
   }
-  .bw-shell:has([data-brand-layout-mode="rail"]) .bw-sidebar nav .bw-rail-item:is(:hover, [aria-current="page"]) .bw-rail-icon {
+  .bw-shell:has([data-brand-layout-mode="rail"]) .bw-sidebar nav .bw-rail-item:hover .bw-rail-icon {
     color: var(--ys-ink);
+  }
+  .bw-shell:has([data-brand-layout-mode="rail"]) .bw-sidebar nav .bw-rail-item[aria-current="page"] .bw-rail-icon {
+    color: var(--ys-active-fg);
   }
   .bw-shell:has([data-brand-layout-mode="rail"]) .bw-rail-label {
     min-width: 0;
@@ -203,12 +199,17 @@
     margin-left: auto;
     padding: 0 5px;
     border-radius: 9px;
-    background: var(--ys-accent);
-    color: var(--ys-on-accent);
+    background: var(--ys-active-bg);
+    color: var(--ys-active-fg);
+    font-family: var(--ys-mono);
     font-size: 10.5px;
-    font-weight: 700;
+    font-weight: 600;
     font-variant-numeric: tabular-nums;
     line-height: 1;
+  }
+  .bw-shell:has([data-brand-layout-mode="rail"]) .bw-rail-item[aria-current="page"] .bw-rail-badge {
+    background: var(--ys-surface);
+    color: var(--ys-ink);
   }
   .bw-shell:has([data-brand-layout-mode="rail"][data-rail-expanded="false"]) .bw-rail .bw-rail-badge {
     position: absolute;
@@ -221,9 +222,7 @@
     box-shadow: 0 0 0 2px var(--bw-rail-bg);
   }
 
-  /* ---------------------------------------------------------------- two groups (project rooms, docs/BRAND-ROOMS.md §2)
-     Only while rooms are open: 직접 만들기, then 야기 팀과 on a faint blue band under a hairline, so the
-     place for working with the team reads as its own area in both widths. Names show expanded only. */
+  /* ---------------------------------------------------------------- two groups (project rooms, docs/BRAND-ROOMS.md §2) */
   .bw-shell:has([data-brand-layout-mode="rail"]) .bw-rail-group {
     display: grid;
     gap: 2px;
@@ -234,7 +233,7 @@
     color: var(--ys-ink-muted);
     font-size: 11.5px;
     font-weight: 600;
-    letter-spacing: -0.005em;
+    letter-spacing: -0.02em;
     line-height: 16px;
     white-space: nowrap;
     overflow: hidden;
@@ -243,19 +242,13 @@
   .bw-shell:has([data-brand-layout-mode="rail"]) .bw-rail-group[data-rail-section="team"] {
     position: relative;
     margin: 4px 8px 0;
-    padding: 6px 0 2px;
+    padding: 6px 0 4px;
     border-radius: 24px;
-    background: color-mix(in srgb, var(--ys-accent) 6%, transparent);
-    box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--ys-accent) 9%, transparent);
+    background: var(--ys-surface);
+    box-shadow: none;
   }
   .bw-shell:has([data-brand-layout-mode="rail"]) .bw-rail-group[data-rail-section="team"]::before {
-    content: "";
-    position: absolute;
-    top: -9px;
-    left: 7px;
-    right: 7px;
-    height: 1px;
-    background: var(--ys-line);
+    display: none;
   }
   /* Inside the band the side padding shrinks by the band's margin, so every icon keeps its column. */
   .bw-shell:has([data-brand-layout-mode="rail"]) .bw-rail-group[data-rail-section="team"] .bw-rail-list {
@@ -263,10 +256,10 @@
   }
   .bw-shell:has([data-brand-layout-mode="rail"]) .bw-rail-group[data-rail-section="team"] .bw-rail-group-title {
     padding-inline: calc(var(--bw-rail-pad) + 4px);
-    color: var(--ys-accent-text);
+    color: var(--ys-ink-secondary);
   }
   .bw-shell:has([data-brand-layout-mode="rail"][data-rail-expanded="false"]) .bw-rail-group[data-rail-section="team"] .bw-rail-badge {
-    box-shadow: 0 0 0 2px color-mix(in srgb, var(--ys-accent) 6%, var(--bw-rail-bg));
+    box-shadow: 0 0 0 2px var(--ys-surface);
   }
   .bw-shell:has([data-brand-layout-mode="rail"][data-rail-expanded="false"]) .bw-rail-group-title {
     position: absolute;
@@ -367,13 +360,13 @@
     height: 42px;
     flex: none;
     border-radius: 50%;
-    background: var(--ys-accent);
-    color: var(--ys-on-accent);
-    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.22), 0 1px 2px rgba(16, 18, 24, 0.12), 0 6px 16px color-mix(in srgb, var(--ys-accent) 28%, transparent);
+    background: var(--ys-active-bg);
+    color: var(--ys-active-fg);
+    box-shadow: var(--ys-shadow-1);
     transition: transform 180ms var(--ys-spring), background-color var(--ys-dur) var(--ys-ease);
   }
   .bw-shell:has([data-brand-layout-mode="rail"]) .bw-rail-create-button:hover .bw-rail-create-disc {
-    background: color-mix(in srgb, var(--ys-accent) 88%, #000);
+    background: var(--ys-ink-hover);
   }
   .bw-shell:has([data-brand-layout-mode="rail"]) .bw-rail-create-button[aria-expanded="true"] .bw-rail-create-disc {
     transform: rotate(45deg);
@@ -404,8 +397,8 @@
     margin: 0 var(--bw-rail-pad);
     padding: 10px 12px 11px;
     border-radius: 16px;
-    background: color-mix(in srgb, var(--ys-surface) 72%, transparent);
-    box-shadow: var(--ys-ring);
+    background: var(--ys-surface);
+    box-shadow: none;
   }
   .bw-shell:has([data-brand-layout-mode="rail"]) .bw-rail .bw-rail-ring {
     display: none;
@@ -447,7 +440,7 @@
   stroke: color-mix(in srgb, var(--ys-ink) 10%, transparent);
 }
 .bw-shell:has([data-brand-layout-mode="rail"]) .bw-rail-ring-fill {
-  stroke: var(--ys-accent);
+  stroke: var(--ys-ink);
   stroke-linecap: round;
   transition: stroke-dasharray 600ms var(--ys-spring);
 }
@@ -466,14 +459,17 @@
   white-space: nowrap;
 }
 .bw-shell:has([data-brand-layout-mode="rail"]) .bw-rail-credits-line strong {
+  font-family: var(--ys-mono);
   font-size: 12.5px;
-  font-weight: 650;
+  font-weight: 600;
   color: var(--ys-ink);
   font-variant-numeric: tabular-nums;
 }
 .bw-shell:has([data-brand-layout-mode="rail"]) .bw-rail-credits-total {
+  font-family: var(--ys-mono);
   font-weight: 450;
   color: var(--ys-ink-muted);
+  font-variant-numeric: tabular-nums;
 }
 .bw-shell:has([data-brand-layout-mode="rail"]) .bw-rail-credits-bar {
   position: relative;
@@ -487,7 +483,7 @@
   position: absolute;
   inset: 0 auto 0 0;
   border-radius: inherit;
-  background: var(--ys-accent);
+  background: var(--ys-ink);
   transition: width 600ms var(--ys-spring);
 }
 .bw-shell:has([data-brand-layout-mode="rail"]) .bw-rail-credits-refill {
@@ -680,10 +676,11 @@
   background: var(--ys-line);
 }
 .bw-shell:has([data-brand-layout-mode="rail"]) .bw-rail-create-menu [data-rail-create-link="commission"] {
-  color: var(--ys-accent-text);
+  color: var(--ys-ink);
+  font-weight: 600;
 }
 .bw-shell:has([data-brand-layout-mode="rail"]) .bw-rail-create-menu [data-rail-create-link="commission"] .bw-rail-icon {
-  color: var(--ys-accent);
+  color: var(--ys-ink);
 }
 .bw-shell:has([data-brand-layout-mode="rail"]) :is(.bw-rail-create-menu, .bw-rail-sheet-create, .bw-rail-tabs, .bw-rail-sheet-list) .bw-rail-icon,
 .bw-shell:has([data-brand-layout-mode="rail"]) :is(.bw-rail-toast-close, .bw-rail-sheet-close) svg {
@@ -728,8 +725,8 @@
   height: 8px;
   flex: none;
   border-radius: 50%;
-  background: var(--ys-accent);
-  box-shadow: 0 0 0 3px var(--ys-accent-soft);
+  background: var(--ys-ink);
+  box-shadow: 0 0 0 3px var(--ys-raised);
 }
 .bw-shell:has([data-brand-layout-mode="rail"]) .bw-rail-toast[data-rail-toast="failed"] .bw-rail-toast-dot {
   background: var(--ys-ink-muted);
@@ -745,13 +742,13 @@
   margin-left: auto;
   padding: 0 12px;
   border-radius: 18px;
-  color: var(--ys-accent-text);
+  color: var(--ys-ink);
   font-weight: 600;
   text-decoration: none;
   white-space: nowrap;
 }
 .bw-shell:has([data-brand-layout-mode="rail"]) .bw-rail-toast-link:hover {
-  background: var(--ys-accent-soft);
+  background: var(--ys-hover);
 }
 .bw-shell:has([data-brand-layout-mode="rail"]) .bw-rail-toast-close {
   display: grid;
@@ -896,7 +893,7 @@
     font-weight: 650;
   }
   .bw-shell:has([data-brand-layout-mode="rail"]) .bw-rail-tabs :is(a, button)[aria-current="page"] .bw-rail-icon {
-    color: var(--ys-accent);
+    color: var(--ys-ink);
   }
   .bw-shell:has([data-brand-layout-mode="rail"]) .bw-rail-tabs .bw-rail-badge {
     position: absolute;
@@ -908,10 +905,11 @@
     height: 16px;
     padding: 0 4px;
     border-radius: 8px;
-    background: var(--ys-accent);
-    color: var(--ys-on-accent);
+    background: var(--ys-active-bg);
+    color: var(--ys-active-fg);
+    font-family: var(--ys-mono);
     font-size: 10px;
-    font-weight: 700;
+    font-weight: 600;
     font-variant-numeric: tabular-nums;
   }
 
@@ -1009,13 +1007,17 @@
   text-decoration: none;
 }
 .bw-shell:has([data-brand-layout-mode="rail"]) .bw-rail-sheet-list a[aria-current="page"] {
-  background: var(--ys-raised);
-  font-weight: 650;
+  background: var(--ys-active-bg);
+  color: var(--ys-active-fg);
+  font-weight: 600;
+}
+.bw-shell:has([data-brand-layout-mode="rail"]) .bw-rail-sheet-list a[aria-current="page"] .bw-rail-icon {
+  color: var(--ys-active-fg);
 }
 .bw-shell:has([data-brand-layout-mode="rail"]) .bw-rail-sheet-create [data-rail-create-commission] {
   grid-column: 1 / -1;
-  color: var(--ys-accent-text);
-  background: color-mix(in srgb, var(--ys-accent) 6%, var(--ys-surface));
+  color: var(--ys-ink);
+  background: var(--ys-raised);
 }
 .bw-shell:has([data-brand-layout-mode="rail"]) .bw-rail-sheet-group {
   display: grid;
@@ -1024,7 +1026,7 @@
 .bw-shell:has([data-brand-layout-mode="rail"]) .bw-rail-sheet-group[data-rail-section="team"] {
   padding: 6px;
   border-radius: 18px;
-  background: color-mix(in srgb, var(--ys-accent) 6%, transparent);
+  background: var(--ys-subtle-bg);
 }
 .bw-shell:has([data-brand-layout-mode="rail"]) .bw-rail-sheet-group-title {
   margin: 0;
@@ -1034,7 +1036,7 @@
   font-weight: 600;
 }
 .bw-shell:has([data-brand-layout-mode="rail"]) .bw-rail-sheet-group[data-rail-section="team"] .bw-rail-sheet-group-title {
-  color: var(--ys-accent-text);
+  color: var(--ys-ink-secondary);
 }
 
 @media (min-width: 641px) and (max-height: 940px) {

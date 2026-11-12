@@ -5,28 +5,28 @@
  */
 .page {
   --id-paper: #ffffff;
-  --id-canvas: #f6f7f9;
-  --id-sky: #e8eff7;
-  --id-ink: #0e1013;
-  --id-body: #41444d;
-  --id-muted: #676b75;
-  --id-line: #e4e6ea;
-  --id-line-strong: #c7ccd3;
-  --id-accent: #3875c5;
-  --id-accent-text: color-mix(in srgb, var(--id-accent) 85%, #000000);
+  --id-canvas: #ffffff;
+  --id-sky: #f4f4f5;
+  --id-ink: #09090b;
+  --id-body: #52525b;
+  --id-muted: #71717a;
+  --id-line: rgba(0, 0, 0, 0.04);
+  --id-line-strong: rgba(0, 0, 0, 0.12);
+  --id-accent: #0033ff;
+  --id-accent-text: #09090b;
   --id-spring: linear(0, 0.009, 0.035 2.1%, 0.141, 0.281 6.7%, 0.723 12.9%, 0.938 16.7%, 1.017, 1.077, 1.121, 1.149 24.3%, 1.159, 1.163, 1.161, 1.154 29.9%, 1.129 32.8%, 1.051 39.6%, 1.017 43.1%, 0.991, 0.977 51%, 0.974 53.8%, 0.975 57.1%, 0.997 69.8%, 1.003 76.9%, 1);
-  --accent: var(--id-accent-text);
+  --accent: var(--id-ink);
   min-height: 100svh;
   padding: 14px;
   color: var(--id-ink);
   background: var(--id-canvas);
-  font-family: 'Pretendard Variable', Pretendard, 'Apple SD Gothic Neo', 'Malgun Gothic', system-ui, sans-serif;
+  font-family: 'Geist', 'Pretendard Variable', Pretendard, -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
   font-synthesis: none;
-  letter-spacing: -0.01em;
+  letter-spacing: -0.02em;
 }
-.page ::selection { background: color-mix(in srgb, var(--id-accent) 22%, var(--id-paper)); }
+.page ::selection { background: color-mix(in srgb, var(--id-accent) 18%, var(--id-paper)); }
 .page a:focus-visible, .page button:focus-visible {
-  outline: 2px solid var(--id-accent);
+  outline: 2px solid var(--id-ink);
   outline-offset: 3px;
 }
 .layout { display: grid; grid-template-columns: minmax(0, 1fr) minmax(380px, 460px); gap: 14px; min-height: calc(100svh - 28px); }
@@ -34,13 +34,13 @@
 /* ---------- One brand's world: the same palette through look, film and product ---------- */
 .stage { position: relative; display: flex; flex-direction: column; overflow: hidden; min-width: 0; min-height: 0; border-radius: 24px; background: var(--id-sky); isolation: isolate; }
 .stageHead { padding: clamp(24px, 2.8vw, 44px) clamp(14px, 1.4vw, 22px) 0; }
-.title { color: var(--id-ink); font-size: clamp(2rem, 3.9vw, 4rem); font-weight: 540; line-height: 1.02; letter-spacing: -0.052em; white-space: pre-line; word-break: keep-all; }
-.kit { display: flex; width: fit-content; align-items: center; gap: 12px; margin-top: 18px; padding: 7px 14px 7px 10px; border: 1px solid rgb(0 0 0 / 0.06); border-radius: 999px; background: var(--id-paper); font-size: 12px; color: var(--id-muted); }
+.title { color: var(--id-ink); font-size: clamp(2rem, 3.9vw, 4rem); font-weight: 650; line-height: 1.08; letter-spacing: -0.035em; white-space: pre-line; word-break: keep-all; }
+.kit { display: flex; width: fit-content; align-items: center; gap: 12px; margin-top: 18px; padding: 7px 14px 7px 10px; border: 0; border-radius: 999px; background: var(--id-paper); font-size: 12px; color: var(--id-muted); }
 .kit img { width: 22px; height: 22px; }
 .swatches { display: flex; }
 .swatches i { width: 16px; height: 16px; border-radius: 50%; border: 1.5px solid var(--id-paper); margin-left: -4px; }
-.wall { flex: 1; min-height: 0; display: grid; grid-template-columns: 1.08fr 1fr 1fr; grid-template-rows: repeat(2, minmax(0, 1fr)); gap: clamp(8px, 0.9vw, 14px); margin-top: clamp(20px, 2.4vw, 32px); padding: 0 clamp(14px, 1.4vw, 22px) clamp(14px, 1.4vw, 22px); }
-.tile { position: relative; overflow: hidden; border-radius: 18px; background: #d0dbe7; animation: focusIn 900ms cubic-bezier(0.22, 1, 0.36, 1) both; animation-delay: calc(var(--i) * 70ms); }
+.wall { flex: 1; min-height: 0; display: grid; grid-template-columns: 1.08fr 1fr 1fr; grid-template-rows: repeat(2, minmax(0, 1fr)); gap: clamp(8px, 0.9vw, 12px); margin-top: clamp(20px, 2.4vw, 32px); padding: 0 clamp(14px, 1.4vw, 22px) clamp(14px, 1.4vw, 22px); }
+.tile { position: relative; overflow: hidden; border-radius: 14px; background: #e4e4e7; animation: focusIn 900ms cubic-bezier(0.22, 1, 0.36, 1) both; animation-delay: calc(var(--i) * 70ms); }
 .tile:nth-child(-n+2) { grid-row: span 2; }
 .tile img, .tile video { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
 .tile:nth-child(1) img { object-position: 50% 30%; }
@@ -74,9 +74,9 @@
 .languages a { min-width: 36px; min-height: 44px; display: grid; place-items: center; color: var(--id-muted); }
 .languages a[aria-current] { color: var(--id-ink); text-decoration: underline; text-underline-offset: 6px; }
 .login { margin: auto 0; padding: 48px 0; }
-.login h1 { font-size: clamp(1.625rem, 2.2vw, 2rem); font-weight: 560; line-height: 1.06; letter-spacing: -0.045em; word-break: keep-all; }
-.loginHint { margin-top: 12px; font-size: 15px; line-height: 1.62; color: var(--id-body); }
-.login [role='alert'] { padding: 12px 14px; border: 0; border-radius: 14px; background: color-mix(in srgb, var(--id-accent) 9%, var(--id-paper)); color: var(--id-ink); font-size: 14px; font-weight: 500; }
+.login h1 { font-size: clamp(1.625rem, 2.2vw, 2rem); font-weight: 650; line-height: 1.25; letter-spacing: -0.035em; word-break: keep-all; }
+.loginHint { margin-top: 12px; font-size: 15px; line-height: 1.62; color: #71717a; }
+.login [role='alert'] { padding: 12px 14px; border: 0; border-radius: 14px; background: #f4f4f5; color: var(--id-ink); font-size: 14px; font-weight: 500; }
 .providers { display: flex; flex-direction: column; gap: 10px; margin-top: 32px; }
 /* Pills, as every button on this side. Google's and Kakao's colours and marks stay theirs. */
 .providers a { border-radius: 999px; transition: transform 240ms cubic-bezier(0.22, 1, 0.36, 1); transition: transform 240ms var(--id-spring); }

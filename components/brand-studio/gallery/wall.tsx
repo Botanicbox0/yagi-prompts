@@ -236,9 +236,12 @@ function FailedTile({ entry, copy, canGenerate, onRetry }: WallProps & { entry: 
   const reason = job.errorCode === "provider_rejected" && job.references.length > 0 ? copy.board.rejectedWithReferences : errorLine(copy, job.errorCode);
   return (
     <div className="bs-tile" data-state="failed" data-studio-job={job.id} style={tileStyle(entry.ratio)} role="group" aria-label={copy.gallery.failed}>
+      <span className="bs-tile-failed-icon" aria-hidden="true">
+        <StudioIcon name="info" />
+      </span>
       <p className="bs-tile-reason">{reason}</p>
       {canGenerate && (
-        <button type="button" className="bs-btn" data-variant="soft" data-size="sm" onClick={() => onRetry(job)}>
+        <button type="button" className="bs-btn bs-tile-retry" data-variant="soft" data-size="sm" onClick={() => onRetry(job)}>
           <StudioIcon name="rerun" />
           {copy.board.retry}
         </button>
@@ -322,8 +325,20 @@ function ResultTile(props: WallProps & { entry: Extract<Entry, { type: "result" 
           <img src={output.thumbUrl ?? output.url} alt="" loading="lazy" decoding="async" draggable={false} />
         )}
       </button>
-      {(output.draft || job.kind === "region_edit") && (
-        <span className="bs-tile-badge">{output.draft ? copy.board.draftBadge : copy.board.editBadge}</span>
+      {canGenerate && image ? (
+        <button
+          type="button"
+          className="bs-tile-pill"
+          data-studio-region-pill
+          onClick={() => onAction("region", entry.item)}
+        >
+          <StudioIcon name="region" />
+          <span>{m.region}</span>
+        </button>
+      ) : (
+        (output.draft || job.kind === "region_edit") && (
+          <span className="bs-tile-badge">{output.draft ? copy.board.draftBadge : copy.board.editBadge}</span>
+        )
       )}
       {canEdit && (
         <button

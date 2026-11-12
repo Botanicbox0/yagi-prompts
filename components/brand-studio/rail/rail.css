@@ -21,22 +21,13 @@
   padding: 12px;
   gap: 8px;
   border-radius: 24px;
-  background: var(--ys-glass, rgba(255, 255, 255, 0.75));
-  box-shadow: var(--ys-ring), var(--ys-rim), var(--ys-shadow-2);
+  background: var(--ys-panel);
+  box-shadow: none;
   color: var(--ys-ink);
   font-size: 13px;
   transition: width var(--ys-dur-spring) var(--ys-spring), box-shadow var(--ys-dur) var(--ys-ease);
 }
-@supports ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
-  .bsr {
-    -webkit-backdrop-filter: blur(20px) saturate(180%);
-    backdrop-filter: blur(20px) saturate(180%);
-  }
-}
-@supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
-  .bsr { background: var(--ys-surface); }
-}
-.bsr[data-drop-target] { box-shadow: 0 0 0 2px var(--ys-accent), var(--ys-rim), var(--ys-shadow-2); }
+.bsr[data-drop-target] { box-shadow: 0 0 0 2px var(--ys-ink); }
 /* Folded, the handle hugs the right edge of whatever column holds it. */
 .bsr[data-collapsed] { width: 48px; margin-left: auto; padding: 6px; }
 
@@ -63,7 +54,7 @@
   transition: background-color var(--ys-dur) var(--ys-ease), color var(--ys-dur) var(--ys-ease), box-shadow var(--ys-dur) var(--ys-ease);
 }
 .bsr-tab:hover { color: var(--ys-ink); }
-.bsr-tab[aria-selected="true"] { background: var(--ys-surface); color: var(--ys-ink); box-shadow: var(--ys-ring), var(--ys-shadow-1); }
+.bsr-tab[aria-selected="true"] { background: var(--ys-active-bg); color: var(--ys-active-fg); font-weight: 600; box-shadow: none; }
 
 .bsr-icon-btn {
   display: inline-grid;
@@ -80,13 +71,13 @@
   transition: background-color var(--ys-dur) var(--ys-ease), color var(--ys-dur) var(--ys-ease);
 }
 .bsr-icon-btn:hover { background: var(--ys-hover); color: var(--ys-ink); }
-.bsr-icon-btn[data-active] { background: var(--ys-surface); color: var(--ys-ink); box-shadow: var(--ys-ring); }
+.bsr-icon-btn[data-active] { background: var(--ys-active-bg); color: var(--ys-active-fg); box-shadow: none; }
 .bsr-sheet-close { display: none; }
 
 .bsr-handle { display: flex; flex-direction: column; align-items: center; gap: 6px; }
 .bsr-handle .bsr-icon-btn:first-child { margin-bottom: 4px; }
 
-.bsr-status { margin: 0; color: var(--ys-accent-text); font-size: 12px; line-height: 1.4; }
+.bsr-status { margin: 0; color: var(--ys-ink-secondary); font-size: 12px; line-height: 1.4; }
 .bsr-status:empty { height: 0; margin: -4px 0 0; overflow: hidden; }
 
 .bsr-panel { flex: 1; min-height: 0; overflow: auto; margin: 0 -12px; padding: 2px 12px 10px; overscroll-behavior: contain; scrollbar-width: thin; }
@@ -112,7 +103,7 @@
   transition: color var(--ys-dur) var(--ys-ease), background-color var(--ys-dur) var(--ys-ease);
 }
 .bsr-all-link:hover {
-  color: var(--ys-accent-text);
+  color: var(--ys-ink);
   background: var(--ys-hover);
 }
 
@@ -135,10 +126,10 @@
   transition: transform 150ms var(--ys-ease), background-color 150ms var(--ys-ease);
 }
 .bsr-btn .bsr-icon { width: 16px; height: 16px; }
-.bsr-btn[data-variant="soft"] { background: var(--ys-surface); color: var(--ys-ink); box-shadow: inset 0 0 0 1px var(--ys-line-strong); }
+.bsr-btn[data-variant="soft"] { background: var(--ys-surface); color: var(--ys-ink); box-shadow: none; }
 .bsr-btn[data-variant="ghost"] { background: transparent; color: var(--ys-ink-secondary); }
 .bsr-btn[data-variant="ghost"]:hover:not(:disabled) { background: var(--ys-hover); color: var(--ys-ink); }
-.bsr-btn[data-tone="accent"] { color: var(--ys-accent-text); box-shadow: inset 0 0 0 1px var(--ys-accent-line); }
+.bsr-btn[data-tone="accent"] { background: var(--ys-active-bg); color: var(--ys-active-fg); box-shadow: none; }
 .bsr-btn[data-tone="danger"] { color: var(--ys-danger); }
 .bsr-btn:active:not(:disabled) { transform: scale(0.97); }
 .bsr-btn:disabled { opacity: 0.5; cursor: not-allowed; }
@@ -165,14 +156,14 @@
   border: 0;
   border-radius: var(--ys-r-pill);
   background: var(--ys-surface);
-  box-shadow: var(--ys-ring);
+  box-shadow: none;
   color: var(--ys-ink-secondary);
   font: inherit;
   font-size: 12px;
   white-space: nowrap;
   cursor: pointer;
 }
-.bsr-chip[data-selected] { color: var(--ys-ink); box-shadow: 0 0 0 1.5px var(--ys-ink); }
+.bsr-chip[data-selected] { background: var(--ys-active-bg); color: var(--ys-active-fg); box-shadow: none; }
 
 .bsr-row { display: flex; align-items: center; justify-content: flex-end; gap: 6px; }
 .bsr-spacer { flex: 1; }

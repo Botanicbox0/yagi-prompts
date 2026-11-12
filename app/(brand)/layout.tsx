@@ -27,7 +27,7 @@ import { getRequestLocale } from "@/lib/i18n/server";
 import { getDictionary } from "@/lib/i18n/dictionaries";
 export const dynamic = "force-dynamic";
 /** Mobile browser chrome matches the alabaster canvas around the workspace frame. */
-export const viewport: Viewport = { themeColor: "#f8f9fa" };
+export const viewport: Viewport = { themeColor: "#ffffff" };
 export async function generateMetadata(): Promise<Metadata> {
   const d = getDictionary(await getRequestLocale());
   return {
@@ -63,9 +63,14 @@ export default async function BrandLayout({
   return (
     <html lang={locale} className={fontVariables} data-brand-workspace>
       <head>
+        <link rel="stylesheet" href="/fonts/geist/geist.css" />
         <link
           rel="stylesheet"
           href="/fonts/pretendard/pretendard-dynamic-subset.css"
+        />
+        <link
+          rel="stylesheet"
+          href="/fonts/pretendard/pretendard-hangul-mono.css"
         />
       </head>
       <body>

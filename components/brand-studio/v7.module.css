@@ -11,31 +11,31 @@
   color: var(--id-ink);
   background: var(--id-canvas);
   font-family: var(--id-sans);
-  letter-spacing: -0.01em;
+  letter-spacing: -0.02em;
 }
 
 /* ---------- Type ---------- */
 .display {
   font-size: clamp(2.5rem, 5.6vw, 5.6rem);
-  font-weight: 540;
-  letter-spacing: -0.052em;
-  line-height: 1.02;
+  font-weight: 650;
+  letter-spacing: -0.035em;
+  line-height: 1.08;
   white-space: pre-line;
   text-wrap: balance;
 }
 .h2 {
   font-size: clamp(2rem, 3.9vw, 3.75rem);
-  font-weight: 560;
-  letter-spacing: -0.045em;
-  line-height: 1.06;
+  font-weight: 650;
+  letter-spacing: -0.035em;
+  line-height: 1.15;
   white-space: pre-line;
   text-wrap: balance;
 }
-.h3 { font-size: clamp(1.45rem, 2.1vw, 2rem); font-weight: 600; letter-spacing: -0.035em; line-height: 1.15; text-wrap: balance; }
-.lead { max-width: 34rem; font-size: clamp(1.02rem, 1.25vw, 1.2rem); line-height: 1.62; color: var(--id-body); text-wrap: pretty; }
-.body { font-size: 15px; line-height: 1.65; color: var(--id-body); text-wrap: pretty; }
-.note { font-size: 13px; line-height: 1.55; color: var(--id-muted); }
-.mono { font-family: var(--id-mono); font-size: 11.5px; letter-spacing: 0.02em; font-feature-settings: 'tnum'; }
+.h3 { font-size: clamp(1.45rem, 2.1vw, 2rem); font-weight: 650; letter-spacing: -0.035em; line-height: 1.25; text-wrap: balance; }
+.lead { max-width: 34rem; font-size: clamp(1.02rem, 1.25vw, 1.2rem); line-height: 1.55; color: var(--id-body); text-wrap: pretty; }
+.body { font-size: 15px; line-height: 1.6; color: var(--id-body); text-wrap: pretty; }
+.note { font-size: 13px; line-height: 1.55; color: var(--id-muted); font-weight: 400; }
+.mono { font-family: var(--id-mono); font-size: 11.5px; letter-spacing: 0; font-variant-numeric: tabular-nums; font-feature-settings: 'tnum'; }
 .eyebrow {
   display: inline-flex;
   align-items: center;
@@ -44,7 +44,7 @@
   font-weight: 560;
   color: var(--id-body);
 }
-.eyebrowMark { width: 7px; height: 7px; border-radius: 2px; background: var(--id-accent); }
+.eyebrowMark { width: 7px; height: 7px; border-radius: 2px; background: var(--id-ink); }
 .status {
   display: inline-flex;
   align-items: center;
@@ -53,8 +53,8 @@
   border-radius: 999px;
   font-size: 11px;
   font-weight: 600;
-  color: var(--id-accent-text);
-  background: var(--id-accent-tint);
+  color: var(--id-ink);
+  background: var(--id-sky);
 }
 .status[data-status='live'] { color: var(--id-ink); background: var(--id-paper); box-shadow: inset 0 0 0 1px var(--id-line); }
 

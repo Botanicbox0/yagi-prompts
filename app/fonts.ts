@@ -53,9 +53,9 @@ export const satoshi = localFont({
   adjustFontFallback: 'Arial',
 });
 
-/** Prompts and param tables. Always behind a lock or below the fold — not preloaded. */
+/** Prompts, spec badges and numeric tables. Variable 100–900 self-hosted WOFF2. */
 export const geistMono = localFont({
-  src: [{ path: '../assets/fonts/geist-mono-400.woff2', weight: '400', style: 'normal' }],
+  src: [{ path: '../assets/fonts/geist-mono-variable.woff2', weight: '100 900', style: 'normal' }],
   variable: '--font-geist-mono',
   display: 'swap',
   preload: false,

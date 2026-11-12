@@ -7,11 +7,11 @@
 
 | 항목 | 값 |
 | --- | --- |
-| 모드 | **화이트(라이트) 모드.** 브랜드 랜딩(`/brands`)과 brand.twings.app이 같은 톤이다. |
-| 서체 | `Pretendard Variable`. 헤드라인 700–800, 자간 -0.03em ~ -0.04em. 본문 400–500, 자간 -0.01em. |
-| 포인트 색 | **블루 하나, 토큰 하나.** 현재 값 `#3875C5`(대표 레퍼런스의 콘플라워 블루, 2026-10-29). brand.twings.app은 `--ys-accent`, 랜딩은 `--lp-blue`. 작은 글자로 쓰는 블루는 `--ys-accent-text`(같은 색상을 85%로 어둡게 섞은 값)로 대비를 지킨다. 메인 키 컬러는 바뀔 수 있으니 화면 코드에 hex를 쓰지 않고, 옅은 바탕·선·빛은 `color-mix(in srgb, var(--ys-accent) N%, transparent)`로 파생한다. 잉크와 흰색 위에서만 쓴다. |
+| 모드 | **화이트(라이트) 모드.** 브랜드 랜딩(`/brands`)과 brand.twings.app이 같은 순백색(`#FFFFFF`) + 쿨그레이(`#F4F4F5`) 무보더 층위를 쓴다. |
+| 서체 | `'Geist', 'Pretendard Variable', Pretendard, -apple-system, sans-serif` + 수치·스펙 `'Geist Mono'`(`tabular-nums` 필수). 헤드라인 `650`, 자간 `-0.035em`, 행간 `1.25`. 본문·버튼·탭 자간 `-0.02em`. |
+| 포인트 색 | **95% 무채색 + 5% Electric Ultramarine(`#0033FF`, 호버 `#0026CC`).** 최종 생성·핵심 실행 CTA 단 하나에만 솔리드 채움(`0 4px 14px rgba(0,51,255,0.28)`)으로 쓴다. 탭·옵션·토글·사이드바 `+` 등 모든 선택/활성 상태는 Rich Black(`#09090B` + `#FFFFFF`)으로 통일하고 연파랑 파스텔 틴트는 쓰지 않는다. |
 | 빨강 | **브랜드 강조로 쓰지 않는다.** 전역 YAGI v1.2(primary RED `#ED1E1E`)는 TWINGS 화면에 적용하지 않는다. 오류·삭제 같은 진짜 의미 상태에만 낮은 채도의 상태색을 남긴다. |
-| 층위 | 갤러리 알라바스터 `#F8F9FA`(바탕) / 퓨어 화이트 `#FFFFFF`(작업 면·카드) |
+| 층위 | 퓨어 화이트 `#FFFFFF`(메인 캔버스·카드) / 쿨그레이 `#F4F4F5`(사이드바·패널·비활성 알약, 호버 `#E4E4E7`) — 외곽 실선 제거 |
 | 이징 | spring 토큰 하나. CSS `linear()` 스프링을 쓰고, `cubic-bezier(0.22, 1, 0.36, 1)`을 폴백으로 둔다. `linear`와 기본 `ease`는 쓰지 않는다. |
 | 의존성 | 모션 라이브러리는 없다(`framer-motion` 미설치). 새로 넣지 않는다. Shared layout은 View Transitions API(`view-transition-name`)나 FLIP으로 만든다. |
 

@@ -322,7 +322,7 @@ export const studioLayersKo: typeof studioLayersEn = {
 
   region: {
     title: "부분 수정",
-    emptyHint: "그림을 확대해 고칠 부위만 작게 사각형으로 선택해 보세요.",
+    emptyHint: "이미지를 확대해 수정할 부위만 작게 선택해 보세요.",
     placeCenter: "가운데 영역 잡기",
     clearBox: "선택 해제",
     inputPreviewLabel: "입력 미리보기",
@@ -343,7 +343,7 @@ export const studioLayersKo: typeof studioLayersEn = {
     quickPick: "빠른 추가",
     assistantTitle: "지시 도우미",
     assistantTipLabel: "지시 도우미 안내",
-    assistantTip: "선택한 조각이 1번, 추가한 참조가 2번부터 번호가 매겨져요. 고칠 곳만 작게 고르면 주변 배경과 윤곽이 그대로 유지돼요.",
+    assistantTip: "선택 영역은 1번, 추가 참조 이미지는 2번부터 지정돼요. 영역을 작게 잡을수록 주변 배경과 윤곽이 자연스럽게 유지돼요.",
     instructionLabel: "수정 지시",
     placeholderNoRef: "1번 이미지에서 무엇을 고칠지 적어 주세요.",
     placeholderWithRef: "예: 2번 이미지의 로고를 1번 이미지 표면에 자연스럽게 인쇄해줘.",
@@ -366,9 +366,9 @@ export const studioLayersKo: typeof studioLayersEn = {
     emptyPrompt: "무엇을 고칠지 적거나 위에서 작업을 골라 주세요.",
     missingRefMention: "{n}번 참조 이미지를 먼저 추가하거나 문장의 번호를 확인해 주세요.",
     tooManyRefs: "이 모델에는 참조 이미지를 최대 {max}장까지 넣을 수 있어요.",
-    patchArrived: "새 레이어로 들어왔어요. 바탕 눈을 끄고 지우개로 가장자리를 다듬어 보세요.",
+    patchArrived: "새 레이어로 생성됐어요. 하단 레이어의 눈을 끄고 지우개로 가장자리를 부드럽게 다듬어 보세요.",
     autoFlattenedDone: "부분 수정이 완료되어 갤러리에 반영되었어요.",
-    failedToast: "부분 수정을 마치지 못했어요. 고칠 부위를 조금 더 작게 골라 보세요.",
+    failedToast: "부분 수정에 실패했어요. 수정 영역을 조금 더 작게 잡아 보세요.",
   },
 
   props: {

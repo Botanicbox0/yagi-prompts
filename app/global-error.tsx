@@ -62,9 +62,10 @@ export default function GlobalError({
       <body
         style={{
           margin: 0,
-          background: '#F6F7F9',
-          color: '#0E1013',
-          fontFamily: "'Pretendard Variable', 'Apple SD Gothic Neo', 'Malgun Gothic', ui-sans-serif, system-ui, sans-serif",
+          background: '#FFFFFF',
+          color: '#09090B',
+          fontFamily: "'Geist', 'Pretendard Variable', Pretendard, -apple-system, BlinkMacSystemFont, ui-sans-serif, system-ui, sans-serif",
+          letterSpacing: '-0.02em',
           wordBreak: 'keep-all',
           display: 'flex',
           minHeight: '100vh',
@@ -79,9 +80,9 @@ export default function GlobalError({
           style={{
             maxWidth: 460,
             width: '100%',
-            background: '#FFFFFF',
+            background: '#F4F4F5',
             borderRadius: 24,
-            border: '1px solid #DCDEE2',
+            border: 0,
             padding: '32px 28px',
             boxSizing: 'border-box',
           }}
@@ -92,17 +93,17 @@ export default function GlobalError({
               fontWeight: 600,
               letterSpacing: '0.1em',
               textTransform: 'uppercase',
-              color: '#3063A7',
+              color: '#52525B',
               margin: 0,
             }}
           >
             TWINGS
           </p>
-          <h1 style={{ fontSize: 24, lineHeight: 1.3, fontWeight: 600, margin: '14px 0 0' }}>{ko.title}</h1>
-          <p style={{ fontSize: 15, lineHeight: 1.6, color: '#41444D', margin: '10px 0 0' }}>{ko.body}</p>
+          <h1 style={{ fontSize: 24, lineHeight: 1.25, fontWeight: 650, letterSpacing: '-0.035em', margin: '14px 0 0' }}>{ko.title}</h1>
+          <p style={{ fontSize: 15, lineHeight: 1.6, color: '#71717A', margin: '10px 0 0' }}>{ko.body}</p>
           <div lang="en">
-            <p style={{ fontSize: 16, lineHeight: 1.35, fontWeight: 600, margin: '20px 0 0' }}>{en.title}</p>
-            <p style={{ fontSize: 14, lineHeight: 1.6, color: '#41444D', margin: '6px 0 0' }}>{en.body}</p>
+            <p style={{ fontSize: 16, lineHeight: 1.35, fontWeight: 650, letterSpacing: '-0.03em', margin: '20px 0 0' }}>{en.title}</p>
+            <p style={{ fontSize: 14, lineHeight: 1.6, color: '#71717A', margin: '6px 0 0' }}>{en.body}</p>
           </div>
           <div style={{ display: 'flex', flexWrap: 'wrap', gap: 10, marginTop: 24 }}>
             <button
@@ -110,13 +111,14 @@ export default function GlobalError({
               onClick={() => window.location.reload()}
               style={{
                 minHeight: 44,
-                padding: '0 20px',
+                padding: '0 22px',
                 borderRadius: 999,
-                border: '1px solid #3875C5',
-                background: '#3875C5',
+                border: 0,
+                background: '#0033FF',
                 color: '#FFFFFF',
                 fontSize: 13,
                 fontWeight: 600,
+                boxShadow: '0 4px 14px rgba(0, 51, 255, 0.28)',
                 cursor: 'pointer',
               }}
             >
@@ -129,9 +131,9 @@ export default function GlobalError({
                 minHeight: 44,
                 padding: '0 20px',
                 borderRadius: 999,
-                border: '1px solid #C7CCD3',
+                border: 0,
                 background: '#FFFFFF',
-                color: '#0E1013',
+                color: '#09090B',
                 fontSize: 13,
                 fontWeight: 600,
                 cursor: 'pointer',

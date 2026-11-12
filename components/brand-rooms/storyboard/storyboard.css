@@ -9,32 +9,31 @@
  */
 .brs,
 .brs-overlay {
-  --brs-accent: var(--ys-accent, var(--admin-accent, #3875c5));
-  --brs-accent-text: color-mix(in srgb, var(--brs-accent) 85%, #000000);
-  --brs-accent-soft: color-mix(in srgb, var(--brs-accent) 8%, transparent);
-  --brs-accent-line: color-mix(in srgb, var(--brs-accent) 32%, transparent);
-  --brs-ink: var(--ys-ink, var(--admin-ink, #111114));
-  --brs-body: var(--ys-ink-secondary, var(--admin-body, #41444d));
-  --brs-muted: var(--ys-ink-muted, var(--admin-muted, #676b75));
+  --brs-accent: var(--ys-accent, var(--admin-accent, #0033ff));
+  --brs-accent-text: var(--ys-ink, var(--admin-ink, #09090b));
+  --brs-accent-soft: var(--ys-panel, #f4f4f5);
+  --brs-accent-line: rgba(9, 9, 11, 0.14);
+  --brs-ink: var(--ys-ink, var(--admin-ink, #09090b));
+  --brs-body: var(--ys-ink-secondary, var(--admin-body, #52525b));
+  --brs-muted: var(--ys-ink-muted, var(--admin-muted, #71717a));
   --brs-surface: var(--ys-surface, var(--admin-paper, #ffffff));
-  --brs-canvas: var(--ys-canvas, var(--admin-canvas, #f6f7f9));
-  --brs-raised: var(--ys-raised, #f1f2f4);
-  --brs-hover: var(--ys-hover, #eceef1);
-  --brs-mat: var(--ys-media-bg, #eef0f3);
-  --brs-hairline: var(--ys-hairline, rgba(0, 0, 0, 0.06));
-  --brs-line: var(--ys-line, rgba(0, 0, 0, 0.08));
-  --brs-line-strong: var(--ys-line-strong, rgba(0, 0, 0, 0.16));
+  --brs-canvas: var(--ys-canvas, var(--admin-canvas, #ffffff));
+  --brs-raised: var(--ys-raised, #f4f4f5);
+  --brs-hover: var(--ys-hover, #e4e4e7);
+  --brs-mat: var(--ys-media-bg, #f4f4f5);
+  --brs-hairline: var(--ys-hairline, rgba(0, 0, 0, 0.04));
+  --brs-line: var(--ys-line, rgba(0, 0, 0, 0.04));
+  --brs-line-strong: var(--ys-line-strong, rgba(0, 0, 0, 0.12));
   --brs-danger: var(--ys-danger, #a3392f);
-  --brs-glass-dark: rgba(18, 18, 22, 0.66);
+  --brs-glass-dark: rgba(0, 0, 0, 0.65);
   --brs-ease: var(--ys-ease, cubic-bezier(0.22, 1, 0.36, 1));
   --brs-dur: 200ms;
-  --brs-r-card: 20px;
-  --brs-r-media: 14px;
-  --brs-well: inset 0 1px 2px rgba(16, 18, 24, 0.06), inset 0 0 0 1px rgba(0, 0, 0, 0.07);
-  --brs-card: 0 0 0 1px var(--brs-hairline), 0 1px 1px rgba(16, 18, 24, 0.03), 0 2px 6px rgba(16, 18, 24, 0.03);
-  --brs-card-hover: 0 0 0 1px var(--brs-line), 0 2px 4px rgba(16, 18, 24, 0.04), 0 10px 24px rgba(16, 18, 24, 0.05);
-  --brs-float: 0 0 0 1px var(--brs-hairline), inset 0 1px 0 0 rgba(255, 255, 255, 0.9), 0 2px 4px rgba(16, 18, 24, 0.04),
-    0 10px 24px rgba(16, 18, 24, 0.05), 0 28px 64px rgba(16, 18, 24, 0.06);
+  --brs-r-card: 16px;
+  --brs-r-media: 12px;
+  --brs-well: none;
+  --brs-card: none;
+  --brs-card-hover: var(--ys-shadow-1, 0 2px 8px rgba(0, 0, 0, 0.04));
+  --brs-float: 0 0 0 1px rgba(0, 0, 0, 0.06), 0 20px 48px -12px rgba(0, 0, 0, 0.12);
   color: var(--brs-ink);
 }
 

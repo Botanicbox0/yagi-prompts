@@ -262,7 +262,7 @@ export const roomsStoryboardKo: typeof roomsStoryboardEn = {
     approve: "승인하기",
     requestChanges: "수정 요청하기",
     reopen: "다시 확인하기",
-    waiting: "컷마다 확인한 뒤 승인하거나 수정을 요청해 주세요.",
+    waiting: "각 컷을 확인한 뒤 승인하거나 수정을 요청해 주세요.",
     approved: "승인한 스토리보드예요.",
     changesRequested: "수정을 요청했어요. 야기 팀이 새 버전을 올려요.",
     approveTitle: "이 스토리보드를 승인할까요?",

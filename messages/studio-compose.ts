@@ -128,13 +128,13 @@ export const studioComposeEn = {
 
 export const studioComposeKo: typeof studioComposeEn = {
   title: '영상 합치기',
-  subtitle: '만든 영상을 순서대로 놓고, 앞뒤를 자르고, 자막과 음악을 얹어 1080p MP4 한 편으로 내보내요.',
+  subtitle: '클립을 배열하고 자막과 음악을 더해 1080p MP4 한 편으로 완성하세요.',
   backToVideo: '비디오 스튜디오로',
   summary: '{clips}개 컷 · 총 {seconds}초',
   emptySummary: '합칠 영상을 골라 주세요',
   credits: {
     remaining: '잔여 {credits} 크레딧',
-    chatFreeNotice: '타임라인·자막 채팅 지시는 무료예요(분당 횟수 제한). 1080p 최종 렌더링 실행 시에만 크레딧이 차감돼요.',
+    chatFreeNotice: '타임라인 및 자막 채팅 지시는 무료예요(분당 횟수 제한). 최종 1080p 렌더링 시에만 크레딧이 차감돼요.',
   },
   aspects: {
     label: '화면 비율',
@@ -172,8 +172,8 @@ export const studioComposeKo: typeof studioComposeEn = {
     clipMeta: '{seconds}초',
   },
   stage: {
-    emptyTitle: '이어 붙일 영상을 왼쪽에서 담아 보세요',
-    emptyBody: '스튜디오 결과물이나 컴퓨터의 MP4·MOV 파일을 고르면 순서대로 이어 붙이고, 오른쪽 채팅으로 바로 다듬을 수 있어요.',
+    emptyTitle: '이어 붙일 영상을 추가해 보세요',
+    emptyBody: '스튜디오 결과물이나 MP4·MOV 파일을 불러와 순서대로 배치하고, 오른쪽 채팅으로 간편하게 다듬으세요.',
     play: '미리 재생',
     pause: '일시정지',
     restart: '처음으로',

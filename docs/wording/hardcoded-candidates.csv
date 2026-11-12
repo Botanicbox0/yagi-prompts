@@ -1222,24 +1222,6 @@
 /r/[id]/[token]
 /renders
 /renders/[id]","candidate; may be internal/non-rendered; do not mass-replace"
-"lib/design/identity.ts","101","localized-literal-candidate","Korean is 합니다체 in a founder voice: one idea per sentence, lists of two at most.","/admin/brand-workspace
-/admin/brand-workspace/[id]
-/admin/brand-workspace/organizations/[id]
-/admin/do
-/api/brand-studio
-/api/brand-studio/assets/[id]
-/api/brand-studio/compose
-/api/brand-studio/lane
-/api/brand-studio/library
-/api/brand-studio/review
-/api/brand-studio/summary
-/api/brand-studio/webhook
-/api/brand-workspace
-/api/brand-workspace/studio
-/api/brands/inquiries/tick
-/brand/identity
-/brand/library
-/brand/studio","candidate; may be internal/non-rendered; do not mass-replace"
 "lib/brands/identity/schema.ts","226","localized-literal-candidate","무료 크레딧","/admin/brand-workspace
 /admin/brand-workspace/[id]
 /admin/brand-workspace/organizations/[id]
@@ -22488,7 +22470,7 @@
 /r/[id]/[token]
 /renders
 /renders/[id]","candidate; may be internal/non-rendered; do not mass-replace"
-"components/support/twings-ai-concierge.tsx","474","localized-literal-candidate","1:1 담당 상담원 연결","/[locale]
+"components/support/twings-ai-concierge.tsx","472","localized-literal-candidate","1:1 담당 상담원 연결","/[locale]
 /[locale]/brands
 /[locale]/brands/stories
 /[locale]/brands/stories/[slug]
@@ -22536,7 +22518,7 @@
 /r/[id]/[token]
 /renders
 /renders/[id]","candidate; may be internal/non-rendered; do not mass-replace"
-"components/support/twings-ai-concierge.tsx","479","localized-literal-candidate","로그인 확인됨","/[locale]
+"components/support/twings-ai-concierge.tsx","477","localized-literal-candidate","로그인 확인됨","/[locale]
 /[locale]/brands
 /[locale]/brands/stories
 /[locale]/brands/stories/[slug]
@@ -22584,7 +22566,7 @@
 /r/[id]/[token]
 /renders
 /renders/[id]","candidate; may be internal/non-rendered; do not mass-replace"
-"components/support/twings-ai-concierge.tsx","482","localized-literal-candidate","로그인 필요","/[locale]
+"components/support/twings-ai-concierge.tsx","480","localized-literal-candidate","로그인 필요","/[locale]
 /[locale]/brands
 /[locale]/brands/stories
 /[locale]/brands/stories/[slug]
@@ -22632,7 +22614,7 @@
 /r/[id]/[token]
 /renders
 /renders/[id]","candidate; may be internal/non-rendered; do not mass-replace"
-"components/support/twings-ai-concierge.tsx","492","localized-literal-candidate","상담원(사람)과 실시간으로 대화하려면 로그인이 필요합니다. 로그인하시면 회원님의 계정·제작 내역을 확인하고 담당 상담원과 바로 연결해 드립니다.","/[locale]
+"components/support/twings-ai-concierge.tsx","490","localized-literal-candidate","상담원(사람)과 실시간으로 대화하려면 로그인이 필요합니다. 로그인하시면 회원님의 계정·제작 내역을 확인하고 담당 상담원과 바로 연결해 드립니다.","/[locale]
 /[locale]/brands
 /[locale]/brands/stories
 /[locale]/brands/stories/[slug]
@@ -22680,7 +22662,7 @@
 /r/[id]/[token]
 /renders
 /renders/[id]","candidate; may be internal/non-rendered; do not mass-replace"
-"components/support/twings-ai-concierge.tsx","500","localized-literal-candidate","로그인하고 상담원 연결하기 →","/[locale]
+"components/support/twings-ai-concierge.tsx","498","localized-literal-candidate","로그인하고 상담원 연결하기 →","/[locale]
 /[locale]/brands
 /[locale]/brands/stories
 /[locale]/brands/stories/[slug]
@@ -22728,7 +22710,7 @@
 /r/[id]/[token]
 /renders
 /renders/[id]","candidate; may be internal/non-rendered; do not mass-replace"
-"components/support/twings-ai-concierge.tsx","512","localized-literal-candidate","회원","/[locale]
+"components/support/twings-ai-concierge.tsx","510","localized-literal-candidate","회원","/[locale]
 /[locale]/brands
 /[locale]/brands/stories
 /[locale]/brands/stories/[slug]
@@ -22776,7 +22758,7 @@
 /r/[id]/[token]
 /renders
 /renders/[id]","candidate; may be internal/non-rendered; do not mass-replace"
-"components/support/twings-ai-concierge.tsx","521","localized-literal-candidate","상담원에게 전달할 문의 내용을 입력해 주세요...","/[locale]
+"components/support/twings-ai-concierge.tsx","519","localized-literal-candidate","상담원에게 전달할 문의 내용을 입력해 주세요...","/[locale]
 /[locale]/brands
 /[locale]/brands/stories
 /[locale]/brands/stories/[slug]
@@ -22824,7 +22806,7 @@
 /r/[id]/[token]
 /renders
 /renders/[id]","candidate; may be internal/non-rendered; do not mass-replace"
-"components/support/twings-ai-concierge.tsx","539","localized-literal-candidate","상담원에게 전송 중...","/[locale]
+"components/support/twings-ai-concierge.tsx","537","localized-literal-candidate","상담원에게 전송 중...","/[locale]
 /[locale]/brands
 /[locale]/brands/stories
 /[locale]/brands/stories/[slug]
@@ -22872,7 +22854,7 @@
 /r/[id]/[token]
 /renders
 /renders/[id]","candidate; may be internal/non-rendered; do not mass-replace"
-"components/support/twings-ai-concierge.tsx","542","localized-literal-candidate","담당 상담원에게 바로 보내기 →","/[locale]
+"components/support/twings-ai-concierge.tsx","540","localized-literal-candidate","담당 상담원에게 바로 보내기 →","/[locale]
 /[locale]/brands
 /[locale]/brands/stories
 /[locale]/brands/stories/[slug]
@@ -22920,7 +22902,7 @@
 /r/[id]/[token]
 /renders
 /renders/[id]","candidate; may be internal/non-rendered; do not mass-replace"
-"components/support/twings-ai-concierge.tsx","561","localized-literal-candidate","사람(상담원)과 1:1 대화하기","/[locale]
+"components/support/twings-ai-concierge.tsx","559","localized-literal-candidate","사람(상담원)과 1:1 대화하기","/[locale]
 /[locale]/brands
 /[locale]/brands/stories
 /[locale]/brands/stories/[slug]
@@ -22968,7 +22950,7 @@
 /r/[id]/[token]
 /renders
 /renders/[id]","candidate; may be internal/non-rendered; do not mass-replace"
-"components/support/twings-ai-concierge.tsx","567","localized-literal-candidate","전체 FAQ ↗","/[locale]
+"components/support/twings-ai-concierge.tsx","565","localized-literal-candidate","전체 FAQ ↗","/[locale]
 /[locale]/brands
 /[locale]/brands/stories
 /[locale]/brands/stories/[slug]
@@ -23016,7 +22998,7 @@
 /r/[id]/[token]
 /renders
 /renders/[id]","candidate; may be internal/non-rendered; do not mass-replace"
-"components/support/twings-ai-concierge.tsx","573","localized-literal-candidate","AI 상담 질문 입력","/[locale]
+"components/support/twings-ai-concierge.tsx","571","localized-literal-candidate","AI 상담 질문 입력","/[locale]
 /[locale]/brands
 /[locale]/brands/stories
 /[locale]/brands/stories/[slug]
@@ -23064,7 +23046,7 @@
 /r/[id]/[token]
 /renders
 /renders/[id]","candidate; may be internal/non-rendered; do not mass-replace"
-"components/support/twings-ai-concierge.tsx","583","localized-literal-candidate","궁금한 점을 물어보세요 (예: 옷 변경, 5장 선택, 상담원 연결)","/[locale]
+"components/support/twings-ai-concierge.tsx","581","localized-literal-candidate","궁금한 점을 물어보세요 (예: 옷 변경, 5장 선택, 상담원 연결)","/[locale]
 /[locale]/brands
 /[locale]/brands/stories
 /[locale]/brands/stories/[slug]
@@ -23112,7 +23094,7 @@
 /r/[id]/[token]
 /renders
 /renders/[id]","candidate; may be internal/non-rendered; do not mass-replace"
-"components/support/twings-ai-concierge.tsx","593","localized-literal-candidate","질문","/[locale]
+"components/support/twings-ai-concierge.tsx","591","localized-literal-candidate","질문","/[locale]
 /[locale]/brands
 /[locale]/brands/stories
 /[locale]/brands/stories/[slug]
@@ -23160,7 +23142,7 @@
 /r/[id]/[token]
 /renders
 /renders/[id]","candidate; may be internal/non-rendered; do not mass-replace"
-"components/support/twings-ai-concierge.tsx","605","localized-literal-candidate","TWINGS AI 상담센터 열기","/[locale]
+"components/support/twings-ai-concierge.tsx","603","localized-literal-candidate","TWINGS AI 상담센터 열기","/[locale]
 /[locale]/brands
 /[locale]/brands/stories
 /[locale]/brands/stories/[slug]
@@ -23208,7 +23190,7 @@
 /r/[id]/[token]
 /renders
 /renders/[id]","candidate; may be internal/non-rendered; do not mass-replace"
-"components/support/twings-ai-concierge.tsx","614","jsx-text","AI","/[locale]
+"components/support/twings-ai-concierge.tsx","612","jsx-text","AI","/[locale]
 /[locale]/brands
 /[locale]/brands/stories
 /[locale]/brands/stories/[slug]
@@ -26573,11 +26555,6 @@
 "components/brand-studio/video/clip-trim-modal.tsx","395","jsx-aria-label","Close","/brand/studio/video","candidate; may be internal/non-rendered; do not mass-replace"
 "components/brand-studio/video/clip-trim-modal.tsx","528","jsx-text","start","/brand/studio/video","candidate; may be internal/non-rendered; do not mass-replace"
 "components/brand-studio/video/clip-trim-modal.tsx","540","jsx-text","end","/brand/studio/video","candidate; may be internal/non-rendered; do not mass-replace"
-"components/brand-studio/video/workspace.tsx","849","jsx-text","START","/brand/studio/video","candidate; may be internal/non-rendered; do not mass-replace"
-"components/brand-studio/video/workspace.tsx","857","jsx-text","5s","/brand/studio/video","candidate; may be internal/non-rendered; do not mass-replace"
-"components/brand-studio/video/workspace.tsx","858","jsx-text","Sound","/brand/studio/video","candidate; may be internal/non-rendered; do not mass-replace"
-"components/brand-studio/video/workspace.tsx","863","jsx-text","480p","/brand/studio/video","candidate; may be internal/non-rendered; do not mass-replace"
-"components/brand-studio/video/workspace.tsx","865","jsx-text","1080p","/brand/studio/video","candidate; may be internal/non-rendered; do not mass-replace"
 "components/brand-workspace/context-links.tsx","44","jsx-aria-label","TWINGS Studio","/brand
 /brand/creators
 /brand/identity
@@ -26818,7 +26795,7 @@
 /brand/studio/review
 /brand/studio/video
 /brand/usage/return","candidate; may be internal/non-rendered; do not mass-replace"
-"app/(brand)/layout.tsx","76","jsx-aria-label","TWINGS Studio","/brand
+"app/(brand)/layout.tsx","81","jsx-aria-label","TWINGS Studio","/brand
 /brand/creators
 /brand/identity
 /brand/invite
@@ -26842,7 +26819,7 @@
 /brand/studio/review
 /brand/studio/video
 /brand/usage/return","candidate; may be internal/non-rendered; do not mass-replace"
-"app/(brand)/layout.tsx","91","jsx-aria-label","Powered by YAGI","/brand
+"app/(brand)/layout.tsx","96","jsx-aria-label","Powered by YAGI","/brand
 /brand/creators
 /brand/identity
 /brand/invite
@@ -26866,7 +26843,7 @@
 /brand/studio/review
 /brand/studio/video
 /brand/usage/return","candidate; may be internal/non-rendered; do not mass-replace"
-"app/(brand)/layout.tsx","92","jsx-text","Powered by","/brand
+"app/(brand)/layout.tsx","97","jsx-text","Powered by","/brand
 /brand/creators
 /brand/identity
 /brand/invite
@@ -27330,7 +27307,7 @@
 "lib/twings/fx-rate-alert.ts","159","localized-literal-candidate","손익분기 환율 (Break-even)","/api/renders/tick","candidate; may be internal/non-rendered; do not mass-replace"
 "lib/twings/fx-rate-alert.ts","175","localized-literal-candidate","<p style=""margin:0 0 14px;font-size:15px;line-height:1.6"">TWINGS 원화 가격표 설계 기준(1,400원)을 초과하여 현재 환율 기준 영상 생성 원가 및 순마진 현황을 알려드립니다.</p>","/api/renders/tick","candidate; may be internal/non-rendered; do not mass-replace"
 "lib/twings/fx-rate-alert.ts","185","localized-literal-candidate","TWINGS 원화 가격표 설계 기준(1,400원)을 초과하여 현재 환율 기준 영상 생성 원가 및 순마진 현황을 알려드립니다.","/api/renders/tick","candidate; may be internal/non-rendered; do not mass-replace"
-"app/global-error.tsx","99","jsx-text","TWINGS","","candidate; may be internal/non-rendered; do not mass-replace"
+"app/global-error.tsx","100","jsx-text","TWINGS","","candidate; may be internal/non-rendered; do not mass-replace"
 "components/brand-workspace/brand-micro-roi-panel.tsx","79","localized-literal-candidate","01. 브랜드 로고·라벨 각인 복원","","candidate; may be internal/non-rendered; do not mass-replace"
 "components/brand-workspace/brand-micro-roi-panel.tsx","81","localized-literal-candidate","로고·라벨 각인","","candidate; may be internal/non-rendered; do not mass-replace"
 "components/brand-workspace/brand-micro-roi-panel.tsx","85","localized-literal-candidate","의상/용기 전면 브랜드 심볼과 타이포그래피 획 선명도 복원","","candidate; may be internal/non-rendered; do not mass-replace"
