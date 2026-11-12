@@ -72,13 +72,9 @@ export interface RoomMessageDeps {
   sql: SqlRunner;
   media: StudioMediaStore;
   /** Uploads only (`attachment.*`): the staging bucket the browser puts bytes in. */
-<<<<<<< HEAD
   staging?: Pick<StorageDriver, 'read' | 'putStaging' | 'signedUploadUrl' | 'servesSignedUrls' | 'releaseStaging'>;
-=======
-  staging?: Pick<StorageDriver, 'read' | 'putStaging' | 'signedUploadUrl' | 'servesSignedUrls'>;
   /** Optional best-effort cleanup of staging objects once copied to `media`. */
   purgeStagingKey?: (key: string) => Promise<void>;
->>>>>>> 0e03cafa (feat(brand-rooms): rebuild project space, 3-step brief intake, deliverable files tab, and unified activity inbox)
 }
 
 /** What the team is told after a brand member writes. Internal only. */

@@ -14,7 +14,7 @@ import { influencersOpen } from "@/lib/influencers/rules";
 import { featureDenied } from "@/lib/brands/features";
 import { roomsOpenFor } from "@/components/brand-rooms/room/visibility";
 import { roomUnreadCounts } from "@/lib/brand-rooms/overview";
-import { studioV2Visible } from "@/lib/brand-studio/visibility";
+import { studioShowroomVisible, studioV2Visible } from "@/lib/brand-studio/visibility";
 import { getDictionary } from "@/lib/i18n/dictionaries";
 export default async function BrandHome({
   searchParams,
@@ -49,6 +49,7 @@ export default async function BrandHome({
   const campaignList = rooms ? <CampaignList projects={workspace.projects} b={b} locale={locale} rooms={rooms}/> : <CampaignList projects={workspace.projects} b={b} locale={locale}/>;
   const totalRoomUnread = rooms ? Object.values(rooms.unread).reduce((sum, n) => sum + (Number.isFinite(n) ? n : 0), 0) : 0;
   const creatorsEntry = Boolean(rooms && choice && influencersOpen() && poolVisible(choice) && !featureDenied(choice.denied, "creator_pool"));
+  const projectOnlyShowroom = Boolean(rooms && choice && !access.staff && choice.role !== "guest" && studioShowroomVisible(choice, brandStudioV2Open()));
   const sp = dict.roomsShell.space;
   return (
     <div data-brand-home data-project-space={rooms ? "" : undefined}>
@@ -94,6 +95,16 @@ export default async function BrandHome({
         </div>
       )}
       {access.staff && choice && <StaffNotice b={b} manageHref={viewer.isAdmin ? adminOrganizationHref(choice.id, brandHost) : null} />}
+      {projectOnlyShowroom && choice && (
+        <section className="bw-note" data-project-only-retention-notice>
+          <p style={{ margin: 0 }}>
+            {sp.retentionNotice}{" "}
+            <a href={scopedHref("/brand/studio", choice)} style={{ fontWeight: 600, color: "#3063A7" }}>
+              {sp.retentionCta}
+            </a>
+          </p>
+        </section>
+      )}
       {workspace.projects.length === 0 && !choice && (
         <ServiceGuide kind="campaign" b={b} studioAllowed={studioOpen} showOther={!access.projectScopedOnly && studioOpen} />
       )}

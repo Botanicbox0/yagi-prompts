@@ -3,7 +3,7 @@ import { useEffect, useState, type DragEvent } from 'react';
 import { usePathname } from 'next/navigation';
 import { featureDenied, isSandboxedClientOrganization } from '@/lib/brands/features';
 import { poolVisible, scopedHref, sectionVisibility, selectedChoice, type BrandWorkspaceScope } from '@/lib/brands/workspace/selection';
-import { studioV2Visible } from '@/lib/brand-studio/visibility';
+import { studioShowroomVisible, studioV2Visible } from '@/lib/brand-studio/visibility';
 import type { StudioShellCopy } from '@/messages/studio-shell';
 import type { RoomsShellCopy } from '@/messages/rooms-shell';
 import { useWorkspaceSelection } from './identity';
@@ -282,11 +282,15 @@ function Scoped({ scope, studioV2 = false, shell, locale = 'ko', railExpanded = 
   if (!isMorphic && studioV2 && shell) {
     const visible = sectionVisibility(choice);
     const studio = visible.studio && studioV2Visible(choice, true);
+    const studioShowroom = Boolean(
+      choice && choice.role !== 'guest' && choice.role !== 'studio' && studioShowroomVisible(choice, true),
+    );
     const roomsActive = Boolean(rooms && roomsCopy && choice && choice.role !== 'studio');
     return (
       <RailNavigation
         organizationId={choice?.id ?? null}
         studio={studio}
+        studioShowroom={studioShowroom}
         creators={poolVisible(choice) && Boolean(labels.creators)}
         identity={Boolean(visible.identity && labels.identity)}
         team={visible.members}

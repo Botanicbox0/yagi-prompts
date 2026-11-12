@@ -132,11 +132,28 @@ describe('the grouped rail', () => {
     expect(html).not.toContain('data-rail-create');
   });
 
-  it('gives a project-only owner (self_studio denied) 에셋 · 프로젝트 · 알림함 and the + brief button without studio links', () => {
+  it('puts 야기 팀과 (프로젝트 · 알림함) first and keeps 스튜디오 showroom tabs for a project-only owner (self_studio denied)', () => {
     const html = render({ ...owner, denied: ['self_studio'] }, { studioV2: true, rooms: true });
-    expect([...html.matchAll(/data-rail-item="(\w+)"/g)].map((m) => m[1])).toEqual(['assets', 'campaigns', 'messages']);
-    expect(html).not.toContain('/brand/studio');
+    const sections = [...html.matchAll(/data-rail-section="(\w+)"/g)].map((m) => m[1]);
+    expect(sections[0]).toBe('team');
+    expect(sections[1]).toBe('make');
+    expect([...html.matchAll(/data-rail-item="(\w+)"/g)].map((m) => m[1])).toEqual([
+      'campaigns',
+      'messages',
+      'assets',
+      'image',
+      'video',
+    ]);
+    expect([...html.matchAll(/data-rail-tab="(\w+)"/g)].map((m) => m[1])).toEqual([
+      'campaigns',
+      'messages',
+      'assets',
+      'image',
+      'more',
+    ]);
+    expect(html).toContain('/brand/studio');
     expect(html).toContain('data-rail-create');
+    expect(html).not.toContain('data-rail-credits');
   });
 
   it('is not grouped for the TWINGS team view', () => {

@@ -92,11 +92,11 @@ export const intakeBriefEn = {
   },
   budgets: {
     under_300: 'Under 3M KRW',
-    '300_500': '3M – 5M KRW',
-    '500_1000': '5M – 10M KRW',
-    '1000_3000': '10M – 30M KRW',
+    '300_500': '3M–5M KRW',
+    '500_1000': '5M–10M KRW',
+    '1000_3000': '10M–30M KRW',
     over_3000: 'Over 30M KRW',
-    undecided: 'Not decided yet',
+    undecided: 'Not decided yet (decide after consultation)',
   },
   contactChannels: {
     email: 'Email',
@@ -223,11 +223,11 @@ export const intakeBriefKo: typeof intakeBriefEn = {
   },
   budgets: {
     under_300: '300만 원 미만',
-    '300_500': '300만 ~ 500만 원',
-    '500_1000': '500만 ~ 1,000만 원',
-    '1000_3000': '1,000만 ~ 3,000만 원',
+    '300_500': '300만~500만 원',
+    '500_1000': '500만~1,000만 원',
+    '1000_3000': '1,000만~3,000만 원',
     over_3000: '3,000만 원 이상',
-    undecided: '아직 모름',
+    undecided: '아직 모름 (상담 후 결정)',
   },
   contactChannels: {
     email: '이메일',

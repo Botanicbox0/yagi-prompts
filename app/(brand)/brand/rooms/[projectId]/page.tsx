@@ -15,7 +15,10 @@ import {
   type RoomTab,
 } from "@/lib/brand-rooms/overview";
 import { parseReviewTime } from "@/lib/brand-studio/review-contracts";
+import { isProjectOnlyArchived, studioShowroomVisible } from "@/lib/brand-studio/visibility";
+import { PROJECT_ONLY_RETENTION_DAYS } from "@/lib/brands/plans";
 import { scopedHref } from "@/lib/brands/workspace/selection";
+import { brandStudioV2Open } from "@/lib/flags";
 
 /**
  * `/brand/rooms/[projectId]` — one project's room (docs/BRAND-ROOMS.md §3, §7, slice H).
@@ -61,9 +64,11 @@ export default async function ProjectRoomPage({
   ]);
   const tab = roomTab(query.tab);
   const activeTab: RoomTab = tab === "storyboard" || tab === "review" ? "files" : tab;
-  const canEdit = choice.role === "owner" || choice.role === "editor";
-  // Everyone seated in the room talks: owners, editors, viewers and invited guests (BRAND-ROOMS §9-1).
-  const canTalk = true;
+  const isProjectOnlyOrg = studioShowroomVisible(choice, true);
+  const archivedReadOnly = isProjectOnlyOrg && isProjectOnlyArchived(project, PROJECT_ONLY_RETENTION_DAYS);
+  const canEdit = !archivedReadOnly && (choice.role === "owner" || choice.role === "editor");
+  // Everyone seated in the room talks unless a project-only project has entered post-90d read-only archive mode.
+  const canTalk = !archivedReadOnly;
   const href = (target: RoomTab, extra: Record<string, string> = {}) => roomHref(project.id, choice.id, target, extra);
   const counts: Record<RoomTab, number> = {
     overview: 0,
@@ -93,6 +98,22 @@ export default async function ProjectRoomPage({
         backHref={scopedHref("/brand", choice)}
         detailHref={scopedHref(`/brand/projects/${project.id}`, choice)}
       />
+      {isProjectOnlyOrg && (
+        <section
+          className="bw-note"
+          data-project-only-retention-notice
+          data-project-only-archived={archivedReadOnly ? "true" : "false"}
+        >
+          <p style={{ margin: 0 }}>
+            {archivedReadOnly ? shell.space.archivedNotice : shell.space.retentionNotice}{" "}
+            {brandStudioV2Open() && choice.role !== "guest" && (
+              <a href={scopedHref("/brand/studio", choice)} style={{ fontWeight: 600, color: "#3063A7" }}>
+                {shell.space.retentionCta}
+              </a>
+            )}
+          </p>
+        </section>
+      )}
       <RoomTabs tabs={tabs} current={activeTab} copy={shell.room} />
       <section className="brr-panel" data-room-panel={tab}>
         {activeTab === "overview" ? (

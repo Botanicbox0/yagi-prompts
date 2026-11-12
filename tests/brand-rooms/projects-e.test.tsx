@@ -17,7 +17,8 @@ import { roomRefHref } from "@/lib/brand-rooms/message-contracts";
 import { runRoomReviewOperation, staffAddComment } from "@/lib/brand-studio/review";
 import { countShareView, createShare, guestComment, unlockShare } from "@/lib/brand-rooms/shares";
 import { isPurgeableRoomStagingKey } from "@/lib/brand-rooms/staging-cleanup";
-import { studioV2Visible } from "@/lib/brand-studio/visibility";
+import { isProjectOnlyArchived, studioShowroomVisible, studioV2Visible } from "@/lib/brand-studio/visibility";
+import { StudioShowroom } from "@/components/brand-studio/studio-showroom";
 import { getDictionary } from "@/lib/i18n/dictionaries";
 import type { ShareCreated } from "@/lib/brand-rooms/share-contracts";
 import { studioDeps, studioFixture, viewerOf, type StudioFixture } from "@/tests/brand-studio/server/helpers";
@@ -48,6 +49,17 @@ describe("Bundle E — 3-step brief intake & auto-fill parser", () => {
     expect(empty.startsOn).toBeUndefined();
     expect(empty.budgetBand).toBeUndefined();
     expect(empty.aspectRatios).toBeUndefined();
+
+    expect(extractIntakeSuggestions("예산: 상담 후 결정").budgetBand).toBe("undecided");
+    const koBudgets = getDictionary("ko").intakeBrief.budgets;
+    expect(koBudgets).toEqual({
+      under_300: "300만 원 미만",
+      "300_500": "300만~500만 원",
+      "500_1000": "500만~1,000만 원",
+      "1000_3000": "1,000만~3,000만 원",
+      over_3000: "3,000만 원 이상",
+      undecided: "아직 모름 (상담 후 결정)",
+    });
   });
 
   it("validates IntakeBriefSchema and builds clean customer-safe objective text", () => {
@@ -273,13 +285,45 @@ describe("Bundle E — deliverable room tabs, unified inbox, comment jump stream
     expect(gNote.ok).toBe(true);
   });
 
-  it("keeps rooms & brief files open for project-only orgs (self_studio denied) while closing self-studio", async () => {
+  it("keeps rooms & brief files open for project-only orgs (self_studio denied) and renders Studio Showroom while Morphic stays hidden", async () => {
     await f.sql.query(
       `insert into brand_feature_policies (organization_id, denied_features) values ($1, array['self_studio'])
        on conflict (organization_id) do update set denied_features = excluded.denied_features`,
       [f.orgId],
     );
-    expect(studioV2Visible({ id: f.orgId, name: "외주 전용 고객사", denied: ["self_studio"] }, true)).toBe(false);
+    const projectOnlyOrg = { id: f.orgId, name: "외주 전용 고객사", denied: ["self_studio"] };
+    expect(studioV2Visible(projectOnlyOrg, true)).toBe(false);
+    expect(studioShowroomVisible(projectOnlyOrg, true)).toBe(true);
+    expect(studioShowroomVisible({ id: f.orgId, name: "Morphic Korea", denied: ["self_studio"] }, true)).toBe(false);
+    expect(studioShowroomVisible({ id: f.orgId, name: "외주 전용 고객사", denied: ["generative_media", "self_studio"] }, true)).toBe(false);
+
+    const nowMs = Date.parse("2027-04-01T00:00:00.000Z");
+    expect(isProjectOnlyArchived({ status: "active", updatedAt: "2026-11-01T00:00:00.000Z" }, 90, nowMs)).toBe(false);
+    expect(isProjectOnlyArchived({ status: "completed", updatedAt: "2027-02-15T00:00:00.000Z" }, 90, nowMs)).toBe(false);
+    expect(isProjectOnlyArchived({ status: "completed", updatedAt: "2026-12-15T00:00:00.000Z" }, 90, nowMs)).toBe(true);
+
+    const ko = getDictionary("ko");
+    const showroomHtml = renderToStaticMarkup(
+      <StudioShowroom
+        focus="image"
+        organizationId={f.orgId}
+        organizationName="외주 전용 고객사"
+        canRequest
+        imageHref={`/brand/studio?organizationId=${f.orgId}`}
+        videoHref={`/brand/studio/video?organizationId=${f.orgId}`}
+        projectSpaceHref={`/brand?organizationId=${f.orgId}`}
+        newBriefHref={`/brand/projects/new?organizationId=${f.orgId}`}
+        copy={ko.studioShell.showroom}
+      />,
+    );
+    expect(showroomHtml).toContain('data-studio-showroom="image"');
+    expect(showroomHtml).toContain("월 290,000원");
+    expect(showroomHtml).toContain("월 490,000원");
+    expect(showroomHtml).toContain("월 690,000원");
+    expect(showroomHtml).toContain("200 GB");
+    expect(showroomHtml).toContain("400 GB");
+    expect(showroomHtml).toContain("800 GB");
+    expect(showroomHtml).toContain("플랜 전환 · 데모 요청하기");
 
     const summary = await loadRoomSummary({ sql: f.sql }, viewerOf(f.ids.owner), f.orgId);
     expect(summary.ok).toBe(true);

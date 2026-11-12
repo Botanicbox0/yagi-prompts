@@ -23,6 +23,9 @@ export const roomsShellEn = {
     inboxLink: 'Activity',
     creatorsLink: 'Creator pool',
     newBrief: 'New project brief',
+    retentionNotice: 'Project-only workspace: rooms and deliverables stay open for 90 days after completion, then switch to a read-only archive.',
+    retentionCta: 'Explore Brand Studio plans →',
+    archivedNotice: 'This completed project passed its 90-day active window and is now in read-only archive mode. Viewing conversations and downloading final deliverables remain open.',
   },
   entry: {
     open: 'Open room',
@@ -146,6 +149,9 @@ export const roomsShellKo: typeof roomsShellEn = {
     inboxLink: '알림함',
     creatorsLink: '크리에이터',
     newBrief: '새 프로젝트 의뢰',
+    retentionNotice: '프로젝트 전용 워크스페이스 안내 · 최종 납품 완료 후 90일간 프로젝트 룸과 파일을 열람·다운로드할 수 있으며, 이후 읽기 전용 아카이브로 전환됩니다.',
+    retentionCta: '스튜디오 구독 플랜 살펴보기 →',
+    archivedNotice: '최종 완료 후 90일이 지나 읽기 전용 아카이브로 전환된 프로젝트입니다. 기존 대화와 최종 납품본 열람·다운로드는 계속 이용하실 수 있습니다.',
   },
   entry: {
     open: '룸 열기',

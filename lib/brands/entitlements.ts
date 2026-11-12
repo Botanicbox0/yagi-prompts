@@ -124,6 +124,24 @@ export async function loadFeaturePolicies(sql: SqlRunner, organizationIds: reado
       : dbDenied;
     if (merged.length > 0) out[orgId] = merged;
   }
+  try {
+    const projectOnlyRows = (
+      await sql.query<{ organization_id: string }>(
+        `select organization_id from brand_plan_assignments
+          where organization_id = any($1::uuid[])
+            and plan_id = 'project_only'
+            and started_on <= (now() at time zone 'Asia/Seoul')::date
+            and (ends_on is null or (now() at time zone 'Asia/Seoul')::date < ends_on)`,
+        [ids],
+      )
+    ).rows;
+    for (const row of projectOnlyRows) {
+      const orgId = String(row.organization_id);
+      out[orgId] = normalizeDenied([...(out[orgId] ?? []), 'self_studio']);
+    }
+  } catch (error) {
+    if (!isMissingTable(error)) throw error;
+  }
   return out;
 }
 
@@ -181,6 +199,25 @@ export async function assertBrandFeature(sql: SqlRunner, organizationId: string,
     await sql.query<{ denied_features: unknown }>('select denied_features from brand_feature_policies where organization_id = $1', [organizationId])
   ).rows[0];
   if (row && deniedOf(row.denied_features).includes(feature)) throw new BrandFeatureDenied(feature);
+  if (feature === 'self_studio') {
+    let projectOnly: { one: number } | undefined;
+    try {
+      projectOnly = (
+        await sql.query<{ one: number }>(
+          `select 1 as one from brand_plan_assignments
+            where organization_id = $1
+              and plan_id = 'project_only'
+              and started_on <= (now() at time zone 'Asia/Seoul')::date
+              and (ends_on is null or (now() at time zone 'Asia/Seoul')::date < ends_on)
+            limit 1`,
+          [organizationId],
+        )
+      ).rows[0];
+    } catch (error) {
+      if (!isMissingTable(error)) throw error;
+    }
+    if (projectOnly) throw new BrandFeatureDenied('self_studio');
+  }
 }
 
 const PolicyInput = z.object({

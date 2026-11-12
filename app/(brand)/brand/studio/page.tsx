@@ -15,8 +15,9 @@ import { scopedHref, sectionVisibility } from "@/lib/brands/workspace/selection"
 import { BrandBriefStudio } from "@/components/brand-workspace/brand-brief-studio";
 import { ContractProduction } from "@/components/brand-studio/contract-production";
 import { brandStudioV2 } from "@/components/brand-studio/v2-page";
+import { StudioShowroom } from "@/components/brand-studio/studio-showroom";
 import { brandStudioV2Open } from "@/lib/flags";
-import { studioV2Visible } from "@/lib/brand-studio/visibility";
+import { studioShowroomVisible, studioV2Visible } from "@/lib/brand-studio/visibility";
 import { inferBrandCategoryFromWorkspace } from "@/lib/brands/category-experience";
 import {
   confirmedIdentityFor,
@@ -43,7 +44,7 @@ export async function generateMetadata({
   const [{ organizationId }, { sql, viewer, verifiedEmail, dict }] = await Promise.all([searchParams, brandContext()]);
   if (!sql) return {};
   const { choice } = await brandScope({ sql, verifiedEmail }, viewer, organizationId);
-  if (!choice || !studioV2Visible(choice, true)) return {};
+  if (!choice || (!studioV2Visible(choice, true) && !studioShowroomVisible(choice, true))) return {};
   return { title: dict.brandStudio.title };
 }
 
@@ -61,7 +62,7 @@ export default async function BrandStudio({
 }) {
   const [
     { organizationId, projectId, track, scenario, mode: queryMode, tab },
-    { sql, viewer, verifiedEmail, brandHost, b, locale },
+    { sql, viewer, verifiedEmail, brandHost, b, dict, locale },
   ] = await Promise.all([searchParams, brandContext()]);
   const initialProjectId = Array.isArray(projectId) ? projectId[0] : projectId;
   const initialTrack = Array.isArray(track) ? track[0] : track;
@@ -70,12 +71,11 @@ export default async function BrandStudio({
   if (!sql) return <p role="alert">{b.unavailable}</p>;
   const { selection, choice, projectOrganizations } = await brandScope({ sql, verifiedEmail }, viewer, organizationId);
   if (selection.state === "unavailable") return <BrandUnavailable b={b} />;
-  // A brand whose policy closes generative media or self-serve studio (or is a sandboxed client) has no studio: not a notice, no page at all.
+  // Morphic / sandboxed clients and generative_media-denied organizations get 404 (hardline).
   if (
     choice &&
     (isSandboxedClientOrganization(choice) ||
-      featureDenied(choice.denied, "generative_media") ||
-      featureDenied(choice.denied, "self_studio"))
+      featureDenied(choice.denied, "generative_media"))
   )
     notFound();
   // Role and requests follow the SELECTED brand only. A guest brand has no membership here.
@@ -101,6 +101,23 @@ export default async function BrandStudio({
         </section>
       </div>
     );
+  // Non-subscribed project-only organizations see the Studio Showroom instead of a cold block screen.
+  if (choice && brandStudioV2Open() && studioShowroomVisible(choice, true) && !access.staff) {
+    return (
+      <StudioShowroom
+        focus="image"
+        organizationId={choice.id}
+        organizationName={choice.name}
+        canRequest={access.canRequest}
+        imageHref={scopedHref("/brand/studio", choice)}
+        videoHref={scopedHref("/brand/studio/video", choice)}
+        projectSpaceHref={scopedHref("/brand", choice)}
+        newBriefHref={scopedHref("/brand/projects/new", choice)}
+        copy={dict.studioShell.showroom}
+      />
+    );
+  }
+  if (choice && featureDenied(choice.denied, "self_studio")) notFound();
   // Studio v2 (docs/BRAND-STUDIO-V2.md §5.2): behind its flag, and never for a sandboxed or generation-closed brand.
   if (choice && brandStudioV2Open() && studioV2Visible(choice, true))
     return brandStudioV2({ deps: { sql, verifiedEmail }, viewer, choice, access, locale, brandHost, tab, mode: queryMode });

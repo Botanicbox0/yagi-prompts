@@ -66,6 +66,8 @@ export const RAIL_ICON: Readonly<Record<RailItemId | 'team' | 'settings' | 'crea
 export interface RailVisibility {
   /** Studio v2 is open for this brand (flag on, not sandboxed, generation allowed, a role that sees the studio). */
   studio: boolean;
+  /** Non-subscribed project-only brand: shows Studio tabs leading to the Showroom, with `프로젝트` placed first. */
+  studioShowroom?: boolean;
   /** The creator pool is open and this role may use it. */
   creators: boolean;
   identity: boolean;
@@ -76,13 +78,17 @@ export interface RailVisibility {
 /**
  * Default order (§3): 이미지 스튜디오 · 비디오 스튜디오 · 캠페인 · 크리에이터 · 에셋.
  * With rooms (묶음 E, docs/BRAND-PROJECTS-E.md): 이미지 스튜디오 · 비디오 스튜디오 · 에셋 | 프로젝트 · 알림함.
- * (`크리에이터` moves into the Project Space `/brand` header toolbar so `야기 팀과` stays clean.)
+ * For project-only orgs (`studioShowroom` without `studio`), `프로젝트 · 알림함` lead ahead of `에셋 · 스튜디오`.
  */
 export function railItems(visible: RailVisibility): RailItemId[] {
+  const showStudio = Boolean(visible.studio || visible.studioShowroom);
   if (visible.rooms) {
+    if (visible.studioShowroom && !visible.studio) {
+      return ['campaigns', 'messages', 'assets', 'image', 'video'];
+    }
     const grouped: Array<[RailItemId, boolean]> = [
-      ['image', visible.studio],
-      ['video', visible.studio],
+      ['image', showStudio],
+      ['video', showStudio],
       ['assets', true],
       ['campaigns', true],
       ['messages', true],
@@ -90,8 +96,8 @@ export function railItems(visible: RailVisibility): RailItemId[] {
     return grouped.filter(([, shown]) => shown).map(([id]) => id);
   }
   const all: Array<[RailItemId, boolean]> = [
-    ['image', visible.studio],
-    ['video', visible.studio],
+    ['image', showStudio],
+    ['video', showStudio],
     ['campaigns', true],
     ['creators', visible.creators],
     ['assets', true],
@@ -224,9 +230,11 @@ export function railCreateLinks(rooms: boolean, studio = true): RailCreateLink[]
     : [...make, { key: 'campaign', href: '/brand/projects/new', icon: RAIL_ICON.campaigns }];
 }
 
-/** Phone tab bar with rooms: 이미지 · 영상 · 의뢰 · 메시지 when they exist, filled up from the rest. */
-export function groupedTabIds(items: readonly RailItemId[]): RailItemId[] {
-  const first: RailItemId[] = ['image', 'video', 'campaigns', 'messages'];
+/** Phone tab bar with rooms: 이미지 · 영상 · 의뢰 · 메시지 when they exist (or 프로젝트 · 알림함 · 에셋 · 이미지 for project-only orgs). */
+export function groupedTabIds(items: readonly RailItemId[], projectFirst = false): RailItemId[] {
+  const first: RailItemId[] = projectFirst
+    ? ['campaigns', 'messages', 'assets', 'image']
+    : ['image', 'video', 'campaigns', 'messages'];
   return [...first.filter((id) => items.includes(id)), ...items.filter((id) => !first.includes(id))].slice(0, 4);
 }
 

@@ -20,8 +20,16 @@ alter table brand_feature_policies add constraint brand_feature_policies_known c
 );
 
 alter table brand_plan_assignments drop constraint if exists brand_plan_assignments_plan;
+update brand_plan_assignments
+   set plan_id = case plan_id
+     when 'b2b_39' then 'b2b_29'
+     when 'b2b_69' then 'b2b_49'
+     when 'b2b_99' then 'b2b_69'
+     else plan_id
+   end
+ where plan_id in ('b2b_39','b2b_69','b2b_99');
 alter table brand_plan_assignments add constraint brand_plan_assignments_plan check (
-  plan_id in ('b2b_39','b2b_69','b2b_99','project_only')
+  plan_id in ('b2b_29','b2b_49','b2b_69','project_only')
 );
 
 alter table brand_projects add column if not exists intake_brief jsonb;

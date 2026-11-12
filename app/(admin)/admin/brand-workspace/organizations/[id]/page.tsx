@@ -439,7 +439,7 @@ export default async function StudioOrganization({
             <input type="hidden" name="expectedRevision" value={plan?.revision ?? 0} />
             <label>
               {c.planId}
-              <select name="planId" defaultValue={plan?.planId ?? "b2b_39"}>
+              <select name="planId" defaultValue={plan?.planId ?? "b2b_29"}>
                 {BRAND_PLAN_IDS.map((planId) => (
                   <option key={planId} value={planId}>
                     {b.planNames[planId]} · {krw.format(BRAND_PLANS[planId].monthlyKrw)}

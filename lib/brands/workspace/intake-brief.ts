@@ -282,7 +282,7 @@ export function extractIntakeSuggestions(raw: string): IntakeSuggestions {
               ? '1000_3000'
               : 'over_3000';
     out.matchedFields.push('budgetBand');
-  } else if (/예산\s*[:：]?\s*(?:미정|협의|추후)/i.test(text)) {
+  } else if (/예산\s*[:：]?\s*(?:미정|협의|추후|상담|모름)/i.test(text)) {
     out.budgetBand = 'undecided';
     out.matchedFields.push('budgetBand');
   }

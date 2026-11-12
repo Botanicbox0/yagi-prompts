@@ -56,6 +56,8 @@ export interface RailNavigationProps {
   organizationId: string | null;
   /** Studio v2 is open for this brand: 이미지 · 영상 · 리뷰, the credits meter and background progress. */
   studio: boolean;
+  /** Project-only non-subscribed brand: `야기 팀과` sits first, and Studio items open the Showroom without background polling. */
+  studioShowroom?: boolean;
   /** The creator pool is open and this role may use it. */
   creators: boolean;
   identity: boolean;
@@ -141,10 +143,18 @@ export function RailNavigation(props: RailNavigationProps) {
     }
   }, [initialExpanded]);
 
-  const visibleItems = railItems({ studio, creators: props.creators, identity: props.identity, rooms: nav !== null });
+  const projectFirst = Boolean(props.studioShowroom && !studio);
+  const visibleItems = railItems({
+    studio,
+    studioShowroom: props.studioShowroom,
+    creators: props.creators,
+    identity: props.identity,
+    rooms: nav !== null,
+  });
   // With rooms, the saved order applies inside each group and never moves an item across groups.
   const groups = nav ? groupItems(visibleItems, order) : null;
-  const items = groups ? [...groups.make, ...groups.team] : orderItems(visibleItems, order);
+  const groupOrder: readonly RailGroupId[] = projectFirst ? ['team', 'make'] : ['make', 'team'];
+  const items = groups ? [...groups[groupOrder[0]!], ...groups[groupOrder[1]!]] : orderItems(visibleItems, order);
   const label = (id: RailItemId): string => {
     if (id === 'messages') return nav?.messages ?? '';
     if (id === 'campaigns' && nav) return nav.commissions;
@@ -365,7 +375,7 @@ export function RailNavigation(props: RailNavigationProps) {
   // Phone tab bar: 이미지 스튜디오 · 비디오 스튜디오 · 캠페인 · 에셋 when they exist, filled up from the rest; the others go in 더보기.
   // With rooms: 이미지 스튜디오 · 비디오 스튜디오 · 의뢰 · 메시지 (rail-model `groupedTabIds`).
   const tabIds = nav
-    ? groupedTabIds(items)
+    ? groupedTabIds(items, projectFirst)
     : [
         ...(['image', 'video', 'campaigns', 'assets'] as RailItemId[]).filter((id) => items.includes(id)),
         ...items.filter((id) => !['image', 'video', 'campaigns', 'assets'].includes(id)),
@@ -415,7 +425,7 @@ export function RailNavigation(props: RailNavigationProps) {
         {...tipHandlers}
       >
         {groups ? (
-          (['make', 'team'] as const).map((group) =>
+          groupOrder.map((group) =>
             groups[group].length > 0 ? (
               <div
                 key={group}
@@ -629,7 +639,7 @@ export function RailNavigation(props: RailNavigationProps) {
               </div>
             ) : null}
             {groups
-              ? (['make', 'team'] as const).map((group) => {
+              ? groupOrder.map((group) => {
                   const ids = sheetIds.filter((id) => RAIL_GROUP[id] === group);
                   return ids.length > 0 ? (
                     <div key={group} className="bw-rail-sheet-group" data-rail-section={group}>
