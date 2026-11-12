@@ -15,7 +15,7 @@ import type {
 import type { BrandCopy } from "./action-form";
 import { formatBrandTimestamp } from "./format";
 
-function toSlackHandle(name: string): string {
+function toBrandHandle(name: string): string {
   const slug = name
     .trim()
     .toLowerCase()
@@ -23,20 +23,6 @@ function toSlackHandle(name: string): string {
     .replace(/^-+|-+$/g, "");
   return `@${slug || "brand"}`;
 }
-
-const QUICK_TOPICS_KO = [
-  { label: "일정·납기 문의", text: "안녕하세요, 이번 캠페인 첫 시안(v1) 및 최종 납기 일정이 궁금합니다." },
-  { label: "크리에이터 리스트", text: "캠페인에 매칭 가능한 추천 크리에이터 리스트를 받아볼 수 있을까요?" },
-  { label: "견적·예산 상담", text: "예산 범위에 따른 제작 편수 및 시딩 구성을 상담하고 싶습니다." },
-  { label: "시안 수정 피드백", text: "전달주신 시안 관련하여 추가 연출 피드백 드립니다: " },
-] as const;
-
-const QUICK_TOPICS_EN = [
-  { label: "Timeline & Delivery", text: "Hi, could we check the schedule for Cut v1 and final delivery?" },
-  { label: "Creator Lineup", text: "Could you share the recommended creator list for our campaign?" },
-  { label: "Quote & Scope", text: "We'd like to discuss production volume and seeding options for our budget." },
-  { label: "Cut Feedback", text: "Sharing additional direction feedback on the latest cut: " },
-] as const;
 
 export function SupportDrawer({
   organizations,
@@ -47,7 +33,7 @@ export function SupportDrawer({
   b: BrandCopy;
   locale: string;
 }) {
-  const isKo = locale === "ko";
+  const concierge = b.managed.concierge;
   const list = useRef<HTMLDivElement>(null);
   const dialog = useRef<HTMLDialogElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
@@ -70,8 +56,13 @@ export function SupportDrawer({
 
   const currentOrg =
     organizations.find((o) => o.id === organizationId) ?? organizations[0];
-  const brandHandle = currentOrg ? toSlackHandle(currentOrg.name) : "@brand";
-  const quickTopics = isKo ? QUICK_TOPICS_KO : QUICK_TOPICS_EN;
+  const brandHandle = currentOrg ? toBrandHandle(currentOrg.name) : "@brand";
+  const quickTopics = [
+    { label: concierge.topics.timelineLabel, text: concierge.topics.timelineText },
+    { label: concierge.topics.creatorsLabel, text: concierge.topics.creatorsText },
+    { label: concierge.topics.quoteLabel, text: concierge.topics.quoteText },
+    { label: concierge.topics.feedbackLabel, text: concierge.topics.feedbackText },
+  ];
 
   useEffect(() => {
     if (list.current) list.current.scrollTop = list.current.scrollHeight;
@@ -227,7 +218,7 @@ export function SupportDrawer({
           <path d="M8 8h8M8 12h5" />
         </svg>
         <span className="bw-support-launch-label">
-          {isKo ? "실시간 문의" : "Live Concierge"}
+          {concierge.launcher}
         </span>
         {!isOpen && unreadCount > 0 && (
           <span className="bw-support-unread" data-concierge-unread>
@@ -257,11 +248,7 @@ export function SupportDrawer({
                   1:1 · {brandHandle}
                 </span>
               </div>
-              <p>
-                {isKo
-                  ? "전담 프로듀서와 1:1 실시간 연동됩니다"
-                  : "Connected live with your dedicated YAGI PD"}
-              </p>
+              <p>{concierge.subtitle}</p>
             </div>
           </div>
           <div className="bw-concierge-header-actions">
@@ -320,13 +307,14 @@ export function SupportDrawer({
           {/* Welcome card inside messenger */}
           <div className="bw-concierge-welcome">
             <div className="bw-concierge-welcome-top">
-              <span className="bw-concierge-tag">YAGI STUDIO DIRECT</span>
+              <span className="bw-concierge-tag">{concierge.tag}</span>
               <span className="bw-concierge-org-badge">{currentOrg?.name}</span>
             </div>
             <p>
-              {isKo
-                ? `${currentOrg?.name ?? "고객사"} 전용 실시간 문의창입니다. 메시지를 남기시면 전담 프로듀서에게 즉시 전달되며, 답변도 이곳으로 바로 도착합니다.`
-                : `Direct line for ${currentOrg?.name ?? "your team"}. Messages go straight to our producers and replies appear here live.`}
+              {concierge.welcome.replace(
+                "{org}",
+                currentOrg?.name ?? concierge.defaultOrg,
+              )}
             </p>
           </div>
 
@@ -363,7 +351,7 @@ export function SupportDrawer({
         </div>
 
         {canWrite && messages.length === 0 && (
-          <div className="bw-concierge-quick-chips" aria-label={isKo ? "빠른 문의 선택" : "Quick inquiry topics"}>
+          <div className="bw-concierge-quick-chips" aria-label={concierge.quickLabel}>
             {quickTopics.map((topic) => (
               <button
                 key={topic.label}
@@ -398,11 +386,7 @@ export function SupportDrawer({
               value={draft}
               onChange={(e) => setDraft(e.target.value)}
               onKeyDown={handleKeyDown}
-              placeholder={
-                isKo
-                  ? "메시지를 입력하세요 (Enter 전송 · Shift+Enter 줄바꿈)"
-                  : "Type a message (Enter to send · Shift+Enter for new line)"
-              }
+              placeholder={concierge.placeholder}
               disabled={busy}
             />
             <button

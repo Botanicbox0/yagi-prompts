@@ -221,7 +221,7 @@
   display: inline-flex;
   align-items: center;
   gap: 5px;
-  min-height: 28px;
+  min-height: 32px;
   padding: 0 11px;
   border: 0;
   border-radius: var(--ys-r-pill);
@@ -516,5 +516,8 @@
   }
   .searchWrap {
     max-width: none;
+  }
+  .pill {
+    min-height: 36px;
   }
 }

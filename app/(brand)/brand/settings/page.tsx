@@ -27,7 +27,6 @@ export default async function BrandSettings({
   // The TWINGS team reads them here; edits stay with owners and the admin console.
   const org = choice && choice.role !== "guest" ? await loadBrandSettings({ sql, verifiedEmail }, viewer, choice.id) : null,
     c = b.managed,
-    showIdentityBridge = false,
     showStorageMeter = Boolean(org && choice && choice.role !== "guest" && brandStudioV2Open() && assetHubVisible(choice, true)),
     storageSummary = showStorageMeter && org
       ? await loadOrganizationStorageSummary(sql, org.id).catch(() => null)
@@ -39,39 +38,7 @@ export default async function BrandSettings({
           <h1>{c.settings}</h1>
           <p>{c.profileHint}</p>
         </div>
-        {showIdentityBridge && (
-          <a
-            href={scopedHref("/brand/identity", choice)}
-            className="bw-button"
-            data-settings-identity-bridge
-          >
-            {locale === "en" ? "Open Brand Kit →" : "브랜드 키트 열기 →"}
-          </a>
-        )}
       </div>
-      {showIdentityBridge && (
-        <aside
-          className="bw-note bw-row"
-          data-settings-identity-callout
-          style={{ marginBottom: "16px", padding: "12px 16px" }}
-        >
-          <div>
-            <strong style={{ fontSize: "13.5px" }}>
-              {locale === "en"
-                ? "Organization Profile & Brand Kit"
-                : "조직 기본 프로필과 브랜드 키트가 분리되어 있습니다"}
-            </strong>
-            <p className="bw-muted" style={{ margin: "2px 0 0", fontSize: "12.5px" }}>
-              {locale === "en"
-                ? "Manage your organization name, website, contact email, and primary logo here. Set studio moodboards and brand guidelines in the Brand Kit tab."
-                : "이 화면에서는 조직명·웹사이트·담당자 이메일·대표 로고를 관리합니다. 스튜디오에 적용할 무드보드와 연출 기준은 [브랜드 키트] 탭에서 설정하세요."}
-            </p>
-          </div>
-          <a href={scopedHref("/brand/identity", choice)} className="bw-button">
-            {locale === "en" ? "Open Brand Kit →" : "브랜드 키트 열기 →"}
-          </a>
-        </aside>
-      )}
       {!org ? (
         <section className="bw-empty" data-brand-settings-unavailable>
           <p>{!choice || choice.role === "guest" ? b.access.sharedOnly : b.denied}</p>

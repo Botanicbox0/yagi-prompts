@@ -68,7 +68,7 @@ export const adminConsoleEn = {
     studio: "Brands awaiting a reply",
     inquiries: "New brand requests",
     posts: "Posts to review",
-    payouts: "Payments after the hold",
+    payouts: "Payouts ready to send",
     applicants: "Applicants to select",
     socialAccounts: "SNS follower checks",
     creatorApplications: "Creative applications",
@@ -343,7 +343,7 @@ export const adminConsoleEn = {
     openOrg: "DNA & policy",
     inspectorHeading: "Brand Engine & Identity DNA Inspector",
     inspectorLede:
-      "Structured view of S1–S5 brand capabilities: fixed colour world, hardline rules, model routing roles, saved grading looks, memory events, and finish/QA readiness.",
+      "Brand media engine status: fixed colour world, hardline rules, model routing roles, saved grading looks, memory events, and finish/QA readiness.",
     sections: {
       overview: "DNA & Engine",
       entitlements: "Plan & Policy",
@@ -359,7 +359,7 @@ export const adminConsoleEn = {
     modelRouting: "Model routing roles",
     savedLooks: "Saved grading looks",
     memoryEvents: "Brand memory events",
-    pipelineReadiness: "S3–S5 pipeline capabilities",
+    pipelineReadiness: "Finishing & QA readiness",
     microRoiModes: "Micro-ROI crop-edit harness",
     argonDirector: "Argon Director (Brief · Sound · QA)",
     rawJsonToggle: "Inspect raw brand_identities JSON",
@@ -747,7 +747,7 @@ export const adminConsoleKo: typeof adminConsoleEn = {
     openOrg: "DNA·정책 관리",
     inspectorHeading: "브랜드 엔진 · 고정 DNA 인스펙터",
     inspectorLede:
-      "S1~S5 브랜드 미디어 엔진 상태: 컬러 월드, 하드라인 규칙, 역할별 모델 배정, 저장된 그레이딩 룩, 브랜드 메모리 이벤트, 마감·QA 파이프라인 준비도를 구조화해 보여 줍니다.",
+      "브랜드 미디어 엔진 상태: 컬러 월드, 하드라인 규칙, 역할별 모델 배정, 저장된 그레이딩 룩, 브랜드 메모리 이벤트, 마감·검수 준비 상태를 보여 줍니다.",
     sections: {
       overview: "DNA·엔진 요약",
       entitlements: "플랜·기능 정책",
@@ -763,7 +763,7 @@ export const adminConsoleKo: typeof adminConsoleEn = {
     modelRouting: "역할별 모델 배정",
     savedLooks: "저장된 그레이딩 룩",
     memoryEvents: "브랜드 메모리 이벤트",
-    pipelineReadiness: "S3~S5 파이프라인 준비도",
+    pipelineReadiness: "마감·검수 준비 상태",
     microRoiModes: "마이크로 ROI 크롭·합성 하네스",
     argonDirector: "Argon 디렉터 (지시서 · 사운드 · QA)",
     rawJsonToggle: "brand_identities 원본 JSON 보기",

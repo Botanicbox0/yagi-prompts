@@ -156,7 +156,7 @@ export function SiteNav({
               the mark became the logotype, so the text beside it would have been the same word
               twice). */}
           <div className="flex min-w-0 items-center gap-2 min-[360px]:gap-3 sm:gap-5">
-            <a href={audience === 'brand' ? `/${locale}/brands` : `/${locale}`} className="flex shrink-0 items-center" title={labels.brand}>
+            <a href={audience === 'brand' ? `/${locale}/brands` : `/${locale}`} className="flex min-h-10 shrink-0 items-center" title={labels.brand}>
               <TwingsLogo size={16} className="[&_[data-twings-mark]]:hidden min-[360px]:[&_[data-twings-mark]]:inline-block" />
             </a>
             {modeLinks}

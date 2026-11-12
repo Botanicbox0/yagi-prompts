@@ -62,68 +62,86 @@ export default function GlobalError({
       <body
         style={{
           margin: 0,
-          background: '#ffffff',
-          color: '#000000',
-          fontFamily: "'Pretendard Variable', ui-sans-serif, system-ui, sans-serif",
+          background: '#F6F7F9',
+          color: '#0E1013',
+          fontFamily: "'Pretendard Variable', 'Apple SD Gothic Neo', 'Malgun Gothic', ui-sans-serif, system-ui, sans-serif",
+          wordBreak: 'keep-all',
           display: 'flex',
           minHeight: '100vh',
           alignItems: 'center',
           justifyContent: 'center',
+          padding: 20,
+          boxSizing: 'border-box',
         }}
       >
-        <div data-global-error style={{ maxWidth: 460, padding: '0 24px' }}>
+        <div
+          data-global-error
+          style={{
+            maxWidth: 460,
+            width: '100%',
+            background: '#FFFFFF',
+            borderRadius: 24,
+            border: '1px solid #DCDEE2',
+            padding: '32px 28px',
+            boxSizing: 'border-box',
+          }}
+        >
           <p
             style={{
               fontSize: 12,
-              letterSpacing: '0.12em',
+              fontWeight: 600,
+              letterSpacing: '0.1em',
               textTransform: 'uppercase',
-              color: '#0000EE',
+              color: '#3063A7',
               margin: 0,
             }}
           >
             TWINGS
           </p>
-          <h1 style={{ fontSize: 28, lineHeight: 1.2, fontWeight: 900, margin: '14px 0 0' }}>{ko.title}</h1>
-          <p style={{ fontSize: 15, lineHeight: 1.6, opacity: 0.75, margin: '10px 0 0' }}>{ko.body}</p>
+          <h1 style={{ fontSize: 24, lineHeight: 1.3, fontWeight: 600, margin: '14px 0 0' }}>{ko.title}</h1>
+          <p style={{ fontSize: 15, lineHeight: 1.6, color: '#41444D', margin: '10px 0 0' }}>{ko.body}</p>
           <div lang="en">
-            <p style={{ fontSize: 17, lineHeight: 1.3, fontWeight: 700, margin: '20px 0 0' }}>{en.title}</p>
-            <p style={{ fontSize: 14, lineHeight: 1.6, opacity: 0.75, margin: '6px 0 0' }}>{en.body}</p>
+            <p style={{ fontSize: 16, lineHeight: 1.35, fontWeight: 600, margin: '20px 0 0' }}>{en.title}</p>
+            <p style={{ fontSize: 14, lineHeight: 1.6, color: '#41444D', margin: '6px 0 0' }}>{en.body}</p>
           </div>
-          <button
-            type="button"
-            onClick={() => window.location.reload()}
-            style={{
-              marginTop: 22,
-              padding: '10px 18px',
-              border: '1px solid #000',
-              background: 'transparent',
-              fontSize: 12,
-              letterSpacing: '0.12em',
-              textTransform: 'uppercase',
-              cursor: 'pointer',
-            }}
-          >
-            {ko.reload} · {en.reload}
-          </button>
-          <button
-            type="button"
-            onClick={() => reset()}
-            style={{
-              marginTop: 22,
-              marginLeft: 12,
-              padding: '10px 18px',
-              border: '1px solid rgba(0,0,0,0.25)',
-              background: 'transparent',
-              fontSize: 12,
-              letterSpacing: '0.12em',
-              textTransform: 'uppercase',
-              cursor: 'pointer',
-            }}
-          >
-            {ko.retry} · {en.retry}
-          </button>
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 10, marginTop: 24 }}>
+            <button
+              type="button"
+              onClick={() => window.location.reload()}
+              style={{
+                minHeight: 44,
+                padding: '0 20px',
+                borderRadius: 999,
+                border: '1px solid #3875C5',
+                background: '#3875C5',
+                color: '#FFFFFF',
+                fontSize: 13,
+                fontWeight: 600,
+                cursor: 'pointer',
+              }}
+            >
+              {ko.reload} · {en.reload}
+            </button>
+            <button
+              type="button"
+              onClick={() => reset()}
+              style={{
+                minHeight: 44,
+                padding: '0 20px',
+                borderRadius: 999,
+                border: '1px solid #C7CCD3',
+                background: '#FFFFFF',
+                color: '#0E1013',
+                fontSize: 13,
+                fontWeight: 600,
+                cursor: 'pointer',
+              }}
+            >
+              {ko.retry} · {en.retry}
+            </button>
+          </div>
           {error.digest && (
-            <p style={{ fontFamily: 'ui-monospace, monospace', fontSize: 11, opacity: 0.4, marginTop: 18 }}>
+            <p style={{ fontFamily: 'ui-monospace, monospace', fontSize: 11, color: '#5A5E66', marginTop: 18 }}>
               {error.digest}
             </p>
           )}

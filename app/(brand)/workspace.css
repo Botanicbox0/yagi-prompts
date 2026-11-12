@@ -1,7 +1,6 @@
 html[data-brand-workspace] {
   --bw-font:
-    "TWINGS Helvetica Neue", "Pretendard Variable", "Apple SD Gothic Neo",
-    "Malgun Gothic", sans-serif;
+    "Pretendard Variable", "Apple SD Gothic Neo", "Malgun Gothic", sans-serif;
   --ys-mono:
     var(--font-geist-mono), "JetBrains Mono", "SFMono-Regular", Consolas,
     monospace;
@@ -62,8 +61,8 @@ html[data-brand-workspace] {
   --ys-bubble: var(--ys-ink);
   --ys-bubble-shadow: var(--ys-shadow-1);
   --ys-dot-glow: 0 0 0 3px var(--ys-accent-soft);
-  --ys-gold: #a15c07;
-  --ys-gold-soft: rgba(161, 92, 7, 0.09);
+  --ys-gold: #8a4b06;
+  --ys-gold-soft: rgba(138, 75, 6, 0.09);
   --ys-emerald: #177245;
   --ys-emerald-soft: rgba(23, 114, 69, 0.09);
   --ys-sky: var(--ys-accent-text);
@@ -124,7 +123,7 @@ html[data-brand-workspace] {
 
 /* Light-mode token bridge when shared .bw-* views render inside the Admin shell (html[data-workspace-admin]) */
 html[data-workspace-admin] {
-  --bw-font: var(--workspace-font, "TWINGS Helvetica Neue", "Pretendard Variable", sans-serif);
+  --bw-font: var(--workspace-font, "Pretendard Variable", sans-serif);
   --ys-mono: var(--workspace-code-font, var(--font-geist-mono), monospace);
   --ys-stage: #111113;
   --ys-bg: #ffffff;
@@ -139,10 +138,16 @@ html[data-workspace-admin] {
   --ys-ink: #151515;
   --ys-ink-secondary: #52525b;
   --ys-ink-muted: #71717a;
+  --ys-accent: #3875c5;
+  --ys-accent-soft: color-mix(in srgb, var(--ys-accent) 7%, transparent);
+  --ys-accent-line: color-mix(in srgb, var(--ys-accent) 32%, transparent);
+  --ys-accent-text: color-mix(in srgb, var(--ys-accent) 85%, #000);
+  --ys-on-accent: #ffffff;
+  --ys-dot-glow: 0 0 0 3px var(--ys-accent-soft);
   --ys-red: #dc2626;
   --ys-red-soft: rgba(220, 38, 38, 0.08);
-  --ys-gold: #b45309;
-  --ys-gold-soft: rgba(180, 83, 9, 0.1);
+  --ys-gold: #8a4b06;
+  --ys-gold-soft: rgba(138, 75, 6, 0.1);
   --ys-emerald: #15803d;
   --ys-emerald-soft: rgba(21, 128, 61, 0.1);
   --ys-sky: #0369a1;
@@ -152,7 +157,7 @@ html[data-workspace-admin] {
   --color-workspace-ink: #151515;
   --color-workspace-muted: #52525b;
   --color-workspace-line: #e4e4e7;
-  --color-blue: #0000ee;
+  --color-blue: var(--ys-accent-text);
   --bw-line: #e4e4e7;
 }
 [data-brand-workspace] body {
@@ -371,9 +376,9 @@ html[data-workspace-admin] {
   transition: border-color 0.15s, background-color 0.15s, transform 0.1s;
 }
 .bw-primary {
-  background: var(--ys-ink);
-  border-color: var(--ys-ink);
-  color: var(--ys-bg);
+  background: var(--ys-accent);
+  border-color: var(--ys-accent);
+  color: var(--ys-on-accent, #ffffff);
   font-weight: 600;
 }
 .bw-button:disabled {
@@ -385,8 +390,8 @@ html[data-workspace-admin] {
   background: var(--ys-hover);
 }
 .bw-primary:hover:not(:disabled) {
-  background: var(--ys-ink-hover, #3f3f46);
-  border-color: var(--ys-ink-hover, #3f3f46);
+  background: color-mix(in srgb, var(--ys-accent) 88%, #000);
+  border-color: color-mix(in srgb, var(--ys-accent) 88%, #000);
 }
 .bw-main a:not(.bw-button) {
   text-underline-offset: 4px;
@@ -1072,16 +1077,16 @@ body:has(.bw-triage-bulk) .bw-support-launch { translate:0 -76px; }
 @supports not ((backdrop-filter:blur(1px)) or (-webkit-backdrop-filter:blur(1px))) { .bw-support-launch { background:var(--ys-surface); } }
 .bw-support-launch:hover { transform:translateY(-2px) scale(1.02);box-shadow:var(--ys-ring),var(--ys-rim),0 2px 4px rgba(16,18,24,0.05),0 14px 32px rgba(16,18,24,0.07),0 36px 72px rgba(16,18,24,0.06); }
 .bw-support-launch svg { width:20px;height:20px;fill:none;stroke:currentColor;stroke-width:1.8;flex-shrink:0; }
-.bw-support-launch-dot { width:8px;height:8px;border-radius:999px;background:#4ade80;box-shadow:0 0 0 3px rgba(74,222,128,0.25);flex-shrink:0; }
+.bw-support-launch-dot { width:8px;height:8px;border-radius:999px;background:var(--ys-accent);box-shadow:var(--ys-dot-glow);flex-shrink:0; }
 .bw-support-launch-label { white-space:nowrap; }
-.bw-support-unread { min-width:20px;height:20px;padding:0 6px;border-radius:999px;background:var(--ys-accent, #FAD204);color:var(--ys-on-accent, #0A0A0A);font-size:11px;font-weight:700;display:inline-flex;align-items:center;justify-content:center; }
+.bw-support-unread { min-width:20px;height:20px;padding:0 6px;border-radius:999px;background:var(--ys-accent);color:var(--ys-on-accent, #ffffff);font-size:11px;font-weight:700;display:inline-flex;align-items:center;justify-content:center; }
 .bw-support-dialog { position:fixed;inset:auto 24px 88px auto;margin:0;width:min(396px,calc(100vw - 32px));height:min(580px,calc(100svh - 116px));max-height:calc(100svh - 110px);padding:0;border:1px solid color-mix(in srgb, var(--ys-ink) 12%, transparent);border-radius:22px;box-shadow:0 28px 80px rgba(15, 15, 20, 0.17),0 0 0 1px color-mix(in srgb, var(--ys-ink) 4%, transparent);color:var(--ys-ink);background:var(--ys-surface);z-index:65;overflow:hidden; }
 .bw-support-dialog[open] { display:flex;flex-direction:column; }
 .bw-support-dialog::backdrop { background:transparent; }
 .bw-concierge-header { display:flex;gap:12px;align-items:center;justify-content:space-between;padding:16px 18px;border-bottom:1px solid var(--ys-line);background:linear-gradient(180deg,var(--ys-subtle-bg) 0%,var(--ys-surface) 100%); }
 .bw-concierge-brand { display:flex;align-items:center;gap:12px;min-width:0; }
 .bw-concierge-avatar { position:relative;width:38px;height:38px;border-radius:12px;background:var(--ys-strong, var(--ys-accent, var(--ys-accent)));color:white;font-weight:700;font-size:15px;display:grid;place-items:center;flex-shrink:0;box-shadow:0 4px 14px color-mix(in srgb, var(--ys-ink-glow, var(--ys-accent)) 35%, transparent); }
-.bw-concierge-online { position:absolute;right:-2px;bottom:-2px;width:11px;height:11px;border-radius:999px;background:#22c55e;border:2px solid var(--ys-surface); }
+.bw-concierge-online { position:absolute;right:-2px;bottom:-2px;width:11px;height:11px;border-radius:999px;background:var(--ys-accent);border:2px solid var(--ys-surface); }
 .bw-concierge-title-row { display:flex;align-items:center;gap:8px;flex-wrap:wrap; }
 .bw-support-dialog header strong { font-size:15px;font-weight:600;letter-spacing:-0.01em; }
 .bw-concierge-slack-pill { font-family:var(--font-mono,monospace);font-size:10px;padding:2px 7px;border-radius:999px;background:color-mix(in srgb, var(--ys-ink) 7%, transparent);border:1px solid color-mix(in srgb, var(--ys-ink) 12%, transparent);color:var(--ys-ink-secondary); }
@@ -1116,7 +1121,9 @@ body:has(.bw-triage-bulk) .bw-support-launch { translate:0 -76px; }
  .bw-featured-art,.bw-featured-art>*,.bw-featured-art img { min-height:190px;height:210px; }
  .bw-featured-copy { padding:22px; }
  .bw-brand-list { grid-template-columns:1fr; }
- .bw-support-launch { right:16px;bottom:18px; }
+ .bw-support-launch { right:14px;bottom:18px;width:44px;height:44px;padding:0;justify-content:center;gap:0; }
+ .bw-support-launch-dot,.bw-support-launch-label { display:none; }
+ .bw-support-unread { position:absolute;top:-4px;right:-4px; }
  .bw-contract-row .bw-button { font-size:12px; }
  .bw-contract-row .bw-form { flex-basis:100%; }
 }
@@ -3429,8 +3436,8 @@ html[data-brand-workspace]:has(.bw-triage-bulk) { scroll-padding-bottom: 104px; 
 }
 :where([data-brand-workspace]) .bw-button:hover:not(:disabled) { background: var(--ys-surface); box-shadow: var(--ys-ring), var(--ys-rim), var(--ys-shadow-2); transform: translateY(-1px); }
 :where([data-brand-workspace]) .bw-button:active:not(:disabled) { transform: translateY(0) scale(0.98); }
-:where([data-brand-workspace]) .bw-primary { background: var(--ys-ink); color: #ffffff; box-shadow: 0 0 0 1px var(--ys-ink), inset 0 1px 0 rgba(255, 255, 255, 0.16), var(--ys-shadow-1); }
-:where([data-brand-workspace]) .bw-primary:hover:not(:disabled) { background: var(--ys-ink-hover); box-shadow: 0 0 0 1px var(--ys-ink-hover), inset 0 1px 0 rgba(255, 255, 255, 0.16), var(--ys-shadow-2); }
+:where([data-brand-workspace]) .bw-primary { background: var(--ys-accent); color: var(--ys-on-accent); box-shadow: 0 0 0 1px var(--ys-accent), inset 0 1px 0 rgba(255, 255, 255, 0.22), var(--ys-shadow-1); }
+:where([data-brand-workspace]) .bw-primary:hover:not(:disabled) { background: color-mix(in srgb, var(--ys-accent) 88%, #000); box-shadow: 0 0 0 1px color-mix(in srgb, var(--ys-accent) 88%, #000), inset 0 1px 0 rgba(255, 255, 255, 0.22), var(--ys-shadow-2); }
 :where([data-brand-workspace]) .bw-danger { box-shadow: 0 0 0 1px color-mix(in srgb, var(--ys-danger) 32%, transparent), var(--ys-shadow-1); }
 :where([data-brand-workspace]) .bw-danger:hover:not(:disabled) { box-shadow: 0 0 0 1px var(--ys-danger), var(--ys-shadow-2); }
 :where([data-brand-workspace]) .bw-danger-solid { background: var(--ys-danger); box-shadow: 0 0 0 1px var(--ys-danger), var(--ys-shadow-1); }

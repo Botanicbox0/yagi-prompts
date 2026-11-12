@@ -65,10 +65,6 @@ export default async function BrandLayout({
       <head>
         <link
           rel="stylesheet"
-          href="/fonts/helvetica-neue/helvetica-neue.css"
-        />
-        <link
-          rel="stylesheet"
           href="/fonts/pretendard/pretendard-dynamic-subset.css"
         />
       </head>
