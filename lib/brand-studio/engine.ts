@@ -262,7 +262,7 @@ export async function sweepStudio(deps: StudioDeps): Promise<{ released: number;
         where claimed_at is null and (
               (status in ('held','queued') and created_at < now() - interval '24 hours')
            or (status in ('running','finishing') and coalesce(started_at, created_at) < now() - interval '6 hours')
-           or (status = 'running' and lane = 'sunra_mcp' and $1::boolean = false and coalesce(started_at, created_at) < now() - interval '60 minutes'))
+           or (status = 'running' and lane = 'sunra_mcp' and $1::boolean = false and coalesce(started_at, created_at) < now() - interval '30 minutes'))
         returning id, work`,
       [mcpUp],
     )

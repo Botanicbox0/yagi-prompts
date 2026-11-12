@@ -143,6 +143,33 @@ export async function jobsOf(sql: SqlRunner, organizationId: string, limit = 60)
   ).rows;
 }
 
+/**
+ * R-08: Loads the newest `perMediumLimit` image-family jobs AND newest `perMediumLimit` video-family
+ * jobs so a burst of image generations never evicts video studio history (and vice versa).
+ */
+export async function jobsOfStudioState(sql: SqlRunner, organizationId: string, perMediumLimit = 60): Promise<JobRow[]> {
+  const [imageJobs, videoJobs] = await Promise.all([
+    sql.query<JobRow>(
+      `select * from brand_studio_jobs
+        where organization_id = $1 and kind in ('image', 'region_edit')
+        order by created_at desc, id limit $2`,
+      [organizationId, perMediumLimit],
+    ),
+    sql.query<JobRow>(
+      `select * from brand_studio_jobs
+        where organization_id = $1 and kind in ('video', 'video_remix', 'video_final')
+        order by created_at desc, id limit $2`,
+      [organizationId, perMediumLimit],
+    ),
+  ]);
+  return [...imageJobs.rows, ...videoJobs.rows].sort((a, b) => {
+    const ta = a.created_at instanceof Date ? a.created_at.getTime() : new Date(String(a.created_at)).getTime();
+    const tb = b.created_at instanceof Date ? b.created_at.getTime() : new Date(String(b.created_at)).getTime();
+    if (tb !== ta) return tb - ta;
+    return String(a.id).localeCompare(String(b.id));
+  });
+}
+
 export async function jobsByIds(sql: SqlRunner, organizationId: string, ids: readonly string[]): Promise<JobRow[]> {
   if (ids.length === 0) return [];
   return (

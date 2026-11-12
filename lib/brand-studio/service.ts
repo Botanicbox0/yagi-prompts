@@ -26,7 +26,7 @@ import { assetFromOutput, completeStudioAsset, deleteStudioAsset, deleteStudioOu
 import { handoffToCampaign } from './handoff';
 import { analyzeStudioFilm, cancelStudioJob, createStudioJob, previewStudioPrompt } from './jobs';
 import { failure, guarded } from './outcome';
-import { assetView, assetsOf, campaignsOf, jobsByIds, jobsOf, viewsOf } from './repo';
+import { assetView, assetsOf, campaignsOf, jobsByIds, jobsOfStudioState, viewsOf } from './repo';
 import type { StudioDeps } from './types';
 import { allowanceView, loadAllowance } from './usage';
 
@@ -98,7 +98,7 @@ export async function loadStudioState(deps: StudioDeps, viewer: Viewer, organiza
       const [allowance, assets, jobs, campaigns] = [
         await loadAllowance(sql, organizationId, deps.env, deps.now?.() ?? new Date()),
         await assetsOf(sql, organizationId),
-        await jobsOf(sql, organizationId),
+        await jobsOfStudioState(sql, organizationId),
         await campaignsOf(sql, organizationId),
       ];
       return {

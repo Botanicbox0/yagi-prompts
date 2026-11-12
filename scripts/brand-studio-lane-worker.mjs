@@ -225,7 +225,13 @@ async function waitFor(taskId) {
 
 /* ----------------------------------------------------------------- jobs */
 
-const running = new Set();
+/** Map<jobId, slotCount>: tracks actual output slots so multi-image runs never exceed STUDIO_LANE_MAX. */
+const running = new Map();
+const activeSlots = () => {
+  let total = 0;
+  for (const slots of running.values()) total += slots;
+  return total;
+};
 
 async function runJob(job) {
   const started = Date.now();
@@ -272,16 +278,18 @@ async function runJob(job) {
 }
 
 async function tick() {
-  const free = MAX - running.size;
-  const info = { version: VERSION, running: running.size, max: MAX };
+  const usedSlots = activeSlots();
+  const free = MAX - usedSlots;
+  const info = { version: VERSION, running: running.size, runningSlots: usedSlots, max: MAX };
   if (free <= 0) {
     await lane('heartbeat', { info });
     return 0;
   }
   const { jobs } = await lane('claim', { limit: free, info });
   for (const job of jobs ?? []) {
-    running.add(job.jobId);
-    log('job_claimed', { jobId: job.jobId, kind: job.kind, model: job.model });
+    const slots = Math.max(1, Array.isArray(job.outputs) ? job.outputs.length : 1);
+    running.set(job.jobId, slots);
+    log('job_claimed', { jobId: job.jobId, kind: job.kind, model: job.model, slots });
     void runJob(job);
   }
   return jobs?.length ?? 0;

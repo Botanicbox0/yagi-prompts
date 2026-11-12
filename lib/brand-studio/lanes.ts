@@ -214,12 +214,21 @@ export async function failoverLane(
   return { action: 'route', lane, tried };
 }
 
-/** Slots in use on each lane. */
+/** Slots in use on each lane (sum of pending output slots per active job, at least 1 per job). */
 export async function laneLoad(sql: SqlRunner): Promise<Record<StudioLane, number>> {
   const rows = (
     await sql.query<{ lane: string; n: number }>(
-      `select lane, count(*)::int as n from brand_studio_jobs
-        where lane is not null and status in ('queued','running','finishing') group by lane`,
+      `select j.lane,
+              coalesce(sum(greatest(coalesce(o.cnt, 1), 1)), 0)::int as n
+         from brand_studio_jobs j
+         left join (
+           select job_id, count(*)::int as cnt
+             from brand_studio_outputs
+            where status = 'pending'
+            group by job_id
+         ) o on o.job_id = j.id
+        where j.lane is not null and j.status in ('queued','running','finishing')
+        group by j.lane`,
     )
   ).rows;
   const out: Record<StudioLane, number> = { sunra_api: 0, sunra_mcp: 0 };

@@ -235,4 +235,29 @@ describe('the account lane', () => {
     expect(await laneFail(deps, { jobId: failing.id, code: 'provider_rejected', detail: 'moderation' })).toEqual({ ok: true, jobId: failing.id });
     expect(await view(failing.id)).toMatchObject({ status: 'failed', errorCode: 'provider_rejected' });
   });
+
+  it('R-06: counts multi-output slots in laneLoad/laneClaim and expires stuck sunra_mcp running jobs after 30 minutes', async () => {
+    const { laneLoad } = await import('@/lib/brand-studio/lanes');
+    await f.sql.query("update brand_studio_allowances set preferred_lane = 'sunra_mcp' where organization_id = $1", [f.orgId]);
+    await recordLaneHeartbeat(f.sql, 'sunra_mcp', {});
+
+    const j1 = await create({ ...image, count: 2, enhance: false });
+    const j2 = await create({ ...image, count: 2, enhance: false });
+    expect((await laneLoad(f.sql)).sunra_mcp).toBe(4);
+    await advanceStudioJobsWith(deps, { jobIds: [j1.id, j2.id] });
+
+    // A slot budget of 2 claims j1 (2 output slots) and leaves j2 queued instead of overflowing concurrency.
+    const claimed = await laneClaim(deps, { limit: 2 });
+    if (!claimed.ok) throw new Error('expected claim');
+    expect(claimed.jobs.map((j) => j.jobId)).toEqual([j1.id]);
+    expect((await view(j1.id)).status).toBe('running');
+    expect((await view(j2.id)).status).toBe('queued');
+
+    // If the worker dies while j1 is running, sweepStudio fails it after 30 minutes (releasing reserved budget).
+    await f.sql.query("update brand_studio_lanes set seen_at = now() - interval '10 minutes'");
+    await f.sql.query("update brand_studio_jobs set started_at = now() - interval '31 minutes' where id = $1", [j1.id]);
+    const swept = await sweepStudio(deps);
+    expect(swept.expired).toBe(1);
+    expect(await view(j1.id)).toMatchObject({ status: 'failed', errorCode: 'provider_unavailable', estimateKrw: 0 });
+  });
 });
