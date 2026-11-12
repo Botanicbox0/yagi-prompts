@@ -46,9 +46,10 @@ export const RAIL_HREF: Readonly<Record<RailItemId, string>> = {
 };
 
 /** 18px stroke icons on a 20-unit grid. */
-export const RAIL_ICON: Readonly<Record<RailItemId | 'team' | 'settings' | 'create' | 'more' | 'toggle' | 'commission', string>> = {
+export const RAIL_ICON: Readonly<Record<RailItemId | 'team' | 'settings' | 'create' | 'more' | 'toggle' | 'commission' | 'compose', string>> = {
   messages: 'M3.5 4.5h10v7.5H8l-3 2.5v-2.5H3.5z M13.5 7.5h3v7H15v2l-2.6-2H9.5v-2.5',
   commission: 'M4 4.5h9.5l2.5 2.5v8.5H4z M7 9h6M7 12h4 M13.5 4.5V7H16',
+  compose: 'M3.5 5.5h5v9h-5z M11.5 5.5h5v9h-5z M8.5 10h3',
   image: 'M3.5 4.5h13v11h-13z M3.5 13l3.8-3.6 3 2.8 2.2-2 4 3.6 M12.6 7.4h.1',
   video: 'M3 5.5h10v9H3z M13 8.6l4-2.4v7.6l-4-2.4',
   review: 'M4 4.5h12v8.5H9l-3.5 3v-3H4z M7 8h6M7 10.5h4',
@@ -117,7 +118,10 @@ export function railActive(href: string, path: string): boolean {
   if (href === '/brand') return path === '/brand' || under(path, '/brand/projects') || /^\/brand\/rooms\/[^/]+/.test(path);
   if (href === '/brand/rooms') return path === '/brand/rooms' || path === '/brand/rooms/';
   if (href === '/brand/studio') {
-    return under(path, '/brand/studio') && !under(path, '/brand/studio/video') && !under(path, '/brand/studio/review');
+    return under(path, '/brand/studio') && !under(path, '/brand/studio/video') && !under(path, '/brand/studio/review') && !under(path, '/brand/studio/compose');
+  }
+  if (href === '/brand/studio/video') {
+    return under(path, '/brand/studio/video') || under(path, '/brand/studio/compose');
   }
   return under(path, href);
 }
@@ -205,7 +209,7 @@ export function dropInGroup(groups: RailGroups, source: RailItemId, target: Rail
   return group === 'make' ? [...dropped, ...groups.team] : [...groups.make, ...dropped];
 }
 
-export type RailCreateKey = 'image' | 'video' | 'reverse' | 'campaign' | 'commission';
+export type RailCreateKey = 'image' | 'video' | 'reverse' | 'compose' | 'campaign' | 'commission';
 export interface RailCreateLink {
   key: RailCreateKey;
   href: string;
@@ -213,7 +217,7 @@ export interface RailCreateLink {
 }
 
 /**
- * The "+" menu. Without rooms: 이미지 만들기 · 영상 만들기 · 참고 영상으로 만들기 · 캠페인 의뢰. With rooms the
+ * The "+" menu. Without rooms: 이미지 만들기 · 영상 만들기 · 참고 영상으로 만들기 · 영상 합치기 · 캠페인 의뢰. With rooms the
  * request is what the brand hands to the YAGI team, so it leaves the list and becomes the last entry,
  * 야기 팀에 의뢰하기 (`commission`), which the menu shows under a divider.
  */
@@ -223,6 +227,7 @@ export function railCreateLinks(rooms: boolean, studio = true): RailCreateLink[]
         { key: 'image', href: '/brand/studio', icon: RAIL_ICON.image },
         { key: 'video', href: '/brand/studio/video', icon: RAIL_ICON.video },
         { key: 'reverse', href: '/brand/studio/video?start=reverse', icon: RAIL_ICON.review },
+        { key: 'compose', href: '/brand/studio/compose', icon: RAIL_ICON.compose },
       ]
     : [];
   return rooms

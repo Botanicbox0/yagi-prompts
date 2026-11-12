@@ -10,6 +10,7 @@ import { studioLibraryEn } from './studio-library';
 import { studioVideoEn } from './studio-video';
 import { studioReviewEn } from './studio-review';
 import { studioLayersEn } from './studio-layers';
+import { studioComposeEn } from './studio-compose';
 import { adminConsoleEn } from './admin-console';
 /**
  * docs/PLATFORM-2.0.md §14.1 — the names live in this one object (founder decision 2026-10-24). Every
@@ -54,6 +55,7 @@ export const en = {
   studioVideo: studioVideoEn,
   studioReview: studioReviewEn,
   studioLayers: studioLayersEn,
+  studioCompose: studioComposeEn,
   adminConsole: adminConsoleEn,
   landingMedia: {
     nav: 'Landing images',

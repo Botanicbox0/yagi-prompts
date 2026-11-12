@@ -97,12 +97,14 @@ describe('the "+" menu', () => {
       ['image', '/brand/studio'],
       ['video', '/brand/studio/video'],
       ['reverse', '/brand/studio/video?start=reverse'],
+      ['compose', '/brand/studio/compose'],
       ['campaign', '/brand/projects/new'],
     ]);
     expect(railCreateLinks(true).map((l) => [l.key, l.href])).toEqual([
       ['image', '/brand/studio'],
       ['video', '/brand/studio/video'],
       ['reverse', '/brand/studio/video?start=reverse'],
+      ['compose', '/brand/studio/compose'],
       ['commission', '/brand/projects/new'],
     ]);
     expect(railCreateLinks(true, false).map((l) => [l.key, l.href])).toEqual([
