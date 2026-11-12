@@ -308,7 +308,9 @@ export async function POST(request: NextRequest) {
               ? 403
               : result.code === "rate_limited"
                 ? 429
-                : 400,
+                : result.code === "storage_quota_exceeded"
+                  ? 413
+                  : 400,
     );
   } catch {
     return json({ ok: false, code: "storage_unavailable" }, 503);

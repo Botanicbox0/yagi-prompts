@@ -17,6 +17,7 @@ import {
 import { parseReviewTime } from "@/lib/brand-studio/review-contracts";
 import { isProjectOnlyArchived, studioShowroomVisible } from "@/lib/brand-studio/visibility";
 import { PROJECT_ONLY_RETENTION_DAYS } from "@/lib/brands/plans";
+import { loadOrganizationStorageSummary } from "@/lib/brands/storage-quota";
 import { scopedHref } from "@/lib/brands/workspace/selection";
 import { brandStudioV2Open } from "@/lib/flags";
 
@@ -57,15 +58,17 @@ export default async function ProjectRoomPage({
   const project = await loadRoomProject(sql, choice.id, projectId);
   if (!project) notFound();
 
-  const [people, overview, briefFiles] = await Promise.all([
+  const isProjectOnlyOrg = studioShowroomVisible(choice, true);
+  const [people, overview, briefFiles, storageSummary] = await Promise.all([
     loadRoomPeople(sql, choice.id, project.id),
     loadRoomOverview(sql, { organizationId: choice.id, project, userId: ctx.userId }),
     loadRoomBriefFiles(sql, choice.id, project.id),
+    isProjectOnlyOrg ? loadOrganizationStorageSummary(sql, choice.id).catch(() => null) : Promise.resolve(null),
   ]);
   const tab = roomTab(query.tab);
   const activeTab: RoomTab = tab === "storyboard" || tab === "review" ? "files" : tab;
-  const isProjectOnlyOrg = studioShowroomVisible(choice, true);
-  const archivedReadOnly = isProjectOnlyOrg && isProjectOnlyArchived(project, PROJECT_ONLY_RETENTION_DAYS);
+  const retentionDays = storageSummary?.retentionDays ?? PROJECT_ONLY_RETENTION_DAYS;
+  const archivedReadOnly = isProjectOnlyOrg && isProjectOnlyArchived(project, retentionDays);
   const canEdit = !archivedReadOnly && (choice.role === "owner" || choice.role === "editor");
   // Everyone seated in the room talks unless a project-only project has entered post-90d read-only archive mode.
   const canTalk = !archivedReadOnly;

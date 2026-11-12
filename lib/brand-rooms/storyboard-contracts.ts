@@ -53,6 +53,7 @@ export const STORYBOARD_ERROR_CODES = [
   'empty',
   /** 200 cuts per board, 50 boards per project. */
   'limit_reached',
+  'storage_quota_exceeded',
   'unsupported_file',
   'file_too_large',
   'provider_unavailable',
@@ -102,6 +103,7 @@ export function storyboardHttpStatus(code: StoryboardErrorCode): number {
     case 'conflict':
     case 'not_editable':
     case 'limit_reached':
+    case 'storage_quota_exceeded':
       return 409;
     case 'empty':
       return 422;

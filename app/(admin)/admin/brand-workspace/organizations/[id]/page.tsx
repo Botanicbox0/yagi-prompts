@@ -40,6 +40,7 @@ import { MICRO_ROI_MODES } from "@/lib/brands/finish/micro-roi";
 import { BRAND_LOOK_PRESET_IDS } from "@/lib/brands/finish/color-grading";
 import { resolveCategoryExperienceProfile } from "@/lib/brands/category-experience";
 import { BrandStudioAllowancePanel } from "@/lib/admin/brand-studio-allowance-panel";
+import { BrandStorageQuotaPanel } from "@/lib/admin/brand-storage-quota-panel";
 
 export const dynamic = "force-dynamic";
 
@@ -474,6 +475,7 @@ export default async function StudioOrganization({
           </ManagedForm>
         </section>
         <BrandStudioAllowancePanel sql={sql} organizationId={id} b={b} locale={locale} />
+        <BrandStorageQuotaPanel sql={sql} organizationId={id} b={b} locale={locale} />
       </div>
       <section id="brand-identity-editor" className="bw-panel" data-brand-identity-admin>
         <h2>{c.identityTitle}</h2>

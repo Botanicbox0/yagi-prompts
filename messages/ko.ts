@@ -1958,6 +1958,7 @@ export const ko: Dictionary = {
       allowance_exhausted: '이번 달 한도를 넘어서 만들 수 없어요.',
       too_many_running: '진행 중인 작업이 많아요. 하나가 끝나면 다시 해 주세요.',
       asset_limit: '에셋 한도가 가득 찼어요. 안 쓰는 에셋을 지워 주세요.',
+      storage_quota_exceeded: '조직 저장 한도가 가득 찼어요. 열람과 내려받기는 그대로 쓸 수 있고, 안 쓰는 파일을 지우면 바로 새 파일을 올릴 수 있어요.',
       unsupported_file: '올릴 수 없는 파일 형식이에요.',
       file_too_large: '파일이 너무 커요.',
       reference_missing: '참조 중 하나를 찾을 수 없어요. 다시 넣어 주세요.',
@@ -2429,6 +2430,7 @@ export const ko: Dictionary = {
     },
     errors: {
       rateLimited: '요청이 많습니다. 잠시 후 다시 시도해 주세요.',
+      storageQuotaExceeded: '조직 저장 공간 한도가 가득 찼습니다. 사용하지 않는 파일을 정리한 뒤 다시 시도해 주세요.',
       adminInvalid: '저장하지 못했습니다. 필수 항목과 입력 형식을 확인해 주세요.',
       adminDenied: '이 작업을 할 수 없거나 대상을 찾을 수 없습니다. 새로고침해 현재 상태를 확인해 주세요.',
       studioRateLimited: '짧은 시간에 너무 많이 바꿨어요. 10분 뒤에 다시 해 주세요.',

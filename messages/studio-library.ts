@@ -121,6 +121,16 @@ export const studioLibraryEn = {
     uploadAction: 'Upload files',
     deliverableOpen: 'Open in campaign',
   },
+  storage: {
+    title: 'Storage',
+    usedOf: '{used} of {quota} used ({percent}%)',
+    nearLimitBadge: '80%+ used',
+    exceededBadge: 'Uploads paused',
+    nearLimitNotice: 'Over 80% of your storage is in use ({used} / {quota}). Everything keeps working normally — delete unused files anytime to free up room.',
+    exceededNotice: 'Storage is full ({used} / {quota}). Only new file uploads are paused — viewing, downloads, reviews, and deleting existing files stay open.',
+    retentionNote: 'Project files stay available for {days} days after final delivery.',
+    manageAssets: 'Clean up in Assets',
+  },
 };
 
 export const studioLibraryKo: typeof studioLibraryEn = {
@@ -241,5 +251,15 @@ export const studioLibraryKo: typeof studioLibraryEn = {
     openStudio: '이미지 스튜디오 열기',
     uploadAction: '파일 올리기',
     deliverableOpen: '캠페인에서 보기',
+  },
+  storage: {
+    title: '저장 공간',
+    usedOf: '{quota} 중 {used} 사용 ({percent}%)',
+    nearLimitBadge: '용량 80% 이상',
+    exceededBadge: '새 업로드 멈춤',
+    nearLimitNotice: '저장 공간을 80% 넘게 쓰고 있어요 ({used} / {quota}). 지금도 모든 기능은 그대로 쓸 수 있고, 안 쓰는 파일을 정리하면 여유가 생겨요.',
+    exceededNotice: '저장 한도가 가득 차 새 파일 올리기만 잠시 멈췄어요 ({used} / {quota}). 기존 작업물 보기·내려받기·검토·삭제는 그대로 열려 있으니 안 쓰는 파일을 지우면 바로 다시 올릴 수 있어요.',
+    retentionNote: '프로젝트 파일은 최종 납품 뒤 {days}일 동안 보관돼요.',
+    manageAssets: '에셋에서 정리하기',
   },
 };

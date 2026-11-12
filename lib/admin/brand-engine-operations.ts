@@ -5,6 +5,11 @@ import {
   saveBrandIdentity,
 } from '@/lib/brands/identity/service';
 import { setPlanAssignment } from '@/lib/brands/plans';
+import {
+  adminReconcileOrganizationStorage,
+  BYTES_PER_GB,
+  setOrganizationStorageQuota,
+} from '@/lib/brands/storage-quota';
 import type { AdminOperation } from './operations';
 import { ok, type AdminContext } from './context';
 import { brandFailure } from './brand-workspace-operations';
@@ -171,9 +176,72 @@ const identityConfirm: AdminOperation<IdentityConfirmInput> = {
   },
 };
 
+interface StorageQuotaInput {
+  organizationId: string;
+  quotaBytes: number | null;
+  retentionDays: number | null;
+  note: string;
+  expectedRevision: number;
+}
+
+const storageQuota: AdminOperation<StorageQuotaInput> = {
+  parse(form) {
+    const expectedRevision = revisionOf(form);
+    if (Number.isNaN(expectedRevision)) return { ok: false, detail: 'expectedRevision must be a whole number' };
+    const gbRaw = f.str(form, 'quotaGb');
+    let quotaBytes: number | null = null;
+    if (gbRaw !== '') {
+      const gb = Number(gbRaw);
+      if (!Number.isFinite(gb) || gb < 0 || gb > 100_000) {
+        return { ok: false, detail: 'quotaGb must be between 0 and 100000' };
+      }
+      quotaBytes = Math.round(gb * BYTES_PER_GB);
+    }
+    const retRaw = f.str(form, 'retentionDays');
+    let retentionDays: number | null = null;
+    if (retRaw !== '') {
+      const days = Number(retRaw);
+      if (!Number.isInteger(days) || days < 1 || days > 3650) {
+        return { ok: false, detail: 'retentionDays must be a whole number between 1 and 3650' };
+      }
+      retentionDays = days;
+    }
+    return {
+      ok: true,
+      value: {
+        organizationId: f.str(form, 'organizationId'),
+        quotaBytes,
+        retentionDays,
+        note: f.text(form, 'note'),
+        expectedRevision,
+      },
+    };
+  },
+  async run(ctx: AdminContext, input) {
+    const result = await setOrganizationStorageQuota({ sql: ctx.sql }, ctx.viewer, input);
+    if (!result.ok) return brandFailure(result.code);
+    return ok('saved', { to: organizationPath(input.organizationId) });
+  },
+};
+
+const storageReconcile: AdminOperation<{ organizationId: string }> = {
+  parse(form) {
+    const organizationId = f.str(form, 'organizationId');
+    if (!organizationId) return { ok: false, detail: 'organizationId is required' };
+    return { ok: true, value: { organizationId } };
+  },
+  async run(ctx: AdminContext, input) {
+    const result = await adminReconcileOrganizationStorage({ sql: ctx.sql }, ctx.viewer, input.organizationId);
+    if (!result.ok) return brandFailure(result.code);
+    return ok('saved', { to: organizationPath(input.organizationId) });
+  },
+};
+
 export const BRAND_ENGINE_OPERATIONS = {
   'brandEngine.featurePolicy': featurePolicy,
   'brandEngine.plan': plan,
   'brandEngine.identityDraft': identityDraft,
   'brandEngine.identityConfirm': identityConfirm,
+  'brandEngine.storageQuota': storageQuota,
+  'brandEngine.storageReconcile': storageReconcile,
 };

@@ -50,6 +50,7 @@ export const ROOM_ERROR_CODES = [
   'invalid',
   'conflict',
   'rate_limited',
+  'storage_quota_exceeded',
   'file_too_large',
   'unsupported_file',
   'provider_unavailable',
@@ -474,6 +475,7 @@ export function roomErrorStatus(code: RoomErrorCode): number {
     case 'invalid':
       return 400;
     case 'conflict':
+    case 'storage_quota_exceeded':
       return 409;
     case 'file_too_large':
       return 413;

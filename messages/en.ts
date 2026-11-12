@@ -1947,6 +1947,7 @@ export const en = {
       allowance_exhausted: 'This run would go over this month’s limit.',
       too_many_running: 'Too many runs are open. Try again when one finishes.',
       asset_limit: 'Your assets are full. Delete assets you no longer use.',
+      storage_quota_exceeded: 'Your organization storage is full. Viewing and downloads stay open — delete unused files to upload new ones right away.',
       unsupported_file: 'This file type cannot be uploaded.',
       file_too_large: 'This file is too large.',
       reference_missing: 'A reference is missing or was deleted. Add it again.',
@@ -2418,6 +2419,7 @@ export const en = {
     },
     errors: {
       rateLimited: 'Too many requests. Please try again shortly.',
+      storageQuotaExceeded: 'Organization storage is full. Remove unused files and try again.',
       adminInvalid: 'This couldn’t be saved. Check the required fields and formats.',
       adminDenied: 'This action isn’t available or the item no longer exists. Refresh to see the current state.',
       studioRateLimited: 'Too many changes in a short time. Try again in 10 minutes.',

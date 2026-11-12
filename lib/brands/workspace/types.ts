@@ -2,7 +2,7 @@
 export type BrandRole = 'owner' | 'editor' | 'viewer';
 export type BrandProjectStatus = 'requested' | 'active' | 'completed' | 'cancelled';
 export type ProductionMode = 'creator' | 'studio';
-export type BrandFailureCode = 'sign_in_required' | 'not_found' | 'forbidden' | 'invalid' | 'conflict' | 'rate_limited' | 'not_active' | 'not_approved' | 'consent_required' | 'storage_unavailable' | 'not_shared' | 'existing_member_role_mismatch' | 'feature_unavailable';
+export type BrandFailureCode = 'sign_in_required' | 'not_found' | 'forbidden' | 'invalid' | 'conflict' | 'rate_limited' | 'not_active' | 'not_approved' | 'consent_required' | 'storage_unavailable' | 'storage_quota_exceeded' | 'not_shared' | 'existing_member_role_mismatch' | 'feature_unavailable';
 export type BrandOutcome<T = { id: string }> = ({ ok: true } & T) | { ok: false; code: BrandFailureCode; field?: string };
 export interface BrandOrganization { id: string; name: string; role: BrandRole }
 export interface BrandReferenceLink { url: string; note: string }
