@@ -171,19 +171,19 @@
   min-height: 32px;
   padding: 0 12px;
   border-radius: 16px;
-  background: color-mix(in srgb, var(--ys-accent) 8%, var(--ys-surface));
-  color: var(--ys-accent-text);
+  background: var(--ys-raised);
+  color: var(--ys-ink);
   font-size: 12.5px;
-  font-weight: 650;
+  font-weight: 600;
   white-space: nowrap;
-  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--ys-accent) 16%, transparent);
+  box-shadow: none;
 }
 .brr-team-dot {
   width: 7px;
   height: 7px;
   border-radius: 50%;
-  background: var(--ys-accent);
-  box-shadow: 0 0 0 3px var(--ys-accent-soft);
+  background: var(--ys-ink);
+  box-shadow: none;
 }
 
 /* ------------------------------------------------------------------ tabs: recessed track, white pill */
@@ -222,10 +222,10 @@
   color: var(--ys-ink);
 }
 .brr-tabs a[aria-current="page"] {
-  background: var(--ys-surface);
-  color: var(--ys-ink);
-  font-weight: 650;
-  box-shadow: var(--ys-ring), var(--ys-rim), var(--ys-shadow-1);
+  background: var(--ys-active-bg);
+  color: var(--ys-active-fg);
+  font-weight: 600;
+  box-shadow: none;
 }
 .brr-tab-count,
 .brr-entry-badge {
@@ -235,12 +235,17 @@
   height: 18px;
   padding: 0 5px;
   border-radius: 9px;
-  background: var(--ys-accent);
-  color: var(--ys-on-accent);
+  background: var(--ys-active-bg);
+  color: var(--ys-active-fg);
+  font-family: var(--ys-mono);
   font-size: 10.5px;
   font-weight: 700;
   font-variant-numeric: tabular-nums;
   line-height: 1;
+}
+.brr-tabs a[aria-current="page"] .brr-tab-count {
+  background: rgba(255, 255, 255, 0.18);
+  color: #ffffff;
 }
 
 .brr-panel {
@@ -349,15 +354,15 @@
   box-shadow: none;
 }
 .brr-stage-line li[data-state="current"] .brr-stage-dot {
-  background: var(--ys-accent);
-  box-shadow: 0 0 0 4px var(--ys-accent-soft);
+  background: var(--ys-active-bg);
+  box-shadow: 0 0 0 4px var(--ys-raised);
 }
 .brr-stage-line li[data-state="current"] .brr-stage-dot::after {
   content: "";
   width: 8px;
   height: 8px;
   border-radius: 50%;
-  background: var(--ys-on-accent);
+  background: var(--ys-active-fg);
 }
 .brr-stage-line li[data-state="skipped"] .brr-stage-dot {
   box-shadow: inset 0 0 0 1.5px var(--ys-line);
@@ -366,14 +371,14 @@
   color: var(--ys-ink);
   font-size: 13.5px;
   font-weight: 650;
-  letter-spacing: -0.015em;
+  letter-spacing: -0.02em;
 }
 .brr-stage-line li:is([data-state="ahead"], [data-state="skipped"]) .brr-stage-name {
   color: var(--ys-ink-muted);
   font-weight: 550;
 }
 .brr-stage-line li[data-state="current"] .brr-stage-name {
-  color: var(--ys-accent-text);
+  color: var(--ys-ink);
 }
 .brr-stage-date {
   color: var(--ys-ink-muted);

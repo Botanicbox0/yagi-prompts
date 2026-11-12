@@ -12,7 +12,7 @@ import { getDictionary } from "@/lib/i18n/dictionaries";
  */
 export const dynamic = "force-dynamic";
 
-export const viewport: Viewport = { themeColor: "#f6f7f9" };
+export const viewport: Viewport = { themeColor: "#ffffff" };
 
 export async function generateMetadata(): Promise<Metadata> {
   const dict = getDictionary(await getRequestLocale());
@@ -28,7 +28,9 @@ export default async function ShareRootLayout({ children }: { children: ReactNod
   return (
     <html lang={locale} className={fontVariables}>
       <head>
+        <link rel="stylesheet" href="/fonts/geist/geist.css" />
         <link rel="stylesheet" href="/fonts/pretendard/pretendard-dynamic-subset.css" />
+        <link rel="stylesheet" href="/fonts/pretendard/pretendard-hangul-mono.css" />
       </head>
       <body>{children}</body>
     </html>

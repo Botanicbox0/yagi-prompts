@@ -11,29 +11,28 @@
 .bsv-stage,
 .bsv-dialog,
 .bsv-toast {
-  --bsv-accent: var(--ys-accent, var(--admin-accent, var(--color-blue)));
-  --bsv-accent-text: color-mix(in srgb, var(--bsv-accent) 85%, #000000);
-  --bsv-accent-soft: color-mix(in srgb, var(--bsv-accent) 8%, transparent);
-  --bsv-accent-line: color-mix(in srgb, var(--bsv-accent) 32%, transparent);
-  --bsv-ink: var(--ys-ink, var(--admin-ink, #111114));
-  --bsv-body: var(--ys-ink-secondary, var(--admin-body, #41444d));
-  --bsv-muted: var(--ys-ink-muted, var(--admin-muted, #676b75));
+  --bsv-accent: var(--ys-accent, var(--admin-accent, #0033ff));
+  --bsv-accent-text: var(--ys-ink, var(--admin-ink, #09090b));
+  --bsv-accent-soft: var(--ys-panel, #f4f4f5);
+  --bsv-accent-line: rgba(9, 9, 11, 0.14);
+  --bsv-ink: var(--ys-ink, var(--admin-ink, #09090b));
+  --bsv-body: var(--ys-ink-secondary, var(--admin-body, #52525b));
+  --bsv-muted: var(--ys-ink-muted, var(--admin-muted, #71717a));
   --bsv-surface: var(--ys-surface, var(--admin-paper, #ffffff));
-  --bsv-canvas: var(--ys-canvas, var(--admin-canvas, #f6f7f9));
-  --bsv-raised: var(--ys-raised, #f1f2f4);
-  --bsv-hover: var(--ys-hover, #eceef1);
-  --bsv-media-bg: var(--ys-media-bg, #eef0f3);
-  --bsv-hairline: var(--ys-hairline, rgba(0, 0, 0, 0.06));
-  --bsv-line: var(--ys-line, rgba(0, 0, 0, 0.08));
-  --bsv-line-strong: var(--ys-line-strong, rgba(0, 0, 0, 0.16));
+  --bsv-canvas: var(--ys-canvas, var(--admin-canvas, #ffffff));
+  --bsv-raised: var(--ys-raised, #f4f4f5);
+  --bsv-hover: var(--ys-hover, #e4e4e7);
+  --bsv-media-bg: var(--ys-media-bg, #f4f4f5);
+  --bsv-hairline: var(--ys-hairline, rgba(0, 0, 0, 0.04));
+  --bsv-line: var(--ys-line, rgba(0, 0, 0, 0.04));
+  --bsv-line-strong: var(--ys-line-strong, rgba(0, 0, 0, 0.12));
   --bsv-danger: var(--ys-danger, #a3392f);
-  --bsv-glass-dark: rgba(18, 18, 22, 0.68);
+  --bsv-glass-dark: rgba(0, 0, 0, 0.65);
   --bsv-ease: var(--ys-ease, cubic-bezier(0.22, 1, 0.36, 1));
   --bsv-dur: 220ms;
-  --bsv-well: inset 0 1px 2px rgba(16, 18, 24, 0.06), inset 0 0 0 1px rgba(0, 0, 0, 0.07);
-  --bsv-card: 0 0 0 1px var(--bsv-hairline), 0 1px 1px rgba(16, 18, 24, 0.03), 0 2px 6px rgba(16, 18, 24, 0.03);
-  --bsv-float: 0 0 0 1px var(--bsv-hairline), inset 0 1px 0 0 rgba(255, 255, 255, 0.9), 0 2px 4px rgba(16, 18, 24, 0.04),
-    0 10px 24px rgba(16, 18, 24, 0.05), 0 28px 64px rgba(16, 18, 24, 0.05);
+  --bsv-well: none;
+  --bsv-card: none;
+  --bsv-float: 0 0 0 1px rgba(0, 0, 0, 0.06), 0 20px 48px -12px rgba(0, 0, 0, 0.12);
   color: var(--bsv-ink);
 }
 
@@ -57,16 +56,17 @@
 }
 .bsv-title {
   margin: 0;
-  font-size: clamp(28px, 3vw, 40px);
-  font-weight: 560;
-  letter-spacing: -0.045em;
-  line-height: 1.06;
+  font-size: clamp(26px, 2.8vw, 36px);
+  font-weight: 650;
+  letter-spacing: -0.035em;
+  line-height: 1.25;
 }
 .bsv-lede {
   margin: 6px 0 0;
   max-width: 62ch;
-  color: var(--bsv-body);
-  font-size: 15px;
+  color: var(--bsv-muted);
+  font-size: 14.5px;
+  font-weight: 400;
   line-height: 1.6;
 }
 .bsv-layout {

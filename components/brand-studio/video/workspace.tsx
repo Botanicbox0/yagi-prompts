@@ -111,6 +111,12 @@ function useHeadSlot() {
   return slot;
 }
 
+const GUIDE_VIDEOS = [
+  { src: "/reel/landing/v7/rx-beauty-orig.mp4", poster: "/reel/landing/v7/rx-beauty-orig.jpg" },
+  { src: "/reel/landing/v7/rx-beauty-world.mp4", poster: "/reel/landing/v7/rx-beauty-world.jpg" },
+  { src: "/reel/brands/production-paris.mp4", poster: "/reel/brands/production-paris.jpg" },
+] as const;
+
 type AssetPickerTarget =
   | { kind: "startFrame" }
   | { kind: "endFrame" }
@@ -841,36 +847,30 @@ export function VideoStudioWorkspace({
         <p>{wc.guide.subheading}</p>
       </div>
       <ol className={w.guideGrid}>
-        {wc.guide.steps.map((step, idx) => (
-          <li key={idx} className={w.guideCard} data-video-guide-step={idx + 1}>
-            <div className={w.guideArt} aria-hidden="true">
-              {idx === 0 && (
-                <div className={w.guideArtFrames}>
-                  <span className={w.guideFrameBox}>START</span>
-                  <span className={w.guideArrow}>→</span>
-                  <span className={w.guideFrameBox}>@1</span>
-                </div>
-              )}
-              {idx === 1 && (
-                <div className={w.guideArtSpecs}>
-                  <span className={w.guideChipVisual}>9:16</span>
-                  <span className={`${w.guideChipVisual} ${w.guideChipVisualAccent}`}>5s</span>
-                  <span className={w.guideChipVisual}>Sound</span>
-                </div>
-              )}
-              {idx === 2 && (
-                <div className={w.guideArtMaster}>
-                  <span className={w.guideResBadge}>480p</span>
-                  <span className={w.guideArrow}>→</span>
-                  <span className={w.guideResBadgeMaster}>1080p</span>
-                </div>
-              )}
-            </div>
-            <h3>{step.title}</h3>
-            <p>{step.body}</p>
-            <span className={w.guideTag}>{step.tag}</span>
-          </li>
-        ))}
+        {wc.guide.steps.map((step, idx) => {
+          const media = GUIDE_VIDEOS[idx] ?? GUIDE_VIDEOS[0];
+          return (
+            <li key={idx} className={w.guideCard} data-video-guide-step={idx + 1}>
+              <div className={w.guideMedia} aria-hidden="true">
+                <video
+                  className={w.guideVideo}
+                  src={media.src}
+                  poster={media.poster}
+                  autoPlay
+                  loop
+                  muted
+                  playsInline
+                  preload="metadata"
+                />
+              </div>
+              <div className={w.guideCardBody}>
+                <h3>{step.title}</h3>
+                <p>{step.body}</p>
+                <span className={w.guideTag}>{step.tag}</span>
+              </div>
+            </li>
+          );
+        })}
       </ol>
       {runOpen && (
         <div className={w.guideActions}>
@@ -1308,8 +1308,7 @@ export function VideoStudioWorkspace({
                         </button>
                         <select
                           aria-label={wc.prompt.audioLabel}
-                          className="bs-field"
-                          style={{ width: "auto", minHeight: 28, padding: "2px 8px", fontSize: 12 }}
+                          className={w.compactSelect}
                           value={dock.draft.audio}
                           disabled={!runOpen}
                           onChange={(ev) => dock.setDraft((cur) => ({ ...cur, audio: ev.target.value as StudioState["jobs"][number]["audio"] & string }))}
@@ -1371,8 +1370,7 @@ export function VideoStudioWorkspace({
                       <span className={w.blockTitle}>{wc.specs.seconds}</span>
                       <select
                         aria-label={wc.specs.seconds}
-                        className="bs-field"
-                        style={{ width: "auto", minHeight: 28, padding: "2px 8px", fontSize: 12 }}
+                        className={`${w.compactSelect} ${w.compactSelectMono}`}
                         value={dock.draft.seconds}
                         disabled={!runOpen}
                         onChange={(ev) => dock.setDraft((cur) => ({ ...cur, seconds: Number(ev.target.value) }))}
@@ -1867,8 +1865,7 @@ export function VideoStudioWorkspace({
                     </button>
                     <select
                       aria-label={wc.prompt.audioLabel}
-                      className="bs-field"
-                      style={{ width: "auto", minHeight: 28, padding: "2px 8px", fontSize: 12 }}
+                      className={w.compactSelect}
                       value={editDraft.audio}
                       disabled={!runOpen}
                       onChange={(ev) => setEditDraft((cur) => ({ ...cur, audio: ev.target.value as VideoEditDraft["audio"] }))}

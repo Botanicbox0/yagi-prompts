@@ -9,18 +9,18 @@
 .brh-dialog,
 .brh-open,
 .brh-page {
-  --brh-accent: var(--ys-accent, #3875c5);
-  --brh-accent-text: #3063a7;
-  --brh-accent-soft: color-mix(in srgb, var(--brh-accent) 9%, transparent);
-  --brh-ink: var(--ys-ink, #0e1013);
-  --brh-body: var(--ys-ink-secondary, #41444d);
-  --brh-muted: var(--ys-ink-muted, #676b75);
+  --brh-accent: var(--ys-accent, #0033ff);
+  --brh-accent-text: var(--ys-ink, #09090b);
+  --brh-accent-soft: var(--ys-panel, #f4f4f5);
+  --brh-ink: var(--ys-ink, #09090b);
+  --brh-body: var(--ys-ink-secondary, #52525b);
+  --brh-muted: var(--ys-ink-muted, #71717a);
   --brh-surface: var(--ys-surface, #ffffff);
-  --brh-canvas: var(--ys-canvas, #f6f7f9);
-  --brh-raised: var(--ys-raised, #f1f2f4);
-  --brh-line: var(--ys-line, rgba(0, 0, 0, 0.08));
-  --brh-line-strong: var(--ys-line-strong, rgba(0, 0, 0, 0.16));
-  --brh-well: inset 0 1px 2px rgba(16, 18, 24, 0.06), inset 0 0 0 1px rgba(0, 0, 0, 0.07);
+  --brh-canvas: var(--ys-canvas, #ffffff);
+  --brh-raised: var(--ys-raised, #f4f4f5);
+  --brh-line: var(--ys-line, rgba(0, 0, 0, 0.04));
+  --brh-line-strong: var(--ys-line-strong, rgba(0, 0, 0, 0.12));
+  --brh-well: none;
   --brh-ease: var(--ys-ease, cubic-bezier(0.22, 1, 0.36, 1));
 }
 

@@ -102,21 +102,21 @@
 }
 
 .trackCardActive {
-  background: var(--ys-surface);
-  border-color: var(--ys-accent);
-  box-shadow: 0 0 0 1.5px var(--ys-accent), var(--ys-shadow-1);
+  background: var(--ys-active-bg);
+  border-color: var(--ys-active-bg);
+  box-shadow: none;
 }
 
 .trackCardTitle {
   margin: 0;
   font-size: 15px;
   font-weight: 650;
-  letter-spacing: -0.015em;
+  letter-spacing: -0.02em;
   color: var(--ys-ink);
 }
 
 .trackCardActive .trackCardTitle {
-  color: var(--ys-accent-text);
+  color: var(--ys-active-fg);
 }
 
 .trackCardLine {
@@ -124,6 +124,9 @@
   font-size: 13px;
   line-height: 1.5;
   color: var(--ys-ink-secondary);
+}
+.trackCardActive .trackCardLine {
+  color: rgba(255, 255, 255, 0.76);
 }
 
 .chipGroup {
@@ -140,8 +143,8 @@
   min-height: 38px;
   padding: 6px 14px;
   border-radius: 999px;
-  border: 1px solid var(--ys-line-strong);
-  background: var(--ys-subtle-bg);
+  border: 0;
+  background: var(--ys-raised);
   color: var(--ys-ink-secondary);
   font: inherit;
   font-size: 13px;
@@ -149,37 +152,32 @@
   line-height: 1.25;
   cursor: pointer;
   transition:
-    border-color var(--ys-dur, 180ms) var(--ys-ease, ease),
     background-color var(--ys-dur, 180ms) var(--ys-ease, ease),
-    color var(--ys-dur, 180ms) var(--ys-ease, ease),
-    box-shadow var(--ys-dur, 180ms) var(--ys-ease, ease);
+    color var(--ys-dur, 180ms) var(--ys-ease, ease);
 }
 
 .chip:hover {
-  background: var(--ys-surface);
-  border-color: var(--ys-ink-secondary);
+  background: var(--ys-hover);
   color: var(--ys-ink);
 }
 
 .chipSelected {
-  background: var(--ys-accent-soft);
-  border-color: var(--ys-accent);
-  color: var(--ys-accent-text);
+  background: var(--ys-active-bg);
+  color: var(--ys-active-fg);
   font-weight: 600;
-  box-shadow: inset 0 0 0 0.5px var(--ys-accent);
+  box-shadow: none;
 }
 
 .chipSelected:hover {
-  background: var(--ys-accent-soft);
-  border-color: var(--ys-accent);
-  color: var(--ys-accent-text);
+  background: var(--ys-active-bg);
+  color: var(--ys-active-fg);
 }
 
 .dropzone {
   padding: 20px;
   border-radius: 14px;
-  border: 1.5px dashed var(--ys-line-strong);
-  background: var(--ys-subtle-bg);
+  border: 1px dashed rgba(0, 0, 0, 0.12);
+  background: #fafafa;
 }
 
 .actions {

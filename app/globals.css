@@ -13,14 +13,14 @@
   /* --- §5.1 palette ------------------------------------------------------ */
   --color-black: #000000;
   --color-white: #ffffff;
-  --color-blue: #3875c5; /* COLOUR.accent, lib/design/identity.ts */
-  --color-sky: #e8eff7; /* COLOUR.sky: the quiet ground behind media */
-  --color-muted: #676b75; /* COLOUR.muted: captions and card meta, instead of a hex in the markup */
-  --color-workspace-canvas: #f7f7f8;
+  --color-blue: #0033ff; /* COLOUR.accent, lib/design/identity.ts */
+  --color-sky: #f4f4f5; /* COLOUR.sky: monochrome secondary surface */
+  --color-muted: #71717a; /* COLOUR.muted: captions and helper descriptions */
+  --color-workspace-canvas: #ffffff;
   --color-workspace-paper: #ffffff;
-  --color-workspace-ink: #202126;
-  --color-workspace-muted: #6b6d75;
-  --color-workspace-line: #e8e8eb;
+  --color-workspace-ink: #09090b;
+  --color-workspace-muted: #52525b;
+  --color-workspace-line: #e4e4e7;
   --color-line-light: rgba(0, 0, 0, 0.12);
   --color-line-dark: rgba(255, 255, 255, 0.16);
   /* Brand audience experience. Page and component styles reference these tokens only. */
@@ -102,12 +102,10 @@
    =========================================================================== */
 
 :root {
-  --stack-display: 'Pretendard Variable', Pretendard, 'Apple SD Gothic Neo', 'Malgun Gothic', system-ui, sans-serif;
-  --stack-label: 'Pretendard Variable', Pretendard, 'Apple SD Gothic Neo', 'Malgun Gothic', system-ui, sans-serif;
-  /* Satoshi landed 2026-08-13 (founder-supplied Fontshare files, ITF-FFL in LICENSES). */
-  --stack-body: var(--font-satoshi), 'Pretendard Variable', ui-sans-serif, system-ui,
-    -apple-system, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
-  --stack-mono: var(--font-geist-mono), ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  --stack-display: 'Geist', 'Pretendard Variable', Pretendard, -apple-system, sans-serif;
+  --stack-label: 'Geist', 'Pretendard Variable', Pretendard, -apple-system, sans-serif;
+  --stack-body: 'Geist', 'Pretendard Variable', Pretendard, -apple-system, sans-serif;
+  --stack-mono: 'Geist Mono', 'Pretendard Hangul', var(--font-geist-mono), ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
 
   --surface: var(--color-white);
   --on-surface: var(--color-black);
@@ -116,19 +114,12 @@
 }
 
 html:lang(ko) {
-  --stack-display: 'Pretendard Variable', 'Apple SD Gothic Neo', 'Malgun Gothic', sans-serif;
-  --stack-label: 'Pretendard Variable', 'Apple SD Gothic Neo', 'Malgun Gothic', sans-serif;
-  --stack-body: 'Pretendard Variable', 'Apple SD Gothic Neo', 'Malgun Gothic', ui-sans-serif,
-    system-ui, sans-serif;
-  /* Geist Mono has no Hangul, so on the KO tree every mono-styled SENTENCE (rail ledes, form
-     hints, empty labels) was rendering its Korean through the browser's last-resort fallback —
-     the "구려 보이는" the founder called out. 'Pretendard Hangul' is a GENERATED alias of the
-     vendor subset whose unicode-range never covers latin (scripts/pretendard-hangul-mono.ts):
-     first in the stack it catches Hangul only, and latin/digits fall through to Geist Mono, so
-     the §5 mono identity is untouched. (Pretendard AFTER the geist var would be unreachable —
-     the next/font variable expands to Geist plus its fallbacks, ending in the generic
-     `monospace`, and a generic matches everything.) */
-  --stack-mono: 'Pretendard Hangul', var(--font-geist-mono), ui-monospace, monospace;
+  --stack-display: 'Geist', 'Pretendard Variable', Pretendard, -apple-system, sans-serif;
+  --stack-label: 'Geist', 'Pretendard Variable', Pretendard, -apple-system, sans-serif;
+  --stack-body: 'Geist', 'Pretendard Variable', Pretendard, -apple-system, sans-serif;
+  /* Geist Mono covers Latin & digits via unicode-range; Pretendard Hangul catches Hangul-only
+     syllables without intercepting Latin/digits. */
+  --stack-mono: 'Pretendard Hangul', 'Geist Mono', var(--font-geist-mono), ui-monospace, monospace;
 
   /* Hangul breaks at spaces, like latin — never inside a word. Browsers treat CJK as breakable
      between any two syllables, which set "작업하기" as "작업하 / 기" in display type wherever a

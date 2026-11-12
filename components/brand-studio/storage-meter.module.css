@@ -8,19 +8,19 @@
   gap: 10px;
   padding: 14px 16px;
   border-radius: 18px;
-  background: var(--ys-surface);
-  box-shadow: var(--ys-ring), var(--ys-shadow-1);
+  background: var(--ys-raised);
+  box-shadow: none;
   word-break: keep-all;
 }
 
 .card[data-storage-state="near_limit"] {
-  background: color-mix(in srgb, var(--ys-accent) 6%, var(--ys-surface));
-  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--ys-accent) 22%, transparent), var(--ys-shadow-1);
+  background: var(--ys-raised);
+  box-shadow: inset 0 0 0 1px var(--ys-line-strong);
 }
 
 .card[data-storage-state="exceeded"] {
-  background: color-mix(in srgb, var(--ys-ink) 4%, var(--ys-surface));
-  box-shadow: inset 0 0 0 1.5px var(--ys-ink), var(--ys-shadow-1);
+  background: var(--ys-raised);
+  box-shadow: inset 0 0 0 1.5px var(--ys-ink);
 }
 
 .topRow {
@@ -42,7 +42,7 @@
   color: var(--ys-ink);
   font-size: 13.5px;
   font-weight: 650;
-  letter-spacing: -0.01em;
+  letter-spacing: -0.02em;
 }
 
 .badge {
@@ -51,19 +51,22 @@
   min-height: 22px;
   padding: 0 9px;
   border-radius: var(--ys-r-pill);
-  background: color-mix(in srgb, var(--ys-accent) 12%, var(--ys-surface));
-  color: var(--ys-accent-text);
+  background: var(--ys-surface);
+  color: var(--ys-ink);
+  font-family: var(--ys-mono);
   font-size: 11.5px;
   font-weight: 600;
+  font-variant-numeric: tabular-nums;
 }
 
 .badgeExceeded {
-  background: var(--ys-ink);
-  color: var(--ys-surface);
+  background: var(--ys-active-bg);
+  color: var(--ys-active-fg);
 }
 
 .numbers {
   color: var(--ys-ink-secondary);
+  font-family: var(--ys-mono);
   font-size: 13px;
   font-weight: 500;
   font-variant-numeric: tabular-nums;
@@ -75,13 +78,13 @@
   height: 7px;
   overflow: hidden;
   border-radius: var(--ys-r-pill);
-  background: var(--ys-raised);
+  background: var(--ys-surface);
 }
 
 .fill {
   height: 100%;
   border-radius: var(--ys-r-pill);
-  background: var(--ys-accent);
+  background: var(--ys-ink);
   transition: width var(--ys-dur) var(--ys-ease);
 }
 

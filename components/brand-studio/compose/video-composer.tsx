@@ -1210,7 +1210,7 @@ export function VideoComposer({
             />
             <button
               type="submit"
-              className={s.primaryBtn}
+              className={s.chatApplyBtn}
               disabled={!canCreate || !chatInput.trim() || chatBusy}
               data-compose-chat-send
             >

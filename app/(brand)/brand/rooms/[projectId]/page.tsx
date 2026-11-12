@@ -110,7 +110,7 @@ export default async function ProjectRoomPage({
           <p style={{ margin: 0 }}>
             {archivedReadOnly ? shell.space.archivedNotice : shell.space.retentionNotice}{" "}
             {brandStudioV2Open() && choice.role !== "guest" && (
-              <a href={scopedHref("/brand/studio", choice)} style={{ fontWeight: 600, color: "#3063A7" }}>
+              <a href={scopedHref("/brand/studio", choice)} style={{ fontWeight: 600, color: "var(--ys-ink)", textDecoration: "underline", textUnderlineOffset: "3px" }}>
                 {shell.space.retentionCta}
               </a>
             )}

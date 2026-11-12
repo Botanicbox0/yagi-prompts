@@ -158,13 +158,13 @@ describe('design tokens (§5.1/§5.2/§4)', () => {
    * Geist has no Hangul, so mono-styled Korean sentences were rendering through the browser's
    * last-resort fallback.
    */
-  it('loads Satoshi at the head of the EN body, and Hangul never falls out of the mono stack', () => {
-    expect(globals).toMatch(/--stack-body:\s*var\(--font-satoshi\)/);
+  it('loads Geist + Pretendard Variable at the head of body, and Hangul never falls out of the mono stack', () => {
+    expect(globals).toMatch(/--stack-body:\s*'Geist',\s*'Pretendard Variable'/);
     const koBlock = globals.slice(globals.indexOf('html:lang(ko) {'));
     const koStacks = koBlock.slice(0, koBlock.indexOf('}'));
     // The alias must come FIRST: after the geist var it sits behind that variable's generic
     // `monospace` terminal and never matches anything (per-glyph fallback stops at a generic).
-    expect(koStacks).toMatch(/--stack-mono:\s*'Pretendard Hangul',\s*var\(--font-geist-mono\)/);
+    expect(koStacks).toMatch(/--stack-mono:\s*'Pretendard Hangul',\s*'Geist Mono',\s*var\(--font-geist-mono\)/);
 
     // The generated alias file: present, latin-free, linked from every root layout.
     const hangulMono = readFileSync(

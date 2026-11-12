@@ -7,8 +7,8 @@
   --st-card: #f7f7f8;
   --st-glass: rgb(255 255 255 / 0.72);
   --st-glass-line: rgb(10 10 10 / 0.08);
-  --st-accent: var(--id-accent, var(--color-blue));
-  --st-accent-soft: color-mix(in srgb, var(--st-accent) 7%, white);
+  --st-accent: var(--id-accent, #0033ff);
+  --st-accent-soft: rgba(9, 9, 11, 0.06);
   --st-shadow: 0 1px 2px rgb(16 24 40 / 0.04), 0 24px 60px -24px rgb(16 24 40 / 0.18);
   color: var(--st-ink);
 }

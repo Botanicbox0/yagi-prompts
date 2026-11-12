@@ -99,7 +99,7 @@ export default async function BrandHome({
         <section className="bw-note" data-project-only-retention-notice>
           <p style={{ margin: 0 }}>
             {sp.retentionNotice}{" "}
-            <a href={scopedHref("/brand/studio", choice)} style={{ fontWeight: 600, color: "#3063A7" }}>
+            <a href={scopedHref("/brand/studio", choice)} style={{ fontWeight: 600, color: "var(--ys-ink)", textDecoration: "underline", textUnderlineOffset: "3px" }}>
               {sp.retentionCta}
             </a>
           </p>

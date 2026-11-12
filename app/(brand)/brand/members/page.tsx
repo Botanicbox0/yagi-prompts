@@ -125,8 +125,8 @@ export default async function MembersPage({
               style={{
                 padding: "4px 10px",
                 borderRadius: "999px",
-                background: "rgba(56, 117, 197, 0.08)",
-                color: "#3063a7",
+                background: "var(--ys-panel)",
+                color: "var(--ys-ink-secondary)",
                 fontSize: "11px",
                 fontWeight: 600,
               }}
@@ -244,9 +244,9 @@ export default async function MembersPage({
                         style={{
                           fontSize: "10px",
                           fontWeight: 600,
-                          color: "#3063a7",
-                          background: "rgba(56, 117, 197, 0.09)",
-                          padding: "1px 6px",
+                          color: "var(--ys-ink)",
+                          background: "var(--ys-surface)",
+                          padding: "2px 8px",
                           borderRadius: "999px",
                         }}
                       >

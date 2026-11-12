@@ -145,7 +145,7 @@ export const roomsShellKo: typeof roomsShellEn = {
   space: {
     eyebrow: '야기 팀과 · 프로젝트 공간',
     title: '프로젝트',
-    subtitle: '야기 팀에 맡긴 기획서·스토리보드·시안 검수와 대화를 프로젝트별로 한곳에서 진행합니다.',
+    subtitle: '기획서부터 스토리보드, 시안 검수와 대화까지 프로젝트별로 한곳에서 진행합니다.',
     inboxLink: '알림함',
     creatorsLink: '크리에이터',
     newBrief: '새 프로젝트 의뢰',
@@ -216,7 +216,7 @@ export const roomsShellKo: typeof roomsShellEn = {
     stageDone: '지난 단계',
     stageAhead: '아직 오지 않은 단계',
     todoTitle: '지금 확인할 것',
-    todoEmpty: '지금 기다리는 일은 없어요. 야기 팀이 새로 올리면 여기에 보여요.',
+    todoEmpty: '대기 중인 작업이 없어요. 야기 팀이 새로 올리면 이곳에 표시돼요.',
     todoBoard: '스토리보드 v{version}',
     todoBoardAction: '보고 결정하기',
     todoReview: '시안 v{version}',

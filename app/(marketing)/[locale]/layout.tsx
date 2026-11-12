@@ -85,6 +85,7 @@ export default async function MarketingRootLayout({
   return (
     <html lang={locale} className={fontVariables}>
       <head>
+        <link rel="stylesheet" href="/fonts/geist/geist.css" />
         {/* Pretendard ships Korean as a 92-slice unicode-range dynamic subset; it cannot go
             through next/font/local, so it is linked as self-hosted vendor CSS (§5.2). */}
         <link rel="stylesheet" href="/fonts/pretendard/pretendard-dynamic-subset.css" />

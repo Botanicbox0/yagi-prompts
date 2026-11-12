@@ -132,14 +132,14 @@ export function HumanHandoff({
               fontSize: 11,
               fontWeight: 700,
               letterSpacing: "0.02em",
-              background: "rgba(56, 117, 197, 0.12)",
-              color: "#3063A7",
+              background: "var(--ys-active-bg, #09090B)",
+              color: "var(--ys-active-fg, #FFFFFF)",
             }}
           >
             <span className="ys-brand-live-dot" aria-hidden="true" />
             {isKo ? "전담 PD 직통 연결" : "Direct PD Escalation"}
           </span>
-          <strong style={{ fontSize: 13.5, color: "#0E1013" }}>
+          <strong style={{ fontSize: 13.5, color: "var(--ys-ink, #09090B)" }}>
             {status === "requested"
               ? isKo
                 ? "전담 PD를 불렀어요 — 정리된 명세서와 레퍼런스를 함께 전달했습니다"

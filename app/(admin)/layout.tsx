@@ -55,6 +55,7 @@ export default async function AdminRootLayout({ children }: { children: ReactNod
     // workspace in `app/(app)` also sets `data-workspace-admin`, and must not inherit them.
     <html lang={locale} className={fontVariables} data-workspace-admin data-admin-console>
       <head>
+        <link rel="stylesheet" href="/fonts/geist/geist.css" />
         <link rel="stylesheet" href="/fonts/pretendard/pretendard-dynamic-subset.css" />
         <link rel="stylesheet" href="/fonts/pretendard/pretendard-hangul-mono.css" />
       </head>

@@ -133,7 +133,7 @@ export const roomsReviewEn = {
 export const roomsReviewKo: typeof roomsReviewEn = {
   tab: {
     title: '시안',
-    lede: '야기 팀이 보낸 시안이 버전마다 여기에 쌓여요. 아직 열린 의견은 새 버전으로 이어져요.',
+    lede: '야기 팀이 보낸 버전별 시안이 이곳에 쌓여요. 열린 의견은 다음 버전으로 이어져요.',
     listLabel: '이 의뢰의 시안',
     empty: {
       title: '아직 올라온 시안이 없어요',
