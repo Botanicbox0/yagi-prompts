@@ -56,7 +56,7 @@ function route(handlers: Record<string, (init?: RequestInit) => Response | Promi
     return hit[1](init);
   });
 }
-const GENERATE = 'POST https://generativelanguage.googleapis.com/v1beta/models/gemini-3.8-flash:generateContent';
+const GENERATE = 'POST https://generativelanguage.googleapis.com/v1beta/models/gemini-4-hydrogen:generateContent';
 
 describe('probeMp4', () => {
   it('reads length and the video track size, skipping the sound track', () => {

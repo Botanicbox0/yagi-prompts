@@ -330,7 +330,7 @@ const STAGE2_VIDEO_CREATOR_DOCTRINE = [
 interface GeminiCandidateResponse {
   candidates?: Array<{
     content?: {
-      parts?: Array<{ text?: string }>;
+      parts?: Array<{ text?: string; thought?: boolean }>;
     };
   }>;
 }
@@ -374,12 +374,15 @@ export async function callGeminiStructuredJson<T>(
     throw new Error(`gemini_director_http_${response.status}`);
   }
   const body = (await response.json()) as GeminiCandidateResponse;
-  const partsList = body.candidates?.[0]?.content?.parts ?? [];
-  const text = partsList[partsList.length - 1]?.text;
-  if (!text) {
+  const text = (body.candidates?.[0]?.content?.parts ?? [])
+    .filter((p) => !p.thought && typeof p.text === 'string')
+    .map((p) => p.text)
+    .join('');
+  if (!text.trim()) {
     throw new Error('gemini_director_empty_response');
   }
-  const parsedJson = JSON.parse(text) as unknown;
+  const fenced = /^\s*```(?:json)?\s*([\s\S]*?)\s*```\s*$/i.exec(text);
+  const parsedJson = JSON.parse(fenced ? fenced[1]! : text) as unknown;
   return parser(parsedJson);
 }
 

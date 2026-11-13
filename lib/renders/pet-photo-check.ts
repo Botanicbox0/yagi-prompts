@@ -6,7 +6,7 @@ import type { SlotPhoto } from './cast-inputs';
  * docs/CAST-CATEGORIES.md §3 — a pet photo skips every face rule (no face check, no identity group,
  * no own-face consent). That is only safe if it really is a pet: someone else's face posted into the
  * pet slot would otherwise reach an engine with nobody's consent on file. So before a pet photo is
- * stored, Gemini 3.8 Flash (the template director's model and call, `GEMINI_API_KEY`) reads it:
+ * stored, Gemini 4 Hydrogen (the template director's model and call, `GEMINI_API_KEY`) reads it:
  *
  *   · a person anywhere in the picture (a face, a body, a person in a poster or on a screen) → refused;
  *   · no animal in it → refused;
