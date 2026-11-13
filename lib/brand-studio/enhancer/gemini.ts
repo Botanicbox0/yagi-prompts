@@ -3,10 +3,9 @@
  * the same env names and default model as lib/template-director/flash-director.ts, JSON output with
  * a response schema. Server-only. Every failure throws; callers turn that into their fallback.
  *
- * Request fields checked against the Gemini API reference on 2026-11-10:
+ * Request fields checked against the Gemini API reference on 2026-11-14:
  * https://aistudio.google.com/api-reference/generate-content (generationConfig.responseMimeType,
- * responseJsonSchema, thinkingConfig.thinkingLevel MINIMAL|LOW|MEDIUM|HIGH) and the model table at
- * https://aistudio.google.com/docs/thinking (gemini-3.8-flash: low, medium, high).
+ * responseJsonSchema, thinkingConfig.thinkingLevel LOW|MEDIUM|HIGH|XHIGH for gemini-4-hydrogen).
  */
 import {
   GEMINI_DIRECTOR_DEFAULT_BASE_URL,
@@ -52,7 +51,7 @@ export async function callGeminiJson(
     system: string;
     parts: GeminiPart[];
     schema: Record<string, unknown>;
-    thinking: 'LOW' | 'MEDIUM' | 'HIGH';
+    thinking: 'LOW' | 'MEDIUM' | 'HIGH' | 'XHIGH';
     timeoutMs: number;
   },
 ): Promise<unknown> {
