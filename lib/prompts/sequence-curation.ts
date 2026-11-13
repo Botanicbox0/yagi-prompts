@@ -21,65 +21,44 @@ export function resolveDefaultMediumForPlan(planTier: ViewerPlanTier = 'standard
   return 'all';
 }
 
-export interface EditorialMoodOption {
-  id: EditorialMoodId;
-  indexLabel: string;
-  labelKo: string;
-  labelEn: string;
-  descKo: string;
-  descEn: string;
+/**
+ * The one chip row above the home gallery (founder review 2026-11-10: one row, plain words, no
+ * numbers). Medium chips and the four mood chips share one selection; labels live in the
+ * dictionaries under `creatorJourney.filter*`.
+ */
+export type HomeFilterId =
+  | 'all'
+  | 'video'
+  | 'image'
+  | 'runway-editorial'
+  | 'retro-youth'
+  | 'dream-fantasy'
+  | 'celeb-spotlight';
+
+export const HOME_FILTER_IDS: readonly HomeFilterId[] = [
+  'all',
+  'video',
+  'image',
+  'runway-editorial',
+  'retro-youth',
+  'dream-fantasy',
+  'celeb-spotlight'
+];
+
+export function resolveDefaultFilterForPlan(planTier: ViewerPlanTier = 'standard'): HomeFilterId {
+  return resolveDefaultMediumForPlan(planTier);
 }
 
-export const EDITORIAL_MOOD_OPTIONS: readonly EditorialMoodOption[] = [
-  {
-    id: 'all',
-    indexLabel: 'ALL',
-    labelKo: '전체 에디션',
-    labelEn: 'All Editions',
-    descKo: '이번 주 추천순 전체 영상 포맷과 5장 화보집을 한눈에 둘러봅니다.',
-    descEn: 'Browse all curated video formats and 5-shot editorial photo series.'
-  },
-  {
-    id: 'runway-editorial',
-    indexLabel: '01',
-    labelKo: '런웨이 & 하이패션',
-    labelEn: 'Runway & High Fashion',
-    descKo: '패션쇼 프레스 라인, 도심 스트릿 몽타주, 하이주얼리와 웨딩 화보 주인공이 되는 장면',
-    descEn: 'Step into front-row runway arrivals, city fashion montages, and couture editorials.'
-  },
-  {
-    id: 'retro-youth',
-    indexLabel: '02',
-    labelKo: '8090 레트로 & 청춘 기록',
-    labelEn: '80s–90s Retro & Youth',
-    descKo: '90년대 서울 길거리 인터뷰, 80년대 도쿄 하이틴 스타, 필름 캠코더 감성의 청춘 장면',
-    descEn: '1990s Seoul street interviews, 80s teen icons, and analog camcorder nostalgia.'
-  },
-  {
-    id: 'dream-fantasy',
-    indexLabel: '03',
-    labelKo: '몽환 & 시네마 판타지',
-    labelEn: 'Dream & Cinema Fantasy',
-    descKo: '어항 속 금붕어 백일몽, 발레리나 렌즈 포털, 동화·무협 세계관의 초현실 시네마',
-    descEn: 'Surreal aquarium daydreams, lens portals, fairytales, and cinematic fantasy worlds.'
-  },
-  {
-    id: 'celeb-spotlight',
-    indexLabel: '04',
-    labelKo: '셀럽 & 뷰티 캠페인',
-    labelEn: 'Celeb & Beauty Spotlight',
-    descKo: '글로벌 뷰티 광고의 메인 모델이나 매거진 커버 주인공처럼 빛나는 클로즈업',
-    descEn: 'Star in luxury beauty commercials, magazine covers, and flash-lit press lines.'
-  },
-  {
-    id: 'photo-series',
-    indexLabel: '05',
-    labelKo: '5장 화보집 (이미지)',
-    labelEn: '5-Shot Photo Series',
-    descKo: '셀카 한 장으로 한 번에 5장의 화보 세트를 완성하는 에디토리얼 사진 컬렉션',
-    descEn: 'Turn one selfie into a complete 5-frame editorial photography series.'
-  }
-] as const;
+/** Whether a card with these traits stays visible under the selected chip. */
+export function matchesHomeFilter(
+  filter: HomeFilterId,
+  slug: string,
+  medium: 'video' | 'image'
+): boolean {
+  if (filter === 'all') return true;
+  if (filter === 'video' || filter === 'image') return medium === filter;
+  return resolveTemplateMoods(slug, medium).includes(filter);
+}
 
 const RUNWAY_SLUGS = new Set([
   'city-fashion-montage',

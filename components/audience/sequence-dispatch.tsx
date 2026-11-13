@@ -7,27 +7,52 @@ import type { Locale } from '@/lib/i18n/config';
 import { TypographicPoster } from '@/components/prompts/poster';
 import { cardAuthor, cardRatio } from '@/components/prompts/card-frame';
 import {
-  EDITORIAL_MOOD_OPTIONS,
   HERO_EDITORIAL_PRIORITY,
+  HOME_FILTER_IDS,
+  matchesHomeFilter,
   pickHeroFeaturedTemplate,
+  resolveDefaultFilterForPlan,
   resolveDefaultMediumForPlan,
   resolveTemplateMoods,
   type EditorialMoodId,
-  type EditorialMoodOption,
   type GalleryMediumTab,
+  type HomeFilterId,
   type ViewerPlanTier,
 } from '@/lib/prompts/sequence-curation';
 
 export {
-  EDITORIAL_MOOD_OPTIONS,
   HERO_EDITORIAL_PRIORITY,
+  HOME_FILTER_IDS,
+  matchesHomeFilter,
   pickHeroFeaturedTemplate,
+  resolveDefaultFilterForPlan,
   resolveDefaultMediumForPlan,
   resolveTemplateMoods,
   type EditorialMoodId,
-  type EditorialMoodOption,
   type GalleryMediumTab,
+  type HomeFilterId,
   type ViewerPlanTier,
+};
+
+export interface HomeFilterLabels {
+  label: string;
+  all: string;
+  video: string;
+  image: string;
+  runway: string;
+  retro: string;
+  fantasy: string;
+  celeb: string;
+}
+
+const FILTER_LABEL_KEY: Record<HomeFilterId, keyof Omit<HomeFilterLabels, 'label'>> = {
+  all: 'all',
+  video: 'video',
+  image: 'image',
+  'runway-editorial': 'runway',
+  'retro-youth': 'retro',
+  'dream-fantasy': 'fantasy',
+  'celeb-spotlight': 'celeb'
 };
 
 export interface SequenceDispatchProps {
@@ -37,6 +62,7 @@ export interface SequenceDispatchProps {
   cardSecondsPattern: string;
   cardAuthorPattern: string;
   cardAuthorAnonymous: string;
+  filterLabels: HomeFilterLabels;
   initialPlanTier?: ViewerPlanTier;
 }
 
@@ -44,9 +70,8 @@ export interface SequenceDispatchProps {
  * Cosmos Sequence (`cosmos.so/sequence`) inspired editorial curation & mood discovery for personal TWINGS:
  * 1. "THIS WEEK IN TWINGS" weekly dispatch strip with auto-playing looping films (no redundant "01 HOT FILM" header text)
  *    alongside the 5-shot editorial photo series spotlight.
- * 2. Instant Medium Switcher (`전체` / `영상 템플릿` / `5장 이미지 화보`) + `Image-Only` plan priority mode so users can
- *    flip directly to Image Templates at the top without scrolling past 22 video cards.
- * 3. Meaningful Editorial Mood Curator + magnetic `Freestyle Yourself · 나만의 템플릿 만들기` entry door.
+ * 2. One chip row (all · video · photos · four moods) that filters the rails below; the "make your own"
+ *    door sits after the rails in the page itself.
  */
 export function SequenceDispatchSection({
   locale,
@@ -55,44 +80,13 @@ export function SequenceDispatchSection({
   cardSecondsPattern,
   cardAuthorPattern,
   cardAuthorAnonymous,
+  filterLabels,
   initialPlanTier = 'standard'
 }: SequenceDispatchProps) {
-  const [planTier, setPlanTier] = useState<ViewerPlanTier>(initialPlanTier);
-  const [activeMedium, setActiveMedium] = useState<GalleryMediumTab>(() =>
-    resolveDefaultMediumForPlan(initialPlanTier)
+  const planTier = initialPlanTier;
+  const [activeFilter, setActiveFilter] = useState<HomeFilterId>(() =>
+    resolveDefaultFilterForPlan(initialPlanTier)
   );
-  const [activeMood, setActiveMood] = useState<EditorialMoodId>('all');
-  const [visibleCount, setVisibleCount] = useState<number | null>(null);
-
-  const handleSelectMedium = (medium: GalleryMediumTab) => {
-    setActiveMedium(medium);
-    if (medium === 'image' && activeMood !== 'all') {
-      setActiveMood('photo-series');
-    } else if (medium === 'video' && activeMood === 'photo-series') {
-      setActiveMood('all');
-    } else if (medium === 'all' && activeMood === 'photo-series') {
-      setActiveMood('all');
-    }
-  };
-
-  const handleSelectMood = (mood: EditorialMoodId) => {
-    setActiveMood(mood);
-    if (mood === 'photo-series') {
-      setActiveMedium('image');
-    } else if (activeMedium === 'image' && mood !== 'all') {
-      setActiveMedium('all');
-    }
-  };
-
-  const handleToggleImageOnlyPlan = () => {
-    const nextTier: ViewerPlanTier = planTier === 'image_only' ? 'standard' : 'image_only';
-    setPlanTier(nextTier);
-    const defaultMed = resolveDefaultMediumForPlan(nextTier);
-    setActiveMedium(defaultMed);
-    if (nextTier === 'image_only') {
-      setActiveMood('all');
-    }
-  };
 
   useEffect(() => {
     const videoRail = document.querySelector<HTMLElement>('[data-rail="video"]');
@@ -100,29 +94,14 @@ export function SequenceDispatchSection({
     const allVideoLink = document.querySelector<HTMLElement>('[data-all-video]')?.parentElement ?? document.querySelector<HTMLElement>('[data-all-video]');
     const items = document.querySelectorAll<HTMLElement>('[data-prompt-item]');
 
-    const effectiveImageOnly = activeMedium === 'image' || activeMood === 'photo-series';
-    const effectiveVideoOnly = activeMedium === 'video';
+    const effectiveImageOnly = activeFilter === 'image';
+    const effectiveVideoOnly = activeFilter === 'video';
 
-    let matched = 0;
     for (const item of items) {
       const cardEl = item.querySelector<HTMLElement>('[data-prompt-card]');
       const slug = cardEl?.dataset.promptCard ?? '';
       const medium = (cardEl?.dataset.medium === 'image' ? 'image' : 'video') as 'video' | 'image';
-      const moods = resolveTemplateMoods(slug, medium);
-
-      const mediumMatch =
-        (effectiveImageOnly && medium === 'image') ||
-        (effectiveVideoOnly && medium === 'video') ||
-        (!effectiveImageOnly && !effectiveVideoOnly);
-
-      const moodMatch =
-        activeMood === 'all' ||
-        activeMood === 'photo-series' ||
-        moods.includes(activeMood);
-
-      const show = mediumMatch && moodMatch;
-      item.hidden = !show;
-      if (show) matched += 1;
+      item.hidden = !matchesHomeFilter(activeFilter, slug, medium);
     }
 
     if (videoRail) {
@@ -149,23 +128,17 @@ export function SequenceDispatchSection({
       }
     }
 
-    setVisibleCount(
-      activeMood === 'all' && activeMedium === 'all' ? null : matched
-    );
-
     return () => {
       for (const item of items) item.hidden = false;
       if (videoRail) videoRail.style.display = '';
       if (imageRail) imageRail.style.display = '';
       if (allVideoLink) allVideoLink.style.display = '';
     };
-  }, [activeMood, activeMedium]);
+  }, [activeFilter]);
 
   const topVideos = hotVideos.slice(0, 3);
   const featuredImageSet = imageSeries[0] ?? null;
-  const activeMoodObj =
-    EDITORIAL_MOOD_OPTIONS.find((opt) => opt.id === activeMood) ?? EDITORIAL_MOOD_OPTIONS[0]!;
-  const imageFirst = planTier === 'image_only' || activeMedium === 'image';
+  const imageFirst = planTier === 'image_only' || activeFilter === 'image';
 
   return (
     <div data-sequence-editorial data-plan-tier={planTier} className="mb-10 space-y-8">
@@ -299,7 +272,7 @@ export function SequenceDispatchSection({
                 <button
                   type="button"
                   data-dispatch-image-switch
-                  onClick={() => handleSelectMedium('image')}
+                  onClick={() => setActiveFilter('image')}
                   className="font-mono text-[0.7rem] font-semibold text-[#3063A7] underline underline-offset-4 hover:text-[#0E1013]"
                 >
                   {locale === 'en' ? 'Switch to all photo series ↓' : '화보 템플릿으로 바로 전환 ↓'}
@@ -358,12 +331,7 @@ export function SequenceDispatchSection({
                         />
                       </div>
                     ) : null}
-                    <div className="mt-2 flex items-center justify-between px-1 font-mono text-[0.68rem] text-black/60 tabular-nums">
-                      <span>
-                        {locale === 'en'
-                          ? 'FRAMES 01–05 · EDITORIAL CONTACT SHEET'
-                          : 'FRAMES 01–05 · 5컷 연속 화보 패키지'}
-                      </span>
+                    <div className="mt-2 flex items-center justify-end px-1 text-[0.72rem]">
                       <span className="font-semibold text-[#3063A7]">
                         {locale === 'en' ? 'Open series →' : '화보 세트 열기 →'}
                       </span>
@@ -399,205 +367,32 @@ export function SequenceDispatchSection({
         </div>
       </section>
 
-      {/* 2. Instant Medium Switcher (Video ⇄ 5-Shot Photo Series + Image-Only Plan Priority) & Mood Curator */}
       <div
-        data-editorial-mood-curator
-        className="rounded-[24px] border border-hairline bg-white p-5 sm:p-6"
+        role="group"
+        aria-label={filterLabels.label}
+        data-home-filter
+        className="-mx-4 flex items-center gap-2 overflow-x-auto px-4 pb-1 sm:mx-0 sm:flex-wrap sm:overflow-x-visible sm:px-0"
       >
-        {/* Top Row: Instant Medium Switcher so users never have to scroll past 22 videos to see images */}
-        <div
-          data-gallery-medium-switcher
-          className="flex flex-wrap items-center justify-between gap-3 border-b border-hairline pb-4"
-        >
-          <div className="flex flex-wrap items-center gap-2" role="tablist" aria-label={locale === 'en' ? 'Switch format medium' : '영상·화보 전환'}>
+        {HOME_FILTER_IDS.map((id) => {
+          const isActive = activeFilter === id;
+          return (
             <button
+              key={id}
               type="button"
-              role="tab"
-              data-medium-tab="all"
-              aria-selected={activeMedium === 'all'}
-              onClick={() => handleSelectMedium('all')}
+              data-home-filter-chip={id}
+              aria-pressed={isActive}
+              onClick={() => setActiveFilter(id)}
               className={[
-                'inline-flex min-h-10 items-center gap-2 rounded-full border px-4 py-2 text-xs font-semibold transition-colors',
-                activeMedium === 'all'
-                  ? 'border-[#0E1013] bg-[#0E1013] text-white'
-                  : 'border-hairline bg-[#F6F7F9] text-[#0E1013] hover:border-[#3875C5]/45'
-              ].join(' ')}
-            >
-              <span>{locale === 'en' ? 'All Formats' : '전체 보기'}</span>
-              <span className="font-mono text-[0.68rem] opacity-75 tabular-nums">
-                {hotVideos.length + imageSeries.length}
-              </span>
-            </button>
-
-            <button
-              type="button"
-              role="tab"
-              data-medium-tab="video"
-              aria-selected={activeMedium === 'video'}
-              onClick={() => handleSelectMedium('video')}
-              className={[
-                'inline-flex min-h-10 items-center gap-2 rounded-full border px-4 py-2 text-xs font-semibold transition-colors',
-                activeMedium === 'video'
+                'inline-flex min-h-10 shrink-0 items-center rounded-full border px-4 py-2 text-sm font-medium transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#3875C5]',
+                isActive
                   ? 'border-[#3875C5] bg-[#3875C5] text-white'
-                  : 'border-hairline bg-[#F6F7F9] text-[#0E1013] hover:border-[#3875C5]/45'
+                  : 'border-hairline bg-white text-[#0E1013] hover:border-[#3875C5]/45'
               ].join(' ')}
             >
-              <span>{locale === 'en' ? 'Video Films' : '영상 템플릿만 보기'}</span>
-              <span className="font-mono text-[0.68rem] opacity-75 tabular-nums">
-                {hotVideos.length}
-              </span>
+              {filterLabels[FILTER_LABEL_KEY[id]]}
             </button>
-
-            <button
-              type="button"
-              role="tab"
-              data-medium-tab="image"
-              aria-selected={activeMedium === 'image'}
-              onClick={() => handleSelectMedium('image')}
-              className={[
-                'inline-flex min-h-10 items-center gap-2 rounded-full border px-4 py-2 text-xs font-semibold transition-colors',
-                activeMedium === 'image'
-                  ? 'border-[#3875C5] bg-[#3875C5] text-white'
-                  : 'border-[#3875C5]/30 bg-[#F3F7FA] text-[#3063A7] hover:border-[#3875C5]'
-              ].join(' ')}
-            >
-              <span>{locale === 'en' ? '5-Shot Photo Series' : '5장 이미지 화보 바로 전환'}</span>
-              <span className="font-mono text-[0.68rem] opacity-85 tabular-nums">
-                {imageSeries.length}
-              </span>
-            </button>
-          </div>
-
-          {/* Image-Only Plan Priority Toggle (for Entry Plan subscribers where Image Templates must surface first) */}
-          <div className="flex items-center gap-2">
-            <button
-              type="button"
-              data-plan-tier-toggle="image_only"
-              aria-pressed={planTier === 'image_only'}
-              onClick={handleToggleImageOnlyPlan}
-              className={[
-                'inline-flex min-h-9 items-center gap-1.5 rounded-full border px-3.5 py-1.5 font-mono text-[0.7rem] font-medium transition-colors',
-                planTier === 'image_only'
-                  ? 'border-[#3875C5] bg-[#E8EFF7] text-[#3063A7]'
-                  : 'border-hairline bg-white text-black/60 hover:border-[#3875C5]/40'
-              ].join(' ')}
-            >
-              <span
-                aria-hidden="true"
-                className={[
-                  'size-1.5 rounded-full',
-                  planTier === 'image_only' ? 'bg-[#3875C5]' : 'bg-black/30'
-                ].join(' ')}
-              />
-              <span>
-                {locale === 'en'
-                  ? 'Image-Only Plan View (Images First)'
-                  : 'Image-Only 플랜 기준 (화보 최우선 노출)'}
-              </span>
-            </button>
-          </div>
-        </div>
-
-        {/* Second Row: Meaningful Editorial Mood Curator */}
-        <div className="mt-4 flex flex-wrap items-baseline justify-between gap-2">
-          <div>
-            <p className="font-mono text-[0.68rem] font-medium tracking-[0.08em] text-[#3063A7] uppercase">
-              {locale === 'en' ? 'CURATED BY MOOD & WORLD' : '분위기와 세계관으로 고르기'}
-            </p>
-            <h3 className="mt-1 text-base font-bold tracking-[-0.015em] text-[#0E1013]">
-              {locale === 'en'
-                ? 'What kind of scene do you want to star in today?'
-                : '오늘 어떤 장면의 주인공이 되고 싶으신가요?'}
-            </h3>
-          </div>
-          {visibleCount !== null && (
-            <div className="flex items-center gap-3 font-mono text-xs text-black/60 tabular-nums">
-              <span data-mood-count>
-                {locale === 'en' ? `${visibleCount} formats` : `${visibleCount}개 포맷`}
-              </span>
-              <button
-                type="button"
-                data-mood-reset
-                onClick={() => {
-                  setActiveMood('all');
-                  setActiveMedium('all');
-                  setPlanTier('standard');
-                }}
-                className="text-xs font-medium text-[#3063A7] underline underline-offset-4 hover:text-[#0E1013]"
-              >
-                {locale === 'en' ? 'Show all' : '전체 보기'}
-              </button>
-            </div>
-          )}
-        </div>
-
-        <div
-          role="group"
-          aria-label={locale === 'en' ? 'Filter by editorial mood' : '분위기별 에디션 선택'}
-          className="mt-3.5 flex items-center gap-2 overflow-x-auto pb-1 lg:flex-wrap lg:overflow-x-visible"
-        >
-          {EDITORIAL_MOOD_OPTIONS.map((option) => {
-            const isActive = activeMood === option.id;
-            return (
-              <button
-                key={option.id}
-                type="button"
-                data-mood-pill={option.id}
-                aria-pressed={isActive}
-                onClick={() => handleSelectMood(option.id)}
-                className={[
-                  'inline-flex min-h-10 shrink-0 items-center gap-2 rounded-full border px-4 py-2 text-xs font-medium transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#3875C5]',
-                  isActive
-                    ? 'border-[#3875C5] bg-[#3875C5] text-white'
-                    : 'border-hairline bg-[#F6F7F9] text-[#0E1013] hover:border-[#3875C5]/45 hover:bg-[#E8EFF7]/60'
-                ].join(' ')}
-              >
-                <span
-                  className={[
-                    'font-mono text-[0.68rem] tabular-nums',
-                    isActive ? 'text-white/85' : 'text-[#3063A7]'
-                  ].join(' ')}
-                >
-                  {option.indexLabel}
-                </span>
-                <span>{locale === 'en' ? option.labelEn : option.labelKo}</span>
-              </button>
-            );
-          })}
-        </div>
-
-        <p
-          data-mood-description={activeMood}
-          className="mt-3 text-xs leading-relaxed text-black/65"
-        >
-          {locale === 'en' ? activeMoodObj.descEn : activeMoodObj.descKo}
-        </p>
-
-        {/* 3. Make Your Own Video & Earn 80% as a Template Maker Door */}
-        <div
-          data-direct-scene-door
-          className="mt-5 flex flex-wrap items-center justify-between gap-4 rounded-[18px] border border-[#3875C5]/25 bg-[#F3F7FA] px-5 py-4"
-        >
-          <div className="max-w-2xl">
-            <p className="text-xs font-semibold text-[#3063A7]">
-              {locale === 'en'
-                ? 'MAKE YOUR OWN VIDEO & EARN 80% PROFIT SHARE'
-                : '나만의 영상 제작하기 · 누군가 내 템플릿으로 만들 때마다 순수익 80% 정산'}
-            </p>
-            <p className="mt-1 text-sm font-bold tracking-[-0.01em] text-[#0E1013]">
-              {locale === 'en'
-                ? 'Upload any reference video to make your own scene — then publish it as a template and earn 80% every time someone uses it.'
-                : '저장해 둔 영상에 내 사진을 넣어 나만의 영상을 만들고, 템플릿으로 올려 다른 사람이 만들 때마다 80% 수익을 받아보세요.'}
-            </p>
-          </div>
-          <a
-            href={`/${locale}/direct`}
-            data-direct-scene-link
-            className="inline-flex min-h-10 shrink-0 items-center rounded-full bg-[#3875C5] px-4 py-2 text-xs font-semibold text-white transition-colors hover:bg-[#3063A7]"
-          >
-            {locale === 'en' ? 'Make My Own Video & Earn →' : '나만의 영상 제작 & 수익 보기 →'}
-          </a>
-        </div>
+          );
+        })}
       </div>
     </div>
   );

@@ -1268,6 +1268,12 @@ async function sweepMakers(): Promise<void> {
     const side = (id: string) => new RegExp(`data-audience="${id}"[^>]*>([^<]*)</a>`).exec(page.body)?.[1] ?? null;
     expectEqual(`${locale}: the switch's consumer side reads "${personal}"`, side('creator'), personal);
     expectEqual(`${locale}: …and its brand side "${brand}"`, side('brand'), brand);
+    // Founder review 2026-11-10: one row of plain chips above the gallery, the door after it.
+    expectPresent(`${locale}: home filter is one chip row`, page.body, 'data-home-filter-chip="image"');
+    expectAbsent(`${locale}: …no plan-basis pill`, page.body, 'data-plan-tier-toggle');
+    expectAbsent(`${locale}: …no numbered mood pills`, page.body, 'data-mood-pill');
+    expectAbsent(`${locale}: …no frame tag`, page.body, 'FRAMES 01');
+    expectPresent(`${locale}: make-your-own door after the rails`, page.body, 'data-direct-scene-door');
   }
 
   // §7.5 (founder 2026-10-30): one feed — originals and AI creatives mixed, no origin rails or chips.
