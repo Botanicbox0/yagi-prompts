@@ -47,7 +47,7 @@ export const PROMPT_MODELS = [
   { id: 'nano-banana-pro', label: 'NANO BANANA PRO' },
   { id: 'nano-banana-2', label: 'NANO BANANA 2' },
   { id: 'gpt-image-2', label: 'GPT IMAGE 2' },
-  { id: 'seedream-5.0-pro', label: 'SEEDREAM 5.0 PRO' },
+  { id: 'seedream-5.5', label: 'SEEDREAM 5.5' },
 ] as const;
 
 export type PromptModelId = (typeof PROMPT_MODELS)[number]['id'];

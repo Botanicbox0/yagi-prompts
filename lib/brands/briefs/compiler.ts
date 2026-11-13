@@ -11,7 +11,7 @@ import {
 export const COMPILER_GRAMMAR_IDS = [
   'gpt-image-2.5',
   'nano-banana-pro',
-  'seedream-5.0-pro',
+  'seedream-5.5',
   'flux-kontext',
   'soul-2.0',
   'ideogram-recraft',
@@ -24,7 +24,7 @@ export const COMPILER_TARGET_IDS = [
   'gpt-image-2',
   'nano-banana-pro',
   'nano-banana-2.1',
-  'seedream-5.0-pro',
+  'seedream-5.5',
   'seedream-5.0-lite',
   'flux-3',
   'flux-kontext',
@@ -108,14 +108,14 @@ export const SHOT_ROUTING_TABLE: Record<ShotCutKind, ShotRoutingDecision> = {
     cutKind: 'editorial_full_body',
     grammar: 'soul-2.0',
     engineId: 'text2image_soul_v2',
-    fallbackEngineId: 'seedream-5.0-pro',
+    fallbackEngineId: 'seedream-5.5',
     defaultResolution: '2k',
     rationale: 'Garment asymmetry and editorial atmosphere without reference copying'
   },
   reference_exact_product: {
     cutKind: 'reference_exact_product',
-    grammar: 'seedream-5.0-pro',
-    engineId: 'seedream-5.0-pro',
+    grammar: 'seedream-5.5',
+    engineId: 'seedream-5.5',
     fallbackEngineId: 'nano-banana-pro',
     defaultResolution: '2k',
     rationale: 'Thick glass, caustics, cap geometry, and reference frame fidelity (6/8 product benchmark)'
@@ -132,7 +132,7 @@ export const SHOT_ROUTING_TABLE: Record<ShotCutKind, ShotRoutingDecision> = {
     cutKind: 'person_portrait',
     grammar: 'nano-banana-pro',
     engineId: 'nano-banana-pro',
-    fallbackEngineId: 'seedream-5.0-pro',
+    fallbackEngineId: 'seedream-5.5',
     defaultResolution: '2k',
     rationale: '3/4 and profile facial geometry lock paired with a10 matte skin reflectance'
   },
@@ -178,9 +178,9 @@ export function grammarForTarget(target: CompilerTargetId): CompilerGrammarId {
     case 'nano-banana-pro':
     case 'nano-banana-2.1':
       return 'nano-banana-pro';
-    case 'seedream-5.0-pro':
+    case 'seedream-5.5':
     case 'seedream-5.0-lite':
-      return 'seedream-5.0-pro';
+      return 'seedream-5.5';
     case 'flux-3':
     case 'flux-kontext':
       return 'flux-kontext';
@@ -514,7 +514,7 @@ export function lintCompiledPrompt(
     issues.push({
       rule: 'gpt_image_person_disallowed',
       severity: 'error',
-      text: `Target ${target} is disallowed for shots with a person (plastic skin artifact); route to seedream-5.0-pro or nano-banana-pro.`
+      text: `Target ${target} is disallowed for shots with a person (plastic skin artifact); route to seedream-5.5 or nano-banana-pro.`
     });
   }
 
@@ -623,7 +623,7 @@ export function lintCompiledPrompt(
   }
 
   // 10. Seedream word & reference budget (§2.2: <= 600 words, <= 10 references)
-  if (target === 'seedream-5.0-pro' || target === 'seedream-5.0-lite') {
+  if (target === 'seedream-5.5' || target === 'seedream-5.0-lite') {
     const words = prompt.trim().split(/\s+/).length;
     if (words > 600) {
       issues.push({
@@ -730,7 +730,7 @@ export function compilePrompt(
     case 'nano-banana-pro':
       prompt = serializeNanoBanana(spec, hasPerson);
       break;
-    case 'seedream-5.0-pro':
+    case 'seedream-5.5':
       prompt = serializeSeedream(spec, hasPerson);
       break;
     case 'flux-kontext':

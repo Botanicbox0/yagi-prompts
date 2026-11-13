@@ -687,3 +687,152 @@ export function applyColorGradeToCanvasContext(
 
   ctx.putImageData(imageData, rx0, ry0);
 }
+
+export interface ShotMatchClipInput {
+  clipId: string;
+  profile: ColorGradeProfile;
+}
+
+export interface ShotMatchClipResult {
+  clipId: string;
+  isAnchor: boolean;
+  transferMatrix: number[];
+  cssFilter: string;
+  skinProtectApplied: number;
+}
+
+/**
+ * Computes per-clip Reinhard color-transfer matrices matching every shot to a chosen
+ * anchor clip while protecting warm skin hue tones (`15°..45°`). Client-safe.
+ */
+export function computeShotMatchMatrices(
+  clips: readonly ShotMatchClipInput[],
+  anchorIndex = 0,
+  options?: { intensity?: number; skinProtect?: number },
+): ShotMatchClipResult[] {
+  if (clips.length === 0) return [];
+  const safeAnchor = Math.min(Math.max(0, Math.trunc(anchorIndex)), clips.length - 1);
+  const anchor = clips[safeAnchor]!;
+  const intensity = clamp(0, 1, options?.intensity ?? 0.85);
+  const skinProtect = clamp(0, 1, options?.skinProtect ?? 0.7);
+  const dampedIntensity = round4(intensity * (1 - skinProtect * 0.25));
+
+  return clips.map((clip, idx) => {
+    const isAnchor = idx === safeAnchor;
+    if (isAnchor) {
+      return {
+        clipId: clip.clipId,
+        isAnchor: true,
+        transferMatrix: [...IDENTITY_MATRIX_4X5],
+        cssFilter: 'none',
+        skinProtectApplied: round4(skinProtect),
+      };
+    }
+    const transferMatrix = computeReinhardTransferMatrix(clip.profile, anchor.profile, dampedIntensity);
+    const cssFilter = cssFilterForColorGrade({
+      enabled: true,
+      scope: 'selected_clip',
+      targetClipId: clip.clipId,
+      referenceProfile: anchor.profile,
+      intensity: dampedIntensity,
+      skinProtect,
+      halation: 0,
+      grain: 0,
+    });
+    return {
+      clipId: clip.clipId,
+      isAnchor: false,
+      transferMatrix,
+      cssFilter,
+      skinProtectApplied: round4(skinProtect),
+    };
+  });
+}
+
+/**
+ * Generates an Adobe IRIDAS 33x33x33 `.cube` 3D LUT from a `ColorGradeSpec`, matching
+ * Reinhard transfer / curated preset, warm skin protection, and highlight halation.
+ */
+export function generate33CubeLutFromSpec(spec: ColorGradeSpec, title = 'TWINGS Studio Look'): string {
+  const size = 33;
+  const last = size - 1;
+  const safeTitle =
+    title
+      .replace(/["\r\n]/g, ' ')
+      .replace(/\s+/g, ' ')
+      .trim()
+      .slice(0, 64) || 'TWINGS Studio Look';
+  const lines: string[] = [
+    `TITLE "${safeTitle}"`,
+    `LUT_3D_SIZE ${size}`,
+    'DOMAIN_MIN 0.0 0.0 0.0',
+    'DOMAIN_MAX 1.0 1.0 1.0',
+    '',
+  ];
+
+  const enabled = Boolean(spec.enabled);
+  const intensity = enabled ? clamp(0, 1, spec.intensity) : 0;
+  const preset = findGradePreset(spec.presetId);
+  const targetProfile = spec.referenceProfile ?? (preset ? presetToTargetProfile(preset) : null);
+  const matrix =
+    intensity > 0 && targetProfile
+      ? computeReinhardTransferMatrix(NEUTRAL_PROFILE, targetProfile, intensity)
+      : [...IDENTITY_MATRIX_4X5];
+  const skinProtect = enabled ? clamp(0, 1, spec.skinProtect) : 0;
+  const halation = enabled ? clamp(0, 0.2, spec.halation) * intensity : 0;
+
+  for (let b = 0; b < size; b += 1) {
+    const b0 = b / last;
+    for (let g = 0; g < size; g += 1) {
+      const g0 = g / last;
+      for (let r = 0; r < size; r += 1) {
+        const r0 = r / last;
+        if (intensity <= 0) {
+          lines.push(`${r0.toFixed(6)} ${g0.toFixed(6)} ${b0.toFixed(6)}`);
+          continue;
+        }
+        let r1 = matrix[0]! * r0 + matrix[1]! * g0 + matrix[2]! * b0 + matrix[4]!;
+        let g1 = matrix[5]! * r0 + matrix[6]! * g0 + matrix[7]! * b0 + matrix[9]!;
+        let b1 = matrix[10]! * r0 + matrix[11]! * g0 + matrix[12]! * b0 + matrix[14]!;
+
+        if (preset && spec.referenceProfile) {
+          const pMix = intensity * 0.35;
+          r1 += pMix * (r0 * preset.gainR + preset.liftR - r0);
+          g1 += pMix * (g0 * preset.gainG + preset.liftG - g0);
+          b1 += pMix * (b0 * preset.gainB + preset.liftB - b0);
+        } else if (preset && !spec.referenceProfile) {
+          const pr = 0.5 + (r0 * preset.gainR + preset.liftR - 0.5) * preset.contrast;
+          const pg = 0.5 + (g0 * preset.gainG + preset.liftG - 0.5) * preset.contrast;
+          const pb = 0.5 + (b0 * preset.gainB + preset.liftB - 0.5) * preset.contrast;
+          const lum = 0.2126 * pr + 0.7152 * pg + 0.0722 * pb;
+          r1 = r0 + intensity * (lum + (pr - lum) * preset.saturation - r0);
+          g1 = g0 + intensity * (lum + (pg - lum) * preset.saturation - g0);
+          b1 = b0 + intensity * (lum + (pb - lum) * preset.saturation - b0);
+        }
+
+        if (skinProtect > 0) {
+          const skinW = skinBandWeight(r0, g0, b0);
+          if (skinW > 0) {
+            const protect = clamp(0, 0.9, skinW * skinProtect * 0.85);
+            r1 = r1 * (1 - protect) + r0 * protect;
+            g1 = g1 * (1 - protect) + g0 * protect;
+            b1 = b1 * (1 - protect) + b0 * protect;
+          }
+        }
+
+        if (halation > 0) {
+          const luma = 0.2126 * r1 + 0.7152 * g1 + 0.0722 * b1;
+          if (luma > 0.76) {
+            const glow = ((luma - 0.76) / 0.24) * halation * 0.6;
+            r1 += glow * 1.15;
+            g1 += glow * 0.75;
+            b1 += glow * 0.45;
+          }
+        }
+
+        lines.push(`${clamp(0, 1, r1).toFixed(6)} ${clamp(0, 1, g1).toFixed(6)} ${clamp(0, 1, b1).toFixed(6)}`);
+      }
+    }
+  }
+  return `${lines.join('\n')}\n`;
+}

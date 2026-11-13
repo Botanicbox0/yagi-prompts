@@ -27,6 +27,8 @@ import {
 } from "@/lib/brand-studio/compose";
 import { exportCompositionMp4 } from "@/lib/brand-studio/compose/export-client";
 import { exportProjectNleBundleZip } from "@/lib/brand-studio/compose/nle-export";
+import type { ContinuityPlan } from "@/lib/brand-studio/continuity/contracts";
+import { extractContinuityFramesInBrowser } from "@/lib/brand-studio/continuity/frame-picker";
 import type { StudioAllowanceView, StudioAssetView, StudioJobView, StudioOutputView, StudioState } from "@/lib/brand-studio/contracts";
 import { formatCredits } from "@/lib/brand-studio/credits";
 import type { StudioVideoModel } from "@/lib/brand-studio/models";
@@ -1184,6 +1186,89 @@ export function VideoStudioWorkspace({
     [dock, lookup, railHeight],
   );
 
+  const [extendingScene, setExtendingScene] = useState(false);
+
+  const handleExtendNextScene = useCallback(
+    async (clip: ComposeClip) => {
+      if (!canCreate || extendingScene) return;
+      setExtendingScene(true);
+      try {
+        const keyframes = await extractContinuityFramesInBrowser(
+          clip.srcUrl,
+          clip.trimStartSec,
+          clip.trimEndSec,
+          4,
+        ).catch(() => []);
+        const res = await fetch("/api/brand-studio/post-production", {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({
+            operation: "continuity.plan",
+            input: {
+              organizationId,
+              locale,
+              clipDurationSec: Math.max(0.3, clip.trimEndSec - clip.trimStartSec),
+              sequenceDurationSec: totalSequenceSec,
+              targetNextSeconds: 6,
+              ...(clip.assetId ? { assetId: clip.assetId } : {}),
+              ...(clip.outputId ? { outputId: clip.outputId } : {}),
+              clipLabel: clip.label,
+              keyframes,
+            },
+          }),
+        });
+        const data = (await res.json().catch(() => null)) as
+          | { ok?: boolean; plan?: ContinuityPlan }
+          | null;
+        if (data?.ok && data.plan) {
+          const plan = data.plan;
+          let nextTray: TrayItem[] = [];
+          for (const ref of plan.referenceRefs) {
+            if (ref.kind === "asset") {
+              const a = lookup.asset(ref.id);
+              if (a) {
+                const item = trayItemFromAsset(a);
+                nextTray = ref.role === "start_frame" ? withStartFrame(nextTray, item) : [...nextTray, item];
+              }
+            } else if (ref.kind === "output") {
+              const o = lookup.output(ref.id);
+              if (o) {
+                const item = trayItemFromOutput(o, ref.name);
+                nextTray = ref.role === "start_frame" ? withStartFrame(nextTray, item) : [...nextTray, item];
+              }
+            }
+          }
+          if (nextTray.length > 0) {
+            dock.setTray(nextTray);
+          } else {
+            handleAttachSequenceClipToDock(clip);
+          }
+          dock.setDraft((cur) => ({ ...cur, prompt: plan.recommendedPrompt }));
+          if (railHeight === "full") setRailHeight("compact");
+          window.setTimeout(focusPrompt, 0);
+          setStatus(plan.continuityNotes || plan.cameraTransition);
+          return;
+        }
+        handleAttachSequenceClipToDock(clip);
+      } catch {
+        handleAttachSequenceClipToDock(clip);
+      } finally {
+        setExtendingScene(false);
+      }
+    },
+    [
+      canCreate,
+      dock,
+      extendingScene,
+      handleAttachSequenceClipToDock,
+      locale,
+      lookup,
+      organizationId,
+      railHeight,
+      totalSequenceSec,
+    ],
+  );
+
   const cancel = useCallback(
     async (job: StudioJobView) => {
       setStopping(job.id);
@@ -1484,6 +1569,7 @@ export function VideoStudioWorkspace({
               selectedClipId={selectedClipId}
               inspectorTab={inspectorTab}
               audioAssets={audioAssets}
+              extendingScene={extendingScene}
               railCopy={wc.rail}
               floatingCopy={wc.floatingBar}
               onHeightChange={setRailHeight}
@@ -1491,6 +1577,7 @@ export function VideoStudioWorkspace({
               onInspectorTabChange={setInspectorTab}
               onProjectChange={commitTimeline}
               onAttachClipToDock={handleAttachSequenceClipToDock}
+              onExtendNextScene={(clip) => void handleExtendNextScene(clip)}
               onLocalVideoFiles={(files) => void handleLocalSequenceFiles(files)}
               onNotice={setStatus}
               onAllowanceUpdate={setAllowanceOverride}

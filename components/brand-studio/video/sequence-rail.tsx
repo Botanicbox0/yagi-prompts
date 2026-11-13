@@ -16,14 +16,18 @@ import type { StudioAllowanceView, StudioAssetView } from "@/lib/brand-studio/co
 import { formatCredits } from "@/lib/brand-studio/credits";
 import {
   COMPOSE_ASPECTS,
+  DEFAULT_COLOR_GRADE_SPEC,
   DEFAULT_COLOR_REGION,
   applyTimelinePatches,
   clamp,
   clipPlayDuration,
+  computeShotMatchMatrices,
   cssFilterForColorGrade,
   detectVideoSceneCutsInBrowser,
+  extractColorProfileFromRgba,
   extractColorProfileInBrowser,
   frameStateAtTime,
+  generate33CubeLutFromSpec,
   normalizeColorRegion,
   playheadClipSplitTarget,
   projectDurationSec,
@@ -44,7 +48,7 @@ import {
   type DetectedCut,
   type TimelinePatch,
 } from "@/lib/brand-studio/compose";
-import { musicCredits } from "@/lib/brand-studio/music/contracts";
+import { musicCredits, sfxCredits } from "@/lib/brand-studio/music/contracts";
 import { upscaleCredits, type UpscaleResolution } from "@/lib/brand-studio/upscale/contracts";
 import type { StudioVideoCopy } from "@/messages/studio-video";
 import { FloatingClipBar } from "./floating-clip-bar";
@@ -129,11 +133,13 @@ export interface SequenceRailProps {
   audioAssets: StudioAssetView[];
   railCopy: StudioVideoCopy["workspace"]["rail"];
   floatingCopy: StudioVideoCopy["workspace"]["floatingBar"];
+  extendingScene?: boolean;
   onHeightChange(next: SequenceRailHeight): void;
   onSelectClip(clipId: string | null): void;
   onInspectorTabChange(tab: SequenceInspectorTab): void;
   onProjectChange(next: ComposerProject): void;
   onAttachClipToDock(clip: ComposeClip): void;
+  onExtendNextScene?: (clip: ComposeClip) => void;
   onLocalVideoFiles(files: File[]): void;
   onNotice(text: string): void;
   onAllowanceUpdate?(allowance: StudioAllowanceView): void;
@@ -150,11 +156,13 @@ export function SequenceRail({
   audioAssets,
   railCopy,
   floatingCopy,
+  extendingScene = false,
   onHeightChange,
   onSelectClip,
   onInspectorTabChange,
   onProjectChange,
   onAttachClipToDock,
+  onExtendNextScene,
   onLocalVideoFiles,
   onNotice,
   onAllowanceUpdate,
@@ -166,11 +174,14 @@ export function SequenceRail({
 
   // Inspector states
   const [analyzingRef, setAnalyzingRef] = useState(false);
+  const [shotMatching, setShotMatching] = useState(false);
   const [musicStyle, setMusicStyle] = useState<MusicStyleKey>("frenchHouse");
   const [musicBpm, setMusicBpm] = useState(122);
   const [musicRefLabel, setMusicRefLabel] = useState<string | null>(null);
   const [musicRefAssetId, setMusicRefAssetId] = useState<string | null>(null);
   const [musicBusy, setMusicBusy] = useState(false);
+  const [sfxPrompt, setSfxPrompt] = useState("");
+  const [sfxBusy, setSfxBusy] = useState(false);
   const [captionText, setCaptionText] = useState("");
   const [captionPos, setCaptionPos] = useState<CaptionPosition>("bottom");
   const [upscaleRes, setUpscaleRes] = useState<UpscaleResolution>(1080);
@@ -561,7 +572,7 @@ export function SequenceRail({
               durationSec: typeof current.durationSec === "number" ? current.durationSec : targetMusicDuration,
               trimStartSec: 0,
               volume: 0.45,
-              nonCommercialGuide: true,
+              nonCommercialGuide: current.commercialAllowed === true ? false : current.nonCommercialOnly !== false,
             },
           });
         }
@@ -569,6 +580,134 @@ export function SequenceRail({
     } finally {
       setMusicBusy(false);
     }
+  };
+
+  const sfxCostCredits = useMemo(() => sfxCredits(4), []);
+
+  const handleGenerateSfx = async () => {
+    const text = sfxPrompt.trim();
+    if (!canEdit || !text || sfxBusy) return;
+    setSfxBusy(true);
+    try {
+      let current = await postPostProduction("sfx.generate", {
+        organizationId,
+        requestId: makeReqId("sfx"),
+        text,
+        durationSec: 4,
+      });
+      let polls = 0;
+      while (
+        current.ok === true &&
+        (current.status === "running" || current.status === "queued") &&
+        typeof current.jobId === "string" &&
+        polls < 20
+      ) {
+        await waitMs(350);
+        current = await postPostProduction("sfx.status", {
+          organizationId,
+          jobId: current.jobId,
+        });
+        polls += 1;
+      }
+      if (current.allowance && typeof current.allowance === "object") {
+        onAllowanceUpdate?.(current.allowance as StudioAllowanceView);
+      }
+      if (current.ok === true && current.status === "succeeded") {
+        const assetId = typeof current.assetId === "string" ? current.assetId : undefined;
+        const srcUrl =
+          (typeof current.audioUrl === "string" && current.audioUrl) ||
+          (typeof current.dataUrl === "string" && current.dataUrl) ||
+          (assetId ? `/api/brand-studio/compose?organizationId=${organizationId}&source=asset&id=${assetId}` : "");
+        if (srcUrl) {
+          applyPatches([
+            {
+              op: "add_sfx",
+              label: text.slice(0, 28),
+              sourceKind: "asset",
+              ...(assetId ? { assetId } : {}),
+              srcUrl,
+              startSec: roundTenths(playheadSec),
+              durationSec: typeof current.durationSec === "number" ? current.durationSec : 4,
+              volume: 0.85,
+            },
+          ]);
+          setSfxPrompt("");
+        }
+      }
+    } finally {
+      setSfxBusy(false);
+    }
+  };
+
+  const handleShotMatch = async () => {
+    if (!canEdit || project.clips.length < 2 || shotMatching) return;
+    setShotMatching(true);
+    try {
+      const neutral = extractColorProfileFromRgba(new Uint8Array(0));
+      const clipProfiles = await Promise.all(
+        project.clips.map(async (clip) => {
+          const profile = await extractColorProfileInBrowser(
+            clip.thumbUrl ?? clip.srcUrl,
+            clip.thumbUrl ? "image" : "video",
+            clip.trimStartSec + 0.2,
+          ).catch(() => neutral);
+          return { clipId: clip.id, profile };
+        }),
+      );
+      const anchorIdx = Math.max(0, selectedIdx);
+      const anchorProfile = clipProfiles[anchorIdx]?.profile ?? clipProfiles[0]!.profile;
+      const res = await postPostProduction("grade.shot_match", {
+        organizationId,
+        anchorIndex: anchorIdx,
+        intensity: currentGrade.intensity,
+        skinProtect: currentGrade.skinProtect,
+        presetId: currentGrade.presetId,
+        clips: clipProfiles,
+      });
+      if (res.ok !== true) {
+        computeShotMatchMatrices(clipProfiles, anchorIdx, {
+          intensity: currentGrade.intensity,
+          skinProtect: currentGrade.skinProtect,
+        });
+      }
+      applyPatches([
+        {
+          op: "set_color_grade",
+          enabled: true,
+          scope: "full_timeline",
+          referenceLabel: railCopy.inspector.shotMatchBtn,
+          referenceProfile: anchorProfile,
+          intensity: currentGrade.intensity,
+          skinProtect: currentGrade.skinProtect,
+          grain: currentGrade.grain,
+          halation: currentGrade.halation,
+        },
+      ]);
+      onNotice(railCopy.inspector.shotMatchedNotice);
+    } finally {
+      setShotMatching(false);
+    }
+  };
+
+  const handleDownloadCubeLut = () => {
+    const spec = toColorGradeSpec(currentGrade) ?? {
+      ...DEFAULT_COLOR_GRADE_SPEC,
+      enabled: true,
+      intensity: currentGrade.intensity,
+      skinProtect: currentGrade.skinProtect,
+      grain: currentGrade.grain,
+      halation: currentGrade.halation,
+    };
+    const cube = generate33CubeLutFromSpec(spec, currentGrade.referenceLabel ?? "TWINGS Studio Look");
+    const blob = new Blob([cube], { type: "text/plain;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = "twings-grade-33.cube";
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    window.setTimeout(() => URL.revokeObjectURL(url), 1000);
   };
 
   const handleAddCaption = (event: FormEvent) => {
@@ -857,11 +996,13 @@ export function SequenceRail({
           clipIndex={selectedIdx}
           canEdit={canEdit}
           detectingCuts={detectingCuts}
+          extendingScene={extendingScene}
           copy={floatingCopy}
           onTrim={handleTrimAction}
           onDetectCuts={() => void handleDetectCuts()}
           onColorGrade={handleOpenColorGrade}
           onAttachAsReference={() => onAttachClipToDock(selectedClip)}
+          onExtendScene={onExtendNextScene ? () => onExtendNextScene(selectedClip) : undefined}
           onGenerateMusic={handleOpenMusicGen}
           onUpscale={handleOpenUpscale}
           onDelete={handleDeleteSelected}
@@ -917,6 +1058,11 @@ export function SequenceRail({
                 seconds: totalSec,
               })}
             </span>
+            {totalSec >= 30 && (
+              <span className={w.seqTotalBadge} data-sequence-over30-badge>
+                {railCopy.over30Badge}
+              </span>
+            )}
             {railHeight === "full" && (
               <div className={w.seqAspectPills}>
                 {COMPOSE_ASPECTS.map((asp: ComposeAspect) => (
@@ -937,6 +1083,17 @@ export function SequenceRail({
           </div>
 
           <div className={w.seqHeaderEnd}>
+            {canEdit && onExtendNextScene && project.clips.length > 0 && (
+              <button
+                type="button"
+                className={w.seqUploadBtn}
+                disabled={extendingScene}
+                onClick={() => onExtendNextScene(selectedClip ?? project.clips[project.clips.length - 1]!)}
+                data-sequence-extend-scene
+              >
+                {extendingScene ? floatingCopy.extendingScene : railCopy.extendNextSceneBtn}
+              </button>
+            )}
             {canEdit && (
               <button
                 type="button"
@@ -1148,6 +1305,169 @@ export function SequenceRail({
                     </div>
                   )}
                 </div>
+
+                <div className={w.seqMultiTrackPanel} data-nle-multitrack>
+                  {selectedClip && selectedIdx >= 0 && (
+                    <div className={w.seqNleControlRow} data-nle-clip-controls={selectedClip.id}>
+                      <span>{railCopy.speedLabel}</span>
+                      {([0.5, 1, 1.5, 2] as const).map((rate) => (
+                        <button
+                          key={rate}
+                          type="button"
+                          className={w.seqHeightBtn}
+                          aria-pressed={Math.abs((selectedClip.playbackRate ?? 1) - rate) < 0.05}
+                          disabled={!canEdit}
+                          onClick={() =>
+                            applyPatches([{ op: "set_clip_speed", clipIndex: selectedIdx, playbackRate: rate }])
+                          }
+                          data-nle-speed={rate}
+                        >
+                          {rate}x
+                        </button>
+                      ))}
+                      <button
+                        type="button"
+                        className={w.seqLaneAction}
+                        disabled={!canEdit}
+                        onClick={() => applyPatches([{ op: "slip_clip", clipIndex: selectedIdx, deltaSec: -0.5 }])}
+                        data-nle-slip="back"
+                      >
+                        {railCopy.slipBack}
+                      </button>
+                      <button
+                        type="button"
+                        className={w.seqLaneAction}
+                        disabled={!canEdit}
+                        onClick={() => applyPatches([{ op: "slip_clip", clipIndex: selectedIdx, deltaSec: 0.5 }])}
+                        data-nle-slip="forward"
+                      >
+                        {railCopy.slipForward}
+                      </button>
+                      <button
+                        type="button"
+                        className={w.seqLaneAction}
+                        disabled={!canEdit}
+                        onClick={() =>
+                          applyPatches([{ op: "set_clip_audio_offset", clipIndex: selectedIdx, audioOffsetSec: -0.5 }])
+                        }
+                        data-nle-audio-offset="lead"
+                      >
+                        {railCopy.audioLead}
+                      </button>
+                      <button
+                        type="button"
+                        className={w.seqLaneAction}
+                        disabled={!canEdit}
+                        onClick={() =>
+                          applyPatches([{ op: "set_clip_audio_offset", clipIndex: selectedIdx, audioOffsetSec: 0.5 }])
+                        }
+                        data-nle-audio-offset="lag"
+                      >
+                        {railCopy.audioLag}
+                      </button>
+                      <button
+                        type="button"
+                        className={w.seqHeightBtn}
+                        aria-pressed={selectedClip.transitionIn === "cross_dissolve"}
+                        disabled={!canEdit}
+                        onClick={() =>
+                          applyPatches([
+                            {
+                              op: "set_clip_transition",
+                              clipIndex: selectedIdx,
+                              transitionIn:
+                                selectedClip.transitionIn === "cross_dissolve" ? "none" : "cross_dissolve",
+                              transitionDurationSec: 0.4,
+                            },
+                          ])
+                        }
+                        data-nle-transition
+                      >
+                        {selectedClip.transitionIn === "cross_dissolve"
+                          ? railCopy.transitionDissolve
+                          : railCopy.transitionNone}
+                      </button>
+                    </div>
+                  )}
+
+                  <div className={w.seqTrackLane} data-sequence-overlay-lane>
+                    <span>{railCopy.overlayLaneLabel}</span>
+                    {canEdit && (selectedClip ?? project.clips[0]) && (
+                      <button
+                        type="button"
+                        className={w.seqLaneAction}
+                        onClick={() => {
+                          const target = selectedClip ?? project.clips[0];
+                          if (!target) return;
+                          applyPatches([
+                            {
+                              op: "add_overlay",
+                              label: `${target.label} PiP`,
+                              sourceKind: target.sourceKind,
+                              ...(target.assetId ? { assetId: target.assetId } : {}),
+                              ...(target.outputId ? { outputId: target.outputId } : {}),
+                              srcUrl: target.thumbUrl ?? target.srcUrl,
+                              ...(target.thumbUrl !== undefined ? { thumbUrl: target.thumbUrl } : {}),
+                              mediaKind: target.thumbUrl ? "image" : "video",
+                              startSec: roundTenths(playheadSec),
+                              endSec: roundTenths(playheadSec + Math.min(4, Math.max(1, totalSec - playheadSec || 3))),
+                            },
+                          ]);
+                        }}
+                        data-overlay-add
+                      >
+                        {railCopy.overlayAddFromSelected}
+                      </button>
+                    )}
+                    <div className={w.seqCaptionChips}>
+                      {(project.overlays ?? []).map((ov, ovIdx) => (
+                        <span key={ov.id} className={w.seqCaptionChip}>
+                          {ov.label}
+                          {canEdit && (
+                            <button
+                              type="button"
+                              onClick={() => applyPatches([{ op: "remove_overlay", overlayIndex: ovIdx }])}
+                            >
+                              ×
+                            </button>
+                          )}
+                        </span>
+                      ))}
+                    </div>
+                    {(project.overlays?.length ?? 0) > 0 && canEdit && (
+                      <button
+                        type="button"
+                        className={w.seqLaneAction}
+                        onClick={() => applyPatches([{ op: "remove_overlay", overlayIndex: "all" }])}
+                      >
+                        {railCopy.overlayClear}
+                      </button>
+                    )}
+                  </div>
+
+                  <div className={w.seqTrackLane} data-sequence-sfx-lane>
+                    <span>{railCopy.sfxLaneLabel}</span>
+                    {(project.sfxClips?.length ?? 0) > 0 ? (
+                      <div className={w.seqCaptionChips}>
+                        {project.sfxClips!.map((sfx, sfxIdx) => (
+                          <span key={sfx.id} className={w.seqCaptionChip}>
+                            {sfx.label} ({sfx.startSec}s)
+                            {canEdit && (
+                              <button
+                                type="button"
+                                onClick={() => applyPatches([{ op: "remove_sfx", sfxIndex: sfxIdx }])}
+                              >
+                                ×
+                              </button>
+                            )}
+                          </span>
+                        ))}
+                      </div>
+                    ) : (
+                      <span>{railCopy.sfxEmpty}</span>
+                    )}
+                  </div>
+                </div>
               </div>
             </div>
 
@@ -1297,6 +1617,24 @@ export function SequenceRail({
                     >
                       {railCopy.inspector.matchRefUpload}
                     </button>
+                    <button
+                      type="button"
+                      className={w.seqUploadBtn}
+                      disabled={!canEdit || project.clips.length < 2 || shotMatching}
+                      onClick={() => void handleShotMatch()}
+                      data-grade-shot-match
+                    >
+                      {shotMatching ? railCopy.inspector.shotMatching : railCopy.inspector.shotMatchBtn}
+                    </button>
+                    <button
+                      type="button"
+                      className={w.seqUploadBtn}
+                      disabled={project.clips.length === 0}
+                      onClick={handleDownloadCubeLut}
+                      data-grade-download-cube
+                    >
+                      {railCopy.inspector.downloadCubeBtn}
+                    </button>
                     {currentGrade.enabled && (
                       <button
                         type="button"
@@ -1314,7 +1652,11 @@ export function SequenceRail({
 
               {inspectorTab === "music" && (
                 <div className={w.seqInspectorBody} data-inspector-panel="music">
-                  <span className={w.seqLicenseTag}>{railCopy.inspector.musicLicense}</span>
+                  <span className={w.seqLicenseTag} data-music-license-badge>
+                    {project.bgm?.nonCommercialGuide === true
+                      ? railCopy.inspector.musicLicense
+                      : railCopy.inspector.musicCommercialLicense}
+                  </span>
                   <div className={w.seqPresetGrid}>
                     {(["frenchHouse", "ambientCello", "marimbaPerc", "warmSynth"] as const).map((st) => (
                       <button
@@ -1384,6 +1726,32 @@ export function SequenceRail({
                         ? railCopy.inspector.musicGenerating
                         : interpolate(railCopy.inspector.musicGenerateBtn, {
                             credits: formatCredits(musicCostCredits, locale),
+                          })}
+                    </button>
+                  </div>
+
+                  <div className={w.seqSfxDivider} data-sfx-generator>
+                    <span className={w.seqLicenseTag}>{railCopy.inspector.sfxTitle}</span>
+                    <input
+                      type="text"
+                      className={w.seqSfxInput}
+                      value={sfxPrompt}
+                      disabled={!canEdit || sfxBusy}
+                      placeholder={railCopy.inspector.sfxPlaceholder}
+                      onChange={(e) => setSfxPrompt(e.target.value)}
+                      data-sfx-prompt
+                    />
+                    <button
+                      type="button"
+                      className={w.seqUploadBtn}
+                      disabled={!canEdit || sfxBusy || !sfxPrompt.trim()}
+                      onClick={() => void handleGenerateSfx()}
+                      data-sfx-generate
+                    >
+                      {sfxBusy
+                        ? railCopy.inspector.sfxGenerating
+                        : interpolate(railCopy.inspector.sfxGenerateBtn, {
+                            credits: formatCredits(sfxCostCredits, locale),
                           })}
                     </button>
                   </div>

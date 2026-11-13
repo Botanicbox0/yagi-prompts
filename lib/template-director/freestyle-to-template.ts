@@ -33,7 +33,7 @@ export interface TemplateSceneLockSpec {
   slug: string;
   lockedElements: readonly TemplateLockedElement[];
   customizableElements: readonly TemplateCustomizableElement[];
-  recommendedModels: readonly ('seedream-5.0-pro' | 'nano-banana-2.1')[];
+  recommendedModels: readonly ('seedream-5.5' | 'nano-banana-2.1')[];
   dualAnchorWhenRisky: boolean;
 }
 
@@ -180,7 +180,12 @@ export const ReferenceSceneInputSchema = z.object({
   stylingPrompt: z.string().trim().min(5).max(1200),
   sceneBackdropPrompt: z.string().trim().min(5).max(1200),
   lightingRiskForFace: z.boolean().default(false),
-  preferredAnchorEngine: z.enum(['seedream-5.0-pro', 'nano-banana-2.1']).default('seedream-5.0-pro'),
+  preferredAnchorEngine: z
+    .preprocess(
+      (v) => (v === 'seedream-5.0-pro' ? 'seedream-5.5' : v),
+      z.enum(['seedream-5.5', 'nano-banana-2.1']),
+    )
+    .default('seedream-5.5'),
   /**
    * Template Freeze Policy when promoting this personal scene into a reusable template:
    * - `camera_and_motion` and `lighting_and_grade` are ALWAYS locked to preserve quality.
@@ -242,8 +247,8 @@ export function compileReferenceToTemplatePromotion(
   // Map aspect to valid IMAGE_ASPECTS ('1:1' | '4:5' | '3:4' | '16:9' | '9:16') for Step 1 keyframe
   const keyframeAspect = input.aspect === '4:3' ? '3:4' : input.aspect;
 
-  // Step 1 (Keyframe): In Maker Recipe v2, `seedream-5.0-pro` is a registered maker image engine.
-  const step1Engine = 'seedream-5.0-pro' as const;
+  // Step 1 (Keyframe): In Maker Recipe v2, `seedream-5.5` is a registered maker image engine.
+  const step1Engine = 'seedream-5.5' as const;
 
   const slots: Record<
     string,
@@ -401,8 +406,8 @@ export function compileReferenceToTemplatePromotion(
     lockedElements,
     customizableElements,
     recommendedModels: input.lightingRiskForFace
-      ? ['seedream-5.0-pro', 'nano-banana-2.1']
-      : [input.preferredAnchorEngine, 'seedream-5.0-pro'],
+      ? ['seedream-5.5', 'nano-banana-2.1']
+      : [input.preferredAnchorEngine, 'seedream-5.5'],
     dualAnchorWhenRisky: true
   };
 
@@ -544,7 +549,7 @@ export const PRESET_REFERENCE_SCENARIOS: readonly PresetReferenceScenario[] = [
       stylingPrompt: 'Tailored oversized black wool trench coat with silver ear cuffs and sleek wet hair',
       sceneBackdropPrompt: 'Rain-slicked Euljiro alley at midnight with blurred paparazzi silhouettes in the background',
       lightingRiskForFace: true,
-      preferredAnchorEngine: 'seedream-5.0-pro',
+      preferredAnchorEngine: 'seedream-5.5',
       lockOutfitAsSignature: false,
       lockBackdropAsSignature: true
     }
@@ -600,7 +605,7 @@ export const PRESET_REFERENCE_SCENARIOS: readonly PresetReferenceScenario[] = [
       stylingPrompt: 'Off-shoulder ivory silk top with dewy glass-skin makeup and minimalist gold jewelry',
       sceneBackdropPrompt: 'Warm champagne studio cyclorama with subtle sunlit water-ripple reflections',
       lightingRiskForFace: false,
-      preferredAnchorEngine: 'seedream-5.0-pro',
+      preferredAnchorEngine: 'seedream-5.5',
       lockOutfitAsSignature: false,
       lockBackdropAsSignature: false
     }

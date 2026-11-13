@@ -192,6 +192,38 @@ function describePatch(patch: TimelinePatch, locale: 'ko' | 'en'): string {
               : 'full timeline';
       return ko ? `${scopeName} ${presetName} 색보정` : `${presetName} color grade (${scopeName})`;
     }
+    case 'set_clip_speed': {
+      const rate = Math.round(patch.playbackRate * 100) / 100;
+      return ko ? `${patch.clipIndex + 1}번 컷 ${rate}배속` : `cut ${patch.clipIndex + 1} speed ${rate}x`;
+    }
+    case 'slip_clip':
+      return ko
+        ? `${patch.clipIndex + 1}번 컷 구간 ${patch.deltaSec > 0 ? '+' : ''}${patch.deltaSec}초 슬립`
+        : `slipped cut ${patch.clipIndex + 1} by ${patch.deltaSec}s`;
+    case 'set_clip_audio_offset':
+      return ko
+        ? `${patch.clipIndex + 1}번 컷 오디오 싱크 ${patch.audioOffsetSec > 0 ? '+' : ''}${patch.audioOffsetSec}초`
+        : `cut ${patch.clipIndex + 1} audio offset ${patch.audioOffsetSec}s`;
+    case 'set_clip_transition':
+      return ko
+        ? patch.transitionIn === 'none'
+          ? `${patch.clipIndex + 1}번 컷 전환 효과 제거`
+          : `${patch.clipIndex + 1}번 컷 전환 효과 적용`
+        : patch.transitionIn === 'none'
+          ? `removed transition on cut ${patch.clipIndex + 1}`
+          : `applied ${patch.transitionIn} transition on cut ${patch.clipIndex + 1}`;
+    case 'add_overlay':
+      return ko ? `V2 오버레이 "${patch.label}" 추가` : `added overlay "${patch.label}"`;
+    case 'remove_overlay':
+      return ko ? 'V2 오버레이 삭제' : 'removed overlay';
+    case 'add_sfx':
+      return ko ? `A2 효과음 "${patch.label}" 추가` : `added SFX "${patch.label}"`;
+    case 'remove_sfx':
+      return ko ? 'A2 효과음 삭제' : 'removed SFX';
+    case 'set_sfx_volume':
+      return ko
+        ? `${patch.sfxIndex + 1}번 효과음 볼륨 ${Math.round(patch.volume * 100)}%`
+        : `SFX ${patch.sfxIndex + 1} volume ${Math.round(patch.volume * 100)}%`;
   }
 }
 

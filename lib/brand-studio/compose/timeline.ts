@@ -65,6 +65,39 @@ export interface ComposeColorGradeState {
 export type ComposeSourceKind = 'asset' | 'output' | 'local';
 export type CaptionPosition = 'bottom' | 'center' | 'top';
 export type CaptionSize = 'sm' | 'md' | 'lg';
+export type ClipTransitionKind = 'none' | 'cross_dissolve' | 'dip_to_black';
+
+export interface ComposeOverlayClip {
+  id: string;
+  label: string;
+  sourceKind: ComposeSourceKind;
+  assetId?: string;
+  outputId?: string;
+  srcUrl: string;
+  thumbUrl?: string | null;
+  mediaKind: 'image' | 'video';
+  startSec: number;
+  endSec: number;
+  /** Normalized horizontal center `0..1` (default `0.5`). */
+  x: number;
+  /** Normalized vertical center `0..1` (default `0.5`). */
+  y: number;
+  /** Scale factor `0.1..1.5` relative to sequence width (default `0.45`). */
+  scale: number;
+  /** Layer opacity `0..1` (default `1`). */
+  opacity: number;
+}
+
+export interface ComposeSfxClip {
+  id: string;
+  label: string;
+  sourceKind: 'asset' | 'local';
+  assetId?: string;
+  srcUrl: string;
+  startSec: number;
+  durationSec: number;
+  volume: number;
+}
 
 export interface TimelineClipTake {
   id: string;
@@ -97,6 +130,14 @@ export interface ComposeClip {
   /** `0..1` clip audio gain. */
   volume: number;
   muted: boolean;
+  /** Playback speed multiplier `0.25..4` (`1` omitted). */
+  playbackRate?: number;
+  /** J/L cut audio lead/lag in seconds `-5..5` (`0` omitted). */
+  audioOffsetSec?: number;
+  /** Incoming cut transition (`'none'` omitted). */
+  transitionIn?: ClipTransitionKind;
+  /** Transition overlap duration in seconds `0.1..2` (omitted when `'none'`). */
+  transitionDurationSec?: number;
   /** Detected scene transition timestamps in media seconds (`0 < t < durationSec`). */
   cutMarkers?: number[];
   /** Multi-take stack (`1/N`) for regenerating a shot in-place without timeline sprawl. */
@@ -137,6 +178,10 @@ export interface ComposerProject {
   captions: ComposeCaption[];
   bgm: ComposeBgm | null;
   colorGrade?: ComposeColorGradeState | null;
+  /** V2 Picture-in-Picture / product cutout overlay track (omitted when empty). */
+  overlays?: ComposeOverlayClip[];
+  /** A2 dedicated sound-effects track (omitted when empty). */
+  sfxClips?: ComposeSfxClip[];
   /** Asset UUIDs referenced during generation (e.g., `@video1` film sheets) for automatic cache cleanup on completion. */
   referenceAssetIds?: string[];
 }
@@ -198,12 +243,52 @@ export type TimelinePatch =
       skinProtect?: number;
       grain?: number;
       halation?: number;
-    };
+    }
+  | { op: 'set_clip_speed'; clipIndex: number; playbackRate: number }
+  | { op: 'slip_clip'; clipIndex: number; deltaSec: number }
+  | { op: 'set_clip_audio_offset'; clipIndex: number; audioOffsetSec: number }
+  | {
+      op: 'set_clip_transition';
+      clipIndex: number;
+      transitionIn: ClipTransitionKind;
+      transitionDurationSec?: number;
+    }
+  | {
+      op: 'add_overlay';
+      label: string;
+      sourceKind: ComposeSourceKind;
+      assetId?: string;
+      outputId?: string;
+      srcUrl: string;
+      thumbUrl?: string | null;
+      mediaKind: 'image' | 'video';
+      startSec: number;
+      endSec: number;
+      x?: number;
+      y?: number;
+      scale?: number;
+      opacity?: number;
+    }
+  | { op: 'remove_overlay'; overlayIndex: number | 'all' }
+  | {
+      op: 'add_sfx';
+      label: string;
+      sourceKind: 'asset' | 'local';
+      assetId?: string;
+      srcUrl: string;
+      startSec: number;
+      durationSec: number;
+      volume?: number;
+    }
+  | { op: 'remove_sfx'; sfxIndex: number | 'all' }
+  | { op: 'set_sfx_volume'; sfxIndex: number; volume: number };
 
 export const MIN_CLIP_PLAY_SEC = 0.3;
 export const AUTO_CUT_EDGE_GUARD_SEC = 0.4;
 export const MAX_COMPOSE_CLIPS = 24;
 export const MAX_COMPOSE_CAPTIONS = 32;
+export const MAX_COMPOSE_OVERLAYS = 12;
+export const MAX_COMPOSE_SFX = 24;
 
 export const DEFAULT_COLOR_REGION: ComposeColorRegion = {
   x: 0.15,
@@ -329,20 +414,45 @@ export function normalizeClipBounds(clip: ComposeClip): ComposeClip {
           normalizedTakes.length - 1,
         )
       : undefined;
+  const {
+    playbackRate: rawRate,
+    audioOffsetSec: rawAudioOffset,
+    transitionIn: rawTransitionIn,
+    transitionDurationSec: rawTransitionDuration,
+    ...baseClip
+  } = clip;
+  const rate =
+    typeof rawRate === 'number' && Number.isFinite(rawRate) && Math.abs(rawRate - 1) >= 0.01
+      ? clamp(roundHundredths(rawRate), 0.25, 4)
+      : undefined;
+  const audioOffsetSec =
+    typeof rawAudioOffset === 'number' && Number.isFinite(rawAudioOffset) && Math.abs(rawAudioOffset) >= 0.05
+      ? clamp(roundHundredths(rawAudioOffset), -5, 5)
+      : undefined;
+  const transitionIn =
+    rawTransitionIn === 'cross_dissolve' || rawTransitionIn === 'dip_to_black' ? rawTransitionIn : undefined;
+  const transitionDurationSec = transitionIn
+    ? clamp(roundTenths(rawTransitionDuration ?? 0.4), 0.1, 2)
+    : undefined;
+
   return {
-    ...clip,
+    ...baseClip,
     durationSec: full,
     trimStartSec: start,
     trimEndSec: end,
     volume: clamp(Number.isFinite(clip.volume) ? Math.round(clip.volume * 100) / 100 : 1, 0, 1),
     muted: Boolean(clip.muted),
+    ...(rate !== undefined ? { playbackRate: rate } : {}),
+    ...(audioOffsetSec !== undefined ? { audioOffsetSec } : {}),
+    ...(transitionIn ? { transitionIn, transitionDurationSec } : {}),
     ...(cutMarkers ? { cutMarkers } : { cutMarkers: undefined }),
     ...(normalizedTakes ? { takes: normalizedTakes, activeTakeIndex } : { takes: undefined, activeTakeIndex: undefined }),
   };
 }
 
 export function clipPlayDuration(clip: ComposeClip): number {
-  return Math.max(MIN_CLIP_PLAY_SEC, roundTenths(clip.trimEndSec - clip.trimStartSec));
+  const rate = clip.playbackRate && Number.isFinite(clip.playbackRate) ? clamp(clip.playbackRate, 0.25, 4) : 1;
+  return Math.max(MIN_CLIP_PLAY_SEC, roundTenths((clip.trimEndSec - clip.trimStartSec) / rate));
 }
 
 /** Returns scene-cut media timestamps strictly inside `(trimStartSec + 0.4, trimEndSec - 0.4)`. */
@@ -437,6 +547,8 @@ export function frameStateAtTime(
 ): {
   activeClip: { clip: ComposeClip; index: number; mediaTimeSec: number } | null;
   activeCaptions: ComposeCaption[];
+  activeOverlays: ComposeOverlayClip[];
+  activeSfx: ComposeSfxClip[];
   bgmTimeSec: number | null;
   activeColorGrade: ComposeColorGradeState | null;
 } {
@@ -448,23 +560,29 @@ export function frameStateAtTime(
     const span = spans[i]!;
     const isLast = i === spans.length - 1;
     if (t >= span.timelineStartSec && (t < span.timelineEndSec || (isLast && t <= span.timelineEndSec))) {
+      const rate =
+        span.clip.playbackRate && Number.isFinite(span.clip.playbackRate)
+          ? clamp(span.clip.playbackRate, 0.25, 4)
+          : 1;
       const offset = clamp(t - span.timelineStartSec, 0, Math.max(0, span.durationSec - 0.001));
       activeClip = {
         clip: span.clip,
         index: span.index,
-        mediaTimeSec: clamp(span.clip.trimStartSec + offset, span.clip.trimStartSec, span.clip.trimEndSec),
+        mediaTimeSec: clamp(span.clip.trimStartSec + offset * rate, span.clip.trimStartSec, span.clip.trimEndSec),
       };
       break;
     }
   }
   const activeCaptions = project.captions.filter((c) => c.text.trim() !== '' && t >= c.startSec && t <= c.endSec);
+  const activeOverlays = (project.overlays ?? []).filter((o) => t >= o.startSec && t <= o.endSec);
+  const activeSfx = (project.sfxClips ?? []).filter((s) => t >= s.startSec && t <= s.startSec + s.durationSec);
   let bgmTimeSec: number | null = null;
   if (project.bgm && project.bgm.volume > 0 && total > 0) {
     const bgmPlayable = Math.max(0.5, project.bgm.durationSec - project.bgm.trimStartSec);
     bgmTimeSec = project.bgm.trimStartSec + (t % bgmPlayable);
   }
   const activeColorGrade = activeColorGradeForFrame(project, activeClip);
-  return { activeClip, activeCaptions, bgmTimeSec, activeColorGrade };
+  return { activeClip, activeCaptions, activeOverlays, activeSfx, bgmTimeSec, activeColorGrade };
 }
 
 export function playheadClipSplitTarget(
@@ -634,6 +752,16 @@ export function extractProjectReferencedAssetIds(
   if (timeline.colorGrade && typeof timeline.colorGrade === 'object') {
     add(timeline.colorGrade.referenceAssetId);
   }
+  if (Array.isArray(timeline.overlays)) {
+    for (const overlay of timeline.overlays) {
+      if (overlay && typeof overlay === 'object') add(overlay.assetId);
+    }
+  }
+  if (Array.isArray(timeline.sfxClips)) {
+    for (const sfx of timeline.sfxClips) {
+      if (sfx && typeof sfx === 'object') add(sfx.assetId);
+    }
+  }
   if (Array.isArray(timeline.referenceAssetIds)) {
     for (const id of timeline.referenceAssetIds) add(id);
   }
@@ -654,10 +782,37 @@ export function normalizeCaptions(captions: readonly ComposeCaption[], totalSec:
   });
 }
 
+function normalizeOverlayClip(overlay: ComposeOverlayClip): ComposeOverlayClip {
+  const startSec = clamp(roundTenths(overlay.startSec), 0, 3600);
+  const endSec = Math.max(roundTenths(startSec + 0.3), roundTenths(overlay.endSec));
+  return {
+    ...overlay,
+    label: overlay.label.trim().slice(0, 80) || 'Overlay',
+    startSec,
+    endSec,
+    x: clamp(roundHundredths(overlay.x), 0, 1),
+    y: clamp(roundHundredths(overlay.y), 0, 1),
+    scale: clamp(roundHundredths(overlay.scale), 0.1, 1.5),
+    opacity: clamp(roundHundredths(overlay.opacity), 0, 1),
+  };
+}
+
+function normalizeSfxClip(sfx: ComposeSfxClip): ComposeSfxClip {
+  return {
+    ...sfx,
+    label: sfx.label.trim().slice(0, 80) || 'SFX',
+    startSec: clamp(roundTenths(sfx.startSec), 0, 3600),
+    durationSec: clamp(roundTenths(sfx.durationSec), 0.2, 60),
+    volume: clamp(roundHundredths(sfx.volume), 0, 1),
+  };
+}
+
 export function applyTimelinePatches(
   initial: ComposerProject,
   patches: readonly TimelinePatch[],
 ): { project: ComposerProject; appliedCount: number } {
+  const initialOverlays = initial.overlays?.map((o) => normalizeOverlayClip({ ...o })).slice(0, MAX_COMPOSE_OVERLAYS);
+  const initialSfx = initial.sfxClips?.map((s) => normalizeSfxClip({ ...s })).slice(0, MAX_COMPOSE_SFX);
   let current: ComposerProject = {
     version: 1,
     aspect: initial.aspect,
@@ -665,6 +820,8 @@ export function applyTimelinePatches(
     captions: initial.captions.map((c) => ({ ...c })),
     bgm: initial.bgm ? { ...initial.bgm } : null,
     colorGrade: normalizeColorGradeState(initial.colorGrade),
+    ...(initialOverlays && initialOverlays.length > 0 ? { overlays: initialOverlays } : {}),
+    ...(initialSfx && initialSfx.length > 0 ? { sfxClips: initialSfx } : {}),
     ...(initial.referenceAssetIds && initial.referenceAssetIds.length > 0
       ? { referenceAssetIds: [...initial.referenceAssetIds] }
       : {}),
@@ -963,6 +1120,160 @@ export function applyTimelinePatches(
         appliedCount += 1;
         break;
       }
+      case 'set_clip_speed': {
+        const target = current.clips[patch.clipIndex];
+        if (!target || !Number.isFinite(patch.playbackRate)) break;
+        const clips = [...current.clips];
+        clips[patch.clipIndex] = normalizeClipBounds({
+          ...target,
+          playbackRate: clamp(roundHundredths(patch.playbackRate), 0.25, 4),
+        });
+        current = { ...current, clips };
+        appliedCount += 1;
+        break;
+      }
+      case 'slip_clip': {
+        const target = current.clips[patch.clipIndex];
+        if (!target || !Number.isFinite(patch.deltaSec)) break;
+        const span = Math.max(MIN_CLIP_PLAY_SEC, roundTenths(target.trimEndSec - target.trimStartSec));
+        const maxStart = Math.max(0, roundTenths(target.durationSec - span));
+        const nextStart = clamp(roundTenths(target.trimStartSec + patch.deltaSec), 0, maxStart);
+        const nextEnd = Math.min(target.durationSec, roundTenths(nextStart + span));
+        const clips = [...current.clips];
+        clips[patch.clipIndex] = normalizeClipBounds({
+          ...target,
+          trimStartSec: nextStart,
+          trimEndSec: nextEnd,
+        });
+        current = { ...current, clips };
+        appliedCount += 1;
+        break;
+      }
+      case 'set_clip_audio_offset': {
+        const target = current.clips[patch.clipIndex];
+        if (!target || !Number.isFinite(patch.audioOffsetSec)) break;
+        const clips = [...current.clips];
+        clips[patch.clipIndex] = normalizeClipBounds({
+          ...target,
+          audioOffsetSec: clamp(roundHundredths(patch.audioOffsetSec), -5, 5),
+        });
+        current = { ...current, clips };
+        appliedCount += 1;
+        break;
+      }
+      case 'set_clip_transition': {
+        const target = current.clips[patch.clipIndex];
+        if (!target) break;
+        const nextClip =
+          patch.transitionIn === 'none'
+            ? normalizeClipBounds({ ...target, transitionIn: undefined, transitionDurationSec: undefined })
+            : normalizeClipBounds({
+                ...target,
+                transitionIn: patch.transitionIn,
+                transitionDurationSec: patch.transitionDurationSec ?? target.transitionDurationSec ?? 0.4,
+              });
+        const clips = [...current.clips];
+        clips[patch.clipIndex] = nextClip;
+        current = { ...current, clips };
+        appliedCount += 1;
+        break;
+      }
+      case 'add_overlay': {
+        const existing = current.overlays ?? [];
+        if (!patch.srcUrl || existing.length >= MAX_COMPOSE_OVERLAYS) break;
+        const total = Math.max(3, projectDurationSec(current));
+        const startSec = clamp(roundTenths(patch.startSec), 0, Math.max(0, roundTenths(total - 0.3)));
+        const endSec = Math.max(roundTenths(startSec + 0.3), roundTenths(patch.endSec));
+        const overlay = normalizeOverlayClip({
+          id: nextId('ovl'),
+          label: patch.label,
+          sourceKind: patch.sourceKind,
+          ...(patch.assetId ? { assetId: patch.assetId } : {}),
+          ...(patch.outputId ? { outputId: patch.outputId } : {}),
+          srcUrl: patch.srcUrl,
+          ...(patch.thumbUrl !== undefined ? { thumbUrl: patch.thumbUrl } : {}),
+          mediaKind: patch.mediaKind,
+          startSec,
+          endSec,
+          x: patch.x ?? 0.5,
+          y: patch.y ?? 0.5,
+          scale: patch.scale ?? 0.45,
+          opacity: patch.opacity ?? 1,
+        });
+        current = { ...current, overlays: [...existing, overlay] };
+        appliedCount += 1;
+        break;
+      }
+      case 'remove_overlay': {
+        const existing = current.overlays ?? [];
+        if (patch.overlayIndex === 'all') {
+          if (existing.length > 0) {
+            const { overlays: _dropped, ...rest } = current;
+            current = rest;
+            appliedCount += 1;
+          }
+          break;
+        }
+        if (patch.overlayIndex < 0 || patch.overlayIndex >= existing.length) break;
+        const nextOverlays = existing.filter((_, idx) => idx !== patch.overlayIndex);
+        if (nextOverlays.length > 0) {
+          current = { ...current, overlays: nextOverlays };
+        } else {
+          const { overlays: _dropped, ...rest } = current;
+          current = rest;
+        }
+        appliedCount += 1;
+        break;
+      }
+      case 'add_sfx': {
+        const existing = current.sfxClips ?? [];
+        if (!patch.srcUrl || existing.length >= MAX_COMPOSE_SFX) break;
+        const sfx = normalizeSfxClip({
+          id: nextId('sfx'),
+          label: patch.label,
+          sourceKind: patch.sourceKind,
+          ...(patch.assetId ? { assetId: patch.assetId } : {}),
+          srcUrl: patch.srcUrl,
+          startSec: patch.startSec,
+          durationSec: patch.durationSec,
+          volume: patch.volume ?? 0.85,
+        });
+        current = { ...current, sfxClips: [...existing, sfx] };
+        appliedCount += 1;
+        break;
+      }
+      case 'remove_sfx': {
+        const existing = current.sfxClips ?? [];
+        if (patch.sfxIndex === 'all') {
+          if (existing.length > 0) {
+            const { sfxClips: _dropped, ...rest } = current;
+            current = rest;
+            appliedCount += 1;
+          }
+          break;
+        }
+        if (patch.sfxIndex < 0 || patch.sfxIndex >= existing.length) break;
+        const nextSfx = existing.filter((_, idx) => idx !== patch.sfxIndex);
+        if (nextSfx.length > 0) {
+          current = { ...current, sfxClips: nextSfx };
+        } else {
+          const { sfxClips: _dropped, ...rest } = current;
+          current = rest;
+        }
+        appliedCount += 1;
+        break;
+      }
+      case 'set_sfx_volume': {
+        const existing = current.sfxClips ?? [];
+        const target = existing[patch.sfxIndex];
+        if (!target || !Number.isFinite(patch.volume)) break;
+        const nextSfx = existing.map((item, idx) =>
+          idx === patch.sfxIndex ? normalizeSfxClip({ ...item, volume: patch.volume }) : item,
+        );
+        current = { ...current, sfxClips: nextSfx };
+        appliedCount += 1;
+        break;
+      }
     }
   }
 
@@ -990,6 +1301,14 @@ export function sanitizeProjectForPersistence(project: ComposerProject): Compose
       const nextActive = mappedIdx >= 0 ? mappedIdx : validTakes.length - 1;
       return normalizeClipBounds({ ...clip, takes: validTakes, activeTakeIndex: nextActive });
     });
+  const sanitizedOverlays = (project.overlays ?? [])
+    .filter((o) => o.sourceKind !== 'local' && !o.srcUrl.startsWith('blob:'))
+    .slice(0, MAX_COMPOSE_OVERLAYS)
+    .map(normalizeOverlayClip);
+  const sanitizedSfx = (project.sfxClips ?? [])
+    .filter((s) => s.sourceKind !== 'local' && !s.srcUrl.startsWith('blob:'))
+    .slice(0, MAX_COMPOSE_SFX)
+    .map(normalizeSfxClip);
   return {
     version: 1,
     aspect: project.aspect,
@@ -997,6 +1316,8 @@ export function sanitizeProjectForPersistence(project: ComposerProject): Compose
     captions: project.captions,
     bgm: project.bgm && project.bgm.sourceKind !== 'local' && !project.bgm.srcUrl.startsWith('blob:') ? project.bgm : null,
     colorGrade: sanitizedGrade,
+    ...(sanitizedOverlays.length > 0 ? { overlays: sanitizedOverlays } : {}),
+    ...(sanitizedSfx.length > 0 ? { sfxClips: sanitizedSfx } : {}),
     ...(project.referenceAssetIds && project.referenceAssetIds.length > 0
       ? { referenceAssetIds: project.referenceAssetIds.filter((id) => typeof id === 'string' && id.trim() !== '') }
       : {}),
@@ -1079,6 +1400,52 @@ export function parseStoredProject(raw: string | null): ComposerProject | null {
       parsed.colorGrade && typeof parsed.colorGrade === 'object'
         ? normalizeColorGradeState(parsed.colorGrade as ComposeColorGradeState)
         : null;
+    const overlays = Array.isArray(parsed.overlays)
+      ? parsed.overlays
+          .filter(
+            (o): o is ComposeOverlayClip =>
+              Boolean(o) &&
+              typeof o.id === 'string' &&
+              typeof o.label === 'string' &&
+              (typeof o.srcUrl === 'string' || typeof o.assetId === 'string' || typeof o.outputId === 'string') &&
+              !(typeof o.srcUrl === 'string' && o.srcUrl.startsWith('blob:')) &&
+              (o.mediaKind === 'image' || o.mediaKind === 'video') &&
+              typeof o.startSec === 'number' &&
+              typeof o.endSec === 'number',
+          )
+          .slice(0, MAX_COMPOSE_OVERLAYS)
+          .map((o) =>
+            normalizeOverlayClip({
+              ...o,
+              srcUrl: typeof o.srcUrl === 'string' ? o.srcUrl : '',
+              x: typeof o.x === 'number' ? o.x : 0.5,
+              y: typeof o.y === 'number' ? o.y : 0.5,
+              scale: typeof o.scale === 'number' ? o.scale : 0.45,
+              opacity: typeof o.opacity === 'number' ? o.opacity : 1,
+            }),
+          )
+      : [];
+    const sfxClips = Array.isArray(parsed.sfxClips)
+      ? parsed.sfxClips
+          .filter(
+            (s): s is ComposeSfxClip =>
+              Boolean(s) &&
+              typeof s.id === 'string' &&
+              typeof s.label === 'string' &&
+              (typeof s.srcUrl === 'string' || typeof s.assetId === 'string') &&
+              !(typeof s.srcUrl === 'string' && s.srcUrl.startsWith('blob:')) &&
+              typeof s.startSec === 'number' &&
+              typeof s.durationSec === 'number',
+          )
+          .slice(0, MAX_COMPOSE_SFX)
+          .map((s) =>
+            normalizeSfxClip({
+              ...s,
+              srcUrl: typeof s.srcUrl === 'string' ? s.srcUrl : '',
+              volume: typeof s.volume === 'number' ? s.volume : 0.85,
+            }),
+          )
+      : [];
     const referenceAssetIds = Array.isArray(parsed.referenceAssetIds)
       ? parsed.referenceAssetIds.filter((id): id is string => typeof id === 'string' && id.trim() !== '')
       : undefined;
@@ -1089,6 +1456,8 @@ export function parseStoredProject(raw: string | null): ComposerProject | null {
       captions,
       bgm,
       ...(colorGrade ? { colorGrade } : {}),
+      ...(overlays.length > 0 ? { overlays } : {}),
+      ...(sfxClips.length > 0 ? { sfxClips } : {}),
       ...(referenceAssetIds && referenceAssetIds.length > 0 ? { referenceAssetIds } : {}),
     };
   } catch {

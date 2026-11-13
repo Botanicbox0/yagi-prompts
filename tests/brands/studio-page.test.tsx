@@ -51,7 +51,7 @@ describe("brand studio page", () => {
     expect(html).toContain("Nano Banana Pro");
     expect(html).toContain("Nano Banana 2.1");
     expect(html).toContain("Nano Banana 2.0");
-    expect(html).toContain("Seedream 5.0 Pro");
+    expect(html).toContain("Seedream 5.5");
     expect(html).toContain("Seedance 2.5");
     expect(html).not.toMatch(/comfyui|higgsfield/i);
   });

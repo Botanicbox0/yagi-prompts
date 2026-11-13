@@ -1031,11 +1031,12 @@ describe('4. Studio UI v4 Markup, 8-Client Connect Modal, Copy Hygiene & Left Ra
       }
     }
 
-    // CSS & Copy Hygiene check (zero #EBF5FF, zero internal infra terms)
+    // CSS & Copy Hygiene check (zero #EBF5FF, TWINGS v2 Dark UI tokens)
     const cssText = readFileSync('components/brand-studio/workflows/workflows.module.css', 'utf8');
     expect(cssText.toLowerCase()).not.toContain('#ebf5ff');
-    expect(cssText.toLowerCase()).toContain('#0033ff');
-    expect(cssText.toLowerCase()).toContain('#f4f4f5');
+    expect(cssText.toLowerCase()).not.toContain('#0033ff');
+    expect(cssText.toLowerCase()).toContain('#ff58ae');
+    expect(cssText.toLowerCase()).toContain('#18181b');
 
     for (const surfaceText of [hubHtml, modalHtml]) {
       expect(surfaceText).not.toMatch(

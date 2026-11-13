@@ -18,7 +18,7 @@ import {
 } from '@/lib/brand-studio/contracts';
 import { advanceStudioJobsWith } from '@/lib/brand-studio/engine';
 import { createStudioJob } from '@/lib/brand-studio/jobs';
-import { studioModel } from '@/lib/brand-studio/models';
+import { normalizeLegacyStudioModelId, studioModelOrLegacy } from '@/lib/brand-studio/models';
 import { failure, guarded } from '@/lib/brand-studio/outcome';
 import { jobsByIds, jobsOf, readyAsset, readyOutput, tagsOf, viewsOf } from '@/lib/brand-studio/repo';
 import type { OutputRow, StudioDeps } from '@/lib/brand-studio/types';
@@ -452,10 +452,11 @@ export async function saveWorkflowFromJob(
       const firstImageRole: StudioAssetRole =
         refs.find((r) => r.role)?.role ?? (v.category === 'character' ? 'person' : 'product');
 
-      const modelDef = studioModel(job.model);
+      const normalizedModel = normalizeLegacyStudioModelId(job.model);
+      const modelDef = studioModelOrLegacy(job.model);
       const safeModel =
         modelDef && modelDef.availability === 'live' && modelDef.medium === (isVideo ? 'video' : 'image')
-          ? job.model
+          ? normalizedModel
           : isVideo
             ? 'seedance-2.5'
             : 'nano-banana-pro';

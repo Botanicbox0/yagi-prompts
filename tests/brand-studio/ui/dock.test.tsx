@@ -69,16 +69,23 @@ const modelOptions = (html: string) => [...html.matchAll(/role="option"[^>]*data
 
 describe("prompt bar controls from the registry", () => {
   it("offers exactly the live models per medium, never one awaiting its provider", () => {
-    expect(awaiting.length).toBeGreaterThan(0);
     for (const medium of ["image", "video"] as const) {
       const offered = dockControls(initialDraft(medium)).models.map((m) => m.id);
-      expect(offered).toEqual(selectableModels(medium).map((m) => m.id));
+      const liveIds = selectableModels(medium).map((m) => m.id);
+      expect(offered).toEqual(liveIds);
+      expect(offered.length).toBeGreaterThan(0);
+      for (const m of dockControls(initialDraft(medium)).models) {
+        expect(m.availability).toBe("live");
+      }
       for (const model of awaiting) expect(offered).not.toContain(model.id);
     }
     const html = render({ initialModelMenu: true });
     expect(modelOptions(html)).toEqual(selectableModels("image").map((m) => m.id));
     for (const model of awaiting) expect(html).not.toContain(model.label);
-    expect(withModel(initialDraft("image"), awaiting[0]!.id).model).not.toBe(awaiting[0]!.id);
+    if (awaiting.length > 0) {
+      expect(withModel(initialDraft("image"), awaiting[0]!.id).model).not.toBe(awaiting[0]!.id);
+    }
+    expect(withModel(initialDraft("image"), "seedream-5-pro").model).not.toBe("seedream-5-pro");
   });
 
   it("changes the legal ratios and qualities when the model changes", () => {

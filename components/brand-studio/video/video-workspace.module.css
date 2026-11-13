@@ -385,8 +385,8 @@
 }
 
 .atOption[data-active] .atMonoTag {
-  background: rgba(255, 255, 255, 0.16);
-  color: #ffffff;
+  background: color-mix(in srgb, var(--ys-active-fg) 16%, transparent);
+  color: var(--ys-active-fg);
 }
 
 .atName {
@@ -410,8 +410,8 @@
 }
 
 .atOption[data-active] .atRole {
-  background: rgba(255, 255, 255, 0.14);
-  color: rgba(255, 255, 255, 0.88);
+  background: color-mix(in srgb, var(--ys-active-fg) 14%, transparent);
+  color: var(--ys-active-fg);
 }
 
 .atEmpty {
@@ -998,8 +998,8 @@
   padding: 0 14px;
   border: 0;
   border-radius: 9999px;
-  background: var(--ys-cta-bg, #0033ff);
-  color: #ffffff;
+  background: var(--ys-accent, #ff58ae);
+  color: var(--ys-on-accent, #09090b);
   font: inherit;
   font-size: 12.5px;
   font-weight: 650;
@@ -1010,7 +1010,7 @@
 }
 
 .barPrimaryCta:hover:not(:disabled) {
-  background: var(--ys-accent-hover, #0026cc);
+  background: var(--ys-accent-hover, #ff389f);
 }
 
 .barPrimaryCta:disabled {
@@ -1915,12 +1915,51 @@
   align-items: center;
   gap: 6px;
   font-size: 11px;
-  color: #52525b;
+  color: var(--ys-muted);
 }
 
 .seqLicenseTag {
   font-size: 10.5px;
-  color: #71717a;
+  color: var(--ys-muted);
+}
+
+.seqMultiTrackPanel {
+  display: grid;
+  gap: 6px;
+  padding: 8px 10px;
+  border-radius: 10px;
+  border: 1px solid var(--ys-hairline);
+  background: var(--ys-surface-elevated);
+}
+
+.seqNleControlRow {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  font-size: 11px;
+  color: var(--ys-muted);
+}
+
+.seqSfxDivider {
+  margin-top: 6px;
+  padding-top: 8px;
+  border-top: 1px solid var(--ys-hairline);
+  display: grid;
+  gap: 6px;
+}
+
+.seqSfxInput {
+  min-width: 0;
+  width: 100%;
+  box-sizing: border-box;
+  height: 30px;
+  padding: 0 10px;
+  border-radius: 8px;
+  border: 1px solid var(--ys-hairline);
+  background: var(--ys-surface);
+  color: var(--ys-ink);
+  font-size: 12px;
 }
 
 /* ----------------------------------------------------- Right Drawer Recent Creations */

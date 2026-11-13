@@ -1,11 +1,11 @@
-/* Studio UI v4 — Org Workflows, Knowledge Hub & Multi-Client MCP Connect
-   95% Monochrome (#FFFFFF canvas, #F4F4F5 borderless surfaces, #09090B active ink)
-   + 5% Electric Ultramarine (#0033FF single primary CTA). */
+/* Studio UI v5 Dark — Org Workflows, Knowledge Hub & Multi-Client MCP Connect
+   95% Monochrome (#09090B canvas, #111113/#18181B borderless surfaces, #EDEDED active ink)
+   + 5% Magnific Pink (#FF58AE single primary CTA with #09090B ink). */
 
 .page {
   min-height: 100%;
-  background: #ffffff;
-  color: #09090b;
+  background: var(--ys-canvas, #09090b);
+  color: var(--ys-ink, #ededed);
   font-family: var(--font-sans, 'Pretendard Variable', 'Geist', sans-serif);
   padding: 28px clamp(20px, 3vw, 40px) 72px;
   box-sizing: border-box;
@@ -47,7 +47,7 @@
   font-weight: 700;
   letter-spacing: -0.02em;
   line-height: 1.25;
-  color: #09090b;
+  color: var(--ys-ink, #ededed);
 }
 
 .creditPill {
@@ -56,8 +56,8 @@
   height: 28px;
   padding: 0 11px;
   border-radius: 999px;
-  background: #f4f4f5;
-  color: #09090b;
+  background: var(--ys-panel, #18181b);
+  color: var(--ys-ink, #ededed);
   font-family: var(--font-mono, 'Geist Mono', monospace);
   font-size: 12px;
   font-weight: 600;
@@ -68,7 +68,7 @@
   margin: 0;
   font-size: 14px;
   line-height: 1.55;
-  color: #52525b;
+  color: var(--ys-ink-secondary, #a1a1aa);
 }
 
 .headerActions {
@@ -83,20 +83,21 @@
   padding: 0 14px;
   border: 0;
   border-radius: 11px;
-  background: #f4f4f5;
-  color: #09090b;
+  background: var(--ys-panel, #18181b);
+  color: var(--ys-ink, #ededed);
   font-size: 13px;
   font-weight: 600;
   cursor: pointer;
   display: inline-flex;
   align-items: center;
   gap: 7px;
+  box-shadow: var(--ys-rim, inset 0 1px 0 0 rgba(255, 255, 255, 0.06));
   transition: background-color 140ms ease, opacity 140ms ease;
   text-decoration: none;
 }
 
 .secondaryBtn:hover:not(:disabled) {
-  background: #e4e4e7;
+  background: var(--ys-hover, #27272a);
 }
 
 .secondaryBtn:disabled {
@@ -109,8 +110,8 @@
   padding: 0 15px;
   border: 0;
   border-radius: 11px;
-  background: #09090b;
-  color: #ffffff;
+  background: var(--ys-active-bg, #ededed);
+  color: var(--ys-active-fg, #09090b);
   font-size: 13px;
   font-weight: 600;
   cursor: pointer;
@@ -134,8 +135,8 @@
   padding: 0 18px;
   border: 0;
   border-radius: 12px;
-  background: #0033ff;
-  color: #ffffff;
+  background: var(--ys-accent, #ff58ae);
+  color: var(--ys-on-accent, #09090b);
   font-size: 13px;
   font-weight: 600;
   cursor: pointer;
@@ -143,11 +144,11 @@
   align-items: center;
   justify-content: center;
   gap: 8px;
-  transition: opacity 140ms ease;
+  transition: background-color 140ms ease, opacity 140ms ease;
 }
 
 .primaryCta:hover:not(:disabled) {
-  opacity: 0.92;
+  background: var(--ys-accent-hover, #ff389f);
 }
 
 .primaryCta:disabled {
@@ -157,12 +158,13 @@
 
 /* Hero AI Workflow Builder */
 .builderHero {
-  background: #f4f4f5;
+  background: var(--ys-surface, #111113);
   border-radius: 20px;
   padding: 22px 24px;
   display: flex;
   flex-direction: column;
   gap: 14px;
+  box-shadow: inset 0 0 0 1px var(--ys-hairline, rgba(255, 255, 255, 0.08));
 }
 
 .builderTop {
@@ -179,7 +181,7 @@
   font-weight: 700;
   letter-spacing: 0.06em;
   text-transform: uppercase;
-  color: #71717a;
+  color: var(--ys-ink-muted, #71717a);
 }
 
 .builderHeading {
@@ -187,14 +189,14 @@
   font-size: 18px;
   font-weight: 700;
   letter-spacing: -0.015em;
-  color: #09090b;
+  color: var(--ys-ink, #ededed);
 }
 
 .builderLead {
   margin: 4px 0 0;
   font-size: 13px;
   line-height: 1.5;
-  color: #52525b;
+  color: var(--ys-ink-secondary, #a1a1aa);
 }
 
 .builderForm {
@@ -210,15 +212,15 @@
   padding: 10px 14px;
   border: 0;
   border-radius: 12px;
-  background: #ffffff;
-  color: #09090b;
+  background: var(--ys-panel, #18181b);
+  color: var(--ys-ink, #ededed);
   font-size: 14px;
   font-family: inherit;
   outline: none;
 }
 
 .builderInput:focus {
-  box-shadow: 0 0 0 2px #09090b;
+  box-shadow: 0 0 0 2px var(--ys-ink, #ededed);
 }
 
 .chipRow {
@@ -233,8 +235,8 @@
   padding: 0 12px;
   border: 0;
   border-radius: 999px;
-  background: #ffffff;
-  color: #52525b;
+  background: var(--ys-panel, #18181b);
+  color: var(--ys-ink-secondary, #a1a1aa);
   font-size: 12px;
   font-weight: 500;
   cursor: pointer;
@@ -242,8 +244,8 @@
 }
 
 .promptChip:hover {
-  color: #09090b;
-  background: #e4e4e7;
+  color: var(--ys-ink, #ededed);
+  background: var(--ys-hover, #27272a);
 }
 
 /* Tabs & Category Filters */
@@ -261,7 +263,7 @@
   gap: 4px;
   padding: 4px;
   border-radius: 13px;
-  background: #f4f4f5;
+  background: var(--ys-panel, #18181b);
 }
 
 .tabBtn {
@@ -270,7 +272,7 @@
   border: 0;
   border-radius: 9px;
   background: transparent;
-  color: #52525b;
+  color: var(--ys-ink-secondary, #a1a1aa);
   font-size: 13px;
   font-weight: 600;
   cursor: pointer;
@@ -280,8 +282,8 @@
 }
 
 .tabBtnActive {
-  background: #09090b;
-  color: #ffffff;
+  background: var(--ys-active-bg, #ededed);
+  color: var(--ys-active-fg, #09090b);
 }
 
 .tabCount {
@@ -303,16 +305,16 @@
   padding: 0 12px;
   border: 0;
   border-radius: 999px;
-  background: #f4f4f5;
-  color: #52525b;
+  background: var(--ys-panel, #18181b);
+  color: var(--ys-ink-secondary, #a1a1aa);
   font-size: 12px;
   font-weight: 600;
   cursor: pointer;
 }
 
 .catPillActive {
-  background: #09090b;
-  color: #ffffff;
+  background: var(--ys-active-bg, #ededed);
+  color: var(--ys-active-fg, #09090b);
 }
 
 /* Main Split Workspace: Cards + Active Runner */
@@ -340,19 +342,20 @@
 }
 
 .workflowCard {
-  background: #f4f4f5;
+  background: var(--ys-surface, #111113);
   border-radius: 18px;
   padding: 20px;
   display: flex;
   flex-direction: column;
   justify-content: space-between;
   gap: 16px;
+  box-shadow: inset 0 0 0 1px var(--ys-hairline, rgba(255, 255, 255, 0.08));
   transition: background-color 140ms ease;
 }
 
 .workflowCardSelected {
-  box-shadow: inset 0 0 0 2px #09090b;
-  background: #ffffff;
+  box-shadow: inset 0 0 0 2px var(--ys-ink, #ededed);
+  background: var(--ys-panel, #18181b);
 }
 
 .cardTop {
@@ -381,19 +384,19 @@
   height: 22px;
   padding: 0 8px;
   border-radius: 6px;
-  background: #ffffff;
-  color: #52525b;
+  background: var(--ys-panel, #18181b);
+  color: var(--ys-ink-secondary, #a1a1aa);
   font-size: 11px;
   font-weight: 600;
 }
 
 .workflowCardSelected .badge {
-  background: #f4f4f5;
+  background: var(--ys-hover, #27272a);
 }
 
 .badgeDark {
-  background: #09090b;
-  color: #ffffff;
+  background: var(--ys-active-bg, #ededed);
+  color: var(--ys-active-fg, #09090b);
 }
 
 .cardTitle {
@@ -402,14 +405,14 @@
   font-weight: 700;
   line-height: 1.35;
   letter-spacing: -0.01em;
-  color: #09090b;
+  color: var(--ys-ink, #ededed);
 }
 
 .cardSummary {
   margin: 0;
   font-size: 13px;
   line-height: 1.55;
-  color: #52525b;
+  color: var(--ys-ink-secondary, #a1a1aa);
 }
 
 .stepPills {
@@ -425,14 +428,14 @@
   gap: 5px;
   padding: 4px 8px;
   border-radius: 7px;
-  background: #ffffff;
-  color: #09090b;
+  background: var(--ys-panel, #18181b);
+  color: var(--ys-ink, #ededed);
   font-size: 11px;
   font-weight: 500;
 }
 
 .workflowCardSelected .stepMini {
-  background: #f4f4f5;
+  background: var(--ys-hover, #27272a);
 }
 
 .stepNum {
@@ -440,7 +443,7 @@
   font-size: 10px;
   font-weight: 700;
   font-variant-numeric: tabular-nums;
-  color: #71717a;
+  color: var(--ys-ink-muted, #71717a);
 }
 
 .cardFooter {
@@ -455,7 +458,7 @@
   font-family: var(--font-mono, 'Geist Mono', monospace);
   font-size: 12px;
   font-variant-numeric: tabular-nums;
-  color: #52525b;
+  color: var(--ys-ink-secondary, #a1a1aa);
 }
 
 .cardBtnRow {
@@ -470,20 +473,20 @@
   border: 0;
   border-radius: 8px;
   background: transparent;
-  color: #52525b;
+  color: var(--ys-ink-secondary, #a1a1aa);
   font-size: 12px;
   font-weight: 600;
   cursor: pointer;
 }
 
 .ghostBtn:hover {
-  background: #e4e4e7;
-  color: #09090b;
+  background: var(--ys-hover, #27272a);
+  color: var(--ys-ink, #ededed);
 }
 
 /* Runner Panel */
 .runnerPanel {
-  background: #f4f4f5;
+  background: var(--ys-surface, #111113);
   border-radius: 20px;
   padding: 22px;
   display: flex;
@@ -491,6 +494,7 @@
   gap: 18px;
   position: sticky;
   top: 20px;
+  box-shadow: inset 0 0 0 1px var(--ys-hairline, rgba(255, 255, 255, 0.08));
 }
 
 .runnerHeader {
@@ -504,15 +508,15 @@
   margin: 4px 0 0;
   font-size: 18px;
   font-weight: 700;
-  color: #09090b;
+  color: var(--ys-ink, #ededed);
 }
 
 .runnerGuide {
   margin: 0;
   font-size: 13px;
   line-height: 1.55;
-  color: #52525b;
-  background: #ffffff;
+  color: var(--ys-ink-secondary, #a1a1aa);
+  background: var(--ys-panel, #18181b);
   border-radius: 12px;
   padding: 12px 14px;
 }
@@ -521,7 +525,7 @@
   margin: 0 0 8px;
   font-size: 12px;
   font-weight: 700;
-  color: #09090b;
+  color: var(--ys-ink, #ededed);
 }
 
 .pipelineList {
@@ -540,9 +544,9 @@
   gap: 10px;
   padding: 9px 12px;
   border-radius: 10px;
-  background: #ffffff;
+  background: var(--ys-panel, #18181b);
   font-size: 12px;
-  color: #09090b;
+  color: var(--ys-ink, #ededed);
 }
 
 .pipelineLeft {
@@ -556,8 +560,8 @@
   width: 20px;
   height: 20px;
   border-radius: 6px;
-  background: #09090b;
-  color: #ffffff;
+  background: var(--ys-active-bg, #ededed);
+  color: var(--ys-active-fg, #09090b);
   font-family: var(--font-mono, 'Geist Mono', monospace);
   font-size: 11px;
   font-weight: 700;
@@ -583,7 +587,7 @@
 .fieldLabel {
   font-size: 12px;
   font-weight: 600;
-  color: #09090b;
+  color: var(--ys-ink, #ededed);
 }
 
 .textInput,
@@ -593,8 +597,8 @@
   box-sizing: border-box;
   border: 0;
   border-radius: 11px;
-  background: #ffffff;
-  color: #09090b;
+  background: var(--ys-panel, #18181b);
+  color: var(--ys-ink, #ededed);
   font-family: inherit;
   font-size: 13px;
   padding: 10px 12px;
@@ -616,7 +620,7 @@
 .textInput:focus,
 .selectInput:focus,
 .textareaInput:focus {
-  box-shadow: 0 0 0 2px #09090b;
+  box-shadow: 0 0 0 2px var(--ys-ink, #ededed);
 }
 
 .packChecks {
@@ -631,10 +635,10 @@
   gap: 9px;
   padding: 9px 12px;
   border-radius: 10px;
-  background: #ffffff;
+  background: var(--ys-panel, #18181b);
   font-size: 13px;
   font-weight: 500;
-  color: #09090b;
+  color: var(--ys-ink, #ededed);
   cursor: pointer;
 }
 
@@ -650,18 +654,18 @@
   align-items: center;
   justify-content: space-between;
   font-size: 12px;
-  color: #52525b;
+  color: var(--ys-ink-secondary, #a1a1aa);
 }
 
 .estimateNums {
   font-family: var(--font-mono, 'Geist Mono', monospace);
   font-weight: 700;
   font-variant-numeric: tabular-nums;
-  color: #09090b;
+  color: var(--ys-ink, #ededed);
 }
 
 .resultBox {
-  background: #ffffff;
+  background: var(--ys-panel, #18181b);
   border-radius: 14px;
   padding: 14px;
   display: flex;
@@ -673,19 +677,20 @@
   margin: 0;
   font-size: 13px;
   font-weight: 700;
-  color: #09090b;
+  color: var(--ys-ink, #ededed);
 }
 
 .resultBody {
   margin: 0;
   font-size: 12px;
   line-height: 1.5;
-  color: #52525b;
+  color: var(--ys-ink-secondary, #a1a1aa);
 }
 
 .errorBanner {
-  background: #09090b;
-  color: #ffffff;
+  background: var(--ys-panel, #18181b);
+  color: var(--ys-ink, #ededed);
+  box-shadow: inset 0 0 0 1px var(--ys-danger, #ef4444);
   border-radius: 12px;
   padding: 10px 14px;
   font-size: 13px;
@@ -693,7 +698,7 @@
 
 /* Empty State & Guides */
 .emptyBox {
-  background: #f4f4f5;
+  background: var(--ys-surface, #111113);
   border-radius: 18px;
   padding: 36px 24px;
   text-align: center;
@@ -701,13 +706,14 @@
   flex-direction: column;
   align-items: center;
   gap: 8px;
+  box-shadow: inset 0 0 0 1px var(--ys-hairline, rgba(255, 255, 255, 0.08));
 }
 
 .emptyTitle {
   margin: 0;
   font-size: 15px;
   font-weight: 700;
-  color: #09090b;
+  color: var(--ys-ink, #ededed);
 }
 
 .emptyBody {
@@ -715,7 +721,7 @@
   max-width: 480px;
   font-size: 13px;
   line-height: 1.55;
-  color: #52525b;
+  color: var(--ys-ink-secondary, #a1a1aa);
 }
 
 .guidesGrid {
@@ -725,20 +731,21 @@
 }
 
 .guideCard {
-  background: #f4f4f5;
+  background: var(--ys-surface, #111113);
   border-radius: 18px;
   padding: 20px;
   display: flex;
   flex-direction: column;
   justify-content: space-between;
   gap: 14px;
+  box-shadow: inset 0 0 0 1px var(--ys-hairline, rgba(255, 255, 255, 0.08));
 }
 
 .guideBodyPreview {
   margin: 0;
   font-size: 13px;
   line-height: 1.6;
-  color: #52525b;
+  color: var(--ys-ink-secondary, #a1a1aa);
   white-space: pre-wrap;
   display: -webkit-box;
   -webkit-line-clamp: 5;
@@ -751,7 +758,7 @@
   position: fixed;
   inset: 0;
   z-index: 80;
-  background: rgba(9, 9, 11, 0.48);
+  background: rgba(0, 0, 0, 0.72);
   display: grid;
   place-items: center;
   padding: 20px;
@@ -761,11 +768,12 @@
 .modalDialog {
   width: 100%;
   max-width: 720px;
-  background: #ffffff;
-  color: #09090b;
+  background: var(--ys-surface, #111113);
+  color: var(--ys-ink, #ededed);
   border-radius: 22px;
   padding: 26px;
   box-sizing: border-box;
+  box-shadow: var(--ys-float, 0 24px 64px rgba(0, 0, 0, 0.65));
   display: flex;
   flex-direction: column;
   gap: 18px;
@@ -785,18 +793,18 @@
   font-size: 20px;
   font-weight: 700;
   letter-spacing: -0.015em;
-  color: #09090b;
+  color: var(--ys-ink, #ededed);
 }
 
 .modalLead {
   margin: 6px 0 0;
   font-size: 13px;
   line-height: 1.55;
-  color: #52525b;
+  color: var(--ys-ink-secondary, #a1a1aa);
 }
 
 .surfaceBlock {
-  background: #f4f4f5;
+  background: var(--ys-panel, #18181b);
   border-radius: 16px;
   padding: 16px 18px;
   display: flex;
@@ -816,16 +824,16 @@
   padding: 0 13px;
   border: 0;
   border-radius: 999px;
-  background: #f4f4f5;
-  color: #52525b;
+  background: var(--ys-panel, #18181b);
+  color: var(--ys-ink-secondary, #a1a1aa);
   font-size: 12px;
   font-weight: 600;
   cursor: pointer;
 }
 
 .clientPillActive {
-  background: #09090b;
-  color: #ffffff;
+  background: var(--ys-active-bg, #ededed);
+  color: var(--ys-active-fg, #09090b);
 }
 
 .stepsList {
@@ -843,17 +851,18 @@
   gap: 10px;
   font-size: 13px;
   line-height: 1.5;
-  color: #09090b;
+  color: var(--ys-ink, #ededed);
 }
 
 .codeBox {
-  background: #09090b;
-  color: #ffffff;
+  background: var(--ys-canvas, #09090b);
+  color: var(--ys-ink, #ededed);
   border-radius: 13px;
   padding: 14px;
   display: flex;
   flex-direction: column;
   gap: 10px;
+  box-shadow: inset 0 0 0 1px var(--ys-hairline, rgba(255, 255, 255, 0.08));
 }
 
 .codeTop {
@@ -875,8 +884,8 @@
   padding: 0 11px;
   border: 0;
   border-radius: 7px;
-  background: #ffffff;
-  color: #09090b;
+  background: var(--ys-active-bg, #ededed);
+  color: var(--ys-active-fg, #09090b);
   font-size: 12px;
   font-weight: 600;
   cursor: pointer;
@@ -889,7 +898,7 @@
   line-height: 1.55;
   white-space: pre-wrap;
   word-break: break-all;
-  color: #f4f4f5;
+  color: var(--ys-ink, #ededed);
 }
 
 .tokenRow {
@@ -899,7 +908,7 @@
   gap: 12px;
   padding: 10px 12px;
   border-radius: 11px;
-  background: #ffffff;
+  background: var(--ys-panel, #18181b);
   font-size: 12px;
 }
 
@@ -921,7 +930,8 @@
   gap: 12px;
   padding: 11px 13px;
   border-radius: 12px;
-  background: #ffffff;
+  background: var(--ys-panel, #18181b);
+  color: var(--ys-ink, #ededed);
   cursor: pointer;
   text-align: left;
   border: 0;
@@ -929,7 +939,7 @@
 }
 
 .recentRunSelected {
-  box-shadow: inset 0 0 0 2px #09090b;
+  box-shadow: inset 0 0 0 2px var(--ys-ink, #ededed);
 }
 
 .modalFooter {

@@ -16,7 +16,12 @@ import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
 import type { StudioErrorCode } from '@/lib/brand-studio/contracts';
 import type { AudioAssetLicenseSource } from '@/lib/brands/sound/master';
-import { MUSIC_PROVIDERS, type MusicProviderId } from './contracts';
+import { createSunraClient, SunraError } from '@/lib/sunra/client';
+import {
+  MUSIC_PROVIDERS,
+  type MusicCompositionPlan,
+  type MusicProviderId,
+} from './contracts';
 import { synthesizePreviewMusicWav } from './synth';
 
 const execFileAsync = promisify(execFile);
@@ -33,6 +38,7 @@ export interface MusicProviderSubmitRequest {
   preDropHushMs: number;
   abcNotation: string;
   refAudioUrl: string | null;
+  compositionPlan?: MusicCompositionPlan;
 }
 
 export type MusicProviderSubmitOutcome =
@@ -91,6 +97,7 @@ export function resolveMusicProviderId(env: EnvRecord = process.env): MusicProvi
     return explicit as MusicProviderId;
   }
   if (env.SUNO_API_URL?.trim() && env.SUNO_API_KEY?.trim()) return 'suno';
+  if (env.SUNRA_API_KEY?.trim()) return 'sunra_elevenlabs';
   if (env.ELEVENLABS_API_KEY?.trim()) return 'elevenlabs';
   if (env.YAGI_PRODUCTION_URL?.trim() && env.YAGI_PROD_TOKEN?.trim()) return 'yagi_production';
   if (env.BRAND_STUDIO_PROVIDER?.trim() === 'fake' || env.NODE_ENV === 'test') return 'fake';
@@ -282,11 +289,11 @@ function createLocalYue2MusicProvider(env: EnvRecord, fetchImpl: typeof fetch): 
             };
           }
         } catch {
-          // Fall through cleanly to instant synthesized WAV preview when local GPU worker is offline
+          return { ok: false, code: 'provider_unavailable' };
         }
       }
 
-      return synthFallbackOutcome(req);
+      return { ok: false, code: 'provider_unavailable' };
     },
     async poll(providerTaskId) {
       if (yagiBridge) {
@@ -470,6 +477,82 @@ function createElevenLabsMusicProvider(env: EnvRecord, fetchImpl: typeof fetch):
   };
 }
 
+function createSunraElevenLabsMusicProvider(env: EnvRecord, fetchImpl: typeof fetch): MusicProvider {
+  const apiKey = env.SUNRA_API_KEY?.trim() || '';
+  const baseUrl = (env.SUNRA_BASE_URL?.trim() || 'https://api.sunra.ai').replace(/\/+$/, '');
+  const client = apiKey ? createSunraClient({ apiKey, baseUrl }, { fetch: fetchImpl }) : null;
+
+  return {
+    id: 'sunra_elevenlabs',
+    commercialAllowed: true,
+    async submit(req) {
+      if (!client) return { ok: false, code: 'provider_unavailable' };
+      try {
+        const clampedMs = Math.max(3000, Math.min(59_500, Math.round(req.durationSec * 1000)));
+        // Upstream contract rejects requests carrying both prompt and composition_plan
+        const payload: Record<string, unknown> = req.compositionPlan
+          ? {
+              composition_plan: {
+                positive_global_styles: req.compositionPlan.positiveGlobalStyles,
+                negative_global_styles: req.compositionPlan.negativeGlobalStyles,
+                sections: req.compositionPlan.sections.map((section) => ({
+                  section_name: section.sectionName,
+                  positive_local_styles: section.positiveLocalStyles,
+                  negative_local_styles: section.negativeLocalStyles,
+                  duration_ms: Math.max(1000, Math.min(59_500, Math.round(section.durationMs))),
+                  lines: section.lines,
+                })),
+              },
+              output_format: 'mp3_44100_128',
+            }
+          : {
+              prompt:
+                [req.userPrompt.trim(), req.stylePrompt.trim()].filter(Boolean).join('. ').slice(0, 1800) ||
+                `Commercial instrumental brand score ${req.bpm} BPM ${req.keySignature}`,
+              music_length_ms: clampedMs,
+              force_instrumental: true,
+              output_format: 'mp3_44100_128',
+            };
+
+        const task = await client.submit('elevenlabs/music-v2.5/text-to-music', payload);
+        return {
+          ok: true,
+          status: 'running',
+          providerTaskId: task.id,
+          commercialAllowed: true,
+          licenseSource: 'commercial_licensed',
+          licenseCertificateRef: 'STUDIO-COMMERCIAL-AUDIO-API',
+        };
+      } catch (error) {
+        if (error instanceof SunraError && error.status === 422) {
+          return { ok: false, code: 'provider_rejected' };
+        }
+        return { ok: false, code: 'provider_unavailable' };
+      }
+    },
+    async poll(providerTaskId) {
+      if (!client) return { ok: false, code: 'provider_unavailable' };
+      try {
+        const task = await client.getTask(providerTaskId);
+        if (task.status === 'IN_QUEUE' || task.status === 'IN_PROGRESS') {
+          return { ok: true, status: 'running' };
+        }
+        if (task.status === 'COMPLETED' && task.success !== false && task.url) {
+          return {
+            ok: true,
+            status: 'succeeded',
+            audioUrl: task.url,
+            mime: 'audio/mpeg',
+          };
+        }
+        return { ok: false, code: 'failed' };
+      } catch {
+        return { ok: false, code: 'provider_unavailable' };
+      }
+    },
+  };
+}
+
 export function selectMusicProvider(
   env: EnvRecord = process.env,
   options?: { fetchImpl?: typeof fetch },
@@ -479,6 +562,8 @@ export function selectMusicProvider(
   switch (id) {
     case 'fake':
       return createFakeMusicProvider(env);
+    case 'sunra_elevenlabs':
+      return createSunraElevenLabsMusicProvider(env, fetchImpl);
     case 'local_yue2':
       return createLocalYue2MusicProvider(env, fetchImpl);
     case 'yagi_production':

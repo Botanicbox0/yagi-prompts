@@ -24,8 +24,10 @@ import {
   DEFAULT_IMAGE_MODEL,
   DEFAULT_VIDEO_MODEL,
   estimateImageUsd,
+  normalizeLegacyStudioModelId,
   selectableModels,
   studioModel,
+  studioModelOrLegacy,
   type StudioImageModel,
   type StudioImageQuality,
   type StudioMedium,
@@ -523,7 +525,8 @@ export function rerunInput(job: StudioJobView, ids: { organizationId: string; re
 /** "설정 다시 쓰기": the bar as it was for this job (the tray is rebuilt separately). */
 export function draftFromJob(job: StudioJobView, current: DockDraft): DockDraft {
   const medium: StudioMedium = job.kind === "image" || job.kind === "region_edit" ? "image" : "video";
-  const model = studioModel(job.model)?.medium === medium ? job.model : current.model;
+  const resolved = studioModelOrLegacy(job.model);
+  const model = resolved?.medium === medium ? normalizeLegacyStudioModelId(job.model) : current.model;
   return normalizeDraft({
     ...withMedium(current, medium),
     model,

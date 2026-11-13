@@ -26,8 +26,8 @@ import { YagiLogo } from "@/components/brand/yagi-mark";
 import { getRequestLocale } from "@/lib/i18n/server";
 import { getDictionary } from "@/lib/i18n/dictionaries";
 export const dynamic = "force-dynamic";
-/** Mobile browser chrome matches the alabaster canvas around the workspace frame. */
-export const viewport: Viewport = { themeColor: "#ffffff" };
+/** Mobile browser chrome matches the obsidian canvas around the workspace frame. */
+export const viewport: Viewport = { themeColor: "#09090b" };
 export async function generateMetadata(): Promise<Metadata> {
   const d = getDictionary(await getRequestLocale());
   return {

@@ -170,7 +170,7 @@ function shouldIncludeBgm(project: ComposerProject, opts?: NleExportOptions): bo
 export interface NleMediaSource {
   /** `file-1`, `file-2`, … — the xmeml `<file id>`. */
   fileId: string;
-  kind: 'clip' | 'bgm';
+  kind: 'clip' | 'bgm' | 'overlay' | 'sfx';
   url: string;
   label: string;
   /** ASCII-safe name inside `media/`. */
@@ -185,7 +185,13 @@ export interface NleMediaPlan {
   /** For each timeline clip, the index into `clipSources`. */
   clipSourceIndex: number[];
   bgm: NleMediaSource | null;
-  /** Every file the bundle expects under `media/`, clips first, then the music track. */
+  /** Unique V2 overlay sources in first-use order (present when project has overlays). */
+  overlaySources?: NleMediaSource[];
+  overlaySourceIndex?: number[];
+  /** Unique A2 SFX sources in first-use order (present when project has SFX clips). */
+  sfxSources?: NleMediaSource[];
+  sfxSourceIndex?: number[];
+  /** Every file the bundle expects under `media/`, clips first, then music, overlays, SFX. */
   all: NleMediaSource[];
 }
 
@@ -222,12 +228,13 @@ export function planNleMedia(project: ComposerProject, opts?: NleExportOptions):
     clipSourceIndex.push(index);
   }
 
+  let nextFileNum = clipSources.length + 1;
   let bgm: NleMediaSource | null = null;
   if (shouldIncludeBgm(project, opts) && project.bgm) {
     const ext = inferExtension(project.bgm.srcUrl, project.bgm.label, AUDIO_EXTENSIONS, 'mp3');
     const filename = `bgm_track.${ext}`;
     bgm = {
-      fileId: `file-${clipSources.length + 1}`,
+      fileId: `file-${nextFileNum++}`,
       kind: 'bgm',
       url: project.bgm.srcUrl,
       label: project.bgm.label,
@@ -236,7 +243,69 @@ export function planNleMedia(project: ComposerProject, opts?: NleExportOptions):
     };
   }
 
-  return { clipSources, clipSourceIndex, bgm, all: bgm ? [...clipSources, bgm] : [...clipSources] };
+  const all: NleMediaSource[] = bgm ? [...clipSources, bgm] : [...clipSources];
+  const overlaySources: NleMediaSource[] = [];
+  const overlaySourceIndex: number[] = [];
+  const overlayByKey = new Map<string, number>();
+  for (const ov of project.overlays ?? []) {
+    const key = ov.assetId ? `asset:${ov.assetId}` : ov.outputId ? `output:${ov.outputId}` : `url:${ov.srcUrl}`;
+    let idx = overlayByKey.get(key);
+    if (idx === undefined) {
+      idx = overlaySources.length;
+      overlayByKey.set(key, idx);
+      const ordinal = String(idx + 1).padStart(2, '0');
+      const fallbackExt = ov.mediaKind === 'image' ? 'png' : 'mp4';
+      const allowedExts = ov.mediaKind === 'image' ? ['png', 'jpg', 'jpeg', 'webp'] : VIDEO_EXTENSIONS;
+      const ext = inferExtension(ov.srcUrl, ov.label, allowedExts, fallbackExt);
+      const filename = `ovl_${ordinal}_${asciiSlug(ov.label, 'overlay')}_${fnv1aHex(key).slice(0, 6)}.${ext}`;
+      const src: NleMediaSource = {
+        fileId: `file-${nextFileNum++}`,
+        kind: 'overlay',
+        url: ov.srcUrl,
+        label: ov.label,
+        filename,
+        path: `${NLE_MEDIA_DIR}/${filename}`,
+      };
+      overlaySources.push(src);
+      all.push(src);
+    }
+    overlaySourceIndex.push(idx);
+  }
+
+  const sfxSources: NleMediaSource[] = [];
+  const sfxSourceIndex: number[] = [];
+  const sfxByKey = new Map<string, number>();
+  for (const sfx of project.sfxClips ?? []) {
+    const key = sfx.assetId ? `asset:${sfx.assetId}` : `url:${sfx.srcUrl}`;
+    let idx = sfxByKey.get(key);
+    if (idx === undefined) {
+      idx = sfxSources.length;
+      sfxByKey.set(key, idx);
+      const ordinal = String(idx + 1).padStart(2, '0');
+      const ext = inferExtension(sfx.srcUrl, sfx.label, AUDIO_EXTENSIONS, 'wav');
+      const filename = `sfx_${ordinal}_${asciiSlug(sfx.label, 'sfx')}_${fnv1aHex(key).slice(0, 6)}.${ext}`;
+      const src: NleMediaSource = {
+        fileId: `file-${nextFileNum++}`,
+        kind: 'sfx',
+        url: sfx.srcUrl,
+        label: sfx.label,
+        filename,
+        path: `${NLE_MEDIA_DIR}/${filename}`,
+      };
+      sfxSources.push(src);
+      all.push(src);
+    }
+    sfxSourceIndex.push(idx);
+  }
+
+  return {
+    clipSources,
+    clipSourceIndex,
+    bgm,
+    ...(overlaySources.length > 0 ? { overlaySources, overlaySourceIndex } : {}),
+    ...(sfxSources.length > 0 ? { sfxSources, sfxSourceIndex } : {}),
+    all,
+  };
 }
 
 /* ------------------------------------------------------------------------------------------------ */
@@ -269,7 +338,11 @@ export function layoutNleFrames(
   const clips = project.clips.map((clip, clipIndex) => {
     const inFrame = Math.max(0, toFrames(clip.trimStartSec, timebase));
     const outFrame = Math.max(inFrame + 1, toFrames(clip.trimEndSec, timebase));
-    const clipFrames = outFrame - inFrame;
+    const rate =
+      typeof clip.playbackRate === 'number' && Number.isFinite(clip.playbackRate)
+        ? Math.min(4, Math.max(0.25, clip.playbackRate))
+        : 1;
+    const clipFrames = Math.max(1, Math.round((outFrame - inFrame) / rate));
     const startFrame = cursorFrame;
     cursorFrame += clipFrames;
     return { clipIndex, inFrame, outFrame, startFrame, endFrame: cursorFrame };
@@ -455,6 +528,50 @@ export function buildFcp7Xml(project: ComposerProject, opts?: NleExportOptions):
     xml.add(depth, '</filter>');
   };
 
+  const addTimeRemapFilter = (depth: number, playbackRate: number) => {
+    const pct = Math.round(playbackRate * 100);
+    xml.add(depth, '<filter>');
+    xml.add(depth + 1, '<effect>');
+    xml.tag(depth + 2, 'name', 'Time Remap');
+    xml.tag(depth + 2, 'effectid', 'timeremap');
+    xml.tag(depth + 2, 'effectcategory', 'motion');
+    xml.tag(depth + 2, 'effecttype', 'motion');
+    xml.tag(depth + 2, 'mediatype', 'video');
+    xml.add(depth + 2, '<parameter>');
+    xml.tag(depth + 3, 'name', 'speed');
+    xml.tag(depth + 3, 'parameterid', 'speed');
+    xml.tag(depth + 3, 'valuemin', 25);
+    xml.tag(depth + 3, 'valuemax', 400);
+    xml.tag(depth + 3, 'value', pct);
+    xml.add(depth + 2, '</parameter>');
+    xml.add(depth + 1, '</effect>');
+    xml.add(depth, '</filter>');
+  };
+
+  const addTransitionItem = (
+    depth: number,
+    transitionIn: 'cross_dissolve' | 'dip_to_black',
+    durationFrames: number,
+    cutFrame: number,
+  ) => {
+    const half = Math.max(1, Math.floor(durationFrames / 2));
+    const tStart = Math.max(0, cutFrame - half);
+    const tEnd = Math.max(tStart + 1, cutFrame + Math.max(1, durationFrames - half));
+    xml.add(depth, '<transitionitem>');
+    xml.add(depth + 1, rate);
+    xml.tag(depth + 1, 'start', tStart);
+    xml.tag(depth + 1, 'end', tEnd);
+    xml.tag(depth + 1, 'alignment', 'center');
+    xml.add(depth + 1, '<effect>');
+    xml.tag(depth + 2, 'name', transitionIn === 'dip_to_black' ? 'Dip to Color Dissolve' : 'Cross Dissolve');
+    xml.tag(depth + 2, 'effectid', transitionIn === 'dip_to_black' ? 'Dip to Color Dissolve' : 'Cross Dissolve');
+    xml.tag(depth + 2, 'effectcategory', 'Dissolve');
+    xml.tag(depth + 2, 'effecttype', 'transition');
+    xml.tag(depth + 2, 'mediatype', 'video');
+    xml.add(depth + 1, '</effect>');
+    xml.add(depth, '</transitionitem>');
+  };
+
   const addLink = (
     depth: number,
     ref: string,
@@ -519,6 +636,10 @@ export function buildFcp7Xml(project: ComposerProject, opts?: NleExportOptions):
   for (const f of frames) {
     const clip = project.clips[f.clipIndex]!;
     const sourceIndex = plan.clipSourceIndex[f.clipIndex]!;
+    if (clip.transitionIn === 'cross_dissolve' || clip.transitionIn === 'dip_to_black') {
+      const tFrames = Math.max(2, toFrames(clip.transitionDurationSec ?? 0.4, timebase));
+      addTransitionItem(5, clip.transitionIn, tFrames, f.startFrame);
+    }
     xml.add(5, `<clipitem id="clipitem-${f.clipIndex + 1}">`);
     xml.tag(6, 'masterclipid', `masterclip-${sourceIndex + 1}`);
     xml.tag(6, 'name', clip.label);
@@ -530,12 +651,59 @@ export function buildFcp7Xml(project: ComposerProject, opts?: NleExportOptions):
     xml.tag(6, 'in', f.inFrame);
     xml.tag(6, 'out', f.outFrame);
     addClipFile(6, sourceIndex);
+    if (typeof clip.playbackRate === 'number' && Math.abs(clip.playbackRate - 1) >= 0.01) {
+      addTimeRemapFilter(6, clip.playbackRate);
+    }
     addClipLinks(6, f.clipIndex);
     xml.add(5, '</clipitem>');
   }
   xml.tag(5, 'enabled', 'TRUE');
   xml.tag(5, 'locked', 'FALSE');
   xml.add(4, '</track>');
+  if (project.overlays && project.overlays.length > 0 && plan.overlaySources && plan.overlaySourceIndex) {
+    xml.add(4, '<track>');
+    project.overlays.forEach((overlay, idx) => {
+      const srcIdx = plan.overlaySourceIndex![idx]!;
+      const source = plan.overlaySources![srcIdx]!;
+      const startFrame = Math.max(0, toFrames(overlay.startSec, timebase));
+      const endFrame = Math.max(startFrame + 1, toFrames(overlay.endSec, timebase));
+      const durFrames = endFrame - startFrame;
+      xml.add(5, `<clipitem id="clipitem-v2-${idx + 1}">`);
+      xml.tag(6, 'masterclipid', `masterclip-v2-${srcIdx + 1}`);
+      xml.tag(6, 'name', overlay.label || 'Overlay');
+      xml.tag(6, 'enabled', 'TRUE');
+      xml.tag(6, 'duration', durFrames);
+      xml.add(6, rate);
+      xml.tag(6, 'start', startFrame);
+      xml.tag(6, 'end', endFrame);
+      xml.tag(6, 'in', 0);
+      xml.tag(6, 'out', durFrames);
+      if (emittedFiles.has(source.fileId)) {
+        xml.add(6, `<file id="${source.fileId}"/>`);
+      } else {
+        emittedFiles.add(source.fileId);
+        xml.add(6, `<file id="${source.fileId}">`);
+        xml.tag(7, 'name', source.filename);
+        xml.tag(7, 'pathurl', `./${source.path}`);
+        xml.add(7, rate);
+        xml.tag(7, 'duration', durFrames);
+        xml.add(7, '<media>');
+        xml.add(8, '<video>');
+        xml.add(9, '<samplecharacteristics>');
+        xml.add(10, rate);
+        xml.tag(10, 'width', width);
+        xml.tag(10, 'height', height);
+        xml.add(9, '</samplecharacteristics>');
+        xml.add(8, '</video>');
+        xml.add(7, '</media>');
+        xml.add(6, '</file>');
+      }
+      xml.add(5, '</clipitem>');
+    });
+    xml.tag(5, 'enabled', 'TRUE');
+    xml.tag(5, 'locked', 'FALSE');
+    xml.add(4, '</track>');
+  }
   xml.add(3, '</video>');
 
   // ---- audio ----
@@ -566,14 +734,17 @@ export function buildFcp7Xml(project: ComposerProject, opts?: NleExportOptions):
         if (!clipHasAudio[f.clipIndex]) continue;
         const clip = project.clips[f.clipIndex]!;
         const sourceIndex = plan.clipSourceIndex[f.clipIndex]!;
+        const offsetFrames = toFrames(clip.audioOffsetSec ?? 0, timebase);
+        const aStart = Math.max(0, f.startFrame + offsetFrames);
+        const aEnd = Math.max(aStart + 1, f.endFrame + offsetFrames);
         xml.add(5, `<clipitem id="clipitem-${f.clipIndex + 1}-a${channel}">`);
         xml.tag(6, 'masterclipid', `masterclip-${sourceIndex + 1}`);
         xml.tag(6, 'name', clip.label);
         xml.tag(6, 'enabled', 'TRUE');
         xml.tag(6, 'duration', sourceDuration[sourceIndex]!);
         xml.add(6, rate);
-        xml.tag(6, 'start', f.startFrame);
-        xml.tag(6, 'end', f.endFrame);
+        xml.tag(6, 'start', aStart);
+        xml.tag(6, 'end', aEnd);
         xml.tag(6, 'in', f.inFrame);
         xml.tag(6, 'out', f.outFrame);
         addClipFile(6, sourceIndex);
@@ -641,6 +812,58 @@ export function buildFcp7Xml(project: ComposerProject, opts?: NleExportOptions):
         if (finiteOr(bgm.state.volume, 1) < 1) addLevelFilter(6, bgm.state.volume);
         addLink(6, `clipitem-bgm-${n}-a1`, 'audio', baseTrack + 1, n);
         addLink(6, `clipitem-bgm-${n}-a2`, 'audio', baseTrack + 2, n);
+        xml.add(5, '</clipitem>');
+      });
+      xml.tag(5, 'enabled', 'TRUE');
+      xml.tag(5, 'locked', 'FALSE');
+      xml.tag(5, 'outputchannelindex', channel);
+      xml.add(4, '</track>');
+    }
+  }
+  if (project.sfxClips && project.sfxClips.length > 0 && plan.sfxSources && plan.sfxSourceIndex) {
+    const sfxBaseTrack = (frames.length > 0 ? 2 : 0) + (bgm && totalFrames > 0 ? 2 : 0);
+    for (const channel of [1, 2] as const) {
+      xml.add(4, '<track>');
+      project.sfxClips.forEach((sfx, idx) => {
+        const srcIdx = plan.sfxSourceIndex![idx]!;
+        const source = plan.sfxSources![srcIdx]!;
+        const n = idx + 1;
+        const startFrame = Math.max(0, toFrames(sfx.startSec, timebase));
+        const durFrames = Math.max(1, toFrames(sfx.durationSec, timebase));
+        xml.add(5, `<clipitem id="clipitem-sfx-${n}-a${channel}">`);
+        xml.tag(6, 'masterclipid', `masterclip-sfx-${srcIdx + 1}`);
+        xml.tag(6, 'name', sfx.label || 'SFX');
+        xml.tag(6, 'enabled', 'TRUE');
+        xml.tag(6, 'duration', durFrames);
+        xml.add(6, rate);
+        xml.tag(6, 'start', startFrame);
+        xml.tag(6, 'end', startFrame + durFrames);
+        xml.tag(6, 'in', 0);
+        xml.tag(6, 'out', durFrames);
+        if (emittedFiles.has(source.fileId)) {
+          xml.add(6, `<file id="${source.fileId}"/>`);
+        } else {
+          emittedFiles.add(source.fileId);
+          xml.add(6, `<file id="${source.fileId}">`);
+          xml.tag(7, 'name', source.filename);
+          xml.tag(7, 'pathurl', `./${source.path}`);
+          xml.add(7, rate);
+          xml.tag(7, 'duration', durFrames);
+          xml.add(7, '<media>');
+          xml.add(8, '<audio>');
+          xml.add(9, '<samplecharacteristics>');
+          xml.tag(10, 'depth', AUDIO_BIT_DEPTH);
+          xml.tag(10, 'samplerate', AUDIO_SAMPLE_RATE);
+          xml.add(9, '</samplecharacteristics>');
+          xml.tag(9, 'channelcount', 2);
+          xml.add(8, '</audio>');
+          xml.add(7, '</media>');
+          xml.add(6, '</file>');
+        }
+        xml.add(6, `<sourcetrack><mediatype>audio</mediatype><trackindex>${channel}</trackindex></sourcetrack>`);
+        if (finiteOr(sfx.volume, 1) < 1) addLevelFilter(6, sfx.volume);
+        addLink(6, `clipitem-sfx-${n}-a1`, 'audio', sfxBaseTrack + 1, n);
+        addLink(6, `clipitem-sfx-${n}-a2`, 'audio', sfxBaseTrack + 2, n);
         xml.add(5, '</clipitem>');
       });
       xml.tag(5, 'enabled', 'TRUE');

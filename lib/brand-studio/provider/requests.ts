@@ -85,10 +85,13 @@ function imageRequest(input: StudioRequestInput): StudioProviderRequest {
     if (urls.length === 0) return { endpoint: `${model.api.alias}/${model.endpoints.textToImage}`, body };
     return { endpoint: `${model.api.alias}/${model.endpoints.edit}`, body: { ...body, images: urls } };
   }
+  const background = model.supportsTransparentBackground && input.params.background ? input.params.background : undefined;
   const common = {
     prompt: input.prompt,
     aspect_ratio: pick(input.params.aspect, model.aspects, model.aspects[0]!),
     resolution: pick(input.params.resolution, model.resolutions, model.defaultResolution),
+    ...(background ? { background } : {}),
+    ...(background === 'transparent' ? { output_format: 'png' } : {}),
     ...safety(model),
   };
   if (urls.length === 0) return { endpoint: `${model.api.alias}/${model.endpoints.textToImage}`, body: common };

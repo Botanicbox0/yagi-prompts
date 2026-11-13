@@ -96,8 +96,8 @@ export function ProjectFilesTab({
                 fontSize: 13,
                 fontWeight: active ? 600 : 500,
                 cursor: "pointer",
-                background: active ? "#FFFFFF" : "transparent",
-                color: active ? "var(--ys-ink, #111827)" : "var(--ys-muted, #6B7280)",
+                background: active ? "var(--ys-active-bg, #ededed)" : "transparent",
+                color: active ? "var(--ys-active-fg, #09090b)" : "var(--ys-ink-secondary)",
                 boxShadow: active ? "0 1px 2px rgba(15, 23, 42, 0.08)" : "none",
               }}
             >

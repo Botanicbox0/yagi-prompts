@@ -38,11 +38,16 @@ const rules = css.replace(brandTokens, "").replace(adminTokens, "");
 describe("brand workspace taste", () => {
   it("defines the brand host on one key colour token, with red only as a low-chroma danger state", () => {
     expect(brandTokens).toMatch(/--ys-accent: #[0-9a-f]{6};/);
+    expect(brandTokens).toContain("--ys-canvas: #09090b;");
+    expect(brandTokens).toContain("--ys-surface: #111113;");
+    expect(brandTokens).toContain("--ys-panel: #18181b;");
+    expect(brandTokens).toContain("--ys-accent: #ff58ae;");
+    expect(brandTokens).toContain("--ys-on-accent: #09090b;");
     expect(brandTokens).toContain("--color-blue: var(--ys-accent-text);");
-    expect(brandTokens).toContain("--ys-accent-text: color-mix(in srgb, var(--ys-accent) 85%, #000);");
-    // The key colour may change: every other blue derives from --ys-accent, none is written out.
+    expect(brandTokens).toContain("--ys-accent-text: color-mix(in srgb, var(--ys-accent) 82%, #fff);");
+    // The key colour may change: every other accent derives from --ys-accent, none is written out.
     expect(rules + brandTokens.replace(/--ys-accent: #[0-9a-f]{6};/, "")).not.toMatch(/#0000ee|rgba\(0, 0, 238|#4355e8|#3875c5/i);
-    // Blue as text uses the darker same-hue shade, so small labels pass AA on white, alabaster and tints.
+    // Accent as text uses the lightened same-hue shade, so small labels pass AA on dark #09090B/#111113/#18181B surfaces.
     expect(rules).not.toMatch(/(^|[;{ ])color: ?var\(--ys-accent[,)]/m);
     expect(brandTokens).toContain("--ys-red: var(--ys-danger);");
     expect(brandTokens).not.toMatch(/#ed1e1e|#dc2626/i);
@@ -246,7 +251,7 @@ describe("brand workspace taste", () => {
     expect(html).toContain("Nano Banana Pro");
     expect(html).toContain("Nano Banana 2.1");
     expect(html).toContain("Nano Banana 2.0");
-    expect(html).toContain("Seedream 5.0 Pro");
+    expect(html).toContain("Seedream 5.5");
     expect(html).toContain("Seedance 2.5");
     expect(html).toContain("data-studio-upscaling-studio");
     expect(html).not.toMatch(/comfyui|higgsfield/i);
@@ -332,5 +337,21 @@ describe("brand workspace taste", () => {
         expect(brandRouteAllowed(slot.defaultThumb, "GET")).toBe(true);
       }
     }
+  });
+
+  it("keeps Explainer step cards and library stat pills on dark surface tokens rather than bare white fills", () => {
+    const explainerCss = readFileSync(
+      join(process.cwd(), "components", "brand-studio", "explainer.module.css"),
+      "utf8",
+    ).replace(/\r\n/g, "\n");
+    expect(explainerCss).toContain("background: var(--ys-surface, #f8f8fa);");
+    expect(explainerCss).not.toContain("\n  background: #f8f8fa;");
+
+    const statPillRule = css.slice(
+      css.indexOf(":where([data-brand-workspace]) .bw-sota-stat-pill {"),
+      css.indexOf("}", css.indexOf(":where([data-brand-workspace]) .bw-sota-stat-pill {")),
+    );
+    expect(statPillRule).toContain("background: var(--ys-panel);");
+    expect(statPillRule).not.toContain("background: #ffffff;");
   });
 });

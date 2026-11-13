@@ -16,6 +16,7 @@ import {
 } from '@/lib/brands/sound/music-studio';
 
 export const MUSIC_PROVIDERS = [
+  'sunra_elevenlabs',
   'local_yue2',
   'yagi_production',
   'suno',
@@ -48,17 +49,45 @@ export function musicKrw(durationSec: number): number {
   return musicCredits(durationSec) * STUDIO_CREDIT_KRW;
 }
 
+/** Customer-facing TWINGS credit estimate for sound-effect generation. */
+export function sfxCredits(durationSec: number): number {
+  const sec = Math.max(0.5, Math.min(22, Number.isFinite(durationSec) && durationSec > 0 ? durationSec : 4));
+  return 4 + Math.ceil(sec / 5) * 2;
+}
+
+/** Internal KRW allowance unit (`1 credit = 10 KRW`) reserved for one SFX generation run. */
+export function sfxKrw(durationSec: number): number {
+  return sfxCredits(durationSec) * STUDIO_CREDIT_KRW;
+}
+
 const RefAudioObjectSchema = z.object({
   assetId: z.string().uuid().optional(),
   url: z.string().trim().min(1).max(1000).optional(),
   label: z.string().trim().max(160).optional(),
 });
 
+export const MusicCompositionSectionSchema = z.object({
+  sectionName: z.string().trim().min(1).max(80),
+  positiveLocalStyles: z.array(z.string().trim().min(1).max(120)).max(12).default([]),
+  negativeLocalStyles: z.array(z.string().trim().min(1).max(120)).max(12).default([]),
+  durationMs: z.number().int().min(1000).max(60_000),
+  lines: z.array(z.string().trim().max(240)).max(24).default([]),
+});
+
+export const MusicCompositionPlanSchema = z.object({
+  positiveGlobalStyles: z.array(z.string().trim().min(1).max(120)).max(16).default([]),
+  negativeGlobalStyles: z.array(z.string().trim().min(1).max(120)).max(16).default([]),
+  sections: z.array(MusicCompositionSectionSchema).min(1).max(8),
+});
+
+export type MusicCompositionPlan = z.infer<typeof MusicCompositionPlanSchema>;
+
 export const MusicGenerateInputSchema = z.object({
   organizationId: z.string().uuid(),
   requestId: z.string().regex(/^[A-Za-z0-9_-]{8,80}$/),
   presetId: z.string().trim().min(1).max(64).optional(),
   prompt: z.string().trim().max(500).default(''),
+  compositionPlan: MusicCompositionPlanSchema.optional(),
   bpm: z.number().int().min(60).max(180).default(122),
   keySignature: z.enum(['Dm', 'Am', 'Fm', 'Cm', 'Em', 'Gm', 'C', 'F']).default('Dm'),
   leadInstrument: z.enum(LEAD_INSTRUMENT_ARCHETYPES).default('mellow Rhodes lead melody'),

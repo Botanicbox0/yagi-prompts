@@ -642,7 +642,7 @@ export function BrandOnboardingWizard({
     BrandCustomMoodboardItem[]
   >(() => clampMoodboardItemsToMax(DEFAULT_CUSTOM_MOODBOARD_ITEMS));
   const [identityPreviewModelId, setIdentityPreviewModelId] =
-    useState<BrandStudioImageModelId>("seedream_5_0_pro");
+    useState<BrandStudioImageModelId>("seedream_5_5");
 
   const compiledIdentityPreview = compileAestheticPromptForModel({
     modelId: identityPreviewModelId,
@@ -1347,7 +1347,7 @@ export function BrandOnboardingWizard({
             style={{
               margin: 0,
               padding: 20,
-              background: "#FFFFFF",
+              background: "var(--ys-surface)",
               borderRadius: 20,
               border: "1px solid var(--ys-line)",
             }}
@@ -1472,8 +1472,8 @@ export function BrandOnboardingWizard({
                         key={trait}
                         className="bw-badge"
                         style={{
-                          background: "#FFFFFF",
-                          border: "1px solid rgba(15, 23, 42, 0.1)",
+                          background: "var(--ys-panel)",
+                          border: "1px solid var(--ys-hairline)",
                         }}
                       >
                         {trait}
@@ -1536,7 +1536,7 @@ export function BrandOnboardingWizard({
                           margin: 0,
                           padding: 16,
                           borderRadius: 18,
-                          background: "#F6F7F9",
+                          background: "var(--ys-panel)",
                           display: "flex",
                           flexDirection: "column",
                           justifyContent: "space-between",
@@ -1550,7 +1550,7 @@ export function BrandOnboardingWizard({
                             style={{
                               fontSize: 34,
                               fontWeight: 700,
-                              color: "#3875C5",
+                              color: "var(--ys-accent-text)",
                               lineHeight: 1.1,
                             }}
                           >
@@ -1572,7 +1572,7 @@ export function BrandOnboardingWizard({
                           margin: 0,
                           padding: 16,
                           borderRadius: 18,
-                          background: "#F6F7F9",
+                          background: "var(--ys-panel)",
                           display: "flex",
                           flexDirection: "column",
                           justifyContent: "space-between",
@@ -1640,7 +1640,7 @@ export function BrandOnboardingWizard({
                           margin: 0,
                           padding: 14,
                           borderRadius: 18,
-                          background: "#F6F7F9",
+                          background: "var(--ys-panel)",
                         }}
                       >
                         <small className="bw-muted">
@@ -1651,7 +1651,7 @@ export function BrandOnboardingWizard({
                             margin: "8px 0 0",
                             fontSize: 14,
                             fontWeight: 600,
-                            color: "#0B0D12",
+                            color: "var(--ys-ink)",
                           }}
                         >
                           {isKo
@@ -1667,7 +1667,7 @@ export function BrandOnboardingWizard({
                           margin: 0,
                           padding: 14,
                           borderRadius: 18,
-                          background: "#F6F7F9",
+                          background: "var(--ys-panel)",
                         }}
                       >
                         <small className="bw-muted">
@@ -1688,7 +1688,7 @@ export function BrandOnboardingWizard({
                             <span
                               key={val}
                               className="bw-badge"
-                              style={{ background: "#FFFFFF" }}
+                              style={{ background: "var(--ys-surface)" }}
                             >
                               {val}
                             </span>
@@ -1712,7 +1712,7 @@ export function BrandOnboardingWizard({
                           margin: 0,
                           padding: 14,
                           borderRadius: 18,
-                          background: "#F6F7F9",
+                          background: "var(--ys-panel)",
                         }}
                       >
                         <small className="bw-muted">
@@ -1736,8 +1736,8 @@ export function BrandOnboardingWizard({
                               key={tag}
                               className="bw-badge"
                               style={{
-                                background: "rgba(56, 117, 197, 0.1)",
-                                color: "#3063A7",
+                                background: "var(--ys-accent-soft)",
+                                color: "var(--ys-accent-text)",
                               }}
                             >
                               {tag}
@@ -1753,7 +1753,7 @@ export function BrandOnboardingWizard({
                           margin: 0,
                           padding: 14,
                           borderRadius: 18,
-                          background: "#F6F7F9",
+                          background: "var(--ys-panel)",
                         }}
                       >
                         <small className="bw-muted">
@@ -1776,7 +1776,7 @@ export function BrandOnboardingWizard({
                             <span
                               key={tag}
                               className="bw-badge"
-                              style={{ background: "#FFFFFF" }}
+                              style={{ background: "var(--ys-surface)" }}
                             >
                               {tag}
                             </span>
@@ -1793,7 +1793,7 @@ export function BrandOnboardingWizard({
                         margin: 0,
                         padding: 14,
                         borderRadius: 18,
-                        background: "#F6F7F9",
+                        background: "var(--ys-panel)",
                       }}
                     >
                       <small className="bw-muted">
@@ -1806,7 +1806,7 @@ export function BrandOnboardingWizard({
                         style={{
                           margin: "6px 0 0",
                           fontSize: 13,
-                          color: "#0B0D12",
+                          color: "var(--ys-ink)",
                         }}
                       >
                         {isKo
@@ -1831,7 +1831,7 @@ export function BrandOnboardingWizard({
                           margin: 0,
                           padding: 14,
                           borderRadius: 18,
-                          background: "#F6F7F9",
+                          background: "var(--ys-panel)",
                         }}
                       >
                         <small className="bw-muted">
@@ -1858,7 +1858,7 @@ export function BrandOnboardingWizard({
                           margin: 0,
                           padding: 14,
                           borderRadius: 18,
-                          background: "#F6F7F9",
+                          background: "var(--ys-panel)",
                         }}
                       >
                         <small className="bw-muted">
@@ -1890,8 +1890,8 @@ export function BrandOnboardingWizard({
                   margin: 0,
                   padding: 18,
                   borderRadius: 20,
-                  background: "#F6F7F9",
-                  border: "1px solid rgba(56, 117, 197, 0.24)",
+                  background: "var(--ys-panel)",
+                  border: "1px solid var(--ys-hairline)",
                 }}
               >
                 <p className="bw-kicker">
@@ -1965,7 +1965,7 @@ export function BrandOnboardingWizard({
                   }}
                 >
                   <div>
-                    <small style={{ fontWeight: 700, color: "#3063A7" }}>
+                    <small style={{ fontWeight: 700, color: "var(--ys-accent-text)" }}>
                       {isKo
                         ? `${preview.bentoProfile.completenessPct}% 프로필 준비 완료`
                         : `${preview.bentoProfile.completenessPct}% complete`}
@@ -1975,7 +1975,7 @@ export function BrandOnboardingWizard({
                         width: 110,
                         height: 6,
                         borderRadius: 999,
-                        background: "rgba(56, 117, 197, 0.18)",
+                        background: "var(--ys-accent-soft)",
                         marginTop: 4,
                         overflow: "hidden",
                       }}
@@ -1984,7 +1984,7 @@ export function BrandOnboardingWizard({
                         style={{
                           width: `${preview.bentoProfile.completenessPct}%`,
                           height: "100%",
-                          background: "#3875C5",
+                          background: "var(--ys-accent)",
                         }}
                       />
                     </div>
@@ -2010,7 +2010,7 @@ export function BrandOnboardingWizard({
             style={{
               margin: 0,
               padding: 18,
-              background: "#FFFFFF",
+              background: "var(--ys-surface)",
               borderRadius: 20,
               border: "1px solid var(--ys-line)",
             }}
@@ -2139,7 +2139,7 @@ export function BrandOnboardingWizard({
               style={{
                 margin: 0,
                 padding: 18,
-                background: "#FFFFFF",
+                background: "var(--ys-surface)",
                 borderRadius: 20,
                 border: "1px solid var(--ys-line)",
               }}
@@ -2231,10 +2231,10 @@ export function BrandOnboardingWizard({
                           ? "1.5px solid var(--ys-ink)"
                           : "1px solid var(--ys-line)",
                         background: isCurrent
-                          ? "#FFFFFF"
+                          ? "var(--ys-panel)"
                           : isDone
-                            ? "var(--ys-paper-2)"
-                            : "#FFFFFF",
+                            ? "var(--ys-raised)"
+                            : "var(--ys-surface)",
                         color: "var(--ys-ink)",
                         cursor: "pointer",
                       }}
@@ -2267,7 +2267,7 @@ export function BrandOnboardingWizard({
                 style={{
                   margin: 0,
                   padding: 16,
-                  background: "#FFFFFF",
+                  background: "var(--ys-surface)",
                   borderRadius: 20,
                 }}
               >
@@ -2348,7 +2348,7 @@ export function BrandOnboardingWizard({
                 style={{
                   margin: 0,
                   padding: 16,
-                  background: "#FFFFFF",
+                  background: "var(--ys-surface)",
                   borderRadius: 20,
                 }}
               >
@@ -2484,7 +2484,7 @@ export function BrandOnboardingWizard({
                 style={{
                   margin: 0,
                   padding: 16,
-                  background: "#FFFFFF",
+                  background: "var(--ys-surface)",
                   borderRadius: 20,
                 }}
               >
@@ -2521,7 +2521,7 @@ export function BrandOnboardingWizard({
                           margin: 0,
                           padding: 14,
                           borderRadius: 16,
-                          background: "#F6F7F9",
+                          background: "var(--ys-panel)",
                         }}
                       >
                         <div className="bw-row">

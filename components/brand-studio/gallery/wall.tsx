@@ -13,7 +13,7 @@
 import { Fragment, useEffect, useId, useRef, useState, type ReactNode } from "react";
 import type { StudioJobView, StudioOutputView } from "@/lib/brand-studio/contracts";
 import { creditsOf } from "@/lib/brand-studio/credits";
-import { studioModel, type StudioMedium } from "@/lib/brand-studio/models";
+import { studioModelOrLegacy, type StudioMedium } from "@/lib/brand-studio/models";
 import { canCancel, outputRatio, ratioNumber, slotRatio } from "../board";
 import { credits, errorLine, fill, type StudioCopy, type StudioLocale } from "../copy";
 import { StudioIcon } from "../icons";
@@ -263,7 +263,7 @@ function ResultTile(props: WallProps & { entry: Extract<Entry, { type: "result" 
   const liked = library.liked.has(libraryKey(ref));
   const image = output.kind === "image";
   const sized = Boolean(output.width && output.height);
-  const model = studioModel(job.model);
+  const model = studioModelOrLegacy(job.model);
   const usage = job.estimateKrw > 0 && job.outputs.length > 0 ? Math.ceil(creditsOf(job.estimateKrw) / Math.max(1, job.outputs.length)) : 0;
   const open = () => onAction("open", entry.item);
 

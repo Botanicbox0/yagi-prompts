@@ -920,6 +920,10 @@ describe('6. Zero Prohibited Platform References Across Post-Production Modules'
   const files = [
     'lib/brand-studio/compose/scene-detect.ts',
     'lib/brand-studio/compose/color-grade.ts',
+    'lib/brand-studio/continuity/contracts.ts',
+    'lib/brand-studio/continuity/frame-picker.ts',
+    'lib/brand-studio/continuity/planner.ts',
+    'lib/brand-studio/continuity/index.ts',
     'lib/brand-studio/upscale/contracts.ts',
     'lib/brand-studio/upscale/provider.ts',
     'lib/brand-studio/upscale/service.ts',
@@ -928,6 +932,7 @@ describe('6. Zero Prohibited Platform References Across Post-Production Modules'
     'lib/brand-studio/music/provider.ts',
     'lib/brand-studio/music/synth.ts',
     'lib/brand-studio/music/service.ts',
+    'lib/brand-studio/music/sfx.ts',
     'lib/brand-studio/music/index.ts',
     'app/api/brand-studio/post-production/route.ts',
   ];
@@ -943,6 +948,8 @@ describe('6. Zero Prohibited Platform References Across Post-Production Modules'
     for (const clientRel of [
       'lib/brand-studio/compose/scene-detect.ts',
       'lib/brand-studio/compose/color-grade.ts',
+      'lib/brand-studio/continuity/contracts.ts',
+      'lib/brand-studio/continuity/frame-picker.ts',
     ]) {
       const src = readFileSync(resolve(process.cwd(), clientRel), 'utf8');
       expect(src, clientRel).not.toMatch(

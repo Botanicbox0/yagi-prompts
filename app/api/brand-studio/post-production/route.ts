@@ -11,10 +11,12 @@ import { BRAND_MUSIC_STUDIO_PRESETS } from '@/lib/brands/sound/music-studio';
 import { requireCreate, StudioDenied, studioSeat } from '@/lib/brand-studio/access';
 import {
   computeReinhardTransferMatrix,
+  computeShotMatchMatrices,
   cssFilterForColorGrade,
   DEFAULT_COLOR_GRADE_SPEC,
   extractColorProfileFromRgba,
   findGradePreset,
+  generate33CubeLutFromSpec,
   GRADE_PRESETS,
   presetToTargetProfile,
   type ColorGradeProfile,
@@ -24,8 +26,14 @@ import {
   detectSceneCutsFromFrameSamples,
   parseFfmpegScdetOutput,
 } from '@/lib/brand-studio/compose/scene-detect';
+import { ContinuityPlanInputSchema, planSceneContinuation } from '@/lib/brand-studio/continuity';
 import { STUDIO_HEADERS, studioJson, studioStatus } from '@/lib/brand-studio/http';
-import { generateReferenceMusic, getMusicJobStatus } from '@/lib/brand-studio/music';
+import {
+  generateReferenceMusic,
+  generateSoundEffect,
+  getMusicJobStatus,
+  getSfxJobStatus,
+} from '@/lib/brand-studio/music';
 import { readyAsset, readyOutput } from '@/lib/brand-studio/repo';
 import { studioLog, studioRuntimeDeps } from '@/lib/brand-studio/runtime';
 import {
@@ -58,18 +66,22 @@ import { resolveRequestUrl, sameOriginMutation } from '@/lib/routing/surfaces';
 export const dynamic = 'force-dynamic';
 
 export const POST_PRODUCTION_OPERATIONS = [
+  'continuity.plan',
   'cuts.detect',
   'grade.analyze',
   'grade.master',
+  'grade.shot_match',
   'upscale.submit',
   'upscale.status',
   'music.generate',
   'music.status',
+  'sfx.generate',
+  'sfx.status',
 ] as const;
 export type PostProductionOperation = (typeof POST_PRODUCTION_OPERATIONS)[number];
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-const BODY_MAX = 262_144;
+const BODY_MAX = 1_048_576;
 
 const CutsDetectInputSchema = z.object({
   organizationId: z.string().uuid(),
@@ -142,6 +154,23 @@ const GradeMasterInputSchema = z.object({
   targetClipId: z.string().trim().max(80).nullable().optional(),
   region: ColorRegionSchema.nullable().optional(),
   referenceProfile: ColorProfileSchema.nullable().optional(),
+});
+
+const GradeShotMatchInputSchema = z.object({
+  organizationId: z.string().uuid(),
+  anchorIndex: z.number().int().min(0).max(23).default(0),
+  intensity: z.number().min(0).max(1).default(0.85),
+  skinProtect: z.number().min(0).max(1).default(0.7),
+  presetId: z.string().trim().max(64).nullable().optional(),
+  clips: z
+    .array(
+      z.object({
+        clipId: z.string().trim().min(1).max(80),
+        profile: ColorProfileSchema,
+      }),
+    )
+    .min(2)
+    .max(24),
 });
 
 export async function GET(request: NextRequest): Promise<NextResponse> {
@@ -225,7 +254,8 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
   try {
     const deps = await studioRuntimeDeps(sql);
     const operation = typeof body.operation === 'string' ? body.operation : '';
-    const isStatusRead = operation === 'upscale.status' || operation === 'music.status';
+    const isStatusRead =
+      operation === 'upscale.status' || operation === 'music.status' || operation === 'sfx.status';
 
     // Mandatory first-line seat + Morphic hardline + self_studio + guest exclusion BEFORE validating operation details
     await deps.sql.transaction(async (tx) => {
@@ -238,6 +268,15 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
 
     if (!(POST_PRODUCTION_OPERATIONS as readonly string[]).includes(operation)) {
       return studioJson({ ok: false, code: 'invalid' }, 400);
+    }
+
+    if (operation === 'continuity.plan') {
+      const parsed = ContinuityPlanInputSchema.safeParse(body.input);
+      if (!parsed.success || parsed.data.organizationId !== organizationId) {
+        return studioJson({ ok: false, code: 'invalid' }, 400);
+      }
+      const plan = await planSceneContinuation(deps, parsed.data);
+      return studioJson({ ok: true, plan }, 200);
     }
 
     if (operation === 'cuts.detect') {
@@ -397,6 +436,40 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
       );
     }
 
+    if (operation === 'grade.shot_match') {
+      const parsed = GradeShotMatchInputSchema.safeParse(body.input);
+      if (!parsed.success || parsed.data.organizationId !== organizationId) {
+        return studioJson({ ok: false, code: 'invalid' }, 400);
+      }
+      const v = parsed.data;
+      await deps.sql.transaction(async (tx) => {
+        try {
+          await assertBrandFeature(tx, v.organizationId, 'color_grading');
+        } catch (err) {
+          if (err instanceof BrandFeatureDenied) throw new StudioDenied('feature_unavailable');
+          throw err;
+        }
+      });
+
+      const matches = computeShotMatchMatrices(v.clips, v.anchorIndex, {
+        intensity: v.intensity,
+        skinProtect: v.skinProtect,
+      });
+      const anchorClip = v.clips[Math.min(v.anchorIndex, v.clips.length - 1)]!;
+      const preset = findGradePreset(v.presetId);
+      const spec: ColorGradeSpec = {
+        ...DEFAULT_COLOR_GRADE_SPEC,
+        enabled: true,
+        scope: 'full_timeline',
+        presetId: preset?.id ?? null,
+        referenceProfile: anchorClip.profile,
+        intensity: v.intensity,
+        skinProtect: v.skinProtect,
+      };
+      const cubeLut = generate33CubeLutFromSpec(spec, preset?.titleEn ?? 'Shot Match Look');
+      return studioJson({ ok: true, matches, spec, cubeLut, creditsUsed: 0 }, 200);
+    }
+
     if (operation === 'upscale.submit') {
       const result = await submitUpscaleJob(deps, viewer, body.input);
       if (!result.ok) return studioJson(result, studioStatus(result.code));
@@ -415,7 +488,19 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
       return studioJson(result, 200);
     }
 
-    const result = await getMusicJobStatus(deps, viewer, body.input);
+    if (operation === 'music.status') {
+      const result = await getMusicJobStatus(deps, viewer, body.input);
+      if (!result.ok) return studioJson(result, studioStatus(result.code));
+      return studioJson(result, 200);
+    }
+
+    if (operation === 'sfx.generate') {
+      const result = await generateSoundEffect(deps, viewer, body.input);
+      if (!result.ok) return studioJson(result, studioStatus(result.code));
+      return studioJson(result, 200);
+    }
+
+    const result = await getSfxJobStatus(deps, viewer, body.input);
     if (!result.ok) return studioJson(result, studioStatus(result.code));
     return studioJson(result, 200);
   } catch (error) {

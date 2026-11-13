@@ -121,11 +121,11 @@ describe('Step 0: Photo Inspection & Cleanup Model Routing (Gemini 4 Hydrogen)',
     expect(verdict.recommendedCleanup).toEqual({
       mode: 'inpaint_occlusion',
       engine: 'nano-banana-2.1',
-      fallbackEngine: 'seedream-5.0-pro',
+      fallbackEngine: 'seedream-5.5',
       requiresDualCandidateSelection: true,
-      candidateEngines: ['seedream-5.0-pro', 'nano-banana-2.1'],
+      candidateEngines: ['seedream-5.5', 'nano-banana-2.1'],
       candidatePromptsEn: {
-        'seedream-5.0-pro': expect.stringContaining('Reference Image 1 provides the young Korean female subject'),
+        'seedream-5.5': expect.stringContaining('Reference Image 1 provides the young Korean female subject'),
         'nano-banana-2.1': expect.stringContaining('SURGICAL IN-PLACE IDENTITY LOCK')
       },
       editPromptEn: expect.stringContaining('Keep the person in Image 1 100% identical')
@@ -133,7 +133,7 @@ describe('Step 0: Photo Inspection & Cleanup Model Routing (Gemini 4 Hydrogen)',
     expect(verdict.userMessageKo).toContain('TWINGS가 자연스럽게 정리해서 진행할까요?');
   });
 
-  it('routes over-retouched beauty-app contour/lip photos (over_retouched_contour) to Dual-Candidate (Seedream 5.0 Pro + Nano Banana 2.1) anatomical de-filter normalization', async () => {
+  it('routes over-retouched beauty-app contour/lip photos (over_retouched_contour) to Dual-Candidate (Seedream 5.5 + Nano Banana 2.1) anatomical de-filter normalization', async () => {
     const fetchMock = vi.fn(async (_url: RequestInfo | URL) =>
       geminiJsonResponse({
         status: 'needs_cleanup',
@@ -160,11 +160,11 @@ describe('Step 0: Photo Inspection & Cleanup Model Routing (Gemini 4 Hydrogen)',
     expect(verdict.recommendedCleanup).toEqual({
       mode: 'normalize_retouch',
       engine: 'nano-banana-2.1',
-      fallbackEngine: 'seedream-5.0-pro',
+      fallbackEngine: 'seedream-5.5',
       requiresDualCandidateSelection: true,
       candidateEngines: DUAL_IDENTITY_CANDIDATE_ENGINES,
       candidatePromptsEn: {
-        'seedream-5.0-pro': expect.stringContaining('very low specular-to-diffuse ratio'),
+        'seedream-5.5': expect.stringContaining('very low specular-to-diffuse ratio'),
         'nano-banana-2.1': expect.stringContaining('IDENTITY LOCK:')
       },
       editPromptEn: expect.stringContaining('normalizing any 2D beauty-app liquify distortions')
@@ -282,12 +282,12 @@ describe('Step 0: Photo Inspection & Cleanup Model Routing (Gemini 4 Hydrogen)',
     expect(plan.strategy).toBe('surgical_inplace_edit');
     expect(plan.styleAnchorIndex).toBe(1);
     expect(plan.structureAnchorIndex).toBe(7);
-    expect(plan.engine).toBe('seedream-5.0-pro');
+    expect(plan.engine).toBe('seedream-5.5');
     expect(plan.requiresMasterSynthesis).toBe(true);
     // Must be sealed so accidental JSON serialization never leaks the optical master prompt
     expect(JSON.stringify(plan.opticalMasterPromptEn)).toBe('"[REDACTED_SERVER_ONLY_PROMPT]"');
     expect(JSON.stringify(plan.fallbackMasterPromptEn)).toBe('"[REDACTED_SERVER_ONLY_PROMPT]"');
-    expect(JSON.stringify(plan.dualCandidatePromptsEn['seedream-5.0-pro'])).toBe('"[REDACTED_SERVER_ONLY_PROMPT]"');
+    expect(JSON.stringify(plan.dualCandidatePromptsEn['seedream-5.5'])).toBe('"[REDACTED_SERVER_ONLY_PROMPT]"');
     expect(JSON.stringify(plan.dualCandidatePromptsEn['nano-banana-2.1'])).toBe('"[REDACTED_SERVER_ONLY_PROMPT]"');
 
     const unwrappedSeedream = unwrapServerOnlyPrompt(plan.opticalMasterPromptEn);

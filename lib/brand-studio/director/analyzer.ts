@@ -2,8 +2,9 @@
  * Multimodal input analyzer for the Silent `Video-Creator` Director (docs/STUDIO-PRO-SUITE-V4.md §1.3).
  *
  * Inspects up to 9 attached `@imageN` thumbnails plus the cached `@video1` `FilmSheet` (`shots`, `look`,
- * `audio`, `seconds`). Supports `gemini-3.8-flash` (default) and `argon` (`BRAND_STUDIO_DIRECTOR_PROVIDER`),
- * gracefully falling back to `gemini-3.8-flash` when the Argon endpoint is not configured yet.
+ * `audio`, `seconds`). Supports `gemini-4-hydrogen` (default, mapping legacy `gemini-3.8-flash`) and
+ * `argon` (`BRAND_STUDIO_DIRECTOR_PROVIDER`), gracefully falling back to `gemini-4-hydrogen` when
+ * the Argon endpoint is not configured yet.
  */
 import { z } from 'zod';
 import { callGeminiJson, inlinePart, studioGeminiConfig, type GeminiPart } from '@/lib/brand-studio/enhancer/gemini';
@@ -75,7 +76,9 @@ export const MEDIA_ANALYSIS_RESPONSE_SCHEMA = {
 
 export function resolveDirectorProvider(env: Record<string, string | undefined>): DirectorProviderId {
   const requested = env.BRAND_STUDIO_DIRECTOR_PROVIDER?.trim().toLowerCase();
-  return requested === 'argon' ? 'argon' : 'gemini-3.8-flash';
+  if (requested === 'argon') return 'argon';
+  // Map legacy 'gemini-3.8-flash' and default/empty values onto Gemini 4 Hydrogen.
+  return 'gemini-4-hydrogen';
 }
 
 function defaultHexPalette(paletteHint?: string): string[] {
@@ -147,11 +150,11 @@ function safeClean(text: string, fallback: string): string {
 }
 
 /**
- * Multimodal analyzer backed by `Gemini 3.8 Flash` (`studioGeminiConfig`).
+ * Multimodal analyzer backed by `gemini-4-hydrogen` (`studioGeminiConfig`).
  * Inspects up to 9 attached `@imageN` thumbnails + cached `@video1` `FilmSheet`.
  */
 export class GeminiFlashMediaAnalyzer implements MediaAnalyzer {
-  readonly provider: DirectorProviderId = 'gemini-3.8-flash';
+  readonly provider: DirectorProviderId = 'gemini-4-hydrogen';
 
   async analyze(input: MediaAnalyzeInput, deps: MediaAnalyzeDeps): Promise<MediaAnalysisDigest> {
     const base = deterministicDigest(this.provider, input, true);

@@ -242,7 +242,8 @@ describe("2. Silent Multimodal Video-Creator Director (MediaAnalyzer + 3-Mode Pr
   it("raises THUMBS_MAX to 9 and gracefully falls back from Argon stub to GeminiFlashMediaAnalyzer", async () => {
     expect(THUMBS_MAX).toBe(9);
     expect(DIRECTOR_THUMBS_MAX).toBe(9);
-    expect(resolveDirectorProvider({})).toBe("gemini-3.8-flash");
+    expect(resolveDirectorProvider({})).toBe("gemini-4-hydrogen");
+    expect(resolveDirectorProvider({ BRAND_STUDIO_DIRECTOR_PROVIDER: "gemini-3.8-flash" })).toBe("gemini-4-hydrogen");
     expect(resolveDirectorProvider({ BRAND_STUDIO_DIRECTOR_PROVIDER: "argon" })).toBe("argon");
 
     const thumb = { bytes: new Uint8Array([1, 2, 3]), mime: "image/jpeg" };
@@ -272,7 +273,7 @@ describe("2. Silent Multimodal Video-Creator Director (MediaAnalyzer + 3-Mode Pr
     );
 
     expect(reasons).toContain("argon_unconfigured");
-    expect(digest.provider).toBe("gemini-3.8-flash");
+    expect(digest.provider).toBe("gemini-4-hydrogen");
     expect(digest.paletteHex).toEqual(["#14181F", "#EAE4DC", "#0033FF"]);
     const sentParts = sentBody(analyzerFetch).contents[0]!.parts;
     expect(sentParts.filter((p) => "inlineData" in p)).toHaveLength(9);
@@ -567,9 +568,9 @@ describe("3. Zero-Drift <PromptHighlight>, Bidirectional Tray Ring, Collapsed Do
     const css = readFileSync(path.resolve(process.cwd(), "app/(brand)/studio-v2.css"), "utf8");
     expect(css).toContain(".bs-prompt, .bs-prompt-backdrop");
     expect(css).toContain('data-mention-bound="true"');
-    expect(css).toContain("color-mix(in srgb, var(--ys-cta-bg, #0033FF) 11%, transparent)");
+    expect(css).toContain("color-mix(in srgb, var(--ys-accent, #ff58ae) 16%, transparent)");
     expect(css).toContain("border-bottom: 1.5px dotted #D97706");
-    expect(css).toContain("color-mix(in srgb, var(--ys-cta-bg, #0033FF) 55%, transparent)");
+    expect(css).toContain("color-mix(in srgb, var(--ys-accent, #ff58ae) 55%, transparent)");
     expect(css).not.toMatch(/#ebf5ff/i);
   });
 });

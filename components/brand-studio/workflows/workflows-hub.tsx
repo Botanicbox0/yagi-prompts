@@ -1133,7 +1133,7 @@ export function WorkflowsHub({
                     onChange={(e) => setRecentTitle(e.target.value)}
                     placeholder={copy.recentModal.titlePlaceholder}
                     className={styles.builderInput}
-                    style={{ background: '#F4F4F5' }}
+                    style={{ background: 'var(--ys-panel, #18181b)' }}
                     maxLength={120}
                   />
                 </div>
@@ -1146,7 +1146,7 @@ export function WorkflowsHub({
                     onChange={(e) => setRecentSummary(e.target.value)}
                     placeholder={copy.recentModal.summaryPlaceholder}
                     className={styles.builderInput}
-                    style={{ background: '#F4F4F5' }}
+                    style={{ background: 'var(--ys-panel, #18181b)' }}
                     maxLength={400}
                   />
                 </div>
@@ -1207,7 +1207,7 @@ export function WorkflowsHub({
                   onChange={(e) => setCustomTitle(e.target.value)}
                   placeholder={copy.customModal.namePlaceholder}
                   className={styles.textInput}
-                  style={{ background: '#F4F4F5' }}
+                  style={{ background: 'var(--ys-panel, #18181b)' }}
                   maxLength={120}
                 />
               </div>
@@ -1220,7 +1220,7 @@ export function WorkflowsHub({
                   onChange={(e) => setCustomSummary(e.target.value)}
                   placeholder={copy.customModal.summaryPlaceholder}
                   className={styles.textInput}
-                  style={{ background: '#F4F4F5' }}
+                  style={{ background: 'var(--ys-panel, #18181b)' }}
                   maxLength={400}
                 />
               </div>
@@ -1232,7 +1232,7 @@ export function WorkflowsHub({
                     value={customCategory}
                     onChange={(e) => setCustomCategory(e.target.value as WorkflowCategory)}
                     className={styles.selectInput}
-                    style={{ background: '#F4F4F5' }}
+                    style={{ background: 'var(--ys-panel, #18181b)' }}
                   >
                     {WORKFLOW_CATEGORIES.map((cat) => (
                       <option key={cat} value={cat}>
@@ -1252,7 +1252,7 @@ export function WorkflowsHub({
                       setCustomAspect(next === 'video' ? '9:16' : '4:5');
                     }}
                     className={styles.selectInput}
-                    style={{ background: '#F4F4F5' }}
+                    style={{ background: 'var(--ys-panel, #18181b)' }}
                   >
                     <option value="image">{copy.customModal.mediumImage}</option>
                     <option value="video">{copy.customModal.mediumVideo}</option>
@@ -1265,7 +1265,7 @@ export function WorkflowsHub({
                     value={customAspect}
                     onChange={(e) => setCustomAspect(e.target.value)}
                     className={styles.selectInput}
-                    style={{ background: '#F4F4F5' }}
+                    style={{ background: 'var(--ys-panel, #18181b)' }}
                   >
                     {(customMedium === 'video'
                       ? ['9:16', '16:9', '1:1', '4:3', '3:4']
@@ -1287,7 +1287,7 @@ export function WorkflowsHub({
                   onChange={(e) => setCustomGuide(e.target.value)}
                   placeholder={copy.customModal.guidePlaceholder}
                   className={styles.textInput}
-                  style={{ background: '#F4F4F5' }}
+                  style={{ background: 'var(--ys-panel, #18181b)' }}
                   maxLength={800}
                 />
               </div>
@@ -1299,7 +1299,7 @@ export function WorkflowsHub({
                   value={customStepPrompt}
                   onChange={(e) => setCustomStepPrompt(e.target.value)}
                   className={styles.textareaInput}
-                  style={{ background: '#F4F4F5' }}
+                  style={{ background: 'var(--ys-panel, #18181b)' }}
                   maxLength={3200}
                 />
               </div>
@@ -1353,7 +1353,7 @@ export function WorkflowsHub({
                   onChange={(e) => setGuideTitle(e.target.value)}
                   placeholder={copy.guides.titlePlaceholder}
                   className={styles.textInput}
-                  style={{ background: '#F4F4F5' }}
+                  style={{ background: 'var(--ys-panel, #18181b)' }}
                   maxLength={120}
                 />
               </div>
@@ -1367,7 +1367,7 @@ export function WorkflowsHub({
                     onChange={(e) => setGuideTags(e.target.value)}
                     placeholder={copy.guides.tagsPlaceholder}
                     className={styles.textInput}
-                    style={{ background: '#F4F4F5' }}
+                    style={{ background: 'var(--ys-panel, #18181b)' }}
                   />
                 </div>
                 <div className={styles.field} style={{ flex: 1 }}>
@@ -1376,7 +1376,7 @@ export function WorkflowsHub({
                     value={guideStatus}
                     onChange={(e) => setGuideStatus(e.target.value === 'draft' ? 'draft' : 'published')}
                     className={styles.selectInput}
-                    style={{ background: '#F4F4F5' }}
+                    style={{ background: 'var(--ys-panel, #18181b)' }}
                   >
                     <option value="published">{copy.guides.publishedBadge}</option>
                     <option value="draft">{copy.guides.draftBadge}</option>
@@ -1391,12 +1391,12 @@ export function WorkflowsHub({
                   onChange={(e) => setGuideBody(e.target.value)}
                   placeholder={copy.guides.bodyPlaceholder}
                   className={styles.textareaInput}
-                  style={{ background: '#F4F4F5', minHeight: 140 }}
+                  style={{ background: 'var(--ys-panel, #18181b)', minHeight: 140 }}
                   maxLength={12000}
                 />
               </div>
 
-              <label className={styles.packOption} style={{ background: '#F4F4F5' }}>
+              <label className={styles.packOption} style={{ background: 'var(--ys-panel, #18181b)' }}>
                 <input
                   type="checkbox"
                   checked={guideInject}

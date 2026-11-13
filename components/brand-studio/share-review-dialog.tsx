@@ -208,10 +208,11 @@ const DIALOG_STYLES = `
   overflow-y: auto;
   padding: 24px;
   border-radius: 20px;
-  background: #ffffff;
-  color: #09090b;
-  box-shadow: 0 24px 60px rgba(9, 9, 11, 0.16);
-  font-family: 'Geist', 'Pretendard Variable', Pretendard, -apple-system, BlinkMacSystemFont, sans-serif;
+  background: var(--ys-surface, #111113);
+  color: var(--ys-ink, #ededed);
+  border: 1px solid var(--ys-line-strong, rgba(255, 255, 255, 0.18));
+  box-shadow: var(--ys-float, inset 0 1px 0 0 rgba(255, 255, 255, 0.06));
+  font-family: var(--bw-font, 'Pretendard Variable', Pretendard, 'Geist', -apple-system, BlinkMacSystemFont, sans-serif);
   box-sizing: border-box;
   display: grid;
   gap: 16px;
@@ -228,7 +229,7 @@ const DIALOG_STYLES = `
   font-weight: 650;
   letter-spacing: -0.035em;
   line-height: 1.25;
-  color: #09090b;
+  color: var(--ys-ink, #ededed);
 }
 .srd-close {
   display: inline-grid;
@@ -237,19 +238,20 @@ const DIALOG_STYLES = `
   height: 34px;
   border: 0;
   border-radius: 999px;
-  background: #f4f4f5;
-  color: #09090b;
+  background: var(--ys-raised, #18181b);
+  color: var(--ys-ink, #ededed);
   cursor: pointer;
 }
 .srd-close:hover {
-  background: #e4e4e7;
+  background: var(--ys-hover, #27272a);
 }
 .srd-card {
   display: grid;
   gap: 12px;
   padding: 16px;
   border-radius: 16px;
-  background: #f4f4f5;
+  background: var(--ys-panel, #18181b);
+  border: 1px solid var(--ys-hairline, rgba(255, 255, 255, 0.08));
 }
 .srd-card-head {
   display: flex;
@@ -263,13 +265,13 @@ const DIALOG_STYLES = `
   font-size: 14.5px;
   font-weight: 650;
   letter-spacing: -0.02em;
-  color: #09090b;
+  color: var(--ys-ink, #ededed);
 }
 .srd-sub {
   margin: 0;
   font-size: 13px;
   line-height: 1.5;
-  color: #52525b;
+  color: var(--ys-ink-secondary, rgba(255, 255, 255, 0.64));
 }
 .srd-badge {
   display: inline-flex;
@@ -277,9 +279,9 @@ const DIALOG_STYLES = `
   height: 24px;
   padding: 0 10px;
   border-radius: 999px;
-  background: #ffffff;
-  color: #09090b;
-  font-family: 'Geist Mono', ui-monospace, SFMono-Regular, monospace;
+  background: var(--ys-surface, #111113);
+  color: var(--ys-ink, #ededed);
+  font-family: var(--ys-mono, 'Geist Mono', ui-monospace, SFMono-Regular, monospace);
   font-size: 11.5px;
   font-weight: 600;
   font-variant-numeric: tabular-nums;
@@ -292,17 +294,17 @@ const DIALOG_STYLES = `
   font-size: 12px;
   font-weight: 600;
   letter-spacing: -0.01em;
-  color: #52525b;
+  color: var(--ys-ink-secondary, rgba(255, 255, 255, 0.64));
 }
 .srd-input,
 .srd-select,
 .srd-textarea {
   width: 100%;
   box-sizing: border-box;
-  border: 0;
+  border: 1px solid var(--ys-hairline, rgba(255, 255, 255, 0.08));
   border-radius: 12px;
-  background: #ffffff;
-  color: #09090b;
+  background: var(--ys-input-bg, #111113);
+  color: var(--ys-ink, #ededed);
   font: inherit;
   font-size: 13.5px;
   padding: 10px 12px;
@@ -314,7 +316,7 @@ const DIALOG_STYLES = `
 }
 .srd-input::placeholder,
 .srd-textarea::placeholder {
-  color: #71717a;
+  color: var(--ys-placeholder, rgba(255, 255, 255, 0.42));
 }
 .srd-toggles {
   display: flex;
@@ -328,10 +330,10 @@ const DIALOG_STYLES = `
   gap: 6px;
   min-height: 34px;
   padding: 0 13px;
-  border: 0;
+  border: 1px solid var(--ys-hairline, rgba(255, 255, 255, 0.08));
   border-radius: 999px;
-  background: #ffffff;
-  color: #52525b;
+  background: var(--ys-surface, #111113);
+  color: var(--ys-ink-secondary, rgba(255, 255, 255, 0.64));
   font: inherit;
   font-size: 12.5px;
   font-weight: 600;
@@ -339,12 +341,12 @@ const DIALOG_STYLES = `
   cursor: pointer;
 }
 .srd-pill:hover:not(:disabled) {
-  background: #e4e4e7;
-  color: #09090b;
+  background: var(--ys-hover, #27272a);
+  color: var(--ys-ink, #ededed);
 }
 .srd-pill[aria-pressed="true"] {
-  background: #09090b;
-  color: #ffffff;
+  background: var(--ys-active-bg, #ededed);
+  color: var(--ys-active-fg, #09090b);
 }
 .srd-row {
   display: flex;
@@ -358,7 +360,7 @@ const DIALOG_STYLES = `
   gap: 4px;
   padding: 3px;
   border-radius: 999px;
-  background: #ffffff;
+  background: var(--ys-surface, #111113);
 }
 .srd-expiry-btn {
   min-height: 28px;
@@ -366,16 +368,16 @@ const DIALOG_STYLES = `
   border: 0;
   border-radius: 999px;
   background: transparent;
-  color: #52525b;
-  font-family: 'Geist Mono', ui-monospace, SFMono-Regular, monospace;
+  color: var(--ys-ink-secondary, rgba(255, 255, 255, 0.64));
+  font-family: var(--ys-mono, 'Geist Mono', ui-monospace, SFMono-Regular, monospace);
   font-size: 12px;
   font-weight: 600;
   font-variant-numeric: tabular-nums;
   cursor: pointer;
 }
 .srd-expiry-btn[aria-pressed="true"] {
-  background: #09090b;
-  color: #ffffff;
+  background: var(--ys-active-bg, #ededed);
+  color: var(--ys-active-fg, #09090b);
 }
 .srd-primary {
   display: inline-flex;
@@ -385,9 +387,9 @@ const DIALOG_STYLES = `
   padding: 0 18px;
   border: 0;
   border-radius: 999px;
-  background: #0033ff;
-  color: #ffffff;
-  box-shadow: 0 4px 14px rgba(0, 51, 255, 0.28);
+  background: var(--ys-accent, #ff58ae);
+  color: var(--ys-on-accent, #09090b);
+  box-shadow: var(--ys-cta-shadow, none);
   font: inherit;
   font-size: 13.5px;
   font-weight: 600;
@@ -395,7 +397,7 @@ const DIALOG_STYLES = `
   cursor: pointer;
 }
 .srd-primary:hover:not(:disabled) {
-  background: #0026cc;
+  background: var(--ys-accent-hover, #ff389f);
 }
 .srd-secondary {
   display: inline-flex;
@@ -405,8 +407,8 @@ const DIALOG_STYLES = `
   padding: 0 16px;
   border: 0;
   border-radius: 999px;
-  background: #09090b;
-  color: #ffffff;
+  background: var(--ys-active-bg, #ededed);
+  color: var(--ys-active-fg, #09090b);
   font: inherit;
   font-size: 13px;
   font-weight: 600;
@@ -423,10 +425,10 @@ const DIALOG_STYLES = `
   justify-content: center;
   min-height: 34px;
   padding: 0 13px;
-  border: 0;
+  border: 1px solid var(--ys-hairline, rgba(255, 255, 255, 0.08));
   border-radius: 999px;
-  background: #ffffff;
-  color: #09090b;
+  background: var(--ys-surface, #111113);
+  color: var(--ys-ink, #ededed);
   font: inherit;
   font-size: 12.5px;
   font-weight: 600;
@@ -435,7 +437,7 @@ const DIALOG_STYLES = `
   cursor: pointer;
 }
 .srd-ghost:hover:not(:disabled) {
-  background: #e4e4e7;
+  background: var(--ys-hover, #27272a);
 }
 .srd-primary:disabled,
 .srd-secondary:disabled,
@@ -450,7 +452,7 @@ const DIALOG_STYLES = `
   gap: 8px;
   padding: 10px 12px;
   border-radius: 12px;
-  background: #ffffff;
+  background: var(--ys-surface, #111113);
 }
 .srd-url {
   flex: 1 1 220px;
@@ -458,19 +460,19 @@ const DIALOG_STYLES = `
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  font-family: 'Geist Mono', ui-monospace, SFMono-Regular, monospace;
+  font-family: var(--ys-mono, 'Geist Mono', ui-monospace, SFMono-Regular, monospace);
   font-size: 12.5px;
   font-variant-numeric: tabular-nums;
-  color: #09090b;
+  color: var(--ys-ink, #ededed);
 }
 .srd-error {
   margin: 0;
   font-size: 12.5px;
   font-weight: 500;
-  color: #71717a;
+  color: var(--ys-danger, #f87171);
 }
 .srd-modal :is(button, a, input, select, textarea):focus-visible {
-  outline: 2px solid #0033ff;
+  outline: 2px solid var(--ys-focus, #ededed);
   outline-offset: 2px;
 }
 `;

@@ -20,11 +20,11 @@ const sampleOcclusionVerdict: PhotoInspectionVerdict = {
   recommendedCleanup: {
     mode: 'inpaint_occlusion',
     engine: 'nano-banana-2.1',
-    fallbackEngine: 'seedream-5.0-pro',
+    fallbackEngine: 'seedream-5.5',
     requiresDualCandidateSelection: true,
-    candidateEngines: ['seedream-5.0-pro', 'nano-banana-2.1'],
+    candidateEngines: ['seedream-5.5', 'nano-banana-2.1'],
     candidatePromptsEn: {
-      'seedream-5.0-pro': 'Reference Image 1 provides the young Korean female subject...',
+      'seedream-5.5': 'Reference Image 1 provides the young Korean female subject...',
       'nano-banana-2.1': 'IDENTITY LOCK: Keep the exact facial identity...'
     },
     editPromptEn: 'Keep the person in Image 1 100% identical and remove the bottle and hand.'
@@ -61,11 +61,11 @@ const sampleRetouchVerdict: PhotoInspectionVerdict = {
   recommendedCleanup: {
     mode: 'normalize_retouch',
     engine: 'nano-banana-2.1',
-    fallbackEngine: 'seedream-5.0-pro',
+    fallbackEngine: 'seedream-5.5',
     requiresDualCandidateSelection: true,
-    candidateEngines: ['seedream-5.0-pro', 'nano-banana-2.1'],
+    candidateEngines: ['seedream-5.5', 'nano-banana-2.1'],
     candidatePromptsEn: {
-      'seedream-5.0-pro': 'Reference Image 1 provides the young Korean female subject...',
+      'seedream-5.5': 'Reference Image 1 provides the young Korean female subject...',
       'nano-banana-2.1': 'IDENTITY LOCK: Keep the exact facial identity...'
     },
     editPromptEn: 'Normalize 2D beauty-app liquify distortions back to natural 85mm camera lens anatomy.'
@@ -73,7 +73,7 @@ const sampleRetouchVerdict: PhotoInspectionVerdict = {
 };
 
 describe('TemplateDirectorPanel UI/UX (4-Pass SOTA Verification)', () => {
-  it('Pass 1: renders collapsed progressive-disclosure toggle by default and shows Dual-Candidate Likeness Picker (Seedream 5.0 Pro + Nano Banana 2.1) when occlusion or beauty retouching is detected', () => {
+  it('Pass 1: renders collapsed progressive-disclosure toggle by default and shows Dual-Candidate Likeness Picker (Seedream 5.5 + Nano Banana 2.1) when occlusion or beauty retouching is detected', () => {
     const html = renderToStaticMarkup(
       <TemplateDirectorPanel locale="ko" photoInspection={sampleOcclusionVerdict} />
     );
@@ -83,9 +83,9 @@ describe('TemplateDirectorPanel UI/UX (4-Pass SOTA Verification)', () => {
     expect(html).toContain('data-photo-inspection-banner="needs_cleanup"');
     expect(html).toContain('data-photo-cleanup-mode="inpaint_occlusion"');
     expect(html).toContain('data-photo-dual-candidates');
-    expect(html).toContain('data-identity-candidate="seedream-5.0-pro"');
+    expect(html).toContain('data-identity-candidate="seedream-5.5"');
     expect(html).toContain('data-identity-candidate="nano-banana-2.1"');
-    expect(html).toContain('후보 A · 부드러운 자연 인상 (Seedream 5.0 Pro)');
+    expect(html).toContain('후보 A · 부드러운 자연 인상 (Seedream 5.5)');
     expect(html).toContain('후보 B · 선명한 윤곽 · 가림 정돈 (Nano Banana 2.1)');
     expect(html).toContain('TWINGS가 가려진 부분 정리해서 진행 (+2 크레딧)');
     expect(html).toContain('원본 사진 그대로 쓰기');
@@ -192,7 +192,7 @@ describe('TemplateDirectorPanel UI/UX (4-Pass SOTA Verification)', () => {
         originalPhotoUrl="/selfie-original.jpg"
         candidatesLoading={true}
         identityCandidates={[
-          { engine: 'seedream-5.0-pro', titleKo: 'A', titleEn: 'A', subtitleKo: '', subtitleEn: '', previewUrl: null, similarityScore: 0.96 },
+          { engine: 'seedream-5.5', titleKo: 'A', titleEn: 'A', subtitleKo: '', subtitleEn: '', previewUrl: null, similarityScore: 0.96 },
           { engine: 'nano-banana-2.1', titleKo: 'B', titleEn: 'B', subtitleKo: '', subtitleEn: '', previewUrl: null, similarityScore: 0.91 }
         ]}
       />
@@ -209,7 +209,7 @@ describe('TemplateDirectorPanel UI/UX (4-Pass SOTA Verification)', () => {
     expect(html).toContain('원본 셀카 대조하기');
     expect(html).toContain('data-candidate-recommended="true"');
     expect(html).toContain('가장 닮은 추천');
-    expect(html).toContain('data-candidate-skeleton="seedream-5.0-pro"');
+    expect(html).toContain('data-candidate-skeleton="seedream-5.5"');
     expect(html).toContain('TWINGS가 자연스러운 카메라 비율·피부 결로 정돈해서 진행 (+2 크레딧)');
     expect(html).toContain('원본 사진 그대로 쓰기');
   });

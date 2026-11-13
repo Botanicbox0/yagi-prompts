@@ -27,7 +27,7 @@ import type {
 import type { BlockedInput, BlockedRewrite } from './enhancer/blocked';
 import type { StudioEnv } from './env';
 import type { StudioMediaStore } from './media-store';
-import type { StudioImageQuality, StudioLane, StudioPromptProfile } from './models';
+import type { StudioImageBackground, StudioImageQuality, StudioLane, StudioPromptProfile } from './models';
 import type { StudioProvider, StudioProviderFailure } from './provider/types';
 
 /* ------------------------------------------------------------ intelligence (S2) */
@@ -128,6 +128,8 @@ export interface StudioJobParams {
   resolution: string | null;
   /** Image / region edit on a model with `qualities` (GPT Image): the quality asked for. */
   quality?: StudioImageQuality;
+  /** Cutout background mode (`Seedream 5.5` only): `'auto' | 'transparent' | 'opaque'`. */
+  background?: StudioImageBackground;
   seconds: number | null;
   audio: StudioAudioMode | null;
   count: number;

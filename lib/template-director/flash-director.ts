@@ -145,8 +145,8 @@ export function compileModelSpecificIdentityPrompt(
   const hairLock = stripBannedPlasticTokens(spec.extractedHairLockEn);
   const surgicalDelta = stripBannedPlasticTokens(spec.rawSurgicalPromptEn);
 
-  if (engine === 'seedream-5.0-pro') {
-    // Official ByteDance Seedream 5.0 Pro Formula: 4-Part Cohesive Natural-Language Prose
+  if (engine === 'seedream-5.5') {
+    // Official ByteDance Seedream 5.5 Formula: 4-Part Cohesive Natural-Language Prose
     const part1RefRole = `Reference Image 1 provides the young Korean female subject's exact facial identity, distinctive features (${identityLock}), exact hairstyle (${hairLock}), clothing, and ambient lighting—preserve 95% of Reference Image 1's real facial bone structure, eye spacing, nose bridge contour, lip shape, and personal charm so she remains 100% unmistakably the exact same person.`;
     const part2SceneProse = `An in-place refined vertical 3:4 medium bust-up portrait of the exact same young Korean woman from Reference Image 1, keeping her original hairstyle (${hairLock}) and natural styling, while gently relaxing any harsh, tense, or intimidating facial tension into a calm, effortlessly chic, approachable expression with softly closed or naturally relaxed lips and removing any hand touching the cheek or dangling earphone wire. ${surgicalDelta}`;
     const part3OpticsSkin = `Maintain the natural diffused daylight and soft tonal roll-off (#F4EFEA highlight roll-off, #262528 shadow floor) of an 85mm f/2.0 portrait lens. ${AMERICANO_SKIN_CONTRACT}`;
@@ -222,12 +222,12 @@ export function routePhotoCleanup(
     return {
       mode,
       engine: 'nano-banana-2.1',
-      fallbackEngine: 'seedream-5.0-pro',
+      fallbackEngine: 'seedream-5.5',
       editPromptEn: rawSurgicalPromptEn,
       requiresDualCandidateSelection: true,
       candidateEngines: DUAL_IDENTITY_CANDIDATE_ENGINES,
       candidatePromptsEn: {
-        'seedream-5.0-pro': compileModelSpecificIdentityPrompt('seedream-5.0-pro', spec),
+        'seedream-5.5': compileModelSpecificIdentityPrompt('seedream-5.5', spec),
         'nano-banana-2.1': compileModelSpecificIdentityPrompt('nano-banana-2.1', spec)
       }
     };
@@ -601,9 +601,9 @@ export function createFlashTemplateDirector(
           ? raw.strategy
           : 'passthrough_crop';
       const requiresMasterSynthesis = strategy === 'surgical_inplace_edit';
-      const primaryEngine: ModelSpecificImageEngine = input.preferredEngine ?? 'seedream-5.0-pro';
+      const primaryEngine: ModelSpecificImageEngine = input.preferredEngine ?? 'seedream-5.5';
       const fallbackEngine: ModelSpecificImageEngine =
-        primaryEngine === 'seedream-5.0-pro' ? 'nano-banana-2.1' : 'seedream-5.0-pro';
+        primaryEngine === 'seedream-5.5' ? 'nano-banana-2.1' : 'seedream-5.5';
 
       const compiledPrimaryPrompt = compileModelSpecificIdentityPrompt(primaryEngine, {
         extractedIdentityLockEn: raw.extractedIdentityLockEn,
@@ -616,9 +616,9 @@ export function createFlashTemplateDirector(
         rawSurgicalPromptEn: raw.opticalMasterPromptEn
       });
       const compiledSeedreamPrompt =
-        primaryEngine === 'seedream-5.0-pro'
+        primaryEngine === 'seedream-5.5'
           ? compiledPrimaryPrompt
-          : compileModelSpecificIdentityPrompt('seedream-5.0-pro', {
+          : compileModelSpecificIdentityPrompt('seedream-5.5', {
               extractedIdentityLockEn: raw.extractedIdentityLockEn,
               extractedHairLockEn: raw.extractedHairLockEn,
               rawSurgicalPromptEn: raw.opticalMasterPromptEn
@@ -646,7 +646,7 @@ export function createFlashTemplateDirector(
         opticalMasterPromptEn: sealServerOnlyPrompt(compiledPrimaryPrompt),
         fallbackMasterPromptEn: sealServerOnlyPrompt(compiledFallbackPrompt),
         dualCandidatePromptsEn: {
-          'seedream-5.0-pro': sealServerOnlyPrompt(compiledSeedreamPrompt),
+          'seedream-5.5': sealServerOnlyPrompt(compiledSeedreamPrompt),
           'nano-banana-2.1': sealServerOnlyPrompt(compiledNanoBananaPrompt)
         }
       };

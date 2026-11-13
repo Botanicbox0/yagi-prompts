@@ -11,32 +11,32 @@
 .bsv-stage,
 .bsv-dialog,
 .bsv-toast {
-  --bsv-accent: var(--ys-accent, var(--admin-accent, #0033ff));
-  --bsv-accent-hover: #0026cc;
-  --bsv-accent-text: var(--ys-ink, var(--admin-ink, #09090b));
-  --bsv-accent-soft: var(--ys-panel, #f4f4f5);
-  --bsv-accent-line: rgba(9, 9, 11, 0.14);
-  --bsv-ink: var(--ys-ink, var(--admin-ink, #09090b));
-  --bsv-body: var(--ys-ink-secondary, var(--admin-body, #52525b));
-  --bsv-muted: var(--ys-ink-muted, var(--admin-muted, #71717a));
-  --bsv-surface: #ffffff;
-  --bsv-canvas: #ffffff;
-  --bsv-raised: #f4f4f5;
-  --bsv-hover: #e4e4e7;
-  --bsv-media-bg: #f4f4f5;
-  --bsv-hairline: rgba(9, 9, 11, 0.06);
-  --bsv-line: rgba(9, 9, 11, 0.06);
-  --bsv-line-strong: rgba(9, 9, 11, 0.14);
-  --bsv-danger: #52525b;
-  --bsv-mono: 'Geist Mono', ui-monospace, SFMono-Regular, Menlo, monospace;
-  --bsv-glass-dark: rgba(9, 9, 11, 0.72);
+  --bsv-accent: var(--ys-accent, #ff58ae);
+  --bsv-accent-hover: var(--ys-accent-hover, #ff389f);
+  --bsv-accent-text: var(--ys-accent-text, var(--ys-ink, #ededed));
+  --bsv-accent-soft: var(--ys-panel, #18181b);
+  --bsv-accent-line: var(--ys-line-strong, rgba(255, 255, 255, 0.18));
+  --bsv-ink: var(--ys-ink, #ededed);
+  --bsv-body: var(--ys-ink-secondary, #a1a1aa);
+  --bsv-muted: var(--ys-ink-muted, #71717a);
+  --bsv-surface: var(--ys-surface, #111113);
+  --bsv-canvas: var(--ys-canvas, #09090b);
+  --bsv-raised: var(--ys-raised, #18181b);
+  --bsv-hover: var(--ys-hover, #27272a);
+  --bsv-media-bg: var(--ys-media-bg, #18181b);
+  --bsv-hairline: var(--ys-hairline, rgba(255, 255, 255, 0.08));
+  --bsv-line: var(--ys-line, rgba(255, 255, 255, 0.08));
+  --bsv-line-strong: var(--ys-line-strong, rgba(255, 255, 255, 0.18));
+  --bsv-danger: var(--ys-danger, #f87171);
+  --bsv-mono: var(--ys-mono, 'Geist Mono', ui-monospace, SFMono-Regular, Menlo, monospace);
+  --bsv-glass-dark: var(--ys-glass-dark, rgba(9, 9, 11, 0.78));
   --bsv-ease: var(--ys-ease, cubic-bezier(0.22, 1, 0.36, 1));
   --bsv-dur: 180ms;
   --bsv-well: none;
-  --bsv-card: none;
-  --bsv-float: 0 24px 60px rgba(9, 9, 11, 0.14);
-  font-family: 'Geist', 'Pretendard Variable', Pretendard, -apple-system, BlinkMacSystemFont, sans-serif;
-  background-color: #ffffff;
+  --bsv-card: var(--ys-card, none);
+  --bsv-float: var(--ys-float, 0 24px 60px rgba(0, 0, 0, 0.55));
+  font-family: var(--bw-font, 'Pretendard Variable', Pretendard, 'Geist', -apple-system, BlinkMacSystemFont, sans-serif);
+  background-color: var(--bsv-canvas);
   color: var(--bsv-ink);
 }
 
@@ -131,17 +131,17 @@
   background: var(--bsv-hover);
 }
 .bsv-item[aria-current="true"] {
-  background: #09090b;
-  color: #ffffff;
+  background: var(--ys-active-bg, #09090b);
+  color: var(--ys-active-fg, #ffffff);
   box-shadow: none;
 }
 .bsv-item[aria-current="true"] .bsv-open-count,
 .bsv-item[aria-current="true"] .bsv-quiet {
-  color: rgba(255, 255, 255, 0.78);
+  color: color-mix(in srgb, var(--ys-active-fg, #ffffff) 78%, transparent);
 }
 .bsv-item[aria-current="true"] .bsv-status {
-  background: rgba(255, 255, 255, 0.16);
-  color: #ffffff;
+  background: color-mix(in srgb, var(--ys-active-fg, #ffffff) 16%, transparent);
+  color: var(--ys-active-fg, #ffffff);
   box-shadow: none;
 }
 .bsv-thumb {
@@ -197,7 +197,7 @@
   height: 22px;
   padding: 0 9px;
   border-radius: 999px;
-  background: #ffffff;
+  background: var(--bsv-surface);
   color: var(--bsv-body);
   font-size: 12px;
   font-weight: 600;
@@ -215,8 +215,8 @@
   color: var(--bsv-ink);
 }
 .bsv-status[data-state="approved"] {
-  background: #09090b;
-  color: #ffffff;
+  background: var(--ys-active-bg, #09090b);
+  color: var(--ys-active-fg, #ffffff);
   box-shadow: none;
 }
 
@@ -350,7 +350,7 @@
 }
 .bsv-spot[data-pending] {
   border: 1.5px dashed var(--bsv-accent);
-  background: rgba(255, 255, 255, 0.92);
+  background: var(--bsv-surface);
   color: var(--bsv-accent-text);
   cursor: default;
 }
@@ -444,7 +444,7 @@
   border: 0;
   border-radius: 999px;
   background: var(--bsv-ink);
-  color: #ffffff;
+  color: var(--bsv-canvas);
   font-size: 10.5px;
   font-weight: 600;
   font-variant-numeric: tabular-nums;
@@ -594,12 +594,12 @@
   color: var(--bsv-ink);
 }
 .bsv-seg-btn[aria-pressed="true"] {
-  background: #09090b;
-  color: #ffffff;
+  background: var(--ys-active-bg, #09090b);
+  color: var(--ys-active-fg, #ffffff);
   box-shadow: none;
 }
 .bsv-seg-btn[aria-pressed="true"] .bsv-seg-count {
-  color: rgba(255, 255, 255, 0.78);
+  color: color-mix(in srgb, var(--ys-active-fg, #ffffff) 78%, transparent);
 }
 .bsv-threads {
   display: grid;
@@ -625,7 +625,7 @@
 }
 .bsv-thread[data-active] {
   background: var(--bsv-raised);
-  box-shadow: inset 0 0 0 1.5px #09090b;
+  box-shadow: inset 0 0 0 1.5px var(--bsv-ink);
 }
 .bsv-thread[data-resolved] > .bsv-comment {
   opacity: 0.62;
@@ -646,13 +646,14 @@
   box-sizing: border-box;
   border-radius: 999px;
   background: var(--bsv-ink);
-  color: #ffffff;
+  color: var(--bsv-canvas);
   font-size: 11px;
   font-weight: 600;
   font-variant-numeric: tabular-nums;
 }
 .bsv-comment[data-role="studio"] .bsv-num {
   background: var(--bsv-accent);
+  color: var(--ys-on-accent, #ffffff);
 }
 .bsv-author {
   font-weight: 600;
@@ -690,7 +691,7 @@
   padding: 0 9px;
   border: 0;
   border-radius: 999px;
-  background: #ffffff;
+  background: var(--bsv-surface);
   color: var(--bsv-ink);
   font-family: var(--bsv-mono);
   font-size: 12px;
@@ -700,8 +701,8 @@
   transition: background-color var(--bsv-dur) var(--bsv-ease), color var(--bsv-dur) var(--bsv-ease);
 }
 button.bsv-timecode:hover {
-  background: #09090b;
-  color: #ffffff;
+  background: var(--ys-active-bg, #09090b);
+  color: var(--ys-active-fg, #ffffff);
 }
 .bsv-timecode[data-whole] {
   color: var(--bsv-body);
@@ -796,7 +797,7 @@ button.bsv-spot-tag {
   resize: vertical;
 }
 .bsv-thread .bsv-input {
-  background: #ffffff;
+  background: var(--bsv-surface);
 }
 .bsv-input::placeholder {
   color: var(--bsv-muted);
@@ -862,8 +863,8 @@ button.bsv-spot-tag {
   background: var(--bsv-hover);
 }
 .bsv-pill[aria-pressed="true"] {
-  background: #09090b;
-  color: #ffffff;
+  background: var(--ys-active-bg, #09090b);
+  color: var(--ys-active-fg, #ffffff);
   box-shadow: none;
 }
 .bsv-primary {
@@ -876,8 +877,8 @@ button.bsv-spot-tag {
   border: 0;
   border-radius: 999px;
   background: var(--bsv-accent);
-  color: #ffffff;
-  box-shadow: 0 4px 14px rgba(0, 51, 255, 0.28);
+  color: var(--ys-on-accent, #ffffff);
+  box-shadow: none;
   font: inherit;
   font-size: 14px;
   font-weight: 600;
@@ -1015,7 +1016,8 @@ button.bsv-spot-tag {
   padding: 20px;
   border: 0;
   border-radius: 24px;
-  background: rgba(255, 255, 255, 0.94);
+  background: var(--ys-dock-bg, rgba(255, 255, 255, 0.94));
+  color: var(--bsv-ink);
   box-shadow: var(--bsv-float);
   box-sizing: border-box;
   -webkit-backdrop-filter: blur(20px) saturate(180%);

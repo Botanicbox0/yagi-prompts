@@ -455,6 +455,7 @@ export async function generateReferenceMusic(
       preDropHushMs,
       abcNotation: abcScore.abcNotation,
       refAudioUrl: resolvedRefAudioUrl,
+      ...(v.compositionPlan ? { compositionPlan: v.compositionPlan } : {}),
     });
   } catch {
     const refundedAllowance = await refundMusicJob(

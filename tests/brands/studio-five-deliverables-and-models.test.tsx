@@ -81,20 +81,20 @@ describe("Brand Studio 5 Core Deliverables & 5 Image Models (12-Round Verificati
     }
   });
 
-  it("02. includes the exact 5 founder-specified image models (GPT Image 2.6, Nano Banana Pro, 2.1, 2.0, Seedream 5.0 Pro) and excludes 2.5", () => {
+  it("02. includes the exact 5 founder-specified image models (GPT Image 2.6, Nano Banana Pro, 2.1, 2.0, Seedream 5.5) and excludes 2.5", () => {
     expect(BRAND_STUDIO_IMAGE_MODELS.map((m) => m.id)).toEqual([
       "gpt_image_2_6",
       "nano_banana_pro",
       "nano_banana_2_1",
       "nano_banana_2_0",
-      "seedream_5_0_pro",
+      "seedream_5_5",
     ]);
     expect(BRAND_STUDIO_IMAGE_MODELS.map((m) => m.nameEn)).toEqual([
       "GPT Image 2.6",
       "Nano Banana Pro",
       "Nano Banana 2.1",
       "Nano Banana 2.0",
-      "Seedream 5.0 Pro",
+      "Seedream 5.5",
     ]);
     const serialized = JSON.stringify(BRAND_STUDIO_IMAGE_MODELS);
     expect(serialized).not.toMatch(/2\.5/);
@@ -894,7 +894,7 @@ describe("Brand Studio 5 Core Deliverables & 5 Image Models (12-Round Verificati
     expect(hydratedHtml).toContain("data-data-privacy-shield-badge");
   });
 
-  it("26. verifies Brand Aesthetic Presets (6 reverse-engineered styles), Custom Project Moodboard (max 20 images), 5-Model Empirical Prompt Compiler (GPT Image 2.6, Nano Banana family, Seedream 5.0 Pro), and live-verified comparison assets", () => {
+  it("26. verifies Brand Aesthetic Presets (6 reverse-engineered styles), Custom Project Moodboard (max 20 images), 5-Model Empirical Prompt Compiler (GPT Image 2.6, Nano Banana family, Seedream 5.5), and live-verified comparison assets", () => {
     expect(MAX_BRAND_MOODBOARD_IMAGES).toBe(20);
     expect(BRAND_AESTHETIC_PRESETS).toHaveLength(6);
     expect(BRAND_AESTHETIC_PRESETS.map((p) => p.id)).toEqual([
@@ -949,7 +949,7 @@ describe("Brand Studio 5 Core Deliverables & 5 Image Models (12-Round Verificati
     expect(nanoFastPrompt.compiledPrompt).toContain("무드보드 20장 평균");
 
     const seedreamPrompt = compileAestheticPromptForModel({
-      modelId: "seedream_5_0_pro",
+      modelId: "seedream_5_5",
       mode: "twings_preset",
       presetId: "french_blue_glass",
       userBrief: subjectPrompt,

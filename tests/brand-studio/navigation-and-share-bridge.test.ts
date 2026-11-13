@@ -290,14 +290,14 @@ describe('2. OpenCanva (캔버스 편집) 1-Click Direct Entry (studio-app.tsx +
 });
 
 describe('3. Studio Review v4 + ShareReviewDialog + twings:open-share-review event contract', () => {
-  it('re-opens STUDIO_REVIEW_PAGE_OPEN = true and conforms to strict Studio UI v4 tokens in review.css', () => {
+  it('re-opens STUDIO_REVIEW_PAGE_OPEN = true and conforms to strict TWINGS v2 Dark UI tokens in review.css', () => {
     expect(STUDIO_REVIEW_PAGE_OPEN).toBe(true);
     const css = readFileSync('components/brand-studio/review/review.css', 'utf8');
     expect(css).not.toMatch(/#ebf5ff/i);
     expect(css).not.toMatch(/#a3392f/i);
-    expect(css).toMatch(/#0033ff/i);
-    expect(css).toMatch(/#f4f4f5/i);
-    expect(css).toMatch(/#e4e4e7/i);
+    expect(css).not.toMatch(/#0033ff/i);
+    expect(css).toMatch(/#ff58ae/i);
+    expect(css).toMatch(/#18181b/i);
     expect(css).toMatch(/#09090b/i);
     expect(css).toContain('Geist Mono');
     expect(css).toContain('tabular-nums');

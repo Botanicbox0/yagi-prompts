@@ -9,11 +9,13 @@ export interface FloatingClipBarProps {
   clipIndex: number;
   canEdit: boolean;
   detectingCuts?: boolean;
+  extendingScene?: boolean;
   copy: StudioVideoCopy["workspace"]["floatingBar"];
   onTrim(): void;
   onDetectCuts(): void;
   onColorGrade(): void;
   onAttachAsReference(): void;
+  onExtendScene?: () => void;
   onGenerateMusic(): void;
   onUpscale(): void;
   onDelete(): void;
@@ -24,11 +26,13 @@ export function FloatingClipBar({
   clipIndex,
   canEdit,
   detectingCuts = false,
+  extendingScene = false,
   copy,
   onTrim,
   onDetectCuts,
   onColorGrade,
   onAttachAsReference,
+  onExtendScene,
   onGenerateMusic,
   onUpscale,
   onDelete,
@@ -95,6 +99,17 @@ export function FloatingClipBar({
         >
           {copy.attachRef}
         </button>
+        {onExtendScene && (
+          <button
+            type="button"
+            className={w.floatingBtn}
+            disabled={!canEdit || extendingScene}
+            onClick={onExtendScene}
+            data-floating-action="extend-scene"
+          >
+            {extendingScene ? copy.extendingScene : copy.extendScene}
+          </button>
+        )}
         <button
           type="button"
           className={w.floatingBtn}

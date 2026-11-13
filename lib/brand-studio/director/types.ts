@@ -2,13 +2,13 @@
  * Silent Multimodal `Video-Creator` Director types (docs/STUDIO-PRO-SUITE-V4.md §1.3).
  *
  * Separates multimodal input inspection (`MediaAnalyzer`) from intent-triaged prompt compilation
- * (`PromptCompiler`) so `Gemini 3.8 Flash` (default) and `Argon` share one deterministic contract.
+ * (`PromptCompiler`) so `gemini-4-hydrogen` (default) and `Argon` share one deterministic contract.
  */
 import type { FilmSheet, StudioAssetRole, StudioAudioMode } from '@/lib/brand-studio/contracts';
 import type { EnhanceDeps, EnhanceInput, EnhanceReference, EnhanceResult, EnhanceVideo } from '@/lib/brand-studio/enhancer/types';
 import type { SqlRunner } from '@/lib/db/sql-runner';
 
-export type DirectorProviderId = 'gemini-3.8-flash' | 'argon';
+export type DirectorProviderId = 'gemini-4-hydrogen' | 'argon';
 
 export type PromptIntentMode = 'passthrough' | 'slot_fill' | 'expand';
 
