@@ -1,6 +1,10 @@
 import type { SqlRunner } from '@/lib/db/sql-runner';
 import type { Locale } from '@/lib/i18n/config';
 import type { TemplateMedium } from '@/lib/prompts/schemas';
+import {
+  personalDirectorSpecSchema,
+  type PersonalDirectorSpec,
+} from '@/lib/template-director/schema';
 
 /**
  * Every `render_jobs` statement, in one driver-agnostic module (the same seam as
@@ -48,6 +52,8 @@ export interface RenderJob {
   finishedAt: string | null;
   createdAt: string;
   updatedAt: string;
+  selectedFrames: number[] | null;
+  directorSpec: PersonalDirectorSpec | null;
 }
 
 interface RawRow {
@@ -83,6 +89,8 @@ interface RawRow {
   finished_at: Date | string | null;
   created_at: Date | string;
   updated_at: Date | string;
+  selected_frames?: number[] | null;
+  director_spec?: unknown;
 }
 
 const COLUMN_NAMES = [
@@ -91,6 +99,7 @@ const COLUMN_NAMES = [
   'attempts', 'error_code', 'error_message', 'cost_usd', 'share_token', 'share_expires_at',
   'notify_status', 'notify_channel', 'notify_attempts', 'notified_at',
   'claimed_at', 'started_at', 'finished_at', 'created_at', 'updated_at',
+  'selected_frames', 'director_spec',
 ] as const;
 const COLUMNS = COLUMN_NAMES.join(', ');
 /** The same list qualified for the claim's UPDATE … FROM, where the CTE also carries an `id`. */
@@ -105,6 +114,26 @@ function num(value: number | string | null): number | null {
   if (value === null) return null;
   const parsed = typeof value === 'number' ? value : Number.parseFloat(value);
   return Number.isFinite(parsed) ? parsed : null;
+}
+
+function parseSelectedFramesRow(value: unknown): number[] | null {
+  if (!Array.isArray(value)) return null;
+  const nums = value.filter((item): item is number => typeof item === 'number' && Number.isInteger(item) && item >= 0);
+  return nums.length > 0 ? nums : null;
+}
+
+function parseDirectorSpecRow(value: unknown): PersonalDirectorSpec | null {
+  if (value === null || value === undefined) return null;
+  let candidate: unknown = value;
+  if (typeof value === 'string') {
+    try {
+      candidate = JSON.parse(value);
+    } catch {
+      return null;
+    }
+  }
+  const parsed = personalDirectorSpecSchema.safeParse(candidate);
+  return parsed.success ? parsed.data : null;
 }
 
 function toJob(raw: RawRow): RenderJob {
@@ -141,6 +170,8 @@ function toJob(raw: RawRow): RenderJob {
     finishedAt: iso(raw.finished_at),
     createdAt: iso(raw.created_at) ?? '',
     updatedAt: iso(raw.updated_at) ?? '',
+    selectedFrames: parseSelectedFramesRow(raw.selected_frames),
+    directorSpec: parseDirectorSpecRow(raw.director_spec),
   };
 }
 
@@ -163,13 +194,33 @@ export interface InsertRenderJobArgs {
   inputMime: string | null;
   /** `held` when the person still has to verify their face (docs §8.2); default `queued`. */
   status?: 'queued' | 'held';
+  selectedFrames?: number[] | null;
+  directorSpec?: PersonalDirectorSpec | null;
 }
 
 export async function insertRenderJob(sql: SqlRunner, args: InsertRenderJobArgs): Promise<void> {
   await sql.query(
-    `insert into render_jobs (id, user_id, template_id, template_slug, medium, engine, aspect, locale, input_key, input_mime, status, resolution)
-     values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)`,
-    [args.id, args.userId, args.templateId, args.templateSlug, args.medium, args.engine, args.aspect, args.locale, args.inputKey, args.inputMime, args.status ?? 'queued', args.resolution ?? null],
+    `insert into render_jobs (
+       id, user_id, template_id, template_slug, medium, engine, aspect, locale,
+       input_key, input_mime, status, resolution, selected_frames, director_spec
+     )
+     values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13::integer[], $14::jsonb)`,
+    [
+      args.id,
+      args.userId,
+      args.templateId,
+      args.templateSlug,
+      args.medium,
+      args.engine,
+      args.aspect,
+      args.locale,
+      args.inputKey,
+      args.inputMime,
+      args.status ?? 'queued',
+      args.resolution ?? null,
+      args.selectedFrames ?? null,
+      args.directorSpec ? JSON.stringify(args.directorSpec) : null,
+    ],
   );
 }
 

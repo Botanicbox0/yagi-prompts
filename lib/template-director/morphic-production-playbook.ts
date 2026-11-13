@@ -13,6 +13,8 @@
  *   banning "porcelain skin" plastic hotspots)
  */
 
+import type { PersonalAudioMode, PersonalBgmMood } from './schema';
+
 export const GEMINI_DIRECTOR_THINKING_LEVEL = 'HIGH' as const;
 
 export interface DirectorModelArchitectureDecision {
@@ -67,6 +69,17 @@ export const DIRECTOR_MODEL_ARCHITECTURE_DECISION: DirectorModelArchitectureDeci
  */
 export const PERSONAL_NO_BGM_AUDIO_CONTRACT_EN =
   'Strict No-BGM Personal Audio Rule: Generate ONLY natural on-site ambient room/street tone and realistic physical Foley/SFX (footsteps, fabric movement, camera shutters, mist spray, object handling, and natural lip-sync speech when applicable). Strictly NO background music, NO musical score, NO BGM, NO beats, NO drums, NO synth pads, NO melody, and NO song.' as const;
+
+export const PERSONAL_BGM_MOOD_PROMPTS: Record<PersonalBgmMood, string> = {
+  cinematic: 'subtle lush cinematic atmospheric strings and warm analog pad score matched to the camera pacing',
+  trendy_beat: 'crisp modern editorial bassline and minimalist rhythmic groove aligned softly with visual cuts',
+  calm_mood: 'warm delicate ambient acoustic piano and airy textures breathing smoothly under room acoustics',
+};
+
+export function personalSceneBgmAudioContractEn(mood?: PersonalBgmMood | null): string {
+  const moodDesc = PERSONAL_BGM_MOOD_PROMPTS[mood ?? 'cinematic'];
+  return `Cohesive Scene BGM Audio Rule: Generate cohesive ${moodDesc} integrated naturally alongside crisp ambient Foley and clear spoken dialogue without overpowering voices, with clean studio mix continuity and zero harsh clipping.`;
+}
 
 export const PERSONAL_NO_BGM_AUDIO_NOTICE_KO =
   '인스타그램·틱톡 업로드 시 원하는 음악을 바로 입히실 수 있도록, 배경음악(BGM) 없이 현장 효과음과 자연스러운 사운드만 담아 제작됩니다.' as const;
@@ -286,17 +299,28 @@ export function enforcePersonalMorphicGuardrails(
     hasLookReferenceSlot?: boolean;
     hasSlenderArmLock?: boolean;
     preserveExistingLipSyncAudio?: boolean;
+    audioMode?: PersonalAudioMode;
+    bgmMood?: PersonalBgmMood | null;
   }
 ): string {
   let out = rawPrompt.trim();
 
-  // 1. Strip any accidental "porcelain skin" or "visible pores" tokens that cause plastic glare or aging/mole artifacts, and strip BGM phrases
+  // 1. Strip any accidental "porcelain skin" or "visible pores" tokens that cause plastic glare or aging/mole artifacts, and strip BGM phrases unless bgm mode is active
   out = out
     .replace(/\bfair\s+porcelain\s+skin\b/gi, 'clean matte-satin fair complexion')
     .replace(/\bporcelain\s+skin\b/gi, 'matte-satin living skin finish')
-    .replace(/\bdewy\s+glass[- ]skin\b/gi, 'clean natural skin finish')
-    .replace(/\bwith\s+background\s+music(?:\s+and\s+upbeat\s+soundtrack)?\b/gi, 'with natural ambient on-site audio only')
-    .replace(/\bupbeat\s+soundtrack\b/gi, 'natural ambient sound');
+    .replace(/\bdewy\s+glass[- ]skin\b/gi, 'clean natural skin finish');
+
+  if (options.audioMode === 'bgm') {
+    out = out
+      .replace(/Strict\s+No-BGM(?:\s+Personal)?\s+Audio\s+Rule:[^\n]*/gi, '')
+      .replace(/,?\s*no background music\b/gi, '')
+      .replace(/\bwith natural ambient on-site audio only\b/gi, 'with natural ambient audio and balanced musical underscore');
+  } else {
+    out = out
+      .replace(/\bwith\s+background\s+music(?:\s+and\s+upbeat\s+soundtrack)?\b/gi, 'with natural ambient on-site audio only')
+      .replace(/\bupbeat\s+soundtrack\b/gi, 'natural ambient sound');
+  }
 
   // 2. When an outfit slot (@Image 2 / look_ref) is present, ensure neck-down isolation is explicitly stated
   if (
@@ -321,15 +345,19 @@ export function enforcePersonalMorphicGuardrails(
     out = `${out}\n\nSLENDER SILHOUETTE LOCK: Ignore any wide blouse or puff sleeves from @Image 1 and maintain naturally slender shoulders, collarbones, and slim toned arms (no random moles or blemishes on face or neck).`;
   }
 
-  // 4. Enforce Universal Personal No-BGM Audio Rule unless the template uses immutable master lip-sync audio (@audio1)
+  // 4. Enforce Personal Audio Rule unless the template uses immutable master lip-sync audio (@audio1)
   const hasImmutableAudioRef = /@audio\s*1/i.test(out);
-  if (
-    !options.preserveExistingLipSyncAudio &&
-    !hasImmutableAudioRef &&
-    !out.toLowerCase().includes('no background music') &&
-    !out.toLowerCase().includes('no-bgm')
-  ) {
-    out = `${out}\n\n${PERSONAL_NO_BGM_AUDIO_CONTRACT_EN}`;
+  if (!options.preserveExistingLipSyncAudio && !hasImmutableAudioRef) {
+    if (options.audioMode === 'bgm') {
+      if (!out.toLowerCase().includes('cohesive scene bgm audio rule')) {
+        out = `${out}\n\n${personalSceneBgmAudioContractEn(options.bgmMood)}`;
+      }
+    } else if (
+      !out.toLowerCase().includes('no background music') &&
+      !out.toLowerCase().includes('no-bgm')
+    ) {
+      out = `${out}\n\n${PERSONAL_NO_BGM_AUDIO_CONTRACT_EN}`;
+    }
   }
 
   return out;

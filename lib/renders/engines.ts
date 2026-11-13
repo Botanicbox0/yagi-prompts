@@ -303,7 +303,7 @@ export interface VideoRenderInput {
   /** What the job was bought at (render_jobs.resolution); absent = the 720p default. */
   resolution?: CreatorResolution;
   /** A recipe step's references in prompt order, replacing photo/assetId/fixedReferenceUrls. */
-  references?: ReadonlyArray<{ type: 'image' | 'video'; url: string }>;
+  references?: ReadonlyArray<{ type: 'image' | 'video' | 'audio'; url: string }>;
 }
 
 /**
@@ -331,9 +331,13 @@ export async function startVideoRender(input: VideoRenderInput, deps: RenderEngi
   const content: ArkContentItem[] = [{ type: 'text', text: input.prompt }];
   if (input.references) {
     for (const reference of input.references) {
-      content.push(reference.type === 'video'
-        ? { type: 'video_url', video_url: { url: reference.url }, role: 'reference_video' }
-        : { type: 'image_url', image_url: { url: reference.url }, role: 'reference_image' });
+      content.push(
+        reference.type === 'video'
+          ? { type: 'video_url', video_url: { url: reference.url }, role: 'reference_video' }
+          : reference.type === 'audio'
+            ? { type: 'audio_url', audio_url: { url: reference.url }, role: 'reference_audio' }
+            : { type: 'image_url', image_url: { url: reference.url }, role: 'reference_image' },
+      );
     }
   } else if (input.assetId) content.push({ type: 'image_url', image_url: { url: assetReference(input.assetId) }, role: 'reference_image' });
   else if (input.photo) content.push({ type: 'image_url', image_url: { url: dataUrl(input.photo) }, role: 'reference_image' });
@@ -371,8 +375,12 @@ async function startKlingRender(input: VideoRenderInput, deps: RenderEngineDeps)
   if (!isKlingModel(model)) throw new RenderFailure('engine_error', `${input.engine} does not render on ${model}`, false);
   if (input.aspect !== '16:9' && input.aspect !== '9:16' && input.aspect !== '1:1') throw new RenderFailure('engine_error', `Kling renders 16:9, 9:16 or 1:1, not ${input.aspect}`, false);
   const references: Array<{ type: 'image' | 'video'; url: string }> = [];
-  if (input.references) references.push(...input.references);
-  else {
+  if (input.references) {
+    for (const reference of input.references) {
+      if (reference.type === 'audio') throw new RenderFailure('engine_error', 'Kling takes image or video references only', false);
+      references.push({ type: reference.type, url: reference.url });
+    }
+  } else {
     if (input.assetId) throw new RenderFailure('engine_error', 'Kling takes the photo itself, not a ModelArk asset', false);
     if (input.photo) references.push({ type: 'image', url: dataUrl(input.photo) });
     for (const url of input.fixedReferenceUrls ?? []) references.push({ type: 'image', url });

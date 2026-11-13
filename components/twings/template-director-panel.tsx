@@ -25,6 +25,14 @@ import {
   PERSONAL_NO_BGM_AUDIO_NOTICE_EN,
   PERSONAL_NO_BGM_AUDIO_NOTICE_KO
 } from '@/lib/template-director/morphic-production-playbook';
+import {
+  PERSONAL_AUDIO_MODES,
+  PERSONAL_BGM_MOODS,
+  type PersonalAudioMode,
+  type PersonalBgmMood,
+  type PersonalDirectorSpec
+} from '@/lib/template-director/schema';
+import type { PublicRecipe } from '@/lib/recipes/public';
 
 export interface DirectorVideoResolutionSpec {
   /** Video duration in seconds (4..15, defaults to 10s) */
@@ -46,8 +54,8 @@ export interface DirectorImageSetSpec {
 }
 
 export interface DirectorReferenceSlotValue {
-  slotName: 'outfit' | 'prop';
-  role: 'look' | 'product';
+  slotName: 'outfit' | 'prop' | 'scene';
+  role: 'look' | 'product' | 'scene';
   file: File;
   previewUrl: string;
 }
@@ -60,6 +68,8 @@ export interface TemplateDirectorCopy {
   outfitSlotHint: string;
   propSlotLabel: string;
   propSlotHint: string;
+  sceneSlotLabel?: string;
+  sceneSlotHint?: string;
   removeSlotLabel: string;
   inputLabel: string;
   inputPlaceholder: string;
@@ -106,11 +116,13 @@ export const DEFAULT_TEMPLATE_DIRECTOR_COPY_KO: TemplateDirectorCopy = {
   subtitle:
     '템플릿에 고정된 기본 스타일을 확인하고, 내 취향에 맞지 않는 의상·메이크업·헤어·표정을 사진이나 한 줄 요청으로 자연스럽게 바꿔보세요.',
   outfitSlotLabel: '입힐 의상 사진',
-  outfitSlotHint: '@Image 2 · 룩 레퍼런스',
+  outfitSlotHint: '의상 · 스타일 레퍼런스',
   propSlotLabel: '들려줄 소품 · 제품',
-  propSlotHint: '@Image 3 · 소품 레퍼런스',
+  propSlotHint: '소품 · 제품 레퍼런스',
+  sceneSlotLabel: '배경 · 무드 사진',
+  sceneSlotHint: '배경 · 공간 레퍼런스',
   removeSlotLabel: '참조 사진 빼기',
-  inputLabel: '디렉터에게 한 줄 요청',
+  inputLabel: '장면 디렉팅 요청',
   inputPlaceholder: '예: 2번째 컷에서 컵 대신 내 향수를 들고 정면을 보며 살짝 웃게 해줘',
   defaultReferencePrompt: '첨부한 레퍼런스 사진을 장면에 자연스럽게 반영해 줘',
   applyButton: '장면에 반영',
@@ -118,8 +130,8 @@ export const DEFAULT_TEMPLATE_DIRECTOR_COPY_KO: TemplateDirectorCopy = {
   resetButton: '원본 설정으로 초기화',
   activeChipsLabel: '적용된 커스텀 설정',
   removeChipLabel: '설정 해제',
-  cleanupAcceptOcclusion: 'TWINGS가 가려진 부분 정리해서 진행 (+2 크레딧)',
-  cleanupAcceptRetouch: 'TWINGS가 자연스러운 카메라 비율·피부 결로 정돈해서 진행 (+2 크레딧)',
+  cleanupAcceptOcclusion: 'TWINGS가 가려진 부분 정리해서 진행',
+  cleanupAcceptRetouch: 'TWINGS가 자연스러운 카메라 비율·피부 결로 정돈해서 진행',
   cleanupAcceptDetail: 'TWINGS 광학 선명도 복원 적용 (무료)',
   cleanupAcceptedBadge: '사진 자동 정리 적용됨',
   cleanupSkipButton: '원본 사진 그대로 쓰기',
@@ -127,10 +139,10 @@ export const DEFAULT_TEMPLATE_DIRECTOR_COPY_KO: TemplateDirectorCopy = {
   cleanupChangeButton: '다시 선택',
   retakeRecommendedBadge: '정면 독사진 권장',
   dualCandidateHeading:
-    '사진에 가림·보정이 있어 영상에서 얼굴이 달라 보일 수 있어요. 두 가지 엔진 버전 중 내 실물과 더 닮은 쪽을 골라주세요.',
-  dualCandidateSeedreamTitle: '후보 A · 부드러운 자연 인상 (Seedream 5.0 Pro)',
+    '사진에 가림·보정이 있어 영상에서 얼굴이 달라 보일 수 있어요. 두 가지 버전 중 내 실물과 더 닮은 쪽을 골라주세요.',
+  dualCandidateSeedreamTitle: '후보 A · 부드러운 자연 인상',
   dualCandidateSeedreamDesc: '이목구비 조화와 맑고 자연스러운 피부 톤을 부드럽게 살립니다',
-  dualCandidateNanoBananaTitle: '후보 B · 선명한 윤곽 · 가림 정돈 (Nano Banana 2.1)',
+  dualCandidateNanoBananaTitle: '후보 B · 선명한 윤곽 · 가림 정돈',
   dualCandidateNanoBananaDesc: '손·소품 제거와 또렷한 눈코입·턱선 정리에 강합니다',
   dualCandidatePickButton: '이 버전이 더 닮았어요',
   dualCandidateSelectedBadge: '선택됨',
@@ -178,11 +190,13 @@ export const DEFAULT_TEMPLATE_DIRECTOR_COPY_EN: TemplateDirectorCopy = {
   subtitle:
     'Review the template defaults below and override any outfit, makeup, hair, or expression via reference photo or text.',
   outfitSlotLabel: 'Outfit reference',
-  outfitSlotHint: '@Image 2 · Look authority',
+  outfitSlotHint: 'Outfit & styling reference',
   propSlotLabel: 'Prop or product',
-  propSlotHint: '@Image 3 · Object authority',
+  propSlotHint: 'Prop & product reference',
+  sceneSlotLabel: 'Scene & backdrop photo',
+  sceneSlotHint: 'Backdrop & mood reference',
   removeSlotLabel: 'Remove reference',
-  inputLabel: 'One-line note to the director',
+  inputLabel: 'One-line scene direction',
   inputPlaceholder: 'e.g. In shot 2, hold my perfume bottle instead of the cup and smile softly at the lens',
   defaultReferencePrompt: 'Apply the attached reference image naturally to the scene',
   applyButton: 'Apply to scene',
@@ -190,8 +204,8 @@ export const DEFAULT_TEMPLATE_DIRECTOR_COPY_EN: TemplateDirectorCopy = {
   resetButton: 'Reset to original',
   activeChipsLabel: 'Applied customizations',
   removeChipLabel: 'Remove customization',
-  cleanupAcceptOcclusion: 'Clean up occlusion with TWINGS (+2 credits)',
-  cleanupAcceptRetouch: 'Normalize beauty-filter proportions with TWINGS (+2 credits)',
+  cleanupAcceptOcclusion: 'Clean up occlusion with TWINGS',
+  cleanupAcceptRetouch: 'Normalize beauty-filter proportions with TWINGS',
   cleanupAcceptDetail: 'Restore optical sharpness with TWINGS (Free)',
   cleanupAcceptedBadge: 'Auto photo cleanup active',
   cleanupSkipButton: 'Use original photo as-is',
@@ -199,10 +213,10 @@ export const DEFAULT_TEMPLATE_DIRECTOR_COPY_EN: TemplateDirectorCopy = {
   cleanupChangeButton: 'Change choice',
   retakeRecommendedBadge: 'Front solo photo recommended',
   dualCandidateHeading:
-    'To prevent facial drift from occlusion or retouching, compare both engine masters and pick the one that looks most like you.',
-  dualCandidateSeedreamTitle: 'Candidate A · Soft Natural Likeness (Seedream 5.0 Pro)',
+    'To prevent facial drift from occlusion or retouching, compare both versions and pick the one that looks most like you.',
+  dualCandidateSeedreamTitle: 'Candidate A · Soft Natural Likeness',
   dualCandidateSeedreamDesc: 'Preserves soft facial harmony and natural warm skin tone',
-  dualCandidateNanoBananaTitle: 'Candidate B · Crisp Contour & Cleanup (Nano Banana 2.1)',
+  dualCandidateNanoBananaTitle: 'Candidate B · Crisp Contour & Cleanup',
   dualCandidateNanoBananaDesc: 'Excels at removing hands/props and sharpening feature lines',
   dualCandidatePickButton: 'Looks most like me',
   dualCandidateSelectedBadge: 'Selected',
@@ -311,6 +325,13 @@ export interface TemplateDirectorPanelProps {
     resolution: PersonalVideoResolution,
     quote: VideoResolutionTierQuote
   ) => void;
+  medium?: 'image' | 'video';
+  pricingDisplayMode?: 'krw' | 'store_credits';
+  disclosedRecipe?: PublicRecipe | null;
+  onDraftChange?: (draft: {
+    directorSpec: PersonalDirectorSpec | null;
+    slotFiles: Partial<Record<'look_ref' | 'prop_ref' | 'scene_ref', File>>;
+  }) => void;
   disabled?: boolean;
   onCleanupChoice?: (choice: 'accept' | 'skip' | 'pending') => void;
   onSelectIdentityCandidate?: (choice: IdentityCandidateChoiceId) => void;
@@ -318,7 +339,11 @@ export interface TemplateDirectorPanelProps {
   onRequestReupload?: () => void;
   onSubmitTurn?: (input: {
     userMessage: string;
-    references: ReadonlyArray<{ slotName: 'outfit' | 'prop'; role: 'look' | 'product'; file: File }>;
+    references: ReadonlyArray<{
+      slotName: 'outfit' | 'prop' | 'scene';
+      role: 'look' | 'product' | 'scene';
+      file: File;
+    }>;
   }) => Promise<{
     accepted: boolean;
     assistantMessage: string;
@@ -328,7 +353,7 @@ export interface TemplateDirectorPanelProps {
 }
 
 const FOCUS_RING =
-  'focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#3875C5]';
+  'focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#09090B]';
 
 export function TemplateDirectorPanel({
   locale = 'ko',
@@ -349,6 +374,10 @@ export function TemplateDirectorPanel({
   videoResolutionSpec = null,
   initialResolution = '720p',
   onResolutionChange,
+  medium,
+  pricingDisplayMode = 'krw',
+  disclosedRecipe = null,
+  onDraftChange,
   disabled = false,
   onCleanupChoice,
   onSelectIdentityCandidate,
@@ -415,8 +444,10 @@ export function TemplateDirectorPanel({
     initialResolution
   );
 
+  const isVideoContext = medium === 'video' || Boolean(videoResolutionSpec);
+
   const videoResolutionMultiQuote: VideoResolutionMultiTierQuote | null =
-    totalSetFrames === 0
+    totalSetFrames === 0 && Boolean(videoResolutionSpec)
       ? quoteVideoResolutionTiers({
           seconds: videoResolutionSpec?.runtimeSeconds ?? 10,
           aspect: videoResolutionSpec?.aspect ?? '9:16',
@@ -452,18 +483,56 @@ export function TemplateDirectorPanel({
   const [turnAccepted, setTurnAccepted] = useState<boolean>(true);
   const [fileError, setFileError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
-  const [draggingSlot, setDraggingSlot] = useState<'outfit' | 'prop' | null>(null);
+  const [draggingSlot, setDraggingSlot] = useState<'outfit' | 'prop' | 'scene' | null>(null);
   const [, startTransition] = useTransition();
 
+  const [audioMode, setAudioMode] = useState<PersonalAudioMode>('ambient');
+  const [bgmMood, setBgmMood] = useState<PersonalBgmMood>('cinematic');
   const [outfitSlot, setOutfitSlot] = useState<DirectorReferenceSlotValue | null>(null);
   const [propSlot, setPropSlot] = useState<DirectorReferenceSlotValue | null>(null);
+  const [sceneSlot, setSceneSlot] = useState<DirectorReferenceSlotValue | null>(null);
   const [pasteNotice, setPasteNotice] = useState<string | null>(null);
 
   const outfitInputRef = useRef<HTMLInputElement>(null);
   const propInputRef = useRef<HTMLInputElement>(null);
+  const sceneInputRef = useRef<HTMLInputElement>(null);
   const textInputRef = useRef<HTMLTextAreaElement>(null);
+  const onDraftChangeRef = useRef(onDraftChange);
+  onDraftChangeRef.current = onDraftChange;
   const activeUrlsRef = useRef<Set<string>>(new Set());
   const requestEpochRef = useRef(0);
+
+  // Sync draft spec and attached slot files to the parent studio form without re-trigger loops.
+  useEffect(() => {
+    const notify = onDraftChangeRef.current;
+    if (!notify) return;
+    const slotFiles: Partial<Record<'look_ref' | 'prop_ref' | 'scene_ref', File>> = {
+      ...(outfitSlot ? { look_ref: outfitSlot.file } : {}),
+      ...(propSlot ? { prop_ref: propSlot.file } : {}),
+      ...(sceneSlot ? { scene_ref: sceneSlot.file } : {})
+    };
+    const slotOverrides: Array<'look_ref' | 'prop_ref' | 'scene_ref'> = [];
+    if (outfitSlot) slotOverrides.push('look_ref');
+    if (propSlot) slotOverrides.push('prop_ref');
+    if (sceneSlot) slotOverrides.push('scene_ref');
+    const trimmedMessage = userMessage.trim();
+    const hasBgm = isVideoContext && audioMode === 'bgm';
+    const hasAny =
+      chips.length > 0 || trimmedMessage.length > 0 || hasBgm || slotOverrides.length > 0;
+    notify({
+      slotFiles,
+      directorSpec: hasAny
+        ? {
+            userMessage: trimmedMessage || null,
+            summaryChips: chips,
+            audioMode: isVideoContext ? audioMode : 'ambient',
+            bgmMood: hasBgm ? bgmMood : null,
+            structuredIntent: null,
+            slotOverrides
+          }
+        : null
+    });
+  }, [audioMode, bgmMood, chips, isVideoContext, outfitSlot, propSlot, sceneSlot, userMessage]);
 
   // Clean up all created object URLs on unmount so mobile Safari never leaks blob memory.
   useEffect(() => {
@@ -482,8 +551,8 @@ export function TemplateDirectorPanel({
   }, [photoInspection?.status, photoInspection?.userMessageKo]);
 
   const assignReferenceSlot = (
-    slotName: 'outfit' | 'prop',
-    role: 'look' | 'product',
+    slotName: 'outfit' | 'prop' | 'scene',
+    role: 'look' | 'product' | 'scene',
     file: File | null | undefined
   ) => {
     if (!file) return;
@@ -501,16 +570,22 @@ export function TemplateDirectorPanel({
         activeUrlsRef.current.delete(outfitSlot.previewUrl);
       }
       setOutfitSlot({ slotName, role, file, previewUrl });
-    } else {
+    } else if (slotName === 'prop') {
       if (propSlot?.previewUrl) {
         URL.revokeObjectURL(propSlot.previewUrl);
         activeUrlsRef.current.delete(propSlot.previewUrl);
       }
       setPropSlot({ slotName, role, file, previewUrl });
+    } else {
+      if (sceneSlot?.previewUrl) {
+        URL.revokeObjectURL(sceneSlot.previewUrl);
+        activeUrlsRef.current.delete(sceneSlot.previewUrl);
+      }
+      setSceneSlot({ slotName, role, file, previewUrl });
     }
   };
 
-  const clearReferenceSlot = (slotName: 'outfit' | 'prop') => {
+  const clearReferenceSlot = (slotName: 'outfit' | 'prop' | 'scene') => {
     if (slotName === 'outfit' && outfitSlot) {
       URL.revokeObjectURL(outfitSlot.previewUrl);
       activeUrlsRef.current.delete(outfitSlot.previewUrl);
@@ -522,6 +597,12 @@ export function TemplateDirectorPanel({
       activeUrlsRef.current.delete(propSlot.previewUrl);
       setPropSlot(null);
       if (propInputRef.current) propInputRef.current.value = '';
+    }
+    if (slotName === 'scene' && sceneSlot) {
+      URL.revokeObjectURL(sceneSlot.previewUrl);
+      activeUrlsRef.current.delete(sceneSlot.previewUrl);
+      setSceneSlot(null);
+      if (sceneInputRef.current) sceneInputRef.current.value = '';
     }
   };
 
@@ -538,6 +619,8 @@ export function TemplateDirectorPanel({
       clearReferenceSlot('outfit');
     } else if (slot === 'prop') {
       clearReferenceSlot('prop');
+    } else if (slot === 'lighting_mood') {
+      clearReferenceSlot('scene');
     }
     startTransition(() => {
       const next = chips.filter((chip) => chip.slot !== slot);
@@ -556,13 +639,15 @@ export function TemplateDirectorPanel({
         const pastedFile = item.getAsFile();
         if (pastedFile) {
           event.preventDefault();
-          const targetSlot: 'outfit' | 'prop' = outfitSlot === null ? 'outfit' : 'prop';
-          const targetRole: 'look' | 'product' = targetSlot === 'outfit' ? 'look' : 'product';
+          const targetSlot: 'outfit' | 'prop' | 'scene' =
+            outfitSlot === null ? 'outfit' : propSlot === null ? 'prop' : 'scene';
+          const targetRole: 'look' | 'product' | 'scene' =
+            targetSlot === 'outfit' ? 'look' : targetSlot === 'prop' ? 'product' : 'scene';
           assignReferenceSlot(targetSlot, targetRole, pastedFile);
           setPasteNotice(
             locale === 'en'
-              ? `Pasted image into ${targetSlot === 'outfit' ? '@Image 2 (Outfit)' : '@Image 3 (Prop)'}`
-              : `클립보드 사진을 ${targetSlot === 'outfit' ? '@Image 2 (의상 레퍼런스)' : '@Image 3 (소품 레퍼런스)'}에 첨부했어요`
+              ? `Pasted image into ${targetSlot === 'outfit' ? 'Outfit reference' : targetSlot === 'prop' ? 'Prop reference' : 'Backdrop reference'}`
+              : `클립보드 사진을 ${targetSlot === 'outfit' ? '의상 레퍼런스' : targetSlot === 'prop' ? '소품 레퍼런스' : '배경 레퍼런스'}에 첨부했어요`
           );
           return;
         }
@@ -575,6 +660,9 @@ export function TemplateDirectorPanel({
     setSubmitting(false);
     clearReferenceSlot('outfit');
     clearReferenceSlot('prop');
+    clearReferenceSlot('scene');
+    setAudioMode('ambient');
+    setBgmMood('cinematic');
     setUserMessage('');
     setFileError(null);
     setPasteNotice(null);
@@ -588,7 +676,7 @@ export function TemplateDirectorPanel({
 
   const handleApplyTurn = async () => {
     const trimmed = userMessage.trim();
-    const refs = [outfitSlot, propSlot].filter(
+    const refs = [outfitSlot, propSlot, sceneSlot].filter(
       (item): item is DirectorReferenceSlotValue => item !== null
     );
     if ((!trimmed && refs.length === 0) || submitting || disabled) return;
@@ -618,6 +706,67 @@ export function TemplateDirectorPanel({
           summaryKo: trimmed.slice(0, 36)
         });
       }
+
+      // Include attached scene reference chip if active so users see backdrop override reflected immediately.
+      if (sceneSlot) {
+        generatedChips.push({
+          slot: 'lighting_mood',
+          labelKo: locale === 'en' ? 'Backdrop ref' : '배경 레퍼런스',
+          summaryKo: sceneSlot.file.name.slice(0, 28)
+        });
+      }
+
+      if (templateId && typeof fetch === 'function') {
+        const myEpoch = ++requestEpochRef.current;
+        setSubmitting(true);
+        setFileError(null);
+        try {
+          const form = new FormData();
+          form.set('template', templateId);
+          form.set('locale', locale);
+          form.set('message', effectiveMessage);
+          form.set('audioMode', isVideoContext ? audioMode : 'ambient');
+          if (isVideoContext && audioMode === 'bgm') {
+            form.set('bgmMood', bgmMood);
+          }
+          if (outfitSlot) form.set('slot_look_ref', outfitSlot.file);
+          if (propSlot) form.set('slot_prop_ref', propSlot.file);
+          if (sceneSlot) form.set('slot_scene_ref', sceneSlot.file);
+
+          const res = await fetch('/api/template-director', {
+            method: 'POST',
+            body: form,
+            credentials: 'same-origin'
+          });
+          if (requestEpochRef.current !== myEpoch) return;
+          const payload = (await res.json().catch(() => null)) as {
+            ok?: boolean;
+            turn?: {
+              approved?: boolean;
+              replyKo?: string;
+              summaryChips?: DirectorSummaryChip[];
+            };
+          } | null;
+          if (res.ok && payload?.ok && payload.turn) {
+            setTurnAccepted(Boolean(payload.turn.approved));
+            if (payload.turn.replyKo) setAssistantMessage(payload.turn.replyKo);
+            if (payload.turn.approved && Array.isArray(payload.turn.summaryChips)) {
+              const next = upsertSummaryChips(chips, payload.turn.summaryChips);
+              setChips(next);
+              setUserMessage('');
+              onChipsChange?.(next);
+              return;
+            }
+          }
+        } catch {
+          // Offline or unauthenticated previewers fall back to local summary chips seamlessly.
+        } finally {
+          if (requestEpochRef.current === myEpoch) {
+            setSubmitting(false);
+          }
+        }
+      }
+
       const next = upsertSummaryChips(chips, generatedChips);
       setChips(next);
       setUserMessage('');
@@ -755,7 +904,7 @@ export function TemplateDirectorPanel({
       data-template-director-panel
       data-director-expanded={expanded ? 'true' : 'false'}
       data-template-archetype={resolvedBaseline.templateArchetypeId}
-      className="mt-4 flex flex-col gap-3 text-[#0E1013]"
+      className="mt-4 flex flex-col gap-3 text-[#09090B]"
     >
       {/* Step 0: Uploaded Photo Inspection & Dual-Candidate Selection Banner (Sky Tint + Double-Ring Specular Border) */}
       {showInspectionCard && photoInspection && (
@@ -765,18 +914,20 @@ export function TemplateDirectorPanel({
           data-photo-cleanup-choice={cleanupChoice}
           data-photo-selected-candidate={selectedCandidate ?? 'none'}
           aria-label="사진 자동 검수 안내"
-          className="rounded-[20px] border border-[#E4E6EA] bg-[#F3F7FA] p-4 shadow-[inset_0_1px_0_0_rgba(255,255,255,0.9),0_2px_8px_rgba(14,16,19,0.03)]"
+          className="rounded-[20px] border border-[#E4E4E7] bg-[#F4F4F5] p-4"
         >
           <div className="flex flex-wrap items-center justify-between gap-2">
-            <span className="inline-flex items-center gap-1.5 rounded-full bg-[#E8EFF7] px-2.5 py-1 font-mono text-[0.7rem] font-medium tracking-tight text-[#3063A7] tabular-nums">
-              <span aria-hidden="true" className="size-1.5 rounded-full bg-[#3875C5]" />
+            <span className="inline-flex items-center gap-1.5 rounded-full bg-white px-2.5 py-1 font-mono text-[0.7rem] font-medium tracking-tight text-[#09090B] tabular-nums">
+              <span aria-hidden="true" className="size-1.5 rounded-full bg-[#FF58AE]" />
               {photoInspection.status === 'needs_retake'
                 ? copy.retakeRecommendedBadge
                 : cleanupChoice === 'accepted'
                   ? copy.cleanupAcceptedBadge
                   : cleanupChoice === 'skipped'
                     ? copy.cleanupSkippedBadge
-                    : `FACE RATIO ${Math.round(photoInspection.faceWidthRatio * 100)}%`}
+                    : locale === 'en'
+                      ? `Face ratio ${Math.round(photoInspection.faceWidthRatio * 100)}%`
+                      : `얼굴 비율 ${Math.round(photoInspection.faceWidthRatio * 100)}%`}
             </span>
 
             {photoInspection.status === 'needs_cleanup' && cleanupChoice !== 'pending' && (
@@ -789,33 +940,33 @@ export function TemplateDirectorPanel({
                   setSelectedCandidate(null);
                   onCleanupChoice?.('pending');
                 }}
-                className={`inline-flex min-h-9 items-center rounded-full px-2.5 text-xs font-medium text-[#3063A7] underline underline-offset-4 hover:text-[#0E1013] ${FOCUS_RING}`}
+                className={`inline-flex min-h-9 items-center rounded-full px-2.5 text-xs font-medium text-[#CC1573] underline underline-offset-4 hover:text-[#09090B] ${FOCUS_RING}`}
               >
                 {copy.cleanupChangeButton}
               </button>
             )}
           </div>
 
-          <p className="mt-2.5 text-[0.9rem] leading-[1.58] text-[#0E1013]">{inspectionMessage}</p>
+          <p className="mt-2.5 text-[0.9rem] leading-[1.58] text-[#09090B]">{inspectionMessage}</p>
 
           {/* Direct Re-Upload Recommendation Box (No-AI-Face-Transform Default Policy) */}
           {suitability && suitability.recommendDirectReupload && (
             <div
               data-photo-reupload-recommendation={suitability.issueCategory}
               data-prefer-direct-upload="true"
-              className="mt-3 rounded-[16px] border border-[#3875C5]/35 bg-white p-3.5 shadow-[inset_0_1px_0_0_rgba(255,255,255,0.9)]"
+              className="mt-3 rounded-[16px] border border-[#09090B]/20 bg-white p-3.5"
             >
               <div className="flex flex-wrap items-center justify-between gap-2">
-                <span className="inline-flex items-center gap-1.5 rounded-full bg-[#3875C5] px-2.5 py-0.5 font-mono text-[0.65rem] font-semibold text-white">
+                <span className="inline-flex items-center gap-1.5 rounded-full bg-[#09090B] px-2.5 py-0.5 text-[0.68rem] font-semibold text-white">
                   {locale === 'en'
-                    ? 'RECOMMENDED · DIRECT PHOTO UPLOAD (NO AI FACE CHANGE)'
+                    ? 'Recommended · Direct photo upload'
                     : '가장 나답게 나오는 방법 · 다른 정면 사진 직접 업로드 권장'}
                 </span>
               </div>
-              <p className="mt-2 text-xs leading-[1.55] text-[#41444D]">
+              <p className="mt-2 text-xs leading-[1.55] text-[#52525B]">
                 {locale === 'en' ? suitability.whyUnsuitableEn : suitability.whyUnsuitableKo}
               </p>
-              <p className="mt-1 text-xs font-medium leading-[1.55] text-[#0E1013]">
+              <p className="mt-1 text-xs font-medium leading-[1.55] text-[#09090B]">
                 {locale === 'en' ? suitability.reuploadTipEn : suitability.reuploadTipKo}
               </p>
               <div className="mt-2.5">
@@ -824,7 +975,7 @@ export function TemplateDirectorPanel({
                   data-photo-reupload-cta
                   disabled={disabled}
                   onClick={handleTriggerReupload}
-                  className={`inline-flex min-h-10 w-full items-center justify-center rounded-full bg-[#0E1013] px-4 py-2 text-xs font-semibold text-white transition-opacity hover:opacity-90 disabled:opacity-40 sm:w-auto ${FOCUS_RING}`}
+                  className={`inline-flex min-h-10 w-full items-center justify-center rounded-full bg-[#09090B] px-4 py-2 text-xs font-semibold text-white transition-opacity hover:opacity-90 disabled:opacity-40 sm:w-auto ${FOCUS_RING}`}
                 >
                   {locale === 'en'
                     ? 'Upload another front-facing photo directly (Recommended)'
@@ -834,16 +985,16 @@ export function TemplateDirectorPanel({
             </div>
           )}
 
-          {/* Dual-Candidate Likeness Picker (Seedream 5.0 Pro vs Nano Banana 2.1) */}
+          {/* Dual-Candidate Likeness Picker */}
           {photoInspection.status === 'needs_cleanup' && showDualCandidates && (
             <div
               data-photo-dual-candidates
               role="radiogroup"
               aria-label={copy.dualCandidateHeading}
-              className="mt-3 rounded-[18px] border border-[#E4E6EA] bg-white p-3 shadow-[inset_0_1px_0_0_rgba(255,255,255,0.9)]"
+              className="mt-3 rounded-[18px] border border-[#E4E4E7] bg-white p-3"
             >
               <div className="flex flex-wrap items-center justify-between gap-2">
-                <p className="text-xs font-medium text-[#41444D]">{copy.dualCandidateHeading}</p>
+                <p className="text-xs font-medium text-[#52525B]">{copy.dualCandidateHeading}</p>
                 {originalPhotoUrl && (
                   <button
                     type="button"
@@ -851,7 +1002,7 @@ export function TemplateDirectorPanel({
                     aria-pressed={compareOriginalOpen}
                     disabled={disabled}
                     onClick={() => setCompareOriginalOpen((prev) => !prev)}
-                    className={`inline-flex min-h-8 items-center rounded-full border border-[#E4E6EA] bg-[#F3F7FA] px-2.5 py-1 text-[0.7rem] font-medium text-[#3063A7] transition-colors hover:border-[#3875C5] hover:bg-[#E8EFF7] ${FOCUS_RING}`}
+                    className={`inline-flex min-h-8 items-center rounded-full border border-[#E4E4E7] bg-[#F4F4F5] px-2.5 py-1 text-[0.7rem] font-medium text-[#09090B] transition-colors hover:border-[#09090B] ${FOCUS_RING}`}
                   >
                     {compareOriginalOpen
                       ? (copy.dualCandidateCompareHide ?? '원본 대조 닫기')
@@ -863,9 +1014,9 @@ export function TemplateDirectorPanel({
               {originalPhotoUrl && compareOriginalOpen && (
                 <div
                   data-candidate-original-preview
-                  className="mt-2.5 flex items-center gap-3 rounded-[14px] border border-[#E4E6EA] bg-[#F6F7F9] p-2.5"
+                  className="mt-2.5 flex items-center gap-3 rounded-[14px] border border-[#E4E4E7] bg-[#F4F4F5] p-2.5"
                 >
-                  <div className="aspect-[3/4] w-16 shrink-0 overflow-hidden rounded-xl border border-[#C7CCD3] bg-white">
+                  <div className="aspect-[3/4] w-16 shrink-0 overflow-hidden rounded-xl border border-[#E4E4E7] bg-white">
                     {/* eslint-disable-next-line @next/next/no-img-element -- original selfie preview */}
                     <img
                       src={originalPhotoUrl}
@@ -874,13 +1025,13 @@ export function TemplateDirectorPanel({
                     />
                   </div>
                   <div className="min-w-0">
-                    <span className="inline-block rounded-full bg-white px-2 py-0.5 font-mono text-[0.65rem] font-semibold text-[#41444D] uppercase">
-                      ORIGINAL
+                    <span className="inline-block rounded-full bg-white px-2 py-0.5 text-[0.65rem] font-semibold text-[#52525B]">
+                      {locale === 'en' ? 'Original' : '원본'}
                     </span>
-                    <p className="mt-1 text-xs font-semibold text-[#0E1013]">
+                    <p className="mt-1 text-xs font-semibold text-[#09090B]">
                       {copy.dualCandidateOriginalLabel ?? '내 원본 셀카'}
                     </p>
-                    <p className="mt-0.5 text-[0.72rem] leading-[1.45] text-[#676B75]">
+                    <p className="mt-0.5 text-[0.72rem] leading-[1.45] text-[#71717A]">
                       {locale === 'en'
                         ? 'Compare eye shape, nose contour, and natural expression with Candidates A and B below.'
                         : '눈매·코 라인·자연스러운 인상이 아래 후보 A·B 중 어느 쪽과 더 가까운지 비교해 보세요.'}
@@ -894,7 +1045,7 @@ export function TemplateDirectorPanel({
                   data-candidates-loading-status
                   role="status"
                   aria-live="polite"
-                  className="mt-2 font-mono text-[0.7rem] font-medium text-[#3063A7]"
+                  className="mt-2 text-[0.72rem] font-medium text-[#52525B]"
                 >
                   {copy.dualCandidateGenerating ?? '두 가지 맞춤형 얼굴 후보를 생성하고 있어요…'}
                 </p>
@@ -927,36 +1078,36 @@ export function TemplateDirectorPanel({
                         'flex flex-col justify-between gap-2 rounded-[16px] border p-3 text-left transition-colors',
                         FOCUS_RING,
                         isSelected
-                          ? 'border-[#3875C5] bg-[#E8EFF7]'
-                          : 'border-[#E4E6EA] bg-[#F6F7F9] hover:border-[#C7CCD3] hover:bg-white'
+                          ? 'border-[#09090B] bg-[#F4F4F5]'
+                          : 'border-[#E4E4E7] bg-white hover:border-[#09090B]'
                       ].join(' ')}
                     >
                       <div className="flex items-start justify-between gap-2">
                         <div>
                           <div className="flex flex-wrap items-center gap-1.5">
-                            <p className="text-xs font-semibold text-[#0E1013]">{card.title}</p>
+                            <p className="text-xs font-semibold text-[#09090B]">{card.title}</p>
                             {card.isRecommended && (
                               <span
                                 data-candidate-recommended-badge
-                                className="rounded-full bg-[#3875C5] px-2 py-0.5 font-mono text-[0.62rem] font-semibold text-white"
+                                className="rounded-full bg-[#FF58AE] px-2 py-0.5 text-[0.62rem] font-bold text-[#09090B]"
                               >
                                 {copy.dualCandidateRecommendedBadge ?? '가장 닮은 추천'}
                               </span>
                             )}
                           </div>
-                          <p className="mt-0.5 text-[0.75rem] leading-[1.45] text-[#41444D]">
+                          <p className="mt-0.5 text-[0.75rem] leading-[1.45] text-[#52525B]">
                             {card.desc}
                           </p>
                         </div>
                         {card.similarityScore !== null && (
-                          <span className="shrink-0 rounded-full bg-white px-2 py-0.5 font-mono text-[0.65rem] font-semibold text-[#3063A7] tabular-nums">
+                          <span className="shrink-0 rounded-full bg-[#F4F4F5] px-2 py-0.5 font-mono text-[0.65rem] font-semibold text-[#09090B] tabular-nums">
                             {Math.round(card.similarityScore * 100)}%
                           </span>
                         )}
                       </div>
 
                       {card.previewUrl ? (
-                        <div className="aspect-[3/4] w-full overflow-hidden rounded-xl border border-[#E4E6EA] bg-white">
+                        <div className="aspect-[3/4] w-full overflow-hidden rounded-xl border border-[#E4E4E7] bg-white">
                           {/* eslint-disable-next-line @next/next/no-img-element -- candidate preview */}
                           <img
                             src={card.previewUrl}
@@ -968,7 +1119,7 @@ export function TemplateDirectorPanel({
                         <div
                           data-candidate-skeleton={card.engine}
                           aria-hidden="true"
-                          className="aspect-[3/4] w-full animate-pulse rounded-xl border border-[#E4E6EA] bg-[#E8EFF7]/65 motion-reduce:animate-none"
+                          className="aspect-[3/4] w-full animate-pulse rounded-xl border border-[#E4E4E7] bg-[#F4F4F5] motion-reduce:animate-none"
                         />
                       ) : null}
 
@@ -976,8 +1127,8 @@ export function TemplateDirectorPanel({
                         className={[
                           'inline-flex min-h-8 w-full items-center justify-center rounded-full px-3 py-1 text-[0.72rem] font-semibold',
                           isSelected
-                            ? 'bg-[#3875C5] text-white'
-                            : 'border border-[#C7CCD3] bg-white text-[#3063A7]'
+                            ? 'bg-[#09090B] text-white'
+                            : 'border border-[#E4E4E7] bg-white text-[#09090B]'
                         ].join(' ')}
                       >
                         {isSelected ? copy.dualCandidateSelectedBadge : copy.dualCandidatePickButton}
@@ -1004,7 +1155,7 @@ export function TemplateDirectorPanel({
                   }
                   onCleanupChoice?.('accept');
                 }}
-                className={`inline-flex min-h-11 flex-1 items-center justify-center rounded-full bg-[#3875C5] px-4 py-2 text-xs font-semibold text-white transition-opacity hover:opacity-90 disabled:opacity-40 ${FOCUS_RING}`}
+                className={`inline-flex min-h-11 flex-1 items-center justify-center rounded-full bg-[#FF58AE] px-4 py-2 text-xs font-bold text-[#09090B] transition-colors hover:bg-[#FF389F] disabled:opacity-40 ${FOCUS_RING}`}
               >
                 {cleanupAcceptLabel}
               </button>
@@ -1018,7 +1169,7 @@ export function TemplateDirectorPanel({
                   onSelectIdentityCandidate?.('original');
                   onCleanupChoice?.('skip');
                 }}
-                className={`inline-flex min-h-11 items-center justify-center rounded-full border border-[#C7CCD3] bg-white px-4 py-2 text-xs font-medium text-[#41444D] transition-colors hover:border-[#0E1013] hover:text-[#0E1013] disabled:opacity-40 ${FOCUS_RING}`}
+                className={`inline-flex min-h-11 items-center justify-center rounded-full border border-[#E4E4E7] bg-white px-4 py-2 text-xs font-medium text-[#52525B] transition-colors hover:border-[#09090B] hover:text-[#09090B] disabled:opacity-40 ${FOCUS_RING}`}
               >
                 {copy.cleanupSkipButton}
               </button>
@@ -1040,7 +1191,7 @@ export function TemplateDirectorPanel({
               ? 'Select which shots to generate'
               : '화보 세트 중 원하는 컷 골라서 제작하기'
           }
-          className="rounded-[20px] border border-[#E4E6EA] bg-[#F3F7FA] p-4 shadow-[inset_0_1px_0_0_rgba(255,255,255,0.9)]"
+          className="rounded-[20px] border border-[#E4E4E7] bg-[#F4F4F5] p-4"
         >
           <input
             type="hidden"
@@ -1050,16 +1201,20 @@ export function TemplateDirectorPanel({
           />
           <div className="flex flex-wrap items-start justify-between gap-2">
             <div>
-              <span className="inline-flex items-center gap-1.5 rounded-full bg-[#E8EFF7] px-2.5 py-0.5 font-mono text-[0.68rem] font-semibold text-[#3063A7] tabular-nums">
-                <span aria-hidden="true" className="size-1.5 rounded-full bg-[#3875C5]" />
+              <span className="inline-flex items-center gap-1.5 rounded-full bg-white px-2.5 py-0.5 font-mono text-[0.68rem] font-semibold text-[#09090B] tabular-nums">
+                <span aria-hidden="true" className="size-1.5 rounded-full bg-[#FF58AE]" />
                 {locale === 'en'
-                  ? `SELECT SHOTS (${selectiveQuote.selectedCount}/${selectiveQuote.totalFrames})`
-                  : `원하는 화보 컷만 골라서 제작 (${selectiveQuote.selectedCount}/${selectiveQuote.totalFrames}컷 선택됨)`}
+                  ? `Select shots (${selectiveQuote.selectedCount}/${selectiveQuote.totalFrames})`
+                  : `원하는 화보 컷만 골라서 제작 (${selectiveQuote.selectedCount}/${selectiveQuote.totalFrames}컷 선택)`}
               </span>
-              <p className="mt-1.5 text-xs leading-relaxed text-[#41444D]">
-                {locale === 'en'
-                  ? `Pick all ${selectiveQuote.totalFrames} shots or choose only the frames you want — credits scale automatically.`
-                  : `전체 ${selectiveQuote.totalFrames}장을 다 뽑거나, 마음에 드는 구도만 골라서 제작할 수 있어요. 선택한 장수에 맞춰 크레딧이 자동 계산됩니다.`}
+              <p className="mt-1.5 text-xs leading-relaxed text-[#52525B]">
+                {pricingDisplayMode === 'store_credits'
+                  ? locale === 'en'
+                    ? `Pick all ${selectiveQuote.totalFrames} shots or choose only the frames you want — credits scale automatically.`
+                    : `전체 ${selectiveQuote.totalFrames}장을 다 뽑거나, 마음에 드는 구도만 골라서 제작할 수 있어요. 선택한 컷 수에 맞춰 크레딧이 계산됩니다.`
+                  : locale === 'en'
+                    ? `Pick all ${selectiveQuote.totalFrames} shots or choose only the frames you want — pricing adjusts per shot.`
+                    : `전체 ${selectiveQuote.totalFrames}장을 다 뽑거나, 마음에 드는 구도만 골라서 제작할 수 있어요. 선택한 컷 수에 맞춰 금액이 달라집니다.`}
               </p>
             </div>
 
@@ -1073,7 +1228,7 @@ export function TemplateDirectorPanel({
                     Array.from({ length: selectiveQuote.totalFrames }, (_, idx) => idx)
                   )
                 }
-                className={`rounded-full border border-[#C7CCD3] bg-white px-2.5 py-1 text-[0.7rem] font-medium text-[#0E1013] hover:border-[#3875C5] disabled:opacity-45 ${FOCUS_RING}`}
+                className={`rounded-full border border-[#E4E4E7] bg-white px-2.5 py-1 text-[0.7rem] font-medium text-[#09090B] hover:border-[#09090B] disabled:opacity-45 ${FOCUS_RING}`}
               >
                 {locale === 'en' ? `All ${selectiveQuote.totalFrames} shots` : `전체 ${selectiveQuote.totalFrames}컷 선택`}
               </button>
@@ -1087,7 +1242,7 @@ export function TemplateDirectorPanel({
                     selectiveQuote.selectedFrameIndices[0] === 0)
                 }
                 onClick={() => updateSelectedFrames([0])}
-                className={`rounded-full border border-[#C7CCD3] bg-white px-2.5 py-1 text-[0.7rem] font-medium text-[#3063A7] hover:border-[#3875C5] disabled:opacity-45 ${FOCUS_RING}`}
+                className={`rounded-full border border-[#E4E4E7] bg-white px-2.5 py-1 text-[0.7rem] font-medium text-[#52525B] hover:border-[#09090B] hover:text-[#09090B] disabled:opacity-45 ${FOCUS_RING}`}
               >
                 {locale === 'en' ? '1st shot only' : '1번 컷만 선택'}
               </button>
@@ -1120,24 +1275,24 @@ export function TemplateDirectorPanel({
                     'flex flex-col items-center justify-between gap-1.5 rounded-[14px] border p-2 text-center transition-colors',
                     FOCUS_RING,
                     isSelected
-                      ? 'border-[#3875C5] bg-white shadow-sm'
-                      : 'border-[#E4E6EA] bg-[#F6F7F9]/75 opacity-65 hover:opacity-100'
+                      ? 'border-[#09090B] bg-white'
+                      : 'border-[#E4E4E7] bg-white/60 opacity-65 hover:opacity-100'
                   ].join(' ')}
                 >
                   {thumb ? (
-                    <div className="aspect-[4/5] w-full overflow-hidden rounded-[8px] bg-[#E8EFF7]">
+                    <div className="aspect-[4/5] w-full overflow-hidden rounded-[8px] bg-[#F4F4F5]">
                       {/* eslint-disable-next-line @next/next/no-img-element -- frame thumbnail */}
                       <img src={thumb} alt="" className="h-full w-full object-cover" />
                     </div>
                   ) : (
-                    <div className="flex aspect-[4/5] w-full items-center justify-center rounded-[8px] bg-[#E8EFF7] font-mono text-xs font-bold text-[#3063A7] tabular-nums">
+                    <div className="flex aspect-[4/5] w-full items-center justify-center rounded-[8px] bg-[#F4F4F5] font-mono text-xs font-bold text-[#09090B] tabular-nums">
                       0{idx + 1}
                     </div>
                   )}
                   <span
                     className={[
                       'inline-flex w-full items-center justify-center rounded-full px-1.5 py-0.5 font-mono text-[0.65rem] font-semibold tabular-nums',
-                      isSelected ? 'bg-[#3875C5] text-white' : 'bg-[#E4E6EA] text-[#41444D]'
+                      isSelected ? 'bg-[#09090B] text-white' : 'bg-[#F4F4F5] text-[#52525B]'
                     ].join(' ')}
                   >
                     {locale === 'en' ? `Shot ${idx + 1}` : `${idx + 1}컷`} {isSelected ? '✓' : ''}
@@ -1149,35 +1304,43 @@ export function TemplateDirectorPanel({
 
           <div
             data-selective-frame-quote
-            className="mt-3 flex flex-wrap items-center justify-between gap-2 rounded-[14px] border border-[#E4E6EA] bg-white px-3.5 py-2.5 text-xs"
+            className="mt-3 flex flex-wrap items-center justify-between gap-2 rounded-[14px] border border-[#E4E4E7] bg-white px-3.5 py-2.5 text-xs"
           >
             <div className="flex flex-wrap items-center gap-2">
-              <span className="font-semibold text-[#0E1013]">
+              <span className="font-semibold text-[#09090B]">
                 {locale === 'en'
                   ? `${selectiveQuote.selectedCount} of ${selectiveQuote.totalFrames} shots selected`
-                  : `총 ${selectiveQuote.totalFrames}컷 중 ${selectiveQuote.selectedCount}컷 제작`}
+                  : `총 ${selectiveQuote.totalFrames}컷 중 ${selectiveQuote.selectedCount}컷 선택`}
               </span>
-              {selectiveQuote.savedCredits > 0 && (
+              {selectiveQuote.savedKrw > 0 && (
                 <span
                   data-selective-saved-badge
-                  className="rounded-full bg-[#E8EFF7] px-2.5 py-0.5 font-mono text-[0.68rem] font-semibold text-[#3063A7] tabular-nums"
+                  className="rounded-full bg-[#F4F4F5] px-2.5 py-0.5 font-mono text-[0.68rem] font-semibold text-[#CC1573] tabular-nums"
                 >
-                  {locale === 'en'
-                    ? `Saves ${selectiveQuote.savedCredits} credits`
-                    : `전체 대비 ${selectiveQuote.savedCredits} 크레딧 (${selectiveQuote.savedKrw.toLocaleString('ko-KR')}원) 절약`}
+                  {pricingDisplayMode === 'store_credits'
+                    ? locale === 'en'
+                      ? `Saves ${selectiveQuote.savedCredits} credits`
+                      : `전체 대비 ${selectiveQuote.savedCredits} 크레딧 절약`
+                    : locale === 'en'
+                      ? `Saves ₩${selectiveQuote.savedKrw.toLocaleString('en-US')}`
+                      : `${selectiveQuote.savedKrw.toLocaleString('ko-KR')}원 절약`}
                 </span>
               )}
             </div>
-            <div className="font-mono text-xs font-bold text-[#3063A7] tabular-nums">
-              {locale === 'en'
-                ? `${selectiveQuote.totalCredits} credits (₩${selectiveQuote.totalKrw.toLocaleString('en-US')})`
-                : `${selectiveQuote.totalCredits} 크레딧 · 단건 ${selectiveQuote.totalKrw.toLocaleString('ko-KR')}원`}
+            <div className="font-mono text-xs font-bold text-[#09090B] tabular-nums">
+              {pricingDisplayMode === 'store_credits'
+                ? locale === 'en'
+                  ? `${selectiveQuote.totalCredits} credits`
+                  : `${selectiveQuote.totalCredits} 크레딧`
+                : locale === 'en'
+                  ? `₩${selectiveQuote.totalKrw.toLocaleString('en-US')}`
+                  : `${selectiveQuote.totalKrw.toLocaleString('ko-KR')}원`}
             </div>
           </div>
         </section>
       )}
 
-      {/* 3-Tier Video Resolution & Credit Mode Picker (480p Draft · 720p Standard · 1080p Masterpiece) + No-BGM Audio Notice */}
+      {/* 3-Tier Video Resolution Picker (480p Draft · 720p Standard · 1080p Masterpiece) + Seedance Audio Mode */}
       {videoResolutionMultiQuote && activeResolutionQuote && (
         <section
           data-video-resolution-tiers
@@ -1186,10 +1349,10 @@ export function TemplateDirectorPanel({
           data-selected-resolution-krw={activeResolutionQuote.totalKrw}
           aria-label={
             locale === 'en'
-              ? 'Select video resolution and credit mode'
-              : '영상 화질 및 크레딧 모드 선택 (480p Draft · 720p · 1080p)'
+              ? 'Select video resolution'
+              : '영상 화질 선택 (480p · 720p · 1080p)'
           }
-          className="rounded-[20px] border border-[#E4E6EA] bg-[#F3F7FA] p-4 shadow-[inset_0_1px_0_0_rgba(255,255,255,0.9)]"
+          className="rounded-[20px] border border-[#E4E4E7] bg-[#F4F4F5] p-4"
         >
           <input
             type="hidden"
@@ -1199,13 +1362,13 @@ export function TemplateDirectorPanel({
           />
           <div className="flex flex-wrap items-start justify-between gap-2">
             <div>
-              <span className="inline-flex items-center gap-1.5 rounded-full bg-[#E8EFF7] px-2.5 py-0.5 font-mono text-[0.68rem] font-semibold text-[#3063A7] tabular-nums">
-                <span aria-hidden="true" className="size-1.5 rounded-full bg-[#3875C5]" />
+              <span className="inline-flex items-center gap-1.5 rounded-full bg-white px-2.5 py-0.5 font-mono text-[0.68rem] font-semibold text-[#09090B] tabular-nums">
+                <span aria-hidden="true" className="size-1.5 rounded-full bg-[#FF58AE]" />
                 {locale === 'en'
-                  ? `RESOLUTION & CREDIT MODE · ${selectedResolution}`
-                  : `화질 · 크레딧 모드 선택 (${selectedResolution} 선택됨)`}
+                  ? `VIDEO RESOLUTION · ${selectedResolution}`
+                  : `영상 화질 선택 (${selectedResolution})`}
               </span>
-              <p className="mt-1.5 text-xs leading-relaxed text-[#41444D]">
+              <p className="mt-1.5 text-xs leading-relaxed text-[#52525B]">
                 {locale === 'en'
                   ? 'Test likeness and edits with 480p Draft first, share in crisp 720p Standard, or render in flagship 1080p Masterpiece.'
                   : '의상·연출 변경이나 얼굴 닮음새가 궁금할 땐 가벼운 480p Draft로 먼저 확인하고, 일상 업로드는 선명한 720p, 최고 소장본은 1080p로 선택하세요.'}
@@ -1213,11 +1376,15 @@ export function TemplateDirectorPanel({
             </div>
             <span
               data-draft-savings-pill
-              className="rounded-full border border-[#3875C5]/30 bg-white px-2.5 py-1 font-mono text-[0.68rem] font-semibold text-[#3063A7] tabular-nums"
+              className="rounded-full border border-[#E4E4E7] bg-white px-2.5 py-1 font-mono text-[0.68rem] font-semibold text-[#CC1573] tabular-nums"
             >
-              {locale === 'en'
-                ? `480p Draft saves ${videoResolutionMultiQuote.draftWorkflow.draftSavedCreditsVs720p} cr (${videoResolutionMultiQuote.draftWorkflow.draftSavedPercentVs720p}%)`
-                : `480p Draft · 본 영상 대비 ${videoResolutionMultiQuote.draftWorkflow.draftSavedCreditsVs720p} 크레딧(${videoResolutionMultiQuote.draftWorkflow.draftSavedPercentVs720p}%) 절약`}
+              {pricingDisplayMode === 'store_credits'
+                ? locale === 'en'
+                  ? `480p Draft saves ${videoResolutionMultiQuote.draftWorkflow.draftSavedCreditsVs720p} cr (${videoResolutionMultiQuote.draftWorkflow.draftSavedPercentVs720p}%)`
+                  : `480p Draft · 본 영상 대비 ${videoResolutionMultiQuote.draftWorkflow.draftSavedCreditsVs720p} 크레딧(${videoResolutionMultiQuote.draftWorkflow.draftSavedPercentVs720p}%) 절약`
+                : locale === 'en'
+                  ? `480p Draft saves ${videoResolutionMultiQuote.draftWorkflow.draftSavedPercentVs720p}%`
+                  : `480p Draft · 본 영상 대비 ${videoResolutionMultiQuote.draftWorkflow.draftSavedPercentVs720p}% 절약`}
             </span>
           </div>
 
@@ -1244,64 +1411,155 @@ export function TemplateDirectorPanel({
                     'flex flex-col justify-between gap-2 rounded-[16px] border p-3 text-left transition-colors',
                     FOCUS_RING,
                     isSelected
-                      ? 'border-[#3875C5] bg-white shadow-sm'
-                      : 'border-[#E4E6EA] bg-[#F6F7F9]/85 hover:border-[#C7CCD3] hover:bg-white'
+                      ? 'border-[#09090B] bg-white'
+                      : 'border-[#E4E4E7] bg-white/60 hover:border-[#09090B] hover:bg-white'
                   ].join(' ')}
                 >
                   <div>
                     <div className="flex flex-wrap items-center justify-between gap-1.5">
-                      <span className="font-mono text-xs font-bold text-[#0E1013] tabular-nums">
+                      <span className="font-mono text-xs font-bold text-[#09090B] tabular-nums">
                         {res}
                       </span>
                       <span
                         className={[
-                          'rounded-full px-2 py-0.5 font-mono text-[0.62rem] font-semibold',
+                          'rounded-full px-2 py-0.5 text-[0.62rem] font-semibold',
                           isSelected
-                            ? 'bg-[#3875C5] text-white'
-                            : 'bg-[#E8EFF7] text-[#3063A7]'
+                            ? 'bg-[#09090B] text-white'
+                            : 'bg-[#F4F4F5] text-[#52525B]'
                         ].join(' ')}
                       >
                         {locale === 'en' ? tier.badgeEn : tier.badgeKo}
                       </span>
                     </div>
-                    <p className="mt-1 text-xs font-semibold text-[#0E1013]">
+                    <p className="mt-1 text-xs font-semibold text-[#09090B]">
                       {locale === 'en' ? tier.titleEn : tier.titleKo}
                     </p>
-                    <p className="mt-0.5 text-[0.72rem] leading-[1.45] text-[#41444D]">
+                    <p className="mt-0.5 text-[0.72rem] leading-[1.45] text-[#52525B]">
                       {locale === 'en' ? tier.subtitleEn : tier.subtitleKo}
                     </p>
                   </div>
 
-                  <div className="flex items-baseline justify-between border-t border-[#E4E6EA] pt-2 font-mono tabular-nums">
-                    <span className="text-xs font-bold text-[#3063A7]">
-                      {locale === 'en'
-                        ? `${tier.totalCredits} cr`
-                        : `${tier.totalCredits} 크레딧`}
+                  <div className="flex items-baseline justify-between border-t border-[#E4E4E7] pt-2 font-mono tabular-nums">
+                    <span className="text-xs font-bold text-[#09090B]">
+                      {pricingDisplayMode === 'store_credits'
+                        ? locale === 'en'
+                          ? `${tier.totalCredits} cr`
+                          : `${tier.totalCredits} 크레딧`
+                        : locale === 'en'
+                          ? `₩${tier.totalKrw.toLocaleString('en-US')}`
+                          : `${tier.totalKrw.toLocaleString('ko-KR')}원`}
                     </span>
-                    <span className="text-[0.68rem] text-[#676B75]">
-                      {locale === 'en'
-                        ? `₩${tier.totalKrw.toLocaleString('en-US')}`
-                        : `단건 ${tier.totalKrw.toLocaleString('ko-KR')}원`}
+                    <span className="text-[0.68rem] text-[#71717A]">
+                      {locale === 'en' ? tier.badgeEn : tier.badgeKo}
                     </span>
                   </div>
                 </button>
               );
             })}
           </div>
+        </section>
+      )}
 
-          <div
-            data-personal-no-bgm-notice
-            className="mt-3 flex items-start gap-2 rounded-[14px] border border-[#E4E6EA] bg-white px-3.5 py-2.5 text-xs text-[#41444D]"
-          >
-            <span className="mt-0.5 shrink-0 rounded-full bg-[#E8EFF7] px-2 py-0.5 font-mono text-[0.62rem] font-semibold text-[#3063A7]">
-              NO-BGM SFX
+      {/* Seedance 2.5 Native Audio Option (Ambient voice/foley default vs Optional scene BGM) */}
+      {isVideoContext && (
+        <section
+          data-director-audio-toggle
+          aria-label={locale === 'en' ? 'Video audio option' : '영상 사운드 설정'}
+          className="rounded-[20px] border border-[#E4E4E7] bg-white p-3.5"
+        >
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <span className="text-xs font-semibold text-[#09090B]">
+              {locale === 'en' ? 'Video audio option' : '영상 사운드 설정'}
             </span>
-            <p className="leading-[1.5]">
-              {locale === 'en'
-                ? PERSONAL_NO_BGM_AUDIO_NOTICE_EN
-                : PERSONAL_NO_BGM_AUDIO_NOTICE_KO}
-            </p>
+            <div className="inline-flex rounded-full border border-[#E4E4E7] bg-[#F4F4F5] p-0.5">
+              {PERSONAL_AUDIO_MODES.map((mode) => {
+                const active = audioMode === mode;
+                const label =
+                  mode === 'ambient'
+                    ? locale === 'en'
+                      ? 'Ambient & voice only (Default)'
+                      : '현장음 · 목소리만 (기본)'
+                    : locale === 'en'
+                      ? 'Generate matching BGM'
+                      : '어울리는 배경음악 함께 생성';
+                return (
+                  <button
+                    key={mode}
+                    type="button"
+                    data-audio-mode-option={mode}
+                    aria-pressed={active}
+                    onClick={() => setAudioMode(mode)}
+                    className={`rounded-full px-3 py-1 text-[0.72rem] transition-colors ${
+                      active
+                        ? mode === 'bgm'
+                          ? 'bg-[#FF58AE] font-bold text-[#09090B]'
+                          : 'bg-[#09090B] font-semibold text-white'
+                        : 'font-medium text-[#52525B] hover:text-[#09090B]'
+                    } ${FOCUS_RING}`}
+                  >
+                    {label}
+                  </button>
+                );
+              })}
+            </div>
           </div>
+
+          {audioMode === 'bgm' ? (
+            <div className="mt-2.5 space-y-2">
+              <div className="flex flex-wrap gap-1.5">
+                {PERSONAL_BGM_MOODS.map((mood) => {
+                  const selected = bgmMood === mood;
+                  const label =
+                    locale === 'en'
+                      ? mood === 'cinematic'
+                        ? 'Cinematic strings'
+                        : mood === 'trendy_beat'
+                          ? 'Trendy beat'
+                          : 'Calm acoustic'
+                      : mood === 'cinematic'
+                        ? '시네마틱 무드'
+                        : mood === 'trendy_beat'
+                          ? '트렌디 비트'
+                          : '잔잔한 어쿠스틱';
+                  return (
+                    <button
+                      key={mood}
+                      type="button"
+                      data-director-bgm-mood={mood}
+                      aria-pressed={selected}
+                      onClick={() => setBgmMood(mood)}
+                      className={`rounded-full border px-3 py-1 text-[0.72rem] transition-colors ${
+                        selected
+                          ? 'border-[#09090B] bg-[#F4F4F5] font-semibold text-[#09090B]'
+                          : 'border-[#E4E4E7] bg-white text-[#52525B] hover:border-[#09090B]'
+                      } ${FOCUS_RING}`}
+                    >
+                      {label}
+                    </button>
+                  );
+                })}
+              </div>
+              <p className="text-[0.72rem] leading-[1.5] text-[#52525B]">
+                {locale === 'en'
+                  ? 'Scene-matched BGM is generated together with your video. To change the track later, start a new render.'
+                  : '장면 분위기에 어울리는 배경음악을 함께 생성합니다. 음악을 바꾸려면 새로 제작해야 합니다.'}
+              </p>
+            </div>
+          ) : (
+            <div
+              data-personal-no-bgm-notice
+              className="mt-2.5 flex items-start gap-2 rounded-[10px] bg-[#F4F4F5] px-3 py-2 text-xs text-[#52525B]"
+            >
+              <span className="mt-0.5 shrink-0 rounded-full bg-white px-2 py-0.5 text-[0.65rem] font-semibold text-[#09090B]">
+                {locale === 'en' ? 'Ambient audio' : '현장음 기본'}
+              </span>
+              <p className="leading-[1.5]">
+                {locale === 'en'
+                  ? PERSONAL_NO_BGM_AUDIO_NOTICE_EN
+                  : PERSONAL_NO_BGM_AUDIO_NOTICE_KO}
+              </p>
+            </div>
+          )}
         </section>
       )}
 
@@ -1318,15 +1576,15 @@ export function TemplateDirectorPanel({
             'inline-flex min-h-11 items-center gap-2 rounded-full border px-4 py-2 text-xs font-medium transition-colors',
             FOCUS_RING,
             expanded
-              ? 'border-[#3875C5] bg-[#E8EFF7] text-[#3063A7]'
-              : 'border-[#E4E6EA] bg-white text-[#41444D] hover:border-[#C7CCD3] hover:text-[#0E1013]'
+              ? 'border-[#09090B] bg-[#F4F4F5] text-[#09090B]'
+              : 'border-[#E4E4E7] bg-white text-[#52525B] hover:border-[#09090B] hover:text-[#09090B]'
           ].join(' ')}
         >
           <span>{expanded ? copy.toggleClose : copy.toggleOpen}</span>
           {chips.length > 0 && (
             <span
               data-director-chip-count
-              className="inline-flex min-w-5 items-center justify-center rounded-full bg-[#3875C5] px-1.5 py-0.5 font-mono text-[0.68rem] font-semibold text-white tabular-nums"
+              className="inline-flex min-w-5 items-center justify-center rounded-full bg-[#FF58AE] px-1.5 py-0.5 font-mono text-[0.68rem] font-bold text-[#09090B] tabular-nums"
             >
               {chips.length}
             </span>
@@ -1339,7 +1597,7 @@ export function TemplateDirectorPanel({
             data-director-reset
             disabled={disabled || submitting}
             onClick={resetAll}
-            className={`inline-flex min-h-11 items-center rounded-full px-3 text-xs text-[#676B75] underline underline-offset-4 hover:text-[#0E1013] disabled:opacity-40 ${FOCUS_RING}`}
+            className={`inline-flex min-h-11 items-center rounded-full px-3 text-xs text-[#71717A] underline underline-offset-4 hover:text-[#09090B] disabled:opacity-40 ${FOCUS_RING}`}
           >
             {copy.resetButton}
           </button>
@@ -1357,9 +1615,9 @@ export function TemplateDirectorPanel({
             <span
               key={`${chip.slot}-${chip.summaryKo}-${index}`}
               data-director-chip={chip.slot}
-              className="inline-flex min-h-9 items-center gap-1.5 rounded-full bg-[#0E1013] py-1 pr-1 pl-3.5 text-xs font-medium text-white"
+              className="inline-flex min-h-9 items-center gap-1.5 rounded-full bg-[#09090B] py-1 pr-1 pl-3.5 text-xs font-medium text-white"
             >
-              <span className="font-mono text-[0.68rem] text-[#DCE8F5] uppercase">
+              <span className="font-mono text-[0.68rem] text-white/75 uppercase">
                 {chip.labelKo}
               </span>
               <span>· {chip.summaryKo}</span>
@@ -1384,25 +1642,25 @@ export function TemplateDirectorPanel({
         hidden={!expanded}
         data-director-island
         onPaste={handleClipboardPaste}
-        className="rounded-[24px] border border-[#E4E6EA] bg-white p-4 shadow-[inset_0_1px_0_0_rgba(255,255,255,0.9),0_4px_16px_rgba(14,16,19,0.04)] transition-all duration-200 ease-[cubic-bezier(0.22,1,0.36,1)] motion-reduce:transition-none"
+        className="rounded-[20px] border border-[#E4E4E7] bg-white p-4 transition-colors"
       >
-        <p className="text-xs leading-[1.6] text-[#676B75]">{copy.subtitle}</p>
+        <p className="text-xs leading-[1.6] text-[#71717A]">{copy.subtitle}</p>
 
         {/* Template Baseline Disclosure Card: Shows what is fixed vs what defaults are baked into this template */}
         <section
           data-template-baseline-card={resolvedBaseline.templateArchetypeId}
           aria-label={locale === 'en' ? resolvedBaseline.titleEn : resolvedBaseline.titleKo}
-          className="mt-3 rounded-[18px] border border-[#E4E6EA] bg-[#F6F7F9] p-3.5"
+          className="mt-3 rounded-[16px] border border-[#E4E4E7] bg-[#F4F4F5] p-3.5"
         >
           <div className="flex flex-wrap items-center justify-between gap-2">
             <h3
               data-template-baseline-title
-              className="text-xs font-semibold tracking-tight text-[#0E1013]"
+              className="text-xs font-semibold tracking-tight text-[#09090B]"
             >
               {locale === 'en' ? resolvedBaseline.titleEn : resolvedBaseline.titleKo}
             </h3>
-            <span className="rounded-full bg-[#E8EFF7] px-2.5 py-0.5 font-mono text-[0.65rem] font-medium text-[#3063A7]">
-              BASELINE SPEC
+            <span className="rounded-full bg-white px-2.5 py-0.5 text-[0.68rem] font-medium text-[#52525B]">
+              {locale === 'en' ? 'Template guide' : '기본 고정 · 변경 안내'}
             </span>
           </div>
 
@@ -1422,11 +1680,13 @@ export function TemplateDirectorPanel({
                   ? outfitSlot?.file ?? null
                   : slotSpec.slot === 'prop'
                     ? propSlot?.file ?? null
-                    : null;
+                    : slotSpec.slot === 'lighting_mood'
+                      ? sceneSlot?.file ?? null
+                      : null;
               const isSlotCustomized = activeChipForSlot !== null || attachedSlotFile !== null;
               const activeOverrideSummary =
                 activeChipForSlot?.summaryKo ??
-                (attachedSlotFile ? `@Image · ${attachedSlotFile.name}` : null);
+                (attachedSlotFile ? attachedSlotFile.name : null);
 
               return (
                 <div
@@ -1436,22 +1696,22 @@ export function TemplateDirectorPanel({
                   className={[
                     'flex flex-col justify-between gap-1.5 rounded-[14px] border p-2.5 transition-colors',
                     isSlotCustomized
-                      ? 'border-[#3875C5] bg-[#E8EFF7]/55'
-                      : 'border-[#E4E6EA] bg-white'
+                      ? 'border-[#09090B] bg-[#F4F4F5]'
+                      : 'border-[#E4E4E7] bg-white'
                   ].join(' ')}
                 >
                   <div>
                     <div className="flex flex-wrap items-center justify-between gap-1.5">
                       <div className="flex items-center gap-1.5">
-                        <span className="font-mono text-[0.68rem] font-semibold text-[#3063A7] uppercase">
+                        <span className="font-mono text-[0.68rem] font-semibold text-[#52525B] uppercase">
                           {slotLabel}
                         </span>
                         {isSlotCustomized && (
                           <span
                             data-baseline-customized-badge={slotSpec.slot}
-                            className="rounded-full bg-[#3875C5] px-2 py-0.5 font-mono text-[0.6rem] font-semibold text-white uppercase"
+                            className="rounded-full bg-[#FF58AE] px-2 py-0.5 text-[0.62rem] font-bold text-[#09090B]"
                           >
-                            {locale === 'en' ? 'CUSTOMIZED' : '맞춤 적용됨'}
+                            {locale === 'en' ? 'Customized' : '맞춤 적용됨'}
                           </span>
                         )}
                       </div>
@@ -1462,7 +1722,7 @@ export function TemplateDirectorPanel({
                             data-baseline-revert={slotSpec.slot}
                             disabled={disabled || submitting}
                             onClick={() => revertSlotToDefault(slotSpec.slot)}
-                            className={`rounded-full border border-[#C7CCD3] bg-white px-2 py-0.5 text-[0.66rem] font-medium text-[#41444D] hover:border-[#0E1013] hover:text-[#0E1013] ${FOCUS_RING}`}
+                            className={`rounded-full border border-[#E4E4E7] bg-white px-2 py-0.5 text-[0.66rem] font-medium text-[#52525B] hover:border-[#09090B] hover:text-[#09090B] ${FOCUS_RING}`}
                           >
                             {locale === 'en' ? 'Revert' : '기본값 복원'}
                           </button>
@@ -1476,6 +1736,8 @@ export function TemplateDirectorPanel({
                               outfitInputRef.current?.click();
                             } else if (slotSpec.acceptsReferenceImage === 'prop') {
                               propInputRef.current?.click();
+                            } else if (slotSpec.acceptsReferenceImage === 'scene') {
+                              sceneInputRef.current?.click();
                             }
                             if (matchingPreset) {
                               setUserMessage(
@@ -1486,7 +1748,7 @@ export function TemplateDirectorPanel({
                             }
                             textInputRef.current?.focus();
                           }}
-                          className={`rounded-full border border-[#E4E6EA] bg-[#F3F7FA] px-2.5 py-0.5 text-[0.68rem] font-medium text-[#3063A7] hover:border-[#3875C5] hover:bg-[#E8EFF7] ${FOCUS_RING}`}
+                          className={`rounded-full border border-[#E4E4E7] bg-[#F4F4F5] px-2.5 py-0.5 text-[0.68rem] font-medium text-[#09090B] hover:border-[#09090B] ${FOCUS_RING}`}
                         >
                           {copy.baselineCustomizeButton}
                         </button>
@@ -1495,7 +1757,7 @@ export function TemplateDirectorPanel({
                     <p
                       className={[
                         'mt-1 text-xs font-medium',
-                        isSlotCustomized ? 'text-[#676B75] line-through' : 'text-[#0E1013]'
+                        isSlotCustomized ? 'text-[#71717A] line-through' : 'text-[#09090B]'
                       ].join(' ')}
                     >
                       {defaultSetting}
@@ -1503,12 +1765,12 @@ export function TemplateDirectorPanel({
                     {isSlotCustomized && activeOverrideSummary && (
                       <p
                         data-baseline-active-override={slotSpec.slot}
-                        className="mt-0.5 text-xs font-semibold text-[#3063A7]"
+                        className="mt-0.5 text-xs font-semibold text-[#09090B]"
                       >
                         → {activeOverrideSummary}
                       </p>
                     )}
-                    <p className="mt-0.5 text-[0.72rem] leading-[1.45] text-[#676B75]">{hint}</p>
+                    <p className="mt-0.5 text-[0.72rem] leading-[1.45] text-[#71717A]">{hint}</p>
                   </div>
                 </div>
               );
@@ -1517,9 +1779,9 @@ export function TemplateDirectorPanel({
 
           <div
             data-template-locked-elements
-            className="mt-2.5 flex flex-wrap items-center gap-1.5 border-t border-[#E4E6EA] pt-2.5"
+            className="mt-2.5 flex flex-wrap items-center gap-1.5 border-t border-[#E4E4E7] pt-2.5"
           >
-            <span className="font-mono text-[0.66rem] font-semibold text-[#676B75] uppercase">
+            <span className="font-mono text-[0.66rem] font-semibold text-[#71717A] uppercase">
               {copy.baselineLockedLabel}:
             </span>
             {(locale === 'en'
@@ -1528,7 +1790,7 @@ export function TemplateDirectorPanel({
             ).map((lockedItem) => (
               <span
                 key={lockedItem}
-                className="inline-flex items-center rounded-full border border-[#E4E6EA] bg-white px-2.5 py-0.5 text-[0.7rem] text-[#676B75]"
+                className="inline-flex items-center rounded-full border border-[#E4E4E7] bg-white px-2.5 py-0.5 text-[0.7rem] text-[#71717A]"
               >
                 {lockedItem}
               </span>
@@ -1538,7 +1800,7 @@ export function TemplateDirectorPanel({
 
         {/* Predictive 1-Tap Revision Presets (Grounded in Real Campaign Revision Data) */}
         <div data-director-predictive-presets className="mt-3.5">
-          <p className="text-[0.72rem] font-semibold text-[#41444D]">
+          <p className="text-[0.72rem] font-semibold text-[#52525B]">
             {copy.predictivePresetsLabel}
           </p>
           <div className="mt-1.5 flex flex-wrap gap-1.5">
@@ -1563,6 +1825,8 @@ export function TemplateDirectorPanel({
                       outfitInputRef.current?.click();
                     } else if (preset.opensReferenceSlot === 'prop') {
                       propInputRef.current?.click();
+                    } else if (preset.opensReferenceSlot === 'scene') {
+                      sceneInputRef.current?.click();
                     }
                     textInputRef.current?.focus();
                   }}
@@ -1570,14 +1834,14 @@ export function TemplateDirectorPanel({
                     'inline-flex min-h-9 items-center gap-1.5 rounded-full border px-3 py-1 text-xs transition-colors disabled:opacity-40',
                     FOCUS_RING,
                     isPresetActive
-                      ? 'border-[#3875C5] bg-[#E8EFF7] font-semibold text-[#3063A7]'
-                      : 'border-[#E4E6EA] bg-[#F3F7F9] text-[#0E1013] hover:border-[#3875C5] hover:bg-[#E8EFF7] hover:text-[#3063A7]'
+                      ? 'border-[#09090B] bg-[#F4F4F5] font-semibold text-[#09090B]'
+                      : 'border-[#E4E4E7] bg-white text-[#09090B] hover:border-[#09090B] hover:bg-[#F4F4F5]'
                   ].join(' ')}
                 >
                   <span
                     className={[
-                      'rounded-full px-1.5 py-0.5 font-mono text-[0.62rem] font-semibold',
-                      isPresetActive ? 'bg-[#3875C5] text-white' : 'bg-[#E8EFF7] text-[#3063A7]'
+                      'rounded-full px-1.5 py-0.5 text-[0.62rem] font-semibold',
+                      isPresetActive ? 'bg-[#09090B] text-white' : 'bg-[#F4F4F5] text-[#52525B]'
                     ].join(' ')}
                   >
                     {locale === 'en' ? preset.reasonBadgeEn : preset.reasonBadgeKo}
@@ -1608,8 +1872,8 @@ export function TemplateDirectorPanel({
                   'inline-flex min-h-9 items-center rounded-full border px-3 py-1 text-xs transition-colors disabled:opacity-40',
                   FOCUS_RING,
                   isQuickActive
-                    ? 'border-[#3875C5] bg-[#E8EFF7] font-semibold text-[#3063A7]'
-                    : 'border-[#E4E6EA] bg-[#F6F7F9] text-[#41444D] hover:border-[#3875C5] hover:bg-[#E8EFF7] hover:text-[#3063A7]'
+                    ? 'border-[#09090B] bg-[#F4F4F5] font-semibold text-[#09090B]'
+                    : 'border-[#E4E4E7] bg-[#F4F4F5] text-[#52525B] hover:border-[#09090B] hover:text-[#09090B]'
                 ].join(' ')}
               >
                 {preset.label}
@@ -1618,18 +1882,18 @@ export function TemplateDirectorPanel({
           })}
         </div>
 
-        {/* Recessed Tactile Wells for Optional User Reference Images (@Image 2 Look, @Image 3 Prop) */}
+        {/* Recessed Tactile Wells for Optional User Reference Images */}
         <div
           data-direct-upload-mode="true"
-          className="mt-3.5 rounded-[16px] border border-[#E4E6EA] bg-[#F3F7FA]/75 px-3.5 py-2.5"
+          className="mt-3.5 rounded-[14px] border border-[#E4E4E7] bg-[#F4F4F5] px-3.5 py-2.5"
         >
-          <p className="text-[0.75rem] font-medium leading-[1.45] text-[#3063A7]">
+          <p className="text-[0.75rem] font-medium leading-[1.45] text-[#52525B]">
             {locale === 'en'
-              ? 'Direct Reference Image Upload · Attach your exact outfit (@Image 2) or product (@Image 3) photo to apply it directly without arbitrary AI distortion.'
-              : '직접 이미지 업로드 · AI가 임의로 변형하지 않고, 직접 올리신 사진 속 의상(@Image 2)·소품(@Image 3) 디자인 그대로 장면에 반영합니다.'}
+              ? 'Direct Reference Image Upload · Attach your exact outfit, product, or backdrop photo to apply it cleanly.'
+              : '직접 이미지 업로드 · AI가 임의로 변형하지 않고, 직접 올리신 사진 속 의상·소품·배경 분위기를 장면에 반영합니다.'}
           </p>
         </div>
-        <div className="mt-2.5 grid grid-cols-1 gap-2.5 sm:grid-cols-2">
+        <div className="mt-2.5 grid grid-cols-1 gap-2.5 sm:grid-cols-3">
           <input
             ref={outfitInputRef}
             type="file"
@@ -1650,8 +1914,18 @@ export function TemplateDirectorPanel({
             disabled={disabled || submitting}
             onChange={(e) => assignReferenceSlot('prop', 'product', e.currentTarget.files?.[0])}
           />
+          <input
+            ref={sceneInputRef}
+            type="file"
+            accept="image/jpeg,image/png,image/webp"
+            className="sr-only"
+            tabIndex={-1}
+            aria-hidden="true"
+            disabled={disabled || submitting}
+            onChange={(e) => assignReferenceSlot('scene', 'scene', e.currentTarget.files?.[0])}
+          />
 
-          {/* Slot 1: @Image 2 Outfit Reference */}
+          {/* Slot 1: Outfit Reference */}
           <div
             data-director-slot="outfit"
             data-slot-filled={outfitSlot ? 'true' : 'false'}
@@ -1668,18 +1942,16 @@ export function TemplateDirectorPanel({
               }
             }}
             className={[
-              'flex items-center justify-between gap-3 rounded-[18px] border p-3 shadow-[inset_0_1px_2px_rgba(14,16,19,0.04)] transition-colors',
-              draggingSlot === 'outfit'
-                ? 'border-[#3875C5] bg-[#E8EFF7]'
-                : outfitSlot
-                  ? 'border-[#3875C5] bg-[#F3F7FA]'
-                  : 'border-[#E4E6EA] bg-[#F6F7F9]'
+              'flex items-center justify-between gap-3 rounded-[16px] border p-3 transition-colors',
+              draggingSlot === 'outfit' || outfitSlot
+                ? 'border-[#09090B] bg-white'
+                : 'border-[#E4E4E7] bg-[#F4F4F5]'
             ].join(' ')}
           >
             {outfitSlot ? (
               <>
                 <div className="flex min-w-0 items-center gap-2.5">
-                  <div className="size-11 shrink-0 overflow-hidden rounded-xl border border-[#E4E6EA] bg-white">
+                  <div className="size-11 shrink-0 overflow-hidden rounded-xl border border-[#E4E4E7] bg-white">
                     {/* eslint-disable-next-line @next/next/no-img-element -- local blob preview */}
                     <img
                       src={outfitSlot.previewUrl}
@@ -1688,10 +1960,10 @@ export function TemplateDirectorPanel({
                     />
                   </div>
                   <div className="min-w-0">
-                    <p className="truncate text-xs font-semibold text-[#0E1013]">
+                    <p className="truncate text-xs font-semibold text-[#09090B]">
                       {outfitSlot.file.name}
                     </p>
-                    <p className="font-mono text-[0.68rem] text-[#3063A7] tabular-nums">
+                    <p className="font-mono text-[0.68rem] text-[#52525B] tabular-nums">
                       {copy.outfitSlotHint} ·{' '}
                       <span data-slot-file-spec="outfit">
                         {formatReferenceFileSpec(outfitSlot.file)}
@@ -1704,7 +1976,7 @@ export function TemplateDirectorPanel({
                   data-director-slot-clear="outfit"
                   aria-label={`${copy.outfitSlotLabel} ${copy.removeSlotLabel}`}
                   onClick={() => clearReferenceSlot('outfit')}
-                  className={`inline-flex min-h-11 min-w-11 shrink-0 items-center justify-center rounded-full text-sm text-[#676B75] hover:bg-black/5 hover:text-[#0E1013] ${FOCUS_RING}`}
+                  className={`inline-flex min-h-11 min-w-11 shrink-0 items-center justify-center rounded-full text-sm text-[#71717A] hover:bg-black/5 hover:text-[#09090B] ${FOCUS_RING}`}
                 >
                   ×
                 </button>
@@ -1718,19 +1990,19 @@ export function TemplateDirectorPanel({
                 className={`flex min-h-11 w-full items-center justify-between gap-2 rounded-xl text-left disabled:opacity-40 ${FOCUS_RING}`}
               >
                 <div>
-                  <p className="text-xs font-semibold text-[#0E1013]">+ {copy.outfitSlotLabel}</p>
-                  <p className="font-mono text-[0.68rem] text-[#676B75] tabular-nums">
+                  <p className="text-xs font-semibold text-[#09090B]">+ {copy.outfitSlotLabel}</p>
+                  <p className="font-mono text-[0.68rem] text-[#71717A] tabular-nums">
                     {copy.outfitSlotHint}
                   </p>
                 </div>
-                <span className="rounded-full border border-[#C7CCD3] bg-white px-2.5 py-1 font-mono text-[0.68rem] text-[#41444D]">
+                <span className="rounded-full border border-[#E4E4E7] bg-white px-2 py-0.5 font-mono text-[0.65rem] text-[#52525B]">
                   JPG·PNG
                 </span>
               </button>
             )}
           </div>
 
-          {/* Slot 2: @Image 3 Prop / Product Reference */}
+          {/* Slot 2: Prop / Product Reference */}
           <div
             data-director-slot="prop"
             data-slot-filled={propSlot ? 'true' : 'false'}
@@ -1747,18 +2019,16 @@ export function TemplateDirectorPanel({
               }
             }}
             className={[
-              'flex items-center justify-between gap-3 rounded-[18px] border p-3 shadow-[inset_0_1px_2px_rgba(14,16,19,0.04)] transition-colors',
-              draggingSlot === 'prop'
-                ? 'border-[#3875C5] bg-[#E8EFF7]'
-                : propSlot
-                  ? 'border-[#3875C5] bg-[#F3F7FA]'
-                  : 'border-[#E4E6EA] bg-[#F6F7F9]'
+              'flex items-center justify-between gap-3 rounded-[16px] border p-3 transition-colors',
+              draggingSlot === 'prop' || propSlot
+                ? 'border-[#09090B] bg-white'
+                : 'border-[#E4E4E7] bg-[#F4F4F5]'
             ].join(' ')}
           >
             {propSlot ? (
               <>
                 <div className="flex min-w-0 items-center gap-2.5">
-                  <div className="size-11 shrink-0 overflow-hidden rounded-xl border border-[#E4E6EA] bg-white">
+                  <div className="size-11 shrink-0 overflow-hidden rounded-xl border border-[#E4E4E7] bg-white">
                     {/* eslint-disable-next-line @next/next/no-img-element -- local blob preview */}
                     <img
                       src={propSlot.previewUrl}
@@ -1767,10 +2037,10 @@ export function TemplateDirectorPanel({
                     />
                   </div>
                   <div className="min-w-0">
-                    <p className="truncate text-xs font-semibold text-[#0E1013]">
+                    <p className="truncate text-xs font-semibold text-[#09090B]">
                       {propSlot.file.name}
                     </p>
-                    <p className="font-mono text-[0.68rem] text-[#3063A7] tabular-nums">
+                    <p className="font-mono text-[0.68rem] text-[#52525B] tabular-nums">
                       {copy.propSlotHint} ·{' '}
                       <span data-slot-file-spec="prop">
                         {formatReferenceFileSpec(propSlot.file)}
@@ -1783,7 +2053,7 @@ export function TemplateDirectorPanel({
                   data-director-slot-clear="prop"
                   aria-label={`${copy.propSlotLabel} ${copy.removeSlotLabel}`}
                   onClick={() => clearReferenceSlot('prop')}
-                  className={`inline-flex min-h-11 min-w-11 shrink-0 items-center justify-center rounded-full text-sm text-[#676B75] hover:bg-black/5 hover:text-[#0E1013] ${FOCUS_RING}`}
+                  className={`inline-flex min-h-11 min-w-11 shrink-0 items-center justify-center rounded-full text-sm text-[#71717A] hover:bg-black/5 hover:text-[#09090B] ${FOCUS_RING}`}
                 >
                   ×
                 </button>
@@ -1797,12 +2067,91 @@ export function TemplateDirectorPanel({
                 className={`flex min-h-11 w-full items-center justify-between gap-2 rounded-xl text-left disabled:opacity-40 ${FOCUS_RING}`}
               >
                 <div>
-                  <p className="text-xs font-semibold text-[#0E1013]">+ {copy.propSlotLabel}</p>
-                  <p className="font-mono text-[0.68rem] text-[#676B75] tabular-nums">
+                  <p className="text-xs font-semibold text-[#09090B]">+ {copy.propSlotLabel}</p>
+                  <p className="font-mono text-[0.68rem] text-[#71717A] tabular-nums">
                     {copy.propSlotHint}
                   </p>
                 </div>
-                <span className="rounded-full border border-[#C7CCD3] bg-white px-2.5 py-1 font-mono text-[0.68rem] text-[#41444D]">
+                <span className="rounded-full border border-[#E4E4E7] bg-white px-2 py-0.5 font-mono text-[0.65rem] text-[#52525B]">
+                  JPG·PNG
+                </span>
+              </button>
+            )}
+          </div>
+
+          {/* Slot 3: Scene / Backdrop Reference */}
+          <div
+            data-director-slot="scene"
+            data-slot-filled={sceneSlot ? 'true' : 'false'}
+            onDragOver={(e) => {
+              e.preventDefault();
+              if (!disabled && !submitting) setDraggingSlot('scene');
+            }}
+            onDragLeave={() => setDraggingSlot((prev) => (prev === 'scene' ? null : prev))}
+            onDrop={(e) => {
+              e.preventDefault();
+              setDraggingSlot(null);
+              if (!disabled && !submitting) {
+                assignReferenceSlot('scene', 'scene', e.dataTransfer.files?.[0]);
+              }
+            }}
+            className={[
+              'flex items-center justify-between gap-3 rounded-[16px] border p-3 transition-colors',
+              draggingSlot === 'scene' || sceneSlot
+                ? 'border-[#09090B] bg-white'
+                : 'border-[#E4E4E7] bg-[#F4F4F5]'
+            ].join(' ')}
+          >
+            {sceneSlot ? (
+              <>
+                <div className="flex min-w-0 items-center gap-2.5">
+                  <div className="size-11 shrink-0 overflow-hidden rounded-xl border border-[#E4E4E7] bg-white">
+                    {/* eslint-disable-next-line @next/next/no-img-element -- local blob preview */}
+                    <img
+                      src={sceneSlot.previewUrl}
+                      alt={copy.sceneSlotLabel ?? '배경 · 무드 사진'}
+                      className="h-full w-full object-cover"
+                    />
+                  </div>
+                  <div className="min-w-0">
+                    <p className="truncate text-xs font-semibold text-[#09090B]">
+                      {sceneSlot.file.name}
+                    </p>
+                    <p className="font-mono text-[0.68rem] text-[#52525B] tabular-nums">
+                      {copy.sceneSlotHint ?? '배경 · 공간 레퍼런스'} ·{' '}
+                      <span data-slot-file-spec="scene">
+                        {formatReferenceFileSpec(sceneSlot.file)}
+                      </span>
+                    </p>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  data-director-slot-clear="scene"
+                  aria-label={`${copy.sceneSlotLabel ?? '배경 · 무드 사진'} ${copy.removeSlotLabel}`}
+                  onClick={() => clearReferenceSlot('scene')}
+                  className={`inline-flex min-h-11 min-w-11 shrink-0 items-center justify-center rounded-full text-sm text-[#71717A] hover:bg-black/5 hover:text-[#09090B] ${FOCUS_RING}`}
+                >
+                  ×
+                </button>
+              </>
+            ) : (
+              <button
+                type="button"
+                data-director-slot-pick="scene"
+                disabled={disabled || submitting}
+                onClick={() => sceneInputRef.current?.click()}
+                className={`flex min-h-11 w-full items-center justify-between gap-2 rounded-xl text-left disabled:opacity-40 ${FOCUS_RING}`}
+              >
+                <div>
+                  <p className="text-xs font-semibold text-[#09090B]">
+                    + {copy.sceneSlotLabel ?? (locale === 'en' ? 'Scene & backdrop photo' : '배경 · 무드 사진')}
+                  </p>
+                  <p className="font-mono text-[0.68rem] text-[#71717A] tabular-nums">
+                    {copy.sceneSlotHint ?? (locale === 'en' ? 'Backdrop & mood reference' : '배경 · 공간 레퍼런스')}
+                  </p>
+                </div>
+                <span className="rounded-full border border-[#E4E4E7] bg-white px-2 py-0.5 font-mono text-[0.65rem] text-[#52525B]">
                   JPG·PNG
                 </span>
               </button>
@@ -1810,10 +2159,10 @@ export function TemplateDirectorPanel({
           </div>
         </div>
 
-        {(outfitSlot !== null || propSlot !== null) && !userMessage.trim() && (
+        {(outfitSlot !== null || propSlot !== null || sceneSlot !== null) && !userMessage.trim() && (
           <p
             data-director-reference-ready
-            className="mt-2 rounded-xl bg-[#E8EFF7] px-3 py-1.5 text-[0.72rem] font-medium text-[#3063A7]"
+            className="mt-2 rounded-xl bg-[#F4F4F5] px-3 py-1.5 text-[0.72rem] font-medium text-[#09090B]"
           >
             {locale === 'en'
               ? 'Reference photo attached — you can press Apply directly even without typing a note.'
@@ -1821,15 +2170,89 @@ export function TemplateDirectorPanel({
           </p>
         )}
 
+        {/* Disclosed Original Template References (download allowed for non-person objects, inline view-only for person photos) */}
+        {disclosedRecipe?.files && disclosedRecipe.files.length > 0 && (
+          <section
+            data-director-original-references
+            aria-label={locale === 'en' ? 'Original template references' : '원본 제작 레퍼런스'}
+            className="mt-3.5 rounded-[14px] border border-[#E4E4E7] bg-[#F4F4F5] p-3"
+          >
+            <p className="text-[0.72rem] font-semibold text-[#09090B]">
+              {locale === 'en' ? 'Original template references' : '원본 제작에 사용된 레퍼런스'}
+            </p>
+            <div className="mt-2 grid grid-cols-1 gap-2 sm:grid-cols-2">
+              {disclosedRecipe.files.map((file) => {
+                const isPersonProtected = Boolean(file.containsPerson) || !file.download;
+                return (
+                  <div
+                    key={file.n}
+                    data-director-original-ref={file.n}
+                    className="flex items-center justify-between gap-2.5 rounded-xl border border-[#E4E4E7] bg-white p-2.5"
+                  >
+                    <div className="flex min-w-0 items-center gap-2.5">
+                      {file.kind === 'image' ? (
+                        // eslint-disable-next-line @next/next/no-img-element -- authenticated recipe file preview
+                        <img
+                          src={file.href}
+                          alt={locale === 'en' ? `Reference ${file.n}` : `레퍼런스 ${file.n}`}
+                          className="size-10 shrink-0 rounded-lg border border-[#E4E4E7] object-cover"
+                        />
+                      ) : file.kind === 'video' ? (
+                        <video
+                          src={file.href}
+                          muted
+                          playsInline
+                          preload="metadata"
+                          className="size-10 shrink-0 rounded-lg border border-[#E4E4E7] object-cover"
+                        />
+                      ) : (
+                        <audio
+                          src={file.href}
+                          controls
+                          preload="none"
+                          className="h-8 w-36 shrink-0"
+                        />
+                      )}
+                      <div className="min-w-0">
+                        <p className="text-xs font-medium text-[#09090B]">
+                          {locale === 'en' ? `Reference ${file.n}` : `레퍼런스 ${file.n}`}
+                        </p>
+                        {isPersonProtected ? (
+                          <span
+                            data-reference-person-protected={file.n}
+                            className="inline-block rounded-full bg-[#F4F4F5] px-2 py-0.5 text-[0.65rem] font-medium text-[#52525B]"
+                          >
+                            {locale === 'en' ? 'View only (Portrait protected)' : '화면 조회 전용 (인물 보호)'}
+                          </span>
+                        ) : null}
+                      </div>
+                    </div>
+                    {!isPersonProtected && file.download ? (
+                      <a
+                        href={file.download}
+                        download
+                        data-reference-download={file.n}
+                        className={`shrink-0 rounded-full border border-[#E4E4E7] bg-[#F4F4F5] px-2.5 py-1 text-[0.68rem] font-semibold text-[#09090B] hover:border-[#09090B] ${FOCUS_RING}`}
+                      >
+                        {locale === 'en' ? 'Download' : '다운로드'}
+                      </a>
+                    ) : null}
+                  </div>
+                );
+              })}
+            </div>
+          </section>
+        )}
+
         {/* Recessed Tactile Text Input + Apply Pill CTA */}
         <div className="mt-3.5">
           <div className="flex items-baseline justify-between gap-2">
-            <label htmlFor={inputId} className="block text-xs font-semibold text-[#0E1013]">
+            <label htmlFor={inputId} className="block text-xs font-semibold text-[#09090B]">
               {copy.inputLabel}
             </label>
             <span
               data-director-char-count
-              className="font-mono text-[0.68rem] text-[#676B75] tabular-nums"
+              className="font-mono text-[0.68rem] text-[#71717A] tabular-nums"
             >
               {userMessage.length}/{MAX_DIRECTOR_INPUT_CHARS}
             </span>
@@ -1851,7 +2274,7 @@ export function TemplateDirectorPanel({
                   void handleApplyTurn();
                 }
               }}
-              className="w-full flex-1 resize-none rounded-[18px] border border-[#E4E6EA] bg-[#F6F7F9] px-3.5 py-2.5 text-sm leading-relaxed text-[#0E1013] shadow-[inset_0_1px_2px_rgba(14,16,19,0.05)] placeholder:text-[#676B75]/75 focus:border-[#3875C5] focus:bg-white focus:outline-none"
+              className="w-full flex-1 resize-none rounded-[16px] border border-[#E4E4E7] bg-[#F4F4F5] px-3.5 py-2.5 text-sm leading-relaxed text-[#09090B] placeholder:text-[#71717A] focus:border-[#09090B] focus:bg-white focus:outline-none"
             />
             <button
               type="button"
@@ -1859,10 +2282,10 @@ export function TemplateDirectorPanel({
               disabled={
                 disabled ||
                 submitting ||
-                (!userMessage.trim() && outfitSlot === null && propSlot === null)
+                (!userMessage.trim() && outfitSlot === null && propSlot === null && sceneSlot === null)
               }
               onClick={() => void handleApplyTurn()}
-              className={`inline-flex min-h-11 shrink-0 items-center justify-center rounded-full bg-[#3875C5] px-5 py-2.5 text-xs font-semibold text-white transition-opacity hover:opacity-90 disabled:bg-[#E4E6EA] disabled:text-[#676B75] ${FOCUS_RING}`}
+              className={`inline-flex min-h-11 shrink-0 items-center justify-center rounded-full bg-[#FF58AE] px-5 py-2.5 text-xs font-bold text-[#09090B] transition-colors hover:bg-[#FF389F] disabled:bg-[#E4E4E7] disabled:text-[#71717A] ${FOCUS_RING}`}
             >
               {submitting ? copy.applyingButton : copy.applyButton}
             </button>
@@ -1872,12 +2295,12 @@ export function TemplateDirectorPanel({
         {/* Live Region for Director Feedback & File Validation Errors */}
         <div id={statusId} role="status" aria-live="polite" className="mt-2">
           {pasteNotice && (
-            <p data-director-paste-notice className="text-xs font-medium text-[#3063A7]">
+            <p data-director-paste-notice className="text-xs font-medium text-[#CC1573]">
               {pasteNotice}
             </p>
           )}
           {fileError && (
-            <p data-director-file-error className="text-xs font-medium text-[#3063A7]">
+            <p data-director-file-error className="text-xs font-medium text-[#CC1573]">
               {fileError}
             </p>
           )}
@@ -1888,8 +2311,8 @@ export function TemplateDirectorPanel({
               className={[
                 'mt-1 rounded-xl px-3 py-2 text-xs leading-relaxed',
                 turnAccepted
-                  ? 'bg-[#E8EFF7] text-[#3063A7]'
-                  : 'border border-[#C7CCD3] bg-[#F6F7F9] text-[#41444D]'
+                  ? 'bg-[#F4F4F5] text-[#09090B]'
+                  : 'border border-[#E4E4E7] bg-[#F4F4F5] text-[#52525B]'
               ].join(' ')}
             >
               {assistantMessage}

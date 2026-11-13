@@ -23,7 +23,13 @@ import { SELFIE_SLOT, creatorSlotNames, displayStepPrompt, parseRecipe, type Rec
 /** `pet` and `partner` are the buyer's other two photos (docs/CAST-CATEGORIES.md §3). */
 export type RecipeInput = { kind: 'selfie' } | { kind: 'pet' } | { kind: 'partner' } | { kind: 'reference'; n: number } | { kind: 'step'; n: number };
 export interface PublicRecipeStep { n: number; kind: 'image' | 'video'; engine: string; inputs: RecipeInput[]; prompt: string; note: string | null }
-export interface PublicRecipeFile { n: number; kind: 'image' | 'video'; href: string; download: string }
+export interface PublicRecipeFile {
+  n: number;
+  kind: 'image' | 'video' | 'audio';
+  href: string;
+  download: string | null;
+  containsPerson?: boolean;
+}
 export interface PublicRecipe {
   presentation: Presentation;
   intro: string | null;
@@ -65,7 +71,22 @@ export async function loadPublicRecipe(sql: SqlRunner, templateId: string, label
   let files: PublicRecipe['files'] = null;
   if (row.maker && disclosure.assets) {
     const handles = Object.values(recipe.slots).flatMap((slot) => (slot.source === 'creator' ? [{ handle: slot.asset, kind: slot.kind }] : []));
-    files = handles.map(({ handle, kind }, i) => ({ n: i + 1, kind, href: `/api/makers/files/${handle}`, download: `/api/makers/files/${handle}?download=1` }));
+    const personSet = new Set<string>();
+    if (handles.length > 0) {
+      const { rows: assetRows } = await sql.query<{ id: string; contains_person: boolean | null }>(
+        'select id, contains_person from platform_format_assets where id = any($1::text[])',
+        [handles.map((h) => h.handle)],
+      );
+      for (const a of assetRows) {
+        if (a.contains_person === true) personSet.add(a.id);
+      }
+    }
+    files = handles.map(({ handle, kind }, i) => {
+      const isPerson = personSet.has(handle);
+      return isPerson
+        ? { n: i + 1, kind, href: `/api/makers/files/${handle}`, download: null, containsPerson: true }
+        : { n: i + 1, kind, href: `/api/makers/files/${handle}`, download: `/api/makers/files/${handle}?download=1` };
+    });
   }
   return {
     presentation: parsePresentation(row.presentation),

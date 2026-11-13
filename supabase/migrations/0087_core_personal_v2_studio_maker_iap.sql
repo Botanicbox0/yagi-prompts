@@ -87,7 +87,12 @@ alter table platform_format_assets
       'audio/mpeg', 'audio/wav', 'audio/mp4', 'audio/aac'
     )),
   add constraint platform_format_assets_bytes_check
-    check (bytes > 0 and bytes <= 26214400),
+    check (
+      bytes > 0 and (
+        (kind = 'image' and bytes <= 4194304) or
+        (kind in ('video', 'audio') and bytes <= 26214400)
+      )
+    ),
   add constraint platform_format_assets_kind_mime_match
     check (
       (kind = 'image' and mime like 'image/%') or

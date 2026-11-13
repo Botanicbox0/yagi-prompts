@@ -14,6 +14,7 @@ import { campaignHref } from '@/lib/campaigns/links';
 import { isCampaignPublic } from '@/lib/campaigns/state';
 import { formatTemplatePrice, isForSale } from '@/lib/twings/products';
 import { aspectsForMedium, defaultAspect, estimateImageUsd, isImageEngine, resolveEngine } from '@/lib/images/engines';
+import { templateImageSetInfo } from '@/lib/twings/selective-frames';
 import { signInHref } from '@/lib/billing/links';
 import { identityVerifyHref } from '@/lib/identity/links';
 import { templateMetadata, unresolvedTemplateMetadata } from '@/lib/seo/template-metadata';
@@ -196,6 +197,7 @@ export default async function TemplatePage({ params }: RouteParams) {
                 perFrameProviderUsd: isImageEngine(resolvedEngine)
                   ? estimateImageUsd(resolvedEngine, 1)
                   : 0.09,
+                royaltyKrw: templateImageSetInfo(card, null).royaltyKrw,
                 frameThumbnails: gallery.map((f) => f.src),
               }
             : null,

@@ -1,6 +1,8 @@
 import { isGoogleEngine, isImageAspect, isImageEngine, isOpenAiEngine, isVideoAspect, isVideoEngine, type ImageAspect, type VideoAspect } from '@/lib/images/engines';
 import type { RenderProvider } from '@/lib/renders/repo';
 import { RenderFailure, runImageRender, startVideoRender, type EngineOutput, type RenderEngineDeps, type RenderPhoto, type StepReference } from '@/lib/renders/engines';
+import { CUSTOM_REF_SLOTS, type CustomRefSlot } from '@/lib/renders/cast-inputs';
+import type { PersonalAudioMode } from '@/lib/template-director/schema';
 import { extensionFor, type RenderStore } from '@/lib/renders/store';
 import { assetReference } from '@/lib/identity/service';
 import { engineStepPrompt, identityPath, isMakerEngine, isStudioRecipeEngine, outputSteps, partnerInputs, personInputs, SELFIE_SLOT, type Recipe, type RecipeStep } from './schema';
@@ -26,7 +28,15 @@ import type { RecipeState, StepRecord } from './repo';
  */
 
 export type PersonReference = { kind: 'asset'; assetId: string } | { kind: 'wait'; assetId: string };
-export interface MakerFile { key: string; mime: string; kind: 'image' | 'video'; bytes: Uint8Array }
+export interface MakerFile { key: string; mime: string; kind: 'image' | 'video' | 'audio'; bytes: Uint8Array }
+
+export interface StepPromptOverrideArgs {
+  step: RecipeStep;
+  prompt: string;
+  isOutput: boolean;
+  customSlots: CustomRefSlot[];
+  audioMode?: PersonalAudioMode;
+}
 
 export interface RecipeRunContext {
   jobId: string;
@@ -38,8 +48,12 @@ export interface RecipeRunContext {
   engines: RenderEngineDeps;
   /** The customer's photo as stored on the job (`{job}/input.*`). */
   selfie: (RenderPhoto & { key: string }) | null;
-  /** Optional non-person user slot files (`product | scene | look | mask`) for faceless brand recipes. */
+  /** Optional non-person user slot files (`product | scene | look | mask` or customer `look_ref | prop_ref | scene_ref`). */
   userSlots?: Record<string, RenderPhoto & { key: string }>;
+  /** Seedance native audio mode chosen by the user (`ambient` = no BGM, `bgm` = scene-matched BGM). */
+  audioMode?: PersonalAudioMode;
+  /** Optional director hook to compile per-step prompts from `director_spec` + customization refs. */
+  stepPromptOverride?: (args: StepPromptOverrideArgs) => Promise<string> | string;
   /** A maker file by its `ast_…` handle (private bucket), or null when it is gone. */
   makerFile(handle: string): Promise<MakerFile | null>;
   /** The customer's face (selfie or a result made from it) as a verified-library asset. Throws RenderFailure on refusal. */
@@ -100,14 +114,40 @@ export async function runRecipe(ctx: RecipeRunContext): Promise<RecipeRun> {
     try {
       if (!isMakerEngine(step.engine) && !isStudioRecipeEngine(step.engine)) throw new RenderFailure('engine_error', `engine ${step.engine} is not a recipe engine`, false);
       const inputs = await gather(ctx, step, records);
+      const customSlots: CustomRefSlot[] = [];
+      if (ctx.userSlots && (shown.has(step.id) || (step.kind === 'image' && recipe.steps.length === 1))) {
+        for (const slotName of CUSTOM_REF_SLOTS) {
+          if (step.inputs.includes(slotName)) continue;
+          const customFile = ctx.userSlots[slotName];
+          if (!customFile) continue;
+          customSlots.push(slotName);
+          inputs.push({
+            name: slotName,
+            key: customFile.key,
+            mime: customFile.mime,
+            kind: 'image',
+            bytes: customFile.bytes,
+          });
+        }
+      }
       const viaAsset = identityPath(step.engine) === 'asset';
       if (viaAsset && step.inputs.some((input) => partners.has(input))) throw new RenderFailure('engine_error', 'a partner photo never goes to the verified library', false);
-      const prompt = engineStepPrompt(recipe, step);
+      const rawPrompt = engineStepPrompt(recipe, step);
+      const prompt = ctx.stepPromptOverride
+        ? await ctx.stepPromptOverride({
+            step,
+            prompt: rawPrompt,
+            isOutput: shown.has(step.id),
+            customSlots,
+            audioMode: ctx.audioMode,
+          })
+        : rawPrompt;
 
       if (step.kind === 'image') {
         if (!isImageEngine(step.engine)) throw new RenderFailure('engine_error', `unknown image engine ${step.engine}`, false);
         const references: StepReference[] = [];
         for (const input of inputs) {
+          if (input.kind === 'audio') throw new RenderFailure('engine_error', 'audio references apply to video steps only', false);
           if (person.has(input.name) && viaAsset) {
             const ref = await ctx.person({ bytes: input.bytes, key: input.key });
             if (ref.kind === 'wait') return { kind: 'wait', assetId: ref.assetId };
@@ -128,7 +168,7 @@ export async function runRecipe(ctx: RecipeRunContext): Promise<RecipeRun> {
       }
 
       if (!isVideoEngine(step.engine)) throw new RenderFailure('engine_error', `unknown video engine ${step.engine}`, false);
-      const references: Array<{ type: 'image' | 'video'; url: string }> = [];
+      const references: Array<{ type: 'image' | 'video' | 'audio'; url: string }> = [];
       for (const input of inputs) {
         if (person.has(input.name) && viaAsset) {
           const ref = await ctx.person({ bytes: input.bytes, key: input.key });
@@ -146,6 +186,9 @@ export async function runRecipe(ctx: RecipeRunContext): Promise<RecipeRun> {
         if (input.kind === 'video') {
           if (url === null) throw new RenderFailure('engine_error', 'a reference film needs a storage URL the provider can fetch', false);
           references.push({ type: 'video', url });
+        } else if (input.kind === 'audio') {
+          if (url === null) throw new RenderFailure('engine_error', 'a reference audio needs a storage URL the provider can fetch', false);
+          references.push({ type: 'audio', url });
         } else references.push({ type: 'image', url: url ?? dataUrl(input.bytes, input.mime) });
       }
       const aspect: VideoAspect = shown.has(step.id) && isVideoAspect(ctx.outputAspect) ? ctx.outputAspect : step.params.aspect;
@@ -167,7 +210,7 @@ export async function runRecipe(ctx: RecipeRunContext): Promise<RecipeRun> {
   return { kind: 'done', results, usd, assets };
 }
 
-interface GatheredInput { name: string; key: string; mime: string; kind: 'image' | 'video'; bytes: Uint8Array }
+interface GatheredInput { name: string; key: string; mime: string; kind: 'image' | 'video' | 'audio'; bytes: Uint8Array }
 
 async function gather(ctx: RecipeRunContext, step: RecipeStep, records: Record<string, StepRecord>): Promise<GatheredInput[]> {
   const inputs: GatheredInput[] = [];

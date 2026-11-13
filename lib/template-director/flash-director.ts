@@ -6,7 +6,8 @@ import {
 import {
   GEMINI_DIRECTOR_THINKING_LEVEL,
   PERSONAL_NO_BGM_AUDIO_CONTRACT_EN,
-  enforcePersonalMorphicGuardrails
+  enforcePersonalMorphicGuardrails,
+  personalSceneBgmAudioContractEn
 } from './morphic-production-playbook';
 import {
   DEFAULT_EDITORIAL_TEMPLATE_BASELINE,
@@ -24,14 +25,19 @@ import {
   type DirectorChatTurnInput,
   type DirectorChatTurnResult,
   type DirectorConfig,
+  type DirectorEditIntent,
   type DirectorRewriteInput,
   type DirectorRewriteResult,
+  type DirectorSummaryChip,
   type IdentitySimilarityVerdict,
   type IdentitySimilarityVerificationInput,
   type ModelSpecificImageEngine,
   type MultiPhotoIdentityInput,
   type OpaqueCompiledPrompt,
   type OpticalIdentityMasterPlan,
+  type PersonalAudioMode,
+  type PersonalBgmMood,
+  type PersonalDirectorSpec,
   type PhotoInspectionInput,
   type PhotoInspectionVerdict,
   type PhotoIssueCode,
@@ -275,7 +281,17 @@ function escapeRegExp(literal: string): string {
   return literal.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
 
-export function sanitizeRewrittenPrompt(rawPrompt: string, hasPersonSlot: boolean, cast: 'solo' | 'couple' | 'pet' = 'solo'): string {
+export function sanitizeRewrittenPrompt(
+  rawPrompt: string,
+  hasPersonSlot: boolean,
+  castOrOptions:
+    | 'solo'
+    | 'couple'
+    | 'pet'
+    | { cast?: 'solo' | 'couple' | 'pet'; audioMode?: PersonalAudioMode; bgmMood?: PersonalBgmMood | null } = 'solo'
+): string {
+  const opts = typeof castOrOptions === 'string' ? { cast: castOrOptions } : castOrOptions;
+  const cast = opts.cast ?? 'solo';
   let cleaned = rawPrompt.trim();
   for (const buzz of BANNED_AI_BUZZWORDS) {
     cleaned = cleaned.replace(new RegExp(`\\b${escapeRegExp(buzz)}\\b`, 'gi'), '');
@@ -287,7 +303,12 @@ export function sanitizeRewrittenPrompt(rawPrompt: string, hasPersonSlot: boolea
   if (hasPersonSlot && !cleaned.includes('Natural matte skin texture with visible pores')) {
     cleaned = `${cleaned}\n\n${SKIN_MATTE_CONTRACT_A10}`;
   }
-  return enforcePersonalMorphicGuardrails(cleaned, { hasPersonSlot, cast });
+  return enforcePersonalMorphicGuardrails(cleaned, {
+    hasPersonSlot,
+    cast,
+    audioMode: opts.audioMode,
+    bgmMood: opts.bgmMood,
+  });
 }
 
 export function verifyRewrittenPrompt(
@@ -323,7 +344,7 @@ const STAGE2_VIDEO_CREATOR_DOCTRINE = [
   '4. Dynamic Multi-Shot Hairstyle Synchronization: Synchronize the target hairstyle (whether sleek tied low-bun, chin-length bob, or long straight hair with bangs) across ALL timeline shots so tied hair never unties mid-video.',
   '5. Candid Micro-Acting & Lower-Face Lock: Keep lip motion calm and understated; forbid wide toothy grins, shouting, or stiff passport-photo staring straight into the camera lens. Every shot transition must remain an instantaneous editorial hard cut.',
   `6. SKIN_MATTE_CONTRACT: Preserve "${SKIN_MATTE_CONTRACT_A10}".`,
-  `7. STRICT PERSONAL NO-BGM AUDIO CONTRACT: ${PERSONAL_NO_BGM_AUDIO_CONTRACT_EN}`,
+  '7. AUDIO CONTRACT: Check `audioMode` in the input JSON. When `audioMode === "ambient"` (default), enforce the Strict No-BGM Personal Audio Rule (ambient sound & natural speech/foley only, zero BGM). When `audioMode === "bgm"`, honor `audioDirective` for cohesive scene-matched background music balanced beneath dialogue and foley.',
   '8. Preserve the original camera focal length, chiaroscuro shadow floor, and unbroken single-bed audio rules.'
 ].join('\n');
 
@@ -513,12 +534,19 @@ export function createFlashTemplateDirector(
     },
 
     async rewritePrompt(input: DirectorRewriteInput): Promise<DirectorRewriteResult> {
+      const audioRule =
+        input.audioMode === 'bgm'
+          ? personalSceneBgmAudioContractEn(input.bgmMood)
+          : PERSONAL_NO_BGM_AUDIO_CONTRACT_EN;
       const parts: Array<Record<string, unknown>> = [
         {
           text: JSON.stringify({
             basePrompt: input.basePrompt,
             structuredIntent: input.structuredIntent,
-            referenceSlots: input.referenceSlots
+            referenceSlots: input.referenceSlots,
+            audioMode: input.audioMode ?? 'ambient',
+            bgmMood: input.bgmMood ?? null,
+            audioDirective: audioRule,
           })
         }
       ];
@@ -534,7 +562,11 @@ export function createFlashTemplateDirector(
       const hasPerson = input.referenceSlots.some((slot) => slot.role === 'person' || slot.role === 'partner');
       // docs/CAST-CATEGORIES.md §3: the locks follow who is in it, not one assumed person.
       const cast = input.referenceSlots.some((slot) => slot.role === 'partner') ? 'couple' : input.referenceSlots.some((slot) => slot.role === 'pet') ? 'pet' : 'solo';
-      const sanitized = sanitizeRewrittenPrompt(raw.rewrittenPrompt, hasPerson, cast);
+      const sanitized = sanitizeRewrittenPrompt(raw.rewrittenPrompt, hasPerson, {
+        cast,
+        audioMode: input.audioMode,
+        bgmMood: input.bgmMood,
+      });
       const check = verifyRewrittenPrompt(sanitized);
       if (!check.ok) {
         throw new Error(`stage2_prompt_verification_failed:${check.reason}`);
@@ -707,3 +739,246 @@ export function createFlashTemplateDirector(
 }
 
 export type FlashTemplateDirector = ReturnType<typeof createFlashTemplateDirector>;
+
+/**
+ * Deterministic Stage 1 fallback used when `GEMINI_API_KEY` is absent in local dev/CI
+ * or as an instant pre-check alongside `createFlashTemplateDirector`.
+ */
+export function runHeuristicDirectorTurn(
+  input: DirectorChatTurnInput & {
+    audioMode?: PersonalAudioMode;
+    bgmMood?: PersonalBgmMood | null;
+  }
+): DirectorChatTurnResult {
+  const normalized = input.userMessage.normalize('NFKC').trim();
+  if (normalized.length > 1000) {
+    return {
+      approved: false,
+      refusal: 'too_large',
+      replyKo: '요청 문장은 1,000자 이내로 입력해 주세요.',
+      guardrailAdjustmentKo: null,
+      readyToRender: false,
+      summaryChips: [],
+      structuredIntent: null,
+    };
+  }
+  if (normalized && IDENTITY_SWAP_REGEX.test(normalized)) {
+    return {
+      approved: false,
+      refusal: 'identity',
+      replyKo: '본인 얼굴만 사용할 수 있으며, 타인이나 연예인 얼굴로의 변경은 지원하지 않아요.',
+      guardrailAdjustmentKo: null,
+      readyToRender: false,
+      summaryChips: [],
+      structuredIntent: null,
+    };
+  }
+  if (normalized && PROMPT_INJECTION_REGEX.test(normalized)) {
+    return {
+      approved: false,
+      refusal: 'unsafe',
+      replyKo: '템플릿의 의상·소품·장면 연출 수정 요청만 반영할 수 있어요.',
+      guardrailAdjustmentKo: null,
+      readyToRender: false,
+      summaryChips: [],
+      structuredIntent: null,
+    };
+  }
+
+  const chips: DirectorSummaryChip[] = [];
+  const refs = input.references ?? [];
+  const hasLook = refs.some((r) => r.role === 'look' || r.slotName === 'outfit' || r.slotName === 'look_ref');
+  const hasProp = refs.some((r) => r.role === 'product' || r.slotName === 'prop' || r.slotName === 'prop_ref');
+  const hasScene = refs.some((r) => r.role === 'scene' || r.slotName === 'scene' || r.slotName === 'scene_ref');
+
+  const safeNote = normalized.slice(0, 60);
+  if (hasLook) {
+    chips.push({ slot: 'outfit', labelKo: '의상 레퍼런스', summaryKo: safeNote || '첨부한 의상 스타일 반영' });
+  }
+  if (hasProp) {
+    chips.push({ slot: 'prop', labelKo: '소품 레퍼런스', summaryKo: safeNote || '첨부한 소품·제품 반영' });
+  }
+  if (hasScene) {
+    chips.push({ slot: 'lighting_mood', labelKo: '장면 분위기', summaryKo: safeNote || '첨부한 배경 무드 반영' });
+  }
+
+  if (normalized && !hasLook && !hasProp && !hasScene) {
+    if (/드레스|자켓|재킷|코트|셔츠|옷|의상|착장|outfit|dress|jacket/i.test(normalized)) {
+      chips.push({ slot: 'outfit', labelKo: '의상', summaryKo: safeNote });
+    } else if (/화장|메이크업|블러셔|립|피부|makeup|lip/i.test(normalized)) {
+      chips.push({ slot: 'makeup', labelKo: '메이크업', summaryKo: safeNote });
+    } else if (/머리|헤어|앞머리|로우번|단발|생머리|안경|선글라스|hair|bangs/i.test(normalized)) {
+      chips.push({ slot: 'hair', labelKo: '헤어', summaryKo: safeNote });
+    } else if (/소품|가방|가지고|들고|제품|컵|prop|product/i.test(normalized)) {
+      chips.push({ slot: 'prop', labelKo: '소품', summaryKo: safeNote });
+    } else if (/조명|배경|분위기|색감|lighting|mood|background/i.test(normalized)) {
+      chips.push({ slot: 'lighting_mood', labelKo: '분위기', summaryKo: safeNote });
+    } else {
+      chips.push({ slot: 'shot_action', labelKo: '연출', summaryKo: safeNote });
+    }
+  }
+
+  const intent: DirectorEditIntent = {
+    hairOverrideEn: chips.find((c) => c.slot === 'hair')?.summaryKo ?? null,
+    makeupOverrideEn: chips.find((c) => c.slot === 'makeup')?.summaryKo ?? null,
+    outfitOverrideEn: chips.find((c) => c.slot === 'outfit')?.summaryKo ?? null,
+    propOverrideEn: chips.find((c) => c.slot === 'prop')?.summaryKo ?? null,
+    shotEdits: normalized ? [{ shotIndex: 1, actionEn: `Apply user styling note calmly: ${normalized.slice(0, 240)}` }] : [],
+    strictExclusionsEn: [],
+  };
+
+  const partsSummary = chips.map((c) => `${c.labelKo}(${c.summaryKo})`).join(', ');
+  const audioLabel = input.audioMode === 'bgm' ? ' · 어울리는 배경음악 포함' : '';
+
+  return {
+    approved: true,
+    refusal: 'none',
+    replyKo: partsSummary
+      ? `카메라 무빙과 기본 리듬은 유지한 채 ${partsSummary}${audioLabel} 설정으로 장면에 반영했어요.`
+      : `장면 설정${audioLabel}이 적용되었어요.`,
+    guardrailAdjustmentKo: null,
+    readyToRender: true,
+    summaryChips: chips.slice(0, 5),
+    structuredIntent: intent,
+  };
+}
+
+/**
+ * Deterministic prompt compiler used offline or as resilient fallback for Stage 2 Director rewrites.
+ */
+export function applyDeterministicDirectorSpec(input: {
+  basePrompt: string;
+  medium: 'image' | 'video';
+  cast?: 'solo' | 'couple' | 'pet';
+  hasPersonSlot?: boolean;
+  hasOutfitRef?: boolean;
+  hasPropRef?: boolean;
+  hasSceneRef?: boolean;
+  directorSpec?: PersonalDirectorSpec | null;
+}): string {
+  const parts: string[] = [input.basePrompt.trim()];
+  const spec = input.directorSpec ?? null;
+
+  if (input.hasOutfitRef) {
+    parts.push(
+      'Custom Outfit Authority: Apply the garment silhouette, color, and fabric strictly from the uploaded look reference image neck-down only; never copy face, skin tone, or backdrop from the outfit reference.'
+    );
+  }
+  if (input.hasPropRef) {
+    parts.push(
+      'Custom Prop Authority: Naturally integrate the uploaded object/prop reference at accurate physical hand scale without obscuring the face.'
+    );
+  }
+  if (input.hasSceneRef) {
+    parts.push(
+      'Custom Scene Mood Authority: Harmonize environmental tone and backdrop ambiance gently with the uploaded scene reference while preserving the template camera framing and lighting continuity.'
+    );
+  }
+
+  const intent = spec?.structuredIntent ?? null;
+  if (intent?.outfitOverrideEn) parts.push(`Wardrobe preference: ${intent.outfitOverrideEn}`);
+  if (intent?.makeupOverrideEn) parts.push(`Makeup preference: ${intent.makeupOverrideEn}`);
+  if (intent?.hairOverrideEn) parts.push(`Hairstyle preference: ${intent.hairOverrideEn}`);
+  if (intent?.propOverrideEn) parts.push(`Prop preference: ${intent.propOverrideEn}`);
+  if (intent?.shotEdits?.length) {
+    parts.push(intent.shotEdits.map((e) => `Shot ${e.shotIndex}: ${e.actionEn}`).join(' '));
+  } else if (spec?.userMessage?.trim()) {
+    parts.push(`User customization note (keep camera choreography & facial identity locked): ${spec.userMessage.trim()}`);
+  } else if (spec?.summaryChips?.length) {
+    parts.push(
+      `User selected slot adjustments: ${spec.summaryChips.map((c) => `${c.slot}=${c.summaryKo}`).join('; ')}`
+    );
+  }
+
+  const combined = parts.join('\n\n');
+  const hasPerson = input.hasPersonSlot ?? input.cast !== 'pet';
+
+  if (input.medium === 'video') {
+    return sanitizeRewrittenPrompt(combined, hasPerson, {
+      cast: input.cast ?? 'solo',
+      audioMode: spec?.audioMode ?? 'ambient',
+      bgmMood: spec?.bgmMood ?? null,
+    });
+  }
+
+  return hasPerson && !combined.includes('Natural matte skin texture with visible pores')
+    ? `${combined}\n\n${SKIN_MATTE_CONTRACT_A10}`
+    : combined;
+}
+
+/**
+ * Compiles a customer's template customization using `gemini-4-hydrogen` when configured,
+ * falling back cleanly to `applyDeterministicDirectorSpec` in local/offline environments or on transient API error.
+ */
+export async function compileDirectorPrompt(
+  input: {
+    basePrompt: string;
+    medium: 'image' | 'video';
+    cast?: 'solo' | 'couple' | 'pet';
+    hasPersonSlot?: boolean;
+    hasOutfitRef?: boolean;
+    hasPropRef?: boolean;
+    hasSceneRef?: boolean;
+    directorSpec?: PersonalDirectorSpec | null;
+    referenceSlots?: readonly DirectorRewriteInput['referenceSlots'][number][];
+  },
+  deps: { env?: Record<string, string | undefined>; fetch?: typeof fetch } = {}
+): Promise<string> {
+  const spec = input.directorSpec ?? null;
+  const hasCustomization = Boolean(
+    spec?.userMessage?.trim() ||
+      spec?.summaryChips?.length ||
+      spec?.structuredIntent ||
+      spec?.audioMode === 'bgm' ||
+      input.hasOutfitRef ||
+      input.hasPropRef ||
+      input.hasSceneRef
+  );
+  if (!hasCustomization) return input.basePrompt;
+
+  const config = directorConfigFromEnv(deps.env ?? process.env);
+  if (config && input.medium === 'video') {
+    try {
+      const director = createFlashTemplateDirector(config, { fetch: deps.fetch });
+      const intent: DirectorEditIntent = spec?.structuredIntent ?? {
+        hairOverrideEn: spec?.summaryChips?.find((c) => c.slot === 'hair')?.summaryKo ?? null,
+        makeupOverrideEn: spec?.summaryChips?.find((c) => c.slot === 'makeup')?.summaryKo ?? null,
+        outfitOverrideEn: spec?.summaryChips?.find((c) => c.slot === 'outfit')?.summaryKo ?? null,
+        propOverrideEn: spec?.summaryChips?.find((c) => c.slot === 'prop')?.summaryKo ?? null,
+        shotEdits: spec?.userMessage?.trim()
+          ? [{ shotIndex: 1, actionEn: spec.userMessage.trim().slice(0, 480) }]
+          : [],
+        strictExclusionsEn: [],
+      };
+      type RewriteSlot = {
+        index: number;
+        slotName: string;
+        role: 'person' | 'pet' | 'partner' | 'look' | 'product' | 'scene';
+      };
+      const slots: RewriteSlot[] = input.referenceSlots
+        ? input.referenceSlots.filter((s): s is RewriteSlot => s.role !== 'mask')
+        : [{ index: 1, slotName: 'selfie', role: 'person' }];
+      if (input.hasOutfitRef && !slots.some((s) => s.slotName === 'look_ref')) {
+        slots.push({ index: slots.length + 1, slotName: 'look_ref', role: 'look' });
+      }
+      if (input.hasPropRef && !slots.some((s) => s.slotName === 'prop_ref')) {
+        slots.push({ index: slots.length + 1, slotName: 'prop_ref', role: 'product' });
+      }
+      if (input.hasSceneRef && !slots.some((s) => s.slotName === 'scene_ref')) {
+        slots.push({ index: slots.length + 1, slotName: 'scene_ref', role: 'scene' });
+      }
+      const rewritten = await director.rewritePrompt({
+        basePrompt: input.basePrompt,
+        structuredIntent: intent,
+        referenceSlots: slots,
+        audioMode: spec?.audioMode ?? 'ambient',
+        bgmMood: spec?.bgmMood ?? null,
+      });
+      return unwrapServerOnlyPrompt(rewritten.compiledPrompt);
+    } catch {
+      // Resilient fallback keeps paid render generation moving even if optional LLM refinement errors transiently.
+    }
+  }
+
+  return applyDeterministicDirectorSpec(input);
+}

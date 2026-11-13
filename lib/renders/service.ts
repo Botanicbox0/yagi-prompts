@@ -32,10 +32,13 @@ import { getPremiumEditBudget } from '@/lib/premium-editing/budget';
 import { deleteExpiredEditReferences, loadSubscriptionRender, subscriptionRenderSchemaReady, subscriptionUsageTrackingPresent } from '@/lib/premium-editing/repo';
 import { prepareSubscriptionPrompt } from '@/lib/premium-editing/service';
 import type { PremiumEditClient } from '@/lib/premium-editing/provider';
-import { RenderFailure, baseFailureCode, pollVideoRender, runImageRender, startVideoRender, videoModelFor, type EngineOutput, type RenderEngineDeps, type RenderFailureCode, type RenderPhoto } from './engines';
+import { RenderFailure, baseFailureCode, pollVideoRender, runImageRender, startVideoRender, videoModelFor, type EngineOutput, type RenderEngineDeps, type RenderFailureCode, type RenderPhoto, type StepReference } from './engines';
 import { ensureJobRecipe, ensureMakerSandbox, insertJobOutputs, insertJobRecipe, loadJobRecipe, loadTemplateRecipe, MAKER_SANDBOX_ID, MAKER_SANDBOX_SLUG, renderPurpose, saveStepRecord, type JobRecipe } from '@/lib/recipes/repo';
 import { recordedUsd, runRecipe, type RecipeResult } from '@/lib/recipes/execute';
 import { primaryStep, recipeNeedsIdentity, type Recipe } from '@/lib/recipes/schema';
+import { compileDirectorPrompt } from '@/lib/template-director/flash-director';
+import { parseDirectorSpecInput, type PersonalDirectorSpec } from '@/lib/template-director/schema';
+import { parseSelectedFrames, selectiveOrderKrw, sliceCarouselRecipe } from '@/lib/twings/selective-frames';
 import { readMakerFile } from '@/lib/recipes/assets';
 import { fixedVideoReferenceUrls } from './template-references';
 import type { RenderNotifier } from './notify';
@@ -67,8 +70,8 @@ import { loadRenderFrames } from './frames';
 import { constantTimeEqual, isRenderId, isShareExpired, isShareTokenShape, newShareToken, shareExpiresAt } from './share';
 import { extensionFor, type RenderStore } from './store';
 import {
-  castOpen, cleanSlotPhoto, deleteSpentSlotPhotos, extraSlots, liveSlotRows, loadSlotPhotos, makeInputsFrom, petIsPrimary,
-  recordPrimaryPetPhoto, storeSlotPhotos, type CastSlot, type SlotPhoto,
+  CUSTOM_REF_SLOTS, castOpen, cleanSlotPhoto, deleteSpentSlotPhotos, extraSlots, liveSlotRows, loadSlotPhotos, makeInputsFrom, petIsPrimary,
+  recordPrimaryPetPhoto, storeSlotPhotos, type CastSlot, type RenderSlot, type SlotPhoto,
 } from './cast-inputs';
 import { PARTNER_SLOT, PET_SLOT } from '@/lib/recipes/schema';
 import { checkPetPhoto, petRefusal, type PetPhotoVerdict } from './pet-photo-check';
@@ -218,9 +221,13 @@ export interface CreateRenderInput {
    * free render). A paid render binds them to the order's render id before payment instead
    * (lib/renders/cast-inputs.ts), and they are read from there.
    */
-  slots?: Partial<Record<CastSlot, SlotPhoto>>;
+  slots?: Partial<Record<RenderSlot, SlotPhoto>>;
   /** The uploader confirmed the partner agreed to their photo being used (a couple template). */
   partnerConsent?: boolean;
+  /** 0-based selected frame indices for multi-frame image sets (`null` = all frames). */
+  selectedFrames?: number[] | null;
+  /** Hydrogen customization spec + Seedance native audio mode (`ambient` | `bgm`). */
+  directorSpec?: PersonalDirectorSpec | null;
 }
 
 export async function createRenderJob(deps: RenderServiceDeps, viewer: Viewer, input: CreateRenderInput): Promise<CreateRenderOutcome> {
@@ -230,15 +237,21 @@ export async function createRenderJob(deps: RenderServiceDeps, viewer: Viewer, i
   if (!input.paymentOrderId) return { ok: false, code: 'not_open' };
   return deps.sql.transaction(async (sql) => {
     const { rows } = await sql.query<{
-      status: string; template_slug: string; aspect: string; render_ref: string; render_id: string | null; identity_selfie_id: string | null; resolution: string | null;
-    }>("select status,template_slug,aspect,render_ref,render_id,identity_selfie_id,resolution from billing_payments where id=$1 and user_id=$2 and payment_type='NORMAL' for update", [input.paymentOrderId, viewer.userId]);
+      status: string; template_slug: string; aspect: string; render_ref: string; render_id: string | null; identity_selfie_id: string | null; resolution: string | null; selected_frames: number[] | null; director_spec: unknown;
+    }>("select status,template_slug,aspect,render_ref,render_id,identity_selfie_id,resolution,selected_frames,director_spec from billing_payments where id=$1 and user_id=$2 and payment_type='NORMAL' for update", [input.paymentOrderId, viewer.userId]);
     const payment = rows[0];
     if (!payment || payment.status !== 'paid' || payment.template_slug !== input.templateSlug || payment.aspect !== input.aspect) return { ok: false, code: 'not_open' };
     if (payment.render_id) {
       const job = await loadRenderJob(sql, payment.render_id);
       return job ? { ok: true, id: job.id, held: job.status === 'held' } : { ok: false, code: 'not_found' };
     }
-    const result = await createAuthorizedRender({ ...deps, sql }, viewer, {...input,selfieId:payment.identity_selfie_id??undefined,resolution:payment.resolution}, payment.render_ref);
+    const result = await createAuthorizedRender({ ...deps, sql }, viewer, {
+      ...input,
+      selfieId: payment.identity_selfie_id ?? undefined,
+      resolution: payment.resolution,
+      selectedFrames: parseSelectedFrames(payment.selected_frames),
+      directorSpec: parseDirectorSpecInput(payment.director_spec),
+    }, payment.render_ref);
     if (result.ok) await sql.query('update billing_payments set render_id=$2,fulfilled_at=$3,lease_until=null where id=$1', [input.paymentOrderId, result.id, deps.now ?? new Date()]);
     return result;
   });
@@ -395,7 +408,13 @@ async function createAuthorizedRender(deps: RenderServiceDeps, viewer: Viewer, i
       if (refused) return { ok: false, code: refused };
     }
   }
-  const slotPhotos: Partial<Record<CastSlot, SlotPhoto>> = {};
+  const slotPhotos: Partial<Record<RenderSlot, SlotPhoto>> = {};
+  for (const customSlot of CUSTOM_REF_SLOTS) {
+    const given = input.slots?.[customSlot];
+    if (given) {
+      try { slotPhotos[customSlot] = await cleanSlotPhoto(given); } catch { return { ok: false, code: 'bad_slot_photo' }; }
+    }
+  }
   const needed = extraSlots(makeInputs);
   if (needed.length > 0) {
     // A paid render's photos were bound to its render id when the order was made.
@@ -439,6 +458,11 @@ async function createAuthorizedRender(deps: RenderServiceDeps, viewer: Viewer, i
   if (petIsPrimary(makeInputs)) {
     await recordPrimaryPetPhoto(deps.sql, { renderId: id, userId: viewer.userId, templateId: template.id, key: inputKey, mime: primary.mime, now });
   }
+  const normalizedFrames =
+    template.medium === 'image'
+      ? selectiveOrderKrw(template, recipe, input.selectedFrames, resolution.resolution).normalizedFrames
+      : null;
+  const directorSpec = parseDirectorSpecInput(input.directorSpec);
   await insertRenderJob(deps.sql, {
     id,
     userId: viewer.userId!,
@@ -452,6 +476,8 @@ async function createAuthorizedRender(deps: RenderServiceDeps, viewer: Viewer, i
     inputKey,
     inputMime: primary.mime,
     status: held ? 'held' : 'queued',
+    selectedFrames: normalizedFrames,
+    directorSpec,
   });
   if (input.selfieId) await deps.sql.query('update render_jobs set identity_selfie_id=$2 where id=$1',[id,input.selfieId]);
   return { ok: true, id, held };
@@ -719,10 +745,37 @@ async function renderNow(
   const request = deps.subscriptionSchemaReady ? await loadSubscriptionRender(deps.sql, job.id) : null;
   const prepared = request ? await prepareSubscriptionPrompt(deps.sql, deps.store, request, now, deps.premiumEditor) : null;
   const prompt = buildRenderPrompt({ promptText: prepared?.promptText ?? template.promptText, medium: job.medium, hasPhoto: photo !== null || assetId !== null });
+  const slotFiles = job.directorSpec || (await liveSlotRows(deps.sql, job.id)).length > 0
+    ? await loadSlotPhotos(deps.sql, deps.store, job.id)
+    : {};
+  const customSlots = CUSTOM_REF_SLOTS.filter((slot) => Boolean(slotFiles[slot]));
+  const finalPromptText = !prepared && (job.directorSpec || customSlots.length > 0)
+    ? await compileDirectorPrompt({
+        basePrompt: prompt.text,
+        medium: job.medium,
+        cast: template.cast,
+        hasPersonSlot: photo !== null || assetId !== null,
+        hasOutfitRef: Boolean(slotFiles.look_ref),
+        hasPropRef: Boolean(slotFiles.prop_ref),
+        hasSceneRef: Boolean(slotFiles.scene_ref),
+        directorSpec: job.directorSpec,
+      })
+    : prompt.text;
 
   if (job.medium === 'image') {
     if (!isImageEngine(job.engine) || !isImageAspect(job.aspect)) throw new RenderFailure('engine_error', `unknown image engine/aspect ${job.engine} ${job.aspect}`, false);
-    const output = await runImageRender({ engine: job.engine, prompt: prompt.text, aspect: job.aspect, photo, assetId }, deps.engines ?? {});
+    const customImageRefs: StepReference[] = customSlots
+      .map((slot) => slotFiles[slot])
+      .filter((f): f is RenderPhoto & { key: string } => Boolean(f))
+      .map((f) => ({ kind: 'bytes', bytes: f.bytes, mime: f.mime }));
+    const imageReferences: StepReference[] | undefined =
+      customImageRefs.length > 0 && photo !== null
+        ? [{ kind: 'bytes', bytes: photo.bytes, mime: photo.mime }, ...customImageRefs]
+        : undefined;
+    const output = await runImageRender(
+      { engine: job.engine, prompt: finalPromptText, aspect: job.aspect, photo, assetId, ...(imageReferences ? { references: imageReferences } : {}) },
+      deps.engines ?? {},
+    );
     await finish(deps, job, output, now);
     if (assetId !== null) await recordIdentityUse(deps.sql, { userId: job.userId, assetId, now });
     report.succeeded += 1;
@@ -736,12 +789,23 @@ async function renderNow(
       where e.render_ref=$1 and e.dispatch_attempt<$2 and exists(select 1 from render_jobs j where j.id=e.render_ref and j.status='running' and j.attempts=$2) returning e.render_ref`, [job.id, job.attempts, now]);
     if (!dispatch.rows.length) { report.waiting += 1; return; }
   }
-  const referenceUrls = [...fixedVideoReferenceUrls(template.id, deps.siteUrl), ...await campaignRenderReferenceUrls(deps.sql, deps.store, job.id)];
+  const customVideoUrls: string[] = [];
+  for (const slot of customSlots) {
+    const file = slotFiles[slot];
+    if (!file) continue;
+    const url = await deps.store.url(file.key, 30 * 60);
+    customVideoUrls.push(url ?? `data:${file.mime};base64,${Buffer.from(file.bytes).toString('base64')}`);
+  }
+  const referenceUrls = [
+    ...fixedVideoReferenceUrls(template.id, deps.siteUrl),
+    ...await campaignRenderReferenceUrls(deps.sql, deps.store, job.id),
+    ...customVideoUrls,
+  ];
   const dispatch = await claimCampaignDispatch(deps.sql, job.id, job.attempts, now);
   if (dispatch.campaign && !dispatch.claimed) { report.waiting += 1; return; }
   try {
   const started = await startVideoRender(
-    { engine: job.engine, prompt: prompt.text, aspect: job.aspect, seconds: prepared?.seconds ?? template.runtimeSeconds ?? 5, photo, assetId,
+    { engine: job.engine, prompt: finalPromptText, aspect: job.aspect, seconds: prepared?.seconds ?? template.runtimeSeconds ?? 5, photo, assetId,
       fixedReferenceUrls: referenceUrls,
       resolution: renderResolution(job.resolution),
       ...(deps.callbackUrl ? { callbackUrl: deps.callbackUrl } : {}) },
@@ -796,7 +860,8 @@ async function pollAwaiting(deps: RenderPassDeps, job: RenderJob, now: Date, rep
     const template = await loadPromptById(deps.sql, job.templateId);
     const request = deps.subscriptionSchemaReady ? await loadSubscriptionRender(deps.sql, job.id) : null;
     const recipe = await loadJobRecipe(deps.sql, job.id);
-    const film = recipe?.recipe ? primaryStep(recipe.recipe) : null;
+    const effectiveRecipe = recipe?.recipe ? sliceCarouselRecipe(recipe.recipe, job.selectedFrames) : null;
+    const film = effectiveRecipe ? primaryStep(effectiveRecipe) : null;
     const { model, seconds } = videoModelFor(job.engine, film?.kind === 'video' ? film.params.duration : request?.runtime_seconds ?? template?.runtimeSeconds ?? 5);
     const polled = await pollVideoRender(
       { taskId: job.providerTaskId, model, seconds, resolution: renderResolution(job.resolution), aspect: job.aspect, onProviderDone: () => markRenderFinishing(deps.sql, job.id, now) },
@@ -873,16 +938,33 @@ async function jobRecipeFor(deps: RenderPassDeps, job: RenderJob): Promise<JobRe
 async function renderRecipe(deps: RenderPassDeps, job: RenderJob, recipe: JobRecipe, now: Date, report: RenderPassReport, handedOff: Set<string>): Promise<void> {
   const startedAt = (deps.clock ?? Date.now)();
   const photo = await readPhoto(deps.store, job);
+  const effectiveRecipe = sliceCarouselRecipe(recipe.recipe!, job.selectedFrames);
+  const userSlots = await loadSlotPhotos(deps.sql, deps.store, job.id);
   const run = await runRecipe({
     jobId: job.id,
-    recipe: recipe.recipe!,
+    recipe: effectiveRecipe,
     outputAspect: job.aspect,
     state: recipe.state,
     store: deps.store,
     engines: deps.engines ?? {},
     selfie: photo && job.inputKey ? { ...photo, key: job.inputKey } : null,
     // docs/CAST-CATEGORIES.md §3 — the pet or partner photo (a pet-only job's pet is its input photo).
-    userSlots: await loadSlotPhotos(deps.sql, deps.store, job.id),
+    userSlots,
+    audioMode: job.directorSpec?.audioMode,
+    stepPromptOverride: job.directorSpec || CUSTOM_REF_SLOTS.some((slot) => Boolean(userSlots[slot]))
+      ? ({ step, prompt, isOutput, customSlots }) => {
+          if (!isOutput && customSlots.length === 0) return prompt;
+          return compileDirectorPrompt({
+            basePrompt: prompt,
+            medium: step.kind,
+            hasPersonSlot: step.inputs.includes('selfie'),
+            hasOutfitRef: Boolean(userSlots.look_ref),
+            hasPropRef: Boolean(userSlots.prop_ref),
+            hasSceneRef: Boolean(userSlots.scene_ref),
+            directorSpec: job.directorSpec,
+          });
+        }
+      : undefined,
     makerFile: (handle) => readMakerFile(deps.sql, deps.store, handle),
     person: async ({ bytes, key }) => {
       const reference = await personAsset(deps, job, bytes, key);
@@ -913,7 +995,7 @@ async function renderRecipe(deps: RenderPassDeps, job: RenderJob, recipe: JobRec
     return;
   }
   const first = run.results[0]!;
-  const primary = primaryStep(recipe.recipe!).engine;
+  const primary = primaryStep(effectiveRecipe).engine;
   const provider = isEngineId(primary) ? engineProvider(primary) : 'modelark';
   await finishRecipe(deps, job, run.results, run.usd, { bytes: await deps.store.read(first.key), mime: first.mime, provider, costUsd: run.usd }, now);
   for (const assetId of new Set(run.assets)) await recordIdentityUse(deps.sql, { userId: job.userId, assetId, now });

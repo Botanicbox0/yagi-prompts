@@ -85,14 +85,14 @@ describe('TemplateDirectorPanel UI/UX (4-Pass SOTA Verification)', () => {
     expect(html).toContain('data-photo-dual-candidates');
     expect(html).toContain('data-identity-candidate="seedream-5.0-pro"');
     expect(html).toContain('data-identity-candidate="nano-banana-2.1"');
-    expect(html).toContain('후보 A · 부드러운 자연 인상 (Seedream 5.0 Pro)');
-    expect(html).toContain('후보 B · 선명한 윤곽 · 가림 정돈 (Nano Banana 2.1)');
-    expect(html).toContain('TWINGS가 가려진 부분 정리해서 진행 (+2 크레딧)');
+    expect(html).toContain('후보 A · 부드러운 자연 인상');
+    expect(html).toContain('후보 B · 선명한 윤곽 · 가림 정돈');
+    expect(html).toContain('TWINGS가 가려진 부분 정리해서 진행');
     expect(html).toContain('원본 사진 그대로 쓰기');
-    expect(html).toContain('FACE RATIO 36%');
+    expect(html).toContain('얼굴 비율 36%');
   });
 
-  it('Pass 2: distinguishes free local SeedVR2 optical restoration from paid dual-candidate cleanup and strictly adheres to TWINGS Blue palette (no YAGI red)', () => {
+  it('Pass 2: distinguishes free local optical restoration from dual-candidate cleanup and adheres to Design System v2 palette (no YAGI red or legacy blue)', () => {
     const html = renderToStaticMarkup(
       <TemplateDirectorPanel
         locale="ko"
@@ -104,7 +104,9 @@ describe('TemplateDirectorPanel UI/UX (4-Pass SOTA Verification)', () => {
     expect(html).toContain('data-photo-cleanup-mode="restore_detail"');
     expect(html).not.toContain('data-photo-dual-candidates');
     expect(html).toContain('TWINGS 광학 선명도 복원 적용 (무료)');
-    expect(html).toContain('#3875C5');
+    expect(html).toContain('#FF58AE');
+    expect(html).toContain('#09090B');
+    expect(html).not.toContain('#3875C5');
     // Must never contain forbidden YAGI v1.2 red (#ED1E1E) or Tailwind red utility classes
     expect(html.toLowerCase()).not.toContain('#ed1e1e');
     expect(html).not.toContain('bg-red-');
@@ -152,15 +154,17 @@ describe('TemplateDirectorPanel UI/UX (4-Pass SOTA Verification)', () => {
 
     // Reference wells & active summary chips
     expect(html).toContain('data-director-slot="outfit"');
-    expect(html).toContain('@Image 2 · 룩 레퍼런스');
+    expect(html).toContain('의상 · 스타일 레퍼런스');
     expect(html).toContain('data-director-slot="prop"');
-    expect(html).toContain('@Image 3 · 소품 레퍼런스');
+    expect(html).toContain('소품 · 제품 레퍼런스');
+    expect(html).toContain('data-director-slot="scene"');
+    expect(html).toContain('배경 · 공간 레퍼런스');
     expect(html).toContain('data-director-chip-count');
     expect(html).toContain('크림 트위드 자켓');
     expect(html).toContain('유리 향수병');
     expect(html).toContain('data-director-char-count');
     expect(html).toContain('0/320');
-    expect(html).toContain('focus-visible:outline-[#3875C5]');
+    expect(html).toContain('focus-visible:outline-[#09090B]');
   });
 
   it('Pass 4: deduplicates summary chips by slot (including makeup) while preserving distinct shot_action beats', () => {
@@ -210,7 +214,7 @@ describe('TemplateDirectorPanel UI/UX (4-Pass SOTA Verification)', () => {
     expect(html).toContain('data-candidate-recommended="true"');
     expect(html).toContain('가장 닮은 추천');
     expect(html).toContain('data-candidate-skeleton="seedream-5.0-pro"');
-    expect(html).toContain('TWINGS가 자연스러운 카메라 비율·피부 결로 정돈해서 진행 (+2 크레딧)');
+    expect(html).toContain('TWINGS가 자연스러운 카메라 비율·피부 결로 정돈해서 진행');
     expect(html).toContain('원본 사진 그대로 쓰기');
   });
 

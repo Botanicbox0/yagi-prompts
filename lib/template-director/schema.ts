@@ -4,6 +4,15 @@ import type { RecipeSlotRole } from '@/lib/recipes/schema';
 export const GEMINI_DIRECTOR_DEFAULT_MODEL = 'gemini-4-hydrogen' as const;
 export const GEMINI_DIRECTOR_DEFAULT_BASE_URL = 'https://generativelanguage.googleapis.com/v1beta' as const;
 
+export const PERSONAL_AUDIO_MODES = ['ambient', 'bgm'] as const;
+export type PersonalAudioMode = (typeof PERSONAL_AUDIO_MODES)[number];
+
+export const PERSONAL_BGM_MOODS = ['cinematic', 'trendy_beat', 'calm_mood'] as const;
+export type PersonalBgmMood = (typeof PERSONAL_BGM_MOODS)[number];
+
+export const CUSTOM_DIRECTOR_REF_SLOTS = ['look_ref', 'prop_ref', 'scene_ref'] as const;
+export type CustomDirectorRefSlot = (typeof CUSTOM_DIRECTOR_REF_SLOTS)[number];
+
 export const PHOTO_ISSUE_CODES = [
   'hand_occlusion',
   'prop_occlusion',
@@ -61,7 +70,7 @@ export interface TemplateBaselineSlotSpec {
   /** Guidance on how the user can override this slot via text or reference photo. */
   customizableHintKo: string;
   customizableHintEn: string;
-  acceptsReferenceImage?: 'outfit' | 'prop' | null;
+  acceptsReferenceImage?: 'outfit' | 'prop' | 'scene' | null;
 }
 
 export interface TemplatePredictivePreset {
@@ -74,7 +83,7 @@ export interface TemplatePredictivePreset {
   reasonBadgeEn: string;
   samplePromptKo: string;
   samplePromptEn: string;
-  opensReferenceSlot?: 'outfit' | 'prop' | null;
+  opensReferenceSlot?: 'outfit' | 'prop' | 'scene' | null;
 }
 
 export interface TemplateBaselineSpec {
@@ -318,7 +327,47 @@ export interface DirectorRewriteInput {
   basePrompt: string;
   structuredIntent: DirectorEditIntent;
   referenceSlots: readonly DirectorReferenceSlotMeta[];
+  /** Native video audio preference (`ambient` = natural voice/foley only; `bgm` = Hydrogen scene-matched score). */
+  audioMode?: PersonalAudioMode;
+  bgmMood?: PersonalBgmMood | null;
 }
+
+export const personalDirectorSpecSchema = z.object({
+  userMessage: z.string().trim().max(1000).nullable().optional(),
+  summaryChips: z
+    .array(
+      z.object({
+        slot: z.enum(DIRECTOR_EDITABLE_SLOTS),
+        labelKo: z.string().trim().min(1).max(60),
+        summaryKo: z.string().trim().min(1).max(200),
+      }),
+    )
+    .max(8)
+    .optional(),
+  audioMode: z.enum(PERSONAL_AUDIO_MODES).optional().default('ambient'),
+  bgmMood: z.enum(PERSONAL_BGM_MOODS).nullable().optional(),
+  structuredIntent: z
+    .object({
+      hairOverrideEn: z.string().trim().max(400).nullable(),
+      makeupOverrideEn: z.string().trim().max(400).nullable().optional().default(null),
+      outfitOverrideEn: z.string().trim().max(600).nullable(),
+      propOverrideEn: z.string().trim().max(400).nullable(),
+      shotEdits: z
+        .array(
+          z.object({
+            shotIndex: z.number().int().min(1).max(12),
+            actionEn: z.string().trim().min(1).max(500),
+          }),
+        )
+        .max(4),
+      strictExclusionsEn: z.array(z.string().trim().min(1).max(120)).max(12),
+    })
+    .nullable()
+    .optional(),
+  slotOverrides: z.array(z.enum(CUSTOM_DIRECTOR_REF_SLOTS)).max(3).optional(),
+});
+
+export type PersonalDirectorSpec = z.infer<typeof personalDirectorSpecSchema>;
 
 /**
  * Opaque handle for a server-only compiled prompt.
@@ -441,21 +490,21 @@ export const rawIdentitySimilaritySchema = z.object({
  * Empirical Template Baseline Presets derived from 33+ real creator campaign deliveries
  * (90s Apgujeong Interview, Night Red Carpet Arrival, Editorial Runway).
  * Discloses what is baked into the template by default vs what the user can customize
- * via text or reference photo (@Image 2 Look, @Image 3 Prop).
+ * via text or reference photo without internal technical jargon.
  */
 export const DEFAULT_EDITORIAL_TEMPLATE_BASELINE: TemplateBaselineSpec = {
   templateArchetypeId: 'default-editorial',
-  titleKo: '이 템플릿의 기본 연출 · 맞춤 변경 범위',
-  titleEn: 'Template Default Styling & Customizable Scope',
+  titleKo: '이 템플릿의 고정 연출 · 맞춤 변경 범위',
+  titleEn: 'Locked Direction & Customizable Scope',
   lockedElementsKo: [
     '카메라 렌즈 · 컷 전환 리듬',
     '공간 배경 · 조명 무드',
-    '원본 오디오 · 립싱크 타이밍'
+    '장면 타이밍 · 입 모양 립싱크 리듬'
   ],
   lockedElementsEn: [
     'Camera lens & cut rhythm',
     'Scene backdrop & lighting mood',
-    'Master audio & lip-sync timing'
+    'Shot pacing & lip-sync timing'
   ],
   baselineSlots: [
     {
@@ -464,8 +513,8 @@ export const DEFAULT_EDITORIAL_TEMPLATE_BASELINE: TemplateBaselineSpec = {
       labelEn: 'Default Outfit',
       defaultSettingKo: '템플릿 시그니처 착장 (시안의 기본 의상 적용)',
       defaultSettingEn: 'Template signature wardrobe',
-      customizableHintKo: '원하는 옷 사진(@Image 2)을 올리거나 텍스트로 드레스·수트·자켓 스타일을 지정할 수 있어요',
-      customizableHintEn: 'Attach an outfit photo (@Image 2) or describe your desired look',
+      customizableHintKo: '원하는 옷 사진을 올리거나 텍스트로 드레스·수트·자켓 스타일을 지정할 수 있어요',
+      customizableHintEn: 'Attach an outfit reference photo or describe your desired look',
       acceptsReferenceImage: 'outfit'
     },
     {
@@ -539,12 +588,12 @@ export const DEFAULT_EDITORIAL_TEMPLATE_BASELINE: TemplateBaselineSpec = {
     {
       id: 'outfit-user-photo-ref',
       slot: 'outfit',
-      labelKo: '내가 올린 옷 사진(@Image 2) 그대로 입히기',
-      labelEn: 'Wear my uploaded outfit (@Image 2)',
+      labelKo: '내가 올린 의상 레퍼런스 그대로 입히기',
+      labelEn: 'Wear my uploaded outfit reference',
       reasonBadgeKo: '직접 이미지 업로드',
       reasonBadgeEn: 'Direct photo upload',
-      samplePromptKo: '기본 착장 대신 첨부한 의상 사진(@Image 2)의 옷 실루엣과 컬러로 전 컷 동일하게 갈아입혀 줘',
-      samplePromptEn: 'Dress me in the exact garment silhouette and colour from attached @Image 2 across every shot',
+      samplePromptKo: '기본 착장 대신 첨부한 의상 레퍼런스 사진의 옷 실루엣과 컬러로 전 컷 동일하게 갈아입혀 줘',
+      samplePromptEn: 'Dress me in the exact garment silhouette and colour from my uploaded outfit photo across every shot',
       opensReferenceSlot: 'outfit'
     },
     {
@@ -586,12 +635,12 @@ export const DEFAULT_EDITORIAL_TEMPLATE_BASELINE: TemplateBaselineSpec = {
     {
       id: 'prop-user-product-ref',
       slot: 'prop',
-      labelKo: '내 제품·소품 사진(@Image 3) 자연스럽게 들려주기',
-      labelEn: 'Hold my uploaded product (@Image 3)',
+      labelKo: '내 제품·소품 레퍼런스 자연스럽게 들려주기',
+      labelEn: 'Hold my uploaded product reference',
       reasonBadgeKo: '직접 이미지 업로드',
       reasonBadgeEn: 'Direct photo upload',
-      samplePromptKo: '기존 소품은 빼고 첨부한 제품 사진(@Image 3)을 실제 손 크기에 맞춰 자연스럽게 들려줘',
-      samplePromptEn: 'Remove the default prop and hold the attached product (@Image 3) at true hand scale',
+      samplePromptKo: '기존 소품은 빼고 첨부한 제품·소품 레퍼런스 사진을 실제 손 크기에 맞춰 자연스럽게 들려줘',
+      samplePromptEn: 'Remove the default prop and hold the uploaded product reference at true hand scale',
       opensReferenceSlot: 'prop'
     },
     {
@@ -643,12 +692,12 @@ export const TEMPLATE_BASELINE_PRESETS: Readonly<Record<string, TemplateBaseline
     lockedElementsKo: [
       '85mm 망원 런웨이 트래킹 · 프론트 로우 플래시 세례',
       '다크 스튜디오 바닥 반사광 & 모델 워킹 리듬',
-      '배경음악(BGM) 없는 실제 힐 구두 발걸음 · 카메라 셔터 현장음'
+      '힐 구두 발걸음 · 카메라 셔터 현장 음향'
     ],
     lockedElementsEn: [
       '85mm telephoto runway tracking & front-row flashes',
       'Dark studio floor reflections & runway stride rhythm',
-      'Strict No-BGM live heel footsteps & press shutter acoustics'
+      'Live heel footsteps & press shutter acoustics'
     ],
     baselineSlots: [
       {
@@ -657,8 +706,8 @@ export const TEMPLATE_BASELINE_PRESETS: Readonly<Record<string, TemplateBaseline
         labelEn: 'Default Outfit & Silhouette Fit',
         defaultSettingKo: '시그니처 런웨이 드레스 (셀카 소매 부피 무시 · 슬림한 팔·쇄골 핏 자동 보정)',
         defaultSettingEn: 'Signature runway look (wide selfie sleeves ignored · slender arm fit locked)',
-        customizableHintKo: '내 전신 의상 사진(@Image 2)을 올리면 목선 아래 의상과 신발만 1:1로 갈아입혀요',
-        customizableHintEn: 'Attach @Image 2 for a strict neck-down 1:1 outfit swap while keeping your face',
+        customizableHintKo: '내 전신 의상 레퍼런스를 올리면 목선 아래 의상과 신발만 1:1로 갈아입혀요',
+        customizableHintEn: 'Attach an outfit photo for a strict neck-down wardrobe swap while keeping your face',
         acceptsReferenceImage: 'outfit'
       },
       {
@@ -731,8 +780,8 @@ export const TEMPLATE_BASELINE_PRESETS: Readonly<Record<string, TemplateBaseline
         labelEn: 'Default Outfit',
         defaultSettingKo: '94년 압구정 블랙 가죽 재킷 · 차콜 팬츠 · 삐삐 벨트',
         defaultSettingEn: '1994 black leather jacket, charcoal trousers & waist pager',
-        customizableHintKo: '오프화이트 블레이저·셔츠 룩이나 내가 올린 옷 사진(@Image 2)으로 바꿀 수 있어요',
-        customizableHintEn: 'Swap to an off-white blazer look or attach your own outfit photo (@Image 2)',
+        customizableHintKo: '오프화이트 블레이저·셔츠 룩이나 내가 올린 의상 레퍼런스 사진으로 바꿀 수 있어요',
+        customizableHintEn: 'Swap to an off-white blazer look or attach your own outfit reference photo',
         acceptsReferenceImage: 'outfit'
       },
       {
@@ -775,7 +824,7 @@ export const TEMPLATE_BASELINE_PRESETS: Readonly<Record<string, TemplateBaseline
     lockedElementsKo: [
       '밤 레드카펫 프레스 라인 · 카메라 플래시 조명',
       '경호원·취재진 사이 망원 워킹 & 팬 사인회 7컷 구성',
-      '11초 무음악(No-BGM) 실제 셔터음 · 다국어 기자 콜 사운드'
+      '11초 현장 셔터음 · 다국어 기자 콜 사운드'
     ],
     lockedElementsEn: [
       'Night red-carpet chiaroscuro & press xenon flashes',
@@ -789,8 +838,8 @@ export const TEMPLATE_BASELINE_PRESETS: Readonly<Record<string, TemplateBaseline
         labelEn: 'Default Outfit',
         defaultSettingKo: '런웨이 타우프 베이지 스웨이드 코르셋 드레스 · 화이트 실크 스카프 · 롱부츠',
         defaultSettingEn: 'Taupe-beige suede corset dress, white silk neck kerchief & boots',
-        customizableHintKo: '목 스카프를 뺀 여배우 블랙 새틴 드레스나 내 드레스 사진(@Image 2)으로 바꿀 수 있어요',
-        customizableHintEn: 'Switch to a strapless black satin actress gown or upload @Image 2',
+        customizableHintKo: '목 스카프를 뺀 여배우 블랙 새틴 드레스나 내 의상 레퍼런스 사진으로 바꿀 수 있어요',
+        customizableHintEn: 'Switch to a strapless black satin actress gown or upload your outfit photo',
         acceptsReferenceImage: 'outfit'
       },
       {
@@ -982,4 +1031,24 @@ export function diagnosePhotoSuitability(
     reuploadTipEn:
       'Uploading a sharp, evenly lit front-facing photo will preserve your exact features much more clearly.'
   };
+}
+
+/**
+ * Safely parses `PersonalDirectorSpec` from JSON strings (FormData) or DB `jsonb` values.
+ * Returns null when absent, empty, or malformed.
+ */
+export function parseDirectorSpecInput(raw: unknown): PersonalDirectorSpec | null {
+  if (raw === null || raw === undefined) return null;
+  let candidate: unknown = raw;
+  if (typeof raw === 'string') {
+    const trimmed = raw.trim();
+    if (!trimmed) return null;
+    try {
+      candidate = JSON.parse(trimmed);
+    } catch {
+      return null;
+    }
+  }
+  const parsed = personalDirectorSpecSchema.safeParse(candidate);
+  return parsed.success ? parsed.data : null;
 }

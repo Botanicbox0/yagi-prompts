@@ -149,7 +149,8 @@ describe('Make Your Own Video & Maker 80% Revenue Engine + Selective Frame Picke
     expect(html).toContain('data-selective-credits="29"');
     expect(html).toContain('data-selective-krw="400"');
     expect(html).toContain('data-selective-saved-badge');
-    expect(html).toContain('42 크레딧');
+    expect(html).toContain('400원');
+    expect(html).not.toContain('크레딧');
   });
 
   it('renders CreatorCampaignHub with 2 monetization tracks (Official Format vs Guided Custom Video) and 3-point payout checklist', () => {

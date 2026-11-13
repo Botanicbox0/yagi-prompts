@@ -12,7 +12,17 @@ import { getRenderStore } from '@/lib/renders/store';
  * to save it instead of showing it.
  */
 export const dynamic = 'force-dynamic';
-const EXTENSION: Record<string, string> = { 'image/jpeg': 'jpg', 'image/png': 'png', 'image/webp': 'webp', 'video/mp4': 'mp4', 'video/quicktime': 'mov' };
+const EXTENSION: Record<string, string> = {
+  'image/jpeg': 'jpg',
+  'image/png': 'png',
+  'image/webp': 'webp',
+  'video/mp4': 'mp4',
+  'video/quicktime': 'mov',
+  'audio/mpeg': 'mp3',
+  'audio/wav': 'wav',
+  'audio/mp4': 'm4a',
+  'audio/aac': 'aac',
+};
 const PRIVATE = { 'Cache-Control': 'private, no-store', 'X-Robots-Tag': 'noindex, nofollow', 'X-Content-Type-Options': 'nosniff' };
 
 export async function GET(request: Request, { params }: { params: Promise<{ file: string }> }) {
@@ -24,6 +34,12 @@ export async function GET(request: Request, { params }: { params: Promise<{ file
     if (!sql) return new NextResponse(null, { status: 503, headers: PRIVATE });
     const object = await makerFileObject(sql, viewer, file);
     if (!object) return new NextResponse(null, { status: 404, headers: PRIVATE });
+    if (download && object.containsPerson) {
+      return NextResponse.json(
+        { ok: false, code: 'person_reference_download_forbidden' },
+        { status: 403, headers: PRIVATE },
+      );
+    }
     const name = `twings-${file.slice(4, 12)}.${EXTENSION[object.mime] ?? 'bin'}`;
     const store = await getRenderStore();
     // To look at, a short-lived signed address; to save, the bytes from here under their own name
