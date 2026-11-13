@@ -1939,7 +1939,7 @@ export const en = {
       seedreamPro: 'Product and people photos',
       nanoBananaPro: 'Text, logos and partial edits',
       seedreamFlash: 'Quick drafts',
-      seedream55: 'Opening soon',
+      seedream55: 'Product and people photos',
       gptImageFlare: 'Fast to make and edit',
       gptImageSunburst: 'Slightly slower, with sharper detail edits for the same credits.',
       seedance25: 'Video from text, pictures or a reference',

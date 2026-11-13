@@ -179,7 +179,7 @@ export const MCP_TOOL_DEFINITIONS = [
       required: ['prompt'],
       properties: {
         prompt: { type: 'string' },
-        model: { type: 'string', description: 'Defaults to nano-banana-pro or seedream-5-pro.' },
+        model: { type: 'string', description: 'Defaults to nano-banana-pro or seedream-5.5.' },
         aspect: { type: 'string', default: '4:5' },
         resolution: { type: 'string', default: '2K' },
         count: { type: 'integer', minimum: 1, maximum: 4, default: 1 },

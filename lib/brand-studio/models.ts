@@ -21,9 +21,10 @@ export type StudioPromptProfile = 'seedream' | 'nano-banana' | 'gpt-image' | 'se
 
 /**
  * `live`: selectable. `awaiting_provider`: declared so the day the provider lists it only this flag
- * changes; hidden from every screen and refused by the API until then.
+ * changes; hidden from every screen and refused by the API until then. `retired`: superseded by a
+ * newer version; kept for historical job/cost lookup, hidden from every screen and refused for new jobs.
  */
-export type StudioModelAvailability = 'live' | 'awaiting_provider';
+export type StudioModelAvailability = 'live' | 'awaiting_provider' | 'retired';
 
 interface StudioModelBase {
   id: string;
@@ -33,6 +34,8 @@ interface StudioModelBase {
   hintKey: string;
   availability: StudioModelAvailability;
   promptProfile: StudioPromptProfile;
+  /** True when the upstream endpoints carry `enable_safety_checker` (always forced `true`). */
+  safetyChecker?: boolean;
   /** Sunra API: `POST /v1/queue/{alias}/{endpoint}`. */
   api: { alias: string };
   /** Sunra account lane (MCP `create_image` / `create_video` model id), or null when it has none. */
@@ -139,16 +142,16 @@ const GPT_IMAGE_26_CENTS: Readonly<Record<StudioImageQuality, Readonly<Record<st
 
 export const STUDIO_MODELS = [
   {
-    id: 'seedream-5-pro',
+    id: 'seedream-5.5',
     medium: 'image',
-    label: 'Seedream 5.0 Pro',
-    hintKey: 'seedreamPro',
+    label: 'Seedream 5.5',
+    hintKey: 'seedream55',
     availability: 'live',
     promptProfile: 'seedream',
-    api: { alias: 'bytedance/seedream-5.0-pro' },
-    mcp: { model: 'seedream-5-pro' },
+    api: { alias: 'bytedance/seedream-5.5' },
+    mcp: { model: 'seedream-5.5' },
     aspects: SEEDREAM_ASPECTS,
-    resolutions: ['1K', '2K'],
+    resolutions: ['1K', '1.5K', '2K'],
     defaultResolution: '2K',
     maxReferences: 10,
     regionEdit: false,
@@ -177,6 +180,7 @@ export const STUDIO_MODELS = [
     hintKey: 'seedreamFlash',
     availability: 'live',
     promptProfile: 'seedream',
+    safetyChecker: true,
     api: { alias: 'bytedance/seedream-5.0-flash' },
     mcp: null,
     aspects: SEEDREAM_ASPECTS,
@@ -187,16 +191,16 @@ export const STUDIO_MODELS = [
     endpoints: { textToImage: 'text-to-image', edit: 'image-editing' },
   },
   {
-    // ByteDance announced it on 2026-11-09. Sunra listed it on neither lane on 2026-11-10, so the alias
-    // and the controls below are the 5.0 Pro shape and must be re-read from the catalogue before `live`.
-    id: 'seedream-5.5',
+    // Superseded by Seedream 5.5 (2026-11-14); kept as `retired` for historical job/cost lookup.
+    id: 'seedream-5-pro',
     medium: 'image',
-    label: 'Seedream 5.5',
-    hintKey: 'seedream55',
-    availability: 'awaiting_provider',
+    label: 'Seedream 5.0 Pro',
+    hintKey: 'seedreamPro',
+    availability: 'retired',
     promptProfile: 'seedream',
-    api: { alias: 'bytedance/seedream-5.5' },
-    mcp: null,
+    safetyChecker: true,
+    api: { alias: 'bytedance/seedream-5.0-pro' },
+    mcp: { model: 'seedream-5-pro' },
     aspects: SEEDREAM_ASPECTS,
     resolutions: ['1K', '2K'],
     defaultResolution: '2K',
@@ -278,7 +282,7 @@ export const STUDIO_MODELS = [
 
 export type StudioModelId = (typeof STUDIO_MODELS)[number]['id'];
 
-export const DEFAULT_IMAGE_MODEL: StudioModelId = 'seedream-5-pro';
+export const DEFAULT_IMAGE_MODEL: StudioModelId = 'seedream-5.5';
 export const DEFAULT_VIDEO_MODEL: StudioModelId = 'seedance-2.5';
 /** The model a region edit uses unless the customer picked another one that allows it. */
 export const DEFAULT_REGION_EDIT_MODEL: StudioModelId = 'nano-banana-pro';
@@ -331,10 +335,14 @@ export function estimateImageUsd(input: {
 }): number {
   const refs = Math.max(0, input.references);
   switch (input.model) {
-    case 'seedream-5-pro':
-    case 'seedream-5.5': {
+    case 'seedream-5-pro': {
       const base = input.resolution === '1K' ? 0.045 : 0.09;
       return base + Math.max(0, refs - 1) * 0.004;
+    }
+    case 'seedream-5.5': {
+      // Sunra price cards (2026-11-14): $0.020 at 1K/1.5K or $0.035 at 2K, plus $0.008 per input image.
+      const base = input.resolution === '1K' || input.resolution === '1.5K' ? 0.02 : 0.035;
+      return Math.round((base + refs * 0.008) * 1000) / 1000;
     }
     case 'seedream-5-flash':
       return 0.027;

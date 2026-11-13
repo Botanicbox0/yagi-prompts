@@ -1950,7 +1950,7 @@ export const ko: Dictionary = {
       seedreamPro: '제품·인물 사진',
       nanoBananaPro: '글자·로고, 부분 수정',
       seedreamFlash: '빠른 시안',
-      seedream55: '곧 열려요',
+      seedream55: '제품·인물 사진',
       gptImageFlare: '빠르게 만들고 고쳐요',
       gptImageSunburst: '조금 느린 대신 디테일을 더 정밀하게 고쳐요. 드는 크레딧은 같아요.',
       seedance25: '글·사진·참고 영상으로 만드는 영상',

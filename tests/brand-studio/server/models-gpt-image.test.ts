@@ -107,7 +107,7 @@ describe('GPT Image 2.6 in the registry', () => {
       // A region crop's own shape takes the closest listed size.
       expect(pixelSize(model, '2K', '5:4')).toEqual([2048, 1536]);
     }
-    expect(pixelSize(studioModel('seedream-5-pro') as StudioImageModel, '2K', '1:1')).toBeNull();
+    expect(pixelSize(studioModel('seedream-5.5') as StudioImageModel, '2K', '1:1')).toBeNull();
   });
 });
 
@@ -173,8 +173,8 @@ describe('the quality field', () => {
       if (high.ok) expect(high.job.estimateKrw).toBe(usageKrw(0.06 * 2, 'image'));
       const plain = await create({ model: IDS[1] });
       expect(plain).toMatchObject({ ok: true, job: { quality: 'medium' } });
-      expect(await create({ model: 'seedream-5-pro', quality: 'high' })).toEqual({ ok: false, code: 'invalid' });
-      const seedream = await create({ model: 'seedream-5-pro' });
+      expect(await create({ model: 'seedream-5.5', quality: 'high' })).toEqual({ ok: false, code: 'invalid' });
+      const seedream = await create({ model: 'seedream-5.5' });
       expect(seedream.ok && seedream.job.quality).toBeFalsy();
     });
 

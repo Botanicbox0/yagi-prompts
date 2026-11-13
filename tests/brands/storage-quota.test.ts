@@ -155,7 +155,7 @@ describe('deduplicated byte aggregation, 80% warn vs 100% upload block, and phys
       kind: 'image',
       organizationId: f.orgId,
       requestId: requestId(),
-      model: 'seedream-5-pro',
+      model: 'seedream-5.5',
       prompt: 'Studio product bottle on stone',
       aspect: '1:1',
       resolution: '2K',

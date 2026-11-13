@@ -91,9 +91,9 @@ describe("prompt bar controls from the registry", () => {
       expect(options(html, "count")).toEqual(["1", "2", "3", "4"]);
     }
     const nano = { ...withModel(initialDraft("image"), "nano-banana-pro"), aspect: "4:5", resolution: "4K" };
-    const seedream = withModel(nano, "seedream-5-pro");
+    const seedream = withModel(nano, "seedream-5.5");
     expect(seedream.aspect).not.toBe("4:5");
-    expect((STUDIO_MODELS.find((m) => m.id === "seedream-5-pro") as StudioImageModel).aspects).toContain(seedream.aspect);
+    expect((STUDIO_MODELS.find((m) => m.id === "seedream-5.5") as StudioImageModel).aspects).toContain(seedream.aspect);
     expect(seedream.resolution).toBe("2K");
   });
 
@@ -108,7 +108,7 @@ describe("prompt bar controls from the registry", () => {
       expect(html).toContain(copy.models[model.hintKey as keyof typeof copy.models]);
       expect(html).toContain(fill(copy.dock.perImage, { n: perImage }));
     }
-    expect(html).toMatch(/aria-selected="true"[^>]*data-model="seedream-5-pro"/);
+    expect(html).toMatch(/aria-selected="true"[^>]*data-model="seedream-5.5"/);
   });
 
   it("has no medium switch: the image screen never shows video controls", () => {
@@ -168,8 +168,8 @@ describe("quality (GPT Image only)", () => {
     }
     // Leaving a quality model drops the quality; coming back starts at its default.
     const high = { ...withModel(initialDraft("image"), GPT[0]!), quality: "high" };
-    expect(withModel(high, "seedream-5-pro").quality).toBe("");
-    expect(withModel(withModel(high, "seedream-5-pro"), GPT[1]!).quality).toBe("medium");
+    expect(withModel(high, "seedream-5.5").quality).toBe("");
+    expect(withModel(withModel(high, "seedream-5.5"), GPT[1]!).quality).toBe("medium");
     expect(normalizeDraft({ ...high, quality: "ultra" }).quality).toBe("medium");
   });
 

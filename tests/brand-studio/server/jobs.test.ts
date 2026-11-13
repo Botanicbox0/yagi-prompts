@@ -18,7 +18,7 @@ afterEach(async () => {
 });
 
 const image = (over: Record<string, unknown> = {}) => ({
-  kind: 'image', organizationId: f.orgId, requestId: requestId(), model: 'seedream-5-pro', prompt: 'a glass bottle on wet stone',
+  kind: 'image', organizationId: f.orgId, requestId: requestId(), model: 'seedream-5.5', prompt: 'a glass bottle on wet stone',
   aspect: '3:4', resolution: '2K', count: 2, ...over,
 });
 
@@ -45,7 +45,7 @@ describe('job.create', () => {
     // A lane is free, so it starts `queued` on it rather than flashing "waiting for a slot".
     expect(created).toMatchObject({ ok: true, job: { kind: 'image', status: 'queued', expected: 2, aspect: '3:4', resolution: '2K', outputs: [], errorCode: null } });
     if (!created.ok) throw new Error();
-    expect(created.job.estimateKrw).toBe(usageKrw(0.09 * 2, 'image'));
+    expect(created.job.estimateKrw).toBe(usageKrw(0.035 * 2, 'image'));
     expect(deps.provider.tasks.size).toBe(0);
     expect((await f.sql.query('select count(*)::int as n from brand_studio_outputs where job_id = $1', [created.job.id])).rows[0]).toEqual({ n: 2 });
     expect((await f.sql.query('select lane from brand_studio_jobs where id = $1', [created.job.id])).rows[0]).toEqual({ lane: 'sunra_api' });
@@ -91,7 +91,7 @@ describe('job.create', () => {
   it('refuses what the model does not offer, models not yet live, and unknown operations', async () => {
     expect(await createStudioJob(deps, viewerOf(f.ids.owner), image({ aspect: '5:4' }))).toEqual({ ok: false, code: 'invalid' });
     expect(await createStudioJob(deps, viewerOf(f.ids.owner), image({ resolution: '4K' }))).toEqual({ ok: false, code: 'invalid' });
-    expect(await createStudioJob(deps, viewerOf(f.ids.owner), image({ model: 'seedream-5.5' }))).toEqual({ ok: false, code: 'invalid' });
+    expect(await createStudioJob(deps, viewerOf(f.ids.owner), image({ model: 'seedream-5-pro' }))).toEqual({ ok: false, code: 'invalid' });
     expect(await createStudioJob(deps, viewerOf(f.ids.owner), image({ model: 'seedance-2.5' }))).toEqual({ ok: false, code: 'invalid' });
     expect(await createStudioJob(deps, viewerOf(f.ids.owner), image({ count: 5 }))).toEqual({ ok: false, code: 'invalid' });
     expect(await runStudioOperation(deps, viewerOf(f.ids.owner), 'job.explode', { organizationId: f.orgId })).toEqual({ ok: false, code: 'invalid' });
@@ -124,7 +124,7 @@ describe('the monthly allowance', () => {
   });
 
   it('cannot be overspent by two concurrent requests, and failed or canceled jobs give their reservation back', async () => {
-    const one = usageKrw(0.09, 'image');
+    const one = usageKrw(0.035, 'image');
     await f.sql.query('update brand_studio_allowances set monthly_cap_krw = $2 where organization_id = $1', [f.orgId, one + Math.floor(one / 2)]);
     const results = await Promise.all([
       createStudioJob(deps, viewerOf(f.ids.owner), image({ count: 1 })),

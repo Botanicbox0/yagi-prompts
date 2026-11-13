@@ -3,7 +3,7 @@ import { STUDIO_MODELS } from '@/lib/brand-studio/models';
 import { boxToPixels, parseAspect, planRegion, type RegionPlan } from '@/lib/brand-studio/region-edit';
 
 const LISTS = Object.fromEntries(STUDIO_MODELS.map((m) => [m.id, m.aspects])) as Record<string, readonly string[]>;
-const SEEDREAM = LISTS['seedream-5-pro']!;
+const SEEDREAM = LISTS['seedream-5.5']!;
 const NANO = LISTS['nano-banana-pro']!;
 const SEEDANCE = LISTS['seedance-2.5']!;
 

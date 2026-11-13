@@ -38,9 +38,9 @@ export class StudioRequestError extends Error {
   }
 }
 
-/** Endpoints whose input schema carries `enable_safety_checker` (the Seedream family). */
+/** Endpoints whose input schema carries `enable_safety_checker` (Seedream 5.0 models). */
 export function hasSafetyChecker(model: StudioModel): boolean {
-  return model.promptProfile === 'seedream';
+  return Boolean(model.safetyChecker);
 }
 
 function imageModel(id: string): StudioImageModel {
