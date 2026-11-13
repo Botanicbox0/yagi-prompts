@@ -3,16 +3,16 @@
 > 원문은 대표가 2026-10-29에 준 "Design Engineering Repertoire & Contextual Judgment Guidelines"다. 이 파일은 그것을 TWINGS 코드 사실에 맞춰 정리한 것이다.
 > 색, 서체, 사진·영상 만드는 법의 고정 원본은 `docs/design/IDENTITY.md`다. 취향 판정(좋다/싫다)의 기록은 `docs/design/TASTE.md`에 있다. 이 파일은 "무엇을 꺼내 쓸 수 있는가", TASTE.md는 "대표가 무엇을 좋아하고 싫어했는가"를 적는다.
 
-## 0. 고정값
+## 0. 고정값 (2026-11-14 v2 최종 확정 · Frozen)
 
 | 항목 | 값 |
 | --- | --- |
-| 모드 | **화이트(라이트) 모드.** 브랜드 랜딩(`/brands`)과 brand.twings.app이 같은 순백색(`#FFFFFF`) + 쿨그레이(`#F4F4F5`) 무보더 층위를 쓴다. |
-| 서체 | `'Geist', 'Pretendard Variable', Pretendard, -apple-system, sans-serif` + 수치·스펙 `'Geist Mono'`(`tabular-nums` 필수). 헤드라인 `650`, 자간 `-0.035em`, 행간 `1.25`. 본문·버튼·탭 자간 `-0.02em`. |
-| 포인트 색 | **95% 무채색 + 5% Electric Ultramarine(`#0033FF`, 호버 `#0026CC`).** 최종 생성·핵심 실행 CTA 단 하나에만 솔리드 채움(`0 4px 14px rgba(0,51,255,0.28)`)으로 쓴다. 탭·옵션·토글·사이드바 `+` 등 모든 선택/활성 상태는 Rich Black(`#09090B` + `#FFFFFF`)으로 통일하고 연파랑 파스텔 틴트는 쓰지 않는다. |
+| 모드 | **표면별 이원 모드 (2026-11-14 v2 최종 확정 · Frozen).** 개인(`/ko`)은 **White**(`#FFFFFF` + `#F4F4F5` + `#09090B`), 브랜드(`/ko/brands`)는 **Editorial Off-Black**(`#09090B` + `#111113` + `#18181B` + `rgba(255,255,255,0.04)`). 구형 블루·모노 규칙은 `_archive/design-legacy/`로 아카이브했다. |
+| 서체 | `'Pretendard Variable', Pretendard, -apple-system, BlinkMacSystemFont, sans-serif` **단일 서체** + 수치·스펙 `font-variant-numeric: tabular-nums`. 한국어는 `word-break: keep-all`, `overflow-wrap: break-word` 필수. |
+| 포인트 색 | **95% 무채색 + 5% 이내 Magnific Pink 단색(`#FF58AE`, 호버 `#FF389F`, 액티브 `#FF1A90`).** 외곽 네온 글로우(`box-shadow`) 없이 단색 명도 변화만 쓰며, **버튼 텍스트는 반드시 `#09090B` 볼드**(`6.88:1` WCAG AA). KPI·지표 숫자는 화이트(`#EDEDED`) 또는 잉크(`#09090B`)로 유지하고, `#FF58AE` 핑크는 클릭 가능한 핵심 CTA와 활성 포커스 상태에만 사용한다. 화이트 바탕 텍스트 핑크 링크는 `#CC1573`. |
 | 빨강 | **브랜드 강조로 쓰지 않는다.** 전역 YAGI v1.2(primary RED `#ED1E1E`)는 TWINGS 화면에 적용하지 않는다. 오류·삭제 같은 진짜 의미 상태에만 낮은 채도의 상태색을 남긴다. |
-| 층위 | 퓨어 화이트 `#FFFFFF`(메인 캔버스·카드) / 쿨그레이 `#F4F4F5`(사이드바·패널·비활성 알약, 호버 `#E4E4E7`) — 외곽 실선 제거 |
-| 이징 | spring 토큰 하나. CSS `linear()` 스프링을 쓰고, `cubic-bezier(0.22, 1, 0.36, 1)`을 폴백으로 둔다. `linear`와 기본 `ease`는 쓰지 않는다. |
+| 층위 · 깊이 | White(`/ko`): `#FFFFFF` 캔버스 · `#F4F4F5` 카드(호버 `#E4E4E7`) / Dark(`/ko/brands`): `#09090B` 캔버스 · `#111113` 표면 · `rgba(255,255,255,0.04)` 카드 · 보더 `0.08→호버 0.18` · 상단 인셋 `0.06` · 보조 글자 `0.64` · 헤더 글래스 `blur(16px)` |
+| 이징 · 속도 | `--ease-editorial: cubic-bezier(0.22, 1, 0.36, 1)`, `--ease-in-out-editorial: cubic-bezier(0.65, 0, 0.35, 1)` · `--duration-fast: 160ms` / `--duration-base: 280ms` / `--duration-slow: 520ms` (`prefers-reduced-motion` 시 `0ms`). |
 | 의존성 | 모션 라이브러리는 없다(`framer-motion` 미설치). 새로 넣지 않는다. Shared layout은 View Transitions API(`view-transition-name`)나 FLIP으로 만든다. |
 
 ## 1. 상황별 판단 원칙
@@ -96,20 +96,20 @@
 - **Blur-to-Sharp Staggered Reveal:** 결과물이나 핵심 섹션이 `blur(8px)`에서 `blur(0)`으로 초점이 맞듯 나타난다.
 - **Cursor-Tracking Spotlight / Iridescent Sheen**
   - 위임 `pointermove` 리스너 하나와 rAF로 `--mouse-x`, `--mouse-y`를 갱신한다.
-  - 흰 카드 위에서는 흰 빛이 보이지 않는다. 블루·잉크의 아주 옅은 틴트를 쓴다.
   - `(hover: hover) and (pointer: fine)`에서만 켠다.
+  - 흰 카드 위에서는 잉크·핑크(`rgba(255, 88, 174, 0.08)`), 다크 카드 위에서는 화이트 틴트(`rgba(255, 255, 255, 0.06)`)를 쓴다.
 - **Spring Physics:** 호버, 드롭다운 열림, 슬라이더에 spring 토큰을 쓴다.
 
 ### D. 타이포그래피·정밀도
-- **Pretendard Variable 대비:** 헤드라인은 무겁고 좁게, 본문은 편하게.
-- **Tabular Numerals & Mono 배지**
-  - 수치에는 전부 `font-variant-numeric: tabular-nums`. 대상: 퍼센트, 해상도(1K·2K·4K), 크레딧, 좌표, 팔로워 수, 날짜.
+- **Pretendard Variable 단일 패밀리 대비:** 헤드라인은 무겁고 좁게(`650~700`, `-0.03em`), 본문은 편하게(`400`, `1.55`, `word-break: keep-all`).
+- **Tabular Numerals 배지**
+  - 수치에는 전부 `font-variant-numeric: tabular-nums`. 대상: 퍼센트, 해상도(1K·2K·4K), 크레딧, 좌표, 팔로워 수, 뷰, 날짜.
   - 단위 배지는 고정폭으로 둬서, 숫자가 바뀌어도 레이아웃이 흔들리지 않게 한다.
 
 ## 3. 지켜야 할 한계
 
 - `backdrop-filter`는 오버레이, HUD, 미디어 위 칩에만 쓴다. 그리드 카드 전체에 걸지 않는다. 한 화면에서 동시에 흐리는 층은 6개 안팎까지.
 - `prefers-reduced-motion`이면 스프링, 리빌, 스포트라이트를 끄고 바로 최종 상태를 보인다.
-- 유리 위 텍스트는 WCAG AA 대비를 넘겨야 한다. 키보드 포커스 링은 블루로 분명하게 보이게 한다.
+- 유리 위 텍스트는 WCAG AA 대비를 넘겨야 한다. 키보드 포커스 링은 `#FF58AE`(라이트에서는 `#CC1573` 링)로 분명하게 보이게 한다.
 - 터치 기기에서는 커서 효과를 쓰지 않는다.
 - 서드파티 화면(Playbook 등)은 참고만 한다. 이미지와 문구를 가져오지 않는다.
