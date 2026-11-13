@@ -95,7 +95,7 @@ export const PARTNER_SLOT = 'partner';
 const Name = z.string().regex(NAME);
 const SlotRole = z.enum(RECIPE_SLOT_ROLES).optional();
 const UserSlot = z.object({ kind: z.literal('image'), source: z.literal('user'), required: z.boolean(), role: SlotRole }).strict();
-const CreatorSlot = z.object({ kind: z.enum(['image', 'video']), source: z.literal('creator'), asset: z.string().regex(ASSET_HANDLE), role: SlotRole }).strict();
+const CreatorSlot = z.object({ kind: z.enum(['image', 'video', 'audio']), source: z.literal('creator'), asset: z.string().regex(ASSET_HANDLE), role: SlotRole }).strict();
 const Slot = z.discriminatedUnion('source', [UserSlot, CreatorSlot]);
 const Prompt = z.string().trim().min(10).max(MAX_STEP_PROMPT_CHARS);
 /**
@@ -336,7 +336,7 @@ export function parseRecipe(raw: unknown, options: ParseRecipeOptions = {}): Rec
       const earlier = seen.get(input);
       if (slot) {
         used.add(input);
-        if (slot.kind === 'video') { if (step.kind !== 'video') issues.push({ code: 'video_input', step: step.id }); }
+        if (slot.kind === 'video' || slot.kind === 'audio') { if (step.kind !== 'video') issues.push({ code: 'video_input', step: step.id }); }
         else images += 1;
       } else if (earlier) {
         used.add(input);
@@ -435,10 +435,13 @@ export function creatorSlotNames(recipe: Pick<Recipe, 'slots'>): string[] {
 export function engineStepPrompt(recipe: Recipe, step: RecipeStep): string {
   const person = personInputs(recipe);
   const position = new Map<string, string>();
-  let images = 0, videos = 0;
+  let images = 0, videos = 0, audios = 0;
   for (const input of step.inputs) {
     const kind = recipe.slots[input]?.kind ?? 'image';
-    position.set(input, kind === 'video' ? `Video ${++videos}` : `Image ${++images}`);
+    position.set(
+      input,
+      kind === 'video' ? `Video ${++videos}` : kind === 'audio' ? `Audio ${++audios}` : `Image ${++images}`,
+    );
   }
   const text = step.prompt.replace(TOKEN, (_match, name: string) => position.get(name.trim()) ?? '');
   const lines: string[] = [];
@@ -485,5 +488,5 @@ export function exportRecipe(recipe: Recipe): string {
 /** The single-prompt fallback stored in prompt_text (legacy readers), in the catalogue's `@imageN` dialect. */
 export function legacyPromptText(recipe: Recipe): string {
   const step = primaryStep(recipe);
-  return engineStepPrompt(recipe, step).replace(/\bImage (\d+)\b/g, '@image$1').replace(/\bVideo (\d+)\b/g, '@video$1');
+  return engineStepPrompt(recipe, step).replace(/\bImage (\d+)\b/g, '@image$1').replace(/\bVideo (\d+)\b/g, '@video$1').replace(/\bAudio (\d+)\b/g, '@audio$1');
 }

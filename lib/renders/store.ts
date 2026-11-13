@@ -308,6 +308,14 @@ export function extensionFor(mime: string): string {
       return 'mp4';
     case 'video/quicktime':
       return 'mov';
+    case 'audio/mpeg':
+      return 'mp3';
+    case 'audio/wav':
+      return 'wav';
+    case 'audio/mp4':
+      return 'm4a';
+    case 'audio/aac':
+      return 'aac';
     default:
       return 'bin';
   }

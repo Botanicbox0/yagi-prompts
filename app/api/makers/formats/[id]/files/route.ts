@@ -3,9 +3,9 @@ import { getViewer } from '@/lib/auth/viewer';
 import { getSqlRunner } from '@/lib/db/connect';
 import { isSameOrigin } from '@/lib/billing/toss-runtime';
 import { readBoundedBody } from '@/lib/creator-subscriptions/http';
-import { platformAccess } from '@/lib/creator-platform/runtime';
+import { platformAccess, openMakerEnabled } from '@/lib/creator-platform/runtime';
 import { PlatformError } from '@/lib/creator-platform/contract';
-import { MAKER_FILE_MAX_BYTES } from '@/lib/recipes/assets';
+import { MAKER_AV_FILE_MAX_BYTES, MAKER_FILE_MAX_BYTES } from '@/lib/recipes/assets';
 import { uploadMakerFile } from '@/lib/recipes/maker';
 import { getRenderStore } from '@/lib/renders/store';
 
@@ -23,16 +23,22 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
   if (!isSameOrigin(request)) return json({ code: 'forbidden' }, 403);
   const viewer = await getViewer();
   if (!viewer.userId) return json({ code: 'sign_in_required' }, 401);
-  const role = new URL(request.url).searchParams.get('role');
+  const url = new URL(request.url);
+  const role = url.searchParams.get('role');
   if (role !== 'reference' && role !== 'example') return json({ code: 'invalid' }, 400);
+  const containsPerson = role === 'reference' && url.searchParams.get('containsPerson') === '1';
+  const contentType = (request.headers.get('content-type') ?? '').toLowerCase();
+  const limit = contentType.startsWith('video/') || contentType.startsWith('audio/')
+    ? MAKER_AV_FILE_MAX_BYTES
+    : MAKER_FILE_MAX_BYTES;
   try {
-    const bytes = await readBoundedBody(request, MAKER_FILE_MAX_BYTES);
+    const bytes = await readBoundedBody(request, limit);
     if (!bytes) return json({ code: 'too_large' }, 413);
     const sql = await getSqlRunner();
     if (!sql) return json({ code: 'unavailable' }, 503);
-    const access = await platformAccess(sql);
+    const [access, openMaker] = await Promise.all([platformAccess(sql), openMakerEnabled(sql)]);
     const { id } = await params;
-    const file = await uploadMakerFile({ sql, store: await getRenderStore() }, viewer, { formatId: id, role, bytes }, { creators: access.creators });
+    const file = await uploadMakerFile({ sql, store: await getRenderStore() }, viewer, { formatId: id, role, bytes, containsPerson }, { creators: access.creators || openMaker });
     return json({ ok: true, file }, 201);
   } catch (error) {
     if (error instanceof PlatformError) return json({ code: error.code }, STATUS[error.code] ?? 409);

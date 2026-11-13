@@ -193,13 +193,13 @@ export async function makerAction(deps: { sql: SqlRunner; store: RenderStore; st
   });
 }
 
-export async function uploadMakerFile(deps: { sql: SqlRunner; store: RenderStore }, viewer: Viewer, input: { formatId: string; role: 'reference' | 'example'; bytes: Uint8Array }, access: MakerAccess) {
+export async function uploadMakerFile(deps: { sql: SqlRunner; store: RenderStore }, viewer: Viewer, input: { formatId: string; role: 'reference' | 'example'; bytes: Uint8Array; containsPerson?: boolean }, access: MakerAccess) {
   demand(z.uuid().safeParse(input.formatId).success, 'not_found');
   const userId = await makerGate(deps.sql, viewer, access);
   return deps.sql.transaction(async (tx) => {
     const row = await ownFormat(tx, userId, input.formatId, true);
     demand(row.status === 'draft', 'conflict');
-    const stored = await storeMakerFile(tx, deps.store, { formatId: row.id, userId, role: input.role, bytes: input.bytes });
+    const stored = await storeMakerFile(tx, deps.store, { formatId: row.id, userId, role: input.role, bytes: input.bytes, containsPerson: input.containsPerson });
     demand(stored.ok, stored.ok ? 'invalid' : stored.code);
     return stored.asset;
   });

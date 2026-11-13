@@ -18,3 +18,5 @@ export async function platformAccess(sql:SqlRunner) {
   return {ready,community,creators,rewards,onboarding,applications};
 }
 export type PlatformAccess=Awaited<ReturnType<typeof platformAccess>>;
+
+export { openMakerEnabled } from '@/lib/makers/self-activate';
