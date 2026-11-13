@@ -1,7 +1,7 @@
 import { z } from 'zod';
 import type { RecipeSlotRole } from '@/lib/recipes/schema';
 
-export const GEMINI_DIRECTOR_DEFAULT_MODEL = 'gemini-3.8-flash' as const;
+export const GEMINI_DIRECTOR_DEFAULT_MODEL = 'gemini-4-hydrogen' as const;
 export const GEMINI_DIRECTOR_DEFAULT_BASE_URL = 'https://generativelanguage.googleapis.com/v1beta' as const;
 
 export const PHOTO_ISSUE_CODES = [

@@ -20,10 +20,10 @@ function gemini(answer: unknown, status = 200): { fetch: typeof fetch; calls: Ar
 }
 
 describe('the pet photo check', () => {
-  it('accepts a pet with no person, sending the photo to Gemini 3.8 Flash', async () => {
+  it('accepts a pet with no person, sending the photo to Gemini 4 Hydrogen', async () => {
     const g = gemini({ person: false, animal: true });
     expect(await checkPetPhoto(PHOTO, { env: ENV, fetch: g.fetch })).toEqual({ ok: true });
-    expect(g.calls[0]!.url).toContain('/models/gemini-3.8-flash:generateContent');
+    expect(g.calls[0]!.url).toContain('/models/gemini-4-hydrogen:generateContent');
     expect(g.calls[0]!.body.contents[0].parts[0].inlineData).toMatchObject({ mimeType: 'image/jpeg' });
   });
 

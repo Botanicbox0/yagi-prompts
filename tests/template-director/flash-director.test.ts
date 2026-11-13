@@ -58,13 +58,13 @@ function geminiJsonResponse(payload: unknown, tokens = { promptTokenCount: 310, 
   );
 }
 
-describe('Gemini 3.8 Flash config & deterministic precheck', () => {
-  it('resolves gemini-3.8-flash by default and requires GEMINI_API_KEY', () => {
+describe('Gemini 4 Hydrogen config & deterministic precheck', () => {
+  it('resolves gemini-4-hydrogen by default and requires GEMINI_API_KEY', () => {
     expect(directorConfigFromEnv({})).toBeNull();
     expect(directorConfigFromEnv({ GEMINI_API_KEY: 'test-gemini-key' })).toEqual({
       apiKey: 'test-gemini-key',
       baseUrl: 'https://generativelanguage.googleapis.com/v1beta',
-      model: GEMINI_DIRECTOR_DEFAULT_MODEL
+      model: 'gemini-4-hydrogen'
     });
     expect(directorConfigFromEnv({ GEMINI_API_KEY: 'test-gemini-key', GEMINI_DIRECTOR_MODEL: 'gemini-3.8-flash' })?.model).toBe(
       'gemini-3.8-flash'
@@ -83,7 +83,7 @@ describe('Gemini 3.8 Flash config & deterministic precheck', () => {
   });
 });
 
-describe('Step 0: Photo Inspection & Cleanup Model Routing (Gemini 3.8 Flash)', () => {
+describe('Step 0: Photo Inspection & Cleanup Model Routing (Gemini 4 Hydrogen)', () => {
   const samplePhoto: PhotoInspectionInput = {
     photo: { bytes: new Uint8Array([255, 216, 255, 1, 2, 3]), mime: 'image/jpeg' },
     width: 1500,
@@ -107,14 +107,14 @@ describe('Step 0: Photo Inspection & Cleanup Model Routing (Gemini 3.8 Flash)', 
     );
 
     const director = createFlashTemplateDirector(
-      { apiKey: 'fake-gemini-key', baseUrl: 'https://generativelanguage.googleapis.com/v1beta', model: 'gemini-3.8-flash' },
+      { apiKey: 'fake-gemini-key', baseUrl: 'https://generativelanguage.googleapis.com/v1beta', model: GEMINI_DIRECTOR_DEFAULT_MODEL },
       { fetch: fetchMock }
     );
 
     const verdict = await director.inspectPhoto(samplePhoto);
     expect(fetchMock).toHaveBeenCalledTimes(1);
     const [calledUrl] = fetchMock.mock.calls[0]!;
-    expect(String(calledUrl)).toContain('/models/gemini-3.8-flash:generateContent');
+    expect(String(calledUrl)).toContain('/models/gemini-4-hydrogen:generateContent');
 
     expect(verdict.status).toBe('needs_cleanup');
     expect(verdict.issues).toEqual(['prop_occlusion', 'hand_occlusion']);
@@ -150,7 +150,7 @@ describe('Step 0: Photo Inspection & Cleanup Model Routing (Gemini 3.8 Flash)', 
     );
 
     const director = createFlashTemplateDirector(
-      { apiKey: 'fake-gemini-key', baseUrl: 'https://generativelanguage.googleapis.com/v1beta', model: 'gemini-3.8-flash' },
+      { apiKey: 'fake-gemini-key', baseUrl: 'https://generativelanguage.googleapis.com/v1beta', model: GEMINI_DIRECTOR_DEFAULT_MODEL },
       { fetch: fetchMock }
     );
 
@@ -190,7 +190,7 @@ describe('Step 0: Photo Inspection & Cleanup Model Routing (Gemini 3.8 Flash)', 
     );
 
     const director = createFlashTemplateDirector(
-      { apiKey: 'fake-gemini-key', baseUrl: 'https://generativelanguage.googleapis.com/v1beta', model: 'gemini-3.8-flash' },
+      { apiKey: 'fake-gemini-key', baseUrl: 'https://generativelanguage.googleapis.com/v1beta', model: GEMINI_DIRECTOR_DEFAULT_MODEL },
       { fetch: fetchMock }
     );
 
@@ -227,7 +227,7 @@ describe('Step 0: Photo Inspection & Cleanup Model Routing (Gemini 3.8 Flash)', 
     );
 
     const director = createFlashTemplateDirector(
-      { apiKey: 'fake-gemini-key', baseUrl: 'https://generativelanguage.googleapis.com/v1beta', model: 'gemini-3.8-flash' },
+      { apiKey: 'fake-gemini-key', baseUrl: 'https://generativelanguage.googleapis.com/v1beta', model: GEMINI_DIRECTOR_DEFAULT_MODEL },
       { fetch: fetchMock }
     );
 
@@ -264,7 +264,7 @@ describe('Step 0: Photo Inspection & Cleanup Model Routing (Gemini 3.8 Flash)', 
     );
 
     const director = createFlashTemplateDirector(
-      { apiKey: 'fake-gemini-key', baseUrl: 'https://generativelanguage.googleapis.com/v1beta', model: 'gemini-3.8-flash' },
+      { apiKey: 'fake-gemini-key', baseUrl: 'https://generativelanguage.googleapis.com/v1beta', model: GEMINI_DIRECTOR_DEFAULT_MODEL },
       { fetch: fetchMock }
     );
 
@@ -324,7 +324,7 @@ describe('Step 0: Photo Inspection & Cleanup Model Routing (Gemini 3.8 Flash)', 
     );
 
     const director = createFlashTemplateDirector(
-      { apiKey: 'fake-gemini-key', baseUrl: 'https://generativelanguage.googleapis.com/v1beta', model: 'gemini-3.8-flash' },
+      { apiKey: 'fake-gemini-key', baseUrl: 'https://generativelanguage.googleapis.com/v1beta', model: GEMINI_DIRECTOR_DEFAULT_MODEL },
       { fetch: fetchMock }
     );
 
@@ -352,7 +352,7 @@ describe('Step 0: Photo Inspection & Cleanup Model Routing (Gemini 3.8 Flash)', 
     );
 
     const director = createFlashTemplateDirector(
-      { apiKey: 'fake-gemini-key', baseUrl: 'https://generativelanguage.googleapis.com/v1beta', model: 'gemini-3.8-flash' },
+      { apiKey: 'fake-gemini-key', baseUrl: 'https://generativelanguage.googleapis.com/v1beta', model: GEMINI_DIRECTOR_DEFAULT_MODEL },
       { fetch: fetchMock }
     );
 
@@ -414,7 +414,7 @@ describe('Stage 1 (Reception Desk) & Stage 2 (Internal Rewriter) Zero-Leak Archi
     });
 
     const director = createFlashTemplateDirector(
-      { apiKey: 'fake-gemini-key', baseUrl: 'https://generativelanguage.googleapis.com/v1beta', model: 'gemini-3.8-flash' },
+      { apiKey: 'fake-gemini-key', baseUrl: 'https://generativelanguage.googleapis.com/v1beta', model: GEMINI_DIRECTOR_DEFAULT_MODEL },
       { fetch: fetchMock }
     );
 
@@ -432,7 +432,7 @@ describe('Stage 1 (Reception Desk) & Stage 2 (Internal Rewriter) Zero-Leak Archi
   it('blocks prompt-injection and system-prompt extraction attempts at Stage 1 before calling the model', async () => {
     const fetchMock = vi.fn();
     const director = createFlashTemplateDirector(
-      { apiKey: 'fake-gemini-key', baseUrl: 'https://generativelanguage.googleapis.com/v1beta', model: 'gemini-3.8-flash' },
+      { apiKey: 'fake-gemini-key', baseUrl: 'https://generativelanguage.googleapis.com/v1beta', model: GEMINI_DIRECTOR_DEFAULT_MODEL },
       { fetch: fetchMock }
     );
 
@@ -486,7 +486,7 @@ No background music, no sunglasses, no original casual outfit, handheld objects,
     });
 
     const director = createFlashTemplateDirector(
-      { apiKey: 'fake-gemini-key', baseUrl: 'https://generativelanguage.googleapis.com/v1beta', model: 'gemini-3.8-flash' },
+      { apiKey: 'fake-gemini-key', baseUrl: 'https://generativelanguage.googleapis.com/v1beta', model: GEMINI_DIRECTOR_DEFAULT_MODEL },
       { fetch: fetchMock }
     );
 
@@ -558,9 +558,9 @@ describe('Template Baseline Disclosure & Predictive Creator Revision Taxonomy', 
     expect(skincare.templateArchetypeId).toBe('beauty-grwm-skincare');
   });
 
-  it('codifies Morphic Production Laws, Gemini 3.8 Flash HIGH vs Argon decision, and Strict No-BGM Audio Contract', () => {
+  it('codifies Morphic Production Laws, Gemini 4 Hydrogen HIGH vs Argon decision, and Strict No-BGM Audio Contract', () => {
     expect(GEMINI_DIRECTOR_THINKING_LEVEL).toBe('HIGH');
-    expect(DIRECTOR_MODEL_ARCHITECTURE_DECISION.personalTemplateDirector.model).toBe('gemini-3.8-flash');
+    expect(DIRECTOR_MODEL_ARCHITECTURE_DECISION.personalTemplateDirector.model).toBe('gemini-4-hydrogen');
     expect(DIRECTOR_MODEL_ARCHITECTURE_DECISION.personalTemplateDirector.thinkingLevel).toBe('HIGH');
     expect(DIRECTOR_MODEL_ARCHITECTURE_DECISION.b2bBrandDirector.model).toBe('argon');
     expect(MORPHIC_APPROVED_VIDEO_LAWS).toHaveLength(6);

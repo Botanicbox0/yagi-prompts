@@ -16,12 +16,12 @@
 export const GEMINI_DIRECTOR_THINKING_LEVEL = 'HIGH' as const;
 
 export interface DirectorModelArchitectureDecision {
-  personalModificationModel: 'gemini-3.8-flash';
+  personalModificationModel: 'gemini-4-hydrogen';
   personalThinkingLevel: 'HIGH';
   b2bBrandDirectorModel: 'argon';
   isFlashHighSufficientForPersonal: true;
   personalTemplateDirector: {
-    model: 'gemini-3.8-flash';
+    model: 'gemini-4-hydrogen';
     thinkingLevel: 'HIGH';
   };
   b2bBrandDirector: {
@@ -32,16 +32,16 @@ export interface DirectorModelArchitectureDecision {
 }
 
 /**
- * Architectural decision answering why `gemini-3.8-flash` (`thinkingLevel: 'HIGH'`) is sufficient
+ * Architectural decision answering why `gemini-4-hydrogen` (`thinkingLevel: 'HIGH'`) is sufficient
  * and optimal for the TWINGS Personal Side, while `Argon` is reserved for B2B Brand Studio.
  */
 export const DIRECTOR_MODEL_ARCHITECTURE_DECISION: DirectorModelArchitectureDecision = {
-  personalModificationModel: 'gemini-3.8-flash',
+  personalModificationModel: 'gemini-4-hydrogen',
   personalThinkingLevel: 'HIGH',
   b2bBrandDirectorModel: 'argon',
   isFlashHighSufficientForPersonal: true,
   personalTemplateDirector: {
-    model: 'gemini-3.8-flash',
+    model: 'gemini-4-hydrogen',
     thinkingLevel: 'HIGH'
   },
   b2bBrandDirector: {
@@ -49,13 +49,13 @@ export const DIRECTOR_MODEL_ARCHITECTURE_DECISION: DirectorModelArchitectureDeci
   },
   rationaleKo: [
     '개인 사이드 템플릿은 카메라 구도·컷 리듬·조명 설계가 이미 마스터 프롬프트에 고정되어 있어, 수정 단계에서는 슬롯별 의도 추출(의상·메이크업·헤어·소품·표정)과 사진 검수(가림·소매 부피·광각 왜곡·헤어 동기화)가 핵심입니다.',
-    '실제 모픽(Morphic) 캠페인 18인 제작 파이프라인(optical_identity_engine.py)에서도 gemini-3.8-flash (HIGH thinking)가 다중 셀카 중 최적의 정면 앵커 선정, 3:4 크롭 좌표 계산, 헤어/의상 슬롯 동기화를 완벽히 수행했습니다.',
-    'gemini-3.8-flash (HIGH)는 멀티모달 이미지 검수와 컷별 프롬프트 치환을 1.5~2.5초 내에 처리하여 개인 유저 체감 속도와 6% 마진 구조를 동시에 지키며, 무거운 멀티턴 브랜드 디렉터 모델(Argon)은 B2B 브랜드 캠페인 설계에만 집중시키는 것이 가장 효율적입니다.'
+    '실제 모픽(Morphic) 캠페인 18인 제작 파이프라인(optical_identity_engine.py)에 이어 Gemini 4 세대 고효율 모델인 gemini-4-hydrogen (HIGH thinking)으로 상향하여 다중 셀카 정면 앵커 선정, 3:4 크롭 좌표 계산, 헤어/의상 슬롯 동기화 정밀도를 높였습니다.',
+    'gemini-4-hydrogen (HIGH)은 3.8 Flash 대비 더 빠른 응답 속도와 높은 멀티모달 추론 정확도로 개인 유저 체감 속도와 마진 구조를 동시에 지키며, 무거운 멀티턴 브랜드 디렉터 모델(Argon)은 B2B 브랜드 캠페인 설계에만 집중시키는 것이 가장 효율적입니다.'
   ],
   rationaleEn: [
     'Personal templates already lock camera choreography, cut timing, and lighting, so modification requires high-precision multimodal photo inspection and slot-level rewrite rather than open-ended campaign planning.',
-    'Proven in the 18-creator Morphic production pipeline (optical_identity_engine.py), gemini-3.8-flash with HIGH thinking accurately detects 24mm barrel distortion, wide-sleeve silhouette bleed, and hairstyle continuity.',
-    'gemini-3.8-flash (HIGH) delivers ~2s latency and protects unit economics on personal renders, while Argon remains dedicated to B2B Brand Studio direction.'
+    'Upgraded from the 18-creator Morphic production pipeline baseline to Gemini 4 high-efficiency gemini-4-hydrogen with HIGH thinking for sharper detection of 24mm barrel distortion, wide-sleeve silhouette bleed, and hairstyle continuity.',
+    'gemini-4-hydrogen (HIGH) delivers faster latency and frontier-grade multimodal precision while protecting unit economics on personal renders, keeping Argon dedicated to B2B Brand Studio direction.'
   ]
 } as const;
 

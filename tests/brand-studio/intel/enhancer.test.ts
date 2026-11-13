@@ -159,7 +159,7 @@ describe('enhancePrompt — request', () => {
     const fetchMock = mockGemini({ prompt: CASES[0]!.answer, notes: NOTE });
     await enhancePrompt(CASES[0]!.input, { fetch: fetchMock as unknown as typeof fetch, env: ENV });
     const [url, init] = fetchMock.mock.calls[0]!;
-    expect(String(url)).toBe('https://generativelanguage.googleapis.com/v1beta/models/gemini-3.8-flash:generateContent');
+    expect(String(url)).toBe('https://generativelanguage.googleapis.com/v1beta/models/gemini-4-hydrogen:generateContent');
     expect((init?.headers as Record<string, string>)['x-goog-api-key']).toBe('test-key');
     const body = sentBody(fetchMock);
     expect(body.generationConfig.responseMimeType).toBe('application/json');
