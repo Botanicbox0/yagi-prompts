@@ -64,7 +64,7 @@ export default async function RecipeEditorPage({ params, searchParams }: { param
   return shell(draft?.status ?? 'new', <RecipeEditor
     copy={t}
     formatId={formatId}
-    draft={draft && { status: draft.status, title: draft.title, titleKo: draft.titleKo, recipe: draft.recipe, exampleUrl: draft.exampleUrl, disclosure: draft.disclosure, presentation: draft.presentation, royaltyKrw: draft.royaltyKrw, testRendersUsed: draft.testRendersUsed, files: draft.files.map((f) => ({ id: f.id, role: f.role, kind: f.kind, mime: f.mime })), tests: draft.tests, revisionOf: draft.revisionOf }}
+    draft={draft && { status: draft.status, title: draft.title, titleKo: draft.titleKo, recipe: draft.recipe, exampleUrl: draft.exampleUrl, disclosure: draft.disclosure, presentation: draft.presentation, royaltyKrw: draft.royaltyKrw, testRendersUsed: draft.testRendersUsed, files: draft.files.map((f) => ({ id: f.id, role: f.role, kind: f.kind, mime: f.mime })), tests: draft.tests, revisionOf: draft.revisionOf, keyframes: draft.keyframes ?? null }}
     engines={engines}
     aspects={{ image: [...IMAGE_ASPECTS], video: [...VIDEO_ASPECTS] }}
     hasSelfie={hasSelfie}

@@ -6,6 +6,8 @@ import { isRoyalty, quoteRecipe, ROYALTY_DEFAULT_KRW, ROYALTY_MAX_KRW, ROYALTY_S
 import { makeEarning } from '@/lib/twings/template-price';
 import { exportRecipe, INTRO_MAX, MAX_RECIPE_STEPS, MAX_STEP_PROMPT_CHARS, NOTE_MAX, OUTRO_MAX, PARTNER_SLOT, parseRecipe, PET_SLOT, recipeMedium, SELFIE_SLOT, type Recipe, type RecipeIssue } from '@/lib/recipes/schema';
 import { BUTTON, BUTTON_OUTLINE, FIELD, HINT, PANEL } from '@/components/creators/styles';
+import { KeyframePicker } from './keyframe-picker';
+import type { VideoKeyframe } from '@/lib/prompts/keyframes';
 
 /**
  * The maker recipe editor (docs/PLATFORM-2.0.md §7.4): editor on the left, the template page preview
@@ -24,6 +26,7 @@ export interface EditorDraft {
   status: 'draft' | 'submitted' | 'accepted' | 'rejected'; title: string; titleKo: string | null; recipe: unknown; exampleUrl: string | null;
   disclosure: { prompts: boolean; assets: boolean }; presentation: 'make-first' | 'story-first'; royaltyKrw: number; testRendersUsed: number;
   files: EditorFile[]; tests: EditorTest[]; revisionOf: string | null;
+  keyframes?: VideoKeyframe[] | null;
 }
 interface StepState { kind: 'image' | 'video'; engine: string; text: string; aspect: string; duration: number; resolution: '720p' | '1080p'; note?: string }
 /** docs/PLATFORM-2.0.md §20.3 — what the creative writes around the prompts (display only). */
@@ -327,6 +330,19 @@ export function RecipeEditor({ copy, formatId, draft, engines, aspects, hasSelfi
           {exampleFile ? <div className="flex items-center gap-3 text-xs"><FileThumb file={exampleFile} alt={copy.exampleUploaded} /><span>{copy.exampleUploaded}</span><button type="button" onClick={() => void removeFile(exampleFile.id)} className="underline underline-offset-4">{copy.removeFile}</button></div> : null}
           <label className={`${BUTTON_OUTLINE} cursor-pointer`}>{busy === 'upload' ? copy.uploading : copy.exampleUpload}<input type="file" accept="image/jpeg,image/png,image/webp,video/mp4,video/quicktime" className="sr-only" onChange={(e) => void upload('example', e)} /></label>
         </section>
+
+        {medium === 'video' ? (
+          <KeyframePicker
+            formatId={formatId}
+            durationSeconds={steps.find((s) => s.kind === 'video')?.duration ?? 10}
+            title={locale === 'ko' && titleKo.trim() ? titleKo : title}
+            initialKeyframes={draft?.keyframes ?? null}
+            exampleVideoSrc={exampleFile?.kind === 'video' ? `/api/makers/files/${exampleFile.id}` : null}
+            locale={locale}
+            disabled={disabled}
+            onBeforeSave={() => save(true)}
+          />
+        ) : null}
 
         <section className={PANEL}>
           <fieldset className="space-y-2"><legend className="text-sm">{copy.disclosure}</legend>

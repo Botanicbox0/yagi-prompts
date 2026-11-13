@@ -49,6 +49,8 @@ import { MakeSheet } from '@/components/templates/make-sheet';
 import { templateCredits } from '@/lib/twings/credits';
 import { CreativeAvatar } from '@/components/makers/identity';
 import { PersonalIdentity } from '@/components/audience/personal-identity';
+import { defaultTimelineKeyframes } from '@/lib/prompts/keyframes';
+import { cachedPromptKeyframes } from '@/lib/prompts/keyframes-cached';
 
 /**
  * `/[locale]/t/[slug]` — one template, which is also where it is made (docs/TEMPLATES-IA.md §2).
@@ -124,7 +126,11 @@ export default async function TemplatePage({ params }: RouteParams) {
   const recipe = await cachedPublicRecipe(card.id, { selfie: mr.selfieLabel, reference: mr.referenceLabel, step: mr.stepResultLabel, pet: dict.cast.photo.petTitle, partner: dict.cast.photo.partnerTitle });
   // docs/CAST-CATEGORIES.md §3: what the make card asks for (selfie · pet · partner). Null = a pet or
   // couple template without a matching recipe — shown, but not offered for making.
-  const makeInputs = await cachedMakeInputs(card.id, card.cast ?? 'solo');
+  const [makeInputs, storedKeyframes] = await Promise.all([
+    cachedMakeInputs(card.id, card.cast ?? 'solo'),
+    card.medium === 'video' ? cachedPromptKeyframes(card.slug) : Promise.resolve(null),
+  ]);
+  const videoKeyframes = card.medium === 'video' ? (storedKeyframes?.length ? storedKeyframes : defaultTimelineKeyframes(card.runtimeSeconds)) : null;
   const petOnly = makeInputs !== null && makeInputs.pet && !makeInputs.selfie;
   const teaserRecipe = recipe ? recipeTeaser(recipe) : null;
   // Story-first (founder, 2026-10-29): the result, then how it was made, then "one selfie and it's
@@ -258,6 +264,8 @@ export default async function TemplatePage({ params }: RouteParams) {
                         alt={labels.resultLabel}
                         ratio={ratio}
                         aspect={mediaAspect}
+                        keyframes={videoKeyframes}
+                        locale={locale}
                         controls={{
                           play: dict.campaigns.landing.reelPlay,
                           pause: dict.campaigns.landing.reelPause,

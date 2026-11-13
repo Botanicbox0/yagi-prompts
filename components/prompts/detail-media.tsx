@@ -2,6 +2,8 @@
 
 import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { observeCardArming } from '@/lib/media/card-arming';
+import { VideoKeyframeStrip } from './video-keyframe-strip';
+import type { VideoKeyframe } from '@/lib/prompts/keyframes';
 
 export interface DetailMediaSource {
   src: string;
@@ -66,6 +68,8 @@ export function PromptDetailMedia({
   fallback,
   aspect,
   controls,
+  keyframes,
+  locale = 'ko',
 }: {
   poster: DetailMediaSource | null;
   video: DetailMediaSource | null;
@@ -74,6 +78,8 @@ export function PromptDetailMedia({
   fallback: ReactNode;
   aspect?: string | null;
   controls: DetailMediaControls;
+  keyframes?: readonly VideoKeyframe[] | null;
+  locale?: 'ko' | 'en';
 }) {
   const [videoFailed, setVideoFailed] = useState(false);
   const [posterFailed, setPosterFailed] = useState(false);
@@ -175,8 +181,8 @@ export function PromptDetailMedia({
     }
   };
 
-  return (
-    <div ref={hostRef} data-media-host className={outerClass} style={!aspect && ratio ? { aspectRatio: ratio } : undefined}>
+  const stageContent = (
+    <div ref={keyframes?.length && hasVideo ? undefined : hostRef} data-media-host={keyframes?.length && hasVideo ? undefined : true} className={outerClass} style={!aspect && ratio ? { aspectRatio: ratio } : undefined}>
       <div className={stageClass}>
         {hasPoster && (
           // eslint-disable-next-line @next/next/no-img-element -- gateway URL with auth headers on private tiers; next/image cannot proxy
@@ -254,4 +260,23 @@ export function PromptDetailMedia({
       </div>
     </div>
   );
+
+  if (hasVideo && keyframes && keyframes.length > 0) {
+    return (
+      <div ref={hostRef} data-media-host className="flex w-full flex-col gap-3">
+        {stageContent}
+        <VideoKeyframeStrip
+          keyframes={keyframes}
+          posterSrc={poster?.src ?? null}
+          videoSrc={video?.src ?? null}
+          videoRef={videoRef}
+          locale={locale}
+          alt={alt}
+          onSelectBeat={() => setIntent('playing')}
+        />
+      </div>
+    );
+  }
+
+  return stageContent;
 }
