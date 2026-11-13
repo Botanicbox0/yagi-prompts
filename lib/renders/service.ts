@@ -15,6 +15,7 @@ import type { ArkAssetsClient } from '@/lib/ark/assets';
 import { releaseAfterUse, releaseAfterUseEnabled } from '@/lib/identity/rotation';
 import { ASSET_WAIT_HOURS, assetLibraryMode, ensureIdentityAsset, ensureVirtualGroup, identityStatusFor, loadIdentityGroup, needsIdentity, needsLiveness, pollIdentityAsset, recordIdentityUse, type AssetLibraryMode, type IdentityDeps } from '@/lib/identity/service';
 import { purchaseOpenFor } from '@/lib/auth/purchase-gate';
+import type { RenderPipelineMode } from '@/lib/flags';
 import { getTossGateway, type TossGateway } from '@/lib/billing/toss-gateway';
 import { addTossReport, billingErrorCode, emptyTossReport, logBilling, reconcileTossPayments, renderPaymentStatus, type TossReconcileReport } from '@/lib/billing/toss-service';
 import { DEFAULT_LOCALE, isLocale, type Locale } from '@/lib/i18n/config';
@@ -39,6 +40,8 @@ import { primaryStep, recipeNeedsIdentity, type Recipe } from '@/lib/recipes/sch
 import { compileDirectorPrompt } from '@/lib/template-director/flash-director';
 import { parseDirectorSpecInput, type PersonalDirectorSpec } from '@/lib/template-director/schema';
 import { parseSelectedFrames, selectiveOrderKrw, sliceCarouselRecipe } from '@/lib/twings/selective-frames';
+import { creditsRequiredForKrw } from '@/lib/mobile/iap/catalog';
+import { toNativeIapOs } from '@/lib/mobile/iap/verify';
 import { readMakerFile } from '@/lib/recipes/assets';
 import { fixedVideoReferenceUrls } from './template-references';
 import type { RenderNotifier } from './notify';
@@ -123,6 +126,8 @@ export interface RenderServiceDeps {
   now?: Date;
   /** Which asset library a photo goes through (lib/flags.ts); tests pin it, production reads the flag. */
   mode?: AssetLibraryMode;
+  /** Optional render pipeline gate override (defaults to RENDER_PIPELINE_MODE from lib/flags.ts). */
+  pipelineMode?: RenderPipelineMode;
   /** docs/CAST-CATEGORIES.md §3 — the "is this really a pet" check; tests inject it, production calls Gemini. */
   petCheck?: (photo: SlotPhoto) => Promise<PetPhotoVerdict>;
 }
@@ -1243,4 +1248,159 @@ export async function loadSharedRender(sql: SqlRunner, id: string, token: string
 export async function listMyRenders(sql: SqlRunner, userId: string, limit = 50): Promise<RenderView[]> {
   // Test and review renders live in the maker editor and the review queue, not in "내 결과물".
   return withTitles(sql, (await listRenderJobsForUser(sql, userId, limit)).filter((job) => job.templateId !== MAKER_SANDBOX_ID));
+}
+
+export type CreateStoreIapRenderFailure =
+  | CreateRenderFailure
+  | 'bad_request'
+  | 'insufficient_credits';
+
+export type CreateStoreIapRenderOutcome =
+  | { ok: true; id: string; held: boolean; creditsSpent: number; balance: number }
+  | {
+      ok: false;
+      code: CreateStoreIapRenderFailure;
+      creditsNeeded?: number;
+      balance?: number;
+    };
+
+class StoreIapRenderAbort extends Error {
+  constructor(
+    readonly outcome: Exclude<CreateStoreIapRenderOutcome, { ok: true }>,
+  ) {
+    super(outcome.code);
+  }
+}
+
+/**
+ * Consumes pre-verified App Store / Google Play IAP credits to enqueue a personal render inside
+ * native store wrappers (`ios-store` / `android-store`), keeping web checkout completely separate.
+ */
+export async function createStoreIapRenderJob(
+  deps: RenderServiceDeps,
+  viewer: Viewer,
+  input: CreateRenderInput & {
+    storePlatform: 'ios-store' | 'android-store';
+    requestId: string;
+  },
+): Promise<CreateStoreIapRenderOutcome> {
+  if (viewer.userId === null) return { ok: false, code: 'sign_in_required' };
+  if (!SUBSCRIPTION_UUID.test(input.requestId)) return { ok: false, code: 'bad_request' };
+  if (!canStartRender(viewer, deps.pipelineMode)) return { ok: false, code: 'not_open' };
+
+  const osPlatform = toNativeIapOs(input.storePlatform);
+  const spendTxId = `spend:${input.requestId}`;
+
+  try {
+    return await deps.sql.transaction(async (sql) => {
+      await sql.query('select id from profiles where id = $1 for no key update', [viewer.userId]);
+
+      const existing = await sql.query<{ render_id: string | null; credits_delta: number }>(
+        'select render_id, credits_delta from store_iap_transactions where platform = $1 and transaction_id = $2 for update',
+        [osPlatform, spendTxId],
+      );
+      if (existing.rows[0]?.render_id) {
+        const job = await loadRenderJob(sql, existing.rows[0].render_id);
+        if (!job || job.userId !== viewer.userId) {
+          throw new StoreIapRenderAbort({ ok: false, code: 'not_found' });
+        }
+        const wallet = await sql.query<{ credits_balance: number }>(
+          'select credits_balance from store_iap_wallets where user_id = $1',
+          [viewer.userId],
+        );
+        return {
+          ok: true,
+          id: job.id,
+          held: job.status === 'held',
+          creditsSpent: Math.abs(Number(existing.rows[0].credits_delta)),
+          balance: Number(wallet.rows[0]?.credits_balance ?? 0),
+        };
+      }
+
+      const template = await loadPromptBySlug(sql, input.templateSlug);
+      if (!template || template.status !== 'published' || template.audience === 'brand') {
+        throw new StoreIapRenderAbort({ ok: false, code: 'not_found' });
+      }
+      if (!isForSale(template)) {
+        throw new StoreIapRenderAbort({ ok: false, code: 'not_for_sale' });
+      }
+
+      const resolution = renderableResolution(template, input.resolution);
+      if (!resolution.ok) {
+        throw new StoreIapRenderAbort({ ok: false, code: 'bad_resolution' });
+      }
+
+      const recipe = await loadTemplateRecipe(sql, template.id);
+      const priced = selectiveOrderKrw(template, recipe, input.selectedFrames, resolution.resolution);
+      if (priced.amountKrw === null || priced.amountKrw <= 0) {
+        throw new StoreIapRenderAbort({ ok: false, code: 'not_for_sale' });
+      }
+
+      const creditsNeeded = creditsRequiredForKrw(priced.amountKrw);
+      const wallet = await sql.query<{ credits_balance: number }>(
+        'select credits_balance from store_iap_wallets where user_id = $1 for update',
+        [viewer.userId],
+      );
+      const currentBalance = Number(wallet.rows[0]?.credits_balance ?? 0);
+      if (currentBalance < creditsNeeded) {
+        throw new StoreIapRenderAbort({
+          ok: false,
+          code: 'insufficient_credits',
+          creditsNeeded,
+          balance: currentBalance,
+        });
+      }
+
+      const created = await createAuthorizedRender(
+        { ...deps, sql },
+        viewer,
+        {
+          ...input,
+          selectedFrames: priced.normalizedFrames,
+          resolution: resolution.resolution,
+        },
+        undefined,
+        template,
+      );
+      if (!created.ok) {
+        throw new StoreIapRenderAbort(created);
+      }
+
+      const updatedWallet = await sql.query<{ credits_balance: number }>(
+        `update store_iap_wallets
+           set credits_balance = credits_balance - $2,
+               lifetime_spent = lifetime_spent + $2
+         where user_id = $1
+         returning credits_balance`,
+        [viewer.userId, creditsNeeded],
+      );
+
+      await sql.query(
+        `insert into store_iap_transactions
+           (user_id, platform, product_id, transaction_id, kind, credits_delta, status, environment, render_id, verified_at)
+         values ($1, $2, $3, $4, 'spend', $5, 'verified', 'production', $6, now())`,
+        [
+          viewer.userId,
+          osPlatform,
+          `render:${template.slug}`,
+          spendTxId,
+          -creditsNeeded,
+          created.id,
+        ],
+      );
+
+      return {
+        ok: true,
+        id: created.id,
+        held: created.held,
+        creditsSpent: creditsNeeded,
+        balance: Number(updatedWallet.rows[0]?.credits_balance ?? currentBalance - creditsNeeded),
+      };
+    });
+  } catch (error) {
+    if (error instanceof StoreIapRenderAbort) {
+      return error.outcome;
+    }
+    throw error;
+  }
 }

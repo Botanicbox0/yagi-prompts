@@ -17,6 +17,12 @@ import type { EditScope } from '@/lib/premium-editing/contract';
 import { publishViewerSelfie } from '@/lib/twings/viewer-selfie';
 import { publishViewerAccess } from '@/lib/twings/viewer-access';
 import { CastPhotoFields, castPhotoHint, castPhotosReady, EMPTY_CAST_PHOTOS, type CastPhotoState } from './cast-photos';
+import {
+  detectStorePlatform,
+  isNativeStoreApp,
+  type StorePlatform,
+} from '@/lib/mobile/store-bridge';
+import { creditsRequiredForKrw, STORE_IAP_PACKS } from '@/lib/mobile/iap/catalog';
 
 /**
  * TWINGS — the make loop, as a four-step demo (founder, 2026-08-16: "사진만 넣으면 완성도 높은
@@ -256,6 +262,7 @@ export function TwingsStudio({
   shopOpenHint = false,
   initialAccess,
   stickyBar = true,
+  storePlatform,
 }: {
   styles: StudioStyle[];
   labels: StudioLabels;
@@ -271,6 +278,8 @@ export function TwingsStudio({
   initialAccess?: StudioAccessSnapshot;
   /** The phone's own sticky make bar. Off where the studio sits in a sheet with its own launcher. */
   stickyBar?: boolean;
+  /** Native app store wrapper detection override (defaults to client UA detection). */
+  storePlatform?: StorePlatform;
 }) {
   const single = styles.length === 1;
   // docs/PLATFORM-2.0.md §3.1: the static page used to paint "closed" and flip once the access call
@@ -317,6 +326,19 @@ export function TwingsStudio({
   const [usageExhausted, setUsageExhausted] = useState(false);
   const [selectedFrames, setSelectedFrames] = useState<number[] | null>(null);
   const [selectivePriceOverride, setSelectivePriceOverride] = useState<string | null>(null);
+  const [effectiveStorePlatform, setEffectiveStorePlatform] = useState<StorePlatform>(
+    storePlatform ?? 'web',
+  );
+  useEffect(() => {
+    if (storePlatform !== undefined) {
+      setEffectiveStorePlatform(storePlatform);
+      return;
+    }
+    if (typeof navigator !== 'undefined') {
+      setEffectiveStorePlatform(detectStorePlatform({ userAgent: navigator.userAgent }));
+    }
+  }, [storePlatform]);
+  const nativeStoreActive = isNativeStoreApp(effectiveStorePlatform);
   const payRef = useRef<HTMLButtonElement>(null);
   const selfiePanelRef = useRef<HTMLDivElement>(null);
   const studioRef = useRef<HTMLElement>(null);
@@ -938,6 +960,53 @@ export function TwingsStudio({
               )}
 
               <div className="mt-auto pt-6">
+                {nativeStoreActive && chosen && !monthly && (() => {
+                  const koMatch = /([\d,]+)\s*원/.exec(chosenPrice);
+                  const usdMatch = /\$([\d.]+)/.exec(chosenPrice);
+                  const estimatedKrw = koMatch?.[1]
+                    ? Number(koMatch[1].replace(/,/g, ''))
+                    : usdMatch?.[1]
+                      ? Math.round(Number(usdMatch[1]) * 1400)
+                      : 1900;
+                  const creditsNeeded = creditsRequiredForKrw(estimatedKrw);
+                  const isKo = live?.locale !== 'en';
+                  return (
+                    <div
+                      data-native-iap-sheet={effectiveStorePlatform}
+                      className="mb-4 rounded-[16px] border border-[#E4E4E7] bg-[#F4F4F5] p-4 text-[#09090B]"
+                    >
+                      <div className="flex items-center justify-between gap-2">
+                        <span className="text-xs font-semibold text-[#CC1573]">
+                          {effectiveStorePlatform === 'ios-store' ? 'App Store In-App Purchase' : 'Google Play Billing'}
+                        </span>
+                        <span className="font-mono text-xs font-bold tabular-nums">
+                          {isKo ? `${creditsNeeded} 크레딧 필요` : `${creditsNeeded} Credits`}
+                        </span>
+                      </div>
+                      <p className="mt-1.5 text-xs leading-relaxed text-[#52525B]" style={{ wordBreak: 'keep-all' }}>
+                        {isKo
+                          ? '앱 내에서는 스토어 인앱결제로 충전한 크레딧으로 바로 생성합니다.'
+                          : 'Use App Store / Google Play in-app credit packs to render inside the mobile app.'}
+                      </p>
+                      <div className="mt-2.5 grid grid-cols-2 gap-1.5">
+                        {STORE_IAP_PACKS.map((pack) => (
+                          <div
+                            key={pack.productId}
+                            data-iap-sku={pack.productId}
+                            className="rounded-lg border border-[#E4E4E7] bg-white px-2.5 py-2 text-[0.72rem]"
+                          >
+                            <p className="font-semibold text-[#09090B]">
+                              {isKo ? pack.labelKo : pack.labelEn}
+                            </p>
+                            <p className="mt-0.5 font-mono text-[0.68rem] text-[#52525B] tabular-nums">
+                              {pack.retailKrw.toLocaleString('ko-KR')}원
+                            </p>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  );
+                })()}
                 {subscriptionAvailable && subscriptionCopy && <label className="mb-5 flex cursor-pointer items-start gap-3 text-sm leading-relaxed"><input data-subscription-own-face-consent type="checkbox" checked={ownFaceConsent} disabled={submitting} onChange={event => setOwnFaceConsent(event.target.checked)} className="mt-1 size-4 shrink-0 accent-black" /><span>{subscriptionCopy.studioConsent}</span></label>}
                 {identityBlocked && live && (
                   <p data-identity-notice={identity} className="mb-3 border border-accent px-4 py-3 text-[0.9rem] leading-relaxed">
@@ -966,7 +1035,9 @@ export function TwingsStudio({
                           ? labels.payCta.replace('{price}', chosenPrice)
                           : labels.payCta}
                 </button>
-                <p className="mt-3 text-sm leading-relaxed text-black/70">{monthly && subscriptionCopy ? subscriptionCopy.studioNote : labels.payNote}</p>
+                {nativeStoreActive ? null : (
+                  <p className="mt-3 text-sm leading-relaxed text-black/70">{monthly && subscriptionCopy ? subscriptionCopy.studioNote : labels.payNote}</p>
+                )}
                 {liveError && (
                   <p data-live-error role="alert" className="mt-2 text-sm text-accent">
                     {liveError}
