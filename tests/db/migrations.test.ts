@@ -204,6 +204,8 @@ describe('migrations apply on a fresh database (PLAN §6)', () => {
       'social_accounts',
       'social_verify_workers',
       'steps',
+      'store_iap_transactions',
+      'store_iap_wallets',
       'stripe_events',
       'subscriptions',
     ]);
