@@ -556,7 +556,21 @@ export const en = {
     "libraryBody": "Studio-made formats, ready to explore. Choose by the film you want to be in.",
     "campaignHeading": "Make it. Post it. Take part.",
     "campaignBody": "Check the campaign details, payment and dates before you apply.",
-    "campaignCta": "Explore campaigns"
+    "campaignCta": "Explore campaigns",
+    "makerShowcase": {
+      "eyebrow": "TEMPLATE MAKER",
+      "heading": "Turn your visual format into recurring revenue.",
+      "body": "Lock what stays fixed, mark what swaps with a user's photo or prompt, and publish. Every run earns maker royalties in your workspace.",
+      "step1Title": "1. Upload sources & pledge once",
+      "step1Body": "Activate maker mode in one click inside the workspace. Upload only original video, photos, or audio you have rights to use.",
+      "step2Title": "2. Define fixed structure & swappable slots",
+      "step2Body": "Separate locked lighting, sound, and pacing from user-editable prompts and pick keyframe beats for 3-second preview.",
+      "step3Title": "3. Publish & accrue revenue",
+      "step3Body": "Publish directly to the catalog. Accrued estimated earnings are tracked per template inside your workspace.",
+      "payoutBadge": "Estimated revenue accruing (payout setup pending)",
+      "cta": "Open maker workspace",
+      "desktopNote": "Video format authoring runs on desktop web."
+    }
   },
   brandLanding: {
     "v7": {
@@ -3365,6 +3379,7 @@ export const en = {
     startWithGoogle: 'Start with Google',
     continueWithGoogle: 'Continue with Google',
     continueWithKakao: 'Continue with Kakao',
+    continueWithApple: 'Continue with Apple',
     // The sign-in door (/auth/choose) — a door, not a landing: the act, one line, the consent line.
     chooseTitle: 'Log in or sign up',
     chooseLede: 'First time here? Your account is created as you continue.',

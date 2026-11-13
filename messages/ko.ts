@@ -565,7 +565,21 @@ export const ko: Dictionary = {
     "libraryBody": "스튜디오가 만든 포맷을 둘러보세요. 내가 주인공이 되고 싶은 영상을 고르면 됩니다.",
     "campaignHeading": "내 영상으로 캠페인에 참여하세요.",
     "campaignBody": "캠페인 내용과 원고료, 일정을 확인하고 지원하세요.",
-    "campaignCta": "참여할 캠페인 보기"
+    "campaignCta": "참여할 캠페인 보기",
+    "makerShowcase": {
+      "eyebrow": `${T.maker}`,
+      "heading": "내 스타일이 곧 수익이 되는 포맷 스튜디오.",
+      "body": "사진이나 영상 한 편으로 고정 구도와 가변 슬롯을 정리해 발행하면, 다른 사용자가 내 포맷으로 생성할 때마다 수익이 쌓입니다.",
+      "step1Title": "1. 레퍼런스 업로드와 한 번의 서약",
+      "step1Body": `${T.makerStudio}에서 버튼 한 번으로 시작합니다. 내가 만든 포맷의 원본 영상·사진·오디오만 등록합니다.`,
+      "step2Title": "2. 고정 요소와 바뀔 슬롯 설계",
+      "step2Body": "배경음·구도·고정 소품과 사용자가 바꿀 얼굴·슬롯을 나누고, 3초 만에 훑어보는 핵심 프레임을 맞춥니다.",
+      "step3Title": "3. 발행과 실시간 수익 적립",
+      "step3Body": "포맷을 발행하면 카탈로그에 올라갑니다. 생성이 일어날 때마다 예상 수익이 내 작업공간에 바로 기록됩니다.",
+      "payoutBadge": "예상 수익 적립 (출금 준비 중)",
+      "cta": `${T.makerStudio} 열기`,
+      "desktopNote": "영상 포맷 제작은 웹 데스크톱 환경에서 진행합니다."
+    }
   },
   brandLanding: {
     "v7": {
@@ -3376,6 +3390,7 @@ export const ko: Dictionary = {
     startWithGoogle: 'Google로 시작하기',
     continueWithGoogle: 'Google로 계속하기',
     continueWithKakao: '카카오로 계속하기',
+    continueWithApple: 'Apple로 계속하기',
     // The sign-in door (/auth/choose) — a door, not a landing: the act, one line, the consent line.
     chooseTitle: '로그인 또는 회원가입',
     chooseLede: '처음이라면 계정이 바로 만들어집니다.',

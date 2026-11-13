@@ -20,6 +20,7 @@ import { PromptRail } from '@/components/prompts/rails';
 import { railOrder } from '@/components/prompts/card-frame';
 import { CampaignRail } from '@/components/campaigns/rails';
 import { CreatorHero, CreatorHowItWorks, CreatorCampaignDoor, BrandDoor } from '@/components/audience/creator-home';
+import { MakerMonetizationShowcase } from '@/components/audience/maker-monetization-showcase';
 import { cachedSubscriptionAvailability } from '@/lib/creator-subscriptions/cached-availability';
 import { SubscriptionAvailabilityProvider } from '@/components/twings/subscription-availability';
 import { DEFAULT_HERO_EVIDENCE, heroEvidence } from '@/lib/content/slots';
@@ -81,7 +82,7 @@ export default async function LandingPage({ params }: { params: Promise<{ locale
           <div className="mt-8 flex flex-wrap items-center gap-6">
             <a href={templatesHref(locale,'video')} data-all-video className="inline-flex min-h-11 items-center text-sm font-medium underline underline-offset-4">{t.allVideo} ↗</a>
             {templates.image.length > 0 && (
-              <a href="#image" data-jump-image-rail className="inline-flex min-h-11 items-center text-sm font-medium text-[#3063A7] underline underline-offset-4">
+              <a href="#image" data-jump-image-rail className="inline-flex min-h-11 items-center text-sm font-semibold text-[#09090B] underline underline-offset-4 transition-colors hover:text-[#CC1573]">
                 {locale === 'en' ? 'Jump to 5-Shot Photo Series ↓' : '5장 화보집 바로 보기 ↓'}
               </a>
             )}
@@ -92,6 +93,7 @@ export default async function LandingPage({ params }: { params: Promise<{ locale
       </section>
       {castShelves.length > 0 && <section data-cast-home data-section data-theme="light" className="section"><div className="audience-shell pb-16 lg:pb-24">{castShelves.map(({ cast, shelf }) => <CastShelfSection key={cast} locale={locale} dict={dict} cast={cast} shelf={shelf} mode="home" />)}</div></section>}
       <CreatorHowItWorks dict={dict} />
+      <MakerMonetizationShowcase dict={dict} locale={locale} />
       {recruiting.length > 0 ? <section data-section data-theme="light" className="section"><div className="audience-shell py-16"><CampaignRail id="campaigns" heading={dict.campaigns.railRecruiting} lede={dict.campaigns.railRecruitingLede} cards={recruiting} styles={styles} locale={locale} labels={campaignLabels(dict)} now={Date.now()} /><a href={campaignsHref(locale)} className="mt-8 inline-flex min-h-11 items-center text-sm underline underline-offset-4">{dict.creatorJourney.campaignCta} ↗</a></div></section> : <CreatorCampaignDoor dict={dict} locale={locale} />}
       <FaqSection dict={dict} locale={locale} placement="landing" path={`/${locale}`} availability={availability} />
       <BrandDoor dict={dict} locale={locale} />
