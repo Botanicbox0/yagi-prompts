@@ -55,14 +55,15 @@ describe('TWINGS design identity', () => {
     expect(personal).toMatch(/\.personal\s*\{\s*--color-black\s*:\s*var\(--id-ink\)\s*;\s*\}/);
     expect(personal).toMatch(/background-color\s*:\s*var\(--id-canvas\)/);
     expect(personal).not.toMatch(/#[0-9a-f]{3,8}\b|rgb\(/i);
-    for (const page of ['page.tsx', 'video/page.tsx', 'image/page.tsx', 'pricing/page.tsx', 't/[slug]/page.tsx']) {
+    for (const page of ['page.tsx', 'video/page.tsx', 'image/page.tsx', 'pricing/page.tsx', 't/[slug]/page.tsx', 'faq/page.tsx', 'creators/page.tsx', 'makers/[handle]/page.tsx']) {
       expect(readFileSync(join(process.cwd(), 'app', '(marketing)', '[locale]', page), 'utf8'), page).toContain('<PersonalIdentity>');
     }
   });
 
   it('keeps every pair the page relies on readable', () => {
     for (const pair of CONTRAST_PAIRS) expect(contrast(pair.fg, pair.bg), pair.use).toBeGreaterThanOrEqual(pair.min);
-    expect(mixAccent(85, '#000000')).toBe('#002bd9');
+    expect(contrast(COLOUR.ink, COLOUR.accent)).toBeGreaterThanOrEqual(4.5);
+    expect(mixAccent(ACCENT_MIX.text.accent, ACCENT_MIX.text.base)).toBe('#ad3c76');
   });
 
   // 2026-10-30 founder: another AI must be able to read how TWINGS looks and how to generate for it.

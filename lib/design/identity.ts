@@ -1,26 +1,27 @@
 /**
- * TWINGS design identity as code (updated 2026-11-12 Studio UI v4).
+ * TWINGS design identity as code (updated 2026-11-14 Design System v2 Frozen).
  *
- * UI Chrome ("95% Monochrome + 5% Electric Ultramarine"):
- *   Canvas #FFFFFF · Secondary Surface / Pill #F4F4F5 · Hover #E4E4E7 · Active Rich Black #09090B
- *   Primary CTA only: Electric Ultramarine #0033FF (hover #0026CC, shadow 0 4px 14px rgba(0,51,255,0.28))
- *   Typography: Geist + Pretendard Variable (-0.035em headings @ 650, -0.02em UI) + Geist Mono tabular-nums.
+ * UI Chrome ("White #FFFFFF + Dark #09090B Dual Surface + <=5% Magnific Pink #FF58AE"):
+ *   White Canvas #FFFFFF · Secondary Surface / Pill #F4F4F5 · Hover #E4E4E7 · Rich Black #09090B
+ *   Primary CTA only: Magnific Pink #FF58AE (hover #FF389F, active #FF1A90, box-shadow: none)
+ *   WCAG AA required: #09090B ink on #FF58AE CTA (6.88:1) · never #FFFFFF on #FF58AE (2.89:1)
+ *   Typography: single Pretendard Variable stack, word-break: keep-all, tabular-nums.
  *
  * Photography & Film Color World (`WORLD`, founder 2026-10-30):
  *   Remains cool white and French blue (`#3875c5`, hue [195, 225]°) with warm natural skin.
  */
 
-export const IDENTITY_VERSION = '2026-11-12';
+export const IDENTITY_VERSION = '2026-11-14';
 
-/** UI chrome colour by role: 95% monochrome surfaces + 5% Electric Ultramarine CTA accent. */
+/** UI chrome colour by role: neutral surfaces + <=5% Magnific Pink CTA accent. */
 export const COLOUR = {
   /** Main canvas and primary work surface. */
   paper: '#ffffff',
   /** Page ground: pure white canvas; secondary panels use `sky` (#f4f4f5). */
   canvas: '#ffffff',
-  /** Secondary panels, sidebars and inactive pills (monochrome cool grey, zero pastel blue tint). */
+  /** Secondary panels, sidebars and inactive pills (monochrome cool grey). */
   sky: '#f4f4f5',
-  /** Primary text and active/selected fill (Rich Black). */
+  /** Primary text, active/selected fill, and text on solid pink CTA (Rich Ink). */
   ink: '#09090b',
   /** Secondary / label text. */
   body: '#52525b',
@@ -29,25 +30,25 @@ export const COLOUR = {
   /** Hover surface and ultra-light structural divider. */
   line: '#e4e4e7',
   lineStrong: '#d4d4d8',
-  /** Electric Ultramarine: primary generation CTA only. White text on it reads 6.59:1. */
-  accent: '#0033ff',
+  /** Magnific Pink: primary generation CTA & active focus only. Ink (#09090B) text reads 6.88:1. */
+  accent: '#ff58ae',
 } as const;
 
 /** Shades mixed from the accent (CSS `color-mix(in srgb, accent N%, base)`). Tints stay monochrome. */
 export const ACCENT_MIX = {
-  /** Deeper ultramarine for focus/link legibility (#002bd9, 7.89:1 on white). */
-  text: { accent: 85, base: '#000000' },
-  hover: { accent: 80, base: '#000000' },
-  pressed: { accent: 66, base: '#000000' },
+  /** Deep berry pink for readable text links on white & wash surfaces (#ad3c76, 5.70:1 on #fff, 5.18:1 on #f4f4f5). */
+  text: { accent: 68, base: '#000000' },
+  hover: { accent: 90, base: '#000000' },
+  pressed: { accent: 80, base: '#000000' },
   /** Monochrome pill surface (#f4f4f5) — pastel blue background tints are forbidden. */
   tint: { accent: 0, base: '#f4f4f5' },
 } as const;
 
 export const TYPE = {
-  /** Geist renders Latin & numerals crisply; Pretendard Variable carries Hangul per-glyph. */
-  sans: "'Geist', 'Pretendard Variable', Pretendard, -apple-system, sans-serif",
-  /** Spec labels, credit balances, resolutions, ratios and durations (always with tabular-nums). */
-  mono: "'Geist Mono', 'Pretendard Hangul', var(--font-geist-mono), 'Pretendard Variable', Pretendard, monospace",
+  /** Single Pretendard Variable stack across headings, body and controls (word-break: keep-all). */
+  sans: "'Pretendard Variable', Pretendard, -apple-system, BlinkMacSystemFont, sans-serif",
+  /** Single Pretendard Variable stack paired with CSS font-variant-numeric: tabular-nums. */
+  mono: "'Pretendard Variable', Pretendard, -apple-system, BlinkMacSystemFont, sans-serif",
   display: { weight: 650, tracking: '-0.035em', leading: 1.08 },
   heading: { weight: 650, tracking: '-0.035em', leading: 1.25 },
   body: { weight: 400, tracking: '-0.02em', leading: 1.55 },
@@ -95,12 +96,12 @@ export const IMAGERY = {
   people: 'fictional, unretouched skin',
 } as const;
 
-/** The rules a reviewer (human or model) checks before anything ships on the brand side. */
+/** The rules a reviewer (human or model) checks before anything ships. */
 export const HARDLINES = [
-  '95% Monochrome (#FFFFFF canvas, #F4F4F5 panels/pills, #E4E4E7 hover, #09090B active) + 5% Electric Ultramarine (#0033FF) for primary CTA only.',
-  'No pastel blue background tints (#EBF5FF / #E8EFF7) and no red emphasis (#ED1E1E).',
-  'Borderless surface separation instead of 1px solid grey boxes; tactile glass ring on floating docks.',
-  'Geist + Pretendard Variable (-0.035em headings @ 650, -0.02em UI) + Geist Mono with tabular-nums on all numeric specs.',
+  'White (#FFFFFF canvas, #F4F4F5 panels/pills) + Dark (#09090B canvas, #111113 surface) + <=5% Magnific Pink (#FF58AE, box-shadow: none) for primary CTA only.',
+  'Rich Ink (#09090B, 6.88:1) inside solid #FF58AE CTA buttons; never #FFFFFF text on #FF58AE.',
+  'No pastel blue background tints (#EBF5FF / #E8EFF7), no legacy UI blues (#0033FF / #3875C5), and no red emphasis (#ED1E1E).',
+  'Single Pretendard Variable stack with word-break: keep-all and tabular-nums on numeric specs.',
   'No engine or competitor names on public pages; unreleased features carry an early-access or coming label.',
   'Korean uses concise, natural studio phrasing: one idea per sentence, helper descriptions in #71717A.',
 ] as const;
@@ -129,8 +130,8 @@ export const CONTRAST_PAIRS: ReadonlyArray<{ fg: string; bg: string; min: number
   { fg: COLOUR.body, bg: COLOUR.paper, min: 7, use: 'body copy' },
   { fg: COLOUR.muted, bg: COLOUR.canvas, min: 4.5, use: 'captions on the page ground' },
   { fg: COLOUR.body, bg: COLOUR.sky, min: 4.5, use: 'labels on secondary panels' },
-  { fg: '#ffffff', bg: COLOUR.accent, min: 4.5, use: 'CTA label' },
-  { fg: mixAccent(ACCENT_MIX.text.accent, ACCENT_MIX.text.base), bg: COLOUR.canvas, min: 4.5, use: 'blue links on canvas' },
-  { fg: mixAccent(ACCENT_MIX.text.accent, ACCENT_MIX.text.base), bg: COLOUR.sky, min: 4.5, use: 'blue text on secondary panels' },
+  { fg: COLOUR.ink, bg: COLOUR.accent, min: 4.5, use: 'CTA label' },
+  { fg: mixAccent(ACCENT_MIX.text.accent, ACCENT_MIX.text.base), bg: COLOUR.canvas, min: 4.5, use: 'accent links on canvas' },
+  { fg: mixAccent(ACCENT_MIX.text.accent, ACCENT_MIX.text.base), bg: COLOUR.sky, min: 4.5, use: 'accent text on secondary panels' },
   { fg: COLOUR.ink, bg: mixAccent(ACCENT_MIX.tint.accent, ACCENT_MIX.tint.base), min: 4.5, use: 'chip text on monochrome surface' },
 ];

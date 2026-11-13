@@ -21,7 +21,7 @@
 | sticky glass (`--header-bg`) | `rgba(255, 255, 255, 0.84)` + `blur(16px)` | 상단 고정 내비게이션 유리 층위 |
 | ink | `#09090B` | 주요 본문·제목, 솔리드 핑크 CTA 내부 텍스트 |
 | body / muted | `#52525B` / `#71717A` | 보조 본문, 부연 설명·캡션 |
-| border / hover | `rgba(9, 9, 11, 0.08)` / `0.16` | 미세 경계·세그먼트 구분선 |
+| border / hover | `rgba(9, 9, 11, 0.08)` / `0.16` | 미세 경계·세그먼트 구분선 (솔리드 폴백 `#D4D4D8`) |
 | **pink link (text)** | **`#CC1573`** | 화이트 바탕 위 핑크 텍스트 링크(WCAG AA `5.35:1`) |
 
 ### 2-2. Dark Surface (`twings.app/ko/brands` 브랜드 — Editorial Off-Black & Depth)
