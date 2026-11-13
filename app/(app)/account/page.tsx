@@ -8,7 +8,10 @@ import { selfieLibrary, selfieLimit, type SelfieLibrary } from '@/lib/identity/s
 import { IDENTITY_SELFIE_PATH } from '@/lib/identity/links';
 import { SelfieLibraryPanel } from '@/components/identity/selfie-grid';
 import { TextSwap } from '@/components/ui/text-swap';
-import { deletionMailto } from '@/components/app/deletion-mailto';
+import { DeletionRequestStatus } from '@/components/account/deletion';
+import { deletionGraceDays, deletionReady, openDeletionRequest, type DeletionRequest } from '@/lib/account/deletion';
+import { interpolate } from '@/lib/i18n/format';
+import { ACCOUNT_DELETE_PATH } from '@/lib/account/links';
 import {
   loadPreferences,
   PREFERENCES_OFF,
@@ -22,6 +25,7 @@ import { RenderList } from '@/components/renders/render-list';
 import { CreatorProfileCard } from '@/components/app/creator-profile';
 import { loadCreatorProfile, type CreatorProfile } from '@/lib/creators/profile';
 import { saveNotificationPreferences } from './actions';
+import { cancelDeletion } from './delete/actions';
 import { CREATOR_WORKSPACE_PATH, creatorProgramOpen } from '@/lib/creator-platform/links';
 import { SubscriptionStatus } from '@/components/billing/subscription-status';
 import { subscriptionQaAllowed } from '@/lib/creator-subscriptions/access';
@@ -104,6 +108,7 @@ export default async function AccountPage({
   let subscription: SubscriptionSummary | null = null;
   let subscriptionLoaded = false;
   let selfies: SelfieLibrary | null = null;
+  let deletionRequest: DeletionRequest | null = null;
   const socialOpen = influencersOpen();
   let social: { influencer: boolean; items: SocialAccountView[] } | null = null;
   try {
@@ -111,19 +116,22 @@ export default async function AccountPage({
     if (viewer.userId !== null) {
       const sql = await getSqlRunner();
       if (sql !== null) {
+        const userId = viewer.userId;
         const subEnv = billingConfigFromEnv()?.kind === 'test' && subscriptionQaAllowed(viewer) ? 'test' : 'live';
-        const [prefs, works, creator, monthly, face] = await Promise.allSettled([
-          loadPreferences(sql, viewer.userId), listMyRenders(sql, viewer.userId, 3), loadCreatorProfile(sql, viewer.userId),
-          getSubscriptionSummary(sql, viewer.userId, { environment: subEnv }), selfieLibrary(sql, viewer.userId, selfieLimit()),
+        const [prefs, works, creator, monthly, face, deletion] = await Promise.allSettled([
+          loadPreferences(sql, userId), listMyRenders(sql, userId, 3), loadCreatorProfile(sql, userId),
+          getSubscriptionSummary(sql, userId, { environment: subEnv }), selfieLibrary(sql, userId, selfieLimit()),
+          // An open deletion request replaces the link with its status.
+          deletionReady(sql).then((ready) => (ready ? openDeletionRequest(sql, userId) : null)),
         ]);
         if (prefs.status === 'fulfilled') preferences = prefs.value ?? PREFERENCES_OFF;
         if (works.status === 'fulfilled') renders = works.value;
         if (creator.status === 'fulfilled') profile = creator.value;
         if (monthly.status === 'fulfilled') { subscription = monthly.value; subscriptionLoaded = true; }
         if (face.status === 'fulfilled') selfies = face.value;
+        if (deletion.status === 'fulfilled') deletionRequest = deletion.value;
         // docs/PLATFORM-2.0.md §17.1 — the SNS card, only while TWINGS_INFLUENCERS is on.
         if (socialOpen) {
-          const userId = viewer.userId;
           social = await Promise.all([listSocialAccounts(sql, userId), isInfluencer(sql, userId)])
             .then(([items, influencer]) => ({ influencer, items }))
             .catch(() => ({ influencer: false, items: [] }));
@@ -285,16 +293,22 @@ export default async function AccountPage({
             </button>
           </form>
 
-          {/* §3.7 — v1 deletion is an honest REQUEST flow; the runbook ships with M5. */}
-          <div>
+          {/* Self-serve deletion (docs/RUNBOOK-deletion.md). The confirmation step lives at
+              /account/delete and falls back to the mail request until 0064 is applied. */}
+          <div id="account-deletion" data-account-deletion className="scroll-mt-24">
             <p className="font-label text-eyebrow uppercase opacity-60">{copy.deletionHeading}</p>
-            <p className="mt-2 text-[0.9375rem] opacity-70">{copy.deletionBody}</p>
-            <a
-              href={deletionMailto(copy, viewer?.email ?? null)}
-              className="text-accent mt-3 inline-block font-label text-eyebrow uppercase"
-            >
-              <TextSwap>{copy.deletionCta} →</TextSwap>
-            </a>
+            {deletionRequest ? (
+              <div className="mt-3">
+                <DeletionRequestStatus copy={dict.accountDeletion} locale={locale} request={deletionRequest} cancel={cancelDeletion} />
+              </div>
+            ) : (
+              <>
+                <p className="mt-2 text-[0.9375rem] opacity-70">{interpolate(copy.deletionBody, { days: String(deletionGraceDays()) })}</p>
+                <a href={ACCOUNT_DELETE_PATH} data-account-deletion-link className="text-accent mt-3 inline-block font-label text-eyebrow uppercase">
+                  <TextSwap>{copy.deletionCta} →</TextSwap>
+                </a>
+              </>
+            )}
           </div>
         </div>
         {process.env.TWINGS_COMMUNITY==='on'||process.env.TWINGS_FORMAT_CREATORS==='on'||process.env.TWINGS_IMAGE_REWARDS==='on'?<a href="/community" className="mt-8 mr-3 inline-flex min-h-12 items-center rounded-full border border-current px-6 py-3 text-sm">{dict.community.title}</a>:null}

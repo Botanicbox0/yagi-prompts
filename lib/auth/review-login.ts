@@ -9,13 +9,18 @@ export interface ReviewLoginDependencies {
   commit(session: ReviewSession): Promise<boolean>;
 }
 
+/** The reviewer addresses, lower case. This domain is not the staff domain. */
+export const REVIEW_ACCOUNT_EMAIL = /^pg-review(?:-[a-z0-9]+)*@twings\.app$/;
+export const isReviewAccountEmail = (email: string | null | undefined): boolean =>
+  typeof email === 'string' && REVIEW_ACCOUNT_EMAIL.test(email.trim().toLowerCase());
+
 export async function authenticateReviewAccount(
   input: { email: unknown; password: unknown }, deps: ReviewLoginDependencies,
 ): Promise<boolean> {
   if (typeof input.email !== 'string' || typeof input.password !== 'string') return false;
   const email = input.email.trim().toLowerCase();
   // This domain is not the staff domain. Other customers retain Google/Kakao sign-in.
-  if (!/^pg-review(?:-[a-z0-9]+)*@twings\.app$/.test(email) || email.length > 120
+  if (!REVIEW_ACCOUNT_EMAIL.test(email) || email.length > 120
     || input.password.length < 1 || input.password.length > 256) return false;
   try {
     const result = await deps.authenticate({ email, password: input.password });

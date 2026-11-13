@@ -10,7 +10,7 @@ export const ADMIN_NAV_GROUPS = [
   { key: "templates", items: ["prompts", "community", "contests"] },
   { key: "brands", items: ["brandWorkspace", "campaigns", "inquiries", "funding"] },
   { key: "money", items: ["payments", "payouts", "subscriptions"] },
-  { key: "people", items: ["users", "risk"] },
+  { key: "people", items: ["users", "risk", "accountDeletions"] },
   { key: "settings", items: ["landingMedia"] },
 ] as const;
 
@@ -29,6 +29,8 @@ export const ADMIN_NAV_PATHS = {
   subscriptions: "/admin/subscriptions",
   users: "/admin/users",
   risk: "/admin/risk",
+  // Self-serve account deletion: what the daily pass could not finish (docs/RUNBOOK-deletion.md).
+  accountDeletions: "/admin/account-deletions",
   landingMedia: "/admin/landing-media",
 } as const;
 export type AdminNavKey = keyof typeof ADMIN_NAV_PATHS;

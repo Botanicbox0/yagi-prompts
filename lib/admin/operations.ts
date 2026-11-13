@@ -1,6 +1,7 @@
 import { ok, type AdminContext, type AdminOutcome } from './context';
 import { PLAYBOOK_OPERATIONS, type BlockDraftInput } from './playbook-operations';
 import { PROMPT_OPERATIONS } from './prompt-operations';
+import { ACCOUNT_DELETION_OPERATIONS } from './account-deletion-operations';
 import { CONTEST_OPERATIONS } from './contest-operations';
 import { CAMPAIGN_OPERATIONS } from './campaign-operations';
 import { CAMPAIGN_PRODUCTION_OPERATIONS } from './campaign-production-operations';
@@ -80,6 +81,8 @@ export const ADMIN_OPERATIONS = {
   ...LANDING_MEDIA_OPERATIONS,
   ...RENDER_OPERATIONS,
   ...PAYOUT_OPERATIONS,
+  // docs/RUNBOOK-deletion.md — the account deletion queue: delete now, mark done by hand, close.
+  ...ACCOUNT_DELETION_OPERATIONS,
 };
 
 export type AdminOperationName = keyof typeof ADMIN_OPERATIONS;

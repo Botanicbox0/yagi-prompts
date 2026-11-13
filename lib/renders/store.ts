@@ -1,4 +1,4 @@
-import { access, mkdir, readFile, writeFile, unlink } from 'node:fs/promises';
+import { access, mkdir, readFile, rm, writeFile, unlink } from 'node:fs/promises';
 import { constants } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import { AwsClient } from 'aws4fetch';
@@ -32,6 +32,11 @@ export interface RenderStore {
   /** Optional for test stores; runtime drivers delete expired private edit references. */
   delete?(key: string): Promise<void>;
   /**
+   * Remove every object under one owner folder (`{uuid}` or `social/{uuid}`). Account deletion only
+   * (lib/account/deletion.ts); a folder that is already gone is a success.
+   */
+  deleteFolder?(folder: string): Promise<void>;
+  /**
    * An absolute URL an outside host will honour for `ttlSeconds`, or `null` when nothing serves
    * the object over HTTP (local driver) and the gateway must stream it.
    */
@@ -53,6 +58,11 @@ export class RenderObjectNotFound extends Error {
  */
 export function assertRenderKey(key: string): void {
   if (!/^(?:social\/)?[0-9a-f-]{36}\/[a-z][a-z0-9_-]{0,47}\.[a-z0-9]{2,5}$/i.test(key)) throw new Error(`illegal render key: ${key}`);
+}
+
+/** One owner's folder: `{uuid}` or `social/{uuid}`. Nothing broader can be named, so nothing broader can be removed. */
+export function assertRenderFolder(folder: string): void {
+  if (!/^(?:social\/)?[0-9a-f-]{36}$/i.test(folder)) throw new Error(`illegal render folder: ${folder}`);
 }
 
 async function fileExists(path: string): Promise<boolean> {
@@ -85,6 +95,10 @@ export function createLocalRenderStore(rootDir?: string): RenderStore {
     async delete(key) {
       const path = pathOf(key);
       try { await unlink(path); } catch (error) { if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error; }
+    },
+    async deleteFolder(folder) {
+      assertRenderFolder(folder);
+      await rm(join(root, folder), { recursive: true, force: true });
     },
     async url() {
       return null;
@@ -130,6 +144,20 @@ export function createSupabaseRenderStore(client?: SupabaseClient): RenderStore 
       assertRenderKey(key);
       const { error } = await (await db()).storage.from(RENDERS_BUCKET).remove([key]);
       if (error && !isMissing(error)) throw new Error('private edit reference deletion failed');
+    },
+    async deleteFolder(folder) {
+      assertRenderFolder(folder);
+      const bucket = (await db()).storage.from(RENDERS_BUCKET);
+      // Keys are flat under the folder (`{uuid}/{name}.{ext}`); loop in case a folder ever holds more than one page.
+      for (let round = 0; round < 20; round += 1) {
+        const { data, error } = await bucket.list(folder, { limit: 100 });
+        if (error) { if (isMissing(error)) return; throw new Error('render folder listing failed'); }
+        const paths = (data ?? []).filter((entry) => entry.id !== null).map((entry) => `${folder}/${entry.name}`);
+        if (paths.length === 0) return;
+        const removed = await bucket.remove(paths);
+        if (removed.error && !isMissing(removed.error)) throw new Error('render folder deletion failed');
+      }
+      throw new Error('render folder deletion did not finish');
     },
     async url(key, ttlSeconds, options = {}) {
       assertRenderKey(key);

@@ -1,6 +1,7 @@
 import { NextResponse, type NextRequest } from 'next/server';
 import { createAuthServerClient } from '@/lib/supabase/auth-client';
 import { getSqlRunner } from '@/lib/db/connect';
+import { deletionInProgress } from '@/lib/account/deletion';
 import { SIGNUP_COOKIES } from '@/lib/cookies/wallet';
 import { authFailurePath, authReturnPath, resolveRequestUrl } from '@/lib/routing/surfaces';
 import {
@@ -19,6 +20,11 @@ import {
  *   3. write the locale cookie FROM THE PROFILE — this is what lets the edge run the precedence
  *      chain without a service-role round trip on every request (see middleware.ts);
  *   4. land on the originating page.
+ *
+ * One refusal (docs/RUNBOOK-deletion.md): a sign-in account whose rows have been deleted and whose own
+ * removal is still on a deletion request's list gets NO new profile. The retry of that removal would
+ * cascade the new profile away with anything it paid for, so the session is ended and the person is
+ * sent back with the sign-in notice; once the request closes they can join again.
  *
  * `is_admin` is never derived here. The DB sets it from `auth.users` alone: a confirmed exact
  * @yagiworkshop.xyz email (0038_core_staff_admin.sql, also on this insert), otherwise a manual grant
@@ -57,6 +63,7 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
   }
 
   let profileLocale: Locale = uiLocale;
+  let beingDeleted = false;
   try {
     const sql = await getSqlRunner();
     if (sql !== null) {
@@ -67,6 +74,8 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
       const row = existing.rows[0];
       if (row !== undefined) {
         profileLocale = isLocale(row.locale) ? row.locale : uiLocale;
+      } else if (await deletionInProgress(sql, data.user.id)) {
+        beingDeleted = true;
       } else {
         await sql.transaction(async (tx) => {
           // The column default supplies the 3; naming it here would be a second place to get the
@@ -98,6 +107,12 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
   } catch {
     // A profile write failure must not strand the user mid-login; the session is already valid,
     // and the rolled-back transaction retries wholesale on the next login.
+  }
+
+  if (beingDeleted) {
+    // The exchange above already set session cookies; take them back before leaving.
+    await supabase.auth.signOut().catch(() => undefined);
+    return NextResponse.redirect(new URL(authFailurePath(url.hostname, uiLocale, 'oauth', next), url.origin));
   }
 
   const response = NextResponse.redirect(new URL(next, url.origin));
