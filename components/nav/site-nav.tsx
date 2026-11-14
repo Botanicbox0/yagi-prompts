@@ -121,10 +121,40 @@ export function SiteNav({
     return () => window.removeEventListener('resize', onResize);
   }, [open]);
 
+  const isCreator = audience === 'creator';
   const signInHref = explicitSignInHref ?? `/auth/signin?next=${encodeURIComponent(signInNext)}&locale=${locale}`;
   const modeLinks = (
-    <div role="group" aria-label={audienceLabel} data-audience-switch className="flex shrink-0 items-center gap-0.5 rounded-full border border-hairline p-0.5 text-[0.6875rem] font-medium sm:text-xs">
-      {modes.map(mode => <a key={mode.id} href={mode.href} aria-current={mode.id === audience ? 'page' : undefined} data-audience={mode.id} className={`inline-flex min-h-10 items-center justify-center rounded-full px-2.5 transition-colors sm:px-3 ${mode.id === audience ? 'bg-black text-white' : 'hover:bg-black/5'}`}>{mode.label}</a>)}
+    <div
+      role="group"
+      aria-label={audienceLabel}
+      data-audience-switch
+      className={
+        isCreator
+          ? 'flex shrink-0 items-center gap-0.5 rounded-full bg-[#F4F4F5] p-1 text-[0.6875rem] font-semibold sm:text-xs'
+          : 'flex shrink-0 items-center gap-0.5 rounded-full border border-hairline p-0.5 text-[0.6875rem] font-medium sm:text-xs'
+      }
+    >
+      {modes.map((mode) => (
+        <a
+          key={mode.id}
+          href={mode.href}
+          aria-current={mode.id === audience ? 'page' : undefined}
+          data-audience={mode.id}
+          className={
+            isCreator
+              ? `inline-flex h-8 min-h-8 items-center justify-center rounded-full px-3 transition-colors sm:px-3.5 ${
+                  mode.id === audience
+                    ? 'bg-[#09090B] text-white'
+                    : 'text-[#71717A] hover:text-[#09090B]'
+                }`
+              : `inline-flex min-h-10 items-center justify-center rounded-full px-2.5 transition-colors sm:px-3 ${
+                  mode.id === audience ? 'bg-black text-white' : 'hover:bg-black/5'
+                }`
+          }
+        >
+          {mode.label}
+        </a>
+      ))}
     </div>
   );
 
@@ -132,7 +162,7 @@ export function SiteNav({
     <>
       <a
         href="#main"
-        className="text-accent sr-only bg-white px-4 py-2 focus:not-sr-only focus:fixed focus:top-2 focus:left-2 focus:z-[60]"
+        className={`${isCreator ? 'text-[#09090B]' : 'text-accent'} sr-only bg-white px-4 py-2 focus:not-sr-only focus:fixed focus:top-2 focus:left-2 focus:z-[60]`}
       >
         {labels.skipToContent}
       </a>
@@ -142,10 +172,13 @@ export function SiteNav({
         data-audience-nav={audience}
         className={[
           'fixed inset-x-0 top-0 z-50 h-16 text-on-surface',
-          // A stable white bar gains a separator after the page moves.
-          scrolled
-            ? 'border-b border-hairline bg-surface'
-            : 'border-b border-transparent bg-surface',
+          isCreator
+            ? scrolled
+              ? 'border-b border-[#09090B]/[0.08] bg-white/84 backdrop-blur-[16px] backdrop-saturate-[1.4]'
+              : 'border-b border-transparent bg-white/84 backdrop-blur-[16px] backdrop-saturate-[1.4]'
+            : scrolled
+              ? 'border-b border-hairline bg-surface'
+              : 'border-b border-transparent bg-surface',
         ].join(' ')}
       >
         <nav
@@ -169,7 +202,17 @@ export function SiteNav({
                 key={link.href}
                 href={link.href}
                 aria-current={current(link) ? (link.href.includes('#') ? 'location' : 'page') : undefined}
-                className={`inline-flex min-h-10 items-center text-xs font-medium ${current(link) ? 'text-accent underline decoration-2 underline-offset-8' : 'hover:text-accent'}`}
+                className={
+                  isCreator
+                    ? `inline-flex min-h-10 items-center text-xs transition-colors ${
+                        current(link)
+                          ? 'font-semibold text-[#09090B] underline decoration-2 underline-offset-8'
+                          : 'font-medium text-[#52525B] hover:text-[#09090B]'
+                      }`
+                    : `inline-flex min-h-10 items-center text-xs font-medium ${
+                        current(link) ? 'text-accent underline decoration-2 underline-offset-8' : 'hover:text-accent'
+                      }`
+                }
               >
                 <TextSwap>{link.label}</TextSwap>
               </a>
@@ -195,7 +238,7 @@ export function SiteNav({
             className="ml-2 min-h-11 min-w-11 shrink-0 text-xs font-medium lg:hidden"
           >
             {audience === 'creator' && creatorSession.signedIn && accountLabels
-              ? <span data-creator-mobile-account aria-hidden="true" className="relative mx-auto flex size-9 items-center justify-center rounded-full bg-accent text-xs font-semibold text-white">{Array.from(creatorSession.displayName ?? accountLabels.fallbackName)[0]?.toUpperCase()}<span className="absolute -right-0.5 -bottom-0.5 size-2.5 rounded-full border-2 border-white bg-accent" /></span>
+              ? <span data-creator-mobile-account aria-hidden="true" className="relative mx-auto flex size-9 items-center justify-center rounded-full bg-[#FF58AE] text-xs font-bold text-[#09090B]">{Array.from(creatorSession.displayName ?? accountLabels.fallbackName)[0]?.toUpperCase()}<span className="absolute -right-0.5 -bottom-0.5 size-2.5 rounded-full border-2 border-white bg-[#FF58AE]" /></span>
               : <TextSwap>{labels.menu}</TextSwap>}
           </button>
           </div>
@@ -213,14 +256,18 @@ export function SiteNav({
           className="fixed inset-0 z-[55] flex flex-col overflow-y-auto bg-surface text-on-surface lg:hidden"
         >
           <div className="flex h-16 items-center justify-between px-gutter">
-            <span className="font-display text-[1.05rem] leading-none font-black uppercase">
+            <span className={isCreator ? 'text-base font-bold tracking-tight text-[#09090B]' : 'font-display text-[1.05rem] leading-none font-black uppercase'}>
               {labels.brand}
             </span>
             <button
               ref={closeButtonRef}
               type="button"
               onClick={() => setOpen(false)}
-              className="font-label text-eyebrow uppercase"
+              className={
+                isCreator
+                  ? 'inline-flex min-h-9 items-center rounded-full bg-[#F4F4F5] px-3.5 py-1.5 text-xs font-semibold text-[#09090B]'
+                  : 'font-label text-eyebrow uppercase'
+              }
             >
               <TextSwap>{labels.close}</TextSwap>
             </button>
@@ -228,7 +275,7 @@ export function SiteNav({
 
           <div className="flex flex-1 flex-col justify-between px-gutter pt-10 pb-12">
             <div className="mb-8 self-start" onClick={() => setOpen(false)}>{modeLinks}</div>
-            {audience === 'creator' && creatorSession.signedIn && accountLabels && <p className="mb-6 break-words text-sm font-medium text-accent">{creatorSession.displayName ?? accountLabels.fallbackName}</p>}
+            {audience === 'creator' && creatorSession.signedIn && accountLabels && <p className="mb-6 break-words text-sm font-semibold text-[#52525B]">{creatorSession.displayName ?? accountLabels.fallbackName}</p>}
             <ul className="flex flex-col gap-6">
               {links.map((link) => (
                 <li key={link.href}>
@@ -236,7 +283,15 @@ export function SiteNav({
                     href={link.href}
                     onClick={() => setOpen(false)}
                     aria-current={current(link) ? (link.href.includes('#') ? 'location' : 'page') : undefined}
-                    className={`text-[clamp(1.7rem,7vw,3rem)] leading-tight font-semibold tracking-tight ${current(link) ? 'text-accent' : ''}`}
+                    className={`text-[clamp(1.7rem,7vw,3rem)] leading-tight font-semibold tracking-tight ${
+                      current(link)
+                        ? isCreator
+                          ? 'text-[#09090B] underline decoration-2 underline-offset-8'
+                          : 'text-accent'
+                        : isCreator
+                          ? 'text-[#52525B]'
+                          : ''
+                    }`}
                   >
                     <TextSwap>{link.label}</TextSwap>
                   </a>

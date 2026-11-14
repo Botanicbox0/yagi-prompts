@@ -49,7 +49,8 @@ describe('MakerMonetizationShowcase & Design System v2 personal landing', () => 
 
     expect(html).toContain('data-direct-scene-door');
     expect(html).toContain('data-direct-scene-link');
-    expect(html).toContain('bg-[#FF58AE]');
+    expect(html).toContain('audience-button-quiet');
+    expect(html).not.toContain('bg-[#FF58AE]');
     expect(html).not.toContain('#3875C5');
     expect(html).not.toContain('#3063A7');
     expect(html).not.toContain('80%');

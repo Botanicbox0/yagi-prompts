@@ -77,12 +77,13 @@ export default async function LandingPage({ params }: { params: Promise<{ locale
             cardSecondsPattern={labels.cardSeconds}
             cardAuthorPattern={labels.cardAuthor}
             cardAuthorAnonymous={labels.cardAuthorAnonymous}
+            copy={dict.creatorJourney.sequenceDispatch}
           />
           <PromptRail id="video" heading={t.video.rail} lede={t.video.railLede} cards={templates.video} locale={locale} labels={labels} useCaseLabels={useCaseLabels} emptyLabel={t.video.emptyTitle} filteredEmptyLabel={dict.prompts.filterEmpty} topClassName="mt-0" />
           <div className="mt-8 flex flex-wrap items-center gap-6">
             <a href={templatesHref(locale,'video')} data-all-video className="inline-flex min-h-11 items-center text-sm font-medium underline underline-offset-4">{t.allVideo} ↗</a>
             {templates.image.length > 0 && (
-              <a href="#image" data-jump-image-rail className="inline-flex min-h-11 items-center text-sm font-semibold text-[#09090B] underline underline-offset-4 transition-colors hover:text-[#CC1573]">
+              <a href="#image" data-jump-image-rail className="inline-flex min-h-11 items-center text-sm font-semibold text-[#09090B] underline underline-offset-4 transition-colors hover:opacity-70">
                 {locale === 'en' ? 'Jump to 5-Shot Photo Series ↓' : '5장 화보집 바로 보기 ↓'}
               </a>
             )}

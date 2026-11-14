@@ -20,6 +20,7 @@ describe('Make Your Own Video & Maker 80% Revenue Engine + Selective Frame Picke
     expect(recommended?.navKo).toBe('나만의 영상 제작하기');
     expect(recommended?.navEn).toBe('Make Your Own Video');
     expect(recommended?.headlineKo).toContain('저장해 둔 영상으로 내 장면을 만들고');
+    expect(recommended?.headlineKo).not.toContain('80%');
     expect(HIGH_QUALITY_REQUEST_GUIDE).toHaveLength(3);
     expect(MAKER_DB_ARCHITECTURE_READINESS.map((t) => t.table)).toEqual([
       'platform_creators',
@@ -123,6 +124,9 @@ describe('Make Your Own Video & Maker 80% Revenue Engine + Selective Frame Picke
     expect(html).not.toContain('{{selfie}}');
     expect(html).not.toContain('5200K');
     expect(html).not.toContain('#ED1E1E');
+    expect(html).not.toContain('#3875C5');
+    expect(html).not.toContain('#3063A7');
+    expect(html).not.toContain('80%');
     expect(html).not.toContain('platform_creators');
     expect(html).not.toContain('platform_formats');
     expect(html).not.toContain('platform_settlements');

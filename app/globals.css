@@ -14,6 +14,7 @@
   --color-black: #000000;
   --color-white: #ffffff;
   --color-blue: #ff58ae; /* COLOUR.accent, lib/design/identity.ts (Magnific Pink v2) */
+  --color-accent-pink: #ff58ae;
   --color-sky: #f4f4f5; /* COLOUR.sky: monochrome secondary surface */
   --color-muted: #71717a; /* COLOUR.muted: captions and helper descriptions */
   --color-workspace-canvas: #ffffff;
@@ -216,7 +217,7 @@ dialog, [role='dialog'] { overscroll-behavior: contain; }
 .audience-subheading { font-weight: 600; line-height: 1.15; letter-spacing: -0.035em; text-wrap: balance; }
 .audience-eyebrow { font-size: 0.72rem; font-weight: 500; letter-spacing: 0.04em; opacity: 0.55; }
 /* The two buttons of the identity (components/brand-studio/v7.module.css `.cta` and `.ghost`): the one
-   blue fill for the screen's main action, and a white pill with the line for everything beside it.
+   Magnific Pink fill for the screen's main action, and a white pill with the line for everything beside it.
    In the components layer, so a call site can still size one with utilities (`text-sm`, `px-4`, `w-full`). */
 @layer components {
   .audience-button { display: inline-flex; min-height: 44px; align-items: center; justify-content: center; gap: 0.75rem; border-radius: 9999px; background: var(--color-blue); color: var(--color-workspace-ink); box-shadow: none; padding: 0 1.5rem; font-size: 0.9375rem; font-weight: 650; transition: background-color var(--duration-fast) var(--ease-editorial), transform var(--duration-base) var(--ease-editorial); }

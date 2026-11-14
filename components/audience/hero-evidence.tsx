@@ -18,8 +18,8 @@ export function HeroEvidence({
 }) {
   if (pair === null) return null;
   return (
-    <figure data-hero-evidence className="mt-6 w-full max-w-[23rem] rounded-2xl bg-[#F4F4F5] p-3">
-      <div className="grid grid-cols-[0.86fr_auto_1.14fr] items-center gap-2.5">
+    <figure data-hero-evidence className="mt-5 w-full max-w-[26rem] rounded-[16px] bg-[#F4F4F5] p-3 sm:mt-6">
+      <div className="grid grid-cols-[0.8fr_auto_1.2fr] items-center gap-2.5">
         <EvidenceFrame src={pair.before} alt={copy.evidenceSelfieAlt} label={copy.evidenceSelfie} />
         <span aria-hidden="true" className="-mt-4 text-xs text-[#71717A]">→</span>
         <EvidenceFrame src={pair.after} videoSrc={pair.afterVideo} alt={copy.evidenceSceneAlt} label={copy.evidenceScene} wide />
@@ -44,13 +44,13 @@ function EvidenceFrame({
 }) {
   return (
     <div className="flex min-w-0 flex-col">
-      <div className="relative h-24 w-full overflow-hidden rounded-[12px] bg-white sm:h-28">
+      <div className={`relative w-full overflow-hidden rounded-[12px] bg-white max-h-36 ${wide ? 'aspect-[4/3]' : 'aspect-[4/5]'}`}>
         {/* eslint-disable-next-line @next/next/no-img-element -- a content slot URL, any host */}
         <img
           src={src}
           alt={alt}
           width={wide ? 640 : 400}
-          height={500}
+          height={wide ? 480 : 500}
           decoding="async"
           fetchPriority="high"
           className={`h-full w-full object-cover ${wide ? 'object-center' : 'object-[50%_22%]'}`}

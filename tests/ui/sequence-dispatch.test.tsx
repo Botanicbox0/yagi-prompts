@@ -106,7 +106,7 @@ describe('SequenceDispatchSection & personal home editorial curation (2026-11-04
 
     expect(htmlKo).toContain('data-sequence-editorial');
     expect(htmlKo).toContain('data-weekly-dispatch');
-    expect(htmlKo).toContain('THIS WEEK IN TWINGS');
+    expect(htmlKo).toContain('이번 주 큐레이션');
     expect(htmlKo).toContain('data-dispatch-card="aquarium-goldfish"');
     expect(htmlKo).toContain('data-dispatch-card="city-fashion-montage"');
     expect(htmlKo).toContain('data-dispatch-card="fashion-show-arrival"');
@@ -117,16 +117,17 @@ describe('SequenceDispatchSection & personal home editorial curation (2026-11-04
     expect(htmlKo).toContain('data-dispatch-video="city-fashion-montage"');
     expect(htmlKo).toContain('data-dispatch-video="fashion-show-arrival"');
 
-    // Instant medium switcher (Video ⇄ 5-Shot Photo Series) + Image-Only plan priority toggle
+    // Instant medium switcher (Video ⇄ Photo Series), without developer plan-tier toggle chrome
     expect(htmlKo).toContain('data-gallery-medium-switcher');
     expect(htmlKo).toContain('data-medium-tab="video"');
     expect(htmlKo).toContain('data-medium-tab="image"');
-    expect(htmlKo).toContain('data-plan-tier-toggle="image_only"');
+    expect(htmlKo).not.toContain('data-plan-tier-toggle');
 
     expect(htmlKo).toContain('data-dispatch-image-spotlight');
     expect(htmlKo).toContain('data-dispatch-image-featured="bridal-editorial-5-shots"');
     expect(htmlKo).toContain('5장 에디토리얼 화보 세트');
-    expect(htmlKo).toContain('FRAMES 01–05');
+    expect(htmlKo).not.toContain('FRAMES 01–05');
+    expect(htmlKo).toContain('5컷 연속 화보');
 
     // Meaningful mood curator pills
     expect(htmlKo).toContain('data-editorial-mood-curator');
@@ -159,5 +160,35 @@ describe('SequenceDispatchSection & personal home editorial curation (2026-11-04
     expect(htmlImageOnly).toContain('data-plan-tier="image_only"');
     expect(htmlImageOnly).toContain('data-image-priority="first"');
     expect(htmlImageOnly).toContain('data-medium-tab="image" aria-selected="true"');
+  });
+
+  it('prioritizes purchasable image series ahead of not-for-sale image series in the spotlight', () => {
+    const closedSeries = makeCard({
+      slug: 'closed-series-first',
+      title: 'Closed Series',
+      medium: 'image',
+      priceCents: 0,
+      runtimeSeconds: null,
+    });
+    const saleSeries = makeCard({
+      slug: 'bridal-editorial-5-shots',
+      title: 'Bridal Editorial',
+      medium: 'image',
+      priceCents: 400,
+      runtimeSeconds: null,
+    });
+
+    const html = renderToStaticMarkup(
+      <SequenceDispatchSection
+        locale="ko"
+        hotVideos={[]}
+        imageSeries={[closedSeries, saleSeries]}
+        cardSecondsPattern="{seconds}초"
+        cardAuthorPattern="by @{handle}"
+        cardAuthorAnonymous="제작"
+      />
+    );
+
+    expect(html).toContain('data-dispatch-image-featured="bridal-editorial-5-shots"');
   });
 });

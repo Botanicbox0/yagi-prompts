@@ -289,38 +289,38 @@ export default async function TemplatePage({ params }: RouteParams) {
                   </>
                 )}
               </div>
-              <div className="min-w-0">
-                <p className="font-label text-eyebrow uppercase">
-                  <span data-medium-chip className="text-accent">{dict.nav[card.medium]}</span>
+              <div className="min-w-0 lg:sticky lg:top-24">
+                <p className="text-[13px] font-medium text-[#71717A]">
+                  <span data-medium-chip>{dict.nav[card.medium]}</span>
                 </p>
-                <h1 className="mt-2 font-display text-[clamp(1.75rem,3vw,2.5rem)] leading-[1.12] font-black tracking-[-0.025em] break-keep uppercase">{title}</h1>
+                <h1 className="mt-2 font-display text-[clamp(1.75rem,3vw,2.5rem)] leading-[1.16] font-bold tracking-[-0.028em] text-balance break-keep">{title}</h1>
                 {/* §7.5 (founder 2026-10-30): a creative's template says who made it and opens their
                     profile — one line under the title, nothing more. Bio, place and links live on the profile. */}
                 {makerRest && card.authorHandle && (
                   <a data-template-maker={card.authorHandle} data-template-credit href={`/${locale}${makerRest}`} className="group mt-3 flex max-w-md min-h-11 items-center gap-3">
                     <CreativeAvatar handle={card.authorHandle} name={maker?.displayName ?? null} src={maker?.avatar ?? null} size={36} eager />
                     <span className="min-w-0 flex-1">
-                      <span className="block truncate text-xs text-black/55">{t.makerBlockHeading}</span>
+                      <span className="block truncate text-xs text-[#71717A]">{t.makerBlockHeading}</span>
                       <span className="block truncate text-sm font-semibold group-hover:underline">
                         {maker?.displayName ?? `@${card.authorHandle}`}
-                        {maker?.displayName && <span className="ml-1.5 font-normal text-black/55">@{card.authorHandle}</span>}
+                        {maker?.displayName && <span className="ml-1.5 font-normal text-[#71717A]">@{card.authorHandle}</span>}
                       </span>
                     </span>
-                    <span className="shrink-0 text-xs font-medium text-black/70 group-hover:text-black">{t.makerBlockCta} →</span>
+                    <span className="shrink-0 text-xs font-medium text-[#52525B] group-hover:text-[#09090B]">{t.makerBlockCta} →</span>
                   </a>
                 )}
                 <div className="mt-3 flex flex-wrap items-center gap-1.5 text-xs">
                   {!makerRest && (
-                    <span data-template-credit className="inline-flex items-center rounded-full border border-hairline bg-surface px-2.5 py-1 font-medium text-black/80">
+                    <span data-template-credit className="inline-flex items-center rounded-full bg-[#F4F4F5] px-2.5 py-1 font-medium text-[#09090B]">
                       {credit}
                     </span>
                   )}
                   {/* Every public template passed studio review, studio and maker alike (§7.5). */}
-                  <span data-template-verified title={t.verifiedHint} className="inline-flex items-center rounded-full border border-hairline bg-surface px-2.5 py-1 font-medium text-black/75">
+                  <span data-template-verified title={t.verifiedHint} className="inline-flex items-center rounded-full bg-[#F4F4F5] px-2.5 py-1 font-medium text-[#52525B]">
                     {t.verified}
                   </span>
-                  {card.useCase.map((value) => (
-                    <span key={value} className="inline-flex items-center rounded-full border border-hairline px-2.5 py-1 text-black/65">
+                  {card.useCase.filter((v) => v !== 'cinematic').map((value) => (
+                    <span key={value} className="inline-flex items-center rounded-full bg-[#F4F4F5] px-2.5 py-1 text-[#52525B]">
                       {useCaseLabels[value] ?? value}
                     </span>
                   ))}
@@ -344,18 +344,21 @@ export default async function TemplatePage({ params }: RouteParams) {
 
                 {style === null ? (
                   <>
-                    <section data-template-closed className="mt-6 rounded-3xl border border-hairline bg-white p-5 sm:p-6">
-                      <p className="font-display text-[1.5rem] leading-none font-black">{t.notForSale}</p>
-                      <dl data-template-facts className="mt-2.5 flex flex-wrap items-center gap-y-1 text-xs text-black/65">
+                    <section data-template-closed className="mt-6 rounded-[16px] bg-[#F4F4F5] p-5 sm:p-6">
+                      <p className="font-display text-[1.5rem] leading-none font-bold">{t.notForSale}</p>
+                      <dl data-template-facts className="mt-2.5 flex flex-wrap items-center gap-y-1 text-xs text-[#52525B]">
                         {facts.filter(([label]) => label !== t.waitLabel).map(([label, value], idx) => (
                           <div key={label} data-template-fact className="inline-flex items-center">
                             {idx > 0 && <span aria-hidden="true" className="mx-1.5 text-black/30">·</span>}
                             <dt className="sr-only">{label}</dt>
-                            <dd className="inline font-medium text-black/80">{value}</dd>
+                            <dd className="inline font-medium text-[#09090B]">{value}</dd>
                           </div>
                         ))}
                       </dl>
-                      <p className="mt-3 text-sm leading-relaxed text-black/75">{t.notForSaleBody}</p>
+                      <p className="mt-3 text-sm leading-relaxed text-[#52525B]">{t.notForSaleBody}</p>
+                      <a href={templatesHref(locale, card.medium)} data-template-closed-browse className="audience-button-quiet mt-4 min-h-10 px-4 text-xs">
+                        {card.medium === 'image' ? t.closedBrowseImageCta : t.closedBrowseVideoCta} →
+                      </a>
                     </section>
                   </>
                 ) : (
@@ -459,9 +462,9 @@ export default async function TemplatePage({ params }: RouteParams) {
                           <TemplateMakeAvailability copy={makeAvailabilityCopy} oneTimeAvailable={shopOpen} subscriptionEligible={subscriptionQuote !== null} field="body" />
                         </p>
                         {/* The face photo guide is for a selfie; a pet-only card has its own tips beside the pet photo. */}
-                        {!petOnly && <section data-template-photo-guide className="mt-5 rounded-3xl border border-hairline bg-white p-4 sm:p-5">
-                          <h2 className="text-xs font-semibold text-black/85">{dict.selfie.goodExamples}</h2>
-                          <p className="mt-2 text-xs leading-relaxed text-black/70">{dict.studio.signedOutBody}</p>
+                        {!petOnly && <section data-template-photo-guide className="mt-5 rounded-[16px] bg-[#F4F4F5] p-4 sm:p-5">
+                          <h2 className="text-xs font-semibold text-[#09090B]">{dict.selfie.goodExamples}</h2>
+                          <p className="mt-2 text-xs leading-relaxed text-[#52525B]">{dict.studio.signedOutBody}</p>
                           <ul data-studio-photo-examples className="mt-3 grid grid-cols-3 gap-2.5">
                             {photoGuideExamples.map((example) => (
                               <li key={example.id} data-studio-photo-example={example.id}>
@@ -470,8 +473,8 @@ export default async function TemplatePage({ params }: RouteParams) {
                                     {/* eslint-disable-next-line @next/next/no-img-element -- the public photo guide */}
                                     <img src={example.src} alt="" width={160} height={200} loading="lazy" className={`h-full w-full object-cover ${example.crop}`} />
                                   </div>
-                                  <figcaption className="mt-1.5 flex items-center gap-1 text-xs font-medium text-black/80">
-                                    <span aria-hidden="true" className="text-accent">✓</span>{example.label}
+                                  <figcaption className="mt-1.5 flex items-center gap-1 text-xs font-medium text-[#09090B]">
+                                    <span aria-hidden="true" className="text-[#09090B]">✓</span>{example.label}
                                   </figcaption>
                                 </figure>
                               </li>
@@ -484,7 +487,7 @@ export default async function TemplatePage({ params }: RouteParams) {
                 )}
 
                 {/* The definition, under the first screen (AGENTS.md §7 GEO): in the HTML, not in the way. */}
-                <p data-template-description className="mt-6 max-w-detail text-sm leading-relaxed text-black/65">{description}</p>
+                <p data-template-description className="mt-6 max-w-detail text-sm leading-relaxed text-[#52525B]">{style !== null ? description : dict.creatorJourney.body}</p>
               </div>
             </header>
 
@@ -494,21 +497,21 @@ export default async function TemplatePage({ params }: RouteParams) {
 
             {/* The earn loop: campaigns that ask for exactly this template. */}
             {campaigns.length > 0 && (
-              <section data-template-campaigns className="mt-16 border-t border-hairline pt-10">
-                <p className="text-accent font-label text-eyebrow uppercase">{dict.campaigns.eyebrow}</p>
-                <h2 className="mt-4 font-display text-[clamp(1.4rem,2.6vw,2rem)] leading-[0.95] font-black uppercase">{t.campaignsHeading}</h2>
-                <ul className="mt-6 flex flex-col divide-y divide-hairline border-y border-hairline">
+              <section data-template-campaigns className="mt-16 border-t border-[#09090B]/[0.08] pt-10">
+                <p className="text-[13px] font-medium text-[#71717A]">{dict.campaigns.eyebrow}</p>
+                <h2 className="audience-heading mt-3">{t.campaignsHeading}</h2>
+                <ul className="mt-6 flex flex-col divide-y divide-[#09090B]/[0.08] border-y border-[#09090B]/[0.08]">
                   {campaigns.map((c) => (
                     <li key={c.id} className="flex flex-wrap items-center justify-between gap-4 py-4">
                       <div>
-                        <a href={campaignHref(locale, c.slug)} className="font-display text-[1.2rem] leading-none font-black uppercase">
+                        <a href={campaignHref(locale, c.slug)} className="text-base font-bold tracking-[-0.015em] text-[#09090B] hover:underline">
                           {localize(c.title, locale).replace(/\s+/g, ' ')}
                         </a>
-                        <p className="mt-1.5 font-mono text-[0.75rem] opacity-60">
+                        <p className="mt-1 text-xs text-[#71717A]">
                           {c.hostName} · {cLabels.status[c.status]}
                         </p>
                       </div>
-                      <a href={campaignHref(locale, c.slug)} className="inline-block border border-current px-4 py-2 font-label text-eyebrow uppercase">
+                      <a href={campaignHref(locale, c.slug)} className="audience-button-quiet min-h-10 px-4 text-xs">
                         <TextSwap>{dict.campaigns.applyCta} →</TextSwap>
                       </a>
                     </li>

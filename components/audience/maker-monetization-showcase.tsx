@@ -34,19 +34,19 @@ export function MakerMonetizationShowcase({
       data-theme="light"
       data-maker-monetization-showcase
       lang={locale}
-      className="border-t border-[#E4E4E7] bg-white py-14 text-[#09090B] shadow-none sm:py-20"
+      className="border-t border-[#E4E4E7] bg-white py-10 text-[#09090B] shadow-none sm:py-14"
     >
       <div className="mx-auto w-full max-w-[1440px] px-4 sm:px-6 lg:px-10">
-        <div className="rounded-[24px] border border-[#E4E4E7] bg-[#F4F4F5] p-6 shadow-none sm:p-8 lg:p-10">
+        <div className="rounded-[16px] bg-[#F4F4F5] p-6 shadow-none sm:p-8 lg:p-10">
           <div className="flex flex-col gap-6 lg:flex-row lg:items-end lg:justify-between">
             <div className="max-w-2xl">
               <div className="flex flex-wrap items-center gap-2.5">
-                <span className="font-mono text-[0.72rem] font-semibold tracking-[0.08em] text-[#CC1573] uppercase">
+                <span className="text-[13px] font-medium text-[#71717A]">
                   {t.eyebrow}
                 </span>
                 <span
                   data-maker-showcase-payout
-                  className="inline-flex items-center rounded-full border border-[#E4E4E7] bg-white px-3 py-1 text-[0.72rem] font-semibold text-[#CC1573]"
+                  className="inline-flex items-center rounded-full bg-white px-3 py-1 text-xs font-medium text-[#52525B]"
                 >
                   {t.payoutBadge}
                 </span>
@@ -71,7 +71,7 @@ export function MakerMonetizationShowcase({
               <a
                 href="/creators/workspace"
                 data-maker-showcase-cta
-                className="inline-flex min-h-11 items-center justify-center gap-2 rounded-full bg-[#FF58AE] px-6 py-2.5 text-sm font-bold text-[#09090B] shadow-none transition-colors hover:bg-[#FF73BA] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#FF58AE]"
+                className="inline-flex min-h-11 items-center justify-center gap-2 rounded-full bg-[#FF58AE] px-6 py-2.5 text-sm font-bold text-[#09090B] shadow-none transition-colors hover:bg-[#FF389F] active:bg-[#FF1A90] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#FF58AE]"
               >
                 <span>{t.cta}</span>
                 <span aria-hidden="true">→</span>
@@ -86,7 +86,7 @@ export function MakerMonetizationShowcase({
             {steps.map((step) => (
               <article
                 key={step.num}
-                className="flex flex-col justify-between rounded-[18px] border border-[#E4E4E7] bg-white p-5 shadow-none"
+                className="flex flex-col justify-between rounded-[16px] bg-white p-5 shadow-none"
               >
                 <div>
                   <h3
