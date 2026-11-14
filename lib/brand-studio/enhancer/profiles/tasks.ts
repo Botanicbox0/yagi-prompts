@@ -23,7 +23,17 @@ function shotTable(shots: readonly PlannedShot[]): string {
 
 function imageTask(input: EnhanceInput, binding: Binding): string {
   const attached = binding.bound.some((b) => b.token);
-  return `Task: a new still image from the request${attached ? ', using the attached images for what each one supplies' : ''}.`;
+  if (!attached) {
+    return 'Task: a new still image from the request.';
+  }
+  return `Task: a new still image from the request, using the attached images for what each one supplies.
+Inspect every attached picture ("Picture of ...") directly alongside the customer's "request", "role", "take" and "leaveOut". Never write generic blind placeholders when pixels are attached; pair each reference token with concrete visible traits from its picture:
+- product: describe its actual visible silhouette, material and opacity (such as clear, frosted or tinted glass, matte tube, brushed metal, paperboard), cap or closure geometry, finish and surface colours, while keeping the exact label, proportions and colours of the token; leave out its original background and lighting unless asked.
+- logo: describe visible mark shape, colour contrast and natural surface placement, and require the exact mark to stay unredrawn, unmirrored, un-restyled and properly scaled.
+- model: lock the visible facial structure, hairstyle, build and natural matte skin texture (without plastic or waxy retouching); take wardrobe or pose only when asked or listed in "take".
+- style / location: extract visible key-light direction, highlight softness, shadow fall, surface materials and dominant colour palette from the picture, while leaving out any unrequested subject or product shown in it.
+- when "role" is null: infer what each picture supplies by comparing what is visibly inside the picture with the customer's request.
+Optical integration: unite all kept elements into ONE physical photograph with consistent key-light direction, colour temperature, surface reflections or refraction and contact shadows rather than a pasted collage.`;
 }
 
 function regionTask(input: EnhanceInput, binding: Binding): string {
@@ -32,11 +42,14 @@ function regionTask(input: EnhanceInput, binding: Binding): string {
   const sources = others.length
     ? ` ${others.join(', ')} ${others.length === 1 ? 'is a source' : 'are sources'} for the change (a logo, a product, a person, a texture); take only what the change needs from ${others.length === 1 ? 'it' : 'them'}.`
     : '';
+  const sourceInspection = others.length
+    ? ` Inspect both ${target} (local surface curvature, angle, light direction and grain) and ${others.join(', ')} (exact visible mark, material finish and colours) so the change conforms to ${target}'s perspective, shading and contact shadows.`
+    : '';
   const opening =
     input.profile === 'seedream'
       ? `"In ${target}, change only <the change>; do not move or resize anything else."`
       : `"Using ${target}, change only <the change>; do not move or resize anything else."`;
-  return `Task: change one boxed part of an existing picture.${sources}
+  return `Task: change one boxed part of an existing picture.${sources}${sourceInspection}
 Image 1 (${target}) is an enlarged crop cut out from a larger photograph, so it may look soft. Keep ${target}'s exact framing, camera angle, object scale, outer silhouette, contours, lighting direction, colour palette, and pixel positions completely unchanged. Never redraw, enlarge, or re-shape the surrounding object (never invent curvature or new geometry). Apply ONLY the requested local change, then keep every surrounding pixel identical to ${target}.
 Start with ${opening} Then say how the changed part must look, then the keep-list (exact object scale, outer silhouette, contours, light direction, colour, shadows, texture, grain and pixel positions of ${target}).
 Never zoom, crop, reframe, extend, rotate or change the aspect. Do not describe or change anything outside the change.`;

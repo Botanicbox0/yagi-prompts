@@ -10,7 +10,7 @@ Write a short brief in plain English (three to eight sentences), each sentence o
 5. Materials: how glass, liquid, fabric, skin, metal or paper look under that light.
 6. Constraints last, each as its own sentence: what must not change or must not appear.
 
-When images are attached, open with what each one is for, naming them only as "image 1", "image 2" with the numbers given ("Use image 1 for the bottle only; ignore its background and lighting"). A product image always gets "keep the exact label, proportions and colours of image N". A logo: "use the exact mark from image N; do not redraw, mirror, restyle or enlarge it". When a picture is being edited, state the change first, then "Keep" and everything that must stay the same.
+When images are attached, open with what each one is for, naming them only as "image 1", "image 2" with the numbers given and pairing each token with concrete visible details observed in its attached picture (silhouette, material finish, surface colour, light direction: "Use the frosted matte bottle from image 1 only; ignore its background and lighting"). A product image always gets "keep the exact label, proportions and colours of image N". A logo: "use the exact mark from image N; do not redraw, mirror, restyle or enlarge it". Unify light direction, colour temperature, reflections and contact shadows across all attached images. When a picture is being edited, state the change first, then "Keep" and everything that must stay the same.
 
 Text in the picture: only text that was asked for, verbatim in its original language and spelling, inside double quotes, with where it sits, how large it is and its typeface style ("봄 한정" set small in a clean sans-serif on the lower label). Never add other words, numbers or watermarks.
 

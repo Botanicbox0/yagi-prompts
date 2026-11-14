@@ -53,6 +53,7 @@ function payload(input: EnhanceInput, binding: Binding, seconds: number | null, 
         take: b.ref.use?.trim() || null,
         leaveOut: b.ref.avoid?.trim() || null,
         frame: b.ref.frame ?? null,
+        visualAttached: Boolean(b.ref.thumb && b.ref.kind === 'image' && THUMB_MIMES.has(b.ref.thumb.mime)),
       })),
     editTarget: binding.editTarget,
     brand: input.brand
@@ -102,7 +103,17 @@ function thumbParts(input: EnhanceInput, binding: Binding): GeminiPart[] {
     const thumb = b.ref.thumb;
     if (!thumb || b.ref.kind !== 'image' || !THUMB_MIMES.has(thumb.mime)) continue;
     const name = b.token ?? b.name;
-    parts.push({ text: `Picture of ${name} (the customer's "${b.ref.label}"${b.ref.role ? `, ${b.ref.role}` : ''}):` });
+    const cues = [
+      `the customer's "${b.ref.label}"`,
+      b.ref.role ? `role: ${b.ref.role}` : 'role: infer from visual content and request',
+      b.ref.use?.trim() ? `take: "${b.ref.use.trim()}"` : null,
+      b.ref.avoid?.trim() ? `leave out: "${b.ref.avoid.trim()}"` : null,
+    ]
+      .filter(Boolean)
+      .join(', ');
+    parts.push({
+      text: `Picture of ${name} (${cues} — inspect the actual pixels for concrete shape, material, surface finish, colours and light cues that serve the request):`,
+    });
     parts.push(inlinePart(thumb.bytes, thumb.mime));
   }
   return parts;
@@ -146,11 +157,13 @@ export async function enhancePrompt(input: EnhanceInput, deps: EnhanceDeps): Pro
       : effectiveInput.kind === 'video_remix' && effectiveInput.video?.method !== 'edit'
         ? planShots(seconds, effectiveInput.video)
         : [];
+    const visualParts = thumbParts(effectiveInput, binding);
+    const hasVisualParts = visualParts.some((p) => 'inlineData' in p);
     const raw = await callGeminiJson(config, deps.fetch, {
       system: buildSystemInstruction(effectiveInput, binding, seconds, shots),
-      parts: [{ text: JSON.stringify(payload(effectiveInput, binding, seconds, shots)) }, ...thumbParts(effectiveInput, binding)],
+      parts: [{ text: JSON.stringify(payload(effectiveInput, binding, seconds, shots)) }, ...visualParts],
       schema: ENHANCER_RESPONSE_SCHEMA,
-      thinking: 'LOW',
+      thinking: hasVisualParts ? 'MEDIUM' : 'LOW',
       timeoutMs: ENHANCE_TIMEOUT_MS,
     });
     const parsed = EnhancerOutputSchema.safeParse(raw);

@@ -7,7 +7,7 @@
 import { confirmedIdentityFor } from '@/lib/brands/identity/service';
 import type { FilmDepth, FilmSheet, FilmShot, StudioErrorCode, StudioReference } from './contracts';
 import { extractStoredFilmSheet, isFilmSheetExpired, readCachedFilmSheet, writeCachedFilmSheet } from './film-sheet';
-import { imageInfo } from './files';
+import { imageInfo, sniffMime, thumbnailWebp } from './files';
 import { studioModel, type StudioImageModel, type StudioModel } from './models';
 import { resolveReferences, type ResolvedRef } from './plan';
 import { StudioDenied } from './access';
@@ -52,6 +52,8 @@ export async function brandSummary(deps: Pick<StudioDeps, 'sql'>, organizationId
   }
 }
 
+const ENHANCER_IMAGE_MIMES = new Set(['image/jpeg', 'image/png', 'image/webp']);
+
 export async function enhanceReferences(deps: Pick<StudioDeps, 'media'>, refs: readonly ResolvedRef[]): Promise<EnhanceInput['references']> {
   const out: EnhanceInput['references'] = [];
   for (const r of refs) {
@@ -59,6 +61,23 @@ export async function enhanceReferences(deps: Pick<StudioDeps, 'media'>, refs: r
     if (r.thumbKey) {
       try {
         thumb = { bytes: await deps.media.read(r.thumbKey), mime: 'image/webp' };
+      } catch {
+        thumb = undefined;
+      }
+    }
+    if (!thumb && r.kind === 'image' && r.key) {
+      try {
+        const rawBytes = await deps.media.read(r.key);
+        if (rawBytes.byteLength > 0) {
+          try {
+            thumb = { bytes: await thumbnailWebp(rawBytes, 768), mime: 'image/webp' };
+          } catch {
+            const sniffed = sniffMime(rawBytes);
+            if (sniffed && ENHANCER_IMAGE_MIMES.has(sniffed)) {
+              thumb = { bytes: rawBytes, mime: sniffed };
+            }
+          }
+        }
       } catch {
         thumb = undefined;
       }
