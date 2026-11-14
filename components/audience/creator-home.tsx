@@ -25,28 +25,30 @@ export function CreatorHero({ dict, locale, featured, evidence = null }: { dict:
   const ratio = measured ? `${measured.w} / ${measured.h}` : '16 / 9';
   const [ratioWidth, ratioHeight] = ratio.split('/').map(Number);
   const portrait = (ratioWidth ?? 16) < (ratioHeight ?? 9);
-  const definition = <p data-service-definition className={`${evidence === null ? 'mt-6 text-base' : 'mt-8 text-sm'} max-w-lg leading-relaxed text-black/65`}>{t.body}</p>;
+  const definition = <p data-service-definition className={`${evidence === null ? 'mt-6 max-w-lg text-base text-[#52525B]' : 'mt-6 max-w-2xl border-t border-black/[0.06] pt-4 text-sm text-[#52525B]'} leading-relaxed`}>{t.body}</p>;
   return <section data-section data-theme="light" data-creator-hero data-hero-has-evidence={evidence === null ? undefined : ''} className="section relative isolate">
-    <div className="audience-shell grid items-center gap-10 pt-28 pb-12 lg:grid-cols-[0.98fr_1.02fr] lg:gap-12 lg:pt-32 lg:pb-20">
-      <div className="flex flex-col justify-center">
-        <p className="audience-eyebrow">{t.eyebrow}</p>
-        <h1 className="audience-title mt-5 whitespace-pre-line">{t.title}</h1>
-        {evidence === null && definition}
-        <HeroEvidence pair={evidence} copy={t} />
-        <div className={`${evidence === null ? 'mt-8' : 'mt-6'} flex flex-wrap items-center gap-5`}>
-          <a href={templatesHref(locale, 'video')} data-hero-video className="audience-button">{t.browse} ↗</a>
-          <a href="#how-it-works" className="inline-flex min-h-11 items-center text-sm underline underline-offset-4">{t.how}</a>
+    <div className="audience-shell pt-20 pb-8 lg:pt-28 lg:pb-12">
+      <div className="grid items-center gap-7 lg:grid-cols-[0.98fr_1.02fr] lg:gap-12">
+        <div className="flex flex-col justify-center">
+          <p className="audience-eyebrow">{t.eyebrow}</p>
+          <h1 className="audience-title mt-3.5 whitespace-pre-line sm:mt-5">{t.title}</h1>
+          {evidence === null && definition}
+          <HeroEvidence pair={evidence} copy={t} />
+          <div className={`${evidence === null ? 'mt-8' : 'mt-6'} flex flex-wrap items-center gap-5`}>
+            <a href={templatesHref(locale, 'video')} data-hero-video className="audience-button">{t.browse} ↗</a>
+            <a href="#how-it-works" className="inline-flex min-h-11 items-center text-sm underline underline-offset-4">{t.how}</a>
+          </div>
+          <p data-creator-availability className="mt-4 max-w-md text-xs leading-relaxed text-[#52525B]"><CreatorAvailabilityNotice copy={{ ready: t.ready, preparing: t.preparing, subscriptionReady: t.subscriptionReady, subscriptionPaused: t.subscriptionPaused }} oneTimeAvailable={storefrontOpen()} /></p>
         </div>
-        <p data-creator-availability className="mt-5 max-w-md text-xs leading-relaxed text-black/65"><CreatorAvailabilityNotice copy={{ ready: t.ready, preparing: t.preparing, subscriptionReady: t.subscriptionReady, subscriptionPaused: t.subscriptionPaused }} oneTimeAvailable={storefrontOpen()} /></p>
-        {evidence !== null && definition}
+        {featured && <article data-featured-template={featured.slug} data-media-host className={`relative min-w-0 w-full ${portrait ? 'max-w-sm justify-self-center' : ''}`}>
+          <CreatorPreview poster={featured.poster} video={featured.video} title={title!} href={templateHref(locale, featured.slug)} ratio={ratio} labels={{ play: t.playPreview, pause: t.pausePreview }} fallback={<TypographicPoster title={title!} slug={featured.slug} kicker="" ratio={ratio} />} />
+          <a href={templateHref(locale, featured.slug)} className="mt-3 flex items-baseline justify-between gap-3 text-sm font-medium tracking-[-0.01em]">
+            <span>{title}</span>
+            <span aria-hidden="true" className="text-muted">↗</span>
+          </a>
+        </article>}
       </div>
-      {featured && <article data-featured-template={featured.slug} data-media-host className={`relative min-w-0 w-full ${portrait ? 'max-w-sm justify-self-center' : ''}`}>
-        <CreatorPreview poster={featured.poster} video={featured.video} title={title!} href={templateHref(locale, featured.slug)} ratio={ratio} labels={{ play: t.playPreview, pause: t.pausePreview }} fallback={<TypographicPoster title={title!} slug={featured.slug} kicker="" ratio={ratio} />} />
-        <a href={templateHref(locale, featured.slug)} className="mt-3 flex items-baseline justify-between gap-3 text-sm font-medium tracking-[-0.01em]">
-          <span>{title}</span>
-          <span aria-hidden="true" className="text-muted">↗</span>
-        </a>
-      </article>}
+      {evidence !== null && definition}
     </div>
   </section>;
 }

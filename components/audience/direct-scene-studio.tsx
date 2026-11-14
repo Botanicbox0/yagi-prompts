@@ -2,6 +2,7 @@
 
 import { useMemo, useState } from 'react';
 import type { Locale } from '@/lib/i18n/config';
+import { getDictionary } from '@/lib/i18n/dictionaries';
 import {
   compileReferenceToTemplatePromotion,
   DIRECT_SCENE_WORDING_CANDIDATES,
@@ -110,78 +111,70 @@ export function DirectSceneStudio({
   );
 
   const recommendedWording = DIRECT_SCENE_WORDING_CANDIDATES[0]!;
+  const ds = getDictionary(locale).creatorJourney.directScene;
 
   return (
-    <div data-direct-scene-studio className="space-y-14">
-      {/* SECTION 0: Warm Consumer Value Proposition + Maker 80% Revenue Highlight */}
+    <div data-direct-scene-studio className="space-y-12">
+      {/* SECTION 0: Warm Consumer Value Proposition + Accruing Revenue Highlight */}
       <section
         data-direct-wording-rationale
-        className="rounded-[24px] border border-[#3875C5]/25 bg-[#F3F7FA] p-6 sm:p-8"
+        className="rounded-[16px] bg-[#F4F4F5] p-6 sm:p-8"
       >
         <div className="flex flex-wrap items-start justify-between gap-6">
           <div className="max-w-3xl">
-            <span className="inline-flex items-center gap-1.5 rounded-full bg-[#E8EFF7] px-3 py-1 text-xs font-semibold text-[#3063A7]">
-              <span aria-hidden="true" className="size-1.5 rounded-full bg-[#3875C5]" />
-              {locale === 'en'
-                ? 'MAKE YOUR OWN VIDEO & EARN 80% AS A TEMPLATE MAKER'
-                : '나만의 영상 제작하기 · 내 영상을 템플릿으로 올리고 80% 수익 받기'}
+            <span className="inline-flex items-center rounded-full bg-white px-3 py-1 text-xs font-semibold text-[#52525B]">
+              {ds.rationaleBadge}
             </span>
-            <h2 className="mt-3 text-lg font-bold tracking-[-0.015em] text-[#0E1013] sm:text-xl">
+            <h2 className="mt-3 text-lg font-bold tracking-[-0.015em] text-[#09090B] sm:text-xl">
               {locale === 'en'
                 ? recommendedWording.headlineEn
                 : recommendedWording.headlineKo}
             </h2>
-            <p className="mt-2 text-xs leading-relaxed text-black/70 sm:text-sm">
+            <p className="mt-2 text-xs leading-relaxed text-[#52525B] sm:text-sm">
               {locale === 'en'
                 ? recommendedWording.subcopyEn
                 : recommendedWording.subcopyKo}
             </p>
           </div>
           <div className="grid gap-2.5 sm:grid-cols-3">
-            <div className="rounded-[16px] border border-white bg-white px-4 py-3.5 text-xs shadow-sm">
-              <p className="font-semibold text-[#3063A7]">1단계 · 내 영상 만들기</p>
-              <p className="mt-1 font-bold text-[#0E1013]">저장해 둔 영상 + 내 사진</p>
-              <p className="mt-0.5 text-[0.72rem] text-black/60">원하는 분위기를 내 얼굴로 먼저 완성</p>
+            <div className="rounded-[16px] bg-white px-4 py-3.5 text-xs">
+              <p className="font-semibold text-[#71717A]">1단계 · 내 영상 만들기</p>
+              <p className="mt-1 font-bold text-[#09090B]">저장해 둔 영상 + 내 사진</p>
+              <p className="mt-0.5 text-[0.72rem] text-[#52525B]">원하는 분위기를 내 얼굴로 먼저 완성</p>
             </div>
-            <div className="rounded-[16px] border border-white bg-white px-4 py-3.5 text-xs shadow-sm">
-              <p className="font-semibold text-[#3063A7]">2단계 · 템플릿으로 공개</p>
-              <p className="mt-1 font-bold text-[#0E1013]">내 셀카는 비공개로 보호</p>
-              <p className="mt-0.5 text-[0.72rem] text-black/60">완성된 영상만 예시로 올라가고 구도는 자동 고정</p>
+            <div className="rounded-[16px] bg-white px-4 py-3.5 text-xs">
+              <p className="font-semibold text-[#71717A]">2단계 · 템플릿으로 공개</p>
+              <p className="mt-1 font-bold text-[#09090B]">내 셀카는 비공개로 보호</p>
+              <p className="mt-0.5 text-[0.72rem] text-[#52525B]">완성된 영상만 예시로 올라가고 구도는 자동 고정</p>
             </div>
-            <div className="rounded-[16px] border border-[#3875C5]/30 bg-white px-4 py-3.5 text-xs shadow-sm">
-              <p className="font-semibold text-[#3063A7]">3단계 · 만들 때마다 수익 정산</p>
-              <p className="mt-1 font-bold text-[#0E1013]">순수익의 80%가 내 통장으로</p>
-              <p className="mt-0.5 text-[0.72rem] text-black/60">누군가 내 템플릿으로 만들 때마다 자동 적립</p>
+            <div className="rounded-[16px] bg-white px-4 py-3.5 text-xs">
+              <p className="font-semibold text-[#71717A]">{ds.step3CardLabel}</p>
+              <p className="mt-1 font-bold text-[#09090B]">{ds.step3CardTitle}</p>
+              <p className="mt-0.5 text-[0.72rem] text-[#52525B]">{ds.step3CardSub}</p>
             </div>
           </div>
         </div>
       </section>
 
-      {/* SECTION 1: Maker Revenue Calculator — Earn 80% Every Time Someone Uses Your Template */}
+      {/* SECTION 1: Revenue Simulator */}
       <section
         data-maker-revenue-calculator
         aria-labelledby="maker-revenue-heading"
-        className="rounded-[24px] border border-[#3875C5]/30 bg-white p-6 shadow-[0_18px_42px_-28px_rgba(12,15,20,0.12)] sm:p-8 lg:p-10"
+        className="border-t border-[#09090B]/[0.08] pt-10"
       >
-        <div className="flex flex-wrap items-end justify-between gap-4 border-b border-hairline pb-6">
+        <div className="flex flex-wrap items-end justify-between gap-4 border-b border-[#09090B]/[0.08] pb-6">
           <div className="max-w-2xl">
-            <span className="inline-flex items-center gap-1.5 rounded-full bg-[#E8EFF7] px-3 py-1 text-xs font-semibold text-[#3063A7]">
-              {locale === 'en'
-                ? 'CREATOR REVENUE SHARE · 80% NET MARGIN'
-                : '템플릿 수익 시뮬레이터 · 순이익의 80% 정산'}
+            <span className="inline-flex items-center rounded-full bg-[#F4F4F5] px-3 py-1 text-xs font-semibold text-[#52525B]">
+              {ds.simBadge}
             </span>
             <h2
               id="maker-revenue-heading"
-              className="mt-3 font-display text-[clamp(1.45rem,2.6vw,2.15rem)] leading-[1.1] font-black tracking-[-0.025em] text-[#0E1013]"
+              className="mt-3 font-display text-[clamp(1.45rem,2.6vw,2.15rem)] leading-[1.1] font-bold tracking-[-0.025em] text-[#09090B]"
             >
-              {locale === 'en'
-                ? 'Someone makes a video with your template? You earn 80% of the profit.'
-                : '내가 올린 템플릿으로 다른 사람이 만들 때마다 수익이 쌓입니다'}
+              {ds.simHeading}
             </h2>
-            <p className="mt-2 text-sm leading-relaxed text-black/65">
-              {locale === 'en'
-                ? 'Set your own template bonus (+0 to +5,000 KRW). You receive 80% of the entire net margin after VAT, payment fee, and generation cost.'
-                : '내 영상을 템플릿으로 올릴 때 기본 가격 위에 내 추가 수익금(0원~5,000원)을 직접 정할 수 있어요. 결제 금액에서 세금·결제수수료·제작원가를 뺀 전체 순이익의 80%가 내 수익으로 정산됩니다.'}
+            <p className="mt-2 text-sm leading-relaxed text-[#52525B]">
+              {ds.simBody}
             </p>
           </div>
 
@@ -196,14 +189,14 @@ export function DirectSceneStudio({
 
         <div className="mt-6 grid gap-6 lg:grid-cols-12">
           {/* Left 5 cols: Choose your template price raise */}
-          <div className="flex flex-col justify-between rounded-[20px] border border-hairline bg-[#F6F7F9] p-5 lg:col-span-5">
+          <div className="flex flex-col justify-between rounded-[16px] bg-[#F4F4F5] p-5 lg:col-span-5">
             <div>
-              <p className="text-xs font-semibold text-[#3063A7]">
+              <p className="text-xs font-semibold text-[#52525B]">
                 {locale === 'en'
                   ? '1. Choose how much bonus to add to your template'
                   : '1. 내 템플릿에 붙일 추가 수익금을 골라보세요'}
               </p>
-              <p className="mt-1 text-xs leading-relaxed text-black/65">
+              <p className="mt-1 text-xs leading-relaxed text-[#52525B]">
                 {locale === 'en'
                   ? `Base film price: ₩${revenueSim.floorKrw.toLocaleString('en-US')} (${revenueSim.baseCredits} credits)`
                   : `현재 선택한 영상(${activePreset.badgeKo}) 기본가: ${revenueSim.floorKrw.toLocaleString('ko-KR')}원 (${revenueSim.baseCredits} 크레딧)`}
@@ -222,8 +215,8 @@ export function DirectSceneStudio({
                       className={[
                         'inline-flex min-h-10 items-center rounded-full border px-3.5 py-1.5 text-xs font-semibold transition-colors tabular-nums',
                         active
-                          ? 'border-[#3875C5] bg-[#3875C5] text-white'
-                          : 'border-hairline bg-white text-[#0E1013] hover:border-[#3875C5]'
+                          ? 'border-[#09090B] bg-[#09090B] text-white'
+                          : 'border-[#09090B]/[0.08] bg-white text-[#09090B] hover:border-[#09090B]/[0.2]'
                       ].join(' ')}
                     >
                       {raise === 0
@@ -237,22 +230,22 @@ export function DirectSceneStudio({
               </div>
             </div>
 
-            <div className="mt-5 rounded-[16px] border border-[#3875C5]/25 bg-white p-4">
+            <div className="mt-5 rounded-[16px] bg-white p-4">
               <div className="flex items-baseline justify-between gap-2">
-                <span className="text-xs font-medium text-black/65">
+                <span className="text-xs font-medium text-[#52525B]">
                   {locale === 'en' ? 'Template Sale Price' : '구매자에게 보이는 템플릿 가격'}
                 </span>
-                <span className="font-mono text-sm font-bold text-[#0E1013] tabular-nums">
+                <span className="font-mono text-sm font-bold text-[#09090B] tabular-nums">
                   {revenueSim.salePriceKrw.toLocaleString('ko-KR')}원 ({revenueSim.totalCredits} 크레딧)
                 </span>
               </div>
-              <div className="mt-2 flex items-baseline justify-between gap-2 border-t border-hairline pt-2">
-                <span className="text-xs font-semibold text-[#3063A7]">
-                  {locale === 'en' ? 'Your 80% Share per 1 Make' : '누군가 1번 만들 때마다 내가 받는 수익 (80%)'}
+              <div className="mt-2 flex items-baseline justify-between gap-2 border-t border-[#09090B]/[0.08] pt-2">
+                <span className="text-xs font-semibold text-[#52525B]">
+                  {ds.simPerMakeLabel}
                 </span>
                 <span
                   data-maker-earning-per-make
-                  className="font-display text-lg font-black text-[#3063A7] tabular-nums"
+                  className="font-display text-lg font-bold text-[#09090B] tabular-nums"
                 >
                   +{revenueSim.perMake.creator.toLocaleString('ko-KR')}원
                 </span>
@@ -261,28 +254,26 @@ export function DirectSceneStudio({
           </div>
 
           {/* Right 7 cols: Cumulative Earnings Milestones (10, 50, 100, 500 makes) */}
-          <div className="flex flex-col justify-between rounded-[20px] border border-[#3875C5]/25 bg-[#F3F7FA] p-5 lg:col-span-7">
+          <div className="flex flex-col justify-between rounded-[16px] bg-[#F4F4F5] p-5 lg:col-span-7">
             <div>
-              <p className="text-xs font-semibold text-[#3063A7]">
-                {locale === 'en'
-                  ? '2. Estimated Cumulative Earnings by Number of Makes'
-                  : '2. 내 템플릿으로 사람들이 만들었을 때 예상 누적 정산금'}
+              <p className="text-xs font-semibold text-[#52525B]">
+                {ds.simMilestonesLabel}
               </p>
               <div className="mt-3.5 grid grid-cols-2 gap-3 sm:grid-cols-4">
                 {revenueSim.milestones.map((m) => (
                   <div
                     key={m.makes}
                     data-maker-milestone={m.makes}
-                    className="rounded-[16px] border border-white bg-white p-4 shadow-sm"
+                    className="rounded-[16px] bg-white p-4"
                   >
-                    <p className="text-xs font-semibold text-black/60">
+                    <p className="text-xs font-semibold text-[#52525B]">
                       {locale === 'en' ? `${m.makes} makes` : `${m.makes}명이 만들면`}
                     </p>
-                    <p className="mt-2 font-display text-xl font-black tracking-tight text-[#0E1013] tabular-nums">
+                    <p className="mt-2 font-display text-xl font-bold tracking-tight text-[#09090B] tabular-nums">
                       {m.creatorTotalKrw.toLocaleString('ko-KR')}원
                     </p>
-                    <p className="mt-1 text-[0.7rem] text-[#3063A7]">
-                      {locale === 'en' ? '80% Maker Payout' : '내 정산 수익 (80%)'}
+                    <p className="mt-1 text-[0.7rem] text-[#71717A]">
+                      {ds.simMilestoneSub}
                     </p>
                   </div>
                 ))}
@@ -292,16 +283,12 @@ export function DirectSceneStudio({
             {/* Maker Account Connection Assurance */}
             <div
               data-maker-db-pipeline
-              className="mt-4 rounded-[14px] border border-white bg-white px-4 py-3 text-xs leading-relaxed text-black/70"
+              className="mt-4 rounded-[12px] bg-white px-4 py-3 text-xs leading-relaxed text-[#52525B]"
             >
-              <span className="font-semibold text-[#0E1013]">
-                {locale === 'en'
-                  ? 'Connected directly to your Maker Profile (@handle): '
-                  : '내 크리에이티브 프로필(@핸들)과 자동 연동됩니다: '}
+              <span className="font-semibold text-[#09090B]">
+                {ds.simLedgerTitle}
               </span>
-              {locale === 'en'
-                ? 'Every time a buyer renders your template, 80% of the net profit is automatically recorded in your settlement ledger.'
-                : '템플릿이 공개되면 카드에 내 @핸들이 함께 표시되고, 다른 사람이 내 템플릿으로 제작할 때마다 순이익의 80%가 내 정산 내역에 투명하게 자동 적립됩니다.'}
+              {ds.simLedgerNote}
             </div>
           </div>
         </div>
@@ -309,21 +296,21 @@ export function DirectSceneStudio({
 
       {/* SECTION 2: Easy 3 Tips for Best Video Quality */}
       <section data-high-quality-guide aria-labelledby="quality-guide-heading" className="space-y-6">
-        <div className="border-t border-hairline pt-8">
-          <p className="text-xs font-semibold text-[#3063A7]">
+        <div className="border-t border-[#09090B]/[0.08] pt-8">
+          <p className="text-[13px] font-medium text-[#71717A]">
             {locale === 'en'
               ? 'EASY TIPS FOR NATURAL RESULTS'
               : '누구나 실패 없이 예쁜 영상을 뽑는 3가지 요령'}
           </p>
           <h2
             id="quality-guide-heading"
-            className="mt-2 font-display text-[clamp(1.5rem,2.8vw,2.25rem)] leading-[1.08] font-black tracking-[-0.025em] text-[#0E1013]"
+            className="mt-2 font-display text-[clamp(1.5rem,2.8vw,2.25rem)] leading-[1.08] font-bold tracking-[-0.025em] text-[#09090B]"
           >
             {locale === 'en'
               ? 'How to get the most natural face and mood on your first try'
               : '어려운 설정 없이 이것만 기억하면 가장 나답고 예쁘게 나옵니다'}
           </h2>
-          <p className="mt-2 max-w-2xl text-sm leading-relaxed text-black/65">
+          <p className="mt-2 max-w-2xl text-sm leading-relaxed text-[#52525B]">
             {locale === 'en'
               ? 'No complicated prompts needed — just bring a clear 4–10s clip, one unfiltered front photo, and an outfit photo if you want to change clothes.'
               : '복잡한 명령어를 적을 필요가 전혀 없어요. 마음에 드는 짧은 영상 하나와 보정 없는 정면 사진 한 장이면 충분합니다.'}
@@ -335,44 +322,44 @@ export function DirectSceneStudio({
             <article
               key={rule.stepNumber}
               data-quality-rule={rule.stepNumber}
-              className="flex flex-col justify-between rounded-[24px] border border-hairline bg-white p-6 shadow-[0_14px_34px_-24px_rgba(12,15,20,0.1)]"
+              className="flex flex-col justify-between rounded-[16px] bg-[#F4F4F5] p-6"
             >
               <div>
                 <div className="flex items-center justify-between">
-                  <span className="inline-flex items-center rounded-full bg-[#E8EFF7] px-3 py-1 text-xs font-bold text-[#3063A7]">
+                  <span className="inline-flex items-center rounded-full bg-white px-3 py-1 text-xs font-semibold text-[#52525B]">
                     {locale === 'en' ? `Tip ${idx + 1}` : `요령 ${idx + 1}`}
                   </span>
                 </div>
-                <h3 className="mt-4 text-base font-bold tracking-[-0.015em] text-[#0E1013]">
+                <h3 className="mt-4 text-base font-bold tracking-[-0.015em] text-[#09090B]">
                   {locale === 'en' ? rule.titleEn : rule.titleKo}
                 </h3>
-                <p className="mt-2 text-xs leading-relaxed text-black/65">
+                <p className="mt-2 text-xs leading-relaxed text-[#52525B]">
                   {locale === 'en' ? rule.summaryEn : rule.summaryKo}
                 </p>
 
-                <div className="mt-4 space-y-3 border-t border-hairline pt-4">
-                  <div className="rounded-[16px] bg-[#F3F7FA] p-3.5">
-                    <p className="text-xs font-semibold text-[#3063A7]">
+                <div className="mt-4 space-y-3 border-t border-[#09090B]/[0.08] pt-4">
+                  <div className="rounded-[12px] bg-white p-3.5">
+                    <p className="text-xs font-semibold text-[#09090B]">
                       {locale === 'en' ? 'Recommended' : '이렇게 올리면 좋아요'}
                     </p>
-                    <ul className="mt-2 space-y-1.5 text-xs leading-relaxed text-[#0E1013]">
+                    <ul className="mt-2 space-y-1.5 text-xs leading-relaxed text-[#09090B]">
                       {rule.goodExamplesKo.map((ex) => (
                         <li key={ex} className="flex items-start gap-2">
-                          <span className="mt-1 size-1.5 shrink-0 rounded-full bg-[#3875C5]" />
+                          <span className="mt-1.5 size-1.5 shrink-0 rounded-full bg-[#09090B]" />
                           <span>{ex}</span>
                         </li>
                       ))}
                     </ul>
                   </div>
 
-                  <div className="rounded-[16px] border border-hairline bg-[#F6F7F9] p-3.5">
-                    <p className="text-xs font-semibold text-black/55">
+                  <div className="rounded-[12px] border border-[#09090B]/[0.08] bg-white/75 p-3.5">
+                    <p className="text-xs font-semibold text-[#71717A]">
                       {locale === 'en' ? 'Better to avoid' : '이런 경우는 피해주세요'}
                     </p>
-                    <ul className="mt-2 space-y-1.5 text-xs leading-relaxed text-black/65">
+                    <ul className="mt-2 space-y-1.5 text-xs leading-relaxed text-[#52525B]">
                       {rule.avoidExamplesKo.map((ex) => (
                         <li key={ex} className="flex items-start gap-2">
-                          <span className="mt-1 size-1.5 shrink-0 rounded-full bg-black/35" />
+                          <span className="mt-1.5 size-1.5 shrink-0 rounded-full bg-[#71717A]" />
                           <span>{ex}</span>
                         </li>
                       ))}
@@ -389,18 +376,18 @@ export function DirectSceneStudio({
       <section
         data-direct-scene-simulator
         aria-labelledby="simulator-heading"
-        className="rounded-[24px] border border-hairline bg-white p-6 shadow-[0_18px_42px_-28px_rgba(12,15,20,0.12)] sm:p-8 lg:p-10"
+        className="border-t border-[#09090B]/[0.08] pt-10"
       >
-        <div className="flex flex-wrap items-end justify-between gap-4 border-b border-hairline pb-6">
+        <div className="flex flex-wrap items-end justify-between gap-4 border-b border-[#09090B]/[0.08] pb-6">
           <div>
-            <p className="text-xs font-semibold text-[#3063A7]">
+            <p className="text-[13px] font-medium text-[#71717A]">
               {locale === 'en'
                 ? 'HOW IT WORKS · FROM MY VIDEO TO MY TEMPLATE'
                 : '한눈에 보는 제작 과정 · 내 영상 완성부터 템플릿 등록까지'}
             </p>
             <h2
               id="simulator-heading"
-              className="mt-2 font-display text-[clamp(1.45rem,2.6vw,2.1rem)] leading-[1.08] font-black tracking-[-0.025em] text-[#0E1013]"
+              className="mt-2 font-display text-[clamp(1.45rem,2.6vw,2.1rem)] leading-[1.08] font-bold tracking-[-0.025em] text-[#09090B]"
             >
               {locale === 'en'
                 ? 'See how your video is made and shared as a template'
@@ -426,8 +413,8 @@ export function DirectSceneStudio({
                   className={[
                     'inline-flex min-h-10 items-center rounded-full border px-4 py-2 text-xs font-semibold transition-colors',
                     active
-                      ? 'border-[#3875C5] bg-[#3875C5] text-white'
-                      : 'border-hairline bg-[#F6F7F9] text-[#0E1013] hover:border-[#3875C5]/45'
+                      ? 'border-[#09090B] bg-[#09090B] text-white'
+                      : 'border-[#09090B]/[0.08] bg-[#F4F4F5] text-[#09090B] hover:border-[#09090B]/[0.2]'
                   ].join(' ')}
                 >
                   {locale === 'en' ? preset.badgeEn : preset.badgeKo}
@@ -442,52 +429,52 @@ export function DirectSceneStudio({
           {/* STEP 1 (4 cols): Upload Reference Video & My Photo */}
           <div
             data-stage="reference-input"
-            className="flex flex-col justify-between rounded-[20px] border border-hairline bg-[#F6F7F9] p-5 lg:col-span-4"
+            className="flex flex-col justify-between rounded-[16px] bg-[#F4F4F5] p-5 lg:col-span-4"
           >
             <div className="space-y-4">
               <div className="flex items-center justify-between">
-                <span className="rounded-full bg-[#E8EFF7] px-3 py-1 text-xs font-bold text-[#3063A7]">
+                <span className="rounded-full bg-white px-3 py-1 text-xs font-semibold text-[#52525B]">
                   1단계 · 영상과 내 사진 올리기
                 </span>
-                <span className="rounded-full bg-white px-2.5 py-0.5 text-xs font-medium text-black/65">
+                <span className="rounded-full bg-white px-2.5 py-0.5 text-xs font-medium text-[#52525B]">
                   {activePreset.input.aspect} · {activePreset.input.durationSeconds}초
                 </span>
               </div>
 
-              <h3 className="text-base font-bold text-[#0E1013]">
+              <h3 className="text-base font-bold text-[#09090B]">
                 {locale === 'en'
                   ? '1. Upload Reference Clip & Front Selfie'
                   : '1. 저장해 둔 영상 + 내 정면 사진 준비'}
               </h3>
 
               {/* Friendly Korean summary of what the reference video brings */}
-              <div className="space-y-2 rounded-[16px] border border-hairline bg-white p-3.5 text-xs">
-                <p className="font-semibold text-[#3063A7]">
+              <div className="space-y-2 rounded-[16px] bg-white p-3.5 text-xs">
+                <p className="font-semibold text-[#09090B]">
                   {locale === 'en'
                     ? 'What we keep from your reference video'
                     : '올리신 영상에서 자동으로 가져오는 분위기'}
                 </p>
                 <div>
-                  <span className="font-semibold text-[#0E1013]">카메라 움직임: </span>
-                  <span className="text-black/70">{activePreset.cameraSummaryKo}</span>
+                  <span className="font-semibold text-[#09090B]">카메라 움직임: </span>
+                  <span className="text-[#52525B]">{activePreset.cameraSummaryKo}</span>
                 </div>
                 <div>
-                  <span className="font-semibold text-[#0E1013]">조명과 색감: </span>
-                  <span className="text-black/70">{activePreset.lightingSummaryKo}</span>
+                  <span className="font-semibold text-[#09090B]">조명과 색감: </span>
+                  <span className="text-[#52525B]">{activePreset.lightingSummaryKo}</span>
                 </div>
                 <div>
-                  <span className="font-semibold text-[#0E1013]">기본 스타일: </span>
-                  <span className="text-black/70">{activePreset.stylingSummaryKo}</span>
+                  <span className="font-semibold text-[#09090B]">기본 스타일: </span>
+                  <span className="text-[#52525B]">{activePreset.stylingSummaryKo}</span>
                 </div>
               </div>
 
               {/* Direct Selfie Suitability Verification */}
               <div
                 data-selfie-suitability-box
-                className="space-y-2.5 rounded-[16px] border border-hairline bg-white p-3.5 text-xs"
+                className="space-y-2.5 rounded-[16px] bg-white p-3.5 text-xs"
               >
                 <div className="flex items-center justify-between gap-2">
-                  <span className="font-semibold text-[#0E1013]">
+                  <span className="font-semibold text-[#09090B]">
                     {locale === 'en' ? 'My Photo Check' : '내 사진 자동 확인'}
                   </span>
                   <div className="flex gap-1">
@@ -496,10 +483,10 @@ export function DirectSceneStudio({
                       data-selfie-sim="clean-front"
                       onClick={() => setSelfieCheckMode('clean-front')}
                       className={[
-                        'rounded-full px-2.5 py-1 text-[0.68rem] font-medium',
+                        'rounded-full px-2.5 py-1 text-[0.68rem] font-medium transition-colors',
                         selfieCheckMode === 'clean-front'
-                          ? 'bg-[#3875C5] text-white'
-                          : 'bg-[#F6F7F9] text-black/65'
+                          ? 'bg-[#09090B] text-white'
+                          : 'bg-[#F4F4F5] text-[#52525B]'
                       ].join(' ')}
                     >
                       밝은 정면 사진
@@ -509,10 +496,10 @@ export function DirectSceneStudio({
                       data-selfie-sim="filtered-or-angled"
                       onClick={() => setSelfieCheckMode('filtered-or-angled')}
                       className={[
-                        'rounded-full px-2.5 py-1 text-[0.68rem] font-medium',
+                        'rounded-full px-2.5 py-1 text-[0.68rem] font-medium transition-colors',
                         selfieCheckMode === 'filtered-or-angled'
-                          ? 'bg-[#3875C5] text-white'
-                          : 'bg-[#F6F7F9] text-black/65'
+                          ? 'bg-[#09090B] text-white'
+                          : 'bg-[#F4F4F5] text-[#52525B]'
                       ].join(' ')}
                     >
                       보정·측면 사진일 때
@@ -521,18 +508,18 @@ export function DirectSceneStudio({
                 </div>
 
                 {suitability.isSuitable ? (
-                  <p className="rounded-[12px] bg-[#F3F7FA] p-2.5 text-[0.72rem] leading-relaxed text-[#3063A7]">
+                  <p className="rounded-[12px] bg-[#F4F4F5] p-2.5 text-[0.72rem] leading-relaxed text-[#09090B]">
                     ✓ 얼굴이 또렷하게 잘 보이는 사진이에요! 인위적인 AI 얼굴 변형 없이 내 인상 그대로 영상을 만듭니다.
                   </p>
                 ) : (
                   <div
                     data-reupload-warning
-                    className="rounded-[12px] border border-[#3875C5]/35 bg-[#F3F7FA] p-2.5 text-[0.72rem] leading-relaxed text-[#0E1013]"
+                    className="rounded-[12px] border border-[#09090B]/20 bg-[#F4F4F5] p-2.5 text-[0.72rem] leading-relaxed text-[#09090B]"
                   >
-                    <p className="font-semibold text-[#3063A7]">
+                    <p className="font-semibold text-[#09090B]">
                       ! 이 사진은 영상에서 얼굴이 다르게 나올 수 있어 다른 정면 사진을 추천드려요
                     </p>
-                    <p className="mt-1 text-black/70">
+                    <p className="mt-1 text-[#52525B]">
                       {suitability.whyUnsuitableKo} {suitability.reuploadTipKo}
                     </p>
                   </div>
@@ -540,27 +527,27 @@ export function DirectSceneStudio({
               </div>
 
               {/* Simple Keep vs Change Note */}
-              <div className="space-y-2 rounded-[16px] border border-hairline bg-white p-3.5 text-xs">
+              <div className="space-y-2 rounded-[16px] bg-white p-3.5 text-xs">
                 <label className="block">
-                  <span className="font-semibold text-[#0E1013]">
+                  <span className="font-semibold text-[#09090B]">
                     영상에서 그대로 살릴 분위기
                   </span>
                   <input
                     type="text"
                     value={directorKeepNote}
                     onChange={(e) => setDirectorKeepNote(e.target.value)}
-                    className="mt-1 w-full rounded-[10px] border border-hairline bg-[#F6F7F9] px-3 py-2 text-xs text-[#0E1013]"
+                    className="mt-1 w-full rounded-[10px] border border-[#09090B]/[0.08] bg-[#F4F4F5] px-3 py-2 text-xs text-[#09090B]"
                   />
                 </label>
                 <label className="block">
-                  <span className="font-semibold text-[#0E1013]">
+                  <span className="font-semibold text-[#09090B]">
                     내 사진·옷 사진으로 바꿀 부분
                   </span>
                   <input
                     type="text"
                     value={directorChangeNote}
                     onChange={(e) => setDirectorChangeNote(e.target.value)}
-                    className="mt-1 w-full rounded-[10px] border border-hairline bg-[#F6F7F9] px-3 py-2 text-xs text-[#0E1013]"
+                    className="mt-1 w-full rounded-[10px] border border-[#09090B]/[0.08] bg-[#F4F4F5] px-3 py-2 text-xs text-[#09090B]"
                   />
                 </label>
               </div>
@@ -570,19 +557,19 @@ export function DirectSceneStudio({
           {/* STEP 2 (4 cols): Pick Your Best Face Preview & Finish Video */}
           <div
             data-stage="personal-synthesis"
-            className="flex flex-col justify-between rounded-[20px] border border-hairline bg-[#F6F7F9] p-5 lg:col-span-4"
+            className="flex flex-col justify-between rounded-[16px] bg-[#F4F4F5] p-5 lg:col-span-4"
           >
             <div className="space-y-4">
               <div className="flex items-center justify-between">
-                <span className="rounded-full bg-[#E8EFF7] px-3 py-1 text-xs font-bold text-[#3063A7]">
+                <span className="rounded-full bg-white px-3 py-1 text-xs font-semibold text-[#52525B]">
                   2단계 · 내 영상 완성하기
                 </span>
-                <span className="rounded-full bg-white px-2.5 py-0.5 text-xs font-semibold text-[#3063A7]">
+                <span className="rounded-full bg-white px-2.5 py-0.5 text-xs font-semibold text-[#52525B]">
                   더 닮은 얼굴 시안 선택 가능
                 </span>
               </div>
 
-              <h3 className="text-base font-bold text-[#0E1013]">
+              <h3 className="text-base font-bold text-[#09090B]">
                 {locale === 'en'
                   ? '2. Pick the Most Natural Likeness & Create'
                   : '2. 더 나다운 첫 장면을 고르고 영상 완성'}
@@ -591,14 +578,14 @@ export function DirectSceneStudio({
               {/* Step 2A: Friendly A/B Likeness Choice */}
               <div
                 data-dual-likeness-preview
-                className="space-y-3 rounded-[16px] border border-hairline bg-white p-4 text-xs"
+                className="space-y-3 rounded-[16px] bg-white p-4 text-xs"
               >
-                <p className="font-semibold text-[#3063A7]">
+                <p className="font-semibold text-[#09090B]">
                   내가 보기에 더 닮은 첫 장면을 직접 고를 수 있어요
                 </p>
-                <p className="leading-relaxed text-black/65">
+                <p className="leading-relaxed text-[#52525B]">
                   조명이 화려하거나 어두운 영상에서도 얼굴이 어색해지지 않도록, 두 가지 느낌의 첫 장면을 먼저 보여드립니다.{' '}
-                  <strong className="font-semibold text-[#0E1013]">내 실물과 더 가까운 쪽을 고르면</strong> 그 얼굴 그대로 영상이 움직입니다.
+                  <strong className="font-semibold text-[#09090B]">내 실물과 더 가까운 쪽을 고르면</strong> 그 얼굴 그대로 영상이 움직입니다.
                 </p>
 
                 <div className="grid grid-cols-2 gap-2.5">
@@ -608,19 +595,19 @@ export function DirectSceneStudio({
                     aria-pressed={selectedLikenessCandidate === 'candidate-a'}
                     onClick={() => setSelectedLikenessCandidate('candidate-a')}
                     className={[
-                      'rounded-[14px] border p-3 text-left transition-colors',
+                      'rounded-[12px] p-3 text-left transition-all',
                       selectedLikenessCandidate === 'candidate-a'
-                        ? 'border-[#3875C5] bg-[#F3F7FA]'
-                        : 'border-hairline bg-[#F6F7F9]'
+                        ? 'bg-white ring-[1.5px] ring-[#09090B]'
+                        : 'bg-[#F4F4F5] hover:bg-[#ECECEF]'
                     ].join(' ')}
                   >
-                    <span className="text-[0.7rem] font-bold text-[#3063A7]">
+                    <span className="text-[0.7rem] font-bold text-[#09090B]">
                       시안 A · 또렷한 이목구비
                     </span>
-                    <p className="mt-1 text-xs font-semibold text-[#0E1013]">
+                    <p className="mt-1 text-xs font-semibold text-[#09090B]">
                       눈매·콧대·턱선이 선명한 느낌
                     </p>
-                    <p className="mt-0.5 text-[0.7rem] text-black/60">
+                    <p className="mt-0.5 text-[0.7rem] text-[#52525B]">
                       어두운 밤거리나 플래시 조명에서 내 이목구비를 또렷하게 살려줍니다.
                     </p>
                   </button>
@@ -631,19 +618,19 @@ export function DirectSceneStudio({
                     aria-pressed={selectedLikenessCandidate === 'candidate-b'}
                     onClick={() => setSelectedLikenessCandidate('candidate-b')}
                     className={[
-                      'rounded-[14px] border p-3 text-left transition-colors',
+                      'rounded-[12px] p-3 text-left transition-all',
                       selectedLikenessCandidate === 'candidate-b'
-                        ? 'border-[#3875C5] bg-[#F3F7FA]'
-                        : 'border-hairline bg-[#F6F7F9]'
+                        ? 'bg-white ring-[1.5px] ring-[#09090B]'
+                        : 'bg-[#F4F4F5] hover:bg-[#ECECEF]'
                     ].join(' ')}
                   >
-                    <span className="text-[0.7rem] font-bold text-[#3063A7]">
+                    <span className="text-[0.7rem] font-bold text-[#09090B]">
                       시안 B · 부드러운 자연 인상
                     </span>
-                    <p className="mt-1 text-xs font-semibold text-[#0E1013]">
+                    <p className="mt-1 text-xs font-semibold text-[#09090B]">
                       맑은 피부결과 자연스러운 표정
                     </p>
-                    <p className="mt-0.5 text-[0.7rem] text-black/60">
+                    <p className="mt-0.5 text-[0.7rem] text-[#52525B]">
                       햇살이나 필름 카메라 특유의 부드럽고 자연스러운 분위기를 살려줍니다.
                     </p>
                   </button>
@@ -654,15 +641,15 @@ export function DirectSceneStudio({
               <div
                 data-direct-resolution-tiers
                 data-direct-selected-resolution={selectedResolution}
-                className="space-y-2.5 rounded-[16px] border border-hairline bg-white p-4 text-xs"
+                className="space-y-2.5 rounded-[16px] bg-white p-4 text-xs"
               >
                 <div className="flex flex-wrap items-center justify-between gap-1.5">
-                  <p className="font-semibold text-[#3063A7]">
+                  <p className="font-semibold text-[#09090B]">
                     {locale === 'en'
                       ? 'Choose Video Resolution & Credit Mode'
                       : '화질 · 크레딧 모드 선택 (480p Draft · 720p · 1080p)'}
                   </p>
-                  <span className="rounded-full bg-[#E8EFF7] px-2 py-0.5 font-mono text-[0.65rem] font-semibold text-[#3063A7] tabular-nums">
+                  <span className="rounded-full bg-[#F4F4F5] px-2 py-0.5 font-mono text-[0.65rem] font-semibold text-[#52525B] tabular-nums">
                     {locale === 'en'
                       ? `480p saves ${compiled.resolutionTiers.draftWorkflow.draftSavedPercentVs720p}%`
                       : `480p Draft · ${compiled.resolutionTiers.draftWorkflow.draftSavedPercentVs720p}% 크레딧 절약`}
@@ -681,22 +668,22 @@ export function DirectSceneStudio({
                         aria-pressed={active}
                         onClick={() => setSelectedResolution(res)}
                         className={[
-                          'flex flex-col justify-between rounded-[12px] border p-2.5 text-left transition-colors',
+                          'flex flex-col justify-between rounded-[12px] p-2.5 text-left transition-all',
                           active
-                            ? 'border-[#3875C5] bg-[#F3F7FA]'
-                            : 'border-hairline bg-[#F6F7F9]'
+                            ? 'bg-white ring-[1.5px] ring-[#09090B]'
+                            : 'bg-[#F4F4F5] hover:bg-[#ECECEF]'
                         ].join(' ')}
                       >
                         <div>
                           <div className="flex items-center justify-between gap-1">
-                            <span className="font-mono text-xs font-bold text-[#0E1013] tabular-nums">
+                            <span className="font-mono text-xs font-bold text-[#09090B] tabular-nums">
                               {res}
                             </span>
-                            <span className="rounded-full bg-white px-1.5 py-0.5 font-mono text-[0.58rem] font-semibold text-[#3063A7]">
+                            <span className="rounded-full bg-white px-1.5 py-0.5 font-mono text-[0.58rem] font-semibold text-[#52525B]">
                               {res === '480p' ? 'DRAFT' : res === '720p' ? 'STD' : 'MAX'}
                             </span>
                           </div>
-                          <p className="mt-1 text-[0.7rem] font-semibold text-[#0E1013]">
+                          <p className="mt-1 text-[0.7rem] font-semibold text-[#09090B]">
                             {res === '480p'
                               ? '사전 테스트'
                               : res === '720p'
@@ -704,7 +691,7 @@ export function DirectSceneStudio({
                                 : '최고 화질'}
                           </p>
                         </div>
-                        <p className="mt-2 font-mono text-[0.72rem] font-bold text-[#3063A7] tabular-nums">
+                        <p className="mt-2 font-mono text-[0.72rem] font-bold text-[#09090B] tabular-nums">
                           {tier.totalCredits} cr
                         </p>
                       </button>
@@ -714,21 +701,21 @@ export function DirectSceneStudio({
 
                 <p
                   data-direct-no-bgm-rule
-                  className="rounded-[12px] bg-[#F3F7FA] p-2.5 text-[0.71rem] leading-relaxed text-[#41444D]"
+                  className="rounded-[12px] bg-[#F4F4F5] p-2.5 text-[0.71rem] leading-relaxed text-[#52525B]"
                 >
                   🔊 {locale === 'en' ? PERSONAL_NO_BGM_AUDIO_NOTICE_EN : PERSONAL_NO_BGM_AUDIO_NOTICE_KO}
                 </p>
               </div>
 
               {/* Step 2C: Privacy Guarantee */}
-              <div className="space-y-2 rounded-[16px] border border-hairline bg-white p-4 text-xs">
-                <p className="font-semibold text-[#3063A7]">
+              <div className="space-y-2 rounded-[16px] bg-white p-4 text-xs">
+                <p className="font-semibold text-[#09090B]">
                   완성된 영상은 소장하거나 템플릿으로 올릴 수 있어요
                 </p>
-                <p className="leading-relaxed text-[#0E1013]">
+                <p className="leading-relaxed text-[#09090B]">
                   {compiled.personalToTemplateSummary.personalRenderRoleKo}
                 </p>
-                <p className="rounded-[12px] bg-[#F3F7FA] p-2.5 text-[0.72rem] font-medium text-[#3063A7]">
+                <p className="rounded-[12px] bg-[#F4F4F5] p-2.5 text-[0.72rem] font-medium text-[#52525B]">
                   🔒 {compiled.personalToTemplateSummary.privacyGuaranteeKo}
                 </p>
               </div>
@@ -739,39 +726,39 @@ export function DirectSceneStudio({
           <div
             data-stage="template-promotion"
             data-template-freeze-matrix
-            className="flex flex-col justify-between rounded-[20px] border border-[#3875C5]/35 bg-[#F3F7FA] p-5 lg:col-span-4"
+            className="flex flex-col justify-between rounded-[16px] bg-[#F4F4F5] p-5 lg:col-span-4"
           >
             <div className="space-y-4">
-              <div className="flex items-center justify-between">
-                <span className="rounded-full bg-[#3875C5] px-3 py-1 text-xs font-bold text-white">
+              <div className="flex items-center justify-between gap-2">
+                <span className="rounded-full bg-[#09090B] px-3 py-1 text-xs font-bold text-white">
                   3단계 · 템플릿 등록 & 수익화
                 </span>
-                <span className="rounded-full bg-white px-2.5 py-0.5 text-xs font-semibold text-[#3063A7]">
-                  순수익 80% 정산
+                <span className="rounded-full bg-white px-2.5 py-0.5 text-xs font-semibold text-[#52525B]">
+                  {ds.stage3PayoutBadge}
                 </span>
               </div>
 
-              <h3 className="text-base font-bold text-[#0E1013]">
+              <h3 className="text-base font-bold text-[#09090B]">
                 {locale === 'en'
                   ? '3. Publish as Your Template & Earn'
                   : '3. 다른 사람이 만들 때 어디까지 바꿀 수 있게 할까요?'}
               </h3>
 
-              <p className="text-xs leading-relaxed text-black/70">
+              <p className="text-xs leading-relaxed text-[#52525B]">
                 내 영상을 템플릿으로 올리면{' '}
-                <strong className="font-semibold text-[#0E1013]">
+                <strong className="font-semibold text-[#09090B]">
                   카메라 구도와 조명은 깨지지 않게 자동으로 고정
                 </strong>
                 됩니다. 의상과 배경만 내 스타일로 고정할지, 다른 사람도 바꿀 수 있게 열어둘지 선택해 주세요.
               </p>
 
               {/* Simple Friendly Toggles for Outfit & Backdrop */}
-              <div className="space-y-2 rounded-[16px] border border-white bg-white p-3.5 text-xs">
-                <p className="font-semibold text-[#3063A7]">
+              <div className="space-y-2 rounded-[16px] bg-white p-3.5 text-xs">
+                <p className="font-semibold text-[#09090B]">
                   다른 사람이 내 템플릿을 쓸 때 설정 (클릭해서 변경)
                 </p>
                 <div className="flex items-center justify-between gap-2 py-1">
-                  <span className="font-medium text-[#0E1013]">
+                  <span className="font-medium text-[#09090B]">
                     의상 스타일
                   </span>
                   <button
@@ -782,16 +769,16 @@ export function DirectSceneStudio({
                     className={[
                       'rounded-full px-3 py-1 text-xs font-semibold transition-colors',
                       lockOutfit
-                        ? 'bg-[#0E1013] text-white'
-                        : 'bg-[#E8EFF7] text-[#3063A7]'
+                        ? 'bg-[#09090B] text-white'
+                        : 'bg-[#F4F4F5] text-[#52525B] hover:bg-[#ECECEF]'
                     ].join(' ')}
                   >
                     {lockOutfit ? '내 의상 스타일로 고정' : '다른 사람 옷 사진 허용'}
                   </button>
                 </div>
 
-                <div className="flex items-center justify-between gap-2 border-t border-hairline pt-2">
-                  <span className="font-medium text-[#0E1013]">
+                <div className="flex items-center justify-between gap-2 border-t border-[#09090B]/[0.08] pt-2">
+                  <span className="font-medium text-[#09090B]">
                     배경·소품 분위기
                   </span>
                   <button
@@ -802,8 +789,8 @@ export function DirectSceneStudio({
                     className={[
                       'rounded-full px-3 py-1 text-xs font-semibold transition-colors',
                       lockBackdrop
-                        ? 'bg-[#0E1013] text-white'
-                        : 'bg-[#E8EFF7] text-[#3063A7]'
+                        ? 'bg-[#09090B] text-white'
+                        : 'bg-[#F4F4F5] text-[#52525B] hover:bg-[#ECECEF]'
                     ].join(' ')}
                   >
                     {lockBackdrop ? '내 배경으로 고정' : '다른 사람 배경 변경 허용'}
@@ -818,26 +805,26 @@ export function DirectSceneStudio({
                     key={item.key}
                     data-freeze-item={item.key}
                     data-freeze-status={item.status}
-                    className="rounded-[14px] border border-white bg-white p-3 text-xs"
+                    className="rounded-[12px] bg-white p-3 text-xs"
                   >
                     <div className="flex flex-wrap items-center justify-between gap-1">
-                      <span className="font-bold text-[#0E1013]">
+                      <span className="font-bold text-[#09090B]">
                         {locale === 'en' ? item.labelEn : item.labelKo}
                       </span>
                       <span
                         className={[
                           'rounded-full px-2.5 py-0.5 text-[0.68rem] font-semibold',
                           item.status === 'buyer_selfie_slot'
-                            ? 'bg-[#3875C5] text-white'
+                            ? 'bg-[#09090B] text-white'
                             : item.status === 'open_user_reference'
-                              ? 'bg-[#E8EFF7] text-[#3063A7]'
-                              : 'bg-[#F6F7F9] text-black/70'
+                              ? 'bg-[#F4F4F5] text-[#09090B]'
+                              : 'bg-[#F4F4F5] text-[#52525B]'
                         ].join(' ')}
                       >
                         {locale === 'en' ? item.badgeEn : item.badgeKo}
                       </span>
                     </div>
-                    <p className="mt-1 text-[0.72rem] leading-relaxed text-black/65">
+                    <p className="mt-1 text-[0.72rem] leading-relaxed text-[#52525B]">
                       {locale === 'en' ? item.detailEn : item.detailKo}
                     </p>
                   </li>
@@ -850,23 +837,21 @@ export function DirectSceneStudio({
         {/* Bottom Summary Bar: How Future Buyers See This Published Template */}
         <div
           data-buyer-preview-card
-          className="mt-6 flex flex-wrap items-center justify-between gap-4 rounded-[20px] border border-hairline bg-[#F6F7F9] p-5"
+          className="mt-6 flex flex-wrap items-center justify-between gap-4 rounded-[16px] bg-[#F4F4F5] p-5"
         >
           <div className="max-w-2xl space-y-1">
-            <p className="text-xs font-semibold text-[#3063A7]">
+            <p className="text-xs font-semibold text-[#71717A]">
               {locale === 'en'
                 ? 'HOW OTHERS WILL USE YOUR TEMPLATE'
                 : '템플릿으로 등록되면 다른 사람들에게 이렇게 보입니다'}
             </p>
-            <p className="text-sm font-bold text-[#0E1013]">
+            <p className="text-sm font-bold text-[#09090B]">
               {compiled.personalToTemplateSummary.templateBuyerExperienceKo}
             </p>
-            <p className="text-xs text-black/60">
-              누군가 이 템플릿({revenueSim.salePriceKrw.toLocaleString('ko-KR')}원)으로 영상을 만들 때마다{' '}
-              <strong className="font-semibold text-[#3063A7]">
-                +{revenueSim.perMake.creator.toLocaleString('ko-KR')}원(순이익의 80%)
-              </strong>
-              이 내 크리에이티브 정산금으로 적립됩니다.
+            <p className="text-xs text-[#52525B]">
+              {ds.buyerPreviewEarningPattern
+                .replace('{salePrice}', revenueSim.salePriceKrw.toLocaleString(locale === 'en' ? 'en-US' : 'ko-KR'))
+                .replace('{perMake}', revenueSim.perMake.creator.toLocaleString(locale === 'en' ? 'en-US' : 'ko-KR'))}
             </p>
           </div>
 
@@ -880,7 +865,7 @@ export function DirectSceneStudio({
             </a>
             <a
               href={videoCatalogHref}
-              className="inline-flex min-h-11 items-center rounded-full border border-hairline bg-white px-5 py-2.5 text-xs font-semibold text-[#0E1013] transition-colors hover:border-[#3875C5]"
+              className="audience-button-quiet min-h-11 px-5 text-xs"
             >
               {locale === 'en' ? 'Browse Templates ↗' : '인기 템플릿 먼저 둘러보기 ↗'}
             </a>

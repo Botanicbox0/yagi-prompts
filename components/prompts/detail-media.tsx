@@ -270,6 +270,7 @@ export function PromptDetailMedia({
           posterSrc={poster?.src ?? null}
           videoSrc={video?.src ?? null}
           videoRef={videoRef}
+          aspect={aspect}
           locale={locale}
           alt={alt}
           onSelectBeat={() => setIntent('playing')}

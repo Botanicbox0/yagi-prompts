@@ -1,4 +1,4 @@
-import { readFileSync } from 'node:fs';
+import { readdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { ACCENT_MIX, COLOUR, CONTRAST_PAIRS, HARDLINES, IMAGERY, MODEL_ROLES, MOTION, TYPE, WORLD, contrast, mixAccent } from '@/lib/design/identity';
@@ -55,8 +55,17 @@ describe('TWINGS design identity', () => {
     expect(personal).toMatch(/\.personal\s*\{\s*--color-black\s*:\s*var\(--id-ink\)\s*;\s*\}/);
     expect(personal).toMatch(/background-color\s*:\s*var\(--id-canvas\)/);
     expect(personal).not.toMatch(/#[0-9a-f]{3,8}\b|rgb\(/i);
-    for (const page of ['page.tsx', 'video/page.tsx', 'image/page.tsx', 'pricing/page.tsx', 't/[slug]/page.tsx', 'faq/page.tsx', 'creators/page.tsx', 'makers/[handle]/page.tsx']) {
+    for (const page of ['page.tsx', 'video/page.tsx', 'image/page.tsx', 'pricing/page.tsx', 'direct/page.tsx', 't/[slug]/page.tsx', 'faq/page.tsx', 'creators/page.tsx', 'makers/[handle]/page.tsx']) {
       expect(readFileSync(join(process.cwd(), 'app', '(marketing)', '[locale]', page), 'utf8'), page).toContain('<PersonalIdentity>');
+    }
+  });
+
+  it('keeps components/audience free of legacy blue tokens', () => {
+    const audienceDir = join(process.cwd(), 'components', 'audience');
+    const files = readdirSync(audienceDir).filter((f) => /\.(ts|tsx)$/.test(f));
+    for (const file of files) {
+      const src = readFileSync(join(audienceDir, file), 'utf8');
+      expect(src, file).not.toMatch(/#3875c5|#3063a7|#0033ff|#f3f7fa|#e8eff7/i);
     }
   });
 

@@ -71,13 +71,13 @@ export function MakeLauncherView({ credits, price = null, signinHref, labels, ch
 
   return (
     <>
-      <section ref={boxRef} data-template-make-launcher data-viewer={access === null ? 'unknown' : signedIn ? 'member' : 'visitor'} className="mt-6 rounded-[24px] border border-hairline bg-white p-5 shadow-[0_14px_34px_-24px_rgba(12,15,20,0.14)] sm:p-6">
+      <section ref={boxRef} data-template-make-launcher data-viewer={access === null ? 'unknown' : signedIn ? 'member' : 'visitor'} className="mt-6 rounded-[16px] bg-[#F4F4F5] p-5 shadow-none sm:p-6">
         {lead && <div data-make-lead className="mb-5">{lead}</div>}
-        {cost && <p data-template-credits className="font-display text-[2rem] leading-none font-black tabular-nums">{cost}</p>}
+        {cost && <p data-template-credits className="font-display text-[2rem] leading-none font-bold tabular-nums">{cost}</p>}
         {price && (
           <div className="flex flex-wrap items-center gap-2.5">
-            <p data-template-price className="font-display text-[2rem] leading-none font-black tabular-nums">{price.value}</p>
-            <span className="rounded-full bg-surface px-2.5 py-1 text-xs font-medium text-black/75">{price.label}</span>
+            <p data-template-price className="font-display text-[2rem] leading-none font-bold tabular-nums">{price.value}</p>
+            <span className="rounded-full bg-white px-2.5 py-1 text-xs font-medium text-[#52525B]">{price.label}</span>
           </div>
         )}
         <div className={cost || price ? 'mt-2.5' : ''}>{children}</div>
@@ -90,14 +90,14 @@ export function MakeLauncherView({ credits, price = null, signinHref, labels, ch
         aria-hidden={boxInView ? 'true' : undefined}
         inert={boxInView ? true : undefined}
         className={[
-          'fixed inset-x-0 bottom-0 z-40 border-t border-hairline bg-surface/95 px-4 pt-3 pb-safe backdrop-blur md:hidden',
+          'fixed inset-x-0 bottom-0 z-40 border-t border-[#09090B]/[0.08] bg-white/84 px-4 pt-3 pb-safe backdrop-blur-[16px] backdrop-saturate-[1.4] md:hidden',
           'transition-transform duration-200 ease-out motion-reduce:transition-none',
           boxInView ? 'translate-y-full' : 'translate-y-0',
         ].join(' ')}
       >
         <div className="mx-auto flex max-w-xl items-center gap-4">
-          {cost && <p data-make-sticky-credits className="shrink-0 font-display text-[1.2rem] leading-none font-black tabular-nums">{cost}</p>}
-          {price && <p data-make-sticky-price className="shrink-0 font-display text-[1.2rem] leading-none font-black tabular-nums">{price.value}</p>}
+          {cost && <p data-make-sticky-credits className="shrink-0 font-display text-[1.2rem] leading-none font-bold tabular-nums">{cost}</p>}
+          {price && <p data-make-sticky-price className="shrink-0 font-display text-[1.2rem] leading-none font-bold tabular-nums">{price.value}</p>}
           <div className="flex-1">{cta('sticky')}</div>
         </div>
       </div>

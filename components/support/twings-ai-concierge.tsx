@@ -295,10 +295,15 @@ export function TwingsAiConcierge({
     }
   }
 
+  const isTemplateDetail = pathname.includes('/t/');
+
   return (
     <div
       data-twings-ai-concierge
-      className="fixed right-4 bottom-5 z-[48] flex flex-col items-end sm:right-6 sm:bottom-6"
+      className={[
+        'fixed right-4 z-[48] flex flex-col items-end sm:right-6 md:bottom-6',
+        isTemplateDetail ? 'bottom-20' : 'bottom-4',
+      ].join(' ')}
     >
       {isOpen && (
         <section
@@ -318,7 +323,7 @@ export function TwingsAiConcierge({
                 <TwingsMark className="h-[16px] text-white" />
                 <span
                   aria-hidden="true"
-                  className="absolute -right-0.5 -bottom-0.5 size-3 rounded-full border-2 border-white bg-[#0033FF]"
+                  className="absolute -right-0.5 -bottom-0.5 size-3 rounded-full border-2 border-white bg-[#FF58AE]"
                 />
               </div>
               <div>
@@ -493,7 +498,7 @@ export function TwingsAiConcierge({
                     <a
                       href={signInHref}
                       data-concierge-login-cta
-                      className="inline-flex min-h-10 w-full items-center justify-center rounded-full bg-[#0033FF] px-4 py-2 text-xs font-semibold text-white shadow-[0_4px_14px_rgba(0,51,255,0.28)] transition-colors hover:bg-[#0026CC]"
+                      className="inline-flex min-h-10 w-full items-center justify-center rounded-full bg-[#09090B] px-4 py-2 text-xs font-semibold text-white transition-colors hover:bg-[#27272A]"
                     >
                       {isKo ? '로그인하고 상담원 연결하기 →' : 'Sign in to connect with a specialist →'}
                     </a>
@@ -530,7 +535,7 @@ export function TwingsAiConcierge({
                       type="submit"
                       disabled={sendingSlack || !humanMessageDraft.trim()}
                       data-concierge-slack-submit
-                      className="inline-flex min-h-9 w-full items-center justify-center rounded-full bg-[#0033FF] px-4 py-2 text-xs font-semibold text-white shadow-[0_4px_14px_rgba(0,51,255,0.28)] transition-colors hover:bg-[#0026CC] disabled:opacity-50"
+                      className="inline-flex min-h-9 w-full items-center justify-center rounded-full bg-[#09090B] px-4 py-2 text-xs font-semibold text-white transition-colors hover:bg-[#27272A] disabled:opacity-50"
                     >
                       {sendingSlack
                         ? isKo
@@ -586,7 +591,7 @@ export function TwingsAiConcierge({
               <button
                 type="submit"
                 data-concierge-ask-submit
-                className="inline-flex min-h-10 shrink-0 items-center justify-center rounded-full bg-[#0033FF] px-4 py-2 text-xs font-semibold text-white shadow-[0_4px_14px_rgba(0,51,255,0.28)] transition-colors hover:bg-[#0026CC]"
+                className="inline-flex min-h-10 shrink-0 items-center justify-center rounded-full bg-[#09090B] px-4 py-2 text-xs font-semibold text-white transition-colors hover:bg-[#27272A]"
               >
                 {isKo ? '질문' : 'Ask'}
               </button>
@@ -602,12 +607,12 @@ export function TwingsAiConcierge({
         aria-expanded={isOpen}
         aria-label={isKo ? 'TWINGS AI 상담센터 열기' : 'Open TWINGS AI Support Center'}
         data-twings-ai-concierge-launcher
-        className="group relative flex size-14 items-center justify-center rounded-full border-2 border-white bg-[#09090B] text-white shadow-[0_14px_34px_-8px_rgba(9,9,11,0.38)] transition-transform duration-200 hover:scale-105 focus:outline-none"
+        className="group relative flex size-11 items-center justify-center rounded-full border-2 border-white bg-[#09090B] text-white shadow-[0_14px_34px_-8px_rgba(9,9,11,0.38)] transition-transform duration-200 hover:scale-105 focus:outline-none sm:size-14"
       >
-        <TwingsMark className="h-[22px] text-white transition-transform duration-200 group-hover:scale-110" />
+        <TwingsMark className="h-[18px] text-white transition-transform duration-200 group-hover:scale-110 sm:h-[22px]" />
         <span
           aria-hidden="true"
-          className="absolute -top-0.5 -right-0.5 flex size-4 items-center justify-center rounded-full border-2 border-white bg-[#0B0D12] font-mono text-[0.5rem] font-bold text-white"
+          className="absolute -top-0.5 -right-0.5 flex size-3.5 items-center justify-center rounded-full border-2 border-white bg-[#0B0D12] font-mono text-[0.45rem] font-bold text-white sm:size-4 sm:text-[0.5rem]"
         >
           AI
         </span>
