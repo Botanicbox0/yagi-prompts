@@ -10,6 +10,7 @@
 import "./review.css";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Explainer } from "../explainer";
+import { ShareReviewDialog, useShareReviewEvent, type ShareReviewTarget } from "../share-review-dialog";
 import { reviewHref, type ReviewDetail, type ReviewList, type ReviewListItem } from "@/lib/brand-studio/review-contracts";
 import { fetchReviewDetail, fetchReviewList, postReview } from "./api";
 import { ReviewPicker } from "./picker";
@@ -37,6 +38,9 @@ export function ReviewApp({ organizationId, locale, copy, initialList, initialDe
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [picking, setPicking] = useState(false);
+  const [shareTarget, setShareTarget] = useState<ShareReviewTarget | null>(null);
+
+  useShareReviewEvent(organizationId, setShareTarget);
 
   const reloadList = useCallback(async () => {
     const result = await fetchReviewList(organizationId);
@@ -114,6 +118,11 @@ export function ReviewApp({ organizationId, locale, copy, initialList, initialDe
   }, [organizationId, selectedId, refresh]);
 
   const steps = [copy.explainer.step1, copy.explainer.step2, copy.explainer.step3, copy.explainer.step4];
+  const activeSummary = useMemo(
+    () => (selectedId ? list.find((item) => item.id === selectedId) ?? null : null),
+    [list, selectedId],
+  );
+  const shareBtnLabel = locale === "en" ? "Share link (/s/...) · Client chat" : "공유 링크 (/s/...) · 대화방 연결";
 
   return (
     <div className="bsv-review" data-studio-review>
@@ -123,12 +132,33 @@ export function ReviewApp({ organizationId, locale, copy, initialList, initialDe
           <p className="bsv-lede">{copy.lede}</p>
         </div>
         {canWrite && list.length > 0 && (
-          <button type="button" className="bsv-pill" onClick={() => setPicking(true)} data-review-pick-open>
-            <svg className="bsv-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
-              <path d="M12 5v14M5 12h14" />
-            </svg>
-            {copy.pick}
-          </button>
+          <div className="bsv-head-actions">
+            {selectedId && (
+              <button
+                type="button"
+                className="bsv-primary"
+                onClick={() =>
+                  setShareTarget({
+                    organizationId,
+                    reviewId: selectedId,
+                    title: detail?.review.title ?? activeSummary?.title ?? "",
+                  })
+                }
+                data-review-share-open
+              >
+                <svg className="bsv-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+                  <path d="M10 14a4 4 0 0 0 5.7 0l3-3a4 4 0 0 0-5.7-5.7l-1 1M14 10a4 4 0 0 0-5.7 0l-3 3a4 4 0 0 0 5.7 5.7l1-1" />
+                </svg>
+                {shareBtnLabel}
+              </button>
+            )}
+            <button type="button" className="bsv-pill" onClick={() => setPicking(true)} data-review-pick-open>
+              <svg className="bsv-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+                <path d="M12 5v14M5 12h14" />
+              </svg>
+              {copy.pick}
+            </button>
+          </div>
         )}
       </header>
 
@@ -243,6 +273,14 @@ export function ReviewApp({ organizationId, locale, copy, initialList, initialDe
             select(created.review.id);
             void reloadList();
           }}
+        />
+      )}
+
+      {shareTarget && (
+        <ShareReviewDialog
+          target={shareTarget}
+          locale={locale}
+          onClose={() => setShareTarget(null)}
         />
       )}
     </div>

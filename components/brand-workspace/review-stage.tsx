@@ -1325,9 +1325,9 @@ export function ReviewStage({
                     width: 44,
                     height: 44,
                     borderRadius: 10,
-                    border: "2px solid #3875C5",
-                    background: "rgba(56, 117, 197, 0.18)",
-                    boxShadow: "0 0 0 3px rgba(255,255,255,0.85)",
+                    border: "2px solid var(--ys-accent)",
+                    background: "color-mix(in srgb, var(--ys-accent) 18%, transparent)",
+                    boxShadow: "0 0 0 2px rgba(255, 255, 255, 0.72)",
                     display: "flex",
                     alignItems: "center",
                     justifyContent: "center",
@@ -1559,9 +1559,9 @@ export function ReviewStage({
                   value={pinRoiMode}
                   onChange={(e) => setPinRoiMode(e.currentTarget.value as MicroRoiTargetMode)}
                   style={{
-                    background: "#0F172A",
-                    color: "#F8FAFC",
-                    border: "1px solid rgba(255,255,255,0.2)",
+                    background: "var(--ys-raised)",
+                    color: "var(--ys-ink)",
+                    border: "1px solid var(--ys-line-strong)",
                     borderRadius: 8,
                     padding: "4px 8px",
                     fontSize: 12,
@@ -1586,8 +1586,8 @@ export function ReviewStage({
                   onClick={triggerMicroRoiHandoff}
                   data-pin-send-micro-roi
                   style={{
-                    background: "#3875C5",
-                    color: "#FFFFFF",
+                    background: "var(--ys-active-bg)",
+                    color: "var(--ys-active-fg)",
                     border: "none",
                     padding: "6px 11px",
                     borderRadius: 8,

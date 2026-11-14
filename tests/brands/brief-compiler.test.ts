@@ -159,7 +159,7 @@ describe('routing table & 7 model prompt grammars (knowhow-corpus.md §2.1–2.4
       'text2image_soul_v2'
     );
     expect(routeShotEngine({ ...baseSpec, cutKind: 'reference_exact_product' }).engineId).toBe(
-      'seedream-5.0-pro'
+      'seedream-5.5'
     );
     expect(routeShotEngine({ ...baseSpec, cutKind: 'logo_mark_preserve' }).engineId).toBe(
       'nano-banana-pro'
@@ -201,7 +201,7 @@ describe('routing table & 7 model prompt grammars (knowhow-corpus.md §2.1–2.4
     expect(nb.prompt).toContain('CAMERA & OPTICS:');
     expect(nb.lint).toEqual([]);
 
-    // 3. Seedream 5.0 Pro (4-part prose +person a10 contract)
+    // 3. Seedream 5.5 (4-part prose +person a10 contract)
     const personSpec = ShotSpecSchema.parse({
       ...baseSpec,
       references: [
@@ -227,9 +227,9 @@ describe('routing table & 7 model prompt grammars (knowhow-corpus.md §2.1–2.4
       }
     });
     const seedream = compilePrompt(personSpec, IDENTITY, undefined, {
-      target: 'seedream-5.0-pro'
+      target: 'seedream-5.5'
     });
-    expect(seedream.params.grammar).toBe('seedream-5.0-pro');
+    expect(seedream.params.grammar).toBe('seedream-5.5');
     expect(seedream.prompt).toContain(SKIN_MATTE_CONTRACT_A10);
     expect(seedream.lint).toEqual([]);
 

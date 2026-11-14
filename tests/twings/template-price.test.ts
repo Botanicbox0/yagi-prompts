@@ -23,12 +23,13 @@ import { parseRecipe } from '@/lib/recipes/schema';
 /** docs/PLATFORM-2.0.md §19.2 (founder, 2026-11-02): the numbers the founder agreed to, as a contract. */
 
 const film = (seconds: number) => quoteVideo({ model: 'seedance-2.5', seconds, resolution: '720p', aspect: '9:16' })!.providerUsd;
-const set = (engine: 'nano-banana-2.1' | 'seedream-5.0-pro', n: number) => estimateImageUsd(engine, 1) * n;
+const set = (engine: 'nano-banana-2.1' | 'seedream-5.5', n: number) => estimateImageUsd(engine, 1) * n;
 
 describe('template price', () => {
   it('puts an image set at cost × 1.12 and a film at a 6% margin, in 10원 credits', () => {
     expect(baseCredits({ medium: 'image', providerUsd: set('nano-banana-2.1', 5) })).toBe(41);
-    expect(baseCredits({ medium: 'image', providerUsd: set('seedream-5.0-pro', 5) })).toBe(71);
+    expect(baseCredits({ medium: 'image', providerUsd: set('seedream-5.5', 5) })).toBe(34);
+    expect(baseCredits({ medium: 'image', providerUsd: 0.09 * 5 })).toBe(71);
     expect(baseCredits({ medium: 'video', providerUsd: film(10) })).toBe(345);
     expect(baseCredits({ medium: 'video', providerUsd: film(15) })).toBe(517);
   });
@@ -82,7 +83,8 @@ describe('template price', () => {
   });
 
   it('calculates selective frame credits and KRW proportionally when picking 1..5 shots out of a 5-shot set', () => {
-    const seedreamUsd = estimateImageUsd('seedream-5.0-pro', 1); // $0.09
+    expect(estimateImageUsd('seedream-5.5', 1)).toBe(0.043);
+    const seedreamUsd = 0.09; // Founder credit plan baseline benchmark ($0.09/shot → 71 cr set)
     const shot1 = quoteSelectiveImageSet({
       perFrameProviderUsd: seedreamUsd,
       totalFrames: 5,
@@ -123,7 +125,7 @@ describe('template price', () => {
       steps: [1, 2, 3, 4, 5].map((n) => ({
         id: `shot${n}`,
         kind: 'image' as const,
-        engine: 'seedream-5.0-pro',
+        engine: 'seedream-5.5',
         inputs: ['selfie'],
         prompt: `Editorial portrait shot ${n} featuring {{selfie}} in natural studio light.`,
         params: { aspect: '3:4' as const },
@@ -142,8 +144,8 @@ describe('template price', () => {
 
     const quote2 = quoteSelectiveRecipe(parsed.recipe, [1, 3], 1000);
     expect(quote2.selectedCount).toBe(2);
-    expect(quote2.baseCredits).toBe(29);
-    expect(quote2.savedCredits).toBe(42);
+    expect(quote2.baseCredits).toBe(14);
+    expect(quote2.savedCredits).toBe(20);
   });
 
   it('simulates Maker 80% template revenue milestones accurately', () => {

@@ -8,7 +8,10 @@
  * non-deleted messages) before deleting an unreferenced `st/...` object.
  */
 import type { SqlRunner } from '@/lib/db/sql-runner';
+import { sweepExpiredFilmSheets } from './film-sheet/lifecycle';
 import { isStudioMediaKey, type StudioMediaStore } from './media-store';
+
+export { sweepExpiredFilmSheets } from './film-sheet/lifecycle';
 
 export interface PhysicalCleanupExclusion {
   assetId?: string;
@@ -146,6 +149,13 @@ export async function dropUnreferencedStudioKeys(
         message: error instanceof Error ? error.message.slice(0, 200) : 'unknown',
       });
     }
+  }
+  try {
+    await sweepExpiredFilmSheets(sql);
+  } catch (error) {
+    log?.('studio_film_sheet_sweep_failed', {
+      message: error instanceof Error ? error.message.slice(0, 200) : 'unknown',
+    });
   }
   return deletedKeys;
 }

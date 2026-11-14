@@ -108,7 +108,7 @@ describe('the real-person identity', () => {
     expect(needsIdentity('seedance-2.0')).toBe(true);
     expect(needsIdentity('seedance-2.5')).toBe(true);
     // Seedream's image API refuses `asset://` (2026-09-22): the photo goes as bytes, its moderation decides.
-    expect(needsIdentity('seedream-5.0-pro')).toBe(false);
+    expect(needsIdentity('seedream-5.5')).toBe(false);
     expect(needsIdentity('seedream-5.0-lite')).toBe(false);
     expect(needsIdentity('gpt-image-2')).toBe(false);
     expect(needsIdentity('gpt-image-2.5-flare')).toBe(false);

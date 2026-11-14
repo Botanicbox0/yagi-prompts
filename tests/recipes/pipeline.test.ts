@@ -157,7 +157,7 @@ describe('recipe v2 in the render pass', () => {
   it('sends the selfie itself to Seedream as base64 — no asset group, no asset:// — and keeps every frame', async () => {
     const { slug } = await recipeTemplate({
       ...carousel(3),
-      steps: carousel(3).steps.map((step) => ({ ...step, engine: 'seedream-5.0-pro', params: { aspect: '3:4' } })),
+      steps: carousel(3).steps.map((step) => ({ ...step, engine: 'seedream-5.5', params: { aspect: '3:4' } })),
     });
     const created = await createRenderJob({ sql: h.sql, store, mode: 'virtual' }, ADMIN_VIEWER, { templateSlug: slug, aspect: '3:4', photo: PHOTO, locale: 'ko' });
     if (!created.ok) throw new Error(created.code);
@@ -176,7 +176,7 @@ describe('recipe v2 in the render pass', () => {
 
   it('finishes a Seedream job parked on an asset before the bytes path on the photo itself', async () => {
     const id = randomUUID(), slug = `single-${id.slice(0, 8)}`;
-    await insertPrompt(h.sql, { id, slug, source: 'yagi', authorId: null, authorHandle: null, status: 'published', publishedAt: 'now', models: ['seedream-5.0-pro'], title: 'Single Seedream', titleKo: null, promptText: 'A bride by a tall window, matte natural skin.', textVisibility: 'hidden', media: null, useCase: [], featured: false, medium: 'image', engine: 'seedream-5.0-pro', aspectDefault: '3:4', runtimeSeconds: null, priceCents: 349, priceKrw: 4900 });
+    await insertPrompt(h.sql, { id, slug, source: 'yagi', authorId: null, authorHandle: null, status: 'published', publishedAt: 'now', models: ['seedream-5.5'], title: 'Single Seedream', titleKo: null, promptText: 'A bride by a tall window, matte natural skin.', textVisibility: 'hidden', media: null, useCase: [], featured: false, medium: 'image', engine: 'seedream-5.5', aspectDefault: '3:4', runtimeSeconds: null, priceCents: 349, priceKrw: 4900 });
     const created = await createRenderJob({ sql: h.sql, store, mode: 'virtual' }, ADMIN_VIEWER, { templateSlug: slug, aspect: '3:4', photo: PHOTO, locale: 'ko' });
     if (!created.ok) throw new Error(created.code);
     // What the old path left behind: claimed, waiting on the bank's comparison of the photo.
@@ -191,7 +191,7 @@ describe('recipe v2 in the render pass', () => {
   });
 
   it('fails a face Seedream refuses as the face policy, on the step it refused', async () => {
-    const { slug } = await recipeTemplate({ ...carousel(2), steps: carousel(2).steps.map((step) => ({ ...step, engine: 'seedream-5.0-pro', params: { aspect: '3:4' } })) });
+    const { slug } = await recipeTemplate({ ...carousel(2), steps: carousel(2).steps.map((step) => ({ ...step, engine: 'seedream-5.5', params: { aspect: '3:4' } })) });
     const created = await createRenderJob({ sql: h.sql, store, mode: 'virtual' }, ADMIN_VIEWER, { templateSlug: slug, aspect: '3:4', photo: PHOTO, locale: 'ko' });
     if (!created.ok) throw new Error(created.code);
     const seedream = { async generate() { throw new SeedreamError('The request failed because the input image may contain real person.', 400, 'InputImageSensitiveContentDetected.PrivacyInformation', 'req-1'); } } as unknown as SeedreamClient;

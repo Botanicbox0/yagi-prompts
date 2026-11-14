@@ -44,12 +44,23 @@ describe("tray numbering", () => {
     expect(trayLabels([pic(1), film(2), pic(3), sound(4)], copyFor(locale))).toEqual(expected);
   });
 
-  it("puts just the per-kind number under each square, not a round labelled chip", () => {
+  it("puts the @kindN virtual tag under each square, not a round labelled chip", () => {
     expect(trayNumbers([pic(1), pic(2), pic(3)])).toEqual([1, 2, 3]);
     expect(trayNumbers([pic(1), film(2), pic(3)])).toEqual([1, 1, 2]);
     const items = [pic(1), pic(2), pic(3)];
     const html = render({ items });
-    expect([...html.matchAll(/class="bs-thumb-n bs-num" aria-hidden="true">(\d+)</g)].map((m) => m[1])).toEqual(["1", "2", "3"]);
+    expect([...html.matchAll(/class="bs-thumb-n bs-num" aria-hidden="true">([^<]+)</g)].map((m) => m[1])).toEqual([
+      "@image1",
+      "@image2",
+      "@image3",
+    ]);
+    const mixedHtml = render({ items: [pic(1), film(2), pic(3), sound(4)] });
+    expect([...mixedHtml.matchAll(/class="bs-thumb-n bs-num" aria-hidden="true">([^<]+)</g)].map((m) => m[1])).toEqual([
+      "@image1",
+      "@video1",
+      "@image2",
+      "@audio1",
+    ]);
     expect(html).not.toContain("bs-chip-label");
     expect(html).not.toMatch(/>이미지 1</);
     expect(html.match(/class="bs-thumb"/g)).toHaveLength(3);

@@ -10,6 +10,7 @@ import type {
   StudioRemixMethod,
 } from '@/lib/brand-studio/contracts';
 import type { StudioPromptProfile } from '@/lib/brand-studio/models';
+import type { SqlRunner } from '@/lib/db/sql-runner';
 
 export type EnhanceKind = 'image' | 'region_edit' | 'video' | 'video_remix';
 
@@ -67,6 +68,9 @@ export interface EnhanceResult {
 export interface EnhanceDeps {
   fetch: typeof fetch;
   env: Record<string, string | undefined>;
+  /** Optional DB runner + org ID so published `brand_studio_playbooks` (`inject_director = true`) feed the Director. */
+  sql?: SqlRunner;
+  organizationId?: string;
   /**
    * Optional (addition to the §12 signature): called with a short reason code when the fallback is
    * used ("no_key", "gemini_http_429", "lost_references" …). For server logs only; never shown.

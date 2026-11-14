@@ -235,6 +235,18 @@ export function brandRouteAllowed(pathname: string, method: string): boolean {
   if (pathname === '/api/brand-studio/summary') return read;
   // Same-origin authenticated clip/audio stream + TWINGS credit & chat operations for the video composer (docs/BRAND-VIDEO-COMPOSE-D.md §3).
   if (pathname === '/api/brand-studio/compose') return read || method === 'POST';
+  if (pathname === '/api/brand-studio/post-production') return method === 'POST';
+  if (pathname === '/api/brand-studio/share-bridge') return method === 'POST';
+  if (pathname === '/api/brand-studio/video-projects') return read || method === 'POST';
+  if (pathname === '/api/brand-studio/workflows') return read || method === 'POST';
+  if (pathname === '/api/brand-studio/mcp-tokens') return read || method === 'POST';
+  // Remote MCP & OAuth 2.1 discovery/token doors (authenticated strictly via Bearer token / OAuth code, never browser cookies on /api/mcp).
+  if (pathname === '/api/mcp') return read || method === 'POST' || method === 'DELETE' || method === 'OPTIONS';
+  if (pathname === '/api/mcp/oauth/register' || pathname === '/api/mcp/oauth/token') return method === 'POST' || method === 'OPTIONS';
+  if (pathname === '/api/mcp/oauth/authorize') return read || method === 'POST';
+  if (pathname === '/.well-known/oauth-protected-resource' || pathname === '/.well-known/oauth-authorization-server') {
+    return read || method === 'OPTIONS';
+  }
   if (/^\/api\/brand-studio\/assets\/[a-f0-9-]{36}$/.test(pathname)) return method === 'POST';
   if (/^\/api\/brand-studio\/media\/st\/[a-f0-9]{64}\.(?:png|jpg|webp|mp4|mov|mp3|wav)$/.test(pathname)) return read;
   // Project room conversations (docs/BRAND-ROOMS.md §4): the stream, a thread, the lines about one thing
@@ -261,13 +273,29 @@ export function isSharePath(pathname: string): boolean {
   return /^\/s\/[A-Za-z0-9_-]{43}$/.test(pathname);
 }
 
+/** Cross-origin Bearer/OAuth MCP endpoints that do not use session cookies and accept external AI connector clients. */
+export function isExternalMcpEndpoint(pathname: string): boolean {
+  return (
+    pathname === '/api/mcp' ||
+    pathname === '/api/mcp/oauth/register' ||
+    pathname === '/api/mcp/oauth/token' ||
+    pathname === '/.well-known/oauth-protected-resource' ||
+    pathname === '/.well-known/oauth-authorization-server'
+  );
+}
+
 /** Former matcher exclusions now run only AFTER the host policy, preserving consumer behavior. */
 export function bypassConsumerLocale(pathname: string): boolean {
   // Self-hosted photo hints are static assets. Keep the host boundary above intact.
   if (pathname === '/workers/photo-advice-v1.js' || pathname === '/models/face-landmarker-float16-v1.task' ||
     /^\/vendor\/face-1\.1\.0\/(?:vision_bundle\.js|wasm\/vision_wasm_(?:nosimd_)?internal\.(?:js|wasm))$/.test(pathname)) return true;
   if (pathname === '/llms.txt' || pathname === '/llms-full.txt') return true;
-  if (pathname === '/.well-known/assetlinks.json' || pathname === '/.well-known/apple-app-site-association') return true;
+  if (
+    pathname === '/.well-known/assetlinks.json' ||
+    pathname === '/.well-known/apple-app-site-association' ||
+    pathname === '/.well-known/oauth-protected-resource' ||
+    pathname === '/.well-known/oauth-authorization-server'
+  ) return true;
   // A share link's page is not a locale page and needs no session (docs/BRAND-ROOMS.md §6).
   if (isSharePath(pathname)) return true;
   return /^\/(?:_next\/static|_next\/image|favicon\.ico|sitemap\.xml|robots\.txt|sw\.js|offline\.html|manifest\.webmanifest|fonts\/|\.storage\/|api\/|auth\/|r\/)/.test(pathname)
@@ -279,7 +307,7 @@ export function authReturnPath(raw: unknown, hostname: string, fallback: string)
   const path = safeReturnPath(raw, base);
   const pathname = new URL(path, 'https://path.invalid').pathname;
   if (hostname === 'admin.twings.app' && !isAdminPath(pathname)) return '/admin';
-  if (hostname === 'brand.twings.app' && !isBrandPath(pathname)) return '/brand';
+  if (hostname === 'brand.twings.app' && !isBrandPath(pathname) && pathname !== '/api/mcp/oauth/authorize') return '/brand';
   return path;
 }
 

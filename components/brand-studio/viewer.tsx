@@ -11,6 +11,7 @@
  * A result that came from a partial edit opens on a before/after slider.
  */
 import { useEffect, useId, useRef, useState, type KeyboardEvent } from "react";
+import { copyImageUrlToClipboard, isEditableTextTarget } from "@/lib/brand-studio/clipboard-image";
 import type { RegionBox, StudioAssetView, StudioJobView, StudioOutputView } from "@/lib/brand-studio/contracts";
 import type { StudioImageModel } from "@/lib/brand-studio/models";
 import { errorLine, fill, type StudioCopy, type StudioLocale } from "./copy";
@@ -227,6 +228,7 @@ function ViewerContent({
   const [uploading, setUploading] = useState(false);
   const [regionNote, setRegionNote] = useState<string | null>(null);
   const [sentLine, setSentLine] = useState<string | null>(null);
+  const [copyToast, setCopyToast] = useState<string | null>(null);
   const [confirming, setConfirming] = useState(false);
   const file = media(item);
   const job = item.type === "output" ? item.job : null;
@@ -234,6 +236,34 @@ function ViewerContent({
   const parentAsset = job && !parent && parentAssetOf ? parentAssetOf(job.parentAssetId) : null;
   const before = parent ?? parentAsset;
   const image = file.kind === "image";
+
+  const copyCurrentImage = async () => {
+    if (!image) return;
+    const res = await copyImageUrlToClipboard(file.url);
+    setCopyToast(res.ok ? v.copiedImage : v.copyFailed);
+  };
+
+  useEffect(() => {
+    if (!copyToast) return;
+    const timer = window.setTimeout(() => setCopyToast(null), 3200);
+    return () => window.clearTimeout(timer);
+  }, [copyToast]);
+
+  useEffect(() => {
+    if (!image || typeof window === "undefined") return;
+    const onKeyDown = (event: globalThis.KeyboardEvent) => {
+      if (event.defaultPrevented || isEditableTextTarget(event.target)) return;
+      const selection = typeof window.getSelection === "function" ? window.getSelection()?.toString() ?? "" : "";
+      if (selection.trim()) return;
+      if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "c") {
+        event.preventDefault();
+        void copyCurrentImage();
+      }
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [image, file.url]);
   const name = item.type === "asset" ? item.asset.name : "";
   const comparing = !region && image && job?.kind === "region_edit" && before?.kind === "image";
 
@@ -290,6 +320,7 @@ function ViewerContent({
     { name: "reference", icon: "attach", label: v.reference, run: () => actions.reference(item), show: canGenerate },
     { name: "save", icon: "save", label: v.save, run: () => output && actions.save(output), show: canCreate && Boolean(output) && !output?.savedAssetId },
     { name: "finalize", icon: "spark", label: v.finalize, run: () => output && actions.finalize(output), show: canGenerate && Boolean(output?.draft) },
+    { name: "review", icon: "review", label: locale === "en" ? "Review & Share" : "검수 · 공유", run: () => actions.review?.(item), show: canCreate && Boolean(actions.review) },
     { name: "campaign", icon: "send", label: v.campaign, run: () => actions.campaign(item), show: canCreate },
   ];
   const saved = canCreate && Boolean(output?.savedAssetId);
@@ -381,6 +412,11 @@ function ViewerContent({
               )}
             </div>
             <div className="bs-row bs-quiet-actions">
+              {image && (
+                <button type="button" className="bs-btn" data-variant="ghost" data-size="sm" data-copy-image onClick={() => void copyCurrentImage()}>
+                  {v.copyImage}
+                </button>
+              )}
               <a className="bs-btn" data-variant="ghost" data-size="sm" href={file.url} download target="_blank" rel="noopener noreferrer" data-action="download">
                 <StudioIcon name="download" />
                 {v.download}
@@ -392,6 +428,11 @@ function ViewerContent({
                 </button>
               )}
             </div>
+            {copyToast && (
+              <p className="bs-notice" role="status" data-viewer-copy-toast>
+                {copyToast}
+              </p>
+            )}
             {confirming && output && (
               <div className="bs-confirm-box" role="group" aria-label={v.delete} data-studio-delete-confirm>
                 <p>{v.deleteConfirm}</p>

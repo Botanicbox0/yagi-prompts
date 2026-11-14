@@ -1,4 +1,4 @@
-import { IMAGE_ENGINES, sizeString, type ImageAspect, type SeedreamEngineId, imageSizeFor } from './engines';
+import { IMAGE_ENGINES, sizeString, type ImageAspect, type SeedreamEngineId, type SeedreamResolutionTier, imageSizeFor } from './engines';
 
 /**
  * BytePlus ModelArk — the Seedream image generation API, as ONE boundary (docs.byteplus.com,
@@ -32,10 +32,29 @@ export function seedreamConfigFromEnv(env: Record<string, string | undefined> = 
 
 export type { SeedreamEngineId };
 
+export type SeedreamBackgroundMode = 'auto' | 'transparent' | 'opaque';
+
+export function resolveSeedreamModelId(
+  engine: SeedreamEngineId,
+  env: Record<string, string | undefined> = process.env,
+): string {
+  if (engine === 'seedream-5.5') {
+    const override = env.ARK_SEEDREAM_55_MODEL?.trim();
+    if (override) return override;
+  }
+  return IMAGE_ENGINES[engine].model;
+}
+
 export interface SeedreamGenerateInput {
   engine: SeedreamEngineId;
   prompt: string;
   aspect: ImageAspect;
+  /** Resolution tier (`1K`, `1.5K`, `2K`). Defaults to `2K`. */
+  resolution?: SeedreamResolutionTier;
+  /** Optional background mode (`Seedream 5.5`). `'transparent'` forces PNG output. */
+  background?: SeedreamBackgroundMode;
+  /** Explicit wire model id override (defaults to `resolveSeedreamModelId(engine)`). */
+  modelOverride?: string;
   /** Image URLs or `data:image/...;base64,…` strings. Seedance asset:// IDs are not supported. */
   references?: string[];
   outputFormat?: 'png' | 'jpeg';
@@ -85,14 +104,17 @@ export function toSeedreamBody(input: SeedreamGenerateInput): Record<string, unk
   if (references.length > spec.maxReferenceImages) {
     throw new RangeError(`${input.engine} takes at most ${spec.maxReferenceImages} reference images`);
   }
+  const background = spec.supportsTransparentBackground && input.background ? input.background : undefined;
+  const outputFormat = background === 'transparent' ? 'png' : (input.outputFormat ?? 'jpeg');
   const body: Record<string, unknown> = {
-    model: spec.model,
+    model: input.modelOverride?.trim() || spec.model,
     prompt: input.prompt,
-    size: sizeString(imageSizeFor(input.engine, input.aspect)),
-    output_format: input.outputFormat ?? 'jpeg',
+    size: sizeString(imageSizeFor(input.engine, input.aspect, input.resolution)),
+    output_format: outputFormat,
     response_format: input.responseFormat ?? 'url',
     watermark: input.watermark ?? false,
   };
+  if (background) body.background = background;
   if (references.length === 1) body.image = references[0];
   else if (references.length > 1) body.image = references;
   if (input.promptMode) body.optimize_prompt_options = { mode: input.promptMode };
@@ -106,13 +128,18 @@ interface RawResponse {
   error?: { code?: string; message?: string };
 }
 
-export function createSeedreamClient(config: SeedreamConfig, fetchImpl: typeof fetch = fetch) {
+export function createSeedreamClient(
+  config: SeedreamConfig,
+  fetchImpl: typeof fetch = fetch,
+  env: Record<string, string | undefined> = process.env,
+) {
   return {
     async generate(input: SeedreamGenerateInput): Promise<SeedreamResult> {
+      const modelId = input.modelOverride?.trim() || resolveSeedreamModelId(input.engine, env);
       const response = await fetchImpl(`${config.baseUrl}/images/generations`, {
         method: 'POST',
         headers: { 'content-type': 'application/json', authorization: `Bearer ${config.apiKey}` },
-        body: JSON.stringify(toSeedreamBody(input)),
+        body: JSON.stringify(toSeedreamBody({ ...input, modelOverride: modelId })),
       });
       const text = await response.text();
       let parsed: RawResponse = {};
@@ -127,7 +154,7 @@ export function createSeedreamClient(config: SeedreamConfig, fetchImpl: typeof f
         throw new SeedreamError(message, response.status, parsed.error?.code ?? null, requestId);
       }
       return {
-        model: parsed.model ?? IMAGE_ENGINES[input.engine].model,
+        model: parsed.model ?? modelId,
         images: (parsed.data ?? []).map((item) => ({
           url: item.url ?? null,
           b64: item.b64_json ?? null,

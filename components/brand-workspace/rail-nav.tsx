@@ -54,7 +54,7 @@ import {
 export interface RailNavigationProps {
   /** The selected brand's id, or null (no brand yet / an unavailable one). */
   organizationId: string | null;
-  /** Studio v2 is open for this brand: 이미지 · 영상 · 리뷰, the credits meter and background progress. */
+  /** Studio v2 is open for this brand: 이미지 · 영상 · 편집 · 워크플로우, the credits meter and background progress. */
   studio: boolean;
   /** Project-only non-subscribed brand: `야기 팀과` sits first, and Studio items open the Showroom without background polling. */
   studioShowroom?: boolean;
@@ -156,8 +156,8 @@ export function RailNavigation(props: RailNavigationProps) {
   const groupOrder: readonly RailGroupId[] = projectFirst ? ['team', 'make'] : ['make', 'team'];
   const items = groups ? [...groups[groupOrder[0]!], ...groups[groupOrder[1]!]] : orderItems(visibleItems, order);
   const label = (id: RailItemId): string => {
-    if (id === 'messages') return nav?.messages ?? '';
-    if (id === 'campaigns' && nav) return nav.commissions;
+    if (id === 'messages') return copy.rail.messages || nav?.messages || '';
+    if (id === 'campaigns' && nav) return copy.rail.campaigns || nav.commissions;
     return copy.rail[id];
   };
   const groupTitle = (group: RailGroupId) => (nav ? (group === 'make' ? nav.groupMake : nav.groupTeam) : '');
@@ -373,8 +373,8 @@ export function RailNavigation(props: RailNavigationProps) {
     );
   };
 
-  // Phone tab bar: 이미지 스튜디오 · 비디오 스튜디오 · 캠페인 · 에셋 when they exist, filled up from the rest; the others go in 더보기.
-  // With rooms: 이미지 스튜디오 · 비디오 스튜디오 · 의뢰 · 메시지 (rail-model `groupedTabIds`).
+  // Phone tab bar: 이미지 스튜디오 · 영상 스튜디오 · 캠페인 · 에셋 when they exist, filled up from the rest; the others go in 더보기.
+  // With rooms: 이미지 스튜디오 · 영상 스튜디오 · 의뢰 · 메시지 (rail-model `groupedTabIds`).
   const tabIds = nav
     ? groupedTabIds(items, projectFirst)
     : [

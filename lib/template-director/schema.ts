@@ -35,7 +35,7 @@ export const DIRECTOR_EDITABLE_SLOTS = [
 export type DirectorEditableSlot = (typeof DIRECTOR_EDITABLE_SLOTS)[number];
 
 export const DUAL_IDENTITY_CANDIDATE_ENGINES = [
-  'seedream-5.0-pro',
+  'seedream-5.5',
   'nano-banana-2.1'
 ] as const;
 export type DualIdentityCandidateEngine = (typeof DUAL_IDENTITY_CANDIDATE_ENGINES)[number];
@@ -100,7 +100,7 @@ export const CLEANUP_MODES = [
 export type CleanupMode = (typeof CLEANUP_MODES)[number];
 
 export const CLEANUP_ENGINES = [
-  'seedream-5.0-pro',
+  'seedream-5.5',
   'nano-banana-2.1',
   'gpt-image-2.5-sunburst',
   'seedvr2-local'
@@ -146,7 +146,7 @@ export interface RecommendedPhotoCleanup {
   preferDirectReupload?: boolean;
   /**
    * When true (occlusion or heavy beauty-app retouching detected), TWINGS generates two parallel
-   * identity candidates (Seedream 5.0 Pro + Nano Banana 2.1) and lets the user pick the one that
+   * identity candidates (Seedream 5.5 + Nano Banana 2.1) and lets the user pick the one that
    * looks most like their real face if they cannot upload another photo.
    */
   requiresDualCandidateSelection?: boolean;
@@ -184,7 +184,7 @@ export interface PhotoInspectionVerdict {
 }
 
 export type ModelSpecificImageEngine =
-  | 'seedream-5.0-pro'
+  | 'seedream-5.5'
   | 'nano-banana-2.1'
   | 'gpt-image-2.5-sunburst';
 
@@ -196,7 +196,7 @@ export interface MultiPhotoIdentityInput {
   }>;
   /** Optional creator or user feedback (e.g., "이마 조금 줄이고 턱선 둥글게"). */
   creatorNoteKo?: string | null;
-  /** Target synthesis engine for model-specific prompt optimization (defaults to 'seedream-5.0-pro' or 'nano-banana-2.1'). */
+  /** Target synthesis engine for model-specific prompt optimization (defaults to 'seedream-5.5' or 'nano-banana-2.1'). */
   preferredEngine?: ModelSpecificImageEngine;
 }
 
@@ -228,9 +228,9 @@ export interface OpticalIdentityMasterPlan {
   extractedHairLockEn: string;
   /** Server-only model-specific prompt fed to the selected engine when strategy === 'surgical_inplace_edit'. */
   opticalMasterPromptEn: OpaqueCompiledPrompt;
-  /** Server-only fallback prompt formatted specifically for the secondary engine (e.g. Seedream 5.0 Pro <-> Nano Banana 2.1). */
+  /** Server-only fallback prompt formatted specifically for the secondary engine (e.g. Seedream 5.5 <-> Nano Banana 2.1). */
   fallbackMasterPromptEn: OpaqueCompiledPrompt;
-  /** Parallel dual-candidate prompts (Seedream 5.0 Pro + Nano Banana 2.1) so the user can pick the closest likeness. */
+  /** Parallel dual-candidate prompts (Seedream 5.5 + Nano Banana 2.1) so the user can pick the closest likeness. */
   dualCandidatePromptsEn: Record<DualIdentityCandidateEngine, OpaqueCompiledPrompt>;
 }
 

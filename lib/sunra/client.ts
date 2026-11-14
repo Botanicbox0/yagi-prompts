@@ -190,12 +190,21 @@ export function parseSunraQueueState(raw: unknown): SunraQueueState {
 export function parseSunraQueueResult(raw: unknown): SunraQueueResult {
   const result = asRecord(raw);
   const files: SunraQueueResult['files'] = [];
-  const push = (file: unknown) => {
+  const push = (file: unknown, fallbackMime: string | null = null) => {
+    if (typeof file === 'string' && file) {
+      files.push({ url: file, contentType: fallbackMime });
+      return;
+    }
     const f = asRecord(file);
-    if (typeof f.url === 'string' && f.url) files.push({ url: f.url, contentType: typeof f.content_type === 'string' ? f.content_type : null });
+    if (typeof f.url === 'string' && f.url) {
+      files.push({ url: f.url, contentType: typeof f.content_type === 'string' ? f.content_type : fallbackMime });
+    }
   };
-  if (Array.isArray(result.images)) result.images.forEach(push);
+  if (Array.isArray(result.images)) result.images.forEach((f) => push(f));
+  if (Array.isArray(result.audios)) result.audios.forEach((f) => push(f, 'audio/mpeg'));
   if (result.video) push(result.video);
+  if (result.audio) push(result.audio, 'audio/mpeg');
+  if (typeof result.audio_url === 'string' && result.audio_url) push(result.audio_url, 'audio/mpeg');
   if (result.image) push(result.image);
   const video = asRecord(result.video);
   const draft = typeof result.draft_task_id === 'string' ? result.draft_task_id : typeof video.draft_task_id === 'string' ? video.draft_task_id : null;
@@ -281,7 +290,13 @@ export function createSunraClient(
       if (state.status !== 'COMPLETED' || state.success === false) return task;
       const result = await call(path, { method: 'GET' });
       const images = Array.isArray(result.images) ? result.images : [];
-      const url = asRecord(result.video).url ?? asRecord(images[0]).url;
+      const audios = Array.isArray(result.audios) ? result.audios : [];
+      const url =
+        asRecord(result.video).url ??
+        asRecord(result.audio).url ??
+        asRecord(audios[0]).url ??
+        (typeof result.audio_url === 'string' && result.audio_url ? result.audio_url : undefined) ??
+        asRecord(images[0]).url;
       const billedUsd =
         typeof result.units === 'number' && result.units > 0
           ? Math.round((result.units / 1000) * 10000) / 10000

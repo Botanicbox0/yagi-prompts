@@ -11,6 +11,7 @@ import { studioVideoEn } from './studio-video';
 import { studioReviewEn } from './studio-review';
 import { studioLayersEn } from './studio-layers';
 import { studioComposeEn } from './studio-compose';
+import { studioWorkflowsEn } from './studio-workflows';
 import { adminConsoleEn } from './admin-console';
 import { campaignHubEn } from './campaign-hub';
 /**
@@ -57,6 +58,7 @@ export const en = {
   studioReview: studioReviewEn,
   studioLayers: studioLayersEn,
   studioCompose: studioComposeEn,
+  studioWorkflows: studioWorkflowsEn,
   adminConsole: adminConsoleEn,
   landingMedia: {
     nav: 'Landing images',
@@ -1792,6 +1794,7 @@ export const en = {
       tooManyVideos: 'Only one reference video per run.',
       tooManyImages: 'This model takes up to {n} pictures.',
       uploading: 'Uploading {name}',
+      pasted: 'Added pasted image to references.',
     },
     roles: {
       product: 'Product',
@@ -1861,6 +1864,9 @@ export const en = {
       compareHint: 'Drag the line left or right to compare before and after.',
       before: 'Before',
       after: 'After',
+      copyImage: 'Copy image',
+      copiedImage: 'Copied image to clipboard.',
+      copyFailed: 'Could not copy to clipboard.',
     },
     region: {
       hint: 'Draw a box over the part to change. Everything outside the box stays as it is.',
@@ -1869,7 +1875,7 @@ export const en = {
       keys: 'Arrow keys move the box. Shift and arrow keys resize it.',
       preview: 'Input preview',
       refs: 'References',
-      refsHint: 'Drag in or pick logo, product or people photos. In your sentence they start at number 2.',
+      refsHint: 'Drag in, pick, or press Ctrl+V to paste photos. In your sentence they start at number 2.',
       dropHere: 'Drop to add as a reference',
       addRefs: 'Pick photos',
       addOne: 'Add as reference: {name}',
@@ -1933,7 +1939,7 @@ export const en = {
       seedreamPro: 'Product and people photos',
       nanoBananaPro: 'Text, logos and partial edits',
       seedreamFlash: 'Quick drafts',
-      seedream55: 'Opening soon',
+      seedream55: 'Product and people photos',
       gptImageFlare: 'Fast to make and edit',
       gptImageSunburst: 'Slightly slower, with sharper detail edits for the same credits.',
       seedance25: 'Video from text, pictures or a reference',

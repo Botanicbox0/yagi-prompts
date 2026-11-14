@@ -6,6 +6,7 @@
  */
 import { confirmedIdentityFor } from '@/lib/brands/identity/service';
 import type { FilmDepth, FilmSheet, FilmShot, StudioErrorCode, StudioReference } from './contracts';
+import { extractStoredFilmSheet, isFilmSheetExpired, readCachedFilmSheet, writeCachedFilmSheet } from './film-sheet';
 import { imageInfo } from './files';
 import { studioModel, type StudioImageModel, type StudioModel } from './models';
 import { resolveReferences, type ResolvedRef } from './plan';
@@ -76,9 +77,20 @@ export async function enhanceReferences(deps: Pick<StudioDeps, 'media'>, refs: r
   return out;
 }
 
-export async function runEnhancer(deps: Pick<StudioDeps, 'intel' | 'intelDeps' | 'log'>, input: EnhanceInput): Promise<EnhanceResult> {
+export async function runEnhancer(
+  deps: Pick<StudioDeps, 'intel' | 'intelDeps' | 'log'> & { sql?: StudioDeps['sql']; organizationId?: string },
+  input: EnhanceInput,
+): Promise<EnhanceResult> {
+  const intelDeps =
+    deps.sql || deps.organizationId
+      ? {
+          ...deps.intelDeps,
+          ...(deps.sql ? { sql: deps.sql } : {}),
+          ...(deps.organizationId ? { organizationId: deps.organizationId } : {}),
+        }
+      : deps.intelDeps;
   try {
-    const result = await deps.intel.enhancePrompt(input, deps.intelDeps);
+    const result = await deps.intel.enhancePrompt(input, intelDeps);
     if (result && typeof result.prompt === 'string' && result.prompt.trim()) return result;
   } catch (error) {
     deps.log?.('studio_enhance_failed', { message: error instanceof Error ? error.message.slice(0, 200) : 'unknown' });
@@ -108,27 +120,28 @@ export async function readSheet(
 }
 
 /* A library video is read once per language and depth: the sheet is kept on the asset (`film_sheets`,
- * migration 0077, keyed "ko" / "en" for the basic reading and "blueprint:ko" / "blueprint:en" for the
- * deeper one) and reused by the remix panel, the prompt preview and the job. A failed reading is not
- * kept, so a later call may try again. Before 0077 the column is missing and every call reads afresh. */
-const UNDEFINED_COLUMN = '42703';
-const missingColumn = (error: unknown) => (error as { code?: string } | null)?.code === UNDEFINED_COLUMN;
-const sheetKey = (locale: 'ko' | 'en', depth: FilmDepth) => (depth === 'basic' ? locale : `${depth}:${locale}`);
-
-export function storedSheet(row: { film_sheets?: unknown } | null | undefined, locale: 'ko' | 'en', depth: FilmDepth = 'basic'): FilmSheet | null {
-  const all = row?.film_sheets;
-  const sheet = all && typeof all === 'object' ? (all as Record<string, unknown>)[sheetKey(locale, depth)] : null;
-  return sheet && typeof sheet === 'object' && typeof (sheet as FilmSheet).summary === 'string' ? (sheet as FilmSheet) : null;
+ * migration 0077 + 0087 14-day sliding TTL, keyed "ko" / "en" for the basic reading and
+ * "blueprint:ko" / "blueprint:en" for the deeper one) and reused by the remix panel, the prompt preview
+ * and the job. A failed reading is not kept, so a later call may try again. */
+export function storedSheet(
+  row: { film_sheets?: unknown; film_sheets_expires_at?: unknown } | null | undefined,
+  locale: 'ko' | 'en',
+  depth: FilmDepth = 'basic',
+  now: Date = new Date(),
+): FilmSheet | null {
+  if (isFilmSheetExpired(row?.film_sheets_expires_at, now)) return null;
+  return extractStoredFilmSheet(row?.film_sheets, locale, depth);
 }
 
-async function cachedSheet(sql: StudioDeps['sql'], organizationId: string, assetId: string, locale: 'ko' | 'en', depth: FilmDepth): Promise<FilmSheet | null> {
-  try {
-    const row = (await sql.query<{ film_sheets: unknown }>('select film_sheets from brand_studio_assets where id = $1 and organization_id = $2', [assetId, organizationId])).rows[0];
-    return storedSheet(row, locale, depth);
-  } catch (error) {
-    if (missingColumn(error)) return null;
-    throw error;
-  }
+async function cachedSheet(
+  sql: StudioDeps['sql'],
+  organizationId: string,
+  assetId: string,
+  locale: 'ko' | 'en',
+  depth: FilmDepth,
+  now?: Date,
+): Promise<FilmSheet | null> {
+  return readCachedFilmSheet(sql, { organizationId, assetId, locale, depth, ...(now ? { now } : {}) });
 }
 
 export async function keepSheet(
@@ -138,30 +151,24 @@ export async function keepSheet(
   locale: 'ko' | 'en',
   sheet: FilmSheet,
   depth: FilmDepth = 'basic',
+  now?: Date,
 ): Promise<void> {
-  try {
-    await sql.query(
-      `update brand_studio_assets set film_sheets = coalesce(film_sheets, '{}'::jsonb) || jsonb_build_object($3::text, $4::jsonb)
-        where id = $1 and organization_id = $2`,
-      [assetId, organizationId, sheetKey(locale, depth), JSON.stringify(sheet)],
-    );
-  } catch (error) {
-    if (!missingColumn(error)) throw error;
-  }
+  await writeCachedFilmSheet(sql, { organizationId, assetId, locale, sheet, depth, ...(now ? { now } : {}) });
 }
 
 /** The sheet of a reference video: the asset's kept reading when there is one, else a fresh reading (kept for next time). */
 export async function filmSheetFor(
-  deps: Pick<StudioDeps, 'sql' | 'intel' | 'intelDeps' | 'media' | 'env'>,
+  deps: Pick<StudioDeps, 'sql' | 'intel' | 'intelDeps' | 'media' | 'env' | 'now'>,
   input: { organizationId: string; assetId: string | null; ref: ResolvedRef; locale: 'ko' | 'en'; depth?: FilmDepth },
 ): Promise<FilmSheet | null> {
   const depth = input.depth ?? 'basic';
+  const now = deps.now?.();
   if (input.assetId) {
-    const kept = await cachedSheet(deps.sql, input.organizationId, input.assetId, input.locale, depth);
+    const kept = await cachedSheet(deps.sql, input.organizationId, input.assetId, input.locale, depth, now);
     if (kept) return kept;
   }
   const sheet = await readSheet(deps, input.ref, input.locale, depth);
-  if (sheet && input.assetId) await keepSheet(deps.sql, input.organizationId, input.assetId, input.locale, sheet, depth);
+  if (sheet && input.assetId) await keepSheet(deps.sql, input.organizationId, input.assetId, input.locale, sheet, depth, now);
   return sheet;
 }
 
@@ -317,6 +324,6 @@ export async function prepareJob(deps: StudioDeps, job: JobRow): Promise<{ final
     sheet,
     editCropThumb,
   );
-  const result = await runEnhancer(deps, input);
+  const result = await runEnhancer({ ...deps, organizationId: job.organization_id }, input);
   return { finalPrompt: result.prompt.slice(0, 8000), work: { ...work, enhanceNotes: result.notes.slice(0, 2000), prepared: true } };
 }

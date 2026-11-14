@@ -69,16 +69,23 @@ const modelOptions = (html: string) => [...html.matchAll(/role="option"[^>]*data
 
 describe("prompt bar controls from the registry", () => {
   it("offers exactly the live models per medium, never one awaiting its provider", () => {
-    expect(awaiting.length).toBeGreaterThan(0);
     for (const medium of ["image", "video"] as const) {
       const offered = dockControls(initialDraft(medium)).models.map((m) => m.id);
-      expect(offered).toEqual(selectableModels(medium).map((m) => m.id));
+      const liveIds = selectableModels(medium).map((m) => m.id);
+      expect(offered).toEqual(liveIds);
+      expect(offered.length).toBeGreaterThan(0);
+      for (const m of dockControls(initialDraft(medium)).models) {
+        expect(m.availability).toBe("live");
+      }
       for (const model of awaiting) expect(offered).not.toContain(model.id);
     }
     const html = render({ initialModelMenu: true });
     expect(modelOptions(html)).toEqual(selectableModels("image").map((m) => m.id));
     for (const model of awaiting) expect(html).not.toContain(model.label);
-    expect(withModel(initialDraft("image"), awaiting[0]!.id).model).not.toBe(awaiting[0]!.id);
+    if (awaiting.length > 0) {
+      expect(withModel(initialDraft("image"), awaiting[0]!.id).model).not.toBe(awaiting[0]!.id);
+    }
+    expect(withModel(initialDraft("image"), "seedream-5-pro").model).not.toBe("seedream-5-pro");
   });
 
   it("changes the legal ratios and qualities when the model changes", () => {
@@ -91,9 +98,9 @@ describe("prompt bar controls from the registry", () => {
       expect(options(html, "count")).toEqual(["1", "2", "3", "4"]);
     }
     const nano = { ...withModel(initialDraft("image"), "nano-banana-pro"), aspect: "4:5", resolution: "4K" };
-    const seedream = withModel(nano, "seedream-5-pro");
+    const seedream = withModel(nano, "seedream-5.5");
     expect(seedream.aspect).not.toBe("4:5");
-    expect((STUDIO_MODELS.find((m) => m.id === "seedream-5-pro") as StudioImageModel).aspects).toContain(seedream.aspect);
+    expect((STUDIO_MODELS.find((m) => m.id === "seedream-5.5") as StudioImageModel).aspects).toContain(seedream.aspect);
     expect(seedream.resolution).toBe("2K");
   });
 
@@ -108,7 +115,7 @@ describe("prompt bar controls from the registry", () => {
       expect(html).toContain(copy.models[model.hintKey as keyof typeof copy.models]);
       expect(html).toContain(fill(copy.dock.perImage, { n: perImage }));
     }
-    expect(html).toMatch(/aria-selected="true"[^>]*data-model="seedream-5-pro"/);
+    expect(html).toMatch(/aria-selected="true"[^>]*data-model="seedream-5.5"/);
   });
 
   it("has no medium switch: the image screen never shows video controls", () => {
@@ -168,8 +175,8 @@ describe("quality (GPT Image only)", () => {
     }
     // Leaving a quality model drops the quality; coming back starts at its default.
     const high = { ...withModel(initialDraft("image"), GPT[0]!), quality: "high" };
-    expect(withModel(high, "seedream-5-pro").quality).toBe("");
-    expect(withModel(withModel(high, "seedream-5-pro"), GPT[1]!).quality).toBe("medium");
+    expect(withModel(high, "seedream-5.5").quality).toBe("");
+    expect(withModel(withModel(high, "seedream-5.5"), GPT[1]!).quality).toBe("medium");
     expect(normalizeDraft({ ...high, quality: "ultra" }).quality).toBe("medium");
   });
 
@@ -212,28 +219,51 @@ describe("blueprint runs", () => {
   });
 });
 
-describe("prompt polishing", () => {
-  it("explains auto-polish on the '!' in the founder's words, free, on hover and focus", () => {
-    const copy = copyFor("ko");
-    expect(copy.dock.enhanceTip).toBe("각 이미지 모델에 최적화 된 프롬프트가 생성됩니다.");
-    const html = render();
-    expect(html).toMatch(/<button type="button" class="bs-tip-btn" aria-label="[^"]+" aria-describedby="([^"]+)">/);
-    const describedBy = /class="bs-tip-btn"[^>]*aria-describedby="([^"]+)"/.exec(html)![1];
-    expect(html).toContain(`id="${describedBy}" role="tooltip"`);
-    expect(html).toContain(copy.dock.enhanceTip);
-    expect(html).toContain(copy.dock.enhanceTipFree);
-    expect(html).toMatch(/role="switch"[^>]*aria-checked="true"/);
+describe("silent director, @ highlight and collapsed pill mode", () => {
+  it("removes manual 자동 개선 switch and ✨ button while keeping initialDraft().enhance true", () => {
+    expect(initialDraft("image").enhance).toBe(true);
+    expect(initialDraft("video").enhance).toBe(true);
+    const html = render({ draft: { ...initialDraft(), prompt: "병" } });
+    expect(html).not.toContain("data-studio-enhance-group");
+    expect(html).not.toContain("data-studio-enhance");
+    expect(html).not.toContain("data-studio-enhance-now");
+    expect(html).not.toContain("data-studio-undo-enhance");
+    expect(html).toContain("data-prompt-highlight");
   });
 
-  it("glows while waiting and offers the original sentence back once improved", () => {
+  it("highlights bound @ mentions in the backdrop, lights up Tray data-mentioned, and marks unbound @ mentions false", () => {
+    const pic = trayItemFromAsset(asset(1, { role: "product" }));
     const copy = copyFor("ko");
-    const waiting = render({ enhancing: true, draft: { ...initialDraft(), prompt: "병" } });
-    expect(waiting).toMatch(/class="bs-prompt-wrap" data-enhancing=""/);
-    expect(waiting).toMatch(/data-studio-submit[^>]*disabled|disabled=""[^>]*data-studio-submit/);
-    const done = render({ enhanced: true, draft: { ...initialDraft(), prompt: "A clear glass bottle" } });
-    expect(done).toContain("data-studio-undo-enhance");
-    expect(done).toContain(copy.dock.undoEnhance);
-    expect(render({ draft: initialDraft() })).toMatch(/data-studio-enhance-now[^>]*disabled=""|disabled=""[^>]*data-studio-enhance-now/);
+    const html = render({
+      tray: [pic],
+      labels: trayLabels([pic], copy),
+      draft: { ...initialDraft(), prompt: "@image1 옆에 @image9 놓기\n" },
+    });
+    expect(html).toContain('<mark class="bs-mention-mark" data-mention-bound="true">@image1</mark>');
+    expect(html).toContain('<mark class="bs-mention-mark" data-mention-bound="false">@image9</mark>');
+    expect(html).toMatch(/class="bs-tray-item"[^>]*data-mentioned=""/);
+    expect(html).toMatch(/class="bs-thumb" data-mentioned=""/);
+  });
+
+  it("renders a 1-line floating pill in collapsed mode with + icon, label, tray count and credits", () => {
+    const pic = trayItemFromAsset(asset(1));
+    const copy = copyFor("ko");
+    const html = render({
+      mode: "video",
+      collapsed: true,
+      collapsedLabel: "프롬프트 열기",
+      tray: [pic],
+      labels: trayLabels([pic], copy),
+      draft: withMedium(initialDraft(), "video"),
+    });
+    expect(html).toContain('class="bs-dock bs-dock-collapsed"');
+    expect(html).toContain("data-studio-dock");
+    expect(html).toContain('data-collapsed=""');
+    expect(html).toContain("프롬프트 열기");
+    expect(html).toContain('data-collapsed-tray-count="1"');
+    expect(html).toContain("참조 1");
+    expect(html).toContain("남은 크레딧 28,760");
+    expect(html).not.toContain('data-variant="solid"');
   });
 
   it("asks prompt.enhance with the run the bar would send, and sends an improved sentence as it is", () => {
@@ -339,7 +369,19 @@ describe("what the bar sends and what it costs", () => {
     expect(tinyHtml).toContain(copy.remix.limitSmall);
     expect(tinyHtml).toMatch(/disabled=""[^>]*data-studio-submit/);
     const long = trayItemFromAsset(asset(4, { kind: "video", seconds: max + 5, width: 720, height: 1280 }));
-    expect(render({ mode: "video", draft, tray: [long], labels: ["영상 1"] })).toContain(fill(copy.remix.limitLength, { min, max }));
+    // >30s clips up to 600s auto-route to blueprint (never blocked by Seedance's 30s raw input cap).
+    const longAutoHtml = render({ mode: "video", draft, tray: [long], labels: ["영상 1"] });
+    expect(longAutoHtml).toContain("data-studio-over-limit-note");
+    expect(longAutoHtml).not.toMatch(/disabled=""[^>]*data-studio-submit/);
+    // Clips shorter than 2s (< min) or longer than 600s (> blueprint max) warn before spend.
+    const tooShort = trayItemFromAsset(asset(7, { kind: "video", seconds: min - 0.5, width: 720, height: 1280 }));
+    expect(render({ mode: "video", draft, tray: [tooShort], labels: ["영상 1"] })).toContain(
+      fill(copy.remix.limitLength, { min, max }),
+    );
+    const overBlueprintMax = trayItemFromAsset(asset(6, { kind: "video", seconds: 605, width: 720, height: 1280 }));
+    expect(render({ mode: "video", draft, tray: [overBlueprintMax], labels: ["영상 1"] })).toContain(
+      fill(copy.remix.limitLength, { min, max: 600 }),
+    );
     const unknown = trayItemFromAsset(asset(5, { kind: "video", seconds: null, width: null, height: null }));
     expect(buildJob({ ...draft, method: "edit" }, [unknown], ids).ok).toBe(true);
   });

@@ -25,7 +25,8 @@ import { dropWorkingFiles, LEASE_SECONDS } from './job-store';
 import { routeJob } from './lanes';
 import type { StudioImageModel } from './models';
 import { planFinal, planJob, type JobPlan } from './plan';
-import { brandSummary, enhanceInputOf, enhanceReferences, keepSheet, readSheet, remixContext, runEnhancer, storedSheet } from './prepare';
+import { brandSummary, enhanceInputOf, enhanceReferences, keepSheet, readSheet, remixContext, runEnhancer } from './prepare';
+import { readCachedFilmSheet } from './film-sheet';
 import { jobView, openJobCount, readyAsset, readyOutput } from './repo';
 import type { EnhanceInput, JobRow, OutputRow, StudioDeps } from './types';
 import { loadAllowance, reserveAllowance } from './usage';
@@ -245,8 +246,14 @@ export async function analyzeStudioFilm(deps: StudioDeps, viewer: Viewer, raw: u
   if ('ok' in asset) return asset;
   const locale = localeOf(viewer);
   const depth = v.depth ?? 'basic';
-  // Read once per asset, language and depth: the kept reading answers every later call (./prepare.ts).
-  const kept = storedSheet(asset, locale, depth);
+  // Read once per asset, language and depth (respecting 14-day sliding TTL): kept reading answers later calls.
+  const kept = await readCachedFilmSheet(deps.sql, {
+    organizationId: v.organizationId,
+    assetId: asset.id,
+    locale,
+    depth,
+    now,
+  });
   if (kept) return { ok: true, sheet: kept };
   if (!takeFreeIntelSlot(`analyze:${v.organizationId}`, FREE_INTEL_LIMITS.analyzePerMinute, now.getTime())) {
     return failure('too_many_running');
@@ -260,6 +267,6 @@ export async function analyzeStudioFilm(deps: StudioDeps, viewer: Viewer, raw: u
     locale,
     depth,
   );
-  if (sheet) await keepSheet(deps.sql, v.organizationId, asset.id, locale, sheet, depth);
+  if (sheet) await keepSheet(deps.sql, v.organizationId, asset.id, locale, sheet, depth, now);
   return { ok: true, sheet };
 }

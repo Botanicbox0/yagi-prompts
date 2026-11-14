@@ -88,7 +88,7 @@ describe("viewer actions", () => {
     expect(regionEditInput({ ids: ids(), source: { outputId: output(1).id }, box, instruction: "x", draft: initialDraft(), model: "gpt-image-2.6-flare", quality: "high" })).toMatchObject({ model: "gpt-image-2.6-flare", quality: "high" });
     expect(regionEditInput({ ids: ids(), source: { outputId: output(1).id }, box, instruction: "x", draft: initialDraft(), model: "nano-banana-pro", quality: "high" })).not.toHaveProperty("quality");
     // A model that cannot edit a part well never runs one: the default edit model does.
-    expect(regionEditInput({ ids: ids(), source: { outputId: output(1).id }, box, instruction: "x", draft: initialDraft(), model: "seedream-5-pro" })).toMatchObject({ model: "nano-banana-pro" });
+    expect(regionEditInput({ ids: ids(), source: { outputId: output(1).id }, box, instruction: "x", draft: initialDraft(), model: "seedream-5.5" })).toMatchObject({ model: "nano-banana-pro" });
   });
 
   it("checks a partial edit before it leaves: a box, words, pictures only and numbers that exist", () => {

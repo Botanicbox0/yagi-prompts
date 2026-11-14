@@ -21,9 +21,10 @@ export type StudioPromptProfile = 'seedream' | 'nano-banana' | 'gpt-image' | 'se
 
 /**
  * `live`: selectable. `awaiting_provider`: declared so the day the provider lists it only this flag
- * changes; hidden from every screen and refused by the API until then.
+ * changes; hidden from every screen and refused by the API until then. `retired`: superseded by a
+ * newer version; kept for historical job/cost lookup, hidden from every screen and refused for new jobs.
  */
-export type StudioModelAvailability = 'live' | 'awaiting_provider';
+export type StudioModelAvailability = 'live' | 'awaiting_provider' | 'retired';
 
 interface StudioModelBase {
   id: string;
@@ -33,6 +34,8 @@ interface StudioModelBase {
   hintKey: string;
   availability: StudioModelAvailability;
   promptProfile: StudioPromptProfile;
+  /** True when the upstream endpoints carry `enable_safety_checker` (always forced `true`). */
+  safetyChecker?: boolean;
   /** Sunra API: `POST /v1/queue/{alias}/{endpoint}`. */
   api: { alias: string };
   /** Sunra account lane (MCP `create_image` / `create_video` model id), or null when it has none. */
@@ -57,7 +60,13 @@ export interface StudioImageModel extends StudioModelBase {
   /** Rendering qualities the customer may pick (GPT Image); absent for models without the choice. */
   qualities?: readonly StudioImageQuality[];
   defaultQuality?: StudioImageQuality;
+  /** True when `background: 'auto' | 'transparent' | 'opaque'` is supported (PNG on transparent). */
+  supportsTransparentBackground?: boolean;
 }
+
+/** Background mode for image generation models that support cutout output (Seedream 5.5). */
+export const STUDIO_IMAGE_BACKGROUNDS = ['auto', 'transparent', 'opaque'] as const;
+export type StudioImageBackground = (typeof STUDIO_IMAGE_BACKGROUNDS)[number];
 
 /** Rendering quality of the models that offer one (both lanes call the field `quality`). */
 export const STUDIO_IMAGE_QUALITIES = ['low', 'medium', 'high'] as const;
@@ -139,19 +148,20 @@ const GPT_IMAGE_26_CENTS: Readonly<Record<StudioImageQuality, Readonly<Record<st
 
 export const STUDIO_MODELS = [
   {
-    id: 'seedream-5-pro',
+    id: 'seedream-5.5',
     medium: 'image',
-    label: 'Seedream 5.0 Pro',
-    hintKey: 'seedreamPro',
+    label: 'Seedream 5.5',
+    hintKey: 'seedream55',
     availability: 'live',
     promptProfile: 'seedream',
-    api: { alias: 'bytedance/seedream-5.0-pro' },
-    mcp: { model: 'seedream-5-pro' },
+    api: { alias: 'bytedance/seedream-5.5' },
+    mcp: { model: 'seedream-5.5' },
     aspects: SEEDREAM_ASPECTS,
-    resolutions: ['1K', '2K'],
+    resolutions: ['1K', '1.5K', '2K'],
     defaultResolution: '2K',
     maxReferences: 10,
     regionEdit: false,
+    supportsTransparentBackground: true,
     endpoints: { textToImage: 'text-to-image', edit: 'image-editing' },
   },
   {
@@ -177,25 +187,8 @@ export const STUDIO_MODELS = [
     hintKey: 'seedreamFlash',
     availability: 'live',
     promptProfile: 'seedream',
+    safetyChecker: true,
     api: { alias: 'bytedance/seedream-5.0-flash' },
-    mcp: null,
-    aspects: SEEDREAM_ASPECTS,
-    resolutions: ['1K', '2K'],
-    defaultResolution: '2K',
-    maxReferences: 10,
-    regionEdit: false,
-    endpoints: { textToImage: 'text-to-image', edit: 'image-editing' },
-  },
-  {
-    // ByteDance announced it on 2026-11-09. Sunra listed it on neither lane on 2026-11-10, so the alias
-    // and the controls below are the 5.0 Pro shape and must be re-read from the catalogue before `live`.
-    id: 'seedream-5.5',
-    medium: 'image',
-    label: 'Seedream 5.5',
-    hintKey: 'seedream55',
-    availability: 'awaiting_provider',
-    promptProfile: 'seedream',
-    api: { alias: 'bytedance/seedream-5.5' },
     mcp: null,
     aspects: SEEDREAM_ASPECTS,
     resolutions: ['1K', '2K'],
@@ -278,13 +271,24 @@ export const STUDIO_MODELS = [
 
 export type StudioModelId = (typeof STUDIO_MODELS)[number]['id'];
 
-export const DEFAULT_IMAGE_MODEL: StudioModelId = 'seedream-5-pro';
+export const DEFAULT_IMAGE_MODEL: StudioModelId = 'seedream-5.5';
 export const DEFAULT_VIDEO_MODEL: StudioModelId = 'seedance-2.5';
 /** The model a region edit uses unless the customer picked another one that allows it. */
 export const DEFAULT_REGION_EDIT_MODEL: StudioModelId = 'nano-banana-pro';
 
+/** Normalize retired historical model ids (Seedream 5.0 Pro) to their active Seedream 5.5 successor. */
+export function normalizeLegacyStudioModelId(id: string): string {
+  if (id === 'seedream-5-pro' || id === 'seedream-5.0-pro') return 'seedream-5.5';
+  return id;
+}
+
 export function studioModel(id: string): StudioModel | null {
   return (STUDIO_MODELS as readonly StudioModel[]).find((m) => m.id === id) ?? null;
+}
+
+/** Look up a model id, mapping legacy retired ids (`seedream-5-pro`) to `seedream-5.5` for rerun/history display. */
+export function studioModelOrLegacy(id: string): StudioModel | null {
+  return studioModel(id) ?? studioModel(normalizeLegacyStudioModelId(id));
 }
 
 /** Models a screen may offer: live ones only, in registry order. */
@@ -330,11 +334,12 @@ export function estimateImageUsd(input: {
   quality?: string | null;
 }): number {
   const refs = Math.max(0, input.references);
-  switch (input.model) {
-    case 'seedream-5-pro':
+  const modelId = normalizeLegacyStudioModelId(input.model);
+  switch (modelId) {
     case 'seedream-5.5': {
-      const base = input.resolution === '1K' ? 0.045 : 0.09;
-      return base + Math.max(0, refs - 1) * 0.004;
+      // Sunra & ModelArk price cards (2026-11-14): $0.020 at 1K/1.5K or $0.035 at 2K, plus $0.008 per input image.
+      const base = input.resolution === '1K' || input.resolution === '1.5K' ? 0.02 : 0.035;
+      return Math.round((base + refs * 0.008) * 1000) / 1000;
     }
     case 'seedream-5-flash':
       return 0.027;

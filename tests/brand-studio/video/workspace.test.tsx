@@ -164,13 +164,13 @@ describe("Seedance-based Video Edit job builder & credits", () => {
 });
 
 describe("VideoStudioWorkspace rendering", () => {
-  it("renders create, blueprint, and edit panels with loaded StudioState and credit quotes", () => {
+  it("renders unified bottom-capsule Video Studio with 3-step guide, LibraryRail, Seedance 2.5 dock, and credit quotes", () => {
     const dict = getDictionary("ko");
     const initial = studioState({
       canCreate: true,
       assets: [videoAsset(), imageAsset("44444444-4444-4444-8444-444444444444")],
     });
-    const createHtml = renderToStaticMarkup(
+    const html = renderToStaticMarkup(
       <VideoStudioWorkspace
         organizationId={ORG}
         locale="ko"
@@ -180,23 +180,16 @@ describe("VideoStudioWorkspace rendering", () => {
         initialState={initial}
       />,
     );
-    expect(createHtml).toContain("Seedance 2.5");
-    expect(createHtml).toContain("data-studio-quote");
-    expect(createHtml).toContain("크레딧");
-    expect(createHtml).not.toMatch(/₩|\d원\b/);
-
-    const editHtml = renderToStaticMarkup(
-      <VideoStudioWorkspace
-        organizationId={ORG}
-        locale="ko"
-        copy={dict.brandStudio}
-        libraryCopy={dict.studioLibrary}
-        videoCopy={dict.studioVideo}
-        initialTab="edit"
-        initialState={initial}
-      />,
-    );
-    expect(editHtml).toContain("data-video-edit-panel");
-    expect(editHtml).toContain("data-video-edit-submit");
+    expect(html).toContain("data-video-studio-workspace");
+    expect(html).toContain('data-studio-mode="video"');
+    expect(html).toContain("data-video-guide");
+    expect(html).toContain("data-studio-dock");
+    expect(html).toContain("data-library-rail");
+    expect(html).toContain("Seedance 2.5");
+    expect(html).toContain("data-studio-quote");
+    expect(html).toContain("크레딧");
+    expect(html.match(/data-variant="solid"/g)).toHaveLength(1);
+    expect(html).not.toContain("data-video-tab=");
+    expect(html).not.toMatch(/₩|\d원\b/);
   });
 });

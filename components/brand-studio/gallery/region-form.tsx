@@ -7,7 +7,8 @@
  * with what it is (로고 · 제품 · 인물 · 스타일), the model (only those that edit a part well), the cost in
  * credits and the instruction. Sending closes the form at once; the run shows up in the wall.
  */
-import { useId, useRef, useState, type DragEvent } from "react";
+import { useCallback, useEffect, useId, useRef, useState, type ClipboardEvent as ReactClipboardEvent, type DragEvent } from "react";
+import { extractClipboardImages, prepareClipboardUploadFiles } from "@/lib/brand-studio/clipboard-image";
 import { STUDIO_LIMITS, STUDIO_UPLOAD_MIMES, type RegionBox, type StudioAssetRole } from "@/lib/brand-studio/contracts";
 import type { StudioImageModel } from "@/lib/brand-studio/models";
 import { credits, fill, type StudioCopy, type StudioLocale } from "../copy";
@@ -83,11 +84,44 @@ export function RegionForm(props: RegionFormProps) {
     else if (event.dataTransfer.files.length) props.onFiles(Array.from(event.dataTransfer.files));
   };
 
+  const ingestClipboardFiles = useCallback(
+    (rawFiles: File[]) => {
+      if (!rawFiles.length || full) return;
+      void prepareClipboardUploadFiles(rawFiles).then((ready) => {
+        if (ready.length) props.onFiles(ready);
+      });
+    },
+    [full, props.onFiles],
+  );
+
+  const onFormPaste = (event: ReactClipboardEvent) => {
+    const pasted = extractClipboardImages(event.clipboardData);
+    if (!pasted.length) return;
+    event.preventDefault();
+    event.stopPropagation();
+    ingestClipboardFiles(pasted);
+  };
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const onWindowPaste = (event: ClipboardEvent) => {
+      if (event.defaultPrevented) return;
+      const pasted = extractClipboardImages(event.clipboardData);
+      if (!pasted.length) return;
+      event.preventDefault();
+      event.stopPropagation();
+      ingestClipboardFiles(pasted);
+    };
+    window.addEventListener("paste", onWindowPaste);
+    return () => window.removeEventListener("paste", onWindowPaste);
+  }, [ingestClipboardFiles]);
+
   return (
     <form
       className="bs-region-form"
       data-studio-region-form
       data-drop-target={dropActive ? "" : undefined}
+      onPaste={onFormPaste}
       onSubmit={(event) => {
         event.preventDefault();
         props.onSend();

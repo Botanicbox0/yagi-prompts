@@ -616,7 +616,7 @@
   padding: 6px 10px;
   border-radius: 10px;
   background: var(--ys-ink);
-  color: #ffffff;
+  color: var(--ys-active-fg);
   font-size: 12px;
   font-weight: 500;
   line-height: 1.45;

@@ -9,7 +9,7 @@
 export type StudioProviderFailure = 'provider_rejected' | 'provider_unavailable' | 'failed';
 
 export interface StudioProviderRequest {
-  /** `alias/endpoint`, e.g. `bytedance/seedream-5.0-pro/text-to-image`. */
+  /** `alias/endpoint`, e.g. `bytedance/seedream-5.5/text-to-image`. */
   endpoint: string;
   body: Record<string, unknown>;
 }

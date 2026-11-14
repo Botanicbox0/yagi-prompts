@@ -23,7 +23,8 @@ import { clock, fill, itemName, itemOfAsset, itemOfOutput, tagsFrom, writeError 
 import { useStudioLibrary } from "./rail/use-library";
 import type { RefSource } from "./refs";
 import type { LibraryItemView, StudioFolderView, StudioLibrary } from "./seams";
-import { imageScreenRefHref, videoScreenHref } from "./studio-app";
+import { ShareReviewDialog, useShareReviewEvent, type ShareReviewTarget } from "./share-review-dialog";
+import { imageCanvasHref, imageScreenRefHref, videoComposeClipHref, videoScreenHref } from "./studio-app";
 import { StorageMeterCard } from "./storage-meter";
 import { useStudio } from "./use-studio";
 
@@ -208,7 +209,10 @@ export function BrandAssetHub({
   const [editTags, setEditTags] = useState("");
   const [notice, setNotice] = useState<string | null>(null);
   const [dropActive, setDropActive] = useState(false);
+  const [shareTarget, setShareTarget] = useState<ShareReviewTarget | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  useShareReviewEvent(organizationId, setShareTarget);
 
   const entries = useMemo(() => buildHubEntries(assets, jobs, h.sourceGenerated), [assets, jobs, h.sourceGenerated]);
   const similarAnchor = useMemo(() => (similarKey ? entries.find((e) => e.key === similarKey) ?? null : null), [entries, similarKey]);
@@ -593,6 +597,9 @@ export function BrandAssetHub({
                   <div className={s.cardActions}>
                     {canOpenStudio && entry.kind === "image" && (
                       <>
+                        <a className={s.miniAction} href={imageCanvasHref(organizationId, entry.source)} data-asset-hub-open-canvas>
+                          {hubLocale === "en" ? "Canvas Editor" : "캔버스 편집"}
+                        </a>
                         <a className={s.miniAction} href={imageScreenRefHref(organizationId, entry.source)} data-asset-hub-use-image>
                           {h.openInImage}
                         </a>
@@ -601,10 +608,32 @@ export function BrandAssetHub({
                         </a>
                       </>
                     )}
+                    {canOpenStudio && entry.kind === "video" && (
+                      <a className={s.miniAction} href={videoComposeClipHref(organizationId, entry.source)} data-asset-hub-open-compose>
+                        {hubLocale === "en" ? "To Editing Studio" : "편집 스튜디오로"}
+                      </a>
+                    )}
                     {canOpenStudio && reverseHref && (
                       <a className={s.miniAction} href={reverseHref} data-asset-hub-reverse>
                         {h.reverseVideo}
                       </a>
+                    )}
+                    {canOpenStudio && canCreate && (entry.kind === "image" || entry.kind === "video") && (
+                      <button
+                        type="button"
+                        className={s.miniAction}
+                        onClick={() =>
+                          setShareTarget({
+                            organizationId,
+                            assetId: "assetId" in entry.source ? entry.source.assetId : null,
+                            outputId: "outputId" in entry.source ? entry.source.outputId : null,
+                            title: entry.title,
+                          })
+                        }
+                        data-asset-hub-share-review
+                      >
+                        {hubLocale === "en" ? "Review & Share" : "검수 · 공유"}
+                      </button>
                     )}
                     <button
                       type="button"
@@ -670,6 +699,13 @@ export function BrandAssetHub({
             );
           })}
         </ul>
+      )}
+      {shareTarget && (
+        <ShareReviewDialog
+          target={shareTarget}
+          locale={hubLocale}
+          onClose={() => setShareTarget(null)}
+        />
       )}
     </div>
   );

@@ -65,7 +65,7 @@ describe('image template manifest', () => {
       title: 'Bridal shot 1',
       titleKo: '웨딩 컷 1',
       promptText: prompt('Shot 1 by a window.'),
-      engine: 'seedream-5.0-pro',
+      engine: 'seedream-5.5',
       aspect: '3:4',
       fileName: '01_shot_seedream_2k.png',
     });
@@ -96,10 +96,10 @@ describe('an image set', () => {
     expect(built.ok).toBe(true);
     if (!built.ok) return;
     const { set } = built;
-    expect(set).toMatchObject({ slug: SET.slug, titleKo: SET.title_ko, title: SET.title_en, engine: 'seedream-5.0-pro', aspect: '3:4', thumbnail: SET.thumbnail });
+    expect(set).toMatchObject({ slug: SET.slug, titleKo: SET.title_ko, title: SET.title_en, engine: 'seedream-5.5', aspect: '3:4', thumbnail: SET.thumbnail });
     expect(outputSteps(set.recipe)).toEqual(['shot1', 'shot2', 'shot3', 'shot4', 'shot5']);
     set.recipe.steps.forEach((step, index) => {
-      expect(step).toMatchObject({ kind: 'image', engine: 'seedream-5.0-pro', inputs: ['selfie'], params: { aspect: '3:4' } });
+      expect(step).toMatchObject({ kind: 'image', engine: 'seedream-5.5', inputs: ['selfie'], params: { aspect: '3:4' } });
       expect(step.prompt).toContain('Reference {{selfie}} provides only');
       const engineText = engineStepPrompt(set.recipe, step);
       expect(engineText.startsWith(`${MANIFEST[index]!.prompt}\n\n`)).toBe(true);
@@ -177,14 +177,14 @@ describe('registering an image set', () => {
       title: SET.title_en,
       titleKo: SET.title_ko,
       medium: 'image',
-      engine: 'seedream-5.0-pro',
+      engine: 'seedream-5.5',
       aspectDefault: '3:4',
-      models: ['seedream-5.0-pro'],
+      models: ['seedream-5.5'],
       textVisibility: 'pro',
       featured: false,
     });
     // Founder rule 2026-11-02: cost × 1.12 over every frame, in won by card (lib/twings/template-price.ts).
-    expect(row!.priceKrw).toBe(baseKrw({ medium: 'image', providerUsd: estimateImageUsd('seedream-5.0-pro', 1) * MANIFEST.length }));
+    expect(row!.priceKrw).toBe(baseKrw({ medium: 'image', providerUsd: estimateImageUsd('seedream-5.5', 1) * MANIFEST.length }));
     expect(row!.priceCents).toBeGreaterThan(0);
     const recipe = await loadTemplateRecipe(harness.sql, row!.id);
     expect(recipe?.steps.map((step) => engineStepPrompt(recipe, step).split('\n\n')[0])).toEqual(MANIFEST.map((item) => item.prompt));
@@ -195,7 +195,7 @@ describe('registering an image set', () => {
     expect(catalog.image.map((card) => card.slug)).toEqual([SET.slug]);
     const card = catalog.image[0]!;
     const gallery = card.gallery ?? [];
-    expect(card.modelLabels).toEqual(['SEEDREAM 5.0 PRO']);
+    expect(card.modelLabels).toEqual(['SEEDREAM 5.5']);
     expect(gallery).toHaveLength(5);
     expect(gallery.every((frame) => frame.source === 'public' && frame.w === 1760 && frame.h === 2352)).toBe(true);
     // The thumbnail is frame 2's image, content-addressed: the same published object.

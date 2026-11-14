@@ -114,19 +114,19 @@
   padding: 0 22px;
   border-radius: 999px;
   border: 0;
-  background: var(--ys-accent, #0033ff);
-  color: #ffffff;
+  background: var(--ys-accent, #ff58ae);
+  color: var(--ys-on-accent, #09090b);
   font-size: 14px;
   font-weight: 600;
   letter-spacing: -0.02em;
-  box-shadow: var(--ys-cta-shadow, 0 4px 14px rgba(0, 51, 255, 0.28));
+  box-shadow: var(--ys-cta-shadow, none);
   cursor: pointer;
   text-decoration: none;
   transition: background-color 140ms ease, box-shadow 140ms ease;
 }
 
 .primaryBtn:hover:not(:disabled) {
-  background: var(--ys-accent-hover, #0026cc);
+  background: var(--ys-accent-hover, #ff389f);
 }
 
 .primaryBtn:disabled {
@@ -242,8 +242,8 @@
 
 .stageVisual {
   border-radius: 14px;
-  border: 1px dashed rgba(0, 0, 0, 0.12);
-  background: #fafafa;
+  border: 1px dashed var(--ys-line-strong, rgba(255, 255, 255, 0.16));
+  background: var(--ys-raised, #18181b);
   padding: 22px;
   display: flex;
   flex-direction: column;

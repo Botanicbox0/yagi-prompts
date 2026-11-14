@@ -14,7 +14,7 @@ import { errorLine, fill, newRequestId, type StudioCopy } from "./copy";
 import type { ReferenceVideoProblem } from "@/lib/brand-studio/reference-video";
 import {
   attachRefusal,
-  buildJob,
+  buildMultiClipJobs,
   draftAfterAttach,
   draftFromJob,
   enhancePreviewInput,
@@ -92,7 +92,7 @@ export function useDock({
   const [busy, setBusy] = useState(false);
   const [enhancing, setEnhancing] = useState(false);
   const [enhanced, setEnhanced] = useState<Enhanced | null>(null);
-  const press = useRef<{ fingerprint: string; id: string } | null>(null);
+  const press = useRef<{ fingerprint: string; ids: string[] } | null>(null);
   // Several files can finish uploading in one tick; each attach must see the ones before it.
   const latest = useRef(tray);
   latest.current = tray;
@@ -110,12 +110,14 @@ export function useDock({
       setTray(next.items);
       setMessage(next.full ? fill(copy.tray.tooMany, { n: STUDIO_LIMITS.referencesMax }) : null);
       setNotice(null);
-      // Without a fixed screen a video coming in means the customer wants a video.
-      const switched = draftAfterAttach(latestDraft.current, item, Boolean(mode));
+      const prevMedium = latestDraft.current.medium;
+      const switched = draftAfterAttach(latestDraft.current, item, Boolean(mode), next.items);
       if (!next.full && switched !== latestDraft.current) {
         latestDraft.current = switched;
-        setDraft((current) => draftAfterAttach(current, item, Boolean(mode)));
-        setNotice(copy.dock.switchedToVideo);
+        setDraft((current) => draftAfterAttach(current, item, Boolean(mode), next.items));
+        if (!mode && switched.medium !== prevMedium) {
+          setNotice(copy.dock.switchedToVideo);
+        }
       }
     },
     [copy, mode, setDraft],
@@ -123,24 +125,50 @@ export function useDock({
 
   const preEnhanced = isPreEnhanced(enhanced, draft.prompt);
 
-  /** True when a run started. */
+  /** True when one or more runs started (multi-clip plans dispatch concurrently via Promise.all). */
   const submit = useCallback(async (): Promise<boolean> => {
     if (busy || enhancing) return false;
-    const probe = buildJob(draft, tray, { organizationId, requestId: "probe" }, { preEnhanced });
+    const filmItem = tray.find((item) => item.kind === "video");
+    const filmEntry = filmItem?.assetId ? studio.films[filmItem.assetId] : undefined;
+    const sheet = filmEntry?.status === "done" ? filmEntry.sheet : null;
+    const probe = buildMultiClipJobs(
+      draft,
+      tray,
+      { organizationId, requestIds: ["probe-0", "probe-1", "probe-2", "probe-3"] },
+      { preEnhanced, sheet },
+    );
     if (!probe.ok) {
       setMessage(problemLine(probe.problem, copy));
       return false;
     }
-    const fingerprint = JSON.stringify({ ...probe.input, requestId: null });
-    if (press.current?.fingerprint !== fingerprint) press.current = { fingerprint, id: newRequestId() };
+    const fingerprint = JSON.stringify(probe.inputs.map((inp) => ({ ...inp, requestId: null })));
+    if (press.current?.fingerprint !== fingerprint || press.current.ids.length !== probe.inputs.length) {
+      press.current = { fingerprint, ids: probe.inputs.map(() => newRequestId()) };
+    }
+    const ids = press.current.ids;
     setBusy(true);
     setMessage(null);
     setNotice(null);
-    const result = await studio.createJob({ ...probe.input, requestId: press.current.id });
+
+    if (probe.inputs.length === 1) {
+      const result = await studio.createJob({ ...probe.inputs[0]!, requestId: ids[0]! });
+      setBusy(false);
+      if (isFailure(result)) {
+        setMessage(errorLine(copy, result.code));
+        return false;
+      }
+      press.current = null;
+      return true;
+    }
+
+    const results = await Promise.all(
+      probe.inputs.map((jobInput, idx) => studio.createJob({ ...jobInput, requestId: ids[idx]! })),
+    );
     setBusy(false);
-    if (isFailure(result)) {
-      setMessage(errorLine(copy, result.code));
-      return false;
+    const failed = results.find(isFailure);
+    if (failed) {
+      setMessage(errorLine(copy, failed.code));
+      if (results.every(isFailure)) return false;
     }
     press.current = null;
     return true;

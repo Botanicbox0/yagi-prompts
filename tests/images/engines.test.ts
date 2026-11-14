@@ -35,7 +35,7 @@ function ratioOf(aspect: string): number {
 
 describe('image engines (docs/TEMPLATES-IA.md §7)', () => {
   it('names the two founder-chosen families and defaults images to GPT Image 2.5 Flare (founder, 2026-10-24, after its real-selfie smoke)', () => {
-    expect(IMAGE_ENGINE_IDS).toEqual(['gpt-image-2.5-flare', 'gpt-image-2', 'gpt-image-2.5-sunburst', 'seedream-5.0-pro', 'seedream-5.0-lite', 'nano-banana-2.1', 'nano-banana-pro']);
+    expect(IMAGE_ENGINE_IDS).toEqual(['gpt-image-2.5-flare', 'gpt-image-2', 'gpt-image-2.5-sunburst', 'seedream-5.5', 'seedream-5.0-lite', 'nano-banana-2.1', 'nano-banana-pro']);
     expect(defaultEngine('image')).toBe('gpt-image-2.5-flare');
     expect(defaultEngine('video')).toBe('seedance-2.0');
     expect(enginesForMedium('video')).toEqual(['seedance-2.0', 'seedance-2.5', 'kling-omni']);
@@ -44,7 +44,7 @@ describe('image engines (docs/TEMPLATES-IA.md §7)', () => {
     expect(engineLabel('kling-omni')).toBe('KLING OMNI');
     expect(engineLabel('seedance-2.5')).toBe('SEEDANCE 2.5');
     expect(isOpenAiEngine('gpt-image-2.5-sunburst')).toBe(true);
-    expect(isOpenAiEngine('seedream-5.0-pro')).toBe(false);
+    expect(isOpenAiEngine('seedream-5.5')).toBe(false);
     for (const id of ['gpt-image-2.5-flare', 'gpt-image-2.5-sunburst', 'gpt-image-2'] as const) {
       expect(IMAGE_ENGINES[id].provider).toBe('openai');
       expect(IMAGE_ENGINES[id].model).toBe(id);
@@ -56,7 +56,7 @@ describe('image engines (docs/TEMPLATES-IA.md §7)', () => {
     for (const id of ['gpt-image-2.5-flare', 'gpt-image-2.5-sunburst'] as const) {
       expect(['high', 'xhigh', 'max']).toContain(IMAGE_ENGINES[id].quality);
     }
-    for (const id of ['seedream-5.0-pro', 'seedream-5.0-lite', 'nano-banana-2.1'] as const) expect(IMAGE_ENGINES[id].quality).toBeUndefined();
+    for (const id of ['seedream-5.5', 'seedream-5.0-lite', 'nano-banana-2.1'] as const) expect(IMAGE_ENGINES[id].quality).toBeUndefined();
   });
 
   it('renders Nano Banana 2.1 at Gemini’s own 2K sizes and prices it at the 2K rate (PLATFORM-2.0 §9.2, R2)', () => {
@@ -105,7 +105,7 @@ describe('image engines (docs/TEMPLATES-IA.md §7)', () => {
   });
 
   it('keeps Seedream sizes inside the documented explicit-size window', () => {
-    for (const engine of ['seedream-5.0-pro', 'seedream-5.0-lite'] as const) {
+    for (const engine of ['seedream-5.5', 'seedream-5.0-lite'] as const) {
       for (const aspect of IMAGE_ASPECTS) {
         const { width, height } = imageSizeFor(engine, aspect);
         const pixels = width * height;
@@ -115,15 +115,29 @@ describe('image engines (docs/TEMPLATES-IA.md §7)', () => {
         expect(width / height).toBeLessThanOrEqual(16);
       }
     }
+    for (const tier of ['1K', '1.5K', '2K'] as const) {
+      for (const aspect of IMAGE_ASPECTS) {
+        const { width, height } = imageSizeFor('seedream-5.5', aspect, tier);
+        const pixels = width * height;
+        expect(pixels, `seedream-5.5 ${tier} ${aspect}`).toBeGreaterThanOrEqual(SEEDREAM_PIXELS_MIN);
+        expect(pixels, `seedream-5.5 ${tier} ${aspect}`).toBeLessThanOrEqual(SEEDREAM_PIXELS_MAX);
+        if (tier !== '2K') {
+          expect(pixels, `seedream-5.5 ${tier} ${aspect}`).toBeLessThanOrEqual(SEEDREAM_PRO_CHEAP_PIXELS_MAX);
+        }
+      }
+    }
   });
 
-  it('renders Seedream Pro at 2K — above the $0.045 step, priced at the $0.09 rate (founder, 2026-09-06)', () => {
+  it('renders Seedream 5.5 at 2K by default ($0.035/render + $0.008/ref) and 1K/1.5K at $0.020', () => {
     for (const aspect of IMAGE_ASPECTS) {
-      const { width, height } = imageSizeFor('seedream-5.0-pro', aspect);
+      const { width, height } = imageSizeFor('seedream-5.5', aspect);
       expect(width * height, aspect).toBeGreaterThan(SEEDREAM_PRO_CHEAP_PIXELS_MAX);
     }
-    expect(IMAGE_ENGINES['seedream-5.0-pro'].usdPerRender).toBe(0.09);
-    expect(sizeString(imageSizeFor('seedream-5.0-pro', '4:5'))).toBe('1728x2160');
+    expect(IMAGE_ENGINES['seedream-5.5'].usdPerRender).toBe(0.035);
+    expect(IMAGE_ENGINES['seedream-5.5'].supportsTransparentBackground).toBe(true);
+    expect(sizeString(imageSizeFor('seedream-5.5', '4:5'))).toBe('1728x2160');
+    expect(sizeString(imageSizeFor('seedream-5.5', '1:1', '1K'))).toBe('1024x1024');
+    expect(sizeString(imageSizeFor('seedream-5.5', '4:5', '1.5K'))).toBe('1280x1600');
   });
 
   it('keeps GPT Image 2 sizes on the 16-pixel grid, within the ceiling and the 1:3–3:1 band', () => {
@@ -140,10 +154,13 @@ describe('image engines (docs/TEMPLATES-IA.md §7)', () => {
   });
 
   it('prices a render with the visitor photo counted as one reference', () => {
-    // Official ModelArk pricing (2026-10-21): Pro's first reference is free, $0.003 from the second;
+    // Seedream 5.5: $0.035 (2K) or $0.020 (1K/1.5K) + $0.008 per reference (no free reference);
     // Lite's reference input is free.
-    expect(estimateImageUsd('seedream-5.0-pro', 1)).toBe(0.09);
-    expect(estimateImageUsd('seedream-5.0-pro', 2)).toBe(0.093);
+    expect(estimateImageUsd('seedream-5.5', 0)).toBe(0.035);
+    expect(estimateImageUsd('seedream-5.5', 1)).toBe(0.043);
+    expect(estimateImageUsd('seedream-5.5', 2)).toBe(0.051);
+    expect(estimateImageUsd('seedream-5.5', 1, '1K')).toBe(0.028);
+    expect(estimateImageUsd('seedream-5.5', 1, '1.5K')).toBe(0.028);
     expect(estimateImageUsd('seedream-5.0-lite', 0)).toBe(0.035);
     expect(estimateImageUsd('seedream-5.0-lite', 1)).toBe(0.035);
     expect(estimateImageUsd('gpt-image-2', 1)).toBe(0.24);
@@ -151,7 +168,7 @@ describe('image engines (docs/TEMPLATES-IA.md §7)', () => {
     expect(estimateImageUsd('gpt-image-2.5-flare', 1)).toBe(0.094);
     expect(estimateImageUsd('gpt-image-2.5-sunburst', 1)).toBeGreaterThanOrEqual(estimateImageUsd('gpt-image-2.5-flare', 1));
     expect(IMAGE_ENGINES['gpt-image-2'].maxReferenceImages).toBe(16);
-    expect(IMAGE_ENGINES['seedream-5.0-pro'].model).toBe('dola-seedream-5-0-pro-260628');
+    expect(IMAGE_ENGINES['seedream-5.5'].model).toBe('dola-seedream-5-5-261028');
     expect(IMAGE_ENGINES['seedream-5.0-lite'].model).toBe('seedream-5-0-260128');
   });
 });

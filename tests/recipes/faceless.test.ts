@@ -29,7 +29,7 @@ function facelessProductRecipe() {
       {
         id: 'still',
         kind: 'image',
-        engine: 'seedream-5.0-pro',
+        engine: 'seedream-5.5',
         inputs: ['bottle', 'plinth'],
         prompt: 'Place {{bottle}} on {{plinth}} under cool studio strip light.',
         params: { aspect: '4:5' }
@@ -104,7 +104,7 @@ describe('recipe v2 — faceless brand recipes & person slot safety (BRAND-PRODU
         {
           id: 'shot',
           kind: 'image',
-          engine: 'seedream-5.0-pro',
+          engine: 'seedream-5.5',
           inputs: ['other_face'],
           prompt: 'Editorial portrait of {{other_face}}.',
           params: { aspect: '4:5' }
@@ -129,7 +129,7 @@ describe('recipe v2 — faceless brand recipes & person slot safety (BRAND-PRODU
         {
           id: 'still',
           kind: 'image',
-          engine: 'seedream-5.0-pro',
+          engine: 'seedream-5.5',
           inputs: ['cast', 'bottle'],
           prompt: 'Editorial frame of {{cast}} holding {{bottle}}.',
           params: { aspect: '4:5' }
@@ -167,7 +167,7 @@ describe('recipe v2 — faceless brand recipes & person slot safety (BRAND-PRODU
         {
           id: 'f1',
           kind: 'image',
-          engine: 'seedream-5.0-pro',
+          engine: 'seedream-5.5',
           inputs: ['cast'],
           prompt: 'Portrait of {{cast}}.',
           params: { aspect: '4:5' }
@@ -175,7 +175,7 @@ describe('recipe v2 — faceless brand recipes & person slot safety (BRAND-PRODU
         {
           id: 'f2',
           kind: 'image',
-          engine: 'seedream-5.0-pro',
+          engine: 'seedream-5.5',
           inputs: ['bottle'],
           prompt: 'Close-up of {{bottle}} alone.',
           params: { aspect: '4:5' }
@@ -199,7 +199,7 @@ describe('recipe v2 — faceless brand recipes & person slot safety (BRAND-PRODU
         {
           id: 'hero',
           kind: 'image',
-          engine: 'seedream-5.0-pro',
+          engine: 'seedream-5.5',
           inputs: ['bottle'],
           prompt: 'Studio product still of {{bottle}} on brushed aluminum.',
           params: { aspect: '4:5' }

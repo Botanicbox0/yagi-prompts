@@ -37,10 +37,10 @@ describe('recipe editor', () => {
   });
 
   it('shows the price from the base up and what one make earns, except on a company account', () => {
-    const recipe = toRecipe([{ kind: 'image', engine: 'seedream-5.0-pro', text: '[내 사진]의 인물이 창가에 앉은 조용한 초상.', aspect: '4:5', duration: 10, resolution: '720p' }], 'image', [], label);
+    const recipe = toRecipe([{ kind: 'image', engine: 'seedream-5.5', text: '[내 사진]의 인물이 창가에 앉은 조용한 초상.', aspect: '4:5', duration: 10, resolution: '720p' }], 'image', [], label);
     const draft = { status: 'draft' as const, title: 'Window', titleKo: null, recipe, exampleUrl: null, disclosure: { prompts: false, assets: false }, presentation: 'make-first' as const, royaltyKrw: 300, testRendersUsed: 0, files: [], tests: [], revisionOf: null };
     const render = (company: boolean) => renderToString(<RecipeEditor copy={ko.makerRecipe} formatId="11111111-1111-4111-8111-111111111111" draft={draft}
-      engines={[{ id: 'seedream-5.0-pro', label: 'SEEDREAM 5.0 PRO', kind: 'image' }, { id: 'seedance-2.5', label: 'SEEDANCE 2.5', kind: 'video', minDuration: 4, maxDuration: 30, resolutions: ['720p'] }]}
+      engines={[{ id: 'seedream-5.5', label: 'SEEDREAM 5.5', kind: 'image' }, { id: 'seedance-2.5', label: 'SEEDANCE 2.5', kind: 'video', minDuration: 4, maxDuration: 30, resolutions: ['720p'] }]}
       aspects={{ image: ['4:5'], video: ['9:16'] }} hasSelfie testLimit={3} selfieHref="/identity/selfie" workspaceHref="/creators/workspace" locale="ko" company={company} />);
     const outside = render(false);
     // One Seedream Pro picture: base 200원 (15 credits, the image minimum), raised by 300원 → 500원.

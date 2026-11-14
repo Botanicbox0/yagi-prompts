@@ -39,8 +39,9 @@ import { SELFIE_SLOT, engineStepPrompt, parseRecipe } from '@/lib/recipes/schema
  * Reads `.env.local` first, like `ark-smoke.ts`. Keys are never printed.
  *
  * Usage:
- *   npm run image:smoke -- --engine seedream-5.0-pro --ratio 4:5
- *   npm run image:smoke -- --engine seedream-5.0-pro --ratio 3:4 --photo ./tmp/me.jpg --manifest <manifest.json> --frame 2
+ *   npm run image:smoke -- --engine seedream-5.5 --ratio 4:5
+ *   npm run image:smoke -- --engine seedream-5.5 --ratio 3:4 --photo ./tmp/me.jpg --manifest <manifest.json> --frame 2
+ *   npm run image:smoke -- --engine seedream-5.5 --ratio 1:1 --resolution 2K --background transparent
  *   npm run image:smoke -- --engine gpt-image-2.5-flare --ratio 4:5 --photo ./tmp/me.jpg
  *   npm run image:smoke -- --engine gpt-image-2.5-sunburst --ratio 4:5 --photo ./tmp/me.jpg --quality max   # measure a tier
  *   npm run image:smoke -- --engine gpt-image-2 --dry
@@ -93,12 +94,26 @@ function printable(body: unknown): string {
 
 async function main(): Promise<number> {
   const dry = flag('dry') !== null;
-  const engineArg = flag('engine') ?? 'seedream-5.0-pro';
+  const engineArg = flag('engine') ?? 'seedream-5.5';
   if (!isImageEngine(engineArg)) {
     console.error(`unknown engine "${engineArg}" — one of ${IMAGE_ENGINE_IDS.join(', ')}`);
     return 2;
   }
   const engine: ImageEngineId = engineArg;
+  const resolutionArg = flag('resolution');
+  const RESOLUTIONS = ['1K', '1.5K', '2K'] as const;
+  if (resolutionArg !== null && !RESOLUTIONS.includes(resolutionArg as (typeof RESOLUTIONS)[number])) {
+    console.error(`unknown resolution "${resolutionArg}" — one of ${RESOLUTIONS.join(', ')}`);
+    return 2;
+  }
+  const resolution = (resolutionArg ?? undefined) as (typeof RESOLUTIONS)[number] | undefined;
+  const backgroundArg = flag('background');
+  const BACKGROUNDS = ['auto', 'transparent', 'opaque'] as const;
+  if (backgroundArg !== null && !BACKGROUNDS.includes(backgroundArg as (typeof BACKGROUNDS)[number])) {
+    console.error(`unknown background "${backgroundArg}" — one of ${BACKGROUNDS.join(', ')}`);
+    return 2;
+  }
+  const background = (backgroundArg ?? undefined) as (typeof BACKGROUNDS)[number] | undefined;
   const qualityArg = flag('quality');
   const QUALITIES = ['low', 'medium', 'high', 'xhigh', 'max', 'auto'];
   if (qualityArg !== null && !QUALITIES.includes(qualityArg)) {
@@ -124,8 +139,8 @@ async function main(): Promise<number> {
   const spec = IMAGE_ENGINES[engine];
 
   console.log(`engine    : ${spec.label} (${spec.model}) via ${spec.provider}`);
-  console.log(`size      : ${sizeString(imageSizeFor(engine, aspect))} (${aspect})`);
-  console.log(`estimate  : ≈ $${estimateImageUsd(engine, references).toFixed(3)} for one image`);
+  console.log(`size      : ${sizeString(imageSizeFor(engine, aspect, resolution))} (${aspect}${resolution ? `, ${resolution}` : ''})`);
+  console.log(`estimate  : ≈ $${estimateImageUsd(engine, references, resolution).toFixed(3)} for one image`);
   console.log(`reference : ${photoPath ?? '(none — text to image)'}`);
   if (manifestPath) console.log(`prompt    : manifest frame ${frame}, as the recipe path sends it (${prompt.length} chars)`);
 
@@ -137,9 +152,19 @@ async function main(): Promise<number> {
   if (!isOpenAiEngine(engine)) {
     const config = seedreamConfigFromEnv();
     console.log(`ARK_API_KEY: ${config ? 'present' : 'MISSING'}`);
-    // The render pass's request, field for field: the photo's bytes as a data URL, a JPEG back as base64.
+    // The render pass's request, field for field: the photo's bytes as a data URL, PNG when transparent else JPEG.
     const references = photoPath ? [`data:${mimeOf(photoPath)};base64,${(await readFile(resolve(photoPath))).toString('base64')}`] : [];
-    const request: SeedreamGenerateInput = { engine, prompt, aspect, references, outputFormat: 'jpeg', responseFormat: 'b64_json' };
+    const outputFormat = background === 'transparent' ? 'png' : 'jpeg';
+    const request: SeedreamGenerateInput = {
+      engine,
+      prompt,
+      aspect,
+      references,
+      resolution,
+      background,
+      outputFormat,
+      responseFormat: 'b64_json',
+    };
     if (dry || !config) {
       console.log(printable(toSeedreamBody(request)));
       return config ? 0 : 1;
@@ -152,7 +177,8 @@ async function main(): Promise<number> {
       console.log(`done in ${((Date.now() - started) / 1000).toFixed(1)}s · size ${image?.size ?? '?'} · usage ${JSON.stringify(result.usage)}`);
       const bytes = image?.b64 ? new Uint8Array(Buffer.from(image.b64, 'base64')) : image?.url ? new Uint8Array(await (await fetch(image.url)).arrayBuffer()) : null;
       if (bytes) {
-        const out = resolve(`tmp/image-smoke-${engine}-${aspect.replace(':', 'x')}${manifestPath ? `-frame${frame}` : ''}-${Date.now()}.jpg`);
+        const ext = outputFormat === 'png' ? 'png' : 'jpg';
+        const out = resolve(`tmp/image-smoke-${engine}-${aspect.replace(':', 'x')}${manifestPath ? `-frame${frame}` : ''}-${Date.now()}.${ext}`);
         await mkdir(resolve('tmp'), { recursive: true });
         await writeFile(out, bytes);
         console.log(`saved     : ${out} (${bytes.length} bytes)`);

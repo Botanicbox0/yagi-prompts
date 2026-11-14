@@ -95,7 +95,7 @@ export const studioLayersEn = {
     inputPreviewLabel: "Input preview",
     inputPreviewCaption: "The selected crop is sent as image 1",
     refsTitle: "Reference images (from 2)",
-    refsHint: "Drag from the left panel or upload a mark, product or person photo.",
+    refsHint: "Drag from the left panel, upload a file, or press Ctrl+V to paste a copied image.",
     dropRefs: "Drop here to add as reference",
     addRef: "Add reference image",
     removeRef: "Remove reference {n}",
@@ -191,7 +191,7 @@ export const studioLayersEn = {
 
   stage: {
     label: "Picture",
-    hint: "Arrow keys move the selected layer by 1 px, with Shift by 10 px. Hold Space and drag to move around. Double-click text to type on the picture.",
+    hint: "Arrow keys move the selected layer by 1 px, with Shift by 10 px. Press Ctrl+C / Ctrl+V to copy and paste layers or clipboard images. Hold Space and drag to move around.",
     drop: "Drop to add it as a layer",
     missing: "Couldn't load this image",
     selected: "{name} selected",
@@ -201,6 +201,17 @@ export const studioLayersEn = {
     notImage: "Only images can be added.",
     uploadFailed: "Couldn't upload {name}.",
     textPlaceholder: "Type here",
+  },
+
+  clipboard: {
+    copyLayer: "Copy layer (Ctrl+C)",
+    copiedLayer: "Copied layer. Press Ctrl+V to paste.",
+    copiedCrop: "Copied selected area to clipboard.",
+    copiedCanvas: "Copied canvas image to clipboard.",
+    copyFailed: "Couldn't copy to clipboard in this browser.",
+    pastedLayer: "Pasted image as a new layer.",
+    pastedRef: "Added pasted image as a reference.",
+    pasteHint: "Or press Ctrl+V to paste a copied image",
   },
 
   sheet: {
@@ -328,7 +339,7 @@ export const studioLayersKo: typeof studioLayersEn = {
     inputPreviewLabel: "입력 미리보기",
     inputPreviewCaption: "선택한 조각이 1번 이미지로 들어갑니다",
     refsTitle: "참조 이미지 (2번부터)",
-    refsHint: "왼쪽 에셋에서 끌어 놓거나 로고·제품·인물 파일을 올려 주세요.",
+    refsHint: "왼쪽 에셋에서 끌어 놓거나 파일을 올리거나, 복사한 이미지를 Ctrl+V로 바로 붙여넣어 보세요.",
     dropRefs: "여기에 놓으면 참조 이미지로 추가돼요",
     addRef: "참조 이미지 추가",
     removeRef: "{n}번 참조 빼기",
@@ -424,7 +435,7 @@ export const studioLayersKo: typeof studioLayersEn = {
 
   stage: {
     label: "그림",
-    hint: "방향키로 고른 레이어를 1px씩, Shift와 함께 누르면 10px씩 옮겨요. 스페이스를 누른 채 끌면 화면이 움직여요. 글자는 두 번 눌러 그림 위에서 고칠 수 있어요.",
+    hint: "방향키로 고른 레이어를 1px씩, Shift와 함께 누르면 10px씩 옮겨요. Ctrl+C / Ctrl+V로 레이어나 복사한 이미지를 붙여넣을 수 있어요. 스페이스를 누른 채 끌면 화면이 움직여요.",
     drop: "여기에 놓으면 레이어로 들어가요",
     missing: "이미지를 불러오지 못했어요",
     selected: "{name} 골랐어요",
@@ -434,6 +445,17 @@ export const studioLayersKo: typeof studioLayersEn = {
     notImage: "이미지만 넣을 수 있어요.",
     uploadFailed: "{name}을(를) 올리지 못했어요.",
     textPlaceholder: "여기에 입력하세요",
+  },
+
+  clipboard: {
+    copyLayer: "레이어 복사 (Ctrl+C)",
+    copiedLayer: "레이어를 복사했어요. Ctrl+V로 붙여넣을 수 있어요.",
+    copiedCrop: "선택 영역을 클립보드에 복사했어요.",
+    copiedCanvas: "캔버스 이미지를 클립보드에 복사했어요.",
+    copyFailed: "이 브라우저에서는 클립보드 복사를 지원하지 않아요.",
+    pastedLayer: "복사한 이미지를 새 레이어로 붙여넣었어요.",
+    pastedRef: "붙여넣은 이미지를 참조 이미지로 추가했어요.",
+    pasteHint: "복사한 이미지는 Ctrl+V로 바로 붙여넣을 수 있어요",
   },
 
   sheet: {

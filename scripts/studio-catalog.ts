@@ -7,7 +7,7 @@
  * price card (`/v1/pricing/model/{id}/endpoint/{name}`). No key needed; spends nothing and prints no
  * secrets. Exit code 1 when a `live` model is missing from the catalogue.
  */
-import { STUDIO_MODELS } from '../lib/brand-studio/models';
+import { STUDIO_MODELS, type StudioModel } from '../lib/brand-studio/models';
 
 const API = 'https://api.sunra.ai/v1';
 const CATALOGUE = `${API}/models?limit=300`;
@@ -46,7 +46,7 @@ async function main(): Promise<void> {
 
   console.log(`Sunra catalogue: ${listed.size} models${body.has_more ? ' (more pages exist; only the first 300 were read)' : ''}\n`);
   let missingLive = 0;
-  for (const model of STUDIO_MODELS) {
+  for (const model of STUDIO_MODELS as readonly StudioModel[]) {
     const hit = listed.get(model.api.alias);
     const wanted = Object.values(model.endpoints);
     const endpoints = new Set((hit?.endpoints ?? []).map((e) => e.name).filter(Boolean));

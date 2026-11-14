@@ -29,7 +29,7 @@ async function result(input: Record<string, unknown>): Promise<StudioOutputView>
   return poll.jobs[0]!.outputs[0]!;
 }
 const video = () => result({ kind: 'video', model: 'seedance-2.5', prompt: 'slow push in on the bottle', aspect: '9:16', seconds: 5, audio: 'native', resolution: '720p' });
-const picture = () => result({ kind: 'image', model: 'seedream-5-pro', prompt: 'a glass bottle', aspect: '1:1', resolution: '1K', count: 1 });
+const picture = () => result({ kind: 'image', model: 'seedream-5.5', prompt: 'a glass bottle', aspect: '1:1', resolution: '1K', count: 1 });
 const objectiveOf = async (projectId: string) => (await f.sql.query<{ objective: string }>('select objective from brand_projects where id = $1', [projectId])).rows[0]!.objective;
 const messages = async (projectId: string) =>
   (await f.sql.query<{ body: string; author_role: string }>('select body, author_role from brand_messages where project_id = $1 order by created_at', [projectId])).rows;

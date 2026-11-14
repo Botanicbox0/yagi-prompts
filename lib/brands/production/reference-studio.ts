@@ -15,7 +15,7 @@ import type { BrandClientCategory } from "@/lib/brands/category-experience";
  *   - `nano_banana_pro` (`Nano Banana Pro`)
  *   - `nano_banana_2_1` (`Nano Banana 2.1`)
  *   - `nano_banana_2_0` (`Nano Banana 2.0`)
- *   - `seedream_5_0_pro` (`Seedream 5.0 Pro`)
+ *   - `seedream_5_5` (`Seedream 5.5`)
  */
 
 export type BrandCoreDeliverableTrackId =
@@ -240,14 +240,14 @@ export interface StudioReferenceWorkflowPreset {
  *   2. `nano_banana_pro` (`Nano Banana Pro`)
  *   3. `nano_banana_2_1` (`Nano Banana 2.1`)
  *   4. `nano_banana_2_0` (`Nano Banana 2.0`)
- *   5. `seedream_5_0_pro` (`Seedream 5.0 Pro`)
+ *   5. `seedream_5_5` (`Seedream 5.5`)
  */
 export type BrandStudioImageModelId =
   | "gpt_image_2_6"
   | "nano_banana_pro"
   | "nano_banana_2_1"
   | "nano_banana_2_0"
-  | "seedream_5_0_pro";
+  | "seedream_5_5";
 
 export interface BrandStudioImageModelSpec {
   id: BrandStudioImageModelId;
@@ -280,7 +280,7 @@ export interface BrandStudioImageModelSpec {
   priceKrwPer5Set: number;
   /** B2B credits for 1 single 2K image */
   creditsPerSingle: number;
-  supportedResolutions: readonly ("1K" | "2K" | "4K")[];
+  supportedResolutions: readonly ("1K" | "1.5K" | "2K" | "4K")[];
 }
 
 export const BRAND_STUDIO_IMAGE_MODELS: ReadonlyArray<BrandStudioImageModelSpec> =
@@ -438,9 +438,9 @@ export const BRAND_STUDIO_IMAGE_MODELS: ReadonlyArray<BrandStudioImageModelSpec>
       supportedResolutions: ["1K", "2K"],
     },
     {
-      id: "seedream_5_0_pro",
-      nameKo: "Seedream 5.0 Pro",
-      nameEn: "Seedream 5.0 Pro",
+      id: "seedream_5_5",
+      nameKo: "Seedream 5.5",
+      nameEn: "Seedream 5.5",
       tierBadgeKo: "실제 같은 피부결 · 전신 비율 · 의류 착장 1순위",
       tierBadgeEn: "Master · Real Matte Skin, 8-Head Lookbook & VTO",
       promptFormulaBadgeKo: "인위적인 AI 피부 광택 제거 · 실제 모공과 원단 결 · 의류 핏 고정",
@@ -473,7 +473,7 @@ export const BRAND_STUDIO_IMAGE_MODELS: ReadonlyArray<BrandStudioImageModelSpec>
       creditsPer5Set: 65,
       priceKrwPer5Set: 800,
       creditsPerSingle: 13,
-      supportedResolutions: ["1K", "2K"],
+      supportedResolutions: ["1K", "1.5K", "2K"],
     },
   ];
 
@@ -990,8 +990,8 @@ export const BRAND_STUDIO_MICRO_EDIT_MODELS: ReadonlyArray<BrandStudioMicroEditM
     },
     {
       id: "film_grain_skin_enhancer",
-      nameKo: "Seedream 5.0 Pro · 실제 피부결 & 필름 입자감 마감",
-      nameEn: "Seedream 5.0 Pro · Real Matte Skin & 35mm Grain Finish",
+      nameKo: "Seedream 5.5 · 실제 피부결 & 필름 입자감 마감",
+      nameEn: "Seedream 5.5 · Real Matte Skin & 35mm Grain Finish",
       badgeKo: "인위적인 AI 광택 제거 · 최종 마감",
       badgeEn: "Removes AI Plastic Look · Final Finish",
       shortTraitKo:
@@ -1406,8 +1406,8 @@ export const FIRST_CREATION_GOALS: readonly FirstCreationGoalCard[] = [
     id: "fashion_lookbook",
     titleKo: "이미지 · 1~4번 참고 사진 화보",
     titleEn: "Image · Multi-Ref Lookbook",
-    subtitleKo: "Nano Banana Pro / Seedream 5.0 Pro · 인물·배경·포즈·색감 조합 화보",
-    subtitleEn: "Nano Banana Pro / Seedream 5.0 Pro · 4-slot lookbook composite",
+    subtitleKo: "Nano Banana Pro / Seedream 5.5 · 인물·배경·포즈·색감 조합 화보",
+    subtitleEn: "Nano Banana Pro / Seedream 5.5 · 4-slot lookbook composite",
     targetTrack: "image",
     targetMedium: "image",
     targetSubMode: "multi_ref_generate",
@@ -1464,7 +1464,7 @@ export const FIRST_CREATION_GOALS: readonly FirstCreationGoalCard[] = [
     targetMedium: "video",
     targetSubMode: "multi_ref_generate",
     targetWorkflowMode: "lookbook_composite",
-    targetImageModelId: "seedream_5_0_pro",
+    targetImageModelId: "seedream_5_5",
     targetAspect: "9:16",
   },
   {
@@ -1477,7 +1477,7 @@ export const FIRST_CREATION_GOALS: readonly FirstCreationGoalCard[] = [
     targetMedium: "video",
     targetSubMode: "multi_ref_generate",
     targetWorkflowMode: "lookbook_composite",
-    targetImageModelId: "seedream_5_0_pro",
+    targetImageModelId: "seedream_5_5",
     targetAspect: "9:16",
   },
   {
@@ -2492,7 +2492,7 @@ export const VERIFIED_CREATOR_CANDIDATES: readonly AnonymousCreatorCandidateSpec
  * ============================================================================
  * Brand Aesthetic Moodboard & Preset Lock System (`미감 프리셋 · 우리 브랜드 무드보드`)
  * ============================================================================
- * Context-less image models (GPT Image 2.6, Nano Banana Pro/2.1/2.0, Seedream 5.0 Pro)
+ * Context-less image models (GPT Image 2.6, Nano Banana Pro/2.1/2.0, Seedream 5.5)
  * lose brand consistency unless a reverse-engineered Visual DNA preset is locked
  * before generation and compiled into each model's native prompt architecture.
  */
@@ -2556,7 +2556,7 @@ export const BRAND_AESTHETIC_PRESETS: ReadonlyArray<BrandAestheticPreset> = [
       "/reel/landing/c-logo-ours.webp",
       "/reel/landing/cut-cheek.webp",
     ],
-    recommendedModelId: "seedream_5_0_pro",
+    recommendedModelId: "seedream_5_5",
     pinnedColorId: "color_editorial_cobalt",
     pinnedTextureId: "texture_dewy_glass_smear",
     slotDefaults: {
@@ -2593,7 +2593,7 @@ export const BRAND_AESTHETIC_PRESETS: ReadonlyArray<BrandAestheticPreset> = [
       "/reel/studio/vto-set-front.webp",
       "/reel/studio/vto-garment.webp",
     ],
-    recommendedModelId: "seedream_5_0_pro",
+    recommendedModelId: "seedream_5_5",
     pinnedColorId: "color_crisp_studio_neutral",
     pinnedTextureId: "texture_macro_fabric_weave",
     slotDefaults: {
@@ -2945,8 +2945,8 @@ export const MODEL_EASY_COMPARISON_MATRIX: ReadonlyArray<ModelEasyComparisonRow>
     verifiedSampleImage: "/reel/brands/house-french-blue-hero-1080p.jpg",
   },
   {
-    modelId: "seedream_5_0_pro",
-    shortName: "Seedream 5.0 Pro",
+    modelId: "seedream_5_5",
+    shortName: "Seedream 5.5",
     oneLineWhenKo: "번들거리는 AI 광택 없이 실제 카메라로 찍은 듯한 보송한 피부결과 전신 착장 핏을 원할 때",
     oneLineWhenEn: "When you need authentic matte skin pores (zero plastic sheen) and true garment fit",
     bestBadgeKo: "실제 피부결 · 전신 착장 1위",
@@ -2968,7 +2968,7 @@ export const MODEL_EASY_COMPARISON_MATRIX: ReadonlyArray<ModelEasyComparisonRow>
  *   - `nano_banana_pro` (ALL-CAPS Compartment Locks)
  *   - `nano_banana_2_1` (Scene Lock + 1->2 SKU Swap Protocol)
  *   - `nano_banana_2_0` (Fast Concept & Palette Lock)
- *   - `seedream_5_0_pro` (4-Part Cohesive Natural-Language Prose + Matte Skin Contract + COLOUR AUTHORITY + HEX VALUES)
+ *   - `seedream_5_5` (4-Part Cohesive Natural-Language Prose + Matte Skin Contract + COLOUR AUTHORITY + HEX VALUES)
  */
 export function compileAestheticPromptForModel(opts: {
   modelId: BrandStudioImageModelId;
@@ -3082,7 +3082,7 @@ export function compileAestheticPromptForModel(opts: {
     };
   }
 
-  // seedream_5_0_pro — 4-Part Cohesive Natural-Language Prose + Matte Skin Contract + COLOUR AUTHORITY + HEX VALUES
+  // seedream_5_5 — 4-Part Cohesive Natural-Language Prose + Matte Skin Contract + COLOUR AUTHORITY + HEX VALUES
   const compiledPrompt = isKo
     ? `${cleanBrief}. ${dna.opticsKo}, ${dna.lightingKo}. ${dna.surfaceSkinKo}(번들거리는 인위적 광택 없이 실제 피부 모공과 원단·유리 질감 보존). COLOUR AUTHORITY: ${aestheticTitle}. HEX VALUES: [${hexList}].`
     : `${cleanBrief}. Shot with ${dna.opticsEn} under ${dna.lightingEn}. Preserve ${dna.surfaceSkinEn} with zero synthetic plastic sheen. COLOUR AUTHORITY: ${aestheticTitle}. HEX VALUES: [${hexList}].`;

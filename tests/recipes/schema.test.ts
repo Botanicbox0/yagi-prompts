@@ -17,7 +17,7 @@ function filmRecipe(): Record<string, unknown> {
     version: 2,
     slots: { selfie, scene: { kind: 'image', source: 'creator', asset: A1 } },
     steps: [
-      { id: 'sheet', kind: 'image', engine: 'seedream-5.0-pro', inputs: ['selfie'], prompt: 'Character reference sheet of {{selfie}}, front and side views.', params: { aspect: '16:9' } },
+      { id: 'sheet', kind: 'image', engine: 'seedream-5.5', inputs: ['selfie'], prompt: 'Character reference sheet of {{selfie}}, front and side views.', params: { aspect: '16:9' } },
       { id: 'shot1', kind: 'video', engine: 'seedance-2.5', inputs: ['sheet', 'scene'], prompt: 'The person from {{sheet}} walks through {{scene}} at dusk.', params: { aspect: '9:16', duration: 10, resolution: '720p' } },
     ],
     output: { from: 'shot1' },

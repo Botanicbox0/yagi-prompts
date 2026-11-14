@@ -35,28 +35,33 @@ describe('Seedream client (ModelArk images/generations)', () => {
     expect(seedreamConfigFromEnv({ ARK_API_KEY: 'k' })).toEqual({ apiKey: 'k', baseUrl: 'https://ark.ap-southeast.bytepluses.com/api/v3' });
   });
 
-  it('spells the body the way the API does: explicit size, no watermark, one or many references', () => {
-    const body = toSeedreamBody({ engine: 'seedream-5.0-pro', prompt: 'p', aspect: '4:5' });
+  it('spells the body the way the API does: explicit size, no watermark, one or many references, and transparent png', () => {
+    const body = toSeedreamBody({ engine: 'seedream-5.5', prompt: 'p', aspect: '4:5' });
     expect(body).toEqual({
-      model: 'dola-seedream-5-0-pro-260628',
+      model: 'dola-seedream-5-5-261028',
       prompt: 'p',
       size: '1728x2160',
       output_format: 'jpeg',
       response_format: 'url',
       watermark: false,
     });
+    expect(toSeedreamBody({ engine: 'seedream-5.5', prompt: 'p', aspect: '1:1', resolution: '1K', background: 'transparent' })).toMatchObject({
+      model: 'dola-seedream-5-5-261028',
+      background: 'transparent',
+      output_format: 'png',
+    });
     expect(toSeedreamBody({ engine: 'seedream-5.0-lite', prompt: 'p', aspect: '1:1', references: ['asset://a'] }).image).toBe('asset://a');
     expect(toSeedreamBody({ engine: 'seedream-5.0-lite', prompt: 'p', aspect: '1:1', references: ['asset://a', 'https://x/b.png'] }).image).toEqual(['asset://a', 'https://x/b.png']);
-    expect(() => toSeedreamBody({ engine: 'seedream-5.0-pro', prompt: 'p', aspect: '1:1', references: new Array(11).fill('asset://a') })).toThrow(RangeError);
+    expect(() => toSeedreamBody({ engine: 'seedream-5.5', prompt: 'p', aspect: '1:1', references: new Array(11).fill('asset://a') })).toThrow(RangeError);
   });
 
   it('returns the url, the size and the usage of a finished image', async () => {
     const capture: { url?: string; init?: RequestInit } = {};
     const client = createSeedreamClient(
       { apiKey: 'k', baseUrl: 'https://ark.test/api/v3' },
-      fakeFetch(200, { model: 'dola-seedream-5-0-pro-260628', data: [{ url: 'https://cdn/x.jpg', size: '1728x2160', output_format: 'jpeg' }], usage: { input_images: 1, generated_images: 1, output_tokens: 4096, total_tokens: 4096 } }, capture),
+      fakeFetch(200, { model: 'dola-seedream-5-5-261028', data: [{ url: 'https://cdn/x.jpg', size: '1728x2160', output_format: 'jpeg' }], usage: { input_images: 1, generated_images: 1, output_tokens: 4096, total_tokens: 4096 } }, capture),
     );
-    const result = await client.generate({ engine: 'seedream-5.0-pro', prompt: 'p', aspect: '4:5', references: ['asset://a'] });
+    const result = await client.generate({ engine: 'seedream-5.5', prompt: 'p', aspect: '4:5', references: ['asset://a'] });
     expect(capture.url).toBe('https://ark.test/api/v3/images/generations');
     expect((capture.init?.headers as Record<string, string>).authorization).toBe('Bearer k');
     expect(result.images[0]).toEqual({ url: 'https://cdn/x.jpg', b64: null, size: '1728x2160', outputFormat: 'jpeg' });
@@ -65,9 +70,9 @@ describe('Seedream client (ModelArk images/generations)', () => {
 
   it('names the two refusals the UI has to answer differently', async () => {
     const denied = createSeedreamClient({ apiKey: 'k', baseUrl: 'https://ark.test' }, fakeFetch(403, { error: { code: 'AccessDenied', message: 'no access. Request id: 0217' } }));
-    await expect(denied.generate({ engine: 'seedream-5.0-pro', prompt: 'p', aspect: '1:1' })).rejects.toMatchObject({ code: 'AccessDenied', accessProblem: true, inputRejected: false, requestId: '0217' });
+    await expect(denied.generate({ engine: 'seedream-5.5', prompt: 'p', aspect: '1:1' })).rejects.toMatchObject({ code: 'AccessDenied', accessProblem: true, inputRejected: false, requestId: '0217' });
     const face = createSeedreamClient({ apiKey: 'k', baseUrl: 'https://ark.test' }, fakeFetch(400, { error: { code: 'InputImageSensitiveContentDetected.PrivacyInformation', message: 'may contain a real person' } }));
-    await expect(face.generate({ engine: 'seedream-5.0-pro', prompt: 'p', aspect: '1:1', references: ['https://x/face.jpg'] })).rejects.toSatisfy((error: unknown) => error instanceof SeedreamError && error.inputRejected && !error.accessProblem);
+    await expect(face.generate({ engine: 'seedream-5.5', prompt: 'p', aspect: '1:1', references: ['https://x/face.jpg'] })).rejects.toSatisfy((error: unknown) => error instanceof SeedreamError && error.inputRejected && !error.accessProblem);
   });
 });
 

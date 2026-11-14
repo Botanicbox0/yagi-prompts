@@ -77,21 +77,18 @@ beforeEach(() => {
 afterEach(() => vi.unstubAllEnvs());
 
 describe("/brand/studio/video for an ordinary brand", () => {
-  it("renders the 2-column Video Studio workspace with create/edit tabs, frames, prompt dock, and history/guide tabs", async () => {
+  it("renders the unified Video Studio workspace shell with compose/request links and right rail slot", async () => {
     const html = await page();
     expect(html).toContain("data-brand-studio-video");
     expect(html).toContain(`<h1 class="bs-title">${studioVideoKo.title}</h1>`);
     expect(html).toContain("data-video-studio-workspace");
-    expect(html).toContain('data-video-tab="create"');
-    expect(html).toContain('data-video-tab="edit"');
-    expect(html).toContain('data-video-create-mode="prompt"');
-    expect(html).toContain('data-video-create-mode="blueprint"');
-    expect(html).toContain("data-video-start-frame");
-    expect(html).toContain("data-video-end-frame");
-    expect(html).toContain('data-video-stage-tab="history"');
-    expect(html).toContain('data-video-stage-tab="guide"');
+    expect(html).toContain('data-studio-mode="video"');
+    expect(html).toContain("data-studio-rail-slot");
+    expect(html).toContain("data-studio-reverse");
+    expect(html).toContain("data-studio-video-compose-link");
     expect(html).toContain(`href="/brand/projects/new?organizationId=${ORG}"`);
     expect(html).toContain("data-studio-video-request-link");
+    expect(html).not.toContain('data-video-tab=');
   });
 
   it("redirects legacy ?view=request to /brand/projects/new (Bundle E project intake)", async () => {
@@ -99,13 +96,14 @@ describe("/brand/studio/video for an ordinary brand", () => {
     expect(redirectSpy).toHaveBeenCalledWith(`/brand/projects/new?organizationId=${ORG}`);
   });
 
-  it("opens blueprint remake mode on ?start=reverse (winning over ?view=request) and edit mode on ?tab=edit", async () => {
+  it("keeps the workspace open on ?start=reverse (winning over ?view=request) and ?tab=edit without redirecting", async () => {
     const blueprintHtml = await page({ start: "reverse", asset: ASSET, view: "request" });
-    expect(blueprintHtml).toContain("data-video-blueprint-panel");
+    expect(blueprintHtml).toContain("data-video-studio-workspace");
+    expect(blueprintHtml).toContain("data-studio-reverse");
     expect(redirectSpy).not.toHaveBeenCalled();
 
     const editHtml = await page({ tab: "edit" });
-    expect(editHtml).toContain("data-video-edit-panel");
+    expect(editHtml).toContain("data-video-studio-workspace");
   });
 
   it("shows the contract link only to a brand with a production contract", async () => {
@@ -126,7 +124,8 @@ describe("/brand/studio/video for an ordinary brand", () => {
   it.each(["ko", "en"] as const)("names no client, supplier, won amount or old framing (%s)", async (locale) => {
     state.locale = locale;
     const html = (await page()) + (await page({ start: "reverse" })) + (await page({ tab: "edit" }));
-    expect(html).toContain(locale === "ko" ? studioVideoKo.workspace.tabs.create : studioVideoEn.workspace.tabs.create);
+    expect(html).toContain(locale === "ko" ? studioVideoKo.title : studioVideoEn.title);
+    expect(html).toContain(locale === "ko" ? studioVideoKo.workspace.requestAction : studioVideoEn.workspace.requestAction);
     for (const banned of [/9편|200만|2M\+? views/i, /morphic|모픽/i, /sunra|higgsfield|seedance|gemini/i, /브랜드 전용 포맷|인하우스 패키지/, /₩|\d원\b/]) {
       expect(html).not.toMatch(banned);
     }

@@ -13,7 +13,7 @@
 import { Fragment, useEffect, useId, useRef, useState, type ReactNode } from "react";
 import type { StudioJobView, StudioOutputView } from "@/lib/brand-studio/contracts";
 import { creditsOf } from "@/lib/brand-studio/credits";
-import { studioModel, type StudioMedium } from "@/lib/brand-studio/models";
+import { studioModelOrLegacy, type StudioMedium } from "@/lib/brand-studio/models";
 import { canCancel, outputRatio, ratioNumber, slotRatio } from "../board";
 import { credits, errorLine, fill, type StudioCopy, type StudioLocale } from "../copy";
 import { StudioIcon } from "../icons";
@@ -130,7 +130,7 @@ export function tileMenuKeys(input: {
   if (canGenerate && image) keys.push("region");
   if (canEdit && image && sized) keys.push("decorate");
   if (canGenerate && image) keys.push("to-video");
-  if (canEdit) keys.push("folder", "campaign");
+  if (canEdit) keys.push("folder", "review", "campaign");
   if (canEdit && !saved) keys.push("save");
   keys.push("download");
   if (canEdit) keys.push("delete");
@@ -263,7 +263,7 @@ function ResultTile(props: WallProps & { entry: Extract<Entry, { type: "result" 
   const liked = library.liked.has(libraryKey(ref));
   const image = output.kind === "image";
   const sized = Boolean(output.width && output.height);
-  const model = studioModel(job.model);
+  const model = studioModelOrLegacy(job.model);
   const usage = job.estimateKrw > 0 && job.outputs.length > 0 ? Math.ceil(creditsOf(job.estimateKrw) / Math.max(1, job.outputs.length)) : 0;
   const open = () => onAction("open", entry.item);
 
@@ -288,7 +288,7 @@ function ResultTile(props: WallProps & { entry: Extract<Entry, { type: "result" 
     decorate: { label: m.decorate, icon: "layers", run: () => onAction("decorate", entry.item) },
     "to-video": { label: m.toVideo, icon: "video", run: () => onAction("toVideo", entry.item) },
     folder: { label: m.folder, icon: "folder-plus", keepOpen: true, disabled: !library.ready, run: () => setPanel("folders") },
-    review: { label: m.review, icon: "review", run: () => onAction("review", entry.item) },
+    review: { label: locale === "en" ? "Review & Share" : "검수 · 공유", icon: "review", run: () => onAction("review", entry.item) },
     campaign: { label: m.campaign, icon: "send", run: () => onAction("campaign", entry.item) },
     save: { label: m.save, icon: "save", run: () => onAction("save", entry.item) },
     download: { label: m.download, icon: "download", run: () => onAction("download", entry.item) },

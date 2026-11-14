@@ -89,7 +89,7 @@ describe('upload', () => {
 
 describe('library and results', () => {
   async function oneResult() {
-    const created = await createStudioJob(deps, owner(), { kind: 'image', organizationId: f.orgId, requestId: requestId(), model: 'seedream-5-pro', prompt: 'a blue bottle', aspect: '1:1', resolution: '1K' });
+    const created = await createStudioJob(deps, owner(), { kind: 'image', organizationId: f.orgId, requestId: requestId(), model: 'seedream-5.5', prompt: 'a blue bottle', aspect: '1:1', resolution: '1K' });
     if (!created.ok) throw new Error(created.code);
     await advanceStudioJobsWith(deps, { jobIds: [created.job.id] });
     const state = await loadStudioState(deps, owner(), f.orgId);
@@ -115,7 +115,7 @@ describe('library and results', () => {
   it('will not delete what an open job is using', async () => {
     const saved = await upload(await pngBytes(), 'image/png');
     if (!saved.ok) throw new Error();
-    const created = await createStudioJob(deps, owner(), { kind: 'image', organizationId: f.orgId, requestId: requestId(), model: 'seedream-5-pro', prompt: 'x', aspect: '1:1', resolution: '1K', references: [{ assetId: saved.asset.id }] });
+    const created = await createStudioJob(deps, owner(), { kind: 'image', organizationId: f.orgId, requestId: requestId(), model: 'seedream-5.5', prompt: 'x', aspect: '1:1', resolution: '1K', references: [{ assetId: saved.asset.id }] });
     expect(created.ok).toBe(true);
     expect(await deleteStudioAsset(deps, owner(), { organizationId: f.orgId, assetId: saved.asset.id })).toEqual({ ok: false, code: 'conflict' });
   });

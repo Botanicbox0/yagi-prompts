@@ -47,8 +47,9 @@ export function referenceVideoFit(
 }
 
 /**
- * Whether a clip can be read into a blueprint: its length within the same bounds a reference may run
- * (the remake is 4–15 s, so a longer clip would be squeezed past usefulness). Picture size never matters.
+ * Whether a clip can be read into a blueprint: up to `STUDIO_SHOT_LIMITS.secondsMax` (600 s), since
+ * the video is only read into a shot plan and never sent to the generator as raw video input.
+ * Picture size never matters.
  */
 export function blueprintFit(
   model: Pick<StudioVideoModel, 'referenceVideoSeconds'>,
@@ -56,8 +57,76 @@ export function blueprintFit(
 ): { readable: boolean; problem: 'length' | null } {
   const seconds = secondsOf(video.seconds);
   const time = model.referenceVideoSeconds;
-  const problem = seconds !== null && (seconds < time.min || seconds > time.max) ? 'length' : null;
+  const problem =
+    seconds !== null && (seconds < time.min || seconds > STUDIO_SHOT_LIMITS.secondsMax) ? 'length' : null;
   return { readable: problem === null, problem };
+}
+
+export interface MultiClipWindow {
+  index: number;
+  startSec: number;
+  endSec: number;
+  durationSec: number;
+}
+
+export interface MultiClipPlan {
+  clipCount: number;
+  clipDurations: number[];
+  windows: MultiClipWindow[];
+  sweetSpotWarning: boolean;
+}
+
+/**
+ * Splits a requested total output duration into 1 clip (4–15 s) or 2–4 coherent clips (4–15 s each)
+ * so long reference formats (> 15 s or > 30 s) can be generated concurrently without hitting the
+ * per-clip Seedance 15 s generation cap or 30 s raw-video input cap.
+ */
+export function planMultiClipGeneration(input: {
+  referenceSeconds: number | null;
+  targetTotalSeconds: number;
+  clipCount?: number;
+  maxPerClipSeconds?: number;
+}): MultiClipPlan {
+  const minPerClip = 4;
+  const maxPerClip = Math.min(15, Math.max(minPerClip, Math.round(input.maxPerClipSeconds ?? 15)));
+  const rawTotal = Number.isFinite(input.targetTotalSeconds) ? Math.round(input.targetTotalSeconds) : maxPerClip;
+  const wantsMulti = rawTotal > maxPerClip || (input.clipCount !== undefined && input.clipCount >= 2);
+
+  if (!wantsMulti) {
+    const dur = Math.min(maxPerClip, Math.max(minPerClip, rawTotal));
+    return {
+      clipCount: 1,
+      clipDurations: [dur],
+      windows: [{ index: 0, startSec: 0, endSec: dur, durationSec: dur }],
+      sweetSpotWarning: dur > 30 || rawTotal > 30,
+    };
+  }
+
+  const count =
+    input.clipCount !== undefined && input.clipCount >= 2
+      ? Math.min(4, Math.max(2, Math.round(input.clipCount)))
+      : Math.min(4, Math.max(2, Math.ceil(rawTotal / maxPerClip)));
+
+  const clampedTotal = Math.min(count * maxPerClip, Math.max(count * minPerClip, rawTotal));
+  const base = Math.floor(clampedTotal / count);
+  const rem = clampedTotal - base * count;
+  const clipDurations = Array.from({ length: count }, (_, i) => base + (i < rem ? 1 : 0));
+
+  let cursor = 0;
+  const windows: MultiClipWindow[] = clipDurations.map((durationSec, index) => {
+    const startSec = round1(cursor);
+    const endSec = round1(cursor + durationSec);
+    cursor = endSec;
+    return { index, startSec, endSec, durationSec };
+  });
+
+  const totalPlanned = clipDurations.reduce((sum, n) => sum + n, 0);
+  return {
+    clipCount: count,
+    clipDurations,
+    windows,
+    sweetSpotWarning: totalPlanned > 30 || rawTotal > 30,
+  };
 }
 
 /**
@@ -101,4 +170,54 @@ export function normalizeShots(shots: readonly FilmShot[], referenceSeconds: num
     .filter((s) => s.end - s.start >= 0.1)
     .sort((a, b) => a.start - b.start || a.end - b.end)
     .slice(0, STUDIO_SHOT_LIMITS.shotsMax);
+}
+
+/**
+ * Slices a blueprint shot table for one window of a multi-clip generation, shifting and scaling the
+ * part's cuts onto `[0, sourceSpan]` so `blueprintShots(window.durationSec, sheet)` lays them out
+ * across that clip's exact duration.
+ */
+export function sliceShotsForWindow(
+  shots: readonly FilmShot[],
+  referenceSeconds: number | null | undefined,
+  window: MultiClipWindow,
+  totalPlannedSeconds: number,
+): FilmShot[] {
+  if (!shots.length || totalPlannedSeconds <= 0 || window.durationSec <= 0) return [];
+  const cleaned = normalizeShots(shots, referenceSeconds);
+  if (!cleaned.length) return [];
+  const sourceSpan = Math.max(secondsOf(referenceSeconds) ?? 0, ...cleaned.map((s) => s.end));
+  if (!(sourceSpan > 0)) return [];
+
+  const sliceStart = (window.startSec / totalPlannedSeconds) * sourceSpan;
+  const sliceEnd = (window.endSec / totalPlannedSeconds) * sourceSpan;
+  const sliceLen = sliceEnd - sliceStart;
+  if (!(sliceLen >= 0.1)) return [];
+
+  const scale = sourceSpan / sliceLen;
+  const overlapped = cleaned
+    .filter((s) => s.end > sliceStart + 0.02 && s.start < sliceEnd - 0.02)
+    .map((s): FilmShot => {
+      const relStart = Math.max(0, s.start - sliceStart) * scale;
+      const relEnd = Math.min(sliceLen, s.end - sliceStart) * scale;
+      return {
+        ...s,
+        start: round1(Math.max(0, Math.min(sourceSpan, relStart))),
+        end: round1(Math.max(0, Math.min(sourceSpan, relEnd))),
+      };
+    })
+    .filter((s) => s.end - s.start >= 0.1);
+
+  if (!overlapped.length) {
+    const mid = (sliceStart + sliceEnd) / 2;
+    const nearest =
+      cleaned.find((s) => s.start <= mid && s.end >= mid) ??
+      cleaned[Math.min(cleaned.length - 1, Math.floor((window.index / Math.max(1, totalPlannedSeconds)) * cleaned.length))] ??
+      cleaned[0]!;
+    return [{ ...nearest, start: 0, end: round1(sourceSpan) }];
+  }
+
+  overlapped[0] = { ...overlapped[0]!, start: 0 };
+  overlapped[overlapped.length - 1] = { ...overlapped[overlapped.length - 1]!, end: round1(sourceSpan) };
+  return normalizeShots(overlapped, sourceSpan);
 }

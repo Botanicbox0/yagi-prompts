@@ -28,12 +28,12 @@
   --brc-line: var(--ys-line, rgba(0, 0, 0, 0.04));
   --brc-line-strong: var(--ys-line-strong, rgba(0, 0, 0, 0.12));
   --brc-danger: var(--ys-danger, #a3392f);
-  --brc-glass: rgba(255, 255, 255, 0.88);
+  --brc-glass: var(--ys-glass, rgba(255, 255, 255, 0.88));
   --brc-ease: var(--ys-spring, cubic-bezier(0.22, 1, 0.36, 1));
   --brc-dur: 200ms;
   --brc-well: none;
   --brc-ring: 0 0 0 1px var(--brc-hairline);
-  --brc-float: 0 0 0 1px rgba(0, 0, 0, 0.06), 0 20px 48px -12px rgba(0, 0, 0, 0.12);
+  --brc-float: var(--ys-float, 0 0 0 1px rgba(0, 0, 0, 0.06), 0 20px 48px -12px rgba(0, 0, 0, 0.12));
   color: var(--brc-ink);
 }
 
@@ -72,11 +72,11 @@
 .brc-btn[data-primary='true'] {
   background: var(--brc-accent);
   border-color: var(--brc-accent);
-  color: #ffffff;
+  color: var(--ys-on-accent, #ffffff);
 }
 .brc-btn[data-primary='true']:hover {
-  background: color-mix(in srgb, var(--brc-accent) 88%, #000000);
-  color: #ffffff;
+  background: var(--ys-accent-hover, color-mix(in srgb, var(--brc-accent) 88%, #000000));
+  color: var(--ys-on-accent, #ffffff);
 }
 .brc-chip svg,
 .brc-icon-btn svg,
@@ -237,7 +237,7 @@ body:has([data-room-channel]) [data-concierge-launcher] {
   padding: 0 6px;
   border-radius: 999px;
   background: var(--brc-accent);
-  color: #ffffff;
+  color: var(--ys-on-accent, #ffffff);
   font-size: 11px;
   font-weight: 650;
   line-height: 20px;
@@ -603,7 +603,7 @@ body:has([data-room-channel]) [data-concierge-launcher] {
 }
 .brc-avatar[data-team='true'] {
   background: var(--brc-accent);
-  color: #ffffff;
+  color: var(--ys-on-accent, #ffffff);
 }
 .brc-time.brc-time-hover {
   display: block;
@@ -893,7 +893,7 @@ a.brc-ref:hover {
   padding: 1px 7px;
   border-radius: 999px;
   background: var(--brc-accent);
-  color: #ffffff;
+  color: var(--ys-on-accent, #ffffff);
   font-size: 11px;
 }
 .brc-thread-time {
@@ -1199,7 +1199,7 @@ a.brc-ref:hover {
 }
 .brc-send {
   background: var(--brc-accent);
-  color: #ffffff;
+  color: var(--ys-on-accent, #ffffff);
   transition: background var(--brc-dur) var(--brc-ease);
 }
 .brc-send:disabled {

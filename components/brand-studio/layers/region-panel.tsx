@@ -7,7 +7,8 @@
  * - Prompt Auto-Refine toggle + `!` tip + live preview rewrite
  * - Model / quality select, `자동으로 바로 합치기` toggle, and credit-only non-blocking submit CTA.
  */
-import { useEffect, useId, useMemo, useRef, useState, type DragEvent, type RefObject } from "react";
+import { useCallback, useEffect, useId, useMemo, useRef, useState, type ClipboardEvent as ReactClipboardEvent, type DragEvent, type RefObject } from "react";
+import { extractClipboardImages, prepareClipboardUploadFiles } from "@/lib/brand-studio/clipboard-image";
 import { STUDIO_LIMITS, STUDIO_UPLOAD_MIMES, type RegionBox, type StudioAssetRole } from "@/lib/brand-studio/contracts";
 import {
   REGION_ASSISTANT_TASK_IDS,
@@ -35,12 +36,15 @@ export interface RegionEditPanelProps {
   box: RegionBox | null;
   preset?: LayerEditorRegionPreset | null;
   autoFlatten: boolean;
+  /** True when marquee / partial-edit tool is active so window-level Ctrl+V routes copied images here. */
+  activeForPaste?: boolean;
   quickItems: readonly TrayItem[];
   uploading: boolean;
   onBox(box: RegionBox | null): void;
   onAutoFlatten(value: boolean): void;
   resolveRef(ref: RefSource): TrayItem | null;
   onUploadRefs(files: File[]): Promise<TrayItem[]>;
+  onNotice?(message: string): void;
   onSubmitted(jobId: string, meta: { autoFlatten: boolean; box: RegionBox }): void;
 }
 
@@ -144,6 +148,49 @@ export function RegionEditPanel(props: RegionEditPanelProps) {
     setReferences((cur) => [...cur, { ...item, role: cleanRole }]);
     setErrorNote(null);
   };
+
+  const ingestPastedFiles = useCallback(
+    async (rawFiles: File[]) => {
+      if (!rawFiles.length) return;
+      if (full) {
+        setErrorNote(fill(r.tooManyRefs, { max: maxExtraRefs }));
+        return;
+      }
+      const ready = await prepareClipboardUploadFiles(rawFiles);
+      const added = await props.onUploadRefs(ready);
+      if (!added.length) return;
+      setReferences((cur) => {
+        const room = Math.max(0, maxExtraRefs - cur.length);
+        const fresh = added.filter((a) => !cur.some((c) => c.key === a.key)).slice(0, room);
+        return [...cur, ...fresh];
+      });
+      setErrorNote(null);
+      props.onNotice?.(copy.clipboard.pastedRef);
+    },
+    [full, r.tooManyRefs, maxExtraRefs, props.onUploadRefs, props.onNotice, copy.clipboard.pastedRef],
+  );
+
+  const handlePaste = (event: ReactClipboardEvent) => {
+    const pasted = extractClipboardImages(event.clipboardData);
+    if (!pasted.length) return;
+    event.preventDefault();
+    event.stopPropagation();
+    void ingestPastedFiles(pasted);
+  };
+
+  useEffect(() => {
+    if (!props.activeForPaste || typeof window === "undefined") return;
+    const onWindowPaste = (event: ClipboardEvent) => {
+      if (event.defaultPrevented) return;
+      const pasted = extractClipboardImages(event.clipboardData);
+      if (!pasted.length) return;
+      event.preventDefault();
+      event.stopPropagation();
+      void ingestPastedFiles(pasted);
+    };
+    window.addEventListener("paste", onWindowPaste);
+    return () => window.removeEventListener("paste", onWindowPaste);
+  }, [props.activeForPaste, ingestPastedFiles]);
 
   const handleDrop = (event: DragEvent) => {
     if (!acceptsDrag(event.dataTransfer?.types)) return;
@@ -278,6 +325,7 @@ export function RegionEditPanel(props: RegionEditPanelProps) {
         if (!event.currentTarget.contains(event.relatedTarget as Node | null)) setDropActive(false);
       }}
       onDrop={handleDrop}
+      onPaste={handlePaste}
     >
       <div className="bsl-region-head">
         <h2 className="bsl-panel-title">{r.title}</h2>

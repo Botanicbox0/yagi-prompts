@@ -5,6 +5,7 @@
  *
  * The client-safe mention helpers live in `./mentions` (import that file directly from the browser).
  */
+import { loadDirectorPlaybooks, playbookRuleLines } from '@/lib/brand-studio/director/playbooks';
 import { blueprintShape, blueprintShots, isBlueprint } from './blueprint';
 import { composeFallbackPrompt } from './fallback';
 import { callGeminiJson, inlinePart, studioGeminiConfig, type GeminiPart } from './gemini';
@@ -27,7 +28,7 @@ export { seedanceReferenceMode, type SeedanceReferenceMode } from './references'
 /** The output length a video prompt is written for; send the provider the same number. */
 export { effectiveSeconds } from './lines';
 
-const THUMBS_MAX = 4;
+export const THUMBS_MAX = 9;
 const THUMB_MIMES = new Set(['image/jpeg', 'image/png', 'image/webp']);
 const ENHANCE_TIMEOUT_MS = 25_000;
 
@@ -126,23 +127,35 @@ export async function enhancePrompt(input: EnhanceInput, deps: EnhanceDeps): Pro
     // A blueprint with nothing to change is still a remake to write: the blueprint is the request.
     const blueprint = isBlueprint(input);
     if (!input.prompt.trim() && !input.video?.change?.trim() && !blueprint) return fallback('empty_prompt');
-    const binding = bindReferences(input);
-    const seconds = effectiveSeconds(input.kind, input.video);
+    const playbooks = deps.sql && deps.organizationId ? await loadDirectorPlaybooks(deps.sql, deps.organizationId) : [];
+    const extraRules = playbookRuleLines(playbooks);
+    const effectiveInput: EnhanceInput =
+      extraRules.length > 0
+        ? {
+            ...input,
+            brand: {
+              ...(input.brand ?? {}),
+              rules: [...(input.brand?.rules ?? []), ...extraRules].slice(0, 18),
+            },
+          }
+        : input;
+    const binding = bindReferences(effectiveInput);
+    const seconds = effectiveSeconds(effectiveInput.kind, effectiveInput.video);
     const shots = blueprint
-      ? blueprintShots(seconds, input.video)
-      : input.kind === 'video_remix' && input.video?.method !== 'edit'
-        ? planShots(seconds, input.video)
+      ? blueprintShots(seconds, effectiveInput.video)
+      : effectiveInput.kind === 'video_remix' && effectiveInput.video?.method !== 'edit'
+        ? planShots(seconds, effectiveInput.video)
         : [];
     const raw = await callGeminiJson(config, deps.fetch, {
-      system: buildSystemInstruction(input, binding, seconds, shots),
-      parts: [{ text: JSON.stringify(payload(input, binding, seconds, shots)) }, ...thumbParts(input, binding)],
+      system: buildSystemInstruction(effectiveInput, binding, seconds, shots),
+      parts: [{ text: JSON.stringify(payload(effectiveInput, binding, seconds, shots)) }, ...thumbParts(effectiveInput, binding)],
       schema: ENHANCER_RESPONSE_SCHEMA,
       thinking: 'LOW',
       timeoutMs: ENHANCE_TIMEOUT_MS,
     });
     const parsed = EnhancerOutputSchema.safeParse(raw);
     if (!parsed.success) return fallback('bad_shape');
-    const checked = checkEnhancedPrompt(parsed.data.prompt, input, binding);
+    const checked = checkEnhancedPrompt(parsed.data.prompt, effectiveInput, binding);
     if (!checked.ok) return fallback(checked.reason);
     if (blueprint && !blueprintShape(checked.prompt, seconds, input.video?.keep)) return fallback('blueprint_shape');
     return {

@@ -75,13 +75,15 @@ describe('the contract', () => {
 });
 
 describe('what a clip allows', () => {
-  it('reads any picture size but only the lengths a remake works with', () => {
+  it('reads any picture size and up to 600s for blueprint, flagging >600s as tooLong', () => {
     expect(blueprintFit(model, { seconds: 6 })).toEqual({ readable: true, problem: null });
-    expect(blueprintFit(model, { seconds: model.referenceVideoSeconds.max + 1 }).readable).toBe(false);
+    expect(blueprintFit(model, { seconds: model.referenceVideoSeconds.max + 1 })).toEqual({ readable: true, problem: null });
+    expect(blueprintFit(model, { seconds: 601 }).readable).toBe(false);
     expect(blueprintFit(model, { seconds: null }).readable).toBe(true);
     expect(clipNotice(model, { ...clip, width: 200, height: 300 })).toBe('small');
     expect(clipNotice(model, { ...clip, seconds: 1 })).toBe('tooShort');
-    expect(clipNotice(model, { ...clip, seconds: 40 })).toBe('tooLong');
+    expect(clipNotice(model, { ...clip, seconds: 40 })).toBe('editShort');
+    expect(clipNotice(model, { ...clip, seconds: 605 })).toBe('tooLong');
     expect(clipNotice(model, { ...clip, seconds: 3 })).toBe('editShort');
     expect(clipNotice(model, clip)).toBeNull();
   });
