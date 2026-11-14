@@ -224,7 +224,7 @@ export async function previewStudioPrompt(deps: StudioDeps, viewer: Viewer, raw:
     remix?.sheet ?? null,
     editCropThumb,
   );
-  const result = await runEnhancer(deps, input);
+  const result = await runEnhancer({ ...deps, organizationId: seat.organizationId }, input);
   return { ok: true, prompt: result.prompt, notes: result.notes };
 }
 

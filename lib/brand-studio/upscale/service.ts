@@ -14,6 +14,7 @@ import type { SqlRunner } from '@/lib/db/sql-runner';
 import { lockOrganization, requireCreate, StudioDenied, studioSeat } from '@/lib/brand-studio/access';
 import { COMPOSE_FINAL_RENDER_MODEL } from '@/lib/brand-studio/compose/credits';
 import { creditsOf } from '@/lib/brand-studio/credits';
+import { thumbnailWebp } from '@/lib/brand-studio/files';
 import { readyAsset, readyOutput } from '@/lib/brand-studio/repo';
 import type { StudioDeps } from '@/lib/brand-studio/types';
 import { allowanceView, loadAllowance, reserveAllowance } from '@/lib/brand-studio/usage';
@@ -112,15 +113,25 @@ async function storeUpscaledAsset(
   const ext = input.kind === 'image' ? 'png' : 'mp4';
   const label = `HD ${input.resolution}p.${ext}`;
   const durationMs = input.kind === 'video' ? Math.max(100, Math.round(input.durationSec * 1000)) : null;
+  let thumbKey: string | null = null;
+  if (input.kind === 'image') {
+    try {
+      const thumbBytes = await thumbnailWebp(finalBytes);
+      const storedThumb = await deps.media.put(thumbBytes, 'image/webp');
+      thumbKey = storedThumb.key;
+    } catch {
+      thumbKey = null;
+    }
+  }
 
   const inserted = (
     await sql.query<{ id: string }>(
       `insert into brand_studio_assets (
          organization_id, kind, name, mime, size_bytes, width, height, duration_ms,
-         storage_key, sha256, source, status, created_by
+         storage_key, thumb_key, sha256, source, status, created_by
        ) values (
          $1, $2, $3, $4, $5, $6, $7, $8,
-         $9, $10, 'generation', 'ready', $11
+         $9, $10, $11, 'generation', 'ready', $12
        ) returning id`,
       [
         input.organizationId,
@@ -132,6 +143,7 @@ async function storeUpscaledAsset(
         input.height,
         durationMs,
         stored.key,
+        thumbKey,
         sha,
         input.userId,
       ],

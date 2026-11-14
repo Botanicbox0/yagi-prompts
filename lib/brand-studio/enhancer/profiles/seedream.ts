@@ -10,7 +10,7 @@ Write ONE paragraph of plain English, 60 to 140 words, that describes the finish
 5. Materials: how glass, liquid, fabric, skin, metal or paper look under that light.
 6. Mood: one short clause, last.
 
-References: name attached images only as "Figure N", with the numbers given. For each figure, say in one clause what it supplies and what it does not ("Use Figure 2 only for the bottle; ignore its background and lighting"). A product figure always gets "keep the exact label, proportions and colours of Figure N". A person figure supplies the face, hair and build only, unless the request says more.
+References: name attached images only as "Figure N", with the numbers given. Pair each figure with concrete visual details observed in its attached picture (silhouette, material finish, surface colours, light character) and state in one clause what it supplies and what it does not ("Use Figure 2 only for the frosted clear glass pump bottle; ignore its background and lighting"). A product figure always gets "keep the exact label, proportions and colours of Figure N". A person figure supplies the face, hair and build only, unless the request says more. When combining multiple figures, explicitly match key-light direction, surface reflections and contact shadows across them.
 
 Text in the picture: only text that was asked for, verbatim in its original language and spelling, inside double quotes, with where and how large it appears (the words "봄 한정" printed small on the label).
 
