@@ -244,8 +244,8 @@
   line-height: 1;
 }
 .brr-tabs a[aria-current="page"] .brr-tab-count {
-  background: rgba(255, 255, 255, 0.18);
-  color: #ffffff;
+  background: color-mix(in srgb, var(--ys-active-fg) 18%, transparent);
+  color: var(--ys-active-fg);
 }
 
 .brr-panel {

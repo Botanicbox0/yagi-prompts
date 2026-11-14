@@ -39,6 +39,25 @@
   PRICE reference-to-video: $6.40-$11.70 per M tokens — Without input video: $10.70/M tokens (480p/720p) or $11.70/M (1080p). With input video: $6.40/M tokens (480p/720p) or $7.00/M (1080p). Video input is billed for at least ceil(output seconds × 2/3) s — see docs.sunra.ai/p
   PRICE draft-to-video: $7.00-$11.70 per M tokens — Finals are always 1080p: $11.70/M tokens without input video, $7.00/M with input video (the draft's reference videos are re-counted into the final's tokens, so the with-video rate applies whenever the draft used referenc
 
+### bytedance/seedream-5.5 (model_55a521102026)
+  POST /requests/{request_id}/cancel
+    ?
+  POST /bytedance/seedream-5.5/text-to-image
+    *prompt: string  // The text prompt used to generate the image.
+     aspect_ratio: string enum[1:1,4:3,3:4,16:9,9:16,3:2,2:3,21:9] def="1:1"  // Image aspect ratio.
+     resolution: string enum[1K,1.5K,2K] def="1.5K"  // Output resolution tier.
+     output_format: string enum[jpeg,png] def="jpeg"  // Output file format.
+     background: string enum[auto,transparent,opaque] def="auto"  // Background mode. Transparent output requires PNG.
+  POST /bytedance/seedream-5.5/image-editing
+    *prompt: string  // The text prompt used to edit the image. Reference images as Figure 1, Figure 2, etc.
+    *images: array<string>(max 10)  // Input image URLs. Up to 10 references are allowed.
+     aspect_ratio: string enum[1:1,4:3,3:4,16:9,9:16,3:2,2:3,21:9] def="1:1"  // Image aspect ratio.
+     resolution: string enum[1K,1.5K,2K] def="1.5K"  // Output resolution tier.
+     output_format: string enum[jpeg,png] def="jpeg"  // Output file format.
+     background: string enum[auto,transparent,opaque] def="auto"  // Background mode. Transparent output requires PNG.
+  PRICE text-to-image: $0.020-$0.035 per image — 1K/1.5K: $0.020 per image, 2K: $0.035 per image
+  PRICE image-editing: $0.028-$0.115 per edited image — Output $0.020 at 1K/1.5K or $0.035 at 2K, plus $0.008 per input image
+
 ### bytedance/seedream-5.0-pro (model_b63ac71d3992)
   POST /requests/{request_id}/cancel
     ?

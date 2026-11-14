@@ -39,7 +39,7 @@ async function view(id: string): Promise<StudioJobView> {
   if (!poll.ok) throw new Error(poll.code);
   return poll.jobs[0]!;
 }
-const image = { kind: 'image', model: 'seedream-5-pro', prompt: 'a glass bottle on wet stone', aspect: '16:9', resolution: '2K' };
+const image = { kind: 'image', model: 'seedream-5.5', prompt: 'a glass bottle on wet stone', aspect: '16:9', resolution: '2K' };
 
 describe('image jobs', () => {
   it('runs held -> queued -> running -> finishing -> succeeded in one advance and stores N results with thumbnails', async () => {
@@ -54,7 +54,7 @@ describe('image jobs', () => {
       expect(o.thumbUrl).toMatch(/\.webp$/);
     }
     expect(sent).toHaveLength(3);
-    expect(sent[0]).toMatchObject({ endpoint: 'bytedance/seedream-5.0-pro/text-to-image', body: { aspect_ratio: '16:9', enable_safety_checker: true } });
+    expect(sent[0]).toMatchObject({ endpoint: 'bytedance/seedream-5.5/text-to-image', body: { aspect_ratio: '16:9' } });
     const row = (await f.sql.query<{ usage_krw: number; cost_usd: string; claimed_at: unknown }>('select usage_krw, cost_usd, claimed_at from brand_studio_jobs where id = $1', [job.id])).rows[0]!;
     expect(row.claimed_at).toBeNull();
     expect(row.usage_krw).toBe(done.estimateKrw);
@@ -123,7 +123,7 @@ describe('region edit', () => {
     const source = await seedImageAsset(deps, f.orgId, f.ids.owner, { width: 64, height: 48 });
     const logo = await seedImageAsset(deps, f.orgId, f.ids.owner, { role: 'logo' });
     const job = await create({
-      kind: 'region_edit', model: 'seedream-5-pro', prompt: '라벨 글자만 바꿔 주세요',
+      kind: 'region_edit', model: 'seedream-5.5', prompt: '라벨 글자만 바꿔 주세요',
       source: { assetId: source }, box: { x: 0.25, y: 0.25, w: 0.5, h: 0.5 }, references: [{ assetId: logo }],
     });
     // A model without a region-edit default gives way to Nano Banana Pro.
@@ -199,9 +199,9 @@ describe('the account lane', () => {
     const claimed = await laneClaim(deps, { limit: 4 });
     if (!claimed.ok) throw new Error();
     expect(claimed.jobs).toHaveLength(1);
-    expect(claimed.jobs[0]).toMatchObject({ jobId: job.id, model: 'seedream-5-pro', prompt: 'ENHANCED(seedream): a glass bottle on wet stone', params: { aspect: '16:9', count: 2, draft: false } });
+    expect(claimed.jobs[0]).toMatchObject({ jobId: job.id, model: 'seedream-5.5', prompt: 'ENHANCED(seedream): a glass bottle on wet stone', params: { aspect: '16:9', count: 2, draft: false } });
     expect(claimed.jobs[0]!.outputs.map((o) => o.idx)).toEqual([0, 1]);
-    expect(claimed.jobs[0]!.apiRequest?.endpoint).toBe('bytedance/seedream-5.0-pro/text-to-image');
+    expect(claimed.jobs[0]!.apiRequest?.endpoint).toBe('bytedance/seedream-5.5/text-to-image');
     expect(await laneClaim(deps, {})).toEqual({ ok: true, jobs: [] });
     // The engine leaves a worker's running job alone.
     expect(await advanceStudioJobsWith(deps, { jobIds: [job.id] })).toEqual({ advanced: 0 });

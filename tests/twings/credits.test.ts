@@ -13,9 +13,9 @@ describe('template credits', () => {
   });
 
   it('prices a set on all its frames together, at cost × 1.12', () => {
-    const picture = { medium: 'image' as const, engine: 'seedream-5.0-pro', runtimeSeconds: null, aspectDefault: '3:4' };
-    expect(templateCredits({ ...picture, gallery: [] })).toBe(15);
-    expect(templateCredits({ ...picture, gallery: frames(5) })).toBe(71);
+    const picture = { medium: 'image' as const, engine: 'seedream-5.5', runtimeSeconds: null, aspectDefault: '3:4' };
+    expect(templateCredits({ ...picture, gallery: [] })).toBe(7);
+    expect(templateCredits({ ...picture, gallery: frames(5) })).toBe(34);
     expect(templateCredits({ ...picture, engine: 'nano-banana-2.1', gallery: frames(5) })).toBe(41);
   });
 

@@ -176,8 +176,8 @@
 .dropzone {
   padding: 20px;
   border-radius: 14px;
-  border: 1px dashed rgba(0, 0, 0, 0.12);
-  background: #fafafa;
+  border: 1px dashed var(--ys-line-strong);
+  background: var(--ys-raised);
 }
 
 .actions {

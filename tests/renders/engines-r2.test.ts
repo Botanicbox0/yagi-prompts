@@ -39,7 +39,7 @@ describe('the real-person matrix (needsIdentity · identityPath)', () => {
     expect(needsIdentity('kling-omni')).toBe(false);
     expect(needsIdentity('seedance-2.5')).toBe(true);
     expect(needsIdentity('seedream-5.0-lite')).toBe(false);
-    expect(identityPath('seedream-5.0-pro')).toBe('bytes');
+    expect(identityPath('seedream-5.5')).toBe('bytes');
     expect(engineProvider('nano-banana-2.1')).toBe('google');
     expect(engineProvider('kling-omni')).toBe('kling');
   });

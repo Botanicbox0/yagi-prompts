@@ -107,10 +107,10 @@
 .brs-btn-primary {
   border-color: var(--brs-accent);
   background: var(--brs-accent);
-  color: #ffffff;
+  color: var(--ys-on-accent, #ffffff);
 }
 .brs-btn-primary:hover:not(:disabled) {
-  background: color-mix(in srgb, var(--brs-accent) 88%, #000000);
+  background: var(--ys-accent-hover, color-mix(in srgb, var(--brs-accent) 88%, #000000));
 }
 .brs-btn-quiet {
   border-color: transparent;
@@ -141,11 +141,11 @@
   width: 40px;
   height: 40px;
   border-color: var(--brs-ink);
-  background: var(--brs-ink);
-  color: #ffffff;
+  background: var(--ys-active-bg, var(--brs-ink));
+  color: var(--ys-active-fg, #ffffff);
 }
 .brs-icon-btn-main:hover:not(:disabled) {
-  background: color-mix(in srgb, var(--brs-ink) 86%, #ffffff);
+  background: color-mix(in srgb, var(--ys-active-bg, var(--brs-ink)) 86%, var(--ys-surface, #ffffff));
 }
 
 /* ------------------------------------------------------------ head */
@@ -920,7 +920,7 @@ span.brs-thumb {
   gap: 10px;
   padding: 10px 12px;
   border-radius: 999px;
-  background: rgba(255, 255, 255, 0.86);
+  background: var(--ys-glass, rgba(255, 255, 255, 0.86));
   -webkit-backdrop-filter: blur(20px) saturate(180%);
   backdrop-filter: blur(20px) saturate(180%);
   box-shadow: var(--brs-float);
@@ -942,7 +942,7 @@ span.brs-thumb {
   .brs-sheet,
   .brs-confirm,
   .brs-editor-foot {
-    background: #ffffff;
+    background: var(--brs-surface);
   }
 }
 

@@ -173,7 +173,7 @@ const GRAMMAR_VIEW_MAP: Record<
     ko: '문법 2 · 형태·구도 고정 블록',
     en: 'Grammar 2 · Geometry & Composition Lock'
   },
-  'seedream-5.0-pro': {
+  'seedream-5.5': {
     code: 'G3_reference_paragraphs',
     ko: '문법 3 · 레퍼런스 보존 4단락',
     en: 'Grammar 3 · Reference Preservation 4-Paragraph'

@@ -18,13 +18,13 @@ export function HeroEvidence({
 }) {
   if (pair === null) return null;
   return (
-    <figure data-hero-evidence className="mt-7 w-full max-w-[34rem]">
-      <div className="grid grid-cols-[0.82fr_auto_1.18fr] items-center gap-2.5 sm:gap-3">
+    <figure data-hero-evidence className="mt-6 w-full max-w-[23rem] rounded-2xl bg-[#F4F4F5] p-3">
+      <div className="grid grid-cols-[0.86fr_auto_1.14fr] items-center gap-2.5">
         <EvidenceFrame src={pair.before} alt={copy.evidenceSelfieAlt} label={copy.evidenceSelfie} />
-        <span aria-hidden="true" className="-mt-6 text-sm text-muted">→</span>
+        <span aria-hidden="true" className="-mt-4 text-xs text-[#71717A]">→</span>
         <EvidenceFrame src={pair.after} videoSrc={pair.afterVideo} alt={copy.evidenceSceneAlt} label={copy.evidenceScene} wide />
       </div>
-      <figcaption className="mt-3 text-sm font-medium tracking-[-0.01em]">{copy.evidenceLine}</figcaption>
+      <figcaption className="mt-2.5 border-t border-black/[0.06] pt-2 text-xs font-medium tracking-[-0.01em] text-[#09090B]">{copy.evidenceLine}</figcaption>
     </figure>
   );
 }
@@ -44,7 +44,7 @@ function EvidenceFrame({
 }) {
   return (
     <div className="flex min-w-0 flex-col">
-      <div className="relative h-44 w-full overflow-hidden rounded-[18px] bg-sky sm:h-52">
+      <div className="relative h-24 w-full overflow-hidden rounded-[12px] bg-white sm:h-28">
         {/* eslint-disable-next-line @next/next/no-img-element -- a content slot URL, any host */}
         <img
           src={src}
@@ -69,7 +69,7 @@ function EvidenceFrame({
           />
         )}
       </div>
-      <p className="mt-2 text-xs text-muted">{label}</p>
+      <p className="mt-1.5 text-[11px] font-medium text-[#52525B]">{label}</p>
     </div>
   );
 }

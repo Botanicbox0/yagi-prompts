@@ -81,9 +81,9 @@ export interface TossOrder {
   input_deleted_at: string | Date | null;
   /** 0052: the order 다시 결제하기 made from this one. */
   retried_by: string | null;
-  /** 0087: selected 0-based frame indices for selective image-set purchase; null = all frames. */
+  /** 0088: selected 0-based frame indices for selective image-set purchase; null = all frames. */
   selected_frames?: number[] | null;
-  /** 0087: Hydrogen director customization spec + Seedance native audio mode. */
+  /** 0088: Hydrogen director customization spec + Seedance native audio mode. */
   director_spec?: unknown;
 }
 type TossRow = TossOrder & { render_status: string | null };

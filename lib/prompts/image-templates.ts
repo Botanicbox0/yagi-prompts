@@ -39,7 +39,8 @@ import { PROMPT_GALLERY_MAX, PROMPT_TEXT_MAX, PROMPT_TEXT_MIN, PROMPT_TITLE_MAX,
  * refused rather than quietly rendered at ours.
  */
 export const MANIFEST_MODEL_ENGINES: Readonly<Record<string, { engine: ImageEngineId; resolution: string }>> = {
-  seedream_v5_pro: { engine: 'seedream-5.0-pro', resolution: '2k' },
+  seedream_v5_5: { engine: 'seedream-5.5', resolution: '2k' },
+  seedream_v5_pro: { engine: 'seedream-5.5', resolution: '2k' },
   nano_banana_pro: { engine: 'nano-banana-pro', resolution: '2k' },
 };
 

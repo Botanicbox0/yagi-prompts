@@ -5,6 +5,7 @@
  */
 import type { SqlRunner } from '@/lib/db/sql-runner';
 import { getStorage } from '@/lib/storage';
+import { compileDirectorPrompt, composeDirectorFallbackPrompt } from './director';
 import { composeFallbackPrompt, enhancePrompt } from './enhancer';
 import { rewriteBlockedPrompt } from './enhancer/blocked';
 import { readFilm } from './film-sheet';
@@ -13,14 +14,28 @@ import { advanceStudioJobsWith, sweepStudio } from './engine';
 import { studioEnv } from './env';
 import { createStudioMediaStore } from './media-store';
 import { selectStudioProvider } from './provider';
-import type { StudioDeps, StudioIntel } from './types';
+import type { EnhanceInput, IntelDeps, StudioDeps, StudioIntel } from './types';
 
 /** Server log only. Event names are stable (`studio_provider_balance` is watched); values never include secrets. */
 export function studioLog(event: string, detail: Record<string, unknown> = {}): void {
   console.warn(`[brand-studio] ${event}`, JSON.stringify(detail).slice(0, 600));
 }
 
-const intel: StudioIntel = { enhancePrompt, composeFallbackPrompt, readFilm, rewriteBlockedPrompt, planRegion, cropForEdit, compositeRegion };
+function isSeedanceVideo(input: EnhanceInput): boolean {
+  return input.profile === 'seedance' && (input.kind === 'video' || input.kind === 'video_remix');
+}
+
+const intel: StudioIntel = {
+  enhancePrompt: (input: EnhanceInput, deps: IntelDeps) =>
+    isSeedanceVideo(input) ? compileDirectorPrompt(input, deps) : enhancePrompt(input, deps),
+  composeFallbackPrompt: (input: EnhanceInput) =>
+    isSeedanceVideo(input) ? composeDirectorFallbackPrompt(input) : composeFallbackPrompt(input),
+  readFilm,
+  rewriteBlockedPrompt,
+  planRegion,
+  cropForEdit,
+  compositeRegion,
+};
 
 export async function studioRuntimeDeps(sql: SqlRunner, source: Record<string, string | undefined> = process.env): Promise<StudioDeps> {
   const env = studioEnv(source);

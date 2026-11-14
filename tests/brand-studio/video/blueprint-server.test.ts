@@ -114,12 +114,14 @@ describe('planning a blueprint', () => {
     expect(polled.ok && polled.jobs[0]).toMatchObject({ method: 'blueprint', shots: job.shots });
   });
 
-  it('takes a clip too small to attach, refuses one too long to read, and still refuses a small clip for the other ways', async () => {
+  it('takes a clip too small or >30s to attach via blueprint, refuses >600s, and still refuses a small clip for the other ways', async () => {
     const tiny = await videoAsset(6, 200, 300);
     expect((await create(remix(tiny))).method).toBe('blueprint');
     expect(await createStudioJob(deps, owner(), { organizationId: f.orgId, requestId: requestId(), ...remix(tiny, { method: 'reference' }) })).toEqual({ ok: false, code: 'invalid' });
-    const long = await videoAsset(model.referenceVideoSeconds.max + 5, 720, 1280);
-    expect(await createStudioJob(deps, owner(), { organizationId: f.orgId, requestId: requestId(), ...remix(long) })).toEqual({ ok: false, code: 'invalid' });
+    const over30 = await videoAsset(model.referenceVideoSeconds.max + 5, 720, 1280);
+    expect((await create(remix(over30))).method).toBe('blueprint');
+    const over600 = await videoAsset(605, 720, 1280);
+    expect(await createStudioJob(deps, owner(), { organizationId: f.orgId, requestId: requestId(), ...remix(over600) })).toEqual({ ok: false, code: 'invalid' });
   });
 
   it('refuses a shape the model cannot make, and an oversized table at the contract', async () => {

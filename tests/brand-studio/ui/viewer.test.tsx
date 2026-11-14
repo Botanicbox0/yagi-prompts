@@ -40,8 +40,8 @@ describe("viewer", () => {
     const html = render([{ type: "output", output: picture, job: imageJob }, { type: "output", output: output(2), job: imageJob }], { actions: withMore, region });
     expect(html).toMatch(/<dialog[^>]*aria-labelledby=/);
     expect(html).toContain(copy.viewer.label);
-    expect(actionNames(html)).toEqual(["region", "rerun", "decorate", "to-video", "reference", "save", "campaign", "download", "delete"]);
-    expect(html.match(/class="bs-btn bs-action" data-variant="soft"/g)).toHaveLength(7);
+    expect(actionNames(html)).toEqual(["region", "rerun", "decorate", "to-video", "reference", "save", "review", "campaign", "download", "delete"]);
+    expect(html.match(/class="bs-btn bs-action" data-variant="soft"/g)).toHaveLength(8);
     expect(html).toContain(`aria-label="${copy.viewer.prev}" disabled=""`);
     expect(html).not.toContain(`aria-label="${copy.viewer.next}" disabled=""`);
     expect(html).toContain(copy.viewer.promptToggle);
@@ -106,8 +106,8 @@ describe("viewer", () => {
   it("lets a viewer only look and download, and keeps generation closed while the limit is", () => {
     const item: ViewerItem = { type: "output", output: picture, job: imageJob };
     expect(actionNames(render([item], { canCreate: false, canGenerate: false, actions: withMore }))).toEqual(["download"]);
-    expect(actionNames(render([item], { canGenerate: false, actions: withMore }))).toEqual(["decorate", "save", "campaign", "download", "delete"]);
-    expect(actionNames(render([{ type: "asset", asset: asset(1) }], { actions: withMore, region }))).toEqual(["region", "decorate", "to-video", "reference", "campaign", "download"]);
+    expect(actionNames(render([item], { canGenerate: false, actions: withMore }))).toEqual(["decorate", "save", "review", "campaign", "download", "delete"]);
+    expect(actionNames(render([{ type: "asset", asset: asset(1) }], { actions: withMore, region }))).toEqual(["region", "decorate", "to-video", "reference", "review", "campaign", "download"]);
   });
 });
 

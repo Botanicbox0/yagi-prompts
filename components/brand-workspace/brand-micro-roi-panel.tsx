@@ -373,7 +373,7 @@ export function BrandMicroRoiPanel({
         <div
           className="bw-card bw-fields"
           data-micro-roi-visual-stage
-          style={{ margin: 0, padding: 16, background: "#FFFFFF", borderRadius: 20 }}
+          style={{ margin: 0, padding: 16, background: "var(--ys-surface)", borderRadius: 20 }}
         >
           <div className="bw-row">
             <strong>
@@ -438,10 +438,10 @@ export function BrandMicroRoiPanel({
                 top: `${Math.max(4, Math.min(78, (y0 / imageHeight) * 100))}%`,
                 width: `${Math.max(18, Math.min(48, (cropW / imageWidth) * 100))}%`,
                 height: `${Math.max(20, Math.min(48, (cropH / imageHeight) * 100))}%`,
-                border: "2px solid #3875C5",
+                border: "2px solid var(--ys-accent)",
                 borderRadius: 12,
-                background: "rgba(56, 117, 197, 0.14)",
-                boxShadow: "0 0 0 3px rgba(255,255,255,0.92), 0 12px 28px rgba(15,23,42,0.28)",
+                background: "color-mix(in srgb, var(--ys-accent) 14%, transparent)",
+                boxShadow: "0 0 0 2px rgba(255, 255, 255, 0.72), 0 12px 28px rgba(9, 9, 11, 0.38)",
                 display: "flex",
                 flexDirection: "column",
                 justifyContent: "space-between",
@@ -453,8 +453,8 @@ export function BrandMicroRoiPanel({
                 style={{
                   fontSize: 10,
                   fontWeight: 700,
-                  color: "#FFFFFF",
-                  background: "#3875C5",
+                  color: "var(--ys-on-accent)",
+                  background: "var(--ys-accent)",
                   borderRadius: 999,
                   padding: "2px 7px",
                   alignSelf: "flex-start",
@@ -466,8 +466,8 @@ export function BrandMicroRoiPanel({
                 style={{
                   fontSize: 10,
                   fontWeight: 600,
-                  color: "#0F172A",
-                  background: "rgba(255,255,255,0.92)",
+                  color: "var(--ys-ink)",
+                  background: "var(--ys-glass)",
                   borderRadius: 999,
                   padding: "2px 7px",
                   alignSelf: "flex-end",
@@ -524,7 +524,7 @@ export function BrandMicroRoiPanel({
         <div
           className="bw-card bw-fields"
           data-micro-roi-loupe
-          style={{ margin: 0, padding: 16, background: "#FFFFFF", borderRadius: 20 }}
+          style={{ margin: 0, padding: 16, background: "var(--ys-surface)", borderRadius: 20 }}
         >
           <div className="bw-row">
             <strong>
@@ -578,8 +578,8 @@ export function BrandMicroRoiPanel({
                 style={{
                   fontSize: 11,
                   fontWeight: 700,
-                  background: "#3875C5",
-                  color: "#FFFFFF",
+                  background: "var(--ys-accent)",
+                  color: "var(--ys-on-accent)",
                   padding: "3px 10px",
                   borderRadius: 999,
                   alignSelf: "flex-start",

@@ -68,7 +68,7 @@ export async function activateOpenMaker(
         [userId, OWL_P_ATTESTATION_VERSION],
       );
     } catch {
-      // Pre-0087 schemas do not carry attested_at/attestation_version columns yet.
+      // Pre-0088 schemas do not carry attested_at/attestation_version columns yet.
     }
 
     return {

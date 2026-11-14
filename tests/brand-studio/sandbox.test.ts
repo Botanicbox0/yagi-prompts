@@ -40,11 +40,11 @@ function validInput(operation: StudioOperation, organizationId: string): Record<
   const id = randomUUID();
   switch (operation) {
     case 'job.create':
-      return { kind: 'image', organizationId, requestId: requestId(), model: 'seedream-5-pro', prompt: 'a bottle', aspect: '1:1', resolution: '2K', count: 1 };
+      return { kind: 'image', organizationId, requestId: requestId(), model: 'seedream-5.5', prompt: 'a bottle', aspect: '1:1', resolution: '2K', count: 1 };
     case 'job.cancel':
       return { organizationId, jobId: id };
     case 'prompt.enhance':
-      return { kind: 'image', organizationId, model: 'seedream-5-pro', prompt: 'a bottle', aspect: '1:1', resolution: '2K' };
+      return { kind: 'image', organizationId, model: 'seedream-5.5', prompt: 'a bottle', aspect: '1:1', resolution: '2K' };
     case 'film.analyze':
     case 'asset.complete':
     case 'asset.delete':

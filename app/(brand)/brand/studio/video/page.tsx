@@ -12,11 +12,12 @@ import { scopedHref } from "@/lib/brands/workspace/selection";
 import { brandStudioV2Open } from "@/lib/flags";
 
 /**
- * `/brand/studio/video` — Video Studio 2-column workspace (Bundle C, docs/BRAND-STUDIO-VIDEO-C.md):
- *   - Left manipulation panel: `영상 만들기` (`문장·참조로 만들기` | `설계도로 재현`) and `영상 편집`
- *     (4–30s clip edit with segment & crop modal, up to 9 reference images, `@` asset mentions, sound, resolution).
- *   - Right stage: `기록` (video wall + viewer + 1080p final + campaign handoff) | `사용 방법` (3-step visual cards).
- *   - Legacy `?view=request` redirects to `/brand/projects/new` (Bundle E project intake).
+ * `/brand/studio/video` — Unified Video Studio Workspace (Studio Pro Suite v4, docs/STUDIO-PRO-SUITE-V4.md):
+ *   - Full-canvas video gallery wall (`기록`) or 3-step `16:9` looping video guide (`가이드`).
+ *   - Bottom floating capsule prompt dock (`<Dock mode="video" ... />`) with unified Seedance 2.5 routing,
+ *     `@` multimodal reference autocomplete, AI Director multi-clip planner, and `ClipTrimModal`.
+ *   - Right-hand `LibraryRail` (`폴더 / 좋아요 / 업로드`).
+ *   - Legacy `?view=request` redirects to `/brand/projects/new`.
  *
  * `studioRouteContext` runs first: sandboxed clients (Morphic/모픽), brands whose policy closes generation,
  * campaign-only invitees, and deployments with the flag off all get a 404 before anything renders.
@@ -48,6 +49,7 @@ export default async function StudioVideoPage({
     asset?: string | string[];
     view?: string | string[];
     tab?: string | string[];
+    project?: string | string[];
   }>;
 }) {
   const params = await searchParams;
@@ -79,6 +81,7 @@ export default async function StudioVideoPage({
   const canRequest = !access.staff && access.canRequest;
   const contracts = await hasProductionContracts(ctx.deps.sql, choice.id);
   const asset = first(params.asset);
+  const projectParam = first(params.project);
   const opensEdit = !opensReverse && (first(params.tab) === "edit" || first(params.start) === "edit");
 
   return (
@@ -124,6 +127,7 @@ export default async function StudioVideoPage({
         initialTab={opensEdit ? "edit" : "create"}
         initialCreateMode={opensReverse ? "blueprint" : "prompt"}
         initialAssetId={asset && UUID.test(asset) ? asset : null}
+        initialProjectId={projectParam && UUID.test(projectParam) ? projectParam : null}
       />
     </div>
   );

@@ -34,7 +34,7 @@ export function job(n: number, patch: Partial<StudioJobView> = {}): StudioJobVie
     id: id(0x2000 + n),
     kind: "image",
     status: "succeeded",
-    model: "seedream-5-pro",
+    model: "seedream-5.5",
     prompt: `Prompt ${n}`,
     finalPrompt: `Enhanced prompt ${n}`,
     expected: 1,

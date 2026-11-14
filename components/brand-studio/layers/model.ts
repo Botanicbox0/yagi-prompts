@@ -359,6 +359,42 @@ export function duplicateLayer(doc: LayerDoc, id: string, opts: { newId?: string
   return { doc: { ...doc, layers }, id: copy.id };
 }
 
+/** Pastes a previously copied layer onto the top of `doc`, nudging on collision and fitting within canvas bounds. */
+export function pasteLayer(
+  doc: LayerDoc,
+  source: Layer,
+  opts: { newId?: string; suffix: string },
+): { doc: LayerDoc; id: string | null } {
+  if (doc.layers.length >= MAX_LAYERS) return { doc, id: null };
+  const offset = Math.max(8, Math.round(Math.min(doc.width, doc.height) * 0.02));
+  const collides = doc.layers.some((l) => Math.abs(l.x - source.x) < 2 && Math.abs(l.y - source.y) < 2);
+  let w = source.w;
+  let h = source.h;
+  if (w > doc.width * 0.95 || h > doc.height * 0.95) {
+    const scale = Math.min((doc.width * 0.9) / Math.max(MIN_SIDE, w), (doc.height * 0.9) / Math.max(MIN_SIDE, h), 1);
+    w = Math.max(MIN_SIDE, round(w * scale));
+    h = Math.max(MIN_SIDE, round(h * scale));
+  }
+  const rawX = collides ? source.x + offset : source.x;
+  const rawY = collides ? source.y + offset : source.y;
+  const outOfBounds = rawX + w < MIN_SIDE || rawY + h < MIN_SIDE || rawX > doc.width - MIN_SIDE || rawY > doc.height - MIN_SIDE;
+  const x = outOfBounds ? round((doc.width - w) / 2) : round(rawX);
+  const y = outOfBounds ? round((doc.height - h) / 2) : round(rawY);
+  const baseName = source.name.endsWith(` ${opts.suffix}`) ? source.name : `${source.name} ${opts.suffix}`;
+  const pasted = normalizeLayer({
+    ...structuredCloneLayer(source),
+    id: opts.newId ?? newLayerId(),
+    name: baseName.slice(0, NAME_MAX),
+    x,
+    y,
+    w,
+    h,
+    locked: false,
+    hidden: false,
+  } as Layer);
+  return { doc: { ...doc, layers: [...doc.layers, pasted] }, id: pasted.id };
+}
+
 function structuredCloneLayer(layer: Layer): Layer {
   return JSON.parse(JSON.stringify(layer)) as Layer;
 }

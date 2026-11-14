@@ -177,11 +177,19 @@ export async function planJob(
     const model = liveModel(input.model, 'image') as StudioImageModel;
     if (!(model.aspects as readonly string[]).includes(input.aspect) || !(model.resolutions as readonly string[]).includes(input.resolution)) throw new StudioDenied('invalid');
     if (resolved.some((r) => r.kind !== 'image' || r.frame) || resolved.length > model.maxReferences) throw new StudioDenied('invalid');
+    if (input.background !== undefined && !model.supportsTransparentBackground) throw new StudioDenied('invalid');
     const quality = qualityFor(model, input.quality);
     const usd = imageRunUsd({ model: model.id, resolution: input.resolution, references: resolved.length, count: input.count, quality });
     return {
       ...shared, kind: 'image', model,
-      params: { ...base, aspect: input.aspect, resolution: input.resolution, count: input.count, ...(quality ? { quality } : {}) },
+      params: {
+        ...base,
+        aspect: input.aspect,
+        resolution: input.resolution,
+        count: input.count,
+        ...(quality ? { quality } : {}),
+        ...(input.background ? { background: input.background } : {}),
+      },
       estimateUsd: usd, estimateKrw: usageKrw(usd, 'image'),
       outputs: { count: input.count, kind: 'image', isDraft: false },
     };

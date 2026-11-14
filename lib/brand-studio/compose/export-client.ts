@@ -5,12 +5,18 @@
  * `OfflineAudioContext` mix) -> `muxAvc1ToMp4` (~3.9s for 30s 1080p on workstation Chromium).
  * Automatic fallback: real-time `<canvas>.captureStream` + `MediaRecorder` when WebCodecs is unavailable.
  */
+import { applyColorGradeToCanvasContext } from './color-grade';
 import { muxAvc1ToMp4, type EncodedAudioSample, type EncodedVideoSample } from './mp4-muxer';
 import {
   COMPOSE_DIMENSIONS,
+  clipPlayDuration,
   frameStateAtTime,
+  normalizeColorGradeState,
   projectDurationSec,
+  toColorGradeSpec,
   type ComposeCaption,
+  type ComposeClip,
+  type ComposeOverlayClip,
   type ComposerProject,
 } from './timeline';
 
@@ -127,6 +133,51 @@ export function drawCaptionsOverlay(
   }
 }
 
+export function applyProjectColorGradeFrame(
+  ctx: CanvasRenderingContext2D,
+  canvasWidth: number,
+  canvasHeight: number,
+  project: ComposerProject,
+  activeClip: { clip: ComposeClip; index: number } | null,
+): boolean {
+  const grade = normalizeColorGradeState(project.colorGrade);
+  const spec = toColorGradeSpec(grade);
+  if (!grade || !spec || !spec.enabled) return false;
+
+  const isSelectedClip = Boolean(
+    activeClip &&
+      (grade.clipId
+        ? activeClip.clip.id === grade.clipId
+        : grade.clipIndex !== null && grade.clipIndex !== undefined
+          ? activeClip.index === grade.clipIndex
+          : grade.scope === 'selected_clip'
+            ? activeClip.index === 0
+            : true),
+  );
+
+  if (spec.scope === 'selected_clip' && !isSelectedClip) return false;
+  if (
+    spec.scope === 'region' &&
+    (grade.clipId || (grade.clipIndex !== null && grade.clipIndex !== undefined)) &&
+    !isSelectedClip
+  ) {
+    return false;
+  }
+
+  const effectiveSpec = {
+    ...spec,
+    targetClipId:
+      spec.targetClipId ??
+      (grade.clipIndex !== null && grade.clipIndex !== undefined && activeClip
+        ? isSelectedClip
+          ? activeClip.clip.id
+          : '__other_clip__'
+        : null),
+  };
+  applyColorGradeToCanvasContext(ctx, canvasWidth, canvasHeight, effectiveSpec, isSelectedClip);
+  return true;
+}
+
 async function loadReadyVideo(srcUrl: string): Promise<HTMLVideoElement> {
   return await new Promise<HTMLVideoElement>((resolve, reject) => {
     const v = document.createElement('video');
@@ -175,6 +226,41 @@ async function seekVideoTo(video: HTMLVideoElement, timeSec: number): Promise<vo
   });
 }
 
+async function loadReadyImage(srcUrl: string): Promise<HTMLImageElement | null> {
+  return await new Promise<HTMLImageElement | null>((resolve) => {
+    const img = new Image();
+    img.crossOrigin = 'anonymous';
+    img.onload = () => resolve(img);
+    img.onerror = () => resolve(null);
+    img.src = srcUrl;
+  });
+}
+
+function drawActiveOverlays(
+  ctx: CanvasRenderingContext2D,
+  activeOverlays: readonly ComposeOverlayClip[],
+  overlayMedia: ReadonlyMap<string, HTMLImageElement | HTMLVideoElement>,
+  canvasWidth: number,
+  canvasHeight: number,
+): void {
+  if (activeOverlays.length === 0) return;
+  for (const ov of activeOverlays) {
+    const media = overlayMedia.get(ov.id);
+    if (!media) continue;
+    const natW = media instanceof HTMLVideoElement ? media.videoWidth : media.naturalWidth;
+    const natH = media instanceof HTMLVideoElement ? media.videoHeight : media.naturalHeight;
+    if (natW <= 0 || natH <= 0) continue;
+    const drawW = Math.max(8, Math.round(canvasWidth * ov.scale));
+    const drawH = Math.max(8, Math.round((drawW * natH) / natW));
+    const dx = Math.round(ov.x * canvasWidth - drawW / 2);
+    const dy = Math.round(ov.y * canvasHeight - drawH / 2);
+    ctx.save();
+    ctx.globalAlpha = Math.max(0, Math.min(1, ov.opacity));
+    ctx.drawImage(media, dx, dy, drawW, drawH);
+    ctx.restore();
+  }
+}
+
 async function encodeMixedAudioAac(
   project: ComposerProject,
   totalSec: number,
@@ -186,7 +272,8 @@ async function encodeMixedAudioAac(
 } | null> {
   const wantsClipAudio = project.clips.some((c) => !c.muted && c.volume > 0);
   const wantsBgm = Boolean(project.bgm && project.bgm.volume > 0);
-  if ((!wantsClipAudio && !wantsBgm) || typeof AudioEncoder === 'undefined' || typeof OfflineAudioContext === 'undefined') {
+  const wantsSfx = Boolean(project.sfxClips && project.sfxClips.some((s) => s.volume > 0));
+  if ((!wantsClipAudio && !wantsBgm && !wantsSfx) || typeof AudioEncoder === 'undefined' || typeof OfflineAudioContext === 'undefined') {
     return null;
   }
 
@@ -219,20 +306,27 @@ async function encodeMixedAudioAac(
     if (wantsClipAudio) {
       let cursor = 0;
       for (const clip of project.clips) {
-        const dur = Math.max(0.3, clip.trimEndSec - clip.trimStartSec);
+        const rate =
+          typeof clip.playbackRate === 'number' && Number.isFinite(clip.playbackRate)
+            ? Math.min(4, Math.max(0.25, clip.playbackRate))
+            : 1;
+        const sourceSpanSec = Math.max(0.3, clip.trimEndSec - clip.trimStartSec);
+        const timelineDur = clipPlayDuration(clip);
         if (!clip.muted && clip.volume > 0) {
           const decoded = await decodeBuffer(clip.srcUrl);
           if (decoded) {
             const src = offline.createBufferSource();
             src.buffer = decoded;
+            src.playbackRate.value = rate;
             const gain = offline.createGain();
             gain.gain.value = clip.volume;
             src.connect(gain).connect(offline.destination);
-            src.start(cursor, clip.trimStartSec, dur);
+            const when = Math.max(0, cursor + (clip.audioOffsetSec ?? 0));
+            src.start(when, clip.trimStartSec, sourceSpanSec);
             anySourceConnected = true;
           }
         }
-        cursor += dur;
+        cursor += timelineDur;
       }
     }
 
@@ -249,6 +343,22 @@ async function encodeMixedAudioAac(
         src.connect(gain).connect(offline.destination);
         src.start(0, project.bgm.trimStartSec, totalSec);
         anySourceConnected = true;
+      }
+    }
+
+    if (wantsSfx && project.sfxClips) {
+      for (const sfx of project.sfxClips) {
+        if (sfx.volume <= 0 || !sfx.srcUrl) continue;
+        const decoded = await decodeBuffer(sfx.srcUrl);
+        if (decoded) {
+          const src = offline.createBufferSource();
+          src.buffer = decoded;
+          const gain = offline.createGain();
+          gain.gain.value = sfx.volume;
+          src.connect(gain).connect(offline.destination);
+          src.start(Math.max(0, sfx.startSec), 0, Math.min(decoded.duration, sfx.durationSec));
+          anySourceConnected = true;
+        }
       }
     }
 
@@ -344,6 +454,24 @@ export async function exportCompositionMp4(
 
   const { width, height } = COMPOSE_DIMENSIONS[project.aspect];
   const videoElements = await Promise.all(project.clips.map((c) => loadReadyVideo(c.srcUrl)));
+  const overlayMedia = new Map<string, HTMLImageElement | HTMLVideoElement>();
+  if (project.overlays && project.overlays.length > 0) {
+    await Promise.all(
+      project.overlays.map(async (ov) => {
+        try {
+          if (ov.mediaKind === 'image') {
+            const img = await loadReadyImage(ov.srcUrl);
+            if (img) overlayMedia.set(ov.id, img);
+          } else {
+            const vid = await loadReadyVideo(ov.srcUrl);
+            overlayMedia.set(ov.id, vid);
+          }
+        } catch {
+          // Skip broken overlay cleanly so primary export succeeds
+        }
+      }),
+    );
+  }
   const canvas = document.createElement('canvas');
   canvas.width = width;
   canvas.height = height;
@@ -402,6 +530,14 @@ export async function exportCompositionMp4(
           drawVideoCover(ctx, videoEl, width, height);
         }
       }
+      applyProjectColorGradeFrame(ctx, width, height, project, state.activeClip);
+      for (const ov of state.activeOverlays) {
+        const media = overlayMedia.get(ov.id);
+        if (media instanceof HTMLVideoElement) {
+          await seekVideoTo(media, Math.max(0, tSec - ov.startSec));
+        }
+      }
+      drawActiveOverlays(ctx, state.activeOverlays, overlayMedia, width, height);
       drawCaptionsOverlay(ctx, state.activeCaptions, width, height);
 
       const frame = new VideoFrame(canvas, {
@@ -480,6 +616,14 @@ export async function exportCompositionMp4(
         drawVideoCover(ctx, videoEl, width, height);
       }
     }
+    applyProjectColorGradeFrame(ctx, width, height, project, state.activeClip);
+    for (const ov of state.activeOverlays) {
+      const media = overlayMedia.get(ov.id);
+      if (media instanceof HTMLVideoElement) {
+        await seekVideoTo(media, Math.max(0, tSec - ov.startSec));
+      }
+    }
+    drawActiveOverlays(ctx, state.activeOverlays, overlayMedia, width, height);
     drawCaptionsOverlay(ctx, state.activeCaptions, width, height);
     onProgress?.((frameIdx + 1) / totalFrames);
     await new Promise((r) => window.setTimeout(r, Math.round(1000 / EXPORT_FPS)));

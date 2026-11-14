@@ -5,7 +5,7 @@ import { studioModel } from '@/lib/brand-studio/models';
 import { freshDb, runner } from '@/tests/helpers/pglite';
 
 /** docs/BRAND-STUDIO-V2.md §7: preferred -> other -> held; a final sticks to its draft's lane. */
-const withMcp = studioModel('seedream-5-pro')!;
+const withMcp = studioModel('seedream-5.5')!;
 const noMcp = studioModel('seedream-5-flash')!;
 const base = (over: Partial<LaneRouteInput> = {}): LaneRouteInput => ({
   preferred: 'sunra_api',

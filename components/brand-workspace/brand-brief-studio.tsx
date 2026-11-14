@@ -529,7 +529,7 @@ export function BrandBriefStudio({
     BRAND_AUDIO_STUDIO_PRESETS.find((a) => a.id === audioPresetId) ??
     BRAND_AUDIO_STUDIO_PRESETS[0]!;
 
-  // Image Model Selection & Full Comparison Guide Toggle (5 Models: GPT Image 2.6, Nano Banana Pro, 2.1, 2.0, Seedream 5.0 Pro)
+  // Image Model Selection & Full Comparison Guide Toggle (5 Models: GPT Image 2.6, Nano Banana Pro, 2.1, 2.0, Seedream 5.5)
   const [selectedImageModelId, setSelectedImageModelId] =
     useState<BrandStudioImageModelId>("nano_banana_pro");
   const [showFullModelGuide, setShowFullModelGuide] = useState<boolean>(false);
@@ -852,7 +852,7 @@ export function BrandBriefStudio({
   const [isModelAbCompareMode, setIsModelAbCompareMode] =
     useState<boolean>(false);
   const [compareSecondModelId, setCompareSecondModelId] =
-    useState<BrandStudioImageModelId>("seedream_5_0_pro");
+    useState<BrandStudioImageModelId>("seedream_5_5");
   const [slotWeights, setSlotWeights] = useState<
     Record<1 | 2 | 3 | 4, "0.3" | "0.7" | "1.0">
   >({
@@ -4982,7 +4982,7 @@ export function BrandBriefStudio({
       titleKo: "크롬 아이웨어 & 브루탈리즘 콘크리트 로우앵글",
       titleEn: "Chrome Eyewear & Brutalist Concrete Low-Angle",
       directorTag: "35mm · 로우앵글",
-      modelBadge: "Seedream 5.0",
+      modelBadge: "Seedream 5.5",
       aspectLabel: "4:5",
       src: "/reel/brands/slot-3-pose-lowangle-lookbook.jpg",
       presetId: "seoul_editorial",
@@ -9846,15 +9846,15 @@ export function BrandBriefStudio({
           marginBottom: "8px",
           padding: "5px 10px",
           borderRadius: "12px",
-          background: "#FFFFFF",
-          border: "1px solid #E4E6EC",
-          color: "#0E1013",
+          background: "var(--ys-surface)",
+          border: "1px solid var(--ys-line)",
+          color: "var(--ys-ink)",
           display: "flex",
           flexWrap: "wrap",
           alignItems: "center",
           justifyContent: "space-between",
           gap: "6px",
-          boxShadow: "0 2px 10px rgba(15, 23, 42, 0.03)",
+          boxShadow: "0 2px 10px rgba(0, 0, 0, 0.28)",
         }}
       >
         <div
@@ -9959,12 +9959,12 @@ export function BrandBriefStudio({
                   padding: "0 10px",
                   borderRadius: "999px",
                   border: active
-                    ? "1px solid #3875C5"
+                    ? "1px solid var(--ys-accent)"
                     : "1px solid transparent",
                   background: active
-                    ? "rgba(56, 117, 197, 0.09)"
-                    : "#F6F7F9",
-                  color: active ? "#3063A7" : "#383B44",
+                    ? "color-mix(in srgb, var(--ys-accent) 9%, transparent)"
+                    : "var(--ys-panel)",
+                  color: active ? "var(--ys-accent-text)" : "var(--ys-ink-secondary)",
                   fontSize: "11.5px",
                   fontWeight: active ? 700 : 600,
                   cursor: "pointer",
@@ -9997,12 +9997,12 @@ export function BrandBriefStudio({
               padding: "0 9px",
               borderRadius: "999px",
               background: isGlobalBrandKitLocked
-                ? "rgba(56, 117, 197, 0.1)"
-                : "#F6F7F9",
+                ? "color-mix(in srgb, var(--ys-accent) 10%, transparent)"
+                : "var(--ys-panel)",
               border: isGlobalBrandKitLocked
-                ? "1px solid #3875C5"
-                : "1px solid #E4E6EC",
-              color: isGlobalBrandKitLocked ? "#3063A7" : "#6B6F7B",
+                ? "1px solid var(--ys-accent)"
+                : "1px solid var(--ys-line)",
+              color: isGlobalBrandKitLocked ? "var(--ys-accent-text)" : "var(--ys-ink-muted)",
               fontSize: "10.5px",
               fontWeight: 700,
               cursor: "pointer",
@@ -10034,10 +10034,10 @@ export function BrandBriefStudio({
               borderRadius: "999px",
               background:
                 viewDensity === "zen_canvas"
-                  ? "rgba(56, 117, 197, 0.1)"
-                  : "#F6F7F9",
-              border: "1px solid #E4E6EC",
-              color: viewDensity === "zen_canvas" ? "#3063A7" : "#383B44",
+                  ? "color-mix(in srgb, var(--ys-accent) 10%, transparent)"
+                  : "var(--ys-panel)",
+              border: "1px solid var(--ys-line)",
+              color: viewDensity === "zen_canvas" ? "var(--ys-accent-text)" : "var(--ys-ink-secondary)",
               fontSize: "10.5px",
               fontWeight: 700,
               cursor: "pointer",
@@ -10065,10 +10065,10 @@ export function BrandBriefStudio({
               padding: "0 9px",
               borderRadius: "999px",
               background: isShortcutsHudOpen
-                ? "rgba(56, 117, 197, 0.08)"
-                : "#F6F7F9",
-              border: "1px solid #E4E6EC",
-              color: "#383B44",
+                ? "color-mix(in srgb, var(--ys-accent) 8%, transparent)"
+                : "var(--ys-panel)",
+              border: "1px solid var(--ys-line)",
+              color: "var(--ys-ink-secondary)",
               fontSize: "10.5px",
               fontWeight: 700,
               cursor: "pointer",
@@ -10092,10 +10092,10 @@ export function BrandBriefStudio({
               padding: "0 9px",
               borderRadius: "999px",
               background: isBrandKitDrawerOpen
-                ? "#3875C5"
-                : "rgba(56, 117, 197, 0.08)",
-              border: "1px solid rgba(56, 117, 197, 0.3)",
-              color: isBrandKitDrawerOpen ? "#FFFFFF" : "#3063A7",
+                ? "var(--ys-accent)"
+                : "color-mix(in srgb, var(--ys-accent) 8%, transparent)",
+              border: "1px solid color-mix(in srgb, var(--ys-accent) 30%, transparent)",
+              color: isBrandKitDrawerOpen ? "var(--ys-on-accent)" : "var(--ys-accent-text)",
               fontSize: "10.5px",
               fontWeight: 700,
               cursor: "pointer",
@@ -10125,10 +10125,10 @@ export function BrandBriefStudio({
             style={{
               padding: "4px 10px",
               borderRadius: "10px",
-              background: "#F8F9FB",
-              border: "1px solid #E4E6EC",
+              background: "var(--ys-panel)",
+              border: "1px solid var(--ys-line)",
               fontSize: "10.5px",
-              color: "#383B44",
+              color: "var(--ys-ink-secondary)",
               display: "inline-flex",
               flexWrap: "wrap",
               alignItems: "center",
@@ -10136,7 +10136,7 @@ export function BrandBriefStudio({
               fontFamily: "var(--ys-mono)",
             }}
           >
-            <strong style={{ color: "#3063A7" }}>
+            <strong style={{ color: "var(--ys-accent-text)" }}>
               {isKo ? "키보드 단축키:" : "Shortcuts:"}
             </strong>
             <span>
@@ -10153,8 +10153,8 @@ export function BrandBriefStudio({
           style={{
             padding: "3px 8px",
             borderRadius: "10px",
-            background: "#FFFFFF",
-            border: "1px solid #E4E6EC",
+            background: "var(--ys-surface)",
+            border: "1px solid var(--ys-line)",
             display: "inline-flex",
             alignItems: "center",
             gap: "6px",
@@ -10165,8 +10165,8 @@ export function BrandBriefStudio({
             style={{
               padding: "1px 6px",
               borderRadius: "5px",
-              background: "#F1F3F7",
-              color: "#3063A7",
+              background: "var(--ys-panel)",
+              color: "var(--ys-accent-text)",
               fontWeight: 700,
               fontFamily: "var(--ys-mono)",
             }}
@@ -10191,7 +10191,7 @@ export function BrandBriefStudio({
               outline: "none",
               background: "transparent",
               fontSize: "10.5px",
-              color: "#111114",
+              color: "var(--ys-ink)",
             }}
           />
         </div>
@@ -10202,18 +10202,18 @@ export function BrandBriefStudio({
           style={{
             padding: "4px 10px",
             borderRadius: "10px",
-            background: "#F8F9FB",
-            border: "1px solid #E4E6EC",
+            background: "var(--ys-panel)",
+            border: "1px solid var(--ys-line)",
             display: "inline-flex",
             alignItems: "center",
             gap: "8px",
             fontSize: "10.5px",
           }}
         >
-          <span style={{ fontWeight: 700, color: "#3063A7" }}>
+          <span style={{ fontWeight: 700, color: "var(--ys-accent-text)" }}>
             {isKo ? "백그라운드 작업 큐 (논블로킹):" : "Background Queue:"}
           </span>
-          <span style={{ color: "#383B44" }}>
+          <span style={{ color: "var(--ys-ink-secondary)" }}>
             {isKo
               ? "1080p 인스타 마스터 + 4컷 병렬 생성 준비 완료"
               : "1080p IG Master + 4x Batch Ready"}
@@ -10224,7 +10224,7 @@ export function BrandBriefStudio({
               width: "52px",
               height: "6px",
               borderRadius: "999px",
-              background: "#E4E6EC",
+              background: "var(--ys-line)",
               overflow: "hidden",
               display: "inline-block",
             }}
@@ -10234,7 +10234,7 @@ export function BrandBriefStudio({
                 display: "block",
                 width: "100%",
                 height: "100%",
-                background: "#3875C5",
+                background: "var(--ys-accent)",
               }}
             />
           </span>
@@ -10247,8 +10247,8 @@ export function BrandBriefStudio({
             marginLeft: "auto",
             padding: "4px 10px",
             borderRadius: "10px",
-            background: "rgba(56, 117, 197, 0.06)",
-            border: "1px solid rgba(56, 117, 197, 0.25)",
+            background: "color-mix(in srgb, var(--ys-accent) 6%, transparent)",
+            border: "1px solid color-mix(in srgb, var(--ys-accent) 25%, transparent)",
             display: "inline-flex",
             flexWrap: "wrap",
             alignItems: "center",
@@ -10256,7 +10256,7 @@ export function BrandBriefStudio({
             fontSize: "11px",
           }}
         >
-          <span style={{ color: "#111114", fontWeight: 600 }}>
+          <span style={{ color: "var(--ys-ink)", fontWeight: 600 }}>
             {isKo
               ? "캠페인 마스터 패키지 (1080p 영상 + 2K 룩북 4종 + -14 LUFS 오디오 + 광고 권한 코드)"
               : "Master Campaign Bundle (1080p Video + 4x 2K Stills + -14 LUFS Audio + Ad Codes)"}
@@ -10265,7 +10265,7 @@ export function BrandBriefStudio({
             data-download-folder-structure-preview
             style={{
               fontSize: "10px",
-              color: "#3063A7",
+              color: "var(--ys-accent-text)",
               fontFamily: "var(--ys-mono)",
               fontWeight: 700,
             }}
@@ -10286,9 +10286,9 @@ export function BrandBriefStudio({
             style={{
               padding: "3px 9px",
               borderRadius: "999px",
-              border: "1px solid #3875C5",
-              background: isBundleExported ? "#111114" : "#3875C5",
-              color: "#FFFFFF",
+              border: "1px solid var(--ys-accent)",
+              background: isBundleExported ? "var(--ys-panel)" : "var(--ys-accent)",
+              color: isBundleExported ? "var(--ys-ink)" : "var(--ys-on-accent)",
               fontSize: "10.5px",
               fontWeight: 700,
               cursor: "pointer",
@@ -10311,8 +10311,8 @@ export function BrandBriefStudio({
           marginBottom: "8px",
           padding: "5px 10px",
           borderRadius: "10px",
-          background: "#FFFFFF",
-          border: "1px solid #E4E6EC",
+          background: "var(--ys-surface)",
+          border: "1px solid var(--ys-line)",
           display: "flex",
           flexWrap: "wrap",
           alignItems: "center",
@@ -10325,7 +10325,7 @@ export function BrandBriefStudio({
           data-enterprise-approval-gate-bar
           style={{ display: "inline-flex", alignItems: "center", gap: "6px" }}
         >
-          <span style={{ fontWeight: 700, color: "#111114" }}>
+          <span style={{ fontWeight: 700, color: "var(--ys-ink)" }}>
             {isKo ? "최종 송출 승인 게이트:" : "Enterprise Approval Gate:"}
           </span>
           <button
@@ -10336,9 +10336,9 @@ export function BrandBriefStudio({
             style={{
               padding: "2px 8px",
               borderRadius: "999px",
-              border: "1px solid #3875C5",
-              background: cmoApproved ? "#3875C5" : "#F8F9FB",
-              color: cmoApproved ? "#FFFFFF" : "#3063A7",
+              border: "1px solid var(--ys-accent)",
+              background: cmoApproved ? "var(--ys-accent)" : "var(--ys-panel)",
+              color: cmoApproved ? "var(--ys-on-accent)" : "var(--ys-accent-text)",
               fontSize: "10px",
               fontWeight: 700,
               cursor: "pointer",
@@ -10358,12 +10358,12 @@ export function BrandBriefStudio({
           data-budget-cap-guardrail
           style={{ display: "inline-flex", alignItems: "center", gap: "6px" }}
         >
-          <span style={{ fontWeight: 700, color: "#383B44" }}>
+          <span style={{ fontWeight: 700, color: "var(--ys-ink-secondary)" }}>
             {isKo ? "캠페인 예산 가드레일:" : "Budget Cap Guardrail:"}
           </span>
           <span
             data-spend-cap-progress-bar
-            style={{ fontFamily: "var(--ys-mono)", color: "#3063A7", fontWeight: 700 }}
+            style={{ fontFamily: "var(--ys-mono)", color: "var(--ys-accent-text)", fontWeight: 700 }}
           >
             {isKo
               ? "일일 한도 3,000 cr 중 420 cr 사용 (14% · 안전 범위)"
@@ -10380,8 +10380,8 @@ export function BrandBriefStudio({
             style={{
               padding: "2px 7px",
               borderRadius: "999px",
-              background: "rgba(56, 117, 197, 0.1)",
-              color: "#3063A7",
+              background: "color-mix(in srgb, var(--ys-accent) 10%, transparent)",
+              color: "var(--ys-accent-text)",
               fontWeight: 700,
             }}
           >
@@ -10397,7 +10397,7 @@ export function BrandBriefStudio({
         >
           <span
             data-data-privacy-shield-badge
-            style={{ color: "#6B6F7B", fontWeight: 600 }}
+            style={{ color: "var(--ys-ink-muted)", fontWeight: 600 }}
           >
             {isKo
               ? "기업 에셋 AI 재학습 0% 격리 보증 · 99.9% 가동률 SLA"
@@ -10498,12 +10498,12 @@ export function BrandBriefStudio({
               ? "calc(100svh - 86px)"
               : "auto",
           borderRadius: "16px",
-          backgroundColor: "#FFFFFF",
+          backgroundColor: "var(--ys-surface)",
           backgroundImage:
-            "radial-gradient(rgba(15, 23, 42, 0.06) 1px, transparent 1px)",
+            "radial-gradient(rgba(0, 0, 0, 0.28) 1px, transparent 1px)",
           backgroundSize: "20px 20px",
-          border: "1px solid #E4E6EC",
-          color: "#0E1013",
+          border: "1px solid var(--ys-line)",
+          color: "var(--ys-ink)",
           padding: "10px",
           display:
             studioSurfaceMode === "spatial_canvas" ||
@@ -10515,7 +10515,7 @@ export function BrandBriefStudio({
           overflow: "hidden",
           userSelect: "none",
           outline: "none",
-          boxShadow: "0 6px 24px rgba(15, 23, 42, 0.03)",
+          boxShadow: "0 6px 24px rgba(0, 0, 0, 0.28)",
         }}
       >
         {/* 1. TOP DIRECTING & CHAT BAR (Sits at the TOP above the Dual White Canvases — Video-Creator Production Architecture) */}
@@ -10538,10 +10538,10 @@ export function BrandBriefStudio({
               position: "relative",
               borderRadius: "13px",
               padding: "8px 12px",
-              background: "rgba(255, 255, 255, 0.96)",
+              background: "var(--ys-dock-bg)",
               backdropFilter: "blur(16px)",
-              border: "1px solid #E4E6EC",
-              boxShadow: "0 4px 16px rgba(15, 23, 42, 0.04)",
+              border: "1px solid var(--ys-line)",
+              boxShadow: "0 4px 16px rgba(0, 0, 0, 0.28)",
               display: "grid",
               gap: "6px",
             }}
@@ -10557,9 +10557,9 @@ export function BrandBriefStudio({
                   inset: 0,
                   border: 0,
                   borderRadius: "13px",
-                  background: "rgba(255, 255, 255, 0.94)",
+                  background: "var(--ys-dock-bg)",
                   backdropFilter: "blur(8px)",
-                  color: "#111114",
+                  color: "var(--ys-ink)",
                   display: "flex",
                   alignItems: "center",
                   justifyContent: "center",
@@ -10591,21 +10591,21 @@ export function BrandBriefStudio({
                         height: "30px",
                         borderRadius: "6px",
                         objectFit: "cover",
-                        border: "1.5px solid #3875C5",
+                        border: "1.5px solid var(--ys-accent)",
                         transform: idx === 0 ? "rotate(-8deg)" : "rotate(7deg)",
-                        boxShadow: "0 4px 10px rgba(15, 23, 42, 0.12)",
+                        boxShadow: "0 4px 10px rgba(255, 255, 255, 0.1)",
                       }}
                     />
                   ))}
                 </span>
-                <span style={{ fontSize: "12px", fontWeight: 600, color: "#111114" }}>
+                <span style={{ fontSize: "12px", fontWeight: 600, color: "var(--ys-ink)" }}>
                   {isKo ? (
                     <>
-                      <strong style={{ color: "#3063A7" }}>Enter</strong> 키를 누르거나 클릭해 선택한 노드({selectedCanvasItemIds.length}개)를 디렉팅 레퍼런스로 바로 연결
+                      <strong style={{ color: "var(--ys-accent-text)" }}>Enter</strong> 키를 누르거나 클릭해 선택한 노드({selectedCanvasItemIds.length}개)를 디렉팅 레퍼런스로 바로 연결
                     </>
                   ) : (
                     <>
-                      Press <strong style={{ color: "#3063A7" }}>Enter</strong> to attach selection or click here
+                      Press <strong style={{ color: "var(--ys-accent-text)" }}>Enter</strong> to attach selection or click here
                     </>
                   )}
                 </span>
@@ -10633,11 +10633,11 @@ export function BrandBriefStudio({
                     height: "26px",
                     padding: "0 8px",
                     borderRadius: "7px",
-                    border: "1px solid #E4E6EC",
+                    border: "1px solid var(--ys-line)",
                     background: !isLeftRailCollapsed
-                      ? "rgba(56, 117, 197, 0.1)"
-                      : "#F8F9FB",
-                    color: !isLeftRailCollapsed ? "#3063A7" : "#383B44",
+                      ? "color-mix(in srgb, var(--ys-accent) 10%, transparent)"
+                      : "var(--ys-panel)",
+                    color: !isLeftRailCollapsed ? "var(--ys-accent-text)" : "var(--ys-ink-secondary)",
                     fontSize: "11px",
                     fontWeight: 600,
                     display: "inline-flex",
@@ -10661,8 +10661,8 @@ export function BrandBriefStudio({
                     gap: "2px",
                     padding: "2px",
                     borderRadius: "999px",
-                    background: "#F1F3F7",
-                    border: "1px solid #E4E6EC",
+                    background: "var(--ys-panel)",
+                    border: "1px solid var(--ys-line)",
                   }}
                 >
                   <button
@@ -10674,15 +10674,15 @@ export function BrandBriefStudio({
                       border: 0,
                       background:
                         !isVideoMode && activeCoreTrack !== "audio"
-                          ? "#FFFFFF"
+                          ? "var(--ys-surface)"
                           : "transparent",
                       color:
                         !isVideoMode && activeCoreTrack !== "audio"
-                          ? "#111114"
-                          : "#6B6F7B",
+                          ? "var(--ys-ink)"
+                          : "var(--ys-ink-muted)",
                       boxShadow:
                         !isVideoMode && activeCoreTrack !== "audio"
-                          ? "0 1px 2px rgba(15, 23, 42, 0.08)"
+                          ? "0 1px 2px rgba(255, 255, 255, 0.1)"
                           : "none",
                       fontSize: "11px",
                       fontWeight: 700,
@@ -10698,10 +10698,10 @@ export function BrandBriefStudio({
                       padding: "3px 9px",
                       borderRadius: "999px",
                       border: 0,
-                      background: isVideoMode ? "#FFFFFF" : "transparent",
-                      color: isVideoMode ? "#3063A7" : "#6B6F7B",
+                      background: isVideoMode ? "var(--ys-surface)" : "transparent",
+                      color: isVideoMode ? "var(--ys-accent-text)" : "var(--ys-ink-muted)",
                       boxShadow: isVideoMode
-                        ? "0 1px 2px rgba(15, 23, 42, 0.08)"
+                        ? "0 1px 2px rgba(255, 255, 255, 0.1)"
                         : "none",
                       fontSize: "11px",
                       fontWeight: 700,
@@ -10718,9 +10718,9 @@ export function BrandBriefStudio({
                       borderRadius: "999px",
                       border: 0,
                       background:
-                        activeCoreTrack === "audio" ? "#FFFFFF" : "transparent",
+                        activeCoreTrack === "audio" ? "var(--ys-surface)" : "transparent",
                       color:
-                        activeCoreTrack === "audio" ? "#111114" : "#6B6F7B",
+                        activeCoreTrack === "audio" ? "var(--ys-ink)" : "var(--ys-ink-muted)",
                       fontSize: "11px",
                       fontWeight: 600,
                       cursor: "pointer",
@@ -10747,9 +10747,9 @@ export function BrandBriefStudio({
                       style={{
                         padding: "2px 7px",
                         borderRadius: "999px",
-                        border: "1px solid rgba(56, 117, 197, 0.25)",
-                        background: "rgba(56, 117, 197, 0.07)",
-                        color: "#3063A7",
+                        border: "1px solid color-mix(in srgb, var(--ys-accent) 25%, transparent)",
+                        background: "color-mix(in srgb, var(--ys-accent) 7%, transparent)",
+                        color: "var(--ys-accent-text)",
                         fontSize: "10.5px",
                         fontWeight: 700,
                         cursor: "pointer",
@@ -10770,8 +10770,8 @@ export function BrandBriefStudio({
                   gap: "2px",
                   padding: "2px",
                   borderRadius: "999px",
-                  background: "#F1F3F7",
-                  border: "1px solid #E4E6EC",
+                  background: "var(--ys-panel)",
+                  border: "1px solid var(--ys-line)",
                 }}
               >
                 {(
@@ -10833,8 +10833,8 @@ export function BrandBriefStudio({
                       padding: "3px 9px",
                       borderRadius: "999px",
                       border: 0,
-                      background: vMode.active ? "#3875C5" : "transparent",
-                      color: vMode.active ? "#FFFFFF" : "#383B44",
+                      background: vMode.active ? "var(--ys-accent)" : "transparent",
+                      color: vMode.active ? "var(--ys-on-accent)" : "var(--ys-ink-secondary)",
                       fontSize: "11px",
                       fontWeight: vMode.active ? 700 : 600,
                       cursor: "pointer",
@@ -10854,8 +10854,8 @@ export function BrandBriefStudio({
                 gap: "8px",
                 padding: "5px 10px",
                 borderRadius: "10px",
-                background: "#F8F9FB",
-                border: "1px solid #E4E6EC",
+                background: "var(--ys-panel)",
+                border: "1px solid var(--ys-line)",
               }}
             >
               <input
@@ -10872,7 +10872,7 @@ export function BrandBriefStudio({
                   minWidth: 0,
                   border: 0,
                   background: "transparent",
-                  color: "#0E1013",
+                  color: "var(--ys-ink)",
                   fontSize: "12.5px",
                   fontWeight: 500,
                   outline: "none",
@@ -10901,7 +10901,7 @@ export function BrandBriefStudio({
                           height: "22px",
                           borderRadius: "5px",
                           objectFit: "cover",
-                          border: "1.5px solid #3875C5",
+                          border: "1.5px solid var(--ys-accent)",
                           cursor: "pointer",
                         }}
                       />
@@ -10919,8 +10919,8 @@ export function BrandBriefStudio({
                   padding: "0 13px",
                   borderRadius: "999px",
                   border: 0,
-                  background: "#3875C5",
-                  color: "#FFFFFF",
+                  background: "var(--ys-accent)",
+                  color: "var(--ys-on-accent)",
                   fontSize: "11.5px",
                   fontWeight: 700,
                   display: "inline-flex",
@@ -10961,13 +10961,13 @@ export function BrandBriefStudio({
                     borderRadius: "999px",
                     border:
                       dockPopover === "model"
-                        ? "1px solid #3875C5"
-                        : "1px solid #E4E6EC",
+                        ? "1px solid var(--ys-accent)"
+                        : "1px solid var(--ys-line)",
                     background:
                       dockPopover === "model"
-                        ? "rgba(56, 117, 197, 0.1)"
-                        : "#FFFFFF",
-                    color: "#111114",
+                        ? "color-mix(in srgb, var(--ys-accent) 10%, transparent)"
+                        : "var(--ys-surface)",
+                    color: "var(--ys-ink)",
                     fontSize: "12px",
                     fontWeight: 600,
                     display: "inline-flex",
@@ -10983,7 +10983,7 @@ export function BrandBriefStudio({
                         ? activeImageModel.nameKo
                         : activeImageModel.nameEn}
                   </span>
-                  <span style={{ fontSize: "10px", color: "#6B6F7B" }}>▾</span>
+                  <span style={{ fontSize: "10px", color: "var(--ys-ink-muted)" }}>▾</span>
                 </button>
 
                 {/* Aspect Ratio & Duration Trigger */}
@@ -10997,13 +10997,13 @@ export function BrandBriefStudio({
                     borderRadius: "999px",
                     border:
                       dockPopover === "aspect"
-                        ? "1px solid #3875C5"
-                        : "1px solid #E4E6EC",
+                        ? "1px solid var(--ys-accent)"
+                        : "1px solid var(--ys-line)",
                     background:
                       dockPopover === "aspect"
-                        ? "rgba(56, 117, 197, 0.1)"
-                        : "#FFFFFF",
-                    color: "#111114",
+                        ? "color-mix(in srgb, var(--ys-accent) 10%, transparent)"
+                        : "var(--ys-surface)",
+                    color: "var(--ys-ink)",
                     fontSize: "12px",
                     fontWeight: 600,
                     cursor: "pointer",
@@ -11024,16 +11024,16 @@ export function BrandBriefStudio({
                     borderRadius: "999px",
                     border:
                       imageSubMode === "micro_region_edit"
-                        ? "1px solid #3875C5"
-                        : "1px solid #E4E6EC",
+                        ? "1px solid var(--ys-accent)"
+                        : "1px solid var(--ys-line)",
                     background:
                       imageSubMode === "micro_region_edit"
-                        ? "rgba(56, 117, 197, 0.1)"
-                        : "#FFFFFF",
+                        ? "color-mix(in srgb, var(--ys-accent) 10%, transparent)"
+                        : "var(--ys-surface)",
                     color:
                       imageSubMode === "micro_region_edit"
-                        ? "#3063A7"
-                        : "#383B44",
+                        ? "var(--ys-accent-text)"
+                        : "var(--ys-ink-secondary)",
                     fontSize: "12px",
                     fontWeight: 600,
                     cursor: "pointer",
@@ -11053,13 +11053,13 @@ export function BrandBriefStudio({
                     borderRadius: "999px",
                     border:
                       dockPopover === "tools"
-                        ? "1px solid #3875C5"
-                        : "1px solid #E4E6EC",
+                        ? "1px solid var(--ys-accent)"
+                        : "1px solid var(--ys-line)",
                     background:
                       dockPopover === "tools"
-                        ? "rgba(56, 117, 197, 0.1)"
-                        : "#FFFFFF",
-                    color: "#383B44",
+                        ? "color-mix(in srgb, var(--ys-accent) 10%, transparent)"
+                        : "var(--ys-surface)",
+                    color: "var(--ys-ink-secondary)",
                     fontSize: "12px",
                     fontWeight: 600,
                     cursor: "pointer",
@@ -11079,13 +11079,13 @@ export function BrandBriefStudio({
                     borderRadius: "999px",
                     border:
                       dockPopover === "workflows"
-                        ? "1px solid #3875C5"
-                        : "1px solid #E4E6EC",
+                        ? "1px solid var(--ys-accent)"
+                        : "1px solid var(--ys-line)",
                     background:
                       dockPopover === "workflows"
-                        ? "rgba(56, 117, 197, 0.1)"
-                        : "#FFFFFF",
-                    color: "#383B44",
+                        ? "color-mix(in srgb, var(--ys-accent) 10%, transparent)"
+                        : "var(--ys-surface)",
+                    color: "var(--ys-ink-secondary)",
                     fontSize: "12px",
                     fontWeight: 600,
                     cursor: "pointer",
@@ -11099,9 +11099,9 @@ export function BrandBriefStudio({
                   style={{
                     padding: "4px 10px",
                     borderRadius: "999px",
-                    border: "1px solid #E4E6EC",
-                    background: "#FFFFFF",
-                    color: "#383B44",
+                    border: "1px solid var(--ys-line)",
+                    background: "var(--ys-surface)",
+                    color: "var(--ys-ink-secondary)",
                     fontSize: "12px",
                     fontWeight: 600,
                     cursor: "pointer",
@@ -11148,7 +11148,7 @@ export function BrandBriefStudio({
                 </label>
               </div>
 
-              <span style={{ fontSize: "11px", color: "#6B6F7B" }}>
+              <span style={{ fontSize: "11px", color: "var(--ys-ink-muted)" }}>
                 {isKo
                   ? "화이트 스튜디오 캔버스 · 좌측 이미지에서 우측 영상 레퍼런스로 1클릭 이동"
                   : "White Studio Canvas · 1-Click Left Image to Right Video Reference Bridge"}
@@ -11162,15 +11162,15 @@ export function BrandBriefStudio({
               style={{
                 padding: "12px",
                 borderRadius: "14px",
-                background: "#FFFFFF",
-                border: "1px solid #E4E6EC",
-                boxShadow: "0 16px 36px rgba(15, 23, 42, 0.12)",
+                background: "var(--ys-surface)",
+                border: "1px solid var(--ys-line)",
+                boxShadow: "0 16px 36px rgba(255, 255, 255, 0.1)",
                 display: "grid",
                 gap: "6px",
               }}
             >
               <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "2px 4px" }}>
-                <strong style={{ fontSize: "12px", color: "#111114" }}>
+                <strong style={{ fontSize: "12px", color: "var(--ys-ink)" }}>
                   {isVideoMode
                     ? isKo
                       ? "Seedance 2.5 해상도 · 모드 선택"
@@ -11182,7 +11182,7 @@ export function BrandBriefStudio({
                 <button
                   type="button"
                   onClick={() => setDockPopover("none")}
-                  style={{ border: 0, background: "transparent", color: "#6B6F7B", cursor: "pointer" }}
+                  style={{ border: 0, background: "transparent", color: "var(--ys-ink-muted)", cursor: "pointer" }}
                 >
                   ×
                 </button>
@@ -11206,12 +11206,12 @@ export function BrandBriefStudio({
                           padding: "8px 10px",
                           borderRadius: "10px",
                           border: active
-                            ? "1.5px solid #3875C5"
-                            : "1px solid #E4E6EC",
+                            ? "1.5px solid var(--ys-accent)"
+                            : "1px solid var(--ys-line)",
                           background: active
-                            ? "rgba(56, 117, 197, 0.08)"
-                            : "#F8F9FB",
-                          color: "#111114",
+                            ? "color-mix(in srgb, var(--ys-accent) 8%, transparent)"
+                            : "var(--ys-panel)",
+                          color: "var(--ys-ink)",
                           textAlign: "left",
                           cursor: "pointer",
                         }}
@@ -11220,11 +11220,11 @@ export function BrandBriefStudio({
                           <strong style={{ fontSize: "12.5px", display: "block" }}>
                             {isKo ? m.nameKo : m.nameEn}
                           </strong>
-                          <span style={{ fontSize: "11px", color: "#6B6F7B" }}>
+                          <span style={{ fontSize: "11px", color: "var(--ys-ink-muted)" }}>
                             {isKo ? m.shortTraitKo : m.shortTraitEn}
                           </span>
                         </div>
-                        <span style={{ fontSize: "11px", fontWeight: 700, color: "#3063A7" }}>
+                        <span style={{ fontSize: "11px", fontWeight: 700, color: "var(--ys-accent-text)" }}>
                           {m.creditsPer5Set} cr
                         </span>
                       </button>
@@ -11250,12 +11250,12 @@ export function BrandBriefStudio({
                           padding: "8px 10px",
                           borderRadius: "10px",
                           border: active
-                            ? "1.5px solid #3875C5"
-                            : "1px solid #E4E6EC",
+                            ? "1.5px solid var(--ys-accent)"
+                            : "1px solid var(--ys-line)",
                           background: active
-                            ? "rgba(56, 117, 197, 0.08)"
-                            : "#F8F9FB",
-                          color: "#111114",
+                            ? "color-mix(in srgb, var(--ys-accent) 8%, transparent)"
+                            : "var(--ys-panel)",
+                          color: "var(--ys-ink)",
                           textAlign: "left",
                           cursor: "pointer",
                         }}
@@ -11264,11 +11264,11 @@ export function BrandBriefStudio({
                           <strong style={{ fontSize: "12.5px", display: "block" }}>
                             {isKo ? tier.nameKo : tier.nameEn}
                           </strong>
-                          <span style={{ fontSize: "11px", color: "#6B6F7B" }}>
+                          <span style={{ fontSize: "11px", color: "var(--ys-ink-muted)" }}>
                             {isKo ? tier.summaryKo : tier.summaryEn}
                           </span>
                         </div>
-                        <span style={{ fontSize: "11px", fontWeight: 700, color: "#3063A7" }}>
+                        <span style={{ fontSize: "11px", fontWeight: 700, color: "var(--ys-accent-text)" }}>
                           {tier.resolution}
                         </span>
                       </button>
@@ -11285,15 +11285,15 @@ export function BrandBriefStudio({
             style={{
               padding: "12px",
               borderRadius: "14px",
-              background: "#FFFFFF",
-              border: "1px solid #E4E6EC",
-              boxShadow: "0 16px 36px rgba(15, 23, 42, 0.12)",
+              background: "var(--ys-surface)",
+              border: "1px solid var(--ys-line)",
+              boxShadow: "0 16px 36px rgba(255, 255, 255, 0.1)",
               display: dockPopover === "tools" ? "grid" : "none",
               gap: "8px",
             }}
           >
             <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-              <strong style={{ fontSize: "12.5px", color: "#111114" }}>
+              <strong style={{ fontSize: "12.5px", color: "var(--ys-ink)" }}>
                 {isKo
                   ? "업스케일링 스튜디오 (720p → 1080p 인스타 최적화 · SeedVR2 4K)"
                   : "Upscaling Studio (1080p IG Optimized & SeedVR2 4K)"}
@@ -11301,7 +11301,7 @@ export function BrandBriefStudio({
               <button
                 type="button"
                 onClick={() => setDockPopover("none")}
-                style={{ border: 0, background: "transparent", color: "#6B6F7B", cursor: "pointer" }}
+                style={{ border: 0, background: "transparent", color: "var(--ys-ink-muted)", cursor: "pointer" }}
               >
                 ×
               </button>
@@ -11318,12 +11318,12 @@ export function BrandBriefStudio({
                       padding: "8px 10px",
                       borderRadius: "10px",
                       border: active
-                        ? "1.5px solid #3875C5"
-                        : "1px solid #E4E6EC",
+                        ? "1.5px solid var(--ys-accent)"
+                        : "1px solid var(--ys-line)",
                       background: active
-                        ? "rgba(56, 117, 197, 0.08)"
-                        : "#F8F9FB",
-                      color: "#111114",
+                        ? "color-mix(in srgb, var(--ys-accent) 8%, transparent)"
+                        : "var(--ys-panel)",
+                      color: "var(--ys-ink)",
                       textAlign: "left",
                       cursor: "pointer",
                     }}
@@ -11331,7 +11331,7 @@ export function BrandBriefStudio({
                     <strong style={{ fontSize: "11.5px", display: "block" }}>
                       {isKo ? eng.nameKo : eng.nameEn}
                     </strong>
-                    <span style={{ fontSize: "10.5px", color: "#3063A7", fontWeight: 600 }}>
+                    <span style={{ fontSize: "10.5px", color: "var(--ys-accent-text)", fontWeight: 600 }}>
                       {eng.supportedTargets.join(" / ")} · {eng.creditsPer10s} cr
                     </span>
                   </button>
@@ -11348,9 +11348,9 @@ export function BrandBriefStudio({
                     style={{
                       padding: "4px 10px",
                       borderRadius: "999px",
-                      border: upscaleTargetResolution === res ? "1px solid #3875C5" : "1px solid #E4E6EC",
-                      background: upscaleTargetResolution === res ? "#3875C5" : "#F8F9FB",
-                      color: upscaleTargetResolution === res ? "#FFFFFF" : "#383B44",
+                      border: upscaleTargetResolution === res ? "1px solid var(--ys-accent)" : "1px solid var(--ys-line)",
+                      background: upscaleTargetResolution === res ? "var(--ys-accent)" : "var(--ys-panel)",
+                      color: upscaleTargetResolution === res ? "var(--ys-on-accent)" : "var(--ys-ink-secondary)",
                       fontSize: "11px",
                       fontWeight: 700,
                       cursor: "pointer",
@@ -11371,8 +11371,8 @@ export function BrandBriefStudio({
                   padding: "6px 14px",
                   borderRadius: "999px",
                   border: 0,
-                  background: "#3875C5",
-                  color: "#FFFFFF",
+                  background: "var(--ys-accent)",
+                  color: "var(--ys-on-accent)",
                   fontSize: "11.5px",
                   fontWeight: 700,
                   cursor: "pointer",
@@ -11391,21 +11391,21 @@ export function BrandBriefStudio({
               style={{
                 padding: "12px",
                 borderRadius: "14px",
-                background: "#FFFFFF",
-                border: "1px solid #E4E6EC",
-                boxShadow: "0 16px 36px rgba(15, 23, 42, 0.12)",
+                background: "var(--ys-surface)",
+                border: "1px solid var(--ys-line)",
+                boxShadow: "0 16px 36px rgba(255, 255, 255, 0.1)",
                 display: "grid",
                 gap: "6px",
               }}
             >
               <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-                <strong style={{ fontSize: "12px", color: "#111114" }}>
+                <strong style={{ fontSize: "12px", color: "var(--ys-ink)" }}>
                   {isKo ? "워크플로 선택 (이미지 · 영상 · 캠페인 · 유통 · 오디오)" : "Select Workflow"}
                 </strong>
                 <button
                   type="button"
                   onClick={() => setDockPopover("none")}
-                  style={{ border: 0, background: "transparent", color: "#6B6F7B", cursor: "pointer" }}
+                  style={{ border: 0, background: "transparent", color: "var(--ys-ink-muted)", cursor: "pointer" }}
                 >
                   ×
                 </button>
@@ -11424,13 +11424,13 @@ export function BrandBriefStudio({
                       borderRadius: "10px",
                       border:
                         activeCoreTrack === track.id
-                          ? "1.5px solid #3875C5"
-                          : "1px solid #E4E6EC",
+                          ? "1.5px solid var(--ys-accent)"
+                          : "1px solid var(--ys-line)",
                       background:
                         activeCoreTrack === track.id
-                          ? "rgba(56, 117, 197, 0.08)"
-                          : "#F8F9FB",
-                      color: "#111114",
+                          ? "color-mix(in srgb, var(--ys-accent) 8%, transparent)"
+                          : "var(--ys-panel)",
+                      color: "var(--ys-ink)",
                       textAlign: "left",
                       cursor: "pointer",
                     }}
@@ -11438,7 +11438,7 @@ export function BrandBriefStudio({
                     <strong style={{ fontSize: "12px", display: "block" }}>
                       {isKo ? track.shortLabelKo : track.shortLabelEn}
                     </strong>
-                    <span style={{ fontSize: "10.5px", color: "#6B6F7B" }}>
+                    <span style={{ fontSize: "10.5px", color: "var(--ys-ink-muted)" }}>
                       {isKo ? track.badgeKo : track.badgeEn}
                     </span>
                   </button>
@@ -11453,9 +11453,9 @@ export function BrandBriefStudio({
               style={{
                 padding: "10px 12px",
                 borderRadius: "14px",
-                background: "#FFFFFF",
-                border: "1px solid #E4E6EC",
-                boxShadow: "0 16px 36px rgba(15, 23, 42, 0.12)",
+                background: "var(--ys-surface)",
+                border: "1px solid var(--ys-line)",
+                boxShadow: "0 16px 36px rgba(255, 255, 255, 0.1)",
                 display: "flex",
                 flexWrap: "wrap",
                 alignItems: "center",
@@ -11464,7 +11464,7 @@ export function BrandBriefStudio({
               }}
             >
               <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
-                <span style={{ fontSize: "11.5px", color: "#6B6F7B", fontWeight: 600 }}>
+                <span style={{ fontSize: "11.5px", color: "var(--ys-ink-muted)", fontWeight: 600 }}>
                   {isKo ? "화면 비율" : "Aspect Ratio"}
                 </span>
                 {SHOT_ASPECTS.map((ratio) => (
@@ -11478,9 +11478,9 @@ export function BrandBriefStudio({
                     style={{
                       padding: "4px 10px",
                       borderRadius: "999px",
-                      border: aspect === ratio ? "1px solid #3875C5" : "1px solid #E4E6EC",
-                      background: aspect === ratio ? "#3875C5" : "#F8F9FB",
-                      color: aspect === ratio ? "#FFFFFF" : "#383B44",
+                      border: aspect === ratio ? "1px solid var(--ys-accent)" : "1px solid var(--ys-line)",
+                      background: aspect === ratio ? "var(--ys-accent)" : "var(--ys-panel)",
+                      color: aspect === ratio ? "var(--ys-on-accent)" : "var(--ys-ink-secondary)",
                       fontSize: "11.5px",
                       fontWeight: 600,
                       cursor: "pointer",
@@ -11492,7 +11492,7 @@ export function BrandBriefStudio({
               </div>
               {isVideoMode && (
                 <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
-                  <span style={{ fontSize: "11.5px", color: "#6B6F7B", fontWeight: 600 }}>
+                  <span style={{ fontSize: "11.5px", color: "var(--ys-ink-muted)", fontWeight: 600 }}>
                     {isKo ? "길이" : "Duration"}
                   </span>
                   {([5, 10, 15] as const).map((sec) => (
@@ -11506,9 +11506,9 @@ export function BrandBriefStudio({
                       style={{
                         padding: "4px 9px",
                         borderRadius: "999px",
-                        border: videoSeconds === sec ? "1px solid #3875C5" : "1px solid #E4E6EC",
-                        background: videoSeconds === sec ? "#3875C5" : "#F8F9FB",
-                        color: videoSeconds === sec ? "#FFFFFF" : "#383B44",
+                        border: videoSeconds === sec ? "1px solid var(--ys-accent)" : "1px solid var(--ys-line)",
+                        background: videoSeconds === sec ? "var(--ys-accent)" : "var(--ys-panel)",
+                        color: videoSeconds === sec ? "var(--ys-on-accent)" : "var(--ys-ink-secondary)",
                         fontSize: "11.5px",
                         fontWeight: 600,
                         cursor: "pointer",
@@ -11534,16 +11534,16 @@ export function BrandBriefStudio({
             width: "240px",
             padding: "12px",
             borderRadius: "14px",
-            background: "rgba(255, 255, 255, 0.98)",
-            border: "1px solid #E4E6EC",
-            boxShadow: "0 16px 40px rgba(15, 23, 42, 0.14)",
+            background: "var(--ys-dock-bg)",
+            border: "1px solid var(--ys-line)",
+            boxShadow: "0 16px 40px rgba(255, 255, 255, 0.1)",
             zIndex: 28,
             display: isLeftRailCollapsed ? "none" : "grid",
             gap: "10px",
           }}
         >
           <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-            <strong style={{ fontSize: "12px", color: "#111114" }}>
+            <strong style={{ fontSize: "12px", color: "var(--ys-ink)" }}>
               {isKo ? "브랜드 에셋 트레이" : "Brand Asset Tray"}
             </strong>
             <button
@@ -11552,7 +11552,7 @@ export function BrandBriefStudio({
               style={{
                 border: 0,
                 background: "transparent",
-                color: "#6B6F7B",
+                color: "var(--ys-ink-muted)",
                 fontSize: "12px",
                 cursor: "pointer",
               }}
@@ -11581,9 +11581,9 @@ export function BrandBriefStudio({
                 style={{
                   padding: "2px 6px",
                   borderRadius: "999px",
-                  border: "1px solid #E4E6EC",
-                  background: libraryTrackFilter === f.id ? "#3875C5" : "#F8F9FB",
-                  color: libraryTrackFilter === f.id ? "#FFFFFF" : "#383B44",
+                  border: "1px solid var(--ys-line)",
+                  background: libraryTrackFilter === f.id ? "var(--ys-accent)" : "var(--ys-panel)",
+                  color: libraryTrackFilter === f.id ? "var(--ys-on-accent)" : "var(--ys-ink-secondary)",
                   fontSize: "9.5px",
                   fontWeight: 700,
                   cursor: "pointer",
@@ -11623,10 +11623,10 @@ export function BrandBriefStudio({
                 }}
                 style={{
                   padding: 0,
-                  border: "1px solid #E4E6EC",
+                  border: "1px solid var(--ys-line)",
                   borderRadius: "8px",
                   overflow: "hidden",
-                  background: "#F8F9FB",
+                  background: "var(--ys-panel)",
                   aspectRatio: "1 / 1",
                   cursor: "pointer",
                 }}
@@ -11647,8 +11647,8 @@ export function BrandBriefStudio({
                 textAlign: "center",
                 padding: "7px 10px",
                 borderRadius: "8px",
-                background: "rgba(56, 117, 197, 0.08)",
-                color: "#3063A7",
+                background: "color-mix(in srgb, var(--ys-accent) 8%, transparent)",
+                color: "var(--ys-accent-text)",
                 fontSize: "11.5px",
                 fontWeight: 600,
                 textDecoration: "none",
@@ -11682,9 +11682,9 @@ export function BrandBriefStudio({
               data-studio-left-image-canvas
               style={{
                 borderRadius: "16px",
-                background: "#FFFFFF",
-                border: "1px solid #E4E6EC",
-                boxShadow: "0 6px 20px rgba(15, 23, 42, 0.04)",
+                background: "var(--ys-surface)",
+                border: "1px solid var(--ys-line)",
+                boxShadow: "0 6px 20px rgba(0, 0, 0, 0.28)",
                 padding: "14px",
                 display: "flex",
                 flexDirection: "column",
@@ -11701,7 +11701,7 @@ export function BrandBriefStudio({
                   justifyContent: "space-between",
                   gap: "8px",
                   paddingBottom: "8px",
-                  borderBottom: "1px solid #EEF0F5",
+                  borderBottom: "1px solid var(--ys-panel)",
                 }}
               >
                 <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
@@ -11709,15 +11709,15 @@ export function BrandBriefStudio({
                     style={{
                       padding: "3px 8px",
                       borderRadius: "6px",
-                      background: "rgba(56, 117, 197, 0.1)",
-                      color: "#3063A7",
+                      background: "color-mix(in srgb, var(--ys-accent) 10%, transparent)",
+                      color: "var(--ys-accent-text)",
                       fontSize: "11px",
                       fontWeight: 800,
                     }}
                   >
                     LEFT CANVAS · IMAGE
                   </span>
-                  <strong style={{ fontSize: "13.5px", color: "#111114" }}>
+                  <strong style={{ fontSize: "13.5px", color: "var(--ys-ink)" }}>
                     {isKo
                       ? `이미지 캔버스 · ${activeImageModel.nameKo}`
                       : `Image Canvas · ${activeImageModel.nameEn}`}
@@ -11732,9 +11732,9 @@ export function BrandBriefStudio({
                   style={{
                     padding: "5px 12px",
                     borderRadius: "999px",
-                    border: "1px solid #3875C5",
-                    background: "rgba(56, 117, 197, 0.09)",
-                    color: "#3063A7",
+                    border: "1px solid var(--ys-accent)",
+                    background: "color-mix(in srgb, var(--ys-accent) 9%, transparent)",
+                    color: "var(--ys-accent-text)",
                     fontSize: "11.5px",
                     fontWeight: 700,
                     display: "inline-flex",
@@ -11759,8 +11759,8 @@ export function BrandBriefStudio({
                   flex: 1,
                   minHeight: "340px",
                   borderRadius: "12px",
-                  background: "#F6F7F9",
-                  border: "1px solid #E4E6EC",
+                  background: "var(--ys-panel)",
+                  border: "1px solid var(--ys-line)",
                   overflow: "hidden",
                   display: "flex",
                   alignItems: "center",
@@ -11794,10 +11794,10 @@ export function BrandBriefStudio({
                     style={{
                       padding: "4px 9px",
                       borderRadius: "999px",
-                      background: "rgba(255, 255, 255, 0.92)",
+                      background: "var(--ys-dock-bg)",
                       backdropFilter: "blur(8px)",
-                      border: "1px solid #E4E6EC",
-                      color: "#111114",
+                      border: "1px solid var(--ys-line)",
+                      color: "var(--ys-ink)",
                       fontSize: "11px",
                       fontWeight: 700,
                     }}
@@ -11808,10 +11808,10 @@ export function BrandBriefStudio({
                     style={{
                       padding: "4px 9px",
                       borderRadius: "999px",
-                      background: "rgba(255, 255, 255, 0.92)",
+                      background: "var(--ys-dock-bg)",
                       backdropFilter: "blur(8px)",
-                      border: "1px solid #E4E6EC",
-                      color: "#3063A7",
+                      border: "1px solid var(--ys-line)",
+                      color: "var(--ys-accent-text)",
                       fontSize: "11px",
                       fontWeight: 700,
                     }}
@@ -11829,10 +11829,10 @@ export function BrandBriefStudio({
                       top: `${selectionRect.yPct}%`,
                       width: `${selectionRect.wPct}%`,
                       height: `${selectionRect.hPct}%`,
-                      border: "2px solid #3875C5",
+                      border: "2px solid var(--ys-accent)",
                       borderRadius: "8px",
-                      background: "rgba(56, 117, 197, 0.14)",
-                      boxShadow: "0 0 0 9999px rgba(17, 17, 20, 0.18)",
+                      background: "color-mix(in srgb, var(--ys-accent) 14%, transparent)",
+                      boxShadow: "0 0 0 9999px rgba(255, 255, 255, 0.1)",
                       pointerEvents: "none",
                       display: "flex",
                       alignItems: "flex-start",
@@ -11844,8 +11844,8 @@ export function BrandBriefStudio({
                       style={{
                         padding: "2px 6px",
                         borderRadius: "4px",
-                        background: "#3875C5",
-                        color: "#FFFFFF",
+                        background: "var(--ys-accent)",
+                        color: "var(--ys-on-accent)",
                         fontSize: "10px",
                         fontWeight: 700,
                       }}
@@ -11876,8 +11876,8 @@ export function BrandBriefStudio({
                       style={{
                         padding: "6px",
                         borderRadius: "10px",
-                        background: "#F8F9FB",
-                        border: "1px solid #E4E6EC",
+                        background: "var(--ys-panel)",
+                        border: "1px solid var(--ys-line)",
                         display: "flex",
                         flexDirection: "column",
                         gap: "5px",
@@ -11889,7 +11889,7 @@ export function BrandBriefStudio({
                           height: "64px",
                           borderRadius: "6px",
                           overflow: "hidden",
-                          background: "#FFFFFF",
+                          background: "var(--ys-surface)",
                         }}
                       >
                         <img
@@ -11909,8 +11909,8 @@ export function BrandBriefStudio({
                             left: "4px",
                             padding: "1px 5px",
                             borderRadius: "4px",
-                            background: "rgba(255, 255, 255, 0.92)",
-                            color: "#111114",
+                            background: "var(--ys-dock-bg)",
+                            color: "var(--ys-ink)",
                             fontSize: "9.5px",
                             fontWeight: 700,
                           }}
@@ -11930,7 +11930,7 @@ export function BrandBriefStudio({
                           style={{
                             fontSize: "10.5px",
                             fontWeight: 600,
-                            color: "#383B44",
+                            color: "var(--ys-ink-secondary)",
                             overflow: "hidden",
                             textOverflow: "ellipsis",
                             whiteSpace: "nowrap",
@@ -11955,9 +11955,9 @@ export function BrandBriefStudio({
                           style={{
                             padding: "2px 6px",
                             borderRadius: "4px",
-                            border: "1px solid rgba(56, 117, 197, 0.35)",
-                            background: "rgba(56, 117, 197, 0.08)",
-                            color: "#3063A7",
+                            border: "1px solid color-mix(in srgb, var(--ys-accent) 35%, transparent)",
+                            background: "color-mix(in srgb, var(--ys-accent) 8%, transparent)",
+                            color: "var(--ys-accent-text)",
                             fontSize: "9.5px",
                             fontWeight: 700,
                             cursor: "pointer",
@@ -12010,15 +12010,15 @@ export function BrandBriefStudio({
                       padding: "6px 10px",
                       borderRadius: "999px",
                       border: active
-                        ? "1.5px solid #3875C5"
-                        : "1px solid #E4E6EC",
-                      background: active ? "#3875C5" : "#FFFFFF",
-                      color: active ? "#FFFFFF" : "#383B44",
+                        ? "1.5px solid var(--ys-accent)"
+                        : "1px solid var(--ys-line)",
+                      background: active ? "var(--ys-accent)" : "var(--ys-surface)",
+                      color: active ? "var(--ys-on-accent)" : "var(--ys-ink-secondary)",
                       fontSize: "11px",
                       fontWeight: 700,
                       whiteSpace: "nowrap",
                       cursor: "pointer",
-                      boxShadow: "0 2px 8px rgba(15, 23, 42, 0.05)",
+                      boxShadow: "0 2px 8px rgba(0, 0, 0, 0.28)",
                     }}
                   >
                     {isKo ? bridgeBtn.ko : bridgeBtn.en}
@@ -12039,9 +12039,9 @@ export function BrandBriefStudio({
                   marginTop: "4px",
                   padding: "6px 10px",
                   borderRadius: "999px",
-                  border: "1.5px dashed #3875C5",
-                  background: "rgba(56, 117, 197, 0.08)",
-                  color: "#3063A7",
+                  border: "1.5px dashed var(--ys-accent)",
+                  background: "color-mix(in srgb, var(--ys-accent) 8%, transparent)",
+                  color: "var(--ys-accent-text)",
                   fontSize: "10.5px",
                   fontWeight: 800,
                   whiteSpace: "nowrap",
@@ -12061,12 +12061,12 @@ export function BrandBriefStudio({
                   padding: "4px 9px",
                   borderRadius: "999px",
                   border: isDualSyncZoomOn
-                    ? "1px solid #3875C5"
-                    : "1px solid #E4E6EC",
+                    ? "1px solid var(--ys-accent)"
+                    : "1px solid var(--ys-line)",
                   background: isDualSyncZoomOn
-                    ? "rgba(56, 117, 197, 0.1)"
-                    : "#FFFFFF",
-                  color: isDualSyncZoomOn ? "#3063A7" : "#6B6F7B",
+                    ? "color-mix(in srgb, var(--ys-accent) 10%, transparent)"
+                    : "var(--ys-surface)",
+                  color: isDualSyncZoomOn ? "var(--ys-accent-text)" : "var(--ys-ink-muted)",
                   fontSize: "10px",
                   fontWeight: 700,
                   whiteSpace: "nowrap",
@@ -12087,9 +12087,9 @@ export function BrandBriefStudio({
                 style={{
                   padding: "3px 8px",
                   borderRadius: "999px",
-                  background: "#F8F9FB",
-                  border: "1px solid #E4E6EC",
-                  color: "#111114",
+                  background: "var(--ys-panel)",
+                  border: "1px solid var(--ys-line)",
+                  color: "var(--ys-ink)",
                   fontSize: "10px",
                   fontWeight: 700,
                   fontFamily: "var(--ys-mono)",
@@ -12107,9 +12107,9 @@ export function BrandBriefStudio({
               data-studio-right-video-canvas
               style={{
                 borderRadius: "16px",
-                background: "#FFFFFF",
-                border: "1px solid #E4E6EC",
-                boxShadow: "0 6px 20px rgba(15, 23, 42, 0.04)",
+                background: "var(--ys-surface)",
+                border: "1px solid var(--ys-line)",
+                boxShadow: "0 6px 20px rgba(0, 0, 0, 0.28)",
                 padding: "14px",
                 display: "flex",
                 flexDirection: "column",
@@ -12126,7 +12126,7 @@ export function BrandBriefStudio({
                   justifyContent: "space-between",
                   gap: "8px",
                   paddingBottom: "8px",
-                  borderBottom: "1px solid #EEF0F5",
+                  borderBottom: "1px solid var(--ys-panel)",
                 }}
               >
                 <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
@@ -12134,15 +12134,15 @@ export function BrandBriefStudio({
                     style={{
                       padding: "3px 8px",
                       borderRadius: "6px",
-                      background: "rgba(56, 117, 197, 0.1)",
-                      color: "#3063A7",
+                      background: "color-mix(in srgb, var(--ys-accent) 10%, transparent)",
+                      color: "var(--ys-accent-text)",
                       fontSize: "11px",
                       fontWeight: 800,
                     }}
                   >
                     {isKo ? "우측 영상 캔버스" : "RIGHT CANVAS · VIDEO"}
                   </span>
-                  <strong style={{ fontSize: "13.5px", color: "#111114" }}>
+                  <strong style={{ fontSize: "13.5px", color: "var(--ys-ink)" }}>
                     {isKo
                       ? `영상 캔버스 · Seedance 2.5 (${videoResolution} · ${videoSeconds}s)`
                       : `Video Canvas · Seedance 2.5 (${videoResolution} · ${videoSeconds}s)`}
@@ -12162,10 +12162,10 @@ export function BrandBriefStudio({
                           padding: "4px 9px",
                           borderRadius: "999px",
                           border: active
-                            ? "1px solid #3875C5"
-                            : "1px solid #E4E6EC",
-                          background: active ? "#3875C5" : "#F8F9FB",
-                          color: active ? "#FFFFFF" : "#383B44",
+                            ? "1px solid var(--ys-accent)"
+                            : "1px solid var(--ys-line)",
+                          background: active ? "var(--ys-accent)" : "var(--ys-panel)",
+                          color: active ? "var(--ys-on-accent)" : "var(--ys-ink-secondary)",
                           fontSize: "11px",
                           fontWeight: 700,
                           cursor: "pointer",
@@ -12183,8 +12183,8 @@ export function BrandBriefStudio({
                 style={{
                   padding: "8px 10px",
                   borderRadius: "10px",
-                  background: "#F8F9FB",
-                  border: "1px solid #E4E6EC",
+                  background: "var(--ys-panel)",
+                  border: "1px solid var(--ys-line)",
                   display: "grid",
                   gap: "6px",
                 }}
@@ -12199,11 +12199,11 @@ export function BrandBriefStudio({
                     gap: "6px",
                     padding: "4px 8px",
                     borderRadius: "7px",
-                    background: "rgba(56, 117, 197, 0.08)",
-                    border: "1px solid rgba(56, 117, 197, 0.25)",
+                    background: "color-mix(in srgb, var(--ys-accent) 8%, transparent)",
+                    border: "1px solid color-mix(in srgb, var(--ys-accent) 25%, transparent)",
                     fontSize: "11px",
                     fontWeight: 700,
-                    color: "#3063A7",
+                    color: "var(--ys-accent-text)",
                   }}
                 >
                   <span>
@@ -12216,7 +12216,7 @@ export function BrandBriefStudio({
                   </span>
                 </div>
                 <div style={{ display: "flex", alignItems: "center", gap: "8px", flexWrap: "wrap" }}>
-                  <span style={{ fontSize: "11.5px", fontWeight: 700, color: "#3063A7" }}>
+                  <span style={{ fontSize: "11.5px", fontWeight: 700, color: "var(--ys-accent-text)" }}>
                     {isKo
                       ? `연결된 영상 레퍼런스 (${bridgedVideoRefs.length}개)`
                       : `Bridged Video References (${bridgedVideoRefs.length})`}
@@ -12230,11 +12230,11 @@ export function BrandBriefStudio({
                         gap: "6px",
                         padding: "3px 8px 3px 4px",
                         borderRadius: "999px",
-                        background: "#FFFFFF",
-                        border: "1px solid #E4E6EC",
+                        background: "var(--ys-surface)",
+                        border: "1px solid var(--ys-line)",
                         fontSize: "11px",
                         fontWeight: 600,
-                        color: "#111114",
+                        color: "var(--ys-ink)",
                       }}
                     >
                       <img
@@ -12260,8 +12260,8 @@ export function BrandBriefStudio({
                   flex: 1,
                   minHeight: "290px",
                   borderRadius: "12px",
-                  background: "#F6F7F9",
-                  border: "1px solid #E4E6EC",
+                  background: "var(--ys-panel)",
+                  border: "1px solid var(--ys-line)",
                   overflow: "hidden",
                   display: "flex",
                   alignItems: "center",
@@ -12317,14 +12317,14 @@ export function BrandBriefStudio({
                     width: "48px",
                     height: "48px",
                     borderRadius: "999px",
-                    border: "1px solid rgba(255, 255, 255, 0.8)",
-                    background: "rgba(255, 255, 255, 0.92)",
-                    color: "#3063A7",
+                    border: "1px solid var(--ys-hairline)",
+                    background: "var(--ys-dock-bg)",
+                    color: "var(--ys-accent-text)",
                     display: "inline-flex",
                     alignItems: "center",
                     justifyContent: "center",
                     cursor: "pointer",
-                    boxShadow: "0 8px 24px rgba(15, 23, 42, 0.18)",
+                    boxShadow: "0 8px 24px rgba(255, 255, 255, 0.1)",
                   }}
                 >
                   <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
@@ -12347,10 +12347,10 @@ export function BrandBriefStudio({
                     style={{
                       padding: "4px 9px",
                       borderRadius: "999px",
-                      background: "rgba(255, 255, 255, 0.92)",
+                      background: "var(--ys-dock-bg)",
                       backdropFilter: "blur(8px)",
-                      border: "1px solid #E4E6EC",
-                      color: "#111114",
+                      border: "1px solid var(--ys-line)",
+                      color: "var(--ys-ink)",
                       fontSize: "11px",
                       fontWeight: 700,
                     }}
@@ -12361,10 +12361,10 @@ export function BrandBriefStudio({
                     style={{
                       padding: "4px 9px",
                       borderRadius: "999px",
-                      background: "rgba(255, 255, 255, 0.92)",
+                      background: "var(--ys-dock-bg)",
                       backdropFilter: "blur(8px)",
-                      border: "1px solid #E4E6EC",
-                      color: "#3063A7",
+                      border: "1px solid var(--ys-line)",
+                      color: "var(--ys-accent-text)",
                       fontSize: "11px",
                       fontWeight: 700,
                     }}
@@ -12379,8 +12379,8 @@ export function BrandBriefStudio({
                 style={{
                   padding: "10px 12px",
                   borderRadius: "10px",
-                  background: "#F8F9FB",
-                  border: "1px solid #E4E6EC",
+                  background: "var(--ys-panel)",
+                  border: "1px solid var(--ys-line)",
                   display: "flex",
                   flexWrap: "wrap",
                   alignItems: "center",
@@ -12389,12 +12389,12 @@ export function BrandBriefStudio({
                 }}
               >
                 <div>
-                  <strong style={{ fontSize: "12px", color: "#111114", display: "block" }}>
+                  <strong style={{ fontSize: "12px", color: "var(--ys-ink)", display: "block" }}>
                     {isKo
                       ? "인스타그램 1080p 화질 방어 & SeedVR2 업스케일 마스터링"
                       : "Instagram 1080p Anti-Compression & SeedVR2 Mastering"}
                   </strong>
-                  <span style={{ fontSize: "11px", color: "#6B6F7B" }}>
+                  <span style={{ fontSize: "11px", color: "var(--ys-ink-muted)" }}>
                     {isKo
                       ? "Lanczos + CAS 0.25 + 필름 그레인 보존 · 업로드 재압축 열화 차단"
                       : "Lanczos + CAS 0.25 + Film Grain Lock · Prevents IG re-compression blur"}
@@ -12406,9 +12406,9 @@ export function BrandBriefStudio({
                   style={{
                     padding: "6px 12px",
                     borderRadius: "999px",
-                    border: "1px solid #3875C5",
-                    background: "#3875C5",
-                    color: "#FFFFFF",
+                    border: "1px solid var(--ys-accent)",
+                    background: "var(--ys-accent)",
+                    color: "var(--ys-on-accent)",
                     fontSize: "11.5px",
                     fontWeight: 700,
                     cursor: "pointer",
@@ -12433,8 +12433,8 @@ export function BrandBriefStudio({
             minHeight: "560px",
             display: studioSurfaceMode === "spatial_canvas" ? "block" : "none",
             borderRadius: "16px",
-            background: "#FFFFFF",
-            border: "1px solid #E4E6EC",
+            background: "var(--ys-surface)",
+            border: "1px solid var(--ys-line)",
             overflow: "hidden",
             transform: `scale(${canvasZoomPct / 100})`,
             transformOrigin: "center center",
@@ -12455,10 +12455,10 @@ export function BrandBriefStudio({
               gap: "6px",
               padding: "6px 8px",
               borderRadius: "12px",
-              background: "rgba(255, 255, 255, 0.96)",
+              background: "var(--ys-dock-bg)",
               backdropFilter: "blur(12px)",
-              border: "1px solid #E4E6EC",
-              boxShadow: "0 8px 24px rgba(15, 23, 42, 0.08)",
+              border: "1px solid var(--ys-line)",
+              boxShadow: "0 8px 24px rgba(255, 255, 255, 0.1)",
             }}
           >
             <button
@@ -12469,9 +12469,9 @@ export function BrandBriefStudio({
               style={{
                 padding: "5px 9px",
                 borderRadius: "8px",
-                border: "1px solid #E4E6EC",
-                background: "#F8F9FB",
-                color: "#111114",
+                border: "1px solid var(--ys-line)",
+                background: "var(--ys-panel)",
+                color: "var(--ys-ink)",
                 fontSize: "11px",
                 fontWeight: 700,
                 cursor: "pointer",
@@ -12487,9 +12487,9 @@ export function BrandBriefStudio({
               style={{
                 padding: "5px 9px",
                 borderRadius: "8px",
-                border: "1px solid rgba(56, 117, 197, 0.35)",
-                background: "rgba(56, 117, 197, 0.08)",
-                color: "#3063A7",
+                border: "1px solid color-mix(in srgb, var(--ys-accent) 35%, transparent)",
+                background: "color-mix(in srgb, var(--ys-accent) 8%, transparent)",
+                color: "var(--ys-accent-text)",
                 fontSize: "11px",
                 fontWeight: 700,
                 cursor: "pointer",
@@ -12505,9 +12505,9 @@ export function BrandBriefStudio({
               style={{
                 padding: "5px 9px",
                 borderRadius: "8px",
-                border: "1px solid #3875C5",
-                background: "#3875C5",
-                color: "#FFFFFF",
+                border: "1px solid var(--ys-accent)",
+                background: "var(--ys-accent)",
+                color: "var(--ys-on-accent)",
                 fontSize: "11px",
                 fontWeight: 700,
                 cursor: "pointer",
@@ -12523,9 +12523,9 @@ export function BrandBriefStudio({
               style={{
                 padding: "5px 9px",
                 borderRadius: "8px",
-                border: "1px solid #E4E6EC",
-                background: "#F8F9FB",
-                color: "#111114",
+                border: "1px solid var(--ys-line)",
+                background: "var(--ys-panel)",
+                color: "var(--ys-ink)",
                 fontSize: "11px",
                 fontWeight: 700,
                 cursor: "pointer",
@@ -12541,9 +12541,9 @@ export function BrandBriefStudio({
               style={{
                 padding: "5px 9px",
                 borderRadius: "8px",
-                border: "1px solid #E4E6EC",
-                background: "#F8F9FB",
-                color: "#111114",
+                border: "1px solid var(--ys-line)",
+                background: "var(--ys-panel)",
+                color: "var(--ys-ink)",
                 fontSize: "11px",
                 fontWeight: 700,
                 cursor: "pointer",
@@ -12559,9 +12559,9 @@ export function BrandBriefStudio({
               style={{
                 padding: "5px 9px",
                 borderRadius: "8px",
-                border: "1px solid #E4E6EC",
-                background: "#FFFFFF",
-                color: "#383B44",
+                border: "1px solid var(--ys-line)",
+                background: "var(--ys-surface)",
+                color: "var(--ys-ink-secondary)",
                 fontSize: "11px",
                 fontWeight: 600,
                 cursor: "pointer",
@@ -12576,9 +12576,9 @@ export function BrandBriefStudio({
               style={{
                 padding: "5px 9px",
                 borderRadius: "8px",
-                border: "1px solid rgba(56, 117, 197, 0.35)",
-                background: "rgba(56, 117, 197, 0.08)",
-                color: "#3063A7",
+                border: "1px solid color-mix(in srgb, var(--ys-accent) 35%, transparent)",
+                background: "color-mix(in srgb, var(--ys-accent) 8%, transparent)",
+                color: "var(--ys-accent-text)",
                 fontSize: "11px",
                 fontWeight: 700,
                 cursor: "pointer",
@@ -12597,9 +12597,9 @@ export function BrandBriefStudio({
                 style={{
                   padding: "4px 8px",
                   borderRadius: "7px",
-                  border: "1px solid #E4E6EC",
-                  background: "#FFFFFF",
-                  color: "#383B44",
+                  border: "1px solid var(--ys-line)",
+                  background: "var(--ys-surface)",
+                  color: "var(--ys-ink-secondary)",
                   fontSize: "10.5px",
                   fontWeight: 600,
                   cursor: "pointer",
@@ -12620,8 +12620,8 @@ export function BrandBriefStudio({
               right: "284px",
               bottom: "56px",
               borderRadius: "16px",
-              border: "1.5px dashed rgba(56, 117, 197, 0.28)",
-              background: "rgba(56, 117, 197, 0.015)",
+              border: "1.5px dashed color-mix(in srgb, var(--ys-accent) 28%, transparent)",
+              background: "color-mix(in srgb, var(--ys-accent) 2%, transparent)",
               pointerEvents: "none",
               zIndex: 9,
             }}
@@ -12633,9 +12633,9 @@ export function BrandBriefStudio({
                 left: "14px",
                 padding: "2px 8px",
                 borderRadius: "6px",
-                background: "#FFFFFF",
-                border: "1px solid rgba(56, 117, 197, 0.3)",
-                color: "#3063A7",
+                background: "var(--ys-surface)",
+                border: "1px solid color-mix(in srgb, var(--ys-accent) 30%, transparent)",
+                color: "var(--ys-accent-text)",
                 fontSize: "10px",
                 fontWeight: 700,
               }}
@@ -12684,8 +12684,8 @@ export function BrandBriefStudio({
                       fill="none"
                       stroke={
                         isWireHighlighted
-                          ? "#3875C5"
-                          : "rgba(56, 117, 197, 0.35)"
+                          ? "var(--ys-accent)"
+                          : "color-mix(in srgb, var(--ys-accent) 35%, transparent)"
                       }
                       strokeWidth={isWireHighlighted ? "2.4" : "1.6"}
                       strokeDasharray={isWireHighlighted ? undefined : "5 4"}
@@ -12694,16 +12694,16 @@ export function BrandBriefStudio({
                       cx={x1}
                       cy={y1}
                       r="4"
-                      fill="#3875C5"
-                      stroke="#FFFFFF"
+                      fill="var(--ys-accent)"
+                      stroke="var(--ys-surface)"
                       strokeWidth="1.5"
                     />
                     <circle
                       cx={x2}
                       cy={y2}
                       r="4"
-                      fill="#3875C5"
-                      stroke="#FFFFFF"
+                      fill="var(--ys-accent)"
+                      stroke="var(--ys-surface)"
                       strokeWidth="1.5"
                     />
                     {targetItem.wireLabelKo && (
@@ -12712,15 +12712,15 @@ export function BrandBriefStudio({
                           width="88"
                           height="19"
                           rx="9.5"
-                          fill="#FFFFFF"
-                          stroke="rgba(56, 117, 197, 0.45)"
+                          fill="var(--ys-surface)"
+                          stroke="color-mix(in srgb, var(--ys-accent) 45%, transparent)"
                           strokeWidth="1"
                         />
                         <text
                           x="44"
                           y="13"
                           textAnchor="middle"
-                          fill="#3063A7"
+                          fill="var(--ys-accent-text)"
                           fontSize="9.5"
                           fontWeight="700"
                         >
@@ -12784,13 +12784,13 @@ export function BrandBriefStudio({
                   cursor: draggingCanvasItem?.id === item.id ? "grabbing" : "grab",
                   borderRadius: "12px",
                   overflow: "visible",
-                  background: "#FFFFFF",
+                  background: "var(--ys-surface)",
                   border: isSelected
-                    ? "2px solid #3875C5"
-                    : "1px solid #E4E6EC",
+                    ? "2px solid var(--ys-accent)"
+                    : "1px solid var(--ys-line)",
                   boxShadow: isSelected
-                    ? "0 14px 32px rgba(56, 117, 197, 0.18)"
-                    : "0 8px 24px rgba(15, 23, 42, 0.08)",
+                    ? "0 14px 32px color-mix(in srgb, var(--ys-accent) 18%, transparent)"
+                    : "0 8px 24px rgba(255, 255, 255, 0.1)",
                   display: "flex",
                   flexDirection: "column",
                   zIndex: isSelected ? 14 : 12,
@@ -12807,8 +12807,8 @@ export function BrandBriefStudio({
                     width: "9px",
                     height: "9px",
                     borderRadius: "999px",
-                    background: "#FFFFFF",
-                    border: "2px solid #3875C5",
+                    background: "var(--ys-surface)",
+                    border: "2px solid var(--ys-accent)",
                     zIndex: 3,
                   }}
                 />
@@ -12822,16 +12822,16 @@ export function BrandBriefStudio({
                     width: "9px",
                     height: "9px",
                     borderRadius: "999px",
-                    background: "#3875C5",
-                    border: "2px solid #FFFFFF",
+                    background: "var(--ys-accent)",
+                    border: "2px solid var(--ys-surface)",
                     zIndex: 3,
                   }}
                 />
                 <div
                   style={{
                     padding: "5px 8px",
-                    background: "#F8F9FB",
-                    borderBottom: "1px solid #EEF0F5",
+                    background: "var(--ys-panel)",
+                    borderBottom: "1px solid var(--ys-panel)",
                     borderTopLeftRadius: "11px",
                     borderTopRightRadius: "11px",
                     display: "flex",
@@ -12845,7 +12845,7 @@ export function BrandBriefStudio({
                     style={{
                       fontSize: "10px",
                       fontWeight: 700,
-                      color: "#3063A7",
+                      color: "var(--ys-accent-text)",
                       overflow: "hidden",
                       textOverflow: "ellipsis",
                       whiteSpace: "nowrap",
@@ -12857,7 +12857,7 @@ export function BrandBriefStudio({
                     style={{
                       fontSize: "9.5px",
                       fontWeight: 600,
-                      color: "#6B6F7B",
+                      color: "var(--ys-ink-muted)",
                       flexShrink: 0,
                     }}
                   >
@@ -12914,13 +12914,13 @@ export function BrandBriefStudio({
                         height: "34px",
                         borderRadius: "999px",
                         border: 0,
-                        background: "rgba(255, 255, 255, 0.9)",
-                        color: "#3063A7",
+                        background: "var(--ys-dock-bg)",
+                        color: "var(--ys-accent-text)",
                         display: "inline-flex",
                         alignItems: "center",
                         justifyContent: "center",
                         cursor: "pointer",
-                        boxShadow: "0 4px 12px rgba(15, 23, 42, 0.16)",
+                        boxShadow: "0 4px 12px rgba(255, 255, 255, 0.1)",
                       }}
                     >
                       <svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor">
@@ -12933,8 +12933,8 @@ export function BrandBriefStudio({
                 <div
                   style={{
                     padding: "5px 7px",
-                    background: "#FFFFFF",
-                    borderTop: "1px solid #EEF0F5",
+                    background: "var(--ys-surface)",
+                    borderTop: "1px solid var(--ys-panel)",
                     borderBottomLeftRadius: "11px",
                     borderBottomRightRadius: "11px",
                     display: "flex",
@@ -12947,7 +12947,7 @@ export function BrandBriefStudio({
                   <span
                     style={{
                       fontSize: "10px",
-                      color: "#383B44",
+                      color: "var(--ys-ink-secondary)",
                       fontWeight: 600,
                       overflow: "hidden",
                       textOverflow: "ellipsis",
@@ -12971,9 +12971,9 @@ export function BrandBriefStudio({
                         style={{
                           padding: "2px 6px",
                           borderRadius: "5px",
-                          border: "1px solid rgba(56, 117, 197, 0.35)",
-                          background: "rgba(56, 117, 197, 0.08)",
-                          color: "#3063A7",
+                          border: "1px solid color-mix(in srgb, var(--ys-accent) 35%, transparent)",
+                          background: "color-mix(in srgb, var(--ys-accent) 8%, transparent)",
+                          color: "var(--ys-accent-text)",
                           fontSize: "9.5px",
                           fontWeight: 700,
                           cursor: "pointer",
@@ -12991,9 +12991,9 @@ export function BrandBriefStudio({
                         style={{
                           padding: "2px 6px",
                           borderRadius: "5px",
-                          border: "1px solid rgba(56, 117, 197, 0.35)",
-                          background: "rgba(56, 117, 197, 0.08)",
-                          color: "#3063A7",
+                          border: "1px solid color-mix(in srgb, var(--ys-accent) 35%, transparent)",
+                          background: "color-mix(in srgb, var(--ys-accent) 8%, transparent)",
+                          color: "var(--ys-accent-text)",
                           fontSize: "9.5px",
                           fontWeight: 700,
                           cursor: "pointer",
@@ -13021,10 +13021,10 @@ export function BrandBriefStudio({
               gap: "6px",
               padding: "5px 8px",
               borderRadius: "10px",
-              background: "rgba(255, 255, 255, 0.96)",
+              background: "var(--ys-dock-bg)",
               backdropFilter: "blur(12px)",
-              border: "1px solid #E4E6EC",
-              boxShadow: "0 6px 20px rgba(15, 23, 42, 0.08)",
+              border: "1px solid var(--ys-line)",
+              boxShadow: "0 6px 20px rgba(255, 255, 255, 0.1)",
             }}
           >
             <button
@@ -13034,9 +13034,9 @@ export function BrandBriefStudio({
               style={{
                 padding: "4px 8px",
                 borderRadius: "7px",
-                border: "1px solid #E4E6EC",
-                background: "#F8F9FB",
-                color: "#111114",
+                border: "1px solid var(--ys-line)",
+                background: "var(--ys-panel)",
+                color: "var(--ys-ink)",
                 fontSize: "11px",
                 fontWeight: 700,
                 cursor: "pointer",
@@ -13050,8 +13050,8 @@ export function BrandBriefStudio({
               style={{
                 padding: "3px 7px",
                 borderRadius: "6px",
-                border: "1px solid #E4E6EC",
-                background: "#FFFFFF",
+                border: "1px solid var(--ys-line)",
+                background: "var(--ys-surface)",
                 fontSize: "11px",
                 fontWeight: 700,
                 cursor: "pointer",
@@ -13059,7 +13059,7 @@ export function BrandBriefStudio({
             >
               −
             </button>
-            <span style={{ fontSize: "11px", fontWeight: 700, color: "#3063A7", minWidth: "38px", textAlign: "center" }}>
+            <span style={{ fontSize: "11px", fontWeight: 700, color: "var(--ys-accent-text)", minWidth: "38px", textAlign: "center" }}>
               {canvasZoomPct}%
             </span>
             <button
@@ -13068,8 +13068,8 @@ export function BrandBriefStudio({
               style={{
                 padding: "3px 7px",
                 borderRadius: "6px",
-                border: "1px solid #E4E6EC",
-                background: "#FFFFFF",
+                border: "1px solid var(--ys-line)",
+                background: "var(--ys-surface)",
                 fontSize: "11px",
                 fontWeight: 700,
                 cursor: "pointer",
@@ -13096,9 +13096,9 @@ export function BrandBriefStudio({
                   style={{
                     padding: "2px 6px",
                     borderRadius: "6px",
-                    border: "1px solid #E4E6EC",
-                    background: canvasTheme === th.id ? "#3875C5" : "#F8F9FB",
-                    color: canvasTheme === th.id ? "#FFFFFF" : "#383B44",
+                    border: "1px solid var(--ys-line)",
+                    background: canvasTheme === th.id ? "var(--ys-accent)" : "var(--ys-panel)",
+                    color: canvasTheme === th.id ? "var(--ys-on-accent)" : "var(--ys-ink-secondary)",
                     fontSize: "9.5px",
                     fontWeight: 700,
                     cursor: "pointer",
@@ -13120,15 +13120,15 @@ export function BrandBriefStudio({
               zIndex: 25,
               padding: "6px 10px",
               borderRadius: "10px",
-              background: "rgba(255, 255, 255, 0.96)",
+              background: "var(--ys-dock-bg)",
               backdropFilter: "blur(12px)",
-              border: "1px solid #E4E6EC",
-              boxShadow: "0 6px 20px rgba(15, 23, 42, 0.08)",
+              border: "1px solid var(--ys-line)",
+              boxShadow: "0 6px 20px rgba(255, 255, 255, 0.1)",
               display: "flex",
               alignItems: "center",
               gap: "8px",
               fontSize: "10.5px",
-              color: "#383B44",
+              color: "var(--ys-ink-secondary)",
               fontWeight: 700,
             }}
           >
@@ -13138,8 +13138,8 @@ export function BrandBriefStudio({
                 width: "22px",
                 height: "14px",
                 borderRadius: "3px",
-                border: "1.5px solid #3875C5",
-                background: "rgba(56, 117, 197, 0.14)",
+                border: "1.5px solid var(--ys-accent)",
+                background: "color-mix(in srgb, var(--ys-accent) 14%, transparent)",
                 display: "inline-block",
               }}
             />
@@ -13150,7 +13150,7 @@ export function BrandBriefStudio({
             </span>
             <span
               data-minimap-zoom-indicator
-              style={{ fontFamily: "var(--ys-mono)", color: "#3063A7" }}
+              style={{ fontFamily: "var(--ys-mono)", color: "var(--ys-accent-text)" }}
             >
               {canvasZoomPct}%
             </span>
@@ -13165,7 +13165,7 @@ export function BrandBriefStudio({
                 top: `${selectionBounds.minY - 4}px`,
                 width: `${selectionBounds.maxX - selectionBounds.minX + 8}px`,
                 height: `${selectionBounds.maxY - selectionBounds.minY + 8}px`,
-                border: "2px solid #3875C5",
+                border: "2px solid var(--ys-accent)",
                 borderRadius: "14px",
                 pointerEvents: "none",
                 zIndex: 15,
@@ -13182,8 +13182,8 @@ export function BrandBriefStudio({
                 top: `${Math.min(rubberBandBox.startY, rubberBandBox.currY)}px`,
                 width: `${Math.abs(rubberBandBox.currX - rubberBandBox.startX)}px`,
                 height: `${Math.abs(rubberBandBox.currY - rubberBandBox.startY)}px`,
-                border: "1.5px solid #3875C5",
-                background: "rgba(56, 117, 197, 0.08)",
+                border: "1.5px solid var(--ys-accent)",
+                background: "color-mix(in srgb, var(--ys-accent) 8%, transparent)",
                 pointerEvents: "none",
                 zIndex: 20,
               }}
@@ -13206,10 +13206,10 @@ export function BrandBriefStudio({
                   width: "260px",
                   padding: "12px",
                   borderRadius: "14px",
-                  background: "rgba(255, 255, 255, 0.96)",
+                  background: "var(--ys-dock-bg)",
                   backdropFilter: "blur(14px)",
-                  border: "1px solid #E4E6EC",
-                  boxShadow: "0 14px 36px rgba(15, 23, 42, 0.12)",
+                  border: "1px solid var(--ys-line)",
+                  boxShadow: "0 14px 36px rgba(255, 255, 255, 0.1)",
                   zIndex: 24,
                   display: "grid",
                   gap: "8px",
@@ -13224,7 +13224,7 @@ export function BrandBriefStudio({
                     gap: "3px",
                     padding: "2px",
                     borderRadius: "8px",
-                    background: "#F1F3F7",
+                    background: "var(--ys-panel)",
                   }}
                 >
                   {(
@@ -13246,9 +13246,9 @@ export function BrandBriefStudio({
                         borderRadius: "6px",
                         border: 0,
                         background:
-                          activeInspectorTab === tab.id ? "#FFFFFF" : "transparent",
+                          activeInspectorTab === tab.id ? "var(--ys-surface)" : "transparent",
                         color:
-                          activeInspectorTab === tab.id ? "#3063A7" : "#6B6F7B",
+                          activeInspectorTab === tab.id ? "var(--ys-accent-text)" : "var(--ys-ink-muted)",
                         fontSize: "9.5px",
                         fontWeight: 700,
                         cursor: "pointer",
@@ -13267,12 +13267,12 @@ export function BrandBriefStudio({
                     gap: "6px",
                     padding: "4px 7px",
                     borderRadius: "7px",
-                    background: "#F8F9FB",
-                    border: "1px solid #E4E6EC",
+                    background: "var(--ys-panel)",
+                    border: "1px solid var(--ys-line)",
                     fontSize: "9.5px",
                   }}
                 >
-                  <span style={{ color: "#383B44", fontWeight: 600 }}>
+                  <span style={{ color: "var(--ys-ink-secondary)", fontWeight: 600 }}>
                     {isKo ? "버전 히스토리: v3 (현재 마스터)" : "Version: v3 (Current)"}
                   </span>
                   <button
@@ -13288,9 +13288,9 @@ export function BrandBriefStudio({
                     style={{
                       padding: "2px 6px",
                       borderRadius: "5px",
-                      border: "1px solid #3875C5",
-                      background: "#FFFFFF",
-                      color: "#3063A7",
+                      border: "1px solid var(--ys-accent)",
+                      background: "var(--ys-surface)",
+                      color: "var(--ys-accent-text)",
                       fontSize: "9px",
                       fontWeight: 700,
                       cursor: "pointer",
@@ -13311,8 +13311,8 @@ export function BrandBriefStudio({
                     style={{
                       padding: "2px 7px",
                       borderRadius: "999px",
-                      background: "rgba(56, 117, 197, 0.1)",
-                      color: "#3063A7",
+                      background: "color-mix(in srgb, var(--ys-accent) 10%, transparent)",
+                      color: "var(--ys-accent-text)",
                       fontSize: "10px",
                       fontWeight: 700,
                     }}
@@ -13322,7 +13322,7 @@ export function BrandBriefStudio({
                   <span
                     style={{
                       fontSize: "10px",
-                      color: "#6B6F7B",
+                      color: "var(--ys-ink-muted)",
                       fontFamily: "var(--ys-mono)",
                     }}
                   >
@@ -13339,7 +13339,7 @@ export function BrandBriefStudio({
                       height: "42px",
                       borderRadius: "8px",
                       objectFit: "cover",
-                      border: "1px solid #E4E6EC",
+                      border: "1px solid var(--ys-line)",
                       flexShrink: 0,
                     }}
                   />
@@ -13348,7 +13348,7 @@ export function BrandBriefStudio({
                       style={{
                         display: "block",
                         fontSize: "12px",
-                        color: "#111114",
+                        color: "var(--ys-ink)",
                         overflow: "hidden",
                         textOverflow: "ellipsis",
                         whiteSpace: "nowrap",
@@ -13360,7 +13360,7 @@ export function BrandBriefStudio({
                       style={{
                         display: "block",
                         fontSize: "10.5px",
-                        color: "#6B6F7B",
+                        color: "var(--ys-ink-muted)",
                       }}
                     >
                       {isKo ? inspectedNode.modelBadgeKo : inspectedNode.modelBadgeEn}
@@ -13372,7 +13372,7 @@ export function BrandBriefStudio({
                 <div
                   style={{
                     paddingTop: "6px",
-                    borderTop: "1px solid #EEF0F5",
+                    borderTop: "1px solid var(--ys-panel)",
                     display: "grid",
                     gap: "4px",
                   }}
@@ -13381,7 +13381,7 @@ export function BrandBriefStudio({
                     style={{
                       fontSize: "10px",
                       fontWeight: 700,
-                      color: "#6B6F7B",
+                      color: "var(--ys-ink-muted)",
                     }}
                   >
                     {isKo
@@ -13422,9 +13422,9 @@ export function BrandBriefStudio({
                         style={{
                           padding: "4px 6px",
                           borderRadius: "6px",
-                          border: "1px solid #E4E6EC",
-                          background: "#F8F9FB",
-                          color: "#111114",
+                          border: "1px solid var(--ys-line)",
+                          background: "var(--ys-panel)",
+                          color: "var(--ys-ink)",
                           fontSize: "10.5px",
                           fontWeight: 600,
                           cursor: "pointer",
@@ -13459,9 +13459,9 @@ export function BrandBriefStudio({
                     style={{
                       padding: "5px 7px",
                       borderRadius: "7px",
-                      border: "1px solid rgba(56, 117, 197, 0.4)",
-                      background: "rgba(56, 117, 197, 0.09)",
-                      color: "#3063A7",
+                      border: "1px solid color-mix(in srgb, var(--ys-accent) 40%, transparent)",
+                      background: "color-mix(in srgb, var(--ys-accent) 9%, transparent)",
+                      color: "var(--ys-accent-text)",
                       fontSize: "10.5px",
                       fontWeight: 700,
                       cursor: "pointer",
@@ -13479,9 +13479,9 @@ export function BrandBriefStudio({
                     style={{
                       padding: "5px 7px",
                       borderRadius: "7px",
-                      border: "1px solid #E4E6EC",
-                      background: "#F8F9FB",
-                      color: "#111114",
+                      border: "1px solid var(--ys-line)",
+                      background: "var(--ys-panel)",
+                      color: "var(--ys-ink)",
                       fontSize: "10.5px",
                       fontWeight: 600,
                       cursor: "pointer",
@@ -13499,9 +13499,9 @@ export function BrandBriefStudio({
                     style={{
                       padding: "5px 7px",
                       borderRadius: "7px",
-                      border: "1px solid #E4E6EC",
-                      background: "#F8F9FB",
-                      color: "#111114",
+                      border: "1px solid var(--ys-line)",
+                      background: "var(--ys-panel)",
+                      color: "var(--ys-ink)",
                       fontSize: "10.5px",
                       fontWeight: 600,
                       cursor: "pointer",
@@ -13518,9 +13518,9 @@ export function BrandBriefStudio({
                     style={{
                       padding: "5px 7px",
                       borderRadius: "7px",
-                      border: "1px solid #E4E6EC",
-                      background: "#F8F9FB",
-                      color: "#111114",
+                      border: "1px solid var(--ys-line)",
+                      background: "var(--ys-panel)",
+                      color: "var(--ys-ink)",
                       fontSize: "10.5px",
                       fontWeight: 600,
                       cursor: "pointer",
@@ -13567,9 +13567,9 @@ export function BrandBriefStudio({
           padding: "12px 16px",
           marginBottom: "14px",
           borderRadius: "14px",
-          background: "#FFFFFF",
-          border: "1.5px solid #3875C5",
-          boxShadow: "0 6px 20px rgba(56, 117, 197, 0.08)",
+          background: "var(--ys-surface)",
+          border: "1.5px solid var(--ys-accent)",
+          boxShadow: "0 6px 20px color-mix(in srgb, var(--ys-accent) 8%, transparent)",
         }}
       >
         <div style={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: "8px" }}>
@@ -13577,8 +13577,8 @@ export function BrandBriefStudio({
             style={{
               padding: "4px 10px",
               borderRadius: "999px",
-              background: "#3875C5",
-              color: "#FFFFFF",
+              background: "var(--ys-accent)",
+              color: "var(--ys-on-accent)",
               fontSize: "11px",
               fontWeight: 800,
             }}
@@ -13593,7 +13593,7 @@ export function BrandBriefStudio({
                     ? "04 · CAMPAIGN SEEDING STUDIO"
                     : "05 · AUDIO & FOLEY STUDIO"}
           </span>
-          <strong style={{ fontSize: "14px", color: "#111114" }}>
+          <strong style={{ fontSize: "14px", color: "var(--ys-ink)" }}>
             {studioSurfaceMode === "track_image"
               ? isKo
                 ? "이미지 단독 스튜디오 — 5대 생성 모델 · 1~4번 역할 슬롯 · 1440px 스마트 마스크 부분 수정"
@@ -13625,9 +13625,9 @@ export function BrandBriefStudio({
             style={{
               padding: "5px 10px",
               borderRadius: "8px",
-              border: "1px solid #E4E6EC",
-              background: "#F8F9FB",
-              color: "#3063A7",
+              border: "1px solid var(--ys-line)",
+              background: "var(--ys-panel)",
+              color: "var(--ys-accent-text)",
               fontSize: "11.5px",
               fontWeight: 700,
               cursor: "pointer",
@@ -13641,9 +13641,9 @@ export function BrandBriefStudio({
             style={{
               padding: "5px 10px",
               borderRadius: "8px",
-              border: "1px solid #E4E6EC",
-              background: "#FFFFFF",
-              color: "#383B44",
+              border: "1px solid var(--ys-line)",
+              background: "var(--ys-surface)",
+              color: "var(--ys-ink-secondary)",
               fontSize: "11.5px",
               fontWeight: 600,
               cursor: "pointer",
@@ -13854,7 +13854,7 @@ export function BrandBriefStudio({
               marginTop: "12px",
               padding: "12px 14px",
               borderRadius: "12px",
-              background: "#FFFFFF",
+              background: "var(--ys-surface)",
               border: "1px solid var(--ys-border)",
               display: "flex",
               flexDirection: "column",
@@ -13951,7 +13951,7 @@ export function BrandBriefStudio({
                     height: "32px",
                     borderRadius: "8px",
                     background: "var(--ys-ink)",
-                    color: "#FFFFFF",
+                    color: "var(--ys-on-accent)",
                     display: "inline-flex",
                     alignItems: "center",
                     justifyContent: "center",
@@ -14062,7 +14062,7 @@ export function BrandBriefStudio({
                     width: "32px",
                     height: "32px",
                     borderRadius: "8px",
-                    background: "#FFFFFF",
+                    background: "var(--ys-surface)",
                     boxShadow: "var(--ys-ring)",
                     display: "inline-flex",
                     alignItems: "center",
@@ -14151,7 +14151,7 @@ export function BrandBriefStudio({
                         : "1px solid var(--ys-border)",
                       background: selected
                         ? "var(--ys-brand-tint)"
-                        : "#FFFFFF",
+                        : "var(--ys-surface)",
                       cursor: "pointer",
                       display: "flex",
                       flexDirection: "column",
@@ -14218,7 +14218,7 @@ export function BrandBriefStudio({
                   gap: "5px",
                   padding: "10px 12px",
                   borderRadius: "10px",
-                  background: "#FFFFFF",
+                  background: "var(--ys-surface)",
                   border: "1px solid var(--ys-border)",
                 }}
               >
@@ -14385,10 +14385,10 @@ export function BrandBriefStudio({
           padding: "10px 14px",
           marginBottom: "14px",
           borderRadius: "14px",
-          background: "#FFFFFF",
-          border: "1px solid #E4E6EC",
-          color: "#0E1013",
-          boxShadow: "0 4px 16px rgba(15, 23, 42, 0.04)",
+          background: "var(--ys-surface)",
+          border: "1px solid var(--ys-line)",
+          color: "var(--ys-ink)",
+          boxShadow: "0 4px 16px rgba(0, 0, 0, 0.28)",
         }}
       >
         {/* Left: Split-Pane Toggle (Fold/Expand Left Image or Right Video like VS Code / Cursor Split Editor) */}
@@ -14405,7 +14405,7 @@ export function BrandBriefStudio({
             style={{
               fontSize: "11px",
               fontWeight: 700,
-              color: "#6B6F7B",
+              color: "var(--ys-ink-muted)",
               marginRight: "4px",
             }}
           >
@@ -14428,12 +14428,12 @@ export function BrandBriefStudio({
                   padding: "6px 11px",
                   borderRadius: "999px",
                   border: active
-                    ? "1.5px solid #3875C5"
-                    : "1px solid #E4E6EC",
+                    ? "1.5px solid var(--ys-accent)"
+                    : "1px solid var(--ys-line)",
                   background: active
-                    ? "rgba(56, 117, 197, 0.1)"
-                    : "#F8F9FB",
-                  color: active ? "#3063A7" : "#383B44",
+                    ? "color-mix(in srgb, var(--ys-accent) 10%, transparent)"
+                    : "var(--ys-panel)",
+                  color: active ? "var(--ys-accent-text)" : "var(--ys-ink-secondary)",
                   fontSize: "12px",
                   fontWeight: active ? 700 : 600,
                   cursor: "pointer",
@@ -14455,8 +14455,8 @@ export function BrandBriefStudio({
             gap: "4px",
             padding: "3px",
             borderRadius: "999px",
-            background: "#F1F3F7",
-            border: "1px solid #E4E6EC",
+            background: "var(--ys-panel)",
+            border: "1px solid var(--ys-line)",
           }}
         >
           {(
@@ -14490,9 +14490,9 @@ export function BrandBriefStudio({
                   padding: "5px 12px",
                   borderRadius: "999px",
                   border: 0,
-                  background: active ? "#FFFFFF" : "transparent",
-                  color: active ? "#3063A7" : "#6B6F7B",
-                  boxShadow: active ? "0 1px 3px rgba(15, 23, 42, 0.08)" : "none",
+                  background: active ? "var(--ys-surface)" : "transparent",
+                  color: active ? "var(--ys-accent-text)" : "var(--ys-ink-muted)",
+                  boxShadow: active ? "0 1px 3px rgba(255, 255, 255, 0.1)" : "none",
                   fontSize: "12px",
                   fontWeight: active ? 700 : 600,
                   cursor: "pointer",
@@ -14523,9 +14523,9 @@ export function BrandBriefStudio({
               gap: "6px",
               padding: "6px 12px",
               borderRadius: "999px",
-              border: "1px solid rgba(56, 117, 197, 0.85)",
-              background: "#3875C5",
-              color: "#FFFFFF",
+              border: "1px solid color-mix(in srgb, var(--ys-accent) 85%, transparent)",
+              background: "var(--ys-accent)",
+              color: "var(--ys-on-accent)",
               fontSize: "12px",
               fontWeight: 700,
               cursor: "pointer",
@@ -14619,8 +14619,8 @@ export function BrandBriefStudio({
               marginBottom: "12px",
               borderRadius: "12px",
               background:
-                "linear-gradient(90deg, rgba(56, 117, 197, 0.09) 0%, rgba(56, 117, 197, 0.02) 100%)",
-              border: "1px solid rgba(56, 117, 197, 0.28)",
+                "linear-gradient(90deg, color-mix(in srgb, var(--ys-accent) 9%, transparent) 0%, color-mix(in srgb, var(--ys-accent) 2%, transparent) 100%)",
+              border: "1px solid color-mix(in srgb, var(--ys-accent) 28%, transparent)",
             }}
           >
             <div
@@ -14635,7 +14635,7 @@ export function BrandBriefStudio({
                 className="bw-chip"
                 style={{
                   background: "var(--ys-brand)",
-                  color: "#FFFFFF",
+                  color: "var(--ys-on-accent)",
                   fontWeight: 700,
                 }}
               >
@@ -14680,7 +14680,7 @@ export function BrandBriefStudio({
                           ? "var(--ys-brand-tint)"
                           : "var(--ys-surface)",
                       color: isSlotSelected
-                        ? "#FFFFFF"
+                        ? "var(--ys-surface)"
                         : alreadyBridged
                           ? "var(--ys-brand-text)"
                           : "var(--ys-ink)",
@@ -15403,7 +15403,7 @@ export function BrandBriefStudio({
                 marginBottom: "16px",
                 background:
                   imageSubMode === "micro_region_edit"
-                    ? "linear-gradient(180deg, rgba(56, 117, 197, 0.08) 0%, #FFFFFF 100%)"
+                    ? "linear-gradient(180deg, color-mix(in srgb, var(--ys-accent) 8%, transparent) 0%, var(--ys-surface) 100%)"
                     : "var(--ys-subtle-bg)",
                 boxShadow:
                   imageSubMode === "micro_region_edit"
@@ -15562,9 +15562,9 @@ export function BrandBriefStudio({
                       style={{
                         padding: "2px 7px",
                         borderRadius: "999px",
-                        border: "1px solid #E4E6EC",
-                        background: maskFeatherPct === pct ? "#3875C5" : "#FFFFFF",
-                        color: maskFeatherPct === pct ? "#FFFFFF" : "var(--ys-ink)",
+                        border: "1px solid var(--ys-line)",
+                        background: maskFeatherPct === pct ? "var(--ys-accent)" : "var(--ys-surface)",
+                        color: maskFeatherPct === pct ? "var(--ys-on-accent)" : "var(--ys-ink)",
                         fontSize: "10px",
                         fontWeight: 700,
                         cursor: "pointer",
@@ -15594,7 +15594,7 @@ export function BrandBriefStudio({
                   style={{
                     padding: "8px 10px",
                     borderRadius: "9px",
-                    background: "#FFFFFF",
+                    background: "var(--ys-surface)",
                     border: "1px solid var(--ys-border-subtle)",
                     display: "grid",
                     gap: "5px",
@@ -15615,9 +15615,9 @@ export function BrandBriefStudio({
                         style={{
                           padding: "2px 7px",
                           borderRadius: "999px",
-                          border: "1px solid #E4E6EC",
-                          background: skuAngleMode === ang.id ? "#3875C5" : "#F8F9FB",
-                          color: skuAngleMode === ang.id ? "#FFFFFF" : "#383B44",
+                          border: "1px solid var(--ys-line)",
+                          background: skuAngleMode === ang.id ? "var(--ys-accent)" : "var(--ys-panel)",
+                          color: skuAngleMode === ang.id ? "var(--ys-on-accent)" : "var(--ys-ink-secondary)",
                           fontSize: "10px",
                           fontWeight: 700,
                           cursor: "pointer",
@@ -15634,7 +15634,7 @@ export function BrandBriefStudio({
                   style={{
                     padding: "8px 10px",
                     borderRadius: "9px",
-                    background: "#FFFFFF",
+                    background: "var(--ys-surface)",
                     border: "1px solid var(--ys-border-subtle)",
                     display: "grid",
                     gap: "5px",
@@ -15662,9 +15662,9 @@ export function BrandBriefStudio({
                       style={{
                         padding: "2px 8px",
                         borderRadius: "6px",
-                        border: "1px solid #3875C5",
-                        background: "rgba(56, 117, 197, 0.08)",
-                        color: "#3063A7",
+                        border: "1px solid var(--ys-accent)",
+                        background: "color-mix(in srgb, var(--ys-accent) 8%, transparent)",
+                        color: "var(--ys-accent-text)",
                         fontSize: "10px",
                         fontWeight: 700,
                         cursor: "pointer",
@@ -15681,7 +15681,7 @@ export function BrandBriefStudio({
                   style={{
                     padding: "8px 10px",
                     borderRadius: "9px",
-                    background: "#FFFFFF",
+                    background: "var(--ys-surface)",
                     border: "1px solid var(--ys-border-subtle)",
                     display: "grid",
                     gap: "4px",
@@ -15698,7 +15698,7 @@ export function BrandBriefStudio({
                   </span>
                   <span
                     data-delta-e-pass-badge
-                    style={{ color: "#3063A7", fontWeight: 700, fontFamily: "var(--ys-mono)" }}
+                    style={{ color: "var(--ys-accent-text)", fontWeight: 700, fontFamily: "var(--ys-mono)" }}
                   >
                     {isKo
                       ? "브랜드 고유 색상 오차: ΔE 0.8 (기준 < 1.2 완벽 일치)"
@@ -15711,14 +15711,14 @@ export function BrandBriefStudio({
                   style={{
                     padding: "8px 10px",
                     borderRadius: "9px",
-                    background: "rgba(56, 117, 197, 0.06)",
-                    border: "1px solid rgba(56, 117, 197, 0.25)",
+                    background: "color-mix(in srgb, var(--ys-accent) 6%, transparent)",
+                    border: "1px solid color-mix(in srgb, var(--ys-accent) 25%, transparent)",
                     display: "grid",
                     gap: "4px",
                     fontSize: "10.5px",
                   }}
                 >
-                  <strong style={{ color: "#3063A7" }}>
+                  <strong style={{ color: "var(--ys-accent-text)" }}>
                     {isKo
                       ? "Sunra 최대 20컷 동시 병렬 생성 엔진"
                       : "Sunra 20-Slot Concurrent Generation Grid"}
@@ -15956,7 +15956,7 @@ export function BrandBriefStudio({
                 </button>
               </div>
 
-              {/* 5 Image Model Cards (GPT Image 2.6 · Nano Banana Pro · Nano Banana 2.1 · Nano Banana 2.0 · Seedream 5.0 Pro) */}
+              {/* 5 Image Model Cards (GPT Image 2.6 · Nano Banana Pro · Nano Banana 2.1 · Nano Banana 2.0 · Seedream 5.5) */}
               <div
                 className="bw-model-picker-grid"
                 data-studio-image-model-picker
@@ -16119,9 +16119,9 @@ export function BrandBriefStudio({
                       style={{
                         fontSize: "11px",
                         fontWeight: 700,
-                        background: "#3875C5",
-                        color: "#FFFFFF",
-                        border: "1px solid #3875C5",
+                        background: "var(--ys-accent)",
+                        color: "var(--ys-on-accent)",
+                        border: "1px solid var(--ys-accent)",
                       }}
                     >
                       {isKo
@@ -16289,13 +16289,13 @@ export function BrandBriefStudio({
                             borderRadius: "999px",
                             border:
                               imageBatchCount === b.cnt
-                                ? "1px solid #3875C5"
-                                : "1px solid #E4E6EC",
+                                ? "1px solid var(--ys-accent)"
+                                : "1px solid var(--ys-line)",
                             background:
-                              imageBatchCount === b.cnt ? "#3875C5" : "#FFFFFF",
+                              imageBatchCount === b.cnt ? "var(--ys-accent)" : "var(--ys-surface)",
                             color:
                               imageBatchCount === b.cnt
-                                ? "#FFFFFF"
+                                ? "var(--ys-surface)"
                                 : "var(--ys-ink)",
                             fontSize: "10.5px",
                             fontWeight: 700,
@@ -16316,13 +16316,13 @@ export function BrandBriefStudio({
                         padding: "3px 9px",
                         borderRadius: "999px",
                         border: isModelAbCompareMode
-                          ? "1px solid #3875C5"
-                          : "1px solid #E4E6EC",
+                          ? "1px solid var(--ys-accent)"
+                          : "1px solid var(--ys-line)",
                         background: isModelAbCompareMode
-                          ? "rgba(56, 117, 197, 0.1)"
-                          : "#FFFFFF",
+                          ? "color-mix(in srgb, var(--ys-accent) 10%, transparent)"
+                          : "var(--ys-surface)",
                         color: isModelAbCompareMode
-                          ? "#3063A7"
+                          ? "var(--ys-accent-text)"
                           : "var(--ys-ink-secondary)",
                         fontSize: "10.5px",
                         fontWeight: 700,
@@ -16331,8 +16331,8 @@ export function BrandBriefStudio({
                     >
                       {isModelAbCompareMode
                         ? isKo
-                          ? `2모델 A/B 동시 비교 ON (${activeImageModel.nameKo} vs Seedream 5.0 Pro)`
-                          : `2-Model A/B Compare ON (${activeImageModel.nameEn} vs Seedream 5.0 Pro)`
+                          ? `2모델 A/B 동시 비교 ON (${activeImageModel.nameKo} vs Seedream 5.5)`
+                          : `2-Model A/B Compare ON (${activeImageModel.nameEn} vs Seedream 5.5)`
                         : isKo
                           ? "2개 모델 A/B 동시 비교 켜기"
                           : "Enable 2-Model A/B Compare"}
@@ -16350,7 +16350,7 @@ export function BrandBriefStudio({
                       gap: "6px",
                       padding: "6px 10px",
                       borderRadius: "9px",
-                      background: "#FFFFFF",
+                      background: "var(--ys-surface)",
                       border: "1px solid var(--ys-border-subtle)",
                       fontSize: "10.5px",
                     }}
@@ -16378,9 +16378,9 @@ export function BrandBriefStudio({
                           style={{
                             padding: "2px 7px",
                             borderRadius: "6px",
-                            border: "1px solid #E4E6EC",
-                            background: "#F8F9FB",
-                            color: "#3063A7",
+                            border: "1px solid var(--ys-line)",
+                            background: "var(--ys-panel)",
+                            color: "var(--ys-accent-text)",
                             fontFamily: "var(--ys-mono)",
                             fontSize: "10px",
                             fontWeight: 700,
@@ -16401,9 +16401,9 @@ export function BrandBriefStudio({
                       style={{
                         padding: "2px 8px",
                         borderRadius: "6px",
-                        border: "1px solid rgba(56, 117, 197, 0.35)",
-                        background: "rgba(56, 117, 197, 0.08)",
-                        color: "#3063A7",
+                        border: "1px solid color-mix(in srgb, var(--ys-accent) 35%, transparent)",
+                        background: "color-mix(in srgb, var(--ys-accent) 8%, transparent)",
+                        color: "var(--ys-accent-text)",
                         fontSize: "10px",
                         fontWeight: 700,
                         cursor: "pointer",
@@ -16486,9 +16486,9 @@ export function BrandBriefStudio({
                     }}
                     style={{
                       fontWeight: 700,
-                      background: "#3875C5",
-                      color: "#FFFFFF",
-                      border: "1px solid #3875C5",
+                      background: "var(--ys-accent)",
+                      color: "var(--ys-on-accent)",
+                      border: "1px solid var(--ys-accent)",
                     }}
                   >
                     {isKo
@@ -16711,10 +16711,10 @@ export function BrandBriefStudio({
                       padding: "3px 9px",
                       borderRadius: "999px",
                       border: isEndFrameLoopLocked
-                        ? "1px solid #3875C5"
-                        : "1px solid #E4E6EC",
-                      background: isEndFrameLoopLocked ? "#3875C5" : "#FFFFFF",
-                      color: isEndFrameLoopLocked ? "#FFFFFF" : "var(--ys-ink)",
+                        ? "1px solid var(--ys-accent)"
+                        : "1px solid var(--ys-line)",
+                      background: isEndFrameLoopLocked ? "var(--ys-accent)" : "var(--ys-surface)",
+                      color: isEndFrameLoopLocked ? "var(--ys-on-accent)" : "var(--ys-ink)",
                       fontSize: "10.5px",
                       fontWeight: 700,
                       cursor: "pointer",
@@ -16767,15 +16767,15 @@ export function BrandBriefStudio({
                           borderRadius: "999px",
                           border:
                             cameraMotionPreset === cam.id
-                              ? "1px solid #3875C5"
-                              : "1px solid #E4E6EC",
+                              ? "1px solid var(--ys-accent)"
+                              : "1px solid var(--ys-line)",
                           background:
                             cameraMotionPreset === cam.id
-                              ? "rgba(56, 117, 197, 0.1)"
-                              : "#FFFFFF",
+                              ? "color-mix(in srgb, var(--ys-accent) 10%, transparent)"
+                              : "var(--ys-surface)",
                           color:
                             cameraMotionPreset === cam.id
-                              ? "#3063A7"
+                              ? "var(--ys-accent-text)"
                               : "var(--ys-ink)",
                           fontSize: "10px",
                           fontWeight: 700,
@@ -16803,9 +16803,9 @@ export function BrandBriefStudio({
                         style={{
                           padding: "2px 6px",
                           borderRadius: "6px",
-                          border: "1px solid #E4E6EC",
-                          background: cameraMotionScale === sc ? "#3875C5" : "#FFFFFF",
-                          color: cameraMotionScale === sc ? "#FFFFFF" : "var(--ys-ink)",
+                          border: "1px solid var(--ys-line)",
+                          background: cameraMotionScale === sc ? "var(--ys-accent)" : "var(--ys-surface)",
+                          color: cameraMotionScale === sc ? "var(--ys-on-accent)" : "var(--ys-ink)",
                           fontSize: "10px",
                           fontWeight: 700,
                           fontFamily: "var(--ys-mono)",
@@ -16849,7 +16849,7 @@ export function BrandBriefStudio({
                       className="bw-chip"
                       style={{
                         background: "var(--ys-ink)",
-                        color: "#FFFFFF",
+                        color: "var(--ys-on-accent)",
                         fontWeight: 700,
                         marginRight: "8px",
                       }}
@@ -17196,15 +17196,15 @@ export function BrandBriefStudio({
                             borderRadius: "999px",
                             border:
                               safeZonePlatform === pf.id
-                                ? "1px solid #3875C5"
-                                : "1px solid #E4E6EC",
+                                ? "1px solid var(--ys-accent)"
+                                : "1px solid var(--ys-line)",
                             background:
                               safeZonePlatform === pf.id
-                                ? "rgba(56, 117, 197, 0.1)"
-                                : "#FFFFFF",
+                                ? "color-mix(in srgb, var(--ys-accent) 10%, transparent)"
+                                : "var(--ys-surface)",
                             color:
                               safeZonePlatform === pf.id
-                                ? "#3063A7"
+                                ? "var(--ys-accent-text)"
                                 : "var(--ys-ink)",
                             fontSize: "10px",
                             fontWeight: 700,
@@ -17225,10 +17225,10 @@ export function BrandBriefStudio({
                         padding: "3px 9px",
                         borderRadius: "999px",
                         border: isSafeZoneOverlayOn
-                          ? "1px solid #3875C5"
-                          : "1px solid #E4E6EC",
-                        background: isSafeZoneOverlayOn ? "#3875C5" : "#FFFFFF",
-                        color: isSafeZoneOverlayOn ? "#FFFFFF" : "var(--ys-ink)",
+                          ? "1px solid var(--ys-accent)"
+                          : "1px solid var(--ys-line)",
+                        background: isSafeZoneOverlayOn ? "var(--ys-accent)" : "var(--ys-surface)",
+                        color: isSafeZoneOverlayOn ? "var(--ys-on-accent)" : "var(--ys-ink)",
                         fontSize: "10px",
                         fontWeight: 700,
                         cursor: "pointer",
@@ -17260,7 +17260,7 @@ export function BrandBriefStudio({
                       data-upscale-batch-queue-tray={batchUpscaleQueuedCount}
                       style={{ display: "inline-flex", alignItems: "center", gap: "6px" }}
                     >
-                      <span style={{ fontWeight: 700, color: "#3063A7" }}>
+                      <span style={{ fontWeight: 700, color: "var(--ys-accent-text)" }}>
                         {isKo
                           ? `일괄 업스케일 배치 큐 (${batchUpscaleQueuedCount}컷 대기 중)`
                           : `Batch Upscale Queue (${batchUpscaleQueuedCount} cuts ready)`}
@@ -17271,8 +17271,8 @@ export function BrandBriefStudio({
                         style={{
                           padding: "2px 7px",
                           borderRadius: "6px",
-                          border: "1px solid #E4E6EC",
-                          background: "#F8F9FB",
+                          border: "1px solid var(--ys-line)",
+                          background: "var(--ys-panel)",
                           color: "var(--ys-ink)",
                           fontSize: "10px",
                           fontWeight: 700,
@@ -17314,15 +17314,15 @@ export function BrandBriefStudio({
                             borderRadius: "6px",
                             border:
                               upscaleExportCodec === cd.id
-                                ? "1px solid #3875C5"
-                                : "1px solid #E4E6EC",
+                                ? "1px solid var(--ys-accent)"
+                                : "1px solid var(--ys-line)",
                             background:
                               upscaleExportCodec === cd.id
-                                ? "#3875C5"
-                                : "#FFFFFF",
+                                ? "var(--ys-accent)"
+                                : "var(--ys-surface)",
                             color:
                               upscaleExportCodec === cd.id
-                                ? "#FFFFFF"
+                                ? "var(--ys-surface)"
                                 : "var(--ys-ink)",
                             fontSize: "10px",
                             fontWeight: 700,
@@ -17359,19 +17359,19 @@ export function BrandBriefStudio({
                             padding: "6px 9px",
                             borderRadius: "8px",
                             border: active
-                              ? "1.5px solid #3875C5"
-                              : "1px solid #E4E6EC",
+                              ? "1.5px solid var(--ys-accent)"
+                              : "1px solid var(--ys-line)",
                             background: active
-                              ? "rgba(56, 117, 197, 0.08)"
-                              : "#F8F9FB",
+                              ? "color-mix(in srgb, var(--ys-accent) 8%, transparent)"
+                              : "var(--ys-panel)",
                             textAlign: "left",
                             cursor: "pointer",
                           }}
                         >
-                          <strong style={{ display: "block", fontSize: "10.5px", color: "#111114" }}>
+                          <strong style={{ display: "block", fontSize: "10.5px", color: "var(--ys-ink)" }}>
                             {isKo ? cut.titleKo : cut.titleEn}
                           </strong>
-                          <span style={{ fontSize: "9.5px", color: "#6B6F7B" }}>
+                          <span style={{ fontSize: "9.5px", color: "var(--ys-ink-muted)" }}>
                             {isKo ? cut.goalKo : cut.goalEn}
                           </span>
                         </button>
@@ -17413,9 +17413,9 @@ export function BrandBriefStudio({
                           style={{
                             padding: "2px 7px",
                             borderRadius: "999px",
-                            border: "1px solid #E4E6EC",
-                            background: cutTransitionMode === tr.id ? "#3875C5" : "#FFFFFF",
-                            color: cutTransitionMode === tr.id ? "#FFFFFF" : "#383B44",
+                            border: "1px solid var(--ys-line)",
+                            background: cutTransitionMode === tr.id ? "var(--ys-accent)" : "var(--ys-surface)",
+                            color: cutTransitionMode === tr.id ? "var(--ys-on-accent)" : "var(--ys-ink-secondary)",
                             fontSize: "9.5px",
                             fontWeight: 700,
                             cursor: "pointer",
@@ -17449,9 +17449,9 @@ export function BrandBriefStudio({
                           style={{
                             padding: "2px 7px",
                             borderRadius: "999px",
-                            border: "1px solid #E4E6EC",
-                            background: cinemaLutId === lut.id ? "#3875C5" : "#FFFFFF",
-                            color: cinemaLutId === lut.id ? "#FFFFFF" : "#383B44",
+                            border: "1px solid var(--ys-line)",
+                            background: cinemaLutId === lut.id ? "var(--ys-accent)" : "var(--ys-surface)",
+                            color: cinemaLutId === lut.id ? "var(--ys-on-accent)" : "var(--ys-ink-secondary)",
                             fontSize: "9.5px",
                             fontWeight: 700,
                             cursor: "pointer",
@@ -17469,7 +17469,7 @@ export function BrandBriefStudio({
                     >
                       <span
                         data-meta-encoder-pass-check
-                        style={{ color: "#3063A7", fontWeight: 700, fontFamily: "var(--ys-mono)" }}
+                        style={{ color: "var(--ys-accent-text)", fontWeight: 700, fontFamily: "var(--ys-mono)" }}
                       >
                         {isKo ? "CRF 14 · Keyint 30 · BT.709 통과" : "CRF 14 · Keyint 30 · BT.709 Pass"}
                       </span>
@@ -17478,8 +17478,8 @@ export function BrandBriefStudio({
                         style={{
                           padding: "2px 6px",
                           borderRadius: "6px",
-                          background: "rgba(56, 117, 197, 0.1)",
-                          color: "#3063A7",
+                          background: "color-mix(in srgb, var(--ys-accent) 10%, transparent)",
+                          color: "var(--ys-accent-text)",
                           fontWeight: 700,
                           fontSize: "9.5px",
                         }}
@@ -17514,10 +17514,10 @@ export function BrandBriefStudio({
                         flex: "1 1 240px",
                         padding: "4px 8px",
                         borderRadius: "6px",
-                        border: "1px solid #D5D9E2",
-                        background: "#FFFFFF",
+                        border: "1px solid var(--ys-line)",
+                        background: "var(--ys-surface)",
                         fontSize: "10.5px",
-                        color: "#111114",
+                        color: "var(--ys-ink)",
                       }}
                     />
                     <button
@@ -17531,9 +17531,9 @@ export function BrandBriefStudio({
                       style={{
                         padding: "3px 8px",
                         borderRadius: "6px",
-                        border: "1px solid #E4E6EC",
-                        background: "#F8F9FB",
-                        color: "#383B44",
+                        border: "1px solid var(--ys-line)",
+                        background: "var(--ys-panel)",
+                        color: "var(--ys-ink-secondary)",
                         fontSize: "10px",
                         fontWeight: 700,
                         cursor: "pointer",
@@ -17560,9 +17560,9 @@ export function BrandBriefStudio({
                       style={{
                         padding: "3px 8px",
                         borderRadius: "6px",
-                        border: "1px solid #3875C5",
-                        background: "#3875C5",
-                        color: "#FFFFFF",
+                        border: "1px solid var(--ys-accent)",
+                        background: "var(--ys-accent)",
+                        color: "var(--ys-on-accent)",
                         fontSize: "10px",
                         fontWeight: 700,
                         cursor: "pointer",
@@ -17657,7 +17657,7 @@ export function BrandBriefStudio({
                           <span
                             className="bw-chip"
                             style={{
-                              background: "rgba(17, 17, 20, 0.08)",
+                              background: "rgba(255, 255, 255, 0.1)",
                               color: "var(--ys-ink-secondary)",
                               fontWeight: 700,
                               fontSize: "10.5px",
@@ -17707,8 +17707,8 @@ export function BrandBriefStudio({
                           <span
                             className="bw-chip"
                             style={{
-                              background: "#3875C5",
-                              color: "#FFFFFF",
+                              background: "var(--ys-accent)",
+                              color: "var(--ys-on-accent)",
                               fontWeight: 700,
                               fontSize: "10.5px",
                             }}
@@ -17866,8 +17866,8 @@ export function BrandBriefStudio({
                       gap: "8px",
                       padding: "7px 10px",
                       borderRadius: "8px",
-                      background: "#0F1115",
-                      color: "#E5E7EB",
+                      background: "var(--ys-canvas)",
+                      color: "var(--ys-ink)",
                       fontSize: "10.5px",
                       fontFamily: "var(--ys-mono)",
                     }}
@@ -17892,9 +17892,9 @@ export function BrandBriefStudio({
                       style={{
                         padding: "3px 8px",
                         borderRadius: "6px",
-                        border: "1px solid rgba(56, 117, 197, 0.55)",
-                        background: copiedFfmpegFilter ? "#3875C5" : "rgba(56, 117, 197, 0.2)",
-                        color: "#FFFFFF",
+                        border: "1px solid color-mix(in srgb, var(--ys-accent) 55%, transparent)",
+                        background: copiedFfmpegFilter ? "var(--ys-accent)" : "color-mix(in srgb, var(--ys-accent) 20%, transparent)",
+                        color: "var(--ys-on-accent)",
                         fontSize: "10px",
                         fontWeight: 700,
                         cursor: "pointer",
@@ -18112,18 +18112,18 @@ export function BrandBriefStudio({
                         padding: "8px 10px",
                         borderRadius: "9px",
                         border: active
-                          ? "1.5px solid #3875C5"
+                          ? "1.5px solid var(--ys-accent)"
                           : "1px solid var(--ys-border)",
                         background: active
-                          ? "rgba(56, 117, 197, 0.08)"
-                          : "#FFFFFF",
+                          ? "color-mix(in srgb, var(--ys-accent) 8%, transparent)"
+                          : "var(--ys-surface)",
                         cursor: "pointer",
                         display: "flex",
                         flexDirection: "column",
                         gap: "2px",
                       }}
                     >
-                      <strong style={{ fontSize: "11.5px", color: active ? "#3063A7" : "var(--ys-ink)" }}>
+                      <strong style={{ fontSize: "11.5px", color: active ? "var(--ys-accent-text)" : "var(--ys-ink)" }}>
                         {isKo ? rStep.ko : rStep.en}
                       </strong>
                       <span style={{ fontSize: "10.5px", color: "var(--ys-ink-secondary)" }}>
@@ -18181,11 +18181,11 @@ export function BrandBriefStudio({
                           fontWeight: selectedCreatorSampleIdx === cr.idx ? 700 : 500,
                           background:
                             selectedCreatorSampleIdx === cr.idx
-                              ? "#3875C5"
-                              : "#FFFFFF",
+                              ? "var(--ys-accent)"
+                              : "var(--ys-surface)",
                           color:
                             selectedCreatorSampleIdx === cr.idx
-                              ? "#FFFFFF"
+                              ? "var(--ys-surface)"
                               : "var(--ys-ink)",
                         }}
                       >
@@ -18207,7 +18207,7 @@ export function BrandBriefStudio({
                     style={{
                       padding: "7px 9px",
                       borderRadius: "8px",
-                      background: "#FFFFFF",
+                      background: "var(--ys-surface)",
                       border: "1px solid var(--ys-border-subtle)",
                     }}
                   >
@@ -18224,7 +18224,7 @@ export function BrandBriefStudio({
                     style={{
                       padding: "7px 9px",
                       borderRadius: "8px",
-                      background: "#FFFFFF",
+                      background: "var(--ys-surface)",
                       border: "1px solid var(--ys-border-subtle)",
                     }}
                   >
@@ -18244,7 +18244,7 @@ export function BrandBriefStudio({
                       padding: "7px 9px",
                       borderRadius: "8px",
                       background: "var(--ys-brand-tint)",
-                      border: "1px solid rgba(56, 117, 197, 0.35)",
+                      border: "1px solid color-mix(in srgb, var(--ys-accent) 35%, transparent)",
                     }}
                   >
                     <strong style={{ display: "block", color: "var(--ys-brand-text)", fontSize: "10.5px" }}>
@@ -18270,12 +18270,12 @@ export function BrandBriefStudio({
                     gap: "6px",
                     padding: "6px 9px",
                     borderRadius: "8px",
-                    background: "#FFFFFF",
+                    background: "var(--ys-surface)",
                     border: "1px solid var(--ys-border-subtle)",
                     fontSize: "10.5px",
                   }}
                 >
-                  <span style={{ fontWeight: 700, color: "#3063A7", fontFamily: "var(--ys-mono)" }}>
+                  <span style={{ fontWeight: 700, color: "var(--ys-accent-text)", fontFamily: "var(--ys-mono)" }}>
                     {isKo
                       ? "3축 정면 각도 가이드: Pitch 4° · Yaw -2° · Roll 1° (±15° 권장 범위 내)"
                       : "3-Axis Face Angle Guide: Pitch 4° · Yaw -2° · Roll 1° (Within ±15°)"}
@@ -18303,11 +18303,11 @@ export function BrandBriefStudio({
                   style={{
                     padding: "7px 10px",
                     borderRadius: "9px",
-                    background: "#FFFFFF",
+                    background: "var(--ys-surface)",
                     border: "1px solid var(--ys-border-subtle)",
                   }}
                 >
-                  <strong style={{ display: "block", color: "#3063A7", marginBottom: "2px" }}>
+                  <strong style={{ display: "block", color: "var(--ys-accent-text)", marginBottom: "2px" }}>
                     {isKo
                       ? "셀카 1장 → 주인공 영상 변환 시뮬레이션 (비차단 권고 검수)"
                       : "1 Selfie → Hero Video Simulation (Non-blocking Advisory)"}
@@ -18325,12 +18325,12 @@ export function BrandBriefStudio({
                   style={{
                     padding: "7px 10px",
                     borderRadius: "9px",
-                    background: "rgba(56, 117, 197, 0.08)",
-                    border: "1px solid rgba(56, 117, 197, 0.28)",
+                    background: "color-mix(in srgb, var(--ys-accent) 8%, transparent)",
+                    border: "1px solid color-mix(in srgb, var(--ys-accent) 28%, transparent)",
                   }}
                 >
                   <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: "4px", marginBottom: "3px" }}>
-                    <strong style={{ color: "#3063A7" }}>
+                    <strong style={{ color: "var(--ys-accent-text)" }}>
                       {isKo ? "초상권·2차 광고 라이선스 원장 (§5.3)" : "Portrait & 2nd-Use Ad Rights Ledger"}
                     </strong>
                     <div style={{ display: "inline-flex", gap: "3px" }}>
@@ -18344,9 +18344,9 @@ export function BrandBriefStudio({
                           style={{
                             padding: "1px 6px",
                             borderRadius: "999px",
-                            border: "1px solid #E4E6EC",
-                            background: creatorRightsTerm === term ? "#3875C5" : "#FFFFFF",
-                            color: creatorRightsTerm === term ? "#FFFFFF" : "#383B44",
+                            border: "1px solid var(--ys-line)",
+                            background: creatorRightsTerm === term ? "var(--ys-accent)" : "var(--ys-surface)",
+                            color: creatorRightsTerm === term ? "var(--ys-on-accent)" : "var(--ys-ink-secondary)",
                             fontSize: "9.5px",
                             fontWeight: 700,
                             cursor: "pointer",
@@ -18370,11 +18370,11 @@ export function BrandBriefStudio({
                   style={{
                     padding: "7px 10px",
                     borderRadius: "9px",
-                    background: "#FFFFFF",
+                    background: "var(--ys-surface)",
                     border: "1px solid var(--ys-border-subtle)",
                   }}
                 >
-                  <strong style={{ display: "block", color: "#3063A7", marginBottom: "2px", fontFamily: "var(--ys-mono)" }}>
+                  <strong style={{ display: "block", color: "var(--ys-accent-text)", marginBottom: "2px", fontFamily: "var(--ys-mono)" }}>
                     {isKo
                       ? "첫 3초 훅(Hook) 이탈 방어 예측: 92점 (상위 4% 잔존율)"
                       : "First 3s Hook Retention Predictor: 92/100 (Top 4%)"}
@@ -18392,7 +18392,7 @@ export function BrandBriefStudio({
                   style={{
                     padding: "7px 10px",
                     borderRadius: "9px",
-                    background: "#FFFFFF",
+                    background: "var(--ys-surface)",
                     border: "1px solid var(--ys-border-subtle)",
                   }}
                 >
@@ -18422,12 +18422,12 @@ export function BrandBriefStudio({
                   style={{
                     padding: "7px 10px",
                     borderRadius: "9px",
-                    background: "rgba(56, 117, 197, 0.08)",
-                    border: "1px solid rgba(56, 117, 197, 0.28)",
+                    background: "color-mix(in srgb, var(--ys-accent) 8%, transparent)",
+                    border: "1px solid color-mix(in srgb, var(--ys-accent) 28%, transparent)",
                     fontSize: "10.5px",
                   }}
                 >
-                  <strong style={{ display: "block", color: "#3063A7", marginBottom: "2px" }}>
+                  <strong style={{ display: "block", color: "var(--ys-accent-text)", marginBottom: "2px" }}>
                     {isKo
                       ? "필수 해시태그·광고 표기 잠금 (공정위·플랫폼 규정 준수)"
                       : "Mandatory Hashtag & Ad-Disclosure Lock"}
@@ -18443,7 +18443,7 @@ export function BrandBriefStudio({
                   style={{
                     padding: "7px 10px",
                     borderRadius: "9px",
-                    background: "#FFFFFF",
+                    background: "var(--ys-surface)",
                     border: "1px solid var(--ys-border-subtle)",
                     fontSize: "10.5px",
                   }}
@@ -18472,7 +18472,7 @@ export function BrandBriefStudio({
                   gap: "6px",
                   padding: "7px 10px",
                   borderRadius: "9px",
-                  background: "#FFFFFF",
+                  background: "var(--ys-surface)",
                   border: "1px solid var(--ys-border-subtle)",
                   fontSize: "10.5px",
                 }}
@@ -18499,9 +18499,9 @@ export function BrandBriefStudio({
                       style={{
                         padding: "2px 8px",
                         borderRadius: "999px",
-                        border: "1px solid #E4E6EC",
-                        background: creatorPreviewAspect === asp.id ? "#3875C5" : "#F8F9FB",
-                        color: creatorPreviewAspect === asp.id ? "#FFFFFF" : "#383B44",
+                        border: "1px solid var(--ys-line)",
+                        background: creatorPreviewAspect === asp.id ? "var(--ys-accent)" : "var(--ys-panel)",
+                        color: creatorPreviewAspect === asp.id ? "var(--ys-on-accent)" : "var(--ys-ink-secondary)",
                         fontSize: "10px",
                         fontWeight: 700,
                         cursor: "pointer",
@@ -18663,7 +18663,7 @@ export function BrandBriefStudio({
                   gap: "8px",
                   padding: "7px 10px",
                   borderRadius: "9px",
-                  background: "#FFFFFF",
+                  background: "var(--ys-surface)",
                   border: "1px solid var(--ys-border-subtle)",
                 }}
               >
@@ -18693,11 +18693,11 @@ export function BrandBriefStudio({
                         fontWeight: distributionPlatformFilter === ch.id ? 700 : 500,
                         background:
                           distributionPlatformFilter === ch.id
-                            ? "#3875C5"
+                            ? "var(--ys-accent)"
                             : "var(--ys-subtle-bg)",
                         color:
                           distributionPlatformFilter === ch.id
-                            ? "#FFFFFF"
+                            ? "var(--ys-surface)"
                             : "var(--ys-ink)",
                       }}
                     >
@@ -18712,7 +18712,7 @@ export function BrandBriefStudio({
                     style={{
                       fontSize: "10.5px",
                       fontWeight: 700,
-                      color: "#3063A7",
+                      color: "var(--ys-accent-text)",
                       fontFamily: "var(--ys-mono)",
                     }}
                   >
@@ -18734,9 +18734,9 @@ export function BrandBriefStudio({
                     style={{
                       padding: "2px 8px",
                       borderRadius: "6px",
-                      border: "1px solid #3875C5",
-                      background: copiedAdAuthCode ? "#3875C5" : "rgba(56, 117, 197, 0.1)",
-                      color: copiedAdAuthCode ? "#FFFFFF" : "#3063A7",
+                      border: "1px solid var(--ys-accent)",
+                      background: copiedAdAuthCode ? "var(--ys-accent)" : "color-mix(in srgb, var(--ys-accent) 10%, transparent)",
+                      color: copiedAdAuthCode ? "var(--ys-on-accent)" : "var(--ys-accent-text)",
                       fontSize: "10px",
                       fontWeight: 700,
                       cursor: "pointer",
@@ -18764,7 +18764,7 @@ export function BrandBriefStudio({
                   gap: "6px",
                   padding: "7px 10px",
                   borderRadius: "9px",
-                  background: "#FFFFFF",
+                  background: "var(--ys-surface)",
                   border: "1px solid var(--ys-border-subtle)",
                   fontSize: "10.5px",
                 }}
@@ -18801,11 +18801,11 @@ export function BrandBriefStudio({
                       style={{
                         padding: "2px 8px",
                         borderRadius: "999px",
-                        border: "1px solid #E4E6EC",
+                        border: "1px solid var(--ys-line)",
                         background:
-                          seedingAllocationPreset === alloc.id ? "#3875C5" : "#F8F9FB",
+                          seedingAllocationPreset === alloc.id ? "var(--ys-accent)" : "var(--ys-panel)",
                         color:
-                          seedingAllocationPreset === alloc.id ? "#FFFFFF" : "#383B44",
+                          seedingAllocationPreset === alloc.id ? "var(--ys-on-accent)" : "var(--ys-ink-secondary)",
                         fontSize: "10px",
                         fontWeight: 700,
                         cursor: "pointer",
@@ -18834,7 +18834,7 @@ export function BrandBriefStudio({
                   style={{
                     padding: "7px 9px",
                     borderRadius: "8px",
-                    background: "#FFFFFF",
+                    background: "var(--ys-surface)",
                     border: "1px solid var(--ys-border-subtle)",
                   }}
                 >
@@ -18851,7 +18851,7 @@ export function BrandBriefStudio({
                   style={{
                     padding: "7px 9px",
                     borderRadius: "8px",
-                    background: "#FFFFFF",
+                    background: "var(--ys-surface)",
                     border: "1px solid var(--ys-border-subtle)",
                   }}
                 >
@@ -18869,7 +18869,7 @@ export function BrandBriefStudio({
                     padding: "7px 9px",
                     borderRadius: "8px",
                     background: "var(--ys-brand-tint)",
-                    border: "1px solid rgba(56, 117, 197, 0.35)",
+                    border: "1px solid color-mix(in srgb, var(--ys-accent) 35%, transparent)",
                   }}
                 >
                   <span style={{ display: "block", fontSize: "10px", color: "var(--ys-brand-text)", fontWeight: 700 }}>
@@ -18902,14 +18902,14 @@ export function BrandBriefStudio({
                   gap: "6px",
                   padding: "7px 10px",
                   borderRadius: "9px",
-                  background: "rgba(56, 117, 197, 0.08)",
-                  border: "1px solid rgba(56, 117, 197, 0.28)",
+                  background: "color-mix(in srgb, var(--ys-accent) 8%, transparent)",
+                  border: "1px solid color-mix(in srgb, var(--ys-accent) 28%, transparent)",
                   fontSize: "10.5px",
                 }}
               >
                 <span
                   data-roi-savings-vs-meta-ads
-                  style={{ fontWeight: 700, color: "#3063A7", fontFamily: "var(--ys-mono)" }}
+                  style={{ fontWeight: 700, color: "var(--ys-accent-text)", fontFamily: "var(--ys-mono)" }}
                 >
                   {isKo
                     ? "일반 피드 광고(CPV 35원) 대비 -87.1% 조회당 비용 절감 · 예상 오가닉 참여율(ER) 4.8% · 파생 콘텐츠 300건+ 확산 구조"
@@ -18950,9 +18950,9 @@ export function BrandBriefStudio({
                       style={{
                         padding: "2px 8px",
                         borderRadius: "999px",
-                        border: "1px solid #E4E6EC",
-                        background: creatorTierMixPreset === mix.id ? "#3875C5" : "#FFFFFF",
-                        color: creatorTierMixPreset === mix.id ? "#FFFFFF" : "#383B44",
+                        border: "1px solid var(--ys-line)",
+                        background: creatorTierMixPreset === mix.id ? "var(--ys-accent)" : "var(--ys-surface)",
+                        color: creatorTierMixPreset === mix.id ? "var(--ys-on-accent)" : "var(--ys-ink-secondary)",
                         fontSize: "10px",
                         fontWeight: 700,
                         cursor: "pointer",
@@ -18998,8 +18998,8 @@ export function BrandBriefStudio({
                       style={{
                         padding: "2px 6px",
                         borderRadius: "4px",
-                        background: "#3875C5",
-                        color: "#FFFFFF",
+                        background: "var(--ys-accent)",
+                        color: "var(--ys-on-accent)",
                         fontWeight: 700,
                         fontSize: "10px",
                       }}
@@ -19030,14 +19030,14 @@ export function BrandBriefStudio({
                     style={{
                       padding: "7px 9px",
                       borderRadius: "8px",
-                      background: "#FFFFFF",
+                      background: "var(--ys-surface)",
                       border: "1px solid var(--ys-border-subtle)",
                     }}
                   >
                     <strong style={{ display: "block", color: "var(--ys-ink)", marginBottom: "2px" }}>
                       {isKo ? cand.categoryKo : cand.categoryEn}
                     </strong>
-                    <span style={{ display: "block", color: "#3063A7", fontWeight: 700, fontFamily: "var(--ys-mono)" }}>
+                    <span style={{ display: "block", color: "var(--ys-accent-text)", fontWeight: 700, fontFamily: "var(--ys-mono)" }}>
                       {isKo ? cand.followerTierKo : cand.followerTierEn} · Hook {cand.avgHookRetention}
                     </span>
                     <span style={{ color: "var(--ys-ink-secondary)" }}>
@@ -19061,11 +19061,11 @@ export function BrandBriefStudio({
                   style={{
                     padding: "7px 10px",
                     borderRadius: "8px",
-                    background: "#FFFFFF",
+                    background: "var(--ys-surface)",
                     border: "1px solid var(--ys-border-subtle)",
                   }}
                 >
-                  <strong style={{ display: "block", color: "#3063A7", marginBottom: "2px" }}>
+                  <strong style={{ display: "block", color: "var(--ys-accent-text)", marginBottom: "2px" }}>
                     {isKo ? "TikTok Spark Ads · Meta 파트너십 코드 시뮬레이터" : "Spark Ads & Meta Partnership Code Simulator"}
                   </strong>
                   <span style={{ color: "var(--ys-ink-secondary)", fontFamily: "var(--ys-mono)" }}>
@@ -19081,11 +19081,11 @@ export function BrandBriefStudio({
                   style={{
                     padding: "7px 10px",
                     borderRadius: "8px",
-                    background: "rgba(56, 117, 197, 0.08)",
-                    border: "1px solid rgba(56, 117, 197, 0.28)",
+                    background: "color-mix(in srgb, var(--ys-accent) 8%, transparent)",
+                    border: "1px solid color-mix(in srgb, var(--ys-accent) 28%, transparent)",
                   }}
                 >
-                  <strong style={{ display: "block", color: "#3063A7", marginBottom: "2px", fontFamily: "var(--ys-mono)" }}>
+                  <strong style={{ display: "block", color: "var(--ys-accent-text)", marginBottom: "2px", fontFamily: "var(--ys-mono)" }}>
                     {isKo
                       ? "통합 어트리뷰션 퍼널: 예상 CTR 2.9% · 전환 CPA 6,400원"
                       : "Attribution Funnel: Est. CTR 2.9% · Blended CPA KRW 6,400"}
@@ -19102,7 +19102,7 @@ export function BrandBriefStudio({
                   style={{
                     padding: "7px 10px",
                     borderRadius: "8px",
-                    background: "#FFFFFF",
+                    background: "var(--ys-surface)",
                     border: "1px solid var(--ys-border-subtle)",
                   }}
                 >
@@ -19111,7 +19111,7 @@ export function BrandBriefStudio({
                   </strong>
                   <span
                     data-sla-milestone-chip="100_percent_on_time"
-                    style={{ color: "#3063A7", fontWeight: 700 }}
+                    style={{ color: "var(--ys-accent-text)", fontWeight: 700 }}
                   >
                     {isKo
                       ? "D+14 기한 내 100% 게시 보장 · 미이행 인원 발생 시 예비 코호트 즉시 대체"
@@ -19124,13 +19124,13 @@ export function BrandBriefStudio({
                   style={{
                     padding: "7px 10px",
                     borderRadius: "8px",
-                    background: "#FFFFFF",
+                    background: "var(--ys-surface)",
                     border: "1px solid var(--ys-border-subtle)",
                   }}
                 >
                   <strong
                     data-total-reach-counter="2000000_plus"
-                    style={{ display: "block", color: "#3063A7", marginBottom: "2px", fontFamily: "var(--ys-mono)" }}
+                    style={{ display: "block", color: "var(--ys-accent-text)", marginBottom: "2px", fontFamily: "var(--ys-mono)" }}
                   >
                     {isKo
                       ? "검증된 글로벌 AI 플랫폼 실적 기준: 영상 9편 · 200만 뷰+ · 파생 오가닉 300건+"
@@ -19154,7 +19154,7 @@ export function BrandBriefStudio({
                   gap: "6px",
                   padding: "6px 10px",
                   borderRadius: "8px",
-                  background: "#FFFFFF",
+                  background: "var(--ys-surface)",
                   border: "1px solid var(--ys-border-subtle)",
                   fontSize: "10.5px",
                 }}
@@ -19171,9 +19171,9 @@ export function BrandBriefStudio({
                   style={{
                     padding: "2px 9px",
                     borderRadius: "999px",
-                    border: "1px solid #3875C5",
-                    background: "rgba(56, 117, 197, 0.1)",
-                    color: "#3063A7",
+                    border: "1px solid var(--ys-accent)",
+                    background: "color-mix(in srgb, var(--ys-accent) 10%, transparent)",
+                    color: "var(--ys-accent-text)",
                     fontSize: "10px",
                     fontWeight: 700,
                     cursor: "pointer",
@@ -19354,7 +19354,7 @@ export function BrandBriefStudio({
                     gap: "8px",
                     padding: "6px 8px",
                     borderRadius: "7px",
-                    background: "#FFFFFF",
+                    background: "var(--ys-surface)",
                     border: "1px solid var(--ys-border-subtle)",
                     opacity: audioStemMuted.bgm ? 0.55 : 1,
                   }}
@@ -19379,9 +19379,9 @@ export function BrandBriefStudio({
                       style={{
                         padding: "2px 6px",
                         borderRadius: "4px",
-                        border: "1px solid #E4E6EC",
-                        background: "#F8F9FB",
-                        color: "#3063A7",
+                        border: "1px solid var(--ys-line)",
+                        background: "var(--ys-panel)",
+                        color: "var(--ys-accent-text)",
                         fontSize: "10px",
                         fontWeight: 700,
                         cursor: "pointer",
@@ -19400,9 +19400,9 @@ export function BrandBriefStudio({
                       style={{
                         padding: "2px 6px",
                         borderRadius: "4px",
-                        border: "1px solid #E4E6EC",
-                        background: audioStemMuted.bgm ? "#3875C5" : "#F8F9FB",
-                        color: audioStemMuted.bgm ? "#FFFFFF" : "#383B44",
+                        border: "1px solid var(--ys-line)",
+                        background: audioStemMuted.bgm ? "var(--ys-accent)" : "var(--ys-panel)",
+                        color: audioStemMuted.bgm ? "var(--ys-on-accent)" : "var(--ys-ink-secondary)",
                         fontSize: "10px",
                         fontWeight: 700,
                         cursor: "pointer",
@@ -19426,7 +19426,7 @@ export function BrandBriefStudio({
                     gap: "8px",
                     padding: "6px 8px",
                     borderRadius: "7px",
-                    background: "#FFFFFF",
+                    background: "var(--ys-surface)",
                     border: "1px solid var(--ys-border-subtle)",
                     opacity: audioStemMuted.foley ? 0.55 : 1,
                   }}
@@ -19452,9 +19452,9 @@ export function BrandBriefStudio({
                       style={{
                         padding: "2px 6px",
                         borderRadius: "4px",
-                        border: "1px solid #E4E6EC",
-                        background: audioStemMuted.foley ? "#3875C5" : "#F8F9FB",
-                        color: audioStemMuted.foley ? "#FFFFFF" : "#383B44",
+                        border: "1px solid var(--ys-line)",
+                        background: audioStemMuted.foley ? "var(--ys-accent)" : "var(--ys-panel)",
+                        color: audioStemMuted.foley ? "var(--ys-on-accent)" : "var(--ys-ink-secondary)",
                         fontSize: "10px",
                         fontWeight: 700,
                         cursor: "pointer",
@@ -19478,7 +19478,7 @@ export function BrandBriefStudio({
                     gap: "8px",
                     padding: "6px 8px",
                     borderRadius: "7px",
-                    background: "#FFFFFF",
+                    background: "var(--ys-surface)",
                     border: "1px solid var(--ys-border-subtle)",
                     opacity: audioStemMuted.voice ? 0.55 : 1,
                   }}
@@ -19507,9 +19507,9 @@ export function BrandBriefStudio({
                       style={{
                         padding: "2px 6px",
                         borderRadius: "4px",
-                        border: "1px solid #E4E6EC",
-                        background: audioStemMuted.voice ? "#3875C5" : "#F8F9FB",
-                        color: audioStemMuted.voice ? "#FFFFFF" : "#383B44",
+                        border: "1px solid var(--ys-line)",
+                        background: audioStemMuted.voice ? "var(--ys-accent)" : "var(--ys-panel)",
+                        color: audioStemMuted.voice ? "var(--ys-on-accent)" : "var(--ys-ink-secondary)",
                         fontSize: "10px",
                         fontWeight: 700,
                         cursor: "pointer",
@@ -19536,7 +19536,7 @@ export function BrandBriefStudio({
                     gap: "6px",
                     padding: "6px 8px",
                     borderRadius: "7px",
-                    background: "#FFFFFF",
+                    background: "var(--ys-surface)",
                     border: "1px solid var(--ys-border-subtle)",
                   }}
                 >
@@ -19570,9 +19570,9 @@ export function BrandBriefStudio({
                         style={{
                           padding: "2px 8px",
                           borderRadius: "999px",
-                          border: "1px solid #E4E6EC",
-                          background: audioLoopMode === mode.id ? "#3875C5" : "#F8F9FB",
-                          color: audioLoopMode === mode.id ? "#FFFFFF" : "#383B44",
+                          border: "1px solid var(--ys-line)",
+                          background: audioLoopMode === mode.id ? "var(--ys-accent)" : "var(--ys-panel)",
+                          color: audioLoopMode === mode.id ? "var(--ys-on-accent)" : "var(--ys-ink-secondary)",
                           fontSize: "10px",
                           fontWeight: 700,
                           cursor: "pointer",
@@ -19599,9 +19599,9 @@ export function BrandBriefStudio({
                         style={{
                           padding: "2px 7px",
                           borderRadius: "999px",
-                          border: "1px solid #E4E6EC",
-                          background: audioDurationSyncSec === dur ? "#3875C5" : "#F8F9FB",
-                          color: audioDurationSyncSec === dur ? "#FFFFFF" : "#383B44",
+                          border: "1px solid var(--ys-line)",
+                          background: audioDurationSyncSec === dur ? "var(--ys-accent)" : "var(--ys-panel)",
+                          color: audioDurationSyncSec === dur ? "var(--ys-on-accent)" : "var(--ys-ink-secondary)",
                           fontSize: "10px",
                           fontWeight: 700,
                           cursor: "pointer",
@@ -19623,15 +19623,15 @@ export function BrandBriefStudio({
                     gap: "6px",
                     padding: "6px 8px",
                     borderRadius: "7px",
-                    background: "rgba(56, 117, 197, 0.06)",
-                    border: "1px solid rgba(56, 117, 197, 0.25)",
+                    background: "color-mix(in srgb, var(--ys-accent) 6%, transparent)",
+                    border: "1px solid color-mix(in srgb, var(--ys-accent) 25%, transparent)",
                   }}
                 >
                   <div
                     data-voiceover-language-selector={voiceoverLang}
                     style={{ display: "inline-flex", alignItems: "center", gap: "4px" }}
                   >
-                    <span style={{ fontSize: "10.5px", fontWeight: 700, color: "#3063A7" }}>
+                    <span style={{ fontSize: "10.5px", fontWeight: 700, color: "var(--ys-accent-text)" }}>
                       {isKo ? "내레이션 다국어 톤:" : "Voiceover Language:"}
                     </span>
                     {(
@@ -19650,9 +19650,9 @@ export function BrandBriefStudio({
                         style={{
                           padding: "2px 8px",
                           borderRadius: "999px",
-                          border: "1px solid #E4E6EC",
-                          background: voiceoverLang === lang.id ? "#3875C5" : "#FFFFFF",
-                          color: voiceoverLang === lang.id ? "#FFFFFF" : "#383B44",
+                          border: "1px solid var(--ys-line)",
+                          background: voiceoverLang === lang.id ? "var(--ys-accent)" : "var(--ys-surface)",
+                          color: voiceoverLang === lang.id ? "var(--ys-on-accent)" : "var(--ys-ink-secondary)",
                           fontSize: "10px",
                           fontWeight: 700,
                           cursor: "pointer",
@@ -19672,8 +19672,8 @@ export function BrandBriefStudio({
                       flex: "1 1 260px",
                       padding: "4px 8px",
                       borderRadius: "6px",
-                      border: "1px solid #D5D9E2",
-                      background: "#FFFFFF",
+                      border: "1px solid var(--ys-line)",
+                      background: "var(--ys-surface)",
                       fontSize: "11px",
                       color: "var(--ys-ink)",
                     }}
@@ -19692,7 +19692,7 @@ export function BrandBriefStudio({
                     gap: "6px",
                     padding: "6px 8px",
                     borderRadius: "7px",
-                    background: "#FFFFFF",
+                    background: "var(--ys-surface)",
                     border: "1px solid var(--ys-border-subtle)",
                   }}
                 >
@@ -19716,11 +19716,11 @@ export function BrandBriefStudio({
                         style={{
                           padding: "2px 8px",
                           borderRadius: "999px",
-                          border: "1px solid #E4E6EC",
+                          border: "1px solid var(--ys-line)",
                           background:
-                            activeFoleyCueSec === cue.sec ? "#3875C5" : "#F8F9FB",
+                            activeFoleyCueSec === cue.sec ? "var(--ys-accent)" : "var(--ys-panel)",
                           color:
-                            activeFoleyCueSec === cue.sec ? "#FFFFFF" : "#383B44",
+                            activeFoleyCueSec === cue.sec ? "var(--ys-on-accent)" : "var(--ys-ink-secondary)",
                           fontSize: "10px",
                           fontWeight: 700,
                           cursor: "pointer",
@@ -19775,12 +19775,12 @@ export function BrandBriefStudio({
                     gap: "6px",
                     padding: "6px 8px",
                     borderRadius: "7px",
-                    background: "#FFFFFF",
+                    background: "var(--ys-surface)",
                     border: "1px solid var(--ys-border-subtle)",
                     fontSize: "10.5px",
                   }}
                 >
-                  <span style={{ fontWeight: 700, color: "#3063A7", fontFamily: "var(--ys-mono)" }}>
+                  <span style={{ fontWeight: 700, color: "var(--ys-accent-text)", fontFamily: "var(--ys-mono)" }}>
                     {isKo
                       ? "파형 비트-스냅(Beat-Snap) 엔진: 0.0s · 1.8s · 3.6s · 5.0s 컷 전환 트랜지언트 0ms 정렬"
                       : "Waveform Beat-Snap Engine: 0.0s · 1.8s · 3.6s · 5.0s Cut Transient 0ms Lock"}
@@ -19808,9 +19808,9 @@ export function BrandBriefStudio({
                         style={{
                           padding: "2px 7px",
                           borderRadius: "999px",
-                          border: "1px solid #E4E6EC",
-                          background: voiceoverTone === tone.id ? "#3875C5" : "#F8F9FB",
-                          color: voiceoverTone === tone.id ? "#FFFFFF" : "#383B44",
+                          border: "1px solid var(--ys-line)",
+                          background: voiceoverTone === tone.id ? "var(--ys-accent)" : "var(--ys-panel)",
+                          color: voiceoverTone === tone.id ? "var(--ys-on-accent)" : "var(--ys-ink-secondary)",
                           fontSize: "10px",
                           fontWeight: 700,
                           cursor: "pointer",
@@ -19832,12 +19832,12 @@ export function BrandBriefStudio({
                     gap: "6px",
                     padding: "6px 8px",
                     borderRadius: "7px",
-                    background: "rgba(56, 117, 197, 0.08)",
-                    border: "1px solid rgba(56, 117, 197, 0.28)",
+                    background: "color-mix(in srgb, var(--ys-accent) 8%, transparent)",
+                    border: "1px solid color-mix(in srgb, var(--ys-accent) 28%, transparent)",
                     fontSize: "10.5px",
                   }}
                 >
-                  <span style={{ fontWeight: 700, color: "#3063A7" }}>
+                  <span style={{ fontWeight: 700, color: "var(--ys-accent-text)" }}>
                     {isKo
                       ? "글로벌 상업 광고 음원 라이선스 인증서 (영구·전 매체 유료 광고 집행 보증)"
                       : "Global Commercial Music License Certificate (Perpetual All-Media Paid Ads)"}
@@ -19855,9 +19855,9 @@ export function BrandBriefStudio({
                     style={{
                       padding: "2px 8px",
                       borderRadius: "6px",
-                      border: "1px solid #3875C5",
-                      background: "#FFFFFF",
-                      color: "#3063A7",
+                      border: "1px solid var(--ys-accent)",
+                      background: "var(--ys-surface)",
+                      color: "var(--ys-accent-text)",
                       fontSize: "10px",
                       fontWeight: 700,
                       cursor: "pointer",
@@ -19917,9 +19917,9 @@ export function BrandBriefStudio({
                   }
                   style={{
                     fontWeight: 700,
-                    background: "#3875C5",
-                    color: "#FFFFFF",
-                    border: "1px solid #3875C5",
+                    background: "var(--ys-accent)",
+                    color: "var(--ys-on-accent)",
+                    border: "1px solid var(--ys-accent)",
                   }}
                 >
                   {isKo
@@ -20462,8 +20462,8 @@ export function BrandBriefStudio({
                 style={{
                   padding: "2px 8px",
                   borderRadius: "999px",
-                  background: "rgba(56, 117, 197, 0.35)",
-                  border: "1px solid rgba(56, 117, 197, 0.85)",
+                  background: "color-mix(in srgb, var(--ys-accent) 35%, transparent)",
+                  border: "1px solid color-mix(in srgb, var(--ys-accent) 85%, transparent)",
                   color: "#FFFFFF",
                   fontSize: "10.5px",
                   fontWeight: 700,
@@ -21013,8 +21013,8 @@ export function BrandBriefStudio({
                 style={{
                   padding: "3px 8px",
                   borderRadius: "999px",
-                  border: "1px solid rgba(56, 117, 197, 0.75)",
-                  background: "rgba(56, 117, 197, 0.25)",
+                  border: "1px solid color-mix(in srgb, var(--ys-accent) 75%, transparent)",
+                  background: "color-mix(in srgb, var(--ys-accent) 25%, transparent)",
                   color: "#FFFFFF",
                   fontSize: "10.5px",
                   fontWeight: 700,
@@ -21064,7 +21064,7 @@ export function BrandBriefStudio({
                         borderRadius: "6px",
                         objectFit: "cover",
                         flexShrink: 0,
-                        border: "1px solid rgba(56, 117, 197, 0.8)",
+                        border: "1px solid color-mix(in srgb, var(--ys-accent) 80%, transparent)",
                       }}
                     />
                     <div style={{ minWidth: 0, flex: 1 }}>
@@ -21072,7 +21072,7 @@ export function BrandBriefStudio({
                         style={{
                           fontSize: "10px",
                           fontWeight: 700,
-                          color: "#93C5FD",
+                          color: "var(--ys-accent-text)",
                           whiteSpace: "nowrap",
                           overflow: "hidden",
                           textOverflow: "ellipsis",
@@ -21344,8 +21344,8 @@ export function BrandBriefStudio({
                     padding: "4px 10px",
                     borderRadius: "999px",
                     border: 0,
-                    background: "#3875C5",
-                    color: "#FFFFFF",
+                    background: "var(--ys-accent)",
+                    color: "var(--ys-on-accent)",
                     fontSize: "11px",
                     fontWeight: 700,
                     cursor: "pointer",

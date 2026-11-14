@@ -56,10 +56,12 @@ export const INTERNAL_TERMS: readonly RegExp[] = [
 const GEAR_BRANDS =
   /\b(?:kodak|fujifilm|fuji|ilford|portra|cinestill|panavision|arri|alexa|red komodo|canon|nikon|sony|leica|hasselblad|zeiss|cooke|sigma art|profoto|godox|aputure)\b/i;
 
-/** Filler praise the model may not add. Removed when the customer did not write it. */
+/** Filler praise and banned plastic-skin / shortcut tokens the model may not add. Removed when the customer did not write them. */
 const FILLER: readonly RegExp[] = [
   /\b(?:stunning|breathtaking|masterpiece|award[- ]winning|best quality|high quality|ultra[- ]detailed|highly detailed|hyper[- ]?realistic|photorealistic masterpiece|trending on artstation|octane render|unreal engine)\b/gi,
   /\b(?:4k|8k|16k|uhd)\b/gi,
+  /\b(?:poreless porcelain(?:\s+glass[- ]skin)?|glass[- ]skin|dewy highlighter(?:\s+glow)?|silky[- ]smooth poreless skin|beauty[- ]diffused xenon flash)\b/gi,
+  /\bsame as (?:the )?original video\b/gi,
 ];
 
 /** Lighting equipment, rewritten as what the light looks like. */

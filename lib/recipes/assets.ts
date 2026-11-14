@@ -99,7 +99,7 @@ export async function storeMakerFile(sql: SqlRunner, store: RenderStore, input: 
   const existing = await sql.query<AssetRow>('select id,role,kind,mime,bytes,created_at from platform_format_assets where format_id=$1 and role=$2 and sha256=$3', [input.formatId, input.role, sha]);
   if (existing.rows[0]) {
     if (typeof input.containsPerson === 'boolean') {
-      try { await sql.query('update platform_format_assets set contains_person=$2 where id=$1', [existing.rows[0].id, input.containsPerson]); } catch { /* pre-0087 */ }
+      try { await sql.query('update platform_format_assets set contains_person=$2 where id=$1', [existing.rows[0].id, input.containsPerson]); } catch { /* pre-0088 */ }
     }
     return { ok: true, asset: { ...toAsset(existing.rows[0]), containsPerson: input.containsPerson ?? existing.rows[0].contains_person ?? false }, unchanged: true };
   }
@@ -115,7 +115,7 @@ export async function storeMakerFile(sql: SqlRunner, store: RenderStore, input: 
     returning id,role,kind,mime,bytes,created_at`, [id, input.formatId, input.userId, input.role, kind, key, file.mime, file.bytes.byteLength, sha]);
   const containsPerson = Boolean(input.containsPerson);
   if (containsPerson) {
-    try { await sql.query('update platform_format_assets set contains_person=$2 where id=$1', [id, true]); } catch { /* pre-0087 */ }
+    try { await sql.query('update platform_format_assets set contains_person=$2 where id=$1', [id, true]); } catch { /* pre-0088 */ }
   }
   return { ok: true, asset: { ...toAsset(rows[0]!), containsPerson }, unchanged: false };
 }

@@ -146,7 +146,7 @@ describe('image cost floor — one price per engine (founder, 2026-10-21)', () =
       // Measured 2026-10-24 ($0.094 with the selfie): the 5% floor is 159원, lifted to the 200원 minimum.
       'gpt-image-2.5-flare': 200,
       'gpt-image-2.5-sunburst': 1100,
-      'seedream-5.0-pro': 200,
+      'seedream-5.5': 200,
       // The 5% floor is 100원; the founder's 200원 minimum per image lifts it (2026-10-21).
       'seedream-5.0-lite': 200,
       // R2: ≈73원 at 2K with one reference — the same 200원 minimum applies (PLATFORM-2.0 §9.2).
@@ -173,8 +173,8 @@ describe('image cost floor — one price per engine (founder, 2026-10-21)', () =
     }
   });
 
-  it('charges Seedream Pro nothing for the first reference and $0.003 from the second', () => {
-    expect(imageCostFloor({ engine: 'seedream-5.0-pro', referenceImages: 1 }).providerUsd).toBe(0.09);
-    expect(imageCostFloor({ engine: 'seedream-5.0-pro', referenceImages: 3 }).providerUsd).toBe(0.096);
+  it('charges Seedream 5.5 $0.008 per reference image (no free reference)', () => {
+    expect(imageCostFloor({ engine: 'seedream-5.5', referenceImages: 1 }).providerUsd).toBe(0.043);
+    expect(imageCostFloor({ engine: 'seedream-5.5', referenceImages: 3 }).providerUsd).toBe(0.059);
   });
 });

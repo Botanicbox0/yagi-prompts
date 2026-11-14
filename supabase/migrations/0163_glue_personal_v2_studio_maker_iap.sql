@@ -1,4 +1,4 @@
--- CLOUD APPLICATION REQUIRED — TWINGS · glue migration 0162 — Store IAP deny-all RLS posture (pairs with 0087)
+-- CLOUD APPLICATION REQUIRED — TWINGS · glue migration 0163 — Store IAP deny-all RLS posture (pairs with 0088)
 -- Browser/anon clients never query or mutate store_iap_wallets or store_iap_transactions directly;
 -- verified server API routes run on the service role after receipt verification.
 do $$ declare t text; begin

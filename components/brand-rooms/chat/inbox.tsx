@@ -186,8 +186,8 @@ export function RoomInbox({
                     fontSize: 12,
                     fontWeight: active ? 600 : 500,
                     cursor: "pointer",
-                    background: active ? "#FFFFFF" : "transparent",
-                    color: active ? "var(--ys-ink, #111827)" : "var(--ys-muted, #6B7280)",
+                    background: active ? "var(--ys-active-bg, #ededed)" : "transparent",
+                    color: active ? "var(--ys-active-fg, #09090b)" : "var(--ys-ink-secondary)",
                   }}
                 >
                   {copy.inbox.filters[mode]}

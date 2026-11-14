@@ -107,7 +107,7 @@ export async function selfPublishFormat(
       const keyframes = parseVideoKeyframes(kfRows[0]?.keyframes ?? null) ?? defaultTimelineKeyframes(film.params.duration);
       await tx.query('update prompt_items set keyframes=$2::jsonb where id=$1', [templateId, JSON.stringify(keyframes)]);
     } catch {
-      // Pre-0087 schemas lack prompt_items.keyframes; publish still succeeds and runtime falls back to default beats.
+      // Pre-0088 schemas lack prompt_items.keyframes; publish still succeeds and runtime falls back to default beats.
     }
   }
   await tx.query("update platform_formats set status='accepted',template_id=$2,rights_at=coalesce(rights_at,now()),updated_at=now() where id=$1", [row.id, templateId]);

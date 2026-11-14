@@ -9,7 +9,7 @@
  */
 import { z } from 'zod';
 import type { StudioStorageQuotaView } from '@/lib/brands/storage-quota-format';
-import { STUDIO_IMAGE_QUALITIES, type StudioImageQuality } from './models';
+import { STUDIO_IMAGE_BACKGROUNDS, STUDIO_IMAGE_QUALITIES, type StudioImageQuality } from './models';
 
 export type { StudioStorageQuotaView };
 
@@ -188,6 +188,8 @@ export const ImageJobSchema = z.object({
   count: z.number().int().min(1).max(STUDIO_LIMITS.imageCountMax).default(1),
   /** Only for models that declare `qualities` (GPT Image); the planner refuses it for any other. */
   quality: z.enum(STUDIO_IMAGE_QUALITIES).optional(),
+  /** Only for models that declare `supportsTransparentBackground` (Seedream 5.5); refused otherwise. */
+  background: z.enum(STUDIO_IMAGE_BACKGROUNDS).optional(),
 });
 
 export const RegionEditJobSchema = z.object({

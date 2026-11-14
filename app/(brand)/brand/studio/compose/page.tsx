@@ -5,6 +5,8 @@ import { studioRouteOrShowroom } from '@/components/brand-studio/route-context';
 import { StudioShowroom } from '@/components/brand-studio/studio-showroom';
 import { VideoComposer } from '@/components/brand-studio/compose/video-composer';
 import { studioEnv } from '@/lib/brand-studio/env';
+import { loadFolderItems, loadLibrary } from '@/lib/brand-studio/library';
+import type { LibraryItemWire } from '@/lib/brand-studio/library-contracts';
 import { createStudioMediaStore } from '@/lib/brand-studio/media-store';
 import { assetView, assetsOf, jobsOf, viewsOf } from '@/lib/brand-studio/repo';
 import { allowanceView, loadAllowance } from '@/lib/brand-studio/usage';
@@ -59,16 +61,17 @@ export default async function StudioComposePage({
     );
   }
 
-  const { deps } = ctx;
+  const { deps, viewer } = ctx;
   const media = createStudioMediaStore();
 
-  const [rawAssets, rawJobs, allowance] = await Promise.all([
+  const [rawAssets, rawJobs, allowance, libraryRes] = await Promise.all([
     assetsOf(deps.sql, choice.id, 200),
     jobsOf(deps.sql, choice.id, 60),
     loadAllowance(deps.sql, choice.id, studioEnv()),
+    loadLibrary({ sql: deps.sql, media }, viewer, choice.id).catch(() => null),
   ]);
   const assets = rawAssets
-    .filter((a) => a.kind === 'video' || a.kind === 'audio')
+    .filter((a) => a.kind === 'video' || a.kind === 'audio' || a.kind === 'image')
     .map((a) => assetView(a, media));
   const jobs = await viewsOf(deps.sql, rawJobs, media);
   const videoOutputs = jobs.flatMap((job) =>
@@ -81,6 +84,33 @@ export default async function StudioComposePage({
           `${dict.studioVideo.title} ${idx + 1}`,
       })),
   );
+  const imageOutputs = jobs.flatMap((job) =>
+    job.outputs
+      .filter((out) => out.kind === 'image')
+      .map((out, idx) => ({
+        ...out,
+        label:
+          job.prompt.trim().slice(0, 36) ||
+          `${dict.studioCompose.sources.browser.imageTag} ${idx + 1}`,
+      })),
+  );
+
+  const initialFolders = libraryRes && libraryRes.ok ? libraryRes.folders : [];
+  const initialLikedItems = libraryRes && libraryRes.ok ? libraryRes.liked : [];
+  const initialLikedKeys = initialLikedItems.map((item) => item.key);
+
+  const initialFolderItems: Record<string, LibraryItemWire[]> = {};
+  if (initialFolders.length > 0) {
+    const preloaded = await Promise.all(
+      initialFolders.slice(0, 12).map(async (folder) => {
+        const res = await loadFolderItems({ sql: deps.sql, media }, viewer, choice.id, folder.id).catch(() => null);
+        return [folder.id, res && res.ok ? res.items : []] as const;
+      }),
+    );
+    for (const [folderId, items] of preloaded) {
+      initialFolderItems[folderId] = items;
+    }
+  }
 
   const canCreate = !access.staff && (choice.role === 'owner' || choice.role === 'editor');
 
@@ -94,6 +124,11 @@ export default async function StudioComposePage({
       initialAllowance={allowanceView(allowance)}
       initialAssets={assets}
       initialVideoOutputs={videoOutputs}
+      initialImageOutputs={imageOutputs}
+      initialFolders={initialFolders}
+      initialLikedKeys={initialLikedKeys}
+      initialLikedItems={initialLikedItems}
+      initialFolderItems={initialFolderItems}
     />
   );
 }

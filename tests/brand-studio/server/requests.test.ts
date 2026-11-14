@@ -49,7 +49,7 @@ function expectValid(request: { endpoint: string; body: Record<string, unknown> 
  */
 const SNAPSHOT_MODELS = STUDIO_MODELS.filter((m) => m.availability === 'live' && !('pixels' in m));
 const params = (p: Partial<StudioJobParams> = {}): StudioJobParams => ({ aspect: null, resolution: null, seconds: null, audio: null, count: 1, locale: 'ko', ...p });
-const input = (p: Partial<StudioRequestInput>): StudioRequestInput => ({ kind: 'image', model: 'seedream-5-pro', prompt: 'a bottle on stone', params: params(), images: [], videos: [], ...p });
+const input = (p: Partial<StudioRequestInput>): StudioRequestInput => ({ kind: 'image', model: 'seedream-5.5', prompt: 'a bottle on stone', params: params(), images: [], videos: [], ...p });
 const img = (n: number) => `https://media.example.test/st/${String(n).repeat(64).slice(0, 64)}.png`;
 
 describe('the schema file parses', () => {
@@ -64,17 +64,20 @@ describe('image requests', () => {
   it('text-to-image without references, image-editing with them; URL strings in order', () => {
     const plain = buildStudioRequest(input({ params: params({ aspect: '4:3', resolution: '1K' }) }));
     expect(plain).toEqual({
-      endpoint: 'bytedance/seedream-5.0-pro/text-to-image',
-      body: { prompt: 'a bottle on stone', aspect_ratio: '4:3', resolution: '1K', enable_safety_checker: true },
+      endpoint: 'bytedance/seedream-5.5/text-to-image',
+      body: { prompt: 'a bottle on stone', aspect_ratio: '4:3', resolution: '1K' },
     });
     expectValid(plain);
+    const mid = buildStudioRequest(input({ params: params({ aspect: '16:9', resolution: '1.5K' }) }));
+    expect(mid.body.resolution).toBe('1.5K');
+    expectValid(mid);
     const edit = buildStudioRequest(input({ params: params({ aspect: '9:16', resolution: '2K' }), images: [{ url: img(1) }, { url: img(2) }] }));
-    expect(edit.endpoint).toBe('bytedance/seedream-5.0-pro/image-editing');
+    expect(edit.endpoint).toBe('bytedance/seedream-5.5/image-editing');
     expect(edit.body.images).toEqual([img(1), img(2)]);
     expectValid(edit);
   });
 
-  it('sends the safety checker as true on every Seedream endpoint and never on Gemini (it has no such field)', () => {
+  it('sends the safety checker as true on endpoints that have the field and omits it on models without one', () => {
     for (const model of SNAPSHOT_MODELS.filter((m) => m.medium === 'image')) {
       for (const images of [[], [{ url: img(3) }]]) {
         const request = buildStudioRequest(input({ model: model.id, images, params: params({ aspect: '1:1', resolution: '2K' }) }));
@@ -86,7 +89,7 @@ describe('image requests', () => {
   });
 
   it('has no input that turns the safety checker off', () => {
-    const sneaky = { ...input({}), params: { ...params(), enable_safety_checker: false } as unknown as StudioJobParams, enable_safety_checker: false } as StudioRequestInput;
+    const sneaky = { ...input({ model: 'seedream-5-flash' }), params: { ...params(), enable_safety_checker: false } as unknown as StudioJobParams, enable_safety_checker: false } as StudioRequestInput;
     expect(buildStudioRequest(sneaky).body.enable_safety_checker).toBe(true);
   });
 
@@ -170,7 +173,7 @@ describe('video requests (Seedance 2.5)', () => {
   });
 
   it('refuses an image model for a video and the reverse', () => {
-    expect(() => buildStudioRequest(video({ model: 'seedream-5-pro' }))).toThrow(StudioRequestError);
+    expect(() => buildStudioRequest(video({ model: 'seedream-5.5' }))).toThrow(StudioRequestError);
     expect(() => buildStudioRequest(input({ model: 'seedance-2.5' }))).toThrow(StudioRequestError);
     expect(studioModel('seedance-2.5')?.medium).toBe('video');
   });

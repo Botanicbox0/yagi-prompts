@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { IMAGE_ASPECTS, IMAGE_ENGINES, VIDEO_ASPECTS, engineProvider, isEngineId, isImageEngine, isVideoEngine, type EngineId } from '@/lib/images/engines';
+import { IMAGE_ASPECTS, IMAGE_ENGINES, VIDEO_ASPECTS, engineProvider, isEngineId, isImageEngine, isVideoEngine, normalizeLegacyEngineId, type EngineId } from '@/lib/images/engines';
 import { videoEngineSpec } from '@/lib/video/models';
 
 /**
@@ -49,7 +49,7 @@ const TOKEN = /\{\{\s*([^{}]*?)\s*\}\}/g;
  * this list only once `npm run kling:smoke` / `npm run gemini:smoke` has shown what each does with
  * a real selfie — a founder decision after the smoke, not a code default (PLATFORM-2.0 §7.3).
  */
-export const MAKER_ENGINE_IDS = ['gpt-image-2.5-flare', 'gpt-image-2', 'seedream-5.0-pro', 'seedream-5.0-lite', 'seedance-2.0', 'seedance-2.5'] as const satisfies readonly EngineId[];
+export const MAKER_ENGINE_IDS = ['gpt-image-2.5-flare', 'gpt-image-2', 'seedream-5.5', 'seedream-5.0-lite', 'seedance-2.0', 'seedance-2.5'] as const satisfies readonly EngineId[];
 export type MakerEngineId = (typeof MAKER_ENGINE_IDS)[number];
 export function isMakerEngine(value: unknown): value is MakerEngineId {
   return typeof value === 'string' && (MAKER_ENGINE_IDS as readonly string[]).includes(value);
@@ -109,7 +109,9 @@ export const OUTRO_MAX = 600;
 const Note = z.string().trim().max(NOTE_MAX).optional();
 const Notes = z.object({ intro: z.string().trim().max(INTRO_MAX).optional(), outro: z.string().trim().max(OUTRO_MAX).optional() }).strict();
 const ImageStep = z.object({
-  id: Name, kind: z.literal('image'), engine: z.string().max(40), inputs: z.array(Name).min(1).max(MAX_STEP_INPUTS), prompt: Prompt, note: Note,
+  id: Name, kind: z.literal('image'),
+  engine: z.preprocess((v) => (typeof v === 'string' ? normalizeLegacyEngineId(v) : v), z.string().max(40)),
+  inputs: z.array(Name).min(1).max(MAX_STEP_INPUTS), prompt: Prompt, note: Note,
   params: z.object({ aspect: z.enum(IMAGE_ASPECTS) }).strict(),
 }).strict();
 const VideoStep = z.object({

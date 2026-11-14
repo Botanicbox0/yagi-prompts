@@ -152,10 +152,12 @@ describe("/brand/studio/review", () => {
     expect(state.calls).toEqual([]);
   });
 
-  it("is closed on /brand/studio/review for ordinary brands too (묶음 B: review lives in project rooms only)", async () => {
+  it("opens on /brand/studio/review for ordinary brands with the 1-click share & chat bridge header action", async () => {
     vi.stubEnv("BRAND_STUDIO_V2", "on");
-    await expect(page()).rejects.toThrow("NEXT_NOT_FOUND");
-    expect(state.calls).toEqual([]);
+    const html = await page({ review: R1 });
+    expect(html).toContain("data-studio-review");
+    expect(html).toContain("data-review-share-open");
+    expect(state.calls).toEqual(["list", `detail:${R1}`]);
   });
 });
 

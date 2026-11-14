@@ -463,7 +463,7 @@
   height: 7px;
   flex: none;
   border-radius: 50%;
-  background: #ffffff;
+  background: var(--ys-active-fg);
   animation: bsl-pulse 1.5s ease-in-out infinite;
 }
 @keyframes bsl-pulse {

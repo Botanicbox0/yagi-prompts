@@ -19,7 +19,7 @@ afterEach(async () => {
 });
 
 const owner = () => viewerOf(f.ids.owner);
-const image = { kind: 'image', model: 'seedream-5-pro', prompt: 'a glass bottle on wet stone', aspect: '16:9', resolution: '2K', count: 1 };
+const image = { kind: 'image', model: 'seedream-5.5', prompt: 'a glass bottle on wet stone', aspect: '16:9', resolution: '2K', count: 1 };
 async function create(input: Record<string, unknown>): Promise<StudioJobView> {
   const result = await createStudioJob(deps, owner(), { organizationId: f.orgId, requestId: requestId(), ...input });
   if (!result.ok) throw new Error(`create failed: ${result.code}`);

@@ -1,23 +1,53 @@
 "use client";
 /**
- * The prompt bar (docs/BRAND-STUDIO-V3.md §4): one rounded translucent panel floating over the bottom
- * centre of the wall. Top: the reference row (square thumbnails, a number under each). Middle: the
- * text. Bottom: one row of compact chips (model, ratio, quality, count — length and sound on the video
- * screen), prompt polishing (the "자동 개선" switch with its "!" explanation and the ✨ button), and on
- * the right the screen's one solid button with this run's cost in credits.
+ * The prompt bar (docs/STUDIO-PRO-SUITE-V4.md §1, BRAND-STUDIO-V3.md §4): one rounded translucent panel
+ * floating over the bottom centre of the wall. Top: the reference row (square thumbnails with `@kindN`
+ * badges and bidirectional blue focus rings when mentioned). Middle: zero-drift `<PromptHighlight>`
+ * backdrop + `<textarea>`. Bottom: compact model/ratio/resolution/quality/count/duration/sound chips,
+ * and on the right the screen's one solid button with this run's cost in credits.
  *
- * The screen fixes the medium (`mode`): there is no image/video switch here.
+ * Manual `자동 개선(✨)` controls are removed: the Silent Multimodal Director runs automatically on submit,
+ * and when Video Studio's Sequence Rail expands to full timeline height, `collapsed` renders a sleek
+ * 1-line floating pill button.
  */
-import { useEffect, useId, useRef, useState, type DragEvent, type ReactNode } from "react";
-import { STUDIO_AUDIO_MODES, STUDIO_LIMITS, type StudioAllowanceView } from "@/lib/brand-studio/contracts";
+import { useEffect, useId, useMemo, useRef, useState, type DragEvent, type ReactNode } from "react";
+import { extractClipboardImages, prepareClipboardUploadFiles } from "@/lib/brand-studio/clipboard-image";
+import {
+  STUDIO_AUDIO_MODES,
+  STUDIO_LIMITS,
+  STUDIO_SHOT_LIMITS,
+  type StudioAllowanceView,
+  type StudioAssetView,
+} from "@/lib/brand-studio/contracts";
 import { creditsLeft } from "@/lib/brand-studio/credits";
 import type { StudioMedium, StudioVideoModel } from "@/lib/brand-studio/models";
 import type { Dictionary } from "@/lib/i18n/dictionaries";
+import { studioVideoEn, studioVideoKo } from "@/messages/studio-video";
 import { uploadKind } from "./api";
+import {
+  AtMentionMenu,
+  applyMentionInsertion,
+  buildAtMentionCandidates,
+  detectMentionTrigger,
+  stepMentionIndex,
+  type AtMentionCandidate,
+} from "./at-mention-menu";
 import { credits, fill, formatDay, type StudioCopy, type StudioLocale } from "./copy";
-import { DRAFT_RESOLUTION, dockControls, remixActive, remixBlocking, remixFit, withModel, type DockDraft } from "./dock-model";
+import {
+  DRAFT_RESOLUTION,
+  dockControls,
+  draftAfterAttach,
+  remixActive,
+  remixBlocking,
+  remixBlueprintFit,
+  remixFit,
+  resolveUnifiedRemixMethod,
+  withModel,
+  type DockDraft,
+} from "./dock-model";
 import { ModelMenu } from "./gallery/model-menu";
 import { StudioIcon } from "./icons";
+import { PromptHighlight, resolvePromptMentions } from "./prompt-highlight";
 import { RemixPanel } from "./remix-panel";
 import { REF_DRAG_TYPE, acceptsDrag, decodeRefDrag, type RefSource, type TrayItem } from "./refs";
 import { Tray } from "./tray";
@@ -44,14 +74,25 @@ export interface DockProps {
   film: FilmState | null;
   uploading: readonly string[];
   initialOpenRef?: string | null;
-  /** The ✨ button is waiting for the improved sentence. */
+  /** Kept optional for caller compatibility while background Silent Director runs automatically. */
   enhancing?: boolean;
-  /** The text in the field is the improved sentence (offer "원래 문장으로"). */
   enhanced?: boolean;
   /** Opens the model list first (tests). */
   initialModelMenu?: boolean;
   /** `dict.studioVideo`, for the reference-video panel's link to the full reverse panel (video screen). */
   videoCopy?: Dictionary["studioVideo"];
+  /** Organization assets searchable in `@` autocomplete (Section 2: 에셋에서 바로 추가). */
+  availableAssets?: readonly StudioAssetView[];
+  /** Recent generated outputs searchable in `@` autocomplete (Section 2: 에셋에서 바로 추가). */
+  recentOutputs?: readonly TrayItem[];
+  /** Collapsed 1-line floating pill mode when Video Studio's Sequence Rail expands to full height. */
+  collapsed?: boolean;
+  collapsedLabel?: string;
+  onExpand?(): void;
+  /** Direct 1-click attach handler for `@` autocomplete unattached items. */
+  onAttachItem?(item: TrayItem): void;
+  /** Opens `ClipTrimModal` for `@video1` directly from the tray chip or over-30s banner. */
+  onTrimVideo?(item: TrayItem): void;
   onDraft(next: DockDraft): void;
   onTrayUpdate(key: string, patch: Partial<Pick<TrayItem, "role" | "use" | "avoid" | "frame">>): void;
   onTrayRemove(key: string): void;
@@ -65,8 +106,8 @@ export interface DockProps {
 }
 
 /** The bar's real height as `--bs-dock-h` on the page, so the wall, popovers and the help launcher clear it. */
-function useDockHeight() {
-  const ref = useRef<HTMLFormElement>(null);
+function useDockHeight(collapsed: boolean) {
+  const ref = useRef<HTMLElement | null>(null);
   useEffect(() => {
     const el = ref.current;
     if (!el || typeof ResizeObserver === "undefined") return;
@@ -79,41 +120,151 @@ function useDockHeight() {
       observer.disconnect();
       root.style.removeProperty("--bs-dock-h");
     };
-  }, []);
+  }, [collapsed]);
   return ref;
 }
 
-/** Grows the text field with what is typed, up to six lines. */
-function useAutoGrow(value: string) {
+/** Grows the text field with what is typed, up to six lines, keeping the backdrop height & scroll synced. */
+function useAutoGrow(value: string, backdropRef: React.RefObject<HTMLDivElement | null>, collapsed: boolean) {
   const ref = useRef<HTMLTextAreaElement>(null);
   useEffect(() => {
+    if (collapsed) return;
     const el = ref.current;
     if (!el) return;
     el.style.height = "auto";
-    el.style.height = `${Math.min(el.scrollHeight, 6 * 24 + 20)}px`;
-  }, [value]);
+    const nextHeight = `${Math.min(el.scrollHeight, 6 * 24 + 20)}px`;
+    el.style.height = nextHeight;
+    if (backdropRef.current) {
+      backdropRef.current.style.height = nextHeight;
+      backdropRef.current.scrollTop = el.scrollTop;
+    }
+  }, [backdropRef, collapsed, value]);
   return ref;
 }
 
 export function Dock(props: DockProps) {
-  const { draft, tray, copy, locale, busy, message, onDraft, mode = draft.medium, enhancing = false, enhanced = false } = props;
+  const { draft, tray, copy, locale, busy, message, onDraft, mode = draft.medium, enhancing = false, collapsed = false } = props;
   const d = copy.dock;
   const id = useId();
-  const form = useDockHeight();
-  const field = useAutoGrow(draft.prompt);
+  const backdropRef = useRef<HTMLDivElement>(null);
+  const isComposingRef = useRef(false);
+  const form = useDockHeight(collapsed);
+  const field = useAutoGrow(draft.prompt, backdropRef, collapsed);
   const controls = dockControls(draft);
   const remix = remixActive(draft, tray);
-  const fit = remix ? remixFit(draft, tray) : null;
-  const limits = controls.model.medium === "video" ? (controls.model as StudioVideoModel).referenceVideoSeconds : null;
-  // A blueprint only reads the clip, so its pixel size is no reason to stop (dock-model.ts `remixBlocking`).
-  const blocking = remixBlocking(draft, fit);
-  const filmLimit = fit && limits ? (blocking ? filmLimitLine(blocking, limits, copy) : !fit.editable && draft.method !== "blueprint" ? filmLimitLine("edit", limits, copy) : null) : null;
-  const filmAsset = remix ? (tray.find((item) => item.kind === "video")?.assetId ?? null) : null;
+  const effectiveMethod = remix ? resolveUnifiedRemixMethod(draft, tray) : draft.method;
+  const effectiveDraft = remix && effectiveMethod !== draft.method ? { ...draft, method: effectiveMethod } : draft;
+  const fit = remix ? remixFit(effectiveDraft, tray) : null;
+  const bpFit = remix ? remixBlueprintFit(effectiveDraft, tray) : null;
+  const rawLimits = controls.model.medium === "video" ? (controls.model as StudioVideoModel).referenceVideoSeconds : null;
+  const limits = rawLimits
+    ? effectiveMethod === "blueprint"
+      ? { ...rawLimits, max: STUDIO_SHOT_LIMITS.secondsMax }
+      : rawLimits
+    : null;
+  // A blueprint only reads the clip, so pixel size and >30s..600s never stop it (`remixBlocking`).
+  const blocking = remixBlocking(effectiveDraft, fit, bpFit);
+  const filmLimit =
+    fit && limits && rawLimits
+      ? blocking
+        ? filmLimitLine(blocking, limits, copy)
+        : !fit.editable && effectiveMethod !== "blueprint"
+          ? filmLimitLine("edit", rawLimits, copy)
+          : null
+      : null;
+  const filmTrayItem = remix ? (tray.find((item) => item.kind === "video") ?? null) : null;
+  const filmAsset = filmTrayItem?.assetId ?? null;
+  const resolvedVideoCopy = props.videoCopy ?? (locale === "ko" ? studioVideoKo : studioVideoEn);
+
   const [dropActive, setDropActive] = useState(false);
+  const [mention, setMention] = useState<{
+    open: boolean;
+    query: string;
+    atIndex: number;
+    cursor: number;
+    activeIndex: number;
+  }>({ open: false, query: "", atIndex: -1, cursor: 0, activeIndex: 0 });
   const depth = useRef(0);
   const set = (patch: Partial<DockDraft>) => onDraft({ ...draft, ...patch });
   const cost = credits(copy.credits.amount, props.credits, locale);
-  const canEnhance = Boolean(props.onEnhance) && draft.prompt.trim().length > 0 && !enhancing && !busy;
+
+  const { mentionedKeys } = useMemo(
+    () => resolvePromptMentions(draft.prompt, tray),
+    [draft.prompt, tray],
+  );
+
+  const candidates = useMemo(
+    () =>
+      mention.open
+        ? buildAtMentionCandidates({
+            query: mention.query,
+            mode,
+            tray,
+            availableAssets: props.availableAssets,
+            recentOutputs: props.recentOutputs,
+            copy,
+            outputBadgeLabel: resolvedVideoCopy.remix.atMenu.outputBadge,
+          })
+        : { attached: [], library: [], flat: [] },
+    [copy, mention.open, mention.query, mode, props.availableAssets, props.recentOutputs, resolvedVideoCopy.remix.atMenu.outputBadge, tray],
+  );
+  const safeMentionIndex = candidates.flat.length > 0 ? Math.min(mention.activeIndex, candidates.flat.length - 1) : 0;
+
+  useEffect(() => {
+    if (!mention.open) return;
+    const onDown = (event: PointerEvent) => {
+      const root = form.current;
+      if (root && event.target instanceof Node && !root.contains(event.target)) {
+        setMention((cur) => ({ ...cur, open: false }));
+      }
+    };
+    document.addEventListener("pointerdown", onDown);
+    return () => document.removeEventListener("pointerdown", onDown);
+  }, [form, mention.open]);
+
+  const syncMentionFromCursor = (text: string, cursor: number) => {
+    if (isComposingRef.current) return;
+    const trig = detectMentionTrigger(text, cursor);
+    if (!trig.active) {
+      setMention((cur) => (cur.open ? { ...cur, open: false } : cur));
+      return;
+    }
+    setMention((cur) => ({
+      open: true,
+      query: trig.query,
+      atIndex: trig.atIndex,
+      cursor,
+      activeIndex: cur.open && cur.query === trig.query && cur.atIndex === trig.atIndex ? cur.activeIndex : 0,
+    }));
+  };
+
+  const pickMentionCandidate = (candidate: AtMentionCandidate) => {
+    if (isComposingRef.current) return;
+    const cursor = field.current?.selectionStart ?? mention.cursor;
+    const inserted = applyMentionInsertion(draft.prompt, cursor, mention.atIndex, candidate.token);
+    if (candidate.attachItem) {
+      const nextTray = [...tray, candidate.attachItem];
+      const nextDraft = draftAfterAttach(draft, candidate.attachItem, Boolean(props.mode), nextTray);
+      if (props.onAttachItem) {
+        props.onAttachItem(candidate.attachItem);
+      } else if (candidate.attachItem.assetId) {
+        props.onDropSource({ assetId: candidate.attachItem.assetId });
+      } else if (candidate.attachItem.outputId) {
+        props.onDropSource({ outputId: candidate.attachItem.outputId });
+      }
+      onDraft({ ...nextDraft, prompt: inserted.text });
+    } else {
+      set({ prompt: inserted.text });
+    }
+    setMention((cur) => ({ ...cur, open: false }));
+    requestAnimationFrame(() => {
+      const el = field.current;
+      if (el) {
+        el.focus();
+        el.setSelectionRange(inserted.nextCursor, inserted.nextCursor);
+      }
+    });
+  };
 
   const dragIn = (event: DragEvent) => {
     if (!acceptsDrag(event.dataTransfer?.types)) return;
@@ -140,9 +291,55 @@ export function Dock(props: DockProps) {
     else if (event.dataTransfer.files.length) props.onFiles(Array.from(event.dataTransfer.files));
   };
 
+  if (collapsed) {
+    const collapsedText =
+      props.collapsedLabel ??
+      (mode === "video"
+        ? locale === "ko"
+          ? "새 컷 · 장면 추가"
+          : "Add shot"
+        : d.label);
+    const leftText = allowanceText(props.allowance, copy, locale).value;
+    const trayCountText =
+      tray.length > 0
+        ? locale === "ko"
+          ? `참조 ${tray.length}`
+          : `${tray.length} ref${tray.length === 1 ? "" : "s"}`
+        : null;
+    return (
+      <button
+        ref={(node) => {
+          form.current = node;
+        }}
+        type="button"
+        className="bs-dock bs-dock-collapsed"
+        data-studio-dock
+        data-mode={mode}
+        data-collapsed=""
+        aria-label={collapsedText}
+        onClick={() => props.onExpand?.()}
+      >
+        <span className="bs-dock-collapsed-plus" aria-hidden="true">
+          <StudioIcon name="plus" />
+        </span>
+        <span className="bs-dock-collapsed-label">{collapsedText}</span>
+        <span className="bs-dock-collapsed-meta bs-num">
+          {trayCountText && (
+            <span className="bs-dock-collapsed-tray" data-collapsed-tray-count={tray.length}>
+              {trayCountText}
+            </span>
+          )}
+          <span className="bs-dock-collapsed-credits">{leftText}</span>
+        </span>
+      </button>
+    );
+  }
+
   return (
     <form
-      ref={form}
+      ref={(node) => {
+        form.current = node;
+      }}
       className="bs-dock"
       data-studio-dock
       data-mode={mode}
@@ -171,6 +368,9 @@ export function Dock(props: DockProps) {
         dropActive={dropActive}
         uploading={props.uploading}
         initialOpen={props.initialOpenRef ?? null}
+        mentionedKeys={mentionedKeys}
+        onTrimVideo={props.onTrimVideo}
+        trimLabel={resolvedVideoCopy.remix.trayTrim}
         onUpdate={props.onTrayUpdate}
         onRemove={props.onTrayRemove}
         onMove={props.onTrayMove ?? (() => {})}
@@ -178,21 +378,37 @@ export function Dock(props: DockProps) {
       />
       {remix && (
         <RemixPanel
-          draft={draft}
+          draft={effectiveDraft}
           film={props.film}
           copy={copy}
           disabled={busy}
           limit={filmLimit}
           editable={fit?.editable ?? true}
+          videoSeconds={filmTrayItem?.seconds ?? null}
+          rawMaxSeconds={rawLimits?.max ?? 30}
           videoCopy={props.videoCopy}
           videoAssetId={filmAsset}
+          onTrimVideo={filmTrayItem && props.onTrimVideo ? () => props.onTrimVideo!(filmTrayItem) : undefined}
           onChange={set}
         />
       )}
-      <div className="bs-prompt-wrap" data-enhancing={enhancing ? "" : undefined} data-enhanced={enhanced ? "" : undefined}>
+      <div className="bs-prompt-wrap" data-enhancing={enhancing ? "" : undefined}>
+        {mention.open && (
+          <AtMentionMenu
+            id={`${id}-at-menu`}
+            attached={candidates.attached}
+            library={candidates.library}
+            activeIndex={safeMentionIndex}
+            copy={copy}
+            videoCopy={props.videoCopy}
+            onHighlight={(idx) => setMention((cur) => ({ ...cur, activeIndex: idx }))}
+            onSelect={pickMentionCandidate}
+          />
+        )}
         <label className="bs-sr" htmlFor={`${id}-prompt`}>
           {d.label}
         </label>
+        <PromptHighlight prompt={draft.prompt} tray={tray} backdropRef={backdropRef} />
         <textarea
           ref={field}
           id={`${id}-prompt`}
@@ -201,18 +417,85 @@ export function Dock(props: DockProps) {
           maxLength={STUDIO_LIMITS.promptMax}
           value={draft.prompt}
           placeholder={mode === "video" ? d.placeholderVideo : d.placeholder}
-          aria-describedby={[message ? `${id}-message` : "", enhanced || enhancing ? `${id}-enhanced` : ""].filter(Boolean).join(" ") || undefined}
+          aria-describedby={message ? `${id}-message` : undefined}
+          aria-expanded={mention.open ? true : undefined}
+          aria-controls={mention.open ? `${id}-at-menu` : undefined}
+          aria-activedescendant={mention.open && candidates.flat.length > 0 ? `${id}-at-menu-opt-${safeMentionIndex}` : undefined}
           aria-busy={enhancing}
           readOnly={enhancing}
           aria-keyshortcuts="Control+Enter Meta+Enter"
-          onChange={(event) => set({ prompt: event.target.value })}
+          onScroll={(event) => {
+            if (backdropRef.current) {
+              backdropRef.current.scrollTop = event.currentTarget.scrollTop;
+            }
+          }}
+          onCompositionStart={() => {
+            isComposingRef.current = true;
+          }}
+          onCompositionEnd={(event) => {
+            isComposingRef.current = false;
+            const el = event.currentTarget;
+            syncMentionFromCursor(el.value, el.selectionStart ?? el.value.length);
+          }}
+          onChange={(event) => {
+            const nextText = event.target.value;
+            const cursor = event.target.selectionStart ?? nextText.length;
+            set({ prompt: nextText });
+            const nativeComposing = Boolean((event.nativeEvent as InputEvent | undefined)?.isComposing);
+            if (!isComposingRef.current && !nativeComposing) {
+              syncMentionFromCursor(nextText, cursor);
+            }
+          }}
+          onClick={(event) => {
+            if (isComposingRef.current) return;
+            syncMentionFromCursor(event.currentTarget.value, event.currentTarget.selectionStart ?? event.currentTarget.value.length);
+          }}
+          onKeyUp={(event) => {
+            if (isComposingRef.current || event.nativeEvent.isComposing) return;
+            if (event.key === "ArrowDown" || event.key === "ArrowUp" || event.key === "Enter" || event.key === "Tab" || event.key === "Escape") return;
+            syncMentionFromCursor(event.currentTarget.value, event.currentTarget.selectionStart ?? event.currentTarget.value.length);
+          }}
           onKeyDown={(event) => {
+            if (isComposingRef.current || event.nativeEvent.isComposing) return;
+            if (mention.open) {
+              if (event.key === "Escape") {
+                event.preventDefault();
+                event.stopPropagation();
+                setMention((cur) => ({ ...cur, open: false }));
+                return;
+              }
+              if (event.key === "ArrowDown" && candidates.flat.length > 0) {
+                event.preventDefault();
+                setMention((cur) => ({ ...cur, activeIndex: stepMentionIndex(safeMentionIndex, 1, candidates.flat.length) }));
+                return;
+              }
+              if (event.key === "ArrowUp" && candidates.flat.length > 0) {
+                event.preventDefault();
+                setMention((cur) => ({ ...cur, activeIndex: stepMentionIndex(safeMentionIndex, -1, candidates.flat.length) }));
+                return;
+              }
+              if (
+                ((event.key === "Enter" && !event.ctrlKey && !event.metaKey && !event.shiftKey) || event.key === "Tab") &&
+                candidates.flat.length > 0
+              ) {
+                event.preventDefault();
+                const chosen = candidates.flat[safeMentionIndex];
+                if (chosen) pickMentionCandidate(chosen);
+                return;
+              }
+            }
             if (event.key === "Enter" && (event.ctrlKey || event.metaKey)) {
               event.preventDefault();
               event.currentTarget.form?.requestSubmit();
             }
           }}
           onPaste={(event) => {
+            const clipboardImages = extractClipboardImages(event.clipboardData);
+            if (clipboardImages.length > 0) {
+              event.preventDefault();
+              void prepareClipboardUploadFiles(clipboardImages).then((ready) => props.onFiles(ready));
+              return;
+            }
             const files = Array.from(event.clipboardData?.files ?? []).filter((file) => uploadKind(file.type) !== null);
             if (!files.length) return;
             event.preventDefault();
@@ -220,17 +503,6 @@ export function Dock(props: DockProps) {
           }}
         />
       </div>
-      {(enhancing || enhanced) && (
-        <p id={`${id}-enhanced`} className="bs-dock-note bs-enhanced-note" role="status" data-studio-enhanced>
-          <span>{enhancing ? d.enhancing : d.enhanced}</span>
-          {enhanced && props.onUndoEnhance && (
-            <button type="button" className="bs-link-btn" data-studio-undo-enhance onClick={props.onUndoEnhance}>
-              <StudioIcon name="undo" />
-              {d.undoEnhance}
-            </button>
-          )}
-        </p>
-      )}
       {message && (
         <p id={`${id}-message`} className="bs-dock-message" role="alert" data-studio-dock-message>
           {message}
@@ -300,8 +572,19 @@ export function Dock(props: DockProps) {
               ))}
             </Select>
           ) : (
-            !(remix && draft.method === "edit") && (
-              <Select id={`${id}-seconds`} label={d.seconds} value={String(draft.seconds)} display={fill(d.secondsValue, { n: draft.seconds })} onChange={(value) => set({ seconds: Number(value) })} data="seconds" mono>
+            !(remix && (effectiveMethod === "edit" || (draft.clipCount ?? 1) >= 2)) && (
+              <Select
+                id={`${id}-seconds`}
+                label={d.seconds}
+                value={String(draft.seconds)}
+                display={fill(d.secondsValue, { n: draft.seconds })}
+                onChange={(value) => {
+                  const sec = Number(value);
+                  set({ seconds: sec, ...(remix ? { targetTotalSeconds: sec, clipCount: 1 } : {}) });
+                }}
+                data="seconds"
+                mono
+              >
                 {controls.seconds.map((n) => (
                   <option key={n} value={n}>
                     {fill(d.secondsValue, { n })}
@@ -312,44 +595,13 @@ export function Dock(props: DockProps) {
           )}
           {draft.medium === "video" && !remix && (
             <Select id={`${id}-sound`} label={d.sound} quietLabel value={draft.audio} display={copy.sound[draft.audio]} onChange={(audio) => set({ audio: audio as DockDraft["audio"] })} data="sound">
-              {STUDIO_AUDIO_MODES.map((mode) => (
-                <option key={mode} value={mode}>
-                  {copy.sound[mode]}
+              {STUDIO_AUDIO_MODES.map((m) => (
+                <option key={m} value={m}>
+                  {copy.sound[m]}
                 </option>
               ))}
             </Select>
           )}
-          <span className="bs-enhance" data-studio-enhance-group>
-            <button
-              type="button"
-              role="switch"
-              className="bs-switch"
-              aria-checked={draft.enhance}
-              data-studio-enhance
-              onClick={() => set({ enhance: !draft.enhance })}
-            >
-              <span className="bs-switch-knob" aria-hidden="true" />
-              {d.enhance}
-            </button>
-            <Tip id={`${id}-enhance-tip`} label={d.enhanceInfo}>
-              <span>{mode === "video" ? d.enhanceTipVideo : d.enhanceTip}</span>
-              <span>{d.enhanceTipFree}</span>
-            </Tip>
-            {props.onEnhance && (
-              <button
-                type="button"
-                className="bs-chip-btn bs-enhance-now"
-                data-studio-enhance-now
-                aria-label={d.enhanceNow}
-                title={d.enhanceNow}
-                disabled={!canEnhance}
-                aria-busy={enhancing}
-                onClick={props.onEnhance}
-              >
-                <StudioIcon name="sparkles" />
-              </button>
-            )}
-          </span>
         </div>
         <div className="bs-controls-end">
           <button

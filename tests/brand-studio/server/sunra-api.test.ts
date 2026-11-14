@@ -42,7 +42,7 @@ describe('Sunra API lane', () => {
   it('maps a balance problem to provider_unavailable and logs studio_provider_balance (never the message to a customer)', async () => {
     for (const status of [402, 412]) {
       const { p, log } = provider({ '/v1/queue/': () => json(status, { error: { code: 'INSUFFICIENT_CREDIT', message: 'Insufficient balance: $0.00' } }) });
-      const error = await p.submit({ endpoint: 'bytedance/seedream-5.0-pro/text-to-image', body: {} }).catch((e) => e);
+      const error = await p.submit({ endpoint: 'bytedance/seedream-5.5/text-to-image', body: {} }).catch((e) => e);
       expect(error).toBeInstanceOf(StudioProviderError);
       expect(error).toMatchObject({ code: 'provider_unavailable', retryable: false });
       expect(log).toHaveBeenCalledWith('studio_provider_balance', expect.objectContaining({ lane: 'sunra_api', status }));

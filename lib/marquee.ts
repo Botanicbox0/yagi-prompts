@@ -11,7 +11,7 @@
 /** What the studio actually runs and delivers. Engines first; the rest is the shape of a film. */
 export const HOUSE_MARQUEE_ITEMS = [
   'SEEDANCE 2.5',
-  'SEEDREAM 5.0',
+  'SEEDREAM 5.5',
   'GPT IMAGE 2',
   '9:16',
   '16:9',

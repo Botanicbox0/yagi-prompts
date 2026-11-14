@@ -45,7 +45,7 @@ export interface DirectorVideoResolutionSpec {
 
 export interface DirectorImageSetSpec {
   totalFrames: number;
-  /** Per-frame provider USD (defaults to 0.09 for Seedream 5.0 Pro if omitted) */
+  /** Per-frame provider USD (defaults to 0.043 for Seedream 5.5 2K w/ 1 ref if omitted) */
   perFrameProviderUsd?: number;
   /** Optional maker raise on the full set (`royalty_krw`, 0..5000) */
   royaltyKrw?: number;
@@ -304,7 +304,7 @@ export interface TemplateDirectorPanelProps {
   /** Explicit template baseline specification overriding `templateId` resolution. */
   templateBaseline?: TemplateBaselineSpec;
   photoInspection?: PhotoInspectionVerdict | null;
-  /** Optional generated candidate previews for Seedream 5.0 Pro & Nano Banana 2.1 when dual-candidate selection is active. */
+  /** Optional generated candidate previews for Seedream 5.5 & Nano Banana 2.1 when dual-candidate selection is active. */
   identityCandidates?: readonly IdentityCandidatePreview[];
   /** Optional original uploaded selfie URL so the user can compare Candidate A/B directly against their original photo. */
   originalPhotoUrl?: string | null;
@@ -474,7 +474,7 @@ export function TemplateDirectorPanel({
   );
   const [compareOriginalOpen, setCompareOriginalOpen] = useState(false);
   const candidateButtonRefs = useRef<Record<DualIdentityCandidateEngine, HTMLButtonElement | null>>({
-    'seedream-5.0-pro': null,
+    'seedream-5.5': null,
     'nano-banana-2.1': null
   });
   const [userMessage, setUserMessage] = useState('');
@@ -839,13 +839,13 @@ export function TemplateDirectorPanel({
         : copy.cleanupAcceptDetail;
 
   const seedreamScore =
-    identityCandidates.find((c) => c.engine === 'seedream-5.0-pro')?.similarityScore ?? null;
+    identityCandidates.find((c) => c.engine === 'seedream-5.5')?.similarityScore ?? null;
   const nanoBananaScore =
     identityCandidates.find((c) => c.engine === 'nano-banana-2.1')?.similarityScore ?? null;
   const recommendedEngine: DualIdentityCandidateEngine | null =
     seedreamScore !== null && nanoBananaScore !== null
       ? seedreamScore >= nanoBananaScore
-        ? 'seedream-5.0-pro'
+        ? 'seedream-5.5'
         : 'nano-banana-2.1'
       : null;
 
@@ -858,13 +858,13 @@ export function TemplateDirectorPanel({
     isRecommended: boolean;
   }> = [
     {
-      engine: 'seedream-5.0-pro',
+      engine: 'seedream-5.5',
       title: copy.dualCandidateSeedreamTitle,
       desc: copy.dualCandidateSeedreamDesc,
       previewUrl:
-        identityCandidates.find((c) => c.engine === 'seedream-5.0-pro')?.previewUrl ?? null,
+        identityCandidates.find((c) => c.engine === 'seedream-5.5')?.previewUrl ?? null,
       similarityScore: seedreamScore,
-      isRecommended: recommendedEngine === 'seedream-5.0-pro'
+      isRecommended: recommendedEngine === 'seedream-5.5'
     },
     {
       engine: 'nano-banana-2.1',
@@ -891,7 +891,7 @@ export function TemplateDirectorPanel({
     }
     event.preventDefault();
     const nextEngine: DualIdentityCandidateEngine =
-      currentEngine === 'seedream-5.0-pro' ? 'nano-banana-2.1' : 'seedream-5.0-pro';
+      currentEngine === 'seedream-5.5' ? 'nano-banana-2.1' : 'seedream-5.5';
     setSelectedCandidate(nextEngine);
     setCleanupChoice('accepted');
     onSelectIdentityCandidate?.(nextEngine);
@@ -985,7 +985,7 @@ export function TemplateDirectorPanel({
             </div>
           )}
 
-          {/* Dual-Candidate Likeness Picker */}
+          {/* Dual-Candidate Likeness Picker (Seedream 5.5 vs Nano Banana 2.1) */}
           {photoInspection.status === 'needs_cleanup' && showDualCandidates && (
             <div
               data-photo-dual-candidates
@@ -1147,7 +1147,7 @@ export function TemplateDirectorPanel({
                 data-photo-cleanup-accept
                 disabled={disabled}
                 onClick={() => {
-                  const chosen = selectedCandidate ?? 'seedream-5.0-pro';
+                  const chosen = selectedCandidate ?? 'seedream-5.5';
                   setSelectedCandidate(chosen);
                   setCleanupChoice('accepted');
                   if (showDualCandidates) {

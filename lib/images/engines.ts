@@ -55,7 +55,7 @@
 import type { TemplateMedium } from '@/lib/prompts/schemas';
 
 /** Order is the admin picker's order: the recommended default first. */
-export const IMAGE_ENGINE_IDS = ['gpt-image-2.5-flare', 'gpt-image-2', 'gpt-image-2.5-sunburst', 'seedream-5.0-pro', 'seedream-5.0-lite', 'nano-banana-2.1', 'nano-banana-pro'] as const;
+export const IMAGE_ENGINE_IDS = ['gpt-image-2.5-flare', 'gpt-image-2', 'gpt-image-2.5-sunburst', 'seedream-5.5', 'seedream-5.0-lite', 'nano-banana-2.1', 'nano-banana-pro'] as const;
 export type ImageEngineId = (typeof IMAGE_ENGINE_IDS)[number];
 
 export const VIDEO_ENGINE_IDS = ['seedance-2.0', 'seedance-2.5', 'kling-omni'] as const;
@@ -132,9 +132,16 @@ export function engineLabel(id: EngineId): string {
   return isImageEngine(id) ? IMAGE_ENGINES[id].label : VIDEO_ENGINES[id].label;
 }
 
+/** Map superseded legacy engine ids (DB rows / historical templates) to their current replacement. */
+export function normalizeLegacyEngineId(engine: string | null): string | null {
+  if (engine === 'seedream-5.0-pro' || engine === 'seedream-5-pro') return 'seedream-5.5';
+  return engine;
+}
+
 /** A row's engine, or its medium's default when none was chosen (or an unknown id was stored). */
 export function resolveEngine(engine: string | null, medium: TemplateMedium): EngineId {
-  return isEngineId(engine) ? engine : defaultEngine(medium);
+  const normalized = normalizeLegacyEngineId(engine);
+  return isEngineId(normalized) ? normalized : defaultEngine(medium);
 }
 
 // ---------------------------------------------------------------------------
@@ -177,34 +184,39 @@ export interface ImageSize {
   height: number;
 }
 
+export type SeedreamResolutionTier = '1K' | '1.5K' | '2K';
+
 export interface ImageEngine {
   id: ImageEngineId;
   label: string;
   provider: 'modelark' | 'openai' | 'google';
   /** The wire model id. */
   model: string;
-  /** Pixel size per aspect — every entry is valid on that engine by construction (tests pin it). */
+  /** Pixel size per aspect at the default resolution — every entry is valid on that engine by construction. */
   sizes: Record<ImageAspect, ImageSize>;
+  /** Optional multi-tier pixel table (Seedream 5.5 supports 1K, 1.5K, 2K). */
+  sizesByResolution?: Readonly<Record<SeedreamResolutionTier, Record<ImageAspect, ImageSize>>>;
+  /** Supported resolution tiers when more than one tier is offered. */
+  resolutions?: readonly SeedreamResolutionTier[];
+  /** True when `background: 'auto' | 'transparent' | 'opaque'` is supported (PNG when transparent). */
+  supportsTransparentBackground?: boolean;
   /** OpenAI engines only: the one quality tier this engine renders at. Nothing can lower it. */
   quality?: GptImageQuality;
   /** Rough USD for one render at the size above, before reference images. */
   usdPerRender: number;
   /** Rough USD added per BILLED reference image (the visitor's photo is one). */
   usdPerReference: number;
-  /** References the provider does not bill. Seedream 5.0 Pro bills from the second (official, 2026-10-21). */
+  /** References the provider does not bill. */
   freeReferenceImages?: number;
   /** The most reference images one request may carry. */
   maxReferenceImages: number;
 }
 
 /**
- * Seedream 5.0 Pro at the 2K tier (founder, 2026-09-06: "seedream 5.0pro는 2k로 품질 더 올려줘").
- * 2K sits above ModelArk's 2.36 MP price step, so a Pro render is $0.09 rather than $0.045 — the
- * price of the founder's quality call, carried in `usdPerRender` below. Sizes are ModelArk's own
- * 2K mappings; 4:5 is not in its table, so it is spelled as an explicit `WxH` inside the documented
- * pixel window (1728×2160 = 3.73 MP ≤ 4.62 MP).
+ * Seedream 5.5 (dola-seedream-5-5-261028) 2K pixel sizes per aspect. Every size is a multiple of 16
+ * inside ModelArk's documented pixel window (1280x720 .. 4.62 MP), matching Sunra 2K output.
  */
-const SEEDREAM_PRO_2K: Record<ImageAspect, ImageSize> = {
+const SEEDREAM_2K: Record<ImageAspect, ImageSize> = {
   '4:5': { width: 1728, height: 2160 },
   '1:1': { width: 2048, height: 2048 },
   '9:16': { width: 1584, height: 2816 },
@@ -212,8 +224,24 @@ const SEEDREAM_PRO_2K: Record<ImageAspect, ImageSize> = {
   '16:9': { width: 2816, height: 1584 },
 };
 
-/** Seedream 5.0 Lite starts at 2K too — the same table. */
-const SEEDREAM_2K = SEEDREAM_PRO_2K;
+/** Seedream 5.5 multi-tier pixel sizes: 1K (~1.0MP <= 2.61MP), 1.5K (~2.3MP <= 2.61MP), and 2K (~4.1MP <= 4.62MP). */
+export const SEEDREAM_55_SIZES: Readonly<Record<SeedreamResolutionTier, Record<ImageAspect, ImageSize>>> = {
+  '1K': {
+    '4:5': { width: 960, height: 1200 },
+    '1:1': { width: 1024, height: 1024 },
+    '9:16': { width: 720, height: 1280 },
+    '3:4': { width: 864, height: 1152 },
+    '16:9': { width: 1280, height: 720 },
+  },
+  '1.5K': {
+    '4:5': { width: 1280, height: 1600 },
+    '1:1': { width: 1536, height: 1536 },
+    '9:16': { width: 1152, height: 2048 },
+    '3:4': { width: 1344, height: 1792 },
+    '16:9': { width: 2048, height: 1152 },
+  },
+  '2K': SEEDREAM_2K,
+};
 
 /**
  * Gemini's own 2K pixel sizes per aspect (image-generation guide, "Aspect ratios and image sizes"
@@ -280,16 +308,19 @@ export const IMAGE_ENGINES: Record<ImageEngineId, ImageEngine> = {
     usdPerReference: 0.03,
     maxReferenceImages: 16,
   },
-  'seedream-5.0-pro': {
-    id: 'seedream-5.0-pro',
-    label: 'SEEDREAM 5.0 PRO',
+  'seedream-5.5': {
+    id: 'seedream-5.5',
+    label: 'SEEDREAM 5.5',
     provider: 'modelark',
-    model: 'dola-seedream-5-0-pro-260628',
-    sizes: SEEDREAM_PRO_2K,
-    // 2K: above the official 2.61 MP step, so the $0.09 rate. First reference free, $0.003 after.
-    usdPerRender: 0.09,
-    usdPerReference: 0.003,
-    freeReferenceImages: 1,
+    model: 'dola-seedream-5-5-261028',
+    sizes: SEEDREAM_2K,
+    sizesByResolution: SEEDREAM_55_SIZES,
+    resolutions: ['1K', '1.5K', '2K'],
+    supportsTransparentBackground: true,
+    // 2K: $0.035/image ($0.020 at 1K/1.5K <= 2.61MP), plus $0.008 per input reference image.
+    usdPerRender: 0.035,
+    usdPerReference: 0.008,
+    freeReferenceImages: 0,
     maxReferenceImages: 10,
   },
   'seedream-5.0-lite': {
@@ -339,8 +370,10 @@ export function imageFitsAspect(width: number, height: number, aspect: ImageAspe
   return Math.abs(width / height - w / h) / (w / h) <= ASPECT_TOLERANCE;
 }
 
-export function imageSizeFor(engine: ImageEngineId, aspect: ImageAspect): ImageSize {
-  return IMAGE_ENGINES[engine].sizes[aspect];
+export function imageSizeFor(engine: ImageEngineId, aspect: ImageAspect, resolution: SeedreamResolutionTier = '2K'): ImageSize {
+  const spec = IMAGE_ENGINES[engine];
+  if (spec.sizesByResolution) return spec.sizesByResolution[resolution][aspect];
+  return spec.sizes[aspect];
 }
 
 /** `WxH` the way both APIs spell it. */
@@ -348,10 +381,11 @@ export function sizeString(size: ImageSize): string {
   return `${size.width}x${size.height}`;
 }
 
-export function estimateImageUsd(engine: ImageEngineId, referenceImages = 1): number {
+export function estimateImageUsd(engine: ImageEngineId, referenceImages = 1, resolution: SeedreamResolutionTier = '2K'): number {
   const spec = IMAGE_ENGINES[engine];
+  const renderUsd = engine === 'seedream-5.5' && (resolution === '1K' || resolution === '1.5K') ? 0.02 : spec.usdPerRender;
   const billed = Math.max(0, referenceImages - (spec.freeReferenceImages ?? 0));
-  return Math.round((spec.usdPerRender + spec.usdPerReference * billed) * 1000) / 1000;
+  return Math.round((renderUsd + spec.usdPerReference * billed) * 1000) / 1000;
 }
 
 /** ModelArk's explicit-size window for Seedream image generation (pixels and aspect), from the tutorial. */

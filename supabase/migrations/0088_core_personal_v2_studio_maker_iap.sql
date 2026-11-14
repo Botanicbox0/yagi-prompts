@@ -1,6 +1,6 @@
--- CLOUD APPLICATION REQUIRED — TWINGS · core migration 0087 — Personal v2 Studio, Hydrogen Director, Keyframes, Open Maker & Store IAP
+-- CLOUD APPLICATION REQUIRED — TWINGS · core migration 0088 — Personal v2 Studio, Hydrogen Director, Keyframes, Open Maker & Store IAP
 --
--- Apply this file alongside 0162_glue_personal_v2_studio_maker_iap.sql before deploying code that reads or
+-- Apply this file alongside 0163_glue_personal_v2_studio_maker_iap.sql before deploying code that reads or
 -- writes these columns/tables.
 
 -- 1. Selective image set + Hydrogen director spec on billing_payments & render_jobs
@@ -160,3 +160,21 @@ create table if not exists store_iap_transactions (
 
 create index if not exists idx_store_iap_transactions_user
   on store_iap_transactions (user_id, created_at desc);
+
+-- 7. Backfill measured 1440x1080 (4:3) dimensions on giant-daydream ("작은 방의 백일몽") hero showcase film
+update prompt_items
+set media = jsonb_set(
+  jsonb_set(
+    jsonb_set(
+      jsonb_set(media, '{video,w}', '1440'::jsonb, true),
+      '{video,h}', '1080'::jsonb, true
+    ),
+    '{poster,w}', '1440'::jsonb, true
+  ),
+  '{poster,h}', '1080'::jsonb, true
+)
+where slug = 'giant-daydream'
+  and media is not null
+  and jsonb_typeof(media->'video') = 'object'
+  and jsonb_typeof(media->'poster') = 'object'
+  and (media->'poster'->>'w' is null or media->'video'->>'w' is null);

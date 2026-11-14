@@ -54,7 +54,7 @@ export default async function LandingPage({ params }: { params: Promise<{ locale
   const recruiting = campaigns.campaigns.filter(campaign => campaign.status === 'recruiting');
   const styles = new Map([...catalog.video, ...catalog.image].map(card => [card.slug, card]));
   // §7.5 (founder 2026-10-30 & 2026-11-04): one feed per medium — originals and AI creatives' templates mixed by `railOrder`.
-  // The hero showcases the top editorial studio original (`city-fashion-montage` / `aquarium-goldfish` / `fashion-show-arrival`).
+  // The hero showcases the top editorial studio original (`giant-daydream` / `city-fashion-montage` / `aquarium-goldfish` / `fashion-show-arrival`).
   const featured = pickHeroFeaturedTemplate(templates.video);
   const clientSafeCard = (card: (typeof templates.video)[number]) => ({ ...card, models: [], modelLabels: [] });
   const orderedVideos = railOrder(templates.video).map(clientSafeCard);

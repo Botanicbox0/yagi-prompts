@@ -1,9 +1,10 @@
 /**
- * Chat-based timeline editing engine (`docs/BRAND-VIDEO-COMPOSE-D.md` §2-2, Founder Decision 3).
+ * Chat-based timeline editing engine (`docs/BRAND-VIDEO-COMPOSE-D.md` §2-2, `docs/STUDIO-PRO-SUITE-V4.md`).
  *
  * 1. Deterministic Korean + English parser (`parseComposeChatCommand`) runs with zero latency and zero
- *    credit cost for everyday editing instructions (trim, reorder/swap, delete, captions, music/clip volume,
- *    aspect ratio, undo, and multi-clause instructions).
+ *    credit cost for everyday editing instructions (trim, split at timestamp/playhead, auto scene-cut split,
+ *    reference/preset color grading, reorder/swap, delete, captions, music/clip volume, aspect ratio, undo,
+ *    and multi-clause instructions).
  * 2. When a natural-language edit goes beyond deterministic patterns, `/api/brand-studio/compose` (`chat.edit`)
  *    translates it into Zod-validated `TimelinePatch[]` server-side under a per-minute rate limit — with zero
  *    credit charge for timeline/caption chat and zero external API keys exposed in the UI.
@@ -11,9 +12,17 @@
 import { z } from 'zod';
 import {
   COMPOSE_ASPECTS,
+  COMPOSE_COLOR_PRESET_IDS,
+  COMPOSE_COLOR_SCOPES,
+  DEFAULT_COLOR_REGION,
+  frameStateAtTime,
+  playheadClipSplitTarget,
+  roundTenths,
   type CaptionPosition,
   type CaptionSize,
   type ComposeAspect,
+  type ComposeColorPresetId,
+  type ComposeColorScope,
   type ComposerProject,
   type TimelinePatch,
 } from './timeline';
@@ -22,6 +31,11 @@ export type ComposeChatOutcome =
   | { kind: 'undo' }
   | { kind: 'patches'; patches: TimelinePatch[]; detail: string }
   | { kind: 'unrecognized' };
+
+export interface ComposeChatContext {
+  playheadSec?: number;
+  selectedClipIdx?: number;
+}
 
 const KOR_ORDINAL_WORDS: ReadonlyArray<[RegExp, number]> = [
   [/(?:첫\s*번째|첫째|맨\s*앞|처음\s*(?:컷|클립|장면))/i, 0],
@@ -39,6 +53,33 @@ const ENG_ORDINAL_WORDS: ReadonlyArray<[RegExp, number]> = [
   [/\bfourth\b/i, 3],
   [/\bfifth\b/i, 4],
 ];
+
+const COLOR_PRESET_PATTERNS: ReadonlyArray<[RegExp, ComposeColorPresetId]> = [
+  [/(?:프렌치\s*블루|트윙스\s*블루|\bfrench\s*blue\b)/i, 'twings-french-blue'],
+  [/(?:클린\s*하이키|하이키|밝고\s*깨끗|\bclean\s*high[\s-]*key\b|\bhigh[\s-]*key\b)/i, 'clean-high-key'],
+  [/(?:쿨\s*포슬린|포슬린|차가운\s*톤|\bcool\s*porcelain\b|\bporcelain\b)/i, 'editorial-cool-porcelain'],
+  [/(?:2383|웜\s*필름|필름\s*웜|따뜻한\s*필름|따뜻한\s*색감|웜톤|\bwarm\s*film\b|\bfilm\s*warm\b|\bkodak\b)/i, 'kodak-2383-warm'],
+  [/(?:무디\s*틸|틸\s*(?:앤|&|and)\s*앰버|틸앤앰버|시네마틱\s*틸|\bteal\s*(?:and|&)\s*amber\b|\bmoody\s*teal\b)/i, 'moody-teal-amber'],
+  [/(?:파스텔\s*에어리|파스텔\s*필름|에어리\s*필름|파스텔톤|\bpastel\s*airy\b|\bpastel\s*film\b|\bairy\s*film\b)/i, 'pastel-airy-film'],
+];
+
+const PRESET_LABEL_KO: Readonly<Record<ComposeColorPresetId, string>> = {
+  'twings-french-blue': '프렌치 블루',
+  'clean-high-key': '클린 하이키',
+  'editorial-cool-porcelain': '쿨 포슬린',
+  'kodak-2383-warm': '2383 필름 웜',
+  'moody-teal-amber': '무디 틸 앤 앰버',
+  'pastel-airy-film': '파스텔 에어리',
+};
+
+const PRESET_LABEL_EN: Readonly<Record<ComposeColorPresetId, string>> = {
+  'twings-french-blue': 'French Blue',
+  'clean-high-key': 'Clean High-Key',
+  'editorial-cool-porcelain': 'Cool Porcelain',
+  'kodak-2383-warm': '2383 Film Warm',
+  'moody-teal-amber': 'Moody Teal & Amber',
+  'pastel-airy-film': 'Pastel Airy',
+};
 
 function resolveClipIndex(clause: string, clipCount: number): number | null {
   const maxIdx = Math.max(0, clipCount - 1);
@@ -58,6 +99,15 @@ function resolveClipIndex(clause: string, clipCount: number): number | null {
   return null;
 }
 
+function resolveColorPreset(clause: string): ComposeColorPresetId | null {
+  for (const [pattern, presetId] of COLOR_PRESET_PATTERNS) {
+    if (pattern.test(clause)) return presetId;
+  }
+  if (/(?:따뜻|웜|\bwarm\b)/i.test(clause)) return 'kodak-2383-warm';
+  if (/(?:차갑|쿨|\bcool\b)/i.test(clause)) return 'editorial-cool-porcelain';
+  return null;
+}
+
 function extractQuotedText(clause: string): string | null {
   const match =
     /['"“”‘’「」『』]([^'"“”‘’「」『』]{1,120})['"“”‘’「」『』]/.exec(clause) ??
@@ -66,14 +116,14 @@ function extractQuotedText(clause: string): string | null {
 }
 
 function splitCompoundClauses(input: string): string[] {
-  // Preserve quoted text while splitting compound conjunctions ("줄이고", "바꾸고", "그리고", "and").
+  // Preserve quoted text while splitting compound conjunctions ("줄이고", "바꾸고", "자르고", "나누고", "입히고", "그리고", "and").
   const placeholders: string[] = [];
   const masked = input.replace(/['"“”‘’「」『』][^'"“”‘’「」『』]*['"“”‘’「」『』]/g, (quoted) => {
     placeholders.push(quoted);
     return `__QUOTE_${placeholders.length - 1}__`;
   });
   const rawParts = masked
-    .split(/(?:\s*(?:,|;|그리고|그런\s*다음|그\s*다음|\band\s+then\b|\bthen\b|\band\b)\s*)|(?<=(?:줄이|바꾸|옮기|지우|넣|켜|끄|낮추|높이|자르))고\s+/i)
+    .split(/(?:\s*(?:,|;|그리고|그런\s*다음|그\s*다음|\band\s+then\b|\bthen\b|\band\b)\s*)|(?<=(?:줄이|바꾸|옮기|지우|넣|켜|끄|낮추|높이|자르|나누|입히))고\s+/i)
     .map((part) => part.trim())
     .filter(Boolean);
   return rawParts.map((part) =>
@@ -91,6 +141,18 @@ function describePatch(patch: TimelinePatch, locale: 'ko' | 'en'): string {
         return ko ? `${patch.clipIndex + 1}번 컷 ${patch.targetDurationSec}초` : `cut ${patch.clipIndex + 1} → ${patch.targetDurationSec}s`;
       }
       return ko ? `${patch.clipIndex + 1}번 컷 구간 조절` : `trimmed cut ${patch.clipIndex + 1}`;
+    case 'set_clip_cuts':
+      return ko
+        ? `${patch.clipIndex + 1}번 컷 전환 ${patch.cutMarkers.length}개 표시`
+        : `marked ${patch.cutMarkers.length} cuts on clip ${patch.clipIndex + 1}`;
+    case 'split_clip_at':
+      return ko
+        ? `${patch.clipIndex + 1}번 컷 ${patch.atMediaSec}초 지점 분할`
+        : `split cut ${patch.clipIndex + 1} at ${patch.atMediaSec}s`;
+    case 'split_clip_cuts':
+      return ko
+        ? `${patch.clipIndex + 1}번 컷 장면 전환 자동 분할`
+        : `auto-split scene cuts on clip ${patch.clipIndex + 1}`;
     case 'move_clip':
       return ko ? `${patch.fromIndex + 1}번 → ${patch.toIndex + 1}번 이동` : `moved cut ${patch.fromIndex + 1} → ${patch.toIndex + 1}`;
     case 'swap_clips':
@@ -109,6 +171,59 @@ function describePatch(patch: TimelinePatch, locale: 'ko' | 'en'): string {
       return ko ? `배경음악 볼륨 ${Math.round(patch.volume * 100)}%` : `music volume ${Math.round(patch.volume * 100)}%`;
     case 'remove_bgm':
       return ko ? '배경음악 제거' : 'removed music';
+    case 'set_color_grade': {
+      if (!patch.enabled) {
+        return ko ? '색보정 해제' : 'cleared color grade';
+      }
+      const presetName = patch.presetId
+        ? (ko ? PRESET_LABEL_KO[patch.presetId] : PRESET_LABEL_EN[patch.presetId])
+        : (patch.referenceLabel ?? (ko ? '커스텀 룩' : 'custom look'));
+      const scopeName =
+        patch.scope === 'selected_clip'
+          ? ko
+            ? `${(patch.clipIndex ?? 0) + 1}번 클립`
+            : `clip ${(patch.clipIndex ?? 0) + 1}`
+          : patch.scope === 'region'
+            ? ko
+              ? '부분 영역'
+              : 'region'
+            : ko
+              ? '전체 영상'
+              : 'full timeline';
+      return ko ? `${scopeName} ${presetName} 색보정` : `${presetName} color grade (${scopeName})`;
+    }
+    case 'set_clip_speed': {
+      const rate = Math.round(patch.playbackRate * 100) / 100;
+      return ko ? `${patch.clipIndex + 1}번 컷 ${rate}배속` : `cut ${patch.clipIndex + 1} speed ${rate}x`;
+    }
+    case 'slip_clip':
+      return ko
+        ? `${patch.clipIndex + 1}번 컷 구간 ${patch.deltaSec > 0 ? '+' : ''}${patch.deltaSec}초 슬립`
+        : `slipped cut ${patch.clipIndex + 1} by ${patch.deltaSec}s`;
+    case 'set_clip_audio_offset':
+      return ko
+        ? `${patch.clipIndex + 1}번 컷 오디오 싱크 ${patch.audioOffsetSec > 0 ? '+' : ''}${patch.audioOffsetSec}초`
+        : `cut ${patch.clipIndex + 1} audio offset ${patch.audioOffsetSec}s`;
+    case 'set_clip_transition':
+      return ko
+        ? patch.transitionIn === 'none'
+          ? `${patch.clipIndex + 1}번 컷 전환 효과 제거`
+          : `${patch.clipIndex + 1}번 컷 전환 효과 적용`
+        : patch.transitionIn === 'none'
+          ? `removed transition on cut ${patch.clipIndex + 1}`
+          : `applied ${patch.transitionIn} transition on cut ${patch.clipIndex + 1}`;
+    case 'add_overlay':
+      return ko ? `V2 오버레이 "${patch.label}" 추가` : `added overlay "${patch.label}"`;
+    case 'remove_overlay':
+      return ko ? 'V2 오버레이 삭제' : 'removed overlay';
+    case 'add_sfx':
+      return ko ? `A2 효과음 "${patch.label}" 추가` : `added SFX "${patch.label}"`;
+    case 'remove_sfx':
+      return ko ? 'A2 효과음 삭제' : 'removed SFX';
+    case 'set_sfx_volume':
+      return ko
+        ? `${patch.sfxIndex + 1}번 효과음 볼륨 ${Math.round(patch.volume * 100)}%`
+        : `SFX ${patch.sfxIndex + 1} volume ${Math.round(patch.volume * 100)}%`;
   }
 }
 
@@ -116,7 +231,7 @@ export function describeTimelinePatches(patches: readonly TimelinePatch[], local
   return patches.map((patch) => describePatch(patch, locale)).join(', ');
 }
 
-function parseSingleClause(clause: string, project: ComposerProject): TimelinePatch | null {
+function parseSingleClause(clause: string, project: ComposerProject, context?: ComposeChatContext): TimelinePatch | null {
   const clipCount = project.clips.length;
 
   // 1. Aspect ratio
@@ -132,7 +247,98 @@ function parseSingleClause(clause: string, project: ComposerProject): TimelinePa
     if (/(?:피드|\bfeed\b)/i.test(clause)) return { op: 'set_aspect', aspect: '4:5' };
   }
 
-  // 2. Caption clear / remove / add
+  // 2. Color grading (`set_color_grade`) — before caption/delete so "색보정 해제/빼줘" never removes a clip
+  const mentionsColorGrade =
+    /(?:색보정|컬러\s*그레이딩|색감|그레이딩|\bcolou?r\s*grad(?:e|ing)?\b|\bcolor\s*look\b|\bfilm\s*look\b)/i.test(clause) ||
+    COLOR_PRESET_PATTERNS.some(([pattern]) => pattern.test(clause));
+  if (mentionsColorGrade && !extractQuotedText(clause)) {
+    if (/(?:해제|초기화|원래대로|꺼|빼|제거|없애|\bclear\b|\bremove\b|\breset\b|\boff\b|\bdisable\b)/i.test(clause)) {
+      return { op: 'set_color_grade', enabled: false };
+    }
+    const presetId = resolveColorPreset(clause) ?? 'twings-french-blue';
+    const explicitClipIdx = resolveClipIndex(clause, clipCount);
+    const isFull = /(?:전체\s*영상|영상\s*전체|타임라인\s*전체|모든\s*클립|\bfull\s*(?:video|timeline)\b|\bentire\s*(?:video|timeline)\b|\ball\s*clips\b)/i.test(clause);
+    const isRegion = /(?:특정\s*영역|부분\s*영역|부분\s*색보정|영역\s*마스크|\bregion\b)/i.test(clause);
+    const scope: ComposeColorScope = isRegion
+      ? 'region'
+      : !isFull && explicitClipIdx !== null
+        ? 'selected_clip'
+        : 'full_timeline';
+    const targetClipIdx = scope === 'selected_clip' ? (explicitClipIdx ?? context?.selectedClipIdx ?? 0) : null;
+    const pct = /(\d{1,3})\s*%/.exec(clause);
+    const intensity = pct ? Math.min(100, Math.max(5, Number(pct[1]))) / 100 : 0.85;
+    return {
+      op: 'set_color_grade',
+      enabled: true,
+      scope,
+      clipIndex: targetClipIdx,
+      clipId: targetClipIdx !== null ? (project.clips[targetClipIdx]?.id ?? null) : null,
+      ...(scope === 'region' ? { region: project.colorGrade?.region ?? DEFAULT_COLOR_REGION } : {}),
+      presetId,
+      intensity,
+    };
+  }
+
+  // 3. Auto scene-cut detection & split (`split_clip_cuts`)
+  if (
+    /(?:컷\s*전환|장면\s*전환|씬\s*전환|자동\s*컷|\bscene\s*(?:cuts?|transitions?|changes?)\b|\bauto[\s-]*(?:cut|split)\b)/i.test(clause) &&
+    /(?:나눠|나누|분할|잘라|자르|구분|감지|\bsplit\b|\bdetect\b|\bdivide\b)/i.test(clause)
+  ) {
+    const targetIdx = resolveClipIndex(clause, clipCount) ?? context?.selectedClipIdx ?? 0;
+    const markers = project.clips[targetIdx]?.cutMarkers ? [...project.clips[targetIdx]!.cutMarkers!] : [];
+    return {
+      op: 'split_clip_cuts',
+      clipIndex: targetIdx,
+      cutMediaSecs: markers,
+    };
+  }
+
+  // 4. Playhead split & explicit timestamp split (`split_clip_at`)
+  if (
+    /(?:현재\s*위치|지금\s*위치|재생\s*위치|플레이헤드|현재\s*지점|\bplayhead\b|\bcurrent\s*(?:position|time|point)\b).*?(?:잘라|자르|나눠|나누|분할|쪼개|\bsplit\b|\bcut\b)/i.test(clause) ||
+    /^(?:현재\s*위치\s*(?:분할|자르기)|분할해\s*줘?|\bsplit\s*(?:here|at\s*playhead)\b)$/i.test(clause.trim())
+  ) {
+    if (context?.playheadSec !== undefined) {
+      const target = playheadClipSplitTarget(project, context.playheadSec);
+      if (target) {
+        return { op: 'split_clip_at', clipIndex: target.clipIndex, atMediaSec: target.atMediaSec };
+      }
+    }
+    const fallbackIdx = resolveClipIndex(clause, clipCount) ?? context?.selectedClipIdx ?? 0;
+    const fallbackClip = project.clips[fallbackIdx];
+    const midSec = fallbackClip
+      ? roundTenths((fallbackClip.trimStartSec + fallbackClip.trimEndSec) / 2)
+      : roundTenths(context?.playheadSec ?? 1.5);
+    return { op: 'split_clip_at', clipIndex: fallbackIdx, atMediaSec: Math.max(0.3, midSec) };
+  }
+
+  const splitAtKor =
+    /(\d+(?:\.\d+)?)\s*(?:초|s)\s*(?:에서|지점에서|위치에서|부분에서|기점으로)\s*(?:잘라|자르|나눠|나누|분할|쪼개|컷)/i.exec(clause) ??
+    /(\d+(?:\.\d+)?)\s*(?:초|s)\s*(?:분할|나누기)/i.exec(clause);
+  const splitAtEng =
+    /\b(?:split|divide|slice)\b.*?\bat\s*(\d+(?:\.\d+)?)\s*(?:seconds?|secs?|s)\b/i.exec(clause) ??
+    /\bcut\s+(?:(?:clip|shot)\s*\d+\s+)?at\s*(\d+(?:\.\d+)?)\s*(?:seconds?|secs?|s)\b/i.exec(clause);
+  const splitTimeMatch = splitAtKor ?? splitAtEng;
+  if (splitTimeMatch) {
+    const requestedSec = Number(splitTimeMatch[1]);
+    const explicitIdx = resolveClipIndex(clause, clipCount);
+    if (explicitIdx !== null) {
+      return { op: 'split_clip_at', clipIndex: explicitIdx, atMediaSec: roundTenths(requestedSec) };
+    }
+    if (clipCount > 0) {
+      const state = frameStateAtTime(project, requestedSec);
+      if (state.activeClip) {
+        return {
+          op: 'split_clip_at',
+          clipIndex: state.activeClip.index,
+          atMediaSec: roundTenths(state.activeClip.mediaTimeSec),
+        };
+      }
+    }
+    return { op: 'split_clip_at', clipIndex: 0, atMediaSec: roundTenths(requestedSec) };
+  }
+
+  // 5. Caption clear / remove / add
   if (/(?:자막|캡션|글자|문구|\bcaptions?\b|\bsubtitles?\b)/i.test(clause)) {
     if (/(?:모두|다|전체|\ball\b).*(?:지워|삭제|빼|없애|clear|remove|delete)|(?:지워|삭제|clear|remove|delete).*(?:모두|다|전체|\ball\b)\s*(?:자막|캡션|captions?)/i.test(clause)) {
       return { op: 'remove_caption', captionIndex: 'all' };
@@ -182,7 +388,7 @@ function parseSingleClause(clause: string, project: ComposerProject): TimelinePa
     }
   }
 
-  // 3. BGM / Music controls
+  // 6. BGM / Music controls
   if (/(?:배경\s*음악|배경음|음악|\bbgm\b|\bmusic\b)/i.test(clause)) {
     if (/(?:빼|삭제|제거|없애|\bremove\b|\bclear\b)/i.test(clause)) {
       return { op: 'remove_bgm' };
@@ -204,7 +410,7 @@ function parseSingleClause(clause: string, project: ComposerProject): TimelinePa
     }
   }
 
-  // 4. Clip original sound / audio controls
+  // 7. Clip original sound / audio controls
   if (/(?:원본\s*소리|클립\s*소리|영상\s*소리|소리|오디오|볼륨|\bclip\s*audio\b|\bsound\b|\bmute\b|\bunmute\b|\bvolume\b)/i.test(clause)) {
     const targetIdx = /(?:모두|다|전체|\ball\b)/i.test(clause) ? ('all' as const) : (resolveClipIndex(clause, clipCount) ?? ('all' as const));
     if (/(?:꺼|음소거|무음|\bmute\b|\boff\b)/i.test(clause)) {
@@ -220,7 +426,7 @@ function parseSingleClause(clause: string, project: ComposerProject): TimelinePa
     }
   }
 
-  // 5. Swap two clips ("1번과 2번 순서 바꿔줘", "swap clip 1 and 2")
+  // 8. Swap two clips ("1번과 2번 순서 바꿔줘", "swap clip 1 and 2")
   const swapKor = /(\d+)\s*(?:번째|번)(?:컷|클립)?\s*(?:과|와|이랑|하고|,)\s*(\d+)\s*(?:번째|번).*?(?:바꿔|교환|맞바꿔)/i.exec(clause);
   if (swapKor) {
     return { op: 'swap_clips', indexA: Math.max(0, Number(swapKor[1]) - 1), indexB: Math.max(0, Number(swapKor[2]) - 1) };
@@ -233,7 +439,7 @@ function parseSingleClause(clause: string, project: ComposerProject): TimelinePa
     return { op: 'swap_clips', indexA: 0, indexB: 1 };
   }
 
-  // 6. Move clip ("3번째 클립 맨 앞으로", "1번 클립 맨 뒤로", "move clip 3 to 1")
+  // 9. Move clip ("3번째 클립 맨 앞으로", "1번 클립 맨 뒤로", "move clip 3 to 1")
   if (/(?:옮겨|이동|보내|\bmove\b)/i.test(clause)) {
     const fromIndex = resolveClipIndex(clause, clipCount);
     if (fromIndex !== null) {
@@ -252,7 +458,7 @@ function parseSingleClause(clause: string, project: ComposerProject): TimelinePa
     }
   }
 
-  // 7. Delete / remove clip ("마지막 컷 삭제", "2번 클립 빼줘", "delete cut 2")
+  // 10. Delete / remove clip ("마지막 컷 삭제", "2번 클립 빼줘", "delete cut 2")
   if (/(?:삭제|빼|제거|지워|\bdelete\b|\bremove\b|\bdrop\b)/i.test(clause)) {
     const clipIndex = resolveClipIndex(clause, clipCount);
     if (clipIndex !== null) {
@@ -260,7 +466,7 @@ function parseSingleClause(clause: string, project: ComposerProject): TimelinePa
     }
   }
 
-  // 8. Trim clip range / cut front or back / set target duration
+  // 11. Trim clip range / cut front or back / set target duration
   const clipIndex = resolveClipIndex(clause, clipCount) ?? 0;
   const clip = project.clips[clipIndex];
 
@@ -315,6 +521,7 @@ export function parseComposeChatCommand(
   message: string,
   project: ComposerProject,
   locale: 'ko' | 'en' = 'ko',
+  context?: ComposeChatContext,
 ): ComposeChatOutcome {
   const trimmed = message.trim();
   if (!trimmed) return { kind: 'unrecognized' };
@@ -326,12 +533,12 @@ export function parseComposeChatCommand(
   const clauses = splitCompoundClauses(trimmed);
   const patches: TimelinePatch[] = [];
   for (const clause of clauses) {
-    const patch = parseSingleClause(clause, project);
+    const patch = parseSingleClause(clause, project, context);
     if (patch) patches.push(patch);
   }
 
   if (patches.length === 0) {
-    const single = parseSingleClause(trimmed, project);
+    const single = parseSingleClause(trimmed, project, context);
     if (single) patches.push(single);
   }
 
@@ -343,6 +550,27 @@ export function parseComposeChatCommand(
   return { kind: 'patches', patches, detail };
 }
 
+const ColorRegionSchema = z.object({
+  x: z.number().min(0).max(1),
+  y: z.number().min(0).max(1),
+  w: z.number().min(0.05).max(1),
+  h: z.number().min(0.05).max(1),
+});
+
+const ReferenceColorProfileSchema = z.object({
+  lumaMean: z.number(),
+  lumaStd: z.number(),
+  rMean: z.number(),
+  gMean: z.number(),
+  bMean: z.number(),
+  rStd: z.number(),
+  gStd: z.number(),
+  bStd: z.number(),
+  warmth: z.number(),
+  contrast: z.number(),
+  saturation: z.number(),
+});
+
 export const TimelinePatchSchema: z.ZodType<TimelinePatch> = z.discriminatedUnion('op', [
   z.object({ op: z.literal('set_aspect'), aspect: z.enum(COMPOSE_ASPECTS) }),
   z.object({
@@ -351,6 +579,21 @@ export const TimelinePatchSchema: z.ZodType<TimelinePatch> = z.discriminatedUnio
     trimStartSec: z.number().min(0).optional(),
     trimEndSec: z.number().min(0.3).optional(),
     targetDurationSec: z.number().min(0.3).optional(),
+  }),
+  z.object({
+    op: z.literal('set_clip_cuts'),
+    clipIndex: z.number().int().min(0),
+    cutMarkers: z.array(z.number().min(0)).max(120),
+  }),
+  z.object({
+    op: z.literal('split_clip_at'),
+    clipIndex: z.number().int().min(0),
+    atMediaSec: z.number().min(0.3),
+  }),
+  z.object({
+    op: z.literal('split_clip_cuts'),
+    clipIndex: z.number().int().min(0),
+    cutMediaSecs: z.array(z.number().min(0)).max(120),
   }),
   z.object({ op: z.literal('move_clip'), fromIndex: z.number().int().min(0), toIndex: z.number().int().min(0) }),
   z.object({ op: z.literal('swap_clips'), indexA: z.number().int().min(0), indexB: z.number().int().min(0) }),
@@ -386,6 +629,24 @@ export const TimelinePatchSchema: z.ZodType<TimelinePatch> = z.discriminatedUnio
   }),
   z.object({ op: z.literal('set_bgm_volume'), volume: z.number().min(0).max(1), muted: z.boolean().optional() }),
   z.object({ op: z.literal('remove_bgm') }),
+  z.object({
+    op: z.literal('set_color_grade'),
+    enabled: z.boolean(),
+    scope: z.enum(COMPOSE_COLOR_SCOPES).optional(),
+    clipIndex: z.number().int().min(0).nullable().optional(),
+    clipId: z.string().max(80).nullable().optional(),
+    region: ColorRegionSchema.nullable().optional(),
+    presetId: z.enum(COMPOSE_COLOR_PRESET_IDS).nullable().optional(),
+    referenceLabel: z.string().max(160).nullable().optional(),
+    referenceUrl: z.string().max(500).nullable().optional(),
+    referenceAssetId: z.string().max(80).nullable().optional(),
+    referenceOutputId: z.string().max(80).nullable().optional(),
+    referenceProfile: ReferenceColorProfileSchema.nullable().optional(),
+    intensity: z.number().min(0).max(1).optional(),
+    skinProtect: z.number().min(0).max(1).optional(),
+    grain: z.number().min(0).max(10).optional(),
+    halation: z.number().min(0).max(0.2).optional(),
+  }),
 ]);
 
 export const ComposePatchesEnvelopeSchema = z.object({

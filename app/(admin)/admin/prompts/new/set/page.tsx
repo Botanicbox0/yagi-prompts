@@ -58,7 +58,7 @@ export default async function AdminImageSetNewPage() {
             </div>
           </div>
           <ImageSetFields
-            defaultEngine="seedream-5.0-pro"
+            defaultEngine="seedream-5.5"
             defaultAspect={DEFAULT_IMAGE_ASPECT}
             engines={SET_ENGINES.map((id) => ({ id, label: IMAGE_ENGINES[id].label }))}
             aspects={IMAGE_ASPECTS.map((id) => ({ id, label: dict.templates.aspects[id as keyof typeof dict.templates.aspects] ?? id }))}

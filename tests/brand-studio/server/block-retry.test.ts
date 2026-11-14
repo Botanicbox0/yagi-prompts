@@ -25,7 +25,7 @@ afterEach(async () => {
 });
 
 const owner = () => viewerOf(f.ids.owner);
-const image = { kind: 'image', model: 'seedream-5-pro', prompt: 'a model with bare shoulders by a window', aspect: '3:4', resolution: '1K', count: 1, enhance: false };
+const image = { kind: 'image', model: 'seedream-5.5', prompt: 'a model with bare shoulders by a window', aspect: '3:4', resolution: '1K', count: 1, enhance: false };
 const REJECTED: StudioTaskStatus = { state: 'failed', code: 'provider_rejected', detail: 'unsafe_content/moderation_blocked' };
 const DONE: StudioTaskStatus = { state: 'succeeded', outputs: [{ url: 'fake://image/320x180/a', mime: 'image/png' }] };
 

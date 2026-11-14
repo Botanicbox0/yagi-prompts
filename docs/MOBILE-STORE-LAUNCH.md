@@ -17,7 +17,7 @@
      - `twings.credits.3000` (300 credits, 3,300 KRW tier)
      - `twings.credits.5000` (500 credits, 5,500 KRW tier)
      - `twings.credits.10000` (1,000 credits, 11,000 KRW tier)
-   - Server ledger (`store_iap_wallets`, `store_iap_transactions` in migrations `0087` / `0162`) verifies receipts fail-closed and deducts credits inside the same serializable transaction as render enqueueing (`POST /api/mobile/iap/renders`).
+   - Server ledger (`store_iap_wallets`, `store_iap_transactions` in migrations `0088` / `0163`) verifies receipts fail-closed and deducts credits inside the same serializable transaction as render enqueueing (`POST /api/mobile/iap/renders`).
 3. **Desktop Web Gate for Video Format Authoring**:
    - Creating or publishing **video** templates (`/creators/workspace/formats/[id]`) requires a desktop web viewport (`>= 1024px`); mobile store builds render the desktop-web notice (`data-video-maker-desktop-only`).
 
@@ -36,7 +36,7 @@
 
 ## 3. Store Submission Preflight
 
-1. Apply DB migrations `0087_core_personal_v2_studio_maker_iap.sql` and `0162_glue_personal_v2_studio_maker_iap.sql` to Supabase before shipping native builds.
+1. Apply DB migrations `0088_core_personal_v2_studio_maker_iap.sql` and `0163_glue_personal_v2_studio_maker_iap.sql` to Supabase before shipping native builds.
 2. Confirm `npx tsc --noEmit`, full `npx vitest run`, and `npm run sweep:anon` pass on release commit.
 3. Verify inside iOS Simulator / TestFlight (`TwingsIOS/1.0`) and Android Internal Testing (`TwingsAndroid/1.0`):
    - `/auth/choose` renders Apple + Google + Kakao on iOS, Google + Kakao on Android.

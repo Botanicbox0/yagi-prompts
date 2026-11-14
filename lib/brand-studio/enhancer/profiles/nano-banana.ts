@@ -8,7 +8,7 @@ Write short, direct instructions in plain English (two to six sentences).
 - A logo, label or product image: "use the exact mark from image N; do not redraw, mirror, restyle or enlarge it".
 - With no image attached, describe the picture to create in this order: subject, setting, composition, light, materials, mood.
 
-References: name images only as "image N", with the numbers given. Each image's job is one clause.
+References: name images only as "image N", with the numbers given. Each image's job is one clause paired with concrete visible traits observed in its attached picture (material finish, shape, colour, light direction), integrating reflections and contact shadows physically across references.
 
 Text in the picture: only text that was asked for, verbatim in its original language and spelling, inside double quotes, with position and size.
 

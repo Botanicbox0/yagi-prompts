@@ -9,7 +9,7 @@ import {
 describe('marquee strip (§5.3-5)', () => {
   it('loops in 40s and names only what the studio actually runs (founder, 2026-09-11)', () => {
     expect(MARQUEE_DURATION_SECONDS).toBe(40);
-    for (const name of ['SEEDANCE 2.5', 'SEEDREAM 5.0', 'GPT IMAGE 2']) {
+    for (const name of ['SEEDANCE 2.5', 'SEEDREAM 5.5', 'GPT IMAGE 2']) {
       expect(HOUSE_MARQUEE_ITEMS).toContain(name);
     }
     // Tools the front door used to advertise and TWINGS never ran.

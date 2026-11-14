@@ -7,7 +7,26 @@
  * - In-editor Oplux Region Edit panel + non-blocking job tracking that lands finished patches as new layers
  * - `mergeDown` ("아래로 합치기") and full-resolution PNG export.
  */
-import { useCallback, useEffect, useId, useMemo, useRef, useState, type KeyboardEvent } from "react";
+import {
+   useCallback,
+  useEffect,
+  useId,
+  useMemo,
+  useRef,
+  useState,
+  type ClipboardEvent as ReactClipboardEvent,
+  type KeyboardEvent,
+} from "react";
+import {
+  copyImageUrlToClipboard,
+  extractClipboardImages,
+  getStudioCopiedLayer,
+  isEditableTextTarget,
+  prepareClipboardUploadFiles,
+  setStudioCopiedLayer,
+  writePngBlobToClipboard,
+  type ClipboardDataLike,
+} from "@/lib/brand-studio/clipboard-image";
 import { STUDIO_UPLOAD_MIMES, type RegionBox, type StudioAssetView } from "@/lib/brand-studio/contracts";
 import type { Dictionary } from "@/lib/i18n/dictionaries";
 import { useModal } from "../modal";
@@ -16,7 +35,16 @@ import { nudgeBox } from "../region-math";
 import { libraryKey, type LayerEditorProps, type LibraryItemView } from "../seams";
 import { browserRenderDeps, loadMaskAsDataUrl, measurerFor, naturalSize, waitForLayerFonts, warmFonts } from "./browser";
 import { pushRecent } from "./colors";
-import { EXPORT_STEPS, exportFileName, planExport, planMergeDown, renderPlan, type ExportStep, type RenderResult } from "./export";
+import {
+  EXPORT_STEPS,
+  exportFileName,
+  planCropExport,
+  planExport,
+  planMergeDown,
+  renderPlan,
+  type ExportStep,
+  type RenderResult,
+} from "./export";
 import { ZOOM_STEP, fitView, nudgeDelta, zoomCentered, type Insets, type Point, type View } from "./geometry";
 import { canRedo, canUndo, commit, createHistory, preview, redo, settle, undo, type History } from "./history";
 import { LayerIcon, type LayerIconName } from "./icons";
@@ -45,12 +73,14 @@ import {
   moveLayer,
   newLayerId,
   nextName,
+  pasteLayer,
   removeLayer,
   setBaseHidden,
   topVisibleImageLayerId,
   updateLayer,
   withPlate,
   type Frame,
+  type Layer,
   type LayerDoc,
   type LayerPatch,
   type LayerTool,
@@ -594,6 +624,115 @@ export default function LayerEditor(props: LayerEditorProps & { copy: Dictionary
     edit((d) => duplicateLayer(d, id, { newId, suffix: copy.names.copySuffix }).doc);
     setSelectedId(newId);
   };
+
+  const pasteInternalLayer = useCallback(
+    (source: Layer) => {
+      if (atLimit()) return;
+      const newId = newLayerId();
+      edit((d) => pasteLayer(d, source, { newId, suffix: copy.names.copySuffix }).doc);
+      setSelectedId(newId);
+      setToolState("move");
+      say(copy.clipboard.pastedLayer);
+    },
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [copy.clipboard.pastedLayer, copy.names.copySuffix, edit, say],
+  );
+
+  const copySelection = async () => {
+    const current = historyRef.current.present;
+    if (tool === "marquee" && regionBox) {
+      try {
+        const textLayers = current.layers.filter((l): l is TextLayer => l.kind === "text" && !l.hidden);
+        if (textLayers.length) await waitForLayerFonts(textLayers);
+        const planned = planCropExport(current, { url: base.url, width: base.width, height: base.height, name: copy.names.base }, regionBox, measurerFor);
+        const rendered = await renderPlan(planned.plan, browserRenderDeps(() => {}));
+        if (!rendered.ok) return say(copy.clipboard.copyFailed);
+        const [dataUrl, written] = await Promise.all([blobToDataUrl(rendered.blob), writePngBlobToClipboard(rendered.blob)]);
+        const cropLayer = createPatchLayer(current, {
+          url: dataUrl,
+          ref: null,
+          box: planned.box,
+          name: nextName(current, copy.names.image),
+        });
+        setStudioCopiedLayer(cropLayer, written.byteLength);
+        say(copy.clipboard.copiedCrop);
+      } catch {
+        say(copy.clipboard.copyFailed);
+      }
+      return;
+    }
+
+    const layer = findLayer(current, selectedId);
+    if (layer) {
+      setStudioCopiedLayer(layer, 0);
+      say(copy.clipboard.copiedLayer);
+      if (layer.kind === "image") {
+        void copyImageUrlToClipboard(layer.src.url).then((res) => {
+          if (res.ok && res.byteLength > 0) setStudioCopiedLayer(layer, res.byteLength);
+        });
+      }
+      return;
+    }
+
+    try {
+      const textLayers = current.layers.filter((l): l is TextLayer => l.kind === "text" && !l.hidden);
+      if (textLayers.length) await waitForLayerFonts(textLayers);
+      const plan = planExport(current, { url: base.url, width: base.width, height: base.height, name: copy.names.base }, measurerFor);
+      const rendered = await renderPlan(plan, browserRenderDeps(() => {}));
+      if (!rendered.ok) return say(copy.clipboard.copyFailed);
+      const written = await writePngBlobToClipboard(rendered.blob);
+      say(written.ok ? copy.clipboard.copiedCanvas : copy.clipboard.copyFailed);
+    } catch {
+      say(copy.clipboard.copyFailed);
+    }
+  };
+
+  const handleClipboardPaste = useCallback(
+    (data: ClipboardDataLike | null | undefined, target: EventTarget | null, consume: () => void) => {
+      if (confirming || step) return;
+      const inRegionDom = Boolean(target && typeof (target as HTMLElement).closest === "function" && (target as HTMLElement).closest("[data-layers-region]"));
+      if (tool === "marquee" || inRegionDom) return;
+
+      const pastedFiles = extractClipboardImages(data);
+      const internal = getStudioCopiedLayer<Layer>();
+
+      if (pastedFiles.length > 0) {
+        consume();
+        if (pastedFiles.length === 1 && internal && internal.writtenByteLength > 0 && internal.writtenByteLength === pastedFiles[0]!.size) {
+          pasteInternalLayer(internal.layer);
+          return;
+        }
+        void prepareClipboardUploadFiles(pastedFiles).then(async (ready) => {
+          const beforeCount = historyRef.current.present.layers.length;
+          await uploadFiles(ready);
+          if (historyRef.current.present.layers.length > beforeCount) {
+            say(copy.clipboard.pastedLayer);
+          }
+        });
+        return;
+      }
+
+      if (!isEditableTextTarget(target) && internal) {
+        consume();
+        pasteInternalLayer(internal.layer);
+      }
+    },
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [confirming, step, tool, pasteInternalLayer, copy.clipboard.pastedLayer, say],
+  );
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const onWindowPaste = (event: ClipboardEvent) => {
+      if (event.defaultPrevented) return;
+      handleClipboardPaste(event.clipboardData, event.target, () => {
+        event.preventDefault();
+        event.stopPropagation();
+      });
+    };
+    window.addEventListener("paste", onWindowPaste);
+    return () => window.removeEventListener("paste", onWindowPaste);
+  }, [handleClipboardPaste]);
   const remove = (id: string) => {
     if (findLayer(historyRef.current.present, id)?.locked) return say(copy.stage.locked);
     if (editingId === id) {
@@ -780,6 +919,7 @@ export default function LayerEditor(props: LayerEditorProps & { copy: Dictionary
     };
     if (mod && key === "z") return act(event.shiftKey ? doRedo : doUndo);
     if (mod && key === "y") return act(doRedo);
+    if (mod && key === "c") return act(() => void copySelection());
     if (mod && key === "d") return act(() => selectedId && duplicate(selectedId));
     if (mod && (key === "=" || key === "+")) return act(() => zoomBy(ZOOM_STEP));
     if (mod && key === "-") return act(() => zoomBy(1 / ZOOM_STEP));
@@ -843,6 +983,13 @@ export default function LayerEditor(props: LayerEditorProps & { copy: Dictionary
       aria-labelledby={titleId}
       data-layer-editor
       onKeyDown={onKeyDown}
+      onPaste={(event: ReactClipboardEvent<HTMLDialogElement>) => {
+        if (event.defaultPrevented) return;
+        handleClipboardPaste(event.clipboardData, event.target, () => {
+          event.preventDefault();
+          event.stopPropagation();
+        });
+      }}
       onKeyUp={(event) => event.key === " " && setSpaceDown(false)}
       onCancel={(event) => {
         event.preventDefault();
@@ -1036,6 +1183,7 @@ export default function LayerEditor(props: LayerEditorProps & { copy: Dictionary
                 box={regionBox}
                 preset={props.initialRegionPreset}
                 autoFlatten={autoFlatten}
+                activeForPaste={tool === "marquee"}
                 quickItems={quickTrayItems}
                 uploading={uploading.length > 0}
                 onBox={setRegionBox}
@@ -1045,6 +1193,7 @@ export default function LayerEditor(props: LayerEditorProps & { copy: Dictionary
                   return hit ? pickToTray(hit) : null;
                 }}
                 onUploadRefs={uploadRegionRefFiles}
+                onNotice={say}
                 onSubmitted={(jobId, meta) => {
                   setPendingRegionJobs((cur) => [...cur, { jobId, autoFlatten: meta.autoFlatten, box: meta.box }]);
                   setSheet(null);
