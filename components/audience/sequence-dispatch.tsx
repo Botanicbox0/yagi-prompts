@@ -173,18 +173,18 @@ export function SequenceDispatchSection({
       <section
         data-weekly-dispatch
         aria-labelledby="weekly-dispatch-heading"
-        className="rounded-[24px] border border-hairline bg-white p-6 shadow-[0_18px_42px_-28px_rgba(12,15,20,0.12)] sm:p-8 lg:p-10"
+        className="rounded-[24px] border border-[#E4E4E7] bg-white p-6 shadow-none sm:p-8 lg:p-10"
       >
         <div className="flex flex-wrap items-end justify-between gap-4 border-b border-hairline pb-5">
           <div>
-            <p className="font-mono text-[0.72rem] font-medium tracking-[0.08em] text-[#3063A7] uppercase tabular-nums">
+            <p className="font-mono text-[0.72rem] font-semibold tracking-[0.08em] text-[#CC1573] uppercase tabular-nums">
               {locale === 'en'
                 ? 'THIS WEEK IN TWINGS · WEEKLY CURATED DISPATCH'
                 : 'THIS WEEK IN TWINGS · 이번 주 에디토리얼 큐레이션'}
             </p>
             <h2
               id="weekly-dispatch-heading"
-              className="mt-2 font-display text-[clamp(1.45rem,2.6vw,2.15rem)] leading-[1.08] font-black tracking-[-0.025em] text-[#0E1013]"
+              className="mt-2 font-display text-[clamp(1.45rem,2.6vw,2.15rem)] leading-[1.08] font-bold tracking-[-0.025em] text-[#09090B]"
             >
               {locale === 'en'
                 ? 'Scenes everyone is stepping into right now'
@@ -219,7 +219,7 @@ export function SequenceDispatchSection({
                   key={card.slug}
                   data-dispatch-card={card.slug}
                   data-dispatch-kind="video"
-                  className="group relative flex flex-col justify-between rounded-[20px] border border-hairline bg-[#F6F7F9]/75 p-2.5 transition-colors hover:border-[#3875C5]/45 hover:bg-white"
+                  className="group relative flex flex-col justify-between rounded-[20px] border border-[#E4E4E7] bg-[#F4F4F5] p-2.5 shadow-none transition-colors hover:border-[#09090B] hover:bg-white"
                 >
                   <div>
                     <div className="relative aspect-[4/5] w-full overflow-hidden rounded-[14px] bg-sky">
@@ -257,7 +257,7 @@ export function SequenceDispatchSection({
                     <h3 className="mt-2.5 line-clamp-1 px-0.5 text-sm font-semibold tracking-[-0.01em] text-[#0E1013]">
                       <a
                         href={templateHref(locale, card.slug)}
-                        className="outline-none after:absolute after:inset-0 after:rounded-[20px] after:content-[''] focus-visible:after:outline-2 focus-visible:after:outline-offset-2 focus-visible:after:outline-[#3875C5]"
+                        className="outline-none after:absolute after:inset-0 after:rounded-[20px] after:content-[''] focus-visible:after:outline-2 focus-visible:after:outline-offset-2 focus-visible:after:outline-[#FF58AE]"
                       >
                         {title}
                       </a>
@@ -286,21 +286,21 @@ export function SequenceDispatchSection({
             data-dispatch-image-spotlight
             data-image-priority={imageFirst ? 'first' : 'second'}
             className={[
-              'flex flex-col justify-between rounded-[20px] border border-[#3875C5]/25 bg-[#F3F7FA] p-4 sm:p-5 lg:col-span-5',
+              'flex flex-col justify-between rounded-[20px] border border-[#E4E4E7] bg-[#F4F4F5] p-4 shadow-none sm:p-5 lg:col-span-5',
               imageFirst ? 'lg:order-1' : 'lg:order-2'
             ].join(' ')}
           >
             <div>
               <div className="flex flex-wrap items-center justify-between gap-2">
-                <span className="inline-flex items-center gap-1.5 rounded-full bg-[#E8EFF7] px-2.5 py-1 font-mono text-[0.68rem] font-semibold text-[#3063A7] uppercase tabular-nums">
-                  <span aria-hidden="true" className="size-1.5 rounded-full bg-[#3875C5]" />
+                <span className="inline-flex items-center gap-1.5 rounded-full border border-[#E4E4E7] bg-white px-2.5 py-1 font-mono text-[0.68rem] font-semibold text-[#CC1573] uppercase tabular-nums">
+                  <span aria-hidden="true" className="size-1.5 rounded-full bg-[#FF58AE]" />
                   {locale === 'en' ? '5-SHOT PHOTO SERIES' : '5장 에디토리얼 화보 세트'}
                 </span>
                 <button
                   type="button"
                   data-dispatch-image-switch
                   onClick={() => handleSelectMedium('image')}
-                  className="font-mono text-[0.7rem] font-semibold text-[#3063A7] underline underline-offset-4 hover:text-[#0E1013]"
+                  className="font-mono text-[0.7rem] font-semibold text-[#CC1573] underline underline-offset-4 hover:text-[#09090B]"
                 >
                   {locale === 'en' ? 'Switch to all photo series ↓' : '화보 템플릿으로 바로 전환 ↓'}
                 </button>
@@ -328,7 +328,7 @@ export function SequenceDispatchSection({
                   {/* Contact-sheet preview strip (shows multi-frame nature of Image Series) */}
                   <a
                     href={templateHref(locale, featuredImageSet.slug)}
-                    className="mt-3.5 block overflow-hidden rounded-[16px] border border-white/80 bg-white p-2 shadow-sm transition-transform hover:scale-[1.01]"
+                    className="mt-3.5 block overflow-hidden rounded-[16px] border border-[#E4E4E7] bg-white p-2 shadow-none transition-colors hover:border-[#09090B]"
                   >
                     {featuredImageSet.gallery && featuredImageSet.gallery.length >= 2 ? (
                       <div className="grid grid-cols-3 gap-1.5">
@@ -364,7 +364,7 @@ export function SequenceDispatchSection({
                           ? 'FRAMES 01–05 · EDITORIAL CONTACT SHEET'
                           : 'FRAMES 01–05 · 5컷 연속 화보 패키지'}
                       </span>
-                      <span className="font-semibold text-[#3063A7]">
+                      <span className="font-semibold text-[#CC1573]">
                         {locale === 'en' ? 'Open series →' : '화보 세트 열기 →'}
                       </span>
                     </div>
@@ -380,7 +380,7 @@ export function SequenceDispatchSection({
             </div>
 
             {imageSeries.length > 1 && (
-              <div className="mt-3 flex flex-wrap items-center gap-2 border-t border-[#3875C5]/15 pt-3">
+              <div className="mt-3 flex flex-wrap items-center gap-2 border-t border-[#E4E4E7] pt-3">
                 <span className="font-mono text-[0.66rem] text-black/55 uppercase">
                   {locale === 'en' ? 'MORE SERIES:' : '다른 화보 세트:'}
                 </span>
@@ -388,7 +388,7 @@ export function SequenceDispatchSection({
                   <a
                     key={series.slug}
                     href={templateHref(locale, series.slug)}
-                    className="inline-flex min-h-8 items-center rounded-full border border-hairline bg-white px-3 py-1 text-xs font-medium text-[#0E1013] transition-colors hover:border-[#3875C5] hover:text-[#3063A7]"
+                    className="inline-flex min-h-8 items-center rounded-full border border-[#E4E4E7] bg-white px-3 py-1 text-xs font-medium text-[#09090B] transition-colors hover:border-[#09090B] hover:text-[#CC1573]"
                   >
                     {locale === 'ko' && series.titleKo ? series.titleKo : series.title} ↗
                   </a>
@@ -420,7 +420,7 @@ export function SequenceDispatchSection({
                 'inline-flex min-h-10 items-center gap-2 rounded-full border px-4 py-2 text-xs font-semibold transition-colors',
                 activeMedium === 'all'
                   ? 'border-[#0E1013] bg-[#0E1013] text-white'
-                  : 'border-hairline bg-[#F6F7F9] text-[#0E1013] hover:border-[#3875C5]/45'
+                  : 'border-[#E4E4E7] bg-[#F4F4F5] text-[#09090B] hover:border-[#09090B]'
               ].join(' ')}
             >
               <span>{locale === 'en' ? 'All Formats' : '전체 보기'}</span>
@@ -438,8 +438,8 @@ export function SequenceDispatchSection({
               className={[
                 'inline-flex min-h-10 items-center gap-2 rounded-full border px-4 py-2 text-xs font-semibold transition-colors',
                 activeMedium === 'video'
-                  ? 'border-[#3875C5] bg-[#3875C5] text-white'
-                  : 'border-hairline bg-[#F6F7F9] text-[#0E1013] hover:border-[#3875C5]/45'
+                  ? 'border-[#09090B] bg-[#09090B] text-white'
+                  : 'border-[#E4E4E7] bg-[#F4F4F5] text-[#09090B] hover:border-[#09090B]'
               ].join(' ')}
             >
               <span>{locale === 'en' ? 'Video Films' : '영상 템플릿만 보기'}</span>
@@ -457,8 +457,8 @@ export function SequenceDispatchSection({
               className={[
                 'inline-flex min-h-10 items-center gap-2 rounded-full border px-4 py-2 text-xs font-semibold transition-colors',
                 activeMedium === 'image'
-                  ? 'border-[#3875C5] bg-[#3875C5] text-white'
-                  : 'border-[#3875C5]/30 bg-[#F3F7FA] text-[#3063A7] hover:border-[#3875C5]'
+                  ? 'border-[#09090B] bg-[#09090B] text-white'
+                  : 'border-[#E4E4E7] bg-[#F4F4F5] text-[#09090B] hover:border-[#09090B]'
               ].join(' ')}
             >
               <span>{locale === 'en' ? '5-Shot Photo Series' : '5장 이미지 화보 바로 전환'}</span>
@@ -478,15 +478,15 @@ export function SequenceDispatchSection({
               className={[
                 'inline-flex min-h-9 items-center gap-1.5 rounded-full border px-3.5 py-1.5 font-mono text-[0.7rem] font-medium transition-colors',
                 planTier === 'image_only'
-                  ? 'border-[#3875C5] bg-[#E8EFF7] text-[#3063A7]'
-                  : 'border-hairline bg-white text-black/60 hover:border-[#3875C5]/40'
+                  ? 'border-[#09090B] bg-[#F4F4F5] text-[#09090B] font-semibold'
+                  : 'border-[#E4E4E7] bg-white text-[#52525B] hover:border-[#09090B]'
               ].join(' ')}
             >
               <span
                 aria-hidden="true"
                 className={[
                   'size-1.5 rounded-full',
-                  planTier === 'image_only' ? 'bg-[#3875C5]' : 'bg-black/30'
+                  planTier === 'image_only' ? 'bg-[#FF58AE]' : 'bg-[#71717A]'
                 ].join(' ')}
               />
               <span>
@@ -501,7 +501,7 @@ export function SequenceDispatchSection({
         {/* Second Row: Meaningful Editorial Mood Curator */}
         <div className="mt-4 flex flex-wrap items-baseline justify-between gap-2">
           <div>
-            <p className="font-mono text-[0.68rem] font-medium tracking-[0.08em] text-[#3063A7] uppercase">
+            <p className="font-mono text-[0.68rem] font-semibold tracking-[0.08em] text-[#CC1573] uppercase">
               {locale === 'en' ? 'CURATED BY MOOD & WORLD' : '분위기와 세계관으로 고르기'}
             </p>
             <h3 className="mt-1 text-base font-bold tracking-[-0.015em] text-[#0E1013]">
@@ -523,7 +523,7 @@ export function SequenceDispatchSection({
                   setActiveMedium('all');
                   setPlanTier('standard');
                 }}
-                className="text-xs font-medium text-[#3063A7] underline underline-offset-4 hover:text-[#0E1013]"
+                className="text-xs font-medium text-[#CC1573] underline underline-offset-4 hover:text-[#09090B]"
               >
                 {locale === 'en' ? 'Show all' : '전체 보기'}
               </button>
@@ -546,16 +546,16 @@ export function SequenceDispatchSection({
                 aria-pressed={isActive}
                 onClick={() => handleSelectMood(option.id)}
                 className={[
-                  'inline-flex min-h-10 shrink-0 items-center gap-2 rounded-full border px-4 py-2 text-xs font-medium transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#3875C5]',
+                  'inline-flex min-h-10 shrink-0 items-center gap-2 rounded-full border px-4 py-2 text-xs font-medium transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#FF58AE]',
                   isActive
-                    ? 'border-[#3875C5] bg-[#3875C5] text-white'
-                    : 'border-hairline bg-[#F6F7F9] text-[#0E1013] hover:border-[#3875C5]/45 hover:bg-[#E8EFF7]/60'
+                    ? 'border-[#09090B] bg-[#09090B] text-white'
+                    : 'border-[#E4E4E7] bg-[#F4F4F5] text-[#09090B] hover:border-[#09090B] hover:bg-white'
                 ].join(' ')}
               >
                 <span
                   className={[
                     'font-mono text-[0.68rem] tabular-nums',
-                    isActive ? 'text-white/85' : 'text-[#3063A7]'
+                    isActive ? 'text-white/85' : 'text-[#CC1573]'
                   ].join(' ')}
                 >
                   {option.indexLabel}
@@ -573,27 +573,30 @@ export function SequenceDispatchSection({
           {locale === 'en' ? activeMoodObj.descEn : activeMoodObj.descKo}
         </p>
 
-        {/* 3. Make Your Own Video & Earn 80% as a Template Maker Door */}
+        {/* 3. Make Your Own Video & Publish as a Template Maker */}
         <div
           data-direct-scene-door
-          className="mt-5 flex flex-wrap items-center justify-between gap-4 rounded-[18px] border border-[#3875C5]/25 bg-[#F3F7FA] px-5 py-4"
+          className="mt-5 flex flex-wrap items-center justify-between gap-4 rounded-[18px] border border-[#E4E4E7] bg-[#F4F4F5] px-5 py-4 shadow-none"
         >
           <div className="max-w-2xl">
-            <p className="text-xs font-semibold text-[#3063A7]">
+            <p className="text-xs font-semibold text-[#CC1573]">
               {locale === 'en'
-                ? 'MAKE YOUR OWN VIDEO & EARN 80% PROFIT SHARE'
-                : '나만의 영상 제작하기 · 누군가 내 템플릿으로 만들 때마다 순수익 80% 정산'}
+                ? 'MAKE YOUR OWN TEMPLATE & EARN ROYALTIES'
+                : '나만의 포맷 제작하기 · 템플릿을 발행하고 예상 수익을 적립하세요'}
             </p>
-            <p className="mt-1 text-sm font-bold tracking-[-0.01em] text-[#0E1013]">
+            <p
+              className="mt-1 text-sm font-bold tracking-[-0.01em] text-[#09090B]"
+              style={{ wordBreak: 'keep-all' }}
+            >
               {locale === 'en'
-                ? 'Upload any reference video to make your own scene — then publish it as a template and earn 80% every time someone uses it.'
-                : '저장해 둔 영상에 내 사진을 넣어 나만의 영상을 만들고, 템플릿으로 올려 다른 사람이 만들 때마다 80% 수익을 받아보세요.'}
+                ? 'Upload your own video or photo reference, define fixed cues and swappable slots, and earn accruing maker revenue whenever others create with it.'
+                : '내가 보유한 영상이나 사진으로 고정 연출과 가변 슬롯을 정리해 템플릿으로 올리면, 다른 사람이 생성할 때마다 예상 수익이 적립됩니다.'}
             </p>
           </div>
           <a
             href={`/${locale}/direct`}
             data-direct-scene-link
-            className="inline-flex min-h-10 shrink-0 items-center rounded-full bg-[#3875C5] px-4 py-2 text-xs font-semibold text-white transition-colors hover:bg-[#3063A7]"
+            className="inline-flex min-h-10 shrink-0 items-center rounded-full bg-[#FF58AE] px-4 py-2 text-xs font-bold text-[#09090B] shadow-none transition-colors hover:bg-[#FF73BA]"
           >
             {locale === 'en' ? 'Make My Own Video & Earn →' : '나만의 영상 제작 & 수익 보기 →'}
           </a>

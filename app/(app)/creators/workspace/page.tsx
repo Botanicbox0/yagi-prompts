@@ -7,10 +7,12 @@ import { interpolate } from '@/lib/i18n/format';
 import { signInHref } from '@/lib/billing/links';
 import { BUSINESS } from '@/lib/legal/documents';
 import { platformAccess } from '@/lib/creator-platform/runtime';
+import { openMakerEnabled } from '@/lib/makers/self-activate';
 import { loadCreatorWorkspace } from '@/lib/creator-platform/onboarding';
 import { CREATOR_APPLY_PATH, CREATOR_WORKSPACE_PATH, creatorProgramHref } from '@/lib/creator-platform/links';
 import { AppHeader } from '@/components/app/app-header';
 import { FormatSubmitForm } from '@/components/creators/format-form';
+import { OpenMakerCard } from '@/components/creators/open-maker-card';
 import { EarningsTable, FormatList, formatDate, recipeEditorHref } from '@/components/creators/workspace';
 import { recipeSchemaReady } from '@/lib/recipes/repo';
 import { BUTTON, BUTTON_OUTLINE, PANEL } from '@/components/creators/styles';
@@ -38,8 +40,11 @@ export default async function CreatorWorkspacePage({ searchParams }: { searchPar
   const [viewer, sql, locale, query] = await Promise.all([getViewer(), getSqlRunner(), getLocaleFromHeaders(), searchParams]);
   if (!viewer.userId) redirect(signInHref(CREATOR_WORKSPACE_PATH, locale));
   const dict = getDictionary(locale), t = dict.creatorProgram;
-  const access = sql ? await platformAccess(sql) : null;
-  const data = sql && access?.creators ? await loadCreatorWorkspace(sql, viewer, access) : null;
+  const [access, openMaker] = sql
+    ? await Promise.all([platformAccess(sql), openMakerEnabled(sql)])
+    : [null, false];
+  const creatorsOpen = Boolean(access?.creators || openMaker);
+  const data = sql && creatorsOpen ? await loadCreatorWorkspace(sql, viewer, access ?? { onboarding: false }) : null;
   // docs/PLATFORM-2.0.md §7.4: with 0059 the submission is the recipe editor; before it, the older form.
   // A failed probe means the older form, never a broken page.
   const recipeEditor = !!sql && !!data && await recipeSchemaReady(sql).catch(() => false);
@@ -147,6 +152,13 @@ export default async function CreatorWorkspacePage({ searchParams }: { searchPar
     {records}
   </>);
   if (reviewingCard) return shell('submitted', reviewingCard);
+  if (openMaker) {
+    return shell('open_maker', <>
+      {declinedCard}
+      <OpenMakerCard locale={locale} workspaceHref={CREATOR_WORKSPACE_PATH} />
+      {data.formats.length > 0 ? records : null}
+    </>);
+  }
   if (declinedCard) return shell('declined', declinedCard);
   return shell('none', access.applications ? <section className={PANEL}>
     <p className="text-base leading-relaxed">{t.notApplied}</p>

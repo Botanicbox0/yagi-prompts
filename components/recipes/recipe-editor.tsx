@@ -6,6 +6,8 @@ import { isRoyalty, quoteRecipe, ROYALTY_DEFAULT_KRW, ROYALTY_MAX_KRW, ROYALTY_S
 import { makeEarning } from '@/lib/twings/template-price';
 import { exportRecipe, INTRO_MAX, MAX_RECIPE_STEPS, MAX_STEP_PROMPT_CHARS, NOTE_MAX, OUTRO_MAX, PARTNER_SLOT, parseRecipe, PET_SLOT, recipeMedium, SELFIE_SLOT, type Recipe, type RecipeIssue } from '@/lib/recipes/schema';
 import { BUTTON, BUTTON_OUTLINE, FIELD, HINT, PANEL } from '@/components/creators/styles';
+import { KeyframePicker } from './keyframe-picker';
+import type { VideoKeyframe } from '@/lib/prompts/keyframes';
 
 /**
  * The maker recipe editor (docs/PLATFORM-2.0.md §7.4): editor on the left, the template page preview
@@ -18,12 +20,13 @@ import { BUTTON, BUTTON_OUTLINE, FIELD, HINT, PANEL } from '@/components/creator
 type Copy = Dictionary['makerRecipe'];
 export type EditorMedium = 'video' | 'image' | 'carousel';
 export interface EngineOption { id: string; label: string; kind: 'image' | 'video'; minDuration?: number; maxDuration?: number; resolutions?: string[] }
-export interface EditorFile { id: string; role: 'reference' | 'example'; kind: 'image' | 'video'; mime: string }
+export interface EditorFile { id: string; role: 'reference' | 'example'; kind: 'image' | 'video' | 'audio'; mime: string; containsPerson?: boolean }
 export interface EditorTest { id: string; status: string; errorCode: string | null; outputs: number; createdAt: string }
 export interface EditorDraft {
   status: 'draft' | 'submitted' | 'accepted' | 'rejected'; title: string; titleKo: string | null; recipe: unknown; exampleUrl: string | null;
   disclosure: { prompts: boolean; assets: boolean }; presentation: 'make-first' | 'story-first'; royaltyKrw: number; testRendersUsed: number;
   files: EditorFile[]; tests: EditorTest[]; revisionOf: string | null;
+  keyframes?: VideoKeyframe[] | null;
 }
 interface StepState { kind: 'image' | 'video'; engine: string; text: string; aspect: string; duration: number; resolution: '720p' | '1080p'; note?: string }
 /** docs/PLATFORM-2.0.md §20.3 — what the creative writes around the prompts (display only). */
@@ -84,6 +87,7 @@ export function RecipeEditor({ copy, formatId, draft, engines, aspects, hasSelfi
   const [tests, setTests] = useState<EditorTest[]>(draft?.tests ?? []);
   const [used, setUsed] = useState(draft?.testRendersUsed ?? 0);
   const [busy, setBusy] = useState<null | 'save' | 'upload' | 'test' | 'submit' | 'publish'>(null);
+  const [containsPerson, setContainsPerson] = useState(false);
   const [notice, setNotice] = useState<{ tone: 'ok' | 'error'; text: string } | null>(initial?.missingFile ? { tone: 'error', text: copy.importMissingFile } : null);
   const [ready, setReady] = useState(false);
   const textareas = useRef<Array<HTMLTextAreaElement | null>>([]);
@@ -140,7 +144,8 @@ export function RecipeEditor({ copy, formatId, draft, engines, aspects, hasSelfi
     await run('upload', async () => {
       if (!await save(true)) return;
       try {
-        const response = await fetch(`${ACTIONS}/${formatId}/files?role=${role}`, { method: 'POST', headers: { 'Content-Type': file.type || 'application/octet-stream' }, body: file });
+        const qs = role === 'reference' && containsPerson ? `role=${role}&containsPerson=1` : `role=${role}`;
+        const response = await fetch(`${ACTIONS}/${formatId}/files?${qs}`, { method: 'POST', headers: { 'Content-Type': file.type || 'application/octet-stream' }, body: file });
         const result = await response.json().catch(() => ({})) as { file?: EditorFile; code?: string };
         if (!response.ok || !result.file) { setNotice({ tone: 'error', text: errorText(result.code) }); return; }
         setFiles((current) => [...current.filter((f) => role === 'reference' || f.role !== 'example'), result.file!].filter((f, i, all) => all.findIndex((g) => g.id === f.id) === i));
@@ -261,6 +266,16 @@ export function RecipeEditor({ copy, formatId, draft, engines, aspects, hasSelfi
               <input type="radio" name="medium" value={m} checked={medium === m} onChange={() => changeMedium(m)} className="sr-only" />{m === 'video' ? copy.mediumVideo : m === 'image' ? copy.mediumImage : copy.mediumCarousel}
             </label>)}</div>
           </div>
+          {medium === 'video' ? (
+            <p
+              data-video-maker-desktop-only
+              className="rounded-xl border border-[#E4E4E7] bg-[#F4F4F5] p-3 text-xs leading-relaxed text-[#52525B] lg:hidden"
+            >
+              {locale === 'en'
+                ? 'Video template authoring (reference video/audio & timeline keyframes) is optimized for desktop web; image templates can be authored anywhere.'
+                : '레퍼런스 영상·오디오와 핵심 구간을 다루는 영상 템플릿 제작은 데스크톱 웹에 최적화되어 있어요. 이미지 템플릿은 모바일에서도 바로 만들 수 있습니다.'}
+            </p>
+          ) : null}
           {offered.length > 1 ? <div role="radiogroup" aria-label={copy.cast} data-recipe-cast-picker className="space-y-2">
             <p className="text-sm">{copy.cast}</p>
             <div className="flex flex-wrap gap-2">{offered.map((c) => <label key={c} data-recipe-cast={c} className={`inline-flex min-h-11 cursor-pointer items-center rounded-full border px-4 text-sm ${cast === c ? 'border-accent text-accent' : 'border-hairline'}`}>
@@ -275,10 +290,32 @@ export function RecipeEditor({ copy, formatId, draft, engines, aspects, hasSelfi
           <p className="text-xs leading-relaxed opacity-60">{copy.filesHint}</p>
           {references.length ? <ul className="flex flex-wrap gap-3">{references.map((f, i) => <li key={f.id} data-recipe-file={f.id} className="space-y-1 text-xs">
             <FileThumb file={f} alt={label.reference(i + 1)} />
-            <p>{label.reference(i + 1)} · {f.kind === 'image' ? copy.fileImage : copy.fileVideo}</p>
+            <p>
+              {label.reference(i + 1)} ·{' '}
+              {f.kind === 'image'
+                ? copy.fileImage
+                : f.kind === 'audio'
+                  ? (locale === 'en' ? 'Audio' : '오디오')
+                  : copy.fileVideo}
+              {f.containsPerson ? (locale === 'en' ? ' · View-only face' : ' · 인물 포함(다운로드 제외)') : ''}
+            </p>
             <button type="button" onClick={() => void removeFile(f.id)} className="underline underline-offset-4">{copy.removeFile}</button>
           </li>)}</ul> : null}
-          <label className={`${BUTTON_OUTLINE} cursor-pointer`}>{busy === 'upload' ? copy.uploading : copy.upload}<input type="file" accept="image/jpeg,image/png,image/webp,video/mp4,video/quicktime" className="sr-only" onChange={(e) => void upload('reference', e)} /></label>
+          <label className="flex cursor-pointer items-center gap-2 text-xs text-[#52525B]">
+            <input
+              type="checkbox"
+              data-ref-contains-person
+              checked={containsPerson}
+              onChange={(e) => setContainsPerson(e.target.checked)}
+              className="h-3.5 w-3.5 accent-[#09090B]"
+            />
+            <span>
+              {locale === 'en'
+                ? 'Contains person face (view-only, original download disabled)'
+                : '인물 얼굴 포함 (화면 보기만 허용·원본 다운로드 제외)'}
+            </span>
+          </label>
+          <label className={`${BUTTON_OUTLINE} cursor-pointer`}>{busy === 'upload' ? copy.uploading : copy.upload}<input type="file" accept="image/jpeg,image/png,image/webp,video/mp4,video/quicktime,audio/mpeg,audio/wav,audio/mp4,audio/aac" className="sr-only" onChange={(e) => void upload('reference', e)} /></label>
         </section>
 
         <section className={PANEL}>
@@ -327,6 +364,19 @@ export function RecipeEditor({ copy, formatId, draft, engines, aspects, hasSelfi
           {exampleFile ? <div className="flex items-center gap-3 text-xs"><FileThumb file={exampleFile} alt={copy.exampleUploaded} /><span>{copy.exampleUploaded}</span><button type="button" onClick={() => void removeFile(exampleFile.id)} className="underline underline-offset-4">{copy.removeFile}</button></div> : null}
           <label className={`${BUTTON_OUTLINE} cursor-pointer`}>{busy === 'upload' ? copy.uploading : copy.exampleUpload}<input type="file" accept="image/jpeg,image/png,image/webp,video/mp4,video/quicktime" className="sr-only" onChange={(e) => void upload('example', e)} /></label>
         </section>
+
+        {medium === 'video' ? (
+          <KeyframePicker
+            formatId={formatId}
+            durationSeconds={steps.find((s) => s.kind === 'video')?.duration ?? 10}
+            title={locale === 'ko' && titleKo.trim() ? titleKo : title}
+            initialKeyframes={draft?.keyframes ?? null}
+            exampleVideoSrc={exampleFile?.kind === 'video' ? `/api/makers/files/${exampleFile.id}` : null}
+            locale={locale}
+            disabled={disabled}
+            onBeforeSave={() => save(true)}
+          />
+        ) : null}
 
         <section className={PANEL}>
           <fieldset className="space-y-2"><legend className="text-sm">{copy.disclosure}</legend>
@@ -414,9 +464,13 @@ export function RecipeEditor({ copy, formatId, draft, engines, aspects, hasSelfi
 function FileThumb({ file, alt, large = false }: { file: EditorFile; alt: string; large?: boolean }) {
   const src = `/api/makers/files/${file.id}`;
   const size = large ? 'w-full max-h-80' : 'h-20 w-20';
-  return file.kind === 'image'
-    ? <img src={src} alt={alt} className={`${size} rounded-xl border border-hairline object-cover`} loading="lazy" />
-    : <video src={src} aria-label={alt} className={`${size} rounded-xl border border-hairline object-cover`} muted playsInline preload="metadata" controls={large} />;
+  if (file.kind === 'image') {
+    return <img src={src} alt={alt} className={`${size} rounded-xl border border-hairline object-cover`} loading="lazy" />;
+  }
+  if (file.kind === 'audio') {
+    return <audio src={src} aria-label={alt} controls preload="metadata" className={large ? 'w-full' : 'h-12 w-44 rounded-lg border border-hairline'} />;
+  }
+  return <video src={src} aria-label={alt} className={`${size} rounded-xl border border-hairline object-cover`} muted playsInline preload="metadata" controls={large} />;
 }
 
 type Labels = { selfie: string; pet?: string; partner?: string; reference: (n: number) => string; step: (n: number) => string };

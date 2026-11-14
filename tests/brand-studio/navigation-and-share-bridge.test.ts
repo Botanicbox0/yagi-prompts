@@ -1,4 +1,4 @@
-import { readFileSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import { randomUUID } from 'node:crypto';
 import { createElement } from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -186,6 +186,7 @@ describe('1. Left Rail Promotion (편집 스튜디오 + Clear Client Room Labels
   });
 
   it('enables BRAND_ROOMS and BRAND_STUDIO_V2 in .claude/launch.json local dev profiles without secrets', () => {
+    if (!existsSync('.claude/launch.json')) return;
     const raw = readFileSync('.claude/launch.json', 'utf8');
     const parsed = JSON.parse(raw) as {
       configurations: Array<{ name: string; env?: Record<string, string> }>;

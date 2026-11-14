@@ -24,8 +24,17 @@ import type { RenderStore } from './store';
  * the provider's own moderation (lib/renders/engines.ts maps those refusals).
  */
 
+import {
+  CUSTOM_DIRECTOR_REF_SLOTS,
+  type CustomDirectorRefSlot,
+} from '@/lib/template-director/schema';
+
 export type CastSlot = typeof PET_SLOT | typeof PARTNER_SLOT;
 export const CAST_SLOTS: readonly CastSlot[] = [PET_SLOT, PARTNER_SLOT];
+export type CustomRefSlot = CustomDirectorRefSlot;
+export const CUSTOM_REF_SLOTS: readonly CustomRefSlot[] = CUSTOM_DIRECTOR_REF_SLOTS;
+export type RenderSlot = CastSlot | CustomRefSlot;
+export const ALL_RENDER_SLOTS: readonly RenderSlot[] = [...CAST_SLOTS, ...CUSTOM_REF_SLOTS];
 
 /** What the make step asks the buyer for. `null` = this template cannot be made yet (see `templateMakeInputs`). */
 export interface CastMakeInputs {
@@ -101,7 +110,7 @@ export async function cleanSlotPhoto(photo: SlotPhoto): Promise<SlotPhoto> {
   return { bytes: new Uint8Array(data), mime: 'image/jpeg' };
 }
 
-export function slotKey(renderId: string, slot: CastSlot): string {
+export function slotKey(renderId: string, slot: RenderSlot): string {
   return `${renderId}/slot-${slot}.jpg`;
 }
 
@@ -119,7 +128,7 @@ export interface StoreSlotPhotosInput {
   userId: string;
   templateId: string;
   /** Already cleaned (`cleanSlotPhoto`). */
-  photos: Partial<Record<CastSlot, SlotPhoto>>;
+  photos: Partial<Record<RenderSlot, SlotPhoto>>;
   /** When the uploader confirmed the partner agreed; required with a partner photo. */
   partnerConsentAt: Date | null;
   now: Date;
@@ -129,7 +138,7 @@ export interface StoreSlotPhotosInput {
 export async function storeSlotPhotos(sql: SqlRunner, store: RenderStore, input: StoreSlotPhotosInput): Promise<void> {
   if (input.photos.partner && input.partnerConsentAt === null) throw Error('partner_consent_required');
   const expires = new Date(input.now.getTime() + SLOT_PHOTO_RETENTION_DAYS * 86_400_000);
-  for (const slot of CAST_SLOTS) {
+  for (const slot of ALL_RENDER_SLOTS) {
     const photo = input.photos[slot];
     if (!photo) continue;
     const key = slotKey(input.renderId, slot);
@@ -158,7 +167,7 @@ export async function recordPrimaryPetPhoto(sql: SqlRunner, input: { renderId: s
   );
 }
 
-interface SlotRow { slot: CastSlot; storage_key: string; mime: string; partner_consent_at: Date | string | null }
+interface SlotRow { slot: RenderSlot; storage_key: string; mime: string; partner_consent_at: Date | string | null }
 
 /** The live (not yet deleted) slot photos bound to this render id. */
 export async function liveSlotRows(sql: SqlRunner, renderId: string): Promise<SlotRow[]> {

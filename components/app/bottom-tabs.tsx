@@ -22,7 +22,7 @@ import { useStandaloneDisplay } from '@/components/pwa/display-mode';
 
 type Labels = Dictionary['appShell']['tabs'];
 
-export type BottomTabId = 'formats' | 'campaigns' | 'renders' | 'photo' | 'account';
+export type BottomTabId = 'formats' | 'campaigns' | 'renders' | 'maker' | 'photo' | 'account';
 
 export interface BottomTabItem {
   id: BottomTabId;
@@ -35,6 +35,7 @@ export interface BottomTabItem {
 export const PHOTO_HREF = '/account';
 const ACCOUNT_HREF = '/account';
 const RENDERS_HREF = '/renders';
+const MAKER_HREF = '/creators/workspace';
 
 const under = (pathname: string, base: string) => pathname === base || pathname.startsWith(`${base}/`);
 
@@ -46,6 +47,8 @@ export function bottomTabItems({
   photoHref = PHOTO_HREF,
   campaignsHref,
   campaignsLabel,
+  includeMaker = false,
+  makerLabel,
 }: {
   locale: Locale;
   pathname: string | null;
@@ -54,6 +57,8 @@ export function bottomTabItems({
   photoHref?: string;
   campaignsHref?: string;
   campaignsLabel?: string;
+  includeMaker?: boolean;
+  makerLabel?: string;
 }): BottomTabItem[] {
   const path = pathname ?? '';
   const items: BottomTabItem[] = [
@@ -70,6 +75,16 @@ export function bottomTabItems({
       : []),
     // Signed out, "my work" is the sign-in door that comes back to it.
     { id: 'renders', href: signedIn ? RENDERS_HREF : chooseProviderHref(RENDERS_HREF, locale), label: labels.renders, current: under(path, RENDERS_HREF) },
+    ...(includeMaker
+      ? [
+          {
+            id: 'maker' as const,
+            href: signedIn ? MAKER_HREF : chooseProviderHref(MAKER_HREF, locale),
+            label: makerLabel ?? (locale === 'ko' ? '스튜디오' : 'Maker'),
+            current: under(path, MAKER_HREF),
+          },
+        ]
+      : []),
     { id: 'photo', href: photoHref, label: labels.photo, current: photoHref !== ACCOUNT_HREF && under(path, photoHref) },
     { id: 'account', href: ACCOUNT_HREF, label: labels.account, current: under(path, ACCOUNT_HREF) },
   ];
@@ -99,6 +114,13 @@ function TabIcon({ id }: { id: BottomTabId }) {
         <svg {...common}>
           <rect x="7" y="3.5" width="13.5" height="13.5" rx="2.5" />
           <path d="M3.5 7.5v10a3 3 0 0 0 3 3h10" />
+        </svg>
+      );
+    case 'maker':
+      return (
+        <svg {...common}>
+          <path d="M12 4v16M4 12h16" />
+          <circle cx="12" cy="12" r="9" />
         </svg>
       );
     case 'photo':

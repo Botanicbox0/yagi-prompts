@@ -15,7 +15,7 @@ import { parseDisclosure, recipeSchemaReady } from './repo';
  *                                          files. Never an anonymous reader (§20.3).
  */
 
-export interface MediaObject { key: string; mime: string; publicCache: boolean }
+export interface MediaObject { key: string; mime: string; publicCache: boolean; containsPerson?: boolean }
 
 export async function recipeRenderOutput(sql: SqlRunner, viewer: Viewer, renderId: string, position: number): Promise<MediaObject | null> {
   if (!z.uuid().safeParse(renderId).success || !Number.isInteger(position) || position < 0 || position > 5 || !viewer.userId) return null;
@@ -30,13 +30,14 @@ export async function recipeRenderOutput(sql: SqlRunner, viewer: Viewer, renderI
 
 export async function makerFileObject(sql: SqlRunner, viewer: Viewer, handle: string): Promise<MediaObject | null> {
   if (!ASSET_HANDLE.test(handle) || !await recipeSchemaReady(sql)) return null;
-  const { rows } = await sql.query<{ user_id: string; role: string; storage_key: string; mime: string; template_status: string | null; audience: string | null; disclosure: unknown }>(`select a.user_id,a.role,a.storage_key,a.mime,p.status template_status,p.audience,to_jsonb(p.*)->'disclosure' disclosure
+  const { rows } = await sql.query<{ user_id: string; role: string; storage_key: string; mime: string; contains_person: boolean | null; template_status: string | null; audience: string | null; disclosure: unknown }>(`select a.user_id,a.role,a.storage_key,a.mime,a.contains_person,p.status template_status,p.audience,to_jsonb(p.*)->'disclosure' disclosure
     from platform_format_assets a join platform_formats f on f.id=a.format_id left join prompt_items p on p.id=f.template_id and f.status='accepted' where a.id=$1`, [handle]);
   const row = rows[0];
   if (!row) return null;
   if (!viewer.userId) return null;
-  if (row.user_id === viewer.userId || viewer.isAdmin) return { key: row.storage_key, mime: row.mime, publicCache: false };
+  const personFlag = row.contains_person === true ? { containsPerson: true as const } : {};
+  if (row.user_id === viewer.userId || viewer.isAdmin) return { key: row.storage_key, mime: row.mime, publicCache: false, ...personFlag };
   // §20.3: a disclosed source file is part of the full recipe, so it opens for signed-in members only.
   const disclosed = row.role === 'reference' && row.template_status === 'published' && row.audience === 'public' && parseDisclosure(row.disclosure).assets;
-  return disclosed ? { key: row.storage_key, mime: row.mime, publicCache: false } : null;
+  return disclosed ? { key: row.storage_key, mime: row.mime, publicCache: false, ...personFlag } : null;
 }

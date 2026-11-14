@@ -8,6 +8,8 @@ import {
 import { createTossOrder } from '@/lib/billing/toss-service';
 import { canStartRender } from '@/lib/renders/service';
 import { bindOrderPhotos, orderPhotos } from '@/lib/renders/cast-form';
+import { parseDirectorSpecInput } from '@/lib/template-director/schema';
+import { parseSelectedFrames } from '@/lib/twings/selective-frames';
 
 /**
  * `POST /api/billing/toss/orders` — an order for one template, paid with the saved selfie.
@@ -43,6 +45,8 @@ export async function POST(request: Request) {
       locale: String(form.get('locale') ?? ''),
       ...(photos.selfieId ? { selfieId: photos.selfieId } : {}),
       photo: photos.photo,
+      selectedFrames: parseSelectedFrames(form.get('selectedFrames')),
+      directorSpec: parseDirectorSpecInput(form.get('directorSpec')),
     });
     if (result.ok && photos.templateId) {
       await bindOrderPhotos(deps.sql, deps.store, { orderId: result.order.id, userId: viewer.userId, templateId: photos.templateId, extras: photos.extras, partnerConsent: photos.partnerConsent, now: new Date() });

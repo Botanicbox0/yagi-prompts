@@ -1,5 +1,5 @@
 /*
- * TWINGS design identity tokens (docs/design/IDENTITY.md, updated 2026-11-12 Studio UI v4).
+ * TWINGS design identity tokens (docs/design/IDENTITY.md, updated 2026-11-14 Design System v2 Frozen).
  * Values copy lib/design/identity.ts; tests/design/identity.test.ts keeps them equal.
  */
 
@@ -14,10 +14,10 @@
   --id-muted: #71717a;
   --id-line: #e4e4e7;
   --id-line-strong: #d4d4d8;
-  --id-accent: #0033ff;
-  --id-accent-text: color-mix(in srgb, var(--id-accent) 85%, #000000);
-  --id-accent-hover: color-mix(in srgb, var(--id-accent) 80%, #000000);
-  --id-accent-pressed: color-mix(in srgb, var(--id-accent) 66%, #000000);
+  --id-accent: #ff58ae;
+  --id-accent-text: color-mix(in srgb, var(--id-accent) 68%, #000000);
+  --id-accent-hover: color-mix(in srgb, var(--id-accent) 90%, #000000);
+  --id-accent-pressed: color-mix(in srgb, var(--id-accent) 80%, #000000);
   --id-accent-tint: color-mix(in srgb, var(--id-accent) 0%, #f4f4f5);
   --id-spring: linear(0, 0.009, 0.035 2.1%, 0.141, 0.281 6.7%, 0.723 12.9%, 0.938 16.7%, 1.017, 1.077, 1.121, 1.149 24.3%, 1.159, 1.163, 1.161, 1.154 29.9%, 1.129 32.8%, 1.051 39.6%, 1.017 43.1%, 0.991, 0.977 51%, 0.974 53.8%, 0.975 57.1%, 0.997 69.8%, 1.003 76.9%, 1);
   --id-ease: cubic-bezier(0.22, 1, 0.36, 1);
@@ -26,8 +26,8 @@
   --id-slow: 860ms;
   --id-radius-media: 12px;
   --id-radius-card: 16px;
-  --id-sans: 'Geist', 'Pretendard Variable', Pretendard, -apple-system, sans-serif;
-  --id-mono: 'Geist Mono', 'Pretendard Hangul', var(--font-geist-mono), 'Pretendard Variable', Pretendard, monospace;
+  --id-sans: 'Pretendard Variable', Pretendard, -apple-system, BlinkMacSystemFont, sans-serif;
+  --id-mono: 'Pretendard Variable', Pretendard, -apple-system, BlinkMacSystemFont, sans-serif;
   /* The shared nav, enquiry form and FAQ read the site tokens; on this page they follow the identity. */
   --color-blue: var(--id-accent);
   --accent: var(--id-accent-text);
@@ -38,7 +38,13 @@
  * The personal side (twings.app home, /video, /image, template pages, pricing) on top of `.identity`.
  */
 .personal { --color-black: var(--id-ink); }
+.personal {
+  --stack-display: var(--id-sans);
+  --stack-label: var(--id-sans);
+  --stack-body: var(--id-sans);
+  --stack-mono: var(--id-sans);
+}
 .personal :global([data-theme='light']) { --hairline: var(--id-line); }
 .personal main,
 .personal :global(.section[data-theme='light']) { background-color: var(--id-canvas); }
-.personal main { display: flow-root; color: var(--id-ink); font-family: var(--id-sans); letter-spacing: -0.02em; }
+.personal main { display: flow-root; color: var(--id-ink); font-family: var(--id-sans); letter-spacing: -0.02em; word-break: keep-all; overflow-wrap: break-word; }

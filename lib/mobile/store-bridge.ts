@@ -129,10 +129,25 @@ export function detectStorePlatform(input: {
   if (header === 'android-store') return 'android-store';
 
   const ua = input.userAgent ?? '';
-  if (/TwingsIOS\//i.test(ua)) return 'ios-store';
-  if (/TwingsAndroid\//i.test(ua)) return 'android-store';
+  if (/TwingsIOS\//i.test(ua) || /TwingsApp\/[^\s]*\s*\(iOS\)/i.test(ua)) return 'ios-store';
+  if (/TwingsAndroid\//i.test(ua) || /TwingsApp\/[^\s]*\s*\(Android\)/i.test(ua)) return 'android-store';
   if (input.standalone) return 'pwa-standalone';
   return 'web';
+}
+
+export function isNativeStoreApp(
+  platform: StorePlatform,
+): platform is 'ios-store' | 'android-store' {
+  return platform === 'ios-store' || platform === 'android-store';
+}
+
+export function detectStorePlatformFromRequest(
+  request: Pick<Request, 'headers'>,
+): StorePlatform {
+  return detectStorePlatform({
+    userAgent: request.headers.get('user-agent'),
+    clientHeader: request.headers.get('x-twings-client'),
+  });
 }
 
 export interface StoreCheckoutPolicy {

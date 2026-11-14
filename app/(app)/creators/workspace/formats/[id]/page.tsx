@@ -10,7 +10,7 @@ import { IDENTITY_SELFIE_PATH } from '@/lib/identity/links';
 import { currentSelfie } from '@/lib/identity/selfie-service';
 import { engineLabel, IMAGE_ASPECTS, isVideoEngine, VIDEO_ASPECTS } from '@/lib/images/engines';
 import { videoEngineSpec } from '@/lib/video/models';
-import { platformAccess } from '@/lib/creator-platform/runtime';
+import { platformAccess, openMakerEnabled } from '@/lib/creator-platform/runtime';
 import { approvedCreator, companyCreator } from '@/lib/creator-platform/service';
 import { CREATOR_WORKSPACE_PATH } from '@/lib/creator-platform/links';
 import { loadMakerDraft, MAKER_TEST_RENDERS } from '@/lib/recipes/maker';
@@ -39,8 +39,11 @@ export default async function RecipeEditorPage({ params, searchParams }: { param
   const path = `${CREATOR_WORKSPACE_PATH}/formats/${id}`;
   if (!viewer.userId) redirect(signInHref(path, locale));
   const dict = getDictionary(locale), t = dict.makerRecipe;
-  const access = sql ? await platformAccess(sql) : null;
-  const open = !!sql && !!access?.creators && await recipeSchemaReady(sql) && await approvedCreator(sql, viewer.userId);
+  const [access, openMaker] = sql
+    ? await Promise.all([platformAccess(sql), openMakerEnabled(sql)])
+    : [null, false];
+  const creatorsOpen = Boolean(access?.creators || openMaker);
+  const open = !!sql && creatorsOpen && await recipeSchemaReady(sql) && await approvedCreator(sql, viewer.userId);
   const shell = (state: string, children: React.ReactNode) => <div data-section data-theme="light" className="section min-h-screen">
     <AppHeader locale={locale} dict={dict} rest={path} />
     <main id="main" data-recipe-editor-page data-recipe-editor-state={state} className="band py-10 lg:py-14">
@@ -53,7 +56,7 @@ export default async function RecipeEditorPage({ params, searchParams }: { param
   </div>;
   if (!open || !sql || !access) return shell('unavailable', <p role="status">{t.errors.not_open}</p>);
 
-  const draft = id === 'new' ? null : await loadMakerDraft(sql, viewer, id, { creators: access.creators });
+  const draft = id === 'new' ? null : await loadMakerDraft(sql, viewer, id, { creators: creatorsOpen });
   if (id !== 'new' && !draft) notFound();
   const formatId = id === 'new' ? randomUUID() : id;
   const revisionOf = typeof query.revise === 'string' && /^[0-9a-f-]{36}$/.test(query.revise) ? query.revise : undefined;
@@ -64,14 +67,14 @@ export default async function RecipeEditorPage({ params, searchParams }: { param
   return shell(draft?.status ?? 'new', <RecipeEditor
     copy={t}
     formatId={formatId}
-    draft={draft && { status: draft.status, title: draft.title, titleKo: draft.titleKo, recipe: draft.recipe, exampleUrl: draft.exampleUrl, disclosure: draft.disclosure, presentation: draft.presentation, royaltyKrw: draft.royaltyKrw, testRendersUsed: draft.testRendersUsed, files: draft.files.map((f) => ({ id: f.id, role: f.role, kind: f.kind, mime: f.mime })), tests: draft.tests, revisionOf: draft.revisionOf }}
+    draft={draft && { status: draft.status, title: draft.title, titleKo: draft.titleKo, recipe: draft.recipe, exampleUrl: draft.exampleUrl, disclosure: draft.disclosure, presentation: draft.presentation, royaltyKrw: draft.royaltyKrw, testRendersUsed: draft.testRendersUsed, files: draft.files.map((f) => ({ id: f.id, role: f.role, kind: f.kind, mime: f.mime, containsPerson: Boolean(f.containsPerson) })), tests: draft.tests, revisionOf: draft.revisionOf, keyframes: draft.keyframes ?? null }}
     engines={engines}
     aspects={{ image: [...IMAGE_ASPECTS], video: [...VIDEO_ASPECTS] }}
     hasSelfie={hasSelfie}
     selfieHref={IDENTITY_SELFIE_PATH}
     workspaceHref={CREATOR_WORKSPACE_PATH}
     testLimit={MAKER_TEST_RENDERS}
-    selfPublish={selfPublishOpen()}
+    selfPublish={selfPublishOpen() || openMaker}
     company={company}
     casts={editorCasts({ pet: petTemplatesOpen(), couple: coupleTemplatesOpen() })}
     revisionOf={revisionOf}

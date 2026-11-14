@@ -9,6 +9,8 @@ import { identityVerifyHref } from '@/lib/identity/links';
 import { getRenderStore } from '@/lib/renders/store';
 import { savedSelfiePhoto } from '@/lib/identity/selfie-service';
 import { castFormPhotos } from '@/lib/renders/cast-form';
+import { parseDirectorSpecInput } from '@/lib/template-director/schema';
+import { parseSelectedFrames } from '@/lib/twings/selective-frames';
 
 /**
  * `POST /api/renders` — the studio hands over the photo, the template and the aspect; the
@@ -88,6 +90,8 @@ export async function POST(request: Request): Promise<NextResponse> {
     holdForIdentity: form.get('hold') === '1',
     // Read only on an operator's free render; a paid render takes the order's own value.
     resolution: typeof form.get('resolution') === 'string' ? String(form.get('resolution')) : null,
+    selectedFrames: parseSelectedFrames(form.get('selectedFrames')),
+    directorSpec: parseDirectorSpecInput(form.get('directorSpec')),
   });
   if (!outcome.ok) return json(outcome, STATUS[outcome.code]);
 

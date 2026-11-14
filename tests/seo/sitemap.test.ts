@@ -105,7 +105,8 @@ describe('sitemap (§8 M5)', () => {
     // the campaigns listing, pricing, FAQ, and the three legal documents (2026-08-14 — a payment
     // provider's merchant review and 전자상거래법 §21 expect them publicly reachable). The listings
     // are in the sitemap even with no rows — each is a real page with a designed empty state.
-    expect(empty).toHaveLength(24);
+    // 2026-10-27: plus the account deletion how-to (docs/RUNBOOK-deletion.md, the Play listing's URL).
+    expect(empty).toHaveLength(26);
     expect(empty.every((entry) => entry.url.startsWith(ORIGIN))).toBe(true);
   });
 

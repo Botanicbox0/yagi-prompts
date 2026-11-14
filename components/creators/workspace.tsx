@@ -39,8 +39,19 @@ export function FormatList({ formats, dict, locale, canRevise, recipeEditor = fa
 /** Counts and recorded shares only: no costs, fees or customer data reach this table. */
 export function EarningsTable({ earnings, dict, locale }: { earnings: CreatorWorkspace['earnings']; dict: Dictionary; locale: Locale }) {
   const t = dict.creatorProgram, number = (n: number) => n.toLocaleString(locale === 'ko' ? 'ko-KR' : 'en-US');
+  const payoutStatusLabel = locale === 'en'
+    ? 'Estimated revenue accruing (payout setup pending)'
+    : '예상 수익 적립 (출금 준비 중)';
   return <section data-creator-earnings className={PANEL}>
-    <h2 className="text-xl font-semibold">{t.earningsHeading}</h2>
+    <div className="flex flex-wrap items-center justify-between gap-2">
+      <h2 className="text-xl font-semibold">{t.earningsHeading}</h2>
+      <span
+        data-maker-payout-status="accruing"
+        className="inline-flex items-center rounded-full border border-[#E4E4E7] bg-[#F4F4F5] px-3 py-1 text-xs font-medium text-[#52525B]"
+      >
+        {payoutStatusLabel}
+      </span>
+    </div>
     <p className="text-sm leading-relaxed opacity-70">{t.earningsHint}</p>
     {!earnings.length ? <p className="text-sm opacity-65">{t.earningsEmpty}</p> : <div className="overflow-x-auto">
       <table className="w-full min-w-[32rem] text-left text-sm">

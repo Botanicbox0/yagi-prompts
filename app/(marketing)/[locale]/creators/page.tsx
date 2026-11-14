@@ -1,6 +1,7 @@
 import type { Metadata } from 'next';
 import { notFound } from 'next/navigation';
 import { MarketingFooter, MarketingNav } from '@/components/marketing/chrome';
+import { PersonalIdentity } from '@/components/audience/personal-identity';
 import { DEFAULT_LOCALE, isLocale, type Locale } from '@/lib/i18n/config';
 import { getDictionary } from '@/lib/i18n/dictionaries';
 import { CREATOR_APPLY_PATH, CREATOR_PROGRAM_REST, CREATOR_WORKSPACE_PATH, creatorProgramOpen } from '@/lib/creator-platform/links';
@@ -42,7 +43,7 @@ export default async function CreatorProgramPage({ params }: Props) {
   const dict = getDictionary(locale), t = dict.creatorProgram;
   const steps = [[t.step1Title, t.step1Body], [t.step2Title, t.step2Body], [t.step3Title, t.step3Body], [t.step4Title, t.step4Body]];
   const facts = [[t.shareHeading, t.shareBody, 'share'], [t.privateHeading, t.privateBody, 'private'], [t.rulesHeading, t.rulesBody, 'rules']];
-  return <>
+  return <PersonalIdentity>
     <MarketingNav locale={locale} dict={dict} rest={CREATOR_PROGRAM_REST} />
     <main id="main" data-creator-program>
       <section data-section data-theme="light" className="section">
@@ -79,5 +80,5 @@ export default async function CreatorProgramPage({ params }: Props) {
       </aside>
     </main>
     <MarketingFooter locale={locale} dict={dict} />
-  </>;
+  </PersonalIdentity>;
 }

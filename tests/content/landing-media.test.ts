@@ -43,7 +43,12 @@ describe('landing media slots', () => {
 
   it('keeps the hero film only while its still is the original', () => {
     expect(evidenceWithMedia(DEFAULT_HERO_EVIDENCE, NO_LANDING_MEDIA)).toEqual(DEFAULT_HERO_EVIDENCE);
+    expect(DEFAULT_HERO_EVIDENCE.afterVideo).toBeUndefined();
     expect(evidenceWithMedia(DEFAULT_HERO_EVIDENCE, { 'studio-demo/reference-selfie': '/new-selfie.webp' })).toEqual({ ...DEFAULT_HERO_EVIDENCE, before: '/new-selfie.webp' });
     expect(evidenceWithMedia(DEFAULT_HERO_EVIDENCE, { 'studio-demo/different-person': '/new-scene.webp' })).toEqual({ before: DEFAULT_HERO_EVIDENCE.before, after: '/new-scene.webp' });
+
+    const withFilm = { ...DEFAULT_HERO_EVIDENCE, afterVideo: '/reel/studio-demo/different-person.mp4' };
+    expect(evidenceWithMedia(withFilm, NO_LANDING_MEDIA)).toEqual(withFilm);
+    expect(evidenceWithMedia(withFilm, { 'studio-demo/different-person': '/new-scene.webp' })).toEqual({ before: DEFAULT_HERO_EVIDENCE.before, after: '/new-scene.webp' });
   });
 });

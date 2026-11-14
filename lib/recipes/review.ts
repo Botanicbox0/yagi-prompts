@@ -77,7 +77,7 @@ export interface ReviewStep { id: string; kind: 'image' | 'video'; engine: strin
 export interface ReviewRender { id: string; status: string; errorCode: string | null; outputs: number; createdAt: string }
 export interface ReviewEntry {
   id: string; titleKo: string | null; medium: RecipeMedium | null; valid: boolean; steps: ReviewStep[];
-  slots: Array<{ name: string; source: 'user' | 'creator'; kind: 'image' | 'video'; asset: string | null }>;
+  slots: Array<{ name: string; source: 'user' | 'creator'; kind: 'image' | 'video' | 'audio'; asset: string | null }>;
   files: MakerAsset[]; disclosure: Disclosure; presentation: Presentation; royaltyKrw: number | null; quote: RecipeQuote | null;
   testRendersUsed: number; renders: ReviewRender[];
 }

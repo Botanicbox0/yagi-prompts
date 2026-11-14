@@ -14,6 +14,9 @@ import type {
 } from '@/lib/renders/service';
 import { extensionFor } from '@/lib/renders/store';
 import { useSavedSelfie } from '@/lib/identity/selfie-service';
+import { loadTemplateRecipe } from '@/lib/recipes/repo';
+import { parseDirectorSpecInput } from '@/lib/template-director/schema';
+import { parseSelectedFrames, selectiveOrderKrw } from '@/lib/twings/selective-frames';
 import { TossError, type TossGateway, type TossPayment } from './toss-gateway';
 
 export const TOSS_CONSENT_VERSION = 'refund-2026-09-14-section-2';
@@ -78,6 +81,10 @@ export interface TossOrder {
   input_deleted_at: string | Date | null;
   /** 0052: the order 다시 결제하기 made from this one. */
   retried_by: string | null;
+  /** 0088: selected 0-based frame indices for selective image-set purchase; null = all frames. */
+  selected_frames?: number[] | null;
+  /** 0088: Hydrogen director customization spec + Seedance native audio mode. */
+  director_spec?: unknown;
 }
 type TossRow = TossOrder & { render_status: string | null };
 export interface TossServiceDeps extends RenderServiceDeps {
@@ -185,7 +192,9 @@ export async function createTossOrder(
     return fail('bad_aspect');
   const choice = chooseResolution(t, input.resolution);
   if (!choice.ok) return fail('bad_resolution');
-  const amountKrw = chargeKrwFor(t, choice.resolution);
+  const recipe = t.medium === 'image' ? await loadTemplateRecipe(deps.sql, t.id) : null;
+  const pricing = selectiveOrderKrw(t, recipe, input.selectedFrames, choice.resolution);
+  const amountKrw = pricing.amountKrw;
   if (amountKrw === null) return fail('not_for_sale');
   if (
     !input.photo ||
@@ -206,15 +215,22 @@ export async function createTossOrder(
   const locale = isLocale(input.locale)
     ? input.locale
     : (viewer.locale ?? 'en');
-  // A 1080p order says so in the name the buyer sees at Toss; a 720p name is unchanged.
+  const directorSpec = parseDirectorSpecInput(input.directorSpec);
+  // A 1080p order or partial image set selection says so in the name the buyer sees at Toss.
   const hd = choice.resolution === '1080p' ? ' · 1080p' : '';
+  const framesTag = pricing.normalizedFrames
+    ? locale === 'ko'
+      ? ` · ${pricing.normalizedFrames.length}장 선택`
+      : ` · ${pricing.normalizedFrames.length} frames`
+    : '';
+  const suffix = `${hd}${framesTag}`;
   const title = `TWINGS · ${locale === 'ko' ? t.titleKo || t.title : t.title}`;
-  const name = `${title.slice(0, 100 - hd.length)}${hd}`;
+  const name = `${title.slice(0, 100 - suffix.length)}${suffix}`;
   await deps.store.put(inputKey, input.photo.bytes, input.photo.mime);
   await deps.sql.query(
     `insert into billing_payments
-    (id,user_id,environment,amount_krw,template_id,template_slug,order_name,aspect,locale,render_ref,input_key,input_mime,expires_at,identity_selfie_id,resolution)
-    values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15)`,
+    (id,user_id,environment,amount_krw,template_id,template_slug,order_name,aspect,locale,render_ref,input_key,input_mime,expires_at,identity_selfie_id,resolution,selected_frames,director_spec)
+    values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16::integer[],$17::jsonb)`,
     [
       id,
       viewer.userId,
@@ -231,6 +247,8 @@ export async function createTossOrder(
       new Date(clock(deps).getTime() + 30 * 60_000),
       input.selfieId ?? null,
       choice.resolution,
+      pricing.normalizedFrames,
+      directorSpec ? JSON.stringify(directorSpec) : null,
     ],
   );
   return { ok: true, order: { id, amountKrw, name, resolution: choice.resolution } };
@@ -275,6 +293,8 @@ export async function retryTossOrder(
         locale: o.locale,
         selfieId: o.identity_selfie_id ?? undefined,
         photo: { bytes, mime: o.input_mime },
+        selectedFrames: parseSelectedFrames(o.selected_frames),
+        directorSpec: parseDirectorSpecInput(o.director_spec),
       });
       if (!created.ok) return created;
       await tx.query('update billing_payments set retried_by=$2 where id=$1', [o.id, created.order.id]);
@@ -334,13 +354,18 @@ export async function confirmTossOrder(
       if (new Date(o.expires_at) <= clock(deps))
         return endOrder(tx, o, 'pending', 'expired', emptyTossReport());
       const t = await loadPromptBySlug(tx, o.template_slug);
-      // Re-derive the price for the resolution ON THE ORDER (NULL = a pre-0039 order: the base price).
+      const selectedFrames = parseSelectedFrames(o.selected_frames);
+      const recipe = t && selectedFrames?.length && t.medium === 'image' ? await loadTemplateRecipe(tx, t.id) : null;
+      const expectedPricing = t
+        ? selectiveOrderKrw(t, recipe, selectedFrames, isCreatorResolution(o.resolution) ? o.resolution : null)
+        : null;
+      // Re-derive the price for the resolution and selected frames ON THE ORDER.
       if (
         !t ||
         t.status !== 'published' ||
         !isForSale(t) ||
         (o.resolution !== null && !isCreatorResolution(o.resolution)) ||
-        chargeKrwFor(t, isCreatorResolution(o.resolution) ? o.resolution : null) !== o.amount_krw
+        expectedPricing?.amountKrw !== o.amount_krw
       )
         return endOrder(tx, o, 'pending', 'price_changed', emptyTossReport());
       // The consent recorded before the window opened is the one that counts (§2.2-7): only fill a gap.
@@ -490,6 +515,8 @@ async function fulfill(
       holdForIdentity: true,
       photo: { bytes: await deps.store.read(o.input_key), mime: o.input_mime },
       paymentOrderId: o.id,
+      selectedFrames: parseSelectedFrames(o.selected_frames),
+      directorSpec: parseDirectorSpecInput(o.director_spec),
     });
     if (result.ok) return result;
     await queueRefund(deps.sql, o.id);

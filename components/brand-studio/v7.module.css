@@ -79,8 +79,10 @@
   border-radius: 999px;
   font-size: 15px;
   font-weight: 620;
-  color: #ffffff;
+  color: var(--id-ink);
+  font-weight: 650;
   background: var(--id-accent);
+  box-shadow: none;
   text-decoration: none;
   transition: background-color var(--id-quick) var(--id-ease), transform var(--id-base) var(--id-spring);
 }
@@ -511,7 +513,7 @@
 .remixPanel { display: flex; flex-direction: column; gap: 14px; padding: 18px; border: 1px solid var(--id-line); border-radius: var(--id-radius-card); background: var(--id-paper); }
 .remixChat { display: flex; flex: 1; flex-direction: column; justify-content: flex-end; gap: 10px; min-height: 132px; }
 .remixHint { color: var(--id-muted); font-size: 14px; }
-.remixSaid { align-self: flex-end; max-width: 92%; padding: 10px 14px; border-radius: 16px 16px 4px 16px; background: var(--id-accent); color: #fff; font-size: 14.5px; line-height: 1.45; word-break: keep-all; }
+.remixSaid { align-self: flex-end; max-width: 92%; padding: 10px 14px; border-radius: 16px 16px 4px 16px; background: var(--id-accent); color: var(--id-ink); font-size: 14.5px; font-weight: 600; line-height: 1.45; word-break: keep-all; }
 .mention { white-space: nowrap; }
 .remixAttached { align-self: flex-end; width: clamp(92px, 9vw, 124px); aspect-ratio: 3 / 4; object-fit: cover; border: 1px solid var(--id-line); border-radius: 14px; background: var(--id-paper); animation: attachIn 420ms var(--id-spring) both; }
 @keyframes attachIn { from { opacity: 0; transform: translateY(8px) scale(0.96); } to { opacity: 1; transform: none; } }
@@ -542,7 +544,7 @@
 .composer > span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .composer > span[data-empty] { color: var(--id-muted); }
 .composerAttach { flex: none; width: 26px; height: 34px; margin-left: -6px; object-fit: cover; border: 1px solid var(--id-line); border-radius: 7px; background: var(--id-paper); animation: attachIn 360ms var(--id-spring) both; }
-.composerSend { display: grid; flex: none; place-items: center; width: 34px; height: 34px; margin-left: auto; border-radius: 999px; background: var(--id-accent); color: #fff; font-weight: 600; }
+.composerSend { display: grid; flex: none; place-items: center; width: 34px; height: 34px; margin-left: auto; border-radius: 999px; background: var(--id-accent); color: var(--id-ink); font-weight: 700; box-shadow: none; }
 .composerSend[data-busy] { animation: sendBusy 800ms ease-in-out infinite alternate; }
 @keyframes sendBusy { to { opacity: 0.45; } }
 .remixMedia { display: flex; align-items: center; justify-content: center; gap: clamp(12px, 1.6vw, 24px); min-width: 0; min-height: min(78svh, 760px); }

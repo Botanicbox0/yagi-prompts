@@ -10,7 +10,10 @@ import { PREMIUM_EDIT_GUIDE_VERSION, PREMIUM_EDIT_INSTRUCTIONS, validateEditPlan
  * https://developers.openai.com/api/docs/models/gpt-5.6-sol
  * https://developers.openai.com/api/docs/guides/structured-outputs
  */
+import { GEMINI_DIRECTOR_DEFAULT_MODEL } from '@/lib/template-director/schema';
+
 export const PREMIUM_EDIT_DEFAULT_MODEL = 'gpt-5.6-sol';
+export const PREMIUM_EDIT_HYDROGEN_MODEL = GEMINI_DIRECTOR_DEFAULT_MODEL;
 export const PREMIUM_EDIT_MAX_OUTPUT_TOKENS = 600;
 export interface PremiumEditConfig { apiKey: string; model: string }
 export interface EditUsage { inputTokens: number; cachedInputTokens: number; outputTokens: number }

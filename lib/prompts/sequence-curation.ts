@@ -122,11 +122,12 @@ const CELEB_SLUGS = new Set([
 
 /**
  * Priority order for the personal home hero showcase video.
- * Replaces the legacy rank-#21 `you-are-a-prom-queen` with top-ranked editorial films from
- * `RECOMMENDED_VIDEO_ORDER` (`city-fashion-montage` 4:3 editorial montage, `aquarium-goldfish`,
- * `fashion-show-arrival`, `my-tiffany-s-moment`).
+ * Defaults to the editorial daydream film `giant-daydream` ("작은 방의 백일몽", 1440×1080 4:3)
+ * and falls back across top-ranked editorial films (`city-fashion-montage`, `aquarium-goldfish`,
+ * `fashion-show-arrival`, `my-tiffany-s-moment`, `lens-portal-tutu`).
  */
 export const HERO_EDITORIAL_PRIORITY = [
+  'giant-daydream',
   'city-fashion-montage',
   'aquarium-goldfish',
   'fashion-show-arrival',

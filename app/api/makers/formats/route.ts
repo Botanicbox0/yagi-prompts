@@ -3,7 +3,7 @@ import { getViewer } from '@/lib/auth/viewer';
 import { getSqlRunner } from '@/lib/db/connect';
 import { isSameOrigin } from '@/lib/billing/toss-runtime';
 import { readBoundedBody } from '@/lib/creator-subscriptions/http';
-import { platformAccess } from '@/lib/creator-platform/runtime';
+import { platformAccess, openMakerEnabled } from '@/lib/creator-platform/runtime';
 import { PlatformError } from '@/lib/creator-platform/contract';
 import { loadMakerDraft, makerAction, RecipeRejected } from '@/lib/recipes/maker';
 import { MAX_RECIPE_BYTES } from '@/lib/recipes/schema';
@@ -32,8 +32,8 @@ export async function GET(request: Request) {
   try {
     const sql = await getSqlRunner();
     if (!sql) return json({ code: 'unavailable' }, 503);
-    const access = await platformAccess(sql);
-    const draft = await loadMakerDraft(sql, viewer, new URL(request.url).searchParams.get('id') ?? '', { creators: access.creators });
+    const [access, openMaker] = await Promise.all([platformAccess(sql), openMakerEnabled(sql)]);
+    const draft = await loadMakerDraft(sql, viewer, new URL(request.url).searchParams.get('id') ?? '', { creators: access.creators || openMaker });
     if (!draft) return json({ code: 'not_found' }, 404);
     return json({ ok: true, status: draft.status, testRendersUsed: draft.testRendersUsed, tests: draft.tests });
   } catch (error) {
@@ -53,8 +53,8 @@ export async function POST(request: Request) {
     try { raw = JSON.parse(new TextDecoder().decode(bytes)); } catch { return json({ code: 'invalid' }, 400); }
     const sql = await getSqlRunner();
     if (!sql) return json({ code: 'unavailable' }, 503);
-    const access = await platformAccess(sql);
-    const result = await makerAction({ sql, store: await getRenderStore(), storage: await getStorage() }, viewer, raw, { creators: access.creators });
+    const [access, openMaker] = await Promise.all([platformAccess(sql), openMakerEnabled(sql)]);
+    const result = await makerAction({ sql, store: await getRenderStore(), storage: await getStorage() }, viewer, raw, { creators: access.creators || openMaker });
     // §20.6: a self-published template is live now — the catalogue, the rails and the creative page move with it.
     if (result.templateId) {
       const handle = (await loadMakerSettings(sql, viewer.userId).catch(() => null))?.handle;

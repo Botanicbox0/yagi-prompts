@@ -42,14 +42,15 @@ function makeCard(overrides: Partial<PromptCard> = {}): PromptCard {
 }
 
 describe('SequenceDispatchSection & personal home editorial curation (2026-11-04)', () => {
-  it('prioritizes top-ranked aesthetic editorial films over legacy you-are-a-prom-queen for the hero showcase', () => {
+  it('prioritizes giant-daydream for the hero showcase with editorial films ahead of legacy you-are-a-prom-queen', () => {
     const promQueen = makeCard({ slug: 'you-are-a-prom-queen', title: 'You Are a Prom Queen' });
     const cityFashion = makeCard({ slug: 'city-fashion-montage', title: 'City Fashion Montage' });
     const goldfish = makeCard({ slug: 'aquarium-goldfish', title: 'Aquarium Goldfish' });
+    const giantDaydream = makeCard({ slug: 'giant-daydream', title: 'Giant Daydream', titleKo: '작은 방의 백일몽' });
 
-    const chosen = pickHeroFeaturedTemplate([promQueen, goldfish, cityFashion]);
-    expect(chosen?.slug).toBe('city-fashion-montage');
-    expect(HERO_EDITORIAL_PRIORITY[0]).toBe('city-fashion-montage');
+    expect(pickHeroFeaturedTemplate([promQueen, goldfish, cityFashion, giantDaydream])?.slug).toBe('giant-daydream');
+    expect(pickHeroFeaturedTemplate([promQueen, goldfish, cityFashion])?.slug).toBe('city-fashion-montage');
+    expect(HERO_EDITORIAL_PRIORITY[0]).toBe('giant-daydream');
     expect(HERO_EDITORIAL_PRIORITY).not.toContain('you-are-a-prom-queen');
   });
 

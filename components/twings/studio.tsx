@@ -9,12 +9,20 @@ import { SelfieSheet, type SheetChoice } from '@/components/identity/selfie-shee
 import type { SelfieLibrary, SelfieView } from '@/lib/identity/selfie-service';
 import { PremiumEditor } from './premium-editor';
 import { TemplateDirectorPanel, type DirectorImageSetSpec } from './template-director-panel';
+import type { PublicRecipe } from '@/lib/recipes/public';
+import type { CustomDirectorRefSlot, PersonalDirectorSpec } from '@/lib/template-director/schema';
 import { shrinkPhoto } from '@/lib/images/client-photo';
 export { shrinkPhoto } from '@/lib/images/client-photo';
 import type { EditScope } from '@/lib/premium-editing/contract';
 import { publishViewerSelfie } from '@/lib/twings/viewer-selfie';
 import { publishViewerAccess } from '@/lib/twings/viewer-access';
 import { CastPhotoFields, castPhotoHint, castPhotosReady, EMPTY_CAST_PHOTOS, type CastPhotoState } from './cast-photos';
+import {
+  detectStorePlatform,
+  isNativeStoreApp,
+  type StorePlatform,
+} from '@/lib/mobile/store-bridge';
+import { creditsRequiredForKrw, STORE_IAP_PACKS } from '@/lib/mobile/iap/catalog';
 
 /**
  * TWINGS — the make loop, as a four-step demo (founder, 2026-08-16: "사진만 넣으면 완성도 높은
@@ -223,7 +231,7 @@ export function ResolutionPicker({
             onClick={() => onSelect(option.id)}
             className={[
               'flex min-h-11 items-center gap-2 rounded-full border px-3.5 font-label text-[0.72rem] tracking-[0.12em] uppercase transition-colors',
-              option.id === current ? 'border-accent bg-accent/[0.06] text-accent' : 'border-hairline text-black/70 hover:text-black',
+              option.id === current ? 'border-[#09090B] bg-[#09090B] text-white' : 'border-hairline text-[#52525B] hover:border-[#09090B] hover:text-[#09090B]',
             ].join(' ')}
           >
             <span>{index === 0 && labels.resolutionDefault ? `${option.id} · ${labels.resolutionDefault}` : option.id}</span>
@@ -254,6 +262,7 @@ export function TwingsStudio({
   shopOpenHint = false,
   initialAccess,
   stickyBar = true,
+  storePlatform,
 }: {
   styles: StudioStyle[];
   labels: StudioLabels;
@@ -269,6 +278,8 @@ export function TwingsStudio({
   initialAccess?: StudioAccessSnapshot;
   /** The phone's own sticky make bar. Off where the studio sits in a sheet with its own launcher. */
   stickyBar?: boolean;
+  /** Native app store wrapper detection override (defaults to client UA detection). */
+  storePlatform?: StorePlatform;
 }) {
   const single = styles.length === 1;
   // docs/PLATFORM-2.0.md §3.1: the static page used to paint "closed" and flip once the access call
@@ -279,6 +290,11 @@ export function TwingsStudio({
   // default), `chosenSelfie` the face this order uses once the person answers "이 얼굴로 만들까요?".
   const [selfie, setSelfie] = useState<SelfieView | null>(null);
   const [chosenSelfie, setChosenSelfie] = useState<SelfieView | null>(null);
+  const [disclosedRecipe, setDisclosedRecipe] = useState<PublicRecipe | null>(null);
+  const [directorDraft, setDirectorDraft] = useState<{
+    directorSpec: PersonalDirectorSpec | null;
+    slotFiles: Partial<Record<CustomDirectorRefSlot, File>>;
+  }>({ directorSpec: null, slotFiles: {} });
   const [selfieJustSaved, setSelfieJustSaved] = useState(false);
   const [selfieEditing, setSelfieEditing] = useState(false);
   const photo = chosenSelfie?.imageUrl ?? null;
@@ -310,6 +326,19 @@ export function TwingsStudio({
   const [usageExhausted, setUsageExhausted] = useState(false);
   const [selectedFrames, setSelectedFrames] = useState<number[] | null>(null);
   const [selectivePriceOverride, setSelectivePriceOverride] = useState<string | null>(null);
+  const [effectiveStorePlatform, setEffectiveStorePlatform] = useState<StorePlatform>(
+    storePlatform ?? 'web',
+  );
+  useEffect(() => {
+    if (storePlatform !== undefined) {
+      setEffectiveStorePlatform(storePlatform);
+      return;
+    }
+    if (typeof navigator !== 'undefined') {
+      setEffectiveStorePlatform(detectStorePlatform({ userAgent: navigator.userAgent }));
+    }
+  }, [storePlatform]);
+  const nativeStoreActive = isNativeStoreApp(effectiveStorePlatform);
   const payRef = useRef<HTMLButtonElement>(null);
   const selfiePanelRef = useRef<HTMLDivElement>(null);
   const studioRef = useRef<HTMLElement>(null);
@@ -354,7 +383,9 @@ export function TwingsStudio({
 
   // Static page, per-viewer answer: ask once whether this reader renders for real, whether a
   // payment is taken, and whether this template needs their verified face first.
-  const accessUrl = live ? `${live.accessEndpoint}?template=${encodeURIComponent(live.template)}` : null;
+  const accessUrl = live
+    ? `${live.accessEndpoint}?template=${encodeURIComponent(live.template)}&locale=${encodeURIComponent(live.locale)}`
+    : null;
   useEffect(() => {
     if (accessUrl === null) return;
     let cancelled = false;
@@ -363,7 +394,7 @@ export function TwingsStudio({
       const request = ++latest;
       return fetch(accessUrl, { cache: 'no-store', credentials: 'same-origin' })
       .then((response) => (response.ok ? response.json() : { live: false }))
-      .then((json: { open?: boolean; live?: boolean; charge?: boolean; identityRequired?: boolean; identity?: string; signedIn?: boolean; interest?: boolean; selfie?: SelfieView | null; subscription?: typeof subscription; subscriptionEligible?: boolean; editing?: boolean; subscriptionUsePercent?: number | null; editFields?: string[]; premiumEditBudget?: unknown }) => {
+      .then((json: { open?: boolean; live?: boolean; charge?: boolean; identityRequired?: boolean; identity?: string; signedIn?: boolean; interest?: boolean; selfie?: SelfieView | null; subscription?: typeof subscription; subscriptionEligible?: boolean; editing?: boolean; subscriptionUsePercent?: number | null; editFields?: string[]; premiumEditBudget?: unknown; recipe?: PublicRecipe | null }) => {
         if (cancelled || request !== latest) return;
         setAccessKnown(true);
         setLiveMode(json.live === true);
@@ -372,6 +403,7 @@ export function TwingsStudio({
         setIdentityRequired(json.identityRequired === true);
         setIdentity(typeof json.identity === 'string' ? json.identity : 'not_needed');
         setSignedIn(json.signedIn === true);
+        setDisclosedRecipe(json.recipe ?? null);
         // The template page's "my selfie → these results" strip shows the reader's own photo.
         publishViewerSelfie(json.signedIn === true ? (json.selfie?.imageUrl ?? null) : null);
         // …and its make launcher, outside the sheet, says credits or "subscribe" from this.
@@ -500,6 +532,15 @@ export function TwingsStudio({
         if (chosenResolution) form.set('resolution', chosenResolution.id);
         if (selectedFrames && selectedFrames.length > 0) {
           form.set('selectedFrames', selectedFrames.join(','));
+        }
+        if (directorDraft.directorSpec) {
+          form.set('directorSpec', JSON.stringify(directorDraft.directorSpec));
+        }
+        for (const slot of ['look_ref', 'prop_ref', 'scene_ref'] as const) {
+          const customFile = directorDraft.slotFiles[slot];
+          if (customFile) {
+            form.set(`slot_${slot}`, await shrinkPhoto(customFile, 1_400_000));
+          }
         }
         form.set('locale', live.locale);
         if (needs.selfie && chosenSelfie) form.set('selfieId', chosenSelfie.id);
@@ -665,7 +706,7 @@ export function TwingsStudio({
           data-studio-signin
           data-make-cta="card"
           href={live.signinHref}
-          className={`${hasAboveCta ? 'mt-4 ' : ''}flex min-h-12 w-full items-center justify-center rounded-full bg-accent px-5 font-label text-[0.85rem] tracking-[0.1em] text-white uppercase transition-opacity hover:opacity-85`}
+          className={`${hasAboveCta ? 'mt-4 ' : ''}flex min-h-12 w-full items-center justify-center rounded-full bg-[#FF58AE] px-5 font-label text-[0.85rem] font-bold tracking-[0.06em] text-[#09090B] uppercase transition-colors hover:bg-[#FF389F]`}
         >
           {labels.signedOutCta}
         </a>
@@ -713,7 +754,7 @@ export function TwingsStudio({
       {/* The one honest label the whole screen hangs on: where the result goes, and whether a payment is taken. */}
       <p
         data-live-badge
-        className="inline-block rounded-full border border-accent bg-accent/[0.06] px-3.5 py-1.5 font-label text-[0.68rem] tracking-[0.12em] text-accent uppercase"
+        className="inline-block rounded-full border border-[#E4E4E7] bg-[#F4F4F5] px-3.5 py-1.5 font-label text-[0.68rem] font-semibold tracking-[0.12em] text-[#CC1573] uppercase"
       >
         {monthly && subscriptionCopy ? subscriptionCopy.studioBadge : charge ? live.labels.badge : live.labels.operatorBadge}
       </p>
@@ -848,7 +889,7 @@ export function TwingsStudio({
                         onClick={() => setAspect(option.id)}
                         className={[
                           'inline-flex min-h-11 items-center rounded-full border px-3.5 font-label text-[0.72rem] tracking-[0.12em] uppercase transition-colors',
-                          option.id === aspect ? 'border-accent bg-accent/[0.06] text-accent' : 'border-hairline text-black/70 hover:text-black',
+                          option.id === aspect ? 'border-[#09090B] bg-[#09090B] text-white' : 'border-hairline text-[#52525B] hover:border-[#09090B] hover:text-[#09090B]',
                         ].join(' ')}
                       >
                         {option.label}
@@ -899,6 +940,9 @@ export function TwingsStudio({
                   locale={live.locale}
                   templateId={chosen?.id ?? live.template}
                   imageSetSpec={chosen?.imageSetSpec ?? null}
+                  medium={chosen?.videoSrc ? 'video' : 'image'}
+                  disclosedRecipe={disclosedRecipe}
+                  onDraftChange={setDirectorDraft}
                   onSelectedFramesChange={(indices, quote) => {
                     setSelectedFrames(indices);
                     if (quote.isPartialSelection) {
@@ -916,6 +960,53 @@ export function TwingsStudio({
               )}
 
               <div className="mt-auto pt-6">
+                {nativeStoreActive && chosen && !monthly && (() => {
+                  const koMatch = /([\d,]+)\s*원/.exec(chosenPrice);
+                  const usdMatch = /\$([\d.]+)/.exec(chosenPrice);
+                  const estimatedKrw = koMatch?.[1]
+                    ? Number(koMatch[1].replace(/,/g, ''))
+                    : usdMatch?.[1]
+                      ? Math.round(Number(usdMatch[1]) * 1400)
+                      : 1900;
+                  const creditsNeeded = creditsRequiredForKrw(estimatedKrw);
+                  const isKo = live?.locale !== 'en';
+                  return (
+                    <div
+                      data-native-iap-sheet={effectiveStorePlatform}
+                      className="mb-4 rounded-[16px] border border-[#E4E4E7] bg-[#F4F4F5] p-4 text-[#09090B]"
+                    >
+                      <div className="flex items-center justify-between gap-2">
+                        <span className="text-xs font-semibold text-[#CC1573]">
+                          {effectiveStorePlatform === 'ios-store' ? 'App Store In-App Purchase' : 'Google Play Billing'}
+                        </span>
+                        <span className="font-mono text-xs font-bold tabular-nums">
+                          {isKo ? `${creditsNeeded} 크레딧 필요` : `${creditsNeeded} Credits`}
+                        </span>
+                      </div>
+                      <p className="mt-1.5 text-xs leading-relaxed text-[#52525B]" style={{ wordBreak: 'keep-all' }}>
+                        {isKo
+                          ? '앱 내에서는 스토어 인앱결제로 충전한 크레딧으로 바로 생성합니다.'
+                          : 'Use App Store / Google Play in-app credit packs to render inside the mobile app.'}
+                      </p>
+                      <div className="mt-2.5 grid grid-cols-2 gap-1.5">
+                        {STORE_IAP_PACKS.map((pack) => (
+                          <div
+                            key={pack.productId}
+                            data-iap-sku={pack.productId}
+                            className="rounded-lg border border-[#E4E4E7] bg-white px-2.5 py-2 text-[0.72rem]"
+                          >
+                            <p className="font-semibold text-[#09090B]">
+                              {isKo ? pack.labelKo : pack.labelEn}
+                            </p>
+                            <p className="mt-0.5 font-mono text-[0.68rem] text-[#52525B] tabular-nums">
+                              {pack.retailKrw.toLocaleString('ko-KR')}원
+                            </p>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  );
+                })()}
                 {subscriptionAvailable && subscriptionCopy && <label className="mb-5 flex cursor-pointer items-start gap-3 text-sm leading-relaxed"><input data-subscription-own-face-consent type="checkbox" checked={ownFaceConsent} disabled={submitting} onChange={event => setOwnFaceConsent(event.target.checked)} className="mt-1 size-4 shrink-0 accent-black" /><span>{subscriptionCopy.studioConsent}</span></label>}
                 {identityBlocked && live && (
                   <p data-identity-notice={identity} className="mb-3 border border-accent px-4 py-3 text-[0.9rem] leading-relaxed">
@@ -930,7 +1021,7 @@ export function TwingsStudio({
                   aria-describedby={selfieReady && castReady ? undefined : 'studio-cta-hint'}
                   onClick={() => void submitLive()}
                   data-make-cta="card"
-                  className="flex min-h-12 w-full items-center justify-center rounded-full bg-accent px-5 py-3 font-label text-[0.9rem] tracking-[0.1em] text-white uppercase transition-opacity hover:opacity-85 disabled:bg-black/10 disabled:text-black/55"
+                  className="flex min-h-12 w-full items-center justify-center rounded-full bg-[#FF58AE] px-5 py-3 font-label text-[0.9rem] font-bold tracking-[0.06em] text-[#09090B] uppercase transition-colors hover:bg-[#FF389F] disabled:bg-[#E4E4E7] disabled:text-[#71717A]"
                 >
                   {submitting
                     ? live.labels.submitting
@@ -944,7 +1035,9 @@ export function TwingsStudio({
                           ? labels.payCta.replace('{price}', chosenPrice)
                           : labels.payCta}
                 </button>
-                <p className="mt-3 text-sm leading-relaxed text-black/70">{monthly && subscriptionCopy ? subscriptionCopy.studioNote : labels.payNote}</p>
+                {nativeStoreActive ? null : (
+                  <p className="mt-3 text-sm leading-relaxed text-black/70">{monthly && subscriptionCopy ? subscriptionCopy.studioNote : labels.payNote}</p>
+                )}
                 {liveError && (
                   <p data-live-error role="alert" className="mt-2 text-sm text-accent">
                     {liveError}
@@ -1020,7 +1113,7 @@ function MakeStickyBar({ price, label, studioRef, phaseKey }: { price: string | 
     >
       <div className="mx-auto flex max-w-xl items-center gap-4">
         {price && <p data-make-sticky-price className="shrink-0 font-display text-[1.35rem] leading-none font-black tabular-nums">{price}</p>}
-        <a href="#make" data-make-cta="sticky" onClick={go} className="flex min-h-12 flex-1 items-center justify-center rounded-full bg-accent px-4 font-label text-[0.85rem] tracking-[0.1em] text-white uppercase transition-opacity hover:opacity-85">{label}</a>
+        <a href="#make" data-make-cta="sticky" onClick={go} className="flex min-h-12 flex-1 items-center justify-center rounded-full bg-[#FF58AE] px-4 font-label text-[0.85rem] font-bold tracking-[0.06em] text-[#09090B] uppercase transition-colors hover:bg-[#FF389F]">{label}</a>
       </div>
     </div>
   );

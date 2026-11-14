@@ -6,6 +6,7 @@ import { makerRest } from '@/lib/makers/links';
 import { TEMPLATE_LISTING_REST, templateRest } from '@/lib/prompts/links';
 import { LEGAL_DOCS } from '@/lib/legal/documents';
 import { legalRest } from '@/lib/legal/links';
+import { ACCOUNT_DELETION_REST } from '@/lib/account/links';
 import { LOCALES, type Locale } from '@/lib/i18n/config';
 import { localeAlternates } from './playbook-metadata';
 import { BRAND_STORIES } from '@/lib/campaigns/brand-stories';
@@ -84,6 +85,8 @@ export function buildSitemap(input: SitemapInput): MetadataRoute.Sitemap {
     ...BRAND_STORIES.map(story => ({ rest: `/brands/stories/${story.slug}`, priority: 0.7, changeFrequency: 'weekly' as const })),
     { rest: '/pricing', priority: 0.8, changeFrequency: 'weekly' },
     { rest: '/faq', priority: 0.6, changeFrequency: 'weekly' },
+    // docs/RUNBOOK-deletion.md — the Google Play listing's account deletion URL: public on purpose.
+    { rest: ACCOUNT_DELETION_REST, priority: 0.2, changeFrequency: 'yearly' },
     ...(includeCreatorProgram ? [{ rest: '/creators', priority: 0.6, changeFrequency: 'weekly' as const }] : []),
     // The legal surface. Low priority — nobody searches for it — but LISTED, because a payment
     // provider's merchant review and 전자상거래법 §21 both expect these to be publicly reachable,

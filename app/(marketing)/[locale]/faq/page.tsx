@@ -1,6 +1,7 @@
 import type { Metadata } from 'next';
 import { SubscriptionFaq } from '@/components/twings/subscription-faq';
 import { MarketingFooter, MarketingNav } from '@/components/marketing/chrome';
+import { PersonalIdentity } from '@/components/audience/personal-identity';
 import { FAQ_CATEGORIES, faqItems } from '@/lib/faq/catalog';
 import { DEFAULT_LOCALE, isLocale } from '@/lib/i18n/config';
 import { getDictionary } from '@/lib/i18n/dictionaries';
@@ -37,10 +38,10 @@ export default async function FaqPage({ params }: Props) {
   // No catch: a rejected read is an outage, and throwing keeps the last good page (lib/db/read-policy.ts).
   const availability = await cachedSubscriptionAvailability();
   return (
-    <>
+    <PersonalIdentity>
       <MarketingNav locale={locale} dict={dict} rest="/faq" initialTheme="light" />
       <main id="main" data-faq-catalog="all" data-section data-theme="light" className="section">
-        <header className="band pt-28 lg:pt-36">
+        <header className="mx-auto w-full max-w-[calc(var(--container-content)+2*var(--spacing-gutter))] px-[var(--spacing-gutter)] pt-28 lg:pt-36">
           <p className="text-accent font-label text-eyebrow uppercase">{dict.faq.eyebrow}</p>
           <h1 className="mt-6 font-display text-title font-black">{dict.faq.title}</h1>
           <p className="mt-8 max-w-detail text-body opacity-70">{dict.seo.faqDescription}</p>
@@ -52,6 +53,6 @@ export default async function FaqPage({ params }: Props) {
         <SubscriptionFaq items={items} copy={{ subscriptionOpen: dict.faq.subscriptionOpen, subscriptionCreatorOpen: dict.faq.subscriptionCreatorOpen, subscriptionPaused: dict.faq.subscriptionPaused }} initialAvailability={availability} origin={siteUrl()} path={`/${locale}/faq`} locale={locale} eyebrow={dict.faq.eyebrow} title={dict.faq.title} categories={FAQ_CATEGORIES.map(id => ({ id, title: dict.seo.faqCategories[id] }))} />
       </main>
       <MarketingFooter locale={locale} dict={dict} />
-    </>
+    </PersonalIdentity>
   );
 }

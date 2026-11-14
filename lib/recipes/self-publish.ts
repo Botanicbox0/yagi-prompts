@@ -11,6 +11,7 @@ import { AssetRefSchema } from '@/lib/content/schemas';
 import { centsForKrw, isRoyalty, quoteRecipe } from './pricing';
 import { parseDisclosure, parsePresentation } from './repo';
 import { legacyPromptText, primaryStep, recipeCast, type Recipe } from './schema';
+import { defaultTimelineKeyframes, parseVideoKeyframes } from '@/lib/prompts/keyframes';
 
 /**
  * docs/PLATFORM-2.0.md §20.6 — an AI creative publishes their own template, no studio review in
@@ -97,6 +98,18 @@ export async function selfPublishFormat(
   // Written before the format links to the row, so 0059's guard freezes it from then on (as at acceptance).
   await tx.query('update prompt_items set recipe=$2::jsonb,disclosure=$3::jsonb,presentation=$4 where id=$1',
     [templateId, JSON.stringify(recipe), JSON.stringify(parseDisclosure(row.disclosure)), parsePresentation(row.presentation)]);
+  if (film?.kind === 'video') {
+    try {
+      const { rows: kfRows } = await tx.query<{ keyframes: unknown }>(
+        "select coalesce(to_jsonb(f.*)->'keyframes', 'null'::jsonb) as keyframes from platform_formats f where f.id=$1",
+        [row.id],
+      );
+      const keyframes = parseVideoKeyframes(kfRows[0]?.keyframes ?? null) ?? defaultTimelineKeyframes(film.params.duration);
+      await tx.query('update prompt_items set keyframes=$2::jsonb where id=$1', [templateId, JSON.stringify(keyframes)]);
+    } catch {
+      // Pre-0088 schemas lack prompt_items.keyframes; publish still succeeds and runtime falls back to default beats.
+    }
+  }
   await tx.query("update platform_formats set status='accepted',template_id=$2,rights_at=coalesce(rights_at,now()),updated_at=now() where id=$1", [row.id, templateId]);
   return { id: row.id, templateId, slug, priceKrw };
 }

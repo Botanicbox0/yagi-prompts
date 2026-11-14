@@ -1,9 +1,11 @@
 import type { Metadata } from 'next';
+import { headers } from 'next/headers';
 import { TwingsLogo, TwingsMark } from '@/components/brand/twings-mark';
 import { isAppPath, isLocale, type Locale } from '@/lib/i18n/config';
 import { getRequestLocale } from '@/lib/i18n/server';
 import { getDictionary } from '@/lib/i18n/dictionaries';
-import { AUTH_PROVIDERS, chooseProviderHref, signInWithProviderHref, type AuthProvider } from '@/lib/auth/providers';
+import { chooseProviderHref, providersForLocale, signInWithProviderHref, type AuthProvider } from '@/lib/auth/providers';
+import { detectStorePlatform } from '@/lib/mobile/store-bridge';
 import { legalDocument } from '@/lib/legal/documents';
 import { legalHref } from '@/lib/legal/links';
 import { authReturnPath, isAdminPath, isBrandPath } from '@/lib/routing/surfaces';
@@ -72,11 +74,24 @@ function KakaoMark({ className }: { className?: string }) {
   );
 }
 
+function AppleMark({ className }: { className?: string }) {
+  return (
+    <svg viewBox="0 0 24 24" aria-hidden className={className}>
+      <path
+        fill="currentColor"
+        d="M16.365 1.43c0 1.14-.493 2.27-1.177 3.08-.744.9-1.99 1.57-2.987 1.57-.12 0-.23-.02-.3-.03-.01-.06-.04-.22-.04-.39 0-1.15.572-2.27 1.206-2.98.804-.94 2.142-1.64 3.248-1.68.03.13.05.28.05.43zm4.565 15.71c-.03.07-.463 1.58-1.518 3.12-.945 1.34-1.94 2.71-3.43 2.71-1.517 0-1.9-.88-3.63-.88-1.698 0-2.302.91-3.67.91-1.377 0-2.332-1.26-3.428-2.8-1.287-1.82-2.323-4.63-2.323-7.28 0-4.28 2.797-6.55 5.552-6.55 1.448 0 2.675.95 3.6.95.865 0 2.222-1.01 3.902-1.01.613 0 2.886.06 4.374 2.19-.13.09-2.383 1.37-2.383 4.19 0 3.26 2.854 4.42 2.955 4.45z"
+      />
+    </svg>
+  );
+}
+
 function ProviderMark({ provider, className }: { provider: AuthProvider; className?: string }) {
+  if (provider === 'apple') return <AppleMark className={className} />;
   return provider === 'google' ? <GoogleMark className={className} /> : <KakaoMark className={className} />;
 }
 
 const STYLE: Record<AuthProvider, string> = {
+  apple: 'border border-[#09090B] bg-[#09090B] text-white',
   google: 'border border-[#747775] bg-white text-[#1f1f1f]',
   kakao: 'border border-[#FEE500] bg-[#FEE500] text-[#000000]/85',
 };
@@ -105,7 +120,14 @@ function withLinks(template: string, links: Readonly<Record<string, LegalLink>>)
 
 export default async function ChooseProviderPage(props: RouteProps) {
   const { locale, dict, next, admin, brandEntry, error } = await resolve(props);
+  const hdrs = await headers();
+  const storePlatform = detectStorePlatform({
+    userAgent: hdrs.get('user-agent'),
+    clientHeader: hdrs.get('x-twings-client'),
+  });
+  const activeProviders = providersForLocale(locale, { platform: storePlatform });
   const labels: Record<AuthProvider, string> = {
+    apple: dict.auth.continueWithApple,
     google: dict.auth.continueWithGoogle,
     kakao: dict.auth.continueWithKakao,
   };
@@ -113,7 +135,7 @@ export default async function ChooseProviderPage(props: RouteProps) {
     terms: { href: publicHref(legalHref(locale, 'terms'), admin), label: legalDocument('terms', locale).title },
     privacy: { href: publicHref(legalHref(locale, 'privacy'), admin), label: legalDocument('privacy', locale).title },
   });
-  const providers = AUTH_PROVIDERS.map(provider => (
+  const providers = activeProviders.map(provider => (
     <a key={provider} href={signInWithProviderHref(provider, next, locale)} data-auth-provider={provider}
       className={`relative flex h-12 w-full items-center justify-center rounded-[4px] px-12 text-[0.95rem] font-semibold transition-opacity hover:opacity-85 ${STYLE[provider]}`}>
       <ProviderMark provider={provider} className="absolute top-1/2 left-4 h-5 w-5 -translate-y-1/2" />

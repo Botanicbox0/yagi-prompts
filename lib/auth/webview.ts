@@ -30,3 +30,8 @@ export function isEmbeddedWebView(ua: string): boolean {
   const haystack = ua.toLowerCase();
   return EMBEDDED_WEBVIEW_TOKENS.some((token) => haystack.includes(token.toLowerCase()));
 }
+
+/** Recognizes the native Capacitor shell WebView (`TwingsIOS/` or `TwingsAndroid/`). */
+export function isCapacitorShellWebView(ua: string): boolean {
+  return /Twings(?:IOS|Android)\//i.test(ua);
+}

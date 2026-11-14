@@ -13,6 +13,7 @@ import { isRoyalty, quoteRecipe, ROYALTY_DEFAULT_KRW } from './pricing';
 import { parseDisclosure, parsePresentation, recipeSchemaReady, type Disclosure, type Presentation } from './repo';
 import { MAX_RECIPE_BYTES, parseRecipe, recipeCast, recipeMedium, type Recipe, type RecipeIssue, type RecipeMedium } from './schema';
 import { selfPublishFormat, selfPublishOpen } from './self-publish';
+import { parseVideoKeyframes, type VideoKeyframe } from '@/lib/prompts/keyframes';
 
 /**
  * The maker editor's server half (`/creators/workspace/formats/new`, docs/PLATFORM-2.0.md §7.4).
@@ -192,13 +193,13 @@ export async function makerAction(deps: { sql: SqlRunner; store: RenderStore; st
   });
 }
 
-export async function uploadMakerFile(deps: { sql: SqlRunner; store: RenderStore }, viewer: Viewer, input: { formatId: string; role: 'reference' | 'example'; bytes: Uint8Array }, access: MakerAccess) {
+export async function uploadMakerFile(deps: { sql: SqlRunner; store: RenderStore }, viewer: Viewer, input: { formatId: string; role: 'reference' | 'example'; bytes: Uint8Array; containsPerson?: boolean }, access: MakerAccess) {
   demand(z.uuid().safeParse(input.formatId).success, 'not_found');
   const userId = await makerGate(deps.sql, viewer, access);
   return deps.sql.transaction(async (tx) => {
     const row = await ownFormat(tx, userId, input.formatId, true);
     demand(row.status === 'draft', 'conflict');
-    const stored = await storeMakerFile(tx, deps.store, { formatId: row.id, userId, role: input.role, bytes: input.bytes });
+    const stored = await storeMakerFile(tx, deps.store, { formatId: row.id, userId, role: input.role, bytes: input.bytes, containsPerson: input.containsPerson });
     demand(stored.ok, stored.ok ? 'invalid' : stored.code);
     return stored.asset;
   });
@@ -208,6 +209,7 @@ export interface MakerTestRender { id: string; status: string; errorCode: string
 export interface MakerDraft {
   id: string; status: 'draft' | 'submitted' | 'accepted' | 'rejected'; title: string; titleKo: string | null; recipe: unknown; exampleUrl: string | null;
   disclosure: Disclosure; presentation: Presentation; royaltyKrw: number; testRendersUsed: number; files: MakerAsset[]; tests: MakerTestRender[]; revisionOf: string | null;
+  keyframes?: VideoKeyframe[] | null;
 }
 
 /** The editor's state for one of the viewer's own formats — the recipe goes back to its own author only. */
@@ -216,12 +218,22 @@ export async function loadMakerDraft(sql: SqlRunner, viewer: Viewer, id: string,
   const userId = await makerGate(sql, viewer, access);
   try {
     const row = await ownFormat(sql, userId, id);
+    let keyframes: VideoKeyframe[] | null = null;
+    try {
+      const { rows: kfRows } = await sql.query<{ keyframes: unknown }>(
+        "select coalesce(to_jsonb(f.*)->'keyframes', 'null'::jsonb) as keyframes from platform_formats f where f.id=$1 and f.user_id=$2",
+        [id, userId],
+      );
+      keyframes = parseVideoKeyframes(kfRows[0]?.keyframes ?? null);
+    } catch {
+      keyframes = null;
+    }
     const tests = await sql.query<{ id: string; status: string; error_code: string | null; outputs: number; created_at: unknown }>(`select j.id,j.status,j.error_code,(select count(*)::int from render_job_outputs o where o.render_id=j.id) outputs,j.created_at
       from render_job_recipes r join render_jobs j on j.id=r.render_id where r.format_id=$1 and r.purpose='maker_test' and j.user_id=$2 order by j.created_at desc limit 10`, [id, userId]);
     return {
       id: row.id, status: row.status as MakerDraft['status'], title: row.title, titleKo: row.title_ko, recipe: row.recipe_v2, exampleUrl: row.example_url,
       disclosure: parseDisclosure(row.disclosure), presentation: parsePresentation(row.presentation), royaltyKrw: row.royalty_krw ?? ROYALTY_DEFAULT_KRW,
-      testRendersUsed: row.test_renders_used, files: await listMakerFiles(sql, id), revisionOf: row.revision_of,
+      testRendersUsed: row.test_renders_used, files: await listMakerFiles(sql, id), revisionOf: row.revision_of, keyframes,
       tests: tests.rows.map((t) => ({ id: t.id, status: t.status, errorCode: t.error_code, outputs: t.outputs, createdAt: t.created_at instanceof Date ? t.created_at.toISOString() : String(t.created_at) })),
     };
   } catch (error) {

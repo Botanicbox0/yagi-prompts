@@ -30,18 +30,31 @@ export function ReferenceFiles({ files, copy }: { files: File[]; copy: Dictionar
   return (
     <>
       <ul data-recipe-how-files className="mt-3 grid grid-cols-3 gap-3 sm:grid-cols-4">
-        {files.map((file, i) => (
-          <li key={file.href} className="min-w-0">
-            <button type="button" data-recipe-file-open={i + 1} onClick={() => open(i)} aria-label={`${name(i)} · ${h.viewFile}`} className="block aspect-square w-full overflow-hidden rounded-xl border border-hairline bg-black/5">
-              {file.kind === 'image'
-                ? <img src={file.href} alt="" loading="lazy" className="h-full w-full object-cover" />
-                : <video src={file.href} muted playsInline preload="metadata" className="h-full w-full object-cover" />}
-            </button>
-            <a href={downloadHref(file.href)} download data-recipe-file-download={i + 1} className="mt-1.5 inline-flex min-h-9 items-center text-xs font-medium text-black/70 underline underline-offset-4">
-              {h.download}
-            </a>
-          </li>
-        ))}
+        {files.map((file, i) => {
+          const canDownload = Boolean(file.download) && !file.containsPerson;
+          return (
+            <li key={file.href} className="min-w-0">
+              <button type="button" data-recipe-file-open={i + 1} onClick={() => open(i)} aria-label={`${name(i)} · ${h.viewFile}`} className="flex aspect-square w-full items-center justify-center overflow-hidden rounded-xl border border-hairline bg-[#F4F4F5]">
+                {file.kind === 'image' ? (
+                  <img src={file.href} alt="" loading="lazy" className="h-full w-full object-cover" />
+                ) : file.kind === 'video' ? (
+                  <video src={file.href} muted playsInline preload="metadata" className="h-full w-full object-cover" />
+                ) : (
+                  <span className="px-2 text-xs font-semibold text-[#09090B]">AUDIO</span>
+                )}
+              </button>
+              {canDownload && file.download ? (
+                <a href={file.download.includes('download=1') ? file.download : downloadHref(file.href)} download data-recipe-file-download={i + 1} className="mt-1.5 inline-flex min-h-9 items-center text-xs font-medium text-[#52525B] underline underline-offset-4 hover:text-[#09090B]">
+                  {h.download}
+                </a>
+              ) : (
+                <span data-recipe-file-view-only={i + 1} className="mt-1.5 inline-flex items-center rounded-full bg-[#F4F4F5] px-2 py-0.5 text-[11px] font-medium text-[#52525B]">
+                  화면 조회 전용 (인물 보호)
+                </span>
+              )}
+            </li>
+          );
+        })}
       </ul>
       <dialog
         ref={dialogRef}
@@ -59,14 +72,24 @@ export function ReferenceFiles({ files, copy }: { files: File[]; copy: Dictionar
             <div className="flex items-center justify-between gap-3 px-4 py-3">
               <p className="text-sm font-medium">{name(index)} · {interpolate(h.fileCount, { n: String(index + 1), total: String(files.length) })}</p>
               <div className="flex items-center gap-2">
-                <a href={downloadHref(current.href)} download data-recipe-viewer-download className="inline-flex min-h-11 items-center rounded-full bg-white px-4 text-sm font-semibold text-black">{h.download}</a>
+                {!current.containsPerson && current.download ? (
+                  <a href={current.download.includes('download=1') ? current.download : downloadHref(current.href)} download data-recipe-viewer-download className="inline-flex min-h-11 items-center rounded-full bg-white px-4 text-sm font-semibold text-black">{h.download}</a>
+                ) : (
+                  <span data-recipe-viewer-view-only className="inline-flex min-h-9 items-center rounded-full bg-white/15 px-3 text-xs font-medium text-white">
+                    화면 조회 전용 (인물 보호)
+                  </span>
+                )}
                 <button type="button" onClick={close} aria-label={h.closeFile} className="inline-flex min-h-11 min-w-11 items-center justify-center rounded-full text-2xl leading-none">×</button>
               </div>
             </div>
             <div className="relative flex min-h-0 flex-1 items-center justify-center px-2 pb-4">
-              {current.kind === 'image'
-                ? <img key={current.href} src={current.href} alt={name(index)} className="max-h-full max-w-full object-contain" />
-                : <video key={current.href} src={current.href} controls autoPlay playsInline className="max-h-full max-w-full" />}
+              {current.kind === 'image' ? (
+                <img key={current.href} src={current.href} alt={name(index)} className="max-h-full max-w-full object-contain" />
+              ) : current.kind === 'video' ? (
+                <video key={current.href} src={current.href} controls autoPlay playsInline className="max-h-full max-w-full" />
+              ) : (
+                <audio key={current.href} src={current.href} controls className="w-full max-w-md" />
+              )}
               {files.length > 1 && (
                 <>
                   <button type="button" onClick={() => step(-1)} aria-label={h.prevFile} className="absolute top-1/2 left-2 inline-flex min-h-11 min-w-11 -translate-y-1/2 items-center justify-center rounded-full bg-white/15 text-xl">‹</button>

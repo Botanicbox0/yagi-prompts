@@ -11,7 +11,8 @@
       "*.supabase.co",
       "accounts.google.com",
       "kauth.kakao.com",
-      "logins.daum.net"
+      "logins.daum.net",
+      "appleid.apple.com"
     ]
   },
   "ios": {

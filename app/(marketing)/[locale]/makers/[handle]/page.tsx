@@ -16,6 +16,7 @@ import { makerMetadata, unresolvedTemplateMetadata } from '@/lib/seo/template-me
 import { JsonLd } from '@/lib/seo/json-ld';
 import { siteUrl } from '@/lib/seo/site-url';
 import { MarketingFooter, MarketingNav } from '@/components/marketing/chrome';
+import { PersonalIdentity } from '@/components/audience/personal-identity';
 import { PromptRail } from '@/components/prompts/rails';
 import { promptLabels, useCaseLabel } from '@/components/prompts/labels';
 import { CreativeAvatar, CreativeLinks, placeOf } from '@/components/makers/identity';
@@ -135,7 +136,7 @@ export default async function MakerPage({ params }: RouteParams) {
   const bio = makerBioFor(maker, locale);
 
   return (
-    <>
+    <PersonalIdentity>
       <MarketingNav locale={locale} dict={dict} rest={`/makers/${handle}`} initialTheme="light" />
       <JsonLd id="creative-structured-data" data={profileStructuredData(origin, locale, maker, t.jsonLdRole)} />
       <main id="main" data-maker-profile={handle} data-section data-theme="light" className="section">
@@ -242,6 +243,6 @@ export default async function MakerPage({ params }: RouteParams) {
         </div>
       </main>
       <MarketingFooter locale={locale} dict={dict} />
-    </>
+    </PersonalIdentity>
   );
 }

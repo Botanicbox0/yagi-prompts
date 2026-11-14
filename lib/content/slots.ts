@@ -37,14 +37,12 @@ export interface EvidencePair {
 }
 
 /**
- * Founder-approved default Selfie → Scene evidence pair (2026-10-26):
- * Front-facing reference selfie (`hf_20260912...`) → City Fashion Montage scene video output,
- * with zero creator handle or personal information in public paths (AGENTS.md §5).
+ * Founder-approved default Selfie → Scene static photo proof pair (2026-11-14):
+ * Compact static comparison card in the hero left column so only the right-side featured film plays.
  */
 export const DEFAULT_HERO_EVIDENCE: EvidencePair = {
   before: '/reel/studio-demo/reference-selfie.jpeg',
   after: '/reel/studio-demo/different-person.jpg',
-  afterVideo: '/reel/studio-demo/different-person.mp4',
 };
 
 export function heroEvidence(env: Record<string, string | undefined> = process.env): EvidencePair | null {

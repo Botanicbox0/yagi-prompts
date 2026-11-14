@@ -2,8 +2,9 @@ import type { SqlRunner } from '@/lib/db/sql-runner';
 import { savedSelfiePhoto } from '@/lib/identity/selfie-service';
 import { loadPromptBySlug } from '@/lib/prompts/repo';
 import {
-  CAST_SLOTS, castOpen, cleanSlotPhoto, extraSlots, liveSlotRows, petIsPrimary, storeSlotPhotos, templateMakeInputs,
-  type CastSlot, type SlotPhoto,
+  ALL_RENDER_SLOTS, CAST_SLOTS, CUSTOM_REF_SLOTS, castOpen, cleanSlotPhoto, extraSlots, liveSlotRows, petIsPrimary,
+  slotSchemaReady, storeSlotPhotos, templateMakeInputs,
+  type RenderSlot, type SlotPhoto,
 } from './cast-inputs';
 import type { RenderStore } from './store';
 import { checkPetPhoto, petRefusal, type PetPhotoVerdict } from './pet-photo-check';
@@ -18,13 +19,13 @@ import { checkPetPhoto, petRefusal, type PetPhotoVerdict } from './pet-photo-che
  */
 
 export interface CastFormPhotos {
-  slots: Partial<Record<CastSlot, SlotPhoto>>;
+  slots: Partial<Record<RenderSlot, SlotPhoto>>;
   partnerConsent: boolean;
 }
 
 export async function castFormPhotos(form: FormData): Promise<CastFormPhotos> {
-  const slots: Partial<Record<CastSlot, SlotPhoto>> = {};
-  for (const slot of CAST_SLOTS) {
+  const slots: Partial<Record<RenderSlot, SlotPhoto>> = {};
+  for (const slot of ALL_RENDER_SLOTS) {
     const file = form.get(`slot_${slot}`);
     if (file instanceof File && file.size > 0) slots[slot] = { bytes: new Uint8Array(await file.arrayBuffer()), mime: file.type };
   }
@@ -33,28 +34,36 @@ export async function castFormPhotos(form: FormData): Promise<CastFormPhotos> {
 
 export type OrderPhotosFailure = 'selfie_required' | 'not_found' | 'not_for_sale' | 'slot_missing' | 'bad_slot_photo' | 'partner_consent_required' | 'not_a_pet' | 'pet_check_unavailable';
 export type OrderPhotos =
-  | { ok: true; photo: SlotPhoto; selfieId: string | null; extras: Partial<Record<CastSlot, SlotPhoto>>; partnerConsent: boolean; templateId: string | null }
+  | { ok: true; photo: SlotPhoto; selfieId: string | null; extras: Partial<Record<RenderSlot, SlotPhoto>>; partnerConsent: boolean; templateId: string | null }
   | { ok: false; code: OrderPhotosFailure };
 
 /**
  * The photos a paid order carries. A solo template (and an unknown slug, which the order itself
  * refuses) keeps exactly today's rule: the saved selfie or `selfie_required`. A pet-only template's
  * one photo is the pet; a person + pet or couple template adds the second photo, bound to the order
- * by `bindOrderPhotos` once the order exists.
+ * by `bindOrderPhotos` once the order exists. Optional custom reference slots (`look_ref`, `prop_ref`,
+ * `scene_ref`) ride along when provided without altering face consent rules.
  */
 export async function orderPhotos(sql: SqlRunner, store: RenderStore, userId: string, form: FormData, deps: { petCheck?: (photo: SlotPhoto) => Promise<PetPhotoVerdict> } = {}): Promise<OrderPhotos> {
   const petCheck = deps.petCheck ?? checkPetPhoto;
   const selfieId = String(form.get('selfieId') ?? '');
   const selfie = async () => (selfieId ? await savedSelfiePhoto(sql, store, userId, selfieId) : null);
   const template = await loadPromptBySlug(sql, String(form.get('template') ?? ''));
+  const { slots, partnerConsent } = await castFormPhotos(form);
+  const customExtras: Partial<Record<RenderSlot, SlotPhoto>> = {};
+  for (const customSlot of CUSTOM_REF_SLOTS) {
+    const given = slots[customSlot];
+    if (given) {
+      try { customExtras[customSlot] = await cleanSlotPhoto(given); } catch { return { ok: false, code: 'bad_slot_photo' }; }
+    }
+  }
   if (template === null || template.cast === 'solo') {
     const saved = await selfie();
-    return saved ? { ok: true, photo: saved, selfieId, extras: {}, partnerConsent: false, templateId: template?.id ?? null } : { ok: false, code: 'selfie_required' };
+    return saved ? { ok: true, photo: saved, selfieId, extras: customExtras, partnerConsent: false, templateId: template?.id ?? null } : { ok: false, code: 'selfie_required' };
   }
   if (!castOpen(template.cast)) return { ok: false, code: 'not_found' };
   const inputs = await templateMakeInputs(sql, template);
   if (inputs === null) return { ok: false, code: 'not_for_sale' };
-  const { slots, partnerConsent } = await castFormPhotos(form);
   let photo: SlotPhoto;
   let usedSelfie: string | null = null;
   if (petIsPrimary(inputs)) {
@@ -69,7 +78,7 @@ export async function orderPhotos(sql: SqlRunner, store: RenderStore, userId: st
     photo = saved;
     usedSelfie = selfieId;
   }
-  const extras: Partial<Record<CastSlot, SlotPhoto>> = {};
+  const extras: Partial<Record<RenderSlot, SlotPhoto>> = { ...customExtras };
   for (const slot of extraSlots(inputs)) {
     const given = slots[slot];
     if (!given) return { ok: false, code: 'slot_missing' };
@@ -88,8 +97,9 @@ export async function orderPhotos(sql: SqlRunner, store: RenderStore, userId: st
  * job is created with that id when the payment confirms, and reads them from there. An order that is
  * never paid leaves them unclaimed, and the render pass deletes them (lib/renders/cast-inputs.ts).
  */
-export async function bindOrderPhotos(sql: SqlRunner, store: RenderStore, input: { orderId: string; userId: string; templateId: string; extras: Partial<Record<CastSlot, SlotPhoto>>; partnerConsent: boolean; now: Date }): Promise<void> {
+export async function bindOrderPhotos(sql: SqlRunner, store: RenderStore, input: { orderId: string; userId: string; templateId: string; extras: Partial<Record<RenderSlot, SlotPhoto>>; partnerConsent: boolean; now: Date }): Promise<void> {
   if (Object.keys(input.extras).length === 0) return;
+  if (!(await slotSchemaReady(sql))) return;
   const { rows } = await sql.query<{ render_ref: string }>('select render_ref from billing_payments where id = $1 and user_id = $2', [input.orderId, input.userId]);
   const renderRef = rows[0]?.render_ref;
   if (!renderRef) throw Error('order_without_render_ref');
@@ -109,7 +119,7 @@ export async function bindOrderPhotos(sql: SqlRunner, store: RenderStore, input:
 export type RetryPhotoPlan =
   | { kind: 'solo' }
   | { kind: 'refuse'; code: 'not_found' | 'photos_gone' }
-  | { kind: 'copy'; fromRef: string; templateId: string; slots: CastSlot[] };
+  | { kind: 'copy'; fromRef: string; templateId: string; slots: RenderSlot[] };
 
 export async function planRetryPhotos(sql: SqlRunner, userId: string, orderId: string): Promise<RetryPhotoPlan> {
   // A malformed id is the retry's own `not_found`; never a database error from this read.
@@ -122,18 +132,22 @@ export async function planRetryPhotos(sql: SqlRunner, userId: string, orderId: s
   const { rows: templates } = await sql.query<{ id: string; cast: string }>(
     `select id, coalesce(to_jsonb(prompt_items.*)->>'cast_kind', 'solo') as cast from prompt_items where id = $1`, [order.template_id]);
   const template = templates[0];
-  if (!template || template.cast === 'solo') return { kind: 'solo' };
+  if (!template) return { kind: 'solo' };
+  const live = await liveSlotRows(sql, order.render_ref);
+  const customLiveSlots = live.map((r) => r.slot).filter((s) => (CUSTOM_REF_SLOTS as readonly string[]).includes(s));
+  if (template.cast === 'solo') {
+    return customLiveSlots.length > 0
+      ? { kind: 'copy', fromRef: order.render_ref, templateId: template.id, slots: customLiveSlots }
+      : { kind: 'solo' };
+  }
   const cast = template.cast === 'pet' ? 'pet' : 'couple';
   if (!castOpen(cast)) return { kind: 'refuse', code: 'not_found' };
   const inputs = await templateMakeInputs(sql, { id: template.id, cast });
   if (inputs === null) return { kind: 'refuse', code: 'not_found' };
-  const slots = extraSlots(inputs);
-  if (slots.length === 0) return { kind: 'solo' };
-  // The second photo is deleted two hours after an unpaid order (lib/renders/cast-inputs.ts): if it is
-  // gone, the reader starts a new order with a new photo instead of paying for one that cannot render.
-  const live = await liveSlotRows(sql, order.render_ref);
+  const slots: RenderSlot[] = extraSlots(inputs);
+  if (slots.length === 0 && customLiveSlots.length === 0) return { kind: 'solo' };
   if (!slots.every((slot) => live.some((row) => row.slot === slot))) return { kind: 'refuse', code: 'photos_gone' };
-  return { kind: 'copy', fromRef: order.render_ref, templateId: template.id, slots };
+  return { kind: 'copy', fromRef: order.render_ref, templateId: template.id, slots: [...slots, ...customLiveSlots] };
 }
 
 /** Copy the live second photo(s) of the old order onto the new order's render_ref (files copied, not shared). */
@@ -143,7 +157,7 @@ export async function copyRetryPhotos(sql: SqlRunner, store: RenderStore, input:
   if (!toRef) throw Error('order_without_render_ref');
   if (toRef === input.plan.fromRef) return;
   const live = await liveSlotRows(sql, input.plan.fromRef);
-  const photos: Partial<Record<CastSlot, SlotPhoto>> = {};
+  const photos: Partial<Record<RenderSlot, SlotPhoto>> = {};
   let consentAt: Date | null = null;
   for (const slot of input.plan.slots) {
     const row = live.find((item) => item.slot === slot);
