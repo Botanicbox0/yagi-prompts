@@ -77,12 +77,21 @@ describe('before the room migrations', () => {
 
   it('shows an empty room instead of an error', async () => {
     const overview = await loadRoomOverview(preMigrationRunner(), { organizationId: ORG, project, userId: USER });
-    expect(overview).toMatchObject({ stage: 'requested', todos: [], activity: [], counts: { storyboard: 0, review: 0, chat: 0 }, empty: true });
+    expect(overview).toMatchObject({ stage: 'requested', todos: [], counts: { storyboard: 0, review: 0, chat: 0 }, empty: true, received: false });
+    // The request itself is the room's first activity line, read from the project.
+    expect(overview.activity).toEqual([{ key: `p:${PROJECT}:requested`, kind: 'requested', at: project.createdAt, targetId: null, title: null, version: null }]);
     expect(overview.steps.map((s) => s.state)).toEqual(['current', 'ahead', 'ahead', 'ahead', 'ahead']);
     expect(overview.steps[0]!.at).toBe(project.createdAt);
     expect(await roomUnreadCounts(preMigrationRunner(), { organizationId: ORG, userId: USER, projectIds: [PROJECT] })).toEqual({});
     // A missing column (the deliverables' project_id before 0084) is the same.
     expect((await loadRoomOverview(preMigrationRunner({ code: '42703', message: 'column does not exist' }), { organizationId: ORG, project, userId: USER })).empty).toBe(true);
+  });
+
+  it('says the request is in while nothing has been shown yet, and stops once a draft or storyboard arrives', async () => {
+    const requested = { ...project, status: 'requested' as const, title: '  봄 신제품 영상 ' };
+    const overview = await loadRoomOverview(preMigrationRunner(), { organizationId: ORG, project: requested, userId: USER });
+    expect(overview.received).toBe(true);
+    expect(overview.activity[0]).toMatchObject({ kind: 'requested', title: '봄 신제품 영상' });
   });
 
   it('still fails loudly on anything that is not a missing table or column', async () => {
@@ -95,6 +104,8 @@ describe('the overview from the real tables', () => {
     f = await studioFixture({ capKrw: 1_000_000 });
     const { sql, orgId, projectId, ids } = f;
     const at = (minutesAgo: number) => new Date(Date.now() - minutesAgo * 60_000).toISOString();
+    // The request came in before everything below.
+    await sql.query('update brand_projects set created_at = $2 where id = $1', [projectId, at(1000)]);
     // Storyboards: v1 approved, v2 shared (waiting), and a team draft the brand must not see.
     const lineage = '3e9d7e09-9276-4e8e-8c9f-5d4b3b0b9f44';
     await sql.query(
@@ -167,6 +178,8 @@ describe('the overview from the real tables', () => {
 
     expect(overview.activity).toHaveLength(5);
     expect(overview.activity.map((a) => a.kind)).toEqual(['message', 'message', 'message', 'reviewPosted', 'reviewChanges']);
+    // Older than everything above, so the request line has scrolled out of the five.
+    expect(overview.received).toBe(false);
     expect(overview.activity[0]).toMatchObject({ kind: 'message', authorRole: 'brand', line: 'Thanks!' });
     expect(overview.activity[1]).toMatchObject({ kind: 'message', authorRole: 'studio', authorName: null, line: 'New cut is up' });
     // Newest first, and the team's hidden draft never shows.
@@ -190,7 +203,10 @@ describe('the overview from the real tables', () => {
     const { sql, orgId, projectId, ids } = f;
     const project = await loadRoomProject(sql, orgId, projectId);
     const overview = await loadRoomOverview(sql, { organizationId: orgId, project: project!, userId: ids.owner });
-    expect(overview).toMatchObject({ stage: 'requested', todos: [], activity: [], empty: true });
+    expect(overview).toMatchObject({ stage: 'requested', todos: [], empty: true, received: project!.status === 'requested' });
+    expect(overview.activity).toEqual([
+      { key: `p:${projectId}:requested`, kind: 'requested', at: project!.createdAt, targetId: null, title: project!.title, version: null },
+    ]);
     expect(await loadRoomProject(sql, '0b6a4bd6-6f43-4b5a-9f6c-2a1f0e7f6c11', projectId)).toBeNull();
     expect(await loadRoomProject(sql, orgId, 'not-a-uuid')).toBeNull();
     await sql.query('update brand_projects set client_visible = false where id = $1', [projectId]);

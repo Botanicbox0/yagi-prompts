@@ -199,6 +199,7 @@ export type RoomTodo =
   | { kind: 'chat'; unread: number };
 
 export type RoomActivityKind =
+  | 'requested'
   | 'boardShared'
   | 'boardDraft'
   | 'boardApproved'
@@ -231,6 +232,11 @@ export interface RoomOverview {
   counts: { storyboard: number; review: number; chat: number };
   /** No storyboard, no deliverable and no message yet: the first-use explanation shows. */
   empty: boolean;
+  /**
+   * The request is in and the team has not shown anything yet (status `requested`, no storyboard, no
+   * deliverable): the overview opens with the "we got it" note instead of the explanation.
+   */
+  received: boolean;
 }
 
 interface BoardRow {
@@ -282,7 +288,7 @@ const maxIso = (values: Array<string | null>): string | null =>
 
 export interface OverviewInput {
   organizationId: string;
-  project: Pick<RoomProject, 'id' | 'status' | 'createdAt' | 'updatedAt'>;
+  project: Pick<RoomProject, 'id' | 'status' | 'createdAt' | 'updatedAt'> & { title?: string };
   /** The viewer: their own messages are never unread. */
   userId: string;
 }
@@ -392,8 +398,12 @@ export async function loadRoomOverview(sql: SqlRunner, input: OverviewInput): Pr
     return { stage: s, state, at };
   });
 
-  /* recent activity */
+  /* recent activity: the request itself is always the first line (read from the project, not a message) */
   const activity: RoomActivity[] = [];
+  const requestedAt = iso(project.createdAt);
+  if (requestedAt) {
+    activity.push({ key: `p:${project.id}:requested`, kind: 'requested', at: requestedAt, targetId: null, title: project.title?.trim() || null, version: null });
+  }
   for (const b of boards) {
     const base = { targetId: String(b.id), title: String(b.title), version: Number(b.version) };
     const shared = iso(b.shared_at);
@@ -441,6 +451,7 @@ export async function loadRoomOverview(sql: SqlRunner, input: OverviewInput): Pr
     activity: activity.slice(0, 5),
     counts: { storyboard: boardTodos.length, review: reviewTodos.length, chat: unread },
     empty: boards.length === 0 && reviews.length === 0 && messages.length === 0 && unread === 0,
+    received: project.status === 'requested' && boards.length === 0 && reviews.length === 0,
   };
 }
 

@@ -1,4 +1,4 @@
-import { NextRequest, NextResponse } from "next/server";
+import { NextRequest, NextResponse, after } from "next/server";
 import { getViewer } from "@/lib/auth/viewer";
 import { getSqlRunner } from "@/lib/db/connect";
 import { getVerifiedEmail } from "@/lib/auth/verified-email";
@@ -53,9 +53,29 @@ import {
 } from "@/lib/brands/review";
 import {
   notifySlackBrandConcierge,
+  notifySlackBrandProjectRequest,
   syncSlackConciergeReplies,
 } from "@/lib/brands/concierge-slack";
+import { IntakeBriefSchema } from "@/lib/brands/workspace/intake-brief";
 export const dynamic = "force-dynamic";
+/**
+ * A staff note that must never hold up or fail the client's request: after the response where the
+ * runtime offers it, otherwise awaited here with every error swallowed.
+ */
+async function afterResponse(task: () => Promise<unknown>): Promise<void> {
+  const run = async () => {
+    try {
+      await task();
+    } catch {
+      // best effort
+    }
+  };
+  try {
+    after(run);
+  } catch {
+    await run();
+  }
+}
 const HEADERS = {
   "Cache-Control": "private, no-store",
   "X-Content-Type-Options": "nosniff",
@@ -115,6 +135,20 @@ export async function POST(request: NextRequest) {
         break;
       case "project.create":
         result = await createBrandProject({ sql }, viewer, input);
+        if (result.ok && typeof input.organizationId === "string" && typeof (result as { id?: unknown }).id === "string") {
+          const projectId = (result as { id: string }).id;
+          const brief = IntakeBriefSchema.safeParse(input.intakeBrief);
+          await afterResponse(() =>
+            notifySlackBrandProjectRequest(sql, {
+              organizationId: input.organizationId as string,
+              projectId,
+              title: typeof input.title === "string" ? input.title : "",
+              track: brief.success ? brief.data.track : null,
+              dueOn: brief.success ? brief.data.schedule.dueOn : null,
+              budgetBand: brief.success ? brief.data.budgetBand : null,
+            }),
+          );
+        }
         break;
       case "intake.attachFiles":
         result = await attachIntakeBriefFiles({ sql }, viewer, input);
