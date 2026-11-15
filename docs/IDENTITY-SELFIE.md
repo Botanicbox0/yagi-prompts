@@ -64,6 +64,7 @@
 - 밝기: 64×64 다운스케일 luma 평균과 양끝 비율로 `dark`/`bright` 힌트(`lib/identity/photo-advice.ts assessPhotoLight`). 기기 안에서만 계산, 저장하지 않음.
 - 두 권고는 한 문단으로 합쳐 `aria-live="polite"`로 읽힌다.
 - **다른 사람 사진 자동 판정은 하지 않는다**(얼굴 매칭은 권고 범위를 넘는다). "본인 사진만 올려주세요. 여기 있는 사진은 모두 같은 사람이어야 해요."를 시트·페이지에 문안으로만 둔다.
+- **저장한 사진 확인(서버, 2026-11-15, 코드 기본값은 꺼짐·운영은 켜짐)**: `TWINGS_PHOTO_CHECK=on` + `GEMINI_API_KEY` + 0089 적용일 때만. 저장한 사진 한 장당 한 번 Gemini(`gemini-4-hydrogen`, `GEMINI_PHOTO_CHECK_MODEL`로 교체)에 사진 품질 사실(얼굴 수·실제 인물·가림·각도·선명도·빛·크기)만 묻고, 판정(`good`/`check`/`retake` + 항목)은 서버가 정해(`lib/identity/photo-check.ts photoVerdict`) `identity_selfies.photo_check`에 남긴다. 신원·나이·감정은 묻지 않는다. 문구는 `selfie.photoCheck` 사전. 시트("이 얼굴로 만들까요?"·고른 사진)와 `/identity/selfie` 저장 직후에 보이고, 결과 없음·실패·확인 중이면 아무것도 보이지 않는다. 어떤 결과도 버튼을 막지 않는다. API `POST /api/identity/selfie/{id}/check` → `{ ok, check }`(꺼짐 404 `off`, 남의 것 404 `not_found`, 익명 401, 다른 출처 403). **켜기 전에** 개인정보처리방침에 처리 위탁(Google)을 넣어야 하고, 이 확인이 켜지면 `selfie.photoAdvisoryHint`의 "이 기기에서만 살펴보고 분석 결과는 저장하지 않아요"도 고쳐야 한다(대표 결정).
 
 ### `/identity/selfie` (전용 페이지)
 사진이 없으면 업로더 하나. 있으면 관리 그리드(아래 계정과 같은 것) + [사진 추가](한도 아래) 또는 [사진 바꾸기](한도, 기본 사진과 교체) + "템플릿으로 돌아가기"(`next`) 또는 "영상 포맷 고르기". `?add=1`·`?change=1`이면 바로 업로더를 연다. 비로그인은 `/auth/choose?next=/identity/selfie?next=…`.
@@ -124,6 +125,7 @@ N=1에서는 사진 한 장만 보인다: 카운터·기본 뱃지·[기본으�
 ## 7. 클라우드 적용 필요
 - `supabase/migrations/0050_core_identity_selfies.sql` (2.0 수정본: 4개 컬럼, `identity_selfie_default`, `identity_selfies_default_active`, 이관 행 `is_default=true`, "계정당 1장" 인덱스 제거)
 - `supabase/migrations/0137_glue_identity_selfies.sql` (권한은 그대로 select/insert/update, 삭제 권한 없음)
+- `supabase/migrations/0089_core_identity_selfie_photo_check.sql` (`photo_check jsonb`, `photo_checked_at`; glue 없음 — 0137의 표 단위 권한을 그대로 물려받는다). 적용 전에는 사진 확인이 꺼진 채로 동작한다. **2026-11-15 운영 적용**, 같은 날 Vercel Production에 `TWINGS_PHOTO_CHECK=on`(대표 지시). 개인정보처리방침 §1·§5와 이용약관 제2조에 Google(얼굴 사진: Gemini 이미지 생성, 저장한 사진의 적합성 확인)을 함께 올렸다.
 
 코드 배포 **전에** 적용해야 한다. 적용 전에는 `/api/renders/access`가 `selfie: null`을 돌려주고 업로더는 503 → "지금은 사진을 저장할 수 없어요"를 보인다. `IDENTITY_PORTRAIT_ENABLED` 환경변수는 더 이상 읽지 않으므로 Vercel에서 제거해도 된다.
 `IDENTITY_SELFIE_LIMIT`는 설정하지 않으면 1(약관 현행 "한 장"과 같다). 대표가 약관 문안을 승인한 뒤 Vercel Production에 `10`을 넣고 재배포한다.

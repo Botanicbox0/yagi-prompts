@@ -7,6 +7,8 @@ import { selfieSavedOn } from '@/lib/identity/selfie-format';
 import { interpolate } from '@/lib/i18n/format';
 import { SelfieGrid, selfieName } from './selfie-grid';
 import { SelfieUploader } from './selfie-uploader';
+import { PhotoCheckNote } from './photo-check-note';
+import type { PhotoCheck } from '@/lib/identity/photo-check-view';
 
 /**
  * "이 얼굴로 만들까요?" (founder, 2026-10-22: "매번 모바일에서 얼굴을 안 넣어도 되게 … '해당 얼굴을
@@ -63,9 +65,11 @@ export interface SelfieSheetProps {
   /** Server-markup seams for tests: render with the chooser open, on this library. */
   initialOpen?: boolean;
   initialLibrary?: SelfieLibrary | null;
+  /** Test seam: the advisory photo check's answer for the shown face, instead of asking the server. */
+  initialPhotoCheck?: PhotoCheck | null;
 }
 
-export function SelfieSheet({ copy, locale, suggested, chosen, onChoose, onEditingChange, signinHref, justSaved = false, initialOpen = false, initialLibrary = null }: SelfieSheetProps) {
+export function SelfieSheet({ copy, locale, suggested, chosen, onChoose, onEditingChange, signinHref, justSaved = false, initialOpen = false, initialLibrary = null, initialPhotoCheck }: SelfieSheetProps) {
   const [open, setOpen] = useState(initialOpen);
   const [view, setView] = useState<'grid' | 'upload'>('grid');
   const [library, setLibrary] = useState<SelfieLibrary | null>(initialLibrary);
@@ -201,6 +205,8 @@ export function SelfieSheet({ copy, locale, suggested, chosen, onChoose, onEditi
   const savedOn = selfieSavedOn(copy.savedOn, face.createdAt, locale);
   const detail = [face.label, face.isDefault ? copy.defaultBadge : null, savedOn].filter(Boolean).join(' · ');
   const chooserView = view === 'upload' ? 'upload' : loadState === 'ready' ? 'grid' : loadState;
+  // Advice about the face this order would use; "다른 사진 고르기" is the way to another. Never blocks.
+  const photoCheck = <PhotoCheckNote selfieId={face.id} copy={copy.photoCheck} onRetake={openChooser} retakeLabel={copy.otherPhotos} {...(initialPhotoCheck !== undefined ? { initial: initialPhotoCheck } : {})} />;
 
   const dialog = (
     <div data-theme={theme}>
@@ -289,6 +295,7 @@ export function SelfieSheet({ copy, locale, suggested, chosen, onChoose, onEditi
   return (
     <div ref={rootRef} data-selfie-sheet data-selfie-sheet-state={chosen ? 'chosen' : 'confirm'} className="flex flex-col gap-4">
       {chosen ? (
+        <>
         <div className="flex items-center gap-4">
           <div className="size-20 shrink-0 overflow-hidden rounded-2xl bg-black sm:size-24">
             {/* eslint-disable-next-line @next/next/no-img-element -- owner-only private route */}
@@ -300,6 +307,8 @@ export function SelfieSheet({ copy, locale, suggested, chosen, onChoose, onEditi
             <button ref={otherRef} type="button" data-selfie-other onClick={openChooser} className="mt-1 inline-flex min-h-11 items-center text-sm underline underline-offset-4">{copy.otherPhotos}</button>
           </div>
         </div>
+        {photoCheck}
+        </>
       ) : (
         <section aria-labelledby={questionId} className="flex flex-col gap-4">
           <div className="aspect-[4/5] overflow-hidden rounded-xl bg-black">
@@ -310,6 +319,7 @@ export function SelfieSheet({ copy, locale, suggested, chosen, onChoose, onEditi
             <h4 id={questionId} className="text-xl leading-snug font-semibold">{copy.useThisFace}</h4>
             {detail ? <p className="mt-1 text-xs opacity-60">{detail}</p> : null}
           </div>
+          {photoCheck}
           <div className="flex flex-col gap-2">
             <button type="button" data-selfie-use onClick={() => choose(face, 'confirm', libraryRef.current)} className="inline-flex rounded-full min-h-12 w-full items-center justify-center bg-accent px-5 font-label text-[0.8rem] tracking-[0.1em] text-white uppercase transition-opacity hover:opacity-85">{copy.useThisPhoto}</button>
             <button ref={otherRef} type="button" data-selfie-other onClick={openChooser} className="inline-flex rounded-full min-h-11 w-full items-center justify-center border border-current px-5 font-label text-eyebrow uppercase transition-opacity hover:opacity-70">{copy.otherPhotos}</button>

@@ -1625,7 +1625,23 @@ export const ko: Dictionary = {
       dark: '사진이 어두워 보여요. 창가나 밝은 조명 아래에서 찍으면 얼굴이 더 또렷하게 나와요.',
       bright: '사진이 너무 밝아 얼굴 일부가 날아간 것 같아요. 빛을 등지지 말고 다시 찍어보세요.',
     },
-    photoAdvisoryHint: '권고일 뿐이에요. 사진은 이 기기에서만 살펴보고 분석 결과는 저장하지 않아요. 본인 얼굴 사용 동의와 제공사 검수는 그대로 적용돼요.',
+    photoAdvisoryHint: '권고일 뿐이에요. 본인 얼굴 사용 동의와 제공사 검수는 그대로 적용돼요.',
+    // 저장한 사진 확인(권고만, TWINGS_PHOTO_CHECK). 초안 — 워딩 검토 전.
+    photoCheck: {
+      good: '얼굴이 잘 보이는 사진이에요.',
+      retake: '이 사진으로도 만들 수 있지만, 다른 사진을 쓰면 더 잘 맞아요.',
+      issues: {
+        no_face: '사진에서 얼굴을 찾지 못했어요. 얼굴이 잘 보이는 사진으로 바꿔 보세요.',
+        multiple_faces: '사진에 얼굴이 여러 개 보여요. 본인만 나온 사진이 가장 잘 맞아요.',
+        not_real_person: '실제 사람을 찍은 사진이 아닌 것 같아요. 직접 찍은 본인 사진을 써 주세요.',
+        face_covered: '얼굴 일부가 가려져 있어요. 마스크, 선글라스, 손이 얼굴을 가리지 않게 찍어 주세요.',
+        blurry: '얼굴이 흐리게 나왔어요. 초점이 맞게 흔들리지 않고 찍어 주세요.',
+        side_angle: '얼굴이 옆이나 위아래로 돌아가 있어요. 카메라를 정면으로 보면 더 잘 맞아요.',
+        dark: '얼굴이 어둡게 나왔어요. 밝은 곳에서 찍으면 더 또렷해요.',
+        backlit: '뒤에서 들어오는 빛 때문에 얼굴이 어두워요. 빛을 정면으로 받고 찍어 보세요.',
+        small_face: '얼굴이 작게 나왔어요. 어깨 위가 화면을 채우도록 가까이서 찍어 주세요.',
+      },
+    },
     consent: '본인 사진이며, 내 영상·이미지를 만들고 저장하는 데 쓰는 것에 동의합니다.',
     consentHint: '저장하려면 본인 사진 사용에 동의해 주세요.',
     save: '내 사진 저장',
@@ -3721,6 +3737,8 @@ export const ko: Dictionary = {
     makeBodyClosed: '영상 생성은 공개 준비 중입니다. 열리면 사진 한 장으로 만들 수 있고, 결제는 한 편당 한 번입니다.',
     aspectFact: '비율',
     resolutionFact: '해상도',
+    // 대표 2026-11-15: 720p가 기본이고 충분하다는 걸 템플릿 페이지에서 바로 알 수 있게.
+    resolutionStandard: '720p는 SNS 업로드에 충분히 선명한 표준 고화질입니다.',
     waitLabel: '완성까지',
     waitValue: '보통 {minutes}분',
     aiLimit: 'AI로 만들기 때문에 손·글자·배경 같은 세부는 예시와 조금 다를 수 있습니다.',
@@ -3849,7 +3867,7 @@ export const ko: Dictionary = {
     aspectLabel: '비율',
     resolutionLabel: '화질',
     resolutionDefault: '기본',
-    resolutionNote: '영상은 720p로 만듭니다. 1080p는 더 선명하고 가격이 올라갑니다.',
+    resolutionNote: '720p는 SNS 업로드에 충분히 선명한 표준 고화질입니다. 1080p는 더 선명하고 가격이 올라갑니다.',
     makeThis: '내 사진으로 이 장면 만들기',
   },
   identity: {
