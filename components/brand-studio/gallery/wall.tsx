@@ -216,7 +216,7 @@ export function Wall(props: WallProps) {
     press: (key, range) => setPicked((current) => (range ? selectRange(pruneSelection(current, order), order, key) : toggleSelection(pruneSelection(current, order), key))),
   };
   const clear = () => setPicked(EMPTY_SELECTION);
-  const useAsReferences = () => {
+  const sendAsReferences = () => {
     for (const item of targets.items) props.onAction("reference", item);
     clear();
   };
@@ -226,7 +226,7 @@ export function Wall(props: WallProps) {
     // Enter on a picked wall: the selection goes to the prompt bar as references.
     if (event.key === "Enter" && actions.includes("reference") && event.target.closest(".bs-tile-check, .bs-tile-open")) {
       event.preventDefault();
-      useAsReferences();
+      sendAsReferences();
     }
   };
   const tileProps = { ...props, badges, select, canRemove };
@@ -276,7 +276,7 @@ export function Wall(props: WallProps) {
           confirmLine={deleteConfirmLine(targets, jobs, copy)}
           copy={copy}
           library={props.library}
-          onReference={useAsReferences}
+          onReference={sendAsReferences}
           onDelete={() => {
             for (const item of targets.items) props.onAction("delete", item);
             for (const job of targets.failed) void props.onRemove?.(job);
