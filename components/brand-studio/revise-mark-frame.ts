@@ -4,6 +4,7 @@
  * offscreen `<video crossOrigin="anonymous">` is loaded once per clip, sought and drawn. Any failure
  * (tainted canvas, load error, timeout) answers null: the mark then simply has no label.
  */
+import { corsMediaUrl } from "@/lib/brand-studio/cors-media-url";
 import { frameSize, markPixels, type MarkGeometry } from "./revise-marks";
 
 /** The contract allows 400,000 characters; stay clear of it. */
@@ -67,7 +68,8 @@ export function createFrameGrabber(url: string): FrameGrabber {
     video = element;
     ready = (async () => {
       const loaded = once(element, "loadeddata", 10_000);
-      element.src = url;
+      // Its own cache entry: the viewer already played this address without CORS (see corsMediaUrl).
+      element.src = corsMediaUrl(url);
       await loaded;
       return element;
     })();
