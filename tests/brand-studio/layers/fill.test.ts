@@ -3,6 +3,7 @@ import { RegionBoxSchema, type RegionBox } from "@/lib/brand-studio/contracts";
 import { baseRect, canvasForRatio, holdPictureView, resizeCanvas } from "@/components/brand-studio/layers/canvas";
 import {
   FILL_OVERLAP_MIN,
+  FILL_PLACEHOLDER,
   FILL_OVERLAP_SHARE,
   fillInstruction,
   fillSentOf,
@@ -137,30 +138,35 @@ describe("a finished fill lands where it belongs", () => {
 });
 
 describe("the picture that is sent", () => {
-  it("draws the picture at its place and stretches its nearest edge over each empty margin", () => {
+  it("draws the picture at its place and covers each empty margin with flat mid-grey", () => {
     const doc = canvasForRatio(picture(), "16:9"); // 1422 × 800, picture at x 211
     const plan = planFillSource(doc, { width: 2000, height: 1600 }); // stored at half its natural size
     expect(plan).toMatchObject({ width: 1422, height: 800 });
+    expect(FILL_PLACEHOLDER).toBe("#7f7f7f");
     expect(plan.ops).toEqual([
-      { sx: 0, sy: 0, sw: 2000, sh: 1600, dx: 211, dy: 0, dw: 1000, dh: 800 },
-      { sx: 0, sy: 0, sw: 1, sh: 1600, dx: 0, dy: 0, dw: 211, dh: 800 },
-      { sx: 1999, sy: 0, sw: 1, sh: 1600, dx: 1211, dy: 0, dw: 211, dh: 800 },
+      { kind: "picture", sx: 0, sy: 0, sw: 2000, sh: 1600, dx: 211, dy: 0, dw: 1000, dh: 800 },
+      { kind: "flat", color: "#7f7f7f", x: 0, y: 0, w: 211, h: 800 },
+      { kind: "flat", color: "#7f7f7f", x: 1211, y: 0, w: 211, h: 800 },
     ]);
   });
 
-  it("stretches the top and bottom rows for a taller canvas", () => {
+  it("covers the top and bottom bands for a taller canvas", () => {
     const doc = taller(0.5); // picture at y 200
     expect(planFillSource(doc, { width: 1000, height: 800 }).ops).toEqual([
-      { sx: 0, sy: 0, sw: 1000, sh: 800, dx: 0, dy: 200, dw: 1000, dh: 800 },
-      { sx: 0, sy: 0, sw: 1000, sh: 1, dx: 0, dy: 0, dw: 1000, dh: 200 },
-      { sx: 0, sy: 799, sw: 1000, sh: 1, dx: 0, dy: 1000, dw: 1000, dh: 200 },
+      { kind: "picture", sx: 0, sy: 0, sw: 1000, sh: 800, dx: 0, dy: 200, dw: 1000, dh: 800 },
+      { kind: "flat", color: "#7f7f7f", x: 0, y: 0, w: 1000, h: 200 },
+      { kind: "flat", color: "#7f7f7f", x: 0, y: 1000, w: 1000, h: 200 },
     ]);
   });
 
   it("has a fixed English instruction per side, never customer text", () => {
-    expect(fillInstruction("left")).toContain("LEFT edge");
-    expect(fillInstruction("bottom")).toContain("BOTTOM edge");
-    expect(fillInstruction("right")).toMatch(/Add no new objects, people or text\./);
+    for (const side of ["left", "right", "top", "bottom"] as const) {
+      expect(fillInstruction(side)).toBe(
+        `The flat grey band along the ${side.toUpperCase()} edge is empty canvas, not part of the photograph. ` +
+          "Extend the photograph into it so the scene continues naturally: continue the background, the surfaces and objects that reach the edge, and the light and shadows. " +
+          "Add no new objects, people or text. Keep the existing photograph exactly as it is.",
+      );
+    }
   });
 });
 

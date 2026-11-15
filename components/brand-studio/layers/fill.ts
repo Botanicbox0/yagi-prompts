@@ -6,8 +6,9 @@
  * first, so margins on both axes are not offered in this version.
  *
  * How it rides on the partial edit (lib/brand-studio/region-edit): the picture sent is the whole canvas
- * with the picture at its place and each empty margin filled by stretching the picture's nearest row or
- * column, so the edit model and the server's tone match see real colours. Each strip is a box in
+ * with the picture at its place and each empty margin painted flat mid-grey (`FILL_PLACEHOLDER`), and the
+ * instruction calls that band empty canvas. A stretched edge read as already filled and the model kept its
+ * streaks; flat grey was continued and aligned better in real runs. Each strip is a box in
  * fractions of that canvas covering the whole margin plus an overlap into the picture. The composite
  * blends with a feather that lies entirely inside the box: at least max(4 px, 3 % of the box's short
  * side), widened up to 12 % of the short side where strong contours cross the box edge (align.ts
@@ -93,40 +94,38 @@ export function placeFillPatch(doc: LayerDoc, sent: FillSent, box: RegionBox | B
   };
 }
 
-/** One `drawImage(picture, sx, sy, sw, sh, dx, dy, dw, dh)`: source in the picture's natural pixels. */
-export interface FillDrawOp {
-  sx: number;
-  sy: number;
-  sw: number;
-  sh: number;
-  dx: number;
-  dy: number;
-  dw: number;
-  dh: number;
-}
+/** The colour of the empty margins in the picture that is sent. */
+export const FILL_PLACEHOLDER = "#7f7f7f";
+
+/**
+ * `picture`: `drawImage(picture, sx, sy, sw, sh, dx, dy, dw, dh)`, source in the picture's natural pixels.
+ * `flat`: `fillRect(x, y, w, h)` in `color`.
+ */
+export type FillDrawOp =
+  | { kind: "picture"; sx: number; sy: number; sw: number; sh: number; dx: number; dy: number; dw: number; dh: number }
+  | { kind: "flat"; color: string; x: number; y: number; w: number; h: number };
 
 /**
  * The picture that is sent: the canvas at its size, the picture at `baseRect` (no layers), and each
- * empty margin covered by stretching the picture's nearest edge column or row across it.
+ * empty margin painted flat `FILL_PLACEHOLDER` (a stretched edge reads as already filled and the model keeps it).
  */
 export function planFillSource(doc: LayerDoc, natural: { width: number; height: number }): { width: number; height: number; ops: FillDrawOp[] } {
   const b = baseRect(doc);
   const m = emptyMargins(doc);
-  const pw = natural.width;
-  const ph = natural.height;
-  const ops: FillDrawOp[] = [{ sx: 0, sy: 0, sw: pw, sh: ph, dx: b.x, dy: b.y, dw: b.w, dh: b.h }];
-  if (m.left > 0) ops.push({ sx: 0, sy: 0, sw: 1, sh: ph, dx: 0, dy: b.y, dw: m.left, dh: b.h });
-  if (m.right > 0) ops.push({ sx: pw - 1, sy: 0, sw: 1, sh: ph, dx: b.x + b.w, dy: b.y, dw: m.right, dh: b.h });
-  if (m.top > 0) ops.push({ sx: 0, sy: 0, sw: pw, sh: 1, dx: b.x, dy: 0, dw: b.w, dh: m.top });
-  if (m.bottom > 0) ops.push({ sx: 0, sy: ph - 1, sw: pw, sh: 1, dx: b.x, dy: b.y + b.h, dw: b.w, dh: m.bottom });
+  const color = FILL_PLACEHOLDER;
+  const ops: FillDrawOp[] = [{ kind: "picture", sx: 0, sy: 0, sw: natural.width, sh: natural.height, dx: b.x, dy: b.y, dw: b.w, dh: b.h }];
+  if (m.left > 0) ops.push({ kind: "flat", color, x: 0, y: b.y, w: m.left, h: b.h });
+  if (m.right > 0) ops.push({ kind: "flat", color, x: b.x + b.w, y: b.y, w: m.right, h: b.h });
+  if (m.top > 0) ops.push({ kind: "flat", color, x: b.x, y: 0, w: b.w, h: m.top });
+  if (m.bottom > 0) ops.push({ kind: "flat", color, x: b.x, y: b.y + b.h, w: b.w, h: m.bottom });
   return { width: doc.width, height: doc.height, ops };
 }
 
 /** The edit model's instruction per strip. Fixed English, never customer text. */
 export function fillInstruction(side: FillSide): string {
   return (
-    `Fill the stretched band along the ${side.toUpperCase()} edge with a natural continuation of the scene: ` +
-    "continue the background, surfaces, light and shadows. Add no new objects, people or text. " +
-    "Keep everything else exactly as it is."
+    `The flat grey band along the ${side.toUpperCase()} edge is empty canvas, not part of the photograph. ` +
+    "Extend the photograph into it so the scene continues naturally: continue the background, the surfaces and objects that reach the edge, and the light and shadows. " +
+    "Add no new objects, people or text. Keep the existing photograph exactly as it is."
   );
 }
