@@ -27,6 +27,7 @@ import {
   type ReviewThread,
   type ReviewVersion,
 } from "@/lib/brand-studio/review-contracts";
+import { corsMediaUrl } from "@/lib/brand-studio/cors-media-url";
 import type { studioReviewEn } from "@/messages/studio-review";
 import { CompareView } from "./compare";
 import { InkLayer, InkTools, useInk } from "./ink";
@@ -86,8 +87,10 @@ export interface ReviewStageProps {
   onVersion?: (reviewId: string) => void;
   /** More controls at the end of the header (the room's 공유 button). */
   tools?: ReactNode;
-  /** A share link that allows download. */
+  /** A share link that allows download, or an approved cut in the room. */
   downloadUrl?: string | null;
+  /** The file name to save as. With it, a file on another origin is fetched and saved instead of opened. */
+  downloadName?: string | null;
 }
 
 export function fill(template: string, values: Record<string, string | number>): string {
@@ -239,6 +242,79 @@ const ICONS = {
 } as const;
 
 type Mark = { atMs: number | null; endMs?: number | null; x: number | null; y: number | null; strokes?: ReviewStroke[] | null };
+export type ReviewMark = Mark;
+
+/**
+ * A note on a film carries the moment it was written at unless the writer took the time off (`general`):
+ * focusing or typing in the composer pins the playhead, keeping a drawing already made. A still has no time.
+ */
+export function stampMoment(mark: Mark | null, at: { isVideo: boolean; general: boolean; currentMs: number }): Mark | null {
+  if (!at.isVideo || at.general || mark?.atMs != null) return mark;
+  return { atMs: Math.max(0, Math.round(at.currentMs)), endMs: null, x: mark?.x ?? null, y: mark?.y ?? null, strokes: mark?.strokes ?? null };
+}
+
+/** The note `send()` posts. On a film the time is never dropped silently: no mark and not `general` means the playhead. */
+export function composeNote(
+  body: string,
+  mark: Mark | null,
+  at: { isVideo: boolean; general: boolean; extended: boolean; currentMs: number; strokes: ReviewStroke[] | null },
+): ReviewNoteInput {
+  const stamped = stampMoment(mark, at);
+  const note: ReviewNoteInput = { body, atMs: at.isVideo ? (stamped?.atMs ?? null) : (mark?.atMs ?? null), x: mark?.x ?? null, y: mark?.y ?? null };
+  if (at.extended) {
+    note.endMs = mark?.endMs ?? null;
+    note.strokes = at.strokes;
+    // A drawing on a film belongs to the frame it was drawn on.
+    if (at.strokes && at.isVideo && note.atMs == null) note.atMs = Math.round(at.currentMs);
+  }
+  return note;
+}
+
+/** "Spring film-v2.mp4": the review title made safe for a file name, the version and the media's extension. */
+export function reviewDownloadName(title: string, version: number | null | undefined, mediaUrl: string): string {
+  const base =
+    title
+      .normalize("NFC")
+      .replace(/[\u0000-\u001f\u007f<>:"/\\|?*]+/g, " ")
+      .replace(/\s+/g, " ")
+      .trim()
+      .replace(/^\.+|\.+$/g, "")
+      .slice(0, 80)
+      .trim() || "review";
+  let ext = "";
+  try {
+    const path = new URL(mediaUrl, "http://x").pathname;
+    const hit = /\.([a-z0-9]{2,5})$/i.exec(path);
+    if (hit) ext = `.${hit[1]!.toLowerCase()}`;
+  } catch {
+    // Keep no extension; the browser still names the file.
+  }
+  return `${base}${version ? `-v${version}` : ""}${ext}`;
+}
+
+/** Same-origin files save straight from the link; a file on the media domain is fetched (CORS) and saved as a blob. */
+async function saveMedia(url: string, filename: string): Promise<void> {
+  const response = await fetch(corsMediaUrl(url), { credentials: "omit" });
+  if (!response.ok) throw new Error(`download ${response.status}`);
+  const blob = await response.blob();
+  const objectUrl = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = objectUrl;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  window.setTimeout(() => URL.revokeObjectURL(objectUrl), 1000);
+}
+
+function isCrossOrigin(url: string): boolean {
+  if (typeof location === "undefined") return false;
+  try {
+    return new URL(url, location.href).origin !== location.origin;
+  } catch {
+    return false;
+  }
+}
 
 export function ReviewStage({
   review,
@@ -260,6 +336,7 @@ export function ReviewStage({
   onVersion,
   tools,
   downloadUrl,
+  downloadName,
 }: ReviewStageProps) {
   const isVideo = review.kind === "video";
   const media = review.mediaUrl;
@@ -274,6 +351,8 @@ export function ReviewStage({
   const [currentMs, setCurrentMs] = useState(isVideo ? Math.max(0, initialMs ?? 0) : 0);
   const [durationMs, setDurationMs] = useState(review.seconds ? Math.round(review.seconds * 1000) : 0);
   const [mark, setMark] = useState<Mark | null>(null);
+  // The writer took the time off this note: it is about the whole film until sent or re-marked.
+  const [general, setGeneral] = useState(false);
   const [spotMode, setSpotMode] = useState(false);
   const [comparing, setComparing] = useState(false);
   const [dragRange, setDragRange] = useState<{ from: number; to: number } | null>(null);
@@ -296,6 +375,7 @@ export function ReviewStage({
   // A different piece: start clean.
   useEffect(() => {
     setMark(null);
+    setGeneral(false);
     setSpotMode(false);
     setReplyTo(null);
     setActiveId(null);
@@ -447,7 +527,28 @@ export function ReviewStage({
     }
   }
 
+  /** Focus or first keystroke in the composer: a film stops and the note takes the moment on screen. */
+  function pinMomentForDraft() {
+    if (!isVideo || general || mark?.atMs != null) return;
+    const v = videoRef.current;
+    v?.pause();
+    const at = v && Number.isFinite(v.currentTime) && v.currentTime > 0 ? v.currentTime * 1000 : currentMs;
+    setMark((m) => stampMoment(m, { isVideo, general, currentMs: at }));
+  }
+
+  /** The chip's ×: this note is about the whole film. */
+  function dropMoment() {
+    setGeneral(true);
+    setMark((m) => {
+      if (!m) return null;
+      const rest: Mark = { ...m, atMs: null, endMs: null };
+      return rest.x == null && !(rest.strokes && rest.strokes.length) ? null : rest;
+    });
+    textRef.current?.focus();
+  }
+
   function markMoment() {
+    setGeneral(false);
     ink.stop();
     if (isVideo) {
       videoRef.current?.pause();
@@ -471,6 +572,7 @@ export function ReviewStage({
         y: m?.y ?? null,
         strokes: m?.strokes ?? null,
       }));
+      setGeneral(false);
       setError(null);
     },
     [],
@@ -484,6 +586,7 @@ export function ReviewStage({
 
   function startDrawing() {
     if (!canDraw) return;
+    setGeneral(false);
     if (isVideo) {
       videoRef.current?.pause();
       setMark((m) => ({ atMs: m?.atMs ?? Math.round(currentMs), endMs: m?.endMs ?? null, x: m?.x ?? null, y: m?.y ?? null, strokes: m?.strokes ?? null }));
@@ -607,17 +710,12 @@ export function ReviewStage({
     }
     const pending = ink.active ? ink.finish() : null;
     const strokes = pending && pending.length ? pending : (mark?.strokes ?? null);
-    const note: ReviewNoteInput = { body, atMs: mark?.atMs ?? null, x: mark?.x ?? null, y: mark?.y ?? null };
-    if (extended) {
-      note.endMs = mark?.endMs ?? null;
-      note.strokes = strokes;
-      // A drawing on a film belongs to the frame it was drawn on.
-      if (strokes && isVideo && note.atMs == null) note.atMs = Math.round(currentMs);
-    }
+    const note = composeNote(body, mark, { isVideo, general, extended, currentMs, strokes });
     const ok = await run("send", () => actions.addComment(note));
     if (ok) {
       setDraft("");
       setMark(null);
+      setGeneral(false);
       setSpotMode(false);
       ink.reset();
     }
@@ -742,7 +840,21 @@ export function ReviewStage({
             </button>
           )}
           {downloadUrl && (
-            <a className="bsv-pill" href={downloadUrl} download rel="noreferrer" data-review-download>
+            <a
+              className="bsv-pill"
+              href={downloadUrl}
+              download={downloadName ?? true}
+              rel="noreferrer"
+              onClick={(event) => {
+                // `download` is ignored on another origin (the media domain): fetch the file and save it under its name.
+                if (!downloadName || !isCrossOrigin(downloadUrl)) return;
+                event.preventDefault();
+                saveMedia(downloadUrl, downloadName).catch(() => {
+                  window.open(downloadUrl, "_blank", "noopener");
+                });
+              }}
+              data-review-download
+            >
               <Icon d={ICONS.download} />
               {copy.download}
             </a>
@@ -1107,7 +1219,14 @@ export function ReviewStage({
                         {fill(copy.range.chip, { start: formatTimecode(mark.atMs), end: formatTimecode(mark.endMs) })}
                       </span>
                     ) : (
-                      <span className="bsv-chip">{fill(copy.momentChip, { time: formatTimecode(mark.atMs) })}</span>
+                      <span className="bsv-chip" data-review-moment-chip>
+                        {fill(copy.momentChip, { time: formatTimecode(mark.atMs) })}
+                        {isVideo && !ink.active && !(mark.strokes && mark.strokes.length) && (
+                          <button type="button" className="bsv-chip-x" onClick={dropMoment} aria-label={copy.dropMoment} title={copy.dropMoment} data-review-moment-drop>
+                            <Icon d={ICONS.close} />
+                          </button>
+                        )}
+                      </span>
                     ))}
                   {mark?.x != null && <span className="bsv-chip">{copy.spotChip}</span>}
                   {(ink.active ? ink.strokes.length : (mark?.strokes?.length ?? 0)) > 0 && (
@@ -1115,11 +1234,15 @@ export function ReviewStage({
                       {fill(copy.draw.chip, { count: ink.active ? ink.strokes.length : (mark?.strokes?.length ?? 0) })}
                     </span>
                   )}
+                  {/* A bare moment has its own × on the chip; this one clears a range, a spot or a drawing. */}
+                  {(!isVideo || ink.active || mark?.endMs != null || mark?.x != null || (mark?.strokes?.length ?? 0) > 0) && (
                   <button
                     type="button"
                     className="bsv-icon-btn bsv-chip-clear"
                     onClick={() => {
                       setMark(null);
+                      // Cleared on a film: the note is about the whole film, not re-pinned on the next keystroke.
+                      if (isVideo) setGeneral(true);
                       setSpotMode(false);
                       ink.reset();
                     }}
@@ -1127,6 +1250,7 @@ export function ReviewStage({
                   >
                     <Icon d={ICONS.close} />
                   </button>
+                  )}
                 </div>
               )}
               {ink.active && <InkTools ink={ink} copy={copy.draw} onDone={finishDrawing} />}
@@ -1141,7 +1265,11 @@ export function ReviewStage({
                 maxLength={guest ? 1000 : REVIEW_LIMITS.bodyMax}
                 value={draft}
                 placeholder={copy.composer.placeholder}
-                onChange={(e) => setDraft(e.target.value)}
+                onFocus={pinMomentForDraft}
+                onChange={(e) => {
+                  setDraft(e.target.value);
+                  if (e.target.value.trim()) pinMomentForDraft();
+                }}
                 onKeyDown={(e) => {
                   if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) {
                     e.preventDefault();
