@@ -8,13 +8,15 @@
  * (`onRegionSending`) and the request goes out in the background, so several can be sent in a row.
  */
 import { useCallback, useMemo, useState } from "react";
-import type { StudioAssetView, StudioJobView, StudioOutputView } from "@/lib/brand-studio/contracts";
+import type { StudioAssetView, StudioJobCreate, StudioJobView, StudioOutputView } from "@/lib/brand-studio/contracts";
 import type { StudioMedium } from "@/lib/brand-studio/models";
-import { isFailure } from "./api";
+import { isFailure, uploadProblem } from "./api";
 import { errorLine, newRequestId, type StudioCopy } from "./copy";
 import { finalInput, regionEditInput, rerunInput, withMedium } from "./dock-model";
-import { trayFromReferences, trayItemFromAsset, trayItemFromOutput, withStartFrame, type RefSource } from "./refs";
+import { trayFromReferences, trayItemFromAsset, trayItemFromOutput, withStartFrame, type RefSource, type TrayItem } from "./refs";
+import type { ReviseSupport } from "./revise-form";
 import { STUDIO_OPEN_REVERSE, announce, type LayerEditorRegionPreset } from "./seams";
+import { collapseRevisions, reviseRerunInput } from "./revision-model";
 import { boardOutputs } from "./store";
 import type { DockController } from "./use-dock";
 import type { StudioController } from "./use-studio";
@@ -51,13 +53,13 @@ export function useViewer(input: {
   const [notice, setNotice] = useState<string | null>(null);
   const [preset, setPreset] = useState<RegionPreset | null>(null);
 
-  const items: ViewerItem[] = useMemo(
-    () =>
-      open?.list === "assets"
-        ? assets.map((asset) => ({ type: "asset" as const, asset }))
-        : boardOutputs(jobs).map(({ output, job }) => ({ type: "output" as const, output, job })),
-    [open?.list, assets, jobs],
-  );
+  // Prev/next walks the wall's tiles: older versions of a clip are reached through the viewer's strip,
+  // and the version on screen stays in the list while a newer one comes in.
+  const items: ViewerItem[] = useMemo(() => {
+    if (open?.list === "assets") return assets.map((asset) => ({ type: "asset" as const, asset }));
+    const showing = open ? boardOutputs(jobs).find(({ output }) => `o:${output.id}` === open.key)?.job.id : null;
+    return boardOutputs(collapseRevisions(jobs, showing)).map(({ output, job }) => ({ type: "output" as const, output, job }));
+  }, [open, assets, jobs]);
   const index = open ? items.findIndex((item) => itemKey(item) === open.key) : -1;
 
   const show = useCallback((next: { list: "outputs" | "assets"; key: string } | null) => {
@@ -118,7 +120,9 @@ export function useViewer(input: {
     setNotice(null);
   };
 
-  const reuse = (job: StudioJobView) => {
+  const reuse = (target: StudioJobView) => {
+    // A version's own words are only the change; its settings are the clip's first run.
+    const job = (target.revision && jobs.find((j) => j.id === target.revision!.rootJobId)) || target;
     // A blueprint is set up again in the reverse panel (slice C), not in the bar.
     if (job.kind === "video_remix" && job.method === "blueprint") {
       show(null);
@@ -156,6 +160,14 @@ export function useViewer(input: {
   const actions: ViewerActions = {
     regionEdit,
     rerun: (job) => {
+      // A clip version (also a failed one on the wall) is asked for again from the same base.
+      if (job.revision)
+        return void run("rerun", async () => {
+          const again = reviseRerunInput(job, { organizationId, requestId: newRequestId() });
+          if (!again) return errorLine(copy, "not_found");
+          const result = await studio.createJob(again);
+          return isFailure(result) ? errorLine(copy, result.code) : copy.state.started;
+        });
       if (job.kind === "region_edit") return reopenRegion(job);
       if (job.kind === "video_remix") return reuse(job);
       void run("rerun", async () => {
@@ -220,5 +232,35 @@ export function useViewer(input: {
     review: (item) => input.onReview(item),
   };
 
-  return { open, show, items, index, busy, notice, setNotice, preset, actions, rerun: actions.rerun, reuse, openRegion };
+  /** The viewer's version strip and form; the screen adds the picture sources (recent, resolve, upload). */
+  const revise: ReviseSupport = useMemo(
+    () => ({
+      organizationId,
+      jobs,
+      recent: [
+        ...jobs.flatMap((job) => job.outputs.filter((o) => o.kind === "image").map((o) => trayItemFromOutput(o, copy.viewer.label))).slice(0, 12),
+        ...assets.filter((a) => a.kind === "image").slice(0, 6).map(trayItemFromAsset),
+      ],
+      resolve: (source: RefSource) => {
+        const asset = "assetId" in source ? lookup.asset(source.assetId) : null;
+        const output = "outputId" in source ? lookup.output(source.outputId) : null;
+        const item = asset ? trayItemFromAsset(asset) : output ? trayItemFromOutput(output, copy.viewer.label) : null;
+        return item?.kind === "image" ? item : null;
+      },
+      upload: async (files: File[]) => {
+        const added: TrayItem[] = [];
+        for (const file of files) {
+          if (!file.type.startsWith("image/") || uploadProblem(file)) continue;
+          const result = await studio.upload(file);
+          if (!isFailure(result)) added.push(trayItemFromAsset(result.asset));
+        }
+        return added;
+      },
+      plan: (body) => studio.planRevision(body),
+      create: (body: StudioJobCreate) => studio.createJob(body),
+    }),
+    [organizationId, jobs, assets, lookup, studio, copy.viewer.label],
+  );
+
+  return { open, show, items, revise, index, busy, notice, setNotice, preset, actions, rerun: actions.rerun, reuse, openRegion };
 }

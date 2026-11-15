@@ -155,7 +155,7 @@ describe('video', () => {
     await advanceStudioJobsWith(deps, { jobIds: [draftJob.id] });
     const draft = await view(draftJob.id);
     expect(draft).toMatchObject({ status: 'succeeded', resolution: 'draft' });
-    expect(draft.outputs[0]).toMatchObject({ kind: 'video', draft: true, width: 160, height: 90, seconds: 1 });
+    expect(draft.outputs[0]).toMatchObject({ kind: 'video', draft: true, width: 854, height: 480, seconds: 5 });
     expect(sent[0]!.body).toMatchObject({ draft: true, resolution: '480p', generate_audio: true });
 
     const finalJob = await create({ kind: 'video_final', draftOutputId: draft.outputs[0]!.id });

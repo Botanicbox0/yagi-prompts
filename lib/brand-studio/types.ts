@@ -59,6 +59,8 @@ export interface EnhanceInput {
     change?: string;
     sheet?: FilmSheet | null;
   } | null;
+  /** A new version of a generated clip (see lib/brand-studio/enhancer/types.ts). */
+  revision?: { mode: 'edit' | 'reshoot'; version: number; madeWith: string; history: string[] } | null;
 }
 export interface EnhanceResult {
   prompt: string;
@@ -144,6 +146,12 @@ export interface StudioJobParams {
   referenceVideoSeconds?: number;
   /** Remix (`blueprint`, `reference`): the shot table the customer sent, cleaned (lib/brand-studio/reference-video.ts). */
   shots?: FilmShot[];
+  /**
+   * A new version of an earlier clip (lib/brand-studio/revision). `rootJobId` is the run that made v1;
+   * `baseJobId` / `baseOutputId` the version this one was made from; `added` how many trailing refs were
+   * attached for this version. The request itself is the job's `prompt`.
+   */
+  revision?: { rootJobId: string; version: number; baseJobId: string; baseOutputId: string; mode: 'edit' | 'reshoot'; added: number };
 }
 
 /** A provider (or worker) result waiting to be stored, per output slot. */

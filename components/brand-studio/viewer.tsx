@@ -10,7 +10,7 @@
  * the form at once; nothing waits for the result, and several edits can go out in a row.
  * A result that came from a partial edit opens on a before/after slider.
  */
-import { useEffect, useId, useRef, useState, type KeyboardEvent } from "react";
+import { useEffect, useId, useMemo, useRef, useState, type KeyboardEvent } from "react";
 import { copyImageUrlToClipboard, isEditableTextTarget } from "@/lib/brand-studio/clipboard-image";
 import type { RegionBox, StudioAssetView, StudioJobView, StudioOutputView } from "@/lib/brand-studio/contracts";
 import type { StudioImageModel } from "@/lib/brand-studio/models";
@@ -21,6 +21,8 @@ import { RegionForm } from "./gallery/region-form";
 import { StudioIcon, type StudioIconName } from "./icons";
 import type { RefSource, TrayItem } from "./refs";
 import { RegionEditor } from "./region-editor";
+import { ReviseForm, VersionStrip, type ReviseSupport } from "./revise-form";
+import { chainOf, versionOf, type ChainVersion } from "./revision-model";
 
 export type ViewerItem = { type: "output"; output: StudioOutputView; job: StudioJobView } | { type: "asset"; asset: StudioAssetView };
 
@@ -92,6 +94,8 @@ export interface ViewerProps {
   notice: string | null;
   regionPreset?: RegionPreset | null;
   region?: RegionSupport | null;
+  /** Versions of a generated clip: the strip and the "next version" form (video results only). */
+  revise?: ReviseSupport | null;
   parentOf(outputId: string | null): StudioOutputView | null;
   parentAssetOf?(assetId: string | null): StudioAssetView | null;
   onIndex(index: number): void;
@@ -103,6 +107,13 @@ export const itemKey = (item: ViewerItem) => (item.type === "output" ? `o:${item
 const media = (item: ViewerItem) => (item.type === "output" ? item.output : item.asset);
 /** Everything but a 1080p final can be made again with the settings it had. */
 export const canRerun = (job: StudioJobView) => job.kind !== "video_final";
+
+/** What the viewer shows: the opened result for its own version, else the result that represents the picked version. */
+export function shownVersion(opened: ViewerItem, chain: readonly ChainVersion[], own: number, selected: number): ViewerItem {
+  if (selected === own) return opened;
+  const entry = chain.find((v) => v.version === selected);
+  return entry?.output ? { type: "output", output: entry.output, job: entry.job } : opened;
+}
 
 /** A modal dialog that turns non-modal and docks over the wall while `docked` (the rail stays usable). */
 function useViewerDialog(docked: boolean) {
@@ -199,7 +210,7 @@ export function Viewer(props: ViewerProps) {
 }
 
 function ViewerContent({
-  item,
+  item: openedItem,
   copy,
   locale = "ko",
   canCreate,
@@ -208,12 +219,34 @@ function ViewerContent({
   notice,
   regionPreset = null,
   region: support = null,
+  revise = null,
   parentOf,
   parentAssetOf,
   actions,
   onRegion,
 }: ViewerProps & { item: ViewerItem; onRegion(open: boolean): void }) {
   const v = copy.viewer;
+  // Versions of a generated clip: the strip swaps what is shown here without leaving the viewer.
+  const clip = revise && openedItem.type === "output" && openedItem.output.kind === "video" ? openedItem.job : null;
+  const chain = useMemo(() => (clip && revise ? chainOf(revise.jobs, clip) : []), [clip, revise]);
+  const ownVersion = clip && revise ? (versionOf(revise.jobs, clip) ?? 1) : 1;
+  const [selected, setSelected] = useState(ownVersion);
+  const item = shownVersion(openedItem, chain, ownVersion, selected);
+  const videoRef = useRef<HTMLVideoElement>(null);
+  const playback = useRef<{ time: number; playing: boolean } | null>(null);
+  const selectVersion = (version: number) => {
+    const video = videoRef.current;
+    playback.current = video ? { time: video.currentTime, playing: !video.paused } : null;
+    setSelected(version);
+  };
+  const resume = () => {
+    const video = videoRef.current;
+    const at = playback.current;
+    playback.current = null;
+    if (!video || !at) return;
+    video.currentTime = Number.isFinite(video.duration) ? Math.min(at.time, video.duration) : at.time;
+    if (at.playing) void video.play().catch(() => undefined);
+  };
   const preset = regionPreset?.key === itemKey(item) ? regionPreset : null;
   const [region, setRegionState] = useState(Boolean(preset));
   const [box, setBox] = useState<RegionBox | null>(preset?.box ?? null);
@@ -232,8 +265,9 @@ function ViewerContent({
   const [confirming, setConfirming] = useState(false);
   const file = media(item);
   const job = item.type === "output" ? item.job : null;
-  const parent = job ? parentOf(job.parentOutputId) : null;
-  const parentAsset = job && !parent && parentAssetOf ? parentAssetOf(job.parentAssetId) : null;
+  // Only a partial edit compares against what it was made from (a final or a clip version also has a parent).
+  const parent = job?.kind === "region_edit" ? parentOf(job.parentOutputId) : null;
+  const parentAsset = job?.kind === "region_edit" && !parent && parentAssetOf ? parentAssetOf(job.parentAssetId) : null;
   const before = parent ?? parentAsset;
   const image = file.kind === "image";
 
@@ -277,7 +311,7 @@ function ViewerContent({
 
   const picture =
     file.kind === "video" ? (
-      <video src={file.url} poster={file.thumbUrl ?? undefined} controls playsInline preload="metadata" />
+      <video ref={videoRef} src={file.url} poster={file.thumbUrl ?? undefined} controls playsInline preload="metadata" onLoadedMetadata={resume} />
     ) : file.kind === "audio" ? (
       <audio src={file.url} controls preload="metadata" />
     ) : (
@@ -345,6 +379,17 @@ function ViewerContent({
         )}
       </figure>
       <div className="bs-viewer-side">
+        {clip && chain.length >= 2 && <VersionStrip versions={chain} selected={selected} copy={copy} onSelect={selectVersion} />}
+        {clip && revise && canGenerate && output && (
+          <ReviseForm
+            key={output.id}
+            outputId={output.id}
+            support={revise}
+            copy={copy}
+            locale={locale}
+            fallbackVersion={Math.max(1, ...chain.map((entry) => entry.version)) + 1}
+          />
+        )}
         {region && support ? (
           <RegionForm
             picture={{ url: file.url, width: file.width, height: file.height }}

@@ -25,6 +25,7 @@ import { dropWorkingFiles, LEASE_SECONDS } from './job-store';
 import { routeJob } from './lanes';
 import type { StudioImageModel } from './models';
 import { planFinal, planJob, type JobPlan } from './plan';
+import { planRevision } from './revision/plan';
 import { brandSummary, enhanceInputOf, enhanceReferences, keepSheet, readSheet, remixContext, runEnhancer } from './prepare';
 import { readCachedFilmSheet } from './film-sheet';
 import { jobView, openJobCount, readyAsset, readyOutput } from './repo';
@@ -43,6 +44,8 @@ export const FREE_INTEL_LIMITS = {
   windowMs: 60_000,
   enhancePerMinute: 20,
   analyzePerMinute: 6,
+  /** `revise.plan` (lib/brand-studio/revision/advise.ts). */
+  revisePerMinute: 20,
 } as const;
 
 const freeIntelBuckets = new Map<string, number[]>();
@@ -51,7 +54,7 @@ export function resetFreeIntelRateLimits(): void {
   freeIntelBuckets.clear();
 }
 
-function takeFreeIntelSlot(key: string, maxPerWindow: number, nowMs: number): boolean {
+export function takeFreeIntelSlot(key: string, maxPerWindow: number, nowMs: number): boolean {
   const cutoff = nowMs - FREE_INTEL_LIMITS.windowMs;
   const recent = (freeIntelBuckets.get(key) ?? []).filter((ts) => ts > cutoff);
   if (recent.length >= maxPerWindow) {
@@ -120,13 +123,20 @@ export async function createStudioJob(deps: StudioDeps, viewer: Viewer, raw: unk
         await sql.query<JobRow>('select * from brand_studio_jobs where organization_id = $1 and created_by = $2 and request_id = $3', [v.organizationId, seat.userId, v.requestId])
       ).rows[0];
       if (prior) {
-        if (prior.kind !== v.kind) throw new StudioDenied('conflict');
+        // A new version is stored as the kind it runs as (`video_revise` is a request shape only).
+        const same = v.kind === 'video_revise'
+          ? Boolean(prior.params?.revision) && (prior.kind === 'video' || prior.kind === 'video_remix')
+          : prior.kind === v.kind;
+        if (!same) throw new StudioDenied('conflict');
         const outputs = (await sql.query<OutputRow>('select * from brand_studio_outputs where job_id = $1', [prior.id])).rows;
         return { ok: true as const, job: jobView(prior, outputs, deps.media) };
       }
+      // Planned under the organization lock, so a revision's version number cannot be taken twice.
       const plan = v.kind === 'video_final'
         ? await planFinal(sql, v.organizationId, v.draftOutputId, locale)
-        : await planJob(sql, v.organizationId, v, deps.media, locale);
+        : v.kind === 'video_revise'
+          ? await planRevision(sql, v.organizationId, v, deps.media, locale)
+          : await planJob(sql, v.organizationId, v, deps.media, locale);
       if ((await openJobCount(sql, v.organizationId)) >= STUDIO_LIMITS.openJobsPerOrganization) throw new StudioDenied('too_many_running');
       const verdict = await reserveAllowance(sql, v.organizationId, plan.estimateKrw, deps.env, deps.now?.() ?? new Date());
       if (!verdict.ok) throw new StudioDenied(verdict.code);

@@ -872,6 +872,7 @@ export function StudioApp({ organizationId, locale, copy, mode, libraryCopy, lay
           busy={viewer.busy}
           notice={viewer.notice}
           regionPreset={viewer.preset}
+          revise={viewer.revise}
           region={
             dockOpen && mode === "image"
               ? {

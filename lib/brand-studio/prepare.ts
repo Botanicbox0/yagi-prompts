@@ -11,6 +11,7 @@ import { imageInfo, sniffMime, thumbnailWebp } from './files';
 import { studioModel, type StudioImageModel, type StudioModel } from './models';
 import { resolveReferences, type ResolvedRef } from './plan';
 import { StudioDenied } from './access';
+import { addedRefsOf, refKey, renumberRequest, revisionChain } from './revision/recipe';
 import type { EnhanceInput, EnhanceResult, JobRow, StudioDeps, StudioJobParams, StudioJobWork } from './types';
 
 export class PrepareFailure extends Error {
@@ -254,6 +255,7 @@ export function enhanceInputOf(
   brand: EnhanceInput['brand'],
   sheet: FilmSheet | null,
   editCropThumb?: EnhanceInput['editCropThumb'],
+  revision?: EnhanceInput['revision'],
 ): EnhanceInput {
   const p = job.params;
   const kind = enhanceKind(job.kind) ?? 'image';
@@ -266,6 +268,7 @@ export function enhanceInputOf(
     references,
     brand,
     ...(editCropThumb ? { editCropThumb } : {}),
+    ...(revision ? { revision } : {}),
     video: video
       ? {
           seconds: p.seconds ?? null,
@@ -278,6 +281,54 @@ export function enhanceInputOf(
         }
       : null,
   };
+}
+
+/**
+ * What the prompt writer needs to know about a new version of a clip: the prompt the run being revised
+ * was made from and the changes asked for since. Read again from the clip's history (by job id, so a
+ * deleted earlier result does not lose it); null when there is no revision or the history is gone.
+ *
+ * For a reshoot the pictures each request attached sit later in the tray than the customer numbered
+ * them ("이미지 1" of a request is the recipe's images + n), so the request and the history are
+ * renumbered to the tray here; the job keeps the customer's own words.
+ */
+export async function revisionInput(
+  deps: Pick<StudioDeps, 'sql'>,
+  job: Pick<JobRow, 'organization_id' | 'prompt' | 'params' | 'refs'>,
+  resolved: readonly ResolvedRef[],
+): Promise<{ revision: NonNullable<EnhanceInput['revision']>; prompt: string } | null> {
+  const r = job.params?.revision;
+  if (!r) return null;
+  try {
+    const base = (
+      await deps.sql.query<JobRow>('select * from brand_studio_jobs where id = $1 and organization_id = $2', [r.baseJobId, job.organization_id])
+    ).rows[0];
+    if (!base) return null;
+    const chain = await revisionChain(deps.sql, job.organization_id, base);
+    const locale = job.params.locale ?? 'ko';
+    if (r.mode === 'edit') {
+      return { revision: { mode: 'edit', version: r.version, madeWith: chain.madeWith, history: chain.history.map((h) => h.request) }, prompt: job.prompt };
+    }
+    const tray = new Map<string, number>();
+    let images = 0;
+    for (const ref of resolved) {
+      if (ref.kind !== 'image') continue;
+      images += 1;
+      const own = job.refs?.[ref.index - 1];
+      if (own && !tray.has(refKey(own))) tray.set(refKey(own), images);
+    }
+    return {
+      revision: {
+        mode: 'reshoot',
+        version: r.version,
+        madeWith: chain.madeWith,
+        history: chain.history.map((h) => renumberRequest(h.request, h.added, tray, locale)),
+      },
+      prompt: renumberRequest(job.prompt, addedRefsOf(job), tray, locale),
+    };
+  } catch {
+    return null;
+  }
 }
 
 export async function prepareJob(deps: StudioDeps, job: JobRow): Promise<{ finalPrompt: string | null; work: StudioJobWork }> {
@@ -335,13 +386,15 @@ export async function prepareJob(deps: StudioDeps, job: JobRow): Promise<{ final
 
   if (!job.enhance) return { finalPrompt: null, work: { ...work, prepared: true } };
   const organization = (await deps.sql.query<{ name: string }>('select name from brand_organizations where id = $1', [job.organization_id])).rows[0];
+  const revised = await revisionInput(deps, job, resolved);
   const input = enhanceInputOf(
-    job,
+    revised ? { ...job, prompt: revised.prompt } : job,
     model,
     await enhanceReferences(deps, toEnhance),
     await brandSummary(deps, job.organization_id, organization?.name ?? ''),
     sheet,
     editCropThumb,
+    revised?.revision ?? null,
   );
   const result = await runEnhancer({ ...deps, organizationId: job.organization_id }, input);
   return { finalPrompt: result.prompt.slice(0, 8000), work: { ...work, enhanceNotes: result.notes.slice(0, 2000), prepared: true } };

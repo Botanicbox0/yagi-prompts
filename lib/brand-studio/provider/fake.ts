@@ -3,7 +3,7 @@
  *
  * A submitted task reports `pending` for its first poll and succeeds on the second. Images are soft
  * gradient PNGs in the requested aspect (long side 512 px, made with sharp). Videos are always the
- * bundled 1-second 160x90 clip (./fake-clip.ts); a draft also gets a fake draft id so the
+ * bundled 5-second 854x480 clip (./fake-clip.ts); a draft also gets a fake draft id so the
  * draft -> final path runs end to end.
  *
  * A prompt containing `[[fake:reject]]` or `[[fake:fail]]` fails the task with `provider_rejected` /
@@ -11,7 +11,7 @@
  */
 import { randomBytes } from 'node:crypto';
 import sharp from 'sharp';
-import { FAKE_CLIP_MP4_BASE64 } from './fake-clip';
+import { FAKE_CLIP_MP4_BASE64, FAKE_CLIP_SECONDS } from './fake-clip';
 import type { StudioProvider, StudioProviderRequest } from './types';
 
 const LONG_SIDE = 512;
@@ -85,7 +85,7 @@ export function createFakeStudioProvider(options: { pollsBeforeDone?: number } =
       if (task.medium === 'video') {
         return {
           state: 'succeeded',
-          outputs: [{ url: `fake://video/${taskId}`, mime: 'video/mp4', seconds: 1 }],
+          outputs: [{ url: `fake://video/${taskId}`, mime: 'video/mp4', seconds: FAKE_CLIP_SECONDS }],
           ...(task.draft ? { draftTaskId: `fake-draft-${taskId}` } : {}),
         };
       }
