@@ -69,6 +69,7 @@ import {
   yieldRenderJob,
   type RenderJob,
 } from './repo';
+import { beginCollect, endCollect, failUnlessCollected } from './collect';
 import { markRenderFinishing } from './extras';
 import { loadRenderFrames } from './frames';
 import { constantTimeEqual, isRenderId, isShareExpired, isShareTokenShape, newShareToken, shareExpiresAt } from './share';
@@ -869,6 +870,10 @@ async function pollAwaiting(deps: RenderPassDeps, job: RenderJob, now: Date, rep
     return;
   }
   if (!isVideoEngine(job.engine)) return;
+  // Set once the provider says the film is done and this pass is listed as collecting it (lib/renders/collect.ts).
+  const passId = randomUUID();
+  let collecting = false;
+  const collector = (): string | null => (collecting ? passId : null);
   try {
     const template = await loadPromptById(deps.sql, job.templateId);
     const request = deps.subscriptionSchemaReady ? await loadSubscriptionRender(deps.sql, job.id) : null;
@@ -877,10 +882,18 @@ async function pollAwaiting(deps: RenderPassDeps, job: RenderJob, now: Date, rep
     const film = effectiveRecipe ? primaryStep(effectiveRecipe) : null;
     const { model, seconds } = videoModelFor(job.engine, film?.kind === 'video' ? film.params.duration : request?.runtime_seconds ?? template?.runtimeSeconds ?? 5);
     const polled = await pollVideoRender(
-      { taskId: job.providerTaskId, model, seconds, resolution: renderResolution(job.resolution), aspect: job.aspect, onProviderDone: () => markRenderFinishing(deps.sql, job.id, now) },
+      {
+        taskId: job.providerTaskId, model, seconds, resolution: renderResolution(job.resolution), aspect: job.aspect,
+        onProviderDone: async () => {
+          collecting = (await beginCollect(deps.sql, job, passId, now)) === 'collecting';
+          await markRenderFinishing(deps.sql, job.id, now);
+        },
+      },
       deps.engines ?? {},
     );
     if (polled.status === 'pending') {
+      // The provider is done but the download can be tried again: this pass is no longer collecting.
+      if (collecting) await endCollect(deps.sql, job.id, passId);
       report.waiting += 1;
       return;
     }
@@ -894,9 +907,9 @@ async function pollAwaiting(deps: RenderPassDeps, job: RenderJob, now: Date, rep
       report.succeeded += 1;
       return;
     }
-    await settleFailure(deps, job, film ? new RenderFailure(polled.failure.code, `[${film.id}] ${polled.failure.message}`, polled.failure.retryable, film.id) : polled.failure, now, report);
+    await settleFailure(deps, job, film ? new RenderFailure(polled.failure.code, `[${film.id}] ${polled.failure.message}`, polled.failure.retryable, film.id) : polled.failure, now, report, collector());
   } catch (error) {
-    await settleFailure(deps, job, error, now, report);
+    await settleFailure(deps, job, error, now, report, collector());
   }
 }
 
@@ -1075,7 +1088,12 @@ async function finish(deps: RenderPassDeps, job: RenderJob, output: EngineOutput
   });
 }
 
-async function settleFailure(deps: RenderPassDeps, job: RenderJob, error: unknown, now: Date, report: RenderPassReport): Promise<void> {
+/**
+ * `collector`: this pass's id when it was collecting a film the provider had finished (`pollAwaiting`).
+ * Such a failure is about this pass's download or copy, not about the film, so it ends the job only
+ * when no other pass is collecting the same film — and it never sends the job back to the provider.
+ */
+async function settleFailure(deps: RenderPassDeps, job: RenderJob, error: unknown, now: Date, report: RenderPassReport, collector: string | null = null): Promise<void> {
   const rawFailure = error instanceof RenderFailure ? error : new RenderFailure('engine_error', error instanceof Error ? error.message : String(error), false);
   const privateRequest = deps.subscriptionSchemaReady ? await loadSubscriptionRender(deps.sql, job.id) : null;
   const failure = privateRequest ? new RenderFailure(rawFailure.code, rawFailure.code, rawFailure.retryable) : rawFailure;
@@ -1084,6 +1102,23 @@ async function settleFailure(deps: RenderPassDeps, job: RenderJob, error: unknow
   // A recipe step failure is recorded as `code:step`; readers strip the step (`baseFailureCode`).
   const code = failure.step ? `${failure.code}:${failure.step}` : failure.code;
   report.errors.push(`${job.id}: ${code} — ${failure.message}`);
+  if (collector !== null) {
+    // The film exists at the provider: a retryable trouble is the next poll's to try, not a new paid task.
+    if (failure.retryable) {
+      await endCollect(deps.sql, job.id, collector);
+      report.waiting += 1;
+      return;
+    }
+    const outcome = await deps.sql.transaction(async sql => {
+      const settled = await failUnlessCollected(sql, job.id, collector, { code, message: failure.message, finishedAt: now, now });
+      if (settled === 'failed' && deps.subscriptionSchemaReady) await settleSubscriptionUsage(sql, job.id, 'failed');
+      return settled;
+    });
+    if (outcome === 'failed') report.failed += 1;
+    // Another pass has this film in hand: the job is still its to deliver.
+    else if (outcome === 'deferred') report.waiting += 1;
+    return;
+  }
   // Overlapping polls: when another pass has already ended or requeued this job, this failure is not the job's.
   if (failure.retryable && job.attempts < MAX_ATTEMPTS) {
     if (await requeueRenderJob(deps.sql, job.id, { code, message: failure.message })) report.requeued += 1;

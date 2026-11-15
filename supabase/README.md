@@ -101,4 +101,4 @@ operation for a superuser, and it is not something app code can do — that is t
 | 2026-11-15 | `0089_core_identity_selfie_photo_check` | 저장한 사진 권고 확인(`identity_selfies.photo_check`·`photo_checked_at`, glue 없음; 대표 지시 2026-11-15) | #223 |
 | 2026-11-16 | `0090_core_brand_studio_job_soft_delete` · `0164_glue_brand_studio_job_soft_delete` | 브랜드 스튜디오 실패·중단 작업을 벽에서 지우기(`brand_studio_jobs.deleted_at` 소프트 삭제; 적용 후 확인: 컬럼 존재, RLS on+forced, 브라우저 권한 0, 기존 9행 영향 없음; 대표 지시 2026-11-16) | #226 |
 
-미적용: 0029/0115(옛 portrait 비교, 폐지 경로). 0063(prom-queen 비율)은 원장에 없지만 운영 데이터에는 이미 반영돼 있다. 다음 번호: core 0091, glue 0165.
+미적용: 0029/0115(옛 portrait 비교, 폐지 경로). 0091(`render_jobs.collecting`, glue 없음 — 다 된 영상을 가져오는 중인 패스 목록. 적용 전에는 `lib/renders/collect.ts`가 로그 한 줄만 남기고 예전처럼 동작하므로 코드 배포와 순서 무관). 0063(prom-queen 비율)은 원장에 없지만 운영 데이터에는 이미 반영돼 있다. 다음 번호: core 0092, glue 0165.
