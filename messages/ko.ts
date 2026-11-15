@@ -3716,6 +3716,8 @@ export const ko: Dictionary = {
     makeBodyClosed: '영상 생성은 공개 준비 중입니다. 열리면 사진 한 장으로 만들 수 있고, 결제는 한 편당 한 번입니다.',
     aspectFact: '비율',
     resolutionFact: '해상도',
+    // 대표 2026-11-15: 720p가 기본이고 충분하다는 걸 템플릿 페이지에서 바로 알 수 있게.
+    resolutionStandard: '720p는 SNS 업로드에 충분히 선명한 표준 고화질입니다.',
     waitLabel: '완성까지',
     waitValue: '보통 {minutes}분',
     aiLimit: 'AI로 만들기 때문에 손·글자·배경 같은 세부는 예시와 조금 다를 수 있습니다.',
@@ -3844,7 +3846,7 @@ export const ko: Dictionary = {
     aspectLabel: '비율',
     resolutionLabel: '화질',
     resolutionDefault: '기본',
-    resolutionNote: '영상은 720p로 만듭니다. 1080p는 더 선명하고 가격이 올라갑니다.',
+    resolutionNote: '720p는 SNS 업로드에 충분히 선명한 표준 고화질입니다. 1080p는 더 선명하고 가격이 올라갑니다.',
     makeThis: '내 사진으로 이 장면 만들기',
   },
   identity: {

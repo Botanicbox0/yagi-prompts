@@ -3727,6 +3727,7 @@ export const en = {
     makeBodyClosed: 'Generation is not open to the public yet. When it opens, one photo is enough, with one payment per film.',
     aspectFact: 'Aspect',
     resolutionFact: 'Resolution',
+    resolutionStandard: '720p is standard HD, sharp enough for social uploads.',
     waitLabel: 'Ready in',
     waitValue: 'about {minutes} min',
     aiLimit: 'Made with AI, so details like hands, lettering and backgrounds may differ a little from the sample.',
@@ -3855,7 +3856,7 @@ export const en = {
     aspectLabel: 'Aspect',
     resolutionLabel: 'Resolution',
     resolutionDefault: 'Default',
-    resolutionNote: 'Films render at 720p. 1080p is sharper and costs more.',
+    resolutionNote: '720p is standard HD, sharp enough for social uploads. 1080p is sharper and costs more.',
     makeThis: 'Make this with your photo',
   },
   identity: {
