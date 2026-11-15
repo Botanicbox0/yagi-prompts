@@ -24,6 +24,12 @@ export interface DirectSceneStudioProps {
   locale: Locale;
   videoCatalogHref: string;
   creatorWorkspaceHref: string;
+  /**
+   * Credits are a subscription unit. Until web subscriptions open (terms: "충전식 재화 없음", one won
+   * payment per template; docs/PLATFORM-2.0.md §19.2), this page shows won only and offers only the
+   * resolutions a buyer can actually pay for (720p, 1080p). True once subscriptions are open.
+   */
+  showCredits?: boolean;
 }
 
 const RAISE_OPTIONS_KRW = [0, 500, 1000, 2000, 3000] as const;
@@ -31,8 +37,10 @@ const RAISE_OPTIONS_KRW = [0, 500, 1000, 2000, 3000] as const;
 export function DirectSceneStudio({
   locale,
   videoCatalogHref,
-  creatorWorkspaceHref
+  creatorWorkspaceHref,
+  showCredits = false
 }: DirectSceneStudioProps) {
+  const resolutionOptions: readonly PersonalVideoResolution[] = showCredits ? ['480p', '720p', '1080p'] : ['720p', '1080p'];
   const [selectedPresetId, setSelectedPresetId] =
     useState<PresetReferenceScenario['id']>('seoul-night-runway');
 
@@ -198,8 +206,8 @@ export function DirectSceneStudio({
               </p>
               <p className="mt-1 text-xs leading-relaxed text-[#52525B]">
                 {locale === 'en'
-                  ? `Base film price: ₩${revenueSim.floorKrw.toLocaleString('en-US')} (${revenueSim.baseCredits} credits)`
-                  : `현재 선택한 영상(${activePreset.badgeKo}) 기본가: ${revenueSim.floorKrw.toLocaleString('ko-KR')}원 (${revenueSim.baseCredits} 크레딧)`}
+                  ? `Base film price: ₩${revenueSim.floorKrw.toLocaleString('en-US')}${showCredits ? ` (${revenueSim.baseCredits} credits)` : ''}`
+                  : `현재 선택한 영상(${activePreset.badgeKo}) 기본가: ${revenueSim.floorKrw.toLocaleString('ko-KR')}원${showCredits ? ` (${revenueSim.baseCredits} 크레딧)` : ''}`}
               </p>
 
               <div className="mt-3.5 flex flex-wrap gap-2" role="group" aria-label="추가 수익금 선택">
@@ -236,7 +244,7 @@ export function DirectSceneStudio({
                   {locale === 'en' ? 'Template Sale Price' : '구매자에게 보이는 템플릿 가격'}
                 </span>
                 <span className="font-mono text-sm font-bold text-[#09090B] tabular-nums">
-                  {revenueSim.salePriceKrw.toLocaleString('ko-KR')}원 ({revenueSim.totalCredits} 크레딧)
+                  {revenueSim.salePriceKrw.toLocaleString('ko-KR')}원{showCredits ? ` (${revenueSim.totalCredits} 크레딧)` : ''}
                 </span>
               </div>
               <div className="mt-2 flex items-baseline justify-between gap-2 border-t border-[#09090B]/[0.08] pt-2">
@@ -645,19 +653,25 @@ export function DirectSceneStudio({
               >
                 <div className="flex flex-wrap items-center justify-between gap-1.5">
                   <p className="font-semibold text-[#09090B]">
-                    {locale === 'en'
-                      ? 'Choose Video Resolution & Credit Mode'
-                      : '화질 · 크레딧 모드 선택 (480p Draft · 720p · 1080p)'}
+                    {showCredits
+                      ? locale === 'en'
+                        ? 'Choose Video Resolution & Credit Mode'
+                        : '화질 · 크레딧 모드 선택 (480p Draft · 720p · 1080p)'
+                      : locale === 'en'
+                        ? 'Choose Video Resolution'
+                        : '화질 선택'}
                   </p>
-                  <span className="rounded-full bg-[#F4F4F5] px-2 py-0.5 font-mono text-[0.65rem] font-semibold text-[#52525B] tabular-nums">
-                    {locale === 'en'
-                      ? `480p saves ${compiled.resolutionTiers.draftWorkflow.draftSavedPercentVs720p}%`
-                      : `480p Draft · ${compiled.resolutionTiers.draftWorkflow.draftSavedPercentVs720p}% 크레딧 절약`}
-                  </span>
+                  {showCredits && (
+                    <span className="rounded-full bg-[#F4F4F5] px-2 py-0.5 font-mono text-[0.65rem] font-semibold text-[#52525B] tabular-nums">
+                      {locale === 'en'
+                        ? `480p saves ${compiled.resolutionTiers.draftWorkflow.draftSavedPercentVs720p}%`
+                        : `480p Draft · ${compiled.resolutionTiers.draftWorkflow.draftSavedPercentVs720p}% 크레딧 절약`}
+                    </span>
+                  )}
                 </div>
 
-                <div className="grid grid-cols-3 gap-2">
-                  {(['480p', '720p', '1080p'] as const).map((res) => {
+                <div className={showCredits ? 'grid grid-cols-3 gap-2' : 'grid grid-cols-2 gap-2'}>
+                  {resolutionOptions.map((res) => {
                     const tier = compiled.resolutionTiers.tiers[res];
                     const active = selectedResolution === res;
                     return (
@@ -692,7 +706,11 @@ export function DirectSceneStudio({
                           </p>
                         </div>
                         <p className="mt-2 font-mono text-[0.72rem] font-bold text-[#09090B] tabular-nums">
-                          {tier.totalCredits} cr
+                          {showCredits
+                            ? `${tier.totalCredits} cr`
+                            : locale === 'en'
+                              ? `₩${tier.totalKrw.toLocaleString('en-US')}`
+                              : `${tier.totalKrw.toLocaleString('ko-KR')}원`}
                         </p>
                       </button>
                     );

@@ -114,9 +114,21 @@ describe('Make Your Own Video & Maker 80% Revenue Engine + Selective Frame Picke
     expect(html).toContain('data-template-freeze-matrix');
     expect(html).toContain('data-buyer-preview-card');
     expect(html).toContain('data-direct-resolution-tiers');
-    expect(html).toContain('data-direct-resolution-option="480p"');
+    // Until subscriptions open: won only, and only the resolutions a buyer can pay for (terms: no stored value).
+    expect(html).not.toContain('data-direct-resolution-option="480p"');
     expect(html).toContain('data-direct-resolution-option="720p"');
     expect(html).toContain('data-direct-resolution-option="1080p"');
+    expect(html).not.toContain('크레딧');
+    expect(html).not.toContain(' cr<');
+    expect(html).toContain('4,000원');
+    expect(html).toContain('9,700원');
+    // Once subscriptions are open the credit view returns, 480p Draft included.
+    const withCredits = renderToStaticMarkup(
+      <DirectSceneStudio locale="ko" videoCatalogHref="/ko/video" creatorWorkspaceHref="/creators/workspace/formats/new" showCredits />
+    );
+    expect(withCredits).toContain('data-direct-resolution-option="480p"');
+    expect(withCredits).toContain('345 cr');
+    expect(withCredits).toContain('크레딧');
     expect(html).toContain('data-direct-no-bgm-rule');
 
     // No raw compiler/developer/DB jargon on screen
