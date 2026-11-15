@@ -90,7 +90,8 @@ export function jobView(row: JobRow, outputs: OutputRow[], media: StudioMediaSto
     prompt: row.prompt,
     // Shown when the wording was changed before sending: by the enhancer, or by the one retry after a
     // safety-review block (lib/brand-studio/block-retry.ts). What was sent is never hidden from the customer.
-    finalPrompt: row.enhance || row.work?.blockRetry?.source === 'model' ? row.final_prompt : null,
+    finalPrompt: row.enhance || row.work?.blockRetry?.source === 'model' || p.reviewedPrompt ? row.final_prompt : null,
+    ...(p.reviewedPrompt ? { reviewed: true } : {}),
     expected: row.kind === 'image' ? Math.max(1, Number(p.count ?? 1)) : 1,
     aspect: p.aspect ?? null,
     resolution: p.resolution ?? null,
@@ -154,11 +155,41 @@ export function jobView(row: JobRow, outputs: OutputRow[], media: StudioMediaSto
 
 /* ------------------------------------------------------------------ reads */
 
+/**
+ * `brand_studio_jobs.deleted_at` (migration 0090) may not exist yet where the code is already running.
+ * A query naming a missing column would fail the whole request, so the column is looked up first: once
+ * seen it is there for good; while missing it is looked up again after a minute, so applying the
+ * migration needs no redeploy. Without it nothing is filtered and removing a run is not offered.
+ */
+const SOFT_DELETE_RECHECK_MS = 60_000;
+let softDelete: { ready: boolean; at: number } | null = null;
+
+export async function jobSoftDeleteReady(sql: SqlRunner, now = Date.now()): Promise<boolean> {
+  if (softDelete && (softDelete.ready || now - softDelete.at < SOFT_DELETE_RECHECK_MS)) return softDelete.ready;
+  const found = await sql.query(
+    `select 1 from information_schema.columns
+      where table_schema = current_schema() and table_name = 'brand_studio_jobs' and column_name = 'deleted_at'`,
+  );
+  softDelete = { ready: found.rows.length > 0, at: now };
+  return softDelete.ready;
+}
+
+/** Forget the lookup (tests change the schema under one process). */
+export function resetJobSoftDeleteProbe(): void {
+  softDelete = null;
+}
+
+/** The wall leaves out runs a member removed; `''` until the column exists. */
+async function notRemoved(sql: SqlRunner): Promise<string> {
+  return (await jobSoftDeleteReady(sql)) ? 'and deleted_at is null' : '';
+}
+
 export async function jobsOf(sql: SqlRunner, organizationId: string, limit = 60): Promise<JobRow[]> {
+  const live = await notRemoved(sql);
   return (
     await sql.query<JobRow>(
       `select * from brand_studio_jobs
-        where organization_id = $1 and model <> 'compose-1080p'
+        where organization_id = $1 and model <> 'compose-1080p' ${live}
         order by created_at desc, id limit $2`,
       [organizationId, limit],
     )
@@ -170,16 +201,17 @@ export async function jobsOf(sql: SqlRunner, organizationId: string, limit = 60)
  * jobs so a burst of image generations never evicts video studio history (and vice versa).
  */
 export async function jobsOfStudioState(sql: SqlRunner, organizationId: string, perMediumLimit = 60): Promise<JobRow[]> {
+  const live = await notRemoved(sql);
   const [imageJobs, videoJobs] = await Promise.all([
     sql.query<JobRow>(
       `select * from brand_studio_jobs
-        where organization_id = $1 and kind in ('image', 'region_edit')
+        where organization_id = $1 and kind in ('image', 'region_edit') ${live}
         order by created_at desc, id limit $2`,
       [organizationId, perMediumLimit],
     ),
     sql.query<JobRow>(
       `select * from brand_studio_jobs
-        where organization_id = $1 and kind in ('video', 'video_remix', 'video_final') and model <> 'compose-1080p'
+        where organization_id = $1 and kind in ('video', 'video_remix', 'video_final') and model <> 'compose-1080p' ${live}
         order by created_at desc, id limit $2`,
       [organizationId, perMediumLimit],
     ),

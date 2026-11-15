@@ -4,11 +4,13 @@
  * floating over the bottom centre of the wall. Top: the reference row (square thumbnails with `@kindN`
  * badges and bidirectional blue focus rings when mentioned). Middle: zero-drift `<PromptHighlight>`
  * backdrop + `<textarea>`. Bottom: compact model/ratio/resolution/quality/count/duration/sound chips,
- * and on the right the screen's one solid button with this run's cost in credits.
+ * each opening its own dark list (./gallery/chip-select.tsx, never a native `<select>`), then the prompt
+ * rewrite: a switch for rewriting on send (on by default) and a button that rewrites the sentence in the
+ * field now, where it can be edited or taken back. On the right the screen's one solid button with this
+ * run's cost in credits.
  *
- * Manual `자동 개선(✨)` controls are removed: the Silent Multimodal Director runs automatically on submit,
- * and when Video Studio's Sequence Rail expands to full timeline height, `collapsed` renders a sleek
- * 1-line floating pill button.
+ * When Video Studio's Sequence Rail expands to full timeline height, `collapsed` renders a sleek 1-line
+ * floating pill button.
  */
 import { useEffect, useId, useMemo, useRef, useState, type DragEvent, type ReactNode } from "react";
 import { extractClipboardImages, prepareClipboardUploadFiles } from "@/lib/brand-studio/clipboard-image";
@@ -45,6 +47,7 @@ import {
   withModel,
   type DockDraft,
 } from "./dock-model";
+import { AspectShape, ChipSelect } from "./gallery/chip-select";
 import { ModelMenu } from "./gallery/model-menu";
 import { StudioIcon } from "./icons";
 import { PromptHighlight, resolvePromptMentions } from "./prompt-highlight";
@@ -74,11 +77,14 @@ export interface DockProps {
   film: FilmState | null;
   uploading: readonly string[];
   initialOpenRef?: string | null;
-  /** Kept optional for caller compatibility while background Silent Director runs automatically. */
+  /** The rewrite button is waiting for its sentence. */
   enhancing?: boolean;
+  /** The field holds a rewritten sentence and the customer's own words are kept for "원래 문장으로". */
   enhanced?: boolean;
   /** Opens the model list first (tests). */
   initialModelMenu?: boolean;
+  /** Opens that chip's list first: "aspect", "resolution", "quality", "count", "seconds" or "sound" (tests). */
+  initialOpenControl?: string;
   /** `dict.studioVideo`, for the reference-video panel's link to the full reverse panel (video screen). */
   videoCopy?: Dictionary["studioVideo"];
   /** Organization assets searchable in `@` autocomplete (Section 2: 에셋에서 바로 추가). */
@@ -187,6 +193,7 @@ export function Dock(props: DockProps) {
   const depth = useRef(0);
   const set = (patch: Partial<DockDraft>) => onDraft({ ...draft, ...patch });
   const cost = credits(copy.credits.amount, props.credits, locale);
+  const opens = (control: string) => props.initialOpenControl === control;
 
   const { mentionedKeys } = useMemo(
     () => resolvePromptMentions(draft.prompt, tray),
@@ -392,7 +399,7 @@ export function Dock(props: DockProps) {
           onChange={set}
         />
       )}
-      <div className="bs-prompt-wrap" data-enhancing={enhancing ? "" : undefined}>
+      <div className="bs-prompt-wrap" data-enhancing={enhancing ? "" : undefined} data-enhanced={props.enhanced ? "" : undefined}>
         {mention.open && (
           <AtMentionMenu
             id={`${id}-at-menu`}
@@ -525,82 +532,103 @@ export function Dock(props: DockProps) {
             initialOpen={props.initialModelMenu}
             onChange={(value) => onDraft(withModel(draft, value))}
           />
-          <Select id={`${id}-aspect`} label={d.aspect} value={draft.aspect} display={draft.aspect} onChange={(aspect) => set({ aspect })} data="aspect" mono>
-            {controls.aspects.map((aspect) => (
-              <option key={aspect} value={aspect}>
-                {aspect}
-              </option>
-            ))}
-          </Select>
-          <Select
-            id={`${id}-resolution`}
+          <ChipSelect
+            label={d.aspect}
+            value={draft.aspect}
+            options={controls.aspects.map((aspect) => ({ value: aspect, label: aspect, icon: <AspectShape ratio={aspect} /> }))}
+            onChange={(aspect) => set({ aspect })}
+            data="aspect"
+            mono
+            initialOpen={opens("aspect")}
+          />
+          <ChipSelect
             label={d.resolution}
             value={draft.resolution}
-            display={draft.resolution === DRAFT_RESOLUTION ? d.draft : draft.resolution}
+            options={controls.resolutions.map((resolution) => ({ value: resolution, label: resolution === DRAFT_RESOLUTION ? d.draft : resolution }))}
             onChange={(resolution) => set({ resolution })}
             data="resolution"
             mono
-          >
-            {controls.resolutions.map((resolution) => (
-              <option key={resolution} value={resolution}>
-                {resolution === DRAFT_RESOLUTION ? d.draft : resolution}
-              </option>
-            ))}
-          </Select>
+            initialOpen={opens("resolution")}
+          />
           {controls.qualities.length > 0 && (
-            <Select
-              id={`${id}-quality`}
+            <ChipSelect
               label={d.quality}
               value={draft.quality}
-              display={copy.qualities[draft.quality as keyof StudioCopy["qualities"]] ?? draft.quality}
+              options={controls.qualities.map((quality) => ({ value: quality, label: copy.qualities[quality as keyof StudioCopy["qualities"]] ?? quality }))}
               onChange={(quality) => set({ quality })}
               data="quality"
-            >
-              {controls.qualities.map((quality) => (
-                <option key={quality} value={quality}>
-                  {copy.qualities[quality as keyof StudioCopy["qualities"]] ?? quality}
-                </option>
-              ))}
-            </Select>
+              initialOpen={opens("quality")}
+            />
           )}
           {draft.medium === "image" ? (
-            <Select id={`${id}-count`} label={d.count} value={String(draft.count)} display={fill(d.countValue, { n: draft.count })} onChange={(value) => set({ count: Number(value) })} data="count" mono>
-              {controls.counts.map((n) => (
-                <option key={n} value={n}>
-                  {fill(d.countValue, { n })}
-                </option>
-              ))}
-            </Select>
+            <ChipSelect
+              label={d.count}
+              value={String(draft.count)}
+              options={controls.counts.map((n) => ({ value: String(n), label: fill(d.countValue, { n }) }))}
+              onChange={(value) => set({ count: Number(value) })}
+              data="count"
+              mono
+              initialOpen={opens("count")}
+            />
           ) : (
             !(remix && (effectiveMethod === "edit" || (draft.clipCount ?? 1) >= 2)) && (
-              <Select
-                id={`${id}-seconds`}
+              <ChipSelect
                 label={d.seconds}
                 value={String(draft.seconds)}
-                display={fill(d.secondsValue, { n: draft.seconds })}
+                options={controls.seconds.map((n) => ({ value: String(n), label: fill(d.secondsValue, { n }) }))}
                 onChange={(value) => {
                   const sec = Number(value);
                   set({ seconds: sec, ...(remix ? { targetTotalSeconds: sec, clipCount: 1 } : {}) });
                 }}
                 data="seconds"
                 mono
-              >
-                {controls.seconds.map((n) => (
-                  <option key={n} value={n}>
-                    {fill(d.secondsValue, { n })}
-                  </option>
-                ))}
-              </Select>
+                initialOpen={opens("seconds")}
+              />
             )
           )}
           {draft.medium === "video" && !remix && (
-            <Select id={`${id}-sound`} label={d.sound} quietLabel value={draft.audio} display={copy.sound[draft.audio]} onChange={(audio) => set({ audio: audio as DockDraft["audio"] })} data="sound">
-              {STUDIO_AUDIO_MODES.map((m) => (
-                <option key={m} value={m}>
-                  {copy.sound[m]}
-                </option>
-              ))}
-            </Select>
+            <ChipSelect
+              label={d.sound}
+              value={draft.audio}
+              options={STUDIO_AUDIO_MODES.map((m) => ({ value: m, label: copy.sound[m] }))}
+              onChange={(audio) => set({ audio: audio as DockDraft["audio"] })}
+              data="sound"
+              initialOpen={opens("sound")}
+            />
+          )}
+          {!remix && (
+            <span className="bs-enhance" data-studio-enhance-group>
+              <button
+                type="button"
+                role="switch"
+                className="bs-switch"
+                aria-checked={draft.enhance}
+                data-studio-enhance
+                onClick={() => set({ enhance: !draft.enhance })}
+              >
+                <span className="bs-switch-knob" aria-hidden="true" />
+                <span>{d.enhance}</span>
+              </button>
+              {props.onEnhance &&
+                (props.enhanced && props.onUndoEnhance ? (
+                  <button type="button" className="bs-chip-btn" data-studio-undo-enhance disabled={busy || enhancing} onClick={() => props.onUndoEnhance?.()}>
+                    <StudioIcon name="undo" />
+                    <span>{d.undoEnhance}</span>
+                  </button>
+                ) : (
+                  <button
+                    type="button"
+                    className="bs-chip-btn"
+                    data-studio-enhance-now
+                    disabled={busy || enhancing || !draft.prompt.trim()}
+                    aria-busy={enhancing}
+                    onClick={() => props.onEnhance?.()}
+                  >
+                    <StudioIcon name="sparkles" />
+                    <span>{d.enhanceNow}</span>
+                  </button>
+                ))}
+            </span>
           )}
         </div>
         <div className="bs-controls-end">
@@ -636,44 +664,6 @@ export function Tip({ id, label, children }: { id: string; label: string; childr
       <span id={id} role="tooltip" className="bs-tip-body">
         {children}
       </span>
-    </span>
-  );
-}
-
-function Select({
-  id,
-  label,
-  quietLabel = true,
-  value,
-  display,
-  onChange,
-  data,
-  mono = false,
-  children,
-}: {
-  id: string;
-  label: string;
-  /** The value says what it is (a ratio, a quality): keep the label for screen readers only. */
-  quietLabel?: boolean;
-  value: string;
-  display: string;
-  onChange(value: string): void;
-  data: string;
-  mono?: boolean;
-  children: ReactNode;
-}) {
-  return (
-    <span className="bs-select" data-control={data} data-mono={mono ? "" : undefined}>
-      <label htmlFor={id} className={quietLabel ? "bs-sr" : undefined}>
-        {label}
-      </label>
-      <span className="bs-select-value" aria-hidden="true">
-        {display}
-      </span>
-      <StudioIcon name="chevron" />
-      <select id={id} value={value} onChange={(event) => onChange(event.target.value)}>
-        {children}
-      </select>
     </span>
   );
 }

@@ -361,32 +361,40 @@ export function dockProblem(draft: DockDraft, tray: readonly TrayItem[]): DockPr
 }
 
 /**
- * One press of "만들기" as a contract request, or the reason it cannot be sent. `preEnhanced`: the
- * prompt in the bar is the one the ✨ button already improved, so it is sent as it is (`enhance: false`)
- * and never rewritten twice.
+ * One press of "만들기" as a contract request, or the reason it cannot be sent.
+ *
+ * `ownWords`: the bar holds a sentence "지금 문장 다듬기" wrote (the customer may have edited it) and these
+ * are the words they typed before it. A plain image or video run then sends their words as `prompt`, the
+ * sentence in the bar as `reviewedPrompt` and `enhance: false`, so it is never rewritten twice and the
+ * run keeps both. A reference-video run always writes its own sentence (the switch is not offered there).
  */
 export function buildJob(
   draft: DockDraft,
   tray: readonly TrayItem[],
   ids: { organizationId: string; requestId: string },
-  options: { preEnhanced?: boolean } = {},
+  options: { ownWords?: string | null } = {},
 ): { ok: true; input: StudioJobCreate } | { ok: false; problem: DockProblem } {
   const clean = normalizeDraft(draft);
   const problem = dockProblem(clean, tray);
   if (problem) return { ok: false, problem };
+  const remix = remixActive(clean, tray);
+  const shown = clean.prompt.trim();
+  const own = options.ownWords?.trim() ?? "";
+  const reviewed = !remix && own.length > 0 && own !== shown;
   const base = {
     organizationId: ids.organizationId,
     requestId: ids.requestId,
     model: clean.model,
-    prompt: clean.prompt.trim(),
-    enhance: options.preEnhanced ? false : clean.enhance,
+    prompt: reviewed ? own : shown,
+    enhance: reviewed ? false : remix ? true : clean.enhance,
+    ...(reviewed ? { reviewedPrompt: shown } : {}),
     references: toReferences(tray, clean.medium),
     aspect: clean.aspect,
   };
   if (clean.medium === "image")
     return { ok: true, input: { kind: "image", ...base, resolution: clean.resolution, count: clean.count, ...(clean.quality ? { quality: clean.quality as StudioImageQuality } : {}) } };
   const resolution = clean.resolution as "draft" | "480p" | "720p" | "1080p";
-  if (remixActive(clean, tray)) {
+  if (remix) {
     const method = resolveUnifiedRemixMethod(clean, tray);
     const plan = activeMultiClipPlan(clean, tray);
     const clipSeconds = method !== "edit" ? (plan && plan.clipCount === 1 ? plan.clipDurations[0]! : clean.seconds) : undefined;
@@ -419,7 +427,7 @@ export function buildMultiClipJobs(
   draft: DockDraft,
   tray: readonly TrayItem[],
   ids: { organizationId: string; requestIds: readonly string[] },
-  options: { preEnhanced?: boolean; sheet?: FilmSheet | null } = {},
+  options: { ownWords?: string | null; sheet?: FilmSheet | null } = {},
 ): { ok: true; inputs: StudioJobCreate[]; plan: MultiClipPlan | null } | { ok: false; problem: DockProblem } {
   const plan = activeMultiClipPlan(draft, tray);
   if (!plan || plan.clipCount < 2) {
@@ -427,7 +435,7 @@ export function buildMultiClipJobs(
       draft,
       tray,
       { organizationId: ids.organizationId, requestId: ids.requestIds[0] ?? "req-0" },
-      { preEnhanced: options.preEnhanced },
+      { ownWords: options.ownWords },
     );
     if (!single.ok) return single;
     return { ok: true, inputs: [single.input], plan };
@@ -463,7 +471,7 @@ export function buildMultiClipJobs(
       requestId: ids.requestIds[idx] ?? `${ids.requestIds[0] ?? "req"}-${idx + 1}`,
       model: clean.model,
       prompt: promptBody,
-      enhance: options.preEnhanced ? false : clean.enhance,
+      enhance: true,
       references,
       aspect: clean.aspect,
       resolution,
@@ -499,8 +507,18 @@ export function enhancePreviewInput(
  * partial edit reopens its box, a reference-video run goes back to the bar).
  */
 export function rerunInput(job: StudioJobView, ids: { organizationId: string; requestId: string }): StudioJobCreate | null {
-  const enhance = job.finalPrompt !== null;
-  const base = { organizationId: ids.organizationId, requestId: ids.requestId, model: job.model, prompt: job.prompt, enhance, references: job.references };
+  // A sentence the customer read before sending goes again as it was; anything else is rewritten like the first time.
+  const reviewed = job.reviewed && job.finalPrompt ? job.finalPrompt.slice(0, STUDIO_LIMITS.promptMax) : null;
+  const enhance = reviewed ? false : job.finalPrompt !== null;
+  const base = {
+    organizationId: ids.organizationId,
+    requestId: ids.requestId,
+    model: job.model,
+    prompt: job.prompt,
+    enhance,
+    ...(reviewed ? { reviewedPrompt: reviewed } : {}),
+    references: job.references,
+  };
   if (job.kind === "image" && job.aspect && job.resolution)
     return {
       kind: "image",

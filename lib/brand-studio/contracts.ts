@@ -179,10 +179,18 @@ const JobBase = {
   references: z.array(StudioReferenceSchema).max(STUDIO_LIMITS.referencesMax).default([]),
 };
 
+/**
+ * The sentence the customer read in the prompt bar after "지금 문장 다듬기" (they may have edited it). It is
+ * sent as it is and never rewritten again; `prompt` stays the words they typed first. Plain image and video
+ * runs only: a partial edit and a reference-video run always write their own sentence.
+ */
+const ReviewedPrompt = z.string().trim().min(1).max(STUDIO_LIMITS.promptMax).optional();
+
 export const ImageJobSchema = z.object({
   kind: z.literal('image'),
   ...JobBase,
   prompt: JobBase.prompt.min(1),
+  reviewedPrompt: ReviewedPrompt,
   aspect: z.string().max(8),
   resolution: z.string().max(8),
   count: z.number().int().min(1).max(STUDIO_LIMITS.imageCountMax).default(1),
@@ -217,6 +225,7 @@ export const VideoJobSchema = z.object({
   kind: z.literal('video'),
   ...VideoBase,
   prompt: JobBase.prompt.min(1),
+  reviewedPrompt: ReviewedPrompt,
   seconds: z.number().int().min(4).max(15),
 });
 
@@ -451,6 +460,7 @@ export const STUDIO_OPERATIONS = [
   'asset.delete',
   'asset.from_output',
   'output.delete',
+  'job.delete',
   'handoff.campaign',
 ] as const;
 export type StudioOperation = (typeof STUDIO_OPERATIONS)[number];
@@ -517,6 +527,8 @@ export interface StudioJobView {
   prompt: string;
   /** What was sent after enhancement; null until the enhancer has run or when it was off. */
   finalPrompt: string | null;
+  /** True when `finalPrompt` is the sentence the customer read (and may have edited) before sending. */
+  reviewed?: boolean;
   /** How many results this job is expected to produce (drives the pending cards). */
   expected: number;
   aspect: string | null;
@@ -607,6 +619,8 @@ export interface StudioState {
   jobs: StudioJobView[];
   /** Campaigns a result can be sent to. */
   campaigns: Array<{ id: string; title: string }>;
+  /** True when a run that ended with no result can be removed from the wall (`job.delete`). */
+  canRemoveRuns?: boolean;
 }
 
 /** `GET /api/brand-studio?organizationId=…&jobs=a,b` — the poll; also moves open jobs forward. */

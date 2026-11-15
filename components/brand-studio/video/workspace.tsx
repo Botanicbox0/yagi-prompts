@@ -1550,6 +1550,8 @@ export function VideoStudioWorkspace({
               onAction={tileAction}
               onRetry={(job) => (canRerun(job) ? viewer.rerun(job) : viewer.reuse(job))}
               onCancel={(job) => void cancel(job)}
+              canRemove={canCreate && Boolean(state?.canRemoveRuns)}
+              onRemove={(job) => studio.deleteJob(job.id).then((result) => setStatus(isFailure(result) ? copy.gallery.removeFailedError : null))}
               onNotice={setStatus}
               empty={guideSection}
             />

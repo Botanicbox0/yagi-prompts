@@ -164,6 +164,16 @@ export function useStudio({ organizationId, initialState, api: injected }: { org
     [api, organizationId, refreshSilently],
   );
 
+  /** Takes a run that ended with no result off the wall (the server keeps the row). */
+  const deleteJob = useCallback(
+    async (jobId: string) => {
+      const result = await api.call("job.delete", { organizationId, jobId });
+      if (!isFailure(result)) dispatch({ type: "jobRemoved", jobId });
+      return result;
+    },
+    [api, organizationId],
+  );
+
   // A reference video is read once per asset; a failed reading is simply no reading.
   const [films, setFilms] = useState<Record<string, FilmState>>({});
   const asked = useRef(new Set<string>());
@@ -198,7 +208,7 @@ export function useStudio({ organizationId, initialState, api: injected }: { org
     [api, refreshSilently],
   );
 
-  return { store, load, createJob, cancelJob, saveOutput, deleteOutput, updateAsset, deleteAsset, handoff, enhancePrompt, planRevision, readMark, films, analyzeFilm, uploads, upload };
+  return { store, load, createJob, cancelJob, saveOutput, deleteOutput, deleteJob, updateAsset, deleteAsset, handoff, enhancePrompt, planRevision, readMark, films, analyzeFilm, uploads, upload };
 }
 
 /**

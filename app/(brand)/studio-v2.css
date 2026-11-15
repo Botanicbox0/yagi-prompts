@@ -195,6 +195,8 @@ textarea.bs-field { resize: vertical; }
 .bs-select:hover, .bs-chip-btn:hover:not(:disabled) { background: var(--ys-hover); }
 .bs-chip-btn[aria-expanded="true"] { background: var(--ys-active-bg); color: var(--ys-active-fg); }
 .bs-chip-btn[aria-expanded="true"] .bs-icon { color: var(--ys-active-fg); }
+/* The pointer is still on the chip right after it opens its list: keep it readable. */
+.bs-chip-btn[aria-expanded="true"]:hover:not(:disabled) { background: var(--ys-active-bg); }
 .bs-chip-btn:disabled { opacity: 0.45; cursor: not-allowed; }
 .bs-select > label:not(.bs-sr) { color: var(--ys-ink-muted); }
 .bs-select-value, .bs-chip-value { font-variant-numeric: tabular-nums; }
@@ -530,3 +532,46 @@ textarea.bs-field { resize: vertical; }
   .bs-prompt-wrap[data-enhancing], .bs-prompt-wrap[data-enhancing]::before { animation: none; }
   .bs-btn:active:not(:disabled), .bs-chip:active:not(:disabled), .bs-door:active, .bs-example:active, .bs-thumb:active:not(:disabled), .bs-tile-btn:hover:not(:disabled) { transform: none; }
 }
+
+/* Setting chips (ratio, resolution, quality, count, length, sound): a dark list above the chip, never a native select. */
+.bs-pick[data-mono] .bs-chip-value, .bs-pick[data-mono] .bs-pick-label { font-family: var(--ys-mono); font-size: 12px; }
+.bs-pick-list { top: auto; right: auto; bottom: calc(100% + 8px); left: 0; min-width: 132px; width: max-content; max-height: min(60dvh, 420px); }
+.bs-pick-list [role="option"] { min-height: 34px; padding: 0 10px; font-variant-numeric: tabular-nums; }
+.bs-pick-list [role="option"] .bs-pick-label { flex: 1; }
+.bs-pick-list [role="option"][aria-selected="true"] { background: var(--ys-active-bg); color: var(--ys-active-fg); }
+.bs-pick-list [role="option"][aria-selected="true"]:hover { background: var(--ys-active-bg); }
+.bs-pick-list [role="option"][aria-selected="true"] .bs-icon { color: currentColor; }
+.bs-shape { flex: none; width: 18px; height: 18px; color: var(--ys-ink-secondary); }
+.bs-chip-btn[aria-expanded="true"] .bs-shape, .bs-pick-list [role="option"][aria-selected="true"] .bs-shape { color: currentColor; }
+/* Prompt rewrite: the switch for rewriting on send, and the button that rewrites the field now. */
+.bs-enhance { display: inline-flex; align-items: center; gap: 4px; }
+
+/* Picking several tiles: a checkbox in the corner, a ring on what is picked, one bar for all of them. */
+.bs-tile-check { position: absolute; top: 8px; left: 8px; z-index: 1; display: grid; place-items: center; width: 24px; height: 24px; padding: 0; border: 1.5px solid rgba(255, 255, 255, 0.78); border-radius: 7px; background: var(--ys-glass-dark); color: var(--ys-active-fg); cursor: pointer; opacity: 0; transition: opacity 160ms var(--ys-ease), background-color 160ms var(--ys-ease); }
+.bs-tile-check .bs-icon { width: 15px; height: 15px; }
+.bs-tile-check[aria-checked="true"] { border-color: var(--ys-active-bg); background: var(--ys-active-bg); }
+.bs-tile:hover .bs-tile-check, .bs-tile:focus-within .bs-tile-check, .bs-tile-check[aria-checked="true"], .bs-wall[data-selecting] .bs-tile-check { opacity: 1; }
+.bs-tile-check:focus-visible { outline: 2px solid var(--ys-focus); outline-offset: 2px; }
+.bs-tile-check ~ .bs-tile-btn[data-corner="tl"] { left: 40px; }
+.bs-tile[data-selected] { outline: 2px solid var(--ys-active-bg); outline-offset: 2px; }
+.bs-tile[data-selected] .bs-tile-open img, .bs-tile[data-selected] .bs-tile-open video { filter: brightness(0.82); }
+.bs-wall[data-selecting] .bs-tile-open { cursor: pointer; }
+.bs-tile-remove { position: absolute; top: 8px; right: 8px; opacity: 1; }
+.bs-selection { position: sticky; bottom: calc(var(--bs-dock-h, 0px) + 78px); z-index: 7; align-self: center; display: flex; flex-wrap: wrap; align-items: center; justify-content: center; gap: 4px; max-width: 100%; margin-top: 4px; padding: 6px 8px 6px 16px; border: 1px solid var(--ys-line-strong); border-radius: 9999px; background: var(--ys-surface); box-shadow: var(--ys-float); animation: bs-pop 160ms var(--ys-ease); }
+.bs-selection-count { margin: 0 8px 0 0; font-size: 13px; font-weight: 600; color: var(--ys-ink); white-space: nowrap; }
+.bs-selection-line { margin: 0 8px 0 0; font-size: 13px; color: var(--ys-ink); }
+.bs-selection .bs-btn { white-space: nowrap; }
+.bs-selection .bs-btn[data-tone="danger"], .bs-selection .bs-btn[data-tone="danger"] .bs-icon { color: var(--ys-danger); }
+.bs-selection-clear { position: static; opacity: 1; margin-left: 4px; background: transparent; border-color: transparent; color: var(--ys-ink-secondary); }
+@media (pointer: coarse) {
+  .bs-tile-check { width: 32px; height: 32px; opacity: 1; }
+  .bs-tile-check ~ .bs-tile-btn[data-corner="tl"] { left: 48px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .bs-tile-check, .bs-selection { transition: none; animation: none; }
+}
+/* The switch in its off state must still read on the dark bar: a visible track and dot from the ink tokens. */
+.bs-enhance .bs-switch-knob { background: color-mix(in srgb, var(--ys-ink) 22%, transparent); }
+.bs-enhance .bs-switch-knob::after { background: var(--ys-ink-secondary); box-shadow: none; }
+.bs-enhance .bs-switch[aria-checked="true"] .bs-switch-knob { background: var(--ys-active-bg); }
+.bs-enhance .bs-switch[aria-checked="true"] .bs-switch-knob::after { background: var(--ys-active-fg); }

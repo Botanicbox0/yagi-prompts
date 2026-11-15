@@ -23,7 +23,8 @@ import {
   withMedium,
   withModel,
 } from "@/components/brand-studio/dock-model";
-import { isPreEnhanced } from "@/components/brand-studio/use-dock";
+import { ownWordsOf } from "@/components/brand-studio/use-dock";
+import { aspectBox } from "@/components/brand-studio/gallery/chip-select";
 import { trayItemFromAsset, trayLabels } from "@/components/brand-studio/refs";
 import { fill } from "@/components/brand-studio/copy";
 import { referenceVideoFit } from "@/lib/brand-studio/reference-video";
@@ -61,9 +62,11 @@ function render(patch: Partial<DockProps> = {}, locale: "ko" | "en" = "ko") {
   };
   return renderToStaticMarkup(<Dock {...props} />);
 }
-const options = (html: string, control: string) => {
-  const block = html.match(new RegExp(`data-control="${control}"[\\s\\S]*?</select>`))?.[0] ?? "";
-  return [...block.matchAll(/<option value="([^"]*)"/g)].map((m) => m[1]);
+/** The values a chip offers: the bar rendered with that chip's list open (a closed chip renders no list). */
+const options = (patch: Partial<DockProps>, control: string) => {
+  const html = render({ ...patch, initialOpenControl: control });
+  const block = html.match(new RegExp(`data-studio-pick-list="${control}"[\\s\\S]*?</div></div>`))?.[0] ?? "";
+  return [...block.matchAll(/role="option"[^>]*data-value="([^"]*)"/g)].map((m) => m[1]);
 };
 const modelOptions = (html: string) => [...html.matchAll(/role="option"[^>]*data-model="([^"]+)"/g)].map((m) => m[1]);
 
@@ -93,9 +96,9 @@ describe("prompt bar controls from the registry", () => {
       const draft = withModel(initialDraft("image"), model.id);
       const html = render({ draft });
       expect(html).toContain(`>${model.label}<`);
-      expect(options(html, "aspect")).toEqual([...model.aspects]);
-      expect(options(html, "resolution")).toEqual([...model.resolutions]);
-      expect(options(html, "count")).toEqual(["1", "2", "3", "4"]);
+      expect(options({ draft }, "aspect")).toEqual([...model.aspects]);
+      expect(options({ draft }, "resolution")).toEqual([...model.resolutions]);
+      expect(options({ draft }, "count")).toEqual(["1", "2", "3", "4"]);
     }
     const nano = { ...withModel(initialDraft("image"), "nano-banana-pro"), aspect: "4:5", resolution: "4K" };
     const seedream = withModel(nano, "seedream-5.5");
@@ -135,11 +138,11 @@ describe("prompt bar controls from the registry", () => {
     const draft = withMedium(initialDraft("image"), "video");
     const model = STUDIO_MODELS.find((m) => m.id === draft.model) as StudioVideoModel;
     const html = render({ draft, mode: "video" });
-    expect(options(html, "resolution")).toEqual([DRAFT_RESOLUTION, ...model.resolutions]);
+    expect(options({ draft, mode: "video" }, "resolution")).toEqual([DRAFT_RESOLUTION, ...model.resolutions]);
     expect(html).toContain(copyFor("ko").dock.draft);
-    expect(options(html, "seconds")).toEqual(Array.from({ length: model.maxSeconds - model.minSeconds + 1 }, (_, i) => String(model.minSeconds + i)));
-    expect(options(html, "sound")).toEqual(["native", "ambient", "silent"]);
-    expect(options(html, "aspect")).toEqual([...model.aspects]);
+    expect(options({ draft, mode: "video" }, "seconds")).toEqual(Array.from({ length: model.maxSeconds - model.minSeconds + 1 }, (_, i) => String(model.minSeconds + i)));
+    expect(options({ draft, mode: "video" }, "sound")).toEqual(["native", "ambient", "silent"]);
+    expect(options({ draft, mode: "video" }, "aspect")).toEqual([...model.aspects]);
     expect(html).not.toContain('data-control="count"');
     expect(html).toContain(copyFor("ko").dock.placeholderVideo);
   });
@@ -163,7 +166,7 @@ describe("quality (GPT Image only)", () => {
       const html = render({ draft });
       const built = buildJob(draft, [], ids);
       if (GPT.includes(model.id)) {
-        expect(options(html, "quality")).toEqual(["low", "medium", "high"]);
+        expect(options({ draft }, "quality")).toEqual(["low", "medium", "high"]);
         expect(draft.quality).toBe("medium");
         expect(built.ok && built.input.kind === "image" && built.input.quality).toBe("medium");
         expect(built.ok && StudioJobCreateSchema.safeParse(built.input).success).toBe(true);
@@ -220,15 +223,71 @@ describe("blueprint runs", () => {
 });
 
 describe("silent director, @ highlight and collapsed pill mode", () => {
-  it("removes manual 자동 개선 switch and ✨ button while keeping initialDraft().enhance true", () => {
+  it("shows the rewrite switch (on by default) and the rewrite-now button with the bar's own wording", () => {
+    const d = copyFor("ko").dock;
     expect(initialDraft("image").enhance).toBe(true);
     expect(initialDraft("video").enhance).toBe(true);
     const html = render({ draft: { ...initialDraft(), prompt: "병" } });
-    expect(html).not.toContain("data-studio-enhance-group");
-    expect(html).not.toContain("data-studio-enhance");
-    expect(html).not.toContain("data-studio-enhance-now");
+    expect(html).toMatch(/role="switch"[^>]*aria-checked="true"[^>]*data-studio-enhance(?!-)/);
+    expect(html).toContain(`<span>${d.enhance}</span>`);
+    expect(html).toMatch(new RegExp(`data-studio-enhance-now[^>]*>[\\s\\S]*?<span>${d.enhanceNow}</span>`));
     expect(html).not.toContain("data-studio-undo-enhance");
     expect(html).toContain("data-prompt-highlight");
+    // Off: the switch says so; nothing to rewrite: the button is there but cannot be pressed.
+    expect(render({ draft: { ...initialDraft(), prompt: "병", enhance: false } })).toMatch(/role="switch"[^>]*aria-checked="false"/);
+    expect(render()).toMatch(/data-studio-enhance-now[^>]*disabled=""|disabled=""[^>]*data-studio-enhance-now/);
+    // A rewritten sentence in the field: one press back to the customer's words, in place of the rewrite button.
+    const rewritten = render({ draft: { ...initialDraft(), prompt: "A clear glass bottle" }, enhanced: true });
+    expect(rewritten).toMatch(new RegExp(`data-studio-undo-enhance[^>]*>[\\s\\S]*?<span>${d.undoEnhance}</span>`));
+    expect(rewritten).not.toContain("data-studio-enhance-now");
+    expect(rewritten).toContain("data-enhanced");
+    // Without a handler there is no dead button (a screen that cannot rewrite shows the switch only).
+    expect(render({ onEnhance: undefined, draft: { ...initialDraft(), prompt: "병" } })).not.toContain("data-studio-enhance-now");
+  });
+
+  it("never renders a native select: every setting chip opens its own listbox", () => {
+    for (const mode of ["image", "video"] as const) {
+      const draft = withMedium(initialDraft("image"), mode);
+      const closed = render({ draft, mode });
+      expect(closed).not.toContain("<select");
+      expect(closed).not.toContain("data-studio-pick-list");
+      for (const control of mode === "image" ? ["aspect", "resolution", "count"] : ["aspect", "resolution", "seconds", "sound"]) {
+        expect(closed).toMatch(new RegExp(`data-control="${control}"[^>]*>\\s*<button[^>]*aria-haspopup="listbox"[^>]*aria-expanded="false"`));
+        const open = render({ draft, mode, initialOpenControl: control });
+        expect(open).toMatch(new RegExp(`data-studio-pick-list="${control}"[^>]*><div[^>]*role="listbox"`));
+        expect(open.match(/data-studio-pick-list=/g)).toHaveLength(1);
+        // The current value is the selected option.
+        const value = control === "count" ? String(draft.count) : control === "seconds" ? String(draft.seconds) : control === "sound" ? draft.audio : (draft[control as "aspect" | "resolution"] as string);
+        expect(open).toMatch(new RegExp(`role="option" aria-selected="true" data-value="${value}"`));
+      }
+    }
+  });
+
+  it("draws each ratio as a small shape on the chip and in its list", () => {
+    const draft = withModel(initialDraft("image"), "nano-banana-pro");
+    const html = render({ draft, initialOpenControl: "aspect" });
+    for (const ratio of ["1:1", "4:3", "3:4", "4:5", "9:16", "16:9", "21:9"]) expect(html).toContain(`data-shape="${ratio}"`);
+    expect(aspectBox("1:1")).toEqual({ width: 16, height: 16 });
+    expect(aspectBox("16:9")).toEqual({ width: 16, height: 9 });
+    expect(aspectBox("9:16")).toEqual({ width: 9, height: 16 });
+    expect(aspectBox("21:9").height).toBeLessThan(aspectBox("16:9").height);
+    expect(aspectBox("4:5").width).toBeGreaterThan(aspectBox("3:4").width);
+    expect(aspectBox("nonsense")).toEqual({ width: 16, height: 16 });
+  });
+
+  it("lists the image models as Seedream 5.5, GPT Image 2.6 Flare and Sunburst, Nano Banana Pro, without Seedream 5.0 Flash", () => {
+    const order = ["seedream-5.5", "gpt-image-2.6-flare", "gpt-image-2.6-sunburst", "nano-banana-pro"];
+    expect(selectableModels("image").map((m) => m.id)).toEqual(order);
+    expect(modelOptions(render({ initialModelMenu: true }))).toEqual(order);
+    // Still a live model: an earlier Flash run can be made again and its history reads as before.
+    const flash = STUDIO_MODELS.find((m) => m.id === "seedream-5-flash")!;
+    expect(flash.availability).toBe("live");
+    const old = job(1, { model: "seedream-5-flash", prompt: "병", aspect: "1:1", resolution: "2K" });
+    const again = rerunInput(old, ids);
+    expect(again).toMatchObject({ kind: "image", model: "seedream-5-flash" });
+    expect(StudioJobCreateSchema.safeParse(again).success).toBe(true);
+    // "설정 다시 쓰기" brings its settings back on a model the bar offers.
+    expect(order).toContain(draftFromJob(old, initialDraft("image")).model);
   });
 
   it("highlights bound @ mentions in the backdrop, lights up Tray data-mentioned, and marks unbound @ mentions false", () => {
@@ -277,14 +336,47 @@ describe("silent director, @ highlight and collapsed pill mode", () => {
       expect(preview.input).toMatchObject({ kind: "image", enhance: true, references: [{ assetId: asset(1).id, role: "product" }] });
     }
     expect(enhancePreviewInput(initialDraft(), [], ORG)).toEqual({ ok: false, problem: { kind: "empty_prompt" } });
-    const improved = buildJob(draft, [pic], ids, { preEnhanced: true });
-    expect(improved.ok && improved.input.kind === "image" && improved.input.enhance).toBe(false);
     expect(buildJob(draft, [pic], ids).ok && (buildJob(draft, [pic], ids) as { input: { enhance: boolean } }).input.enhance).toBe(true);
-    const enhanced = { original: "흰 대리석 위 병", improved: "A clear glass bottle on white marble" };
-    expect(isPreEnhanced(enhanced, enhanced.improved)).toBe(true);
-    // Editing the improved sentence drops the state: it is enhanced again like any sentence.
-    expect(isPreEnhanced(enhanced, `${enhanced.improved}, morning`)).toBe(false);
-    expect(isPreEnhanced(null, enhanced.improved)).toBe(false);
+  });
+
+  it("keeps the customer's words when a rewritten sentence is sent: prompt stays theirs, the sentence goes as reviewedPrompt", () => {
+    const own = "흰 대리석 위 병";
+    const enhanced = { original: own, improved: "A clear glass bottle on white marble" };
+    const pic = trayItemFromAsset(asset(1, { role: "product" }));
+    // The sentence as written, and after the customer edits it: both keep the original and are never rewritten again.
+    for (const shown of [enhanced.improved, `${enhanced.improved}, morning light`]) {
+      expect(ownWordsOf(enhanced, shown)).toBe(own);
+      const built = buildJob({ ...initialDraft(), prompt: shown }, [pic], ids, { ownWords: ownWordsOf(enhanced, shown) });
+      expect(built.ok && built.input).toMatchObject({ kind: "image", prompt: own, reviewedPrompt: shown, enhance: false });
+      expect(built.ok && StudioJobCreateSchema.safeParse(built.input).success).toBe(true);
+    }
+    const film = buildJob({ ...withMedium(initialDraft(), "video"), prompt: enhanced.improved }, [], ids, { ownWords: own });
+    expect(film.ok && film.input).toMatchObject({ kind: "video", prompt: own, reviewedPrompt: enhanced.improved, enhance: false });
+    // Nothing rewritten, typed back to the original, or emptied: an ordinary run.
+    expect(ownWordsOf(null, enhanced.improved)).toBeNull();
+    expect(ownWordsOf(enhanced, ` ${own} `)).toBeNull();
+    expect(ownWordsOf(enhanced, "  ")).toBeNull();
+    const plain = buildJob({ ...initialDraft(), prompt: own }, [pic], ids, { ownWords: null });
+    expect(plain.ok && plain.input).not.toHaveProperty("reviewedPrompt");
+    // The switch off sends the customer's words as they are.
+    const off = buildJob({ ...initialDraft(), prompt: own, enhance: false }, [pic], ids);
+    expect(off.ok && off.input).toMatchObject({ prompt: own, enhance: false });
+    expect(off.ok && off.input).not.toHaveProperty("reviewedPrompt");
+    // A reference-video run always writes its own sentence: no reviewedPrompt, enhancement on.
+    const clip = trayItemFromAsset(asset(2, { kind: "video", seconds: 8, width: 1280, height: 720 }));
+    const remix = buildJob({ ...withMedium(initialDraft(), "video"), prompt: enhanced.improved, change: "병을 바꿔요", enhance: false }, [clip], ids, { ownWords: own });
+    expect(remix.ok && remix.input).toMatchObject({ kind: "video_remix", prompt: enhanced.improved, enhance: true });
+    expect(remix.ok && remix.input).not.toHaveProperty("reviewedPrompt");
+    // The switch is not offered while a reference video is attached.
+    expect(render({ mode: "video", draft: { ...withMedium(initialDraft(), "video"), prompt: "x" }, tray: [clip], labels: ["영상 1"] })).not.toContain("data-studio-enhance-group");
+  });
+
+  it("makes a reviewed run again with the same sentence, and brings both back with 다시 만들기", () => {
+    const reviewed = job(1, { prompt: "흰 대리석 위 병", finalPrompt: "A clear glass bottle on white marble", reviewed: true, aspect: "1:1", resolution: "2K" });
+    expect(rerunInput(reviewed, ids)).toMatchObject({ prompt: "흰 대리석 위 병", reviewedPrompt: "A clear glass bottle on white marble", enhance: false });
+    const auto = job(2, { prompt: "흰 대리석 위 병", finalPrompt: "A clear glass bottle on white marble", aspect: "1:1", resolution: "2K" });
+    expect(rerunInput(auto, ids)).toMatchObject({ prompt: "흰 대리석 위 병", enhance: true });
+    expect(rerunInput(auto, ids)).not.toHaveProperty("reviewedPrompt");
   });
 });
 

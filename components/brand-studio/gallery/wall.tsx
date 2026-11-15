@@ -9,8 +9,13 @@
  * Hover or focus on a tile shows small icon buttons in its corners: like, add to a folder, use as a
  * reference, and the more-menu. Tiles are drag sources for the prompt bar, the partial-edit form, the
  * layer editor and the library's folders.
+ *
+ * Several tiles can be picked at once: a checkbox in each result's and failed run's corner, Shift+click
+ * for a range, then one floating bar acts on all of them (use as references, also on Enter; put in a
+ * folder; download; delete). A tile is exactly what is on screen: a clip with versions shows one version,
+ * and that version alone is selected or deleted (./selection.ts).
  */
-import { Fragment, useEffect, useId, useRef, useState, type ReactNode } from "react";
+import { Fragment, useEffect, useId, useRef, useState, type KeyboardEvent, type MouseEvent, type ReactNode } from "react";
 import type { StudioJobView, StudioOutputView } from "@/lib/brand-studio/contracts";
 import { creditsOf } from "@/lib/brand-studio/credits";
 import { studioModelOrLegacy, type StudioMedium } from "@/lib/brand-studio/models";
@@ -22,7 +27,22 @@ import { libraryKey, type StudioLibrary } from "../seams";
 import { collapseRevisions, revisionBadges } from "../revision-model";
 import { isOpen } from "../store";
 import { dayLabel, groupByDay } from "./days";
+import { downloadOutputs } from "./download";
 import { FolderPicker } from "./folder-picker";
+import {
+  EMPTY_SELECTION,
+  bulkActions,
+  failedKey,
+  pruneSelection,
+  resultKey,
+  selectRange,
+  selectedTargets,
+  toggleSelection,
+  type BulkAction,
+  type SelectableTile,
+  type SelectedTargets,
+  type Selection,
+} from "./selection";
 import { Menu, useAnchored, useDismiss, type MenuEntry } from "./menu";
 
 /** Everything a tile's buttons and menu can ask the screen to do. */
@@ -74,6 +94,12 @@ export interface WallProps {
   onAction(action: TileAction, item: WallTileItem): void;
   onRetry(job: StudioJobView): void;
   onCancel?(job: StudioJobView): void;
+  /** Runs that ended with no result can be taken off the wall (owner or editor, and the server has it). */
+  canRemove?: boolean;
+  /** Takes one such run off the wall. Without it failed tiles have no checkbox and no remove button. */
+  onRemove?(job: StudioJobView): void | Promise<unknown>;
+  /** Tiles selected first, by key (tests). */
+  initialSelection?: readonly string[];
   onNotice(line: string | null): void;
   /** Shown instead of the wall when there is nothing yet (the explainer and the example sentences). */
   empty?: ReactNode;
@@ -106,6 +132,30 @@ export function wallEntries(jobs: readonly StudioJobView[], parentOf: (id: strin
       }
       return { job, entries };
     });
+}
+
+/**
+ * The tiles that can be picked, in the order on screen: every result, and (where runs can be removed)
+ * every run that ended with no result. Places still being made are never pickable. Clips are collapsed
+ * first, so a clip contributes the version it shows and nothing behind it.
+ */
+export function wallSelectable(jobs: readonly StudioJobView[], parentOf: (id: string | null) => StudioOutputView | null, canRemove: boolean): SelectableTile[] {
+  const tiles: SelectableTile[] = [];
+  for (const { entries } of wallEntries(collapseRevisions(jobs), parentOf))
+    for (const entry of entries) {
+      if (entry.type === "result") tiles.push({ key: resultKey(entry.item.output.id), type: "result", item: entry.item });
+      else if (entry.type === "failed" && canRemove) tiles.push({ key: failedKey(entry.job.id), type: "failed", job: entry.job });
+    }
+  return tiles;
+}
+
+/** The question before deleting what is selected; it adds that earlier versions stay when a picked clip has them. */
+export function deleteConfirmLine(targets: SelectedTargets, jobs: readonly StudioJobView[], copy: StudioCopy): string {
+  const g = copy.gallery;
+  const badges = revisionBadges(jobs);
+  const versioned = targets.items.some((item) => (badges.get(item.job.id) ?? 1) > 1);
+  const line = fill(g.bulkDeleteConfirm, { n: targets.items.length + targets.failed.length });
+  return versioned ? `${line} ${g.bulkDeleteVersions}` : line;
 }
 
 export type TileMenuKey = "open" | "rerun" | "reuse" | "region" | "decorate" | "to-video" | "folder" | "review" | "campaign" | "save" | "download" | "delete";
@@ -149,7 +199,37 @@ export function Wall(props: WallProps) {
   const g = copy.gallery;
   // A clip with several versions shows its newest one (and newer failures); the viewer reaches the rest.
   const badges = revisionBadges(jobs);
-  const tileProps = { ...props, badges };
+  const canRemove = Boolean(props.canRemove && props.onRemove);
+  const tiles = wallSelectable(jobs, parentOf, canRemove);
+  const order = tiles.map((tile) => tile.key);
+  const [picked, setPicked] = useState<Selection>(() =>
+    props.initialSelection?.length ? { keys: new Set(props.initialSelection), anchor: props.initialSelection[props.initialSelection.length - 1] ?? null } : EMPTY_SELECTION,
+  );
+  // What left the wall (deleted, or replaced by a newer version) is no longer selected.
+  const selection = pruneSelection(picked, order);
+  const targets = selectedTargets(tiles, selection);
+  const selecting = selection.keys.size > 0;
+  const actions = bulkActions(targets, { canGenerate: props.canGenerate, canEdit: props.canEdit, canRemove });
+  const select: Select = {
+    selecting,
+    has: (key) => selection.keys.has(key),
+    press: (key, range) => setPicked((current) => (range ? selectRange(pruneSelection(current, order), order, key) : toggleSelection(pruneSelection(current, order), key))),
+  };
+  const clear = () => setPicked(EMPTY_SELECTION);
+  const sendAsReferences = () => {
+    for (const item of targets.items) props.onAction("reference", item);
+    clear();
+  };
+  const keys = (event: KeyboardEvent<HTMLElement>) => {
+    if (!selecting || !(event.target instanceof Element) || event.target.closest(".bs-menu, [data-studio-selection-bar]")) return;
+    if (event.key === "Escape") clear();
+    // Enter on a picked wall: the selection goes to the prompt bar as references.
+    if (event.key === "Enter" && actions.includes("reference") && event.target.closest(".bs-tile-check, .bs-tile-open")) {
+      event.preventDefault();
+      sendAsReferences();
+    }
+  };
+  const tileProps = { ...props, badges, select, canRemove };
   const groups = groupByDay(wallEntries(collapseRevisions(jobs), parentOf), (entry) => entry.job.createdAt, now);
   const label = mode === "video" ? g.labelVideo : g.label;
   if (!groups.length && !sending.length)
@@ -161,7 +241,7 @@ export function Wall(props: WallProps) {
   const today = dayLabel(groups[0]?.key ?? "", now, locale, g);
   let n = 0;
   return (
-    <section className="bs-wall" data-studio-board aria-label={label}>
+    <section className="bs-wall" data-studio-board aria-label={label} data-selecting={selecting ? "" : undefined} onKeyDown={keys}>
       {sending.length > 0 && !groups.length && (
         <WallDay label={g.today}>
           {sending.map((tile) => (
@@ -189,7 +269,169 @@ export function Wall(props: WallProps) {
           ))}
         </WallDay>
       ))}
+      {selecting && (
+        <SelectionBar
+          targets={targets}
+          actions={actions}
+          confirmLine={deleteConfirmLine(targets, jobs, copy)}
+          copy={copy}
+          library={props.library}
+          onReference={sendAsReferences}
+          onDelete={() => {
+            for (const item of targets.items) props.onAction("delete", item);
+            for (const job of targets.failed) void props.onRemove?.(job);
+          }}
+          onClear={clear}
+          onNotice={props.onNotice}
+        />
+      )}
     </section>
+  );
+}
+
+/** What a tile needs to take part in the selection. */
+interface Select {
+  /** True once anything is picked: a press on a picture then picks instead of opening. */
+  selecting: boolean;
+  has(key: string): boolean;
+  press(key: string, range: boolean): void;
+}
+
+function TileCheck({ selected, label, onPress }: { selected: boolean; label: string; onPress(event: MouseEvent): void }) {
+  return (
+    <button type="button" role="checkbox" aria-checked={selected} className="bs-tile-check" data-studio-select aria-label={label} title={label} onClick={onPress}>
+      {selected && <StudioIcon name="check" />}
+    </button>
+  );
+}
+
+/**
+ * The bar that floats above the prompt bar while tiles are picked: how many, then what can be done with
+ * all of them. Delete asks once, in the bar itself.
+ */
+function SelectionBar({
+  targets,
+  actions,
+  confirmLine,
+  copy,
+  library,
+  onReference,
+  onDelete,
+  onClear,
+  onNotice,
+}: {
+  targets: SelectedTargets;
+  actions: readonly BulkAction[];
+  confirmLine: string;
+  copy: StudioCopy;
+  library: StudioLibrary;
+  onReference(): void;
+  onDelete(): void;
+  onClear(): void;
+  onNotice(line: string | null): void;
+}) {
+  const g = copy.gallery;
+  const id = useId();
+  const [panel, setPanel] = useState<"folders" | "confirm" | null>(null);
+  const [saving, setSaving] = useState(false);
+  const folderButton = useRef<HTMLButtonElement>(null);
+  const count = targets.items.length + targets.failed.length;
+  const refs = targets.items.map((item) => ({ outputId: item.output.id }));
+  const file = async (folder: { id: string; name: string } | null) => {
+    const done = folder ? await Promise.all(refs.map((ref) => library.addToFolder(folder.id, ref))) : [false];
+    onNotice(folder && done.every(Boolean) ? fill(g.addedMany, { n: refs.length, name: folder.name }) : g.folderFailed);
+    if (folder && done.every(Boolean)) onClear();
+  };
+  const download = async () => {
+    setSaving(true);
+    const { fallback } = await downloadOutputs(targets.items.map((item) => item.output));
+    setSaving(false);
+    onNotice(fallback > 1 ? g.downloadFailed : null);
+  };
+  const button: Record<BulkAction, { label: string; icon: "plus" | "folder-plus" | "download" | "trash"; run(): void; busy?: boolean; disabled?: boolean; tone?: "danger" }> = {
+    reference: { label: g.reference, icon: "plus", run: onReference },
+    folder: { label: g.folder, icon: "folder-plus", run: () => setPanel(panel === "folders" ? null : "folders"), disabled: !library.ready },
+    download: { label: g.menu.download, icon: "download", run: () => void download(), busy: saving, disabled: saving },
+    delete: { label: g.menu.delete, icon: "trash", run: () => setPanel("confirm"), tone: "danger" },
+  };
+  return (
+    <div className="bs-selection" role="toolbar" aria-label={g.selectionBar} data-studio-selection-bar>
+      {panel === "confirm" ? (
+        <>
+          <p className="bs-selection-line" role="alert">
+            {confirmLine}
+          </p>
+          <button
+            type="button"
+            className="bs-btn"
+            data-variant="soft"
+            data-size="sm"
+            data-tone="danger"
+            data-bulk-confirm
+            autoFocus
+            onClick={() => {
+              setPanel(null);
+              onDelete();
+            }}
+          >
+            {g.menu.delete}
+          </button>
+          <button type="button" className="bs-btn" data-variant="ghost" data-size="sm" onClick={() => setPanel(null)}>
+            {copy.viewer.cancel}
+          </button>
+        </>
+      ) : (
+        <>
+          <p className="bs-selection-count bs-num" aria-live="polite">
+            {fill(g.selected, { n: count })}
+          </p>
+          {actions.map((action) => {
+            const b = button[action];
+            return (
+              <button
+                key={action}
+                ref={action === "folder" ? folderButton : undefined}
+                type="button"
+                className="bs-btn"
+                data-variant="ghost"
+                data-size="sm"
+                data-tone={b.tone}
+                data-bulk={action}
+                disabled={b.disabled}
+                aria-busy={b.busy}
+                aria-haspopup={action === "folder" ? "dialog" : undefined}
+                aria-expanded={action === "folder" ? panel === "folders" : undefined}
+                aria-controls={action === "folder" && panel === "folders" ? `${id}-folders` : undefined}
+                onClick={b.run}
+              >
+                <StudioIcon name={b.icon} />
+                {b.label}
+              </button>
+            );
+          })}
+          <button type="button" className="bs-tile-btn bs-selection-clear" aria-label={g.clearSelection} title={g.clearSelection} onClick={onClear}>
+            <StudioIcon name="close" />
+          </button>
+        </>
+      )}
+      {panel === "folders" && (
+        <FolderPicker
+          id={`${id}-folders`}
+          anchor={folderButton.current}
+          folders={library.folders}
+          words={{ title: g.folderTitle, empty: g.folderEmpty, newFolder: g.newFolder, newFolderName: g.newFolderName, create: g.createFolder }}
+          onClose={() => setPanel(null)}
+          onPick={(folderId) => {
+            setPanel(null);
+            void file(library.folders.find((f) => f.id === folderId) ?? null);
+          }}
+          onCreate={(name) => {
+            setPanel(null);
+            void library.createFolder(name).then((folder) => file(folder));
+          }}
+        />
+      )}
+    </div>
   );
 }
 
@@ -212,6 +454,8 @@ function SendingSlot({ tile, copy }: { tile: SendingTile; copy: StudioCopy }) {
 
 /** Version numbers of clips with more than one version, by run id. */
 type Badges = { badges: ReadonlyMap<string, number> };
+/** The selection, and whether runs with no result can be removed here. */
+type Picking = { select: Select; canRemove: boolean };
 
 function VersionBadge({ n, copy, extra }: { n: number | undefined; copy: StudioCopy; extra?: string | null }) {
   if (!n) return extra ? <span className="bs-tile-badge">{extra}</span> : null;
@@ -222,7 +466,7 @@ function VersionBadge({ n, copy, extra }: { n: number | undefined; copy: StudioC
   );
 }
 
-function PendingTile({ entry, copy, canStop = false, stopping = null, onCancel, badges }: WallProps & Badges & { entry: Extract<Entry, { type: "pending" }> }) {
+function PendingTile({ entry, copy, canStop = false, stopping = null, onCancel, badges }: WallProps & Badges & Picking & { entry: Extract<Entry, { type: "pending" }> }) {
   const { job } = entry;
   const stage = copy.board.stage[job.status as keyof typeof copy.board.stage] ?? copy.board.stage.queued;
   return (
@@ -246,12 +490,20 @@ function PendingTile({ entry, copy, canStop = false, stopping = null, onCancel, 
   );
 }
 
-function FailedTile({ entry, copy, canGenerate, onRetry, badges }: WallProps & Badges & { entry: Extract<Entry, { type: "failed" }> }) {
+function FailedTile({ entry, copy, canGenerate, onRetry, onRemove, canRemove, select, badges }: WallProps & Badges & Picking & { entry: Extract<Entry, { type: "failed" }> }) {
   const { job } = entry;
+  const key = failedKey(job.id);
+  const selected = select.has(key);
   // A block with attachments usually comes from the attachment, so say where to look.
   const reason = job.errorCode === "provider_rejected" && job.references.length > 0 ? copy.board.rejectedWithReferences : errorLine(copy, job.errorCode);
   return (
-    <div className="bs-tile" data-state="failed" data-studio-job={job.id} style={tileStyle(entry.ratio)} role="group" aria-label={copy.gallery.failed}>
+    <div className="bs-tile" data-state="failed" data-studio-job={job.id} data-selected={selected ? "" : undefined} style={tileStyle(entry.ratio)} role="group" aria-label={copy.gallery.failed}>
+      {canRemove && <TileCheck selected={selected} label={copy.gallery.selectFailed} onPress={(event) => select.press(key, event.shiftKey)} />}
+      {canRemove && (
+        <button type="button" className="bs-tile-btn bs-tile-remove" data-studio-remove aria-label={copy.gallery.removeFailed} title={copy.gallery.removeFailed} onClick={() => void onRemove?.(job)}>
+          <StudioIcon name="trash" />
+        </button>
+      )}
       <span className="bs-tile-failed-icon" aria-hidden="true">
         <StudioIcon name="info" />
       </span>
@@ -267,9 +519,11 @@ function FailedTile({ entry, copy, canGenerate, onRetry, badges }: WallProps & B
   );
 }
 
-function ResultTile(props: WallProps & Badges & { entry: Extract<Entry, { type: "result" }>; n: number }) {
-  const { entry, n, copy, locale, canGenerate, canEdit, library, onAction, onNotice, badges } = props;
+function ResultTile(props: WallProps & Badges & Picking & { entry: Extract<Entry, { type: "result" }>; n: number }) {
+  const { entry, n, copy, locale, canGenerate, canEdit, library, onAction, onNotice, badges, select } = props;
   const { output, job } = entry.item;
+  const key = resultKey(output.id);
+  const selected = select.has(key);
   const g = copy.gallery;
   const m = g.menu;
   const id = useId();
@@ -322,6 +576,7 @@ function ResultTile(props: WallProps & Badges & { entry: Extract<Entry, { type: 
       data-job-kind={job.kind}
       data-open={panel ? "" : undefined}
       data-liked={liked ? "" : undefined}
+      data-selected={selected ? "" : undefined}
       style={tileStyle(entry.ratio)}
     >
       <button
@@ -329,7 +584,8 @@ function ResultTile(props: WallProps & Badges & { entry: Extract<Entry, { type: 
         className="bs-tile-open"
         draggable={canEdit}
         onDragStart={(event) => startRefDrag(event, ref)}
-        onClick={open}
+        // While tiles are picked (or with Shift held) a press on the picture picks; otherwise it opens.
+        onClick={(event) => (select.selecting || event.shiftKey ? select.press(key, event.shiftKey) : open())}
         aria-label={fill(copy.board.open, { n })}
       >
         {output.kind === "video" ? (
@@ -342,6 +598,7 @@ function ResultTile(props: WallProps & Badges & { entry: Extract<Entry, { type: 
           <img src={output.thumbUrl ?? output.url} alt="" loading="lazy" decoding="async" draggable={false} />
         )}
       </button>
+      <TileCheck selected={selected} label={fill(g.selectTile, { n })} onPress={(event) => select.press(key, event.shiftKey)} />
       {canGenerate && image ? (
         <button
           type="button"

@@ -200,7 +200,7 @@ describe('1. Left Rail Promotion (편집 스튜디오 + Clear Client Room Labels
   });
 });
 
-describe('2. OpenCanva (캔버스 편집) 1-Click Direct Entry (studio-app.tsx + asset-hub.tsx)', () => {
+describe('2. Layer editor (꾸미기) 1-Click Direct Entry (studio-app.tsx + asset-hub.tsx)', () => {
   it('provides blank canvas presets (4:5, 9:16, 16:9, 1:1), white PNG generator, and direct deep-link builders', () => {
     expect(BLANK_CANVAS_PRESETS.map((p) => `${p.id}:${p.width}x${p.height}`)).toEqual([
       '4:5:1080x1350',
@@ -218,7 +218,7 @@ describe('2. OpenCanva (캔버스 편집) 1-Click Direct Entry (studio-app.tsx +
     expect(videoComposeClipHref(ORG, { outputId: sampleId })).toBe(`/brand/studio/compose?organizationId=${ORG}&clip=o%3A${sampleId}`);
   });
 
-  it('renders 1-click 캔버스 편집 header button and empty-state quick action in Image Studio (and hides on Video / read-only)', () => {
+  it('renders the 1-click 새로 꾸미기 header button and empty-state quick action in Image Studio (and hides on Video / read-only)', () => {
     const emptyImageHtml = renderToStaticMarkup(
       createElement(StudioApp, {
         organizationId: ORG,
@@ -231,7 +231,10 @@ describe('2. OpenCanva (캔버스 편집) 1-Click Direct Entry (studio-app.tsx +
       }),
     );
     expect(emptyImageHtml).toContain('data-studio-open-canvas');
-    expect(emptyImageHtml).toContain('캔버스 편집');
+    // One editor, one name: the entrance on a blank picture says "새로 꾸미기", never "캔버스 편집".
+    expect(emptyImageHtml).toContain(ko.brandStudio.gallery.decorateBlank);
+    expect(ko.brandStudio.gallery.decorateBlank).toBe('새로 꾸미기');
+    expect(emptyImageHtml).not.toContain('캔버스 편집');
     expect(emptyImageHtml).toContain('data-studio-empty-open-canvas');
 
     const videoHtml = renderToStaticMarkup(
@@ -261,7 +264,7 @@ describe('2. OpenCanva (캔버스 편집) 1-Click Direct Entry (studio-app.tsx +
     expect(viewerHtml).not.toContain('data-studio-open-canvas');
   });
 
-  it('renders 캔버스 편집 on image cards, 편집 스튜디오로 on video cards, and 검수 · 공유 in Asset Hub', () => {
+  it('renders 꾸미기 on image cards, 편집 스튜디오로 on video cards, and 검수 · 공유 in Asset Hub', () => {
     const imgAsset = fixtureAsset(1, { kind: 'image', name: 'Packshot.png' });
     const vidAsset = fixtureAsset(2, { kind: 'video', name: 'Teaser.mp4', seconds: 8 });
     const genImg = fixtureOutput(3, { kind: 'image' });
@@ -282,6 +285,8 @@ describe('2. OpenCanva (캔버스 편집) 1-Click Direct Entry (studio-app.tsx +
     );
 
     expect(html).toContain('data-asset-hub-open-canvas');
+    expect(html).toMatch(new RegExp(`data-asset-hub-open-canvas[^>]*>${ko.brandStudio.gallery.menu.decorate}<`));
+    expect(html).not.toContain('캔버스 편집');
     expect(html).toContain(`href="/brand/studio?organizationId=${ORG}&amp;canvas=a%3A${imgAsset.id}"`);
     expect(html).toContain(`href="/brand/studio?organizationId=${ORG}&amp;canvas=o%3A${genImg.id}"`);
     expect(html).toContain('data-asset-hub-open-compose');
