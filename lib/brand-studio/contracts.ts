@@ -269,6 +269,52 @@ export const VideoFinalJobSchema = z.object({
 export const STUDIO_REVISE_MODES = ['edit', 'reshoot'] as const;
 export type StudioReviseMode = (typeof STUDIO_REVISE_MODES)[number];
 
+/** How many spots one revision may point at. */
+export const STUDIO_REVISE_MARKS_MAX = 3;
+
+/**
+ * A spot the customer pointed at on the clip (docs/BRAND-STUDIO-V6-PLAN.md §4.5): a pin (a click) or a
+ * box (a drag) on the frame at `time`, in fractions of the picture (0..1, origin top-left). A pin has
+ * `x`/`y` only (its centre); a box adds `w`/`h` and `x`/`y` are its top-left corner. In the request text
+ * mark n is written ①, ② or ③.
+ */
+const MarkGeometry = {
+  time: z.number().min(0).max(STUDIO_SHOT_LIMITS.secondsMax),
+  x: z.number().min(0).max(1),
+  y: z.number().min(0).max(1),
+  w: z.number().min(0.02).max(1).optional(),
+  h: z.number().min(0.02).max(1).optional(),
+};
+const boxInPicture = (m: { x: number; y: number; w?: number; h?: number }) =>
+  (m.w === undefined) === (m.h === undefined) && (m.w === undefined || (m.x + m.w <= 1.0001 && m.y + m.h! <= 1.0001));
+
+/**
+ * A mark as it travels with a revision. `label` and `what` come from `revise.mark` (what the spot is
+ * on): `label` is the short name the customer saw on the chip, in their language; `what` the precise
+ * description the prompt writer uses instead of the mark. Both are absent when the spot could not be read.
+ */
+export const ReviseMarkSchema = z
+  .object({
+    ...MarkGeometry,
+    label: z.string().trim().min(1).max(60).optional(),
+    what: z.string().trim().min(1).max(240).optional(),
+  })
+  .refine(boxInPicture, { error: 'mark leaves the picture' });
+export type ReviseMark = z.infer<typeof ReviseMarkSchema>;
+
+/**
+ * `revise.mark`: read what one spot is on, without spending anything. `frame` is the frame at `time`
+ * with the mark drawn on it (the browser draws it): a JPEG data URL, long side at most 768 px.
+ */
+export const ReviseMarkReadSchema = z
+  .object({
+    organizationId: Id,
+    outputId: Id,
+    ...MarkGeometry,
+    frame: z.string().max(400_000).regex(/^data:image\/jpeg;base64,[A-Za-z0-9+/=]+$/),
+  })
+  .refine(boxInPicture, { error: 'mark leaves the picture' });
+
 /**
  * A new version of a clip the studio generated. The customer sends only what should change and any
  * pictures added for it; model, size, length, sound and the earlier references come from the clip's own
@@ -286,6 +332,8 @@ export const VideoReviseJobSchema = z.object({
   prompt: z.string().trim().min(1).max(STUDIO_LIMITS.promptMax),
   /** Pictures added for this revision only (images; `frame` is not allowed). */
   references: z.array(StudioReferenceSchema).max(STUDIO_LIMITS.referencesMax - 1).default([]),
+  /** Spots the request points at (①②③ in `prompt`), in order. */
+  marks: z.array(ReviseMarkSchema).max(STUDIO_REVISE_MARKS_MAX).default([]),
 });
 
 export const StudioJobCreateSchema = z.discriminatedUnion('kind', [
@@ -308,6 +356,8 @@ export const RevisePlanSchema = z.object({
   outputId: Id,
   prompt: z.string().trim().max(STUDIO_LIMITS.promptMax).default(''),
   references: z.array(StudioReferenceSchema).max(STUDIO_LIMITS.referencesMax - 1).default([]),
+  /** The spots the request points at, so the fit is judged on what they are on. */
+  marks: z.array(ReviseMarkSchema).max(STUDIO_REVISE_MARKS_MAX).default([]),
 });
 
 /** Why a way is closed. The screen has one short line per code. */
@@ -394,6 +444,7 @@ export const STUDIO_OPERATIONS = [
   'prompt.enhance',
   'film.analyze',
   'revise.plan',
+  'revise.mark',
   'asset.reserve',
   'asset.complete',
   'asset.update',
@@ -500,6 +551,8 @@ export interface StudioJobView {
     baseOutputId: string | null;
     mode: StudioReviseMode;
     added: number;
+    /** The spots this version's request pointed at (①②③ in `prompt`). */
+    marks?: ReviseMark[];
   } | null;
   outputs: StudioOutputView[];
   /** Usage this run is expected to take from the monthly allowance, in KRW. */
@@ -566,6 +619,12 @@ export interface StudioJobsPoll {
 export type StudioJobCreated = { ok: true; job: StudioJobView };
 export type StudioPromptPreview = { ok: true; prompt: string; notes: string };
 export type StudioFilmAnalysis = { ok: true; sheet: FilmSheet | null };
+/**
+ * `revise.mark` answer: what the spot is on. `label` is a short name in the customer's language for the
+ * chip; `what` a precise description for the prompt writer. Both null when it could not be read (the
+ * mark still works, by position).
+ */
+export type StudioReviseMarkRead = { ok: true; label: string | null; what: string | null };
 /** `revise.plan` answer. `reason` is null when no request was sent or it could not be read; `recommended` is then the default way. */
 export interface StudioRevisePlan {
   ok: true;

@@ -85,8 +85,14 @@ describe("retrying a version", () => {
       mode: "reshoot",
       prompt: "카메라를 천천히",
       references: [{ assetId: asset(2).id, role: "product" }],
+      marks: [],
     });
     expect(reviseRerunInput(v2, { organizationId: ORG, requestId: id(0x78) })).toMatchObject({ mode: "edit", references: [] });
+    // The spots the request pointed at go again with it.
+    const marks = [{ time: 1.5, x: 0.2, y: 0.4, label: "병", what: "the bottle" }, { time: 3, x: 0.1, y: 0.1, w: 0.3, h: 0.2 }];
+    const marked = { ...v3, prompt: "① 더 크게, ② 선명하게", revision: rev(3, output(2).id, { marks }) };
+    expect(reviseRerunInput(marked, { organizationId: ORG, requestId: id(0x81) })).toMatchObject({ prompt: "① 더 크게, ② 선명하게", marks });
+    expect(chainOf([marked, v2, v1], marked).map((v) => v.marks)).toEqual([[], [], marks]);
     expect(reviseRerunInput({ ...v3, revision: rev(3, null) }, { organizationId: ORG, requestId: id(0x79) })).toBeNull();
     expect(reviseRerunInput(v1, { organizationId: ORG, requestId: id(0x80) })).toBeNull();
   });

@@ -258,6 +258,7 @@ export function useViewer(input: {
       },
       plan: (body) => studio.planRevision(body),
       create: (body: StudioJobCreate) => studio.createJob(body),
+      readMark: (body) => studio.readMark(body),
     }),
     [organizationId, jobs, assets, lookup, studio, copy.viewer.label],
   );

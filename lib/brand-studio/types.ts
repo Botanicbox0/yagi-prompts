@@ -60,7 +60,13 @@ export interface EnhanceInput {
     sheet?: FilmSheet | null;
   } | null;
   /** A new version of a generated clip (see lib/brand-studio/enhancer/types.ts). */
-  revision?: { mode: 'edit' | 'reshoot'; version: number; madeWith: string; history: string[] } | null;
+  revision?: {
+    mode: 'edit' | 'reshoot';
+    version: number;
+    madeWith: string;
+    history: string[];
+    marks?: Array<{ n: number; time: number; what: string | null; x: number; y: number; w?: number; h?: number; label?: string | null }>;
+  } | null;
 }
 export interface EnhanceResult {
   prompt: string;
@@ -151,7 +157,16 @@ export interface StudioJobParams {
    * `baseJobId` / `baseOutputId` the version this one was made from; `added` how many trailing refs were
    * attached for this version. The request itself is the job's `prompt`.
    */
-  revision?: { rootJobId: string; version: number; baseJobId: string; baseOutputId: string; mode: 'edit' | 'reshoot'; added: number };
+  revision?: {
+    rootJobId: string;
+    version: number;
+    baseJobId: string;
+    baseOutputId: string;
+    mode: 'edit' | 'reshoot';
+    added: number;
+    /** Spots the request points at (①②③ in the prompt), as sent: geometry, the chip label and the description. */
+    marks?: Array<{ time: number; x: number; y: number; w?: number; h?: number; label?: string; what?: string }>;
+  };
 }
 
 /** A provider (or worker) result waiting to be stored, per output slot. */

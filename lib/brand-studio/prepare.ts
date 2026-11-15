@@ -11,6 +11,7 @@ import { imageInfo, sniffMime, thumbnailWebp } from './files';
 import { studioModel, type StudioImageModel, type StudioModel } from './models';
 import { resolveReferences, type ResolvedRef } from './plan';
 import { StudioDenied } from './access';
+import { replaceMarks } from './enhancer/marks';
 import { addedRefsOf, refKey, renumberRequest, revisionChain } from './revision/recipe';
 import type { EnhanceInput, EnhanceResult, JobRow, StudioDeps, StudioJobParams, StudioJobWork } from './types';
 
@@ -292,6 +293,19 @@ export function enhanceInputOf(
  * them ("이미지 1" of a request is the recipe's images + n), so the request and the history are
  * renumbered to the tray here; the job keeps the customer's own words.
  */
+/** A job's stored marks as the prompt writer reads them: numbered from 1 in the order they were sent. */
+export function enhanceMarks(stored: NonNullable<StudioJobParams['revision']>['marks']): NonNullable<NonNullable<EnhanceInput['revision']>['marks']> {
+  return (Array.isArray(stored) ? stored : []).map((m, i) => ({
+    n: i + 1,
+    time: m.time,
+    what: m.what ?? null,
+    x: m.x,
+    y: m.y,
+    ...(m.w !== undefined && m.h !== undefined ? { w: m.w, h: m.h } : {}),
+    label: m.label ?? null,
+  }));
+}
+
 export async function revisionInput(
   deps: Pick<StudioDeps, 'sql'>,
   job: Pick<JobRow, 'organization_id' | 'prompt' | 'params' | 'refs'>,
@@ -306,8 +320,15 @@ export async function revisionInput(
     if (!base) return null;
     const chain = await revisionChain(deps.sql, job.organization_id, base);
     const locale = job.params.locale ?? 'ko';
+    const marks = enhanceMarks(r.marks);
+    // Earlier requests pointed at their own marks: those are written out here, so only this request's
+    // ①②③ reach the prompt writer, with `marks` beside them.
+    const earlier = chain.history.map((h) => ({ ...h, request: replaceMarks(h.request, h.marks ?? []) }));
     if (r.mode === 'edit') {
-      return { revision: { mode: 'edit', version: r.version, madeWith: chain.madeWith, history: chain.history.map((h) => h.request) }, prompt: job.prompt };
+      return {
+        revision: { mode: 'edit', version: r.version, madeWith: chain.madeWith, history: earlier.map((h) => h.request), ...(marks.length ? { marks } : {}) },
+        prompt: job.prompt,
+      };
     }
     const tray = new Map<string, number>();
     let images = 0;
@@ -322,7 +343,8 @@ export async function revisionInput(
         mode: 'reshoot',
         version: r.version,
         madeWith: chain.madeWith,
-        history: chain.history.map((h) => renumberRequest(h.request, h.added, tray, locale)),
+        history: earlier.map((h) => renumberRequest(h.request, h.added, tray, locale)),
+        ...(marks.length ? { marks } : {}),
       },
       prompt: renumberRequest(job.prompt, addedRefsOf(job), tray, locale),
     };
@@ -387,8 +409,10 @@ export async function prepareJob(deps: StudioDeps, job: JobRow): Promise<{ final
   if (!job.enhance) return { finalPrompt: null, work: { ...work, prepared: true } };
   const organization = (await deps.sql.query<{ name: string }>('select name from brand_organizations where id = $1', [job.organization_id])).rows[0];
   const revised = await revisionInput(deps, job, resolved);
+  // Without the clip's history the marks cannot travel as context: their words go into the request.
+  const stillMarked = !revised && job.params?.revision?.marks?.length ? replaceMarks(job.prompt, job.params.revision.marks) : null;
   const input = enhanceInputOf(
-    revised ? { ...job, prompt: revised.prompt } : job,
+    revised ? { ...job, prompt: revised.prompt } : stillMarked !== null ? { ...job, prompt: stillMarked } : job,
     model,
     await enhanceReferences(deps, toEnhance),
     await brandSummary(deps, job.organization_id, organization?.name ?? ''),
