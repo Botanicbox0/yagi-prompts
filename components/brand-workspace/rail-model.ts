@@ -93,8 +93,8 @@ export interface RailVisibility {
 
 /**
  * Default order (§3): 이미지 스튜디오 · 영상 스튜디오 · 편집 스튜디오 · 워크플로우 · 캠페인 · 크리에이터 · 에셋.
- * With rooms (묶음 E, docs/BRAND-PROJECTS-E.md): 이미지 스튜디오 · 영상 스튜디오 · 편집 스튜디오 · 워크플로우 · 에셋 | 프로젝트 · 리뷰 · 대화 · 피드백.
- * For project-only orgs (`studioShowroom` without `studio`), `프로젝트 · 리뷰 · 대화 · 피드백` lead ahead of `에셋 · 스튜디오`.
+ * With rooms (묶음 E, docs/BRAND-PROJECTS-E.md): 이미지 스튜디오 · 영상 스튜디오 · 편집 스튜디오 · 워크플로우 · 에셋 | 프로젝트 · 알림함.
+ * For project-only orgs (`studioShowroom` without `studio`), `프로젝트 · 알림함` lead ahead of `에셋 · 스튜디오`.
  */
 export function railItems(visible: RailVisibility): RailItemId[] {
   const showStudio = Boolean(visible.studio || visible.studioShowroom);
