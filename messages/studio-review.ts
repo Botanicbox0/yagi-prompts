@@ -94,6 +94,7 @@ export const studioReviewEn = {
   spotHint: 'Click the frame to mark the spot, or just write.',
   clearMark: 'Remove the mark',
   momentChip: 'At {time}',
+  dropMoment: 'Remove the time. The note is about the whole film',
   spotChip: 'Spot marked',
   composer: {
     label: 'Your note',
@@ -278,6 +279,7 @@ export const studioReviewKo: typeof studioReviewEn = {
   spotHint: '화면을 누르면 위치가 표시돼요. 바로 적어도 돼요.',
   clearMark: '표시 지우기',
   momentChip: '{time} 장면',
+  dropMoment: '시각을 빼고 영상 전체 의견으로 남겨요',
   spotChip: '위치 표시됨',
   composer: {
     label: '의견',

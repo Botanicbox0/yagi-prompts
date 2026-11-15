@@ -18,6 +18,7 @@
   --brh-surface: var(--ys-surface, #ffffff);
   --brh-canvas: var(--ys-canvas, #ffffff);
   --brh-raised: var(--ys-raised, #f4f4f5);
+  --brh-glass: var(--ys-glass, rgba(255, 255, 255, 0.9));
   --brh-line: var(--ys-line, rgba(0, 0, 0, 0.04));
   --brh-line-strong: var(--ys-line-strong, rgba(0, 0, 0, 0.12));
   --brh-well: none;
@@ -107,11 +108,29 @@
   box-sizing: border-box;
   border: 0;
   border-radius: 24px;
-  background: rgba(255, 255, 255, 0.9);
-  box-shadow: 0 0 0 1px var(--brh-line), 0 28px 64px rgba(16, 18, 24, 0.14);
+  /* The surface and the ink come from the same theme: dark glass with light ink in the workspace and the
+     room, white glass with dark ink in the admin and anywhere without workspace tokens. */
+  background: var(--brh-glass);
+  box-shadow: 0 0 0 1px var(--brh-line-strong), 0 28px 64px rgba(0, 0, 0, 0.24);
   color: var(--brh-ink);
   -webkit-backdrop-filter: blur(24px) saturate(160%);
   backdrop-filter: blur(24px) saturate(160%);
+}
+/* Fields and the result box sit on the glass: a hairline keeps them visible in both themes. */
+.brh-dialog {
+  --brh-well: inset 0 0 0 1px var(--brh-line-strong);
+  --brh-field: var(--ys-input-bg, var(--brh-raised));
+}
+.brh-dialog .brh-field select,
+.brh-dialog .brh-field input {
+  background: var(--brh-field);
+}
+.brh-dialog .brh-made {
+  box-shadow: inset 0 0 0 1px var(--brh-line-strong);
+}
+.brh-dialog .brh-title,
+.brh-dialog .brh-subtitle {
+  color: var(--brh-ink);
 }
 .brh-dialog::backdrop {
   background: rgba(14, 16, 19, 0.28);
