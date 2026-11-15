@@ -363,7 +363,7 @@ export function dockProblem(draft: DockDraft, tray: readonly TrayItem[]): DockPr
 /**
  * One press of "만들기" as a contract request, or the reason it cannot be sent.
  *
- * `ownWords`: the bar holds a sentence "지금 문장 다듬기" wrote (the customer may have edited it) and these
+ * `ownWords`: the bar holds a sentence "지금 설계하기" wrote (the customer may have edited it) and these
  * are the words they typed before it. A plain image or video run then sends their words as `prompt`, the
  * sentence in the bar as `reviewedPrompt` and `enhance: false`, so it is never rewritten twice and the
  * run keeps both. A reference-video run always writes its own sentence (the switch is not offered there).
