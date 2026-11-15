@@ -22,6 +22,7 @@ import {
   type JobRefSchema,
   type OutputRefSchema,
   type PromptPreviewSchema,
+  type RevisePlanSchema,
   type StudioAssetKind,
   type StudioAssetReserved,
   type StudioAssetRole,
@@ -36,6 +37,7 @@ import {
   type StudioJobsPoll,
   type StudioOperation,
   type StudioPromptPreview,
+  type StudioRevisePlan,
   type StudioState,
 } from "@/lib/brand-studio/contracts";
 import { newRequestId } from "./copy";
@@ -48,6 +50,7 @@ export interface StudioOps {
   "job.cancel": [z.input<typeof JobRefSchema>, StudioDone];
   "prompt.enhance": [z.input<typeof PromptPreviewSchema>, StudioPromptPreview];
   "film.analyze": [z.input<typeof FilmAnalyzeSchema>, StudioFilmAnalysis];
+  "revise.plan": [z.input<typeof RevisePlanSchema>, StudioRevisePlan];
   "asset.reserve": [z.input<typeof AssetReserveSchema>, StudioAssetReserved];
   "asset.complete": [z.input<typeof AssetCompleteSchema>, StudioAssetSaved];
   "asset.update": [z.input<typeof AssetUpdateSchema>, StudioAssetSaved];

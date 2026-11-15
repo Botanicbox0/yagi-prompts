@@ -394,6 +394,30 @@ textarea.bs-field { resize: vertical; }
 .bs-strip .bs-thumb { width: 40px; height: 40px; border-radius: 8px; cursor: grab; }
 .bs-strip .bs-thumb[data-taken] { box-shadow: 0 0 0 1.5px var(--ys-ink); }
 .bs-region-actions { position: sticky; bottom: -16px; margin: 0 -16px -16px; padding: 12px 16px 16px; background: linear-gradient(transparent, var(--ys-surface) 30%); }
+/* Versions of a clip in the viewer: one row of small chips, the shown version's request, the next-version form. */
+.bs-revise-versions { display: grid; gap: 6px; }
+.bs-revise-strip { display: flex; flex-wrap: wrap; gap: 4px; }
+.bs-revise-chip { min-height: 28px; padding: 0 10px; font-size: 12px; }
+.bs-revise-chip .bs-icon { width: 12px; height: 12px; }
+.bs-revise-chip[data-state="making"] .bs-icon { animation: bs-pulse 0.9s var(--ys-ease) infinite alternate; }
+.bs-revise-request { margin: 0; font-size: 13px; color: var(--ys-ink-secondary); overflow-wrap: anywhere; }
+.bs-revise { display: grid; gap: 8px; }
+.bs-revise[data-drop-target] { background: var(--ys-panel); box-shadow: 0 0 0 8px var(--ys-panel); border-radius: 14px; }
+.bs-revise .bs-region-ref-list { align-items: center; gap: 8px; }
+.bs-revise-methods { display: grid; gap: 4px; margin: 0; padding: 0; border: 0; }
+.bs-revise-method { position: relative; display: flex; align-items: center; gap: 8px; min-height: 34px; padding: 0 12px; border-radius: var(--ys-r-control); background: var(--ys-panel); color: var(--ys-ink-secondary); font-size: 13px; font-weight: 500; cursor: pointer; transition: background-color 150ms var(--ys-ease), color 150ms var(--ys-ease); }
+.bs-revise-method input { position: absolute; inset: 0; opacity: 0; margin: 0; cursor: pointer; }
+.bs-revise-method:hover:not([data-disabled]) { background: var(--ys-hover); color: var(--ys-ink); }
+.bs-revise-method:has(input:checked) { background: var(--ys-active-bg); color: var(--ys-active-fg); font-weight: 600; }
+.bs-revise-method:has(input:focus-visible) { outline: 2px solid var(--ys-focus); outline-offset: 2px; }
+.bs-revise-method[data-disabled] { opacity: 0.5; cursor: not-allowed; }
+.bs-revise-method[data-disabled] input { cursor: not-allowed; }
+.bs-revise-cost { margin-left: auto; font-family: var(--ys-mono); font-size: 12px; font-variant-numeric: tabular-nums; }
+.bs-revise-problem { padding: 2px 12px 0; }
+.bs-revise-suggestion { display: grid; gap: 6px; font-size: 13px; }
+.bs-revise-suggestion p { margin: 0; color: var(--ys-ink); }
+.bs-revise .bs-submit { justify-self: stretch; }
+.bs-tile[data-state="ready"] .bs-tile-badge[data-revision-badge] { opacity: 1; }
 
 /* Before / after slider: the earlier picture over the result, cut at the line. */
 .bs-viewer { --bs-media-h: calc(100dvh - 48px - 53px - 48px); }
@@ -476,7 +500,7 @@ textarea.bs-field { resize: vertical; }
 
 @media (prefers-reduced-motion: reduce) {
   .bs-btn, .bs-chip, .bs-chip-btn, .bs-select, .bs-door, .bs-example, .bs-thumb, .bs-thumb-x, .bs-tile-btn, .bs-tile-info, .bs-tile-open img, .bs-assets, .bs-tray, .bs-switch-knob, .bs-switch-knob::after, .bs-door-title .bs-icon, .bs-tip-body, .bs-region-form { transition: none; }
-  .bs-skeleton > span, .bs-stage, .bs-film-state, .bs-tile[data-state="pending"], .bs-thumb[data-state="pending"], .bs-enhance-now[aria-busy="true"] .bs-icon, .bs-dock-toast, .bs-menu[data-anchored] { animation: none; }
+  .bs-skeleton > span, .bs-revise-chip .bs-icon, .bs-stage, .bs-film-state, .bs-tile[data-state="pending"], .bs-thumb[data-state="pending"], .bs-enhance-now[aria-busy="true"] .bs-icon, .bs-dock-toast, .bs-menu[data-anchored] { animation: none; }
   /* The polishing glow stays as a still ring. */
   .bs-prompt-wrap[data-enhancing], .bs-prompt-wrap[data-enhancing]::before { animation: none; }
   .bs-btn:active:not(:disabled), .bs-chip:active:not(:disabled), .bs-door:active, .bs-example:active, .bs-thumb:active:not(:disabled), .bs-tile-btn:hover:not(:disabled) { transform: none; }

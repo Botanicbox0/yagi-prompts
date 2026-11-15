@@ -45,6 +45,8 @@ function validInput(operation: StudioOperation, organizationId: string): Record<
       return { organizationId, jobId: id };
     case 'prompt.enhance':
       return { kind: 'image', organizationId, model: 'seedream-5.5', prompt: 'a bottle', aspect: '1:1', resolution: '2K' };
+    case 'revise.plan':
+      return { organizationId, outputId: id, prompt: 'make the bottle blue' };
     case 'film.analyze':
     case 'asset.complete':
     case 'asset.delete':

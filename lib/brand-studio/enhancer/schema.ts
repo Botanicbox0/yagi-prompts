@@ -76,7 +76,9 @@ const EQUIPMENT: ReadonlyArray<[RegExp, string]> = [
 
 function exemptText(input: EnhanceInput): string {
   const refs = input.references.map((r) => `${r.label} ${r.use ?? ''} ${r.avoid ?? ''}`).join(' ');
-  return [input.prompt, input.video?.change ?? '', input.brand?.name ?? '', refs].join('\n');
+  // A revision carries the earlier prompt and requests over: words they already had are not "introduced".
+  const revision = input.revision ? [input.revision.madeWith, ...input.revision.history].join('\n') : '';
+  return [input.prompt, input.video?.change ?? '', input.brand?.name ?? '', refs, revision].join('\n');
 }
 
 function introduces(re: RegExp, text: string, exempt: string): boolean {

@@ -15,7 +15,7 @@ import { bindReferences, mapCustomerMentions, type Binding } from './references'
 import { checkEnhancedPrompt, cleanNotes, ENHANCER_RESPONSE_SCHEMA, EnhancerOutputSchema } from './schema';
 import type { EnhanceDeps, EnhanceInput, EnhanceResult } from './types';
 
-export type { EnhanceDeps, EnhanceInput, EnhanceKind, EnhanceReference, EnhanceResult, EnhanceVideo } from './types';
+export type { EnhanceDeps, EnhanceInput, EnhanceKind, EnhanceReference, EnhanceResult, EnhanceRevision, EnhanceVideo } from './types';
 export { composeFallbackPrompt } from './fallback';
 export {
   findMissingReferences,
@@ -39,6 +39,9 @@ const MODEL_NOTES = {
 
 function payload(input: EnhanceInput, binding: Binding, seconds: number | null, shots: PlannedShot[]) {
   const video = input.video;
+  const revision = input.revision ?? null;
+  // A reshoot's change note is already inside `revision.madeWith`; sending it again would apply it twice.
+  const change = revision?.mode === 'reshoot' ? '' : (video?.change?.trim() ?? '');
   return {
     request: mapCustomerMentions(input.prompt.trim(), binding.bound),
     customerLanguage: input.locale,
@@ -70,7 +73,7 @@ function payload(input: EnhanceInput, binding: Binding, seconds: number | null, 
           audio: video.audio,
           method: video.method ?? null,
           keep: keepPhrase(video.keep) || null,
-          change: video.change?.trim() ? mapCustomerMentions(video.change.trim(), binding.bound) : null,
+          change: change ? mapCustomerMentions(change, binding.bound) : null,
           reference: video.sheet
             ? {
                 seconds: video.sheet.seconds,
@@ -81,6 +84,17 @@ function payload(input: EnhanceInput, binding: Binding, seconds: number | null, 
               }
             : null,
           shots: shots.length ? shots : null,
+        }
+      : null,
+    revision: revision
+      ? {
+          mode: revision.mode,
+          version: revision.version,
+          madeWith: revision.madeWith,
+          // A reshoot's earlier requests are numbered to this run's tray (lib/brand-studio/prepare.ts), so
+          // their picture mentions become tokens like the request's. An edit's stay as written: they
+          // named the pictures of their own run.
+          history: revision.mode === 'reshoot' ? revision.history.map((h) => mapCustomerMentions(h, binding.bound)) : revision.history,
         }
       : null,
   };
@@ -170,7 +184,8 @@ export async function enhancePrompt(input: EnhanceInput, deps: EnhanceDeps): Pro
     if (!parsed.success) return fallback('bad_shape');
     const checked = checkEnhancedPrompt(parsed.data.prompt, effectiveInput, binding);
     if (!checked.ok) return fallback(checked.reason);
-    if (blueprint && !blueprintShape(checked.prompt, seconds, input.video?.keep)) return fallback('blueprint_shape');
+    // A reshoot rewrites the earlier prompt sentence by sentence; its shape is that prompt's, not a fresh blueprint's.
+    if (blueprint && !input.revision && !blueprintShape(checked.prompt, seconds, input.video?.keep)) return fallback('blueprint_shape');
     return {
       prompt: checked.prompt,
       notes: cleanNotes(parsed.data.notes, input.locale, MODEL_NOTES[input.locale]),

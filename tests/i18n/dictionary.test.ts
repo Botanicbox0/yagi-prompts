@@ -105,6 +105,8 @@ describe('dictionary completeness (§3.9)', () => {
       // docs/PLATFORM-2.0.md §17 — "SNS" is the word Korean copy uses too, and the admin queue's empty cell is a dash.
       'social.eyebrow',
       'social.admin.none',
+      // Clip versions read "v3" in both locales, like the version marks in other creative tools.
+      'brandStudio.revise.version',
       // PLATFORM-2.0 §14.1 (2026-10-24): the credit is "by @handle" in Korean too — the local idiom.
       'prompts.byAuthor',
       'prompts.cardAuthor',
