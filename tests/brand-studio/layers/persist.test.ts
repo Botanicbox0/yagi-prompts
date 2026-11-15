@@ -17,6 +17,7 @@ import {
   serializeDraft,
   type StorageLike,
 } from "@/components/brand-studio/layers/persist";
+import { CANVAS_MAX, baseRect, resizeCanvas } from "@/components/brand-studio/layers/canvas";
 
 const ASSET = "0b9f1c7e-1d2a-4c55-9a3e-7f1e2d3c4b5a";
 const BASE = "o:5a4b3c2d-1e0f-4a9b-8c7d-6e5f4a3b2c1d";
@@ -149,5 +150,51 @@ describe("draft storage", () => {
     expect(loadRecentColors(storage)).toEqual(["#AABBCC"]);
     storage.setItem("twings_studio_layers_colors_v1", "{");
     expect(loadRecentColors(storage)).toEqual([]);
+  });
+});
+
+describe("drafts with a resized canvas", () => {
+  /** The 1200 × 1500 picture on a 1600 × 1500 canvas, at (400, 0). */
+  const grown = () => resizeCanvas(sample(), { width: 1600, height: 1500 }, { x: 1, y: 0 });
+
+  it("round-trips the canvas size and where the picture sits", () => {
+    const doc = grown();
+    const raw = serializeDraft(doc, BASE);
+    expect(JSON.parse(raw)).toMatchObject({ width: 1600, height: 1500, picture: { x: 400, y: 0, w: 1200, h: 1500 } });
+    expect(parseDraft(raw, expected)).toEqual(doc);
+  });
+
+  it("reads an old draft without base as the picture covering the canvas", () => {
+    const raw = serializeDraft(sample(), BASE);
+    expect(JSON.parse(raw)).not.toHaveProperty("picture");
+    const back = parseDraft(raw, expected)!;
+    expect(back.base).toBeUndefined();
+    expect([back.width, back.height]).toEqual([1200, 1500]);
+  });
+
+  it("scales the canvas and the picture's offset when the picture comes back at another size", () => {
+    const doc = grown();
+    const back = parseDraft(serializeDraft(doc, BASE), { ...expected, width: 600, height: 750 })!;
+    expect([back.width, back.height]).toEqual([800, 750]);
+    expect(baseRect(back)).toEqual({ x: 200, y: 0, w: 600, h: 750 });
+    expect(back.layers[0]!.x).toBeCloseTo(doc.layers[0]!.x / 2);
+  });
+
+  it("rejects a broken base or a canvas outside the limits", () => {
+    const raw = JSON.parse(serializeDraft(grown(), BASE)) as Record<string, unknown>;
+    const withBase = (picture: unknown, extra: Record<string, unknown> = {}) => JSON.stringify({ ...raw, picture, ...extra });
+    expect(parseDraft(withBase({ x: "1", y: 0, w: 1200, h: 1500 }), expected)).toBeNull();
+    expect(parseDraft(withBase({ x: 0, y: 0, w: 0, h: 1500 }), expected)).toBeNull();
+    expect(parseDraft(withBase("nope"), expected)).toBeNull();
+    expect(parseDraft(withBase({ x: 0, y: 0, w: 1200, h: 1500 }, { width: CANVAS_MAX + 1 }), expected)).toBeNull();
+    expect(parseDraft(withBase({ x: 0, y: 0, w: 1200, h: 1500 }, { height: 10 }), expected)).toBeNull();
+    expect(parseDraft(withBase({ x: 0, y: 0, w: 1200, h: 1500 }, { width: Number.NaN }), expected)).toBeNull();
+  });
+
+  it("keeps a draft whose only change is the canvas", () => {
+    const storage = memoryStorage();
+    const doc = resizeCanvas(emptyDoc(1200, 1500), { width: 1500, height: 1500 }, { x: 0.5, y: 0.5 });
+    expect(saveDraft(storage, BASE, doc)).toBe(true);
+    expect(loadDraft(storage, expected)).toEqual(doc);
   });
 });

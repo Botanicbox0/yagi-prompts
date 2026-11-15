@@ -31,9 +31,12 @@ import { STUDIO_UPLOAD_MIMES, type RegionBox, type StudioAssetView } from "@/lib
 import type { Dictionary } from "@/lib/i18n/dictionaries";
 import { useModal } from "../modal";
 import { trayItemFromAsset, type RefSource, type TrayItem } from "../refs";
+import { qualityOf, regionCredits } from "../dock-model";
 import { nudgeBox } from "../region-math";
 import { libraryKey, type LayerEditorProps, type LibraryItemView } from "../seams";
-import { browserRenderDeps, loadMaskAsDataUrl, measurerFor, naturalSize, waitForLayerFonts, warmFonts } from "./browser";
+import { browserRenderDeps, createCanvas, loadImage, loadMaskAsDataUrl, measurerFor, naturalSize, waitForLayerFonts, warmFonts } from "./browser";
+import { canvasForRatio, holdPictureView, isCanvasResized, pictureBoxToWorld, resetCanvas, resizeCanvas, baseRect, type CanvasRatio } from "./canvas";
+import { CanvasSizeControl } from "./canvas-control";
 import { pushRecent } from "./colors";
 import {
   EXPORT_STEPS,
@@ -41,12 +44,14 @@ import {
   planCropExport,
   planExport,
   planMergeDown,
+  renderFillSource,
   renderPlan,
   type ExportStep,
   type RenderResult,
 } from "./export";
+import { fillInstruction, fillSentOf, fillStrips, placeFillPatch, type FillSent } from "./fill";
 import { ZOOM_STEP, fitView, nudgeDelta, zoomCentered, type Insets, type Point, type View } from "./geometry";
-import { canRedo, canUndo, commit, createHistory, preview, redo, settle, undo, type History } from "./history";
+import { canRedo, canUndo, commit, createHistory, preview, redo, revert, settle, undo, type History } from "./history";
 import { LayerIcon, type LayerIconName } from "./icons";
 import {
   BRUSH_HARDNESS_MAX,
@@ -159,9 +164,19 @@ interface TrackedRegionJob {
   jobId: string;
   autoFlatten: boolean;
   box: RegionBox;
+  /** "빈 곳 채우기": the box is in fractions of the canvas as it was sent, not of the picture. */
+  fill?: FillSent;
 }
 
-export default function LayerEditor(props: LayerEditorProps & { copy: Dictionary["studioLayers"] }) {
+export default function LayerEditor(
+  props: LayerEditorProps & {
+    copy: Dictionary["studioLayers"];
+    /** Tests only: opens with the size panel open. */
+    initialCanvasOpen?: boolean;
+    /** Tests only: starts from this document instead of a draft. */
+    initialDoc?: LayerDoc;
+  },
+) {
   const { base, copy } = props;
   const baseKey = libraryKey(base.ref);
   const storage = useMemo(() => browserStorage(), []);
@@ -178,8 +193,8 @@ export default function LayerEditor(props: LayerEditorProps & { copy: Dictionary
   const hintId = useId();
 
   const [initial] = useState(() => {
-    const restored = loadDraft(storage, { baseKey, width: base.width, height: base.height });
-    let doc = restored ? refreshUrls(restored, props.assets) : emptyDoc(base.width, base.height);
+    const restored = props.initialDoc ? null : loadDraft(storage, { baseKey, width: base.width, height: base.height });
+    let doc = props.initialDoc ?? (restored ? refreshUrls(restored, props.assets) : emptyDoc(base.width, base.height));
     let initialSelected: string | null = null;
     if (props.initialPatch) {
       const existing = doc.layers.find(
@@ -188,11 +203,14 @@ export default function LayerEditor(props: LayerEditorProps & { copy: Dictionary
       if (existing) {
         initialSelected = existing.id;
       } else {
+        // The patch box is in picture pixels; a restored draft may have the picture elsewhere on its canvas.
+        const at = baseRect(doc);
+        const box = props.initialPatch.box;
         const patchLayer = createPatchLayer(doc, {
           id: props.initialPatch.id,
           url: props.initialPatch.url,
           ref: props.initialPatch.ref ?? null,
-          box: props.initialPatch.box,
+          box: { x: box.x + at.x, y: box.y + at.y, w: box.w, h: box.h },
           name: props.initialPatch.name ?? nextName(doc, copy.names.regionPatch),
           maskDataUrl: props.initialPatch.maskUrl,
         });
@@ -237,8 +255,15 @@ export default function LayerEditor(props: LayerEditorProps & { copy: Dictionary
   const [exportError, setExportError] = useState<string | null>(null);
   const [confirming, setConfirming] = useState(false);
   const [sheet, setSheet] = useState<Sheet | null>(props.initialTool === "marquee" && props.region ? "region" : null);
+  // The size panel; while it is open the stage shows canvas handles. Never on a blank canvas.
+  const canResizeCanvas = !props.blankCanvas;
+  const [canvasOpen, setCanvasOpen] = useState(Boolean(props.initialCanvasOpen) && canResizeCanvas);
+  // "빈 곳 채우기": busy while the picture is drawn, uploaded and sent; and the partial edit's error line.
+  const [filling, setFilling] = useState(false);
+  const [fillError, setFillError] = useState<string | null>(null);
 
   const say = useCallback((message: string) => setNotice(message), []);
+  const onRevert = useCallback((start: LayerDoc) => setHistory((h) => revert(h, start)), []);
   useEffect(() => {
     if (!notice) return;
     const t = window.setTimeout(() => setNotice(null), NOTICE_MS);
@@ -328,12 +353,17 @@ export default function LayerEditor(props: LayerEditorProps & { copy: Dictionary
     };
   }, []);
 
-  const fit = useCallback(() => {
-    const el = stageRef.current;
-    if (!el) return;
-    const phone = window.matchMedia("(max-width: 720px)").matches;
-    setView(fitView({ width: el.clientWidth, height: el.clientHeight }, { width: base.width, height: base.height }, insets(), phone ? 12 : 28, 2));
-  }, [base.width, base.height, insets]);
+  /** Fits the canvas (or `size`, a canvas about to be shown) into the free part of the stage. */
+  const fit = useCallback(
+    (size?: { width: number; height: number }) => {
+      const el = stageRef.current;
+      if (!el) return;
+      const phone = window.matchMedia("(max-width: 720px)").matches;
+      const canvas = size ?? { width: historyRef.current.present.width, height: historyRef.current.present.height };
+      setView(fitView({ width: el.clientWidth, height: el.clientHeight }, canvas, insets(), phone ? 12 : 28, 2));
+    },
+    [insets],
+  );
 
   useEffect(() => {
     fit();
@@ -417,14 +447,18 @@ export default function LayerEditor(props: LayerEditorProps & { copy: Dictionary
     }
   }, [doc, startEdit]);
 
-  const doUndo = () => {
+  /** Undo or redo; when it changes where the picture sits on the canvas, the picture stays put on screen. */
+  const moveHistory = (move: (h: History<LayerDoc>) => History<LayerDoc>) => {
     if (editingId) stopEdit();
-    setHistory(undo);
+    const before = historyRef.current;
+    const after = move(before);
+    if (after === before) return;
+    historyRef.current = after;
+    setHistory(after);
+    setView((v) => holdPictureView(v, before.present, after.present));
   };
-  const doRedo = () => {
-    if (editingId) stopEdit();
-    setHistory(redo);
-  };
+  const doUndo = () => moveHistory(undo);
+  const doRedo = () => moveHistory(redo);
 
   /* --------------------------------------------------- non-blocking region jobs */
 
@@ -454,6 +488,29 @@ export default function LayerEditor(props: LayerEditorProps & { copy: Dictionary
       if (job.status !== "succeeded") continue;
 
       const output = job.outputs.find((o) => o.kind === "image");
+      const sent = entry.fill;
+      if (sent) {
+        if (!output) continue;
+        void (async () => {
+          const rp = output.regionPatch;
+          const maskDataUrl = rp?.maskUrl ? await loadMaskAsDataUrl(rp.maskUrl) : null;
+          const canvasBox = rp ? { x: rp.x, y: rp.y, w: rp.w, h: rp.h } : entry.box;
+          edit((d) => {
+            if (d.layers.length >= MAX_LAYERS) return d;
+            const layer = createPatchLayer(d, {
+              url: rp?.url ?? output.url,
+              ref: { outputId: output.id },
+              // Fractions of the canvas as it was sent, kept where it belongs relative to the picture now.
+              box: placeFillPatch(d, sent, canvasBox),
+              name: nextName(d, copy.names.regionPatch),
+              maskDataUrl,
+            });
+            return addLayer(d, layer);
+          });
+          say(copy.canvas.fillDone);
+        })();
+        continue;
+      }
       if (entry.autoFlatten || !output) {
         say(copy.region.autoFlattenedDone);
         continue;
@@ -463,12 +520,6 @@ export default function LayerEditor(props: LayerEditorProps & { copy: Dictionary
         const rp = output.regionPatch;
         const maskDataUrl = rp?.maskUrl ? await loadMaskAsDataUrl(rp.maskUrl) : null;
         const normBox = rp ? { x: rp.x, y: rp.y, w: rp.w, h: rp.h } : entry.box;
-        const pxBox = {
-          x: normBox.x * base.width,
-          y: normBox.y * base.height,
-          w: normBox.w * base.width,
-          h: normBox.h * base.height,
-        };
         const patchUrl = rp?.url ?? output.url;
         const newId = newLayerId();
         edit((d) => {
@@ -477,7 +528,8 @@ export default function LayerEditor(props: LayerEditorProps & { copy: Dictionary
             id: newId,
             url: patchUrl,
             ref: { outputId: output.id },
-            box: pxBox,
+            // Fractions of the picture, placed wherever the picture sits on the canvas now.
+            box: pictureBoxToWorld(d, normBox),
             name: nextName(d, copy.names.regionPatch),
             maskDataUrl,
           });
@@ -489,7 +541,7 @@ export default function LayerEditor(props: LayerEditorProps & { copy: Dictionary
         say(copy.region.patchArrived);
       })();
     }
-  }, [pendingRegionJobs, props.region, base.width, base.height, copy.names.regionPatch, copy.region, edit, say]);
+  }, [pendingRegionJobs, props.region, copy.names.regionPatch, copy.region, copy.canvas.fillDone, edit, say]);
 
   /* ------------------------------------------------------------------- adding */
 
@@ -792,14 +844,99 @@ export default function LayerEditor(props: LayerEditorProps & { copy: Dictionary
       return next;
     });
   const reset = () => {
-    if (!historyRef.current.present.layers.length && !historyRef.current.present.baseHidden) return;
+    const current = historyRef.current.present;
+    if (!current.layers.length && !current.baseHidden && !isCanvasResized(current)) return;
     if (editingId) {
       editStartRef.current = null;
       setEditingId(null);
     }
-    edit((d) => ({ v: d.v, width: d.width, height: d.height, layers: [] }));
+    const cleared = resetCanvas({ v: current.v, width: current.width, height: current.height, layers: [], ...(current.base ? { base: current.base } : {}) });
+    setHistory((h) => commit(h, cleared));
     setSelectedId(null);
+    if (cleared.width !== current.width || cleared.height !== current.height) refitTo(cleared);
     say(copy.resetDone);
+  };
+
+  /* ------------------------------------------------------------------- canvas */
+
+  const refitTo = (next: LayerDoc) => {
+    autoFitRef.current = true;
+    fit({ width: next.width, height: next.height });
+  };
+  /** A preset, a typed size or the way back: one undo step, then the view fits the new canvas. */
+  const changeCanvas = (fn: (d: LayerDoc) => LayerDoc) => {
+    const current = historyRef.current.present;
+    const next = fn(current);
+    if (next === current) return;
+    setHistory((h) => commit(h, next));
+    refitTo(next);
+  };
+  /* --------------------------------------------------------- fill empty area */
+
+  const region = props.region ?? null;
+  const fillOffered = Boolean(props.fillEmpty && region && !props.blankCanvas);
+
+  /** One partial edit per strip on a picture of the whole canvas (fill.ts); finished strips arrive as layers. */
+  const fillEmptyArea = async () => {
+    if (!region || filling) return;
+    const sentDoc = historyRef.current.present;
+    const strips = fillStrips(sentDoc);
+    if (!strips.length) return;
+    const quality = qualityOf(region.models.find((m) => m.id === region.defaultModel) ?? null, region.defaultQuality);
+    setFillError(null);
+    setFilling(true);
+    try {
+      const rendered = await renderFillSource(sentDoc, base.url, { loadImage, createCanvas });
+      if (!rendered.ok) {
+        setFillError(region.errorText(null));
+        return;
+      }
+      const name = exportFileName(base.name ?? copy.export.fallbackName, copy.canvas.fillFileSuffix, rendered.mime);
+      const uploaded = await props.upload(new File([rendered.blob], name, { type: rendered.mime }));
+      if (!uploaded.ok) {
+        setFillError(region.errorText(uploaded.code));
+        return;
+      }
+      const sent = fillSentOf(sentDoc);
+      const results = await Promise.all(
+        strips.map(async (strip) => ({
+          strip,
+          res: await region.submit({
+            source: { assetId: uploaded.asset.id },
+            box: strip.box,
+            instruction: fillInstruction(strip.side),
+            model: region.defaultModel,
+            quality,
+            references: [],
+            enhance: false,
+            sourceSize: { width: sent.width, height: sent.height },
+          }),
+        })),
+      );
+      const started: TrackedRegionJob[] = [];
+      let failedLine: string | null = null;
+      for (const { strip, res } of results) {
+        if (res.ok) started.push({ jobId: res.job.id, autoFlatten: false, box: strip.box, fill: sent });
+        else failedLine ??= res.message;
+      }
+      if (started.length) {
+        setPendingRegionJobs((cur) => [...cur, ...started]);
+        say(copy.canvas.fillSent);
+      }
+      if (failedLine) setFillError(failedLine);
+    } catch {
+      setFillError(region.errorText(null));
+    } finally {
+      setFilling(false);
+    }
+  };
+
+  const openCanvas = (open: boolean) => {
+    if (open) {
+      if (editingId) stopEdit();
+      setSelectedId(null);
+    }
+    setCanvasOpen(open);
   };
 
   /* -------------------------------------------------------------------- draft */
@@ -818,9 +955,17 @@ export default function LayerEditor(props: LayerEditorProps & { copy: Dictionary
 
   /* -------------------------------------------------------------------- close */
 
-  const dirty = () =>
-    JSON.stringify(historyRef.current.present.layers) !== JSON.stringify(savedRef.current.layers) ||
-    Boolean(historyRef.current.present.baseHidden) !== Boolean(savedRef.current.baseHidden);
+  const dirty = () => {
+    const now = historyRef.current.present;
+    const saved = savedRef.current;
+    return (
+      JSON.stringify(now.layers) !== JSON.stringify(saved.layers) ||
+      Boolean(now.baseHidden) !== Boolean(saved.baseHidden) ||
+      now.width !== saved.width ||
+      now.height !== saved.height ||
+      JSON.stringify(baseRect(now)) !== JSON.stringify(baseRect(saved))
+    );
+  };
 
   const finishClose = (mode: "keep" | "discard") => {
     if (mode === "discard") {
@@ -843,6 +988,7 @@ export default function LayerEditor(props: LayerEditorProps & { copy: Dictionary
     if (confirming) return setConfirming(false);
     if (step) return;
     if (editingId) return stopEdit();
+    if (canvasOpen) return setCanvasOpen(false);
     if (sheet) return setSheet(null);
     if (regionBox) return setRegionBox(null);
     if (selectedId) return setSelectedId(null);
@@ -1032,6 +1178,8 @@ export default function LayerEditor(props: LayerEditorProps & { copy: Dictionary
           onEditText={(id) => (id ? startEdit(id) : stopEdit())}
           onPreview={(next) => setHistory((h) => preview(h, next))}
           onSettle={(start) => setHistory((h) => settle(h, start))}
+          canvasMode={canvasOpen}
+          onRevert={onRevert}
           onTextInput={(id, text) => setHistory((h) => preview(h, updateLayer(h.present, id, { text })))}
           onImageError={(url) => setFailed((f) => (f.has(url) ? f : new Set([...f, url])))}
           onDropRef={(ref, at) => {
@@ -1046,13 +1194,36 @@ export default function LayerEditor(props: LayerEditorProps & { copy: Dictionary
           {copy.stage.hint}
         </p>
 
-        <div className="bsl-top" ref={topRef}>
+        <div className="bsl-top" ref={topRef} data-canvas-open={canvasOpen || undefined}>
           <IconButton icon="close" label={copy.close} onClick={requestClose} data="close" />
           <h2 id={titleId} className="bsl-title">
             {tool === "marquee" ? copy.regionModeTitle : copy.title}
             {base.name && <span className="bsl-title-name">{base.name}</span>}
           </h2>
           <span className="bsl-spacer" />
+          {canResizeCanvas && (
+            <CanvasSizeControl
+              copy={copy}
+              doc={doc}
+              open={canvasOpen}
+              onOpenChange={openCanvas}
+              onRatio={(ratio: CanvasRatio) => changeCanvas((d) => canvasForRatio(d, ratio))}
+              onSize={(size) => changeCanvas((d) => resizeCanvas(d, size, { x: 0.5, y: 0.5 }))}
+              onReset={() => changeCanvas(resetCanvas)}
+              fill={
+                fillOffered && region
+                  ? {
+                      creditsPerStrip: regionCredits(region.defaultModel, 0, region.defaultQuality),
+                      locale: props.locale,
+                      // Also while the strips are being made: a second press would pay for the same fill twice.
+                      busy: filling || pendingRegionJobs.some((job) => job.fill),
+                      error: fillError,
+                      onFill: () => void fillEmptyArea(),
+                    }
+                  : null
+              }
+            />
+          )}
           <div className="bsl-cluster" role="group" aria-label={`${copy.undo} · ${copy.redo}`}>
             <IconButton icon="undo" label={copy.undo} disabled={!canUndo(history)} onClick={doUndo} data="undo" />
             <IconButton icon="redo" label={copy.redo} disabled={!canRedo(history)} onClick={doRedo} data="redo" />
@@ -1071,7 +1242,7 @@ export default function LayerEditor(props: LayerEditorProps & { copy: Dictionary
             data-variant="ghost"
             data-size="sm"
             onClick={reset}
-            disabled={!doc.layers.length && !doc.baseHidden}
+            disabled={!doc.layers.length && !doc.baseHidden && !isCanvasResized(doc)}
             data-action="reset"
           >
             <LayerIcon name="reset" />

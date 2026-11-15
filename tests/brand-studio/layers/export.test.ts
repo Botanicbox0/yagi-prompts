@@ -5,7 +5,9 @@ import {
   drawPlan,
   exportFileName,
   imageSources,
+  planCropExport,
   planExport,
+  planMergeDown,
   renderPlan,
   shapeGeometry,
   type CanvasLike,
@@ -14,6 +16,7 @@ import {
 } from "@/components/brand-studio/layers/export";
 import { addLayer, createImageLayer, createShapeLayer, createTextLayer, emptyDoc, updateLayer, type LayerDoc } from "@/components/brand-studio/layers/model";
 import { graphemes } from "@/components/brand-studio/layers/text-layout";
+import { resizeCanvas } from "@/components/brand-studio/layers/canvas";
 
 const mono = () => (text: string) => graphemes(text).length * 10;
 const base = { url: "/api/brand-studio/media/st/base.png", width: 1000, height: 800, name: "바탕 이미지" };
@@ -206,5 +209,65 @@ describe("file name", () => {
     expect(exportFileName(null, "design")).toBe("twings-design.png");
     expect(exportFileName("   ", "design", "image/webp")).toBe("twings-design.webp");
     expect(exportFileName("x".repeat(200), "design").length).toBeLessThanOrEqual(60 + "-design.png".length);
+  });
+});
+
+describe("export on a resized canvas", () => {
+  /** The 1000 × 800 picture on a 1200 × 1000 canvas, at (100, 200). */
+  const grown = () => resizeCanvas(sample(), { width: 1200, height: 1000 }, { x: 0.5, y: 1 });
+
+  it("draws the picture where it sits and returns the canvas size", () => {
+    const doc = grown();
+    const plan = planExport(doc, base, mono);
+    expect([plan.width, plan.height]).toEqual([1200, 1000]);
+    expect(plan.ops[0]).toMatchObject({ layerId: BASE_OP_ID, frame: { x: 100, y: 200, w: 1000, h: 800, rotation: 0 } });
+    const box = plan.ops.find((o) => o.layerId === "box")!;
+    const before = planExport(sample(), base, mono).ops.find((o) => o.layerId === "box")!;
+    expect(box.frame.x - before.frame.x).toBe(100);
+    expect(box.frame.y - before.frame.y).toBe(200);
+  });
+
+  it("crops the picture on a canvas smaller than it", () => {
+    const doc = resizeCanvas(sample(), { width: 600, height: 400 }, { x: 0.5, y: 0.5 });
+    const plan = planExport(doc, base, mono);
+    expect([plan.width, plan.height]).toEqual([600, 400]);
+    expect(plan.ops[0]!.frame).toMatchObject({ x: -200, y: -200, w: 1000, h: 800 });
+  });
+
+  it("reads a crop box as fractions of the picture, wherever it sits", () => {
+    const doc = grown();
+    const { plan, box } = planCropExport(doc, base, { x: 0.25, y: 0.25, w: 0.5, h: 0.5 }, mono);
+    expect(box).toEqual({ x: 350, y: 400, w: 500, h: 400 });
+    expect([plan.width, plan.height]).toEqual([500, 400]);
+    expect(plan.ops[0]!.frame).toMatchObject({ x: -250, y: -200, w: 1000, h: 800 });
+    // Unresized: the same box in the old numbers.
+    const plain = planCropExport(sample(), base, { x: 0.25, y: 0.25, w: 0.5, h: 0.5 }, mono);
+    expect(plain.box).toEqual({ x: 250, y: 200, w: 500, h: 400 });
+    expect(plain.plan.ops[0]!.frame).toMatchObject({ x: -250, y: -200, w: 1000, h: 800 });
+  });
+
+  it("keeps a crop inside the picture", () => {
+    const { box } = planCropExport(grown(), base, { x: 0.9, y: 0.9, w: 0.5, h: 0.5 }, mono);
+    expect(box.x + box.w).toBe(1100);
+    expect(box.y + box.h).toBe(1000);
+  });
+
+  it("bakes the bottom layer against the canvas, with the picture at its offset", () => {
+    let doc = resizeCanvas(emptyDoc(1000, 800), { width: 1200, height: 1000 }, { x: 0.5, y: 1 });
+    doc = addLayer(doc, { ...createShapeLayer(doc, { shape: "rect", name: "판", id: "sq" }), x: 50, y: 100, w: 200, h: 300, rotation: 0 });
+    const planned = planMergeDown(doc, "sq", base, mono)!;
+    expect(planned.box).toEqual({ x: 50, y: 100, w: 200, h: 300 });
+    expect(planned.plan.ops[0]).toMatchObject({ layerId: BASE_OP_ID, frame: { x: 50, y: 100, w: 1000, h: 800 } });
+    // A layer hanging off the canvas is cut at the canvas edge.
+    const off = addLayer({ ...doc, layers: [] }, { ...createShapeLayer(doc, { shape: "rect", name: "판", id: "edge" }), x: 1100, y: 900, w: 300, h: 300, rotation: 0 });
+    expect(planMergeDown(off, "edge", base, mono)!.box).toEqual({ x: 1100, y: 900, w: 100, h: 100 });
+  });
+
+  it("bakes against a canvas smaller than the picture", () => {
+    let doc = resizeCanvas(emptyDoc(1000, 800), { width: 600, height: 400 }, { x: 0, y: 0 });
+    doc = addLayer(doc, { ...createShapeLayer(doc, { shape: "rect", name: "판", id: "sq" }), x: 500, y: 300, w: 300, h: 300, rotation: 0 });
+    const planned = planMergeDown(doc, "sq", base, mono)!;
+    expect(planned.box).toEqual({ x: 500, y: 300, w: 100, h: 100 });
+    expect(planned.plan.ops[0]!.frame).toMatchObject({ x: -500, y: -300, w: 1000, h: 800 });
   });
 });

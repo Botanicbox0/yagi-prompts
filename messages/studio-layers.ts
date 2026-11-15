@@ -19,6 +19,20 @@ export const studioLayersEn = {
   restored: "Picked up where you left off.",
   resetDone: "Started over. Undo brings it back.",
 
+  canvas: {
+    size: "Size",
+    ratio: "Ratio",
+    width: "Width",
+    height: "Height",
+    reset: "Back to picture size",
+    fill: "Fill empty area",
+    fillCta: "{label} · {credits} credits",
+    fillSent: "Filling the empty area.",
+    fillDone: "Filled the empty area.",
+    /** The picture sent for filling is stored in the library as "<name>-<suffix>.png". */
+    fillFileSuffix: "fill",
+  },
+
   tools: {
     label: "Editing tools",
     move: "Move",
@@ -262,6 +276,19 @@ export const studioLayersKo: typeof studioLayersEn = {
   save: "저장하기",
   restored: "지난번 편집을 불러왔어요.",
   resetDone: "처음부터 시작해요. 실행 취소를 누르면 되돌아가요.",
+
+  canvas: {
+    size: "크기",
+    ratio: "비율",
+    width: "가로",
+    height: "세로",
+    reset: "이미지 크기로",
+    fill: "여백 채우기",
+    fillCta: "{label} · {credits} 크레딧",
+    fillSent: "여백을 채우는 중이에요.",
+    fillDone: "여백을 채웠어요.",
+    fillFileSuffix: "여백채우기",
+  },
 
   tools: {
     label: "편집 도구",

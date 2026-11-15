@@ -156,6 +156,8 @@ export interface LayerEditorRegionSupport {
     quality: string;
     references: TrayItem[];
     enhance: boolean;
+    /** The sent picture's size when it is not `base` ("빈 곳 채우기" sends the whole canvas). */
+    sourceSize?: { width: number; height: number };
   }): Promise<{ ok: true; job: StudioJobView } | { ok: false; message: string }>;
   enhancePrompt(request: {
     source: RefSource;
@@ -180,6 +182,10 @@ export interface LayerEditorProps {
   initialPatch?: LayerEditorInitialPatch | null;
   initialRegionPreset?: LayerEditorRegionPreset | null;
   region?: LayerEditorRegionSupport | null;
+  /** The base is a generated white picture ("새로 꾸미기"): its size is the canvas, so no canvas resizing. */
+  blankCanvas?: boolean;
+  /** The server allows "빈 곳 채우기" (`StudioState.canFillEmpty`, flag `BRAND_STUDIO_OUTPAINT`). Off when absent. */
+  fillEmpty?: boolean;
   /** Stores the exported PNG as a new asset. */
   upload(file: File): Promise<{ ok: true; asset: StudioAssetView } | StudioFailure>;
   onSaved(asset: StudioAssetView): void;

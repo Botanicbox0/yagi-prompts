@@ -4,6 +4,7 @@
  * their bytes, and anything that fails validation is dropped on the way back in.
  */
 import type { RefSource } from "../refs";
+import { CANVAS_MAX, CANVAS_MIN, isCanvasResized } from "./canvas";
 import {
   FONTS,
   LAYER_DOC_VERSION,
@@ -11,6 +12,7 @@ import {
   NAME_MAX,
   TEXT_MAX,
   finite,
+  type Box,
   normalizeLayer,
   type FontId,
   type Layer,
@@ -34,8 +36,11 @@ export const draftKey = (baseKey: string) => `${DRAFT_PREFIX}${baseKey}`;
 interface StoredDraft {
   v: typeof LAYER_DOC_VERSION;
   base: string;
+  /** The canvas. */
   width: number;
   height: number;
+  /** Where the picture sits (absent: it covers the canvas; drafts from before the canvas could change). */
+  picture?: Box;
   savedAt: number;
   layers: Layer[];
   baseHidden?: boolean;
@@ -47,6 +52,7 @@ export function serializeDraft(doc: LayerDoc, baseKey: string, now = Date.now())
     base: baseKey,
     width: doc.width,
     height: doc.height,
+    ...(doc.base ? { picture: doc.base } : {}),
     savedAt: now,
     layers: doc.layers,
     ...(doc.baseHidden ? { baseHidden: true } : {}),
@@ -155,7 +161,22 @@ export function sanitizeLayer(raw: unknown): Layer | null {
   return null;
 }
 
-/** A stored draft back into a document for this base, or null (wrong version, other picture, broken). */
+/** A stored picture rectangle: four finite numbers with a positive size, or null. */
+function storedPicture(value: unknown): Box | null {
+  if (!value || typeof value !== "object") return null;
+  const r = value as Record<string, unknown>;
+  const ok = (n: unknown): n is number => typeof n === "number" && Number.isFinite(n);
+  if (!ok(r.x) || !ok(r.y) || !ok(r.w) || !ok(r.h) || r.w <= 0 || r.h <= 0) return null;
+  return { x: r.x, y: r.y, w: r.w, h: r.h };
+}
+
+const inCanvasLimits = (n: number) => n >= CANVAS_MIN && n <= CANVAS_MAX;
+
+/**
+ * A stored draft back into a document for this base, or null (wrong version, other picture, broken).
+ * `expected` is the picture's stored size; a resized canvas comes back with it, scaled like the layers
+ * when the picture is now stored at another size.
+ */
 export function parseDraft(raw: string | null, expected: { baseKey: string; width: number; height: number }): LayerDoc | null {
   if (!raw) return null;
   let value: unknown;
@@ -170,6 +191,11 @@ export function parseDraft(raw: string | null, expected: { baseKey: string; widt
   const width = finite(v.width, 0);
   const height = finite(v.height, 0);
   if (width <= 0 || height <= 0) return null;
+  let picture: Box | null = null;
+  if (v.picture !== undefined) {
+    picture = storedPicture(v.picture);
+    if (!picture || !inCanvasLimits(width) || !inCanvasLimits(height)) return null;
+  }
   const seen = new Set<string>();
   let layers: Layer[] = [];
   for (const item of v.layers.slice(0, MAX_LAYERS)) {
@@ -179,19 +205,27 @@ export function parseDraft(raw: string | null, expected: { baseKey: string; widt
       layers.push(layer);
     }
   }
-  // The same picture stored at another size: scale the layers with it.
-  if (Math.abs(width - expected.width) > 0.5 || Math.abs(height - expected.height) > 0.5) {
-    const sx = expected.width / width;
-    const sy = expected.height / height;
+  // The picture's size when the draft was stored; the same picture at another size scales everything.
+  const storedW = picture?.w ?? width;
+  const storedH = picture?.h ?? height;
+  const sx = expected.width / storedW;
+  const sy = expected.height / storedH;
+  if (Math.abs(storedW - expected.width) > 0.5 || Math.abs(storedH - expected.height) > 0.5) {
     layers = layers.map((layer) => scaleLayer(layer, sx, sy));
   }
-  return {
+  const hidden = v.baseHidden === true ? { baseHidden: true as const } : {};
+  if (!picture) return { v: LAYER_DOC_VERSION, width: expected.width, height: expected.height, layers, ...hidden };
+  const doc: LayerDoc = {
     v: LAYER_DOC_VERSION,
-    width: expected.width,
-    height: expected.height,
+    width: Math.min(CANVAS_MAX, Math.max(CANVAS_MIN, Math.round(width * sx))),
+    height: Math.min(CANVAS_MAX, Math.max(CANVAS_MIN, Math.round(height * sy))),
+    base: { x: Math.round(picture.x * sx), y: Math.round(picture.y * sy), w: expected.width, h: expected.height },
     layers,
-    ...(v.baseHidden === true ? { baseHidden: true } : {}),
+    ...hidden,
   };
+  if (isCanvasResized(doc)) return doc;
+  const { base: _covering, ...plain } = doc;
+  return plain;
 }
 
 function scaleLayer(layer: Layer, sx: number, sy: number): Layer {
@@ -211,7 +245,7 @@ function scaleLayer(layer: Layer, sx: number, sy: number): Layer {
 export function saveDraft(storage: StorageLike | null, baseKey: string, doc: LayerDoc, now = Date.now()): boolean {
   if (!storage) return false;
   try {
-    if (doc.layers.length === 0 && !doc.baseHidden) {
+    if (doc.layers.length === 0 && !doc.baseHidden && !isCanvasResized(doc)) {
       storage.removeItem(draftKey(baseKey));
       return true;
     }

@@ -4,6 +4,7 @@
  * secrets are compared in constant time by `secretMatches`).
  */
 import { timingSafeEqual } from 'node:crypto';
+import { brandStudioOutpaintOpen } from '@/lib/flags';
 import { STUDIO_LANES, type StudioLane } from './models';
 
 export type StudioEnvSource = Record<string, string | undefined>;
@@ -20,6 +21,8 @@ export interface StudioEnv {
   webhookUrl: string | null;
   /** Origin used to turn a relative media URL into one a provider can fetch (null = keep as is). */
   appOrigin: string | null;
+  /** `BRAND_STUDIO_OUTPAINT=on`: the layer editor may offer "빈 곳 채우기" (lib/flags.ts). */
+  outpaint?: boolean;
 }
 
 function whole(value: string | undefined, fallback: number, max: number): number {
@@ -63,6 +66,7 @@ export function studioEnv(env: StudioEnvSource = process.env): StudioEnv {
         ? `${appOrigin}/api/brand-studio/webhook?token=${encodeURIComponent(secret)}`
         : null,
     appOrigin,
+    outpaint: brandStudioOutpaintOpen(env),
   };
 }
 

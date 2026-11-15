@@ -929,6 +929,8 @@ export function StudioApp({ organizationId, locale, copy, mode, libraryCopy, lay
           initialTool={editorState.initialTool}
           initialPatch={editorState.initialPatch}
           initialRegionPreset={editorState.initialRegionPreset}
+          blankCanvas={Boolean(editorState.isBlankCanvas)}
+          fillEmpty={Boolean(state?.canFillEmpty)}
           region={
             dockOpen && mode === "image"
               ? {
@@ -956,7 +958,8 @@ export function StudioApp({ organizationId, locale, copy, mode, libraryCopy, lay
                       }
                     }
                     const key = newRequestId();
-                    const ratio = `${editorState.base.width} / ${editorState.base.height}`;
+                    const size = req.sourceSize ?? editorState.base;
+                    const ratio = `${size.width} / ${size.height}`;
                     onRegionSending({ key, ratio });
                     const body = regionEditInput({
                       ids: { organizationId, requestId: key },
