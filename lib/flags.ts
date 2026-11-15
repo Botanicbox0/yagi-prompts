@@ -143,6 +143,16 @@ export function brandStudioV2Open(env: NodeJS.ProcessEnv = process.env): boolean
 }
 
 /**
+ * "빈 곳 채우기" in the studio's layer editor: fills the empty canvas around a picture with ordinary
+ * partial edits (`region_edit`). Not yet proven with a real edit model, so default OFF: open only when
+ * the server environment says exactly `BRAND_STUDIO_OUTPAINT=on`. Off means the studio state carries no
+ * `canFillEmpty` and the editor renders no button; nothing else changes.
+ */
+export function brandStudioOutpaintOpen(env: Record<string, string | undefined> = process.env): boolean {
+  return env.BRAND_STUDIO_OUTPAINT === 'on';
+}
+
+/**
  * docs/CAST-CATEGORIES.md §4 — couple templates (the buyer and one partner). Default OFF: open only
  * when the server environment says exactly `TWINGS_COUPLE_TEMPLATES=on`. Terms §5.3 say "your own
  * face only" and cannot change while Toss reviews subscription billing, so off means couples do not

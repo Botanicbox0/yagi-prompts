@@ -5,7 +5,7 @@
  * picture: the picture and every layer shift together.
  */
 import type { RegionBox } from "@/lib/brand-studio/contracts";
-import type { Point } from "./geometry";
+import type { Point, View } from "./geometry";
 import { clamp, type Box, type LayerDoc } from "./model";
 
 export const CANVAS_RATIOS = ["1:1", "4:5", "3:4", "9:16", "16:9", "21:9"] as const;
@@ -131,6 +131,18 @@ export function activeCanvasRatio(doc: LayerDoc): CanvasRatio | null {
     if (Math.abs(Math.round((doc.height * rw) / rh) - doc.width) <= 1 || Math.abs(Math.round((doc.width * rh) / rw) - doc.height) <= 1) return ratio;
   }
   return null;
+}
+
+/**
+ * The view after the document changed from `from` to `to` (undo or redo of a canvas change): the pan
+ * moves by the opposite of the picture's move, times the zoom, so the picture stays where it is on
+ * screen (the handle drag in stage.tsx does the same). The same view object when the picture did not move.
+ */
+export function holdPictureView(view: View, from: LayerDoc, to: LayerDoc): View {
+  const a = baseRect(from);
+  const b = baseRect(to);
+  if (a.x === b.x && a.y === b.y) return view;
+  return { ...view, panX: view.panX - (b.x - a.x) * view.zoom, panY: view.panY - (b.y - a.y) * view.zoom };
 }
 
 /** Canvas pixels the picture does not cover on each side (0 where it reaches or passes the edge). */

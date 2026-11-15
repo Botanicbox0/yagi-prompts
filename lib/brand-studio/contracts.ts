@@ -621,6 +621,8 @@ export interface StudioState {
   campaigns: Array<{ id: string; title: string }>;
   /** True when a run that ended with no result can be removed from the wall (`job.delete`). */
   canRemoveRuns?: boolean;
+  /** Present (true) only when `BRAND_STUDIO_OUTPAINT=on` and the member can create: the layer editor may offer "빈 곳 채우기". */
+  canFillEmpty?: boolean;
 }
 
 /** `GET /api/brand-studio?organizationId=…&jobs=a,b` — the poll; also moves open jobs forward. */

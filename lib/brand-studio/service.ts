@@ -127,6 +127,8 @@ export async function loadStudioState(deps: StudioDeps, viewer: Viewer, organiza
         jobs: await viewsOf(sql, jobs, deps.media),
         campaigns,
         canRemoveRuns: seat.canCreate && (await jobSoftDeleteReady(sql)),
+        // Off unless the flag is on: the key is left out entirely, so nothing about it reaches the client.
+        ...(seat.canCreate && deps.env.outpaint ? { canFillEmpty: true } : {}),
       };
     }),
   );

@@ -7,6 +7,7 @@
  */
 import { STUDIO_LIMITS } from "@/lib/brand-studio/contracts";
 import { baseRect } from "./canvas";
+import { planFillSource } from "./fill";
 import { boundsOf } from "./geometry";
 import { MIN_SIDE, canMergeDown, type Box, type FontId, type Frame, type Layer, type LayerDoc, type ShapeKind, type TextLayer } from "./model";
 import { layoutText, fontShorthand, graphemes, type Measure, type TextLayout } from "./text-layout";
@@ -430,6 +431,11 @@ export async function renderPlan(plan: ExportPlan, deps: RenderDeps, maxBytes: n
   drawPlan(ctx, plan, images, deps.family, (w, h) => deps.createCanvas(w, h));
 
   deps.onStep?.("saving");
+  return encodeWithin(canvas, maxBytes);
+}
+
+/** PNG, or WebP then JPEG when the PNG is over `maxBytes`. */
+async function encodeWithin(canvas: CanvasLike, maxBytes: number): Promise<RenderResult> {
   const attempts: Array<[ExportMime, number | undefined]> = [
     ["image/png", undefined],
     ["image/webp", 0.95],
@@ -449,6 +455,44 @@ export async function renderPlan(plan: ExportPlan, deps: RenderDeps, maxBytes: n
     return { ok: false, reason: "canvas" };
   }
   return { ok: false, reason: "too-big" };
+}
+
+/**
+ * The picture "빈 곳 채우기" sends (fill.ts `planFillSource`): the canvas with only the base picture and
+ * its edges stretched over the empty margins. No layers. Encoded like an export.
+ */
+export async function renderFillSource(
+  doc: LayerDoc,
+  baseUrl: string,
+  deps: Pick<RenderDeps, "loadImage" | "createCanvas">,
+  maxBytes: number = STUDIO_LIMITS.imageBytesMax,
+): Promise<RenderResult> {
+  let image: CanvasImageSource;
+  try {
+    image = await deps.loadImage(baseUrl);
+  } catch {
+    return { ok: false, reason: "image", names: [] };
+  }
+  const natural = naturalOf(image);
+  if (!natural) return { ok: false, reason: "image", names: [] };
+  const plan = planFillSource(doc, natural);
+  const canvas = deps.createCanvas(plan.width, plan.height);
+  const ctx = canvas?.getContext("2d") ?? null;
+  if (!canvas || !ctx) return { ok: false, reason: "canvas" };
+  plan.ops.forEach((op, i) => {
+    // The stretched edges are one source pixel wide: no smoothing, so nothing from the next column bleeds in.
+    ctx.imageSmoothingEnabled = i === 0;
+    ctx.drawImage(image, op.sx, op.sy, op.sw, op.sh, op.dx, op.dy, op.dw, op.dh);
+  });
+  ctx.imageSmoothingEnabled = true;
+  return encodeWithin(canvas, maxBytes);
+}
+
+function naturalOf(image: CanvasImageSource): { width: number; height: number } | null {
+  const img = image as { naturalWidth?: number; naturalHeight?: number; width?: unknown; height?: unknown };
+  const width = img.naturalWidth || (typeof img.width === "number" ? img.width : 0);
+  const height = img.naturalHeight || (typeof img.height === "number" ? img.height : 0);
+  return width > 0 && height > 0 ? { width, height } : null;
 }
 
 /* ---------------------------------------------------------------- naming */

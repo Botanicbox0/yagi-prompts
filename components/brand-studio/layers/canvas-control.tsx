@@ -7,8 +7,23 @@
 import { useId, useState, type KeyboardEvent } from "react";
 import { AspectShape } from "../gallery/chip-select";
 import { CANVAS_MAX, CANVAS_MIN, CANVAS_RATIOS, activeCanvasRatio, isCanvasResized, type CanvasRatio } from "./canvas";
+import { fillStrips } from "./fill";
 import type { LayerDoc } from "./model";
-import type { LayersCopy } from "./panels";
+import { fill as fillText, type LayersCopy } from "./panels";
+
+/**
+ * "빈 곳 채우기" (fill.ts), passed only when the server capability is on, the member may generate and
+ * the canvas is not blank. The button shows only while the empty area lies on one axis.
+ */
+export interface CanvasFillOffer {
+  /** Credits of one partial edit with the editor's default model and quality; one per strip. */
+  creditsPerStrip: number;
+  locale: "ko" | "en";
+  busy: boolean;
+  /** The partial edit's error line. */
+  error: string | null;
+  onFill(): void;
+}
 
 export interface CanvasSizeControlProps {
   copy: LayersCopy;
@@ -19,16 +34,18 @@ export interface CanvasSizeControlProps {
   /** A typed size, applied centred. */
   onSize(size: { width: number; height: number }): void;
   onReset(): void;
+  fill?: CanvasFillOffer | null;
 }
 
 type Side = "width" | "height";
 
-export function CanvasSizeControl({ copy, doc, open, onOpenChange, onRatio, onSize, onReset }: CanvasSizeControlProps) {
+export function CanvasSizeControl({ copy, doc, open, onOpenChange, onRatio, onSize, onReset, fill }: CanvasSizeControlProps) {
   const panelId = useId();
   // What is being typed; null shows the document's own value (so a handle drag updates the fields live).
   const [draft, setDraft] = useState<{ side: Side; text: string } | null>(null);
   const size = `${doc.width} × ${doc.height}`;
   const active = activeCanvasRatio(doc);
+  const strips = fill && open ? fillStrips(doc).length : 0;
 
   const apply = (side: Side, text: string) => {
     setDraft(null);
@@ -92,6 +109,30 @@ export function CanvasSizeControl({ copy, doc, open, onOpenChange, onRatio, onSi
             </span>
             {field("height", copy.canvas.height)}
           </div>
+          {fill && strips > 0 && (
+            <>
+              <button
+                type="button"
+                className="bsl-btn bsl-num"
+                data-variant="solid"
+                data-size="sm"
+                disabled={fill.busy}
+                aria-busy={fill.busy}
+                data-canvas-fill
+                onClick={fill.onFill}
+              >
+                {fillText(copy.canvas.fillCta, {
+                  label: copy.canvas.fill,
+                  credits: (fill.creditsPerStrip * strips).toLocaleString(fill.locale === "ko" ? "ko-KR" : "en-US"),
+                })}
+              </button>
+              {fill.error && (
+                <p className="bsl-error" role="alert">
+                  {fill.error}
+                </p>
+              )}
+            </>
+          )}
           {isCanvasResized(doc) && (
             <button type="button" className="bsl-btn" data-variant="soft" data-size="sm" data-canvas-reset onClick={onReset}>
               {copy.canvas.reset}
