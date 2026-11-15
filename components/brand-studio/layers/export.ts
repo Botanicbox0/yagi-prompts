@@ -459,7 +459,8 @@ async function encodeWithin(canvas: CanvasLike, maxBytes: number): Promise<Rende
 
 /**
  * The picture "빈 곳 채우기" sends (fill.ts `planFillSource`): the canvas with only the base picture and
- * its edges stretched over the empty margins. No layers. Encoded like an export.
+ * the empty margins painted flat mid-grey (a stretched edge reads as already filled and the model keeps
+ * it). No layers. Encoded like an export.
  */
 export async function renderFillSource(
   doc: LayerDoc,
@@ -479,12 +480,13 @@ export async function renderFillSource(
   const canvas = deps.createCanvas(plan.width, plan.height);
   const ctx = canvas?.getContext("2d") ?? null;
   if (!canvas || !ctx) return { ok: false, reason: "canvas" };
-  plan.ops.forEach((op, i) => {
-    // The stretched edges are one source pixel wide: no smoothing, so nothing from the next column bleeds in.
-    ctx.imageSmoothingEnabled = i === 0;
-    ctx.drawImage(image, op.sx, op.sy, op.sw, op.sh, op.dx, op.dy, op.dw, op.dh);
-  });
-  ctx.imageSmoothingEnabled = true;
+  for (const op of plan.ops) {
+    if (op.kind === "picture") ctx.drawImage(image, op.sx, op.sy, op.sw, op.sh, op.dx, op.dy, op.dw, op.dh);
+    else {
+      ctx.fillStyle = op.color;
+      ctx.fillRect(op.x, op.y, op.w, op.h);
+    }
+  }
   return encodeWithin(canvas, maxBytes);
 }
 
