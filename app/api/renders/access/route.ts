@@ -58,6 +58,8 @@ export async function GET(request: Request): Promise<NextResponse> {
   let subscription: SubscriptionSummary | null = null;
   let subscriptionEligible = false;
   let subscriptionUsePercent: number | null = null;
+  // What one make takes from the month at each resolution the template sells (720p first).
+  let subscriptionUseByResolution: Record<string, number> | null = null;
   let editing = false;
   let editFields: EditScope[] = [];
   let premiumEditBudget: PremiumEditBudget | null = null;
@@ -96,6 +98,13 @@ export async function GET(request: Request): Promise<NextResponse> {
           if (subscription?.hasAccess && eligibility) {
             live = true;
             subscriptionUsePercent = await getSubscriptionUsePercent(sql, viewer.userId, environment, eligibility.quote.units);
+            if (subscriptionUsePercent !== null && template) {
+              const byResolution: Record<string, number> = { '720p': subscriptionUsePercent };
+              const hd = subscriptionTemplateEligibility(template, '1080p');
+              const hdPercent = hd ? await getSubscriptionUsePercent(sql, viewer.userId, environment, hd.quote.units) : null;
+              if (hdPercent !== null) byResolution['1080p'] = hdPercent;
+              subscriptionUseByResolution = byResolution;
+            }
             editing = subscription.planId === 'premium' && await premiumEditingOperational(sql, environment);
             editFields = editing ? eligibility.scopes : [];
             if (editing) premiumEditBudget = await getPremiumEditBudget(sql, viewer.userId, { environment });
@@ -114,5 +123,5 @@ export async function GET(request: Request): Promise<NextResponse> {
     }
   }
 
-  return NextResponse.json({ open: storefrontOpen(), live, charge: canStartRender(viewer) && !viewer.isAdmin, identityRequired, identity, signedIn, interest, selfie, subscription, subscriptionEligible, subscriptionUsePercent, editing, editFields, premiumEditBudget, recipe }, { headers: HEADERS });
+  return NextResponse.json({ open: storefrontOpen(), live, charge: canStartRender(viewer) && !viewer.isAdmin, identityRequired, identity, signedIn, interest, selfie, subscription, subscriptionEligible, subscriptionUsePercent, subscriptionUseByResolution, editing, editFields, premiumEditBudget, recipe }, { headers: HEADERS });
 }

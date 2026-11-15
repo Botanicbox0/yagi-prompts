@@ -53,9 +53,10 @@ export function quoteSubscriptionVideo(input: { seconds: number; resolution: '72
 /** Unknown image/provider costs stay outside the published video estimate. A sample video is
  * output media, not a billed input reference. Revisit the quote if video input is introduced.
  */
-export function templateSubscriptionQuote(template: Pick<PromptCard, 'medium' | 'engine' | 'runtimeSeconds' | 'aspectDefault'>, planId: CreatorPlanId = 'creator') {
+export function templateSubscriptionQuote(template: Pick<PromptCard, 'medium' | 'engine' | 'runtimeSeconds' | 'aspectDefault'>, planId: CreatorPlanId = 'creator', resolution: '720p' | '1080p' = '720p') {
   if (template.medium !== 'video' || !template.runtimeSeconds) return null;
   const uses25 = template.engine === 'seedance-2.5' || ((template.engine === null || template.engine === 'seedance-2.0') && template.runtimeSeconds > 15);
   if (!uses25) return null;
-  return quoteSubscriptionVideo({ seconds: template.runtimeSeconds, resolution: '720p', aspect: template.aspectDefault ?? '9:16' }, planId);
+  // The make is debited at the resolution it is rendered at (founder, 2026-11-15): 1080p costs more of the month than 720p.
+  return quoteSubscriptionVideo({ seconds: template.runtimeSeconds, resolution, aspect: template.aspectDefault ?? '9:16' }, planId);
 }

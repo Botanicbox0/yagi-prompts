@@ -2,6 +2,7 @@ import { estimateImageUsd, isImageEngine, isVideoEngine } from '@/lib/images/eng
 import { quoteVideo, videoModelForEngine } from '@/lib/video/models';
 import { COST_ASSUMPTIONS } from '@/lib/twings/cost-model';
 import { baseCredits, baseKrw, isRaise, RAISE_MAX_KRW, RAISE_STEP_KRW, type PriceMedium } from '@/lib/twings/template-price';
+import { recipeAtResolution, recipeResolutions, type FilmResolution } from './resolution';
 import type { Recipe } from './schema';
 
 /**
@@ -52,8 +53,12 @@ export function stepCosts(recipe: Recipe): StepCost[] {
   });
 }
 
-export function quoteRecipe(recipe: Recipe, royaltyKrw: number): RecipeQuote {
-  const steps = stepCosts(recipe);
+/**
+ * `resolution` is the one the buyer orders (lib/recipes/resolution.ts): the film is rendered at it,
+ * so it is priced at it. Left out, the recipe is priced as written — what a test render costs.
+ */
+export function quoteRecipe(recipe: Recipe, royaltyKrw: number, resolution?: FilmResolution | null): RecipeQuote {
+  const steps = stepCosts(recipeAtResolution(recipe, resolution));
   const providerUsd = Math.round(steps.reduce((sum, step) => sum + step.providerUsd, 0) * 10000) / 10000;
   const medium: PriceMedium = recipe.steps.some((step) => step.kind === 'video') ? 'video' : 'image';
   const floorKrw = baseKrw({ medium, providerUsd });
@@ -69,6 +74,38 @@ export function quoteRecipe(recipe: Recipe, royaltyKrw: number): RecipeQuote {
     proposedKrw,
     proposedCents: Math.ceil(proposedKrw / COST_ASSUMPTIONS.krwPerUsd * 100),
   };
+}
+
+/**
+ * The price of each resolution the recipe's film can be made at, 720p first, with the same raise on
+ * top of each base. Empty for a recipe that makes no film (an image, a carousel): those have one
+ * price, `quoteRecipe(recipe, royaltyKrw)`.
+ */
+export function quoteRecipeByResolution(recipe: Recipe, royaltyKrw: number): Partial<Record<FilmResolution, RecipeQuote>> {
+  const quotes: Partial<Record<FilmResolution, RecipeQuote>> = {};
+  for (const resolution of recipeResolutions(recipe)) quotes[resolution] = quoteRecipe(recipe, royaltyKrw, resolution);
+  return quotes;
+}
+
+/**
+ * The quote a template is SOLD on: a film's 720p make (the default every order starts from), an
+ * image or a carousel as it is. This — not the recipe as written — is the base a creative's price
+ * sits on and the floor a row's `price_krw` is checked against.
+ */
+export function quoteRecipeBase(recipe: Recipe, royaltyKrw: number): RecipeQuote {
+  return quoteRecipe(recipe, royaltyKrw, recipeResolutions(recipe)[0] ?? null);
+}
+
+/**
+ * The 1080p row price that goes with a 720p row price: the 1080p base plus the same won the 720p
+ * price carries above ITS base (the creative's raise, or the studio's premium). 0 = not sold at
+ * 1080p (no film, or an engine without it).
+ */
+export function price1080KrwFor(recipe: Recipe, priceKrw: number): number {
+  const quotes = quoteRecipeByResolution(recipe, 0);
+  const sd = quotes['720p'], hd = quotes['1080p'];
+  if (!sd || !hd) return 0;
+  return hd.floorKrw + Math.max(0, priceKrw - sd.floorKrw);
 }
 
 /** USD cents for a won price, the same conversion the proposal uses (Toss still charges won). */

@@ -40,6 +40,7 @@ export async function POST(request: Request) {
     const editText = typeof rawEdit === 'string' ? rawEdit : undefined;
     if ((editText?.trim() || rawReferences.length) && !await premiumEditingOperational(deps.sql, deps.environment)) return subscriptionFailure('editing_unavailable');
     const selfie = form.get('selfieId');
+    const resolution = form.get('resolution');
     const outcome = await createSubscriptionRenderJob({ sql: deps.sql, environment: deps.environment, store: await getRenderStore() }, viewer, {
       requestId: String(form.get('requestId') ?? ''), templateSlug: String(form.get('template') ?? ''),
       ownFaceConsent: true, locale: String(form.get('locale') ?? ''),
@@ -47,6 +48,7 @@ export async function POST(request: Request) {
       photo: photos instanceof File ? { bytes: new Uint8Array(await photos.arrayBuffer()), mime: photos.type } : null,
       editText, references: await Promise.all(rawReferences.map(async reference => ({ bytes: new Uint8Array(await (reference as File).arrayBuffer()), mime: (reference as File).type }))),
       referencesConsent: form.get('referencesConsent') === '1',
+      ...(typeof resolution === 'string' && resolution ? { resolution } : {}),
     });
     if (!outcome.ok) return subscriptionFailure(outcome.code);
     if (outcome.held) return subscriptionJson({ ok: true, id: outcome.id, href: renderHref(outcome.id), held: true, verifyHref: identityVerifyHref(renderHref(outcome.id)) }, 201);

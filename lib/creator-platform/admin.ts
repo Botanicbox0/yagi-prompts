@@ -8,7 +8,7 @@ import { demand } from './contract';
 import { audit, approvedCreator, lockUser, onboardingReady } from './service';
 import { marginSplit, rewardQuote } from './economics';
 import { legacyPromptText, parseRecipe, primaryStep, recipeCast } from '@/lib/recipes/schema';
-import { centsForKrw, quoteRecipe } from '@/lib/recipes/pricing';
+import { centsForKrw, price1080KrwFor, quoteRecipeBase } from '@/lib/recipes/pricing';
 import { parseDisclosure, parsePresentation } from '@/lib/recipes/repo';
 
 const reason=z.string().trim().min(3).max(2000), money=z.number().int().min(0).max(100_000_000);
@@ -147,9 +147,10 @@ async function acceptRecipe(tx:SqlRunner,templateId:string,row:{user_id:string;t
  const checked=parseRecipe(row.v2.recipe_v2);demand(checked.ok,'recipe_invalid');
  const recipe=checked.recipe,primary=primaryStep(recipe),film=recipe.steps.find(step=>step.kind==='video');
  demand(priceKrw!==undefined,'price_required');
- const quote=quoteRecipe(recipe,row.v2.royalty_krw??0);demand(priceKrw>=quote.floorKrw,'price_below_floor');
+ // The floor is the 720p make; 1080p gets its own row price, the same won above its base (lib/recipes/resolution.ts).
+ const quote=quoteRecipeBase(recipe,row.v2.royalty_krw??0);demand(priceKrw>=quote.floorKrw,'price_below_floor');const price1080Krw=price1080KrwFor(recipe,priceKrw);
  await insertPrompt(tx,{id:templateId,slug:`format-${templateId}`,source:'yagi',authorId:row.user_id,authorHandle:null,status:'pending',models:[primary.engine],title:row.title,titleKo:row.v2.title_ko??null,promptText:legacyPromptText(recipe),textVisibility:'hidden',media:null,useCase:[],featured:false,
-  medium:primary.kind,engine:primary.engine,aspectDefault:primary.params.aspect,runtimeSeconds:film?.kind==='video'?film.params.duration:null,priceKrw,priceCents:centsForKrw(priceKrw),cast:recipeCast(recipe)});
+  medium:primary.kind,engine:primary.engine,aspectDefault:primary.params.aspect,runtimeSeconds:film?.kind==='video'?film.params.duration:null,priceKrw,priceCents:centsForKrw(priceKrw),...(price1080Krw>0?{price1080Krw,price1080Cents:centsForKrw(price1080Krw)}:{}),cast:recipeCast(recipe)});
  await tx.query('update prompt_items set recipe=$2::jsonb,disclosure=$3::jsonb,presentation=$4 where id=$1',[templateId,JSON.stringify(recipe),JSON.stringify(parseDisclosure(row.v2.disclosure)),parsePresentation(row.v2.presentation)]);
 }
 export async function revokeClaim(sql:SqlRunner,id:string,userId:string,credits:number) {

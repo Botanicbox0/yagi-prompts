@@ -105,3 +105,37 @@ Monthly plans use the same provider quote and margin basis; see [CREATOR-SUBSCRI
    zero-default columns; no RLS change). The code reads the new columns, so deploy after this.
 2. Merge and deploy. Behaviour is identical until a 1080p price is set: every order is 720p.
 3. Set 1080p prices in the admin editor for templates the founder approves.
+
+## 6. Recipe templates render at the order's resolution (2026-11-15)
+
+Founder, 2026-11-15: a buyer chooses 720p or 1080p, and the price follows the choice — in won today,
+in credits (or the month's allowance) once subscriptions open.
+
+Before this, a recipe template sent the resolution written on its film step to the provider whatever
+the order said. Three live rows were written at 1080p and sold at the 720p price; a 10-second 4:3
+film cost 7,972원 to make against a 6,800원 sale, and the "1080p" option on two other rows produced
+the same film as the base price. Nothing had sold, so no money was lost.
+
+The rule now, in one place (`lib/recipes/resolution.ts`):
+
+- `recipeAtResolution(recipe, resolution)` is the recipe as it runs for an order. The render pass
+  uses it (`lib/renders/service.ts` `renderRecipe`) and so does the quote
+  (`quoteRecipe(recipe, raise, resolution)`), so what is charged and what is rendered cannot drift.
+- The resolution on a film step is what the creative wrote and tested it at. Test and review renders
+  still use it. It no longer decides what a buyer receives.
+- A template's `price_krw` is its 720p price; the floor it is checked against is the 720p quote
+  (`quoteRecipeBase`). `price_1080_krw` is the 1080p price.
+  - A creative's template (self-publish, studio acceptance): 1080p is priced automatically at the
+    1080p base plus the same won the 720p price carries above its base (`price1080KrwFor`).
+  - A studio film import (`content/templates/*.json`): `price_1080_krw` is an optional field, checked
+    against the 1080p floor. Left out, the film sells at 720p only.
+  - A studio original edited in `/admin`: unchanged — the founder types both prices (§4-1).
+- Monthly use: `createSubscriptionRenderJob` takes `resolution`; the units it reserves are the quote
+  of that resolution (10 s 9:16: 100 units at 720p, 247 at 1080p). 1080p is admitted only where the
+  template sells it. The studio shows the picker in monthly mode with each option's share of the month.
+- Credits: `templateCredits(card, resolution)` (`lib/twings/credits.ts`) already quotes per resolution
+  (10 s 9:16: 345 at 720p, 847 at 1080p). When the credit ledger replaces units, the debit is that
+  function at the order's resolution — no other change.
+
+Not changed: no price on any live row, no migration. Existing rows are above their floor at the
+resolution they now render at.

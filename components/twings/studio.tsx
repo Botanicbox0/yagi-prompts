@@ -148,10 +148,13 @@ type Phase = 'photo' | 'style' | 'pay';
 export function buildSubscriptionRenderForm(input: {
   requestId: string; template: string; locale: string; selfieId?: string | null; photo?: Blob | null;
   editText: string; references: Blob[]; referencesConsent: boolean;
+  /** The resolution the member chose; left out, the server renders 720p. */
+  resolution?: string | null;
 }) {
   const form = new FormData();
   form.set('requestId', input.requestId);
   form.set('template', input.template);
+  if (input.resolution) form.set('resolution', input.resolution);
   form.set('locale', input.locale);
   form.set('ownFaceConsent', '1');
   if (input.selfieId) form.set('selfieId', input.selfieId);
@@ -318,6 +321,7 @@ export function TwingsStudio({
   const [editing, setEditing] = useState(false);
   const [editFields, setEditFields] = useState<EditScope[]>([]);
   const [subscriptionUsePercent, setSubscriptionUsePercent] = useState<number | null>(null);
+  const [subscriptionUseByResolution, setSubscriptionUseByResolution] = useState<Record<string, number> | null>(null);
   const [premiumEditBudget, setPremiumEditBudget] = useState<PublicPremiumEditBudget | null>(null);
   const [editRequestLimitReached, setEditRequestLimitReached] = useState(false);
   const [ownFaceConsent, setOwnFaceConsent] = useState(false);
@@ -366,7 +370,13 @@ export function TwingsStudio({
   const editorAvailable = monthly && subscription?.planId === 'premium' && editing && editFields.length > 0;
   const editBudgetExhausted = editRequestLimitReached || premiumEditBudget?.remaining === 0;
   const editorOpen = editorAvailable && premiumEditBudget !== null && premiumEditBudget.remaining > 0 && !editRequestLimitReached;
-  const insufficientUsage = subscriptionUsePercent !== null && (subscription?.remainingPercent ?? 0) < subscriptionUsePercent;
+  // A member picks the resolution too: each takes its own share of the month (1080p more than 720p).
+  const monthlyResolutions = Object.entries(subscriptionUseByResolution ?? {})
+    .filter(([, percent]) => typeof percent === 'number' && Number.isFinite(percent))
+    .map(([id, percent]) => ({ id, price: `${Math.round(percent * 10) / 10}%` }));
+  const monthlyResolution = monthlyResolutions.find((option) => option.id === resolution) ?? monthlyResolutions[0] ?? null;
+  const monthlyUsePercent = monthlyResolution ? subscriptionUseByResolution?.[monthlyResolution.id] ?? subscriptionUsePercent : subscriptionUsePercent;
+  const insufficientUsage = monthlyUsePercent !== null && (subscription?.remainingPercent ?? 0) < monthlyUsePercent;
 
   useEffect(() => {
     const nextStyle = styles.find(item => item.id === initialStyleId) ?? styles[0];
@@ -394,7 +404,7 @@ export function TwingsStudio({
       const request = ++latest;
       return fetch(accessUrl, { cache: 'no-store', credentials: 'same-origin' })
       .then((response) => (response.ok ? response.json() : { live: false }))
-      .then((json: { open?: boolean; live?: boolean; charge?: boolean; identityRequired?: boolean; identity?: string; signedIn?: boolean; interest?: boolean; selfie?: SelfieView | null; subscription?: typeof subscription; subscriptionEligible?: boolean; editing?: boolean; subscriptionUsePercent?: number | null; editFields?: string[]; premiumEditBudget?: unknown; recipe?: PublicRecipe | null }) => {
+      .then((json: { open?: boolean; live?: boolean; charge?: boolean; identityRequired?: boolean; identity?: string; signedIn?: boolean; interest?: boolean; selfie?: SelfieView | null; subscription?: typeof subscription; subscriptionEligible?: boolean; editing?: boolean; subscriptionUsePercent?: number | null; subscriptionUseByResolution?: Record<string, number> | null; editFields?: string[]; premiumEditBudget?: unknown; recipe?: PublicRecipe | null }) => {
         if (cancelled || request !== latest) return;
         setAccessKnown(true);
         setLiveMode(json.live === true);
@@ -426,6 +436,7 @@ export function TwingsStudio({
         setSubscriptionEligible(json.subscriptionEligible === true);
         setEditing(json.editing === true);
         setSubscriptionUsePercent(typeof json.subscriptionUsePercent === 'number' && Number.isFinite(json.subscriptionUsePercent) ? json.subscriptionUsePercent : null);
+        setSubscriptionUseByResolution(json.subscriptionUseByResolution && typeof json.subscriptionUseByResolution === 'object' ? json.subscriptionUseByResolution : null);
         setEditFields((json.editFields ?? []).filter((field): field is EditScope => ['wardrobe_color', 'prop_color', 'background_palette', 'lighting_mood'].includes(field)));
         const editBudget = parsePremiumEditBudget(json.premiumEditBudget);
         setPremiumEditBudget(editBudget);
@@ -524,7 +535,7 @@ export function TwingsStudio({
           setLiveError(subscriptionCopy?.studioReferenceLarge ?? live.labels.errors.generic ?? null);
           return;
         }
-        form = buildSubscriptionRenderForm({ requestId, template: live.template, locale: live.locale, selfieId: chosenSelfie!.id, editText: edit.editText, references, referencesConsent: edit.referencesConsent });
+        form = buildSubscriptionRenderForm({ requestId, template: live.template, locale: live.locale, selfieId: chosenSelfie!.id, editText: edit.editText, references, referencesConsent: edit.referencesConsent, resolution: monthlyResolution?.id ?? null });
       } else {
         form = new FormData();
         form.set('template', live.template);
@@ -906,7 +917,8 @@ export function TwingsStudio({
 
               {monthly && subscriptionCopy && <div data-subscription-studio-summary className="mt-5 space-y-3">
                 <p className="text-sm font-medium">{interpolate(subscriptionCopy.studioRemaining, { percent: String(Math.max(0, Math.min(100, Math.round(subscription?.remainingPercent ?? 0)))) })}</p>
-                {subscriptionUsePercent !== null && <p className="text-sm opacity-70">{interpolate(subscriptionCopy.studioEstimate, { percent: String(Math.round(subscriptionUsePercent * 10) / 10) })}</p>}
+                {monthlyResolutions.length > 1 && <ResolutionPicker options={monthlyResolutions} selected={monthlyResolution?.id ?? null} onSelect={(id) => { setResolution(id); subscriptionRequestId.current = null; }} labels={{ resolutionLabel: labels.resolutionLabel, resolutionDefault: labels.resolutionDefault }} />}
+                {monthlyUsePercent !== null && <p className="text-sm opacity-70">{interpolate(subscriptionCopy.studioEstimate, { percent: String(Math.round(monthlyUsePercent * 10) / 10) })}</p>}
               </div>}
               {subscriptionAvailable && subscriptionCopy && <SubscriptionPaymentChoice
                 available={charge && (insufficientUsage || usageExhausted)}
