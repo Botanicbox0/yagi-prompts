@@ -44,6 +44,7 @@ export default async function BrandHome({
         organizationId: choice.id,
         unread: await roomUnreadCounts(sql, { organizationId: choice.id, userId: viewer.userId, projectIds: workspace.projects.map((p) => p.id) }),
         copy: dict.roomsShell.entry,
+        list: dict.roomsShell.space.list,
       }
     : null;
   const campaignList = rooms ? <CampaignList projects={workspace.projects} b={b} locale={locale} rooms={rooms}/> : <CampaignList projects={workspace.projects} b={b} locale={locale}/>;
@@ -51,6 +52,9 @@ export default async function BrandHome({
   const creatorsEntry = Boolean(rooms && choice && influencersOpen() && poolVisible(choice) && !featureDenied(choice.denied, "creator_pool"));
   const projectOnlyShowroom = Boolean(rooms && choice && !access.staff && choice.role !== "guest" && studioShowroomVisible(choice, brandStudioV2Open()));
   const sp = dict.roomsShell.space;
+  // The service guide describes creator campaigns; a brand that only commissions work from the team
+  // (self-serve studio closed) does not get it inside the project space.
+  const serviceGuide = !(rooms && choice && featureDenied(choice.denied, "self_studio"));
   return (
     <div data-brand-home data-project-space={rooms ? "" : undefined}>
       {rooms ? (
@@ -146,10 +150,10 @@ export default async function BrandHome({
               </section>
             ) : access.canRequest ? (
               <section className="bw-empty" data-brand-empty="request">
-                <h2>{b.empty}</h2>
-                <p>{b.emptyBody}</p>
+                <h2>{rooms ? sp.empty.title : b.empty}</h2>
+                <p>{rooms ? sp.empty.body : b.emptyBody}</p>
                 <a className="bw-button bw-primary" href={newProject}>
-                  {b.newProject}
+                  {rooms ? sp.newBrief : b.newProject}
                 </a>
               </section>
             ) : (
@@ -173,10 +177,12 @@ export default async function BrandHome({
               settingsOpen={sectionVisibility(choice).settings}
             />
           )}
-          <details className="bw-service-disclosure" data-brand-service-disclosure>
-            <summary>{b.dashboard.serviceGuideToggle}</summary>
-            <ServiceGuide kind="campaign" b={b} studioAllowed={studioOpen} showOther={!access.projectScopedOnly && studioOpen} organizationId={choice?.id} />
-          </details>
+          {serviceGuide && (
+            <details className="bw-service-disclosure" data-brand-service-disclosure>
+              <summary>{b.dashboard.serviceGuideToggle}</summary>
+              <ServiceGuide kind="campaign" b={b} studioAllowed={studioOpen} showOther={!access.projectScopedOnly && studioOpen} organizationId={choice?.id} />
+            </details>
+          )}
           {access.hasOrganization && workspace.organizations.length > 0 && (
             <section className="bw-team-footer">
               <h2>{b.organizations}</h2>

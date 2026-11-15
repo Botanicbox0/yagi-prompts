@@ -79,6 +79,28 @@ export async function seedBrandWorkspaceFixtures(sql: SqlRunner, storage: Storag
   const template=value(await createProductionTemplate(deps,studio,{contractId:production.id,title:'[Local fixture] Portrait film',titleKo:'[로컬 예시] 인물 영상',promptText:'Local QA template only. Use the verified identity reference for a studio portrait film.',seconds:5,aspect:'9:16',previewAttachmentId:attachment.id,requestId:randomUUID()}));
   value(await sendBrandSupport(deps,studio,{organizationId:org.id,body:'[Local fixture] Welcome. You can ask the studio about your workspace here.',requestId:randomUUID()}));
   await seedCampaignWizardFixtures(deps, { owner, orgId: org.id, projectId: project.id, studioId: studio.userId!, contractId: production.id, templateId: template.id, value });
+  await seedProjectOnlyFixtures(deps, { studio, value });
+}
+
+/** Fixed id of the local project-only organization, so QA scripts and tests can point at it. */
+export const PROJECT_ONLY_FIXTURE_ORG_REQUEST = 'bb000000-0000-4000-8000-000000000010';
+
+/**
+ * A client that only commissions video production (docs/BRAND-CLIENT-WORK.md), local only: an
+ * organization owned by the `pro` fixture user on the `project_only` plan, with nothing commissioned
+ * yet. `PLAYBOOK_DEV_IDENTITY=<pro fixture id>` then walks the whole loop as that client from an empty
+ * workspace, and `dev:admin` sees the same organization as YAGI staff. No real client, price or result.
+ */
+async function seedProjectOnlyFixtures(deps: { sql: SqlRunner; storage: StorageDriver }, f: { studio: Viewer; value: <T extends { ok: boolean }>(r: T) => Extract<T, { ok: true }> }) {
+  const client: Viewer = { userId: FIXTURE_USERS.pro.id, email: FIXTURE_USERS.pro.email, locale: 'ko', isAdmin: false, tier: 'pro' };
+  // The owner is the `pro` fixture user; a database seeded without that profile simply has no such client.
+  if (!(await deps.sql.query('select 1 from profiles where id = $1', [client.userId])).rows.length) return;
+  const org = f.value(await createBrandOrganization(deps, client, { name: '[로컬 예시] 외주 전용 고객사', requestId: PROJECT_ONLY_FIXTURE_ORG_REQUEST }));
+  const { setPlanAssignment } = await import('@/lib/brands/plans');
+  const assigned = (await deps.sql.query('select 1 from brand_plan_assignments where organization_id = $1', [org.id])).rows.length > 0;
+  if (assigned) return;
+  f.value(await setPlanAssignment(deps, f.studio, { organizationId: org.id, planId: 'project_only', billingMode: 'invoice',
+    startedOn: new Date(Date.now() + 9 * 3600000).toISOString().slice(0, 10), endsOn: null, seats: null, note: '[Local fixture] project-only client', expectedRevision: 0 }));
 }
 
 /**

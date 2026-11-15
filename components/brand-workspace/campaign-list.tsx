@@ -33,6 +33,8 @@ export interface CampaignListRooms {
   organizationId: string;
   unread: Record<string, number>;
   copy: RoomsShellCopy['entry'];
+  /** The project space's own words for the filters, count, search and attention note (rooms open). */
+  list?: RoomsShellCopy['space']['list'];
 }
 
 export function CampaignList({ projects, b, locale, studio = false, rooms = null }: { projects: BrandProjectSummary[]; b: BrandCopy; locale: string; studio?: boolean; rooms?: CampaignListRooms | null }) {
@@ -55,6 +57,10 @@ export function CampaignList({ projects, b, locale, studio = false, rooms = null
     setReturnLocation(href);
   }
   const d = b.dashboard;
+  // In the project space (rooms open) the list speaks of projects, not campaigns.
+  const words = rooms && !studio && rooms.list
+    ? { all: rooms.list.all, resultCount: rooms.list.resultCount, search: rooms.list.search, searchPlaceholder: rooms.list.searchPlaceholder, noMatch: rooms.list.noMatch, attentionNote: rooms.list.attentionNote }
+    : { all: b.performance.allCampaigns, resultCount: d.resultCount, search: d.search, searchPlaceholder: d.searchPlaceholder, noMatch: b.performance.noCampaignMatch, attentionNote: d.attentionNote };
   const link = (p: BrandProjectSummary) => {
     if (rooms && !studio && p.clientVisible !== false) return roomHref(p.id, rooms.organizationId);
     const detail = `${studio ? '/admin/brand-workspace' : '/brand/projects'}/${p.id}`;
@@ -80,16 +86,16 @@ export function CampaignList({ projects, b, locale, studio = false, rooms = null
   }
   return <div data-campaign-queue data-workspace-board>
     {attention.length > 0 && <section className="bw-attention" data-home-attention>
-      <div><h2>{studio ? d.studioAttention : d.attention}<span>{attention.length}</span></h2><p>{interpolate(studio ? d.studioAttentionNote : d.attentionNote, { count: attention.length })}</p></div>
+      <div><h2>{studio ? d.studioAttention : d.attention}<span>{attention.length}</span></h2><p>{interpolate(studio ? d.studioAttentionNote : words.attentionNote, { count: attention.length })}</p></div>
       <div className="bw-attention-links">{attention.map(p => <a key={p.id} href={`${link(p)}${studio ? '' : '#review'}`}><span>{p.title}</span><strong>{studio ? (p.status === 'requested' ? d.openRequest : d.openChanges) : d.openReview} <i aria-hidden="true">↗</i></strong></a>)}</div>
     </section>}
     <section className="bw-campaign-section">
       <div className="bw-board-toolbar">
-        <div className="bw-status-tabs" role="group" aria-label={b.projectStatus}>{(['all','requested','active','completed','cancelled'] as const).map(key => <button type="button" key={key} aria-pressed={status === key} onClick={() => updateFilters({ query, status: key })}>{key === 'all' ? b.performance.allCampaigns : b.status[key]}<span>{(key === 'all' ? projects : projects.filter(p => p.status === key)).length}</span></button>)}</div>
-        <label className="bw-search"><span className="sr-only">{d.search}</span><svg viewBox="0 0 20 20" aria-hidden="true"><circle cx="8.5" cy="8.5" r="5.5"/><path d="m13 13 4 4"/></svg><input value={query} onChange={e => updateFilters({ query: e.target.value, status })} placeholder={d.searchPlaceholder}/></label>
+        <div className="bw-status-tabs" role="group" aria-label={b.projectStatus}>{(['all','requested','active','completed','cancelled'] as const).map(key => <button type="button" key={key} aria-pressed={status === key} onClick={() => updateFilters({ query, status: key })}>{key === 'all' ? words.all : b.status[key]}<span>{(key === 'all' ? projects : projects.filter(p => p.status === key)).length}</span></button>)}</div>
+        <label className="bw-search"><span className="sr-only">{words.search}</span><svg viewBox="0 0 20 20" aria-hidden="true"><circle cx="8.5" cy="8.5" r="5.5"/><path d="m13 13 4 4"/></svg><input value={query} onChange={e => updateFilters({ query: e.target.value, status })} placeholder={words.searchPlaceholder}/></label>
       </div>
-      <div className="bw-filter-summary"><p role="status" aria-live="polite">{interpolate(d.resultCount, { count: sorted.length })}</p>{(query || status !== 'all') && <button type="button" onClick={() => updateFilters({ query: '', status: 'all' })}>{d.resetFilters}</button>}</div>
-      {!sorted.length ? <p className="bw-board-empty" role="status">{b.performance.noCampaignMatch}</p> : studio ? <div className="bw-ops-list">
+      <div className="bw-filter-summary"><p role="status" aria-live="polite">{interpolate(words.resultCount, { count: sorted.length })}</p>{(query || status !== 'all') && <button type="button" onClick={() => updateFilters({ query: '', status: 'all' })}>{d.resetFilters}</button>}</div>
+      {!sorted.length ? <p className="bw-board-empty" role="status">{words.noMatch}</p> : studio ? <div className="bw-ops-list">
         <div className="bw-ops-labels" aria-hidden="true"><span>{d.campaign}</span><span>{d.activity}</span><span>{d.schedule}</span></div>
         {sorted.map(p => <a className="bw-ops-row" key={p.id} href={link(p)}><div className="bw-ops-name"><WorkspacePreview cover={p.coverUrl} content={p.overview?.contents.find(c => c.mime?.startsWith('image/')) ?? p.overview?.contents[0]} b={b} title={p.organizationName}/><div><small>{p.organizationName}</small><h3>{p.title}</h3><span className="bw-status" data-state={p.status}>{b.status[p.status]}</span>{p.clientVisible===false&&<small className="bw-private-label">{b.managed.prepared}</small>}</div></div><span className={needsAction(p) ? 'bw-action-needed' : 'bw-muted'}>{activity(p)}</span><span className="bw-ops-date" data-campaign-date={campaignDateLine(p)?.kind ?? 'none'}>{dateLine(p, false) ?? '—'}<span aria-hidden="true">↗</span></span></a>)}
       </div> : <ul className="bw-campaign-grid">{sorted.map(p => <li key={p.id}><a className="bw-campaign-card" href={link(p)}>
@@ -97,6 +103,7 @@ export function CampaignList({ projects, b, locale, studio = false, rooms = null
         <div className="bw-card-copy"><p>{p.organizationName}{p.clientVisible===false&&<small className="bw-private-label" data-campaign-unshared>{b.managed.prepared}</small>}</p><h2>{p.title}</h2>{campaignDateLine(p) && <span data-campaign-date={campaignDateLine(p)!.kind}>{dateLine(p)}</span>}<footer><strong className={needsAction(p) ? 'bw-action-needed' : ''}>{activity(p)}</strong><span aria-hidden="true">↗</span></footer></div>
       </a>{rooms && p.clientVisible !== false ? <RoomEntry href={roomHref(p.id, rooms.organizationId)} unread={rooms.unread[p.id] ?? 0} copy={rooms.copy} variant="card"/> : null}</li>)}</ul>}
     </section>
-    {!studio && <section className="bw-recent" data-home-recent><header><h2>{d.recent}</h2><p>{d.recentNote}</p></header>{latest.length ? <div className="bw-content-grid">{latest.map(({ p, content }) => <a key={content.id} href={`${link(p)}#review`} className="bw-content-card"><WorkspacePreview content={content} poster={p.coverUrl} b={b} title={p.organizationName}/><div><span className="bw-status" data-state={content.decision}>{b.decisionStates[content.decision]}</span><h3>{content.title}</h3><p>{p.title}</p><small>{interpolate(b.version, { number: content.version })}</small></div></a>)}</div> : <p className="bw-board-empty">{d.noRecent}</p>}</section>}
+    {/* Rooms open: the old content versions are always empty for room-era projects, so nothing shows. */}
+    {!studio && !(rooms && latest.length === 0) && <section className="bw-recent" data-home-recent><header><h2>{d.recent}</h2><p>{d.recentNote}</p></header>{latest.length ? <div className="bw-content-grid">{latest.map(({ p, content }) => <a key={content.id} href={`${link(p)}#review`} className="bw-content-card"><WorkspacePreview content={content} poster={p.coverUrl} b={b} title={p.organizationName}/><div><span className="bw-status" data-state={content.decision}>{b.decisionStates[content.decision]}</span><h3>{content.title}</h3><p>{p.title}</p><small>{interpolate(b.version, { number: content.version })}</small></div></a>)}</div> : <p className="bw-board-empty">{d.noRecent}</p>}</section>}
   </div>;
 }

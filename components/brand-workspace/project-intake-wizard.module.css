@@ -101,7 +101,10 @@
   border-color: var(--ys-ink-secondary);
 }
 
-.trackCardActive {
+/* `:hover` is listed too: on its own it outranks the active rule and put the dark hover background under
+   the active (dark) title, which made the chosen card's title disappear while the pointer rested on it. */
+.trackCardActive,
+.trackCardActive:hover {
   background: var(--ys-active-bg);
   border-color: var(--ys-active-bg);
   box-shadow: none;
@@ -125,8 +128,10 @@
   line-height: 1.5;
   color: var(--ys-ink-secondary);
 }
+/* The active card's background is `--ys-active-bg` (light on the dark theme, dark on the light one), so
+   its second line follows `--ys-active-fg`: a fixed white was unreadable on the light card. */
 .trackCardActive .trackCardLine {
-  color: rgba(255, 255, 255, 0.76);
+  color: color-mix(in srgb, var(--ys-active-fg) 72%, transparent);
 }
 
 .chipGroup {

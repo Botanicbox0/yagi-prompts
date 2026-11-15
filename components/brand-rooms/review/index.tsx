@@ -11,14 +11,23 @@
  */
 import "@/components/brand-studio/review/review.css";
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { roomReviewHref, type ReviewCreated, type ReviewStack, type RoomReviewDetail } from "@/lib/brand-studio/review-contracts";
+import { roomReviewHref, type ReviewCreated, type ReviewItem, type ReviewStack, type RoomReviewDetail } from "@/lib/brand-studio/review-contracts";
 import { ReviewPicker } from "@/components/brand-studio/review/picker";
-import { ReviewStage, fill, reviewErrorText, type ReviewActionResult, type ReviewActions } from "@/components/brand-studio/review/stage";
+import { ReviewStage, fill, reviewDownloadName, reviewErrorText, type ReviewActionResult, type ReviewActions } from "@/components/brand-studio/review/stage";
 import type { ProjectReviewTabProps } from "../seams";
 import { ShareButton } from "../share";
 import { fetchRoomReview, fetchRoomReviews, postRoomReview } from "./api";
 
 const POLL_MS = 30_000;
+
+/**
+ * Members seated in the room may save a cut once it is approved; drafts stay watch-only until the founder
+ * decides otherwise. Share-link guests follow their link's own `allow_download` (shared-page.tsx).
+ */
+export function roomDownload(review: Pick<ReviewItem, "status" | "mediaUrl" | "title" | "version">): { url: string; name: string } | null {
+  if (review.status !== "approved" || !review.mediaUrl) return null;
+  return { url: review.mediaUrl, name: reviewDownloadName(review.title, review.version, review.mediaUrl) };
+}
 
 function rememberInAddress(reviewId: string | null) {
   try {
@@ -156,6 +165,7 @@ export function ProjectReviewTab({
 
   const stackOfSelected = stacks?.find((s) => s.versions.some((v) => v.id === selectedId)) ?? null;
   const latestOfStack = stackOfSelected?.versions[0] ?? null;
+  const download = detail ? roomDownload(detail.review) : null;
 
   return (
     <div className="bsv-review bsv-room-review" data-room-review>
@@ -254,6 +264,8 @@ export function ProjectReviewTab({
                 initialCommentId={detail.review.id === initial?.reviewId ? arrivalCommentId : null}
                 actions={actions}
                 linkFor={(ms) => roomReviewHref(organizationId, projectId, detail.review.id, ms)}
+                downloadUrl={download?.url ?? null}
+                downloadName={download?.name ?? null}
                 tools={
                   rights.canEdit ? (
                     <>
