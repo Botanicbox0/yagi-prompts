@@ -4,8 +4,9 @@
  * screen runs. Components get answers already merged into the store; they never fetch on their own.
  */
 import { useCallback, useEffect, useMemo, useReducer, useRef, useState } from "react";
-import type { FilmSheet, StudioJobCreate, StudioJobView, StudioState } from "@/lib/brand-studio/contracts";
-import { createStudioApi, isFailure, measureInBrowser, type StudioApi, type StudioOps } from "./api";
+import type { z } from "zod";
+import type { FilmSheet, ReviseMarkReadSchema, StudioJobCreate, StudioJobView, StudioReviseMarkRead, StudioState } from "@/lib/brand-studio/contracts";
+import { createStudioApi, isFailure, measureInBrowser, type ApiResult, type StudioApi, type StudioOps } from "./api";
 import { newRequestId } from "./copy";
 import { createPollLoop, type PollLoop } from "./poller";
 import { STUDIO_JOB_SETTLED, STUDIO_JOB_STARTED, announce } from "./seams";
@@ -134,6 +135,12 @@ export function useStudio({ organizationId, initialState, api: injected }: { org
   /** The viewer's "next version" form: which ways are open, what each uses and which fits the request. Spends nothing. */
   const planRevision = useCallback((input: StudioOps["revise.plan"][0]) => api.call("revise.plan", input), [api]);
 
+  /** A spot marked on a clip: what it is on (a short label for the chip, a description for the request). Spends nothing. */
+  const readMark = useCallback(
+    (input: z.input<typeof ReviseMarkReadSchema>): Promise<ApiResult<StudioReviseMarkRead>> => api.call("revise.mark", input),
+    [api],
+  );
+
   /** Stops a run that has not reached the maker yet; either way the job is read again (status and usage). */
   const cancelJob = useCallback(
     async (jobId: string) => {
@@ -191,7 +198,7 @@ export function useStudio({ organizationId, initialState, api: injected }: { org
     [api, refreshSilently],
   );
 
-  return { store, load, createJob, cancelJob, saveOutput, deleteOutput, updateAsset, deleteAsset, handoff, enhancePrompt, planRevision, films, analyzeFilm, uploads, upload };
+  return { store, load, createJob, cancelJob, saveOutput, deleteOutput, updateAsset, deleteAsset, handoff, enhancePrompt, planRevision, readMark, films, analyzeFilm, uploads, upload };
 }
 
 /**

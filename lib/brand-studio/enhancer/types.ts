@@ -70,6 +70,24 @@ export interface EnhanceRevision {
   version: number;
   madeWith: string;
   history: string[];
+  /**
+   * Spots the customer pointed at on the clip; mark `n` is ①, ② or ③ in the request. `what` says what
+   * the spot is on (null when it could not be read), `time` the second it was placed at, `x`/`y`
+   * (and `w`/`h` for a box) where it is, in fractions of the picture. Absent when there are none.
+   */
+  marks?: EnhanceMark[];
+}
+
+export interface EnhanceMark {
+  n: number;
+  time: number;
+  what: string | null;
+  x: number;
+  y: number;
+  w?: number;
+  h?: number;
+  /** The chip text the customer saw. Used by the fallback only; the model gets `what` and the position. */
+  label?: string | null;
 }
 
 export interface EnhanceResult {

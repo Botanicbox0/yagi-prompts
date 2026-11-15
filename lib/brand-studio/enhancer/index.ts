@@ -8,6 +8,7 @@
 import { loadDirectorPlaybooks, playbookRuleLines } from '@/lib/brand-studio/director/playbooks';
 import { blueprintShape, blueprintShots, isBlueprint } from './blueprint';
 import { composeFallbackPrompt } from './fallback';
+import { hasMarkSign, replaceMarks } from './marks';
 import { callGeminiJson, inlinePart, studioGeminiConfig, type GeminiPart } from './gemini';
 import { effectiveSeconds, keepPhrase, planShots, type PlannedShot } from './lines';
 import { buildSystemInstruction } from './profiles';
@@ -15,7 +16,7 @@ import { bindReferences, mapCustomerMentions, type Binding } from './references'
 import { checkEnhancedPrompt, cleanNotes, ENHANCER_RESPONSE_SCHEMA, EnhancerOutputSchema } from './schema';
 import type { EnhanceDeps, EnhanceInput, EnhanceResult } from './types';
 
-export type { EnhanceDeps, EnhanceInput, EnhanceKind, EnhanceReference, EnhanceResult, EnhanceRevision, EnhanceVideo } from './types';
+export type { EnhanceDeps, EnhanceInput, EnhanceKind, EnhanceMark, EnhanceReference, EnhanceResult, EnhanceRevision, EnhanceVideo } from './types';
 export { composeFallbackPrompt } from './fallback';
 export {
   findMissingReferences,
@@ -95,6 +96,19 @@ function payload(input: EnhanceInput, binding: Binding, seconds: number | null, 
           // their picture mentions become tokens like the request's. An edit's stay as written: they
           // named the pictures of their own run.
           history: revision.mode === 'reshoot' ? revision.history.map((h) => mapCustomerMentions(h, binding.bound)) : revision.history,
+          // ①②③ in the request: what each spot is on and where (lib/brand-studio/enhancer/marks.ts).
+          ...(revision.marks?.length
+            ? {
+                marks: revision.marks.map((m) => ({
+                  n: m.n,
+                  time: m.time,
+                  what: m.what,
+                  x: m.x,
+                  y: m.y,
+                  ...(m.w !== undefined && m.h !== undefined ? { w: m.w, h: m.h } : {}),
+                })),
+              }
+            : {}),
         }
       : null,
   };
@@ -143,7 +157,7 @@ export async function enhancePrompt(input: EnhanceInput, deps: EnhanceDeps): Pro
     try {
       return composeFallbackPrompt(input);
     } catch {
-      return { prompt: input.prompt.trim(), notes: '', source: 'fallback' };
+      return { prompt: input.revision ? replaceMarks(input.prompt.trim(), []) : input.prompt.trim(), notes: '', source: 'fallback' };
     }
   };
   try {
@@ -184,6 +198,8 @@ export async function enhancePrompt(input: EnhanceInput, deps: EnhanceDeps): Pro
     if (!parsed.success) return fallback('bad_shape');
     const checked = checkEnhancedPrompt(parsed.data.prompt, effectiveInput, binding);
     if (!checked.ok) return fallback(checked.reason);
+    // The video model never reads the customer's ①②③: they must have become words.
+    if (input.revision && hasMarkSign(checked.prompt)) return fallback('mark_sign');
     // A reshoot rewrites the earlier prompt sentence by sentence; its shape is that prompt's, not a fresh blueprint's.
     if (blueprint && !input.revision && !blueprintShape(checked.prompt, seconds, input.video?.keep)) return fallback('blueprint_shape');
     return {

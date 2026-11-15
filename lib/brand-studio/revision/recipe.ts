@@ -26,6 +26,8 @@ export interface RevisionHistoryItem {
   request: string;
   /** The pictures attached for that change (the edit's trailing `revision.added` refs). */
   added: StudioReference[];
+  /** The spots that change pointed at (①②③ in `request`), when it pointed at any. */
+  marks?: Array<{ label?: string; what?: string }>;
 }
 
 export interface RevisionRecipe {
@@ -115,7 +117,8 @@ export async function revisionChain(sql: SqlRunner, organizationId: string, star
       recipeJob = current;
       break;
     }
-    history.unshift({ version: revision.version, request: current.prompt ?? '', added: addedRefsOf(current) });
+    const marks = Array.isArray(revision.marks) && revision.marks.length ? revision.marks.map((m) => ({ ...m })) : null;
+    history.unshift({ version: revision.version, request: current.prompt ?? '', added: addedRefsOf(current), ...(marks ? { marks } : {}) });
     const parent: JobRow | null = revision.baseJobId ? await jobById(sql, organizationId, revision.baseJobId) : null;
     current = parent ? await versionJobOf(sql, organizationId, parent) : null;
   }

@@ -140,6 +140,12 @@ ${lengthRule(seconds)}
 ${soundRule(audio)}`;
 }
 
+/** ①②③ in a revision request: spots the customer pointed at (lib/brand-studio/enhancer/marks.ts). */
+function marksRule(mode: 'edit' | 'reshoot'): string {
+  const words = mode === 'edit' ? ' (for an edit, in the words that find it in the video)' : '';
+  return `①, ② and ③ in the request are marks the customer placed on the clip: mark n is "revision.marks[n-1]", whose "what" says what it is on and "time" the second it was placed at. Wherever the request uses a mark, write that description instead${words}. When "what" is null, describe the thing by where it is in the frame at that second (use "x","y" as a rough position: left / centre / right, top / middle / bottom). Never write ①②③, the word mark, coordinates or a ring in the prompt.`;
+}
+
 /**
  * A new version of a generated clip (lib/brand-studio/revision). The earlier prompt and requests travel
  * in the user turn ("revision.madeWith", "revision.history"); these rules say what to do with them.
@@ -150,6 +156,7 @@ function revisionTask(input: EnhanceInput, binding: Binding): string {
   const previous = Math.max(1, revision.version - 1);
   const hasHistory = revision.history.length > 0;
   const never = 'Never mention versions, an earlier prompt, earlier requests or this history in the prompt.';
+  const marks = revision.marks?.length ? `\n${marksRule(revision.mode)}` : '';
   if (revision.mode === 'edit') {
     const ref = binding.bound.find((b) => b.ref.kind === 'video')?.token ?? '@Video1';
     const pictures = binding.bound.some((b) => b.ref.kind === 'image' && b.token)
@@ -157,14 +164,14 @@ function revisionTask(input: EnhanceInput, binding: Binding): string {
       : '';
     return `Task: the next version of a generated clip. ${ref} is version ${previous} of the clip; it was generated from the prompt in "revision.madeWith".${hasHistory ? ` The changes in "revision.history" were made after that and are already visible in ${ref}: they stay.` : ''}
 Write an edit instruction for ${ref} that applies ONLY the request. Open with: "In ${ref}, change only <the change>; everything else stays as it is." Name the subject with the same words "revision.madeWith" uses for it, so the model finds it in the video.${pictures}
-Then say plainly that the camera movement, the timing and cuts, the framing, the subjects and everything the request does not mention stay exactly as they are in ${ref}. No new timeline, no new shots, no new camera moves, no visual-style block.
+Then say plainly that the camera movement, the timing and cuts, the framing, the subjects and everything the request does not mention stay exactly as they are in ${ref}. No new timeline, no new shots, no new camera moves, no visual-style block.${marks}
 ${never}
 ${soundRule(audio)}`;
   }
   return `Task: make a generated clip again with changes. "revision.madeWith" is the complete prompt the clip was generated from.
 Rewrite it so it applies ${hasHistory ? 'each request in "revision.history" in order (oldest first), and then the request' : 'the request'}. Change only the sentences those requests touch; keep every other sentence, their order, the timing marks and the reference tokens word for word. A later request wins over an earlier one where they disagree.
 Pictures attached for the requests are listed in "references" after the ones "revision.madeWith" already uses: bind each by its token (the next free numbers) where its request applies.
-Output the complete prompt, not a list of changes.
+Output the complete prompt, not a list of changes.${marks}
 ${never}
 ${soundRule(audio)}`;
 }

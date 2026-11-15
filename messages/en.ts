@@ -1959,6 +1959,11 @@ export const en = {
       submit: 'Make v{n}',
       switchAndMake: 'Switch and make',
       makeAsSelected: 'Make as selected',
+      mark: 'Mark what to fix',
+      markHint: 'Click or drag on the video where it needs fixing',
+      markLayer: 'Mark what to fix on the video',
+      removeMark: 'Remove mark {n}',
+      markReading: 'Reading',
       reasons: {
         surface: 'This change can be fixed in the video directly.',
         motion: 'To change the camera or the action, shoot again.',

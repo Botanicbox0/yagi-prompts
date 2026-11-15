@@ -1970,6 +1970,11 @@ export const ko: Dictionary = {
       submit: 'v{n} 만들기',
       switchAndMake: '바꿔서 만들기',
       makeAsSelected: '그대로 만들기',
+      mark: '고칠 곳 표시',
+      markHint: '영상을 클릭하거나 드래그해 표시하세요',
+      markLayer: '영상에 고칠 곳 표시',
+      removeMark: '{n}번 지우기',
+      markReading: '읽는 중',
       reasons: {
         surface: '영상에서 바로 고칠 수 있어요.',
         motion: '카메라나 동작은 다시 촬영해야 해요.',

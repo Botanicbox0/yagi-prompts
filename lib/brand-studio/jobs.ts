@@ -46,6 +46,8 @@ export const FREE_INTEL_LIMITS = {
   analyzePerMinute: 6,
   /** `revise.plan` (lib/brand-studio/revision/advise.ts). */
   revisePerMinute: 20,
+  /** `revise.mark` (lib/brand-studio/revision/mark.ts): one call per mark placed. */
+  markPerMinute: 30,
 } as const;
 
 const freeIntelBuckets = new Map<string, number[]>();

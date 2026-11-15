@@ -19,6 +19,7 @@ import {
   type StudioJobsPoll,
   type StudioOperation,
   type StudioPromptPreview,
+  type StudioReviseMarkRead,
   type StudioRevisePlan,
   type StudioState,
 } from './contracts';
@@ -29,6 +30,7 @@ import { handoffToCampaign } from './handoff';
 import { analyzeStudioFilm, cancelStudioJob, createStudioJob, previewStudioPrompt } from './jobs';
 import { failure, guarded } from './outcome';
 import { planStudioRevise } from './revision/advise';
+import { readStudioMark } from './revision/mark';
 import { assetView, assetsOf, campaignsOf, jobsByIds, jobsOfStudioState, viewsOf } from './repo';
 import type { StudioDeps } from './types';
 import { allowanceView, loadAllowance } from './usage';
@@ -44,6 +46,7 @@ export type StudioOperationResult =
   | StudioPromptPreview
   | StudioFilmAnalysis
   | StudioRevisePlan
+  | StudioReviseMarkRead
   | StudioAssetReserved
   | StudioAssetSaved
   | StudioHandoffDone;
@@ -54,6 +57,7 @@ const SELF_STUDIO_OPS: ReadonlySet<StudioOperation> = new Set([
   'prompt.enhance',
   'film.analyze',
   'revise.plan',
+  'revise.mark',
   'handoff.campaign',
 ]);
 
@@ -80,6 +84,8 @@ export async function runStudioOperation(deps: StudioDeps, viewer: Viewer, opera
       return analyzeStudioFilm(deps, viewer, input);
     case 'revise.plan':
       return planStudioRevise(deps, viewer, input);
+    case 'revise.mark':
+      return readStudioMark(deps, viewer, input);
     case 'asset.reserve':
       return reserveStudioAsset(deps, viewer, input);
     case 'asset.complete':

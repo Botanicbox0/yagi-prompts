@@ -8,8 +8,9 @@
  * `reshootWay` return either the plan or the reason the way is closed.
  */
 import type { SqlRunner } from '@/lib/db/sql-runner';
-import { STUDIO_LIMITS, type StudioReference, type StudioReviseMode, type StudioReviseProblem } from '../contracts';
+import { STUDIO_LIMITS, type ReviseMark, type StudioReference, type StudioReviseMode, type StudioReviseProblem } from '../contracts';
 import { StudioDenied } from '../access';
+import { pointsPastMarks } from '../enhancer/marks';
 import type { StudioMediaStore } from '../media-store';
 import { studioModel, type StudioVideoModel } from '../models';
 import { mentionsMissing, resolveReferences, type JobPlan, type ResolvedRef } from '../plan';
@@ -24,6 +25,27 @@ export interface ReviseRequest {
   mode: StudioReviseMode;
   prompt: string;
   references: StudioReference[];
+  /** Spots the request points at (①②③), as sent. */
+  marks?: readonly ReviseMark[];
+}
+
+type StoredMark = NonNullable<NonNullable<StudioJobParams['revision']>['marks']>[number];
+
+/** The marks as they are stored on the job: geometry, the chip label and the description, nothing else. */
+export function storedMarks(marks: readonly ReviseMark[] | undefined): StoredMark[] {
+  return (marks ?? []).map((m) => ({
+    time: m.time,
+    x: m.x,
+    y: m.y,
+    ...(m.w !== undefined && m.h !== undefined ? { w: m.w, h: m.h } : {}),
+    ...(m.label ? { label: m.label } : {}),
+    ...(m.what ? { what: m.what } : {}),
+  }));
+}
+
+/** A request may only point at marks that were sent with it (② needs two marks). */
+export function requireMarksBehind(prompt: string, marks: readonly ReviseMark[] | undefined): void {
+  if (pointsPastMarks(prompt, marks?.length ?? 0)) throw new StudioDenied('invalid');
 }
 
 function liveVideoModel(id: string): StudioVideoModel | null {
@@ -56,7 +78,13 @@ export async function resolveAdded(
   return resolved;
 }
 
-function revisionParams(recipe: RevisionRecipe, mode: StudioReviseMode, added: number): NonNullable<StudioJobParams['revision']> {
+function revisionParams(
+  recipe: RevisionRecipe,
+  mode: StudioReviseMode,
+  added: number,
+  marks?: readonly ReviseMark[],
+): NonNullable<StudioJobParams['revision']> {
+  const kept = storedMarks(marks);
   return {
     rootJobId: recipe.rootJobId,
     version: recipe.nextVersion,
@@ -64,6 +92,7 @@ function revisionParams(recipe: RevisionRecipe, mode: StudioReviseMode, added: n
     baseOutputId: recipe.base.outputId,
     mode,
     added,
+    ...(kept.length ? { marks: kept } : {}),
   };
 }
 
@@ -120,7 +149,7 @@ export async function editWay(
         keep: [],
         change: '',
         ...(base.seconds !== null ? { referenceVideoSeconds: base.seconds } : {}),
-        revision: revisionParams(recipe, 'edit', request.references.length),
+        revision: revisionParams(recipe, 'edit', request.references.length, request.marks),
       },
       refs,
       resolved,
@@ -183,7 +212,7 @@ export async function reshootWay(
     audio: p.audio ?? 'native',
     count: 1,
     locale,
-    revision: revisionParams(recipe, 'reshoot', fresh.length),
+    revision: revisionParams(recipe, 'reshoot', fresh.length, request.marks),
   };
   if (run.kind === 'video') {
     const usd = videoRunUsd({ resolution, seconds: seconds ?? model.defaultSeconds });
@@ -231,17 +260,18 @@ const DENIED: Record<StudioReviseProblem, 'invalid' | 'reference_missing'> = {
 export async function planRevision(
   sql: SqlRunner,
   organizationId: string,
-  input: { outputId: string; mode: StudioReviseMode; prompt: string; references: StudioReference[] },
+  input: { outputId: string; mode: StudioReviseMode; prompt: string; references: StudioReference[]; marks?: ReviseMark[] },
   media: StudioMediaStore,
   locale: 'ko' | 'en',
 ): Promise<JobPlan> {
+  requireMarksBehind(input.prompt, input.marks);
   const recipe = await loadRevisionRecipe(sql, organizationId, input.outputId);
   const added = await resolveAdded(sql, organizationId, input.references, media, locale);
   // The customer numbers the pictures they attached for this request from 1, whatever the way, and the
   // clip itself is "영상 1".
   const clip = { kind: 'video' } as ResolvedRef;
   if (mentionsMissing(input.prompt, [clip, ...added])) throw new StudioDenied('reference_missing');
-  const request = { mode: input.mode, prompt: input.prompt, references: [...input.references] };
+  const request = { mode: input.mode, prompt: input.prompt, references: [...input.references], marks: input.marks ?? [] };
   const way = input.mode === 'edit'
     ? await editWay(sql, organizationId, recipe, request, media, locale)
     : await reshootWay(sql, organizationId, recipe, request, media, locale);

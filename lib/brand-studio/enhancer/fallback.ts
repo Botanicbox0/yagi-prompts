@@ -6,6 +6,7 @@
  */
 import { composeBlueprintPrompt, isBlueprint } from './blueprint';
 import { audioLine, effectiveSeconds, formatRange, keepPhrase, planShots, referenceClause } from './lines';
+import { replaceMarks, type MarkWords } from './marks';
 import { bindReferences, mapCustomerMentions, type Binding, type BoundReference } from './references';
 import type { EnhanceInput, EnhanceResult } from './types';
 
@@ -101,17 +102,28 @@ function videoPrompt(input: EnhanceInput, binding: Binding, request: string): st
  */
 function reshootPrompt(input: EnhanceInput, binding: Binding, request: string): string {
   const revision = input.revision!;
-  const changes = [...revision.history.map((h) => mapCustomerMentions(h.trim(), binding.bound)), request]
+  // Earlier requests' own marks were written out before they got here (lib/brand-studio/prepare.ts);
+  // a sign left over is only ever "the marked spot".
+  const changes = [...revision.history.map((h) => mapCustomerMentions(replaceMarks(h.trim(), []), binding.bound)), request]
     .map(sentence)
     .filter(Boolean);
   const madeWith = revision.madeWith.trim();
   const text = [madeWith, changes.join('\n')].filter(Boolean).join('\n\n');
-  return text || input.prompt.trim();
+  return text || request || replaceMarks(input.prompt.trim(), markWords(input));
+}
+
+/** Mark n of a revision as words, by its number (①②③ in the request). */
+function markWords(input: EnhanceInput): MarkWords[] {
+  const words: MarkWords[] = [];
+  for (const m of input.revision?.marks ?? []) if (m.n >= 1 && m.n <= 20) words[m.n - 1] = { what: m.what, label: m.label ?? null };
+  return Array.from({ length: words.length }, (_, i) => words[i] ?? {});
 }
 
 export function composeFallbackPrompt(input: EnhanceInput): EnhanceResult {
   const binding = bindReferences(input);
-  const request = mapCustomerMentions(input.prompt.trim(), binding.bound);
+  // A revision's ①②③ become what each spot is on; the video model never reads the signs.
+  const said = input.revision ? replaceMarks(input.prompt.trim(), markWords(input)) : input.prompt.trim();
+  const request = mapCustomerMentions(said, binding.bound);
   // An edit-revision is the ordinary edit fallback with the request as the change.
   if (input.revision?.mode === 'reshoot' && input.profile === 'seedance') {
     return { prompt: reshootPrompt(input, binding, request), notes: FALLBACK_NOTES[input.locale], source: 'fallback' };
