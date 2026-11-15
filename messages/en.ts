@@ -1615,7 +1615,7 @@ export const en = {
       dark: 'The photo looks dark. Near a window or under good light your face comes out sharper.',
       bright: 'The photo looks overexposed; part of your face may be washed out. Try again without the light behind you.',
     },
-    photoAdvisoryHint: 'This is only guidance. The photo is checked on your device and the result is not stored. Your consent and provider checks still apply.',
+    photoAdvisoryHint: 'This is only guidance. Your consent and provider checks still apply.',
     // Saved-photo check (advisory only, TWINGS_PHOTO_CHECK). Draft — before the wording review.
     photoCheck: {
       good: 'Your face is clear in this photo.',
