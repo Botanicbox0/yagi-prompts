@@ -180,7 +180,7 @@ const JobBase = {
 };
 
 /**
- * The sentence the customer read in the prompt bar after "지금 문장 다듬기" (they may have edited it). It is
+ * The sentence the customer read in the prompt bar after "지금 설계하기" (they may have edited it). It is
  * sent as it is and never rewritten again; `prompt` stays the words they typed first. Plain image and video
  * runs only: a partial edit and a reference-video run always write their own sentence.
  */

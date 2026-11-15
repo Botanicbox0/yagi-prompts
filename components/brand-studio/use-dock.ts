@@ -2,7 +2,7 @@
 /**
  * The prompt bar's own state: the draft, the references and one press of "만들기". A press keeps its
  * request id until it succeeds, so sending the same thing again after a lost answer cannot start a
- * second run. "지금 문장 다듬기" asks `prompt.enhance` for the rewritten sentence (free for the customer)
+ * second run. "지금 설계하기" asks `prompt.enhance` for the rewritten sentence (free for the customer)
  * and puts it in the field, where it can be edited. The words typed before it are kept: "원래 문장으로"
  * brings them back, and a run sends them as `prompt` with the sentence in the field as `reviewedPrompt`
  * (`enhance: false`), so nothing is rewritten twice and the run records both.
@@ -183,7 +183,7 @@ export function useDock({
     return true;
   }, [busy, copy, draft, enhancing, organizationId, ownWords, studio, tray]);
 
-  /** "지금 문장 다듬기": the sentence the model will read, in the field, with the customer's words kept for "원래 문장으로". */
+  /** "지금 설계하기": the sentence the model will read, in the field, with the customer's words kept for "원래 문장으로". */
   const enhanceNow = useCallback(async () => {
     if (enhancing || !draft.prompt.trim()) return;
     const preview = enhancePreviewInput(draft, tray, organizationId);

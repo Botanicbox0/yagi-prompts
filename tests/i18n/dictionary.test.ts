@@ -107,6 +107,10 @@ describe('dictionary completeness (§3.9)', () => {
       'social.admin.none',
       // Clip versions read "v3" in both locales, like the version marks in other creative tools.
       'brandStudio.revise.version',
+      // "Prompt Architect" is the feature's name (founder, 2026-11-16): it reads every reference and designs
+      // the prompt for the chosen model, so it is not called "polish"; a name is the same in both locales.
+      'brandStudio.dock.enhance',
+      'brandStudio.explainer.steps.enhance.title',
       // PLATFORM-2.0 §14.1 (2026-10-24): the credit is "by @handle" in Korean too — the local idiom.
       'prompts.byAuthor',
       'prompts.cardAuthor',
