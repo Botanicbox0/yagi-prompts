@@ -15,6 +15,8 @@ import { selfiePhotoCheck } from '@/lib/identity/photo-check-service';
  * screens then show nothing. Nothing here ever blocks saving, choosing or paying.
  */
 export const dynamic = 'force-dynamic';
+/** One model call of up to PHOTO_CHECK_TIMEOUT_MS plus a storage read. */
+export const maxDuration = 30;
 const headers = { 'Cache-Control': 'private, no-store', 'X-Robots-Tag': 'noindex, nofollow' };
 const json = (data: unknown, status = 200) => NextResponse.json(data, { status, headers });
 const OFF = { ok: false, code: 'off' };

@@ -1619,7 +1619,7 @@ export const en = {
     // Saved-photo check (advisory only, TWINGS_PHOTO_CHECK). Draft — before the wording review.
     photoCheck: {
       good: 'Your face is clear in this photo.',
-      retake: 'Another photo will work better. You can still make it with this one.',
+      retake: 'You can make it with this photo, but another one will work better.',
       issues: {
         no_face: "We couldn't find a face in this photo. Choose one where your face is clearly visible.",
         multiple_faces: 'More than one face shows in this photo. A photo of just you works best.',

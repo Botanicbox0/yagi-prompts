@@ -19,7 +19,8 @@ import type { PhotoCheck, PhotoCheckIssue } from './photo-check-view';
  */
 export const PHOTO_CHECK_DEFAULT_BASE_URL = 'https://generativelanguage.googleapis.com/v1beta';
 export const PHOTO_CHECK_DEFAULT_MODEL = 'gemini-4-hydrogen';
-export const PHOTO_CHECK_TIMEOUT_MS = 12_000;
+/** A real call took up to 11.7 s (2026-11-15, 8 images, median 3.5 s). Past this the screens simply show nothing. */
+export const PHOTO_CHECK_TIMEOUT_MS = 20_000;
 
 export const PHOTO_CHECK_SYSTEM = [
   'You check whether ONE uploaded photo is usable as the face reference for an AI video of the person in it.',
