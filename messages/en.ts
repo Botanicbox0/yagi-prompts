@@ -3763,7 +3763,7 @@ export const en = {
     resolutionStandard: '720p is standard HD, sharp enough for social uploads.',
     waitLabel: 'Ready in',
     waitValue: 'about {minutes} min',
-    aiLimit: 'Made with AI, so details like hands, lettering and backgrounds may differ a little from the sample.',
+    aiLimit: 'Made with AI, so the result may not be perfect, and how closely it resembles you depends on the photo you upload. Details like hands, lettering and backgrounds may differ a little from the sample.',
     makeBodySubscription: 'Prepare a clear, front-facing photo of yourself. You can make this template with an available monthly plan.',
     makeBodySubscriptionPaused: 'New subscriptions are temporarily paused. Existing subscribers can check their current period and plan status in their account.',
     relatedHeading: 'Similar templates',

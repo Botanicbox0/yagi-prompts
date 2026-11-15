@@ -3753,7 +3753,7 @@ export const ko: Dictionary = {
     resolutionStandard: '720p는 SNS 업로드에 충분히 선명한 표준 고화질입니다.',
     waitLabel: '완성까지',
     waitValue: '보통 {minutes}분',
-    aiLimit: 'AI로 만들기 때문에 손·글자·배경 같은 세부는 예시와 조금 다를 수 있습니다.',
+    aiLimit: 'AI로 만들어 완벽하지 않을 수 있고, 닮은 정도는 올린 사진에 따라 달라집니다. 손·글자·배경 같은 세부는 예시와 조금 다를 수 있습니다.',
     makeBodySubscription: '정면이 또렷한 본인 사진을 준비해 주세요. 이용 가능한 월 구독으로 이 템플릿을 만들 수 있습니다.',
     makeBodySubscriptionPaused: '새 구독 신청은 잠시 중단했습니다. 기존 구독자는 내 계정에서 이용기간과 상태를 확인해 주세요.',
     relatedHeading: '비슷한 템플릿',
