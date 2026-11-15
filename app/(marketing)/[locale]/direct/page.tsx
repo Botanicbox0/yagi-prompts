@@ -7,6 +7,7 @@ import { SITE_TWITTER_CARD, siteOgImage } from '@/lib/seo/og';
 import { MarketingFooter, MarketingNav } from '@/components/marketing/chrome';
 import { PersonalIdentity } from '@/components/audience/personal-identity';
 import { DirectSceneStudio } from '@/components/audience/direct-scene-studio';
+import { cachedSubscriptionAvailability } from '@/lib/creator-subscriptions/cached-availability';
 
 export const revalidate = 3600;
 
@@ -50,6 +51,8 @@ export default async function DirectScenePage({
   const locale: Locale = isLocale(raw) ? raw : DEFAULT_LOCALE;
   const dict = getDictionary(locale);
   const ds = dict.creatorJourney.directScene;
+  // Credits appear only once web subscriptions are open, the same switch the template page reads.
+  const subscriptionOpen = (await cachedSubscriptionAvailability()).status === 'open';
 
   return (
     <PersonalIdentity>
@@ -74,6 +77,7 @@ export default async function DirectScenePage({
                 locale={locale}
                 videoCatalogHref={templatesHref(locale, 'video')}
                 creatorWorkspaceHref={`${CREATOR_WORKSPACE_PATH}/formats/new`}
+                showCredits={subscriptionOpen}
               />
             </div>
           </div>
