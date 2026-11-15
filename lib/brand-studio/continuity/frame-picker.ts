@@ -3,6 +3,7 @@
  *
  * Strictly zero Node, filesystem, or database imports (`security:client` clean).
  */
+import { corsMediaUrl } from '../cors-media-url';
 import type { ContinuityKeyframeCandidate } from './contracts';
 
 export interface FrameQualityBreakdown {
@@ -180,7 +181,8 @@ export async function extractContinuityFramesInBrowser(
         },
         { once: true },
       );
-      video.src = videoUrl;
+      // Its own cache entry: the clip was usually played without CORS first (see corsMediaUrl).
+      video.src = corsMediaUrl(videoUrl);
     });
 
     const naturalDur = Number.isFinite(video.duration) && video.duration > 0 ? video.duration : trimEndSec;

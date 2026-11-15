@@ -391,6 +391,8 @@ export default async function TemplatePage({ params }: RouteParams) {
                           </div>
                         ))}
                       </dl>
+                      {/* Founder, 2026-11-15: 720p is the default and it is enough — say so where the price is decided. */}
+                      {resolutions.length > 0 && <p data-resolution-standard className="mt-1.5 text-xs text-black/65">{t.resolutionStandard}</p>}
                     </MakeLauncher>
 
                     {/* The make card as a sheet: studio, refund and AI notes, the photo guide. Every `#make` opens it. */}

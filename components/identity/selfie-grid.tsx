@@ -5,6 +5,7 @@ import type { SelfieLibrary, SelfieView } from '@/lib/identity/selfie-service';
 import { selfieSavedOn } from '@/lib/identity/selfie-format';
 import { interpolate } from '@/lib/i18n/format';
 import { SelfieUploader } from './selfie-uploader';
+import { PhotoCheckNote } from './photo-check-note';
 
 /**
  * The saved photos as a grid (docs/IDENTITY-SELFIE.md §3). Two uses, one look:
@@ -198,7 +199,11 @@ export function SelfieLibraryPanel({ copy, locale, initial, variant, manageHref 
   const [error, setError] = useState<string | null>(null);
   const items = library.items;
   const full = items.length >= library.limit;
-  const target = items.find(item => item.id === library.defaultId) ?? items[0] ?? null;
+  // The photo just saved here gets the advisory check; "change" from that advice replaces that photo.
+  const [checkedId, setCheckedId] = useState<string | null>(null);
+  const [replaceId, setReplaceId] = useState<string | null>(null);
+  const checked = items.find(item => item.id === checkedId) ?? null;
+  const target = items.find(item => item.id === replaceId) ?? items.find(item => item.id === library.defaultId) ?? items[0] ?? null;
   const [uploading, setUploading] = useState<'add' | 'replace' | null>(variant === 'page' && startEditing && items.length > 0 ? (full ? 'replace' : 'add') : null);
   const actionRef = useRef<HTMLElement | null>(null);
   const continueRef = useRef<HTMLAnchorElement>(null);
@@ -245,8 +250,10 @@ export function SelfieLibraryPanel({ copy, locale, initial, variant, manageHref 
     }
   }
 
-  const onSaved = (_saved: SelfieView, _replaced: boolean, next: SelfieLibrary | null) => {
+  const onSaved = (saved: SelfieView, _replaced: boolean, next: SelfieLibrary | null) => {
     setUploading(null);
+    setReplaceId(null);
+    setCheckedId(saved.id);
     setError(null);
     if (next) setLibrary(next); else void reload();
     setStatus(copy.savedToast);
@@ -306,6 +313,14 @@ export function SelfieLibraryPanel({ copy, locale, initial, variant, manageHref 
       ) : (
         <>
           {grid}
+          {checked && !uploading ? (
+            <PhotoCheckNote
+              selfieId={checked.id}
+              copy={copy.photoCheck}
+              retakeLabel={copy.change}
+              onRetake={() => { setReplaceId(checked.id); setUploading('replace'); }}
+            />
+          ) : null}
           {uploading ? (
             <div data-selfie-library-upload className="flex flex-col gap-4 border-t border-hairline pt-5">
               <p className="text-sm leading-relaxed opacity-75">
@@ -320,7 +335,7 @@ export function SelfieLibraryPanel({ copy, locale, initial, variant, manageHref 
                 replaceId={uploading === 'replace' ? target?.id ?? null : null}
                 signinHref={signinHref}
                 onSaved={onSaved}
-                onEditingChange={editing => { if (!editing) { setUploading(null); setFocusTarget('action'); } }}
+                onEditingChange={editing => { if (!editing) { setUploading(null); setReplaceId(null); setFocusTarget('action'); } }}
               />
               {uploading === 'add' ? (
                 <button type="button" data-selfie-add-cancel onClick={() => { setUploading(null); setFocusTarget('action'); }} className="min-h-11 self-start text-sm underline underline-offset-4">
@@ -331,7 +346,7 @@ export function SelfieLibraryPanel({ copy, locale, initial, variant, manageHref 
           ) : (
             <div className="flex flex-wrap gap-3">
               {full ? (
-                <button ref={element => { actionRef.current = element; }} type="button" data-selfie-change onClick={() => setUploading('replace')} className="inline-flex min-h-11 items-center border border-current px-4 font-label text-eyebrow uppercase transition-opacity hover:opacity-70">
+                <button ref={element => { actionRef.current = element; }} type="button" data-selfie-change onClick={() => { setReplaceId(null); setUploading('replace'); }} className="inline-flex min-h-11 items-center border border-current px-4 font-label text-eyebrow uppercase transition-opacity hover:opacity-70">
                   {copy.change}
                 </button>
               ) : (

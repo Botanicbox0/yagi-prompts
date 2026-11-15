@@ -27,7 +27,7 @@ describe('legal documents', () => {
   });
 
   it('states the owner-approved campaign service receipt and quote policy separately from template rendering',()=>{
-    expect(LEGAL_EFFECTIVE).toBe('2026-11-12');
+    expect(LEGAL_EFFECTIVE).toBe('2026-11-15');
     const ko=legalDocument('terms','ko').body,en=legalDocument('terms','en').body;
     expect(ko).toContain('TWINGS 자체 서비스 대금');expect(ko).toContain('총액, 세금 기준, 제공 범위, 시작 조건과 환불 조건');expect(ko).toContain('입금 확인');expect(ko).toContain('자동 실행하지 않습니다');
     expect(en).toContain("TWINGS's own service fees");expect(en).toContain('total, tax basis, scope, start conditions and refund conditions');expect(en).toContain('does not automatically');
@@ -110,6 +110,10 @@ describe('legal documents', () => {
     expect(legalDocument('privacy', 'ko').body).toContain('BytePlus Pte. Ltd.');
     expect(legalDocument('privacy', 'ko').body).toContain('국외 이전');
     expect(legalDocument('privacy', 'en').body).toContain('OpenAI, L.L.C.');
+    // 2026-11-15: Google renders the Gemini image templates and checks a saved photo — the face photo goes there too.
+    expect(legalDocument('privacy', 'ko').body).toContain('| Google LLC (미국) | 이미지 생성(Gemini), 저장한 사진의 적합성 확인 | 얼굴 사진 |');
+    expect(legalDocument('privacy', 'en').body).toContain('| Google LLC (United States) | Image generation (Gemini); suitability check of a saved photo | Face photo |');
+    expect(legalDocument('terms', 'ko').body).toContain('Google의 Gemini 이미지 모델');
     expect(legalDocument('privacy', 'ko').body).toContain('만 14세 미만');
   });
 
