@@ -88,7 +88,7 @@ describe.each(sandboxedChoices)('hardline with rooms on: %s', (_label, choice) =
 });
 
 describe('the grouped rail', () => {
-  it('splits into 직접 만들기 and 야기 팀과 with 프로젝트 · 리뷰 and 대화 · 피드백', () => {
+  it('splits into 직접 만들기 and 야기 팀과 with 프로젝트 and 알림함', () => {
     const html = render(owner, { studioV2: true, rooms: true });
     expect(html).toContain('data-brand-layout-mode="rail"');
     const sections = [...html.matchAll(/data-rail-section="(\w+)"/g)].map((m) => m[1]);
@@ -101,7 +101,7 @@ describe('the grouped rail', () => {
     expect(make).toContain(nav.groupMake);
     expect(make).toContain(`>${shell.rail.compose}<`);
     expect(team).toContain(nav.groupTeam);
-    // Clear client room labels: 프로젝트 · 리뷰 at /brand, 대화 · 피드백 at /brand/rooms.
+    // Clear client room labels: 프로젝트 at /brand, 알림함 at /brand/rooms.
     expect(team).toContain(`href="/brand?organizationId=${OWNER}"`);
     expect(team).toContain(`>${shell.rail.campaigns}<`);
     expect(team).toContain(`href="/brand/rooms?organizationId=${OWNER}"`);
@@ -133,7 +133,7 @@ describe('the grouped rail', () => {
     expect(html).not.toContain('data-rail-create');
   });
 
-  it('puts 야기 팀과 (프로젝트 · 리뷰 · 대화 · 피드백) first and keeps 스튜디오 showroom tabs for a project-only owner (self_studio denied)', () => {
+  it('puts 야기 팀과 (프로젝트 · 알림함) first and keeps 스튜디오 showroom tabs for a project-only owner (self_studio denied)', () => {
     const html = render({ ...owner, denied: ['self_studio'] }, { studioV2: true, rooms: true });
     const sections = [...html.matchAll(/data-rail-section="(\w+)"/g)].map((m) => m[1]);
     expect(sections[0]).toBe('team');

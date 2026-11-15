@@ -15,7 +15,7 @@ import { unreadFrom } from '@/components/brand-workspace/rail-activity';
 
 /** docs/BRAND-ROOMS.md §2 — the rail in two groups, without React. */
 describe('the two groups', () => {
-  it('splits 직접 만들기 and 야기 팀과, with 프로젝트 · 리뷰 at /brand and 대화 · 피드백 at /brand/rooms', () => {
+  it('splits 직접 만들기 and 야기 팀과, with 프로젝트 at /brand and 알림함 at /brand/rooms', () => {
     const all = railItems({ studio: true, creators: true, identity: true, rooms: true });
     expect(all).toEqual(['image', 'video', 'compose', 'workflows', 'assets', 'campaigns', 'messages']);
     expect(groupItems(all, [])).toEqual({ make: ['image', 'video', 'compose', 'workflows', 'assets'], team: ['campaigns', 'messages'] });
@@ -32,7 +32,7 @@ describe('the two groups', () => {
     expect(railItems({ studio: true, creators: true, identity: true })).not.toContain('messages');
   });
 
-  it('shows a campaign-only guest or project-only client 에셋 · 프로젝트 · 대화 · 피드백 and nothing of the studio', () => {
+  it('shows a campaign-only guest or project-only client 에셋 · 프로젝트 · 알림함 and nothing of the studio', () => {
     const guest = railItems({ studio: false, creators: false, identity: false, rooms: true });
     expect(guest).toEqual(['assets', 'campaigns', 'messages']);
     expect(groupItems(guest, [])).toEqual({ make: ['assets'], team: ['campaigns', 'messages'] });

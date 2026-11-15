@@ -141,17 +141,17 @@ describe('1. Left Rail Promotion (편집 스튜디오 + Clear Client Room Labels
     expect(railActive('/brand/studio', '/brand/studio/workflows')).toBe(false);
   });
 
-  it('renders unmistakable KO/EN rail labels for 영상 스튜디오, 편집 스튜디오, 워크플로우, 프로젝트 · 리뷰, and 대화 · 피드백', () => {
+  it('renders unmistakable KO/EN rail labels for 영상 스튜디오, 편집 스튜디오, 워크플로우, 프로젝트, and 알림함', () => {
     expect(ko.studioShell.rail.video).toBe('영상 스튜디오');
     expect(en.studioShell.rail.video).toBe('Video Studio');
     expect(ko.studioShell.rail.compose).toBe('편집 스튜디오');
     expect(en.studioShell.rail.compose).toBe('Editing Studio');
     expect(ko.studioShell.rail.workflows).toBe('워크플로우');
     expect(en.studioShell.rail.workflows).toBe('Workflows');
-    expect(ko.studioShell.rail.campaigns).toBe('프로젝트 · 리뷰');
-    expect(en.studioShell.rail.campaigns).toBe('Projects & Review');
-    expect(ko.studioShell.rail.messages).toBe('대화 · 피드백');
-    expect(en.studioShell.rail.messages).toBe('Chat & Feedback');
+    expect(ko.studioShell.rail.campaigns).toBe('프로젝트');
+    expect(en.studioShell.rail.campaigns).toBe('Projects');
+    expect(ko.studioShell.rail.messages).toBe('알림함');
+    expect(en.studioShell.rail.messages).toBe('Activity');
 
     const choice: BrandWorkspaceChoice = { id: ORG, name: 'Studio Brand', role: 'owner', logoUrl: null, denied: [] };
     const scope: BrandWorkspaceScope = { choices: [choice], projectOrganizations: {} };
@@ -179,8 +179,8 @@ describe('1. Left Rail Promotion (편집 스튜디오 + Clear Client Room Labels
     expect(html).toContain('>영상 스튜디오<');
     expect(html).toContain('>편집 스튜디오<');
     expect(html).toContain('>워크플로우<');
-    expect(html).toContain('>프로젝트 · 리뷰<');
-    expect(html).toContain('>대화 · 피드백<');
+    expect(html).toContain('>프로젝트<');
+    expect(html).toContain('>알림함<');
     const activeIds = [...html.matchAll(/data-rail-item="(\w+)"[^>]*aria-current="page"/g)].map((m) => m[1]);
     expect(activeIds).toEqual(['compose']);
   });
