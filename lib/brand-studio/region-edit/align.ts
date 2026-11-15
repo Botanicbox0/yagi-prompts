@@ -891,6 +891,15 @@ export async function computeDiffMask(input: {
   const bh = box.height;
   const short = Math.min(bw, bh);
   const baseF = baseFeatherFor(box, input.feather);
+  // A box side on the picture's border has nothing beyond it to blend toward: no feather there (full
+  // weight up to the border), or a band of the original would stay along the edge. Inner sides unchanged.
+  const open = {
+    left: box.left === 0,
+    top: box.top === 0,
+    right: box.left + bw === src.width,
+    bottom: box.top + bh === src.height,
+  };
+  const side = (onBorder: boolean, d: number, f: number) => (onBorder ? 1 : smoothstep01(d, f));
 
   const editBuf = Buffer.isBuffer(input.alignedRoi) ? input.alignedRoi : input.alignedRoi.data;
   const editC = Buffer.isBuffer(input.alignedRoi) ? 3 : input.alignedRoi.channels;
@@ -899,8 +908,13 @@ export async function computeDiffMask(input: {
   if (bw <= 6 || bh <= 6) {
     for (let by = 0; by < bh; by += 1) {
       for (let bx = 0; bx < bw; bx += 1) {
-        const d = Math.min(bx + 1, bw - bx, by + 1, bh - by);
-        mask[by * bw + bx] = Math.round(smoothstep01(d, baseF) * 255);
+        const w = Math.min(
+          side(open.left, bx + 1, baseF),
+          side(open.right, bw - bx, baseF),
+          side(open.top, by + 1, baseF),
+          side(open.bottom, bh - by, baseF),
+        );
+        mask[by * bw + bx] = Math.round(w * 255);
       }
     }
     return mask;
@@ -944,10 +958,10 @@ export async function computeDiffMask(input: {
     for (let bx = 0; bx < bw; bx += 1) {
       const fT = edgeFeatherOf(topS[bx]!);
       const fB = edgeFeatherOf(bottomS[bx]!);
-      const wL = smoothstep01(bx + 1, fL);
-      const wR = smoothstep01(bw - bx, fR);
-      const wT = smoothstep01(by + 1, fT);
-      const wB = smoothstep01(bh - by, fB);
+      const wL = side(open.left, bx + 1, fL);
+      const wR = side(open.right, bw - bx, fR);
+      const wT = side(open.top, by + 1, fT);
+      const wB = side(open.bottom, bh - by, fB);
       envelope[by * bw + bx] = Math.min(wL, wR, wT, wB);
     }
   }

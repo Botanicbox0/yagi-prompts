@@ -3,7 +3,8 @@
  *
  * The paste follows the hand method in Video-Creator's local-fix script, simplified to what a
  * server can do without OpenCV: scale the edit back to the crop, correct its overall tone from the
- * ring around the customer's box, and blend it in with a feather that lies entirely inside the box.
+ * ring around the customer's box, and blend it in with a feather that lies entirely inside the box. A
+ * box side on the picture's border gets no feather (align.ts `computeDiffMask`): nothing lies beyond it.
  * Every pixel outside the box is copied from the original untouched — that is the invariant the
  * tests check on raw buffers. Not done here: sub-pixel alignment of a shifted edit (ECC) and the
  * low-frequency tone transfer of the hand script, which would also undo an intended colour change.

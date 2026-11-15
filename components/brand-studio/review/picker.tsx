@@ -7,6 +7,7 @@ import "./review.css";
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { StudioAssetView, StudioState } from "@/lib/brand-studio/contracts";
 import { REVIEW_LIMITS, type ReviewCreated, type ReviewFailure } from "@/lib/brand-studio/review-contracts";
+import { listedJobs } from "../store";
 import { postReview } from "./api";
 import { fill, reviewErrorText, type ReviewCopy } from "./stage";
 
@@ -27,7 +28,7 @@ function dayOf(iso: string, locale: "ko" | "en"): string {
 
 export function pickItems(state: Pick<StudioState, "jobs" | "assets">, copy: ReviewCopy, locale: "ko" | "en"): { results: PickItem[]; uploads: PickItem[] } {
   const results: PickItem[] = [];
-  for (const job of state.jobs) {
+  for (const job of listedJobs(state.jobs)) {
     for (const o of job.outputs) {
       if (o.kind !== "image" && o.kind !== "video") continue;
       const prompt = job.prompt.replace(/\s+/g, " ").trim();

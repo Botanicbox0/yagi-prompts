@@ -14,6 +14,7 @@ import { useCallback, useMemo, useRef, useState, type DragEvent, type ReactNode 
 import { STUDIO_ASSET_ROLES, STUDIO_LIMITS, type StudioAssetKind, type StudioAssetRole, type StudioAssetView, type StudioJobView, type StudioOutputView, type StudioState } from "@/lib/brand-studio/contracts";
 import type { Dictionary } from "@/lib/i18n/dictionaries";
 import { isFailure, uploadProblem, type StudioApi } from "./api";
+import { listedJobs } from "./store";
 import s from "./asset-hub.module.css";
 import { errorLine, type StudioCopy } from "./copy";
 import { FoldersTab } from "./rail/folders-tab";
@@ -189,7 +190,7 @@ export function BrandAssetHub({
   const library = injectedLibrary ?? liveLibrary;
   const state = studio.store.state;
   const assets = useMemo(() => state?.assets ?? [], [state?.assets]);
-  const jobs = useMemo(() => state?.jobs ?? [], [state?.jobs]);
+  const jobs = useMemo(() => listedJobs(state?.jobs ?? []), [state?.jobs]);
   const canCreate = state?.canCreate ?? false;
   const uploadBlocked = Boolean(state?.storage?.uploadBlocked);
   const hubLocale: "ko" | "en" = libraryCopy.label === "Assets" ? "en" : "ko";

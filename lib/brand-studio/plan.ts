@@ -213,7 +213,7 @@ export async function planJob(
     return {
       ...shared, kind: 'region_edit', model,
       parentOutputId: input.source.outputId ?? null,
-      params: { ...base, resolution, box: input.box, source: { ...input.source }, ...(quality ? { quality } : {}) },
+      params: { ...base, resolution, box: input.box, source: { ...input.source }, ...(quality ? { quality } : {}), ...(input.purpose ? { purpose: input.purpose } : {}) },
       estimateUsd: usd, estimateKrw: usageKrw(usd, 'image'),
       outputs: { count: 1, kind: 'image', isDraft: false },
     };

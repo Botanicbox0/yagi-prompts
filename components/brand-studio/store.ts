@@ -103,3 +103,32 @@ export function findOutput(jobs: readonly StudioJobView[], outputId: string | nu
   for (const job of jobs) for (const output of job.outputs) if (output.id === outputId) return output;
   return null;
 }
+
+/* ------------------------------------------------- "빈 곳 채우기" (internal runs) */
+
+/**
+ * The runs a screen lists or takes results from: never the internal strips of "빈 곳 채우기" (`purpose:
+ * 'fill'`). The layer editor's `region.jobs` keeps the full list so its strips still arrive as layers.
+ */
+export function listedJobs<T extends Pick<StudioJobView, "purpose">>(jobs: readonly T[]): T[] {
+  // The same array when there is nothing to leave out (memoised lists keep their identity).
+  return jobs.some((job) => job.purpose === "fill") ? jobs.filter((job) => job.purpose !== "fill") : (jobs as T[]);
+}
+
+/**
+ * Pictures uploaded for "빈 곳 채우기" whose runs have all settled (succeeded, failed or stopped), so the
+ * picture can be deleted: no run reads it any more. `tracked` maps each picture to the runs started on it;
+ * a run not seen in `jobs` yet counts as open.
+ */
+export function fillSourcesToDelete(tracked: ReadonlyMap<string, readonly string[]>, jobs: readonly Pick<StudioJobView, "id" | "status">[]): string[] {
+  const open = new Set<string>(STUDIO_JOB_OPEN_STATUSES);
+  const out: string[] = [];
+  for (const [assetId, jobIds] of tracked) {
+    const settled = jobIds.every((id) => {
+      const hit = jobs.find((j) => j.id === id);
+      return Boolean(hit) && !open.has(hit!.status);
+    });
+    if (settled) out.push(assetId);
+  }
+  return out;
+}

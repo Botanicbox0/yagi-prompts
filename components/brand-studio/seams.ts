@@ -158,6 +158,8 @@ export interface LayerEditorRegionSupport {
     enhance: boolean;
     /** The sent picture's size when it is not `base` ("빈 곳 채우기" sends the whole canvas). */
     sourceSize?: { width: number; height: number };
+    /** `fill`: a strip of "빈 곳 채우기" (internal; no tile on the wall, never listed). */
+    purpose?: "fill";
   }): Promise<{ ok: true; job: StudioJobView } | { ok: false; message: string }>;
   enhancePrompt(request: {
     source: RefSource;
@@ -186,6 +188,11 @@ export interface LayerEditorProps {
   blankCanvas?: boolean;
   /** The server allows "빈 곳 채우기" (`StudioState.canFillEmpty`, flag `BRAND_STUDIO_OUTPAINT`). Off when absent. */
   fillEmpty?: boolean;
+  /**
+   * "빈 곳 채우기": the picture just uploaded for it (`assetId`), then the runs started on it (`jobIds`,
+   * possibly none). The screen hides that picture and deletes it once all those runs have settled.
+   */
+  onFillSource?(assetId: string, jobIds?: readonly string[]): void;
   /** Stores the exported PNG as a new asset. */
   upload(file: File): Promise<{ ok: true; asset: StudioAssetView } | StudioFailure>;
   onSaved(asset: StudioAssetView): void;
