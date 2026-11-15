@@ -12,6 +12,7 @@ import type { StudioAssetView } from "@/lib/brand-studio/contracts";
 import type { StudioVideoCopy } from "@/messages/studio-video";
 import { StudioIcon } from "../icons";
 import { useModal } from "../modal";
+import { corsMediaUrl } from "@/lib/brand-studio/cors-media-url";
 import { fillText } from "./reverse-model";
 import { FULL_CROP, clampCropRect, clampTrimRange, isFullFrameAndRange, type CropRect } from "./workspace-model";
 import w from "./video-workspace.module.css";
@@ -57,7 +58,7 @@ async function exportTrimmedMp4(
     video.playsInline = true;
     video.muted = true;
     video.preload = "auto";
-    video.src = url;
+    video.src = corsMediaUrl(url);
 
     let settled = false;
     const finish = (file: File | null) => {
@@ -201,7 +202,7 @@ export function ClipTrimModal({
     probe.muted = true;
     probe.playsInline = true;
     probe.preload = "metadata";
-    probe.src = asset.url;
+    probe.src = corsMediaUrl(asset.url);
 
     const thumbs: string[] = [];
     const count = 8;
