@@ -18,10 +18,11 @@ import type { CreatorResolution } from './resolution';
  * had been set 40~75% above the 10% floor (가상 뷰티 광고 8,900원 against a 6,200원 floor), so the
  * floor was never what made a film expensive — but the founder wants the floor itself lower.
  *
- * What 5% costs, stated once so nobody re-derives it: the free-remake promise published in the FAQ
- * ("얼굴이 제대로 반영되지 않으면 7일 안에 무상으로 다시 만들거나 환불") is paid out of this margin,
- * and the break-even remake rate halves from ~12% to ~6%. One remake in sixteen sales erases the
- * profit on that template. The PG rate is also still a provisional 3.3%, not a signed one.
+ * What 5% costs, stated once so nobody re-derives it: a refunded sale still paid the provider, so
+ * about one defect refund in sixteen sales erases the profit on that template. The free re-render
+ * the refund policy used to promise is gone (founder, 2026-11-15: a defect is refunded, resemblance
+ * that varies with the photo is not a defect — lib/legal/documents.ts §4, and the photo check in
+ * lib/identity/photo-check.ts advises before payment). The PG rate here is still the provisional 3.3%.
  *
  * This figure drives TEMPLATE prices only. The subscription allowance keeps its own 10% target in
  * `subscription-plan.ts` — moving it here would silently hand every Creator subscriber 35 more

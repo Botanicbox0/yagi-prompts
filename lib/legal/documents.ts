@@ -283,11 +283,21 @@ TWINGS의 템플릿 유료 상품은 **템플릿 한 편당 한 번 결제**하�
 
 회사 또는 AI 모델의 사정으로 결과물이 만들어지지 않은 경우(생성 실패 안내를 받은 경우) **전액 환불**합니다. 별도 요청이 없어도 확인되는 대로 처리하며, 늦어도 7일 이내에 ${BUSINESS.email} 로 알려주시면 바로 처리합니다.
 
-## 4. 결과물에 명백한 하자가 있는 경우
+## 4. 결과물에 하자가 있는 경우
 
-올린 얼굴이 반영되지 않았거나 영상이 재생되지 않는 등 명백한 하자가 있으면, 결과물을 받은 날로부터 7일 이내에 요청하시면 **무상 재생성 1회 또는 전액 환불** 중 하나로 처리합니다.
+다음 중 하나에 해당하면 결과물을 받은 날로부터 7일 이내에 요청하실 때 **전액 환불**합니다.
 
-표시·광고 내용과 다르거나 계약대로 제공되지 않은 경우에는 전자상거래법 제17조 제3항에 따른 청약철회 기간(공급받은 날부터 3개월, 그 사실을 안 날 또는 알 수 있었던 날부터 30일)을 적용합니다. 위 7일 안내가 법령에 따른 권리를 제한하지는 않습니다.
+- 영상이나 이미지가 재생되지 않거나 열리지 않는 경우
+- 올린 사진의 얼굴이 결과물에 전혀 반영되지 않은 경우(다른 사람의 얼굴로 만들어진 경우)
+- 템플릿 페이지에 표시된 길이, 화질, 구성과 다르게 제공된 경우
+
+결과물은 AI가 만들기 때문에 완벽하지 않을 수 있고, **올린 사진의 각도, 밝기, 선명도, 가림 여부에 따라 닮은 정도가 달라집니다.** 다음은 하자로 보지 않습니다.
+
+- 닮은 정도, 표정, 피부 표현, 머리 모양이 기대와 다른 경우
+- 손, 글자, 배경 같은 세부가 예시 영상과 다른 경우
+- 사진 확인에서 다른 사진을 권고받고도 그 사진으로 만든 경우의 닮은 정도
+
+표시·광고 내용과 다르거나 계약대로 제공되지 않은 경우에는 전자상거래법 제17조 제3항에 따른 청약철회 기간(공급받은 날부터 3개월, 그 사실을 안 날 또는 알 수 있었던 날부터 30일)을 적용합니다. 위 안내가 법령에 따른 권리를 제한하지는 않습니다.
 
 ## 5. 환불되지 않는 경우
 
@@ -331,11 +341,21 @@ Under Article 17(2)(5) of the same Act, withdrawal is restricted **once delivery
 
 If no result is produced for reasons on the Company's or the AI model's side (you receive a failure notice), you are **refunded in full**. This is processed as soon as it is confirmed; writing to ${BUSINESS.email} within 7 days makes it immediate.
 
-## 4. If the result is plainly defective
+## 4. If the result is defective
 
-If your face is not reflected, the film does not play, or the result is otherwise plainly defective, ask within 7 days of receiving it and you get **one free re-render or a full refund**, your choice.
+If one of the following applies, ask within 7 days of receiving the result and you are **refunded in full**.
 
-If delivery differs from the advertised or agreed terms, the withdrawal periods in Article 17(3) of the same Act apply: within 3 months of delivery or within 30 days of when you learned or could have learned of the problem. The 7-day service remedy above does not limit statutory rights.
+- The film or image does not play or open.
+- The face in your photo is not reflected in the result at all (it was made with someone else's face).
+- The result differs from the length, resolution or contents stated on the template page.
+
+A result is made by AI, so it may not be perfect, and **how closely it resembles you depends on the angle, brightness, sharpness and coverage of the face in the photo you upload.** The following are not defects.
+
+- The degree of resemblance, the expression, the skin rendering or the hairstyle differs from what you expected.
+- Details such as hands, lettering or the background differ from the sample film.
+- The degree of resemblance, when the photo check advised another photo and you made the result with that photo anyway.
+
+If delivery differs from the advertised or agreed terms, the withdrawal periods in Article 17(3) of the same Act apply: within 3 months of delivery or within 30 days of when you learned or could have learned of the problem. The guidance above does not limit statutory rights.
 
 ## 5. When a refund is not available
 
