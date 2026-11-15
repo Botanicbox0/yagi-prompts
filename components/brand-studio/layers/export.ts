@@ -1,10 +1,12 @@
 /**
  * Export of a decorated picture (docs/BRAND-STUDIO-V3.md §5): the base and every visible layer drawn
- * onto one canvas at the base's stored pixel size, encoded as PNG. Planning is pure (testable without a
+ * onto one canvas at the document's canvas size (the picture where `baseRect` puts it; canvas it does
+ * not cover stays transparent), encoded as PNG. Planning is pure (testable without a
  * browser); drawing takes any 2D context; `renderPlan` wires loading, drawing and encoding through
  * injected dependencies so the failure paths can be tested too.
  */
 import { STUDIO_LIMITS } from "@/lib/brand-studio/contracts";
+import { baseRect } from "./canvas";
 import { boundsOf } from "./geometry";
 import { MIN_SIDE, canMergeDown, type Box, type FontId, type Frame, type Layer, type LayerDoc, type ShapeKind, type TextLayer } from "./model";
 import { layoutText, fontShorthand, graphemes, type Measure, type TextLayout } from "./text-layout";
@@ -98,21 +100,29 @@ function layerToOp(layer: Layer, measureFor: (layer: TextLayer) => Measure): Dra
   };
 }
 
-/** What gets drawn, in order: the base, then every visible layer bottom to top. Text is laid out here. */
+/** The base picture drawn at its place on the canvas, moved by `-ox, -oy` (the plan's own origin). */
+function baseOp(doc: LayerDoc, base: ExportBase, ox = 0, oy = 0): ImageOp {
+  const b = baseRect(doc);
+  return { kind: "image", layerId: BASE_OP_ID, name: base.name, url: base.url, frame: { x: b.x - ox, y: b.y - oy, w: b.w, h: b.h, rotation: 0 }, opacity: 1 };
+}
+
+/**
+ * What gets drawn, in order: the base, then every visible layer bottom to top, on the whole canvas.
+ * Text is laid out here.
+ */
 export function planExport(doc: LayerDoc, base: ExportBase, measureFor: (layer: TextLayer) => Measure): ExportPlan {
-  const ops: DrawOp[] = [
-    { kind: "image", layerId: BASE_OP_ID, name: base.name, url: base.url, frame: { x: 0, y: 0, w: base.width, h: base.height, rotation: 0 }, opacity: 1 },
-  ];
+  const ops: DrawOp[] = [baseOp(doc, base)];
   for (const layer of doc.layers) {
     if (layer.hidden || layer.opacity <= 0) continue;
     ops.push(layerToOp(layer, measureFor));
   }
-  return { width: base.width, height: base.height, ops };
+  return { width: doc.width, height: doc.height, ops };
 }
 
 /**
- * Plans rendering a normalized marquee selection (`box`, fractions `0..1`) of the current composite
- * into a cropped pixel rectangle, respecting `doc.baseHidden`.
+ * Plans rendering a normalized marquee selection (`box`, fractions `0..1` of the base PICTURE, wherever
+ * it sits on the canvas) of the current composite into a cropped pixel rectangle, respecting
+ * `doc.baseHidden`. The returned `box` is in canvas pixels, kept inside the picture.
  */
 export function planCropExport(
   doc: LayerDoc,
@@ -120,21 +130,13 @@ export function planCropExport(
   box: { x: number; y: number; w: number; h: number },
   measureFor: (layer: TextLayer) => Measure,
 ): { plan: ExportPlan; box: Box } {
-  const x = Math.max(0, Math.min(base.width - MIN_SIDE, Math.round(box.x * base.width)));
-  const y = Math.max(0, Math.min(base.height - MIN_SIDE, Math.round(box.y * base.height)));
-  const w = Math.max(MIN_SIDE, Math.min(base.width - x, Math.round(box.w * base.width)));
-  const h = Math.max(MIN_SIDE, Math.min(base.height - y, Math.round(box.h * base.height)));
+  const p = baseRect(doc);
+  const x = Math.max(p.x, Math.min(p.x + p.w - MIN_SIDE, p.x + Math.round(box.x * p.w)));
+  const y = Math.max(p.y, Math.min(p.y + p.h - MIN_SIDE, p.y + Math.round(box.y * p.h)));
+  const w = Math.max(MIN_SIDE, Math.min(p.x + p.w - x, Math.round(box.w * p.w)));
+  const h = Math.max(MIN_SIDE, Math.min(p.y + p.h - y, Math.round(box.h * p.h)));
   const ops: DrawOp[] = [];
-  if (!doc.baseHidden) {
-    ops.push({
-      kind: "image",
-      layerId: BASE_OP_ID,
-      name: base.name,
-      url: base.url,
-      frame: { x: -x, y: -y, w: base.width, h: base.height, rotation: 0 },
-      opacity: 1,
-    });
-  }
+  if (!doc.baseHidden) ops.push(baseOp(doc, base, x, y));
   for (const layer of doc.layers) {
     if (layer.hidden || layer.opacity <= 0) continue;
     const op = layerToOp(layer, measureFor);
@@ -149,6 +151,8 @@ export function planCropExport(
 /**
  * Plans merging the selected layer (`id`) into the layer right beneath it (`index > 0`),
  * or baking `layers[0]` onto the base region beneath it (`index === 0`) as a flattened layer above base.
+ * The baked area is the layer's bounds cut at the canvas edges (canvas the picture does not cover
+ * stays transparent in it).
  */
 export function planMergeDown(
   doc: LayerDoc,
@@ -183,20 +187,11 @@ export function planMergeDown(
   const ub = boundsOf(upperOp.frame);
   const x = Math.max(0, Math.floor(ub.x));
   const y = Math.max(0, Math.floor(ub.y));
-  const right = Math.min(base.width, Math.ceil(ub.x + ub.w));
-  const bottom = Math.min(base.height, Math.ceil(ub.y + ub.h));
+  const right = Math.min(doc.width, Math.ceil(ub.x + ub.w));
+  const bottom = Math.min(doc.height, Math.ceil(ub.y + ub.h));
   const w = Math.max(MIN_SIDE, right - x);
   const h = Math.max(MIN_SIDE, bottom - y);
-  const ops: DrawOp[] = [
-    {
-      kind: "image",
-      layerId: BASE_OP_ID,
-      name: base.name,
-      url: base.url,
-      frame: { x: -x, y: -y, w: base.width, h: base.height, rotation: 0 },
-      opacity: 1,
-    },
-  ];
+  const ops: DrawOp[] = [baseOp(doc, base, x, y)];
   if (upperOp.opacity > 0) {
     ops.push({
       ...upperOp,

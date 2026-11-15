@@ -3,8 +3,8 @@
  * no DOM, no React. Every edit returns a new document and leaves the old one alone, so the history
  * can keep references.
  *
- * Units: every position and size is in pixels of the base picture at its stored size
- * (`base.width` × `base.height`). x, y is the top-left corner of the unrotated box; rotation (degrees,
+ * Units: every position and size is in canvas pixels, which are pixels of the base picture at its
+ * stored size (the picture sits at `baseRect(doc)`, canvas.ts). x, y is the top-left corner of the unrotated box; rotation (degrees,
  * clockwise) turns the box around its centre. `layers[0]` is drawn first (bottom).
  */
 import { COLOUR } from "@/lib/design/identity";
@@ -88,8 +88,13 @@ export type Layer = ImageLayer | TextLayer | ShapeLayer;
 
 export interface LayerDoc {
   v: typeof LAYER_DOC_VERSION;
+  /** The canvas (what the export is), in pixels. Equal to the picture's stored size until resized. */
   width: number;
   height: number;
+  /** Where the base picture sits on the canvas, in the same pixels. Its w and h are always the picture's
+   *  stored size. Absent: the picture covers the canvas exactly, which is every document made before
+   *  the canvas could be resized. Read it through `baseRect` (canvas.ts). */
+  base?: Box;
   layers: Layer[];
   /** Hides the base image on stage (showing checkerboard) so patch edges can be inspected and erased. */
   baseHidden?: boolean;

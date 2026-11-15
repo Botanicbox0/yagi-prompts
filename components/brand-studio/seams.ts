@@ -180,6 +180,8 @@ export interface LayerEditorProps {
   initialPatch?: LayerEditorInitialPatch | null;
   initialRegionPreset?: LayerEditorRegionPreset | null;
   region?: LayerEditorRegionSupport | null;
+  /** The base is a generated white picture ("새로 꾸미기"): its size is the canvas, so no canvas resizing. */
+  blankCanvas?: boolean;
   /** Stores the exported PNG as a new asset. */
   upload(file: File): Promise<{ ok: true; asset: StudioAssetView } | StudioFailure>;
   onSaved(asset: StudioAssetView): void;

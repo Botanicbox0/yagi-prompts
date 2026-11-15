@@ -19,6 +19,7 @@ import type { RegionBox } from "@/lib/brand-studio/contracts";
 import { REF_DRAG_TYPE, acceptsDrag, decodeRefDrag, type RefSource } from "../refs";
 import { containsPoint as containsRegionPoint, drawBox, moveBox, resizeBox } from "../region-math";
 import { drawableUrl } from "./browser";
+import { CANVAS_HANDLES, baseRect, isCanvasResized, pictureBoxToWorld, resizeFromHandle, worldToPicture, type CanvasHandle } from "./canvas";
 import { shapeGeometry } from "./export";
 import {
   boundsOf,
@@ -41,7 +42,6 @@ import {
 } from "./geometry";
 import { paintMaskStrokeOnContext, worldPointToMask, type MaskBrushMode } from "./mask";
 import {
-  clamp,
   findLayer,
   fontChoice,
   topVisibleImageLayerId,
@@ -66,7 +66,8 @@ type DragMode =
   | "marqueeDraw"
   | "marqueeMove"
   | "marqueeResize"
-  | "brush";
+  | "brush"
+  | "canvas";
 
 interface BrushSession {
   layerId: string;
@@ -86,6 +87,7 @@ interface Drag {
   layer: Layer | null;
   frame: Frame | null;
   handle: Handle | null;
+  canvasHandle: CanvasHandle | null;
   targets: SnapTargets | null;
   startClient: Point;
   startWorld: Point;
@@ -118,6 +120,10 @@ export interface StageProps {
   onEditText(id: string | null): void;
   onPreview(doc: LayerDoc): void;
   onSettle(start: LayerDoc): void;
+  /** Canvas-resize mode (the size panel is open): canvas handles instead of layer selection. */
+  canvasMode?: boolean;
+  /** Puts the document from before a drag back (Escape during a canvas drag). */
+  onRevert?(start: LayerDoc): void;
   onTextInput(id: string, text: string): void;
   onImageError(url: string): void;
   onDropRef(ref: RefSource, at: Point): void;
@@ -207,10 +213,31 @@ export function Stage(props: StageProps) {
     return { x: clientX - (rect?.left ?? 0), y: clientY - (rect?.top ?? 0) };
   };
 
-  const toNorm = (world: Point): Point => ({
-    x: doc.width > 0 ? clamp(world.x / doc.width, 0, 1) : 0,
-    y: doc.height > 0 ? clamp(world.y / doc.height, 0, 1) : 0,
-  });
+  // A RegionBox is fractions of the base PICTURE, wherever it sits on the canvas.
+  const toNorm = (world: Point): Point => worldToPicture(doc, world);
+
+  // Escape during a canvas drag puts the canvas and the view back, before the editor sees the key.
+  const { onRevert } = props;
+  useEffect(() => {
+    if (dragging !== "canvas") return;
+    const onKey = (event: KeyboardEvent) => {
+      const drag = dragRef.current;
+      if (event.key !== "Escape" || drag?.mode !== "canvas") return;
+      event.preventDefault();
+      event.stopPropagation();
+      dragRef.current = null;
+      setDragging(null);
+      try {
+        stageRef.current?.releasePointerCapture(drag.pointerId);
+      } catch {
+        /* already released */
+      }
+      onRevert?.(drag.start);
+      onView(() => drag.startView);
+    };
+    window.addEventListener("keydown", onKey, true);
+    return () => window.removeEventListener("keydown", onKey, true);
+  }, [dragging, onRevert, onView, stageRef]);
 
   const renderLiveBrushPreview = (session: BrushSession) => {
     const canvas = liveBrushCanvasRef.current;
@@ -299,6 +326,7 @@ export function Stage(props: StageProps) {
       layer: null,
       frame: null,
       handle: null,
+      canvasHandle: null,
       targets: null,
       startClient: { x: event.clientX, y: event.clientY },
       startWorld: world,
@@ -310,6 +338,10 @@ export function Stage(props: StageProps) {
     let drag: Drag | null = null;
     if (event.button === 1 || props.spaceDown) {
       drag = { ...base, mode: "pan" };
+    } else if (props.canvasMode) {
+      if (editingId) props.onEditText(null);
+      const canvasHandle = target.closest<HTMLElement>("[data-canvas-handle]")?.dataset.canvasHandle as CanvasHandle | undefined;
+      drag = canvasHandle ? { ...base, mode: "canvas", canvasHandle } : { ...base, mode: "pan" };
     } else if (tool === "marquee" && props.onRegionBox) {
       if (editingId) props.onEditText(null);
       const marqueeHandleEl = target.closest<HTMLElement>("[data-marquee-handle]");
@@ -365,7 +397,9 @@ export function Stage(props: StageProps) {
           if (layer.locked) drag = { ...base, mode: "locked", layer };
           else {
             const others = doc.layers.filter((l) => l.id !== id && !l.hidden).map((l) => boundsOf(frames.get(l.id) ?? l));
-            drag = { ...base, mode: "move", layer, frame, targets: snapTargets(doc, others) };
+            // The picture's edges catch too once it no longer fills the canvas.
+            const edges = isCanvasResized(doc) ? [...others, baseRect(doc)] : others;
+            drag = { ...base, mode: "move", layer, frame, targets: snapTargets(doc, edges) };
           }
         }
       } else {
@@ -427,14 +461,25 @@ export function Stage(props: StageProps) {
       if (first) props.onNotice(copy.stage.locked);
       return;
     }
+    if (drag.mode === "canvas" && drag.canvasHandle) {
+      const z = drag.startView.zoom;
+      const next = resizeFromHandle(drag.start, drag.canvasHandle, (event.clientX - drag.startClient.x) / z, (event.clientY - drag.startClient.y) / z);
+      // West and north handles shift the content in document space; move the view back so the picture stays put.
+      const from = baseRect(drag.start);
+      const to = baseRect(next);
+      onView(() => ({ ...drag.startView, panX: drag.startView.panX - (to.x - from.x) * z, panY: drag.startView.panY - (to.y - from.y) * z }));
+      props.onPreview(next);
+      return;
+    }
     const world = toWorld(view, loc);
     if (drag.mode === "marqueeDraw" && props.onRegionBox) {
       props.onRegionBox(drawBox(toNorm(drag.startWorld), toNorm(world)));
       return;
     }
     if (drag.mode === "marqueeMove" && props.onRegionBox && drag.startRegionBox) {
-      const dx = doc.width > 0 ? (world.x - drag.startWorld.x) / doc.width : 0;
-      const dy = doc.height > 0 ? (world.y - drag.startWorld.y) / doc.height : 0;
+      const picture = baseRect(doc);
+      const dx = picture.w > 0 ? (world.x - drag.startWorld.x) / picture.w : 0;
+      const dy = picture.h > 0 ? (world.y - drag.startWorld.y) / picture.h : 0;
       props.onRegionBox(moveBox(drag.startRegionBox, dx, dy));
       return;
     }
@@ -500,7 +545,7 @@ export function Stage(props: StageProps) {
       props.onRegionBox(null);
       return;
     }
-    if (drag.moved && (drag.mode === "move" || drag.mode === "resize" || drag.mode === "rotate")) props.onSettle(drag.start);
+    if (drag.moved && (drag.mode === "move" || drag.mode === "resize" || drag.mode === "rotate" || drag.mode === "canvas")) props.onSettle(drag.start);
   }
 
   function onDoubleClick(event: ReactMouseEvent<HTMLDivElement>) {
@@ -531,7 +576,9 @@ export function Stage(props: StageProps) {
   const selected = findLayer(doc, selectedId);
   const selectedFrame = selected ? frames.get(selected.id) : undefined;
   const editing = Boolean(editingId && editingId === selectedId);
-  const showBrushCursor = (tool === "eraser" || tool === "restore") && !props.spaceDown && dragging !== "pan" && cursor !== null;
+  const canvasMode = Boolean(props.canvasMode);
+  const picture = baseRect(doc);
+  const showBrushCursor = !canvasMode && (tool === "eraser" || tool === "restore") && !props.spaceDown && dragging !== "pan" && cursor !== null;
 
   return (
     <div
@@ -543,6 +590,7 @@ export function Stage(props: StageProps) {
       aria-describedby={props.hintId}
       data-layers-stage
       data-tool={tool}
+      data-canvas={canvasMode || undefined}
       data-panning={props.spaceDown || dragging === "pan" || undefined}
       data-dragging={dragging ?? undefined}
       onPointerDown={onPointerDown}
@@ -567,14 +615,16 @@ export function Stage(props: StageProps) {
           ["--bsl-zoom" as string]: view.zoom,
         } as CSSProperties}
       >
-        <img
-          ref={props.baseImgRef}
-          className="bsl-base"
-          src={drawableUrl(props.baseUrl)}
-          alt=""
-          draggable={false}
-          style={{ display: doc.baseHidden ? "none" : undefined }}
-        />
+        <div className="bsl-base-clip">
+          <img
+            ref={props.baseImgRef}
+            className="bsl-base"
+            src={drawableUrl(props.baseUrl)}
+            alt=""
+            draggable={false}
+            style={{ left: picture.x, top: picture.y, width: picture.w, height: picture.h, display: doc.baseHidden ? "none" : undefined }}
+          />
+        </div>
         {doc.layers.map((layer) => {
           const frame = frames.get(layer.id) ?? layer;
           const activeBrush = brushingLayerId === layer.id;
@@ -637,7 +687,7 @@ export function Stage(props: StageProps) {
         </svg>
       )}
 
-      {tool === "move" && selected && selectedFrame && !selected.hidden && (
+      {!canvasMode && tool === "move" && selected && selectedFrame && !selected.hidden && (
         <Selection layer={selected} frame={selectedFrame} view={view} editing={editing} dragging={dragging} />
       )}
 
@@ -648,6 +698,29 @@ export function Stage(props: StageProps) {
           view={view}
           interactive={tool === "marquee"}
         />
+      )}
+
+      {canvasMode && (
+        <div
+          className="bsl-canvas-frame"
+          aria-hidden="true"
+          data-canvas-frame
+          style={{ left: view.panX, top: view.panY, width: doc.width * view.zoom, height: doc.height * view.zoom }}
+        >
+          {CANVAS_HANDLES.map((hd) => {
+            const at = handleAnchor(hd);
+            return (
+              <span
+                key={hd}
+                className="bsl-handle"
+                data-canvas-handle={hd}
+                data-edge={hd.length === 1 ? (hd === "n" || hd === "s" ? "h" : "v") : undefined}
+                style={{ left: `${at.x * 100}%`, top: `${at.y * 100}%`, cursor: handleCursor(hd, 0) }}
+              />
+            );
+          })}
+          {dragging === "canvas" && <span className="bsl-size-tag bsl-num">{`${doc.width} × ${doc.height}`}</span>}
+        </div>
       )}
 
       {showBrushCursor && cursor && (
@@ -723,12 +796,13 @@ function MarqueeSelection({
   view: View;
   interactive: boolean;
 }) {
-  const left = view.panX + box.x * doc.width * view.zoom;
-  const top = view.panY + box.y * doc.height * view.zoom;
-  const width = box.w * doc.width * view.zoom;
-  const height = box.h * doc.height * view.zoom;
-  const pxW = Math.max(1, Math.round(box.w * doc.width));
-  const pxH = Math.max(1, Math.round(box.h * doc.height));
+  const world = pictureBoxToWorld(doc, box);
+  const left = view.panX + world.x * view.zoom;
+  const top = view.panY + world.y * view.zoom;
+  const width = world.w * view.zoom;
+  const height = world.h * view.zoom;
+  const pxW = Math.max(1, Math.round(world.w));
+  const pxH = Math.max(1, Math.round(world.h));
   const small = Math.min(width, height) < 36;
   const handles = interactive ? MARQUEE_HANDLES.filter((hd) => !small || hd.length === 2) : [];
 

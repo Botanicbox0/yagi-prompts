@@ -929,6 +929,7 @@ export function StudioApp({ organizationId, locale, copy, mode, libraryCopy, lay
           initialTool={editorState.initialTool}
           initialPatch={editorState.initialPatch}
           initialRegionPreset={editorState.initialRegionPreset}
+          blankCanvas={Boolean(editorState.isBlankCanvas)}
           region={
             dockOpen && mode === "image"
               ? {

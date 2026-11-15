@@ -19,6 +19,14 @@ export const studioLayersEn = {
   restored: "Picked up where you left off.",
   resetDone: "Started over. Undo brings it back.",
 
+  canvas: {
+    size: "Size",
+    ratio: "Ratio",
+    width: "Width",
+    height: "Height",
+    reset: "Back to picture size",
+  },
+
   tools: {
     label: "Editing tools",
     move: "Move",
@@ -262,6 +270,14 @@ export const studioLayersKo: typeof studioLayersEn = {
   save: "저장하기",
   restored: "지난번 편집을 불러왔어요.",
   resetDone: "처음부터 시작해요. 실행 취소를 누르면 되돌아가요.",
+
+  canvas: {
+    size: "크기",
+    ratio: "비율",
+    width: "가로",
+    height: "세로",
+    reset: "원본 크기로",
+  },
 
   tools: {
     label: "편집 도구",
