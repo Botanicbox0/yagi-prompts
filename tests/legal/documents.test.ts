@@ -76,6 +76,25 @@ describe('legal documents', () => {
     expect(en).toContain('not refundable');
   });
 
+  /**
+   * Founder, 2026-11-15: no free re-render. A defect is refunded; what a defect is — and what AI
+   * variation is — is written down, and statutory rights are restated.
+   */
+  it('defines a defect, refunds it in full and promises no re-render', () => {
+    const ko = legalDocument('refund', 'ko').body;
+    expect(ko).not.toContain('무상 재생성');
+    expect(ko).toContain('다른 사람의 얼굴로 만들어진 경우');
+    expect(ko).toContain('다음은 하자로 보지 않습니다');
+    expect(ko).toContain('닮은 정도');
+    expect(ko).toContain('전자상거래법 제17조 제3항');
+    expect(ko).toContain('법령에 따른 권리를 제한하지는 않습니다');
+    const en = legalDocument('refund', 'en').body;
+    expect(en).not.toMatch(/re-render/i);
+    expect(en).toContain('The following are not defects.');
+    expect(en).toContain('Article 17(3)');
+    expect(en).toContain('does not limit statutory rights');
+  });
+
   /** What is sold is one payment per result — no credits, no points, no stored value. */
   it('sells one payment per template and nothing redeemable', () => {
     for (const locale of LOCALES) {
