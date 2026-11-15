@@ -17,12 +17,13 @@ import {
 } from '../contracts';
 import { requireCreate, studioSeat, StudioDenied } from '../access';
 import { callGeminiJson, studioGeminiConfig } from '../enhancer/gemini';
+import { replaceMarks } from '../enhancer/marks';
 import { FREE_INTEL_LIMITS, takeFreeIntelSlot } from '../jobs';
 import { failure, guarded } from '../outcome';
 import type { IntelDeps, StudioDeps } from '../types';
 import { loadAllowance } from '../usage';
 import { loadRevisionRecipe } from './recipe';
-import { editWay, resolveAdded, reshootWay, type WayOutcome } from './plan';
+import { editWay, requireMarksBehind, resolveAdded, reshootWay, type WayOutcome } from './plan';
 
 const CLASSIFY_TIMEOUT_MS = 12_000;
 const MADE_WITH_MAX = 1500;
@@ -75,6 +76,11 @@ export async function planStudioRevise(deps: StudioDeps, viewer: Viewer, raw: un
   const parsed = RevisePlanSchema.safeParse(raw);
   if (!parsed.success) return failure('invalid');
   const v = parsed.data;
+  try {
+    requireMarksBehind(v.prompt, v.marks);
+  } catch {
+    return failure('invalid');
+  }
   const locale: 'ko' | 'en' = viewer.locale === 'en' ? 'en' : 'ko';
   const now = deps.now?.() ?? new Date();
   const ready = await guarded(() =>
@@ -87,7 +93,7 @@ export async function planStudioRevise(deps: StudioDeps, viewer: Viewer, raw: un
       }
       const recipe = await loadRevisionRecipe(sql, v.organizationId, v.outputId);
       await resolveAdded(sql, v.organizationId, v.references, deps.media, locale);
-      const request = { prompt: v.prompt, references: [...v.references] };
+      const request = { prompt: v.prompt, references: [...v.references], marks: v.marks };
       const edit = await editWay(sql, v.organizationId, recipe, { ...request, mode: 'edit' }, deps.media, locale);
       const reshoot = await reshootWay(sql, v.organizationId, recipe, { ...request, mode: 'reshoot' }, deps.media, locale);
       if (!edit.ok && !reshoot.ok) throw new StudioDenied('invalid');
@@ -100,10 +106,11 @@ export async function planStudioRevise(deps: StudioDeps, viewer: Viewer, raw: un
   let recommended: StudioReviseMode | null = null;
   let reason: StudioReviseReason | null = null;
   if (v.prompt) {
+    // The classifier reads what each mark is on, never the ①②③ signs.
     reason = await classifyRevision(deps.intelDeps, {
-      request: v.prompt,
+      request: replaceMarks(v.prompt, v.marks),
       madeWith: recipe.madeWith,
-      history: recipe.history.map((h) => h.request),
+      history: recipe.history.map((h) => replaceMarks(h.request, h.marks ?? [])),
     });
     const fits = reason ? wayFor(reason) : fallback;
     recommended = (fits === 'edit' ? edit.ok : reshoot.ok) ? fits : fallback;

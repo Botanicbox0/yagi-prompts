@@ -233,6 +233,8 @@ function ViewerContent({
   const [selected, setSelected] = useState(ownVersion);
   const item = shownVersion(openedItem, chain, ownVersion, selected);
   const videoRef = useRef<HTMLVideoElement>(null);
+  // The figure the revise form draws marks into (a state, so the form re-renders once it exists).
+  const [mediaHost, setMediaHost] = useState<HTMLElement | null>(null);
   const playback = useRef<{ time: number; playing: boolean } | null>(null);
   const selectVersion = (version: number) => {
     const video = videoRef.current;
@@ -361,7 +363,7 @@ function ViewerContent({
 
   return (
     <div className="bs-viewer-body" data-region={region ? "" : undefined}>
-      <figure className="bs-viewer-media" data-kind={file.kind}>
+      <figure ref={setMediaHost} className="bs-viewer-media" data-kind={file.kind}>
         {region ? (
           <RegionEditor box={box} onChange={setBox} copy={copy}>
             {picture}
@@ -388,6 +390,7 @@ function ViewerContent({
             copy={copy}
             locale={locale}
             fallbackVersion={Math.max(1, ...chain.map((entry) => entry.version)) + 1}
+            stage={file.kind === "video" && !region ? { video: videoRef, host: mediaHost, url: file.url } : null}
           />
         )}
         {region && support ? (

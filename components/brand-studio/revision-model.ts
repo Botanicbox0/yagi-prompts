@@ -4,7 +4,7 @@
  * carries no `revision`). A 1080p final belongs to the version of the draft it finishes. Images never take
  * part: every function here leaves image and partial-edit runs exactly as they came in.
  */
-import type { StudioJobCreate, StudioJobView, StudioOutputView, StudioReference } from "@/lib/brand-studio/contracts";
+import type { ReviseMark, StudioJobCreate, StudioJobView, StudioOutputView, StudioReference } from "@/lib/brand-studio/contracts";
 import { isOpen } from "./store";
 
 const CLIP_KINDS: ReadonlySet<StudioJobView["kind"]> = new Set(["video", "video_remix", "video_final"]);
@@ -63,6 +63,8 @@ export interface ChainVersion {
   output: StudioOutputView | null;
   /** What was asked for this version (null for v1). */
   request: string | null;
+  /** The spots that request pointed at (its circled digits), in order; empty when none. */
+  marks: ReviseMark[];
   state: "ready" | "making";
 }
 
@@ -76,9 +78,10 @@ export function chainOf(jobs: readonly StudioJobView[], job: StudioJobView): Cha
     const main = runs.find((run) => run.kind !== "video_final") ?? null;
     const final = runs.find((run) => run.kind === "video_final" && run.status === "succeeded" && run.outputs.length > 0) ?? null;
     const request = main?.revision ? main.prompt : null;
-    if (final) list.push({ version, job: final, output: final.outputs[0]!, request, state: "ready" });
-    else if (main && main.status === "succeeded" && main.outputs.length > 0) list.push({ version, job: main, output: main.outputs[0]!, request, state: "ready" });
-    else if (main && isOpen(main)) list.push({ version, job: main, output: null, request, state: "making" });
+    const marks = (main?.revision && main.revision.marks) || [];
+    if (final) list.push({ version, job: final, output: final.outputs[0]!, request, marks, state: "ready" });
+    else if (main && main.status === "succeeded" && main.outputs.length > 0) list.push({ version, job: main, output: main.outputs[0]!, request, marks, state: "ready" });
+    else if (main && isOpen(main)) list.push({ version, job: main, output: null, request, marks, state: "making" });
   }
   return list;
 }
@@ -148,5 +151,6 @@ export function reviseRerunInput(job: StudioJobView, ids: { organizationId: stri
     mode: revision.mode,
     prompt: job.prompt,
     references,
+    marks: revision.marks ?? [],
   };
 }

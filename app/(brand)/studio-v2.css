@@ -417,6 +417,31 @@ textarea.bs-field { resize: vertical; }
 .bs-revise-suggestion { display: grid; gap: 6px; font-size: 13px; }
 .bs-revise-suggestion p { margin: 0; color: var(--ys-ink); }
 .bs-revise .bs-submit { justify-self: stretch; }
+/* Marks on a clip ("고칠 곳 표시"): one accent, a ring for a pin, a thin box for a drag. */
+.bs-viewer-media { position: relative; }
+.bs-mark-stage { position: absolute; z-index: 2; pointer-events: none; }
+.bs-mark-layer { position: absolute; inset: 0; pointer-events: auto; cursor: crosshair; touch-action: none; border-radius: 12px; }
+.bs-mark-layer:focus-visible { outline: 2px solid var(--ys-focus); outline-offset: -2px; }
+.bs-mark-layer[data-full] { cursor: default; }
+.bs-mark-stage[data-active] { box-shadow: inset 0 0 0 2px color-mix(in srgb, var(--ys-accent) 70%, transparent); border-radius: 12px; }
+.bs-mark-pin { position: absolute; display: grid; place-items: center; width: 24px; height: 24px; margin: -12px 0 0 -12px; border: 2px solid var(--ys-accent); border-radius: 50%; background: rgba(9, 9, 11, 0.55); color: #fff; font-size: 11px; font-weight: 700; line-height: 1; box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.45); }
+.bs-mark-box { position: absolute; border: 2px solid var(--ys-accent); border-radius: 3px; box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.45); }
+.bs-mark-box[data-preview] { border-style: dashed; }
+.bs-mark-num { position: absolute; top: -2px; left: -2px; display: grid; place-items: center; min-width: 18px; height: 18px; padding: 0 4px; border-radius: 3px 0 4px 0; background: var(--ys-accent); color: var(--ys-on-accent); font-size: 11px; font-weight: 700; line-height: 1; }
+.bs-mark-chips { display: flex; flex-wrap: wrap; gap: 4px; margin: 0; padding: 0; list-style: none; }
+.bs-mark-chip { display: inline-flex; align-items: center; min-height: 26px; border-radius: var(--ys-r-pill); background: var(--ys-panel); color: var(--ys-ink); font-size: 12px; max-width: 100%; }
+.bs-mark-chip[data-static] { gap: 4px; padding: 0 10px 0 8px; color: var(--ys-ink-secondary); }
+.bs-mark-chip-go { display: inline-flex; align-items: center; gap: 4px; min-width: 0; min-height: 26px; padding: 0 2px 0 8px; border: 0; border-radius: var(--ys-r-pill); background: none; color: inherit; font: inherit; cursor: pointer; }
+.bs-mark-chip-go:focus-visible, .bs-mark-chip-x:focus-visible { outline: 2px solid var(--ys-focus); outline-offset: 1px; }
+.bs-mark-n { color: var(--ys-accent-text, var(--ys-accent)); font-weight: 700; }
+.bs-mark-text { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 14em; font-variant-numeric: tabular-nums; }
+.bs-mark-chip-x { display: grid; place-items: center; width: 24px; height: 24px; margin-right: 1px; padding: 0; border: 0; border-radius: 50%; background: none; color: var(--ys-ink-secondary); cursor: pointer; }
+.bs-mark-chip-x:hover:not(:disabled) { background: var(--ys-hover); color: var(--ys-ink); }
+.bs-mark-chip-x .bs-icon { width: 12px; height: 12px; }
+.bs-mark-spin { width: 10px; height: 10px; border: 1.5px solid currentColor; border-right-color: transparent; border-radius: 50%; opacity: 0.6; animation: bs-mark-spin 0.8s linear infinite; }
+@keyframes bs-mark-spin { to { transform: rotate(360deg); } }
+.bs-mark-toggle[aria-pressed="true"] { background: var(--ys-active-bg); color: var(--ys-active-fg); }
+.bs-mark-hint { margin: -2px 0 0; font-size: 12.5px; }
 .bs-tile[data-state="ready"] .bs-tile-badge[data-revision-badge] { opacity: 1; }
 
 /* Before / after slider: the earlier picture over the result, cut at the line. */
@@ -500,7 +525,7 @@ textarea.bs-field { resize: vertical; }
 
 @media (prefers-reduced-motion: reduce) {
   .bs-btn, .bs-chip, .bs-chip-btn, .bs-select, .bs-door, .bs-example, .bs-thumb, .bs-thumb-x, .bs-tile-btn, .bs-tile-info, .bs-tile-open img, .bs-assets, .bs-tray, .bs-switch-knob, .bs-switch-knob::after, .bs-door-title .bs-icon, .bs-tip-body, .bs-region-form { transition: none; }
-  .bs-skeleton > span, .bs-revise-chip .bs-icon, .bs-stage, .bs-film-state, .bs-tile[data-state="pending"], .bs-thumb[data-state="pending"], .bs-enhance-now[aria-busy="true"] .bs-icon, .bs-dock-toast, .bs-menu[data-anchored] { animation: none; }
+  .bs-skeleton > span, .bs-revise-chip .bs-icon, .bs-stage, .bs-film-state, .bs-tile[data-state="pending"], .bs-thumb[data-state="pending"], .bs-enhance-now[aria-busy="true"] .bs-icon, .bs-dock-toast, .bs-menu[data-anchored], .bs-mark-spin { animation: none; }
   /* The polishing glow stays as a still ring. */
   .bs-prompt-wrap[data-enhancing], .bs-prompt-wrap[data-enhancing]::before { animation: none; }
   .bs-btn:active:not(:disabled), .bs-chip:active:not(:disabled), .bs-door:active, .bs-example:active, .bs-thumb:active:not(:disabled), .bs-tile-btn:hover:not(:disabled) { transform: none; }

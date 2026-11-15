@@ -4,11 +4,18 @@
  * open, what each costs, the default way). On send it asks again with the request; when the customer has
  * not picked a way by hand and the server suggests the other one, it stops on a suggestion row, otherwise
  * it creates the run at once. Nothing waits for the run itself: it is polled like any other.
+ *
+ * Marks (§4.5): up to three spots pointed at on the clip. Placing one writes its circled digit into the
+ * request at the caret and, separately, `readMark` asks `revise.mark` what it is on (free; never blocks the
+ * form). Removing one takes its digit out and renumbers the rest. Marks travel with `revise.plan` and with
+ * the created version, then clear.
  */
 import {
   STUDIO_LIMITS,
   STUDIO_REVISE_MODES,
+  type ReviseMark,
   type StudioJobCreated,
+  type StudioReviseMarkRead,
   type StudioReviseMode,
   type StudioRevisePlan,
   type StudioReviseReason,
@@ -16,6 +23,7 @@ import {
 import { isFailure, type ApiResult } from "./api";
 import { newRequestId } from "./copy";
 import { toReferences, type TrayItem } from "./refs";
+import { MARKS_MAX, insertDigit, removeDigit, toWireMarks, wireGeometry, type MarkGeometry, type MarkState } from "./revise-marks";
 
 export interface ReviseState {
   phase: "loading" | "ready" | "checking" | "suggest" | "sending";
@@ -26,6 +34,8 @@ export interface ReviseState {
   prompt: string;
   references: TrayItem[];
   suggestion: { mode: StudioReviseMode; reason: StudioReviseReason | null } | null;
+  /** Spots pointed at on the clip, in order (mark n is the n-th circled digit in `prompt`). */
+  marks: MarkState[];
   /** An error code or `empty_prompt` / `unavailable`; the form turns it into a line. */
   note: string | null;
 }
@@ -33,12 +43,26 @@ export interface ReviseState {
 export interface ReviseDeps {
   organizationId: string;
   outputId: string;
-  plan(input: { organizationId: string; outputId: string; prompt: string; references: ReturnType<typeof toReferences> }): Promise<ApiResult<StudioRevisePlan>>;
+  plan(input: RevisePlanInput): Promise<ApiResult<StudioRevisePlan>>;
   create(input: ReviseCreateInput): Promise<ApiResult<StudioJobCreated>>;
   onChange(state: ReviseState): void;
+  /** `revise.mark`: what a spot is on. Absent: marks work by position only. */
+  readMark?(input: ReviseMarkReadInput): Promise<ApiResult<StudioReviseMarkRead>>;
+  /** The frame at the mark's time with the mark drawn on it (JPEG data URL), or null when it cannot be taken. */
+  frame?(mark: MarkGeometry): Promise<string | null>;
   /** A version is on its way (the strip shows it from the store; the screen may say so too). */
   onCreated?(created: StudioJobCreated): void;
 }
+
+export interface RevisePlanInput {
+  organizationId: string;
+  outputId: string;
+  prompt: string;
+  references: ReturnType<typeof toReferences>;
+  marks: ReviseMark[];
+}
+
+export type ReviseMarkReadInput = { organizationId: string; outputId: string; frame: string } & ReturnType<typeof wireGeometry>;
 
 /** Most references one version may add (the run keeps a place for the clip itself). */
 export const REVISE_REFERENCES_MAX = STUDIO_LIMITS.referencesMax - 1;
@@ -51,6 +75,7 @@ export const initialReviseState = (): ReviseState => ({
   prompt: "",
   references: [],
   suggestion: null,
+  marks: [],
   note: null,
 });
 
@@ -62,7 +87,7 @@ export function openMode(plan: StudioRevisePlan | null, wanted: StudioReviseMode
 
 export type ReviseCreateInput = ReturnType<typeof toCreate>;
 
-function toCreate(input: { organizationId: string; outputId: string; mode: StudioReviseMode; prompt: string; references: TrayItem[] }) {
+function toCreate(input: { organizationId: string; outputId: string; mode: StudioReviseMode; prompt: string; references: TrayItem[]; marks: readonly MarkState[] }) {
   return {
     kind: "video_revise" as const,
     organizationId: input.organizationId,
@@ -71,6 +96,7 @@ function toCreate(input: { organizationId: string; outputId: string; mode: Studi
     mode: input.mode,
     prompt: input.prompt.trim(),
     references: toReferences(input.references.filter((r) => r.kind === "image"), "image"),
+    marks: toWireMarks(input.marks),
   };
 }
 
@@ -81,7 +107,43 @@ export function createReviseFlow(deps: ReviseDeps) {
     deps.onChange(state);
   };
   const ask = (prompt: string) =>
-    deps.plan({ organizationId: deps.organizationId, outputId: deps.outputId, prompt, references: toReferences(state.references, "image") });
+    deps.plan({ organizationId: deps.organizationId, outputId: deps.outputId, prompt, references: toReferences(state.references, "image"), marks: toWireMarks(state.marks) });
+  /** A typing or marking change: a pending suggestion no longer applies. */
+  const edited = (): Partial<ReviseState> => ({ suggestion: null, phase: state.phase === "suggest" ? "ready" : state.phase });
+  let nextKey = 0;
+  /** Bumped on every read and move, so a late answer for an older position is dropped. */
+  const reads = new Map<string, number>();
+  const patchMark = (key: string, patch: Partial<MarkState>) => {
+    if (!state.marks.some((m) => m.key === key)) return;
+    set({ marks: state.marks.map((m) => (m.key === key ? { ...m, ...patch } : m)) });
+  };
+
+  /** Asks what the mark is on; the chip shows the answer. A failed or empty reading leaves the time on the chip. */
+  async function readMark(key: string) {
+    const mark = state.marks.find((m) => m.key === key);
+    if (!mark || !deps.readMark) return;
+    const token = (reads.get(key) ?? 0) + 1;
+    reads.set(key, token);
+    patchMark(key, { reading: true });
+    const current = () => reads.get(key) === token && state.marks.some((m) => m.key === key);
+    let frame: string | null = null;
+    try {
+      frame = deps.frame ? await deps.frame(mark) : null;
+    } catch {
+      frame = null;
+    }
+    if (!current()) return;
+    if (!frame) return patchMark(key, { reading: false });
+    let answer: ApiResult<StudioReviseMarkRead>;
+    try {
+      answer = await deps.readMark({ organizationId: deps.organizationId, outputId: deps.outputId, ...wireGeometry(mark), frame });
+    } catch {
+      answer = { ok: false, code: "failed" };
+    }
+    if (!current()) return;
+    if (isFailure(answer)) return patchMark(key, { reading: false, label: null, what: null });
+    patchMark(key, { reading: false, label: answer.label?.trim() || null, what: answer.what?.trim() || null });
+  }
 
   async function load() {
     set({ phase: "loading", note: null });
@@ -92,11 +154,12 @@ export function createReviseFlow(deps: ReviseDeps) {
 
   async function create(mode: StudioReviseMode) {
     set({ phase: "sending", mode, suggestion: null, note: null });
-    const result = await deps.create(toCreate({ organizationId: deps.organizationId, outputId: deps.outputId, mode, prompt: state.prompt, references: state.references }));
+    const result = await deps.create(toCreate({ organizationId: deps.organizationId, outputId: deps.outputId, mode, prompt: state.prompt, references: state.references, marks: state.marks }));
     if (isFailure(result)) return set({ phase: "ready", note: result.code });
     // The form clears; the plan answers the next version's number on the next open.
     const plan = state.plan ? { ...state.plan, version: state.plan.version + 1 } : null;
-    set({ phase: "ready", prompt: "", references: [], picked: false, plan });
+    reads.clear();
+    set({ phase: "ready", prompt: "", references: [], marks: [], picked: false, plan });
     deps.onCreated?.(result);
   }
 
@@ -136,14 +199,41 @@ export function createReviseFlow(deps: ReviseDeps) {
       set({ mode, picked: true, suggestion: null, phase: state.phase === "suggest" ? "ready" : state.phase });
     },
     setPrompt(prompt: string) {
-      set({ prompt: prompt.slice(0, STUDIO_LIMITS.promptMax), suggestion: null, phase: state.phase === "suggest" ? "ready" : state.phase, note: null });
+      set({ prompt: prompt.slice(0, STUDIO_LIMITS.promptMax), note: null, ...edited() });
     },
     setReferences(references: TrayItem[]) {
-      set({ references: references.filter((r) => r.kind === "image").slice(0, REVISE_REFERENCES_MAX), suggestion: null, phase: state.phase === "suggest" ? "ready" : state.phase });
+      set({ references: references.filter((r) => r.kind === "image").slice(0, REVISE_REFERENCES_MAX), ...edited() });
     },
     note(code: string | null) {
       set({ note: code });
     },
+    /**
+     * Places a mark (pin or box) and writes its digit into the request at `caret` (the end when null).
+     * Returns its key and the caret after the digit, or null when the marks are full. Reading it is a
+     * separate call (`readMark`).
+     */
+    addMark(geometry: MarkGeometry, caret: number | null): { key: string; caret: number } | null {
+      if (state.marks.length >= MARKS_MAX || state.phase === "sending" || state.phase === "checking") return null;
+      const key = `m${(nextKey += 1)}`;
+      const written = insertDigit(state.prompt, caret, state.marks.length + 1);
+      const mark: MarkState = { key, ...geometry, label: null, what: null, reading: false };
+      set({ marks: [...state.marks, mark], prompt: written.text.slice(0, STUDIO_LIMITS.promptMax), note: null, ...edited() });
+      return { key, caret: Math.min(written.caret, STUDIO_LIMITS.promptMax) };
+    },
+    /** Takes a mark away with its digit; the later marks and their digits move up one. */
+    removeMark(key: string) {
+      const index = state.marks.findIndex((m) => m.key === key);
+      if (index < 0 || state.phase === "sending" || state.phase === "checking") return;
+      reads.delete(key);
+      set({ marks: state.marks.filter((m) => m.key !== key), prompt: removeDigit(state.prompt, index + 1), ...edited() });
+    },
+    /** New geometry for a mark (keyboard nudge). Any reading in flight is dropped; the screen reads it again after a pause. */
+    moveMark(key: string, geometry: Partial<MarkGeometry>) {
+      if (!state.marks.some((m) => m.key === key)) return;
+      reads.set(key, (reads.get(key) ?? 0) + 1);
+      set({ marks: state.marks.map((m) => (m.key === key ? { ...m, ...geometry, reading: Boolean(deps.readMark) } : m)), ...edited() });
+    },
+    readMark,
   };
 }
 

@@ -181,6 +181,62 @@ function spacedSeedanceToken(token: string | null): string | null {
   return token.replace(/^@(Image|Video|Audio)(\d+)$/i, (_m, kind: string, n: string) => `@${kind[0]!.toUpperCase()}${kind.slice(1).toLowerCase()} ${n}`);
 }
 
+/** `@Image1` -> `@Image 1` everywhere in a prompt (the spelling this director sends to Seedance). */
+function spaceSeedanceTokens(text: string): string {
+  return text.replace(/@(Image|Video|Audio)(\d+)\b/g, '@$1 $2');
+}
+
+/** `@Image 1` -> `@Image1`: the spelling the enhancer binds and checks references with. */
+function unspaceSeedanceTokens(text: string): string {
+  return text.replace(/@(Image|Video|Audio) (\d+)\b/g, '@$1$2');
+}
+
+/**
+ * A new version of a generated clip (lib/brand-studio/revision) is not directed from scratch: the
+ * prompt writer that knows how the clip was made (`revision.madeWith`, the earlier requests, the marks)
+ * writes it, in the enhancer (enhancer/profiles/tasks.ts `revisionTask`). The earlier prompt usually
+ * came from this director, so its tokens are handed over in the enhancer's spelling.
+ */
+const revisionUserText = (input: { prompt: string; video?: { change?: string } | null; revision?: EnhanceInput['revision'] }): string =>
+  [input.prompt, input.video?.change ?? '', input.revision?.madeWith ?? '', ...(input.revision?.history ?? [])].join('\n');
+
+function revisionEnhanceInput(enhanceInput: EnhanceInput): EnhanceInput {
+  const revision = enhanceInput.revision!;
+  // This director makes clips without background music unless a musical performance was asked for
+  // (`enforceDirectorAudioPolicy`). The enhancer's `native` sound line would add "music that fits the
+  // mood" and contradict the earlier prompt, so a revision is written with the no-music sound line.
+  const noMusic = enhanceInput.video?.audio === 'native' && !requestsExplicitMusicPerformance(revisionUserText(enhanceInput));
+  return {
+    ...enhanceInput,
+    video: enhanceInput.video ? { ...enhanceInput.video, audio: noMusic ? 'ambient' : enhanceInput.video.audio } : enhanceInput.video,
+    revision: { ...revision, madeWith: unspaceSeedanceTokens(revision.madeWith), history: revision.history.map(unspaceSeedanceTokens) },
+  };
+}
+
+/** One statement about sound is enough: a separate `Audio:` line after the text already said it is dropped. */
+function dropRepeatedAudioLine(text: string): string {
+  const kept: string[] = [];
+  let stated = false;
+  for (const line of text.split('\n')) {
+    if (stated && /^[ \t]*(?:audio|sound)\s*:/i.test(line)) continue;
+    if (/\b(?:audio|sound)\s*:/i.test(line)) stated = true;
+    kept.push(line);
+  }
+  return kept.join('\n').replace(/\n{3,}/g, '\n\n').trim();
+}
+
+/** What this director adds to a revision prompt: its token spelling and the audio policy. Nothing is re-directed. */
+function finishRevisionPrompt(result: EnhanceResult, input: DirectorCompileInput): EnhanceResult {
+  const spaced = dropRepeatedAudioLine(spaceSeedanceTokens(stripRedundantVideoHeaders(result.prompt)));
+  // The revision writer already states the sound for the clip's audio mode. The audio policy is applied
+  // only where it still has something to do (a silent clip, or a prompt that does not rule music out):
+  // run over a line that already says "no music" it would only mangle that line.
+  const audio = input.video?.audio ?? 'on';
+  const silent = audio === 'off' || audio === 'silent';
+  const rulesMusicOut = /\bno\s+(?:background\s+)?music\b/i.test(spaced);
+  return { ...result, prompt: silent || !rulesMusicOut ? enforceDirectorAudioPolicy(spaced, audio, revisionUserText(input)) : spaced };
+}
+
 export function stripRedundantVideoHeaders(text: string): string {
   return text
     .replace(REDUNDANT_HEADER_LINE_RE, '')
@@ -349,6 +405,11 @@ export function composeDirectorFallbackPrompt(
     return composeFallbackPrompt(enhanceInput);
   }
 
+  // A new version of a clip keeps the prompt it was made from: the enhancer's revision fallback, not a new direction.
+  if (enhanceInput.revision) {
+    return finishRevisionPrompt(composeFallbackPrompt(revisionEnhanceInput(enhanceInput)), input);
+  }
+
   const binding = bindReferences(enhanceInput);
   const blueprint = isBlueprint(enhanceInput);
   const seconds = effectiveSeconds(enhanceInput.kind, enhanceInput.video) ?? 6;
@@ -501,6 +562,19 @@ export class DefaultPromptCompiler implements PromptCompiler {
     const playbookLines = playbookRuleLines(playbooks);
     const enhanceInput = toEnhanceInput(input, playbookLines);
     const binding = bindReferences(enhanceInput);
+
+    // 0. A new version of a generated clip: written from the clip's own history, never re-directed
+    //    (a request such as "make the bottle green" is not a scene to direct). See `revisionEnhanceInput`.
+    if (enhanceInput.revision && enhanceInput.profile === 'seedance') {
+      const revised = await enhancePrompt(revisionEnhanceInput(enhanceInput), deps);
+      return {
+        ...finishRevisionPrompt(revised, input),
+        intent: 'slot_fill',
+        provider,
+        analysis: null,
+        playbooksApplied: playbooks.length,
+      };
+    }
 
     // 1. Passthrough mode: preserve structured user prompt intact, binding @Image N tokens cleanly.
     if (intent === 'passthrough') {

@@ -77,7 +77,10 @@ const EQUIPMENT: ReadonlyArray<[RegExp, string]> = [
 function exemptText(input: EnhanceInput): string {
   const refs = input.references.map((r) => `${r.label} ${r.use ?? ''} ${r.avoid ?? ''}`).join(' ');
   // A revision carries the earlier prompt and requests over: words they already had are not "introduced".
-  const revision = input.revision ? [input.revision.madeWith, ...input.revision.history].join('\n') : '';
+  // The marks' descriptions came from the customer's own pointing (revise.mark): they count as given.
+  const revision = input.revision
+    ? [input.revision.madeWith, ...input.revision.history, ...(input.revision.marks ?? []).map((m) => m.what ?? '')].join('\n')
+    : '';
   return [input.prompt, input.video?.change ?? '', input.brand?.name ?? '', refs, revision].join('\n');
 }
 

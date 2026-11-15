@@ -23,6 +23,8 @@ export const dynamic = 'force-dynamic';
 export const maxDuration = 300;
 
 const BODY_MAX = 65_536;
+/** `revise.mark` carries one marked frame (a JPEG data URL, ≤ 400,000 characters by contract). */
+const MARK_BODY_MAX = 450_000;
 
 function advanceLater(deps: StudioDeps, jobIds: string[]): void {
   if (jobIds.length === 0) return;
@@ -75,13 +77,15 @@ export async function POST(request: NextRequest) {
   if (!brandStudioV2Open()) return studioJson({ ok: false, code: 'studio_closed' }, 404);
   const viewer = await getViewer();
   if (!viewer.userId) return studioJson({ ok: false, code: 'sign_in_required' }, 401);
-  if (Number(request.headers.get('content-length') ?? 0) > BODY_MAX) return studioJson({ ok: false, code: 'invalid' }, 413);
+  if (Number(request.headers.get('content-length') ?? 0) > MARK_BODY_MAX) return studioJson({ ok: false, code: 'invalid' }, 413);
   let body: { operation?: unknown; input?: unknown };
   try {
     const raw = await request.text();
-    if (Buffer.byteLength(raw) > BODY_MAX) return studioJson({ ok: false, code: 'invalid' }, 413);
+    const size = Buffer.byteLength(raw);
+    if (size > MARK_BODY_MAX) return studioJson({ ok: false, code: 'invalid' }, 413);
     body = JSON.parse(raw);
     if (!body || typeof body !== 'object' || !body.input || typeof body.input !== 'object') throw new Error('shape');
+    if (size > BODY_MAX && body.operation !== 'revise.mark') return studioJson({ ok: false, code: 'invalid' }, 413);
   } catch {
     return studioJson({ ok: false, code: 'invalid' }, 400);
   }
