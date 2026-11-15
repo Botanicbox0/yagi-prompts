@@ -587,7 +587,8 @@ export function StudioApp({ organizationId, locale, copy, mode, libraryCopy, lay
     }
   };
 
-  const openCanvasLabel = locale === "en" ? "Canvas Editor" : "캔버스 편집";
+  // The editor has one name on every screen ("꾸미기"); this entrance opens it on a blank picture.
+  const openCanvasLabel = copy.gallery.decorateBlank;
   const canvasLauncher =
     mode === "image" && canCreate ? (
       <div ref={canvasMenuWrapRef} style={{ position: "relative", display: "inline-flex", alignItems: "center" }}>
@@ -771,6 +772,8 @@ export function StudioApp({ organizationId, locale, copy, mode, libraryCopy, lay
             onAction={tileAction}
             onRetry={(job) => (canRerun(job) ? viewer.rerun(job) : viewer.reuse(job))}
             onCancel={(job) => void cancel(job)}
+            canRemove={canCreate && Boolean(state.canRemoveRuns)}
+            onRemove={(job) => studio.deleteJob(job.id).then((result) => setStatus(isFailure(result) ? copy.gallery.removeFailedError : null))}
             onNotice={setStatus}
             empty={empty}
           />

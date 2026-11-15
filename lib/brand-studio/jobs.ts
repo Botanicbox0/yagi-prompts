@@ -28,7 +28,7 @@ import { planFinal, planJob, type JobPlan } from './plan';
 import { planRevision } from './revision/plan';
 import { brandSummary, enhanceInputOf, enhanceReferences, keepSheet, readSheet, remixContext, runEnhancer } from './prepare';
 import { readCachedFilmSheet } from './film-sheet';
-import { jobView, openJobCount, readyAsset, readyOutput } from './repo';
+import { jobSoftDeleteReady, jobView, openJobCount, readyAsset, readyOutput } from './repo';
 import type { EnhanceInput, JobRow, OutputRow, StudioDeps } from './types';
 import { loadAllowance, reserveAllowance } from './usage';
 import { failure, guarded } from './outcome';
@@ -178,6 +178,38 @@ export async function cancelStudioJob(deps: StudioDeps, viewer: Viewer, raw: unk
   if ('ok' in outcome) return outcome;
   await dropWorkingFiles(deps.media, outcome.work);
   return { ok: true };
+}
+
+/**
+ * `job.delete`: takes a run that ended with no result (failed or stopped) off the wall. It only sets
+ * `deleted_at`: the row with its status, reason, usage and cost stays for audit and billing. A run that is
+ * still open, or one with results, is refused: results are deleted one by one (`output.delete`).
+ */
+export async function deleteStudioJob(deps: StudioDeps, viewer: Viewer, raw: unknown): Promise<StudioDone | StudioFailure> {
+  const parsed = JobRefSchema.safeParse(raw);
+  if (!parsed.success) return failure('invalid');
+  const v = parsed.data;
+  const outcome = await guarded(() =>
+    deps.sql.transaction(async (sql) => {
+      requireCreate(await studioSeat(sql, viewer.userId, v.organizationId));
+      // The column arrives with migration 0089; before that there is nothing to set.
+      if (!(await jobSoftDeleteReady(sql))) throw new StudioDenied('feature_unavailable');
+      const job = (
+        await sql.query<Pick<JobRow, 'id' | 'status' | 'deleted_at'>>(
+          'select id, status, deleted_at from brand_studio_jobs where id = $1 and organization_id = $2 for update',
+          [v.jobId, v.organizationId],
+        )
+      ).rows[0];
+      if (!job) throw new StudioDenied('not_found');
+      if (job.deleted_at) return job;
+      if (job.status !== 'failed' && job.status !== 'canceled') throw new StudioDenied('conflict');
+      const shown = (await sql.query("select 1 from brand_studio_outputs where job_id = $1 and status = 'ready' and deleted_at is null limit 1", [job.id])).rows[0];
+      if (shown) throw new StudioDenied('conflict');
+      await sql.query('update brand_studio_jobs set deleted_at = now() where id = $1', [job.id]);
+      return job;
+    }),
+  );
+  return 'ok' in outcome ? outcome : { ok: true };
 }
 
 export async function previewStudioPrompt(deps: StudioDeps, viewer: Viewer, raw: unknown): Promise<StudioPromptPreview | StudioFailure> {

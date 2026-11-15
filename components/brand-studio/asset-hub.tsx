@@ -598,7 +598,7 @@ export function BrandAssetHub({
                     {canOpenStudio && entry.kind === "image" && (
                       <>
                         <a className={s.miniAction} href={imageCanvasHref(organizationId, entry.source)} data-asset-hub-open-canvas>
-                          {hubLocale === "en" ? "Canvas Editor" : "캔버스 편집"}
+                          {studioCopy.gallery.menu.decorate}
                         </a>
                         <a className={s.miniAction} href={imageScreenRefHref(organizationId, entry.source)} data-asset-hub-use-image>
                           {h.openInImage}

@@ -142,6 +142,11 @@ export interface StudioJobParams {
   audio: StudioAudioMode | null;
   count: number;
   locale: 'ko' | 'en';
+  /**
+   * The rewritten sentence the customer read in the prompt bar before sending (plain image and video runs).
+   * It becomes `final_prompt` as it is; the row's `prompt` stays what they typed and `enhance` is false.
+   */
+  reviewedPrompt?: string;
   method?: StudioRemixMethod;
   keep?: StudioKeepKey[];
   change?: string;
@@ -225,6 +230,8 @@ export interface JobRow {
   model: string;
   prompt: string;
   final_prompt: string | null;
+  /** Set when a member removed this run from the wall (migration 0089); absent before it is applied. */
+  deleted_at?: Date | string | null;
   enhance: boolean;
   params: StudioJobParams;
   refs: StudioReference[];

@@ -173,6 +173,9 @@ export async function planJob(
   if (mentionsMissing(input.prompt, resolved, imageOffset)) throw new StudioDenied('reference_missing');
   const base = { aspect: null, resolution: null, seconds: null, audio: null, count: 1, locale } satisfies StudioJobParams;
   const shared = { prompt: input.prompt, enhance: input.enhance, refs: input.references, resolved, parentOutputId: null, stickLane: null };
+  // A sentence the customer already read in the prompt bar is sent as it is: no second rewrite.
+  const reviewedPrompt = (input.kind === 'image' || input.kind === 'video') && input.reviewedPrompt && input.reviewedPrompt !== input.prompt ? input.reviewedPrompt : null;
+  const reviewed = reviewedPrompt ? { enhance: false, params: { reviewedPrompt } } : null;
 
   if (input.kind === 'image') {
     const model = liveModel(input.model, 'image') as StudioImageModel;
@@ -183,6 +186,7 @@ export async function planJob(
     const usd = imageRunUsd({ model: model.id, resolution: input.resolution, references: resolved.length, count: input.count, quality });
     return {
       ...shared, kind: 'image', model,
+      ...(reviewed ? { enhance: reviewed.enhance } : {}),
       params: {
         ...base,
         aspect: input.aspect,
@@ -190,6 +194,7 @@ export async function planJob(
         count: input.count,
         ...(quality ? { quality } : {}),
         ...(input.background ? { background: input.background } : {}),
+        ...reviewed?.params,
       },
       estimateUsd: usd, estimateKrw: usageKrw(usd, 'image'),
       outputs: { count: input.count, kind: 'image', isDraft: false },
@@ -228,7 +233,8 @@ export async function planJob(
     const usd = videoRunUsd({ resolution: input.resolution, seconds: secs });
     return {
       ...shared, kind: 'video', model,
-      params: { ...base, aspect: input.aspect, resolution: input.resolution, seconds: secs, audio: input.audio },
+      ...(reviewed ? { enhance: reviewed.enhance } : {}),
+      params: { ...base, aspect: input.aspect, resolution: input.resolution, seconds: secs, audio: input.audio, ...reviewed?.params },
       estimateUsd: usd, estimateKrw: usageKrw(usd, 'video'),
       outputs: { count: 1, kind: 'video', isDraft },
     };

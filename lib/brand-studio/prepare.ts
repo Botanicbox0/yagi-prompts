@@ -406,7 +406,8 @@ export async function prepareJob(deps: StudioDeps, job: JobRow): Promise<{ final
     work.sheet = sheet;
   }
 
-  if (!job.enhance) return { finalPrompt: null, work: { ...work, prepared: true } };
+  // Enhancement off: the customer's words go as they are, or the rewritten sentence they already read.
+  if (!job.enhance) return { finalPrompt: job.params?.reviewedPrompt?.trim() || null, work: { ...work, prepared: true } };
   const organization = (await deps.sql.query<{ name: string }>('select name from brand_organizations where id = $1', [job.organization_id])).rows[0];
   const revised = await revisionInput(deps, job, resolved);
   // Without the clip's history the marks cannot travel as context: their words go into the request.

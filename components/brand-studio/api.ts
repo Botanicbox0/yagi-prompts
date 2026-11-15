@@ -60,6 +60,7 @@ export interface StudioOps {
   "asset.delete": [z.input<typeof AssetRefSchema>, StudioDone];
   "asset.from_output": [z.input<typeof AssetFromOutputSchema>, StudioAssetSaved];
   "output.delete": [z.input<typeof OutputRefSchema>, StudioDone];
+  "job.delete": [z.input<typeof JobRefSchema>, StudioDone];
   "handoff.campaign": [z.input<typeof CampaignHandoffSchema>, StudioHandoffDone];
 }
 // Compile-time guard: every contract operation has a row above and nothing else does.

@@ -27,11 +27,11 @@ import { studioSeat } from './access';
 import { loadOrganizationStorageSummary, toStudioStorageQuotaView } from '@/lib/brands/storage-quota';
 import { assetFromOutput, completeStudioAsset, deleteStudioAsset, deleteStudioOutput, reserveStudioAsset, updateStudioAsset } from './assets';
 import { handoffToCampaign } from './handoff';
-import { analyzeStudioFilm, cancelStudioJob, createStudioJob, previewStudioPrompt } from './jobs';
+import { analyzeStudioFilm, cancelStudioJob, createStudioJob, deleteStudioJob, previewStudioPrompt } from './jobs';
 import { failure, guarded } from './outcome';
 import { planStudioRevise } from './revision/advise';
 import { readStudioMark } from './revision/mark';
-import { assetView, assetsOf, campaignsOf, jobsByIds, jobsOfStudioState, viewsOf } from './repo';
+import { assetView, assetsOf, campaignsOf, jobSoftDeleteReady, jobsByIds, jobsOfStudioState, viewsOf } from './repo';
 import type { StudioDeps } from './types';
 import { allowanceView, loadAllowance } from './usage';
 
@@ -98,6 +98,8 @@ export async function runStudioOperation(deps: StudioDeps, viewer: Viewer, opera
       return assetFromOutput(deps, viewer, input);
     case 'output.delete':
       return deleteStudioOutput(deps, viewer, input);
+    case 'job.delete':
+      return deleteStudioJob(deps, viewer, input);
     case 'handoff.campaign':
       return handoffToCampaign(deps, viewer, input);
   }
@@ -124,6 +126,7 @@ export async function loadStudioState(deps: StudioDeps, viewer: Viewer, organiza
         assets: assets.map((a) => assetView(a, deps.media)),
         jobs: await viewsOf(sql, jobs, deps.media),
         campaigns,
+        canRemoveRuns: seat.canCreate && (await jobSoftDeleteReady(sql)),
       };
     }),
   );

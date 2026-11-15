@@ -33,6 +33,11 @@ interface StudioModelBase {
   /** One short line on what it is good at. Keys into messages (brandStudio.models.<hintKey>). */
   hintKey: string;
   availability: StudioModelAvailability;
+  /**
+   * `false`: still runs (an earlier run can be made again, history and prices resolve) but no screen offers
+   * it for a new run. Absent means listed.
+   */
+  listed?: boolean;
   promptProfile: StudioPromptProfile;
   /** True when the upstream endpoints carry `enable_safety_checker` (always forced `true`). */
   safetyChecker?: boolean;
@@ -164,39 +169,6 @@ export const STUDIO_MODELS = [
     supportsTransparentBackground: true,
     endpoints: { textToImage: 'text-to-image', edit: 'image-editing' },
   },
-  {
-    id: 'nano-banana-pro',
-    medium: 'image',
-    label: 'Nano Banana Pro',
-    hintKey: 'nanoBananaPro',
-    availability: 'live',
-    promptProfile: 'nano-banana',
-    api: { alias: 'google/gemini-3-pro-image' },
-    mcp: { model: 'nano-banana-pro' },
-    aspects: GEMINI_PRO_ASPECTS,
-    resolutions: ['1K', '2K', '4K'],
-    defaultResolution: '2K',
-    maxReferences: 10,
-    regionEdit: true,
-    endpoints: { textToImage: 'text-to-image', edit: 'image-editing' },
-  },
-  {
-    id: 'seedream-5-flash',
-    medium: 'image',
-    label: 'Seedream 5.0 Flash',
-    hintKey: 'seedreamFlash',
-    availability: 'live',
-    promptProfile: 'seedream',
-    safetyChecker: true,
-    api: { alias: 'bytedance/seedream-5.0-flash' },
-    mcp: null,
-    aspects: SEEDREAM_ASPECTS,
-    resolutions: ['1K', '2K'],
-    defaultResolution: '2K',
-    maxReferences: 10,
-    regionEdit: false,
-    endpoints: { textToImage: 'text-to-image', edit: 'image-editing' },
-  },
   // GPT Image 2.6. API lane (catalogue, 2026-11-11): `openai/gpt-image-2.6-{flare,sunburst}`, endpoints
   // text-to-image / image-editing, `width`/`height`/`quality`/`n`, edits take `images` (up to 16).
   // Account lane (`list_models`, 2026-11-11): ids `gpt-image-2.6-flare` / `-sunburst`, the aspects and
@@ -239,6 +211,42 @@ export const STUDIO_MODELS = [
     pixels: GPT_IMAGE_PIXELS,
     qualities: STUDIO_IMAGE_QUALITIES,
     defaultQuality: 'medium',
+  },
+  {
+    id: 'nano-banana-pro',
+    medium: 'image',
+    label: 'Nano Banana Pro',
+    hintKey: 'nanoBananaPro',
+    availability: 'live',
+    promptProfile: 'nano-banana',
+    api: { alias: 'google/gemini-3-pro-image' },
+    mcp: { model: 'nano-banana-pro' },
+    aspects: GEMINI_PRO_ASPECTS,
+    resolutions: ['1K', '2K', '4K'],
+    defaultResolution: '2K',
+    maxReferences: 10,
+    regionEdit: true,
+    endpoints: { textToImage: 'text-to-image', edit: 'image-editing' },
+  },
+  // Seedream 5.0 Flash: no longer offered for a new run (2026-11-15). It stays `live` so an earlier run can be
+  // made again and its history, credits and price still resolve.
+  {
+    id: 'seedream-5-flash',
+    medium: 'image',
+    label: 'Seedream 5.0 Flash',
+    hintKey: 'seedreamFlash',
+    availability: 'live',
+    listed: false,
+    promptProfile: 'seedream',
+    safetyChecker: true,
+    api: { alias: 'bytedance/seedream-5.0-flash' },
+    mcp: null,
+    aspects: SEEDREAM_ASPECTS,
+    resolutions: ['1K', '2K'],
+    defaultResolution: '2K',
+    maxReferences: 10,
+    regionEdit: false,
+    endpoints: { textToImage: 'text-to-image', edit: 'image-editing' },
   },
   {
     id: 'seedance-2.5',
@@ -291,10 +299,13 @@ export function studioModelOrLegacy(id: string): StudioModel | null {
   return studioModel(id) ?? studioModel(normalizeLegacyStudioModelId(id));
 }
 
-/** Models a screen may offer: live ones only, in registry order. */
+/**
+ * Models a screen may offer for a new run: live and listed ones, in registry order (the order the model
+ * list shows: Seedream 5.5, GPT Image 2.6 Flare and Sunburst, Nano Banana Pro).
+ */
 export function selectableModels(medium?: StudioMedium): StudioModel[] {
   return (STUDIO_MODELS as readonly StudioModel[]).filter(
-    (m) => m.availability === 'live' && (medium === undefined || m.medium === medium),
+    (m) => m.availability === 'live' && m.listed !== false && (medium === undefined || m.medium === medium),
   );
 }
 

@@ -2,9 +2,10 @@
 /**
  * The prompt bar's own state: the draft, the references and one press of "만들기". A press keeps its
  * request id until it succeeds, so sending the same thing again after a lost answer cannot start a
- * second run. The ✨ button asks `prompt.enhance` for the improved sentence (free for the customer);
- * that sentence is then sent with `enhance: false` so it is not rewritten twice, and editing it drops
- * that state again.
+ * second run. "지금 문장 다듬기" asks `prompt.enhance` for the rewritten sentence (free for the customer)
+ * and puts it in the field, where it can be edited. The words typed before it are kept: "원래 문장으로"
+ * brings them back, and a run sends them as `prompt` with the sentence in the field as `reviewedPrompt`
+ * (`enhance: false`), so nothing is rewritten twice and the run records both.
  */
 import { useCallback, useRef, useState } from "react";
 import { STUDIO_LIMITS, type StudioAssetView, type StudioJobView, type StudioOutputView } from "@/lib/brand-studio/contracts";
@@ -67,8 +68,16 @@ export interface Enhanced {
   improved: string;
 }
 
-/** True while the field still holds exactly the sentence the ✨ button wrote. */
-export const isPreEnhanced = (enhanced: Enhanced | null, prompt: string) => Boolean(enhanced && enhanced.improved === prompt);
+/**
+ * The customer's own words to send beside the sentence in the field, or null when the field is not a
+ * rewritten sentence (never rewritten, taken back, emptied, or typed back to the original).
+ */
+export function ownWordsOf(enhanced: Enhanced | null, prompt: string): string | null {
+  if (!enhanced) return null;
+  const shown = prompt.trim();
+  const own = enhanced.original.trim();
+  return shown && own && shown !== own ? own : null;
+}
 
 export function useDock({
   studio,
@@ -123,7 +132,7 @@ export function useDock({
     [copy, mode, setDraft],
   );
 
-  const preEnhanced = isPreEnhanced(enhanced, draft.prompt);
+  const ownWords = ownWordsOf(enhanced, draft.prompt);
 
   /** True when one or more runs started (multi-clip plans dispatch concurrently via Promise.all). */
   const submit = useCallback(async (): Promise<boolean> => {
@@ -135,7 +144,7 @@ export function useDock({
       draft,
       tray,
       { organizationId, requestIds: ["probe-0", "probe-1", "probe-2", "probe-3"] },
-      { preEnhanced, sheet },
+      { ownWords, sheet },
     );
     if (!probe.ok) {
       setMessage(problemLine(probe.problem, copy));
@@ -172,9 +181,9 @@ export function useDock({
     }
     press.current = null;
     return true;
-  }, [busy, copy, draft, enhancing, organizationId, preEnhanced, studio, tray]);
+  }, [busy, copy, draft, enhancing, organizationId, ownWords, studio, tray]);
 
-  /** ✨: the sentence the model will read, in the field, with the original one kept for "원래 문장으로". */
+  /** "지금 문장 다듬기": the sentence the model will read, in the field, with the customer's words kept for "원래 문장으로". */
   const enhanceNow = useCallback(async () => {
     if (enhancing || !draft.prompt.trim()) return;
     const preview = enhancePreviewInput(draft, tray, organizationId);
@@ -183,6 +192,8 @@ export function useDock({
       return;
     }
     const original = draft.prompt;
+    // Rewriting a sentence that was already rewritten keeps the words the customer typed first.
+    const own = ownWordsOf(enhanced, original) ?? original;
     setEnhancing(true);
     setMessage(null);
     const result = await studio.enhancePrompt(preview.input);
@@ -193,10 +204,11 @@ export function useDock({
     }
     const improved = result.prompt.trim().slice(0, STUDIO_LIMITS.promptMax);
     // The customer may have kept typing elsewhere; only replace the sentence that was sent.
+    if (latestDraft.current.prompt !== original) return;
     setDraft((current) => (current.prompt === original ? { ...current, prompt: improved } : current));
-    setEnhanced({ original, improved });
+    setEnhanced({ original: own, improved });
     setNotice(null);
-  }, [copy, draft, enhancing, organizationId, studio, tray]);
+  }, [copy, draft, enhanced, enhancing, organizationId, studio, tray]);
 
   const undoEnhance = useCallback(() => {
     if (!enhanced) return;
@@ -207,9 +219,14 @@ export function useDock({
   /** "설정 다시 쓰기" and a reference-video run's "다시 만들기": its settings and references back in the bar. */
   const reuse = useCallback(
     (job: StudioJobView, lookup: { asset(id: string): StudioAssetView | null; output(id: string): StudioOutputView | null }) => {
-      setDraft((current) => draftFromJob(job, current));
+      // A run whose sentence the customer read comes back with that sentence in the field and their words kept.
+      const reviewed = job.reviewed && job.finalPrompt ? job.finalPrompt.slice(0, STUDIO_LIMITS.promptMax) : null;
+      setDraft((current) => {
+        const next = draftFromJob(job, current);
+        return reviewed ? { ...next, prompt: reviewed } : next;
+      });
       setTray(trayFromReferences(job.references, lookup, copy.viewer.label));
-      setEnhanced(null);
+      setEnhanced(reviewed ? { original: job.prompt, improved: reviewed } : null);
       setMessage(null);
       setNotice(null);
     },
@@ -234,7 +251,7 @@ export function useDock({
     submit,
     reuse,
     enhancing,
-    enhanced: preEnhanced,
+    enhanced: ownWords !== null,
     enhanceNow,
     undoEnhance,
   };

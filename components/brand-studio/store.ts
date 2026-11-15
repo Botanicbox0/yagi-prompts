@@ -27,7 +27,8 @@ export type StudioAction =
   | { type: "assetUpserted"; asset: StudioAssetView }
   | { type: "assetRemoved"; id: string }
   | { type: "outputSaved"; outputId: string; assetId: string }
-  | { type: "outputRemoved"; outputId: string };
+  | { type: "outputRemoved"; outputId: string }
+  | { type: "jobRemoved"; jobId: string };
 
 export function initialStore(state?: StudioState | null): StudioStore {
   return state ? { phase: "ready", state } : { phase: "loading", state: null };
@@ -76,6 +77,8 @@ export function studioReducer(store: StudioStore, action: StudioAction): StudioS
             : job,
         ),
       }));
+    case "jobRemoved":
+      return withState(store, (s) => ({ ...s, jobs: s.jobs.filter((job) => job.id !== action.jobId) }));
     case "outputRemoved":
       return withState(store, (s) => ({
         ...s,
