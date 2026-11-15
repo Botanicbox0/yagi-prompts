@@ -1,7 +1,7 @@
 import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { ArkOpenApiError, type ArkAsset, type ArkAssetsClient, type ArkAssetStatus } from '@/lib/ark/assets';
 import type { ArkClient, ArkTask } from '@/lib/ark/client';
 import type { GptImageResult, OpenAiImageClient } from '@/lib/images/openai';
@@ -9,6 +9,7 @@ import { OpenAiImageError } from '@/lib/images/openai';
 import { createFakeMailer, type FakeMailer } from '@/lib/notify/mailer-fake';
 import { createEmailRenderNotifier, renderIdempotencyKey, type RenderNotifier } from '@/lib/renders/notify';
 import { loadRenderJob } from '@/lib/renders/repo';
+import { COLLECT_LEASE_MINUTES, liveCollectors } from '@/lib/renders/collect';
 import { loadRenderExtras } from '@/lib/renders/extras';
 import { renderStage } from '@/components/renders/stage';
 import {
@@ -21,6 +22,7 @@ import {
   releaseHeldRendersFor,
   runRenderPass,
   type RenderPassDeps,
+  type RenderPassReport,
 } from '@/lib/renders/service';
 import { SHARE_TTL_DAYS } from '@/lib/renders/share';
 import { createLocalRenderStore, type RenderStore } from '@/lib/renders/store';
@@ -95,6 +97,13 @@ function fakeAssets(state: { status: ArkAssetStatus; created: number }): ArkAsse
 
 function task(status: ArkTask['status'], videoUrl: string | null = null): ArkTask {
   return { id: 'cgt-1', status, model: 'dreamina-seedance-2-0-260128', videoUrl, error: null, completionTokens: null, createdAt: null, updatedAt: null };
+}
+
+/** A point a fake waits at until the test opens it — how these tests order two overlapping passes. */
+function gate(): { opened: Promise<void>; open: () => void } {
+  let open!: () => void;
+  const opened = new Promise<void>((resolve) => { open = resolve; });
+  return { opened, open };
 }
 
 describe('the render queue', () => {
@@ -430,32 +439,164 @@ describe('the render queue', () => {
     expect((await loadRenderJob(h.sql, created.id))!).toMatchObject({ status: 'running', providerTaskId: 'cgt-1' });
   });
 
-  it('keeps a delivered film delivered when an overlapping poll of the same task fails afterwards', async () => {
+  /**
+   * A film job the provider has just finished (task `cgt-1`), and a `poll` that is one overlapping pass
+   * (the owner's open page, the provider callback, the tick). The tests below order the passes with
+   * gates the fake download and the fake bucket wait on — never with a timer, so the order they
+   * describe is the order that runs, however loaded the machine is.
+   */
+  const finishedFilm = async (doFetch: typeof fetch, storeOverrides: Partial<RenderStore> = {}) => {
     await h.sql.query(`insert into identity_groups (user_id, status, group_id, verified_at) values ($1, 'active', 'grp-1', now())`, [ADMIN_VIEWER.userId]);
     const created = await enqueue(VIDEO_TEMPLATE, '9:16');
     if (!created.ok) throw new Error(created.code);
     const assets = fakeAssets({ status: 'Active', created: 0 });
-    const bankStore = { ...store, url: async () => 'https://store.test/photo.jpg' };
+    const bankStore: RenderStore = { ...store, url: async () => 'https://store.test/photo.jpg', ...storeOverrides };
     let state: ArkTask = task('queued');
     const ark: ArkClient = { async createVideoTask() { return { id: 'cgt-1' }; }, async getVideoTask() { return state; } };
-    let downloads = 0;
-    // The first pass downloads the film; the second one's link is refused a moment later.
-    const doFetch: typeof fetch = async () => {
-      downloads += 1;
-      if (downloads === 1) return new Response(VIDEO_BYTES, { status: 200, headers: { 'content-type': 'video/mp4' } });
-      await new Promise((resolve) => setTimeout(resolve, 40));
-      return new Response('expired', { status: 403 });
-    };
     await runRenderPass(deps({ ark, fetch: doFetch }, { assets, store: bankStore }), { jobId: created.id });
     expect((await loadRenderJob(h.sql, created.id))!).toMatchObject({ status: 'running', providerTaskId: 'cgt-1' });
     state = task('succeeded', 'https://ark.example/out.mp4');
+    return {
+      id: created.id,
+      poll: (overrides: Partial<RenderPassDeps> = {}) => runRenderPass(deps({ ark, fetch: doFetch }, { assets, store: bankStore, ...overrides }), { limit: 0 }),
+      job: async () => (await loadRenderJob(h.sql, created.id))!,
+    };
+  };
+  const film = () => new Response(VIDEO_BYTES, { status: 200, headers: { 'content-type': 'video/mp4' } });
+  const refused = () => new Response('expired', { status: 403 });
+  const failedIn = (reports: RenderPassReport[]) => reports.reduce((sum, report) => sum + report.failed, 0);
 
-    const pass = () => runRenderPass(deps({ ark, fetch: doFetch }, { assets, store: bankStore }), { limit: 0 });
-    const reports = await Promise.all([pass(), pass()]);
+  it('keeps a delivered film delivered when an overlapping poll of the same task fails afterwards', async () => {
+    let downloads = 0;
+    const bothDownloading = gate();
+    const delivered = gate();
+    // Two polls download at once. The first gets the film; the second one's link is refused — and it
+    // hears so only after the first has delivered, which is what "afterwards" means here.
+    const doFetch: typeof fetch = async () => {
+      downloads += 1;
+      if (downloads === 1) {
+        await bothDownloading.opened;
+        return film();
+      }
+      bothDownloading.open();
+      await delivered.opened;
+      return refused();
+    };
+    const render = await finishedFilm(doFetch);
+
+    const passes = [render.poll(), render.poll()];
+    await Promise.race(passes); // the pass with the film; the other is still held at its download
+    expect(downloads).toBe(2);
+    expect(await render.job()).toMatchObject({ status: 'succeeded', resultMime: 'video/mp4', errorCode: null });
+    delivered.open();
+    const reports = await Promise.all(passes);
 
     expect(downloads).toBe(2);
-    expect((await loadRenderJob(h.sql, created.id))!).toMatchObject({ status: 'succeeded', resultMime: 'video/mp4', errorCode: null });
-    expect(reports.reduce((sum, report) => sum + report.failed, 0)).toBe(0);
+    expect(await render.job()).toMatchObject({ status: 'succeeded', resultMime: 'video/mp4', errorCode: null });
+    expect(failedIn(reports)).toBe(0);
+  });
+
+  it('does not fail a film one pass is still copying when an overlapping poll of the same task is refused first', async () => {
+    let downloads = 0;
+    const bothDownloading = gate();
+    const copied = gate();
+    const doFetch: typeof fetch = async () => {
+      downloads += 1;
+      if (downloads === 1) {
+        await bothDownloading.opened;
+        return film();
+      }
+      bothDownloading.open();
+      return refused();
+    };
+    // The copy into our bucket is the slow part of a delivery (seconds for a real film): hold it open
+    // until the refused poll is completely over.
+    const render = await finishedFilm(doFetch, {
+      put: async (key, bytes, mime) => {
+        if (key.endsWith('/result.mp4')) await copied.opened;
+        return store.put(key, bytes, mime);
+      },
+    });
+
+    const passes = [render.poll(), render.poll()];
+    const refusedPoll = await Promise.race(passes); // the other pass is held at its copy, film in hand
+    expect(downloads).toBe(2);
+    expect(refusedPoll).toMatchObject({ succeeded: 0, failed: 0, requeued: 0, waiting: 1 });
+    expect(refusedPoll.errors.join('\n')).toContain('bad_output');
+    expect(await render.job()).toMatchObject({ status: 'running', providerTaskId: 'cgt-1', errorCode: null });
+    expect(mailer.sent).toHaveLength(0);
+
+    copied.open();
+    const reports = await Promise.all(passes);
+    expect(await render.job()).toMatchObject({ status: 'succeeded', resultMime: 'video/mp4', errorCode: null, notifyStatus: 'sent' });
+    expect(failedIn(reports)).toBe(0);
+    expect(mailer.sent).toHaveLength(1); // the delivery, and no failure notice before it
+  });
+
+  it('still fails a film nobody could fetch: of two polls refused together, the last one out ends the job once', async () => {
+    let downloads = 0;
+    const bothDownloading = gate();
+    const doFetch: typeof fetch = async () => {
+      downloads += 1;
+      if (downloads === 1) await bothDownloading.opened;
+      else bothDownloading.open();
+      return refused();
+    };
+    const render = await finishedFilm(doFetch);
+
+    const reports = await Promise.all([render.poll(), render.poll()]);
+    expect(downloads).toBe(2);
+    expect(failedIn(reports)).toBe(1);
+    expect(reports.reduce((sum, report) => sum + report.waiting, 0)).toBe(1);
+    expect(await render.job()).toMatchObject({ status: 'failed', errorCode: 'bad_output', resultKey: null });
+  });
+
+  it('lets a refused poll end the job once the pass that was copying the film is past its lease', async () => {
+    const render = await finishedFilm(async () => refused());
+    const listed = (agoMs: number) => h.sql.query(`update render_jobs set collecting = jsonb_build_object('a-pass-that-died', $2::bigint) where id = $1`, [render.id, NOW.getTime() - agoMs]);
+
+    // A pass began copying this film a minute ago and has not come back: it may still deliver.
+    await listed(60_000);
+    expect(await render.poll()).toMatchObject({ failed: 0, waiting: 1 });
+    expect(await render.job()).toMatchObject({ status: 'running', errorCode: null });
+
+    // Past the lease (longer than any function can run) it is not coming back, and the film cannot be fetched.
+    await listed((COLLECT_LEASE_MINUTES + 1) * 60_000);
+    expect(await render.poll()).toMatchObject({ failed: 1, waiting: 0 });
+    expect(await render.job()).toMatchObject({ status: 'failed', errorCode: 'bad_output' });
+  });
+
+  it('never holds a delivery back for another pass, and a download that can be retried leaves no one listed', async () => {
+    let answer: () => Response = () => new Response('busy', { status: 503 });
+    const render = await finishedFilm(async () => answer());
+    const collecting = async () => (await h.sql.query<{ collecting: unknown }>('select collecting from render_jobs where id = $1', [render.id])).rows[0]!.collecting;
+
+    // 503 is the next poll's to try again: the job waits, and this pass takes itself off the list.
+    expect(await render.poll()).toMatchObject({ failed: 0, requeued: 0, waiting: 1 });
+    expect(await render.job()).toMatchObject({ status: 'running', providerTaskId: 'cgt-1' });
+    expect(liveCollectors(await collecting(), NOW)).toEqual([]);
+
+    // Someone else is listed as copying it. A pass that has the film delivers anyway.
+    await h.sql.query(`update render_jobs set collecting = jsonb_build_object('another-pass', $2::bigint) where id = $1`, [render.id, NOW.getTime()]);
+    answer = film;
+    expect(await render.poll()).toMatchObject({ succeeded: 1, failed: 0 });
+    expect(await render.job()).toMatchObject({ status: 'succeeded', resultMime: 'video/mp4' });
+  });
+
+  it.each([
+    { link: 'a good link', answer: film, report: { succeeded: 1, failed: 0 }, job: { status: 'succeeded', resultMime: 'video/mp4', errorCode: null } },
+    { link: 'a refused link', answer: refused, report: { succeeded: 0, failed: 1 }, job: { status: 'failed', resultMime: null, errorCode: 'bad_output' } },
+  ])('collects as before on a database without the collecting column (0091 not applied yet): $link', async ({ answer, report, job }) => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    try {
+      await h.sql.query('alter table render_jobs drop column collecting');
+      const render = await finishedFilm(async () => answer());
+      expect(await render.poll()).toMatchObject(report);
+      expect(await render.job()).toMatchObject(job);
+      expect(warn.mock.calls.some(([line]) => String(line).includes('collecting not recorded'))).toBe(true);
+    } finally {
+      warn.mockRestore();
+    }
   });
 
   it('lets a later pass take over a parked job whose dispatching pass died', async () => {
