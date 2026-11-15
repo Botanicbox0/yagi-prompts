@@ -7,7 +7,7 @@ import { audit } from '@/lib/creator-platform/service';
 import { listSelfies, savedSelfiePhoto } from '@/lib/identity/selfie-service';
 import { createRecipeSandboxRender } from '@/lib/renders/service';
 import { listMakerFiles, type MakerAsset } from './assets';
-import { quoteRecipe, type RecipeQuote } from './pricing';
+import { quoteRecipeBase, type RecipeQuote } from './pricing';
 import { parseDisclosure, parsePresentation, recipeSchemaReady, type Disclosure, type Presentation } from './repo';
 import { parseRecipe, recipeCast, recipeMedium, type Recipe, type RecipeMedium } from './schema';
 
@@ -99,7 +99,7 @@ export async function loadReviewEntries(sql: SqlRunner, ids: string[]): Promise<
       slots: recipe ? Object.entries(recipe.slots).map(([name, slot]) => ({ name, source: slot.source, kind: slot.kind, asset: slot.source === 'creator' ? slot.asset : null })) : [],
       files: await listMakerFiles(sql, row.id),
       disclosure: parseDisclosure(row.disclosure), presentation: parsePresentation(row.presentation), royaltyKrw: row.royalty_krw,
-      quote: recipe && row.royalty_krw !== null ? quoteRecipe(recipe, row.royalty_krw) : null,
+      quote: recipe && row.royalty_krw !== null ? quoteRecipeBase(recipe, row.royalty_krw) : null,
       testRendersUsed: row.test_renders_used,
       renders: renders.rows.map((r) => ({ id: r.id, status: r.status, errorCode: r.error_code, outputs: r.outputs, createdAt: r.created_at instanceof Date ? r.created_at.toISOString() : String(r.created_at) })),
     });

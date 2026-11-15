@@ -45,10 +45,13 @@ describe('a maker film', () => {
     expect(buildMakerFilm(FILE, `${PROMPT}\n${'x'.repeat(MAX_STEP_PROMPT_CHARS)}`)).toMatchObject({ ok: false });
   });
 
-  it('refuses a price under the cost floor of the resolution the recipe renders at', () => {
+  it('refuses a price under the 720p cost floor, and a 1080p price under its own', () => {
     expect(buildMakerFilm({ ...FILE, price_krw: 3900 }, PROMPT)).toMatchObject({ ok: false });
-    // The same price cannot buy a 1080p render either: the recipe, not the order, picks the resolution.
-    expect(buildMakerFilm({ ...FILE, resolution: '1080p' }, PROMPT)).toMatchObject({ ok: false });
+    // What the film was written at no longer sets the price: the order names the resolution it renders at.
+    expect(buildMakerFilm({ ...FILE, resolution: '1080p' }, PROMPT)).toMatchObject({ ok: true });
+    // 10 s 4:3 at 1080p costs 7,972원 to make; its floor is 9,800원.
+    expect(buildMakerFilm({ ...FILE, price_1080_krw: 9700 }, PROMPT)).toMatchObject({ ok: false });
+    expect(buildMakerFilm({ ...FILE, price_1080_krw: 9800 }, PROMPT)).toMatchObject({ ok: true });
   });
 });
 

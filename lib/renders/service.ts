@@ -23,7 +23,7 @@ import { getDictionary } from '@/lib/i18n/dictionaries';
 import { aspectsForMedium, engineProvider, isEngineId, isImageAspect, isImageEngine, isVideoAspect, isVideoEngine, resolveEngine } from '@/lib/images/engines';
 import { loadPromptById, loadPromptBySlug, type PromptRow } from '@/lib/prompts/repo';
 import { isForSale } from '@/lib/twings/products';
-import { renderResolution, renderableResolution } from '@/lib/twings/resolution';
+import { DEFAULT_CREATOR_RESOLUTION, isCreatorResolution, renderResolution, renderableResolution, type CreatorResolution } from '@/lib/twings/resolution';
 import { reserveSubscriptionUsage, settleSubscriptionUsage } from '@/lib/creator-subscriptions/usage';
 import type { BillingEnvironment } from '@/lib/creator-subscriptions/types';
 import { EDIT_REFERENCE_RETENTION_DAYS, MAX_SUBSCRIPTION_BODY_BYTES, type EditReference, type EditValidationCode } from '@/lib/premium-editing/contract';
@@ -36,6 +36,7 @@ import type { PremiumEditClient } from '@/lib/premium-editing/provider';
 import { RenderFailure, baseFailureCode, pollVideoRender, runImageRender, startVideoRender, videoModelFor, type EngineOutput, type RenderEngineDeps, type RenderFailureCode, type RenderPhoto, type StepReference } from './engines';
 import { ensureJobRecipe, ensureMakerSandbox, insertJobOutputs, insertJobRecipe, loadJobRecipe, loadTemplateRecipe, MAKER_SANDBOX_ID, MAKER_SANDBOX_SLUG, renderPurpose, saveStepRecord, type JobRecipe } from '@/lib/recipes/repo';
 import { recordedUsd, runRecipe, type RecipeResult } from '@/lib/recipes/execute';
+import { recipeAtResolution } from '@/lib/recipes/resolution';
 import { primaryStep, recipeNeedsIdentity, type Recipe } from '@/lib/recipes/schema';
 import { compileDirectorPrompt } from '@/lib/template-director/flash-director';
 import { parseDirectorSpecInput, type PersonalDirectorSpec } from '@/lib/template-director/schema';
@@ -285,6 +286,8 @@ export interface CreateSubscriptionRenderInput {
   references?: readonly EditReference[];
   /** Includes the disclosed OpenAI processing of the optional reference images. */
   referencesConsent?: boolean;
+  /** 720p when left out. 1080p only where the template sells it; it takes more of the month. */
+  resolution?: string;
 }
 export type CreateSubscriptionRenderOutcome = { ok: true; id: string; held: boolean } | { ok: false; code: CreateRenderFailure | EditValidationCode | 'consent_required' | 'bad_request' | 'unsupported_template' | 'subscription_required' | 'premium_required' | 'usage_exhausted' | 'conflict' | 'not_open' | 'edit_unavailable' | 'edit_request_limit' };
 class SubscriptionEnqueueAbort extends Error { constructor(readonly code: CreateRenderFailure | 'edit_unavailable' | 'edit_request_limit') { super(code); } }
@@ -296,7 +299,10 @@ const SUBSCRIPTION_UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a
 export async function createSubscriptionRenderJob(deps: RenderServiceDeps & { environment: BillingEnvironment }, viewer: Viewer, input: CreateSubscriptionRenderInput): Promise<CreateSubscriptionRenderOutcome> {
   if (!viewer.userId) return { ok: false, code: 'sign_in_required' };
   if (input.ownFaceConsent !== true) return { ok: false, code: 'consent_required' };
-  const allowedKeys = ['requestId', 'templateSlug', 'ownFaceConsent', 'selfieId', 'photo', 'locale', 'editText', 'references', 'referencesConsent'];
+  const allowedKeys = ['requestId', 'templateSlug', 'ownFaceConsent', 'selfieId', 'photo', 'locale', 'editText', 'references', 'referencesConsent', 'resolution'];
+  // Refused, never downgraded: a member who asked for 1080p must not be handed 720p (lib/twings/resolution.ts).
+  if (input.resolution !== undefined && input.resolution !== '' && !isCreatorResolution(input.resolution)) return { ok: false, code: 'bad_request' };
+  const resolution: CreatorResolution = isCreatorResolution(input.resolution) ? input.resolution : DEFAULT_CREATOR_RESOLUTION;
   if (!SUBSCRIPTION_UUID.test(input.requestId) || typeof input.templateSlug !== 'string' || !['test', 'live'].includes(deps.environment) || Object.keys(input).some(key => !allowedKeys.includes(key)) || (input.editText !== undefined && typeof input.editText !== 'string') || (input.references !== undefined && !Array.isArray(input.references))) return { ok: false, code: 'bad_request' };
   const references = input.references ?? [];
   const wantsEdit = !!input.editText?.trim() || references.length > 0;
@@ -310,7 +316,9 @@ export async function createSubscriptionRenderJob(deps: RenderServiceDeps & { en
   const fingerprint = createHash('sha256').update(JSON.stringify([input.templateSlug, input.selfieId ?? null,
     input.selfieId ? null : input.photo ? createHash('sha256').update(input.photo.bytes).digest('hex') : null,
     input.selfieId ? null : input.photo?.mime ?? null, text?.ok ? text.text : null,
-    cleaned.references.map(reference => createHash('sha256').update(reference.bytes).digest('hex'))])).digest('hex');
+    cleaned.references.map(reference => createHash('sha256').update(reference.bytes).digest('hex')),
+    // Only a non-default resolution joins the fingerprint, so a request made before this field existed still matches its retry.
+    ...(resolution === DEFAULT_CREATOR_RESOLUTION ? [] : [resolution])])).digest('hex');
   const now = deps.now ?? new Date();
   const writtenKeys: string[] = [];
   try {
@@ -326,7 +334,7 @@ export async function createSubscriptionRenderJob(deps: RenderServiceDeps & { en
       const template = await loadPromptBySlug(sql, input.templateSlug);
       if (!template || template.status !== 'published' || template.audience === 'brand') return { ok: false, code: 'not_found' };
       if (!isForSale(template)) return { ok: false, code: 'not_for_sale' };
-      const eligibility = subscriptionTemplateEligibility(template);
+      const eligibility = subscriptionTemplateEligibility(template, resolution);
       if (!eligibility) return { ok: false, code: 'unsupported_template' };
       // A paid edit rewrites one prompt; a maker recipe has several and is not offered for it.
       if (await loadTemplateRecipe(sql, template.id)) return { ok: false, code: 'unsupported_template' };
@@ -342,7 +350,7 @@ export async function createSubscriptionRenderJob(deps: RenderServiceDeps & { en
         if (!budget.remaining) throw new SubscriptionEnqueueAbort('edit_request_limit');
       }
       if (photo) writtenKeys.push(`${id}/input.${extensionFor(photo.mime)}`);
-      const result = await createAuthorizedRender({ ...deps, sql }, viewer, { templateSlug: template.slug, aspect: template.aspectDefault ?? '9:16', photo, selfieId: input.selfieId, locale: input.locale, resolution: '720p', holdForIdentity: true }, id);
+      const result = await createAuthorizedRender({ ...deps, sql }, viewer, { templateSlug: template.slug, aspect: template.aspectDefault ?? '9:16', photo, selfieId: input.selfieId, locale: input.locale, resolution, holdForIdentity: true }, id);
       if (!result.ok) throw new SubscriptionEnqueueAbort(result.code);
       const referenceKeys: string[] = [];
       for (const [index, reference] of cleaned.references.entries()) {
@@ -943,7 +951,9 @@ async function jobRecipeFor(deps: RenderPassDeps, job: RenderJob): Promise<JobRe
 async function renderRecipe(deps: RenderPassDeps, job: RenderJob, recipe: JobRecipe, now: Date, report: RenderPassReport, handedOff: Set<string>): Promise<void> {
   const startedAt = (deps.clock ?? Date.now)();
   const photo = await readPhoto(deps.store, job);
-  const effectiveRecipe = sliceCarouselRecipe(recipe.recipe!, job.selectedFrames);
+  // The buyer's resolution, not the one the recipe was written at (lib/recipes/resolution.ts): the
+  // order was priced for it. A test or review render carries the recipe's own, so nothing moves there.
+  const effectiveRecipe = recipeAtResolution(sliceCarouselRecipe(recipe.recipe!, job.selectedFrames), job.resolution);
   const userSlots = await loadSlotPhotos(deps.sql, deps.store, job.id);
   const run = await runRecipe({
     jobId: job.id,

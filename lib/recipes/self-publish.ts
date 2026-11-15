@@ -8,7 +8,7 @@ import { lockUser } from '@/lib/creator-platform/service';
 import { insertPrompt } from '@/lib/prompts/repo';
 import { probeVideoDurationSeconds, promptStagingKey, publishPromptMedia, sha256Hex } from '@/lib/prompts/media';
 import { AssetRefSchema } from '@/lib/content/schemas';
-import { centsForKrw, isRoyalty, quoteRecipe } from './pricing';
+import { centsForKrw, isRoyalty, price1080KrwFor, quoteRecipeBase } from './pricing';
 import { parseDisclosure, parsePresentation } from './repo';
 import { legacyPromptText, primaryStep, recipeCast, type Recipe } from './schema';
 import { defaultTimelineKeyframes, parseVideoKeyframes } from '@/lib/prompts/keyframes';
@@ -26,7 +26,7 @@ import { defaultTimelineKeyframes, parseVideoKeyframes } from '@/lib/prompts/key
  *     a real face through the real pipeline (provider moderation included) before anyone pays.
  *
  * The price is the base price (lib/twings/template-price.ts) plus the creative's raise — the price
- * they typed in the studio, never below the base — through the same `quoteRecipe` the studio uses. The template goes live published,
+ * they typed in the studio, never below the base — through the same `quoteRecipeBase` the studio uses. The template goes live published,
  * credited `by @handle`, and the studio's archive control takes it down after the fact.
  * `TWINGS_MAKER_SELF_PUBLISH=off` restores review-only (the `submit` path), without a deploy of code.
  */
@@ -85,13 +85,16 @@ export async function selfPublishFormat(
 
   const primary = primaryStep(recipe);
   const film = recipe.steps.find((step) => step.kind === 'video');
-  const priceKrw = quoteRecipe(recipe, row.royalty_krw!).proposedKrw;
+  // 720p is the price; 1080p is its own, the 1080p base plus the same raise (lib/recipes/resolution.ts).
+  const priceKrw = quoteRecipeBase(recipe, row.royalty_krw!).proposedKrw;
+  const price1080Krw = price1080KrwFor(recipe, priceKrw);
   const slug = selfPublishSlug(row.title, templateId);
   await insertPrompt(tx, {
     id: templateId, slug, source: 'yagi', authorId: userId, authorHandle: null, status: 'published', publishedAt: 'now',
     models: [primary.engine], title: row.title, titleKo: row.title_ko, promptText: legacyPromptText(recipe), textVisibility: 'hidden',
     media, useCase: [], featured: false, medium: primary.kind, engine: primary.engine, aspectDefault: primary.params.aspect,
     runtimeSeconds: film?.kind === 'video' ? film.params.duration : null, priceKrw, priceCents: centsForKrw(priceKrw),
+    ...(price1080Krw > 0 ? { price1080Krw, price1080Cents: centsForKrw(price1080Krw) } : {}),
     // docs/CAST-CATEGORIES.md §1: the recipe's photo slots say who is in it.
     cast: recipeCast(recipe),
   });

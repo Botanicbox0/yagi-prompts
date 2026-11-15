@@ -1,6 +1,7 @@
 import type { PromptRow } from '@/lib/prompts/repo';
 import { isVideoEngine, resolveEngine } from '@/lib/images/engines';
 import { isForSale } from '@/lib/twings/products';
+import { offeredResolutions, type CreatorResolution } from '@/lib/twings/resolution';
 import { templateSubscriptionQuote } from '@/lib/twings/subscription-plan';
 import { videoModelFor } from '@/lib/renders/engines';
 import { buildRenderPrompt } from '@/lib/renders/prompt';
@@ -9,10 +10,15 @@ import { templateEditableScopes } from './guard';
 
 /** Server-only shared admission for access previews and enqueue. The caller projects only safe
  * capabilities; this function never authorizes payment or returns a recipe.
+ *
+ * `resolution` is the one the member asks for. 720p is every template's default; 1080p is admitted
+ * only where the template sells it (lib/twings/resolution.ts), and the quote — the units this make
+ * takes from the month — is the quote of THAT resolution.
  */
-export function subscriptionTemplateEligibility(template: PromptRow) {
+export function subscriptionTemplateEligibility(template: PromptRow, resolution: CreatorResolution = '720p') {
   if (template.status !== 'published' || template.audience === 'brand' || !isForSale(template)) return null;
-  const quote = templateSubscriptionQuote(template);
+  if (resolution !== '720p' && !offeredResolutions(template).includes(resolution)) return null;
+  const quote = templateSubscriptionQuote(template, 'creator', resolution);
   const engine = resolveEngine(template.engine, template.medium);
   const scopes = templateEditableScopes(template);
   const handles = buildRenderPrompt({ promptText: template.promptText, medium: template.medium, hasPhoto: true }).references;

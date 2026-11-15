@@ -2,7 +2,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ChangeEvent } from 'react';
 import type { Dictionary } from '@/messages/en';
 import { interpolate } from '@/lib/i18n/format';
-import { isRoyalty, quoteRecipe, ROYALTY_DEFAULT_KRW, ROYALTY_MAX_KRW, ROYALTY_STEP_KRW } from '@/lib/recipes/pricing';
+import { isRoyalty, quoteRecipeBase, ROYALTY_DEFAULT_KRW, ROYALTY_MAX_KRW, ROYALTY_STEP_KRW } from '@/lib/recipes/pricing';
 import { makeEarning } from '@/lib/twings/template-price';
 import { exportRecipe, INTRO_MAX, MAX_RECIPE_STEPS, MAX_STEP_PROMPT_CHARS, NOTE_MAX, OUTRO_MAX, PARTNER_SLOT, parseRecipe, PET_SLOT, recipeMedium, SELFIE_SLOT, type Recipe, type RecipeIssue } from '@/lib/recipes/schema';
 import { BUTTON, BUTTON_OUTLINE, FIELD, HINT, PANEL } from '@/components/creators/styles';
@@ -96,7 +96,7 @@ export function RecipeEditor({ copy, formatId, draft, engines, aspects, hasSelfi
 
   const recipe = useMemo(() => toRecipe(steps, medium, references, label, notes, cast), [steps, medium, references, label, notes, cast]);
   const checked = useMemo(() => parseRecipe(recipe), [recipe]);
-  const quote = checked.ok && isRoyalty(royalty) ? quoteRecipe(checked.recipe, royalty) : null;
+  const quote = checked.ok && isRoyalty(royalty) ? quoteRecipeBase(checked.recipe, royalty) : null;
   const won = (n: number) => interpolate(copy.royaltyValue, { amount: n.toLocaleString(locale === 'ko' ? 'ko-KR' : 'en-US') });
   // While typing, the field holds the text; a whole price inside [base, base + max] becomes the raise.
   const typed = priceText === null ? null : Number(priceText);

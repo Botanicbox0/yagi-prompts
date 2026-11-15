@@ -80,6 +80,24 @@ describe('subscription render authorization and private preparation', () => {
     expect((await h.sql.query('select * from creator_subscription_usage')).rows).toHaveLength(1);
   });
 
+  it('takes more of the month for 1080p than 720p, and only where the template sells 1080p', async () => {
+    const { pid } = await paid();
+    // 1080p is not sold on this template yet: refused, never quietly rendered at 720p.
+    await h.sql.query("update prompt_items set price_1080_cents=0,price_1080_krw=0 where slug='neon-alley-dolly'");
+    expect(await createSubscriptionRenderJob(deps(), viewer, { ...request(), resolution: '1080p' })).toMatchObject({ ok: false, code: 'unsupported_template' });
+    expect(await createSubscriptionRenderJob(deps(), viewer, { ...request(), resolution: '480p' })).toMatchObject({ ok: false, code: 'bad_request' });
+    await h.sql.query("update prompt_items set price_1080_cents=1150,price_1080_krw=15900 where slug='neon-alley-dolly'");
+    const input = { ...request(), resolution: '1080p' };
+    const created = await createSubscriptionRenderJob(deps(), viewer, input);
+    expect(created.ok).toBe(true); if (!created.ok) return;
+    expect(await loadRenderJob(h.sql, created.id)).toMatchObject({ resolution: '1080p' });
+    // 10 s 9:16: 720p is the 100-unit base film; 1080p is 2.46 times its provider cost.
+    expect((await h.sql.query('select reserved_units from creator_subscription_periods where id=$1', [pid])).rows[0]).toEqual({ reserved_units: 247 });
+    // The same request id cannot come back asking for another resolution.
+    expect(await createSubscriptionRenderJob(deps(), viewer, { ...input, resolution: '720p' })).toMatchObject({ ok: false, code: 'conflict' });
+    expect(await createSubscriptionRenderJob(deps(), viewer, input)).toEqual(created);
+  });
+
   it('caches one bounded model plan and never sends the recipe or own face to the edit client', async () => {
     await paid();
     vi.stubEnv('PREMIUM_EDIT_REQUESTS_PER_PERIOD', undefined);

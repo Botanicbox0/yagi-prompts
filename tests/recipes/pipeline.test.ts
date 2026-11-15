@@ -138,6 +138,44 @@ describe('recipe v2 in the render pass', () => {
     expect((await listJobOutputs(h.sql, created.id)).map((o) => [o.position, o.stepId, o.key])).toEqual([[0, 'shot1', `${created.id}/result.mp4`]]);
   });
 
+  it('renders the film at the resolution the order names, not the one the recipe was written at', async () => {
+    // The live rows that sold a 1080p-written recipe at the 720p price (2026-11-15).
+    const written1080 = {
+      version: 2,
+      slots: { selfie: { kind: 'image', source: 'user', required: true } },
+      steps: [{ id: 'film', kind: 'video', engine: 'seedance-2.5', inputs: ['selfie'], prompt: 'The person in {{selfie}} walks.', params: { aspect: '9:16', duration: 10, resolution: '1080p' } }],
+      output: { from: 'film' },
+    };
+    const { slug, recipe } = await recipeTemplate(written1080);
+    const calls: CreateVideoTaskInput[] = [];
+    const ark: ArkClient = { async createVideoTask(input) { calls.push(input); return { id: `cgt-${calls.length}` }; }, async getVideoTask() { return task('running'); } };
+    const engines = { ark };
+
+    // No resolution named: 720p, the default every template page states.
+    const base = await createRenderJob({ sql: h.sql, store, mode: 'virtual' }, ADMIN_VIEWER, { templateSlug: slug, aspect: '9:16', photo: PHOTO, locale: 'ko' });
+    if (!base.ok) throw new Error(base.code);
+    await runRenderPass(deps(engines, { assets: fakeAssets() }), { jobId: base.id });
+    expect(calls).toHaveLength(1);
+    expect(calls[0]!.resolution).toBe('720p');
+
+    // 1080p ordered: 1080p rendered.
+    const hd = await createRenderJob({ sql: h.sql, store, mode: 'virtual' }, ADMIN_VIEWER, { templateSlug: slug, aspect: '9:16', photo: PHOTO, locale: 'ko', resolution: '1080p' });
+    if (!hd.ok) throw new Error(hd.code);
+    await runRenderPass(deps(engines, { assets: fakeAssets() }), { jobId: hd.id });
+    expect(calls).toHaveLength(2);
+    expect(calls[1]!.resolution).toBe('1080p');
+
+    // A test render is the creative checking the recipe as written: it keeps the recipe's own.
+    const formatId = await makerScene();
+    const test = await createRecipeSandboxRender({ sql: h.sql, store, mode: 'virtual' }, { userId: ADMIN_VIEWER.userId!, locale: 'ko', formatId, purpose: 'maker_test', recipe, photo: PHOTO });
+    if (!test.ok) throw new Error(test.code);
+    await runRenderPass(deps(engines, { assets: fakeAssets() }), { jobId: test.id });
+    expect(calls).toHaveLength(3);
+    expect(calls[2]!.resolution).toBe('1080p');
+    // The stored template is untouched.
+    expect((await h.sql.query<{ r: string }>("select recipe->'steps'->0->'params'->>'resolution' as r from prompt_items where slug=$1", [slug])).rows[0]!.r).toBe('1080p');
+  });
+
   it('renders a carousel: N results, the first is the job result, costs summed', async () => {
     const { slug } = await recipeTemplate(carousel(3));
     const created = await createRenderJob({ sql: h.sql, store, mode: 'virtual' }, ADMIN_VIEWER, { templateSlug: slug, aspect: '4:5', photo: PHOTO, locale: 'ko' });
