@@ -93,6 +93,8 @@ export const PROJECT_ONLY_FIXTURE_ORG_REQUEST = 'bb000000-0000-4000-8000-0000000
  */
 async function seedProjectOnlyFixtures(deps: { sql: SqlRunner; storage: StorageDriver }, f: { studio: Viewer; value: <T extends { ok: boolean }>(r: T) => Extract<T, { ok: true }> }) {
   const client: Viewer = { userId: FIXTURE_USERS.pro.id, email: FIXTURE_USERS.pro.email, locale: 'ko', isAdmin: false, tier: 'pro' };
+  // The owner is the `pro` fixture user; a database seeded without that profile simply has no such client.
+  if (!(await deps.sql.query('select 1 from profiles where id = $1', [client.userId])).rows.length) return;
   const org = f.value(await createBrandOrganization(deps, client, { name: '[로컬 예시] 외주 전용 고객사', requestId: PROJECT_ONLY_FIXTURE_ORG_REQUEST }));
   const { setPlanAssignment } = await import('@/lib/brands/plans');
   const assigned = (await deps.sql.query('select 1 from brand_plan_assignments where organization_id = $1', [org.id])).rows.length > 0;
