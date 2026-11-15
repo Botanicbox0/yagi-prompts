@@ -156,7 +156,7 @@ export function jobView(row: JobRow, outputs: OutputRow[], media: StudioMediaSto
 /* ------------------------------------------------------------------ reads */
 
 /**
- * `brand_studio_jobs.deleted_at` (migration 0089) may not exist yet where the code is already running.
+ * `brand_studio_jobs.deleted_at` (migration 0090) may not exist yet where the code is already running.
  * A query naming a missing column would fail the whole request, so the column is looked up first: once
  * seen it is there for good; while missing it is looked up again after a minute, so applying the
  * migration needs no redeploy. Without it nothing is filtered and removing a run is not offered.

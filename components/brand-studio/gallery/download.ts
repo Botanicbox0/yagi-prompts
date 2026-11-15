@@ -1,10 +1,12 @@
 /**
  * Saving several results at once from the wall's selection bar. Each file is read and handed to the
- * browser as a download with its own name, one after another, so nothing opens in a new tab. A file the
- * browser may not read (another origin without permission) falls back to the plain download link the
- * viewer uses.
+ * browser as a download with its own name, one after another, so nothing opens in a new tab. A file on
+ * the media domain is read under its own cache entry (lib/brand-studio/cors-media-url.ts: the copy the
+ * wall already cached carries no permission to be read). A file that still cannot be read falls back to
+ * the plain download link the viewer uses.
  */
 import type { StudioOutputView } from "@/lib/brand-studio/contracts";
+import { corsMediaUrl } from "@/lib/brand-studio/cors-media-url";
 
 const EXTENSIONS: Record<string, string> = {
   "image/png": "png",
@@ -43,7 +45,7 @@ export async function downloadOutputs(outputs: readonly Pick<StudioOutputView, "
   let fallback = 0;
   for (const output of outputs) {
     try {
-      const response = await fetch(output.url);
+      const response = await fetch(corsMediaUrl(output.url));
       if (!response.ok) throw new Error(String(response.status));
       const blob = await response.blob();
       const href = URL.createObjectURL(blob);

@@ -230,7 +230,7 @@ export interface JobRow {
   model: string;
   prompt: string;
   final_prompt: string | null;
-  /** Set when a member removed this run from the wall (migration 0089); absent before it is applied. */
+  /** Set when a member removed this run from the wall (migration 0090); absent before it is applied. */
   deleted_at?: Date | string | null;
   enhance: boolean;
   params: StudioJobParams;

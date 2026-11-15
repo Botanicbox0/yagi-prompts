@@ -192,7 +192,7 @@ export async function deleteStudioJob(deps: StudioDeps, viewer: Viewer, raw: unk
   const outcome = await guarded(() =>
     deps.sql.transaction(async (sql) => {
       requireCreate(await studioSeat(sql, viewer.userId, v.organizationId));
-      // The column arrives with migration 0089; before that there is nothing to set.
+      // The column arrives with migration 0090; before that there is nothing to set.
       if (!(await jobSoftDeleteReady(sql))) throw new StudioDenied('feature_unavailable');
       const job = (
         await sql.query<Pick<JobRow, 'id' | 'status' | 'deleted_at'>>(

@@ -1,4 +1,4 @@
--- CLOUD APPLICATION REQUIRED — TWINGS · glue migration 0164 — pairs with 0089 (brand_studio_jobs.deleted_at)
+-- CLOUD APPLICATION REQUIRED — TWINGS · glue migration 0164 — pairs with 0090 (brand_studio_jobs.deleted_at)
 -- No new table and no new policy: the column inherits the table's posture from 0152 (RLS on + forced, no
 -- browser policies, service_role only). Re-asserted here so the pair is safe to apply on its own.
 do $$ begin

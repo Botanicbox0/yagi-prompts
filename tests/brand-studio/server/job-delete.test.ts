@@ -10,7 +10,7 @@ import { requestId, studioDeps, studioFixture, viewerOf, type StudioFixture } fr
 
 /**
  * docs/BRAND-STUDIO-V6-PLAN.md §7 row B. Two things the prompt bar and the wall rely on:
- *  - `job.delete` takes a run that ended with no result off the wall by setting `deleted_at` (0089). The row
+ *  - `job.delete` takes a run that ended with no result off the wall by setting `deleted_at` (0090). The row
  *    is never removed, and until the column exists the studio behaves exactly as before.
  *  - a sentence the customer read before sending is stored as `final_prompt` while `prompt` stays their words.
  */
