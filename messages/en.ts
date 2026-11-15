@@ -1616,6 +1616,22 @@ export const en = {
       bright: 'The photo looks overexposed; part of your face may be washed out. Try again without the light behind you.',
     },
     photoAdvisoryHint: 'This is only guidance. The photo is checked on your device and the result is not stored. Your consent and provider checks still apply.',
+    // Saved-photo check (advisory only, TWINGS_PHOTO_CHECK). Draft — before the wording review.
+    photoCheck: {
+      good: 'Your face is clear in this photo.',
+      retake: 'Another photo will work better. You can still make it with this one.',
+      issues: {
+        no_face: "We couldn't find a face in this photo. Choose one where your face is clearly visible.",
+        multiple_faces: 'More than one face shows in this photo. A photo of just you works best.',
+        not_real_person: "This doesn't look like a photo of a real person. Use a photo you took of yourself.",
+        face_covered: 'Part of your face is covered. Keep masks, sunglasses and hands away from your face.',
+        blurry: 'Your face is blurry. Hold the camera steady and let it focus.',
+        side_angle: 'Your face is turned or tilted. Facing the camera works better.',
+        dark: 'Your face looks dark. Brighter light makes it clearer.',
+        backlit: 'Light behind you leaves your face in shadow. Face the light instead.',
+        small_face: 'Your face is small in the frame. Move closer so your head and shoulders fill it.',
+      },
+    },
     consent: 'This is my own photo. I agree to use it to create and save my videos and images.',
     consentHint: 'Please confirm this is your own photo to save it.',
     save: 'Save my photo',
