@@ -19,6 +19,7 @@ import { credits, errorLine, fill, type StudioCopy, type StudioLocale } from "..
 import { StudioIcon } from "../icons";
 import { startRefDrag } from "../refs";
 import { libraryKey, type StudioLibrary } from "../seams";
+import { collapseRevisions, revisionBadges } from "../revision-model";
 import { isOpen } from "../store";
 import { dayLabel, groupByDay } from "./days";
 import { FolderPicker } from "./folder-picker";
@@ -146,7 +147,10 @@ export function tileStyle(ratio: string): Record<string, string | number> {
 export function Wall(props: WallProps) {
   const { jobs, copy, locale, mode, sending = [], now = new Date(), parentOf } = props;
   const g = copy.gallery;
-  const groups = groupByDay(wallEntries(jobs, parentOf), (entry) => entry.job.createdAt, now);
+  // A clip with several versions shows its newest one (and newer failures); the viewer reaches the rest.
+  const badges = revisionBadges(jobs);
+  const tileProps = { ...props, badges };
+  const groups = groupByDay(wallEntries(collapseRevisions(jobs), parentOf), (entry) => entry.job.createdAt, now);
   const label = mode === "video" ? g.labelVideo : g.label;
   if (!groups.length && !sending.length)
     return (
@@ -171,9 +175,9 @@ export function Wall(props: WallProps) {
           {group.items.map(({ job, entries }) => (
             <Fragment key={job.id}>
               {entries.map((entry) => {
-                if (entry.type === "result") return <ResultTile key={entry.key} entry={entry} n={++n} {...props} />;
-                if (entry.type === "pending") return <PendingTile key={entry.key} entry={entry} {...props} />;
-                if (entry.type === "failed") return <FailedTile key={entry.key} entry={entry} {...props} />;
+                if (entry.type === "result") return <ResultTile key={entry.key} entry={entry} n={++n} {...tileProps} />;
+                if (entry.type === "pending") return <PendingTile key={entry.key} entry={entry} {...tileProps} />;
+                if (entry.type === "failed") return <FailedTile key={entry.key} entry={entry} {...tileProps} />;
                 return null;
               })}
               {props.notes?.[job.id] && (
@@ -206,13 +210,25 @@ function SendingSlot({ tile, copy }: { tile: SendingTile; copy: StudioCopy }) {
   );
 }
 
-function PendingTile({ entry, copy, canStop = false, stopping = null, onCancel }: WallProps & { entry: Extract<Entry, { type: "pending" }> }) {
+/** Version numbers of clips with more than one version, by run id. */
+type Badges = { badges: ReadonlyMap<string, number> };
+
+function VersionBadge({ n, copy, extra }: { n: number | undefined; copy: StudioCopy; extra?: string | null }) {
+  if (!n) return extra ? <span className="bs-tile-badge">{extra}</span> : null;
+  return (
+    <span className="bs-tile-badge" data-revision-badge={n}>
+      {[fill(copy.revise.version, { n }), extra].filter(Boolean).join(" · ")}
+    </span>
+  );
+}
+
+function PendingTile({ entry, copy, canStop = false, stopping = null, onCancel, badges }: WallProps & Badges & { entry: Extract<Entry, { type: "pending" }> }) {
   const { job } = entry;
   const stage = copy.board.stage[job.status as keyof typeof copy.board.stage] ?? copy.board.stage.queued;
   return (
     <div className="bs-tile" data-state="pending" data-job-status={job.status} data-studio-job={job.id} style={tileStyle(entry.ratio)} role="group" aria-label={fill(copy.board.pending, { n: entry.n })}>
       <span className="bs-stage">{stage}</span>
-      {job.kind === "region_edit" && <span className="bs-tile-badge">{copy.board.editBadge}</span>}
+      <VersionBadge n={badges.get(job.id)} copy={copy} extra={job.kind === "region_edit" ? copy.board.editBadge : null} />
       {canStop && onCancel && canCancel(job) && entry.n === job.outputs.length + 1 && (
         <button
           type="button"
@@ -230,7 +246,7 @@ function PendingTile({ entry, copy, canStop = false, stopping = null, onCancel }
   );
 }
 
-function FailedTile({ entry, copy, canGenerate, onRetry }: WallProps & { entry: Extract<Entry, { type: "failed" }> }) {
+function FailedTile({ entry, copy, canGenerate, onRetry, badges }: WallProps & Badges & { entry: Extract<Entry, { type: "failed" }> }) {
   const { job } = entry;
   // A block with attachments usually comes from the attachment, so say where to look.
   const reason = job.errorCode === "provider_rejected" && job.references.length > 0 ? copy.board.rejectedWithReferences : errorLine(copy, job.errorCode);
@@ -240,6 +256,7 @@ function FailedTile({ entry, copy, canGenerate, onRetry }: WallProps & { entry: 
         <StudioIcon name="info" />
       </span>
       <p className="bs-tile-reason">{reason}</p>
+      <VersionBadge n={badges.get(job.id)} copy={copy} />
       {canGenerate && (
         <button type="button" className="bs-btn bs-tile-retry" data-variant="soft" data-size="sm" onClick={() => onRetry(job)}>
           <StudioIcon name="rerun" />
@@ -250,8 +267,8 @@ function FailedTile({ entry, copy, canGenerate, onRetry }: WallProps & { entry: 
   );
 }
 
-function ResultTile(props: WallProps & { entry: Extract<Entry, { type: "result" }>; n: number }) {
-  const { entry, n, copy, locale, canGenerate, canEdit, library, onAction, onNotice } = props;
+function ResultTile(props: WallProps & Badges & { entry: Extract<Entry, { type: "result" }>; n: number }) {
+  const { entry, n, copy, locale, canGenerate, canEdit, library, onAction, onNotice, badges } = props;
   const { output, job } = entry.item;
   const g = copy.gallery;
   const m = g.menu;
@@ -336,9 +353,11 @@ function ResultTile(props: WallProps & { entry: Extract<Entry, { type: "result" 
           <span>{m.region}</span>
         </button>
       ) : (
-        (output.draft || job.kind === "region_edit") && (
-          <span className="bs-tile-badge">{output.draft ? copy.board.draftBadge : copy.board.editBadge}</span>
-        )
+        <VersionBadge
+          n={badges.get(job.id)}
+          copy={copy}
+          extra={output.draft ? copy.board.draftBadge : job.kind === "region_edit" ? copy.board.editBadge : null}
+        />
       )}
       {canEdit && (
         <button

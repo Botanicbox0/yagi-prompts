@@ -1736,6 +1736,7 @@ export function VideoStudioWorkspace({
           busy={viewer.busy}
           notice={viewer.notice}
           regionPreset={viewer.preset}
+          revise={viewer.revise}
           region={null}
           parentOf={parentOf}
           parentAssetOf={parentAssetOf}

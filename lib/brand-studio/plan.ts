@@ -119,7 +119,8 @@ export interface JobPlan {
   stickLane: StudioLane | null;
 }
 
-type JobInput = Exclude<StudioJobCreate, { kind: 'video_final' }>;
+/** A final is planned by `planFinal`, a new version of a clip by `planRevision` (./revision/plan.ts). */
+type JobInput = Exclude<StudioJobCreate, { kind: 'video_final' } | { kind: 'video_revise' }>;
 
 function liveModel(id: string, medium: 'image' | 'video'): StudioModel {
   const model = studioModel(id);

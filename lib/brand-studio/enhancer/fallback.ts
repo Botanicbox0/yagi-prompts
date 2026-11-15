@@ -95,9 +95,27 @@ function videoPrompt(input: EnhanceInput, binding: Binding, request: string): st
   return lines.filter((l) => l.trim().length > 0).join('\n');
 }
 
+/**
+ * A reshoot without a model: the earlier prompt as it was sent, a blank line, then every change asked
+ * for since, oldest first, as plain lines. Never empty: with nothing at all it is the request.
+ */
+function reshootPrompt(input: EnhanceInput, binding: Binding, request: string): string {
+  const revision = input.revision!;
+  const changes = [...revision.history.map((h) => mapCustomerMentions(h.trim(), binding.bound)), request]
+    .map(sentence)
+    .filter(Boolean);
+  const madeWith = revision.madeWith.trim();
+  const text = [madeWith, changes.join('\n')].filter(Boolean).join('\n\n');
+  return text || input.prompt.trim();
+}
+
 export function composeFallbackPrompt(input: EnhanceInput): EnhanceResult {
   const binding = bindReferences(input);
   const request = mapCustomerMentions(input.prompt.trim(), binding.bound);
+  // An edit-revision is the ordinary edit fallback with the request as the change.
+  if (input.revision?.mode === 'reshoot' && input.profile === 'seedance') {
+    return { prompt: reshootPrompt(input, binding, request), notes: FALLBACK_NOTES[input.locale], source: 'fallback' };
+  }
   const prompt = input.profile === 'seedance' ? videoPrompt(input, binding, request) : imagePrompt(input, binding, request);
   return { prompt, notes: FALLBACK_NOTES[input.locale], source: 'fallback' };
 }

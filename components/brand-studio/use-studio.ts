@@ -131,6 +131,9 @@ export function useStudio({ organizationId, initialState, api: injected }: { org
   /** ✨ in the prompt bar: the sentence the enhancer would send, without starting anything. */
   const enhancePrompt = useCallback((input: StudioOps["prompt.enhance"][0]) => api.call("prompt.enhance", input), [api]);
 
+  /** The viewer's "next version" form: which ways are open, what each uses and which fits the request. Spends nothing. */
+  const planRevision = useCallback((input: StudioOps["revise.plan"][0]) => api.call("revise.plan", input), [api]);
+
   /** Stops a run that has not reached the maker yet; either way the job is read again (status and usage). */
   const cancelJob = useCallback(
     async (jobId: string) => {
@@ -188,7 +191,7 @@ export function useStudio({ organizationId, initialState, api: injected }: { org
     [api, refreshSilently],
   );
 
-  return { store, load, createJob, cancelJob, saveOutput, deleteOutput, updateAsset, deleteAsset, handoff, enhancePrompt, films, analyzeFilm, uploads, upload };
+  return { store, load, createJob, cancelJob, saveOutput, deleteOutput, updateAsset, deleteAsset, handoff, enhancePrompt, planRevision, films, analyzeFilm, uploads, upload };
 }
 
 /**

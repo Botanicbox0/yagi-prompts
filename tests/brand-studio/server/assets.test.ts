@@ -36,7 +36,7 @@ describe('file checks', () => {
     expect(sniffMime(new Uint8Array([0xff, 0xd8, 0xff, 0xe0]))).toBe('image/jpeg');
     expect(sniffMime(fakeClipBytes())).toBe('video/mp4');
     expect(sniffMime(new TextEncoder().encode('<svg xmlns="http://www.w3.org/2000/svg"/>'))).toBeNull();
-    expect(videoInfo(fakeClipBytes())).toEqual({ width: 160, height: 90, durationMs: 1000 });
+    expect(videoInfo(fakeClipBytes())).toEqual({ width: 854, height: 480, durationMs: 5000 });
     expect(checkUpload(fakeClipBytes(), { mime: 'video/quicktime', sizeBytes: fakeClipBytes().byteLength })).toEqual({ ok: true, mime: 'video/mp4', kind: 'video' });
     expect(checkUpload(await pngBytes(), { mime: 'video/mp4', sizeBytes: (await pngBytes()).byteLength })).toEqual({ ok: false, code: 'unsupported_file' });
   });
@@ -53,7 +53,7 @@ describe('upload', () => {
     expect(saved.asset.url).toMatch(/^\/api\/brand-studio\/media\/st\/[0-9a-f]{64}\.png$/);
     expect(saved.asset.thumbUrl).toMatch(/\.webp$/);
     const video = await upload(fakeClipBytes(), 'video/mp4', 'film.mp4');
-    expect(video).toMatchObject({ ok: true, asset: { kind: 'video', width: 160, height: 90, seconds: 1, thumbUrl: null } });
+    expect(video).toMatchObject({ ok: true, asset: { kind: 'video', width: 854, height: 480, seconds: 5, thumbUrl: null } });
   });
 
   it('refuses wrong magic bytes, a size that differs from the reservation, an unsupported type and a file over the limit', async () => {

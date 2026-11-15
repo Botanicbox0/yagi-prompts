@@ -140,12 +140,42 @@ ${lengthRule(seconds)}
 ${soundRule(audio)}`;
 }
 
+/**
+ * A new version of a generated clip (lib/brand-studio/revision). The earlier prompt and requests travel
+ * in the user turn ("revision.madeWith", "revision.history"); these rules say what to do with them.
+ */
+function revisionTask(input: EnhanceInput, binding: Binding): string {
+  const revision = input.revision!;
+  const audio = input.video?.audio ?? 'native';
+  const previous = Math.max(1, revision.version - 1);
+  const hasHistory = revision.history.length > 0;
+  const never = 'Never mention versions, an earlier prompt, earlier requests or this history in the prompt.';
+  if (revision.mode === 'edit') {
+    const ref = binding.bound.find((b) => b.ref.kind === 'video')?.token ?? '@Video1';
+    const pictures = binding.bound.some((b) => b.ref.kind === 'image' && b.token)
+      ? ' Bind each attached image by its token for what it supplies to the change.'
+      : '';
+    return `Task: the next version of a generated clip. ${ref} is version ${previous} of the clip; it was generated from the prompt in "revision.madeWith".${hasHistory ? ` The changes in "revision.history" were made after that and are already visible in ${ref}: they stay.` : ''}
+Write an edit instruction for ${ref} that applies ONLY the request. Open with: "In ${ref}, change only <the change>; everything else stays as it is." Name the subject with the same words "revision.madeWith" uses for it, so the model finds it in the video.${pictures}
+Then say plainly that the camera movement, the timing and cuts, the framing, the subjects and everything the request does not mention stay exactly as they are in ${ref}. No new timeline, no new shots, no new camera moves, no visual-style block.
+${never}
+${soundRule(audio)}`;
+  }
+  return `Task: make a generated clip again with changes. "revision.madeWith" is the complete prompt the clip was generated from.
+Rewrite it so it applies ${hasHistory ? 'each request in "revision.history" in order (oldest first), and then the request' : 'the request'}. Change only the sentences those requests touch; keep every other sentence, their order, the timing marks and the reference tokens word for word. A later request wins over an earlier one where they disagree.
+Pictures attached for the requests are listed in "references" after the ones "revision.madeWith" already uses: bind each by its token (the next free numbers) where its request applies.
+Output the complete prompt, not a list of changes.
+${never}
+${soundRule(audio)}`;
+}
+
 export function taskBlock(
   input: EnhanceInput,
   binding: Binding,
   seconds: number | null,
   shots: readonly PlannedShot[],
 ): string {
+  if (input.revision && (input.kind === 'video' || input.kind === 'video_remix')) return revisionTask(input, binding);
   switch (input.kind) {
     case 'image':
       return imageTask(input, binding);

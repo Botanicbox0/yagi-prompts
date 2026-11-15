@@ -105,6 +105,19 @@ export function jobView(row: JobRow, outputs: OutputRow[], media: StudioMediaSto
     keep: remix && Array.isArray(p.keep) ? [...p.keep] : [],
     change: remix ? (p.change ?? '') : null,
     ...(remix && Array.isArray(p.shots) && p.shots.length ? { shots: p.shots.map((s) => ({ ...s })) } : {}),
+    // A new version of an earlier clip (lib/brand-studio/revision). The base is read from the row's
+    // foreign key, so it turns null once that result is deleted.
+    ...(p.revision
+      ? {
+          revision: {
+            rootJobId: p.revision.rootJobId,
+            version: p.revision.version,
+            baseOutputId: row.parent_output_id,
+            mode: p.revision.mode,
+            added: p.revision.added,
+          },
+        }
+      : {}),
     outputs: outputs
       .filter((o) => o.job_id === row.id && o.status === 'ready' && !o.deleted_at && o.storage_key)
       .sort((a, b) => a.idx - b.idx)

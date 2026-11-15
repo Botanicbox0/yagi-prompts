@@ -261,14 +261,65 @@ export const VideoFinalJobSchema = z.object({
   draftOutputId: Id,
 });
 
+/**
+ * How a new version of a generated clip is made (docs/BRAND-STUDIO-V6-PLAN.md §4).
+ * `edit`     the clip itself is sent back and only what was asked changes (motion, camera, timing stay)
+ * `reshoot`  the run the clip came from is made again, with every request so far written into its prompt
+ */
+export const STUDIO_REVISE_MODES = ['edit', 'reshoot'] as const;
+export type StudioReviseMode = (typeof STUDIO_REVISE_MODES)[number];
+
+/**
+ * A new version of a clip the studio generated. The customer sends only what should change and any
+ * pictures added for it; model, size, length, sound and the earlier references come from the clip's own
+ * history on the server. It is stored as a `video_remix` (edit) or as the kind of the run it re-makes
+ * (reshoot): `video_revise` is a request shape, never a stored kind.
+ */
+export const VideoReviseJobSchema = z.object({
+  kind: z.literal('video_revise'),
+  organizationId: Id,
+  requestId: RequestId,
+  /** The ready video result being revised: any version of a clip. */
+  outputId: Id,
+  mode: z.enum(STUDIO_REVISE_MODES),
+  /** What to change, in the customer's words. */
+  prompt: z.string().trim().min(1).max(STUDIO_LIMITS.promptMax),
+  /** Pictures added for this revision only (images; `frame` is not allowed). */
+  references: z.array(StudioReferenceSchema).max(STUDIO_LIMITS.referencesMax - 1).default([]),
+});
+
 export const StudioJobCreateSchema = z.discriminatedUnion('kind', [
   ImageJobSchema,
   RegionEditJobSchema,
   VideoJobSchema,
   VideoRemixJobSchema,
   VideoFinalJobSchema,
+  VideoReviseJobSchema,
 ]);
 export type StudioJobCreate = z.infer<typeof StudioJobCreateSchema>;
+
+/**
+ * `revise.plan`: what a revision of this clip would be, without spending anything. With an empty
+ * `prompt` it answers which ways are open and what each would use; with a request it also says which
+ * way fits it.
+ */
+export const RevisePlanSchema = z.object({
+  organizationId: Id,
+  outputId: Id,
+  prompt: z.string().trim().max(STUDIO_LIMITS.promptMax).default(''),
+  references: z.array(StudioReferenceSchema).max(STUDIO_LIMITS.referencesMax - 1).default([]),
+});
+
+/** Why a way is closed. The screen has one short line per code. */
+export const STUDIO_REVISE_PROBLEMS = ['too_short', 'too_long', 'unsupported', 'references_gone', 'too_many_references'] as const;
+export type StudioReviseProblem = (typeof STUDIO_REVISE_PROBLEMS)[number];
+
+/**
+ * Why one way fits a request better. `surface` (look, product, colour, background, text) points at
+ * `edit`; `motion` (camera, action), `structure` (shots, framing, order) and `length` point at `reshoot`.
+ */
+export const STUDIO_REVISE_REASONS = ['surface', 'motion', 'structure', 'length'] as const;
+export type StudioReviseReason = (typeof STUDIO_REVISE_REASONS)[number];
 
 /** `prompt.enhance`: what the enhancer would send, without spending anything on generation. */
 export const PromptPreviewSchema = z.discriminatedUnion('kind', [
@@ -342,6 +393,7 @@ export const STUDIO_OPERATIONS = [
   'job.cancel',
   'prompt.enhance',
   'film.analyze',
+  'revise.plan',
   'asset.reserve',
   'asset.complete',
   'asset.update',
@@ -436,6 +488,19 @@ export interface StudioJobView {
   change: string | null;
   /** Remix only: the shot table the customer sent, so the reference-video panel can be set up again. */
   shots?: FilmShot[];
+  /**
+   * Set on a new version of an earlier clip. Every version of one clip shares `rootJobId` (the id of the
+   * run that made v1, which itself carries no `revision`); `prompt` is the change that was asked for.
+   * `added` is how many of the trailing `references` were attached for this version.
+   */
+  revision?: {
+    rootJobId: string;
+    version: number;
+    /** The result this version was made from; null once that result is deleted. */
+    baseOutputId: string | null;
+    mode: StudioReviseMode;
+    added: number;
+  } | null;
   outputs: StudioOutputView[];
   /** Usage this run is expected to take from the monthly allowance, in KRW. */
   estimateKrw: number;
@@ -501,6 +566,15 @@ export interface StudioJobsPoll {
 export type StudioJobCreated = { ok: true; job: StudioJobView };
 export type StudioPromptPreview = { ok: true; prompt: string; notes: string };
 export type StudioFilmAnalysis = { ok: true; sheet: FilmSheet | null };
+/** `revise.plan` answer. `reason` is null when no request was sent or it could not be read; `recommended` is then the default way. */
+export interface StudioRevisePlan {
+  ok: true;
+  /** The version number the next revision of this clip gets. */
+  version: number;
+  methods: Record<StudioReviseMode, { available: boolean; estimateKrw: number; problem?: StudioReviseProblem }>;
+  recommended: StudioReviseMode | null;
+  reason: StudioReviseReason | null;
+}
 export type StudioAssetReserved = { ok: true; id: string; direct: boolean; url?: string };
 export type StudioAssetSaved = { ok: true; asset: StudioAssetView };
 export type StudioHandoffDone = { ok: true; projectId: string; href: string };

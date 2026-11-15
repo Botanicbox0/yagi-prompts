@@ -56,6 +56,20 @@ export interface EnhanceInput {
   /** Region edit only: the enlarged cropped region sent as image 1 / Figure 1 so Gemini sees the cut-out. */
   editCropThumb?: { bytes: Uint8Array; mime: string } | null;
   video?: EnhanceVideo | null;
+  /**
+   * A new version of a generated clip (lib/brand-studio/revision). `madeWith` is the prompt the run being
+   * revised was made from; `history` the changes asked for since then, oldest first; `prompt` is the new
+   * change. `edit`: the attached video is version `version - 1` and already shows `history`.
+   * `reshoot`: `madeWith` is rewritten with `history` and then `prompt` applied.
+   */
+  revision?: EnhanceRevision | null;
+}
+
+export interface EnhanceRevision {
+  mode: 'edit' | 'reshoot';
+  version: number;
+  madeWith: string;
+  history: string[];
 }
 
 export interface EnhanceResult {
