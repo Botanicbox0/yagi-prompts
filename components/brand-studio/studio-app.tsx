@@ -26,7 +26,7 @@ import { useStudioLibrary } from "./rail/use-library";
 import { trayItemFromAsset, trayItemFromOutput, trayLabels, withStartFrame, type RefSource, type TrayItem } from "./refs";
 import { ShareReviewDialog, useShareReviewEvent, type ShareReviewTarget } from "./share-review-dialog";
 import { libraryKey, type LayerEditorProps, type LayerEditorRegionPreset } from "./seams";
-import { findOutput } from "./store";
+import { fillSourcesToDelete, findOutput, listedJobs } from "./store";
 import { useDock } from "./use-dock";
 import { useStudio } from "./use-studio";
 import { sourceOf, useViewer } from "./use-viewer";
@@ -203,9 +203,16 @@ export function StudioApp({ organizationId, locale, copy, mode, libraryCopy, lay
   const dock = useDock({ studio, copy, organizationId, initialMedium: mode, mode });
   const library = useStudioLibrary(organizationId);
   const state = studio.store.state;
-  const allJobs = useMemo(() => state?.jobs ?? [], [state?.jobs]);
+  // Every run, including the internal strips of "빈 곳 채우기": only the layer editor reads this list.
+  const rawJobs = useMemo(() => state?.jobs ?? [], [state?.jobs]);
+  // What the screen shows and takes results from: never a fill strip.
+  const allJobs = useMemo(() => listedJobs(rawJobs), [rawJobs]);
   const jobs = useMemo(() => jobsFor(allJobs, mode), [allJobs, mode]);
-  const assets = useMemo(() => state?.assets ?? [], [state?.assets]);
+  // Pictures uploaded for "빈 곳 채우기": hidden from the screen, deleted once their runs have settled.
+  const [fillSources, setFillSources] = useState<ReadonlyMap<string, readonly string[] | null>>(() => new Map());
+  const deletingFillRef = useRef<Set<string>>(new Set());
+  const allAssets = useMemo(() => state?.assets ?? [], [state?.assets]);
+  const assets = useMemo(() => (fillSources.size ? allAssets.filter((a) => !fillSources.has(a.id)) : allAssets), [allAssets, fillSources]);
   const canCreate = state?.canCreate ?? false;
   const dockOpen = canCreate && (state?.allowance.capKrw ?? 0) > 0;
   const [handoff, setHandoff] = useState<RefSource | null>(null);
@@ -398,6 +405,21 @@ export function StudioApp({ organizationId, locale, copy, mode, libraryCopy, lay
     },
     [allJobs, lookup, parentAssetOf, parentOf],
   );
+
+  // A picture uploaded for "빈 곳 채우기" is deleted once every run on it has settled (the server also
+  // refuses while a run that reads it is open). Placed patch layers point at the runs' own patch files.
+  const deleteAsset = studio.deleteAsset;
+  useEffect(() => {
+    const tracked = new Map<string, readonly string[]>();
+    for (const [id, jobIds] of fillSources) if (jobIds && !deletingFillRef.current.has(id)) tracked.set(id, jobIds);
+    for (const assetId of fillSourcesToDelete(tracked, rawJobs)) {
+      deletingFillRef.current.add(assetId);
+      void deleteAsset(assetId).then((result) => {
+        // Refused (a run still reads it) or not reached: try again when the runs next change.
+        if (isFailure(result) && result.code !== "not_found") deletingFillRef.current.delete(assetId);
+      });
+    }
+  }, [fillSources, rawJobs, deleteAsset]);
 
   const onRegionSending = useCallback((event: { key: string; ratio: string } | { done: string; line: string | null }) => {
     if ("key" in event) setSending((current) => [{ key: event.key, ratio: event.ratio }, ...current]);
@@ -931,6 +953,9 @@ export function StudioApp({ organizationId, locale, copy, mode, libraryCopy, lay
           initialRegionPreset={editorState.initialRegionPreset}
           blankCanvas={Boolean(editorState.isBlankCanvas)}
           fillEmpty={Boolean(state?.canFillEmpty)}
+          onFillSource={(assetId, jobIds) =>
+            setFillSources((cur) => new Map(cur).set(assetId, jobIds ? [...jobIds] : null))
+          }
           region={
             dockOpen && mode === "image"
               ? {
@@ -939,7 +964,7 @@ export function StudioApp({ organizationId, locale, copy, mode, libraryCopy, lay
                   models: regionEditModels(),
                   defaultModel: regionEditModel(dock.draft),
                   defaultQuality: dock.draft.quality,
-                  jobs: allJobs,
+                  jobs: rawJobs,
                   errorText: (code) => errorLine(copy, code ?? "failed"),
                   submit: async (req) => {
                     let effectiveSource = req.source;
@@ -960,7 +985,9 @@ export function StudioApp({ organizationId, locale, copy, mode, libraryCopy, lay
                     const key = newRequestId();
                     const size = req.sourceSize ?? editorState.base;
                     const ratio = `${size.width} / ${size.height}`;
-                    onRegionSending({ key, ratio });
+                    // A fill strip is internal: no "sending" tile on the wall.
+                    const internal = req.purpose === "fill";
+                    if (!internal) onRegionSending({ key, ratio });
                     const body = regionEditInput({
                       ids: { organizationId, requestId: key },
                       source: effectiveSource,
@@ -971,10 +998,11 @@ export function StudioApp({ organizationId, locale, copy, mode, libraryCopy, lay
                       quality: req.quality || null,
                       references: req.references,
                       locale,
+                      ...(internal ? { purpose: "fill" as const } : {}),
                     });
                     const result = await studio.createJob(body);
                     const line = isFailure(result) ? errorLine(copy, result.code) : null;
-                    onRegionSending({ done: key, line });
+                    if (!internal) onRegionSending({ done: key, line });
                     if (isFailure(result)) {
                       return { ok: false, message: line ?? errorLine(copy, "failed") };
                     }

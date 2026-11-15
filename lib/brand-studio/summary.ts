@@ -22,6 +22,7 @@ import {
 import { studioSeat } from './access';
 import type { StudioEnv } from './env';
 import { guarded } from './outcome';
+import { NOT_FILL } from './repo';
 import { allowanceView, loadAllowance } from './usage';
 
 /** How long a finished job stays in `settled` (long enough for a 20-second poll to see it twice). */
@@ -59,7 +60,7 @@ export async function loadStudioSummary(deps: StudioSummaryDeps, viewer: Viewer,
       const open = (
         await sql.query<{ id: string; kind: string }>(
           `select id, kind from brand_studio_jobs
-            where organization_id = $1 and created_by = $2 and status = any($3::text[])
+            where organization_id = $1 and created_by = $2 and status = any($3::text[]) and ${NOT_FILL}
             order by created_at desc, id limit ${OPEN_LIMIT}`,
           [organizationId, seat.userId, [...STUDIO_JOB_OPEN_STATUSES]],
         )
@@ -67,7 +68,7 @@ export async function loadStudioSummary(deps: StudioSummaryDeps, viewer: Viewer,
       const settled = (
         await sql.query<{ id: string; kind: string; status: string; finished_at: Date | string }>(
           `select id, kind, status, finished_at from brand_studio_jobs
-            where organization_id = $1 and created_by = $2 and status in ('succeeded','failed','canceled')
+            where organization_id = $1 and created_by = $2 and status in ('succeeded','failed','canceled') and ${NOT_FILL}
               and finished_at >= $3 and finished_at <= $4
             order by finished_at desc, id limit ${SETTLED_LIMIT}`,
           [organizationId, seat.userId, new Date(now.getTime() - STUDIO_SETTLED_WINDOW_MS).toISOString(), now.toISOString()],

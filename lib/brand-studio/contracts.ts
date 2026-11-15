@@ -211,6 +211,11 @@ export const RegionEditJobSchema = z.object({
   box: RegionBoxSchema,
   /** As on an image job: only for an edit model that declares `qualities`. */
   quality: z.enum(STUDIO_IMAGE_QUALITIES).optional(),
+  /**
+   * `fill`: one strip of the layer editor's "빈 곳 채우기" (flag `BRAND_STUDIO_OUTPAINT`). An internal run:
+   * never in a list of runs or results, still returned by id to the editor that started it.
+   */
+  purpose: z.literal('fill').optional(),
 });
 
 const VideoBase = {
@@ -545,6 +550,8 @@ export interface StudioJobView {
   parentAssetId: string | null;
   /** Region edit only: the box that was changed, so the same edit can be set up again. */
   box: RegionBox | null;
+  /** `fill`: an internal "빈 곳 채우기" strip. Screens that list runs or results skip it. */
+  purpose?: 'fill';
   /** Remix only: how the reference video was used, what was kept and what was changed. */
   method: StudioRemixMethod | null;
   keep: StudioKeepKey[];

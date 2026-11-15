@@ -152,6 +152,8 @@ export interface StudioJobParams {
   change?: string;
   box?: RegionBox;
   source?: { assetId?: string; outputId?: string };
+  /** Region edit: `fill` marks an internal "빈 곳 채우기" strip, left out of every list of runs and results. */
+  purpose?: 'fill';
   draftOutputId?: string;
   /** Seconds of the attached reference video (estimates, the film reader). Never set for `blueprint`: its video is not attached. */
   referenceVideoSeconds?: number;

@@ -13,7 +13,11 @@
  * blends with a feather that lies entirely inside the box: at least max(4 px, 3 % of the box's short
  * side), widened up to 12 % of the short side where strong contours cross the box edge (align.ts
  * `computeDiffMask`). The overlap is 25 % of the margin and at least 32 px, which is about twice that
- * widest feather, so the blend toward the picture happens over real picture pixels.
+ * widest feather, so the blend toward the picture happens over real picture pixels. Box sides on the
+ * canvas border get no feather, so the fill reaches the outer edge.
+ *
+ * The strips are internal runs (`purpose: 'fill'`): never listed on any screen, still delivered to the
+ * editor by id. The uploaded picture is deleted by the studio screen once all its strips have settled.
  */
 import type { RegionBox } from "@/lib/brand-studio/contracts";
 import { baseRect, emptyMargins } from "./canvas";

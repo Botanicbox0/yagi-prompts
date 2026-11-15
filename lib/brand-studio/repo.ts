@@ -102,6 +102,7 @@ export function jobView(row: JobRow, outputs: OutputRow[], media: StudioMediaSto
     parentOutputId: row.parent_output_id,
     parentAssetId: row.kind === 'region_edit' ? (p.source?.assetId ?? null) : null,
     box: row.kind === 'region_edit' ? (p.box ?? null) : null,
+    ...(row.kind === 'region_edit' && p.purpose === 'fill' ? { purpose: 'fill' as const } : {}),
     method: remix ? (p.method ?? null) : null,
     keep: remix && Array.isArray(p.keep) ? [...p.keep] : [],
     change: remix ? (p.change ?? '') : null,
@@ -184,12 +185,18 @@ async function notRemoved(sql: SqlRunner): Promise<string> {
   return (await jobSoftDeleteReady(sql)) ? 'and deleted_at is null' : '';
 }
 
+/**
+ * Lists of runs leave out the internal strips of "빈 곳 채우기" (`params.purpose = 'fill'`). Reads by id
+ * (`jobsByIds`, the poll) still return them, and usage counts them like any other run.
+ */
+export const NOT_FILL = "coalesce(params ->> 'purpose', '') <> 'fill'";
+
 export async function jobsOf(sql: SqlRunner, organizationId: string, limit = 60): Promise<JobRow[]> {
   const live = await notRemoved(sql);
   return (
     await sql.query<JobRow>(
       `select * from brand_studio_jobs
-        where organization_id = $1 and model <> 'compose-1080p' ${live}
+        where organization_id = $1 and model <> 'compose-1080p' and ${NOT_FILL} ${live}
         order by created_at desc, id limit $2`,
       [organizationId, limit],
     )
@@ -205,7 +212,7 @@ export async function jobsOfStudioState(sql: SqlRunner, organizationId: string, 
   const [imageJobs, videoJobs] = await Promise.all([
     sql.query<JobRow>(
       `select * from brand_studio_jobs
-        where organization_id = $1 and kind in ('image', 'region_edit') ${live}
+        where organization_id = $1 and kind in ('image', 'region_edit') and ${NOT_FILL} ${live}
         order by created_at desc, id limit $2`,
       [organizationId, perMediumLimit],
     ),

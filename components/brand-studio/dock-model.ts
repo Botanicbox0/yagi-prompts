@@ -714,6 +714,8 @@ export function regionEditInput(input: {
   /** Sent only when the edit model has qualities. */
   quality?: string | null;
   locale?: "ko" | "en";
+  /** "빈 곳 채우기": an internal strip, left out of every list of runs and results. */
+  purpose?: "fill";
 }): StudioJobCreate {
   const references = input.references ?? [];
   const prompt = input.instruction.trim();
@@ -730,6 +732,7 @@ export function regionEditInput(input: {
     source: "assetId" in input.source ? { assetId: input.source.assetId } : { outputId: input.source.outputId },
     box: input.box,
     ...(quality ? { quality: quality as StudioImageQuality } : {}),
+    ...(input.purpose ? { purpose: input.purpose } : {}),
   };
 }
 

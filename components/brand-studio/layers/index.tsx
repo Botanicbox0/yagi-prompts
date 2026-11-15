@@ -897,20 +897,25 @@ export default function LayerEditor(
         setFillError(region.errorText(uploaded.code));
         return;
       }
+      props.onFillSource?.(uploaded.asset.id);
       const sent = fillSentOf(sentDoc);
       const results = await Promise.all(
         strips.map(async (strip) => ({
           strip,
-          res: await region.submit({
-            source: { assetId: uploaded.asset.id },
-            box: strip.box,
-            instruction: fillInstruction(strip.side),
-            model: region.defaultModel,
-            quality,
-            references: [],
-            enhance: false,
-            sourceSize: { width: sent.width, height: sent.height },
-          }),
+          // A send that throws counts as not sent, so the picture's runs are always reported below.
+          res: await region
+            .submit({
+              source: { assetId: uploaded.asset.id },
+              box: strip.box,
+              instruction: fillInstruction(strip.side),
+              model: region.defaultModel,
+              quality,
+              references: [],
+              enhance: false,
+              sourceSize: { width: sent.width, height: sent.height },
+              purpose: "fill",
+            })
+            .catch(() => ({ ok: false as const, message: region.errorText(null) })),
         })),
       );
       const started: TrackedRegionJob[] = [];
@@ -919,6 +924,7 @@ export default function LayerEditor(
         if (res.ok) started.push({ jobId: res.job.id, autoFlatten: false, box: strip.box, fill: sent });
         else failedLine ??= res.message;
       }
+      props.onFillSource?.(uploaded.asset.id, started.map((s) => s.jobId));
       if (started.length) {
         setPendingRegionJobs((cur) => [...cur, ...started]);
         say(copy.canvas.fillSent);

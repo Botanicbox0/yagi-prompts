@@ -116,6 +116,8 @@ export async function createStudioJob(deps: StudioDeps, viewer: Viewer, raw: unk
   if (!parsed.success) return failure('invalid');
   const v = parsed.data;
   const locale = localeOf(viewer);
+  // "빈 곳 채우기" runs exist only while its flag is on.
+  if (v.kind === 'region_edit' && v.purpose && !deps.env.outpaint) return failure('feature_unavailable');
   return guarded(() =>
     deps.sql.transaction(async (sql) => {
       const seat = await studioSeat(sql, viewer.userId, v.organizationId);

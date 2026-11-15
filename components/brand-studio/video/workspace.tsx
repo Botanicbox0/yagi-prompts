@@ -62,7 +62,7 @@ import {
 } from "../refs";
 import { ShareReviewDialog, useShareReviewEvent, type ShareReviewTarget } from "../share-review-dialog";
 import { STUDIO_JOB_STARTED } from "../seams";
-import { findOutput } from "../store";
+import { findOutput, listedJobs } from "../store";
 import { useDock } from "../use-dock";
 import { useStudio } from "../use-studio";
 import { sourceOf, useViewer } from "../use-viewer";
@@ -210,7 +210,8 @@ export function VideoStudioWorkspace({
   const dock = useDock({ studio, copy, organizationId, initialMedium: "video", mode: "video" });
   const library = useStudioLibrary(organizationId);
   const state = studio.store.state;
-  const allJobs = useMemo(() => state?.jobs ?? [], [state?.jobs]);
+  // Never the internal strips of "빈 곳 채우기" (store.ts `listedJobs`).
+  const allJobs = useMemo(() => listedJobs(state?.jobs ?? []), [state?.jobs]);
   const jobs = useMemo(() => jobsFor(allJobs, "video"), [allJobs]);
   const assets = useMemo(() => state?.assets ?? [], [state?.assets]);
   const audioAssets = useMemo(() => assets.filter((a) => a.kind === "audio"), [assets]);
