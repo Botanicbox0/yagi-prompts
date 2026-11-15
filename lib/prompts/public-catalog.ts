@@ -60,9 +60,10 @@ async function readPromptCatalog(): Promise<PromptCatalog> {
 /** 2026-10-29 (`v12-creative-cover`): `PublicMaker` carries the 0065 profile (name, place, links, avatar…) and the 0071 cover; both addresses are `/creative-media/…`. */
 /** 2026-11-02 (`v13-remove-goldfish-daydream`): drop duplicate `aquarium-goldfish-daydream` from the catalog cache. */
 /** 2026-11-11 (`v14-cast`): `PromptCard.cast`; couple and pet templates leave the projection while their flag is off (both part of the key). */
+/** 2026-11-15 (`v15-rule-prices`): five creative templates moved to their rule price in the database (founder: no raise on company templates), `lens-portal-tutu` runtime 17 → 15 s. */
 export const getPromptCatalog = unstable_cache(
   readPromptCatalog,
-  ['prompt-catalog', 'v14-cast', resolveRuntimeMode(), publicMediaCacheKey(), coupleTemplatesOpen() ? 'couple-on' : 'couple-off', petTemplatesOpen() ? 'pet-on' : 'pet-off'],
+  ['prompt-catalog', 'v15-rule-prices', resolveRuntimeMode(), publicMediaCacheKey(), coupleTemplatesOpen() ? 'couple-on' : 'couple-off', petTemplatesOpen() ? 'pet-on' : 'pet-off'],
   {
     tags: [PROMPTS_TAG],
     revalidate: CATALOG_TTL_SECONDS,
