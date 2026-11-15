@@ -30,8 +30,12 @@ export const DRAG_THRESHOLD_PX = 6;
 export const BOX_MIN = 0.02;
 /** A mark is drawn on the video while the clip is this close to its time (seconds). */
 export const VISIBLE_WINDOW_S = 0.15;
-/** Height of the native controls strip left free under the layer (CSS px). */
-export const CONTROLS_STRIP_PX = 48;
+/**
+ * Height of the native controls strip left free under the layer (CSS px). Chrome's controls on a clip of
+ * viewer size are about 71 px tall (the button row sits above the timeline), measured with a real mouse:
+ * at 48 px a click on the play button placed a mark instead of playing.
+ */
+export const CONTROLS_STRIP_PX = 76;
 
 export interface Size {
   width: number;

@@ -48,8 +48,8 @@ describe("where the picture sits in the video box", () => {
   });
 
   it("leaves the native controls strip free only where it covers the picture", () => {
-    // Picture fills the box height: the bottom 48 px are the controls.
-    expect(controlsInset({ left: 0, top: 0, width: 281, height: 500 }, 500)).toBe(48);
+    // Picture fills the box height: the bottom 76 px are the controls.
+    expect(controlsInset({ left: 0, top: 0, width: 281, height: 500 }, 500)).toBe(76);
     // Letterboxed picture ends 287 px above the box bottom: nothing to leave free.
     expect(controlsInset({ left: 0, top: 287.5, width: 400, height: 225 }, 800)).toBe(0);
     // Never more than 40 % of a short picture.

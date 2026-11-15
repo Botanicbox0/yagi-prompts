@@ -182,7 +182,13 @@ export function MarkLayer({ video, host, marks, active, copy, onPlace, onNudge, 
           onPointerDown={(event) => {
             if (full || (event.pointerType === "mouse" && event.button !== 0)) return;
             event.preventDefault();
-            event.currentTarget.setPointerCapture?.(event.pointerId);
+            // Capture keeps a drag alive when the finger or cursor leaves the layer; a mark must still be
+            // placed when the browser refuses it (a pointer that is no longer active).
+            try {
+              event.currentTarget.setPointerCapture?.(event.pointerId);
+            } catch {
+              /* marking works without capture */
+            }
             event.currentTarget.focus({ preventScroll: true });
             drag.current = { id: event.pointerId, start: local(event) };
           }}
