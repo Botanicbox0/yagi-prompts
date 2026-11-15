@@ -4,6 +4,7 @@ import { RoomChannel } from "@/components/brand-rooms/chat";
 import { ProjectFilesTab } from "@/components/brand-rooms/files";
 import { RoomHeader, RoomTabs, type RoomTabLink } from "@/components/brand-rooms/room/room-header";
 import { RoomOverview } from "@/components/brand-rooms/room/room-overview";
+import { RoomRequestedLine } from "@/components/brand-rooms/room/room-requested";
 import { roomHref } from "@/components/brand-rooms/room/visibility";
 import {
   VISIBLE_ROOM_TABS,
@@ -88,8 +89,12 @@ export default async function ProjectRoomPage({
   const reviewId = one(query.review);
   const commentId = one(query.comment);
   const atMs = parseReviewTime(query.t);
+  // `?category=brief` opens 파일 on 기획서 (the overview's "낸 내용 보기").
+  const briefCategory = (Array.isArray(query.category) ? query.category[0] : query.category) === "brief";
   const initialCategory =
-    tab === "storyboard" || boardId ? "storyboard" : tab === "review" || reviewId ? "drafts" : "all";
+    tab === "storyboard" || boardId ? "storyboard" : tab === "review" || reviewId ? "drafts" : briefCategory ? "brief" : "all";
+  // The retention note matters once the work is delivered: a project-only room shows it only when completed.
+  const retentionNotice = isProjectOnlyOrg && project.status === "completed";
 
   return (
     <div className="brr-room" data-project-room={project.id} data-room-tab-current={activeTab}>
@@ -99,9 +104,9 @@ export default async function ProjectRoomPage({
         copy={shell.room}
         statusLabel={dict.brandWorkspace.status[project.status]}
         backHref={scopedHref("/brand", choice)}
-        detailHref={scopedHref(`/brand/projects/${project.id}`, choice)}
+        detailHref={project.track === "creator_campaign" ? scopedHref(`/brand/projects/${project.id}`, choice) : null}
       />
-      {isProjectOnlyOrg && (
+      {retentionNotice && (
         <section
           className="bw-note"
           data-project-only-retention-notice
@@ -144,14 +149,17 @@ export default async function ProjectRoomPage({
             }}
           />
         ) : (
-          <RoomChannel
-            organizationId={choice.id}
-            projectId={project.id}
-            locale={locale}
-            copy={dict.roomsChat}
-            canTalk={canTalk}
-            layout="flow"
-          />
+          <>
+            <RoomRequestedLine project={project} copy={shell.overview} locale={locale} briefHref={href("files", { category: "brief" })} />
+            <RoomChannel
+              organizationId={choice.id}
+              projectId={project.id}
+              locale={locale}
+              copy={dict.roomsChat}
+              canTalk={canTalk}
+              layout="flow"
+            />
+          </>
         )}
       </section>
     </div>

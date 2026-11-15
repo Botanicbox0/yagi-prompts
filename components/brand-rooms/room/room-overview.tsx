@@ -1,7 +1,8 @@
 /**
  * The room's 개요 tab (docs/BRAND-ROOMS.md §7): the stage line (의뢰 접수 → 스토리보드 → 시안 → 수정 →
  * 완료, dated where the data says so), "지금 확인할 것" with a link into the tab that holds each item, and
- * the five latest activities. An empty room opens with the first-use explanation.
+ * the five latest activities. A request nobody has answered with work yet opens with the "we got it" note
+ * (and a way back to what was sent); any other empty room opens with a one-line explanation.
  *
  * Server component; the explanation is the shared client `Explainer` (components/brand-studio/explainer.tsx).
  * Techniques (docs/design/TOOLBOX.md §1-2): architectural hairlines on the stage line, white cards on the
@@ -30,7 +31,11 @@ function todoLink(todo: RoomTodo, href: Href): string {
   return href('chat');
 }
 
+/** The brief the client sent: the files tab opened on 기획서. */
+export const briefHref = (href: Href): string => href('files', { category: 'brief' });
+
 function activityLink(item: RoomActivity, href: Href): string {
+  if (item.kind === 'requested') return briefHref(href);
   if (item.kind === 'message') return href('chat');
   if (item.kind.startsWith('board')) return href('storyboard', item.targetId ? { board: item.targetId } : {});
   return href('review', item.targetId ? { review: item.targetId } : {});
@@ -58,14 +63,26 @@ export function RoomOverview({
   const stateLabel = { done: copy.stageDone, current: copy.stageNow, skipped: copy.stageAhead, ahead: copy.stageAhead } as const;
   return (
     <div className="brr-overview" data-room-overview data-room-stage={overview.stage}>
-      {overview.empty ? (
+      {overview.received ? (
+        <section className="brr-card brr-received" data-room-received aria-labelledby="brr-received-title">
+          <h2 id="brr-received-title">{copy.received.title}</h2>
+          <p className="brr-received-line">{copy.received.line}</p>
+          <div className="brr-received-actions">
+            <a className="brr-received-primary" href={briefHref(href)} data-room-received-brief>
+              {copy.received.brief}
+            </a>
+            <a className="brr-received-secondary" href={href('chat')} data-room-received-chat>
+              {copy.received.chat}
+            </a>
+          </div>
+        </section>
+      ) : overview.empty ? (
         <Explainer
           storageKey={ROOM_EXPLAINER_KEY}
           title={copy.explainer.title}
           line={copy.explainer.line}
           actions={[{ label: copy.explainer.action, href: href('chat'), primary: true }]}
-          stepsTitle={copy.explainer.stepsTitle}
-          steps={copy.explainer.steps}
+          steps={[]}
           dismissLabel={copy.explainer.dismiss}
           reopenLabel={copy.explainer.reopen}
           className="brr-explainer"

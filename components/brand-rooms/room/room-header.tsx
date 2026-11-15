@@ -1,6 +1,6 @@
 /**
  * The room's head and tab bar (docs/BRAND-ROOMS.md §7): back to 의뢰, the project, its track and status,
- * the people in the room with the YAGI team, a link to the full request page, then 개요 · 스토리보드 ·
+ * the people in the room with the YAGI team, a link to the campaign page (creator campaigns only), then 개요 · 스토리보드 ·
  * 시안 · 대화 as links (`?tab=`) with the count of what waits in each.
  *
  * Server component. Techniques (docs/design/TOOLBOX.md §1-2): large bold title, concentric radius on the
@@ -25,7 +25,8 @@ export function RoomHeader({
   copy: RoomsShellCopy['room'];
   statusLabel: string;
   backHref: string;
-  detailHref: string;
+  /** The campaign page with its creators and results; only a creator campaign has one worth opening. */
+  detailHref: string | null;
 }) {
   const shown = people.slice(0, FACES);
   const rest = people.length - shown.length;
@@ -38,12 +39,14 @@ export function RoomHeader({
           </svg>
           {copy.back}
         </a>
-        <a className="brr-detail" href={detailHref} data-room-detail>
-          {copy.detail}
-          <svg viewBox="0 0 20 20" aria-hidden="true">
-            <path d="M7.5 12.5l5-5M8.5 7.5h4v4" />
-          </svg>
-        </a>
+        {detailHref ? (
+          <a className="brr-detail" href={detailHref} data-room-detail>
+            {copy.detail}
+            <svg viewBox="0 0 20 20" aria-hidden="true">
+              <path d="M7.5 12.5l5-5M8.5 7.5h4v4" />
+            </svg>
+          </a>
+        ) : null}
       </div>
       <div className="brr-head-main">
         <div className="brr-head-title">

@@ -37,6 +37,8 @@ export default async function NewBrandProject({
   const useIntakeBrief = Boolean(choice && roomsOpenFor(choice, brandRoomsOpen()));
   const selfStudioClosed = Boolean(choice && featureDenied(choice.denied, "self_studio"));
   const intakeCopy = dict?.intakeBrief ?? (locale === "en" ? intakeBriefEn : intakeBriefKo);
+  // In the project space (rooms open) the way back is to 프로젝트, not the campaign list.
+  const backLabel = useIntakeBrief ? (dict?.roomsShell?.room.back ?? b.back) : b.back;
   const formats: WizardFormat[] = organizations.length === 0 || generativeClosed || useIntakeBrief ? [] : (await loadPromptCatalog(sql).catch(() => ({ video: [] as Awaited<ReturnType<typeof loadPromptCatalog>>["video"] }))).video.map((card) => ({
     slug: card.slug, title: locale === "ko" && card.titleKo ? card.titleKo : card.title, source: card.source,
     authorHandle: card.source === "community" ? card.authorHandle : null, poster: card.poster, video: card.video,
@@ -45,7 +47,7 @@ export default async function NewBrandProject({
     <div data-brand-new-project>
       <div className="bw-heading">
         <div>
-          <a href={back}>← {b.back}</a>
+          <a href={back}>← {backLabel}</a>
           <h1>{studioPrep ? b.studioPrep.title : organizations.length ? (useIntakeBrief ? intakeCopy.title : b.wizard.title) : b.newProject}</h1>
           <p>{studioPrep ? b.studioPrep.intro : organizations.length ? (useIntakeBrief ? intakeCopy.intro : b.wizard.intro) : b.emptyBody}</p>
         </div>
@@ -74,7 +76,7 @@ export default async function NewBrandProject({
         <section className="bw-empty" data-brand-new-project-read-only>
           <p>{choice?.role === "guest" ? b.access.sharedOnly : choice?.role === "studio" ? b.access.staffReadOnly : b.access.viewerCannotRequest}</p>
           <a href={back} className="bw-button">
-            {b.back}
+            {backLabel}
           </a>
         </section>
       ) : useIntakeBrief ? (

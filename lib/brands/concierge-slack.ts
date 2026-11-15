@@ -1,5 +1,6 @@
 import { createHash, randomUUID } from 'node:crypto';
 import type { SqlRunner } from '@/lib/db/sql-runner';
+import { siteUrl } from '@/lib/seo/site-url';
 
 /**
  * Preferred dedicated Slack channel names for `brand.twings.app` live concierge inquiries.
@@ -393,6 +394,95 @@ export async function notifySlackBrandConcierge(
           unfurl_links: false,
           unfurl_media: false,
         }),
+      });
+      if (!response.ok) return { sent: false };
+      const data = (await response.json()) as { ok?: boolean; ts?: string };
+      return { sent: data.ok === true, ts: data.ts, channelId: target.channelId };
+    } finally {
+      clearTimeout(timer);
+    }
+  } catch {
+    return { sent: false };
+  }
+}
+
+/**
+ * The staff note for a new commission (internal only). It carries no `[org:…]` tag on purpose: replies
+ * in its thread are team talk, not answers to forward into the client's support chat.
+ */
+export function formatProjectRequestAlert(input: {
+  organizationName: string;
+  title: string;
+  track?: string | null;
+  dueOn?: string | null;
+  budgetBand?: string | null;
+  adminUrl: string;
+}): string {
+  const flat = (value: string) => value.replace(/\s+/g, ' ').trim().slice(0, 160);
+  const lines = [
+    `📥 *[brand.twings.app 새 프로젝트 의뢰]*`,
+    `• *고객사:* *${flat(input.organizationName)}*`,
+    `• *프로젝트:* ${flat(input.title)}`,
+  ];
+  if (input.track) lines.push(`• *트랙:* \`${flat(input.track)}\``);
+  if (input.dueOn) lines.push(`• *납품 희망일:* ${flat(input.dueOn)}`);
+  if (input.budgetBand && input.budgetBand !== 'undecided') lines.push(`• *예산대:* \`${flat(input.budgetBand)}\``);
+  lines.push(`• *룸 열기:* ${input.adminUrl}`);
+  return lines.join('\n');
+}
+
+/**
+ * Tells the YAGI team that a brand submitted a project request. Same destination and the same no-op
+ * rules as `notifySlackBrandConcierge` (no token, `SLACK_BRAND_CONCIERGE_ENABLED=off` or a unit test:
+ * nothing is sent). Never throws.
+ */
+export async function notifySlackBrandProjectRequest(
+  sql: SqlRunner,
+  input: {
+    organizationId: string;
+    projectId: string;
+    title: string;
+    track?: string | null;
+    dueOn?: string | null;
+    budgetBand?: string | null;
+  },
+  options?: {
+    env?: Record<string, string | undefined>;
+    fetcher?: typeof fetch;
+    timeoutMs?: number;
+    origin?: string;
+  },
+): Promise<{ sent: boolean; ts?: string; channelId?: string }> {
+  const config = resolveConciergeSlackConfig(options?.env);
+  if (!config) return { sent: false };
+  try {
+    const orgRow = (
+      await sql.query<{ name: string }>('select name from brand_organizations where id=$1', [input.organizationId])
+    ).rows[0];
+    const organizationName = orgRow?.name ? String(orgRow.name) : 'Brand Client';
+    const origin = (options?.origin ?? siteUrl(options?.env as NodeJS.ProcessEnv | undefined)).replace(/\/+$/, '');
+    const adminUrl = `${origin}/admin/brand-rooms/${encodeURIComponent(input.organizationId)}?channel=${encodeURIComponent(input.projectId)}`;
+    const fetcher = options?.fetcher ?? fetch;
+    const target = await resolveActiveConciergeChannel(config, fetcher);
+    const text = formatProjectRequestAlert({
+      organizationName,
+      title: input.title,
+      track: input.track ?? null,
+      dueOn: input.dueOn ?? null,
+      budgetBand: input.budgetBand ?? null,
+      adminUrl,
+    });
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), options?.timeoutMs ?? 4500);
+    try {
+      const response = await fetcher('https://slack.com/api/chat.postMessage', {
+        method: 'POST',
+        signal: controller.signal,
+        headers: {
+          Authorization: `Bearer ${config.token}`,
+          'Content-Type': 'application/json; charset=utf-8',
+        },
+        body: JSON.stringify({ channel: target.channelId, text, unfurl_links: false, unfurl_media: false }),
       });
       if (!response.ok) return { sent: false };
       const data = (await response.json()) as { ok?: boolean; ts?: string };
