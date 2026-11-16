@@ -3,7 +3,8 @@
  * happens when the edit model sees as much of the picture as it can take at its own size. Pure.
  *
  * - The customer's box (`select`) grows into a paste zone (`box`): each side by 40% of the box's
- *   shorter side, at least 24 px, inside the picture. Only the zone may change.
+ *   shorter side, at least 24 px, inside the picture. Only the zone may change. When what changed
+ *   runs into the zone's edge, the paste widens it once (`widestZone`, up to the box's longer side).
  * - The window (`roi`) is what the model receives: the whole picture when its shape is one the model
  *   takes, else the largest rectangle of a supported shape that holds the zone, centred on the box as
  *   far as the picture allows.
@@ -54,6 +55,27 @@ export function pasteZone(image: { width: number; height: number }, select: Pixe
   const right = Math.min(image.width, select.left + select.width + grow);
   const bottom = Math.min(image.height, select.top + select.height + grow);
   return { left, top, width: right - left, height: bottom - top };
+}
+
+/**
+ * The widest paste zone a change may take: each side grown by the box's longer side (never less than
+ * `pasteZone`), inside the picture and the window. Used once, when what changed runs into the edge of
+ * the first zone (a tulip taller than the teapot it replaced). Null when it is no wider.
+ */
+export function widestZone(image: { width: number; height: number }, plan: Pick<RegionPlan, 'roi' | 'box' | 'select'>): PixelRect | null {
+  const s = plan.select;
+  if (!s) return null;
+  const grow = Math.max(ZONE_MIN_PX, Math.round(Math.min(s.width, s.height) * ZONE_GROW), Math.max(s.width, s.height));
+  const { roi } = plan;
+  const left = Math.max(0, roi.left, s.left - grow);
+  const top = Math.max(0, roi.top, s.top - grow);
+  const right = Math.min(image.width, roi.left + roi.width, s.left + s.width + grow);
+  const bottom = Math.min(image.height, roi.top + roi.height, s.top + s.height + grow);
+  const wide = { left: Math.min(left, plan.box.left), top: Math.min(top, plan.box.top), width: 0, height: 0 };
+  wide.width = Math.max(right, plan.box.left + plan.box.width) - wide.left;
+  wide.height = Math.max(bottom, plan.box.top + plan.box.height) - wide.top;
+  const same = wide.left === plan.box.left && wide.top === plan.box.top && wide.width === plan.box.width && wide.height === plan.box.height;
+  return same ? null : wide;
 }
 
 /** Start of a span of `size` that holds [lo, hi), centred on `centre` as far as [0, total) allows. */

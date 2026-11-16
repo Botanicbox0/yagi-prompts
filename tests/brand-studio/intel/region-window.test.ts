@@ -201,6 +201,27 @@ describe('paste back', () => {
     expect(wrong).toBe(0);
   });
 
+  it('widens the zone once when a change runs past its edge, up to the box’s longer side', async () => {
+    // A flat box (120 x 40): the zone grows 24 px, the tulip rises 60 px above the box.
+    const flat = { x: 140 / W, y: 160 / H, w: 120 / W, h: 40 / H };
+    const tulip = { left: 185, top: 100, width: 20, height: 90 };
+    const { plan, out, orig, result } = await pasteRun(flat, [{ rect: tulip, rgb: [230, 30, 30] }]);
+    expect(tulip.top).toBeLessThan(plan.box.top);
+    expect(result.box).toBeDefined();
+    expect(result.box!.top).toBeLessThanOrEqual(tulip.top - 8);
+    expect(result.box!.top).toBeGreaterThanOrEqual(plan.select!.top - Math.max(plan.select!.width, plan.select!.height));
+    let wrong = 0;
+    for (let y = tulip.top; y < tulip.top + tulip.height; y += 1) {
+      for (let x = tulip.left; x < tulip.left + tulip.width; x += 1) if (out.data[(y * W + x) * 4] !== 230) wrong += 1;
+    }
+    expect(wrong).toBe(0);
+    let changedOutside = 0;
+    for (let y = 0; y < H; y += 1) for (let x = 0; x < W; x += 1) if (!inside(result.box!, x, y) && !samePixel(out, orig, x, y)) changedOutside += 1;
+    expect(changedOutside).toBe(0);
+    const mask = await sharp(result.maskPng!).metadata();
+    expect([mask.width, mask.height]).toEqual([result.box!.width, result.box!.height]);
+  });
+
   it('does not paste a change that is not connected to the box', async () => {
     const stray = { left: 117, top: 200, width: 20, height: 20 }; // inside the zone, below-left of the box
     const { plan, out, orig } = await pasteRun(BOX, [

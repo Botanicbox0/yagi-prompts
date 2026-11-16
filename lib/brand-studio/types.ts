@@ -126,6 +126,8 @@ export interface StudioIntel {
     misaligned?: boolean;
     ringResidual?: number;
     transform?: { sx: number; sy: number; dx: number; dy: number };
+    /** Region edit v2: the paste zone the patch and mask cover (may be wider than `plan.box`). */
+    box?: { left: number; top: number; width: number; height: number };
   }>;
 }
 

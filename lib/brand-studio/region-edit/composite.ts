@@ -12,6 +12,7 @@
 import sharp from 'sharp';
 import { alignEditedRoi, computeDiffMask, type AlignTransform } from './align';
 import { computeChangeMask } from './paste';
+import { widestZone } from './window';
 import { decodeRgba, encodePng, type RgbaImage } from './pixels';
 import type { PixelRect, RegionPlan } from './plan';
 
@@ -154,6 +155,8 @@ export interface CompositeRegionResult {
   changeFound?: boolean;
   /** Window plans only: share of the paste zone pasted at full weight. */
   pasted?: number;
+  /** Window plans only: the paste zone used (the patch and mask cover it); wider than `plan.box` when widened. */
+  box?: PixelRect;
 }
 
 export async function compositeRegion(input: {
@@ -162,19 +165,31 @@ export async function compositeRegion(input: {
   plan: RegionPlan;
   feather?: number;
 }): Promise<CompositeRegionResult> {
-  const { plan } = input;
   const src = await decodeRgba(input.original);
-  assertPlan(src, plan);
-  const { roi, box } = plan;
+  assertPlan(src, input.plan);
+  const roi = input.plan.roi;
 
-  const aligned = await alignEditedRoi({ original: src, edited: input.edited, plan });
-  const ringWidth = Math.max(2, Math.round(Math.min(box.width, box.height) * 0.06));
-  const tone = matchTone(src, { data: aligned.alignedRoi, channels: aligned.channels }, plan, ringWidth);
+  const aligned = await alignEditedRoi({ original: src, edited: input.edited, plan: input.plan });
+  const toneFor = (p: RegionPlan) =>
+    matchTone(src, { data: aligned.alignedRoi, channels: aligned.channels }, p, Math.max(2, Math.round(Math.min(p.box.width, p.box.height) * 0.06)));
+  let plan = input.plan;
+  let tone = toneFor(plan);
   // A window plan (region edit v2) pastes only what changed near the customer's box (./paste.ts);
   // a crop plan keeps the mask it always had.
-  const change = plan.select
-    ? computeChangeMask({ original: src, alignedRoi: aligned.alignedRoi, channels: aligned.channels, plan, tone, feather: input.feather })
-    : null;
+  const changeFor = (p: RegionPlan, t: Tone) =>
+    computeChangeMask({ original: src, alignedRoi: aligned.alignedRoi, channels: aligned.channels, plan: p, tone: t, feather: input.feather });
+  let change = plan.select ? changeFor(plan, tone) : null;
+  if (change?.reachesEdge) {
+    // The change runs into the zone's edge: widen the zone once (up to the box's longer side) so a
+    // change that grew past the box is not cut off.
+    const wide = widestZone(src, plan);
+    if (wide) {
+      plan = { ...plan, box: wide };
+      tone = toneFor(plan);
+      change = changeFor(plan, tone);
+    }
+  }
+  const { box } = plan;
   const mask = change
     ? change.mask
     : await computeDiffMask({
@@ -237,6 +252,6 @@ export async function compositeRegion(input: {
     misaligned: aligned.misaligned,
     ringResidual: aligned.ringResidual,
     transform: aligned.transform,
-    ...(change ? { changeFound: change.changeFound, pasted: change.pasted } : {}),
+    ...(change ? { changeFound: change.changeFound, pasted: change.pasted, box: { ...box } } : {}),
   };
 }

@@ -11,7 +11,8 @@
  *      feather (nothing lies beyond it), an inner side fades to the original.
  *
  * When nothing that changed touches the box (a very subtle edit), the box itself is pasted with a
- * feather inside it, as the crop method does.
+ * feather inside it, as the crop method does. `reachesEdge` tells the compositor that what is kept runs
+ * into an inner side of the zone; it then widens the zone once (window.ts `widestZone`) and runs again.
  */
 import type { Tone } from './composite';
 import type { RgbaImage } from './pixels';
@@ -153,6 +154,8 @@ export interface ChangeMask {
   changeFound: boolean;
   /** Share of the zone pasted at full weight (0..1). */
   pasted: number;
+  /** True when what is kept runs into a side of the zone that lies inside the picture (it may be cut off). */
+  reachesEdge: boolean;
 }
 
 export function computeChangeMask(input: {
@@ -233,9 +236,19 @@ export function computeChangeMask(input: {
         mask[(sel.top + by) * zw + sel.left + bx] = Math.round(v * 255);
       }
     }
-    return { mask, changeFound: false, pasted: (sel.width * sel.height) / (zw * zh) };
+    return { mask, changeFound: false, pasted: (sel.width * sel.height) / (zw * zh), reachesEdge: false };
   }
   fillHoles(kept, zw, zh);
+  // Does the kept change run into an inner side of the zone (two or more pixels on it)?
+  let edgeHits = 0;
+  for (let zx = 0; zx < zw; zx += 1) {
+    if (!open.top && kept[zx]) edgeHits += 1;
+    if (!open.bottom && kept[(zh - 1) * zw + zx]) edgeHits += 1;
+  }
+  for (let zy = 0; zy < zh; zy += 1) {
+    if (!open.left && kept[zy * zw]) edgeHits += 1;
+    if (!open.right && kept[zy * zw + zw - 1]) edgeHits += 1;
+  }
 
   // 3. The edge.
   const grown = dilateBinary(kept, zw, zh, feather);
@@ -254,5 +267,5 @@ export function computeChangeMask(input: {
       if (v === 255) full += 1;
     }
   }
-  return { mask, changeFound: true, pasted: full / (zw * zh) };
+  return { mask, changeFound: true, pasted: full / (zw * zh), reachesEdge: edgeHits >= 2 };
 }
