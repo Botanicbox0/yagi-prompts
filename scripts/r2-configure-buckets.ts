@@ -7,9 +7,13 @@ import {
 } from '../lib/storage/r2-private';
 
 /**
- * `npm run r2:configure` — idempotently applies optimal multi-brand CORS and Lifecycle policies
- * (`AbortIncompleteMultipartUpload: 1 day`, plus `7-day` staging expiration on the private bucket)
- * to `R2_PUBLIC_BUCKET` and (when set) `R2_PRIVATE_BUCKET`.
+ * `npm run r2:configure` — idempotently applies the multi-brand CORS policy and the lifecycle document
+ * (`AbortIncompleteMultipartUpload: 1 day`, nothing else) to `R2_PUBLIC_BUCKET` and (when set)
+ * `R2_PRIVATE_BUCKET`, then reads the lifecycle rules back and prints their ids.
+ *
+ * No rule here deletes objects by age: long-lived brand files sit under `staging/` in the private bucket
+ * (see `buildMultiBrandR2LifecycleXml`). Writing the lifecycle document replaces every rule on the bucket,
+ * so a rule added by hand in the Cloudflare dashboard is removed by this script.
  *
  * Requires an R2 API token with `Admin Read & Write` scope (`R2_ADMIN_ACCESS_KEY_ID` /
  * `R2_ADMIN_SECRET_ACCESS_KEY`, falling back to `R2_PRIVATE_ACCESS_KEY_ID` / `R2_ACCESS_KEY_ID`).
@@ -21,15 +25,10 @@ function md5Base64(xml: string): string {
   return createHash('md5').update(xml, 'utf8').digest('base64');
 }
 
-async function applyBucketPolicies(
-  r2: AwsClient,
-  accountId: string,
-  bucket: string,
-  includeStagingExpiry: boolean,
-): Promise<void> {
+async function applyBucketPolicies(r2: AwsClient, accountId: string, bucket: string): Promise<void> {
   const base = `https://${accountId}.r2.cloudflarestorage.com/${bucket}`;
   const corsXml = buildMultiBrandR2CorsXml();
-  const lifecycleXml = buildMultiBrandR2LifecycleXml({ includeStagingExpiry });
+  const lifecycleXml = buildMultiBrandR2LifecycleXml();
 
   const corsRes = await r2.fetch(`${base}?cors`, {
     method: 'PUT',
@@ -57,14 +56,25 @@ async function applyBucketPolicies(
     throw new Error(`[${bucket}] PutBucketLifecycleConfiguration failed (${lcRes.status})`);
   }
 
+  // Read the rules back: what the bucket holds now, not what was sent.
+  const readRes = await r2.fetch(`${base}?lifecycle`, { method: 'GET' });
+  const readXml = readRes.ok ? await readRes.text() : '';
+  const lifecycleRuleIds = [...readXml.matchAll(/<ID>([^<]*)<\/ID>/g)].map((m) => m[1]);
+  const deletesByAge = /<Days>|<Date>/.test(readXml.replace(/<AbortIncompleteMultipartUpload>[\s\S]*?<\/AbortIncompleteMultipartUpload>/g, ''));
+
   console.log(
     JSON.stringify({
       bucket,
       corsApplied: true,
       lifecycleApplied: true,
-      includeStagingExpiry,
+      lifecycleReadBack: readRes.ok,
+      lifecycleRuleIds,
+      deletesByAge,
     }),
   );
+  if (deletesByAge) {
+    throw new Error(`[${bucket}] a lifecycle rule still deletes objects by age`);
+  }
 }
 
 async function main(): Promise<void> {
@@ -95,8 +105,8 @@ async function main(): Promise<void> {
     throw new Error('Neither R2_PUBLIC_BUCKET nor R2_PRIVATE_BUCKET is set.');
   }
 
-  if (publicBucket) await applyBucketPolicies(r2, accountId, publicBucket, false);
-  if (privateBucket) await applyBucketPolicies(r2, accountId, privateBucket, true);
+  if (publicBucket) await applyBucketPolicies(r2, accountId, publicBucket);
+  if (privateBucket) await applyBucketPolicies(r2, accountId, privateBucket);
 }
 
 main().catch((err) => {
