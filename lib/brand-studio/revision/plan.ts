@@ -29,6 +29,8 @@ export interface ReviseRequest {
   marks?: readonly ReviseMark[];
   /** Material read for the request (videos); never among the run's references. */
   materials?: ReadonlyArray<{ assetId?: string; outputId?: string }>;
+  /** The customer's answer to the one question asked about this request. */
+  clarified?: { question: string; answer: string } | null;
 }
 
 type StoredMark = NonNullable<NonNullable<StudioJobParams['revision']>['marks']>[number];
@@ -111,6 +113,7 @@ function revisionParams(
   added: number,
   marks?: readonly ReviseMark[],
   materials?: ReadonlyArray<{ assetId?: string; outputId?: string }>,
+  clarified?: { question: string; answer: string } | null,
 ): NonNullable<StudioJobParams['revision']> {
   const kept = storedMarks(marks);
   return {
@@ -122,6 +125,7 @@ function revisionParams(
     added,
     ...(kept.length ? { marks: kept } : {}),
     ...(materials?.length ? { materials: materials.map((m) => ({ ...m })) } : {}),
+    ...(clarified ? { clarified: { question: clarified.question, answer: clarified.answer } } : {}),
   };
 }
 
@@ -178,7 +182,7 @@ export async function editWay(
         keep: [],
         change: '',
         ...(base.seconds !== null ? { referenceVideoSeconds: base.seconds } : {}),
-        revision: revisionParams(recipe, 'edit', request.references.length, request.marks, request.materials),
+        revision: revisionParams(recipe, 'edit', request.references.length, request.marks, request.materials, request.clarified),
       },
       refs,
       resolved,
@@ -241,7 +245,7 @@ export async function reshootWay(
     audio: p.audio ?? 'native',
     count: 1,
     locale,
-    revision: revisionParams(recipe, 'reshoot', fresh.length, request.marks, request.materials),
+    revision: revisionParams(recipe, 'reshoot', fresh.length, request.marks, request.materials, request.clarified),
   };
   if (run.kind === 'video') {
     const usd = videoRunUsd({ resolution, seconds: seconds ?? model.defaultSeconds });
@@ -289,7 +293,15 @@ const DENIED: Record<StudioReviseProblem, 'invalid' | 'reference_missing'> = {
 export async function planRevision(
   sql: SqlRunner,
   organizationId: string,
-  input: { outputId: string; mode: StudioReviseMode; prompt: string; references: StudioReference[]; marks?: ReviseMark[]; materials?: StudioReference[] },
+  input: {
+    outputId: string;
+    mode: StudioReviseMode;
+    prompt: string;
+    references: StudioReference[];
+    marks?: ReviseMark[];
+    materials?: StudioReference[];
+    clarified?: { question: string; answer: string };
+  },
   media: StudioMediaStore,
   locale: 'ko' | 'en',
 ): Promise<JobPlan> {
@@ -301,7 +313,14 @@ export async function planRevision(
   const clip = { kind: 'video' } as ResolvedRef;
   if (mentionsMissing(input.prompt, [clip, ...added])) throw new StudioDenied('reference_missing');
   const materials = await resolveMaterials(sql, organizationId, input.materials, media, locale);
-  const request = { mode: input.mode, prompt: input.prompt, references: [...input.references], marks: input.marks ?? [], materials };
+  const request = {
+    mode: input.mode,
+    prompt: input.prompt,
+    references: [...input.references],
+    marks: input.marks ?? [],
+    materials,
+    clarified: input.clarified ?? null,
+  };
   const way = input.mode === 'edit'
     ? await editWay(sql, organizationId, recipe, request, media, locale)
     : await reshootWay(sql, organizationId, recipe, request, media, locale);

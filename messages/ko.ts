@@ -1998,6 +1998,8 @@ export const ko: Dictionary = {
       },
       switchAndMake: '바꿔서 만들기',
       makeAsSelected: '그대로 만들기',
+      asWritten: '고르지 않고 만들기',
+      clarifiedLabel: '요청 확인 내용',
       mark: '고칠 곳 표시',
       markHint: '영상을 클릭하거나 드래그해 표시하세요',
       markLayer: '영상에 고칠 곳 표시',

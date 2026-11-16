@@ -2,6 +2,7 @@
  * Rows <-> wire views, and the reads every studio module shares. SQL here never decides access:
  * callers pass an organization they already seated (./access.ts) and every query is scoped to it.
  */
+import { clarifiedOf } from './revision/clarify';
 import { brandStudioProjectsOpen } from '@/lib/flags';
 import type { SqlRunner } from '@/lib/db/sql-runner';
 import type {
@@ -122,6 +123,7 @@ export function jobView(row: JobRow, outputs: OutputRow[], media: StudioMediaSto
             mode: p.revision.mode,
             added: p.revision.added,
             ...(p.revision.materials?.length ? { materials: p.revision.materials.map((m) => ({ ...m })) } : {}),
+            ...(clarifiedOf(p.revision) ? { clarified: clarifiedOf(p.revision)! } : {}),
             ...(Array.isArray(p.revision.marks) && p.revision.marks.length
               ? { marks: p.revision.marks.map((m) => ({ ...m })) }
               : {}),
