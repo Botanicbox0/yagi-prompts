@@ -86,7 +86,11 @@ describe("retrying a version", () => {
       prompt: "카메라를 천천히",
       references: [{ assetId: asset(2).id, role: "product" }],
       marks: [],
+      materials: [],
     });
+    // The videos read for that request are read again.
+    const withMaterial = { ...v3, revision: rev(3, output(2).id, { materials: [{ assetId: asset(5).id }] }) };
+    expect(reviseRerunInput(withMaterial, { organizationId: ORG, requestId: id(0x79) })).toMatchObject({ materials: [{ assetId: asset(5).id }] });
     expect(reviseRerunInput(v2, { organizationId: ORG, requestId: id(0x78) })).toMatchObject({ mode: "edit", references: [] });
     // The spots the request pointed at go again with it.
     const marks = [{ time: 1.5, x: 0.2, y: 0.4, label: "병", what: "the bottle" }, { time: 3, x: 0.1, y: 0.1, w: 0.3, h: 0.2 }];

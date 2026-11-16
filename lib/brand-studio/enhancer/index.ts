@@ -16,7 +16,7 @@ import { bindReferences, mapCustomerMentions, type Binding } from './references'
 import { checkEnhancedPrompt, cleanNotes, ENHANCER_RESPONSE_SCHEMA, EnhancerOutputSchema } from './schema';
 import type { EnhanceDeps, EnhanceInput, EnhanceResult } from './types';
 
-export type { EnhanceDeps, EnhanceInput, EnhanceKind, EnhanceMark, EnhanceReference, EnhanceResult, EnhanceRevision, EnhanceVideo } from './types';
+export type { EnhanceDeps, EnhanceInput, EnhanceKind, EnhanceMark, EnhanceMaterial, EnhanceReference, EnhanceResult, EnhanceRevision, EnhanceVideo } from './types';
 export { composeFallbackPrompt } from './fallback';
 export {
   findMissingReferences,
@@ -109,6 +109,8 @@ function payload(input: EnhanceInput, binding: Binding, seconds: number | null, 
                 })),
               }
             : {}),
+          // What the attached material shows, already read for this request (revision/material.ts).
+          ...(revision.materials?.length ? { materials: revision.materials.map((m) => ({ n: m.n, kind: m.kind, notes: m.notes })) } : {}),
         }
       : null,
   };
