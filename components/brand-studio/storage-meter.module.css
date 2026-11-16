@@ -132,3 +132,29 @@
 .actionLink:hover {
   background: var(--ys-hover);
 }
+
+/* The quiet form on the assets page: a short bar and the numbers, no card. */
+.inline {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+  word-break: keep-all;
+}
+
+.inlineTrack {
+  flex: none;
+  width: 72px;
+  height: 4px;
+  overflow: hidden;
+  border-radius: var(--ys-r-pill);
+  background: var(--ys-hover);
+}
+
+.inlineNumbers {
+  color: var(--ys-ink-muted);
+  font-size: 12px;
+  font-weight: 500;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.01em;
+}

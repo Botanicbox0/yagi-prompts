@@ -9,9 +9,19 @@ export interface StorageMeterCardProps {
   locale: 'ko' | 'en';
   /** Optional link back to `/brand/library` when rendered on `/brand/settings`. */
   assetsHref?: string | null;
+  /**
+   * One quiet line (a short bar and the numbers) while there is nothing to act on. Near the limit, over it,
+   * or with a retention note to show, the full card is drawn regardless.
+   */
+  compact?: boolean;
 }
 
-export function StorageMeterCard({ storage, copy, locale, assetsHref = null }: StorageMeterCardProps) {
+/** Nothing to act on and nothing to announce: the meter may be drawn as one quiet line. */
+export function storageIsQuiet(storage: StudioStorageQuotaView): boolean {
+  return storage.state === 'ok' && storage.retentionDays === null;
+}
+
+export function StorageMeterCard({ storage, copy, locale, assetsHref = null, compact = false }: StorageMeterCardProps) {
   const used = formatStorageBytes(storage.usedBytes, locale);
   const quota = formatStorageBytes(storage.effectiveQuotaBytes, locale);
   const barWidth = `${Math.max(storage.usedBytes > 0 ? 2 : 0, Math.min(100, Math.round(storage.usageRatio * 100)))}%`;
@@ -22,6 +32,32 @@ export function StorageMeterCard({ storage, copy, locale, assetsHref = null }: S
       : storage.state === 'near_limit'
         ? fill(copy.nearLimitNotice, { used, quota, percent: storage.usagePercent })
         : null;
+
+  if (compact && storageIsQuiet(storage)) {
+    return (
+      <div
+        className={s.inline}
+        data-brand-storage-meter
+        data-storage-compact
+        data-storage-state={storage.state}
+        data-storage-upload-blocked={storage.uploadBlocked ? 'true' : 'false'}
+      >
+        <div
+          className={s.inlineTrack}
+          role="progressbar"
+          aria-label={copy.title}
+          aria-valuemin={0}
+          aria-valuemax={100}
+          aria-valuenow={Math.min(100, storage.usagePercent)}
+        >
+          <div className={s.fill} style={{ width: barWidth }} />
+        </div>
+        <span className={s.inlineNumbers} data-storage-numbers>
+          {fill(copy.usedOf, { used, quota, percent: storage.usagePercent })}
+        </span>
+      </div>
+    );
+  }
 
   return (
     <section

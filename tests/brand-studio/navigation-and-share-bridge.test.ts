@@ -27,7 +27,7 @@ import {
   imageCanvasHref,
   videoComposeClipHref,
 } from '@/components/brand-studio/studio-app';
-import { BrandAssetHub } from '@/components/brand-studio/asset-hub';
+import { BrandAssetHub, buildHubEntries, hubActions } from '@/components/brand-studio/asset-hub';
 import { ReviewApp } from '@/components/brand-studio/review/review-app';
 import {
   OPEN_SHARE_REVIEW_EVENT,
@@ -264,15 +264,13 @@ describe('2. Layer editor (꾸미기) 1-Click Direct Entry (studio-app.tsx + ass
     expect(viewerHtml).not.toContain('data-studio-open-canvas');
   });
 
-  it('renders 꾸미기 on image cards, 편집 스튜디오로 on video cards, and 검수 · 공유 in Asset Hub', () => {
+  it('offers 꾸미기 on image tiles, 편집 스튜디오로 on video tiles, and 검수 · 공유 in Asset Hub', () => {
     const imgAsset = fixtureAsset(1, { kind: 'image', name: 'Packshot.png' });
     const vidAsset = fixtureAsset(2, { kind: 'video', name: 'Teaser.mp4', seconds: 8 });
     const genImg = fixtureOutput(3, { kind: 'image' });
-    const state = studioState({
-      canCreate: true,
-      assets: [imgAsset, vidAsset],
-      jobs: [fixtureJob(1, { outputs: [genImg] })],
-    });
+    const assets = [imgAsset, vidAsset];
+    const jobs = [fixtureJob(1, { outputs: [genImg] })];
+    const state = studioState({ canCreate: true, assets, jobs });
 
     const html = renderToStaticMarkup(
       createElement(BrandAssetHub, {
@@ -284,14 +282,40 @@ describe('2. Layer editor (꾸미기) 1-Click Direct Entry (studio-app.tsx + ass
       }),
     );
 
-    expect(html).toContain('data-asset-hub-open-canvas');
-    expect(html).toMatch(new RegExp(`data-asset-hub-open-canvas[^>]*>${ko.brandStudio.gallery.menu.decorate}<`));
-    expect(html).not.toContain('캔버스 편집');
-    expect(html).toContain(`href="/brand/studio?organizationId=${ORG}&amp;canvas=a%3A${imgAsset.id}"`);
-    expect(html).toContain(`href="/brand/studio?organizationId=${ORG}&amp;canvas=o%3A${genImg.id}"`);
+    // Since 2026-11-16 a tile shows one main action; the rest live in its "more" menu and its sheet, both built
+    // from `hubActions`. The video tile's main action is the editing studio.
     expect(html).toContain('data-asset-hub-open-compose');
+    expect(html).toMatch(new RegExp(`data-asset-hub-open-compose[^>]*>${ko.studioLibrary.hub.openInCompose}<`));
+    expect(ko.studioLibrary.hub.openInCompose).toBe('편집 스튜디오로');
     expect(html).toContain(`href="/brand/studio/compose?organizationId=${ORG}&amp;clip=a%3A${vidAsset.id}"`);
-    expect(html.match(/data-asset-hub-share-review/g)).toHaveLength(3);
+    expect(html).not.toContain('캔버스 편집');
+
+    const h = ko.studioLibrary.hub;
+    const copy = {
+      useImage: h.openInImage,
+      decorate: ko.brandStudio.gallery.menu.decorate,
+      makeVideo: h.openInVideo,
+      compose: h.openInCompose,
+      reverse: h.reverseVideo,
+      share: h.shareReview,
+      similar: h.findSimilar,
+      edit: ko.studioLibrary.uploads.edit,
+    };
+    const entries = buildHubEntries(assets, jobs, h.sourceGenerated);
+    const actionsOf = (key: string) => {
+      const { main, more } = hubActions(entries.find((e) => e.key === key)!, { organizationId: ORG, canOpenStudio: true, canCreate: true, copy });
+      return [...(main ? [main] : []), ...more];
+    };
+    const decorate = (key: string) => actionsOf(key).find((a) => a.marker === 'data-asset-hub-open-canvas');
+    expect(decorate(`a:${imgAsset.id}`)).toMatchObject({ label: '꾸미기', href: `/brand/studio?organizationId=${ORG}&canvas=a%3A${imgAsset.id}` });
+    expect(decorate(`o:${genImg.id}`)).toMatchObject({ label: '꾸미기', href: `/brand/studio?organizationId=${ORG}&canvas=o%3A${genImg.id}` });
+    expect(decorate(`a:${vidAsset.id}`)).toBeUndefined();
+    expect(h.shareReview).toBe('검수 · 공유');
+    for (const key of [`a:${imgAsset.id}`, `a:${vidAsset.id}`, `o:${genImg.id}`]) {
+      expect(actionsOf(key).filter((a) => a.marker === 'data-asset-hub-share-review')).toEqual([
+        { key: 'share', label: '검수 · 공유', marker: 'data-asset-hub-share-review' },
+      ]);
+    }
   });
 });
 
