@@ -74,6 +74,8 @@ export interface DockProps {
   notice?: string | null;
   /** The screen's latest status line, shown as a small pill above the bar (the screen announces it). */
   toast?: string | null;
+  /** The project this run goes into, when one is chosen (`BRAND_STUDIO_PROJECTS`). Absent: nothing is drawn. */
+  project?: { title: string; hint: string } | null;
   film: FilmState | null;
   uploading: readonly string[];
   initialOpenRef?: string | null;
@@ -632,6 +634,13 @@ export function Dock(props: DockProps) {
           )}
         </div>
         <div className="bs-controls-end">
+          {props.project && (
+            <span className="bs-chip bs-dock-project" title={props.project.hint} data-studio-dock-project>
+              <StudioIcon name="folder" />
+              <span className="bs-dock-project-name">{props.project.title}</span>
+              <span className="bs-sr">{props.project.hint}</span>
+            </span>
+          )}
           <button
             type="submit"
             className="bs-btn bs-submit"

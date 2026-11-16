@@ -19,6 +19,7 @@ import {
   type AssetUpdateSchema,
   type CampaignHandoffSchema,
   type FilmAnalyzeSchema,
+  type JobAssignProjectSchema,
   type JobRefSchema,
   type OutputRefSchema,
   type PromptPreviewSchema,
@@ -35,6 +36,7 @@ import {
   type StudioHandoffDone,
   type StudioJobCreateSchema,
   type StudioJobCreated,
+  type StudioJobProjectAssigned,
   type StudioJobsPoll,
   type StudioOperation,
   type StudioPromptPreview,
@@ -61,6 +63,7 @@ export interface StudioOps {
   "asset.from_output": [z.input<typeof AssetFromOutputSchema>, StudioAssetSaved];
   "output.delete": [z.input<typeof OutputRefSchema>, StudioDone];
   "job.delete": [z.input<typeof JobRefSchema>, StudioDone];
+  "job.assign_project": [z.input<typeof JobAssignProjectSchema>, StudioJobProjectAssigned];
   "handoff.campaign": [z.input<typeof CampaignHandoffSchema>, StudioHandoffDone];
 }
 // Compile-time guard: every contract operation has a row above and nothing else does.

@@ -10,6 +10,7 @@ import {
   type StudioJobView,
   type StudioJobsPoll,
   type StudioOutputView,
+  type StudioProjectRef,
   type StudioState,
 } from "@/lib/brand-studio/contracts";
 
@@ -28,7 +29,9 @@ export type StudioAction =
   | { type: "assetRemoved"; id: string }
   | { type: "outputSaved"; outputId: string; assetId: string }
   | { type: "outputRemoved"; outputId: string }
-  | { type: "jobRemoved"; jobId: string };
+  | { type: "jobRemoved"; jobId: string }
+  | { type: "jobsProject"; jobIds: readonly string[]; projectId: string | null }
+  | { type: "projectAdded"; project: StudioProjectRef };
 
 export function initialStore(state?: StudioState | null): StudioStore {
   return state ? { phase: "ready", state } : { phase: "loading", state: null };
@@ -79,6 +82,22 @@ export function studioReducer(store: StudioStore, action: StudioAction): StudioS
       }));
     case "jobRemoved":
       return withState(store, (s) => ({ ...s, jobs: s.jobs.filter((job) => job.id !== action.jobId) }));
+    case "jobsProject": {
+      const moved = new Set(action.jobIds);
+      return withState(store, (s) => ({
+        ...s,
+        jobs: s.jobs.map((job) => {
+          if (!moved.has(job.id)) return job;
+          const { projectId: _was, ...rest } = job;
+          return action.projectId ? { ...rest, projectId: action.projectId } : rest;
+        }),
+      }));
+    }
+    case "projectAdded":
+      // Only while the feature is open (the list exists); newest first, as the server lists them.
+      return withState(store, (s) =>
+        s.projects ? { ...s, projects: [action.project, ...s.projects.filter((project) => project.id !== action.project.id)] } : s,
+      );
     case "outputRemoved":
       return withState(store, (s) => ({
         ...s,

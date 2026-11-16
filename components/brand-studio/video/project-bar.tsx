@@ -347,3 +347,159 @@ export function VideoProjectBar({
     </div>
   );
 }
+
+export interface ImageProjectBarProps {
+  canEdit: boolean;
+  /** The project new pictures go into; null is the default (no project). */
+  projectId: string | null;
+  projects: ReadonlyArray<{ id: string; title: string }>;
+  copy: StudioVideoCopy["workspace"]["projects"];
+  /** "프로젝트 없음": the first choice, and the state the bar starts in. */
+  noneLabel: string;
+  onSelectProject(projectId: string | null): void;
+  /** Makes a project with this title and resolves true once it is chosen. */
+  onCreateProject(title: string): Promise<boolean>;
+}
+
+/**
+ * The image studio's project bar: the video studio's switcher with only what a picture needs (choose, make
+ * a new one, see its name). Everything that belongs to a sequence (save state, complete, send a clip, layout
+ * presets, review, exports, delete) stays in the video studio.
+ */
+export function ImageProjectBar({ canEdit, projectId, projects, copy, noneLabel, onSelectProject, onCreateProject }: ImageProjectBarProps) {
+  const [menuOpen, setMenuOpen] = useState(false);
+  const [naming, setNaming] = useState(false);
+  const [draftTitle, setDraftTitle] = useState("");
+  const [busy, setBusy] = useState(false);
+  const wrapRef = useRef<HTMLDivElement>(null);
+  const current = projects.find((p) => p.id === projectId) ?? null;
+
+  useEffect(() => {
+    if (!menuOpen) return;
+    const onPointerDown = (event: MouseEvent) => {
+      if (wrapRef.current && !wrapRef.current.contains(event.target as Node)) setMenuOpen(false);
+    };
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setMenuOpen(false);
+    };
+    window.addEventListener("mousedown", onPointerDown);
+    window.addEventListener("keydown", onKey);
+    return () => {
+      window.removeEventListener("mousedown", onPointerDown);
+      window.removeEventListener("keydown", onKey);
+    };
+  }, [menuOpen]);
+
+  const commit = async () => {
+    const title = draftTitle.trim();
+    if (!title || busy) {
+      if (!title) setNaming(false);
+      return;
+    }
+    setBusy(true);
+    const made = await onCreateProject(title);
+    setBusy(false);
+    if (made) {
+      setNaming(false);
+      setDraftTitle("");
+    }
+  };
+
+  return (
+    <div ref={wrapRef} className={w.projectBar} data-studio-project-bar data-project={current ? current.id : ""}>
+      <div className={w.projectBarStart}>
+        <div className={w.projectDropdownAnchor}>
+          <button type="button" className={w.projectDropdownBtn} aria-expanded={menuOpen} onClick={() => setMenuOpen((prev) => !prev)} data-studio-project-switcher>
+            <span>{copy.myProjects}</span>
+            <span className={w.projectCountChip}>{projects.length}</span>
+          </button>
+
+          {menuOpen && (
+            <div className={w.projectMenu} role="menu" data-studio-project-menu>
+              <div className={w.projectMenuHead}>
+                <span>{copy.myProjects}</span>
+                {canEdit && (
+                  <button
+                    type="button"
+                    className={w.projectNewBtn}
+                    onClick={() => {
+                      setMenuOpen(false);
+                      setDraftTitle("");
+                      setNaming(true);
+                    }}
+                    data-studio-project-new
+                  >
+                    {copy.newProject}
+                  </button>
+                )}
+              </div>
+              <ul className={w.projectList}>
+                <li>
+                  <button
+                    type="button"
+                    className={w.projectItemBtn}
+                    data-active={current ? undefined : ""}
+                    onClick={() => {
+                      setMenuOpen(false);
+                      onSelectProject(null);
+                    }}
+                    data-studio-project-option=""
+                  >
+                    <span className={w.projectItemTitle}>{noneLabel}</span>
+                  </button>
+                </li>
+                {projects.map((p) => (
+                  <li key={p.id}>
+                    <button
+                      type="button"
+                      className={w.projectItemBtn}
+                      data-active={p.id === current?.id ? "" : undefined}
+                      onClick={() => {
+                        setMenuOpen(false);
+                        onSelectProject(p.id);
+                      }}
+                      data-studio-project-option={p.id}
+                    >
+                      <span className={w.projectItemTitle}>{p.title}</span>
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+        </div>
+
+        {naming && canEdit ? (
+          <input
+            type="text"
+            className={w.projectTitleInput}
+            aria-label={copy.renameLabel}
+            placeholder={copy.renamePlaceholder}
+            value={draftTitle}
+            maxLength={120}
+            autoFocus
+            disabled={busy}
+            onChange={(e) => setDraftTitle(e.target.value)}
+            onBlur={() => void commit()}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") {
+                e.preventDefault();
+                void commit();
+              } else if (e.key === "Escape") {
+                setDraftTitle("");
+                setNaming(false);
+              }
+            }}
+            data-studio-project-title-input
+          />
+        ) : (
+          current && (
+            <span className={w.projectSaveState} data-studio-project-title>
+              {current.title}
+            </span>
+          )
+        )}
+      </div>
+    </div>
+  );
+}
