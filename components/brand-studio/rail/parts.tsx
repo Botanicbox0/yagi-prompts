@@ -92,7 +92,11 @@ export interface MenuItem {
   tone?: "danger";
   /** A quiet group heading drawn above this item. */
   before?: string;
-  run(): void;
+  /** Somewhere to go: the item is drawn as a link (it opens in a new tab like any link) and `run` is optional. */
+  href?: string;
+  /** `data-*` markers for tests and scripts. */
+  attrs?: Record<`data-${string}`, string>;
+  run?(): void;
 }
 
 /** What every tab shares: copy, permissions, the press targets and the one open menu. */
@@ -150,7 +154,7 @@ export function RailMenu({
   }, [open]);
   useEffect(() => {
     if (!open || !place) return;
-    list.current?.querySelector<HTMLButtonElement>("[role=menuitem]")?.focus();
+    list.current?.querySelector<HTMLElement>("[role=menuitem]")?.focus();
     const away = (event: PointerEvent) => {
       const target = event.target as Node | null;
       if (target && !list.current?.contains(target) && !trigger.current?.contains(target)) toggle.current(false);
@@ -172,8 +176,8 @@ export function RailMenu({
     trigger.current?.focus();
   };
   const keys = (event: KeyboardEvent<HTMLDivElement>) => {
-    const entries = Array.from(list.current?.querySelectorAll<HTMLButtonElement>("[role=menuitem]") ?? []);
-    const at = entries.indexOf(document.activeElement as HTMLButtonElement);
+    const entries = Array.from(list.current?.querySelectorAll<HTMLElement>("[role=menuitem]") ?? []);
+    const at = entries.indexOf(document.activeElement as HTMLElement);
     if (event.key === "Escape") {
       event.stopPropagation();
       close();
@@ -210,17 +214,33 @@ export function RailMenu({
                   {item.before}
                 </p>
               )}
-              <button
-                type="button"
-                role="menuitem"
-                data-tone={item.tone}
-                onClick={() => {
-                  onToggle(false);
-                  item.run();
-                }}
-              >
-                {item.label}
-              </button>
+              {item.href ? (
+                <a
+                  role="menuitem"
+                  href={item.href}
+                  data-tone={item.tone}
+                  {...item.attrs}
+                  onClick={() => {
+                    onToggle(false);
+                    item.run?.();
+                  }}
+                >
+                  {item.label}
+                </a>
+              ) : (
+                <button
+                  type="button"
+                  role="menuitem"
+                  data-tone={item.tone}
+                  {...item.attrs}
+                  onClick={() => {
+                    onToggle(false);
+                    item.run?.();
+                  }}
+                >
+                  {item.label}
+                </button>
+              )}
             </Fragment>
           ))}
         </div>,

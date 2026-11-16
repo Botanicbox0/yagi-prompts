@@ -301,6 +301,7 @@
   white-space: nowrap;
   cursor: pointer;
 }
+.bsr-menu a[role="menuitem"] { display: block; flex: none; line-height: 32px; text-decoration: none; }
 .bsr-menu [role="menuitem"]:hover, .bsr-menu [role="menuitem"]:focus-visible { background: var(--ys-hover); }
 .bsr-menu [role="menuitem"][data-tone="danger"] { color: var(--ys-danger); }
 .bsr-menu-heading { margin: 6px 10px 2px; color: var(--ys-ink-muted); font-size: 11px; font-weight: 500; }
