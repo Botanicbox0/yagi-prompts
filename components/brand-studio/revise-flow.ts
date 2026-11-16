@@ -12,6 +12,7 @@
  */
 import {
   STUDIO_LIMITS,
+  STUDIO_REVISE_MATERIALS_MAX,
   STUDIO_REVISE_MODES,
   type ReviseMark,
   type StudioJobCreated,
@@ -33,6 +34,8 @@ export interface ReviseState {
   picked: boolean;
   prompt: string;
   references: TrayItem[];
+  /** Videos to read for this request (never sent to the video model): a texture, a movement, a look. */
+  materials: TrayItem[];
   suggestion: { mode: StudioReviseMode; reason: StudioReviseReason | null } | null;
   /** Spots pointed at on the clip, in order (mark n is the n-th circled digit in `prompt`). */
   marks: MarkState[];
@@ -67,6 +70,9 @@ export type ReviseMarkReadInput = { organizationId: string; outputId: string; fr
 /** Most references one version may add (the run keeps a place for the clip itself). */
 export const REVISE_REFERENCES_MAX = STUDIO_LIMITS.referencesMax - 1;
 
+/** Most videos one version may carry as material to read. */
+export const REVISE_MATERIALS_MAX = STUDIO_REVISE_MATERIALS_MAX;
+
 export const initialReviseState = (): ReviseState => ({
   phase: "loading",
   plan: null,
@@ -74,6 +80,7 @@ export const initialReviseState = (): ReviseState => ({
   picked: false,
   prompt: "",
   references: [],
+  materials: [],
   suggestion: null,
   marks: [],
   note: null,
@@ -87,7 +94,7 @@ export function openMode(plan: StudioRevisePlan | null, wanted: StudioReviseMode
 
 export type ReviseCreateInput = ReturnType<typeof toCreate>;
 
-function toCreate(input: { organizationId: string; outputId: string; mode: StudioReviseMode; prompt: string; references: TrayItem[]; marks: readonly MarkState[] }) {
+function toCreate(input: { organizationId: string; outputId: string; mode: StudioReviseMode; prompt: string; references: TrayItem[]; materials: TrayItem[]; marks: readonly MarkState[] }) {
   return {
     kind: "video_revise" as const,
     organizationId: input.organizationId,
@@ -97,6 +104,10 @@ function toCreate(input: { organizationId: string; outputId: string; mode: Studi
     prompt: input.prompt.trim(),
     references: toReferences(input.references.filter((r) => r.kind === "image"), "image"),
     marks: toWireMarks(input.marks),
+    materials: input.materials
+      .filter((m) => m.kind === "video")
+      .slice(0, REVISE_MATERIALS_MAX)
+      .map((m) => (m.assetId ? { assetId: m.assetId } : { outputId: m.outputId! })),
   };
 }
 
@@ -154,12 +165,12 @@ export function createReviseFlow(deps: ReviseDeps) {
 
   async function create(mode: StudioReviseMode) {
     set({ phase: "sending", mode, suggestion: null, note: null });
-    const result = await deps.create(toCreate({ organizationId: deps.organizationId, outputId: deps.outputId, mode, prompt: state.prompt, references: state.references, marks: state.marks }));
+    const result = await deps.create(toCreate({ organizationId: deps.organizationId, outputId: deps.outputId, mode, prompt: state.prompt, references: state.references, materials: state.materials, marks: state.marks }));
     if (isFailure(result)) return set({ phase: "ready", note: result.code });
     // The form clears; the plan answers the next version's number on the next open.
     const plan = state.plan ? { ...state.plan, version: state.plan.version + 1 } : null;
     reads.clear();
-    set({ phase: "ready", prompt: "", references: [], marks: [], picked: false, plan });
+    set({ phase: "ready", prompt: "", references: [], materials: [], marks: [], picked: false, plan });
     deps.onCreated?.(result);
   }
 
@@ -203,6 +214,27 @@ export function createReviseFlow(deps: ReviseDeps) {
     },
     setReferences(references: TrayItem[]) {
       set({ references: references.filter((r) => r.kind === "image").slice(0, REVISE_REFERENCES_MAX), ...edited() });
+    },
+    setMaterials(materials: TrayItem[]) {
+      set({ materials: materials.filter((m) => m.kind === "video").slice(0, REVISE_MATERIALS_MAX), ...edited() });
+    },
+    /**
+     * Adds what the customer dropped or picked: pictures become references, videos material to read.
+     * Returns how many were left out because that kind is full.
+     */
+    attach(items: readonly TrayItem[]): number {
+      const references = [...state.references];
+      const materials = [...state.materials];
+      let left = 0;
+      for (const item of items) {
+        const list = item.kind === "image" ? references : item.kind === "video" ? materials : null;
+        if (!list) continue;
+        if (list.some((x) => x.key === item.key)) continue;
+        if (list.length >= (item.kind === "image" ? REVISE_REFERENCES_MAX : REVISE_MATERIALS_MAX)) left += 1;
+        else list.push(item);
+      }
+      if (references.length !== state.references.length || materials.length !== state.materials.length) set({ references, materials, ...edited() });
+      return left;
     },
     note(code: string | null) {
       set({ note: code });

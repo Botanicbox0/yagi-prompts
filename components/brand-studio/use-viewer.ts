@@ -240,17 +240,19 @@ export function useViewer(input: {
       recent: [
         ...jobs.flatMap((job) => job.outputs.filter((o) => o.kind === "image").map((o) => trayItemFromOutput(o, copy.viewer.label))).slice(0, 12),
         ...assets.filter((a) => a.kind === "image").slice(0, 6).map(trayItemFromAsset),
+        // Videos the team uploaded: material a revision can read (a texture, a movement, a look).
+        ...assets.filter((a) => a.kind === "video").slice(0, 4).map(trayItemFromAsset),
       ],
       resolve: (source: RefSource) => {
         const asset = "assetId" in source ? lookup.asset(source.assetId) : null;
         const output = "outputId" in source ? lookup.output(source.outputId) : null;
         const item = asset ? trayItemFromAsset(asset) : output ? trayItemFromOutput(output, copy.viewer.label) : null;
-        return item?.kind === "image" ? item : null;
+        return item?.kind === "image" || item?.kind === "video" ? item : null;
       },
       upload: async (files: File[]) => {
         const added: TrayItem[] = [];
         for (const file of files) {
-          if (!file.type.startsWith("image/") || uploadProblem(file)) continue;
+          if (!(file.type.startsWith("image/") || file.type.startsWith("video/")) || uploadProblem(file)) continue;
           const result = await studio.upload(file);
           if (!isFailure(result)) added.push(trayItemFromAsset(result.asset));
         }

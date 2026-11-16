@@ -353,6 +353,37 @@ export async function revisionInput(
   }
 }
 
+/**
+ * What the material attached to a revision shows, read for its request (lib/brand-studio/revision/
+ * material.ts). Material that is gone or cannot be read is left out: the revision goes on without it.
+ */
+export async function materialNotes(
+  deps: Pick<StudioDeps, 'sql' | 'media' | 'env' | 'intel' | 'intelDeps'>,
+  job: Pick<JobRow, 'organization_id' | 'prompt' | 'params'>,
+  madeWith: string,
+): Promise<NonNullable<NonNullable<EnhanceInput['revision']>['materials']>> {
+  const stored = job.params?.revision?.materials ?? [];
+  const read = deps.intel.readMaterial;
+  if (!stored.length || !read) return [];
+  const request = replaceMarks(job.prompt, job.params?.revision?.marks ?? []);
+  const notes = await Promise.all(
+    stored.map(async (material) => {
+      try {
+        const [ref] = await resolveReferences(deps.sql, job.organization_id, [material], deps.media, job.params.locale ?? 'ko');
+        if (!ref || ref.kind !== 'video') return null;
+        const video =
+          deps.media.kind === 'r2'
+            ? { url: providerUrl(deps, ref.url) }
+            : { bytes: await deps.media.read(ref.key), mime: ref.key.endsWith('.mov') ? 'video/quicktime' : 'video/mp4' };
+        return await read({ video, request, madeWith }, deps.intelDeps);
+      } catch {
+        return null;
+      }
+    }),
+  );
+  return notes.flatMap((text) => (text ? [text] : [])).map((text, i) => ({ n: i + 1, kind: 'video' as const, notes: text }));
+}
+
 export async function prepareJob(deps: StudioDeps, job: JobRow): Promise<{ finalPrompt: string | null; work: StudioJobWork }> {
   const model = studioModel(job.model);
   if (!model) throw new PrepareFailure('failed', `unknown model ${job.model}`);
@@ -409,7 +440,9 @@ export async function prepareJob(deps: StudioDeps, job: JobRow): Promise<{ final
   // Enhancement off: the customer's words go as they are, or the rewritten sentence they already read.
   if (!job.enhance) return { finalPrompt: job.params?.reviewedPrompt?.trim() || null, work: { ...work, prepared: true } };
   const organization = (await deps.sql.query<{ name: string }>('select name from brand_organizations where id = $1', [job.organization_id])).rows[0];
-  const revised = await revisionInput(deps, job, resolved);
+  const history = await revisionInput(deps, job, resolved);
+  const materials = history ? await materialNotes(deps, job, history.revision.madeWith) : [];
+  const revised = history && materials.length ? { ...history, revision: { ...history.revision, materials } } : history;
   // Without the clip's history the marks cannot travel as context: their words go into the request.
   const stillMarked = !revised && job.params?.revision?.marks?.length ? replaceMarks(job.prompt, job.params.revision.marks) : null;
   const input = enhanceInputOf(

@@ -4,9 +4,9 @@ import type { StudioJobView, StudioRevisePlan } from "@/lib/brand-studio/contrac
 import { creditsOf } from "@/lib/brand-studio/credits";
 import { Wall, type WallProps } from "@/components/brand-studio/gallery/wall";
 import { Viewer, shownVersion, type ViewerActions, type ViewerItem, type ViewerProps } from "@/components/brand-studio/viewer";
-import { ReviseFormView, VersionStrip, type ReviseFormViewProps, type ReviseSupport } from "@/components/brand-studio/revise-form";
+import { ReviseFormView, VersionStrip, noteLine, type ReviseFormViewProps, type ReviseSupport } from "@/components/brand-studio/revise-form";
 import type { MarkState } from "@/components/brand-studio/revise-marks";
-import { createReviseFlow, initialReviseState, type ReviseState } from "@/components/brand-studio/revise-flow";
+import { REVISE_MATERIALS_MAX, REVISE_REFERENCES_MAX, createReviseFlow, initialReviseState, type ReviseState } from "@/components/brand-studio/revise-flow";
 import { chainOf } from "@/components/brand-studio/revision-model";
 import { credits, fill } from "@/components/brand-studio/copy";
 import { trayItemFromAsset } from "@/components/brand-studio/refs";
@@ -133,6 +133,55 @@ describe("the next-version form", () => {
     );
   const markState = (patch: Partial<MarkState>): MarkState => ({ key: "m", time: 2.4, x: 0.5, y: 0.5, label: null, what: null, reading: false, ...patch });
 
+  it("opens with a title, a box for the request and a line that says pictures and videos can be dropped", () => {
+    const html = view({}, { onMaterials: noop });
+    expect(html).toContain(`data-revise-title="true">${copy.revise.title}`);
+    expect(html).toMatch(/data-revise-box="true"[^]*data-revise-prompt="true"[^]*data-revise-add="true"[^]*data-revise-drop-hint="true"/);
+    expect(html).toContain(copy.revise.dropHint);
+    expect(html).toContain(copy.revise.addRefs);
+    expect(html).toContain(`placeholder="${copy.revise.placeholder}"`);
+    // Without a way to take videos the panel offers pictures only.
+    const pictures = view({});
+    expect(pictures).toContain(copy.revise.dropHintImages);
+    expect(pictures).toContain(copy.revise.addImages);
+    expect(pictures).not.toContain("video/mp4");
+    expect(html).toContain("video/mp4");
+  });
+
+  it("names the button by what it does and says the current version stays", () => {
+    const html = view({});
+    expect(html).toMatch(new RegExp(`data-revise-submit="true"[^>]*><span>${copy.revise.submit}</span>`));
+    expect(copy.revise.submit).not.toMatch(/v{n}|vd/);
+    expect(html).toContain(`data-revise-after="true">${fill(copy.revise.after, { n: 4 })}`);
+    expect(html).toContain(copy.revise.hints.edit);
+    expect(html).toContain(copy.revise.hints.reshoot);
+  });
+
+  it("shows attached pictures numbered and attached videos as material, with one line on how a video is used", () => {
+    const picture = trayItemFromAsset(asset(2));
+    const film = { ...trayItemFromAsset(asset(3)), kind: "video" as const, thumbUrl: null };
+    const none = view({}, { onMaterials: noop });
+    expect(none).not.toContain("data-revise-refs");
+    expect(none).not.toContain("data-revise-material-note");
+    const html = view({ references: [picture], materials: [film] }, { onMaterials: noop });
+    expect(html).toMatch(/data-revise-ref="1"/);
+    expect(html).toMatch(/data-revise-material="1"[^]*<video /);
+    expect(html).toContain(copy.revise.materialLabel);
+    expect(html).toContain(`data-revise-material-note="true">${copy.revise.materialNote}`);
+    expect(html).toContain(fill(copy.revise.removeMaterial, { n: 1 }));
+  });
+
+  it("offers recent pictures and videos; one already attached or over its limit cannot be added again", () => {
+    const picture = trayItemFromAsset(asset(2));
+    const film = { ...trayItemFromAsset(asset(3)), kind: "video" as const };
+    const other = { ...trayItemFromAsset(asset(4)), kind: "video" as const };
+    const third = { ...trayItemFromAsset(asset(5)), kind: "video" as const };
+    const html = view({ materials: [film, other] }, { onMaterials: noop, recent: [picture, film, third] });
+    const buttons = [...html.matchAll(/<button type="button" class="bs-thumb" data-kind="(image|video)"( data-taken="")?( disabled="")?/g)].map((m) => [m[1], Boolean(m[2]), Boolean(m[3])]);
+    expect(buttons).toEqual([["image", false, false], ["video", true, true], ["video", false, true]]);
+    expect(noteLine("attach_full", { ...initialReviseState(), phase: "ready" }, copy)).toBe(fill(copy.revise.attachFull, { images: REVISE_REFERENCES_MAX, videos: REVISE_MATERIALS_MAX }));
+  });
+
   it("offers the mark button only for a clip on screen, with one hint line while no mark exists", () => {
     expect(view({})).not.toContain("data-revise-mark-toggle");
     const off = view({}, { markMode: false });
@@ -227,6 +276,22 @@ describe("the next-version form", () => {
     expect(planCalls).toEqual([{ organizationId: ORG, outputId: output(3).id, prompt: "", references: [], marks: [] }]);
     expect(flow.state.mode).toBe("reshoot");
     expect(flow.state.plan?.version).toBe(4);
+  });
+
+  it("sorts what is attached: pictures become references, videos material, each up to its limit", async () => {
+    const { flow, created } = flowWith([plan(), plan({ recommended: "edit", reason: "surface" })]);
+    await flow.load();
+    const film = (n: number) => ({ ...trayItemFromAsset(asset(n)), kind: "video" as const });
+    expect(flow.attach([trayItemFromAsset(asset(2)), film(3), film(4)])).toBe(0);
+    expect(flow.attach([film(3)])).toBe(0);
+    expect(flow.attach([film(5)])).toBe(1);
+    expect(flow.state.references.map((r) => r.assetId)).toEqual([asset(2).id]);
+    expect(flow.state.materials.map((m) => m.assetId)).toEqual([asset(3).id, asset(4).id]);
+    flow.setMaterials(flow.state.materials.slice(1));
+    flow.setPrompt("제형이 더 걸쭉하게");
+    await flow.submit();
+    expect(created).toEqual([expect.objectContaining({ references: [{ assetId: asset(2).id }], materials: [{ assetId: asset(4).id }] })]);
+    expect(flow.state).toMatchObject({ references: [], materials: [] });
   });
 
   it("creates the version at once when the plan agrees, then clears the form", async () => {

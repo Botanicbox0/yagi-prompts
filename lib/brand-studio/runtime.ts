@@ -8,6 +8,7 @@ import { getStorage } from '@/lib/storage';
 import { compileDirectorPrompt, composeDirectorFallbackPrompt } from './director';
 import { composeFallbackPrompt, enhancePrompt } from './enhancer';
 import { rewriteBlockedPrompt } from './enhancer/blocked';
+import { readMaterial } from './revision/material';
 import { readFilm } from './film-sheet';
 import { compositeRegion, cropForEdit, planRegion } from './region-edit';
 import { advanceStudioJobsWith, sweepStudio } from './engine';
@@ -31,6 +32,7 @@ const intel: StudioIntel = {
   composeFallbackPrompt: (input: EnhanceInput) =>
     isSeedanceVideo(input) ? composeDirectorFallbackPrompt(input) : composeFallbackPrompt(input),
   readFilm,
+  readMaterial,
   rewriteBlockedPrompt,
   planRegion,
   cropForEdit,

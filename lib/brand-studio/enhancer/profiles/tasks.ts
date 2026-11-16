@@ -146,6 +146,11 @@ function marksRule(mode: 'edit' | 'reshoot'): string {
   return `①, ② and ③ in the request are marks the customer placed on the clip: mark n is "revision.marks[n-1]", whose "what" says what it is on and "time" the second it was placed at. Wherever the request uses a mark, write that description instead${words}. When "what" is null, describe the thing by where it is in the frame at that second (use "x","y" as a rough position: left / centre / right, top / middle / bottom). Never write ①②③, the word mark, coordinates or a ring in the prompt.`;
 }
 
+/** Material the customer attached to show what they mean, already read into notes (revision/material.ts). */
+function materialsRule(): string {
+  return '"revision.materials" are notes on videos the customer attached to show what they mean (a texture, a movement, a look). The video model never receives those videos. Take from each note only what the request needs and write it into the change as plain, concrete description: how it looks, how it moves and how fast, how light sits on it. Never mention a reference video, attached material or notes in the prompt, and never write a token for one.';
+}
+
 /**
  * A new version of a generated clip (lib/brand-studio/revision). The earlier prompt and requests travel
  * in the user turn ("revision.madeWith", "revision.history"); these rules say what to do with them.
@@ -156,7 +161,7 @@ function revisionTask(input: EnhanceInput, binding: Binding): string {
   const previous = Math.max(1, revision.version - 1);
   const hasHistory = revision.history.length > 0;
   const never = 'Never mention versions, an earlier prompt, earlier requests or this history in the prompt.';
-  const marks = revision.marks?.length ? `\n${marksRule(revision.mode)}` : '';
+  const marks = (revision.marks?.length ? `\n${marksRule(revision.mode)}` : '') + (revision.materials?.length ? `\n${materialsRule()}` : '');
   if (revision.mode === 'edit') {
     const ref = binding.bound.find((b) => b.ref.kind === 'video')?.token ?? '@Video1';
     const pictures = binding.bound.some((b) => b.ref.kind === 'image' && b.token)

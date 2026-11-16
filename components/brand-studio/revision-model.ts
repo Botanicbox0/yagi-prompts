@@ -152,5 +152,7 @@ export function reviseRerunInput(job: StudioJobView, ids: { organizationId: stri
     prompt: job.prompt,
     references,
     marks: revision.marks ?? [],
+    // The videos read for that request are read again (they were never among the references).
+    materials: (revision.materials ?? []).map((m) => ({ ...m })),
   };
 }

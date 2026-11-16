@@ -287,6 +287,13 @@ export type StudioReviseMode = (typeof STUDIO_REVISE_MODES)[number];
 export const STUDIO_REVISE_MARKS_MAX = 3;
 
 /**
+ * How many pieces of material one revision may carry: videos the customer attaches to show what they
+ * mean (a texture, a movement, a look). They are read and written into the request; the video model
+ * never receives them (lib/brand-studio/revision/material.ts).
+ */
+export const STUDIO_REVISE_MATERIALS_MAX = 2;
+
+/**
  * A spot the customer pointed at on the clip (docs/BRAND-STUDIO-V6-PLAN.md §4.5): a pin (a click) or a
  * box (a drag) on the frame at `time`, in fractions of the picture (0..1, origin top-left). A pin has
  * `x`/`y` only (its centre); a box adds `w`/`h` and `x`/`y` are its top-left corner. In the request text
@@ -348,6 +355,8 @@ export const VideoReviseJobSchema = z.object({
   references: z.array(StudioReferenceSchema).max(STUDIO_LIMITS.referencesMax - 1).default([]),
   /** Spots the request points at (①②③ in `prompt`), in order. */
   marks: z.array(ReviseMarkSchema).max(STUDIO_REVISE_MARKS_MAX).default([]),
+  /** Material to read for this request (videos of this organization; `frame` is not allowed). Never sent to the video model. */
+  materials: z.array(StudioReferenceSchema).max(STUDIO_REVISE_MATERIALS_MAX).default([]),
 });
 
 export const StudioJobCreateSchema = z.discriminatedUnion('kind', [
@@ -572,6 +581,8 @@ export interface StudioJobView {
     added: number;
     /** The spots this version's request pointed at (①②③ in `prompt`). */
     marks?: ReviseMark[];
+    /** The material read for this version's request (videos; never among `references`). */
+    materials?: Array<{ assetId?: string; outputId?: string }>;
   } | null;
   outputs: StudioOutputView[];
   /** Usage this run is expected to take from the monthly allowance, in KRW. */

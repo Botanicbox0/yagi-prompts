@@ -66,6 +66,7 @@ export interface EnhanceInput {
     madeWith: string;
     history: string[];
     marks?: Array<{ n: number; time: number; what: string | null; x: number; y: number; w?: number; h?: number; label?: string | null }>;
+    materials?: Array<{ n: number; kind: 'video'; notes: string }>;
   } | null;
 }
 export interface EnhanceResult {
@@ -89,6 +90,8 @@ export interface StudioIntel {
   enhancePrompt(input: EnhanceInput, deps: IntelDeps): Promise<EnhanceResult>;
   composeFallbackPrompt(input: EnhanceInput): EnhanceResult;
   readFilm(input: { video: { bytes: Uint8Array; mime: string } | { url: string }; locale: 'ko' | 'en'; depth?: FilmDepth }, deps: IntelDeps): Promise<FilmSheet | null>;
+  /** Optional so a test double may leave it out; without it attached material is simply not read. */
+  readMaterial?(input: { video: { bytes: Uint8Array; mime: string } | { url: string }; request: string; madeWith: string }, deps: IntelDeps): Promise<string | null>;
   /** Optional so a test double may leave it out; without it a blocked run is simply not retried. */
   rewriteBlockedPrompt?(input: BlockedInput, deps: IntelDeps): Promise<BlockedRewrite>;
   planRegion(image: { width: number; height: number }, box: RegionBox, aspects: readonly string[]): RegionPlan;
@@ -173,6 +176,8 @@ export interface StudioJobParams {
     added: number;
     /** Spots the request points at (①②③ in the prompt), as sent: geometry, the chip label and the description. */
     marks?: Array<{ time: number; x: number; y: number; w?: number; h?: number; label?: string; what?: string }>;
+    /** Material read for this request (lib/brand-studio/revision/material.ts): videos, never sent to the video model. */
+    materials?: Array<{ assetId?: string; outputId?: string }>;
   };
 }
 

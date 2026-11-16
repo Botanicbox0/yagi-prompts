@@ -41,6 +41,11 @@ describe("viewer", () => {
     expect(html).toMatch(/<dialog[^>]*aria-labelledby=/);
     expect(html).toContain(copy.viewer.label);
     expect(actionNames(html)).toEqual(["region", "rerun", "decorate", "to-video", "reference", "save", "review", "campaign", "download", "delete"]);
+    // The sentence we wrote for the model is shown but not selectable; the customer's own words are.
+    expect(html).toContain('<p data-no-copy="">Enhanced prompt 1</p>');
+    expect(html.match(/data-no-copy/g)).toHaveLength(1);
+    // The handoff says where the result goes, in the rail's words.
+    expect(html).toContain(`title="${copyFor("ko").viewer.campaignHint}"`);
     expect(html.match(/class="bs-btn bs-action" data-variant="soft"/g)).toHaveLength(8);
     expect(html).toContain(`aria-label="${copy.viewer.prev}" disabled=""`);
     expect(html).not.toContain(`aria-label="${copy.viewer.next}" disabled=""`);
@@ -53,6 +58,8 @@ describe("viewer", () => {
     const copy = copyFor("en");
     const draft = output(3, { kind: "video", draft: true, savedAssetId: asset(1).id });
     const html = render([{ type: "output", output: draft, job: job(3, { kind: "video", finalPrompt: null, outputs: [draft] }) }], { actions: withMore, region }, "en");
+    // Nothing of ours to protect when the request went as written.
+    expect(html).not.toContain("data-no-copy");
     const names = actionNames(html);
     expect(names).toContain("finalize");
     expect(names).not.toContain("region");

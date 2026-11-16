@@ -117,6 +117,7 @@ export function jobView(row: JobRow, outputs: OutputRow[], media: StudioMediaSto
             baseOutputId: row.parent_output_id,
             mode: p.revision.mode,
             added: p.revision.added,
+            ...(p.revision.materials?.length ? { materials: p.revision.materials.map((m) => ({ ...m })) } : {}),
             ...(Array.isArray(p.revision.marks) && p.revision.marks.length
               ? { marks: p.revision.marks.map((m) => ({ ...m })) }
               : {}),

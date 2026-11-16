@@ -76,6 +76,18 @@ export interface EnhanceRevision {
    * (and `w`/`h` for a box) where it is, in fractions of the picture. Absent when there are none.
    */
   marks?: EnhanceMark[];
+  /**
+   * Material the customer attached to show what they mean, already read (lib/brand-studio/revision/
+   * material.ts): `notes` says in plain English what in it serves the request. The video model never
+   * sees the material itself. Absent when there is none or it could not be read.
+   */
+  materials?: EnhanceMaterial[];
+}
+
+export interface EnhanceMaterial {
+  n: number;
+  kind: 'video';
+  notes: string;
 }
 
 export interface EnhanceMark {

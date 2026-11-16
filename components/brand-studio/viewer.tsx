@@ -230,6 +230,8 @@ function ViewerContent({
   const clip = revise && openedItem.type === "output" && openedItem.output.kind === "video" ? openedItem.job : null;
   const chain = useMemo(() => (clip && revise ? chainOf(revise.jobs, clip) : []), [clip, revise]);
   const ownVersion = clip && revise ? (versionOf(revise.jobs, clip) ?? 1) : 1;
+  // A version of this clip is never offered as material for its own next version.
+  const reviseExclude = useMemo(() => chain.flatMap((entry) => (entry.output ? [`o:${entry.output.id}`] : [])), [chain]);
   const [selected, setSelected] = useState(ownVersion);
   const item = shownVersion(openedItem, chain, ownVersion, selected);
   const videoRef = useRef<HTMLVideoElement>(null);
@@ -336,7 +338,7 @@ function ViewerContent({
   }
 
   const output = item.type === "output" ? item.output : null;
-  const tiles: Array<{ name: string; icon: StudioIconName; label: string; run(): void; show: boolean }> = [
+  const tiles: Array<{ name: string; icon: StudioIconName; label: string; hint?: string; run(): void; show: boolean }> = [
     {
       name: "region",
       icon: "region",
@@ -357,7 +359,7 @@ function ViewerContent({
     { name: "save", icon: "save", label: v.save, run: () => output && actions.save(output), show: canCreate && Boolean(output) && !output?.savedAssetId },
     { name: "finalize", icon: "spark", label: v.finalize, run: () => output && actions.finalize(output), show: canGenerate && Boolean(output?.draft) },
     { name: "review", icon: "review", label: locale === "en" ? "Review & Share" : "검수 · 공유", run: () => actions.review?.(item), show: canCreate && Boolean(actions.review) },
-    { name: "campaign", icon: "send", label: v.campaign, run: () => actions.campaign(item), show: canCreate },
+    { name: "campaign", icon: "send", label: v.campaign, hint: v.campaignHint, run: () => actions.campaign(item), show: canCreate },
   ];
   const saved = canCreate && Boolean(output?.savedAssetId);
 
@@ -390,6 +392,7 @@ function ViewerContent({
             copy={copy}
             locale={locale}
             fallbackVersion={Math.max(1, ...chain.map((entry) => entry.version)) + 1}
+            exclude={reviseExclude}
             stage={file.kind === "video" && !region ? { video: videoRef, host: mediaHost, url: file.url } : null}
           />
         )}
@@ -446,6 +449,7 @@ function ViewerContent({
                   data-action={tile.name}
                   disabled={busy === tile.name}
                   aria-busy={busy === tile.name}
+                  title={tile.hint}
                   onClick={tile.run}
                 >
                   <StudioIcon name={tile.icon} />
@@ -503,7 +507,16 @@ function ViewerContent({
             <p className="bs-label">{v.yourPrompt}</p>
             <p>{job.prompt || copy.board.noPrompt}</p>
             <p className="bs-label">{v.sentPrompt}</p>
-            <p>{job.finalPrompt ?? v.notEnhanced}</p>
+            {/* Read here, not copied: no selection (CSS), no copy, cut, drag or context menu. */}
+            <p
+              data-no-copy={job.finalPrompt ? "" : undefined}
+              onCopy={job.finalPrompt ? (event) => event.preventDefault() : undefined}
+              onCut={job.finalPrompt ? (event) => event.preventDefault() : undefined}
+              onDragStart={job.finalPrompt ? (event) => event.preventDefault() : undefined}
+              onContextMenu={job.finalPrompt ? (event) => event.preventDefault() : undefined}
+            >
+              {job.finalPrompt ?? v.notEnhanced}
+            </p>
             {canGenerate && job.kind !== "video_final" && (
               <button type="button" className="bs-btn" data-variant="soft" data-size="sm" onClick={() => actions.reuse(job)}>
                 {v.reuse}

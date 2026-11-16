@@ -2,10 +2,11 @@
 /**
  * The next version of a generated clip, inside the viewer (docs/BRAND-STUDIO-V6-PLAN.md §4): the version
  * strip (v1 … vN, the one being made shows as such) with the shown version's request under it, and the
- * form under that: what to change, reference images, the two ways with their credits, "vN 만들기".
+ * form under that: a titled box for what to change (pictures and videos can be dropped anywhere on the
+ * viewer), the two ways with their credits, and the button that makes the next version.
  * The logic is `revise-flow.ts`; this file is only the screen.
  */
-import { useEffect, useId, useMemo, useRef, useState, type DragEvent, type Ref, type RefObject } from "react";
+import { useEffect, useId, useMemo, useRef, useState, type Ref, type RefObject } from "react";
 import {
   STUDIO_LIMITS,
   STUDIO_REVISE_MODES,
@@ -23,6 +24,7 @@ import { credits, errorLine, fill, type StudioCopy, type StudioLocale } from "./
 import { StudioIcon } from "./icons";
 import { REF_DRAG_TYPE, acceptsDrag, decodeRefDrag, startRefDrag, type RefSource, type TrayItem } from "./refs";
 import {
+  REVISE_MATERIALS_MAX,
   REVISE_REFERENCES_MAX,
   createReviseFlow,
   initialReviseState,
@@ -136,6 +138,8 @@ export interface ReviseFormViewProps {
   uploading: boolean;
   onPrompt(text: string): void;
   onReferences(next: TrayItem[]): void;
+  /** Videos to read for the request. Absent: videos cannot be attached (pictures only). */
+  onMaterials?(next: TrayItem[]): void;
   onFiles(files: File[]): void;
   resolve(source: RefSource): TrayItem | null;
   onPick(mode: StudioReviseMode): void;
@@ -154,6 +158,7 @@ export interface ReviseFormViewProps {
 
 export function noteLine(note: string, state: ReviseState, copy: StudioCopy): string {
   if (note === "empty_prompt") return copy.dock.emptyPrompt;
+  if (note === "attach_full") return fill(copy.revise.attachFull, { images: REVISE_REFERENCES_MAX, videos: REVISE_MATERIALS_MAX });
   if (note === "unavailable") {
     const problem = state.plan?.methods[state.mode]?.problem;
     return problem ? copy.revise.problems[problem] : copy.revise.problems.unsupported;
@@ -161,27 +166,82 @@ export function noteLine(note: string, state: ReviseState, copy: StudioCopy): st
   return errorLine(copy, note);
 }
 
+/** A picture's own thumbnail, or a video's first frame when it has none. */
+function AttachThumb({ item }: { item: TrayItem }) {
+  if (item.kind === "video" && !item.thumbUrl) return <video src={item.url} muted playsInline preload="metadata" draggable={false} />;
+  return <img src={item.thumbUrl ?? item.url} alt="" loading="lazy" draggable={false} />;
+}
+
+/** How long a drag may go without a `dragover` before the form stops showing where to drop (ms). */
+const DRAG_REST_MS = 500;
+
 /** The form as markup only (tests render it with a fixed state). */
 export function ReviseFormView(props: ReviseFormViewProps) {
   const { state, copy, locale } = props;
   const r = copy.revise;
   const id = useId();
   const files = useRef<HTMLInputElement>(null);
-  const [dropActive, setDropActive] = useState(false);
+  const form = useRef<HTMLFormElement>(null);
+  const [dragging, setDragging] = useState(false);
   const busy = state.phase === "checking" || state.phase === "sending";
-  const full = state.references.length >= REVISE_REFERENCES_MAX;
+  const videos = Boolean(props.onMaterials);
+  const refsFull = state.references.length >= REVISE_REFERENCES_MAX;
+  const materialsFull = !videos || state.materials.length >= REVISE_MATERIALS_MAX;
+  const full = refsFull && materialsFull;
+  const taken = (item: TrayItem) => (item.kind === "video" ? state.materials : state.references).some((x) => x.key === item.key);
+  const closed = (item: TrayItem) => (item.kind === "video" ? materialsFull : item.kind === "image" ? refsFull : true);
   const add = (item: TrayItem | null) => {
-    if (!item || item.kind !== "image" || full || state.references.some((ref) => ref.key === item.key)) return;
-    props.onReferences([...state.references, item]);
+    if (!item || taken(item) || closed(item)) return;
+    if (item.kind === "image") props.onReferences([...state.references, item]);
+    else if (item.kind === "video") props.onMaterials?.([...state.materials, item]);
   };
-  const drop = (event: DragEvent) => {
-    if (!acceptsDrag(event.dataTransfer?.types)) return;
+  const drop = (event: { dataTransfer: DataTransfer | null; preventDefault(): void }) => {
+    if (!event.dataTransfer || !acceptsDrag(event.dataTransfer.types)) return;
     event.preventDefault();
-    setDropActive(false);
+    setDragging(false);
     const source = decodeRefDrag(event.dataTransfer.getData(REF_DRAG_TYPE));
     if (source) add(props.resolve(source));
     else if (event.dataTransfer.files.length) props.onFiles(Array.from(event.dataTransfer.files));
   };
+  // Something dragged anywhere over the window lights the form up; dropped anywhere on the viewer
+  // (the clip included) it lands in the form.
+  const live = useRef(drop);
+  live.current = drop;
+  useEffect(() => {
+    let rest = 0;
+    const stop = () => {
+      window.clearTimeout(rest);
+      setDragging(false);
+    };
+    const onViewer = (target: EventTarget | null) => {
+      const body = form.current?.closest(".bs-viewer-body") ?? form.current;
+      return target instanceof Node && Boolean(body?.contains(target));
+    };
+    const over = (event: globalThis.DragEvent) => {
+      if (!acceptsDrag(event.dataTransfer?.types)) return;
+      setDragging(true);
+      window.clearTimeout(rest);
+      rest = window.setTimeout(() => setDragging(false), DRAG_REST_MS);
+      if (!onViewer(event.target)) return;
+      event.preventDefault();
+      if (event.dataTransfer) event.dataTransfer.dropEffect = "copy";
+    };
+    const dropped = (event: globalThis.DragEvent) => {
+      stop();
+      // The form's own handler takes a drop that lands inside it.
+      if (!onViewer(event.target) || (event.target instanceof Node && form.current?.contains(event.target))) return;
+      live.current(event);
+    };
+    window.addEventListener("dragover", over);
+    window.addEventListener("drop", dropped);
+    window.addEventListener("dragend", stop);
+    return () => {
+      window.clearTimeout(rest);
+      window.removeEventListener("dragover", over);
+      window.removeEventListener("drop", dropped);
+      window.removeEventListener("dragend", stop);
+    };
+  }, []);
   const cost = (mode: StudioReviseMode) => {
     const method = state.plan?.methods[mode];
     return method && method.estimateKrw > 0 ? credits(copy.credits.amount, creditsOf(method.estimateKrw), locale) : null;
@@ -190,13 +250,15 @@ export function ReviseFormView(props: ReviseFormViewProps) {
   const marking = props.markMode === true;
   const markable = props.markMode === true || props.markMode === false;
   const marksFull = state.marks.length >= MARKS_MAX;
+  const attached = state.references.length + state.materials.length > 0;
 
   return (
     <form
+      ref={form}
       className="bs-revise"
       data-revise-form
       data-phase={state.phase}
-      data-drop-target={dropActive ? "" : undefined}
+      data-drop-target={dragging ? "" : undefined}
       onSubmit={(event) => {
         event.preventDefault();
         props.onSubmit();
@@ -212,81 +274,110 @@ export function ReviseFormView(props: ReviseFormViewProps) {
         if (!acceptsDrag(event.dataTransfer?.types)) return;
         event.preventDefault();
         event.dataTransfer.dropEffect = "copy";
-        setDropActive(true);
-      }}
-      onDragLeave={(event) => {
-        if (!event.currentTarget.contains(event.relatedTarget as Node | null)) setDropActive(false);
       }}
       onDrop={drop}
     >
-      <label className="bs-sr" htmlFor={`${id}-prompt`}>
-        {r.prompt}
-      </label>
-      <textarea
-        id={`${id}-prompt`}
-        className="bs-field"
-        rows={2}
-        maxLength={STUDIO_LIMITS.promptMax}
-        value={state.prompt}
-        placeholder={r.placeholder}
-        data-revise-prompt
-        ref={props.promptRef}
-        onSelect={(event) => props.onCaret?.(event.currentTarget.selectionStart)}
-        onChange={(event) => props.onPrompt(event.target.value)}
-        onKeyDown={(event) => {
-          if (event.key === "Enter" && (event.ctrlKey || event.metaKey)) {
-            event.preventDefault();
-            event.currentTarget.form?.requestSubmit();
-          }
-        }}
-      />
-      {state.marks.length > 0 && (
-        <ul className="bs-mark-chips" data-revise-marks>
-          {state.marks.map((mark, i) => (
-            <li key={mark.key} className="bs-mark-chip" data-revise-mark={i + 1} data-reading={mark.reading ? "" : undefined}>
-              <button type="button" className="bs-mark-chip-go" onClick={() => props.onMarkSeek?.(mark.key)}>
-                <span className="bs-mark-n" aria-hidden="true">
-                  {circled(i + 1)}
-                </span>
-                <span className="bs-mark-text">{chipText(mark)}</span>
-                {mark.reading && (
-                  <span className="bs-mark-spin" role="status">
-                    <span className="bs-sr">{r.markReading}</span>
+      <div className="bs-revise-head">
+        <h3 className="bs-revise-title" data-revise-title>
+          {r.title}
+        </h3>
+        <span className="bs-revise-next bs-num" data-revise-next>
+          {fill(r.version, { n: props.version })}
+        </span>
+      </div>
+      <div className="bs-revise-box" data-revise-box>
+        <label className="bs-sr" htmlFor={`${id}-prompt`}>
+          {r.prompt}
+        </label>
+        <textarea
+          id={`${id}-prompt`}
+          className="bs-field bs-revise-prompt"
+          rows={4}
+          maxLength={STUDIO_LIMITS.promptMax}
+          value={state.prompt}
+          placeholder={r.placeholder}
+          data-revise-prompt
+          ref={props.promptRef}
+          onSelect={(event) => props.onCaret?.(event.currentTarget.selectionStart)}
+          onChange={(event) => props.onPrompt(event.target.value)}
+          onKeyDown={(event) => {
+            if (event.key === "Enter" && (event.ctrlKey || event.metaKey)) {
+              event.preventDefault();
+              event.currentTarget.form?.requestSubmit();
+            }
+          }}
+        />
+        {state.marks.length > 0 && (
+          <ul className="bs-mark-chips" data-revise-marks>
+            {state.marks.map((mark, i) => (
+              <li key={mark.key} className="bs-mark-chip" data-revise-mark={i + 1} data-reading={mark.reading ? "" : undefined}>
+                <button type="button" className="bs-mark-chip-go" onClick={() => props.onMarkSeek?.(mark.key)}>
+                  <span className="bs-mark-n" aria-hidden="true">
+                    {circled(i + 1)}
                   </span>
-                )}
-              </button>
-              <button type="button" className="bs-mark-chip-x" aria-label={fill(r.removeMark, { n: i + 1 })} disabled={busy} onClick={() => props.onMarkRemove?.(mark.key)}>
-                <StudioIcon name="close" />
-              </button>
-            </li>
-          ))}
-        </ul>
-      )}
-      <ul className="bs-region-ref-list" data-revise-refs>
-        {state.references.map((ref, i) => (
-          <li key={ref.key} className="bs-region-ref" data-revise-ref={i + 1}>
-            <span className="bs-thumb" data-static>
-              <img src={ref.thumbUrl ?? ref.url} alt="" draggable={false} />
-            </span>
-            <span className="bs-thumb-n bs-num" aria-hidden="true">
-              {i + 1}
-            </span>
-            <button type="button" className="bs-thumb-x" aria-label={fill(r.removeRef, { n: i + 1 })} onClick={() => props.onReferences(state.references.filter((x) => x.key !== ref.key))}>
-              <StudioIcon name="close" />
-            </button>
-          </li>
-        ))}
-        <li className="bs-region-ref">
-          <button type="button" className="bs-btn" data-variant="ghost" data-size="sm" data-revise-add disabled={full || props.uploading} onClick={() => files.current?.click()}>
+                  <span className="bs-mark-text">{chipText(mark)}</span>
+                  {mark.reading && (
+                    <span className="bs-mark-spin" role="status">
+                      <span className="bs-sr">{r.markReading}</span>
+                    </span>
+                  )}
+                </button>
+                <button type="button" className="bs-mark-chip-x" aria-label={fill(r.removeMark, { n: i + 1 })} disabled={busy} onClick={() => props.onMarkRemove?.(mark.key)}>
+                  <StudioIcon name="close" />
+                </button>
+              </li>
+            ))}
+          </ul>
+        )}
+        {attached && (
+          <ul className="bs-region-ref-list" data-revise-refs>
+            {state.references.map((ref, i) => (
+              <li key={ref.key} className="bs-region-ref" data-revise-ref={i + 1}>
+                <span className="bs-thumb" data-static>
+                  <AttachThumb item={ref} />
+                </span>
+                <span className="bs-thumb-n bs-num" aria-hidden="true">
+                  {i + 1}
+                </span>
+                <button type="button" className="bs-thumb-x" aria-label={fill(r.removeRef, { n: i + 1 })} onClick={() => props.onReferences(state.references.filter((x) => x.key !== ref.key))}>
+                  <StudioIcon name="close" />
+                </button>
+              </li>
+            ))}
+            {state.materials.map((material, i) => (
+              <li key={material.key} className="bs-region-ref" data-revise-material={i + 1}>
+                <span className="bs-thumb" data-static data-kind="video">
+                  <AttachThumb item={material} />
+                  <span className="bs-thumb-play" aria-hidden="true">
+                    <StudioIcon name="play" />
+                  </span>
+                </span>
+                <span className="bs-thumb-n" aria-hidden="true">
+                  {r.materialLabel}
+                </span>
+                <button type="button" className="bs-thumb-x" aria-label={fill(r.removeMaterial, { n: i + 1 })} onClick={() => props.onMaterials?.(state.materials.filter((x) => x.key !== material.key))}>
+                  <StudioIcon name="close" />
+                </button>
+              </li>
+            ))}
+          </ul>
+        )}
+        {state.materials.length > 0 && (
+          <p className="bs-muted bs-revise-material-note" data-revise-material-note>
+            {r.materialNote}
+          </p>
+        )}
+        <div className="bs-revise-tools">
+          <button type="button" className="bs-btn" data-variant="soft" data-size="sm" data-revise-add disabled={full || props.uploading} onClick={() => files.current?.click()}>
             <StudioIcon name={props.uploading ? "spark" : "plus"} />
-            {r.addRefs}
+            {videos ? r.addRefs : r.addImages}
           </button>
           <input
             ref={files}
             type="file"
             className="bs-sr"
             tabIndex={-1}
-            accept={STUDIO_UPLOAD_MIMES.image.join(",")}
+            accept={[...STUDIO_UPLOAD_MIMES.image, ...(videos ? STUDIO_UPLOAD_MIMES.video : [])].join(",")}
             multiple
             onChange={(event) => {
               const picked = Array.from(event.target.files ?? []);
@@ -294,13 +385,11 @@ export function ReviseFormView(props: ReviseFormViewProps) {
               if (picked.length) props.onFiles(picked);
             }}
           />
-        </li>
-        {markable && (
-          <li className="bs-region-ref">
+          {markable && (
             <button
               type="button"
               className="bs-btn bs-mark-toggle"
-              data-variant="ghost"
+              data-variant="soft"
               data-size="sm"
               data-revise-mark-toggle
               aria-pressed={marking}
@@ -310,51 +399,67 @@ export function ReviseFormView(props: ReviseFormViewProps) {
               <StudioIcon name="region" />
               {r.mark}
             </button>
-          </li>
-        )}
-      </ul>
+          )}
+        </div>
+        <p className="bs-revise-drop" data-revise-drop-hint>
+          <StudioIcon name="upload" />
+          <span>{dragging ? r.dropHere : videos ? r.dropHint : r.dropHintImages}</span>
+        </p>
+      </div>
       {marking && state.marks.length === 0 && (
         <p className="bs-muted bs-mark-hint" data-revise-mark-hint>
           {r.markHint}
         </p>
       )}
       {props.recent.length > 0 && (
-        <ul className="bs-strip" aria-label={r.addRefs}>
-          {props.recent.map((item) => {
-            const taken = state.references.some((ref) => ref.key === item.key);
-            return (
-              <li key={item.key}>
-                <button
-                  type="button"
-                  className="bs-thumb"
-                  data-taken={taken ? "" : undefined}
-                  disabled={taken || full}
-                  draggable
-                  onDragStart={(event) => startRefDrag(event, item.assetId ? { assetId: item.assetId } : { outputId: item.outputId! })}
-                  aria-label={fill(r.addOne, { name: item.name })}
-                  onClick={() => add(item)}
-                >
-                  <img src={item.thumbUrl ?? item.url} alt="" loading="lazy" draggable={false} />
-                </button>
-              </li>
-            );
-          })}
-        </ul>
+        <div className="bs-revise-recent">
+          <p className="bs-label">{r.recent}</p>
+          <ul className="bs-strip" aria-label={r.recent}>
+            {props.recent.map((item) => {
+              const on = taken(item);
+              return (
+                <li key={item.key}>
+                  <button
+                    type="button"
+                    className="bs-thumb"
+                    data-kind={item.kind}
+                    data-taken={on ? "" : undefined}
+                    disabled={on || closed(item)}
+                    draggable
+                    onDragStart={(event) => startRefDrag(event, item.assetId ? { assetId: item.assetId } : { outputId: item.outputId! })}
+                    aria-label={fill(r.addOne, { name: item.name })}
+                    onClick={() => add(item)}
+                  >
+                    <AttachThumb item={item} />
+                    {item.kind === "video" && (
+                      <span className="bs-thumb-play" aria-hidden="true">
+                        <StudioIcon name="play" />
+                      </span>
+                    )}
+                  </button>
+                </li>
+              );
+            })}
+          </ul>
+        </div>
       )}
       <fieldset className="bs-revise-methods">
-        <legend className="bs-sr">{r.method}</legend>
+        <legend className="bs-label">{r.method}</legend>
         {STUDIO_REVISE_MODES.map((mode) => {
           const method = state.plan?.methods[mode];
-          const closed = Boolean(method && !method.available);
+          const shut = Boolean(method && !method.available);
           const price = cost(mode);
           return (
             <div key={mode} className="bs-revise-method-row">
-              <label className="bs-revise-method" data-revise-method={mode} data-disabled={closed ? "" : undefined}>
-                <input type="radio" name={`${id}-method`} value={mode} checked={state.mode === mode} disabled={closed || busy} onChange={() => props.onPick(mode)} />
-                <span>{r[mode]}</span>
+              <label className="bs-revise-method" data-revise-method={mode} data-disabled={shut ? "" : undefined}>
+                <input type="radio" name={`${id}-method`} value={mode} checked={state.mode === mode} disabled={shut || busy} onChange={() => props.onPick(mode)} />
+                <span className="bs-revise-method-text">
+                  <span>{r[mode]}</span>
+                  <small>{r.hints[mode]}</small>
+                </span>
                 {price && <span className="bs-num bs-revise-cost">{price}</span>}
               </label>
-              {closed && (
+              {shut && (
                 <p className="bs-muted bs-revise-problem" data-revise-problem={method?.problem ?? "unsupported"}>
                   {problem(method?.problem)}
                 </p>
@@ -384,9 +489,12 @@ export function ReviseFormView(props: ReviseFormViewProps) {
         </p>
       )}
       <button type="submit" className="bs-btn bs-submit" data-variant="solid" data-size="md" data-revise-submit disabled={busy || state.phase === "suggest"} aria-busy={busy || undefined}>
-        <span>{fill(r.submit, { n: props.version })}</span>
+        <span>{r.submit}</span>
         {cost(state.mode) && <span className="bs-submit-cost bs-num">{cost(state.mode)}</span>}
       </button>
+      <p className="bs-muted bs-revise-after" data-revise-after>
+        {fill(r.after, { n: props.version })}
+      </p>
     </form>
   );
 }
@@ -438,7 +546,7 @@ export function ReviseForm({
   useEffect(() => {
     void flow.load();
   }, [flow]);
-  const recent = useMemo(() => support.recent.filter((r) => r.kind === "image" && !exclude?.includes(r.key)), [support.recent, exclude]);
+  const recent = useMemo(() => support.recent.filter((r) => (r.kind === "image" || r.kind === "video") && !exclude?.includes(r.key)), [support.recent, exclude]);
 
   // One offscreen copy of the clip per form, loaded only when the first mark is read.
   const url = stage?.url ?? null;
@@ -534,17 +642,19 @@ export function ReviseForm({
       uploading={uploading}
       resolve={(source) => {
         const item = support.resolve(source);
-        return item && item.kind === "image" ? item : null;
+        return item && (item.kind === "image" || item.kind === "video") && !exclude?.includes(item.key) ? item : null;
       }}
       onPrompt={flow.setPrompt}
       onReferences={flow.setReferences}
+      onMaterials={flow.setMaterials}
       onFiles={(picked) => {
         setUploading(true);
         void support
           .upload(picked)
           .then((added) => {
-            const current = flow.state.references;
-            flow.setReferences([...current, ...added.filter((a) => a.kind === "image" && !current.some((c) => c.key === a.key))]);
+            // Fewer came back than were picked: a file was the wrong kind or too large.
+            if (flow.attach(added) > 0) flow.note("attach_full");
+            else if (added.length < picked.length) flow.note("unsupported_file");
           })
           .catch(() => flow.note("failed"))
           .finally(() => setUploading(false));
