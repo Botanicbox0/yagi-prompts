@@ -29,6 +29,7 @@ import { libraryKey, type LayerEditorProps, type LayerEditorRegionPreset } from 
 import { fillSourcesToDelete, findOutput, listedJobs } from "./store";
 import { useDock } from "./use-dock";
 import { useStudio } from "./use-studio";
+import { ImageProjectBar } from "./video/project-bar";
 import { sourceOf, useViewer } from "./use-viewer";
 import { Viewer, canRerun, itemKey, type ViewerItem } from "./viewer";
 
@@ -52,6 +53,11 @@ export interface StudioAppProps {
   layersCopy: Dictionary["studioLayers"];
   /** `dict.studioVideo` (video screen): the reference-video panel's link into the full reverse panel. */
   videoCopy?: Dictionary["studioVideo"];
+  /**
+   * The video studio's project words ("내 프로젝트", "+ 새 프로젝트"), handed to the image screen only while
+   * `BRAND_STUDIO_PROJECTS` is on. Without it (or without `state.projects`) there is no project bar.
+   */
+  projectsCopy?: Dictionary["studioVideo"]["workspace"]["projects"];
   /** Server-loaded state; without it the screen loads its own on mount. */
   initialState?: StudioState | null;
   /** Tests inject a client; the screen otherwise talks to `/api/brand-studio`. */
@@ -198,8 +204,10 @@ export function recentPictures(jobs: readonly StudioJobView[], assets: readonly 
   return out;
 }
 
-export function StudioApp({ organizationId, locale, copy, mode, libraryCopy, layersCopy, videoCopy, initialState = null, api }: StudioAppProps) {
-  const studio = useStudio({ organizationId, initialState, api });
+export function StudioApp({ organizationId, locale, copy, mode, libraryCopy, layersCopy, videoCopy, projectsCopy, initialState = null, api }: StudioAppProps) {
+  // The project new pictures go into. Null (no project) is the default and an ordinary state.
+  const [projectChoice, setProjectChoice] = useState<string | null>(null);
+  const studio = useStudio({ organizationId, initialState, api, projectId: mode === "image" ? projectChoice : null });
   const dock = useDock({ studio, copy, organizationId, initialMedium: mode, mode });
   const library = useStudioLibrary(organizationId);
   const state = studio.store.state;
@@ -214,6 +222,25 @@ export function StudioApp({ organizationId, locale, copy, mode, libraryCopy, lay
   const allAssets = useMemo(() => state?.assets ?? [], [state?.assets]);
   const assets = useMemo(() => (fillSources.size ? allAssets.filter((a) => !fillSources.has(a.id)) : allAssets), [allAssets, fillSources]);
   const canCreate = state?.canCreate ?? false;
+  // Present only while runs can belong to a project (flag on, migration applied) and on the image screen.
+  const projects = mode === "image" && projectsCopy ? state?.projects : undefined;
+  const activeProject = projects?.find((project) => project.id === projectChoice) ?? null;
+  useEffect(() => {
+    if (mode !== "image") return;
+    const fromUrl = new URLSearchParams(window.location.search).get("project");
+    if (fromUrl) setProjectChoice(fromUrl);
+  }, [mode]);
+  useEffect(() => {
+    // A project that was deleted elsewhere (or a stale link) quietly falls back to no project.
+    if (projects && projectChoice && !projects.some((project) => project.id === projectChoice)) setProjectChoice(null);
+  }, [projects, projectChoice]);
+  const chooseProject = useCallback((id: string | null) => {
+    setProjectChoice(id);
+    const url = new URL(window.location.href);
+    if (id) url.searchParams.set("project", id);
+    else url.searchParams.delete("project");
+    window.history.replaceState(window.history.state, "", url.toString());
+  }, []);
   const dockOpen = canCreate && (state?.allowance.capKrw ?? 0) > 0;
   const [handoff, setHandoff] = useState<RefSource | null>(null);
   const [shareTarget, setShareTarget] = useState<ShareReviewTarget | null>(null);
@@ -777,6 +804,25 @@ export function StudioApp({ organizationId, locale, copy, mode, libraryCopy, lay
             </button>
           </div>
         )}
+        {projects && projectsCopy && (
+          <ImageProjectBar
+            canEdit={canCreate}
+            projectId={activeProject?.id ?? null}
+            projects={projects}
+            copy={projectsCopy}
+            noneLabel={libraryCopy.projects.none}
+            onSelectProject={chooseProject}
+            onCreateProject={async (title) => {
+              const made = await studio.createProject(title);
+              if ("ok" in made) {
+                setStatus(errorLine(copy, made.code));
+                return false;
+              }
+              chooseProject(made.id);
+              return true;
+            }}
+          />
+        )}
         {state && (
           <Wall
             mode={mode}
@@ -818,6 +864,7 @@ export function StudioApp({ organizationId, locale, copy, mode, libraryCopy, lay
             message={dock.message}
             notice={dock.notice}
             toast={status}
+            project={activeProject ? { title: activeProject.title, hint: libraryCopy.projects.dockInto.replace("{name}", activeProject.title) } : null}
             film={remixVideo?.assetId ? studio.films[remixVideo.assetId] ?? null : null}
             uploading={studio.uploads.map((u) => u.name)}
             enhancing={dock.enhancing}

@@ -44,6 +44,8 @@ function validInput(operation: StudioOperation, organizationId: string): Record<
     case 'job.cancel':
     case 'job.delete':
       return { organizationId, jobId: id };
+    case 'job.assign_project':
+      return { organizationId, jobId: id, projectId: null };
     case 'prompt.enhance':
       return { kind: 'image', organizationId, model: 'seedream-5.5', prompt: 'a bottle', aspect: '1:1', resolution: '2K' };
     case 'revise.plan':

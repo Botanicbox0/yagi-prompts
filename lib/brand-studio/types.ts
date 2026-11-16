@@ -239,6 +239,8 @@ export interface JobRow {
   final_prompt: string | null;
   /** Set when a member removed this run from the wall (migration 0090); absent before it is applied. */
   deleted_at?: Date | string | null;
+  /** The project this run belongs to (migration 0091); absent before it is applied. */
+  project_id?: string | null;
   enhance: boolean;
   params: StudioJobParams;
   refs: StudioReference[];

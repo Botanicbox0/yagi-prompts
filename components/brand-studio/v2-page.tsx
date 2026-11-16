@@ -9,6 +9,7 @@
  * `brandStudioV2Open() && studioV2Visible(choice, true)`. All data is awaited here so the tree that
  * comes back is plain markup plus one client island.
  */
+import { brandStudioProjectsOpen } from "@/lib/flags";
 import type { ReactElement } from "react";
 import { redirect } from "next/navigation";
 import type { Viewer } from "@/lib/auth/identity";
@@ -71,7 +72,7 @@ export async function brandStudioV2(input: StudioV2Input): Promise<ReactElement>
         {/* The credits line and the phone's library button are placed here by the studio (studio-app.tsx). */}
         <div className="bs-head-slot" data-studio-head-slot />
       </header>
-      <StudioApp organizationId={choice.id} locale={locale} copy={copy} mode="image" libraryCopy={dict.studioLibrary} layersCopy={dict.studioLayers} />
+      <StudioApp organizationId={choice.id} locale={locale} copy={copy} mode="image" libraryCopy={dict.studioLibrary} {...(brandStudioProjectsOpen() ? { projectsCopy: dict.studioVideo.workspace.projects } : {})} layersCopy={dict.studioLayers} />
     </div>
   );
 }

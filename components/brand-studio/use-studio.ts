@@ -5,7 +5,7 @@
  */
 import { useCallback, useEffect, useMemo, useReducer, useRef, useState } from "react";
 import type { z } from "zod";
-import type { FilmSheet, ReviseMarkReadSchema, StudioJobCreate, StudioJobView, StudioReviseMarkRead, StudioState } from "@/lib/brand-studio/contracts";
+import type { FilmSheet, ReviseMarkReadSchema, StudioFailure, StudioJobCreate, StudioJobView, StudioProjectRef, StudioReviseMarkRead, StudioState } from "@/lib/brand-studio/contracts";
 import { createStudioApi, isFailure, measureInBrowser, type ApiResult, type StudioApi, type StudioOps } from "./api";
 import { newRequestId } from "./copy";
 import { createPollLoop, type PollLoop } from "./poller";
@@ -14,9 +14,33 @@ import { initialStore, isOpen, studioReducer } from "./store";
 
 export type FilmState = { status: "loading" } | { status: "done"; sheet: FilmSheet | null };
 
-export function useStudio({ organizationId, initialState, api: injected }: { organizationId: string; initialState?: StudioState | null; api?: StudioApi }) {
+/**
+ * The `job.create` input as it is sent. With no project chosen (or projects closed, which the caller turns
+ * into null) it is the very object it always was. A new version and a 1080p finish name no project either:
+ * the server gives them the project of the run they come from.
+ */
+export function jobInputForProject(input: StudioJobCreate, projectId: string | null): StudioJobCreate {
+  const fresh = input.kind === "image" || input.kind === "video" || input.kind === "video_remix" || input.kind === "region_edit";
+  return projectId && fresh ? { ...input, projectId } : input;
+}
+
+export function useStudio({
+  organizationId,
+  initialState,
+  api: injected,
+  projectId = null,
+}: {
+  organizationId: string;
+  initialState?: StudioState | null;
+  api?: StudioApi;
+  /** The project new runs go into. Sent only while the server says projects are open (`state.projects`). */
+  projectId?: string | null;
+}) {
   const api = useMemo(() => injected ?? createStudioApi({ organizationId }), [injected, organizationId]);
   const [store, dispatch] = useReducer(studioReducer, initialState ?? null, initialStore);
+  const projectsOpen = Boolean(store.state?.projects);
+  const intoProject = useRef<string | null>(null);
+  intoProject.current = projectsOpen ? projectId : null;
   const preloaded = useRef(Boolean(initialState));
 
   const load = useCallback(async () => {
@@ -81,11 +105,44 @@ export function useStudio({ organizationId, initialState, api: injected }: { org
 
   const createJob = useCallback(
     async (input: StudioJobCreate) => {
-      const result = await api.call("job.create", input);
+      const result = await api.call("job.create", jobInputForProject(input, intoProject.current));
       if (!isFailure(result)) dispatch({ type: "jobAdded", job: result.job });
       return result;
     },
     [api],
+  );
+
+  /** Put a run (and everything made from it) in a project, or take it out with `null`. */
+  const assignProject = useCallback(
+    async (jobId: string, target: string | null) => {
+      const result = await api.call("job.assign_project", { organizationId, jobId, projectId: target });
+      if (!isFailure(result)) dispatch({ type: "jobsProject", jobIds: result.jobIds, projectId: result.projectId });
+      return result;
+    },
+    [api, organizationId],
+  );
+
+  /** A new project with nothing in it yet (the video studio's own endpoint and row). */
+  const createProject = useCallback(
+    async (title: string): Promise<StudioProjectRef | StudioFailure> => {
+      try {
+        const res = await fetch("/api/brand-studio/video-projects", {
+          method: "POST",
+          credentials: "same-origin",
+          cache: "no-store",
+          headers: { "Content-Type": "application/json", Accept: "application/json" },
+          body: JSON.stringify({ op: "create", organizationId, requestId: newRequestId(), title }),
+        });
+        const body = (await res.json().catch(() => null)) as { ok?: boolean; code?: StudioFailure["code"]; project?: { id: string; title: string } } | null;
+        if (!res.ok || !body?.ok || !body.project) return { ok: false, code: body?.code ?? "failed" };
+        const project = { id: body.project.id, title: body.project.title };
+        dispatch({ type: "projectAdded", project });
+        return project;
+      } catch {
+        return { ok: false, code: "failed" };
+      }
+    },
+    [organizationId],
   );
 
   const saveOutput = useCallback(
@@ -208,7 +265,7 @@ export function useStudio({ organizationId, initialState, api: injected }: { org
     [api, refreshSilently],
   );
 
-  return { store, load, createJob, cancelJob, saveOutput, deleteOutput, deleteJob, updateAsset, deleteAsset, handoff, enhancePrompt, planRevision, readMark, films, analyzeFilm, uploads, upload };
+  return { store, load, createJob, assignProject, createProject, cancelJob, saveOutput, deleteOutput, deleteJob, updateAsset, deleteAsset, handoff, enhancePrompt, planRevision, readMark, films, analyzeFilm, uploads, upload };
 }
 
 /**

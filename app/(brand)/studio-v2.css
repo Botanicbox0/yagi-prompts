@@ -190,6 +190,10 @@ textarea.bs-field { resize: vertical; }
 .bs-controls-set { display: flex; flex: 1; flex-wrap: wrap; align-items: center; gap: 6px; min-width: 0; }
 .bs-controls-set > * { flex: none; }
 .bs-controls-end { display: flex; align-items: center; margin-left: auto; }
+/* Where this run is going, when a project is chosen (BRAND_STUDIO_PROJECTS). Not a control: the project bar above changes it. */
+.bs-dock-project { flex: none; max-width: 190px; min-height: 32px; margin-right: 8px; padding: 0 11px; font-size: 12.5px; cursor: default; }
+.bs-dock-project .bs-icon { flex: none; width: 14px; height: 14px; }
+.bs-dock-project-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 /* Compact borderless pills: model, ratio, quality, count. */
 .bs-select, .bs-chip-btn { position: relative; display: inline-flex; flex: none; align-items: center; gap: 5px; height: 32px; min-height: 32px; padding: 0 10px 0 12px; border: 0; border-radius: 9999px; background: var(--ys-panel); box-shadow: none; color: var(--ys-ink); font: inherit; font-size: 12.5px; font-weight: 500; letter-spacing: -0.02em; white-space: nowrap; cursor: pointer; transition: background-color 150ms var(--ys-ease), color 150ms var(--ys-ease); }
 .bs-select:hover, .bs-chip-btn:hover:not(:disabled) { background: var(--ys-hover); }

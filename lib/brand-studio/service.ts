@@ -28,6 +28,7 @@ import { loadOrganizationStorageSummary, toStudioStorageQuotaView } from '@/lib/
 import { assetFromOutput, completeStudioAsset, deleteStudioAsset, deleteStudioOutput, reserveStudioAsset, updateStudioAsset } from './assets';
 import { handoffToCampaign } from './handoff';
 import { analyzeStudioFilm, cancelStudioJob, createStudioJob, deleteStudioJob, previewStudioPrompt } from './jobs';
+import { assignStudioJobProject, liveProjectsOf, studioProjectsReady } from './job-projects';
 import { failure, guarded } from './outcome';
 import { planStudioRevise } from './revision/advise';
 import { readStudioMark } from './revision/mark';
@@ -59,6 +60,7 @@ const SELF_STUDIO_OPS: ReadonlySet<StudioOperation> = new Set([
   'revise.plan',
   'revise.mark',
   'handoff.campaign',
+  'job.assign_project',
 ]);
 
 /** One `POST /api/brand-studio` operation. Unknown names are `invalid`. */
@@ -102,6 +104,8 @@ export async function runStudioOperation(deps: StudioDeps, viewer: Viewer, opera
       return deleteStudioJob(deps, viewer, input);
     case 'handoff.campaign':
       return handoffToCampaign(deps, viewer, input);
+    case 'job.assign_project':
+      return assignStudioJobProject(deps, viewer, input);
   }
 }
 
@@ -118,17 +122,27 @@ export async function loadStudioState(deps: StudioDeps, viewer: Viewer, organiza
         await jobsOfStudioState(sql, organizationId),
         await campaignsOf(sql, organizationId),
       ];
+      // Runs can belong to a project only with the flag on and migration 0091 applied. A run whose project
+      // was deleted or archived reads as being in no project (the row keeps its id).
+      const projects = (await studioProjectsReady(deps, sql)) ? await liveProjectsOf(sql, organizationId) : null;
+      const live = new Set(projects?.map((project) => project.id));
+      const views = (await viewsOf(sql, jobs, deps.media)).map((view) => {
+        if (!view.projectId || live.has(view.projectId)) return view;
+        const { projectId: _gone, ...rest } = view;
+        return rest;
+      });
       return {
         ok: true as const,
         canCreate: seat.canCreate,
         allowance: allowanceView(allowance),
         storage: toStudioStorageQuotaView(storageSummary),
         assets: assets.map((a) => assetView(a, deps.media)),
-        jobs: await viewsOf(sql, jobs, deps.media),
+        jobs: views,
         campaigns,
         canRemoveRuns: seat.canCreate && (await jobSoftDeleteReady(sql)),
         // Off unless the flag is on: the key is left out entirely, so nothing about it reaches the client.
         ...(seat.canCreate && deps.env.outpaint ? { canFillEmpty: true } : {}),
+        ...(projects ? { projects } : {}),
       };
     }),
   );

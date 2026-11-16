@@ -80,6 +80,19 @@ export const studioLibraryEn = {
     deleteYes: 'Delete file',
   },
   roles: { product: 'Product', person: 'Person', logo: 'Logo', style: 'Style', place: 'Place', other: 'Other' },
+  /** Runs in projects (`BRAND_STUDIO_PROJECTS`). The list itself keeps the video studio's words ("My projects"). */
+  projects: {
+    none: 'No project',
+    assign: 'Add to a project',
+    assignMany: 'Add all {n} to a project',
+    pickTitle: 'Which project?',
+    familyNote: 'The {n} results made together move together.',
+    save: 'Add',
+    assigned: 'Added to “{name}”.',
+    removed: 'Taken out of the project.',
+    dockInto: 'New results go into “{name}”.',
+    empty: 'No projects yet. Make one under “My projects” in the studio first.',
+  },
   errors: {
     failed: "That didn't save. Please try again.",
     forbidden: 'You need edit access for this.',
@@ -224,6 +237,18 @@ export const studioLibraryKo: typeof studioLibraryEn = {
     deleteYes: '파일 지우기',
   },
   roles: { product: '제품', person: '인물', logo: '로고', style: '스타일', place: '장소', other: '기타' },
+  projects: {
+    none: '프로젝트 없음',
+    assign: '프로젝트에 담기',
+    assignMany: '{n}개 함께 프로젝트에 담기',
+    pickTitle: '어느 프로젝트에 담을까요?',
+    familyNote: '함께 만든 결과 {n}개가 같이 움직여요.',
+    save: '담기',
+    assigned: '‘{name}’에 담았어요.',
+    removed: '프로젝트에서 뺐어요.',
+    dockInto: '지금 만드는 결과는 ‘{name}’에 담겨요.',
+    empty: '아직 프로젝트가 없어요. 스튜디오의 ‘내 프로젝트’에서 먼저 만들어 주세요.',
+  },
   errors: {
     failed: '저장하지 못했어요. 다시 해 주세요.',
     forbidden: '편집 권한이 있어야 할 수 있어요.',

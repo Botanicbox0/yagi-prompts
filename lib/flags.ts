@@ -153,6 +153,17 @@ export function brandStudioOutpaintOpen(env: Record<string, string | undefined> 
 }
 
 /**
+ * A studio run can belong to a project (docs/BRAND-STUDIO-V6-PLAN.md §7 C, migration 0091): the image
+ * studio gets the video studio's project switcher, new runs carry the chosen project, and the assets page
+ * can put an existing run in a project. Default OFF: open only when the server environment says exactly
+ * `BRAND_STUDIO_PROJECTS=on`. Off means every screen, request and answer is as it was; on still stays
+ * closed until `brand_studio_jobs.project_id` exists.
+ */
+export function brandStudioProjectsOpen(env: Record<string, string | undefined> = process.env): boolean {
+  return env.BRAND_STUDIO_PROJECTS === 'on';
+}
+
+/**
  * docs/CAST-CATEGORIES.md §4 — couple templates (the buyer and one partner). Default OFF: open only
  * when the server environment says exactly `TWINGS_COUPLE_TEMPLATES=on`. Terms §5.3 say "your own
  * face only" and cannot change while Toss reviews subscription billing, so off means couples do not

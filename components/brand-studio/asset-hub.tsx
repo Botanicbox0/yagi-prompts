@@ -19,6 +19,7 @@ import type { Dictionary } from "@/lib/i18n/dictionaries";
 import { isFailure, uploadProblem, type StudioApi } from "./api";
 import {
   buildHubEntries,
+  familySize,
   filterHubEntries,
   filterProjectView,
   groupByProject,
@@ -32,6 +33,7 @@ import {
   type HubProjectLinks,
   type HubSection,
 } from "./asset-hub-model";
+import { ProjectPickDialog } from "./asset-hub-project";
 import { HubDetail, HubLinkTile, HubTile } from "./asset-hub-tile";
 import { listedJobs } from "./store";
 import s from "./asset-hub.module.css";
@@ -111,6 +113,7 @@ export function BrandAssetHub({
   const [tileMenu, setTileMenu] = useState<string | null>(null);
   const [detailKey, setDetailKey] = useState<string | null>(null);
   const [editing, setEditing] = useState<StudioAssetView | null>(null);
+  const [picking, setPicking] = useState<HubEntry | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [dropActive, setDropActive] = useState(false);
   const [shareTarget, setShareTarget] = useState<ShareReviewTarget | null>(null);
@@ -122,7 +125,18 @@ export function BrandAssetHub({
   const similarAnchor = useMemo(() => (similarKey ? entries.find((e) => e.key === similarKey) ?? null : null), [entries, similarKey]);
   const detail = useMemo(() => (detailKey ? entries.find((e) => e.key === detailKey) ?? null : null), [entries, detailKey]);
 
-  const projectView = useMemo(() => groupByProject(entries, projectLinks, deliverables), [deliverables, entries, projectLinks]);
+  // Present only while runs can belong to a project (`BRAND_STUDIO_PROJECTS` and migration 0091).
+  const studioProjects = state?.projects;
+  const canAssign = Boolean(studioProjects) && canCreate && canOpenStudio;
+  // The page was rendered with the projects of that moment; one made since (or one with nothing on its
+  // timeline) still gets a group as soon as a run is put in it.
+  const links = useMemo<HubProjectLinks | null>(() => {
+    if (!studioProjects) return projectLinks;
+    const known = new Set((projectLinks?.self ?? []).map((link) => link.id));
+    const added = studioProjects.filter((project) => !known.has(project.id)).map((project) => ({ id: project.id, title: project.title, updatedAt: "", assetIds: [], outputIds: [] }));
+    return { self: [...(projectLinks?.self ?? []), ...added], team: projectLinks?.team ?? [] };
+  }, [projectLinks, studioProjects]);
+  const projectView = useMemo(() => groupByProject(entries, links, deliverables), [deliverables, entries, links]);
   const hasProjects = projectView.groups.length > 0;
   const active: HubSection = section === null || (section === "projects" && !hasProjects) ? (hasProjects ? "projects" : "all") : section;
 
@@ -165,7 +179,16 @@ export function BrandAssetHub({
   );
   /** What a person would call the item, else its kind ("이미지", "영상"). Never the stored file name. */
   const nameOf = (entry: HubEntry) => entry.label ?? libraryCopy.item[entry.kind];
-  const actionsOf = (entry: HubEntry) => hubActions(entry, { organizationId, canOpenStudio, canCreate, copy: actionCopy });
+  const movesWith = (entry: HubEntry) => (entry.jobId ? familySize(jobs, entry.jobId) : 1);
+  const actionsOf = (entry: HubEntry) =>
+    hubActions(entry, {
+      organizationId,
+      canOpenStudio,
+      canCreate,
+      copy: actionCopy,
+      // A run that holds several results says so in the menu: they move together.
+      projectLabel: canAssign ? (item) => (movesWith(item) > 1 ? fill(libraryCopy.projects.assignMany, { n: movesWith(item) }) : libraryCopy.projects.assign) : null,
+    });
 
   const handleFiles = useCallback(
     async (files: File[]) => {
@@ -204,6 +227,8 @@ export function BrandAssetHub({
       setSimilarKey((cur) => (cur === entry.key ? null : entry.key));
     } else if (action.key === "edit" && entry.asset) {
       setEditing(entry.asset);
+    } else if (action.key === "project" && entry.jobId) {
+      setPicking(entry);
     } else if (action.key === "share") {
       setShareTarget({
         organizationId,
@@ -614,6 +639,24 @@ export function BrandAssetHub({
           onUpdate={(assetId, patch) => studio.updateAsset({ assetId, ...patch })}
           onDelete={(assetId) => studio.deleteAsset(assetId)}
           onClose={() => setEditing(null)}
+        />
+      )}
+      {picking && picking.jobId && studioProjects && (
+        <ProjectPickDialog
+          key={picking.key}
+          copy={libraryCopy}
+          projects={studioProjects}
+          current={picking.projectId && studioProjects.some((project) => project.id === picking.projectId) ? picking.projectId : null}
+          count={movesWith(picking)}
+          onPick={async (target) => {
+            const result = await studio.assignProject(picking.jobId!, target);
+            if (isFailure(result)) return errorLine(studioCopy, result.code);
+            const name = studioProjects.find((project) => project.id === target)?.title ?? "";
+            setNotice(target ? fill(libraryCopy.projects.assigned, { name }) : libraryCopy.projects.removed);
+            setPicking(null);
+            return null;
+          }}
+          onClose={() => setPicking(null)}
         />
       )}
       {shareTarget && <ShareReviewDialog target={shareTarget} locale={hubLocale} onClose={() => setShareTarget(null)} />}

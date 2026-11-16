@@ -31,6 +31,7 @@ import { readCachedFilmSheet } from './film-sheet';
 import { jobSoftDeleteReady, jobView, openJobCount, readyAsset, readyOutput } from './repo';
 import type { EnhanceInput, JobRow, OutputRow, StudioDeps } from './types';
 import { loadAllowance, reserveAllowance } from './usage';
+import { projectForNewJob, studioProjectsReady } from './job-projects';
 import { failure, guarded } from './outcome';
 
 const localeOf = (viewer: Viewer): 'ko' | 'en' => (viewer.locale === 'en' ? 'en' : 'ko');
@@ -75,7 +76,7 @@ export function takeFreeIntelSlot(key: string, maxPerWindow: number, nowMs: numb
   return true;
 }
 
-async function insertJob(deps: StudioDeps, sql: StudioDeps['sql'], userId: string, organizationId: string, requestId: string, plan: JobPlan) {
+async function insertJob(deps: StudioDeps, sql: StudioDeps['sql'], userId: string, organizationId: string, requestId: string, plan: JobPlan, projectId: string | null = null) {
   // A free lane now means the job starts `queued`; `held` only while every lane is full.
   const lane = await routeJob(sql, {
     organizationId,
@@ -101,6 +102,11 @@ async function insertJob(deps: StudioDeps, sql: StudioDeps['sql'], userId: strin
       ],
     )
   ).rows[0]!;
+  // Written apart from the insert so the statement above is the same with or without migration 0091.
+  if (projectId) {
+    await sql.query('update brand_studio_jobs set project_id = $2 where id = $1', [job.id, projectId]);
+    job.project_id = projectId;
+  }
   const outputs = (
     await sql.query<OutputRow>(
       `insert into brand_studio_outputs (job_id, organization_id, idx, kind, is_draft)
@@ -144,7 +150,15 @@ export async function createStudioJob(deps: StudioDeps, viewer: Viewer, raw: unk
       if ((await openJobCount(sql, v.organizationId)) >= STUDIO_LIMITS.openJobsPerOrganization) throw new StudioDenied('too_many_running');
       const verdict = await reserveAllowance(sql, v.organizationId, plan.estimateKrw, deps.env, deps.now?.() ?? new Date());
       if (!verdict.ok) throw new StudioDenied(verdict.code);
-      return { ok: true as const, job: await insertJob(deps, sql, seat.userId, v.organizationId, v.requestId, plan) };
+      // Closed (flag off or column missing): the request's `projectId` is not even looked at.
+      const projectId = (await studioProjectsReady(deps, sql))
+        ? await projectForNewJob(sql, v.organizationId, {
+            requested: 'projectId' in v ? v.projectId : null,
+            parentOutputId: plan.parentOutputId,
+            fill: plan.params.purpose === 'fill',
+          })
+        : null;
+      return { ok: true as const, job: await insertJob(deps, sql, seat.userId, v.organizationId, v.requestId, plan, projectId) };
     }),
   );
 }

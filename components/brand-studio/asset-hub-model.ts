@@ -32,6 +32,8 @@ export interface HubEntry {
   createdAt: string;
   parentOutputId: string | null;
   jobId: string | null;
+  /** The project the run that made this belongs to (`BRAND_STUDIO_PROJECTS`); null for uploads and when closed. */
+  projectId: string | null;
   asset: StudioAssetView | null;
   output: StudioOutputView | null;
 }
@@ -112,6 +114,7 @@ export function buildHubEntries(assets: readonly StudioAssetView[], jobs: readon
       createdAt: asset.createdAt,
       parentOutputId: null,
       jobId: null,
+      projectId: null,
       asset,
       output: null,
     });
@@ -135,6 +138,7 @@ export function buildHubEntries(assets: readonly StudioAssetView[], jobs: readon
         createdAt: output.createdAt,
         parentOutputId: job.parentOutputId,
         jobId: job.id,
+        projectId: job.projectId ?? null,
         asset: null,
         output,
       });
@@ -205,7 +209,7 @@ export function filterHubEntries(
     .map((item) => item.entry);
 }
 
-export type HubActionKey = "useImage" | "decorate" | "makeVideo" | "compose" | "reverse" | "share" | "similar" | "edit";
+export type HubActionKey = "useImage" | "decorate" | "makeVideo" | "compose" | "reverse" | "share" | "similar" | "project" | "edit";
 
 export interface HubAction {
   key: HubActionKey;
@@ -233,7 +237,14 @@ export interface HubActionCopy {
  */
 export function hubActions(
   entry: HubEntry,
-  opts: { organizationId: string; canOpenStudio: boolean; canCreate: boolean; copy: HubActionCopy },
+  opts: {
+    organizationId: string;
+    canOpenStudio: boolean;
+    canCreate: boolean;
+    copy: HubActionCopy;
+    /** The "put in a project" line for a studio result, or null while runs cannot belong to a project. */
+    projectLabel?: ((entry: HubEntry) => string) | null;
+  },
 ): { main: HubAction | null; more: HubAction[] } {
   const { organizationId, canOpenStudio, canCreate, copy } = opts;
   let main: HubAction | null = null;
@@ -256,6 +267,9 @@ export function hubActions(
     more.push({ key: "share", label: copy.share, marker: "data-asset-hub-share-review" });
   }
   more.push({ key: "similar", label: copy.similar, marker: "data-asset-hub-similar" });
+  if (opts.projectLabel && canOpenStudio && canCreate && entry.jobId) {
+    more.push({ key: "project", label: opts.projectLabel(entry), marker: "data-asset-hub-project-assign" });
+  }
   if (canCreate && entry.asset) more.push({ key: "edit", label: copy.edit, marker: "data-asset-hub-edit" });
   return { main, more };
 }
@@ -335,6 +349,13 @@ export function groupByProject(entries: readonly HubEntry[], links: HubProjectLi
   }
   const order = new Map(entries.map((entry, index) => [entry.key, index]));
   const placed = new Set<string>();
+  const inProject = new Map<string, HubEntry[]>();
+  for (const entry of entries) {
+    if (!entry.projectId) continue;
+    const list = inProject.get(entry.projectId);
+    if (list) list.push(entry);
+    else inProject.set(entry.projectId, [entry]);
+  }
 
   const members = (link: HubProjectLink): HubEntry[] => {
     const found = new Map<string, HubEntry>();
@@ -349,6 +370,12 @@ export function groupByProject(entries: readonly HubEntry[], links: HubProjectLi
     for (const id of link.outputIds) {
       add(byOutput.get(id));
       const copy = savedCopy.get(id);
+      if (copy) add(byAsset.get(copy));
+    }
+    // Results whose run was put in this project (it has to be a project the page knows: a deleted one names nothing).
+    for (const entry of inProject.get(link.id) ?? []) {
+      add(entry);
+      const copy = entry.output ? savedCopy.get(entry.output.id) : undefined;
       if (copy) add(byAsset.get(copy));
     }
     return [...found.values()].sort((a, b) => order.get(a.key)! - order.get(b.key)!);
@@ -413,4 +440,44 @@ export function filterProjectView(view: HubProjectView, filter: HubViewFilter): 
       .filter((group) => groupCount(group) > 0),
     loose: pass(view.loose),
   };
+}
+
+/* ------------------------------------------------------- moving a run */
+
+/**
+ * The runs that move together when one is put in a project: up to the first run of the chain, then down
+ * through everything made from its results (later versions, the 1080p finish, partial edits). The server
+ * decides for real (`job.assign_project`); this is the same walk over what the page holds, so the menu can
+ * say how many pictures will move before anything is sent.
+ */
+export function jobFamily(jobs: readonly Pick<StudioJobView, "id" | "parentOutputId" | "outputs">[], jobId: string): string[] {
+  const byId = new Map(jobs.map((job) => [job.id, job]));
+  const makerOf = new Map<string, string>();
+  for (const job of jobs) for (const output of job.outputs) makerOf.set(output.id, job.id);
+  let top = jobId;
+  for (let guard = 0; guard < 64; guard += 1) {
+    const parent = byId.get(top)?.parentOutputId;
+    const maker = parent ? makerOf.get(parent) : undefined;
+    if (!maker || maker === top) break;
+    top = maker;
+  }
+  const family = new Set<string>([top]);
+  const queue = [top];
+  while (queue.length) {
+    const current = queue.shift()!;
+    const made = new Set(byId.get(current)?.outputs.map((output) => output.id));
+    for (const job of jobs) {
+      if (!family.has(job.id) && job.parentOutputId && made.has(job.parentOutputId)) {
+        family.add(job.id);
+        queue.push(job.id);
+      }
+    }
+  }
+  return [...family];
+}
+
+/** How many results on the page move with this run (itself included). */
+export function familySize(jobs: readonly Pick<StudioJobView, "id" | "parentOutputId" | "outputs">[], jobId: string): number {
+  const family = new Set(jobFamily(jobs, jobId));
+  return jobs.reduce((sum, job) => (family.has(job.id) ? sum + job.outputs.length : sum), 0);
 }

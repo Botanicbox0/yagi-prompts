@@ -2,6 +2,7 @@
  * Rows <-> wire views, and the reads every studio module shares. SQL here never decides access:
  * callers pass an organization they already seated (./access.ts) and every query is scoped to it.
  */
+import { brandStudioProjectsOpen } from '@/lib/flags';
 import type { SqlRunner } from '@/lib/db/sql-runner';
 import type {
   StudioAssetView,
@@ -100,6 +101,9 @@ export function jobView(row: JobRow, outputs: OutputRow[], media: StudioMediaSto
     audio: (p.audio ?? null) as StudioAudioMode | null,
     references: (Array.isArray(row.refs) ? row.refs : []) as StudioReference[],
     parentOutputId: row.parent_output_id,
+    // Only while `BRAND_STUDIO_PROJECTS` is on (read from the server environment here, because every answer
+    // that carries a run is built by this function): with the flag off the answer has the keys it always had.
+    ...(row.project_id && brandStudioProjectsOpen() ? { projectId: row.project_id } : {}),
     parentAssetId: row.kind === 'region_edit' ? (p.source?.assetId ?? null) : null,
     box: row.kind === 'region_edit' ? (p.box ?? null) : null,
     ...(row.kind === 'region_edit' && p.purpose === 'fill' ? { purpose: 'fill' as const } : {}),

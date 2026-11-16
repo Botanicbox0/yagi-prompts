@@ -177,6 +177,11 @@ const JobBase = {
   /** Rewrite the prompt for the chosen model before sending. On by default in the UI. */
   enhance: z.boolean().default(true),
   references: z.array(StudioReferenceSchema).max(STUDIO_LIMITS.referencesMax).default([]),
+  /**
+   * The project this run goes into (`BRAND_STUDIO_PROJECTS`). Ignored while the feature is closed, and
+   * for a run made from an earlier result, which always takes that result's project.
+   */
+  projectId: Id.optional(),
 };
 
 /**
@@ -435,6 +440,9 @@ export const AssetRefSchema = z.object({ organizationId: Id, assetId: Id });
 export const OutputRefSchema = z.object({ organizationId: Id, outputId: Id });
 export const JobRefSchema = z.object({ organizationId: Id, jobId: Id });
 
+/** `job.assign_project`: put a run (and everything made from it) in a project; `null` takes it out. */
+export const JobAssignProjectSchema = z.object({ organizationId: Id, jobId: Id, projectId: Id.nullable() });
+
 /** Save a result into the library. Same bytes twice returns the existing asset. */
 export const AssetFromOutputSchema = z.object({
   organizationId: Id,
@@ -475,6 +483,7 @@ export const STUDIO_OPERATIONS = [
   'asset.from_output',
   'output.delete',
   'job.delete',
+  'job.assign_project',
   'handoff.campaign',
 ] as const;
 export type StudioOperation = (typeof STUDIO_OPERATIONS)[number];
@@ -555,6 +564,8 @@ export interface StudioJobView {
   references: StudioReference[];
   /** For a region edit or a final: the result it was made from. */
   parentOutputId: string | null;
+  /** The project this run belongs to. Present only while `BRAND_STUDIO_PROJECTS` is on and the run has one. */
+  projectId?: string;
   /** For a region edit of a library picture: that picture (an edit of a result uses `parentOutputId`). */
   parentAssetId: string | null;
   /** Region edit only: the box that was changed, so the same edit can be set up again. */
@@ -641,6 +652,24 @@ export interface StudioState {
   canRemoveRuns?: boolean;
   /** Present (true) only when `BRAND_STUDIO_OUTPAINT=on` and the member can create: the layer editor may offer "빈 곳 채우기". */
   canFillEmpty?: boolean;
+  /**
+   * Present only while runs can belong to a project (`BRAND_STUDIO_PROJECTS=on` and migration 0091
+   * applied): the projects a run can be put in, newest first. Absent means the feature is closed.
+   */
+  projects?: StudioProjectRef[];
+}
+
+/** A studio project, as much as a picker needs. */
+export interface StudioProjectRef {
+  id: string;
+  title: string;
+}
+
+/** `job.assign_project`: every run that moved (the run and its family) and where they are now. */
+export interface StudioJobProjectAssigned {
+  ok: true;
+  jobIds: string[];
+  projectId: string | null;
 }
 
 /** `GET /api/brand-studio?organizationId=…&jobs=a,b` — the poll; also moves open jobs forward. */
