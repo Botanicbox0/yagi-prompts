@@ -6,6 +6,7 @@
  */
 import { composeBlueprintPrompt, isBlueprint } from './blueprint';
 import { audioLine, effectiveSeconds, formatRange, keepPhrase, planShots, referenceClause } from './lines';
+import { withClarified } from '../revision/clarify';
 import { replaceMarks, type MarkWords } from './marks';
 import { bindReferences, mapCustomerMentions, type Binding, type BoundReference } from './references';
 import type { EnhanceInput, EnhanceResult } from './types';
@@ -121,8 +122,9 @@ function markWords(input: EnhanceInput): MarkWords[] {
 
 export function composeFallbackPrompt(input: EnhanceInput): EnhanceResult {
   const binding = bindReferences(input);
-  // A revision's ①②③ become what each spot is on; the video model never reads the signs.
-  const said = input.revision ? replaceMarks(input.prompt.trim(), markWords(input)) : input.prompt.trim();
+  // A revision's ①②③ become what each spot is on; the video model never reads the signs. The answer to
+  // the one question asked about it follows the request, so what was meant reaches the model too.
+  const said = input.revision ? withClarified(replaceMarks(input.prompt.trim(), markWords(input)), input.revision.clarified) : input.prompt.trim();
   const request = mapCustomerMentions(said, binding.bound);
   // An edit-revision is the ordinary edit fallback with the request as the change.
   if (input.revision?.mode === 'reshoot' && input.profile === 'seedance') {

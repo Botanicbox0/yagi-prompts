@@ -143,14 +143,18 @@ export function AssetPanel(props: AssetPanelProps) {
                 className="bs-asset-tile"
                 draggable={canCreate}
                 onDragStart={(event) => startRefDrag(event, { assetId: asset.id })}
-                onClick={() => (props.attachOnPress ? props.onAttach(asset) : props.onView(asset))}
-                aria-label={props.attachOnPress ? fill(a.attach, { name: asset.name }) : `${a.view}: ${asset.name}`}
-                title={props.attachOnPress ? a.dragHint : undefined}
+                onClick={() => (props.attachOnPress && asset.kind !== "document" ? props.onAttach(asset) : props.onView(asset))}
+                aria-label={props.attachOnPress && asset.kind !== "document" ? fill(a.attach, { name: asset.name }) : `${a.view}: ${asset.name}`}
+                title={props.attachOnPress && asset.kind !== "document" ? a.dragHint : undefined}
               >
                 {asset.kind === "video" ? (
                   <video src={`${asset.url}#t=0.1`} poster={asset.thumbUrl ?? undefined} muted playsInline preload="metadata" tabIndex={-1} />
                 ) : asset.kind === "image" ? (
                   <img src={asset.thumbUrl ?? asset.url} alt="" loading="lazy" draggable={false} />
+                ) : asset.kind === "document" ? (
+                  <span className="bs-asset-audio" aria-hidden="true" data-document="">
+                    <StudioIcon name="doc" />
+                  </span>
                 ) : (
                   <span className="bs-asset-audio" aria-hidden="true">
                     <StudioIcon name="play" />

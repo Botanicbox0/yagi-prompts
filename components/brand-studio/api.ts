@@ -105,6 +105,19 @@ async function read<T>(response: Response): Promise<ApiResult<T>> {
   return failed(STATUS_CODES[response.status] ?? "failed");
 }
 
+/**
+ * The type to upload a file as. The browser's own type, unless it is not one the studio knows: then a
+ * PDF or PPTX is recognised by its extension. Windows with Hancom installed reports a PDF as
+ * `application/haansoftpdf`, and some systems report nothing at all. The server checks the bytes anyway.
+ */
+export function uploadMime(file: { name: string; type: string }): string {
+  if (uploadKind(file.type)) return file.type;
+  const name = file.name.toLowerCase();
+  if (name.endsWith(".pdf")) return STUDIO_UPLOAD_MIMES.document[0];
+  if (name.endsWith(".pptx")) return STUDIO_UPLOAD_MIMES.document[1];
+  return file.type;
+}
+
 export function uploadKind(mime: string): StudioAssetKind | null {
   for (const kind of Object.keys(STUDIO_UPLOAD_MIMES) as StudioAssetKind[])
     if ((STUDIO_UPLOAD_MIMES[kind] as readonly string[]).includes(mime)) return kind;
@@ -115,11 +128,12 @@ const BYTES_MAX: Record<StudioAssetKind, number> = {
   image: STUDIO_LIMITS.imageBytesMax,
   video: STUDIO_LIMITS.videoBytesMax,
   audio: STUDIO_LIMITS.audioBytesMax,
+  document: STUDIO_LIMITS.documentBytesMax,
 };
 
 /** Checked in the browser before anything is sent; the server checks again. */
-export function uploadProblem(file: { type: string; size: number }): StudioErrorCode | null {
-  const kind = uploadKind(file.type);
+export function uploadProblem(file: { type: string; size: number; name?: string }): StudioErrorCode | null {
+  const kind = uploadKind(file.name !== undefined ? uploadMime({ name: file.name, type: file.type }) : file.type);
   if (!kind) return "unsupported_file";
   return file.size > BYTES_MAX[kind] ? "file_too_large" : null;
 }
@@ -171,14 +185,15 @@ export function createStudioApi({ organizationId, fetch: fetcher = (...args) => 
       options: { role?: StudioAssetRole; requestId?: string; measure?: (file: Blob, kind: StudioAssetKind) => Promise<MeasuredMedia> } = {},
     ): Promise<ApiResult<StudioAssetSaved>> {
       const problem = uploadProblem(file);
-      const kind = uploadKind(file.type);
+      const mime = uploadMime(file);
+      const kind = uploadKind(mime);
       if (problem || !kind) return failed(problem ?? "unsupported_file");
       const name = (file.name.trim() || kind).slice(0, STUDIO_LIMITS.nameMax);
       const reserved = await call("asset.reserve", {
         organizationId,
         requestId: options.requestId ?? newRequestId(),
         name,
-        mime: file.type,
+        mime,
         sizeBytes: file.size,
         ...(options.role ? { role: options.role } : {}),
       });
@@ -187,12 +202,12 @@ export function createStudioApi({ organizationId, fetch: fetcher = (...args) => 
       try {
         put =
           reserved.direct && reserved.url
-            ? await fetcher(reserved.url, { method: "PUT", body: file, headers: { "Content-Type": file.type } })
+            ? await fetcher(reserved.url, { method: "PUT", body: file, headers: { "Content-Type": mime } })
             : await fetcher(`${STUDIO_ENDPOINT}/assets/${encodeURIComponent(reserved.id)}?organizationId=${encodeURIComponent(organizationId)}`, {
                 method: "POST",
                 body: file,
                 credentials: "same-origin",
-                headers: { "Content-Type": file.type },
+                headers: { "Content-Type": mime },
               });
       } catch {
         return failed("failed");
@@ -218,6 +233,8 @@ function cleanMeasure(size: MeasuredMedia): MeasuredMedia {
 
 /** Browser measurement: image size from a decoded bitmap, video size and length from its metadata. */
 export async function measureInBrowser(file: Blob, kind: StudioAssetKind): Promise<MeasuredMedia> {
+  // A document has nothing to measure in the browser (the server counts a deck's slides itself).
+  if (kind === "document") return {};
   if (kind === "image" && typeof createImageBitmap === "function") {
     const bitmap = await createImageBitmap(file);
     const size = { width: bitmap.width, height: bitmap.height };

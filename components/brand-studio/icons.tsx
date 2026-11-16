@@ -16,6 +16,7 @@ const paths = {
   video: "M3 7h12v10H3zM15 10.5l6-3.5v10l-6-3.5",
   attach: "M4 4h16v16H4zM12 8v8M8 12h8",
   save: "M6 4h12v16l-6-4-6 4z",
+  doc: "M7 3.5h7l4 4v13H7zM14 3.5v4h4M9.5 12h6M9.5 15h6M9.5 18h4",
   send: "M21 3L3 10.5l7.5 3L14 21z",
   download: "M12 4v11M7 10l5 5 5-5M5 20h14",
   trash: "M4 7h16M9 7V4h6v3M6.5 7l1 13h9l1-13",

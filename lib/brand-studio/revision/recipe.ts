@@ -15,6 +15,7 @@ import type { StudioReference } from '../contracts';
 import { rewriteReferenceMentions } from '../enhancer/mentions';
 import { StudioDenied } from '../access';
 import { readyOutput } from '../repo';
+import { clarifiedOf } from './clarify';
 import type { JobRow, StudioJobParams } from '../types';
 
 /** The walk gives up after this many edits in a row (the reshoot way then closes; edit stays open). */
@@ -28,6 +29,8 @@ export interface RevisionHistoryItem {
   added: StudioReference[];
   /** The spots that change pointed at (①②③ in `request`), when it pointed at any. */
   marks?: Array<{ label?: string; what?: string }>;
+  /** What the customer answered when asked what that change meant (revise.plan). */
+  clarified?: { question: string; answer: string };
 }
 
 export interface RevisionRecipe {
@@ -118,7 +121,14 @@ export async function revisionChain(sql: SqlRunner, organizationId: string, star
       break;
     }
     const marks = Array.isArray(revision.marks) && revision.marks.length ? revision.marks.map((m) => ({ ...m })) : null;
-    history.unshift({ version: revision.version, request: current.prompt ?? '', added: addedRefsOf(current), ...(marks ? { marks } : {}) });
+    const clarified = clarifiedOf(revision);
+    history.unshift({
+      version: revision.version,
+      request: current.prompt ?? '',
+      added: addedRefsOf(current),
+      ...(marks ? { marks } : {}),
+      ...(clarified ? { clarified } : {}),
+    });
     const parent: JobRow | null = revision.baseJobId ? await jobById(sql, organizationId, revision.baseJobId) : null;
     current = parent ? await versionJobOf(sql, organizationId, parent) : null;
   }

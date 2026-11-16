@@ -82,11 +82,16 @@ export interface EnhanceRevision {
    * sees the material itself. Absent when there is none or it could not be read.
    */
   materials?: EnhanceMaterial[];
+  /**
+   * The customer was asked what the request meant (it read two ways) and answered: `answer` states what
+   * they meant and outranks the request's ambiguous wording. Absent when nothing was asked.
+   */
+  clarified?: { question: string; answer: string };
 }
 
 export interface EnhanceMaterial {
   n: number;
-  kind: 'video';
+  kind: 'video' | 'document';
   notes: string;
 }
 

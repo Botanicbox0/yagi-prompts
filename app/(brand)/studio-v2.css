@@ -430,6 +430,14 @@ textarea.bs-field { resize: vertical; }
 .bs-thumb-play { position: absolute; inset: 0; display: grid; place-items: center; background: rgba(9, 9, 11, 0.3); color: #fff; pointer-events: none; }
 .bs-thumb-play .bs-icon { width: 14px; height: 14px; }
 .bs-revise .bs-region-ref-list { align-items: center; gap: 8px; }
+.bs-revise-document-tile { display: inline-flex; align-items: center; gap: 6px; max-width: 240px; min-height: 40px; padding: 6px 38px 6px 10px; border: 1px solid var(--ys-line-strong); border-radius: 10px; background: var(--ys-panel); color: var(--ys-ink-secondary); font-size: 12px; }
+.bs-revise-document-tile svg { flex: none; width: 18px; height: 18px; }
+.bs-revise-document-name { min-width: 0; overflow: hidden; color: var(--ys-ink); text-overflow: ellipsis; white-space: nowrap; }
+.bs-revise-document-pages { flex: none; font-size: 11px; }
+.bs-revise-document .bs-thumb-x { top: 50%; right: 8px; transform: translateY(-50%); }
+.bs-revise-document-thumb { display: grid; place-items: center; width: 100%; height: 100%; background: var(--ys-panel); color: var(--ys-ink-secondary); }
+.bs-revise-document-thumb svg { width: 18px; height: 18px; }
+.bs-revise-unread { margin: 0; font-size: 12px; }
 .bs-revise-methods { display: grid; gap: 4px; margin: 0; padding: 0; border: 0; }
 .bs-revise-methods legend { padding: 0 0 4px; }
 .bs-revise-method-text { display: grid; gap: 1px; min-width: 0; }
@@ -446,6 +454,13 @@ textarea.bs-field { resize: vertical; }
 .bs-revise-problem { padding: 2px 12px 0; }
 .bs-revise-suggestion { display: grid; gap: 6px; font-size: 13px; }
 .bs-revise-suggestion p { margin: 0; color: var(--ys-ink); }
+.bs-revise-clarify { gap: 8px; padding: 12px; border: 1px solid var(--ys-line-strong); border-radius: var(--ys-r-control); }
+.bs-revise-clarify > p { font-weight: 600; }
+.bs-revise-choices { display: grid; gap: 4px; }
+.bs-revise-choices .bs-btn { justify-content: flex-start; width: 100%; border-radius: var(--ys-r-control); min-height: 40px; height: auto; padding: 8px 12px; white-space: normal; text-align: left; overflow-wrap: anywhere; }
+.bs-revise-choices .bs-btn[data-variant="ghost"] { justify-self: start; width: auto; min-height: 36px; color: var(--ys-ink-secondary); }
+.bs-revise-clarified { display: grid; gap: 1px; font-size: 12.5px; }
+.bs-revise-clarified p { margin: 0; overflow-wrap: anywhere; }
 .bs-revise .bs-submit { justify-self: stretch; }
 /* Marks on a clip ("고칠 곳 표시"): one accent, a ring for a pin, a thin box for a drag. */
 .bs-viewer-media { position: relative; }

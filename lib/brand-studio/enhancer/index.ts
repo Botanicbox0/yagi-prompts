@@ -111,6 +111,11 @@ function payload(input: EnhanceInput, binding: Binding, seconds: number | null, 
             : {}),
           // What the attached material shows, already read for this request (revision/material.ts).
           ...(revision.materials?.length ? { materials: revision.materials.map((m) => ({ n: m.n, kind: m.kind, notes: m.notes })) } : {}),
+          // What the customer answered when asked what the request meant: it outranks the request's wording.
+          // Its picture mentions become tokens like the request's ("이미지 2처럼" -> the picture's token).
+          ...(revision.clarified
+            ? { clarified: { question: revision.clarified.question, answer: mapCustomerMentions(revision.clarified.answer, binding.bound) } }
+            : {}),
         }
       : null,
   };

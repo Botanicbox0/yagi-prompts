@@ -35,6 +35,8 @@ export interface ThumbProps {
 export function Thumb({ item, copy, draggable, attachOnPress, onAttach, onView, actions = [], menu }: ThumbProps) {
   const name = itemName(item, copy);
   const still = item.thumbUrl ?? (item.kind === "image" ? item.url : null);
+  // A document is material for a revision, never a reference: pressing it opens it, it is not attached.
+  const attaches = attachOnPress && item.kind !== "document";
   return (
     <li className="bsr-thumb" data-kind={item.kind} data-library-item={item.key}>
       <button
@@ -42,14 +44,15 @@ export function Thumb({ item, copy, draggable, attachOnPress, onAttach, onView, 
         className="bsr-thumb-main"
         draggable={draggable}
         onDragStart={(event) => startRefDrag(event, item.ref)}
-        onClick={() => (attachOnPress ? onAttach(item.ref) : onView(item.ref))}
-        aria-label={fill(attachOnPress ? copy.item.attach : copy.item.view, { name })}
-        title={attachOnPress ? copy.item.dragHint : undefined}
+        onClick={() => (attaches ? onAttach(item.ref) : onView(item.ref))}
+        aria-label={fill(attaches ? copy.item.attach : copy.item.view, { name })}
+        title={attaches ? copy.item.dragHint : undefined}
       >
-        {item.kind === "audio" ? (
-          <span className="bsr-audio" aria-hidden="true">
-            <RailIcon name="wave" />
+        {item.kind === "audio" || item.kind === "document" ? (
+          <span className="bsr-audio" aria-hidden="true" data-document={item.kind === "document" ? "" : undefined}>
+            <RailIcon name={item.kind === "document" ? "doc" : "wave"} />
             <span className="bsr-audio-name">{name}</span>
+            {item.kind === "document" && item.pages ? <span className="bsr-doc-pages">{fill(copy.item.slides, { n: item.pages })}</span> : null}
           </span>
         ) : still ? (
           <img src={still} alt="" loading="lazy" decoding="async" draggable={false} />

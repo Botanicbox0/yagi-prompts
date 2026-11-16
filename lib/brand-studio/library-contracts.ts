@@ -47,13 +47,16 @@ export interface LibraryItemWire {
   /** `"o:<outputId>"` or `"a:<assetId>"`. */
   key: string;
   ref: LibraryRef;
-  kind: 'image' | 'video' | 'audio';
+  /** `document` (PDF, PPTX) only for library assets; it is material, never a reference. */
+  kind: 'image' | 'video' | 'audio' | 'document';
   url: string;
   thumbUrl: string | null;
   name: string | null;
   width: number | null;
   height: number | null;
   seconds: number | null;
+  /** Slides of a PPTX, when known for certain. */
+  pages?: number;
   createdAt: string;
 }
 

@@ -54,7 +54,7 @@ import { useStudio } from "./use-studio";
 export { buildHubEntries, filterHubEntries, filterProjectView, groupByProject, hubActions, humanTitle, similarityScore } from "./asset-hub-model";
 export type { HubAction, HubDeliverable, HubEntry, HubProjectGroup, HubProjectLinks, HubProjectView, HubSection } from "./asset-hub-model";
 
-const KINDS = ["all", "image", "video", "audio"] as const;
+const KINDS = ["all", "image", "video", "audio", "document"] as const;
 /** A project's cover row shows at most this many pictures (fewer on narrow screens, by CSS). */
 const COVERS = 6;
 
@@ -432,7 +432,8 @@ export function BrandAssetHub({
                 onChange={(e) => setKindFilter(e.target.value as "all" | StudioAssetKind)}
                 data-asset-hub-kind={kindFilter}
               >
-                {KINDS.map((k) => (
+                {/* "Documents" appears only once there is one: with none, the filter is what it always was. */}
+                {KINDS.filter((k) => k !== "document" || kindFilter === "document" || entries.some((e) => e.kind === "document")).map((k) => (
                   <option key={k} value={k}>
                     {h.kinds[k]}
                   </option>

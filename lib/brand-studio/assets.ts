@@ -30,6 +30,7 @@ import {
   type StudioFailure,
 } from './contracts';
 import { lockOrganization, requireCreate, studioSeat, StudioDenied } from './access';
+import { documentKey, inspectDocument, isDocumentKey, studioDocumentStore, studioDocumentsReady } from './documents';
 import { bytesLimit, checkUpload, imageInfo, kindOfMime, sha256Hex, thumbnailWebp, videoInfo } from './files';
 import { failure, guarded } from './outcome';
 import { dropUnreferencedStudioKeys, type PhysicalCleanupExclusion } from './physical-cleanup';
@@ -59,6 +60,9 @@ export async function reserveStudioAsset(deps: StudioDeps, viewer: Viewer, raw: 
   const v = parsed.data;
   const kind = kindOfMime(v.mime);
   if (!kind) return failure('unsupported_file');
+  // Documents exist only while they are open (flag, migration 0092, private storage): closed, a PDF is
+  // what it always was here, an unsupported file.
+  if (kind === 'document' && !(await studioDocumentsReady(deps, deps.sql))) return failure('unsupported_file');
   if (v.sizeBytes > bytesLimit(kind)) return failure('file_too_large');
   const reserved = await guarded(() =>
     deps.sql.transaction(async (sql) => {
@@ -111,6 +115,9 @@ async function completeOnce(deps: StudioDeps, viewer: Viewer, raw: unknown, atte
   if (!parsed.success) return failure('invalid');
   const v = parsed.data;
   const stored: string[] = [];
+  /** Private objects written by this attempt (documents), removed again when it does not commit. */
+  const storedPrivate: string[] = [];
+  const documents = await studioDocumentStore(deps, deps.sql);
   let releasedStagingKey: string | null = null;
   const outcome = await guarded(() =>
     deps.sql.transaction(async (sql) => {
@@ -142,6 +149,25 @@ async function completeOnce(deps: StudioDeps, viewer: Viewer, raw: unknown, atte
         await adjustOrganizationStorageBytes(sql, v.organizationId, -Number(row.size_bytes));
         return same;
       }
+      if (verdict.kind === 'document') {
+        // Kept private: the bytes go to `orgs/{org}/studio/documents/{id}`, never to the media store.
+        if (!documents) throw new StudioDenied('unsupported_file');
+        const doc = inspectDocument(bytes, verdict.mime);
+        if (!doc.ok) {
+          throw new StudioDenied(doc.problem === 'encrypted' ? 'document_locked' : doc.problem === 'too_many_slides' ? 'too_many_slides' : doc.problem === 'too_large' ? 'file_too_large' : 'unsupported_file');
+        }
+        const key = documentKey(v.organizationId, row.id);
+        await documents.put(key, bytes, verdict.mime);
+        storedPrivate.push(key);
+        releasedStagingKey = row.storage_key;
+        return (
+          await sql.query<AssetRow>(
+            `update brand_studio_assets set status = 'ready', kind = 'document', mime = $2, storage_key = $3, thumb_key = null, sha256 = $4,
+                width = null, height = null, duration_ms = null, page_count = $5 where id = $1 returning *`,
+            [row.id, verdict.mime, key, sha, doc.pages],
+          )
+        ).rows[0]!;
+      }
       let width: number | null = null, height: number | null = null, durationMs: number | null = null, thumbKey: string | null = null;
       if (verdict.kind === 'image') {
         const size = await imageInfo(bytes);
@@ -171,10 +197,12 @@ async function completeOnce(deps: StudioDeps, viewer: Viewer, raw: unknown, atte
     }),
   ).catch(async (error) => {
     for (const key of stored) await deps.media.delete(key).catch(() => undefined);
+    for (const key of storedPrivate) await documents?.delete(key).catch(() => undefined);
     throw error;
   });
   if ('ok' in outcome) {
     for (const key of stored) await deps.media.delete(key).catch(() => undefined);
+    for (const key of storedPrivate) await documents?.delete(key).catch(() => undefined);
     // Two uploads of the same bytes raced: the other one won; fold into it.
     if (outcome.code === 'conflict' && attempt === 0) return completeOnce(deps, viewer, raw, 1);
     return outcome;
@@ -229,8 +257,25 @@ export async function deleteStudioAsset(deps: StudioDeps, viewer: Viewer, raw: u
     }),
   );
   if ('ok' in outcome) return outcome;
-  await dropKeys(deps, [outcome.storage_key, outcome.thumb_key], { assetId: outcome.id });
+  if (outcome.kind === 'document') await dropStudioDocument(deps, outcome.storage_key);
+  else await dropKeys(deps, [outcome.storage_key, outcome.thumb_key], { assetId: outcome.id });
   return { ok: true };
+}
+
+/**
+ * A deleted document's private object goes with it (its key is its own asset id, so nothing else points
+ * at it). Works whether documents are open or not: a document made while they were open is still removed
+ * after the flag is turned off. A failure is logged with the key's shape only, never the content.
+ */
+export async function dropStudioDocument(deps: Pick<StudioDeps, 'staging' | 'log'>, key: string | null | undefined): Promise<boolean> {
+  if (!isDocumentKey(key) || !deps.staging.privateObjects) return false;
+  try {
+    await deps.staging.privateObjects.delete(key);
+    return true;
+  } catch (error) {
+    deps.log?.('studio_document_delete_failed', { message: error instanceof Error ? error.message.slice(0, 120) : 'unknown' });
+    return false;
+  }
 }
 
 export async function assetFromOutput(deps: StudioDeps, viewer: Viewer, raw: unknown): Promise<StudioAssetSaved | StudioFailure> {

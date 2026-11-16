@@ -8,7 +8,9 @@ import {
   type Bucket,
   type CopyOutcome,
   type CopyRequest,
+  type PrivateObjectStore,
   type StorageDriver,
+  isPrivateObjectKey,
 } from './index';
 
 export type BrandStorageSurface = 'studio' | 'rooms' | 'attachments' | 'deliverables';
@@ -216,9 +218,46 @@ export function createR2PrivateStorageDriver(
     if (!res.ok) throw new Error(`r2 upload failed: ${bucket}/${key} — status ${res.status}`);
   }
 
+  /** `orgs/{orgId}/…` sits at the bucket root: outside `staging/` (expires after 7 days) and `published/`. */
+  const privateUrl = (key: string, query?: URLSearchParams): string => {
+    if (!isPrivateObjectKey(key)) throw new Error('illegal private object key');
+    assertSafeStorageKey(key);
+    return `${baseUrl}/${encodeS3Key(key)}${query ? `?${query.toString()}` : ''}`;
+  };
+  const privateObjects: PrivateObjectStore = {
+    async put(key, bytes, contentType) {
+      const body = Buffer.from(bytes);
+      const signed = await r2.sign(
+        new Request(privateUrl(key), {
+          method: 'PUT',
+          body,
+          headers: { 'Content-Type': contentType, 'Cache-Control': 'private, no-store', 'Content-Length': String(body.byteLength) },
+        }),
+      );
+      const res = await fetcher(signed);
+      if (!res.ok) throw new Error(`r2 private put failed — status ${res.status}`);
+    },
+    async read(key) {
+      const res = await fetcher(await r2.sign(new Request(privateUrl(key), { method: 'GET' })));
+      if (res.status === 404) throw new StorageObjectNotFound('private', key);
+      if (!res.ok) throw new Error(`r2 private read failed — status ${res.status}`);
+      return new Uint8Array(await res.arrayBuffer());
+    },
+    async delete(key) {
+      const res = await fetcher(await r2.sign(new Request(privateUrl(key), { method: 'DELETE' })));
+      if (!res.ok && res.status !== 404) throw new Error(`r2 private delete failed — status ${res.status}`);
+    },
+    async signedUrl(key, expiresInSeconds) {
+      const expiresIn = Number.isFinite(expiresInSeconds) ? Math.max(1, Math.min(Math.floor(expiresInSeconds), 60)) : 60;
+      const params = new URLSearchParams({ 'X-Amz-Expires': String(expiresIn), 'response-content-disposition': 'attachment' });
+      return (await r2.sign(new Request(privateUrl(key, params), { method: 'GET' }), { aws: { signQuery: true } })).url;
+    },
+  };
+
   return {
     name: 'r2',
     servesSignedUrls: true,
+    privateObjects,
 
     async signedUploadUrl(key: string, contentType: string): Promise<string> {
       const params = new URLSearchParams({ 'X-Amz-Expires': '900' });

@@ -23,6 +23,8 @@ export interface TrayItem {
   url: string;
   thumbUrl: string | null;
   seconds: number | null;
+  /** Slides of a PPTX document, when known for certain. */
+  pages?: number;
   /** Measured size, when known (a reference video's limits use it). */
   width?: number | null;
   height?: number | null;
@@ -45,6 +47,7 @@ export function trayItemFromAsset(asset: StudioAssetView): TrayItem {
     seconds: asset.seconds,
     width: asset.width,
     height: asset.height,
+    ...(asset.pages ? { pages: asset.pages } : {}),
     ...(asset.role ? { role: asset.role } : {}),
   };
 }
@@ -65,13 +68,13 @@ export function trayItemFromOutput(output: StudioOutputView, name: string): Tray
 
 /** Per-kind numbering in tray order: ["이미지 1", "영상 1", "이미지 2"]. */
 export function trayLabels(items: readonly Pick<TrayItem, "kind">[], copy: StudioCopy): string[] {
-  const seen: Record<StudioAssetKind, number> = { image: 0, video: 0, audio: 0 };
+  const seen: Record<StudioAssetKind, number> = { image: 0, video: 0, audio: 0, document: 0 };
   return items.map((item) => fill(copy.tray[item.kind], { n: ++seen[item.kind] }));
 }
 
 /** The number under each thumbnail: per kind, in tray order (an image run reads 1, 2, 3 …). */
 export function trayNumbers(items: readonly Pick<TrayItem, "kind">[]): number[] {
-  const seen: Record<StudioAssetKind, number> = { image: 0, video: 0, audio: 0 };
+  const seen: Record<StudioAssetKind, number> = { image: 0, video: 0, audio: 0, document: 0 };
   return items.map((item) => ++seen[item.kind]);
 }
 
@@ -95,6 +98,8 @@ export function mentionLabel(kind: MentionKind | "any", n: number, copy: StudioC
 
 /** Adds at the end (or at the front when `first`), never twice, never past the run limit. */
 export function addToTray(items: readonly TrayItem[], item: TrayItem, first = false): { items: TrayItem[]; full: boolean } {
+  // A document is material for a revision, never a reference: the tray never takes one.
+  if (item.kind === "document") return { items: [...items], full: false };
   if (items.some((i) => i.key === item.key)) return { items: [...items], full: false };
   if (items.length >= STUDIO_LIMITS.referencesMax) return { items: [...items], full: true };
   return { items: first ? [item, ...items] : [...items, item], full: false };

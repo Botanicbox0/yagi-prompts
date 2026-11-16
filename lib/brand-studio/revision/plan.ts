@@ -8,7 +8,7 @@
  * `reshootWay` return either the plan or the reason the way is closed.
  */
 import type { SqlRunner } from '@/lib/db/sql-runner';
-import { STUDIO_LIMITS, STUDIO_REVISE_MATERIALS_MAX, type ReviseMark, type StudioReference, type StudioReviseMode, type StudioReviseProblem } from '../contracts';
+import { STUDIO_LIMITS, STUDIO_REVISE_DOCUMENTS_MAX, STUDIO_REVISE_MATERIALS_MAX, type ReviseMark, type StudioReference, type StudioReviseMode, type StudioReviseProblem } from '../contracts';
 import { StudioDenied } from '../access';
 import { pointsPastMarks } from '../enhancer/marks';
 import type { StudioMediaStore } from '../media-store';
@@ -29,6 +29,10 @@ export interface ReviseRequest {
   marks?: readonly ReviseMark[];
   /** Material read for the request (videos); never among the run's references. */
   materials?: ReadonlyArray<{ assetId?: string; outputId?: string }>;
+  /** Documents read for the request; never among the run's references. */
+  documents?: ReadonlyArray<{ assetId: string }>;
+  /** The customer's answer to the one question asked about this request. */
+  clarified?: { question: string; answer: string } | null;
 }
 
 type StoredMark = NonNullable<NonNullable<StudioJobParams['revision']>['marks']>[number];
@@ -105,12 +109,39 @@ export async function resolveMaterials(
   return list.map((r) => (r.assetId ? { assetId: r.assetId } : { outputId: r.outputId! }));
 }
 
+/**
+ * The documents sent with a revision (§4.7): this organization's ready, live `document` assets, at most
+ * `STUDIO_REVISE_DOCUMENTS_MAX`. Only while documents are open; closed, they are ignored as an unknown
+ * field always was. Stored as ids; never among the run's references.
+ */
+export async function resolveDocuments(
+  sql: SqlRunner,
+  organizationId: string,
+  documents: ReadonlyArray<{ assetId: string }> | undefined,
+  open: boolean,
+): Promise<Array<{ assetId: string }>> {
+  if (!open) return [];
+  const ids = [...new Set((documents ?? []).map((d) => d.assetId))];
+  if (!ids.length) return [];
+  if (ids.length > STUDIO_REVISE_DOCUMENTS_MAX) throw new StudioDenied('invalid');
+  const found = (
+    await sql.query<{ id: string }>(
+      "select id from brand_studio_assets where organization_id = $1 and id = any($2::uuid[]) and kind = 'document' and status = 'ready' and deleted_at is null",
+      [organizationId, ids],
+    )
+  ).rows.map((r) => r.id);
+  if (found.length !== ids.length) throw new StudioDenied('reference_missing');
+  return ids.map((assetId) => ({ assetId }));
+}
+
 function revisionParams(
   recipe: RevisionRecipe,
   mode: StudioReviseMode,
   added: number,
   marks?: readonly ReviseMark[],
   materials?: ReadonlyArray<{ assetId?: string; outputId?: string }>,
+  documents?: ReadonlyArray<{ assetId: string }>,
+  clarified?: { question: string; answer: string } | null,
 ): NonNullable<StudioJobParams['revision']> {
   const kept = storedMarks(marks);
   return {
@@ -122,6 +153,8 @@ function revisionParams(
     added,
     ...(kept.length ? { marks: kept } : {}),
     ...(materials?.length ? { materials: materials.map((m) => ({ ...m })) } : {}),
+    ...(documents?.length ? { documents: documents.map((d) => ({ assetId: d.assetId })) } : {}),
+    ...(clarified ? { clarified: { question: clarified.question, answer: clarified.answer } } : {}),
   };
 }
 
@@ -178,7 +211,7 @@ export async function editWay(
         keep: [],
         change: '',
         ...(base.seconds !== null ? { referenceVideoSeconds: base.seconds } : {}),
-        revision: revisionParams(recipe, 'edit', request.references.length, request.marks, request.materials),
+        revision: revisionParams(recipe, 'edit', request.references.length, request.marks, request.materials, request.documents, request.clarified),
       },
       refs,
       resolved,
@@ -241,7 +274,7 @@ export async function reshootWay(
     audio: p.audio ?? 'native',
     count: 1,
     locale,
-    revision: revisionParams(recipe, 'reshoot', fresh.length, request.marks, request.materials),
+    revision: revisionParams(recipe, 'reshoot', fresh.length, request.marks, request.materials, request.documents, request.clarified),
   };
   if (run.kind === 'video') {
     const usd = videoRunUsd({ resolution, seconds: seconds ?? model.defaultSeconds });
@@ -289,9 +322,19 @@ const DENIED: Record<StudioReviseProblem, 'invalid' | 'reference_missing'> = {
 export async function planRevision(
   sql: SqlRunner,
   organizationId: string,
-  input: { outputId: string; mode: StudioReviseMode; prompt: string; references: StudioReference[]; marks?: ReviseMark[]; materials?: StudioReference[] },
+  input: {
+    outputId: string;
+    mode: StudioReviseMode;
+    prompt: string;
+    references: StudioReference[];
+    marks?: ReviseMark[];
+    materials?: StudioReference[];
+    documents?: Array<{ assetId: string }>;
+    clarified?: { question: string; answer: string };
+  },
   media: StudioMediaStore,
   locale: 'ko' | 'en',
+  documentsOpen = false,
 ): Promise<JobPlan> {
   requireMarksBehind(input.prompt, input.marks);
   const recipe = await loadRevisionRecipe(sql, organizationId, input.outputId);
@@ -301,7 +344,16 @@ export async function planRevision(
   const clip = { kind: 'video' } as ResolvedRef;
   if (mentionsMissing(input.prompt, [clip, ...added])) throw new StudioDenied('reference_missing');
   const materials = await resolveMaterials(sql, organizationId, input.materials, media, locale);
-  const request = { mode: input.mode, prompt: input.prompt, references: [...input.references], marks: input.marks ?? [], materials };
+  const documents = await resolveDocuments(sql, organizationId, input.documents, documentsOpen);
+  const request = {
+    mode: input.mode,
+    prompt: input.prompt,
+    references: [...input.references],
+    marks: input.marks ?? [],
+    materials,
+    documents,
+    clarified: input.clarified ?? null,
+  };
   const way = input.mode === 'edit'
     ? await editWay(sql, organizationId, recipe, request, media, locale)
     : await reshootWay(sql, organizationId, recipe, request, media, locale);

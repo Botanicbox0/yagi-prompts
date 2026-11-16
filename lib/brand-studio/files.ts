@@ -20,6 +20,9 @@ export function sniffMime(bytes: Uint8Array): string | null {
   if (b.length >= 12 && b.toString('latin1', 4, 8) === 'ftyp') return b.toString('latin1', 8, 12) === 'qt  ' ? 'video/quicktime' : 'video/mp4';
   if (b.length >= 3 && b.toString('latin1', 0, 3) === 'ID3') return 'audio/mpeg';
   if (b.length >= 2 && b[0] === 0xff && (b[1]! & 0xe0) === 0xe0 && (b[1]! & 0x06) !== 0) return 'audio/mpeg';
+  if (b.length >= 5 && b.toString('latin1', 0, 5) === '%PDF-') return 'application/pdf';
+  // A ZIP: only ever a PPTX here (the document check opens it and refuses anything else).
+  if (b.length >= 4 && b[0] === 0x50 && b[1] === 0x4b && b[2] === 0x03 && b[3] === 0x04) return STUDIO_UPLOAD_MIMES.document[1];
   return null;
 }
 
@@ -31,6 +34,7 @@ export function kindOfMime(mime: string): StudioAssetKind | null {
 }
 
 export function bytesLimit(kind: StudioAssetKind): number {
+  if (kind === 'document') return STUDIO_LIMITS.documentBytesMax;
   return kind === 'image' ? STUDIO_LIMITS.imageBytesMax : kind === 'video' ? STUDIO_LIMITS.videoBytesMax : STUDIO_LIMITS.audioBytesMax;
 }
 

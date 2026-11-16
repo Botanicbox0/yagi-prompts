@@ -68,7 +68,8 @@ export async function handoffToCampaign(deps: StudioDeps, viewer: Viewer, raw: u
       let file: { key: string; mime: string; name: string; size: number; kind: 'image' | 'video' | 'audio' } | null = null;
       if (v.assetId) {
         const a = await readyAsset(sql, v.organizationId, v.assetId);
-        if (a) file = { key: a.storage_key, mime: a.mime, name: a.name, size: Number(a.size_bytes), kind: a.kind };
+        // A document stays private: it is never copied into a campaign.
+        if (a && a.kind !== 'document') file = { key: a.storage_key, mime: a.mime, name: a.name, size: Number(a.size_bytes), kind: a.kind };
       } else {
         const o = await readyOutput(sql, v.organizationId, v.outputId!);
         if (o?.storage_key && o.mime) file = { key: o.storage_key, mime: o.mime, name: `studio-${o.id.slice(0, 8)}`, size: Number(o.bytes ?? 0), kind: o.kind };

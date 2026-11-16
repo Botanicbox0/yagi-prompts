@@ -164,6 +164,16 @@ export function brandStudioProjectsOpen(env: Record<string, string | undefined> 
 }
 
 /**
+ * Documents (PDF, PPTX) as material in the brand studio's revise panel (docs/BRAND-STUDIO-V6-PLAN.md §4.7,
+ * migration 0092). Default OFF: open only when the server environment says exactly
+ * `BRAND_STUDIO_DOCUMENTS=on`, and even then only once the migration is applied
+ * (lib/brand-studio/documents/index.ts `studioDocumentsReady`).
+ */
+export function brandStudioDocumentsOpen(env: Record<string, string | undefined> = process.env): boolean {
+  return env.BRAND_STUDIO_DOCUMENTS === 'on';
+}
+
+/**
  * docs/CAST-CATEGORIES.md §4 — couple templates (the buyer and one partner). Default OFF: open only
  * when the server environment says exactly `TWINGS_COUPLE_TEMPLATES=on`. Terms §5.3 say "your own
  * face only" and cannot change while Toss reviews subscription billing, so off means couples do not

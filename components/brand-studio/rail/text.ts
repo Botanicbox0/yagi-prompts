@@ -58,6 +58,7 @@ export function itemOfAsset(asset: StudioAssetView): LibraryItemView {
     width: asset.width,
     height: asset.height,
     seconds: asset.seconds,
+    ...(asset.pages ? { pages: asset.pages } : {}),
     createdAt: asset.createdAt,
   };
 }
