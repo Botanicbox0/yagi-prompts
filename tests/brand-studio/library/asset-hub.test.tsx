@@ -3,7 +3,8 @@ import { renderToStaticMarkup } from "react-dom/server";
 import type { ReactElement } from "react";
 import { SANDBOXED_CLIENT_ORG_IDS } from "@/lib/brands/features";
 import type { BrandWorkspaceChoice } from "@/lib/brands/workspace/selection";
-import { BrandAssetHub, buildHubEntries, filterHubEntries, similarityScore } from "@/components/brand-studio/asset-hub";
+import { BrandAssetHub, buildHubEntries, filterHubEntries, hubActions, humanTitle, similarityScore } from "@/components/brand-studio/asset-hub";
+import { HubDetail } from "@/components/brand-studio/asset-hub-tile";
 import { Viewer } from "@/components/brand-studio/viewer";
 import { regionEditModels } from "@/components/brand-studio/dock-model";
 import { imageScreenRefHref } from "@/components/brand-studio/studio-app";
@@ -72,6 +73,21 @@ import ContentLibrary from "@/app/(brand)/brand/library/page";
 import BrandIdentityPage from "@/app/(brand)/brand/identity/page";
 import BrandSettings from "@/app/(brand)/brand/settings/page";
 
+function actionCopy(locale: "ko" | "en") {
+  const dict = getDictionary(locale);
+  const h = dict.studioLibrary.hub;
+  return {
+    useImage: h.openInImage,
+    decorate: dict.brandStudio.gallery.menu.decorate,
+    makeVideo: h.openInVideo,
+    compose: h.openInCompose,
+    reverse: h.reverseVideo,
+    share: h.shareReview,
+    similar: h.findSimilar,
+    edit: dict.studioLibrary.uploads.edit,
+  };
+}
+
 function stubLibrary(patch: Partial<StudioLibrary> = {}): StudioLibrary {
   return {
     ready: true,
@@ -122,8 +138,156 @@ describe("unified BrandAssetHub & similarity lens", () => {
       expect(html).toContain(`data-asset-hub-tab="${tab}"`);
     }
     expect(html).toContain(imageScreenRefHref(ORG, { assetId: asset(1).id }).replace("&", "&amp;"));
-    expect(html).toContain(`start=reverse&amp;asset=${asset(2).id}`);
+    // "참고 영상으로 만들기" moved off the tile into the uploaded film's "more" menu and sheet.
+    const film = buildHubEntries(s.assets, s.jobs, dict.studioLibrary.hub.sourceGenerated).find((e) => e.key === `a:${asset(2).id}`)!;
+    const reverse = hubActions(film, { organizationId: ORG, canOpenStudio: true, canCreate: true, copy: actionCopy(locale) }).more.find((a) => a.key === "reverse");
+    expect(reverse).toMatchObject({ label: dict.studioLibrary.hub.reverseVideo, marker: "data-asset-hub-reverse" });
+    expect(reverse?.href).toContain(`start=reverse&asset=${asset(2).id}`);
     expect(html).not.toMatch(/₩|KRW|\d[\d,]*\s*원(?!래)/);
+  });
+
+  it("shows a human name or nothing: export ids, hashes and camera-roll names never become a title", () => {
+    for (const ugly of [
+      "hf_20261109_095947_a9a77cc2-dbe1-4471-81ba-0c5a1d2e3f40.png",
+      "f03b2fe9-a08c-4e29-abc0-2c5977594b27.mp4",
+      "a98d50255f2a89f6934c04155b9de0c7.jpg",
+      "IMG_4821.JPG",
+      "KakaoTalk_20261109_123456789.jpg",
+      "스크린샷 2026-11-09 153312.png",
+      "2026-11-09 14.22.33.mov",
+      "video.mp4",
+      "",
+      "   ",
+    ]) {
+      expect(humanTitle(ugly), ugly).toBeNull();
+    }
+    expect(humanTitle("봄 신제품 컷.jpg")).toBe("봄 신제품 컷");
+    expect(humanTitle("Perfume flacon")).toBe("Perfume flacon");
+    expect(humanTitle("product_shot_v2.png")).toBe("product shot v2");
+    expect(humanTitle("logo.png")).toBe("logo");
+    // A prompt gives its first line only.
+    expect(humanTitle("A hand slowly places a round glass perfume bottle\nCamera: slow push in")).toBe("A hand slowly places a round glass perfume bottle");
+  });
+
+  it.each(["ko", "en"] as const)("draws the picture as the tile: no file name, no button row, one main action, a length on films (%s)", (locale) => {
+    const dict = getDictionary(locale);
+    const ugly = "hf_20261109_095947_a9a77cc2-dbe1-4471-81ba-0c5a1d2e3f40.png";
+    const film = "f03b2fe9-a08c-4e29-abc0-2c5977594b27.mp4";
+    const html = renderToStaticMarkup(
+      <BrandAssetHub
+        organizationId={ORG}
+        studioCopy={dict.brandStudio}
+        libraryCopy={dict.studioLibrary}
+        initialState={studioState({
+          assets: [
+            asset(1, { name: ugly, width: 1600, height: 2000 }),
+            asset(2, { kind: "video", name: film, seconds: 42, url: "https://media.example/st/ref.mp4", width: 1080, height: 1920 }),
+            asset(3, { name: "봄 신제품 컷.jpg", role: "product", tags: ["spring"] }),
+          ],
+          jobs: [job(1, { prompt: "Glass perfume bottle in morning light", outputs: [output(1)] })],
+        })}
+        injectedLibrary={stubLibrary()}
+      />,
+    );
+    const tiles = html.split("data-asset-hub-card=").slice(1);
+    expect(tiles).toHaveLength(4);
+    // Raw file names are searchable, never drawn.
+    expect(html).not.toContain("hf_20261109");
+    expect(html).not.toContain("f03b2fe9-a08c-4e29");
+    expect(html).toContain("봄 신제품 컷");
+    expect(html).not.toContain("봄 신제품 컷.jpg");
+    expect(html).toContain("Glass perfume bottle in morning light");
+    // The old card's pill rows, role tag and tag chips are gone from the grid.
+    for (const gone of ["data-asset-hub-open-canvas", "data-asset-hub-use-video", "data-asset-hub-reverse", "data-asset-hub-share-review", "data-asset-hub-similar", "data-asset-hub-edit", "data-asset-hub-edit-form"]) {
+      expect(html, gone).not.toContain(gone);
+    }
+    for (const tile of tiles) {
+      // One press target for the sheet, a heart, at most one main action and one "more" button.
+      expect(tile.match(/data-asset-hub-open(?=[=\s>])/g)).toHaveLength(1);
+      expect(tile.match(/data-asset-hub-like/g)).toHaveLength(1);
+      expect((tile.match(/data-asset-hub-(use-image|open-compose)/g) ?? []).length).toBeLessThanOrEqual(1);
+      expect(tile.match(/aria-haspopup="menu"/g)).toHaveLength(1);
+    }
+    // Only films and sounds carry a badge: their length.
+    expect(html.match(/data-asset-hub-length/g)).toHaveLength(1);
+    expect(html).toMatch(/data-asset-hub-length[^>]*>.*?0:42<\/span>/);
+    // The tile is drawn at the picture's own ratio (4:5 and 9:16 here).
+    expect(html).toContain("--r:0.8");
+    expect(html).toContain("--r:0.5625");
+    // The page no longer opens with a sentence describing itself.
+    expect(html).not.toContain(dict.studioLibrary.hub.subtitle);
+  });
+
+  it("draws storage as one quiet line while there is room, and as the full card once there is something to act on", () => {
+    const dict = getDictionary("ko");
+    const GB = 1024 ** 3;
+    const render = (storage: NonNullable<ReturnType<typeof studioState>["storage"]>) =>
+      renderToStaticMarkup(
+        <BrandAssetHub organizationId={ORG} studioCopy={dict.brandStudio} libraryCopy={dict.studioLibrary} initialState={studioState({ storage })} injectedLibrary={stubLibrary()} />,
+      );
+    const base = { usedBytes: 4 * 1024 ** 2, effectiveQuotaBytes: 50 * GB, usageRatio: 0.0001, usagePercent: 0, state: "ok" as const, uploadBlocked: false, retentionDays: null };
+
+    const quiet = render(base);
+    expect(quiet).toContain("data-storage-compact");
+    expect(quiet.match(/data-brand-storage-meter/g)).toHaveLength(1);
+    expect(quiet).toContain("data-storage-numbers");
+
+    const near = render({ ...base, usedBytes: 42 * GB, usageRatio: 0.84, usagePercent: 84, state: "near_limit" });
+    expect(near).not.toContain("data-storage-compact");
+    expect(near).toContain('data-storage-badge="near_limit"');
+    expect(near).toContain("data-storage-notice");
+
+    const full = render({ ...base, usedBytes: 50 * GB, usageRatio: 1, usagePercent: 100, state: "exceeded", uploadBlocked: true });
+    expect(full).not.toContain("data-storage-compact");
+    expect(full).toContain('data-storage-upload-blocked="true"');
+
+    // Project-only clients read how long delivered files are kept: that note is never folded away.
+    const kept = render({ ...base, retentionDays: 90 });
+    expect(kept).not.toContain("data-storage-compact");
+    expect(kept).toContain("data-storage-retention");
+  });
+
+  it("keeps every action reachable without hover: the sheet lists them all, and project-only clients get no studio links", () => {
+    const dict = getDictionary("ko");
+    const entries = buildHubEntries(
+      [asset(1, { name: "IMG_0001.JPG", role: "logo", tags: ["mono"] }), asset(2, { kind: "video", name: "Teaser", seconds: 8 }), asset(3, { kind: "audio", name: "Jingle", seconds: 12 })],
+      [job(1, { prompt: "Blue glass serum bottle on marble", outputs: [output(1)] })],
+      dict.studioLibrary.hub.sourceGenerated,
+    );
+    const pick = (key: string) => entries.find((e) => e.key === key)!;
+    const keys = (key: string, opts: { canOpenStudio: boolean; canCreate: boolean }) => {
+      const { main, more } = hubActions(pick(key), { organizationId: ORG, copy: actionCopy("ko"), ...opts });
+      return { main: main?.key ?? null, more: more.map((a) => a.key) };
+    };
+    const open = { canOpenStudio: true, canCreate: true };
+    expect(keys(`a:${asset(1).id}`, open)).toEqual({ main: "useImage", more: ["decorate", "makeVideo", "share", "similar", "edit"] });
+    expect(keys(`a:${asset(2).id}`, open)).toEqual({ main: "compose", more: ["reverse", "share", "similar", "edit"] });
+    expect(keys(`a:${asset(3).id}`, open)).toEqual({ main: null, more: ["similar", "edit"] });
+    expect(keys(`o:${output(1).id}`, open)).toEqual({ main: "useImage", more: ["decorate", "makeVideo", "share", "similar"] });
+    // Viewers cannot share or edit; project-only clients (`self_studio` denied) get no dead studio links.
+    expect(keys(`a:${asset(1).id}`, { canOpenStudio: true, canCreate: false })).toEqual({ main: "useImage", more: ["decorate", "makeVideo", "similar"] });
+    expect(keys(`a:${asset(2).id}`, { canOpenStudio: false, canCreate: true })).toEqual({ main: null, more: ["similar", "edit"] });
+
+    const upload = pick(`a:${asset(1).id}`);
+    const sheet = renderToStaticMarkup(
+      <HubDetail
+        entry={upload}
+        copy={dict.studioLibrary}
+        name={dict.studioLibrary.item.image}
+        liked={false}
+        {...hubActions(upload, { organizationId: ORG, copy: actionCopy("ko"), ...open })}
+        onLike={() => {}}
+        onAction={() => {}}
+        onClose={() => {}}
+      />,
+    );
+    for (const marker of ["data-asset-hub-use-image", "data-asset-hub-open-canvas", "data-asset-hub-use-video", "data-asset-hub-share-review", "data-asset-hub-similar", "data-asset-hub-edit", "data-asset-hub-like", "data-asset-hub-detail-close"]) {
+      expect(sheet, marker).toContain(marker);
+    }
+    // The sheet is where a file's stored name may be read (it is the way to rename it), with its role and tags.
+    expect(sheet).toContain("IMG_0001.JPG");
+    expect(sheet).toContain(dict.studioLibrary.roles.logo);
+    expect(sheet).toContain("mono");
   });
 
   it("filters by prompt/tag/role/kind and ranks related items via similarityScore", () => {
