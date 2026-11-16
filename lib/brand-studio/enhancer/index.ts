@@ -120,14 +120,22 @@ function thumbParts(input: EnhanceInput, binding: Binding): GeminiPart[] {
   const parts: GeminiPart[] = [];
   const cropThumb = input.kind === 'region_edit' ? input.editCropThumb : null;
   const hasCrop = Boolean(cropThumb && THUMB_MIMES.has(cropThumb.mime));
+  const wide = input.kind === 'region_edit' ? input.regionWindow : null;
   if (hasCrop && cropThumb) {
     const target = binding.editTarget ?? 'image 1';
     parts.push({
-      text: `Picture of ${target} (the enlarged region crop cut out from the customer's photograph — keep its framing, scale, outer silhouette, contours and surrounding pixels identical):`,
+      text: wide
+        ? `Picture of ${target} (the customer's picture as the editor receives it; the part to change is the boxed area in the ${wide.where}, ${wide.left}-${wide.right}% from the left and ${wide.top}-${wide.bottom}% from the top — keep everything else identical):`
+        : `Picture of ${target} (the enlarged region crop cut out from the customer's photograph — keep its framing, scale, outer silhouette, contours and surrounding pixels identical):`,
     });
     parts.push(inlinePart(cropThumb.bytes, cropThumb.mime));
   }
-  const maxRefThumbs = THUMBS_MAX + (hasCrop ? 1 : 0);
+  const closeUp = hasCrop && wide?.closeUp && THUMB_MIMES.has(wide.closeUp.mime) ? wide.closeUp : null;
+  if (closeUp) {
+    parts.push({ text: `Close-up of the boxed part of ${binding.editTarget ?? 'image 1'} (for your eyes only; the editor does not receive it, so never name it as a figure):` });
+    parts.push(inlinePart(closeUp.bytes, closeUp.mime));
+  }
+  const maxRefThumbs = THUMBS_MAX + (hasCrop ? 1 : 0) + (closeUp ? 1 : 0);
   for (const b of binding.bound) {
     if (parts.length / 2 >= maxRefThumbs) break;
     const thumb = b.ref.thumb;

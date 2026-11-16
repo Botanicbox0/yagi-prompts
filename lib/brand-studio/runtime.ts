@@ -10,7 +10,7 @@ import { composeFallbackPrompt, enhancePrompt } from './enhancer';
 import { rewriteBlockedPrompt } from './enhancer/blocked';
 import { readMaterial } from './revision/material';
 import { readFilm } from './film-sheet';
-import { compositeRegion, cropForEdit, planRegion } from './region-edit';
+import { compositeRegion, cropForEdit, planRegion, planRegionWindow } from './region-edit';
 import { advanceStudioJobsWith, sweepStudio } from './engine';
 import { studioEnv } from './env';
 import { createStudioMediaStore } from './media-store';
@@ -35,6 +35,7 @@ const intel: StudioIntel = {
   readMaterial,
   rewriteBlockedPrompt,
   planRegion,
+  planRegionWindow: (image, box) => planRegionWindow(image, box),
   cropForEdit,
   compositeRegion,
 };

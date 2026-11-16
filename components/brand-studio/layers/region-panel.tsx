@@ -71,8 +71,9 @@ export function RegionEditPanel(props: RegionEditPanelProps) {
 
   const [model, setModelState] = useState<string>(() => presetModel(props.preset?.model, region));
   const [quality, setQuality] = useState<string>(() =>
-    qualityOf(region.models.find((m) => m.id === presetModel(props.preset?.model, region)) ?? null, props.preset?.quality ?? region.defaultQuality),
+    region.fixedModel ? "" : qualityOf(region.models.find((m) => m.id === presetModel(props.preset?.model, region)) ?? null, props.preset?.quality ?? region.defaultQuality),
   );
+  const v2 = region.fixedModel ? { v2: true } : {};
   const [references, setReferences] = useState<TrayItem[]>(() => props.preset?.references ?? []);
   const [task, setTask] = useState<RegionAssistantTaskId | null>(null);
   const [instruction, setInstruction] = useState<string>(() =>
@@ -139,7 +140,7 @@ export function RegionEditPanel(props: RegionEditPanelProps) {
 
   const boxAssessment = useMemo(() => assessRegionBox(box, edgeScore, locale), [box, edgeScore, locale]);
 
-  const creditsAmount = regionCredits(model, references.length, quality);
+  const creditsAmount = regionCredits(model, references.length, quality, Boolean(region.fixedModel));
   const formattedCredits = creditsAmount.toLocaleString(locale === "ko" ? "ko-KR" : "en-US");
 
   const addRefItem = (item: TrayItem | null) => {
@@ -237,7 +238,7 @@ export function RegionEditPanel(props: RegionEditPanelProps) {
       setErrorNote(assistantState.missingRefWarning);
       return;
     }
-    const problem = regionProblem({ box, instruction, model, references });
+    const problem = regionProblem({ box, instruction, model, references, ...v2 });
     if (problem) {
       setErrorNote(problemMessage(problem, copy));
       return;
@@ -275,7 +276,7 @@ export function RegionEditPanel(props: RegionEditPanelProps) {
       setErrorNote(assistantState.missingRefWarning);
       return;
     }
-    const problem = regionProblem({ box, instruction, model, references });
+    const problem = regionProblem({ box, instruction, model, references, ...v2 });
     if (problem) {
       setErrorNote(problemMessage(problem, copy));
       return;
@@ -591,6 +592,7 @@ export function RegionEditPanel(props: RegionEditPanelProps) {
         {showEnhanceTip && <p className="bsl-tip-box">{r.enhanceTip}</p>}
       </div>
 
+      {!region.fixedModel && (
       <div className={qualities.length ? "bsl-grid2" : "bsl-field"}>
         <div className="bsl-field">
           <label className="bsl-label" htmlFor={`${id}-model`}>
@@ -619,6 +621,7 @@ export function RegionEditPanel(props: RegionEditPanelProps) {
           </div>
         )}
       </div>
+      )}
 
       <label className="bsl-check">
         <input type="checkbox" checked={autoFlatten} onChange={(event) => props.onAutoFlatten(event.target.checked)} />
@@ -647,6 +650,8 @@ export function RegionEditPanel(props: RegionEditPanelProps) {
 }
 
 function presetModel(asked: string | undefined, region: LayerEditorRegionSupport): string {
+  // Region edit v2: a rerun of an edit made on another model runs on the one engine too.
+  if (region.fixedModel) return region.defaultModel;
   if (asked && region.models.some((m) => m.id === asked)) return asked;
   return region.defaultModel;
 }

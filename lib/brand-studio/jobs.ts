@@ -26,7 +26,7 @@ import { routeJob } from './lanes';
 import type { StudioImageModel } from './models';
 import { planFinal, planJob, type JobPlan } from './plan';
 import { planRevision } from './revision/plan';
-import { brandSummary, enhanceInputOf, enhanceReferences, keepSheet, readSheet, remixContext, runEnhancer } from './prepare';
+import { brandSummary, enhanceInputOf, enhanceReferences, keepSheet, readSheet, regionEditPlan, remixContext, runEnhancer } from './prepare';
 import { readCachedFilmSheet } from './film-sheet';
 import { jobSoftDeleteReady, jobView, openJobCount, readyAsset, readyOutput } from './repo';
 import type { EnhanceInput, JobRow, OutputRow, StudioDeps } from './types';
@@ -146,7 +146,7 @@ export async function createStudioJob(deps: StudioDeps, viewer: Viewer, raw: unk
         ? await planFinal(sql, v.organizationId, v.draftOutputId, locale)
         : v.kind === 'video_revise'
           ? await planRevision(sql, v.organizationId, v, deps.media, locale)
-          : await planJob(sql, v.organizationId, v, deps.media, locale);
+          : await planJob(sql, v.organizationId, v, deps.media, locale, { regionV2: deps.env.regionV2 });
       if ((await openJobCount(sql, v.organizationId)) >= STUDIO_LIMITS.openJobsPerOrganization) throw new StudioDenied('too_many_running');
       const verdict = await reserveAllowance(sql, v.organizationId, plan.estimateKrw, deps.env, deps.now?.() ?? new Date());
       if (!verdict.ok) throw new StudioDenied(verdict.code);
@@ -243,7 +243,7 @@ export async function previewStudioPrompt(deps: StudioDeps, viewer: Viewer, raw:
       if (!takeFreeIntelSlot(`enhance:${v.organizationId}`, FREE_INTEL_LIMITS.enhancePerMinute, now.getTime())) {
         throw new StudioDenied('too_many_running');
       }
-      const plan = await planJob(sql, v.organizationId, { ...v, requestId: 'preview' }, deps.media, locale);
+      const plan = await planJob(sql, v.organizationId, { ...v, requestId: 'preview' }, deps.media, locale, { regionV2: deps.env.regionV2 });
       return { seat, plan };
     }),
   );
@@ -255,6 +255,7 @@ export async function previewStudioPrompt(deps: StudioDeps, viewer: Viewer, raw:
       ? await remixContext(deps, { organizationId: seat.organizationId, params: plan.params, refs: plan.refs, resolved: plan.resolved, locale })
       : null;
   let editCropThumb: EnhanceInput['editCropThumb'] = null;
+  let regionWindow: EnhanceInput['regionWindow'] = null;
   if (plan.kind === 'region_edit' && plan.params.box) {
     try {
       const source = plan.params.source ?? {};
@@ -267,9 +268,9 @@ export async function previewStudioPrompt(deps: StudioDeps, viewer: Viewer, raw:
         const original = await deps.media.read(srcRow.storage_key);
         const size = await imageInfo(original);
         if (size) {
-          const regionPlan = deps.intel.planRegion(size, plan.params.box, (plan.model as StudioImageModel).aspects);
-          const crop = await deps.intel.cropForEdit(original, regionPlan);
-          editCropThumb = { bytes: crop.bytes, mime: crop.mime };
+          const planned = await regionEditPlan(deps, original, size, plan.params, plan.model as StudioImageModel);
+          editCropThumb = { bytes: planned.crop.bytes, mime: planned.crop.mime };
+          regionWindow = planned.regionWindow;
         }
       }
     } catch {
@@ -283,6 +284,8 @@ export async function previewStudioPrompt(deps: StudioDeps, viewer: Viewer, raw:
     await brandSummary(deps, seat.organizationId, seat.organizationName),
     remix?.sheet ?? null,
     editCropThumb,
+    null,
+    regionWindow,
   );
   const result = await runEnhancer({ ...deps, organizationId: seat.organizationId }, input);
   return { ok: true, prompt: result.prompt, notes: result.notes };

@@ -17,7 +17,7 @@ export const PROFILE_BLOCKS: Record<StudioPromptProfile, string> = {
   seedance: SEEDANCE_PROFILE,
 };
 
-function regionEditProfileBlock(profile: StudioPromptProfile): string {
+function regionEditProfileBlock(profile: StudioPromptProfile, wide = false): string {
   const tokenSyntax = profile === 'seedream' ? '"Figure N"' : '"image N"';
   const firstToken = profile === 'seedream' ? 'Figure 1' : 'image 1';
   const formatLine =
@@ -26,7 +26,7 @@ function regionEditProfileBlock(profile: StudioPromptProfile): string {
       : 'Write short, surgical plain-English edit instructions (two to five sentences, no scene-generation boilerplate).';
   return `Model: a precision local-repair image editor. Do NOT write a full-scene generation brief.
 ${formatLine}
-References: name attached images only as ${tokenSyntax} with the exact numbers given (${firstToken} is the enlarged region crop to repair in place; any source references start at 2).
+References: name attached images only as ${tokenSyntax} with the exact numbers given (${firstToken} is ${wide ? "the customer's picture, shown wide, with one part to change in place" : 'the enlarged region crop to repair in place'}; any source references start at 2).
 A logo, label or product source gets: "use the exact mark from <token>; do not redraw, mirror, restyle or enlarge it".
 Text in the picture: only text that was asked for, verbatim in its original language and spelling, inside double quotes, with exact surface placement and proportion.
 People: keep facial identity, head angle, gaze and expression locked unless asked; natural skin texture without plastic or waxy retouching.`;
@@ -38,6 +38,7 @@ export function buildSystemInstruction(
   seconds: number | null,
   shots: readonly PlannedShot[],
 ): string {
-  const profileBlock = input.kind === 'region_edit' ? regionEditProfileBlock(input.profile) : PROFILE_BLOCKS[input.profile];
-  return [coreBlock(input.locale, input.kind), profileBlock, taskBlock(input, binding, seconds, shots)].join('\n\n');
+  const wide = input.kind === 'region_edit' && Boolean(input.regionWindow);
+  const profileBlock = input.kind === 'region_edit' ? regionEditProfileBlock(input.profile, wide) : PROFILE_BLOCKS[input.profile];
+  return [coreBlock(input.locale, input.kind, wide), profileBlock, taskBlock(input, binding, seconds, shots)].join('\n\n');
 }

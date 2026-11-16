@@ -10,7 +10,7 @@ import { useCallback, useEffect, useId, useMemo, useRef, useState } from "react"
 import { createPortal } from "react-dom";
 import { extractClipboardImages, isEditableTextTarget, prepareClipboardUploadFiles } from "@/lib/brand-studio/clipboard-image";
 import type { StudioAssetView, StudioJobView, StudioOutputView, StudioState } from "@/lib/brand-studio/contracts";
-import type { StudioMedium } from "@/lib/brand-studio/models";
+import { REGION_V2_MODEL, regionV2Models, type StudioMedium } from "@/lib/brand-studio/models";
 import type { Dictionary } from "@/lib/i18n/dictionaries";
 import { isFailure, uploadProblem, type StudioApi } from "./api";
 import { EXAMPLES, jobsFor } from "./board";
@@ -242,6 +242,11 @@ export function StudioApp({ organizationId, locale, copy, mode, libraryCopy, lay
     window.history.replaceState(window.history.state, "", url.toString());
   }, []);
   const dockOpen = canCreate && (state?.allowance.capKrw ?? 0) > 0;
+  // Region edit v2 (`BRAND_STUDIO_REGION_V2`): one engine for every partial edit, so no choice is offered.
+  const regionV2 = Boolean(state?.regionV2);
+  const regionChoice = regionV2
+    ? { models: regionV2Models(), defaultModel: REGION_V2_MODEL as string, defaultQuality: null, fixedModel: true }
+    : { models: regionEditModels(), defaultModel: regionEditModel(dock.draft), defaultQuality: dock.draft.quality };
   const [handoff, setHandoff] = useState<RefSource | null>(null);
   const [shareTarget, setShareTarget] = useState<ShareReviewTarget | null>(null);
   const [canvasMenuOpen, setCanvasMenuOpen] = useState(false);
@@ -457,6 +462,7 @@ export function StudioApp({ organizationId, locale, copy, mode, libraryCopy, lay
   }, []);
 
   const viewer = useViewer({
+    regionV2,
     studio,
     dock,
     copy,
@@ -948,9 +954,7 @@ export function StudioApp({ organizationId, locale, copy, mode, libraryCopy, lay
           region={
             dockOpen && mode === "image"
               ? {
-                  models: regionEditModels(),
-                  defaultModel: regionEditModel(dock.draft),
-                  defaultQuality: dock.draft.quality,
+                  ...regionChoice,
                   recent: recentPictures(jobs, assets, copy.viewer.label),
                   resolve: (source) => {
                     const tile = sourceItem(source);
@@ -1008,9 +1012,7 @@ export function StudioApp({ organizationId, locale, copy, mode, libraryCopy, lay
               ? {
                   sourceRef: editorState.base.ref,
                   previewUrl: editorState.base.url,
-                  models: regionEditModels(),
-                  defaultModel: regionEditModel(dock.draft),
-                  defaultQuality: dock.draft.quality,
+                  ...regionChoice,
                   jobs: rawJobs,
                   errorText: (code) => errorLine(copy, code ?? "failed"),
                   submit: async (req) => {
@@ -1046,6 +1048,7 @@ export function StudioApp({ organizationId, locale, copy, mode, libraryCopy, lay
                       references: req.references,
                       locale,
                       ...(internal ? { purpose: "fill" as const } : {}),
+                      ...(regionV2 ? { v2: true } : {}),
                     });
                     const result = await studio.createJob(body);
                     const line = isFailure(result) ? errorLine(copy, result.code) : null;
@@ -1071,6 +1074,7 @@ export function StudioApp({ organizationId, locale, copy, mode, libraryCopy, lay
                       quality: req.quality || null,
                       references: req.references,
                       locale,
+                      ...(regionV2 ? { v2: true } : {}),
                     });
                     if (built.kind === "video_final") {
                       return { ok: false, message: copy.dock.enhanceFailed };

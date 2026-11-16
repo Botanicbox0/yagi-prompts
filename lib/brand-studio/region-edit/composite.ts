@@ -11,6 +11,7 @@
  */
 import sharp from 'sharp';
 import { alignEditedRoi, computeDiffMask, type AlignTransform } from './align';
+import { computeChangeMask } from './paste';
 import { decodeRgba, encodePng, type RgbaImage } from './pixels';
 import type { PixelRect, RegionPlan } from './plan';
 
@@ -35,6 +36,13 @@ function assertPlan(image: { width: number; height: number }, plan: RegionPlan):
     plan.box.left + plan.box.width <= plan.roi.left + plan.roi.width &&
     plan.box.top + plan.box.height <= plan.roi.top + plan.roi.height;
   if (!inside(image, plan.roi) || !inside(image, plan.box) || !boxInRoi) throw new Error('region_plan_mismatch');
+  if (plan.select) {
+    const s = plan.select;
+    const selectInBox =
+      s.left >= plan.box.left && s.top >= plan.box.top &&
+      s.left + s.width <= plan.box.left + plan.box.width && s.top + s.height <= plan.box.top + plan.box.height;
+    if (!inside(image, s) || !selectInBox) throw new Error('region_plan_mismatch');
+  }
   if (plan.work.width < 1 || plan.work.height < 1) throw new Error('region_plan_mismatch');
 }
 
@@ -142,6 +150,10 @@ export interface CompositeRegionResult {
   misaligned?: boolean;
   ringResidual?: number;
   transform?: AlignTransform;
+  /** Window plans only: false when nothing that changed touched the box and the box itself was pasted. */
+  changeFound?: boolean;
+  /** Window plans only: share of the paste zone pasted at full weight. */
+  pasted?: number;
 }
 
 export async function compositeRegion(input: {
@@ -158,13 +170,20 @@ export async function compositeRegion(input: {
   const aligned = await alignEditedRoi({ original: src, edited: input.edited, plan });
   const ringWidth = Math.max(2, Math.round(Math.min(box.width, box.height) * 0.06));
   const tone = matchTone(src, { data: aligned.alignedRoi, channels: aligned.channels }, plan, ringWidth);
-  const mask = await computeDiffMask({
-    original: src,
-    alignedRoi: aligned.alignedRoi,
-    plan,
-    feather: input.feather,
-    tone,
-  });
+  // A window plan (region edit v2) pastes only what changed near the customer's box (./paste.ts);
+  // a crop plan keeps the mask it always had.
+  const change = plan.select
+    ? computeChangeMask({ original: src, alignedRoi: aligned.alignedRoi, channels: aligned.channels, plan, tone, feather: input.feather })
+    : null;
+  const mask = change
+    ? change.mask
+    : await computeDiffMask({
+        original: src,
+        alignedRoi: aligned.alignedRoi,
+        plan,
+        feather: input.feather,
+        tone,
+      });
 
   const out = Buffer.from(src.data);
   const patchCh = src.hasAlpha ? 4 : 3;
@@ -218,5 +237,6 @@ export async function compositeRegion(input: {
     misaligned: aligned.misaligned,
     ringResidual: aligned.ringResidual,
     transform: aligned.transform,
+    ...(change ? { changeFound: change.changeFound, pasted: change.pasted } : {}),
   };
 }
