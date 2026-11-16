@@ -12,6 +12,7 @@ import { studioModel, type StudioImageModel, type StudioModel } from './models';
 import { resolveReferences, type ResolvedRef } from './plan';
 import { StudioDenied } from './access';
 import { replaceMarks } from './enhancer/marks';
+import { isDocumentKey } from './documents';
 import { clarifiedOf, withClarified } from './revision/clarify';
 import { addedRefsOf, refKey, renumberRequest, revisionChain } from './revision/recipe';
 import type { EnhanceInput, EnhanceResult, JobRow, StudioDeps, StudioJobParams, StudioJobWork } from './types';
@@ -363,15 +364,30 @@ export async function revisionInput(
  * material.ts). Material that is gone or cannot be read is left out: the revision goes on without it.
  */
 export async function materialNotes(
-  deps: Pick<StudioDeps, 'sql' | 'media' | 'env' | 'intel' | 'intelDeps'>,
+  deps: Pick<StudioDeps, 'sql' | 'media' | 'env' | 'intel' | 'intelDeps' | 'staging'>,
   job: Pick<JobRow, 'organization_id' | 'prompt' | 'params'>,
   madeWith: string,
 ): Promise<NonNullable<NonNullable<EnhanceInput['revision']>['materials']>> {
+  return (await readRevisionMaterials(deps, job, madeWith)).notes;
+}
+
+/**
+ * Every video and document attached to a revision, read for its request, with how many could not be
+ * read. Videos come first, then documents; the notes are numbered in that order.
+ */
+export async function readRevisionMaterials(
+  deps: Pick<StudioDeps, 'sql' | 'media' | 'env' | 'intel' | 'intelDeps' | 'staging'>,
+  job: Pick<JobRow, 'organization_id' | 'prompt' | 'params'>,
+  madeWith: string,
+): Promise<{ notes: NonNullable<NonNullable<EnhanceInput['revision']>['materials']>; reads: { read: number; unread: number } | null }> {
   const stored = job.params?.revision?.materials ?? [];
+  const documents = job.params?.revision?.documents ?? [];
+  const attached = stored.length + documents.length;
+  if (!attached) return { notes: [], reads: null };
   const read = deps.intel.readMaterial;
-  if (!stored.length || !read) return [];
+  if (!read) return { notes: [], reads: { read: 0, unread: attached } };
   const request = replaceMarks(job.prompt, job.params?.revision?.marks ?? []);
-  const notes = await Promise.all(
+  const videoNotes = await Promise.all(
     stored.map(async (material) => {
       try {
         const [ref] = await resolveReferences(deps.sql, job.organization_id, [material], deps.media, job.params.locale ?? 'ko');
@@ -386,7 +402,30 @@ export async function materialNotes(
       }
     }),
   );
-  return notes.flatMap((text) => (text ? [text] : [])).map((text, i) => ({ n: i + 1, kind: 'video' as const, notes: text }));
+  const documentNotes = await Promise.all(
+    documents.map(async ({ assetId }) => {
+      try {
+        // Read even if documents were closed since: the version was made with it.
+        const store = deps.staging.privateObjects;
+        if (!store) return null;
+        const row = (
+          await deps.sql.query<{ storage_key: string; mime: string }>(
+            "select storage_key, mime from brand_studio_assets where id = $1 and organization_id = $2 and kind = 'document' and status = 'ready' and deleted_at is null",
+            [assetId, job.organization_id],
+          )
+        ).rows[0];
+        if (!row || !isDocumentKey(row.storage_key)) return null;
+        return await read({ document: { bytes: await store.read(row.storage_key), mime: row.mime }, request, madeWith }, deps.intelDeps);
+      } catch {
+        return null;
+      }
+    }),
+  );
+  const notes = [
+    ...videoNotes.flatMap((text) => (text ? [{ kind: 'video' as const, notes: text }] : [])),
+    ...documentNotes.flatMap((text) => (text ? [{ kind: 'document' as const, notes: text }] : [])),
+  ].map((note, i) => ({ n: i + 1, ...note }));
+  return { notes, reads: { read: notes.length, unread: attached - notes.length } };
 }
 
 export async function prepareJob(deps: StudioDeps, job: JobRow): Promise<{ finalPrompt: string | null; work: StudioJobWork }> {
@@ -446,7 +485,14 @@ export async function prepareJob(deps: StudioDeps, job: JobRow): Promise<{ final
   if (!job.enhance) return { finalPrompt: job.params?.reviewedPrompt?.trim() || null, work: { ...work, prepared: true } };
   const organization = (await deps.sql.query<{ name: string }>('select name from brand_organizations where id = $1', [job.organization_id])).rows[0];
   const history = await revisionInput(deps, job, resolved);
-  const materials = history ? await materialNotes(deps, job, history.revision.madeWith) : [];
+  const reading = history ? await readRevisionMaterials(deps, job, history.revision.madeWith) : null;
+  const materials = reading?.notes ?? [];
+  if (reading?.reads) work.materialReads = reading.reads;
+  else if (!history && (job.params?.revision?.materials?.length || job.params?.revision?.documents?.length)) {
+    // The clip's history is gone, so nothing was read: say so on the version.
+    const attached = (job.params.revision.materials?.length ?? 0) + (job.params.revision.documents?.length ?? 0);
+    work.materialReads = { read: 0, unread: attached };
+  }
   const revised = history && materials.length ? { ...history, revision: { ...history.revision, materials } } : history;
   // Without the clip's history the marks and the answer cannot travel as context: their words go into the request.
   const loose = job.params?.revision;

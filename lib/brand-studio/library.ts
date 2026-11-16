@@ -78,6 +78,7 @@ function itemFromAsset(row: AssetRow, media: StudioMediaStore): LibraryItemWire 
     width: view.width,
     height: view.height,
     seconds: view.seconds,
+    ...(view.pages ? { pages: view.pages } : {}),
     createdAt: view.createdAt,
   };
 }

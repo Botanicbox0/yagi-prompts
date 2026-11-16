@@ -91,7 +91,7 @@ export interface EnhanceRevision {
 
 export interface EnhanceMaterial {
   n: number;
-  kind: 'video';
+  kind: 'video' | 'document';
   notes: string;
 }
 

@@ -47,13 +47,16 @@ export const libraryKey = (ref: RefSource): LibraryKey => ("assetId" in ref ? `a
 export interface LibraryItemView {
   key: LibraryKey;
   ref: RefSource;
-  kind: "image" | "video" | "audio";
+  /** `document` (PDF, PPTX): material only, shown as an icon tile and never attached as a reference. */
+  kind: "image" | "video" | "audio" | "document";
   url: string;
   thumbUrl: string | null;
   name: string | null;
   width: number | null;
   height: number | null;
   seconds: number | null;
+  /** Slides of a PPTX, when known for certain. */
+  pages?: number;
   createdAt: string;
 }
 

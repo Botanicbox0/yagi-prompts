@@ -25,6 +25,7 @@ import { dropWorkingFiles, LEASE_SECONDS } from './job-store';
 import { routeJob } from './lanes';
 import type { StudioImageModel } from './models';
 import { planFinal, planJob, type JobPlan } from './plan';
+import { studioDocumentsReady } from './documents';
 import { planRevision } from './revision/plan';
 import { brandSummary, enhanceInputOf, enhanceReferences, keepSheet, readSheet, remixContext, runEnhancer } from './prepare';
 import { readCachedFilmSheet } from './film-sheet';
@@ -145,7 +146,7 @@ export async function createStudioJob(deps: StudioDeps, viewer: Viewer, raw: unk
       const plan = v.kind === 'video_final'
         ? await planFinal(sql, v.organizationId, v.draftOutputId, locale)
         : v.kind === 'video_revise'
-          ? await planRevision(sql, v.organizationId, v, deps.media, locale)
+          ? await planRevision(sql, v.organizationId, v, deps.media, locale, await studioDocumentsReady(deps, sql))
           : await planJob(sql, v.organizationId, v, deps.media, locale);
       if ((await openJobCount(sql, v.organizationId)) >= STUDIO_LIMITS.openJobsPerOrganization) throw new StudioDenied('too_many_running');
       const verdict = await reserveAllowance(sql, v.organizationId, plan.estimateKrw, deps.env, deps.now?.() ?? new Date());

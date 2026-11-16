@@ -77,6 +77,8 @@ const KIND_KEYWORDS: Record<StudioAssetKind, readonly string[]> = {
   image: ["image", "img", "pic", "photo", "이미지", "사진", "컷"],
   video: ["video", "vid", "clip", "영상", "비디오", "클립"],
   audio: ["audio", "aud", "sound", "music", "오디오", "사운드", "소리", "음악"],
+  // A document is never mentioned as a reference; no word finds it.
+  document: [],
 };
 
 const ROLE_ALIASES: Record<StudioAssetRole, readonly string[]> = {
@@ -125,6 +127,7 @@ export function buildAtMentionCandidates(input: {
     image: tray.filter((i) => i.kind === "image").length,
     video: tray.filter((i) => i.kind === "video").length,
     audio: tray.filter((i) => i.kind === "audio").length,
+    document: 0,
   };
 
   const attached: AtMentionCandidate[] = [];

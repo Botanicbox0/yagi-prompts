@@ -67,6 +67,8 @@ export interface ChainVersion {
   marks: ReviseMark[];
   /** The question asked about that request and the customer's answer; null when none was asked. */
   clarified: { question: string; answer: string } | null;
+  /** How many of that request's attached videos and documents could not be read (0 when all were). */
+  unread: number;
   state: "ready" | "making";
 }
 
@@ -82,7 +84,7 @@ export function chainOf(jobs: readonly StudioJobView[], job: StudioJobView): Cha
     const request = main?.revision ? main.prompt : null;
     const marks = (main?.revision && main.revision.marks) || [];
     const clarified = main?.revision?.clarified ?? null;
-    const shared = { version, request, marks, clarified };
+    const shared = { version, request, marks, clarified, unread: main?.revision?.unread ?? 0 };
     if (final) list.push({ ...shared, job: final, output: final.outputs[0]!, state: "ready" });
     else if (main && main.status === "succeeded" && main.outputs.length > 0) list.push({ ...shared, job: main, output: main.outputs[0]!, state: "ready" });
     else if (main && isOpen(main)) list.push({ ...shared, job: main, output: null, state: "making" });
@@ -156,8 +158,9 @@ export function reviseRerunInput(job: StudioJobView, ids: { organizationId: stri
     prompt: job.prompt,
     references,
     marks: revision.marks ?? [],
-    // The videos read for that request are read again (they were never among the references).
+    // The videos and documents read for that request are read again (they were never among the references).
     materials: (revision.materials ?? []).map((m) => ({ ...m })),
+    ...(revision.documents?.length ? { documents: revision.documents.map((d) => ({ assetId: d.assetId })) } : {}),
     // What the customer said they meant goes again too: the same request means the same thing.
     ...(revision.clarified ? { clarified: { question: revision.clarified.question, answer: revision.clarified.answer } } : {}),
   };

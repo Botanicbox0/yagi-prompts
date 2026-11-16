@@ -13,6 +13,7 @@ const paths = {
   remove: "M6 12h12",
   wave: "M4 12h1.5M7 9v6M10 6v12M13 8.5v7M16 10.5v3M19 12h1",
   search: "M10.5 17a6.5 6.5 0 1 1 0-13 6.5 6.5 0 0 1 0 13zM15.5 15.5 20 20",
+  doc: "M7 3.5h7l4 4v13H7zM14 3.5v4h4M9.5 12h6M9.5 15h6M9.5 18h4",
 } as const;
 
 export type RailIconName = keyof typeof paths;

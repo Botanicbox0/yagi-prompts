@@ -15,8 +15,14 @@ export type { StudioStorageQuotaView };
 
 /* ---------------------------------------------------------------- vocab */
 
-export const STUDIO_ASSET_KINDS = ['image', 'video', 'audio'] as const;
+/**
+ * `document` (PDF, PPTX) is material only (docs/BRAND-STUDIO-V6-PLAN.md §4.7): read by Gemini with a
+ * revision request, never a reference and never sent to an image or video model. Its bytes stay private.
+ */
+export const STUDIO_ASSET_KINDS = ['image', 'video', 'audio', 'document'] as const;
 export type StudioAssetKind = (typeof STUDIO_ASSET_KINDS)[number];
+/** The kinds a run can take as a reference: every kind but `document`. */
+export type StudioMediaKind = Exclude<StudioAssetKind, 'document'>;
 
 /** What an asset usually is in a picture. A hint the customer can change per run, never a lock. */
 export const STUDIO_ASSET_ROLES = ['product', 'person', 'logo', 'style', 'place', 'other'] as const;
@@ -101,6 +107,10 @@ export const STUDIO_ERROR_CODES = [
   'provider_rejected',
   'provider_unavailable',
   'region_misaligned',
+  /** A slide deck past `STUDIO_DOCUMENT_SLIDES_MAX`. */
+  'too_many_slides',
+  /** A password-protected PDF or PPTX. */
+  'document_locked',
   'failed',
 ] as const;
 export type StudioErrorCode = (typeof STUDIO_ERROR_CODES)[number];
@@ -117,6 +127,7 @@ export const STUDIO_LIMITS = {
   imageBytesMax: 15_000_000,
   videoBytesMax: 50_000_000,
   audioBytesMax: 15_000_000,
+  documentBytesMax: 20_000_000,
   /** Open (not finished) jobs one organization may have at once. */
   openJobsPerOrganization: 6,
   tagsMax: 8,
@@ -128,7 +139,14 @@ export const STUDIO_UPLOAD_MIMES = {
   image: ['image/jpeg', 'image/png', 'image/webp'],
   video: ['video/mp4', 'video/quicktime'],
   audio: ['audio/mpeg', 'audio/wav'],
+  document: ['application/pdf', 'application/vnd.openxmlformats-officedocument.presentationml.presentation'],
 } as const satisfies Record<StudioAssetKind, readonly string[]>;
+
+/** The old binary PowerPoint format: refused with a line asking for a PDF export. */
+export const STUDIO_OLD_SLIDES_MIME = 'application/vnd.ms-powerpoint';
+
+/** Slides one PPTX may have (a deck with more is refused); a PDF is limited by size only. */
+export const STUDIO_DOCUMENT_SLIDES_MAX = 60;
 
 /* -------------------------------------------------------------- helpers */
 
@@ -298,6 +316,9 @@ export const STUDIO_REVISE_MARKS_MAX = 3;
  */
 export const STUDIO_REVISE_MATERIALS_MAX = 2;
 
+/** How many documents (PDF, PPTX) one revision may carry as material, apart from the videos. */
+export const STUDIO_REVISE_DOCUMENTS_MAX = 2;
+
 /**
  * One question back when a revision request reads two ways (docs/BRAND-STUDIO-V6-PLAN.md §4.6): its
  * length limits. The question and its 2–3 choices come from the `revise.plan` reading itself, in the
@@ -376,6 +397,8 @@ export const VideoReviseJobSchema = z.object({
   marks: z.array(ReviseMarkSchema).max(STUDIO_REVISE_MARKS_MAX).default([]),
   /** Material to read for this request (videos of this organization; `frame` is not allowed). Never sent to the video model. */
   materials: z.array(StudioReferenceSchema).max(STUDIO_REVISE_MATERIALS_MAX).default([]),
+  /** Documents to read for this request (this organization's PDF or PPTX assets). Never sent to the video model. */
+  documents: z.array(z.object({ assetId: Id })).max(STUDIO_REVISE_DOCUMENTS_MAX).optional(),
   /** The customer's answer to the one question `revise.plan` asked about this request. Absent: none was asked, or it was made as written. */
   clarified: ReviseClarifiedSchema.optional(),
 });
@@ -439,7 +462,7 @@ export const AssetReserveSchema = z.object({
   organizationId: Id,
   requestId: RequestId,
   name: z.string().trim().min(1).max(STUDIO_LIMITS.nameMax),
-  mime: z.string().max(40),
+  mime: z.string().max(100),
   sizeBytes: z.number().int().positive(),
   role: z.enum(STUDIO_ASSET_ROLES).optional(),
 });
@@ -538,6 +561,8 @@ export interface StudioAssetView {
   height: number | null;
   /** Seconds, for video and audio. */
   seconds: number | null;
+  /** Slides of a PPTX. Absent when the count is not known for certain (every PDF). */
+  pages?: number;
   source: StudioAssetSource;
   createdAt: string;
 }
@@ -622,6 +647,10 @@ export interface StudioJobView {
     marks?: ReviseMark[];
     /** The material read for this version's request (videos; never among `references`). */
     materials?: Array<{ assetId?: string; outputId?: string }>;
+    /** The documents read for this version's request (never among `references`). */
+    documents?: Array<{ assetId: string }>;
+    /** How many of the attached videos and documents could not be read (the request went on without them). */
+    unread?: number;
     /** The question asked about this version's request and the customer's answer. */
     clarified?: ReviseClarified;
   } | null;
@@ -687,6 +716,11 @@ export interface StudioState {
    * applied): the projects a run can be put in, newest first. Absent means the feature is closed.
    */
   projects?: StudioProjectRef[];
+  /**
+   * Present (true) only while documents can be attached to a revision (`BRAND_STUDIO_DOCUMENTS=on`,
+   * migration 0092 applied, private storage available) and the member can create.
+   */
+  acceptsDocuments?: boolean;
 }
 
 /** A studio project, as much as a picker needs. */

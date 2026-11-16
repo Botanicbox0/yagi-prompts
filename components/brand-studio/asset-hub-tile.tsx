@@ -95,9 +95,9 @@ export function HubTile({ entry, copy, name, liked, main, more, moreLabel, compa
       }}
     >
       <button type="button" className={s.tileOpen} aria-label={fill(copy.item.view, { name })} onClick={onOpen} data-asset-hub-open>
-        {entry.kind === "audio" ? (
-          <span className={s.audioStage}>
-            <RailIcon name="wave" />
+        {entry.kind === "audio" || entry.kind === "document" ? (
+          <span className={s.audioStage} data-document={entry.kind === "document" ? "" : undefined}>
+            <RailIcon name={entry.kind === "document" ? "doc" : "wave"} />
             {entry.label && <span className={s.audioName}>{entry.label}</span>}
           </span>
         ) : still ? (
@@ -126,17 +126,23 @@ export function HubTile({ entry, copy, name, liked, main, more, moreLabel, compa
         )}
       </button>
 
-      {entry.kind !== "image" && (
+      {entry.kind !== "image" && entry.kind !== "document" && (
         <span className={s.badge} data-asset-hub-length>
           {entry.kind === "video" ? <PlayGlyph /> : <RailIcon name="wave" />}
           {entry.seconds != null ? clock(entry.seconds) : copy.item[entry.kind]}
+        </span>
+      )}
+      {entry.kind === "document" && (
+        <span className={s.badge} data-asset-hub-document>
+          <RailIcon name="doc" />
+          {entry.pages ? fill(copy.item.slides, { n: entry.pages }) : copy.item.document}
         </span>
       )}
 
       <Heart liked={liked} label={fill(liked ? copy.item.unlike : copy.item.like, { name })} onPress={onLike} className={s.heart} />
 
       <div className={s.foot}>
-        {!compact && entry.label && entry.kind !== "audio" && <p className={s.footTitle}>{entry.label}</p>}
+        {!compact && entry.label && entry.kind !== "audio" && entry.kind !== "document" && <p className={s.footTitle}>{entry.label}</p>}
         <div className={s.footActions}>
           {!compact && main && (
             <a className={s.footMain} href={main.href} {...marker(main)}>
@@ -258,6 +264,13 @@ export function HubDetail({ entry, copy, name, liked, main, more, onLike, onActi
             <img src={entry.url} alt={name} />
           ) : entry.kind === "video" ? (
             <video ref={film} src={entry.url} poster={entry.thumbUrl ?? undefined} controls muted loop playsInline preload="metadata" />
+          ) : entry.kind === "document" ? (
+            <>
+              <RailIcon name="doc" />
+              <a href={entry.url} rel="noreferrer" data-asset-hub-document-open>
+                {copy.item.open}
+              </a>
+            </>
           ) : (
             <>
               <RailIcon name="wave" />

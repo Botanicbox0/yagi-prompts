@@ -18,6 +18,7 @@
  */
 import {
   STUDIO_LIMITS,
+  STUDIO_REVISE_DOCUMENTS_MAX,
   STUDIO_REVISE_MATERIALS_MAX,
   STUDIO_REVISE_MODES,
   type ReviseMark,
@@ -42,6 +43,8 @@ export interface ReviseState {
   references: TrayItem[];
   /** Videos to read for this request (never sent to the video model): a texture, a movement, a look. */
   materials: TrayItem[];
+  /** Documents (PDF, PPTX) to read for this request: product facts, names, colour codes, rules. */
+  documents: TrayItem[];
   suggestion: { mode: StudioReviseMode; reason: StudioReviseReason | null } | null;
   /** The question on screen (phase `clarify`). */
   clarify: { question: string; options: string[] } | null;
@@ -68,6 +71,8 @@ export interface ReviseDeps {
   frame?(mark: MarkGeometry): Promise<string | null>;
   /** A version is on its way (the strip shows it from the store; the screen may say so too). */
   onCreated?(created: StudioJobCreated): void;
+  /** True while the server takes documents (`StudioState.acceptsDocuments`). Off: a document is never attached. */
+  documents?: boolean;
 }
 
 export interface RevisePlanInput {
@@ -89,6 +94,9 @@ export const REVISE_REFERENCES_MAX = STUDIO_LIMITS.referencesMax - 1;
 /** Most videos one version may carry as material to read. */
 export const REVISE_MATERIALS_MAX = STUDIO_REVISE_MATERIALS_MAX;
 
+/** Most documents one version may carry as material to read. */
+export const REVISE_DOCUMENTS_MAX = STUDIO_REVISE_DOCUMENTS_MAX;
+
 export const initialReviseState = (): ReviseState => ({
   phase: "loading",
   plan: null,
@@ -97,6 +105,7 @@ export const initialReviseState = (): ReviseState => ({
   prompt: "",
   references: [],
   materials: [],
+  documents: [],
   suggestion: null,
   clarify: null,
   clarified: null,
@@ -119,6 +128,7 @@ function toCreate(input: {
   prompt: string;
   references: TrayItem[];
   materials: TrayItem[];
+  documents: TrayItem[];
   marks: readonly MarkState[];
   clarified: ReviseState["clarified"];
 }) {
@@ -136,6 +146,14 @@ function toCreate(input: {
       .filter((m) => m.kind === "video")
       .slice(0, REVISE_MATERIALS_MAX)
       .map((m) => (m.assetId ? { assetId: m.assetId } : { outputId: m.outputId! })),
+    ...(input.documents.some((d) => d.kind === "document" && d.assetId)
+      ? {
+          documents: input.documents
+            .filter((d) => d.kind === "document" && d.assetId)
+            .slice(0, REVISE_DOCUMENTS_MAX)
+            .map((d) => ({ assetId: d.assetId! })),
+        }
+      : {}),
     ...(input.clarified && answer ? { clarified: { question: input.clarified.question, answer } } : {}),
   };
 }
@@ -153,7 +171,7 @@ export function createReviseFlow(deps: ReviseDeps) {
       prompt,
       references: toReferences(state.references, "image"),
       marks: toWireMarks(state.marks),
-      materials: state.materials.length,
+      materials: state.materials.length + state.documents.length,
       ...(state.clarified ? { clarified: { ...state.clarified } } : {}),
     });
   /**
@@ -216,6 +234,7 @@ export function createReviseFlow(deps: ReviseDeps) {
         prompt: state.prompt,
         references: state.references,
         materials: state.materials,
+        documents: state.documents,
         marks: state.marks,
         clarified: state.clarified,
       }),
@@ -224,7 +243,7 @@ export function createReviseFlow(deps: ReviseDeps) {
     // The form clears; the plan answers the next version's number on the next open.
     const plan = state.plan ? { ...state.plan, version: state.plan.version + 1 } : null;
     reads.clear();
-    set({ phase: "ready", prompt: "", references: [], materials: [], marks: [], picked: false, plan, clarify: null, clarified: null });
+    set({ phase: "ready", prompt: "", references: [], materials: [], documents: [], marks: [], picked: false, plan, clarify: null, clarified: null });
     deps.onCreated?.(result);
   }
 
@@ -301,6 +320,10 @@ export function createReviseFlow(deps: ReviseDeps) {
     setMaterials(materials: TrayItem[]) {
       set({ materials: materials.filter((m) => m.kind === "video").slice(0, REVISE_MATERIALS_MAX), ...edited() });
     },
+    setDocuments(documents: TrayItem[]) {
+      if (!deps.documents) return;
+      set({ documents: documents.filter((d) => d.kind === "document" && d.assetId).slice(0, REVISE_DOCUMENTS_MAX), ...edited() });
+    },
     /**
      * Adds what the customer dropped or picked: pictures become references, videos material to read.
      * Returns how many were left out because that kind is full.
@@ -308,15 +331,19 @@ export function createReviseFlow(deps: ReviseDeps) {
     attach(items: readonly TrayItem[]): number {
       const references = [...state.references];
       const materials = [...state.materials];
+      const documents = [...state.documents];
+      const max = { image: REVISE_REFERENCES_MAX, video: REVISE_MATERIALS_MAX, document: REVISE_DOCUMENTS_MAX } as const;
       let left = 0;
       for (const item of items) {
-        const list = item.kind === "image" ? references : item.kind === "video" ? materials : null;
+        const list =
+          item.kind === "image" ? references : item.kind === "video" ? materials : item.kind === "document" && deps.documents && item.assetId ? documents : null;
         if (!list) continue;
         if (list.some((x) => x.key === item.key)) continue;
-        if (list.length >= (item.kind === "image" ? REVISE_REFERENCES_MAX : REVISE_MATERIALS_MAX)) left += 1;
+        if (list.length >= max[item.kind as keyof typeof max]) left += 1;
         else list.push(item);
       }
-      if (references.length !== state.references.length || materials.length !== state.materials.length) set({ references, materials, ...edited() });
+      if (references.length !== state.references.length || materials.length !== state.materials.length || documents.length !== state.documents.length)
+        set({ references, materials, documents, ...edited() });
       return left;
     },
     note(code: string | null) {

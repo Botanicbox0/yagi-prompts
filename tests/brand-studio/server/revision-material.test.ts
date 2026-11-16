@@ -160,7 +160,7 @@ describe('the prompt writer with material notes', () => {
     await enhancePrompt(base({ revision: { mode: 'edit', version: 2, madeWith: 'A serum drop falls onto skin.', history: [], materials } }), { fetch: fetchMock as unknown as typeof fetch, env: ENV });
     const body = sentBody(fetchMock);
     const system = body.systemInstruction.parts[0]!.text;
-    expect(system).toContain('"revision.materials" are notes on videos the customer attached');
+    expect(system).toContain('"revision.materials" are notes on material the customer attached');
     expect(system).toContain('never write a token for one');
     expect(JSON.parse((body.contents[0]!.parts[0] as { text: string }).text).revision.materials).toEqual(materials);
   });

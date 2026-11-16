@@ -138,17 +138,25 @@ export async function uploadVideoFile(
 
   const pollMs = options.pollMs ?? 2_000;
   const deadline = Date.now() + (options.maxWaitMs ?? 60_000);
-  while (file.state !== undefined && file.state !== 'ACTIVE') {
-    if (file.state === 'FAILED') throw new Error('gemini_upload_failed');
-    if (Date.now() > deadline) throw new Error('gemini_upload_timeout');
-    await wait(pollMs);
-    const check = await fetchImpl(`${config.baseUrl}/${file.name}`, {
-      method: 'GET',
-      headers: { 'x-goog-api-key': config.apiKey },
-    });
-    if (!check.ok) throw new Error('gemini_upload_poll');
-    file = fileFrom(await check.json());
-    if (!file) throw new Error('gemini_upload_shape');
+  const created = file.name;
+  try {
+    while (file.state !== undefined && file.state !== 'ACTIVE') {
+      if (file.state === 'FAILED') throw new Error('gemini_upload_failed');
+      if (Date.now() > deadline) throw new Error('gemini_upload_timeout');
+      await wait(pollMs);
+      const check = await fetchImpl(`${config.baseUrl}/${file.name}`, {
+        method: 'GET',
+        headers: { 'x-goog-api-key': config.apiKey },
+      });
+      if (!check.ok) throw new Error('gemini_upload_poll');
+      const next: UploadedFile | null = fileFrom(await check.json());
+      if (!next) throw new Error('gemini_upload_shape');
+      file = next;
+    }
+  } catch (error) {
+    // The file exists on Google's side but never became usable: remove it now rather than in 48 h.
+    await deleteVideoFile(config, fetchImpl, created);
+    throw error;
   }
   return { name: file.name, uri: file.uri };
 }

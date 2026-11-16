@@ -8,7 +8,9 @@ import {
   type Bucket,
   type CopyOutcome,
   type CopyRequest,
+  type PrivateObjectStore,
   type StorageDriver,
+  isPrivateObjectKey,
 } from './index';
 
 /**
@@ -44,8 +46,36 @@ async function fileExists(path: string): Promise<boolean> {
 export function createLocalStorageDriver(rootDir?: string): StorageDriver {
   const root = resolve(rootDir ?? process.env.STORAGE_LOCAL_ROOT ?? '.storage');
 
+  // Private objects live under `.storage/private/`, apart from every bucket (lib/storage/index.ts).
+  const privatePath = (key: string): string => {
+    if (!isPrivateObjectKey(key)) throw new Error('illegal private object key');
+    const base = resolve(join(root, 'private'));
+    const full = resolve(join(base, key));
+    if (!full.startsWith(base + (process.platform === 'win32' ? '\\' : '/'))) throw new Error('illegal private object key');
+    return full;
+  };
+  const privateObjects: PrivateObjectStore = {
+    async put(key, bytes) {
+      const path = privatePath(key);
+      await mkdir(dirname(path), { recursive: true });
+      await writeFile(path, bytes);
+    },
+    async read(key) {
+      const path = privatePath(key);
+      if (!(await fileExists(path))) throw new StorageObjectNotFound('private', key);
+      return new Uint8Array(await readFile(path));
+    },
+    async delete(key) {
+      await rm(privatePath(key), { force: true });
+    },
+    async signedUrl() {
+      return null;
+    },
+  };
+
   return {
     name: 'local',
+    privateObjects,
     // `.storage/` is a directory on disk; nothing serves it over HTTP. The gateway streams instead.
     servesSignedUrls: false,
 

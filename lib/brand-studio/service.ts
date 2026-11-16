@@ -28,6 +28,7 @@ import { loadOrganizationStorageSummary, toStudioStorageQuotaView } from '@/lib/
 import { assetFromOutput, completeStudioAsset, deleteStudioAsset, deleteStudioOutput, reserveStudioAsset, updateStudioAsset } from './assets';
 import { handoffToCampaign } from './handoff';
 import { analyzeStudioFilm, cancelStudioJob, createStudioJob, deleteStudioJob, previewStudioPrompt } from './jobs';
+import { studioDocumentsReady } from './documents';
 import { assignStudioJobProject, liveProjectsOf, studioProjectsReady } from './job-projects';
 import { failure, guarded } from './outcome';
 import { planStudioRevise } from './revision/advise';
@@ -143,6 +144,7 @@ export async function loadStudioState(deps: StudioDeps, viewer: Viewer, organiza
         // Off unless the flag is on: the key is left out entirely, so nothing about it reaches the client.
         ...(seat.canCreate && deps.env.outpaint ? { canFillEmpty: true } : {}),
         ...(projects ? { projects } : {}),
+        ...(seat.canCreate && (await studioDocumentsReady(deps, sql)) ? { acceptsDocuments: true } : {}),
       };
     }),
   );

@@ -12,6 +12,7 @@ import type {
   StudioOutputView,
   StudioReference,
 } from './contracts';
+import { documentUrl } from './documents';
 import type { StudioMediaStore } from './media-store';
 import { isStudioMediaKeyReferenced } from './physical-cleanup';
 import type { AssetRow, JobRow, OutputRow } from './types';
@@ -29,14 +30,17 @@ export function tagsOf(value: string[] | string | null | undefined): string[] {
 }
 
 export function assetView(row: AssetRow, media: StudioMediaStore): StudioAssetView {
+  // A document is private: its address is the authenticated route, never the media domain.
+  const document = row.kind === 'document';
   return {
     id: row.id,
     kind: row.kind,
     role: row.role,
     name: row.name,
     tags: tagsOf(row.tags),
-    url: media.url(row.storage_key),
-    thumbUrl: row.thumb_key ? media.url(row.thumb_key) : null,
+    url: document ? documentUrl(row.organization_id, row.id) : media.url(row.storage_key),
+    thumbUrl: !document && row.thumb_key ? media.url(row.thumb_key) : null,
+    ...(document && row.page_count ? { pages: row.page_count } : {}),
     width: row.width,
     height: row.height,
     seconds: seconds(row.duration_ms),
@@ -123,6 +127,8 @@ export function jobView(row: JobRow, outputs: OutputRow[], media: StudioMediaSto
             mode: p.revision.mode,
             added: p.revision.added,
             ...(p.revision.materials?.length ? { materials: p.revision.materials.map((m) => ({ ...m })) } : {}),
+            ...(p.revision.documents?.length ? { documents: p.revision.documents.map((d) => ({ assetId: d.assetId })) } : {}),
+            ...((row.work?.materialReads?.unread ?? 0) > 0 ? { unread: row.work!.materialReads!.unread } : {}),
             ...(clarifiedOf(p.revision) ? { clarified: clarifiedOf(p.revision)! } : {}),
             ...(Array.isArray(p.revision.marks) && p.revision.marks.length
               ? { marks: p.revision.marks.map((m) => ({ ...m })) }

@@ -10,7 +10,7 @@
 import { useCallback, useMemo, useState } from "react";
 import type { StudioAssetView, StudioJobCreate, StudioJobView, StudioOutputView } from "@/lib/brand-studio/contracts";
 import type { StudioMedium } from "@/lib/brand-studio/models";
-import { isFailure, uploadProblem } from "./api";
+import { isFailure, uploadKind, uploadMime, uploadProblem } from "./api";
 import { errorLine, newRequestId, type StudioCopy } from "./copy";
 import { finalInput, regionEditInput, rerunInput, withMedium } from "./dock-model";
 import { trayFromReferences, trayItemFromAsset, trayItemFromOutput, withStartFrame, type RefSource, type TrayItem } from "./refs";
@@ -48,6 +48,7 @@ export function useViewer(input: {
   focusPrompt(): void;
 }) {
   const { studio, dock, copy, locale, mode, organizationId, jobs, assets, lookup, onCampaign, focusPrompt } = input;
+  const acceptsDocuments = studio.store.state?.acceptsDocuments === true;
   const [open, setOpen] = useState<{ list: "outputs" | "assets"; key: string } | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
@@ -242,17 +243,21 @@ export function useViewer(input: {
         ...assets.filter((a) => a.kind === "image").slice(0, 6).map(trayItemFromAsset),
         // Videos the team uploaded: material a revision can read (a texture, a movement, a look).
         ...assets.filter((a) => a.kind === "video").slice(0, 4).map(trayItemFromAsset),
+        // Documents too, while the server takes them (product facts, names, colour codes, rules).
+        ...(acceptsDocuments ? assets.filter((a) => a.kind === "document").slice(0, 4).map(trayItemFromAsset) : []),
       ],
+      documents: acceptsDocuments,
       resolve: (source: RefSource) => {
         const asset = "assetId" in source ? lookup.asset(source.assetId) : null;
         const output = "outputId" in source ? lookup.output(source.outputId) : null;
         const item = asset ? trayItemFromAsset(asset) : output ? trayItemFromOutput(output, copy.viewer.label) : null;
-        return item?.kind === "image" || item?.kind === "video" ? item : null;
+        return item?.kind === "image" || item?.kind === "video" || (acceptsDocuments && item?.kind === "document") ? item : null;
       },
       upload: async (files: File[]) => {
         const added: TrayItem[] = [];
         for (const file of files) {
-          if (!(file.type.startsWith("image/") || file.type.startsWith("video/")) || uploadProblem(file)) continue;
+          const kind = uploadKind(uploadMime(file));
+          if (!(kind === "image" || kind === "video" || (acceptsDocuments && kind === "document")) || uploadProblem(file)) continue;
           const result = await studio.upload(file);
           if (!isFailure(result)) added.push(trayItemFromAsset(result.asset));
         }
@@ -262,7 +267,7 @@ export function useViewer(input: {
       create: (body: StudioJobCreate) => studio.createJob(body),
       readMark: (body) => studio.readMark(body),
     }),
-    [organizationId, jobs, assets, lookup, studio, copy.viewer.label],
+    [organizationId, jobs, assets, lookup, studio, copy.viewer.label, acceptsDocuments],
   );
 
   return { open, show, items, revise, index, busy, notice, setNotice, preset, actions, rerun: actions.rerun, reuse, openRegion };

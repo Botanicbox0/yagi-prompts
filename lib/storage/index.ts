@@ -30,8 +30,30 @@ export interface CopyRequest {
   toKey: string;
 }
 
+/**
+ * Private objects that stay until they are deleted: a customer's own files that must never sit on the
+ * public media domain and must not expire like staging (the private bucket expires `staging/` after 7
+ * days). Keys start with `orgs/{organizationId}/`. Unlike published buckets these can be deleted: they go
+ * when the record that owns them is deleted. First user: brand studio documents (lib/brand-studio/documents.ts).
+ */
+export interface PrivateObjectStore {
+  put(key: string, bytes: Uint8Array, contentType: string): Promise<void>;
+  read(key: string): Promise<Uint8Array>;
+  /** Idempotent: a missing object is not an error. */
+  delete(key: string): Promise<void>;
+  /** A <=60 s signed GET served as a download, or null where nothing serves URLs (local: the route streams). */
+  signedUrl(key: string, expiresInSeconds: number): Promise<string | null>;
+}
+
+/** The only keys a `PrivateObjectStore` takes. */
+export function isPrivateObjectKey(key: string): boolean {
+  return /^orgs\/[0-9a-f-]{36}\/[a-z0-9-]+(\/[A-Za-z0-9._-]+)+$/.test(key) && !key.split('/').some((s) => s === '.' || s === '..');
+}
+
 export interface StorageDriver {
   readonly name: string;
+  /** Present on drivers that can keep private objects (R2, local); absent on Supabase. */
+  readonly privateObjects?: PrivateObjectStore;
   /**
    * Does `signedUrl()` return a URL an outside host will honour on its own?
    *

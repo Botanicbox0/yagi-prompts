@@ -29,6 +29,8 @@ export interface HubEntry {
   tags: readonly string[];
   prompt: string;
   seconds: number | null;
+  /** Slides of a PPTX document, when known for certain. */
+  pages?: number;
   createdAt: string;
   parentOutputId: string | null;
   jobId: string | null;
@@ -50,7 +52,8 @@ export const HUB_THUMB_SIDE = 512;
 
 function tileRatio(kind: StudioAssetKind, width: number | null, height: number | null): Pick<HubEntry, "ratio" | "sized" | "pixelWidth"> {
   if (width && height && width > 0 && height > 0) return { ratio: clampRatio(width / height), sized: true, pixelWidth: width };
-  return { ratio: kind === "video" ? 16 / 9 : kind === "audio" ? 1 : 4 / 5, sized: kind === "audio", pixelWidth: null };
+  const square = kind === "audio" || kind === "document";
+  return { ratio: kind === "video" ? 16 / 9 : square ? 1 : 4 / 5, sized: square, pixelWidth: null };
 }
 
 /**
@@ -111,6 +114,7 @@ export function buildHubEntries(assets: readonly StudioAssetView[], jobs: readon
       tags: asset.tags,
       prompt: "",
       seconds: asset.seconds,
+      ...(asset.pages ? { pages: asset.pages } : {}),
       createdAt: asset.createdAt,
       parentOutputId: null,
       jobId: null,
@@ -266,7 +270,7 @@ export function hubActions(
   if (canOpenStudio && canCreate && (entry.kind === "image" || entry.kind === "video")) {
     more.push({ key: "share", label: copy.share, marker: "data-asset-hub-share-review" });
   }
-  more.push({ key: "similar", label: copy.similar, marker: "data-asset-hub-similar" });
+  if (entry.kind !== "document") more.push({ key: "similar", label: copy.similar, marker: "data-asset-hub-similar" });
   if (opts.projectLabel && canOpenStudio && canCreate && entry.jobId) {
     more.push({ key: "project", label: opts.projectLabel(entry), marker: "data-asset-hub-project-assign" });
   }

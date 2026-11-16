@@ -4,7 +4,7 @@
  * Everything a customer could get wrong is refused here with a contract code, before any money moves.
  */
 import type { SqlRunner } from '@/lib/db/sql-runner';
-import type { StudioAssetKind, StudioAssetRole, StudioJobCreate, StudioJobKind, StudioReference } from './contracts';
+import type { StudioAssetKind, StudioAssetRole, StudioMediaKind, StudioJobCreate, StudioJobKind, StudioReference } from './contracts';
 import { StudioDenied } from './access';
 import type { StudioMediaStore } from './media-store';
 import {
@@ -27,7 +27,7 @@ export interface ResolvedRef {
   index: number;
   /** Position among references of the same kind (1-based): "이미지 2". */
   ordinal: number;
-  kind: StudioAssetKind;
+  kind: StudioMediaKind;
   key: string;
   thumbKey: string | null;
   url: string;
@@ -41,7 +41,7 @@ export interface ResolvedRef {
   height: number | null;
 }
 
-const LABELS: Record<'ko' | 'en', Record<StudioAssetKind, string>> = {
+const LABELS: Record<'ko' | 'en', Record<StudioMediaKind, string>> = {
   ko: { image: '이미지', video: '영상', audio: '오디오' },
   en: { image: 'Image', video: 'Video', audio: 'Audio' },
 };
@@ -53,7 +53,7 @@ export async function resolveReferences(
   media: StudioMediaStore,
   locale: 'ko' | 'en',
 ): Promise<ResolvedRef[]> {
-  const seen: Record<StudioAssetKind, number> = { image: 0, video: 0, audio: 0 };
+  const seen: Record<StudioMediaKind, number> = { image: 0, video: 0, audio: 0 };
   const out: ResolvedRef[] = [];
   for (const [i, ref] of refs.entries()) {
     let row: { kind: StudioAssetKind; key: string; thumb: string | null; ms: number | null; w: number | null; h: number | null; role: StudioAssetRole | null } | null = null;
@@ -65,15 +65,18 @@ export async function resolveReferences(
       if (o?.storage_key) row = { kind: o.kind, key: o.storage_key, thumb: o.thumb_key, ms: o.duration_ms, w: o.width, h: o.height, role: null };
     }
     if (!row) throw new StudioDenied('reference_missing');
-    seen[row.kind] += 1;
+    // A document is material, never a reference: no run sends one to an image or video model.
+    if (row.kind === 'document') throw new StudioDenied('invalid');
+    const kind: StudioMediaKind = row.kind;
+    seen[kind] += 1;
     out.push({
       index: i + 1,
-      ordinal: seen[row.kind],
-      kind: row.kind,
+      ordinal: seen[kind],
+      kind,
       key: row.key,
       thumbKey: row.thumb,
       url: media.url(row.key),
-      label: `${LABELS[locale][row.kind]} ${seen[row.kind]}`,
+      label: `${LABELS[locale][kind]} ${seen[kind]}`,
       ...(ref.role ?? row.role ? { role: (ref.role ?? row.role)! } : {}),
       ...(ref.use ? { use: ref.use } : {}),
       ...(ref.avoid ? { avoid: ref.avoid } : {}),
@@ -86,7 +89,7 @@ export async function resolveReferences(
   return out;
 }
 
-const MENTIONS: Array<[StudioAssetKind, RegExp]> = [
+const MENTIONS: Array<[StudioMediaKind, RegExp]> = [
   ['image', /(?:이미지|사진|image|img|figure)\s*#?\s*(\d{1,2})/gi],
   ['video', /(?:영상|비디오|video)\s*#?\s*(\d{1,2})/gi],
   ['audio', /(?:오디오|음원|audio)\s*#?\s*(\d{1,2})/gi],
@@ -141,7 +144,7 @@ function qualityFor(model: StudioImageModel, asked: StudioImageQuality | undefin
   return asked ?? model.defaultQuality ?? model.qualities[0];
 }
 
-function count(refs: readonly ResolvedRef[], kind: StudioAssetKind): number {
+function count(refs: readonly ResolvedRef[], kind: StudioMediaKind): number {
   return refs.filter((r) => r.kind === kind).length;
 }
 

@@ -9,6 +9,7 @@
 import { useEffect, useId, useMemo, useRef, useState, type Ref, type RefObject } from "react";
 import {
   STUDIO_LIMITS,
+  STUDIO_OLD_SLIDES_MIME,
   STUDIO_REVISE_MODES,
   STUDIO_UPLOAD_MIMES,
   type StudioJobCreated,
@@ -24,6 +25,7 @@ import { credits, errorLine, fill, type StudioCopy, type StudioLocale } from "./
 import { StudioIcon } from "./icons";
 import { REF_DRAG_TYPE, acceptsDrag, decodeRefDrag, startRefDrag, type RefSource, type TrayItem } from "./refs";
 import {
+  REVISE_DOCUMENTS_MAX,
   REVISE_MATERIALS_MAX,
   REVISE_REFERENCES_MAX,
   createReviseFlow,
@@ -50,6 +52,8 @@ export interface ReviseSupport {
   create(input: ReviseCreateInput): Promise<ApiResult<StudioJobCreated>>;
   /** `revise.mark` (free): what a marked spot is on. Without it marks work by position only. */
   readMark?(input: ReviseMarkReadInput): Promise<ApiResult<StudioReviseMarkRead>>;
+  /** True while the server takes documents (PDF, PPTX) as material. */
+  documents?: boolean;
 }
 
 /** The clip on screen, for marks: the viewer's `<video>`, the figure the marks are drawn in, and its address. */
@@ -119,6 +123,11 @@ export function VersionStrip({
           <p>{current.clarified.answer}</p>
         </div>
       )}
+      {current?.request && current.unread > 0 && (
+        <p className="bs-muted bs-revise-unread" data-revision-unread>
+          {fill(r.unread, { n: current.unread })}
+        </p>
+      )}
       {current?.request && current.marks.length > 0 && (
         <ul className="bs-mark-chips" data-revision-marks>
           {current.marks.map((mark, i) => (
@@ -147,6 +156,8 @@ export interface ReviseFormViewProps {
   onReferences(next: TrayItem[]): void;
   /** Videos to read for the request. Absent: videos cannot be attached (pictures only). */
   onMaterials?(next: TrayItem[]): void;
+  /** Documents (PDF, PPTX) to read for the request. Absent: documents cannot be attached. */
+  onDocuments?(next: TrayItem[]): void;
   onFiles(files: File[]): void;
   resolve(source: RefSource): TrayItem | null;
   onPick(mode: StudioReviseMode): void;
@@ -167,7 +178,10 @@ export interface ReviseFormViewProps {
 
 export function noteLine(note: string, state: ReviseState, copy: StudioCopy): string {
   if (note === "empty_prompt") return copy.dock.emptyPrompt;
+  if (note === "attach_full_documents")
+    return fill(copy.revise.attachFullDocuments, { images: REVISE_REFERENCES_MAX, videos: REVISE_MATERIALS_MAX, documents: REVISE_DOCUMENTS_MAX });
   if (note === "attach_full") return fill(copy.revise.attachFull, { images: REVISE_REFERENCES_MAX, videos: REVISE_MATERIALS_MAX });
+  if (note === "old_slides") return copy.revise.oldSlides;
   if (note === "unavailable") {
     const problem = state.plan?.methods[state.mode]?.problem;
     return problem ? copy.revise.problems[problem] : copy.revise.problems.unsupported;
@@ -194,15 +208,20 @@ export function ReviseFormView(props: ReviseFormViewProps) {
   const [dragging, setDragging] = useState(false);
   const busy = state.phase === "checking" || state.phase === "sending";
   const videos = Boolean(props.onMaterials);
+  const docs = Boolean(props.onDocuments);
   const refsFull = state.references.length >= REVISE_REFERENCES_MAX;
   const materialsFull = !videos || state.materials.length >= REVISE_MATERIALS_MAX;
-  const full = refsFull && materialsFull;
-  const taken = (item: TrayItem) => (item.kind === "video" ? state.materials : state.references).some((x) => x.key === item.key);
-  const closed = (item: TrayItem) => (item.kind === "video" ? materialsFull : item.kind === "image" ? refsFull : true);
+  const documentsFull = !docs || state.documents.length >= REVISE_DOCUMENTS_MAX;
+  const full = refsFull && materialsFull && documentsFull;
+  const listOf = (item: TrayItem) => (item.kind === "video" ? state.materials : item.kind === "document" ? state.documents : state.references);
+  const taken = (item: TrayItem) => listOf(item).some((x) => x.key === item.key);
+  const closed = (item: TrayItem) =>
+    item.kind === "video" ? materialsFull : item.kind === "image" ? refsFull : item.kind === "document" ? documentsFull : true;
   const add = (item: TrayItem | null) => {
     if (!item || taken(item) || closed(item)) return;
     if (item.kind === "image") props.onReferences([...state.references, item]);
     else if (item.kind === "video") props.onMaterials?.([...state.materials, item]);
+    else if (item.kind === "document") props.onDocuments?.([...state.documents, item]);
   };
   const drop = (event: { dataTransfer: DataTransfer | null; preventDefault(): void }) => {
     if (!event.dataTransfer || !acceptsDrag(event.dataTransfer.types)) return;
@@ -259,7 +278,7 @@ export function ReviseFormView(props: ReviseFormViewProps) {
   const marking = props.markMode === true;
   const markable = props.markMode === true || props.markMode === false;
   const marksFull = state.marks.length >= MARKS_MAX;
-  const attached = state.references.length + state.materials.length > 0;
+  const attached = state.references.length + state.materials.length + state.documents.length > 0;
   // The question takes the focus when it appears, so the keyboard and a screen reader land on it.
   const question = useRef<HTMLDivElement>(null);
   const asking = state.phase === "clarify" && Boolean(state.clarify);
@@ -375,11 +394,28 @@ export function ReviseFormView(props: ReviseFormViewProps) {
                 </button>
               </li>
             ))}
+            {state.documents.map((document, i) => (
+              <li key={document.key} className="bs-region-ref bs-revise-document" data-revise-document={i + 1}>
+                <span className="bs-revise-document-tile" title={document.name}>
+                  <StudioIcon name="doc" />
+                  <span className="bs-revise-document-name">{document.name}</span>
+                  {document.pages ? <span className="bs-num bs-revise-document-pages">{fill(r.slides, { n: document.pages })}</span> : null}
+                </span>
+                <button type="button" className="bs-thumb-x" aria-label={fill(r.removeDocument, { n: i + 1 })} onClick={() => props.onDocuments?.(state.documents.filter((x) => x.key !== document.key))}>
+                  <StudioIcon name="close" />
+                </button>
+              </li>
+            ))}
           </ul>
         )}
         {state.materials.length > 0 && (
           <p className="bs-muted bs-revise-material-note" data-revise-material-note>
             {r.materialNote}
+          </p>
+        )}
+        {state.documents.length > 0 && (
+          <p className="bs-muted bs-revise-material-note" data-revise-document-note>
+            {r.documentNote}
           </p>
         )}
         <div className="bs-revise-tools">
@@ -392,7 +428,11 @@ export function ReviseFormView(props: ReviseFormViewProps) {
             type="file"
             className="bs-sr"
             tabIndex={-1}
-            accept={[...STUDIO_UPLOAD_MIMES.image, ...(videos ? STUDIO_UPLOAD_MIMES.video : [])].join(",")}
+            accept={[
+              ...STUDIO_UPLOAD_MIMES.image,
+              ...(videos ? STUDIO_UPLOAD_MIMES.video : []),
+              ...(docs ? [...STUDIO_UPLOAD_MIMES.document, ".pdf", ".pptx", STUDIO_OLD_SLIDES_MIME, ".ppt"] : []),
+            ].join(",")}
             multiple
             onChange={(event) => {
               const picked = Array.from(event.target.files ?? []);
@@ -418,7 +458,7 @@ export function ReviseFormView(props: ReviseFormViewProps) {
         </div>
         <p className="bs-revise-drop" data-revise-drop-hint>
           <StudioIcon name="upload" />
-          <span>{dragging ? r.dropHere : videos ? r.dropHint : r.dropHintImages}</span>
+          <span>{dragging ? r.dropHere : docs ? r.dropHintDocuments : videos ? r.dropHint : r.dropHintImages}</span>
         </p>
       </div>
       {marking && state.marks.length === 0 && (
@@ -445,7 +485,13 @@ export function ReviseFormView(props: ReviseFormViewProps) {
                     aria-label={fill(r.addOne, { name: item.name })}
                     onClick={() => add(item)}
                   >
-                    <AttachThumb item={item} />
+                    {item.kind === "document" ? (
+                      <span className="bs-revise-document-thumb" aria-hidden="true">
+                        <StudioIcon name="doc" />
+                      </span>
+                    ) : (
+                      <AttachThumb item={item} />
+                    )}
                     {item.kind === "video" && (
                       <span className="bs-thumb-play" aria-hidden="true">
                         <StudioIcon name="play" />
@@ -569,16 +615,21 @@ export function ReviseForm({
         create: (input) => live.current.create(input),
         onChange: setState,
         ...(support.readMark ? { readMark: (input: ReviseMarkReadInput) => live.current.readMark!(input) } : {}),
+        ...(support.documents ? { documents: true } : {}),
         frame: (mark) => grabber.current?.capture(mark, accentOf(liveStage.current?.host ?? null)) ?? Promise.resolve(null),
       }),
     // A flow per shown result; `support` and the stage are read through refs.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [outputId, support.organizationId],
+    [outputId, support.organizationId, support.documents],
   );
   useEffect(() => {
     void flow.load();
   }, [flow]);
-  const recent = useMemo(() => support.recent.filter((r) => (r.kind === "image" || r.kind === "video") && !exclude?.includes(r.key)), [support.recent, exclude]);
+  const recent = useMemo(
+    () =>
+      support.recent.filter((r) => (r.kind === "image" || r.kind === "video" || (support.documents && r.kind === "document")) && !exclude?.includes(r.key)),
+    [support.recent, support.documents, exclude],
+  );
 
   // One offscreen copy of the clip per form, loaded only when the first mark is read.
   const url = stage?.url ?? null;
@@ -674,19 +725,28 @@ export function ReviseForm({
       uploading={uploading}
       resolve={(source) => {
         const item = support.resolve(source);
-        return item && (item.kind === "image" || item.kind === "video") && !exclude?.includes(item.key) ? item : null;
+        return item && (item.kind === "image" || item.kind === "video" || (support.documents && item.kind === "document")) && !exclude?.includes(item.key) ? item : null;
       }}
       onPrompt={flow.setPrompt}
       onReferences={flow.setReferences}
       onMaterials={flow.setMaterials}
+      {...(support.documents ? { onDocuments: flow.setDocuments } : {})}
       onFiles={(picked) => {
+        // An old binary PowerPoint is refused before anything is sent: it asks for a PDF export.
+        const oldSlides = support.documents ? picked.filter(isOldSlides) : [];
+        const sending = picked.filter((file) => !oldSlides.includes(file));
+        if (!sending.length) {
+          if (oldSlides.length) flow.note("old_slides");
+          return;
+        }
         setUploading(true);
         void support
-          .upload(picked)
+          .upload(sending)
           .then((added) => {
             // Fewer came back than were picked: a file was the wrong kind or too large.
-            if (flow.attach(added) > 0) flow.note("attach_full");
-            else if (added.length < picked.length) flow.note("unsupported_file");
+            if (flow.attach(added) > 0) flow.note(support.documents ? "attach_full_documents" : "attach_full");
+            else if (oldSlides.length) flow.note("old_slides");
+            else if (added.length < sending.length) flow.note("unsupported_file");
           })
           .catch(() => flow.note("failed"))
           .finally(() => setUploading(false));
@@ -718,6 +778,11 @@ export function ReviseForm({
       />
     </>
   );
+}
+
+/** A `.ppt` (the old binary PowerPoint format): it cannot be read; the customer is asked for a PDF. */
+export function isOldSlides(file: { name: string; type: string }): boolean {
+  return file.type === STUDIO_OLD_SLIDES_MIME || /\.ppt$/i.test(file.name);
 }
 
 /** The studio accent as a canvas colour (the frame's mark is drawn in it). */

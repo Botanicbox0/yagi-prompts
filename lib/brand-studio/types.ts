@@ -15,6 +15,7 @@ import type {
   FilmShot,
   RegionBox,
   StudioAssetKind,
+  StudioMediaKind,
   StudioAssetRole,
   StudioAudioMode,
   StudioErrorCode,
@@ -66,7 +67,7 @@ export interface EnhanceInput {
     madeWith: string;
     history: string[];
     marks?: Array<{ n: number; time: number; what: string | null; x: number; y: number; w?: number; h?: number; label?: string | null }>;
-    materials?: Array<{ n: number; kind: 'video'; notes: string }>;
+    materials?: Array<{ n: number; kind: 'video' | 'document'; notes: string }>;
     clarified?: { question: string; answer: string };
   } | null;
 }
@@ -92,7 +93,10 @@ export interface StudioIntel {
   composeFallbackPrompt(input: EnhanceInput): EnhanceResult;
   readFilm(input: { video: { bytes: Uint8Array; mime: string } | { url: string }; locale: 'ko' | 'en'; depth?: FilmDepth }, deps: IntelDeps): Promise<FilmSheet | null>;
   /** Optional so a test double may leave it out; without it attached material is simply not read. */
-  readMaterial?(input: { video: { bytes: Uint8Array; mime: string } | { url: string }; request: string; madeWith: string }, deps: IntelDeps): Promise<string | null>;
+  readMaterial?(
+    input: { video?: { bytes: Uint8Array; mime: string } | { url: string }; document?: { bytes: Uint8Array; mime: string }; request: string; madeWith: string },
+    deps: IntelDeps,
+  ): Promise<string | null>;
   /** Optional so a test double may leave it out; without it a blocked run is simply not retried. */
   rewriteBlockedPrompt?(input: BlockedInput, deps: IntelDeps): Promise<BlockedRewrite>;
   planRegion(image: { width: number; height: number }, box: RegionBox, aspects: readonly string[]): RegionPlan;
@@ -114,7 +118,7 @@ export interface StudioIntel {
 
 export type StudioStaging = Pick<
   StorageDriver,
-  'read' | 'putStaging' | 'signedUploadUrl' | 'servesSignedUrls' | 'releaseStaging'
+  'read' | 'putStaging' | 'signedUploadUrl' | 'servesSignedUrls' | 'releaseStaging' | 'privateObjects'
 >;
 
 export interface StudioDeps {
@@ -179,6 +183,8 @@ export interface StudioJobParams {
     marks?: Array<{ time: number; x: number; y: number; w?: number; h?: number; label?: string; what?: string }>;
     /** Material read for this request (lib/brand-studio/revision/material.ts): videos, never sent to the video model. */
     materials?: Array<{ assetId?: string; outputId?: string }>;
+    /** Documents read for this request (PDF, PPTX assets), never sent to the video model. */
+    documents?: Array<{ assetId: string }>;
     /** The one question asked about this request (revise.plan) and what the customer answered. */
     clarified?: { question: string; answer: string };
   };
@@ -200,9 +206,15 @@ export interface StudioJobWork {
   /** Lanes that could not pay for this job; it never goes back to one of them (no ping-pong). */
   triedLanes?: StudioLane[];
   /** Resolved input addresses as sent (also what the account-lane worker receives). */
-  inputs?: Array<{ kind: StudioAssetKind; url: string; frame?: 'start' | 'end' }>;
+  inputs?: Array<{ kind: StudioMediaKind; url: string; frame?: 'start' | 'end' }>;
   sheet?: FilmSheet | null;
   enhanceNotes?: string;
+  /**
+   * A revision's attached videos and documents: how many were read into notes and how many could not be
+   * (gone, unreadable, the reading failed). Counts only, never what they said. The screen tells the
+   * customer when something was not read (docs/BRAND-STUDIO-V6-PLAN.md §4.7).
+   */
+  materialReads?: { read: number; unread: number };
   region?: {
     plan: RegionPlan;
     cropKey: string;
@@ -297,6 +309,8 @@ export interface AssetRow {
   width: number | null;
   height: number | null;
   duration_ms: number | null;
+  /** Migration 0092: a PPTX's slide count; null otherwise (and absent before the migration). */
+  page_count?: number | null;
   storage_key: string;
   thumb_key: string | null;
   sha256: string | null;
