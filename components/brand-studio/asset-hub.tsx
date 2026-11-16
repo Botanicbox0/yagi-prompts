@@ -6,19 +6,39 @@
  * The picture is the tile (2026-11-16, docs/design/TASTE.md): no file names and no button rows under it.
  * Hover or keyboard focus shows one main action and a "more" menu; a press opens the sheet with everything,
  * which is also how touch screens reach every action. Search covers names, tags, roles and prompts.
+ *
+ * When some of the work belongs to a project the page opens by project: the brand's standing material,
+ * then one row of covers per project (made in the studio, or done with the YAGI team), then everything that
+ * is in no project as the usual grid. The grouping is derived server-side from existing links
+ * (lib/brand-studio/asset-projects.ts) and placed by `groupByProject`; "전체" stays one tab away.
  */
 import "./rail/rail.css";
 import { useCallback, useMemo, useRef, useState, type DragEvent, type ReactNode } from "react";
 import { STUDIO_ASSET_ROLES, type StudioAssetKind, type StudioAssetRole, type StudioAssetView, type StudioState } from "@/lib/brand-studio/contracts";
 import type { Dictionary } from "@/lib/i18n/dictionaries";
 import { isFailure, uploadProblem, type StudioApi } from "./api";
-import { buildHubEntries, filterHubEntries, hubActions, type HubAction, type HubActionCopy, type HubEntry, type HubSection } from "./asset-hub-model";
-import { HubDetail, HubTile } from "./asset-hub-tile";
+import {
+  buildHubEntries,
+  filterHubEntries,
+  filterProjectView,
+  groupByProject,
+  groupCount,
+  hubActions,
+  type HubAction,
+  type HubActionCopy,
+  type HubDeliverable,
+  type HubEntry,
+  type HubProjectGroup,
+  type HubProjectLinks,
+  type HubSection,
+} from "./asset-hub-model";
+import { HubDetail, HubLinkTile, HubTile } from "./asset-hub-tile";
 import { listedJobs } from "./store";
 import s from "./asset-hub.module.css";
 import { errorLine, type StudioCopy } from "./copy";
 import { AssetDialog } from "./rail/asset-dialog";
 import { FoldersTab } from "./rail/folders-tab";
+import { RailIcon } from "./rail/icons";
 import { hasExtras, isTempFolder } from "./rail/library-store";
 import type { MenuItem, RailKit, ThumbAction } from "./rail/parts";
 import { fill, itemName, writeError } from "./rail/text";
@@ -29,10 +49,12 @@ import { imageScreenRefHref } from "./studio-app";
 import { StorageMeterCard, storageIsQuiet } from "./storage-meter";
 import { useStudio } from "./use-studio";
 
-export { buildHubEntries, filterHubEntries, hubActions, humanTitle, similarityScore } from "./asset-hub-model";
-export type { HubAction, HubEntry, HubSection } from "./asset-hub-model";
+export { buildHubEntries, filterHubEntries, filterProjectView, groupByProject, hubActions, humanTitle, similarityScore } from "./asset-hub-model";
+export type { HubAction, HubDeliverable, HubEntry, HubProjectGroup, HubProjectLinks, HubProjectView, HubSection } from "./asset-hub-model";
 
 const KINDS = ["all", "image", "video", "audio"] as const;
+/** A project's cover row shows at most this many pictures (fewer on narrow screens, by CSS). */
+const COVERS = 6;
 
 export interface BrandAssetHubProps {
   organizationId: string;
@@ -41,6 +63,10 @@ export interface BrandAssetHubProps {
   initialState?: StudioState | null;
   deliverableCount?: number;
   deliverablesNode?: ReactNode;
+  /** Which files belong to which project (ids only, server-derived). Null or empty: no by-project view. */
+  projectLinks?: HubProjectLinks | null;
+  /** Campaign deliverables, for their project's group. They stay links into the project's review. */
+  deliverables?: readonly HubDeliverable[];
   /** False for project-only clients (`self_studio` denied) so dead links to `/brand/studio` are hidden. */
   canOpenStudio?: boolean;
   /** Optional test injection so server/unit tests render without network calls. */
@@ -55,6 +81,8 @@ export function BrandAssetHub({
   initialState = null,
   deliverableCount = 0,
   deliverablesNode = null,
+  projectLinks = null,
+  deliverables,
   canOpenStudio = true,
   injectedLibrary,
   api,
@@ -70,7 +98,9 @@ export function BrandAssetHub({
   const hubLocale: "ko" | "en" = libraryCopy.label === "Assets" ? "en" : "ko";
   const h = libraryCopy.hub;
 
-  const [section, setSection] = useState<HubSection>("all");
+  // Null until a tab is chosen: the page then opens by project when there is a project to show, else on everything.
+  const [section, setSection] = useState<HubSection | null>(null);
+  const [openGroup, setOpenGroup] = useState<string | null>(null);
   const [query, setQuery] = useState("");
   const [kindFilter, setKindFilter] = useState<"all" | StudioAssetKind>("all");
   const [roleFilter, setRoleFilter] = useState<"all" | StudioAssetRole>("all");
@@ -92,20 +122,30 @@ export function BrandAssetHub({
   const similarAnchor = useMemo(() => (similarKey ? entries.find((e) => e.key === similarKey) ?? null : null), [entries, similarKey]);
   const detail = useMemo(() => (detailKey ? entries.find((e) => e.key === detailKey) ?? null : null), [entries, detailKey]);
 
+  const projectView = useMemo(() => groupByProject(entries, projectLinks, deliverables), [deliverables, entries, projectLinks]);
+  const hasProjects = projectView.groups.length > 0;
+  const active: HubSection = section === null || (section === "projects" && !hasProjects) ? (hasProjects ? "projects" : "all") : section;
+
   // Studio results carry no role, so the role filter (and its control) does not apply on that tab.
-  const activeRole = section === "generated" ? "all" : roleFilter;
+  const activeRole = active === "generated" ? "all" : roleFilter;
   const filtered = useMemo(
     () =>
       filterHubEntries(entries, {
-        section,
+        section: active,
         liked: library.liked,
         query,
         kind: kindFilter,
         role: activeRole,
         similarTo: similarAnchor,
       }),
-    [activeRole, entries, kindFilter, library.liked, query, section, similarAnchor],
+    [active, activeRole, entries, kindFilter, library.liked, query, similarAnchor],
   );
+  const shownView = useMemo(
+    () => filterProjectView(projectView, { liked: library.liked, query, kind: kindFilter, role: activeRole }),
+    [activeRole, kindFilter, library.liked, projectView, query],
+  );
+  const opened = active === "projects" && openGroup ? projectView.groups.find((group) => group.key === openGroup) ?? null : null;
+  const openedShown: HubProjectGroup | null = opened ? shownView.groups.find((group) => group.key === opened.key) ?? { ...opened, entries: [], deliverables: [] } : null;
 
   const totalCount = entries.length + deliverableCount;
   const generatedCount = useMemo(() => entries.filter((e) => e.origin === "generated").length, [entries]);
@@ -159,6 +199,8 @@ export function BrandAssetHub({
     setTileMenu(null);
     setDetailKey(null);
     if (action.key === "similar") {
+      // Related items are ranked across everything, so the by-project view hands over to the full grid.
+      if (active === "projects") setSection("all");
       setSimilarKey((cur) => (cur === entry.key ? null : entry.key));
     } else if (action.key === "edit" && entry.asset) {
       setEditing(entry.asset);
@@ -212,6 +254,7 @@ export function BrandAssetHub({
   };
 
   const sections: Array<{ id: HubSection; label: string; count?: number }> = [
+    ...(hasProjects ? [{ id: "projects" as const, label: h.sections.projects, count: projectView.groups.length }] : []),
     { id: "all", label: h.sections.all, count: entries.length },
     { id: "uploads", label: h.sections.uploads, count: assets.length },
     { id: "generated", label: h.sections.generated, count: generatedCount },
@@ -221,7 +264,7 @@ export function BrandAssetHub({
   ];
 
   const studioHref = `/brand/studio?organizationId=${encodeURIComponent(organizationId)}`;
-  const gridSection = section !== "folders" && section !== "deliverables";
+  const gridSection = active !== "folders" && active !== "deliverables";
   const filtering = Boolean(query) || kindFilter !== "all" || activeRole !== "all";
   // One quiet line in the head while there is room; the full card (with its notice) once there is something to act on.
   const storage = state?.storage ?? null;
@@ -229,7 +272,51 @@ export function BrandAssetHub({
   const loadFailed = studio.store.phase === "failed" && !state;
   const uploading = studio.uploads.length > 0;
   const pickFiles = () => fileInputRef.current?.click();
-  const emptyCanUpload = canCreate && section !== "generated" && section !== "liked";
+  const emptyCanUpload = canCreate && active !== "generated" && active !== "liked";
+
+  const countLine = (n: number) => (n === 1 ? h.projects.one : fill(libraryCopy.folders.count, { n }));
+  const originLine = (group: HubProjectGroup) => `${group.origin === "team" ? h.projects.team : h.projects.self} · ${countLine(groupCount(group))}`;
+  const projectHref = (group: HubProjectGroup): string | null =>
+    group.origin === "team"
+      ? `/brand/projects/${group.id}`
+      : canOpenStudio
+        ? `/brand/studio/video?organizationId=${encodeURIComponent(organizationId)}&project=${encodeURIComponent(group.id)}`
+        : null;
+  /** `scope` keeps one open menu when the same file is drawn in two places (two projects, or a project and the strip). */
+  const tile = (entry: HubEntry, scope: string, compact = false) => {
+    const name = nameOf(entry);
+    const { main, more } = actionsOf(entry);
+    const menuKey = `${scope}|${entry.key}`;
+    return (
+      <HubTile
+        key={entry.key}
+        entry={entry}
+        copy={libraryCopy}
+        name={name}
+        liked={library.liked.has(entry.key)}
+        main={main}
+        more={more}
+        moreLabel={fill(libraryCopy.uploads.more, { name })}
+        compact={compact}
+        menuOpen={tileMenu === menuKey}
+        onMenu={(open) => setTileMenu(open ? menuKey : null)}
+        onOpen={() => {
+          setTileMenu(null);
+          setDetailKey(entry.key);
+        }}
+        onLike={() => void library.toggleLike(entry.source)}
+        onAction={(action) => runAction(entry, action)}
+      />
+    );
+  };
+  const linkTile = (item: HubDeliverable, compact = false) => (
+    <HubLinkTile key={`c:${item.id}`} item={item} href={`/brand/projects/${item.projectId}#review`} copy={libraryCopy} compact={compact} />
+  );
+  const noMatch = (
+    <section className={s.empty} data-asset-hub-empty={active}>
+      <p>{libraryCopy.uploads.noMatch}</p>
+    </section>
+  );
 
   return (
     <div
@@ -297,9 +384,12 @@ export function BrandAssetHub({
               type="button"
               role="tab"
               className={s.segBtn}
-              aria-selected={section === tab.id}
+              aria-selected={active === tab.id}
               data-asset-hub-tab={tab.id}
-              onClick={() => setSection(tab.id)}
+              onClick={() => {
+                setSection(tab.id);
+                setOpenGroup(null);
+              }}
             >
               <span>{tab.label}</span>
               {typeof tab.count === "number" && tab.count > 0 && <span className={s.segNum}>{tab.count}</span>}
@@ -324,7 +414,7 @@ export function BrandAssetHub({
                 ))}
               </select>
             </span>
-            {section !== "generated" && (
+            {active !== "generated" && (
               <span className={s.selectWrap} data-active={roleFilter !== "all" ? "" : undefined}>
                 <select
                   className={s.select}
@@ -388,22 +478,97 @@ export function BrandAssetHub({
         </div>
       )}
 
-      {section === "deliverables" ? (
+      {active === "deliverables" ? (
         <section data-asset-hub-deliverables>{deliverablesNode}</section>
-      ) : section === "folders" ? (
+      ) : active === "folders" ? (
         <section className={s.foldersWrap} data-asset-hub-folders>
           <FoldersTab kit={folderKit} library={library} openId={openFolderId} onOpen={setOpenFolderId} creating={creatingFolder} onCreating={setCreatingFolder} />
         </section>
-      ) : loadFailed ? null : filtered.length === 0 ? (
-        <section className={s.empty} data-asset-hub-empty={section}>
+      ) : loadFailed ? null : active === "projects" ? (
+        openedShown ? (
+          <section className={s.group} data-asset-hub-project={openedShown.key} data-origin={openedShown.origin} data-asset-hub-project-open>
+            <div className={s.groupBar}>
+              <button type="button" className={s.quietBtn} onClick={() => setOpenGroup(null)} data-asset-hub-project-back>
+                <RailIcon name="back" />
+                {h.sections.projects}
+              </button>
+              <h2 className={s.groupTitle}>{openedShown.title}</h2>
+              <span className={s.groupMeta}>{originLine(openedShown)}</span>
+              {projectHref(openedShown) && (
+                <a className={s.groupLink} href={projectHref(openedShown)!} data-asset-hub-project-link>
+                  {h.projects.open}
+                </a>
+              )}
+            </div>
+            {groupCount(openedShown) === 0 ? (
+              noMatch
+            ) : (
+              <ul className={s.grid} data-asset-hub-grid>
+                {openedShown.entries.map((entry) => tile(entry, openedShown.key))}
+                {openedShown.deliverables.map((item) => linkTile(item))}
+              </ul>
+            )}
+          </section>
+        ) : shownView.standing.length + shownView.groups.length + shownView.loose.length === 0 ? (
+          noMatch
+        ) : (
+          <div className={s.groups} data-asset-hub-projects>
+            {shownView.standing.length > 0 && (
+              <section className={s.group} data-asset-hub-standing>
+                <div className={s.groupHead}>
+                  <h2 className={s.groupTitle}>{h.projects.standing}</h2>
+                  <span className={s.groupMeta}>{countLine(shownView.standing.length)}</span>
+                </div>
+                <ul className={s.strip}>{shownView.standing.map((entry) => tile(entry, "standing", true))}</ul>
+              </section>
+            )}
+            {shownView.groups.map((group) => {
+              const covers = group.entries.slice(0, COVERS);
+              const rest = group.deliverables.slice(0, COVERS - covers.length);
+              return (
+                <section key={group.key} className={s.group} data-asset-hub-project={group.key} data-origin={group.origin}>
+                  <div className={s.groupHead}>
+                    <h2 className={s.groupTitle}>
+                      <button type="button" className={s.groupOpen} onClick={() => setOpenGroup(group.key)} data-asset-hub-project-see-all>
+                        {group.title}
+                      </button>
+                    </h2>
+                    <span className={s.groupMeta}>{originLine(group)}</span>
+                    <span className={s.groupMore} aria-hidden="true">
+                      {h.projects.seeAll}
+                      <RailIcon name="collapse" />
+                    </span>
+                  </div>
+                  <ul className={s.covers}>
+                    {covers.map((entry) => tile(entry, group.key, true))}
+                    {rest.map((item) => linkTile(item, true))}
+                  </ul>
+                </section>
+              );
+            })}
+            {shownView.loose.length > 0 && (
+              <section className={s.group} data-asset-hub-loose>
+                <div className={s.groupHead}>
+                  <h2 className={s.groupTitle}>{h.projects.loose}</h2>
+                  <span className={s.groupMeta}>{countLine(shownView.loose.length)}</span>
+                </div>
+                <ul className={s.grid} data-asset-hub-grid>
+                  {shownView.loose.map((entry) => tile(entry, "loose"))}
+                </ul>
+              </section>
+            )}
+          </div>
+        )
+      ) : filtered.length === 0 ? (
+        <section className={s.empty} data-asset-hub-empty={active}>
           <p>
             {similarAnchor
               ? h.emptySimilar
               : filtering
                 ? libraryCopy.uploads.noMatch
-                : section === "generated"
+                : active === "generated"
                   ? h.emptyGenerated
-                  : section === "liked"
+                  : active === "liked"
                     ? libraryCopy.liked.empty
                     : h.emptyAll}
           </p>
@@ -424,30 +589,7 @@ export function BrandAssetHub({
         </section>
       ) : (
         <ul className={s.grid} data-asset-hub-grid>
-          {filtered.map((entry) => {
-            const name = nameOf(entry);
-            const { main, more } = actionsOf(entry);
-            return (
-              <HubTile
-                key={entry.key}
-                entry={entry}
-                copy={libraryCopy}
-                name={name}
-                liked={library.liked.has(entry.key)}
-                main={main}
-                more={more}
-                moreLabel={fill(libraryCopy.uploads.more, { name })}
-                menuOpen={tileMenu === entry.key}
-                onMenu={(open) => setTileMenu(open ? entry.key : null)}
-                onOpen={() => {
-                  setTileMenu(null);
-                  setDetailKey(entry.key);
-                }}
-                onLike={() => void library.toggleLike(entry.source)}
-                onAction={(action) => runAction(entry, action)}
-              />
-            );
-          })}
+          {filtered.map((entry) => tile(entry, "all"))}
         </ul>
       )}
 

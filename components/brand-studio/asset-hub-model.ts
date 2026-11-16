@@ -6,7 +6,7 @@ import type { StudioAssetKind, StudioAssetRole, StudioAssetView, StudioJobView, 
 import type { RefSource } from "./refs";
 import { imageCanvasHref, imageScreenRefHref, videoComposeClipHref, videoScreenHref } from "./studio-app";
 
-export type HubSection = "all" | "uploads" | "generated" | "folders" | "liked" | "deliverables";
+export type HubSection = "projects" | "all" | "uploads" | "generated" | "folders" | "liked" | "deliverables";
 
 export interface HubEntry {
   key: string;
@@ -258,4 +258,159 @@ export function hubActions(
   more.push({ key: "similar", label: copy.similar, marker: "data-asset-hub-similar" });
   if (canCreate && entry.asset) more.push({ key: "edit", label: copy.edit, marker: "data-asset-hub-edit" });
   return { main, more };
+}
+
+/* ------------------------------------------------------------ by project */
+
+/** One piece of work and the ids of the library files and studio results linked to it (server-derived). */
+export interface HubProjectLink {
+  id: string;
+  title: string;
+  updatedAt: string;
+  assetIds: readonly string[];
+  outputIds: readonly string[];
+}
+
+export interface HubProjectLinks {
+  /** Video projects the team made themselves. */
+  self: readonly HubProjectLink[];
+  /** Projects done with the YAGI team (files reviewed in the project's room). */
+  team: readonly HubProjectLink[];
+}
+
+/** A campaign deliverable: it lives in its project's review, so its tile is a link there. */
+export interface HubDeliverable {
+  id: string;
+  projectId: string;
+  projectTitle: string;
+  title: string;
+  kind: "image" | "video" | "file";
+  url: string | null;
+  createdAt: string;
+}
+
+export interface HubProjectGroup {
+  key: string;
+  origin: "self" | "team";
+  id: string;
+  title: string;
+  entries: HubEntry[];
+  deliverables: HubDeliverable[];
+  /** Newest thing in the group, for ordering. */
+  latest: string;
+}
+
+export interface HubProjectView {
+  /** The brand's standing material: uploads given a role (logo, product, person …). Not a project. */
+  standing: HubEntry[];
+  groups: HubProjectGroup[];
+  /** Everything that is in no project and is not standing material. */
+  loose: HubEntry[];
+}
+
+export const groupCount = (group: Pick<HubProjectGroup, "entries" | "deliverables">): number => group.entries.length + group.deliverables.length;
+
+/**
+ * Sorts what the page already shows into projects. Only `entries` are ever placed, so a deleted file, a
+ * deleted run or an internal fill run (none of which reach `entries`) cannot appear through a project.
+ *
+ * - A file linked to two projects appears in both; a file in any project never appears in `loose`.
+ * - A result and the library copy saved from it travel together (either one being linked places both).
+ * - A project with nothing to show is left out; `standing` is role-tagged uploads, whatever uses them.
+ */
+export function groupByProject(entries: readonly HubEntry[], links: HubProjectLinks | null | undefined, deliverables: readonly HubDeliverable[] = []): HubProjectView {
+  const byAsset = new Map<string, HubEntry>();
+  const byOutput = new Map<string, HubEntry>();
+  const savedCopy = new Map<string, string>(); // output id -> asset id
+  const savedFrom = new Map<string, string>(); // asset id -> output id
+  for (const entry of entries) {
+    if (entry.asset) byAsset.set(entry.asset.id, entry);
+    if (entry.output) {
+      byOutput.set(entry.output.id, entry);
+      if (entry.output.savedAssetId) {
+        savedCopy.set(entry.output.id, entry.output.savedAssetId);
+        savedFrom.set(entry.output.savedAssetId, entry.output.id);
+      }
+    }
+  }
+  const order = new Map(entries.map((entry, index) => [entry.key, index]));
+  const placed = new Set<string>();
+
+  const members = (link: HubProjectLink): HubEntry[] => {
+    const found = new Map<string, HubEntry>();
+    const add = (entry: HubEntry | undefined) => {
+      if (entry) found.set(entry.key, entry);
+    };
+    for (const id of link.assetIds) {
+      add(byAsset.get(id));
+      const source = savedFrom.get(id);
+      if (source) add(byOutput.get(source));
+    }
+    for (const id of link.outputIds) {
+      add(byOutput.get(id));
+      const copy = savedCopy.get(id);
+      if (copy) add(byAsset.get(copy));
+    }
+    return [...found.values()].sort((a, b) => order.get(a.key)! - order.get(b.key)!);
+  };
+  const newest = (list: readonly { createdAt: string }[], fallback: string): string => list.reduce((max, item) => (item.createdAt > max ? item.createdAt : max), list.length ? "" : fallback);
+
+  const groups: HubProjectGroup[] = [];
+  for (const link of links?.self ?? []) {
+    const found = members(link);
+    if (!found.length) continue;
+    for (const entry of found) placed.add(entry.key);
+    groups.push({ key: `self:${link.id}`, origin: "self", id: link.id, title: link.title, entries: found, deliverables: [], latest: newest(found, link.updatedAt) });
+  }
+
+  const team = new Map<string, { title: string; updatedAt: string; link: HubProjectLink | null; deliverables: HubDeliverable[] }>();
+  for (const link of links?.team ?? []) team.set(link.id, { title: link.title, updatedAt: link.updatedAt, link, deliverables: [] });
+  for (const item of deliverables) {
+    const row = team.get(item.projectId);
+    if (row) row.deliverables.push(item);
+    else team.set(item.projectId, { title: item.projectTitle, updatedAt: item.createdAt, link: null, deliverables: [item] });
+  }
+  for (const [id, row] of team) {
+    const found = row.link ? members(row.link) : [];
+    if (!found.length && !row.deliverables.length) continue;
+    for (const entry of found) placed.add(entry.key);
+    groups.push({ key: `team:${id}`, origin: "team", id, title: row.title, entries: found, deliverables: row.deliverables, latest: newest([...found, ...row.deliverables], row.updatedAt) });
+  }
+  groups.sort((a, b) => (a.latest < b.latest ? 1 : a.latest > b.latest ? -1 : a.key < b.key ? -1 : 1));
+
+  const standing = entries.filter((entry) => entry.origin === "upload" && entry.role !== null);
+  const kept = new Set(standing.map((entry) => entry.key));
+  const loose = entries.filter((entry) => !placed.has(entry.key) && !kept.has(entry.key));
+  return { standing, groups, loose };
+}
+
+export interface HubViewFilter {
+  liked: ReadonlySet<string>;
+  query: string;
+  kind: "all" | StudioAssetKind;
+  role: "all" | StudioAssetRole;
+}
+
+/** The by-project view under the page's search and filters. A group with nothing left is dropped. */
+export function filterProjectView(view: HubProjectView, filter: HubViewFilter): HubProjectView {
+  const pass = (list: readonly HubEntry[]) => filterHubEntries(list, { section: "all", similarTo: null, ...filter });
+  const q = filter.query.trim().toLowerCase();
+  const keep = (item: HubDeliverable) =>
+    filter.role === "all" && (filter.kind === "all" || filter.kind === item.kind) && (!q || `${item.title}\n${item.projectTitle}`.toLowerCase().includes(q));
+  return {
+    standing: pass(view.standing),
+    groups: view.groups
+      .map((group) => {
+        // A search that names the project keeps the whole project.
+        const named = Boolean(q) && group.title.toLowerCase().includes(q);
+        const unsearched = named ? { ...filter, query: "" } : filter;
+        return {
+          ...group,
+          entries: filterHubEntries(group.entries, { section: "all", similarTo: null, ...unsearched }),
+          deliverables: group.deliverables.filter(named ? (item) => filter.role === "all" && (filter.kind === "all" || filter.kind === item.kind) : keep),
+        };
+      })
+      .filter((group) => groupCount(group) > 0),
+    loose: pass(view.loose),
+  };
 }

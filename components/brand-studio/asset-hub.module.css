@@ -392,6 +392,7 @@
 
 .tile {
   position: relative;
+  container-type: inline-size;
   flex: var(--r, 1) 1 calc(var(--hub-row-h) * var(--r, 1));
   min-width: 0;
   max-width: 100%;
@@ -630,6 +631,14 @@
   }
 }
 
+/* A 9:16 film in a short row is too narrow for a name and a pill: the heart and the menu stay. */
+@container (max-width: 176px) {
+  .footTitle,
+  .footMain {
+    display: none;
+  }
+}
+
 /* No hover on touch: a tap opens the sheet, which holds every action. Only a liked heart stays on the picture. */
 @media (hover: none) {
   .foot,
@@ -644,6 +653,185 @@
   .footMore {
     -webkit-backdrop-filter: blur(8px);
     backdrop-filter: blur(8px);
+  }
+}
+
+/* ------------------------------------------------------------ by project */
+
+.groups {
+  display: grid;
+  gap: 30px;
+}
+
+.group {
+  display: grid;
+  gap: 12px;
+  min-width: 0;
+}
+
+.groupHead {
+  position: relative;
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  min-width: 0;
+}
+
+.groupBar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 12px;
+  min-width: 0;
+}
+
+.groupBar .quietBtn {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  padding-left: 8px;
+}
+
+.groupBar .quietBtn svg,
+.groupMore svg {
+  width: 15px;
+  height: 15px;
+}
+
+.groupTitle {
+  min-width: 0;
+  margin: 0;
+  overflow: hidden;
+  color: var(--ys-ink);
+  font-size: 17px;
+  font-weight: 600;
+  letter-spacing: -0.02em;
+  line-height: 1.35;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* The project's name is the control; its hit area is the whole header row. */
+.groupOpen {
+  padding: 0;
+  border: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  letter-spacing: inherit;
+  cursor: pointer;
+}
+
+.groupOpen::after {
+  content: "";
+  position: absolute;
+  inset: -6px 0;
+}
+
+.groupOpen:focus-visible {
+  outline: 2px solid var(--ys-focus);
+  outline-offset: 3px;
+  border-radius: 4px;
+}
+
+.groupMeta {
+  flex: none;
+  color: var(--ys-ink-muted);
+  font-size: 12.5px;
+  font-weight: 500;
+  font-variant-numeric: tabular-nums;
+}
+
+.groupMore {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  gap: 1px;
+  margin-left: auto;
+  color: var(--ys-ink-secondary);
+  font-size: 12.5px;
+  font-weight: 500;
+  transition: color var(--ys-dur) var(--ys-ease);
+}
+
+.groupHead:hover .groupMore {
+  color: var(--ys-ink);
+}
+
+.groupLink {
+  margin-left: auto;
+  color: var(--ys-ink-secondary);
+  font-size: 12.5px;
+  font-weight: 500;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+.groupLink:hover {
+  color: var(--ys-ink);
+}
+
+.groupLink:focus-visible {
+  outline: 2px solid var(--ys-focus);
+  outline-offset: 3px;
+  border-radius: 4px;
+}
+
+/* A project's cover row: the same tiles, one row, one shape, so every project reads at the same height. */
+.covers {
+  display: grid;
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+  gap: 12px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.covers > .tile {
+  aspect-ratio: 4 / 5;
+}
+
+.covers .tileOpen img,
+.covers .tileOpen video {
+  object-position: 50% 18%;
+}
+
+/* The brand's standing material: small tiles in one row that scrolls sideways when there are many. */
+.strip {
+  display: flex;
+  gap: 10px;
+  margin: 0;
+  padding: 0 0 2px;
+  overflow-x: auto;
+  list-style: none;
+  scrollbar-width: thin;
+}
+
+.strip > .tile {
+  flex: none;
+  width: calc(132px * var(--r, 1));
+  height: 132px;
+  aspect-ratio: auto;
+}
+
+.tile[data-compact] .foot {
+  padding: 28px 8px 8px;
+}
+
+.footNote {
+  margin: 0;
+  color: var(--hub-on-media);
+  font-size: 12px;
+  font-weight: 500;
+  opacity: 0.86;
+}
+
+@media (max-width: 1100px) {
+  .covers {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+  .covers > .tile:nth-child(n + 5) {
+    display: none;
   }
 }
 
@@ -891,8 +1079,23 @@
     --hub-row-h: 172px;
     gap: 14px;
   }
-  .grid {
+  .grid,
+  .strip {
     gap: 8px;
+  }
+  .groups {
+    gap: 24px;
+  }
+  .covers {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 8px;
+  }
+  .covers > .tile:nth-child(n + 4) {
+    display: none;
+  }
+  .strip > .tile {
+    width: calc(108px * var(--r, 1));
+    height: 108px;
   }
   .headSide {
     justify-content: space-between;

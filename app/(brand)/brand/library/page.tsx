@@ -6,6 +6,7 @@ import { WorkspacePreview } from "@/components/brand-workspace/preview";
 import { brandScope } from "@/components/brand-workspace/scope";
 import { BrandUnavailable } from "@/components/brand-workspace/brand-unavailable";
 import { StaffNotice } from "@/components/brand-workspace/staff-notice";
+import { loadAssetProjectLinks } from "@/lib/brand-studio/asset-projects";
 import { studioRuntimeDeps } from "@/lib/brand-studio/runtime";
 import { loadStudioState } from "@/lib/brand-studio/service";
 import { assetHubVisible, studioV2Visible } from "@/lib/brand-studio/visibility";
@@ -51,10 +52,25 @@ export default async function ContentLibrary({
 
   if (choice && hubVisible) {
     const canTransact = typeof (sql as { transaction?: unknown }).transaction === "function";
-    const loaded = canTransact
-      ? await loadStudioState(await studioRuntimeDeps(sql), viewer, choice.id).catch(() => null)
-      : null;
+    // The studio state and the project links are read side by side; both pass the same seat check
+    // (membership, the sandbox hardline, the feature policy), and the links are ids only.
+    const [loaded, links] = canTransact
+      ? await Promise.all([
+          loadStudioState(await studioRuntimeDeps(sql), viewer, choice.id).catch(() => null),
+          loadAssetProjectLinks({ sql }, viewer, choice.id).catch(() => null),
+        ])
+      : [null, null];
     const initialState = loaded && loaded.ok ? loaded : null;
+    const projectLinks = initialState && links && links.ok ? { self: links.self, team: links.team } : null;
+    const deliverables = contents.map(({ p, c }) => ({
+      id: c.id,
+      projectId: p.id,
+      projectTitle: p.title,
+      title: c.title,
+      kind: c.mime?.startsWith("image/") ? ("image" as const) : c.mime?.startsWith("video/") ? ("video" as const) : ("file" as const),
+      url: c.mediaUrl,
+      createdAt: c.createdAt,
+    }));
     const deliverablesGrid = contents.length ? (
       <div className="bw-content-grid">
         {contents.map(({ p, c }) => (
@@ -82,6 +98,8 @@ export default async function ContentLibrary({
           initialState={initialState}
           deliverableCount={contents.length}
           deliverablesNode={deliverablesGrid}
+          projectLinks={projectLinks}
+          deliverables={deliverables}
           canOpenStudio={canOpenStudio}
         />
       </>

@@ -286,7 +286,7 @@ export function normalizeStoredTimeline(raw: unknown, fallbackAspect: ComposeAsp
   };
 }
 
-function collectMediaRefs(timelines: readonly ComposerProject[]): { assetIds: string[]; outputIds: string[] } {
+export function collectMediaRefs(timelines: readonly ComposerProject[]): { assetIds: string[]; outputIds: string[] } {
   const assetIds = new Set<string>();
   const outputIds = new Set<string>();
   const addAsset = (id: unknown) => {

@@ -7,7 +7,7 @@
  * "more" menu. Touch screens have no hover, so a tap opens the sheet, which lists every action.
  */
 import { useEffect, useRef, useState, type CSSProperties, type SyntheticEvent } from "react";
-import { clampRatio, tileSources, type HubAction, type HubEntry } from "./asset-hub-model";
+import { clampRatio, humanTitle, tileSources, type HubAction, type HubDeliverable, type HubEntry } from "./asset-hub-model";
 import s from "./asset-hub.module.css";
 import { useModal } from "./modal";
 import { RailIcon } from "./rail/icons";
@@ -41,6 +41,11 @@ export interface HubTileProps {
   main: HubAction | null;
   more: HubAction[];
   moreLabel: string;
+  /**
+   * A small tile (a project's cover row, the shared-material strip): no name and no pill on the picture; the
+   * main action is the first item of the "more" menu, as on every tile. The sheet is unchanged.
+   */
+  compact?: boolean;
   menuOpen: boolean;
   onMenu(open: boolean): void;
   onOpen(): void;
@@ -48,7 +53,7 @@ export interface HubTileProps {
   onAction(action: HubAction): void;
 }
 
-export function HubTile({ entry, copy, name, liked, main, more, moreLabel, menuOpen, onMenu, onOpen, onLike, onAction }: HubTileProps) {
+export function HubTile({ entry, copy, name, liked, main, more, moreLabel, compact = false, menuOpen, onMenu, onOpen, onLike, onAction }: HubTileProps) {
   // A stored size is trusted; a guessed one is corrected from the media itself once it loads.
   const [measured, setMeasured] = useState<number | null>(null);
   const [hovering, setHovering] = useState(false);
@@ -63,7 +68,8 @@ export function HubTile({ entry, copy, name, liked, main, more, moreLabel, menuO
   const onImage = (event: SyntheticEvent<HTMLImageElement>) => measure(event.currentTarget.naturalWidth, event.currentTarget.naturalHeight);
   const onVideoMeta = (event: SyntheticEvent<HTMLVideoElement>) => measure(event.currentTarget.videoWidth, event.currentTarget.videoHeight);
 
-  const items: MenuItem[] = more.map((action) => ({
+  // The menu lists everything, the main action first: on a narrow tile the pill is not drawn, and the menu is the way.
+  const items: MenuItem[] = (main ? [main, ...more] : more).map((action) => ({
     key: action.key,
     label: action.label,
     href: action.href,
@@ -79,6 +85,7 @@ export function HubTile({ entry, copy, name, liked, main, more, moreLabel, menuO
       data-origin={entry.origin}
       data-kind={entry.kind}
       data-menu-open={menuOpen ? "" : undefined}
+      data-compact={compact ? "" : undefined}
       onPointerEnter={(event) => {
         if (event.pointerType === "mouse") setHovering(true);
       }}
@@ -129,9 +136,9 @@ export function HubTile({ entry, copy, name, liked, main, more, moreLabel, menuO
       <Heart liked={liked} label={fill(liked ? copy.item.unlike : copy.item.like, { name })} onPress={onLike} className={s.heart} />
 
       <div className={s.foot}>
-        {entry.label && entry.kind !== "audio" && <p className={s.footTitle}>{entry.label}</p>}
+        {!compact && entry.label && entry.kind !== "audio" && <p className={s.footTitle}>{entry.label}</p>}
         <div className={s.footActions}>
-          {main && (
+          {!compact && main && (
             <a className={s.footMain} href={main.href} {...marker(main)}>
               {main.label}
             </a>
@@ -139,6 +146,70 @@ export function HubTile({ entry, copy, name, liked, main, more, moreLabel, menuO
           {items.length > 0 && <RailMenu open={menuOpen} label={moreLabel} items={items} onToggle={onMenu} className={s.footMore} />}
         </div>
       </div>
+    </li>
+  );
+}
+
+/**
+ * A campaign deliverable in the same tile: the whole picture is a link to its project's review, where it is
+ * approved, commented on and downloaded. It has no actions of its own here, so it has no menu and no sheet.
+ */
+export function HubLinkTile({ item, href, copy, compact = false }: { item: HubDeliverable; href: string; copy: LibraryCopy; compact?: boolean }) {
+  const [measured, setMeasured] = useState<number | null>(null);
+  const [broken, setBroken] = useState(false);
+  const kind = item.kind === "file" || !item.url || broken ? "file" : item.kind;
+  const title = humanTitle(item.title);
+  const name = title ?? (kind === "video" ? copy.item.video : copy.item.image);
+  const measure = (width: number, height: number) => {
+    if (width > 0 && height > 0) setMeasured(clampRatio(width / height));
+  };
+  return (
+    <li
+      className={s.tile}
+      style={{ "--r": measured ?? (kind === "video" ? 9 / 16 : 4 / 5) } as CSSProperties}
+      data-asset-hub-card={`c:${item.id}`}
+      data-origin="deliverable"
+      data-kind={kind}
+      data-compact={compact ? "" : undefined}
+    >
+      <a className={s.tileOpen} href={href} aria-label={`${fill(copy.item.view, { name })} · ${copy.hub.deliverableOpen}`} data-asset-hub-deliverable>
+        {kind === "image" ? (
+          <img
+            src={item.url!}
+            alt=""
+            loading="lazy"
+            decoding="async"
+            draggable={false}
+            onLoad={(event) => measure(event.currentTarget.naturalWidth, event.currentTarget.naturalHeight)}
+            onError={() => setBroken(true)}
+          />
+        ) : kind === "video" ? (
+          <video
+            src={`${item.url}#t=0.1`}
+            muted
+            playsInline
+            preload="metadata"
+            tabIndex={-1}
+            aria-hidden="true"
+            onLoadedMetadata={(event) => measure(event.currentTarget.videoWidth, event.currentTarget.videoHeight)}
+            onError={() => setBroken(true)}
+          />
+        ) : (
+          <span className={s.audioStage}>{title && <span className={s.audioName}>{title}</span>}</span>
+        )}
+      </a>
+      {kind === "video" && (
+        <span className={s.badge} data-asset-hub-length>
+          <PlayGlyph />
+          {copy.item.video}
+        </span>
+      )}
+      {!compact && (
+        <div className={s.foot}>
+          {title && kind !== "file" && <p className={s.footTitle}>{title}</p>}
+          <p className={s.footNote}>{copy.hub.deliverableOpen}</p>
+        </div>
+      )}
     </li>
   );
 }
