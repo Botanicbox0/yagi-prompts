@@ -94,6 +94,7 @@ export const studioLibraryEn = {
     subtitle: 'Uploaded brand files, generated studio work, shared folders, and campaign deliverables in one place.',
     sectionsLabel: 'Asset categories',
     sections: {
+      projects: 'Projects',
       all: 'All',
       uploads: 'Uploads',
       generated: 'Generated',
@@ -123,6 +124,15 @@ export const studioLibraryEn = {
     openStudio: 'Open Image studio',
     uploadAction: 'Upload files',
     deliverableOpen: 'Open in campaign',
+    projects: {
+      standing: 'Shared materials',
+      loose: 'Not in a project',
+      self: 'Make it yourself',
+      team: 'With the YAGI team',
+      seeAll: 'See all',
+      open: 'Open project',
+      one: '1 item',
+    },
   },
   storage: {
     title: 'Storage',
@@ -228,6 +238,7 @@ export const studioLibraryKo: typeof studioLibraryEn = {
     subtitle: '브랜드 에셋부터 스튜디오 결과물, 캠페인 납품본까지 한곳에서 관리하고 바로 사용하세요.',
     sectionsLabel: '에셋 분류',
     sections: {
+      projects: '프로젝트',
       all: '전체',
       uploads: '업로드',
       generated: '생성 결과',
@@ -257,6 +268,15 @@ export const studioLibraryKo: typeof studioLibraryEn = {
     openStudio: '이미지 스튜디오 열기',
     uploadAction: '파일 올리기',
     deliverableOpen: '캠페인에서 보기',
+    projects: {
+      standing: '공통 자료',
+      loose: '개별 파일',
+      self: '직접 만들기',
+      team: '야기 팀과',
+      seeAll: '모두 보기',
+      open: '프로젝트 열기',
+      one: '1개',
+    },
   },
   storage: {
     title: '저장 공간',

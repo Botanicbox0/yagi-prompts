@@ -88,6 +88,8 @@ function actionCopy(locale: "ko" | "en") {
   };
 }
 
+const fill2 = (template: string, n: number) => template.replace("{n}", String(n));
+
 function stubLibrary(patch: Partial<StudioLibrary> = {}): StudioLibrary {
   return {
     ready: true,
@@ -245,6 +247,133 @@ describe("unified BrandAssetHub & similarity lens", () => {
     const kept = render({ ...base, retentionDays: 90 });
     expect(kept).not.toContain("data-storage-compact");
     expect(kept).toContain("data-storage-retention");
+  });
+
+  it.each(["ko", "en"] as const)("opens by project when some work belongs to one: standing row, a cover row per project, the rest as the usual grid (%s)", (locale) => {
+    const dict = getDictionary(locale);
+    const p = dict.studioLibrary.hub.projects;
+    const state0 = studioState({
+      assets: [
+        asset(1, { name: "Wordmark", role: "logo" }),
+        asset(2, { kind: "video", name: "Runway reference", seconds: 8, url: "https://media.example/st/ref.mp4" }),
+        asset(3, { name: "Moodboard scan" }),
+      ],
+      jobs: [
+        job(1, { kind: "video", prompt: "Opening shot", outputs: [output(1, { kind: "video", seconds: 5 })] }),
+        job(2, { prompt: "Loose picture", outputs: [output(2)] }),
+      ],
+    });
+    const html = renderToStaticMarkup(
+      <BrandAssetHub
+        organizationId={ORG}
+        studioCopy={dict.brandStudio}
+        libraryCopy={dict.studioLibrary}
+        initialState={state0}
+        projectLinks={{
+          self: [
+            { id: id(0x51), title: "Spring film", updatedAt: "2026-11-10T00:00:00Z", assetIds: [asset(2).id], outputIds: [output(1).id] },
+            { id: id(0x52), title: "Teaser cut", updatedAt: "2026-11-09T00:00:00Z", assetIds: [], outputIds: [output(1).id] },
+          ],
+          team: [],
+        }}
+        deliverables={[{ id: id(0x61), projectId: id(0x71), projectTitle: "Winter campaign", title: "Creator cut", kind: "image", url: "https://media.example/d.webp", createdAt: "2026-11-08T00:00:00Z" }]}
+        deliverableCount={1}
+        injectedLibrary={stubLibrary()}
+      />,
+    );
+    // The by-project tab exists, is first and is the one selected.
+    expect(html.indexOf('data-asset-hub-tab="projects"')).toBeGreaterThan(-1);
+    expect(html.indexOf('data-asset-hub-tab="projects"')).toBeLessThan(html.indexOf('data-asset-hub-tab="all"'));
+    expect(html).toMatch(/aria-selected="true" data-asset-hub-tab="projects"/);
+    expect(html).toMatch(/aria-selected="false" data-asset-hub-tab="all"/);
+
+    // Standing material, then the projects, then what is in no project.
+    const standingAt = html.indexOf("data-asset-hub-standing");
+    const looseAt = html.indexOf("data-asset-hub-loose");
+    const projectAt = html.indexOf('data-asset-hub-project="');
+    expect(standingAt).toBeGreaterThan(-1);
+    expect(projectAt).toBeGreaterThan(standingAt);
+    expect(looseAt).toBeGreaterThan(projectAt);
+    expect(html).toContain(`>${p.standing}</h2>`);
+    expect(html).toContain(`>${p.loose}</h2>`);
+
+    const section = (marker: string) => {
+      const start = html.indexOf(marker);
+      const end = html.indexOf("</section>", start);
+      return html.slice(start, end);
+    };
+    const spring = section(`data-asset-hub-project="self:${id(0x51)}"`);
+    const teaser = section(`data-asset-hub-project="self:${id(0x52)}"`);
+    const winter = section(`data-asset-hub-project="team:${id(0x71)}"`);
+    expect(spring).toContain("Spring film");
+    expect(spring).toContain(p.self);
+    expect(spring).toContain(fill2(dict.studioLibrary.folders.count, 2));
+    // One result on two timelines: a cover in both projects, and not below.
+    expect(spring).toContain(`data-asset-hub-card="o:${output(1).id}"`);
+    expect(teaser).toContain(`data-asset-hub-card="o:${output(1).id}"`);
+    expect(spring).toContain(`data-asset-hub-card="a:${asset(2).id}"`);
+    // A team project known through its campaign deliverable: the same tile, as a link into the project.
+    expect(winter).toContain("Winter campaign");
+    expect(winter).toContain(p.team);
+    expect(winter).toContain(`href="/brand/projects/${id(0x71)}#review"`);
+    expect(winter).toContain(`data-asset-hub-card="c:${id(0x61)}"`);
+    // Covers are the same tiles in their small form: no pill on the picture.
+    expect(spring).toContain("data-compact");
+    expect(spring).not.toContain("data-asset-hub-open-compose");
+
+    const loose = section("data-asset-hub-loose");
+    expect(loose).toContain("data-asset-hub-grid");
+    expect(loose.split("data-asset-hub-card=").slice(1).map((t) => t.slice(1, 3 + 36))).toEqual([`o:${output(2).id}`, `a:${asset(3).id}`]);
+    expect(loose).not.toContain("data-compact");
+    const standing = section("data-asset-hub-standing");
+    expect(standing.split("data-asset-hub-card=").slice(1)).toHaveLength(1);
+    expect(standing).toContain(`data-asset-hub-card="a:${asset(1).id}"`);
+    expect(html).not.toMatch(/₩|KRW|\d[\d,]*\s*원(?!래)/);
+  });
+
+  it("opens on everything when nothing belongs to a project, and draws no standing row without role-tagged uploads", () => {
+    const dict = getDictionary("ko");
+    const state0 = studioState({ assets: [asset(1, { name: "Moodboard scan" })], jobs: [job(1, { prompt: "Loose picture", outputs: [output(1)] })] });
+    const none = renderToStaticMarkup(
+      <BrandAssetHub organizationId={ORG} studioCopy={dict.brandStudio} libraryCopy={dict.studioLibrary} initialState={state0} projectLinks={{ self: [], team: [] }} injectedLibrary={stubLibrary()} />,
+    );
+    expect(none).not.toContain('data-asset-hub-tab="projects"');
+    expect(none).toMatch(/aria-selected="true" data-asset-hub-tab="all"/);
+    expect(none).not.toContain("data-asset-hub-projects");
+    // Links that name nothing on the page are the same as no links.
+    const ghost = renderToStaticMarkup(
+      <BrandAssetHub
+        organizationId={ORG}
+        studioCopy={dict.brandStudio}
+        libraryCopy={dict.studioLibrary}
+        initialState={state0}
+        projectLinks={{ self: [{ id: id(0x51), title: "Old project", updatedAt: "2026-01-01T00:00:00Z", assetIds: [], outputIds: [id(0x99)] }], team: [] }}
+        injectedLibrary={stubLibrary()}
+      />,
+    );
+    expect(ghost).toBe(none);
+
+    const noRoles = renderToStaticMarkup(
+      <BrandAssetHub
+        organizationId={ORG}
+        studioCopy={dict.brandStudio}
+        libraryCopy={dict.studioLibrary}
+        initialState={state0}
+        projectLinks={{ self: [{ id: id(0x51), title: "Spring film", updatedAt: "2026-11-10T00:00:00Z", assetIds: [], outputIds: [output(1).id] }], team: [] }}
+        injectedLibrary={stubLibrary()}
+      />,
+    );
+    expect(noRoles).toContain("data-asset-hub-projects");
+    expect(noRoles).not.toContain("data-asset-hub-standing");
+    expect(noRoles).not.toContain(dict.studioLibrary.hub.projects.standing);
+  });
+
+  it("calls the two kinds of project what the rail calls them", () => {
+    for (const locale of ["ko", "en"] as const) {
+      const dict = getDictionary(locale);
+      expect(dict.studioLibrary.hub.projects.self).toBe(dict.roomsShell.nav.groupMake);
+      expect(dict.studioLibrary.hub.projects.team).toBe(dict.roomsShell.nav.groupTeam);
+    }
   });
 
   it("keeps every action reachable without hover: the sheet lists them all, and project-only clients get no studio links", () => {
