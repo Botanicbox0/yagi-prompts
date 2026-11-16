@@ -1,4 +1,6 @@
 import { createHash } from 'node:crypto';
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
 import { describe, expect, it, vi } from 'vitest';
 import { privateStorageR2Config, selectStorageDriver, type EnvLike } from '@/lib/runtime-mode';
 import { STAGING_BUCKET, StorageObjectNotFound, type StorageDriver } from '@/lib/storage';
@@ -260,7 +262,7 @@ describe('automatic staging release on verified R2 publish', () => {
 });
 
 describe('multi-brand R2 CORS and Lifecycle configuration XML', () => {
-  it('generates valid S3 CORS and Lifecycle XML covering brand/admin origins, Range headers, 1d multipart abort, and 7d staging expiry', () => {
+  it('generates valid S3 CORS and Lifecycle XML covering brand/admin origins, Range headers and 1d multipart abort', () => {
     const cors = buildMultiBrandR2CorsXml();
     expect(cors).toContain('<AllowedOrigin>https://twings.app</AllowedOrigin>');
     expect(cors).toContain('<AllowedOrigin>https://brand.twings.app</AllowedOrigin>');
@@ -268,10 +270,43 @@ describe('multi-brand R2 CORS and Lifecycle configuration XML', () => {
     expect(cors).toContain('<AllowedMethod>PUT</AllowedMethod>');
     expect(cors).toContain('<ExposeHeader>Content-Range</ExposeHeader>');
 
-    const lifecycle = buildMultiBrandR2LifecycleXml({ includeStagingExpiry: true });
+    const lifecycle = buildMultiBrandR2LifecycleXml();
     expect(lifecycle).toContain('<DaysAfterInitiation>1</DaysAfterInitiation>');
-    expect(lifecycle).toContain('<Prefix>staging/</Prefix>');
-    expect(lifecycle).toContain('<Prefix>content/prompt/</Prefix>');
-    expect(lifecycle).toContain('<Days>7</Days>');
+  });
+
+  // 2026-11-16: the private driver keeps every STAGING_BUCKET key under `staging/`, and that is where brand
+  // attachments, organization logos and room files live for good. A 7-day expiry on that prefix was live on
+  // the production bucket and would have deleted them; no bucket rule may delete objects by age.
+  it('never writes a rule that deletes objects by age', () => {
+    const lifecycle = buildMultiBrandR2LifecycleXml();
+    expect(lifecycle).not.toMatch(/<Expiration>/);
+    expect(lifecycle).not.toMatch(/<Days>/);
+    expect(lifecycle).not.toMatch(/<Date>/);
+    expect(lifecycle.match(/<Rule>/g)).toHaveLength(1);
+    expect(lifecycle).toContain('<ID>abort-incomplete-multipart-1d</ID>');
+    // An option that used to switch the expiry on must not bring it back.
+    const withOldOption = (buildMultiBrandR2LifecycleXml as (o?: unknown) => string)({ includeStagingExpiry: true });
+    expect(withOldOption).toBe(lifecycle);
+  });
+
+  it('keeps long-lived private files under the prefix the old rule expired', async () => {
+    const driver = createR2PrivateStorageDriver({
+      accountId: 'acc1234567890abcdef',
+      accessKeyId: 'ak_test_123',
+      secretAccessKey: 'sk_test_456',
+      bucket: 'twings-private-apac',
+    });
+    // A brand workspace attachment key (`brands/{org}/{project}/{id}`), kept for as long as the project exists.
+    const url = await driver.signedUploadUrl(
+      'brands/11111111-1111-4111-8111-111111111111/22222222-2222-4222-8222-222222222222/33333333-3333-4333-8333-333333333333',
+      'application/pdf',
+    );
+    expect(url).toContain('/twings-private-apac/staging/brands/');
+  });
+
+  it('the configure script sends only the shared lifecycle document', () => {
+    const source = readFileSync(join(process.cwd(), 'scripts/r2-configure-buckets.ts'), 'utf8');
+    expect(source).toContain('buildMultiBrandR2LifecycleXml()');
+    expect(source).not.toMatch(/Expiration|includeStagingExpiry/);
   });
 });

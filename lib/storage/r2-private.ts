@@ -103,43 +103,28 @@ export function buildMultiBrandR2CorsXml(origins: readonly string[] = DEFAULT_R2
   ].join('\n');
 }
 
-export function buildMultiBrandR2LifecycleXml(options?: { includeStagingExpiry?: boolean }): string {
-  const rules = [
-    [
-      '  <Rule>',
-      '    <ID>abort-incomplete-multipart-1d</ID>',
-      '    <Filter><Prefix></Prefix></Filter>',
-      '    <Status>Enabled</Status>',
-      '    <AbortIncompleteMultipartUpload>',
-      '      <DaysAfterInitiation>1</DaysAfterInitiation>',
-      '    </AbortIncompleteMultipartUpload>',
-      '  </Rule>',
-    ].join('\n'),
-  ];
-
-  if (options?.includeStagingExpiry) {
-    for (const [id, prefix] of [
-      ['expire-staging-prefix-7d', 'staging/'],
-      ['expire-prompt-staging-7d', 'content/prompt/'],
-      ['expire-staging-root-7d', 'staging/content/prompt/'],
-    ] as const) {
-      rules.push(
-        [
-          '  <Rule>',
-          `    <ID>${id}</ID>`,
-          `    <Filter><Prefix>${prefix}</Prefix></Filter>`,
-          '    <Status>Enabled</Status>',
-          '    <Expiration><Days>7</Days></Expiration>',
-          '  </Rule>',
-        ].join('\n'),
-      );
-    }
-  }
-
+/**
+ * The one lifecycle document `npm run r2:configure` sends to both buckets: unfinished multipart uploads are
+ * dropped after a day, and nothing else.
+ *
+ * It must never delete objects by age. `objectPathForBucket` keeps every `STAGING_BUCKET` key under
+ * `staging/`, and that prefix is not only temporary uploads: brand workspace attachments, organization logos
+ * and room files stay there for good. Until 2026-11-16 this function also wrote 7-day expiry rules for
+ * `staging/` and `content/prompt/`; they were live on the production bucket and were removed two days before
+ * the first files would have been deleted. Temporary copies are cleaned up by `releaseStaging`, by key.
+ */
+export function buildMultiBrandR2LifecycleXml(): string {
   return [
     '<?xml version="1.0" encoding="UTF-8"?>',
     '<LifecycleConfiguration xmlns="http://s3.amazonaws.com/doc/2006-03-01/">',
-    ...rules,
+    '  <Rule>',
+    '    <ID>abort-incomplete-multipart-1d</ID>',
+    '    <Filter><Prefix></Prefix></Filter>',
+    '    <Status>Enabled</Status>',
+    '    <AbortIncompleteMultipartUpload>',
+    '      <DaysAfterInitiation>1</DaysAfterInitiation>',
+    '    </AbortIncompleteMultipartUpload>',
+    '  </Rule>',
     '</LifecycleConfiguration>',
   ].join('\n');
 }

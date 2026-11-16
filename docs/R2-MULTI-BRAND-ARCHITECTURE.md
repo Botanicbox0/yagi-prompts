@@ -53,7 +53,7 @@
    - 다운로드/스트리밍: R2 Presigned `GET` `302` 리다이렉트 (신뢰할 수 없는 첨부 문서는 `response-content-disposition=attachment` 서명 강제로 XSS 원천 차단).
 3. **자동 수명 주기(Lifecycle) 규칙으로 유령 비용 0원 유지** (`npm run r2:configure`):
    - `abort-incomplete-multipart-1d`: 중단된 대용량 멀티파트 업로드 조각 **1일 뒤 자동 폐기**.
-   - `expire-staging-7d`: `staging/` 및 `content/prompt/` 임시 업로드 객체 **7일 뒤 자동 만료 삭제**.
+   - **기간으로 파일을 지우는 규칙은 두지 않는다 (2026-11-16 제거).** 처음에는 `staging/`·`content/prompt/`를 7일 뒤 지우는 규칙을 함께 걸었다. 그런데 비공개 드라이버는 `STAGING_BUCKET` 키를 전부 `staging/` 아래에 두고, 거기에는 임시 업로드뿐 아니라 브랜드 워크스페이스 첨부·조직 로고·룸 파일처럼 계속 보관하는 파일도 있다. 운영 버킷에서 이 규칙이 실제로 켜져 있었고, 첫 삭제(2026-11-18 17:10 UTC) 이틀 전에 대표 승인으로 껐다. 임시 사본은 `releaseStaging`이 키 단위로 지운다. 기간 삭제를 다시 넣으려면 먼저 영구 파일을 `staging/` 밖으로 옮겨야 한다. `tests/storage/r2-multi-brand.test.ts`가 이 규칙이 돌아오는 것을 막는다.
 4. **CORS 최소 권한 허용** (`npm run r2:configure`):
    - `AllowedOrigins`: `https://twings.app`, `https://brand.twings.app`, `https://admin.twings.app`, `https://*.vercel.app`
    - `AllowedMethods`: `GET`, `HEAD`, `PUT` (`DELETE`는 서버 전용 S3 API로만 수행)
@@ -71,7 +71,7 @@
    - `R2_PRIVATE_BUCKET`(`twings-private-apac`) 환경변수가 설정되면 모든 신규 스테이징·브랜드 첨부 업로드·서명 URL이 자동으로 R2 비공개 버킷을 사용한다.
    - 이전 전 기존 Supabase `content`에 남아 있는 모픽(`deb648e9-...`, `d425c3b1-...`) 등의 첨부 파일은 읽기 시 자동 폴백하며, `npm run r2:migrate-private` 실행 시 무중단으로 R2로 전량 복사·검증된다.
 3. **일괄 설정·마이그레이션 스크립트 추가**:
-   - `scripts/r2-configure-buckets.ts` (`npm run r2:configure`): 공개·비공개 버킷에 표준 CORS와 수명 주기 규칙을 멱등 적용하고 검증한다.
+   - `scripts/r2-configure-buckets.ts` (`npm run r2:configure`): 공개·비공개 버킷에 표준 CORS와 수명 주기 규칙(미완료 멀티파트 1일 폐기 하나뿐)을 멱등 적용하고, 적용 뒤 버킷의 규칙을 다시 읽어 id를 출력한다. 수명 주기 문서를 쓰면 버킷의 기존 규칙이 전부 교체되므로, 대시보드에서 손으로 추가한 규칙도 이 스크립트를 돌리면 사라진다.
    - `scripts/r2-migrate-private.ts` (`npm run r2:migrate-private`): Supabase `content`의 브랜드 첨부 파일을 `twings-private-apac`으로 바이트 크기 대조 복사한다.
 4. **Vercel Pro 현행화**:
    - `AGENTS.md` §0 및 `docs/SCALE-RISKS-2026-11.md`의 구형 Hobby 표기를 실제 운영 플랜인 **Vercel Pro (서울 `icn1`, `maxDuration = 300`, 1 TB 대역폭)** 기준으로 현행화했다.
