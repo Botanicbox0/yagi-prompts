@@ -72,24 +72,25 @@ export function renderUnsubscribed(input: UnsubscribePageInput): string {
 }
 
 /**
- * The project room scope (docs/BRAND-ROOMS-FEEDBACK.md §2.2): one organization's room mail is off. The
- * way back is the workspace, not `/account`, so the link goes to the brand host's messages screen.
+ * The project room scope (docs/BRAND-ROOMS-FEEDBACK.md §2.2, §10): one organization's room mail is off.
+ * The confirmed title, sentence and one link (§10.2/§10.3). The way back is the settings section of the
+ * messages inbox on the brand host, not `/account`.
  */
-export function renderRoomEmailUnsubscribed(input: { locale: Locale; messagesUrl: string }): string {
-  const dict = getDictionary(input.locale);
-  const copy = dict.roomsNotices.unsubscribed;
+export function renderRoomEmailUnsubscribed(input: { locale: Locale; settingsUrl: string }): string {
+  const copy = getDictionary(input.locale).roomsNotices.unsubscribed;
+  // Korean wraps between words, never inside one ("거부했습/니다" at 390px); a word wider than the
+  // screen may still break. Only this page: the other scopes' pages keep their bytes.
+  const wrap = 'word-break:keep-all;overflow-wrap:anywhere;';
 
   return shell(
     input.locale,
     copy.title,
-    `<h1 style="margin:0 0 20px 0;font-size:34px;line-height:1.05;font-weight:800;text-transform:uppercase;">${escapeHtml(
+    `<h1 style="margin:0 0 20px 0;font-size:34px;line-height:1.05;font-weight:800;text-transform:uppercase;${wrap}">${escapeHtml(
       copy.title,
     )}</h1>
-  <p style="margin:0 0 12px 0;font-size:16px;line-height:1.6;">${escapeHtml(copy.done)}</p>
-  <p style="margin:0 0 32px 0;font-size:16px;line-height:1.6;opacity:0.65;">${escapeHtml(copy.reversible)}</p>
+  <p style="margin:0 0 32px 0;font-size:16px;line-height:1.6;${wrap}">${escapeHtml(copy.body)}</p>
   <p style="margin:0;font-family:${MONO};font-size:12px;line-height:2;">
-    <a href="${escapeHtml(input.messagesUrl)}" style="color:${BLUE};">${escapeHtml(copy.open)} &rarr;</a><br>
-    <a href="/${input.locale}" style="color:#000000;opacity:0.55;text-decoration:none;">${escapeHtml(dict.unsubscribe.home)}</a>
+    <a href="${escapeHtml(input.settingsUrl)}" style="color:${BLUE};">${escapeHtml(copy.link)} &rarr;</a>
   </p>`,
   );
 }

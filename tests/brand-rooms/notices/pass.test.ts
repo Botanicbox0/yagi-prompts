@@ -11,9 +11,10 @@ import { testPushKeys } from '../../helpers/push';
 import { fakePushSender, generalInboxPath, memberLine, minutesFromNow, noticeEnv, noticeFixture, noticeRows, projectRoomPath, teamLine, type NoticeFixture } from './helpers';
 
 /**
- * docs/BRAND-ROOMS-FEEDBACK.md §2.1–§2.2 — the pass: what is mailed, merged, held back, skipped and
- * retried, what one mail says, and the push that goes out at once. The fake mailer records every mail
- * the provider would have accepted; nothing leaves the machine.
+ * docs/BRAND-ROOMS-FEEDBACK.md §2.1–§2.2, §10.1 — the pass: what is mailed (one kind per mail), bundled,
+ * held back, skipped and retried, what one mail says, and the push that goes out at once. The fake
+ * mailer records every mail the provider would have accepted; nothing leaves the machine. The exact
+ * confirmed wording per kind is pinned in ./wording.test.ts.
  */
 let f: NoticeFixture;
 let mailer: FakeMailer;
@@ -82,35 +83,102 @@ describe('bundled mail', () => {
     expect(mailTo('editor')[1]!.text).toContain('Second');
   });
 
-  it('shows at most five lines and counts the rest', async () => {
+  it('counts every line in one mail and quotes the first five, with no "and N more" line (§10.1)', async () => {
     for (let i = 1; i <= 7; i += 1) await teamLine(f, `Line ${i}`);
     await pass(minutesFromNow(11));
     const mail = mailTo('owner');
     expect(mail).toHaveLength(1);
-    expect(mail[0]!.text).toContain('Line 5');
+    expect(mail[0]!.subject).toBe('7 unread messages in Spring launch');
+    expect(mail[0]!.text).toContain('There are 7 unread replies and messages.');
+    expect(mail[0]!.text.split('\n').filter((l) => l.startsWith('YAGI team: '))).toEqual(['Line 1', 'Line 2', 'Line 3', 'Line 4', 'Line 5'].map((l) => `YAGI team: ${l}`));
     expect(mail[0]!.text).not.toContain('Line 6');
-    expect(mail[0]!.text).toContain('and 2 more');
+    expect(mail[0]!.text).not.toContain('more');
+  });
+
+  it('labels a team member as "YAGI team · name" in the quote lines', async () => {
+    await f.sql.query("update profiles set display_name = 'Jisoo' where id = $1", [f.ids.admin]);
+    await teamLine(f, 'The first cut is up.');
+    await pass(minutesFromNow(11));
+    expect(mailTo('owner')[0]!.text).toContain('YAGI team · Jisoo: The first cut is up.');
   });
 });
 
 describe('"now" mail', () => {
-  it('merges several items of one pass into one mail per person', async () => {
+  it('sends one mail per notice, each of its own kind and with its own idempotency key (§10.1)', async () => {
     await posted('review_posted', 'Hero film');
     await posted('storyboard_shared', 'Shot list');
     const report = await pass(minutesFromNow(0));
-    expect(report).toMatchObject({ mails: 4, sent: 8 });
-    const [mail] = mailTo('viewer');
-    expect(mailTo('viewer')).toHaveLength(1);
-    expect(mail!.text).toContain('Hero film v2');
-    expect(mail!.text).toContain('Shot list v2');
-    expect(mail!.subject).toBe('News on Spring launch');
+    expect(report).toMatchObject({ mails: 8, sent: 8 });
+    const mails = mailTo('viewer');
+    expect(mails.map((m) => m.subject).sort()).toEqual(['New version of Hero film for Spring launch', 'Storyboard shared for Spring launch']);
+    expect(new Set(mails.map((m) => m.idempotencyKey)).size).toBe(2);
+    const rows = (await noticeRows(f.sql)).filter((r) => r.recipient_id === f.ids.viewer);
+    expect(new Set(rows.map((r) => r.batch_id)).size).toBe(2);
+    const draft = mails.find((m) => m.subject.startsWith('New version'))!;
+    expect(draft.text).toContain('The YAGI team has uploaded version 2.');
+    expect(draft.text).not.toContain('Shot list');
   });
 
-  it('mails a mention at once, without waiting for the bundle', async () => {
+  it('does not carry due bundled lines in a "now" mail: they keep their own mail', async () => {
+    await teamLine(f, 'Waiting line');
+    await f.sql.query("update brand_room_notices set due_at = now() - interval '1 minute'");
+    await posted('review_posted', 'Hero film');
+    await pass(minutesFromNow(0));
+    const mails = mailTo('owner');
+    expect(mails).toHaveLength(2);
+    expect(mails.find((m) => m.subject.startsWith('New version'))!.text).not.toContain('Waiting line');
+    expect(mails.find((m) => m.subject === '1 unread message in Spring launch')!.text).toContain('YAGI team: Waiting line');
+  });
+
+  it('mails a mention at once, without waiting for the bundle, quoting its line', async () => {
     await memberLine(f, f.ids.owner, 'Can you look at cut 3?', { mentions: [f.ids.editor] });
     await pass(minutesFromNow(0));
     expect(mailTo('editor')).toHaveLength(1);
-    expect(mailTo('editor')[0]!.text).toContain('Can you look at cut 3?');
+    const [mail] = mailTo('editor');
+    expect(mail!.subject).toBe('owner mentioned you in Spring launch');
+    expect(mail!.text).toContain('owner: Can you look at cut 3?');
+  });
+
+  it('names a team member who mentions you by their plain name, and quotes them with the team label (ko and en)', async () => {
+    await f.sql.query("update profiles set display_name = 'Jisoo' where id = $1", [f.ids.admin]);
+    await f.sql.query("update profiles set locale = 'ko' where id = $1", [f.ids.owner]);
+    const sender = fakePushSender();
+    await savePushSubscription(f.sql, f.ids.owner, { endpoint: 'https://fcm.googleapis.com/fcm/send/owner-device', ...testPushKeys() }, null);
+    await teamLine(f, 'Cut 3 is ready for you.', { mentions: [f.ids.owner, f.ids.editor] });
+    await pass(minutesFromNow(0), { push: sender });
+    const [ko] = mailTo('owner');
+    expect(ko!.subject).toBe('[Spring launch] Jisoo님이 불렀어요');
+    expect(ko!.text.split('\n')[0]).toBe('Jisoo님이 불렀어요');
+    expect(ko!.text).toContain('Jisoo님이 프로젝트 대화에서 불렀어요. 내용을 확인해 주세요.');
+    expect(ko!.text).toContain('야기 팀 · Jisoo: Cut 3 is ready for you.');
+    expect(sender.calls.find((c) => c.message.lang === 'ko')!.message).toMatchObject({ title: '나를 불렀어요', body: '[Spring launch] Jisoo님이 불렀어요' });
+    const [en] = mailTo('editor');
+    expect(en!.subject).toBe('Jisoo mentioned you in Spring launch');
+    expect(en!.text.split('\n')[0]).toBe('Jisoo mentioned you');
+    expect(en!.text).toContain('Jisoo mentioned you in the project conversation. Please check the message.');
+    expect(en!.text).toContain('YAGI team · Jisoo: Cut 3 is ready for you.');
+  });
+
+  it('names a team member without a name as the team', async () => {
+    await f.sql.query("update profiles set locale = 'ko' where id = $1", [f.ids.owner]);
+    await teamLine(f, 'Ping', { mentions: [f.ids.owner, f.ids.editor] });
+    await pass(minutesFromNow(0));
+    expect(mailTo('owner')[0]!.subject).toBe('[Spring launch] 야기 팀님이 불렀어요');
+    expect(mailTo('owner')[0]!.text).toContain('야기 팀: Ping');
+    expect(mailTo('editor')[0]!.subject).toBe('YAGI team mentioned you in Spring launch');
+  });
+
+  it('names a brand colleague who mentions you by their display name (ko and en)', async () => {
+    await f.sql.query("update profiles set display_name = 'Mina Park' where id = $1", [f.ids.owner]);
+    await f.sql.query("update profiles set locale = 'ko' where id = $1", [f.ids.viewer]);
+    await memberLine(f, f.ids.owner, 'Thoughts on the ending?', { mentions: [f.ids.editor, f.ids.viewer] });
+    await pass(minutesFromNow(0));
+    const [en] = mailTo('editor');
+    expect(en!.subject).toBe('Mina Park mentioned you in Spring launch');
+    expect(en!.text).toContain('Mina Park: Thoughts on the ending?');
+    const [ko] = mailTo('viewer');
+    expect(ko!.subject).toBe('[Spring launch] Mina Park님이 불렀어요');
+    expect(ko!.text).toContain('Mina Park: Thoughts on the ending?');
   });
 
   it('marks everything due as no_mailer when no mail provider is configured, without throwing', async () => {
@@ -179,12 +247,12 @@ describe('what one mail says', () => {
     const [mail] = mailTo('owner');
     expect(mail).toBeDefined();
     const room = `https://brand.twings.app${projectRoomPath(f)}`;
+    expect(mail!.subject).toBe('1 unread message in Spring launch');
     for (const part of [mail!.html, mail!.text]) {
-      expect(part).toContain('Spring launch');
       expect(part).toContain(`${'a'.repeat(100)} ${'b'.repeat(19)}…`);
       expect(part).not.toContain('TAIL-NOT-SHOWN');
       expect(part).toContain(room);
-      expect(part).toContain('Open project');
+      expect(part).toContain('View Messages');
     }
     expect(mail!.unsubscribeUrl).toMatch(/^https:\/\/twings\.app\/api\/notify\/unsubscribe\?t=/);
     expect(mail!.text).toContain(mail!.unsubscribeUrl);
@@ -200,9 +268,11 @@ describe('what one mail says', () => {
     await posted('review_posted', '메인 영상');
     await pass(minutesFromNow(0));
     const [mail] = mailTo('owner');
-    expect(mail!.subject).toBe('Spring launch에 새 소식이 있어요');
-    expect(mail!.text).toContain('프로젝트에서 보기');
-    expect(mail!.text).toContain('메인 영상 v2');
+    expect(mail!.subject).toBe('[Spring launch] 메인 영상 새 시안이 도착했어요');
+    expect(mail!.text).toContain('메인 영상의 새 버전이 올라왔습니다.');
+    expect(mail!.text).toContain('야기 팀이 2번째 시안을 준비했어요. 확인하고 의견을 남겨주세요.');
+    expect(mail!.text).toContain('시안 확인하기');
+    expect(mail!.text).toContain('이 메일은 프로젝트 진행 알림이며, 알림 설정에서 수신 여부를 변경할 수 있습니다. 수신 거부');
   });
 
   it('builds the receipt mail on its own subject', () => {
@@ -214,7 +284,7 @@ describe('what one mail says', () => {
       projectTitle: 'Spring launch',
       lines: [{ kind: 'intake_received' }],
     });
-    expect(mail.subject).toBe('We got your request: Spring launch');
+    expect(mail.subject).toBe('Request received for Spring launch');
     expect(mail.buttonUrl).toBe(`https://brand.twings.app${projectRoomPath(f)}`);
     expect(mail.text).not.toMatch(/reply/i);
   });
@@ -235,14 +305,33 @@ describe('push', () => {
     const report = await pass(minutesFromNow(0), { push: sender });
     expect(report).toMatchObject({ pushes: 1, mails: 0 });
     expect(sender.calls).toHaveLength(1);
-    expect(sender.calls[0]!.message).toMatchObject({ title: 'Spring launch', url: projectRoomPath(f), tag: f.projectId });
-    expect(sender.calls[0]!.message.body).toContain('Pushed first');
+    expect(sender.calls[0]!.message).toMatchObject({
+      title: '1 New Message',
+      body: 'You have 1 new message from the YAGI team in Spring launch.',
+      url: projectRoomPath(f),
+      tag: f.projectId,
+    });
     const rows = await noticeRows(f.sql);
     expect(rows.find((r) => r.recipient_id === f.ids.owner)).toMatchObject({ push_state: 'sent', state: 'pending' });
     // Nobody else has a device: claimed and left skipped, never retried.
     expect(rows.filter((r) => r.recipient_id !== f.ids.owner).every((r) => r.push_state === 'skipped')).toBe(true);
     await pass(minutesFromNow(1), { push: sender });
     expect(sender.calls).toHaveLength(1);
+  });
+
+  it('pushes the team’s lines of one pass once, counting them; each "now" notice on its own, newest last', async () => {
+    const sender = fakePushSender();
+    await f.sql.query("update profiles set locale = 'ko' where id = $1", [f.ids.owner]);
+    await savePushSubscription(f.sql, f.ids.owner, { endpoint: 'https://fcm.googleapis.com/fcm/send/owner-device', ...testPushKeys() }, null);
+    await teamLine(f, 'One');
+    await teamLine(f, 'Two');
+    await posted('review_posted', '메인 영상');
+    await pass(minutesFromNow(0), { push: sender });
+    expect(sender.calls.map((c) => [c.message.title, c.message.body])).toEqual([
+      ['새 메시지 2건', '[Spring launch] 야기 팀이 보낸 메시지가 2건 있습니다.'],
+      ['새 시안 도착', '[Spring launch] 메인 영상의 2번째 시안을 확인해 보세요.'],
+    ]);
+    expect(sender.calls.every((c) => c.message.tag === f.projectId && c.message.lang === 'ko')).toBe(true);
   });
 
   it('does not push the intake receipt', async () => {
@@ -272,28 +361,22 @@ describe('the general channel', () => {
     const inbox = `https://brand.twings.app${generalInboxPath(f)}`;
     expect(mail!.text).toContain(inbox);
     expect(mail!.html).toContain(inbox.replace('&', '&amp;'));
-    expect(mail!.subject).toBe('News in General · Studio fixture brand');
-    expect(mail!.text).toContain('We got your question about invoices.');
+    // `{project}` is the general conversation's own name (§10.1), never a project's or the brand's.
+    expect(mail!.subject).toBe('1 unread message in General');
+    expect(mail!.text).toContain('YAGI team: We got your question about invoices.');
     expect(mail!.text).not.toContain('Spring launch');
-    // Its own button and note: it opens the general conversation, not a project.
-    for (const part of [mail!.html, mail!.text]) {
-      expect(part).toContain('Open General');
-      expect(part).toContain('You get this because you are a member of this brand.');
-      expect(part).not.toContain('Open project');
-      expect(part).not.toContain('part of this project');
-    }
+    expect(mail!.text).not.toContain('Studio fixture brand');
+    expect(mail!.text).toContain(`View Messages: ${inbox}`);
   });
 
-  it('writes the general mail’s button and note in Korean for a Korean reader', async () => {
+  it('names the general conversation in Korean for a Korean reader', async () => {
     await f.sql.query("update profiles set locale = 'ko' where id = $1", [f.ids.owner]);
     await teamLine(f, '세금계산서 문의 확인했어요.', { projectId: 'general' });
     await pass(minutesFromNow(11));
     const [mail] = mailTo('owner');
-    expect(mail!.subject).toBe('일반 문의에 새 소식이 있어요 · Studio fixture brand');
-    expect(mail!.text).toContain('일반 문의에서 보기');
-    expect(mail!.text).toContain('이 브랜드의 구성원이라 보내 드렸어요.');
-    expect(mail!.text).not.toContain('프로젝트에서 보기');
-    expect(mail!.text).not.toContain('이 프로젝트에 참여하고 있어');
+    expect(mail!.subject).toBe('[일반 문의] 읽지 않은 메시지가 1건 있어요');
+    expect(mail!.text).toContain('야기 팀: 세금계산서 문의 확인했어요.');
+    expect(mail!.text).toContain(`메시지 확인하기: https://brand.twings.app${generalInboxPath(f)}`);
   });
 
   it('keeps general and a project apart: two mails, each with its own link', async () => {
@@ -312,8 +395,12 @@ describe('the general channel', () => {
     await teamLine(f, 'Ping in general', { projectId: 'general' });
     await pass(minutesFromNow(0), { push: sender });
     expect(sender.calls).toHaveLength(1);
-    expect(sender.calls[0]!.message).toMatchObject({ url: generalInboxPath(f), tag: f.orgId });
-    expect(sender.calls[0]!.message.title).toContain('Studio fixture brand');
+    expect(sender.calls[0]!.message).toMatchObject({
+      url: generalInboxPath(f),
+      tag: f.orgId,
+      title: '1 New Message',
+      body: 'You have 1 new message from the YAGI team in General.',
+    });
   });
 });
 
@@ -350,7 +437,27 @@ describe('a team reply on a draft', () => {
       detail: { title: 'Hero film', version: 1 },
     });
     await pass(minutesFromNow(11));
-    expect(mailTo('owner')[0]!.text).toContain('Reply from YAGI team on Hero film: We moved the logo up by a third.');
+    expect(mailTo('owner')[0]!.subject).toBe('1 unread message in Spring launch');
+    expect(mailTo('owner')[0]!.text).toContain('YAGI team: We moved the logo up by a third.');
+  });
+
+  it('counts but does not quote a reply whose note the team keeps to itself', async () => {
+    const { reviewId, commentId } = await seedComment('TEAM-ONLY NOTE');
+    await f.sql.query("update brand_studio_review_comments set visibility = 'team' where id = $1", [commentId]);
+    await postRoomEvent(f.sql, {
+      organizationId: f.orgId,
+      projectId: f.projectId,
+      event: 'review_commented',
+      ref: { kind: 'review', reviewId, commentId },
+      actorId: f.ids.admin,
+      actorRole: 'studio',
+      detail: { title: 'Hero film', version: 1 },
+    });
+    await pass(minutesFromNow(11));
+    const [mail] = mailTo('owner');
+    expect(mail!.subject).toBe('1 unread message in Spring launch');
+    expect(mail!.text + mail!.html).not.toContain('TEAM-ONLY NOTE');
+    expect(mail!.html).not.toContain('<tr>');
   });
 
   it('does not stumble over a malformed note id in the line', async () => {
@@ -365,7 +472,9 @@ describe('a team reply on a draft', () => {
     await enqueueNotices(f.sql, { type: 'event', organizationId: f.orgId, projectId: f.projectId, event: 'review_commented', messageId: line, actorId: f.ids.admin, actorRole: 'studio' });
     const report = await pass(minutesFromNow(11));
     expect(report.mails).toBe(4);
-    expect(mailTo('owner')[0]!.text).toContain('YAGI team replied on Hero film');
+    // No readable note: the mail still goes out and counts the reply, with no quote line.
+    expect(mailTo('owner')[0]!.subject).toBe('1 unread message in Spring launch');
+    expect(mailTo('owner')[0]!.html).not.toContain('<tr>');
   });
 });
 

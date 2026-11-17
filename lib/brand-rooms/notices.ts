@@ -14,14 +14,17 @@
  * members only): every grouping, read check and cap below is per recipient × place.
  *
  *   push   at most once, as soon as a pass sees the row (no 10-minute wait): claimed rows are marked
- *          first, then corrected to `sent` / `failed`.
- *   mail   `now` rows of one recipient × place in one pass become one mail; `bundle` rows wait 10
- *          minutes, are dropped when the person has read that channel since (`read`), and go out at most
- *          once per recipient × place every 30 minutes. A muted person (`brand_room_notice_prefs`) is
- *          skipped. The provider's idempotency key is the batch id, kept across the 3 attempts.
+ *          first, then corrected to `sent` / `failed`. One push per "now" notice; the team's lines of
+ *          one recipient × place in one pass are one push that counts them.
+ *   mail   one mail is one kind (§10.1). A `now` row (new draft, storyboard, mention, receipt) is a mail
+ *          of its own; `bundle` rows (the team's lines and draft replies) wait 10 minutes, are dropped
+ *          when the person has read that channel since (`read`), and go out as one mail per recipient ×
+ *          place at most every 30 minutes. A muted person (`brand_room_notice_prefs`) is skipped. The
+ *          provider's idempotency key is the batch id, kept across the 3 attempts.
  *
- * Off unless `BRAND_ROOM_NOTIFY=on` and rooms are open (`BRAND_ROOMS=on`). The rule table and every
- * string are proposals waiting for the founder (§8-1, §8-2): nothing is sent with the flag off.
+ * Off unless `BRAND_ROOM_NOTIFY=on` and rooms are open (`BRAND_ROOMS=on`). The rules (§2.1), the
+ * intervals (§8-3) and every string (messages/rooms-notices.ts) are the founder's, confirmed 2026-11-18
+ * (§10). Nothing is sent with the flag off.
  */
 import { randomUUID } from 'node:crypto';
 import { after } from 'next/server';
@@ -34,7 +37,7 @@ import { companyLine } from '@/lib/notify/company-line';
 import type { Mailer, SendOutcome } from '@/lib/notify/mailer';
 import { createWebPushSender, pushConfigFromEnv, sendPushToUser, type PushMessage, type PushSender } from '@/lib/notify/push';
 import { getMailer } from '@/lib/notify/service';
-import { sheet, sheetText } from '@/lib/notify/sheet';
+import { sheet, sheetText, type SheetArgs } from '@/lib/notify/sheet';
 import { ROOM_EMAIL_SCOPE, unsubscribePath } from '@/lib/notify/unsubscribe';
 import { brandSiteUrl, siteUrl } from '@/lib/seo/site-url';
 import { roomAudience } from './access';
@@ -53,7 +56,7 @@ export interface RoomNoticeRule {
   actor: 'studio' | 'brand' | 'any';
 }
 
-/** §2.1 as data. Proposed values, founder confirmation pending (§8-1). */
+/** §2.1 as data. Confirmed by the founder with the wording (§10, 2026-11-18). */
 export const ROOM_NOTICE_RULES: Readonly<Record<RoomNoticeKind, RoomNoticeRule>> = {
   /** The team posted a new draft or a new version of one. */
   new_version: { email: 'now', push: true, actor: 'studio' },
@@ -90,9 +93,9 @@ export const ROOM_NOTICE_LIMITS = {
   /** At most one bundled mail per recipient × place (project or general) in this window (§8-3). */
   bundleCapMinutes: 30,
   maxAttempts: 3,
-  /** Lines in one mail; the rest is "and N more". */
+  /** Quote lines in one bundled mail (§10.1). There is no "and N more" line; `{count}` says how many. */
   maxLines: 5,
-  /** How much of a team line a mail quotes. */
+  /** How much of a line a mail quotes. */
   excerptChars: 120,
   leaseMinutes: 10,
   /** Rows one pass claims, per phase. */
@@ -261,16 +264,23 @@ export function kickRoomNoticePass(env: NodeJS.ProcessEnv = process.env): void {
   }
 }
 
-/* ------------------------------------------------------------------ mail */
+/* ------------------------------------------------------------------ mail and push (§10) */
 
 export interface RoomNoticeLine {
   kind: RoomNoticeKind;
-  /** The draft's or storyboard's title (event lines). */
+  /** The draft's or storyboard's title (event lines). Missing: the place's name. */
   title?: string | null;
+  /** Missing: 1. */
   version?: number | null;
-  /** Who wrote it, as the mail shows them. */
+  /** Who wrote it, labelled as §10.1 says for a quote line ("야기 팀 · 이름", "야기 팀", or a brand member's name). */
   name?: string | null;
-  /** The quoted text, already cut to 120 characters. */
+  /**
+   * The same person by plain name, for a mention's `{name}`: their display name (a team member's too); a
+   * brand member without one as the conversation shows them; a team member without one as "야기 팀".
+   * Missing: `name`.
+   */
+  person?: string | null;
+  /** The quoted text, already cut to 120 characters. Empty: a line with no text (only files). */
   excerpt?: string | null;
 }
 
@@ -280,11 +290,9 @@ export interface RoomNoticeMailInput {
   organizationId: string;
   /** Null: the organization's general channel. */
   projectId: string | null;
-  /** The project's title; unused for the general channel. */
+  /** The project's title; unused for the general channel (it is named `roomsChat.inbox.general`). */
   projectTitle: string;
-  /** Names the general channel's mail and push (the brand it belongs to). */
-  organizationName?: string;
-  /** Every item of the batch, oldest first. The mail shows the first five. */
+  /** One "now" notice, or every row of one bundled mail, oldest first. */
   lines: readonly RoomNoticeLine[];
   env?: NodeJS.ProcessEnv;
 }
@@ -297,7 +305,82 @@ export interface RoomNoticeMail {
   unsubscribeUrl: string;
 }
 
-type NoticeCopy = ReturnType<typeof getDictionary>['roomsNotices'];
+type Dict = ReturnType<typeof getDictionary>;
+
+/** The two kinds one bundled mail (and one counted push) carries. Every other kind is one notice, one mail. */
+const BUNDLED: ReadonlySet<RoomNoticeKind> = new Set<RoomNoticeKind>(['team_message', 'team_reply']);
+
+/** What a mail or push is about: the bundle (`replies`), or the one "now" notice it carries. */
+export type RoomNoticeMailKind = 'replies' | 'new_version' | 'storyboard' | 'mention' | 'intake_received';
+
+const KIND_COPY = {
+  replies: 'replies',
+  new_version: 'newVersion',
+  storyboard: 'storyboard',
+  mention: 'mention',
+  intake_received: 'intakeReceived',
+} as const satisfies Record<RoomNoticeMailKind, keyof Dict['roomsNotices']['kinds']>;
+
+export function roomNoticeMailKind(lines: readonly RoomNoticeLine[]): RoomNoticeMailKind {
+  const single = lines.find((line) => !BUNDLED.has(line.kind));
+  return single ? (single.kind as Exclude<RoomNoticeKind, 'team_message' | 'team_reply'>) : 'replies';
+}
+
+const flat = (value: string | null | undefined): string => (value ?? '').replace(/\s+/g, ' ').trim();
+
+/** `{project}`: the project's title, or the general conversation's own name (§10.1). */
+function placeName(dict: Dict, projectId: string | null, projectTitle: string): string {
+  return projectId === null ? dict.roomsChat.inbox.general : flat(projectTitle);
+}
+
+/** Every placeholder a kind's strings use, with the fallbacks an event line without them gets. */
+function noticeVars(dict: Dict, kind: RoomNoticeMailKind, lines: readonly RoomNoticeLine[], project: string): Record<string, string | number> {
+  const line = kind === 'replies' ? undefined : lines.find((l) => l.kind === kind);
+  return {
+    project,
+    title: flat(line?.title) || project,
+    version: line?.version && line.version > 0 ? line.version : 1,
+    name: flat(line?.person) || flat(line?.name) || dict.roomsChat.author.someone,
+    count: kind === 'replies' ? lines.length : 1,
+  };
+}
+
+/**
+ * The strings of one kind. The bundle's count-bearing English sentences have a singular form used only
+ * when exactly one row is carried (docs §10.3); Korean has one form and its `one` repeats it.
+ */
+interface KindStrings {
+  subject: string;
+  heading: string;
+  body: string;
+  button: string;
+  /** Absent for the receipt, which has no push. */
+  pushTitle?: string;
+  pushBody?: string;
+}
+
+function kindStrings(dict: Dict, kind: RoomNoticeMailKind, count: number): KindStrings {
+  const kinds = dict.roomsNotices.kinds;
+  if (kind === 'replies') {
+    const { one, ...plural } = kinds.replies;
+    return count === 1 ? { ...plural, ...one } : plural;
+  }
+  return kinds[KIND_COPY[kind]];
+}
+
+/**
+ * The quote lines under the body (§10.1): "author: first 120 characters". The bundle quotes up to five
+ * of its rows, oldest first, skipping rows with no text (a file-only message, a reply whose note is not
+ * readable); the mention quotes its one line. Other kinds quote nothing.
+ */
+function quoteRows(dict: Dict, kind: RoomNoticeMailKind, lines: readonly RoomNoticeLine[]): Array<[string, string]> {
+  if (kind !== 'replies' && kind !== 'mention') return [];
+  const source = kind === 'replies' ? lines : lines.filter((l) => l.kind === 'mention').slice(0, 1);
+  return source
+    .filter((line) => flat(line.excerpt) !== '')
+    .slice(0, ROOM_NOTICE_LIMITS.maxLines)
+    .map((line) => [flat(line.name) || dict.roomsChat.author.someone, flat(line.excerpt)]);
+}
 
 /** The first 120 characters of a line, whitespace folded. */
 export function noticeExcerpt(body: string | null | undefined, chars: number = ROOM_NOTICE_LIMITS.excerptChars): string {
@@ -320,64 +403,67 @@ export function roomNoticePath(organizationId: string, projectId: string | null)
   return `/brand/rooms/${projectId.toLowerCase()}?${params.toString()}`;
 }
 
-function lineText(copy: NoticeCopy, line: RoomNoticeLine, place: string): string {
-  const title = line.title?.trim() || place;
-  const version = line.version && line.version > 0 ? line.version : 1;
-  const name = line.name?.trim() || copy.email.team;
-  const excerpt = line.excerpt?.trim() ?? '';
-  const lines = copy.email.lines;
-  switch (line.kind) {
-    case 'new_version':
-      return interpolate(lines.newVersion, { title, version });
-    case 'storyboard':
-      return interpolate(lines.storyboard, { title, version });
-    case 'team_message':
-      return interpolate(lines.teamMessage, { name, excerpt });
-    case 'team_reply':
-      return excerpt ? interpolate(lines.teamReply, { name, title, excerpt }) : interpolate(lines.teamReplyBare, { name, title });
-    case 'mention':
-      return interpolate(lines.mention, { name, excerpt });
-    case 'intake_received':
-      return interpolate(lines.intake, { project: place });
-  }
-}
-
-/** What a push shows for a batch: the one line, or the count. */
-export function noticePushBody(locale: Locale, lines: readonly RoomNoticeLine[], placeName: string): string {
-  const copy = getDictionary(locale).roomsNotices;
-  return lines.length === 1 ? lineText(copy, lines[0]!, placeName) : interpolate(copy.push.many, { count: lines.length });
-}
-
 /**
- * One mail for one recipient × place (a project, or the general channel): what arrived (at most five
- * lines), one button into the room on the brand host, the unsubscribe link (signed, no login) and the
- * company line. No internal tool names, no prices, no promised times, no invitation to reply.
+ * One mail of one kind (§10.1): the subject, the heading and the body of that kind, the quote lines
+ * under it (the bundle and the mention only), one button into the room on the brand host (the general
+ * conversation's opens the inbox on it), the confirmed footer sentence with the unsubscribe link (signed,
+ * no login) and the company line. Every sentence is the founder's (messages/rooms-notices.ts); nothing
+ * else is written here.
  */
 export function buildRoomNoticeEmail(input: RoomNoticeMailInput): RoomNoticeMail {
   const env = input.env ?? process.env;
-  const copy = getDictionary(input.locale).roomsNotices;
-  const project = input.projectTitle.replace(/\s+/g, ' ').trim();
-  const organization = (input.organizationName ?? '').replace(/\s+/g, ' ').trim();
-  const intakeOnly = input.lines.length > 0 && input.lines.every((line) => line.kind === 'intake_received');
-  const general = input.projectId === null;
-  const subject = general
-    ? interpolate(copy.email.subjectGeneral, { organization })
-    : interpolate(intakeOnly ? copy.email.subjectIntake : copy.email.subject, { project });
-  const title = general ? copy.email.titleGeneral : intakeOnly ? copy.email.titleIntake : interpolate(copy.email.title, { project });
-  const shown = input.lines.slice(0, ROOM_NOTICE_LIMITS.maxLines).map((line) => lineText(copy, line, project));
-  const rest = input.lines.length - shown.length;
-  const paragraphs = rest > 0 ? [...shown, interpolate(copy.email.more, { count: rest })] : shown;
+  const dict = getDictionary(input.locale);
+  const copy = dict.roomsNotices;
+  const kind = roomNoticeMailKind(input.lines);
+  const vars = noticeVars(dict, kind, input.lines, placeName(dict, input.projectId, input.projectTitle));
+  const strings = kindStrings(dict, kind, Number(vars.count));
   const buttonUrl = `${brandSiteUrl(env)}${roomNoticePath(input.organizationId, input.projectId)}`;
   const unsubscribeUrl = `${siteUrl(env)}${unsubscribePath({ userId: input.recipientId, toggle: ROOM_EMAIL_SCOPE, organizationId: input.organizationId })}`;
-  const args = {
-    title,
-    paragraphs,
-    // The general conversation's button opens the inbox's General, so it names that, not a project.
-    button: { label: general ? copy.email.ctaGeneral : copy.email.cta, url: buttonUrl },
-    note: { text: general ? copy.email.noteGeneral : copy.email.note, link: { label: copy.email.stop, url: unsubscribeUrl } },
+  const args: SheetArgs = {
+    title: interpolate(strings.heading, vars),
+    paragraphs: [interpolate(strings.body, vars)],
+    rows: quoteRows(dict, kind, input.lines),
+    button: { label: strings.button, url: buttonUrl },
+    note: { text: copy.footer.text, link: { label: copy.footer.stop, url: unsubscribeUrl } },
     footer: companyLine(input.locale, { address: true }),
   };
-  return { subject, html: sheet(args), text: sheetText(args), buttonUrl, unsubscribeUrl };
+  return { subject: interpolate(strings.subject, vars), html: sheet(args), text: sheetText(args), buttonUrl, unsubscribeUrl };
+}
+
+export interface RoomNoticePushInput {
+  locale: Locale;
+  organizationId: string;
+  /** Null: the organization's general channel. */
+  projectId: string | null;
+  projectTitle: string;
+  /** One "now" notice, or the team's lines of one recipient × place pushed together in one pass. */
+  lines: readonly RoomNoticeLine[];
+}
+
+/**
+ * The push of one kind (§10.1): its confirmed title and body; the team's lines use the replies strings
+ * with how many are pushed together (1 when single). Opens the same place as the mail's button, as a
+ * same-origin path. `tag` is the place, so a newer notice about it replaces the older one on the device.
+ * Null for the receipt, which has no push (§2.1).
+ */
+export function buildRoomNoticePush(input: RoomNoticePushInput): PushMessage | null {
+  const kind = roomNoticeMailKind(input.lines);
+  if (kind === 'intake_received' || input.lines.length === 0) return null;
+  const dict = getDictionary(input.locale);
+  const vars = noticeVars(dict, kind, input.lines, placeName(dict, input.projectId, input.projectTitle));
+  const strings = kindStrings(dict, kind, Number(vars.count));
+  if (!strings.pushTitle || !strings.pushBody) return null;
+  const organizationId = input.organizationId.toLowerCase();
+  const projectId = input.projectId ? input.projectId.toLowerCase() : null;
+  const tag = projectId ?? organizationId;
+  return {
+    title: interpolate(strings.pushTitle, vars),
+    body: interpolate(strings.pushBody, vars),
+    url: roomNoticePath(organizationId, projectId),
+    tag,
+    topic: tag.replace(/-/g, ''),
+    lang: input.locale,
+  };
 }
 
 /* ------------------------------------------------------------------ pass */
@@ -427,7 +513,6 @@ interface MessageFacts {
   id: string;
   channel: string;
   body: string;
-  files: number;
   detail: Record<string, unknown> | null;
   deleted: boolean;
   createdAt: Date;
@@ -447,7 +532,6 @@ interface Facts {
   messages: Map<string, MessageFacts>;
   recipients: Map<string, RecipientFacts>;
   projects: Map<string, string>;
-  organizations: Map<string, string>;
 }
 
 const toDate = (v: Date | string): Date => (v instanceof Date ? v : new Date(String(v)));
@@ -467,7 +551,6 @@ async function loadFacts(sql: SqlRunner, rows: readonly NoticeRow[]): Promise<Fa
   const messageIds = [...new Set(rows.map((r) => r.message_id).filter((id): id is string => Boolean(id)))];
   const recipientIds = [...new Set(rows.map((r) => r.recipient_id))];
   const projectIds = [...new Set(rows.map((r) => r.project_id).filter((id): id is string => Boolean(id)))];
-  const organizationIds = [...new Set(rows.map((r) => r.organization_id))];
   const messages = new Map<string, MessageFacts>();
   if (messageIds.length) {
     const found = (
@@ -476,7 +559,6 @@ async function loadFacts(sql: SqlRunner, rows: readonly NoticeRow[]): Promise<Fa
         channel: string;
         kind: string;
         body: string | null;
-        attachments: unknown;
         detail: Record<string, unknown> | null;
         deleted_at: Date | string | null;
         created_at: Date | string;
@@ -488,7 +570,7 @@ async function loadFacts(sql: SqlRunner, rows: readonly NoticeRow[]): Promise<Fa
         // A team reply's text comes from the draft note itself; a note the team keeps to itself never does.
         // The note id is compared as a uuid (the primary key's index), and only after the text is checked
         // to be one: a malformed `ref` yields no text instead of a failed cast.
-        `select m.id::text as id, m.channel, m.kind, m.body, m.attachments, m.detail, m.deleted_at, m.created_at, m.author_role,
+        `select m.id::text as id, m.channel, m.kind, m.body, m.detail, m.deleted_at, m.created_at, m.author_role,
                 p.display_name, p.email,
                 (select c.body from brand_studio_review_comments c
                   where m.event = 'review_commented'
@@ -507,7 +589,6 @@ async function loadFacts(sql: SqlRunner, rows: readonly NoticeRow[]): Promise<Fa
         id: String(m.id).toLowerCase(),
         channel: String(m.channel),
         body: m.body ?? '',
-        files: Array.isArray(m.attachments) ? m.attachments.length : 0,
         detail: m.detail,
         deleted: m.deleted_at != null,
         createdAt: toDate(m.created_at),
@@ -530,38 +611,49 @@ async function loadFacts(sql: SqlRunner, rows: readonly NoticeRow[]): Promise<Fa
       projects.set(String(p.id).toLowerCase(), String(p.title));
     }
   }
-  const organizations = new Map<string, string>();
-  for (const o of (await sql.query<{ id: string; name: string }>('select id::text as id, name from brand_organizations where id = any($1::uuid[])', [organizationIds])).rows) {
-    organizations.set(String(o.id).toLowerCase(), String(o.name));
-  }
-  return { messages, recipients, projects, organizations };
+  return { messages, recipients, projects };
 }
 
-/** What names a place: the project's title, or the brand's name for its general channel. */
-function placeTitle(facts: Facts, organizationId: string, projectId: string | null): string {
-  return projectId ? (facts.projects.get(projectId.toLowerCase()) ?? '') : (facts.organizations.get(organizationId.toLowerCase()) ?? '');
+/** The project's title; the general channel is named by the mail itself (`roomsChat.inbox.general`). */
+function projectTitleOf(facts: Facts, projectId: string | null): string {
+  return projectId ? (facts.projects.get(projectId.toLowerCase()) ?? '') : '';
 }
 
-/** The author as a mail names them: "YAGI team · name" (or just "YAGI team"), a brand member by name. */
-function authorName(copy: NoticeCopy, message: MessageFacts): string {
-  const name = message.displayName?.replace(/\s+/g, ' ').trim().slice(0, 60) || null;
-  if (message.role === 'studio') return name ? interpolate(copy.email.teamAuthor, { name }) : copy.email.team;
-  return name ?? message.email?.split('@')[0]?.trim().slice(0, 60) ?? copy.email.team;
+/**
+ * The author as §10.1 labels them: "야기 팀 · name" (just "야기 팀" without a name) for the team, a brand
+ * member by their name (the address's local part when they set none, as the conversation shows them).
+ */
+function authorName(dict: Dict, message: MessageFacts): string {
+  const name = flat(message.displayName).slice(0, 60) || null;
+  if (message.role === 'studio') return name ? interpolate(dict.roomsNotices.author.teamMember, { name }) : dict.roomsNotices.author.team;
+  return personName(dict, message);
+}
+
+/**
+ * The same person by plain name, for a mention's `{name}`: the display name, a team member's too; a
+ * brand member without one by the address's local part; a team member without one as "야기 팀".
+ */
+function personName(dict: Dict, message: MessageFacts): string {
+  const name = flat(message.displayName).slice(0, 60) || null;
+  if (name) return name;
+  if (message.role === 'studio') return dict.roomsNotices.author.team;
+  return message.email?.split('@')[0]?.trim().slice(0, 60) || dict.roomsChat.author.someone;
 }
 
 function lineOf(row: NoticeRow, facts: Facts, locale: Locale): RoomNoticeLine {
-  const copy = getDictionary(locale).roomsNotices;
+  const dict = getDictionary(locale);
   const message = row.message_id ? facts.messages.get(row.message_id.toLowerCase()) : undefined;
   if (!message) return { kind: row.kind };
   const detail = message.detail ?? {};
   const title = typeof detail.title === 'string' ? detail.title : null;
   const version = typeof detail.version === 'number' ? detail.version : null;
-  const name = authorName(copy, message);
+  const name = authorName(dict, message);
+  // A reply quotes the draft note itself (a note the team keeps to itself never comes back); a line
+  // quotes its own text. No text (only files, a note no longer readable): no quote line (§10.1).
   if (row.kind === 'team_reply') return { kind: row.kind, title, version, name, excerpt: noticeExcerpt(message.replyBody) };
-  if (row.kind === 'team_message' || row.kind === 'mention') {
-    const excerpt = noticeExcerpt(message.body) || (message.files > 0 ? interpolate(copy.email.files, { count: message.files }) : '');
-    return { kind: row.kind, name, excerpt };
-  }
+  if (row.kind === 'team_message') return { kind: row.kind, name, excerpt: noticeExcerpt(message.body) };
+  // A mention's `{name}` is the plain name; its quote line keeps the author label (§10.1).
+  if (row.kind === 'mention') return { kind: row.kind, name, person: personName(dict, message), excerpt: noticeExcerpt(message.body) };
   return { kind: row.kind, title, version, name };
 }
 
@@ -616,32 +708,30 @@ async function pushPhase(deps: RoomNoticePassDeps, now: Date, limit: number, rep
   if (rows.length === 0 || !deps.push) return;
   const facts = await loadFacts(deps.sql, rows);
   const seated = audienceCache(deps.sql);
+  // One push per "now" notice; the team's lines of one recipient × place are one push that counts them.
   const groups = new Map<string, NoticeRow[]>();
   for (const row of rows) {
     const message = row.message_id ? facts.messages.get(row.message_id.toLowerCase()) : undefined;
     if (row.message_id && (!message || message.deleted)) continue;
-    const key = placeKey(row.recipient_id, row.organization_id, channelOf(row.project_id));
+    const place = placeKey(row.recipient_id, row.organization_id, channelOf(row.project_id));
+    const key = BUNDLED.has(row.kind) ? `${place}:replies` : `${place}:${row.id}`;
     groups.set(key, [...(groups.get(key) ?? []), row]);
   }
-  for (const group of groups.values()) {
+  // Same tag per place: the newest event goes last, so it is the one left on the device.
+  const newest = (group: NoticeRow[]) => Math.max(...group.map((row) => toDate(row.created_at).getTime()));
+  for (const group of [...groups.values()].sort((a, b) => newest(a) - newest(b))) {
     const first = group[0]!;
     try {
       if (!(await seated(first.organization_id, first.project_id, first.recipient_id))) continue;
       const locale = facts.recipients.get(first.recipient_id.toLowerCase())?.locale ?? DEFAULT_LOCALE;
-      const organizationId = first.organization_id.toLowerCase();
-      const projectId = first.project_id ? first.project_id.toLowerCase() : null;
-      const name = placeTitle(facts, organizationId, projectId);
-      const lines = group.map((row) => lineOf(row, facts, locale));
-      // One notification per place (the project, or the brand's general channel): a newer one replaces it.
-      const tag = projectId ?? organizationId;
-      const message: PushMessage = {
-        title: projectId ? name : interpolate(getDictionary(locale).roomsNotices.push.generalTitle, { organization: name }),
-        body: noticePushBody(locale, lines, name),
-        url: roomNoticePath(organizationId, projectId),
-        tag,
-        topic: tag.replace(/-/g, ''),
-        lang: locale,
-      };
+      const message = buildRoomNoticePush({
+        locale,
+        organizationId: first.organization_id,
+        projectId: first.project_id,
+        projectTitle: projectTitleOf(facts, first.project_id),
+        lines: group.map((row) => lineOf(row, facts, locale)),
+      });
+      if (!message) continue;
       const fanout = await sendPushToUser({ sql: deps.sql, sender: deps.push, now }, first.recipient_id, message);
       const state = fanout.sent > 0 ? 'sent' : fanout.failed > 0 ? 'failed' : null;
       if (state) await deps.sql.query('update brand_room_notices set push_state = $2 where id = any($1::uuid[])', [group.map((r) => r.id), state]);
@@ -710,10 +800,15 @@ async function mailPhase(deps: RoomNoticePassDeps, now: Date, limit: number, rep
       if (r.last) lastBundle.set(placeKey(String(r.recipient_id), String(r.organization_id), channelOf(r.project_id)), toDate(r.last));
     }
     const seated = audienceCache(tx);
-    // A retried batch keeps its id (the provider's idempotency key); new rows group by recipient × place.
+    // One mail is one kind (§10.1). A retried batch keeps its id (the provider's idempotency key); a new
+    // "now" row is a batch of its own; new bundled rows group by recipient × place.
     const groups = new Map<string, NoticeRow[]>();
     for (const row of rows) {
-      const key = row.batch_id ? `b:${row.batch_id}` : `g:${placeKey(row.recipient_id, row.organization_id, channelOf(row.project_id))}`;
+      const key = row.batch_id
+        ? `b:${row.batch_id}`
+        : row.timing === 'bundle'
+          ? `g:${placeKey(row.recipient_id, row.organization_id, channelOf(row.project_id))}`
+          : `n:${row.id}`;
       groups.set(key, [...(groups.get(key) ?? []), row]);
     }
     const batches: Batch[] = [];
@@ -779,8 +874,7 @@ async function mailPhase(deps: RoomNoticePassDeps, now: Date, limit: number, rep
       recipientId: batch.recipientId,
       organizationId: batch.organizationId,
       projectId: batch.projectId,
-      projectTitle: batch.projectId ? placeTitle(claimed.facts, batch.organizationId, batch.projectId) : '',
-      organizationName: placeTitle(claimed.facts, batch.organizationId, null),
+      projectTitle: projectTitleOf(claimed.facts, batch.projectId),
       lines: [...batch.rows].sort((a, b) => toDate(a.created_at).getTime() - toDate(b.created_at).getTime()).map((row) => lineOf(row, claimed.facts!, recipient.locale)),
       env,
     });

@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { getSqlRunner } from '@/lib/db/connect';
 import { DEFAULT_LOCALE, isLocale, LOCALE_HEADER, type Locale } from '@/lib/i18n/config';
 import { disableRoomEmail } from '@/lib/brand-rooms/notice-prefs';
+import { roomNoticeSettingsPath } from '@/lib/brand-rooms/notice-paths';
 import type { NotifyToggle } from '@/lib/notify/kinds';
 import { disableToggle } from '@/lib/notify/preferences';
 import { renderRoomEmailUnsubscribed, renderUnsubscribed, renderUnsubscribeInvalid } from '@/lib/notify/unsubscribe-page';
@@ -40,7 +41,7 @@ function page(html: string, status: 200 | 400): NextResponse {
 
 type Applied =
   | { ok: false }
-  | { ok: true; scope: 'room'; locale: Locale }
+  | { ok: true; scope: 'room'; locale: Locale; organizationId: string }
   | { ok: true; scope: 'toggle'; locale: Locale; toggle: NotifyToggle };
 
 /** The one write both doors share: check the token, then switch off exactly what it names. */
@@ -57,7 +58,7 @@ async function apply(token: string | null, fallbackLocale: Locale): Promise<Appl
   // only thing it can do is switch that organization's room mail off for that person.
   if (verified.claims.toggle === ROOM_EMAIL_SCOPE) {
     const room = await disableRoomEmail(sql, verified.claims.userId, verified.claims.organizationId).catch(() => ({ ok: false, locale: fallbackLocale }));
-    return room.ok ? { ok: true, scope: 'room', locale: room.locale } : { ok: false };
+    return room.ok ? { ok: true, scope: 'room', locale: room.locale, organizationId: verified.claims.organizationId } : { ok: false };
   }
 
   const result = await disableToggle(sql, verified.claims.userId, verified.claims.toggle);
@@ -76,7 +77,8 @@ export async function GET(request: Request): Promise<NextResponse> {
   const applied = await apply(new URL(request.url).searchParams.get('t'), fallbackLocale);
   if (!applied.ok) return page(renderUnsubscribeInvalid(fallbackLocale), 400);
   if (applied.scope === 'room') {
-    return page(renderRoomEmailUnsubscribed({ locale: applied.locale, messagesUrl: `${brandSiteUrl()}/brand/rooms` }), 200);
+    // Back to the settings in that brand's messages inbox, where room mail can be switched on again.
+    return page(renderRoomEmailUnsubscribed({ locale: applied.locale, settingsUrl: `${brandSiteUrl()}${roomNoticeSettingsPath(applied.organizationId)}` }), 200);
   }
   return page(renderUnsubscribed({ locale: applied.locale, toggle: applied.toggle }), 200);
 }

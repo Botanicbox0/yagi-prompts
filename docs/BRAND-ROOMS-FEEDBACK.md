@@ -96,10 +96,10 @@ create index on brand_room_notices (state, due_at) where state = 'pending';
 - `project_id`는 null을 허용한다(조직의 일반 대화). 묶는 단위는 받는 사람 × 장소(조직 + 프로젝트 또는 일반 대화)다.
 - 열 추가: `lease_until`(보내는 중 잠금 10분), `push_state`·`pushed_at`(푸시는 메일보다 먼저, 한 번만).
 - 건너뛴 사유 추가: `no_access`(그사이 구성원에서 빠짐), `no_email`, `deleted`(원래 글이 지워짐), `rule`. 30분 상한에 걸린 행은 건너뛰지 않고 `due_at`만 뒤로 민다.
-- "바로" 메일이 나갈 때 같은 사람·장소의 기한이 된 묶음 글도 함께 싣는다.
+- ~~"바로" 메일이 나갈 때 같은 사람·장소의 기한이 된 묶음 글도 함께 싣는다.~~ N4에서 없앴다(§10.1: 메일 한 통은 알림 한 종류).
 - 버튼 주소: 프로젝트는 `/brand/rooms/{projectId}?organizationId=…`, 일반 대화는 `/brand/rooms?organizationId=…&channel=general`. 여러 브랜드에 속한 사람이 다른 브랜드로 열리지 않게 조직을 붙인다.
 - 수신 거부 주소는 twings.app 쪽에 있다(브랜드 호스트는 `/api/notify/unsubscribe`를 막는다). 메일 앱의 원클릭 수신 거부(POST)도 받는다. 이전에는 GET만 받아서, 메일에 붙어 나가던 원클릭 헤더가 동작하지 않았다.
-- 사전(`messages/rooms-notices.ts`)의 문구는 임시 문구다. §9 초안과 모양이 다르다(제목 하나 + 일어난 일 줄 목록). 대표 확정본을 이 모양에 맞춰 N4에서 넣는다.
+- ~~사전(`messages/rooms-notices.ts`)의 문구는 임시 문구다.~~ N4에서 §10 확정본으로 바꿨다(종류별 제목·첫 줄·본문·버튼·푸시).
 
 확인(2026-11-18, 로컬 두 역할, 가짜 메일러): 플래그가 꺼져 있으면 0행이고 tick은 `ran:false`. 켜면 새 시안 메일은 응답 직후 나가고(행이 `sent`), 팀 대화는 10분 뒤로 잡힌다. 고객이 대화를 읽으면 `skipped/read`, 읽지 않은 일반 대화는 묶음 메일 한 통. 수신 거부는 GET·POST 모두 설정을 끄고, 그 뒤 글은 `skipped/muted`. tick은 bearer가 틀리면 401, `CRON_SECRET`이 없으면 503. 푸시 발송과 실제 메일 헤더, 30분 상한·재시도·멘션·스토리보드·답글·의뢰 접수 메일은 단위 테스트로만 확인했다.
 
@@ -202,12 +202,34 @@ alter table brand_studio_review_comments
 
 순서: N1과 N2를 함께 → N3 → N4. N1과 N2는 건드리는 파일이 다르다. N3는 N1의 "팀만 보기"를 화면에 쓰고 `messages.ts`를 N2 뒤에 고친다. N4의 문안은 대표 확정본으로 넣는다.
 
+**N4 구현**(2026-11-18, 브랜치 `claude/rooms-notice-settings`, 마이그레이션 없음, 플래그 off면 운영 화면 그대로). 위 설계와 달라진 것:
+
+- 메일·푸시는 §10.1 모양이다. "바로" 알림은 한 건이 한 통이고 묶음 id도 따로다. 묶음 메일은 받는 사람 × 장소마다 한 통, `{count}`는 실린 글 수, 인용 줄은 글 있는 것만 최대 5줄이다. 푸시도 "바로" 알림은 한 건씩, 팀 대화·답글은 그 회차 건수를 센 한 건이다. 같은 장소 푸시는 태그가 같아 마지막 것만 남으므로 오래된 것부터 보낸다.
+- 설정은 알림함 목록 맨 아래 "알림 설정" 칸(`#notice-settings`)이다. 이메일은 `/api/brand-rooms/notice-prefs`(GET·POST)로 저장한다. 푸시는 `/api/notify/push`를 브랜드 호스트에 여는 대신 `/api/brand-rooms/notice-push`(POST·DELETE, 같은 저장 함수)를 새로 뒀다. 플래그가 꺼지면 404여야 하고, 좌석을 확인해 모픽·샌드박스를 404로 막아야 해서다. `/api/notify/push`는 브랜드 호스트에서 계속 닫혀 있다.
+- 브라우저 쪽 구독 흐름은 개인 화면의 "완성되면 알려드릴까요?"와 같은 코드를 쓴다(`components/notify/push-client.ts`로 옮겼고, 개인 화면 동작은 그대로).
+- 브랜드 호스트에서 `/sw.js`와 알림 아이콘 두 개(`/icons/icon-192.png`, `/icons/badge-96.png`)만 열었다(GET). `(brand)` 레이아웃은 알림이 켜져 있고 룸이 열린 사람에게만 서비스 워커를 등록한다.
+- 푸시 구독은 브라우저 × 출처마다 하나다. twings.app 구독과 brand.twings.app 구독이 따로 있고 둘 다 그 사람의 모든 푸시를 받는다(`sendPushToUser`). 그래서 `public/sw.js`는 운영 호스트에서 브랜드 경로를 brand.twings.app에서, 그 밖의 경로를 twings.app에서 연다. 로컬·프리뷰는 그대로이고, twings.app에서 받은 렌더 푸시는 전과 같다.
+- 수신 거부 뒤 페이지는 §10의 제목·문장과 링크 하나(그 브랜드 알림함의 설정 칸)만 둔다. 홈 링크는 뺐다. 다른 범위의 수신 거부 페이지는 바이트까지 그대로다.
+- 브랜드 호스트는 설치형 앱이 아니어서 iPhone 사파리 탭에서는 "이 브라우저는 알림을 지원하지 않아요."가 보인다. 푸시 키가 없는 배포에서는 푸시 줄을 보이지 않는다. 멘션의 `{name}`은 그 사람의 이름 그대로다(야기 팀원도 "지수님이 불렀어요", 이름이 없는 팀원은 "야기 팀"). 멘션 아래 인용 줄은 §10.1 표기("야기 팀 · 이름")를 따른다.
+
+확인(2026-11-18): `npx tsc --noEmit` 통과. `npx vitest run tests/brand-rooms tests/notify tests/i18n tests/routes tests/brands tests/db tests/account tests/pwa tests/design --maxWorkers=8` 194개 파일, 1,833개 테스트 통과. 리뷰 반영(영어 단수형, 멘션 이름) 뒤 `tsc` 통과, `npx vitest run tests/brand-rooms tests/notify tests/i18n tests/routes tests/pwa --maxWorkers=8` 102개 파일, 945개 테스트 통과. 확정 문안은 §10 표를 손으로 옮긴 문자열과 대조한다(`tests/brand-rooms/notices/wording.test.ts`, 문구 하나를 바꾸면 실패하는 것까지 확인).
+
+리뷰의 브라우저 확인(전체 루프, 빌드, 스윕, 메일 8통 §10 대조, CSP 아래 서비스 워커 등록) 뒤 고친 것:
+
+- 390px에서 떠 있는 문의 버튼이 푸시 스위치 모서리를 덮었다. 한 열이 되는 899px 이하에서 알림함 목록 끝에 버튼 자리(88px + 안전 영역, 워크스페이스 화면이 폰에서 버튼 아래 두는 여백과 같다)를 둔다. 버튼은 옮기거나 바꾸지 않았다.
+- 알림이 켜져 있으면 알림함을 열 때마다 React key 경고가 났다. 서버 페이지가 만든 설정 요소를 클라이언트 목록에 넣으면 지연 참조로 도착해 정적 자식으로 표시되지 않기 때문이다. 페이지는 이제 데이터(문구, 메일 스위치 값, 공개 키)만 넘기고 알림함이 설정 칸을 직접 그린다.
+- 서버가 구독 저장을 거절하면(2xx 아님) 브라우저 구독이 남아 새로고침 뒤 스위치가 켜져 보였다. 공용 흐름(`components/notify/push-client.ts`)이 그때 브라우저 구독도 되돌린다(최선 노력). 응답을 못 받은 경우는 그대로 두어 다음 방문 때 다시 보낸다. 개인 화면의 다른 동작은 그대로다.
+- 수신 거부 뒤 페이지(룸 범위)의 제목과 문장에 `word-break: keep-all`(`overflow-wrap: anywhere`로 보완). 다른 범위 페이지는 바이트 그대로다.
+- 서비스 워커는 로그인한 사람의 워크스페이스에서만 등록한다. 별도 레이아웃은 없고 `(brand)` 레이아웃의 로그인 분기(`scope`, 문의 버튼과 같은 조건)를 쓴다.
+
+고친 뒤 `npx tsc --noEmit` 통과, `npx vitest run tests/brand-rooms tests/notify tests/i18n tests/routes tests/pwa tests/account --maxWorkers=8` 106개 파일, 1,014개 테스트 통과. 빌드·스윕과 고친 화면의 브라우저 확인은 다시 하지 않았다(§7).
+
 각 조각의 완료 기준은 AGENTS.md §3 검증 루프 전부와, 로컬에서 두 역할(고객·팀)로 실제 화면 확인이다. 메일은 로컬 가짜 메일러(`PLAYBOOK_FAKE_MAILER=1`)로 보낸 내용을 확인한다. 형식 검증(§11)은 하지 않는다: 결제·렌더·크레딧·정산·동의 상태에 닿지 않는다.
 
 ## 7. 확인하지 못한 것
 
 - 운영에서 `BRAND_ROOMS`와 Slack 알림이 켜져 있는지(값은 코드로 알 수 없다).
-- 브랜드 호스트(brand.twings.app)에서 서비스 워커와 푸시 구독이 실제로 되는지. 푸시 구독은 출처별이라 twings.app에서 한 구독과 별개다. N4에서 로컬과 프리뷰로 확인한다.
+- N4 리뷰의 로컬 브라우저 확인(2026-11-18, 증거는 커밋하지 않는 `.bench-evidence/notice-settings/`): 서비스 워커는 워크스페이스 CSP(`script-src 'nonce-…' 'strict-dynamic'`, `worker-src` 없음)에서 위반 없이 등록됐다. 크롬 한 가지로만 봤고, 사파리·파이어폭스와 실제 푸시 서비스로 간 알림, brand.twings.app 운영 호스트는 아직이다. 그 확인에서 나온 다섯 가지는 고쳤고(§6 N4), 고친 뒤 화면은 다시 브라우저로 본다: 390px에서 문의 버튼과 푸시 스위치가 겹치지 않는지(700–899px 포함), 콘솔의 key 경고가 사라졌는지, 서버가 구독 저장을 거절하면 새로고침 뒤 스위치가 꺼져 있는지(개인 화면 포함), 수신 거부 뒤 페이지가 낱말 중간에서 줄바꿈하지 않는지, 로그아웃 상태의 `/brand/invite`에 서비스 워커가 등록되지 않는지.
 - 운영 메일 발신 주소로 브랜드 고객에게 보낸 메일이 스팸함에 가지 않는지. 켜기 전에 대표 계정으로 한 통 보내 확인한다.
 - 이 설계는 코드만 읽고 썼다. 운영 화면을 고객·팀으로 열어 보지 않았다.
 
@@ -255,3 +277,49 @@ Footer: "This is a project notification. You can manage your notification settin
 3. **"정상적으로", "성공적으로"**: 뜻을 더하지 않는 낱말이다. 윤문 뒤에도 남았다.
 4. **멘션 본문의 "호출했습니다"**: 제품 화면의 낱말은 "부르다"(예: "팀 전체에 알려요")이다. 제목은 "불렀어요"로 맞는데 본문만 다르다.
 
+
+## 10. 확정 문안과 메일 모양 (2026-11-18 대표 확정)
+
+대표가 §9 초안을 보고 "이대로 진행하자"고 했다(2026-11-18). §2.1의 발송 대상과 §8-3의 간격(10분, 30분)도 제안값대로 간다. 걸린 네 곳은 함께 올린 권고대로 처리했다: 응답 약속 문장과 재촉 문장을 빼고, "정상적으로"·"성공적으로"를 빼고, 멘션 낱말을 "부르다"로 맞췄다. 접수 메일에 기한 약속은 넣지 않는다. 뺀 문장을 되살리거나 약속을 넣는 것은 대표가 다시 정한다.
+
+초안에 없던 문구(멘션 본문, 수신 거부 링크, 알림 설정, 수신 거부 뒤 페이지)는 같은 날 Gemma 4 2패스로 뽑아 원문과 대조했다. 발송은 여전히 `BRAND_ROOM_NOTIFY`가 켜져야 시작된다.
+
+### 10.1 메일 모양
+
+- 메일 한 통은 알림 한 종류다. "바로" 알림(새 시안, 스토리보드, 멘션, 의뢰 접수)은 한 건이 한 통이다. N2의 "바로 메일에 묶음 글도 함께 싣기"는 없앤다.
+- 묶음 메일(야기 팀 대화·의견 답글)은 받는 사람 × 장소마다 한 통이고 `{count}`는 실린 글의 수다. 본문 아래에 글마다 "쓴 사람: 앞 120자"를 최대 5줄 싣는다. 글이 없는 줄(파일만 보낸 메시지 등)은 싣지 않는다. "외 N건" 줄은 없다.
+- 멘션 메일도 본문 아래에 그 글의 "쓴 사람: 앞 120자"를 한 줄 싣는다.
+- 쓴 사람 표기: 야기 팀은 "야기 팀 · 이름"(이름이 없으면 "야기 팀"), 고객은 이름.
+- 조직의 일반 대화에서 온 알림은 `{project}` 자리에 그 채널의 제품 이름(`roomsChat`의 `general`: "일반 문의" / "General")을 넣고, 버튼은 알림함의 일반 대화로 간다.
+- 맨 아래: 확정 문장 + 수신 거부 링크, 그리고 회사 줄.
+- 푸시: 종류별 확정 문구. 대화·답글 푸시는 묶음 문구에 그 회차의 건수를 넣는다(한 건이면 1).
+
+### 10.2 한국어
+
+| 알림 | 메일 제목 | 첫 줄 | 본문 | 버튼 | 푸시 제목 | 푸시 내용 |
+| --- | --- | --- | --- | --- | --- | --- |
+| 새 시안 | [{project}] {title} 새 시안이 도착했어요 | {title}의 새 버전이 올라왔습니다. | 야기 팀이 {version}번째 시안을 준비했어요. 확인하고 의견을 남겨주세요. | 시안 확인하기 | 새 시안 도착 | [{project}] {title}의 {version}번째 시안을 확인해 보세요. |
+| 스토리보드 | [{project}] 스토리보드가 공유되었습니다 | {title} 스토리보드를 확인해 보세요. | 야기 팀이 작업 방향을 담은 스토리보드를 올렸습니다. 내용을 검토해 주세요. | 스토리보드 보기 | 스토리보드 공유 | [{project}] {title}의 스토리보드가 도착했습니다. |
+| 묶음(대화·답글) | [{project}] 읽지 않은 메시지가 {count}건 있어요 | 야기 팀의 메시지를 확인해 주세요. | 아직 확인하지 않은 의견과 답글이 {count}건 있습니다. | 메시지 확인하기 | 새 메시지 {count}건 | [{project}] 야기 팀이 보낸 메시지가 {count}건 있습니다. |
+| 멘션 | [{project}] {name}님이 불렀어요 | {name}님이 불렀어요 | {name}님이 프로젝트 대화에서 불렀어요. 내용을 확인해 주세요. | 대화 바로가기 | 나를 불렀어요 | [{project}] {name}님이 불렀어요 |
+| 의뢰 접수 | [{project}] 의뢰가 접수되었습니다 | 요청하신 내용이 잘 전달되었습니다. | 야기 팀이 보내주신 의뢰 내용을 확인하고 있습니다. | 내 의뢰 확인하기 | (푸시 없음) | (푸시 없음) |
+
+- 맨 아래 문장: "이 메일은 프로젝트 진행 알림이며, 알림 설정에서 수신 여부를 변경할 수 있습니다." 링크 글자: "수신 거부"
+- 알림 설정(알림함): 제목 "알림 설정" · "이메일 알림" — "새 시안, 스토리보드, 메시지, 멘션 알림을 메일로 보내드려요." · "푸시 알림" — "현재 사용 중인 브라우저에서 알림을 보내드려요." · 차단됨 "브라우저 설정에서 알림을 허용해 주세요." · 미지원 "이 브라우저는 알림을 지원하지 않아요." · "저장됐어요" · "저장하지 못했어요. 다시 시도해 주세요."
+- 수신 거부 뒤 페이지: "메일 수신을 거부했습니다" · "이제 이 브랜드의 프로젝트 메일은 발송되지 않아요. 다시 받으려면 알림 설정에서 켤 수 있어요." · 링크 "알림 설정으로 가기"
+
+### 10.3 영어
+
+| 알림 | Subject | Heading | Body | Button | Push title | Push body |
+| --- | --- | --- | --- | --- | --- | --- |
+| new_version | New version of {title} for {project} | A new version of {title} is ready. | The YAGI team has uploaded version {version}. Please review it and share your feedback. | Review Draft | New Draft Ready | Check out version {version} of {title} in {project}. |
+| storyboard | Storyboard shared for {project} | Your storyboard for {title} is ready. | The YAGI team has shared the storyboard outlining the project direction. Please take a look. | View Storyboard | Storyboard Shared | The storyboard for {title} in {project} is now available. |
+| replies | {count} unread messages in {project} | You have new messages from the YAGI team. | There are {count} unread replies and messages. | View Messages | {count} New Messages | You have {count} new messages from the YAGI team in {project}. |
+| mention | {name} mentioned you in {project} | {name} mentioned you | {name} mentioned you in the project conversation. Please check the message. | Go to Chat | You were mentioned | [{project}] {name} mentioned you |
+| intake_received | Request received for {project} | Your request has been submitted. | The YAGI team is reviewing your requirements. | View Request | (none) | (none) |
+
+count = 1 uses the singular form: "1 unread message in {project}" · "There is 1 unread reply or message." · "1 New Message" · "You have 1 new message from the YAGI team in {project}." (한국어는 한 가지 문장 그대로)
+
+- Footer: "This is a project notification. You can manage your notification settings in the workspace." Link: "Unsubscribe"
+- Settings: "Notification settings" · "Email notifications" — "Get emails for new drafts, storyboards, messages, and mentions." · "Push notifications" — "Get notifications on your current browser." · blocked "Please allow notifications in your browser settings." · unsupported "This browser does not support notifications." · "Saved" · "Failed to save. Please try again."
+- After unsubscribing: "Email notifications turned off" · "You will no longer receive project emails from this brand. You can turn them back on in notification settings." · link "Go to notification settings"

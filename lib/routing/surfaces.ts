@@ -264,6 +264,12 @@ export function brandRouteAllowed(pathname: string, method: string): boolean {
   if (pathname === '/api/brand-rooms/reviews') return read || method === 'POST';
   if (pathname === '/api/brand-rooms/shares') return read || method === 'POST';
   if (pathname === '/api/brand-rooms/shares/public') return method === 'POST';
+  // Room notice settings in the inbox (docs/BRAND-ROOMS-FEEDBACK.md §10): the mail switch, and this
+  // browser's push. Both answer 404 while BRAND_ROOM_NOTIFY is off. `/api/notify/push` stays closed here.
+  if (pathname === '/api/brand-rooms/notice-prefs') return read || method === 'POST';
+  if (pathname === '/api/brand-rooms/notice-push') return method === 'POST' || method === 'DELETE';
+  // The service worker that shows those pushes, and the two icons its notifications carry. Exact files.
+  if (pathname === '/sw.js' || pathname === '/icons/icon-192.png' || pathname === '/icons/badge-96.png') return read;
   if (isSharePath(pathname)) return read;
   return read && !pathname.startsWith('/api/') && !isAdminPath(pathname) && adminRouteAllowed(pathname, method);
 }

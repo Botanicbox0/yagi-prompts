@@ -335,6 +335,141 @@ body:has([data-room-channel]) [data-concierge-launcher] {
   }
 }
 
+/* ------------------------------------------------------------ notice settings (bottom of the inbox list) */
+
+/* Pushed to the bottom of the list while the list is short; right after it, past a hairline, when long. */
+.brc-notice-settings {
+  flex-shrink: 0;
+  margin: auto 4px 0;
+  padding: 14px 2px 2px;
+  border-top: 1px solid var(--brc-line-strong);
+  scroll-margin: 12px;
+}
+.brc-notice-title {
+  margin: 0 0 4px;
+  padding: 0 4px;
+  color: var(--brc-muted);
+  font-size: 11px;
+  font-weight: 600;
+}
+.brc-notice-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 8px;
+  min-height: 44px;
+  padding: 4px 0 4px 4px;
+}
+.brc-notice-text {
+  min-width: 0;
+}
+.brc-notice-label {
+  display: block;
+  color: var(--brc-ink);
+  font-size: 13.5px;
+  font-weight: 560;
+  line-height: 1.35;
+  cursor: pointer;
+  word-break: keep-all;
+  overflow-wrap: break-word;
+}
+.brc-notice-help {
+  margin: 2px 0 0;
+  color: var(--brc-muted);
+  font-size: 12px;
+  line-height: 1.45;
+  word-break: keep-all;
+  overflow-wrap: break-word;
+}
+.brc-notice-help[data-tone='note'] {
+  color: var(--brc-body);
+}
+/* A 44 px target around a 36 × 20 track; the focus ring sits on the track. */
+.brc-switch {
+  display: inline-grid;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+.brc-switch-track {
+  position: relative;
+  width: 36px;
+  height: 20px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--brc-ink) 20%, var(--brc-surface));
+  transition: background-color var(--brc-dur) var(--brc-ease), opacity var(--brc-dur) var(--brc-ease);
+}
+.brc-switch-track::after {
+  content: '';
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: var(--brc-surface);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.18), 0 0 0 0.5px rgba(0, 0, 0, 0.06);
+  transition: transform var(--brc-dur) var(--brc-ease);
+}
+.brc-switch[aria-checked='true'] .brc-switch-track {
+  background: var(--brc-accent);
+}
+.brc-switch[aria-checked='true'] .brc-switch-track::after {
+  transform: translateX(16px);
+}
+.brc-switch[aria-disabled='true'] {
+  cursor: default;
+}
+.brc-switch[aria-disabled='true'] .brc-switch-track {
+  opacity: 0.45;
+}
+.brc-switch[aria-busy='true'] .brc-switch-track {
+  opacity: 0.7;
+}
+.brc-inbox .brc-switch:focus-visible {
+  outline: none;
+}
+.brc-inbox .brc-switch:focus-visible .brc-switch-track {
+  outline: 2px solid var(--brc-accent);
+  outline-offset: 2px;
+}
+.brc-notice-status {
+  min-height: 18px;
+  margin: 2px 4px 0;
+  color: var(--brc-muted);
+  font-size: 12px;
+  line-height: 1.5;
+}
+.brc-notice-status[data-tone='error'] {
+  color: var(--brc-ink);
+  font-weight: 600;
+}
+@media (prefers-reduced-motion: reduce) {
+  .brc-switch-track,
+  .brc-switch-track::after {
+    transition: none;
+  }
+}
+/*
+ * Below 900px the list is one full-width column and the floating enquiry button (`.bw-support-launch`,
+ * 44–48px tall, 16–24px off the screen's edge or above the phone's tab bar) sits over its bottom right
+ * corner, where the switches end. The list ends with room for it, the same clearance the workspace's own
+ * pages keep under it on a phone (`.bw-main` padding-bottom 88px), so scrolled to the end nothing in the
+ * list is under the button. Wider, the list is the left column and the button sits over the other one.
+ */
+@media (max-width: 899px) {
+  .brc-inbox-list {
+    padding-bottom: calc(88px + env(safe-area-inset-bottom, 0px));
+  }
+}
+
 /* ------------------------------------------------------------ channel */
 
 .brc-channel {

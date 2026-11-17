@@ -6,7 +6,8 @@
  * and a chosen conversation takes the screen, with a way back.
  *
  * The list reads `/api/brand-rooms/summary` again every 20 s while the tab is on screen and whenever a
- * conversation announces a read or a send (ROOM_ACTIVITY).
+ * conversation announces a read or a send (ROOM_ACTIVITY). The notice settings sit at the bottom of the
+ * list when room notices are on (`settings`, docs/BRAND-ROOMS-FEEDBACK.md §10).
  */
 import "./chat.css";
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
@@ -16,6 +17,7 @@ import type { RoomsChatCopy } from "@/messages/rooms-chat";
 import { ROOM_ACTIVITY, type RoomSummary } from "../seams";
 import { ChannelView } from "./channel-view";
 import { listStamp } from "./format";
+import { RoomNoticeSettings, type RoomNoticeSettingsData } from "./notice-settings";
 import { brandTransport } from "./transport";
 
 type Locale = "ko" | "en";
@@ -61,6 +63,7 @@ export function RoomInbox({
   initial,
   selected: selectedFromUrl,
   canTalk,
+  settings,
 }: {
   organizationId: string;
   locale: Locale;
@@ -68,6 +71,12 @@ export function RoomInbox({
   initial: RoomSummary;
   selected: string | null;
   canTalk: boolean;
+  /**
+   * What the notice settings (./notice-settings.tsx) at the bottom of the list start from, when the page
+   * shows them. Data, not an element: an element made by the server page and dropped into this list
+   * arrives as a lazy reference React cannot mark as a static child, and every load logged a key warning.
+   */
+  settings?: RoomNoticeSettingsData | null;
 }) {
   const [summary, setSummary] = useState(initial);
   const [selected, setSelected] = useState<string | null>(selectedFromUrl);
@@ -299,6 +308,7 @@ export function RoomInbox({
           </ul>
         ) : null}
         {showConversations && projectChannels.length === 0 && <p className="brc-inbox-empty">{copy.inbox.empty}</p>}
+        {settings ? <RoomNoticeSettings organizationId={organizationId} copy={settings.copy} emailEnabled={settings.emailEnabled} publicKey={settings.publicKey} /> : null}
       </nav>
       <div className="brc-inbox-pane">
         {selected ? (
