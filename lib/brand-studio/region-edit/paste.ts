@@ -276,7 +276,7 @@ export function computeChangeMask(input: {
     for (let i = 0; i < n; i += 1) {
       const d = Math.abs(diff[i]!);
       if (d > maxD[i]!) maxD[i] = d;
-      sumD[i] += d;
+      sumD[i] = sumD[i]! + d;
     }
   }
   const core = new Uint8Array(n);
@@ -298,8 +298,8 @@ export function computeChangeMask(input: {
       const i = zy * zw + zx;
       if (!core[i]) continue;
       const l = labels[i]!;
-      total[l] += 1;
-      if (rowIn && zx >= sel.left && zx < sel.left + sel.width) inBox[l] += 1;
+      total[l] = total[l]! + 1;
+      if (rowIn && zx >= sel.left && zx < sel.left + sel.width) inBox[l] = inBox[l]! + 1;
     }
   }
   const coreKept = new Uint8Array(n);
