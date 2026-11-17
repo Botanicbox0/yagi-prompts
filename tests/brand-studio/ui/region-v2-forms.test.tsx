@@ -55,7 +55,7 @@ function panel(region: Partial<LayerEditorRegionSupport>, preset?: { model?: str
     copy: layersCopy,
     html: renderToStaticMarkup(
       <RegionEditPanel copy={layersCopy} locale="ko" baseSize={{ width: 1200, height: 1500 }} baseImgRef={createRef()} region={base}
-        box={{ x: 0.2, y: 0.25, w: 0.35, h: 0.3 }} autoFlatten={false} quickItems={[]} uploading={false} onBox={noop} onAutoFlatten={noop}
+        box={{ x: 0.2, y: 0.25, w: 0.35, h: 0.3 }} quickItems={[]} uploading={false} onBox={noop}
         resolveRef={() => null} onUploadRefs={async () => []} onSubmitted={noop}
         {...(preset ? { preset: { box: null, instruction: "", ...preset } } : {})} />,
     ),

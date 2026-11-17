@@ -439,6 +439,18 @@ export function topVisibleImageLayerId(doc: LayerDoc): string | null {
   return null;
 }
 
+/**
+ * The layer an eraser or restore stroke works on: the selected picture layer when it is visible (a locked
+ * one is returned so the stage can say so), otherwise the topmost visible unlocked one. Always read from
+ * the real document, never from a display copy (region-result.ts `stageDocFor`).
+ */
+export function brushTarget(doc: LayerDoc, selectedId: string | null): ImageLayer | null {
+  const selected = findLayer(doc, selectedId);
+  if (selected?.kind === "image" && !selected.hidden) return selected;
+  const fallback = findLayer(doc, topVisibleImageLayerId(doc));
+  return fallback?.kind === "image" ? fallback : null;
+}
+
 export function canMergeDown(doc: LayerDoc, id: string): boolean {
   const index = doc.layers.findIndex((l) => l.id === id);
   if (index < 0) return false;
