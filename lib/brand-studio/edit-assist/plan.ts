@@ -337,59 +337,119 @@ export const EditPlanSchema: z.ZodType<EditPlan> = z.discriminatedUnion('kind', 
 /* ------------------------------------------------------- model answers */
 
 /**
- * The model's JSON schema (the dialect `callGeminiJson` sends as `responseJsonSchema`): one flat step
- * object with every field optional. Unions (`to`, `where`) stay open here and the system instruction
- * spells out their shapes; `EditPlanSchema` above does the real validation.
+ * The wire shape: what the model writes. Every step is ONE flat object of plain fields, so the response
+ * schema needs no union. Three steps differ from `EditStep`, each in the field the union used to be:
+ * - `move`: `place` "first" | "last" | "before" | "after", plus `anchor` (a cut ref) for before / after;
+ * - `sound`: `target` "clip" | "all_clips" | "music", plus `clip` (a cut ref) for "clip";
+ * - `caption_add`: `where` "start" | "end" | "whole" | "clip" | "range", plus `clip` for "clip" and
+ *   `from` / `to` (video seconds) for "range".
+ * So `clip` always names a cut and `from` / `to` are always a span of seconds. `editPlanFromWire`
+ * rewrites those three into `EditStep`; every other field is already the internal one.
  */
+export const MOVE_PLACES = ['first', 'last', 'before', 'after'] as const;
+export const SOUND_TARGETS = ['clip', 'all_clips', 'music'] as const;
+export const CAPTION_WHERE_MODES = ['start', 'end', 'whole', 'clip', 'range'] as const;
+
+/**
+ * The model's JSON schema (sent as `responseJsonSchema` by `callGeminiJson`) for the wire shape. Kept
+ * small on purpose: the API compiles it into a decoding constraint and refuses one with "too many
+ * states" (HTTP 400). Measured on gemini-4-hydrogen 2026-11-18: `minItems: 1, maxItems: 12` on the step
+ * array alone was enough to be refused (the decoder unrolls up to 12 copies of a ~21-field object);
+ * the same schema without array bounds was accepted. So: no array bounds, no numeric bounds, no
+ * patterns, no unions, no open `{}` fields; enums only where the values are a few short words. Limits
+ * (1–12 steps, 2–4 choices, ranges, refs, presets) live in the system instruction and in
+ * `EditPlanSchema`, which stays the real validator. `plan.test.ts` holds the shape rules and a size budget.
+ *
+ * Key order matters: the API makes the model write an object's keys in schema order and never go back.
+ * With `text` before `where` and `clip`, a caption "on cut c3" could not name the cut any more (live
+ * answers put "c3" in `caption` and padded with `secondsPerClip: 0`). So the step keys run in the order
+ * every step reads naturally — what kind, where / which target, which cut or caption, how it moves, how
+ * much, the words, the style, the sound, the rest — and every step example in `EDIT_ASSIST_SYSTEM` lists
+ * its keys in this same order (`STEP_KEY_ORDER`; `plan.test.ts` checks the examples against it).
+ */
+export const STEP_KEY_ORDER = [
+  'do',
+  'where',
+  'target',
+  'clip',
+  'caption',
+  'place',
+  'anchor',
+  'keep',
+  'seconds',
+  'from',
+  'to',
+  'at',
+  'text',
+  'position',
+  'size',
+  'volume',
+  'muted',
+  'remove',
+  'aspect',
+  'preset',
+  'strength',
+  'protect',
+  'secondsPerClip',
+] as const;
+
+const STEP_KEY_SCHEMAS: Record<(typeof STEP_KEY_ORDER)[number], Record<string, unknown>> = {
+  do: { type: 'string', enum: [...EDIT_STEP_KINDS] },
+  where: { type: 'string', enum: [...CAPTION_WHERE_MODES] },
+  target: { type: 'string', enum: [...SOUND_TARGETS] },
+  clip: { type: 'string' },
+  caption: { type: 'string' },
+  place: { type: 'string', enum: [...MOVE_PLACES] },
+  anchor: { type: 'string' },
+  keep: { type: 'string', enum: [...KEEP_PARTS] },
+  seconds: { type: 'number' },
+  from: { type: 'number' },
+  to: { type: 'number' },
+  at: { type: 'number' },
+  text: { type: 'string' },
+  position: { type: 'string', enum: [...CAPTION_POSITIONS] },
+  size: { type: 'string', enum: [...CAPTION_SIZES] },
+  volume: { type: 'number' },
+  muted: { type: 'boolean' },
+  remove: { type: 'boolean' },
+  aspect: { type: 'string', enum: [...COMPOSE_ASPECTS] },
+  preset: { type: 'string' },
+  strength: { type: 'number' },
+  protect: { type: 'array', items: { type: 'string' } },
+  secondsPerClip: { type: 'number' },
+};
+
 export const EDIT_PLAN_MODEL_SCHEMA: Record<string, unknown> = {
   type: 'object',
   properties: {
     kind: { type: 'string', enum: ['plan', 'ask', 'cannot'] },
     steps: {
       type: 'array',
-      minItems: 1,
-      maxItems: EDIT_PLAN_MAX_STEPS,
       items: {
         type: 'object',
-        properties: {
-          do: { type: 'string', enum: [...EDIT_STEP_KINDS] },
-          clip: { type: 'string' },
-          keep: { type: 'string', enum: [...KEEP_PARTS] },
-          seconds: { type: 'number' },
-          from: { type: 'number' },
-          to: {},
-          at: { type: 'number' },
-          target: { type: 'string' },
-          volume: { type: 'number' },
-          muted: { type: 'boolean' },
-          remove: { type: 'boolean' },
-          text: { type: 'string' },
-          where: {},
-          position: { type: 'string', enum: [...CAPTION_POSITIONS] },
-          size: { type: 'string', enum: [...CAPTION_SIZES] },
-          caption: { type: 'string' },
-          aspect: { type: 'string', enum: [...COMPOSE_ASPECTS] },
-          preset: { type: 'string', enum: ['off', ...COMPOSE_COLOR_PRESET_IDS] },
-          strength: { type: 'number' },
-          protect: { type: 'array', items: { type: 'string' } },
-          secondsPerClip: { type: 'number' },
-        },
+        properties: Object.fromEntries(STEP_KEY_ORDER.map((key) => [key, STEP_KEY_SCHEMAS[key]])),
         required: ['do'],
       },
     },
     about: { type: 'string', enum: [...ASK_ABOUT] },
-    choices: { type: 'array', minItems: 2, maxItems: 4, items: { type: 'string' } },
+    choices: { type: 'array', items: { type: 'string' } },
     reason: { type: 'string', enum: [...CANNOT_REASONS] },
   },
   required: ['kind'],
 };
 
-function withoutNulls(value: unknown): unknown {
-  if (Array.isArray(value)) return value.map(withoutNulls);
-  if (value === null || typeof value !== 'object') return value;
-  const out: Record<string, unknown> = {};
+type Loose = Record<string, unknown>;
+
+const isRecord = (value: unknown): value is Loose => !!value && typeof value === 'object' && !Array.isArray(value);
+
+/** `null` and `[]` carry nothing: dropped at every depth. */
+function withoutEmpty(value: unknown): unknown {
+  if (Array.isArray(value)) return value.map(withoutEmpty);
+  if (!isRecord(value)) return value;
+  const out: Loose = {};
   for (const [key, inner] of Object.entries(value)) {
-    if (inner !== null) out[key] = withoutNulls(inner);
+    if (inner === null || (Array.isArray(inner) && inner.length === 0)) continue;
+    out[key] = withoutEmpty(inner);
   }
   return out;
 }
@@ -399,13 +459,7 @@ function withoutNulls(value: unknown): unknown {
  * Those carry nothing, so they are dropped before validation; any other unknown key still fails.
  */
 function tidyModelReply(raw: unknown): unknown {
-  const tidy = withoutNulls(raw);
-  if (!tidy || typeof tidy !== 'object' || Array.isArray(tidy)) return tidy;
-  const reply = { ...(tidy as Record<string, unknown>) };
-  for (const key of ['steps', 'choices'] as const) {
-    if (Array.isArray(reply[key]) && (reply[key] as unknown[]).length === 0) delete reply[key];
-  }
-  return reply;
+  return withoutEmpty(raw);
 }
 
 /** Short machine descriptions of what failed, for the one corrective model call (never shown). */
@@ -416,8 +470,105 @@ function schemaProblems(error: z.ZodError): string[] {
   });
 }
 
+const isClipRef = (value: unknown): value is string =>
+  typeof value === 'string' && (CLIP_REF_PATTERN.test(value) || SPLIT_PIECE_REF_PATTERN.test(value));
+
+/**
+ * One wire step → its `EditStep` shape. Only the wire-only fields of `move`, `sound` and `caption_add`
+ * are rewritten; anything else (including a stray field on the wrong kind) is passed on unchanged for
+ * `EditPlanSchema` to refuse. A step already in the internal shape passes unchanged too.
+ */
+function stepFromWire(step: unknown, index: number, problems: string[]): unknown {
+  if (!isRecord(step)) return step;
+  const problem = (field: string, code: string): unknown => {
+    problems.push(`schema steps.${index}.${field}: ${code}`);
+    return step;
+  };
+  switch (step.do) {
+    case 'move': {
+      if (step.place === undefined) return step;
+      const { place, anchor, ...rest } = step;
+      if ('to' in rest) return problem('place', 'place_and_to');
+      if (place === 'first' || place === 'last') {
+        return anchor === undefined ? { ...rest, to: place } : problem('anchor', 'anchor_only_with_before_or_after');
+      }
+      if (place === 'before' || place === 'after') {
+        return typeof anchor === 'string' ? { ...rest, to: { [place]: anchor } } : problem('anchor', 'place_needs_anchor');
+      }
+      return problem('place', 'unknown_place');
+    }
+    case 'sound': {
+      if (step.target !== 'clip') return step;
+      const { clip, ...rest } = step;
+      return isClipRef(clip) ? { ...rest, target: clip } : problem('clip', 'target_clip_needs_clip_ref');
+    }
+    case 'caption_add': {
+      if (step.where === 'clip') {
+        const { clip, ...rest } = step;
+        return clip === undefined ? problem('clip', 'where_clip_needs_clip') : { ...rest, where: { clip } };
+      }
+      if (step.where === 'range') {
+        const { from, to, ...rest } = step;
+        if (from === undefined || to === undefined) return problem('from', 'where_range_needs_from_and_to');
+        return { ...rest, where: { from, to } };
+      }
+      return step;
+    }
+    default:
+      return step;
+  }
+}
+
+/**
+ * The model's wire reply → the `EditPlan` shape, before validation. Pure; no checks beyond what the
+ * rewrite itself needs (those come back as problem lines for the corrective call).
+ */
+export function editPlanFromWire(raw: unknown): { ok: true; value: unknown } | { ok: false; problems: string[] } {
+  const tidy = tidyModelReply(raw);
+  if (!isRecord(tidy) || !Array.isArray(tidy.steps)) return { ok: true, value: tidy };
+  const problems: string[] = [];
+  const steps = tidy.steps.map((step, index) => stepFromWire(step, index, problems));
+  if (problems.length > 0) return { ok: false, problems: problems.slice(0, 8) };
+  return { ok: true, value: { ...tidy, steps } };
+}
+
+/** The wire form of a plan (the inverse of `editPlanFromWire`): for tests and evaluation scripts. */
+export function editPlanToWire(plan: EditPlan): Loose {
+  if (plan.kind !== 'plan') return { ...plan };
+  return { kind: 'plan', steps: plan.steps.map(stepToWire) };
+}
+
+function stepToWire(step: EditStep): Loose {
+  switch (step.do) {
+    case 'move': {
+      const { to, ...rest } = step;
+      if (typeof to === 'string') return { ...rest, place: to };
+      return 'before' in to ? { ...rest, place: 'before', anchor: to.before } : { ...rest, place: 'after', anchor: to.after };
+    }
+    case 'sound': {
+      if (step.target === 'all_clips' || step.target === 'music') return { ...step };
+      const { target, ...rest } = step;
+      return { ...rest, target: 'clip', clip: target };
+    }
+    case 'caption_add': {
+      const { where, ...rest } = step;
+      if (typeof where === 'string') return { ...step };
+      return 'clip' in where ? { ...rest, where: 'clip', clip: where.clip } : { ...rest, where: 'range', from: where.from, to: where.to };
+    }
+    default:
+      return { ...step };
+  }
+}
+
+/** Validates a reply already in the internal `EditPlan` shape (strict; nulls and `[]` dropped first). */
 export function parseEditPlan(raw: unknown): { ok: true; plan: EditPlan } | { ok: false; problems: string[] } {
   const parsed = EditPlanSchema.safeParse(tidyModelReply(raw));
   if (parsed.success) return { ok: true, plan: parsed.data };
   return { ok: false, problems: schemaProblems(parsed.error) };
+}
+
+/** A model reply in the wire shape: rewritten (`editPlanFromWire`), then validated (`parseEditPlan`). */
+export function parseModelReply(raw: unknown): { ok: true; plan: EditPlan } | { ok: false; problems: string[] } {
+  const wire = editPlanFromWire(raw);
+  return wire.ok ? parseEditPlan(wire.value) : wire;
 }

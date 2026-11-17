@@ -7,7 +7,12 @@ import {
 } from '@/lib/brand-studio/compose/service';
 import { applyTimelinePatches, type ComposerProject } from '@/lib/brand-studio/compose/timeline';
 import { diffTimelines, type EditDelta } from '@/lib/brand-studio/edit-assist/diff';
-import { AssistPlanInputSchema, planEditAssist } from '@/lib/brand-studio/edit-assist/service';
+import { EDIT_PLAN_MODEL_SCHEMA } from '@/lib/brand-studio/edit-assist/plan';
+import {
+  AssistPlanInputSchema,
+  EDIT_ASSIST_REJECTED_LOG_TAG,
+  planEditAssist,
+} from '@/lib/brand-studio/edit-assist/service';
 import { brandStudioEditAssistOpen } from '@/lib/flags';
 import type { StudioDeps } from '@/lib/brand-studio/types';
 import { studioDeps, studioFixture, viewerOf, type StudioFixture } from '../server/helpers';
@@ -248,6 +253,8 @@ describe('assist.plan', () => {
         ["달리는 컷에 '도시를 달리다' 자막 달아줘", {}],
         // Source seconds on a 2x cut.
         ['세 번째 컷 앞 1초 잘라줘', {}],
+        // A look the parser does not know: it would put its fallback (French blue) there.
+        ['색감을 시네마틱한 청록·주황 톤으로 바꿔줘', {}],
       ];
       for (const [message, more] of cases) {
         const model = fakeModel({ kind: 'cannot', reason: 'nothing_to_edit' });
@@ -270,7 +277,8 @@ describe('assist.plan', () => {
       expect(model.calls).toHaveLength(1);
       const [call] = model.calls;
       expect(call!.thinking).toBe('LOW');
-      expect(call!.schema).toMatchObject({ required: ['kind'] });
+      expect(call!.schema).toEqual(EDIT_PLAN_MODEL_SCHEMA);
+      expect(JSON.stringify(call!.schema)).not.toMatch(/"(?:minItems|maxItems|anyOf|oneOf)"/);
       expect(call!.parts).toHaveLength(2);
       expect(call!.parts[1]).toBe(`<instruction>\n${FREEFORM}\n</instruction>`);
     });
@@ -311,6 +319,48 @@ describe('assist.plan', () => {
       expect(correction).toContain('<previous_reply>');
       expect(correction).toContain('step 1: range_outside_cut');
       expect(model.calls[1]!.parts.slice(0, 2)).toEqual(model.calls[0]!.parts);
+    });
+
+    it('reads the wire shape: move place / anchor, sound target "clip", caption_add where "clip" / "range"', async () => {
+      const model = fakeModel({
+        kind: 'plan',
+        steps: [
+          { do: 'move', clip: 'c4', place: 'before', anchor: 'c1' },
+          { do: 'sound', target: 'clip', clip: 'c2', muted: true },
+          { do: 'caption_add', where: 'clip', clip: 'c3', text: '도시를 달리다' },
+          { do: 'caption_add', where: 'range', from: 5, to: 8, text: '한정 수량' },
+        ],
+      });
+      expect(await plan(on, FREEFORM, {}, { env: MODEL_ENV, fetchImpl: model.fetchImpl })).toEqual({
+        ok: true,
+        kind: 'plan',
+        steps: [
+          { do: 'move', clip: { clipId: 'clip-logo' }, to: { before: { clipId: 'clip-open' } } },
+          { do: 'sound', target: { clipId: 'clip-hand' }, muted: true },
+          { do: 'caption_add', text: '도시를 달리다', where: { clip: { clipId: 'clip-run' } } },
+          { do: 'caption_add', text: '한정 수량', where: { from: 5, to: 8 } },
+        ],
+        creditsUsed: 0,
+      });
+      expect(model.calls).toHaveLength(1);
+    });
+
+    it('sends a wire problem back once and takes the corrected answer (the live key-order failure)', async () => {
+      // What the real model answered when `text` came before `where` and `clip` in the schema.
+      const model = fakeModel(
+        { kind: 'plan', steps: [{ do: 'caption_add', text: '도시를 달리다', where: 'clip', caption: 'c3', secondsPerClip: 0 }] },
+        { kind: 'plan', steps: [{ do: 'caption_add', where: 'clip', clip: 'c3', text: '도시를 달리다' }] },
+      );
+      expect(
+        await plan(on, "달리는 컷에 '도시를 달리다' 자막 달아줘", {}, { env: MODEL_ENV, fetchImpl: model.fetchImpl }),
+      ).toEqual({
+        ok: true,
+        kind: 'plan',
+        steps: [{ do: 'caption_add', text: '도시를 달리다', where: { clip: { clipId: 'clip-run' } } }],
+        creditsUsed: 0,
+      });
+      expect(model.calls).toHaveLength(2);
+      expect(model.calls[1]!.parts[2]).toContain('schema steps.0.clip: where_clip_needs_clip');
     });
 
     it('gives up after two answers that do not validate', async () => {
@@ -421,6 +471,74 @@ describe('assist.plan', () => {
       });
       expect(calls).toBe(2);
     });
+  });
+});
+
+describe('a model request the API refuses', () => {
+  const UNAVAILABLE = { ok: true, kind: 'cannot', reason: 'unavailable', creditsUsed: 0 };
+  const run = (fetchImpl: typeof fetch) =>
+    planEditAssist(
+      AssistPlanInputSchema.parse({
+        organizationId: '00000000-0000-4000-8000-000000000000',
+        message: FREEFORM,
+        locale: 'ko',
+        project: assistFixture(),
+      }),
+      { env: MODEL_ENV, providerMode: 'live', fetchImpl },
+    );
+  const apiError = (status: number, message: string) =>
+    new Response(JSON.stringify({ error: { code: status, message, status: 'INVALID_ARGUMENT' } }), {
+      status,
+      headers: { 'Content-Type': 'application/json' },
+    });
+  const refusing = (status: number, message: string) => vi.fn(async () => apiError(status, message)) as unknown as typeof fetch;
+  const tagged = (spy: { mock: { calls: unknown[][] } }) =>
+    spy.mock.calls.map((call) => String(call[0])).filter((line) => line.startsWith(EDIT_ASSIST_REJECTED_LOG_TAG));
+
+  it('answers unavailable and logs one line with the status and the API reason, never the key or the instruction', async () => {
+    const errors = vi.spyOn(console, 'error').mockImplementation(() => {});
+    try {
+      const reason =
+        'The specified schema produces a constraint that has too many states for serving.\n' +
+        `key test-gemini-key, text ${FREEFORM}, ${'x'.repeat(400)}`;
+      expect(await run(refusing(400, reason))).toEqual(UNAVAILABLE);
+      const lines = tagged(errors);
+      expect(lines).toHaveLength(1);
+      expect(lines[0]!.startsWith(`${EDIT_ASSIST_REJECTED_LOG_TAG} status=400 model=`)).toBe(true);
+      expect(lines[0]).toContain('too many states for serving');
+      expect(lines[0]).not.toContain('test-gemini-key');
+      expect(lines[0]).not.toContain(FREEFORM);
+      expect(lines[0]).not.toContain('\n');
+      const logged = JSON.parse(lines[0]!.slice(lines[0]!.indexOf('message=') + 'message='.length)) as string;
+      expect(logged.length).toBe(300);
+    } finally {
+      errors.mockRestore();
+    }
+  });
+
+  it('logs a refused corrective call and other 4xx, nothing for 408, 429, 5xx or a timeout', async () => {
+    const errors = vi.spyOn(console, 'error').mockImplementation(() => {});
+    try {
+      expect(await run(refusing(403, 'Permission denied on resource project.'))).toEqual(UNAVAILABLE);
+      expect(tagged(errors).at(-1)).toContain('status=403');
+
+      let calls = 0;
+      const refusedSecond = vi.fn(async () => {
+        calls += 1;
+        return calls === 1 ? geminiAnswer({ kind: 'plan', steps: [{ do: 'remove', clip: 'c9' }] }) : apiError(400, 'Request contains an invalid argument.');
+      }) as unknown as typeof fetch;
+      expect(await run(refusedSecond)).toEqual(UNAVAILABLE);
+      expect(tagged(errors)).toHaveLength(2);
+
+      for (const status of [408, 429, 500, 503]) expect(await run(refusing(status, 'busy')), String(status)).toEqual(UNAVAILABLE);
+      const timeout = vi.fn(async () => {
+        throw new DOMException('The operation was aborted.', 'AbortError');
+      }) as unknown as typeof fetch;
+      expect(await run(timeout)).toEqual(UNAVAILABLE);
+      expect(tagged(errors)).toHaveLength(2);
+    } finally {
+      errors.mockRestore();
+    }
   });
 });
 

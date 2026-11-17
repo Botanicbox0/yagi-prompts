@@ -12,7 +12,7 @@ import type { AskAbout, AskChoice } from '@/lib/brand-studio/edit-assist/plan';
 import type { StudioComposeCopy } from '@/messages/studio-compose';
 import type { AssistNoteCode } from './assist-model';
 
-export type AssistWordsCopy = Pick<StudioComposeCopy, 'assist' | 'colorGrade' | 'chat'>;
+export type AssistWordsCopy = Pick<StudioComposeCopy, 'assist' | 'colorGrade' | 'chat' | 'timeline'>;
 export type DeltaLineKey = keyof StudioComposeCopy['assist']['lines'];
 
 /** One change line before wording: the dictionary key and the values for its placeholders. */
@@ -136,7 +136,7 @@ export function askQuestion(about: AskAbout, copy: Pick<StudioComposeCopy, 'assi
 }
 
 /**
- * The label of one answer chip: a cut by its CURRENT position ("컷 2"), every cut, seconds, a caption by
+ * The label of one answer chip: a cut by its CURRENT position ("2번 컷"), every cut, seconds, a caption by
  * its (shortened) text, or a place. `null` when the cut or caption is no longer on the timeline.
  */
 export function askChoiceText(
@@ -158,12 +158,17 @@ export function askChoiceText(
   return caption ? fill(ask.choiceCaption, { text: shortenText(caption.text, CHOICE_CAPTION_MAX) }) : null;
 }
 
-/** One line for a note. Rate limit, undo and "nothing to undo" reuse the chat panel's sentences. */
+/**
+ * One line for a note. Undo and "nothing to undo" reuse the chat panel's sentences, "no scene change
+ * found" the timeline's own (the same sentence the scene-cut button shows).
+ */
 export function noteText(code: AssistNoteCode, copy: AssistWordsCopy, seconds?: number): string {
   const notes = copy.assist.notes;
   switch (code) {
     case 'no_change':
       return notes.noChange;
+    case 'no_cuts_found':
+      return copy.timeline.noCutsDetected;
     case 'stale':
       return notes.stale;
     case 'not_timeline_edit':
@@ -177,7 +182,7 @@ export function noteText(code: AssistNoteCode, copy: AssistWordsCopy, seconds?: 
     case 'unavailable':
       return notes.unavailable;
     case 'rate_limited':
-      return fill(copy.chat.rateLimited, { seconds: seconds ?? 60 });
+      return fill(notes.rateLimited, { seconds: seconds ?? 60 });
     case 'undone':
       return copy.chat.undone;
     case 'nothing_to_undo':

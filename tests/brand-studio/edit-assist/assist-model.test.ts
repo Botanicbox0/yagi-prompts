@@ -144,15 +144,39 @@ describe('automatic scene split passthrough', () => {
     const detect = vi.fn(async () => [2, 3.5]);
     const resolved = await resolveSceneSplitPatches(answer, real, detect);
     expect(detect).toHaveBeenCalledWith(real.clips[0]);
-    expect(resolved).toEqual([
-      { op: 'set_clip_cuts', clipIndex: 0, cutMarkers: [2, 3.5] },
-      { op: 'split_clip_cuts', clipIndex: 0, cutMediaSecs: [2, 3.5] },
-    ]);
+    expect(resolved).toEqual({
+      patches: [
+        { op: 'set_clip_cuts', clipIndex: 0, cutMarkers: [2, 3.5] },
+        { op: 'split_clip_cuts', clipIndex: 0, cutMediaSecs: [2, 3.5] },
+      ],
+      noCutsFound: false,
+    });
 
-    const decision = decideAssist(real, patches(resolved), real);
+    const decision = decideAssist(real, patches(resolved.patches), real);
     expect(decision.type).toBe('proposal');
     if (decision.type !== 'proposal') return;
     expect(decision.draft.clips.length).toBe(real.clips.length + 2);
+  });
+
+  it('turns a split that finds no scene change into a note, never an empty proposal', async () => {
+    const real = frozenFixture();
+    const answer: TimelinePatch[] = [{ op: 'split_clip_cuts', clipIndex: 0, cutMediaSecs: [] }];
+    // Nothing detected, or only points too close to the cut's edges to split at.
+    for (const found of [[], [0.1], [real.clips[0]!.trimEndSec - 0.05]]) {
+      const resolved = await resolveSceneSplitPatches(answer, real, async () => found);
+      expect(resolved, JSON.stringify(found)).toEqual({ patches: [], noCutsFound: true });
+    }
+    // Other changes in the same instruction still go through.
+    const mixed = await resolveSceneSplitPatches([...answer, { op: 'set_aspect', aspect: '1:1' }], real, async () => []);
+    expect(mixed).toEqual({ patches: [{ op: 'set_aspect', aspect: '1:1' }], noCutsFound: true });
+    expect(decideAssist(real, patches(mixed.patches), real).type).toBe('instant');
+  });
+
+  it('never proposes stored scene markers on their own (they are not content)', () => {
+    const real = frozenFixture();
+    expect(decideAssist(real, patches([{ op: 'set_clip_cuts', clipIndex: 0, cutMarkers: [] }]), real)).toEqual({
+      type: 'nothing',
+    });
   });
 });
 

@@ -265,9 +265,14 @@ export function useEditAssist(options: EditAssistOptions): EditAssist {
         let answer: AssistServerAnswer = readAssistAnswer(await postAssistPlan(input, controller.signal));
         if (seq !== seqRef.current) return;
         if (answer.ok && answer.kind === 'patches' && needsSceneDetection(answer.patches)) {
-          const patches = await resolveSceneSplitPatches(answer.patches, sent, latest.current.detectCuts);
+          const split = await resolveSceneSplitPatches(answer.patches, sent, latest.current.detectCuts);
           if (seq !== seqRef.current) return;
-          answer = { ...answer, patches };
+          // No scene change to cut at: say so, never a proposal that changes nothing on screen.
+          if (split.noCutsFound) {
+            push({ id: nextId('n'), type: 'note', code: 'no_cuts_found' });
+            if (split.patches.length === 0) return;
+          }
+          answer = { ...answer, patches: split.patches };
         }
         handleDecision(decideAssist(latest.current.project, answer, sent), message);
       } catch {

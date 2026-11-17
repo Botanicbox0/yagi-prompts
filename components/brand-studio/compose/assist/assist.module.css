@@ -37,6 +37,11 @@
   background: var(--ys-surface);
 }
 
+/* Nothing said yet: only as tall as the hint, so the examples and the input sit right under it. */
+.log[data-empty] {
+  min-height: 0;
+}
+
 .hint,
 .pending {
   margin: 0;
@@ -251,6 +256,12 @@
 .choice:focus-visible,
 .example:focus-visible,
 .send:focus-visible {
+  outline: 2px solid var(--ys-focus);
+  outline-offset: 2px;
+}
+
+/* A new proposal or question takes focus as a whole card (see `focusEntryId`). */
+.card:focus-visible {
   outline: 2px solid var(--ys-focus);
   outline-offset: 2px;
 }

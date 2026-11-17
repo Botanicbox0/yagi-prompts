@@ -237,7 +237,7 @@ export const studioComposeEn = {
   },
   // "말로 편집" (docs/BRAND-EDITING-STUDIO.md §4.1, §4.6), behind BRAND_STUDIO_EDIT_ASSIST. Draft wording.
   assist: {
-    heading: 'Describe an edit',
+    heading: 'AI edit',
     inputLabel: 'Edit instruction',
     placeholder: "e.g. Shorten cut 2 to 2s and add a 'Meet it now' caption at the end",
     send: 'Send',
@@ -271,7 +271,7 @@ export const studioComposeEn = {
       lookStrength: 'Look: {name} {pct}%',
       lookOff: 'Look off',
       lookCustom: 'reference match',
-      other: '{count} other changes',
+      other: 'Other changes: {count}',
       total: 'Total length {before}s → {after}s',
     },
     proposal: {
@@ -306,6 +306,7 @@ export const studioComposeEn = {
       notPossible: "That can't fit. Change the length or the number of cuts and try again.",
       couldNotPlan: "Couldn't turn that into an edit. Try again with a cut number or seconds.",
       unavailable: "Couldn't handle that right now. Please try again shortly.",
+      rateLimited: 'Too many requests this minute. Wait {seconds}s and try again.',
     },
   },
   status: {
@@ -572,13 +573,13 @@ export const studioComposeKo: typeof studioComposeEn = {
     costNote: '이 기능은 크레딧이 들지 않아요.',
     redo: '다시 실행',
     lines: {
-      clipTrimmed: '컷 {n} 길이 {before}초 → {after}초',
-      clipRemoved: '컷 {n} 삭제',
-      clipMoved: '컷 {n} {to}번째로 이동',
-      clipSplit: '컷 {n} {at}초 지점 분할',
-      clipMuted: '컷 {n} 소리 끔',
-      clipUnmuted: '컷 {n} 소리 켬',
-      clipVolume: '컷 {n} 소리 {pct}%',
+      clipTrimmed: '{n}번 컷 길이 {before}초 → {after}초',
+      clipRemoved: '{n}번 컷 삭제',
+      clipMoved: '{n}번 컷 {to}번째로 이동',
+      clipSplit: '{n}번 컷 {at}초 지점 분할',
+      clipMuted: '{n}번 컷 소리 끔',
+      clipUnmuted: '{n}번 컷 소리 켬',
+      clipVolume: '{n}번 컷 소리 {pct}%',
       allMuted: '모든 컷 소리 끔',
       allUnmuted: '모든 컷 소리 켬',
       allVolume: '모든 컷 소리 {pct}%',
@@ -611,7 +612,7 @@ export const studioComposeKo: typeof studioComposeEn = {
       whichCaption: '어느 자막을 바꿀까요?',
       howLong: '몇 초로 맞출까요?',
       whereCaption: '자막을 어디에 넣을까요?',
-      choiceClip: '컷 {n}',
+      choiceClip: '{n}번 컷',
       choiceAll: '전부',
       choiceSeconds: '{n}초',
       choiceStart: '영상 처음',
@@ -627,6 +628,7 @@ export const studioComposeKo: typeof studioComposeEn = {
       notPossible: '이 조건으로는 맞출 수 없어요. 길이나 컷 수를 바꿔서 다시 말해 주세요.',
       couldNotPlan: '편집 내용을 파악하지 못했어요. 컷 번호나 초를 넣어 다시 알려 주세요.',
       unavailable: '지금은 처리할 수 없어요. 잠시 뒤에 다시 시도해 주세요.',
+      rateLimited: '이번 분에 요청이 많았어요. {seconds}초 뒤에 다시 시도해 주세요.',
     },
   },
   status: {

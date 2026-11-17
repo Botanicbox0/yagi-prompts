@@ -13,7 +13,7 @@
  * and the per-minute limit shared with `chat.edit` stay in `compose/service.ts`, which routes here.
  */
 import { z } from 'zod';
-import { callGeminiJson, studioGeminiConfig, type GeminiPart } from '@/lib/brand-studio/enhancer/gemini';
+import { callGeminiJson, studioGeminiConfig, type GeminiConfig, type GeminiPart } from '@/lib/brand-studio/enhancer/gemini';
 import { parseComposeChatCommand } from '../compose/chat-intent';
 import {
   applyTimelinePatches,
@@ -30,15 +30,18 @@ import {
   ASK_ABOUT,
   CAPTION_PLACES,
   EDIT_PLAN_MODEL_SCHEMA,
-  parseEditPlan,
+  parseModelReply,
   type AskAbout,
   type AskChoice,
   type CannotReason,
   type EditRefs,
 } from './plan';
 
-/** Per model call; there are at most two (one corrective call when the first answer fails). */
-export const EDIT_ASSIST_TIMEOUT_MS = 8_000;
+/**
+ * Per model call; there are at most two (one corrective call when the first answer fails). Live calls ran
+ * 2.5–5 s (median 3.1 s) with one cold call at 7.4 s (2026-11-18), so 8 s was too close.
+ */
+export const EDIT_ASSIST_TIMEOUT_MS = 12_000;
 
 /* --------------------------------------------------------------- input */
 
@@ -184,6 +187,9 @@ const TWO_ACTIONS =
   /(?:(?:줄이|바꾸|옮기|지우|넣|켜|끄|낮추|높이|자르|나누|입히|맞추|늘리|빼|키우|올리|내리|붙이|없애|살리|두)고\s|그리고|그\s*다음|그런\s*다음|\bthen\b|\band\s+(?:add|cut|trim|move|remove|delete|drop|mute|make|put|turn|set|change|swap|split|keep)\b)/i;
 /** Rewording or moving a caption that exists: the rule parser can only add one. */
 const CHANGE_WORDS = /(?:바꿔|바꾸|수정|고쳐|변경|\bchange\b|\breplace\b|\bedit\b|\brewrite\b)/i;
+/** The one look the rule parser falls back to when it recognises no look name in the sentence. */
+const FALLBACK_LOOK = 'twings-french-blue';
+const NAMES_FALLBACK_LOOK = /(?:프렌치\s*블루|트윙스\s*블루|french\s*blue)/i;
 /** A caption placed on a cut ("달리는 컷에"): the rule parser only knows start, end and whole. */
 const ON_A_CUT = /(?:(?:컷|클립|장면|샷)\s*(?:에|위에|에서)|\b(?:on|over)\s+(?:the\s+)?(?:\w+\s+)?(?:clip|cut|shot)\b)/i;
 
@@ -195,7 +201,8 @@ const ON_A_CUT = /(?:(?:컷|클립|장면|샷)\s*(?:에|위에|에서)|\b(?:on|o
  *   counts source seconds, not played ones);
  * - two actions but one patch: the other action was dropped (or the whole sentence was misread, e.g.
  *   "반으로 나누고 뒤쪽은 지워줘" removing the whole cut);
- * - a caption "added" where one should change, or placed on a cut.
+ * - a caption "added" where one should change, or placed on a cut;
+ * - a colour look the sentence did not name (the parser falls back to one preset).
  */
 function ruleResultTrusted(message: string, patches: readonly TimelinePatch[], project: ComposerProject): boolean {
   if (POINTING.test(message)) return false;
@@ -207,6 +214,10 @@ function ruleResultTrusted(message: string, patches: readonly TimelinePatch[], p
       if (rate !== undefined && rate !== 1) return false;
     }
     if (patch.op === 'add_caption' && (CHANGE_WORDS.test(message) || ON_A_CUT.test(message))) return false;
+    // A look the sentence did not name: the parser put its fallback there ("청록·주황 톤" became French blue).
+    if (patch.op === 'set_color_grade' && patch.enabled && patch.presetId === FALLBACK_LOOK && !NAMES_FALLBACK_LOOK.test(message)) {
+      return false;
+    }
   }
   return true;
 }
@@ -218,22 +229,25 @@ export const EDIT_ASSIST_SYSTEM = [
   '',
   'Answer kinds:',
   '- {"kind":"plan","steps":[...]}: 1 to 12 steps that do exactly what was asked.',
-  '- {"kind":"ask","about":...,"choices":[...]}: ONE question when the instruction is ambiguous between targets or lacks a number you need. about "which_clip": choices are cut refs ("c2") or "all"; "which_caption": caption refs ("t1"); "how_long": seconds as strings ("2", "2.5"); "where_caption": "start", "end", "whole". 2 to 4 choices.',
+  '- {"kind":"ask","about":...,"choices":[...]}: ONE question when the instruction is ambiguous between targets or lacks a number you need. about "which_clip": choices are cut refs ("c2") or "all"; "which_caption": caption refs ("t1"); "how_long": seconds as strings ("2", "2.5"); "where_caption": "start", "end", "whole". 2 to 4 different choices.',
   '- {"kind":"cannot","reason":...}: "not_timeline_edit" when it asks for anything these steps cannot do (changing what is inside the footage, generating images, video or music, effects, speed, transitions, exporting, or anything that is not editing this timeline); "nothing_to_edit" when what it names does not exist (for example no music); "not_possible" when the limits make it impossible (for example a longer video than the cuts allow).',
   '',
-  'Steps. Seconds inside a cut are played seconds of the cut as it plays now, 0 = where it starts now. Seconds of captions and fit_total are seconds of the whole video.',
-  '- {"do":"trim","clip":"c2","keep":"start"|"end"|"middle","seconds":2}: keep only the first / last / middle N seconds of the cut.',
-  '- {"do":"trim","clip":"c2","keep":"range","from":1,"to":3}: keep only seconds from..to of the cut.',
+  'Steps. Each step is one flat object: "do" and exactly the fields its line below shows, written in the order shown (the response schema allows no other order); leave every other field out. "clip" and "anchor" are always cut refs, "caption" a caption ref; "from" and "to" are always a span of seconds. Seconds inside a cut are played seconds of the cut as it plays now, 0 = where it starts now. Seconds of captions and fit_total are seconds of the whole video.',
+  '- {"do":"trim","clip":"c2","keep":"start","seconds":2}: keep only the first N seconds of the cut; "keep":"end" the last N, "keep":"middle" the middle N.',
+  '- {"do":"trim","clip":"c2","keep":"range","from":1,"to":3}: keep only seconds from..to of the cut (no "seconds").',
   '- {"do":"split","clip":"c2","at":1.5}: split the cut in two at N seconds; later steps may name the pieces "c2a" (first) and "c2b" (second).',
   '- {"do":"remove","clip":"c3"}: remove the cut.',
-  '- {"do":"move","clip":"c3","to":"first"|"last"|{"before":"c1"}|{"after":"c1"}}: move the cut.',
-  '- {"do":"sound","target":"c2"|"all_clips"|"music","volume":0.5,"muted":true}: volume (0 to 1) and/or mute of one cut\'s own sound, every cut\'s sound, or the music. {"do":"sound","target":"music","remove":true} removes the music.',
-  '- {"do":"caption_add","text":"...","where":"start"|"end"|"whole"|{"clip":"c2"}|{"from":3,"to":5},"seconds":2.5,"position":"top"|"center"|"bottom","size":"sm"|"md"|"lg"}: add a caption with the text exactly as the user wrote it (up to 80 characters). "seconds" only with "start", "end" or a clip.',
-  '- {"do":"caption_edit","caption":"t1","text":"...","position":"top","size":"lg","from":0,"to":2}: change only the given fields of a caption.',
-  '- {"do":"caption_remove","caption":"t1"|"all"}',
-  '- {"do":"aspect","aspect":"9:16"|"16:9"|"4:5"|"1:1"}',
-  `- {"do":"look","preset":"<preset>"|"off","strength":0.8}: colour look of the video. Presets: twings-french-blue (cool French blue), clean-high-key (bright and clean), editorial-cool-porcelain (cool and pale), kodak-2383-warm (warm film), moody-teal-amber (cinematic teal and amber), pastel-airy-film (soft pastel).`,
-  '- {"do":"fit_total","seconds":15,"protect":["c4"]}: make the whole video N seconds long by shortening cuts from their ends in proportion to their length; protected cuts keep their length. It only shortens.',
+  '- {"do":"move","clip":"c3","place":"first"}: move the cut to the start; "place":"last" to the end.',
+  '- {"do":"move","clip":"c3","place":"after","anchor":"c1"}: move the cut right after the anchor cut; "place":"before" right before it.',
+  '- {"do":"sound","target":"clip","clip":"c2","volume":0.5}: one cut\'s own sound. "target":"all_clips" (no "clip"): every cut\'s own sound. "target":"music": the music. Give "volume" (0 to 1), "muted" (true/false) or both. {"do":"sound","target":"music","remove":true} removes the music.',
+  '- {"do":"caption_add","where":"end","text":"..."}: add a caption with the text exactly as the user wrote it (up to 80 characters). "where": "start", "end" or "whole" (the whole video).',
+  '- {"do":"caption_add","where":"clip","clip":"c2","text":"..."}: a caption over that cut. {"do":"caption_add","where":"range","from":3,"to":5,"text":"..."}: from..to seconds of the video.',
+  '  Optional on caption_add, in this order: "seconds" right before "text" (how long it shows; only with "start", "end" or "clip"), then "position" ("top", "center", "bottom") and "size" ("sm", "md", "lg") after "text": {"do":"caption_add","where":"start","seconds":2,"text":"...","position":"top","size":"sm"}.',
+  '- {"do":"caption_edit","caption":"t1","from":0,"to":2,"text":"...","position":"top","size":"lg"}: change only the fields given (any of them, in this order); leave the others out, e.g. {"do":"caption_edit","caption":"t2","text":"..."}.',
+  '- {"do":"caption_remove","caption":"t1"}: remove that caption; "caption":"all" removes every caption.',
+  '- {"do":"aspect","aspect":"16:9"}: one of "9:16", "16:9", "4:5", "1:1".',
+  `- {"do":"look","preset":"kodak-2383-warm","strength":0.8}: colour look of the video ("strength" 0 to 1 is optional). Presets: twings-french-blue (cool French blue), clean-high-key (bright and clean), editorial-cool-porcelain (cool and pale), kodak-2383-warm (warm film), moody-teal-amber (cinematic teal and amber), pastel-airy-film (soft pastel). "preset":"off" removes the look.`,
+  '- {"do":"fit_total","seconds":15,"protect":["c4"]}: make the whole video N seconds long by shortening cuts from their ends in proportion to their length; protected cuts keep their length ("protect" is optional). It only shortens.',
   '- {"do":"even_pace","secondsPerClip":2}: cut every cut longer than N seconds down to its first N seconds.',
   '',
   'Rules:',
@@ -279,11 +293,60 @@ function correctionBlock(previous: unknown, problems: readonly string[]): string
   ].join('\n');
 }
 
+/** Stable tag of the server log line for a request the model API refused. */
+export const EDIT_ASSIST_REJECTED_LOG_TAG = '[edit-assist] model rejected request';
+const REJECTED_MESSAGE_MAX = 300;
+
+/** A 4xx other than 408 / 429: the API refused this request itself (schema, key, model), not a passing outage. */
+function refusedRequest(status: number): boolean {
+  return status >= 400 && status < 500 && status !== 408 && status !== 429;
+}
+
+/** The API's own reason from an error body (`{ error: { message } }`), else the raw text. */
+function apiErrorMessage(text: string): string {
+  try {
+    const body = JSON.parse(text) as { error?: { message?: unknown } };
+    if (typeof body?.error?.message === 'string') return body.error.message;
+  } catch {
+    // not JSON: the raw text is the message
+  }
+  return text;
+}
+
+/**
+ * `callGeminiJson` turns a refused request into the same `gemini_http_<status>` error as an outage, and the
+ * user gets `unavailable` either way. A refusal is permanent until the code changes, so it must not pass for
+ * an outage in the logs: this fetch reads the API's reason from a clone of the response (before
+ * `callGeminiJson` throws) and writes one `console.error` line — status, model, the first 300 characters
+ * of the API message with the key and the instruction cut out. Nothing else changes for the call.
+ */
+function logRefusals(fetchImpl: typeof fetch, config: GeminiConfig, instruction: string): typeof fetch {
+  return async (url, init) => {
+    const response = await fetchImpl(url, init);
+    if (refusedRequest(response.status)) {
+      let reason = '';
+      try {
+        reason = apiErrorMessage(await response.clone().text());
+      } catch {
+        reason = '';
+      }
+      for (const secret of [config.apiKey, instruction]) {
+        if (secret) reason = reason.split(secret).join('[redacted]');
+      }
+      reason = reason.replace(/\s+/g, ' ').trim().slice(0, REJECTED_MESSAGE_MAX);
+      console.error(
+        `${EDIT_ASSIST_REJECTED_LOG_TAG} status=${response.status} model=${config.model} message=${JSON.stringify(reason)}`,
+      );
+    }
+    return response;
+  };
+}
+
 type Judged = { ok: true; result: AssistPlanResult } | { ok: false; problems: string[] };
 
 /** Validates one model answer, resolves its refs and dry-runs a plan on the server's copy of the timeline. */
 function judge(raw: unknown, project: ComposerProject, refs: EditRefs): Judged {
-  const parsed = parseEditPlan(raw);
+  const parsed = parseModelReply(raw);
   if (!parsed.ok) return { ok: false, problems: parsed.problems };
   const plan = parsed.plan;
   if (plan.kind === 'cannot') return { ok: true, result: cannot(plan.reason) };
@@ -330,8 +393,9 @@ export async function planEditAssist(input: AssistPlanInput, options: AssistPlan
     ...(input.answer ? { answer: input.answer as { about: AskAbout; value: AskChoice } } : {}),
   });
   const parts: GeminiPart[] = [{ text: dataBlock(context) }, { text: instructionBlock(input.message) }];
+  const fetchImpl = logRefusals(options.fetchImpl ?? fetch, config, input.message);
   const callModel = (extra: GeminiPart[]) =>
-    callGeminiJson(config, options.fetchImpl ?? fetch, {
+    callGeminiJson(config, fetchImpl, {
       system: EDIT_ASSIST_SYSTEM,
       parts: [...parts, ...extra],
       schema: EDIT_PLAN_MODEL_SCHEMA,

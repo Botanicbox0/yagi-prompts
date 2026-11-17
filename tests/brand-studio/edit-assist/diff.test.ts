@@ -245,6 +245,26 @@ describe('diffTimelines — nothing changes silently', () => {
     ]);
   });
 
+  it('ignores scene cut markers: they are analysis data, not content', () => {
+    const base = assistFixture();
+    // An auto scene split that found nothing stores an empty list: nothing to show, nothing to apply.
+    const emptyMarkers = applyTimelinePatches(base, [{ op: 'set_clip_cuts', clipIndex: 0, cutMarkers: [] }]).project;
+    expect(diffTimelines(base, emptyMarkers)).toEqual([]);
+    const found = applyTimelinePatches(base, [{ op: 'set_clip_cuts', clipIndex: 1, cutMarkers: [2.5, 4] }]).project;
+    expect(found.clips[1]!.cutMarkers?.length).toBeGreaterThan(0);
+    expect(diffTimelines(base, found)).toEqual([]);
+    expect(diffTimelines(found, base)).toEqual([]);
+    // Markers next to a real change do not add an "other" line.
+    const trimmedWithMarkers = applyTimelinePatches(found, [{ op: 'trim_clip', clipIndex: 1, trimEndSec: 3 }]).project;
+    expect(diffTimelines(base, trimmedWithMarkers)).toEqual([
+      { kind: 'clip_trimmed', cut: 2, beforeSec: 5, afterSec: 2 },
+      { kind: 'total', beforeSec: 20, afterSec: 17 },
+    ]);
+    // And a split cut whose pieces carry markers is still one split.
+    const splitWithMarkers = applyTimelinePatches(found, [{ op: 'split_clip_at', clipIndex: 1, atMediaSec: 3 }]).project;
+    expect(diffTimelines(base, splitWithMarkers).map((d) => d.kind)).toEqual(['clip_split']);
+  });
+
   it('counts a colour look moving to another cut when its cut is removed', () => {
     const base: ComposerProject = {
       ...assistFixture(),

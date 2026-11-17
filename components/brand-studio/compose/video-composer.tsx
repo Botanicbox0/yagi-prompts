@@ -70,6 +70,7 @@ import {
 import type { StudioComposeCopy } from '@/messages/studio-compose';
 import { AssistPanel, AssistPreviewBar } from './assist/assist-panel';
 import { useEditAssist } from './assist/use-edit-assist';
+import { commitHistory, initHistory, redoHistory, replaceHistory, undoHistory, type History } from './history';
 import s from './video-composer.module.css';
 
 export interface VideoComposerProps {
@@ -237,9 +238,11 @@ export function VideoComposer({
   const [folderItemsById, setFolderItemsById] = useState<Record<string, LibraryItemWire[]>>(initialFolderItems);
   const [loadingFolderId, setLoadingFolderId] = useState<string | null>(null);
 
-  const [project, setProject] = useState<ComposerProject>(() => initialProject ?? emptyComposerProject('9:16'));
-  const [undoStack, setUndoStack] = useState<ComposerProject[]>([]);
-  const [redoStack, setRedoStack] = useState<ComposerProject[]>([]);
+  // The timeline and its undo / redo stacks are one value, changed only by the pure transitions in `history.ts`.
+  const [history, setHistory] = useState<History<ComposerProject>>(() =>
+    initHistory(initialProject ?? emptyComposerProject('9:16')),
+  );
+  const { present: project, past: undoStack, future: redoStack } = history;
   const [selectedClipIdx, setSelectedClipIdx] = useState<number>(0);
 
   // Playback & stage refs
@@ -335,7 +338,7 @@ export function VideoComposer({
     try {
       const saved = parseStoredProject(window.localStorage.getItem(composeStorageKey(organizationId)));
       if (saved && (saved.clips.length > 0 || saved.captions.length > 0 || saved.bgm || saved.colorGrade)) {
-        setProject(saved);
+        setHistory((h) => replaceHistory(h, saved));
       }
     } catch {
       // ignore storage errors
@@ -394,9 +397,11 @@ export function VideoComposer({
   const spans = useMemo(() => timelineSpans(shownProject), [shownProject]);
   const frameAtPlayhead = useMemo(() => frameStateAtTime(shownProject, playheadSec), [shownProject, playheadSec]);
   const remainingCredits = useMemo(() => creditsLeft(allowance.capKrw, allowance.usedKrw), [allowance]);
+  // The export button prices the real timeline, never a previewed draft.
+  const realTotalSec = useMemo(() => projectDurationSec(project), [project]);
   const renderCostCredits = useMemo(
-    () => (project.clips.length > 0 ? composeFinalRenderCredits(totalSec) : 0),
-    [project.clips.length, totalSec],
+    () => (project.clips.length > 0 ? composeFinalRenderCredits(realTotalSec) : 0),
+    [project.clips.length, realTotalSec],
   );
 
   const safeSelectedIdx = useMemo(
@@ -438,18 +443,14 @@ export function VideoComposer({
   }, [musicRevealCustom, suggestedDropSec]);
 
   // While a "말로 편집" proposal is previewed every edit path is a no-op (`assistLockRef`).
-  const projectRef = useRef(project);
+  const historyRef = useRef(history);
   useEffect(() => {
-    projectRef.current = project;
-  }, [project]);
+    historyRef.current = history;
+  }, [history]);
 
   const commitProject = useCallback((next: ComposerProject) => {
     if (assistLockRef.current) return;
-    setProject((prev) => {
-      setUndoStack((stack) => [...stack.slice(-24), prev]);
-      return next;
-    });
-    setRedoStack((redo) => (redo.length === 0 ? redo : []));
+    setHistory((h) => commitHistory(h, next));
     setSavedAssetId(null);
   }, [assistLockRef]);
 
@@ -467,28 +468,14 @@ export function VideoComposer({
 
   const handleUndo = useCallback(() => {
     if (assistLockRef.current) return;
-    setUndoStack((stack) => {
-      if (stack.length === 0) return stack;
-      const previous = stack[stack.length - 1]!;
-      const current = projectRef.current;
-      setRedoStack((redo) => (redo[redo.length - 1] === current ? redo : [...redo.slice(-24), current]));
-      setProject(previous);
-      setSavedAssetId(null);
-      return stack.slice(0, -1);
-    });
+    setHistory(undoHistory);
+    if (historyRef.current.past.length > 0) setSavedAssetId(null);
   }, [assistLockRef]);
 
   const handleRedo = useCallback(() => {
     if (assistLockRef.current) return;
-    setRedoStack((redo) => {
-      if (redo.length === 0) return redo;
-      const next = redo[redo.length - 1]!;
-      const current = projectRef.current;
-      setUndoStack((stack) => (stack[stack.length - 1] === current ? stack : [...stack.slice(-24), current]));
-      setProject(next);
-      setSavedAssetId(null);
-      return redo.slice(0, -1);
-    });
+    setHistory(redoHistory);
+    if (historyRef.current.future.length > 0) setSavedAssetId(null);
   }, [assistLockRef]);
 
   const handlePlayheadSplit = useCallback(() => {
@@ -601,6 +588,14 @@ export function VideoComposer({
     raf = window.requestAnimationFrame(step);
     return () => window.cancelAnimationFrame(raf);
   }, [playing, totalSec]);
+
+  // "말로 편집": when the timeline on screen gets shorter than the playhead (a proposal opens, "show original"
+  // is released, apply, undo, redo), playback stops and the playhead goes back to the start so play works.
+  useEffect(() => {
+    if (!editAssist || playheadSec <= totalSec) return;
+    setPlaying(false);
+    setPlayheadSec(0);
+  }, [editAssist, playheadSec, totalSec]);
 
   /* ---------------------------------------------------------------- Unified 4-Source Media Browser */
 

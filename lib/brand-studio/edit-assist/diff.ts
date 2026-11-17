@@ -2,11 +2,12 @@
  * What an edit changed, as values (docs/BRAND-EDITING-STUDIO.md §4.6).
  *
  * `diffTimelines(before, after)` is the single source for the lines the screen writes under an edit
- * ("컷 2 길이 5.0초 → 2.0초"). It compares the two timelines themselves, never what a model said it did:
+ * ("2번 컷 길이 5초 → 2초"). It compares the two timelines themselves, never what a model said it did:
  * the screen shows no model prose, and a delta can only describe something that really changed. Every
  * value here is a number, an id-free position, a label or a code; the sentences come from the dictionary.
  *
- * Nothing changes silently: whatever difference no named kind explains is counted in `other`.
+ * Nothing changes silently: whatever difference no named kind explains is counted in `other`. The one
+ * exception is a cut's scene markers (`cutMarkers`), which are analysis data and never compared.
  * Client-safe: no server imports, no Node APIs.
  */
 import {
@@ -77,15 +78,22 @@ function sameSource(a: ComposeClip, b: ComposeClip): boolean {
 
 /**
  * A clip without what the named deltas explain: trims, volume, mute, the active take's trims (a trim
- * keeps it in step), and — for a cut that was split — its id and scene markers.
+ * keeps it in step), and — for a cut that was split — its id. Scene cut markers are never compared: they
+ * are analysis data stored by scene detection, not something that plays, so storing them (even an empty
+ * list when no scene change was found) is not a change to show or to apply.
  */
 function clipRest(clip: ComposeClip, split: boolean): Record<string, unknown> {
-  const { trimStartSec: _start, trimEndSec: _end, volume: _volume, muted: _muted, takes, ...rest } = clip;
+  const {
+    trimStartSec: _start,
+    trimEndSec: _end,
+    volume: _volume,
+    muted: _muted,
+    cutMarkers: _cutMarkers,
+    takes,
+    ...rest
+  } = clip;
   const out: Record<string, unknown> = { ...rest };
-  if (split) {
-    delete out.id;
-    delete out.cutMarkers;
-  }
+  if (split) delete out.id;
   if (takes) {
     const active = clip.activeTakeIndex ?? takes.length - 1;
     out.takes = takes.map((take, i) => (i === active ? { ...take, trimStartSec: undefined, trimEndSec: undefined } : take));

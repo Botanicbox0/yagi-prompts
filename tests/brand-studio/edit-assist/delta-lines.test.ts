@@ -37,14 +37,14 @@ describe('shortenText', () => {
 
 /** Every `EditDelta` kind (and each sound / look variant) with its Korean and English line. */
 const TABLE: Array<[EditDelta, string, string]> = [
-  [{ kind: 'clip_removed', cut: 3, label: '거리 달리기' }, '컷 3 삭제', 'Removed cut 3'],
-  [{ kind: 'clip_split', cut: 1, atSec: 2.5 }, '컷 1 2.5초 지점 분할', 'Split cut 1 at 2.5s'],
-  [{ kind: 'clip_trimmed', cut: 2, beforeSec: 4, afterSec: 2 }, '컷 2 길이 4초 → 2초', 'Cut 2 length 4s → 2s'],
-  [{ kind: 'clip_moved', cut: 4, toPosition: 1 }, '컷 4 1번째로 이동', 'Moved cut 4 to position 1'],
-  [{ kind: 'clip_sound', cut: 2, muted: true }, '컷 2 소리 끔', 'Cut 2 sound off'],
-  [{ kind: 'clip_sound', cut: 2, muted: false }, '컷 2 소리 켬', 'Cut 2 sound on'],
-  [{ kind: 'clip_sound', cut: 2, volumePct: 40 }, '컷 2 소리 40%', 'Cut 2 sound 40%'],
-  [{ kind: 'clip_sound', cut: 2, muted: false, volumePct: 40 }, '컷 2 소리 40%', 'Cut 2 sound 40%'],
+  [{ kind: 'clip_removed', cut: 3, label: '거리 달리기' }, '3번 컷 삭제', 'Removed cut 3'],
+  [{ kind: 'clip_split', cut: 1, atSec: 2.5 }, '1번 컷 2.5초 지점 분할', 'Split cut 1 at 2.5s'],
+  [{ kind: 'clip_trimmed', cut: 2, beforeSec: 4, afterSec: 2 }, '2번 컷 길이 4초 → 2초', 'Cut 2 length 4s → 2s'],
+  [{ kind: 'clip_moved', cut: 4, toPosition: 1 }, '4번 컷 1번째로 이동', 'Moved cut 4 to position 1'],
+  [{ kind: 'clip_sound', cut: 2, muted: true }, '2번 컷 소리 끔', 'Cut 2 sound off'],
+  [{ kind: 'clip_sound', cut: 2, muted: false }, '2번 컷 소리 켬', 'Cut 2 sound on'],
+  [{ kind: 'clip_sound', cut: 2, volumePct: 40 }, '2번 컷 소리 40%', 'Cut 2 sound 40%'],
+  [{ kind: 'clip_sound', cut: 2, muted: false, volumePct: 40 }, '2번 컷 소리 40%', 'Cut 2 sound 40%'],
   [{ kind: 'clip_sound', cut: 'all', muted: true }, '모든 컷 소리 끔', 'All cuts sound off'],
   [{ kind: 'clip_sound', cut: 'all', muted: false }, '모든 컷 소리 켬', 'All cuts sound on'],
   [{ kind: 'clip_sound', cut: 'all', volumePct: 50 }, '모든 컷 소리 50%', 'All cuts sound 50%'],
@@ -66,7 +66,7 @@ const TABLE: Array<[EditDelta, string, string]> = [
   [{ kind: 'look', preset: 'kodak-2383-warm', strengthPct: 60 }, '색감 2383 필름 웜 적용 60%', 'Look: 2383 Film Warm 60%'],
   [{ kind: 'look', preset: 'custom' }, '색감 레퍼런스 맞춤 적용', 'Look: reference match'],
   [{ kind: 'look', preset: 'off' }, '색감 해제', 'Look off'],
-  [{ kind: 'other', count: 2 }, '그 외 변경 사항 2건', '2 other changes'],
+  [{ kind: 'other', count: 2 }, '그 외 변경 사항 2건', 'Other changes: 2'],
   [{ kind: 'total', beforeSec: 20, afterSec: 15.5 }, '전체 길이 20초 → 15.5초', 'Total length 20s → 15.5s'],
 ];
 
@@ -132,7 +132,7 @@ describe('questions, choices and notes', () => {
 
   it('names cuts by their current position and captions by their text, and drops what is gone', () => {
     const project = assistFixture();
-    expect(askChoiceText({ clipId: 'clip-run' }, project, ko)).toBe('컷 3');
+    expect(askChoiceText({ clipId: 'clip-run' }, project, ko)).toBe('3번 컷');
     expect(askChoiceText({ clipId: 'clip-run' }, project, en)).toBe('Cut 3');
     expect(askChoiceText({ clipId: 'missing' }, project, ko)).toBeNull();
     expect(askChoiceText('all', project, ko)).toBe('전부');
@@ -145,9 +145,20 @@ describe('questions, choices and notes', () => {
     expect(askChoiceText({ captionId: 'gone' }, project, ko)).toBeNull();
   });
 
-  it('words every note, reusing the chat panel for rate limit and undo', () => {
+  it('calls a cut what the timeline cards call it ("2번 컷" / "Cut 2")', () => {
+    expect(ko.assist.ask.choiceClip).toBe(ko.timeline.clipBadge);
+    expect(en.assist.ask.choiceClip).toBe(en.timeline.clipBadge);
+    const cutLines = ['clipTrimmed', 'clipRemoved', 'clipMoved', 'clipSplit', 'clipMuted', 'clipUnmuted', 'clipVolume'] as const;
+    for (const key of cutLines) {
+      expect(ko.assist.lines[key].startsWith(ko.timeline.clipBadge), key).toBe(true);
+      expect(en.assist.lines[key].toLowerCase()).toContain(en.timeline.clipBadge.toLowerCase());
+    }
+  });
+
+  it('words every note, reusing the chat panel for undo and the timeline for "no scene change found"', () => {
     const codes: AssistNoteCode[] = [
       'no_change',
+      'no_cuts_found',
       'stale',
       'not_timeline_edit',
       'nothing_to_edit',
@@ -163,7 +174,12 @@ describe('questions, choices and notes', () => {
       expect(noteText(code, en, 9).trim(), code).not.toBe('');
     }
     expect(noteText('no_change', ko)).toBe('이미 그렇게 되어 있어 바꿀 내용이 없어요.');
-    expect(noteText('rate_limited', ko, 9)).toBe(ko.chat.rateLimited.replace('{seconds}', '9'));
+    // The panel is "AI 편집", so its rate-limit line does not say "채팅 편집".
+    expect(noteText('rate_limited', ko, 9)).toBe('이번 분에 요청이 많았어요. 9초 뒤에 다시 시도해 주세요.');
+    expect(noteText('rate_limited', en, 9)).toBe('Too many requests this minute. Wait 9s and try again.');
+    expect(ko.assist.notes.rateLimited).toBe(ko.chat.rateLimited.replace('채팅 편집 ', ''));
+    expect(noteText('no_cuts_found', ko)).toBe(ko.timeline.noCutsDetected);
+    expect(noteText('no_cuts_found', en)).toBe(en.timeline.noCutsDetected);
     expect(noteText('undone', en)).toBe(en.chat.undone);
     expect(noteText('nothing_to_undo', ko)).toBe(ko.chat.nothingToUndo);
   });

@@ -11,7 +11,13 @@
  *
  * Client-safe and React-free; the hook (`use-edit-assist.ts`) holds the state.
  */
-import { applyTimelinePatches, type ComposeClip, type ComposerProject, type TimelinePatch } from '@/lib/brand-studio/compose';
+import {
+  applyTimelinePatches,
+  splittableCutMediaSecs,
+  type ComposeClip,
+  type ComposerProject,
+  type TimelinePatch,
+} from '@/lib/brand-studio/compose';
 import { applyEditSteps, type ResolvedStep } from '@/lib/brand-studio/edit-assist/apply';
 import { diffTimelines, isInstantEdit, sameValue, type EditDelta } from '@/lib/brand-studio/edit-assist/diff';
 import { ASK_ABOUT, CANNOT_REASONS, type AskAbout, type AskChoice, type CannotReason } from '@/lib/brand-studio/edit-assist/plan';
@@ -72,21 +78,36 @@ export function needsSceneDetection(patches: readonly TimelinePatch[]): boolean 
   return patches.some((patch) => patch.op === 'split_clip_cuts' && patch.cutMediaSecs.length === 0);
 }
 
+export interface SceneSplitResolution {
+  patches: TimelinePatch[];
+  /**
+   * An automatic split found no scene change it can cut at. That split is left out (nothing would
+   * change on screen); the panel says so with a note instead of a proposal.
+   */
+  noCutsFound: boolean;
+}
+
 /**
- * Resolves every empty `split_clip_cuts` with the screen's own detector, exactly as the chat panel does:
- * the detected cuts are stored on the clip and the clip is split at them.
+ * Resolves every empty `split_clip_cuts` with the screen's own detector, as the chat panel does: the
+ * detected cuts are stored on the clip and the clip is split at them. A clip with no cut to split at
+ * gets no patches at all and sets `noCutsFound`.
  */
 export async function resolveSceneSplitPatches(
   patches: readonly TimelinePatch[],
   project: ComposerProject,
   detect: (clip: ComposeClip) => Promise<number[]>,
-): Promise<TimelinePatch[]> {
+): Promise<SceneSplitResolution> {
   const resolved: TimelinePatch[] = [];
+  let noCutsFound = false;
   for (const patch of patches) {
     if (patch.op === 'split_clip_cuts' && patch.cutMediaSecs.length === 0) {
       const clip = project.clips[patch.clipIndex];
       if (clip) {
         const detected = await detect(clip);
+        if (splittableCutMediaSecs(clip, detected).length === 0) {
+          noCutsFound = true;
+          continue;
+        }
         resolved.push({ op: 'set_clip_cuts', clipIndex: patch.clipIndex, cutMarkers: detected });
         resolved.push({ op: 'split_clip_cuts', clipIndex: patch.clipIndex, cutMediaSecs: detected });
         continue;
@@ -94,7 +115,7 @@ export async function resolveSceneSplitPatches(
     }
     resolved.push(patch);
   }
-  return resolved;
+  return { patches: resolved, noCutsFound };
 }
 
 /* ---------------------------------------------------------------- drafts and the decision */
@@ -133,6 +154,7 @@ export function draftFrom(real: ComposerProject, source: DraftSource): DraftOutc
 export type AssistNoteCode =
   | AssistCannotCode
   | 'no_change'
+  | 'no_cuts_found'
   | 'stale'
   | 'rate_limited'
   | 'undone'
@@ -179,6 +201,12 @@ export function decideAssist(real: ComposerProject, answer: AssistServerAnswer, 
   }
 }
 
+/** A cut as it plays: scene markers are analysis data (the diff ignores them too). */
+function playedClip(clip: ComposeClip): Omit<ComposeClip, 'cutMarkers'> {
+  const { cutMarkers: _cutMarkers, ...rest } = clip;
+  return rest;
+}
+
 /**
  * Ids of the cuts in `draft` that differ from the real timeline: new cuts (split pieces), cuts whose
  * values changed, and cuts the diff says moved. Removed cuts are not in the draft (their line says so).
@@ -190,7 +218,7 @@ export function changedCutIds(real: ComposerProject, draft: ComposerProject, del
   const out = new Set<string>();
   for (const clip of draft.clips) {
     const previous = byId.get(clip.id);
-    if (!previous || !sameValue(previous, clip)) out.add(clip.id);
+    if (!previous || !sameValue(playedClip(previous), playedClip(clip))) out.add(clip.id);
   }
   for (const delta of deltas) {
     if (delta.kind !== 'clip_moved') continue;

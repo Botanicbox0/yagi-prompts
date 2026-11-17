@@ -6,7 +6,7 @@ import {
   type AssistEntry,
   type HistoryView,
 } from '@/components/brand-studio/compose/assist/assist-model';
-import { AssistPanel, AssistPreviewBar } from '@/components/brand-studio/compose/assist/assist-panel';
+import { AssistPanel, AssistPreviewBar, focusEntryId } from '@/components/brand-studio/compose/assist/assist-panel';
 import { askChoiceText, askQuestion, deltaText, noteText } from '@/components/brand-studio/compose/assist/delta-lines';
 import type { AssistPanelModel } from '@/components/brand-studio/compose/assist/use-edit-assist';
 import { applyTimelinePatches } from '@/lib/brand-studio/compose/timeline';
@@ -209,8 +209,8 @@ describe('AssistPanel — entries', () => {
     const html = render(studioComposeKo, model(entries, view));
     expect(html).toContain(esc(ask.whichClip));
     expect(html).toContain('data-assist-choice="0"');
-    expect(html).toContain('>컷 2<');
-    expect(html).toContain('>컷 3<');
+    expect(html).toContain('>2번 컷<');
+    expect(html).toContain('>3번 컷<');
     expect(html).not.toContain('data-assist-choice="2"');
     expect(html).toContain(`>${esc(ask.choiceAll)}<`);
     expect(html).toContain(esc(studioComposeKo.assist.notes.notTimelineEdit));
@@ -265,6 +265,73 @@ describe('AssistPanel — after apply, undo and cancel', () => {
     const html = render(studioComposeKo, model([], { current: base, undo: [], redo: [] }, { busy: true }));
     expect(html).toContain(`>${esc(studioComposeKo.assist.busy)}<`);
     expect(tagWith(html, 'data-assist-send')).toContain('disabled');
+  });
+});
+
+describe('AssistPanel — layout and keyboard', () => {
+  const emptyView: HistoryView = { current: base, undo: [], redo: [] };
+
+  it('keeps the empty log only as tall as its hint, and lets it grow once something is said', () => {
+    expect(tagWith(render(studioComposeKo, model([], emptyView)), 'data-assist-log')).toContain('data-empty="true"');
+    const withEntries = render(studioComposeKo, model(fixtureEntries(), emptyView));
+    expect(tagWith(withEntries, 'data-assist-log')).not.toContain('data-empty');
+  });
+
+  it('picks the newest entry as the focus target only when it is an open proposal or an open question', () => {
+    const user: AssistEntry = { id: 'u1', type: 'user', text: USER_TEXT[0]! };
+    const open: AssistEntry = { id: 'p1', type: 'proposal', deltas: removeDeltas, status: 'open' };
+    const ask: AssistEntry = { id: 'q1', type: 'ask', about: 'which_clip', choices: ['all'], status: 'open', message: 'x' };
+    const applied: AssistEntry = { id: 'a1', type: 'applied', deltas: trimDeltas, historyMark: trimmed, undone: false };
+    expect(focusEntryId([])).toBeNull();
+    expect(focusEntryId([user, open])).toBe('p1');
+    expect(focusEntryId([user, ask])).toBe('q1');
+    // An instant edit leaves the focus in the input.
+    expect(focusEntryId([user, applied])).toBeNull();
+    expect(focusEntryId([user, { ...open, status: 'dismissed' }])).toBeNull();
+    expect(focusEntryId([user, { ...ask, status: 'answered', picked: 0 }])).toBeNull();
+    // An older open card is not focused again once something newer is below it.
+    expect(focusEntryId([user, open, { id: 'n1', type: 'note', code: 'no_change' }])).toBeNull();
+  });
+
+  it('makes a new proposal a labelled, script-focusable card whose first Tab stop is Apply, then Cancel, then Show original', () => {
+    const p = studioComposeKo.assist.proposal;
+    const entries: AssistEntry[] = [
+      { id: 'u1', type: 'user', text: USER_TEXT[1]! },
+      { id: 'p1', type: 'proposal', deltas: removeDeltas, status: 'open' },
+    ];
+    const html = render(studioComposeKo, model(entries, emptyView));
+    const card = tagWith(html, 'data-assist-focus');
+    expect(card).toContain('data-assist-proposal');
+    expect(card).toContain('tabindex="-1"');
+    expect(card).toContain('role="group"');
+    expect(card).toContain(`aria-label="${esc(p.title)}"`);
+    // Inside the card, nothing focusable comes before Apply.
+    const inside = html.slice(html.indexOf(card) + card.length);
+    const stops = [...inside.matchAll(/<(button|textarea|a|input)\b[^>]*>/g)].map((m) => m[0]);
+    expect(stops[0]).toContain('data-assist-apply');
+    expect(stops[1]).toContain('data-assist-dismiss');
+    expect(stops[2]).toContain('data-assist-compare');
+    expect(html.match(/data-assist-focus/g)).toHaveLength(1);
+  });
+
+  it('does the same for a new question: its first Tab stop is the first choice', () => {
+    const entries: AssistEntry[] = [
+      { id: 'u1', type: 'user', text: USER_TEXT[2]! },
+      { id: 'q1', type: 'ask', about: 'which_clip', choices: [{ clipId: 'clip-hand' }, 'all'], status: 'open', message: '줄여줘' },
+    ];
+    const html = render(studioComposeKo, model(entries, emptyView));
+    const card = tagWith(html, 'data-assist-focus');
+    expect(card).toContain('data-assist-entry="ask"');
+    expect(card).toContain('tabindex="-1"');
+    expect(card).toContain(`aria-label="${esc(studioComposeKo.assist.ask.whichClip)}"`);
+    const inside = html.slice(html.indexOf(card) + card.length);
+    expect(inside.match(/<button\b[^>]*>/)?.[0]).toContain('data-assist-choice="0"');
+  });
+
+  it('never makes settled entries focus targets', () => {
+    const html = render(studioComposeKo, model(fixtureEntries(), { current: trimmed, undo: [base], redo: [] }));
+    expect(html).not.toContain('data-assist-focus');
+    expect(html).not.toContain('tabindex="-1"');
   });
 });
 

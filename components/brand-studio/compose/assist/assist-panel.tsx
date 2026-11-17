@@ -79,19 +79,41 @@ export function AssistPreviewBar({ text }: { text: string }) {
   );
 }
 
+/**
+ * The entry that takes keyboard focus when it appears: the newest entry, when it is an open proposal or
+ * an open question. Tab from there reaches its buttons (Apply first) before anything else.
+ */
+export function focusEntryId(entries: readonly AssistEntry[]): string | null {
+  const last = entries[entries.length - 1];
+  if (!last) return null;
+  if ((last.type === 'proposal' || last.type === 'ask') && last.status === 'open') return last.id;
+  return null;
+}
+
 export function AssistPanel({ assist, copy, canCreate, project }: AssistPanelProps) {
   const a = copy.assist;
   const p = a.proposal;
   const [text, setText] = useState('');
   const logRef = useRef<HTMLDivElement | null>(null);
   const inputRef = useRef<HTMLTextAreaElement | null>(null);
+  const focusCardRef = useRef<HTMLDivElement | null>(null);
+  const focusedIdRef = useRef<string | null>(null);
   const { entries, busy } = assist;
+  const focusId = focusEntryId(entries);
 
   // The log always shows its newest entry.
   useEffect(() => {
     const log = logRef.current;
     if (log) log.scrollTop = log.scrollHeight;
   }, [entries, busy]);
+
+  // A new proposal or question takes focus (the card, not its Apply button: a second Enter must not
+  // apply), so Tab reaches its buttons right away. Each one is focused once, when it appears.
+  useEffect(() => {
+    if (!focusId || focusedIdRef.current === focusId) return;
+    focusedIdRef.current = focusId;
+    focusCardRef.current?.focus({ preventScroll: true });
+  }, [focusId]);
 
   const submit = () => {
     if (!canCreate || busy || !text.trim()) return;
@@ -100,6 +122,12 @@ export function AssistPanel({ assist, copy, canCreate, project }: AssistPanelPro
   };
 
   const focusInput = () => inputRef.current?.focus();
+
+  /** The open proposal / question card that takes focus: a labelled group, focusable by script only. */
+  const focusTargetProps = (entryId: string, label: string) =>
+    entryId === focusId
+      ? ({ ref: focusCardRef, tabIndex: -1, role: 'group', 'aria-label': label, 'data-assist-focus': true } as const)
+      : {};
 
   const undoControl = (entry: AssistEntry) => {
     const history = assist.historyOf(entry);
@@ -145,6 +173,7 @@ export function AssistPanel({ assist, copy, canCreate, project }: AssistPanelPro
           <div
             key={entry.id}
             className={st.card}
+            {...focusTargetProps(entry.id, p.title)}
             data-assist-entry="proposal"
             data-assist-proposal
             data-status={entry.status}
@@ -186,10 +215,17 @@ export function AssistPanel({ assist, copy, canCreate, project }: AssistPanelPro
           </div>
         );
       }
-      case 'ask':
+      case 'ask': {
+        const question = askQuestion(entry.about, copy);
         return (
-          <div key={entry.id} className={st.card} data-assist-entry="ask" data-status={entry.status}>
-            <p className={st.cardTitle}>{askQuestion(entry.about, copy)}</p>
+          <div
+            key={entry.id}
+            className={st.card}
+            {...focusTargetProps(entry.id, question)}
+            data-assist-entry="ask"
+            data-status={entry.status}
+          >
+            <p className={st.cardTitle}>{question}</p>
             <div className={st.actions}>
               {entry.choices.map((choice, i) => {
                 const label = askChoiceText(choice, project, copy);
@@ -201,7 +237,11 @@ export function AssistPanel({ assist, copy, canCreate, project }: AssistPanelPro
                     className={st.choice}
                     aria-pressed={entry.picked === i}
                     disabled={entry.status !== 'open' || busy || !canCreate}
-                    onClick={() => assist.answer(entry.id, i)}
+                    onClick={() => {
+                      assist.answer(entry.id, i);
+                      // The chip goes inactive once answered; keep the keyboard in the panel.
+                      focusInput();
+                    }}
                     data-assist-choice={i}
                   >
                     {label}
@@ -211,6 +251,7 @@ export function AssistPanel({ assist, copy, canCreate, project }: AssistPanelPro
             </div>
           </div>
         );
+      }
       case 'note':
         return (
           <p key={entry.id} className={st.note} data-assist-entry="note" data-code={entry.code}>
@@ -226,7 +267,15 @@ export function AssistPanel({ assist, copy, canCreate, project }: AssistPanelPro
     <aside className={st.panel} aria-label={a.heading} data-assist-panel>
       <h2 className={st.title}>{a.heading}</h2>
 
-      <div ref={logRef} className={st.log} role="log" aria-live="polite" aria-label={a.heading} data-assist-log>
+      <div
+        ref={logRef}
+        className={st.log}
+        role="log"
+        aria-live="polite"
+        aria-label={a.heading}
+        data-assist-log
+        data-empty={entries.length === 0 || undefined}
+      >
         {entries.length === 0 ? <p className={st.hint}>{a.emptyHint}</p> : entries.map(renderEntry)}
         {busy ? (
           <p className={st.pending} data-assist-pending>
