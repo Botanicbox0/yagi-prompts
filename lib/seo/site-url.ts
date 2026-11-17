@@ -28,6 +28,25 @@ export function siteUrl(env: NodeJS.ProcessEnv = process.env): string {
   return configured.replace(/\/+$/, '');
 }
 
+/** The brand workspace's own host in production (lib/routing/surfaces.ts serves `/brand/*` there). */
+const BRAND_ORIGIN = 'https://brand.twings.app';
+
+/**
+ * The origin a mail's link into the brand workspace starts with (docs/BRAND-ROOMS-FEEDBACK.md §2).
+ * Production (`siteUrl()` on twings.app) answers the brand host; local and preview deployments serve
+ * `/brand` from their own origin, so a test mail never sends anyone to production.
+ */
+export function brandSiteUrl(env: NodeJS.ProcessEnv = process.env): string {
+  const site = siteUrl(env);
+  let host = '';
+  try {
+    host = new URL(site).hostname.toLowerCase();
+  } catch {
+    return site;
+  }
+  return host === 'twings.app' || host.endsWith('.twings.app') ? BRAND_ORIGIN : site;
+}
+
 /** `absoluteUrl('/en/pricing')` → `https://…/en/pricing`. Already-absolute input is returned as is. */
 export function absoluteUrl(path: string, env: NodeJS.ProcessEnv = process.env): string {
   if (/^https?:\/\//.test(path)) return path;

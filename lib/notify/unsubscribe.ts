@@ -19,10 +19,28 @@ import { isNotifyToggle, type NotifyToggle } from './kinds';
  *     it cannot read, cannot enable, and cannot touch another user (the id is inside the signature).
  */
 
-export interface UnsubscribeClaims {
+/**
+ * docs/BRAND-ROOMS-FEEDBACK.md §2.2 — the project room mail scope. Same secret, same HMAC, same
+ * "can only take something away" rule; its payload names one organization as well, and the only write
+ * it authorises is `brand_room_notice_prefs.email_enabled = false` for that person and organization.
+ * Tokens of the profile toggles keep their exact bytes (`{u, t}`), so links already in inboxes still work.
+ */
+export const ROOM_EMAIL_SCOPE = 'brand_room_email' as const;
+
+export interface ToggleUnsubscribeClaims {
   userId: string;
   toggle: NotifyToggle;
 }
+
+export interface RoomEmailUnsubscribeClaims {
+  userId: string;
+  toggle: typeof ROOM_EMAIL_SCOPE;
+  organizationId: string;
+}
+
+export type UnsubscribeClaims = ToggleUnsubscribeClaims | RoomEmailUnsubscribeClaims;
+
+const ORG_ID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 export type UnsubscribeFailure = 'malformed' | 'bad_signature';
 
@@ -81,7 +99,11 @@ export function signUnsubscribeToken(
   claims: UnsubscribeClaims,
   secret: string = unsubscribeTokenSecret(),
 ): string {
-  const payload = b64url(JSON.stringify({ u: claims.userId, t: claims.toggle }));
+  const body =
+    claims.toggle === ROOM_EMAIL_SCOPE
+      ? { u: claims.userId, t: claims.toggle, o: claims.organizationId.toLowerCase() }
+      : { u: claims.userId, t: claims.toggle };
+  const payload = b64url(JSON.stringify(body));
   return `${payload}.${sign(payload, secret)}`;
 }
 
@@ -106,11 +128,18 @@ export function verifyUnsubscribeToken(
     return { ok: false, reason: 'bad_signature' };
   }
 
-  let decoded: { u?: unknown; t?: unknown };
+  let decoded: { u?: unknown; t?: unknown; o?: unknown };
   try {
     decoded = JSON.parse(Buffer.from(payload, 'base64url').toString('utf8'));
   } catch {
     return { ok: false, reason: 'malformed' };
+  }
+
+  if (decoded.t === ROOM_EMAIL_SCOPE) {
+    if (typeof decoded.u !== 'string' || decoded.u === '' || typeof decoded.o !== 'string' || !ORG_ID.test(decoded.o)) {
+      return { ok: false, reason: 'malformed' };
+    }
+    return { ok: true, claims: { userId: decoded.u, toggle: ROOM_EMAIL_SCOPE, organizationId: decoded.o } };
   }
 
   if (typeof decoded.u !== 'string' || decoded.u === '' || !isNotifyToggle(decoded.t)) {

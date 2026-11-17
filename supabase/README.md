@@ -106,4 +106,6 @@ operation for a superuser, and it is not something app code can do — that is t
 
 클라우드 적용 필요(아직 운영에 없음): `0093_core_brand_review_team_notes` · `0166_glue_brand_review_team_notes` — 시안 리뷰의 팀 메모(`brand_studio_review_comments.visibility` 'public'|'team', 팀 메모는 `author_role = 'studio'`·`guest_name` 없음만 허용; `docs/BRAND-ROOMS-FEEDBACK.md` §5). 코드는 컬럼이 없으면 예전처럼 읽고 팀 메모 쓰기만 막는다. 적용하면 이 줄을 위 표로 옮긴다.
 
-다음 번호: core 0094, glue 0167 (core 0092는 열린 PR이 쓰고 있다).
+클라우드 적용 필요(아직 적용하지 않음): `0094_core_brand_room_notices` · `0167_glue_brand_room_notices` — 프로젝트 룸 고객 알림(`brand_room_notice_prefs`·`brand_room_notices`, RLS 강제·정책 0개·서버 롤 전용; `docs/BRAND-ROOMS-FEEDBACK.md` §2, 브랜치 `claude/rooms-notices`). `BRAND_ROOM_NOTIFY=on` 전에 적용한다. 플래그가 꺼져 있으면 두 표를 읽지도 쓰지도 않는다. 0092는 열린 PR #244, 0093·0166은 같은 단계의 팀 메모 조각이 쓴다.
+
+다음 번호: core 0095, glue 0168 (core 0092는 열린 PR이 쓰고 있다).

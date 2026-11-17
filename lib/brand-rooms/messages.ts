@@ -32,6 +32,7 @@ import { publicNotesOnly, teamNotesReady } from '@/lib/brand-studio/review-visib
 import type { RoomAlertItem, RoomSummary } from '@/components/brand-rooms/seams';
 import { requireRoomProject, RoomDenied, roomSeat, type RoomSeat } from './access';
 import type { RoomEventKind, RoomRef } from './events';
+import { enqueueNotices } from './notices';
 import {
   AttachmentCompleteSchema,
   AttachmentReserveSchema,
@@ -1050,7 +1051,11 @@ export async function runRoomOperation(deps: RoomMessageDeps, viewer: Viewer, op
       switch (operation) {
         case 'message.send': {
           const { message, created } = await insertMessage(sql, deps.media, reader, input, { role: 'brand', rateLimited: true });
-          if (created) notice = { organizationId, userId: seat.userId, messageId: message.id, body: roomNoticeBody(reader, message) };
+          if (created) {
+            notice = { organizationId, userId: seat.userId, messageId: message.id, body: roomNoticeBody(reader, message) };
+            // Colleagues this line names hear about it (./notices.ts; best effort, never fails the send).
+            await enqueueNotices(sql, { type: 'message', organizationId, projectId: reader.projectId, messageId: message.id, actorId: seat.userId, actorRole: 'brand', mentions: message.mentions });
+          }
           return { ok: true as const, message } satisfies RoomMessageDone;
         }
         case 'message.edit':
@@ -1458,7 +1463,11 @@ export async function staffSendMessage(deps: RoomMessageDeps, viewer: Viewer, in
   return guard(() =>
     deps.sql.transaction(async (sql) => {
       const reader = await staffReader(sql, viewer, String(input.organizationId ?? ''), String(input.projectId ?? ''));
-      const { message } = await insertMessage(sql, deps.media, reader, { ...input, organizationId: reader.organizationId, projectId: reader.channel, mentionsTeam: false }, { role: 'studio', rateLimited: false });
+      const { message, created } = await insertMessage(sql, deps.media, reader, { ...input, organizationId: reader.organizationId, projectId: reader.channel, mentionsTeam: false }, { role: 'studio', rateLimited: false });
+      // The room's members hear about a team line (./notices.ts; best effort, never fails the send).
+      if (created) {
+        await enqueueNotices(sql, { type: 'message', organizationId: reader.organizationId, projectId: reader.projectId, messageId: message.id, actorId: reader.viewerId, actorRole: 'studio', mentions: message.mentions });
+      }
       return { ok: true as const, message };
     }),
   );

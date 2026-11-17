@@ -4,6 +4,7 @@ import { roomsChatEn } from './rooms-chat';
 import { roomsStoryboardEn } from './rooms-storyboard';
 import { roomsReviewEn } from './rooms-review';
 import { roomsShellEn } from './rooms-shell';
+import { roomsNoticesEn } from './rooms-notices';
 import { intakeBriefEn } from './intake-brief';
 import { studioShellEn } from './studio-shell';
 import { studioLibraryEn } from './studio-library';
@@ -51,6 +52,7 @@ export const en = {
   roomsStoryboard: roomsStoryboardEn,
   roomsReview: roomsReviewEn,
   roomsShell: roomsShellEn,
+  roomsNotices: roomsNoticesEn,
   intakeBrief: intakeBriefEn,
   studioShell: studioShellEn,
   studioLibrary: studioLibraryEn,

@@ -6,6 +6,7 @@
  * Best effort by contract: a failure here never fails the write that called it.
  */
 import type { SqlRunner } from '@/lib/db/sql-runner';
+import { enqueueNotices } from './notices';
 
 export const ROOM_EVENT_KINDS = [
   'storyboard_shared',
@@ -79,15 +80,31 @@ export async function postRoomEvent(sql: SqlRunner, input: RoomEventInput): Prom
   } catch {
     // Not inside a transaction: nothing of the caller's can be poisoned by a failed insert.
   }
+  let lineId: string | null = null;
   try {
-    await sql.query(
+    const { rows } = await sql.query<{ id: string }>(
       `insert into brand_room_messages (organization_id, project_id, channel, author_id, author_role, kind, event, detail, ref, ref_key)
-         values ($1, $2::uuid, $8::text, (select id from profiles where id = $3::uuid), 'system', 'event', $4, $5::jsonb, $6::jsonb, $7)`,
+         values ($1, $2::uuid, $8::text, (select id from profiles where id = $3::uuid), 'system', 'event', $4, $5::jsonb, $6::jsonb, $7)
+       returning id`,
       [input.organizationId, input.projectId, input.actorId && UUID.test(input.actorId) ? input.actorId : null, input.event, JSON.stringify(detail), JSON.stringify(ref), refKey, input.projectId.toLowerCase()],
     );
+    lineId = rows[0]?.id ? String(rows[0].id) : null;
     if (savepoint) await sql.query('release savepoint brand_room_event');
   } catch (error) {
     if (savepoint) await sql.query('rollback to savepoint brand_room_event').catch(() => undefined);
     console.warn('[brand-rooms] room_event_failed', JSON.stringify({ event: input.event, message: error instanceof Error ? error.message.slice(0, 200) : 'unknown' }));
+    return;
+  }
+  // Mail and push to the room's members (docs/BRAND-ROOMS-FEEDBACK.md §2). Same contract: never throws.
+  if (lineId) {
+    await enqueueNotices(sql, {
+      type: 'event',
+      organizationId: input.organizationId,
+      projectId: input.projectId,
+      event: input.event,
+      messageId: lineId,
+      actorId: input.actorId,
+      actorRole: input.actorRole,
+    });
   }
 }
