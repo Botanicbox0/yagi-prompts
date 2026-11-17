@@ -4,7 +4,8 @@
  * - Full-screen zoomed/panned stage with `move`, `marquee` (RegionBox), `eraser` and `restore` brush tools
  * - Top Floating Contextual Island toolbar (smoothly expands Size `8..300px` & Hardness `0..100%`, default `30%`)
  * - Base visibility toggle (`baseHidden` -> checkerboard) + non-destructive alpha-mask layers (`maskDataUrl`)
- * - In-editor Oplux Region Edit panel + non-blocking job tracking that lands finished patches as new layers
+ * - In-editor Oplux Region Edit panel + non-blocking job tracking that lands finished patches as new layers,
+ *   followed by the result bar (compare by holding, undo, refine edges; region-result.ts)
  * - `mergeDown` ("아래로 합치기") and full-resolution PNG export.
  */
 import {
@@ -12,6 +13,7 @@ import {
   useEffect,
   useId,
   useMemo,
+  useReducer,
   useRef,
   useState,
   type ClipboardEvent as ReactClipboardEvent,
@@ -35,7 +37,7 @@ import { qualityOf, regionCredits } from "../dock-model";
 import { nudgeBox } from "../region-math";
 import { libraryKey, type LayerEditorProps, type LibraryItemView } from "../seams";
 import { browserRenderDeps, createCanvas, loadImage, loadMaskAsDataUrl, measurerFor, naturalSize, waitForLayerFonts, warmFonts } from "./browser";
-import { canvasForRatio, holdPictureView, isCanvasResized, pictureBoxToWorld, resetCanvas, resizeCanvas, baseRect, type CanvasRatio } from "./canvas";
+import { canvasForRatio, holdPictureView, isCanvasResized, resetCanvas, resizeCanvas, baseRect, type CanvasRatio } from "./canvas";
 import { CanvasSizeControl } from "./canvas-control";
 import { pushRecent } from "./colors";
 import {
@@ -49,7 +51,7 @@ import {
   type ExportStep,
   type RenderResult,
 } from "./export";
-import { fillInstruction, fillSentOf, fillStrips, placeFillPatch, type FillSent } from "./fill";
+import { fillInstruction, fillSentOf, fillStrips, placeFillPatch } from "./fill";
 import { ZOOM_STEP, fitView, nudgeDelta, zoomCentered, type Insets, type Point, type View } from "./geometry";
 import { canRedo, canUndo, commit, createHistory, preview, redo, revert, settle, undo, type History } from "./history";
 import { LayerIcon, type LayerIconName } from "./icons";
@@ -94,6 +96,24 @@ import {
 import { AddPanel, IconButton, LayersPanel, PropsPanel, fill, type PickItem } from "./panels";
 import { browserStorage, clearDraft, loadDraft, loadRecentColors, saveDraft, saveRecentColors } from "./persist";
 import { RegionEditPanel } from "./region-panel";
+import {
+  FIT_MARGIN,
+  RESULT_BAR_IDLE,
+  RESULT_STRIP,
+  barSurvives,
+  focusAfterPatch,
+  focusForRefine,
+  patchLanding,
+  resultBarReducer,
+  editsBlocked,
+  guardStageEdit,
+  stageDocFor,
+  trackRegionJob,
+  undoPatch,
+  withRegionPatch,
+  type TrackedRegionJob,
+} from "./region-result";
+import { RegionResultBar } from "./region-result-bar";
 import { Stage } from "./stage";
 import { layoutText, type TextLayout } from "./text-layout";
 import "./layers.css";
@@ -160,14 +180,6 @@ function refreshUrls(doc: LayerDoc, assets: readonly StudioAssetView[]): LayerDo
   return next;
 }
 
-interface TrackedRegionJob {
-  jobId: string;
-  autoFlatten: boolean;
-  box: RegionBox;
-  /** "빈 곳 채우기": the box is in fractions of the canvas as it was sent, not of the picture. */
-  fill?: FillSent;
-}
-
 export default function LayerEditor(
   props: LayerEditorProps & {
     copy: Dictionary["studioLayers"];
@@ -232,14 +244,20 @@ export default function LayerEditor(
   const editStartRef = useRef<LayerDoc | null>(null);
   const pendingEditRef = useRef<string | null>(null);
   const autoFitRef = useRef(true);
+  // "원본 비교" is held (region-result.ts `editsBlocked`): no editing input is taken.
+  const comparingRef = useRef(false);
   const handledJobsRef = useRef<Set<string>>(new Set());
 
   const [tool, setToolState] = useState<LayerTool>(props.initialTool ?? "move");
   const [brushSize, setBrushSize] = useState<number>(DEFAULT_BRUSH_SIZE);
   const [brushHardness, setBrushHardness] = useState<number>(DEFAULT_BRUSH_HARDNESS);
   const [regionBox, setRegionBox] = useState<RegionBox | null>(props.initialRegionPreset?.box ?? null);
-  const [autoFlatten, setAutoFlatten] = useState<boolean>(false);
   const [pendingRegionJobs, setPendingRegionJobs] = useState<TrackedRegionJob[]>([]);
+  // The bar under the picture after a partial edit lands; `landedSeqRef` orders results reaching the editor.
+  const [resultState, dispatchResult] = useReducer(resultBarReducer, RESULT_BAR_IDLE);
+  const landedSeqRef = useRef(0);
+  const toolRef = useRef(tool);
+  toolRef.current = tool;
 
   const [selectedId, setSelectedId] = useState<string | null>(initial.initialSelected);
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -335,6 +353,9 @@ export default function LayerEditor(
 
   /* --------------------------------------------------------------------- view */
 
+  // Read at fit time, so a change never refits by itself.
+  const reservesResultRef = useRef(false);
+  reservesResultRef.current = Boolean(props.region);
   const insets = useCallback((): Insets => {
     const stage = stageRef.current?.getBoundingClientRect();
     if (!stage) return { top: 0, right: 0, bottom: 0, left: 0 };
@@ -347,7 +368,7 @@ export default function LayerEditor(
     const topBottom = Math.max(top ? top.bottom - stage.top : 0, island ? island.bottom - stage.top : 0);
     return {
       top: Math.max(0, topBottom),
-      bottom: phone && bar ? Math.max(0, stage.bottom - bar.top) : 0,
+      bottom: phone ? (bar ? Math.max(0, stage.bottom - bar.top) : 0) : reservesResultRef.current ? RESULT_STRIP : 0,
       left: !phone && left ? Math.max(0, left.right - stage.left) : 0,
       right: !phone && right ? Math.max(0, stage.right - right.left) : 0,
     };
@@ -360,7 +381,7 @@ export default function LayerEditor(
       if (!el) return;
       const phone = window.matchMedia("(max-width: 720px)").matches;
       const canvas = size ?? { width: historyRef.current.present.width, height: historyRef.current.present.height };
-      setView(fitView({ width: el.clientWidth, height: el.clientHeight }, canvas, insets(), phone ? 12 : 28, 2));
+      setView(fitView({ width: el.clientWidth, height: el.clientHeight }, canvas, insets(), phone ? FIT_MARGIN.phone : FIT_MARGIN.wide, 2));
     },
     [insets],
   );
@@ -457,8 +478,12 @@ export default function LayerEditor(
     setHistory(after);
     setView((v) => holdPictureView(v, before.present, after.present));
   };
-  const doUndo = () => moveHistory(undo);
-  const doRedo = () => moveHistory(redo);
+  const doUndo = () => {
+    if (!comparingRef.current) moveHistory(undo);
+  };
+  const doRedo = () => {
+    if (!comparingRef.current) moveHistory(redo);
+  };
 
   /* --------------------------------------------------- non-blocking region jobs */
 
@@ -511,37 +536,51 @@ export default function LayerEditor(
         })();
         continue;
       }
-      if (entry.autoFlatten || !output) {
-        say(copy.region.autoFlattenedDone);
+      if (!output) {
+        say(copy.region.appliedToast);
         continue;
       }
 
+      // Taken in submit order now, so when several land together the bar follows the last one.
+      const seq = (landedSeqRef.current += 1);
       void (async () => {
-        const rp = output.regionPatch;
-        const maskDataUrl = rp?.maskUrl ? await loadMaskAsDataUrl(rp.maskUrl) : null;
-        const normBox = rp ? { x: rp.x, y: rp.y, w: rp.w, h: rp.h } : entry.box;
-        const patchUrl = rp?.url ?? output.url;
+        const landing = patchLanding(entry, output);
+        const maskDataUrl = landing.maskUrl ? await loadMaskAsDataUrl(landing.maskUrl) : null;
         const newId = newLayerId();
-        edit((d) => {
-          if (d.layers.length >= MAX_LAYERS) return d;
-          const layer = createPatchLayer(d, {
-            id: newId,
-            url: patchUrl,
-            ref: { outputId: output.id },
-            // Fractions of the picture, placed wherever the picture sits on the canvas now.
-            box: pictureBoxToWorld(d, normBox),
-            name: nextName(d, copy.names.regionPatch),
-            maskDataUrl,
-          });
-          return addLayer(d, layer);
-        });
-        setSelectedId(newId);
-        setRegionBox(null);
-        setToolState("eraser");
-        say(copy.region.patchArrived);
+        edit((d) => withRegionPatch(d, landing, { id: newId, name: nextName(d, copy.names.regionPatch), maskDataUrl }));
+        const next = focusAfterPatch({ tool: toolRef.current, selectedId: null, regionBox: null }, newId);
+        setSelectedId(next.selectedId);
+        setRegionBox(next.regionBox);
+        dispatchResult({ type: "applied", layerId: newId, jobId: entry.jobId, seq, tool: next.tool });
       })();
     }
   }, [pendingRegionJobs, props.region, copy.names.regionPatch, copy.region, copy.canvas.fillDone, edit, say]);
+
+  /* ------------------------------------------------------- the result bar */
+
+  // Shown only while it still belongs (the patch is there, same tool, no other layer or new box).
+  const resultBar = resultState.bar && barSurvives(resultState.bar, { doc, tool, selectedId, regionBox }) ? resultState.bar : null;
+  const comparing = editsBlocked(resultBar);
+  comparingRef.current = comparing;
+  useEffect(() => {
+    if (resultState.bar && !resultBar) dispatchResult({ type: "dismiss" });
+  }, [resultState.bar, resultBar]);
+  const stageDoc = useMemo(() => stageDocFor(doc, resultBar), [doc, resultBar]);
+
+  const undoResult = () => {
+    if (!resultBar) return;
+    const id = resultBar.layerId;
+    moveHistory((h) => undoPatch(h, id));
+  };
+  const refineResult = () => {
+    if (!resultBar) return;
+    if (editingId) stopEdit();
+    const next = focusForRefine({ tool, selectedId, regionBox }, resultBar.layerId);
+    dispatchResult({ type: "refine" });
+    setToolState(next.tool);
+    setSelectedId(next.selectedId);
+    say(copy.region.refineHint);
+  };
 
   /* ------------------------------------------------------------------- adding */
 
@@ -741,7 +780,7 @@ export default function LayerEditor(
 
   const handleClipboardPaste = useCallback(
     (data: ClipboardDataLike | null | undefined, target: EventTarget | null, consume: () => void) => {
-      if (confirming || step) return;
+      if (confirming || step || comparingRef.current) return;
       const inRegionDom = Boolean(target && typeof (target as HTMLElement).closest === "function" && (target as HTMLElement).closest("[data-layers-region]"));
       if (tool === "marquee" || inRegionDom) return;
 
@@ -921,7 +960,7 @@ export default function LayerEditor(
       const started: TrackedRegionJob[] = [];
       let failedLine: string | null = null;
       for (const { strip, res } of results) {
-        if (res.ok) started.push({ jobId: res.job.id, autoFlatten: false, box: strip.box, fill: sent });
+        if (res.ok) started.push({ jobId: res.job.id, box: strip.box, fill: sent });
         else failedLine ??= res.message;
       }
       props.onFillSource?.(uploaded.asset.id, started.map((s) => s.jobId));
@@ -974,6 +1013,7 @@ export default function LayerEditor(
   };
 
   const finishClose = (mode: "keep" | "discard") => {
+    dispatchResult({ type: "dismiss" });
     if (mode === "discard") {
       discardedRef.current = true;
       clearDraft(storage, baseKey);
@@ -1013,6 +1053,7 @@ export default function LayerEditor(
   const save = async () => {
     if (step) return;
     if (editingId) stopEdit();
+    dispatchResult({ type: "dismiss" });
     setExportError(null);
     setStep("fonts");
     const current = historyRef.current.present;
@@ -1054,6 +1095,8 @@ export default function LayerEditor(
       return;
     }
     if (confirming || step) return;
+    // While "원본 비교" is held every shortcut is ignored: tools, delete, nudge, undo/redo, copy, zoom keys.
+    if (comparingRef.current) return;
     const target = event.target as HTMLElement;
     const typing = Boolean(target.closest("input, textarea, select, [contenteditable='true']"));
     const mod = event.ctrlKey || event.metaKey;
@@ -1162,7 +1205,10 @@ export default function LayerEditor(
       <div className="bsl-root" data-sheet={sheet ?? undefined} inert={confirming || busy}>
         <Stage
           copy={copy}
+          // Input and every edit read the real document; the compare copy is only drawn.
           doc={doc}
+          displayDoc={stageDoc}
+          inputLocked={comparing}
           baseUrl={base.url}
           frames={frames}
           layouts={layouts}
@@ -1182,11 +1228,21 @@ export default function LayerEditor(
           stageRef={stageRef}
           onSelect={setSelectedId}
           onEditText={(id) => (id ? startEdit(id) : stopEdit())}
-          onPreview={(next) => setHistory((h) => preview(h, next))}
-          onSettle={(start) => setHistory((h) => settle(h, start))}
+          // Second line of defence: nothing from the stage reaches the history while compare is held.
+          onPreview={(next) => {
+            const blocked = comparingRef.current;
+            setHistory((h) => guardStageEdit(h, preview(h, next), blocked));
+          }}
+          onSettle={(start) => {
+            const blocked = comparingRef.current;
+            setHistory((h) => guardStageEdit(h, settle(h, start), blocked));
+          }}
           canvasMode={canvasOpen}
           onRevert={onRevert}
-          onTextInput={(id, text) => setHistory((h) => preview(h, updateLayer(h.present, id, { text })))}
+          onTextInput={(id, text) => {
+            const blocked = comparingRef.current;
+            setHistory((h) => guardStageEdit(h, preview(h, updateLayer(h.present, id, { text })), blocked));
+          }}
           onImageError={(url) => setFailed((f) => (f.has(url) ? f : new Set([...f, url])))}
           onDropRef={(ref, at) => {
             const item = resolveRef(ref);
@@ -1331,6 +1387,21 @@ export default function LayerEditor(
           </div>
         )}
 
+        {resultBar && (
+          <div className="bsl-result-wrap">
+            <RegionResultBar
+              key={resultBar.jobId}
+              copy={copy}
+              comparing={resultBar.comparing}
+              // Phones hide the bar under an open sheet; when it shows again its quiet time restarts.
+              visibleKey={sheet ?? ""}
+              onCompare={(held) => dispatchResult({ type: "compare", on: held })}
+              onUndo={undoResult}
+              onRefine={refineResult}
+            />
+          </div>
+        )}
+
         <aside className="bsl-panel bsl-left" ref={leftRef} data-panel="add" aria-label={copy.add.title}>
           <SheetHead copy={copy} onClose={() => setSheet(null)} />
           <AddPanel
@@ -1359,12 +1430,10 @@ export default function LayerEditor(
                 region={props.region}
                 box={regionBox}
                 preset={props.initialRegionPreset}
-                autoFlatten={autoFlatten}
                 activeForPaste={tool === "marquee"}
                 quickItems={quickTrayItems}
                 uploading={uploading.length > 0}
                 onBox={setRegionBox}
-                onAutoFlatten={setAutoFlatten}
                 resolveRef={(ref) => {
                   const hit = resolveRef(ref);
                   return hit ? pickToTray(hit) : null;
@@ -1372,7 +1441,8 @@ export default function LayerEditor(
                 onUploadRefs={uploadRegionRefFiles}
                 onNotice={say}
                 onSubmitted={(jobId, meta) => {
-                  setPendingRegionJobs((cur) => [...cur, { jobId, autoFlatten: meta.autoFlatten, box: meta.box }]);
+                  setPendingRegionJobs((cur) => [...cur, trackRegionJob(jobId, meta)]);
+                  dispatchResult({ type: "dismiss" });
                   setSheet(null);
                 }}
               />

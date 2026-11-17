@@ -432,7 +432,7 @@ describe("LibraryRail & Oplux RegionEditPanel entry points", () => {
     expect(menuTrigger).toContain('aria-haspopup="menu"');
   });
 
-  it("renders Oplux RegionEditPanel with preview 1, 5-task Prompt Assistant, ! info toggles, auto-flatten, and credit-only single solid CTA", () => {
+  it("renders Oplux RegionEditPanel with preview 1, 5-task Prompt Assistant, ! info toggles, no flatten choice, and credit-only single solid CTA", () => {
     const layersCopy = getDictionary("ko").studioLayers;
     const html = renderToStaticMarkup(
       <RegionEditPanel
@@ -452,11 +452,9 @@ describe("LibraryRail & Oplux RegionEditPanel entry points", () => {
           enhancePrompt: async () => ({ ok: true, finalPrompt: "enhanced" }),
         }}
         box={{ x: 0.2, y: 0.25, w: 0.35, h: 0.3 }}
-        autoFlatten={false}
         quickItems={[]}
         uploading={false}
         onBox={() => {}}
-        onAutoFlatten={() => {}}
         resolveRef={() => null}
         onUploadRefs={async () => []}
         onSubmitted={() => {}}
@@ -470,7 +468,10 @@ describe("LibraryRail & Oplux RegionEditPanel entry points", () => {
     for (const task of ["remove_mark", "place_mark", "swap_person", "enhance_detail", "custom"]) {
       expect(html).toContain(`data-task="${task}"`);
     }
-    expect(html).toContain(layersCopy.region.autoFlatten);
+    // The only checkbox left is prompt refinement: a finished edit always lands as a layer.
+    expect(html.match(/type="checkbox"/g)).toHaveLength(1);
+    expect(html).toContain(layersCopy.region.enhanceLabel);
+    expect(html).not.toContain("자동으로 바로 합치기");
     expect(html.match(/data-variant="solid"/g)).toHaveLength(1);
     expect(html).toContain("크레딧");
     expect(html).not.toMatch(/₩|KRW|\d\s*원/i);
