@@ -1417,6 +1417,52 @@ button.bsv-spot-tag {
   box-shadow: inset 0 0 0 1px var(--bsv-line-strong);
   color: var(--bsv-body);
 }
+
+/*
+ * Team notes (docs/BRAND-ROOMS-FEEDBACK.md §5). Only the team's admin page renders these: a dashed edge
+ * and a faint hatch read as "not on the brand's screen" before the tag is even read. No new colour.
+ */
+.bsv-thread[data-team],
+.bsv-composer[data-team] .bsv-input {
+  background-image: repeating-linear-gradient(135deg, transparent 0 9px, color-mix(in srgb, var(--bsv-ink) 6%, transparent) 9px 10px);
+  outline: 1.5px dashed var(--bsv-line-strong);
+  outline-offset: -1.5px;
+}
+.bsv-team-tag {
+  padding: 1px 7px;
+  border-radius: 999px;
+  background: var(--bsv-canvas);
+  box-shadow: inset 0 0 0 1px var(--bsv-line-strong);
+  color: var(--bsv-ink);
+  font-size: 11.5px;
+  font-weight: 600;
+}
+.bsv-team-switch-row {
+  display: grid;
+  gap: 4px;
+}
+.bsv-team-switch {
+  display: inline-flex;
+  gap: 8px;
+  align-items: center;
+  width: fit-content;
+  color: var(--bsv-body);
+  font-size: 13px;
+  font-weight: 560;
+  cursor: pointer;
+}
+.bsv-team-switch input {
+  width: 16px;
+  height: 16px;
+  margin: 0;
+  accent-color: var(--bsv-ink);
+}
+.bsv-team-hint {
+  margin: 0;
+  color: var(--bsv-muted);
+  font-size: 12.5px;
+  line-height: 1.5;
+}
 .bsv-guest-name {
   display: grid;
   gap: 6px;

@@ -407,6 +407,16 @@ export const adminConsoleEn = {
     photoCleanup: "Precheck & optical cleanup router",
     photoCleanupDesc: "Hands, glasses/reflection, hairline & garment edge route",
   },
+  /**
+   * Team notes on a review (docs/BRAND-ROOMS-FEEDBACK.md §5). Only the admin review page reads these words;
+   * they live here, not in `studioReview`, because brand and share pages carry that whole block.
+   */
+  reviewTeam: {
+    toggle: "Team only",
+    hint: "The brand and share links never see this note.",
+    tag: "Team note",
+    column: "Team notes",
+  },
 };
 
 export const adminConsoleKo: typeof adminConsoleEn = {
@@ -812,5 +822,11 @@ export const adminConsoleKo: typeof adminConsoleEn = {
     zeroLeakPublic: "프롬프트 본문 공개 허용됨",
     photoCleanup: "사전 사진 점검 · 광학 클린업 라우터",
     photoCleanupDesc: "손가락·안경 반사·헤어라인·의상 경계 자동 보정 라우팅",
+  },
+  reviewTeam: {
+    toggle: "팀만 보기",
+    hint: "브랜드와 공유 링크에는 이 의견이 보이지 않아요.",
+    tag: "팀 메모",
+    column: "팀 메모",
   },
 };

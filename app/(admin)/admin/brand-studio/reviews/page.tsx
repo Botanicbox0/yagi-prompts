@@ -60,6 +60,7 @@ export default async function StudioReviews({ searchParams }: { searchParams: Pr
               { key: "title", label: a.columns.title },
               { key: "status", label: a.columns.status },
               { key: "open", label: a.columns.open, numeric: true },
+              { key: "team", label: dict.adminConsole.reviewTeam.column, numeric: true },
               { key: "activity", label: a.columns.activity },
             ]}
             rows={reviews.map((item) => ({
@@ -74,7 +75,9 @@ export default async function StudioReviews({ searchParams }: { searchParams: Pr
                   </a>
                 ),
                 status: <StatusPill tone={TONES[item.status]}>{r.status[item.status]}</StatusPill>,
+                // What the brand sees, then the team's own notes apart (docs/BRAND-ROOMS-FEEDBACK.md §5).
                 open: `${formatCount(item.commentsOpen, locale)} / ${formatCount(item.commentsTotal, locale)}`,
+                team: `${formatCount(item.teamCommentsOpen ?? 0, locale)} / ${formatCount(item.teamCommentsTotal ?? 0, locale)}`,
                 activity: formatAdminTime(item.lastActivityAt, locale),
               },
             }))}

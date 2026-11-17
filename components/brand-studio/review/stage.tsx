@@ -29,10 +29,13 @@ import {
 } from "@/lib/brand-studio/review-contracts";
 import { corsMediaUrl } from "@/lib/brand-studio/cors-media-url";
 import type { studioReviewEn } from "@/messages/studio-review";
+import type { adminConsoleEn } from "@/messages/admin-console";
 import { CompareView } from "./compare";
 import { InkLayer, InkTools, useInk } from "./ink";
 
 export type ReviewCopy = typeof studioReviewEn;
+/** The admin page's words for team notes (`adminConsole.reviewTeam`), never part of `ReviewCopy`. */
+export type ReviewTeamCopy = (typeof adminConsoleEn)["reviewTeam"];
 export type ReviewActionResult = { ok: true } | { ok: false; code: string };
 
 export interface ReviewNoteInput {
@@ -45,6 +48,8 @@ export interface ReviewNoteInput {
   y?: number | null;
   /** Rooms: a drawing on the frame. */
   strokes?: ReviewStroke[] | null;
+  /** The team's page only: keep this new note to the team (docs/BRAND-ROOMS-FEEDBACK.md §5). */
+  team?: boolean;
 }
 
 export interface ReviewActions {
@@ -91,6 +96,12 @@ export interface ReviewStageProps {
   downloadUrl?: string | null;
   /** The file name to save as. With it, a file on another origin is fetched and saved instead of opened. */
   downloadName?: string | null;
+  /**
+   * The team's own page only (`AdminReviewStage`): the "팀만 보기" switch on the composer, the team-note tag
+   * and background, and a visibility column in the export. Every other screen leaves it out; their data
+   * never holds a team note, and if one ever arrived without this prop the stage would not show it.
+   */
+  team?: { copy: ReviewTeamCopy } | null;
 }
 
 export function fill(template: string, values: Record<string, string | number>): string {
@@ -114,10 +125,16 @@ function csvCell(value: string | number | boolean): string {
   return /[",\r\n]/.test(raw) ? `"${raw.replace(/"/g, '""')}"` : raw;
 }
 
+/**
+ * The notes as a file, built in the browser from the notes the screen holds. `team` (the team's page only)
+ * marks team notes: a Visibility column in the CSV, `[team]` in the checklist and the markers. Without it a
+ * team note is never written out, should one ever be in the list.
+ */
 export function exportReviewComments(
   reviewTitle: string,
   comments: readonly ReviewComment[],
   format: ReviewExportFormat,
+  options: { team?: boolean } = {},
 ): { filename: string; mime: string; content: string } {
   const safeBase =
     reviewTitle
@@ -125,10 +142,13 @@ export function exportReviewComments(
       .replace(/\s+/g, "-")
       .replace(/^-+|-+$/g, "")
       .slice(0, 60) || "review";
-  const threads = threadComments(comments as ReviewComment[]).filter((t) => !t.root.deleted);
+  const withTeam = options.team === true;
+  const listed = withTeam ? comments : comments.filter((c) => !c.team);
+  const threads = threadComments(listed as ReviewComment[]).filter((t) => !t.root.deleted);
+  const teamMark = (c: ReviewComment) => (withTeam && c.team ? "[team] " : "");
 
   if (format === "csv") {
-    const header = ["#", "Timecode", "End", "Status", "Author", "Role", "Spot", "Drawing", "Comment"].join(",");
+    const header = ["#", "Timecode", "End", "Status", "Author", "Role", "Spot", "Drawing", ...(withTeam ? ["Visibility"] : []), "Comment"].join(",");
     const rows = threads.map((t, index) => {
       const author = t.root.authorName ?? (t.root.authorRole === "studio" ? "YAGI team" : t.root.guest ? "Guest" : "Brand");
       return [
@@ -140,6 +160,7 @@ export function exportReviewComments(
         t.root.guest ? "guest" : t.root.authorRole,
         t.root.x != null ? `${Math.round(t.root.x * 100)}%,${Math.round((t.root.y ?? 0) * 100)}%` : "",
         Boolean(t.root.strokes?.length),
+        ...(withTeam ? [t.root.team ? "team" : "public"] : []),
         t.root.body,
       ]
         .map(csvCell)
@@ -159,7 +180,7 @@ export function exportReviewComments(
             ? `[${formatTimecode(t.root.atMs)}–${formatTimecode(t.root.endMs)}] `
             : `[${formatTimecode(t.root.atMs)}] `
           : "";
-      lines.push(`- [${check}] **#${index + 1}** ${time}(${author}): ${t.root.body.replace(/\s+/g, " ").trim()}`);
+      lines.push(`- [${check}] **#${index + 1}** ${teamMark(t.root)}${time}(${author}): ${t.root.body.replace(/\s+/g, " ").trim()}`);
       for (const reply of t.replies) {
         if (reply.deleted) continue;
         const replyAuthor = reply.authorName ?? (reply.authorRole === "studio" ? "YAGI team" : reply.guest ? "Guest" : "Brand");
@@ -173,7 +194,7 @@ export function exportReviewComments(
     const start = formatMarkerMs(t.root.atMs ?? 0);
     const end = formatMarkerMs(t.root.endMs ?? t.root.atMs ?? 0);
     const author = t.root.authorName ?? (t.root.authorRole === "studio" ? "YAGI team" : t.root.guest ? "Guest" : "Brand");
-    return `${start}\t${end}\t#${index + 1} ${author}\t${t.root.body.replace(/\s+/g, " ").trim()}`;
+    return `${start}\t${end}\t#${index + 1} ${teamMark(t.root)}${author}\t${t.root.body.replace(/\s+/g, " ").trim()}`;
   });
   return { filename: `${safeBase}-markers.txt`, mime: "text/plain;charset=utf-8", content: `${markerLines.join("\n")}\n` };
 }
@@ -318,7 +339,7 @@ function isCrossOrigin(url: string): boolean {
 
 export function ReviewStage({
   review,
-  comments,
+  comments: allComments,
   canWrite,
   copy,
   locale,
@@ -337,7 +358,11 @@ export function ReviewStage({
   tools,
   downloadUrl,
   downloadName,
+  team = null,
 }: ReviewStageProps) {
+  // Outside the team's page a team note is never shown, whatever the caller passed.
+  const comments = useMemo(() => (team ? allComments : allComments.filter((c) => !c.team)), [team, allComments]);
+  const [teamOnly, setTeamOnly] = useState(false);
   const isVideo = review.kind === "video";
   const media = review.mediaUrl;
   const videoRef = useRef<HTMLVideoElement>(null);
@@ -385,6 +410,7 @@ export function ReviewStage({
     setDurationMs(review.seconds ? Math.round(review.seconds * 1000) : 0);
     setComparing(false);
     setDragRange(null);
+    setTeamOnly(false);
     ink.reset();
     seededRef.current = false;
     // `ink.reset` is stable (useInk).
@@ -498,7 +524,7 @@ export function ReviewStage({
   }
 
   function downloadExport(format: ReviewExportFormat) {
-    const out = exportReviewComments(review.title, comments, format);
+    const out = exportReviewComments(review.title, comments, format, { team: team != null });
     const blob = new Blob([out.content], { type: out.mime });
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
@@ -710,7 +736,8 @@ export function ReviewStage({
     }
     const pending = ink.active ? ink.finish() : null;
     const strokes = pending && pending.length ? pending : (mark?.strokes ?? null);
-    const note = composeNote(body, mark, { isVideo, general, extended, currentMs, strokes });
+    const composed = composeNote(body, mark, { isVideo, general, extended, currentMs, strokes });
+    const note = team && teamOnly ? { ...composed, team: true } : composed;
     const ok = await run("send", () => actions.addComment(note));
     if (ok) {
       setDraft("");
@@ -1190,6 +1217,7 @@ export function ReviewStage({
             <form
               className="bsv-composer"
               data-review-composer
+              data-team={team && teamOnly ? "" : undefined}
               onSubmit={(e) => {
                 e.preventDefault();
                 void send();
@@ -1277,6 +1305,19 @@ export function ReviewStage({
                   }
                 }}
               />
+              {team && (
+                <div className="bsv-team-switch-row">
+                  <label className="bsv-team-switch">
+                    <input type="checkbox" checked={teamOnly} onChange={(e) => setTeamOnly(e.target.checked)} data-review-team-toggle aria-describedby={teamOnly ? `bsv-team-hint-${review.id}` : undefined} />
+                    {team.copy.toggle}
+                  </label>
+                  {teamOnly && (
+                    <p className="bsv-team-hint" id={`bsv-team-hint-${review.id}`}>
+                      {team.copy.hint}
+                    </p>
+                  )}
+                </div>
+              )}
               <div className="bsv-form-row">
                 {media && (
                   <button type="button" className="bsv-pill" onClick={markMoment} data-review-mark aria-pressed={spotMode}>
@@ -1322,6 +1363,7 @@ export function ReviewStage({
         data-carried={carried ? "" : undefined}
         data-active={activeId === t.root.id ? "" : undefined}
         data-resolved={t.root.resolved ? "" : undefined}
+        data-team={team && t.root.team ? "" : undefined}
         onClick={(e) => {
           // A click on the note itself (not on one of its controls) brings the film to it;
           // the timecode button is the keyboard path to the same thing.
@@ -1329,7 +1371,7 @@ export function ReviewStage({
           if (!t.root.deleted) focusThread(t);
         }}
       >
-        <CommentBody comment={t.root} number={numberOf.get(t.root.id) ?? 0} copy={copy} locale={locale} onSeek={() => focusThread(t)} />
+        <CommentBody comment={t.root} number={numberOf.get(t.root.id) ?? 0} copy={copy} locale={locale} onSeek={() => focusThread(t)} teamTag={team && t.root.team ? team.copy.tag : null} />
         {!t.root.deleted && (canComment || canManage) && (
           <div className="bsv-thread-actions">
             {canComment && !carried && (
@@ -1426,6 +1468,7 @@ function CommentBody({
   copy,
   locale,
   onSeek,
+  teamTag = null,
 }: {
   comment: ReviewComment;
   number?: number;
@@ -1433,6 +1476,8 @@ function CommentBody({
   locale: "ko" | "en";
   /** Thread heads only: the moment (or spot) is a button that brings the film or the pin to it. */
   onSeek?: () => void;
+  /** The team's page only: the "팀 메모" tag on a team note's thread head. */
+  teamTag?: string | null;
 }) {
   const role = comment.guest ? "guest" : comment.authorRole;
   const timecode = comment.atMs == null ? "" : comment.endMs != null ? `${formatTimecode(comment.atMs)}–${formatTimecode(comment.endMs)}` : formatTimecode(comment.atMs);
@@ -1450,6 +1495,11 @@ function CommentBody({
             <span className="bsv-role" data-role={role}>
               {copy.roles[role]}
             </span>
+            {teamTag && (
+              <span className="bsv-team-tag" data-review-team-tag>
+                {teamTag}
+              </span>
+            )}
           </>
         )}
         <time className="bsv-when" dateTime={comment.createdAt}>

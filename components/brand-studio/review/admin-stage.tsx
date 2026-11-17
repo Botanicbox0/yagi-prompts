@@ -7,7 +7,7 @@
 import { useRouter } from "next/navigation";
 import { useMemo } from "react";
 import type { ReviewComment, ReviewItem, ReviewVersion } from "@/lib/brand-studio/review-contracts";
-import { ReviewStage, type ReviewActionResult, type ReviewActions, type ReviewCopy } from "./stage";
+import { ReviewStage, type ReviewActionResult, type ReviewActions, type ReviewCopy, type ReviewTeamCopy } from "./stage";
 
 const ADMIN_CODES: Record<string, string> = {
   forbidden: "forbidden",
@@ -29,6 +29,7 @@ export function AdminReviewStage({
   initialMs,
   extended = false,
   versions,
+  teamCopy,
 }: {
   review: ReviewItem;
   comments: ReviewComment[];
@@ -39,6 +40,8 @@ export function AdminReviewStage({
   /** Rooms on and 0084 applied: ranges, drawings and the version tools (docs/BRAND-ROOMS.md §6). */
   extended?: boolean;
   versions?: ReviewVersion[];
+  /** Team notes (docs/BRAND-ROOMS-FEEDBACK.md §5): this page alone offers "팀만 보기" and shows the tag. */
+  teamCopy: ReviewTeamCopy;
 }) {
   const router = useRouter();
   const actions = useMemo<ReviewActions>(() => {
@@ -70,11 +73,14 @@ export function AdminReviewStage({
           x: input.x,
           y: input.y,
           strokes: input.strokes?.length ? JSON.stringify(input.strokes) : null,
+          // A reply sends nothing here: the server gives it its thread's visibility.
+          visibility: input.team ? "team" : null,
         }),
       resolveComment: (commentId) => post("brand_studio.review.resolve", { reviewId: review.id, commentId }),
       setStatus: (status) => post("brand_studio.review.status", { reviewId: review.id, status }),
     };
   }, [review.id, router]);
+  const team = useMemo(() => ({ copy: teamCopy }), [teamCopy]);
 
   return (
     <ReviewStage
@@ -90,6 +96,7 @@ export function AdminReviewStage({
       extended={extended}
       versions={versions}
       onVersion={(id) => router.push(adminReviewPath(id))}
+      team={team}
     />
   );
 }

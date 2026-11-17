@@ -28,6 +28,7 @@ import {
 import { imageInfo, sniffMime, videoInfo } from '@/lib/brand-studio/files';
 import { isStudioMediaKey, type StudioMediaStore } from '@/lib/brand-studio/media-store';
 import { dropUnreferencedStudioKeys } from '@/lib/brand-studio/physical-cleanup';
+import { publicNotesOnly, teamNotesReady } from '@/lib/brand-studio/review-visibility';
 import type { RoomAlertItem, RoomSummary } from '@/components/brand-rooms/seams';
 import { requireRoomProject, RoomDenied, roomSeat, type RoomSeat } from './access';
 import type { RoomEventKind, RoomRef } from './events';
@@ -332,12 +333,14 @@ async function refViews(sql: SqlRunner, media: StudioMediaStore, organizationId:
       ).rows.map((r) => [r.id, r]),
     );
     const commentIds = [...new Set(reviewRefs.map((r) => r.commentId?.toLowerCase()).filter((id): id is string => Boolean(id)))];
+    // A team note (0093) never gives a card its words: no line names one, and if one did it reads as gone.
     const comments =
       commentIds.length && (await tableExists(sql, 'brand_studio_review_comments'))
         ? new Map(
             (
               await sql.query<{ id: string; row: Json }>(
-                'select c.id::text as id, to_jsonb(c) as row from brand_studio_review_comments c where c.id = any($1::uuid[]) and c.organization_id = $2',
+                `select c.id::text as id, to_jsonb(c) as row from brand_studio_review_comments c
+                  where c.id = any($1::uuid[]) and c.organization_id = $2${publicNotesOnly('c', await teamNotesReady(sql))}`,
                 [commentIds, organizationId],
               )
             ).rows.map((r) => [r.id, r.row]),
@@ -403,8 +406,12 @@ async function requireRefInProject(sql: SqlRunner, organizationId: string, proje
   if (!review || jsonString(review, 'deleted_at')) throw new MessageDenied('not_found');
   if ('project_id' in review && jsonString(review, 'project_id')?.toLowerCase() !== projectId) throw new MessageDenied('not_found');
   if (ref.commentId) {
+    // The conversation is the brand's to read: a line may not point at a team note (0093), whoever writes it.
     const comment = (
-      await sql.query('select 1 from brand_studio_review_comments where id = $1 and review_id = $2 and organization_id = $3', [ref.commentId, ref.reviewId, organizationId])
+      await sql.query(
+        `select 1 from brand_studio_review_comments c where c.id = $1 and c.review_id = $2 and c.organization_id = $3${publicNotesOnly('c', await teamNotesReady(sql))}`,
+        [ref.commentId, ref.reviewId, organizationId],
+      )
     ).rows[0];
     if (!comment) throw new MessageDenied('not_found');
   }
@@ -1187,6 +1194,8 @@ async function loadRoomAlerts(
     }
     if (await tableExists(sql, 'brand_studio_reviews')) {
       const hasComments = await tableExists(sql, 'brand_studio_review_comments');
+      // The brand's open notes: team notes (0093) are not theirs to answer and never counted here.
+      const shown = hasComments ? publicNotesOnly('c', await teamNotesReady(sql)) : '';
       const reviews = (
         await sql.query<{ id: string; project_id: string; title: string; version: number | null; status: string; open_notes: number; updated_at: Date | string }>(
           `select distinct on (coalesce(r.stack_id, r.id))
@@ -1194,7 +1203,7 @@ async function loadRoomAlerts(
                   ${
                     hasComments
                       ? `(select count(*)::int from brand_studio_review_comments c
-                          where c.review_id = r.id and c.parent_id is null and c.deleted_at is null and c.resolved_at is null)`
+                          where c.review_id = r.id and c.parent_id is null and c.deleted_at is null and c.resolved_at is null${shown})`
                       : '0'
                   } as open_notes
              from brand_studio_reviews r
