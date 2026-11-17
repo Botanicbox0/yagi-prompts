@@ -68,6 +68,8 @@ import {
   type UpscaleResolution,
 } from '@/lib/brand-studio/upscale/contracts';
 import type { StudioComposeCopy } from '@/messages/studio-compose';
+import { AssistPanel, AssistPreviewBar } from './assist/assist-panel';
+import { useEditAssist } from './assist/use-edit-assist';
 import s from './video-composer.module.css';
 
 export interface VideoComposerProps {
@@ -87,6 +89,8 @@ export interface VideoComposerProps {
   initialToolTab?: 'clips' | 'color' | 'music' | 'captions' | 'upscale';
   initialBrowserFilter?: 'recent' | 'likes' | 'folders' | 'uploads';
   initialProject?: ComposerProject;
+  /** `BRAND_STUDIO_EDIT_ASSIST`: the right panel becomes "말로 편집" (preview, apply, undo, redo). */
+  editAssist?: boolean;
 }
 
 type ToolTab = 'clips' | 'color' | 'music' | 'captions' | 'upscale';
@@ -219,6 +223,7 @@ export function VideoComposer({
   initialToolTab = 'clips',
   initialBrowserFilter = 'recent',
   initialProject,
+  editAssist = false,
 }: VideoComposerProps) {
   const api = useMemo(() => createStudioApi({ organizationId }), [organizationId]);
   const [allowance, setAllowance] = useState<StudioAllowanceView>(initialAllowance);
@@ -234,6 +239,7 @@ export function VideoComposer({
 
   const [project, setProject] = useState<ComposerProject>(() => initialProject ?? emptyComposerProject('9:16'));
   const [undoStack, setUndoStack] = useState<ComposerProject[]>([]);
+  const [redoStack, setRedoStack] = useState<ComposerProject[]>([]);
   const [selectedClipIdx, setSelectedClipIdx] = useState<number>(0);
 
   // Playback & stage refs
@@ -300,6 +306,26 @@ export function VideoComposer({
   const [statusMessage, setStatusMessage] = useState<string | null>(null);
   const [shareReviewTarget, setShareReviewTarget] = useState<ShareReviewTarget | null>(null);
 
+  // "말로 편집": the player and the timeline cards show `shownProject`; every edit path keeps using `project`.
+  const assist = useEditAssist({
+    enabled: editAssist,
+    organizationId,
+    locale,
+    canCreate,
+    copy,
+    project,
+    playheadSec,
+    selectedClipId: project.clips[Math.min(selectedClipIdx, Math.max(0, project.clips.length - 1))]?.id ?? null,
+    undoStack,
+    redoStack,
+    commit: (next) => commitProject(next),
+    undo: () => handleUndo(),
+    detectCuts: (clip) => detectCutsForClip(clip),
+  });
+  const assistLockRef = assist.lockedRef;
+  const shownProject = assist.preview && !assist.comparing ? assist.preview.draft : project;
+  const lockAttrs = assist.preview ? ({ inert: true, 'aria-disabled': true } as const) : {};
+
   useShareReviewEvent(organizationId, setShareReviewTarget);
 
   const audioAssets = useMemo(() => assets.filter((a) => a.kind === 'audio'), [assets]);
@@ -364,9 +390,9 @@ export function VideoComposer({
     };
   }, [activeFolderId, browserFilter, folderItemsById, organizationId]);
 
-  const totalSec = useMemo(() => projectDurationSec(project), [project]);
-  const spans = useMemo(() => timelineSpans(project), [project]);
-  const frameAtPlayhead = useMemo(() => frameStateAtTime(project, playheadSec), [project, playheadSec]);
+  const totalSec = useMemo(() => projectDurationSec(shownProject), [shownProject]);
+  const spans = useMemo(() => timelineSpans(shownProject), [shownProject]);
+  const frameAtPlayhead = useMemo(() => frameStateAtTime(shownProject, playheadSec), [shownProject, playheadSec]);
   const remainingCredits = useMemo(() => creditsLeft(allowance.capKrw, allowance.usedKrw), [allowance]);
   const renderCostCredits = useMemo(
     () => (project.clips.length > 0 ? composeFinalRenderCredits(totalSec) : 0),
@@ -411,34 +437,59 @@ export function VideoComposer({
     }
   }, [musicRevealCustom, suggestedDropSec]);
 
+  // While a "말로 편집" proposal is previewed every edit path is a no-op (`assistLockRef`).
+  const projectRef = useRef(project);
+  useEffect(() => {
+    projectRef.current = project;
+  }, [project]);
+
   const commitProject = useCallback((next: ComposerProject) => {
+    if (assistLockRef.current) return;
     setProject((prev) => {
       setUndoStack((stack) => [...stack.slice(-24), prev]);
       return next;
     });
+    setRedoStack((redo) => (redo.length === 0 ? redo : []));
     setSavedAssetId(null);
-  }, []);
+  }, [assistLockRef]);
 
   const applyPatches = useCallback(
     (patches: readonly TimelinePatch[]) => {
+      if (assistLockRef.current) return 0;
       const { project: updated, appliedCount } = applyTimelinePatches(project, patches);
       if (appliedCount > 0) {
         commitProject(updated);
       }
       return appliedCount;
     },
-    [commitProject, project],
+    [assistLockRef, commitProject, project],
   );
 
   const handleUndo = useCallback(() => {
+    if (assistLockRef.current) return;
     setUndoStack((stack) => {
       if (stack.length === 0) return stack;
       const previous = stack[stack.length - 1]!;
+      const current = projectRef.current;
+      setRedoStack((redo) => (redo[redo.length - 1] === current ? redo : [...redo.slice(-24), current]));
       setProject(previous);
       setSavedAssetId(null);
       return stack.slice(0, -1);
     });
-  }, []);
+  }, [assistLockRef]);
+
+  const handleRedo = useCallback(() => {
+    if (assistLockRef.current) return;
+    setRedoStack((redo) => {
+      if (redo.length === 0) return redo;
+      const next = redo[redo.length - 1]!;
+      const current = projectRef.current;
+      setUndoStack((stack) => (stack[stack.length - 1] === current ? stack : [...stack.slice(-24), current]));
+      setProject(next);
+      setSavedAssetId(null);
+      return redo.slice(0, -1);
+    });
+  }, [assistLockRef]);
 
   const handlePlayheadSplit = useCallback(() => {
     if (!canCreate || project.clips.length === 0) return;
@@ -471,13 +522,13 @@ export function VideoComposer({
       ) {
         return;
       }
-      if (project.clips.length === 0 || !canCreate) return;
+      if (project.clips.length === 0 || !canCreate || assistLockRef.current) return;
       event.preventDefault();
       handlePlayheadSplit();
     };
     window.addEventListener('keydown', onKeyDown);
     return () => window.removeEventListener('keydown', onKeyDown);
-  }, [canCreate, handlePlayheadSplit, project.clips.length]);
+  }, [assistLockRef, canCreate, handlePlayheadSplit, project.clips.length]);
 
   // Synchronize preview <video> and <audio> with playheadSec
   useEffect(() => {
@@ -508,17 +559,18 @@ export function VideoComposer({
 
   useEffect(() => {
     const a = previewAudioRef.current;
+    const bgm = shownProject.bgm;
     if (!a) return;
-    if (!project.bgm || !playing || totalSec <= 0) {
+    if (!bgm || !playing || totalSec <= 0) {
       if (!a.paused) a.pause();
       return;
     }
-    if (a.getAttribute('data-bgm-src') !== project.bgm.srcUrl) {
-      a.setAttribute('data-bgm-src', project.bgm.srcUrl);
-      a.src = project.bgm.srcUrl;
+    if (a.getAttribute('data-bgm-src') !== bgm.srcUrl) {
+      a.setAttribute('data-bgm-src', bgm.srcUrl);
+      a.src = bgm.srcUrl;
       a.load();
     }
-    a.volume = project.bgm.volume;
+    a.volume = bgm.volume;
     if (frameAtPlayhead.bgmTimeSec !== null && Math.abs(a.currentTime - frameAtPlayhead.bgmTimeSec) > 0.35) {
       try {
         a.currentTime = frameAtPlayhead.bgmTimeSec;
@@ -527,7 +579,7 @@ export function VideoComposer({
       }
     }
     if (a.paused) void a.play().catch(() => {});
-  }, [frameAtPlayhead.bgmTimeSec, playing, project.bgm, totalSec]);
+  }, [frameAtPlayhead.bgmTimeSec, playing, shownProject.bgm, totalSec]);
 
   useEffect(() => {
     if (!playing || totalSec <= 0) return;
@@ -1993,8 +2045,8 @@ export function VideoComposer({
           <div className={s.titleRow}>
             <h1 className="bs-title">{copy.title}</h1>
             <span className={s.summaryBadge} data-compose-summary>
-              {project.clips.length > 0
-                ? interpolate(copy.summary, { clips: project.clips.length, seconds: totalSec })
+              {shownProject.clips.length > 0
+                ? interpolate(copy.summary, { clips: shownProject.clips.length, seconds: totalSec })
                 : copy.emptySummary}
             </span>
           </div>
@@ -2014,9 +2066,22 @@ export function VideoComposer({
             onClick={handleUndo}
             disabled={undoStack.length === 0}
             data-compose-undo
+            {...lockAttrs}
           >
             {copy.actions.undo}
           </button>
+          {editAssist ? (
+            <button
+              type="button"
+              className={s.pillBtn}
+              onClick={handleRedo}
+              disabled={redoStack.length === 0}
+              data-compose-redo
+              {...lockAttrs}
+            >
+              {copy.assist.redo}
+            </button>
+          ) : null}
           <button
             type="button"
             className={s.pillBtn}
@@ -2031,6 +2096,7 @@ export function VideoComposer({
             onClick={() => void handleExportNle()}
             disabled={project.clips.length === 0 || exportingNle}
             data-compose-export-nle
+            {...lockAttrs}
           >
             {exportingNle ? copy.actions.exportingNle : copy.actions.exportNle}
           </button>
@@ -2056,6 +2122,7 @@ export function VideoComposer({
             disabled={!canCreate || project.clips.length === 0 || exportingRatio !== null}
             data-variant="solid"
             data-compose-export
+            {...lockAttrs}
           >
             {exportingRatio !== null
               ? interpolate(copy.actions.exporting, { percent: Math.round(exportingRatio * 100) })
@@ -2085,7 +2152,7 @@ export function VideoComposer({
 
       <div className={s.workbench}>
         {/* -------------------------------------------------------- Left: 5-Tab Post-Production Tools */}
-        <section className={s.panel} aria-label={copy.sources.tabsLabel} data-compose-sources>
+        <section className={s.panel} aria-label={copy.sources.tabsLabel} data-compose-sources {...lockAttrs}>
           <div className={s.toolTabStrip} role="tablist" aria-label={copy.sources.tabsLabel}>
             {(['clips', 'color', 'music', 'captions', 'upscale'] as const).map((tab) => (
               <button
@@ -2798,14 +2865,14 @@ export function VideoComposer({
         {/* -------------------------------------------------------- Center: Stage & Timeline */}
         <div className={s.centerColumn}>
           <section className={s.stageCard} data-compose-stage>
-            <div className={s.stageToolbar}>
+            <div className={s.stageToolbar} {...lockAttrs}>
               <div className={s.aspectGroup} role="group" aria-label={copy.aspects.label}>
                 {COMPOSE_ASPECTS.map((aspect) => (
                   <button
                     key={aspect}
                     type="button"
                     className={s.aspectPill}
-                    aria-pressed={project.aspect === aspect}
+                    aria-pressed={shownProject.aspect === aspect}
                     onClick={() => applyPatches([{ op: 'set_aspect', aspect }])}
                     data-compose-aspect={aspect}
                   >
@@ -2829,11 +2896,11 @@ export function VideoComposer({
             </div>
 
             <div className={s.viewportWell}>
-              {project.clips.length > 0 ? (
+              {shownProject.clips.length > 0 ? (
                 <div
                   ref={frameShellRef}
                   className={s.frameShell}
-                  data-aspect={project.aspect}
+                  data-aspect={shownProject.aspect}
                   data-compose-preview-frame
                 >
                   <video
@@ -2856,7 +2923,7 @@ export function VideoComposer({
                   />
                   <audio ref={previewAudioRef} hidden preload="auto" />
 
-                  {project.colorGrade?.enabled && currentGrade.scope === 'region' ? (
+                  {shownProject.colorGrade?.enabled && currentGrade.scope === 'region' ? (
                     <div
                       className={s.regionMaskBox}
                       style={{
@@ -2877,6 +2944,7 @@ export function VideoComposer({
                       onPointerCancel={handleRegionPointerUp}
                       data-compose-grade-region-box
                       data-grade-filter={liveCssFilter}
+                      {...lockAttrs}
                     >
                       <span className={s.regionMaskTag}>
                         {Math.round(displayedRegion.x * 100)}%, {Math.round(displayedRegion.y * 100)}% ·{' '}
@@ -2947,13 +3015,15 @@ export function VideoComposer({
             </div>
           </section>
 
+          {assist.preview ? <AssistPreviewBar text={copy.assist.proposal.previewBar} /> : null}
+
           <section className={s.timelineCard} aria-label={copy.timeline.heading} data-compose-timeline>
             <div className={s.timelineToolbar}>
               <div className={s.timelineToolsLeft}>
                 <h2 className={s.panelTitle}>{copy.timeline.heading}</h2>
-                {project.captions.length > 0 ? (
+                {shownProject.captions.length > 0 ? (
                   <span className={s.summaryBadge}>
-                    {interpolate(copy.timeline.captionsTrack, { count: project.captions.length })}
+                    {interpolate(copy.timeline.captionsTrack, { count: shownProject.captions.length })}
                   </span>
                 ) : null}
                 {detectedSplittableCuts.length > 0 ? (
@@ -2963,7 +3033,7 @@ export function VideoComposer({
                 ) : null}
               </div>
 
-              <div className={s.timelineToolsRight}>
+              <div className={s.timelineToolsRight} {...lockAttrs}>
                 <button
                   type="button"
                   className={s.smallBtn}
@@ -3011,6 +3081,7 @@ export function VideoComposer({
                       className={s.clipBlock}
                       data-selected={safeSelectedIdx === index}
                       data-compose-clip-card={index}
+                      data-assist-changed={assist.changedIds.has(clip.id) || undefined}
                       onClick={() => {
                         setSelectedClipIdx(index);
                         setPlaying(false);
@@ -3019,7 +3090,7 @@ export function VideoComposer({
                     >
                       <div className={s.clipBlockHead}>
                         <span className={s.cutBadge}>{interpolate(copy.timeline.clipBadge, { n: index + 1 })}</span>
-                        <div className={s.clipOrderBtns} onClick={(e) => e.stopPropagation()}>
+                        <div className={s.clipOrderBtns} onClick={(e) => e.stopPropagation()} {...lockAttrs}>
                           <button
                             type="button"
                             className={s.iconBtn}
@@ -3070,7 +3141,7 @@ export function VideoComposer({
                         </div>
                       ) : null}
 
-                      <div className={s.trimGrid} onClick={(e) => e.stopPropagation()}>
+                      <div className={s.trimGrid} onClick={(e) => e.stopPropagation()} {...lockAttrs}>
                         <label className={s.field}>
                           <span>{copy.timeline.trimStart}</span>
                           <input
@@ -3111,6 +3182,7 @@ export function VideoComposer({
                           onClick={() =>
                             applyPatches([{ op: 'set_clip_audio', clipIndex: index, muted: !clip.muted }])
                           }
+                          {...lockAttrs}
                         >
                           {clip.muted ? copy.timeline.clipMuted : copy.timeline.clipSoundOn}
                         </button>
@@ -3123,34 +3195,35 @@ export function VideoComposer({
               <p className={s.emptyNote}>{copy.emptySummary}</p>
             )}
 
-            {project.bgm ? (
+            {shownProject.bgm ? (
               <div className={s.bgmStrip} data-compose-bgm-strip>
                 <div className={s.bgmMetaGroup}>
                   <strong>
-                    {copy.timeline.bgmLabel}: {project.bgm.label}
+                    {copy.timeline.bgmLabel}: {shownProject.bgm.label}
                   </strong>
-                  {project.bgm.nonCommercialGuide ? (
+                  {shownProject.bgm.nonCommercialGuide ? (
                     <span className={s.summaryBadge}>CC BY-NC 4.0</span>
                   ) : null}
                 </div>
-                <label className={s.headerActions}>
+                <label className={s.headerActions} {...lockAttrs}>
                   <span>{copy.timeline.bgmVolume}</span>
                   <input
                     type="range"
                     min={0}
                     max={100}
-                    value={Math.round(project.bgm.volume * 100)}
+                    value={Math.round(shownProject.bgm.volume * 100)}
                     onChange={(e) =>
                       applyPatches([{ op: 'set_bgm_volume', volume: Number(e.target.value) / 100 }])
                     }
                     data-compose-bgm-volume
                   />
-                  <span className={s.monoValue}>{Math.round(project.bgm.volume * 100)}%</span>
+                  <span className={s.monoValue}>{Math.round(shownProject.bgm.volume * 100)}%</span>
                 </label>
                 <button
                   type="button"
                   className={s.smallBtn}
                   onClick={() => applyPatches([{ op: 'remove_bgm' }])}
+                  {...lockAttrs}
                 >
                   {copy.timeline.removeBgm}
                 </button>
@@ -3159,77 +3232,81 @@ export function VideoComposer({
           </section>
         </div>
 
-        {/* -------------------------------------------------------- Right: ChatCut Timeline Editor */}
-        <aside className={s.panel} aria-label={copy.chat.heading} data-compose-chat>
-          <div className={s.panelHead}>
-            <h2 className={s.panelTitle}>{copy.chat.heading}</h2>
-          </div>
-          <p className={s.chatLead}>{copy.chat.lead}</p>
+        {/* -------------------------------------------------------- Right: "말로 편집" (flag) or the chat editor */}
+        {editAssist ? (
+          <AssistPanel assist={assist} copy={copy} canCreate={canCreate} project={project} />
+        ) : (
+          <aside className={s.panel} aria-label={copy.chat.heading} data-compose-chat>
+            <div className={s.panelHead}>
+              <h2 className={s.panelTitle}>{copy.chat.heading}</h2>
+            </div>
+            <p className={s.chatLead}>{copy.chat.lead}</p>
 
-          <div className={s.sourceSection}>
-            <p className={s.sectionLabel}>{copy.chat.examplesLabel}</p>
-            <div className={s.exampleChips}>
-              {(
-                [
-                  copy.chat.examples.autoCut,
-                  copy.chat.examples.colorGrade,
-                  copy.chat.examples.trim,
-                  copy.chat.examples.caption,
-                  copy.chat.examples.swap,
-                  copy.chat.examples.bgm,
-                ] as const
-              ).map((example) => (
-                <button
-                  key={example}
-                  type="button"
-                  className={s.exampleChip}
-                  disabled={!canCreate || chatBusy}
-                  onClick={() => void runChatInstruction(example)}
-                >
-                  {example}
-                </button>
+            <div className={s.sourceSection}>
+              <p className={s.sectionLabel}>{copy.chat.examplesLabel}</p>
+              <div className={s.exampleChips}>
+                {(
+                  [
+                    copy.chat.examples.autoCut,
+                    copy.chat.examples.colorGrade,
+                    copy.chat.examples.trim,
+                    copy.chat.examples.caption,
+                    copy.chat.examples.swap,
+                    copy.chat.examples.bgm,
+                  ] as const
+                ).map((example) => (
+                  <button
+                    key={example}
+                    type="button"
+                    className={s.exampleChip}
+                    disabled={!canCreate || chatBusy}
+                    onClick={() => void runChatInstruction(example)}
+                  >
+                    {example}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            <div className={s.chatLog} role="log" aria-live="polite" data-compose-chat-log>
+              {chatMessages.map((msg) => (
+                <div key={msg.id} className={s.chatBubble} data-role={msg.role}>
+                  {msg.text}
+                </div>
               ))}
             </div>
-          </div>
 
-          <div className={s.chatLog} role="log" aria-live="polite" data-compose-chat-log>
-            {chatMessages.map((msg) => (
-              <div key={msg.id} className={s.chatBubble} data-role={msg.role}>
-                {msg.text}
-              </div>
-            ))}
-          </div>
-
-          <form
-            className={s.chatForm}
-            onSubmit={(e) => {
-              e.preventDefault();
-              void runChatInstruction(chatInput);
-            }}
-          >
-            <textarea
-              className={s.chatInput}
-              value={chatInput}
-              onChange={(e) => setChatInput(e.target.value)}
-              placeholder={copy.chat.placeholder}
-              rows={2}
-              disabled={!canCreate}
-              data-compose-chat-input
-            />
-            <button
-              type="submit"
-              className={s.chatApplyBtn}
-              disabled={!canCreate || !chatInput.trim() || chatBusy}
-              data-compose-chat-send
+            <form
+              className={s.chatForm}
+              onSubmit={(e) => {
+                e.preventDefault();
+                void runChatInstruction(chatInput);
+              }}
             >
-              {chatBusy ? copy.chat.running : copy.chat.send}
-            </button>
-          </form>
+              <textarea
+                className={s.chatInput}
+                value={chatInput}
+                onChange={(e) => setChatInput(e.target.value)}
+                placeholder={copy.chat.placeholder}
+                rows={2}
+                disabled={!canCreate}
+                data-compose-chat-input
+              />
+              <button
+                type="submit"
+                className={s.chatApplyBtn}
+                disabled={!canCreate || !chatInput.trim() || chatBusy}
+                data-compose-chat-send
+              >
+                {chatBusy ? copy.chat.running : copy.chat.send}
+              </button>
+            </form>
 
-          <p className={s.chatRateHint} data-compose-chat-policy>
-            {copy.credits.chatFreeNotice}
-          </p>
-        </aside>
+            <p className={s.chatRateHint} data-compose-chat-policy>
+              {copy.credits.chatFreeNotice}
+            </p>
+          </aside>
+        )}
       </div>
 
       {shareReviewTarget ? (

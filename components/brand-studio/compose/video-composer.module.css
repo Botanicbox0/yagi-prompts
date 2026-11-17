@@ -946,6 +946,16 @@
   box-shadow: 0 0 0 1.5px var(--ys-ink);
 }
 
+/* "말로 편집" preview: cuts the draft changed, and the edit controls locked until Apply / Cancel. */
+.clipBlock[data-assist-changed="true"] {
+  outline: 1.5px dashed var(--ys-ink-secondary);
+  outline-offset: -3px;
+}
+
+.page [inert] {
+  opacity: 0.5;
+}
+
 .clipBlockHead {
   display: flex;
   align-items: center;
