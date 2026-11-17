@@ -57,6 +57,7 @@ import {
   syncSlackConciergeReplies,
 } from "@/lib/brands/concierge-slack";
 import { IntakeBriefSchema } from "@/lib/brands/workspace/intake-brief";
+import { enqueueNotices } from "@/lib/brand-rooms/notices";
 export const dynamic = "force-dynamic";
 /**
  * A staff note that must never hold up or fail the client's request: after the response where the
@@ -148,6 +149,9 @@ export async function POST(request: NextRequest) {
               budgetBand: brief.success ? brief.data.budgetBand : null,
             }),
           );
+          // The receipt mail to the person who sent the request (docs/BRAND-ROOMS-FEEDBACK.md §2.1).
+          // Off unless BRAND_ROOM_NOTIFY=on; never fails the request; a retried request is not mailed twice.
+          await enqueueNotices(sql, { type: "intake", organizationId: input.organizationId as string, projectId, actorId: viewer.userId });
         }
         break;
       case "intake.attachFiles":

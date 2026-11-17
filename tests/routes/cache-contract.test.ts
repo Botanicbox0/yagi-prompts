@@ -570,9 +570,13 @@ describe('notification surface (§3.5, M5)', () => {
     expect(route).toContain("'Cache-Control': 'private, no-store'");
     expect(route).toContain("'X-Robots-Tag': 'noindex, nofollow'");
     expect(route).toContain('verifyUnsubscribeToken');
-    // GET only: a mail client follows links, not forms.
+    // GET for the link a person clicks. POST only for RFC 8058 one-click (the live mailer's
+    // `List-Unsubscribe-Post` header): same token, same write, no page — and the same no-store headers.
+    // Its behaviour per scope is pinned in tests/brand-rooms/notices/one-click.test.ts.
     expect(route).toContain('export async function GET');
-    expect(route).not.toContain('export async function POST');
+    expect(route).toContain('export async function POST');
+    expect(route).toContain("'Cache-Control': HEADERS['Cache-Control']!");
+    expect(route).toContain("'X-Robots-Tag': HEADERS['X-Robots-Tag']!");
   });
 });
 
@@ -729,6 +733,9 @@ describe('render queue (docs/TEMPLATES-IA.md §8)', () => {
     expect(vercel.crons).toEqual([
       { path: '/api/renders/tick', schedule: expect.stringMatching(/^\d+ \d+ \* \* \*$/) },
       { path: '/api/brands/inquiries/tick', schedule: expect.stringMatching(/^\d+ \d+ \* \* \*$/) },
+      // Project room notices (docs/BRAND-ROOMS-FEEDBACK.md §2.2): every 10 minutes, which needs Vercel Pro
+      // (docs/SCALE-RISKS-2026-11.md R-02). The bundled mail's 10-minute wait is measured on this tick.
+      { path: '/api/brand-rooms/notices/tick', schedule: '*/10 * * * *' },
     ]);
   });
 

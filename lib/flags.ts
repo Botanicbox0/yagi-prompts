@@ -202,3 +202,13 @@ export function petTemplatesOpen(env: Record<string, string | undefined> = proce
 export function brandRoomsOpen(env: NodeJS.ProcessEnv = process.env): boolean {
   return env.BRAND_ROOMS === 'on';
 }
+
+/**
+ * docs/BRAND-ROOMS-FEEDBACK.md §2 — mail and push notices to brand members about their project rooms.
+ * Default OFF: on only when the server environment says exactly `BRAND_ROOM_NOTIFY=on` (and rooms are
+ * open). Off means no notice is queued and `/api/brand-rooms/notices/tick` returns at once. Turning it on
+ * waits for the founder's approval of the copy (the dictionary strings are drafts).
+ */
+export function brandRoomNotifyOpen(env: NodeJS.ProcessEnv = process.env): boolean {
+  return env.BRAND_ROOM_NOTIFY === 'on';
+}

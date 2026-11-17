@@ -78,7 +78,14 @@ describe('brand host boundary', () => {
     expect((await middleware(req('brands.twings.app','/api/brand-workspace','POST'))).status).toBe(404);
   });
   it('blocks unrelated routes, methods, and cross-origin writes before handlers', async () => {
-    for(const path of ['/admin','/account','/api/admin/staging-url','/api/billing/checkout','/ko/campaigns','/sitemap.xml','/sw.js']) expect((await middleware(req('brand.twings.app',path))).status).toBe(404);
+    // `/sw.js` is served here since the room notice push (docs/BRAND-ROOMS-FEEDBACK.md §10): GET only, pinned with the
+    // offline page, other icons and `/api/notify/push` still closed in tests/brand-rooms/notices/settings-route.test.ts.
+    for(const path of ['/admin','/account','/api/admin/staging-url','/api/billing/checkout','/ko/campaigns','/sitemap.xml','/offline.html','/manifest.webmanifest','/api/notify/push']) expect((await middleware(req('brand.twings.app',path))).status).toBe(404);
+    expect((await middleware(req('brand.twings.app','/sw.js'))).headers.get('x-middleware-next')).toBe('1');
+    expect((await middleware(req('brand.twings.app','/sw.js','POST','https://brand.twings.app'))).status).toBe(404);
+    expect((await middleware(req('brand.twings.app','/api/brand-rooms/notice-prefs','POST','https://brand.twings.app'))).headers.get('x-middleware-next')).toBe('1');
+    expect((await middleware(req('brand.twings.app','/api/brand-rooms/notice-push','DELETE','https://brand.twings.app'))).headers.get('x-middleware-next')).toBe('1');
+    expect((await middleware(req('brand.twings.app','/api/brand-rooms/notice-push','POST','https://twings.app'))).status).toBe(404);
     expect((await middleware(req('brand.twings.app','/api/brand-workspace','POST','https://twings.app'))).status).toBe(404);
     expect((await middleware(req('brand.twings.app','/api/brand-workspace','POST','https://brand.twings.app'))).headers.get('x-middleware-next')).toBe('1');
   });

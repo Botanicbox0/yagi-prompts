@@ -5,7 +5,7 @@
  * and the composer. The same component serves the brand (inbox, room tab) and the team (admin), through
  * whichever transport it is handed. `RefThreadView` is the compact column beside a cut or a deliverable.
  */
-import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { useCallback, useContext, useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { interpolate } from "@/lib/i18n/format";
 import { continuesGroup, dayKey, parseRefKey, type RoomMessage, type RoomPerson, type RoomReaction } from "@/lib/brand-rooms/message-contracts";
 import type { RoomsChatCopy } from "@/messages/rooms-chat";
@@ -14,6 +14,7 @@ import { dayLabel, fullLabel } from "./format";
 import { AuthorName, MessageItem, type MessageActions } from "./message";
 import type { ChatTransport, Fail } from "./transport";
 import { useFeed, useReadMark, type ShownMessage } from "./use-feed";
+import { ChatPresenceContext, readMarkAllowed } from "./presence";
 
 type Locale = "ko" | "en";
 
@@ -296,7 +297,13 @@ export function ChannelView({ transport, channel, locale, copy, canTalk, layout,
     }
     return best;
   }, [state.messages]);
-  useReadMark(transport, channel, newestAt, seen && state.status === "ready");
+  // Only while the conversation is in front of the person: a shut drawer on the team's desk reads nothing.
+  const presence = useContext(ChatPresenceContext);
+  useReadMark(transport, channel, newestAt, readMarkAllowed({ seen, ready: state.status === "ready", visible: presence.visible, pageVisible: true }));
+  const onNewest = presence.onNewest;
+  useEffect(() => {
+    if (state.status === "ready") onNewest?.(newestAt);
+  }, [newestAt, onNewest, state.status]);
 
   const onSend = async (draft: ComposerDraft) => {
     nearBottom.current = true;

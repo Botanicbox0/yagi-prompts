@@ -91,6 +91,7 @@ export default async function RoomDeliveries({ searchParams }: { searchParams: P
                     { key: "version", label: a.columns.version },
                     { key: "status", label: a.columns.status },
                     { key: "open", label: a.columns.open, numeric: true },
+                    { key: "team", label: dict.adminConsole.reviewTeam.column, numeric: true },
                     { key: "source", label: a.columns.source },
                   ]}
                   rows={rows.map((s) => {
@@ -107,6 +108,8 @@ export default async function RoomDeliveries({ searchParams }: { searchParams: P
                         version: `v${latest.version ?? 1} / ${s.versions.length}`,
                         status: <StatusPill tone={TONES[latest.status]}>{r.status[latest.status]}</StatusPill>,
                         open: formatCount(latest.commentsOpen, locale),
+                        // Team notes counted apart; the brand's count above never includes them.
+                        team: formatCount(latest.teamCommentsOpen ?? 0, locale),
                         source: a.sources[latest.source ?? "studio"],
                       },
                     };

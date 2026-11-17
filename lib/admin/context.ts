@@ -153,6 +153,8 @@ export type AdminErrorCode =
 export interface AdminSuccess {
   /** One-time response body only; never included in redirects or logs. */
   invitationToken?: string;
+  /** A new share link's token (`brand_rooms.share.create`): one-time response body only, like `invitationToken`. */
+  shareToken?: string;
   ok: true;
   code: AdminSuccessCode;
   /** Extra context for the banner (a slug, a revision number) — never a secret. */

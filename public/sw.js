@@ -1,13 +1,14 @@
 /* TWINGS service worker — docs/TEMPLATES-IA.md §5 (PWA first), docs/PLATFORM-2.0.md §5.2–§5.3.
  *
  * Deliberately small. It makes the site installable, answers one thing when the network is gone
- * (a small offline page), and shows the completion push. It never caches HTML, media or API
+ * (a small offline page), and shows the completion push — and, registered on brand.twings.app too, the
+ * project room notices (docs/BRAND-ROOMS-FEEDBACK.md §2.2). It never caches HTML, media or API
  * responses — the site's cache contract (private, no-store on every viewer-shaped page) is
  * enforced by the server, and a worker that kept copies of those pages would undo it on the device.
  */
 const VERSION = 'twings-sw-v2';
 const OFFLINE_URL = '/offline.html';
-/** Where a push without a usable link lands: the reader's own renders. */
+/** Where a push without a usable link lands: the reader's own renders (on twings.app, see `servedAt`). */
 const FALLBACK_URL = '/renders';
 
 self.addEventListener('install', (event) => {
@@ -39,6 +40,16 @@ self.addEventListener('fetch', (event) => {
   );
 });
 
+/**
+ * twings.app and brand.twings.app serve this same file but not the same pages (lib/routing/surfaces.ts
+ * `isBrandPath`), and a person's pushes reach every browser they subscribed in, on either host
+ * (docs/BRAND-ROOMS-FEEDBACK.md §2.2). So in production a brand workspace path opens on the brand host and
+ * anything else on twings.app. Every other host (local, previews) keeps each link on its own origin.
+ */
+const CONSUMER_HOSTS = ['twings.app', 'www.twings.app'];
+const BRAND_HOST = 'brand.twings.app';
+const BRAND_PATH = /^\/brand(?:\/(?:projects|members|invite|settings|library|studio|usage|creators|identity|rooms)(?:\/|$)|$)/;
+
 /** An absolute URL on this site, or null — a push never carries the reader off the site. */
 function inApp(raw) {
   if (typeof raw !== 'string' || raw === '') return null;
@@ -48,6 +59,16 @@ function inApp(raw) {
   } catch (error) {
     return null;
   }
+}
+
+/** A link of this site (from `inApp`), on the host that serves its path. */
+function servedAt(href) {
+  const url = new URL(href);
+  const host = self.location.hostname;
+  const brand = BRAND_PATH.test(url.pathname);
+  if (brand && CONSUMER_HOSTS.includes(host)) return 'https://' + BRAND_HOST + url.pathname + url.search + url.hash;
+  if (!brand && host === BRAND_HOST) return 'https://twings.app' + url.pathname + url.search + url.hash;
+  return url.href;
 }
 
 /**
@@ -77,7 +98,12 @@ self.addEventListener('push', (event) => {
 self.addEventListener('notificationclick', (event) => {
   event.notification.close();
   const data = event.notification.data || {};
-  const url = inApp(data.url) || inApp(FALLBACK_URL);
+  const url = servedAt(inApp(data.url) || inApp(FALLBACK_URL));
+  // The other host's page: no window of this origin can be moved there, so it opens in a new one.
+  if (new URL(url).origin !== self.location.origin) {
+    event.waitUntil(self.clients.openWindow(url));
+    return;
+  }
   event.waitUntil(
     self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then(async (windows) => {
       const same = windows.find((client) => client.url === url);

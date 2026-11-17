@@ -71,7 +71,8 @@ export const ADMIN_OPERATIONS = {
   ...BRAND_ROOM_MESSAGE_OPERATIONS,
   // docs/BRAND-ROOMS.md §5 — project room storyboards, team side: create, title, cuts, share, version, delete.
   ...BRAND_ROOMS_STORYBOARD_OPERATIONS,
-  // docs/BRAND-ROOMS.md §6 — project room deliverables, team side: deliver a file or a new version, revoke a share link.
+  // docs/BRAND-ROOMS.md §6 — project room deliverables, team side: deliver a file or a new version, make or revoke a share link
+  // (docs/BRAND-ROOMS-FEEDBACK.md §4: the project desk makes links as the team).
   ...BRAND_ROOMS_REVIEW_OPERATIONS,
   ...PLATFORM_OPERATIONS,
   ...CAMPAIGN_RISK_OPERATIONS,

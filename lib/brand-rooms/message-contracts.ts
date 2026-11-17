@@ -60,6 +60,23 @@ export type RoomErrorCode = (typeof ROOM_ERROR_CODES)[number];
 
 export const GENERAL_CHANNEL = 'general' as const;
 
+/** The team's desk tabs (docs/BRAND-ROOMS-FEEDBACK.md §4). */
+export const ROOM_DESK_TABS = ['drafts', 'storyboards', 'links'] as const;
+export type RoomDeskTab = (typeof ROOM_DESK_TABS)[number];
+
+/**
+ * The team's desk for one project: `/admin/brand-rooms/<org>/<project>`, with the open tab, the chosen
+ * version (`review`) and a moment in it (`t`) in the query so a reload or a shared link returns there.
+ */
+export function roomDeskPath(organizationId: string, projectId: string, query: { tab?: RoomDeskTab | null; review?: string | null; t?: number | null } = {}): string {
+  const params = new URLSearchParams();
+  if (query.tab && query.tab !== 'drafts') params.set('tab', query.tab);
+  if (query.review) params.set('review', query.review);
+  if (query.t != null && query.t > 0) params.set('t', String(Math.round(query.t)));
+  const search = params.toString();
+  return `/admin/brand-rooms/${organizationId}/${projectId}${search ? `?${search}` : ''}`;
+}
+
 export const ROOM_LIMITS = {
   bodyMax: 4000,
   attachmentsPerMessage: 10,
@@ -324,6 +341,11 @@ export interface RoomMessage {
   authorRole: RoomAuthorRole;
   /** A display name; null for a team member without one (the screen then shows only "야기 팀"). */
   authorName: string | null;
+  /**
+   * An event line for a note left through a share link (no account): `authorName` is the name the guest
+   * typed, or null. Never shown as the YAGI team's.
+   */
+  guest?: true;
   /** The viewer wrote it (may edit and delete it). */
   mine: boolean;
   /** Empty when deleted. */

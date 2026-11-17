@@ -8,6 +8,11 @@
  * campaign-only guest sees nothing. Team side (`staff*`): the admin flag is re-read from the profile
  * row inside the transaction, like `setStudioAllowance`; team comments carry `author_role = 'studio'`.
  *
+ * Team notes (0093, docs/BRAND-ROOMS-FEEDBACK.md §5): the team may keep a note to itself
+ * (`visibility = 'team'`). Every read here leaves those out and counts without them, except the admin
+ * page (`staffReviewDetail`, and the admin lists, which count them apart); outside the team a team note
+ * is "not found" to answer, resolve or delete. A team note leaves no room line and no notice.
+ *
  * Customer-visible text does not exist here: failures are `REVIEW_ERROR_CODES` only. The one sentence
  * this module writes is the internal team notice (`ReviewNotice`), which the route hands to the team
  * notifier after the answer has gone out and which never reaches a customer.
@@ -23,6 +28,7 @@ import { postRoomEvent, type RoomEventInput } from '@/lib/brand-rooms/events';
 import { brandRoomsOpen } from '@/lib/flags';
 import { requireCreate, StudioDenied, studioSeat, type StudioSeat } from './access';
 import type { StudioMediaStore } from './media-store';
+import { publicNotesOnly, teamNotesReady } from './review-visibility';
 import {
   CommentAddSchema,
   CommentRefSchema,
@@ -170,6 +176,9 @@ interface ReviewRow {
   stack_id?: string;
   version?: number;
   source?: ReviewSource;
+  /** 0093, the team's lists only: team notes counted apart. */
+  team_open_count?: number;
+  team_total_count?: number;
 }
 
 interface CommentRow {
@@ -193,20 +202,40 @@ interface CommentRow {
   guest_name?: string | null;
   carried_from?: string | null;
   carried_version?: number | null;
+  /** 0093 only. */
+  visibility?: 'public' | 'team';
 }
 
 const iso = (v: Date | string): string => (v instanceof Date ? v.toISOString() : new Date(String(v)).toISOString());
 const isoOrNull = (v: Date | string | null): string | null => (v == null ? null : iso(v));
 
+/**
+ * Whose counts a review row carries. `brand` (every brand, room and share-link read): public notes only.
+ * `team` (the admin lists): the same public counts, plus the team notes counted apart (0093).
+ */
+type CountsFor = 'brand' | 'team';
+
 /** The review select, with the room columns once 0084 exists. Callers append `and …` conditions. */
-async function reviewSelect(sql: SqlRunner): Promise<string> {
-  return (await roomReviewReady(sql)) ? REVIEW_SELECT.replace('r.created_at, r.updated_at,', `r.created_at, r.updated_at, ${ROOM_REVIEW_COLUMNS},`) : REVIEW_SELECT;
+async function reviewSelect(sql: SqlRunner, countsFor: CountsFor = 'brand'): Promise<string> {
+  const room = await roomReviewReady(sql);
+  const team = await teamNotesReady(sql);
+  return reviewSelectText(room, team, countsFor);
 }
 const ROOM_REVIEW_COLUMNS = 'r.project_id, coalesce(r.stack_id, r.id) as stack_id, r.version, r.source';
 
-const REVIEW_SELECT = `
+/** Open = a thread head neither resolved nor deleted; total = every live note. */
+function noteCount(name: string, open: boolean, visibility: string): string {
+  return `(select count(*)::int from brand_studio_review_comments c
+           where c.review_id = r.id and c.deleted_at is null${open ? ' and c.parent_id is null and c.resolved_at is null' : ''}${visibility}) as ${name}`;
+}
+
+function reviewSelectText(room: boolean, team: boolean, countsFor: CountsFor): string {
+  const shown = publicNotesOnly('c', team);
+  const counts = [noteCount('open_count', true, shown), noteCount('total_count', false, shown)];
+  if (team && countsFor === 'team') counts.push(noteCount('team_open_count', true, " and c.visibility = 'team'"), noteCount('team_total_count', false, " and c.visibility = 'team'"));
+  return `
   select r.id, r.organization_id, r.asset_id, r.output_id, r.title, r.status, r.created_role, r.status_changed_at,
-         r.created_at, r.updated_at,
+         r.created_at, r.updated_at,${room ? ` ${ROOM_REVIEW_COLUMNS},` : ''}
          coalesce(a.kind, o.kind) as s_kind,
          coalesce(a.storage_key, o.storage_key) as s_key,
          coalesce(a.thumb_key, o.thumb_key) as s_thumb,
@@ -215,15 +244,14 @@ const REVIEW_SELECT = `
          coalesce(a.duration_ms, o.duration_ms) as s_ms,
          case when r.asset_id is not null then (a.id is not null and a.deleted_at is null and a.status = 'ready')
               else (o.id is not null and o.deleted_at is null and o.status = 'ready' and o.storage_key is not null) end as s_live,
-         (select count(*)::int from brand_studio_review_comments c
-           where c.review_id = r.id and c.deleted_at is null and c.parent_id is null and c.resolved_at is null) as open_count,
-         (select count(*)::int from brand_studio_review_comments c where c.review_id = r.id and c.deleted_at is null) as total_count,
+         ${counts.join(',\n         ')},
          g.name as organization_name
     from brand_studio_reviews r
     join brand_organizations g on g.id = r.organization_id
     left join brand_studio_assets a on a.id = r.asset_id
     left join brand_studio_outputs o on o.id = r.output_id
    where r.deleted_at is null`;
+}
 
 function listItem(row: ReviewRow, media: StudioMediaStore): ReviewListItem {
   const kind = row.s_kind === 'video' ? 'video' : 'image';
@@ -243,6 +271,7 @@ function listItem(row: ReviewRow, media: StudioMediaStore): ReviewListItem {
     ...(row.version != null
       ? { projectId: row.project_id ? String(row.project_id) : null, stackId: String(row.stack_id ?? row.id), version: Number(row.version), source: row.source === 'delivery' ? 'delivery' : 'studio' }
       : {}),
+    ...(row.team_open_count != null ? { teamCommentsOpen: Number(row.team_open_count), teamCommentsTotal: Number(row.team_total_count ?? 0) } : {}),
   };
 }
 
@@ -335,6 +364,8 @@ function commentView(row: CommentRow, viewerId: string | null, outside = false):
     view.guest = guest;
     view.carriedFrom = row.carried_from ? { version: Number(row.carried_version ?? 1) } : null;
   }
+  // Only the admin page ever receives a team note (every other read leaves it out), so only it sees this.
+  if (row.visibility === 'team') view.team = true;
   return view;
 }
 
@@ -360,15 +391,20 @@ const ROOM_COMMENT_JOINS = `
          left join brand_studio_review_comments sc on sc.id = c.carried_from
          left join brand_studio_reviews sr on sr.id = sc.review_id`;
 
-async function commentsOf(sql: SqlRunner, reviewId: string, viewerId: string | null, outside = false): Promise<ReviewComment[]> {
+/**
+ * The notes of a review. Team notes (0093) are left out unless `includeTeam` — which only the admin page
+ * (`staffReviewDetail`) passes. A team note's replies are team notes too, so a whole team thread goes.
+ */
+async function commentsOf(sql: SqlRunner, reviewId: string, viewerId: string | null, outside = false, includeTeam = false): Promise<ReviewComment[]> {
   const ready = await roomReviewReady(sql);
+  const team = await teamNotesReady(sql);
   const rows = (
     await sql.query<CommentRow>(
       `select c.id, c.review_id, c.parent_id, c.author_id, c.author_role, c.body, c.at_ms, c.x, c.y, c.resolved_at,
-              c.created_at, c.deleted_at, p.display_name, p.email${ready ? ROOM_COMMENT_COLUMNS : ''}
+              c.created_at, c.deleted_at, p.display_name, p.email${ready ? ROOM_COMMENT_COLUMNS : ''}${team ? ', c.visibility' : ''}
          from brand_studio_review_comments c
          left join profiles p on p.id = c.author_id${ready ? ROOM_COMMENT_JOINS : ''}
-        where c.review_id = $1
+        where c.review_id = $1${includeTeam ? '' : publicNotesOnly('c', team)}
         order by c.created_at, c.id`,
       [reviewId],
     )
@@ -388,18 +424,24 @@ async function stackVersions(sql: SqlRunner, stackId: string, organizationId: st
   return rows.map((r) => versionView(r, media));
 }
 
-async function commentRow(sql: SqlRunner, reviewId: string, commentId: string): Promise<CommentRow | null> {
+/** A live note to resolve or delete. A team note is "not found" unless `includeTeam` (the team's own calls). */
+async function commentRow(sql: SqlRunner, reviewId: string, commentId: string, includeTeam = false): Promise<CommentRow | null> {
+  const scope = includeTeam ? '' : publicNotesOnly('c', await teamNotesReady(sql));
   return (
     (
       await sql.query<CommentRow>(
         `select c.*, p.display_name, p.email from brand_studio_review_comments c left join profiles p on p.id = c.author_id
-          where c.id = $1 and c.review_id = $2 and c.deleted_at is null for update of c`,
+          where c.id = $1 and c.review_id = $2 and c.deleted_at is null${scope} for update of c`,
         [commentId, reviewId],
       )
     ).rows[0] ?? null
   );
 }
 
+/**
+ * The review's activity time moves. Not for a team note: the brand sees this time ("last activity") and the
+ * order it makes, and a note it cannot read must not move either.
+ */
 const touch = (sql: SqlRunner, reviewId: string) => sql.query('update brand_studio_reviews set updated_at = now() where id = $1', [reviewId]);
 
 /* --------------------------------------------------------------- shared writes */
@@ -473,8 +515,11 @@ async function insertReview(
   return { ok: true, review: listItem(row, media), existing: !inserted };
 }
 
-/** Who writes a comment: a signed-in member or team member, or a guest through a share link (0084). */
-type CommentAuthor = { userId: string; role: ReviewRole } | { guestName: string; shareId: string };
+/**
+ * Who writes a comment: a signed-in member or team member, or a guest through a share link (0084).
+ * `team` asks for a team note (0093); only the YAGI team (`role: 'studio'`) may ask.
+ */
+type CommentAuthor = { userId: string; role: ReviewRole; team?: boolean } | { guestName: string; shareId: string };
 
 async function insertComment(
   sql: SqlRunner,
@@ -483,11 +528,19 @@ async function insertComment(
   by: CommentAuthor,
 ): Promise<ReviewComment> {
   const ready = await roomReviewReady(sql);
+  const teamReady = await teamNotesReady(sql);
   if ('guestName' in by && !ready) throw new ReviewDenied('provider_unavailable');
+  const theTeam = 'role' in by && by.role === 'studio';
+  const asked = 'team' in by && by.team === true;
+  if (asked && !theTeam) throw new ReviewDenied('forbidden');
+  if (asked && !teamReady) throw new ReviewDenied('provider_unavailable');
+  let team = asked;
   if (input.parentId) {
+    // Outside the team, a team note is not there at all: answering it is "not found", like a wrong id.
     const parent = (
-      await sql.query<{ parent_id: string | null; deleted_at: unknown; carried_from?: string | null }>(
-        `select parent_id, deleted_at${ready ? ', carried_from' : ''} from brand_studio_review_comments where id = $1 and review_id = $2`,
+      await sql.query<{ parent_id: string | null; deleted_at: unknown; carried_from?: string | null; visibility?: string }>(
+        `select c.parent_id, c.deleted_at${ready ? ', c.carried_from' : ''}${teamReady ? ', c.visibility' : ''}
+           from brand_studio_review_comments c where c.id = $1 and c.review_id = $2${theTeam ? '' : publicNotesOnly('c', teamReady)}`,
         [input.parentId, review.id],
       )
     ).rows[0];
@@ -496,6 +549,10 @@ async function insertComment(
     if (parent.parent_id) throw new ReviewDenied('invalid');
     // A note carried over from an earlier version is read-only here: its thread lives on that version.
     if (parent.carried_from) throw new ReviewDenied('invalid');
+    // A reply is what its thread is. A team-only answer under a note the brand reads would split the thread.
+    const parentTeam = parent.visibility === 'team';
+    if (asked && !parentTeam) throw new ReviewDenied('invalid');
+    team = parentTeam;
   }
   // A still has no timeline: its spots carry no moment (and no range).
   const video = review.s_kind === 'video';
@@ -513,6 +570,10 @@ async function insertComment(
       'shareId' in by ? by.shareId : null,
     );
   }
+  if (teamReady) {
+    columns.push('visibility');
+    values.push(team ? 'team' : 'public');
+  }
   const row = (
     await sql.query<CommentRow>(
       `insert into brand_studio_review_comments (${columns.join(', ')})
@@ -521,7 +582,7 @@ async function insertComment(
       values,
     )
   ).rows[0]!;
-  await touch(sql, review.id);
+  if (!team) await touch(sql, review.id);
   const profile = userId
     ? (await sql.query<{ display_name: string | null; email: string | null }>('select display_name, email from profiles where id = $1', [userId])).rows[0]
     : undefined;
@@ -532,15 +593,17 @@ async function insertComment(
  * Resolve or reopen a thread. A carried note and the note it came from are one piece of feedback:
  * resolving either resolves the original and every copy of it; reopening touches only the row asked.
  */
-async function toggleResolved(sql: SqlRunner, review: ReviewRow, commentId: string, userId: string): Promise<boolean> {
-  const row = await commentRow(sql, review.id, commentId);
+async function toggleResolved(sql: SqlRunner, review: ReviewRow, commentId: string, userId: string, includeTeam = false): Promise<boolean> {
+  const row = await commentRow(sql, review.id, commentId, includeTeam);
   if (!row) throw new ReviewDenied('not_found');
   const resolve = row.resolved_at == null;
   if (resolve && (await roomReviewReady(sql))) {
     const origin = row.carried_from ?? row.id;
+    // A note and its copies share one visibility (a copy keeps it); the condition only makes sure of it.
+    const scope = includeTeam ? '' : publicNotesOnly('c', await teamNotesReady(sql));
     await sql.query(
-      `update brand_studio_review_comments set resolved_at = now(), resolved_by = $2
-        where resolved_at is null and deleted_at is null and (id = $1 or id = $3 or carried_from = $3)`,
+      `update brand_studio_review_comments c set resolved_at = now(), resolved_by = $2
+        where c.resolved_at is null and c.deleted_at is null and (c.id = $1 or c.id = $3 or c.carried_from = $3)${scope}`,
       [commentId, userId, origin],
     );
   } else {
@@ -551,7 +614,7 @@ async function toggleResolved(sql: SqlRunner, review: ReviewRow, commentId: stri
       resolve ? [commentId, userId] : [commentId],
     );
   }
-  await touch(sql, review.id);
+  if (row.visibility !== 'team') await touch(sql, review.id);
   return resolve;
 }
 
@@ -570,6 +633,20 @@ const STATUS_WORDS: Record<ReviewStatus, string> = { open: '다시 열기', chan
 
 export function reviewAdminPath(reviewId: string): string {
   return `/admin/brand-studio/reviews/${reviewId}`;
+}
+
+/**
+ * The team notice for a brand member's note. Never for a team note (0093): those stay on the admin page.
+ * (A brand member cannot write one or answer one; the check keeps that true if a caller changes.)
+ */
+function commentNotice(organizationId: string, userId: string, review: ReviewRow, comment: ReviewComment): ReviewNotice | null {
+  if (comment.team) return null;
+  return {
+    organizationId,
+    userId,
+    messageId: comment.id,
+    body: reviewNoticeBody(review, { kind: 'comment', body: comment.body, atMs: comment.atMs, spot: comment.x != null, reply: comment.parentId != null }),
+  };
 }
 
 /** The internal line the team reads (never shown to a customer). */
@@ -704,12 +781,7 @@ export async function runReviewOperation(deps: ReviewDeps, viewer: Viewer, opera
           ).rows[0]!.n;
           if (Number(recent) >= REVIEW_LIMITS.commentsPerMinute) throw new ReviewDenied('rate_limited');
           const comment = await insertComment(sql, review, parsed.data, { userId, role: 'brand' });
-          notice = {
-            organizationId,
-            userId,
-            messageId: comment.id,
-            body: reviewNoticeBody(review, { kind: 'comment', body: comment.body, atMs: comment.atMs, spot: comment.x != null, reply: comment.parentId != null }),
-          };
+          notice = commentNotice(organizationId, userId, review, comment);
           return { ok: true as const, comment } satisfies ReviewCommentAdded;
         }
         case 'comment.resolve': {
@@ -762,7 +834,7 @@ export async function staffReviewList(
       const status = options.status && (REVIEW_STATUSES as readonly string[]).includes(options.status) ? options.status : null;
       const rows = (
         await sql.query<ReviewRow>(
-          `${await reviewSelect(sql)} and ($1::text is null or r.status = $1) order by r.updated_at desc, r.id limit $2`,
+          `${await reviewSelect(sql, 'team')} and ($1::text is null or r.status = $1) order by r.updated_at desc, r.id limit $2`,
           [status, REVIEW_LIMITS.listMax],
         )
       ).rows;
@@ -785,7 +857,8 @@ export async function staffReviewDetail(
         ok: true as const,
         canWrite: true,
         review: itemView(row, deps.media),
-        comments: await commentsOf(sql, row.id, userId),
+        // The one read that includes team notes (0093).
+        comments: await commentsOf(sql, row.id, userId, false, true),
         organizationName: String(row.organization_name),
         ...(await extension(sql, row, deps.media)),
       };
@@ -799,7 +872,11 @@ async function staffReview(sql: SqlRunner, reviewId: unknown): Promise<ReviewRow
   return row;
 }
 
-/** A team comment or reply (`brand_studio.review.reply`). */
+/**
+ * A team comment or reply (`brand_studio.review.reply`). `visibility: 'team'` keeps a new note to the team
+ * (0093): no room line, and no brand, room or share-link screen ever reads it. A reply takes its thread's
+ * visibility; asking for a team reply under a note the brand reads is `invalid`.
+ */
 export async function staffAddComment(
   deps: ReviewDeps,
   viewer: Viewer,
@@ -812,6 +889,7 @@ export async function staffAddComment(
     x?: number | null;
     y?: number | null;
     strokes?: unknown;
+    visibility?: string | null;
   },
 ): Promise<ReviewCommentAdded | ReviewFailure> {
   let event: RoomEventInput | null = null;
@@ -819,10 +897,12 @@ export async function staffAddComment(
     deps.sql.transaction(async (sql) => {
       const userId = await requireStaff(sql, viewer);
       const review = await staffReview(sql, input.reviewId);
-      const parsed = CommentAddSchema.safeParse({ ...input, organizationId: review.organization_id });
+      const { visibility, ...note } = input;
+      if (visibility != null && visibility !== 'public' && visibility !== 'team') throw new ReviewDenied('invalid');
+      const parsed = CommentAddSchema.safeParse({ ...note, organizationId: review.organization_id });
       if (!parsed.success) throw new ReviewDenied('invalid');
-      const comment = await insertComment(sql, review, parsed.data, { userId, role: 'studio' });
-      event = commentEvent(review, comment.id, userId, 'studio');
+      const comment = await insertComment(sql, review, parsed.data, { userId, role: 'studio', team: visibility === 'team' });
+      event = commentEvent(review, comment, userId, 'studio');
       return { ok: true as const, comment };
     }),
   );
@@ -830,14 +910,14 @@ export async function staffAddComment(
   return result;
 }
 
-/** Resolve or reopen a thread (`brand_studio.review.resolve`). */
+/** Resolve or reopen a thread (`brand_studio.review.resolve`), a team note's too. */
 export async function staffResolveComment(deps: ReviewDeps, viewer: Viewer, input: { reviewId: string; commentId: string }): Promise<ReviewDone | ReviewFailure> {
   return guard(() =>
     deps.sql.transaction(async (sql) => {
       const userId = await requireStaff(sql, viewer);
       const review = await staffReview(sql, input.reviewId);
       if (!UUID.test(input.commentId ?? '')) throw new ReviewDenied('invalid');
-      await toggleResolved(sql, review, input.commentId, userId);
+      await toggleResolved(sql, review, input.commentId, userId, true);
       return { ok: true as const };
     }),
   );
@@ -900,13 +980,14 @@ function statusEvent(review: ReviewRow, status: ReviewStatus, actorId: string, a
   };
 }
 
-function commentEvent(review: ReviewRow, commentId: string, actorId: string | null, actorRole: 'brand' | 'studio'): RoomEventInput | null {
-  if (!review.project_id) return null;
+/** The room line a note leaves. None for a team note (0093): no card, no unread count, no notice of it. */
+function commentEvent(review: ReviewRow, comment: ReviewComment, actorId: string | null, actorRole: 'brand' | 'studio'): RoomEventInput | null {
+  if (!review.project_id || comment.team) return null;
   return {
     organizationId: String(review.organization_id),
     projectId: String(review.project_id),
     event: 'review_commented',
-    ref: { kind: 'review', reviewId: String(review.id), commentId },
+    ref: { kind: 'review', reviewId: String(review.id), commentId: comment.id },
     actorId,
     actorRole,
     detail: { title: String(review.title), version: Number(review.version ?? 1) },
@@ -967,12 +1048,14 @@ async function postVersion(
     return created;
   }
   const video = created.review.kind === 'video';
+  // A team note goes over as a team note (0093): the copy keeps its visibility.
+  const visibility = (await teamNotesReady(sql)) ? ', visibility' : '';
   await sql.query(
     `insert into brand_studio_review_comments
-       (review_id, organization_id, parent_id, author_id, author_role, body, at_ms, end_ms, x, y, strokes, guest_name, share_id, carried_from, created_at)
+       (review_id, organization_id, parent_id, author_id, author_role, body, at_ms, end_ms, x, y, strokes, guest_name, share_id, carried_from, created_at${visibility})
      select $1, organization_id, null, author_id, author_role, body,
             case when $3::boolean then at_ms end, case when $3::boolean then end_ms end, x, y, strokes, guest_name, share_id,
-            coalesce(carried_from, id), created_at
+            coalesce(carried_from, id), created_at${visibility}
        from brand_studio_review_comments
       where review_id = $2 and parent_id is null and deleted_at is null and resolved_at is null
      on conflict do nothing`,
@@ -1139,13 +1222,8 @@ export async function runRoomReviewOperation(deps: ReviewDeps, viewer: Viewer, o
           ).rows[0]!.n;
           if (Number(recent) >= REVIEW_LIMITS.commentsPerMinute) throw new ReviewDenied('rate_limited');
           const comment = await insertComment(sql, review, parsed.data, { userId, role: 'brand' });
-          notice = {
-            organizationId,
-            userId,
-            messageId: comment.id,
-            body: reviewNoticeBody(review, { kind: 'comment', body: comment.body, atMs: comment.atMs, spot: comment.x != null, reply: comment.parentId != null }),
-          };
-          event = commentEvent(review, comment.id, userId, 'brand');
+          notice = commentNotice(organizationId, userId, review, comment);
+          event = commentEvent(review, comment, userId, 'brand');
           return { ok: true as const, comment } satisfies ReviewCommentAdded;
         }
         case 'comment.resolve': {
@@ -1329,7 +1407,7 @@ export async function staffProjectStacks(
       if (!UUID.test(input.organizationId) || !UUID.test(input.projectId)) throw new ReviewDenied('invalid');
       const rows = (
         await sql.query<ReviewRow>(
-          `${await reviewSelect(sql)} and r.organization_id = $1 and r.project_id = $2 order by r.updated_at desc, r.id limit $3`,
+          `${await reviewSelect(sql, 'team')} and r.organization_id = $1 and r.project_id = $2 order by r.updated_at desc, r.id limit $3`,
           [input.organizationId, input.projectId, REVIEW_LIMITS.listMax],
         )
       ).rows;

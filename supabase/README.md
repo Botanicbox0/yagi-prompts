@@ -101,5 +101,9 @@ operation for a superuser, and it is not something app code can do — that is t
 | 2026-11-15 | `0089_core_identity_selfie_photo_check` | 저장한 사진 권고 확인(`identity_selfies.photo_check`·`photo_checked_at`, glue 없음; 대표 지시 2026-11-15) | #223 |
 | 2026-11-16 | `0090_core_brand_studio_job_soft_delete` · `0164_glue_brand_studio_job_soft_delete` | 브랜드 스튜디오 실패·중단 작업을 벽에서 지우기(`brand_studio_jobs.deleted_at` 소프트 삭제; 적용 후 확인: 컬럼 존재, RLS on+forced, 브라우저 권한 0, 기존 9행 영향 없음; 대표 지시 2026-11-16) | #226 |
 | 2026-11-16 | `0091_core_brand_studio_job_project` · `0165_glue_brand_studio_job_project` | 스튜디오 실행을 프로젝트에 담기(`brand_studio_jobs.project_id`, 프로젝트는 0087의 `brand_studio_video_projects` 재사용; 적용 후 확인: 컬럼 uuid·nullable, 제약 2개와 인덱스 존재, 두 테이블 RLS on+forced, 브라우저 권한 0건, 기존 실행 9건 모두 project_id 없음). 기능은 `BRAND_STUDIO_PROJECTS`가 꺼져 있어 아직 닫혀 있다 | PR #241 |
+| 2026-11-18 | `0093_core_brand_review_team_notes` · `0166_glue_brand_review_team_notes` | 시안 리뷰의 팀 메모(`brand_studio_review_comments.visibility` 'public'\|'team', `docs/BRAND-ROOMS-FEEDBACK.md` §5; 적용 후 확인: 컬럼 존재, 제약 2개, 기존 행 전부 public(team 0건), RLS on+forced·정책 0개, anon·authenticated 권한 없음) |
+| 2026-11-18 | `0094_core_brand_room_notices` · `0167_glue_brand_room_notices` | 프로젝트 룸 고객 알림 대기열과 수신 설정(`brand_room_notices`·`brand_room_notice_prefs`, `docs/BRAND-ROOMS-FEEDBACK.md` §2; 적용 후 확인: 두 테이블 RLS on+forced·정책 0개, anon·authenticated 권한 없음, service_role만). 발송은 `BRAND_ROOM_NOTIFY=on` 전까지 없다 |
 
-미적용: 0029/0115(옛 portrait 비교, 폐지 경로). 0063(prom-queen 비율)은 원장에 없지만 운영 데이터에는 이미 반영돼 있다. 다음 번호: core 0092, glue 0166.
+미적용: 0029/0115(옛 portrait 비교, 폐지 경로). 0063(prom-queen 비율)은 원장에 없지만 운영 데이터에는 이미 반영돼 있다.
+
+다음 번호: core 0095, glue 0168 (core 0092는 열린 PR이 쓰고 있다).
