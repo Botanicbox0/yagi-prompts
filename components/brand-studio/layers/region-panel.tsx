@@ -356,7 +356,7 @@ export function RegionEditPanel(props: RegionEditPanelProps) {
             />
             <figcaption className="bsl-region-caption">
               <span className="bsl-num-badge bsl-num">1</span>
-              <span>{r.inputPreviewCaption}</span>
+              <span>{region.fixedModel ? r.inputPreviewCaptionWide : r.inputPreviewCaption}</span>
             </figcaption>
           </figure>
 
@@ -495,7 +495,7 @@ export function RegionEditPanel(props: RegionEditPanelProps) {
             !
           </button>
         </div>
-        {showAssistantTip && <p className="bsl-tip-box">{r.assistantTip}</p>}
+        {showAssistantTip && <p className="bsl-tip-box">{region.fixedModel ? r.assistantTipWide : r.assistantTip}</p>}
         <div className="bsl-task-pills" role="group" aria-label={r.assistantTitle}>
           {REGION_ASSISTANT_TASK_IDS.map((taskId) => (
             <button

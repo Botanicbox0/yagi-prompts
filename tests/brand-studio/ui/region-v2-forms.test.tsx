@@ -91,6 +91,15 @@ describe("region edit v2 forms", () => {
     expect(off.html).toContain("<select");
   });
 
+  it("the panel says the picture around the selection goes as image 1, and keeps the crop sentence with the flag off", () => {
+    const on = panel({ models: regionV2Models(), defaultModel: REGION_V2_MODEL, fixedModel: true });
+    expect(on.html).toContain(on.copy.region.inputPreviewCaptionWide);
+    expect(on.html).not.toContain(on.copy.region.inputPreviewCaption);
+    const off = panel({});
+    expect(off.html).toContain(off.copy.region.inputPreviewCaption);
+    expect(off.html).not.toContain(off.copy.region.inputPreviewCaptionWide);
+  });
+
   it("builds the request for the one engine and checks its limits", () => {
     const body = regionEditInput({
       ids: { organizationId: "org", requestId: "r" },
