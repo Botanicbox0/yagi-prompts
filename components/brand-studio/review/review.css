@@ -40,6 +40,43 @@
   color: var(--bsv-ink);
 }
 
+/*
+ * The team's frame around the stage (`/admin/brand-studio/reviews/[id]` and a project's desk in review mode).
+ * The admin console defines none of the tokens above, so the stage falls back to its own studio values; but
+ * an admin page that loads app/(brand)/workspace.css (the desk, the review list it is reached from) also
+ * gets that file's light bridge on <html>, which mixed with the dark fallbacks gave black-on-black marks.
+ * Setting each token to `initial` here makes every var() inside take its fallback again, so the stage looks
+ * the same on both pages and whatever CSS the visit loaded before. (--ys-danger stays: the console sets it
+ * the same way on every admin page.)
+ */
+.bsv-admin-frame {
+  --ys-accent: initial;
+  --ys-accent-hover: initial;
+  --ys-accent-text: initial;
+  --ys-active-bg: initial;
+  --ys-active-fg: initial;
+  --ys-canvas: initial;
+  --ys-card: initial;
+  --ys-dock-bg: initial;
+  --ys-ease: initial;
+  --ys-float: initial;
+  --ys-glass-dark: initial;
+  --ys-hairline: initial;
+  --ys-hover: initial;
+  --ys-ink: initial;
+  --ys-ink-muted: initial;
+  --ys-ink-secondary: initial;
+  --ys-line: initial;
+  --ys-line-strong: initial;
+  --ys-media-bg: initial;
+  --ys-mono: initial;
+  --ys-on-accent: initial;
+  --ys-panel: initial;
+  --ys-raised: initial;
+  --ys-surface: initial;
+  --bw-font: initial;
+}
+
 /* ------------------------------------------------------------ page */
 
 .bsv-review {
@@ -1462,6 +1499,10 @@ button.bsv-spot-tag {
   color: var(--bsv-muted);
   font-size: 12.5px;
   line-height: 1.5;
+}
+/* Its line is kept while off, so turning "팀만 보기" on never moves the checkbox. */
+.bsv-team-hint[data-shown='false'] {
+  visibility: hidden;
 }
 .bsv-guest-name {
   display: grid;

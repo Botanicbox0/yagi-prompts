@@ -1039,6 +1039,16 @@ a.brc-ref:hover {
   color: var(--brc-ink);
   font-weight: 640;
 }
+/* A share link's guest (the review stage's own "외부 손님" mark: an outline, never the team's colour). */
+.brc-guest-tag {
+  padding: 0 7px;
+  border-radius: 999px;
+  box-shadow: inset 0 0 0 1px var(--brc-line-strong);
+  color: var(--brc-body);
+  font-size: 11.5px;
+  font-weight: 560;
+  line-height: 18px;
+}
 .brc-event .brc-ref {
   margin-top: 6px;
 }
@@ -1422,6 +1432,132 @@ a.brc-ref:hover {
 .brc-admin-links span {
   color: var(--brc-muted);
   font-size: 12px;
+}
+/*
+ * The team's project desk (docs/BRAND-ROOMS-FEEDBACK.md §4, components/brand-rooms/desk/desk-frame.tsx).
+ * List mode: the conversation on the left (about 40%), the work on the right, both in the room's fixed height.
+ * Review mode: the work (the stage) in page flow at full width; the conversation is a drawer from the left
+ * edge, 420px, over the admin rail and the stage's player side, never over the stage's notes column.
+ */
+.brc-admin-room.brc-desk[data-desk-mode='list'] {
+  grid-template-columns: minmax(0, 2fr) minmax(0, 3fr);
+}
+.brc-admin-room.brc-desk[data-desk-mode='review'] {
+  display: block;
+  height: auto;
+  min-height: 0;
+}
+.brc-desk-chat {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+  border-radius: 18px;
+  background: var(--brc-surface);
+  box-shadow: var(--brc-ring);
+}
+.brc-desk-chat-body {
+  display: flex;
+  flex: 1;
+  min-height: 0;
+}
+.brc-desk[data-desk-mode='review'] .brc-desk-chat {
+  position: fixed;
+  z-index: 70;
+  top: 0;
+  bottom: 0;
+  left: 0;
+  width: min(420px, calc(100vw - 24px));
+  border-radius: 0 18px 18px 0;
+  box-shadow: var(--brc-float);
+  transform: translateX(calc(-100% - 24px));
+  visibility: hidden;
+  transition:
+    transform var(--brc-dur) var(--brc-ease),
+    visibility 0s linear var(--brc-dur);
+}
+.brc-desk[data-desk-mode='review'] .brc-desk-chat[data-open='true'] {
+  transform: none;
+  visibility: visible;
+  transition: transform var(--brc-dur) var(--brc-ease);
+}
+.brc-desk-drawer-bar {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  padding: 8px 12px 0;
+}
+/*
+ * Behind the open drawer, over everything else (the stage's notes and composer too): what the drawer covers
+ * is visibly behind it, and a click outside closes it. It is a plain fixed layer, so the wheel still scrolls
+ * the page under it. The tint is the share dialog's backdrop, lighter.
+ */
+.brc-desk-scrim {
+  position: fixed;
+  z-index: 69;
+  inset: 0;
+  background: rgba(14, 16, 19, 0.2);
+}
+.brc-desk-main {
+  min-width: 0;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 12px 16px 20px;
+  border-radius: 18px;
+  background: var(--brc-surface);
+  box-shadow: var(--brc-ring);
+}
+.brc-desk[data-desk-mode='review'] .brc-desk-main {
+  overflow: visible;
+  padding: 0;
+  border-radius: 0;
+  background: none;
+  box-shadow: none;
+}
+.brc-desk-review {
+  margin-top: 16px;
+}
+.brc-desk-review-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 8px 16px;
+  margin-bottom: 12px;
+}
+.brc-desk-review-bar .admin-back {
+  margin: 0;
+}
+.brc-desk-review-bar strong {
+  font-size: 18px;
+  font-weight: 650;
+  letter-spacing: -0.02em;
+  overflow-wrap: anywhere;
+}
+/* The day mark stays in the flow here: pinned to the top of a narrow column it sat on the first line's time. */
+.brc-desk-chat .brc-channel[data-layout='fill'] .brc-day {
+  position: static;
+}
+.brc-desk-chat .brc-channel[data-layout='fill'] .brc-day::before,
+.brc-desk-chat .brc-channel[data-layout='fill'] .brc-day::after {
+  visibility: visible;
+}
+@media (prefers-reduced-motion: reduce) {
+  .brc-desk[data-desk-mode='review'] .brc-desk-chat,
+  .brc-desk[data-desk-mode='review'] .brc-desk-chat[data-open='true'] {
+    transition: none;
+  }
+}
+@media (max-width: 899px) {
+  .brc-admin-room.brc-desk[data-desk-mode='list'] {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .brc-desk[data-desk-mode='list'] .brc-desk-chat {
+    height: 72dvh;
+  }
+  .brc-desk-main {
+    overflow: visible;
+  }
 }
 @media (max-width: 899px) {
   .brc-admin-room {

@@ -244,6 +244,38 @@ function nameOf(row: MessageRow): string | null {
   return roomAuthorName(row.author_role, row.display_name, row.email);
 }
 
+/**
+ * A note a share link's guest left (lib/brand-rooms/shares.ts): its line is a brand-side `review_commented`
+ * with no actor. It must never read as the YAGI team's; the screen shows the guest's name from the note.
+ */
+function isGuestNoteLine(row: MessageRow): boolean {
+  return row.kind === 'event' && row.event === 'review_commented' && row.author_id == null && eventDetail(row.detail)?.actorRole === 'brand';
+}
+
+/** The guest names on those lines' notes, by line id. A note of another organization or a team note gives none. */
+async function guestNoteNames(sql: SqlRunner, organizationId: string, rows: readonly MessageRow[]): Promise<Map<string, string | null>> {
+  const out = new Map<string, string | null>();
+  const wanted = new Map<string, string>();
+  for (const row of rows) {
+    if (row.deleted_at || !isGuestNoteLine(row)) continue;
+    out.set(String(row.id), null);
+    const ref = parseRefKey(row.ref_key);
+    if (ref?.kind === 'review' && ref.commentId) wanted.set(String(row.id), ref.commentId.toLowerCase());
+  }
+  if (wanted.size === 0 || !(await tableExists(sql, 'brand_studio_review_comments'))) return out;
+  const names = new Map(
+    (
+      await sql.query<{ id: string; guest_name: string | null }>(
+        `select c.id::text as id, to_jsonb(c) ->> 'guest_name' as guest_name from brand_studio_review_comments c
+          where c.id = any($1::uuid[]) and c.organization_id = $2${publicNotesOnly('c', await teamNotesReady(sql))}`,
+        [[...new Set(wanted.values())], organizationId],
+      )
+    ).rows.map((r) => [r.id, r.guest_name?.replace(/\s+/g, ' ').trim().slice(0, 60) || null]),
+  );
+  for (const [lineId, commentId] of wanted) out.set(lineId, names.get(commentId) ?? null);
+  return out;
+}
+
 /* ------------------------------------------------------------ ref cards */
 
 async function tableExists(sql: SqlRunner, name: string): Promise<boolean> {
@@ -444,6 +476,7 @@ async function views(sql: SqlRunner, media: StudioMediaStore, reader: Reader, ro
   const reactions = await reactionsOf(sql, ids, reader.viewerId);
   const refs = rows.filter((r) => r.ref && r.ref_key && !r.deleted_at).map((r) => parseRefKey(r.ref_key)).filter((r): r is RoomRef => Boolean(r));
   const cards = await refViews(sql, media, reader.organizationId, reader.projectId, refs);
+  const guests = await guestNoteNames(sql, reader.organizationId, rows);
   const threaded = rows.filter((r) => Number(r.reply_count ?? 0) > 0).map((r) => String(r.id));
   const lastReplyBy = new Map(
     threaded.length
@@ -470,7 +503,8 @@ async function views(sql: SqlRunner, media: StudioMediaStore, reader: Reader, ro
       detail: detail ? { ...(detail.title ? { title: detail.title } : {}), ...(detail.version != null ? { version: detail.version } : {}) } : null,
       authorId: row.author_id ? String(row.author_id) : null,
       authorRole: row.author_role,
-      authorName: deleted ? null : nameOf(row),
+      authorName: deleted ? null : guests.has(String(row.id)) ? (guests.get(String(row.id)) ?? null) : nameOf(row),
+      ...(guests.has(String(row.id)) ? { guest: true as const } : {}),
       mine: !deleted && row.kind === 'text' && row.author_id != null && String(row.author_id) === reader.viewerId,
       body: deleted ? '' : String(row.body ?? ''),
       attachments: deleted ? [] : storedAttachments(row.attachments).map((a) => attachmentView(a, media)),
@@ -1312,14 +1346,35 @@ async function staffReader(sql: SqlRunner, viewer: Viewer, organizationId: strin
   return { ...base, channel: project.id.toLowerCase(), projectId: project.id.toLowerCase(), title: project.title };
 }
 
-/** Team unread: brand lines after the latest team read mark or team line in that channel. */
-const TEAM_SEEN = `
+/**
+ * The customer's moves on the work that wait for the team (docs/BRAND-ROOMS-FEEDBACK.md §3): a note, a
+ * change request, an approval. A guest's note through a share link is stored with `actorRole = 'brand'`
+ * too (lib/brand-rooms/shares.ts). What the customer is only told about (a new version, a shared board)
+ * is not here, and a team note (§5) leaves no line at all.
+ */
+export const TEAM_WAITING_EVENTS = ['review_commented', 'review_changes_requested', 'review_approved', 'storyboard_approved', 'storyboard_changes_requested'] as const;
+
+const WAITING_EVENT_LIST = TEAM_WAITING_EVENTS.map((e) => `'${e}'`).join(', ');
+
+/** A line by the team: its own text line, or an event the team caused (a reply on a note, a new version, a shared board). */
+const teamAnswer = (s: string) => `(${s}.author_role = 'studio' or (${s}.kind = 'event' and ${s}.detail ->> 'actorRole' = 'studio'))`;
+
+/** A line the team owes an answer for: a customer's live line, or a customer's note or decision on the work. */
+const waitingLine = (m: string) =>
+  `(${m}.deleted_at is null and (${m}.author_role = 'brand'
+     or (${m}.kind = 'event' and ${m}.author_role = 'system' and ${m}.detail ->> 'actorRole' = 'brand' and ${m}.event in (${WAITING_EVENT_LIST}))))`;
+
+/** The last moment the team saw a channel: its newest read mark, team line or team event there. */
+const teamSeen = (m: string) => `
   greatest(
     coalesce((select max(r.last_read_at) from brand_room_reads r join profiles p on p.id = r.user_id and p.is_admin
-               where r.organization_id = m0.organization_id and r.channel = m0.channel), '-infinity'::timestamptz),
+               where r.organization_id = ${m}.organization_id and r.channel = ${m}.channel), '-infinity'::timestamptz),
     coalesce((select max(s.created_at) from brand_room_messages s
-               where s.organization_id = m0.organization_id and s.channel = m0.channel and s.author_role = 'studio'), '-infinity'::timestamptz)
+               where s.organization_id = ${m}.organization_id and s.channel = ${m}.channel and ${teamAnswer('s')}), '-infinity'::timestamptz)
   )`;
+
+/** Team unread ("waiting"): the waiting lines after the team last saw the channel. `m` is the counted alias. */
+const teamWaiting = (m: string) => `${waitingLine(m)} and ${m}.created_at > ${teamSeen(m)}`;
 
 export interface StaffRoomChannel {
   organizationId: string;
@@ -1366,16 +1421,57 @@ async function openOrganizations(sql: SqlRunner): Promise<Array<{ id: string; na
   return orgs.filter((o) => !featureDenied(policies[o.id] ?? [], 'generative_media')).map((o) => ({ id: o.id.toLowerCase(), name: String(o.name) }));
 }
 
-/** `/admin/brand-rooms` — every channel with a line in it, across client organizations, waiting ones first. */
+/** A project the team has not said anything in yet (docs/BRAND-ROOMS-FEEDBACK.md §3): a commission leaves no line. */
+export interface StaffNewRequest extends StaffRoomChannel {
+  projectId: string;
+  status: string;
+  createdAt: string;
+}
+
+/** Project statuses a "new request" can still have: closed work is not waiting for a first word. */
+const NEW_REQUEST_STATUSES = ['requested', 'active'] as const;
+
+/**
+ * `/admin/brand-rooms` — the team's project list. `newRequests`: client-visible projects of open
+ * organizations with no team line and no team event in their channel yet, newest first. `channels`: every
+ * channel with a line in it (project channels and each organization's general conversation; a new request
+ * the brand already wrote in is here too, the page lists it once), waiting ones first, then by last
+ * activity. Sandboxed and generation-closed organizations are in neither.
+ */
 export async function staffRoomOverview(
   deps: Pick<RoomMessageDeps, 'sql'>,
   viewer: Viewer,
-): Promise<{ ok: true; channels: StaffRoomChannel[]; organizations: Array<{ id: string; name: string }> } | RoomFailure> {
+): Promise<{ ok: true; channels: StaffRoomChannel[]; newRequests: StaffNewRequest[]; organizations: Array<{ id: string; name: string }> } | RoomFailure> {
   return guard(() =>
     deps.sql.transaction(async (sql) => {
       await requireStaff(sql, viewer);
       const organizations = await openOrganizations(sql);
       const open = new Set(organizations.map((o) => o.id));
+      const fresh = (
+        await sql.query<StaffChannelRow & { status: string }>(
+          `select p.organization_id::text as organization_id, g.name as organization_name, p.id::text as channel, p.id::text as project_id, p.title,
+                  p.status, p.created_at,
+                  (select max(m.created_at) from brand_room_messages m where m.organization_id = p.organization_id and m.channel = p.id::text and m.deleted_at is null) as last_at,
+                  (select coalesce(nullif(l.body, ''), l.attachments -> 0 ->> 'name') from brand_room_messages l
+                    where l.organization_id = p.organization_id and l.channel = p.id::text and l.deleted_at is null and l.kind = 'text'
+                    order by l.created_at desc limit 1) as last_line,
+                  (select l.author_role from brand_room_messages l
+                    where l.organization_id = p.organization_id and l.channel = p.id::text and l.deleted_at is null and l.kind = 'text'
+                    order by l.created_at desc limit 1) as last_role,
+                  (select count(*)::int from brand_room_messages m0
+                    where m0.organization_id = p.organization_id and m0.channel = p.id::text and ${teamWaiting('m0')}) as team_unread
+             from brand_projects p
+             join brand_organizations g on g.id = p.organization_id
+            where p.client_visible and p.status = any($1::text[])
+              and not exists (select 1 from brand_room_messages s where s.organization_id = p.organization_id and s.channel = p.id::text and ${teamAnswer('s')})
+            order by p.created_at desc, p.id
+            limit 100`,
+          [[...NEW_REQUEST_STATUSES]],
+        )
+      ).rows;
+      const newRequests = fresh
+        .filter((r) => open.has(String(r.organization_id).toLowerCase()))
+        .map((r) => ({ ...staffChannelView(r), projectId: String(r.project_id), status: String(r.status), createdAt: isoOrNull(r.created_at) ?? '' }));
       const rows = (
         await sql.query<StaffChannelRow>(
           `select m0.organization_id::text as organization_id, g.name as organization_name, m0.channel, m0.project_id::text as project_id, p.title,
@@ -1387,10 +1483,11 @@ export async function staffRoomOverview(
                   (select l.author_role from brand_room_messages l
                     where l.organization_id = m0.organization_id and l.channel = m0.channel and l.deleted_at is null and l.kind = 'text'
                     order by l.created_at desc limit 1) as last_role,
-                  count(*) filter (where m0.author_role = 'brand' and m0.deleted_at is null and m0.created_at > ${TEAM_SEEN})::int as team_unread
+                  count(*) filter (where ${teamWaiting('m0')})::int as team_unread
              from brand_room_messages m0
              join brand_organizations g on g.id = m0.organization_id
              left join brand_projects p on p.id = m0.project_id
+            where m0.project_id is null or p.client_visible
             group by m0.organization_id, g.name, m0.channel, m0.project_id, p.title
             order by max(m0.created_at) desc
             limit 300`,
@@ -1400,7 +1497,44 @@ export async function staffRoomOverview(
         .filter((r) => open.has(String(r.organization_id).toLowerCase()))
         .map(staffChannelView)
         .sort((a, b) => Number(b.teamUnread > 0) - Number(a.teamUnread > 0) || (b.lastAt ?? '').localeCompare(a.lastAt ?? ''));
-      return { ok: true as const, channels, organizations };
+      return { ok: true as const, channels, newRequests, organizations };
+    }),
+  );
+}
+
+export interface StaffProjectDesk {
+  ok: true;
+  organization: { id: string; name: string };
+  project: { id: string; title: string; status: string; createdAt: string | null };
+  teamUnread: number;
+}
+
+/**
+ * `/admin/brand-rooms/[organizationId]/[projectId]` — the team's desk for one project: the same gate as the
+ * project's conversation (an admin re-read on the profile row, an open organization, a client-visible
+ * project of that organization; anything else `not_found`), its status and the waiting count.
+ */
+export async function staffProjectDesk(deps: Pick<RoomMessageDeps, 'sql'>, viewer: Viewer, organizationId: string, projectId: string): Promise<StaffProjectDesk | RoomFailure> {
+  return guard(() =>
+    deps.sql.transaction(async (sql) => {
+      const reader = await staffReader(sql, viewer, organizationId, projectId);
+      if (!reader.projectId) throw new MessageDenied('not_found');
+      const row = (
+        await sql.query<{ status: string; created_at: Date | string | null; team_unread: number }>(
+          `select p.status, p.created_at,
+                  (select count(*)::int from brand_room_messages m0
+                    where m0.organization_id = p.organization_id and m0.channel = p.id::text and ${teamWaiting('m0')}) as team_unread
+             from brand_projects p where p.id = $1 and p.organization_id = $2`,
+          [reader.projectId, reader.organizationId],
+        )
+      ).rows[0];
+      if (!row) throw new MessageDenied('not_found');
+      return {
+        ok: true as const,
+        organization: { id: reader.organizationId, name: reader.organizationName },
+        project: { id: reader.projectId, title: String(reader.title ?? ''), status: String(row.status), createdAt: isoOrNull(row.created_at) },
+        teamUnread: Number(row.team_unread ?? 0),
+      };
     }),
   );
 }
@@ -1432,8 +1566,7 @@ export async function staffRoomChannels(
                     where m.organization_id = $1 and m.channel = c.channel and m.deleted_at is null and m.kind = 'text'
                     order by m.created_at desc limit 1) as last_role,
                   (select count(*)::int from brand_room_messages m0
-                    where m0.organization_id = $1 and m0.channel = c.channel and m0.author_role = 'brand' and m0.deleted_at is null
-                      and m0.created_at > ${TEAM_SEEN}) as team_unread
+                    where m0.organization_id = $1 and m0.channel = c.channel and ${teamWaiting('m0')}) as team_unread
              from chans c`,
           [org.id, org.name],
         )

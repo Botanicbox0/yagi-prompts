@@ -87,7 +87,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
       : { ok: false, code: outcome.code, detail: outcome.detail },
     { status: outcome.ok ? 200 : 400, headers: NO_STORE });
   }
-  if(request.headers.get('accept')==='application/json') return NextResponse.json(outcome.ok ? {ok:true,to:outcome.to,...(outcome.invitationToken?{invitationToken:outcome.invitationToken}:{})} : {ok:false,code:outcome.code}, {status:outcome.ok?200:400,headers:NO_STORE});
+  if(request.headers.get('accept')==='application/json') return NextResponse.json(outcome.ok ? {ok:true,to:outcome.to,...(outcome.invitationToken?{invitationToken:outcome.invitationToken}:{}),...(outcome.shareToken?{shareToken:outcome.shareToken}:{})} : {ok:false,code:outcome.code}, {status:outcome.ok?200:400,headers:NO_STORE});
   // 303: the POST becomes a GET on the way back, so a refresh never re-submits the operation.
   return NextResponse.redirect(new URL(outcomeUrl(back, outcome), requestUrl.origin), {
     status: 303,

@@ -323,9 +323,12 @@ export async function notifySlackBrandConcierge(
   sql: SqlRunner,
   input: {
     organizationId: string;
-    userId: string;
+    /** Null for someone without an account (a share link's guest); `sender` then says who wrote. */
+    userId: string | null;
     body: string;
     messageId: string;
+    /** Overrides the sender line (a guest has no profile row). Already safe for Slack. */
+    sender?: { label: string; role: string } | null;
   },
   options?: {
     env?: Record<string, string | undefined>;
@@ -343,26 +346,30 @@ export async function notifySlackBrandConcierge(
         [input.organizationId],
       )
     ).rows[0];
-    const userRow = (
-      await sql.query<{ email: string; is_admin: boolean }>(
-        'select email, is_admin from profiles where id=$1',
-        [input.userId],
-      )
-    ).rows[0];
-    const memberRow = (
-      await sql.query<{ role: string }>(
-        "select role from brand_memberships where organization_id=$1 and user_id=$2 and status='active'",
-        [input.organizationId, input.userId],
-      )
-    ).rows[0];
+    const userRow = input.userId
+      ? (
+          await sql.query<{ email: string; is_admin: boolean }>(
+            'select email, is_admin from profiles where id=$1',
+            [input.userId],
+          )
+        ).rows[0]
+      : undefined;
+    const memberRow = input.userId
+      ? (
+          await sql.query<{ role: string }>(
+            "select role from brand_memberships where organization_id=$1 and user_id=$2 and status='active'",
+            [input.organizationId, input.userId],
+          )
+        ).rows[0]
+      : undefined;
 
     const organizationName = orgRow?.name ? String(orgRow.name) : 'Brand Client';
-    const senderEmail = userRow?.email ? String(userRow.email) : 'client@brand.twings.app';
-    const senderRole = memberRow?.role
+    const senderEmail = input.sender?.label ?? (userRow?.email ? String(userRow.email) : 'client@brand.twings.app');
+    const senderRole = input.sender?.role ?? (memberRow?.role
       ? String(memberRow.role)
       : userRow?.is_admin
         ? 'studio'
-        : 'member';
+        : 'member');
 
     const fetcher = options?.fetcher ?? fetch;
     const target = await resolveActiveConciergeChannel(config, fetcher);

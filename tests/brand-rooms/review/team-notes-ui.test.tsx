@@ -86,6 +86,15 @@ describe.each(["ko", "en"] as const)("team notes on the stage (%s)", (locale) =>
     expect(html).toContain(`data-review-team-tag="true">${teamCopy.tag}<`);
   });
 
+  it("keeps the switch in place: the hint's line is laid out while off (hidden), shown when on", () => {
+    const html = renderToStaticMarkup(
+      <AdminReviewStage review={item} comments={comments} copy={copy} locale={locale} eyebrow="Brand" initialMs={null} extended teamCopy={teamCopy} />,
+    );
+    // Below the checkbox, present but hidden while "팀만 보기" is off, so turning it on moves nothing.
+    expect(html).toMatch(new RegExp(`data-review-team-toggle="true"/>${teamCopy.toggle}</label><p class="bsv-team-hint"[^>]*data-shown="false" aria-hidden="true">`));
+    expect(html).not.toContain(`aria-describedby="bsv-team-hint-`);
+  });
+
   it("any other stage has no switch and no tag, and drops a team note handed to it", () => {
     const html = renderToStaticMarkup(<ReviewStage review={item} comments={comments} canWrite copy={copy} locale={locale} actions={actions} extended />);
     expect(html).toContain("note 1");

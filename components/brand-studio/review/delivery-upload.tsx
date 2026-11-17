@@ -9,6 +9,7 @@
  */
 import { useState } from "react";
 import { uploadMime } from "@/lib/admin/direct-upload";
+import { roomDeskPath } from "@/lib/brand-rooms/message-contracts";
 import type { roomsReviewEn } from "@/messages/rooms-review";
 
 type AdminCopy = (typeof roomsReviewEn)["admin"];
@@ -36,7 +37,20 @@ function put(url: string, file: File, mime: string, onProgress: (percent: number
   });
 }
 
-export function DeliveryUpload({ organizationId, projectId, stacks, copy }: { organizationId: string; projectId: string; stacks: DeliveryStackOption[]; copy: AdminCopy }) {
+export function DeliveryUpload({
+  organizationId,
+  projectId,
+  stacks,
+  copy,
+  landing = "review",
+}: {
+  organizationId: string;
+  projectId: string;
+  stacks: DeliveryStackOption[];
+  copy: AdminCopy;
+  /** `desk`: from a project's desk, land back there on the new version (docs/BRAND-ROOMS-FEEDBACK.md §4). */
+  landing?: "review" | "desk";
+}) {
   const [file, setFile] = useState<File | null>(null);
   const [title, setTitle] = useState("");
   const [stack, setStack] = useState("");
@@ -75,7 +89,8 @@ export function DeliveryUpload({ organizationId, projectId, stacks, copy }: { or
     setPhase({ kind: "delivering" });
     const form = new FormData();
     form.set("_op", "brand_rooms.delivery.add");
-    form.set("_back", `/admin/brand-rooms/reviews?projectId=${projectId}`);
+    form.set("_back", landing === "desk" ? roomDeskPath(organizationId, projectId) : `/admin/brand-rooms/reviews?projectId=${projectId}`);
+    if (landing === "desk") form.set("landing", "desk");
     form.set("organizationId", organizationId);
     form.set("projectId", projectId);
     form.set("title", title.trim());

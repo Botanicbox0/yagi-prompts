@@ -30,6 +30,7 @@ import {
 import { corsMediaUrl } from "@/lib/brand-studio/cors-media-url";
 import type { studioReviewEn } from "@/messages/studio-review";
 import type { adminConsoleEn } from "@/messages/admin-console";
+import { composerHolds } from "./auto-refresh";
 import { CompareView } from "./compare";
 import { InkLayer, InkTools, useInk } from "./ink";
 
@@ -102,6 +103,17 @@ export interface ReviewStageProps {
    * never holds a team note, and if one ever arrived without this prop the stage would not show it.
    */
   team?: { copy: ReviewTeamCopy } | null;
+  /**
+   * Told whenever the composer starts or stops holding unsent work (text, an open or unsent drawing, a send
+   * in flight), so a page that re-reads on its own can wait (`AdminReviewStage`, ./auto-refresh.ts).
+   */
+  onComposingChange?: (holding: boolean) => void;
+  /**
+   * The team's project desk shows the brand, the project and the draft above the stage: the stage keeps its
+   * title only for assistive technology, and with a version switcher (which already names each version's
+   * status) it drops the separate status mark. Every other screen leaves it out.
+   */
+  compactHead?: boolean;
 }
 
 export function fill(template: string, values: Record<string, string | number>): string {
@@ -359,6 +371,8 @@ export function ReviewStage({
   downloadUrl,
   downloadName,
   team = null,
+  onComposingChange,
+  compactHead = false,
 }: ReviewStageProps) {
   // Outside the team's page a team note is never shown, whatever the caller passed.
   const comments = useMemo(() => (team ? allComments : allComments.filter((c) => !c.team)), [team, allComments]);
@@ -396,6 +410,10 @@ export function ReviewStage({
   const [toast, setToast] = useState<string | null>(null);
   const seededRef = useRef(false);
   const seededCommentRef = useRef<string | null>(null);
+  const holding = composerHolds({ draft, replyDraft, drawing: ink.active, pendingStrokes: mark?.strokes?.length ?? 0, sending: busy !== null });
+  useEffect(() => {
+    onComposingChange?.(holding);
+  }, [holding, onComposingChange]);
 
   // A different piece: start clean.
   useEffect(() => {
@@ -804,14 +822,14 @@ export function ReviewStage({
   return (
     <section className="bsv-stage" data-review-stage={review.id} data-review-kind={review.kind} aria-labelledby={`bsv-title-${review.id}`}>
       <header className="bsv-stage-head">
-        <div className="bsv-stage-heading">
+        <div className={compactHead ? "bsv-visually-hidden" : "bsv-stage-heading"} data-review-heading={compactHead ? "hidden" : undefined}>
           {onBack && (
             <button type="button" className="bsv-back" onClick={onBack}>
               <Icon d={ICONS.arrowLeft} />
               <span>{copy.back}</span>
             </button>
           )}
-          {eyebrow && <p className="bsv-eyebrow">{eyebrow}</p>}
+          {eyebrow && !compactHead && <p className="bsv-eyebrow">{eyebrow}</p>}
           <h2 className="bsv-stage-title" id={`bsv-title-${review.id}`}>
             {review.title}
           </h2>
@@ -841,10 +859,12 @@ export function ReviewStage({
               </button>
             </div>
           )}
-          <span className="bsv-status" data-state={review.status}>
-            <span className="bsv-visually-hidden">{copy.statusLabel}: </span>
-            {copy.status[review.status]}
-          </span>
+          {!(compactHead && stack) && (
+            <span className="bsv-status" data-state={review.status}>
+              <span className="bsv-visually-hidden">{copy.statusLabel}: </span>
+              {copy.status[review.status]}
+            </span>
+          )}
           {canManage &&
             setStatus &&
             nextStatuses(review.status).map((s) => (
@@ -1311,11 +1331,10 @@ export function ReviewStage({
                     <input type="checkbox" checked={teamOnly} onChange={(e) => setTeamOnly(e.target.checked)} data-review-team-toggle aria-describedby={teamOnly ? `bsv-team-hint-${review.id}` : undefined} />
                     {team.copy.toggle}
                   </label>
-                  {teamOnly && (
-                    <p className="bsv-team-hint" id={`bsv-team-hint-${review.id}`}>
-                      {team.copy.hint}
-                    </p>
-                  )}
+                  {/* Always laid out, shown only while on: switching never moves the checkbox (the composer sits at the column's foot). */}
+                  <p className="bsv-team-hint" id={`bsv-team-hint-${review.id}`} data-shown={teamOnly ? "true" : "false"} aria-hidden={teamOnly ? undefined : true}>
+                    {team.copy.hint}
+                  </p>
                 </div>
               )}
               <div className="bsv-form-row">
