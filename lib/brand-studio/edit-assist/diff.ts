@@ -29,6 +29,8 @@ export type CaptionField = 'text' | 'time' | 'position' | 'size';
 export type EditDelta =
   | { kind: 'clip_removed'; cut: number; label: string }
   | { kind: 'clip_split'; cut: number; atSec: number }
+  /** One cut divided into three or more consecutive pieces that still play all of it (scene split). */
+  | { kind: 'clip_split_many'; cut: number; pieces: number }
   | { kind: 'clip_trimmed'; cut: number; beforeSec: number; afterSec: number }
   | { kind: 'clip_moved'; cut: number; toPosition: number }
   | { kind: 'clip_sound'; cut: number | 'all'; muted?: boolean; volumePct?: number }
@@ -222,9 +224,21 @@ function diffClips(before: readonly ComposeClip[], after: readonly ComposeClip[]
       return;
     }
 
-    // More than one new piece: too many ways to read it.
+    // Several new pieces. One reading is clean: the cut was divided into consecutive pieces that still
+    // play the whole of it, in place (an automatic scene split). Anything else is too ambiguous to name.
     survivors.push({ cut: position, at: index ?? afterIndex.get(extra[0]!.id)! });
-    out.other += 1;
+    const all = kept ? [kept, ...extra].sort((x, y) => x.trimStartSec - y.trimStartSec) : [];
+    const whole =
+      all.length >= 3 &&
+      all[0]!.id === cut.id &&
+      Math.abs(all[0]!.trimStartSec - cut.trimStartSec) < EPS &&
+      Math.abs(all[all.length - 1]!.trimEndSec - cut.trimEndSec) < EPS &&
+      all.every((piece, k) => k === 0 || Math.abs(all[k - 1]!.trimEndSec - piece.trimStartSec) < EPS) &&
+      all.every((piece, k) => afterIndex.get(piece.id) === index! + k) &&
+      all.every((piece) => piece.volume === cut.volume && piece.muted === cut.muted) &&
+      all.every((piece) => sameValue(clipRest(cut, true), clipRest(piece, true)));
+    if (whole) out.split.push({ kind: 'clip_split_many', cut: position, pieces: all.length });
+    else out.other += 1;
   });
 
   const inAfterOrder = [...survivors].sort((a, b) => a.at - b.at);

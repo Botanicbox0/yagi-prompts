@@ -265,6 +265,24 @@ describe('diffTimelines — nothing changes silently', () => {
     expect(diffTimelines(base, splitWithMarkers).map((d) => d.kind)).toEqual(['clip_split']);
   });
 
+  it('names one cut divided into several pieces (an automatic scene split), and nothing vaguer', () => {
+    const base = assistFixture();
+    // What the screen applies after finding two scene changes in cut 2: markers, then a split at each.
+    const many = applyTimelinePatches(base, [
+      { op: 'set_clip_cuts', clipIndex: 1, cutMarkers: [1.5, 3] },
+      { op: 'split_clip_cuts', clipIndex: 1, cutMediaSecs: [1.5, 3] },
+    ]).project;
+    expect(many.clips).toHaveLength(base.clips.length + 2);
+    expect(diffTimelines(base, many)).toEqual([{ kind: 'clip_split_many', cut: 2, pieces: 3 }]);
+    expect(isInstantEdit(diffTimelines(base, many))).toBe(true);
+
+    // A piece of it removed afterwards no longer plays the whole cut: that is not a clean split.
+    const pieceGone = applyTimelinePatches(many, [{ op: 'remove_clip', clipIndex: 2 }]).project;
+    const kinds = diffTimelines(base, pieceGone).map((d) => d.kind);
+    expect(kinds).not.toContain('clip_split_many');
+    expect(kinds).toContain('other');
+  });
+
   it('counts a colour look moving to another cut when its cut is removed', () => {
     const base: ComposerProject = {
       ...assistFixture(),

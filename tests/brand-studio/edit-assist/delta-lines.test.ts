@@ -39,6 +39,7 @@ describe('shortenText', () => {
 const TABLE: Array<[EditDelta, string, string]> = [
   [{ kind: 'clip_removed', cut: 3, label: '거리 달리기' }, '3번 컷 삭제', 'Removed cut 3'],
   [{ kind: 'clip_split', cut: 1, atSec: 2.5 }, '1번 컷 2.5초 지점 분할', 'Split cut 1 at 2.5s'],
+  [{ kind: 'clip_split_many', cut: 2, pieces: 3 }, '2번 컷 3개로 분할', 'Cut 2 split into 3 cuts'],
   [{ kind: 'clip_trimmed', cut: 2, beforeSec: 4, afterSec: 2 }, '2번 컷 길이 4초 → 2초', 'Cut 2 length 4s → 2s'],
   [{ kind: 'clip_moved', cut: 4, toPosition: 1 }, '4번 컷 1번째로 이동', 'Moved cut 4 to position 1'],
   [{ kind: 'clip_sound', cut: 2, muted: true }, '2번 컷 소리 끔', 'Cut 2 sound off'],
@@ -83,6 +84,7 @@ describe('deltaText — every delta kind, both languages', () => {
         'clip_removed',
         'clip_sound',
         'clip_split',
+        'clip_split_many',
         'clip_trimmed',
         'look',
         'music_removed',

@@ -63,6 +63,8 @@ export function deltaLine(delta: EditDelta, copy: Pick<StudioComposeCopy, 'assis
       return { key: 'clipRemoved', values: { n: delta.cut } };
     case 'clip_split':
       return { key: 'clipSplit', values: { n: delta.cut, at: formatSeconds(delta.atSec) } };
+    case 'clip_split_many':
+      return { key: 'clipSplitMany', values: { n: delta.cut, count: delta.pieces } };
     case 'clip_trimmed':
       return {
         key: 'clipTrimmed',

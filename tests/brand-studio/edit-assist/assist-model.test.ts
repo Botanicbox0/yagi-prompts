@@ -152,10 +152,12 @@ describe('automatic scene split passthrough', () => {
       noCutsFound: false,
     });
 
+    // One cut divided in place is one named change ("1번 컷 3개로 분할"): applied at once, like a single split.
     const decision = decideAssist(real, patches(resolved.patches), real);
-    expect(decision.type).toBe('proposal');
-    if (decision.type !== 'proposal') return;
+    expect(decision.type).toBe('instant');
+    if (decision.type !== 'instant') return;
     expect(decision.draft.clips.length).toBe(real.clips.length + 2);
+    expect(decision.deltas).toEqual([{ kind: 'clip_split_many', cut: 1, pieces: 3 }]);
   });
 
   it('turns a split that finds no scene change into a note, never an empty proposal', async () => {
