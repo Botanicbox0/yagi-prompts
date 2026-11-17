@@ -1714,10 +1714,13 @@ export function VideoComposer({
           if (refund.ok === true && refund.allowance && typeof refund.allowance === 'object') {
             setAllowance(refund.allowance as StudioAllowanceView);
           }
+          // Say "refunded" only when the server really refunded (it declines reservations past the window).
           setStatusMessage(
-            interpolate(copy.status.exportFailedRefunded, {
-              credits: formatCredits(creditsUsed, locale),
-            }),
+            refund.ok === true && refund.refunded === true
+              ? interpolate(copy.status.exportFailedRefunded, {
+                  credits: formatCredits(creditsUsed, locale),
+                })
+              : copy.status.exportFailed,
           );
         } catch {
           setStatusMessage(copy.status.exportFailed);

@@ -12,6 +12,12 @@ import { creditsOf } from '@/lib/brand-studio/credits';
 
 export const COMPOSE_FINAL_RENDER_MODEL = 'compose-1080p' as const;
 
+/**
+ * How long after `render.reserve` a failed client MP4 export can still be refunded through
+ * `render.refund`. Older reservations stay charged.
+ */
+export const COMPOSE_RENDER_REFUND_WINDOW_MS = 30 * 60 * 1000;
+
 /** Internal KRW allowance unit reserved for one 1080p final MP4 render (`10` base + `2` credits/sec). */
 export function composeFinalRenderKrw(durationSec: number): number {
   const wholeSeconds = Math.max(1, Math.min(300, Math.ceil(Number.isFinite(durationSec) ? durationSec : 1)));

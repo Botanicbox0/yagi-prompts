@@ -782,7 +782,8 @@ export function normalizeCaptions(captions: readonly ComposeCaption[], totalSec:
   });
 }
 
-function normalizeOverlayClip(overlay: ComposeOverlayClip): ComposeOverlayClip {
+/** Clamps one overlay's timing, placement and opacity (shared by patches, local storage and server saves). */
+export function normalizeOverlayClip(overlay: ComposeOverlayClip): ComposeOverlayClip {
   const startSec = clamp(roundTenths(overlay.startSec), 0, 3600);
   const endSec = Math.max(roundTenths(startSec + 0.3), roundTenths(overlay.endSec));
   return {
@@ -797,7 +798,8 @@ function normalizeOverlayClip(overlay: ComposeOverlayClip): ComposeOverlayClip {
   };
 }
 
-function normalizeSfxClip(sfx: ComposeSfxClip): ComposeSfxClip {
+/** Clamps one sound effect's timing and volume (shared by patches, local storage and server saves). */
+export function normalizeSfxClip(sfx: ComposeSfxClip): ComposeSfxClip {
   return {
     ...sfx,
     label: sfx.label.trim().slice(0, 80) || 'SFX',
