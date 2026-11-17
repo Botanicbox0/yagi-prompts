@@ -31,6 +31,9 @@ export const roomsNoticesEn = {
     teamAuthor: 'YAGI team · {name}',
     cta: 'Open project',
     note: 'You get this because you are part of this project.',
+    /** The general conversation's mail: its button opens the inbox's General, not a project. */
+    ctaGeneral: 'Open General',
+    noteGeneral: 'You get this because you are a member of this brand.',
     stop: 'Stop project emails',
   },
   push: {
@@ -68,6 +71,8 @@ export const roomsNoticesKo: typeof roomsNoticesEn = {
     teamAuthor: '야기 팀 · {name}',
     cta: '프로젝트에서 보기',
     note: '이 프로젝트에 참여하고 있어 보내 드렸어요.',
+    ctaGeneral: '일반 문의에서 보기',
+    noteGeneral: '이 브랜드의 구성원이라 보내 드렸어요.',
     stop: '프로젝트 메일 그만 받기',
   },
   push: {

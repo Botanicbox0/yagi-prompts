@@ -275,6 +275,25 @@ describe('the general channel', () => {
     expect(mail!.subject).toBe('News in General · Studio fixture brand');
     expect(mail!.text).toContain('We got your question about invoices.');
     expect(mail!.text).not.toContain('Spring launch');
+    // Its own button and note: it opens the general conversation, not a project.
+    for (const part of [mail!.html, mail!.text]) {
+      expect(part).toContain('Open General');
+      expect(part).toContain('You get this because you are a member of this brand.');
+      expect(part).not.toContain('Open project');
+      expect(part).not.toContain('part of this project');
+    }
+  });
+
+  it('writes the general mail’s button and note in Korean for a Korean reader', async () => {
+    await f.sql.query("update profiles set locale = 'ko' where id = $1", [f.ids.owner]);
+    await teamLine(f, '세금계산서 문의 확인했어요.', { projectId: 'general' });
+    await pass(minutesFromNow(11));
+    const [mail] = mailTo('owner');
+    expect(mail!.subject).toBe('일반 문의에 새 소식이 있어요 · Studio fixture brand');
+    expect(mail!.text).toContain('일반 문의에서 보기');
+    expect(mail!.text).toContain('이 브랜드의 구성원이라 보내 드렸어요.');
+    expect(mail!.text).not.toContain('프로젝트에서 보기');
+    expect(mail!.text).not.toContain('이 프로젝트에 참여하고 있어');
   });
 
   it('keeps general and a project apart: two mails, each with its own link', async () => {

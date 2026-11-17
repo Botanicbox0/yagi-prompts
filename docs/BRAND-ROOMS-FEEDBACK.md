@@ -91,6 +91,18 @@ create table brand_room_notices (
 create index on brand_room_notices (state, due_at) where state = 'pending';
 ```
 
+구현(0094·0167)에서 위 초안과 달라진 것. 원본은 마이그레이션 파일이다.
+
+- `project_id`는 null을 허용한다(조직의 일반 대화). 묶는 단위는 받는 사람 × 장소(조직 + 프로젝트 또는 일반 대화)다.
+- 열 추가: `lease_until`(보내는 중 잠금 10분), `push_state`·`pushed_at`(푸시는 메일보다 먼저, 한 번만).
+- 건너뛴 사유 추가: `no_access`(그사이 구성원에서 빠짐), `no_email`, `deleted`(원래 글이 지워짐), `rule`. 30분 상한에 걸린 행은 건너뛰지 않고 `due_at`만 뒤로 민다.
+- "바로" 메일이 나갈 때 같은 사람·장소의 기한이 된 묶음 글도 함께 싣는다.
+- 버튼 주소: 프로젝트는 `/brand/rooms/{projectId}?organizationId=…`, 일반 대화는 `/brand/rooms?organizationId=…&channel=general`. 여러 브랜드에 속한 사람이 다른 브랜드로 열리지 않게 조직을 붙인다.
+- 수신 거부 주소는 twings.app 쪽에 있다(브랜드 호스트는 `/api/notify/unsubscribe`를 막는다). 메일 앱의 원클릭 수신 거부(POST)도 받는다. 이전에는 GET만 받아서, 메일에 붙어 나가던 원클릭 헤더가 동작하지 않았다.
+- 사전(`messages/rooms-notices.ts`)의 문구는 임시 문구다. §9 초안과 모양이 다르다(제목 하나 + 일어난 일 줄 목록). 대표 확정본을 이 모양에 맞춰 N4에서 넣는다.
+
+확인(2026-11-18, 로컬 두 역할, 가짜 메일러): 플래그가 꺼져 있으면 0행이고 tick은 `ran:false`. 켜면 새 시안 메일은 응답 직후 나가고(행이 `sent`), 팀 대화는 10분 뒤로 잡힌다. 고객이 대화를 읽으면 `skipped/read`, 읽지 않은 일반 대화는 묶음 메일 한 통. 수신 거부는 GET·POST 모두 설정을 끄고, 그 뒤 글은 `skipped/muted`. tick은 bearer가 틀리면 401, `CRON_SECRET`이 없으면 503. 푸시 발송과 실제 메일 헤더, 30분 상한·재시도·멘션·스토리보드·답글·의뢰 접수 메일은 단위 테스트로만 확인했다.
+
 RLS는 다른 룸 테이블과 같다: 켜고 강제, `service_role`만. 번호는 PR을 여는 시점의 main에서 다시 확인한다(지금 main 최고 번호는 core 0091·glue 0165, 열린 PR #244가 core 0092를 쓰고 있다).
 
 ### 2.4 약관·처리방침과의 관계 (판단은 대표)

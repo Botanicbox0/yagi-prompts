@@ -372,8 +372,9 @@ export function buildRoomNoticeEmail(input: RoomNoticeMailInput): RoomNoticeMail
   const args = {
     title,
     paragraphs,
-    button: { label: copy.email.cta, url: buttonUrl },
-    note: { text: copy.email.note, link: { label: copy.email.stop, url: unsubscribeUrl } },
+    // The general conversation's button opens the inbox's General, so it names that, not a project.
+    button: { label: general ? copy.email.ctaGeneral : copy.email.cta, url: buttonUrl },
+    note: { text: general ? copy.email.noteGeneral : copy.email.note, link: { label: copy.email.stop, url: unsubscribeUrl } },
     footer: companyLine(input.locale, { address: true }),
   };
   return { subject, html: sheet(args), text: sheetText(args), buttonUrl, unsubscribeUrl };
