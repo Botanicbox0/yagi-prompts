@@ -118,8 +118,32 @@ function splitAnnexBNalus(data: Uint8Array): Uint8Array[] {
   return nalus;
 }
 
+/**
+ * True when the whole sample is a run of 4-byte big-endian length-prefixed NAL units that ends exactly
+ * at the last byte. This is what a WebCodecs `VideoEncoder` in `avc` format emits.
+ */
+function isLengthPrefixedAvc(data: Uint8Array): boolean {
+  if (data.byteLength < 5) return false;
+  const view = new DataView(data.buffer, data.byteOffset, data.byteLength);
+  let pos = 0;
+  while (pos < data.byteLength) {
+    if (pos + 4 > data.byteLength) return false;
+    const len = view.getUint32(pos, false);
+    if (len === 0) return false;
+    pos += 4 + len;
+  }
+  return pos === data.byteLength;
+}
+
+/**
+ * A sample is a start-code (Annex-B) stream only when it does NOT parse as length-prefixed NAL units.
+ * The first bytes alone cannot tell: a length-prefixed NAL of 256..511 bytes begins with `00 00 01 xx`
+ * and one of exactly 1 byte with `00 00 00 01`, the two start codes. Small pictures of that size are
+ * common (a repeated frame), and rewriting them as if they were start-code streams corrupts the file.
+ */
 function looksLikeAnnexB(data: Uint8Array): boolean {
   if (data.byteLength < 4) return false;
+  if (isLengthPrefixedAvc(data)) return false;
   return (
     (data[0] === 0 && data[1] === 0 && data[2] === 1) ||
     (data[0] === 0 && data[1] === 0 && data[2] === 0 && data[3] === 1)
