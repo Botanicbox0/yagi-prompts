@@ -15,7 +15,9 @@
  *   · A view counts at most once per visitor per hour (a random visitor cookie, stored only as a hash).
  *
  * Creating, listing and revoking pass the room seat (lib/brand-rooms/access.ts): a sandboxed brand never
- * gets past it (404), and only owners and editors manage links. The team lists and revokes from /admin.
+ * gets past it (404), and only owners and editors manage links. The team lists and revokes from /admin, and
+ * from a project's desk also makes links as the team (docs/BRAND-ROOMS-FEEDBACK.md §4; open brands only).
+ * A guest's note reaches the team's internal notifier through `deps.notify` (./team-notice.ts).
  */
 import { createHash, createHmac, randomBytes, scrypt as scryptCb, timingSafeEqual } from 'node:crypto';
 import { promisify } from 'node:util';
@@ -29,6 +31,7 @@ import { addGuestComment, reviewTarget, sharedReviewView } from '@/lib/brand-stu
 import type { ReviewComment, ReviewCommentAdded, ReviewItem } from '@/lib/brand-studio/review-contracts';
 import { RoomDenied, requireEdit, requireRoomProject, roomSeat, type RoomSeat } from './access';
 import { postRoomEvent } from './events';
+import { guestNoteNotice, type RoomTeamNotice, type RoomTeamNotify } from './team-notice';
 import type { StoryboardView } from '@/components/brand-rooms/seams';
 import { storyboardForShare } from './storyboards';
 import {
@@ -57,6 +60,8 @@ export interface ShareDeps {
   sql: SqlRunner;
   media: StudioMediaStore;
   now?: () => Date;
+  /** The team's internal notice for a guest's note (./team-notice.ts); the public route sends it after the answer. */
+  notify?: RoomTeamNotify;
 }
 
 export class ShareDenied extends Error {
@@ -325,16 +330,137 @@ export async function staffListShares(deps: ShareDeps, viewer: Viewer, input: { 
   );
 }
 
-/** The kill switch, from /admin (`brand_rooms.share.revoke`). */
-export async function staffRevokeShare(deps: ShareDeps, viewer: Viewer, input: { shareId: string }): Promise<(ShareDone & { kind: ShareKind; targetId: string }) | ShareFailure> {
+/**
+ * The kill switch, from /admin (`brand_rooms.share.revoke`). Without a scope it turns off any link (a
+ * closed brand's too: its links already show nothing, and turning one off only narrows). From a project's
+ * desk the scope is that project: the organization must be open and the link must be that project's.
+ */
+export async function staffRevokeShare(
+  deps: ShareDeps,
+  viewer: Viewer,
+  input: { shareId: string; organizationId?: string | null; projectId?: string | null },
+): Promise<(ShareDone & { kind: ShareKind; targetId: string }) | ShareFailure> {
   return guard(() =>
     deps.sql.transaction(async (sql) => {
       const userId = await requireStaff(sql, viewer);
       if (!UUID.test(input.shareId ?? '')) throw new ShareDenied('invalid');
+      const scoped = input.organizationId != null || input.projectId != null;
+      if (scoped) await staffProjectScope(sql, input.organizationId, input.projectId);
       const row = (await sql.query<ShareRow>('select * from brand_room_shares where id = $1 for update', [input.shareId])).rows[0];
       if (!row) throw new ShareDenied('not_found');
+      if (scoped && (String(row.organization_id).toLowerCase() !== String(input.organizationId).toLowerCase() || String(row.project_id ?? '').toLowerCase() !== String(input.projectId).toLowerCase())) {
+        throw new ShareDenied('not_found');
+      }
       if (!row.revoked_at) await sql.query('update brand_room_shares set revoked_at = now(), revoked_by = $2 where id = $1', [row.id, userId]);
       return { ok: true as const, kind: row.kind, targetId: String(row.target_id) };
+    }),
+  );
+}
+
+/** A client-visible project of an open organization: the team's desk scope. Anything else is `not_found`. */
+async function staffProjectScope(sql: SqlRunner, organizationId: unknown, projectId: unknown): Promise<{ organizationId: string; projectId: string }> {
+  if (typeof organizationId !== 'string' || !UUID.test(organizationId) || typeof projectId !== 'string' || !UUID.test(projectId)) throw new ShareDenied('not_found');
+  if (!(await organizationOpen(sql, organizationId))) throw new ShareDenied('not_found');
+  const project = (await sql.query('select id from brand_projects where id = $1 and organization_id = $2 and client_visible', [projectId, organizationId])).rows[0];
+  if (!project) throw new ShareDenied('not_found');
+  return { organizationId: organizationId.toLowerCase(), projectId: projectId.toLowerCase() };
+}
+
+/** The item a team link would show: live, in this project, and (a storyboard) already shared with the brand. */
+async function staffTargetFor(sql: SqlRunner, scope: { organizationId: string; projectId: string }, kind: ShareKind, targetId: string): Promise<void> {
+  const projectOf =
+    kind === 'review'
+      ? ((await reviewTarget(sql, scope.organizationId, targetId))?.projectId ?? null)
+      : ((
+          await sql.query<{ project_id: string; status: string }>(
+            'select project_id, status from brand_storyboards where id = $1 and organization_id = $2 and deleted_at is null',
+            [targetId, scope.organizationId],
+          )
+        ).rows.find((b) => b.status !== 'draft')?.project_id ?? null);
+  // A draft board is not the brand's to see yet, so it is nobody else's either; another project's item is not this desk's.
+  if (!projectOf || String(projectOf).toLowerCase() !== scope.projectId) throw new ShareDenied('not_found');
+}
+
+/**
+ * A link the team makes from a project's desk (`brand_rooms.share.create`): the same options the brand's
+ * dialog has (what is shared, notes on/off, download on/off, how long, an optional passphrase), stored as
+ * the team (`created_role = 'studio'`, `created_by` the team member). The token is returned once, here.
+ * The scope is judged before any other part of the input, so a closed brand answers 404 whatever was sent.
+ */
+export async function staffCreateShare(deps: ShareDeps, viewer: Viewer, raw: unknown): Promise<ShareCreated | ShareFailure> {
+  const input = (raw ?? {}) as { organizationId?: unknown; projectId?: unknown };
+  const gate = await guard(() =>
+    deps.sql.transaction(async (sql) => {
+      await requireStaff(sql, viewer);
+      return staffProjectScope(sql, input.organizationId, input.projectId);
+    }),
+  );
+  if ('ok' in gate) return gate;
+  const parsed = ShareCreateSchema.safeParse(raw);
+  if (!parsed.success) return failure('invalid');
+  const v = parsed.data;
+  const passphraseHash = v.passphrase ? await hashPassphrase(v.passphrase) : null;
+  const now = (deps.now ?? (() => new Date()))();
+  return guard(() =>
+    deps.sql.transaction(async (sql) => {
+      const userId = await requireStaff(sql, viewer);
+      const scope = await staffProjectScope(sql, input.organizationId, input.projectId);
+      await staffTargetFor(sql, scope, v.kind, v.targetId);
+      await sql.query('select id from brand_organizations where id = $1 for update', [scope.organizationId]);
+      const live = (
+        await sql.query<{ n: number }>(
+          'select count(*)::int as n from brand_room_shares where organization_id = $1 and kind = $2 and target_id = $3 and revoked_at is null and expires_at > now()',
+          [scope.organizationId, v.kind, v.targetId],
+        )
+      ).rows[0]!.n;
+      if (Number(live) >= SHARE_LIMITS.livePerTarget) throw new ShareDenied('limit_reached');
+      const token = newShareToken();
+      const row = (
+        await sql.query<ShareRow>(
+          `insert into brand_room_shares (token_hash, organization_id, project_id, kind, target_id, allow_comments, allow_download, passphrase_hash, expires_at, created_by, created_role)
+             values ($1, $2, $3, $4, $5, $6, $7, $8, now() + make_interval(days => $9), $10, 'studio') returning *`,
+          [hashShareToken(token), scope.organizationId, scope.projectId, v.kind, v.targetId, v.allowComments, v.allowDownload, passphraseHash, v.expiresInDays, userId],
+        )
+      ).rows[0]!;
+      return { ok: true as const, share: linkView(row, now.getTime()), token };
+    }),
+  );
+}
+
+/** A team link with what it shows, for the desk's 공유 링크 tab. */
+export interface StaffProjectShare extends ShareLink {
+  targetTitle: string;
+  targetVersion: number | null;
+}
+
+/** Every link of one project, newest first, with the title of what each shows (the desk's list). */
+export async function staffProjectShares(
+  deps: ShareDeps,
+  viewer: Viewer,
+  input: { organizationId: string; projectId: string },
+): Promise<{ ok: true; shares: StaffProjectShare[] } | ShareFailure> {
+  const now = (deps.now ?? (() => new Date()))().getTime();
+  return guard(() =>
+    deps.sql.transaction(async (sql) => {
+      await requireStaff(sql, viewer);
+      const scope = await staffProjectScope(sql, input.organizationId, input.projectId);
+      const rows = (
+        await sql.query<ShareRow & { target_title: string | null; target_version: number | null }>(
+          `select s.*,
+                  coalesce(r.title, b.title) as target_title,
+                  coalesce(r.version, b.version) as target_version
+             from brand_room_shares s
+             left join brand_studio_reviews r on s.kind = 'review' and r.id = s.target_id
+             left join brand_storyboards b on s.kind = 'storyboard' and b.id = s.target_id
+            where s.organization_id = $1 and s.project_id = $2
+            order by s.created_at desc limit $3`,
+          [scope.organizationId, scope.projectId, SHARE_LIMITS.listMax],
+        )
+      ).rows;
+      return {
+        ok: true as const,
+        shares: rows.map((r) => ({ ...linkView(r, now), targetTitle: r.target_title ? String(r.target_title) : '', targetVersion: r.target_version == null ? null : Number(r.target_version) })),
+      };
     }),
   );
 }
@@ -486,6 +612,7 @@ export async function guestComment(
   if (!parsed.success) return failure('invalid');
   const v = parsed.data;
   let roomEvent: { organizationId: string; projectId: string; reviewId: string; commentId: string } | null = null;
+  let teamNotice: RoomTeamNotice | null = null;
   const result = await guard(() =>
     deps.sql.transaction(async (sql) => {
       const row = await resolveShare(sql, v.token, true);
@@ -509,6 +636,17 @@ export async function guestComment(
         comment: guestNoteOf(v) as Record<string, unknown>,
       });
       if (!added.ok) throw new ShareDenied(added.code === 'not_found' ? 'not_found' : added.code === 'invalid' ? 'invalid' : 'failed');
+      // The team hears about it (docs/BRAND-ROOMS-FEEDBACK.md §3). Nothing of it goes back to the guest.
+      const target = deps.notify ? await reviewTarget(sql, String(row.organization_id), String(row.target_id)) : null;
+      if (target && !added.comment.team) {
+        teamNotice = guestNoteNotice({
+          organizationId: String(row.organization_id),
+          projectId: row.project_id ? String(row.project_id) : null,
+          review: { id: target.id, title: target.title },
+          comment: { id: added.comment.id, body: added.comment.body, atMs: added.comment.atMs, spot: added.comment.x != null, reply: added.comment.parentId != null },
+          guestName: v.name,
+        });
+      }
       if (row.project_id) {
         roomEvent = {
           organizationId: String(row.organization_id),
@@ -530,6 +668,13 @@ export async function guestComment(
       actorId: null,
       actorRole: 'brand',
     });
+  }
+  if (result.ok && teamNotice && deps.notify) {
+    try {
+      deps.notify(teamNotice);
+    } catch (error) {
+      console.warn('[brand-rooms] guest_note_notice_failed', JSON.stringify({ message: error instanceof Error ? error.message.slice(0, 200) : 'unknown' }));
+    }
   }
   return result;
 }

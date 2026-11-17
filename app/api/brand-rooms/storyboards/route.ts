@@ -1,5 +1,6 @@
-import type { NextRequest } from 'next/server';
+import { after, type NextRequest } from 'next/server';
 import { getViewer } from '@/lib/auth/viewer';
+import { notifySlackBrandConcierge } from '@/lib/brands/concierge-slack';
 import { getSqlRunner } from '@/lib/db/connect';
 import { brandRoomsOpen } from '@/lib/flags';
 import { getStorage } from '@/lib/storage';
@@ -29,7 +30,21 @@ function log(event: string, detail: Record<string, unknown> = {}): void {
 }
 
 async function deps(sql: NonNullable<Awaited<ReturnType<typeof getSqlRunner>>>): Promise<StoryboardDeps> {
-  return { sql, media: createStudioMediaStore(), staging: await getStorage(), log };
+  return {
+    sql,
+    media: createStudioMediaStore(),
+    staging: await getStorage(),
+    log,
+    // A brand's approval or change request reaches the team's internal notifier after the answer, best effort.
+    notify: (notice) =>
+      after(async () => {
+        try {
+          await notifySlackBrandConcierge(sql, notice);
+        } catch (error) {
+          log('storyboard_notice_failed', { message: error instanceof Error ? error.message.slice(0, 200) : 'unknown' });
+        }
+      }),
+  };
 }
 
 export async function GET(request: NextRequest) {

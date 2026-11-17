@@ -75,4 +75,21 @@ describe('admin mutation returns to the validated request host', () => {
     handlers.dispatchAdmin.mockResolvedValue({ ok: false, code: 'unknown', detail: 'internal db diagnostic' });
     expect(await (await POST(enhanced())).json()).toEqual({ ok: false, code: 'unknown' });
   });
+
+  // docs/BRAND-ROOMS-FEEDBACK.md §4: a share link the team makes on a desk; its token is shown once, from JSON.
+  it('hands a new share token back only in the JSON answer, never in a redirect', async () => {
+    const token = 'T'.repeat(43);
+    handlers.dispatchAdmin.mockResolvedValue({ ok: true, code: 'created', shareToken: token });
+    const asJson = () => {
+      const body = new FormData();
+      body.set('_op', 'brand_rooms.share.create');
+      return new NextRequest('https://admin.twings.app/admin/do', { method: 'POST', body, headers: { host: 'admin.twings.app', 'sec-fetch-site': 'same-origin', accept: 'application/json' } });
+    };
+    const json = await POST(asJson());
+    expect(json.headers.get('location')).toBeNull();
+    expect(await json.json()).toMatchObject({ ok: true, shareToken: token });
+    const redirect = await POST(post('admin.twings.app'));
+    expect(redirect.status).toBe(303);
+    expect(redirect.headers.get('location')).not.toContain(token);
+  });
 });

@@ -4,6 +4,8 @@
  *
  * The customer never reads an internal tool's name here: the team is "야기 팀", notices are "전달됐어요".
  */
+import { studioReviewEn, studioReviewKo } from './studio-review';
+
 export const roomsChatEn = {
   inbox: {
     title: 'Activity',
@@ -51,6 +53,8 @@ export const roomsChatEn = {
   },
   author: {
     team: 'YAGI team',
+    /** A share link's guest: the same words the review stage labels their notes with (no new wording). */
+    guest: studioReviewEn.roles.guest,
     you: 'You',
     someone: 'Someone',
     edited: '(edited)',
@@ -200,6 +204,7 @@ export const roomsChatKo: typeof roomsChatEn = {
   },
   author: {
     team: '야기 팀',
+    guest: studioReviewKo.roles.guest,
     you: '나',
     someone: '알 수 없음',
     edited: '(수정됨)',

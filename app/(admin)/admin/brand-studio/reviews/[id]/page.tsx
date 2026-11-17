@@ -16,6 +16,7 @@ import { AdminShareLinks } from "@/components/brand-rooms/share/admin-links";
  * `/admin/brand-studio/reviews/[id]` — one piece under review, the team's side of the same stage the
  * brand sees (docs/BRAND-STUDIO-V3.md §7). Replies, resolutions and status moves go through the
  * registered `brand_studio.review.*` operations and are stored as the team (`author_role = 'studio'`).
+ * The only screen that reads team notes and offers "팀만 보기" (docs/BRAND-ROOMS-FEEDBACK.md §5).
  */
 export const dynamic = "force-dynamic";
 
@@ -49,16 +50,20 @@ export default async function StudioReviewDetail({
             ← {r.admin.back}
           </a>
         </p>
-        <AdminReviewStage
-          review={detail.review}
-          comments={detail.comments}
-          copy={r}
-          locale={locale === "en" ? "en" : "ko"}
-          eyebrow={interpolate(r.admin.brandOf, { name: detail.organizationName })}
-          initialMs={parseReviewTime(typeof search.t === "string" ? search.t : undefined)}
-          extended={detail.extended === true}
-          versions={detail.versions}
-        />
+        {/* The stage's own colours whatever CSS the visit loaded before (review.css `.bsv-admin-frame`); the desk uses the same frame. */}
+        <div className="bsv-admin-frame" data-admin-review-frame>
+          <AdminReviewStage
+            review={detail.review}
+            comments={detail.comments}
+            copy={r}
+            locale={locale === "en" ? "en" : "ko"}
+            eyebrow={interpolate(r.admin.brandOf, { name: detail.organizationName })}
+            initialMs={parseReviewTime(typeof search.t === "string" ? search.t : undefined)}
+            extended={detail.extended === true}
+            versions={detail.versions}
+            teamCopy={dict.adminConsole.reviewTeam}
+          />
+        </div>
         {shares && <AdminShareLinks shares={shares} reviewId={detail.review.id} locale={locale === "en" ? "en" : "ko"} copy={dict.roomsReview} />}
       </div>
     </AdminShell>

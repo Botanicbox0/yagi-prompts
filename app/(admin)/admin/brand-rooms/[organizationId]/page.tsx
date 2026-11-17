@@ -10,7 +10,7 @@ import { AdminPageHeader } from "@/components/admin/patterns";
 import { formatAdminTime } from "@/lib/admin/format";
 import { AdminRoomChannel } from "@/components/brand-rooms/chat/admin";
 import { roomAdminPath, staffRoomChannels } from "@/lib/brand-rooms/messages";
-import { GENERAL_CHANNEL } from "@/lib/brand-rooms/message-contracts";
+import { GENERAL_CHANNEL, roomDeskPath } from "@/lib/brand-rooms/message-contracts";
 
 /**
  * `/admin/brand-rooms/[organizationId]` — one organization's conversations, the team's side
@@ -110,6 +110,9 @@ export default async function AdminBrandRoom({
                   {current.projectId && (
                     <div className="brc-admin-links" data-admin-room-work-links>
                       <span>{a.workLinks}</span>
+                      <a className="brc-btn" href={roomDeskPath(room.organization.id, current.projectId)} data-admin-room-desk-link>
+                        {dict.adminConsole.roomDesk.openDesk}
+                      </a>
                       <a className="brc-btn" href={`/admin/brand-rooms/storyboards${workQuery}`}>
                         {a.storyboards}
                       </a>

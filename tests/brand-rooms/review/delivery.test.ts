@@ -154,6 +154,16 @@ describe('the admin operations', () => {
     expect(await dispatchAdmin('brand_rooms.delivery.add', form('brand_rooms.delivery.add', { organizationId: f.orgId, projectId: f.projectId, title: 'Hero', stagingKey }), ctx())).toMatchObject({ ok: false, code: 'notFound' });
   });
 
+  it('deliver from a project desk and land back on the desk on that version (docs/BRAND-ROOMS-FEEDBACK.md §4)', async () => {
+    const stagingKey = await staged();
+    const outcome = await dispatchAdmin(
+      'brand_rooms.delivery.add',
+      form('brand_rooms.delivery.add', { organizationId: f.orgId, projectId: f.projectId, title: 'Hero', stagingKey, landing: 'desk' }),
+      ctx(),
+    );
+    expect(outcome).toMatchObject({ ok: true, code: 'created', to: expect.stringMatching(new RegExp(`^/admin/brand-rooms/${f.orgId}/${f.projectId}\\?review=[0-9a-f-]{36}$`)) });
+  });
+
   it('turn a share link off', async () => {
     const reviewId = await roomDraft(f, deps);
     const created = (await createShare({ sql: f.sql, media: deps.media }, viewerOf(f.ids.owner), { organizationId: f.orgId, kind: 'review', targetId: reviewId })) as ShareCreated;

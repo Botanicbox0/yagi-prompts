@@ -14,6 +14,7 @@
 import type { SqlRunner } from '@/lib/db/sql-runner';
 import type { RoomStage } from '@/components/brand-rooms/seams';
 import { IntakeBriefSchema, type IntakeBrief } from '@/lib/brands/workspace/intake-brief';
+import { publicNotesOnly, teamNotesReady } from '@/lib/brand-studio/review-visibility';
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
@@ -325,15 +326,16 @@ export async function loadRoomOverview(sql: SqlRunner, input: OverviewInput): Pr
     roomUnreadCounts(sql, { organizationId, userId, projectIds: [project.id] }).then((counts) => counts[project.id] ?? 0),
   ]);
 
-  // Open notes on the deliverables (top-level notes, not replies, neither resolved nor deleted).
+  // Open notes on the deliverables (top-level notes, not replies, neither resolved nor deleted). The
+  // brand's notes only: a team note (0093) is the YAGI team's and never counted in the room.
   const reviewIds = reviews.map((r) => String(r.id));
   const notes = reviewIds.length
     ? await rowsOrEmpty<{ review_id: string; open: number }>(
         sql,
-        `select review_id, count(*)::int as open from brand_studio_review_comments
-          where organization_id = $1 and review_id = any($2::uuid[]) and parent_id is null
-            and resolved_at is null and deleted_at is null
-          group by review_id`,
+        `select c.review_id, count(*)::int as open from brand_studio_review_comments c
+          where c.organization_id = $1 and c.review_id = any($2::uuid[]) and c.parent_id is null
+            and c.resolved_at is null and c.deleted_at is null${publicNotesOnly('c', await teamNotesReady(sql))}
+          group by c.review_id`,
         [organizationId, reviewIds],
       )
     : [];

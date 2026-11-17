@@ -97,6 +97,57 @@ export async function requireRoomProject(sql: SqlRunner, seat: RoomSeat, project
   return { id: String(project.id), title: String(project.title) };
 }
 
+export interface RoomAudienceMember {
+  userId: string;
+  role: RoomRole;
+}
+
+/**
+ * Everyone who may open one project room, by the rules `roomSeat` + `requireRoomProject` apply to one
+ * person (docs/BRAND-ROOMS-FEEDBACK.md §2.1): the organization exists and is open (the sandbox hardline,
+ * then the generation policy), the project is the organization's and client-visible, and the person is
+ * an active member, or an active guest invited to THIS project. `projectId` null is the organization's
+ * general channel: active members only, as `brandReader` in ./messages.ts keeps guests out of it.
+ * Empty when any of that fails. For notices only; it never opens a door.
+ */
+export async function roomAudience(sql: SqlRunner, organizationId: string, projectId: string | null): Promise<RoomAudienceMember[]> {
+  if (!UUID.test(organizationId) || (projectId !== null && !UUID.test(projectId))) return [];
+  const org = (await sql.query<{ id: string; name: string }>('select id, name from brand_organizations where id = $1', [organizationId])).rows[0];
+  if (!org || isSandboxedClientOrganization(org)) return [];
+  try {
+    await assertBrandFeature(sql, organizationId, 'generative_media');
+  } catch (error) {
+    if (error instanceof BrandFeatureDenied) return [];
+    throw error;
+  }
+  if (projectId !== null) {
+    const project = (await sql.query('select id from brand_projects where id = $1 and organization_id = $2 and client_visible', [projectId, organizationId])).rows[0];
+    if (!project) return [];
+  }
+  const rows = (
+    await sql.query<{ user_id: string; role: string }>(
+      `select m.user_id::text as user_id, m.role
+         from brand_memberships m join profiles p on p.id = m.user_id
+        where m.organization_id = $1 and m.status = 'active'
+       union all
+       select g.user_id::text, 'guest'
+         from brand_project_members g join profiles p on p.id = g.user_id
+        where $2::uuid is not null and g.organization_id = $1 and g.project_id = $2::uuid and g.status = 'active'
+          and not exists (select 1 from brand_memberships m where m.organization_id = $1 and m.user_id = g.user_id and m.status = 'active')`,
+      [organizationId, projectId],
+    )
+  ).rows;
+  const seen = new Set<string>();
+  const audience: RoomAudienceMember[] = [];
+  for (const row of rows) {
+    const userId = String(row.user_id).toLowerCase();
+    if (seen.has(userId)) continue;
+    seen.add(userId);
+    audience.push({ userId, role: row.role as RoomRole });
+  }
+  return audience;
+}
+
 export function requireEdit(seat: RoomSeat): void {
   if (!seat.canEdit) throw new RoomDenied('forbidden');
 }
