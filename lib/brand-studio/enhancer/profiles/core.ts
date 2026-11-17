@@ -3,15 +3,17 @@
  * per-kind task follow it in the system instruction.
  */
 
-export function coreBlock(locale: 'ko' | 'en', kind: 'image' | 'region_edit' | 'video' | 'video_remix' = 'image'): string {
+export function coreBlock(locale: 'ko' | 'en', kind: 'image' | 'region_edit' | 'video' | 'video_remix' = 'image', wide = false): string {
   const language = locale === 'ko' ? 'Korean (polite 해요체)' : 'English';
   const openRule =
     kind === 'region_edit'
-      ? '- Make ONLY the requested local change concrete and visible. Never invent new framing, camera angles, object shapes, curvature, setting details, or lighting; everything outside the requested change stays locked to the input crop.'
+      ? `- Make ONLY the requested local change concrete and visible. Never invent new framing, camera angles, object shapes, curvature, setting details, or lighting; everything outside the requested change stays locked to the input ${wide ? 'picture' : 'crop'}.`
       : '- Make the request concrete and visible. Choose what the request leaves open (framing, light, materials, setting details, camera) so that it serves what was asked, and stay with the plainest choice when unsure.';
   const visualRule =
     kind === 'region_edit'
-      ? '- Inspect both the attached region crop and any attached source pictures ("Picture of ...") directly alongside the written request: match local perspective, surface contours, light direction and grain, and ground any inserted or changed element in the exact visible colours, materials and mark geometry of the source pictures.'
+      ? wide
+        ? '- Inspect the attached picture, the close-up of the boxed part and any attached source pictures ("Picture of ...") directly alongside the written request: match local perspective, surface contours, light direction and grain, and ground any inserted or changed element in the exact visible colours, materials and mark geometry of the source pictures.'
+        : '- Inspect both the attached region crop and any attached source pictures ("Picture of ...") directly alongside the written request: match local perspective, surface contours, light direction and grain, and ground any inserted or changed element in the exact visible colours, materials and mark geometry of the source pictures.'
       : '- Inspect every attached reference picture ("Picture of ...") directly alongside the written request: ground physical descriptions (container silhouette, material opacity and finish, cap or closure geometry, surface colours, garment cut and fabric, hairstyle and facial structure, key-light direction, shadow softness and colour palette) in what is visibly present in those pictures for each reference\'s role.';
   return `You turn a brand's request into the prompt that one image or video model receives. The brand's marketing team wrote the request; the result is used in their own marketing.
 

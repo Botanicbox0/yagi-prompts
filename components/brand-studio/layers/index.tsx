@@ -882,7 +882,7 @@ export default function LayerEditor(
     const sentDoc = historyRef.current.present;
     const strips = fillStrips(sentDoc);
     if (!strips.length) return;
-    const quality = qualityOf(region.models.find((m) => m.id === region.defaultModel) ?? null, region.defaultQuality);
+    const quality = region.fixedModel ? "" : qualityOf(region.models.find((m) => m.id === region.defaultModel) ?? null, region.defaultQuality);
     setFillError(null);
     setFilling(true);
     try {
@@ -1219,7 +1219,7 @@ export default function LayerEditor(
               fill={
                 fillOffered && region
                   ? {
-                      creditsPerStrip: regionCredits(region.defaultModel, 0, region.defaultQuality),
+                      creditsPerStrip: regionCredits(region.defaultModel, 0, region.defaultQuality, Boolean(region.fixedModel)),
                       locale: props.locale,
                       // Also while the strips are being made: a second press would pay for the same fill twice.
                       busy: filling || pendingRegionJobs.some((job) => job.fill),

@@ -671,7 +671,9 @@ export function regionEstimateKrw(draft: Pick<DockDraft, "medium" | "model">, re
   return usageKrw(regionEditRun(regionEditModel(draft), references).usd, "image");
 }
 
-export function regionCredits(model: string, references: number, quality?: string | null): number {
+/** `v2`: region edit v2 (`StudioState.regionV2`), one engine whatever `model` says, no quality. */
+export function regionCredits(model: string, references: number, quality?: string | null, v2 = false): number {
+  if (v2) return creditsOf(usageKrw(regionEditRun(model, references, null, true).usd, "image"));
   return creditsOf(usageKrw(regionEditRun(model, references, qualityOf(editModelFor(model), quality) || null).usd, "image"));
 }
 
@@ -688,11 +690,13 @@ export function regionProblem(input: {
   instruction: string;
   model: string;
   references: readonly Pick<TrayItem, "kind">[];
+  /** Region edit v2: the one engine's limits apply. */
+  v2?: boolean;
 }): RegionProblem | null {
   if (!input.box) return { kind: "need_box" };
   if (!input.instruction.trim()) return { kind: "empty_prompt" };
   if (input.references.some((r) => r.kind !== "image")) return { kind: "image_only" };
-  const model = editModelFor(input.model);
+  const model = editModelFor(input.model, Boolean(input.v2));
   if (input.references.length + 1 > model.maxReferences) return { kind: "too_many_images", max: model.maxReferences - 1 };
   // The cut-out is picture 1 in the form, so "이미지 N" may go up to references + 1.
   const kinds: MentionKind[] = ["image", ...input.references.map(() => "image" as const)];
@@ -716,11 +720,13 @@ export function regionEditInput(input: {
   locale?: "ko" | "en";
   /** "빈 곳 채우기": an internal strip, left out of every list of runs and results. */
   purpose?: "fill";
+  /** Region edit v2 (`StudioState.regionV2`): one engine, no quality, whatever was picked. */
+  v2?: boolean;
 }): StudioJobCreate {
   const references = input.references ?? [];
   const prompt = input.instruction.trim();
-  const model = input.model ? editModelFor(input.model) : editModelFor(input.draft.model);
-  const quality = qualityOf(model, input.quality);
+  const model = input.v2 ? editModelFor(input.model ?? input.draft.model, true) : input.model ? editModelFor(input.model) : editModelFor(input.draft.model);
+  const quality = input.v2 ? "" : qualityOf(model, input.quality);
   return {
     kind: "region_edit",
     organizationId: input.ids.organizationId,

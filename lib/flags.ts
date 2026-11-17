@@ -153,6 +153,16 @@ export function brandStudioOutpaintOpen(env: Record<string, string | undefined> 
 }
 
 /**
+ * Region edit v2 ("부분 수정", docs/BRAND-STUDIO-V6-PLAN.md): every partial edit runs on one engine we
+ * chose (Seedream 5.5, no model or quality choice), the engine sees a wide window of the picture and only
+ * what changed near the box is pasted back. Default OFF: open only when the server environment says
+ * exactly `BRAND_STUDIO_REGION_V2=on`. Off means every screen, request and answer is as it was.
+ */
+export function brandStudioRegionV2Open(env: Record<string, string | undefined> = process.env): boolean {
+  return env.BRAND_STUDIO_REGION_V2 === 'on';
+}
+
+/**
  * A studio run can belong to a project (docs/BRAND-STUDIO-V6-PLAN.md §7 C, migration 0091): the image
  * studio gets the video studio's project switcher, new runs carry the chosen project, and the assets page
  * can put an existing run in a project. Default OFF: open only when the server environment says exactly

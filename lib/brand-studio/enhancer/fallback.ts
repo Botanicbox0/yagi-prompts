@@ -31,7 +31,10 @@ function imagePrompt(input: EnhanceInput, binding: Binding, request: string): st
   const refs = referenceLines(input, binding.bound);
   if (input.kind === 'region_edit') {
     const target = binding.editTarget ?? 'image 1';
-    const lead = input.profile === 'seedream' ? `In ${target}, change only this` : `Using ${target}, change only this`;
+    const wide = input.regionWindow;
+    const lead = wide
+      ? `In ${target}, change only the boxed part in the ${wide.where}`
+      : input.profile === 'seedream' ? `In ${target}, change only this` : `Using ${target}, change only this`;
     return [
       `${lead}: ${sentence(request)}`,
       'Do not move or resize anything else.',

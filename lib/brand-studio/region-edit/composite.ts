@@ -11,6 +11,8 @@
  */
 import sharp from 'sharp';
 import { alignEditedRoi, computeDiffMask, type AlignTransform } from './align';
+import { computeChangeMask } from './paste';
+import { widestZone } from './window';
 import { decodeRgba, encodePng, type RgbaImage } from './pixels';
 import type { PixelRect, RegionPlan } from './plan';
 
@@ -35,6 +37,13 @@ function assertPlan(image: { width: number; height: number }, plan: RegionPlan):
     plan.box.left + plan.box.width <= plan.roi.left + plan.roi.width &&
     plan.box.top + plan.box.height <= plan.roi.top + plan.roi.height;
   if (!inside(image, plan.roi) || !inside(image, plan.box) || !boxInRoi) throw new Error('region_plan_mismatch');
+  if (plan.select) {
+    const s = plan.select;
+    const selectInBox =
+      s.left >= plan.box.left && s.top >= plan.box.top &&
+      s.left + s.width <= plan.box.left + plan.box.width && s.top + s.height <= plan.box.top + plan.box.height;
+    if (!inside(image, s) || !selectInBox) throw new Error('region_plan_mismatch');
+  }
   if (plan.work.width < 1 || plan.work.height < 1) throw new Error('region_plan_mismatch');
 }
 
@@ -142,6 +151,12 @@ export interface CompositeRegionResult {
   misaligned?: boolean;
   ringResidual?: number;
   transform?: AlignTransform;
+  /** Window plans only: false when nothing that changed touched the box and the box itself was pasted. */
+  changeFound?: boolean;
+  /** Window plans only: share of the paste zone pasted at full weight. */
+  pasted?: number;
+  /** Window plans only: the paste zone used (the patch and mask cover it); wider than `plan.box` when widened. */
+  box?: PixelRect;
 }
 
 export async function compositeRegion(input: {
@@ -150,21 +165,40 @@ export async function compositeRegion(input: {
   plan: RegionPlan;
   feather?: number;
 }): Promise<CompositeRegionResult> {
-  const { plan } = input;
   const src = await decodeRgba(input.original);
-  assertPlan(src, plan);
-  const { roi, box } = plan;
+  assertPlan(src, input.plan);
+  const roi = input.plan.roi;
 
-  const aligned = await alignEditedRoi({ original: src, edited: input.edited, plan });
-  const ringWidth = Math.max(2, Math.round(Math.min(box.width, box.height) * 0.06));
-  const tone = matchTone(src, { data: aligned.alignedRoi, channels: aligned.channels }, plan, ringWidth);
-  const mask = await computeDiffMask({
-    original: src,
-    alignedRoi: aligned.alignedRoi,
-    plan,
-    feather: input.feather,
-    tone,
-  });
+  const aligned = await alignEditedRoi({ original: src, edited: input.edited, plan: input.plan });
+  const toneFor = (p: RegionPlan) =>
+    matchTone(src, { data: aligned.alignedRoi, channels: aligned.channels }, p, Math.max(2, Math.round(Math.min(p.box.width, p.box.height) * 0.06)));
+  let plan = input.plan;
+  let tone = toneFor(plan);
+  // A window plan (region edit v2) pastes only what changed near the customer's box (./paste.ts);
+  // a crop plan keeps the mask it always had.
+  const changeFor = (p: RegionPlan, t: Tone) =>
+    computeChangeMask({ original: src, alignedRoi: aligned.alignedRoi, channels: aligned.channels, plan: p, tone: t, feather: input.feather });
+  let change = plan.select ? changeFor(plan, tone) : null;
+  if (change?.reachesEdge) {
+    // The change runs into the zone's edge: widen the zone once (up to the box's longer side) so a
+    // change that grew past the box is not cut off.
+    const wide = widestZone(src, plan);
+    if (wide) {
+      plan = { ...plan, box: wide };
+      tone = toneFor(plan);
+      change = changeFor(plan, tone);
+    }
+  }
+  const { box } = plan;
+  const mask = change
+    ? change.mask
+    : await computeDiffMask({
+        original: src,
+        alignedRoi: aligned.alignedRoi,
+        plan,
+        feather: input.feather,
+        tone,
+      });
 
   const out = Buffer.from(src.data);
   const patchCh = src.hasAlpha ? 4 : 3;
@@ -218,5 +252,6 @@ export async function compositeRegion(input: {
     misaligned: aligned.misaligned,
     ringResidual: aligned.ringResidual,
     transform: aligned.transform,
+    ...(change ? { changeFound: change.changeFound, pasted: change.pasted, box: { ...box } } : {}),
   };
 }

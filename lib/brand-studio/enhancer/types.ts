@@ -55,6 +55,19 @@ export interface EnhanceInput {
   brand?: { name?: string; tone?: string; palette?: string[]; rules?: string[] } | null;
   /** Region edit only: the enlarged cropped region sent as image 1 / Figure 1 so Gemini sees the cut-out. */
   editCropThumb?: { bytes: Uint8Array; mime: string } | null;
+  /**
+   * Region edit v2 (`BRAND_STUDIO_REGION_V2`): `editCropThumb` is then the wide window the engine gets as
+   * Figure 1, and this says where the customer's box sits in it (whole percentages of the window) with a
+   * close-up of the box for the prompt writer's eyes only (not sent to the engine).
+   */
+  regionWindow?: {
+    where: string;
+    left: number;
+    top: number;
+    right: number;
+    bottom: number;
+    closeUp?: { bytes: Uint8Array; mime: string } | null;
+  } | null;
   video?: EnhanceVideo | null;
   /**
    * A new version of a generated clip (lib/brand-studio/revision). `madeWith` is the prompt the run being

@@ -283,6 +283,13 @@ export const DEFAULT_IMAGE_MODEL: StudioModelId = 'seedream-5.5';
 export const DEFAULT_VIDEO_MODEL: StudioModelId = 'seedance-2.5';
 /** The model a region edit uses unless the customer picked another one that allows it. */
 export const DEFAULT_REGION_EDIT_MODEL: StudioModelId = 'nano-banana-pro';
+/**
+ * Region edit v2 (`BRAND_STUDIO_REGION_V2`): the one engine every partial edit runs on, whatever was
+ * picked (founder, 2026-11-17: we choose the best engine, the customer is not given a picker). Chosen on
+ * the 2026-11-16 bench: fewest pixels changed outside the target and the least face drift over chained
+ * edits. The `regionEdit` flags above stay as they are for the flag-off studio.
+ */
+export const REGION_V2_MODEL: StudioModelId = 'seedream-5.5';
 
 /** Normalize retired historical model ids (Seedream 5.0 Pro) to their active Seedream 5.5 successor. */
 export function normalizeLegacyStudioModelId(id: string): string {
@@ -312,6 +319,11 @@ export function selectableModels(medium?: StudioMedium): StudioModel[] {
 /** Live image models a partial edit may run on, in registry order. */
 export function regionEditModels(): StudioImageModel[] {
   return selectableModels('image').filter((m): m is StudioImageModel => m.medium === 'image' && m.regionEdit);
+}
+
+/** Region edit v2: the one model a partial edit runs on (a list of one, so no screen offers a choice). */
+export function regionV2Models(): StudioImageModel[] {
+  return [studioModel(REGION_V2_MODEL) as StudioImageModel];
 }
 
 /**
