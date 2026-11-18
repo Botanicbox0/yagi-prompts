@@ -10,7 +10,7 @@ import { kindOfMime, imageInfo, sha256Hex, sniffMime, thumbnailWebp, videoInfo }
 import { dropWorkingFiles, failPendingOutputs, saveJob } from './job-store';
 import { downloadResult } from './provider/download';
 import type { JobRow, OutputRow, StudioDeps, StudioPendingResult } from './types';
-import { usageKrw } from './usage';
+import { settledUsageKrw } from './usage-rate';
 
 const now = (deps: StudioDeps) => (deps.now?.() ?? new Date()).toISOString();
 
@@ -199,24 +199,19 @@ async function settleJob(deps: StudioDeps, job: JobRow, token: string, work: Job
     const dbCode: StudioErrorCode = rawCode === 'region_misaligned' ? 'failed' : rawCode;
     return saveJob(deps.sql, job, token, { status: 'failed', error_code: dbCode, error_detail: detail, work, finished_at: now(deps), usage_krw: 0 });
   }
+  // What the provider charged, kept for our own margin only. It never changes what the run takes.
   const share = Number(job.estimate_usd) / Math.max(1, outputs.length);
-  const medium = job.kind === 'image' || job.kind === 'region_edit' ? 'image' : 'video';
-  // Each result is counted on its own, in whole credits, the way it was quoted (usage-rate.ts).
-  let cost = 0;
-  let usage = 0;
-  for (const o of ready) {
+  const cost = ready.reduce((sum, o) => {
     const reported = work.results?.[String(o.idx)]?.costUsd;
-    const one = typeof reported === 'number' && reported >= 0 ? reported : share;
-    cost += one;
-    usage += usageKrw(one, medium);
-  }
+    return sum + (typeof reported === 'number' && reported >= 0 ? reported : share);
+  }, 0);
   return saveJob(deps.sql, job, token, {
     status: 'succeeded',
     error_code: null,
     error_detail: detail,
     work,
     cost_usd: Math.round(cost * 10_000) / 10_000,
-    usage_krw: usage,
+    usage_krw: settledUsageKrw(Number(job.estimate_krw), outputs.length, ready.length),
     finished_at: now(deps),
   });
 }

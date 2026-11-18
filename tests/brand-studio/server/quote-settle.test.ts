@@ -7,13 +7,14 @@ import { recordLaneHeartbeat } from '@/lib/brand-studio/lanes';
 import { memberUsage } from '@/lib/brand-studio/member-usage';
 import { pollStudioJobs } from '@/lib/brand-studio/service';
 import { loadAllowance } from '@/lib/brand-studio/usage';
+import { settledUsageKrw } from '@/lib/brand-studio/usage-rate';
 import type { StudioJobView } from '@/lib/brand-studio/contracts';
 import { requestId, studioDeps, studioFixture, viewerOf, type StudioFixture } from './helpers';
 
 /**
- * What a run is quoted is what it takes once the account lane's worker reports the provider's credits
- * (scripts/brand-studio-lane-worker.mjs sends `credits / 100` as `costUsd`). The credits below are the
- * ones the provider charged for these settings on 2026-11-18.
+ * What a run is quoted is what it takes. The account lane's worker reports the provider's credits
+ * (scripts/brand-studio-lane-worker.mjs sends `credits / 100` as `costUsd`); they are kept as cost and
+ * never change the amount taken. The credits below are the ones the provider charged on 2026-11-18.
  */
 let f: StudioFixture;
 let deps: ReturnType<typeof studioDeps>;
@@ -80,6 +81,39 @@ describe('a run takes what it was quoted', () => {
       expect(done.estimateKrw, resolution).toBe(job.estimateKrw);
       expect((await used()) - before, resolution).toBe(job.estimateKrw);
     }
+  });
+});
+
+describe('what the provider charged never changes what a run takes', () => {
+  it('takes the quote when the provider settled lower (the exact list price of the API lane) or higher', async () => {
+    for (const charged of [7, 10]) {
+      const before = await used();
+      const job = await create({ kind: 'image', model: 'seedream-5.5', prompt: 'a glass bottle', aspect: '1:1', resolution: '2K', count: 2 });
+      const done = await finishOnAccountLane(job, ['fake://image/320x320/a', 'fake://image/320x320/b'], charged);
+      expect(done.estimateKrw, `charged ${charged}`).toBe(job.estimateKrw);
+      expect((await used()) - before, `charged ${charged}`).toBe(job.estimateKrw);
+      // What it really cost stays on the row, for the margin.
+      const row = (await f.sql.query<{ cost_usd: string; estimate_usd: string }>('select cost_usd, estimate_usd from brand_studio_jobs where id = $1', [job.id])).rows[0]!;
+      expect(Number(row.cost_usd)).toBe(charged / 100);
+      expect(Number(row.estimate_usd)).toBe(0.08);
+    }
+  });
+
+  it('a video settled above its quote still takes the quote', async () => {
+    const job = await create({ kind: 'video', model: 'seedance-2.5', prompt: 'slow push in on the bottle', aspect: '16:9', seconds: 5, audio: 'native', resolution: '720p' });
+    const done = await finishOnAccountLane(job, ['fake://video/1280x720/5'], 131);
+    expect(creditsOf(done.estimateKrw)).toBe(182);
+    expect(await used()).toBe(job.estimateKrw);
+  });
+
+  it('results that did not come out take nothing', () => {
+    expect(settledUsageKrw(280, 4, 4)).toBe(280);
+    expect(settledUsageKrw(280, 4, 2)).toBe(140);
+    expect(settledUsageKrw(280, 4, 0)).toBe(0);
+    expect(settledUsageKrw(660, 1, 1)).toBe(660);
+    expect(settledUsageKrw(660, 1, 3)).toBe(660);
+    expect(settledUsageKrw(0, 1, 1)).toBe(0);
+    expect(settledUsageKrw(Number.NaN, 1, 1)).toBe(0);
   });
 });
 

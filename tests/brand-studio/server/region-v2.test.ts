@@ -12,6 +12,8 @@ import { loadStudioState } from '@/lib/brand-studio/service';
 import type { JobRow, OutputRow } from '@/lib/brand-studio/types';
 import { regionEditRun, usageKrw } from '@/lib/brand-studio/usage-rate';
 import { brandStudioRegionV2Open } from '@/lib/flags';
+import { creditsOf } from '@/lib/brand-studio/credits';
+import { regionCredits } from '@/components/brand-studio/dock-model';
 import { fakeIntel, requestId, seedImageAsset, studioDeps, studioFixture, viewerOf, type StudioFixture } from './helpers';
 
 /**
@@ -117,6 +119,8 @@ describe('region edit v2 on the server', () => {
       expect(row.params.regionWindow).toBe(true);
       expect(row.params).not.toHaveProperty('quality');
       expect(Number(row.estimate_krw)).toBe(usageKrw(0.05, 'image'));
+      // The one figure every screen shows for this edit (viewer, layer editor, canvas fill).
+      expect(creditsOf(Number(row.estimate_krw))).toBe(regionCredits(asked.model, 0, 'quality' in asked ? (asked.quality ?? null) : null, true));
     }
   });
 

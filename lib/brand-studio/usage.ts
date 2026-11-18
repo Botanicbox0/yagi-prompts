@@ -7,8 +7,9 @@
  * studio sets per organization, not a charge.
  *
  * A job reserves its estimate when it is created (the organization row is locked, so two requests
- * cannot both spend the last of the month), and the estimate is replaced by the settled amount when
- * it finishes. Failed and canceled jobs count for nothing.
+ * cannot both spend the last of the month). A finished job takes exactly that reservation for the
+ * results that came out (usage-rate.ts `settledUsageKrw`); the provider's real charge is kept in
+ * `cost_usd` for our margin only. Failed and canceled jobs count for nothing.
  */
 import { z } from 'zod';
 import type { Viewer } from '@/lib/auth/identity';

@@ -47,6 +47,18 @@ export function usageKrw(usd: number, medium: StudioMedium): number {
   return Math.ceil((usd * f.krwPerUsd * factor) / STUDIO_CREDIT_KRW - 1e-9) * STUDIO_CREDIT_KRW;
 }
 
+/**
+ * What a finished run takes: the amount it was quoted and reserved at, for the results that came out.
+ * The figure on the button is the figure taken, whichever lane ran it and whatever the provider settled
+ * at afterwards; the provider's charge is recorded as cost and nothing else (docs/BRAND-STUDIO-V2.md §9).
+ * A result that failed takes nothing, so two pictures out of four take half the quote.
+ */
+export function settledUsageKrw(estimateKrw: number, planned: number, ready: number): number {
+  if (!Number.isFinite(estimateKrw) || estimateKrw <= 0 || ready <= 0) return 0;
+  const slots = Math.max(1, planned);
+  return Math.round((estimateKrw * Math.min(ready, slots)) / slots);
+}
+
 /** Seconds in tenths, the precision a screen sees (`StudioAssetView.seconds`), so both sides round alike. */
 export function tenthsOfSeconds(seconds: number | null): number | null {
   return seconds === null || !Number.isFinite(seconds) ? null : Math.round(seconds * 10) / 10;
