@@ -264,15 +264,14 @@ export function AssistPanel({ assist, copy, canCreate, project }: AssistPanelPro
   const examples = [a.examples.trim, a.examples.fit, a.examples.caption] as const;
 
   return (
-    <aside className={st.panel} aria-label={a.heading} data-assist-panel>
-      <h2 className={st.title}>{a.heading}</h2>
-
+    // No product name on screen (docs/BRAND-EDITING-STUDIO.md §8-1): the input's own label names the region.
+    <aside className={st.panel} aria-label={a.inputLabel} data-assist-panel>
       <div
         ref={logRef}
         className={st.log}
         role="log"
         aria-live="polite"
-        aria-label={a.heading}
+        aria-label={a.inputLabel}
         data-assist-log
         data-empty={entries.length === 0 || undefined}
       >

@@ -6,6 +6,7 @@
 import { timingSafeEqual } from 'node:crypto';
 import {
   brandStudioEditAssistOpen,
+  brandStudioMusicGenerationOpen,
   brandStudioOutpaintOpen,
   brandStudioProjectsOpen,
   brandStudioRegionV2Open,
@@ -34,6 +35,8 @@ export interface StudioEnv {
   regionV2?: boolean;
   /** `BRAND_STUDIO_EDIT_ASSIST=on`: the editing studio's "말로 편집" (`assist.plan`, lib/flags.ts). */
   editAssist?: boolean;
+  /** `BRAND_STUDIO_MUSIC_GENERATION=on`: `music.generate` and its controls (lib/flags.ts). Closed by default. */
+  musicGeneration?: boolean;
 }
 
 function whole(value: string | undefined, fallback: number, max: number): number {
@@ -81,6 +84,7 @@ export function studioEnv(env: StudioEnvSource = process.env): StudioEnv {
     projects: brandStudioProjectsOpen(env),
     regionV2: brandStudioRegionV2Open(env),
     editAssist: brandStudioEditAssistOpen(env),
+    musicGeneration: brandStudioMusicGenerationOpen(env),
   };
 }
 

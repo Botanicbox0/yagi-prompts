@@ -15,9 +15,10 @@ import { resolveRequestUrl, sameOriginMutation } from '@/lib/routing/surfaces';
  *
  * - `GET` / `HEAD`: Same-origin media byte stream (`Range` supported) for organization-owned video/audio
  *   assets & outputs so browser `<video>`/`<audio>`/Canvas can composite without R2 CORS or tainted canvas.
- * - `POST`: TWINGS compose operations (`chat.edit` free + per-minute rate limit, `render.reserve` credit
- *   deduction on 1080p MP4 render, `render.refund` 100% auto-refund on client export failure, and
- *   `assist.plan` "말로 편집" behind `BRAND_STUDIO_EDIT_ASSIST`, sharing `chat.edit`'s limit).
+ * - `POST`: TWINGS compose operations (`chat.edit` free + per-minute rate limit, `render.reserve` records a
+ *   free 1080p MP4 export (0 credits), `render.refund` refunds a failed export only when it was still charged
+ *   (pages loaded before export became free), and `assist.plan` "말로 편집" behind `BRAND_STUDIO_EDIT_ASSIST`,
+ *   sharing `chat.edit`'s limit).
  *
  * Every path enforces: `BRAND_STUDIO_V2` (`404`), sign-in (`401`), membership + Morphic/sandbox hardline +
  * `generative_media` policy (`404`), and campaign-only guest exclusion (`404`). `POST` additionally enforces

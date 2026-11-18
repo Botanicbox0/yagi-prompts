@@ -464,6 +464,7 @@ describe('Editing Studio v4 — 4. Detail Upscaling & 5. Reference Non-Commercia
         initialVideoOutputs: [],
         initialToolTab: 'music',
         initialProject: sampleProjectWithTwoClips(),
+        musicGeneration: true,
       }),
     );
 
@@ -481,6 +482,57 @@ describe('Editing Studio v4 — 4. Detail Upscaling & 5. Reference Non-Commercia
     // Auto-synced to clip_one's first internal cut marker (2.8s)!
     expect(html).toContain('2.8초');
     expect(html).toContain('data-compose-music-submit');
+  });
+
+  it('keeps own audio (upload, use, timeline volume and removal) but no generation while BRAND_STUDIO_MUSIC_GENERATION is closed', () => {
+    const audioAsset = asset(21, { kind: 'audio', name: 'reference-groove.mp3', seconds: 18 });
+    const withBgm = {
+      ...sampleProjectWithTwoClips(),
+      bgm: {
+        label: 'reference-groove.mp3',
+        sourceKind: 'asset' as const,
+        assetId: audioAsset.id,
+        srcUrl: audioAsset.url,
+        durationSec: 18,
+        trimStartSec: 0,
+        volume: 0.5,
+      },
+    };
+    // Closed is the default.
+    const html = renderToStaticMarkup(
+      h(VideoComposer, {
+        organizationId: ORG,
+        locale: 'ko',
+        canCreate: true,
+        copy: koDict.studioCompose,
+        videoStudioHref: `/brand/studio/video?organizationId=${ORG}`,
+        initialAllowance: allowance(),
+        initialAssets: [audioAsset],
+        initialVideoOutputs: [],
+        initialToolTab: 'music',
+        initialProject: withBgm,
+      }),
+    );
+
+    expect(html).toContain('data-compose-music-panel');
+    expect(html).toContain('data-compose-audio-upload-input');
+    expect(html).toContain(`data-compose-use-audio="${audioAsset.id}"`);
+    expect(html).toContain('data-compose-bgm-strip');
+    expect(html).toContain('data-compose-bgm-volume');
+    expect(html).toContain(koDict.studioCompose.timeline.removeBgm);
+    for (const marker of [
+      'data-compose-music-gen',
+      'data-compose-music-license-notice',
+      'data-compose-pick-ref-audio',
+      'data-compose-ref-audio-input',
+      'data-compose-music-submit',
+      'CC BY-NC 4.0',
+    ]) {
+      expect(html).not.toContain(marker);
+    }
+    // Free export: the render button names no price.
+    expect(html).toContain('data-compose-export');
+    expect(html).not.toContain('1080p MP4 렌더링 ·');
   });
 });
 

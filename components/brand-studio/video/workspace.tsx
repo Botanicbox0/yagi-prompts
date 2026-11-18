@@ -16,7 +16,6 @@ import { extractClipboardImages, isEditableTextTarget, prepareClipboardUploadFil
 import {
   addProjectReferenceAssetIds,
   appendClip,
-  composeFinalRenderCredits,
   emptyComposerProject,
   projectDurationSec,
   roundTenths,
@@ -30,7 +29,6 @@ import { exportProjectNleBundleZip } from "@/lib/brand-studio/compose/nle-export
 import type { ContinuityPlan } from "@/lib/brand-studio/continuity/contracts";
 import { extractContinuityFramesInBrowser } from "@/lib/brand-studio/continuity/frame-picker";
 import type { StudioAllowanceView, StudioAssetView, StudioJobView, StudioOutputView, StudioState } from "@/lib/brand-studio/contracts";
-import { formatCredits } from "@/lib/brand-studio/credits";
 import type { StudioVideoModel } from "@/lib/brand-studio/models";
 import type { VideoProjectDetail, VideoProjectStatus, VideoProjectSummary } from "@/lib/brand-studio/video-projects";
 import type { Dictionary } from "@/lib/i18n/dictionaries";
@@ -91,6 +89,8 @@ export interface VideoStudioWorkspaceProps {
   initialSelectedClipId?: string | null;
   initialState?: StudioState | null;
   api?: StudioApi;
+  /** `BRAND_STUDIO_MUSIC_GENERATION`: music generation controls in the sequence rail. Closed by default. */
+  musicGeneration?: boolean;
 }
 
 const GUIDE_VIDEOS = [
@@ -203,6 +203,7 @@ export function VideoStudioWorkspace({
   initialSelectedClipId = null,
   initialState = null,
   api,
+  musicGeneration = false,
 }: VideoStudioWorkspaceProps) {
   const wc = videoCopy.workspace;
   const clientApi = useMemo(() => api ?? createStudioApi({ organizationId }), [api, organizationId]);
@@ -1032,10 +1033,6 @@ export function VideoStudioWorkspace({
   /* --------------------------------------------- Header Export & Share Handlers */
 
   const totalSequenceSec = useMemo(() => projectDurationSec(timeline), [timeline]);
-  const mp4RenderCredits = useMemo(
-    () => composeFinalRenderCredits(Math.max(1, totalSequenceSec || 5)),
-    [totalSequenceSec],
-  );
 
   const handleBarShareReview = useCallback(() => {
     const chosen =
@@ -1085,10 +1082,9 @@ export function VideoStudioWorkspace({
   const handleBarExportMp4 = useCallback(async () => {
     if (!canCreate || timeline.clips.length === 0 || exportingMp4Ratio !== null) return;
     setExportingMp4Ratio(0.02);
-    let reservedJobId: string | null = null;
-    let creditsUsed = mp4RenderCredits;
 
     try {
+      // Export is free (docs/BRAND-EDITING-STUDIO.md §8-3): the server only records it, nothing to refund.
       const reserveRes = await fetch("/api/brand-studio/compose", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -1107,47 +1103,18 @@ export function VideoStudioWorkspace({
         setStatus(wc.projects.mp4FailedNotice);
         return;
       }
-      reservedJobId = reserve.jobId;
-      if (typeof reserve.creditsUsed === "number") creditsUsed = reserve.creditsUsed;
-      if (reserve.allowance && typeof reserve.allowance === "object") {
-        setAllowanceOverride(reserve.allowance as StudioAllowanceView);
-      }
 
       const rendered = await exportCompositionMp4(timeline, (r) => setExportingMp4Ratio(r));
       const objectUrl = URL.createObjectURL(rendered.blob);
       triggerBrowserDownload(objectUrl, rendered.filename);
       window.setTimeout(() => URL.revokeObjectURL(objectUrl), 60_000);
-      setStatus(
-        interpolate(wc.projects.mp4ExportedNotice, {
-          seconds: rendered.durationSec,
-          credits: formatCredits(creditsUsed, locale),
-        }),
-      );
+      setStatus(interpolate(wc.projects.mp4ExportedNotice, { seconds: rendered.durationSec }));
     } catch {
-      if (reservedJobId) {
-        try {
-          const refundRes = await fetch("/api/brand-studio/compose", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            credentials: "same-origin",
-            body: JSON.stringify({
-              operation: "render.refund",
-              input: { organizationId, jobId: reservedJobId },
-            }),
-          });
-          const refund = (await refundRes.json().catch(() => ({}))) as Record<string, unknown>;
-          if (refund.ok === true && refund.allowance && typeof refund.allowance === "object") {
-            setAllowanceOverride(refund.allowance as StudioAllowanceView);
-          }
-        } catch {
-          // Best-effort refund
-        }
-      }
       setStatus(wc.projects.mp4FailedNotice);
     } finally {
       setExportingMp4Ratio(null);
     }
-  }, [canCreate, exportingMp4Ratio, locale, mp4RenderCredits, organizationId, timeline, totalSequenceSec, wc.projects.mp4ExportedNotice, wc.projects.mp4FailedNotice]);
+  }, [canCreate, exportingMp4Ratio, organizationId, timeline, totalSequenceSec, wc.projects.mp4ExportedNotice, wc.projects.mp4FailedNotice]);
 
   const handleAttachSequenceClipToDock = useCallback(
     (clip: ComposeClip) => {
@@ -1449,7 +1416,6 @@ export function VideoStudioWorkspace({
 
         {state && (
           <VideoProjectBar
-            locale={locale}
             canEdit={canCreate}
             projectId={projectId}
             projectTitle={projectTitle}
@@ -1457,7 +1423,6 @@ export function VideoStudioWorkspace({
             savingProject={savingProject}
             projects={projects}
             clipCount={timeline.clips.length}
-            renderCredits={mp4RenderCredits}
             railHeight={railHeight}
             solidMp4Cta={dockOpen && dockCollapsed}
             exportingNle={exportingNle}
@@ -1573,6 +1538,7 @@ export function VideoStudioWorkspace({
               inspectorTab={inspectorTab}
               audioAssets={audioAssets}
               extendingScene={extendingScene}
+              musicGeneration={musicGeneration}
               railCopy={wc.rail}
               floatingCopy={wc.floatingBar}
               onHeightChange={setRailHeight}
