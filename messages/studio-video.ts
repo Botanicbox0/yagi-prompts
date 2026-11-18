@@ -6,6 +6,7 @@
  * (lib/brands/workspace/commission-tracks.ts reads it), so the video screen and the wizard say the same thing.
  * Amounts are credits only. No engine, lane or supplier names, no client names.
  */
+import { studioComposeEn, studioComposeKo } from './studio-compose';
 export const studioVideoEn = {
   title: 'Video studio',
   views: { label: 'Video studio screens', make: 'Make', compose: 'Editing Studio', request: 'Ask our team' },
@@ -435,8 +436,6 @@ export const studioVideoEn = {
       audioLead: 'J-cut -0.5s',
       audioSync: 'Sync 0s',
       audioLag: 'L-cut +0.5s',
-      transitionDissolve: 'Cross dissolve',
-      transitionNone: 'Hard cut',
       heightCompact: '72px strip',
       heightMedium: '200px trim',
       heightFull: 'Full editor',
@@ -449,6 +448,8 @@ export const studioVideoEn = {
       trimOut: 'Out',
       cutMarkersBadge: '{count} cuts',
       splitDetectedBtn: 'Split {count} cuts',
+      /** The editing studio's own sentence, so both editors say the same thing when a clip has no scene change. */
+      noCutsDetected: studioComposeEn.timeline.noCutsDetected,
       bgmEmpty: 'BGM: None (generate guide music or pick audio)',
       /** `bgmEmpty` without the generation hint, while music generation is closed. */
       bgmNone: 'BGM: None',
@@ -467,9 +468,6 @@ export const studioVideoEn = {
         scopeClip: 'Selected clip',
         scopeRegion: 'Partial region',
         matchRefUpload: '+ Reference photo/video',
-        shotMatchBtn: 'Match clip colors',
-        shotMatching: 'Matching shots…',
-        shotMatchedNotice: 'Matched timeline shot color tone to anchor clip',
         downloadCubeBtn: 'Download .cube LUT',
         clearGrade: 'Reset grade',
         intensity: 'Intensity',
@@ -485,7 +483,7 @@ export const studioVideoEn = {
         },
         musicLicense: 'Non-commercial draft guide (CC BY-NC 4.0)',
         musicCommercialLicense: 'Commercial licensed audio',
-        sfxTitle: 'Sound effect (A2)',
+        sfxTitle: 'Sound effect',
         sfxPlaceholder: 'e.g. crisp glass shimmer & sub bass sweep',
         sfxGenerateBtn: 'Generate SFX · {credits} credits',
         sfxGenerating: 'Generating SFX…',
@@ -956,8 +954,6 @@ export const studioVideoKo: typeof studioVideoEn = {
       audioLead: '선행 -0.5초',
       audioSync: '싱크 0초',
       audioLag: '지연 +0.5초',
-      transitionDissolve: '디졸브 전환',
-      transitionNone: '바로 컷',
       heightCompact: '72px',
       heightMedium: '200px',
       heightFull: '전체 편집',
@@ -970,6 +966,7 @@ export const studioVideoKo: typeof studioVideoEn = {
       trimOut: '끝',
       cutMarkersBadge: '컷 {count}개',
       splitDetectedBtn: '감지 컷 {count}개 분할',
+      noCutsDetected: studioComposeKo.timeline.noCutsDetected,
       bgmEmpty: '배경음악 없음 (구간 음악 생성 또는 음원 선택)',
       bgmNone: '배경음악 없음',
       bgmActive: '배경음악: {label}',
@@ -987,9 +984,6 @@ export const studioVideoKo: typeof studioVideoEn = {
         scopeClip: '선택 클립',
         scopeRegion: '부분 영역',
         matchRefUpload: '+ 레퍼런스 이미지·영상',
-        shotMatchBtn: '컷 간 색감 통일',
-        shotMatching: '색감 맞추는 중…',
-        shotMatchedNotice: '기준 컷 색감으로 시퀀스 톤을 맞췄어요',
         downloadCubeBtn: '.cube LUT 저장',
         clearGrade: '색보정 초기화',
         intensity: '강도',
@@ -1005,7 +999,7 @@ export const studioVideoKo: typeof studioVideoEn = {
         },
         musicLicense: '비상업 시안·호흡 가이드 전용 (CC BY-NC 4.0)',
         musicCommercialLicense: '상업용 라이선스 음원',
-        sfxTitle: '효과음 생성 (A2)',
+        sfxTitle: '효과음 생성',
         sfxPlaceholder: '예: 맑은 유리 찰랑임과 묵직한 저음',
         sfxGenerateBtn: '효과음 생성 · {credits} 크레딧',
         sfxGenerating: '효과음 생성 중…',

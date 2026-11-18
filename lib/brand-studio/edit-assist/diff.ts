@@ -21,6 +21,7 @@ import {
   type ComposeClip,
   type ComposeColorPresetId,
   type ComposerProject,
+  type TimelinePatch,
 } from '../compose/timeline';
 
 export type CaptionField = 'text' | 'time' | 'position' | 'size';
@@ -43,6 +44,128 @@ export type EditDelta =
   | { kind: 'look'; preset: ComposeColorPresetId | 'custom' | 'off'; strengthPct?: number }
   | { kind: 'other'; count: number }
   | { kind: 'total'; beforeSec: number; afterSec: number };
+
+/**
+ * What an edit step (or patch) was about, so the change lines can follow the order the user asked in:
+ * a cut by its id BEFORE the edit (a split piece counts as its cut), a caption by id, every cut, every
+ * caption, a new caption, the music, the aspect or the look.
+ */
+export type DeltaSubject =
+  | { clip: string }
+  | { caption: string }
+  | 'clips'
+  | 'captions'
+  | 'new_caption'
+  | 'music'
+  | 'aspect'
+  | 'look';
+
+interface TaggedDelta {
+  delta: EditDelta;
+  subject: DeltaSubject | null;
+}
+
+function subjectMatches(asked: DeltaSubject, subject: DeltaSubject): boolean {
+  if (typeof asked === 'object' && typeof subject === 'object') {
+    if ('clip' in asked && 'clip' in subject) return asked.clip === subject.clip;
+    if ('caption' in asked && 'caption' in subject) return asked.caption === subject.caption;
+    return false;
+  }
+  if (asked === subject) return true;
+  // "Every cut" covers each cut and the other way round (several per-cut steps can end as one "all cuts" line).
+  if (asked === 'clips') return typeof subject === 'object' && 'clip' in subject;
+  if (subject === 'clips') return typeof asked === 'object' && 'clip' in asked;
+  if (asked === 'captions') return typeof subject === 'object' && 'caption' in subject;
+  return false;
+}
+
+/** Stable: lines whose subject a step named come in step order, the rest keep their place after them. */
+function inAskedOrder(tagged: readonly TaggedDelta[], asked: readonly DeltaSubject[]): TaggedDelta[] {
+  const rank = (entry: TaggedDelta) => {
+    if (!entry.subject) return Number.POSITIVE_INFINITY;
+    const index = asked.findIndex((a) => subjectMatches(a, entry.subject!));
+    return index < 0 ? Number.POSITIVE_INFINITY : index;
+  };
+  return tagged
+    .map((entry, position) => ({ entry, position, rank: rank(entry) }))
+    .sort((a, b) => a.rank - b.rank || a.position - b.position)
+    .map((item) => item.entry);
+}
+
+/**
+ * The subjects of index-based patches (rule answers), in patch order, with every index read on the timeline
+ * as it is when that patch runs; a piece cut off by an earlier patch counts as the cut it came from.
+ */
+export function patchSubjects(project: ComposerProject, patches: readonly TimelinePatch[]): DeltaSubject[] {
+  let state = applyTimelinePatches(project, []).project;
+  const origin = new Map(state.clips.map((clip) => [clip.id, clip.id]));
+  const clipAt = (index: number): string | null => {
+    const clip = state.clips[index];
+    return clip ? (origin.get(clip.id) ?? clip.id) : null;
+  };
+  const out: DeltaSubject[] = [];
+  for (const patch of patches) {
+    let parent: string | null = null;
+    switch (patch.op) {
+      case 'trim_clip':
+      case 'split_clip_at':
+      case 'split_clip_cuts':
+      case 'remove_clip':
+      case 'set_clip_speed':
+      case 'slip_clip':
+      case 'set_clip_audio_offset':
+      case 'set_clip_transition':
+        parent = clipAt(patch.clipIndex);
+        break;
+      case 'move_clip':
+        parent = clipAt(patch.fromIndex);
+        break;
+      case 'swap_clips': {
+        const other = clipAt(patch.indexB);
+        parent = clipAt(patch.indexA);
+        if (parent) out.push({ clip: parent });
+        if (other) out.push({ clip: other });
+        parent = null;
+        break;
+      }
+      case 'set_clip_audio':
+        if (patch.clipIndex === 'all') out.push('clips');
+        else parent = clipAt(patch.clipIndex);
+        break;
+      case 'add_caption':
+        out.push('new_caption');
+        break;
+      case 'update_caption': {
+        const caption = state.captions[patch.captionIndex];
+        if (caption) out.push({ caption: caption.id });
+        break;
+      }
+      case 'remove_caption': {
+        const caption = patch.captionIndex === 'all' ? null : state.captions[patch.captionIndex];
+        if (patch.captionIndex === 'all') out.push('captions');
+        else if (caption) out.push({ caption: caption.id });
+        break;
+      }
+      case 'set_bgm_volume':
+      case 'remove_bgm':
+        out.push('music');
+        break;
+      case 'set_aspect':
+        out.push('aspect');
+        break;
+      case 'set_color_grade':
+        out.push('look');
+        break;
+      default:
+        break;
+    }
+    if (parent) out.push({ clip: parent });
+    const next = applyTimelinePatches(state, [patch]).project;
+    for (const clip of next.clips) if (!origin.has(clip.id)) origin.set(clip.id, parent ?? clip.id);
+    state = next;
+  }
+  return out;
+}
 
 /** Structural equality for plain JSON-like values; a key whose value is `undefined` counts as absent. */
 export function sameValue(a: unknown, b: unknown): boolean {
@@ -284,13 +407,13 @@ function captionRest(caption: ComposeCaption): Record<string, unknown> {
 function diffCaptions(before: readonly ComposeCaption[], after: readonly ComposeCaption[]) {
   const afterById = new Map(after.map((c) => [c.id, c]));
   const beforeIds = new Set(before.map((c) => c.id));
-  const removed: EditDelta[] = [];
-  const changed: EditDelta[] = [];
+  const removed: TaggedDelta[] = [];
+  const changed: TaggedDelta[] = [];
   let other = 0;
   for (const caption of before) {
     const now = afterById.get(caption.id);
     if (!now) {
-      removed.push({ kind: 'caption_removed', text: caption.text });
+      removed.push({ delta: { kind: 'caption_removed', text: caption.text }, subject: { caption: caption.id } });
       continue;
     }
     const fields: CaptionField[] = [];
@@ -298,12 +421,14 @@ function diffCaptions(before: readonly ComposeCaption[], after: readonly Compose
     if (now.startSec !== caption.startSec || now.endSec !== caption.endSec) fields.push('time');
     if (now.position !== caption.position) fields.push('position');
     if (now.size !== caption.size) fields.push('size');
-    if (fields.length > 0) changed.push({ kind: 'caption_changed', text: now.text, changed: fields });
+    if (fields.length > 0) {
+      changed.push({ delta: { kind: 'caption_changed', text: now.text, changed: fields }, subject: { caption: caption.id } });
+    }
     if (!sameValue(captionRest(caption), captionRest(now))) other += 1;
   }
-  const added: EditDelta[] = after
+  const added: TaggedDelta[] = after
     .filter((c) => !beforeIds.has(c.id))
-    .map((c) => ({ kind: 'caption_added', text: c.text, fromSec: c.startSec, toSec: c.endSec }));
+    .map((c) => ({ delta: { kind: 'caption_added', text: c.text, fromSec: c.startSec, toSec: c.endSec }, subject: 'new_caption' }));
   return { removed, changed, added, other };
 }
 
@@ -319,11 +444,18 @@ function split<T extends object>(value: T, keys: readonly string[]): { picked: R
 const KNOWN_PROJECT_KEYS = new Set(['aspect', 'clips', 'captions', 'bgm', 'colorGrade']);
 
 /**
- * Deltas from `before` to `after`, in a fixed order: cuts (removed, split, trimmed, moved, sound),
- * captions (removed, changed, added), music, aspect, look, other, total. Both sides are normalised the
- * way the timeline normalises them first, so a timeline is never "changed" by normalisation alone.
+ * Deltas from `before` to `after`. Without `asked`, cuts come by cut number (for one cut: removed, split,
+ * trimmed, moved, sound), then captions (removed, changed, added), music, aspect, look. With `asked` (the
+ * subjects of the plan's steps or the patches, in order — `stepSubjects` / `patchSubjects`), the lines a
+ * step named follow the step order and the rest keep that order after them. `other` and `total` always
+ * come last. Both sides are normalised the way the timeline normalises them first, so a timeline is never
+ * "changed" by normalisation alone.
  */
-export function diffTimelines(beforeProject: ComposerProject, afterProject: ComposerProject): EditDelta[] {
+export function diffTimelines(
+  beforeProject: ComposerProject,
+  afterProject: ComposerProject,
+  asked?: readonly DeltaSubject[],
+): EditDelta[] {
   const before = applyTimelinePatches(beforeProject, []).project;
   const after = applyTimelinePatches(afterProject, []).project;
 
@@ -331,35 +463,40 @@ export function diffTimelines(beforeProject: ComposerProject, afterProject: Comp
   const captions = diffCaptions(before.captions, after.captions);
   let other = clips.other + captions.other;
 
-  const music: EditDelta[] = [];
+  const music: TaggedDelta[] = [];
   if (before.bgm && !after.bgm) {
-    music.push({ kind: 'music_removed' });
+    music.push({ delta: { kind: 'music_removed' }, subject: 'music' });
   } else if (!before.bgm && after.bgm) {
     other += 1;
   } else if (before.bgm && after.bgm) {
     const { volume: beforeVolume, ...beforeRest } = before.bgm;
     const { volume: afterVolume, ...afterRest } = after.bgm;
     if (pct(beforeVolume) !== pct(afterVolume)) {
-      music.push({ kind: 'music_volume', beforePct: pct(beforeVolume), afterPct: pct(afterVolume) });
+      music.push({ delta: { kind: 'music_volume', beforePct: pct(beforeVolume), afterPct: pct(afterVolume) }, subject: 'music' });
     } else if (beforeVolume !== afterVolume) {
       other += 1;
     }
     if (!sameValue(beforeRest, afterRest)) other += 1;
   }
 
-  const aspect: EditDelta[] =
-    before.aspect !== after.aspect ? [{ kind: 'aspect', before: before.aspect, after: after.aspect }] : [];
+  const aspect: TaggedDelta[] =
+    before.aspect !== after.aspect
+      ? [{ delta: { kind: 'aspect', before: before.aspect, after: after.aspect }, subject: 'aspect' }]
+      : [];
 
-  const look: EditDelta[] = [];
+  const look: TaggedDelta[] = [];
   const g0 = before.colorGrade ?? null;
   const g1 = after.colorGrade ?? null;
   const l0 = g0 ? split(g0, LOOK_TARGET_KEYS) : null;
   const l1 = g1 ? split(g1, LOOK_TARGET_KEYS) : null;
   if (!sameValue(l0?.rest ?? null, l1?.rest ?? null)) {
     look.push({
-      kind: 'look',
-      preset: g1 ? (g1.presetId ?? 'custom') : 'off',
-      ...(g0 && g1 && pct(g0.intensity) !== pct(g1.intensity) ? { strengthPct: pct(g1.intensity) } : {}),
+      delta: {
+        kind: 'look',
+        preset: g1 ? (g1.presetId ?? 'custom') : 'off',
+        ...(g0 && g1 && pct(g0.intensity) !== pct(g1.intensity) ? { strengthPct: pct(g1.intensity) } : {}),
+      },
+      subject: 'look',
     });
   }
   // The grade's target moved (e.g. its cut was removed): not a look change, still a change.
@@ -373,20 +510,22 @@ export function diffTimelines(beforeProject: ComposerProject, afterProject: Comp
     }
   }
 
+  // Cuts by cut number; within one cut the kinds keep the order above. "Every cut" sound goes last.
+  const cutOf = (delta: EditDelta) => ('cut' in delta && typeof delta.cut === 'number' ? delta.cut : Number.POSITIVE_INFINITY);
+  const clipLines: TaggedDelta[] = [...clips.removed, ...clips.split, ...clips.trimmed, ...clips.moved, ...clips.sound]
+    .map((delta, position) => ({ delta, position }))
+    .sort((a, b) => cutOf(a.delta) - cutOf(b.delta) || a.position - b.position)
+    .map(({ delta }) => {
+      const cut = cutOf(delta);
+      const clip = Number.isFinite(cut) ? before.clips[cut - 1] : undefined;
+      return { delta, subject: clip ? { clip: clip.id } : 'clips' };
+    });
+
+  const named: TaggedDelta[] = [...clipLines, ...captions.removed, ...captions.changed, ...captions.added, ...music, ...aspect, ...look];
   const beforeSec = projectDurationSec(before);
   const afterSec = projectDurationSec(after);
   return [
-    ...clips.removed,
-    ...clips.split,
-    ...clips.trimmed,
-    ...clips.moved,
-    ...clips.sound,
-    ...captions.removed,
-    ...captions.changed,
-    ...captions.added,
-    ...music,
-    ...aspect,
-    ...look,
+    ...(asked ? inAskedOrder(named, asked) : named).map((entry) => entry.delta),
     ...(other > 0 ? [{ kind: 'other' as const, count: other }] : []),
     ...(beforeSec !== afterSec ? [{ kind: 'total' as const, beforeSec, afterSec }] : []),
   ];

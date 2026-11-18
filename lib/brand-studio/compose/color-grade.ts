@@ -13,6 +13,7 @@
  *
  * Client-safe: zero Node, filesystem, database, or internal vendor strings.
  */
+import { corsMediaUrl } from '../cors-media-url';
 
 export type ColorGradeScope = 'full_timeline' | 'selected_clip' | 'region';
 
@@ -342,7 +343,8 @@ export async function extractColorProfileInBrowser(
     await new Promise<void>((resolve, reject) => {
       img.onload = () => resolve();
       img.onerror = () => reject(new Error('reference_image_load_failed'));
-      img.src = mediaUrl;
+      // Pixels are read: its own cache entry on the media domain (see corsMediaUrl).
+      img.src = corsMediaUrl(mediaUrl);
     });
     ctx.drawImage(img, 0, 0, size, size);
     return extractColorProfileFromRgba(ctx.getImageData(0, 0, size, size).data);
@@ -373,7 +375,7 @@ export async function extractColorProfileInBrowser(
         },
         { once: true },
       );
-      video.src = mediaUrl;
+      video.src = corsMediaUrl(mediaUrl);
     });
 
     const targetTime = clamp(

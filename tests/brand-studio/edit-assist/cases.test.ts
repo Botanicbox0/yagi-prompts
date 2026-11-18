@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { applyEditSteps, resolveAskChoices, resolveEditPlan } from '@/lib/brand-studio/edit-assist/apply';
+import { applyEditSteps, resolveAskChoices, resolveEditPlan, stepSubjects } from '@/lib/brand-studio/edit-assist/apply';
 import { buildEditContext } from '@/lib/brand-studio/edit-assist/context';
 import { diffTimelines, isInstantEdit, type EditDelta } from '@/lib/brand-studio/edit-assist/diff';
 import { EDIT_STEP_KINDS, parseEditPlan } from '@/lib/brand-studio/edit-assist/plan';
@@ -63,7 +63,8 @@ describe('edit-assist instruction table', () => {
           return;
         }
         expect(applied.problems).toEqual([]);
-        const deltas = diffTimelines(timeline, applied.project);
+        // In the order the steps asked for them, as the screen lists them (E2).
+        const deltas = diffTimelines(timeline, applied.project, stepSubjects(resolved.steps));
         expect(deltas).toEqual(c.expect.deltas);
         expect(isInstantEdit(deltas)).toBe(c.expect.instant);
         return;

@@ -6,7 +6,7 @@ import {
   runComposeOperation,
 } from '@/lib/brand-studio/compose/service';
 import { applyTimelinePatches, type ComposerProject, type TimelinePatch } from '@/lib/brand-studio/compose/timeline';
-import { diffTimelines, type EditDelta } from '@/lib/brand-studio/edit-assist/diff';
+import { diffTimelines, patchSubjects, type EditDelta } from '@/lib/brand-studio/edit-assist/diff';
 import { EDIT_PLAN_MODEL_SCHEMA } from '@/lib/brand-studio/edit-assist/plan';
 import {
   AssistPlanInputSchema,
@@ -774,7 +774,9 @@ describe('the rule parser path on the instruction table', () => {
       answered.push(c.id);
       if (c.expect.kind !== 'plan') continue;
       const after = applyTimelinePatches(assistFixture(), res.patches).project;
-      expect(values(c.instruction, diffTimelines(assistFixture(), after)), c.id).toEqual(values(c.instruction, c.expect.deltas));
+      // Lines in patch order, as the screen lists them (E2).
+      const deltas = diffTimelines(assistFixture(), after, patchSubjects(assistFixture(), res.patches));
+      expect(values(c.instruction, deltas), c.id).toEqual(values(c.instruction, c.expect.deltas));
     }
     expect(answered).toEqual([
       'ko-trim-to-length',
