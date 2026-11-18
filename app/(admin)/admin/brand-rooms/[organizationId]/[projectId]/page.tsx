@@ -11,14 +11,14 @@ import { AdminShell, OutcomeBanner } from "@/components/admin/chrome";
 import { AdminPageHeader, AdminTable, StatusPill, type AdminTone } from "@/components/admin/patterns";
 import { formatAdminTime, formatCount } from "@/lib/admin/format";
 import { AdminRoomChannel } from "@/components/brand-rooms/chat/admin";
-import { RoomDeskChatButton, RoomDeskFrame } from "@/components/brand-rooms/desk/desk-frame";
+import { RoomDeskAck, RoomDeskChatButton, RoomDeskFrame } from "@/components/brand-rooms/desk/desk-frame";
 import { AdminShareCreate, AdminShareRevoke } from "@/components/brand-rooms/share/admin-create";
 import { AdminReviewStage } from "@/components/brand-studio/review/admin-stage";
 import { DeliveryUpload } from "@/components/brand-studio/review/delivery-upload";
 import { createStudioMediaStore } from "@/lib/brand-studio/media-store";
 import { staffProjectStacks, staffReviewDetail } from "@/lib/brand-studio/review";
 import { parseReviewTime, type ReviewStatus } from "@/lib/brand-studio/review-contracts";
-import { roomAdminPath, staffProjectDesk } from "@/lib/brand-rooms/messages";
+import { acknowledgementLine, roomAdminPath, staffProjectDesk } from "@/lib/brand-rooms/messages";
 import { GENERAL_CHANNEL, ROOM_DESK_TABS, roomDeskPath, type RoomDeskTab } from "@/lib/brand-rooms/message-contracts";
 import { staffProjectShares } from "@/lib/brand-rooms/shares";
 import type { ShareState } from "@/lib/brand-rooms/share-contracts";
@@ -27,7 +27,8 @@ import { STORYBOARD_ADMIN_PATH, storyboardAdminHref, type StoryboardStatus } fro
 
 /**
  * `/admin/brand-rooms/[organizationId]/[projectId]` — the team's desk for one project
- * (docs/BRAND-ROOMS-FEEDBACK.md §4). Header: the project, its brand, its status and what waits for the team.
+ * (docs/BRAND-ROOMS-FEEDBACK.md §4). Header: the project, its brand, its status, what waits for the team (the
+ * customer's lines not answered yet, §3) and 확인함 with who pressed it last.
  *
  * List mode: the project's conversation on the left (the same `AdminRoomChannel`, its feed route and 4-second
  * poll), tabs on the right. 시안 — the deliverable stacks with every version's open notes (brand and team
@@ -113,6 +114,8 @@ export default async function AdminRoomDesk({
   const waitingLabel = interpolate(c.admin.waiting, { count: desk.teamUnread });
 
   // In review mode the waiting count rides on the "대화" button instead of the title (one number, one place).
+  // 확인함 sits in the actions in both modes: what waits is what the team has not answered (§3), and opening
+  // the conversation no longer clears it.
   const header = (
     <AdminPageHeader
       back={{ href: "/admin/brand-rooms", label: c.admin.back }}
@@ -122,6 +125,14 @@ export default async function AdminRoomDesk({
       {...(!review && desk.teamUnread > 0 ? { count: formatCount(desk.teamUnread, locale), countLabel: waitingLabel } : {})}
       actions={
         <>
+          <RoomDeskAck
+            organizationId={org.id}
+            channel={project.id}
+            count={desk.teamUnread}
+            back={here}
+            acknowledged={acknowledgementLine(desk.acknowledged, d, (at) => formatAdminTime(at, locale))}
+            copy={{ button: d.acknowledge, hint: d.acknowledgeHint, failed: d.acknowledgeFailed }}
+          />
           <RoomDeskChatButton label={d.conversation} count={desk.teamUnread} countLabel={waitingLabel} />
           <a className="admin-btn" href={roomAdminPath(org.id, GENERAL_CHANNEL)} data-admin-desk-general>
             {d.generalConversation}

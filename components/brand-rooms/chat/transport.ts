@@ -42,7 +42,11 @@ export interface ChatTransport {
   remove(channel: string, messageId: string): Promise<{ ok: true } | Fail>;
   pin?(channel: string, messageId: string, pinned: boolean): Promise<{ ok: true; message?: RoomMessage } | Fail>;
   react?(channel: string, messageId: string, emoji: RoomReaction): Promise<{ ok: true; reactions: RoomReactionView[] } | Fail>;
-  read(channel: string, at: string): Promise<void>;
+  /**
+   * Mark the channel read up to `at`. The brand side only: the team has no read mark, its waiting count clears
+   * when it answers or presses 확인함 (docs/BRAND-ROOMS-FEEDBACK.md §3).
+   */
+  read?(channel: string, at: string): Promise<void>;
   upload?(channel: string, file: File, mime: string, onProgress: (ratio: number) => void): Promise<{ ok: true; attachment: RoomAttachment } | Fail>;
   /** Where a ref card leads, or null. */
   refHref(projectId: string, ref: RoomRef, atMs?: number | null): string | null;
@@ -196,9 +200,7 @@ export function adminTransport(organizationId: string): ChatTransport {
       }),
     remove: (channel, messageId) => op("brand_rooms.message.delete", channel, { messageId }),
     pin: (channel, messageId, pinned) => op("brand_rooms.message.pin", channel, { messageId, pinned: String(pinned) }),
-    async read(channel, at) {
-      await op("brand_rooms.channel.read", channel, { at });
-    },
+    // No `read`: opening a conversation does not clear what waits for the team (확인함 or an answer does).
     refHref: adminRefHref,
   };
 }

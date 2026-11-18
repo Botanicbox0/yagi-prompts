@@ -41,10 +41,11 @@ async function brandLine(): Promise<RoomMessage> {
 }
 
 describe('brand_rooms.* admin operations', () => {
-  it('registers the four team writes', () => {
-    for (const name of ['brand_rooms.message.send', 'brand_rooms.message.pin', 'brand_rooms.message.delete', 'brand_rooms.channel.read']) {
+  it('registers the four team writes (확인함, and no read mark: opening clears nothing)', () => {
+    for (const name of ['brand_rooms.message.send', 'brand_rooms.message.pin', 'brand_rooms.message.delete', 'brand_rooms.channel.ack']) {
       expect(ADMIN_OPERATION_NAMES).toContain(name);
     }
+    expect(ADMIN_OPERATION_NAMES).not.toContain('brand_rooms.channel.read');
   });
 
   it('refuses a non-admin, and an admin flag the profile row does not carry', async () => {
@@ -55,7 +56,7 @@ describe('brand_rooms.* admin operations', () => {
     expect((await f.sql.query('select count(*)::int as n from brand_room_messages')).rows[0]).toEqual({ n: 0 });
   });
 
-  it('replies as the YAGI team, pins, reads and takes a line down, landing back on the conversation', async () => {
+  it('replies as the YAGI team, pins, acknowledges and takes a line down, landing back on the conversation', async () => {
     const admin = ctx(f.ids.admin, true);
     const question = await brandLine();
     const sent = await dispatchAdmin(
@@ -80,7 +81,11 @@ describe('brand_rooms.* admin operations', () => {
     const later = await brandLine();
     overview = await staffRoomOverview({ sql: f.sql }, admin.viewer);
     expect(overview.ok && overview.channels[0]!.teamUnread).toBe(1);
-    expect(await dispatchAdmin('brand_rooms.channel.read', form('brand_rooms.channel.read', { organizationId: f.orgId, projectId: f.projectId }), admin)).toMatchObject({ ok: true });
+    // 확인함 returns to the form's own `_back` (no `to`), and writes the presser's mark only.
+    const acknowledged = await dispatchAdmin('brand_rooms.channel.ack', form('brand_rooms.channel.ack', { organizationId: f.orgId, projectId: f.projectId }), admin);
+    expect(acknowledged).toMatchObject({ ok: true, code: 'saved' });
+    expect(outcomeUrl(`/admin/brand-rooms/${f.orgId}/${f.projectId}?tab=links`, acknowledged)).toContain(`/admin/brand-rooms/${f.orgId}/${f.projectId}?`);
+    expect((await f.sql.query('select user_id from brand_room_reads')).rows).toEqual([{ user_id: f.ids.admin }]);
     overview = await staffRoomOverview({ sql: f.sql }, admin.viewer);
     expect(overview.ok && overview.channels[0]!.teamUnread).toBe(0);
 
