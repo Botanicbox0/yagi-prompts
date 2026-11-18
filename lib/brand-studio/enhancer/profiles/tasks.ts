@@ -158,6 +158,11 @@ function materialsRule(): string {
   return '"revision.materials" are notes on videos the customer attached to show what they mean (a texture, a movement, a look). The video model never receives those videos. Take from each note only what the request needs and write it into the change as plain, concrete description: how it looks, how it moves and how fast, how light sits on it. Never mention a reference video, attached material or notes in the prompt, and never write a token for one.';
 }
 
+/** The customer was asked what an unclear request meant and answered (revise.plan, revision/clarify.ts). */
+function clarifiedRule(): string {
+  return '"revision.clarified" is a question the customer was asked because the request could be read two ways, and the answer they chose. The answer states what they meant: where it and the request\'s wording differ or the wording is vague, follow the answer. Write the change as if the request had said it plainly. A request in "revision.history" may end with a short answer in parentheses: that is what that request meant. Never mention a question, an answer or a choice in the prompt.';
+}
+
 /**
  * A new version of a generated clip (lib/brand-studio/revision). The earlier prompt and requests travel
  * in the user turn ("revision.madeWith", "revision.history"); these rules say what to do with them.
@@ -168,7 +173,10 @@ function revisionTask(input: EnhanceInput, binding: Binding): string {
   const previous = Math.max(1, revision.version - 1);
   const hasHistory = revision.history.length > 0;
   const never = 'Never mention versions, an earlier prompt, earlier requests or this history in the prompt.';
-  const marks = (revision.marks?.length ? `\n${marksRule(revision.mode)}` : '') + (revision.materials?.length ? `\n${materialsRule()}` : '');
+  const marks =
+    (revision.marks?.length ? `\n${marksRule(revision.mode)}` : '') +
+    (revision.materials?.length ? `\n${materialsRule()}` : '') +
+    (revision.clarified || revision.history.some((h) => /\)\s*$/.test(h)) ? `\n${clarifiedRule()}` : '');
   if (revision.mode === 'edit') {
     const ref = binding.bound.find((b) => b.ref.kind === 'video')?.token ?? '@Video1';
     const pictures = binding.bound.some((b) => b.ref.kind === 'image' && b.token)

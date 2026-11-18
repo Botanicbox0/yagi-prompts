@@ -112,6 +112,13 @@ export function VersionStrip({
           {current.request}
         </p>
       )}
+      {current?.request && current.clarified && (
+        <div className="bs-revise-clarified" data-revision-clarified>
+          <span className="bs-sr">{r.clarifiedLabel}</span>
+          <p className="bs-muted">{current.clarified.question}</p>
+          <p>{current.clarified.answer}</p>
+        </div>
+      )}
       {current?.request && current.marks.length > 0 && (
         <ul className="bs-mark-chips" data-revision-marks>
           {current.marks.map((mark, i) => (
@@ -145,6 +152,8 @@ export interface ReviseFormViewProps {
   onPick(mode: StudioReviseMode): void;
   onSubmit(): void;
   onAccept(change: boolean): void;
+  /** The question row: a choice, or null to make it as written. */
+  onAnswer?(choice: string | null): void;
   /** Mark mode on or off; null or absent when the clip cannot be marked (no button then). */
   markMode?: boolean | null;
   onMarkMode?(on: boolean): void;
@@ -251,6 +260,12 @@ export function ReviseFormView(props: ReviseFormViewProps) {
   const markable = props.markMode === true || props.markMode === false;
   const marksFull = state.marks.length >= MARKS_MAX;
   const attached = state.references.length + state.materials.length > 0;
+  // The question takes the focus when it appears, so the keyboard and a screen reader land on it.
+  const question = useRef<HTMLDivElement>(null);
+  const asking = state.phase === "clarify" && Boolean(state.clarify);
+  useEffect(() => {
+    if (asking) question.current?.querySelector<HTMLButtonElement>("button")?.focus();
+  }, [asking]);
 
   return (
     <form
@@ -468,6 +483,23 @@ export function ReviseFormView(props: ReviseFormViewProps) {
           );
         })}
       </fieldset>
+      {asking && state.clarify && (
+        <div ref={question} className="bs-revise-suggestion bs-revise-clarify" role="group" aria-labelledby={`${id}-question`} data-revise-clarify>
+          <p id={`${id}-question`}>
+            {state.clarify.question}
+          </p>
+          <div className="bs-revise-choices">
+            {state.clarify.options.map((option, i) => (
+              <button key={option} type="button" className="bs-btn" data-variant="soft" data-size="sm" data-revise-choice={i + 1} onClick={() => props.onAnswer?.(option)}>
+                {option}
+              </button>
+            ))}
+            <button type="button" className="bs-btn" data-variant="ghost" data-size="sm" data-revise-choice="as-written" onClick={() => props.onAnswer?.(null)}>
+              {r.asWritten}
+            </button>
+          </div>
+        </div>
+      )}
       {state.phase === "suggest" && state.suggestion && (
         <div className="bs-revise-suggestion" role="group" data-revise-suggestion={state.suggestion.mode}>
           {state.suggestion.reason && <p>{r.reasons[state.suggestion.reason]}</p>}
@@ -488,7 +520,7 @@ export function ReviseFormView(props: ReviseFormViewProps) {
           {noteLine(state.note, state, copy)}
         </p>
       )}
-      <button type="submit" className="bs-btn bs-submit" data-variant="solid" data-size="md" data-revise-submit disabled={busy || state.phase === "suggest"} aria-busy={busy || undefined}>
+      <button type="submit" className="bs-btn bs-submit" data-variant="solid" data-size="md" data-revise-submit disabled={busy || state.phase === "suggest" || asking} aria-busy={busy || undefined}>
         <span>{r.submit}</span>
         {cost(state.mode) && <span className="bs-submit-cost bs-num">{cost(state.mode)}</span>}
       </button>
@@ -665,6 +697,7 @@ export function ReviseForm({
         void flow.submit();
       }}
       onAccept={(change) => void flow.accept(change)}
+      onAnswer={(choice) => void flow.answer(choice)}
       markMode={stage?.host ? marking : null}
       onMarkMode={setMarking}
       onMarkSeek={(key) => {

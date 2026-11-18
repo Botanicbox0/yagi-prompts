@@ -1,5 +1,5 @@
 /**
- * Material attached to a revision (docs/BRAND-STUDIO-V6-PLAN.md §4.6). Server-only. A customer who
+ * Material attached to a revision (docs/BRAND-STUDIO-V6-PLAN.md §4.5). Server-only. A customer who
  * wants "the serum to flow like this" attaches a video that shows it. The video model takes one
  * reference video and an edit already uses it for the clip itself, so the material is never sent to
  * it: one Gemini call watches the material with the request beside it and writes down what in it

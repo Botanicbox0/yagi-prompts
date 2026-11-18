@@ -198,7 +198,7 @@ function unspaceSeedanceTokens(text: string): string {
  * came from this director, so its tokens are handed over in the enhancer's spelling.
  */
 const revisionUserText = (input: { prompt: string; video?: { change?: string } | null; revision?: EnhanceInput['revision'] }): string =>
-  [input.prompt, input.video?.change ?? '', input.revision?.madeWith ?? '', ...(input.revision?.history ?? [])].join('\n');
+  [input.prompt, input.revision?.clarified?.answer ?? '', input.video?.change ?? '', input.revision?.madeWith ?? '', ...(input.revision?.history ?? [])].join('\n');
 
 function revisionEnhanceInput(enhanceInput: EnhanceInput): EnhanceInput {
   const revision = enhanceInput.revision!;
