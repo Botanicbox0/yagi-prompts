@@ -1,5 +1,5 @@
 import { createStudioMediaStore } from '@/lib/brand-studio/media-store';
-import { roomAdminPath, staffDeleteMessage, staffMarkRead, staffPinMessage, staffSendMessage, type RoomMessageDeps } from '@/lib/brand-rooms/messages';
+import { roomAdminPath, staffAcknowledge, staffDeleteMessage, staffPinMessage, staffSendMessage, type RoomMessageDeps } from '@/lib/brand-rooms/messages';
 import { parseRefKey } from '@/lib/brand-rooms/message-contracts';
 import type { AdminOperation } from './operations';
 import { fail, ok, type AdminContext } from './context';
@@ -10,8 +10,8 @@ import * as f from './form';
  * `/admin/brand-rooms/[organizationId]` posts these through `/admin/do`. Each service call re-reads the
  * admin flag on the profile row inside its transaction and refuses a sandboxed or generation-closed
  * organization as missing; a team line is stored with `author_role = 'studio'` and the writer's id, a
- * pin with `pinned_by`, a take-down with `deleted_by`, a read mark under the reader's id — the rows are
- * the audit.
+ * pin with `pinned_by`, a take-down with `deleted_by`, a 확인함 under the presser's id — the rows are
+ * the audit. The team has no read mark: opening a conversation changes nothing (docs/BRAND-ROOMS-FEEDBACK.md §3).
  */
 
 const roomDeps = (ctx: AdminContext): RoomMessageDeps => ({ sql: ctx.sql, media: createStudioMediaStore() });
@@ -87,12 +87,16 @@ const remove: AdminOperation<ChannelInput & { messageId: string }> = {
   },
 };
 
-const read: AdminOperation<ChannelInput & { at: string | null }> = {
-  parse: (form) => ({ ok: true, value: { ...channelOf(form), at: f.str(form, 'at') || null } }),
+/**
+ * 확인함 from the desk (or an organization's conversation page): the channel's waiting count starts again after
+ * now. Team-only — nothing the brand sees. No `to`: a post without script returns to its own `_back`.
+ */
+const acknowledge: AdminOperation<ChannelInput> = {
+  parse: (form) => ({ ok: true, value: channelOf(form) }),
   async run(ctx, input) {
-    const result = await staffMarkRead(roomDeps(ctx), ctx.viewer, input);
+    const result = await staffAcknowledge(roomDeps(ctx), ctx.viewer, input);
     if (!result.ok) return roomFailure(result.code);
-    return ok('saved', { to: back(input) });
+    return ok('saved');
   },
 };
 
@@ -100,5 +104,5 @@ export const BRAND_ROOM_MESSAGE_OPERATIONS = {
   'brand_rooms.message.send': send,
   'brand_rooms.message.pin': pin,
   'brand_rooms.message.delete': remove,
-  'brand_rooms.channel.read': read,
+  'brand_rooms.channel.ack': acknowledge,
 };
