@@ -284,9 +284,11 @@ describe("flag on: the conversation", () => {
   it("uses no internal words for the new lines", () => {
     for (const locale of ["ko", "en"] as const) {
       const r = copyFor(locale).revise;
-      const lines = [r.talk.send, r.talk.placeholderMore, r.talk.reading, r.talk.make, r.talk.sameQuality, r.talk.asWritten, ...Object.values(r.talk.answer), r.stage.draft, r.stage.final, r.toFinal, r.finalMaking, r.from];
-      // Upscaling is its own feature: never named by the draft/final words or the step to the final.
-      for (const line of lines) expect(line).not.toMatch(/edit|reshoot|revise|recipe|job|model|lane|provider|seedance|sunra|1080p|720p|480p|draft_|mode|upscal|업스케일|해상도/i);
+      const lines = [r.talk.send, r.talk.placeholderMore, r.talk.reading, r.talk.make, r.talk.sameQuality, r.talk.draftEditNote, r.talk.asWritten, ...Object.values(r.talk.answer), r.stage.draft, r.stage.final, r.toFinal, r.finalMaking, r.from];
+      // Upscaling is its own feature: never named by the draft/final words or the step to the final. The plain
+      // English verb "edit" is the customer's own word here (the panel is "Edit this video"), so it is allowed;
+      // the internal names of the two ways are not.
+      for (const line of lines) expect(line).not.toMatch(/reshoot|revise|recipe|job|model|lane|provider|seedance|sunra|1080p|720p|480p|draft_|mode|upscal|업스케일|해상도/i);
     }
     expect(en.revise.stage).toEqual({ draft: "Draft", final: "Final" });
     expect(ko.revise.stage).toEqual({ draft: "초안", final: "완성본" });

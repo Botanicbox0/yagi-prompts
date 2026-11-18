@@ -338,6 +338,23 @@ export interface ReviseFormViewProps {
   sameQuality?: boolean;
 }
 
+/**
+ * Our one-line answer: how it will be made (and why, when the request was read), then what the customer
+ * should know about the result. On a version that is not a draft: it comes out at the same quality. On a
+ * draft that will be edited in place: that result cannot go on to a final (a run that follows its source
+ * is never a draft), and the order that does give a final.
+ */
+export function answerLine(
+  talk: StudioCopy["revise"]["talk"],
+  answer: { mode: "edit" | "reshoot"; reason?: "surface" | "motion" | "structure" | "length" | null },
+  baseNotDraft: boolean | undefined,
+): string {
+  const line = talk.answer[answer.reason ?? answer.mode];
+  if (baseNotDraft === true) return `${line} ${talk.sameQuality}`;
+  if (baseNotDraft === false && answer.mode === "edit") return `${line} ${talk.draftEditNote}`;
+  return line;
+}
+
 export function noteLine(note: string, state: ReviseState, copy: StudioCopy): string {
   if (note === "empty_prompt") return copy.dock.emptyPrompt;
   if (note === "attach_full") return fill(copy.revise.attachFull, { images: REVISE_REFERENCES_MAX, videos: REVISE_MATERIALS_MAX });
@@ -777,7 +794,7 @@ export function ReviseFormView(props: ReviseFormViewProps) {
           {answer && state.said.length > 0 && state.phase !== "checking" && (
             <div className="bs-revise-answer" data-revise-answer={answer.mode}>
               <p className="bs-revise-answer-line" data-revise-answer-line>
-                {props.sameQuality ? `${r.talk.answer[answer.reason ?? answer.mode]} ${r.talk.sameQuality}` : r.talk.answer[answer.reason ?? answer.mode]}
+                {answerLine(r.talk, answer, props.sameQuality)}
               </p>
               {answer.blocked && (
                 <p className="bs-muted bs-revise-problem" data-revise-blocked={answer.blocked}>
