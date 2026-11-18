@@ -150,6 +150,8 @@ export const studioReviewEn = {
   noOpen: 'Every note is resolved.',
   readOnly: 'You can read the notes. Owners and editors can write.',
   copyLink: 'Copy link',
+  /** The studio review page's share button (the dialog makes a share link and connects the client chat). */
+  shareOpen: 'Share link · Client chat',
   copied: 'Link copied',
   copyFailed: "Couldn't copy. Copy the address bar instead.",
   seekTo: 'Go to {time}',
@@ -349,6 +351,7 @@ export const studioReviewKo: typeof studioReviewEn = {
   noOpen: '모든 의견이 해결됐어요.',
   readOnly: '의견을 볼 수 있어요. 작성은 소유자와 편집자만 할 수 있어요.',
   copyLink: '링크 복사',
+  shareOpen: '공유 링크 · 대화방 연결',
   copied: '링크를 복사했어요',
   copyFailed: '복사하지 못했어요. 주소창의 주소를 복사해 주세요.',
   seekTo: '{time}로 이동',

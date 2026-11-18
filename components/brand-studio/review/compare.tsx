@@ -8,6 +8,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { REVIEW_FRAME_MS, formatTimecode, type ReviewVersion } from "@/lib/brand-studio/review-contracts";
 import type { studioReviewEn } from "@/messages/studio-review";
+import { StageSelect } from "./stage-menu";
 
 type Copy = typeof studioReviewEn;
 type Side = "left" | "right";
@@ -94,7 +95,8 @@ export function CompareView({ versions, currentId, copy, onClose }: { versions: 
       className="bsv-compare"
       data-review-compare
       onKeyDown={(e) => {
-        if (e.key === "Escape") onClose();
+        // Escape in a version menu closes that menu only.
+        if (e.key === "Escape" && !(e.target as HTMLElement).closest("[role='menu']")) onClose();
       }}
     >
       <div className="bsv-compare-panes">
@@ -104,16 +106,14 @@ export function CompareView({ versions, currentId, copy, onClose }: { versions: 
           return (
             <figure key={side} className="bsv-compare-pane" data-compare-side={side}>
               <figcaption className="bsv-compare-head">
-                <label className="bsv-visually-hidden" htmlFor={`bsv-compare-${side}`}>
-                  {fill(copy.versions.sideVersion, { side: label })}
-                </label>
-                <select id={`bsv-compare-${side}`} className="bsv-version-select" value={v.id} onChange={(e) => setIds((p) => ({ ...p, [side]: e.target.value }))}>
-                  {versions.map((o) => (
-                    <option key={o.id} value={o.id}>
-                      {`v${o.version} · ${copy.status[o.status]}`}
-                    </option>
-                  ))}
-                </select>
+                <StageSelect
+                  label={fill(copy.versions.sideVersion, { side: label })}
+                  value={v.id}
+                  options={versions.map((o) => ({ value: o.id, label: `v${o.version} · ${copy.status[o.status]}` }))}
+                  onChange={(id) => setIds((p) => ({ ...p, [side]: id }))}
+                  className="bsv-version-select"
+                  marker={{ "data-compare-version": side }}
+                />
                 {v.kind === "video" && v.mediaUrl && (
                   <button
                     type="button"
@@ -176,23 +176,29 @@ export function CompareView({ versions, currentId, copy, onClose }: { versions: 
               {formatTimecode(ms)} <span className="bsv-time-total">/ {formatTimecode(total)}</span>
             </span>
           </div>
-          <div className="bsv-track">
-            <input
-              type="range"
-              className="bsv-range"
-              min={0}
-              max={Math.max(total, 1)}
-              step={REVIEW_FRAME_MS}
-              value={Math.min(ms, Math.max(total, 1))}
-              onChange={(e) => {
-                each((v) => v.pause());
-                setPlaying(false);
-                seek(Number(e.target.value));
-              }}
-              aria-label={copy.versions.timeline}
-              aria-valuetext={formatTimecode(ms)}
-              style={{ ["--bsv-progress" as string]: total > 0 ? `${Math.min(100, (ms / total) * 100)}%` : "0%" }}
-            />
+          {/* The same scrub bar as the stage's timeline: ink for the played part, the native input invisible on top. */}
+          <div className="bsv-timeline bsv-compare-track">
+            <div className="bsv-scrub">
+              <div className="bsv-scrub-track" aria-hidden="true">
+                <span className="bsv-scrub-fill" style={{ width: total > 0 ? `${Math.min(100, (ms / total) * 100)}%` : "0%" }} />
+              </div>
+              <span className="bsv-scrub-thumb" aria-hidden="true" style={{ left: total > 0 ? `${Math.min(100, (ms / total) * 100)}%` : "0%" }} />
+              <input
+                type="range"
+                className="bsv-range"
+                min={0}
+                max={Math.max(total, 1)}
+                step={REVIEW_FRAME_MS}
+                value={Math.min(ms, Math.max(total, 1))}
+                onChange={(e) => {
+                  each((v) => v.pause());
+                  setPlaying(false);
+                  seek(Number(e.target.value));
+                }}
+                aria-label={copy.versions.timeline}
+                aria-valuetext={formatTimecode(ms)}
+              />
+            </div>
           </div>
           <p className="bsv-keys">{copy.versions.sync}</p>
         </div>

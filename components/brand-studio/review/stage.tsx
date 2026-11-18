@@ -16,7 +16,7 @@
  * rate (stored, else measured while it plays), a range loops, and the keys work anywhere in the stage.
  */
 import "./review.css";
-import { useCallback, useEffect, useMemo, useRef, useState, type KeyboardEvent, type MouseEvent, type MutableRefObject, type ReactNode } from "react";
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type KeyboardEvent, type MouseEvent, type MutableRefObject, type ReactNode } from "react";
 import {
   FALLBACK_FPS,
   estimateFps,
@@ -50,8 +50,8 @@ import type { studioReviewEn } from "@/messages/studio-review";
 import type { adminConsoleEn } from "@/messages/admin-console";
 import { composerHolds } from "./auto-refresh";
 import { CompareView } from "./compare";
-import { planHeader, planNotesTools, reviewShortcuts, type HeaderKey } from "./header-plan";
-import { StageMenuButton, StagePopover, useNarrow, type StageMenuEntry } from "./stage-menu";
+import { accentControl, planHeader, planNotesTools, reviewShortcuts, type HeaderKey } from "./header-plan";
+import { StageMenuButton, StagePopover, StageSelect, StageSwitch, useNarrow, type StageMenuEntry } from "./stage-menu";
 import { ReviewTimeline } from "./timeline";
 import { Timecode, fill, fillNodes } from "./timecode";
 
@@ -294,12 +294,31 @@ function bottomBarInset(): number {
   return 0;
 }
 
+/** The smallest the filled stage body gets (a short window): the notes column stays usable. */
+export const MIN_FILL_BODY = 360;
+
+/**
+ * The height of the stage body in the wide two-column layout (docs/BRAND-ROOMS-FEEDBACK.md §11.7, 2026-11-19):
+ * from the body's top to the bottom of the window, so the player (its mat, the frame, the controls) and the
+ * notes column end on the same line and nothing is left empty under the controls.
+ *   · `anchorTop`: where the anchor sits in the window once the page shows it (the room scrolls its review
+ *     mode to its scroll margin; the studio and the share page show it where it is on the page);
+ *   · `above`: from the anchor's top to the body's top (the back bar, the head, the paddings);
+ *   · `bottomBar`: a bar the page keeps over the window's bottom (a phone's tab bar).
+ * 32px under the body: the stage's own bottom padding and a little air.
+ */
+export function fillBodyHeight(input: { viewportH: number; anchorTop: number; above: number; bottomBar?: number }): number {
+  return Math.max(MIN_FILL_BODY, Math.round(input.viewportH - Math.max(0, input.anchorTop) - Math.max(0, input.above) - 32 - (input.bottomBar ?? 0)));
+}
+
 /**
  * Fit a box of `ratio` into the wrapper's width and a height cap, so spot pins map 1:1 onto the media.
  * `fill` (wide layout, full screen): the cap is the window's height minus `reserve()` (the head, the
- * controls, the paddings), so the frame, its controls and the head fit in one view.
+ * controls, the paddings), so the frame, its controls and the head fit in one view. `stretch` (the filled
+ * two-column body, full screen): the wrapper is as tall as its mat and the cap is its own height, so the frame
+ * takes the most of the mat both ways and sits in its middle.
  */
-function useFitBox(ratio: number, fill: boolean, reserve: MutableRefObject<() => number>, layoutKey: string) {
+function useFitBox(ratio: number, fill: boolean, reserve: MutableRefObject<() => number>, layoutKey: string, stretch: boolean) {
   const wrapRef = useRef<HTMLDivElement>(null);
   const [box, setBox] = useState<{ w: number; h: number } | null>(null);
   useEffect(() => {
@@ -308,7 +327,7 @@ function useFitBox(ratio: number, fill: boolean, reserve: MutableRefObject<() =>
     const measure = () => {
       const avail = el.clientWidth;
       if (!avail) return;
-      const maxH = fitHeightCap(window.innerHeight, fill, fill ? reserve.current() : 0);
+      const maxH = stretch ? Math.max(120, el.clientHeight) : fitHeightCap(window.innerHeight, fill, fill ? reserve.current() : 0);
       let w = avail;
       let h = w / ratio;
       if (h > maxH) {
@@ -329,7 +348,7 @@ function useFitBox(ratio: number, fill: boolean, reserve: MutableRefObject<() =>
       observer?.disconnect();
       window.removeEventListener("resize", measure);
     };
-  }, [ratio, fill, reserve, layoutKey]);
+  }, [ratio, fill, reserve, layoutKey, stretch]);
   return { wrapRef, box };
 }
 
@@ -510,7 +529,18 @@ export function ReviewStage({
     return Math.max(0, above) + Math.max(0, below) + 32 + bottomBarInset();
   };
   const fillHeight = layout === "wide" || fullscreen;
-  const { wrapRef, box } = useFitBox(ratio, fillHeight, reserveRef, `${fullscreen}:${notesOpen}`);
+  // From 1241px the notes sit beside the player (review.css); below that they go under it.
+  const oneColumn = useNarrow(1240);
+  const under900 = useNarrow(900);
+  // The wide layout with the notes beside the player fills the window's height (fillBodyHeight).
+  const fillBody = layout === "wide" && !oneColumn && !fullscreen;
+  const [bodyHeight, setBodyHeight] = useState<number | null>(null);
+  // The player's mat takes the column's height and the frame sits in its middle: the filled body, and full
+  // screen unless a narrow screen stacks the open notes under the picture. The filled body starts at a CSS
+  // estimate of its height (review.css) and takes the measured one a moment later, so the page is already
+  // about as tall as it will be when the room scrolls review mode into view.
+  const stretchPlayer = fillBody || (fullscreen && !(notesOpen && under900));
+  const { wrapRef, box } = useFitBox(ratio, fillHeight, reserveRef, `${fullscreen}:${notesOpen}:${bodyHeight ?? 0}`, stretchPlayer);
   const [playing, setPlaying] = useState(false);
   const [muted, setMuted] = useState(false);
   const [speed, setSpeed] = useState<number>(1);
@@ -521,6 +551,35 @@ export function ReviewStage({
   const [general, setGeneral] = useState(false);
   const [spotMode, setSpotMode] = useState(false);
   const [comparing, setComparing] = useState(false);
+  useLayoutEffect(() => {
+    if (!fillBody || comparing) {
+      setBodyHeight(null);
+      return;
+    }
+    const measure = () => {
+      const body = bodyRef.current;
+      const section = sectionRef.current;
+      if (!body || !section) return;
+      // The room's review mode and the team desk's open version are scrolled to their scroll margin when they
+      // open (`data-review-fit-scroll`); the studio's review page and the share page show the stage where it is.
+      const room = section.closest<HTMLElement>("[data-room-review-mode], [data-review-fit-scroll]");
+      const anchor = room ?? section.closest<HTMLElement>("[data-review-fit-anchor]") ?? section;
+      const anchorRect = anchor.getBoundingClientRect();
+      const anchorTop = room ? Number.parseFloat(getComputedStyle(room).scrollMarginTop) || 0 : anchorRect.top + window.scrollY;
+      const above = body.getBoundingClientRect().top - anchorRect.top;
+      const next = fillBodyHeight({ viewportH: window.innerHeight, anchorTop, above, bottomBar: bottomBarInset() });
+      setBodyHeight((prev) => (prev === next ? prev : next));
+    };
+    measure();
+    window.addEventListener("resize", measure);
+    // The head can wrap onto a second line (a long title): the body moves down and gets shorter.
+    const observer = typeof ResizeObserver === "undefined" ? null : new ResizeObserver(measure);
+    if (headRef.current) observer?.observe(headRef.current);
+    return () => {
+      window.removeEventListener("resize", measure);
+      observer?.disconnect();
+    };
+  }, [fillBody, comparing]);
   // A row of the notes list under the pointer or keyboard focus: its marker on the timeline grows.
   const [hoverId, setHoverId] = useState<string | null>(null);
   const [shortcutsOpen, setShortcutsOpen] = useState(false);
@@ -944,7 +1003,8 @@ export function ReviewStage({
    */
   function onKeyDown(event: KeyboardEvent<HTMLElement>) {
     const target = event.target as HTMLElement;
-    if (isTypingTarget(target) || target.closest("dialog")) return;
+    // Typing, a dialog, or an open menu or popover (its own arrows and Escape): the stage's keys stay out.
+    if (isTypingTarget(target) || target.closest("dialog, [role='menu'], [role='dialog']")) return;
     if (comparing) return;
     if (event.key === "Escape" && ink.active) {
       finishDrawing();
@@ -1124,6 +1184,7 @@ export function ReviewStage({
     narrow,
   });
   const notesTools = planNotesTools({ extended, hasNotes: threads.some((t) => !t.root.deleted), authorCount: authorOptions.length });
+  const accent = accentControl({ headPrimary: header.primary != null, composer: canComment });
   // The length as a timecode: the end of the last frame, so a stored length rounded to 0.1 s and the
   // browser's own length read the same (192 frames at 23.976 end at 0:08:00 either way).
   const lastFrameIndex = frameRate ? lastFrame(durationMs, frameRate) : null;
@@ -1134,18 +1195,19 @@ export function ReviewStage({
       {copy.status[review.status]}
     </span>
   );
+  // The version switcher: the stage's own select (a button and a menu), not the browser's white list.
   const versionControl = stack ? (
     <div className="bsv-versions" data-review-versions>
-      <label className="bsv-visually-hidden" htmlFor={`bsv-version-${review.id}`}>
-        {copy.versions.label}
-      </label>
-      <select id={`bsv-version-${review.id}`} className="bsv-version-select" value={review.id} onChange={(e) => onVersion?.(e.target.value)} disabled={!onVersion}>
-        {stack.map((v) => (
-          <option key={v.id} value={v.id}>
-            {`v${v.version} · ${copy.status[v.status]}`}
-          </option>
-        ))}
-      </select>
+      <StageSelect
+        label={copy.versions.label}
+        value={review.id}
+        options={stack.map((v) => ({ value: v.id, label: `v${v.version} · ${copy.status[v.status]}` }))}
+        onChange={(id) => onVersion?.(id)}
+        disabled={!onVersion}
+        size={compactHead ? "md" : "sm"}
+        className="bsv-version-select"
+        marker={{ "data-review-version-select": "" }}
+      />
     </div>
   ) : null;
 
@@ -1271,10 +1333,11 @@ export function ReviewStage({
           )}
           {eyebrow && !compactHead && <p className="bsv-eyebrow">{eyebrow}</p>}
           <div className="bsv-title-row">
-            <h2 className="bsv-stage-title" id={`bsv-title-${review.id}`}>
+            <h2 className="bsv-stage-title" id={`bsv-title-${review.id}`} title={review.title}>
               {review.title}
             </h2>
-            {!compactHead && statusChip}
+            {/* With a version switcher (which names each version's status) the separate status mark would say it twice. */}
+            {!compactHead && !stack && statusChip}
             {!compactHead && versionControl}
           </div>
         </div>
@@ -1297,6 +1360,9 @@ export function ReviewStage({
         ref={bodyRef}
         data-fullscreen={fullscreen ? "" : undefined}
         data-notes-open={fullscreen && notesOpen ? "" : undefined}
+        data-fill={fillBody ? "" : undefined}
+        data-stretch={stretchPlayer ? "" : undefined}
+        style={fillBody && bodyHeight != null ? ({ "--bsv-body-h": `${bodyHeight}px` } as CSSProperties) : undefined}
         data-review-body
       >
         <div className="bsv-player" ref={playerRef} data-review-player>
@@ -1471,20 +1537,14 @@ export function ReviewStage({
                 ) : null}
                 <span className="bsv-transport-end">
                   {extended && (
-                    <select
-                      className="bsv-speed"
-                      aria-label={copy.player.speed}
-                      title={copy.player.speed}
-                      data-review-speed
+                    <StageSelect
+                      label={copy.player.speed}
                       value={String(speed)}
-                      onChange={(e) => changeSpeed(Number(e.target.value))}
-                    >
-                      {[0.5, 1, 1.5, 2].map((rate) => (
-                        <option key={rate} value={String(rate)}>
-                          {`${rate}×`}
-                        </option>
-                      ))}
-                    </select>
+                      options={[0.5, 1, 1.5, 2].map((rate) => ({ value: String(rate), label: `${rate}×` }))}
+                      onChange={(value) => changeSpeed(Number(value))}
+                      className="bsv-speed"
+                      marker={{ "data-review-speed": "" }}
+                    />
                   )}
                   {extended && (
                     <button
@@ -1563,23 +1623,33 @@ export function ReviewStage({
                     marker={{ "data-review-filter-menu": "" }}
                   >
                     {notesTools.filter.includes("drawing") && (
-                      <label className="bsv-check">
-                        <input type="checkbox" checked={drawingOnly} onChange={(e) => setDrawingOnly(e.target.checked)} data-review-filter-drawing />
-                        <span>{copy.filter.drawingOnly}</span>
-                      </label>
+                      <StageSwitch checked={drawingOnly} onChange={setDrawingOnly} marker={{ "data-review-filter-drawing": "" }}>
+                        {copy.filter.drawingOnly}
+                      </StageSwitch>
                     )}
                     {notesTools.filter.includes("author") && (
-                      <label className="bsv-field-row">
-                        <span>{copy.filter.authorLabel}</span>
-                        <select className="bsv-speed" value={authorFilter} onChange={(e) => setAuthorFilter(e.target.value)} data-review-filter-author>
-                          <option value="all">{copy.filter.authorAll}</option>
-                          {authorOptions.map((name) => (
-                            <option key={name} value={name}>
-                              {name}
-                            </option>
-                          ))}
-                        </select>
-                      </label>
+                      // The authors as a short list of choices inside the panel (no second popup on top of it).
+                      <div className="bsv-field-row" role="radiogroup" aria-labelledby={`bsv-author-${review.id}`} data-review-filter-author>
+                        <span className="bsv-popover-title" id={`bsv-author-${review.id}`}>
+                          {copy.filter.authorLabel}
+                        </span>
+                        {[{ value: "all", label: copy.filter.authorAll }, ...authorOptions.map((name) => ({ value: name, label: name }))].map((option) => (
+                          <button
+                            key={option.value}
+                            type="button"
+                            role="radio"
+                            className="bsv-option"
+                            aria-checked={authorFilter === option.value}
+                            onClick={() => setAuthorFilter(option.value)}
+                            data-review-filter-author-option={option.value}
+                          >
+                            <svg className="bsv-icon bsv-menu-check" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+                              <path d={ICONS.check} />
+                            </svg>
+                            <span>{option.label}</span>
+                          </button>
+                        ))}
+                      </div>
                     )}
                   </StagePopover>
                 )}
@@ -1704,11 +1774,16 @@ export function ReviewStage({
               />
               {team && (
                 <div className="bsv-team-switch-row">
-                  <label className="bsv-team-switch">
-                    <input type="checkbox" checked={teamOnly} onChange={(e) => setTeamOnly(e.target.checked)} data-review-team-toggle aria-describedby={teamOnly ? `bsv-team-hint-${review.id}` : undefined} />
+                  <StageSwitch
+                    checked={teamOnly}
+                    onChange={setTeamOnly}
+                    className="bsv-team-switch"
+                    describedBy={teamOnly ? `bsv-team-hint-${review.id}` : undefined}
+                    marker={{ "data-review-team-toggle": "true" }}
+                  >
                     {team.copy.toggle}
-                  </label>
-                  {/* Always laid out, shown only while on: switching never moves the checkbox (the composer sits at the column's foot). */}
+                  </StageSwitch>
+                  {/* Always laid out, shown only while on: switching never moves the switch (the composer sits at the column's foot). */}
                   <p className="bsv-team-hint" id={`bsv-team-hint-${review.id}`} data-shown={teamOnly ? "true" : "false"} aria-hidden={teamOnly ? undefined : true}>
                     {team.copy.hint}
                   </p>
@@ -1727,7 +1802,14 @@ export function ReviewStage({
                     {mark?.strokes?.length ? copy.draw.edit : copy.draw.open}
                   </button>
                 )}
-                <button type="submit" className="bsv-primary" disabled={!draft.trim() || busy !== null}>
+                {/* The view's one accent fill is its main act (header-plan `accentControl`): beside 승인하기 this is primary ink. */}
+                <button
+                  type="submit"
+                  className="bsv-primary"
+                  data-tone={accent === "composer" ? undefined : "neutral"}
+                  data-review-send
+                  disabled={!draft.trim() || busy !== null}
+                >
                   {busy === "send" ? copy.composer.sending : copy.composer.send}
                 </button>
               </div>
@@ -1785,40 +1867,13 @@ export function ReviewStage({
           teamTag={team && t.root.team ? team.copy.tag : null}
           tc={tc}
           fps={frameRate}
+          tools={t.root.deleted ? null : rowTools(t, carried)}
         />
-        {!t.root.deleted && (canComment || canManage) && (
-          <div className="bsv-thread-actions">
-            {canComment && !carried && (
-              <button type="button" className="bsv-text-btn" onClick={() => setReplyTo((v) => (v === t.root.id ? null : t.root.id))} aria-expanded={replyTo === t.root.id} aria-label={copy.replyLabel}>
-                {copy.reply}
-              </button>
-            )}
-            {resolveComment && (
-              <button
-                type="button"
-                className="bsv-text-btn"
-                data-review-resolve={t.root.id}
-                disabled={busy !== null}
-                onClick={() => void run(`resolve:${t.root.id}`, () => resolveComment(t.root.id))}
-              >
-                {t.root.resolved ? copy.reopenThread : copy.resolve}
-              </button>
-            )}
-            {canComment && !carried && t.root.mine && actions.deleteComment && (
-              <DeleteButton copy={copy} disabled={busy !== null} onConfirm={() => void run(`delete:${t.root.id}`, () => actions.deleteComment!(t.root.id))} />
-            )}
-          </div>
-        )}
         {t.replies.length > 0 && (
           <ul className="bsv-replies">
             {t.replies.map((r) => (
               <li key={r.id} className="bsv-reply" data-review-reply={r.id}>
-                <CommentBody comment={r} copy={copy} locale={locale} tc={tc} fps={frameRate} />
-                {canComment && r.mine && actions.deleteComment && (
-                  <div className="bsv-thread-actions">
-                    <DeleteButton copy={copy} disabled={busy !== null} onConfirm={() => void run(`delete:${r.id}`, () => actions.deleteComment!(r.id))} />
-                  </div>
-                )}
+                <CommentBody comment={r} copy={copy} locale={locale} tc={tc} fps={frameRate} tools={replyTools(r)} />
               </li>
             ))}
           </ul>
@@ -1863,6 +1918,71 @@ export function ReviewStage({
       </li>
     );
   }
+
+  /** Delete one's own note or reply: the same confirm as before, then the same call. */
+  function confirmDelete(commentId: string) {
+    if (!actions.deleteComment) return;
+    if (typeof window !== "undefined" && !window.confirm(copy.deleteConfirm)) return;
+    void run(`delete:${commentId}`, () => actions.deleteComment!(commentId));
+  }
+
+  /**
+   * A note's own controls (2026-11-19): 답글 is the one visible action (on hover, focus or selection; always on a
+   * touch screen), and "⋯" opens the stage's menu with 해결 (or 다시 열기) and 삭제. Neither of those two sits in
+   * the row, so a click aimed at the row selects the note and never resolves or deletes it. Tab reaches 답글,
+   * then "⋯"; the menu takes the arrows and Escape.
+   */
+  function rowTools(t: ReviewThread, carried: boolean): ReactNode {
+    const canReply = canComment && !carried;
+    const entries: StageMenuEntry[] = [];
+    if (resolveComment) {
+      entries.push({
+        key: "resolve",
+        label: t.root.resolved ? copy.reopenThread : copy.resolve,
+        disabled: busy !== null,
+        run: () => void run(`resolve:${t.root.id}`, () => resolveComment(t.root.id)),
+      });
+    }
+    if (canComment && !carried && t.root.mine && actions.deleteComment) {
+      entries.push({ key: "delete", label: copy.deleteComment, disabled: busy !== null, run: () => confirmDelete(t.root.id) });
+    }
+    if (!canReply && entries.length === 0) return null;
+    return (
+      <span className="bsv-row-actions" data-review-row-actions={t.root.id}>
+        {canReply && (
+          <button
+            type="button"
+            className="bsv-text-btn"
+            onClick={() => setReplyTo((v) => (v === t.root.id ? null : t.root.id))}
+            aria-expanded={replyTo === t.root.id}
+            aria-label={copy.replyLabel}
+            data-review-reply-open={t.root.id}
+          >
+            {copy.reply}
+          </button>
+        )}
+        {entries.length > 0 && (
+          <StageMenuButton label={copy.more} icon={<Icon d={ICONS.more} />} entries={entries} className="bsv-icon-btn bsv-row-more" marker={{ "data-review-row-more": t.root.id }} />
+        )}
+      </span>
+    );
+  }
+
+  /** A reply's controls: only one's own reply has any, and its 삭제 sits in the "⋯" menu too. */
+  function replyTools(r: ReviewComment): ReactNode {
+    if (r.deleted || !canComment || !r.mine || !actions.deleteComment) return null;
+    return (
+      <span className="bsv-row-actions" data-review-row-actions={r.id}>
+        <StageMenuButton
+          label={copy.more}
+          icon={<Icon d={ICONS.more} />}
+          entries={[{ key: "delete", label: copy.deleteComment, disabled: busy !== null, run: () => confirmDelete(r.id) }]}
+          className="bsv-icon-btn bsv-row-more"
+          marker={{ "data-review-row-more": r.id }}
+        />
+      </span>
+    );
+  }
 }
 
 const STAMP = new Map<string, Intl.DateTimeFormat>();
@@ -1886,6 +2006,7 @@ function CommentBody({
   teamTag = null,
   tc = formatTimecode,
   fps = null,
+  tools = null,
 }: {
   comment: ReviewComment;
   number?: number;
@@ -1901,6 +2022,11 @@ function CommentBody({
   tc?: (ms: number | null | undefined) => string;
   /** The frame rate, for the timecode drawn on the chip (`Timecode`). */
   fps?: number | null;
+  /**
+   * The row's controls (답글 · "⋯"). A thread head keeps them at the end of its time line, a reply at the end of
+   * its name line: their place is always laid out, so showing them never moves the row.
+   */
+  tools?: ReactNode;
 }) {
   const role = comment.guest ? "guest" : comment.authorRole;
   const timecode = comment.atMs == null ? "" : comment.endMs != null ? `${tc(comment.atMs)}–${tc(comment.endMs)}` : tc(comment.atMs);
@@ -1928,6 +2054,7 @@ function CommentBody({
         <time className="bsv-when" dateTime={comment.createdAt}>
           {stamp(comment.createdAt, locale)}
         </time>
+        {!onSeek && tools}
       </header>
       {comment.deleted ? (
         <p className="bsv-body bsv-quiet">{copy.deletedComment}</p>
@@ -1975,6 +2102,7 @@ function CommentBody({
                 </button>
               ) : null}
               {comment.resolved && <span className="bsv-resolved">{copy.resolvedTag}</span>}
+              {tools}
             </div>
           )}
           <p className="bsv-body">{comment.body}</p>
@@ -1984,18 +2112,3 @@ function CommentBody({
   );
 }
 
-function DeleteButton({ copy, disabled, onConfirm }: { copy: ReviewCopy; disabled: boolean; onConfirm: () => void }) {
-  return (
-    <button
-      type="button"
-      className="bsv-text-btn"
-      data-tone="quiet"
-      disabled={disabled}
-      onClick={() => {
-        if (typeof window === "undefined" || window.confirm(copy.deleteConfirm)) onConfirm();
-      }}
-    >
-      {copy.deleteComment}
-    </button>
-  );
-}

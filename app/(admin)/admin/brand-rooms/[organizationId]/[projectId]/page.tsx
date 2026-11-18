@@ -194,7 +194,8 @@ export default async function AdminRoomDesk({
           </nav>
 
           {tab === "drafts" && chosen && (
-            <div className="brc-desk-review" data-admin-desk-stage={chosen.review.id}>
+            // The stage fills the window from here once the version opens (review.css `data-review-fit-scroll`).
+            <div className="brc-desk-review" data-admin-desk-stage={chosen.review.id} data-review-fit-scroll>
               <div className="brc-desk-review-bar">
                 <Link className="admin-back" href={roomDeskPath(org.id, project.id)} scroll={false} data-admin-desk-close>
                   ← {d.closeVersion}

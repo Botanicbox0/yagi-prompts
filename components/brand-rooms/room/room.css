@@ -47,9 +47,16 @@
 /*
  * The floating help button sits over the bottom-right corner, which in review mode is the note composer's
  * send button (and on a phone the notes). It steps aside while a draft is open and comes back on the list.
+ * On a phone in the rail shell (640px and less, app/(brand)/rail.css) it lives in the top bar beside 언어 and
+ * covers nothing there, so it stays (2026-11-19).
  */
-body:has([data-room-review-mode]) .bw-support-launch {
+body:has([data-room-review-mode]):not(:has([data-brand-layout-mode="rail"])) .bw-support-launch {
   display: none;
+}
+@media (min-width: 641px) {
+  body:has([data-room-review-mode]) .bw-support-launch {
+    display: none;
+  }
 }
 .brr-room :is(a, button):focus-visible,
 .brr-entry:focus-visible {

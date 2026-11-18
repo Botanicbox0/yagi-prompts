@@ -9,7 +9,7 @@
  * door answers "not here" (rooms off), the 15-second quiet re-read of ./auto-refresh.ts takes over.
  */
 import { useRouter } from "next/navigation";
-import { useCallback, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { ReviewComment, ReviewItem, ReviewVersion } from "@/lib/brand-studio/review-contracts";
 import { roomDeskPath } from "@/lib/brand-rooms/message-contracts";
 import type { RoomPulseStamp } from "@/lib/brand-rooms/pulse";
@@ -133,6 +133,17 @@ export function AdminReviewStage({
   const paused = useCallback(() => holding.current || !pulseGone, [pulseGone]);
   useQuietRefresh(refresh, paused);
 
+  // On a project's desk the open version works like the client's review mode (docs/BRAND-ROOMS-FEEDBACK.md
+  // §11.7): it is brought to the top of the window once, and the stage fills the window from there, so the
+  // notes column runs to the window's bottom with its own scroll instead of stopping at the player's height.
+  useEffect(() => {
+    if (!deskOrg || !deskProject) return;
+    const box = Array.from(document.querySelectorAll<HTMLElement>("[data-admin-desk-stage]")).find((el) => el.dataset.adminDeskStage === review.id);
+    if (!box) return;
+    // At once, not smoothly: the team opened this version to work on it.
+    requestAnimationFrame(() => box.scrollIntoView({ block: "start", behavior: "auto" }));
+  }, [deskOrg, deskProject, review.id]);
+
   return (
     <ReviewStage
       review={review}
@@ -150,6 +161,7 @@ export function AdminReviewStage({
       team={team}
       onComposingChange={onComposingChange}
       compactHead={Boolean(deskOrg && deskProject)}
+      layout={deskOrg && deskProject ? "wide" : "inline"}
     />
   );
 }
