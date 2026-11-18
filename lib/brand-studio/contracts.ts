@@ -683,6 +683,11 @@ export interface StudioState {
   /** Present (true) only when `BRAND_STUDIO_OUTPAINT=on` and the member can create: the layer editor may offer "빈 곳 채우기". */
   canFillEmpty?: boolean;
   /**
+   * Present (true) only when `BRAND_STUDIO_REGION_V2=on` and the member can create: every partial edit
+   * runs on one engine, so the edit forms show no model or quality choice.
+   */
+  regionV2?: boolean;
+  /**
    * Present only while runs can belong to a project (`BRAND_STUDIO_PROJECTS=on` and migration 0091
    * applied): the projects a run can be put in, newest first. Absent means the feature is closed.
    */

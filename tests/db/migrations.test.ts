@@ -64,6 +64,9 @@ describe('migrations apply on a fresh database (PLAN §6)', () => {
       'brand_reports',
       // 2026-11-11 — project room conversations (docs/BRAND-ROOMS.md §4, slice M).
       'brand_room_messages',
+      // 2026-11-18 — project room notices: mail switch and queue (docs/BRAND-ROOMS-FEEDBACK.md §2.3, 0094).
+      'brand_room_notice_prefs',
+      'brand_room_notices',
       'brand_room_reactions',
       'brand_room_reads',
       'brand_room_share_visits',

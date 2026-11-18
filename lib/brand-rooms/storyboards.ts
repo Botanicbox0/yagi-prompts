@@ -40,6 +40,7 @@ import { dropUnreferencedStudioKeys } from '@/lib/brand-studio/physical-cleanup'
 import type { StudioStaging } from '@/lib/brand-studio/types';
 import { RoomDenied, requireEdit, requireRoomProject, roomSeat, type RoomSeat } from './access';
 import { postRoomEvent, type RoomEventInput, type RoomEventKind } from './events';
+import { storyboardDecisionNotice, type RoomTeamNotice, type RoomTeamNotify } from './team-notice';
 import {
   BoardCreateSchema,
   BoardRefSchema,
@@ -88,6 +89,8 @@ export interface StoryboardDeps {
   staging: StudioStaging;
   /** Server log line; never shown to a customer, never a secret. */
   log?: (event: string, detail?: Record<string, unknown>) => void;
+  /** The team's internal notice for a brand's approval or change request (./team-notice.ts); the route sends it after the answer. */
+  notify?: RoomTeamNotify;
 }
 
 /** Local mode: the browser POSTs a reserved cut's bytes here (app/api/brand-rooms/storyboards/upload/[id]). */
@@ -795,6 +798,7 @@ export async function runStoryboardOperation(deps: StoryboardDeps, viewer: Viewe
   const stored: string[] = [];
   const after: { dropped: Array<string | null>; reserved: { frameId: string; stagingKey: string; mime: string } | null } = { dropped: [], reserved: null };
   const actor: StoryboardActor = { userId: gate.userId, role: 'brand' };
+  let teamNotice: RoomTeamNotice | null = null;
 
   const result = await guard<StoryboardOperationResult>(() =>
     deps.sql.transaction(async (sql) => {
@@ -839,6 +843,15 @@ export async function runStoryboardOperation(deps: StoryboardDeps, viewer: Viewe
           if (row.created_role !== 'studio') throw new StoryboardDenied('forbidden');
           const event = await decide(sql, row, v.status, actor);
           if (event) events.push(eventFor(row, event, actor));
+          // The team hears about a decision on its board (docs/BRAND-ROOMS-FEEDBACK.md §3); a reopen is not one.
+          if (event && (v.status === 'approved' || v.status === 'changes_requested')) {
+            teamNotice = storyboardDecisionNotice({
+              organizationId: String(row.organization_id),
+              userId: gate.userId,
+              board: { id: String(row.id), title: String(row.title), version: Number(row.version) },
+              status: v.status,
+            });
+          }
           return savedBoard(sql, deps.media, row.id);
         }
         case 'board.version': {
@@ -907,6 +920,14 @@ export async function runStoryboardOperation(deps: StoryboardDeps, viewer: Viewe
   }
   await dropUnusedKeys(deps, after.dropped);
   await postEvents(deps, events);
+  const notice = teamNotice as RoomTeamNotice | null;
+  if (notice && deps.notify) {
+    try {
+      deps.notify(notice);
+    } catch (error) {
+      deps.log?.('storyboard_notice_failed', { message: error instanceof Error ? error.message.slice(0, 200) : 'unknown' });
+    }
+  }
   const reserved = after.reserved;
   if (operation === 'frame.reserve' && reserved) {
     const target = await guard(() => uploadTarget(deps, reserved, `${STORYBOARD_LOCAL_UPLOAD_ROUTE}/${reserved.frameId}`));

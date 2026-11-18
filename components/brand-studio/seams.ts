@@ -145,6 +145,8 @@ export interface LayerEditorRegionSupport {
   models: readonly StudioImageModel[];
   defaultModel: string;
   defaultQuality?: string | null;
+  /** Region edit v2: every partial edit runs on `defaultModel`; no model or quality is offered or kept. */
+  fixedModel?: boolean;
   /** Live jobs from `StudioApp` so settled `region_edit` runs arrive as layers without blocking. */
   jobs: readonly StudioJobView[];
   errorText(code: StudioErrorCode | null): string;

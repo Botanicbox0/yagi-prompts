@@ -10,7 +10,8 @@ import "./rail.css";
 import "./studio-v2.css";
 import "@/components/brand-rooms/room/room.css";
 import { cookies } from "next/headers";
-import { brandRoomsOpen, brandStudioV2Open } from "@/lib/flags";
+import { brandRoomNotifyOpen, brandRoomsOpen, brandStudioV2Open } from "@/lib/flags";
+import { RegisterServiceWorker } from "@/components/pwa/register-sw";
 import { RAIL_COOKIE, railCookieExpanded } from "@/components/brand-workspace/rail-model";
 import { WorkspaceLanguage } from '@/components/brand-workspace/language';
 import { WorkspaceNavigation } from '@/components/brand-workspace/navigation';
@@ -59,6 +60,10 @@ export default async function BrandLayout({
   // Project rooms (docs/BRAND-ROOMS.md §2) split the rail in two; same copy rule: a sandboxed-only
   // viewer never receives a word of room copy either.
   const rooms=brandRoomsOpen()&&studioCopy;
+  // Room notices push to this browser (docs/BRAND-ROOMS-FEEDBACK.md §2.2, §10): the worker that shows
+  // them is registered only while notices are on, only where rooms are, and only for a signed-in member
+  // (`scope` is read with a session only; a visitor on /brand/invite gets no worker).
+  const roomPush=Boolean(scope)&&rooms&&brandRoomNotifyOpen();
   const railExpanded=studioV2&&scope?railCookieExpanded((await cookies()).get(RAIL_COOKIE)?.value):false;
   return (
     <html lang={locale} className={fontVariables} data-brand-workspace>
@@ -107,6 +112,7 @@ export default async function BrandLayout({
         </div>
         {scope&&<Suspense fallback={null}><WorkspaceSupport scope={scope} b={b} locale={locale}/></Suspense>}
         <WorkspaceSpotlight />
+        {roomPush&&<RegisterServiceWorker />}
       </body>
     </html>
   );

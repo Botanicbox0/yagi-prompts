@@ -49,6 +49,13 @@ function regionTask(input: EnhanceInput, binding: Binding): string {
     input.profile === 'seedream'
       ? `"In ${target}, change only <the change>; do not move or resize anything else."`
       : `"Using ${target}, change only <the change>; do not move or resize anything else."`;
+  const wide = input.regionWindow;
+  if (wide) {
+    return `Task: change one boxed part of an existing picture.${sources}${sourceInspection}
+Image 1 (${target}) is the customer's picture (or a wide part of it) at its own size, not a crop. The part to change is the boxed area in the ${wide.where} of ${target}, ${wide.left}-${wide.right}% from the left edge and ${wide.top}-${wide.bottom}% from the top edge; the close-up shows it. The editor gets no box, so name that part by what it visibly is and where it sits in ${target} (for example "the white teapot on the low table at the bottom left") so it is found from your words alone. Keep everything else in ${target} exactly as it is: framing, camera angle, every other object, people and faces, colours, light, shadows, texture, grain and pixel positions.
+Start with "In ${target}, change only <the named part and where it is> into <the change>; do not move or resize anything else." Then say how the changed part must look, then the keep-list.
+Never zoom, crop, reframe, extend, rotate or change the aspect. Do not describe or change anything outside the boxed part.`;
+  }
   return `Task: change one boxed part of an existing picture.${sources}${sourceInspection}
 Image 1 (${target}) is an enlarged crop cut out from a larger photograph, so it may look soft. Keep ${target}'s exact framing, camera angle, object scale, outer silhouette, contours, lighting direction, colour palette, and pixel positions completely unchanged. Never redraw, enlarge, or re-shape the surrounding object (never invent curvature or new geometry). Apply ONLY the requested local change, then keep every surrounding pixel identical to ${target}.
 Start with ${opening} Then say how the changed part must look, then the keep-list (exact object scale, outer silhouette, contours, light direction, colour, shadows, texture, grain and pixel positions of ${target}).

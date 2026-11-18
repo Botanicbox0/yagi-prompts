@@ -286,7 +286,16 @@ export function EventLine({ message, copy, locale, refHref }: { message: RoomMes
       <span className="brc-event-dot" aria-hidden="true" />
       <div className="brc-event-main">
         <p className="brc-event-text">
-          <strong>{message.authorName ?? copy.author.team}</strong> {phrase}
+          {message.guest ? (
+            // A share link's guest: their name with the guest label, or the label alone. Never the YAGI team.
+            <>
+              <strong data-room-event-guest>{message.authorName ?? copy.author.guest}</strong>
+              {message.authorName && <span className="brc-guest-tag">{copy.author.guest}</span>}
+            </>
+          ) : (
+            <strong>{message.authorName ?? copy.author.team}</strong>
+          )}{" "}
+          {phrase}
           <time className="brc-time" dateTime={message.createdAt} title={fullLabel(message.createdAt, locale)}>
             {timeLabel(message.createdAt, locale)}
           </time>

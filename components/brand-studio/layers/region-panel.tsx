@@ -5,7 +5,8 @@
  * - Numbered square reference thumbnails `2, 3, …` with drag/drop, file upload, quick strip & role select
  * - 5-task Prompt Assistant (`지시 도우미`) + `!` tip + reference/box-size/contour advisors
  * - Prompt Auto-Refine toggle + `!` tip + live preview rewrite
- * - Model / quality select, `자동으로 바로 합치기` toggle, and credit-only non-blocking submit CTA.
+ * - Model / quality select and credit-only non-blocking submit CTA. A finished edit always lands as a
+ *   patch layer in the editor, followed by the result bar (region-result.ts).
  */
 import { useCallback, useEffect, useId, useMemo, useRef, useState, type ClipboardEvent as ReactClipboardEvent, type DragEvent, type RefObject } from "react";
 import { extractClipboardImages, prepareClipboardUploadFiles } from "@/lib/brand-studio/clipboard-image";
@@ -35,17 +36,15 @@ export interface RegionEditPanelProps {
   region: LayerEditorRegionSupport;
   box: RegionBox | null;
   preset?: LayerEditorRegionPreset | null;
-  autoFlatten: boolean;
   /** True when marquee / partial-edit tool is active so window-level Ctrl+V routes copied images here. */
   activeForPaste?: boolean;
   quickItems: readonly TrayItem[];
   uploading: boolean;
   onBox(box: RegionBox | null): void;
-  onAutoFlatten(value: boolean): void;
   resolveRef(ref: RefSource): TrayItem | null;
   onUploadRefs(files: File[]): Promise<TrayItem[]>;
   onNotice?(message: string): void;
-  onSubmitted(jobId: string, meta: { autoFlatten: boolean; box: RegionBox }): void;
+  onSubmitted(jobId: string, meta: { box: RegionBox }): void;
 }
 
 function problemMessage(problem: RegionProblem, copy: LayersCopy): string {
@@ -64,15 +63,16 @@ function problemMessage(problem: RegionProblem, copy: LayersCopy): string {
 }
 
 export function RegionEditPanel(props: RegionEditPanelProps) {
-  const { copy, locale, baseSize, baseImgRef, region, box, autoFlatten } = props;
+  const { copy, locale, baseSize, baseImgRef, region, box } = props;
   const r = copy.region;
   const id = useId();
   const fileRef = useRef<HTMLInputElement>(null);
 
   const [model, setModelState] = useState<string>(() => presetModel(props.preset?.model, region));
   const [quality, setQuality] = useState<string>(() =>
-    qualityOf(region.models.find((m) => m.id === presetModel(props.preset?.model, region)) ?? null, props.preset?.quality ?? region.defaultQuality),
+    region.fixedModel ? "" : qualityOf(region.models.find((m) => m.id === presetModel(props.preset?.model, region)) ?? null, props.preset?.quality ?? region.defaultQuality),
   );
+  const v2 = region.fixedModel ? { v2: true } : {};
   const [references, setReferences] = useState<TrayItem[]>(() => props.preset?.references ?? []);
   const [task, setTask] = useState<RegionAssistantTaskId | null>(null);
   const [instruction, setInstruction] = useState<string>(() =>
@@ -139,7 +139,7 @@ export function RegionEditPanel(props: RegionEditPanelProps) {
 
   const boxAssessment = useMemo(() => assessRegionBox(box, edgeScore, locale), [box, edgeScore, locale]);
 
-  const creditsAmount = regionCredits(model, references.length, quality);
+  const creditsAmount = regionCredits(model, references.length, quality, Boolean(region.fixedModel));
   const formattedCredits = creditsAmount.toLocaleString(locale === "ko" ? "ko-KR" : "en-US");
 
   const addRefItem = (item: TrayItem | null) => {
@@ -237,7 +237,7 @@ export function RegionEditPanel(props: RegionEditPanelProps) {
       setErrorNote(assistantState.missingRefWarning);
       return;
     }
-    const problem = regionProblem({ box, instruction, model, references });
+    const problem = regionProblem({ box, instruction, model, references, ...v2 });
     if (problem) {
       setErrorNote(problemMessage(problem, copy));
       return;
@@ -275,7 +275,7 @@ export function RegionEditPanel(props: RegionEditPanelProps) {
       setErrorNote(assistantState.missingRefWarning);
       return;
     }
-    const problem = regionProblem({ box, instruction, model, references });
+    const problem = regionProblem({ box, instruction, model, references, ...v2 });
     if (problem) {
       setErrorNote(problemMessage(problem, copy));
       return;
@@ -298,7 +298,7 @@ export function RegionEditPanel(props: RegionEditPanelProps) {
         setErrorNote(res.message);
         return;
       }
-      props.onSubmitted(res.job.id, { autoFlatten, box: targetBox });
+      props.onSubmitted(res.job.id, { box: targetBox });
     } finally {
       setSubmitting(false);
     }
@@ -355,7 +355,7 @@ export function RegionEditPanel(props: RegionEditPanelProps) {
             />
             <figcaption className="bsl-region-caption">
               <span className="bsl-num-badge bsl-num">1</span>
-              <span>{r.inputPreviewCaption}</span>
+              <span>{region.fixedModel ? r.inputPreviewCaptionWide : r.inputPreviewCaption}</span>
             </figcaption>
           </figure>
 
@@ -494,7 +494,7 @@ export function RegionEditPanel(props: RegionEditPanelProps) {
             !
           </button>
         </div>
-        {showAssistantTip && <p className="bsl-tip-box">{r.assistantTip}</p>}
+        {showAssistantTip && <p className="bsl-tip-box">{region.fixedModel ? r.assistantTipWide : r.assistantTip}</p>}
         <div className="bsl-task-pills" role="group" aria-label={r.assistantTitle}>
           {REGION_ASSISTANT_TASK_IDS.map((taskId) => (
             <button
@@ -591,6 +591,7 @@ export function RegionEditPanel(props: RegionEditPanelProps) {
         {showEnhanceTip && <p className="bsl-tip-box">{r.enhanceTip}</p>}
       </div>
 
+      {!region.fixedModel && (
       <div className={qualities.length ? "bsl-grid2" : "bsl-field"}>
         <div className="bsl-field">
           <label className="bsl-label" htmlFor={`${id}-model`}>
@@ -619,11 +620,7 @@ export function RegionEditPanel(props: RegionEditPanelProps) {
           </div>
         )}
       </div>
-
-      <label className="bsl-check">
-        <input type="checkbox" checked={autoFlatten} onChange={(event) => props.onAutoFlatten(event.target.checked)} />
-        <span>{r.autoFlatten}</span>
-      </label>
+      )}
 
       {errorNote && (
         <p className="bsl-error" role="alert">
@@ -647,6 +644,8 @@ export function RegionEditPanel(props: RegionEditPanelProps) {
 }
 
 function presetModel(asked: string | undefined, region: LayerEditorRegionSupport): string {
+  // Region edit v2: a rerun of an edit made on another model runs on the one engine too.
+  if (region.fixedModel) return region.defaultModel;
   if (asked && region.models.some((m) => m.id === asked)) return asked;
   return region.defaultModel;
 }

@@ -74,6 +74,8 @@ export interface RegionSupport {
   defaultModel: string;
   /** The bar's quality, used when the edit model offers one. */
   defaultQuality?: string | null;
+  /** Region edit v2: every partial edit runs on `defaultModel`; no model or quality is offered or kept. */
+  fixedModel?: boolean;
   recent: readonly TrayItem[];
   resolve(source: RefSource): TrayItem | null;
   /** Uploads picked files and answers them as references. */
@@ -255,8 +257,12 @@ function ViewerContent({
   const [region, setRegionState] = useState(Boolean(preset));
   const [box, setBox] = useState<RegionBox | null>(preset?.box ?? null);
   const [instruction, setInstruction] = useState(preset ? regionInstructionForForm(preset.instruction, locale) : "");
-  const [model, setModelState] = useState(preset?.model ?? support?.defaultModel ?? "");
-  const [quality, setQuality] = useState(() => qualityOf(support?.models.find((m) => m.id === (preset?.model ?? support?.defaultModel)) ?? null, preset?.quality ?? support?.defaultQuality));
+  const fixedModel = Boolean(support?.fixedModel);
+  // Region edit v2: a rerun of an edit made on another model runs on the one engine too.
+  const [model, setModelState] = useState(fixedModel ? (support?.defaultModel ?? "") : (preset?.model ?? support?.defaultModel ?? ""));
+  const [quality, setQuality] = useState(() =>
+    fixedModel ? "" : qualityOf(support?.models.find((m) => m.id === (preset?.model ?? support?.defaultModel)) ?? null, preset?.quality ?? support?.defaultQuality),
+  );
   const setModel = (id: string) => {
     setModelState(id);
     setQuality((current) => qualityOf(support?.models.find((m) => m.id === id) ?? null, current));
@@ -323,7 +329,7 @@ function ViewerContent({
     );
 
   async function sendRegion() {
-    const problem = regionProblem({ box, instruction, model, references: refs });
+    const problem = regionProblem({ box, instruction, model, references: refs, ...(fixedModel ? { v2: true } : {}) });
     if (problem) return setRegionNote(problemText(problem, copy));
     setRegionNote(null);
     const request: RegionRequest = { box: box!, instruction: instruction.trim(), model, quality, references: refs };
@@ -410,7 +416,7 @@ function ViewerContent({
             recent={support.recent.filter((r) => r.key !== itemKey(item))}
             instruction={instruction}
             note={regionNote}
-            credits={regionCredits(model, refs.length, quality)}
+            credits={regionCredits(model, refs.length, quality, fixedModel)}
             uploading={uploading}
             onBox={setBox}
             onModel={setModel}

@@ -335,6 +335,141 @@ body:has([data-room-channel]) [data-concierge-launcher] {
   }
 }
 
+/* ------------------------------------------------------------ notice settings (bottom of the inbox list) */
+
+/* Pushed to the bottom of the list while the list is short; right after it, past a hairline, when long. */
+.brc-notice-settings {
+  flex-shrink: 0;
+  margin: auto 4px 0;
+  padding: 14px 2px 2px;
+  border-top: 1px solid var(--brc-line-strong);
+  scroll-margin: 12px;
+}
+.brc-notice-title {
+  margin: 0 0 4px;
+  padding: 0 4px;
+  color: var(--brc-muted);
+  font-size: 11px;
+  font-weight: 600;
+}
+.brc-notice-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 8px;
+  min-height: 44px;
+  padding: 4px 0 4px 4px;
+}
+.brc-notice-text {
+  min-width: 0;
+}
+.brc-notice-label {
+  display: block;
+  color: var(--brc-ink);
+  font-size: 13.5px;
+  font-weight: 560;
+  line-height: 1.35;
+  cursor: pointer;
+  word-break: keep-all;
+  overflow-wrap: break-word;
+}
+.brc-notice-help {
+  margin: 2px 0 0;
+  color: var(--brc-muted);
+  font-size: 12px;
+  line-height: 1.45;
+  word-break: keep-all;
+  overflow-wrap: break-word;
+}
+.brc-notice-help[data-tone='note'] {
+  color: var(--brc-body);
+}
+/* A 44 px target around a 36 × 20 track; the focus ring sits on the track. */
+.brc-switch {
+  display: inline-grid;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+.brc-switch-track {
+  position: relative;
+  width: 36px;
+  height: 20px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--brc-ink) 20%, var(--brc-surface));
+  transition: background-color var(--brc-dur) var(--brc-ease), opacity var(--brc-dur) var(--brc-ease);
+}
+.brc-switch-track::after {
+  content: '';
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: var(--brc-surface);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.18), 0 0 0 0.5px rgba(0, 0, 0, 0.06);
+  transition: transform var(--brc-dur) var(--brc-ease);
+}
+.brc-switch[aria-checked='true'] .brc-switch-track {
+  background: var(--brc-accent);
+}
+.brc-switch[aria-checked='true'] .brc-switch-track::after {
+  transform: translateX(16px);
+}
+.brc-switch[aria-disabled='true'] {
+  cursor: default;
+}
+.brc-switch[aria-disabled='true'] .brc-switch-track {
+  opacity: 0.45;
+}
+.brc-switch[aria-busy='true'] .brc-switch-track {
+  opacity: 0.7;
+}
+.brc-inbox .brc-switch:focus-visible {
+  outline: none;
+}
+.brc-inbox .brc-switch:focus-visible .brc-switch-track {
+  outline: 2px solid var(--brc-accent);
+  outline-offset: 2px;
+}
+.brc-notice-status {
+  min-height: 18px;
+  margin: 2px 4px 0;
+  color: var(--brc-muted);
+  font-size: 12px;
+  line-height: 1.5;
+}
+.brc-notice-status[data-tone='error'] {
+  color: var(--brc-ink);
+  font-weight: 600;
+}
+@media (prefers-reduced-motion: reduce) {
+  .brc-switch-track,
+  .brc-switch-track::after {
+    transition: none;
+  }
+}
+/*
+ * Below 900px the list is one full-width column and the floating enquiry button (`.bw-support-launch`,
+ * 44–48px tall, 16–24px off the screen's edge or above the phone's tab bar) sits over its bottom right
+ * corner, where the switches end. The list ends with room for it, the same clearance the workspace's own
+ * pages keep under it on a phone (`.bw-main` padding-bottom 88px), so scrolled to the end nothing in the
+ * list is under the button. Wider, the list is the left column and the button sits over the other one.
+ */
+@media (max-width: 899px) {
+  .brc-inbox-list {
+    padding-bottom: calc(88px + env(safe-area-inset-bottom, 0px));
+  }
+}
+
 /* ------------------------------------------------------------ channel */
 
 .brc-channel {
@@ -1039,6 +1174,16 @@ a.brc-ref:hover {
   color: var(--brc-ink);
   font-weight: 640;
 }
+/* A share link's guest (the review stage's own "외부 손님" mark: an outline, never the team's colour). */
+.brc-guest-tag {
+  padding: 0 7px;
+  border-radius: 999px;
+  box-shadow: inset 0 0 0 1px var(--brc-line-strong);
+  color: var(--brc-body);
+  font-size: 11.5px;
+  font-weight: 560;
+  line-height: 18px;
+}
 .brc-event .brc-ref {
   margin-top: 6px;
 }
@@ -1422,6 +1567,132 @@ a.brc-ref:hover {
 .brc-admin-links span {
   color: var(--brc-muted);
   font-size: 12px;
+}
+/*
+ * The team's project desk (docs/BRAND-ROOMS-FEEDBACK.md §4, components/brand-rooms/desk/desk-frame.tsx).
+ * List mode: the conversation on the left (about 40%), the work on the right, both in the room's fixed height.
+ * Review mode: the work (the stage) in page flow at full width; the conversation is a drawer from the left
+ * edge, 420px, over the admin rail and the stage's player side, never over the stage's notes column.
+ */
+.brc-admin-room.brc-desk[data-desk-mode='list'] {
+  grid-template-columns: minmax(0, 2fr) minmax(0, 3fr);
+}
+.brc-admin-room.brc-desk[data-desk-mode='review'] {
+  display: block;
+  height: auto;
+  min-height: 0;
+}
+.brc-desk-chat {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+  border-radius: 18px;
+  background: var(--brc-surface);
+  box-shadow: var(--brc-ring);
+}
+.brc-desk-chat-body {
+  display: flex;
+  flex: 1;
+  min-height: 0;
+}
+.brc-desk[data-desk-mode='review'] .brc-desk-chat {
+  position: fixed;
+  z-index: 70;
+  top: 0;
+  bottom: 0;
+  left: 0;
+  width: min(420px, calc(100vw - 24px));
+  border-radius: 0 18px 18px 0;
+  box-shadow: var(--brc-float);
+  transform: translateX(calc(-100% - 24px));
+  visibility: hidden;
+  transition:
+    transform var(--brc-dur) var(--brc-ease),
+    visibility 0s linear var(--brc-dur);
+}
+.brc-desk[data-desk-mode='review'] .brc-desk-chat[data-open='true'] {
+  transform: none;
+  visibility: visible;
+  transition: transform var(--brc-dur) var(--brc-ease);
+}
+.brc-desk-drawer-bar {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  padding: 8px 12px 0;
+}
+/*
+ * Behind the open drawer, over everything else (the stage's notes and composer too): what the drawer covers
+ * is visibly behind it, and a click outside closes it. It is a plain fixed layer, so the wheel still scrolls
+ * the page under it. The tint is the share dialog's backdrop, lighter.
+ */
+.brc-desk-scrim {
+  position: fixed;
+  z-index: 69;
+  inset: 0;
+  background: rgba(14, 16, 19, 0.2);
+}
+.brc-desk-main {
+  min-width: 0;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 12px 16px 20px;
+  border-radius: 18px;
+  background: var(--brc-surface);
+  box-shadow: var(--brc-ring);
+}
+.brc-desk[data-desk-mode='review'] .brc-desk-main {
+  overflow: visible;
+  padding: 0;
+  border-radius: 0;
+  background: none;
+  box-shadow: none;
+}
+.brc-desk-review {
+  margin-top: 16px;
+}
+.brc-desk-review-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 8px 16px;
+  margin-bottom: 12px;
+}
+.brc-desk-review-bar .admin-back {
+  margin: 0;
+}
+.brc-desk-review-bar strong {
+  font-size: 18px;
+  font-weight: 650;
+  letter-spacing: -0.02em;
+  overflow-wrap: anywhere;
+}
+/* The day mark stays in the flow here: pinned to the top of a narrow column it sat on the first line's time. */
+.brc-desk-chat .brc-channel[data-layout='fill'] .brc-day {
+  position: static;
+}
+.brc-desk-chat .brc-channel[data-layout='fill'] .brc-day::before,
+.brc-desk-chat .brc-channel[data-layout='fill'] .brc-day::after {
+  visibility: visible;
+}
+@media (prefers-reduced-motion: reduce) {
+  .brc-desk[data-desk-mode='review'] .brc-desk-chat,
+  .brc-desk[data-desk-mode='review'] .brc-desk-chat[data-open='true'] {
+    transition: none;
+  }
+}
+@media (max-width: 899px) {
+  .brc-admin-room.brc-desk[data-desk-mode='list'] {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .brc-desk[data-desk-mode='list'] .brc-desk-chat {
+    height: 72dvh;
+  }
+  .brc-desk-main {
+    overflow: visible;
+  }
 }
 @media (max-width: 899px) {
   .brc-admin-room {

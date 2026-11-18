@@ -5,6 +5,7 @@ import type { Dictionary } from '@/lib/i18n/dictionaries';
 import { browserDisplayEnv, isStandaloneDisplay } from '@/components/pwa/display-mode';
 import { isIosDevice } from '@/components/pwa/platform';
 import { PUSH_ON_EVENT } from '@/components/pwa/shell';
+import { currentPushSubscription, pushAvailability, pushSupported, savePush, subscribePush, unsubscribePush, type PushAvailability } from './push-client';
 
 /**
  * "완성되면 알려드릴까요?" — the push half of docs/PLATFORM-2.0.md §5.3, as a button the reader
@@ -15,59 +16,12 @@ import { PUSH_ON_EVENT } from '@/components/pwa/shell';
 
 type Copy = Dictionary['appShell']['notify'];
 
-export type PushAvailability = 'unconfigured' | 'install' | 'unsupported' | 'denied' | 'ready';
-
-export function pushAvailability(env: {
-  publicKey: string | null;
-  supported: boolean;
-  ios: boolean;
-  standalone: boolean;
-  permission: NotificationPermission | null;
-}): PushAvailability {
-  if (env.publicKey === null) return 'unconfigured';
-  if (env.ios && !env.standalone) return 'install';
-  if (!env.supported) return 'unsupported';
-  if (env.permission === 'denied') return 'denied';
-  return 'ready';
-}
+export { pushAvailability, type PushAvailability } from './push-client';
 
 type PanelState = 'checking' | Exclude<PushAvailability, 'ready'> | 'off' | 'busy' | 'on' | 'error';
 
-/** `pushManager.subscribe` takes the VAPID public key as bytes. */
-function keyBytes(base64url: string): Uint8Array<ArrayBuffer> {
-  const base64 = base64url.replace(/-/g, '+').replace(/_/g, '/') + '='.repeat((4 - (base64url.length % 4)) % 4);
-  return Uint8Array.from(atob(base64), (char) => char.charCodeAt(0));
-}
-
-function sameKey(current: ArrayBuffer | null, expected: Uint8Array): boolean {
-  if (current === null) return false;
-  const bytes = new Uint8Array(current);
-  return bytes.length === expected.length && bytes.every((byte, i) => byte === expected[i]);
-}
-
-/** A worker that never activates, or a push service that never answers, must not hold the button. */
-function within<T>(promise: Promise<T>, ms = 20_000): Promise<T> {
-  return Promise.race([promise, new Promise<never>((_, reject) => setTimeout(() => reject(new Error('timed out')), ms))]);
-}
-
-function pushSupported(): boolean {
-  return 'serviceWorker' in navigator && 'PushManager' in window && 'Notification' in window;
-}
-
-async function existingSubscription(): Promise<PushSubscription | null> {
-  const registration = await navigator.serviceWorker.getRegistration('/');
-  return (await registration?.pushManager.getSubscription()) ?? null;
-}
-
-function save(method: 'POST' | 'DELETE', body: unknown): Promise<Response> {
-  return fetch('/api/notify/push', {
-    method,
-    headers: { 'content-type': 'application/json' },
-    body: JSON.stringify(body),
-    credentials: 'same-origin',
-    cache: 'no-store',
-  });
-}
+/** The completion push's own door (the brand host's room notices use theirs, components/notify/push-client.ts). */
+const PUSH_ENDPOINT = '/api/notify/push';
 
 export function NotifyChoicePanel({ copy, iosHelp, publicKey, mode }: { copy: Copy; iosHelp: string; publicKey: string | null; mode: 'ask' | 'settings' }) {
   // No keys on this deployment is known on the server: say so in the first paint, no flash.
@@ -90,12 +44,12 @@ export function NotifyChoicePanel({ copy, iosHelp, publicKey, mode }: { copy: Co
     }
     void (async () => {
       try {
-        const subscription = Notification.permission === 'granted' ? await existingSubscription() : null;
+        const subscription = await currentPushSubscription(publicKey);
         if (cancelled) return;
-        if (subscription && sameKey(subscription.options.applicationServerKey, keyBytes(publicKey))) {
+        if (subscription) {
           setState('on');
           // Keep the server's record in step with this device, and with whoever is signed in now.
-          void save('POST', subscription.toJSON()).catch(() => undefined);
+          void savePush(PUSH_ENDPOINT, 'POST', subscription.toJSON()).catch(() => undefined);
         } else {
           setState('off');
         }
@@ -112,25 +66,12 @@ export function NotifyChoicePanel({ copy, iosHelp, publicKey, mode }: { copy: Co
     if (publicKey === null) return;
     setState('busy');
     try {
-      // First thing inside the press: Safari grants permission only to a user gesture.
-      const permission = await Notification.requestPermission();
-      if (permission !== 'granted') {
-        setState(permission === 'denied' ? 'denied' : 'off');
+      // Permission inside this press, then the worker, the subscription and the server.
+      const result = await subscribePush(publicKey, PUSH_ENDPOINT);
+      if (result !== 'on') {
+        setState(result);
         return;
       }
-      // Idempotent: the same script and scope hand back the registration the layout made.
-      await navigator.serviceWorker.register('/sw.js', { scope: '/' });
-      const registration = await within(navigator.serviceWorker.ready);
-      const key = keyBytes(publicKey);
-      let subscription = await registration.pushManager.getSubscription();
-      // A subscription made with an older key cannot be reached with this one: replace it.
-      if (subscription && !sameKey(subscription.options.applicationServerKey, key)) {
-        await subscription.unsubscribe();
-        subscription = null;
-      }
-      subscription ??= await within(registration.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: key }));
-      const response = await save('POST', subscription.toJSON());
-      if (!response.ok) throw new Error(`push subscription refused: ${response.status}`);
       setState('on');
       window.dispatchEvent(new Event(PUSH_ON_EVENT));
     } catch {
@@ -141,11 +82,7 @@ export function NotifyChoicePanel({ copy, iosHelp, publicKey, mode }: { copy: Co
   const disable = async () => {
     setState('busy');
     try {
-      const subscription = await existingSubscription();
-      if (subscription) {
-        await save('DELETE', { endpoint: subscription.endpoint });
-        await subscription.unsubscribe();
-      }
+      await unsubscribePush(PUSH_ENDPOINT);
       setState('off');
     } catch {
       setState('error');

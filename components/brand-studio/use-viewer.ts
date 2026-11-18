@@ -46,6 +46,8 @@ export function useViewer(input: {
   /** A partial edit is on its way (`key`) or has come back (`done`); `line` explains a refusal. */
   onRegionSending(event: { key: string; ratio: string } | { done: string; line: string | null }): void;
   focusPrompt(): void;
+  /** Region edit v2 (`StudioState.regionV2`): every partial edit runs on one engine. */
+  regionV2?: boolean;
 }) {
   const { studio, dock, copy, locale, mode, organizationId, jobs, assets, lookup, onCampaign, focusPrompt } = input;
   const [open, setOpen] = useState<{ list: "outputs" | "assets"; key: string } | null>(null);
@@ -150,6 +152,7 @@ export function useViewer(input: {
       quality: request.quality || null,
       references: request.references,
       locale,
+      ...(input.regionV2 ? { v2: true } : {}),
     });
     const result = await studio.createJob(body);
     const line = isFailure(result) ? errorLine(copy, result.code) : null;

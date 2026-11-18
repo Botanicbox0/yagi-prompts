@@ -1,0 +1,924 @@
+/**
+ * Notices to brand members about their project rooms (docs/BRAND-ROOMS-FEEDBACK.md §2): a mail, and a
+ * push to the devices they turned push on for.
+ *
+ * Queued in three places only: every room event line (`postRoomEvent`, ./events.ts), a chat line
+ * (`message.send` and `staffSendMessage`, ./messages.ts), and the receipt for a new request
+ * (app/api/brand-workspace `project.create`). Queueing is best effort exactly like the event line: it
+ * runs under its own savepoint, logs and swallows any failure, and never fails the write that called it.
+ *
+ * Sent by `runRoomNoticePass`: the 10-minute cron tick (/api/brand-rooms/notices/tick) and one pass
+ * kicked after the response that queued something (`kickRoomNoticePass`, Next.js `after()`).
+ *
+ * A "place" is a project room, or the organization's general channel ("일반 문의", `project_id` null,
+ * members only): every grouping, read check and cap below is per recipient × place.
+ *
+ *   push   at most once, as soon as a pass sees the row (no 10-minute wait): claimed rows are marked
+ *          first, then corrected to `sent` / `failed`. One push per "now" notice; the team's lines of
+ *          one recipient × place in one pass are one push that counts them.
+ *   mail   one mail is one kind (§10.1). A `now` row (new draft, storyboard, mention, receipt) is a mail
+ *          of its own; `bundle` rows (the team's lines and draft replies) wait 10 minutes, are dropped
+ *          when the person has read that channel since (`read`), and go out as one mail per recipient ×
+ *          place at most every 30 minutes. A muted person (`brand_room_notice_prefs`) is skipped. The
+ *          provider's idempotency key is the batch id, kept across the 3 attempts.
+ *
+ * Off unless `BRAND_ROOM_NOTIFY=on` and rooms are open (`BRAND_ROOMS=on`). The rules (§2.1), the
+ * intervals (§8-3) and every string (messages/rooms-notices.ts) are the founder's, confirmed 2026-11-18
+ * (§10). Nothing is sent with the flag off.
+ */
+import { randomUUID } from 'node:crypto';
+import { after } from 'next/server';
+import type { SqlRunner } from '@/lib/db/sql-runner';
+import { brandRoomNotifyOpen, brandRoomsOpen } from '@/lib/flags';
+import { DEFAULT_LOCALE, isLocale, type Locale } from '@/lib/i18n/config';
+import { getDictionary } from '@/lib/i18n/dictionaries';
+import { interpolate } from '@/lib/i18n/format';
+import { companyLine } from '@/lib/notify/company-line';
+import type { Mailer, SendOutcome } from '@/lib/notify/mailer';
+import { createWebPushSender, pushConfigFromEnv, sendPushToUser, type PushMessage, type PushSender } from '@/lib/notify/push';
+import { getMailer } from '@/lib/notify/service';
+import { sheet, sheetText, type SheetArgs } from '@/lib/notify/sheet';
+import { ROOM_EMAIL_SCOPE, unsubscribePath } from '@/lib/notify/unsubscribe';
+import { brandSiteUrl, siteUrl } from '@/lib/seo/site-url';
+import { roomAudience } from './access';
+import type { RoomEventKind } from './events';
+
+/* ------------------------------------------------------------------ rules (§2.1) */
+
+export const ROOM_NOTICE_KINDS = ['new_version', 'storyboard', 'team_message', 'team_reply', 'mention', 'intake_received'] as const;
+export type RoomNoticeKind = (typeof ROOM_NOTICE_KINDS)[number];
+
+export interface RoomNoticeRule {
+  /** `now`: the next pass mails it. `bundle`: 10 minutes later, if still unread. `none`: no mail. */
+  email: 'now' | 'bundle' | 'none';
+  push: boolean;
+  /** Whose action it has to be. Anything else queues nothing. */
+  actor: 'studio' | 'brand' | 'any';
+}
+
+/** §2.1 as data. Confirmed by the founder with the wording (§10, 2026-11-18). */
+export const ROOM_NOTICE_RULES: Readonly<Record<RoomNoticeKind, RoomNoticeRule>> = {
+  /** The team posted a new draft or a new version of one. */
+  new_version: { email: 'now', push: true, actor: 'studio' },
+  /** The team shared a storyboard or a new version of one. */
+  storyboard: { email: 'now', push: true, actor: 'studio' },
+  /** A team line in the project's conversation. */
+  team_message: { email: 'bundle', push: true, actor: 'studio' },
+  /** The team answered on a draft. */
+  team_reply: { email: 'bundle', push: true, actor: 'studio' },
+  /** A line that names the person, from a colleague or the team. Replaces `team_message` for that person. */
+  mention: { email: 'now', push: true, actor: 'any' },
+  /** The receipt for a new request, to the person who sent it only. */
+  intake_received: { email: 'now', push: false, actor: 'brand' },
+};
+
+/** Which event lines notify. Approvals, change requests and the brand's own lines notify nobody (§2.1 last row). */
+export const ROOM_EVENT_NOTICES: Readonly<Partial<Record<RoomEventKind, RoomNoticeKind>>> = {
+  review_posted: 'new_version',
+  review_version: 'new_version',
+  storyboard_shared: 'storyboard',
+  storyboard_version: 'storyboard',
+  review_commented: 'team_reply',
+};
+
+/** A chat line: whoever it names gets `mention`; everyone else hears only about the team's lines. */
+export function messageNoticeKind(actorRole: 'brand' | 'studio', mentioned: boolean): RoomNoticeKind | null {
+  if (mentioned) return 'mention';
+  return actorRole === 'studio' ? 'team_message' : null;
+}
+
+export const ROOM_NOTICE_LIMITS = {
+  /** A bundled mail waits this long for the person to read the line in the app (§8-3). */
+  bundleDelayMinutes: 10,
+  /** At most one bundled mail per recipient × place (project or general) in this window (§8-3). */
+  bundleCapMinutes: 30,
+  maxAttempts: 3,
+  /** Quote lines in one bundled mail (§10.1). There is no "and N more" line; `{count}` says how many. */
+  maxLines: 5,
+  /** How much of a line a mail quotes. */
+  excerptChars: 120,
+  leaseMinutes: 10,
+  /** Rows one pass claims, per phase. */
+  passRows: 200,
+} as const;
+
+const MINUTE = 60_000;
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+/** Both switches: notices themselves, and the rooms they link into. */
+export function roomNoticesOpen(env: NodeJS.ProcessEnv = process.env): boolean {
+  return brandRoomNotifyOpen(env) && brandRoomsOpen(env);
+}
+
+const actorFits = (rule: RoomNoticeRule, role: 'brand' | 'studio'): boolean => rule.actor === 'any' || rule.actor === role;
+
+/* ------------------------------------------------------------------ queue */
+
+export type RoomNoticeSource =
+  | {
+      type: 'event';
+      organizationId: string;
+      projectId: string;
+      event: RoomEventKind;
+      /** The event line's own id (`brand_room_messages.id`). */
+      messageId: string;
+      actorId: string | null;
+      actorRole: 'brand' | 'studio';
+    }
+  | {
+      type: 'message';
+      organizationId: string;
+      /** Null for the organization's general channel ("일반 문의"): its members, no project guests. */
+      projectId: string | null;
+      messageId: string;
+      actorId: string;
+      actorRole: 'brand' | 'studio';
+      mentions: readonly string[];
+    }
+  | { type: 'intake'; organizationId: string; projectId: string; actorId: string };
+
+export interface EnqueueOptions {
+  env?: NodeJS.ProcessEnv;
+  now?: Date;
+  /** Default true: schedule one pass after the response (a no-op outside a request). */
+  kick?: boolean;
+}
+
+interface PlannedNotice {
+  recipientId: string;
+  kind: RoomNoticeKind;
+  messageId: string | null;
+}
+
+/** The place a notice is about: a project id, or null for the organization's general channel. */
+function placeOf(source: RoomNoticeSource): string | null | undefined {
+  if (source.type === 'message' && source.projectId === null) return null;
+  return source.projectId && UUID.test(source.projectId) ? source.projectId.toLowerCase() : undefined;
+}
+
+async function planNotices(sql: SqlRunner, source: RoomNoticeSource): Promise<PlannedNotice[]> {
+  // `undefined` = no valid place. Only a chat line can be in the general channel (null).
+  if (!source || !UUID.test(source.organizationId ?? '') || placeOf(source) === undefined) return [];
+  const actor = source.actorId && UUID.test(source.actorId) ? source.actorId.toLowerCase() : null;
+  if (source.type === 'intake') {
+    if (!actor || !actorFits(ROOM_NOTICE_RULES.intake_received, 'brand')) return [];
+    const audience = await roomAudience(sql, source.organizationId, source.projectId);
+    return audience.some((a) => a.userId === actor) ? [{ recipientId: actor, kind: 'intake_received', messageId: null }] : [];
+  }
+  if (!UUID.test(source.messageId ?? '')) return [];
+  const messageId = source.messageId.toLowerCase();
+  if (source.type === 'event') {
+    const kind = ROOM_EVENT_NOTICES[source.event];
+    if (!kind || !actorFits(ROOM_NOTICE_RULES[kind], source.actorRole)) return [];
+    const audience = await roomAudience(sql, source.organizationId, source.projectId);
+    return audience.filter((a) => a.userId !== actor).map((a) => ({ recipientId: a.userId, kind, messageId }));
+  }
+  const mentioned = new Set((source.mentions ?? []).map((id) => String(id).toLowerCase()));
+  if (source.actorRole !== 'studio' && mentioned.size === 0) return [];
+  const audience = await roomAudience(sql, source.organizationId, placeOf(source) ?? null);
+  const planned: PlannedNotice[] = [];
+  for (const person of audience) {
+    if (person.userId === actor) continue;
+    const kind = messageNoticeKind(source.actorRole, mentioned.has(person.userId));
+    if (kind && actorFits(ROOM_NOTICE_RULES[kind], source.actorRole)) planned.push({ recipientId: person.userId, kind, messageId });
+  }
+  return planned;
+}
+
+/**
+ * Queue the notices one room write causes. Never throws and never fails the caller: inside the caller's
+ * transaction it runs under a savepoint (a failed insert is rolled back alone); outside one, a failure
+ * leaves nothing. A repeat for the same line and person is ignored (the table's unique keys). Returns
+ * how many rows were queued.
+ */
+export async function enqueueNotices(sql: SqlRunner, source: RoomNoticeSource, options: EnqueueOptions = {}): Promise<number> {
+  const env = options.env ?? process.env;
+  if (!roomNoticesOpen(env)) return 0;
+  let savepoint = false;
+  try {
+    await sql.query('savepoint brand_room_notice');
+    savepoint = true;
+  } catch {
+    // Not inside a transaction: nothing of the caller's can be poisoned by a failed insert.
+  }
+  try {
+    const planned = await planNotices(sql, source);
+    const now = options.now ?? new Date();
+    let queued = 0;
+    for (const notice of planned) {
+      const rule = ROOM_NOTICE_RULES[notice.kind];
+      const dueAt = new Date(now.getTime() + (rule.email === 'bundle' ? ROOM_NOTICE_LIMITS.bundleDelayMinutes * MINUTE : 0));
+      const { rows } = await sql.query<{ id: string }>(
+        `insert into brand_room_notices (organization_id, project_id, recipient_id, kind, message_id, timing, due_at, state, skip_reason, push_state)
+           values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+         on conflict do nothing
+         returning id`,
+        [
+          source.organizationId.toLowerCase(),
+          placeOf(source) ?? null,
+          notice.recipientId,
+          notice.kind,
+          notice.messageId,
+          rule.email,
+          dueAt.toISOString(),
+          rule.email === 'none' ? 'skipped' : 'pending',
+          rule.email === 'none' ? 'rule' : null,
+          rule.push ? 'pending' : 'none',
+        ],
+      );
+      queued += rows.length;
+    }
+    if (savepoint) await sql.query('release savepoint brand_room_notice');
+    if (queued > 0 && options.kick !== false) kickRoomNoticePass(env);
+    return queued;
+  } catch (error) {
+    if (savepoint) await sql.query('rollback to savepoint brand_room_notice').catch(() => undefined);
+    console.warn(
+      '[brand-rooms] room_notice_enqueue_failed',
+      JSON.stringify({ type: String(source?.type ?? '').slice(0, 20), message: error instanceof Error ? error.message.slice(0, 200) : 'unknown' }),
+    );
+    return 0;
+  }
+}
+
+/**
+ * One pass right after the response that queued something, so a push (and a "now" mail) does not wait
+ * for the 10-minute tick. Safe anywhere: outside a request scope `after()` throws, and then the tick
+ * sends it.
+ */
+export function kickRoomNoticePass(env: NodeJS.ProcessEnv = process.env): void {
+  if (!roomNoticesOpen(env)) return;
+  const run = async () => {
+    try {
+      const { getSqlRunner } = await import('@/lib/db/connect');
+      const sql = await getSqlRunner();
+      if (sql) await runLiveRoomNoticePass(sql, env);
+    } catch (error) {
+      console.warn('[brand-rooms] room_notice_kick_failed', JSON.stringify({ message: error instanceof Error ? error.message.slice(0, 200) : 'unknown' }));
+    }
+  };
+  try {
+    after(run);
+  } catch {
+    // Not inside a request (a script, a test): the cron tick picks the rows up.
+  }
+}
+
+/* ------------------------------------------------------------------ mail and push (§10) */
+
+export interface RoomNoticeLine {
+  kind: RoomNoticeKind;
+  /** The draft's or storyboard's title (event lines). Missing: the place's name. */
+  title?: string | null;
+  /** Missing: 1. */
+  version?: number | null;
+  /** Who wrote it, labelled as §10.1 says for a quote line ("야기 팀 · 이름", "야기 팀", or a brand member's name). */
+  name?: string | null;
+  /**
+   * The same person by plain name, for a mention's `{name}`: their display name (a team member's too); a
+   * brand member without one as the conversation shows them; a team member without one as "야기 팀".
+   * Missing: `name`.
+   */
+  person?: string | null;
+  /** The quoted text, already cut to 120 characters. Empty: a line with no text (only files). */
+  excerpt?: string | null;
+}
+
+export interface RoomNoticeMailInput {
+  locale: Locale;
+  recipientId: string;
+  organizationId: string;
+  /** Null: the organization's general channel. */
+  projectId: string | null;
+  /** The project's title; unused for the general channel (it is named `roomsChat.inbox.general`). */
+  projectTitle: string;
+  /** One "now" notice, or every row of one bundled mail, oldest first. */
+  lines: readonly RoomNoticeLine[];
+  env?: NodeJS.ProcessEnv;
+}
+
+export interface RoomNoticeMail {
+  subject: string;
+  html: string;
+  text: string;
+  buttonUrl: string;
+  unsubscribeUrl: string;
+}
+
+type Dict = ReturnType<typeof getDictionary>;
+
+/** The two kinds one bundled mail (and one counted push) carries. Every other kind is one notice, one mail. */
+const BUNDLED: ReadonlySet<RoomNoticeKind> = new Set<RoomNoticeKind>(['team_message', 'team_reply']);
+
+/** What a mail or push is about: the bundle (`replies`), or the one "now" notice it carries. */
+export type RoomNoticeMailKind = 'replies' | 'new_version' | 'storyboard' | 'mention' | 'intake_received';
+
+const KIND_COPY = {
+  replies: 'replies',
+  new_version: 'newVersion',
+  storyboard: 'storyboard',
+  mention: 'mention',
+  intake_received: 'intakeReceived',
+} as const satisfies Record<RoomNoticeMailKind, keyof Dict['roomsNotices']['kinds']>;
+
+export function roomNoticeMailKind(lines: readonly RoomNoticeLine[]): RoomNoticeMailKind {
+  const single = lines.find((line) => !BUNDLED.has(line.kind));
+  return single ? (single.kind as Exclude<RoomNoticeKind, 'team_message' | 'team_reply'>) : 'replies';
+}
+
+const flat = (value: string | null | undefined): string => (value ?? '').replace(/\s+/g, ' ').trim();
+
+/** `{project}`: the project's title, or the general conversation's own name (§10.1). */
+function placeName(dict: Dict, projectId: string | null, projectTitle: string): string {
+  return projectId === null ? dict.roomsChat.inbox.general : flat(projectTitle);
+}
+
+/** Every placeholder a kind's strings use, with the fallbacks an event line without them gets. */
+function noticeVars(dict: Dict, kind: RoomNoticeMailKind, lines: readonly RoomNoticeLine[], project: string): Record<string, string | number> {
+  const line = kind === 'replies' ? undefined : lines.find((l) => l.kind === kind);
+  return {
+    project,
+    title: flat(line?.title) || project,
+    version: line?.version && line.version > 0 ? line.version : 1,
+    name: flat(line?.person) || flat(line?.name) || dict.roomsChat.author.someone,
+    count: kind === 'replies' ? lines.length : 1,
+  };
+}
+
+/**
+ * The strings of one kind. The bundle's count-bearing English sentences have a singular form used only
+ * when exactly one row is carried (docs §10.3); Korean has one form and its `one` repeats it.
+ */
+interface KindStrings {
+  subject: string;
+  heading: string;
+  body: string;
+  button: string;
+  /** Absent for the receipt, which has no push. */
+  pushTitle?: string;
+  pushBody?: string;
+}
+
+function kindStrings(dict: Dict, kind: RoomNoticeMailKind, count: number): KindStrings {
+  const kinds = dict.roomsNotices.kinds;
+  if (kind === 'replies') {
+    const { one, ...plural } = kinds.replies;
+    return count === 1 ? { ...plural, ...one } : plural;
+  }
+  return kinds[KIND_COPY[kind]];
+}
+
+/**
+ * The quote lines under the body (§10.1): "author: first 120 characters". The bundle quotes up to five
+ * of its rows, oldest first, skipping rows with no text (a file-only message, a reply whose note is not
+ * readable); the mention quotes its one line. Other kinds quote nothing.
+ */
+function quoteRows(dict: Dict, kind: RoomNoticeMailKind, lines: readonly RoomNoticeLine[]): Array<[string, string]> {
+  if (kind !== 'replies' && kind !== 'mention') return [];
+  const source = kind === 'replies' ? lines : lines.filter((l) => l.kind === 'mention').slice(0, 1);
+  return source
+    .filter((line) => flat(line.excerpt) !== '')
+    .slice(0, ROOM_NOTICE_LIMITS.maxLines)
+    .map((line) => [flat(line.name) || dict.roomsChat.author.someone, flat(line.excerpt)]);
+}
+
+/** The first 120 characters of a line, whitespace folded. */
+export function noticeExcerpt(body: string | null | undefined, chars: number = ROOM_NOTICE_LIMITS.excerptChars): string {
+  const flat = (body ?? '').replace(/\s+/g, ' ').trim();
+  return flat.length > chars ? `${flat.slice(0, chars)}…` : flat;
+}
+
+/**
+ * Where a notice opens, as a same-origin path (push) or after the brand host (mail): the project room, or
+ * the messages inbox on the general conversation — the same `?organizationId=&channel=general` form the
+ * inbox builds for itself (components/brand-rooms/chat/inbox.tsx `hrefFor`). The organization rides along
+ * so a person in several brands lands in the right one (`roomRouteContext` selects by it).
+ */
+export function roomNoticePath(organizationId: string, projectId: string | null): string {
+  const params = new URLSearchParams({ organizationId: organizationId.toLowerCase() });
+  if (projectId === null) {
+    params.set('channel', 'general');
+    return `/brand/rooms?${params.toString()}`;
+  }
+  return `/brand/rooms/${projectId.toLowerCase()}?${params.toString()}`;
+}
+
+/**
+ * One mail of one kind (§10.1): the subject, the heading and the body of that kind, the quote lines
+ * under it (the bundle and the mention only), one button into the room on the brand host (the general
+ * conversation's opens the inbox on it), the confirmed footer sentence with the unsubscribe link (signed,
+ * no login) and the company line. Every sentence is the founder's (messages/rooms-notices.ts); nothing
+ * else is written here.
+ */
+export function buildRoomNoticeEmail(input: RoomNoticeMailInput): RoomNoticeMail {
+  const env = input.env ?? process.env;
+  const dict = getDictionary(input.locale);
+  const copy = dict.roomsNotices;
+  const kind = roomNoticeMailKind(input.lines);
+  const vars = noticeVars(dict, kind, input.lines, placeName(dict, input.projectId, input.projectTitle));
+  const strings = kindStrings(dict, kind, Number(vars.count));
+  const buttonUrl = `${brandSiteUrl(env)}${roomNoticePath(input.organizationId, input.projectId)}`;
+  const unsubscribeUrl = `${siteUrl(env)}${unsubscribePath({ userId: input.recipientId, toggle: ROOM_EMAIL_SCOPE, organizationId: input.organizationId })}`;
+  const args: SheetArgs = {
+    title: interpolate(strings.heading, vars),
+    paragraphs: [interpolate(strings.body, vars)],
+    rows: quoteRows(dict, kind, input.lines),
+    button: { label: strings.button, url: buttonUrl },
+    note: { text: copy.footer.text, link: { label: copy.footer.stop, url: unsubscribeUrl } },
+    footer: companyLine(input.locale, { address: true }),
+  };
+  return { subject: interpolate(strings.subject, vars), html: sheet(args), text: sheetText(args), buttonUrl, unsubscribeUrl };
+}
+
+export interface RoomNoticePushInput {
+  locale: Locale;
+  organizationId: string;
+  /** Null: the organization's general channel. */
+  projectId: string | null;
+  projectTitle: string;
+  /** One "now" notice, or the team's lines of one recipient × place pushed together in one pass. */
+  lines: readonly RoomNoticeLine[];
+}
+
+/**
+ * The push of one kind (§10.1): its confirmed title and body; the team's lines use the replies strings
+ * with how many are pushed together (1 when single). Opens the same place as the mail's button, as a
+ * same-origin path. `tag` is the place, so a newer notice about it replaces the older one on the device.
+ * Null for the receipt, which has no push (§2.1).
+ */
+export function buildRoomNoticePush(input: RoomNoticePushInput): PushMessage | null {
+  const kind = roomNoticeMailKind(input.lines);
+  if (kind === 'intake_received' || input.lines.length === 0) return null;
+  const dict = getDictionary(input.locale);
+  const vars = noticeVars(dict, kind, input.lines, placeName(dict, input.projectId, input.projectTitle));
+  const strings = kindStrings(dict, kind, Number(vars.count));
+  if (!strings.pushTitle || !strings.pushBody) return null;
+  const organizationId = input.organizationId.toLowerCase();
+  const projectId = input.projectId ? input.projectId.toLowerCase() : null;
+  const tag = projectId ?? organizationId;
+  return {
+    title: interpolate(strings.pushTitle, vars),
+    body: interpolate(strings.pushBody, vars),
+    url: roomNoticePath(organizationId, projectId),
+    tag,
+    topic: tag.replace(/-/g, ''),
+    lang: input.locale,
+  };
+}
+
+/* ------------------------------------------------------------------ pass */
+
+export interface RoomNoticePassDeps {
+  sql: SqlRunner;
+  /** Null when no mail provider is configured: due mails are skipped (`no_mailer`), never thrown. */
+  mailer: Mailer | null;
+  /** Null when push is not configured here: claimed pushes stay `skipped`. */
+  push?: PushSender | null;
+  now?: Date;
+  env?: NodeJS.ProcessEnv;
+}
+
+export interface RoomNoticePassReport {
+  ran: boolean;
+  /** Mails the provider accepted. */
+  mails: number;
+  /** Rows those mails carried. */
+  sent: number;
+  skipped: number;
+  /** Bundled rows held back by the 30-minute cap. */
+  deferred: number;
+  /** Rows going back to pending after a failed send. */
+  retrying: number;
+  failed: number;
+  /** Recipient × project pushes that reached at least one device. */
+  pushes: number;
+}
+
+type SkipReason = 'read' | 'muted' | 'no_mailer' | 'no_access' | 'no_email' | 'deleted';
+
+interface NoticeRow {
+  id: string;
+  organization_id: string;
+  /** Null: the organization's general channel. */
+  project_id: string | null;
+  recipient_id: string;
+  kind: RoomNoticeKind;
+  message_id: string | null;
+  timing: 'now' | 'bundle' | 'none';
+  batch_id: string | null;
+  created_at: Date | string;
+}
+
+interface MessageFacts {
+  id: string;
+  channel: string;
+  body: string;
+  detail: Record<string, unknown> | null;
+  deleted: boolean;
+  createdAt: Date;
+  /** The author's side: a text line's own role, an event line's `detail.actorRole`. */
+  role: 'brand' | 'studio';
+  displayName: string | null;
+  email: string | null;
+  replyBody: string | null;
+}
+
+interface RecipientFacts {
+  email: string | null;
+  locale: Locale;
+}
+
+interface Facts {
+  messages: Map<string, MessageFacts>;
+  recipients: Map<string, RecipientFacts>;
+  projects: Map<string, string>;
+}
+
+const toDate = (v: Date | string): Date => (v instanceof Date ? v : new Date(String(v)));
+const GENERAL = 'general';
+/** A row's channel, as `brand_room_reads` names it: its project id, or 'general'. */
+const channelOf = (projectId: string | null): string => (projectId ? projectId.toLowerCase() : GENERAL);
+/** Recipient × place. 'general' exists once per organization, so the organization is part of the place. */
+const placeKey = (recipientId: string, organizationId: string, channel: string): string =>
+  `${recipientId.toLowerCase()}:${organizationId.toLowerCase()}:${channel}`;
+const UUID_TEXT = '^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$';
+
+const NOTICE_SELECT = `select id::text as id, organization_id::text as organization_id, project_id::text as project_id,
+       recipient_id::text as recipient_id, kind, message_id::text as message_id, timing, batch_id::text as batch_id, created_at
+  from brand_room_notices`;
+
+async function loadFacts(sql: SqlRunner, rows: readonly NoticeRow[]): Promise<Facts> {
+  const messageIds = [...new Set(rows.map((r) => r.message_id).filter((id): id is string => Boolean(id)))];
+  const recipientIds = [...new Set(rows.map((r) => r.recipient_id))];
+  const projectIds = [...new Set(rows.map((r) => r.project_id).filter((id): id is string => Boolean(id)))];
+  const messages = new Map<string, MessageFacts>();
+  if (messageIds.length) {
+    const found = (
+      await sql.query<{
+        id: string;
+        channel: string;
+        kind: string;
+        body: string | null;
+        detail: Record<string, unknown> | null;
+        deleted_at: Date | string | null;
+        created_at: Date | string;
+        author_role: string;
+        display_name: string | null;
+        email: string | null;
+        reply_body: string | null;
+      }>(
+        // A team reply's text comes from the draft note itself; a note the team keeps to itself never does.
+        // The note id is compared as a uuid (the primary key's index), and only after the text is checked
+        // to be one: a malformed `ref` yields no text instead of a failed cast.
+        `select m.id::text as id, m.channel, m.kind, m.body, m.detail, m.deleted_at, m.created_at, m.author_role,
+                p.display_name, p.email,
+                (select c.body from brand_studio_review_comments c
+                  where m.event = 'review_commented'
+                    and c.id = case when (m.ref ->> 'commentId') ~ $2 then (m.ref ->> 'commentId')::uuid end
+                    and c.deleted_at is null
+                    and coalesce(to_jsonb(c) ->> 'visibility', 'public') = 'public') as reply_body
+           from brand_room_messages m left join profiles p on p.id = m.author_id
+          where m.id = any($1::uuid[])`,
+        [messageIds, UUID_TEXT],
+      )
+    ).rows;
+    for (const m of found) {
+      const actorRole = m.detail && (m.detail as { actorRole?: unknown }).actorRole;
+      const role: 'brand' | 'studio' = m.kind === 'event' ? (actorRole === 'studio' ? 'studio' : 'brand') : m.author_role === 'studio' ? 'studio' : 'brand';
+      messages.set(String(m.id).toLowerCase(), {
+        id: String(m.id).toLowerCase(),
+        channel: String(m.channel),
+        body: m.body ?? '',
+        detail: m.detail,
+        deleted: m.deleted_at != null,
+        createdAt: toDate(m.created_at),
+        role,
+        displayName: m.display_name,
+        email: m.email,
+        replyBody: m.reply_body,
+      });
+    }
+  }
+  const recipients = new Map<string, RecipientFacts>();
+  for (const p of (
+    await sql.query<{ id: string; email: string | null; locale: string | null }>('select id::text as id, email, locale from profiles where id = any($1::uuid[])', [recipientIds])
+  ).rows) {
+    recipients.set(String(p.id).toLowerCase(), { email: p.email?.trim() || null, locale: isLocale(p.locale) ? p.locale : DEFAULT_LOCALE });
+  }
+  const projects = new Map<string, string>();
+  if (projectIds.length) {
+    for (const p of (await sql.query<{ id: string; title: string }>('select id::text as id, title from brand_projects where id = any($1::uuid[])', [projectIds])).rows) {
+      projects.set(String(p.id).toLowerCase(), String(p.title));
+    }
+  }
+  return { messages, recipients, projects };
+}
+
+/** The project's title; the general channel is named by the mail itself (`roomsChat.inbox.general`). */
+function projectTitleOf(facts: Facts, projectId: string | null): string {
+  return projectId ? (facts.projects.get(projectId.toLowerCase()) ?? '') : '';
+}
+
+/**
+ * The author as §10.1 labels them: "야기 팀 · name" (just "야기 팀" without a name) for the team, a brand
+ * member by their name (the address's local part when they set none, as the conversation shows them).
+ */
+function authorName(dict: Dict, message: MessageFacts): string {
+  const name = flat(message.displayName).slice(0, 60) || null;
+  if (message.role === 'studio') return name ? interpolate(dict.roomsNotices.author.teamMember, { name }) : dict.roomsNotices.author.team;
+  return personName(dict, message);
+}
+
+/**
+ * The same person by plain name, for a mention's `{name}`: the display name, a team member's too; a
+ * brand member without one by the address's local part; a team member without one as "야기 팀".
+ */
+function personName(dict: Dict, message: MessageFacts): string {
+  const name = flat(message.displayName).slice(0, 60) || null;
+  if (name) return name;
+  if (message.role === 'studio') return dict.roomsNotices.author.team;
+  return message.email?.split('@')[0]?.trim().slice(0, 60) || dict.roomsChat.author.someone;
+}
+
+function lineOf(row: NoticeRow, facts: Facts, locale: Locale): RoomNoticeLine {
+  const dict = getDictionary(locale);
+  const message = row.message_id ? facts.messages.get(row.message_id.toLowerCase()) : undefined;
+  if (!message) return { kind: row.kind };
+  const detail = message.detail ?? {};
+  const title = typeof detail.title === 'string' ? detail.title : null;
+  const version = typeof detail.version === 'number' ? detail.version : null;
+  const name = authorName(dict, message);
+  // A reply quotes the draft note itself (a note the team keeps to itself never comes back); a line
+  // quotes its own text. No text (only files, a note no longer readable): no quote line (§10.1).
+  if (row.kind === 'team_reply') return { kind: row.kind, title, version, name, excerpt: noticeExcerpt(message.replyBody) };
+  if (row.kind === 'team_message') return { kind: row.kind, name, excerpt: noticeExcerpt(message.body) };
+  // A mention's `{name}` is the plain name; its quote line keeps the author label (§10.1).
+  if (row.kind === 'mention') return { kind: row.kind, name, person: personName(dict, message), excerpt: noticeExcerpt(message.body) };
+  return { kind: row.kind, title, version, name };
+}
+
+/** Per pass: who may still open which room (an organization closed or a member removed since the line). */
+function audienceCache(sql: SqlRunner) {
+  const cache = new Map<string, Promise<Set<string>>>();
+  return (organizationId: string, projectId: string | null, userId: string): Promise<boolean> => {
+    const key = `${organizationId.toLowerCase()}:${channelOf(projectId)}`;
+    let entry = cache.get(key);
+    if (!entry) {
+      entry = roomAudience(sql, organizationId, projectId).then((people) => new Set(people.map((p) => p.userId)));
+      cache.set(key, entry);
+    }
+    return entry.then((people) => people.has(userId.toLowerCase()));
+  };
+}
+
+const emptyReport = (): RoomNoticePassReport => ({ ran: false, mails: 0, sent: 0, skipped: 0, deferred: 0, retrying: 0, failed: 0, pushes: 0 });
+
+/**
+ * One pass: give back leases that ran out, push what has not been pushed, mail what is due. Returns at
+ * once when notices are off. Every send is outside a transaction; the claims are `for update skip locked`,
+ * so two passes at once take disjoint rows.
+ */
+export async function runRoomNoticePass(deps: RoomNoticePassDeps, options: { limit?: number } = {}): Promise<RoomNoticePassReport> {
+  const report = emptyReport();
+  const env = deps.env ?? process.env;
+  if (!roomNoticesOpen(env)) return report;
+  report.ran = true;
+  const now = deps.now ?? new Date();
+  const limit = Math.max(1, Math.min(options.limit ?? ROOM_NOTICE_LIMITS.passRows, 1000));
+  await deps.sql.query(
+    `update brand_room_notices
+        set state = case when attempts >= $2 then 'failed' else 'pending' end, lease_until = null
+      where state = 'sending' and lease_until < $1`,
+    [now.toISOString(), ROOM_NOTICE_LIMITS.maxAttempts],
+  );
+  await pushPhase(deps, now, limit, report);
+  await mailPhase(deps, now, limit, report, env);
+  return report;
+}
+
+async function pushPhase(deps: RoomNoticePassDeps, now: Date, limit: number, report: RoomNoticePassReport): Promise<void> {
+  const rows = await deps.sql.transaction(async (tx) => {
+    const picked = (await tx.query<NoticeRow>(`${NOTICE_SELECT} where push_state = 'pending' order by created_at, id limit $1 for update skip locked`, [limit])).rows;
+    // At most once: marked before anything is sent, corrected after.
+    if (picked.length) {
+      await tx.query("update brand_room_notices set push_state = 'skipped', pushed_at = $2 where id = any($1::uuid[])", [picked.map((r) => r.id), now.toISOString()]);
+    }
+    return picked;
+  });
+  if (rows.length === 0 || !deps.push) return;
+  const facts = await loadFacts(deps.sql, rows);
+  const seated = audienceCache(deps.sql);
+  // One push per "now" notice; the team's lines of one recipient × place are one push that counts them.
+  const groups = new Map<string, NoticeRow[]>();
+  for (const row of rows) {
+    const message = row.message_id ? facts.messages.get(row.message_id.toLowerCase()) : undefined;
+    if (row.message_id && (!message || message.deleted)) continue;
+    const place = placeKey(row.recipient_id, row.organization_id, channelOf(row.project_id));
+    const key = BUNDLED.has(row.kind) ? `${place}:replies` : `${place}:${row.id}`;
+    groups.set(key, [...(groups.get(key) ?? []), row]);
+  }
+  // Same tag per place: the newest event goes last, so it is the one left on the device.
+  const newest = (group: NoticeRow[]) => Math.max(...group.map((row) => toDate(row.created_at).getTime()));
+  for (const group of [...groups.values()].sort((a, b) => newest(a) - newest(b))) {
+    const first = group[0]!;
+    try {
+      if (!(await seated(first.organization_id, first.project_id, first.recipient_id))) continue;
+      const locale = facts.recipients.get(first.recipient_id.toLowerCase())?.locale ?? DEFAULT_LOCALE;
+      const message = buildRoomNoticePush({
+        locale,
+        organizationId: first.organization_id,
+        projectId: first.project_id,
+        projectTitle: projectTitleOf(facts, first.project_id),
+        lines: group.map((row) => lineOf(row, facts, locale)),
+      });
+      if (!message) continue;
+      const fanout = await sendPushToUser({ sql: deps.sql, sender: deps.push, now }, first.recipient_id, message);
+      const state = fanout.sent > 0 ? 'sent' : fanout.failed > 0 ? 'failed' : null;
+      if (state) await deps.sql.query('update brand_room_notices set push_state = $2 where id = any($1::uuid[])', [group.map((r) => r.id), state]);
+      if (fanout.sent > 0) report.pushes += 1;
+    } catch (error) {
+      console.warn('[brand-rooms] room_notice_push_failed', JSON.stringify({ message: error instanceof Error ? error.message.slice(0, 200) : 'unknown' }));
+    }
+  }
+}
+
+interface Batch {
+  batchId: string;
+  rows: NoticeRow[];
+  recipientId: string;
+  organizationId: string;
+  /** Null: the organization's general channel. */
+  projectId: string | null;
+}
+
+async function mailPhase(deps: RoomNoticePassDeps, now: Date, limit: number, report: RoomNoticePassReport, env: NodeJS.ProcessEnv): Promise<void> {
+  const claimed = await deps.sql.transaction(async (tx) => {
+    const rows = (
+      await tx.query<NoticeRow>(`${NOTICE_SELECT} where state = 'pending' and due_at <= $1 order by created_at, id limit $2 for update skip locked`, [now.toISOString(), limit])
+    ).rows;
+    if (rows.length === 0) return { batches: [] as Batch[], facts: null };
+    const skips = new Map<SkipReason, string[]>();
+    const skip = (reason: SkipReason, ids: string[]) => skips.set(reason, [...(skips.get(reason) ?? []), ...ids]);
+    if (!deps.mailer) {
+      skip('no_mailer', rows.map((r) => r.id));
+      await applySkips(tx, skips, report);
+      return { batches: [] as Batch[], facts: null };
+    }
+    const facts = await loadFacts(tx, rows);
+    const recipientIds = [...new Set(rows.map((r) => r.recipient_id))];
+    const muted = new Set(
+      (
+        await tx.query<{ user_id: string; organization_id: string }>(
+          'select user_id::text as user_id, organization_id::text as organization_id from brand_room_notice_prefs where user_id = any($1::uuid[]) and not email_enabled',
+          [recipientIds],
+        )
+      ).rows.map((r) => `${String(r.user_id).toLowerCase()}:${String(r.organization_id).toLowerCase()}`),
+    );
+    const organizationIds = [...new Set(rows.map((r) => r.organization_id.toLowerCase()))];
+    const reads = new Map<string, Date>();
+    for (const r of (
+      await tx.query<{ user_id: string; organization_id: string; channel: string; last_read_at: Date | string }>(
+        `select user_id::text as user_id, organization_id::text as organization_id, channel, last_read_at
+           from brand_room_reads where user_id = any($1::uuid[]) and organization_id = any($2::uuid[]) and channel = any($3::text[])`,
+        [recipientIds, organizationIds, [...new Set(rows.map((r) => channelOf(r.project_id)))]],
+      )
+    ).rows) {
+      reads.set(placeKey(String(r.user_id), String(r.organization_id), String(r.channel)), toDate(r.last_read_at));
+    }
+    // Only bundles sent inside the cap window can hold anything back.
+    const capFrom = new Date(now.getTime() - ROOM_NOTICE_LIMITS.bundleCapMinutes * MINUTE).toISOString();
+    const lastBundle = new Map<string, Date>();
+    for (const r of (
+      await tx.query<{ recipient_id: string; organization_id: string; project_id: string | null; last: Date | string }>(
+        `select recipient_id::text as recipient_id, organization_id::text as organization_id, project_id::text as project_id, max(sent_at) as last
+           from brand_room_notices
+          where state = 'sent' and timing = 'bundle' and recipient_id = any($1::uuid[]) and sent_at > $2
+          group by recipient_id, organization_id, project_id`,
+        [recipientIds, capFrom],
+      )
+    ).rows) {
+      if (r.last) lastBundle.set(placeKey(String(r.recipient_id), String(r.organization_id), channelOf(r.project_id)), toDate(r.last));
+    }
+    const seated = audienceCache(tx);
+    // One mail is one kind (§10.1). A retried batch keeps its id (the provider's idempotency key); a new
+    // "now" row is a batch of its own; new bundled rows group by recipient × place.
+    const groups = new Map<string, NoticeRow[]>();
+    for (const row of rows) {
+      const key = row.batch_id
+        ? `b:${row.batch_id}`
+        : row.timing === 'bundle'
+          ? `g:${placeKey(row.recipient_id, row.organization_id, channelOf(row.project_id))}`
+          : `n:${row.id}`;
+      groups.set(key, [...(groups.get(key) ?? []), row]);
+    }
+    const batches: Batch[] = [];
+    const deferred = new Map<string, string[]>();
+    for (const group of groups.values()) {
+      const first = group[0]!;
+      const recipientId = first.recipient_id.toLowerCase();
+      const projectId = first.project_id ? first.project_id.toLowerCase() : null;
+      const organizationId = first.organization_id.toLowerCase();
+      const place = placeKey(recipientId, organizationId, channelOf(projectId));
+      const retry = first.batch_id !== null;
+      if (!(await seated(organizationId, projectId, recipientId))) {
+        skip('no_access', group.map((r) => r.id));
+        continue;
+      }
+      if (!facts.recipients.get(recipientId)?.email) {
+        skip('no_email', group.map((r) => r.id));
+        continue;
+      }
+      if (muted.has(`${recipientId}:${organizationId}`)) {
+        skip('muted', group.map((r) => r.id));
+        continue;
+      }
+      const readAt = reads.get(place);
+      const remaining: NoticeRow[] = [];
+      for (const row of group) {
+        const message = row.message_id ? facts.messages.get(row.message_id.toLowerCase()) : undefined;
+        if (row.message_id && (!message || message.deleted)) skip('deleted', [row.id]);
+        else if (!retry && row.timing === 'bundle' && message && readAt && readAt >= message.createdAt) skip('read', [row.id]);
+        else remaining.push(row);
+      }
+      if (remaining.length === 0) continue;
+      if (!retry && remaining.every((row) => row.timing === 'bundle')) {
+        const last = lastBundle.get(place);
+        const open = last ? new Date(last.getTime() + ROOM_NOTICE_LIMITS.bundleCapMinutes * MINUTE) : null;
+        if (open && open > now) {
+          deferred.set(open.toISOString(), [...(deferred.get(open.toISOString()) ?? []), ...remaining.map((r) => r.id)]);
+          continue;
+        }
+      }
+      batches.push({ batchId: first.batch_id ?? randomUUID(), rows: remaining, recipientId, organizationId, projectId });
+    }
+    await applySkips(tx, skips, report);
+    for (const [dueAt, ids] of deferred) {
+      await tx.query('update brand_room_notices set due_at = $2 where id = any($1::uuid[])', [ids, dueAt]);
+      report.deferred += ids.length;
+    }
+    const leaseUntil = new Date(now.getTime() + ROOM_NOTICE_LIMITS.leaseMinutes * MINUTE).toISOString();
+    for (const batch of batches) {
+      await tx.query("update brand_room_notices set state = 'sending', batch_id = $2, attempts = attempts + 1, lease_until = $3 where id = any($1::uuid[])", [
+        batch.rows.map((r) => r.id),
+        batch.batchId,
+        leaseUntil,
+      ]);
+    }
+    return { batches, facts };
+  });
+  if (!claimed.facts || !deps.mailer) return;
+  for (const batch of claimed.batches) {
+    const recipient = claimed.facts.recipients.get(batch.recipientId)!;
+    const mail = buildRoomNoticeEmail({
+      locale: recipient.locale,
+      recipientId: batch.recipientId,
+      organizationId: batch.organizationId,
+      projectId: batch.projectId,
+      projectTitle: projectTitleOf(claimed.facts, batch.projectId),
+      lines: [...batch.rows].sort((a, b) => toDate(a.created_at).getTime() - toDate(b.created_at).getTime()).map((row) => lineOf(row, claimed.facts!, recipient.locale)),
+      env,
+    });
+    let outcome: SendOutcome;
+    try {
+      outcome = await deps.mailer.send({ to: recipient.email!, subject: mail.subject, html: mail.html, text: mail.text, idempotencyKey: batch.batchId, unsubscribeUrl: mail.unsubscribeUrl });
+    } catch (error) {
+      outcome = { ok: false, retryable: true, error: error instanceof Error ? error.message : 'send threw' };
+    }
+    if (outcome.ok) {
+      const { rows } = await deps.sql.query<{ id: string }>(
+        "update brand_room_notices set state = 'sent', sent_at = $2, lease_until = null where batch_id = $1 and state = 'sending' returning id",
+        [batch.batchId, now.toISOString()],
+      );
+      report.mails += 1;
+      report.sent += rows.length;
+      continue;
+    }
+    const { rows } = await deps.sql.query<{ state: string }>(
+      `update brand_room_notices
+          set state = case when $2::boolean and attempts < $3 then 'pending' else 'failed' end, lease_until = null, due_at = $4
+        where batch_id = $1 and state = 'sending'
+        returning state`,
+      [batch.batchId, outcome.retryable, ROOM_NOTICE_LIMITS.maxAttempts, now.toISOString()],
+    );
+    for (const row of rows) {
+      if (row.state === 'failed') report.failed += 1;
+      else report.retrying += 1;
+    }
+    // Never the address: an error from the provider can quote it.
+    console.warn('[brand-rooms] room_notice_mail_failed', JSON.stringify({ batch: batch.batchId, retryable: outcome.retryable }));
+  }
+}
+
+async function applySkips(sql: SqlRunner, skips: Map<SkipReason, string[]>, report: RoomNoticePassReport): Promise<void> {
+  for (const [reason, ids] of skips) {
+    if (ids.length === 0) continue;
+    await sql.query("update brand_room_notices set state = 'skipped', skip_reason = $2, lease_until = null where id = any($1::uuid[])", [ids, reason]);
+    report.skipped += ids.length;
+  }
+}
+
+/** The live pass: the configured mailer (live or fake) and push when the VAPID keys are set. */
+export async function runLiveRoomNoticePass(sql: SqlRunner, env: NodeJS.ProcessEnv = process.env): Promise<RoomNoticePassReport> {
+  const config = pushConfigFromEnv(env);
+  return runRoomNoticePass({ sql, mailer: getMailer(), push: config ? createWebPushSender(config) : null, env });
+}

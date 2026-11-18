@@ -8,7 +8,13 @@
  * - `render.reserve`: Deducts TWINGS credits (`composeFinalRenderKrw`) before high-resolution 1080p MP4 export
  *   under the organization lock (`reserveAllowance` + `brand_studio_jobs` `video_final` / `compose-1080p`).
  * - `render.refund`: Marks a failed client 1080p export row as `failed` (`usage_krw = null`) for an automatic
- *   100% credit refund.
+ *   100% credit refund. It applies only to the caller's own export reservation written by `render.reserve`
+ *   (`params.source = 'compose'`, `status = 'succeeded'`) and only within `COMPOSE_RENDER_REFUND_WINDOW_MS`
+ *   of its `created_at`. Music, SFX and upscale rows share the `compose-1080p` ledger model but refund
+ *   themselves server-side, so this operation never touches them; any other row yields `refunded: false`.
+ * - `assist.plan`: "말로 편집" (`docs/BRAND-EDITING-STUDIO.md` §4, `lib/brand-studio/edit-assist/service.ts`).
+ *   Behind `BRAND_STUDIO_EDIT_ASSIST`; off, it answers exactly like an unknown operation. Same gate and the
+ *   same per-minute budget as `chat.edit`, free.
  */
 import { z } from 'zod';
 import type { Viewer } from '@/lib/auth/identity';
@@ -18,15 +24,16 @@ import { creditsOf } from '@/lib/brand-studio/credits';
 import { callGeminiJson, studioGeminiConfig } from '@/lib/brand-studio/enhancer/gemini';
 import type { StudioDeps } from '@/lib/brand-studio/types';
 import { allowanceView, loadAllowance, reserveAllowance } from '@/lib/brand-studio/usage';
+import { AssistPlanInputSchema, planEditAssist, type AssistPlanResult } from '../edit-assist/service';
 import {
   ComposePatchesEnvelopeSchema,
   describeTimelinePatches,
   parseComposeChatCommand,
 } from './chat-intent';
-import { COMPOSE_FINAL_RENDER_MODEL, composeFinalRenderKrw } from './credits';
+import { COMPOSE_FINAL_RENDER_MODEL, COMPOSE_RENDER_REFUND_WINDOW_MS, composeFinalRenderKrw } from './credits';
 import { COMPOSE_ASPECTS, type ComposerProject, type TimelinePatch } from './timeline';
 
-export const COMPOSE_OPERATIONS = ['chat.edit', 'render.reserve', 'render.refund'] as const;
+export const COMPOSE_OPERATIONS = ['chat.edit', 'render.reserve', 'render.refund', 'assist.plan'] as const;
 export type ComposeOperation = (typeof COMPOSE_OPERATIONS)[number];
 
 export const COMPOSE_CHAT_LIMIT_PER_MIN = 20;
@@ -202,7 +209,8 @@ export type ComposeOperationResult =
   | ComposeFailure
   | ComposeChatResult
   | ComposeRenderReserveResult
-  | ComposeRenderRefundResult;
+  | ComposeRenderRefundResult
+  | AssistPlanResult;
 
 export interface ComposeExtraOptions {
   env?: Record<string, string | undefined>;
@@ -290,6 +298,10 @@ export async function runComposeOperation(
   if (typeof operation !== 'string' || !(COMPOSE_OPERATIONS as readonly string[]).includes(operation)) {
     return { ok: false, code: 'invalid' };
   }
+  // Flag off: `assist.plan` is indistinguishable from an unknown operation (no gate, no rate-limit slot).
+  if (operation === 'assist.plan' && !deps.env.editAssist) {
+    return { ok: false, code: 'invalid' };
+  }
   const organizationId = (input as { organizationId?: unknown } | null)?.organizationId;
   if (typeof organizationId !== 'string' || !UUID.test(organizationId)) {
     return { ok: false, code: 'invalid' };
@@ -346,6 +358,19 @@ export async function runComposeOperation(
       return { ok: true, kind: 'patches', patches: ai.patches, detail: ai.detail, creditsUsed: 0 };
     }
     return { ok: true, kind: 'unrecognized', creditsUsed: 0 };
+  }
+
+  if (operation === 'assist.plan') {
+    const parsed = AssistPlanInputSchema.safeParse(input);
+    if (!parsed.success) return { ok: false, code: 'invalid' };
+    // One budget with `chat.edit`: both are the same chat box to the user.
+    const slot = consumeComposeChatSlot(`${seatUserId}:${parsed.data.organizationId}`, nowMs);
+    if (!slot.ok) return { ok: false, code: 'rate_limited', retryAfterSec: slot.retryAfterSec };
+    return planEditAssist(parsed.data, {
+      env: extra?.env ?? process.env,
+      providerMode: deps.env.provider,
+      ...(extra?.fetchImpl ? { fetchImpl: extra.fetchImpl } : {}),
+    });
   }
 
   if (operation === 'render.reserve') {
@@ -428,12 +453,22 @@ export async function runComposeOperation(
       requireCreate(seat);
 
       await lockOrganization(tx, v.organizationId);
+      const refundableSince = new Date(now.getTime() - COMPOSE_RENDER_REFUND_WINDOW_MS);
       const updatedJob = await tx.query<{ id: string }>(
         `update brand_studio_jobs
             set status = 'failed', usage_krw = null, error_code = 'failed', finished_at = $4
           where id = $1 and organization_id = $2 and created_by = $3 and model = $5 and status = 'succeeded'
+            and params->>'source' = 'compose'
+            and created_at >= $6
           returning id`,
-        [v.jobId, v.organizationId, seat.userId, now.toISOString(), COMPOSE_FINAL_RENDER_MODEL],
+        [
+          v.jobId,
+          v.organizationId,
+          seat.userId,
+          now.toISOString(),
+          COMPOSE_FINAL_RENDER_MODEL,
+          refundableSince.toISOString(),
+        ],
       );
       const updated = await loadAllowance(tx, v.organizationId, deps.env, now);
       return {

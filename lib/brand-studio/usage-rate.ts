@@ -16,6 +16,7 @@
  */
 import {
   DEFAULT_REGION_EDIT_MODEL,
+  REGION_V2_MODEL,
   estimateImageUsd,
   estimateVideoUsd,
   studioModel,
@@ -48,15 +49,22 @@ export function imageRunUsd(input: { model: string; resolution: string; referenc
   return estimateImageUsd({ model: input.model, resolution: input.resolution, references: input.references, quality: input.quality ?? null }) * input.count;
 }
 
-/** The model a partial edit runs on: the picked one when it edits well, else the registry default. */
-export function regionEditModel(id: string): StudioImageModel {
+/**
+ * The model a partial edit runs on: the picked one when it edits well, else the registry default. With
+ * region edit v2 (`v2`, flag `BRAND_STUDIO_REGION_V2`) always `REGION_V2_MODEL`, whatever was picked.
+ */
+export function regionEditModel(id: string, v2 = false): StudioImageModel {
+  if (v2) return studioModel(REGION_V2_MODEL) as StudioImageModel;
   const picked = studioModel(id);
   return (picked && picked.medium === 'image' && picked.availability === 'live' && picked.regionEdit ? picked : studioModel(DEFAULT_REGION_EDIT_MODEL)) as StudioImageModel;
 }
 
-/** A partial edit is one edit call at 2K (or the model's default), the picture itself counting as a reference. */
-export function regionEditRun(id: string, references: number, quality?: string | null): { model: StudioImageModel; resolution: string; usd: number } {
-  const model = regionEditModel(id);
+/**
+ * A partial edit is one edit call at 2K (or the model's default), the picture itself counting as a
+ * reference. `v2`: on `REGION_V2_MODEL`, which has no quality choice (a `quality` passed is ignored).
+ */
+export function regionEditRun(id: string, references: number, quality?: string | null, v2 = false): { model: StudioImageModel; resolution: string; usd: number } {
+  const model = regionEditModel(id, v2);
   const resolution = (model.resolutions as readonly string[]).includes('2K') ? '2K' : model.defaultResolution;
   return { model, resolution, usd: estimateImageUsd({ model: model.id, resolution, references: references + 1, quality: quality ?? null }) };
 }

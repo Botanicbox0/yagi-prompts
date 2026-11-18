@@ -41,6 +41,8 @@ interface ReplyInput {
   y: number | null;
   /** A drawing (rooms, docs/BRAND-ROOMS.md §6), sent as JSON; the review contract checks its shape. */
   strokes: unknown;
+  /** 'team': a note only the YAGI team reads (docs/BRAND-ROOMS-FEEDBACK.md §5). A reply takes its thread's. */
+  visibility: 'public' | 'team';
 }
 
 const reply: AdminOperation<ReplyInput> = {
@@ -52,6 +54,8 @@ const reply: AdminOperation<ReplyInput> = {
     if (!atMs.ok || !endMs.ok || !x.ok || !y.ok) return { ok: false, detail: 'atMs, endMs, x and y must be numbers' };
     const body = f.text(form, 'body');
     if (!body) return { ok: false, detail: 'body is required' };
+    const visibility = f.str(form, 'visibility') || 'public';
+    if (visibility !== 'public' && visibility !== 'team') return { ok: false, detail: 'visibility must be public or team' };
     let strokes: unknown = null;
     const rawStrokes = f.str(form, 'strokes');
     if (rawStrokes) {
@@ -73,6 +77,7 @@ const reply: AdminOperation<ReplyInput> = {
         x: x.value,
         y: y.value,
         strokes,
+        visibility,
       },
     };
   },

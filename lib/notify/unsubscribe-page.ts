@@ -71,6 +71,30 @@ export function renderUnsubscribed(input: UnsubscribePageInput): string {
   );
 }
 
+/**
+ * The project room scope (docs/BRAND-ROOMS-FEEDBACK.md §2.2, §10): one organization's room mail is off.
+ * The confirmed title, sentence and one link (§10.2/§10.3). The way back is the settings section of the
+ * messages inbox on the brand host, not `/account`.
+ */
+export function renderRoomEmailUnsubscribed(input: { locale: Locale; settingsUrl: string }): string {
+  const copy = getDictionary(input.locale).roomsNotices.unsubscribed;
+  // Korean wraps between words, never inside one ("거부했습/니다" at 390px); a word wider than the
+  // screen may still break. Only this page: the other scopes' pages keep their bytes.
+  const wrap = 'word-break:keep-all;overflow-wrap:anywhere;';
+
+  return shell(
+    input.locale,
+    copy.title,
+    `<h1 style="margin:0 0 20px 0;font-size:34px;line-height:1.05;font-weight:800;text-transform:uppercase;${wrap}">${escapeHtml(
+      copy.title,
+    )}</h1>
+  <p style="margin:0 0 32px 0;font-size:16px;line-height:1.6;${wrap}">${escapeHtml(copy.body)}</p>
+  <p style="margin:0;font-family:${MONO};font-size:12px;line-height:2;">
+    <a href="${escapeHtml(input.settingsUrl)}" style="color:${BLUE};">${escapeHtml(copy.link)} &rarr;</a>
+  </p>`,
+  );
+}
+
 /** A token that was truncated, forged, or signed with a key this deployment no longer has. */
 export function renderUnsubscribeInvalid(locale: Locale): string {
   const dict = getDictionary(locale);

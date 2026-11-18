@@ -44,6 +44,7 @@ async function storeOne(deps: StudioDeps, job: JobRow, output: OutputRow, result
   const region = job.kind === 'region_edit' ? job.work.region : undefined;
   let patchPng: Buffer | undefined;
   let maskPng: Buffer | undefined;
+  let patchBox = region?.plan.box;
   if (region) {
     const original = await deps.media.read(region.sourceKey);
     const composed = await deps.intel.compositeRegion({ original, edited: bytes, plan: region.plan });
@@ -55,6 +56,8 @@ async function storeOne(deps: StudioDeps, job: JobRow, output: OutputRow, result
     mime = composed.mime;
     patchPng = composed.patchPng;
     maskPng = composed.maskPng;
+    // Region edit v2 may widen the paste zone; the patch covers the zone it used.
+    if (composed.box) patchBox = composed.box;
   }
   const keys: string[] = [];
   try {
@@ -76,7 +79,7 @@ async function storeOne(deps: StudioDeps, job: JobRow, output: OutputRow, result
           maskKey = (await deps.media.put(maskPng, 'image/png')).key;
           keys.push(maskKey);
         }
-        storedPatch = { patchKey, maskKey, box: { ...region.plan.box } };
+        storedPatch = { patchKey, maskKey, box: { ...(patchBox ?? region.plan.box) } };
       }
     } else {
       const info = videoInfo(bytes);

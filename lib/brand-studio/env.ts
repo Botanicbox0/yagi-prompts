@@ -4,7 +4,12 @@
  * secrets are compared in constant time by `secretMatches`).
  */
 import { timingSafeEqual } from 'node:crypto';
-import { brandStudioOutpaintOpen, brandStudioProjectsOpen } from '@/lib/flags';
+import {
+  brandStudioEditAssistOpen,
+  brandStudioOutpaintOpen,
+  brandStudioProjectsOpen,
+  brandStudioRegionV2Open,
+} from '@/lib/flags';
 import { STUDIO_LANES, type StudioLane } from './models';
 
 export type StudioEnvSource = Record<string, string | undefined>;
@@ -25,6 +30,10 @@ export interface StudioEnv {
   outpaint?: boolean;
   /** `BRAND_STUDIO_PROJECTS=on`: runs may belong to a project (lib/flags.ts, lib/brand-studio/job-projects.ts). */
   projects?: boolean;
+  /** `BRAND_STUDIO_REGION_V2=on`: partial edits run on one engine with a wide window (lib/flags.ts). */
+  regionV2?: boolean;
+  /** `BRAND_STUDIO_EDIT_ASSIST=on`: the editing studio's "말로 편집" (`assist.plan`, lib/flags.ts). */
+  editAssist?: boolean;
 }
 
 function whole(value: string | undefined, fallback: number, max: number): number {
@@ -70,6 +79,8 @@ export function studioEnv(env: StudioEnvSource = process.env): StudioEnv {
     appOrigin,
     outpaint: brandStudioOutpaintOpen(env),
     projects: brandStudioProjectsOpen(env),
+    regionV2: brandStudioRegionV2Open(env),
+    editAssist: brandStudioEditAssistOpen(env),
   };
 }
 

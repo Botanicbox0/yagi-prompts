@@ -1,0 +1,304 @@
+/*
+ * "말로 편집" panel (docs/BRAND-EDITING-STUDIO.md §4.1). Same workspace tokens as the composer
+ * (`--ys-*`): borderless panel, surface wells, one strong button (Apply, the composer's dark action
+ * style — pink stays with the page's export CTA). Every target is at least 32px, focus is always visible.
+ */
+
+.panel {
+  display: grid;
+  align-content: start;
+  gap: 12px;
+  padding: 16px;
+  border-radius: var(--ys-r-card);
+  background: var(--ys-panel);
+  border: 0;
+  min-width: 0;
+}
+
+.title {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 650;
+  letter-spacing: -0.035em;
+  line-height: 1.25;
+  color: var(--ys-ink);
+}
+
+.log {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-height: 120px;
+  max-height: min(56vh, 460px);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: 10px;
+  border-radius: 14px;
+  background: var(--ys-surface);
+}
+
+/* Nothing said yet: only as tall as the hint, so the examples and the input sit right under it. */
+.log[data-empty] {
+  min-height: 0;
+}
+
+.hint,
+.pending {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--ys-ink-helper);
+}
+
+.pending {
+  font-size: 12px;
+  color: var(--ys-ink-muted);
+}
+
+.user {
+  align-self: flex-end;
+  max-width: 88%;
+  padding: 8px 11px;
+  border-radius: 12px;
+  background: var(--ys-active-bg);
+  color: var(--ys-active-fg);
+  font-size: 13px;
+  line-height: 1.45;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.card {
+  display: grid;
+  gap: 8px;
+  padding: 10px 12px;
+  border-radius: 12px;
+  background: var(--ys-panel);
+  color: var(--ys-ink);
+  font-size: 13px;
+  line-height: 1.45;
+  min-width: 0;
+}
+
+.card[data-status='dismissed'],
+.card[data-state='undone'] {
+  color: var(--ys-ink-muted);
+}
+
+.cardTitle {
+  margin: 0;
+  font-size: 13px;
+  font-weight: 650;
+  letter-spacing: -0.02em;
+}
+
+.status {
+  margin: 0;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--ys-ink-secondary);
+}
+
+.lines {
+  display: grid;
+  gap: 4px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  font-variant-numeric: tabular-nums;
+  overflow-wrap: anywhere;
+}
+
+.lines li[data-kind='total'] {
+  padding-top: 4px;
+  border-top: 1px solid var(--ys-hairline);
+  color: var(--ys-ink-secondary);
+}
+
+.note {
+  align-self: flex-start;
+  max-width: 100%;
+  margin: 0;
+  padding: 8px 11px;
+  border-radius: 12px;
+  background: var(--ys-panel);
+  color: var(--ys-ink);
+  font-size: 13px;
+  line-height: 1.45;
+  overflow-wrap: anywhere;
+}
+
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+}
+
+.apply,
+.ghost,
+.choice,
+.example,
+.send {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 32px;
+  padding: 0 12px;
+  border-radius: var(--ys-r-pill);
+  border: 0;
+  font: inherit;
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: -0.02em;
+  font-variant-numeric: tabular-nums;
+  cursor: pointer;
+  transition: background-color 160ms var(--ys-ease), opacity 160ms var(--ys-ease);
+}
+
+.apply {
+  padding: 0 16px;
+  background: var(--ys-active-bg);
+  color: var(--ys-active-fg);
+  font-weight: 650;
+}
+
+.apply:hover {
+  opacity: 0.88;
+}
+
+.ghost,
+.choice,
+.example,
+.send {
+  background: var(--ys-surface);
+  color: var(--ys-ink);
+}
+
+.ghost:hover:not(:disabled),
+.choice:hover:not(:disabled),
+.example:hover,
+.send:hover:not(:disabled) {
+  background: var(--ys-hover);
+}
+
+.ghost:disabled,
+.choice:disabled,
+.send:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.choice[aria-pressed='true'],
+.choice[aria-pressed='true']:disabled {
+  background: var(--ys-active-bg);
+  color: var(--ys-active-fg);
+  opacity: 1;
+}
+
+.compare {
+  touch-action: none;
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-touch-callout: none;
+}
+
+.compare[aria-pressed='true'] {
+  background: var(--ys-hover);
+}
+
+.examples {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.example {
+  height: auto;
+  padding: 6px 12px;
+  font-weight: 500;
+  text-align: left;
+}
+
+.form {
+  display: grid;
+  gap: 8px;
+}
+
+.input {
+  box-sizing: border-box;
+  width: 100%;
+  min-height: 68px;
+  padding: 10px 12px;
+  border-radius: 12px;
+  border: 0;
+  background: var(--ys-surface);
+  color: var(--ys-ink);
+  font: inherit;
+  font-size: 13px;
+  line-height: 1.45;
+  resize: vertical;
+}
+
+.input:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.send {
+  justify-self: end;
+  min-height: 36px;
+  padding: 0 16px;
+}
+
+.apply:focus-visible,
+.ghost:focus-visible,
+.choice:focus-visible,
+.example:focus-visible,
+.send:focus-visible {
+  outline: 2px solid var(--ys-focus);
+  outline-offset: 2px;
+}
+
+/* A new proposal or question takes focus as a whole card (see `focusEntryId`). */
+.card:focus-visible {
+  outline: 2px solid var(--ys-focus);
+  outline-offset: 2px;
+}
+
+.input:focus-visible {
+  outline: 1.5px solid var(--ys-ink);
+  outline-offset: 0;
+}
+
+.foot {
+  margin: 0;
+  padding-top: 8px;
+  border-top: 1px solid var(--ys-hairline);
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--ys-ink-muted);
+}
+
+.previewBar {
+  display: flex;
+  align-items: center;
+  min-height: 36px;
+  padding: 8px 14px;
+  border-radius: 12px;
+  background: var(--ys-panel);
+  box-shadow: inset 0 0 0 1px var(--ys-hairline);
+  color: var(--ys-ink);
+  font-size: 13px;
+  line-height: 1.45;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .apply,
+  .ghost,
+  .choice,
+  .example,
+  .send {
+    transition: none;
+  }
+}

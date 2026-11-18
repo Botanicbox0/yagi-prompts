@@ -26,7 +26,7 @@ vi.mock('next/navigation', () => ({
 }));
 
 import { createMemoryMediaStore } from '@/lib/brand-studio/media-store';
-import { runRoomOperation } from '@/lib/brand-rooms/messages';
+import { runRoomOperation, staffSendMessage } from '@/lib/brand-rooms/messages';
 import RoomsPage from '@/app/(admin)/admin/brand-rooms/page';
 import RoomPage from '@/app/(admin)/admin/brand-rooms/[organizationId]/page';
 import { studioFixture, viewerOf, type StudioFixture } from '../../brand-studio/server/helpers';
@@ -55,15 +55,35 @@ afterAll(async () => {
 });
 
 describe('/admin/brand-rooms', () => {
-  it('lists conversations across brands, the waiting ones first, and every open brand', async () => {
-    const page = await html(RoomsPage({ searchParams: Promise.resolve({}) }));
+  it('lists projects across brands: a new request first, each opening its desk, and every open brand', async () => {
+    // The team has not written in the project yet: a new request, with the brand's waiting line.
+    let page = await html(RoomsPage({ searchParams: Promise.resolve({}) }));
     expect(page).toContain('data-admin-brand-rooms');
-    expect(page).toContain(`data-admin-room-row="${f.orgId}:${f.projectId}"`);
+    expect(page).toContain('data-admin-room-new-requests');
+    expect(page).toContain(`data-admin-room-new="${f.orgId}:${f.projectId}"`);
+    expect(page).not.toContain(`data-admin-room-row="${f.orgId}:${f.projectId}"`);
     expect(page).toContain('Spring launch');
     expect(page).toContain('첫 시안은 언제 볼 수 있을까요?');
     expect(page).toContain('1개 기다림');
-    expect(page).toContain(`href="/admin/brand-rooms/${f.orgId}?channel=${f.projectId}"`);
+    expect(page).toContain(`href="/admin/brand-rooms/${f.orgId}/${f.projectId}"`);
     expect(page).toContain('data-admin-room-organizations');
+    expect(page).toContain(`href="/admin/brand-rooms/${f.orgId}"`);
+    expect(page).toContain('href="/admin/brand-rooms/storyboards"');
+    expect(page).toContain('href="/admin/brand-rooms/reviews"');
+    // The back link says where it goes (the console's name for /admin/brand-workspace), the second table has a
+    // heading, and the waiting count sits beside the title.
+    expect(page).toContain('<a href="/admin/brand-workspace" class="admin-back">← <!-- -->브랜드 작업공간</a>');
+    expect(page).toMatch(/data-admin-room-conversations="true"><h2[^>]*>브랜드 대화<\/h2>/);
+    expect(page).toContain('class="admin-count-chip" aria-label="1개 기다림"');
+
+    // Once the team answers, the project is an ordinary row that still opens the desk.
+    await staffSendMessage({ sql: f.sql, media: createMemoryMediaStore() }, db.viewer!, { organizationId: f.orgId, projectId: f.projectId, requestId: randomUUID(), body: '금요일에 보여 드릴게요.' });
+    page = await html(RoomsPage({ searchParams: Promise.resolve({}) }));
+    expect(page).not.toContain(`data-admin-room-new="${f.orgId}:${f.projectId}"`);
+    expect(page).toContain(`data-admin-room-row="${f.orgId}:${f.projectId}"`);
+    expect(page).toContain(`href="/admin/brand-rooms/${f.orgId}/${f.projectId}"`);
+    // Nothing waits now: no count badge beside the title.
+    expect(page).not.toContain('admin-count-chip');
   });
 
   it('opens one brand: its channels, the chosen conversation and the way to its storyboards and deliverables', async () => {
@@ -73,6 +93,7 @@ describe('/admin/brand-rooms', () => {
     expect(page).toContain(`data-admin-room-channel="${f.projectId}"`);
     expect(page).toContain(`data-room-channel="${f.projectId}"`);
     expect(page).toContain('data-admin-room-work-links');
+    expect(page).toContain(`href="/admin/brand-rooms/${f.orgId}/${f.projectId}" data-admin-room-desk-link`);
     expect(page).toContain(`/admin/brand-rooms/storyboards?organizationId=${f.orgId}&amp;projectId=${f.projectId}`);
     expect(page).toContain(`/admin/brand-rooms/reviews?organizationId=${f.orgId}&amp;projectId=${f.projectId}`);
     const general = await html(RoomPage({ params: Promise.resolve({ organizationId: f.orgId }), searchParams: Promise.resolve({}) }));

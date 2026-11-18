@@ -21,6 +21,17 @@ export interface RegionPlan {
   aspect: string;
   /** The size the crop is enlarged to before it is sent. */
   work: { width: number; height: number };
+  /**
+   * Window plans only (region edit v2, ./window.ts): the customer's box. `box` is then the paste zone
+   * around it and `roi` the window the model sees. Absent on crop plans (`planRegion`).
+   */
+  select?: PixelRect;
+  /** Window plans: `work` width over `roi` width (1 = the customer's pixels went 1:1). */
+  downscale?: number;
+  /** Window plans: the size the model returns for `aspect`, when known. */
+  output?: { width: number; height: number };
+  /** Window plans: no supported shape held the zone, so the whole picture went at the nearest shape. */
+  stretched?: boolean;
 }
 
 /** Context kept around the box on each side when the picture allows it. */

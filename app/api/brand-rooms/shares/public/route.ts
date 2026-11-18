@@ -1,7 +1,9 @@
 import { createHash } from 'node:crypto';
-import { NextResponse, type NextRequest } from 'next/server';
+import { after, NextResponse, type NextRequest } from 'next/server';
 import { getSqlRunner } from '@/lib/db/connect';
 import { brandRoomsOpen } from '@/lib/flags';
+import { notifySlackBrandConcierge } from '@/lib/brands/concierge-slack';
+import type { RoomTeamNotice } from '@/lib/brand-rooms/team-notice';
 import { resolveRequestUrl, sameOriginMutation } from '@/lib/routing/surfaces';
 import { STUDIO_HEADERS } from '@/lib/brand-studio/http';
 import { createStudioMediaStore } from '@/lib/brand-studio/media-store';
@@ -15,7 +17,8 @@ import { shareHttpStatus, type ShareErrorCode } from '@/lib/brand-rooms/share-co
  *
  *   POST { op: 'view', token }                      count this visitor once per hour
  *   POST { op: 'unlock', token, passphrase }        the passphrase gate; sets an http-only proof cookie
- *   POST { op: 'comment', token, name, body, … }    a guest's note, when the link allows comments
+ *   POST { op: 'comment', token, name, body, … }    a guest's note, when the link allows comments; the team's
+ *                                                   internal notifier hears about it after the answer
  *
  * Besides the per-link limits in the service, each server instance also slows down one address that
  * hammers this door. The address is held in memory for a minute and never stored.
@@ -44,6 +47,17 @@ const fail = (code: ShareErrorCode) => json({ ok: false, code }, shareHttpStatus
 
 function log(event: string, detail: Record<string, unknown> = {}): void {
   console.warn(`[brand-rooms] ${event}`, JSON.stringify(detail).slice(0, 600));
+}
+
+/** A guest's note reaches the team's internal notifier after the answer; the guest is told nothing about it. */
+function tellTheTeam(sql: ShareDeps['sql'], notice: RoomTeamNotice): void {
+  after(async () => {
+    try {
+      await notifySlackBrandConcierge(sql, notice);
+    } catch (error) {
+      log('guest_note_notice_failed', { message: error instanceof Error ? error.message.slice(0, 200) : 'unknown' });
+    }
+  });
 }
 
 export async function POST(request: NextRequest) {
@@ -86,7 +100,7 @@ export async function POST(request: NextRequest) {
       response.cookies.set(result.cookie.name, result.cookie.value, { httpOnly: true, sameSite: 'lax', secure, path: '/', maxAge: result.cookie.maxAge });
       return response;
     }
-    const result = await guestComment(deps, body, cookies);
+    const result = await guestComment({ ...deps, notify: (notice) => tellTheTeam(sql, notice) }, body, cookies);
     if (!result.ok) return fail(result.code);
     return json(result, 201);
   } catch (error) {

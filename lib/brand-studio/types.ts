@@ -50,6 +50,19 @@ export interface EnhanceInput {
   brand?: { name?: string; tone?: string; palette?: string[]; rules?: string[] } | null;
   /** Region edit only: the enlarged cropped region sent as image 1 / Figure 1 to the model. */
   editCropThumb?: { bytes: Uint8Array; mime: string } | null;
+  /**
+   * Region edit v2 (`BRAND_STUDIO_REGION_V2`): `editCropThumb` is then the wide window the engine gets as
+   * Figure 1, and this says where the customer's box sits in it (whole percentages of the window) with a
+   * close-up of the box for the prompt writer's eyes only (not sent to the engine).
+   */
+  regionWindow?: {
+    where: string;
+    left: number;
+    top: number;
+    right: number;
+    bottom: number;
+    closeUp?: { bytes: Uint8Array; mime: string } | null;
+  } | null;
   video?: {
     seconds: number | null;
     aspect: string;
@@ -80,6 +93,11 @@ export interface RegionPlan {
   box: { left: number; top: number; width: number; height: number };
   aspect: string;
   work: { width: number; height: number };
+  /** Region edit v2 window plans (lib/brand-studio/region-edit/window.ts): the customer's box; `box` is the paste zone. */
+  select?: { left: number; top: number; width: number; height: number };
+  downscale?: number;
+  output?: { width: number; height: number };
+  stretched?: boolean;
 }
 export interface IntelDeps {
   fetch: typeof fetch;
@@ -96,6 +114,8 @@ export interface StudioIntel {
   /** Optional so a test double may leave it out; without it a blocked run is simply not retried. */
   rewriteBlockedPrompt?(input: BlockedInput, deps: IntelDeps): Promise<BlockedRewrite>;
   planRegion(image: { width: number; height: number }, box: RegionBox, aspects: readonly string[]): RegionPlan;
+  /** Region edit v2 window plan. Optional so a test double may leave it out; a v2 job then fails in prepare. */
+  planRegionWindow?(image: { width: number; height: number }, box: RegionBox): RegionPlan;
   cropForEdit(original: Uint8Array, plan: RegionPlan): Promise<{ bytes: Uint8Array; mime: 'image/png' }>;
   compositeRegion(input: { original: Uint8Array; edited: Uint8Array; plan: RegionPlan; feather?: number }): Promise<{
     bytes: Uint8Array;
@@ -107,6 +127,8 @@ export interface StudioIntel {
     misaligned?: boolean;
     ringResidual?: number;
     transform?: { sx: number; sy: number; dx: number; dy: number };
+    /** Region edit v2: the paste zone the patch and mask cover (may be wider than `plan.box`). */
+    box?: { left: number; top: number; width: number; height: number };
   }>;
 }
 
@@ -158,6 +180,11 @@ export interface StudioJobParams {
   source?: { assetId?: string; outputId?: string };
   /** Region edit: `fill` marks an internal "빈 곳 채우기" strip, left out of every list of runs and results. */
   purpose?: 'fill';
+  /**
+   * Region edit v2 (`BRAND_STUDIO_REGION_V2` was on when it was planned): the window plan
+   * (lib/brand-studio/region-edit/window.ts) and the change-only paste. Absent: the crop plan.
+   */
+  regionWindow?: true;
   draftOutputId?: string;
   /** Seconds of the attached reference video (estimates, the film reader). Never set for `blueprint`: its video is not attached. */
   referenceVideoSeconds?: number;

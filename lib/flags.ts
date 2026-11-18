@@ -153,6 +153,27 @@ export function brandStudioOutpaintOpen(env: Record<string, string | undefined> 
 }
 
 /**
+ * Region edit v2 ("부분 수정", docs/BRAND-STUDIO-V6-PLAN.md): every partial edit runs on one engine we
+ * chose (Seedream 5.5, no model or quality choice), the engine sees a wide window of the picture and only
+ * what changed near the box is pasted back. Default OFF: open only when the server environment says
+ * exactly `BRAND_STUDIO_REGION_V2=on`. Off means every screen, request and answer is as it was.
+ */
+export function brandStudioRegionV2Open(env: Record<string, string | undefined> = process.env): boolean {
+  return env.BRAND_STUDIO_REGION_V2 === 'on';
+}
+
+/**
+ * "말로 편집" in the editing studio (docs/BRAND-EDITING-STUDIO.md §4, §7 E1): an instruction becomes a
+ * validated plan of timeline steps that the screen previews and applies (compose operation `assist.plan`).
+ * Default OFF: open only when the server environment says exactly `BRAND_STUDIO_EDIT_ASSIST=on`. Off means
+ * `assist.plan` answers exactly like an unknown operation and every other screen, request and answer is as
+ * it was (`chat.edit` included).
+ */
+export function brandStudioEditAssistOpen(env: Record<string, string | undefined> = process.env): boolean {
+  return env.BRAND_STUDIO_EDIT_ASSIST === 'on';
+}
+
+/**
  * A studio run can belong to a project (docs/BRAND-STUDIO-V6-PLAN.md §7 C, migration 0091): the image
  * studio gets the video studio's project switcher, new runs carry the chosen project, and the assets page
  * can put an existing run in a project. Default OFF: open only when the server environment says exactly
@@ -191,4 +212,14 @@ export function petTemplatesOpen(env: Record<string, string | undefined> = proce
  */
 export function brandRoomsOpen(env: NodeJS.ProcessEnv = process.env): boolean {
   return env.BRAND_ROOMS === 'on';
+}
+
+/**
+ * docs/BRAND-ROOMS-FEEDBACK.md §2 — mail and push notices to brand members about their project rooms.
+ * Default OFF: on only when the server environment says exactly `BRAND_ROOM_NOTIFY=on` (and rooms are
+ * open). Off means no notice is queued and `/api/brand-rooms/notices/tick` returns at once. Turning it on
+ * waits for the founder's approval of the copy (the dictionary strings are drafts).
+ */
+export function brandRoomNotifyOpen(env: NodeJS.ProcessEnv = process.env): boolean {
+  return env.BRAND_ROOM_NOTIFY === 'on';
 }

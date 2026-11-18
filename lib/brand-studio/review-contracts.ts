@@ -192,6 +192,12 @@ export interface ReviewListItem {
   stackId?: string;
   version?: number;
   source?: ReviewSource;
+  /**
+   * The team's lists only (0093): team notes, counted apart. `commentsOpen`/`commentsTotal` above never
+   * include them, on any screen.
+   */
+  teamCommentsOpen?: number;
+  teamCommentsTotal?: number;
 }
 
 /** One version of a deliverable, as the version switcher and "나란히 비교" need it. */
@@ -247,6 +253,11 @@ export interface ReviewComment {
   guest?: boolean;
   /** Rooms (0084): an open note of an earlier version, shown here read-only until resolved. */
   carriedFrom?: { version: number } | null;
+  /**
+   * Team notes (0093): present, and true, only on a note the YAGI team keeps to itself. Only the admin page
+   * receives such notes; every brand, room and share-link read leaves them out.
+   */
+  team?: true;
 }
 
 export interface ReviewFailure {

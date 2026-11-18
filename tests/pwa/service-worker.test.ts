@@ -27,12 +27,12 @@ function client(url: string): FakeClient {
   return c;
 }
 
-function boot(windows: FakeClient[] = [], caches: Record<string, unknown> = {}) {
+function boot(windows: FakeClient[] = [], caches: Record<string, unknown> = {}, origin = ORIGIN) {
   const handlers = new Map<string, Handler>();
   const shown: Array<{ title: string; options: Record<string, unknown> }> = [];
   const opened: string[] = [];
   const self = {
-    location: new URL(`${ORIGIN}/sw.js`),
+    location: new URL(`${origin}/sw.js`),
     addEventListener: (type: string, handler: Handler) => handlers.set(type, handler),
     skipWaiting: vi.fn(async () => undefined),
     registration: {
@@ -142,6 +142,57 @@ describe('public/sw.js (docs/PLATFORM-2.0.md §5.2)', () => {
     const broken = boot([], { open: async () => { throw new Error('UnknownError: Unexpected internal error.'); } });
     await broken.dispatch('install', {});
     expect(broken.self.skipWaiting).toHaveBeenCalledTimes(1);
+  });
+
+  /**
+   * docs/BRAND-ROOMS-FEEDBACK.md §2.2, §10: the same worker is registered on brand.twings.app for the
+   * project room notices, and a person's pushes reach every browser they subscribed in, on either host.
+   * The link the server sends wins over the fallback, and it opens on the host that serves its path.
+   */
+  describe('on both production hosts (project room notices)', () => {
+    const BRAND = 'https://brand.twings.app';
+    const ROOM = '/brand/rooms/b0000000-0000-4000-8000-00000000000b?organizationId=a0000000-0000-4000-8000-00000000000a';
+
+    it('keeps a room link on the brand origin where it was registered, over the /renders fallback', async () => {
+      const sw = boot([], {}, BRAND);
+      await sw.dispatch('push', pushEvent({ title: '새 시안 도착', body: 'x', url: ROOM, tag: 'b0000000-0000-4000-8000-00000000000b', lang: 'ko' }));
+      expect((sw.shown[0]!.options.data as { url: string }).url).toBe(`${BRAND}${ROOM}`);
+      await sw.dispatch('notificationclick', clickEvent(sw.shown[0]!.options.data));
+      expect(sw.opened).toEqual([`${BRAND}${ROOM}`]);
+    });
+
+    it('brings an open brand window to the room', async () => {
+      const open = client(`${BRAND}/brand/studio`);
+      const sw = boot([open], {}, BRAND);
+      await sw.dispatch('notificationclick', clickEvent({ url: `${BRAND}${ROOM}` }));
+      expect(open.navigatedTo).toBe(`${BRAND}${ROOM}`);
+      expect(sw.opened).toEqual([]);
+    });
+
+    it('opens a room link that reached a twings.app browser on the brand host, in a new window', async () => {
+      const personal = client(`${ORIGIN}/ko/video`);
+      const sw = boot([personal], {}, ORIGIN);
+      await sw.dispatch('push', pushEvent({ title: 'x', url: ROOM }));
+      await sw.dispatch('notificationclick', clickEvent(sw.shown[0]!.options.data));
+      expect(sw.opened).toEqual([`${BRAND}${ROOM}`]);
+      expect(personal.navigatedTo).toBeNull();
+    });
+
+    it('opens a render push that reached a brand.twings.app browser on twings.app, fallback included', async () => {
+      const sw = boot([client(`${BRAND}/brand/rooms`)], {}, BRAND);
+      await sw.dispatch('notificationclick', clickEvent({ url: `${BRAND}/renders/abc` }));
+      await sw.dispatch('notificationclick', clickEvent({}));
+      expect(sw.opened).toEqual([`${ORIGIN}/renders/abc`, `${ORIGIN}/renders`]);
+    });
+
+    it('still refuses foreign links on the brand host, and moves nothing between hosts it does not know', async () => {
+      const brand = boot([], {}, BRAND);
+      await brand.dispatch('notificationclick', clickEvent({ url: 'https://evil.example/brand/rooms' }));
+      expect(brand.opened).toEqual([`${ORIGIN}/renders`]);
+      const local = boot([], {}, 'http://localhost:3000');
+      await local.dispatch('notificationclick', clickEvent({ url: ROOM }));
+      expect(local.opened).toEqual([`http://localhost:3000${ROOM}`]);
+    });
   });
 
   it('still answers navigations network first and caches nothing but the offline page', () => {

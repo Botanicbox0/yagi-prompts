@@ -12,9 +12,10 @@ import { studioModel, type StudioImageModel, type StudioModel } from './models';
 import { resolveReferences, type ResolvedRef } from './plan';
 import { StudioDenied } from './access';
 import { replaceMarks } from './enhancer/marks';
+import { describeSelection, selectionLine } from './region-edit/window';
 import { clarifiedOf, withClarified } from './revision/clarify';
 import { addedRefsOf, refKey, renumberRequest, revisionChain } from './revision/recipe';
-import type { EnhanceInput, EnhanceResult, JobRow, StudioDeps, StudioJobParams, StudioJobWork } from './types';
+import type { EnhanceInput, EnhanceResult, JobRow, RegionPlan, StudioDeps, StudioJobParams, StudioJobWork } from './types';
 
 export class PrepareFailure extends Error {
   constructor(readonly code: StudioErrorCode, readonly detail: string) {
@@ -32,6 +33,56 @@ export function providerUrl(deps: Pick<StudioDeps, 'env'>, url: string): string 
 export function sendPrompt(job: Pick<JobRow, 'final_prompt' | 'prompt' | 'params'>): string {
   if (job.final_prompt) return job.final_prompt;
   return [job.prompt, job.params?.change ?? ''].map((s) => s.trim()).filter(Boolean).join('\n');
+}
+
+/** Long side of the close-up of the customer's box the prompt writer sees (region edit v2). */
+const CLOSE_UP_LONG = 768;
+
+/**
+ * Region edit: the plan, the picture the model receives as image 1, and (v2, `params.regionWindow`)
+ * what the prompt writer is told about where the customer's box sits in it.
+ */
+export async function regionEditPlan(
+  deps: Pick<StudioDeps, 'intel' | 'log'>,
+  original: Uint8Array,
+  size: { width: number; height: number },
+  params: Pick<StudioJobParams, 'box' | 'regionWindow'>,
+  model: StudioImageModel,
+): Promise<{ plan: RegionPlan; crop: { bytes: Uint8Array; mime: 'image/png' }; regionWindow: EnhanceInput['regionWindow'] }> {
+  const box = params.box!;
+  if (!params.regionWindow) {
+    const plan = deps.intel.planRegion(size, box, model.aspects);
+    return { plan, crop: await deps.intel.cropForEdit(original, plan), regionWindow: null };
+  }
+  if (!deps.intel.planRegionWindow) throw new PrepareFailure('failed', 'no window planner');
+  const plan = deps.intel.planRegionWindow(size, box);
+  const crop = await deps.intel.cropForEdit(original, plan);
+  // The close-up: the paste zone around the box, small, for the prompt writer only.
+  const zone = plan.box;
+  const k = Math.min(1, CLOSE_UP_LONG / Math.max(zone.width, zone.height));
+  const closeUp = await deps.intel
+    .cropForEdit(original, {
+      roi: zone,
+      box: plan.select ?? zone,
+      aspect: plan.aspect,
+      work: { width: Math.max(1, Math.round(zone.width * k)), height: Math.max(1, Math.round(zone.height * k)) },
+    })
+    .catch(() => null);
+  deps.log?.('studio_region_window', {
+    window: `${plan.roi.width}x${plan.roi.height}`,
+    picture: `${size.width}x${size.height}`,
+    aspect: plan.aspect,
+    work: `${plan.work.width}x${plan.work.height}`,
+    downscale: plan.downscale ?? 1,
+    ...(plan.stretched ? { stretched: true } : {}),
+  });
+  return { plan, crop, regionWindow: { ...describeSelection(plan), closeUp } };
+}
+
+/** Region edit v2: the words sent end with where the part is, since the engine gets no mask. */
+export function withSelectionLine(prompt: string, plan: RegionPlan): string {
+  const line = selectionLine(describeSelection(plan));
+  return `${prompt.trim().slice(0, 8000 - line.length - 1)}\n${line}`;
 }
 
 /** The confirmed brand identity in the enhancer's words; null when there is none or brand learning is closed. */
@@ -258,6 +309,7 @@ export function enhanceInputOf(
   sheet: FilmSheet | null,
   editCropThumb?: EnhanceInput['editCropThumb'],
   revision?: EnhanceInput['revision'],
+  regionWindow?: EnhanceInput['regionWindow'],
 ): EnhanceInput {
   const p = job.params;
   const kind = enhanceKind(job.kind) ?? 'image';
@@ -270,6 +322,7 @@ export function enhanceInputOf(
     references,
     brand,
     ...(editCropThumb ? { editCropThumb } : {}),
+    ...(regionWindow ? { regionWindow } : {}),
     ...(revision ? { revision } : {}),
     video: video
       ? {
@@ -417,6 +470,7 @@ export async function prepareJob(deps: StudioDeps, job: JobRow): Promise<{ final
   }
 
   let editCropThumb: EnhanceInput['editCropThumb'] = null;
+  let regionWindow: EnhanceInput['regionWindow'] = null;
   if (job.kind === 'region_edit') {
     const source = job.params.source ?? {};
     const row = source.assetId
@@ -426,12 +480,14 @@ export async function prepareJob(deps: StudioDeps, job: JobRow): Promise<{ final
     const original = await deps.media.read(row.storage_key);
     const size = await imageInfo(original);
     if (!size) throw new PrepareFailure('failed', 'the picture to edit does not decode');
-    const plan = deps.intel.planRegion(size, job.params.box, (model as StudioImageModel).aspects);
-    const crop = await deps.intel.cropForEdit(original, plan);
+    const planned = await regionEditPlan(deps, original, size, job.params, model as StudioImageModel);
+    const { plan, crop } = planned;
+    regionWindow = planned.regionWindow;
     const { key: cropKey } = await deps.media.put(crop.bytes, crop.mime);
     editCropThumb = { bytes: crop.bytes, mime: crop.mime };
     work.region = { ...(work.region ?? {}), plan, cropKey, sourceKey: row.storage_key };
   }
+  const windowPlan = job.kind === 'region_edit' && job.params.regionWindow ? work.region?.plan ?? null : null;
 
   let sheet: FilmSheet | null = null;
   let toEnhance = resolved;
@@ -443,7 +499,10 @@ export async function prepareJob(deps: StudioDeps, job: JobRow): Promise<{ final
   }
 
   // Enhancement off: the customer's words go as they are, or the rewritten sentence they already read.
-  if (!job.enhance) return { finalPrompt: job.params?.reviewedPrompt?.trim() || null, work: { ...work, prepared: true } };
+  if (!job.enhance) {
+    const words = job.params?.reviewedPrompt?.trim() || null;
+    return { finalPrompt: windowPlan ? withSelectionLine(words ?? job.prompt, windowPlan) : words, work: { ...work, prepared: true } };
+  }
   const organization = (await deps.sql.query<{ name: string }>('select name from brand_organizations where id = $1', [job.organization_id])).rows[0];
   const history = await revisionInput(deps, job, resolved);
   const materials = history ? await materialNotes(deps, job, history.revision.madeWith) : [];
@@ -462,7 +521,9 @@ export async function prepareJob(deps: StudioDeps, job: JobRow): Promise<{ final
     sheet,
     editCropThumb,
     revised?.revision ?? null,
+    regionWindow,
   );
   const result = await runEnhancer({ ...deps, organizationId: job.organization_id }, input);
-  return { finalPrompt: result.prompt.slice(0, 8000), work: { ...work, enhanceNotes: result.notes.slice(0, 2000), prepared: true } };
+  const finalPrompt = windowPlan ? withSelectionLine(result.prompt, windowPlan) : result.prompt.slice(0, 8000);
+  return { finalPrompt, work: { ...work, enhanceNotes: result.notes.slice(0, 2000), prepared: true } };
 }

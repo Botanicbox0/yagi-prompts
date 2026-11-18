@@ -160,6 +160,12 @@ function videoResolution(model: StudioVideoModel, resolution: string): StudioVid
   return resolution as StudioVideoResolution;
 }
 
+/** Server switches that change how a request is planned (read from `StudioEnv`). */
+export interface PlanOptions {
+  /** `BRAND_STUDIO_REGION_V2`: a partial edit runs on `REGION_V2_MODEL` with a window plan, whatever was picked. */
+  regionV2?: boolean;
+}
+
 /** Validate and price everything but a final (see `planFinal`). */
 export async function planJob(
   sql: SqlRunner,
@@ -167,6 +173,7 @@ export async function planJob(
   input: JobInput,
   media: StudioMediaStore,
   locale: 'ko' | 'en',
+  options: PlanOptions = {},
 ): Promise<JobPlan> {
   const resolved = await resolveReferences(sql, organizationId, input.references, media, locale);
   const imageOffset = input.kind === 'region_edit' && !input.enhance ? 1 : 0;
@@ -198,6 +205,24 @@ export async function planJob(
       },
       estimateUsd: usd, estimateKrw: usageKrw(usd, 'image'),
       outputs: { count: input.count, kind: 'image', isDraft: false },
+    };
+  }
+
+  if (input.kind === 'region_edit' && options.regionV2) {
+    // One engine for every partial edit: the model and quality sent are never trusted. A rerun of an
+    // edit made on another model runs on this one; its history keeps the model that actually ran.
+    const { model, resolution, usd } = regionEditRun(input.model, resolved.length, null, true);
+    if (resolved.some((r) => r.kind !== 'image' || r.frame) || resolved.length + 1 > model.maxReferences) throw new StudioDenied('invalid');
+    const source = input.source.assetId
+      ? await readyAsset(sql, organizationId, input.source.assetId)
+      : await readyOutput(sql, organizationId, input.source.outputId!);
+    if (!source || source.kind !== 'image' || !source.width || !source.height) throw new StudioDenied('reference_missing');
+    return {
+      ...shared, kind: 'region_edit', model,
+      parentOutputId: input.source.outputId ?? null,
+      params: { ...base, resolution, box: input.box, source: { ...input.source }, regionWindow: true, ...(input.purpose ? { purpose: input.purpose } : {}) },
+      estimateUsd: usd, estimateKrw: usageKrw(usd, 'image'),
+      outputs: { count: 1, kind: 'image', isDraft: false },
     };
   }
 

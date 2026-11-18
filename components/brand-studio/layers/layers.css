@@ -221,14 +221,15 @@
 .bsl-top,
 .bsl-island,
 .bsl-panel,
-.bsl-bar {
+.bsl-bar,
+.bsl-result {
   background: var(--ys-glass);
   box-shadow: var(--ys-float);
   -webkit-backdrop-filter: blur(20px) saturate(180%);
   backdrop-filter: blur(20px) saturate(180%);
 }
 @supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
-  .bsl-top, .bsl-island, .bsl-panel, .bsl-bar { background: var(--ys-surface); }
+  .bsl-top, .bsl-island, .bsl-panel, .bsl-bar, .bsl-result { background: var(--ys-surface); }
 }
 .bsl-top {
   position: absolute;
@@ -828,6 +829,34 @@ select.bsl-input { padding-right: 6px; }
 .bsl-confirm p { margin: 0; color: var(--ys-ink-secondary); line-height: 1.55; }
 .bsl-confirm-actions { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 8px; margin-top: 8px; }
 
+/* A landed partial edit (region-result.ts): under the picture, in the gap between the side panels, so it never
+   covers the picture's centre or the region panel's send button. The check is the one accent. */
+/* Gutters = panel offset 12 + width + padding 20 + 12 of air. Bottom 16 + height 48 (36 buttons + 2 × 6) is
+   the strip region-result.ts `RESULT_BAR_BOX` / `RESULT_STRIP` keeps out of the picture's fit; change both together. */
+.bsl-result-wrap { position: absolute; left: 316px; right: 360px; bottom: 16px; z-index: 3; display: flex; justify-content: center; pointer-events: none; }
+.bsl-result {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: 4px 8px;
+  max-width: 100%;
+  padding: 6px 6px 6px 14px;
+  border-radius: 24px;
+  pointer-events: auto;
+  animation: bsl-result-in 260ms var(--ys-ease, cubic-bezier(0.22, 1, 0.36, 1));
+}
+.bsl-result-line { display: inline-flex; align-items: center; gap: 6px; margin: 0; color: var(--ys-ink); font-size: 13px; font-weight: 500; line-height: 1.4; white-space: nowrap; word-break: keep-all; }
+.bsl-result-line .bsl-icon { width: 16px; height: 16px; color: var(--ys-accent); stroke-width: 2.2; }
+.bsl-result-actions { display: flex; flex-wrap: wrap; justify-content: center; align-items: center; gap: 4px; }
+.bsl-result-btn { min-height: 36px; padding: 0 12px; font-size: 13px; word-break: keep-all; -webkit-touch-callout: none; -webkit-user-select: none; user-select: none; touch-action: manipulation; }
+.bsl-result-btn .bsl-icon { width: 16px; height: 16px; }
+.bsl-result-btn[aria-pressed="true"] { background: var(--ys-active-bg); color: var(--ys-active-fg); }
+@keyframes bsl-result-in { from { opacity: 0; translate: 0 6px; } to { opacity: 1; translate: 0 0; } }
+@media (pointer: coarse) {
+  .bsl-result-btn { min-height: 44px; }
+}
+
 /* --------------------------------------------------------------- narrower */
 
 @media (max-width: 1100px) {
@@ -835,6 +864,7 @@ select.bsl-input { padding-right: 6px; }
   .bsl-right { width: 264px; }
   .bsl-island { max-width: calc(100vw - 540px); }
   .bsl-title-name { display: none; }
+  .bsl-result-wrap { left: 280px; right: 308px; }
 }
 
 /* Phones: panels become bottom sheets opened from the bar; one finger moves layers or the picture. */
@@ -907,6 +937,13 @@ select.bsl-input { padding-right: 6px; }
   .bsl-bar-btn:disabled { opacity: 0.4; }
   .bsl-toast-wrap { top: 112px; }
   .bsl-toast-wrap[data-brush-open] { top: 196px; }
+  /* Just above the bottom bar; an open sheet (the region panel and its send button among them) hides it. */
+  .bsl-result-wrap { left: 8px; right: 8px; bottom: calc(80px + env(safe-area-inset-bottom)); }
+  .bsl-root[data-sheet] .bsl-result-wrap { display: none; }
+  .bsl-result { width: 100%; padding: 8px; border-radius: 20px; }
+  .bsl-result-line { flex-basis: 100%; justify-content: center; }
+  .bsl-result-actions { flex: 1; flex-wrap: nowrap; }
+  .bsl-result-btn { flex: 1; min-width: 0; min-height: 44px; padding: 0 8px; }
   .bsl-icon-btn, .bsl-input, .bsl-seg-btn { min-height: 40px; }
   .bsl-icon-btn { width: 40px; height: 40px; }
   .bsl-icon-btn[data-quiet] { width: 36px; height: 36px; min-height: 36px; }
