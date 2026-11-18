@@ -684,3 +684,206 @@ textarea.bs-field { resize: vertical; }
 .bs-enhance .bs-switch-knob::after { background: var(--ys-ink-secondary); box-shadow: none; }
 .bs-enhance .bs-switch[aria-checked="true"] .bs-switch-knob { background: var(--ys-active-bg); }
 .bs-enhance .bs-switch[aria-checked="true"] .bs-switch-knob::after { background: var(--ys-active-fg); }
+
+/*
+ * Several image models in one request (2026-11-19, components/brand-studio/group-model.ts). Quiet marks only:
+ * the chip carries "+N", the model list a check per row, the field one tab per model, the wall a small model
+ * name on each result of a group, the viewer one row of model pills. No new colour; the accent stays on the
+ * one solid button.
+ */
+.bs-chip-more { display: inline-grid; place-items: center; min-width: 22px; height: 18px; padding: 0 5px; border-radius: 9999px; background: color-mix(in srgb, var(--ys-ink) 14%, transparent); color: var(--ys-ink); font-size: 11px; font-weight: 600; line-height: 1; }
+.bs-chip-btn[aria-expanded="true"] .bs-chip-more { background: color-mix(in srgb, var(--ys-active-fg) 14%, transparent); color: var(--ys-active-fg); }
+.bs-chip-tag { color: var(--ys-ink-secondary); font-size: 11.5px; font-weight: 500; }
+.bs-chip-tag::after { content: "·"; margin-left: 5px; opacity: 0.7; }
+.bs-chip-btn[aria-expanded="true"] .bs-chip-tag { color: color-mix(in srgb, var(--ys-active-fg) 72%, transparent); }
+/* The list with checks: the check is its own 44 px column, so a press on it never picks the model alone. */
+.bs-model-list[data-multi] { width: min(392px, calc(100vw - 32px)); max-width: none; }
+.bs-model-list[data-multi] [role="option"] { grid-template-columns: 40px minmax(0, 1fr) auto; grid-template-areas: "check name cost" "check hint cost"; gap: 2px 8px; padding: 8px 12px 8px 4px; }
+.bs-model-check { grid-area: check; display: grid; place-items: center; align-self: stretch; width: 40px; min-height: 44px; margin: -8px 0; cursor: pointer; }
+.bs-model-box { display: grid; place-items: center; width: 18px; height: 18px; border: 1.5px solid color-mix(in srgb, var(--ys-ink) 55%, transparent); border-radius: 5px; transition: background-color 150ms var(--ys-ease), border-color 150ms var(--ys-ease); }
+.bs-model-box .bs-icon { width: 13px; height: 13px; stroke-width: 2.4; }
+.bs-model-check[data-checked] .bs-model-box { border-color: var(--ys-active-bg); background: var(--ys-active-bg); }
+.bs-model-check[data-checked] .bs-model-box .bs-icon { color: var(--ys-active-fg); }
+.bs-model-check:hover:not([data-closed]) .bs-model-box { border-color: currentColor; }
+.bs-model-check[data-closed] { cursor: default; }
+.bs-model-check[data-closed]:not([data-checked]) .bs-model-box { opacity: 0.35; }
+.bs-model-list[data-multi] [role="option"][aria-selected="true"] { background: var(--ys-hover); color: var(--ys-ink); }
+.bs-model-list[data-multi] [role="option"][aria-selected="true"]:hover { background: var(--ys-hover); }
+.bs-model-list[data-multi] [role="option"][aria-selected="true"] .bs-model-hint { color: var(--ys-ink-muted); }
+.bs-model-list[data-multi] [role="option"][aria-selected="true"] .bs-model-cost { color: var(--ys-ink-secondary); }
+.bs-model-intro { margin: -2px 12px 6px; font-size: 12px; line-height: 1.45; color: var(--ys-ink-muted); }
+.bs-model-hint[data-blocked] { color: var(--ys-ink-secondary); }
+.bs-model-limit { margin: 6px 12px 6px; font-size: 12px; color: var(--ys-ink-secondary); }
+/* Each model's credits under the button (the button shows their sum). */
+.bs-dock-breakdown { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 2px 14px; margin: -2px 2px 0; font-size: 12px; color: var(--ys-ink-muted); }
+.bs-breakdown-item { display: inline-flex; gap: 6px; white-space: nowrap; }
+.bs-breakdown-name { font-family: var(--ys-font, inherit); letter-spacing: -0.01em; }
+.bs-breakdown-cost { color: var(--ys-ink-secondary); }
+/* One tab per model over the field after "설계하기". */
+.bs-prompt-tabs-wrap { display: grid; gap: 4px; margin: 0 0 4px; }
+.bs-prompt-tabs { display: flex; gap: 2px; min-width: 0; overflow-x: auto; scrollbar-width: none; border-bottom: 1px solid var(--ys-hairline); }
+.bs-prompt-tabs::-webkit-scrollbar { display: none; }
+.bs-prompt-tab { position: relative; display: inline-flex; flex: none; align-items: center; gap: 6px; min-height: 32px; padding: 0 10px; border: 0; background: transparent; color: var(--ys-ink-secondary); font: inherit; font-size: 12.5px; font-weight: 500; letter-spacing: -0.02em; white-space: nowrap; cursor: pointer; transition: color 150ms var(--ys-ease); }
+.bs-prompt-tab::after { content: ""; position: absolute; left: 8px; right: 8px; bottom: -1px; height: 2px; border-radius: 2px; background: transparent; transition: background-color 150ms var(--ys-ease); }
+.bs-prompt-tab:hover { color: var(--ys-ink); }
+.bs-prompt-tab[aria-selected="true"] { color: var(--ys-ink); font-weight: 600; }
+.bs-prompt-tab[aria-selected="true"]::after { background: var(--ys-ink); }
+.bs-prompt-tab:focus-visible { outline: 2px solid var(--ys-focus); outline-offset: -2px; border-radius: 8px; }
+.bs-prompt-tab-mark { width: 6px; height: 6px; border-radius: 50%; border: 1.5px solid currentColor; opacity: 0.7; }
+.bs-prompt-tab[data-status="designing"] .bs-prompt-tab-mark { border-color: transparent; background: currentColor; animation: bs-pulse 0.8s var(--ys-ease) infinite alternate; }
+.bs-prompt-tab[data-status="failed"] .bs-prompt-tab-mark { border-color: #d97706; background: #d97706; opacity: 1; }
+.bs-prompt-tab-state { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; margin: 0; padding: 0 4px; font-size: 12px; color: var(--ys-ink-muted); }
+/* The model of a result made with others in one request: quiet, bottom-left, gives way to the info pill on hover. */
+.bs-tile-model { position: absolute; left: 8px; bottom: 8px; max-width: calc(100% - 16px); overflow: hidden; padding: 3px 9px; border: 1px solid var(--ys-stage-border, rgba(255, 255, 255, 0.09)); border-radius: 9999px; background: var(--ys-glass-dark); color: #ffffff; font-size: 11px; font-weight: 500; letter-spacing: -0.01em; text-overflow: ellipsis; white-space: nowrap; pointer-events: none; transition: opacity 160ms var(--ys-ease); }
+.bs-tile[data-state="ready"]:hover .bs-tile-model, .bs-tile[data-state="ready"]:focus-within .bs-tile-model { opacity: 0; }
+/*
+ * Pointing at (or focusing) a tile of a request made on several models outlines every tile of it, in ink
+ * (the accent stays on the one solid button), so "made together" reads even when the group wraps rows.
+ */
+.bs-tile[data-group]:not([data-selected]) { outline: 1.5px solid transparent; outline-offset: 3px; transition: outline-color 160ms var(--ys-ease); }
+.bs-tile[data-group][data-group-lit]:not([data-selected]) { outline-color: color-mix(in srgb, var(--ys-ink) 58%, transparent); }
+/*
+ * A tile's bottom edge is a size container (its own width, never the viewport). The caption shortens the model
+ * name with an ellipsis and never clips its credits; a narrow tile shows the partial-edit button as its icon
+ * (its name stays as the accessible name), then the credits alone; a tile too narrow for the credits drops the caption.
+ * Kept apart from the tile itself, because a container would also hold the tile's fixed-position menus.
+ */
+.bs-tile-foot { position: absolute; inset: auto 0 0 0; height: 0; container: tile-foot / inline-size; pointer-events: none; }
+.bs-tile-foot > .bs-tile-pill { pointer-events: auto; }
+.bs-tile-info { max-width: calc(100% - 116px); white-space: nowrap; }
+.bs-tile-info-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+.bs-tile-info-credits { flex: none; }
+@container tile-foot (max-width: 279px) {
+  .bs-tile-pill { justify-content: center; width: 28px; padding: 0; }
+  .bs-tile-pill-label { display: none; }
+  .bs-tile-info { max-width: calc(100% - 64px); }
+}
+/* Too narrow for a readable name beside the credits: the credits alone (never a sliver of a name). */
+@container tile-foot (max-width: 179px) {
+  .bs-tile-info-name { display: none; }
+  .bs-tile-info span + span::before { content: none; }
+}
+@container tile-foot (max-width: 139px) {
+  .bs-tile-info { display: none; }
+}
+/*
+ * Touch: every corner control is a 44 px box from its corner (the visible round button sits inside it), so on a
+ * narrow tile they never overlap; wall.tsx `tileControls` leaves out what does not fit and moves it to the menu.
+ */
+@media (pointer: coarse) {
+  .bs-tile .bs-tile-btn, .bs-tile .bs-tile-check, .bs-tile .bs-tile-pill { position: relative; width: 44px; height: 44px; min-height: 44px; padding: 0; border: 0; border-radius: 0; background: none; -webkit-backdrop-filter: none; backdrop-filter: none; }
+  .bs-tile .bs-tile-btn::before, .bs-tile .bs-tile-pill::before { content: ""; position: absolute; inset: 5px; border: 1px solid var(--ys-stage-border, rgba(255, 255, 255, 0.09)); border-radius: 9999px; background: var(--ys-glass-dark); -webkit-backdrop-filter: blur(8px); backdrop-filter: blur(8px); }
+  .bs-tile .bs-tile-check::before { content: ""; position: absolute; inset: 8px; border: 1.5px solid rgba(255, 255, 255, 0.78); border-radius: 7px; background: var(--ys-glass-dark); }
+  .bs-tile .bs-tile-check[aria-checked="true"]::before { border-color: var(--ys-active-bg); background: var(--ys-active-bg); }
+  .bs-tile .bs-tile-btn > *, .bs-tile .bs-tile-check > *, .bs-tile .bs-tile-pill > * { position: relative; z-index: 1; }
+  .bs-tile .bs-tile-btn[data-corner="tl"] { position: absolute; top: 0; left: 0; }
+  .bs-tile .bs-tile-check { position: absolute; top: 0; left: 0; }
+  .bs-tile .bs-tile-check ~ .bs-tile-btn[data-corner="tl"] { left: 44px; }
+  .bs-tile .bs-tile-tools { top: 0; right: 0; gap: 0; }
+  .bs-tile .bs-tile-remove { position: absolute; top: 0; right: 0; }
+  .bs-tile .bs-tile-pill { position: absolute; right: 2px; bottom: 0; width: auto; min-width: 44px; padding: 0 16px; justify-content: center; }
+  .bs-tile .bs-tile-pill::before { inset: 8px 0; }
+  .bs-tile .bs-tile-btn:hover:not(:disabled), .bs-tile .bs-tile-pill:hover:not(:disabled) { transform: none; }
+  /* A waiting run's stop button and a failed run's "다시" reach 44 px too; a failed tile's words start below its corner buttons. */
+  .bs-tile .bs-tile-cancel { top: 0; right: 0; min-height: 44px; padding: 0 16px; background: none; isolation: isolate; }
+  .bs-tile .bs-tile-cancel::before { content: ""; position: absolute; inset: 8px 4px; z-index: -1; border-radius: 9999px; background: var(--ys-surface); }
+  .bs-tile .bs-tile-retry { min-height: 44px !important; }
+  .bs-tile[data-state="failed"] { padding-top: 48px; }
+  @container tile-foot (max-width: 279px) {
+    .bs-tile .bs-tile-pill { width: 44px; padding: 0; }
+    .bs-tile .bs-tile-pill::before { inset: 6px; }
+    .bs-tile-info { max-width: calc(100% - 62px); }
+  }
+}
+/* On a failed tile the name sits in the centred column, above its reason. */
+.bs-tile-model[data-inline] { position: static; max-width: 100%; margin-bottom: -4px; padding: 0; border: 0; background: none; color: var(--ys-ink); font-size: 12px; font-weight: 600; -webkit-backdrop-filter: none; backdrop-filter: none; }
+@supports (backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px)) {
+  .bs-tile-model { -webkit-backdrop-filter: blur(8px); backdrop-filter: blur(8px); }
+}
+/* "같이 만든 결과" in the viewer: one pill per model, the shown one filled. */
+.bs-siblings { display: grid; gap: 6px; }
+.bs-siblings-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; min-height: 28px; }
+.bs-siblings-head .bs-link-btn .bs-icon { width: 14px; height: 14px; }
+.bs-siblings-head .bs-link-btn[aria-pressed="true"] { background: var(--ys-hover); }
+.bs-siblings-row { display: flex; flex-wrap: wrap; gap: 6px; }
+.bs-sibling { display: inline-flex; align-items: center; gap: 6px; min-height: 32px; padding: 0 12px; border: 1px solid var(--ys-line-strong); border-radius: 9999px; background: transparent; color: var(--ys-ink-secondary); font: inherit; font-size: 12.5px; font-weight: 500; letter-spacing: -0.02em; white-space: nowrap; }
+button.bs-sibling { cursor: pointer; transition: background-color 150ms var(--ys-ease), color 150ms var(--ys-ease); }
+button.bs-sibling:hover { background: var(--ys-hover); color: var(--ys-ink); }
+button.bs-sibling[aria-current="true"] { border-color: var(--ys-active-bg); background: var(--ys-active-bg); color: var(--ys-active-fg); font-weight: 600; cursor: default; }
+button.bs-sibling:focus-visible { outline: 2px solid var(--ys-focus); outline-offset: 2px; }
+.bs-sibling[data-state] { border-style: dashed; color: var(--ys-ink-muted); }
+.bs-sibling-mark { width: 6px; height: 6px; border-radius: 50%; background: currentColor; opacity: 0.6; }
+.bs-sibling[data-state="failed"] .bs-sibling-mark { background: #d97706; opacity: 1; }
+.bs-sibling-note { margin: 0; font-size: 12px; line-height: 1.45; color: var(--ys-ink-muted); }
+/*
+ * "모델 비교": the pictures get the whole viewer body. The action column is hidden (still mounted, so it comes back
+ * exactly as it was) and the model pills with the toggle sit in one quiet row above. Every picture shares ONE
+ * height, as large as the width and the height allow (model-compare.tsx `compareSizes` measures the space), its
+ * name and credits under it. Never a wipe line. A phone swipes one picture per width with "1 / 3".
+ */
+.bs-viewer-body[data-compare] { grid-template-columns: minmax(0, 1fr); grid-template-rows: minmax(0, 1fr); }
+.bs-viewer-body[data-compare] .bs-viewer-side { display: none; }
+.bs-viewer-media[data-compare] { display: flex; flex-direction: column; align-items: stretch; justify-content: flex-start; gap: 14px; }
+.bs-siblings[data-compact] { flex: none; }
+.bs-siblings-bar { display: flex; align-items: center; gap: 10px; min-width: 0; }
+.bs-siblings[data-compact] .bs-siblings-row { flex: 1; flex-wrap: nowrap; min-width: 0; margin: -6px; padding: 6px; overflow-x: auto; scrollbar-width: none; }
+.bs-siblings[data-compact] .bs-siblings-row::-webkit-scrollbar { display: none; }
+.bs-siblings-bar > .bs-link-btn { flex: none; }
+.bs-mcompare { position: relative; display: grid; place-items: center; flex: 1; width: 100%; min-height: 0; }
+.bs-mcompare-row { display: flex; align-items: flex-start; justify-content: center; gap: 16px; max-width: 100%; }
+.bs-mcompare-item { display: grid; gap: 8px; flex: var(--r, 1) 1 0%; min-width: 0; margin: 0; }
+.bs-mcompare-item[data-sized] { flex: none; width: var(--w); }
+.bs-mcompare-open { display: block; width: 100%; padding: 0; border: 0; border-radius: 14px; background: none; cursor: zoom-in; }
+.bs-mcompare-open:focus-visible { outline: 2px solid var(--ys-focus); outline-offset: 2px; }
+.bs-viewer-media .bs-mcompare img { display: block; width: 100%; height: auto; max-width: none; max-height: none; aspect-ratio: var(--r, 1); object-fit: cover; transition: opacity 160ms var(--ys-ease); }
+.bs-viewer-media .bs-mcompare-item[data-sized] img, .bs-mcompare-item[data-sized] .bs-mcompare-empty { width: var(--w); height: var(--h); aspect-ratio: auto; }
+.bs-mcompare-open:hover img { opacity: 0.92; }
+.bs-mcompare-empty { display: grid; place-items: center; aspect-ratio: var(--r, 1); padding: 16px; border: 1px dashed var(--ys-line-strong); border-radius: 14px; text-align: center; }
+.bs-mcompare-empty-why { max-width: 26ch; font-size: 12.5px; line-height: 1.5; color: var(--ys-ink-muted); }
+.bs-mcompare-caption { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; min-width: 0; padding: 0 2px; font-size: 12.5px; line-height: 1.35; }
+.bs-mcompare-name { overflow: hidden; color: var(--ys-ink-secondary); font-weight: 500; letter-spacing: -0.01em; text-overflow: ellipsis; white-space: nowrap; }
+.bs-mcompare-item[data-current] .bs-mcompare-name { color: var(--ys-ink); font-weight: 600; }
+.bs-mcompare-credits { flex: none; color: var(--ys-ink-muted); font-size: 12px; }
+.bs-mcompare-at { display: none; }
+.bs-mcompare[data-mode="swipe"] .bs-mcompare-row { width: 100%; gap: 0; align-items: center; justify-content: flex-start;overflow-x: auto; scroll-snap-type: x mandatory; scrollbar-width: none; overscroll-behavior-x: contain; }
+.bs-mcompare[data-mode="swipe"] .bs-mcompare-row::-webkit-scrollbar { display: none; }
+.bs-mcompare[data-mode="swipe"] .bs-mcompare-item { flex: 0 0 100%; width: auto; justify-items: center; scroll-snap-align: center; }
+.bs-mcompare[data-mode="swipe"] .bs-mcompare-open, .bs-mcompare[data-mode="swipe"] .bs-mcompare-caption { width: var(--w, 100%); }
+.bs-mcompare[data-mode="swipe"] .bs-mcompare-open:focus-visible { outline-offset: -3px; }
+/* "1 / 3" under each swiped picture, so it moves with the picture it counts. */
+.bs-mcompare[data-mode="swipe"] .bs-mcompare-at { display: inline-flex; margin-top: 2px; padding: 3px 10px; border: 1px solid var(--ys-line-strong); border-radius: 9999px; color: var(--ys-ink-secondary); font-size: 12px; pointer-events: none; }
+.bs-siblings-bar > .bs-link-btn[aria-pressed="true"] { background: var(--ys-hover); box-shadow: inset 0 0 0 1px var(--ys-line-strong); color: var(--ys-ink); }
+/* On a phone the pills scroll under a soft right edge, and the toggle is its icon (its name stays the accessible name). */
+@media (max-width: 900px) {
+  .bs-siblings[data-compact] .bs-siblings-row { padding-right: 28px; -webkit-mask-image: linear-gradient(to right, #000 calc(100% - 28px), transparent); mask-image: linear-gradient(to right, #000 calc(100% - 28px), transparent); }
+  .bs-siblings-bar > .bs-link-btn { justify-content: center; width: 44px; min-height: 44px; padding: 0; }
+  .bs-siblings-bar > .bs-link-btn .bs-link-btn-label { display: none; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .bs-viewer-media .bs-mcompare img, .bs-tile[data-group]:not([data-selected]) { transition: none; }
+}
+.bs-sibling-note-model { color: var(--ys-ink-secondary); font-weight: 600; }
+@media (pointer: coarse) {
+  .bs-prompt-tab, .bs-sibling, .bs-prompt-tab-state .bs-link-btn, .bs-siblings-head .bs-link-btn { min-height: 44px; }
+  .bs-model-check { width: 44px; }
+  .bs-model-list[data-multi] [role="option"] { grid-template-columns: 44px minmax(0, 1fr) auto; }
+}
+@media (max-width: 900px) {
+  /*
+   * The chip row scrolls sideways here, and a scroller clips on both axes: 2 px of padding cut a chip's focus
+   * ring (2 px wide, 2 px off the chip) down to its two end arcs. The row keeps 6 px of room on every side
+   * (taken back by a negative margin, so nothing moves) and the whole ring shows on every chip.
+   */
+  .bs-controls-set { margin: -4px -10px; padding: 6px 10px; }
+  .bs-dock-breakdown { justify-content: center; margin-top: -4px; }
+  .bs-model-list[data-multi] { width: auto; }
+  /*
+   * The chips sit in a sideways scroller here, which clips anything absolutely placed inside it: every chip's
+   * list (ratio, size, quality, count) opens as the same bottom sheet as the model list, so it is never cut off.
+   */
+  .bs-controls-set .bs-pick-list { position: fixed; inset: auto 12px calc(12px + env(safe-area-inset-bottom)) 12px; width: auto; min-width: 0; max-width: none; max-height: min(60dvh, 420px); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .bs-model-box, .bs-prompt-tab, .bs-prompt-tab::after, .bs-tile-model, button.bs-sibling { transition: none; }
+  .bs-prompt-tab[data-status="designing"] .bs-prompt-tab-mark { animation: none; }
+}

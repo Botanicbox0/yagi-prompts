@@ -12,7 +12,7 @@
  * When Video Studio's Sequence Rail expands to full timeline height, `collapsed` renders a sleek 1-line
  * floating pill button.
  */
-import { useEffect, useId, useLayoutEffect, useMemo, useRef, useState, type DragEvent, type ReactNode } from "react";
+import { useEffect, useId, useLayoutEffect, useMemo, useRef, useState, type DragEvent, type ReactNode, type RefObject } from "react";
 import { extractClipboardImages, prepareClipboardUploadFiles } from "@/lib/brand-studio/clipboard-image";
 import {
   STUDIO_AUDIO_MODES,
@@ -50,6 +50,17 @@ import {
 } from "./dock-model";
 import { AspectShape, ChipSelect } from "./gallery/chip-select";
 import { ModelMenu } from "./gallery/model-menu";
+import {
+  checkBlock,
+  groupControls,
+  groupQuotes,
+  isGroupDraft,
+  modelLabel as studioModelLabel,
+  pickedModels,
+  sharedLabel,
+  toggledPick,
+  type DesignTabs,
+} from "./group-model";
 import { StudioIcon } from "./icons";
 import { PromptHighlight, mentionAtCaret, resolvePromptMentions, type PromptMentionSegment } from "./prompt-highlight";
 import { RemixPanel } from "./remix-panel";
@@ -112,6 +123,17 @@ export interface DockProps {
   onBrowse(): void;
   onEnhance?(): void;
   onUndoEnhance?(): void;
+  /**
+   * The image screen: the model list gets a check per model, so one request can go to two or three models
+   * at once (./group-model.ts). Absent (the video screen, tests of the single bar): one model, as always.
+   */
+  onModels?(ids: string[]): void;
+  /** Several models after "설계하기": each model's sentence in its own tab; the field shows `active`. */
+  tabs?: { tabs: DesignTabs; active: string } | null;
+  onTab?(model: string): void;
+  onTabText?(text: string): void;
+  /** Designs one model's tab ("아직 설계 전", or one that could not be designed). */
+  onDesignOne?(model: string): void;
 }
 
 /** The bar's real height as `--bs-dock-h` on the page, so the wall, popovers and the help launcher clear it. */
@@ -181,6 +203,18 @@ export function Dock(props: DockProps) {
   const [thumbKey, setThumbKey] = useState<string | null>(null);
   const [tip, setTip] = useState<MentionTip | null>(null);
   const controls = dockControls(draft);
+  // Several image models at once: shared options are what every picked model has; count is per model.
+  const multi = Boolean(props.onModels) && mode === "image";
+  const picked = pickedModels(draft);
+  const grouped = multi && isGroupDraft(draft);
+  const common = grouped ? groupControls(picked) : null;
+  const quotes = grouped ? groupQuotes(draft, tray) : [];
+  // After "설계하기" on several models the field shows one model's own sentence (its tab).
+  const tabbed = grouped && props.tabs && props.tabs.tabs[props.tabs.active] ? props.tabs : null;
+  const activeTab = tabbed ? tabbed.tabs[tabbed.active]! : null;
+  const text = activeTab ? activeTab.text : draft.prompt;
+  const setText = (next: string) => (tabbed ? props.onTabText?.(next) : onDraft({ ...draft, prompt: next }));
+  const tabsRef = useRef<HTMLDivElement>(null);
   const remix = remixActive(draft, tray);
   const effectiveMethod = remix ? resolveUnifiedRemixMethod(draft, tray) : draft.method;
   const effectiveDraft = remix && effectiveMethod !== draft.method ? { ...draft, method: effectiveMethod } : draft;
@@ -219,10 +253,7 @@ export function Dock(props: DockProps) {
   const cost = credits(copy.credits.amount, props.credits, locale);
   const opens = (control: string) => props.initialOpenControl === control;
 
-  const { mentionedKeys, segments } = useMemo(
-    () => resolvePromptMentions(draft.prompt, tray),
-    [draft.prompt, tray],
-  );
+  const { mentionedKeys, segments } = useMemo(() => resolvePromptMentions(text, tray), [text, tray]);
   // "@image1" under each thumbnail, by tray key: the name a mention's tooltip and announcement use.
   const tags = useMemo(() => {
     const list = trayVirtualTags(tray);
@@ -245,7 +276,7 @@ export function Dock(props: DockProps) {
   // The tooltip follows the active mention (re-measured after every paint that can move it).
   useLayoutEffect(() => {
     setTip(activeStart === null ? null : markTip(backdropRef.current, wrapRef.current, scrollRef.current, activeStart));
-  }, [activeStart, draft.prompt, tray]);
+  }, [activeStart, text, tray]);
 
   const syncCaret = (el: HTMLTextAreaElement) => {
     const at = el.selectionStart === el.selectionEnd ? el.selectionStart : null;
@@ -313,7 +344,7 @@ export function Dock(props: DockProps) {
   const pickMentionCandidate = (candidate: AtMentionCandidate) => {
     if (isComposingRef.current) return;
     const cursor = field.current?.selectionStart ?? mention.cursor;
-    const inserted = applyMentionInsertion(draft.prompt, cursor, mention.atIndex, candidate.token);
+    const inserted = applyMentionInsertion(text, cursor, mention.atIndex, candidate.token);
     if (candidate.attachItem) {
       const nextTray = [...tray, candidate.attachItem];
       const nextDraft = draftAfterAttach(draft, candidate.attachItem, Boolean(props.mode), nextTray);
@@ -324,9 +355,12 @@ export function Dock(props: DockProps) {
       } else if (candidate.attachItem.outputId) {
         props.onDropSource({ outputId: candidate.attachItem.outputId });
       }
-      onDraft({ ...nextDraft, prompt: inserted.text });
+      if (tabbed) {
+        if (nextDraft !== draft) onDraft(nextDraft);
+        setText(inserted.text);
+      } else onDraft({ ...nextDraft, prompt: inserted.text });
     } else {
-      set({ prompt: inserted.text });
+      setText(inserted.text);
     }
     setMention((cur) => ({ ...cur, open: false }));
     requestAnimationFrame(() => {
@@ -485,8 +519,21 @@ export function Dock(props: DockProps) {
             onSelect={pickMentionCandidate}
           />
         )}
+        {tabbed && (
+          <PromptTabs
+            id={id}
+            tabsRef={tabsRef}
+            picked={picked}
+            tabs={tabbed.tabs}
+            active={tabbed.active}
+            copy={copy}
+            disabled={busy}
+            onTab={(model) => props.onTab?.(model)}
+            onDesignOne={(model) => props.onDesignOne?.(model)}
+          />
+        )}
         <label className="bs-sr" htmlFor={`${id}-prompt`}>
-          {d.label}
+          {tabbed ? fill(d.tabPrompt, { model: studioModelLabel(tabbed.active) }) : d.label}
         </label>
         {/* One scroller around both layers: they share a grid cell, so their width is the same by construction. */}
         <div
@@ -499,16 +546,19 @@ export function Dock(props: DockProps) {
           }}
         >
           <div className="bs-prompt-stack">
-            <PromptHighlight prompt={draft.prompt} tray={tray} backdropRef={backdropRef} linkedKey={thumbKey} activeStart={activeStart} />
+            <PromptHighlight prompt={text} tray={tray} backdropRef={backdropRef} linkedKey={thumbKey} activeStart={activeStart} />
             <textarea
               ref={field}
               id={`${id}-prompt`}
               className="bs-prompt"
               rows={1}
               maxLength={STUDIO_LIMITS.promptMax}
-              value={draft.prompt}
+              value={text}
               placeholder={mode === "video" ? d.placeholderVideo : d.placeholder}
-              aria-describedby={[message ? `${id}-message` : null, caretLine ? `${id}-mention` : null].filter(Boolean).join(" ") || undefined}
+              aria-describedby={
+                [message ? `${id}-message` : null, caretLine ? `${id}-mention` : null, activeTab && activeTab.status !== "ready" ? `${id}-tab-state` : null].filter(Boolean).join(" ") ||
+                undefined
+              }
               aria-expanded={mention.open ? true : undefined}
               aria-controls={mention.open ? `${id}-at-menu` : undefined}
               aria-activedescendant={mention.open && candidates.flat.length > 0 ? `${id}-at-menu-opt-${safeMentionIndex}` : undefined}
@@ -538,7 +588,7 @@ export function Dock(props: DockProps) {
               onChange={(event) => {
                 const nextText = event.target.value;
                 const cursor = event.target.selectionStart ?? nextText.length;
-                set({ prompt: nextText });
+                setText(nextText);
                 const nativeComposing = Boolean((event.nativeEvent as InputEvent | undefined)?.isComposing);
                 if (!isComposingRef.current && !nativeComposing) {
                   syncMentionFromCursor(nextText, cursor);
@@ -637,12 +687,19 @@ export function Dock(props: DockProps) {
             copy={copy}
             locale={locale}
             initialOpen={props.initialModelMenu}
-            onChange={(value) => onDraft(withModel(draft, value))}
+            onChange={(value) => (multi ? props.onModels!([value]) : onDraft(withModel(draft, value)))}
+            {...(multi
+              ? {
+                  picked,
+                  blockOf: (model: string) => checkBlock(draft, tray, model),
+                  onToggle: (model: string) => props.onModels!(toggledPick(draft, tray, model)),
+                }
+              : {})}
           />
           <ChipSelect
             label={d.aspect}
             value={draft.aspect}
-            options={controls.aspects.map((aspect) => ({ value: aspect, label: aspect, icon: <AspectShape ratio={aspect} /> }))}
+            options={(common?.aspects ?? controls.aspects).map((aspect) => ({ value: aspect, label: aspect, icon: <AspectShape ratio={aspect} /> }))}
             onChange={(aspect) => set({ aspect })}
             data="aspect"
             mono
@@ -651,30 +708,43 @@ export function Dock(props: DockProps) {
           <ChipSelect
             label={d.resolution}
             value={draft.resolution}
-            options={controls.resolutions.map((resolution) => ({ value: resolution, label: resolution === DRAFT_RESOLUTION ? d.draft : resolution }))}
+            options={(common?.resolutions ?? controls.resolutions).map((resolution) => ({ value: resolution, label: resolution === DRAFT_RESOLUTION ? d.draft : resolution }))}
             onChange={(resolution) => set({ resolution })}
             data="resolution"
             mono
             initialOpen={opens("resolution")}
           />
-          {controls.qualities.length > 0 && (
-            <ChipSelect
-              label={d.quality}
-              value={draft.quality}
-              options={controls.qualities.map((quality) => ({ value: quality, label: copy.qualities[quality as keyof StudioCopy["qualities"]] ?? quality }))}
-              onChange={(quality) => set({ quality })}
-              data="quality"
-              initialOpen={opens("quality")}
-            />
-          )}
+          {(common ? common.qualities : controls.qualities).length > 0 &&
+            (common ? (
+              // Quality belongs to the picked models that have one: the chip and its list say which.
+              <ChipSelect
+                label={fill(d.qualityFor, { model: common.qualityModels.map((m) => m.label).join(", ") })}
+                value={draft.quality}
+                tag={sharedLabel(common.qualityModels, true)}
+                note={fill(d.qualityOnly, { model: common.qualityModels.map((m) => m.label).join(", ") })}
+                options={common.qualities.map((quality) => ({ value: quality, label: copy.qualities[quality as keyof StudioCopy["qualities"]] ?? quality }))}
+                onChange={(quality) => set({ quality })}
+                data="quality"
+                initialOpen={opens("quality")}
+              />
+            ) : (
+              <ChipSelect
+                label={d.quality}
+                value={draft.quality}
+                options={controls.qualities.map((quality) => ({ value: quality, label: copy.qualities[quality as keyof StudioCopy["qualities"]] ?? quality }))}
+                onChange={(quality) => set({ quality })}
+                data="quality"
+                initialOpen={opens("quality")}
+              />
+            ))}
           {draft.medium === "image" ? (
             <ChipSelect
-              label={d.count}
+              label={grouped ? d.countEachLabel : d.count}
               value={String(draft.count)}
-              options={controls.counts.map((n) => ({ value: String(n), label: fill(d.countValue, { n }) }))}
+              options={controls.counts.map((n) => ({ value: String(n), label: fill(grouped ? d.countEach : d.countValue, { n }) }))}
               onChange={(value) => set({ count: Number(value) })}
               data="count"
-              mono
+              mono={!grouped}
               initialOpen={opens("count")}
             />
           ) : (
@@ -764,7 +834,121 @@ export function Dock(props: DockProps) {
           </button>
         </div>
       </div>
+      {grouped && quotes.length > 1 && (
+        // What each model's run takes; the button shows their sum.
+        <p className="bs-dock-breakdown bs-num" data-studio-breakdown>
+          <span className="bs-sr">{d.breakdown}: </span>
+          {quotes.map((quote) => (
+            <span key={quote.model.id} className="bs-breakdown-item" data-model={quote.model.id}>
+              <span className="bs-breakdown-name">{quote.model.label}</span>
+              <span className="bs-breakdown-cost">{credits(copy.credits.amount, quote.credits, locale)}</span>
+            </span>
+          ))}
+        </p>
+      )}
     </form>
+  );
+}
+
+/**
+ * The tabs over the prompt field after "설계하기" on several models: one per model in the order they were
+ * picked, its state as a small quiet mark (being designed, not designed yet, could not be designed). ←/→
+ * move between them. Under them, one line for a tab that is not designed, with the press that designs it.
+ */
+function PromptTabs({
+  id,
+  tabsRef,
+  picked,
+  tabs,
+  active,
+  copy,
+  disabled,
+  onTab,
+  onDesignOne,
+}: {
+  id: string;
+  tabsRef: RefObject<HTMLDivElement | null>;
+  picked: readonly string[];
+  tabs: DesignTabs;
+  active: string;
+  copy: StudioCopy;
+  disabled: boolean;
+  onTab(model: string): void;
+  onDesignOne(model: string): void;
+}) {
+  const d = copy.dock;
+  const order = picked.filter((model) => tabs[model]);
+  const current = tabs[active];
+  const state =
+    current?.status === "pending"
+      ? { line: d.tabPending, action: d.designOne }
+      : current?.status === "failed"
+        ? { line: d.enhanceFailed, action: d.designAgain }
+        : current?.status === "designing"
+          ? { line: d.enhancing, action: null }
+          : null;
+  const move = (step: number) => {
+    const at = order.indexOf(active);
+    const next = order[(at + step + order.length) % order.length];
+    if (!next) return;
+    onTab(next);
+    requestAnimationFrame(() => tabsRef.current?.querySelector<HTMLElement>(`[data-tab="${CSS.escape(next)}"]`)?.focus());
+  };
+  return (
+    <div className="bs-prompt-tabs-wrap" data-studio-prompt-tabs>
+      <div
+        ref={tabsRef}
+        className="bs-prompt-tabs"
+        role="tablist"
+        aria-label={d.tabsLabel}
+        onKeyDown={(event) => {
+          if (event.key === "ArrowRight" || event.key === "ArrowLeft") {
+            event.preventDefault();
+            move(event.key === "ArrowRight" ? 1 : -1);
+          }
+        }}
+      >
+        {order.map((model) => {
+          const tab = tabs[model]!;
+          const selected = model === active;
+          const label = studioModelLabel(model);
+          return (
+            <button
+              key={model}
+              type="button"
+              role="tab"
+              className="bs-prompt-tab"
+              aria-selected={selected}
+              aria-controls={`${id}-prompt`}
+              tabIndex={selected ? 0 : -1}
+              data-tab={model}
+              data-status={tab.status}
+              aria-busy={tab.status === "designing" || undefined}
+              aria-describedby={tab.status === "ready" ? undefined : `${id}-tab-${model.replace(/[^A-Za-z0-9_-]/g, "_")}`}
+              onClick={() => onTab(model)}
+            >
+              <span className="bs-prompt-tab-name">{label}</span>
+              {tab.status !== "ready" && <span className="bs-prompt-tab-mark" aria-hidden="true" />}
+              {tab.status !== "ready" && (
+                <span id={`${id}-tab-${model.replace(/[^A-Za-z0-9_-]/g, "_")}`} className="bs-sr">
+                  {tab.status === "pending" ? d.tabPending : tab.status === "failed" ? d.tabFailed : d.enhancing}
+                </span>
+              )}
+            </button>
+          );
+        })}
+      </div>
+      {state && (
+        <p id={`${id}-tab-state`} className="bs-prompt-tab-state" data-studio-tab-state={current!.status}>
+          <span>{state.line}</span>
+          {state.action && (
+            <button type="button" className="bs-link-btn" data-studio-design-one={active} disabled={disabled} onClick={() => onDesignOne(active)}>
+              {state.action}
+            </button>
+          )}
+        </p>
+      )}
+    </div>
   );
 }
 

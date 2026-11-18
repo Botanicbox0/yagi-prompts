@@ -51,7 +51,13 @@ import { toReferences, type RefSource, type TrayItem } from "./refs";
 
 export interface DockDraft {
   medium: StudioMedium;
+  /** The model; with several picked (`models`), the first of them. */
   model: string;
+  /**
+   * Image screen only: two or three image models picked at once, in the order they were checked
+   * (./group-model.ts). Absent (or one entry) is the ordinary single-model bar.
+   */
+  models?: string[];
   prompt: string;
   aspect: string;
   resolution: string;
@@ -173,8 +179,10 @@ export function withMedium(draft: DockDraft, medium: StudioMedium): DockDraft {
   return normalizeDraft({ ...draft, medium, model: modelFor(medium).id });
 }
 
+/** One model for the bar (it replaces a pick of several, ./group-model.ts). */
 export function withModel(draft: DockDraft, id: string): DockDraft {
-  return normalizeDraft({ ...draft, model: id });
+  const { models: _picked, ...bar } = draft;
+  return normalizeDraft({ ...bar, model: id });
 }
 
 /**
@@ -544,9 +552,11 @@ export function rerunInput(job: StudioJobView, ids: { organizationId: string; re
 export function draftFromJob(job: StudioJobView, current: DockDraft): DockDraft {
   const medium: StudioMedium = job.kind === "image" || job.kind === "region_edit" ? "image" : "video";
   const resolved = studioModelOrLegacy(job.model);
+  // The bar's own model pick (one or several) gives way to the run's model; a group is restored by reuse-model.ts.
+  const { models: _picked, ...bar } = current;
   const model = resolved?.medium === medium ? normalizeLegacyStudioModelId(job.model) : current.model;
   return normalizeDraft({
-    ...withMedium(current, medium),
+    ...withMedium(bar, medium),
     model,
     prompt: job.prompt,
     aspect: job.aspect ?? current.aspect,

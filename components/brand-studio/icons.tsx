@@ -12,6 +12,8 @@ const paths = {
   arrow: "M5 12h14M13 6l6 6-6 6",
   chevron: "M7 10l5 5 5-5",
   region: "M4 9V4h5M15 4h5v5M20 15v5h-5M9 20H4v-5M9 9h6v6H9z",
+  /** Two pictures split by a line ("모델 비교"). */
+  compare: "M4 5h16v14H4zM12 3v18",
   rerun: "M20 12a8 8 0 1 1-2.3-5.7M20 4v4.5h-4.5",
   video: "M3 7h12v10H3zM15 10.5l6-3.5v10l-6-3.5",
   attach: "M4 4h16v16H4zM12 8v8M8 12h8",

@@ -15,6 +15,7 @@ import { errorLine, newRequestId, type StudioCopy } from "./copy";
 import { finalInput, regionEditInput, rerunInput, withMedium } from "./dock-model";
 import { trayItemFromAsset, trayItemFromOutput, withStartFrame, type RefSource, type TrayItem } from "./refs";
 import { planReuse, type ReusePlan } from "./reuse-model";
+import { groupSiblings } from "./group-model";
 import type { ReviseSupport } from "./revise-form";
 import { STUDIO_OPEN_REVERSE, announce, type LayerEditorRegionPreset } from "./seams";
 import { collapseRevisions, reviseRerunInput } from "./revision-model";
@@ -121,7 +122,7 @@ export function useViewer(input: {
   const reuse = (target: StudioJobView, from?: StudioOutputView | null) => {
     // A version's own words are only the change; its settings are the clip's first run.
     const job = (target.revision && jobs.find((j) => j.id === target.revision!.rootJobId)) || target;
-    const plan = planReuse(job, { current: dock.draft, lookup, outputName: copy.viewer.label, from: from ?? null });
+    const plan = planReuse(job, { current: dock.draft, lookup, outputName: copy.viewer.label, from: from ?? null, siblings: groupSiblings(job, jobs) });
     switch (plan.to) {
       case "reverse":
         // A blueprint is set up again in the reverse panel (slice C), not in the bar.

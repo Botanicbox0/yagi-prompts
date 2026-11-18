@@ -28,6 +28,10 @@ export interface ChipSelectProps {
   /** Opens the list first (tests). */
   initialOpen?: boolean;
   onChange(value: string): void;
+  /** A quiet word before the value: whom the setting is for ("GPT Image" when it is not for every model). */
+  tag?: string;
+  /** One line at the top of the list (whom the setting applies to). */
+  note?: string;
 }
 
 /** The outline of a ratio ("9:16" is a tall box) inside a 16 px square; a plain square when unreadable. */
@@ -48,7 +52,7 @@ export function AspectShape({ ratio }: { ratio: string }) {
   );
 }
 
-export function ChipSelect({ label, value, options, data, mono = false, initialOpen = false, onChange }: ChipSelectProps) {
+export function ChipSelect({ label, value, options, data, mono = false, initialOpen = false, onChange, tag, note }: ChipSelectProps) {
   const [open, setOpen] = useState(initialOpen);
   const chip = useRef<HTMLButtonElement>(null);
   const id = useId();
@@ -86,6 +90,11 @@ export function ChipSelect({ label, value, options, data, mono = false, initialO
           }
         }}
       >
+        {tag && (
+          <span className="bs-chip-tag" aria-hidden="true">
+            {tag}
+          </span>
+        )}
         {current?.icon}
         <span className="bs-chip-value">{current?.label}</span>
         <StudioIcon name="chevron" />
@@ -97,6 +106,7 @@ export function ChipSelect({ label, value, options, data, mono = false, initialO
           value={current?.value ?? value}
           options={options}
           data={data}
+          note={note}
           onPick={(next) => {
             if (next !== value) onChange(next);
             close();
@@ -114,16 +124,22 @@ function ChipList({
   value,
   options,
   data,
+  note,
   onPick,
   onClose,
-}: Pick<ChipSelectProps, "label" | "value" | "options" | "data"> & { id: string; onPick(value: string): void; onClose(): void }) {
+}: Pick<ChipSelectProps, "label" | "value" | "options" | "data" | "note"> & { id: string; onPick(value: string): void; onClose(): void }) {
   const box = useDismiss(onClose);
   useEffect(() => {
     (box.current?.querySelector<HTMLElement>('[aria-selected="true"]') ?? box.current?.querySelector<HTMLElement>('[role="option"]'))?.focus({ preventScroll: true });
   }, [box]);
   return (
     <div ref={box} className="bs-menu bs-pick-list" data-studio-pick-list={data}>
-      <div id={id} role="listbox" aria-label={label} onKeyDown={(event) => moveFocus(event, '[role="option"]')}>
+      {note && (
+        <p className="bs-menu-title" id={`${id}-note`} data-studio-pick-note>
+          {note}
+        </p>
+      )}
+      <div id={id} role="listbox" aria-label={label} aria-describedby={note ? `${id}-note` : undefined} onKeyDown={(event) => moveFocus(event, '[role="option"]')}>
         {options.map((option) => {
           const selected = option.value === value;
           return (

@@ -10,14 +10,15 @@
  * the form at once; nothing waits for the result, and several edits can go out in a row.
  * A result that came from a partial edit opens on a before/after slider.
  */
-import { useEffect, useId, useMemo, useRef, useState, type KeyboardEvent } from "react";
+import { useEffect, useId, useLayoutEffect, useMemo, useRef, useState, type KeyboardEvent } from "react";
 import { copyImageUrlToClipboard, isEditableTextTarget } from "@/lib/brand-studio/clipboard-image";
 import type { RegionBox, StudioAssetView, StudioJobView, StudioOutputView } from "@/lib/brand-studio/contracts";
-import type { StudioImageModel } from "@/lib/brand-studio/models";
+import { studioModelOrLegacy, type StudioImageModel } from "@/lib/brand-studio/models";
 import { errorLine, fill, type StudioCopy, type StudioLocale } from "./copy";
 import { qualityOf, regionCredits, regionInstructionForForm, regionProblem, type RegionProblem } from "./dock-model";
 import { CopyButton, promptToCopy, sentPromptCopyable } from "./copy-prompt";
 import { CompareSlider } from "./gallery/compare";
+import { ModelCompare, canCompareModels, compareEntries, siblingOutput } from "./gallery/model-compare";
 import { RegionForm } from "./gallery/region-form";
 import { StudioIcon, type StudioIconName } from "./icons";
 import type { RefSource, TrayItem } from "./refs";
@@ -106,6 +107,10 @@ export interface ViewerProps {
   revise?: ReviseSupport | null;
   parentOf(outputId: string | null): StudioOutputView | null;
   parentAssetOf?(assetId: string | null): StudioAssetView | null;
+  /** The runs made with this one on other models in one request (itself included), in pick order. */
+  siblingsOf?(job: StudioJobView): readonly StudioJobView[];
+  /** Opens one result (a sibling's) in this viewer. */
+  onOpenOutput?(outputId: string): void;
   onIndex(index: number): void;
   onClose(): void;
   actions: ViewerActions;
@@ -164,6 +169,8 @@ export function problemText(problem: RegionProblem, copy: StudioCopy): string {
 export function Viewer(props: ViewerProps) {
   const { items, index, copy, onIndex, onClose } = props;
   const [docked, setDocked] = useState(Boolean(props.regionPreset && props.regionPreset.key === (items[index] ? itemKey(items[index]!) : "")));
+  // "모델 비교" stays on while moving between the results of one request.
+  const [comparing, setComparing] = useState(false);
   const ref = useViewerDialog(docked);
   const id = useId();
   const item = items[index];
@@ -181,6 +188,13 @@ export function Viewer(props: ViewerProps) {
       data-studio-viewer
       data-docked={docked ? "" : undefined}
       onKeyDown={(event) => {
+        // Escape leaves "모델 비교" first; the next Escape closes the viewer.
+        if (comparing && event.key === "Escape" && !event.defaultPrevented) {
+          event.preventDefault();
+          compareToggleHadFocus = Date.now();
+          setComparing(false);
+          return;
+        }
         // A non-modal dialog gets no `cancel` from Escape, so the docked form closes itself.
         if (docked && event.key === "Escape" && !event.defaultPrevented) {
           event.preventDefault();
@@ -191,7 +205,10 @@ export function Viewer(props: ViewerProps) {
       }}
       onCancel={(event) => {
         event.preventDefault();
-        onClose();
+        if (comparing) {
+          compareToggleHadFocus = Date.now();
+          setComparing(false);
+        } else onClose();
       }}
     >
       <div className="bs-viewer-bar">
@@ -212,8 +229,172 @@ export function Viewer(props: ViewerProps) {
           <StudioIcon name="close" />
         </button>
       </div>
-      <ViewerContent key={itemKey(item)} {...props} item={item} onRegion={setDocked} />
+      <ViewerContent key={itemKey(item)} {...props} item={item} onRegion={setDocked} comparing={comparing} onCompare={setComparing} />
     </dialog>
+  );
+}
+
+/** Set when the switcher moved with a key, so the next result's switcher takes focus back (the content remounts). */
+let switcherHadFocus = false;
+/** Set when "모델 비교" was pressed: the toggle moves between the side column and the row above the pictures. */
+let compareToggleHadFocus = 0;
+
+/**
+ * "같이 만든 결과": the results of one request made on several models, one pill per model in the order they
+ * were picked, so they can be compared quickly. The shown one is marked; ←/→ inside move between them. A
+ * model whose run failed (or is still being made) stays in the row, quiet, with its reason under it.
+ */
+export function SiblingSwitcher({
+  job,
+  output,
+  siblings,
+  copy,
+  onOpen,
+  comparing = false,
+  onCompare,
+  compact = false,
+}: {
+  job: StudioJobView;
+  output: StudioOutputView | null;
+  siblings: readonly StudioJobView[];
+  copy: StudioCopy;
+  onOpen(outputId: string): void;
+  /** "모델 비교" is on: every model's picture is on the stage. */
+  comparing?: boolean;
+  /** Offered when another model of the group has a picture to compare with. */
+  onCompare?(on: boolean): void;
+  /** One quiet row above the pictures while comparing: the pills, then the toggle (the label is for screen readers). */
+  compact?: boolean;
+}) {
+  const v = copy.viewer;
+  const row = useRef<HTMLDivElement>(null);
+  const toggleRef = useRef<HTMLButtonElement>(null);
+  const shown = siblings.filter((run) => !(run.status === "succeeded" && run.outputs.length === 0));
+  const target = (run: StudioJobView) => siblingOutput(job, output, run);
+  const ready = shown.filter((run) => run.id === job.id || target(run));
+  const canCompare = Boolean(onCompare && output?.kind === "image" && canCompareModels(compareEntries(job, output, siblings, copy)));
+  useEffect(() => {
+    // The toggle moved between the side column and the row above the pictures: focus follows it (only right
+    // after the press, so an old press never pulls focus later).
+    if (compareToggleHadFocus && Date.now() - compareToggleHadFocus < 1500) {
+      compareToggleHadFocus = 0;
+      // Without scrolling: the column is back where it was, and the toggle is where it was pressed.
+      const to = toggleRef.current ?? row.current?.querySelector<HTMLElement>('[aria-current="true"]');
+      to?.focus({ preventScroll: true });
+      to?.scrollIntoView?.({ block: "nearest" });
+      return;
+    }
+    if (!switcherHadFocus) return;
+    switcherHadFocus = false;
+    row.current?.querySelector<HTMLElement>('[aria-current="true"]')?.focus();
+  }, []);
+  if (shown.length < 2) return null;
+  const notes = shown.flatMap((run) => {
+    if (run.id === job.id || target(run)) return [];
+    // The short reason (the wall's tile keeps the longer one about references).
+    const reason =
+      run.status === "failed"
+        ? errorLine(copy, run.errorCode)
+        : run.status === "canceled"
+          ? copy.board.canceled
+          : (copy.board.stage[run.status as keyof typeof copy.board.stage] ?? copy.board.stage.queued);
+    return [{ id: run.id, label: studioModelOrLegacy(run.model)?.label ?? run.model, reason, failed: run.status === "failed" || run.status === "canceled" }];
+  });
+  const step = (dir: number) => {
+    const at = ready.findIndex((run) => run.id === job.id);
+    const next = ready[(at + dir + ready.length) % ready.length];
+    const out = next && next.id !== job.id ? target(next) : null;
+    if (!out) return;
+    switcherHadFocus = true;
+    onOpen(out.id);
+  };
+  const toggle = canCompare && (
+    <button
+      ref={toggleRef}
+      type="button"
+      className="bs-link-btn"
+      aria-pressed={comparing}
+      data-studio-compare-models
+      aria-label={v.compareModels}
+      onClick={() => {
+        compareToggleHadFocus = Date.now();
+        onCompare?.(!comparing);
+      }}
+    >
+      {/* Above the pictures the toggle is always on, so it keeps its own icon (alone on a phone) and shows on by its fill. */}
+      <StudioIcon name={comparing && !compact ? "check" : "compare"} />
+      <span className="bs-link-btn-label">{v.compareModels}</span>
+    </button>
+  );
+  const pills = (
+      <div
+        ref={row}
+        className="bs-siblings-row"
+        role="group"
+        aria-labelledby={`sib-${job.id}`}
+        onKeyDown={(event) => {
+          if (event.key !== "ArrowLeft" && event.key !== "ArrowRight") return;
+          event.preventDefault();
+          step(event.key === "ArrowRight" ? 1 : -1);
+        }}
+      >
+        {shown.map((run) => {
+          const label = studioModelOrLegacy(run.model)?.label ?? run.model;
+          const current = run.id === job.id;
+          const out = current ? null : target(run);
+          if (current || out)
+            return (
+              <button
+                key={run.id}
+                type="button"
+                className="bs-sibling"
+                data-sibling={run.model}
+                aria-current={current ? "true" : undefined}
+                aria-label={current ? label : fill(v.siblingShow, { model: label })}
+                onClick={() => out && onOpen(out.id)}
+              >
+                {label}
+              </button>
+            );
+          return (
+            <span key={run.id} className="bs-sibling" data-sibling={run.model} data-state={run.status === "failed" || run.status === "canceled" ? "failed" : "open"} aria-describedby={`sib-${run.id}-why`}>
+              <span aria-hidden="true" className="bs-sibling-mark" />
+              {label}
+            </span>
+          );
+        })}
+      </div>
+  );
+  return (
+    <div className="bs-siblings" data-studio-siblings data-compact={compact ? "" : undefined}>
+      {compact ? (
+        <>
+          <p className="bs-sr" id={`sib-${job.id}`}>
+            {v.siblings}
+          </p>
+          <div className="bs-siblings-bar">
+            {pills}
+            {toggle}
+          </div>
+        </>
+      ) : (
+        <>
+          <div className="bs-siblings-head">
+            <p className="bs-label" id={`sib-${job.id}`}>
+              {v.siblings}
+            </p>
+            {toggle}
+          </div>
+          {pills}
+        </>
+      )}
+      {notes.map((note) => (
+        // While comparing, the stage's own tile says why; the line stays for screen readers only.
+        <p key={note.id} id={`sib-${note.id}-why`} className={comparing ? "bs-sr" : "bs-sibling-note"} data-studio-sibling-note={note.failed ? "failed" : "open"}>
+          <span className="bs-sibling-note-model">{note.label}:</span> {note.reason}
+        </p>
+      ))}
+    </div>
   );
 }
 
@@ -230,9 +411,13 @@ function ViewerContent({
   revise = null,
   parentOf,
   parentAssetOf,
+  siblingsOf,
+  onOpenOutput,
   actions,
   onRegion,
-}: ViewerProps & { item: ViewerItem; onRegion(open: boolean): void }) {
+  comparing: comparingModels = false,
+  onCompare,
+}: ViewerProps & { item: ViewerItem; onRegion(open: boolean): void; comparing?: boolean; onCompare?(on: boolean): void }) {
   const v = copy.viewer;
   // Versions of a generated clip: the strip swaps what is shown here without leaving the viewer.
   const clip = revise && openedItem.type === "output" && openedItem.output.kind === "video" ? openedItem.job : null;
@@ -324,6 +509,21 @@ function ViewerContent({
   }, [image, file.url]);
   const name = item.type === "asset" ? item.asset.name : "";
   const comparing = !region && image && job?.kind === "region_edit" && before?.kind === "image";
+  // Results of one request on several models: the switcher, and "모델 비교" with every model side by side.
+  const siblings = job?.group && siblingsOf ? siblingsOf(job) : [];
+  const entries = job && item.type === "output" && siblings.length > 1 ? compareEntries(job, item.output, siblings, copy) : [];
+  const comparable = !region && image && canCompareModels(entries);
+  const modelCompare = comparingModels && comparable;
+  // Moving on to a result made alone ends the comparison, so Escape then closes the viewer as always.
+  useEffect(() => {
+    if (comparingModels && !comparable) onCompare?.(false);
+  }, [comparable, comparingModels, onCompare]);
+  // The action column is hidden while comparing, which loses its scroll; leaving puts it back where it was.
+  const side = useRef<HTMLDivElement>(null);
+  const sideTop = useRef(0);
+  useLayoutEffect(() => {
+    if (!modelCompare && side.current) side.current.scrollTop = sideTop.current;
+  }, [modelCompare]);
 
   const setRegion = (open: boolean) => {
     setRegionState(open);
@@ -387,8 +587,22 @@ function ViewerContent({
   const saved = canCreate && Boolean(output?.savedAssetId);
 
   return (
-    <div className="bs-viewer-body" data-region={region ? "" : undefined}>
-      <figure ref={setMediaHost} className="bs-viewer-media" data-kind={file.kind}>
+    // "모델 비교" gives the pictures the whole body: the action column is hidden (kept mounted, so it comes back
+    // exactly as it was) and the model pills with the toggle sit in one quiet row above the pictures.
+    <div className="bs-viewer-body" data-region={region ? "" : undefined} data-compare={modelCompare ? "" : undefined}>
+      <figure ref={setMediaHost} className="bs-viewer-media" data-kind={file.kind} data-compare={modelCompare ? "" : undefined}>
+        {modelCompare && job && siblingsOf && onOpenOutput && (
+          <SiblingSwitcher
+            job={job}
+            output={item.type === "output" ? item.output : null}
+            siblings={siblings}
+            copy={copy}
+            onOpen={onOpenOutput}
+            comparing
+            onCompare={onCompare}
+            compact
+          />
+        )}
         {region ? (
           <RegionEditor box={box} onChange={setBox} copy={copy}>
             {picture}
@@ -401,11 +615,41 @@ function ViewerContent({
             height={file.height}
             labels={{ before: v.before, after: v.after, range: v.compareRange, hint: v.compareHint }}
           />
+        ) : modelCompare ? (
+          <ModelCompare
+            entries={entries}
+            copy={copy}
+            locale={locale}
+            onOpen={(entry) => {
+              // A press on a picture leaves the comparison and opens that result on its own.
+              compareToggleHadFocus = Date.now();
+              onCompare?.(false);
+              if (!entry.current && entry.output) onOpenOutput?.(entry.output.id);
+            }}
+          />
         ) : (
           picture
         )}
       </figure>
-      <div className="bs-viewer-side">
+      <div
+        ref={side}
+        className="bs-viewer-side"
+        aria-hidden={modelCompare || undefined}
+        onScroll={(event) => {
+          if (!modelCompare) sideTop.current = event.currentTarget.scrollTop;
+        }}
+      >
+        {job?.group && siblingsOf && onOpenOutput && !region && !modelCompare && (
+          <SiblingSwitcher
+            job={job}
+            output={item.type === "output" ? item.output : null}
+            siblings={siblings}
+            copy={copy}
+            onOpen={onOpenOutput}
+            comparing={modelCompare}
+            onCompare={onCompare}
+          />
+        )}
         {clip && dialogue ? (
           <VersionPanel
             versions={chain}

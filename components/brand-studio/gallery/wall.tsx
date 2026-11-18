@@ -15,7 +15,7 @@
  * folder; download; delete). A tile is exactly what is on screen: a clip with versions shows one version,
  * and that version alone is selected or deleted (./selection.ts).
  */
-import { Fragment, useEffect, useId, useRef, useState, type KeyboardEvent, type MouseEvent, type ReactNode } from "react";
+import { Fragment, useEffect, useId, useRef, useState, type FocusEvent, type KeyboardEvent, type MouseEvent, type PointerEvent, type ReactNode } from "react";
 import type { StudioJobView, StudioOutputView } from "@/lib/brand-studio/contracts";
 import { creditsOf } from "@/lib/brand-studio/credits";
 import { studioModelOrLegacy, type StudioMedium } from "@/lib/brand-studio/models";
@@ -45,6 +45,7 @@ import {
   type Selection,
 } from "./selection";
 import { Menu, useAnchored, useDismiss, type MenuEntry } from "./menu";
+import { useElementSize, useMediaQuery } from "../use-media";
 
 /** Everything a tile's buttons and menu can ask the screen to do. */
 export type TileAction =
@@ -161,6 +162,9 @@ export function deleteConfirmLine(targets: SelectedTargets, jobs: readonly Studi
 
 export type TileMenuKey =
   | "open"
+  | "select"
+  | "like"
+  | "reference"
   | "rerun"
   | "reuse"
   | "copy-prompt"
@@ -192,20 +196,58 @@ export function tileMenuKeys(input: {
   saved: boolean;
   /** The run has words to copy (`promptToCopy`). */
   copyable?: boolean;
+  /** Corner buttons the tile had no room for (`tileControls`): their actions come here instead. */
+  inMenu?: { select?: boolean; like?: boolean; reference?: boolean };
 }): TileMenuKey[] {
-  const { canGenerate, canEdit, kind, image, sized, saved, copyable = false } = input;
+  const { canGenerate, canEdit, kind, image, sized, saved, copyable = false, inMenu = {} } = input;
   const keys: TileMenuKey[] = ["open"];
+  if (inMenu.select) keys.push("select");
   if (canGenerate && kind === "region_edit") keys.push("reuse");
   else if (canGenerate && kind !== "video_final") keys.push("rerun", "reuse");
   if (copyable) keys.push("copy-prompt");
   if (canGenerate && image) keys.push("region");
   if (canEdit && image && sized) keys.push("decorate");
   if (canGenerate && image) keys.push("to-video");
-  if (canEdit) keys.push("folder", "review", "campaign");
+  if (canGenerate && inMenu.reference) keys.push("reference");
+  if (canEdit) keys.push("folder");
+  if (canEdit && inMenu.like) keys.push("like");
+  if (canEdit) keys.push("review", "campaign");
   if (canEdit && !saved) keys.push("save");
   keys.push("download");
   if (canEdit) keys.push("delete");
   return keys;
+}
+
+/**
+ * Which corner buttons a tile of `width` px has room for, so no two overlap (studio-v2.css draws them at these
+ * sizes): on a touch screen every button is a 44 px box from the corner, otherwise a 24 px select box at 8 px,
+ * a 30 px like button after it, and `tools` 30 px buttons 4 px apart at the right (use · folder · more). What does
+ * not fit goes, in this order: use and folder (the right corner keeps "more"), then like, then the select box;
+ * their actions move into the more-menu (`tileMenuKeys` `inMenu`). Unknown width (not measured yet): everything.
+ */
+export function tileControls(
+  width: number | null,
+  input: { coarse: boolean; like: boolean; tools: number },
+): { check: boolean; like: boolean; tools: number } {
+  const { coarse, like, tools } = input;
+  if (width === null) return { check: true, like, tools };
+  const button = coarse ? 44 : 30;
+  const inset = coarse ? 0 : 8;
+  const gap = coarse ? 0 : 4;
+  const box = coarse ? 44 : 24;
+  const afterBox = coarse ? 0 : 8;
+  const left = (check: boolean, withLike: boolean) => (check || withLike ? inset : 0) + (check ? box : 0) + (check && withLike ? afterBox : 0) + (withLike ? button : 0);
+  const right = (n: number) => (n > 0 ? inset + n * button + (n - 1) * gap : 0);
+  const room = (check: boolean, withLike: boolean, n: number) => left(check, withLike) + right(n) + 4 <= width;
+  const fewer = Math.min(tools, 1);
+  const steps: Array<[boolean, boolean, number]> = [
+    [true, like, tools],
+    [true, like, fewer],
+    [true, false, fewer],
+    [false, false, fewer],
+  ];
+  for (const [check, withLike, n] of steps) if (room(check, withLike, n)) return { check, like: withLike, tools: n };
+  return { check: false, like: false, tools: fewer };
 }
 
 /** Flex values that justify a row: a tile grows by its ratio from the shared row height. */
@@ -249,7 +291,16 @@ export function Wall(props: WallProps) {
       sendAsReferences();
     }
   };
-  const tileProps = { ...props, badges, select, canRemove };
+  // A run made with others in one request: pointing at (or focusing) one of its tiles outlines all of them.
+  // The pointer and the keyboard are kept apart, so leaving one tile never clears the group focus is in.
+  const [pointed, setPointed] = useState<string | null>(null);
+  const [focused, setFocused] = useState<string | null>(null);
+  const group: GroupLight = {
+    lit: pointed ?? focused,
+    point: (id, on) => setPointed((current) => (on ? id : current === id ? null : current)),
+    focus: (id, on) => setFocused((current) => (on ? id : current === id ? null : current)),
+  };
+  const tileProps = { ...props, badges, select, canRemove, group };
   const groups = groupByDay(wallEntries(collapseRevisions(jobs), parentOf), (entry) => entry.job.createdAt, now);
   const label = mode === "video" ? g.labelVideo : g.label;
   if (!groups.length && !sending.length)
@@ -475,7 +526,33 @@ function SendingSlot({ tile, copy }: { tile: SendingTile; copy: StudioCopy }) {
 /** Version numbers of clips with more than one version, by run id. */
 type Badges = { badges: ReadonlyMap<string, number> };
 /** The selection, and whether runs with no result can be removed here. */
-type Picking = { select: Select; canRemove: boolean };
+type Picking = { select: Select; canRemove: boolean; group: GroupLight };
+/** Which request made on several models is lit (pointer first, else keyboard focus), and how a tile reports it. */
+type GroupLight = { lit: string | null; point(groupId: string, on: boolean): void; focus(groupId: string, on: boolean): void };
+
+/**
+ * The attributes and handlers that tie a tile to the other runs of its request: every tile of the group gets
+ * one quiet ink outline while any of them is under a mouse or pen, or holds keyboard focus. A touch alone
+ * lights nothing beyond what its focus gives. Nothing for a run made alone.
+ */
+function groupTile(job: StudioJobView, group: GroupLight) {
+  const id = job.group?.id;
+  if (!id) return {};
+  return {
+    "data-group": id,
+    "data-group-lit": group.lit === id ? "" : undefined,
+    onPointerEnter: (event: PointerEvent<HTMLElement>) => {
+      if (event.pointerType !== "touch") group.point(id, true);
+    },
+    onPointerLeave: (event: PointerEvent<HTMLElement>) => {
+      if (event.pointerType !== "touch") group.point(id, false);
+    },
+    onFocus: () => group.focus(id, true),
+    onBlur: (event: FocusEvent<HTMLElement>) => {
+      if (!(event.relatedTarget instanceof Node && event.currentTarget.contains(event.relatedTarget))) group.focus(id, false);
+    },
+  };
+}
 
 function VersionBadge({ n, copy, extra }: { n: number | undefined; copy: StudioCopy; extra?: string | null }) {
   if (!n) return extra ? <span className="bs-tile-badge">{extra}</span> : null;
@@ -486,12 +563,27 @@ function VersionBadge({ n, copy, extra }: { n: number | undefined; copy: StudioC
   );
 }
 
-function PendingTile({ entry, copy, canStop = false, stopping = null, onCancel, badges }: WallProps & Badges & Picking & { entry: Extract<Entry, { type: "pending" }> }) {
+/**
+ * The model of a run made with others in one request, on its place in the wall (nothing for a lone run).
+ * `inline`: in the flow of a failed tile's centred column, so it never sits on its "다시" button.
+ */
+function GroupModelBadge({ job, inline = false }: { job: StudioJobView; inline?: boolean }) {
+  const model = job.group ? studioModelOrLegacy(job.model) : null;
+  if (!model) return null;
+  return (
+    <span className="bs-tile-model" data-studio-tile-model={job.model} data-inline={inline ? "" : undefined}>
+      {model.label}
+    </span>
+  );
+}
+
+function PendingTile({ entry, copy, canStop = false, stopping = null, onCancel, badges, group }: WallProps & Badges & Picking & { entry: Extract<Entry, { type: "pending" }> }) {
   const { job } = entry;
   const stage = copy.board.stage[job.status as keyof typeof copy.board.stage] ?? copy.board.stage.queued;
   return (
-    <div className="bs-tile" data-state="pending" data-job-status={job.status} data-studio-job={job.id} style={tileStyle(entry.ratio)} role="group" aria-label={fill(copy.board.pending, { n: entry.n })}>
+    <div className="bs-tile" data-state="pending" data-job-status={job.status} data-studio-job={job.id} style={tileStyle(entry.ratio)} role="group" aria-label={fill(copy.board.pending, { n: entry.n })} {...groupTile(job, group)}>
       <span className="bs-stage">{stage}</span>
+      <GroupModelBadge job={job} />
       <VersionBadge n={badges.get(job.id)} copy={copy} extra={job.kind === "region_edit" ? copy.board.editBadge : null} />
       {canStop && onCancel && canCancel(job) && entry.n === job.outputs.length + 1 && (
         <button
@@ -510,15 +602,20 @@ function PendingTile({ entry, copy, canStop = false, stopping = null, onCancel, 
   );
 }
 
-function FailedTile({ entry, copy, canGenerate, onRetry, onRemove, canRemove, select, badges }: WallProps & Badges & Picking & { entry: Extract<Entry, { type: "failed" }> }) {
+function FailedTile({ entry, copy, canGenerate, onRetry, onRemove, canRemove, select, badges, group }: WallProps & Badges & Picking & { entry: Extract<Entry, { type: "failed" }> }) {
   const { job } = entry;
   const key = failedKey(job.id);
   const selected = select.has(key);
   // A block with attachments usually comes from the attachment, so say where to look.
   const reason = job.errorCode === "provider_rejected" && job.references.length > 0 ? copy.board.rejectedWithReferences : errorLine(copy, job.errorCode);
+  // The select box only where it fits beside the remove button (a narrow tile keeps remove).
+  const tile = useRef<HTMLDivElement>(null);
+  const size = useElementSize(tile);
+  const coarse = useMediaQuery("(pointer: coarse)");
+  const fit = tileControls(size?.width ?? null, { coarse, like: false, tools: canRemove ? 1 : 0 });
   return (
-    <div className="bs-tile" data-state="failed" data-studio-job={job.id} data-selected={selected ? "" : undefined} style={tileStyle(entry.ratio)} role="group" aria-label={copy.gallery.failed}>
-      {canRemove && <TileCheck selected={selected} label={copy.gallery.selectFailed} onPress={(event) => select.press(key, event.shiftKey)} />}
+    <div ref={tile} className="bs-tile" data-state="failed" data-studio-job={job.id} data-selected={selected ? "" : undefined} style={tileStyle(entry.ratio)} role="group" aria-label={copy.gallery.failed} {...groupTile(job, group)}>
+      {canRemove && fit.check && <TileCheck selected={selected} label={copy.gallery.selectFailed} onPress={(event) => select.press(key, event.shiftKey)} />}
       {canRemove && (
         <button type="button" className="bs-tile-btn bs-tile-remove" data-studio-remove aria-label={copy.gallery.removeFailed} title={copy.gallery.removeFailed} onClick={() => void onRemove?.(job)}>
           <StudioIcon name="trash" />
@@ -527,6 +624,7 @@ function FailedTile({ entry, copy, canGenerate, onRetry, onRemove, canRemove, se
       <span className="bs-tile-failed-icon" aria-hidden="true">
         <StudioIcon name="info" />
       </span>
+      <GroupModelBadge job={job} inline />
       <p className="bs-tile-reason">{reason}</p>
       <VersionBadge n={badges.get(job.id)} copy={copy} />
       {canGenerate && (
@@ -540,7 +638,7 @@ function FailedTile({ entry, copy, canGenerate, onRetry, onRemove, canRemove, se
 }
 
 function ResultTile(props: WallProps & Badges & Picking & { entry: Extract<Entry, { type: "result" }>; n: number }) {
-  const { entry, n, copy, locale, canGenerate, canEdit, library, onAction, onNotice, badges, select } = props;
+  const { entry, n, copy, locale, canGenerate, canEdit, library, onAction, onNotice, badges, select, group } = props;
   const { output, job } = entry.item;
   const key = resultKey(output.id);
   const selected = select.has(key);
@@ -601,11 +699,33 @@ function ResultTile(props: WallProps & Badges & Picking & { entry: Extract<Entry
     save: { label: m.save, icon: "save", run: () => onAction("save", entry.item) },
     download: { label: m.download, icon: "download", run: () => onAction("download", entry.item) },
     delete: { label: m.delete, icon: "trash", tone: "danger", keepOpen: true, run: () => setPanel("confirm") },
+    // On a tile too narrow for every corner button, the ones that do not fit come here.
+    select: { label: fill(g.selectTile, { n }), icon: "check", run: () => select.press(key, false) },
+    like: { label: liked ? g.unlike : g.like, icon: "heart", disabled: !library.ready, run: () => void like() },
+    reference: { label: g.reference, icon: "plus", run: () => onAction("reference", entry.item) },
   };
-  const entries: MenuEntry[] = tileMenuKeys({ canGenerate, canEdit, kind: job.kind, image, sized, saved: Boolean(output.savedAssetId), copyable: Boolean(promptText) }).map((key) => ({ key, ...item[key] }));
+  // The corner buttons this tile has room for, from its own width (no two overlap; 44 px each on touch).
+  const tile = useRef<HTMLElement>(null);
+  const size = useElementSize(tile);
+  const coarse = useMediaQuery("(pointer: coarse)");
+  // A phone shows only "more" in the right corner (studio-v2.css hides "use" and "folder" there).
+  const phone = useMediaQuery("(max-width: 900px)");
+  const wanted = phone ? 1 : (canGenerate ? 1 : 0) + (canEdit ? 1 : 0) + 1;
+  const fit = tileControls(size?.width ?? null, { coarse, like: canEdit, tools: wanted });
+  const entries: MenuEntry[] = tileMenuKeys({
+    canGenerate,
+    canEdit,
+    kind: job.kind,
+    image,
+    sized,
+    saved: Boolean(output.savedAssetId),
+    copyable: Boolean(promptText),
+    inMenu: { select: !fit.check, like: canEdit && !fit.like, reference: canGenerate && (phone || fit.tools < wanted) },
+  }).map((key) => ({ key, ...item[key] }));
 
   return (
     <figure
+      ref={tile}
       className="bs-tile"
       data-studio-tile
       data-kind={output.kind}
@@ -615,6 +735,7 @@ function ResultTile(props: WallProps & Badges & Picking & { entry: Extract<Entry
       data-liked={liked ? "" : undefined}
       data-selected={selected ? "" : undefined}
       style={tileStyle(entry.ratio)}
+      {...groupTile(job, group)}
     >
       <button
         type="button"
@@ -635,25 +756,42 @@ function ResultTile(props: WallProps & Badges & Picking & { entry: Extract<Entry
           <img src={output.thumbUrl ?? output.url} alt="" loading="lazy" decoding="async" draggable={false} />
         )}
       </button>
-      <TileCheck selected={selected} label={fill(g.selectTile, { n })} onPress={(event) => select.press(key, event.shiftKey)} />
-      {canGenerate && image ? (
-        <button
-          type="button"
-          className="bs-tile-pill"
-          data-studio-region-pill
-          onClick={() => onAction("region", entry.item)}
-        >
-          <StudioIcon name="region" />
-          <span>{m.region}</span>
-        </button>
-      ) : (
-        <VersionBadge
-          n={badges.get(job.id)}
-          copy={copy}
-          extra={output.draft ? copy.board.draftBadge : job.kind === "region_edit" ? copy.board.editBadge : null}
-        />
-      )}
-      {canEdit && (
+      {fit.check && <TileCheck selected={selected} label={fill(g.selectTile, { n })} onPress={(event) => select.press(key, event.shiftKey)} />}
+      {/* The bottom edge measures the tile (a container query): the caption shortens its model name, never its
+          credits, and a narrow tile shows the partial-edit button as its icon alone. */}
+      <div className="bs-tile-foot">
+        {canGenerate && image ? (
+          <button
+            type="button"
+            className="bs-tile-pill"
+            data-studio-region-pill
+            aria-label={m.region}
+            onClick={() => onAction("region", entry.item)}
+          >
+            <StudioIcon name="region" />
+            <span className="bs-tile-pill-label">{m.region}</span>
+          </button>
+        ) : (
+          <VersionBadge
+            n={badges.get(job.id)}
+            copy={copy}
+            extra={output.draft ? copy.board.draftBadge : job.kind === "region_edit" ? copy.board.editBadge : null}
+          />
+        )}
+        {job.group && model && (
+          // Made with other models in one request: which model this one is, without hovering.
+          <span className="bs-tile-model" data-studio-tile-model={job.model} aria-hidden="true">
+            {model.label}
+          </span>
+        )}
+        {(model || usage > 0) && (
+          <span className="bs-tile-info">
+            {model && <span className="bs-tile-info-name">{model.label}</span>}
+            {usage > 0 && <span className="bs-tile-info-credits bs-num">{credits(copy.credits.amount, usage, locale)}</span>}
+          </span>
+        )}
+      </div>
+      {canEdit && fit.like && (
         <button
           type="button"
           className="bs-tile-btn"
@@ -669,12 +807,12 @@ function ResultTile(props: WallProps & Badges & Picking & { entry: Extract<Entry
         </button>
       )}
       <div className="bs-tile-tools" data-corner="tr">
-        {canGenerate && (
+        {canGenerate && fit.tools === wanted && (
           <button type="button" className="bs-tile-btn" data-studio-use aria-label={g.reference} title={g.reference} onClick={() => onAction("reference", entry.item)}>
             <StudioIcon name="plus" />
           </button>
         )}
-        {canEdit && (
+        {canEdit && fit.tools === wanted && (
           <button
             ref={folderButton}
             type="button"
@@ -706,12 +844,6 @@ function ResultTile(props: WallProps & Badges & Picking & { entry: Extract<Entry
           <StudioIcon name="more" />
         </button>
       </div>
-      {(model || usage > 0) && (
-        <figcaption className="bs-tile-info">
-          {model && <span>{model.label}</span>}
-          {usage > 0 && <span className="bs-num">{credits(copy.credits.amount, usage, locale)}</span>}
-        </figcaption>
-      )}
       {panel === "menu" && <Menu id={`${id}-panel`} label={g.more} entries={entries} anchor={more.current} onClose={close(more.current)} />}
       <span className="bs-sr" aria-live="polite" data-studio-copy-live>
         {copied.done ? copy.viewer.copied : ""}

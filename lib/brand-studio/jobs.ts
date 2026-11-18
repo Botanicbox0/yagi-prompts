@@ -76,7 +76,7 @@ export function takeFreeIntelSlot(key: string, maxPerWindow: number, nowMs: numb
   return true;
 }
 
-async function insertJob(deps: StudioDeps, sql: StudioDeps['sql'], userId: string, organizationId: string, requestId: string, plan: JobPlan, projectId: string | null = null) {
+export async function insertJob(deps: StudioDeps, sql: StudioDeps['sql'], userId: string, organizationId: string, requestId: string, plan: JobPlan, projectId: string | null = null) {
   // A free lane now means the job starts `queued`; `held` only while every lane is full.
   const lane = await routeJob(sql, {
     organizationId,

@@ -5,7 +5,7 @@
  */
 import { useCallback, useEffect, useMemo, useReducer, useRef, useState } from "react";
 import type { z } from "zod";
-import type { FilmSheet, ReviseMarkReadSchema, StudioFailure, StudioJobCreate, StudioJobView, StudioProjectRef, StudioReviseMarkRead, StudioState } from "@/lib/brand-studio/contracts";
+import type { FilmSheet, ReviseMarkReadSchema, StudioFailure, StudioJobCreate, StudioJobGroupCreate, StudioJobView, StudioProjectRef, StudioReviseMarkRead, StudioState } from "@/lib/brand-studio/contracts";
 import { createStudioApi, isFailure, measureInBrowser, type ApiResult, type StudioApi, type StudioOps } from "./api";
 import { newRequestId } from "./copy";
 import { createPollLoop, type PollLoop } from "./poller";
@@ -107,6 +107,17 @@ export function useStudio({
     async (input: StudioJobCreate) => {
       const result = await api.call("job.create", jobInputForProject(input, intoProject.current));
       if (!isFailure(result)) dispatch({ type: "jobAdded", job: result.job });
+      return result;
+    },
+    [api],
+  );
+
+  /** One request on several image models: every run lands on the wall at once, or none does. */
+  const createGroup = useCallback(
+    async (input: StudioJobGroupCreate) => {
+      const target = intoProject.current;
+      const result = await api.call("job.create_group", target ? { ...input, projectId: target } : input);
+      if (!isFailure(result)) for (const job of result.jobs) dispatch({ type: "jobAdded", job });
       return result;
     },
     [api],
@@ -265,7 +276,7 @@ export function useStudio({
     [api, refreshSilently],
   );
 
-  return { store, load, createJob, assignProject, createProject, cancelJob, saveOutput, deleteOutput, deleteJob, updateAsset, deleteAsset, handoff, enhancePrompt, planRevision, readMark, films, analyzeFilm, uploads, upload };
+  return { store, load, createJob, createGroup, assignProject, createProject, cancelJob, saveOutput, deleteOutput, deleteJob, updateAsset, deleteAsset, handoff, enhancePrompt, planRevision, readMark, films, analyzeFilm, uploads, upload };
 }
 
 /**

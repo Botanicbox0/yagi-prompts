@@ -154,6 +154,10 @@ export function jobView(row: JobRow, outputs: OutputRow[], media: StudioMediaSto
           },
         }
       : {}),
+    // Made with other models in one request: the same value on every run of it.
+    ...(p.group && typeof p.group.id === 'string' && Array.isArray(p.group.models)
+      ? { group: { id: p.group.id, models: p.group.models.map(String) } }
+      : {}),
     outputs: outputs
       .filter((o) => o.job_id === row.id && o.status === 'ready' && !o.deleted_at && o.storage_key)
       .sort((a, b) => a.idx - b.idx)
