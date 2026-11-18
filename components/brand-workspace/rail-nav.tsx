@@ -26,6 +26,7 @@ import { usePathname } from 'next/navigation';
 import { interpolate } from '@/lib/i18n/format';
 import type { StudioShellCopy } from '@/messages/studio-shell';
 import type { RoomsShellCopy } from '@/messages/rooms-shell';
+import { BRAND_HOME_PATH } from '@/lib/brands/workspace/home';
 import { CreditsMeter, RailToasts, useRoomUnread, useStudioActivity } from './rail-activity';
 import {
   NAV_ORDER_STORAGE_KEY,
@@ -77,7 +78,15 @@ export interface RailNavigationProps {
    */
   rooms?: boolean;
   roomsCopy?: RoomsShellCopy['nav'];
+  /**
+   * The workspace home's name (docs/BRAND-STUDIO-V3.md §12), given only for a brand that has the home.
+   * It sits above both groups, fixed: never dragged, reordered or folded into a group.
+   */
+  home?: string;
 }
+
+/** 18px stroke house on the rail's 20-unit grid. */
+const HOME_ICON = 'M3.5 9.2 10 3.8l6.5 5.4v7.3h-4.3v-4.6H7.8v4.6H3.5z';
 
 function Icon({ d }: { d: string }) {
   return (
@@ -425,6 +434,24 @@ export function RailNavigation(props: RailNavigationProps) {
         onKeyDown={navKeys}
         {...tipHandlers}
       >
+        {props.home ? (
+          <ul className="bw-rail-list" data-rail-group="home">
+            <li className="bw-rail-row">
+              <a
+                href={scope(BRAND_HOME_PATH)}
+                className="bw-rail-item"
+                data-nav-item={BRAND_HOME_PATH}
+                data-nav-group="home"
+                data-rail-item="home"
+                data-rail-tip={props.home}
+                aria-current={railActive(BRAND_HOME_PATH, path) ? 'page' : undefined}
+              >
+                <Icon d={HOME_ICON} />
+                <span className="bw-rail-label">{props.home}</span>
+              </a>
+            </li>
+          </ul>
+        ) : null}
         {groups ? (
           groupOrder.map((group) =>
             groups[group].length > 0 ? (
@@ -638,6 +665,16 @@ export function RailNavigation(props: RailNavigationProps) {
                   </a>
                 ) : null}
               </div>
+            ) : null}
+            {props.home ? (
+              <ul className="bw-rail-sheet-list" data-rail-sheet-home>
+                <li>
+                  <a href={scope(BRAND_HOME_PATH)} aria-current={railActive(BRAND_HOME_PATH, path) ? 'page' : undefined}>
+                    <Icon d={HOME_ICON} />
+                    <span>{props.home}</span>
+                  </a>
+                </li>
+              </ul>
             ) : null}
             {groups
               ? groupOrder.map((group) => {

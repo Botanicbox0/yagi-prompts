@@ -80,7 +80,11 @@ describe('OAuth return paths remain on the request origin', () => {
 
   it('keeps brand PKCE, failures and post-login returns on the canonical brand surface', async () => {
     const signedIn = await signIn(new NextRequest('https://brand.twings.app/auth/signin?provider=kakao&next=/admin'));
-    expect(signedIn.headers.get('location')).toBe('https://brand.twings.app/brand');
+    // A refused next lands on the default landing resolver (docs/BRAND-STUDIO-V3.md §12).
+    expect(signedIn.headers.get('location')).toBe('https://brand.twings.app/brand/start');
+    // An explicit brand next still wins, /brand included.
+    expect((await signIn(new NextRequest('https://brand.twings.app/auth/signin?next=%2Fbrand'))).headers.get('location')).toBe('https://brand.twings.app/brand');
+    expect((await signIn(new NextRequest('https://brand.twings.app/auth/signin'))).headers.get('location')).toBe('https://brand.twings.app/brand/start');
     auth.getSessionUser.mockResolvedValue(null);
     auth.signInWithOAuth.mockResolvedValue({data:{url:'https://provider.example/oauth'},error:null});
     await signIn(new NextRequest('https://brand.twings.app/auth/signin?provider=kakao&next=/brand/projects/example&locale=ko'));
@@ -88,7 +92,7 @@ describe('OAuth return paths remain on the request origin', () => {
     const failure = await callback(new NextRequest('https://brand.twings.app/auth/callback?next=/admin'));
     const target = new URL(failure.headers.get('location')!);
     expect(target.origin).toBe('https://brand.twings.app'); expect(target.pathname).toBe('/auth/choose');
-    expect(target.searchParams.get('next')).toBe('/brand');
+    expect(target.searchParams.get('next')).toBe('/brand/start');
   });
 
   it('returns missing-code and OAuth failures to the same admin chooser', async () => {

@@ -4,6 +4,7 @@ import { usePathname } from 'next/navigation';
 import { featureDenied, isSandboxedClientOrganization } from '@/lib/brands/features';
 import { poolVisible, scopedHref, sectionVisibility, selectedChoice, type BrandWorkspaceScope } from '@/lib/brands/workspace/selection';
 import { studioShowroomVisible, studioV2Visible } from '@/lib/brand-studio/visibility';
+import { brandHomeVisible } from '@/lib/brands/workspace/home';
 import type { StudioShellCopy } from '@/messages/studio-shell';
 import type { RoomsShellCopy } from '@/messages/rooms-shell';
 import { useWorkspaceSelection } from './identity';
@@ -270,9 +271,14 @@ type RailInputs = {
    */
   rooms?: boolean;
   roomsCopy?: RoomsShellCopy['nav'];
+  /**
+   * The workspace home's rail name (`dict.brandHome.nav.home`), given while studio v2 is on and the viewer
+   * may receive studio copy. The rail shows it, at the top, only for a brand that has the home.
+   */
+  homeLabel?: string;
 };
 
-function Scoped({ scope, studioV2 = false, shell, locale = 'ko', railExpanded = false, rooms = false, roomsCopy, ...labels }: Labels & RailInputs & { scope: BrandWorkspaceScope }) {
+function Scoped({ scope, studioV2 = false, shell, locale = 'ko', railExpanded = false, rooms = false, roomsCopy, homeLabel, ...labels }: Labels & RailInputs & { scope: BrandWorkspaceScope }) {
   const choice = selectedChoice(useWorkspaceSelection(scope).selection);
   const isMorphic = Boolean(
     choice && (isSandboxedClientOrganization(choice) || featureDenied(choice.denied, 'generative_media')),
@@ -303,6 +309,7 @@ function Scoped({ scope, studioV2 = false, shell, locale = 'ko', railExpanded = 
         // The TWINGS team view reads a brand through its own console, not the brand's rooms.
         rooms={roomsActive}
         roomsCopy={roomsCopy}
+        home={homeLabel && brandHomeVisible(choice, true) ? homeLabel : undefined}
       />
     );
   }
@@ -327,10 +334,11 @@ export function WorkspaceNavigation({
   railExpanded,
   rooms,
   roomsCopy,
+  homeLabel,
   ...labels
 }: Labels & RailInputs & { scope?: BrandWorkspaceScope | null }) {
   return scope ? (
-    <Scoped scope={scope} studioV2={studioV2} shell={shell} locale={locale} railExpanded={railExpanded} rooms={rooms} roomsCopy={roomsCopy} {...labels} />
+    <Scoped scope={scope} studioV2={studioV2} shell={shell} locale={locale} railExpanded={railExpanded} rooms={rooms} roomsCopy={roomsCopy} homeLabel={homeLabel} {...labels} />
   ) : (
     <Links labels={labels} visible={ALL} pool layoutMode="topbar" scope={(path) => path} />
   );

@@ -1250,6 +1250,9 @@ body:has(.bw-triage-bulk) .bw-support-launch { translate:0 -76px; }
  .bw-language-select label{padding-left:6px}
 }
 .bw-language-apply{min-height:44px;padding:8px 10px;font-size:12px;text-decoration:underline;text-underline-offset:3px;cursor:pointer}
+/* The rail's language menu (rail.css) wraps the form without changing any layout; outside the rail the globe button never shows. */
+.bw-language-menu{display:contents}
+.bw-language-trigger{display:none}
 /* Removal and disclosure actions: quieter than primary, confirmed inline before sending. */
 .bw-danger{color:var(--ys-danger, var(--ys-red));border-color:color-mix(in srgb, var(--ys-danger, var(--ys-red)) 40%, transparent)}
 .bw-danger:hover:not(:disabled){border-color:var(--ys-danger, var(--ys-red))}
