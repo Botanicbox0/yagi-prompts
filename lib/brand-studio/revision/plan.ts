@@ -14,12 +14,32 @@ import { pointsPastMarks } from '../enhancer/marks';
 import type { StudioMediaStore } from '../media-store';
 import { studioModel, type StudioVideoModel } from '../models';
 import { mentionsMissing, resolveReferences, type JobPlan, type ResolvedRef } from '../plan';
-import { referenceVideoFit } from '../reference-video';
+import { followsReferenceLength, isDraftRun, referenceVideoFit } from '../reference-video';
 import type { StudioJobParams } from '../types';
-import { remixRunUsd, usageKrw, videoRunUsd } from '../usage-rate';
+import { billedResolution, remixRunUsd, usageKrw, videoRunUsd } from '../usage-rate';
 import { dedupeRefs, loadRevisionRecipe, refKey, type RevisionRecipe } from './recipe';
 
 export type WayOutcome = { ok: true; plan: JobPlan } | { ok: false; problem: StudioReviseProblem };
+
+/** Whole milliseconds of an exact stored length in seconds (`duration_ms` / 1000), for `remixRunUsd`. */
+const msOf = (seconds: number | null): number | null => (seconds === null ? null : Math.round(seconds * 1000));
+
+/**
+ * The resolution a revision asks for: that of the version it is made from (owner's rule, 2026-11-18: "a
+ * 720p video is edited at 720p and a 1080p video at 1080p"). A final is 1080p; a real draft stays `draft`;
+ * any other version keeps its own resolution, and one planned as a draft that is no draft is 480p. A
+ * revision never drops back to a draft and never raises the resolution; "draft to final" is its own step.
+ * Whether the run can still be a draft is the caller's `isDraftRun` (an edit follows its source, so it is
+ * the standard 480p run at the same price).
+ */
+export function revisionResolution(recipe: Pick<RevisionRecipe, 'base' | 'baseJob'>, model: StudioVideoModel): string {
+  const listed = (r: string) => (model.resolutions as readonly string[]).includes(r);
+  if (recipe.base.isFinal) return listed('1080p') ? '1080p' : model.defaultResolution;
+  if (recipe.base.isDraft && model.supportsDraft) return 'draft';
+  const own = recipe.baseJob.params?.resolution ?? model.defaultResolution;
+  const plain = own === 'draft' ? billedResolution(own) : own;
+  return listed(plain) ? plain : model.defaultResolution;
+}
 
 export interface ReviseRequest {
   mode: StudioReviseMode;
@@ -158,12 +178,13 @@ export async function editWay(
   }
   if (imageCount(resolved) > model.maxReferenceImages) return { ok: false, problem: 'too_many_references' };
 
-  // A final is 1080p; a draft stays a draft (the edit path allows it, and its own final can follow).
-  const asked = base.isFinal ? '1080p' : (recipe.baseJob.params?.resolution ?? model.defaultResolution);
-  const resolution =
-    asked === 'draft' ? (model.supportsDraft ? 'draft' : '480p') : (model.resolutions as readonly string[]).includes(asked) ? asked : model.defaultResolution;
+  // The version's own resolution (`revisionResolution`). A draft is edited at 480p as the standard run at the
+  // same price: an edit follows its source's length, and such a run is never a draft (../reference-video.ts
+  // `isDraftRun`), so its result offers no 1080p final. To get one, finish the draft and edit the final.
+  const resolution = billedResolution(revisionResolution(recipe, model));
   const audio = recipe.baseJob.params?.audio ?? recipe.recipeJob?.params?.audio ?? 'native';
-  const { usd } = remixRunUsd({ model, resolution, method: 'edit', seconds: null, referenceSeconds: base.seconds });
+  // `base.seconds` is the clip's exact stored length (recipe.ts: duration_ms / 1000), priced as such.
+  const { usd } = remixRunUsd({ model, resolution, method: 'edit', seconds: null, referenceSeconds: base.seconds, referenceMs: msOf(base.seconds) });
   return {
     ok: true,
     plan: {
@@ -189,7 +210,7 @@ export async function editWay(
       parentOutputId: base.outputId,
       estimateUsd: usd,
       estimateKrw: usageKrw(usd, 'video'),
-      outputs: { count: 1, kind: 'video', isDraft: resolution === 'draft' },
+      outputs: { count: 1, kind: 'video', isDraft: isDraftRun('video_remix', { resolution, method: 'edit', seconds: null }) },
       stickLane: null,
     },
   };
@@ -226,8 +247,12 @@ export async function reshootWay(
   if (imageCount(freshResolved) > model.maxReferenceImages) return { ok: false, problem: 'too_many_references' };
 
   const p = run.params ?? ({} as StudioJobParams);
-  const resolution = p.resolution ?? model.defaultResolution;
   const seconds = p.seconds ?? null;
+  // The version's own resolution, not the recipe run's: a reshoot of a 1080p final (whose recipe is its draft)
+  // is made at 1080p, and one of a 480p version that is no draft is no draft either (`revisionResolution`).
+  const asked = revisionResolution(recipe, model);
+  // The same rule as a first run (../plan.ts): one that follows its reference's length is never a draft.
+  const resolution = followsReferenceLength(run.kind, { method: p.method, seconds }) ? billedResolution(asked) : asked;
   const shared = {
     model,
     prompt: request.prompt,
@@ -235,7 +260,7 @@ export async function reshootWay(
     refs,
     resolved: freshResolved,
     parentOutputId: recipe.base.outputId,
-    outputs: { count: 1, kind: 'video' as const, isDraft: resolution === 'draft' },
+    outputs: { count: 1, kind: 'video' as const, isDraft: isDraftRun(run.kind, { resolution, method: p.method, seconds }) },
     stickLane: null,
   };
   const params: StudioJobParams = {
@@ -258,7 +283,7 @@ export async function reshootWay(
   const usd =
     method === 'blueprint'
       ? videoRunUsd({ resolution, seconds: seconds ?? model.defaultSeconds })
-      : remixRunUsd({ model, resolution, method, seconds, referenceSeconds }).usd;
+      : remixRunUsd({ model, resolution, method, seconds, referenceSeconds, referenceMs: msOf(referenceSeconds) }).usd;
   return {
     ok: true,
     plan: {

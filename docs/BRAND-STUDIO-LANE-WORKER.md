@@ -41,11 +41,20 @@ pythonw.exe D:/dev/agent-harnesses/windows-background/agent-harness/quiet_run.py
 
 - 계정 크레딧 1 = 정가 1센트로 계산해 사용량에 반영한다(2026-11-10 견적: Seedream 5.0 Pro 1K 5, 2K 9 · Nano Banana Pro 2K 14 ·
   Seedance 2.5 480p 4초 42, 720p 5초 117, 1080p 10초 571).
-- 480p 시안은 `draft: true`, 1080p 완성은 시안의 작업 id를 `draft_source_task_id`로 넘긴다. "영상을 고친다"(edit)는 원본 길이를
-  따르므로 시안이 될 수 없고 일반 480p로 나간다.
+- 480p 시안은 `draft: true`, 1080p 완성은 시안의 작업 id를 `draft_source_task_id`로 넘긴다. 원본 길이를 따르는 실행
+  (`duration: -1`: "영상을 고친다"(edit), 길이를 고르지 않은 레퍼런스 새로 찍기)은 시안이 될 수 없다(CLI 설명: "Duration -1 cannot
+  be a preview"). 그래서 두 경로 모두 이런 실행은 같은 값의 일반 480p로 계획하고 보낸다(`lib/brand-studio/reference-video.ts`
+  `isDraftRun`). 결과에 "1080p로 완성"이 붙지 않고, 앱은 시안으로 계획된 실행의 시안 id만 저장한다(`lane-api.ts`, `finish.ts`).
+  API 경로에서 `duration: -1` 시안이 되는지는 문서에 없고 시험한 적도 없다.
+- 레퍼런스 영상은 계정이 직접 받은 파일만 받는다(바깥 주소는 "Reference video must be an uploaded asset", 2026-11-18). 워커는 생성
+  전에 영상마다 한 번 `get_upload_url`로 자리를 받아, 앱 주소에서 내려받은 파일을 돌려받은 헤더 그대로 PUT하고 `asset_url`로
+  바꿔 보낸다(무료, 50 MB 상한 = 스튜디오 업로드 상한, 받기 2분·올리기 3분 제한). 레퍼런스 이미지·오디오는 바깥 주소를 그대로 받는다.
+  올리기에 실패하면 아무것도 쓰지 않은 채 `failed`로 끝난다(`provider_unavailable`은 계정 경로 전체를 10분 닫으므로 쓰지 않는다).
+  매핑과 업로드는 `scripts/brand-studio-lane-mapping.mjs`에 있고 워커 옆에 있어야 한다. 워커 버전 2부터.
 - CLI는 `--no-download`로 부른다. 끝난 파일을 워커 PC에 먼저 내려받게 두면 제공사 파일 서버가 느려서(연결당 초당 약 50KB)
   결과 확인 한 번이 수십 초씩 걸린다. 파일은 앱이 조각으로 나눠 직접 받는다.
 - 안전 검수는 Sunra 쪽에서 항상 돈다. 워커에 끄는 옵션은 없다.
 - 고객 문장은 CLI에 stdin으로 넘긴다(셸 인용 문제 없음). 로그에는 작업 id와 종류만 남고 문장·주소·비밀값은 남기지 않는다.
+  오류 문장에 주소가 섞여 있으면 쿼리 문자열(서명)을 지우고 남긴다.
 - PC가 꺼지거나 CLI 로그인이 풀리면 이 경로만 멈춘다. `sunra status`로 로그인 상태를 본다.
 - 서버에서 직접 계정 경로를 쓰도록 바꾸려면 Sunra OAuth 동의를 한 번 받아 갱신 토큰을 서버에 안전하게 보관해야 한다(후속).

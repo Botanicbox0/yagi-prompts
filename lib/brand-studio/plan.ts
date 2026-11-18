@@ -17,10 +17,10 @@ import {
   type StudioVideoModel,
   type StudioVideoResolution,
 } from './models';
-import { blueprintFit, normalizeShots, referenceVideoFit, remakeSeconds } from './reference-video';
+import { blueprintFit, followsReferenceLength, isDraftRun, normalizeShots, referenceVideoFit, remakeSeconds } from './reference-video';
 import { readyAsset, readyOutput } from './repo';
 import type { JobRow, StudioJobParams } from './types';
-import { imageRunKrw, imageRunUsd, regionEditRun, remixRunUsd, tenthsOfSeconds, usageKrw, videoRunUsd } from './usage-rate';
+import { billedResolution, imageRunKrw, imageRunUsd, regionEditRun, remixRunUsd, usageKrw, videoRunUsd } from './usage-rate';
 
 export interface ResolvedRef {
   /** Position in the tray (1-based, across kinds). */
@@ -39,6 +39,8 @@ export interface ResolvedRef {
   durationMs: number | null;
   width: number | null;
   height: number | null;
+  /** The stored file's type (the account-lane worker uploads a reference video with it). */
+  mime?: string | null;
 }
 
 const LABELS: Record<'ko' | 'en', Record<StudioAssetKind, string>> = {
@@ -56,13 +58,13 @@ export async function resolveReferences(
   const seen: Record<StudioAssetKind, number> = { image: 0, video: 0, audio: 0 };
   const out: ResolvedRef[] = [];
   for (const [i, ref] of refs.entries()) {
-    let row: { kind: StudioAssetKind; key: string; thumb: string | null; ms: number | null; w: number | null; h: number | null; role: StudioAssetRole | null } | null = null;
+    let row: { kind: StudioAssetKind; key: string; thumb: string | null; ms: number | null; w: number | null; h: number | null; role: StudioAssetRole | null; mime: string | null } | null = null;
     if (ref.assetId) {
       const a = await readyAsset(sql, organizationId, ref.assetId);
-      if (a) row = { kind: a.kind, key: a.storage_key, thumb: a.thumb_key, ms: a.duration_ms, w: a.width, h: a.height, role: a.role };
+      if (a) row = { kind: a.kind, key: a.storage_key, thumb: a.thumb_key, ms: a.duration_ms, w: a.width, h: a.height, role: a.role, mime: a.mime ?? null };
     } else if (ref.outputId) {
       const o = await readyOutput(sql, organizationId, ref.outputId);
-      if (o?.storage_key) row = { kind: o.kind, key: o.storage_key, thumb: o.thumb_key, ms: o.duration_ms, w: o.width, h: o.height, role: null };
+      if (o?.storage_key) row = { kind: o.kind, key: o.storage_key, thumb: o.thumb_key, ms: o.duration_ms, w: o.width, h: o.height, role: null, mime: o.mime ?? null };
     }
     if (!row) throw new StudioDenied('reference_missing');
     seen[row.kind] += 1;
@@ -81,6 +83,7 @@ export async function resolveReferences(
       durationMs: row.ms,
       width: row.w,
       height: row.h,
+      ...(row.mime ? { mime: row.mime } : {}),
     });
   }
   return out;
@@ -250,7 +253,6 @@ export async function planJob(
   if (count(resolved, 'image') > model.maxReferenceImages) throw new StudioDenied('invalid');
   if (resolved.some((r) => r.frame && r.kind !== 'image')) throw new StudioDenied('invalid');
   if (resolved.filter((r) => r.frame === 'start').length > 1 || resolved.filter((r) => r.frame === 'end').length > 1) throw new StudioDenied('invalid');
-  const isDraft = input.resolution === 'draft';
 
   if (input.kind === 'video') {
     if (count(resolved, 'video') > 0) throw new StudioDenied('invalid');
@@ -262,7 +264,7 @@ export async function planJob(
       ...(reviewed ? { enhance: reviewed.enhance } : {}),
       params: { ...base, aspect: input.aspect, resolution: input.resolution, seconds: secs, audio: input.audio, ...reviewed?.params },
       estimateUsd: usd, estimateKrw: usageKrw(usd, 'video'),
-      outputs: { count: 1, kind: 'video', isDraft },
+      outputs: { count: 1, kind: 'video', isDraft: isDraftRun('video', { resolution: input.resolution, seconds: secs }) },
     };
   }
 
@@ -288,7 +290,7 @@ export async function planJob(
         ...(shots.length ? { shots } : {}),
       },
       estimateUsd: usd, estimateKrw: usageKrw(usd, 'video'),
-      outputs: { count: 1, kind: 'video', isDraft },
+      outputs: { count: 1, kind: 'video', isDraft: isDraftRun('video_remix', { resolution: input.resolution, method: 'blueprint', seconds: secs }) },
     };
   }
 
@@ -297,17 +299,22 @@ export async function planJob(
   const fit = referenceVideoFit(model, { seconds: refSeconds, width: videos[0]!.width, height: videos[0]!.height });
   if (fit.problem || (input.method === 'edit' && !fit.editable)) throw new StudioDenied('invalid');
   const secs = input.method === 'edit' ? null : input.seconds === undefined ? null : videoSecondsOf(model, input.seconds);
-  const { usd } = remixRunUsd({ model, resolution: input.resolution, method: input.method, seconds: secs, referenceSeconds: refSeconds });
+  // A run that follows its reference's length is never a draft (./reference-video.ts `isDraftRun`): asked for
+  // as one, it is the standard 480p run at the same price, and its result offers no 1080p final.
+  const resolution = followsReferenceLength('video_remix', { method: input.method, seconds: secs }) ? billedResolution(input.resolution) : input.resolution;
+  // The exact stored length, as the dock has it too (StudioAssetView.durationMs): the quote is the reserve.
+  const { usd } = remixRunUsd({ model, resolution, method: input.method, seconds: secs, referenceSeconds: refSeconds, referenceMs: videos[0]!.durationMs });
+  const params: StudioJobParams = {
+    ...base, aspect: input.method === 'edit' ? null : input.aspect, resolution, seconds: secs, audio: input.audio,
+    method: input.method, keep: [...new Set(input.keep)], change: input.change,
+    ...(refSeconds !== null ? { referenceVideoSeconds: refSeconds } : {}),
+    ...(shots.length ? { shots } : {}),
+  };
   return {
     ...shared, kind: 'video_remix', model,
-    params: {
-      ...base, aspect: input.method === 'edit' ? null : input.aspect, resolution: input.resolution, seconds: secs, audio: input.audio,
-      method: input.method, keep: [...new Set(input.keep)], change: input.change,
-      ...(refSeconds !== null ? { referenceVideoSeconds: refSeconds } : {}),
-      ...(shots.length ? { shots } : {}),
-    },
+    params,
     estimateUsd: usd, estimateKrw: usageKrw(usd, 'video'),
-    outputs: { count: 1, kind: 'video', isDraft },
+    outputs: { count: 1, kind: 'video', isDraft: isDraftRun('video_remix', params) },
   };
 }
 
@@ -333,8 +340,10 @@ export async function planFinal(
   if (already) throw new StudioDenied('conflict');
   const p = job.params;
   const secs = p.seconds ?? (draft.duration_ms ? Math.round(draft.duration_ms / 1000) : model.defaultSeconds);
-  // The final counts the draft's reference video again, for its real length (docs.sunra.ai, "Draft mode").
-  const usd = estimateVideoUsd({ resolution: '1080p', seconds: secs, referenceVideoSeconds: tenthsOfSeconds(p.referenceVideoSeconds ?? 0) ?? 0 });
+  // The final counts the draft's reference video again, for its real length (docs.sunra.ai, "Draft mode"):
+  // the exact length stored when the draft was planned (its `duration_ms` / 1000), not the tenths a screen shows.
+  const source = typeof p.referenceVideoSeconds === 'number' && Number.isFinite(p.referenceVideoSeconds) && p.referenceVideoSeconds > 0 ? p.referenceVideoSeconds : 0;
+  const usd = estimateVideoUsd({ resolution: '1080p', seconds: secs, referenceVideoSeconds: source });
   return {
     kind: 'video_final',
     model,

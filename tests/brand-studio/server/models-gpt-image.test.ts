@@ -1,6 +1,6 @@
-import { readFileSync } from 'node:fs';
-import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+// @ts-expect-error -- plain Node module of the lane worker, without type declarations
+import { toolCall } from '@/scripts/brand-studio-lane-mapping.mjs';
 import { buildStudioRequest, hasSafetyChecker, type StudioRequestInput } from '@/lib/brand-studio/provider/requests';
 import {
   STUDIO_IMAGE_QUALITIES,
@@ -209,9 +209,10 @@ describe('the quality field', () => {
   });
 
   it('is passed to create_image by the lane worker', () => {
-    const worker = readFileSync(join(process.cwd(), 'scripts/brand-studio-lane-worker.mjs'), 'utf8');
-    const call = worker.slice(worker.indexOf("tool: 'create_image'"), worker.indexOf("tool: 'create_image'") + 600);
-    expect(call).toMatch(/p\.quality \? \{ quality: p\.quality \} : \{\}/);
+    // The worker's mapping lives in scripts/brand-studio-lane-mapping.mjs now, so it is called instead of read.
+    const job = { kind: 'image', model: 'gpt-image-2.6-sunburst', prompt: 'a bottle', inputs: [], params: { aspect: '16:9', resolution: '2K', quality: 'low' } };
+    expect(toolCall(job, 'p')).toMatchObject({ tool: 'create_image', input: { quality: 'low', aspect_ratio: '16:9', resolution: '2K' } });
+    expect(toolCall({ ...job, params: { ...job.params, quality: null } }, 'p').input).not.toHaveProperty('quality');
   });
 });
 

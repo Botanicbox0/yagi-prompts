@@ -595,6 +595,7 @@ export function dockEstimateKrw(draft: DockDraft, tray: readonly TrayItem[]): nu
               method: "blueprint",
               seconds: dur,
               referenceSeconds: film.seconds,
+              referenceMs: film.durationMs ?? null,
             }).usd,
             "video",
           ),
@@ -609,6 +610,8 @@ export function dockEstimateKrw(draft: DockDraft, tray: readonly TrayItem[]): nu
         method,
         seconds: singleSeconds,
         referenceSeconds: film.seconds,
+        // The exact stored length, as the server prices it; a clip without one falls back to its tenths.
+        referenceMs: film.durationMs ?? null,
       }).usd,
       "video",
     );

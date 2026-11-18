@@ -130,6 +130,24 @@ export function planMultiClipGeneration(input: {
 }
 
 /**
+ * A run whose length follows its reference video (the provider's `duration: -1`): an edit, or a new take
+ * with a reference video whose length was not picked. A blueprint never sends its video and always has a length.
+ */
+export function followsReferenceLength(kind: string, params: { method?: string | null; seconds?: number | null }): boolean {
+  return kind === 'video_remix' && params.method !== 'blueprint' && (params.method === 'edit' || typeof params.seconds !== 'number');
+}
+
+/**
+ * A 480p draft that a 1080p final can be made from: asked for as a draft, at a length of its own. The account
+ * lane's CLI says a run that follows its reference (`duration: -1`) cannot be a preview; the API's documentation
+ * does not say either way and it has never been tried. So neither lane makes one: such a run is asked for as the
+ * standard 480p run at the same price, and no final is offered for it (docs/BRAND-STUDIO-LANE-WORKER.md).
+ */
+export function isDraftRun(kind: string, params: { resolution?: string | null; method?: string | null; seconds?: number | null }): boolean {
+  return (kind === 'video' || kind === 'video_remix') && params.resolution === 'draft' && !followsReferenceLength(kind, params);
+}
+
+/**
  * The length a remake runs when the customer did not pick one: the reference's, rounded into the model's
  * range. Rounded from tenths, the precision a screen sees (`StudioAssetView.seconds`), so both sides agree.
  */
