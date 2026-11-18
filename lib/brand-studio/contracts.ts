@@ -299,6 +299,20 @@ export const STUDIO_REVISE_MARKS_MAX = 3;
 export const STUDIO_REVISE_MATERIALS_MAX = 2;
 
 /**
+ * One question back when a revision request reads two ways (docs/BRAND-STUDIO-V6-PLAN.md §4.6): its
+ * length limits. The question and its 2–3 choices come from the `revise.plan` reading itself, in the
+ * customer's language; the customer picks one or has it made as written.
+ */
+export const STUDIO_REVISE_CLARIFY = { questionMax: 140, optionMax: 60, optionsMin: 2, optionsMax: 3 } as const;
+
+/** What the customer said they meant, as it travels with a version. */
+export const ReviseClarifiedSchema = z.object({
+  question: z.string().trim().min(1).max(STUDIO_REVISE_CLARIFY.questionMax),
+  answer: z.string().trim().min(1).max(STUDIO_REVISE_CLARIFY.optionMax),
+});
+export type ReviseClarified = z.infer<typeof ReviseClarifiedSchema>;
+
+/**
  * A spot the customer pointed at on the clip (docs/BRAND-STUDIO-V6-PLAN.md §4.5): a pin (a click) or a
  * box (a drag) on the frame at `time`, in fractions of the picture (0..1, origin top-left). A pin has
  * `x`/`y` only (its centre); a box adds `w`/`h` and `x`/`y` are its top-left corner. In the request text
@@ -362,6 +376,8 @@ export const VideoReviseJobSchema = z.object({
   marks: z.array(ReviseMarkSchema).max(STUDIO_REVISE_MARKS_MAX).default([]),
   /** Material to read for this request (videos of this organization; `frame` is not allowed). Never sent to the video model. */
   materials: z.array(StudioReferenceSchema).max(STUDIO_REVISE_MATERIALS_MAX).default([]),
+  /** The customer's answer to the one question `revise.plan` asked about this request. Absent: none was asked, or it was made as written. */
+  clarified: ReviseClarifiedSchema.optional(),
 });
 
 export const StudioJobCreateSchema = z.discriminatedUnion('kind', [
@@ -386,6 +402,18 @@ export const RevisePlanSchema = z.object({
   references: z.array(StudioReferenceSchema).max(STUDIO_LIMITS.referencesMax - 1).default([]),
   /** The spots the request points at, so the fit is judged on what they are on. */
   marks: z.array(ReviseMarkSchema).max(STUDIO_REVISE_MARKS_MAX).default([]),
+  /** Material attached to the request (counted only: the reading may ask which one is meant). */
+  materials: z.number().int().min(0).max(STUDIO_REVISE_MATERIALS_MAX).default(0),
+  /**
+   * The question was already asked for this request: `answer` is the choice, null when the customer had it
+   * made as written. With this the reading never asks again.
+   */
+  clarified: z
+    .object({
+      question: z.string().trim().min(1).max(STUDIO_REVISE_CLARIFY.questionMax),
+      answer: z.string().trim().min(1).max(STUDIO_REVISE_CLARIFY.optionMax).nullable(),
+    })
+    .optional(),
 });
 
 /** Why a way is closed. The screen has one short line per code. */
@@ -602,6 +630,8 @@ export interface StudioJobView {
     marks?: ReviseMark[];
     /** The material read for this version's request (videos; never among `references`). */
     materials?: Array<{ assetId?: string; outputId?: string }>;
+    /** The question asked about this version's request and the customer's answer. */
+    clarified?: ReviseClarified;
   } | null;
   outputs: StudioOutputView[];
   /** Usage this run is expected to take from the monthly allowance, in KRW (the settled amount once finished). */
@@ -711,6 +741,12 @@ export interface StudioRevisePlan {
   methods: Record<StudioReviseMode, { available: boolean; estimateKrw: number; problem?: StudioReviseProblem }>;
   recommended: StudioReviseMode | null;
   reason: StudioReviseReason | null;
+  /**
+   * Present only when the request reads two ways that would give visibly different videos and nothing sent
+   * with it settles which: one question and 2–3 short choices, in the customer's language. Never present
+   * when `clarified` was sent.
+   */
+  clarify?: { question: string; options: string[] };
 }
 export type StudioAssetReserved = { ok: true; id: string; direct: boolean; url?: string };
 export type StudioAssetSaved = { ok: true; asset: StudioAssetView };

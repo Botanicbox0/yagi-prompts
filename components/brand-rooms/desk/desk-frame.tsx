@@ -9,13 +9,14 @@
  *                 conversation becomes a drawer from the left (the side away from the stage's notes column),
  *                 opened by the header's "대화" button. Open, a light scrim covers the rest of the page (a click
  *                 on it closes the drawer); Esc closes it while focus is in the drawer or on its button, never
- *                 from the stage. Shut, it stays mounted (hidden), keeps polling, and marks nothing read
- *                 (./chat/presence.ts), so the button's count keeps showing what waits.
+ *                 from the stage. Shut, it stays mounted (hidden) and keeps polling.
+ *
+ * The waiting count is what the team has not answered yet (docs/BRAND-ROOMS-FEEDBACK.md §3): opening the
+ * conversation or its drawer does not clear it; an answer or the header's 확인함 (`RoomDeskAck`) does.
  */
 import { useRouter } from "next/navigation";
-import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type FormEvent, type ReactNode } from "react";
 import { ChatPresenceContext, deskConversationVisible, type ChatPresence } from "../chat/presence";
-import { ROOM_ACTIVITY } from "../seams";
 
 interface DeskDrawerState {
   review: boolean;
@@ -72,13 +73,11 @@ export function RoomDeskFrame({
     };
   }, [review, open]);
 
-  // The conversation reads itself only when on screen. Lines that arrive while the drawer is shut refresh the
-  // page, so the header's count (the server's waiting count) shows them.
+  // The header's count is what the team has not answered (or pressed 확인함 on) yet, so any new line can move
+  // it: a customer's line adds one, a team line (sent here, or a note or version posted from the stage) clears
+  // it. Every later line refreshes the page so the count and 확인함 follow, in both modes; looking changes
+  // nothing.
   const visible = deskConversationVisible(review, open);
-  const visibleNow = useRef(visible);
-  useEffect(() => {
-    visibleNow.current = visible;
-  }, [visible]);
   const lastNewest = useRef<string | null | undefined>(undefined);
   const onNewest = useCallback(
     (newestAt: string | null) => {
@@ -86,18 +85,11 @@ export function RoomDeskFrame({
       lastNewest.current = newestAt;
       // The first report is what the page was rendered with; only later lines are news.
       if (before === undefined || !newestAt || newestAt === before) return;
-      if (!visibleNow.current) router.refresh();
+      router.refresh();
     },
     [router],
   );
   const presence = useMemo<ChatPresence>(() => ({ visible, onNewest }), [visible, onNewest]);
-  // Once the open drawer has marked the conversation read (or the team wrote), the button's count is re-read.
-  useEffect(() => {
-    if (!review) return;
-    const onActivity = () => router.refresh();
-    window.addEventListener(ROOM_ACTIVITY, onActivity);
-    return () => window.removeEventListener(ROOM_ACTIVITY, onActivity);
-  }, [review, router]);
 
   return (
     <DeskDrawer.Provider value={{ review, open, setOpen }}>
@@ -120,6 +112,70 @@ export function RoomDeskFrame({
         {review && open && <div className="brc-desk-scrim" aria-hidden="true" onClick={() => setOpen(false)} data-admin-desk-scrim />}
       </div>
     </DeskDrawer.Provider>
+  );
+}
+
+/**
+ * 확인함 (docs/BRAND-ROOMS-FEEDBACK.md §3): the team has looked at what waits and owes no answer for now. Posts the
+ * registered `brand_rooms.channel.ack` (`/admin/do`); with script it refreshes the page in place, without it the
+ * form returns to its own `_back`. Enabled only while something waits. Team-only: nothing the brand sees.
+ * `acknowledged` is the last press, already worded ("이름 · 시각에 확인").
+ */
+export function RoomDeskAck({
+  organizationId,
+  channel,
+  count,
+  back,
+  acknowledged,
+  copy,
+}: {
+  organizationId: string;
+  /** The project id, or `general`. */
+  channel: string;
+  count: number;
+  back: string;
+  acknowledged: string | null;
+  copy: { button: string; hint: string; failed: string };
+}) {
+  const router = useRouter();
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
+  async function submit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (busy || count < 1) return;
+    setBusy(true);
+    setError("");
+    try {
+      const response = await fetch("/admin/do", { method: "POST", body: new FormData(event.currentTarget), credentials: "same-origin", headers: { Accept: "application/json" } });
+      const result = (await response.json().catch(() => null)) as { ok?: boolean } | null;
+      if (result?.ok) router.refresh();
+      else setError(copy.failed);
+    } catch {
+      setError(copy.failed);
+    } finally {
+      setBusy(false);
+    }
+  }
+  return (
+    <form className="brc-desk-ack" method="post" action="/admin/do" encType="multipart/form-data" onSubmit={submit} aria-busy={busy} data-admin-desk-ack={channel}>
+      <input type="hidden" name="_op" value="brand_rooms.channel.ack" />
+      <input type="hidden" name="_back" value={back} />
+      <input type="hidden" name="organizationId" value={organizationId} />
+      <input type="hidden" name="projectId" value={channel} />
+      <button type="submit" className="admin-btn" disabled={busy || count < 1} title={copy.hint} data-admin-desk-ack-button>
+        {copy.button}
+      </button>
+      {acknowledged && (
+        <span className="brc-desk-ack-by" data-admin-desk-ack-by>
+          {acknowledged}
+        </span>
+      )}
+      {error && (
+        <span role="alert" className="bw-error">
+          {error}
+        </span>
+      )}
+    </form>
   );
 }
 

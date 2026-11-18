@@ -1989,6 +1989,8 @@ export const en = {
       },
       switchAndMake: 'Switch and make',
       makeAsSelected: 'Make as selected',
+      asWritten: 'Make it as written',
+      clarifiedLabel: 'What you meant',
       mark: 'Mark what to fix',
       markHint: 'Click or drag on the video where it needs fixing',
       markLayer: 'Mark what to fix on the video',

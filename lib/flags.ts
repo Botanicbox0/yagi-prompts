@@ -174,6 +174,18 @@ export function brandStudioEditAssistOpen(env: Record<string, string | undefined
 }
 
 /**
+ * Music generation in the editing studio and the video studio (docs/BRAND-EDITING-STUDIO.md §8-5): no
+ * commercially cleared music engine is confirmed, so it stays closed. Default OFF: open only when the server
+ * environment says exactly `BRAND_STUDIO_MUSIC_GENERATION=on`. Off means `music.generate` answers
+ * `feature_unavailable` before any credit is reserved and the screens show no generation controls.
+ * `music.status` stays open so a job already running still finishes or refunds. Uploading and using your own
+ * audio, its volume and removal, and sound effects are not affected.
+ */
+export function brandStudioMusicGenerationOpen(env: Record<string, string | undefined> = process.env): boolean {
+  return env.BRAND_STUDIO_MUSIC_GENERATION === 'on';
+}
+
+/**
  * A studio run can belong to a project (docs/BRAND-STUDIO-V6-PLAN.md §7 C, migration 0091): the image
  * studio gets the video studio's project switcher, new runs carry the chosen project, and the assets page
  * can put an existing run in a project. Default OFF: open only when the server environment says exactly

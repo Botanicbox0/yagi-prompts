@@ -53,7 +53,9 @@ import { resolveRequestUrl, sameOriginMutation } from '@/lib/routing/surfaces';
  * - `grade.analyze`: Reference RGBA / profile color transfer matrix + CSS filter + scoped `ColorGradeSpec`
  * - `grade.master`: Authorized 33^3 `.cube` / 5-stage FFmpeg active look master (`color_grading` policy)
  * - `upscale.submit` / `upscale.status`: SeedVR2 (`1080p` / `1440p` / `4K 2160p`) pluggable upscale + 100% refund on error
- * - `music.generate` / `music.status`: Reference-based BGM generation + `0ms` drop sync + CC BY-NC commercial gate
+ * - `music.generate` / `music.status`: Reference-based BGM generation + `0ms` drop sync + CC BY-NC commercial gate.
+ *   `music.generate` answers `feature_unavailable` (`404`) unless `BRAND_STUDIO_MUSIC_GENERATION=on`;
+ *   `music.status` stays open so running jobs finish or refund. SFX is not affected.
  *
  * Security & sandbox hardline (identical to `/api/brand-studio/compose`):
  * 1. `sameOriginMutation` (`403` on cross-origin `POST`)

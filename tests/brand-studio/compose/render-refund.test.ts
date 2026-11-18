@@ -1,21 +1,21 @@
 /**
- * `render.refund` only frees credits for the caller's own MP4 export reservation (`params.source =
- * 'compose'`) and only within `COMPOSE_RENDER_REFUND_WINDOW_MS` of the reservation. Music, SFX and
- * upscale rows share the ledger model and status but refund themselves server-side, so the client
- * operation must never touch them.
+ * Export is free now (docs/BRAND-EDITING-STUDIO.md §8-3): `render.reserve` writes a 0-KRW row. `render.refund`
+ * stays for exports that were still charged (pages loaded before the change, rows from the last
+ * `COMPOSE_RENDER_REFUND_WINDOW_MS`): it frees credits only for the caller's own charged MP4 export row
+ * (`params.source = 'compose'`, `usage_krw > 0`) inside the window. Free export rows, music, SFX and upscale
+ * rows (same ledger model and status; they refund themselves server-side) are never touched.
  */
 import { randomUUID } from 'node:crypto';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import {
-  COMPOSE_FINAL_RENDER_MODEL,
-  COMPOSE_RENDER_REFUND_WINDOW_MS,
-  composeFinalRenderKrw,
-} from '@/lib/brand-studio/compose/credits';
+import { COMPOSE_FINAL_RENDER_MODEL, COMPOSE_RENDER_REFUND_WINDOW_MS } from '@/lib/brand-studio/compose/credits';
 import { runComposeOperation } from '@/lib/brand-studio/compose/service';
 import { studioDeps, studioFixture, viewerOf, type StudioFixture } from '../server/helpers';
 
 // Mid-month so every clock step below stays inside one allowance month.
 const BASE = new Date('2026-11-15T03:00:00.000Z');
+/** What a 10 s export cost before it became free (10 base + 2 credits/s, in KRW). */
+const CHARGED_10S_KRW = 300;
+const CHARGED_5S_KRW = 200;
 
 interface JobSnapshot {
   status: string;
@@ -25,7 +25,7 @@ interface JobSnapshot {
   params: unknown;
 }
 
-describe('render.refund is limited to recent MP4 export reservations', () => {
+describe('render.refund is limited to recent, charged MP4 export reservations', () => {
   let f: StudioFixture;
   let clock: Date;
   let deps: ReturnType<typeof studioDeps>;
@@ -45,6 +45,7 @@ describe('render.refund is limited to recent MP4 export reservations', () => {
 
   const at = (offsetMs: number) => new Date(BASE.getTime() + offsetMs);
 
+  /** A free export through the operation the screens call today. */
   async function reserve(userId: string, durationSec = 10): Promise<string> {
     const result = await runComposeOperation(deps, viewerOf(userId), 'render.reserve', {
       organizationId: f.orgId,
@@ -52,6 +53,7 @@ describe('render.refund is limited to recent MP4 export reservations', () => {
       durationSec,
     });
     if (!result.ok || !('jobId' in result)) throw new Error(`reserve failed: ${JSON.stringify(result)}`);
+    expect(result.creditsUsed).toBe(0);
     return result.jobId;
   }
 
@@ -83,7 +85,7 @@ describe('render.refund is limited to recent MP4 export reservations', () => {
     };
   }
 
-  /** Inserts a paid ledger row exactly the way the music / SFX / upscale services do. */
+  /** Inserts a paid ledger row exactly the way the old export and the music / SFX / upscale services do. */
   async function insertLedgerRow(userId: string, prompt: string, params: Record<string, unknown>, krw = 200): Promise<string> {
     const ts = clock.toISOString();
     return (
@@ -100,13 +102,16 @@ describe('render.refund is limited to recent MP4 export reservations', () => {
     ).rows[0]!.id;
   }
 
+  /** An export charged before it became free (same row the old `render.reserve` wrote). */
+  const chargedExport = (userId: string, krw: number, seconds: number) =>
+    insertLedgerRow(userId, '1080p MP4 compose', { resolution: '1080p', seconds, source: 'compose' }, krw);
+
   it('exports the refund window as 30 minutes', () => {
     expect(COMPOSE_RENDER_REFUND_WINDOW_MS).toBe(30 * 60 * 1000);
   });
 
-  it('refunds the caller’s own export reservation inside the window and restores the allowance', async () => {
-    const krw = composeFinalRenderKrw(10);
-    const jobId = await reserve(f.ids.owner, 10);
+  it('refunds the caller’s own charged export inside the window and restores the allowance', async () => {
+    const jobId = await chargedExport(f.ids.owner, CHARGED_10S_KRW, 10);
     expect((await snapshot(jobId)).params).toMatchObject({ source: 'compose' });
 
     clock = at(COMPOSE_RENDER_REFUND_WINDOW_MS - 1_000);
@@ -119,20 +124,32 @@ describe('render.refund is limited to recent MP4 export reservations', () => {
     const second = await refund(f.ids.owner, jobId);
     expect(second.refunded).toBe(false);
     expect(second.allowance.usedKrw).toBe(0);
-    expect(krw).toBeGreaterThan(0);
   });
 
-  it('does not refund an export reservation older than the window', async () => {
-    const krw = composeFinalRenderKrw(10);
-    const jobId = await reserve(f.ids.owner, 10);
+  it('does not refund a charged export older than the window', async () => {
+    const jobId = await chargedExport(f.ids.owner, CHARGED_10S_KRW, 10);
     const before = await snapshot(jobId);
 
     clock = at(COMPOSE_RENDER_REFUND_WINDOW_MS + 1_000);
     const result = await refund(f.ids.owner, jobId);
     expect(result.refunded).toBe(false);
-    expect(result.allowance.usedKrw).toBe(krw);
+    expect(result.allowance.usedKrw).toBe(CHARGED_10S_KRW);
     expect(await snapshot(jobId)).toEqual(before);
-    expect(before).toMatchObject({ status: 'succeeded', usage_krw: krw });
+    expect(before).toMatchObject({ status: 'succeeded', usage_krw: CHARGED_10S_KRW });
+  });
+
+  it('leaves a free (0-KRW) export row alone: no refund, no usage change, row unchanged', async () => {
+    const paid = await chargedExport(f.ids.owner, CHARGED_5S_KRW, 5);
+    const jobId = await reserve(f.ids.owner, 10);
+    const before = await snapshot(jobId);
+    expect(before).toMatchObject({ status: 'succeeded', usage_krw: 0, params: { source: 'compose', seconds: 10 } });
+
+    const result = await refund(f.ids.owner, jobId);
+    expect(result.refunded).toBe(false);
+    expect(result.allowance.usedKrw).toBe(CHARGED_5S_KRW);
+    expect(await snapshot(jobId)).toEqual(before);
+    // The charged row next to it is still refundable.
+    expect((await refund(f.ids.owner, paid)).refunded).toBe(true);
   });
 
   it('never refunds music, SFX or upscale rows that share the ledger model and status', async () => {
@@ -199,14 +216,13 @@ describe('render.refund is limited to recent MP4 export reservations', () => {
     }
   });
 
-  it('does not let one member refund another member’s export reservation', async () => {
-    const krw = composeFinalRenderKrw(5);
-    const editorJobId = await reserve(f.ids.editor, 5);
+  it('does not let one member refund another member’s charged export', async () => {
+    const editorJobId = await chargedExport(f.ids.editor, CHARGED_5S_KRW, 5);
     const before = await snapshot(editorJobId);
 
     const byOwner = await refund(f.ids.owner, editorJobId);
     expect(byOwner.refunded).toBe(false);
-    expect(byOwner.allowance.usedKrw).toBe(krw);
+    expect(byOwner.allowance.usedKrw).toBe(CHARGED_5S_KRW);
     expect(await snapshot(editorJobId)).toEqual(before);
 
     const byEditor = await refund(f.ids.editor, editorJobId);

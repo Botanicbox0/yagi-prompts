@@ -7,6 +7,7 @@ import { NextRequest } from 'next/server';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { Viewer } from '@/lib/auth/identity';
 import { VideoComposer } from '@/components/brand-studio/compose/video-composer';
+import { SequenceRail } from '@/components/brand-studio/video/sequence-rail';
 import { VideoStudioWorkspace } from '@/components/brand-studio/video/workspace';
 import {
   appendClip,
@@ -684,6 +685,7 @@ describe('Studio Pro Suite v5 Track B — 4. 3-Height Elastic Sequence Rail, Flo
     const timeline = sampleMultiTakeTimeline();
 
     // 1. `compact` (72px default): Dock open + Sequence Rail compact + Floating Clip Bar + Recent Drawer
+    // (music generation open, so all 7 actions show; closed is covered below)
     const compactHtml = renderToStaticMarkup(
       h(VideoStudioWorkspace, {
         organizationId: ORG,
@@ -695,6 +697,7 @@ describe('Studio Pro Suite v5 Track B — 4. 3-Height Elastic Sequence Rail, Flo
         initialRailHeight: 'compact',
         initialTimeline: timeline,
         initialSelectedClipId: 'seq_clip_1',
+        musicGeneration: true,
       }),
     );
 
@@ -798,6 +801,107 @@ describe('Studio Pro Suite v5 Track B — 4. 3-Height Elastic Sequence Rail, Flo
     expect(fullHtml).not.toContain('data-studio-dock');
     expect(fullHtml.match(/data-variant="solid"/g)).toHaveLength(1);
     expect(lintPublicBrandSurface(fullHtml)).toEqual({ clean: true, violations: [] });
+  });
+
+  it('hides music generation while BRAND_STUDIO_MUSIC_GENERATION is closed, keeping the BGM lane and the sound-effect generator', () => {
+    const initial = studioState({
+      canCreate: true,
+      jobs: [recentVidJob],
+      assets: [asset(2, { kind: 'audio', name: 'runway-loop.wav', seconds: 14 })],
+    });
+    const timeline = sampleMultiTakeTimeline();
+    const rail = koDict.studioVideo.workspace.rail;
+    const workspace = (height: 'compact' | 'medium' | 'full', musicGeneration?: boolean) =>
+      renderToStaticMarkup(
+        h(VideoStudioWorkspace, {
+          organizationId: ORG,
+          locale: 'ko',
+          copy: koDict.brandStudio,
+          libraryCopy: koDict.studioLibrary,
+          videoCopy: koDict.studioVideo,
+          initialState: initial,
+          initialRailHeight: height,
+          initialTimeline: timeline,
+          initialSelectedClipId: 'seq_clip_1',
+          ...(musicGeneration === undefined ? {} : { musicGeneration }),
+        }),
+      );
+
+    // Closed is the default: no generate-music action and no generation wording at any height.
+    for (const height of ['compact', 'medium', 'full'] as const) {
+      const closed = workspace(height);
+      expect(closed, height).toContain('data-sequence-floating-bar');
+      expect(closed, height).toContain('data-floating-action="upscale"');
+      expect(closed, height).not.toContain('data-floating-action="generate-music"');
+      expect(closed, height).not.toContain('구간 음악 생성');
+      // Export is free: the button carries no price.
+      expect(closed, height).toContain('data-video-export-mp4');
+      expect(closed, height).not.toContain('MP4 내보내기 ·');
+    }
+    const medium = workspace('medium');
+    expect(medium).toContain('data-sequence-bgm-lane');
+    expect(medium).toContain(`<span>${rail.bgmNone}</span>`);
+    const full = workspace('full');
+    expect(full).toContain('data-inspector-tab="music"');
+    expect(full).toContain(rail.inspector.sfxTitle);
+
+    // Open: the action, the lane's generate button and the tab name come back.
+    expect(workspace('compact', true)).toContain('data-floating-action="generate-music"');
+    expect(workspace('medium', true)).toContain(rail.bgmEmpty);
+    expect(workspace('full', true)).toContain(rail.inspector.musicTab);
+
+    // The inspector's music tab itself.
+    const inspector = (musicGeneration: boolean, project: ComposerProject = timeline) =>
+      renderToStaticMarkup(
+        h(SequenceRail, {
+          organizationId: ORG,
+          locale: 'ko',
+          canEdit: true,
+          project,
+          railHeight: 'full',
+          selectedClipId: null,
+          inspectorTab: 'music',
+          audioAssets: [asset(2, { kind: 'audio', name: 'runway-loop.wav', seconds: 14 })],
+          musicGeneration,
+          railCopy: rail,
+          floatingCopy: koDict.studioVideo.workspace.floatingBar,
+          onHeightChange: () => {},
+          onSelectClip: () => {},
+          onInspectorTabChange: () => {},
+          onProjectChange: () => {},
+          onAttachClipToDock: () => {},
+          onLocalVideoFiles: () => {},
+          onNotice: () => {},
+        }),
+      );
+    const closedPanel = inspector(false);
+    expect(closedPanel).toContain('data-inspector-panel="music"');
+    expect(closedPanel).toContain('data-sfx-generator');
+    expect(closedPanel).toContain('data-sfx-generate');
+    for (const marker of ['data-inspector-generate-music', 'data-music-style=', 'data-music-license-badge']) {
+      expect(closedPanel).not.toContain(marker);
+    }
+    const openPanel = inspector(true);
+    for (const marker of ['data-inspector-generate-music', 'data-music-style=', 'data-music-license-badge', 'data-sfx-generate']) {
+      expect(openPanel).toContain(marker);
+    }
+    // A guide track already on the timeline keeps its non-commercial notice while generation is closed.
+    const withGuide: ComposerProject = {
+      ...timeline,
+      bgm: {
+        label: 'Guide',
+        sourceKind: 'local',
+        srcUrl: '/guide.mp3',
+        durationSec: 12,
+        trimStartSec: 0,
+        volume: 0.6,
+        nonCommercialGuide: true,
+      },
+    };
+    const guidePanel = inspector(false, withGuide);
+    expect(guidePanel).toContain('data-music-license-badge');
+    expect(guidePanel).toContain(rail.inspector.musicLicense);
+    expect(guidePanel).not.toContain('data-inspector-generate-music');
   });
 
   it('exposes Premiere · DaVinci (.xml) NLE bundle export in standalone VideoComposer and keeps 0ms rail transition CSS clean', () => {

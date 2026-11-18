@@ -15,15 +15,6 @@
   min-width: 0;
 }
 
-.title {
-  margin: 0;
-  font-size: 15px;
-  font-weight: 650;
-  letter-spacing: -0.035em;
-  line-height: 1.25;
-  color: var(--ys-ink);
-}
-
 .log {
   display: flex;
   flex-direction: column;

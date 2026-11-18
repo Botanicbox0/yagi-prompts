@@ -1669,6 +1669,25 @@ a.brc-ref:hover {
   letter-spacing: -0.02em;
   overflow-wrap: anywhere;
 }
+/* 확인함 in the desk header and an organization's conversation head: the button, then who pressed it last. */
+.brc-desk-ack {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 10px;
+}
+.brc-desk-ack .admin-btn:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+.brc-desk-ack .admin-btn:disabled:hover {
+  border-color: var(--admin-line-strong, #d4d4d8);
+}
+.brc-desk-ack-by {
+  color: var(--admin-muted, #71717a);
+  font-size: 12.5px;
+  font-variant-numeric: tabular-nums;
+}
 /* The day mark stays in the flow here: pinned to the top of a narrow column it sat on the first line's time. */
 .brc-desk-chat .brc-channel[data-layout='fill'] .brc-day {
   position: static;

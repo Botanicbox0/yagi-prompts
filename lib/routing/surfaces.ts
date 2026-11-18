@@ -254,6 +254,8 @@ export function brandRouteAllowed(pathname: string, method: string): boolean {
   if (pathname === '/api/brand-rooms/messages') return read || method === 'POST';
   if (pathname === '/api/brand-rooms/messages/upload') return method === 'POST';
   if (pathname === '/api/brand-rooms/summary') return read;
+  // One project's pulse: a short stamp per part, so an open room re-reads only what changed (FEEDBACK §11).
+  if (pathname === '/api/brand-rooms/pulse') return read;
   // Project room storyboards (docs/BRAND-ROOMS.md §5): boards, one board, operations, the local upload
   // gateway. The command-line door (/api/brand-rooms/ingest) is deliberately NOT reachable on this host.
   if (pathname === '/api/brand-rooms/storyboards') return read || method === 'POST';

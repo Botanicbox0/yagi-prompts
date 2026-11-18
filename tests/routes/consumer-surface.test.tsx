@@ -249,7 +249,8 @@ describe('P2-17 and P2-18: localized strings and money', () => {
   it('OG alt and email company line follow the locale', () => {
     expect(siteOgImage('ko').alt).toMatch(/[가-힣]/);
     expect(siteOgImage('en').alt).not.toMatch(/[가-힣]/);
-    expect(companyLine('en', { address: true })).toBe('YAGI WORKSHOP Inc. · 55 Digital-ro 34-gil, Guro-gu, Seoul, Republic of Korea · hello@yagiworkshop.xyz');
+    expect(companyLine('en', { address: true })).toBe('YAGI WORKSHOP Inc. · 5F C06, 110, Yangpyeong-ro, Yeongdeungpo-gu, Seoul, 07208, Republic of Korea · hello@yagiworkshop.xyz');
+    expect(companyLine('ko', { address: true })).toBe('야기워크숍 주식회사 · 서울특별시 영등포구 양평로 110, 5층 씨06호(양평동4가) · hello@yagiworkshop.xyz');
     expect(companyLine('ko')).toBe('야기워크숍 주식회사 · hello@yagiworkshop.xyz');
   });
 

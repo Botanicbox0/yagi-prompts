@@ -10,7 +10,7 @@ import {
   projectDurationSec,
   serializeProjectForStorage,
 } from '@/lib/brand-studio/compose/timeline';
-import { composeFinalRenderCredits, composeFinalRenderKrw } from '@/lib/brand-studio/compose/credits';
+import * as composeCredits from '@/lib/brand-studio/compose/credits';
 import { parseComposeChatCommand } from '@/lib/brand-studio/compose/chat-intent';
 import { resetComposeChatRateLimitsForTest, runComposeOperation } from '@/lib/brand-studio/compose/service';
 import { studioFixture, viewerOf } from '../server/helpers';
@@ -148,10 +148,8 @@ describe('chat timeline command parser & TWINGS credit policy (Decision 3)', () 
     expect(bgm).toMatchObject({ kind: 'patches', patches: [{ op: 'set_bgm_volume', volume: 0.3 }] });
 
     const mute = parseComposeChatCommand('원본 소리 다 꺼줘', project, 'ko');
-    expect(mute).toMatchObject({
-      kind: 'patches',
-      patches: [{ op: 'set_clip_audio', clipIndex: 'all', volume: 0, muted: true }],
-    });
+    // Muting keeps each cut's volume (turning the sound back on restores it).
+    expect(mute.kind === 'patches' && mute.patches).toEqual([{ op: 'set_clip_audio', clipIndex: 'all', muted: true }]);
 
     const wide = parseComposeChatCommand('가로 16:9로 바꿔줘', project, 'ko');
     expect(wide).toMatchObject({ kind: 'patches', patches: [{ op: 'set_aspect', aspect: '16:9' }] });
@@ -164,11 +162,9 @@ describe('chat timeline command parser & TWINGS credit policy (Decision 3)', () 
     expect(parseComposeChatCommand('undo', project, 'en')).toEqual({ kind: 'undo' });
   });
 
-  it('computes deterministic TWINGS credits for 1080p final render and exposes zero BYOK or vendor names in UI/copy', () => {
-    expect(composeFinalRenderKrw(5)).toBe(200);
-    expect(composeFinalRenderCredits(5)).toBe(20);
-    expect(composeFinalRenderKrw(30)).toBe(700);
-    expect(composeFinalRenderCredits(30)).toBe(70);
+  it('prices no 1080p export and exposes zero BYOK or vendor names in UI/copy', () => {
+    // Export is free (docs/BRAND-EDITING-STUDIO.md §8-3): no per-second export price is left to compute.
+    expect(Object.keys(composeCredits).sort()).toEqual(['COMPOSE_FINAL_RENDER_MODEL', 'COMPOSE_RENDER_REFUND_WINDOW_MS']);
 
     const copySource = readFileSync(resolve(process.cwd(), 'messages/studio-compose.ts'), 'utf8');
     const uiSource = readFileSync(resolve(process.cwd(), 'components/brand-studio/compose/video-composer.tsx'), 'utf8');

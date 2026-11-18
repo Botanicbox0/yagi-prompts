@@ -5,12 +5,13 @@ import {
   resetComposeChatRateLimitsForTest,
   runComposeOperation,
 } from '@/lib/brand-studio/compose/service';
-import { applyTimelinePatches, type ComposerProject } from '@/lib/brand-studio/compose/timeline';
+import { applyTimelinePatches, type ComposerProject, type TimelinePatch } from '@/lib/brand-studio/compose/timeline';
 import { diffTimelines, type EditDelta } from '@/lib/brand-studio/edit-assist/diff';
 import { EDIT_PLAN_MODEL_SCHEMA } from '@/lib/brand-studio/edit-assist/plan';
 import {
   AssistPlanInputSchema,
   EDIT_ASSIST_REJECTED_LOG_TAG,
+  EDIT_ASSIST_SYSTEM,
   planEditAssist,
 } from '@/lib/brand-studio/edit-assist/service';
 import { brandStudioEditAssistOpen } from '@/lib/flags';
@@ -43,6 +44,14 @@ interface ModelCall {
   schema: Record<string, unknown>;
 }
 
+/**
+ * A scripted failure in place of an answer: the call's own timeout (`callGeminiJson` aborts the fetch), a
+ * network error, an answer cut off before it ended, or an HTTP status.
+ */
+class Failure {
+  constructor(readonly how: 'timeout' | 'network' | 'cut_off' | number) {}
+}
+
 /** A fake model that answers `replies` in order (the last one repeats) and records every request. */
 function fakeModel(...replies: unknown[]) {
   const calls: ModelCall[] = [];
@@ -58,7 +67,22 @@ function fakeModel(...replies: unknown[]) {
       thinking: body.generationConfig.thinkingConfig.thinkingLevel,
       schema: body.generationConfig.responseJsonSchema,
     });
-    return geminiAnswer(replies[Math.min(calls.length - 1, replies.length - 1)]);
+    const reply = replies[Math.min(calls.length - 1, replies.length - 1)];
+    if (reply instanceof Failure) {
+      if (reply.how === 'timeout') throw new DOMException('The operation was aborted.', 'AbortError');
+      if (reply.how === 'network') throw new TypeError('fetch failed');
+      if (reply.how === 'cut_off') {
+        return new Response(
+          JSON.stringify({ candidates: [{ finishReason: 'MAX_TOKENS', content: { parts: [{ text: '{"kind":"pl' }] } }] }),
+          { status: 200, headers: { 'Content-Type': 'application/json' } },
+        );
+      }
+      return new Response(JSON.stringify({ error: { code: reply.how, message: 'scripted' } }), {
+        status: reply.how,
+        headers: { 'Content-Type': 'application/json' },
+      });
+    }
+    return geminiAnswer(reply);
   });
   return { fetchImpl: fetchImpl as unknown as typeof fetch, spy: fetchImpl, calls };
 }
@@ -255,12 +279,48 @@ describe('assist.plan', () => {
         ['세 번째 컷 앞 1초 잘라줘', {}],
         // A look the parser does not know: it would put its fallback (French blue) there.
         ['색감을 시네마틱한 청록·주황 톤으로 바꿔줘', {}],
+        // Sound with no scope named: the parser would change every cut; which cuts (or the music) is a question.
+        ['소리 꺼줘', {}],
+        ['원본 소리 50%로', {}],
+        ['Mute the sound', {}],
       ];
       for (const [message, more] of cases) {
         const model = fakeModel({ kind: 'cannot', reason: 'nothing_to_edit' });
         const res = await plan(on, message, more, { env: MODEL_ENV, fetchImpl: model.fetchImpl });
         expect(res, message).toEqual({ ok: true, kind: 'cannot', reason: 'nothing_to_edit', creditsUsed: 0 });
         expect(model.calls, message).toHaveLength(1);
+      }
+    });
+
+    it('hands the model a caption "added" with the text of one already on the timeline (a move, not a copy)', async () => {
+      const model = fakeModel({ kind: 'plan', steps: [{ do: 'caption_edit', caption: 't1', position: 'top' }] });
+      expect(await plan(on, "'봄 신상 출시' 자막 위로 올려줘", {}, { env: MODEL_ENV, fetchImpl: model.fetchImpl })).toEqual({
+        ok: true,
+        kind: 'plan',
+        steps: [{ do: 'caption_edit', caption: { captionId: 'cap-hello' }, position: 'top' }],
+        creditsUsed: 0,
+      });
+      expect(model.calls).toHaveLength(1);
+    });
+
+    it('keeps a sound edit whose scope the instruction names: every cut, a numbered cut, or the music', async () => {
+      const cases: Array<[string, TimelinePatch]> = [
+        ['모든 컷 원본 소리 꺼줘', { op: 'set_clip_audio', clipIndex: 'all', muted: true }],
+        ['원본 소리 다 꺼줘', { op: 'set_clip_audio', clipIndex: 'all', muted: true }],
+        ['전체 컷 소리 켜줘', { op: 'set_clip_audio', clipIndex: 'all', muted: false }],
+        ['세 번째 컷 소리 50%로', { op: 'set_clip_audio', clipIndex: 2, volume: 0.5, muted: false }],
+        ['Mute all clips', { op: 'set_clip_audio', clipIndex: 'all', muted: true }],
+        ['배경음악 꺼줘', { op: 'set_bgm_volume', volume: 0, muted: true }],
+      ];
+      for (const [message, patch] of cases) {
+        const model = fakeModel({ kind: 'cannot', reason: 'nothing_to_edit' });
+        expect(await plan(on, message, {}, { env: MODEL_ENV, fetchImpl: model.fetchImpl }), message).toEqual({
+          ok: true,
+          kind: 'patches',
+          patches: [patch],
+          creditsUsed: 0,
+        });
+        expect(model.spy, message).not.toHaveBeenCalled();
       }
     });
   });
@@ -472,6 +532,146 @@ describe('assist.plan', () => {
       expect(calls).toBe(2);
     });
   });
+
+  describe('caption text', () => {
+    const HASHTAG = "영상 내내 위쪽에 '#광고' 작게 넣어줘";
+    const hashtagStep = (text: string) => ({ do: 'caption_add', where: 'whole', text, position: 'top', size: 'sm' });
+
+    it('restores text the model wrapped in quote marks or percent-encoded (live answers), without another call', async () => {
+      for (const text of ['"#광고"', '“#광고”', "'#광고'", '「#광고」', '%23광고', '"%23광고"']) {
+        const model = fakeModel({ kind: 'plan', steps: [hashtagStep(text)] });
+        expect(await plan(on, HASHTAG, {}, { env: MODEL_ENV, fetchImpl: model.fetchImpl }), text).toEqual({
+          ok: true,
+          kind: 'plan',
+          steps: [{ do: 'caption_add', text: '#광고', where: 'whole', position: 'top', size: 'sm' }],
+          creditsUsed: 0,
+        });
+        expect(model.calls, text).toHaveLength(1);
+      }
+    });
+
+    it('sends text that is not one of the quoted words back once, and takes the corrected answer', async () => {
+      const model = fakeModel({ kind: 'plan', steps: [hashtagStep('#광고 중')] }, { kind: 'plan', steps: [hashtagStep('#광고')] });
+      expect(await plan(on, HASHTAG, {}, { env: MODEL_ENV, fetchImpl: model.fetchImpl })).toMatchObject({
+        ok: true,
+        kind: 'plan',
+        steps: [{ do: 'caption_add', text: '#광고' }],
+      });
+      expect(model.calls).toHaveLength(2);
+      expect(model.calls[1]!.parts[2]).toContain('step 1: caption_text_not_verbatim');
+
+      const rewrite = fakeModel({ kind: 'plan', steps: [{ do: 'caption_edit', caption: 't2', text: '오늘만 30%할인' }] });
+      expect(
+        await plan(on, "할인 자막을 '오늘만 30% 할인'으로 바꿔줘", {}, { env: MODEL_ENV, fetchImpl: rewrite.fetchImpl }),
+      ).toMatchObject({ kind: 'cannot', reason: 'could_not_plan' });
+      expect(rewrite.calls[1]!.parts[2]).toContain('step 1: caption_text_not_verbatim');
+    });
+
+    it('compares only text a step sets, only when the instruction quotes something', async () => {
+      const fine: Array<[string, Record<string, unknown>]> = [
+        // Moving a caption sets no text.
+        ["'봄 신상 출시' 자막 위치를 위로 바꿔줘", { do: 'caption_edit', caption: 't1', position: 'top' }],
+        // Old and new text both quoted: the new text is one of them.
+        ["'지금 20% 할인' 자막을 '오늘만 30% 할인'으로 바꿔줘", { do: 'caption_edit', caption: 't2', text: '오늘만 30% 할인' }],
+        // Nothing quoted: the words are the model's to write.
+        ['마지막에 구매를 부르는 짧은 문구 하나 넣어줘', { do: 'caption_add', where: 'end', text: '지금 만나보세요' }],
+        // An apostrophe is not a quote mark.
+        ["Don't touch the cuts, just add 'Shop now' at the end", { do: 'caption_add', where: 'end', text: 'Shop now' }],
+      ];
+      for (const [message, step] of fine) {
+        const model = fakeModel({ kind: 'plan', steps: [step] });
+        expect(await plan(on, message, {}, { env: MODEL_ENV, fetchImpl: model.fetchImpl }), message).toMatchObject({
+          ok: true,
+          kind: 'plan',
+        });
+        expect(model.calls, message).toHaveLength(1);
+      }
+    });
+
+    it('does not hold new text to a quote that only names a caption already on the timeline', async () => {
+      const fine: Array<[string, Array<Record<string, unknown>>]> = [
+        [
+          "'봄 신상 출시' 지우고 마지막에 브랜드 문구 넣어줘",
+          [
+            { do: 'caption_remove', caption: 't1' },
+            { do: 'caption_add', where: 'end', text: '지금 만나보세요' },
+          ],
+        ],
+        ["'봄 신상 출시' 자막을 더 짧게 고쳐줘", [{ do: 'caption_edit', caption: 't1', text: '봄 신상' }]],
+      ];
+      for (const [message, steps] of fine) {
+        const model = fakeModel({ kind: 'plan', steps });
+        expect(await plan(on, message, {}, { env: MODEL_ENV, fetchImpl: model.fetchImpl }), message).toMatchObject({
+          ok: true,
+          kind: 'plan',
+        });
+        expect(model.calls, message).toHaveLength(1);
+      }
+    });
+
+    it('tells the model to copy caption text as written, without quote marks or encoding', () => {
+      expect(EDIT_ASSIST_SYSTEM).toContain('without the quote marks around it');
+      expect(EDIT_ASSIST_SYSTEM).toMatch(/never escape or encode/);
+    });
+  });
+
+  describe('a first call that does not come back', () => {
+    const GOOD = { kind: 'plan', steps: [{ do: 'trim', clip: 'c1', keep: 'start', seconds: 3 }] };
+    const BAD = { kind: 'plan', steps: [{ do: 'trim', clip: 'c1', keep: 'start' }] };
+
+    it('is tried once more on a timeout, a network error or a passing outage, in place of the corrective call', async () => {
+      for (const how of ['timeout', 'network', 500, 503, 408, 429] as const) {
+        const model = fakeModel(new Failure(how), GOOD);
+        expect(await plan(on, FREEFORM, {}, { env: MODEL_ENV, fetchImpl: model.fetchImpl }), String(how)).toEqual({
+          ok: true,
+          kind: 'plan',
+          steps: [{ do: 'trim', clip: { clipId: 'clip-open' }, keep: 'start', seconds: 3 }],
+          creditsUsed: 0,
+        });
+        expect(model.calls, String(how)).toHaveLength(2);
+        // The same request again, not a correction.
+        expect(model.calls[1]!.parts, String(how)).toEqual(model.calls[0]!.parts);
+      }
+    });
+
+    it('never makes a third call: a wrong retry answer is could_not_plan, a failed retry unavailable', async () => {
+      const wrong = fakeModel(new Failure('timeout'), BAD);
+      expect(await plan(on, FREEFORM, {}, { env: MODEL_ENV, fetchImpl: wrong.fetchImpl })).toEqual({
+        ok: true,
+        kind: 'cannot',
+        reason: 'could_not_plan',
+        creditsUsed: 0,
+      });
+      expect(wrong.calls).toHaveLength(2);
+
+      const twice = fakeModel(new Failure('timeout'), new Failure(503), GOOD);
+      expect(await plan(on, FREEFORM, {}, { env: MODEL_ENV, fetchImpl: twice.fetchImpl })).toEqual({
+        ok: true,
+        kind: 'cannot',
+        reason: 'unavailable',
+        creditsUsed: 0,
+      });
+      expect(twice.calls).toHaveLength(2);
+    });
+
+    it('is not tried again when the API refused the request or the answer came back unusable', async () => {
+      const errors = vi.spyOn(console, 'error').mockImplementation(() => {});
+      try {
+        for (const how of [400, 401, 403, 404, 'cut_off'] as const) {
+          const model = fakeModel(new Failure(how), GOOD);
+          expect(await plan(on, FREEFORM, {}, { env: MODEL_ENV, fetchImpl: model.fetchImpl }), String(how)).toEqual({
+            ok: true,
+            kind: 'cannot',
+            reason: 'unavailable',
+            creditsUsed: 0,
+          });
+          expect(model.calls, String(how)).toHaveLength(1);
+        }
+      } finally {
+        errors.mockRestore();
+      }
+    });
+  });
 });
 
 describe('a model request the API refuses', () => {
@@ -543,9 +743,17 @@ describe('a model request the API refuses', () => {
 });
 
 describe('the rule parser path on the instruction table', () => {
-  /** What a delta is about, without amounts (the parser's "a bit quieter" is 35 %, the table's 30 %). */
-  const shape = (deltas: readonly EditDelta[]) =>
-    deltas.map((d) => ({ kind: d.kind, ...('cut' in d ? { cut: d.cut } : {}), ...('text' in d ? { text: d.text } : {}) }));
+  /**
+   * Every value of every delta (seconds, volumes, mute, positions, texts), so a wrong number fails. One
+   * exception: a music level the instruction never states ("음악 좀 줄여줘": the parser lowers it to 35 %,
+   * the table to 30 %) — there the starting level and the direction must match, not the new level.
+   */
+  const values = (instruction: string, deltas: readonly EditDelta[]) =>
+    deltas.map((d) =>
+      d.kind === 'music_volume' && d.afterPct !== 0 && !/\d/.test(instruction)
+        ? { kind: d.kind, beforePct: d.beforePct, direction: Math.sign(d.afterPct - d.beforePct) }
+        : d,
+    );
 
   it('answers only what it reads right and leaves every other instruction to the model', async () => {
     const answered: string[] = [];
@@ -566,7 +774,7 @@ describe('the rule parser path on the instruction table', () => {
       answered.push(c.id);
       if (c.expect.kind !== 'plan') continue;
       const after = applyTimelinePatches(assistFixture(), res.patches).project;
-      expect(shape(diffTimelines(assistFixture(), after)), c.id).toEqual(shape(c.expect.deltas));
+      expect(values(c.instruction, diffTimelines(assistFixture(), after)), c.id).toEqual(values(c.instruction, c.expect.deltas));
     }
     expect(answered).toEqual([
       'ko-trim-to-length',
@@ -582,9 +790,9 @@ describe('the rule parser path on the instruction table', () => {
       'ko-landscape',
       'ko-warm-look',
       'ko-trim-then-end-caption',
-      // Where the table would ask, the parser picks its default (caption at the start, every cut muted).
+      // Where the table would ask, the parser picks its default (caption at the start). "소리 꺼줘" names
+      // no scope, so it goes to the model, which asks.
       'ko-ask-where-caption',
-      'ko-ask-which-sound',
       // Removing a look that is not there: a patch that changes nothing.
       'ko-problem-no-look-to-remove',
       'en-remove-last',

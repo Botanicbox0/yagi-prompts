@@ -106,4 +106,6 @@ operation for a superuser, and it is not something app code can do — that is t
 
 미적용: 0029/0115(옛 portrait 비교, 폐지 경로). 0063(prom-queen 비율)은 원장에 없지만 운영 데이터에는 이미 반영돼 있다.
 
-다음 번호: core 0095, glue 0168 (core 0092는 열린 PR이 쓰고 있다).
+**클라우드 적용 필요(미적용)**: `0096_core_brand_review_fps` · `0168_glue_brand_review_fps` — 영상 에셋의 프레임 레이트(`brand_studio_assets.fps` numeric(7,3), null 허용, 1–240 검사; `docs/BRAND-ROOMS-FEEDBACK.md` §11). 열 하나 추가라 기존 행은 null로 남고 다시 쓰지 않는다. 코드는 열이 없어도 동작한다(`assetFpsReady`가 없으면 읽지도 쓰지도 않고, 플레이어가 재생 중에 직접 잰다). 적용 후 확인: 열 존재, 제약 `brand_studio_assets_fps`, 기존 행 fps 전부 null, RLS on+forced·정책 0개, anon·authenticated 권한 없음. 브랜치 `claude/rooms-review-stage2`.
+
+다음 번호: core 0098, glue 0171 (0097·0170은 진행 중인 브랜치가 사용).

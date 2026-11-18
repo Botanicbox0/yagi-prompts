@@ -7,7 +7,7 @@ import type { RoomTeamNotice } from '@/lib/brand-rooms/team-notice';
 import { resolveRequestUrl, sameOriginMutation } from '@/lib/routing/surfaces';
 import { STUDIO_HEADERS } from '@/lib/brand-studio/http';
 import { createStudioMediaStore } from '@/lib/brand-studio/media-store';
-import { countShareView, guestComment, unlockShare, VISITOR_COOKIE, type ShareDeps } from '@/lib/brand-rooms/shares';
+import { countShareView, guestComment, sharePulse, unlockShare, VISITOR_COOKIE, type ShareDeps } from '@/lib/brand-rooms/shares';
 import { shareHttpStatus, type ShareErrorCode } from '@/lib/brand-rooms/share-contracts';
 
 /**
@@ -19,14 +19,17 @@ import { shareHttpStatus, type ShareErrorCode } from '@/lib/brand-rooms/share-co
  *   POST { op: 'unlock', token, passphrase }        the passphrase gate; sets an http-only proof cookie
  *   POST { op: 'comment', token, name, body, … }    a guest's note, when the link allows comments; the team's
  *                                                   internal notifier hears about it after the answer
+ *   POST { op: 'pulse', token }                     a short stamp of the shared item, so the open page re-reads
+ *                                                   only when something changed (docs/BRAND-ROOMS-FEEDBACK.md §11)
  *
  * Besides the per-link limits in the service, each server instance also slows down one address that
- * hammers this door. The address is held in memory for a minute and never stored.
+ * hammers this door. The address is held in memory for a minute and never stored. The pulse has its own
+ * bucket: an open page asks every 5 seconds (12 a minute), so five tabs behind one office address stay under it.
  */
 export const dynamic = 'force-dynamic';
 
 const BODY_MAX = 65_536;
-const PER_MINUTE: Record<string, number> = { view: 60, unlock: 12, comment: 12 };
+const PER_MINUTE: Record<string, number> = { view: 60, unlock: 12, comment: 12, pulse: 60 };
 const recent = new Map<string, number[]>();
 
 function slowDown(op: string, address: string): boolean {
@@ -75,7 +78,7 @@ export async function POST(request: NextRequest) {
     return fail('invalid');
   }
   const op = body.op;
-  if (op !== 'view' && op !== 'unlock' && op !== 'comment') return fail('invalid');
+  if (op !== 'view' && op !== 'unlock' && op !== 'comment' && op !== 'pulse') return fail('invalid');
   const address = (request.headers.get('x-forwarded-for') ?? '').split(',')[0]!.trim() || request.headers.get('x-real-ip') || 'local';
   if (slowDown(op, address)) return fail('rate_limited');
   const sql = await getSqlRunner();
@@ -92,6 +95,11 @@ export async function POST(request: NextRequest) {
       const response = json({ ok: true });
       response.cookies.set(VISITOR_COOKIE, result.visitor, { httpOnly: true, sameSite: 'lax', secure, path: '/', maxAge: 30 * 86_400 });
       return response;
+    }
+    if (op === 'pulse') {
+      const result = await sharePulse(deps, body, cookies);
+      if (!result.ok) return fail(result.code);
+      return json(result);
     }
     if (op === 'unlock') {
       const result = await unlockShare(deps, body, { clientKey });

@@ -5,6 +5,12 @@
  * not picked a way by hand and the server suggests the other one, it stops on a suggestion row, otherwise
  * it creates the run at once. Nothing waits for the run itself: it is polled like any other.
  *
+ * One question (§4.6): when the request reads two ways, the same `revise.plan` answer carries a question
+ * and 2–3 choices, and the form stops on them (phase `clarify`) before anything is made. A choice asks
+ * the plan once more with the answer (so the way can be judged on what was meant) and goes on; "as
+ * written" goes on with the plan it has. Either way the question is never asked again for this version:
+ * every later plan carries `clarified`, and the answer is created with the version.
+ *
  * Marks (§4.5): up to three spots pointed at on the clip. Placing one writes its circled digit into the
  * request at the caret and, separately, `readMark` asks `revise.mark` what it is on (free; never blocks the
  * form). Removing one takes its digit out and renumbers the rest. Marks travel with `revise.plan` and with
@@ -27,7 +33,7 @@ import { toReferences, type TrayItem } from "./refs";
 import { MARKS_MAX, insertDigit, removeDigit, toWireMarks, wireGeometry, type MarkGeometry, type MarkState } from "./revise-marks";
 
 export interface ReviseState {
-  phase: "loading" | "ready" | "checking" | "suggest" | "sending";
+  phase: "loading" | "ready" | "checking" | "clarify" | "suggest" | "sending";
   plan: StudioRevisePlan | null;
   mode: StudioReviseMode;
   /** True once the customer chose a way by hand: no suggestion is shown then. */
@@ -37,6 +43,13 @@ export interface ReviseState {
   /** Videos to read for this request (never sent to the video model): a texture, a movement, a look. */
   materials: TrayItem[];
   suggestion: { mode: StudioReviseMode; reason: StudioReviseReason | null } | null;
+  /** The question on screen (phase `clarify`). */
+  clarify: { question: string; options: string[] } | null;
+  /**
+   * Set once a question was asked for this version: `answer` is the choice, null when it was made as
+   * written or the request was changed instead of answered. Sent with every later plan; never asked again.
+   */
+  clarified: { question: string; answer: string | null } | null;
   /** Spots pointed at on the clip, in order (mark n is the n-th circled digit in `prompt`). */
   marks: MarkState[];
   /** An error code or `empty_prompt` / `unavailable`; the form turns it into a line. */
@@ -63,6 +76,9 @@ export interface RevisePlanInput {
   prompt: string;
   references: ReturnType<typeof toReferences>;
   marks: ReviseMark[];
+  /** How many videos are attached as material (the reading may ask which one is meant). */
+  materials: number;
+  clarified?: { question: string; answer: string | null };
 }
 
 export type ReviseMarkReadInput = { organizationId: string; outputId: string; frame: string } & ReturnType<typeof wireGeometry>;
@@ -82,6 +98,8 @@ export const initialReviseState = (): ReviseState => ({
   references: [],
   materials: [],
   suggestion: null,
+  clarify: null,
+  clarified: null,
   marks: [],
   note: null,
 });
@@ -94,7 +112,17 @@ export function openMode(plan: StudioRevisePlan | null, wanted: StudioReviseMode
 
 export type ReviseCreateInput = ReturnType<typeof toCreate>;
 
-function toCreate(input: { organizationId: string; outputId: string; mode: StudioReviseMode; prompt: string; references: TrayItem[]; materials: TrayItem[]; marks: readonly MarkState[] }) {
+function toCreate(input: {
+  organizationId: string;
+  outputId: string;
+  mode: StudioReviseMode;
+  prompt: string;
+  references: TrayItem[];
+  materials: TrayItem[];
+  marks: readonly MarkState[];
+  clarified: ReviseState["clarified"];
+}) {
+  const answer = input.clarified?.answer?.trim();
   return {
     kind: "video_revise" as const,
     organizationId: input.organizationId,
@@ -108,6 +136,7 @@ function toCreate(input: { organizationId: string; outputId: string; mode: Studi
       .filter((m) => m.kind === "video")
       .slice(0, REVISE_MATERIALS_MAX)
       .map((m) => (m.assetId ? { assetId: m.assetId } : { outputId: m.outputId! })),
+    ...(input.clarified && answer ? { clarified: { question: input.clarified.question, answer } } : {}),
   };
 }
 
@@ -118,9 +147,23 @@ export function createReviseFlow(deps: ReviseDeps) {
     deps.onChange(state);
   };
   const ask = (prompt: string) =>
-    deps.plan({ organizationId: deps.organizationId, outputId: deps.outputId, prompt, references: toReferences(state.references, "image"), marks: toWireMarks(state.marks) });
-  /** A typing or marking change: a pending suggestion no longer applies. */
-  const edited = (): Partial<ReviseState> => ({ suggestion: null, phase: state.phase === "suggest" ? "ready" : state.phase });
+    deps.plan({
+      organizationId: deps.organizationId,
+      outputId: deps.outputId,
+      prompt,
+      references: toReferences(state.references, "image"),
+      marks: toWireMarks(state.marks),
+      materials: state.materials.length,
+      ...(state.clarified ? { clarified: { ...state.clarified } } : {}),
+    });
+  /**
+   * A typing or marking change: a pending suggestion no longer applies. A question left unanswered counts
+   * as asked: the request was changed instead, and it is not asked again for this version.
+   */
+  const edited = (): Partial<ReviseState> => {
+    if (state.phase === "clarify" && state.clarify) return { suggestion: null, clarify: null, clarified: { question: state.clarify.question, answer: null }, phase: "ready" };
+    return { suggestion: null, phase: state.phase === "suggest" ? "ready" : state.phase };
+  };
   let nextKey = 0;
   /** Bumped on every read and move, so a late answer for an older position is dropped. */
   const reads = new Map<string, number>();
@@ -165,22 +208,41 @@ export function createReviseFlow(deps: ReviseDeps) {
 
   async function create(mode: StudioReviseMode) {
     set({ phase: "sending", mode, suggestion: null, note: null });
-    const result = await deps.create(toCreate({ organizationId: deps.organizationId, outputId: deps.outputId, mode, prompt: state.prompt, references: state.references, materials: state.materials, marks: state.marks }));
+    const result = await deps.create(
+      toCreate({
+        organizationId: deps.organizationId,
+        outputId: deps.outputId,
+        mode,
+        prompt: state.prompt,
+        references: state.references,
+        materials: state.materials,
+        marks: state.marks,
+        clarified: state.clarified,
+      }),
+    );
     if (isFailure(result)) return set({ phase: "ready", note: result.code });
     // The form clears; the plan answers the next version's number on the next open.
     const plan = state.plan ? { ...state.plan, version: state.plan.version + 1 } : null;
     reads.clear();
-    set({ phase: "ready", prompt: "", references: [], materials: [], marks: [], picked: false, plan });
+    set({ phase: "ready", prompt: "", references: [], materials: [], marks: [], picked: false, plan, clarify: null, clarified: null });
     deps.onCreated?.(result);
   }
 
   async function submit() {
-    if (state.phase === "checking" || state.phase === "sending") return;
+    if (state.phase === "checking" || state.phase === "sending" || state.phase === "clarify") return;
     if (!state.prompt.trim()) return set({ note: "empty_prompt" });
     set({ phase: "checking", note: null, suggestion: null });
     const plan = await ask(state.prompt.trim());
     if (isFailure(plan)) return set({ phase: "ready", note: plan.code });
     set({ plan });
+    // A question only while none was asked for this version (the server does not ask once `clarified` is sent).
+    if (plan.clarify && !state.clarified && plan.clarify.options.length >= 2)
+      return set({ phase: "clarify", clarify: { question: plan.clarify.question, options: [...plan.clarify.options] } });
+    await proceed(plan);
+  }
+
+  /** The request is settled: the way suggestion when it applies (once), else the version at once. */
+  async function proceed(plan: StudioRevisePlan) {
     const { recommended } = plan;
     if (!plan.methods[state.mode]?.available) {
       const other = openMode(plan, state.mode);
@@ -198,6 +260,26 @@ export function createReviseFlow(deps: ReviseDeps) {
     },
     load,
     submit,
+    /**
+     * The question row: a choice (one of `clarify.options`), or null to make it exactly as written. A choice
+     * asks the plan once more with the answer; then the way suggestion follows only when it applies.
+     */
+    async answer(choice: string | null) {
+      const clarify = state.clarify;
+      if (state.phase !== "clarify" || !clarify) return;
+      const answer = choice !== null && clarify.options.includes(choice) ? choice : null;
+      if (choice !== null && answer === null) return;
+      set({ clarify: null, clarified: { question: clarify.question, answer }, phase: "checking", note: null });
+      let plan = state.plan;
+      if (answer !== null) {
+        const again = await ask(state.prompt.trim());
+        if (isFailure(again)) return set({ phase: "ready", note: again.code });
+        plan = again;
+        set({ plan });
+      }
+      if (!plan) return set({ phase: "ready", note: "failed" });
+      await proceed(plan);
+    },
     /** The suggestion row: `true` switches to the suggested way, `false` keeps the selected one. */
     async accept(change: boolean) {
       const suggestion = state.suggestion;
@@ -207,6 +289,7 @@ export function createReviseFlow(deps: ReviseDeps) {
     },
     pick(mode: StudioReviseMode) {
       if (state.plan && !state.plan.methods[mode]?.available) return;
+      // The question stays on screen: picking a way does not answer it.
       set({ mode, picked: true, suggestion: null, phase: state.phase === "suggest" ? "ready" : state.phase });
     },
     setPrompt(prompt: string) {

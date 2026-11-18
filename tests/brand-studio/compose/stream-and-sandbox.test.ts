@@ -4,16 +4,21 @@ import { NextRequest } from 'next/server';
 import type { Viewer } from '@/lib/auth/identity';
 import type { SqlRunner } from '@/lib/db/sql-runner';
 import { SANDBOXED_CLIENT_ORG_IDS } from '@/lib/brands/features';
-import { COMPOSE_CHAT_LIMIT_PER_MIN, resetComposeChatRateLimitsForTest } from '@/lib/brand-studio/compose/service';
-import { composeFinalRenderCredits, composeFinalRenderKrw } from '@/lib/brand-studio/compose/credits';
+import {
+  COMPOSE_CHAT_LIMIT_PER_MIN,
+  resetComposeChatRateLimitsForTest,
+  runComposeOperation,
+} from '@/lib/brand-studio/compose/service';
+import { COMPOSE_FINAL_RENDER_MODEL } from '@/lib/brand-studio/compose/credits';
 import { muxAvc1ToMp4 } from '@/lib/brand-studio/compose/mp4-muxer';
 import { appendClip, emptyComposerProject } from '@/lib/brand-studio/compose/timeline';
+import { studioEnv } from '@/lib/brand-studio/env';
 import { createStudioMediaStore } from '@/lib/brand-studio/media-store';
 import { memberUsage } from '@/lib/brand-studio/member-usage';
 import { jobsOf, jobsOfStudioState } from '@/lib/brand-studio/repo';
 import { studioMonthWindow, usedKrwIn } from '@/lib/brand-studio/usage';
 import { brandRouteAllowed } from '@/lib/routing/surfaces';
-import { studioFixture, viewerOf, type StudioFixture } from '../server/helpers';
+import { studioDeps, studioFixture, viewerOf, type StudioFixture } from '../server/helpers';
 
 const mocks = vi.hoisted(() => ({
   sql: null as SqlRunner | null,
@@ -43,7 +48,7 @@ const postCompose = (body: unknown, headers?: Record<string, string>) =>
     }),
   );
 
-describe('composer route surface, Morphic/policy hardlines & TWINGS credits (Decision 3)', () => {
+describe('composer route surface, Morphic/policy hardlines & free export (docs/BRAND-EDITING-STUDIO.md §8-3)', () => {
   let f: StudioFixture | null = null;
 
   beforeEach(() => {
@@ -218,14 +223,35 @@ describe('composer route surface, Morphic/policy hardlines & TWINGS credits (Dec
     expect(usedAfterChat).toBe(0);
   });
 
-  it('deducts TWINGS credits on 1080p final render, hides ledger rows from video studio boards, blocks exhausted allowance, and refunds 100% on export failure', async () => {
+  /** A paid generation row (music / SFX / upscale write the same ledger model) that uses `krw` this month. */
+  async function insertPaidLedgerRow(fixture: StudioFixture, krw: number): Promise<void> {
+    const ts = new Date().toISOString();
+    await fixture.sql.query(
+      `insert into brand_studio_jobs (
+         organization_id, created_by, request_id, kind, status, lane, model,
+         prompt, enhance, refs, params, estimate_krw, usage_krw, created_at, started_at, finished_at
+       ) values (
+         $1, $2, $3, 'video_final', 'succeeded', null, $4,
+         'HD 1080p upscale', false, '[]'::jsonb, $5::jsonb, $6, $6, $7, $7, $7
+       )`,
+      [
+        fixture.orgId,
+        fixture.ids.owner,
+        `req_${randomUUID().slice(0, 12)}`,
+        COMPOSE_FINAL_RENDER_MODEL,
+        JSON.stringify({ source: 'upscale', postProdStatus: 'succeeded' }),
+        krw,
+        ts,
+      ],
+    );
+  }
+
+  it('exports for free: a 0-credit row even when the month is used up, idempotent by request id, hidden from boards', async () => {
     f = await studioFixture({ capKrw: 500 }); // 50 TWINGS credits
     mocks.sql = f.sql;
     mocks.viewer = viewerOf(f.ids.owner);
-
-    // 10s 1080p render = 300 KRW = 30 TWINGS credits
-    expect(composeFinalRenderKrw(10)).toBe(300);
-    expect(composeFinalRenderCredits(10)).toBe(30);
+    // The whole month is already spent on generation: a charged export would have been refused (409) before.
+    await insertPaidLedgerRow(f, 500);
 
     const reserve1 = await postCompose({
       operation: 'render.reserve',
@@ -238,36 +264,184 @@ describe('composer route surface, Morphic/policy hardlines & TWINGS credits (Dec
       creditsUsed: number;
       allowance: { capKrw: number; usedKrw: number };
     };
-    expect(body1.creditsUsed).toBe(30);
-    expect(body1.allowance.usedKrw).toBe(300);
+    expect(body1.creditsUsed).toBe(0);
+    expect(body1.allowance).toMatchObject({ capKrw: 500, usedKrw: 500 });
 
-    // Ledger row counts toward memberUsage, yet never clutters jobsOf / jobsOfStudioState
+    const row = (
+      await f.sql.query<{ status: string; model: string; estimate_krw: number; usage_krw: number | null; params: unknown }>(
+        'select status, model, estimate_krw, usage_krw, params from brand_studio_jobs where id = $1',
+        [body1.jobId],
+      )
+    ).rows[0]!;
+    expect({ ...row, estimate_krw: Number(row.estimate_krw), usage_krw: Number(row.usage_krw) }).toMatchObject({
+      status: 'succeeded',
+      model: COMPOSE_FINAL_RENDER_MODEL,
+      estimate_krw: 0,
+      usage_krw: 0,
+    });
+    expect(typeof row.params === 'string' ? JSON.parse(row.params) : row.params).toMatchObject({
+      resolution: '1080p',
+      seconds: 10,
+      source: 'compose',
+    });
+
+    // The same request id answers with the same row; a new one adds another free row.
+    const again = await postCompose({
+      operation: 'render.reserve',
+      input: { organizationId: f.orgId, requestId: 'cmp_render_ok_0001', durationSec: 10 },
+    });
+    expect(again.status).toBe(200);
+    expect(await again.json()).toMatchObject({ ok: true, jobId: body1.jobId, creditsUsed: 0 });
+    const second = await postCompose({
+      operation: 'render.reserve',
+      input: { organizationId: f.orgId, requestId: 'cmp_render_ok_0002', durationSec: 30 },
+    });
+    expect(second.status).toBe(200);
+    expect(await second.json()).toMatchObject({ ok: true, creditsUsed: 0, allowance: { usedKrw: 500 } });
+
+    // Ledger rows never clutter jobsOf / jobsOfStudioState, and the exports add nothing to usage.
     expect(await jobsOf(f.sql, f.orgId)).toHaveLength(0);
     expect(await jobsOfStudioState(f.sql, f.orgId)).toHaveLength(0);
-    const usage = await memberUsage(f.sql, f.orgId);
-    expect(usage[0]?.usedKrw).toBe(300);
+    expect((await memberUsage(f.sql, f.orgId))[0]?.usedKrw).toBe(500);
+    expect(await usedKrwIn(f.sql, f.orgId, studioMonthWindow(new Date()))).toBe(500);
 
-    // Second 10s render (needs 300 KRW, only 200 KRW left) -> 409 allowance_exhausted
-    const exhausted = await postCompose({
+    // A read-only member still cannot export (403), as before.
+    mocks.viewer = viewerOf(f.ids.viewer);
+    const viewerRes = await postCompose({
       operation: 'render.reserve',
-      input: { organizationId: f.orgId, requestId: 'cmp_render_over_0002', durationSec: 10 },
+      input: { organizationId: f.orgId, requestId: 'cmp_render_viewer_01', durationSec: 10 },
     });
-    expect(exhausted.status).toBe(409);
-    expect(await exhausted.json()).toEqual({ ok: false, code: 'allowance_exhausted' });
+    expect(viewerRes.status).toBe(403);
+  });
 
-    // Client encoding fails on first job -> render.refund restores 100% of credits immediately
-    const refund = await postCompose({
-      operation: 'render.refund',
-      input: { organizationId: f.orgId, jobId: body1.jobId },
+  it('exports for an organization with no studio allowance at all', async () => {
+    f = await studioFixture({ capKrw: null }); // no allowance row: generation would answer allowance_closed
+    mocks.sql = f.sql;
+    mocks.viewer = viewerOf(f.ids.owner);
+
+    const res = await postCompose({
+      operation: 'render.reserve',
+      input: { organizationId: f.orgId, requestId: 'cmp_render_closed_01', durationSec: 8 },
     });
-    expect(refund.status).toBe(200);
-    const refundBody = (await refund.json()) as {
-      ok: true;
-      refunded: boolean;
-      allowance: { usedKrw: number };
-    };
-    expect(refundBody.refunded).toBe(true);
-    expect(refundBody.allowance.usedKrw).toBe(0);
+    expect(res.status).toBe(200);
+    expect(await res.json()).toMatchObject({ ok: true, creditsUsed: 0, allowance: { usedKrw: 0 } });
     expect(await usedKrwIn(f.sql, f.orgId, studioMonthWindow(new Date()))).toBe(0);
+  });
+
+  it('never turns a free (0-credit) export row into a refund', async () => {
+    f = await studioFixture({ capKrw: 500 });
+    mocks.sql = f.sql;
+    mocks.viewer = viewerOf(f.ids.owner);
+    await insertPaidLedgerRow(f, 200);
+
+    const reserve = await postCompose({
+      operation: 'render.reserve',
+      input: { organizationId: f.orgId, requestId: 'cmp_render_free_0001', durationSec: 10 },
+    });
+    const { jobId } = (await reserve.json()) as { jobId: string };
+
+    // A page loaded before export became free still calls render.refund after a failed encode.
+    const refund = await postCompose({ operation: 'render.refund', input: { organizationId: f.orgId, jobId } });
+    expect(refund.status).toBe(200);
+    expect(await refund.json()).toMatchObject({ ok: true, refunded: false, allowance: { usedKrw: 200 } });
+    const row = (
+      await f.sql.query<{ status: string; usage_krw: number | null; error_code: string | null }>(
+        'select status, usage_krw, error_code from brand_studio_jobs where id = $1',
+        [jobId],
+      )
+    ).rows[0]!;
+    expect({ ...row, usage_krw: Number(row.usage_krw) }).toEqual({ status: 'succeeded', usage_krw: 0, error_code: null });
+    expect(await usedKrwIn(f.sql, f.orgId, studioMonthWindow(new Date()))).toBe(200);
+  });
+});
+
+/**
+ * "말로 편집" (`assist.plan`) with the flag on keeps the studio's hardlines (docs/BRAND-EDITING-STUDIO.md §7):
+ * Morphic / sandboxed organizations and organizations whose policy denies `generative_media` get the same 404
+ * (`feature_unavailable`) as every other studio call, before any model request.
+ */
+describe('assist.plan Morphic / sandbox / generative_media hardline', () => {
+  const MODEL_ENV = { GEMINI_API_KEY: 'test-gemini-key' };
+  /** Not a fixed command: with the gate open it would go to the model. */
+  const MESSAGE = '오프닝을 좀 더 짧게 해줘';
+  let f: StudioFixture | null = null;
+
+  beforeEach(() => {
+    vi.stubEnv('BRAND_STUDIO_V2', 'on');
+    vi.stubEnv('BRAND_STUDIO_PROVIDER', 'fake');
+    vi.stubEnv('BRAND_STUDIO_EDIT_ASSIST', 'on');
+    resetComposeChatRateLimitsForTest();
+  });
+
+  afterEach(async () => {
+    resetComposeChatRateLimitsForTest();
+    vi.unstubAllEnvs();
+    vi.restoreAllMocks();
+    await f?.db.close();
+    f = null;
+    mocks.sql = null;
+    mocks.viewer = null;
+  });
+
+  const assistInput = (organizationId: string) => ({
+    organizationId,
+    message: MESSAGE,
+    locale: 'ko',
+    project: appendClip(emptyComposerProject('9:16'), {
+      id: 'c1',
+      label: 'Opening',
+      sourceKind: 'output',
+      srcUrl: '/clip1.mp4',
+      durationSec: 6,
+      trimStartSec: 0,
+      trimEndSec: 6,
+      volume: 1,
+      muted: false,
+    }),
+  });
+
+  async function expectRefusedWithoutModel(fixture: StudioFixture): Promise<void> {
+    mocks.sql = fixture.sql;
+    mocks.viewer = viewerOf(fixture.ids.owner);
+
+    // Through the route, as the screen calls it.
+    const globalFetch = vi.spyOn(globalThis, 'fetch');
+    const res = await postCompose({ operation: 'assist.plan', input: assistInput(fixture.orgId) });
+    expect(res.status).toBe(404);
+    expect(res.headers.get('cache-control')).toBe('private, no-store');
+    expect(await res.json()).toEqual({ ok: false, code: 'feature_unavailable' });
+    expect(globalFetch).not.toHaveBeenCalled();
+
+    // Directly, with a model key and an injected fetch that would answer if it were ever reached.
+    const fetchImpl = vi.fn(async () => new Response('{}', { status: 200 }));
+    const deps = studioDeps(fixture.sql, {
+      env: studioEnv({ BRAND_STUDIO_PROVIDER: 'fake', BRAND_STUDIO_DEFAULT_LANE: 'sunra_api', BRAND_STUDIO_EDIT_ASSIST: 'on' }),
+    });
+    const direct = await runComposeOperation(deps, viewerOf(fixture.ids.owner), 'assist.plan', assistInput(fixture.orgId), {
+      env: MODEL_ENV,
+      fetchImpl: fetchImpl as unknown as typeof fetch,
+    });
+    expect(direct).toEqual({ ok: false, code: 'feature_unavailable' });
+    expect(fetchImpl).not.toHaveBeenCalled();
+  }
+
+  it.each([
+    { label: `sandboxed id ${[...SANDBOXED_CLIENT_ORG_IDS][0]}`, orgId: [...SANDBOXED_CLIENT_ORG_IDS][0] },
+    { label: `sandboxed id ${[...SANDBOXED_CLIENT_ORG_IDS][1]}`, orgId: [...SANDBOXED_CLIENT_ORG_IDS][1] },
+    { label: 'named Morphic Studio', orgName: 'Morphic Studio' },
+    { label: 'named 모픽 코리아', orgName: '모픽 코리아' },
+  ])('answers 404 feature_unavailable for $label without calling the model', async ({ orgId, orgName }) => {
+    f = await studioFixture({ orgId, orgName: orgName ?? 'Client' });
+    await expectRefusedWithoutModel(f);
+  });
+
+  it('answers 404 feature_unavailable when the policy denies generative_media, without calling the model', async () => {
+    f = await studioFixture();
+    await f.sql.query(
+      `insert into brand_feature_policies (organization_id, denied_features, updated_by)
+       values ($1, array['generative_media']::text[], $2)`,
+      [f.orgId, f.ids.admin],
+    );
+    await expectRefusedWithoutModel(f);
   });
 });

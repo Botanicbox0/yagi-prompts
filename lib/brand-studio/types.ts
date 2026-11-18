@@ -80,6 +80,7 @@ export interface EnhanceInput {
     history: string[];
     marks?: Array<{ n: number; time: number; what: string | null; x: number; y: number; w?: number; h?: number; label?: string | null }>;
     materials?: Array<{ n: number; kind: 'video'; notes: string }>;
+    clarified?: { question: string; answer: string };
   } | null;
 }
 export interface EnhanceResult {
@@ -205,6 +206,8 @@ export interface StudioJobParams {
     marks?: Array<{ time: number; x: number; y: number; w?: number; h?: number; label?: string; what?: string }>;
     /** Material read for this request (lib/brand-studio/revision/material.ts): videos, never sent to the video model. */
     materials?: Array<{ assetId?: string; outputId?: string }>;
+    /** The one question asked about this request (revise.plan) and what the customer answered. */
+    clarified?: { question: string; answer: string };
   };
 }
 

@@ -13,6 +13,7 @@ import { resolveReferences, type ResolvedRef } from './plan';
 import { StudioDenied } from './access';
 import { replaceMarks } from './enhancer/marks';
 import { describeSelection, selectionLine } from './region-edit/window';
+import { clarifiedOf, withClarified } from './revision/clarify';
 import { addedRefsOf, refKey, renumberRequest, revisionChain } from './revision/recipe';
 import type { EnhanceInput, EnhanceResult, JobRow, RegionPlan, StudioDeps, StudioJobParams, StudioJobWork } from './types';
 
@@ -377,12 +378,14 @@ export async function revisionInput(
     const chain = await revisionChain(deps.sql, job.organization_id, base);
     const locale = job.params.locale ?? 'ko';
     const marks = enhanceMarks(r.marks);
+    const clarified = clarifiedOf(r);
     // Earlier requests pointed at their own marks: those are written out here, so only this request's
-    // ①②③ reach the prompt writer, with `marks` beside them.
-    const earlier = chain.history.map((h) => ({ ...h, request: replaceMarks(h.request, h.marks ?? []) }));
+    // ①②③ reach the prompt writer, with `marks` beside them. An earlier answer follows its request.
+    const earlier = chain.history.map((h) => ({ ...h, request: withClarified(replaceMarks(h.request, h.marks ?? []), h.clarified) }));
+    const extra = { ...(marks.length ? { marks } : {}), ...(clarified ? { clarified } : {}) };
     if (r.mode === 'edit') {
       return {
-        revision: { mode: 'edit', version: r.version, madeWith: chain.madeWith, history: earlier.map((h) => h.request), ...(marks.length ? { marks } : {}) },
+        revision: { mode: 'edit', version: r.version, madeWith: chain.madeWith, history: earlier.map((h) => h.request), ...extra },
         prompt: job.prompt,
       };
     }
@@ -400,7 +403,9 @@ export async function revisionInput(
         version: r.version,
         madeWith: chain.madeWith,
         history: earlier.map((h) => renumberRequest(h.request, h.added, tray, locale)),
-        ...(marks.length ? { marks } : {}),
+        ...extra,
+        // The answer names pictures the way the request does, so it is renumbered with it.
+        ...(clarified ? { clarified: { ...clarified, answer: renumberRequest(clarified.answer, addedRefsOf(job), tray, locale) } } : {}),
       },
       prompt: renumberRequest(job.prompt, addedRefsOf(job), tray, locale),
     };
@@ -505,8 +510,12 @@ export async function prepareJob(deps: StudioDeps, job: JobRow): Promise<{ final
   const history = await revisionInput(deps, job, resolved);
   const materials = history ? await materialNotes(deps, job, history.revision.madeWith) : [];
   const revised = history && materials.length ? { ...history, revision: { ...history.revision, materials } } : history;
-  // Without the clip's history the marks cannot travel as context: their words go into the request.
-  const stillMarked = !revised && job.params?.revision?.marks?.length ? replaceMarks(job.prompt, job.params.revision.marks) : null;
+  // Without the clip's history the marks and the answer cannot travel as context: their words go into the request.
+  const loose = job.params?.revision;
+  const stillMarked =
+    !revised && loose && (loose.marks?.length || clarifiedOf(loose))
+      ? withClarified(loose.marks?.length ? replaceMarks(job.prompt, loose.marks) : job.prompt, clarifiedOf(loose))
+      : null;
   const input = enhanceInputOf(
     revised ? { ...job, prompt: revised.prompt } : stillMarked !== null ? { ...job, prompt: stillMarked } : job,
     model,
