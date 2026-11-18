@@ -23,13 +23,16 @@
  * ./brand-studio-lane-mapping.mjs, which must sit next to this file.
  */
 import { spawn } from 'node:child_process';
+import { randomUUID } from 'node:crypto';
 import { existsSync, mkdirSync, readFileSync, rmSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { join } from 'node:path';
-import { CliRefusal, draftTaskIdOf, failureCodeOf, mimeOf, redactUrls, toolCall, withUploadedVideos } from './brand-studio-lane-mapping.mjs';
+import { CliRefusal, ReferenceCdnCache, createOnce, draftTaskIdOf, failureCodeOf, mimeOf, redactUrls, toolCall, withUploadedVideos } from './brand-studio-lane-mapping.mjs';
 
 // 2: reference videos are uploaded to the account first; a run that follows its source is never a preview.
-const VERSION = '2';
+// 3 (2026-11-19): a busy reference copy is retried (createOnce), pictures already on the provider's CDN are reused,
+//    every picture create carries a request_id, and GPT Image 2.6 gets its reasoning_effort.
+const VERSION = '3';
 const PROJECT_NAME = 'TWINGS Brand Studio';
 const JOB_TIMEOUT_MS = 25 * 60 * 1000;
 const args = process.argv.slice(2);
@@ -128,6 +131,9 @@ async function ensureProject() {
 /** Reference videos go to the account first: it takes no video from another address. */
 const uploadDeps = { fetch: (url, init) => fetch(url, init), uploadSlot: (input) => sunra('get_upload_url', input) };
 
+/** Our picture address -> the provider's CDN copy, for this process only (createOnce). */
+const cdnCache = new ReferenceCdnCache();
+
 async function waitFor(taskId) {
   const deadline = Date.now() + JOB_TIMEOUT_MS;
   let misses = 0;
@@ -180,10 +186,19 @@ async function runJob(job) {
     if (ready.uploads > 0) log('references_uploaded', { jobId: job.jobId, videos: ready.uploads, bytes: ready.bytes, seconds: Math.round((Date.now() - started) / 1000) });
     const call = toolCall(ready.job, project);
     const slots = job.outputs.length ? job.outputs : [{ idx: 0 }];
+    // One request identity per result slot for this run: a retried create is the same request to the provider.
+    // A later claim of the same job (requeued, failed over) is a new run and gets a new one.
+    const runTag = randomUUID().slice(0, 8);
     let credits = 0;
     const outputs = await Promise.all(
       slots.map(async (slot) => {
-        const created = await sunra(call.tool, call.input, { spend: true });
+        // The job stays `running` while this waits: the lane's heartbeat comes from the claim loop, not from here,
+        // and a running job is only given up after 6 h (or 30 min without heartbeats), far past three retries (~34 s).
+        const created = await createOnce(
+          call,
+          { create: (input) => sunra(call.tool, input, { spend: true }), sleep, log, cache: cdnCache },
+          { requestId: `${job.jobId}:${slot.idx}:${runTag}`, log: { jobId: job.jobId, slot: slot.idx } },
+        );
         if (!created.task_id) throw new Error('create returned no task id');
         credits += Number(created.estimated_credits ?? 0) || 0;
         const done = await waitFor(created.task_id);

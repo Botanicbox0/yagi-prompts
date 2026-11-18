@@ -6,6 +6,7 @@
  *   npx tsx scripts/architect-eval.ts <env-file> --refs <dir> [--label after] [--out-dir <dir>] [--only id,id]
  *       [--reruns 1] [--cap 150] [--concurrency 3] [--variant none|short|full]
  *   npx tsx scripts/architect-eval.ts <env-file> --refs <dir> --emit <dir> [--cap 80]
+ *   npx tsx scripts/architect-eval.ts <env-file> --refs <dir> --emit-plain <dir> [--only <cell>] [--cap 6]
  *
  * - Reads ONLY `GEMINI_API_KEY` (and `GEMINI_BASE_URL`) from <env-file>, inside this process. The key is never
  *   printed or written; every string that leaves the process is scrubbed of it.
@@ -424,6 +425,60 @@ async function emit(dir: string, refsDir: string, env: Record<string, string | u
   say(`emitted ${cells.length} cells to ${dir} (${state.calls} calls)`);
 }
 
+/**
+ * `--emit-plain <dir>`: the side-effect check (2026-11-19). An ordinary ad request with NO realism words, close-up
+ * only, Seedream 5.5 and GPT Image 2.6 Flare x the three subjects x {current, new}. Does the new base rule keep the
+ * scene the customer asked for, or drift to the person reference's own backdrop and light? Merged into the
+ * existing matrix.json (cells named `<model>__<s>__closeup__plain__current|new`); 6 model calls.
+ */
+const PLAIN_REQUEST = '이미지 1 모델이 이미지 2 향수병을 들고 활짝 웃는 봄 캠페인 광고 컷. 햇살이 가득 들어오는 밝고 화사한 공간, 산뜻하고 가벼운 분위기로.';
+const PLAIN_MODELS = MATRIX_MODELS.filter((m) => m.id === SEEDREAM || m.id === GPT);
+
+async function emitPlain(dir: string, refsDir: string, env: Record<string, string | undefined>) {
+  mkdirSync(dir, { recursive: true });
+  const matrixFile = join(dir, 'matrix.json');
+  const existing: Array<Record<string, unknown>> = existsSync(matrixFile) ? JSON.parse(readFileSync(matrixFile, 'utf8')) : [];
+  const cells: Array<Record<string, unknown>> = [];
+  const rows: string[] = [];
+  const only = flag('--only')?.split(',').map((x) => x.trim()).filter(Boolean);
+  for (const model of PLAIN_MODELS) {
+    for (const subject of SUBJECTS) {
+      const base = `${model.id}__${subject.key}__closeup__plain`;
+      const refs = [`refs/${REF_FILES[subject.key]}`, `refs/${REF_FILES.product}`];
+      const settings = { aspect: '3:4', ...model.settings };
+      writeFileSync(
+        join(dir, `${base}__current.txt`),
+        [`# ${model.label} · subject ${subject.key} (${subject.note}) · closeup · PLAIN request · CURRENT arm`, 'Prompt Architect: ON in production (do not paste a designed prompt)', `Attach in this order: ${refs.join(', ')} (roles: person, product)`, `Settings: ${JSON.stringify(settings)}`, '', 'Type this request:', PLAIN_REQUEST, ''].join('\n'),
+      );
+      cells.push({ cell: `${base}__current`, model: model.id, subject: subject.key, framing: 'closeup', arm: 'current', plain: true, refs, settings, request: PLAIN_REQUEST });
+      rows.push(`| ${base}__current | ${model.label} | ${subject.key} | closeup | current, plain request | — | 3:4 | ${JSON.stringify(model.settings)} | ${base}__current.txt |`);
+      const c: EvalCase = { id: `${base}__new`, model: model.id, profile: model.profile, prompt: PLAIN_REQUEST, refs: [{ key: subject.key, role: 'person' }, { key: 'product', role: 'product' }], expect: { skin: 'base', people: model.profile === 'gpt-image' } };
+      // `--only <cell>` designs just that cell again and keeps the others as they are in matrix.json.
+      const kept = only?.length && !only.includes(c.id) ? existing.find((x) => x.cell === c.id) : undefined;
+      if (kept) {
+        cells.push(kept);
+        rows.push(`| ${c.id} | ${model.label} | ${subject.key} | closeup | new, plain request | — | 3:4 | ${JSON.stringify(model.settings)} | ${c.id}.txt |`);
+        continue;
+      }
+      const result = await runCase(c, refsDir, env, true);
+      writeFileSync(
+        join(dir, `${c.id}.txt`),
+        [`# ${model.label} · subject ${subject.key} (${subject.note}) · closeup · PLAIN request · NEW profile`, 'Prompt Architect: OFF (paste the prompt below as it is)', `Attach in this order: ${refs.join(', ')} (roles: person, product)`, `Settings: ${JSON.stringify(settings)}`, `Designed from the request: ${PLAIN_REQUEST}`, `Source: ${result.source}${result.fallback ? ` (${result.fallback})` : ''} · checks: ${result.verdict}`, '', '--- prompt ---', result.prompt, ''].join('\n'),
+      );
+      cells.push({ cell: c.id, model: model.id, subject: subject.key, framing: 'closeup', arm: 'new', plain: true, refs, settings, request: PLAIN_REQUEST, prompt: result.prompt, source: result.source, verdict: result.verdict, checks: result.checks });
+      rows.push(`| ${c.id} | ${model.label} | ${subject.key} | closeup | new, plain request | — | 3:4 | ${JSON.stringify(model.settings)} | ${c.id}.txt |`);
+      say(`  ${c.id}: ${result.verdict} (${result.source})`);
+      if (state.stop) throw new Error(state.stop);
+    }
+  }
+  const merged = [...existing.filter((x) => !String(x.cell).includes('__plain__')), ...cells];
+  writeFileSync(matrixFile, scrub(JSON.stringify(merged, null, 2)));
+  const md = join(dir, 'matrix.md');
+  const head = existsSync(md) ? readFileSync(md, 'utf8').split('\n## Plain request')[0]!.trimEnd() : '# Image-test matrix';
+  writeFileSync(md, [head, '', `## Plain request (no realism words), ${new Date().toISOString().slice(0, 10)}`, '', `Request: ${PLAIN_REQUEST}`, '', '| cell | model | subject | framing | arm | tone | aspect | settings | file |', '| --- | --- | --- | --- | --- | --- | --- | --- | --- |', ...rows, ''].join('\n'));
+  say(`emitted ${cells.length} plain cells into ${dir} (${state.calls} calls); matrix.json now ${merged.length} cells`);
+}
+
 /* ------------------------------------------------------------------ main */
 
 async function main() {
@@ -438,6 +493,8 @@ async function main() {
   const variant = flag('--variant');
   if (variant) env.BRAND_STUDIO_ENHANCER_SKIN_VARIANT = variant;
 
+  const plainDir = flag('--emit-plain');
+  if (plainDir) return emitPlain(resolve(plainDir), refsDir, env);
   const emitDir = flag('--emit');
   if (emitDir) return emit(resolve(emitDir), refsDir, env);
 

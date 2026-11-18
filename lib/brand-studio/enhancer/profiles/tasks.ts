@@ -35,7 +35,7 @@ function imageTask(input: EnhanceInput, binding: Binding): string {
 Look at every attached picture ("Picture of ...") alongside the customer's "request", "role", "take" and "leaveOut", and bind each token to what it really shows:
 - product: name it with one noun and the trait that tells it apart ("the frosted bottle in ${first}"), then name what to keep as categories: "keep the exact label, cap, proportions and colours of <token>". Do not re-describe its colours, shapes or label text at length; the picture carries them. Leave out its own background and lighting unless asked.
 - logo: say where the mark sits and how it meets the surface (printed flat on the curved glass), and that the mark is reproduced exactly as drawn, at a natural scale.
-- person: their face, hair, build and skin come from the picture; take wardrobe or pose only when asked or listed in "take". The people rules below say how to write skin.
+- person: their face, hair, build and skin come from the picture, never its backdrop, light or colour grade unless the request asks for them: the request sets the scene. Take wardrobe or pose only when asked or listed in "take". The people rules below say how to write skin.
 - style / place: describe in concrete words what to take from it: where the key light comes from, how soft the highlights are, where shadows fall, the surface materials, the dominant colours and the setting. Leave out any subject or product shown in it.
 - when "role" is null: decide what each picture supplies by comparing what is visibly in it with the request.
 Optical integration: unite all kept elements into ONE physical photograph with consistent key-light direction, colour temperature, reflections or refraction and contact shadows rather than a pasted collage.`;

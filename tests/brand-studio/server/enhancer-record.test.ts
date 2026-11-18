@@ -27,7 +27,7 @@ describe('work.enhancer', () => {
     expect(out.work.enhancer).toEqual({
       profile: 'seedream',
       profileVersion: 'seedream@2026-11-19.1',
-      coreVersion: 'core@2026-11-19.1',
+      coreVersion: 'core@2026-11-19.2',
       llmModel: null,
       source: 'model',
       skinMode: 'realism',
@@ -41,7 +41,7 @@ describe('work.enhancer', () => {
       prompt: `FALLBACK: ${input.prompt}`,
       notes: '',
       source: 'fallback',
-      meta: { profile: input.profile, profileVersion: 'nano-banana@2026-11-19.1+nano-banana-2.1@2026-11-19.1', coreVersion: 'core@2026-11-19.1', llmModel: null, source: 'fallback', fallbackReason: 'timeout', skinMode: 'off', toneMatch: false },
+      meta: { profile: input.profile, profileVersion: 'nano-banana@2026-11-19.1+nano-banana-2.1@2026-11-19.1', coreVersion: 'core@2026-11-19.2', llmModel: null, source: 'fallback', fallbackReason: 'timeout', skinMode: 'off', toneMatch: false },
     });
     const out = await prepared({ model: 'nano-banana-2.1', prompt: '대리석 위 향수병', enhance: true }, intel);
     expect(out.work.enhancer).toMatchObject({ profileVersion: 'nano-banana@2026-11-19.1+nano-banana-2.1@2026-11-19.1', source: 'fallback', fallbackReason: 'timeout' });

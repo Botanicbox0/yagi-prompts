@@ -4,6 +4,20 @@ Every rule change bumps the `version` in the file's header, adds a line here, an
 tables of `scripts/architect-eval.ts` in the PR. Jobs record the versions they were written with
 (`work.enhancer.profileVersion`, `coreVersion`).
 
+## core 2026-11-19.2 (shared rules: core, tasks, skin)
+
+- **Tone variant default stays `short` for every model.** The founder's paid check on production (54 cells, close-ups
+  with `none` / `short` / `full`) showed no consistent visible difference — n=1 per cell, 2026-11-19. The env override
+  `BRAND_STUDIO_ENHANCER_SKIN_VARIANT` stays for further tests.
+- Same check: the new rules beat the current ones on Seedream 5.5 (pores, redness and freckles kept, identity closer;
+  the current rules smoothed skin and, on full-body shots, dropped freckles and lightened skin); a small gain on Nano
+  Banana Pro and GPT Image 2.6; people with GPT Image 2.6 look fine.
+- Side effect seen in that check: the new-rule pictures took on the person reference's own mood (grey studio, calm
+  light). Fixed in wording: a person reference supplies the person, never its backdrop, light or colour grade unless
+  asked (`tasks.ts`), and the realism light rule now works inside the scene and mood the request asks for (`skin.ts`).
+  A plain ad request (no realism words) already kept its bright campaign scene before and after the fix
+  (`scripts/architect-eval.ts --emit-plain`).
+
 ## 2026-11-19.1
 
 - **All profiles get a header** (`version`, target model ids, `sources` with the date each was read and the claim

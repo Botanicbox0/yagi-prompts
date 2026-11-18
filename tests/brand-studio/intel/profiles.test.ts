@@ -115,7 +115,7 @@ describe('what a job records about its prompt', () => {
     expect(result.meta).toEqual({
       profile: 'nano-banana',
       profileVersion: 'nano-banana@2026-11-19.1+nano-banana-2.1@2026-11-19.1',
-      coreVersion: 'core@2026-11-19.1',
+      coreVersion: 'core@2026-11-19.2',
       llmModel: 'gemini-4-hydrogen',
       source: 'model',
       skinMode: 'off',

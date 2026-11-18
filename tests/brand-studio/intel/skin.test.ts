@@ -77,10 +77,13 @@ describe('skinRules: per-model wording', () => {
       const text = skinRules({ profile, plan: realism, variant: 'short', personTokens: ['image 1'] });
       expect(text).toMatch(/forehead, nose and inner cheeks/);
       expect(text).toMatch(/vellus hair/);
-      expect(text).toMatch(/broad soft light from one side/);
+      expect(text).toMatch(/a broad soft source from one side/);
       expect(text).toMatch(/hands, arms and neck/);
       expect(text).toMatch(/never ask for film grain, noise or extra sharpening/);
       expect(text).toMatch(/healthy but locally varied skin/);
+      // The light rule works inside the scene asked for; a person reference never sets the backdrop (2026-11-19.2).
+      expect(text).toMatch(/Keep the setting, palette and mood the request asks for/);
+      expect(text).toMatch(/a person reference never sets the backdrop/);
     }
     expect(skinRules({ profile: 'gpt-image', plan: realism, variant: 'short', personTokens: [] })).toContain('No glamorization, no heavy retouching, no over-sharpened skin.');
     expect(skinRules({ profile: 'nano-banana', plan: realism, variant: 'short', personTokens: [] })).toMatch(/"a real photograph"/);

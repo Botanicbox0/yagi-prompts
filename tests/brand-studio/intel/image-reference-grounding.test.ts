@@ -77,6 +77,7 @@ describe('image reference visual grounding — multimodal payload & thinking lev
       expect(system).toContain('bind each token to what it really shows');
       expect(system).toMatch(/keep the exact label, cap, proportions and colours of <token>/);
       expect(system).toMatch(/style \/ place: describe in concrete words/);
+      expect(system).toMatch(/person: their face, hair, build and skin come from the picture, never its backdrop, light or colour grade unless the request asks for them/);
       expect(system).toContain('Optical integration:');
       expect(body.generationConfig.thinkingConfig).toEqual({ thinkingLevel: 'MEDIUM' });
 

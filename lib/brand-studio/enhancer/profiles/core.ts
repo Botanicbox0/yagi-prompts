@@ -6,7 +6,8 @@ import type { ProfileHeader } from './meta';
 
 export const CORE_HEADER: ProfileHeader = {
   id: 'core',
-  version: '2026-11-19.1',
+  // Covers the shared rules: core.ts, tasks.ts and skin.ts (a change to any of them bumps this).
+  version: '2026-11-19.2',
   models: ['*'],
   sources: [
     { url: 'docs/design/IDENTITY.md#6-1', seen: '2026-11-19', claim: 'lighting gear named in a prompt shows up in the picture: describe the light instead [house]' },
