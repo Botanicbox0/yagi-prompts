@@ -7,8 +7,8 @@
  * brings them back, and a run sends them as `prompt` with the sentence in the field as `reviewedPrompt`
  * (`enhance: false`), so nothing is rewritten twice and the run records both.
  */
-import { useCallback, useRef, useState } from "react";
-import { STUDIO_LIMITS, type StudioAssetView, type StudioJobView, type StudioOutputView } from "@/lib/brand-studio/contracts";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { STUDIO_LIMITS } from "@/lib/brand-studio/contracts";
 import type { StudioMedium } from "@/lib/brand-studio/models";
 import { isFailure } from "./api";
 import { errorLine, fill, newRequestId, type StudioCopy } from "./copy";
@@ -17,15 +17,16 @@ import {
   attachRefusal,
   buildMultiClipJobs,
   draftAfterAttach,
-  draftFromJob,
   enhancePreviewInput,
   initialDraft,
   type DockDraft,
   type DockProblem,
   type FilmLimits,
 } from "./dock-model";
-import { addToTray, mentionLabel, moveInTray, removeFromTray, trayFromReferences, updateTrayItem, type TrayItem } from "./refs";
+import { addToTray, mentionLabel, moveInTray, removeFromTray, updateTrayItem, type TrayItem } from "./refs";
+import type { MissingReference, ReusePlan } from "./reuse-model";
 import type { StudioController } from "./use-studio";
+import { focusDockPromptEnd, takeStudioPrefill } from "./prefill";
 
 export function problemLine(problem: DockProblem, copy: StudioCopy): string {
   switch (problem.kind) {
@@ -62,6 +63,14 @@ export function filmLimitLine(problem: ReferenceVideoProblem | "edit", limits: F
   }
 }
 
+/** "찾을 수 없는 참조: 이미지 2. …" for references a reused run had that are gone, or null. */
+export function missingReferencesLine(missing: readonly MissingReference[], copy: StudioCopy): string | null {
+  if (!missing.length) return null;
+  return fill(copy.viewer.reuseMissing, { label: missing.map((m) => mentionLabel(m.kind, m.number, copy)).join(", ") });
+}
+
+export type DockReusePlan = Extract<ReusePlan, { to: "dock" }>;
+
 /** The improved sentence and what was written before it. */
 export interface Enhanced {
   original: string;
@@ -85,6 +94,7 @@ export function useDock({
   organizationId,
   initialMedium,
   mode,
+  prefill,
 }: {
   studio: StudioController;
   copy: StudioCopy;
@@ -92,6 +102,11 @@ export function useDock({
   initialMedium: StudioMedium;
   /** The screen's medium. When set, the bar never switches medium. */
   mode?: StudioMedium;
+  /**
+   * The workspace home's hand-off (prefill.ts): once the screen has loaded (`ready`), a sentence the home
+   * left for this screen goes in the field, once, when this member can create and the field is empty.
+   */
+  prefill?: { ready: boolean; canCreate: boolean };
 }) {
   const [draft, setDraft] = useState<DockDraft>(() => initialDraft(mode ?? initialMedium));
   const [tray, setTray] = useState<TrayItem[]>([]);
@@ -107,6 +122,31 @@ export function useDock({
   latest.current = tray;
   const latestDraft = useRef(draft);
   latestDraft.current = draft;
+
+  // The home's hand-off is read once, on the first load, and removed whatever happens (prefill.ts).
+  const prefillReady = Boolean(prefill?.ready);
+  const prefillCanCreate = Boolean(prefill?.canCreate);
+  const prefillDone = useRef(false);
+  useEffect(() => {
+    if (!prefillReady || prefillDone.current) return;
+    prefillDone.current = true;
+    let storage: Storage | null = null;
+    try {
+      storage = window.sessionStorage;
+    } catch {
+      return;
+    }
+    const prompt = takeStudioPrefill(storage, {
+      organizationId,
+      medium: mode ?? initialMedium,
+      canCreate: prefillCanCreate,
+      currentPrompt: latestDraft.current.prompt,
+    });
+    if (!prompt) return;
+    latestDraft.current = { ...latestDraft.current, prompt };
+    setDraft((current) => (current.prompt.trim() ? current : { ...current, prompt }));
+    window.requestAnimationFrame(() => window.requestAnimationFrame(focusDockPromptEnd));
+  }, [initialMedium, mode, organizationId, prefillCanCreate, prefillReady]);
 
   const attach = useCallback(
     (item: TrayItem, first = false) => {
@@ -216,19 +256,20 @@ export function useDock({
     setEnhanced(null);
   }, [enhanced]);
 
-  /** "설정 다시 쓰기" and a reference-video run's "다시 만들기": its settings and references back in the bar. */
+  /**
+   * "설정 다시 쓰기" and a reference-video run's "다시 만들기": a run's whole setting back in the bar
+   * (reuse-model.ts `planReuse`). A reference that is gone is named in the bar's notice line.
+   */
   const reuse = useCallback(
-    (job: StudioJobView, lookup: { asset(id: string): StudioAssetView | null; output(id: string): StudioOutputView | null }) => {
-      // A run whose sentence the customer read comes back with that sentence in the field and their words kept.
-      const reviewed = job.reviewed && job.finalPrompt ? job.finalPrompt.slice(0, STUDIO_LIMITS.promptMax) : null;
-      setDraft((current) => {
-        const next = draftFromJob(job, current);
-        return reviewed ? { ...next, prompt: reviewed } : next;
-      });
-      setTray(trayFromReferences(job.references, lookup, copy.viewer.label));
-      setEnhanced(reviewed ? { original: job.prompt, improved: reviewed } : null);
+    (plan: DockReusePlan) => {
+      latestDraft.current = plan.draft;
+      latest.current = plan.tray;
+      setDraft(plan.draft);
+      setTray(plan.tray);
+      setEnhanced(plan.reviewed);
       setMessage(null);
-      setNotice(null);
+      setNotice(missingReferencesLine(plan.missing, copy));
+      press.current = null;
     },
     [copy, setDraft],
   );

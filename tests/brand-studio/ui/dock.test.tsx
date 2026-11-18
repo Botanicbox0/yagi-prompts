@@ -298,8 +298,10 @@ describe("silent director, @ highlight and collapsed pill mode", () => {
       labels: trayLabels([pic], copy),
       draft: { ...initialDraft(), prompt: "@image1 옆에 @image9 놓기\n" },
     });
-    expect(html).toContain('<mark class="bs-mention-mark" data-mention-bound="true">@image1</mark>');
-    expect(html).toContain('<mark class="bs-mention-mark" data-mention-bound="false">@image9</mark>');
+    expect(html).toContain(`<mark class="bs-mention-mark" data-mention-bound="true" data-mention-start="0" data-mention-keys="${pic.key}">@image1</mark>`);
+    expect(html).toContain('<mark class="bs-mention-mark" data-mention-bound="false" data-mention-start="11">@image9</mark>');
+    // One scroller around both layers, the field above the painted words.
+    expect(html).toMatch(/<div class="bs-prompt-scroll" data-prompt-scroll="true"><div class="bs-prompt-stack"><div aria-hidden="true" class="bs-prompt-backdrop"[^>]*>.*<\/div><textarea[^>]*class="bs-prompt"/s);
     expect(html).toMatch(/class="bs-tray-item"[^>]*data-mentioned=""/);
     expect(html).toMatch(/class="bs-thumb" data-mentioned=""/);
   });

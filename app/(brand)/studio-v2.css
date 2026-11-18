@@ -165,21 +165,43 @@ textarea.bs-field { resize: vertical; }
 .bs-dock-toast { position: absolute; bottom: calc(100% + 10px); left: 50%; z-index: 2; max-width: min(560px, calc(100vw - 48px)); margin: 0; padding: 8px 14px; border-radius: var(--ys-r-pill); background: var(--ys-active-bg); box-shadow: var(--ys-float); color: var(--ys-active-fg); font-size: 13px; font-weight: 500; transform: translateX(-50%); animation: bs-rise 260ms var(--ys-ease); }
 @keyframes bs-rise { from { opacity: 0; transform: translate(-50%, 6px); } }
 .bs-prompt-wrap { position: relative; border-radius: 14px; background: transparent; }
-/* Zero-drift mirror geometry: identical font, weight, line-height, letter-spacing, padding, white-space and word-break. */
-.bs-prompt, .bs-prompt-backdrop { box-sizing: border-box; width: 100%; min-height: 44px; max-height: 164px; margin: 0; padding: 6px 4px 10px; border: 0; border-radius: 12px; font: inherit; font-size: 15px; font-weight: 400; line-height: 24px; letter-spacing: -0.02em; white-space: pre-wrap; word-break: break-word; overflow-wrap: break-word; font-kerning: normal; font-variant-ligatures: normal; scrollbar-gutter: stable; }
-.bs-prompt-backdrop { position: absolute; inset: 0; z-index: 0; overflow-y: auto; overflow-x: hidden; background: transparent; color: transparent; pointer-events: none; user-select: none; scrollbar-width: none; }
-.bs-prompt-backdrop::-webkit-scrollbar { display: none; }
-.bs-mention-mark { margin: 0; padding: 0; font: inherit; letter-spacing: inherit; line-height: inherit; color: transparent; background: transparent; }
-.bs-mention-mark[data-mention-bound="true"] { background: color-mix(in srgb, var(--ys-accent, #ff58ae) 16%, transparent); border-radius: 5px; box-shadow: 0 0 0 2px color-mix(in srgb, var(--ys-accent, #ff58ae) 16%, transparent); color: transparent; }
-.bs-mention-mark[data-mention-bound="false"] { background: transparent; border-bottom: 1.5px dotted #D97706; color: transparent; }
-.bs-prompt { position: relative; z-index: 1; display: block; background: transparent; box-shadow: none; color: var(--ys-ink); resize: none; overflow-y: auto; field-sizing: content; }
+/*
+ * The prompt field (2026-11-19, no drift by construction): the backdrop paints the words and the mention
+ * marks; the textarea on top keeps the caret, the selection and typing with transparent text. Both sit in
+ * ONE grid cell inside ONE scroller, neither has its own scrollbar, so their width and wrapping are the same
+ * box. Marks never take inline space (no horizontal padding, margin or border).
+ */
+.bs-prompt-scroll { position: relative; max-height: 164px; overflow-x: hidden; overflow-y: auto; scrollbar-gutter: stable; border-radius: 12px; overscroll-behavior: contain; }
+.bs-prompt-stack { display: grid; grid-template-columns: minmax(0, 1fr); }
+.bs-prompt, .bs-prompt-backdrop { grid-area: 1 / 1; box-sizing: border-box; width: 100%; min-width: 0; min-height: 44px; margin: 0; padding: 6px 4px 10px; border: 0; border-radius: 0; font: inherit; font-size: 15px; font-weight: 400; line-height: 24px; letter-spacing: -0.02em; word-spacing: normal; text-indent: 0; text-transform: none; text-align: start; white-space: pre-wrap; word-break: break-word; overflow-wrap: break-word; font-kerning: normal; font-variant-ligatures: normal; font-feature-settings: normal; tab-size: 8; }
+.bs-prompt-backdrop { z-index: 0; overflow: hidden; background: transparent; color: var(--ys-ink); pointer-events: none; user-select: none; }
+.bs-mention-mark { margin: 0; padding: 0; border: 0; font: inherit; letter-spacing: inherit; line-height: inherit; color: inherit; background: transparent; -webkit-box-decoration-break: clone; box-decoration-break: clone; transition: background-color 120ms var(--ys-ease), box-shadow 120ms var(--ys-ease); }
+.bs-mention-mark[data-mention-bound="true"] { background: color-mix(in srgb, var(--ys-accent, #ff58ae) 16%, transparent); border-radius: 5px; box-shadow: 0 0 0 2px color-mix(in srgb, var(--ys-accent, #ff58ae) 16%, transparent); }
+.bs-mention-mark[data-mention-bound="false"] { background: transparent; border-bottom: 1.5px dotted #D97706; }
+.bs-mention-mark[data-linked][data-mention-bound="true"] { background: color-mix(in srgb, var(--ys-accent, #ff58ae) 32%, transparent); box-shadow: 0 0 0 2px color-mix(in srgb, var(--ys-accent, #ff58ae) 55%, transparent); }
+.bs-mention-mark[data-linked][data-mention-bound="false"] { background: color-mix(in srgb, #D97706 18%, transparent); border-radius: 4px; }
+.bs-prompt { position: relative; z-index: 1; display: block; height: 100%; background: transparent; box-shadow: none; color: transparent; caret-color: var(--ys-ink); resize: none; overflow: hidden; }
+.bs-prompt::selection { background: color-mix(in srgb, var(--ys-accent, #ff58ae) 30%, transparent); color: transparent; }
 .bs-prompt::placeholder { color: var(--ys-placeholder); }
 .bs-prompt:focus-visible { outline: none; }
+/* While the IME composes a syllable the field draws its own words, so the composition underline shows. */
+.bs-prompt-wrap[data-composing] .bs-prompt { color: var(--ys-ink); }
+.bs-prompt-wrap[data-composing] .bs-prompt-backdrop { color: transparent; }
+.bs-mention-tip { position: absolute; z-index: 3; max-width: min(320px, calc(100% - 16px)); margin: 0; padding: 4px 8px; border-radius: 8px; background: var(--ys-active-bg); box-shadow: var(--ys-float); color: var(--ys-active-fg); font-size: 12px; font-weight: 600; line-height: 16px; white-space: normal; pointer-events: none; transform: translate(-50%, calc(-100% - 6px)); }
+.bs-mention-tip[data-bound="false"] { width: max-content; font-weight: 500; }
+.bs-tray-item[data-linked] .bs-thumb { box-shadow: 0 0 0 2px var(--ys-surface, #111113), 0 0 0 4px var(--ys-accent, #ff58ae); }
+.bs-tray-item[data-linked] .bs-thumb-n { padding: 0 5px; border-radius: 5px; background: color-mix(in srgb, var(--ys-accent, #ff58ae) 30%, transparent); color: var(--ys-accent-text, var(--ys-accent)); font-weight: 600; }
+/* Windows high contrast: the field shows its own words in system colours; the painted layer only keeps its size. */
+@media (forced-colors: active) {
+  .bs-prompt-backdrop { visibility: hidden; }
+  .bs-prompt { color: CanvasText; caret-color: CanvasText; }
+  .bs-prompt::selection { background: Highlight; color: HighlightText; }
+}
 /* ✨ waiting: the border glows and flows round the field. */
 @property --bs-angle { syntax: "<angle>"; initial-value: 0deg; inherits: false; }
 .bs-prompt-wrap[data-enhancing]::before { content: ""; position: absolute; inset: -2px; z-index: 1; padding: 2px; border-radius: 16px; background: conic-gradient(from var(--bs-angle), var(--ys-ink), rgba(255, 255, 255, 0.12) 30%, rgba(255, 255, 255, 0.45) 55%, rgba(255, 255, 255, 0.12) 80%, var(--ys-ink)); -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0); -webkit-mask-composite: xor; mask: linear-gradient(#000 0 0) content-box exclude, linear-gradient(#000 0 0); pointer-events: none; animation: bs-flow 2.2s linear infinite; }
 .bs-prompt-wrap[data-enhancing] { box-shadow: 0 0 0 4px rgba(255, 255, 255, 0.06); animation: bs-glow 1.6s var(--ys-ease) infinite alternate; }
-.bs-prompt-wrap[data-enhancing] .bs-prompt { color: var(--ys-ink-secondary); }
+.bs-prompt-wrap[data-enhancing] .bs-prompt-backdrop { color: var(--ys-ink-secondary); }
 .bs-prompt-wrap[data-enhanced] .bs-prompt { box-shadow: none; }
 @keyframes bs-flow { to { --bs-angle: 360deg; } }
 @keyframes bs-glow { to { box-shadow: 0 0 0 4px rgba(255, 255, 255, 0.11); } }
@@ -358,8 +380,29 @@ textarea.bs-field { resize: vertical; }
 .bs-prompt-details summary { min-height: 32px; color: var(--ys-ink-secondary); font-weight: 500; cursor: pointer; }
 .bs-prompt-details summary:hover { color: var(--ys-ink); }
 .bs-prompt-details p { margin: 0 0 8px; overflow-wrap: anywhere; }
-/* The sentence we wrote for the model: read here, not selected or copied. */
+/* A video run's sentence we wrote for the model: read here, not selected or copied. */
 .bs-prompt-details [data-no-copy] { -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; }
+/* "보낸 문장 보기 ……… ⧉ 프롬프트 복사": one press without opening; inside, each sentence has its own. */
+.bs-prompt-block { position: relative; }
+.bs-prompt-block > .bs-copy-btn { position: absolute; top: 0; right: 0; min-height: 32px; padding: 0 8px; }
+.bs-prompt-block > details[open] ~ .bs-copy-btn { display: none; }
+.bs-prompt-block > details > summary { padding-right: 132px; }
+.bs-copy-btn[data-compact] { position: relative; }
+.bs-copy-tip { position: absolute; right: calc(100% + 6px); top: 50%; transform: translateY(-50%); font-size: 12px; font-weight: 500; white-space: nowrap; color: var(--ys-ink); pointer-events: none; }
+/* "입력한 문장 · ⧉": a quiet copy icon beside each sentence's label. */
+.bs-prompt-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; min-height: 28px; margin: 0 0 2px; }
+.bs-prompt-details .bs-prompt-head p { margin: 0; }
+.bs-copy-btn { gap: 6px; }
+.bs-copy-btn .bs-icon { width: 15px; height: 15px; }
+.bs-copy-btn[data-compact] { min-height: 28px; width: 28px; padding: 0; justify-content: center; border-radius: 8px; }
+.bs-copy-btn[data-copied] { color: var(--ys-ink); }
+.bs-copy-label { display: inline-grid; }
+.bs-copy-label > span { grid-area: 1 / 1; }
+.bs-copy-btn:not([data-copied]) .bs-copy-label > span:last-child, .bs-copy-btn[data-copied] .bs-copy-label > span:first-child { visibility: hidden; }
+/* The more-menu's copy entry swaps its label in place (one grid cell, no jump). */
+.bs-menu-swap { display: inline-grid; }
+.bs-menu-swap > span { grid-area: 1 / 1; }
+[data-copied] > .bs-menu-swap > span:first-child, :not([data-copied]) > .bs-menu-swap > span:last-child { visibility: hidden; }
 .bs-dialog { width: min(440px, calc(100vw - 32px)); max-height: calc(100dvh - 32px); overflow: auto; }
 .bs-dialog-body { display: grid; gap: 8px; padding: 20px; }
 .bs-dialog-body h2 { margin: 0 0 6px; font-size: 18px; font-weight: 600; }
@@ -592,7 +635,7 @@ textarea.bs-field { resize: vertical; }
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .bs-btn, .bs-chip, .bs-chip-btn, .bs-select, .bs-door, .bs-example, .bs-thumb, .bs-thumb-x, .bs-tile-btn, .bs-tile-info, .bs-tile-open img, .bs-assets, .bs-tray, .bs-switch-knob, .bs-switch-knob::after, .bs-door-title .bs-icon, .bs-tip-body, .bs-region-form { transition: none; }
+  .bs-btn, .bs-chip, .bs-chip-btn, .bs-select, .bs-door, .bs-example, .bs-thumb, .bs-thumb-x, .bs-tile-btn, .bs-tile-info, .bs-tile-open img, .bs-assets, .bs-tray, .bs-switch-knob, .bs-switch-knob::after, .bs-door-title .bs-icon, .bs-tip-body, .bs-region-form, .bs-mention-mark { transition: none; }
   .bs-skeleton > span, .bs-revise-chip .bs-icon, .bs-stage, .bs-film-state, .bs-tile[data-state="pending"], .bs-thumb[data-state="pending"], .bs-enhance-now[aria-busy="true"] .bs-icon, .bs-dock-toast, .bs-menu[data-anchored], .bs-mark-spin { animation: none; }
   /* The polishing glow stays as a still ring. */
   .bs-prompt-wrap[data-enhancing], .bs-prompt-wrap[data-enhancing]::before { animation: none; }

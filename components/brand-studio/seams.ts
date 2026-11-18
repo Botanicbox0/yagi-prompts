@@ -137,6 +137,10 @@ export interface LayerEditorRegionPreset {
   model?: string;
   quality?: string | null;
   references?: TrayItem[];
+  /** The rewrite switch as the edit was sent ("같은 영역 다시 수정하기"); on when absent. */
+  enhance?: boolean;
+  /** One line the editor shows when it opens (the original is gone, a reference is missing). */
+  notice?: string | null;
 }
 
 export interface LayerEditorRegionSupport {
