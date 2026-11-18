@@ -1,9 +1,11 @@
+import { readFileSync } from "node:fs";
+import path from "node:path";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 import { Dock, type DockProps } from "@/components/brand-studio/dock";
 import { fill } from "@/components/brand-studio/copy";
 import { buildJob, initialDraft, withModel, type DockDraft } from "@/components/brand-studio/dock-model";
-import { Wall } from "@/components/brand-studio/gallery/wall";
+import { Wall, tileControls, tileMenuKeys } from "@/components/brand-studio/gallery/wall";
 import {
   buildGroupJob,
   checkBlock,
@@ -32,7 +34,7 @@ import { trayItemFromAsset, type TrayItem } from "@/components/brand-studio/refs
 import { planReuse } from "@/components/brand-studio/reuse-model";
 import { movedLine } from "@/components/brand-studio/use-dock";
 import { SiblingSwitcher } from "@/components/brand-studio/viewer";
-import { ModelCompare, canCompareModels, compareEntries, resultCredits } from "@/components/brand-studio/gallery/model-compare";
+import { COMPARE_CAPTION_PX, COMPARE_COUNTER_PX, COMPARE_GAP_PX, ModelCompare, canCompareModels, compareEntries, compareSizes, resultCredits } from "@/components/brand-studio/gallery/model-compare";
 import type { StudioJobView } from "@/lib/brand-studio/contracts";
 import { creditsOf } from "@/lib/brand-studio/credits";
 import { selectableModels, type StudioImageModel } from "@/lib/brand-studio/models";
@@ -387,11 +389,16 @@ describe("results", () => {
     expect(html).toContain('aria-label="Seedream 5.5 결과 보기"');
     expect(html).toContain(`<span class="bs-mcompare-credits bs-num">22 크레딧</span>`);
     expect(html).toMatch(/class="bs-mcompare-empty" data-state="failed"><span class="bs-mcompare-empty-why">[^<]+<\/span><\/div><figcaption class="bs-mcompare-caption"><span class="bs-mcompare-name">GPT Image 2.6 Flare<\/span><\/figcaption>/);
-    expect(html).toContain('data-studio-compare-at="true">1 / 3</span>');
+    // Each picture carries its own place in the swipe, so the count moves with the picture it counts.
+    expect(html.match(/data-studio-compare-at="true">\d \/ 3<\/span>/g)).toEqual([1, 2, 3].map((n) => `data-studio-compare-at="true">${n} / 3</span>`));
     // One model with a picture is nothing to compare.
     expect(canCompareModels(compareEntries(nano!, nano!.outputs[0]!, [nano!, runs[2]!], ko))).toBe(false);
     const off = renderToStaticMarkup(<SiblingSwitcher job={nano!} output={nano!.outputs[0]!} siblings={groupSiblings(nano!, runs)} copy={ko} onOpen={() => {}} onCompare={() => {}} />);
-    expect(off).toMatch(/aria-pressed="false" data-studio-compare-models="true">[\s\S]*모델 비교/);
+    expect(off).toMatch(/aria-pressed="false" data-studio-compare-models="true" aria-label="모델 비교">[\s\S]*<span class="bs-link-btn-label">모델 비교<\/span>/);
+    // The quiet row above the pictures keeps the same toggle and its name (a phone shows the icon alone).
+    const bar = renderToStaticMarkup(<SiblingSwitcher job={nano!} output={nano!.outputs[0]!} siblings={groupSiblings(nano!, runs)} copy={ko} onOpen={() => {}} onCompare={() => {}} comparing compact />);
+    expect(bar).toContain("data-compact");
+    expect(bar).toMatch(/class="bs-siblings-bar">[\s\S]*aria-pressed="true" data-studio-compare-models="true" aria-label="모델 비교"/);
     const on = renderToStaticMarkup(<SiblingSwitcher job={nano!} output={nano!.outputs[0]!} siblings={groupSiblings(nano!, runs)} copy={ko} onOpen={() => {}} onCompare={() => {}} comparing />);
     expect(on).toContain('aria-pressed="true"');
     // Nothing to compare with: no toggle.
@@ -420,6 +427,96 @@ describe("results", () => {
     // A single run reused over a bar with several models brings back that one model.
     const single = planReuse(job(7, { model: "nano-banana-2.1" }), { current: pick(["seedream-5.5", "nano-banana-pro"]), lookup: { asset: () => null, output: () => null }, outputName: "결과" });
     expect(single.to === "dock" && pickedModels(single.draft)).toEqual(["nano-banana-2.1"]);
+  });
+});
+
+describe("모델 비교 sizes", () => {
+  it("shares one height as large as the width and the height allow, side by side", () => {
+    const box = { width: 1232, height: 690 };
+    const h = (ratios: number[]) => new Set(compareSizes(ratios, box, "row").map((s) => s.height));
+    // One height for every picture, and the row never wider than the box.
+    for (const ratios of [[0.75, 0.75, 0.75], [1, 1, 1], [16 / 9, 16 / 9], [1.6, 0.75, 1.6]]) {
+      const sizes = compareSizes(ratios, box, "row");
+      expect(h(ratios).size).toBe(1);
+      expect(sizes.reduce((sum, s) => sum + s.width, 0) + COMPARE_GAP_PX * (ratios.length - 1)).toBeLessThanOrEqual(box.width);
+      expect(sizes[0]!.height).toBeLessThanOrEqual(box.height - COMPARE_CAPTION_PX);
+    }
+    // The smaller of what the width and the height allow, whichever runs out first.
+    expect(compareSizes([0.75, 0.75, 0.75], box, "row")[0]!.height).toBe(Math.floor((box.width - 32) / 2.25));
+    expect(compareSizes([1, 1, 1], box, "row")[0]!.height).toBe(Math.floor((box.width - 32) / 3));
+    expect(compareSizes([16 / 9, 16 / 9], box, "row")[0]!.height).toBe(Math.floor((box.width - 16) / (32 / 9)));
+    // A tall box with one 3:4 pair is held by the height instead.
+    expect(compareSizes([0.75, 0.75], { width: 1232, height: 500 }, "row")[0]!.height).toBe(500 - COMPARE_CAPTION_PX);
+  });
+
+  it("gives each picture one screen width (or the height) on a phone", () => {
+    const sizes = compareSizes([0.75, 1, 16 / 9], { width: 366, height: 700 }, "swipe");
+    expect(sizes.map((s) => s.width)).toEqual([362, 362, 362]);
+    expect(sizes[0]!.height).toBe(Math.floor(362 / 0.75));
+    // A tall picture in a short space is held by the height (less the caption and "1 / 3").
+    const room = 300 - COMPARE_CAPTION_PX - COMPARE_COUNTER_PX;
+    expect(compareSizes([0.75], { width: 366, height: 300 }, "swipe")[0]).toEqual({ width: Math.floor(room * 0.75), height: Math.floor(Math.floor(room * 0.75) / 0.75) });
+  });
+});
+
+describe("corner buttons on a narrow tile", () => {
+  it("keeps every button while there is room, then drops use and folder, then like, then the select box", () => {
+    // Desktop: select 24 at 8, like 30 after it, three 30 px tools at the right.
+    expect(tileControls(null, { coarse: false, like: true, tools: 3 })).toEqual({ check: true, like: true, tools: 3 });
+    expect(tileControls(300, { coarse: false, like: true, tools: 3 })).toEqual({ check: true, like: true, tools: 3 });
+    expect(tileControls(150, { coarse: false, like: true, tools: 3 })).toEqual({ check: true, like: true, tools: 1 });
+    expect(tileControls(100, { coarse: false, like: true, tools: 3 })).toEqual({ check: true, like: false, tools: 1 });
+    expect(tileControls(60, { coarse: false, like: true, tools: 3 })).toEqual({ check: false, like: false, tools: 1 });
+    // Touch: 44 px boxes from the corners; a phone has only "more" at the right.
+    expect(tileControls(140, { coarse: true, like: true, tools: 1 })).toEqual({ check: true, like: true, tools: 1 });
+    expect(tileControls(115, { coarse: true, like: true, tools: 1 })).toEqual({ check: true, like: false, tools: 1 });
+    expect(tileControls(84, { coarse: true, like: true, tools: 1 })).toEqual({ check: false, like: false, tools: 1 });
+    // A failed tile: the select box beside the remove button only when both fit.
+    expect(tileControls(100, { coarse: true, like: false, tools: 1 })).toEqual({ check: true, like: false, tools: 1 });
+    expect(tileControls(90, { coarse: true, like: false, tools: 1 })).toEqual({ check: false, like: false, tools: 1 });
+  });
+
+  it("moves what does not fit into the more-menu, and nothing else changes for a wide tile", () => {
+    const base = { canGenerate: true, canEdit: true, kind: "image" as const, image: true, sized: true, saved: false, copyable: true };
+    expect(tileMenuKeys(base)).toEqual(tileMenuKeys({ ...base, inMenu: {} }));
+    const narrow = tileMenuKeys({ ...base, inMenu: { select: true, like: true, reference: true } });
+    expect(narrow.slice(0, 2)).toEqual(["open", "select"]);
+    expect(narrow).toContain("like");
+    expect(narrow).toContain("reference");
+    expect(narrow.indexOf("like")).toBe(narrow.indexOf("folder") + 1);
+    // A viewer has no like and makes nothing, so neither moves in.
+    expect(tileMenuKeys({ ...base, canEdit: false, canGenerate: false, inMenu: { like: true, reference: true } })).not.toContain("like");
+  });
+});
+
+describe("the tile caption", () => {
+  const css = readFileSync(path.resolve(process.cwd(), "app/(brand)/studio-v2.css"), "utf8");
+  const rule = (selector: string, from = 0) => {
+    const at = css.indexOf(`${selector} {`, from);
+    return at < 0 ? "" : css.slice(at, css.indexOf("}", at));
+  };
+  const block = (query: string) => {
+    const at = css.indexOf(`@container ${query} {`);
+    return at < 0 ? "" : css.slice(at, css.indexOf("\n}", at));
+  };
+
+  it("measures the tile's own width, on a box apart from the tile so its menus stay free", () => {
+    expect(rule(".bs-tile-foot")).toContain("container: tile-foot / inline-size");
+    expect(css).not.toMatch(/\.bs-tile \{[^}]*container/);
+  });
+
+  it("shortens the model name and never the credits; a narrow tile shows the partial-edit button as its icon", () => {
+    expect(rule(".bs-tile-info-name")).toContain("text-overflow: ellipsis");
+    expect(rule(".bs-tile-info-credits")).toContain("flex: none");
+    const narrow = block("tile-foot (max-width: 279px)");
+    expect(narrow).toContain(".bs-tile-pill-label { display: none; }");
+    expect(block("tile-foot (max-width: 179px)")).toContain(".bs-tile-info-name { display: none; }");
+    // The button keeps its name for a screen reader when only its icon shows.
+    const html = renderToStaticMarkup(<Wall mode="image" jobs={[job(1, { outputs: [output(1)], estimateKrw: 220 })]} copy={ko} locale="ko" canGenerate canEdit library={{ ready: true, liked: new Set(), folders: [] } as never} parentOf={() => null} onAction={() => {}} onRetry={() => {}} onNotice={() => {}} />);
+    expect(html).toMatch(new RegExp(`class="bs-tile-pill"[^>]*aria-label="${ko.gallery.menu.region}"`));
+    expect(html).toContain(`<span class="bs-tile-pill-label">${ko.gallery.menu.region}</span>`);
+    // The caption: the name first (it shortens), the credits after it (never cut).
+    expect(html).toMatch(/<span class="bs-tile-info"><span class="bs-tile-info-name">[^<]+<\/span><span class="bs-tile-info-credits bs-num">/);
   });
 });
 

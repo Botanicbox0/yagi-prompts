@@ -7,12 +7,13 @@
  *
  * A model whose run failed (or is still being made) keeps its place as a quiet tile with its name and the
  * one-line reason. A press on a picture leaves the comparison and opens that result. On a phone the row
- * is swiped: one picture per screen width (scroll-snap), the model name on each, and "1 / 3" for where you are.
+ * is swiped: one picture per screen width (scroll-snap), the model name on each, and "1 / 3" under each picture.
  *
  * Pictures keep their own shape: each takes the width its own ratio gives at the shared height (the ratio
  * read from the file once it loads, the stored size until then), so nothing is cropped or stretched.
  */
 import { useEffect, useRef, useState, type CSSProperties } from "react";
+import { useElementSize, useMediaQuery } from "../use-media";
 import type { StudioJobView, StudioOutputView } from "@/lib/brand-studio/contracts";
 import { creditsOf } from "@/lib/brand-studio/credits";
 import { studioModelOrLegacy } from "@/lib/brand-studio/models";
@@ -77,6 +78,36 @@ function storedRatio(entry: CompareEntry): number {
   return m && Number(m[2]) > 0 ? Number(m[1]) / Number(m[2]) : 1;
 }
 
+/** Room under each picture for its name and credits (the caption line and its gap). */
+export const COMPARE_CAPTION_PX = 34;
+/** Space between pictures side by side. */
+export const COMPARE_GAP_PX = 16;
+/** Room under a swiped picture for "1 / 3" (a phone). */
+export const COMPARE_COUNTER_PX = 30;
+
+/**
+ * The size of each picture in the space the stage gives (`box`). `row`: side by side at ONE height, as large as
+ * both the width and the height allow. `swipe` (a phone): each picture alone, as large as one screen width and the
+ * height allow. Whole pixels, never larger than the box.
+ */
+export function compareSizes(
+  ratios: readonly number[],
+  box: { width: number; height: number },
+  mode: "row" | "swipe",
+): Array<{ width: number; height: number }> {
+  const room = Math.max(0, box.height - COMPARE_CAPTION_PX);
+  if (mode === "row") {
+    const sum = ratios.reduce((a, b) => a + b, 0) || 1;
+    const height = Math.max(0, Math.floor(Math.min(room, (box.width - COMPARE_GAP_PX * (ratios.length - 1)) / sum)));
+    return ratios.map((r) => ({ width: Math.floor(height * r), height }));
+  }
+  const swipeRoom = Math.max(0, room - COMPARE_COUNTER_PX);
+  return ratios.map((r) => {
+    const width = Math.max(0, Math.floor(Math.min(box.width - 4, swipeRoom * r)));
+    return { width, height: Math.floor(width / r) };
+  });
+}
+
 export function ModelCompare({
   entries,
   copy,
@@ -93,34 +124,38 @@ export function ModelCompare({
   // The ratio each file really has, once it loads (a provider may return a slightly different shape).
   const [measured, setMeasured] = useState<Record<string, number>>({});
   const ratios = entries.map((entry) => (entry.output && measured[entry.output.id]) || storedRatio(entry));
-  const sum = ratios.reduce((a, b) => a + b, 0);
+  const area = useRef<HTMLDivElement>(null);
   const strip = useRef<HTMLDivElement>(null);
-  const [at, setAt] = useState(() => Math.max(0, entries.findIndex((entry) => entry.current)));
+  const box = useElementSize(area);
+  // A phone swipes one picture per width; anything wider lays them side by side.
+  const mode = useMediaQuery("(max-width: 900px)") ? "swipe" : "row";
+  const sizes = box && box.width > 0 && box.height > 0 ? compareSizes(ratios, box, mode) : null;
   // On a phone the opened result is the one in view first.
   useEffect(() => {
     const el = strip.current;
-    if (!el || el.scrollWidth <= el.clientWidth + 1) return;
+    if (!el || mode !== "swipe" || el.scrollWidth <= el.clientWidth + 1) return;
     const start = Math.max(0, entries.findIndex((entry) => entry.current));
     el.scrollLeft = start * el.clientWidth;
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [mode, Boolean(sizes)]);
   return (
-    <div className="bs-mcompare" data-studio-model-compare role="group" aria-label={v.compareModels} style={{ ["--sum" as string]: sum.toFixed(4), ["--n" as string]: entries.length } as CSSProperties}>
-      <div
-        ref={strip}
-        className="bs-mcompare-row"
-        onScroll={(event) => {
-          const el = event.currentTarget;
-          if (el.clientWidth > 0) setAt(Math.min(entries.length - 1, Math.max(0, Math.round(el.scrollLeft / el.clientWidth))));
-        }}
-      >
+    <div
+      ref={area}
+      className="bs-mcompare"
+      data-studio-model-compare
+      data-mode={mode}
+      role="group"
+      aria-label={v.compareModels}
+    >
+      <div ref={strip} className="bs-mcompare-row">
         {entries.map((entry, i) => (
           <figure
             key={entry.run.id}
             className="bs-mcompare-item"
             data-compare-model={entry.run.model}
             data-current={entry.current ? "" : undefined}
-            style={{ ["--r" as string]: ratios[i]!.toFixed(4) } as CSSProperties}
+            style={{ ["--r" as string]: ratios[i]!.toFixed(4), ...(sizes ? { ["--w" as string]: `${sizes[i]!.width}px`, ["--h" as string]: `${sizes[i]!.height}px` } : {}) } as CSSProperties}
+            data-sized={sizes ? "" : undefined}
           >
             {entry.output ? (
               <button
@@ -151,14 +186,13 @@ export function ModelCompare({
               <span className="bs-mcompare-name">{entry.label}</span>
               {entry.credits !== null && entry.credits > 0 && <span className="bs-mcompare-credits bs-num">{credits(copy.credits.amount, entry.credits, locale)}</span>}
             </figcaption>
+            {/* Where this picture is in the swipe (a phone only), right under it so it moves with it. */}
+            <span className="bs-mcompare-at bs-num" aria-hidden="true" data-studio-compare-at>
+              {i + 1} / {entries.length}
+            </span>
           </figure>
         ))}
       </div>
-      {entries.length > 1 && (
-        <span className="bs-mcompare-at bs-num" aria-hidden="true" data-studio-compare-at>
-          {at + 1} / {entries.length}
-        </span>
-      )}
     </div>
   );
 }

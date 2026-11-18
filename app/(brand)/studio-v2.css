@@ -742,6 +742,59 @@ textarea.bs-field { resize: vertical; }
  */
 .bs-tile[data-group]:not([data-selected]) { outline: 1.5px solid transparent; outline-offset: 3px; transition: outline-color 160ms var(--ys-ease); }
 .bs-tile[data-group][data-group-lit]:not([data-selected]) { outline-color: color-mix(in srgb, var(--ys-ink) 58%, transparent); }
+/*
+ * A tile's bottom edge is a size container (its own width, never the viewport). The caption shortens the model
+ * name with an ellipsis and never clips its credits; a narrow tile shows the partial-edit button as its icon
+ * (its name stays as the accessible name), then the credits alone; a tile too narrow for the credits drops the caption.
+ * Kept apart from the tile itself, because a container would also hold the tile's fixed-position menus.
+ */
+.bs-tile-foot { position: absolute; inset: auto 0 0 0; height: 0; container: tile-foot / inline-size; pointer-events: none; }
+.bs-tile-foot > .bs-tile-pill { pointer-events: auto; }
+.bs-tile-info { max-width: calc(100% - 116px); white-space: nowrap; }
+.bs-tile-info-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+.bs-tile-info-credits { flex: none; }
+@container tile-foot (max-width: 279px) {
+  .bs-tile-pill { justify-content: center; width: 28px; padding: 0; }
+  .bs-tile-pill-label { display: none; }
+  .bs-tile-info { max-width: calc(100% - 64px); }
+}
+/* Too narrow for a readable name beside the credits: the credits alone (never a sliver of a name). */
+@container tile-foot (max-width: 179px) {
+  .bs-tile-info-name { display: none; }
+  .bs-tile-info span + span::before { content: none; }
+}
+@container tile-foot (max-width: 139px) {
+  .bs-tile-info { display: none; }
+}
+/*
+ * Touch: every corner control is a 44 px box from its corner (the visible round button sits inside it), so on a
+ * narrow tile they never overlap; wall.tsx `tileControls` leaves out what does not fit and moves it to the menu.
+ */
+@media (pointer: coarse) {
+  .bs-tile .bs-tile-btn, .bs-tile .bs-tile-check, .bs-tile .bs-tile-pill { position: relative; width: 44px; height: 44px; min-height: 44px; padding: 0; border: 0; border-radius: 0; background: none; -webkit-backdrop-filter: none; backdrop-filter: none; }
+  .bs-tile .bs-tile-btn::before, .bs-tile .bs-tile-pill::before { content: ""; position: absolute; inset: 5px; border: 1px solid var(--ys-stage-border, rgba(255, 255, 255, 0.09)); border-radius: 9999px; background: var(--ys-glass-dark); -webkit-backdrop-filter: blur(8px); backdrop-filter: blur(8px); }
+  .bs-tile .bs-tile-check::before { content: ""; position: absolute; inset: 8px; border: 1.5px solid rgba(255, 255, 255, 0.78); border-radius: 7px; background: var(--ys-glass-dark); }
+  .bs-tile .bs-tile-check[aria-checked="true"]::before { border-color: var(--ys-active-bg); background: var(--ys-active-bg); }
+  .bs-tile .bs-tile-btn > *, .bs-tile .bs-tile-check > *, .bs-tile .bs-tile-pill > * { position: relative; z-index: 1; }
+  .bs-tile .bs-tile-btn[data-corner="tl"] { position: absolute; top: 0; left: 0; }
+  .bs-tile .bs-tile-check { position: absolute; top: 0; left: 0; }
+  .bs-tile .bs-tile-check ~ .bs-tile-btn[data-corner="tl"] { left: 44px; }
+  .bs-tile .bs-tile-tools { top: 0; right: 0; gap: 0; }
+  .bs-tile .bs-tile-remove { position: absolute; top: 0; right: 0; }
+  .bs-tile .bs-tile-pill { position: absolute; right: 2px; bottom: 0; width: auto; min-width: 44px; padding: 0 16px; justify-content: center; }
+  .bs-tile .bs-tile-pill::before { inset: 8px 0; }
+  .bs-tile .bs-tile-btn:hover:not(:disabled), .bs-tile .bs-tile-pill:hover:not(:disabled) { transform: none; }
+  /* A waiting run's stop button and a failed run's "다시" reach 44 px too; a failed tile's words start below its corner buttons. */
+  .bs-tile .bs-tile-cancel { top: 0; right: 0; min-height: 44px; padding: 0 16px; background: none; isolation: isolate; }
+  .bs-tile .bs-tile-cancel::before { content: ""; position: absolute; inset: 8px 4px; z-index: -1; border-radius: 9999px; background: var(--ys-surface); }
+  .bs-tile .bs-tile-retry { min-height: 44px !important; }
+  .bs-tile[data-state="failed"] { padding-top: 48px; }
+  @container tile-foot (max-width: 279px) {
+    .bs-tile .bs-tile-pill { width: 44px; padding: 0; }
+    .bs-tile .bs-tile-pill::before { inset: 6px; }
+    .bs-tile-info { max-width: calc(100% - 62px); }
+  }
+}
 /* On a failed tile the name sits in the centred column, above its reason. */
 .bs-tile-model[data-inline] { position: static; max-width: 100%; margin-bottom: -4px; padding: 0; border: 0; background: none; color: var(--ys-ink); font-size: 12px; font-weight: 600; -webkit-backdrop-filter: none; backdrop-filter: none; }
 @supports (backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px)) {
@@ -763,15 +816,27 @@ button.bs-sibling:focus-visible { outline: 2px solid var(--ys-focus); outline-of
 .bs-sibling[data-state="failed"] .bs-sibling-mark { background: #d97706; opacity: 1; }
 .bs-sibling-note { margin: 0; font-size: 12px; line-height: 1.45; color: var(--ys-ink-muted); }
 /*
- * "모델 비교" on the stage: every model's picture side by side at one height (each grows by its own ratio, the
- * row's width is capped so that height fits the stage), its name and credits under it. Never a wipe line.
+ * "모델 비교": the pictures get the whole viewer body. The action column is hidden (still mounted, so it comes back
+ * exactly as it was) and the model pills with the toggle sit in one quiet row above. Every picture shares ONE
+ * height, as large as the width and the height allow (model-compare.tsx `compareSizes` measures the space), its
+ * name and credits under it. Never a wipe line. A phone swipes one picture per width with "1 / 3".
  */
-.bs-mcompare { position: relative; display: grid; place-items: center; width: 100%; height: 100%; min-height: 0; }
-.bs-mcompare-row { display: flex; align-items: flex-start; gap: 16px; width: min(100%, calc((var(--bs-media-h) - 40px) * var(--sum, 2) + (var(--n, 2) - 1) * 16px)); }
+.bs-viewer-body[data-compare] { grid-template-columns: minmax(0, 1fr); grid-template-rows: minmax(0, 1fr); }
+.bs-viewer-body[data-compare] .bs-viewer-side { display: none; }
+.bs-viewer-media[data-compare] { display: flex; flex-direction: column; align-items: stretch; justify-content: flex-start; gap: 14px; }
+.bs-siblings[data-compact] { flex: none; }
+.bs-siblings-bar { display: flex; align-items: center; gap: 10px; min-width: 0; }
+.bs-siblings[data-compact] .bs-siblings-row { flex: 1; flex-wrap: nowrap; min-width: 0; margin: -6px; padding: 6px; overflow-x: auto; scrollbar-width: none; }
+.bs-siblings[data-compact] .bs-siblings-row::-webkit-scrollbar { display: none; }
+.bs-siblings-bar > .bs-link-btn { flex: none; }
+.bs-mcompare { position: relative; display: grid; place-items: center; flex: 1; width: 100%; min-height: 0; }
+.bs-mcompare-row { display: flex; align-items: flex-start; justify-content: center; gap: 16px; max-width: 100%; }
 .bs-mcompare-item { display: grid; gap: 8px; flex: var(--r, 1) 1 0%; min-width: 0; margin: 0; }
+.bs-mcompare-item[data-sized] { flex: none; width: var(--w); }
 .bs-mcompare-open { display: block; width: 100%; padding: 0; border: 0; border-radius: 14px; background: none; cursor: zoom-in; }
 .bs-mcompare-open:focus-visible { outline: 2px solid var(--ys-focus); outline-offset: 2px; }
-.bs-viewer-media .bs-mcompare img { width: 100%; height: auto; max-width: none; max-height: none; aspect-ratio: var(--r, 1); object-fit: cover; transition: opacity 160ms var(--ys-ease); }
+.bs-viewer-media .bs-mcompare img { display: block; width: 100%; height: auto; max-width: none; max-height: none; aspect-ratio: var(--r, 1); object-fit: cover; transition: opacity 160ms var(--ys-ease); }
+.bs-viewer-media .bs-mcompare-item[data-sized] img, .bs-mcompare-item[data-sized] .bs-mcompare-empty { width: var(--w); height: var(--h); aspect-ratio: auto; }
 .bs-mcompare-open:hover img { opacity: 0.92; }
 .bs-mcompare-empty { display: grid; place-items: center; aspect-ratio: var(--r, 1); padding: 16px; border: 1px dashed var(--ys-line-strong); border-radius: 14px; text-align: center; }
 .bs-mcompare-empty-why { max-width: 26ch; font-size: 12.5px; line-height: 1.5; color: var(--ys-ink-muted); }
@@ -780,15 +845,19 @@ button.bs-sibling:focus-visible { outline: 2px solid var(--ys-focus); outline-of
 .bs-mcompare-item[data-current] .bs-mcompare-name { color: var(--ys-ink); font-weight: 600; }
 .bs-mcompare-credits { flex: none; color: var(--ys-ink-muted); font-size: 12px; }
 .bs-mcompare-at { display: none; }
+.bs-mcompare[data-mode="swipe"] .bs-mcompare-row { width: 100%; gap: 0; align-items: center; justify-content: flex-start;overflow-x: auto; scroll-snap-type: x mandatory; scrollbar-width: none; overscroll-behavior-x: contain; }
+.bs-mcompare[data-mode="swipe"] .bs-mcompare-row::-webkit-scrollbar { display: none; }
+.bs-mcompare[data-mode="swipe"] .bs-mcompare-item { flex: 0 0 100%; width: auto; justify-items: center; scroll-snap-align: center; }
+.bs-mcompare[data-mode="swipe"] .bs-mcompare-open, .bs-mcompare[data-mode="swipe"] .bs-mcompare-caption { width: var(--w, 100%); }
+.bs-mcompare[data-mode="swipe"] .bs-mcompare-open:focus-visible { outline-offset: -3px; }
+/* "1 / 3" under each swiped picture, so it moves with the picture it counts. */
+.bs-mcompare[data-mode="swipe"] .bs-mcompare-at { display: inline-flex; margin-top: 2px; padding: 3px 10px; border: 1px solid var(--ys-line-strong); border-radius: 9999px; color: var(--ys-ink-secondary); font-size: 12px; pointer-events: none; }
+.bs-siblings-bar > .bs-link-btn[aria-pressed="true"] { background: var(--ys-hover); box-shadow: inset 0 0 0 1px var(--ys-line-strong); color: var(--ys-ink); }
+/* On a phone the pills scroll under a soft right edge, and the toggle is its icon (its name stays the accessible name). */
 @media (max-width: 900px) {
-  /* A phone swipes the row: one picture per width, snapped, and where you are as "1 / 3". */
-  .bs-mcompare-row { width: 100%; gap: 0; overflow-x: auto; scroll-snap-type: x mandatory; scrollbar-width: none; overscroll-behavior-x: contain; }
-  .bs-mcompare-row::-webkit-scrollbar { display: none; }
-  .bs-mcompare-item { flex: 0 0 100%; justify-items: center; padding: 0 2px; scroll-snap-align: center; }
-  .bs-mcompare-open, .bs-mcompare-empty { width: min(100%, calc((var(--bs-media-h) - 34px) * var(--r, 1))); }
-  .bs-mcompare-caption { width: min(100%, calc((var(--bs-media-h) - 34px) * var(--r, 1))); }
-  .bs-mcompare-open:focus-visible { outline-offset: -3px; }
-  .bs-mcompare-at { position: absolute; top: 6px; right: 8px; display: inline-flex; padding: 3px 9px; border: 1px solid var(--ys-stage-border, rgba(255, 255, 255, 0.09)); border-radius: 9999px; background: var(--ys-glass-dark); color: #ffffff; font-size: 11px; pointer-events: none; }
+  .bs-siblings[data-compact] .bs-siblings-row { padding-right: 28px; -webkit-mask-image: linear-gradient(to right, #000 calc(100% - 28px), transparent); mask-image: linear-gradient(to right, #000 calc(100% - 28px), transparent); }
+  .bs-siblings-bar > .bs-link-btn { justify-content: center; width: 44px; min-height: 44px; padding: 0; }
+  .bs-siblings-bar > .bs-link-btn .bs-link-btn-label { display: none; }
 }
 @media (prefers-reduced-motion: reduce) {
   .bs-viewer-media .bs-mcompare img, .bs-tile[data-group]:not([data-selected]) { transition: none; }
