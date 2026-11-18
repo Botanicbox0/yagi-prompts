@@ -16,7 +16,7 @@
  * rate (stored, else measured while it plays), a range loops, and the keys work anywhere in the stage.
  */
 import "./review.css";
-import { Fragment, useCallback, useEffect, useMemo, useRef, useState, type KeyboardEvent, type MouseEvent, type MutableRefObject, type ReactNode } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type KeyboardEvent, type MouseEvent, type MutableRefObject, type ReactNode } from "react";
 import {
   FALLBACK_FPS,
   estimateFps,
@@ -25,7 +25,6 @@ import {
   endsOnWholeSecond,
   frameSeekSeconds,
   frameStartMs,
-  frameTimecodeParts,
   lastFrame,
   loopKeyOf,
   loopTarget,
@@ -37,7 +36,6 @@ import {
   REVIEW_FRAME_MS,
   REVIEW_LIMITS,
   formatTimecode,
-  nextStatuses,
   spotVisibleAt,
   threadComments,
   type ReviewComment,
@@ -52,6 +50,12 @@ import type { studioReviewEn } from "@/messages/studio-review";
 import type { adminConsoleEn } from "@/messages/admin-console";
 import { composerHolds } from "./auto-refresh";
 import { CompareView } from "./compare";
+import { planHeader, planNotesTools, reviewShortcuts, type HeaderKey } from "./header-plan";
+import { StageMenuButton, StagePopover, useNarrow, type StageMenuEntry } from "./stage-menu";
+import { ReviewTimeline } from "./timeline";
+import { Timecode, fill, fillNodes } from "./timecode";
+
+export { Timecode, fill, fillNodes };
 import { InkLayer, InkTools, useInk } from "./ink";
 
 export type ReviewCopy = typeof studioReviewEn;
@@ -113,6 +117,10 @@ export interface ReviewStageProps {
   onVersion?: (reviewId: string) => void;
   /** More controls at the end of the header (the room's 공유 button). */
   tools?: ReactNode;
+  /** The share button of the room (a ghost button after the primary, docs/BRAND-ROOMS-FEEDBACK.md §11). */
+  share?: ReactNode;
+  /** The page's own actions that fold into the head's "⋯" menu (the room's "새 버전 올리기"). */
+  moreActions?: ReadonlyArray<{ key: string; label: string; run(): void }>;
   /** A share link that allows download, or an approved cut in the room. */
   downloadUrl?: string | null;
   /** The file name to save as. With it, a file on another origin is fetched and saved instead of opened. */
@@ -162,34 +170,6 @@ export function snapNoteToFrames(note: ReviewNoteInput, fps: number | null): Rev
     if (out.atMs != null && out.endMs <= out.atMs) out.endMs = null;
   }
   return out;
-}
-
-export function fill(template: string, values: Record<string, string | number>): string {
-  return template.replace(/\{(\w+)\}/g, (match, key: string) => (key in values ? String(values[key]) : match));
-}
-
-/** `fill` for a screen: the same template with elements (a `Timecode`) in its slots. */
-export function fillNodes(template: string, values: Record<string, ReactNode>): ReactNode[] {
-  return template.split(/(\{\w+\})/).map((part, i) => {
-    const key = /^\{(\w+)\}$/.exec(part)?.[1];
-    return <Fragment key={i}>{key && key in values ? values[key] : part}</Fragment>;
-  });
-}
-
-/**
- * A timecode on screen. With a frame rate the frame number is set apart, smaller and quieter, so `0:08`
- * + `:00` reads as eight seconds and not eight minutes (docs/BRAND-ROOMS-FEEDBACK.md §11). Without one it
- * is the old tenths. `clockOnly`: the frame part left off (a length that ends on a whole second).
- */
-export function Timecode({ ms, fps, clockOnly = false }: { ms: number | null | undefined; fps: number | null; clockOnly?: boolean }) {
-  if (!fps) return <>{formatTimecode(ms)}</>;
-  const { clock, frames } = frameTimecodeParts(ms, fps);
-  return (
-    <span className="bsv-tc" data-review-timecode="">
-      {clock}
-      {clockOnly ? null : <span className="bsv-tc-ff">{frames}</span>}
-    </span>
-  );
 }
 
 export type ReviewExportFormat = "csv" | "markdown" | "markers";
@@ -297,6 +277,24 @@ export function fitHeightCap(viewportH: number, fill: boolean, reserve: number):
 }
 
 /**
+ * A bar the page keeps over the bottom of the window (a phone's tab bar): the frame and its controls fit
+ * above it instead of under it. Found by what sits at the bottom centre of the window.
+ */
+function bottomBarInset(): number {
+  if (typeof document === "undefined" || typeof document.elementFromPoint !== "function") return 0;
+  let el = document.elementFromPoint(window.innerWidth / 2, window.innerHeight - 2) as HTMLElement | null;
+  while (el && el !== document.body) {
+    const position = getComputedStyle(el).position;
+    if (position === "fixed" || position === "sticky") {
+      const top = el.getBoundingClientRect().top;
+      return top > window.innerHeight / 2 ? Math.max(0, Math.round(window.innerHeight - top)) : 0;
+    }
+    el = el.parentElement;
+  }
+  return 0;
+}
+
+/**
  * Fit a box of `ratio` into the wrapper's width and a height cap, so spot pins map 1:1 onto the media.
  * `fill` (wide layout, full screen): the cap is the window's height minus `reserve()` (the head, the
  * controls, the paddings), so the frame, its controls and the head fit in one view.
@@ -361,6 +359,10 @@ const ICONS = {
   exitFullscreen: "M9 4v5H4M15 4v5h5M9 20v-5H4M15 20v-5h5",
   loop: "M17 3l3 3-3 3M4 11V9a3 3 0 0 1 3-3h13M7 21l-3-3 3-3M20 13v2a3 3 0 0 1-3 3H4",
   notes: "M4 5h16v14H4zM14 5v14",
+  more: "M5.5 12h.01M12 12h.01M18.5 12h.01",
+  help: "M9.3 9.2a2.8 2.8 0 0 1 5.4 1c0 1.9-2.7 2.4-2.7 4M12 17.6h.01M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18z",
+  filter: "M4 6h16M7 12h10M10 18h4",
+  export: "M12 4v11M7 10l5 5 5-5M5 20h14",
 } as const;
 
 type Mark = { atMs: number | null; endMs?: number | null; x: number | null; y: number | null; strokes?: ReviewStroke[] | null };
@@ -457,6 +459,8 @@ export function ReviewStage({
   versions,
   onVersion,
   tools,
+  share,
+  moreActions,
   downloadUrl,
   downloadName,
   team = null,
@@ -471,7 +475,6 @@ export function ReviewStage({
   const media = review.mediaUrl;
   const videoRef = useRef<HTMLVideoElement>(null);
   const textRef = useRef<HTMLTextAreaElement>(null);
-  const laneRef = useRef<HTMLDivElement>(null);
   const headRef = useRef<HTMLElement>(null);
   const sectionRef = useRef<HTMLElement>(null);
   const bodyRef = useRef<HTMLDivElement>(null);
@@ -504,7 +507,7 @@ export function ReviewStage({
     const anchor = section.closest("[data-room-review-mode]") ?? section;
     const above = wrap.getBoundingClientRect().top - anchor.getBoundingClientRect().top;
     const below = player.getBoundingClientRect().bottom - wrap.getBoundingClientRect().bottom;
-    return Math.max(0, above) + Math.max(0, below) + 32;
+    return Math.max(0, above) + Math.max(0, below) + 32 + bottomBarInset();
   };
   const fillHeight = layout === "wide" || fullscreen;
   const { wrapRef, box } = useFitBox(ratio, fillHeight, reserveRef, `${fullscreen}:${notesOpen}`);
@@ -518,7 +521,10 @@ export function ReviewStage({
   const [general, setGeneral] = useState(false);
   const [spotMode, setSpotMode] = useState(false);
   const [comparing, setComparing] = useState(false);
-  const [dragRange, setDragRange] = useState<{ from: number; to: number } | null>(null);
+  // A row of the notes list under the pointer or keyboard focus: its marker on the timeline grows.
+  const [hoverId, setHoverId] = useState<string | null>(null);
+  const [shortcutsOpen, setShortcutsOpen] = useState(false);
+  const narrow = useNarrow(520);
   const ink = useInk();
   const canDraw = extended && canComment && media != null;
   const stack = extended && versions && versions.length > 1 ? versions : null;
@@ -551,7 +557,7 @@ export function ReviewStage({
     setRatio(review.width && review.height ? review.width / review.height : review.kind === "video" ? 16 / 9 : 1);
     setDurationMs(review.seconds ? Math.round(review.seconds * 1000) : 0);
     setComparing(false);
-    setDragRange(null);
+    setHoverId(null);
     setTeamOnly(false);
     setMeasuredFps(null);
     setLoopKey(null);
@@ -896,12 +902,6 @@ export function ReviewStage({
     [],
   );
 
-  const msAtLane = (clientX: number) => {
-    const rect = laneRef.current?.getBoundingClientRect();
-    if (!rect || !rect.width || durationMs <= 0) return 0;
-    return clamp01((clientX - rect.left) / rect.width) * durationMs;
-  };
-
   function startDrawing() {
     if (!canDraw) return;
     setGeneral(false);
@@ -955,6 +955,13 @@ export function ReviewStage({
       return;
     }
     if (event.metaKey || event.ctrlKey || event.altKey) return;
+    // The timeline's marker lane moves its own focus with the arrows; they never step the film from there.
+    if (target.closest("[data-review-marker-lane]") && ["ArrowLeft", "ArrowRight", "Home", "End"].includes(event.key)) return;
+    if (event.key === "?" && isVideo && media) {
+      event.preventDefault();
+      setShortcutsOpen((open) => !open);
+      return;
+    }
     if ((event.key === "f" || event.key === "F") && fullscreenAvailable && media && !comparing) {
       event.preventDefault();
       toggleFullscreen();
@@ -1084,24 +1091,6 @@ export function ReviewStage({
 
   const showSpots = media != null && (!isVideo || !playing);
   const spotThreads = showSpots ? threads.filter((t) => !t.root.deleted && spotVisibleAt(t.root, isVideo ? currentMs : null)) : [];
-  const pct = (ms: number) => (durationMs > 0 ? `${Math.min(100, Math.max(0, (ms / durationMs) * 100))}%` : "0%");
-  // Pins closer than ~2.5% of the film fan out sideways (CSS reads --bsv-nudge).
-  const nudge = new Map<string, number>();
-  {
-    let anchor = Number.NEGATIVE_INFINITY;
-    let n = 0;
-    for (const t of timed) {
-      const at = Math.min(t.root.atMs ?? 0, durationMs || Number.MAX_SAFE_INTEGER);
-      const close = durationMs > 0 ? (at - anchor) / durationMs < 0.025 : at === anchor;
-      if (close) n += 1;
-      else {
-        anchor = at;
-        n = 0;
-      }
-      nudge.set(t.root.id, n);
-    }
-  }
-
   // In full screen, starting a note (a range, a spot, the pen, typed text) brings the side panel out. The
   // bare moment the composer pins when it takes focus is not on its own a note being written.
   const composing = holding || ink.active || spotMode || (mark !== null && (mark.endMs != null || mark.x != null || (mark.strokes?.length ?? 0) > 0));
@@ -1115,11 +1104,124 @@ export function ReviewStage({
     activeThread && !activeThread.root.deleted && activeThread.root.strokes && !playing && (!isVideo || activeThread.root.atMs == null || Math.abs(activeThread.root.atMs - currentMs) <= 400)
       ? activeThread.root.strokes
       : null;
-  const spans = extended ? timed.filter((t) => t.root.endMs != null) : [];
+  const roleOf = (c: ReviewComment) => {
+    const role = c.guest ? "guest" : c.authorRole;
+    return { role, label: copy.roles[role] };
+  };
+  // The timeline shows what the list shows (its filters), timed notes only, in time order.
+  const laneNotes = shownAll
+    .filter((t) => !t.root.deleted && t.root.atMs != null)
+    .sort((a, b) => (a.root.atMs ?? 0) - (b.root.atMs ?? 0))
+    .map((t) => ({ thread: t, number: numberOf.get(t.root.id) ?? 0 }));
+  const header = planHeader({
+    status: review.status,
+    canSetStatus: Boolean(canManage && setStatus),
+    team: team != null,
+    hasLink: Boolean(linkFor),
+    hasDownload: Boolean(downloadUrl),
+    hasCompare: Boolean(stack),
+    extra: (moreActions ?? []).map((a) => a.key),
+    narrow,
+  });
+  const notesTools = planNotesTools({ extended, hasNotes: threads.some((t) => !t.root.deleted), authorCount: authorOptions.length });
   // The length as a timecode: the end of the last frame, so a stored length rounded to 0.1 s and the
   // browser's own length read the same (192 frames at 23.976 end at 0:08:00 either way).
   const lastFrameIndex = frameRate ? lastFrame(durationMs, frameRate) : null;
   const endOfFilm = frameRate && lastFrameIndex != null ? frameStartMs(lastFrameIndex + 1, frameRate) : durationMs;
+  const statusChip = (
+    <span className="bsv-status" data-state={review.status}>
+      <span className="bsv-visually-hidden">{copy.statusLabel}: </span>
+      {copy.status[review.status]}
+    </span>
+  );
+  const versionControl = stack ? (
+    <div className="bsv-versions" data-review-versions>
+      <label className="bsv-visually-hidden" htmlFor={`bsv-version-${review.id}`}>
+        {copy.versions.label}
+      </label>
+      <select id={`bsv-version-${review.id}`} className="bsv-version-select" value={review.id} onChange={(e) => onVersion?.(e.target.value)} disabled={!onVersion}>
+        {stack.map((v) => (
+          <option key={v.id} value={v.id}>
+            {`v${v.version} · ${copy.status[v.status]}`}
+          </option>
+        ))}
+      </select>
+    </div>
+  ) : null;
+
+  function startDownload() {
+    if (!downloadUrl) return;
+    if (downloadName && isCrossOrigin(downloadUrl)) {
+      saveMedia(downloadUrl, downloadName).catch(() => window.open(downloadUrl, "_blank", "noopener"));
+      return;
+    }
+    const a = document.createElement("a");
+    a.href = downloadUrl;
+    a.download = downloadName ?? "";
+    a.rel = "noreferrer";
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+  }
+
+  /** One of the head's actions as a button: the one filled primary, or an outlined secondary. */
+  function headerButton(key: HeaderKey, primary: boolean): ReactNode {
+    if (key.startsWith("status:") && setStatus) {
+      const status = key.slice("status:".length) as ReviewStatus;
+      return (
+        <button
+          key={key}
+          type="button"
+          className={primary ? "bsv-primary" : "bsv-ghost"}
+          data-review-status-action={status}
+          data-primary={primary ? "" : undefined}
+          disabled={busy !== null}
+          onClick={() => void run(`status:${status}`, () => setStatus(status))}
+        >
+          {status === "approved" && <Icon d={ICONS.check} />}
+          {copy.statusActions[status]}
+        </button>
+      );
+    }
+    if (key === "download" && downloadUrl) {
+      return (
+        <a
+          key={key}
+          className="bsv-ghost"
+          href={downloadUrl}
+          download={downloadName ?? true}
+          rel="noreferrer"
+          onClick={(event) => {
+            // `download` is ignored on another origin (the media domain): fetch the file and save it under its name.
+            if (!downloadName || !isCrossOrigin(downloadUrl)) return;
+            event.preventDefault();
+            startDownload();
+          }}
+          data-review-download
+        >
+          <Icon d={ICONS.download} />
+          {copy.download}
+        </a>
+      );
+    }
+    return null;
+  }
+
+  /** One of the head's actions as an entry of the "⋯" menu. */
+  function headerEntry(key: HeaderKey): StageMenuEntry {
+    if (key.startsWith("status:")) {
+      const status = key.slice("status:".length) as ReviewStatus;
+      return { key, label: copy.statusActions[status], disabled: busy !== null || !setStatus, run: () => void (setStatus && run(`status:${status}`, () => setStatus(status))) };
+    }
+    if (key === "download") return { key, label: copy.download, run: startDownload };
+    if (key === "copy-link") return { key, label: copy.copyLink, run: () => void copyLink() };
+    if (key === "compare") return { key, label: comparing ? copy.versions.closeCompare : copy.versions.compare, run: () => setComparing((c) => !c) };
+    const extra = (moreActions ?? []).find((a) => `extra:${a.key}` === key);
+    return { key, label: extra?.label ?? key, run: () => extra?.run() };
+  }
+
+  const shortcutRows = reviewShortcuts(copy.player, { isVideo, extended, canComment, fullscreen: fullscreenAvailable });
+
   const fullscreenButton =
     fullscreenAvailable && media ? (
       <button
@@ -1168,83 +1270,22 @@ export function ReviewStage({
             </button>
           )}
           {eyebrow && !compactHead && <p className="bsv-eyebrow">{eyebrow}</p>}
-          <h2 className="bsv-stage-title" id={`bsv-title-${review.id}`}>
-            {review.title}
-          </h2>
+          <div className="bsv-title-row">
+            <h2 className="bsv-stage-title" id={`bsv-title-${review.id}`}>
+              {review.title}
+            </h2>
+            {!compactHead && statusChip}
+            {!compactHead && versionControl}
+          </div>
         </div>
         <div className="bsv-stage-tools" data-review-status={review.status}>
-          {stack && (
-            <div className="bsv-versions" data-review-versions>
-              <label className="bsv-visually-hidden" htmlFor={`bsv-version-${review.id}`}>
-                {copy.versions.label}
-              </label>
-              <select
-                id={`bsv-version-${review.id}`}
-                className="bsv-version-select"
-                value={review.id}
-                onChange={(e) => onVersion?.(e.target.value)}
-                disabled={!onVersion}
-              >
-                {stack.map((v) => (
-                  <option key={v.id} value={v.id}>
-                    {`v${v.version} · ${copy.status[v.status]}`}
-                  </option>
-                ))}
-              </select>
-              <button type="button" className="bsv-pill" aria-pressed={comparing} onClick={() => setComparing((c) => !c)} data-review-compare-open>
-                <Icon d={ICONS.compare} />
-                {comparing ? copy.versions.closeCompare : copy.versions.compare}
-              </button>
-            </div>
-          )}
-          {!(compactHead && stack) && (
-            <span className="bsv-status" data-state={review.status}>
-              <span className="bsv-visually-hidden">{copy.statusLabel}: </span>
-              {copy.status[review.status]}
-            </span>
-          )}
-          {canManage &&
-            setStatus &&
-            nextStatuses(review.status).map((s) => (
-              <button
-                key={s}
-                type="button"
-                className="bsv-pill"
-                data-review-status-action={s}
-                disabled={busy !== null}
-                onClick={() => void run(`status:${s}`, () => setStatus(s))}
-              >
-                {s === "approved" && <Icon d={ICONS.check} />}
-                {copy.statusActions[s]}
-              </button>
-            ))}
-          {linkFor && (
-            <button type="button" className="bsv-pill" onClick={() => void copyLink()} data-review-copy-link>
-              <Icon d={ICONS.link} />
-              {copy.copyLink}
-            </button>
-          )}
-          {downloadUrl && (
-            <a
-              className="bsv-pill"
-              href={downloadUrl}
-              download={downloadName ?? true}
-              rel="noreferrer"
-              onClick={(event) => {
-                // `download` is ignored on another origin (the media domain): fetch the file and save it under its name.
-                if (!downloadName || !isCrossOrigin(downloadUrl)) return;
-                event.preventDefault();
-                saveMedia(downloadUrl, downloadName).catch(() => {
-                  window.open(downloadUrl, "_blank", "noopener");
-                });
-              }}
-              data-review-download
-            >
-              <Icon d={ICONS.download} />
-              {copy.download}
-            </a>
-          )}
+          {compactHead && versionControl}
+          {compactHead && !stack && statusChip}
+          {header.secondary.map((key) => headerButton(key, false))}
           {tools}
+          {header.primary && headerButton(header.primary, true)}
+          {share}
+          <StageMenuButton label={copy.more} icon={<Icon d={ICONS.more} />} entries={header.menu.map(headerEntry)} marker={{ "data-review-more": "" }} />
         </div>
       </header>
 
@@ -1270,7 +1311,6 @@ export function ReviewStage({
                 tabIndex={0}
                 role="group"
                 aria-label={copy.player.stage}
-                aria-describedby={isVideo ? `bsv-keys-${review.id}` : undefined}
               >
                 {isVideo ? (
                   <video
@@ -1370,14 +1410,52 @@ export function ReviewStage({
 
           {isVideo && media && (
             <div className="bsv-controls" data-review-timeline>
+              <ReviewTimeline
+                reviewId={review.id}
+                durationMs={durationMs}
+                currentMs={currentMs}
+                fps={frameRate}
+                stepMs={frameRate ? 1000 / frameRate : REVIEW_FRAME_MS}
+                notes={laneNotes}
+                activeId={activeId}
+                hoverId={hoverId}
+                teamView={team != null}
+                teamTag={team?.copy.tag ?? null}
+                copy={copy}
+                roleOf={roleOf}
+                tc={tc}
+                extended={extended}
+                canComment={canComment}
+                mark={mark}
+                selectedRange={noteRange}
+                onScrub={(ms) => {
+                  videoRef.current?.pause();
+                  seek(ms);
+                }}
+                onSelect={focusThread}
+                onRange={setRange}
+                onSeekTo={(ms) => {
+                  videoRef.current?.pause();
+                  seek(ms);
+                }}
+                onPause={() => videoRef.current?.pause()}
+                onEscape={() => sectionRef.current?.focus({ preventScroll: true })}
+              />
               <div className="bsv-transport">
-                <button type="button" className="bsv-icon-btn" onClick={() => step(-1)} aria-label={copy.player.back}>
+                <button type="button" className="bsv-icon-btn" onClick={() => step(-1)} aria-label={copy.player.back} title={copy.player.back}>
                   <Icon d={ICONS.back} />
                 </button>
-                <button type="button" className="bsv-icon-btn bsv-play" onClick={togglePlay} aria-label={playing ? copy.player.pause : copy.player.play} data-playing={playing ? "" : undefined}>
+                <button
+                  type="button"
+                  className="bsv-icon-btn bsv-play"
+                  onClick={togglePlay}
+                  aria-label={playing ? copy.player.pause : copy.player.play}
+                  title={playing ? copy.player.pause : copy.player.play}
+                  data-playing={playing ? "" : undefined}
+                >
                   <Icon d={playing ? ICONS.pause : ICONS.play} filled />
                 </button>
-                <button type="button" className="bsv-icon-btn" onClick={() => step(1)} aria-label={copy.player.forward}>
+                <button type="button" className="bsv-icon-btn" onClick={() => step(1)} aria-label={copy.player.forward} title={copy.player.forward}>
                   <Icon d={ICONS.forward} />
                 </button>
                 <span className="bsv-time" aria-live="off" data-review-time>
@@ -1394,12 +1472,12 @@ export function ReviewStage({
                 <span className="bsv-transport-end">
                   {extended && (
                     <select
-                      className="bsv-version-select"
+                      className="bsv-speed"
                       aria-label={copy.player.speed}
+                      title={copy.player.speed}
                       data-review-speed
                       value={String(speed)}
                       onChange={(e) => changeSpeed(Number(e.target.value))}
-                      style={{ fontSize: 12, padding: "2px 8px", height: 28 }}
                     >
                       {[0.5, 1, 1.5, 2].map((rate) => (
                         <option key={rate} value={String(rate)}>
@@ -1422,120 +1500,42 @@ export function ReviewStage({
                       <Icon d={ICONS.loop} />
                     </button>
                   )}
-                  <button type="button" className="bsv-icon-btn bsv-mute" onClick={() => setMuted((m) => !m)} aria-label={muted ? copy.player.unmute : copy.player.mute} aria-pressed={muted}>
+                  <button
+                    type="button"
+                    className="bsv-icon-btn bsv-mute"
+                    onClick={() => setMuted((m) => !m)}
+                    aria-label={muted ? copy.player.unmute : copy.player.mute}
+                    title={muted ? copy.player.unmute : copy.player.mute}
+                    aria-pressed={muted}
+                  >
                     <Icon d={muted ? ICONS.muted : ICONS.sound} />
                   </button>
                   {notesButton}
                   {fullscreenButton}
+                  <StagePopover
+                    label={copy.player.shortcuts}
+                    icon={<Icon d={ICONS.help} />}
+                    open={shortcutsOpen}
+                    onOpenChange={setShortcutsOpen}
+                    marker={{ "data-review-shortcuts": "" }}
+                    wide
+                  >
+                    <p className="bsv-popover-title">{copy.player.shortcuts}</p>
+                    <dl className="bsv-shortcuts" data-review-shortcut-list>
+                      {shortcutRows.map(([keys, action]) => (
+                        <div key={keys} className="bsv-shortcut">
+                          <dt>
+                            {keys.split(" ").map((k) => (
+                              <kbd key={k}>{k}</kbd>
+                            ))}
+                          </dt>
+                          <dd>{action}</dd>
+                        </div>
+                      ))}
+                    </dl>
+                  </StagePopover>
                 </span>
               </div>
-              <div className="bsv-track">
-                {extended && (
-                  <div
-                    ref={laneRef}
-                    className="bsv-lane"
-                    data-review-range-lane
-                    role="group"
-                    aria-label={copy.range.lane}
-                    aria-describedby={`bsv-keys-${review.id}`}
-                    data-active={dragRange ? "" : undefined}
-                    data-looping={looping ? "" : undefined}
-                    onPointerDown={(e) => {
-                      if (!canComment || durationMs <= 0 || e.button !== 0) return;
-                      e.currentTarget.setPointerCapture?.(e.pointerId);
-                      videoRef.current?.pause();
-                      const at = msAtLane(e.clientX);
-                      setDragRange({ from: at, to: at });
-                    }}
-                    onPointerMove={(e) => {
-                      if (!dragRange) return;
-                      setDragRange({ from: dragRange.from, to: msAtLane(e.clientX) });
-                    }}
-                    onPointerUp={() => {
-                      if (!dragRange) return;
-                      const { from, to } = dragRange;
-                      setDragRange(null);
-                      if (Math.abs(to - from) < 100) {
-                        seek(from);
-                        setRange(from, null);
-                      } else {
-                        seek(Math.min(from, to));
-                        setRange(from, to);
-                      }
-                    }}
-                    onPointerCancel={() => setDragRange(null)}
-                  >
-                    {spans.map((t) => (
-                      <button
-                        key={t.root.id}
-                        type="button"
-                        className="bsv-span"
-                        data-review-span={t.root.id}
-                        data-role={t.root.authorRole}
-                        data-resolved={t.root.resolved ? "" : undefined}
-                        data-active={activeId === t.root.id ? "" : undefined}
-                        style={{ left: pct(t.root.atMs ?? 0), width: `calc(${pct(t.root.endMs ?? 0)} - ${pct(t.root.atMs ?? 0)})` }}
-                        aria-label={fill(copy.range.spanLabel, { start: tc(t.root.atMs), end: tc(t.root.endMs), text: t.root.body.slice(0, 80) })}
-                        onPointerDown={(e) => e.stopPropagation()}
-                        onClick={() => focusThread(t)}
-                      />
-                    ))}
-                    {(dragRange || mark?.endMs != null) && (
-                      <span
-                        className="bsv-span"
-                        data-pending=""
-                        aria-hidden="true"
-                        style={
-                          dragRange
-                            ? { left: pct(Math.min(dragRange.from, dragRange.to)), width: `calc(${pct(Math.max(dragRange.from, dragRange.to))} - ${pct(Math.min(dragRange.from, dragRange.to))})` }
-                            : { left: pct(mark?.atMs ?? 0), width: `calc(${pct(mark?.endMs ?? 0)} - ${pct(mark?.atMs ?? 0)})` }
-                        }
-                      />
-                    )}
-                    <span className="bsv-lane-label" aria-hidden="true">
-                      {copy.range.lane}
-                    </span>
-                  </div>
-                )}
-                <div className="bsv-pins">
-                  {timed.map((t) => (
-                    <button
-                      key={t.root.id}
-                      type="button"
-                      className="bsv-pin"
-                      data-review-pin={t.root.id}
-                      data-role={t.root.authorRole}
-                      data-resolved={t.root.resolved ? "" : undefined}
-                      data-active={activeId === t.root.id ? "" : undefined}
-                      style={{ left: pct(t.root.atMs ?? 0), ["--bsv-nudge" as string]: nudge.get(t.root.id) ?? 0 }}
-                      aria-label={fill(copy.pinLabel, { time: tc(t.root.atMs), text: t.root.body.slice(0, 80) })}
-                      onClick={() => focusThread(t)}
-                    >
-                      <span aria-hidden="true">{numberOf.get(t.root.id)}</span>
-                    </button>
-                  ))}
-                  {mark?.atMs != null && <span className="bsv-pin" data-pending="" style={{ left: pct(mark.atMs) }} aria-hidden="true" />}
-                </div>
-                <input
-                  type="range"
-                  className="bsv-range"
-                  min={0}
-                  max={Math.max(durationMs, 1)}
-                  step={frameRate ? 1000 / frameRate : REVIEW_FRAME_MS}
-                  value={Math.min(currentMs, Math.max(durationMs, 1))}
-                  onChange={(e) => {
-                    videoRef.current?.pause();
-                    seek(Number(e.target.value));
-                  }}
-                  aria-label={copy.player.timeline}
-                  aria-valuetext={tc(currentMs)}
-                  style={{ ["--bsv-progress" as string]: pct(currentMs) }}
-                />
-              </div>
-              <p className="bsv-keys" id={`bsv-keys-${review.id}`}>
-                {copy.player.keys}
-                {extended && canComment ? ` ${copy.range.keys}` : ""}
-              </p>
             </div>
           )}
         </div>
@@ -1545,65 +1545,53 @@ export function ReviewStage({
             <h3 className="bsv-comments-title">
               {copy.commentsTitle} <span className="bsv-count">{threads.filter((t) => !t.root.deleted).length}</span>
             </h3>
-            <div className="bsv-seg" role="group" aria-label={copy.filter.label}>
+            <div className="bsv-tabs" role="group" aria-label={copy.filter.label}>
               {(extended ? (["open", "resolved", "all"] as const) : (["open", "all"] as const)).map((f) => (
-                <button key={f} type="button" className="bsv-seg-btn" aria-pressed={filter === f} onClick={() => setFilter(f)} data-review-filter={f}>
+                <button key={f} type="button" className="bsv-tab" aria-pressed={filter === f} onClick={() => setFilter(f)} data-review-filter={f}>
                   {copy.filter[f]}
                   {f === "open" && <span className="bsv-seg-count">{openThreads.length}</span>}
                 </button>
               ))}
             </div>
-          </div>
-
-          {extended && threads.some((t) => !t.root.deleted) ? (
-            <div
-              className="bsv-comments-tools"
-              data-review-comments-tools
-              style={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: 6, padding: "0 0 10px" }}
-            >
-              <button
-                type="button"
-                className="bsv-pill"
-                aria-pressed={drawingOnly}
-                data-review-filter-drawing
-                onClick={() => setDrawingOnly((v) => !v)}
-                style={{ fontSize: 12, padding: "4px 10px" }}
-              >
-                {copy.filter.drawingOnly}
-              </button>
-              {authorOptions.length > 1 ? (
-                <select
-                  className="bsv-version-select"
-                  aria-label={copy.filter.authorLabel}
-                  data-review-filter-author
-                  value={authorFilter}
-                  onChange={(e) => setAuthorFilter(e.target.value)}
-                  style={{ fontSize: 12, padding: "4px 8px" }}
-                >
-                  <option value="all">{copy.filter.authorAll}</option>
-                  {authorOptions.map((name) => (
-                    <option key={name} value={name}>
-                      {name}
-                    </option>
-                  ))}
-                </select>
-              ) : null}
-              <div style={{ marginLeft: "auto", display: "inline-flex", gap: 4 }} role="group" aria-label={copy.exportNotes.label}>
-                {(["csv", "markdown", "markers"] as const).map((fmt) => (
-                  <button
-                    key={fmt}
-                    type="button"
-                    className="bsv-pill"
-                    data-review-export={fmt}
-                    onClick={() => downloadExport(fmt)}
-                    style={{ fontSize: 11, padding: "4px 8px" }}
+            {notesTools.filter.length > 0 || notesTools.export.length > 0 ? (
+              <span className="bsv-comments-tools" data-review-comments-tools>
+                {notesTools.filter.length > 0 && (
+                  <StagePopover
+                    label={copy.filter.menu}
+                    icon={<Icon d={ICONS.filter} />}
+                    active={drawingOnly || authorFilter !== "all"}
+                    marker={{ "data-review-filter-menu": "" }}
                   >
-                    {copy.exportNotes[fmt]}
-                  </button>
-                ))}
-              </div>
-            </div>
-          ) : null}
+                    {notesTools.filter.includes("drawing") && (
+                      <label className="bsv-check">
+                        <input type="checkbox" checked={drawingOnly} onChange={(e) => setDrawingOnly(e.target.checked)} data-review-filter-drawing />
+                        <span>{copy.filter.drawingOnly}</span>
+                      </label>
+                    )}
+                    {notesTools.filter.includes("author") && (
+                      <label className="bsv-field-row">
+                        <span>{copy.filter.authorLabel}</span>
+                        <select className="bsv-speed" value={authorFilter} onChange={(e) => setAuthorFilter(e.target.value)} data-review-filter-author>
+                          <option value="all">{copy.filter.authorAll}</option>
+                          {authorOptions.map((name) => (
+                            <option key={name} value={name}>
+                              {name}
+                            </option>
+                          ))}
+                        </select>
+                      </label>
+                    )}
+                  </StagePopover>
+                )}
+                <StageMenuButton
+                  label={copy.exportNotes.label}
+                  icon={<Icon d={ICONS.export} />}
+                  entries={notesTools.export.map((fmt) => ({ key: fmt, label: copy.exportNotes[fmt], run: () => downloadExport(fmt) }))}
+                  marker={{ "data-review-export-menu": "" }}
+                />
+              </span>
+            ) : null}
+          </div>
 
           {shown.length === 0 && carriedGroups.length === 0 ? (
             <p className="bsv-quiet">{threads.length === 0 ? copy.noComments : copy.noOpen}</p>
@@ -1772,6 +1760,14 @@ export function ReviewStage({
         data-active={activeId === t.root.id ? "" : undefined}
         data-resolved={t.root.resolved ? "" : undefined}
         data-team={team && t.root.team ? "" : undefined}
+        data-replying={replyTo === t.root.id ? "" : undefined}
+        // The row under the pointer or keyboard focus lights its marker on the timeline.
+        onPointerEnter={() => setHoverId(t.root.id)}
+        onPointerLeave={() => setHoverId((h) => (h === t.root.id ? null : h))}
+        onFocus={() => setHoverId(t.root.id)}
+        onBlur={(e) => {
+          if (!e.currentTarget.contains(e.relatedTarget as Node | null)) setHoverId((h) => (h === t.root.id ? null : h));
+        }}
         onClick={(e) => {
           // A click on the note itself (not on one of its controls) brings the film to it;
           // the timecode button is the keyboard path to the same thing.

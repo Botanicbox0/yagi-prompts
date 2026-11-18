@@ -252,18 +252,9 @@ export function ProjectReviewTab({
               linkFor={(ms) => roomReviewHref(organizationId, projectId, detail.review.id, ms)}
               downloadUrl={download?.url ?? null}
               downloadName={download?.name ?? null}
-              tools={
-                rights.canEdit ? (
-                  <>
-                    {latestOfStack && (
-                      <button type="button" className="bsv-pill" onClick={() => setPicking("version")} data-room-review-version>
-                        {t.newVersion}
-                      </button>
-                    )}
-                    <ShareButton organizationId={organizationId} target={{ kind: "review", id: detail.review.id }} locale={locale} copy={copy} canEdit={rights.canEdit} />
-                  </>
-                ) : null
-              }
+              share={rights.canEdit ? <ShareButton organizationId={organizationId} target={{ kind: "review", id: detail.review.id }} locale={locale} copy={copy} canEdit={rights.canEdit} /> : null}
+              // "새 버전 올리기" is a tool: it folds into the head's "⋯" menu (docs/BRAND-ROOMS-FEEDBACK.md §11).
+              moreActions={rights.canEdit && latestOfStack ? [{ key: "new-version", label: t.newVersion, run: () => setPicking("version") }] : undefined}
             />
           ) : detailError ? (
             <p className="bsv-error bsv-main-note" role="alert">

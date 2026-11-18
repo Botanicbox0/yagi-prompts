@@ -104,7 +104,8 @@ describe.each(["ko", "en"] as const)("the review stage (%s)", (locale) => {
     const html = renderToStaticMarkup(
       <ReviewStage review={item(V2)} comments={comments} canWrite copy={copy} locale={locale} actions={actions} linkFor={() => "/x"} extended versions={[version(V2, 2), version(V1, 1)]} onVersion={() => undefined} />,
     );
-    for (const marker of ["data-review-range-lane", "data-review-versions", "data-review-compare-open", 'data-review-carried="1"', "data-review-draw", `data-review-span="${note(1).id}"`, "data-review-drawing-tag"]) {
+    // "나란히 비교" now sits in the head's "⋯" menu (header-plan.test.ts pins the menu's items).
+    for (const marker of ["data-review-range-lane", "data-review-versions", "data-review-more", 'data-review-carried="1"', "data-review-draw", `data-review-span="${note(1).id}"`, "data-review-drawing-tag"]) {
       expect(html, marker).toContain(marker);
     }
     expect(html).toContain("0:01.2–0:02.4");
@@ -120,7 +121,8 @@ describe.each(["ko", "en"] as const)("the review stage (%s)", (locale) => {
   it("is the v3 stage exactly when not extended", () => {
     const html = renderToStaticMarkup(<ReviewStage review={item(V2)} comments={comments.slice(0, 1)} canWrite copy={copy} locale={locale} actions={actions} linkFor={() => "/x"} />);
     for (const marker of ["data-review-range-lane", "data-review-versions", "data-review-draw", "data-review-ink", "data-review-guest-name"]) expect(html, marker).not.toContain(marker);
-    expect(html).toContain("data-review-copy-link");
+    // The link copy is in the "⋯" menu now; the status moves stay on the head.
+    expect(html).toContain("data-review-more");
     expect(html).toContain("data-review-status-action");
   });
 
