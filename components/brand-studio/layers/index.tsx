@@ -266,7 +266,7 @@ export default function LayerEditor(
   const [fontsVersion, setFontsVersion] = useState(0);
   const [failed, setFailed] = useState<ReadonlySet<string>>(() => new Set());
   const [recent, setRecent] = useState<string[]>(() => loadRecentColors(storage));
-  const [notice, setNotice] = useState<string | null>(initial.restored ? copy.restored : null);
+  const [notice, setNotice] = useState<string | null>(initial.restored ? copy.restored : (props.initialRegionPreset?.notice ?? null));
   const [live, setLive] = useState("");
   const [uploading, setUploading] = useState<string[]>([]);
   const [step, setStep] = useState<ExportStep | null>(null);

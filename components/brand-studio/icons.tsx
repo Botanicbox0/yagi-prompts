@@ -28,6 +28,7 @@ const paths = {
   reuse: "M4 7h11M4 12h7M4 17h9M17 10v8M14 15l3 3 3-3",
   undo: "M9 6L4 11l5 5M4 11h9a6 6 0 0 1 6 6v2",
   check: "M5 12.5l4.5 4.5L19 7",
+  copy: "M9 9h11v11H9zM5 15H4V4h11v1",
   grip: "M9 6h.01M15 6h.01M9 12h.01M15 12h.01M9 18h.01M15 18h.01",
   open: "M14 4h6v6M20 4l-8 8M18 14v6H4V6h6",
 } as const;

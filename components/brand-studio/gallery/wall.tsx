@@ -21,6 +21,7 @@ import { creditsOf } from "@/lib/brand-studio/credits";
 import { studioModelOrLegacy, type StudioMedium } from "@/lib/brand-studio/models";
 import { canCancel, outputRatio, ratioNumber, slotRatio } from "../board";
 import { credits, errorLine, fill, type StudioCopy, type StudioLocale } from "../copy";
+import { copyText, promptToCopy, useCopied } from "../copy-prompt";
 import { StudioIcon } from "../icons";
 import { startRefDrag } from "../refs";
 import { libraryKey, type StudioLibrary } from "../seams";
@@ -158,13 +159,28 @@ export function deleteConfirmLine(targets: SelectedTargets, jobs: readonly Studi
   return versioned ? `${line} ${g.bulkDeleteVersions}` : line;
 }
 
-export type TileMenuKey = "open" | "rerun" | "reuse" | "region" | "decorate" | "to-video" | "folder" | "review" | "campaign" | "save" | "download" | "delete";
+export type TileMenuKey =
+  | "open"
+  | "rerun"
+  | "reuse"
+  | "copy-prompt"
+  | "region"
+  | "decorate"
+  | "to-video"
+  | "folder"
+  | "review"
+  | "campaign"
+  | "save"
+  | "download"
+  | "delete";
 
 /**
  * The more-menu of a result, in order (docs/BRAND-STUDIO-V3.md §4): 열기 · 다시 만들기 · 설정 다시 쓰기 ·
- * 부분 수정 · 꾸미기 · 영상으로 만들기 · 폴더에 담기 · 리뷰에 올리기 · 캠페인으로 보내기 · 저장 · 내려받기 · 삭제.
+ * 프롬프트 복사 · 부분 수정 · 꾸미기 · 영상으로 만들기 · 폴더에 담기 · 리뷰에 올리기 · 캠페인으로 보내기 · 저장 ·
+ * 내려받기 · 삭제. A partial edit's result reads 열기 · 같은 영역 다시 수정하기 (its original, the same area) ·
+ * 프롬프트 복사 · 부분 수정 (this result) · …: "다시 만들기" would open the same form, so it is not repeated.
  * Starting anything needs an open allowance (`canGenerate`); filing, sending and deleting need an owner
- * or editor (`canEdit`); a viewer can open and download.
+ * or editor (`canEdit`); a viewer can open, copy the prompt and download.
  */
 export function tileMenuKeys(input: {
   canGenerate: boolean;
@@ -174,10 +190,14 @@ export function tileMenuKeys(input: {
   /** Width and height known (the layer editor needs them). */
   sized: boolean;
   saved: boolean;
+  /** The run has words to copy (`promptToCopy`). */
+  copyable?: boolean;
 }): TileMenuKey[] {
-  const { canGenerate, canEdit, kind, image, sized, saved } = input;
+  const { canGenerate, canEdit, kind, image, sized, saved, copyable = false } = input;
   const keys: TileMenuKey[] = ["open"];
-  if (canGenerate && kind !== "video_final") keys.push("rerun", "reuse");
+  if (canGenerate && kind === "region_edit") keys.push("reuse");
+  else if (canGenerate && kind !== "video_final") keys.push("rerun", "reuse");
+  if (copyable) keys.push("copy-prompt");
   if (canGenerate && image) keys.push("region");
   if (canEdit && image && sized) keys.push("decorate");
   if (canGenerate && image) keys.push("to-video");
@@ -551,10 +571,27 @@ function ResultTile(props: WallProps & Badges & Picking & { entry: Extract<Entry
     onNotice(ok ? null : g.likeFailed);
   };
 
+  const promptText = promptToCopy(job);
+  const copied = useCopied();
+  const copyPrompt = () => {
+    if (!promptText) return;
+    void copyText(promptText, more.current?.parentElement).then((ok) => (ok ? copied.flash() : onNotice(copy.viewer.copyFailed)));
+  };
   const item: Record<TileMenuKey, Omit<MenuEntry, "key">> = {
     open: { label: m.open, icon: "open", run: open },
     rerun: { label: m.rerun, icon: "rerun", run: () => onAction("rerun", entry.item) },
-    reuse: { label: m.reuse, icon: "reuse", run: () => onAction("reuse", entry.item) },
+    reuse:
+      job.kind === "region_edit"
+        ? { label: copy.viewer.reuseRegion, icon: "rerun", run: () => onAction("reuse", entry.item) }
+        : { label: m.reuse, icon: "reuse", run: () => onAction("reuse", entry.item) },
+    "copy-prompt": {
+      label: copy.viewer.copyPrompt,
+      doneLabel: copy.viewer.copied,
+      done: copied.done,
+      icon: copied.done ? "check" : "copy",
+      keepOpen: true,
+      run: copyPrompt,
+    },
     region: { label: m.region, icon: "region", run: () => onAction("region", entry.item) },
     decorate: { label: m.decorate, icon: "layers", run: () => onAction("decorate", entry.item) },
     "to-video": { label: m.toVideo, icon: "video", run: () => onAction("toVideo", entry.item) },
@@ -565,7 +602,7 @@ function ResultTile(props: WallProps & Badges & Picking & { entry: Extract<Entry
     download: { label: m.download, icon: "download", run: () => onAction("download", entry.item) },
     delete: { label: m.delete, icon: "trash", tone: "danger", keepOpen: true, run: () => setPanel("confirm") },
   };
-  const entries: MenuEntry[] = tileMenuKeys({ canGenerate, canEdit, kind: job.kind, image, sized, saved: Boolean(output.savedAssetId) }).map((key) => ({ key, ...item[key] }));
+  const entries: MenuEntry[] = tileMenuKeys({ canGenerate, canEdit, kind: job.kind, image, sized, saved: Boolean(output.savedAssetId), copyable: Boolean(promptText) }).map((key) => ({ key, ...item[key] }));
 
   return (
     <figure
@@ -676,6 +713,9 @@ function ResultTile(props: WallProps & Badges & Picking & { entry: Extract<Entry
         </figcaption>
       )}
       {panel === "menu" && <Menu id={`${id}-panel`} label={g.more} entries={entries} anchor={more.current} onClose={close(more.current)} />}
+      <span className="bs-sr" aria-live="polite" data-studio-copy-live>
+        {copied.done ? copy.viewer.copied : ""}
+      </span>
       {panel === "folders" && (
         <FolderPicker
           id={`${id}-panel`}
