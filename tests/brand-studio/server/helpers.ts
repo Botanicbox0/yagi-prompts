@@ -42,7 +42,9 @@ export async function studioFixture(options: { orgName?: string; orgId?: string;
       values ($1, $2, 'Spring launch', 'Launch the spring line', 'creator', $3, $4, true)`,
     [projectId, orgId, ids.owner, randomUUID()],
   );
-  await sql.query('insert into brand_project_members (organization_id, project_id, user_id) values ($1, $2, $3)', [orgId, projectId, ids.guest]);
+  // An invited guest who may comment (0034). Rooms keep a guest invited to view only read-only
+  // (docs/BRAND-ROOMS-FEEDBACK.md §12); tests that need one set can_comment = false themselves.
+  await sql.query('insert into brand_project_members (organization_id, project_id, user_id, can_comment) values ($1, $2, $3, true)', [orgId, projectId, ids.guest]);
   if (options.capKrw !== null) {
     await sql.query('insert into brand_studio_allowances (organization_id, monthly_cap_krw) values ($1, $2)', [orgId, options.capKrw ?? 1_000_000]);
   }
