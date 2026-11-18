@@ -48,6 +48,8 @@ export function useViewer(input: {
   focusPrompt(): void;
   /** Region edit v2 (`StudioState.regionV2`): every partial edit runs on one engine. */
   regionV2?: boolean;
+  /** `StudioState.reviseV2`: the clip edit panel is a conversation; drafts and finals are named on version cards. */
+  reviseV2?: boolean;
 }) {
   const { studio, dock, copy, locale, mode, organizationId, jobs, assets, lookup, onCampaign, focusPrompt } = input;
   const [open, setOpen] = useState<{ list: "outputs" | "assets"; key: string } | null>(null);
@@ -264,8 +266,9 @@ export function useViewer(input: {
       plan: (body) => studio.planRevision(body),
       create: (body: StudioJobCreate) => studio.createJob(body),
       readMark: (body) => studio.readMark(body),
+      ...(input.reviseV2 ? { dialogue: true } : {}),
     }),
-    [organizationId, jobs, assets, lookup, studio, copy.viewer.label],
+    [organizationId, jobs, assets, lookup, studio, copy.viewer.label, input.reviseV2],
   );
 
   return { open, show, items, revise, index, busy, notice, setNotice, preset, actions, rerun: actions.rerun, reuse, openRegion };

@@ -454,6 +454,37 @@ textarea.bs-field { resize: vertical; }
 .bs-revise-clarified { display: grid; gap: 1px; font-size: 12.5px; }
 .bs-revise-clarified p { margin: 0; overflow-wrap: anywhere; }
 .bs-revise .bs-submit { justify-self: stretch; }
+/* The edit panel as a conversation (BRAND_STUDIO_REVISE_V2): what was said on the right, our answer under it, the box last. */
+.bs-revise-thread { display: grid; gap: 10px; min-width: 0; }
+.bs-revise-thread[data-empty] { margin-top: -10px; }
+.bs-revise-turn { display: grid; gap: 8px; min-width: 0; }
+.bs-revise-said { justify-self: end; display: grid; gap: 6px; max-width: 88%; margin: 0; padding: 8px 12px; border-radius: 14px 14px 4px 14px; background: var(--ys-hover); color: var(--ys-ink); font-size: 13.5px; line-height: 1.5; word-break: keep-all; overflow-wrap: anywhere; }
+.bs-revise-said > p { margin: 0; white-space: pre-wrap; }
+.bs-revise-said .bs-mark-chips, .bs-revise-said-refs { justify-content: flex-end; }
+.bs-revise-said .bs-mark-chip[data-static] { background: var(--ys-panel); }
+.bs-revise-asked { gap: 6px; }
+.bs-revise-asked > .bs-muted { font-size: 12.5px; }
+.bs-revise-reading { display: inline-flex; align-items: center; gap: 8px; margin: 0; font-size: 12.5px; }
+.bs-revise-answer { display: grid; gap: 8px; min-width: 0; }
+.bs-revise-answer-line { margin: 0; font-size: 13.5px; line-height: 1.55; color: var(--ys-ink); word-break: keep-all; overflow-wrap: break-word; }
+.bs-revise-answer .bs-revise-problem { padding: 0; }
+.bs-revise-answer .bs-submit { justify-self: stretch; }
+.bs-revise-tools .bs-revise-send { margin-left: auto; border-radius: 50%; background: var(--ys-active-bg); color: var(--ys-active-fg); }
+.bs-revise-tools .bs-revise-send:hover:not([aria-disabled]) { background: var(--ys-active-bg); opacity: 0.88; }
+.bs-revise-send .bs-icon { width: 16px; height: 16px; }
+.bs-revise-tools .bs-revise-send[aria-disabled="true"] { background: var(--ys-raised); color: var(--ys-ink-muted); cursor: not-allowed; }
+/* A version made from an earlier one than the one before it ("v4 ← v2"), and the version card. */
+.bs-revise-from { color: var(--ys-ink-muted); font-size: 11px; }
+.bs-revise-chip[data-selected] .bs-revise-from { color: inherit; opacity: 0.72; }
+.bs-version-card { display: grid; gap: 6px; padding: 10px 12px; border-radius: var(--ys-r-control); box-shadow: inset 0 0 0 1px var(--ys-hairline); }
+.bs-version-card-head { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 8px; min-width: 0; }
+.bs-version-card-n { font-family: var(--ys-mono); font-size: 12px; font-weight: 600; color: var(--ys-ink); }
+.bs-version-stage { padding: 2px 8px; border-radius: var(--ys-r-pill); box-shadow: inset 0 0 0 1px var(--ys-line-strong); color: var(--ys-ink); font-size: 11.5px; font-weight: 600; line-height: 1.4; }
+.bs-version-stage[data-version-stage="final"] { background: var(--ys-active-bg); box-shadow: none; color: var(--ys-active-fg); }
+.bs-version-from { font-size: 12px; }
+.bs-version-final { justify-self: start; gap: 8px; background: var(--ys-raised); }
+.bs-version-final-cost { padding-left: 8px; border-left: 1px solid var(--ys-line-strong); font-family: var(--ys-mono); font-size: 12px; font-weight: 600; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.bs-version-finishing { display: inline-flex; align-items: center; gap: 8px; margin: 0; font-size: 12.5px; }
 /* Marks on a clip ("고칠 곳 표시"): one accent, a ring for a pin, a thin box for a drag. */
 .bs-viewer-media { position: relative; }
 .bs-mark-stage { position: absolute; z-index: 2; pointer-events: none; }
