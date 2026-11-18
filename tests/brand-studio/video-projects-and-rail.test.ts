@@ -904,6 +904,50 @@ describe('Studio Pro Suite v5 Track B — 4. 3-Height Elastic Sequence Rail, Flo
     expect(guidePanel).not.toContain('data-inspector-generate-music');
   });
 
+  it('counts only the cut points inside a cut\'s trim, the same ones its split button uses (E2)', () => {
+    const rail = koDict.studioVideo.workspace.rail;
+    const source = {
+      sourceKind: 'output' as const,
+      outputId: '00000000-0000-4000-8000-000000000601',
+      srcUrl: '/api/brand-studio/media/st/source.mp4',
+      thumbUrl: '/api/brand-studio/media/st/source.webp',
+      durationSec: 8,
+      volume: 1,
+      muted: false,
+    };
+    let p = emptyComposerProject('9:16');
+    // A piece left after an automatic split still carries the whole source's cut points, none inside it.
+    p = appendClip(p, { ...source, id: 'piece_after', label: '뒤 조각', trimStartSec: 6, trimEndSec: 8, cutMarkers: [2.6, 5.4] });
+    p = appendClip(p, { ...source, id: 'whole_one', label: '한 군데', trimStartSec: 0, trimEndSec: 8, cutMarkers: [2.6] });
+    const html = renderToStaticMarkup(
+      h(SequenceRail, {
+        organizationId: ORG,
+        locale: 'ko',
+        canEdit: true,
+        project: p,
+        railHeight: 'medium',
+        selectedClipId: null,
+        inspectorTab: 'color',
+        audioAssets: [],
+        railCopy: rail,
+        floatingCopy: koDict.studioVideo.workspace.floatingBar,
+        onHeightChange: () => {},
+        onSelectClip: () => {},
+        onInspectorTabChange: () => {},
+        onProjectChange: () => {},
+        onAttachClipToDock: () => {},
+        onLocalVideoFiles: () => {},
+        onNotice: () => {},
+      }),
+    );
+    expect(html).not.toContain('data-clip-cut-markers="piece_after"');
+    expect(html).toContain('data-clip-cut-markers="whole_one"');
+    // Badge and button name the same number of cut points.
+    expect(html).toContain('컷 1개');
+    expect(html).toContain('감지 컷 1개 분할');
+    expect(html).not.toContain('컷 2개');
+  });
+
   it('exposes Premiere · DaVinci (.xml) NLE bundle export in standalone VideoComposer and keeps 0ms rail transition CSS clean', () => {
     const composerHtml = renderToStaticMarkup(
       h(VideoComposer, {

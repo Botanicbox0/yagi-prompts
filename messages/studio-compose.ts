@@ -454,7 +454,7 @@ export const studioComposeKo: typeof studioComposeEn = {
   },
   upscale: {
     heading: '고화질 업스케일',
-    lead: '선택한 클립이나 완성 편집본의 해상도와 텍스처 선명도를 4K까지 끌어올립니다.',
+    lead: '선택한 클립의 해상도와 텍스처 선명도를 4K까지 끌어올립니다.',
     resolutionLabel: '목표 해상도',
     res1080p: '1080p FHD',
     res1440p: '1440p QHD',

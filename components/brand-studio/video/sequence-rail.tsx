@@ -895,12 +895,14 @@ export function SequenceRail({
               </label>
             </div>
 
-            {clip.cutMarkers && clip.cutMarkers.length > 0 && (
+            {/* Only the cut points inside this cut's trim, the ones its split button uses: a piece of a split
+                source keeps the source's points, and none of those may fall inside it (E2). */}
+            {splittableCuts.length > 0 && (
               <div className={w.seqCutMarkerRow} data-clip-cut-markers={clip.id}>
                 <span className={w.seqCutBadge}>
-                  {interpolate(railCopy.cutMarkersBadge, { count: clip.cutMarkers.length })}
+                  {interpolate(railCopy.cutMarkersBadge, { count: splittableCuts.length })}
                 </span>
-                {splittableCuts.length > 0 && canEdit && (
+                {canEdit && (
                   <button
                     type="button"
                     className={w.seqSplitCutsBtn}

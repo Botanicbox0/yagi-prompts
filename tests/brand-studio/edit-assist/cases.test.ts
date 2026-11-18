@@ -7,11 +7,11 @@ import { EDIT_ASSIST_CASES, editAssistCaseTimeline, type EditAssistCase } from '
 
 /** Every canned model answer in the instruction table, through validate → resolve → apply → diff. */
 describe('edit-assist instruction table', () => {
-  it('holds 60 instructions, 45 Korean and 15 English, with unique ids', () => {
-    expect(EDIT_ASSIST_CASES).toHaveLength(60);
+  it('holds 61 instructions, 45 Korean and 16 English, with unique ids', () => {
+    expect(EDIT_ASSIST_CASES).toHaveLength(61);
     expect(EDIT_ASSIST_CASES.filter((c) => c.locale === 'ko')).toHaveLength(45);
-    expect(EDIT_ASSIST_CASES.filter((c) => c.locale === 'en')).toHaveLength(15);
-    expect(new Set(EDIT_ASSIST_CASES.map((c) => c.id)).size).toBe(60);
+    expect(EDIT_ASSIST_CASES.filter((c) => c.locale === 'en')).toHaveLength(16);
+    expect(new Set(EDIT_ASSIST_CASES.map((c) => c.id)).size).toBe(61);
   });
 
   it('uses every step kind and every named delta kind at least once', () => {
