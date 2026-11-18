@@ -446,6 +446,13 @@ textarea.bs-field { resize: vertical; }
 .bs-revise-problem { padding: 2px 12px 0; }
 .bs-revise-suggestion { display: grid; gap: 6px; font-size: 13px; }
 .bs-revise-suggestion p { margin: 0; color: var(--ys-ink); }
+.bs-revise-clarify { gap: 8px; padding: 12px; border: 1px solid var(--ys-line-strong); border-radius: var(--ys-r-control); }
+.bs-revise-clarify > p { font-weight: 600; }
+.bs-revise-choices { display: grid; gap: 4px; }
+.bs-revise-choices .bs-btn { justify-content: flex-start; width: 100%; border-radius: var(--ys-r-control); min-height: 40px; height: auto; padding: 8px 12px; white-space: normal; text-align: left; overflow-wrap: anywhere; }
+.bs-revise-choices .bs-btn[data-variant="ghost"] { justify-self: start; width: auto; min-height: 36px; color: var(--ys-ink-secondary); }
+.bs-revise-clarified { display: grid; gap: 1px; font-size: 12.5px; }
+.bs-revise-clarified p { margin: 0; overflow-wrap: anywhere; }
 .bs-revise .bs-submit { justify-self: stretch; }
 /* Marks on a clip ("고칠 곳 표시"): one accent, a ring for a pin, a thin box for a drag. */
 .bs-viewer-media { position: relative; }

@@ -7,7 +7,7 @@ import { Viewer, shownVersion, type ViewerActions, type ViewerItem, type ViewerP
 import { ReviseFormView, VersionStrip, noteLine, type ReviseFormViewProps, type ReviseSupport } from "@/components/brand-studio/revise-form";
 import type { MarkState } from "@/components/brand-studio/revise-marks";
 import { REVISE_MATERIALS_MAX, REVISE_REFERENCES_MAX, createReviseFlow, initialReviseState, type ReviseState } from "@/components/brand-studio/revise-flow";
-import { chainOf } from "@/components/brand-studio/revision-model";
+import { chainOf, reviseRerunInput } from "@/components/brand-studio/revision-model";
 import { credits, fill } from "@/components/brand-studio/copy";
 import { trayItemFromAsset } from "@/components/brand-studio/refs";
 import type { StudioLibrary } from "@/components/brand-studio/seams";
@@ -273,7 +273,7 @@ describe("the next-version form", () => {
   it("asks for the plan on open and selects the default way", async () => {
     const { flow, planCalls } = flowWith([plan({ recommended: "reshoot" })]);
     await flow.load();
-    expect(planCalls).toEqual([{ organizationId: ORG, outputId: output(3).id, prompt: "", references: [], marks: [] }]);
+    expect(planCalls).toEqual([{ organizationId: ORG, outputId: output(3).id, prompt: "", references: [], marks: [], materials: 0 }]);
     expect(flow.state.mode).toBe("reshoot");
     expect(flow.state.plan?.version).toBe(4);
   });
@@ -451,5 +451,138 @@ describe("the next-version form", () => {
     flow.setPrompt("로고를 더 선명하게");
     await flow.submit();
     expect(flow.state).toMatchObject({ phase: "ready", note: "allowance_exhausted", prompt: "로고를 더 선명하게" });
+  });
+});
+
+describe("one question for an unclear request (§4.6)", () => {
+  const copy = copyFor("ko");
+  const QUESTION = { question: "어느 병을 바꿀까요?", options: ["왼쪽 병", "오른쪽 병"] };
+
+  function flowWith(answers: Array<StudioRevisePlan | { ok: false; code: string }>) {
+    const planCalls: Array<Record<string, unknown>> = [];
+    const created: Array<Record<string, unknown>> = [];
+    const flow = createReviseFlow({
+      organizationId: ORG,
+      outputId: output(3).id,
+      plan: vi.fn(async (input) => {
+        planCalls.push(input as unknown as Record<string, unknown>);
+        return answers[Math.min(planCalls.length - 1, answers.length - 1)]! as StudioRevisePlan;
+      }),
+      create: vi.fn(async (input) => {
+        created.push(input as unknown as Record<string, unknown>);
+        return { ok: true as const, job: clip(9, { status: "queued", outputs: [], revision: rev(4, 3) }) };
+      }),
+      onChange: noop,
+    });
+    return { flow, planCalls, created };
+  }
+
+  it("asks, then a choice re-reads the request with the answer and makes it with the answer", async () => {
+    const { flow, planCalls, created } = flowWith([plan(), plan({ reason: "surface", clarify: QUESTION }), plan({ reason: "surface" })]);
+    await flow.load();
+    flow.setPrompt("병 색을 초록색으로");
+    await flow.submit();
+    expect(created).toHaveLength(0);
+    expect(flow.state).toMatchObject({ phase: "clarify", clarify: QUESTION });
+    expect(planCalls[1]).not.toHaveProperty("clarified");
+    await flow.answer("왼쪽 병");
+    expect(planCalls).toHaveLength(3);
+    expect(planCalls[2]).toMatchObject({ prompt: "병 색을 초록색으로", clarified: { question: QUESTION.question, answer: "왼쪽 병" } });
+    expect(created).toEqual([expect.objectContaining({ mode: "edit", prompt: "병 색을 초록색으로", clarified: { question: QUESTION.question, answer: "왼쪽 병" } })]);
+    expect(flow.state).toMatchObject({ phase: "ready", prompt: "", clarify: null, clarified: null });
+  });
+
+  it("as written makes it at once with the plan it has, carrying no answer", async () => {
+    const { flow, planCalls, created } = flowWith([plan(), plan({ reason: "surface", clarify: QUESTION })]);
+    await flow.load();
+    flow.setPrompt("병 색을 초록색으로");
+    await flow.submit();
+    await flow.answer(null);
+    expect(planCalls).toHaveLength(2);
+    expect(created).toHaveLength(1);
+    expect(created[0]).not.toHaveProperty("clarified");
+  });
+
+  it("after the answer the way suggestion still applies, once", async () => {
+    const { flow, created } = flowWith([plan(), plan({ clarify: { question: "어느 쪽으로 옮길까요?", options: ["왼쪽", "오른쪽"] } }), plan({ recommended: "reshoot", reason: "motion" })]);
+    await flow.load();
+    flow.setPrompt("옮겨 줘");
+    await flow.submit();
+    await flow.answer("왼쪽");
+    expect(created).toHaveLength(0);
+    expect(flow.state).toMatchObject({ phase: "suggest", suggestion: { mode: "reshoot", reason: "motion" } });
+    await flow.accept(true);
+    expect(created).toEqual([expect.objectContaining({ mode: "reshoot", clarified: { question: "어느 쪽으로 옮길까요?", answer: "왼쪽" } })]);
+  });
+
+  it("never asks twice for one version: a changed request, a failed run and a second send all carry the first question", async () => {
+    const asks = plan({ clarify: QUESTION });
+    const { flow, planCalls, created } = flowWith([plan(), asks, asks, asks]);
+    await flow.load();
+    flow.setPrompt("병 색을 바꿔 줘");
+    await flow.submit();
+    expect(flow.state.phase).toBe("clarify");
+    // Changing the request instead of answering ends the question for this version.
+    flow.setPrompt("왼쪽 병 색을 바꿔 줘");
+    expect(flow.state).toMatchObject({ phase: "ready", clarify: null, clarified: { question: QUESTION.question, answer: null } });
+    await flow.submit();
+    expect(planCalls[2]).toMatchObject({ clarified: { question: QUESTION.question, answer: null } });
+    expect(created).toHaveLength(1);
+    expect(created[0]).not.toHaveProperty("clarified");
+  });
+
+  it("an answer that is not one of the choices does nothing; a failed reading means no question", async () => {
+    const one = flowWith([plan(), plan({ clarify: QUESTION })]);
+    await one.flow.load();
+    one.flow.setPrompt("병 색을 바꿔 줘");
+    await one.flow.submit();
+    await one.flow.answer("가운데 병");
+    expect(one.flow.state.phase).toBe("clarify");
+    expect(one.created).toHaveLength(0);
+
+    // The server answers without a question when its reading fails: the run goes ahead as written.
+    const two = flowWith([plan(), plan({ reason: null })]);
+    await two.flow.load();
+    two.flow.setPrompt("병 색을 바꿔 줘");
+    await two.flow.submit();
+    expect(two.created).toHaveLength(1);
+
+    // The second plan fails after a choice: the request stays, the answer stays, and it is not asked again.
+    const three = flowWith([plan(), plan({ clarify: QUESTION }), { ok: false, code: "failed" }, plan({ clarify: QUESTION })]);
+    await three.flow.load();
+    three.flow.setPrompt("병 색을 바꿔 줘");
+    await three.flow.submit();
+    await three.flow.answer("오른쪽 병");
+    expect(three.flow.state).toMatchObject({ phase: "ready", note: "failed", prompt: "병 색을 바꿔 줘", clarified: { answer: "오른쪽 병" } });
+    await three.flow.submit();
+    expect(three.created).toEqual([expect.objectContaining({ clarified: { question: QUESTION.question, answer: "오른쪽 병" } })]);
+  });
+
+  it("shows the question with one button per choice and one to make it as written; the send button waits", () => {
+    const html = renderToStaticMarkup(
+      <ReviseFormView state={{ ...initialReviseState(), phase: "clarify", plan: plan(), prompt: "병 색을 바꿔 줘", clarify: QUESTION }} version={4} copy={copy} locale="ko" recent={[]} uploading={false}
+        onPrompt={noop} onReferences={noop} onFiles={noop} resolve={() => null} onPick={noop} onSubmit={noop} onAccept={noop} onAnswer={noop} />,
+    );
+    expect(html).toContain("data-revise-clarify");
+    expect(html).toContain(QUESTION.question);
+    expect(html).toContain(`data-revise-choice="1"`);
+    expect(html).toContain(`data-revise-choice="2"`);
+    expect(html).toContain(`data-revise-choice="as-written"`);
+    expect(html).toContain(copy.revise.asWritten);
+    expect(html).toMatch(/role="group" aria-labelledby="[^"]+-question"/);
+    expect(html).toMatch(/data-revise-submit[^>]*disabled/);
+  });
+
+  it("shows a version's answer read-only under its request, and sends it again with the same request", () => {
+    const clarified = { question: "어느 병을 바꿀까요?", answer: "왼쪽 병" };
+    const v2c = clip(2, { kind: "video_remix", prompt: "병 색을 바꿔 줘", revision: rev(2, 1, { clarified }) });
+    const versions = chainOf([v2c, v1], v2c);
+    expect(versions[1]!.clarified).toEqual(clarified);
+    const html = renderToStaticMarkup(<VersionStrip versions={versions} selected={2} copy={copy} onSelect={noop} />);
+    expect(html).toContain("data-revision-clarified");
+    expect(html).toContain(clarified.answer);
+    expect(html).toContain(copy.revise.clarifiedLabel);
+    expect(renderToStaticMarkup(<VersionStrip versions={versions} selected={1} copy={copy} onSelect={noop} />)).not.toContain("data-revision-clarified");
+    expect(reviseRerunInput(v2c, { organizationId: ORG, requestId: "r".repeat(8) })).toMatchObject({ prompt: "병 색을 바꿔 줘", clarified });
   });
 });

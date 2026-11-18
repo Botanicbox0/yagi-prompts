@@ -56,7 +56,7 @@ describe('revise.plan', () => {
     expect(await ask(deps, { outputId: root.outputId, prompt: '카메라를 왼쪽으로' })).toMatchObject({ ok: true, recommended, reason });
     const body = sentBody(fetchMock);
     expect(body.generationConfig).toMatchObject({ thinkingConfig: { thinkingLevel: 'LOW' } });
-    expect(JSON.parse((body.contents[0]!.parts[0] as { text: string }).text)).toEqual({ request: '카메라를 왼쪽으로', madeWith: 'A perfume bottle on stone.', history: [] });
+    expect(JSON.parse((body.contents[0]!.parts[0] as { text: string }).text)).toEqual({ request: '카메라를 왼쪽으로', madeWith: 'A perfume bottle on stone.', history: [], references: 0, materials: 0 });
   });
 
   it('falls back to edit when the reading fails or is unexpected, and never passes model text on', async () => {

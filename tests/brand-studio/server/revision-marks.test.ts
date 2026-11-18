@@ -164,7 +164,7 @@ describe('revise.plan with marks', () => {
     });
     expect(result).toMatchObject({ ok: true, recommended: 'edit', reason: 'surface' });
     const sent = JSON.parse((sentBody(fetchMock).contents[0]!.parts[0] as { text: string }).text);
-    expect(sent.request).toBe("the translucent pink glass perfume bottle held in the woman's hand 을 초록색으로, the marked spot 는 닫아줘");
+    expect(sent.request).toBe("[marked on the clip: the translucent pink glass perfume bottle held in the woman's hand] 을 초록색으로, [marked on the clip: the marked spot] 는 닫아줘");
     expect(sent.history).toEqual(['모자 을 빨갛게']);
   });
 });

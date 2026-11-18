@@ -2,6 +2,7 @@
  * Rows <-> wire views, and the reads every studio module shares. SQL here never decides access:
  * callers pass an organization they already seated (./access.ts) and every query is scoped to it.
  */
+import { clarifiedOf } from './revision/clarify';
 import { brandStudioProjectsOpen } from '@/lib/flags';
 import type { SqlRunner } from '@/lib/db/sql-runner';
 import type {
@@ -69,6 +70,13 @@ export function outputView(
   };
 }
 
+/** Results a job's usage covers: every ready one (deleted since or not) once settled, the planned ones before. */
+function countedOutputs(row: JobRow, outputs: OutputRow[]): number {
+  const mine = outputs.filter((o) => o.job_id === row.id);
+  const ready = mine.filter((o) => o.status === 'ready').length;
+  return row.usage_krw != null && ready > 0 ? ready : Math.max(1, mine.length);
+}
+
 export function jobView(row: JobRow, outputs: OutputRow[], media: StudioMediaStore): StudioJobView {
   const p = row.params ?? ({} as JobRow['params']);
   const closed = row.status === 'failed' || row.status === 'canceled';
@@ -122,6 +130,7 @@ export function jobView(row: JobRow, outputs: OutputRow[], media: StudioMediaSto
             mode: p.revision.mode,
             added: p.revision.added,
             ...(p.revision.materials?.length ? { materials: p.revision.materials.map((m) => ({ ...m })) } : {}),
+            ...(clarifiedOf(p.revision) ? { clarified: clarifiedOf(p.revision)! } : {}),
             ...(Array.isArray(p.revision.marks) && p.revision.marks.length
               ? { marks: p.revision.marks.map((m) => ({ ...m })) }
               : {}),
@@ -148,6 +157,7 @@ export function jobView(row: JobRow, outputs: OutputRow[], media: StudioMediaSto
         return outputView(o, media, { regionPatch, sourceRef: regionSourceRef });
       }),
     estimateKrw: closed ? 0 : Number(row.usage_krw ?? row.estimate_krw ?? 0),
+    countedOutputs: countedOutputs(row, outputs),
     errorCode:
       row.status === 'failed'
         ? row.work?.region?.misaligned
