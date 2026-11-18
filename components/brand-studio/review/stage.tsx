@@ -560,9 +560,9 @@ export function ReviewStage({
       const body = bodyRef.current;
       const section = sectionRef.current;
       if (!body || !section) return;
-      // The room's review mode is scrolled to its scroll margin when it opens; the studio's review page and the
-      // share page show the stage where it is on the page.
-      const room = section.closest<HTMLElement>("[data-room-review-mode]");
+      // The room's review mode and the team desk's open version are scrolled to their scroll margin when they
+      // open (`data-review-fit-scroll`); the studio's review page and the share page show the stage where it is.
+      const room = section.closest<HTMLElement>("[data-room-review-mode], [data-review-fit-scroll]");
       const anchor = room ?? section.closest<HTMLElement>("[data-review-fit-anchor]") ?? section;
       const anchorRect = anchor.getBoundingClientRect();
       const anchorTop = room ? Number.parseFloat(getComputedStyle(room).scrollMarginTop) || 0 : anchorRect.top + window.scrollY;
@@ -1867,40 +1867,13 @@ export function ReviewStage({
           teamTag={team && t.root.team ? team.copy.tag : null}
           tc={tc}
           fps={frameRate}
+          tools={t.root.deleted ? null : rowTools(t, carried)}
         />
-        {!t.root.deleted && (canComment || canManage) && (
-          <div className="bsv-thread-actions">
-            {canComment && !carried && (
-              <button type="button" className="bsv-text-btn" onClick={() => setReplyTo((v) => (v === t.root.id ? null : t.root.id))} aria-expanded={replyTo === t.root.id} aria-label={copy.replyLabel}>
-                {copy.reply}
-              </button>
-            )}
-            {resolveComment && (
-              <button
-                type="button"
-                className="bsv-text-btn"
-                data-review-resolve={t.root.id}
-                disabled={busy !== null}
-                onClick={() => void run(`resolve:${t.root.id}`, () => resolveComment(t.root.id))}
-              >
-                {t.root.resolved ? copy.reopenThread : copy.resolve}
-              </button>
-            )}
-            {canComment && !carried && t.root.mine && actions.deleteComment && (
-              <DeleteButton copy={copy} disabled={busy !== null} onConfirm={() => void run(`delete:${t.root.id}`, () => actions.deleteComment!(t.root.id))} />
-            )}
-          </div>
-        )}
         {t.replies.length > 0 && (
           <ul className="bsv-replies">
             {t.replies.map((r) => (
               <li key={r.id} className="bsv-reply" data-review-reply={r.id}>
-                <CommentBody comment={r} copy={copy} locale={locale} tc={tc} fps={frameRate} />
-                {canComment && r.mine && actions.deleteComment && (
-                  <div className="bsv-thread-actions">
-                    <DeleteButton copy={copy} disabled={busy !== null} onConfirm={() => void run(`delete:${r.id}`, () => actions.deleteComment!(r.id))} />
-                  </div>
-                )}
+                <CommentBody comment={r} copy={copy} locale={locale} tc={tc} fps={frameRate} tools={replyTools(r)} />
               </li>
             ))}
           </ul>
@@ -1945,6 +1918,71 @@ export function ReviewStage({
       </li>
     );
   }
+
+  /** Delete one's own note or reply: the same confirm as before, then the same call. */
+  function confirmDelete(commentId: string) {
+    if (!actions.deleteComment) return;
+    if (typeof window !== "undefined" && !window.confirm(copy.deleteConfirm)) return;
+    void run(`delete:${commentId}`, () => actions.deleteComment!(commentId));
+  }
+
+  /**
+   * A note's own controls (2026-11-19): 답글 is the one visible action (on hover, focus or selection; always on a
+   * touch screen), and "⋯" opens the stage's menu with 해결 (or 다시 열기) and 삭제. Neither of those two sits in
+   * the row, so a click aimed at the row selects the note and never resolves or deletes it. Tab reaches 답글,
+   * then "⋯"; the menu takes the arrows and Escape.
+   */
+  function rowTools(t: ReviewThread, carried: boolean): ReactNode {
+    const canReply = canComment && !carried;
+    const entries: StageMenuEntry[] = [];
+    if (resolveComment) {
+      entries.push({
+        key: "resolve",
+        label: t.root.resolved ? copy.reopenThread : copy.resolve,
+        disabled: busy !== null,
+        run: () => void run(`resolve:${t.root.id}`, () => resolveComment(t.root.id)),
+      });
+    }
+    if (canComment && !carried && t.root.mine && actions.deleteComment) {
+      entries.push({ key: "delete", label: copy.deleteComment, disabled: busy !== null, run: () => confirmDelete(t.root.id) });
+    }
+    if (!canReply && entries.length === 0) return null;
+    return (
+      <span className="bsv-row-actions" data-review-row-actions={t.root.id}>
+        {canReply && (
+          <button
+            type="button"
+            className="bsv-text-btn"
+            onClick={() => setReplyTo((v) => (v === t.root.id ? null : t.root.id))}
+            aria-expanded={replyTo === t.root.id}
+            aria-label={copy.replyLabel}
+            data-review-reply-open={t.root.id}
+          >
+            {copy.reply}
+          </button>
+        )}
+        {entries.length > 0 && (
+          <StageMenuButton label={copy.more} icon={<Icon d={ICONS.more} />} entries={entries} className="bsv-icon-btn bsv-row-more" marker={{ "data-review-row-more": t.root.id }} />
+        )}
+      </span>
+    );
+  }
+
+  /** A reply's controls: only one's own reply has any, and its 삭제 sits in the "⋯" menu too. */
+  function replyTools(r: ReviewComment): ReactNode {
+    if (r.deleted || !canComment || !r.mine || !actions.deleteComment) return null;
+    return (
+      <span className="bsv-row-actions" data-review-row-actions={r.id}>
+        <StageMenuButton
+          label={copy.more}
+          icon={<Icon d={ICONS.more} />}
+          entries={[{ key: "delete", label: copy.deleteComment, disabled: busy !== null, run: () => confirmDelete(r.id) }]}
+          className="bsv-icon-btn bsv-row-more"
+          marker={{ "data-review-row-more": r.id }}
+        />
+      </span>
+    );
+  }
 }
 
 const STAMP = new Map<string, Intl.DateTimeFormat>();
@@ -1968,6 +2006,7 @@ function CommentBody({
   teamTag = null,
   tc = formatTimecode,
   fps = null,
+  tools = null,
 }: {
   comment: ReviewComment;
   number?: number;
@@ -1983,6 +2022,11 @@ function CommentBody({
   tc?: (ms: number | null | undefined) => string;
   /** The frame rate, for the timecode drawn on the chip (`Timecode`). */
   fps?: number | null;
+  /**
+   * The row's controls (답글 · "⋯"). A thread head keeps them at the end of its time line, a reply at the end of
+   * its name line: their place is always laid out, so showing them never moves the row.
+   */
+  tools?: ReactNode;
 }) {
   const role = comment.guest ? "guest" : comment.authorRole;
   const timecode = comment.atMs == null ? "" : comment.endMs != null ? `${tc(comment.atMs)}–${tc(comment.endMs)}` : tc(comment.atMs);
@@ -2010,6 +2054,7 @@ function CommentBody({
         <time className="bsv-when" dateTime={comment.createdAt}>
           {stamp(comment.createdAt, locale)}
         </time>
+        {!onSeek && tools}
       </header>
       {comment.deleted ? (
         <p className="bsv-body bsv-quiet">{copy.deletedComment}</p>
@@ -2057,6 +2102,7 @@ function CommentBody({
                 </button>
               ) : null}
               {comment.resolved && <span className="bsv-resolved">{copy.resolvedTag}</span>}
+              {tools}
             </div>
           )}
           <p className="bsv-body">{comment.body}</p>
@@ -2066,18 +2112,3 @@ function CommentBody({
   );
 }
 
-function DeleteButton({ copy, disabled, onConfirm }: { copy: ReviewCopy; disabled: boolean; onConfirm: () => void }) {
-  return (
-    <button
-      type="button"
-      className="bsv-text-btn"
-      data-tone="quiet"
-      disabled={disabled}
-      onClick={() => {
-        if (typeof window === "undefined" || window.confirm(copy.deleteConfirm)) onConfirm();
-      }}
-    >
-      {copy.deleteComment}
-    </button>
-  );
-}

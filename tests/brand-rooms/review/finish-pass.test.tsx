@@ -8,7 +8,7 @@ import { getDictionary } from "@/lib/i18n/dictionaries";
  * docs/BRAND-ROOMS-FEEDBACK.md §11.7, finishing pass of 2026-11-19 ("아쉬운 것 없을 때까지") — rendered:
  *   · a range draws its line only when selected (or under the pointer), and a range being drawn hides the
  *     selected one's line while the selected dot stays;
- *   · exactly one accent-filled control per view (the main act), docs/design/TASTE.md 18;
+ *   · exactly one accent-filled control per view (the main act), docs/design/TASTE.md 19;
  *   · no browser-styled control left inside the review surfaces (select, checkbox);
  *   · the studio review page: one filled button on the page and no URL path in its words;
  *   · the filled body's height.
@@ -189,6 +189,58 @@ describe.each(["ko", "en"] as const)("the finishing pass (%s)", (locale) => {
     });
   });
 
+  describe("a note's own controls", () => {
+    const mine = note(5, { mine: true, body: "my own note" });
+    const resolved = note(6, { resolved: true, body: "already fixed" });
+    const myReply = note(7, { parentId: mine.id, mine: true, atMs: null, body: "my reply" });
+    const owner = () =>
+      renderToStaticMarkup(
+        <ReviewStage
+          review={item()}
+          comments={[moment, mine, resolved, myReply]}
+          canWrite
+          copy={copy}
+          locale={locale}
+          actions={{ ...actions, deleteComment: async () => ({ ok: true as const }) }}
+          extended
+        />,
+      );
+    /** Every button's own text (tags stripped), as a person would read the button. */
+    const buttonTexts = (html: string) => (html.match(/<button[^>]*>[\s\S]*?<\/button>/g) ?? []).map((b) => b.replace(/<[^>]+>/g, "").trim());
+
+    it("never puts 해결, 다시 열기 or 삭제 straight in a row: they wait in the \"⋯\" menu", () => {
+      const html = owner();
+      const texts = buttonTexts(html);
+      for (const word of [copy.resolve, copy.reopenThread, copy.deleteComment]) expect(texts, word).not.toContain(word);
+      // Each note a person may act on has 답글 and one "⋯" that opens a menu; a reply of one's own has a "⋯".
+      for (const id of [moment.id, mine.id, resolved.id]) {
+        const row = html.slice(html.indexOf(`data-review-thread="${id}"`));
+        const at = row.indexOf(`data-review-row-actions="${id}"`);
+        const tools = row.slice(at, row.indexOf('class="bsv-body"', at));
+        expect(tools, id).toContain(`data-review-reply-open="${id}"`);
+        expect(tools, id).toMatch(new RegExp(`aria-haspopup="menu"[^>]*data-review-row-more="${id}"`));
+        // Tab order inside the row: 답글, then "⋯".
+        expect(tools.indexOf("data-review-reply-open"), id).toBeLessThan(tools.indexOf("data-review-row-more"));
+      }
+      expect(html).toMatch(new RegExp(`aria-haspopup="menu"[^>]*data-review-row-more="${myReply.id}"`));
+      // The menu button is named with the existing words, no new sentence.
+      expect(html).toMatch(new RegExp(`aria-label="${copy.more}"[^>]*data-review-row-more`));
+    });
+
+    it("keeps the controls' place laid out in the row's time line, so showing them never moves the row", () => {
+      const html = owner();
+      const head = html.slice(html.indexOf(`data-review-thread="${mine.id}"`));
+      const meta = head.slice(head.indexOf('class="bsv-meta"'));
+      expect(meta.indexOf("data-review-row-actions")).toBeGreaterThan(0);
+      expect(meta.indexOf("data-review-row-actions")).toBeLessThan(meta.indexOf('class="bsv-body"'));
+      const css = readFileSync("components/brand-studio/review/review.css", "utf8");
+      // Hidden with a pointer until hover, focus or selection, and not clickable while hidden; always on touch.
+      expect(css).toMatch(/@media \(hover: hover\) \{\s*\.bsv-row-actions \{\s*opacity: 0;\s*pointer-events: none;/);
+      expect(css).toMatch(/\.bsv-thread:is\(:hover, :focus-within, \[data-active\], \[data-replying\]\) > \.bsv-comment \.bsv-row-actions/);
+      expect(css).not.toContain("bsv-thread-actions");
+    });
+  });
+
   describe("no browser-styled controls on the stage", () => {
     it("the version switcher, the speed, the author filter and the team switch are the stage's own", () => {
       const html = renderToStaticMarkup(
@@ -290,6 +342,30 @@ describe("the review surfaces' source", () => {
     expect(css).not.toMatch(/accent-color/);
     expect(css).toMatch(/\.bsv-switch-input:focus-visible \+ \.bsv-switch-track\s*\{\s*outline: 2px solid var\(--bsv-accent\)/);
   });
+  it("hides the floating help button over an open review only where it floats, not in a phone's top bar", () => {
+    for (const [file, open] of [
+      ["components/brand-studio/review/review.css", "[data-studio-review] [data-review-stage]"],
+      ["components/brand-rooms/room/room.css", "[data-room-review-mode]"],
+    ] as const) {
+      const css = readFileSync(file, "utf8");
+      const esc = open.replace(/[[\]()]/g, "\\$&");
+      // Wider than a phone: hidden while a review is open.
+      expect(css, file).toMatch(new RegExp(`@media \\(min-width: 641px\\) \\{\\s*body:has\\(${esc}\\) \\.bw-support-launch \\{\\s*display: none;`));
+      // A phone in the rail shell keeps it in the top bar; only a shell without the rail hides it.
+      expect(css, file).toContain(`body:has(${open}):not(:has([data-brand-layout-mode="rail"])) .bw-support-launch`);
+    }
+  });
+
+  it("opens the team desk's version like the client's review mode: filled to the window's bottom", () => {
+    const admin = readFileSync("components/brand-studio/review/admin-stage.tsx", "utf8");
+    expect(admin).toMatch(/layout=\{deskOrg && deskProject \? "wide" : "inline"\}/);
+    expect(admin).toContain('scrollIntoView({ block: "start", behavior: "auto" })');
+    const page = readFileSync("app/(admin)/admin/brand-rooms/[organizationId]/[projectId]/page.tsx", "utf8");
+    expect(page).toMatch(/data-admin-desk-stage=\{chosen\.review\.id\} data-review-fit-scroll/);
+    const stage = readFileSync("components/brand-studio/review/stage.tsx", "utf8");
+    expect(stage).toContain('"[data-room-review-mode], [data-review-fit-scroll]"');
+  });
+
   it("writes the accent rule into the stage's CSS", () => {
     const css = readFileSync("components/brand-studio/review/review.css", "utf8");
     expect(css).toContain("THE ACCENT RULE");

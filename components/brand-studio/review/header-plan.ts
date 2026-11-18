@@ -48,7 +48,7 @@ export function planHeader(input: HeaderInput): HeaderPlan {
 }
 
 /**
- * Which one control wears the accent fill (docs/design/TASTE.md 18): the view's main act. The head's
+ * Which one control wears the accent fill (docs/design/TASTE.md 19): the view's main act. The head's
  * 승인하기 while the viewer may approve; otherwise the composer's 보내기 (the team's page, a guest, a viewer who
  * may write, an approved draft). Nothing on a read-only view. Where both exist, 보내기 is the neutral filled
  * button (primary ink), so a view never shows two accent fills.

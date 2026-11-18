@@ -20,7 +20,7 @@
  *     Enter or the second tap selects the note in the list and brings the film to it.
  *   · The accent marks only what is being added right now: a range being drawn (its line and two handles) or a
  *     moment being marked. The selected note is primary ink (its dot, its line, a wash on the bar), so it never
- *     competes with the view's one accent-filled action (docs/design/TASTE.md 18).
+ *     competes with the view's one accent-filled action (docs/design/TASTE.md 19).
  *   · The lane is one tab stop: ←/→/Home/End move between its stops in time order (they never step the film
  *     here), Enter/Space opens, Escape goes back to the stage.
  */

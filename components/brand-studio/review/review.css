@@ -721,12 +721,6 @@ button.bsv-spot-tag {
   word-break: keep-all;
   overflow-wrap: anywhere;
 }
-.bsv-thread-actions {
-  display: flex;
-  gap: 2px;
-  margin-top: 6px;
-  margin-left: -8px;
-}
 .bsv-text-btn {
   padding: 4px 8px;
   border: 0;
@@ -2223,65 +2217,53 @@ button.bsv-timecode:hover .bsv-tc-ff {
   /* A neutral bar in primary ink: the selection never borrows the accent (2026-11-19). */
   box-shadow: inset 2px 0 0 var(--bsv-ink), inset 0 -1px 0 var(--bsv-line);
 }
-.bsv-thread-actions {
-  opacity: 0;
+/*
+ * A note's controls (2026-11-19, second pass): 답글 is the one visible action and "⋯" opens the stage's menu with
+ * 해결 (다시 열기) and 삭제, so a click aimed at the row can only select it, open a reply or open the menu. They sit
+ * at the end of the head's time line (a reply: its name line), so their place is always laid out and showing
+ * them never moves the row or covers the date. With a pointer they show on hover, focus and selection, and are
+ * not clickable while hidden; touch screens always show them.
+ */
+.bsv-row-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  margin: -2px -6px -2px auto;
   transition: opacity var(--bsv-dur) var(--bsv-ease);
 }
-.bsv-thread:hover > .bsv-thread-actions,
-.bsv-thread:focus-within > .bsv-thread-actions,
-.bsv-thread[data-active] > .bsv-thread-actions,
-.bsv-thread[data-replying] > .bsv-thread-actions,
-.bsv-reply:hover > .bsv-thread-actions,
-.bsv-reply:focus-within > .bsv-thread-actions {
-  opacity: 1;
+.bsv-comment-head .bsv-row-actions {
+  margin-left: 2px;
 }
-@media (hover: none) {
-  .bsv-thread-actions {
-    opacity: 1;
+/* A short window (1280×720): the note field starts two lines tall (it still grows by its handle), so the list
+   above it keeps one more note in view. */
+@media (min-width: 1241px) and (max-height: 760px) {
+  .bsv-composer > textarea.bsv-input {
+    height: 64px;
   }
 }
-/*
- * With a pointer, a note's actions (답글 · 해결 · 삭제) float over the top-right of its row while the row is
- * under the pointer or holds focus, instead of keeping an invisible line under every note (that empty line was
- * what made the rows look padded at the bottom). Touch screens keep them in the row, always shown.
- */
+.bsv-row-actions .bsv-text-btn {
+  min-height: 28px;
+  padding: 0 8px;
+}
+.bsv-row-actions .bsv-row-more {
+  width: 28px;
+  height: 28px;
+  color: var(--bsv-body);
+}
+.bsv-row-actions .bsv-row-more:hover,
+.bsv-row-actions .bsv-row-more[aria-expanded="true"] {
+  color: var(--bsv-ink);
+}
 @media (hover: hover) {
-  .bsv-thread,
-  .bsv-reply {
-    position: relative;
-  }
-  .bsv-thread > .bsv-thread-actions,
-  .bsv-reply > .bsv-thread-actions {
-    position: absolute;
-    z-index: 2;
-    top: 6px;
-    right: 6px;
-    margin: 0;
-    padding: 2px;
-    border-radius: 10px;
-    background: var(--bsv-raised);
-    box-shadow: inset 0 0 0 1px var(--bsv-line-strong), 0 6px 16px rgba(0, 0, 0, 0.32);
+  .bsv-row-actions {
+    opacity: 0;
     pointer-events: none;
   }
-  .bsv-thread[data-active] > .bsv-thread-actions {
-    opacity: 0;
-  }
-  .bsv-thread:hover > .bsv-thread-actions,
-  .bsv-thread:focus-within > .bsv-thread-actions,
-  .bsv-thread[data-replying] > .bsv-thread-actions,
-  .bsv-reply:hover > .bsv-thread-actions,
-  .bsv-reply:focus-within > .bsv-thread-actions {
+  .bsv-thread:is(:hover, :focus-within, [data-active], [data-replying]) > .bsv-comment .bsv-row-actions,
+  .bsv-reply:is(:hover, :focus-within) > .bsv-comment .bsv-row-actions,
+  .bsv-row-actions:has([aria-expanded="true"]) {
     opacity: 1;
     pointer-events: auto;
-  }
-  .bsv-reply > .bsv-thread-actions {
-    top: -2px;
-    right: 0;
-  }
-  /* The floating actions take the date's place; the date steps aside so no digit peeks out beside them. */
-  .bsv-thread:has(> .bsv-thread-actions):is(:hover, :focus-within, [data-replying]) > .bsv-comment .bsv-when,
-  .bsv-reply:has(> .bsv-thread-actions):is(:hover, :focus-within) > .bsv-comment .bsv-when {
-    visibility: hidden;
   }
 }
 .bsv-num,
@@ -2334,7 +2316,7 @@ button.bsv-timecode:hover .bsv-tc-ff {
 @media (prefers-reduced-motion: reduce) {
   .bsv-timeline *,
   .bsv-thread,
-  .bsv-thread-actions,
+  .bsv-row-actions,
   .bsv-menu * {
     transition: none !important;
   }
@@ -2343,7 +2325,7 @@ button.bsv-timecode:hover .bsv-tc-ff {
 /*
  * Finishing pass (docs/BRAND-ROOMS-FEEDBACK.md §11.7, 2026-11-19: "아쉬운 것 없을 때까지").
  *
- * THE ACCENT RULE (docs/design/TASTE.md 18). The accent does two jobs and no others:
+ * THE ACCENT RULE (docs/design/TASTE.md 19). The accent does two jobs and no others:
  *   1. it fills exactly one control on a view, the view's main act (header-plan.ts `accentControl`):
  *      승인하기 while the viewer may approve, otherwise the composer's 보내기. Where both exist, 보내기 is the
  *      neutral filled button (primary ink on the dark stage, `data-tone="neutral"`);
@@ -2852,10 +2834,21 @@ button.bsv-spot-tag:hover {
 }
 /*
  * The floating help button sits over the bottom-right corner, which with a review open is the notes column and
- * its send button. It steps aside while a piece is open, as it does in the room's review mode.
+ * its send button. It steps aside while a piece is open, as it does in the room's review mode. On a phone in the
+ * rail shell (640px and less, app/(brand)/rail.css) it lives in the top bar beside 언어 and covers nothing, so it
+ * stays there.
  */
-body:has([data-studio-review] [data-review-stage]) .bw-support-launch {
+body:has([data-studio-review] [data-review-stage]):not(:has([data-brand-layout-mode="rail"])) .bw-support-launch {
   display: none;
+}
+@media (min-width: 641px) {
+  body:has([data-studio-review] [data-review-stage]) .bw-support-launch {
+    display: none;
+  }
+}
+/* The team desk's open version comes to the top of the window with a little air (admin-stage.tsx). */
+[data-review-fit-scroll] {
+  scroll-margin-top: 12px;
 }
 [data-studio-review] {
   max-width: none;

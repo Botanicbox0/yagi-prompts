@@ -116,9 +116,10 @@ describe.each(["ko", "en"] as const)("the review stage (%s)", (locale) => {
     // The version switcher is the stage's own select: a button that names the version and its status.
     expect(html).toMatch(/class="bsv-select bsv-version-select"[^>]*aria-label="[^"]+: v2 · [^"]+"[^>]*aria-haspopup="menu"/);
     expect(html).not.toContain("<select");
-    // A carried note offers resolve, never reply.
+    // A carried note offers resolve (inside its "⋯" menu), never reply.
     const carried = html.slice(html.indexOf('data-review-carried="1"'));
-    expect(carried).toContain(`data-review-resolve="${note(3).id}"`);
+    expect(carried).toContain(`data-review-row-more="${note(3).id}"`);
+    expect(carried).not.toContain(`data-review-reply-open="${note(3).id}"`);
     expect(carried).not.toContain(copy.reply + "</button>");
   });
 
@@ -149,7 +150,8 @@ describe.each(["ko", "en"] as const)("the review stage (%s)", (locale) => {
     expect(html).toContain("data-review-guest-name");
     expect(html).toContain("data-review-composer");
     expect(html).toContain("data-review-download");
-    for (const marker of ["data-review-status-action", "data-review-copy-link", "data-review-resolve"]) expect(html, marker).not.toContain(marker);
+    // A guest replies, and has nothing to resolve or delete: no "⋯" on a note either.
+    for (const marker of ["data-review-status-action", "data-review-copy-link", "data-review-resolve", "data-review-row-more"]) expect(html, marker).not.toContain(marker);
   });
 });
 

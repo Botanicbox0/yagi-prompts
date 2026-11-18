@@ -71,7 +71,7 @@ describe("the shortcuts list", () => {
 });
 
 /**
- * docs/design/TASTE.md 18 (2026-11-19): the accent fills one control per view, its main act. 승인하기 when the
+ * docs/design/TASTE.md 19 (2026-11-19): the accent fills one control per view, its main act. 승인하기 when the
  * viewer may approve; otherwise the composer's 보내기; nothing on a read-only view.
  */
 describe("the one accent-filled control", () => {

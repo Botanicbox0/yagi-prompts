@@ -10,7 +10,7 @@
  *   · density degrades gracefully: when the lane holds more notes than it has room for, it folds into evenly
  *     spaced stretches drawn as a quiet strip, and the detail opens on hover, focus or tap (2026-11-19);
  *   · the accent marks only what is being added right now (a range or a moment being drawn); the selected note
- *     is primary ink (docs/design/TASTE.md 18).
+ *     is primary ink (docs/design/TASTE.md 19).
  */
 import type { ReviewThread } from "@/lib/brand-studio/review-contracts";
 import { exactRate } from "@/lib/brand-studio/review-frames";
