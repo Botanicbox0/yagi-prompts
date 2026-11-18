@@ -596,8 +596,10 @@ export interface StudioJobView {
     materials?: Array<{ assetId?: string; outputId?: string }>;
   } | null;
   outputs: StudioOutputView[];
-  /** Usage this run is expected to take from the monthly allowance, in KRW. */
+  /** Usage this run is expected to take from the monthly allowance, in KRW (the settled amount once finished). */
   estimateKrw: number;
+  /** Results `estimateKrw` covers: every result made, including ones deleted since. Absent reads as `outputs.length`. */
+  countedOutputs?: number;
   /** A customer-safe reason when `failed`. Never a provider message. */
   errorCode: StudioErrorCode | null;
   createdAt: string;
