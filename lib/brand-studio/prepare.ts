@@ -288,12 +288,15 @@ export async function remixContext(
   return { sheet, resolved: blueprint ? input.resolved.filter((r) => r.kind !== 'video') : [...input.resolved] };
 }
 
-/** Inputs as sent to the provider (and to the account-lane worker): a blueprint leaves its video out. */
+/**
+ * Inputs as sent to the provider (and to the account-lane worker): a blueprint leaves its video out. A video
+ * keeps its stored type, which the worker uploads it with (the account lane takes no outside video URL).
+ */
 export function sentInputs(deps: Pick<StudioDeps, 'env'>, job: Pick<JobRow, 'kind' | 'params'>, resolved: readonly ResolvedRef[]): NonNullable<StudioJobWork['inputs']> {
   const blueprint = job.kind === 'video_remix' && job.params?.method === 'blueprint';
   return resolved
     .filter((r) => !(blueprint && r.kind === 'video'))
-    .map((r) => ({ kind: r.kind, url: providerUrl(deps, r.url), ...(r.frame ? { frame: r.frame } : {}) }));
+    .map((r) => ({ kind: r.kind, url: providerUrl(deps, r.url), ...(r.frame ? { frame: r.frame } : {}), ...(r.kind === 'video' && r.mime ? { mime: r.mime } : {}) }));
 }
 
 export function enhanceKind(kind: JobRow['kind']): EnhanceInput['kind'] | null {

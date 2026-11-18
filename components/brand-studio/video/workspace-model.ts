@@ -238,7 +238,7 @@ export function buildVideoEditJob(input: {
 }
 
 export function videoEditCredits(
-  video: Pick<StudioAssetView, "seconds"> | null,
+  video: Pick<StudioAssetView, "seconds" | "durationMs"> | null,
   resolution: "draft" | StudioVideoResolution,
   modelId: string = DEFAULT_VIDEO_MODEL,
 ): number {
@@ -250,6 +250,7 @@ export function videoEditCredits(
     method: "edit",
     seconds: null,
     referenceSeconds: seconds,
+    referenceMs: video?.durationMs ?? null,
   });
   return creditsOf(usageKrw(usd, "video"));
 }
