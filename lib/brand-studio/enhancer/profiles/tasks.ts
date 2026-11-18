@@ -26,14 +26,19 @@ function imageTask(input: EnhanceInput, binding: Binding): string {
   if (!attached) {
     return 'Task: a new still image from the request.';
   }
+  // 2026-11-19: a product or logo is bound by naming what to keep, not by re-describing it — the picture
+  // already carries it and a second description competes with it [aggregator: Runware Seedream 5.5
+  // multi-reference guide; official: BytePlus "reference target"]. Style and place pictures are what words
+  // are for: their light, materials and palette are taken over in words [house: 2026-11-14 grounding].
+  const first = binding.bound.find((b) => b.token)?.token ?? 'image 1';
   return `Task: a new still image from the request, using the attached images for what each one supplies.
-Inspect every attached picture ("Picture of ...") directly alongside the customer's "request", "role", "take" and "leaveOut". Never write generic blind placeholders when pixels are attached; pair each reference token with concrete visible traits from its picture:
-- product: describe its actual visible silhouette, material and opacity (such as clear, frosted or tinted glass, matte tube, brushed metal, paperboard), cap or closure geometry, finish and surface colours, while keeping the exact label, proportions and colours of the token; leave out its original background and lighting unless asked.
-- logo: describe visible mark shape, colour contrast and natural surface placement, and require the exact mark to stay unredrawn, unmirrored, un-restyled and properly scaled.
-- model: lock the visible facial structure, hairstyle, build and natural matte skin texture (without plastic or waxy retouching); take wardrobe or pose only when asked or listed in "take".
-- style / location: extract visible key-light direction, highlight softness, shadow fall, surface materials and dominant colour palette from the picture, while leaving out any unrequested subject or product shown in it.
-- when "role" is null: infer what each picture supplies by comparing what is visibly inside the picture with the customer's request.
-Optical integration: unite all kept elements into ONE physical photograph with consistent key-light direction, colour temperature, surface reflections or refraction and contact shadows rather than a pasted collage.`;
+Look at every attached picture ("Picture of ...") alongside the customer's "request", "role", "take" and "leaveOut", and bind each token to what it really shows:
+- product: name it with one noun and the trait that tells it apart ("the frosted bottle in ${first}"), then name what to keep as categories: "keep the exact label, cap, proportions and colours of <token>". Do not re-describe its colours, shapes or label text at length; the picture carries them. Leave out its own background and lighting unless asked.
+- logo: say where the mark sits and how it meets the surface (printed flat on the curved glass), and that the mark is reproduced exactly as drawn, at a natural scale.
+- person: their face, hair, build and skin come from the picture; take wardrobe or pose only when asked or listed in "take". The people rules below say how to write skin.
+- style / place: describe in concrete words what to take from it: where the key light comes from, how soft the highlights are, where shadows fall, the surface materials, the dominant colours and the setting. Leave out any subject or product shown in it.
+- when "role" is null: decide what each picture supplies by comparing what is visibly in it with the request.
+Optical integration: unite all kept elements into ONE physical photograph with consistent key-light direction, colour temperature, reflections or refraction and contact shadows rather than a pasted collage.`;
 }
 
 function regionTask(input: EnhanceInput, binding: Binding): string {

@@ -44,6 +44,14 @@ describe('pictures: the provider quote, to the credit', () => {
     }
   });
 
+  it('Nano Banana 2.1: 4, 5 and 12 credits at 1K, 2K and 4K, whatever the references (estimate_cost 2026-11-19)', () => {
+    for (const references of [0, 1, 3]) {
+      expect(cents(estimateImageUsd({ model: 'nano-banana-2.1', resolution: '1K', references }))).toBe(4);
+      expect(cents(estimateImageUsd({ model: 'nano-banana-2.1', resolution: '2K', references }))).toBe(5);
+      expect(cents(estimateImageUsd({ model: 'nano-banana-2.1', resolution: '4K', references }))).toBe(12);
+    }
+  });
+
   it('a model with no account lane keeps its exact list price', () => {
     expect(estimateImageUsd({ model: 'seedream-5-flash', resolution: '1K', references: 0 })).toBe(0.027);
   });

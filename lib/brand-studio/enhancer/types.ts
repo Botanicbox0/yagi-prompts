@@ -49,15 +49,20 @@ export interface EnhanceVideo {
 export interface EnhanceInput {
   kind: EnhanceKind;
   profile: StudioPromptProfile;
+  /**
+   * The studio model id (models.ts). The profile is looked up by this first, then by `profile` (the family),
+   * so a model with its own block (Nano Banana 2.1, GPT Image 2.6) gets it. Absent: the family block alone.
+   */
+  model?: string;
   locale: 'ko' | 'en';
   prompt: string;
   references: EnhanceReference[];
   brand?: { name?: string; tone?: string; palette?: string[]; rules?: string[] } | null;
-  /** Region edit only: the enlarged cropped region sent as image 1 / Figure 1 so Gemini sees the cut-out. */
+  /** Region edit only: the enlarged cropped region sent as image 1 / Image 1 so Gemini sees the cut-out. */
   editCropThumb?: { bytes: Uint8Array; mime: string } | null;
   /**
    * Region edit v2 (`BRAND_STUDIO_REGION_V2`): `editCropThumb` is then the wide window the engine gets as
-   * Figure 1, and this says where the customer's box sits in it (whole percentages of the window) with a
+   * Image 1, and this says where the customer's box sits in it (whole percentages of the window) with a
    * close-up of the box for the prompt writer's eyes only (not sent to the engine).
    */
   regionWindow?: {
@@ -125,6 +130,24 @@ export interface EnhanceResult {
   /** One short sentence in the customer's language on what was strengthened. */
   notes: string;
   source: 'model' | 'fallback';
+  /** Which rules wrote it (recorded on the job as `work.enhancer`; never shown to a customer). */
+  meta?: EnhanceMeta;
+}
+
+/** What a job records about the prompt it was sent (`work.enhancer`). */
+export interface EnhanceMeta {
+  profile: StudioPromptProfile;
+  /** `seedream@2026-11-19.1`, or the family and the model block: `nano-banana@…+nano-banana-2.1@…`. */
+  profileVersion: string;
+  coreVersion: string;
+  /** The model that wrote the prompt; null when the deterministic fallback did. */
+  llmModel: string | null;
+  source: 'model' | 'fallback';
+  fallbackReason?: string;
+  skinMode: 'off' | 'base' | 'realism';
+  toneMatch: boolean;
+  /** The tone variant the rules used, when `toneMatch` (profiles/skin.ts). */
+  skinVariant?: 'none' | 'short' | 'full';
 }
 
 export interface EnhanceDeps {

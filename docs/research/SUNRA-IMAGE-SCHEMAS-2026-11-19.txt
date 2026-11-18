@@ -1,0 +1,40 @@
+Sunra image schemas read 2026-11-19 (public, no key): the catalogue (GET https://api.sunra.ai/v1/models?limit=300)
+gives each model an `openapi` URL on oapi.sunra.ai; the account lane facts are `sunra call list_models` /
+`get_model_schema` / `estimate_cost` (free, nothing generated). Only the fields the studio needs are copied.
+
+### openai/gpt-image-2.6-flare and openai/gpt-image-2.6-sunburst (API lane)
+  openapi: https://oapi.sunra.ai/main/openai/gpt-image-2.6-flare/b2346d45f2ad57d9b001f1ec26837294fd8c60f1.json
+           https://oapi.sunra.ai/main/openai/gpt-image-2.6-sunburst/b2346d45f2ad57d9b001f1ec26837294fd8c60f1.json
+  POST .../text-to-image
+    *prompt, n def=1, width, height, quality enum[auto,low,medium,high] def=high,
+     reasoning_effort enum[low,medium,high] def=high  // "Generation complexity for GPT Image 2.6"
+     background enum[auto,transparent,opaque], output_format enum[png,jpeg,webp,svg], output_compression
+  POST .../image-editing
+    *prompt, *images (max 16), n, width, height, quality, reasoning_effort, background,
+     output_format enum[png,jpeg,webp], output_compression, mask,
+     markup  // "Transparent PNG annotations guiding the edit; mutually exclusive with mask."
+  PRICE both endpoints: post_calculated, "Fal exact cost ($1/unit)", hold $4.00 (studio:catalog)
+
+### gpt-image-2.6-flare / -sunburst (account lane, get_model_schema)
+  capabilities [image-editing, reasoning-effort]; aspects 3:2 1:1 2:3 16:9 9:16 4:3 3:4; resolutions 1K 2K 4K;
+  qualities low medium high; max_ref_images 16; max_prompt_length 32000; default quality high.
+  create_image.reasoning_effort: "low, medium or high, default high. Same price at every level."
+  create_image has NO markup / mask field.
+
+### google/gemini-nano-banana-2.1 (API lane)
+  openapi: https://oapi.sunra.ai/main/google/gemini-nano-banana-2.1/b2346d45f2ad57d9b001f1ec26837294fd8c60f1.json
+  POST .../text-to-image
+    *prompt, aspect_ratio enum[1:1,1:4,1:8,2:3,3:2,3:4,4:1,4:3,4:5,5:4,8:1,9:16,16:9,21:9] def=1:1,
+     resolution enum[1K,2K,4K] def=1K, enable_web_search def=false, thinking_level enum[minimal,medium,high]|null
+  POST .../image-editing
+    *prompt, *images (max 14), aspect_ratio, resolution, enable_web_search, thinking_level
+  PRICE: $0.034 (1K), $0.050 (2K), $0.113 (4K) per image; +$0.015 with web search (never sent by the studio)
+
+### nano-banana-2.1 (account lane, get_model_schema / estimate_cost)
+  aspects 21:9 16:9 3:2 4:3 5:4 1:1 4:5 3:4 2:3 9:16 4:1 1:4 8:1 1:8; resolutions 1K 2K 4K; max_ref_images 14;
+  default_settings { enable_web_search: false }.
+  estimate_cost (aspect 1:1): 1K 4, 2K 5, 4K 12 credits with 0, 1 or 3 reference images.
+
+### bytedance/seedream-5.5 (API lane, unchanged since 2026-11-10)
+  image-editing prompt description still reads "Reference images as Figure 1, Figure 2, etc." The studio writes
+  "Image 1, Image 2" since 2026-11-19 (founder decision; BytePlus Seedream prompt guide uses "Image 1 / Image 2").

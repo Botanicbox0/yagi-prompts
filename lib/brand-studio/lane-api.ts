@@ -17,6 +17,7 @@ import { closeLane, failoverLane, recordLaneHeartbeat } from './lanes';
 import { dropWorkingFiles } from './job-store';
 import { studioModel } from './models';
 import { requestInputOf } from './engine';
+import { gptReasoningEffort } from './provider/complexity';
 import { buildStudioRequest, type StudioRequestInput } from './provider/requests';
 import { sendPrompt } from './prepare';
 import { isDraftRun } from './reference-video';
@@ -33,6 +34,11 @@ export interface LaneJob {
     resolution: string | null;
     /** Image / region edit on a model with qualities (GPT Image): `create_image`'s `quality`. */
     quality: string | null;
+    /**
+     * GPT Image 2.6: `create_image`'s `reasoning_effort` (provider/complexity.ts), the same value the API lane
+     * sends. Null for other models. A worker installed before 2026-11-19 ignores it (the provider default, high).
+     */
+    reasoningEffort: string | null;
     seconds: number | null;
     audio: string | null;
     count: number;
@@ -77,6 +83,15 @@ const FailInput = z.object({
 
 export type LaneOutcome<T extends object = object> = ({ ok: true } & T) | { ok: false; code: 'invalid' | 'not_found' | 'conflict' };
 
+/** The planning depth a GPT Image 2.6 run is sent with on either lane; null for every other model. */
+function reasoningEffortOf(job: JobRow, request: StudioRequestInput): string | null {
+  const model = studioModel(job.model);
+  if (!model || model.medium !== 'image' || !model.supportsReasoningEffort) return null;
+  if (job.kind !== 'image' && job.kind !== 'region_edit') return null;
+  const references = request.images.length + (request.regionCrop ? 1 : 0);
+  return gptReasoningEffort({ kind: job.kind, prompt: request.prompt, references });
+}
+
 function laneJob(deps: Pick<StudioDeps, 'media' | 'env'>, job: JobRow, outputs: OutputRow[]): LaneJob {
   const p = job.params;
   const request: StudioRequestInput = requestInputOf(deps, job);
@@ -95,6 +110,7 @@ function laneJob(deps: Pick<StudioDeps, 'media' | 'env'>, job: JobRow, outputs: 
       aspect: request.regionCrop?.aspect ?? p.aspect ?? null,
       resolution: p.resolution === 'draft' ? '480p' : (p.resolution ?? null),
       quality: p.quality ?? null,
+      reasoningEffort: reasoningEffortOf(job, request),
       seconds: p.seconds ?? null,
       audio: p.audio ?? null,
       count: outputs.length,

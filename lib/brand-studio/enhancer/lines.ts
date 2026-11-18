@@ -54,7 +54,11 @@ export function referenceClause(profile: EnhanceInput['profile'], b: BoundRefere
         base = `${profile === 'seedance' ? `${t} supplies` : `Use ${t} for`} only the person's face, hair and build, not the background, lighting or clothing`;
         break;
       case 'logo':
-        base = `Use the exact mark from ${t}; do not redraw, mirror or restyle it`;
+        // Nano Banana reads positive phrasing best (profiles/nano-banana.ts, Google's image docs 2026-11-19).
+        base =
+          profile === 'nano-banana'
+            ? `Reproduce the mark from ${t} exactly as drawn: the same letterforms, orientation, proportions and colours`
+            : `Use the exact mark from ${t}; do not redraw, mirror or restyle it`;
         break;
       case 'style':
         base = `Use ${t} only for its light, palette and texture, not its subject or layout`;

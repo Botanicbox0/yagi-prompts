@@ -275,8 +275,8 @@ describe("silent director, @ highlight and collapsed pill mode", () => {
     expect(aspectBox("nonsense")).toEqual({ width: 16, height: 16 });
   });
 
-  it("lists the image models as Seedream 5.5, GPT Image 2.6 Flare and Sunburst, Nano Banana Pro, without Seedream 5.0 Flash", () => {
-    const order = ["seedream-5.5", "gpt-image-2.6-flare", "gpt-image-2.6-sunburst", "nano-banana-pro"];
+  it("lists the image models as Seedream 5.5, GPT Image 2.6 Flare and Sunburst, Nano Banana Pro and 2.1, without Seedream 5.0 Flash", () => {
+    const order = ["seedream-5.5", "gpt-image-2.6-flare", "gpt-image-2.6-sunburst", "nano-banana-pro", "nano-banana-2.1"];
     expect(selectableModels("image").map((m) => m.id)).toEqual(order);
     expect(modelOptions(render({ initialModelMenu: true }))).toEqual(order);
     // Still a live model: an earlier Flash run can be made again and its history reads as before.

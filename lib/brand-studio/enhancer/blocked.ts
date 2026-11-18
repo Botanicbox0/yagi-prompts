@@ -54,8 +54,8 @@ Answer "stop" when the prompt really asks for something a safety review exists t
 With "stop", return an empty prompt.
 
 Otherwise answer "rewrite" and return the same prompt with only the risky wording changed:
-- Keep the scene, the subjects, the actions, their order and timing, the camera, the light, the format of the prompt (blocks, time ranges, "Audio:" line) and every reference token exactly as written (@Image1, @Video1, @Audio1, Figure 1, image 1). Keep every piece of on-screen or spoken text verbatim.
-- Describe people by what they wear, how they stand and what they do, not by body parts or skin. Never change anyone's age, and never call someone an adult unless the prompt already says so.
+- Keep the scene, the subjects, the actions, their order and timing, the camera, the light, the format of the prompt (blocks, time ranges, "Audio:" line) and every reference token exactly as written (@Image1, @Video1, @Audio1, Image 1, Figure 1, image 1). Keep every piece of on-screen or spoken text verbatim.
+- Describe people by what they wear, how they stand and what they do, not by body parts. Keep what the prompt says about skin texture and skin tone, but as photographic description of a face or hands (fine texture, natural pores, tone, undertone, how the light sits on it), never as a description of a body or of bare skin. Never change anyone's age, and never call someone an adult unless the prompt already says so.
 - Replace words that have a violent, sexual or medical second meaning with the literal, neutral one (for example "shoot" a scene becomes "film", a "bare" surface becomes "uncovered", "killer look" becomes "striking look", "hot" becomes "warm" or is dropped).
 - Replace words that push intensity toward the body or toward danger (seductive, sexy, provocative, sultry, aggressive, explosive) with the plain intent (confident, relaxed, energetic).
 - Remove the names of real people, and of brands or works other than the customer's own product; describe the look in plain words instead.
@@ -65,8 +65,8 @@ If you cannot find any wording to change, return the prompt unchanged with "rewr
 
 Return JSON only: {"decision": "rewrite" | "stop", "prompt": string}.`;
 
-/** Reference tokens a rewrite must not lose (Seedance, Seedream and Nano Banana forms). */
-const TOKEN = /@(?:Image|Video|Audio)\d+|\bFigure \d+|\bimage \d+/g;
+/** Reference tokens a rewrite must not lose (Seedance, Seedream old and new, Nano Banana / GPT Image forms). */
+const TOKEN = /@(?:Image|Video|Audio)\d+|\bFigure \d+|\bImage \d+|\bimage \d+/g;
 
 function tokensOf(text: string): string[] {
   return [...new Set(text.match(TOKEN) ?? [])].sort();

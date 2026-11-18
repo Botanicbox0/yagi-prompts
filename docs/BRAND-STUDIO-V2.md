@@ -56,6 +56,7 @@ v2는 기존 파일을 고치지 않고 **새 파일**(`lib/brand-studio/*`, `co
 | `nano-banana-pro` | 글자·로고, 부분 수정 기본 | `google/gemini-3-pro-image` | `nano-banana-pro` |
 | `seedream-5-flash` | 빠른 시안 | `bytedance/seedream-5.0-flash` | 없음 |
 | `seedream-5.5` | 대기 | (미확정) | 없음 |
+| `nano-banana-2.1` (2026-11-19 공개) | 글자 많은 컷, 참고 사진 여러 장, 낮은 크레딧 | `google/gemini-nano-banana-2.1` | `nano-banana-2.1` |
 | `seedance-2.5` (영상) | 텍스트·이미지·레퍼런스·편집, 480p 시안 → 1080p | `bytedance/seedance-2.5` | `seedance-2.5` |
 
 - 입력 규격 전문은 `docs/research/SUNRA-API-SCHEMAS-2026-11-10.txt`(카탈로그에서 뽑은 원문). 추측하지 말고 이 파일과
@@ -192,22 +193,22 @@ v2는 기존 파일을 고치지 않고 **새 파일**(`lib/brand-studio/*`, `co
 
 ### 8.1 프롬프트 보강 (`lib/brand-studio/enhancer`)
 
-Gemini 3.8 Flash(`GEMINI_API_KEY`, `lib/template-director/flash-director.ts`와 같은 fetch 방식)에 구조화 출력으로 요청한다.
-입력: 고객 문장, 모델의 프롬프트 프로필, 참조 목록(번호·종류·역할·가져올 것·빼둘 것, 가능하면 축소 이미지), 브랜드 키트 요약
-(확정된 identity의 톤·팔레트·지켜야 할 규칙), 영상이면 길이·사운드·유지/변경·film sheet. 출력: `{prompt, notes}`.
+Prompt Architect. 고객 문장과 참조를 Gemini(`gemini-4-hydrogen`, `BRAND_STUDIO_ENHANCER_MODEL`로 바꿀 수 있음)에 구조화 출력으로
+보내 고른 모델의 문법으로 다시 쓴다. 출력은 `{prompt, notes}`. Gemini가 실패하거나 검사에 걸리면 **결정적 조립**(`fallback.ts`)으로
+내려간다. 보강 실패가 생성을 막지 않는다.
 
-- **seedream**: 자연어 한 문단(영어 60~140단어). 대상 → 장소 → 구도 → 빛 → 재질 → 분위기 순. 참조는 `Figure N`으로,
-  각 그림에서 무엇을 가져오고 무엇을 안 가져오는지 적는다. 그림 속 글자는 원문 그대로 따옴표 안에. 조명 장비 이름은 쓰지 않고
-  빛이 어떻게 보이는지를 쓴다. 제품은 "Figure N의 라벨·비율·색 그대로"를 명시한다.
-- **nano-banana**: 지시문. "Using image 1 …"로 시작하고, 바꿀 것 다음에 지킬 것(형태·원근·빛 방향·입자)을 나열한다.
-  부분 수정에서는 "Change only …; do not move or resize anything else"를 넣는다.
-- **seedance**: 5초 넘으면 시간 구간별 샷. 카메라는 평범한 말로(천천히 다가감, 손에 든 채 따라감, 고정), 한 구간에 동작 하나,
-  마지막 장면을 적는다. 사운드 한 줄(대사는 언어와 함께 따옴표, 현장음, 음악 유무). 참조는 `@Image1`, `@Video1`.
-  리믹스: "Follow @Video1 for the camera path and cut timing; replace … with … from @Image2; keep …".
-  편집: "In @Video1, change only …; everything else stays as it is". `ambient`면 "no music, only location sound and effects".
-  기법은 전역 스킬 `seedance-film-director`의 원칙을 따른다.
-- 고객이 말하지 않은 사실(효능, 수상, 타 브랜드명, 실존 인물)은 더하지 않는다. 고객 의도를 지우지 않는다.
-- Gemini가 실패하거나 형식이 틀리면 **결정적 조립**(프로필별 템플릿)으로 내려간다. 보강 실패가 생성을 막지 않는다.
+- **규칙의 원본은 코드다.** 모델별 문법은 `lib/brand-studio/enhancer/profiles/`의 파일이 하나뿐인 원본이다
+  (`core.ts`, `seedream.ts`, `nano-banana.ts`, `gpt-image.ts`, `seedance.ts`, 실행 종류별 `tasks.ts`, 인물 피부 `skin.ts`).
+  파일마다 머리말에 `version`, 대상 모델, 근거(`sources`: 주소, 읽은 날, 근거가 되는 주장), `lastVerified`가 있고 규칙에는
+  `[official]`·`[aggregator]`·`[house]`·`[founder: 날짜]` 표시가 붙는다. 여기에는 규칙을 다시 적지 않는다.
+- **찾는 순서**: 모델 id(`MODEL_BLOCKS`: Nano Banana Pro·2.1, GPT Image 2.6) → 모델 계열(`promptProfile`).
+- **바꾸는 법**: 규칙을 고치면 그 파일의 `version`을 올리고 `profiles/CHANGELOG.md`에 한 줄을 쓰고,
+  `npx tsx scripts/architect-eval.ts <env> --refs <dir> --label after`의 전후 표를 PR에 붙인다(텍스트만, 이미지 생성 없음).
+  모델 버전이 바뀌면 `npm run studio:catalog`와 각 `sources`를 다시 읽고 `lastVerified`를 고친다.
+- **기록**: 작업마다 `work.enhancer = { profile, profileVersion, coreVersion, llmModel, source, fallbackReason?, skinMode,
+  toneMatch, skinVariant? }`가 남는다(내부용, 고객에게 보이지 않음).
+- **알려진 빈틈**: 템플릿 이미지 세트(`lib/prompts/image-templates.ts`, 관리자 세트 등록)는 Prompt Architect를 거치지 않는다.
+  피부 규칙은 세트 프롬프트를 쓰는 사람이 직접 넣어야 한다.
 
 ### 8.2 레퍼런스 영상 읽기 (`lib/brand-studio/film-sheet`)
 

@@ -11,6 +11,7 @@ import { imageInfo, sniffMime, thumbnailWebp } from './files';
 import { studioModel, type StudioImageModel, type StudioModel } from './models';
 import { resolveReferences, type ResolvedRef } from './plan';
 import { StudioDenied } from './access';
+import { enhanceMeta } from './enhancer/meta';
 import { replaceMarks } from './enhancer/marks';
 import { describeSelection, selectionLine } from './region-edit/window';
 import { clarifiedOf, withClarified } from './revision/clarify';
@@ -320,6 +321,7 @@ export function enhanceInputOf(
   return {
     kind,
     profile: model.promptProfile,
+    model: model.id,
     locale: p.locale ?? 'ko',
     prompt: job.prompt,
     references,
@@ -528,5 +530,7 @@ export async function prepareJob(deps: StudioDeps, job: JobRow): Promise<{ final
   );
   const result = await runEnhancer({ ...deps, organizationId: job.organization_id }, input);
   const finalPrompt = windowPlan ? withSelectionLine(result.prompt, windowPlan) : result.prompt.slice(0, 8000);
-  return { finalPrompt, work: { ...work, enhanceNotes: result.notes.slice(0, 2000), prepared: true } };
+  // Which rules wrote the prompt (profile version, writer, fallback, skin rules): internal, never shown.
+  const enhancer = result.meta ?? enhanceMeta(input, result.source, { env: deps.intelDeps.env });
+  return { finalPrompt, work: { ...work, enhanceNotes: result.notes.slice(0, 2000), enhancer, prepared: true } };
 }

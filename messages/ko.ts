@@ -2117,6 +2117,7 @@ export const ko: Dictionary = {
     models: {
       seedreamPro: '제품·인물 사진',
       nanoBananaPro: '글자·로고, 부분 수정',
+      nanoBanana21: '참고 이미지로 일관성 있게 만들어요',
       seedreamFlash: '빠른 시안',
       seedream55: '제품·인물 사진',
       gptImageFlare: '빠르게 만들고 고쳐요',

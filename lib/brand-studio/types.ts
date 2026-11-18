@@ -35,6 +35,8 @@ import type { StudioProvider, StudioProviderFailure } from './provider/types';
 export interface EnhanceInput {
   kind: 'image' | 'region_edit' | 'video' | 'video_remix';
   profile: StudioPromptProfile;
+  /** The studio model id; its own profile block is looked up by it (lib/brand-studio/enhancer/profiles). */
+  model?: string;
   locale: 'ko' | 'en';
   prompt: string;
   references: Array<{
@@ -48,11 +50,11 @@ export interface EnhanceInput {
     thumb?: { bytes: Uint8Array; mime: string };
   }>;
   brand?: { name?: string; tone?: string; palette?: string[]; rules?: string[] } | null;
-  /** Region edit only: the enlarged cropped region sent as image 1 / Figure 1 to the model. */
+  /** Region edit only: the enlarged cropped region sent as image 1 / Image 1 to the model. */
   editCropThumb?: { bytes: Uint8Array; mime: string } | null;
   /**
    * Region edit v2 (`BRAND_STUDIO_REGION_V2`): `editCropThumb` is then the wide window the engine gets as
-   * Figure 1, and this says where the customer's box sits in it (whole percentages of the window) with a
+   * Image 1, and this says where the customer's box sits in it (whole percentages of the window) with a
    * close-up of the box for the prompt writer's eyes only (not sent to the engine).
    */
   regionWindow?: {
@@ -87,6 +89,8 @@ export interface EnhanceResult {
   prompt: string;
   notes: string;
   source: 'model' | 'fallback';
+  /** Which rules wrote the prompt (lib/brand-studio/enhancer/types.ts `EnhanceMeta`). */
+  meta?: import('./enhancer/types').EnhanceMeta;
 }
 export interface RegionPlan {
   roi: { left: number; top: number; width: number; height: number };
@@ -230,6 +234,8 @@ export interface StudioJobWork {
   inputs?: Array<{ kind: StudioAssetKind; url: string; frame?: 'start' | 'end'; mime?: string }>;
   sheet?: FilmSheet | null;
   enhanceNotes?: string;
+  /** Which rules wrote the sent prompt (lib/brand-studio/enhancer `EnhanceMeta`). Internal; never shown. */
+  enhancer?: import('./enhancer/types').EnhanceMeta;
   region?: {
     plan: RegionPlan;
     cropKey: string;

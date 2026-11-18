@@ -69,6 +69,8 @@ export function toolCall(job, project) {
         ...(p.resolution ? { resolution: p.resolution } : {}),
         // GPT Image: low / medium / high (absent for models without a quality choice).
         ...(p.quality ? { quality: p.quality } : {}),
+        // GPT Image 2.6 only: planning depth, the value the API lane sends (lib/brand-studio/provider/complexity.ts).
+        ...(p.reasoningEffort ? { reasoning_effort: p.reasoningEffort } : {}),
         ...(urls.length ? { image_urls: urls } : {}),
         // A region edit is pasted back into the original, so it stays lossless; a plain picture travels lighter.
         output_format: job.kind === 'region_edit' ? 'png' : 'jpeg',

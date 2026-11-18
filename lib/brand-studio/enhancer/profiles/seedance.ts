@@ -3,6 +3,18 @@
  * skill: reference authority first, a visual-style block, a timeline in seconds, plain camera words
  * with a start and an end, the last frame, one sound line.
  */
+import type { ProfileHeader } from './meta';
+
+export const SEEDANCE_HEADER: ProfileHeader = {
+  id: 'seedance',
+  version: '2026-11-15.1',
+  models: ['seedance-2.5'],
+  sources: [
+    { url: 'skill:seedance-film-director', seen: '2026-11-15', claim: 'reference authority, visual style, timeline in seconds, camera start and end, last frame, one sound line [house]' },
+    { url: 'docs/research/SUNRA-API-SCHEMAS-2026-11-10.txt', seen: '2026-11-10', claim: '@Image1 / @Video1 / @Audio1 tokens on reference-to-video [aggregator]' },
+  ],
+  lastVerified: '2026-11-15',
+};
 
 export const SEEDANCE_PROFILE = `Model: a video model that generates picture and sound together and follows time-ranged directions.
 
