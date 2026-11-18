@@ -16,6 +16,7 @@ import { studioComposeKo } from './studio-compose';
 import { studioWorkflowsKo } from './studio-workflows';
 import { adminConsoleKo } from './admin-console';
 import { campaignHubKo } from './campaign-hub';
+import { brandHomeKo } from './brand-home';
 
 /**
  * PLAN §3.9 — manual bilingual authoring in v1; the type keeps the two dictionaries in step.
@@ -73,6 +74,7 @@ export const ko: Dictionary = {
   studioCompose: studioComposeKo,
   studioWorkflows: studioWorkflowsKo,
   adminConsole: adminConsoleKo,
+  brandHome: brandHomeKo,
   landingMedia: {
     nav: '랜딩 이미지',
     heading: '랜딩 이미지',

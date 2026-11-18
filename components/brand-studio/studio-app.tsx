@@ -539,6 +539,25 @@ export function StudioApp({ organizationId, locale, copy, mode, libraryCopy, lay
     window.history.replaceState(window.history.state, "", `${url.pathname}${url.search}${url.hash}`);
   }, [canCreate, mode, openLayerEditor, state]);
 
+  // Opened from the workspace home (`/brand/home`, docs/BRAND-STUDIO-V3.md §12) with `?view=o:<id>`: that
+  // result opens in the viewer. A result this screen does not list (another medium, or older than the
+  // loaded wall) just leaves the screen as it is.
+  const viewDone = useRef(false);
+  const showInViewer = viewer.show;
+  useEffect(() => {
+    if (viewDone.current || !state) return;
+    viewDone.current = true;
+    const url = new URL(window.location.href);
+    const source = parseFrom(url.searchParams.get("view"));
+    if (!url.searchParams.has("view")) return;
+    url.searchParams.delete("view");
+    window.history.replaceState(window.history.state, "", `${url.pathname}${url.search}${url.hash}`);
+    if (!source || !("outputId" in source)) return;
+    if (jobs.some((job) => job.outputs.some((output) => output.id === source.outputId))) {
+      showInViewer({ list: "outputs", key: `o:${source.outputId}` });
+    }
+  }, [jobs, showInViewer, state]);
+
   const uploadFiles = useCallback(
     async (files: File[], attach: boolean) => {
       const say = attach ? dock.setMessage : setPanelNotice;

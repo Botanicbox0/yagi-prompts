@@ -860,6 +860,24 @@ export function VideoStudioWorkspace({
     }
   }, [dock, sourceItem, state]);
 
+  // Opened from the workspace home (`/brand/home`, docs/BRAND-STUDIO-V3.md §12) with `?view=o:<id>`: that
+  // clip opens in the viewer. One this screen does not list leaves the screen as it is.
+  const viewDone = useRef(false);
+  const showInViewer = viewer.show;
+  useEffect(() => {
+    if (viewDone.current || !state) return;
+    viewDone.current = true;
+    const url = new URL(window.location.href);
+    if (!url.searchParams.has("view")) return;
+    const source = parseRefParam(url.searchParams.get("view"));
+    url.searchParams.delete("view");
+    window.history.replaceState(window.history.state, "", `${url.pathname}${url.search}${url.hash}`);
+    if (!source || !("outputId" in source)) return;
+    if (jobs.some((job) => job.outputs.some((output) => output.id === source.outputId))) {
+      showInViewer({ list: "outputs", key: `o:${source.outputId}` });
+    }
+  }, [jobs, showInViewer, state]);
+
   const uploadFiles = useCallback(
     async (files: File[], attach: boolean) => {
       const say = attach ? dock.setMessage : setPanelNotice;

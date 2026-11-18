@@ -1064,6 +1064,173 @@
   .bw-shell:has([data-brand-layout-mode="rail"]) .bw-sidebar > .bw-rail-toggle {
     min-height: 36px;
   }
+  /* The Home row (docs/BRAND-STUDIO-V3.md §12) costs one row; win it back from the spacing so 팀 and 설정
+     still show without scrolling the rail at 900px, expanded or not. */
+  .bw-shell:has([data-brand-layout-mode="rail"]):has([data-rail-group="home"]) .bw-rail {
+    gap: 2px;
+  }
+  .bw-shell:has([data-brand-layout-mode="rail"]):has([data-rail-group="home"]) .bw-rail-list {
+    gap: 0;
+  }
+  .bw-shell:has([data-brand-layout-mode="rail"]):has([data-rail-group="home"]) .bw-rail-list[data-rail-group="home"] {
+    padding-block: 0;
+  }
+  .bw-shell:has([data-brand-layout-mode="rail"]):has([data-rail-group="home"]) .bw-rail-order button {
+    min-height: 28px;
+  }
+}
+
+/* ------------------------------------------------------------------ language menu (docs/BRAND-STUDIO-V3.md §12)
+   Hydrated, the rail swaps the bare <select> for a globe button and a small menu built like the brand
+   switcher's (surface, ring, 16px corners, 14px ink rows). Without JavaScript the form stays as it was. */
+.bw-shell:has([data-brand-layout-mode="rail"]) .bw-language-menu[data-ready="true"] > .bw-language-select {
+  display: none;
+}
+.bw-shell:has([data-brand-layout-mode="rail"]) .bw-language-menu[data-ready="true"] > .bw-language-trigger {
+  display: flex;
+}
+.bw-shell:has([data-brand-layout-mode="rail"]) .bw-language-trigger {
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  min-height: 42px;
+  padding: 0 12px;
+  border: 0;
+  border-radius: 21px;
+  background: transparent;
+  color: var(--ys-ink-secondary);
+  font: inherit;
+  font-size: 13px;
+  font-weight: 500;
+  letter-spacing: -0.01em;
+  white-space: nowrap;
+  cursor: pointer;
+  transition: background-color var(--ys-dur) var(--ys-ease), color var(--ys-dur) var(--ys-ease);
+}
+.bw-shell:has([data-brand-layout-mode="rail"]) .bw-language-trigger:hover,
+.bw-shell:has([data-brand-layout-mode="rail"]) .bw-language-trigger[aria-expanded="true"] {
+  background: var(--ys-hover);
+  color: var(--ys-ink);
+}
+.bw-shell:has([data-brand-layout-mode="rail"]) .bw-language-trigger:focus-visible {
+  outline: 2px solid var(--ys-focus);
+  outline-offset: 2px;
+}
+.bw-shell:has([data-brand-layout-mode="rail"]) .bw-language-trigger svg {
+  width: 18px;
+  height: 18px;
+  flex: none;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.5;
+}
+.bw-shell:has([data-brand-layout-mode="rail"]) .bw-language-current {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+@media (min-width: 641px) {
+  .bw-shell:has([data-brand-layout-mode="rail"][data-rail-expanded="false"]) .bw-language-trigger {
+    justify-content: center;
+    width: 42px;
+    padding: 0;
+  }
+}
+@media (min-width: 641px) and (max-height: 940px) {
+  .bw-shell:has([data-brand-layout-mode="rail"]) .bw-language-trigger {
+    min-height: 36px;
+  }
+}
+@media (max-width: 640px) {
+  .bw-shell:has([data-brand-layout-mode="rail"]) .bw-language-trigger {
+    justify-content: center;
+    width: 44px;
+    min-height: 44px;
+    padding: 0;
+    border-radius: 22px;
+  }
+}
+/* Collapsed rail and phone: the globe alone; the name stays for screen readers in the button's label. */
+@media (min-width: 641px) {
+  .bw-shell:has([data-brand-layout-mode="rail"][data-rail-expanded="false"]) .bw-language-current {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    margin: -1px;
+    overflow: hidden;
+    clip: rect(0 0 0 0);
+    white-space: nowrap;
+  }
+}
+@media (max-width: 640px) {
+  .bw-shell:has([data-brand-layout-mode="rail"]) .bw-language-current {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    margin: -1px;
+    overflow: hidden;
+    clip: rect(0 0 0 0);
+    white-space: nowrap;
+  }
+}
+.bw-shell:has([data-brand-layout-mode="rail"]) .bw-language-popover {
+  position: fixed;
+  z-index: 85;
+  display: grid;
+  gap: 2px;
+  min-width: 208px;
+  padding: 6px;
+  border-radius: 16px;
+  background: var(--ys-surface);
+  box-shadow: var(--ys-float);
+  animation: bw-rail-pop 240ms var(--ys-spring) both;
+}
+.bw-shell:has([data-brand-layout-mode="rail"]) .bw-language-popover-title {
+  margin: 4px 10px 4px;
+  color: var(--ys-ink-secondary);
+  font-size: 12px;
+  font-weight: 500;
+  line-height: 18px;
+}
+.bw-shell:has([data-brand-layout-mode="rail"]) .bw-language-popover [role="menuitemradio"] {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  min-height: 42px;
+  padding: 0 10px;
+  border: 0;
+  border-radius: 10px;
+  background: transparent;
+  color: var(--ys-ink);
+  font: inherit;
+  font-size: 14px;
+  font-weight: 500;
+  letter-spacing: -0.01em;
+  text-align: left;
+  cursor: pointer;
+  transition: background-color var(--ys-dur) var(--ys-ease);
+}
+.bw-shell:has([data-brand-layout-mode="rail"]) .bw-language-popover [role="menuitemradio"]:hover,
+.bw-shell:has([data-brand-layout-mode="rail"]) .bw-language-popover [role="menuitemradio"]:focus-visible {
+  background: var(--ys-hover);
+  outline: none;
+}
+.bw-shell:has([data-brand-layout-mode="rail"]) .bw-language-popover [role="menuitemradio"]:focus-visible {
+  box-shadow: inset 0 0 0 1.5px var(--ys-ink);
+}
+.bw-shell:has([data-brand-layout-mode="rail"]) .bw-language-popover [role="menuitemradio"][aria-checked="true"] {
+  font-weight: 600;
+}
+.bw-shell:has([data-brand-layout-mode="rail"]) .bw-language-check {
+  width: 16px;
+  height: 16px;
+  flex: none;
+  fill: none;
+  stroke: var(--ys-ink);
+  stroke-width: 1.8;
+  stroke-linecap: round;
+  stroke-linejoin: round;
 }
 
 /* ------------------------------------------------------------------ motion */
@@ -1093,7 +1260,10 @@
   .bw-shell:has([data-brand-layout-mode="rail"]) :is(.bw-rail-item, .bw-rail-create-disc, .bw-rail-icon, .bw-rail-credits-bar > span, .bw-rail-ring-fill) {
     transition: none;
   }
-  .bw-shell:has([data-brand-layout-mode="rail"]) :is(.bw-rail-tip, .bw-rail-create-menu, .bw-rail-toast, .bw-rail-sheet-bg, .bw-rail-sheet) {
+  .bw-shell:has([data-brand-layout-mode="rail"]) :is(.bw-rail-tip, .bw-rail-create-menu, .bw-rail-toast, .bw-rail-sheet-bg, .bw-rail-sheet, .bw-language-popover) {
     animation: none;
+  }
+  .bw-shell:has([data-brand-layout-mode="rail"]) :is(.bw-language-trigger, .bw-language-popover [role="menuitemradio"]) {
+    transition: none;
   }
 }

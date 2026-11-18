@@ -14,7 +14,7 @@ describe('public audience navigation', () => {
       const brand = audienceNavigation(locale, getDictionary(locale), '/brands');
       expect(brand.audience).toBe('brand');
       expect(brand.primary.href).toBe(`/${locale}/brands#brands`);
-      expect(brand.signInHref).toBe(`https://brand.twings.app/auth/choose?next=%2Fbrand&locale=${locale}`);
+      expect(brand.signInHref).toBe(`https://brand.twings.app/auth/choose?next=%2Fbrand%2Fstart&locale=${locale}`);
       expect(brand.links.some(link => /\/video|\/pricing/.test(link.href))).toBe(false);
     }
   });

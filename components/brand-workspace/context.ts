@@ -16,7 +16,7 @@ export const brandContext = cache(async () => {
     getRequestLocale(),
     requestSurface(),
   ]);
-  if (!viewer.userId) redirect("/auth/choose?next=%2Fbrand");
+  if (!viewer.userId) redirect("/auth/choose?next=%2Fbrand%2Fstart");
   // Auth-server-confirmed only; the service decides whether it opens the TWINGS team view.
   const verifiedEmail = await getVerifiedEmail(viewer.userId);
   const dict = getDictionary(locale);

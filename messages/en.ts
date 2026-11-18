@@ -16,6 +16,7 @@ import { studioComposeEn } from './studio-compose';
 import { studioWorkflowsEn } from './studio-workflows';
 import { adminConsoleEn } from './admin-console';
 import { campaignHubEn } from './campaign-hub';
+import { brandHomeEn } from './brand-home';
 /**
  * docs/PLATFORM-2.0.md §14.1 — the names live in this one object (founder decision 2026-10-24). Every
  * other string is composed from it, so a rename edits these values only. Users get no role name:
@@ -64,6 +65,7 @@ export const en = {
   studioCompose: studioComposeEn,
   studioWorkflows: studioWorkflowsEn,
   adminConsole: adminConsoleEn,
+  brandHome: brandHomeEn,
   landingMedia: {
     nav: 'Landing images',
     heading: 'Landing images',
