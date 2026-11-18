@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { planHeader, planNotesTools, reviewShortcuts } from "@/components/brand-studio/review/header-plan";
+import { accentControl, planHeader, planNotesTools, reviewShortcuts } from "@/components/brand-studio/review/header-plan";
 import { REVIEW_STATUSES } from "@/lib/brand-studio/review-contracts";
 import { getDictionary } from "@/lib/i18n/dictionaries";
 
@@ -67,5 +67,32 @@ describe("the shortcuts list", () => {
     expect(reviewShortcuts(words, { isVideo: true, extended: true, canComment: false, fullscreen: false }).map(([k]) => k)).toEqual(["Space K", "← → , .", "J", "L", "R", "?"]);
     expect(reviewShortcuts(words, { isVideo: true, extended: false, canComment: true, fullscreen: false }).map(([k]) => k)).toEqual(["Space K", "← →", "J", "L", "?"]);
     expect(reviewShortcuts(words, { isVideo: false, extended: true, canComment: true, fullscreen: true })).toEqual([]);
+  });
+});
+
+/**
+ * docs/design/TASTE.md 18 (2026-11-19): the accent fills one control per view, its main act. 승인하기 when the
+ * viewer may approve; otherwise the composer's 보내기; nothing on a read-only view.
+ */
+describe("the one accent-filled control", () => {
+  it("is the head's primary when there is one, else the composer's send, else none", () => {
+    expect(accentControl({ headPrimary: true, composer: true })).toBe("head");
+    expect(accentControl({ headPrimary: true, composer: false })).toBe("head");
+    expect(accentControl({ headPrimary: false, composer: true })).toBe("composer");
+    expect(accentControl({ headPrimary: false, composer: false })).toBeNull();
+  });
+  it("never gives two controls the accent for any role and state the head can be in", () => {
+    for (const status of REVIEW_STATUSES) {
+      for (const canSetStatus of [true, false]) {
+        for (const team of [true, false]) {
+          for (const composer of [true, false]) {
+            const plan = planHeader({ ...base, status, canSetStatus, team });
+            const owner = accentControl({ headPrimary: plan.primary != null, composer });
+            const filled = [plan.primary != null && owner === "head", composer && owner === "composer"].filter(Boolean);
+            expect(filled.length).toBe(plan.primary != null || composer ? 1 : 0);
+          }
+        }
+      }
+    }
   });
 });

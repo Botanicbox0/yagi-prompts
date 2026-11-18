@@ -90,8 +90,11 @@ describe.each(["ko", "en"] as const)("team notes on the stage (%s)", (locale) =>
     const html = renderToStaticMarkup(
       <AdminReviewStage review={item} comments={comments} copy={copy} locale={locale} eyebrow="Brand" initialMs={null} extended teamCopy={teamCopy} />,
     );
-    // Below the checkbox, present but hidden while "팀만 보기" is off, so turning it on moves nothing.
-    expect(html).toMatch(new RegExp(`data-review-team-toggle="true"/>${teamCopy.toggle}</label><p class="bsv-team-hint"[^>]*data-shown="false" aria-hidden="true">`));
+    // Below the switch, present but hidden while "팀만 보기" is off, so turning it on moves nothing. The switch is
+    // the native checkbox (role="switch") drawn as the stage's track, never the browser's white box.
+    expect(html).toMatch(
+      new RegExp(`type="checkbox" role="switch" class="bsv-switch-input"[^>]*data-review-team-toggle="true"/><span class="bsv-switch-track" aria-hidden="true"></span><span class="bsv-switch-label">${teamCopy.toggle}</span></label><p class="bsv-team-hint"[^>]*data-shown="false" aria-hidden="true">`),
+    );
     expect(html).not.toContain(`aria-describedby="bsv-team-hint-`);
   });
 

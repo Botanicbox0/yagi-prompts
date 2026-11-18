@@ -105,13 +105,17 @@ describe.each(["ko", "en"] as const)("the review stage (%s)", (locale) => {
       <ReviewStage review={item(V2)} comments={comments} canWrite copy={copy} locale={locale} actions={actions} linkFor={() => "/x"} extended versions={[version(V2, 2), version(V1, 1)]} onVersion={() => undefined} />,
     );
     // "나란히 비교" now sits in the head's "⋯" menu (header-plan.test.ts pins the menu's items).
-    for (const marker of ["data-review-range-lane", "data-review-versions", "data-review-more", 'data-review-carried="1"', "data-review-draw", `data-review-span="${note(1).id}"`, "data-review-drawing-tag"]) {
+    // A range at rest is its start dot; its line shows once it is selected or under the pointer (2026-11-19).
+    for (const marker of ["data-review-range-lane", "data-review-versions", "data-review-more", 'data-review-carried="1"', "data-review-draw", "data-review-drawing-tag"]) {
       expect(html, marker).toContain(marker);
     }
+    expect(html).not.toContain(`data-review-span="${note(1).id}"`);
     expect(html).toContain("0:01.2–0:02.4");
     expect(html).toContain(locale === "ko" ? "v1에서 넘어온 의견" : "Open notes from v1");
     expect(html).toContain(locale === "ko" ? "외부 손님" : "Guest");
-    expect(html).toContain('<option value="c0000000-0000-4000-8000-000000000002" selected="">v2');
+    // The version switcher is the stage's own select: a button that names the version and its status.
+    expect(html).toMatch(/class="bsv-select bsv-version-select"[^>]*aria-label="[^"]+: v2 · [^"]+"[^>]*aria-haspopup="menu"/);
+    expect(html).not.toContain("<select");
     // A carried note offers resolve, never reply.
     const carried = html.slice(html.indexOf('data-review-carried="1"'));
     expect(carried).toContain(`data-review-resolve="${note(3).id}"`);

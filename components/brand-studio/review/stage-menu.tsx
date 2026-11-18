@@ -145,6 +145,160 @@ export function StagePopover({
   );
 }
 
+/**
+ * An on/off choice on the dark stage ("팀만 보기", "그림 표시만"): the native checkbox, kept for its keyboard,
+ * form and screen-reader behaviour (`role="switch"`), drawn as a small track and thumb in the stage's own
+ * tokens instead of the browser's white box. The focus ring sits on the track.
+ */
+export function StageSwitch({
+  checked,
+  onChange,
+  children,
+  describedBy,
+  marker,
+  className,
+}: {
+  checked: boolean;
+  onChange(checked: boolean): void;
+  children: ReactNode;
+  describedBy?: string;
+  marker?: Record<string, string>;
+  className?: string;
+}) {
+  return (
+    <label className={className ? `bsv-switch ${className}` : "bsv-switch"}>
+      <input type="checkbox" role="switch" className="bsv-switch-input" checked={checked} onChange={(e) => onChange(e.target.checked)} aria-describedby={describedBy} {...marker} />
+      <span className="bsv-switch-track" aria-hidden="true" />
+      <span className="bsv-switch-label">{children}</span>
+    </label>
+  );
+}
+
+export interface StageSelectOption {
+  value: string;
+  label: string;
+}
+
+/**
+ * A choice of one (the version, the playback speed, a compare side) in the stage's own dress: a button that
+ * shows the current value with a chevron and opens a menu of options (`menuitemradio`, the current one
+ * checked). It replaces the browser's own select element, whose white list and box broke the dark stage.
+ * ↑/↓/Home/End move, Enter or a click picks and closes, Escape or a press outside closes, focus returns to it.
+ */
+export function StageSelect({
+  label,
+  value,
+  options,
+  onChange,
+  disabled = false,
+  size = "md",
+  marker,
+  className,
+}: {
+  /** The control's name (spoken with the current value). */
+  label: string;
+  value: string;
+  options: readonly StageSelectOption[];
+  onChange(value: string): void;
+  disabled?: boolean;
+  /** `sm`: 28px, beside the title. `md`: 34px, the size of the stage's icon buttons. */
+  size?: "sm" | "md";
+  marker?: Record<string, string>;
+  className?: string;
+}) {
+  const id = useId();
+  const [open, setOpen] = useState(false);
+  const button = useRef<HTMLButtonElement>(null);
+  const current = options.find((o) => o.value === value) ?? null;
+  const close = useCallback(() => {
+    setOpen(false);
+    button.current?.focus({ preventScroll: true });
+  }, []);
+  return (
+    <span className="bsv-menu-anchor">
+      <button
+        ref={button}
+        type="button"
+        className={className ? `bsv-select ${className}` : "bsv-select"}
+        data-size={size}
+        aria-label={current ? `${label}: ${current.label}` : label}
+        title={label}
+        aria-haspopup="menu"
+        aria-expanded={open}
+        aria-controls={open ? id : undefined}
+        disabled={disabled}
+        onClick={() => setOpen((v) => !v)}
+        {...marker}
+      >
+        <span className="bsv-select-value">{current?.label ?? ""}</span>
+        <svg className="bsv-icon bsv-select-chevron" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+          <path d="M7 10l5 5 5-5" />
+        </svg>
+      </button>
+      {open && (
+        <SelectMenu
+          id={id}
+          label={label}
+          anchor={button.current}
+          options={options}
+          value={value}
+          onClose={close}
+          onPick={(next) => {
+            if (next !== value) onChange(next);
+          }}
+        />
+      )}
+    </span>
+  );
+}
+
+function SelectMenu({
+  id,
+  label,
+  anchor,
+  options,
+  value,
+  onClose,
+  onPick,
+}: {
+  id: string;
+  label: string;
+  anchor: HTMLElement | null;
+  options: readonly StageSelectOption[];
+  value: string;
+  onClose(): void;
+  onPick(value: string): void;
+}) {
+  const box = useDismiss(onClose);
+  useAnchored(box, anchor, onClose);
+  useEffect(() => {
+    const el = box.current;
+    (el?.querySelector<HTMLElement>('[role="menuitemradio"][aria-checked="true"]') ?? el?.querySelector<HTMLElement>('[role="menuitemradio"]'))?.focus({ preventScroll: true });
+  }, [box]);
+  return (
+    <div ref={box} id={id} className="bsv-menu" role="menu" aria-label={label} onKeyDown={(e) => moveFocus(e, '[role="menuitemradio"]:not([disabled])')} data-stage-select-menu>
+      {options.map((option) => (
+        <button
+          key={option.value}
+          type="button"
+          role="menuitemradio"
+          aria-checked={option.value === value}
+          data-menu-item={option.value}
+          onClick={() => {
+            onPick(option.value);
+            onClose();
+          }}
+        >
+          <svg className="bsv-icon bsv-menu-check" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+            <path d="M5 12.5l4.5 4.5L19 7.5" />
+          </svg>
+          <span>{option.label}</span>
+        </button>
+      ))}
+    </div>
+  );
+}
+
 function PopoverPanel({ id, label, anchor, onClose, children, wide }: { id: string; label: string; anchor: HTMLElement | null; onClose(): void; children: ReactNode; wide: boolean }) {
   const box = useDismiss(onClose);
   useAnchored(box, anchor, onClose);

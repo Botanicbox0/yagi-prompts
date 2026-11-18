@@ -48,6 +48,17 @@ export function planHeader(input: HeaderInput): HeaderPlan {
 }
 
 /**
+ * Which one control wears the accent fill (docs/design/TASTE.md 18): the view's main act. The head's
+ * 승인하기 while the viewer may approve; otherwise the composer's 보내기 (the team's page, a guest, a viewer who
+ * may write, an approved draft). Nothing on a read-only view. Where both exist, 보내기 is the neutral filled
+ * button (primary ink), so a view never shows two accent fills.
+ */
+export function accentControl(input: { headPrimary: boolean; composer: boolean }): "head" | "composer" | null {
+  if (input.headPrimary) return "head";
+  return input.composer ? "composer" : null;
+}
+
+/**
  * The notes panel's two icon buttons, with exactly what the row of pills used to hold and for the same
  * viewers: on the room stage once there is a note, "그림 표시만" and (with two or more authors) the author
  * select behind the filter button, and the three exports behind the export button.

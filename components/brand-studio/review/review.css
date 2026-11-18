@@ -18,7 +18,9 @@
   --bsv-accent-line: var(--ys-line-strong, rgba(255, 255, 255, 0.18));
   --bsv-ink: var(--ys-ink, #ededed);
   --bsv-body: var(--ys-ink-secondary, #a1a1aa);
-  --bsv-muted: var(--ys-ink-muted, #71717a);
+  /* Off the workspace (the share page, the team's frame) the muted fallback must still read at 4.5:1 on every
+     dark step it sits on: #71717a measured 3.9:1 on the stage's surface, #8e8e97 measures 4.6–6.1:1. */
+  --bsv-muted: var(--ys-ink-muted, #8e8e97);
   --bsv-surface: var(--ys-surface, #111113);
   --bsv-canvas: var(--ys-canvas, #09090b);
   --bsv-raised: var(--ys-raised, #18181b);
@@ -28,8 +30,12 @@
   --bsv-line: var(--ys-line, rgba(255, 255, 255, 0.08));
   --bsv-line-strong: var(--ys-line-strong, rgba(255, 255, 255, 0.18));
   --bsv-danger: var(--ys-danger, #f87171);
-  --bsv-mono: var(--ys-mono, 'Geist Mono', ui-monospace, SFMono-Regular, Menlo, monospace);
+  /* Numbers use the body face with tabular figures (docs/design/TASTE.md, 조판 표준), on the team's page too:
+     a monospace fallback spaced Korean status words apart there ("v2 · 진 행 중"). */
+  --bsv-mono: var(--ys-mono, 'Pretendard Variable', Pretendard, 'Geist Mono', -apple-system, BlinkMacSystemFont, sans-serif);
   --bsv-glass-dark: var(--ys-glass-dark, rgba(9, 9, 11, 0.78));
+  /* What the timeline sits on (the player's canvas sets it): rings around dots and thumbs cut into it. */
+  --bsv-lane-bg: var(--bsv-surface);
   --bsv-ease: var(--ys-ease, cubic-bezier(0.22, 1, 0.36, 1));
   --bsv-dur: 180ms;
   --bsv-well: none;
@@ -220,7 +226,8 @@
   font-size: 12px;
 }
 .bsv-open-count {
-  color: var(--bsv-accent-text);
+  /* A count, not an action: primary ink (KPI and counts stay neutral, docs/design/IDENTITY.md 2-3). */
+  color: var(--bsv-ink);
   font-family: var(--bsv-mono);
   font-weight: 600;
   font-variant-numeric: tabular-nums;
@@ -458,10 +465,6 @@
 .bsv-mute {
   margin-left: auto;
 }
-.bsv-track {
-  position: relative;
-  padding-top: 28px;
-}
 .bsv-range {
   display: block;
   width: 100%;
@@ -475,7 +478,7 @@
 .bsv-range::-webkit-slider-runnable-track {
   height: 6px;
   border-radius: 999px;
-  background: linear-gradient(to right, var(--bsv-accent) var(--bsv-progress, 0%), var(--bsv-raised) var(--bsv-progress, 0%));
+  background: linear-gradient(to right, var(--bsv-ink) var(--bsv-progress, 0%), var(--bsv-raised) var(--bsv-progress, 0%));
   box-shadow: var(--bsv-well);
 }
 .bsv-range::-moz-range-track {
@@ -487,7 +490,7 @@
 .bsv-range::-moz-range-progress {
   height: 6px;
   border-radius: 999px;
-  background: var(--bsv-accent);
+  background: var(--bsv-ink);
 }
 .bsv-range::-webkit-slider-thumb {
   width: 16px;
@@ -714,6 +717,8 @@ button.bsv-spot-tag {
   font-size: 14px;
   line-height: 1.55;
   white-space: pre-wrap;
+  /* Korean breaks between words ("주세 / 요." was split); a long unbroken string still wraps. */
+  word-break: keep-all;
   overflow-wrap: anywhere;
 }
 .bsv-thread-actions {
@@ -1248,27 +1253,6 @@ button.bsv-spot-tag {
   align-items: center;
   gap: 8px;
 }
-.bsv-version-select {
-  height: 36px;
-  padding: 0 32px 0 14px;
-  border: 0;
-  border-radius: 999px;
-  background: var(--bsv-raised);
-  box-shadow: none;
-  color: var(--bsv-ink);
-  font-family: var(--bsv-mono);
-  font-size: 13px;
-  font-weight: 600;
-  font-variant-numeric: tabular-nums;
-  cursor: pointer;
-}
-.bsv-version-select:hover {
-  background: var(--bsv-hover);
-}
-.bsv-version-select:focus-visible {
-  outline: 2px solid var(--bsv-accent);
-  outline-offset: 2px;
-}
 
 .bsv-compare {
   display: grid;
@@ -1361,22 +1345,6 @@ button.bsv-spot-tag {
   display: grid;
   gap: 4px;
 }
-.bsv-team-switch {
-  display: inline-flex;
-  gap: 8px;
-  align-items: center;
-  width: fit-content;
-  color: var(--bsv-body);
-  font-size: 13px;
-  font-weight: 560;
-  cursor: pointer;
-}
-.bsv-team-switch input {
-  width: 16px;
-  height: 16px;
-  margin: 0;
-  accent-color: var(--bsv-ink);
-}
 .bsv-team-hint {
   margin: 0;
   color: var(--bsv-muted);
@@ -1454,9 +1422,6 @@ button.bsv-spot-tag {
   .bsv-ink-tools * {
     transition: none !important;
   }
-}
-.bsv-compare-controls .bsv-track {
-  padding-top: 0;
 }
 
 /*
@@ -1653,10 +1618,6 @@ button.bsv-timecode:hover .bsv-tc-ff {
   background: transparent;
   color: var(--bsv-ink);
 }
-.bsv-title-row .bsv-version-select {
-  height: 28px;
-  font-size: 12.5px;
-}
 .bsv-stage-head {
   align-items: center;
 }
@@ -1759,24 +1720,9 @@ button.bsv-timecode:hover .bsv-tc-ff {
   font-size: 12.5px;
   font-weight: 600;
 }
-.bsv-check {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  min-height: 32px;
-  color: var(--bsv-ink);
-  font-size: 13px;
-  cursor: pointer;
-}
-.bsv-check input {
-  width: 16px;
-  height: 16px;
-  margin: 0;
-  accent-color: var(--bsv-ink);
-}
 .bsv-field-row {
   display: grid;
-  gap: 6px;
+  gap: 2px;
   color: var(--bsv-body);
   font-size: 12.5px;
 }
@@ -1848,24 +1794,6 @@ button.bsv-timecode:hover .bsv-tc-ff {
 .bsv-transport .bsv-play {
   background: var(--bsv-raised);
 }
-.bsv-speed {
-  height: 30px;
-  padding: 0 8px;
-  border: 0;
-  border-radius: 999px;
-  background: transparent;
-  box-shadow: inset 0 0 0 1px var(--bsv-line);
-  color: var(--bsv-ink);
-  font-family: var(--bsv-mono);
-  font-size: 12px;
-  font-weight: 600;
-  font-variant-numeric: tabular-nums;
-  cursor: pointer;
-}
-.bsv-speed:hover {
-  background: var(--bsv-raised);
-}
-
 /* ---- the timeline: a 4px scrub bar, then the 16px marker lane */
 .bsv-timeline {
   position: relative;
@@ -1906,7 +1834,8 @@ button.bsv-timecode:hover .bsv-tc-ff {
   position: absolute;
   top: 0;
   bottom: 0;
-  background: color-mix(in srgb, var(--bsv-accent) 34%, transparent);
+  /* The selected range on the bar: primary ink, quieter than the played part (accent rule, 2026-11-19). */
+  background: color-mix(in srgb, var(--bsv-ink) 34%, transparent);
 }
 .bsv-scrub-thumb {
   position: absolute;
@@ -1993,9 +1922,15 @@ button.bsv-timecode:hover .bsv-tc-ff {
 .bsv-range-line[data-resolved] {
   background: color-mix(in srgb, var(--bsv-body) 45%, var(--bsv-surface));
 }
-.bsv-range-line[data-active],
+/* The selected note's range is primary ink; only the range being drawn wears the accent. */
+.bsv-range-line[data-active] {
+  top: 6.5px;
+  height: 3px;
+  background: var(--bsv-ink);
+}
 .bsv-range-line[data-pending] {
   top: 6.5px;
+  z-index: 4;
   height: 3px;
   background: var(--bsv-accent);
 }
@@ -2020,10 +1955,12 @@ button.bsv-timecode:hover .bsv-tc-ff {
 .bsv-marker-pending {
   position: absolute;
   top: 50%;
-  width: 8px;
-  height: 8px;
+  z-index: 3;
+  width: 10px;
+  height: 10px;
   box-sizing: border-box;
-  border: 2px solid var(--bsv-ink);
+  /* A moment being marked for the next note: what is being added right now wears the accent. */
+  border: 2px solid var(--bsv-accent);
   border-radius: 999px;
   transform: translate(-50%, -50%);
   pointer-events: none;
@@ -2078,12 +2015,13 @@ button.bsv-timecode:hover .bsv-tc-ff {
 .bsv-marker[data-active] {
   z-index: 4;
 }
+/* The selected note: primary ink, one step larger than a hovered dot's fill, with a thin outer ring. */
 .bsv-marker[data-active] .bsv-marker-dot {
   width: 12px;
   height: 12px;
   border: 0;
-  background: var(--bsv-accent);
-  box-shadow: 0 0 0 2px var(--bsv-surface);
+  background: var(--bsv-ink);
+  box-shadow: 0 0 0 2px var(--bsv-lane-bg), 0 0 0 3.5px color-mix(in srgb, var(--bsv-ink) 45%, transparent);
 }
 .bsv-marker:focus-visible {
   outline: 2px solid var(--bsv-accent);
@@ -2129,7 +2067,7 @@ button.bsv-timecode:hover .bsv-tc-ff {
   background: var(--bsv-hover);
 }
 .bsv-cluster[data-active] {
-  box-shadow: inset 0 0 0 1.5px var(--bsv-accent);
+  box-shadow: inset 0 0 0 1.5px var(--bsv-ink);
 }
 .bsv-cluster:focus-visible {
   outline: 2px solid var(--bsv-accent);
@@ -2282,7 +2220,8 @@ button.bsv-timecode:hover .bsv-tc-ff {
 }
 .bsv-thread[data-active] {
   background: var(--bsv-raised);
-  box-shadow: inset 2px 0 0 var(--bsv-accent), inset 0 -1px 0 var(--bsv-line);
+  /* A neutral bar in primary ink: the selection never borrows the accent (2026-11-19). */
+  box-shadow: inset 2px 0 0 var(--bsv-ink), inset 0 -1px 0 var(--bsv-line);
 }
 .bsv-thread-actions {
   opacity: 0;
@@ -2299,6 +2238,50 @@ button.bsv-timecode:hover .bsv-tc-ff {
 @media (hover: none) {
   .bsv-thread-actions {
     opacity: 1;
+  }
+}
+/*
+ * With a pointer, a note's actions (답글 · 해결 · 삭제) float over the top-right of its row while the row is
+ * under the pointer or holds focus, instead of keeping an invisible line under every note (that empty line was
+ * what made the rows look padded at the bottom). Touch screens keep them in the row, always shown.
+ */
+@media (hover: hover) {
+  .bsv-thread,
+  .bsv-reply {
+    position: relative;
+  }
+  .bsv-thread > .bsv-thread-actions,
+  .bsv-reply > .bsv-thread-actions {
+    position: absolute;
+    z-index: 2;
+    top: 6px;
+    right: 6px;
+    margin: 0;
+    padding: 2px;
+    border-radius: 10px;
+    background: var(--bsv-raised);
+    box-shadow: inset 0 0 0 1px var(--bsv-line-strong), 0 6px 16px rgba(0, 0, 0, 0.32);
+    pointer-events: none;
+  }
+  .bsv-thread[data-active] > .bsv-thread-actions {
+    opacity: 0;
+  }
+  .bsv-thread:hover > .bsv-thread-actions,
+  .bsv-thread:focus-within > .bsv-thread-actions,
+  .bsv-thread[data-replying] > .bsv-thread-actions,
+  .bsv-reply:hover > .bsv-thread-actions,
+  .bsv-reply:focus-within > .bsv-thread-actions {
+    opacity: 1;
+    pointer-events: auto;
+  }
+  .bsv-reply > .bsv-thread-actions {
+    top: -2px;
+    right: 0;
+  }
+  /* The floating actions take the date's place; the date steps aside so no digit peeks out beside them. */
+  .bsv-thread:has(> .bsv-thread-actions):is(:hover, :focus-within, [data-replying]) > .bsv-comment .bsv-when,
+  .bsv-reply:has(> .bsv-thread-actions):is(:hover, :focus-within) > .bsv-comment .bsv-when {
+    visibility: hidden;
   }
 }
 .bsv-num,
@@ -2323,7 +2306,7 @@ button.bsv-timecode:hover .bsv-tc-ff {
   background: var(--bsv-glass-dark);
 }
 .bsv-spot[data-active] {
-  box-shadow: 0 0 0 3px var(--bsv-accent), 0 2px 8px rgba(16, 18, 24, 0.22);
+  box-shadow: 0 0 0 3px var(--bsv-ink), 0 2px 8px rgba(16, 18, 24, 0.22);
 }
 .bsv-composer .bsv-pill,
 .bsv-composer .bsv-primary {
@@ -2355,4 +2338,632 @@ button.bsv-timecode:hover .bsv-tc-ff {
   .bsv-menu * {
     transition: none !important;
   }
+}
+
+/*
+ * Finishing pass (docs/BRAND-ROOMS-FEEDBACK.md §11.7, 2026-11-19: "아쉬운 것 없을 때까지").
+ *
+ * THE ACCENT RULE (docs/design/TASTE.md 18). The accent does two jobs and no others:
+ *   1. it fills exactly one control on a view, the view's main act (header-plan.ts `accentControl`):
+ *      승인하기 while the viewer may approve, otherwise the composer's 보내기. Where both exist, 보내기 is the
+ *      neutral filled button (primary ink on the dark stage, `data-tone="neutral"`);
+ *   2. it marks what is being added right now: a range being drawn (its line and handles), a moment or a spot
+ *      being marked, and the keyboard focus ring.
+ * A selected note is primary ink (its dot with a thin ring, its range line, the wash on the bar, the row's
+ * left bar). Counts, chips of state and the version's status are ink or secondary ink.
+ */
+
+/* ---- the player is one dark canvas: the frame, the timeline and the transport sit on it together */
+.bsv-player {
+  --bsv-lane-bg: var(--bsv-canvas);
+  gap: 8px;
+  padding: clamp(8px, 1vw, 14px) clamp(8px, 1vw, 14px) 8px;
+  border-radius: 18px;
+  background: var(--bsv-canvas);
+}
+.bsv-mat {
+  padding: 0;
+  border-radius: 10px;
+  background: transparent;
+}
+.bsv-scrub-thumb {
+  box-shadow: 0 0 0 2px var(--bsv-lane-bg, var(--bsv-surface));
+}
+.bsv-scrub:has(.bsv-range:focus-visible) .bsv-scrub-thumb {
+  box-shadow: 0 0 0 2px var(--bsv-lane-bg, var(--bsv-surface)), 0 0 0 4px var(--bsv-accent);
+}
+.bsv-range-handle {
+  z-index: 5;
+  box-shadow: 0 0 0 2px var(--bsv-lane-bg, var(--bsv-surface));
+}
+.bsv-scrub-track {
+  /* Quieter than the played part, and still a visible control: 3.3:1 on the canvas (3.2:1 on the team's page). */
+  background: color-mix(in srgb, var(--bsv-body) 58%, var(--bsv-lane-bg, var(--bsv-surface)));
+}
+/* Hit targets: 24px at least (28px on a phone) for the small text controls of the notes column. */
+.bsv-tab {
+  min-width: 24px;
+  justify-content: center;
+}
+button.bsv-spot-tag {
+  min-height: 24px;
+  margin: 0 -4px;
+  padding: 0 4px;
+  border-radius: 6px;
+}
+button.bsv-spot-tag:hover {
+  background: var(--bsv-hover);
+  color: var(--bsv-ink);
+}
+@media (max-width: 520px) {
+  .bsv-tab {
+    min-width: 28px;
+  }
+  button.bsv-timecode,
+  button.bsv-spot-tag {
+    min-height: 28px;
+  }
+}
+.bsv-transport {
+  gap: 2px;
+  min-height: 34px;
+}
+.bsv-time {
+  margin-left: 10px;
+}
+
+/* ---- the filled two-column body: the window's height, the notes beside, nothing empty under the controls */
+@media (min-width: 1241px) {
+  .bsv-stage-body[data-fill] {
+    /* Measured by the stage (fillBodyHeight); until then an estimate of the head and the paddings above it. */
+    height: var(--bsv-body-h, max(420px, calc(100dvh - 190px)));
+    grid-template-rows: minmax(0, 1fr);
+    align-items: stretch;
+  }
+  .bsv-stage-body[data-fill] > .bsv-comments {
+    height: 100%;
+    min-height: 0;
+    max-height: none;
+  }
+  /*
+   * Inline two columns (the team's pages): the notes column is as tall as the player and scrolls inside, so the
+   * stage ends under the controls instead of leaving the player's column empty beside a long list.
+   */
+  .bsv-stage-body:not([data-fill]):not([data-fullscreen]) > .bsv-comments {
+    contain: size;
+    align-self: stretch;
+    max-height: none;
+    min-height: 380px;
+  }
+}
+/* The player takes its column's height: the mat grows, the frame sits in its middle, the controls stay under it. */
+.bsv-stage-body[data-fullscreen][data-stretch] {
+  align-items: stretch;
+}
+.bsv-stage-body[data-fullscreen][data-stretch] > .bsv-player {
+  grid-template-rows: minmax(0, 1fr) auto;
+  align-self: stretch;
+  height: 100%;
+  min-height: 0;
+  box-sizing: border-box;
+}
+.bsv-stage-body[data-fullscreen][data-stretch] .bsv-mat {
+  display: flex;
+  min-height: 0;
+}
+.bsv-stage-body[data-fullscreen][data-stretch] .bsv-frame-wrap {
+  align-items: center;
+  height: 100%;
+  min-height: 0;
+}
+@media (min-width: 1241px) {
+  .bsv-stage-body[data-fill][data-stretch] > .bsv-player {
+    grid-template-rows: minmax(0, 1fr) auto;
+    align-self: stretch;
+    height: 100%;
+    min-height: 0;
+    box-sizing: border-box;
+  }
+  .bsv-stage-body[data-fill][data-stretch] .bsv-mat {
+    display: flex;
+    min-height: 0;
+  }
+  .bsv-stage-body[data-fill][data-stretch] .bsv-frame-wrap {
+    align-items: center;
+    height: 100%;
+    min-height: 0;
+  }
+}
+/* On a crowded lane a range's line runs under the strip, not through it. */
+.bsv-timeline[data-lane-mode="stretches"] .bsv-range-line:not([data-pending]) {
+  top: 13px;
+  height: 2px;
+}
+.bsv-timeline[data-lane-mode="stretches"] .bsv-range-line[data-active] {
+  top: 12.5px;
+  height: 3px;
+}
+
+/* ---- the neutral filled button: 보내기 beside the head's 승인하기 */
+.bsv-primary[data-tone="neutral"] {
+  background: var(--bsv-ink);
+  color: var(--bsv-canvas);
+}
+.bsv-primary[data-tone="neutral"]:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--bsv-ink) 84%, var(--bsv-canvas));
+}
+/* Disabled (nothing typed yet): a quiet shape, not a faded accent or a faded white. */
+.bsv-primary:disabled {
+  background: var(--bsv-raised);
+  color: var(--bsv-muted);
+  opacity: 1;
+}
+.bsv-swatch[aria-pressed="true"] {
+  box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.18), 0 0 0 2px var(--bsv-lane-bg, var(--bsv-surface)), 0 0 0 4px var(--bsv-ink);
+}
+
+/* ---- the stage's own select (a button and a menu instead of the browser's white list) */
+.bsv-select {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  height: 34px;
+  padding: 0 8px 0 12px;
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  box-shadow: inset 0 0 0 1px var(--bsv-line-strong);
+  color: var(--bsv-ink);
+  font: inherit;
+  font-size: 12.5px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.01em;
+  white-space: nowrap;
+  cursor: pointer;
+  transition: background-color var(--bsv-dur) var(--bsv-ease);
+}
+.bsv-select[data-size="sm"] {
+  height: 28px;
+  padding: 0 6px 0 10px;
+}
+.bsv-select:hover:not(:disabled),
+.bsv-select[aria-expanded="true"] {
+  background: var(--bsv-raised);
+}
+.bsv-select:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+.bsv-select-chevron {
+  width: 14px;
+  height: 14px;
+  color: var(--bsv-body);
+}
+.bsv-transport .bsv-select.bsv-speed {
+  min-width: 58px;
+  justify-content: space-between;
+  box-shadow: none;
+}
+.bsv-transport .bsv-select.bsv-speed:hover {
+  background: var(--bsv-hover);
+}
+.bsv-menu :is([role="menuitemradio"], .bsv-option),
+.bsv-popover .bsv-option {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  min-height: 34px;
+  padding: 0 10px 0 8px;
+  border: 0;
+  border-radius: 9px;
+  background: transparent;
+  color: var(--bsv-ink);
+  font: inherit;
+  font-size: 13px;
+  font-weight: 500;
+  font-variant-numeric: tabular-nums;
+  text-align: left;
+  white-space: nowrap;
+  cursor: pointer;
+}
+.bsv-menu [role="menuitemradio"]:hover,
+.bsv-menu [role="menuitemradio"]:focus-visible,
+.bsv-popover .bsv-option:hover,
+.bsv-popover .bsv-option:focus-visible {
+  background: var(--bsv-hover);
+  outline: none;
+}
+.bsv-menu-check {
+  width: 16px;
+  height: 16px;
+  color: var(--bsv-ink);
+  visibility: hidden;
+}
+:is([role="menuitemradio"], [role="radio"])[aria-checked="true"] .bsv-menu-check {
+  visibility: visible;
+}
+.bsv-menu [role="menuitemradio"][aria-checked="true"],
+.bsv-popover .bsv-option[aria-checked="true"] {
+  font-weight: 600;
+}
+.bsv-menu [role="menuitem"]:focus-visible,
+.bsv-menu [role="menuitemradio"]:focus-visible,
+.bsv-popover .bsv-option:focus-visible,
+.bsv-cluster-row:focus-visible {
+  box-shadow: inset 0 0 0 2px var(--bsv-accent);
+}
+.bsv-popover .bsv-popover-title {
+  margin: 4px 0 2px;
+  padding: 0 2px;
+}
+
+/* ---- the switch ("팀만 보기", "그림 표시만"): the native checkbox, drawn as a track and a thumb */
+.bsv-switch {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  width: fit-content;
+  min-height: 28px;
+  color: var(--bsv-body);
+  font-size: 13px;
+  font-weight: 560;
+  cursor: pointer;
+}
+.bsv-popover .bsv-switch {
+  width: 100%;
+  min-height: 34px;
+  padding: 0 4px 0 2px;
+  color: var(--bsv-ink);
+}
+.bsv-switch-input {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  margin: 0;
+  opacity: 0;
+  cursor: pointer;
+}
+.bsv-switch-track {
+  position: relative;
+  flex: none;
+  width: 30px;
+  height: 18px;
+  box-sizing: border-box;
+  border-radius: 999px;
+  background: var(--bsv-hover);
+  box-shadow: inset 0 0 0 1px var(--bsv-line-strong);
+  transition: background-color var(--bsv-dur) var(--bsv-ease);
+}
+.bsv-switch-track::after {
+  content: "";
+  position: absolute;
+  top: 3px;
+  left: 3px;
+  width: 12px;
+  height: 12px;
+  border-radius: 999px;
+  background: var(--bsv-body);
+  transition: transform var(--bsv-dur) var(--bsv-ease), background-color var(--bsv-dur) var(--bsv-ease);
+}
+.bsv-switch-input:checked + .bsv-switch-track {
+  background: var(--bsv-ink);
+  box-shadow: none;
+}
+.bsv-switch-input:checked + .bsv-switch-track::after {
+  background: var(--bsv-canvas);
+  transform: translateX(12px);
+}
+.bsv-switch-input:focus-visible + .bsv-switch-track {
+  outline: 2px solid var(--bsv-accent);
+  outline-offset: 2px;
+}
+.bsv-switch:hover .bsv-switch-label,
+.bsv-switch-input:checked ~ .bsv-switch-label {
+  color: var(--bsv-ink);
+}
+
+/* ---- the lane: stretches (a crowded lane), and the small dot at a note's real time */
+/*
+ * A stretch is a short segment of a density strip: as wide as its stretch less a 3px gap, brighter and a
+ * little thicker for more notes. Segments read as "notes here", never as a ruler's ticks; the exact moment
+ * shows as a dot on hover. The faintest level still measures 3:1 or more on the canvas (graphic contrast).
+ */
+.bsv-stretch {
+  --bsv-dot: color-mix(in srgb, var(--bsv-body) 66%, var(--bsv-lane-bg, var(--bsv-surface)));
+  position: absolute;
+  top: 0;
+  left: 0;
+  display: grid;
+  place-items: center;
+  min-width: 24px;
+  height: 24px;
+  padding: 0;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  transform: translate(-50%, -50%);
+  cursor: pointer;
+}
+.bsv-stretch-bar {
+  /* Longer for more notes (8 / 14 / 22 / 32px, never past the stretch): dashes of different lengths read as
+     notes in places, not as a second, segmented progress bar. */
+  width: min(100%, 8px);
+  height: 2px;
+  border-radius: 999px;
+  background: var(--bsv-dot);
+  transition: height var(--bsv-dur) var(--bsv-ease), background-color var(--bsv-dur) var(--bsv-ease);
+}
+.bsv-stretch[data-level="2"] {
+  --bsv-dot: color-mix(in srgb, var(--bsv-body) 82%, var(--bsv-lane-bg, var(--bsv-surface)));
+}
+.bsv-stretch[data-level="2"] .bsv-stretch-bar {
+  width: min(100%, 14px);
+  height: 3px;
+}
+.bsv-stretch[data-level="3"] {
+  --bsv-dot: var(--bsv-body);
+}
+.bsv-stretch[data-level="3"] .bsv-stretch-bar {
+  width: min(100%, 22px);
+  height: 4px;
+}
+.bsv-stretch[data-level="4"] {
+  --bsv-dot: color-mix(in srgb, var(--bsv-ink) 85%, var(--bsv-body));
+}
+.bsv-stretch[data-level="4"] .bsv-stretch-bar {
+  width: min(100%, 32px);
+  height: 5px;
+}
+.bsv-stretch[data-on],
+.bsv-stretch[data-hover],
+.bsv-stretch[data-active],
+.bsv-stretch[aria-expanded="true"],
+.bsv-stretch:hover,
+.bsv-stretch:focus-visible {
+  --bsv-dot: var(--bsv-ink);
+}
+.bsv-stretch:hover .bsv-stretch-bar,
+.bsv-stretch[data-hover] .bsv-stretch-bar,
+.bsv-stretch[aria-expanded="true"] .bsv-stretch-bar,
+.bsv-stretch:focus-visible .bsv-stretch-bar {
+  height: 6px;
+}
+.bsv-stretch:focus-visible {
+  outline: 2px solid var(--bsv-accent);
+  outline-offset: 1px;
+}
+.bsv-lane-point {
+  position: absolute;
+  top: 50%;
+  z-index: 2;
+  width: 10px;
+  height: 10px;
+  border-radius: 999px;
+  background: var(--bsv-ink);
+  box-shadow: 0 0 0 2px var(--bsv-lane-bg, var(--bsv-surface));
+  transform: translate(-50%, -50%);
+  pointer-events: none;
+}
+.bsv-lane-point[data-active] {
+  width: 12px;
+  height: 12px;
+  box-shadow: 0 0 0 2px var(--bsv-lane-bg, var(--bsv-surface)), 0 0 0 3.5px color-mix(in srgb, var(--bsv-ink) 45%, transparent);
+}
+.bsv-timeline[data-lane-mode="stretches"] .bsv-lane-point {
+  /* Over the strip, a little above its middle so a tall bar never hides it. */
+  z-index: 4;
+}
+.bsv-cluster {
+  /* The pill's edge reads at 4:1 on the canvas (a control boundary, not a hairline). */
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--bsv-ink) 40%, transparent), 0 0 0 2px var(--bsv-lane-bg, var(--bsv-surface));
+}
+.bsv-cluster[data-active] {
+  box-shadow: inset 0 0 0 1.5px var(--bsv-ink), 0 0 0 2px var(--bsv-lane-bg, var(--bsv-surface));
+}
+/* The list a pill or a stretch opens on hover keeps the pointer's way to it: a bridge across the scrub bar. */
+.bsv-cluster-list::after {
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 100%;
+  height: 30px;
+}
+.bsv-cluster-row[data-active] {
+  background: var(--bsv-hover);
+}
+@media (max-width: 520px) {
+  .bsv-stretch {
+    width: 28px;
+    height: 28px;
+  }
+}
+
+/*
+ * A chip holds words between timecodes ("{start} to {end}", "{start}부터 {end}까지", "At {time}"). In its
+ * inline-flex box each run of words is its own flex item, whose edge spaces collapsed: "0:05:23to0:13:23",
+ * "0:05:23부터0:13:23까지". Kept as written.
+ */
+.bsv-chip {
+  white-space: pre;
+}
+
+/* ---- notes column: the composer always at its foot, the tabs after the title */
+.bsv-comments > .bsv-composer {
+  margin-top: auto;
+}
+.bsv-comments-head {
+  justify-content: flex-start;
+}
+@media (max-width: 520px) {
+  .bsv-popover[data-wide] {
+    min-width: min(320px, calc(100vw - 16px));
+  }
+  .bsv-shortcuts {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+/* A touch screen without a keyboard has no use for the keyboard list; its "?" leaves the controls row. */
+@media (hover: none) and (pointer: coarse) {
+  .bsv-transport [data-review-shortcuts] {
+    display: none;
+  }
+}
+
+/* ---- the head: one row, controls of one height */
+@media (min-width: 521px) {
+  /* A long title wraps inside its own column; the actions keep their place on the right. */
+  .bsv-stage-head {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    align-items: center;
+  }
+  .bsv-title-row > :not(.bsv-stage-title) {
+    flex: none;
+  }
+}
+.bsv-stage-tools .bsv-icon-btn,
+.bsv-stage-tools .bsv-ghost,
+.bsv-stage-tools .bsv-primary,
+.bsv-stage-tools .brh-open {
+  height: 36px;
+}
+.bsv-stage-tools .bsv-icon-btn {
+  width: 36px;
+}
+.bsv-stage-tools .bsv-select {
+  height: 36px;
+}
+
+/* ---- the studio's review page (/brand/studio/review) */
+/* The page takes the workspace's whole width, as the room's review mode does, so the stage is not boxed in. */
+.bw-shell .bw-body .bw-main:has([data-studio-review]) {
+  max-width: none;
+}
+@media (min-width: 901px) {
+  .bw-shell .bw-body .bw-main:has([data-studio-review]) {
+    padding-left: 24px;
+    padding-right: 24px;
+  }
+}
+/*
+ * The floating help button sits over the bottom-right corner, which with a review open is the notes column and
+ * its send button. It steps aside while a piece is open, as it does in the room's review mode.
+ */
+body:has([data-studio-review] [data-review-stage]) .bw-support-launch {
+  display: none;
+}
+[data-studio-review] {
+  max-width: none;
+  padding: 0;
+  gap: 16px;
+}
+[data-studio-review] .bsv-head {
+  align-items: center;
+}
+/* Up to 1480px the list is a strip of cards above the stage, so the stage gets the whole width. */
+@media (max-width: 1480px) {
+  [data-studio-review] .bsv-layout {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 12px;
+  }
+  [data-studio-review] .bsv-list {
+    position: static;
+    max-height: none;
+    overflow-x: auto;
+    padding: 6px;
+    border-radius: 18px;
+  }
+  [data-studio-review] .bsv-list ul {
+    grid-auto-flow: column;
+    grid-auto-columns: minmax(240px, 300px);
+  }
+  [data-studio-review] .bsv-item {
+    grid-template-columns: 44px minmax(0, 1fr);
+    padding: 6px;
+    border-radius: 12px;
+  }
+  [data-studio-review] .bsv-thumb {
+    width: 44px;
+    height: 44px;
+    border-radius: 8px;
+  }
+  [data-studio-review] .bsv-item-title {
+    -webkit-line-clamp: 1;
+  }
+}
+/* A short window (1280×720): the page's one-line explanation steps aside so the film keeps its height. */
+@media (min-width: 1241px) and (max-height: 820px) {
+  [data-studio-review] .bsv-lede {
+    display: none;
+  }
+  [data-studio-review] .bsv-title {
+    font-size: 26px;
+  }
+}
+.bsv-stage-title,
+.bsv-item-title,
+.bsv-quiet,
+.bsv-lede,
+.bsv-carried-hint,
+.bsv-team-hint {
+  word-break: keep-all;
+}
+@media (max-width: 520px) {
+  /* The studio page's long share label: its icon alone on a phone, the words kept as the button's name. */
+  [data-review-share-open] .bsv-btn-label {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip: rect(0 0 0 0);
+    white-space: nowrap;
+  }
+  .bsv-stage-tools [data-review-share-open] {
+    justify-content: center;
+    width: 36px;
+    padding: 0;
+  }
+}
+/* A status in the list is a quiet outline, as in the stage head; only the current row is raised. */
+.bsv-item .bsv-status[data-state="approved"] {
+  background: transparent;
+  box-shadow: inset 0 0 0 1px var(--bsv-line-strong);
+  color: var(--bsv-ink);
+}
+/* The current piece in the list: a raised row, not a white block that outshouts the stage. */
+.bsv-item[aria-current="true"] {
+  background: var(--bsv-hover);
+  color: var(--bsv-ink);
+  box-shadow: inset 0 0 0 1px var(--bsv-line-strong);
+}
+.bsv-item[aria-current="true"] .bsv-open-count,
+.bsv-item[aria-current="true"] .bsv-quiet {
+  color: var(--bsv-body);
+}
+.bsv-item[aria-current="true"] .bsv-status {
+  background: var(--bsv-surface);
+  color: var(--bsv-body);
+}
+
+/* ---- side by side: the same scrub bar as the stage, the track above the transport */
+.bsv-compare-controls {
+  padding: 8px 12px;
+  border-radius: 18px;
+  background: var(--bsv-canvas);
+  --bsv-lane-bg: var(--bsv-canvas);
+}
+.bsv-compare-track {
+  order: -1;
+}
+.bsv-compare-pane {
+  border-radius: 18px;
+  background: var(--bsv-canvas);
+}
+.bsv-compare-head .bsv-select {
+  height: 32px;
 }
