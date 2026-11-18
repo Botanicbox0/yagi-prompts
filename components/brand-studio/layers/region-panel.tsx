@@ -5,7 +5,8 @@
  * - Numbered square reference thumbnails `2, 3, …` with drag/drop, file upload, quick strip & role select
  * - 5-task Prompt Assistant (`지시 도우미`) + `!` tip + reference/box-size/contour advisors
  * - Prompt Auto-Refine toggle + `!` tip + live preview rewrite
- * - Model / quality select, `자동으로 바로 합치기` toggle, and credit-only non-blocking submit CTA.
+ * - Model / quality select and credit-only non-blocking submit CTA. A finished edit always lands as a
+ *   patch layer in the editor, followed by the result bar (region-result.ts).
  */
 import { useCallback, useEffect, useId, useMemo, useRef, useState, type ClipboardEvent as ReactClipboardEvent, type DragEvent, type RefObject } from "react";
 import { extractClipboardImages, prepareClipboardUploadFiles } from "@/lib/brand-studio/clipboard-image";
@@ -35,17 +36,15 @@ export interface RegionEditPanelProps {
   region: LayerEditorRegionSupport;
   box: RegionBox | null;
   preset?: LayerEditorRegionPreset | null;
-  autoFlatten: boolean;
   /** True when marquee / partial-edit tool is active so window-level Ctrl+V routes copied images here. */
   activeForPaste?: boolean;
   quickItems: readonly TrayItem[];
   uploading: boolean;
   onBox(box: RegionBox | null): void;
-  onAutoFlatten(value: boolean): void;
   resolveRef(ref: RefSource): TrayItem | null;
   onUploadRefs(files: File[]): Promise<TrayItem[]>;
   onNotice?(message: string): void;
-  onSubmitted(jobId: string, meta: { autoFlatten: boolean; box: RegionBox }): void;
+  onSubmitted(jobId: string, meta: { box: RegionBox }): void;
 }
 
 function problemMessage(problem: RegionProblem, copy: LayersCopy): string {
@@ -64,7 +63,7 @@ function problemMessage(problem: RegionProblem, copy: LayersCopy): string {
 }
 
 export function RegionEditPanel(props: RegionEditPanelProps) {
-  const { copy, locale, baseSize, baseImgRef, region, box, autoFlatten } = props;
+  const { copy, locale, baseSize, baseImgRef, region, box } = props;
   const r = copy.region;
   const id = useId();
   const fileRef = useRef<HTMLInputElement>(null);
@@ -299,7 +298,7 @@ export function RegionEditPanel(props: RegionEditPanelProps) {
         setErrorNote(res.message);
         return;
       }
-      props.onSubmitted(res.job.id, { autoFlatten, box: targetBox });
+      props.onSubmitted(res.job.id, { box: targetBox });
     } finally {
       setSubmitting(false);
     }
@@ -622,11 +621,6 @@ export function RegionEditPanel(props: RegionEditPanelProps) {
         )}
       </div>
       )}
-
-      <label className="bsl-check">
-        <input type="checkbox" checked={autoFlatten} onChange={(event) => props.onAutoFlatten(event.target.checked)} />
-        <span>{r.autoFlatten}</span>
-      </label>
 
       {errorNote && (
         <p className="bsl-error" role="alert">

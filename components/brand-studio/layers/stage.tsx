@@ -42,9 +42,9 @@ import {
 } from "./geometry";
 import { paintMaskStrokeOnContext, worldPointToMask, type MaskBrushMode } from "./mask";
 import {
+  brushTarget,
   findLayer,
   fontChoice,
-  topVisibleImageLayerId,
   updateLayer,
   type Frame,
   type ImageLayer,
@@ -57,7 +57,7 @@ import {
 import type { LayersCopy } from "./panels";
 import type { TextLayout } from "./text-layout";
 
-type DragMode =
+export type DragMode =
   | "move"
   | "resize"
   | "rotate"
@@ -98,7 +98,12 @@ interface Drag {
 
 export interface StageProps {
   copy: LayersCopy;
+  /** The real document: every input reads it and every edit starts from it. */
   doc: LayerDoc;
+  /** Drawing only: a copy that differs in visibility ("원본 비교", region-result.ts `stageDocFor`). */
+  displayDoc?: LayerDoc;
+  /** "원본 비교" is held: no input is taken and an edit in progress is dropped (`compareInterrupts`). */
+  inputLocked?: boolean;
   baseUrl: string;
   frames: ReadonlyMap<string, Frame>;
   layouts: ReadonlyMap<string, TextLayout>;
@@ -129,6 +134,17 @@ export interface StageProps {
   onDropRef(ref: RefSource, at: Point): void;
   onDropFiles(files: File[], at: Point): void;
   onNotice(message: string): void;
+}
+
+/**
+ * What happens to a drag in progress when "원본 비교" is pressed (another finger on the button): a brush
+ * stroke is dropped before it reaches the document, a move/resize/rotate/canvas drag goes back to where it
+ * started (its previews were never a step), anything else just stops.
+ */
+export function compareInterrupts(mode: DragMode): "drop" | "revert" | "stop" {
+  if (mode === "brush") return "drop";
+  if (mode === "move" || mode === "resize" || mode === "rotate" || mode === "canvas") return "revert";
+  return "stop";
 }
 
 /** Screen pixels within which an edge or centre line catches. */
@@ -314,6 +330,7 @@ export function Stage(props: StageProps) {
   }
 
   function onPointerDown(event: ReactPointerEvent<HTMLDivElement>) {
+    if (props.inputLocked) return;
     if (event.button !== 0 && event.button !== 1) return;
     const target = event.target as HTMLElement;
     if (target.closest("textarea")) return;
@@ -359,16 +376,12 @@ export function Stage(props: StageProps) {
       }
     } else if (tool === "eraser" || tool === "restore") {
       if (editingId) props.onEditText(null);
-      let candidate = findLayer(doc, selectedId);
-      if (!candidate || candidate.kind !== "image" || candidate.hidden) {
-        const fallbackId = topVisibleImageLayerId(doc);
-        candidate = fallbackId ? findLayer(doc, fallbackId) : null;
-        if (candidate) props.onSelect(candidate.id);
-      }
-      if (!candidate || candidate.kind !== "image" || candidate.hidden) {
+      const candidate = brushTarget(doc, selectedId);
+      if (!candidate) {
         props.onNotice(copy.stage.needImageLayer);
         return;
       }
+      if (candidate.id !== selectedId) props.onSelect(candidate.id);
       if (candidate.locked) {
         props.onNotice(copy.stage.locked);
         return;
@@ -548,22 +561,45 @@ export function Stage(props: StageProps) {
     if (drag.moved && (drag.mode === "move" || drag.mode === "resize" || drag.mode === "rotate" || drag.mode === "canvas")) props.onSettle(drag.start);
   }
 
+  // "원본 비교" pressed while a drag is under way (another finger): nothing of it reaches the document.
+  useEffect(() => {
+    if (!props.inputLocked) return;
+    const drag = dragRef.current;
+    if (!drag) return;
+    dragRef.current = null;
+    setDragging(null);
+    setGuides(null);
+    try {
+      stageRef.current?.releasePointerCapture(drag.pointerId);
+    } catch {
+      /* already released */
+    }
+    const outcome = compareInterrupts(drag.mode);
+    if (outcome === "drop") {
+      brushSessionRef.current = null;
+      setBrushingLayerId(null);
+    } else if (outcome === "revert" && drag.moved) {
+      props.onRevert?.(drag.start);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [props.inputLocked]);
+
   function onDoubleClick(event: ReactMouseEvent<HTMLDivElement>) {
-    if (tool !== "move") return;
+    if (props.inputLocked || tool !== "move") return;
     const id = (event.target as HTMLElement).closest<HTMLElement>("[data-layer-id]")?.dataset.layerId;
     const layer = id ? findLayer(doc, id) : null;
     if (layer?.kind === "text" && !layer.locked) props.onEditText(layer.id);
   }
 
   function onDragOver(event: DragEvent<HTMLDivElement>) {
-    if (!acceptsDrag(event.dataTransfer?.types)) return;
+    if (props.inputLocked || !acceptsDrag(event.dataTransfer?.types)) return;
     event.preventDefault();
     event.dataTransfer.dropEffect = "copy";
     if (!dropActive) setDropActive(true);
   }
 
   function onDrop(event: DragEvent<HTMLDivElement>) {
-    if (!acceptsDrag(event.dataTransfer?.types)) return;
+    if (props.inputLocked || !acceptsDrag(event.dataTransfer?.types)) return;
     event.preventDefault();
     setDropActive(false);
     const at = toWorld(view, local(event.clientX, event.clientY));
@@ -573,7 +609,9 @@ export function Stage(props: StageProps) {
     if (files.length) props.onDropFiles(files, at);
   }
 
-  const selected = findLayer(doc, selectedId);
+  // Drawing reads the display copy; it differs from `doc` only in what is hidden.
+  const shown = props.displayDoc ?? doc;
+  const selected = findLayer(shown, selectedId);
   const selectedFrame = selected ? frames.get(selected.id) : undefined;
   const editing = Boolean(editingId && editingId === selectedId);
   const canvasMode = Boolean(props.canvasMode);
@@ -607,7 +645,7 @@ export function Stage(props: StageProps) {
     >
       <div
         className="bsl-world"
-        data-base-hidden={doc.baseHidden || undefined}
+        data-base-hidden={shown.baseHidden || undefined}
         style={{
           width: doc.width,
           height: doc.height,
@@ -622,10 +660,10 @@ export function Stage(props: StageProps) {
             src={drawableUrl(props.baseUrl)}
             alt=""
             draggable={false}
-            style={{ left: picture.x, top: picture.y, width: picture.w, height: picture.h, display: doc.baseHidden ? "none" : undefined }}
+            style={{ left: picture.x, top: picture.y, width: picture.w, height: picture.h, display: shown.baseHidden ? "none" : undefined }}
           />
         </div>
-        {doc.layers.map((layer) => {
+        {shown.layers.map((layer) => {
           const frame = frames.get(layer.id) ?? layer;
           const activeBrush = brushingLayerId === layer.id;
           return (
