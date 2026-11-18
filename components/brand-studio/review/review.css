@@ -462,67 +462,6 @@
   position: relative;
   padding-top: 28px;
 }
-.bsv-pins {
-  position: absolute;
-  top: 0;
-  left: 8px;
-  right: 8px;
-  height: 22px;
-}
-.bsv-pin {
-  position: absolute;
-  top: 0;
-  display: grid;
-  place-items: center;
-  min-width: 20px;
-  height: 20px;
-  padding: 0 4px;
-  box-sizing: border-box;
-  border: 0;
-  border-radius: 999px;
-  background: var(--bsv-ink);
-  color: var(--bsv-canvas);
-  font-size: 10.5px;
-  font-weight: 600;
-  font-variant-numeric: tabular-nums;
-  /* Notes at (nearly) the same moment fan out sideways instead of hiding each other. */
-  transform: translateX(calc(-50% + var(--bsv-nudge, 0) * 16px));
-  cursor: pointer;
-  transition: transform var(--bsv-dur) var(--bsv-ease);
-}
-.bsv-pin::after {
-  content: "";
-  position: absolute;
-  top: 100%;
-  left: 50%;
-  width: 1.5px;
-  height: 7px;
-  background: inherit;
-  transform: translateX(-50%);
-}
-.bsv-pin[data-role="studio"] {
-  background: var(--bsv-accent);
-}
-.bsv-pin[data-resolved] {
-  background: var(--bsv-line-strong);
-  color: var(--bsv-body);
-}
-.bsv-pin[data-active] {
-  z-index: 1;
-  transform: translateX(calc(-50% + var(--bsv-nudge, 0) * 16px)) scale(1.15);
-}
-.bsv-pin[data-pending] {
-  min-width: 12px;
-  width: 12px;
-  height: 12px;
-  margin-top: 5px;
-  background: var(--bsv-surface);
-  box-shadow: inset 0 0 0 2px var(--bsv-accent);
-  cursor: default;
-}
-.bsv-pin[data-pending]::after {
-  display: none;
-}
 .bsv-range {
   display: block;
   width: 100%;
@@ -1245,62 +1184,6 @@ button.bsv-spot-tag {
  * one blue and white both read on any footage; versions are a quiet select; side-by-side is two mats on
  * one clock. Carried notes are grouped under a hairline, read-only. A guest wears a dashed role tag.
  */
-.bsv-lane {
-  position: relative;
-  height: 16px;
-  margin: 0 8px 8px;
-  border-radius: 999px;
-  background: var(--bsv-raised);
-  box-shadow: var(--bsv-well);
-  cursor: crosshair;
-  touch-action: none;
-}
-.bsv-lane[data-active] {
-  background: var(--bsv-accent-soft);
-}
-.bsv-lane-label {
-  position: absolute;
-  right: 8px;
-  top: 50%;
-  transform: translateY(-50%);
-  color: var(--bsv-muted);
-  font-size: 10.5px;
-  letter-spacing: 0.02em;
-  pointer-events: none;
-}
-.bsv-span {
-  position: absolute;
-  top: 3px;
-  height: 10px;
-  min-width: 4px;
-  padding: 0;
-  border: 0;
-  border-radius: 999px;
-  background: var(--bsv-ink);
-  opacity: 0.78;
-  cursor: pointer;
-}
-.bsv-span[data-role="studio"] {
-  background: var(--bsv-accent);
-}
-.bsv-span[data-resolved] {
-  opacity: 0.28;
-}
-.bsv-span[data-active] {
-  opacity: 1;
-  box-shadow: 0 0 0 2px var(--bsv-surface), 0 0 0 4px var(--bsv-accent-line);
-}
-.bsv-span[data-pending] {
-  background: var(--bsv-accent);
-  opacity: 0.45;
-  cursor: default;
-  pointer-events: none;
-}
-.bsv-span:focus-visible {
-  outline: 2px solid var(--bsv-accent);
-  outline-offset: 2px;
-}
-
 .bsv-ink {
   position: absolute;
   inset: 0;
@@ -1651,9 +1534,6 @@ button.bsv-timecode:hover .bsv-tc-ff {
   background: var(--ys-active-bg, #ededed);
   color: var(--ys-active-fg, #09090b);
 }
-.bsv-lane[data-looping] {
-  box-shadow: var(--bsv-well), inset 0 0 0 1px var(--bsv-line-strong);
-}
 .bsv-still-tools {
   display: flex;
   justify-content: flex-end;
@@ -1735,5 +1615,744 @@ button.bsv-timecode:hover .bsv-tc-ff {
     grid-template-columns: minmax(0, 1fr);
     grid-template-rows: auto minmax(0, 1fr);
     align-items: stretch;
+  }
+}
+
+/*
+ * Review stage redesign (docs/BRAND-ROOMS-FEEDBACK.md §11, 2026-11-18). Shown to client companies, so it is
+ * quiet by default and shows content on hover, focus or tap:
+ *   · markers on the timeline are small neutral dots; numbers live only in the notes list;
+ *   · one timeline: a 4px scrub bar and a 16px marker lane under it;
+ *   · one primary (filled) action per view; the rest are outlined or inside a menu;
+ *   · the notes are rows with hairlines, not stacked cards;
+ *   · the accent marks one thing at a time: the selected note (and a range being drawn). Focus rings keep it.
+ * Only the stage's own tokens, no new colours: where a quieter step is needed it is a `color-mix` of two of
+ * them.
+ */
+
+/* ---- head: title + quiet status, then outlined · primary · share · "⋯" */
+.bsv-title-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 10px;
+  min-width: 0;
+}
+.bsv-title-row .bsv-status,
+.bsv-stage-tools .bsv-status {
+  height: 24px;
+  padding: 0 10px;
+  background: transparent;
+  box-shadow: inset 0 0 0 1px var(--bsv-line-strong);
+  color: var(--bsv-body);
+  font-size: 12px;
+  font-weight: 560;
+}
+.bsv-title-row .bsv-status[data-state="approved"],
+.bsv-stage-tools .bsv-status[data-state="approved"] {
+  background: transparent;
+  color: var(--bsv-ink);
+}
+.bsv-title-row .bsv-version-select {
+  height: 28px;
+  font-size: 12.5px;
+}
+.bsv-stage-head {
+  align-items: center;
+}
+.bsv-stage-tools {
+  gap: 8px;
+}
+.bsv-ghost,
+.bsv-stage-tools .brh-open {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 36px;
+  padding: 0 14px;
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  box-shadow: inset 0 0 0 1px var(--bsv-line-strong);
+  color: var(--bsv-ink);
+  font: inherit;
+  font-size: 13.5px;
+  font-weight: 600;
+  letter-spacing: -0.02em;
+  white-space: nowrap;
+  text-decoration: none;
+  cursor: pointer;
+  transition: background-color var(--bsv-dur) var(--bsv-ease);
+}
+.bsv-stage-tools .brh-open .brh-icon {
+  width: 16px;
+  height: 16px;
+}
+.bsv-ghost:hover:not(:disabled),
+.bsv-stage-tools .brh-open:hover {
+  background: var(--bsv-raised);
+}
+/* The download is a link: the workspace's link hover colour must not tint it. */
+.bsv-stage a.bsv-ghost:hover:not(:disabled) {
+  color: var(--bsv-ink);
+}
+.bsv-ghost:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* ---- menus and popovers (the studio's menu primitive, placed beside its button) */
+.bsv-menu-anchor {
+  position: relative;
+  display: inline-flex;
+}
+.bsv-menu {
+  z-index: 60;
+  display: grid;
+  gap: 2px;
+  min-width: 184px;
+  padding: 6px;
+  box-sizing: border-box;
+  border-radius: 14px;
+  background: var(--bsv-raised);
+  box-shadow: inset 0 0 0 1px var(--bsv-line), var(--bsv-float);
+  color: var(--bsv-ink);
+}
+.bsv-menu [role="menuitem"] {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  min-height: 34px;
+  padding: 0 10px;
+  border: 0;
+  border-radius: 9px;
+  background: transparent;
+  color: var(--bsv-ink);
+  font: inherit;
+  font-size: 13px;
+  font-weight: 500;
+  text-align: left;
+  white-space: nowrap;
+  cursor: pointer;
+}
+.bsv-menu [role="menuitem"]:hover,
+.bsv-menu [role="menuitem"]:focus-visible {
+  background: var(--bsv-hover);
+  outline: none;
+}
+.bsv-menu [role="menuitem"]:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+.bsv-popover {
+  gap: 10px;
+  min-width: 220px;
+  padding: 12px;
+}
+.bsv-popover[data-wide] {
+  min-width: 320px;
+}
+.bsv-popover-title {
+  margin: 0;
+  color: var(--bsv-body);
+  font-size: 12.5px;
+  font-weight: 600;
+}
+.bsv-check {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 32px;
+  color: var(--bsv-ink);
+  font-size: 13px;
+  cursor: pointer;
+}
+.bsv-check input {
+  width: 16px;
+  height: 16px;
+  margin: 0;
+  accent-color: var(--bsv-ink);
+}
+.bsv-field-row {
+  display: grid;
+  gap: 6px;
+  color: var(--bsv-body);
+  font-size: 12.5px;
+}
+.bsv-shortcuts {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px 18px;
+  margin: 0;
+}
+.bsv-shortcut {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+.bsv-shortcut dt {
+  display: inline-flex;
+  flex: none;
+  gap: 3px;
+  min-width: 58px;
+}
+.bsv-shortcut dd {
+  margin: 0;
+  color: var(--bsv-body);
+  font-size: 12.5px;
+  line-height: 1.35;
+  word-break: keep-all;
+}
+.bsv-shortcut kbd {
+  display: inline-grid;
+  place-items: center;
+  min-width: 20px;
+  height: 20px;
+  padding: 0 5px;
+  box-sizing: border-box;
+  border-radius: 6px;
+  box-shadow: inset 0 0 0 1px var(--bsv-line-strong);
+  color: var(--bsv-ink);
+  font-family: var(--bsv-mono);
+  font-size: 11px;
+  font-weight: 600;
+}
+.bsv-icon-btn[data-active] {
+  position: relative;
+}
+.bsv-icon-btn[data-active]::after {
+  content: "";
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  width: 6px;
+  height: 6px;
+  border-radius: 999px;
+  background: var(--bsv-ink);
+  box-shadow: 0 0 0 2px var(--bsv-surface);
+}
+
+/* ---- controls: one size of icon button, the timeline above them */
+.bsv-controls {
+  gap: 4px;
+}
+.bsv-transport .bsv-icon-btn,
+.bsv-still-tools .bsv-icon-btn,
+.bsv-comments-tools .bsv-icon-btn,
+.bsv-stage-tools .bsv-icon-btn {
+  width: 34px;
+  height: 34px;
+}
+.bsv-transport .bsv-play {
+  background: var(--bsv-raised);
+}
+.bsv-speed {
+  height: 30px;
+  padding: 0 8px;
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  box-shadow: inset 0 0 0 1px var(--bsv-line);
+  color: var(--bsv-ink);
+  font-family: var(--bsv-mono);
+  font-size: 12px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  cursor: pointer;
+}
+.bsv-speed:hover {
+  background: var(--bsv-raised);
+}
+
+/* ---- the timeline: a 4px scrub bar, then the 16px marker lane */
+.bsv-timeline {
+  position: relative;
+  display: grid;
+  gap: 0;
+  padding: 0 6px;
+}
+.bsv-scrub {
+  position: relative;
+  display: flex;
+  align-items: center;
+  height: 18px;
+  cursor: pointer;
+}
+.bsv-scrub-track {
+  position: relative;
+  width: 100%;
+  height: 4px;
+  overflow: hidden;
+  border-radius: 999px;
+  /* Quieter than any marker, but the bar's length is always there (about 2.4:1 on the dark stage). */
+  background: color-mix(in srgb, var(--bsv-body) 45%, var(--bsv-surface));
+  transition: height var(--bsv-dur) var(--bsv-ease);
+}
+.bsv-scrub:hover .bsv-scrub-track,
+.bsv-scrub[data-dragging] .bsv-scrub-track,
+.bsv-scrub:focus-within .bsv-scrub-track {
+  height: 6px;
+}
+.bsv-scrub-fill {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 0;
+  background: var(--bsv-ink);
+}
+.bsv-scrub-wash {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  background: color-mix(in srgb, var(--bsv-accent) 34%, transparent);
+}
+.bsv-scrub-thumb {
+  position: absolute;
+  top: 50%;
+  width: 12px;
+  height: 12px;
+  border-radius: 999px;
+  background: var(--bsv-ink);
+  box-shadow: 0 0 0 2px var(--bsv-surface);
+  transform: translate(-50%, -50%) scale(0);
+  transition: transform var(--bsv-dur) var(--bsv-ease);
+  pointer-events: none;
+}
+.bsv-scrub:hover .bsv-scrub-thumb,
+.bsv-scrub[data-dragging] .bsv-scrub-thumb,
+.bsv-scrub:focus-within .bsv-scrub-thumb {
+  transform: translate(-50%, -50%) scale(1);
+}
+.bsv-scrub:has(.bsv-range:focus-visible) .bsv-scrub-thumb {
+  box-shadow: 0 0 0 2px var(--bsv-surface), 0 0 0 4px var(--bsv-accent);
+}
+.bsv-scrub-tip {
+  position: absolute;
+  bottom: calc(100% + 4px);
+  z-index: 5;
+  padding: 3px 7px;
+  border-radius: 6px;
+  background: var(--bsv-glass-dark);
+  color: #ffffff;
+  font-family: var(--bsv-mono);
+  font-size: 11.5px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  transform: translateX(-50%);
+  pointer-events: none;
+}
+.bsv-scrub-tip .bsv-tc-ff {
+  color: inherit;
+  opacity: 0.72;
+}
+.bsv-scrub .bsv-range {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  margin: 0;
+  opacity: 0;
+  cursor: pointer;
+}
+.bsv-scrub .bsv-range::-webkit-slider-thumb {
+  width: 1px;
+  height: 18px;
+  -webkit-appearance: none;
+  appearance: none;
+}
+.bsv-scrub .bsv-range::-moz-range-thumb {
+  width: 1px;
+  height: 18px;
+  border: 0;
+}
+.bsv-timeline .bsv-lane {
+  position: relative;
+  height: 16px;
+  margin: 0;
+  touch-action: none;
+}
+.bsv-timeline .bsv-lane[data-drawable] {
+  cursor: crosshair;
+}
+.bsv-range-line {
+  position: absolute;
+  top: 7px;
+  height: 2px;
+  min-width: 2px;
+  border-radius: 999px;
+  background: var(--bsv-body);
+  pointer-events: none;
+}
+.bsv-range-line[data-kind="studio"],
+.bsv-range-line[data-kind="team-only"] {
+  background: color-mix(in srgb, var(--bsv-body) 70%, var(--bsv-surface));
+}
+.bsv-range-line[data-resolved] {
+  background: color-mix(in srgb, var(--bsv-body) 45%, var(--bsv-surface));
+}
+.bsv-range-line[data-active],
+.bsv-range-line[data-pending] {
+  top: 6.5px;
+  height: 3px;
+  background: var(--bsv-accent);
+}
+.bsv-range-handle {
+  position: absolute;
+  top: 50%;
+  z-index: 3;
+  width: 10px;
+  height: 10px;
+  border-radius: 999px;
+  background: var(--bsv-accent);
+  box-shadow: 0 0 0 2px var(--bsv-surface);
+  transform: translate(-50%, -50%);
+  cursor: ew-resize;
+  touch-action: none;
+}
+.bsv-range-handle::before {
+  content: "";
+  position: absolute;
+  inset: -7px;
+}
+.bsv-marker-pending {
+  position: absolute;
+  top: 50%;
+  width: 8px;
+  height: 8px;
+  box-sizing: border-box;
+  border: 2px solid var(--bsv-ink);
+  border-radius: 999px;
+  transform: translate(-50%, -50%);
+  pointer-events: none;
+}
+.bsv-marker {
+  --bsv-dot: var(--bsv-body);
+  position: absolute;
+  top: 50%;
+  z-index: 2;
+  display: grid;
+  place-items: center;
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  transform: translate(-50%, -50%);
+  cursor: pointer;
+}
+.bsv-marker[data-resolved] {
+  --bsv-dot: color-mix(in srgb, var(--bsv-body) 62%, var(--bsv-surface));
+}
+.bsv-marker[data-on],
+.bsv-marker[data-hover],
+.bsv-marker:hover,
+.bsv-marker:focus-visible {
+  --bsv-dot: var(--bsv-ink);
+}
+.bsv-marker-dot {
+  width: 8px;
+  height: 8px;
+  box-sizing: border-box;
+  border-radius: 999px;
+  background: var(--bsv-dot);
+  transition: width var(--bsv-dur) var(--bsv-ease), height var(--bsv-dur) var(--bsv-ease), background-color var(--bsv-dur) var(--bsv-ease);
+}
+.bsv-marker[data-kind="studio"] .bsv-marker-dot {
+  border: 1.5px solid var(--bsv-dot);
+  background: transparent;
+}
+.bsv-marker[data-kind="team-only"] .bsv-marker-dot {
+  border: 1.5px dashed var(--bsv-dot);
+  background: transparent;
+}
+.bsv-marker[data-hover] .bsv-marker-dot,
+.bsv-marker:hover .bsv-marker-dot,
+.bsv-marker:focus-visible .bsv-marker-dot {
+  width: 12px;
+  height: 12px;
+}
+.bsv-marker[data-active] {
+  z-index: 4;
+}
+.bsv-marker[data-active] .bsv-marker-dot {
+  width: 12px;
+  height: 12px;
+  border: 0;
+  background: var(--bsv-accent);
+  box-shadow: 0 0 0 2px var(--bsv-surface);
+}
+.bsv-marker:focus-visible {
+  outline: 2px solid var(--bsv-accent);
+  outline-offset: -3px;
+}
+.bsv-cluster-anchor {
+  position: absolute;
+  top: 50%;
+  z-index: 3;
+  display: block;
+  width: 0;
+  height: 0;
+}
+.bsv-cluster {
+  position: absolute;
+  top: 0;
+  left: 0;
+  min-width: 16px;
+  height: 14px;
+  padding: 0 4px;
+  box-sizing: border-box;
+  border: 0;
+  border-radius: 999px;
+  background: var(--bsv-raised);
+  box-shadow: inset 0 0 0 1px var(--bsv-line-strong);
+  color: var(--bsv-ink);
+  font: inherit;
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 14px;
+  font-variant-numeric: tabular-nums;
+  transform: translate(-50%, -50%);
+  cursor: pointer;
+}
+.bsv-cluster::before {
+  content: "";
+  position: absolute;
+  inset: -5px -4px;
+}
+.bsv-cluster:hover,
+.bsv-cluster[data-hover],
+.bsv-cluster[aria-expanded="true"] {
+  background: var(--bsv-hover);
+}
+.bsv-cluster[data-active] {
+  box-shadow: inset 0 0 0 1.5px var(--bsv-accent);
+}
+.bsv-cluster:focus-visible {
+  outline: 2px solid var(--bsv-accent);
+  outline-offset: 2px;
+}
+.bsv-cluster-list {
+  position: absolute;
+  bottom: 34px;
+  z-index: 30;
+  display: grid;
+  gap: 2px;
+  max-height: 240px;
+  overflow: auto;
+  padding: 6px;
+  box-sizing: border-box;
+  border-radius: 12px;
+  background: var(--bsv-raised);
+  box-shadow: inset 0 0 0 1px var(--bsv-line), var(--bsv-float);
+}
+.bsv-cluster-row {
+  display: grid;
+  grid-template-columns: auto auto minmax(0, 1fr);
+  align-items: center;
+  gap: 8px;
+  min-height: 34px;
+  padding: 0 8px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--bsv-ink);
+  font: inherit;
+  font-size: 12.5px;
+  text-align: left;
+  cursor: pointer;
+}
+.bsv-cluster-row:hover,
+.bsv-cluster-row:focus-visible {
+  background: var(--bsv-hover);
+  outline: none;
+}
+.bsv-cluster-author {
+  font-weight: 600;
+  white-space: nowrap;
+}
+.bsv-cluster-text {
+  overflow: hidden;
+  color: var(--bsv-body);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.bsv-timecode[data-small] {
+  height: 20px;
+  padding: 0 7px;
+  font-size: 11.5px;
+  cursor: default;
+}
+.bsv-marker-card {
+  position: absolute;
+  bottom: calc(100% + 26px);
+  z-index: 30;
+  display: grid;
+  gap: 6px;
+  padding: 10px 12px;
+  box-sizing: border-box;
+  border-radius: 12px;
+  background: var(--bsv-raised);
+  box-shadow: inset 0 0 0 1px var(--bsv-line), var(--bsv-float);
+  color: var(--bsv-ink);
+  font-size: 13px;
+  pointer-events: none;
+}
+.bsv-marker-card-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+}
+.bsv-marker-card-head .bsv-timecode {
+  margin-left: auto;
+}
+.bsv-marker-card-body {
+  display: -webkit-box;
+  overflow: hidden;
+  line-height: 1.45;
+  word-break: keep-all;
+  overflow-wrap: anywhere;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+}
+.bsv-marker-card-foot {
+  color: var(--bsv-body);
+  font-size: 12px;
+}
+@media (max-width: 520px) {
+  .bsv-marker {
+    width: 28px;
+    height: 28px;
+  }
+  .bsv-cluster::before {
+    inset: -7px -6px;
+  }
+}
+
+/* ---- notes: quiet tabs, two icon buttons, rows with hairlines */
+.bsv-comments-head {
+  gap: 6px 12px;
+}
+.bsv-tabs {
+  display: inline-flex;
+  gap: 14px;
+}
+.bsv-tab {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  height: 28px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--bsv-body);
+  font: inherit;
+  font-size: 13px;
+  font-weight: 560;
+  cursor: pointer;
+  transition: color var(--bsv-dur) var(--bsv-ease);
+}
+.bsv-tab:hover {
+  color: var(--bsv-ink);
+}
+.bsv-tab[aria-pressed="true"] {
+  color: var(--bsv-ink);
+  box-shadow: inset 0 -2px 0 var(--bsv-ink);
+}
+.bsv-comments-tools {
+  display: inline-flex;
+  gap: 2px;
+  margin-left: auto;
+}
+.bsv-threads {
+  gap: 0;
+}
+.bsv-thread {
+  padding: 12px 10px 12px 14px;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: inset 0 -1px 0 var(--bsv-line);
+}
+.bsv-thread:hover {
+  background: color-mix(in srgb, var(--bsv-raised) 60%, transparent);
+}
+.bsv-thread[data-active] {
+  background: var(--bsv-raised);
+  box-shadow: inset 2px 0 0 var(--bsv-accent), inset 0 -1px 0 var(--bsv-line);
+}
+.bsv-thread-actions {
+  opacity: 0;
+  transition: opacity var(--bsv-dur) var(--bsv-ease);
+}
+.bsv-thread:hover > .bsv-thread-actions,
+.bsv-thread:focus-within > .bsv-thread-actions,
+.bsv-thread[data-active] > .bsv-thread-actions,
+.bsv-thread[data-replying] > .bsv-thread-actions,
+.bsv-reply:hover > .bsv-thread-actions,
+.bsv-reply:focus-within > .bsv-thread-actions {
+  opacity: 1;
+}
+@media (hover: none) {
+  .bsv-thread-actions {
+    opacity: 1;
+  }
+}
+.bsv-num,
+.bsv-comment[data-role="studio"] .bsv-num {
+  background: var(--bsv-raised);
+  color: var(--bsv-body);
+}
+.bsv-thread[data-active] .bsv-num {
+  background: var(--bsv-hover);
+  color: var(--bsv-ink);
+}
+.bsv-role[data-role="studio"] {
+  background: transparent;
+  box-shadow: inset 0 0 0 1px var(--bsv-line-strong);
+  color: var(--bsv-ink);
+}
+.bsv-replies {
+  margin: 10px 0 0 9px;
+  border-left: 1px solid var(--bsv-line-strong);
+}
+.bsv-spot[data-role="studio"] {
+  background: var(--bsv-glass-dark);
+}
+.bsv-spot[data-active] {
+  box-shadow: 0 0 0 3px var(--bsv-accent), 0 2px 8px rgba(16, 18, 24, 0.22);
+}
+.bsv-composer .bsv-pill,
+.bsv-composer .bsv-primary {
+  height: 34px;
+  font-size: 13px;
+}
+.bsv-composer .bsv-pill {
+  background: transparent;
+  box-shadow: inset 0 0 0 1px var(--bsv-line-strong);
+}
+.bsv-composer .bsv-pill:hover:not(:disabled) {
+  background: var(--bsv-raised);
+}
+
+@media (max-width: 520px) {
+  /* A phone: the title has its own row; the actions row is primary + share + "⋯" (outlined ones fold). */
+  .bsv-stage-head {
+    flex-direction: column;
+    align-items: stretch;
+  }
+  .bsv-stage-tools {
+    justify-content: flex-start;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .bsv-timeline *,
+  .bsv-thread,
+  .bsv-thread-actions,
+  .bsv-menu * {
+    transition: none !important;
   }
 }
