@@ -23,7 +23,7 @@ import type { SqlRunner } from '@/lib/db/sql-runner';
 import { featureDenied, isSandboxedClientOrganization } from '@/lib/brands/features';
 import { loadFeaturePolicies } from '@/lib/brands/entitlements';
 import { adjustOrganizationStorageBytes } from '@/lib/brands/storage-quota';
-import { RoomDenied, requireEdit, requireRoomProject, roomSeat, type RoomSeat } from '@/lib/brand-rooms/access';
+import { RoomDenied, requireEdit, requireRoomProject, roomSeat, seatInProject, type RoomSeat } from '@/lib/brand-rooms/access';
 import { postRoomEvent, type RoomEventInput } from '@/lib/brand-rooms/events';
 import { brandRoomsOpen } from '@/lib/flags';
 import { requireCreate, StudioDenied, studioSeat, type StudioSeat } from './access';
@@ -1075,7 +1075,8 @@ async function roomGate(sql: SqlRunner, viewer: Viewer, organizationId: string, 
   const seat = await roomSeat(sql, viewer.userId, organizationId);
   await requireRoomProject(sql, seat, projectId);
   if (!(await roomReviewReady(sql))) throw new ReviewDenied('provider_unavailable');
-  return seat;
+  // `canTalk` as it stands in this project: a guest invited to view only leaves no notes here.
+  return seatInProject(seat, projectId);
 }
 
 /** A live review of this organization that belongs to this project. */

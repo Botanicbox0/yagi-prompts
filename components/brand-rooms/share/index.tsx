@@ -10,6 +10,8 @@ import { useCallback, useEffect, useId, useRef, useState } from "react";
 import { SHARE_EXPIRY_CHOICES, SHARE_LIMITS, sharePath, type ShareLink } from "@/lib/brand-rooms/share-contracts";
 import type { ShareButtonProps } from "../seams";
 import { createShareLink, fetchShares, revokeShareLink } from "../review/api";
+import { InviteShareDialog } from "./invite-dialog";
+import { useRoomShareInvites } from "./invites-context";
 
 const fill = (template: string, values: Record<string, string | number>) => template.replace(/\{(\w+)\}/g, (m, k: string) => (k in values ? String(values[k]) : m));
 
@@ -25,6 +27,9 @@ function day(iso: string, locale: "ko" | "en"): string {
 
 export function ShareButton({ organizationId, target, locale, copy, canEdit }: ShareButtonProps) {
   const [open, setOpen] = useState(false);
+  // docs/BRAND-ROOMS-FEEDBACK.md §12: with invitations on, the room provides this and the dialog gains the
+  // people section and the two link modes. Without it (the switch off, or outside a room) it is today's.
+  const invites = useRoomShareInvites();
   if (!canEdit) return null;
   return (
     <>
@@ -34,12 +39,18 @@ export function ShareButton({ organizationId, target, locale, copy, canEdit }: S
         </svg>
         {copy.share.open}
       </button>
-      {open && <ShareDialog organizationId={organizationId} target={target} locale={locale} copy={copy} onClose={() => setOpen(false)} />}
+      {open &&
+        (invites && invites.organizationId === organizationId ? (
+          <InviteShareDialog invites={invites} target={target} shareCopy={copy.share} onClose={() => setOpen(false)} />
+        ) : (
+          <ShareDialog organizationId={organizationId} target={target} locale={locale} copy={copy} onClose={() => setOpen(false)} />
+        ))}
     </>
   );
 }
 
-function ShareDialog({ organizationId, target, locale, copy, onClose }: Omit<ShareButtonProps, "canEdit"> & { onClose(): void }) {
+/** Today's link-only dialog; kept as it was for every share button without invitations (exported for its tests). */
+export function ShareDialog({ organizationId, target, locale, copy, onClose }: Omit<ShareButtonProps, "canEdit"> & { onClose(): void }) {
   const s = copy.share;
   const id = useId();
   const dialogRef = useRef<HTMLDialogElement>(null);

@@ -31,7 +31,7 @@ import { isStudioMediaKey, type StudioMediaStore } from '@/lib/brand-studio/medi
 import { dropUnreferencedStudioKeys } from '@/lib/brand-studio/physical-cleanup';
 import { publicNotesOnly, teamNotesReady } from '@/lib/brand-studio/review-visibility';
 import type { RoomAlertItem, RoomSummary } from '@/components/brand-rooms/seams';
-import { requireRoomProject, RoomDenied, roomSeat, type RoomSeat } from './access';
+import { canTalkIn, requireRoomProject, RoomDenied, roomSeat, type RoomSeat } from './access';
 import type { RoomEventKind, RoomRef } from './events';
 import { enqueueNotices } from './notices';
 import {
@@ -144,7 +144,8 @@ async function brandReader(sql: SqlRunner, seat: RoomSeat, channel: string): Pro
   }
   const project = await requireRoomProject(sql, seat, channel);
   const id = project.id.toLowerCase();
-  return { ...base, channel: id, projectId: id, title: project.title };
+  // A guest invited to view only reads this room and posts nothing (lib/brand-rooms/access.ts `canTalkIn`).
+  return { ...base, canTalk: canTalkIn(seat, id), channel: id, projectId: id, title: project.title };
 }
 
 /* ------------------------------------------------------------------ rows */
@@ -829,6 +830,8 @@ async function insertMessage(sql: SqlRunner, media: StudioMediaStore, reader: Re
 async function editMessage(sql: SqlRunner, media: StudioMediaStore, reader: Reader, raw: unknown): Promise<RoomMessage> {
   const parsed = MessageEditSchema.safeParse(raw);
   if (!parsed.success) throw new MessageDenied('invalid');
+  // Rewriting a line is writing: a guest invited to view only may delete their old lines, not edit them.
+  if (!reader.canTalk) throw new MessageDenied('forbidden');
   const row = await messageRow(sql, reader, parsed.data.messageId, true);
   if (!row || row.deleted_at || row.kind !== 'text') throw new MessageDenied('not_found');
   if (String(row.author_id) !== reader.viewerId) throw new MessageDenied('forbidden');

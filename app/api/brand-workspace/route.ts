@@ -58,6 +58,7 @@ import {
 } from "@/lib/brands/concierge-slack";
 import { IntakeBriefSchema } from "@/lib/brands/workspace/intake-brief";
 import { enqueueNotices } from "@/lib/brand-rooms/notices";
+import { brandRoomInvitesOpen } from "@/lib/flags";
 export const dynamic = "force-dynamic";
 /**
  * A staff note that must never hold up or fail the client's request: after the response where the
@@ -168,8 +169,11 @@ export async function POST(request: NextRequest) {
         break;
       case "invitation.accept": {
         const verifiedEmail = await getVerifiedEmail(viewer.userId);
+        // docs/BRAND-ROOMS-FEEDBACK.md §12: with invitations on, a project invitation binds to the account
+        // that accepts it and lands in the project room. Off: the strict e-mail match and today's landing.
+        const invitesOn = brandRoomInvitesOpen();
         result = await acceptBrandInvitation(
-          { sql, verifiedEmail },
+          { sql, verifiedEmail, projectGuestBinding: invitesOn, roomLanding: invitesOn },
           viewer,
           input,
         );

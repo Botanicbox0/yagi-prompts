@@ -5,6 +5,7 @@ import { roomsStoryboardEn } from './rooms-storyboard';
 import { roomsReviewEn } from './rooms-review';
 import { roomsShellEn } from './rooms-shell';
 import { roomsNoticesEn } from './rooms-notices';
+import { roomsShareEn } from './rooms-share';
 import { intakeBriefEn } from './intake-brief';
 import { studioShellEn } from './studio-shell';
 import { studioLibraryEn } from './studio-library';
@@ -53,6 +54,7 @@ export const en = {
   roomsReview: roomsReviewEn,
   roomsShell: roomsShellEn,
   roomsNotices: roomsNoticesEn,
+  roomsShare: roomsShareEn,
   intakeBrief: intakeBriefEn,
   studioShell: studioShellEn,
   studioLibrary: studioLibraryEn,

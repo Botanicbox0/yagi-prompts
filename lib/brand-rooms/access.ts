@@ -28,10 +28,15 @@ export interface RoomSeat {
   role: RoomRole;
   /** Owners and editors: storyboards, review status, shares. */
   canEdit: boolean;
-  /** Everyone seated may post messages and comments. */
+  /**
+   * Members may post messages and comments. A project guest may too, except in a project they were
+   * invited to view only (`readOnlyProjectIds`): there `canTalkIn` is false.
+   */
   canTalk: boolean;
   /** For a guest: the only projects they may open. Null for members (every client-visible project). */
   projectIds: string[] | null;
+  /** For a guest: the projects they were invited to view only (`brand_project_members.can_comment = false`). */
+  readOnlyProjectIds?: string[];
 }
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -50,10 +55,11 @@ export async function roomSeat(sql: SqlRunner, userId: string | null | undefined
   ).rows[0];
   let role: RoomRole | null = member ? (member.role as RoomRole) : null;
   let projectIds: string[] | null = null;
+  let readOnlyProjectIds: string[] = [];
   if (!role) {
     const guest = (
-      await sql.query<{ project_id: string }>(
-        `select g.project_id from brand_project_members g join brand_projects p on p.id = g.project_id
+      await sql.query<{ project_id: string; can_comment: boolean | null }>(
+        `select g.project_id, g.can_comment from brand_project_members g join brand_projects p on p.id = g.project_id
           where g.organization_id = $1 and g.user_id = $2 and g.status = 'active' and p.client_visible`,
         [organizationId, userId],
       )
@@ -61,6 +67,9 @@ export async function roomSeat(sql: SqlRunner, userId: string | null | undefined
     if (guest.length) {
       role = 'guest';
       projectIds = guest.map((row) => String(row.project_id));
+      // A guest invited to view only reads but never writes (docs/BRAND-ROOMS-FEEDBACK.md §12), whatever
+      // `BRAND_ROOM_INVITES` says: the team's view-only invitations (0034) mean the same in rooms.
+      readOnlyProjectIds = guest.filter((row) => row.can_comment !== true).map((row) => String(row.project_id));
     }
   }
   if (!role) throw new RoomDenied('not_found');
@@ -78,9 +87,27 @@ export async function roomSeat(sql: SqlRunner, userId: string | null | undefined
     organizationName: String(org.name),
     role,
     canEdit: role === 'owner' || role === 'editor',
-    canTalk: true,
+    canTalk: !projectIds || readOnlyProjectIds.length < projectIds.length,
     projectIds,
+    readOnlyProjectIds,
   };
+}
+
+/**
+ * May this seat post in this project's room (messages, reactions, attachments, draft notes)? Members:
+ * `canTalk`. A guest: not in a project they were invited to view only. `projectId` null is the general
+ * channel, which a guest never opens.
+ */
+export function canTalkIn(seat: Pick<RoomSeat, 'canTalk' | 'readOnlyProjectIds'>, projectId: string | null): boolean {
+  if (!seat.canTalk) return false;
+  if (!projectId || !seat.readOnlyProjectIds?.length) return true;
+  const id = projectId.toLowerCase();
+  return !seat.readOnlyProjectIds.some((p) => p.toLowerCase() === id);
+}
+
+/** The seat as it stands in one project: `canTalk` narrowed by `canTalkIn`. */
+export function seatInProject(seat: RoomSeat, projectId: string): RoomSeat {
+  return { ...seat, canTalk: canTalkIn(seat, projectId) };
 }
 
 /** The project belongs to the organization, the brand may see it, and this seat may open it. Throws `not_found` otherwise. */
