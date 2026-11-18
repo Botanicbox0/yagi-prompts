@@ -1,6 +1,7 @@
 /**
- * "말로 편집" instruction table (docs/BRAND-EDITING-STUDIO.md §4.5): 60 marketer instructions, 45 Korean
- * and 15 English, on the shared four-cut timeline (`fixture.ts`).
+ * "말로 편집" instruction table (docs/BRAND-EDITING-STUDIO.md §4.5): 61 marketer instructions, 45 Korean
+ * and 16 English (the 61st, `en-remove-last-shorten-first`, added 2026-11-18 from a live misreading), on the
+ * shared four-cut timeline (`fixture.ts`).
  *
  * Each case has a hand-written model answer (`reply`) and what must come of it (`expect`):
  * - `plan`: the deltas `diffTimelines` reports after resolve → apply, and whether the edit applies at once;
@@ -454,6 +455,24 @@ export const EDIT_ASSIST_CASES: readonly EditAssistCase[] = [
     instruction: 'Delete the last clip',
     reply: { kind: 'plan', steps: [{ do: 'remove', clip: 'c4' }] },
     expect: { kind: 'plan', deltas: [{ kind: 'clip_removed', cut: 4, label: '로고 엔딩' }, total(16)], instant: false },
+  },
+  {
+    // Live 11-18: the rule parser read "1 to 2s" as the range 1–2 s (a 1 s cut). Now the model decides.
+    id: 'en-remove-last-shorten-first',
+    locale: 'en',
+    instruction: 'Remove the last cut and shorten cut 1 to 2s',
+    reply: {
+      kind: 'plan',
+      steps: [
+        { do: 'remove', clip: 'c4' },
+        { do: 'trim', clip: 'c1', keep: 'start', seconds: 2 },
+      ],
+    },
+    expect: {
+      kind: 'plan',
+      deltas: [{ kind: 'clip_removed', cut: 4, label: '로고 엔딩' }, trimmed(1, 5, 2), total(13)],
+      instant: false,
+    },
   },
   {
     id: 'en-move-first',

@@ -9,6 +9,7 @@
  *
  * Client-safe: zero Node, filesystem, or database imports.
  */
+import { corsMediaUrl } from '../cors-media-url';
 
 export interface FrameHistogramSample {
   timeSec: number;
@@ -327,7 +328,8 @@ export async function detectVideoSceneCutsInBrowser(
         },
         { once: true },
       );
-      video.src = videoUrl;
+      // Frames are read: its own cache entry on the media domain (see corsMediaUrl).
+      video.src = corsMediaUrl(videoUrl);
     });
 
     const duration = Math.min(

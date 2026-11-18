@@ -450,8 +450,13 @@ export function normalizeClipBounds(clip: ComposeClip): ComposeClip {
   };
 }
 
+/** The speed a cut plays at (1 unless set; 0.25–4). The previews set their `<video>` to it, the export uses it. */
+export function clipPlaybackRate(clip: Pick<ComposeClip, 'playbackRate'>): number {
+  return clip.playbackRate && Number.isFinite(clip.playbackRate) ? clamp(clip.playbackRate, 0.25, 4) : 1;
+}
+
 export function clipPlayDuration(clip: ComposeClip): number {
-  const rate = clip.playbackRate && Number.isFinite(clip.playbackRate) ? clamp(clip.playbackRate, 0.25, 4) : 1;
+  const rate = clipPlaybackRate(clip);
   return Math.max(MIN_CLIP_PLAY_SEC, roundTenths((clip.trimEndSec - clip.trimStartSec) / rate));
 }
 
@@ -560,10 +565,7 @@ export function frameStateAtTime(
     const span = spans[i]!;
     const isLast = i === spans.length - 1;
     if (t >= span.timelineStartSec && (t < span.timelineEndSec || (isLast && t <= span.timelineEndSec))) {
-      const rate =
-        span.clip.playbackRate && Number.isFinite(span.clip.playbackRate)
-          ? clamp(span.clip.playbackRate, 0.25, 4)
-          : 1;
+      const rate = clipPlaybackRate(span.clip);
       const offset = clamp(t - span.timelineStartSec, 0, Math.max(0, span.durationSec - 0.001));
       activeClip = {
         clip: span.clip,

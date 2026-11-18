@@ -312,7 +312,9 @@ describe('Editing Studio v4 — 2. Auto Scene-Cut Detection & Playhead Split', (
     expect(html).toContain('data-compose-detected-cuts-badge');
     expect(html).toContain('2개 컷 전환 감지됨');
     expect(html).toContain('data-compose-apply-auto-cuts');
-    expect(html).toContain('감지된 3개 컷으로 자동 나누기');
+    // Two cut points, three pieces: the badge counts the cut points, the button the pieces it makes.
+    expect(html).toContain('3개 컷으로 자동 나누기');
+    expect(html).not.toContain('감지된 3개');
     expect(html).toContain('data-compose-cut-ticks="0"');
   });
 });
@@ -378,7 +380,7 @@ describe('Editing Studio v4 — 3. Reference Color Grading (Full · Selected Cli
     expect(roundTripped?.clips[0]?.cutMarkers).toEqual([0.2, 2.8, 6.4, 9.8]);
   });
 
-  it('renders Color Grading panel with 3 scopes, interactive region overlay, 6 presets, 4 sliders, and master button', () => {
+  it('renders Color Grading panel with 3 scopes, interactive region overlay, 6 presets, 4 sliders, and no master button', () => {
     const { project: regionProject } = applyTimelinePatches(sampleProjectWithTwoClips(), [
       {
         op: 'set_color_grade',
@@ -417,12 +419,13 @@ describe('Editing Studio v4 — 3. Reference Color Grading (Full · Selected Cli
     expect(html).toContain('data-compose-grade-skin');
     expect(html).toContain('data-compose-grade-grain');
     expect(html).toContain('data-compose-grade-halation');
-    expect(html).toContain('data-compose-grade-master');
+    // No "save graded master": it returned settings and said it saved to assets, but made no asset (E2).
+    expect(html).not.toContain('data-compose-grade-master');
   });
 });
 
 describe('Editing Studio v4 — 4. Detail Upscaling & 5. Reference Non-Commercial Guide Music', () => {
-  it('renders Upscale panel with 1080p/1440p/4K pills, scope selector, LAB/Wavelet modes, and tabular credit badge', () => {
+  it('renders Upscale panel with 1080p/1440p/4K pills, the selected-clip target, LAB/Wavelet modes, and tabular credit badge', () => {
     const html = renderToStaticMarkup(
       h(VideoComposer, {
         organizationId: ORG,
@@ -443,7 +446,9 @@ describe('Editing Studio v4 — 4. Detail Upscaling & 5. Reference Non-Commercia
     expect(html).toContain('data-compose-upscale-res="1440"');
     expect(html).toContain('data-compose-upscale-res="2160"');
     expect(html).toContain('data-compose-upscale-scope="selected_clip"');
-    expect(html).toContain('data-compose-upscale-scope="full_timeline"');
+    // No 'edited timeline' choice: it sent the first cut's source, charged for the whole length and changed nothing (E2).
+    expect(html).not.toContain('data-compose-upscale-scope="full_timeline"');
+    expect(html).not.toContain('최종 편집본 업스케일');
     expect(html).toContain('data-compose-upscale-color="lab"');
     expect(html).toContain('data-compose-upscale-color="wavelet"');
     expect(html).toContain('data-compose-upscale-cost');

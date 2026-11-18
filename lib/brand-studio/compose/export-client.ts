@@ -5,6 +5,7 @@
  * `OfflineAudioContext` mix) -> `muxAvc1ToMp4` (~3.9s for 30s 1080p on workstation Chromium).
  * Automatic fallback: real-time `<canvas>.captureStream` + `MediaRecorder` when WebCodecs is unavailable.
  */
+import { corsMediaUrl } from '../cors-media-url';
 import { applyColorGradeToCanvasContext } from './color-grade';
 import { muxAvc1ToMp4, type EncodedAudioSample, type EncodedVideoSample } from './mp4-muxer';
 import {
@@ -192,7 +193,8 @@ async function loadReadyVideo(srcUrl: string): Promise<HTMLVideoElement> {
     };
     v.onloadeddata = done;
     v.onerror = () => reject(new Error('video_load_failed'));
-    v.src = srcUrl;
+    // Frames are drawn to a canvas and read: its own cache entry on the media domain (see corsMediaUrl).
+    v.src = corsMediaUrl(srcUrl);
     v.load();
   });
 }
@@ -232,7 +234,7 @@ async function loadReadyImage(srcUrl: string): Promise<HTMLImageElement | null> 
     img.crossOrigin = 'anonymous';
     img.onload = () => resolve(img);
     img.onerror = () => resolve(null);
-    img.src = srcUrl;
+    img.src = corsMediaUrl(srcUrl);
   });
 }
 
@@ -294,7 +296,7 @@ async function encodeMixedAudioAac(
 
     const decodeBuffer = async (url: string): Promise<AudioBuffer | null> => {
       try {
-        const res = await fetch(url, { credentials: 'same-origin' });
+        const res = await fetch(corsMediaUrl(url), { credentials: 'same-origin' });
         if (!res.ok) return null;
         const ab = await res.arrayBuffer();
         return await offline.decodeAudioData(ab.slice(0));

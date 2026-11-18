@@ -6,7 +6,7 @@ import {
   runComposeOperation,
 } from '@/lib/brand-studio/compose/service';
 import { applyTimelinePatches, type ComposerProject, type TimelinePatch } from '@/lib/brand-studio/compose/timeline';
-import { diffTimelines, type EditDelta } from '@/lib/brand-studio/edit-assist/diff';
+import { diffTimelines, patchSubjects, type EditDelta } from '@/lib/brand-studio/edit-assist/diff';
 import { EDIT_PLAN_MODEL_SCHEMA } from '@/lib/brand-studio/edit-assist/plan';
 import {
   AssistPlanInputSchema,
@@ -318,6 +318,70 @@ describe('assist.plan', () => {
           ok: true,
           kind: 'patches',
           patches: [patch],
+          creditsUsed: 0,
+        });
+        expect(model.spy, message).not.toHaveBeenCalled();
+      }
+    });
+
+    it('hands the model a range trim the sentence never stated as a range ("shorten cut 1 to 2s")', async () => {
+      // Live 11-18: the parser read "1 to 2s" as the range 1–2 s, so cut 1 became 1 s long instead of 2 s.
+      const answer = {
+        kind: 'plan',
+        steps: [
+          { do: 'remove', clip: 'c4' },
+          { do: 'trim', clip: 'c1', keep: 'start', seconds: 2 },
+        ],
+      };
+      const model = fakeModel(answer);
+      expect(await plan(on, 'Remove the last cut and shorten cut 1 to 2s', { locale: 'en' }, { env: MODEL_ENV, fetchImpl: model.fetchImpl })).toEqual({
+        ok: true,
+        kind: 'plan',
+        steps: [
+          { do: 'remove', clip: { clipId: 'clip-logo' } },
+          { do: 'trim', clip: { clipId: 'clip-open' }, keep: 'start', seconds: 2 },
+        ],
+        creditsUsed: 0,
+      });
+      expect(model.calls).toHaveLength(1);
+
+      // One action alone, and a cut whose in-point already equals the misread start (still a misread range).
+      const startsAtOne: ComposerProject = {
+        ...assistFixture(),
+        clips: assistFixture().clips.map((clip, i) => (i === 0 ? { ...clip, trimStartSec: 1, trimEndSec: 5 } : clip)),
+      };
+      for (const [message, more] of [
+        ['Shorten cut 1 to 2s', { locale: 'en' }],
+        ['Shorten cut 1 to 3s', { locale: 'en', project: startsAtOne }],
+      ] as const) {
+        const again = fakeModel({ kind: 'cannot', reason: 'nothing_to_edit' });
+        const res = await plan(on, message, more, { env: MODEL_ENV, fetchImpl: again.fetchImpl });
+        expect(res, message).toEqual({ ok: true, kind: 'cannot', reason: 'nothing_to_edit', creditsUsed: 0 });
+        expect(again.calls, message).toHaveLength(1);
+      }
+    });
+
+    it('keeps a range trim the sentence states, and a length trim, without the model', async () => {
+      const cases: Array<[string, 'ko' | 'en', TimelinePatch[]]> = [
+        ['2번 컷 1초부터 3초까지 잘라줘', 'ko', [{ op: 'trim_clip', clipIndex: 1, trimStartSec: 1, trimEndSec: 3 }]],
+        ['2번 컷 1~3초만 남기기', 'ko', [{ op: 'trim_clip', clipIndex: 1, trimStartSec: 1, trimEndSec: 3 }]],
+        ['Trim cut 2 from 1s to 3s', 'en', [{ op: 'trim_clip', clipIndex: 1, trimStartSec: 1, trimEndSec: 3 }]],
+        // The Korean twin of the live failure reads "2초로" as a length: it stays with the rule parser.
+        [
+          '1번 컷 2초로 줄이고 마지막 컷 지워줘',
+          'ko',
+          [
+            { op: 'trim_clip', clipIndex: 0, targetDurationSec: 2 },
+            { op: 'remove_clip', clipIndex: 3 },
+          ],
+        ],
+      ];
+      for (const [message, locale, patches] of cases) {
+        const model = fakeModel({ kind: 'cannot', reason: 'nothing_to_edit' });
+        expect(await plan(on, message, { locale }, { env: MODEL_ENV, fetchImpl: model.fetchImpl }), message).toEqual({
+          ok: true,
+          kind: 'patches',
+          patches,
           creditsUsed: 0,
         });
         expect(model.spy, message).not.toHaveBeenCalled();
@@ -774,7 +838,9 @@ describe('the rule parser path on the instruction table', () => {
       answered.push(c.id);
       if (c.expect.kind !== 'plan') continue;
       const after = applyTimelinePatches(assistFixture(), res.patches).project;
-      expect(values(c.instruction, diffTimelines(assistFixture(), after)), c.id).toEqual(values(c.instruction, c.expect.deltas));
+      // Lines in patch order, as the screen lists them (E2).
+      const deltas = diffTimelines(assistFixture(), after, patchSubjects(assistFixture(), res.patches));
+      expect(values(c.instruction, deltas), c.id).toEqual(values(c.instruction, c.expect.deltas));
     }
     expect(answered).toEqual([
       'ko-trim-to-length',
