@@ -122,10 +122,33 @@ export function ReviewApp({ organizationId, locale, copy, initialList, initialDe
     () => (selectedId ? list.find((item) => item.id === selectedId) ?? null : null),
     [list, selectedId],
   );
-  const shareBtnLabel = locale === "en" ? "Share link (/s/...) · Client chat" : "공유 링크 (/s/...) · 대화방 연결";
+  // The share dialog opens from the stage's head, as the room's 공유 does: a ghost button after the one filled
+  // action (docs/design/TASTE.md 16, 18). The page's own head keeps only the quiet "pick" button.
+  const shareButton =
+    canWrite && selectedId ? (
+      <button
+        type="button"
+        className="bsv-ghost"
+        onClick={() =>
+          setShareTarget({
+            organizationId,
+            reviewId: selectedId,
+            title: detail?.review.title ?? activeSummary?.title ?? "",
+          })
+        }
+        title={copy.shareOpen}
+        data-review-share-open
+      >
+        <svg className="bsv-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+          <path d="M10 14a4 4 0 0 0 5.7 0l3-3a4 4 0 0 0-5.7-5.7l-1 1M14 10a4 4 0 0 0-5.7 0l-3 3a4 4 0 0 0 5.7 5.7l1-1" />
+        </svg>
+        {/* On a phone only the icon shows (the words stay as its name), so the head keeps one row. */}
+        <span className="bsv-btn-label">{copy.shareOpen}</span>
+      </button>
+    ) : null;
 
   return (
-    <div className="bsv-review" data-studio-review>
+    <div className="bsv-review" data-studio-review data-review-fit-anchor>
       <header className="bsv-head">
         <div>
           <h1 className="bsv-title">{copy.title}</h1>
@@ -133,26 +156,7 @@ export function ReviewApp({ organizationId, locale, copy, initialList, initialDe
         </div>
         {canWrite && list.length > 0 && (
           <div className="bsv-head-actions">
-            {selectedId && (
-              <button
-                type="button"
-                className="bsv-primary"
-                onClick={() =>
-                  setShareTarget({
-                    organizationId,
-                    reviewId: selectedId,
-                    title: detail?.review.title ?? activeSummary?.title ?? "",
-                  })
-                }
-                data-review-share-open
-              >
-                <svg className="bsv-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
-                  <path d="M10 14a4 4 0 0 0 5.7 0l3-3a4 4 0 0 0-5.7-5.7l-1 1M14 10a4 4 0 0 0-5.7 0l-3 3a4 4 0 0 0 5.7 5.7l1-1" />
-                </svg>
-                {shareBtnLabel}
-              </button>
-            )}
-            <button type="button" className="bsv-pill" onClick={() => setPicking(true)} data-review-pick-open>
+            <button type="button" className="bsv-ghost" onClick={() => setPicking(true)} data-review-pick-open>
               <svg className="bsv-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
                 <path d="M12 5v14M5 12h14" />
               </svg>
@@ -247,6 +251,8 @@ export function ReviewApp({ organizationId, locale, copy, initialList, initialDe
                 extended={detail.extended === true}
                 versions={detail.versions}
                 onVersion={select}
+                layout="wide"
+                share={shareButton}
               />
             ) : loading ? (
               <p className="bsv-quiet bsv-main-note" role="status">

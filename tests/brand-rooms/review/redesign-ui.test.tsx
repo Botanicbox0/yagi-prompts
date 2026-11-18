@@ -90,7 +90,8 @@ describe.each(["ko", "en"] as const)("the quiet timeline (%s)", (locale) => {
     expect(brand).toMatch(/<span class="bsv-marker-dot" aria-hidden="true"><\/span><\/button>$/);
     const range = markerOf(html, rangeNote.id)!;
     expect(range).toContain(copy.range.spanLabel.replace("{start}", "0:02:00").replace("{end}", "0:04:00").replace("{text}", "colour too cold here"));
-    expect(html).toContain(`data-review-span="${rangeNote.id}"`);
+    // At rest a range is only its start dot: no line until it is selected or under the pointer (2026-11-19).
+    expect(html).not.toContain(`data-review-span="${rangeNote.id}"`);
     expect(markerOf(html, studioNote.id)).toContain('data-kind="studio"');
     // The lane is one tab stop.
     expect((html.match(/data-lane-stop="" data-review-pin="[^"]+" data-kind="[^"]+"[^>]*tabindex="0"/g) ?? []).length).toBe(1);

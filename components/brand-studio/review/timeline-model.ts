@@ -5,13 +5,22 @@
  *   · markers on the timeline are quiet; a note's content appears on hover, focus or tap. Numbers live only in
  *     the notes list;
  *   · one timeline (a scrub bar with a thin marker lane under it), not three stacked rows;
- *   · the accent marks exactly one thing at a time: the selected note (and a range being drawn).
+ *   · at rest a range is only its start dot; its line shows for the selected note or the one under the
+ *     pointer, and never under a range being drawn (2026-11-19);
+ *   · density degrades gracefully: when the lane holds more notes than it has room for, it folds into evenly
+ *     spaced stretches drawn as a quiet strip, and the detail opens on hover, focus or tap (2026-11-19);
+ *   · the accent marks only what is being added right now (a range or a moment being drawn); the selected note
+ *     is primary ink (docs/design/TASTE.md 19).
  */
 import type { ReviewThread } from "@/lib/brand-studio/review-contracts";
 import { exactRate } from "@/lib/brand-studio/review-frames";
 
-/** Markers whose centres are closer than this (px, at the lane's current width) become one count pill. */
-export const CLUSTER_GAP_PX = 14;
+/**
+ * Markers whose centres are closer than this (px, at the lane's current width) become one count pill. It equals
+ * a marker's 24px target (2026-11-19; it was 14px), so two targets never overlap and a click near a dot's edge
+ * never opens its neighbour.
+ */
+export const CLUSTER_GAP_PX = 24;
 /**
  * On a phone a marker's target is 28px; two dots closer than that would put half of one dot under its
  * neighbour's target, so a tap could open the wrong note. There they fold at the target's width instead.
@@ -67,6 +76,98 @@ export function clusterMarkers(points: readonly LanePoint[], gap = CLUSTER_GAP_P
   }
   flush();
   return groups;
+}
+
+/**
+ * Below this many px per note the lane is too crowded for one dot per note and folds into stretches. A desk
+ * lane of about 930px keeps single dots up to about 31 notes; a phone lane (about 330px) folds past 8.
+ */
+export const DENSE_PX_PER_NOTE = 30;
+export const TOUCH_DENSE_PX_PER_NOTE = 40;
+/**
+ * One stretch's target width once the lane folds: about 31 on a 930px desk lane, about 6 on a phone (one per
+ * screen-sixth, each a 28px target well apart from the next).
+ */
+export const STRETCH_PX = 30;
+export const TOUCH_STRETCH_PX = 56;
+
+export type LaneMode = "dots" | "stretches";
+
+export interface LaneStretch extends LaneGroup {
+  /** The stretch's edges on the lane, px. */
+  from: number;
+  to: number;
+}
+
+export interface LanePlan {
+  mode: LaneMode;
+  /** Dots: single markers and count pills. Stretches: evenly spaced `LaneStretch`es (only the ones with notes). */
+  groups: LaneGroup[];
+}
+
+/**
+ * The lane cut into equal stretches about `target` px wide that tile it exactly; every stretch that holds a
+ * note becomes one stop at its middle. Unlike `clusterMarkers` this never chains: a stop stands for at most one
+ * stretch, and neighbouring stops are always a whole stretch apart.
+ */
+export function stretchMarkers(points: readonly LanePoint[], width: number, target: number): LaneStretch[] {
+  if (!(width > 0)) return [];
+  const count = Math.max(1, Math.round(width / Math.max(1, target)));
+  const size = width / count;
+  const buckets = new Map<number, LanePoint[]>();
+  const sorted = [...points].filter((p) => Number.isFinite(p.x)).sort((a, b) => a.x - b.x || a.id.localeCompare(b.id));
+  for (const point of sorted) {
+    const index = Math.min(count - 1, Math.max(0, Math.floor(point.x / size)));
+    const list = buckets.get(index) ?? [];
+    list.push(point);
+    buckets.set(index, list);
+  }
+  return [...buckets.entries()]
+    .sort((a, b) => a[0] - b[0])
+    .map(([index, members]) => ({ ids: members.map((m) => m.id), x: (index + 0.5) * size, from: index * size, to: (index + 1) * size }));
+}
+
+/**
+ * How the lane draws its notes. One dot per note (and a count pill where dots touch) while there is room;
+ * stretches once there is less than `DENSE_PX_PER_NOTE` per note, or once a pill would stand for more than two
+ * stretches' worth of lane (a long run of close notes would otherwise sit at one misleading spot).
+ */
+export function planLane(points: readonly LanePoint[], width: number, narrow: boolean): LanePlan {
+  const valid = points.filter((p) => Number.isFinite(p.x));
+  const fine = clusterMarkers(valid, clusterGap(width, narrow));
+  if (!(width > 0) || valid.length < 2) return { mode: "dots", groups: fine };
+  const stretchPx = narrow ? TOUCH_STRETCH_PX : STRETCH_PX;
+  const crowded = width / valid.length < (narrow ? TOUCH_DENSE_PX_PER_NOTE : DENSE_PX_PER_NOTE);
+  const xOf = new Map(valid.map((p) => [p.id, p.x]));
+  const sprawling = fine.some((g) => g.ids.length > 1 && (xOf.get(g.ids[g.ids.length - 1]!) ?? 0) - (xOf.get(g.ids[0]!) ?? 0) > 2 * stretchPx);
+  if (!crowded && !sprawling) return { mode: "dots", groups: fine };
+  return { mode: "stretches", groups: stretchMarkers(valid, width, stretchPx) };
+}
+
+/** A stretch's height step (1–4) for how many notes it holds: one, two, three or four, five or more. */
+export function stretchLevel(count: number): 1 | 2 | 3 | 4 {
+  if (count <= 1) return 1;
+  if (count === 2) return 2;
+  if (count <= 4) return 3;
+  return 4;
+}
+
+/**
+ * Which range notes draw their line on the lane. At rest none: a range is its start dot. The selected note's
+ * line shows, except while a new range is being drawn (the two would lie on top of each other; the selected
+ * dot stays); a note under the pointer or keyboard (on the lane, its card, or its row in the list) shows its line.
+ */
+export function rangeLinesShown(input: {
+  rangeIds: Iterable<string>;
+  activeId: string | null;
+  lit: ReadonlyArray<string | null | undefined>;
+  drawing: boolean;
+}): Set<string> {
+  const ranges = new Set(input.rangeIds);
+  const shown = new Set<string>();
+  if (input.activeId && !input.drawing && ranges.has(input.activeId)) shown.add(input.activeId);
+  for (const id of input.lit) if (id && ranges.has(id) && !(input.drawing && id === input.activeId)) shown.add(id);
+  return shown;
 }
 
 /** A marker's centre at `ms` on a lane `width` px wide for a film `durationMs` long. */
