@@ -3,7 +3,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { requireAdmin } from "@/lib/auth/viewer";
 import { getSqlRunner } from "@/lib/db/connect";
-import { brandRoomsOpen } from "@/lib/flags";
+import { brandRoomInvitesOpen, brandRoomsOpen } from "@/lib/flags";
 import { getLocaleFromHeaders } from "@/lib/i18n/server";
 import { getDictionary } from "@/lib/i18n/dictionaries";
 import { interpolate } from "@/lib/i18n/format";
@@ -21,6 +21,7 @@ import { parseReviewTime, type ReviewStatus } from "@/lib/brand-studio/review-co
 import { acknowledgementLine, roomAdminPath, staffProjectDesk } from "@/lib/brand-rooms/messages";
 import { GENERAL_CHANNEL, ROOM_DESK_TABS, roomDeskPath, type RoomDeskTab } from "@/lib/brand-rooms/message-contracts";
 import { staffProjectShares } from "@/lib/brand-rooms/shares";
+import { staffProjectGuests } from "@/lib/brand-rooms/invites";
 import type { ShareState } from "@/lib/brand-rooms/share-contracts";
 import { staffStoryboardList } from "@/lib/brand-rooms/storyboards";
 import { STORYBOARD_ADMIN_PATH, storyboardAdminHref, type StoryboardStatus } from "@/lib/brand-rooms/storyboard-contracts";
@@ -89,6 +90,9 @@ export default async function AdminRoomDesk({
     staffStoryboardList(deps, viewer, { organizationId: org.id, projectId: project.id }),
     staffProjectShares(deps, viewer, { organizationId: org.id, projectId: project.id }),
   ]);
+  // docs/BRAND-ROOMS-FEEDBACK.md §12: the project's guests and waiting invitations, read-only, on the links tab.
+  // Read only while invitations are on (it reads the 0097 columns).
+  const guestList = tab === "links" && brandRoomInvitesOpen() ? await staffProjectGuests({ sql }, viewer, { organizationId: org.id, projectId: project.id }) : null;
   const stacks = stacked.ok ? stacked.stacks : null;
   const boards = boarded.ok ? boarded.boards.filter((b) => b.projectId.toLowerCase() === project.id) : [];
   const links = linked.ok ? linked.shares : null;
@@ -350,6 +354,43 @@ export default async function AdminRoomDesk({
                 </section>
               </>
             ))}
+          {tab === "links" && guestList && guestList.ok && (
+            <section className="mt-6" aria-label={d.guestsTitle} data-admin-desk-guests>
+              <p className="bw-muted">{d.guestsHint}</p>
+              <AdminTable
+                caption={d.guestsTitle}
+                columns={[
+                  { key: "who", label: d.guestWho },
+                  { key: "email", label: d.guestEmail },
+                  { key: "access", label: d.guestAccess },
+                  { key: "when", label: d.guestSince },
+                ]}
+                rows={[
+                  ...guestList.guests.map((g) => ({
+                    key: `g-${g.userId}`,
+                    data: { "data-admin-desk-guest": g.userId },
+                    cells: {
+                      who: g.name ?? "—",
+                      email: [g.email ?? "—", g.invitedEmail ? interpolate(d.guestInvitedAs, { email: g.invitedEmail }) : null].filter(Boolean).join(" · "),
+                      access: <StatusPill tone={g.canComment ? "action" : "hold"}>{g.canComment ? d.guestComment : d.guestView}</StatusPill>,
+                      when: formatAdminTime(g.joinedAt, locale),
+                    },
+                  })),
+                  ...guestList.pending.map((i) => ({
+                    key: `i-${i.id}`,
+                    data: { "data-admin-desk-guest-invite": i.id },
+                    cells: {
+                      who: <StatusPill tone="progress">{i.mailState === "failed" ? d.guestMailFailed : d.guestPending}</StatusPill>,
+                      email: i.email,
+                      access: i.canComment ? d.guestComment : d.guestView,
+                      when: formatAdminTime(i.expiresAt, locale),
+                    },
+                  })),
+                ]}
+                empty={d.noGuests}
+              />
+            </section>
+          )}
         </RoomDeskFrame>
       </div>
     </AdminShell>

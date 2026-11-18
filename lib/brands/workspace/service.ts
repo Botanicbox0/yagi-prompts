@@ -43,6 +43,15 @@ export interface BrandWorkspaceDeps {
    * every brand (`./staff.ts`).
    */
   verifiedEmail?: string;
+  /**
+   * `BRAND_ROOM_INVITES` (docs/BRAND-ROOMS-FEEDBACK.md §12), set by the route. When true, a PROJECT
+   * invitation may be accepted by a signed-in account whose e-mail differs from the invited address: the
+   * first account to accept it with a valid, unexpired, unrevoked token takes it (single use), and the
+   * inviter sees that account. Organization invitations keep the strict e-mail match either way.
+   */
+  projectGuestBinding?: boolean;
+  /** With rooms open and invitations on: an accepted project invitation lands in the project room. */
+  roomLanding?: boolean;
 }
 type Row = Record<string, unknown>;
 class Denied extends Error { constructor(readonly code: BrandFailureCode) { super(code); } }
@@ -842,11 +851,28 @@ export async function createBrandInvitation(deps: BrandWorkspaceDeps, viewer: Vi
  * itself, or the campaign when it is shared with the client. `projectShared` is false for a campaign
  * the studio has not shared yet, so the guest is not sent to a page that cannot open.
  */
-export type BrandInvitationAccepted = { organizationId: string; projectId?: string; projectShared?: boolean };
-async function acceptedScope(sql: SqlRunner, invite: Row): Promise<BrandInvitationAccepted> {
+export type BrandInvitationAccepted = {
+  organizationId: string; projectId?: string; projectShared?: boolean;
+  /**
+   * With rooms open and invitations on (`roomLanding`): the guest lands in the project room, on the draft
+   * or storyboard the invitation was sent from when it carries one. The room re-checks everything.
+   */
+  room?: { target: { kind: 'review' | 'storyboard'; id: string } | null };
+};
+async function acceptedScope(sql: SqlRunner, invite: Row, roomLanding = false): Promise<BrandInvitationAccepted> {
   if (!invite.project_id) return { organizationId: String(invite.organization_id) };
   const shared = (await sql.query('select client_visible from brand_projects where id=$1 and organization_id=$2', [invite.project_id, invite.organization_id])).rows[0]?.client_visible === true;
-  return { organizationId: String(invite.organization_id), projectId: String(invite.project_id), projectShared: shared };
+  const scope: BrandInvitationAccepted = { organizationId: String(invite.organization_id), projectId: String(invite.project_id), projectShared: shared };
+  if (roomLanding && shared) {
+    const kind = invite.target_kind === 'review' || invite.target_kind === 'storyboard' ? invite.target_kind : null;
+    scope.room = { target: kind && uuid(invite.target_id) ? { kind, id: String(invite.target_id) } : null };
+  }
+  return scope;
+}
+/** The account's own e-mail, recorded on a project invitation it accepts (0097). Null when it has none. */
+function acceptedEmail(confirmed: string | undefined, stored: unknown): string | null {
+  const candidate = (confirmed || (typeof stored === 'string' ? stored : '')).trim().toLowerCase();
+  return candidate.includes('@') && candidate.length <= 254 ? candidate : null;
 }
 export async function acceptBrandInvitation(deps: BrandWorkspaceDeps, viewer: Viewer, input: unknown): Promise<BrandOutcome<BrandInvitationAccepted>> {
   return mutation(deps, viewer, BrandInvitationAcceptSchema, input, async (sql, userId, v) => {
@@ -857,23 +883,35 @@ export async function acceptBrandInvitation(deps: BrandWorkspaceDeps, viewer: Vi
     const invite = (await sql.query('select * from brand_invites where id=$1 for update', [row.id])).rows[0]!;
     if (invite.revoked_at || +new Date(stamp(invite.expires_at)) <= Date.now()) throw new Denied('not_found');
     const confirmed = deps.verifiedEmail?.trim().toLowerCase();
-    const stored = String((await profile(sql, userId)).email).trim().toLowerCase();
-    if (!confirmed || confirmed !== stored || confirmed !== invite.email) throw new Denied('forbidden');
+    const storedRaw = (await profile(sql, userId)).email;
+    const stored = String(storedRaw).trim().toLowerCase();
+    const emailMatches = !!confirmed && confirmed === stored && confirmed === invite.email;
+    // docs/BRAND-ROOMS-FEEDBACK.md §12: with invitations on, a PROJECT invitation binds to the first account
+    // that accepts it, whatever that account's e-mail (many work addresses differ from the Google or Kakao
+    // one). Single use: once accepted, any other account gets not_found below. Organization invitations
+    // keep the strict match.
+    const binding = !emailMatches && deps.projectGuestBinding === true && invite.project_id != null;
+    if (!emailMatches && !binding) throw new Denied('forbidden');
+    const roomLanding = deps.roomLanding === true;
     if (invite.accepted_at) {
       if (invite.accepted_by !== userId) throw new Denied('not_found');
       // A response-lost retry confirms existing access; it never reactivates a revoked member.
       if(invite.project_id) { if(!(await sql.query("select user_id from brand_project_members where project_id=$1 and user_id=$2 and status='active'",[invite.project_id,userId])).rows[0]) throw new Denied('not_found'); }
       else await member(sql, userId, String(invite.organization_id));
-      return acceptedScope(sql, invite);
+      return acceptedScope(sql, invite, roomLanding);
     }
-    // Revoking the inviting owner's role also invalidates their still-outstanding invitations.
+    // Revoking the inviting owner's role also invalidates their still-outstanding invitations. A brand's
+    // project invitation (owner or editor, §12) dies the same way when its inviter loses that seat.
     if(invite.issued_by_studio) await studio(sql,String(invite.created_by));
+    else if (invite.project_id) { if (!['owner','editor'].includes(await member(sql, String(invite.created_by), String(invite.organization_id)))) throw new Denied('not_found'); }
     else if (await member(sql, String(invite.created_by), String(invite.organization_id)) !== 'owner') throw new Denied('not_found');
     if(invite.project_id) {
       // The newest invitation defines the guest's scope, including whether they may comment.
       await sql.query("insert into brand_project_members(organization_id,project_id,user_id,can_comment) values($1,$2,$3,$4) on conflict(project_id,user_id) do update set status='active',can_comment=excluded.can_comment",[invite.organization_id,invite.project_id,userId,invite.can_comment===true]);
-      await sql.query('update brand_invites set accepted_at=now(),accepted_by=$1 where id=$2',[userId,invite.id]);
-      return acceptedScope(sql, invite);
+      // `accepted_email` (0097) only while invitations are on, so the flag-off path writes what it always did.
+      if (deps.projectGuestBinding === true) await sql.query('update brand_invites set accepted_at=now(),accepted_by=$1,accepted_email=$3 where id=$2',[userId,invite.id,acceptedEmail(confirmed,storedRaw)]);
+      else await sql.query('update brand_invites set accepted_at=now(),accepted_by=$1 where id=$2',[userId,invite.id]);
+      return acceptedScope(sql, invite, roomLanding);
     }
     const current = (await sql.query('select role,status from brand_memberships where organization_id=$1 and user_id=$2 for update', [invite.organization_id, userId])).rows[0];
     // Already an active member. The same role (a re-sent invitation) is used up and lands in the
@@ -884,7 +922,7 @@ export async function acceptBrandInvitation(deps: BrandWorkspaceDeps, viewer: Vi
       await sql.query(`insert into brand_memberships(organization_id,user_id,role) values($1,$2,$3)
         on conflict(organization_id,user_id) do update set role=excluded.role,status='active'`, [invite.organization_id, userId, invite.role]);
     await sql.query('update brand_invites set accepted_at=now(),accepted_by=$1 where id=$2', [userId, invite.id]);
-    return acceptedScope(sql, invite);
+    return acceptedScope(sql, invite, roomLanding);
   });
 }
 export async function revokeBrandMember(deps: BrandWorkspaceDeps, viewer: Viewer, input: unknown): Promise<BrandOutcome> {
@@ -937,12 +975,32 @@ export async function createStudioInvitation(deps:BrandWorkspaceDeps,viewer:View
   }
   if((await sql.query('select id from brand_invites where organization_id=$1 and created_by=$2 and request_id=$3',[v.organizationId,userId,v.requestId])).rows[0])throw new Denied('conflict');
   const count=(await sql.query("select count(*)::int as n from brand_invites where organization_id=$1 and created_at>now()-interval '1 day'",[v.organizationId])).rows[0];
-  if(Number(count?.n)>=20)throw new Denied('rate_limited');
-  await sql.query('update brand_invites set revoked_at=now() where organization_id=$1 and email=$2 and project_id is not distinct from $3::uuid and accepted_at is null and revoked_at is null',[v.organizationId,v.email,v.projectId]);
-  const id=randomUUID(),token=randomBytes(32).toString('base64url');
-  await sql.query("insert into brand_invites(id,organization_id,project_id,email,role,can_comment,issued_by_studio,token_hash,expires_at,created_by,request_id) values($1,$2,$3,$4,$5,$6,true,$7,now()+interval '7 days',$8,$9)",[id,v.organizationId,v.projectId,v.email,v.role,v.canComment,createHash('sha256').update(token).digest('hex'),userId,v.requestId]);
-  return {id,token};
+  if(Number(count?.n)>=BRAND_INVITES_PER_DAY)throw new Denied('rate_limited');
+  return storeInvitation(sql,{organizationId:v.organizationId,projectId:v.projectId,email:v.email,role:v.role,canComment:v.canComment,issuedByStudio:true,createdBy:userId,requestId:v.requestId});
  });
+}
+/** Invitations an organization may issue in a day, the team's and its own together. */
+export const BRAND_INVITES_PER_DAY = 20;
+export interface StoredInvitationInput {
+  organizationId: string; projectId: string | null; email: string; role: 'owner' | 'editor' | 'viewer'; canComment: boolean;
+  issuedByStudio: boolean; createdBy: string; requestId: string;
+  /** The room item a brand's project invitation was sent from (0097). Never set by the team's form. */
+  target?: { kind: 'review' | 'storyboard'; id: string } | null;
+}
+/**
+ * The one place an invitation row is written, for the team's invitations and a brand's room invitations
+ * (docs/BRAND-ROOMS-FEEDBACK.md §12). A still-pending invitation to the same address for the same scope
+ * is revoked first, so inviting again refreshes it: the old link dies, the new one works for 7 days. The
+ * token is returned once and only its hash is stored. Runs inside the caller's transaction, after its
+ * authorization and limits.
+ */
+export async function storeInvitation(sql: SqlRunner, v: StoredInvitationInput): Promise<{ id: string; token: string }> {
+  await sql.query('update brand_invites set revoked_at=now() where organization_id=$1 and email=$2 and project_id is not distinct from $3::uuid and accepted_at is null and revoked_at is null',[v.organizationId,v.email,v.projectId]);
+  const id=randomUUID(),token=randomBytes(32).toString('base64url'),hash=createHash('sha256').update(token).digest('hex');
+  // The target columns exist from 0097 on; an invitation without a target writes exactly what it always did.
+  if (v.target) await sql.query("insert into brand_invites(id,organization_id,project_id,email,role,can_comment,issued_by_studio,token_hash,expires_at,created_by,request_id,target_kind,target_id) values($1,$2,$3,$4,$5,$6,$7,$8,now()+interval '7 days',$9,$10,$11,$12)",[id,v.organizationId,v.projectId,v.email,v.role,v.canComment,v.issuedByStudio,hash,v.createdBy,v.requestId,v.target.kind,v.target.id]);
+  else await sql.query("insert into brand_invites(id,organization_id,project_id,email,role,can_comment,issued_by_studio,token_hash,expires_at,created_by,request_id) values($1,$2,$3,$4,$5,$6,$7,$8,now()+interval '7 days',$9,$10)",[id,v.organizationId,v.projectId,v.email,v.role,v.canComment,v.issuedByStudio,hash,v.createdBy,v.requestId]);
+  return {id,token};
 }
 export async function revokeStudioAccess(deps:BrandWorkspaceDeps,viewer:Viewer,input:unknown):Promise<BrandOutcome> {
  return mutation(deps,viewer,z.object({organizationId:z.uuid(),userId:z.uuid(),projectId:z.uuid().nullable().default(null)}),input,async(sql,userId,v)=>{
