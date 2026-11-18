@@ -1575,3 +1575,165 @@ button.bsv-spot-tag {
 .bsv-compare-controls .bsv-track {
   padding-top: 0;
 }
+
+/*
+ * Stage 2 (docs/BRAND-ROOMS-FEEDBACK.md §11): the wide layout, full screen, the frame rate and the range
+ * loop. Full screen holds the stage body (the player with its marks and controls, and the notes as a side
+ * panel), never the bare <video>, so pins, the drawing and the range lane stay on the picture. Toggles that
+ * are on wear the same ink fill as the current item in the list; no new colour.
+ */
+.bsv-stage:focus {
+  outline: none;
+}
+/*
+ * The player's own column may shrink below the frame's last measured width. Without this its auto track
+ * took the frame's fixed width as a minimum, so when the column narrowed (the notes panel opening in full
+ * screen, a window made smaller) the frame kept its old size and spilled over the notes.
+ */
+.bsv-player {
+  grid-template-columns: minmax(0, 1fr);
+}
+.bsv-mat,
+.bsv-frame-wrap {
+  min-width: 0;
+}
+.bsv-transport {
+  flex-wrap: wrap;
+}
+.bsv-transport-end {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  margin-left: auto;
+}
+.bsv-transport-end .bsv-mute {
+  margin-left: 0;
+}
+/*
+ * The frame part of a timecode (`0:08` + `:00`): smaller and quieter, so the clock reads as minutes and
+ * seconds. The colour is the secondary ink, not the muted one: on the dark chips the muted fallback
+ * (#71717a) measures 3.9:1 on #111113, below 4.5:1 for this ~10px text; the secondary ink measures
+ * 7.4:1 there (#a1a1aa) and 8.0:1 with the workspace token (white at 64%). Inside the quieter length it
+ * keeps that line's colour; on a hovered timecode chip (ink on light) it follows the chip at 72%.
+ */
+.bsv-tc {
+  white-space: nowrap;
+}
+.bsv-tc-ff {
+  margin-left: 0.5px;
+  color: var(--bsv-body);
+  font-size: 0.82em;
+  font-weight: 500;
+}
+.bsv-time-total .bsv-tc-ff {
+  color: inherit;
+}
+button.bsv-timecode:hover .bsv-tc-ff {
+  color: inherit;
+  opacity: 0.72;
+}
+.bsv-fps {
+  margin-left: 4px;
+  color: var(--bsv-muted);
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.bsv-icon-btn:disabled {
+  opacity: 0.36;
+  cursor: default;
+}
+.bsv-icon-btn:disabled:hover {
+  background: transparent;
+}
+.bsv-icon-btn[data-review-loop="on"],
+.bsv-icon-btn[data-review-notes-toggle][aria-pressed="true"] {
+  background: var(--ys-active-bg, #ededed);
+  color: var(--ys-active-fg, #09090b);
+}
+.bsv-lane[data-looping] {
+  box-shadow: var(--bsv-well), inset 0 0 0 1px var(--bsv-line-strong);
+}
+.bsv-still-tools {
+  display: flex;
+  justify-content: flex-end;
+  gap: 4px;
+}
+@media (max-width: 520px) {
+  .bsv-fps {
+    display: none;
+  }
+}
+
+/* The room's list view: the drafts as cards across the width (review mode replaces it with the stage). */
+.bsv-list[data-view="grid"] {
+  position: static;
+  max-height: none;
+  overflow: visible;
+}
+.bsv-list[data-view="grid"] ul {
+  grid-auto-flow: row;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  grid-auto-columns: auto;
+}
+.bsv-room-review[data-room-review-mode] {
+  gap: 10px;
+  scroll-margin-top: 12px;
+}
+.bsv-room-review-bar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.bsv-room-review-bar .bsv-back:hover {
+  background: var(--bsv-hover);
+  color: var(--bsv-ink);
+}
+
+@media (min-width: 1241px) {
+  /* Wide: the notes column is as tall as the window allows, beside a player sized to the window. */
+  .bsv-stage[data-layout="wide"] .bsv-comments {
+    max-height: max(420px, calc(100dvh - 120px));
+  }
+}
+
+.bsv-stage-body[data-fullscreen] {
+  grid-template-columns: minmax(0, 1fr);
+  align-items: center;
+  width: 100%;
+  height: 100%;
+  padding: 16px;
+  box-sizing: border-box;
+  overflow: hidden;
+  background: var(--bsv-canvas);
+}
+.bsv-stage-body[data-fullscreen][data-notes-open] {
+  grid-template-columns: minmax(0, 1fr) 360px;
+}
+.bsv-stage-body[data-fullscreen]:not([data-notes-open]) > .bsv-comments {
+  display: none;
+}
+.bsv-stage-body[data-fullscreen] > .bsv-comments {
+  align-self: stretch;
+  height: 100%;
+  max-height: none;
+  min-height: 0;
+  padding: 14px;
+  box-sizing: border-box;
+  border-radius: 18px;
+  background: var(--bsv-surface);
+}
+.bsv-stage-body[data-fullscreen] .bsv-threads {
+  overflow: visible;
+}
+.bsv-stage-body[data-fullscreen] .bsv-keys {
+  display: none;
+}
+@media (max-width: 900px) {
+  /* A phone held in full screen: the notes go under the picture, which gives up part of its height. */
+  .bsv-stage-body[data-fullscreen][data-notes-open] {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: auto minmax(0, 1fr);
+    align-items: stretch;
+  }
+}

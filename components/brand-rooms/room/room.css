@@ -28,6 +28,29 @@
   max-width: 1180px;
   margin: 0 auto;
 }
+/*
+ * Review mode (docs/BRAND-ROOMS-FEEDBACK.md §11): a draft open on the stage takes the workspace's whole
+ * content width; the room's own column cap and the shell's cap step aside while it is open.
+ */
+.brr-room:has([data-room-review-mode]) {
+  max-width: none;
+}
+.bw-shell .bw-body .bw-main:has([data-room-review-mode]) {
+  max-width: none;
+}
+@media (min-width: 901px) {
+  .bw-shell .bw-body .bw-main:has([data-room-review-mode]) {
+    padding-left: 24px;
+    padding-right: 24px;
+  }
+}
+/*
+ * The floating help button sits over the bottom-right corner, which in review mode is the note composer's
+ * send button (and on a phone the notes). It steps aside while a draft is open and comes back on the list.
+ */
+body:has([data-room-review-mode]) .bw-support-launch {
+  display: none;
+}
 .brr-room :is(a, button):focus-visible,
 .brr-entry:focus-visible {
   outline: 2px solid var(--ys-focus);
