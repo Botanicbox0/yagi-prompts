@@ -10,8 +10,8 @@ import {
   roomFileVerdict,
   runRoomOperation,
   staffDeleteMessage,
+  staffAcknowledge,
   staffLoadRoomMessages,
-  staffMarkRead,
   staffRoomChannels,
   staffRoomOverview,
   staffSendMessage,
@@ -305,7 +305,7 @@ describe('room conversation service', () => {
     expect(roomFileVerdict(enc('<svg/>'), 'image/svg+xml')).toMatchObject({ ok: false, code: 'unsupported_file' });
   });
 
-  it('lets the team read every channel, reply as the team, take lines down and keep its own unread count', async () => {
+  it('lets the team read every channel, reply as the team, take lines down and keep its own waiting count', async () => {
     const admin = { ...as(f.ids.admin), isAdmin: true };
     const question = await sent(f.ids.owner, { body: 'When is the first cut?' });
     expect(await staffLoadRoomMessages(deps, as(f.ids.owner), { organizationId: f.orgId, projectId: f.projectId })).toEqual({ ok: false, code: 'forbidden' });
@@ -314,7 +314,8 @@ describe('room conversation service', () => {
     expect(page.messages.map((m) => m.id)).toEqual([question.id]);
     let overview = await staffRoomOverview(deps, admin);
     expect(overview.ok && overview.channels).toMatchObject([{ organizationId: f.orgId, channel: f.projectId, teamUnread: 1, lastRole: 'brand' }]);
-    expect(await staffMarkRead(deps, admin, { organizationId: f.orgId, projectId: f.projectId })).toMatchObject({ ok: true });
+    // Reading the channel above did not clear it (docs/BRAND-ROOMS-FEEDBACK.md §3); 확인함 does.
+    expect(await staffAcknowledge(deps, admin, { organizationId: f.orgId, projectId: f.projectId })).toMatchObject({ ok: true });
     overview = await staffRoomOverview(deps, admin);
     expect(overview.ok && overview.channels[0]!.teamUnread).toBe(0);
     await sent(f.ids.owner, { body: 'And the second?' });

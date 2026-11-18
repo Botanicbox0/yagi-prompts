@@ -453,6 +453,12 @@ export const adminConsoleEn = {
     noTargets: "Nothing to share yet. Deliver a draft or share a storyboard first.",
     noLinks: "No links to this project's work yet.",
     linksUnavailable: "Share links can't be read here yet.",
+    /** 확인함 (§3): the waiting count is the customer messages the team has not answered yet. */
+    acknowledge: "Acknowledge",
+    acknowledgeHint: "The count is customer messages the team hasn't answered yet. Press this to clear it until the next one comes in. The brand never sees this.",
+    acknowledged: "by {name} · {time}",
+    acknowledgedAt: "at {time}",
+    acknowledgeFailed: "Couldn't save that. Try again.",
   },
 };
 
@@ -901,5 +907,10 @@ export const adminConsoleKo: typeof adminConsoleEn = {
     noTargets: "아직 공유할 게 없어요. 시안을 올리거나 스토리보드를 먼저 공유해 주세요.",
     noLinks: "이 프로젝트 작업물의 공유 링크가 아직 없어요.",
     linksUnavailable: "아직 여기서 공유 링크를 읽을 수 없어요.",
+    acknowledge: "확인함",
+    acknowledgeHint: "숫자는 아직 답하지 않은 고객 메시지예요. 누르면 다음 고객 메시지가 올 때까지 0이 돼요. 고객에게는 보이지 않아요.",
+    acknowledged: "{name} · {time}에 확인",
+    acknowledgedAt: "{time}에 확인",
+    acknowledgeFailed: "저장하지 못했어요. 다시 눌러 주세요.",
   },
 };

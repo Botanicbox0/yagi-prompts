@@ -121,6 +121,7 @@ RLS는 다른 룸 테이블과 같다: 켜고 강제, `service_role`만. 번호�
   - 사건 줄 가운데 `detail.actorRole = 'brand'`이고 종류가 `review_commented`, `review_changes_requested`, `review_approved`, `storyboard_approved`, `storyboard_changes_requested`인 것.
   - "마지막으로 본 시점"에는 팀이 낸 사건 줄(팀의 의견 답글, 새 버전)도 포함한다. 팀이 답하면 대기가 풀린다.
 - **새 의뢰**: 의뢰 접수는 룸에 줄을 남기지 않는다(0082 제약). 작업대 목록에 "팀 글이 아직 없는 프로젝트"를 따로 "새 의뢰"로 올린다.
+- **2026-11-18 대표 변경: "대기" = 아직 답하지 않은 고객 메시지**. 고객 쪽 줄(위 정의 그대로)은 같은 채널에 그보다 늦은 팀 줄(팀 대화·답글, 고객이 보는 팀 의견, 새 버전·스토리보드 공유 같은 팀 사건 줄. 팀 메모와 지운 팀 줄은 아님)이 생기거나, 팀원이 "확인함"을 누를 때까지 센다. 대화·서랍을 여는 것만으로는 줄지 않는다(관리자 읽음 표시 오퍼레이션 `brand_rooms.channel.read`를 없앴다). "확인함"은 작업대 머리말(목록·검토 모드 모두)과 조직 대화 화면에 있고, 기다리는 수가 있을 때만 눌린다. 누른 사람과 시각은 버튼 옆에 "확인함 · 이름 · 시각"으로 보인다. 저장은 새 마이그레이션 없이 그 팀원의 `brand_room_reads` 행(지금은 이 버튼만 쓴다)이다. 고객 화면·알림·Slack에는 아무것도 생기지 않는다.
 
 ## 4. 팀 작업대
 
@@ -142,7 +143,7 @@ RLS는 다른 룸 테이블과 같다: 켜고 강제, `service_role`만. 번호�
 
 구현(N3)에서 달라진 것·정한 것. 원본은 코드다(`lib/brand-rooms/messages.ts`의 `teamWaiting`, `staffRoomOverview`, `staffProjectDesk`).
 
-- **대기**: 팀이 마지막으로 본 시점 = 관리자 읽음 표시, 팀 글(`author_role = 'studio'`), 팀이 낸 사건 줄(`detail.actorRole = 'studio'`) 가운데 가장 늦은 것. 그 뒤의 지워지지 않은 고객 글과, §3의 다섯 사건(`actorRole = 'brand'`)을 센다. 외부인 의견의 사건 줄은 `actorRole = 'brand'`(행위자 없음)이라 대기에 들어간다. 팀 메모는 줄이 없어 더하지도 풀지도 않는다.
+- **대기**(2026-11-18에 "답하지 않은 것"으로 바뀜, §3 끝): 팀이 마지막으로 본 시점 = 관리자 읽음 표시, 팀 글(`author_role = 'studio'`), 팀이 낸 사건 줄(`detail.actorRole = 'studio'`) 가운데 가장 늦은 것. 그 뒤의 지워지지 않은 고객 글과, §3의 다섯 사건(`actorRole = 'brand'`)을 센다. 외부인 의견의 사건 줄은 `actorRole = 'brand'`(행위자 없음)이라 대기에 들어간다. 팀 메모는 줄이 없어 더하지도 풀지도 않는다.
 - **새 의뢰**: 열린 조직의 고객 공개 프로젝트 중 팀 글도 팀 사건도 없는 것, 상태가 `requested`·`active`인 것만(끝난 프로젝트·취소는 뺀다). 고객이 이미 글을 남긴 새 의뢰는 새 의뢰 묶음에만 한 번 나온다.
 - **목록**: 프로젝트 행은 작업대로 간다. 조직의 일반 문의 대화도 대기가 있으므로 행으로 남기고, 그 행은 기존 조직 대화 화면으로 간다.
 - **Slack**: 외부인 의견은 보낸 사람 줄이 "이름 (공유 링크 외부인)"이고, 이름·본문은 Slack 마크업(`<!channel>` 등)이 동작하지 않게 바꿔 보낸다. 바로가기는 그 버전을 연 작업대. 스토리보드는 승인·수정 요청만 보낸다(다시 열기·같은 상태 반복은 보내지 않는다).
@@ -280,7 +281,7 @@ Footer: "This is a project notification. You can manage your notification settin
 
 ## 10. 확정 문안과 메일 모양 (2026-11-18 대표 확정)
 
-대표가 §9 초안을 보고 "이대로 진행하자"고 했다(2026-11-18). §2.1의 발송 대상과 §8-3의 간격(10분, 30분)도 제안값대로 간다. 걸린 네 곳은 함께 올린 권고대로 처리했다: 응답 약속 문장과 재촉 문장을 빼고, "정상적으로"·"성공적으로"를 빼고, 멘션 낱말을 "부르다"로 맞췄다. 접수 메일에 기한 약속은 넣지 않는다. 뺀 문장을 되살리거나 약속을 넣는 것은 대표가 다시 정한다.
+대표가 §9 초안을 보고 "이대로 진행하자"고 했다(2026-11-18). §2.1의 발송 대상과 §8-3의 간격(10분, 30분)도 제안값대로 간다. 걸린 네 곳은 함께 올린 권고대로 처리했다: 응답 약속 문장과 재촉 문장을 빼고, "정상적으로"·"성공적으로"를 빼고, 멘션 낱말을 "부르다"로 맞췄다. 접수 메일에 기한 약속은 넣지 않는다. 뺀 문장을 되살리거나 약속을 넣는 것은 대표가 다시 정한다. (같은 날 대표가 접수 메일에 "영업일 3일 안에 연락드립니다."를 직접 넣었다. §10.2·§10.3 표가 그것을 반영한다.)
 
 초안에 없던 문구(멘션 본문, 수신 거부 링크, 알림 설정, 수신 거부 뒤 페이지)는 같은 날 Gemma 4 2패스로 뽑아 원문과 대조했다. 발송은 여전히 `BRAND_ROOM_NOTIFY`가 켜져야 시작된다.
 
@@ -302,8 +303,9 @@ Footer: "This is a project notification. You can manage your notification settin
 | 스토리보드 | [{project}] 스토리보드가 공유되었습니다 | {title} 스토리보드를 확인해 보세요. | 야기 팀이 작업 방향을 담은 스토리보드를 올렸습니다. 내용을 검토해 주세요. | 스토리보드 보기 | 스토리보드 공유 | [{project}] {title}의 스토리보드가 도착했습니다. |
 | 묶음(대화·답글) | [{project}] 읽지 않은 메시지가 {count}건 있어요 | 야기 팀의 메시지를 확인해 주세요. | 아직 확인하지 않은 의견과 답글이 {count}건 있습니다. | 메시지 확인하기 | 새 메시지 {count}건 | [{project}] 야기 팀이 보낸 메시지가 {count}건 있습니다. |
 | 멘션 | [{project}] {name}님이 불렀어요 | {name}님이 불렀어요 | {name}님이 프로젝트 대화에서 불렀어요. 내용을 확인해 주세요. | 대화 바로가기 | 나를 불렀어요 | [{project}] {name}님이 불렀어요 |
-| 의뢰 접수 | [{project}] 의뢰가 접수되었습니다 | 요청하신 내용이 잘 전달되었습니다. | 야기 팀이 보내주신 의뢰 내용을 확인하고 있습니다. | 내 의뢰 확인하기 | (푸시 없음) | (푸시 없음) |
+| 의뢰 접수 | [{project}] 의뢰가 접수되었습니다 | 요청하신 내용이 잘 전달되었습니다. | 야기 팀이 보내주신 의뢰 내용을 확인하고 있습니다. 영업일 3일 안에 연락드립니다. | 내 의뢰 확인하기 | (푸시 없음) | (푸시 없음) |
 
+- 의뢰 접수 본문의 둘째 문장 "영업일 3일 안에 연락드립니다."는 대표 문장이다(2026-11-18). §8-4의 약속 문장 결정이 이것으로 끝났다.
 - 맨 아래 문장: "이 메일은 프로젝트 진행 알림이며, 알림 설정에서 수신 여부를 변경할 수 있습니다." 링크 글자: "수신 거부"
 - 알림 설정(알림함): 제목 "알림 설정" · "이메일 알림" — "새 시안, 스토리보드, 메시지, 멘션 알림을 메일로 보내드려요." · "푸시 알림" — "현재 사용 중인 브라우저에서 알림을 보내드려요." · 차단됨 "브라우저 설정에서 알림을 허용해 주세요." · 미지원 "이 브라우저는 알림을 지원하지 않아요." · "저장됐어요" · "저장하지 못했어요. 다시 시도해 주세요."
 - 수신 거부 뒤 페이지: "메일 수신을 거부했습니다" · "이제 이 브랜드의 프로젝트 메일은 발송되지 않아요. 다시 받으려면 알림 설정에서 켤 수 있어요." · 링크 "알림 설정으로 가기"
@@ -316,7 +318,9 @@ Footer: "This is a project notification. You can manage your notification settin
 | storyboard | Storyboard shared for {project} | Your storyboard for {title} is ready. | The YAGI team has shared the storyboard outlining the project direction. Please take a look. | View Storyboard | Storyboard Shared | The storyboard for {title} in {project} is now available. |
 | replies | {count} unread messages in {project} | You have new messages from the YAGI team. | There are {count} unread replies and messages. | View Messages | {count} New Messages | You have {count} new messages from the YAGI team in {project}. |
 | mention | {name} mentioned you in {project} | {name} mentioned you | {name} mentioned you in the project conversation. Please check the message. | Go to Chat | You were mentioned | [{project}] {name} mentioned you |
-| intake_received | Request received for {project} | Your request has been submitted. | The YAGI team is reviewing your requirements. | View Request | (none) | (none) |
+| intake_received | Request received for {project} | Your request has been submitted. | The YAGI team is reviewing your requirements. We'll get back to you within 3 business days. | View Request | (none) | (none) |
+
+The receipt's second sentence follows the founder's Korean sentence (대표 문장, 2026-11-18).
 
 count = 1 uses the singular form: "1 unread message in {project}" · "There is 1 unread reply or message." · "1 New Message" · "You have 1 new message from the YAGI team in {project}." (한국어는 한 가지 문장 그대로)
 

@@ -6,6 +6,7 @@
  * Confirmed by the founder on 2026-11-18 (docs §10.2 Korean, §10.3 English): every string here is the
  * approved wording, character for character. Do not edit, shorten or add a sentence without a new
  * founder decision (AGENTS.md §5, outbound copy). Nothing is sent while `BRAND_ROOM_NOTIFY` is off.
+ * The receipt's second sentence ("영업일 3일 안에 연락드립니다.") is the founder's own, added 2026-11-18.
  *
  * One mail is one kind (§10.1). `{project}` is the project's title, or the general conversation's name
  * (`roomsChat.inbox.general`). `{name}` is the author label below. The replies kind is the bundled mail
@@ -59,7 +60,7 @@ export const roomsNoticesEn = {
     intakeReceived: {
       subject: 'Request received for {project}',
       heading: 'Your request has been submitted.',
-      body: 'The YAGI team is reviewing your requirements.',
+      body: "The YAGI team is reviewing your requirements. We'll get back to you within 3 business days.",
       button: 'View Request',
     },
   },
@@ -136,7 +137,7 @@ export const roomsNoticesKo: typeof roomsNoticesEn = {
     intakeReceived: {
       subject: '[{project}] 의뢰가 접수되었습니다',
       heading: '요청하신 내용이 잘 전달되었습니다.',
-      body: '야기 팀이 보내주신 의뢰 내용을 확인하고 있습니다.',
+      body: '야기 팀이 보내주신 의뢰 내용을 확인하고 있습니다. 영업일 3일 안에 연락드립니다.',
       button: '내 의뢰 확인하기',
     },
   },
