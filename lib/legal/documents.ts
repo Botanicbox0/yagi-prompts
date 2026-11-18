@@ -91,7 +91,7 @@ export function isLegalDoc(value: string): value is LegalDoc {
 }
 
 /** The effective date printed on every document. Bump it whenever the text below changes. */
-export const LEGAL_EFFECTIVE = '2026-11-15';
+export const LEGAL_EFFECTIVE = '2026-11-18';
 
 /** Stated once, used by the terms, the refund policy and the privacy policy alike. */
 const SHARE_LINK_DAYS = 3;
@@ -408,6 +408,8 @@ const PRIVACY_KO = `## 1. 수집하는 개인정보
 
 회사는 주민등록번호를 수집하지 않으며, 결제 수단 정보(카드번호 등)는 결제대행사가 처리하고 회사 서버에 저장하지 않습니다.
 
+결과물을 만들거나 고치려고 이용자가 올린 이미지·영상·오디오와 요청 문구는 그 요청을 처리하기 위해 아래 5항의 AI 모델 제공사로 전송됩니다.
+
 ## 2. 이용 목적
 
 1. 회원 식별과 로그인 유지
@@ -443,6 +445,8 @@ const PRIVACY_KO = `## 1. 수집하는 개인정보
 | BytePlus Pte. Ltd. (싱가포르) | 실인물 인증, 영상·이미지 생성(Seedance·Seedream) | 얼굴 사진, 인증 시 촬영되는 얼굴 영상 |
 | OpenAI, L.L.C. (미국) | 이미지 생성(GPT Image) | 얼굴 사진 |
 | Google LLC (미국) | 이미지 생성(Gemini), 저장한 사진의 적합성 확인 | 얼굴 사진 |
+| Google LLC (미국) | 참고 이미지·영상 분석, 생성 지시문 작성(Gemini) | 이용자가 올리거나 만든 이미지·영상, 요청 문구 |
+| Second Enlightenment Global Private Limited (Sunra 운영사, 싱가포르) | 브랜드 스튜디오 이미지·영상·효과음 생성(Seedream·Seedance·GPT Image·Gemini·ElevenLabs 모델 중개) | 이용자가 올리거나 만든 이미지·영상·오디오, 요청 문구 |
 | Supabase Inc. (미국) | 데이터베이스·인증 | 회원 정보 |
 | Vercel Inc. (미국) | 웹 호스팅 | 접속 기록 |
 | Cloudflare, Inc. (미국) | 암호화 비공개 미디어 저장 및 공개 미디어 전송 | 얼굴 사진, 결과물, 접속 기록 |
@@ -484,6 +488,8 @@ The face video captured during verification is processed by the verification pro
 
 We do not collect national identification numbers. Payment instrument details (card numbers and the like) are handled by the payment provider and never stored on our servers.
 
+Images, video and audio you upload to make or change a result, and the text of your request, are sent to the AI model providers in section 5 to carry out that request.
+
 ## 2. Why
 
 1. Identifying you and keeping you signed in.
@@ -519,6 +525,8 @@ Rendering, the suitability check of a saved photo, and verification are performe
 | BytePlus Pte. Ltd. (Singapore) | Real-person verification; film and image generation (Seedance, Seedream) | Face photo; face video captured during verification |
 | OpenAI, L.L.C. (United States) | Image generation (GPT Image) | Face photo |
 | Google LLC (United States) | Image generation (Gemini); suitability check of a saved photo | Face photo |
+| Google LLC (United States) | Analysis of reference images and video; writing generation instructions (Gemini) | Images and video you upload or make; request text |
+| Second Enlightenment Global Private Limited (operator of Sunra, Singapore) | Brand studio image, film and sound-effect generation (access to Seedream, Seedance, GPT Image, Gemini and ElevenLabs models) | Images, video and audio you upload or make; request text |
 | Supabase Inc. (United States) | Database, authentication | Account data |
 | Vercel Inc. (United States) | Web hosting | Access logs |
 | Cloudflare, Inc. (United States) | Encrypted private media storage and public media delivery | Face photo, results, access logs |
