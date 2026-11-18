@@ -323,6 +323,209 @@
   border: 0;
 }
 
+/* ------------------------------------------------------------ invitations (FEEDBACK §12) */
+
+.brh-dialog-wide {
+  width: min(600px, calc(100vw - 32px));
+}
+.brh-section {
+  display: grid;
+  gap: 10px;
+  margin-top: 16px;
+}
+.brh-section-link {
+  margin-top: 20px;
+  padding-top: 16px;
+  border-top: 1px solid var(--brh-line-strong);
+}
+.brh-subtitle-small {
+  margin-top: 6px;
+  font-size: 13px;
+  color: var(--brh-body);
+}
+.brh-invite {
+  display: grid;
+  gap: 8px;
+}
+.brh-chips {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  min-height: 44px;
+  padding: 6px 8px;
+  border-radius: 12px;
+  background: var(--brh-field, var(--brh-raised));
+  box-shadow: var(--brh-well);
+  cursor: text;
+  box-sizing: border-box;
+}
+.brh-chips:focus-within {
+  outline: 2px solid var(--brh-accent);
+  outline-offset: 2px;
+}
+.brh-chips input {
+  flex: 1 1 160px;
+  min-width: 120px;
+  height: 30px;
+  padding: 0 4px;
+  border: 0;
+  background: transparent;
+  color: var(--brh-ink);
+  font: inherit;
+  font-size: 14px;
+}
+.brh-chips input:focus-visible {
+  outline: none;
+}
+.brh-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  max-width: 100%;
+  height: 28px;
+  padding: 0 4px 0 10px;
+  border-radius: 999px;
+  background: var(--brh-surface);
+  box-shadow: 0 0 0 1px var(--brh-line-strong);
+  font-size: 13px;
+  overflow-wrap: anywhere;
+}
+.brh-chip-x {
+  display: grid;
+  place-items: center;
+  width: 22px;
+  height: 22px;
+  padding: 0;
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  color: var(--brh-muted);
+  cursor: pointer;
+}
+.brh-chip-x .brh-icon {
+  width: 12px;
+  height: 12px;
+}
+.brh-chip-x:hover {
+  background: var(--brh-raised);
+}
+.brh-invite-row {
+  display: flex;
+  gap: 8px;
+  justify-content: flex-end;
+  align-items: center;
+}
+.brh-field-inline {
+  display: inline-grid;
+}
+.brh-field-inline select {
+  height: 36px;
+  font-size: 13px;
+}
+.brh-handoff {
+  display: grid;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.brh-people,
+.brh-live {
+  display: grid;
+  gap: 0;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.brh-person {
+  display: grid;
+  grid-template-columns: 32px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 0;
+  border-bottom: 1px solid var(--brh-line);
+}
+.brh-person:last-child {
+  border-bottom: 0;
+}
+.brh-avatar {
+  display: grid;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  border-radius: 999px;
+  background: var(--brh-raised);
+  color: var(--brh-body);
+  font-size: 13px;
+  font-weight: 600;
+}
+.brh-avatar-pending {
+  background: transparent;
+  box-shadow: inset 0 0 0 1px var(--brh-line-strong);
+}
+.brh-person-text {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+.brh-person-name {
+  overflow: hidden;
+  font-size: 14px;
+  font-weight: 500;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.brh-person-text .brh-meta {
+  overflow-wrap: anywhere;
+}
+.brh-person-role {
+  color: var(--brh-muted);
+  font-size: 13px;
+}
+.brh-person-actions {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+.brh-people-empty {
+  padding: 10px 0;
+}
+.brh-confirm {
+  display: grid;
+  gap: 8px;
+  padding: 14px;
+  border-radius: 18px;
+  background: var(--brh-accent-soft);
+  box-shadow: inset 0 0 0 1px var(--brh-line-strong);
+}
+.brh-confirm p {
+  margin: 0;
+  font-size: 14px;
+  line-height: 1.55;
+  word-break: keep-all;
+}
+.brh-confirm .brh-actions {
+  gap: 8px;
+}
+.brh-section .brh-hint,
+.brh-section .brh-subtitle {
+  word-break: keep-all;
+  overflow-wrap: break-word;
+}
+@media (max-width: 520px) {
+  .brh-person {
+    grid-template-columns: 32px minmax(0, 1fr);
+  }
+  .brh-person-actions,
+  .brh-person-role {
+    grid-column: 2;
+  }
+  .brh-dialog-wide .brh-row {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
 /* ------------------------------------------------------------ the share page */
 
 .brh-page {

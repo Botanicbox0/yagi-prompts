@@ -141,7 +141,20 @@ export function switchHref(pathname: string, choice: BrandWorkspaceChoice): stri
  * campaign itself when it is shared with the client. A campaign the studio has not shared yet opens
  * nothing, so the guest goes to the workspace home, which says the campaign is being prepared.
  */
-export function invitationLanding(result: { organizationId: string; projectId?: string; projectShared?: boolean }): string {
+export function invitationLanding(result: {
+  organizationId: string; projectId?: string; projectShared?: boolean;
+  room?: { target: { kind: 'review' | 'storyboard'; id: string } | null };
+}): string {
+  if (result.projectId && result.projectShared && result.room) {
+    // docs/BRAND-ROOMS-FEEDBACK.md §12: straight into the project room, on the item the invitation came from.
+    const room = scopedHref(`/brand/rooms/${encodeURIComponent(result.projectId)}`, { id: result.organizationId });
+    const target = result.room.target;
+    if (!target) return room;
+    const extra = target.kind === 'review'
+      ? new URLSearchParams({ tab: 'review', review: target.id })
+      : new URLSearchParams({ tab: 'storyboard', board: target.id });
+    return `${room}&${extra.toString()}`;
+  }
   if (result.projectId)
     return result.projectShared ? scopedHref(`/brand/projects/${encodeURIComponent(result.projectId)}`, { id: result.organizationId }) : '/brand';
   return scopedHref('/brand', { id: result.organizationId });

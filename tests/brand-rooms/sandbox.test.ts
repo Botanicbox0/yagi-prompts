@@ -632,3 +632,123 @@ describe('deliverables and share links: the flag and the control', () => {
     expect(bypassConsumerLocale(`/s/${R_TOKEN}`)).toBe(true);
   });
 });
+
+/* ------------------------------------------- invitations to a project room (docs/BRAND-ROOMS-FEEDBACK.md §12) */
+
+const peopleRoute = await import('@/app/api/brand-rooms/people/route');
+const { ROOM_PEOPLE_OPERATIONS } = await import('@/lib/brand-rooms/invite-contracts');
+const pGet = (fx: StudioFixture) => peopleRoute.GET(new ReviewRequest(`${R_BASE}/people?organizationId=${fx.orgId}&projectId=${fx.projectId}`));
+const pPost = (fx: StudioFixture, operation: string, input: Record<string, unknown>) =>
+  peopleRoute.POST(
+    new ReviewRequest(`${R_BASE}/people`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ operation, input: { organizationId: fx.orgId, projectId: fx.projectId, ...input } }) }),
+  );
+
+/** A waiting invitation to the fixture project, put there by hand (as if sent before the brand was closed). */
+async function seedInvite(fx: StudioFixture): Promise<string> {
+  return (
+    await fx.sql.query<{ id: string }>(
+      `insert into brand_invites (organization_id, project_id, email, role, can_comment, token_hash, expires_at, created_by, request_id)
+         values ($1, $2, 'waiting@partner.test', 'viewer', true, $3, now() + interval '7 days', $4, gen_random_uuid()) returning id`,
+      [fx.orgId, fx.projectId, 'c'.repeat(64), fx.ids.owner],
+    )
+  ).rows[0]!.id;
+}
+
+function peopleInput(operation: string, fx: StudioFixture, inviteId: string): Record<string, unknown> {
+  switch (operation) {
+    case 'invite.send':
+      return { emails: ['new@partner.test'], requestId: '00000000-0000-4000-8000-000000000001' };
+    case 'invite.resend':
+    case 'invite.cancel':
+      return { inviteId };
+    case 'guest.permission':
+      return { userId: fx.ids.guest, canComment: true };
+    default:
+      return { userId: fx.ids.guest };
+  }
+}
+
+const inviteCounts = async (fx: StudioFixture) =>
+  (
+    await fx.sql.query(
+      `select (select count(*)::int from brand_invites) as invites,
+              (select count(*)::int from brand_invites where revoked_at is not null) as revoked,
+              (select count(*)::int from brand_project_members where status = 'active') as guests,
+              (select count(*)::int from brand_project_members where can_comment) as commenting`,
+    )
+  ).rows[0];
+
+describe.each(cases)('Morphic hardline, invitations: organization $label', ({ orgId, orgName, policy }) => {
+  it('answers the access list and every operation with a 404 for every member, and writes nothing', async () => {
+    vi.stubEnv('BRAND_ROOMS', 'on');
+    vi.stubEnv('BRAND_ROOM_INVITES', 'on');
+    const fx = await roomFixture({ orgId, orgName, policy });
+    const inviteId = await seedInvite(fx);
+    const before = await inviteCounts(fx);
+    for (const member of [fx.ids.owner, fx.ids.editor, fx.ids.viewer, fx.ids.guest]) {
+      mocks.viewer = viewerOf(member);
+      const list = await pGet(fx);
+      expect(list.status).toBe(404);
+      expect(await list.json()).toEqual({ ok: false, code: 'not_found' });
+      for (const operation of ROOM_PEOPLE_OPERATIONS) {
+        const response = await pPost(fx, operation, peopleInput(operation, fx, inviteId));
+        expect(response.status, `${operation} as ${member}`).toBe(404);
+        expect(Object.keys(await response.json()).sort()).toEqual(['code', 'ok']);
+      }
+    }
+    expect(await inviteCounts(fx)).toEqual(before);
+  });
+});
+
+describe('invitations: the switches and the control', () => {
+  it('is a 404 for everyone while either switch is off', async () => {
+    for (const [rooms, invites] of [['off', 'on'], ['on', 'off'], ['off', 'off']] as const) {
+      vi.stubEnv('BRAND_ROOMS', rooms);
+      vi.stubEnv('BRAND_ROOM_INVITES', invites);
+      const fx = await roomFixture();
+      const inviteId = await seedInvite(fx);
+      const before = await inviteCounts(fx);
+      mocks.viewer = viewerOf(fx.ids.owner);
+      expect((await pGet(fx)).status).toBe(404);
+      for (const operation of ROOM_PEOPLE_OPERATIONS) expect((await pPost(fx, operation, peopleInput(operation, fx, inviteId))).status, operation).toBe(404);
+      expect(await inviteCounts(fx)).toEqual(before);
+      await fx.db.close();
+      f = null;
+    }
+  });
+
+  it('opens for an ordinary organization with both on: owners and editors manage, viewers and guests may not', async () => {
+    vi.stubEnv('BRAND_ROOMS', 'on');
+    vi.stubEnv('BRAND_ROOM_INVITES', 'on');
+    const fx = await roomFixture();
+    for (const member of [fx.ids.owner, fx.ids.editor]) {
+      mocks.viewer = viewerOf(member);
+      expect((await pGet(fx)).status).toBe(200);
+    }
+    for (const member of [fx.ids.viewer, fx.ids.guest]) {
+      mocks.viewer = viewerOf(member);
+      expect((await pGet(fx)).status).toBe(403);
+      expect((await pPost(fx, 'invite.send', { emails: ['x@partner.test'], requestId: '00000000-0000-4000-8000-000000000002' })).status).toBe(403);
+    }
+    mocks.viewer = viewerOf(fx.ids.owner);
+    const sent = await pPost(fx, 'invite.send', { emails: ['x@partner.test'], requestId: '00000000-0000-4000-8000-000000000003' });
+    expect(sent.status).toBe(200);
+    expect((await sent.json()).results).toEqual([expect.objectContaining({ email: 'x@partner.test', state: 'skipped' })]);
+    mocks.viewer = null;
+    expect((await pGet(fx)).status).toBe(401);
+  });
+
+  it('is reachable on the brand host for reading and writing', () => {
+    expect(brandRouteAllowed('/api/brand-rooms/people', 'GET')).toBe(true);
+    expect(brandRouteAllowed('/api/brand-rooms/people', 'POST')).toBe(true);
+    expect(brandRouteAllowed('/api/brand-rooms/people', 'DELETE')).toBe(false);
+  });
+
+  it('keeps the room page and its share entry closed for a sandboxed organization with invitations on', async () => {
+    vi.stubEnv('BRAND_ROOMS', 'on');
+    vi.stubEnv('BRAND_ROOM_INVITES', 'on');
+    const fx = await roomFixture({ orgId: sandboxed[0]! });
+    mocks.viewer = viewerOf(fx.ids.owner);
+    await expect404(() => openRoom(fx.projectId, fx.orgId));
+  });
+});

@@ -6,6 +6,7 @@
  * Server component. Techniques (docs/design/TOOLBOX.md §1-2): large bold title, concentric radius on the
  * pill tab track (a recessed `--ys-raised` well with a white pill, TASTE §12), tabular numerals on counts.
  */
+import type { ReactNode } from 'react';
 import { interpolate } from '@/lib/i18n/format';
 import type { RoomsShellCopy } from '@/messages/rooms-shell';
 import type { RoomPerson, RoomProject, RoomTab } from '@/lib/brand-rooms/overview';
@@ -19,6 +20,7 @@ export function RoomHeader({
   statusLabel,
   backHref,
   detailHref,
+  share = null,
 }: {
   project: RoomProject;
   people: RoomPerson[];
@@ -27,6 +29,8 @@ export function RoomHeader({
   backHref: string;
   /** The campaign page with its creators and results; only a creator campaign has one worth opening. */
   detailHref: string | null;
+  /** "공유" for the whole project (docs/BRAND-ROOMS-FEEDBACK.md §12): owners and editors, invitations on. */
+  share?: ReactNode;
 }) {
   const shown = people.slice(0, FACES);
   const rest = people.length - shown.length;
@@ -80,6 +84,7 @@ export function RoomHeader({
             <span className="brr-team-dot" aria-hidden="true" />
             {copy.team}
           </span>
+          {share}
         </div>
       </div>
     </header>

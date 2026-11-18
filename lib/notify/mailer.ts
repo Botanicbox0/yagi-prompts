@@ -30,7 +30,9 @@ export interface EmailMessage {
   idempotencyKey: string;
   /**
    * RFC 8058 one-click unsubscribe. The same signed URL the body links to, promoted to a header so
-   * Gmail/Apple render their own unsubscribe control (§3.5 "one-click unsubscribe").
+   * Gmail/Apple render their own unsubscribe control (§3.5 "one-click unsubscribe"). Empty only for a
+   * one-off mail someone asked to send to one address (a project room invitation,
+   * docs/BRAND-ROOMS-FEEDBACK.md §12): there is no list to leave, so no header.
    */
   unsubscribeUrl: string;
   /**

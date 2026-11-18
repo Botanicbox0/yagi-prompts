@@ -5,9 +5,18 @@ import { PENDING_BRAND_INVITATION_KEY as KEY } from "@/lib/auth/invitation-trans
 export function AcceptInvitation({
   signedIn,
   b,
+  note,
+  loginNote,
 }: {
   signedIn: boolean;
   b: BrandCopy;
+  /**
+   * With room invitations on (docs/BRAND-ROOMS-FEEDBACK.md §12) a project invitation binds to the account
+   * that accepts it, so the line under the button says that instead of the e-mail-only rule.
+   */
+  note?: string;
+  /** Before sign-in, with room invitations on: a line true for both kinds (the page cannot tell them apart yet). */
+  loginNote?: string;
 }) {
   const [token, setToken] = useState("");
   const [ready, setReady] = useState(false);
@@ -46,7 +55,7 @@ export function AcceptInvitation({
   if (!signedIn)
     return (
       <>
-        <p className="bw-note">{b.inviteLogin}</p>
+        <p className="bw-note" data-invite-login>{loginNote ?? b.inviteLogin}</p>
         <a
           className="bw-button bw-primary"
           href="/auth/choose?next=%2Fbrand%2Finvite"
@@ -74,7 +83,7 @@ export function AcceptInvitation({
       b={b}
       submit={b.acceptInvite}
     >
-      <p className="bw-note">{b.inviteExpiry}</p>
+      <p className="bw-note" data-invite-note>{note ?? b.inviteExpiry}</p>
     </ActionForm>
   );
 }

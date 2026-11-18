@@ -264,6 +264,9 @@ export function brandRouteAllowed(pathname: string, method: string): boolean {
   if (pathname === '/api/brand-rooms/reviews') return read || method === 'POST';
   if (pathname === '/api/brand-rooms/shares') return read || method === 'POST';
   if (pathname === '/api/brand-rooms/shares/public') return method === 'POST';
+  // Inviting people to a project room and managing who has access (docs/BRAND-ROOMS-FEEDBACK.md §12).
+  // Answers 404 while BRAND_ROOM_INVITES is off.
+  if (pathname === '/api/brand-rooms/people') return read || method === 'POST';
   // Room notice settings in the inbox (docs/BRAND-ROOMS-FEEDBACK.md §10): the mail switch, and this
   // browser's push. Both answer 404 while BRAND_ROOM_NOTIFY is off. `/api/notify/push` stays closed here.
   if (pathname === '/api/brand-rooms/notice-prefs') return read || method === 'POST';
