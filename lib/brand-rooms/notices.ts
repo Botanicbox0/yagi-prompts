@@ -333,12 +333,32 @@ function placeName(dict: Dict, projectId: string | null, projectTitle: string): 
   return projectId === null ? dict.roomsChat.inbox.general : flat(projectTitle);
 }
 
+/** The type word at the end of a storyboard's title, in either language, with what joined it to the rest. */
+const STORYBOARD_WORD_AT_END = /(?:스토리보드|(?<![\p{L}\p{N}])storyboard)$/iu;
+const TRAILING_SEPARATOR = /[\s\-–—·•:|/,_]+$/u;
+
+/**
+ * A storyboard's title without one trailing "스토리보드" / "storyboard" (any case), for the storyboard
+ * notice strings, which already name the kind ("{title} 스토리보드를 확인해 보세요.", "Your storyboard
+ * for {title} is ready."): "가을 캠페인 스토리보드" would otherwise read "가을 캠페인 스토리보드
+ * 스토리보드를 …". The separator left dangling ("가을 캠페인 - 스토리보드") goes with it. The word
+ * anywhere else in the title stays. A title that is only the word is kept as it is.
+ */
+export function storyboardNoticeTitle(title: string): string {
+  const whole = flat(title);
+  const match = STORYBOARD_WORD_AT_END.exec(whole);
+  if (!match) return whole;
+  const rest = whole.slice(0, match.index).replace(TRAILING_SEPARATOR, '');
+  return rest === '' ? whole : rest;
+}
+
 /** Every placeholder a kind's strings use, with the fallbacks an event line without them gets. */
 function noticeVars(dict: Dict, kind: RoomNoticeMailKind, lines: readonly RoomNoticeLine[], project: string): Record<string, string | number> {
   const line = kind === 'replies' ? undefined : lines.find((l) => l.kind === kind);
+  const title = flat(line?.title) || project;
   return {
     project,
-    title: flat(line?.title) || project,
+    title: kind === 'storyboard' ? storyboardNoticeTitle(title) : title,
     version: line?.version && line.version > 0 ? line.version : 1,
     name: flat(line?.person) || flat(line?.name) || dict.roomsChat.author.someone,
     count: kind === 'replies' ? lines.length : 1,

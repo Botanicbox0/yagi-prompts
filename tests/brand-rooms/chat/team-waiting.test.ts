@@ -1,25 +1,32 @@
 import { randomUUID } from 'node:crypto';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import type { AdminContext } from '@/lib/admin/context';
+import { dispatchAdmin } from '@/lib/admin/dispatch';
+import { ADMIN_OPERATION_NAMES } from '@/lib/admin/operations';
 import type { Viewer } from '@/lib/auth/identity';
-import { staffMarkRead, staffProjectDesk, staffRoomChannels, staffRoomOverview } from '@/lib/brand-rooms/messages';
+import { loadRoomSummary, runRoomOperation, staffAcknowledge, staffLoadRoomMessages, staffProjectDesk, staffRoomChannels, staffRoomOverview } from '@/lib/brand-rooms/messages';
 import { createShare, guestComment } from '@/lib/brand-rooms/shares';
 import type { ShareCreated } from '@/lib/brand-rooms/share-contracts';
 import { createMemoryMediaStore } from '@/lib/brand-studio/media-store';
 import { staffAddComment } from '@/lib/brand-studio/review';
+import { adminTransport } from '@/components/brand-rooms/chat/transport';
 import { studioDeps, studioFixture, viewerOf, type StudioFixture } from '../../brand-studio/server/helpers';
 import { roomDraft, reviewDeps } from '../review/fixtures';
 
 /**
- * docs/BRAND-ROOMS-FEEDBACK.md §3 — the team's "waiting" count tells the truth: a customer's line, and a
- * customer's note, approval or change request on the work (a guest's note through a share link included),
- * counts until the team reads the channel, writes in it, or answers through the work (a reply on a note, a
- * new version). A team note (§5) leaves no line, so it neither adds to the count nor clears it.
+ * docs/BRAND-ROOMS-FEEDBACK.md §3 (as changed 2026-11-18) — the team's "waiting" count is what the team has not
+ * ANSWERED: a customer's line, and a customer's note, approval or change request on the work (a guest's note
+ * through a share link included), counts until the team writes in the channel, answers through the work (a note
+ * the brand can see, a new version, a shared board), or a team member presses 확인함. Opening the conversation
+ * clears nothing. A team note (§5) leaves no line, so it neither adds to the count nor clears it; a team line
+ * taken down is no answer. 확인함 is team-only: no line, no notice, nothing the brand reads.
  * "New requests" are the client-visible projects of open brands the team has not said anything in yet.
  */
 let f: StudioFixture;
 beforeEach(async () => {
   vi.stubEnv('BRAND_ROOMS', 'on');
   f = await studioFixture();
+  clock = Date.parse('2020-01-01T01:00:00Z');
 });
 afterEach(async () => {
   vi.unstubAllEnvs();
@@ -27,9 +34,14 @@ afterEach(async () => {
 });
 
 const admin = (): Viewer => ({ ...viewerOf(f.ids.admin), isAdmin: true });
-// Lines written here sit in the past, so a read mark (capped at now) can land after any of them.
+// Lines written here sit in the past, so 확인함 (the database's now) lands after any of them; `afterNow` moves
+// the clock past it for the lines that must come later.
 let clock = Date.parse('2020-01-01T01:00:00Z');
 const tick = () => new Date((clock += 60_000)).toISOString();
+const afterNow = () => {
+  clock = Math.max(clock, Date.now() + 60_000);
+};
+const ack = (viewer: Viewer = admin(), projectId = f.projectId) => staffAcknowledge({ sql: f.sql }, viewer, { organizationId: f.orgId, projectId });
 
 /** A line in the fixture project's channel at a known moment (the team and the brand never write at once). */
 async function line(input: { role: 'brand' | 'studio'; body?: string; deleted?: boolean; projectId?: string }): Promise<void> {
@@ -88,7 +100,7 @@ describe('the team waiting count', () => {
     expect(await waiting()).toBe(0);
   });
 
-  it('is cleared by a team line, a team event (a reply on a note, a new version) or a read mark', async () => {
+  it('is cleared by a team line or a team event (a note the brand sees, a new version, a shared board)', async () => {
     await event('review_commented', 'brand');
     await event('storyboard_changes_requested', 'brand');
     expect(await waiting()).toBe(2);
@@ -99,20 +111,47 @@ describe('the team waiting count', () => {
     expect(await waiting()).toBe(1);
     await event('review_version', 'studio');
     expect(await waiting()).toBe(0);
+    await event('storyboard_changes_requested', 'brand');
+    expect(await waiting()).toBe(1);
+    await event('storyboard_version', 'studio');
+    expect(await waiting()).toBe(0);
     await line({ role: 'brand' });
     expect(await waiting()).toBe(1);
     await line({ role: 'studio' });
     expect(await waiting()).toBe(0);
     await event('review_changes_requested', 'brand');
     expect(await waiting()).toBe(1);
-    expect(await staffMarkRead({ sql: f.sql, media: createMemoryMediaStore() }, admin(), { organizationId: f.orgId, projectId: f.projectId, at: tick() })).toMatchObject({ ok: true });
-    expect(await waiting()).toBe(0);
+  });
+
+  it('is not answered by a team line that was taken down', async () => {
+    await line({ role: 'brand' });
+    await line({ role: 'studio', deleted: true });
+    expect(await waiting()).toBe(1);
+  });
+
+  it('is not cleared by opening the conversation: the team reads it, and has no read mark to send', async () => {
+    await line({ role: 'brand', body: 'When is the first cut?' });
+    await event('review_changes_requested', 'brand');
+    expect(await waiting()).toBe(2);
+    const page = await staffLoadRoomMessages({ sql: f.sql, media: createMemoryMediaStore() }, admin(), { organizationId: f.orgId, projectId: f.projectId });
+    expect(page).toMatchObject({ ok: true, team: true });
+    expect(await waiting()).toBe(2);
+    // The old "the team read it" operation is gone, and the team's transport marks nothing on view.
+    expect(ADMIN_OPERATION_NAMES).not.toContain('brand_rooms.channel.read');
+    const ctx: AdminContext = { sql: f.sql, storage: {} as never, viewer: admin() };
+    const form = new FormData();
+    for (const [k, v] of Object.entries({ _op: 'brand_rooms.channel.read', organizationId: f.orgId, projectId: f.projectId })) form.set(k, v);
+    expect(await dispatchAdmin('brand_rooms.channel.read', form, ctx)).toMatchObject({ ok: false, code: 'unknownOperation' });
+    expect(adminTransport(f.orgId).read).toBeUndefined();
+    expect(await waiting()).toBe(2);
+    expect((await f.sql.query('select count(*)::int as n from brand_room_reads')).rows[0]).toEqual({ n: 0 });
   });
 
   it('counts a guest note through a share link (its line carries actorRole brand)', async () => {
     const deps = studioDeps(f.sql);
     const reviewId = await roomDraft(f, deps);
-    await staffMarkRead({ sql: f.sql, media: deps.media }, admin(), { organizationId: f.orgId, projectId: f.projectId });
+    expect(await ack()).toMatchObject({ ok: true });
+    afterNow();
     const before = await waiting();
     const created = (await createShare({ sql: f.sql, media: deps.media }, viewerOf(f.ids.owner), { organizationId: f.orgId, kind: 'review', targetId: reviewId })) as ShareCreated;
     expect(await guestComment({ sql: f.sql, media: deps.media }, { token: created.token, name: 'Jin', body: 'Brighter please' }, { get: () => undefined })).toMatchObject({ ok: true });
@@ -131,6 +170,94 @@ describe('the team waiting count', () => {
     expect(await staffAddComment(reviewDeps(deps), admin(), { reviewId, body: 'Ask the colourist', visibility: 'team' })).toMatchObject({ ok: true, comment: { team: true } });
     expect(await lines()).toBe(count);
     expect(await waiting()).toBe(1);
+  });
+});
+
+describe('확인함', () => {
+  it('sets the count to 0 until the next customer line, and a team note after it does not clear that line', async () => {
+    const deps = studioDeps(f.sql);
+    const reviewId = await roomDraft(f, deps);
+    await line({ role: 'brand' });
+    await event('review_changes_requested', 'brand');
+    expect(await waiting()).toBe(2);
+    expect(await ack()).toMatchObject({ ok: true, acknowledgedAt: expect.any(String) });
+    expect(await waiting()).toBe(0);
+    // A second press with nothing waiting is harmless.
+    expect(await ack()).toMatchObject({ ok: true });
+    afterNow();
+    await line({ role: 'brand', body: 'One more thing' });
+    expect(await waiting()).toBe(1);
+    expect(await staffAddComment(reviewDeps(deps), admin(), { reviewId, body: 'Ask the colourist', visibility: 'team' })).toMatchObject({ ok: true, comment: { team: true } });
+    expect(await waiting()).toBe(1);
+    await event('review_commented', 'brand');
+    expect(await waiting()).toBe(2);
+  });
+
+  it('is the project desk count, with who pressed it and when', async () => {
+    await line({ role: 'brand' });
+    expect(await staffProjectDesk({ sql: f.sql }, admin(), f.orgId, f.projectId)).toMatchObject({ ok: true, teamUnread: 1, acknowledged: null });
+    const done = await ack();
+    if (!done.ok) throw new Error(done.code);
+    const desk = await staffProjectDesk({ sql: f.sql }, admin(), f.orgId, f.projectId);
+    expect(desk).toMatchObject({ ok: true, teamUnread: 0, acknowledged: { at: done.acknowledgedAt, by: 'admin' } });
+    await f.sql.query("update profiles set display_name = 'Jisoo' where id = $1", [f.ids.admin]);
+    expect(await staffProjectDesk({ sql: f.sql }, admin(), f.orgId, f.projectId)).toMatchObject({ acknowledged: { by: 'Jisoo' } });
+    const room = await staffRoomChannels({ sql: f.sql }, admin(), f.orgId);
+    if (!room.ok) throw new Error(room.code);
+    expect(room.channels.find((c) => c.projectId === f.projectId)).toMatchObject({ teamUnread: 0, acknowledged: { at: done.acknowledgedAt, by: 'Jisoo' } });
+    expect(room.channels.find((c) => c.channel === 'general')).toMatchObject({ acknowledged: null });
+  });
+
+  it('works on the general conversation too', async () => {
+    await f.sql.query(
+      `insert into brand_room_messages (organization_id, project_id, channel, author_id, author_role, kind, body, created_at) values ($1, null, 'general', $2, 'brand', 'text', 'hi', $3::timestamptz)`,
+      [f.orgId, f.ids.owner, tick()],
+    );
+    const general = async () => {
+      const room = await staffRoomChannels({ sql: f.sql }, admin(), f.orgId);
+      if (!room.ok) throw new Error(room.code);
+      return room.channels.find((c) => c.channel === 'general')!.teamUnread;
+    };
+    expect(await general()).toBe(1);
+    expect(await ack(admin(), 'general')).toMatchObject({ ok: true });
+    expect(await general()).toBe(0);
+  });
+
+  it('is team-only: no line, no notice, and the brand member’s own unread count does not move', async () => {
+    await line({ role: 'studio', body: 'First cut is up' });
+    const rows = async () =>
+      (await f.sql.query<{ messages: number; notices: number }>('select (select count(*)::int from brand_room_messages) as messages, (select count(*)::int from brand_room_notices) as notices')).rows[0];
+    const before = await rows();
+    const summary = await loadRoomSummary({ sql: f.sql }, viewerOf(f.ids.owner), f.orgId);
+    expect(summary).toMatchObject({ ok: true, unread: 1 });
+    expect(await ack()).toMatchObject({ ok: true });
+    expect(await rows()).toEqual(before);
+    expect(await loadRoomSummary({ sql: f.sql }, viewerOf(f.ids.owner), f.orgId)).toEqual(summary);
+  });
+
+  it('is for the team only: a brand member, a session flag the profile does not carry and the brand-side operations are refused', async () => {
+    await line({ role: 'brand' });
+    expect(await ack(viewerOf(f.ids.owner))).toEqual({ ok: false, code: 'forbidden' });
+    expect(await ack({ ...viewerOf(f.ids.owner), isAdmin: true })).toEqual({ ok: false, code: 'forbidden' });
+    const form = (fields: Record<string, string>) => {
+      const data = new FormData();
+      for (const [k, v] of Object.entries(fields)) data.set(k, v);
+      return data;
+    };
+    const fields = { _op: 'brand_rooms.channel.ack', organizationId: f.orgId, projectId: f.projectId };
+    const ctx = (userId: string, isAdmin: boolean): AdminContext => ({ sql: f.sql, storage: {} as never, viewer: { ...viewerOf(userId), isAdmin } });
+    expect(await dispatchAdmin('brand_rooms.channel.ack', form(fields), ctx(f.ids.owner, false))).toEqual({ ok: false, code: 'forbidden' });
+    expect(await dispatchAdmin('brand_rooms.channel.ack', form(fields), ctx(f.ids.owner, true))).toMatchObject({ ok: false, code: 'forbidden' });
+    // The brand's own operation door has no 확인함.
+    const brandSide = await runRoomOperation({ sql: f.sql, media: createMemoryMediaStore() }, viewerOf(f.ids.owner), 'channel.ack', { organizationId: f.orgId, projectId: f.projectId });
+    expect(brandSide.result).toEqual({ ok: false, code: 'invalid' });
+    expect(await waiting()).toBe(1);
+    // Another brand's project through this organization, or an unknown one, is not found.
+    expect(await ack(admin(), randomUUID())).toEqual({ ok: false, code: 'not_found' });
+    // The team's own press through the registry lands back on the form's page.
+    expect(ADMIN_OPERATION_NAMES).toContain('brand_rooms.channel.ack');
+    expect(await dispatchAdmin('brand_rooms.channel.ack', form(fields), ctx(f.ids.admin, true))).toEqual({ ok: true, code: 'saved' });
+    expect(await waiting()).toBe(0);
   });
 });
 

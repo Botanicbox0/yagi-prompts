@@ -465,6 +465,12 @@ export const adminConsoleEn = {
     guestMailFailed: "Invitation mail not delivered",
     guestInvitedAs: "invited as {email}",
     noGuests: "No guests in this project.",
+    /** 확인함 (§3): the waiting count is the customer messages the team has not answered yet. */
+    acknowledge: "Acknowledge",
+    acknowledgeHint: "The count is customer messages the team hasn't answered yet. Press this to clear it until the next one comes in. The brand never sees this.",
+    acknowledged: "by {name} · {time}",
+    acknowledgedAt: "at {time}",
+    acknowledgeFailed: "Couldn't save that. Try again.",
   },
 };
 
@@ -925,5 +931,10 @@ export const adminConsoleKo: typeof adminConsoleEn = {
     guestMailFailed: "초대 메일 못 보냄",
     guestInvitedAs: "초대 주소 {email}",
     noGuests: "이 프로젝트에 손님이 없어요.",
+    acknowledge: "확인함",
+    acknowledgeHint: "숫자는 아직 답하지 않은 고객 메시지예요. 누르면 다음 고객 메시지가 올 때까지 0이 돼요. 고객에게는 보이지 않아요.",
+    acknowledged: "{name} · {time}에 확인",
+    acknowledgedAt: "{time}에 확인",
+    acknowledgeFailed: "저장하지 못했어요. 다시 눌러 주세요.",
   },
 };
