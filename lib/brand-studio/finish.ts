@@ -200,18 +200,23 @@ async function settleJob(deps: StudioDeps, job: JobRow, token: string, work: Job
     return saveJob(deps.sql, job, token, { status: 'failed', error_code: dbCode, error_detail: detail, work, finished_at: now(deps), usage_krw: 0 });
   }
   const share = Number(job.estimate_usd) / Math.max(1, outputs.length);
-  const cost = ready.reduce((sum, o) => {
-    const reported = work.results?.[String(o.idx)]?.costUsd;
-    return sum + (typeof reported === 'number' && reported >= 0 ? reported : share);
-  }, 0);
   const medium = job.kind === 'image' || job.kind === 'region_edit' ? 'image' : 'video';
+  // Each result is counted on its own, in whole credits, the way it was quoted (usage-rate.ts).
+  let cost = 0;
+  let usage = 0;
+  for (const o of ready) {
+    const reported = work.results?.[String(o.idx)]?.costUsd;
+    const one = typeof reported === 'number' && reported >= 0 ? reported : share;
+    cost += one;
+    usage += usageKrw(one, medium);
+  }
   return saveJob(deps.sql, job, token, {
     status: 'succeeded',
     error_code: null,
     error_detail: detail,
     work,
     cost_usd: Math.round(cost * 10_000) / 10_000,
-    usage_krw: usageKrw(cost, medium),
+    usage_krw: usage,
     finished_at: now(deps),
   });
 }

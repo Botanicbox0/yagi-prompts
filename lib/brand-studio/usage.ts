@@ -14,9 +14,20 @@ import { z } from 'zod';
 import type { Viewer } from '@/lib/auth/identity';
 import type { SqlRunner } from '@/lib/db/sql-runner';
 import type { StudioAllowanceView } from './contracts';
+import { STUDIO_CREDIT_KRW } from './credits';
 import { STUDIO_LANES, type StudioLane } from './models';
 
 export { usageKrw } from './usage-rate';
+
+/**
+ * One job's usage in KRW as SQL, counted in whole credits like the amount a screen shows for it. New rows
+ * already are (usage-rate.ts `usageKrw`); a row settled before that rule can hold a fraction of a credit,
+ * and rounding it here keeps "the amounts on the results" and "what the balance lost" the same number.
+ */
+export function jobUsageKrwSql(alias = ''): string {
+  const t = alias ? `${alias}.` : '';
+  return `ceil(coalesce(${t}usage_krw, ${t}estimate_krw) / ${STUDIO_CREDIT_KRW}.0) * ${STUDIO_CREDIT_KRW}`;
+}
 
 const KST_OFFSET_MS = 9 * 3_600_000;
 
@@ -42,7 +53,7 @@ export interface StudioAllowance {
 export async function usedKrwIn(sql: SqlRunner, organizationId: string, window: { start: Date; end: Date }): Promise<number> {
   const row = (
     await sql.query<{ used: string | number }>(
-      `select coalesce(sum(coalesce(usage_krw, estimate_krw)), 0)::bigint as used from brand_studio_jobs
+      `select coalesce(sum(${jobUsageKrwSql()}), 0)::bigint as used from brand_studio_jobs
         where organization_id = $1 and status not in ('failed','canceled') and created_at >= $2 and created_at < $3`,
       [organizationId, window.start.toISOString(), window.end.toISOString()],
     )
