@@ -9,6 +9,7 @@ import { answerOf, createReviseFlow, fallbackAnswer, initialReviseState, type Re
 import { chainOf, stageOf } from "@/components/brand-studio/revision-model";
 import { credits, fill } from "@/components/brand-studio/copy";
 import { trayItemFromAsset } from "@/components/brand-studio/refs";
+import { getDictionary } from "@/lib/i18n/dictionaries";
 import { ORG, asset, copyFor, id, job, output } from "./fixtures";
 
 /**
@@ -122,7 +123,7 @@ describe("flag on: the viewer", () => {
 
 describe("the version card", () => {
   const card = (versions: ReturnType<typeof chainOf>, selected: number, shown: StudioJobView, patch: Partial<Parameters<typeof VersionPanel>[0]> = {}) =>
-    VersionPanel({ versions, selected, shown: { job: shown, output: shown.outputs[0]! }, copy: ko, canFinish: true, finishing: false, onSelect: noop, onFinal: noop, ...patch });
+    VersionPanel({ versions, selected, shown: { job: shown, output: shown.outputs[0]! }, copy: ko, locale: "ko", canFinish: true, finishing: false, onSelect: noop, onFinal: noop, ...patch });
 
   it("names the stage of what is on screen", () => {
     const draft = clip(1);
@@ -153,6 +154,16 @@ describe("the version card", () => {
     expect(viewerHtml).not.toContain("data-version-final");
     expect(viewerHtml).not.toContain(`data-action="finalize"`);
     expect(viewerHtml).not.toContain("data-version-stage");
+  });
+
+  it("shows on the step to the final the credits its final takes, as the server prices it", () => {
+    const v1 = clip(1, {}, { finalEstimateKrw: 5_320 });
+    const html = renderToStaticMarkup(card(chainOf([v1], v1), 1, v1)!);
+    expect(html).toMatch(new RegExp(`data-version-final="true"[^>]*>[^]*<span>${ko.revise.toFinal}</span><span class="bs-version-final-cost bs-num">${credits(ko.credits.amount, creditsOf(5_320), "ko")}</span>`));
+    // Without a figure (an older answer) the button still works and claims no number.
+    const bare = renderToStaticMarkup(card(chainOf([clip(1)], clip(1)), 1, clip(1))!);
+    expect(bare).toContain("data-version-final");
+    expect(bare).not.toContain("bs-version-final-cost");
   });
 
   it("offers the step to the final only on a draft with no final yet, and hands that draft over", () => {
@@ -216,7 +227,9 @@ describe("flag on: the conversation", () => {
     const price = credits(ko.credits.amount, creditsOf(1500), "ko");
     expect(html).toMatch(/data-revise-said="1"[^]*병 색을 빨강으로[^]*data-revise-answer="edit"/);
     expect(html).toContain(`data-revise-answer-line="true">${ko.revise.talk.answer.surface}`);
-    expect(html.split(price).length - 1).toBe(2);
+    // The credits sit on the button only: the answer line says how and why.
+    expect(html.split(price).length - 1).toBe(1);
+    expect(html).toContain(`data-revise-answer-line="true">${ko.revise.talk.answer.surface}</p>`);
     expect(html.match(/data-revise-make/g)).toHaveLength(1);
     expect(html).toMatch(new RegExp(`data-revise-make="true"[^>]*><span>${ko.revise.talk.make}</span><span class="bs-submit-cost bs-num">${price}</span>`));
     expect(html).not.toContain("data-revise-method");
@@ -257,7 +270,7 @@ describe("flag on: the conversation", () => {
   it("says the new version keeps this one's quality when the version on screen is not a draft", () => {
     const answer = answerOf(plan({ recommended: "edit", reason: "surface" }))!;
     const kept = view({ said: [said("배경을 밤으로")], answer }, { sameQuality: true });
-    expect(kept).toContain(`data-revise-answer-line="true">${ko.revise.talk.answer.surface} ${ko.revise.talk.sameQuality}<span`);
+    expect(kept).toContain(`data-revise-answer-line="true">${ko.revise.talk.answer.surface} ${ko.revise.talk.sameQuality}</p>`);
     expect(view({ said: [said("배경을 밤으로")], answer })).not.toContain(ko.revise.talk.sameQuality);
     expect(view({ said: [said("Make it night")], answer }, { sameQuality: true }, "en")).toContain(`${en.revise.talk.answer.surface} ${en.revise.talk.sameQuality}`);
   });
@@ -277,6 +290,35 @@ describe("flag on: the conversation", () => {
     }
     expect(en.revise.stage).toEqual({ draft: "Draft", final: "Final" });
     expect(ko.revise.stage).toEqual({ draft: "초안", final: "완성본" });
+  });
+
+  it("calls the customer's own 480p version 초안 across the studio; 시안 is left to the team's room deliveries", () => {
+    const d = getDictionary("ko");
+    const v = d.studioVideo;
+    const own = [
+      d.brandStudio.board.draftBadge,
+      d.brandStudio.dock.draft,
+      d.brandStudio.dock.draftNote,
+      v.intro.steps[3]!.title,
+      v.intro.steps[3]!.line,
+      v.reverse.sections.run,
+      v.reverse.run.draft,
+      v.reverse.run.finalNote,
+      v.path.pickEmpty,
+      v.path.draft,
+      v.workspace.specs.draftOption,
+      v.workspace.specs.draftHint,
+      v.workspace.cta.blueprint,
+      v.workspace.guide.steps[2]!.title,
+      v.workspace.guide.steps[2]!.body,
+      v.workspace.guide.steps[2]!.tag,
+      d.studioShell.showroom.stages[3]!.title,
+    ];
+    for (const line of own) {
+      expect(line).toContain("초안");
+      expect(line).not.toContain("시안");
+    }
+    expect(getDictionary("en").studioVideo.workspace.guide.steps[2]!.title).not.toMatch(/preview/i);
   });
 });
 

@@ -7,8 +7,8 @@ import type { SqlRunner } from '@/lib/db/sql-runner';
 import type { StudioAssetKind, StudioAssetRole, StudioJobCreate, StudioJobKind, StudioReference } from './contracts';
 import { StudioDenied } from './access';
 import type { StudioMediaStore } from './media-store';
+import { finalPrice } from './final-price';
 import {
-  estimateVideoUsd,
   studioModel,
   type StudioImageModel,
   type StudioImageQuality,
@@ -339,11 +339,10 @@ export async function planFinal(
   ).rows[0];
   if (already) throw new StudioDenied('conflict');
   const p = job.params;
-  const secs = p.seconds ?? (draft.duration_ms ? Math.round(draft.duration_ms / 1000) : model.defaultSeconds);
   // The final counts the draft's reference video again, for its real length (docs.sunra.ai, "Draft mode"):
   // the exact length stored when the draft was planned (its `duration_ms` / 1000), not the tenths a screen shows.
-  const source = typeof p.referenceVideoSeconds === 'number' && Number.isFinite(p.referenceVideoSeconds) && p.referenceVideoSeconds > 0 ? p.referenceVideoSeconds : 0;
-  const usd = estimateVideoUsd({ resolution: '1080p', seconds: secs, referenceVideoSeconds: source });
+  // The same function prices the draft's view (`finalEstimateKrw`), so the button shows this figure.
+  const { usd, krw } = finalPrice({ params: p, draftDurationMs: draft.duration_ms, model });
   return {
     kind: 'video_final',
     model,
@@ -354,7 +353,7 @@ export async function planFinal(
     resolved: [],
     parentOutputId: draftOutputId,
     estimateUsd: usd,
-    estimateKrw: usageKrw(usd, 'video'),
+    estimateKrw: krw,
     outputs: { count: 1, kind: 'video', isDraft: false },
     stickLane: job.lane,
   };

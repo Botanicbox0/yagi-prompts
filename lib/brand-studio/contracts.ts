@@ -561,6 +561,11 @@ export interface StudioOutputView {
   durationMs?: number;
   /** True for a 480p draft that can still be finished at 1080p. */
   draft: boolean;
+  /**
+   * Present only on a `draft` of a finished clip whose model makes finals: what its 1080p final takes from
+   * the allowance, in KRW. The same figure `job.create` with `video_final` reserves (lib/brand-studio/final-price.ts).
+   */
+  finalEstimateKrw?: number;
   /** The library asset this result was saved as, if any. */
   savedAssetId: string | null;
   /** Region edit only: aligned unmasked patch PNG + initial soft mask PNG over `box` (0..1 fractions). */

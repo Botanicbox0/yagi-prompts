@@ -467,7 +467,6 @@ textarea.bs-field { resize: vertical; }
 .bs-revise-reading { display: inline-flex; align-items: center; gap: 8px; margin: 0; font-size: 12.5px; }
 .bs-revise-answer { display: grid; gap: 8px; min-width: 0; }
 .bs-revise-answer-line { margin: 0; font-size: 13.5px; line-height: 1.55; color: var(--ys-ink); word-break: keep-all; overflow-wrap: break-word; }
-.bs-revise-answer-cost { margin-left: 6px; font-family: var(--ys-mono); font-size: 12px; color: var(--ys-ink-secondary); font-variant-numeric: tabular-nums; white-space: nowrap; }
 .bs-revise-answer .bs-revise-problem { padding: 0; }
 .bs-revise-answer .bs-submit { justify-self: stretch; }
 .bs-revise-tools .bs-revise-send { margin-left: auto; border-radius: 50%; background: var(--ys-active-bg); color: var(--ys-active-fg); }
@@ -483,7 +482,8 @@ textarea.bs-field { resize: vertical; }
 .bs-version-stage { padding: 2px 8px; border-radius: var(--ys-r-pill); box-shadow: inset 0 0 0 1px var(--ys-line-strong); color: var(--ys-ink); font-size: 11.5px; font-weight: 600; line-height: 1.4; }
 .bs-version-stage[data-version-stage="final"] { background: var(--ys-active-bg); box-shadow: none; color: var(--ys-active-fg); }
 .bs-version-from { font-size: 12px; }
-.bs-version-final { justify-self: start; background: var(--ys-raised); }
+.bs-version-final { justify-self: start; gap: 8px; background: var(--ys-raised); }
+.bs-version-final-cost { padding-left: 8px; border-left: 1px solid var(--ys-line-strong); font-family: var(--ys-mono); font-size: 12px; font-weight: 600; font-variant-numeric: tabular-nums; white-space: nowrap; }
 .bs-version-finishing { display: inline-flex; align-items: center; gap: 8px; margin: 0; font-size: 12.5px; }
 /* Marks on a clip ("고칠 곳 표시"): one accent, a ring for a pin, a thin box for a drag. */
 .bs-viewer-media { position: relative; }

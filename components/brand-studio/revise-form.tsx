@@ -157,6 +157,7 @@ export function VersionPanel({
   selected,
   shown,
   copy,
+  locale,
   canFinish,
   finishing,
   onSelect,
@@ -167,6 +168,7 @@ export function VersionPanel({
   /** The result on screen (the opened one, or the one that represents the picked version). */
   shown: { job: StudioJobView; output: StudioOutputView } | null;
   copy: StudioCopy;
+  locale: StudioLocale;
   /** May start runs (the step to the final is offered only then). */
   canFinish: boolean;
   /** The step to the final was just pressed and is on its way. */
@@ -180,6 +182,9 @@ export function VersionPanel({
   const base = current?.base ?? null;
   const branch = (v: ChainVersion) => (v.base !== null && v.base !== v.version - 1 ? v.base : null);
   const final = current?.final ?? "none";
+  // What the final takes, as the server will reserve it (`finalEstimateKrw`, lib/brand-studio/final-price.ts).
+  const finalKrw = shown?.output.finalEstimateKrw;
+  const finalPrice = finalKrw !== undefined && finalKrw > 0 ? credits(copy.credits.amount, creditsOf(finalKrw), locale) : null;
   if (versions.length < 2 && !stage && base === null) return null;
   return (
     <div className="bs-revise-versions" data-version-panel>
@@ -280,7 +285,8 @@ export function VersionPanel({
             onClick={() => onFinal(shown.output)}
           >
             <StudioIcon name="spark" />
-            {r.toFinal}
+            <span>{r.toFinal}</span>
+            {finalPrice && <span className="bs-version-final-cost bs-num">{finalPrice}</span>}
           </button>
         )}
       </div>
@@ -772,7 +778,6 @@ export function ReviseFormView(props: ReviseFormViewProps) {
             <div className="bs-revise-answer" data-revise-answer={answer.mode}>
               <p className="bs-revise-answer-line" data-revise-answer-line>
                 {props.sameQuality ? `${r.talk.answer[answer.reason ?? answer.mode]} ${r.talk.sameQuality}` : r.talk.answer[answer.reason ?? answer.mode]}
-                {price && <span className="bs-revise-answer-cost bs-num">{price}</span>}
               </p>
               {answer.blocked && (
                 <p className="bs-muted bs-revise-problem" data-revise-blocked={answer.blocked}>

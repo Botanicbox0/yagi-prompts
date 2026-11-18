@@ -398,6 +398,7 @@ function ViewerContent({
             selected={selected}
             shown={item.type === "output" ? { job: item.job, output: item.output } : null}
             copy={copy}
+            locale={locale}
             canFinish={canGenerate}
             finishing={busy === "finalize"}
             onSelect={selectVersion}

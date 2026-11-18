@@ -12,7 +12,9 @@ import type {
   StudioOutputView,
   StudioReference,
 } from './contracts';
+import { finalPrice } from './final-price';
 import type { StudioMediaStore } from './media-store';
+import { studioModel } from './models';
 import { isStudioMediaKeyReferenced } from './physical-cleanup';
 import type { AssetRow, JobRow, OutputRow } from './types';
 
@@ -57,8 +59,11 @@ export function outputView(
   extra?: {
     regionPatch?: StudioOutputView['regionPatch'];
     sourceRef?: StudioOutputView['sourceRef'];
+    /** A draft that can still go to its final: what that final takes (./final-price.ts). */
+    finalEstimateKrw?: number;
   },
 ): StudioOutputView {
+  const draft = row.is_draft && Boolean(row.draft_task_id);
   return {
     id: row.id,
     jobId: row.job_id,
@@ -69,7 +74,8 @@ export function outputView(
     height: row.height,
     seconds: seconds(row.duration_ms),
     ...exactMs(row.duration_ms),
-    draft: row.is_draft && Boolean(row.draft_task_id),
+    draft,
+    ...(draft && extra?.finalEstimateKrw !== undefined ? { finalEstimateKrw: extra.finalEstimateKrw } : {}),
     savedAssetId: row.saved_asset_id,
     ...(extra?.regionPatch !== undefined ? { regionPatch: extra.regionPatch } : {}),
     ...(extra?.sourceRef !== undefined ? { sourceRef: extra.sourceRef } : {}),
@@ -86,6 +92,10 @@ function countedOutputs(row: JobRow, outputs: OutputRow[]): number {
 
 export function jobView(row: JobRow, outputs: OutputRow[], media: StudioMediaStore): StudioJobView {
   const p = row.params ?? ({} as JobRow['params']);
+  // A finished clip on a model with drafts: its drafts carry what their 1080p final takes, priced by the
+  // same function `planFinal` reserves with (lib/brand-studio/final-price.ts).
+  const model = (row.kind === 'video' || row.kind === 'video_remix') && row.status === 'succeeded' ? studioModel(row.model) : null;
+  const finishable = model && model.medium === 'video' && model.supportsDraft ? model : null;
   const closed = row.status === 'failed' || row.status === 'canceled';
   const remix = row.kind === 'video_remix';
   const regionSourceRef =
@@ -161,7 +171,11 @@ export function jobView(row: JobRow, outputs: OutputRow[], media: StudioMediaSto
           : row.kind === 'region_edit'
             ? null
             : undefined;
-        return outputView(o, media, { regionPatch, sourceRef: regionSourceRef });
+        return outputView(o, media, {
+          regionPatch,
+          sourceRef: regionSourceRef,
+          ...(finishable ? { finalEstimateKrw: finalPrice({ params: p, draftDurationMs: o.duration_ms, model: finishable }).krw } : {}),
+        });
       }),
     estimateKrw: closed ? 0 : Number(row.usage_krw ?? row.estimate_krw ?? 0),
     countedOutputs: countedOutputs(row, outputs),
