@@ -34,8 +34,16 @@ const CATALOGUE = {
 } as const;
 const API_QUALITY = ['auto', 'low', 'medium', 'high'];
 const IDS = ['gpt-image-2.6-flare', 'gpt-image-2.6-sunburst'] as const;
-/** Account-lane credits per image (1 credit = US$0.01), the same for both models. */
-const CENTS = { low: { '1K': 3, '2K': 6, '4K': 9 }, medium: { '1K': 5, '2K': 9, '4K': 15 }, high: { '1K': 6, '2K': 11, '4K': 18 } } as const;
+/**
+ * Account-lane credits per image (1 credit = US$0.01), the same for both models: `estimate_cost` on
+ * 2026-11-18 for each quality and tier, as [1:1, 4:3 | 3:4, 3:2 | 2:3, 16:9 | 9:16].
+ */
+const CENTS = {
+  low: { '1K': [3, 2, 2, 2], '2K': [6, 4, 4, 3], '4K': [9, 7, 6, 5] },
+  medium: { '1K': [5, 4, 3, 3], '2K': [9, 7, 6, 6], '4K': [15, 11, 10, 8] },
+  high: { '1K': [6, 4, 4, 3], '2K': [11, 8, 8, 7], '4K': [18, 14, 12, 10] },
+} as const;
+const SHAPES = [['1:1'], ['4:3', '3:4'], ['3:2', '2:3'], ['16:9', '9:16']] as const;
 
 const params = (patch: Partial<StudioJobParams> = {}): StudioJobParams => ({ aspect: '4:3', resolution: '2K', seconds: null, audio: null, count: 1, locale: 'ko', ...patch });
 const gpt = (id: string) => studioModel(id) as StudioImageModel;
@@ -80,16 +88,26 @@ describe('GPT Image 2.6 in the registry', () => {
     for (const model of selectableModels('image')) if (!(IDS as readonly string[]).includes(model.id)) expect((model as StudioImageModel).qualities).toBeUndefined();
   });
 
-  it('prices one image from the account lane table, the same for both, with no reference surcharge', () => {
+  it('prices one image from the account lane table by quality, tier and shape, the same for both', () => {
     for (const id of IDS)
       for (const quality of STUDIO_IMAGE_QUALITIES)
         for (const resolution of ['1K', '2K', '4K'] as const) {
-          expect(estimateImageUsd({ model: id, resolution, references: 0, quality })).toBeCloseTo(CENTS[quality][resolution] / 100, 10);
-          expect(estimateImageUsd({ model: id, resolution, references: 9, quality })).toBe(estimateImageUsd({ model: id, resolution, references: 0, quality }));
+          SHAPES.forEach((aspects, shape) => {
+            for (const aspect of aspects)
+              expect(estimateImageUsd({ model: id, resolution, references: 0, quality, aspect }), `${quality} ${resolution} ${aspect}`).toBeCloseTo(CENTS[quality][resolution][shape]! / 100, 10);
+          });
+          // No aspect given (a partial edit's own shape): the square price, the most this tier costs.
+          expect(estimateImageUsd({ model: id, resolution, references: 0, quality })).toBeCloseTo(CENTS[quality][resolution][0] / 100, 10);
         }
     // No quality: the default (medium).
     expect(estimateImageUsd({ model: IDS[0], resolution: '2K', references: 0 })).toBeCloseTo(0.09, 10);
-    expect(regionEditRun(IDS[1], 2, 'high').usd).toBeCloseTo(0.11, 10);
+  });
+
+  it('counts one credit per reference, as the two production edits of 2026-11-11 were charged', () => {
+    // Medium at 2K with the picture and one reference: quoted 9 then, charged 11.
+    expect(regionEditRun(IDS[0], 1, 'medium').usd).toBeCloseTo(0.11, 10);
+    expect(estimateImageUsd({ model: IDS[1], resolution: '4K', references: 2, quality: 'medium', aspect: '1:1' })).toBeCloseTo(0.17, 10);
+    expect(regionEditRun(IDS[1], 2, 'high').usd).toBeCloseTo(0.14, 10);
   });
 
   it('has a size for every ratio and tier it offers, matching the ratio', () => {
@@ -170,7 +188,7 @@ describe('the quality field', () => {
     it('stores the quality, prices it, refuses it for a model without qualities and defaults it', async () => {
       const high = await create({ model: IDS[0], quality: 'high' });
       expect(high).toMatchObject({ ok: true, job: { quality: 'high', model: IDS[0] } });
-      if (high.ok) expect(high.job.estimateKrw).toBe(usageKrw(0.06 * 2, 'image'));
+      if (high.ok) expect(high.job.estimateKrw).toBe(2 * usageKrw(0.06, 'image'));
       const plain = await create({ model: IDS[1] });
       expect(plain).toMatchObject({ ok: true, job: { quality: 'medium' } });
       expect(await create({ model: 'seedream-5.5', quality: 'high' })).toEqual({ ok: false, code: 'invalid' });

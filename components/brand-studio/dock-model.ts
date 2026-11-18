@@ -45,7 +45,7 @@ import {
   type ReferenceVideoFit,
   type ReferenceVideoProblem,
 } from "@/lib/brand-studio/reference-video";
-import { imageRunUsd, regionEditRun, remixRunUsd, usageKrw, videoRunUsd, regionEditModel as editModelFor } from "@/lib/brand-studio/usage-rate";
+import { imageRunKrw, regionEditRun, remixRunUsd, usageKrw, videoRunUsd, regionEditModel as editModelFor } from "@/lib/brand-studio/usage-rate";
 import type { StudioOps } from "./api";
 import { toReferences, type RefSource, type TrayItem } from "./refs";
 
@@ -579,7 +579,7 @@ export function dockEstimateKrw(draft: DockDraft, tray: readonly TrayItem[]): nu
   const clean = normalizeDraft(draft);
   const model = dockControls(clean).model;
   if (model.medium === "image")
-    return usageKrw(imageRunUsd({ model: model.id, resolution: clean.resolution, references: tray.length, count: clean.count, quality: clean.quality || null }), "image");
+    return imageRunKrw({ model: model.id, resolution: clean.resolution, references: tray.length, count: clean.count, quality: clean.quality || null, aspect: clean.aspect });
   const film = tray.find((item) => item.kind === "video");
   if (film) {
     const method = resolveUnifiedRemixMethod(clean, tray);
@@ -625,10 +625,10 @@ export function dockCredits(draft: DockDraft, tray: readonly TrayItem[]): number
  * Credits for ONE image on `model` at the bar's settings (the model menu's line). A quality the model
  * does not have reads at its default.
  */
-export function imageCreditsFor(model: StudioImageModel, draft: Pick<DockDraft, "resolution"> & Partial<Pick<DockDraft, "quality">>, references: number): number {
+export function imageCreditsFor(model: StudioImageModel, draft: Pick<DockDraft, "resolution"> & Partial<Pick<DockDraft, "quality" | "aspect">>, references: number): number {
   const resolution = (model.resolutions as readonly string[]).includes(draft.resolution) ? draft.resolution : model.defaultResolution;
   const quality = qualityOf(model, draft.quality) || null;
-  return creditsOf(usageKrw(estimateImageUsd({ model: model.id, resolution, references, quality }), "image"));
+  return creditsOf(usageKrw(estimateImageUsd({ model: model.id, resolution, references, quality, aspect: draft.aspect ?? null }), "image"));
 }
 
 /* ------------------------------------------------------------ partial edit */

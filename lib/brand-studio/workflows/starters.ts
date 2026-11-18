@@ -6,10 +6,9 @@
  */
 import { creditsOf } from '@/lib/brand-studio/credits';
 import { estimateImageUsd, estimateVideoUsd, type StudioVideoResolution } from '@/lib/brand-studio/models';
+import { usageKrw } from '@/lib/brand-studio/usage-rate';
 import type { WorkflowRecipe, WorkflowStep, WorkflowWire } from './contracts';
 
-/** Approximate KRW-per-USD studio conversion matching `usage-rate.ts` for client-safe card display. */
-const DISPLAY_KRW_PER_USD = 1450;
 
 export function estimateStepCredits(step: WorkflowStep, hasImageRef = true): number {
   if (step.onlyWhenNoImageRef && hasImageRef) return 0;
@@ -22,16 +21,12 @@ export function estimateStepCredits(step: WorkflowStep, hasImageRef = true): num
       seconds: step.seconds ?? 5,
       referenceVideoSeconds: hasVideoRef ? 5 : 0,
     });
-    return creditsOf(Math.ceil(usd * DISPLAY_KRW_PER_USD));
+    return creditsOf(usageKrw(usd, 'video'));
   }
   const refs = step.useReferenceSlots.includes('image1') || step.useHeroOutputAsRef ? 1 : 0;
-  const usd =
-    estimateImageUsd({
-      model: step.model,
-      resolution: step.resolution,
-      references: refs,
-    }) * (step.count ?? 1);
-  return creditsOf(Math.ceil(usd * DISPLAY_KRW_PER_USD));
+  // The same arithmetic a run is reserved with (usage-rate.ts): each picture in whole credits.
+  const usd = estimateImageUsd({ model: step.model, resolution: step.resolution, references: refs });
+  return creditsOf(usageKrw(usd, 'image')) * (step.count ?? 1);
 }
 
 export function estimateRecipeCredits(

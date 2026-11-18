@@ -24,8 +24,10 @@ const image = (over: Record<string, unknown> = {}) => ({
 
 describe('usage arithmetic (existing FX and margins only)', () => {
   it('converts provider USD with 1,400 KRW/USD and the brand image markup / video margin', () => {
-    expect(usageKrw(0.09, 'image')).toBe(142); // 0.09 x 1,400 x 1.12 = 141.12, rounded up
-    expect(usageKrw(1, 'video')).toBe(1554); // 1 x 1,400 x 1.11 = 1,554 exactly (no float creep upwards)
+    expect(usageKrw(0.09, 'image')).toBe(150); // 0.09 x 1,400 x 1.12 = 141.12, counted as 15 whole credits
+    expect(usageKrw(1, 'video')).toBe(1560); // 1 x 1,400 x 1.11 = 1,554, counted as 156 whole credits
+    expect(usageKrw(0.5, 'image')).toBe(790); // 784 exactly is 79 credits, not 78 (no float creep either way)
+    expect(usageKrw(1, 'image')).toBe(1570);
     expect(usageKrw(0, 'image')).toBe(0);
     expect(usageKrw(-1, 'video')).toBe(0);
   });
@@ -45,7 +47,8 @@ describe('job.create', () => {
     // A lane is free, so it starts `queued` on it rather than flashing "waiting for a slot".
     expect(created).toMatchObject({ ok: true, job: { kind: 'image', status: 'queued', expected: 2, aspect: '3:4', resolution: '2K', outputs: [], errorCode: null } });
     if (!created.ok) throw new Error();
-    expect(created.job.estimateKrw).toBe(usageKrw(0.035 * 2, 'image'));
+    // Two pictures at $0.035 list: each is billed 4 cents and counted on its own.
+    expect(created.job.estimateKrw).toBe(2 * usageKrw(0.04, 'image'));
     expect(deps.provider.tasks.size).toBe(0);
     expect((await f.sql.query('select count(*)::int as n from brand_studio_outputs where job_id = $1', [created.job.id])).rows[0]).toEqual({ n: 2 });
     expect((await f.sql.query('select lane from brand_studio_jobs where id = $1', [created.job.id])).rows[0]).toEqual({ lane: 'sunra_api' });
@@ -124,7 +127,7 @@ describe('the monthly allowance', () => {
   });
 
   it('cannot be overspent by two concurrent requests, and failed or canceled jobs give their reservation back', async () => {
-    const one = usageKrw(0.035, 'image');
+    const one = usageKrw(0.04, 'image');
     await f.sql.query('update brand_studio_allowances set monthly_cap_krw = $2 where organization_id = $1', [f.orgId, one + Math.floor(one / 2)]);
     const results = await Promise.all([
       createStudioJob(deps, viewerOf(f.ids.owner), image({ count: 1 })),

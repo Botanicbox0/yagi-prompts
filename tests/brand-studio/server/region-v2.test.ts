@@ -12,6 +12,8 @@ import { loadStudioState } from '@/lib/brand-studio/service';
 import type { JobRow, OutputRow } from '@/lib/brand-studio/types';
 import { regionEditRun, usageKrw } from '@/lib/brand-studio/usage-rate';
 import { brandStudioRegionV2Open } from '@/lib/flags';
+import { creditsOf } from '@/lib/brand-studio/credits';
+import { regionCredits } from '@/components/brand-studio/dock-model';
 import { fakeIntel, requestId, seedImageAsset, studioDeps, studioFixture, viewerOf, type StudioFixture } from './helpers';
 
 /**
@@ -33,8 +35,9 @@ describe('BRAND_STUDIO_REGION_V2', () => {
     expect(v2.model.id).toBe('seedream-5.5');
     expect(v2.resolution).toBe('2K');
     // $0.035 at 2K + $0.008 for the picture itself.
-    expect(v2.usd).toBeCloseTo(0.043, 10);
-    expect(regionEditRun('gpt-image-2.6-sunburst', 2, 'high', true).usd).toBeCloseTo(0.059, 10);
+    // $0.043 list (2K + the picture as one input image), billed 5 cents.
+    expect(v2.usd).toBeCloseTo(0.05, 10);
+    expect(regionEditRun('gpt-image-2.6-sunburst', 2, 'high', true).usd).toBeCloseTo(0.06, 10);
     // Off: unchanged.
     expect(regionEditRun('nano-banana-pro', 0).model.id).toBe('nano-banana-pro');
     expect(regionEditRun('seedream-5.5', 0).model.id).toBe('nano-banana-pro');
@@ -115,7 +118,9 @@ describe('region edit v2 on the server', () => {
       expect(row.model).toBe('seedream-5.5');
       expect(row.params.regionWindow).toBe(true);
       expect(row.params).not.toHaveProperty('quality');
-      expect(Number(row.estimate_krw)).toBe(usageKrw(0.043, 'image'));
+      expect(Number(row.estimate_krw)).toBe(usageKrw(0.05, 'image'));
+      // The one figure every screen shows for this edit (viewer, layer editor, canvas fill).
+      expect(creditsOf(Number(row.estimate_krw))).toBe(regionCredits(asked.model, 0, 'quality' in asked ? (asked.quality ?? null) : null, true));
     }
   });
 

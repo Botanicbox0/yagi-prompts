@@ -20,7 +20,7 @@ import {
 import { blueprintFit, normalizeShots, referenceVideoFit, remakeSeconds } from './reference-video';
 import { readyAsset, readyOutput } from './repo';
 import type { JobRow, StudioJobParams } from './types';
-import { imageRunUsd, regionEditRun, remixRunUsd, usageKrw, videoRunUsd } from './usage-rate';
+import { imageRunKrw, imageRunUsd, regionEditRun, remixRunUsd, tenthsOfSeconds, usageKrw, videoRunUsd } from './usage-rate';
 
 export interface ResolvedRef {
   /** Position in the tray (1-based, across kinds). */
@@ -190,7 +190,8 @@ export async function planJob(
     if (resolved.some((r) => r.kind !== 'image' || r.frame) || resolved.length > model.maxReferences) throw new StudioDenied('invalid');
     if (input.background !== undefined && !model.supportsTransparentBackground) throw new StudioDenied('invalid');
     const quality = qualityFor(model, input.quality);
-    const usd = imageRunUsd({ model: model.id, resolution: input.resolution, references: resolved.length, count: input.count, quality });
+    const run = { model: model.id, resolution: input.resolution, references: resolved.length, count: input.count, quality, aspect: input.aspect };
+    const usd = imageRunUsd(run);
     return {
       ...shared, kind: 'image', model,
       ...(reviewed ? { enhance: reviewed.enhance } : {}),
@@ -203,7 +204,7 @@ export async function planJob(
         ...(input.background ? { background: input.background } : {}),
         ...reviewed?.params,
       },
-      estimateUsd: usd, estimateKrw: usageKrw(usd, 'image'),
+      estimateUsd: usd, estimateKrw: imageRunKrw(run),
       outputs: { count: input.count, kind: 'image', isDraft: false },
     };
   }
@@ -332,7 +333,8 @@ export async function planFinal(
   if (already) throw new StudioDenied('conflict');
   const p = job.params;
   const secs = p.seconds ?? (draft.duration_ms ? Math.round(draft.duration_ms / 1000) : model.defaultSeconds);
-  const usd = estimateVideoUsd({ resolution: '1080p', seconds: secs, referenceVideoSeconds: Math.round(p.referenceVideoSeconds ?? 0) });
+  // The final counts the draft's reference video again, for its real length (docs.sunra.ai, "Draft mode").
+  const usd = estimateVideoUsd({ resolution: '1080p', seconds: secs, referenceVideoSeconds: tenthsOfSeconds(p.referenceVideoSeconds ?? 0) ?? 0 });
   return {
     kind: 'video_final',
     model,

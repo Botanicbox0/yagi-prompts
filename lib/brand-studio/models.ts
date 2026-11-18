@@ -142,14 +142,32 @@ const GPT_IMAGE_PIXELS = {
 } as const satisfies Record<string, Record<(typeof GPT_IMAGE_ASPECTS)[number], readonly [number, number]>>;
 
 /**
- * GPT Image 2.6 price per image, identical for Flare and Sunburst: the account lane's `estimate_cost`
- * (2026-11-11) in account credits, 1 credit = US$0.01 of list price. No reference surcharge.
+ * GPT Image 2.6 price per image in account credits (1 credit = US$0.01), identical for Flare and
+ * Sunburst: the account lane's `estimate_cost` for every quality, tier and aspect ratio (2026-11-18).
+ * The model is billed by tokens, and a square picture takes the most: each row is
+ * [1:1, 4:3 or 3:4, 3:2 or 2:3, 16:9 or 9:16].
+ *
+ * Unlike the other models this one cannot be quoted to the credit before it runs: the prompt's own
+ * tokens and each reference's size are billed too. A reference is counted as one credit, which the
+ * quotes show is what one adds or one more than it adds; a very long prompt can add one credit.
  */
-const GPT_IMAGE_26_CENTS: Readonly<Record<StudioImageQuality, Readonly<Record<string, number>>>> = {
-  low: { '1K': 3, '2K': 6, '4K': 9 },
-  medium: { '1K': 5, '2K': 9, '4K': 15 },
-  high: { '1K': 6, '2K': 11, '4K': 18 },
+const GPT_IMAGE_26_CENTS: Readonly<Record<StudioImageQuality, Readonly<Record<string, readonly [number, number, number, number]>>>> = {
+  low: { '1K': [3, 2, 2, 2], '2K': [6, 4, 4, 3], '4K': [9, 7, 6, 5] },
+  medium: { '1K': [5, 4, 3, 3], '2K': [9, 7, 6, 6], '4K': [15, 11, 10, 8] },
+  high: { '1K': [6, 4, 4, 3], '2K': [11, 8, 8, 7], '4K': [18, 14, 12, 10] },
 };
+const GPT_IMAGE_REFERENCE_CENTS = 1;
+
+/** Which column of `GPT_IMAGE_26_CENTS` an aspect ratio reads; an unknown or absent one reads as square (the most). */
+function gptImageShape(aspect: string | null | undefined): 0 | 1 | 2 | 3 {
+  const m = /^(\d+(?:\.\d+)?):(\d+(?:\.\d+)?)$/.exec(aspect ?? '');
+  if (!m) return 0;
+  const a = Number(m[1]);
+  const b = Number(m[2]);
+  if (!(a > 0) || !(b > 0)) return 0;
+  const long = Math.max(a, b) / Math.min(a, b);
+  return long < 1.15 ? 0 : long < 1.42 ? 1 : long < 1.64 ? 2 : 3;
+}
 
 export const STUDIO_MODELS = [
   {
@@ -347,7 +365,21 @@ export function pixelSize(model: StudioImageModel, resolution: string, aspect: s
 
 /* ------------------------------------------------------------------ cost */
 
-/** Provider list price for one image, in USD (Sunra price cards, 2026-11-10). */
+/**
+ * What the provider bills for a price of `usd`. The account lane charges whole credits and one credit is
+ * one US cent, so every result is rounded up to the cent: a $0.043 edit is 5 credits, a $0.134 picture 14
+ * (Sunra usage history against production jobs, 2026-11-18). Estimates use this unit so the figure a
+ * screen shows before a press is the one a finished run reports.
+ */
+export function billedUsd(usd: number): number {
+  if (!Number.isFinite(usd) || usd <= 0) return 0;
+  return Math.ceil(usd * 100 - 1e-6) / 100;
+}
+
+/**
+ * What one image is billed, in USD: the Sunra price card (2026-11-14) rounded up to the cent (`billedUsd`).
+ * `seedream-5-flash` has no account lane and keeps its exact list price.
+ */
 export function estimateImageUsd(input: {
   model: StudioModelId | string;
   resolution: string;
@@ -355,6 +387,8 @@ export function estimateImageUsd(input: {
   references: number;
   /** Models with `qualities` only; their default when absent. */
   quality?: string | null;
+  /** Models billed by shape only (GPT Image); read as square, the most, when absent. */
+  aspect?: string | null;
 }): number {
   const refs = Math.max(0, input.references);
   const modelId = normalizeLegacyStudioModelId(input.model);
@@ -362,23 +396,23 @@ export function estimateImageUsd(input: {
     case 'seedream-5.5': {
       // Sunra & ModelArk price cards (2026-11-14): $0.020 at 1K/1.5K or $0.035 at 2K, plus $0.008 per input image.
       const base = input.resolution === '1K' || input.resolution === '1.5K' ? 0.02 : 0.035;
-      return Math.round((base + refs * 0.008) * 1000) / 1000;
+      return billedUsd(Math.round((base + refs * 0.008) * 1000) / 1000);
     }
     case 'seedream-5-flash':
       return 0.027;
     case 'nano-banana-pro':
-      return input.resolution === '4K' ? 0.24 : 0.134;
+      return billedUsd(input.resolution === '4K' ? 0.24 : 0.134);
     case 'gpt-image-2.6-flare':
     case 'gpt-image-2.6-sunburst': {
-      // The account lane's per-image credits (1 credit = US$0.01), used for both lanes. The API lane
-      // settles post-calculated ("$1 x upstream units", a $4.00 hold per request): the first live API
-      // run must be compared against this estimate before it is trusted.
+      // The account lane's per-image credits, used for both lanes. The API lane settles by tokens after the
+      // run and has come in lower ($0.044 to $0.067 for these pictures on 2026-11-17).
       const quality = (STUDIO_IMAGE_QUALITIES as readonly string[]).includes(input.quality ?? '') ? (input.quality as StudioImageQuality) : 'medium';
       const table = GPT_IMAGE_26_CENTS[quality];
-      return (table[input.resolution] ?? table['1K']!) / 100;
+      const cents = (table[input.resolution] ?? table['1K']!)[gptImageShape(input.aspect)];
+      return (cents + refs * GPT_IMAGE_REFERENCE_CENTS) / 100;
     }
     default:
-      return 0.134;
+      return billedUsd(0.134);
   }
 }
 
@@ -395,13 +429,17 @@ const SEEDANCE_USD_PER_M: Record<StudioVideoResolution, readonly [number, number
   '720p': [10.7, 6.4],
   '1080p': [11.7, 7.0],
 };
-/** Settlement is by actual usage and has come in above the plain formula; reserve with headroom. */
-const SEEDANCE_HEADROOM = 1.25;
 
 /**
- * Estimated provider cost of one Seedance 2.5 run, in USD.
- * tokens = pixels x fps x seconds / 1024. With a reference video the input seconds are billed too
- * (at least ceil(output x 2/3)), at the lower with-video rate.
+ * What one Seedance 2.5 run is billed, in USD (docs.sunra.ai/platform/pricing, "Seedance video token
+ * pricing"), rounded up to the cent like every account-lane charge:
+ *
+ *   frames = 24 x output seconds + 1, plus 24 x billed input seconds with a reference video
+ *   tokens = floor(frames x width x height / 1024)
+ *
+ * The input is billed for its own length, at least ceil(output x 2/3) seconds, and a run that carries a
+ * video takes the lower rate for the whole request. No allowance on top: this is the provider's own
+ * estimate to the credit (60 settings compared on 2026-11-18, tests/brand-studio/server/quote-parity).
  */
 export function estimateVideoUsd(input: {
   resolution: StudioVideoResolution;
@@ -413,7 +451,8 @@ export function estimateVideoUsd(input: {
   const seconds = Math.max(1, input.seconds);
   const withVideo = input.referenceVideoSeconds > 0;
   const billedInput = withVideo ? Math.max(input.referenceVideoSeconds, Math.ceil((seconds * 2) / 3)) : 0;
-  const tokens = (SEEDANCE_PIXELS[input.resolution] * SEEDANCE_FPS * (seconds + billedInput)) / 1024;
+  const frames = SEEDANCE_FPS * seconds + 1 + SEEDANCE_FPS * billedInput;
+  const tokens = Math.floor((SEEDANCE_PIXELS[input.resolution] * frames) / 1024);
   const rate = SEEDANCE_USD_PER_M[input.resolution][withVideo ? 1 : 0];
-  return (tokens / 1_000_000) * rate * SEEDANCE_HEADROOM;
+  return billedUsd((tokens / 1_000_000) * rate);
 }

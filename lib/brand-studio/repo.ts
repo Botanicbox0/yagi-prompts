@@ -69,6 +69,13 @@ export function outputView(
   };
 }
 
+/** Results a job's usage covers: every ready one (deleted since or not) once settled, the planned ones before. */
+function countedOutputs(row: JobRow, outputs: OutputRow[]): number {
+  const mine = outputs.filter((o) => o.job_id === row.id);
+  const ready = mine.filter((o) => o.status === 'ready').length;
+  return row.usage_krw != null && ready > 0 ? ready : Math.max(1, mine.length);
+}
+
 export function jobView(row: JobRow, outputs: OutputRow[], media: StudioMediaStore): StudioJobView {
   const p = row.params ?? ({} as JobRow['params']);
   const closed = row.status === 'failed' || row.status === 'canceled';
@@ -148,6 +155,7 @@ export function jobView(row: JobRow, outputs: OutputRow[], media: StudioMediaSto
         return outputView(o, media, { regionPatch, sourceRef: regionSourceRef });
       }),
     estimateKrw: closed ? 0 : Number(row.usage_krw ?? row.estimate_krw ?? 0),
+    countedOutputs: countedOutputs(row, outputs),
     errorCode:
       row.status === 'failed'
         ? row.work?.region?.misaligned

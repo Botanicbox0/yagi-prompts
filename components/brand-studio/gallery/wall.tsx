@@ -535,7 +535,7 @@ function ResultTile(props: WallProps & Badges & Picking & { entry: Extract<Entry
   const image = output.kind === "image";
   const sized = Boolean(output.width && output.height);
   const model = studioModelOrLegacy(job.model);
-  const usage = job.estimateKrw > 0 && job.outputs.length > 0 ? Math.ceil(creditsOf(job.estimateKrw) / Math.max(1, job.outputs.length)) : 0;
+  const usage = job.estimateKrw > 0 && job.outputs.length > 0 ? Math.ceil(creditsOf(job.estimateKrw) / Math.max(1, job.countedOutputs ?? job.outputs.length)) : 0;
   const open = () => onAction("open", entry.item);
 
   const close = (trigger: HTMLButtonElement | null) => () => {

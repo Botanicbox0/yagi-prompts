@@ -2,8 +2,9 @@
  * What a run takes from the monthly allowance (docs/BRAND-STUDIO-V2.md §9), as one implementation the
  * server reserves with (./plan.ts) and the prompt dock shows before a press ("약 ₩283").
  *
- * Usage (KRW) = provider cost (USD) x the existing exchange rate x (1 + the existing brand margin).
- * The three factors are the existing constants `COST_ASSUMPTIONS.krwPerUsd` (lib/twings/cost-model.ts),
+ * Usage (KRW) = provider cost (USD) x the existing exchange rate x (1 + the existing brand margin),
+ * rounded up to a whole credit per result. The provider cost is the billed amount (`billedUsd` in
+ * models.ts: the list price rounded up to the cent). The three factors are the existing constants `COST_ASSUMPTIONS.krwPerUsd` (lib/twings/cost-model.ts),
  * `BRAND_IMAGE_MARKUP.target` and `BRAND_VIDEO_MARGIN.target` (lib/brands/production/pricing.ts). Those
  * modules pull in env-reading code, so the values are restated here and
  * tests/brand-studio/server/estimate.test.ts fails the moment they drift apart. No new price lives here.
@@ -26,6 +27,7 @@ import {
   type StudioVideoResolution,
 } from './models';
 import type { StudioRemixMethod } from './contracts';
+import { STUDIO_CREDIT_KRW } from './credits';
 
 export const STUDIO_USAGE_FACTORS = {
   krwPerUsd: 1400,
@@ -33,11 +35,28 @@ export const STUDIO_USAGE_FACTORS = {
   videoMargin: 0.11,
 } as const;
 
+/**
+ * Usage of one result, in KRW. Counted in whole credits (rounded up), the unit every screen shows: a run
+ * that reads "8 credits" takes 80 KRW of the allowance, so the amounts on the results add up to what the
+ * balance lost. Call it once per result (one picture, one video), never on a sum of several.
+ */
 export function usageKrw(usd: number, medium: StudioMedium): number {
   if (!Number.isFinite(usd) || usd <= 0) return 0;
   const f = STUDIO_USAGE_FACTORS;
   const factor = medium === 'image' ? f.imageMarkup : 1 + f.videoMargin;
-  return Math.ceil(usd * f.krwPerUsd * factor - 1e-9);
+  return Math.ceil((usd * f.krwPerUsd * factor) / STUDIO_CREDIT_KRW - 1e-9) * STUDIO_CREDIT_KRW;
+}
+
+/**
+ * What a finished run takes: the amount it was quoted and reserved at, for the results that came out.
+ * The figure on the button is the figure taken, whichever lane ran it and whatever the provider settled
+ * at afterwards; the provider's charge is recorded as cost and nothing else (docs/BRAND-STUDIO-V2.md §9).
+ * A result that failed takes nothing, so two pictures out of four take half the quote.
+ */
+export function settledUsageKrw(estimateKrw: number, planned: number, ready: number): number {
+  if (!Number.isFinite(estimateKrw) || estimateKrw <= 0 || ready <= 0) return 0;
+  const slots = Math.max(1, planned);
+  return Math.round((estimateKrw * Math.min(ready, slots)) / slots);
 }
 
 /** Seconds in tenths, the precision a screen sees (`StudioAssetView.seconds`), so both sides round alike. */
@@ -45,8 +64,26 @@ export function tenthsOfSeconds(seconds: number | null): number | null {
   return seconds === null || !Number.isFinite(seconds) ? null : Math.round(seconds * 10) / 10;
 }
 
-export function imageRunUsd(input: { model: string; resolution: string; references: number; count: number; quality?: string | null }): number {
-  return estimateImageUsd({ model: input.model, resolution: input.resolution, references: input.references, quality: input.quality ?? null }) * input.count;
+export interface ImageRunInput {
+  model: string;
+  resolution: string;
+  references: number;
+  count: number;
+  quality?: string | null;
+  /** Only read by the models billed by shape (GPT Image). */
+  aspect?: string | null;
+}
+
+export function imageRunUsd(input: ImageRunInput): number {
+  return (
+    estimateImageUsd({ model: input.model, resolution: input.resolution, references: input.references, quality: input.quality ?? null, aspect: input.aspect ?? null }) *
+    input.count
+  );
+}
+
+/** Usage of a picture run, in KRW: each picture counted on its own (`usageKrw`), times the count. */
+export function imageRunKrw(input: ImageRunInput): number {
+  return usageKrw(imageRunUsd({ ...input, count: 1 }), 'image') * input.count;
 }
 
 /**
@@ -99,7 +136,8 @@ export function remixRunUsd(input: {
   const usd = estimateVideoUsd({
     resolution: billedResolution(input.resolution),
     seconds: outputSeconds,
-    referenceVideoSeconds: Math.max(1, Math.round(ref ?? outputSeconds)),
+    // The input is billed for its real length, not a whole number of seconds (a 14.1 s source is 14.1 s).
+    referenceVideoSeconds: Math.max(1, ref ?? outputSeconds),
   });
   return { usd, outputSeconds };
 }
