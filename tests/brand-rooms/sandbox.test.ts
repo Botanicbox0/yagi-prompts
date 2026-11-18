@@ -632,3 +632,88 @@ describe('deliverables and share links: the flag and the control', () => {
     expect(bypassConsumerLocale(`/s/${R_TOKEN}`)).toBe(true);
   });
 });
+
+/* ------------------------------------------- the room pulse (docs/BRAND-ROOMS-FEEDBACK.md §11, review stage 2) */
+
+const pulseRoute = await import('@/app/api/brand-rooms/pulse/route');
+const roomPulse = await import('@/lib/brand-rooms/pulse');
+const { NextRequest: PulseRequest } = await import('next/server');
+const pGet = (fx: StudioFixture, projectId = fx.projectId) =>
+  pulseRoute.GET(new PulseRequest(`http://localhost:3000/api/brand-rooms/pulse?organizationId=${fx.orgId}&projectId=${projectId}`));
+
+describe.each(cases)('Morphic hardline, the room pulse: organization $label', ({ orgId, orgName, policy }) => {
+  it('answers every member, the share link and the team with a 404 that names nothing', async () => {
+    vi.stubEnv('BRAND_ROOMS', 'on');
+    const fx = await roomFixture({ orgId, orgName, policy });
+    const t = await seedDeliverable(fx);
+    for (const member of [fx.ids.owner, fx.ids.editor, fx.ids.viewer, fx.ids.guest]) {
+      mocks.viewer = viewerOf(member);
+      const response = await pGet(fx);
+      expect(response.status, `pulse as ${member}`).toBe(404);
+      expect(await response.json()).toEqual({ ok: false, code: 'not_found' });
+    }
+    mocks.viewer = null;
+    const shared = await sPublic({ op: 'pulse', token: R_TOKEN });
+    expect(shared.status).toBe(404);
+    expect(await shared.json()).toEqual({ ok: false, code: 'not_found' });
+    const admin = { ...viewerOf(fx.ids.admin), isAdmin: true };
+    expect(await roomPulse.staffRoomPulse({ sql: fx.sql }, admin, { organizationId: fx.orgId, projectId: fx.projectId })).toEqual({ ok: false, code: 'not_found' });
+    expect(await roomPulse.staffRoomPulse({ sql: fx.sql }, admin, { organizationId: fx.orgId, reviewId: t.reviewId })).toEqual({ ok: false, code: 'not_found' });
+  });
+});
+
+describe('the room pulse: the flag and the control', () => {
+  it('is a 404 for everyone while the flag is off', async () => {
+    vi.stubEnv('BRAND_ROOMS', 'off');
+    const fx = await roomFixture();
+    const t = await seedDeliverable(fx);
+    mocks.viewer = viewerOf(fx.ids.owner);
+    expect((await pGet(fx)).status).toBe(404);
+    mocks.viewer = null;
+    expect((await sPublic({ op: 'pulse', token: R_TOKEN })).status).toBe(404);
+    const admin = { ...viewerOf(fx.ids.admin), isAdmin: true };
+    expect(await roomPulse.staffRoomPulse({ sql: fx.sql }, admin, { organizationId: fx.orgId, reviewId: t.reviewId })).toEqual({ ok: false, code: 'rooms_closed' });
+  });
+
+  it('opens for an ordinary organization with the flag on, so the 404s above come from the gate', async () => {
+    vi.stubEnv('BRAND_ROOMS', 'on');
+    const fx = await roomFixture();
+    const t = await seedDeliverable(fx);
+    for (const member of [fx.ids.owner, fx.ids.editor, fx.ids.viewer, fx.ids.guest]) {
+      mocks.viewer = viewerOf(member);
+      const response = await pGet(fx);
+      expect(response.status).toBe(200);
+      const body = await response.json();
+      expect(Object.keys(body.stamp).sort()).toEqual(['chat', 'reviews', 'shares', 'storyboards']);
+      // A stamp is a short hash: no id, no count, no text of the room.
+      expect(JSON.stringify(body)).not.toMatch(/Logo smaller|Main film|[0-9a-f]{8}-[0-9a-f]{4}-/i);
+    }
+    mocks.viewer = viewerOf(fx.ids.outsider);
+    expect((await pGet(fx)).status).toBe(404);
+    mocks.viewer = null;
+    expect((await pGet(fx)).status).toBe(401);
+    const shared = await sPublic({ op: 'pulse', token: R_TOKEN });
+    expect(shared.status).toBe(200);
+    expect(Object.keys((await shared.json()).stamp)).toEqual(['item']);
+    const admin = { ...viewerOf(fx.ids.admin), isAdmin: true };
+    expect(await roomPulse.staffRoomPulse({ sql: fx.sql }, admin, { organizationId: fx.orgId, reviewId: t.reviewId })).toMatchObject({ ok: true });
+  });
+
+  it('keeps its own bucket on the share door: a page asking every 5 seconds is never slowed down', async () => {
+    vi.stubEnv('BRAND_ROOMS', 'on');
+    const fx = await roomFixture();
+    await seedDeliverable(fx);
+    mocks.viewer = null;
+    for (let i = 0; i < 12; i += 1) expect((await sPublic({ op: 'pulse', token: R_TOKEN })).status).toBe(200);
+    // The other buckets are untouched by it.
+    expect((await sPublic({ op: 'view', token: R_TOKEN })).status).toBe(200);
+  });
+
+  it('is reachable on the brand host as a read, and the team door only on the admin host', () => {
+    expect(brandRouteAllowed('/api/brand-rooms/pulse', 'GET')).toBe(true);
+    expect(brandRouteAllowed('/api/brand-rooms/pulse', 'POST')).toBe(false);
+    const teamDoor = '/admin/brand-rooms/0b6a4bd6-6f43-4b5a-9f6c-2a1f0e7f6c11/pulse';
+    expect(adminRouteAllowed(teamDoor, 'GET')).toBe(true);
+    expect(brandRouteAllowed(teamDoor, 'GET')).toBe(false);
+  });
+});

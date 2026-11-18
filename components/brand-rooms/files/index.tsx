@@ -59,18 +59,22 @@ export function ProjectFilesTab({
   initialReview,
 }: ProjectFilesTabProps) {
   const [category, setCategory] = useState<RoomFilesCategory>(initialCategory);
-  const showBrief = category === "all" || category === "brief";
-  const showStoryboard = category === "all" || category === "storyboard";
+  // A draft open in review mode takes the tab: the filter, the brief and the storyboards step aside
+  // until "시안 목록" closes it (docs/BRAND-ROOMS-FEEDBACK.md §11).
+  const [reviewing, setReviewing] = useState(Boolean(initialReview?.reviewId));
+  const showBrief = !reviewing && (category === "all" || category === "brief");
+  const showStoryboard = !reviewing && (category === "all" || category === "storyboard");
   const showDrafts = category === "all" || category === "drafts";
   const showFinals = category === "finals";
 
   return (
-    <div className="brr-files" data-room-files data-room-files-category={category}>
+    <div className="brr-files" data-room-files data-room-files-category={category} data-room-files-reviewing={reviewing ? "" : undefined}>
       <nav
+        hidden={reviewing}
         className="brr-files-filter"
         aria-label={filesCopy.filterLabel}
         style={{
-          display: "flex",
+          display: reviewing ? "none" : "flex",
           flexWrap: "wrap",
           gap: 6,
           marginBottom: 20,
@@ -186,6 +190,7 @@ export function ProjectFilesTab({
             canEdit={canEdit}
             canTalk={canTalk}
             initial={initialReview}
+            onReviewModeChange={setReviewing}
           />
         </section>
       ) : null}
@@ -204,6 +209,7 @@ export function ProjectFilesTab({
             canTalk={canTalk}
             filterStatus="approved"
             finalsEmptyText={filesCopy.finalsEmpty}
+            onReviewModeChange={setReviewing}
           />
         </section>
       ) : null}

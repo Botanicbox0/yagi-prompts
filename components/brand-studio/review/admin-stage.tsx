@@ -3,13 +3,17 @@
  * The team's review stage (`/admin/brand-studio/reviews/[id]` and a project's desk
  * `/admin/brand-rooms/<org>/<project>?review=<id>`): the same stage the brand sees, wired to the registered
  * admin operations through `/admin/do` (docs/BRAND-STUDIO-V3.md §7). After a write the server page
- * re-renders with the new notes (`router.refresh()`), and it re-reads on its own every 15 seconds while the
- * tab is visible and the composer holds nothing unsent (docs/BRAND-ROOMS-FEEDBACK.md §4, ./auto-refresh.ts).
+ * re-renders with the new notes (`router.refresh()`). Notes and versions from others arrive through the
+ * team's pulse (`/admin/brand-rooms/<org>/pulse`, every 5 seconds while the tab is on screen): the page
+ * re-reads only when the stack's stamp moved, and waits while the composer holds unsent work. Where that
+ * door answers "not here" (rooms off), the 15-second quiet re-read of ./auto-refresh.ts takes over.
  */
 import { useRouter } from "next/navigation";
-import { useCallback, useMemo, useRef } from "react";
+import { useCallback, useMemo, useRef, useState } from "react";
 import type { ReviewComment, ReviewItem, ReviewVersion } from "@/lib/brand-studio/review-contracts";
 import { roomDeskPath } from "@/lib/brand-rooms/message-contracts";
+import type { RoomPulseStamp } from "@/lib/brand-rooms/pulse";
+import { readPulse, staffPulseUrl, usePulse } from "@/components/brand-rooms/pulse";
 import { useQuietRefresh } from "./auto-refresh";
 import { ReviewStage, type ReviewActionResult, type ReviewActions, type ReviewCopy, type ReviewTeamCopy } from "./stage";
 
@@ -95,13 +99,38 @@ export function AdminReviewStage({
   }, [review.id, router, pathFor]);
   const team = useMemo(() => ({ copy: teamCopy }), [teamCopy]);
 
-  // New notes from the brand and guests show up without a reload; never while something is being written.
-  const holding = useRef(false);
-  const onComposingChange = useCallback((value: boolean) => {
-    holding.current = value;
-  }, []);
+  // New notes from the brand and guests show up without a reload, never on top of something being written:
+  // the pulse (docs/BRAND-ROOMS-FEEDBACK.md §11) says when the stack's notes or versions moved; while the
+  // composer holds unsent work the re-read waits and runs the moment it lets go.
   const refresh = useCallback(() => router.refresh(), [router]);
-  const paused = useCallback(() => holding.current, []);
+  const holding = useRef(false);
+  const pending = useRef(false);
+  const onComposingChange = useCallback(
+    (value: boolean) => {
+      holding.current = value;
+      if (!value && pending.current) {
+        pending.current = false;
+        refresh();
+      }
+    },
+    [refresh],
+  );
+  const organizationId = desk?.organizationId ?? review.organizationId;
+  const scope = useMemo(() => (deskProject ? { projectId: deskProject } : { reviewId: review.id }), [deskProject, review.id]);
+  const [pulseGone, setPulseGone] = useState(false);
+  const readStamp = useCallback(() => readPulse<RoomPulseStamp & Record<string, string | null>>(staffPulseUrl(organizationId, scope)), [organizationId, scope]);
+  const onPulse = useCallback(
+    (changed: string[]) => {
+      if (!changed.includes("reviews")) return;
+      if (holding.current) pending.current = true;
+      else refresh();
+    },
+    [refresh],
+  );
+  const onPulseGone = useCallback(() => setPulseGone(true), []);
+  usePulse(organizationId && !pulseGone ? `${organizationId}:${"projectId" in scope ? scope.projectId : scope.reviewId}` : null, readStamp, onPulse, onPulseGone);
+  // Where the pulse door is not there (rooms switched off: a studio review page), the old quiet re-read.
+  const paused = useCallback(() => holding.current || !pulseGone, [pulseGone]);
   useQuietRefresh(refresh, paused);
 
   return (
