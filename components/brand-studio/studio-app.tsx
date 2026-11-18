@@ -208,7 +208,15 @@ export function StudioApp({ organizationId, locale, copy, mode, libraryCopy, lay
   // The project new pictures go into. Null (no project) is the default and an ordinary state.
   const [projectChoice, setProjectChoice] = useState<string | null>(null);
   const studio = useStudio({ organizationId, initialState, api, projectId: mode === "image" ? projectChoice : null });
-  const dock = useDock({ studio, copy, organizationId, initialMedium: mode, mode });
+  const dock = useDock({
+    studio,
+    copy,
+    organizationId,
+    initialMedium: mode,
+    mode,
+    // The workspace home's hand-off (prefill.ts): only where this member has an open prompt bar.
+    prefill: { ready: Boolean(studio.store.state), canCreate: Boolean(studio.store.state?.canCreate) && (studio.store.state?.allowance.capKrw ?? 0) > 0 },
+  });
   const library = useStudioLibrary(organizationId);
   const state = studio.store.state;
   // Every run, including the internal strips of "빈 곳 채우기": only the layer editor reads this list.

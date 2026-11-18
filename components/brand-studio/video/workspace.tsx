@@ -208,7 +208,15 @@ export function VideoStudioWorkspace({
   const wc = videoCopy.workspace;
   const clientApi = useMemo(() => api ?? createStudioApi({ organizationId }), [api, organizationId]);
   const studio = useStudio({ organizationId, initialState, api: clientApi });
-  const dock = useDock({ studio, copy, organizationId, initialMedium: "video", mode: "video" });
+  const dock = useDock({
+    studio,
+    copy,
+    organizationId,
+    initialMedium: "video",
+    mode: "video",
+    // The workspace home's hand-off (prefill.ts): only where this member has an open prompt bar.
+    prefill: { ready: Boolean(studio.store.state), canCreate: Boolean(studio.store.state?.canCreate) && (studio.store.state?.allowance.capKrw ?? 0) > 0 },
+  });
   const library = useStudioLibrary(organizationId);
   const state = studio.store.state;
   // Never the internal strips of "빈 곳 채우기" (store.ts `listedJobs`).

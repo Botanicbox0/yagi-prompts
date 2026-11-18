@@ -12,7 +12,8 @@ import { createStudioMediaStore } from '@/lib/brand-studio/media-store';
 import { jobsOf, viewsOf } from '@/lib/brand-studio/repo';
 import { allowanceView, loadAllowance } from '@/lib/brand-studio/usage';
 import { featureDenied, isSandboxedClientOrganization } from '@/lib/brands/features';
-import { brandHomeVisible, homeActions, homeResults } from '@/lib/brands/workspace/home';
+import { brandHomeVisible, homeDoorPictures, homeLayout, homeResults } from '@/lib/brands/workspace/home';
+import { loadBrandWorkspace } from '@/lib/brands/workspace/service';
 import { scopedHref } from '@/lib/brands/workspace/selection';
 import { brandRoomsOpen, brandStudioV2Open } from '@/lib/flags';
 
@@ -63,33 +64,49 @@ export default async function BrandWorkspaceHome({
   const access = selectedAccess(choice, Object.values(projectOrganizations).filter((o) => o === choice.id));
   const rooms = roomsOpenFor(choice, brandRoomsOpen());
   const canRequest = !access.staff && access.canRequest;
-  const actions = homeActions({ choice, flagOn: true, canRequest, rooms });
+  const layout = homeLayout({ choice, flagOn: true, canRequest, rooms });
+  if (!layout) notFound();
   const media = createStudioMediaStore();
 
   // Every read is scoped to the brand the guard above resolved for this account.
-  const [allowance, jobs, summary] = await Promise.all([
+  const [allowance, jobs, summary, workspace] = await Promise.all([
     loadAllowance(sql, choice.id, studioEnv()).catch(() => null),
     jobsOf(sql, choice.id, RECENT_JOBS)
       .then((rows) => viewsOf(sql, rows, media))
       .catch(() => []),
     rooms ? loadRoomSummary({ sql }, viewer, choice.id).catch(() => null) : Promise.resolve(null),
+    loadBrandWorkspace({ sql, verifiedEmail }, viewer, { organizationId: choice.id }).catch(() => ({ organizations: [], projects: [] })),
   ]);
   const reviews: RoomAlertItem[] = summary && summary.ok ? (summary.alerts ?? []) : [];
+  const activeProjects = workspace.projects.filter((p) => p.status === 'active').length;
   const studioLocale = locale === 'en' ? 'en' : 'ko';
+  const dock = dict.brandStudio.dock;
 
   return (
     <WorkspaceHome
       organizationId={choice.id}
       organizationName={choice.name}
       locale={studioLocale}
-      actions={actions}
-      grouped={rooms}
+      layout={layout}
       allowance={allowance ? allowanceView(allowance) : null}
+      doors={homeDoorPictures(jobs, choice.id)}
       reviews={reviews}
       results={homeResults(jobs, choice.id)}
-      readOnly={choice.role === 'viewer'}
+      activeProjects={activeProjects}
+      // A viewer and the TWINGS team view cannot create here: no prompt bar. Only a viewer gets the note.
+      readOnly={choice.role === 'viewer' || access.staff}
+      viewerNote={choice.role === 'viewer'}
       notice={access.staff ? <StaffNotice b={b} manageHref={viewer.isAdmin ? adminOrganizationHref(choice.id, brandHost) : null} /> : null}
-      copy={{ home: dict.brandHome, shell: dict.studioShell, roomsNav: dict.roomsShell.nav, inbox: dict.roomsChat.inbox }}
+      copy={{
+        home: dict.brandHome,
+        shell: dict.studioShell,
+        roomsNav: dict.roomsShell.nav,
+        roomTabCounts: dict.roomsShell.room.tabCounts,
+        roomStages: dict.roomsShell.overview.stages,
+        inbox: dict.roomsChat.inbox,
+        prompt: { label: dock.label, placeholder: { image: dock.placeholder, video: dock.placeholderVideo } },
+        activeStatus: b.status.active,
+      }}
     />
   );
 }

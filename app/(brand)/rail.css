@@ -919,9 +919,41 @@
     bottom: calc(76px + env(safe-area-inset-bottom, 0px));
     max-width: none;
   }
+  /* The logo hugs its mark so the launcher beside 언어 never sits over its link box. */
+  .bw-shell:has([data-brand-layout-mode="rail"]) .bw-sidebar > .bw-lockup {
+    justify-self: start;
+  }
+  /* The help launcher lives in the top bar on a phone, beside 언어 and 로그아웃 (docs/BRAND-STUDIO-V3.md §12):
+     floating above the tab bar it sat on tiles, the prompt bar's button and the studio's dock. Same button,
+     same dialog; it scrolls away with the top bar like its neighbours. 112px = 16 gutter + 44 + 4 + 44 + 4. */
   .bw-shell:has([data-brand-layout-mode="rail"]) ~ * .bw-support-launch,
   .bw-shell:has([data-brand-layout-mode="rail"]) ~ .bw-support-launch {
-    bottom: calc(80px + env(safe-area-inset-bottom, 0px));
+    position: absolute;
+    top: 12px;
+    right: 112px;
+    bottom: auto;
+    width: 44px;
+    height: 44px;
+    border-radius: 22px;
+    background: transparent;
+    box-shadow: none;
+    -webkit-backdrop-filter: none;
+    backdrop-filter: none;
+    color: var(--ys-ink-secondary);
+    translate: none;
+    transform: none;
+  }
+  .bw-shell:has([data-brand-layout-mode="rail"]) ~ * .bw-support-launch:hover,
+  .bw-shell:has([data-brand-layout-mode="rail"]) ~ .bw-support-launch:hover {
+    background: var(--ys-hover);
+    box-shadow: none;
+    color: var(--ys-ink);
+    transform: none;
+  }
+  .bw-shell:has([data-brand-layout-mode="rail"]) ~ * .bw-support-launch:focus-visible,
+  .bw-shell:has([data-brand-layout-mode="rail"]) ~ .bw-support-launch:focus-visible {
+    outline: 2px solid var(--ys-focus);
+    outline-offset: 2px;
   }
 }
 
@@ -1077,6 +1109,14 @@
   }
   .bw-shell:has([data-brand-layout-mode="rail"]):has([data-rail-group="home"]) .bw-rail-order button {
     min-height: 28px;
+  }
+}
+
+/* At 360px the workspace's old lockup inset (workspace.css, `.bw-lockup>span:last-child`) pushed the mark
+   42px right, into the help launcher beside 언어: in the rail the mark starts at the gutter. */
+@media (max-width: 360px) {
+  .bw-shell:has([data-brand-layout-mode="rail"]) .bw-sidebar > .bw-lockup > span:last-child {
+    padding-left: 0;
   }
 }
 

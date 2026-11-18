@@ -1,20 +1,38 @@
 /*
- * The workspace home (docs/BRAND-STUDIO-V3.md §12). Workspace tokens only (app/(brand)/workspace.css):
- * the off-black canvas, wash cards, hairlines, ink. Four techniques (docs/design/TOOLBOX.md §1-2):
- *   1. Wash cards with a double-ring hairline (outer 1px line, inner top highlight); hover lifts the line.
- *   2. Concentric radius: card 16, icon well 10, thumbnail 10.
- *   3. Tabular numerals on credits and counts.
- *   4. The brand's own results as the only media, framed 4:5 with the face-safe crop (TASTE.md 13).
- * No gradient, glow or accent fill: the page has no filled button.
+ * The workspace home (docs/BRAND-STUDIO-V3.md §12). Workspace tokens only (app/(brand)/workspace.css) and the
+ * studio dock's own surface (app/(brand)/studio-v2.css `.bs-dock`, `.bs-seg`, `.bs-btn`) for the prompt bar.
+ * Four techniques (docs/design/TOOLBOX.md §1-2):
+ *   1. The dock's frosted surface for the one thing to do first; the page's only filled button sits in it.
+ *   2. Media doors: the brand's own newest result (or a house frame marked 예시) under a dark glass plate,
+ *      which keeps the label at ≥ 7:1 on any picture (no gradient over the picture).
+ *   3. Concentric radius: surfaces 18, wells and thumbnails 10.
+ *   4. Tabular numerals on credits, counts and clip lengths.
+ * Every interactive surface has hover, pressed and focus-visible states; reduced motion stops every move.
  */
 
+/* The home fills one screen: tighter top and bottom than the other workspace pages. */
+/* The bottom keeps the floating 실시간 문의 pill (48px at 24px) clear of every tile at the end of the page. */
+:global(.bw-main):has(.home) {
+  padding-top: 28px;
+  padding-bottom: 76px;
+}
+
 .home {
+  --home-gap: 18px;
+  --home-door-h: clamp(176px, calc(100svh - 702px), 236px);
+  --home-ease: cubic-bezier(0.22, 1, 0.36, 1);
   display: grid;
-  gap: 32px;
+  gap: var(--home-gap);
   min-width: 0;
   max-width: 1280px;
+  margin-inline: auto;
   word-break: keep-all;
   overflow-wrap: break-word;
+}
+
+/* No prompt bar for a role that cannot create: the doors take its room, so the screen stays full. */
+.home[data-home-read-only='true'] {
+  --home-door-h: clamp(176px, calc(100svh - 600px), 300px);
 }
 
 .srOnly {
@@ -31,61 +49,112 @@
 
 /* ------------------------------------------------------------ heading */
 .head {
-  display: grid;
-  gap: 8px;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 4px 24px;
   min-width: 0;
 }
 .title {
+  flex: 1 1 320px;
+  min-width: 0;
   margin: 0;
+  overflow: hidden;
   color: var(--ys-ink);
-  font-size: 30px;
+  font-size: 28px;
   font-weight: 650;
-  line-height: 1.22;
+  line-height: 1.25;
   letter-spacing: -0.025em;
-  text-wrap: balance;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 .credits {
+  flex: none;
   margin: 0;
   color: var(--ys-ink-secondary);
-  font-size: 14px;
+  font-size: 13px;
   line-height: 1.45;
   letter-spacing: -0.01em;
   font-variant-numeric: tabular-nums;
 }
 .note {
-  margin: 0;
+  margin: -8px 0 0;
   color: var(--ys-ink-secondary);
   font-size: 13px;
   line-height: 1.45;
 }
 
-/* ------------------------------------------------------------ action cards */
-.actions {
-  min-width: 0;
-}
-.groups {
-  display: grid;
-  gap: 24px;
-  min-width: 0;
-}
-/* Two groups side by side on a wide screen: the make group takes the room its cards need. */
-@media (min-width: 1100px) {
-  /* Side by side the two groups share one row height, so the lone team card lines up with the others. */
-  .groups[data-grouped='true'] {
-    grid-template-columns: minmax(0, 5fr) minmax(0, 1fr);
-    align-items: stretch;
-  }
-  .groups[data-grouped='true'] .group[data-home-group='team'] .cards {
-    grid-template-columns: minmax(0, 1fr);
-  }
-}
-.group {
-  display: grid;
-  grid-template-rows: auto minmax(0, 1fr);
+/* ------------------------------------------------------------ the prompt bar (the dock's surface) */
+form.prompt {
+  position: static;
+  align-self: stretch;
+  width: 100%;
+  margin: 0;
   gap: 10px;
+  padding: 16px 18px 14px;
+  border-radius: 22px;
+  cursor: text;
+  transition: border-color 160ms var(--home-ease), box-shadow 160ms var(--home-ease);
+}
+form.prompt:hover {
+  border-color: var(--ys-line-strong);
+}
+form.prompt:focus-within {
+  border-color: var(--ys-line-strong);
+  box-shadow: var(--ys-dock-shadow), 0 0 0 1px var(--ys-ink);
+}
+.promptField {
+  display: block;
+  width: 100%;
+  min-height: 52px;
+  margin: 0;
+  padding: 2px 2px 0;
+  border: 0;
+  background: transparent;
+  color: var(--ys-ink);
+  font: inherit;
+  font-size: 17px;
+  font-weight: 400;
+  line-height: 26px;
+  letter-spacing: -0.02em;
+  resize: none;
+  cursor: text;
+}
+.promptField::placeholder {
+  color: var(--ys-placeholder);
+}
+.promptField:focus,
+.promptField:focus-visible {
+  outline: none;
+}
+.promptControls {
+  cursor: default;
+}
+.promptHint {
+  min-width: 0;
+  margin: 0 0 0 4px;
+  overflow: hidden;
+  color: var(--ys-ink-secondary);
+  font-size: 12.5px;
+  line-height: 1.4;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* ------------------------------------------------------------ tools: two doors, the team tile, three compact tools */
+.tools {
+  display: grid;
+  grid-template-columns: repeat(12, minmax(0, 1fr));
+  grid-template-areas:
+    'label label label label label label label label label label label label'
+    'doors doors doors doors doors doors doors doors team team team team'
+    'list list list list list list list list list list list list';
+  gap: 10px 12px;
   min-width: 0;
 }
-.groupLabel {
+.label {
+  grid-area: label;
   margin: 0;
   color: var(--ys-ink-secondary);
   font-size: 12.5px;
@@ -93,117 +162,368 @@
   line-height: 16px;
   letter-spacing: -0.01em;
 }
-.cards {
+.doors {
+  grid-area: doors;
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(176px, 1fr));
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 12px;
   margin: 0;
   padding: 0;
   list-style: none;
 }
-@media (min-width: 1100px) {
-  .group[data-home-group='make'] .cards {
-    grid-template-columns: repeat(var(--home-make-cols, 5), minmax(0, 1fr));
-  }
-}
-.cardItem {
+.doors > li {
   display: grid;
   min-width: 0;
 }
-a.card {
+
+a.door {
+  position: relative;
+  display: block;
+  height: var(--home-door-h);
+  overflow: hidden;
+  border-radius: 18px;
+  background: var(--ys-card-media);
+  box-shadow: 0 0 0 1px var(--ys-hairline);
+  color: #ffffff;
+  text-decoration: none;
+  isolation: isolate;
+  transition: box-shadow 160ms var(--home-ease), transform 160ms var(--home-ease);
+}
+a.door:hover {
+  color: #ffffff;
+  box-shadow: 0 0 0 1px var(--ys-line-strong);
+}
+a.door:active {
+  transform: scale(0.992);
+}
+a.door:focus-visible {
+  outline: 2px solid var(--ys-focus);
+  outline-offset: 3px;
+}
+.doorPicture {
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+}
+.doorPicture img,
+.doorPicture video {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  object-position: 50% 22%;
+  transition: transform 520ms var(--home-ease);
+}
+a.door:hover .doorPicture img,
+a.door:hover .doorPicture video {
+  transform: scale(1.035);
+}
+/* Dark glass and white text on any picture (TASTE.md 15): ≥ 7:1 even over a white frame. */
+.doorPlate {
+  position: absolute;
+  right: 10px;
+  bottom: 10px;
+  left: 10px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 12px 10px 14px;
+  border-radius: 12px;
+  background: rgba(9, 9, 11, 0.78);
+  -webkit-backdrop-filter: blur(14px) saturate(140%);
+  backdrop-filter: blur(14px) saturate(140%);
+}
+.doorIcon {
+  flex: none;
+  color: rgba(255, 255, 255, 0.92);
+}
+.doorIcon,
+.toolIcon svg,
+.teamIcon {
+  width: 18px;
+  height: 18px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.6;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+.doorText {
+  display: grid;
+  flex: 1 1 auto;
+  gap: 2px;
+  min-width: 0;
+}
+.doorName {
+  overflow: hidden;
+  color: #ffffff;
+  font-size: 16px;
+  font-weight: 650;
+  line-height: 1.3;
+  letter-spacing: -0.02em;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.doorLine {
+  overflow: hidden;
+  color: rgba(255, 255, 255, 0.86);
+  font-size: 13px;
+  line-height: 1.4;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.doorArrow,
+.rowArrow,
+.factArrow {
+  flex: none;
+  width: 16px;
+  height: 16px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.7;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  transition: transform 160ms var(--home-ease);
+}
+.doorArrow {
+  color: rgba(255, 255, 255, 0.86);
+}
+a.door:hover .doorArrow,
+a.row:hover .rowArrow,
+a.teamFacts:hover .factArrow {
+  transform: translateX(2px);
+}
+.exampleBadge {
+  position: absolute;
+  top: 10px;
+  left: 10px;
+  padding: 3px 9px;
+  border-radius: 999px;
+  background: rgba(9, 9, 11, 0.72);
+  color: #ffffff;
+  font-size: 11.5px;
+  font-weight: 600;
+  line-height: 16px;
+  -webkit-backdrop-filter: blur(10px);
+  backdrop-filter: blur(10px);
+}
+
+/* The YAGI team: a service, not a tool. Outlined and empty inside, with facts when there are any. */
+.team {
+  grid-area: team;
+  display: grid;
+  grid-template-rows: minmax(0, 1fr) auto auto;
+  min-width: 0;
+  height: var(--home-door-h);
+  overflow: hidden;
+  border-radius: 18px;
+  box-shadow: inset 0 0 0 1px var(--ys-line-strong);
+}
+a.teamMain {
   display: grid;
   align-content: start;
-  gap: 14px;
-  min-height: 128px;
-  padding: 16px;
-  border-radius: 16px;
+  gap: 8px;
+  min-height: 0;
+  padding: 18px 18px 12px;
+  color: var(--ys-ink);
+  text-decoration: none;
+  transition: background-color 160ms var(--home-ease);
+}
+a.teamMain:hover {
+  color: var(--ys-ink);
+  background: rgba(255, 255, 255, 0.04);
+}
+a.teamMain:focus-visible,
+a.teamFacts:focus-visible {
+  outline: 2px solid var(--ys-focus);
+  outline-offset: -2px;
+  border-radius: 18px;
+}
+.teamEyebrow {
+  color: var(--ys-ink-secondary);
+  font-size: 12.5px;
+  font-weight: 600;
+  line-height: 16px;
+}
+.teamName {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  color: var(--ys-ink);
+  font-size: 17px;
+  font-weight: 650;
+  line-height: 1.3;
+  letter-spacing: -0.02em;
+}
+.teamName > span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.teamIcon {
+  flex: none;
+}
+.teamLine {
+  display: -webkit-box;
+  overflow: hidden;
+  color: var(--ys-ink-secondary);
+  font-size: 13px;
+  line-height: 1.45;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+}
+.stages {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 0;
+  margin: 0;
+  padding: 0 18px 16px;
+  list-style: none;
+  color: var(--ys-ink-secondary);
+  font-size: 12px;
+  line-height: 18px;
+  letter-spacing: -0.01em;
+}
+.stages > li {
+  white-space: nowrap;
+}
+.stages > li + li::before {
+  content: '·';
+  margin: 0 6px;
+  color: var(--ys-ink-secondary);
+}
+a.teamFacts {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  margin: 0 10px 10px;
+  padding: 8px 8px 8px 10px;
+  border-radius: 12px;
+  background: var(--ys-panel);
+  color: var(--ys-ink);
+  text-decoration: none;
+  transition: background-color 160ms var(--home-ease);
+}
+a.teamFacts:hover {
+  color: var(--ys-ink);
+  background: var(--ys-hover);
+}
+.fact {
+  color: var(--ys-ink);
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 20px;
+  font-variant-numeric: tabular-nums;
+}
+.fact + .fact::before {
+  content: '·';
+  margin-right: 6px;
+  color: var(--ys-ink-secondary);
+  font-weight: 400;
+}
+.factArrow {
+  margin-left: auto;
+  color: var(--ys-ink-secondary);
+}
+
+.toolList {
+  grid-area: list;
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.toolList[data-count='2'] {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+.toolList > li {
+  display: grid;
+  min-width: 0;
+}
+a.tool {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-height: 64px;
+  padding: 12px 14px;
+  border-radius: 14px;
   background: rgba(255, 255, 255, 0.04);
   box-shadow:
-    inset 0 1px 0 0 rgba(255, 255, 255, 0.06),
+    inset 0 1px 0 0 rgba(255, 255, 255, 0.05),
     0 0 0 1px var(--ys-hairline);
   color: var(--ys-ink);
   text-decoration: none;
-  transition:
-    background-color 280ms cubic-bezier(0.22, 1, 0.36, 1),
-    box-shadow 160ms cubic-bezier(0.22, 1, 0.36, 1);
+  transition: background-color 160ms var(--home-ease), box-shadow 160ms var(--home-ease), transform 160ms var(--home-ease);
 }
-a.card:hover {
+a.tool:hover {
   color: var(--ys-ink);
   background: rgba(255, 255, 255, 0.07);
   box-shadow:
-    inset 0 1px 0 0 rgba(255, 255, 255, 0.08),
+    inset 0 1px 0 0 rgba(255, 255, 255, 0.07),
     0 0 0 1px var(--ys-line-strong);
 }
-a.card:focus-visible {
+a.tool:active {
+  transform: scale(0.99);
+}
+a.tool:focus-visible {
   outline: 2px solid var(--ys-focus);
   outline-offset: 2px;
 }
-.iconWell {
+.toolIcon {
   display: inline-grid;
+  flex: none;
   place-items: center;
   width: 36px;
   height: 36px;
   border-radius: 10px;
   background: var(--ys-panel);
-  box-shadow: 0 0 0 1px var(--ys-hairline);
+  color: var(--ys-ink);
 }
-.icon {
-  width: 18px;
-  height: 18px;
-  fill: none;
-  stroke: var(--ys-ink);
-  stroke-width: 1.6;
-  stroke-linecap: round;
-  stroke-linejoin: round;
-}
-.cardText {
+.toolText {
   display: grid;
-  gap: 4px;
+  gap: 1px;
   min-width: 0;
 }
-.cardName {
+.toolName {
+  overflow: hidden;
   color: var(--ys-ink);
-  font-size: 15px;
+  font-size: 14.5px;
   font-weight: 600;
   line-height: 1.3;
-  letter-spacing: -0.02em;
+  letter-spacing: -0.015em;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
-.cardLine {
+.toolLine {
+  overflow: hidden;
   color: var(--ys-ink-secondary);
-  font-size: 13px;
-  font-weight: 400;
-  line-height: 1.45;
-  letter-spacing: -0.01em;
+  font-size: 12.5px;
+  line-height: 1.4;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
-/* ------------------------------------------------------------ continue */
-.continue {
-  display: grid;
-  gap: 14px;
-  min-width: 0;
-}
-.sectionTitle {
-  margin: 0;
-  color: var(--ys-ink);
-  font-size: 18px;
-  font-weight: 650;
-  line-height: 1.3;
-  letter-spacing: -0.02em;
-}
-.continueGrid {
+/* ------------------------------------------------------------ the lower half */
+.lower {
   display: grid;
   gap: 24px;
   min-width: 0;
 }
 @media (min-width: 1100px) {
-  .continueGrid[data-columns='2'] {
-    grid-template-columns: minmax(0, 5fr) minmax(0, 8fr);
+  .lower[data-home-lower='split'] {
+    grid-template-columns: minmax(0, 5fr) minmax(0, 7fr);
     align-items: start;
   }
 }
 .block {
   display: grid;
-  gap: 8px;
+  gap: 10px;
   align-content: start;
   min-width: 0;
 }
@@ -247,12 +567,12 @@ a.row {
   display: flex;
   align-items: center;
   gap: 12px;
-  min-height: 56px;
-  padding: 8px 4px;
+  min-height: 58px;
+  padding: 8px 6px;
+  border-radius: 10px;
   color: var(--ys-ink);
   text-decoration: none;
-  border-radius: 8px;
-  transition: background-color 160ms cubic-bezier(0.22, 1, 0.36, 1);
+  transition: background-color 160ms var(--home-ease);
 }
 a.row:hover {
   color: var(--ys-ink);
@@ -264,8 +584,8 @@ a.row:focus-visible {
 }
 .rowText {
   display: grid;
-  gap: 2px;
   flex: 1 1 auto;
+  gap: 3px;
   min-width: 0;
 }
 .rowTitle {
@@ -279,23 +599,28 @@ a.row:focus-visible {
   white-space: nowrap;
 }
 .rowMeta {
-  overflow: hidden;
+  display: flex;
+  gap: 6px;
+  min-width: 0;
   color: var(--ys-ink-secondary);
   font-size: 12.5px;
   line-height: 1.4;
-  text-overflow: ellipsis;
   white-space: nowrap;
   font-variant-numeric: tabular-nums;
 }
-.rowArrow {
+.rowProject {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.rowProject::after {
+  content: ' ·';
+}
+.rowState {
   flex: none;
-  width: 16px;
-  height: 16px;
-  fill: none;
-  stroke: var(--ys-ink-secondary);
-  stroke-width: 1.6;
-  stroke-linecap: round;
-  stroke-linejoin: round;
+}
+.rowArrow {
+  color: var(--ys-ink-secondary);
 }
 a.more {
   justify-self: start;
@@ -311,15 +636,31 @@ a.more:hover {
   color: var(--ys-ink);
   text-decoration-color: var(--ys-ink);
 }
+a.more:focus-visible {
+  outline: 2px solid var(--ys-focus);
+  outline-offset: 2px;
+  border-radius: 6px;
+}
 
-/* The brand's own results: six 4:5 tiles in one row, three per row on a phone. */
+/* The brand's own results: one row of 4:5 tiles; a second row only where the screen is tall enough. */
 .thumbs {
   display: grid;
-  grid-template-columns: repeat(6, minmax(0, 1fr));
-  gap: 8px;
+  grid-template-columns: repeat(var(--home-thumb-cols, 8), minmax(0, 1fr));
+  gap: 10px;
   margin: 0;
   padding: 0;
   list-style: none;
+}
+.lower[data-home-lower='split'] .thumbs {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+.lower[data-home-lower='split'] .thumbs > li:nth-child(n + 5) {
+  display: none;
+}
+@media (min-height: 1040px) {
+  .lower[data-home-lower='split'] .thumbs > li:nth-child(n + 5) {
+    display: block;
+  }
 }
 a.thumb {
   position: relative;
@@ -329,6 +670,13 @@ a.thumb {
   border-radius: 10px;
   background: var(--ys-card-media);
   box-shadow: 0 0 0 1px var(--ys-hairline);
+  transition: box-shadow 160ms var(--home-ease), transform 160ms var(--home-ease);
+}
+a.thumb:hover {
+  box-shadow: 0 0 0 1px var(--ys-line-strong);
+}
+a.thumb:active {
+  transform: scale(0.985);
 }
 a.thumb img,
 a.thumb video {
@@ -337,17 +685,16 @@ a.thumb video {
   height: 100%;
   object-fit: cover;
   object-position: 50% 15%;
-  transition: transform 280ms cubic-bezier(0.22, 1, 0.36, 1);
+  transition: transform 280ms var(--home-ease);
 }
 a.thumb:hover img,
 a.thumb:hover video {
-  transform: scale(1.02);
+  transform: scale(1.03);
 }
 a.thumb:focus-visible {
   outline: 2px solid var(--ys-focus);
   outline-offset: 2px;
 }
-/* Dark glass and white text on any picture (TASTE.md 15). */
 .badge {
   position: absolute;
   right: 6px;
@@ -371,46 +718,261 @@ a.thumb:focus-visible {
   fill: #ffffff;
 }
 
-.empty {
+/* Starters: a house frame beside the sentence that describes it. */
+.starters {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
   margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.block[data-layout='list'] .starters {
+  grid-template-columns: minmax(0, 1fr);
+  gap: 8px;
+}
+.starters > li {
+  display: grid;
+  min-width: 0;
+}
+a.starter {
+  display: grid;
+  grid-template-columns: clamp(104px, 31%, 156px) minmax(0, 1fr);
+  min-height: clamp(150px, calc(100svh - 702px), 214px);
+  overflow: hidden;
+  border-radius: 16px;
+  background: rgba(255, 255, 255, 0.04);
+  box-shadow:
+    inset 0 1px 0 0 rgba(255, 255, 255, 0.05),
+    0 0 0 1px var(--ys-hairline);
+  color: var(--ys-ink);
+  text-decoration: none;
+  transition: background-color 160ms var(--home-ease), box-shadow 160ms var(--home-ease), transform 160ms var(--home-ease);
+}
+.block[data-layout='list'] a.starter {
+  grid-template-columns: 72px minmax(0, 1fr);
+  min-height: 90px;
+}
+a.starter:hover {
+  color: var(--ys-ink);
+  background: rgba(255, 255, 255, 0.07);
+  box-shadow:
+    inset 0 1px 0 0 rgba(255, 255, 255, 0.07),
+    0 0 0 1px var(--ys-line-strong);
+}
+a.starter:active {
+  transform: scale(0.992);
+}
+a.starter:focus-visible {
+  outline: 2px solid var(--ys-focus);
+  outline-offset: 2px;
+}
+.starterPicture {
+  position: relative;
+  min-height: 100%;
+  overflow: hidden;
+  background: var(--ys-card-media);
+}
+.starterPicture img {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  object-position: 50% 25%;
+  transition: transform 280ms var(--home-ease);
+}
+a.starter:hover .starterPicture img {
+  transform: scale(1.04);
+}
+.starterText {
+  display: grid;
+  grid-template-rows: auto auto auto minmax(0, 1fr);
+  gap: 4px;
+  min-width: 0;
+  padding: 14px 16px;
+}
+/* What pressing the card does, in the prompt bar's own words: quiet, at the foot of the card. */
+.starterAction {
+  display: inline-flex;
+  align-self: end;
+  align-items: center;
+  gap: 6px;
+  margin-top: 6px;
+  color: var(--ys-ink);
+  font-size: 12.5px;
+  font-weight: 600;
+  line-height: 18px;
+}
+.starterAction :global(.bs-icon) {
+  width: 14px;
+  height: 14px;
+  transition: transform 160ms var(--home-ease);
+}
+a.starter:hover .starterAction :global(.bs-icon) {
+  transform: translateX(2px);
+}
+.block[data-layout='list'] .starterAction {
+  display: none;
+}
+.starterMeta {
   color: var(--ys-ink-secondary);
-  font-size: 14px;
+  font-size: 11.5px;
+  font-weight: 600;
+  line-height: 16px;
+}
+.starterName {
+  color: var(--ys-ink);
+  font-size: 15px;
+  font-weight: 650;
+  line-height: 1.3;
+  letter-spacing: -0.02em;
+}
+.starterPrompt {
+  display: -webkit-box;
+  overflow: hidden;
+  margin-top: 2px;
+  color: var(--ys-ink-secondary);
+  font-size: 13px;
   line-height: 1.5;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 5;
+}
+.block[data-layout='list'] .starterPrompt {
+  -webkit-line-clamp: 2;
 }
 
-/* ------------------------------------------------------------ phone */
+/* ------------------------------------------------------------ narrower screens */
+@media (max-width: 1099px) {
+  .tools {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    grid-template-areas:
+      'label label'
+      'doors doors'
+      'list list'
+      'team team';
+  }
+  .team {
+    height: auto;
+  }
+  .thumbs {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+}
+
 @media (max-width: 640px) {
-  .home {
-    gap: 24px;
+  .home,
+  .home[data-home-read-only='true'] {
+    --home-gap: 16px;
+    --home-door-h: 176px;
   }
   .title {
+    display: -webkit-box;
     font-size: 22px;
+    white-space: normal;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 2;
   }
-  .cards {
+  .prompt {
+    padding: 12px 14px;
+  }
+  .promptField {
+    min-height: 48px;
+    font-size: 16px;
+    line-height: 24px;
+  }
+  .promptHint {
+    display: none;
+  }
+  .doors {
+    gap: 8px;
+  }
+  .doorPlate {
+    right: 8px;
+    bottom: 8px;
+    left: 8px;
+    gap: 8px;
+    padding: 9px 10px;
+  }
+  .doorIcon,
+  .doorArrow,
+  .doorLine {
+    display: none;
+  }
+  .doorName {
+    font-size: 15px;
+  }
+  .toolList {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 8px;
+  }
+  .toolList > li:last-child:nth-child(odd) {
+    grid-column: 1 / -1;
+  }
+  a.tool {
+    min-height: 60px;
+    padding: 10px 12px;
+  }
+  .toolLine {
+    display: none;
+  }
+  .thumbs,
+  .lower[data-home-lower='split'] .thumbs {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 6px;
+  }
+  .lower[data-home-lower='split'] .thumbs > li:nth-child(n + 5) {
+    display: block;
+  }
+  .thumbs > li:nth-child(n + 7),
+  .lower[data-home-lower='split'] .thumbs > li:nth-child(n + 7) {
+    display: none;
+  }
+  .starters {
     grid-template-columns: minmax(0, 1fr);
     gap: 8px;
   }
-  a.card {
-    grid-template-columns: 36px minmax(0, 1fr);
-    align-items: center;
-    gap: 12px;
-    min-height: 0;
-    padding: 12px 14px;
+  a.starter {
+    grid-template-columns: 104px minmax(0, 1fr);
+    min-height: 132px;
   }
-  .thumbs {
-    grid-template-columns: repeat(3, minmax(0, 1fr));
+  .starterText {
+    padding: 12px 14px;
   }
 }
 
 @media (prefers-reduced-motion: reduce) {
-  a.card,
+  .prompt,
+  a.door,
+  a.tool,
   a.row,
+  a.teamMain,
+  a.teamFacts,
+  a.thumb,
+  a.starter,
+  .doorPicture img,
+  .doorPicture video,
   a.thumb img,
-  a.thumb video {
+  a.thumb video,
+  .starterPicture img,
+  .doorArrow,
+  .rowArrow,
+  .factArrow {
     transition: none;
   }
+  a.door:hover .doorPicture img,
+  a.door:hover .doorPicture video,
   a.thumb:hover img,
-  a.thumb:hover video {
+  a.thumb:hover video,
+  a.starter:hover .starterPicture img,
+  a.starter:hover .starterAction :global(.bs-icon),
+  a.door:hover .doorArrow,
+  a.row:hover .rowArrow,
+  a.teamFacts:hover .factArrow,
+  a.door:active,
+  a.tool:active,
+  a.thumb:active,
+  a.starter:active {
     transform: none;
   }
 }

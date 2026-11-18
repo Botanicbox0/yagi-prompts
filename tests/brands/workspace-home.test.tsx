@@ -11,7 +11,10 @@ import {
   BRAND_LANDING_PATH,
   brandHomeVisible,
   brandLandingPath,
-  homeActions,
+  HOME_DOOR_EXAMPLES,
+  HOME_STARTERS,
+  homeDoorPictures,
+  homeLayout,
   homeResults,
 } from '@/lib/brands/workspace/home';
 import type { BrandWorkspaceChoice } from '@/lib/brands/workspace/selection';
@@ -81,7 +84,7 @@ describe('who gets the home', () => {
   });
   it.each(closedChoices)('is never for %s', (_label, org) => {
     expect(brandHomeVisible(org, true)).toBe(false);
-    expect(homeActions({ choice: org, flagOn: true, canRequest: true, rooms: true })).toEqual([]);
+    expect(homeLayout({ choice: org, flagOn: true, canRequest: true, rooms: true })).toBeNull();
   });
   it('is not for a project-only brand (self-serve studio closed) or a campaign-only guest', () => {
     expect(brandHomeVisible(choice({ denied: ['self_studio'] }), true)).toBe(false);
@@ -115,28 +118,38 @@ describe('the default landing', () => {
 
 /* -------------------------------------------------------------------- the cards */
 
-describe('action cards follow the same checks as the rail', () => {
-  const keys = (input: Parameters<typeof homeActions>[0]) => homeActions(input).map((a) => `${a.group}:${a.key}`);
-  it('shows the four studio screens, assets and the brief with rooms for an owner or editor', () => {
+describe('doors, tools and the team tile follow the same checks as the rail', () => {
+  const shape = (input: Parameters<typeof homeLayout>[0]) => {
+    const layout = homeLayout(input);
+    return layout && { doors: layout.doors.map((d) => d.key), tools: layout.tools.map((t) => t.key), team: layout.team.key };
+  };
+  it('gives an owner or editor the two doors, three tools and the brief with rooms', () => {
     for (const role of ['owner', 'editor'] as const) {
-      expect(keys({ choice: choice({ role }), flagOn: true, canRequest: true, rooms: true })).toEqual([
-        'make:image',
-        'make:video',
-        'make:compose',
-        'make:workflows',
-        'make:assets',
-        'team:commission',
-      ]);
+      expect(shape({ choice: choice({ role }), flagOn: true, canRequest: true, rooms: true })).toEqual({
+        doors: ['image', 'video'],
+        tools: ['compose', 'workflows', 'assets'],
+        team: 'commission',
+      });
     }
+    expect(homeLayout({ choice: choice(), flagOn: true, canRequest: true, rooms: true })!.team.path).toBe('/brand/projects/new');
   });
   it('offers the campaign request instead when rooms are closed', () => {
-    expect(keys({ choice: choice(), flagOn: true, canRequest: true, rooms: false }).at(-1)).toBe('team:campaign');
+    expect(shape({ choice: choice(), flagOn: true, canRequest: true, rooms: false })!.team).toBe('campaign');
   });
-  it('gives a viewer (and the team view) every screen they can open, but no request', () => {
-    const viewer = keys({ choice: choice({ role: 'viewer' }), flagOn: true, canRequest: false, rooms: true });
-    expect(viewer).not.toContain('team:commission');
-    expect(viewer).not.toContain('team:campaign');
-    expect(viewer).toContain('make:image');
+  it('gives a viewer (and the team view) every screen and the projects list instead of a request', () => {
+    const layout = homeLayout({ choice: choice({ role: 'viewer' }), flagOn: true, canRequest: false, rooms: true })!;
+    expect(layout.team).toEqual({ key: 'projects', path: '/brand' });
+    expect(layout.doors).toHaveLength(2);
+  });
+  it('serves only house frames the brand host already allows, and starters in both media', () => {
+    for (const path of [...Object.values(HOME_DOOR_EXAMPLES), ...HOME_STARTERS.map((s) => s.picture)]) {
+      expect(brandRouteAllowed(path, 'GET'), path).toBe(true);
+    }
+    expect(new Set(HOME_STARTERS.map((s) => s.medium))).toEqual(new Set(['image', 'video']));
+    for (const key of HOME_STARTERS.map((s) => s.key)) {
+      expect(ko.brandHome.starters[key].prompt.length).toBeGreaterThan(10);
+      expect(getDictionary('en').brandHome.starters[key].prompt).not.toBe(ko.brandHome.starters[key].prompt);
+    }
   });
 });
 
@@ -149,17 +162,17 @@ const output = (id: string, kind: 'image' | 'video', thumbUrl: string | null, ur
 
 describe('recent results', () => {
   const org = 'c0000000-0000-4000-8000-00000000000c';
-  it('takes finished results, newest first, at most six, and links each to its screen viewer', () => {
+  it('takes finished results, newest first, at most eight, and links each to its screen viewer', () => {
     const jobs = [
       job({ id: 'v', kind: 'video', outputs: [output('00000000-0000-4000-8000-000000000001', 'video', '/m/poster')] }),
       job({ id: 'f', kind: 'image', status: 'failed', outputs: [output('00000000-0000-4000-8000-000000000002', 'image', null)] }),
       job({ id: 'x', kind: 'image', purpose: 'fill', outputs: [output('00000000-0000-4000-8000-000000000003', 'image', null)] }),
       job({ id: 'n', kind: 'video', outputs: [output('00000000-0000-4000-8000-000000000004', 'video', null)] }),
       job({ id: 'r', kind: 'region_edit', outputs: [output('00000000-0000-4000-8000-000000000005', 'image', null)] }),
-      ...Array.from({ length: 6 }, (_, i) => job({ id: `i${i}`, outputs: [output(`00000000-0000-4000-8000-00000000001${i}`, 'image', `/m/t${i}`)] })),
+      ...Array.from({ length: 8 }, (_, i) => job({ id: `i${i}`, outputs: [output(`00000000-0000-4000-8000-00000000001${i}`, 'image', `/m/t${i}`)] })),
     ];
     const results = homeResults(jobs, org);
-    expect(results).toHaveLength(6);
+    expect(results).toHaveLength(8);
     expect(results[0]).toMatchObject({ kind: 'video', src: '/m/poster', seconds: 6.2 });
     expect(results[0]!.href).toBe(`/brand/studio/video?organizationId=${org}&view=o%3A00000000-0000-4000-8000-000000000001`);
     // A partial edit lives on the image screen; the image itself stands in when there is no thumbnail.
@@ -169,6 +182,21 @@ describe('recent results', () => {
     expect(results.map((r) => r.outputId)).not.toContain('00000000-0000-4000-8000-000000000002');
     expect(results.map((r) => r.outputId)).not.toContain('00000000-0000-4000-8000-000000000003');
     expect(results.find((r) => r.outputId === '00000000-0000-4000-8000-000000000004')).toMatchObject({ src: null, clip: '/m/00000000-0000-4000-8000-000000000004' });
+  });
+});
+
+describe('door pictures', () => {
+  it('take the newest result of each kind, or none', () => {
+    const org = 'c0000000-0000-4000-8000-00000000000c';
+    const doors = homeDoorPictures(
+      [
+        job({ id: 'a', kind: 'image', outputs: [output('00000000-0000-4000-8000-000000000021', 'image', '/m/a')] }),
+        job({ id: 'b', kind: 'image', outputs: [output('00000000-0000-4000-8000-000000000022', 'image', '/m/b')] }),
+      ],
+      org,
+    );
+    expect(doors.image?.outputId).toBe('00000000-0000-4000-8000-000000000021');
+    expect(doors.video).toBeNull();
   });
 });
 
@@ -273,6 +301,15 @@ describe('the home page', () => {
     expect(html).toContain(`data-workspace-home="${fx.orgId}"`);
     expect(html).toContain('Home fixture brand 작업공간');
     for (const key of ['image', 'video', 'compose', 'workflows', 'assets', 'commission']) expect(html).toContain(`data-home-action="${key}"`);
+    // A new brand: house frames marked as examples on both doors, and three starters below.
+    expect(html.match(/data-door-picture="example"/g)).toHaveLength(2);
+    expect(html.match(/data-home-example/g)).toHaveLength(2);
+    expect(html).toContain('data-home-starters');
+    for (const key of ['product', 'look', 'film']) expect(html).toContain(`data-home-starter="${key}"`);
+    // The prompt bar is the one thing first, with the page's only filled button.
+    expect(html).toContain('data-home-prompt');
+    expect(html.match(/data-variant="solid"/g)).toHaveLength(1);
+    expect(html).toContain(ko.brandStudio.dock.placeholder);
     expect(html).not.toContain('data-home-action="campaign"');
     // The rail's own names and groups.
     for (const name of [ko.studioShell.rail.image, ko.studioShell.rail.video, ko.studioShell.rail.compose, ko.studioShell.rail.workflows, ko.studioShell.rail.assets, ko.roomsShell.nav.commission, ko.roomsShell.nav.groupMake, ko.roomsShell.nav.groupTeam]) {
@@ -283,9 +320,7 @@ describe('the home page', () => {
     expect(html).toContain('data-home-credits');
     expect(html).toContain('크레딧 10,000 중 10,000 남았어요');
     expect(html).not.toMatch(/\d\s*원|₩|KRW/);
-    expect(html).toContain('data-home-empty');
     expect(html).not.toContain('data-home-continue');
-    expect(html).not.toContain('data-variant="solid"');
     expect(html).not.toContain('bw-primary');
     expect(html).not.toContain('data-home-viewer-note');
   });
@@ -298,7 +333,10 @@ describe('the home page', () => {
     const html = await openHome(fx.orgId);
     expect(html).toContain('data-home-action="image"');
     expect(html).not.toContain('data-home-action="commission"');
-    expect(html).not.toContain(ko.roomsShell.nav.groupTeam);
+    // No prompt bar for a role that cannot create; the team tile opens the projects list instead.
+    expect(html).not.toContain('data-home-prompt');
+    expect(html).not.toContain('data-variant="solid"');
+    expect(html).toContain('data-home-action="projects"');
     expect(html).toContain('data-home-viewer-note');
   });
 
@@ -324,6 +362,12 @@ describe('the home page', () => {
     expect(html).toContain(`/brand/rooms/${fx.projectId}?organizationId=${fx.orgId}&amp;tab=review&amp;review=${reviewId}`);
     expect(html).toContain('시안 v1 확인 대기');
     expect(html).toContain(`view=o%3A${outputId}`);
-    expect(html).not.toContain('data-home-empty');
+    expect(html).not.toContain('data-home-starters');
+    // The doors now show the brand's own newest image; no clip yet, so the video door keeps its example.
+    expect(html).toContain('data-door-picture="own"');
+    expect(html).toContain('data-door-picture="example"');
+    // Live facts on the team tile: drafts to look at.
+    expect(html).toContain('data-home-team-facts');
+    expect(html).toContain('확인할 시안 1개');
   });
 });

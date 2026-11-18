@@ -13,7 +13,7 @@ const NAV_ORDER_STORAGE_KEY = 'twings_brand_nav_order_v1';
  * home (`home`: studio v2 is on, docs/BRAND-STUDIO-V3.md §12) always goes home; otherwise the logo opens
  * the studio when available, or the user's #1 ordered tab.
  */
-export function WorkspaceHomeLink({ scope, children, home = false }: { scope: BrandWorkspaceScope; children: ReactNode; home?: boolean }) {
+export function WorkspaceHomeLink({ scope, children, home = false, homeLabel }: { scope: BrandWorkspaceScope; children: ReactNode; home?: boolean; homeLabel?: string }) {
   const choice = selectedChoice(useWorkspaceSelection(scope).selection);
   const vis = sectionVisibility(choice);
   const hasHome = home && brandHomeVisible(choice, true);
@@ -51,7 +51,9 @@ export function WorkspaceHomeLink({ scope, children, home = false }: { scope: Br
     return () => window.removeEventListener('twings:nav-order-changed', syncPreferred);
   }, [vis.studio, hasHome]);
 
-  return <a href={scopedHref(preferredEntry, choice)} className="bw-lockup" aria-label="TWINGS Studio">{children}</a>;
+  // On a phone the logo is the way home (the tab bar has no room for a sixth tab): its name says so.
+  const label = hasHome && homeLabel ? `TWINGS Studio · ${homeLabel}` : 'TWINGS Studio';
+  return <a href={scopedHref(preferredEntry, choice)} className="bw-lockup" aria-label={label} data-home-link={hasHome ? '' : undefined}>{children}</a>;
 }
 
 export function WorkspaceSupport({ scope, b, locale }: { scope: BrandWorkspaceScope; b: BrandCopy; locale: string }) {

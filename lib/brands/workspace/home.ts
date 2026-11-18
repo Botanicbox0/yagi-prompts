@@ -43,56 +43,77 @@ export function brandLandingPath(choices: readonly BrandWorkspaceChoice[], flagO
   return brandHomeVisible(choice, flagOn) ? BRAND_HOME_PATH : '/brand';
 }
 
-export type HomeActionKey = 'image' | 'video' | 'compose' | 'workflows' | 'assets' | 'commission' | 'campaign';
-export type HomeGroupId = 'make' | 'team';
+export type HomeDoorKey = 'image' | 'video';
+export type HomeToolKey = 'compose' | 'workflows' | 'assets';
+/** `commission`: 새 프로젝트 의뢰 (rooms open); `campaign`: 캠페인 의뢰 (rooms closed); `projects`: 프로젝트, for a role that cannot request. */
+export type HomeTeamKey = 'commission' | 'campaign' | 'projects';
 
-export interface HomeAction {
-  key: HomeActionKey;
-  group: HomeGroupId;
-  /** Unscoped; the page attaches the brand. */
-  path: string;
+export interface HomeLayout {
+  /** The two big doors: 이미지 스튜디오, 영상 스튜디오. */
+  doors: Array<{ key: HomeDoorKey; path: string }>;
+  /** The compact tools: 편집 스튜디오, 워크플로우, 에셋 (when the asset hub is open). */
+  tools: Array<{ key: HomeToolKey; path: string }>;
+  /** The YAGI team tile: a service, not a tool. */
+  team: { key: HomeTeamKey; path: string };
 }
 
-/** The order cards appear in, and the rail address each one opens. */
-const ACTION_PATHS: ReadonlyArray<readonly [HomeActionKey, HomeGroupId, string]> = [
-  ['image', 'make', '/brand/studio'],
-  ['video', 'make', '/brand/studio/video'],
-  ['compose', 'make', '/brand/studio/compose'],
-  ['workflows', 'make', '/brand/studio/workflows'],
-  ['assets', 'make', '/brand/library'],
-  ['commission', 'team', '/brand/projects/new'],
-  ['campaign', 'team', '/brand/projects/new'],
-];
-
-export interface HomeActionInput {
+export interface HomeLayoutInput {
   choice: HomeOrg;
   flagOn: boolean;
-  /** Owners and editors of this brand (never the TWINGS team view): the request card. */
+  /** Owners and editors of this brand (never the TWINGS team view): the request tile. */
   canRequest: boolean;
   /** Project rooms are open for this brand: the request is a project brief to the YAGI team. */
   rooms: boolean;
 }
 
 /**
- * The cards this brand sees, with the same checks the rail and each page use: the four studio screens
- * share one gate (`studioRouteContext`), the asset hub its own (`assetHubVisible`), and a request is for
- * a role that may send one. With rooms the request is `commission` (새 프로젝트 의뢰), without them the
- * campaign request the "+" menu offers (`campaign`).
+ * What this brand sees, with the same checks the rail and each page use: the four studio screens share one
+ * gate (`studioRouteContext`), the asset hub its own (`assetHubVisible`), and a request is for a role that
+ * may send one. A role that cannot request (a viewer, the TWINGS team view) gets 프로젝트 instead, the
+ * list the rail opens. Null when the brand has no home.
  */
-export function homeActions(input: HomeActionInput): HomeAction[] {
+export function homeLayout(input: HomeLayoutInput): HomeLayout | null {
   const { choice, flagOn } = input;
-  if (!brandHomeVisible(choice, flagOn)) return [];
-  const shown: Record<HomeActionKey, boolean> = {
-    image: true,
-    video: true,
-    compose: true,
-    workflows: true,
-    assets: assetHubVisible(choice, flagOn),
-    commission: input.canRequest && input.rooms,
-    campaign: input.canRequest && !input.rooms,
+  if (!brandHomeVisible(choice, flagOn)) return null;
+  const tools: HomeLayout['tools'] = [
+    { key: 'compose', path: '/brand/studio/compose' },
+    { key: 'workflows', path: '/brand/studio/workflows' },
+  ];
+  if (assetHubVisible(choice, flagOn)) tools.push({ key: 'assets', path: '/brand/library' });
+  const team: HomeLayout['team'] = input.canRequest
+    ? { key: input.rooms ? 'commission' : 'campaign', path: '/brand/projects/new' }
+    : { key: 'projects', path: '/brand' };
+  return {
+    doors: [
+      { key: 'image', path: '/brand/studio' },
+      { key: 'video', path: '/brand/studio/video' },
+    ],
+    tools,
+    team,
   };
-  return ACTION_PATHS.filter(([key]) => shown[key]).map(([key, group, path]) => ({ key, group, path }));
 }
+
+/**
+ * When a brand has made nothing yet, the doors show one of the house's own frames, marked as an example.
+ * Only files the brand host already serves to customers (lib/routing/surfaces.ts STUDIO_DEMO_FILES): the
+ * landing's perfume cut and the poster of the editorial film the workspace showcase plays. No frame with
+ * a real third-party name in it.
+ */
+export const HOME_DOOR_EXAMPLES: Readonly<Record<HomeDoorKey, string>> = {
+  image: '/reel/landing/cut-pump.webp',
+  video: '/reel/brands/studio-editorial-blue-1080p.jpg',
+};
+
+export type HomeStarterKey = 'product' | 'look' | 'film';
+/**
+ * "이렇게 시작해 보세요" for a brand that has made nothing yet: a house frame and a sentence that describes
+ * exactly that frame (messages/brand-home.ts), opened in the studio through the prefill hand-off.
+ */
+export const HOME_STARTERS: ReadonlyArray<{ key: HomeStarterKey; medium: HomeDoorKey; picture: string }> = [
+  { key: 'product', medium: 'image', picture: '/reel/landing/c-garment-wide.webp' },
+  { key: 'look', medium: 'image', picture: '/reel/landing/look-knit.webp' },
+  { key: 'film', medium: 'video', picture: '/reel/landing/v7/rx-beauty-world.jpg' },
+];
 
 export interface HomeResult {
   outputId: string;
@@ -116,7 +137,7 @@ const screenOf = (kind: StudioJobView['kind']): string => (kind === 'image' || k
  * The newest finished results of this brand, newest first, at most `limit`. A clip without a poster shows
  * its first frame; every internal "빈 곳 채우기" strip is left out.
  */
-export function homeResults(jobs: readonly StudioJobView[], organizationId: string, limit = 6): HomeResult[] {
+export function homeResults(jobs: readonly StudioJobView[], organizationId: string, limit = 8): HomeResult[] {
   const out: HomeResult[] = [];
   for (const job of jobs) {
     if (job.status !== 'succeeded' || job.purpose === 'fill') continue;
@@ -139,4 +160,13 @@ export function homeResults(jobs: readonly StudioJobView[], organizationId: stri
     }
   }
   return out;
+}
+
+/** The newest result of each kind, for the two doors (null when the brand has none of that kind yet). */
+export function homeDoorPictures(jobs: readonly StudioJobView[], organizationId: string): Record<HomeDoorKey, HomeResult | null> {
+  const all = homeResults(jobs, organizationId, Number.POSITIVE_INFINITY);
+  return {
+    image: all.find((r) => r.kind === 'image') ?? null,
+    video: all.find((r) => r.kind === 'video') ?? null,
+  };
 }
