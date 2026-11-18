@@ -65,14 +65,15 @@ describe('brand host boundary', () => {
     expect((await middleware(req('admin.twings.app','/api/admin/brand-workspace/attachments/example','GET'))).status).toBe(404);
   });
   it('opens a private same-host brand entry and retains the return path at sign in', async () => {
-    expect((await middleware(req('brand.twings.app','/'))).headers.get('location')).toBe('https://brand.twings.app/brand');
+    // The bare host is the default landing (docs/BRAND-STUDIO-V3.md §12): the resolver picks home or /brand.
+    expect((await middleware(req('brand.twings.app','/'))).headers.get('location')).toBe('https://brand.twings.app/brand/start');
     const destination = new URL((await middleware(req('brand.twings.app','/brand/projects/example'))).headers.get('location')!);
     expect(destination.origin).toBe('https://brand.twings.app');
     expect(destination.pathname).toBe('/auth/choose');
     expect(destination.searchParams.get('next')).toBe('/brand/projects/example');
   });
   it('redirects the plural alias only for navigations and never forwards auth codes or writes', async () => {
-    expect((await middleware(req('brands.twings.app','/'))).headers.get('location')).toBe('https://brand.twings.app/brand');
+    expect((await middleware(req('brands.twings.app','/'))).headers.get('location')).toBe('https://brand.twings.app/brand/start');
     expect((await middleware(req('brands.twings.app','/brand/projects/abc?tab=report'))).headers.get('location')).toBe('https://brand.twings.app/brand/projects/abc?tab=report');
     expect((await middleware(req('brands.twings.app','/auth/callback?code=secret'))).status).toBe(404);
     expect((await middleware(req('brands.twings.app','/api/brand-workspace','POST'))).status).toBe(404);
@@ -90,9 +91,13 @@ describe('brand host boundary', () => {
     expect((await middleware(req('brand.twings.app','/api/brand-workspace','POST','https://brand.twings.app'))).headers.get('x-middleware-next')).toBe('1');
   });
   it('normalizes brand return paths and keeps consumer assets distinct from the workspace', () => {
-    expect(authReturnPath('/brand/../admin','brand.twings.app','/')).toBe('/brand');
+    // A refused or missing next goes to the default landing; an explicit brand path always wins.
+    expect(authReturnPath('/brand/../admin','brand.twings.app','/')).toBe('/brand/start');
     expect(authReturnPath('/brand/projects/abc','brand.twings.app','/')).toBe('/brand/projects/abc');
-    expect(authReturnPath('/brand/twings.svg','brand.twings.app','/')).toBe('/brand');
+    expect(authReturnPath('/brand/twings.svg','brand.twings.app','/')).toBe('/brand/start');
+    expect(authReturnPath(null,'brand.twings.app','/')).toBe('/brand/start');
+    expect(authReturnPath('/brand','brand.twings.app','/')).toBe('/brand');
+    expect(authReturnPath('/brand/home?organizationId=x','brand.twings.app','/')).toBe('/brand/home?organizationId=x');
   });
   it('allows the narrow locale and production transports without opening other server actions', async()=>{
     expect((await middleware(req('brand.twings.app','/api/workspace-locale','POST','https://brand.twings.app'))).headers.get('x-middleware-next')).toBe('1');

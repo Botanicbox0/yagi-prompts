@@ -1,4 +1,5 @@
 import { safeReturnPath } from '@/lib/auth/return-path';
+import { BRAND_LANDING_PATH } from '@/lib/brands/workspace/home';
 
 export type Surface = 'consumer' | 'admin' | 'brand' | 'brands' | 'unknown';
 export const SURFACE_HEADER = 'x-twings-surface';
@@ -60,7 +61,8 @@ export function isBrandPath(pathname: string): boolean {
   // `creators`: the creator pool (docs/PLATFORM-2.0.md §17.3).
   // `identity`: the fixed brand identity layer, memory, and looks (docs/BRAND-PRODUCT.md §5).
   // `rooms`: messages and project rooms (docs/BRAND-ROOMS.md §3); each page gates itself.
-  return pathname === '/brand' || /^\/brand\/(?:projects|members|invite|settings|library|studio|usage|creators|identity|rooms)(?:\/|$)/.test(pathname);
+  // `home`: the workspace home; `start`: the default landing that picks it or `/brand` (docs/BRAND-STUDIO-V3.md §12).
+  return pathname === '/brand' || /^\/brand\/(?:projects|members|invite|settings|library|studio|usage|creators|identity|rooms|home|start)(?:\/|$)/.test(pathname);
 }
 
 const AUTH_METHODS: Record<string, readonly string[]> = {
@@ -313,19 +315,24 @@ export function bypassConsumerLocale(pathname: string): boolean {
     || /\.(?:svg|png|jpg|jpeg|gif|webp|mp4|webm|woff2?)$/.test(pathname);
 }
 
+/**
+ * Where a sign-in returns. On the brand host a missing or refused `next` goes to the landing resolver
+ * (`/brand/start`, docs/BRAND-STUDIO-V3.md §12), which picks the home or `/brand` for this account; an
+ * explicit brand path always wins.
+ */
 export function authReturnPath(raw: unknown, hostname: string, fallback: string): string {
-  const base = hostname === 'admin.twings.app' ? '/admin' : hostname === 'brand.twings.app' ? '/brand' : fallback;
+  const base = hostname === 'admin.twings.app' ? '/admin' : hostname === 'brand.twings.app' ? BRAND_LANDING_PATH : fallback;
   const path = safeReturnPath(raw, base);
   const pathname = new URL(path, 'https://path.invalid').pathname;
   if (hostname === 'admin.twings.app' && !isAdminPath(pathname)) return '/admin';
-  if (hostname === 'brand.twings.app' && !isBrandPath(pathname) && pathname !== '/api/mcp/oauth/authorize') return '/brand';
+  if (hostname === 'brand.twings.app' && !isBrandPath(pathname) && pathname !== '/api/mcp/oauth/authorize') return BRAND_LANDING_PATH;
   return path;
 }
 
 export function authFailurePath(hostname: string, locale: string, error: string, next?: string): string {
   const query = new URLSearchParams({ error });
   if (hostname === 'admin.twings.app' || hostname === 'brand.twings.app') {
-    query.set('next', authReturnPath(next, hostname, hostname === 'brand.twings.app' ? '/brand' : '/admin'));
+    query.set('next', authReturnPath(next, hostname, hostname === 'brand.twings.app' ? BRAND_LANDING_PATH : '/admin'));
     query.set('locale', locale);
     return `/auth/choose?${query}`;
   }

@@ -27,6 +27,7 @@ import {
   splitLocale,
 } from '@/lib/i18n/config';
 import { createNonce, needsWorkspaceCsp, NONCE_HEADER, workspaceCsp } from '@/lib/security/workspace-csp';
+import { BRAND_LANDING_PATH } from '@/lib/brands/workspace/home';
 
 /**
  * Edge middleware first checks the host/path boundary, including API/auth/static requests.
@@ -60,13 +61,14 @@ export async function middleware(request: NextRequest) {
   if (surface === 'brands') {
     if (!['GET', 'HEAD'].includes(request.method) || (pathname !== '/' && !isBrandPath(pathname))) return new NextResponse(null, { status: 404, headers: privateHeaders });
     const target = new URL('https://brand.twings.app');
-    target.pathname = pathname === '/' ? '/brand' : pathname;
+    target.pathname = pathname === '/' ? BRAND_LANDING_PATH : pathname;
     if (pathname !== '/') target.search = search;
     return NextResponse.redirect(target, { status: 308, headers: privateHeaders });
   }
   if (surface === 'brand') {
     if (pathname === '/' && ['GET', 'HEAD'].includes(request.method)) {
-      return NextResponse.redirect(new URL('/brand', requestUrl), { status: 307, headers: privateHeaders });
+      // The bare host is the default landing (docs/BRAND-STUDIO-V3.md §12): home or `/brand`, per account.
+      return NextResponse.redirect(new URL(BRAND_LANDING_PATH, requestUrl), { status: 307, headers: privateHeaders });
     }
     if (
       !brandRouteAllowed(pathname, request.method) ||

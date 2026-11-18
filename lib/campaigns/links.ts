@@ -31,7 +31,7 @@ export function brandEnquiryHref(locale: Locale | string): string {
 
 /** An explicit locale keeps the brand sign-in screen in the language of the landing page. */
 export function brandWorkspaceHref(locale: Locale): string {
-  return `https://brand.twings.app/auth/choose?next=%2Fbrand&locale=${locale}`;
+  return `https://brand.twings.app/auth/choose?next=%2Fbrand%2Fstart&locale=${locale}`;
 }
 
 /** `POST` — the enquiry form's endpoint (app/api/brands/inquiries). */

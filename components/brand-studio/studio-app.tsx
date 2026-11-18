@@ -208,7 +208,15 @@ export function StudioApp({ organizationId, locale, copy, mode, libraryCopy, lay
   // The project new pictures go into. Null (no project) is the default and an ordinary state.
   const [projectChoice, setProjectChoice] = useState<string | null>(null);
   const studio = useStudio({ organizationId, initialState, api, projectId: mode === "image" ? projectChoice : null });
-  const dock = useDock({ studio, copy, organizationId, initialMedium: mode, mode });
+  const dock = useDock({
+    studio,
+    copy,
+    organizationId,
+    initialMedium: mode,
+    mode,
+    // The workspace home's hand-off (prefill.ts): only where this member has an open prompt bar.
+    prefill: { ready: Boolean(studio.store.state), canCreate: Boolean(studio.store.state?.canCreate) && (studio.store.state?.allowance.capKrw ?? 0) > 0 },
+  });
   const library = useStudioLibrary(organizationId);
   const state = studio.store.state;
   // Every run, including the internal strips of "빈 곳 채우기": only the layer editor reads this list.
@@ -538,6 +546,25 @@ export function StudioApp({ organizationId, locale, copy, mode, libraryCopy, lay
     url.searchParams.delete("canvas");
     window.history.replaceState(window.history.state, "", `${url.pathname}${url.search}${url.hash}`);
   }, [canCreate, mode, openLayerEditor, state]);
+
+  // Opened from the workspace home (`/brand/home`, docs/BRAND-STUDIO-V3.md §12) with `?view=o:<id>`: that
+  // result opens in the viewer. A result this screen does not list (another medium, or older than the
+  // loaded wall) just leaves the screen as it is.
+  const viewDone = useRef(false);
+  const showInViewer = viewer.show;
+  useEffect(() => {
+    if (viewDone.current || !state) return;
+    viewDone.current = true;
+    const url = new URL(window.location.href);
+    const source = parseFrom(url.searchParams.get("view"));
+    if (!url.searchParams.has("view")) return;
+    url.searchParams.delete("view");
+    window.history.replaceState(window.history.state, "", `${url.pathname}${url.search}${url.hash}`);
+    if (!source || !("outputId" in source)) return;
+    if (jobs.some((job) => job.outputs.some((output) => output.id === source.outputId))) {
+      showInViewer({ list: "outputs", key: `o:${source.outputId}` });
+    }
+  }, [jobs, showInViewer, state]);
 
   const uploadFiles = useCallback(
     async (files: File[], attach: boolean) => {

@@ -7,7 +7,7 @@
  * brings them back, and a run sends them as `prompt` with the sentence in the field as `reviewedPrompt`
  * (`enhance: false`), so nothing is rewritten twice and the run records both.
  */
-import { useCallback, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { STUDIO_LIMITS } from "@/lib/brand-studio/contracts";
 import type { StudioMedium } from "@/lib/brand-studio/models";
 import { isFailure } from "./api";
@@ -26,6 +26,7 @@ import {
 import { addToTray, mentionLabel, moveInTray, removeFromTray, updateTrayItem, type TrayItem } from "./refs";
 import type { MissingReference, ReusePlan } from "./reuse-model";
 import type { StudioController } from "./use-studio";
+import { focusDockPromptEnd, takeStudioPrefill } from "./prefill";
 
 export function problemLine(problem: DockProblem, copy: StudioCopy): string {
   switch (problem.kind) {
@@ -93,6 +94,7 @@ export function useDock({
   organizationId,
   initialMedium,
   mode,
+  prefill,
 }: {
   studio: StudioController;
   copy: StudioCopy;
@@ -100,6 +102,11 @@ export function useDock({
   initialMedium: StudioMedium;
   /** The screen's medium. When set, the bar never switches medium. */
   mode?: StudioMedium;
+  /**
+   * The workspace home's hand-off (prefill.ts): once the screen has loaded (`ready`), a sentence the home
+   * left for this screen goes in the field, once, when this member can create and the field is empty.
+   */
+  prefill?: { ready: boolean; canCreate: boolean };
 }) {
   const [draft, setDraft] = useState<DockDraft>(() => initialDraft(mode ?? initialMedium));
   const [tray, setTray] = useState<TrayItem[]>([]);
@@ -115,6 +122,31 @@ export function useDock({
   latest.current = tray;
   const latestDraft = useRef(draft);
   latestDraft.current = draft;
+
+  // The home's hand-off is read once, on the first load, and removed whatever happens (prefill.ts).
+  const prefillReady = Boolean(prefill?.ready);
+  const prefillCanCreate = Boolean(prefill?.canCreate);
+  const prefillDone = useRef(false);
+  useEffect(() => {
+    if (!prefillReady || prefillDone.current) return;
+    prefillDone.current = true;
+    let storage: Storage | null = null;
+    try {
+      storage = window.sessionStorage;
+    } catch {
+      return;
+    }
+    const prompt = takeStudioPrefill(storage, {
+      organizationId,
+      medium: mode ?? initialMedium,
+      canCreate: prefillCanCreate,
+      currentPrompt: latestDraft.current.prompt,
+    });
+    if (!prompt) return;
+    latestDraft.current = { ...latestDraft.current, prompt };
+    setDraft((current) => (current.prompt.trim() ? current : { ...current, prompt }));
+    window.requestAnimationFrame(() => window.requestAnimationFrame(focusDockPromptEnd));
+  }, [initialMedium, mode, organizationId, prefillCanCreate, prefillReady]);
 
   const attach = useCallback(
     (item: TrayItem, first = false) => {
