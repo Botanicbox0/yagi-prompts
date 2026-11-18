@@ -96,9 +96,14 @@ describe('/admin/brand-rooms', () => {
     expect(page).toContain(`href="/admin/brand-rooms/${f.orgId}/${f.projectId}" data-admin-room-desk-link`);
     expect(page).toContain(`/admin/brand-rooms/storyboards?organizationId=${f.orgId}&amp;projectId=${f.projectId}`);
     expect(page).toContain(`/admin/brand-rooms/reviews?organizationId=${f.orgId}&amp;projectId=${f.projectId}`);
+    // 확인함 for the chosen channel, back to this conversation.
+    expect(page).toContain(`data-admin-desk-ack="${f.projectId}"`);
+    expect(page).toContain(`name="_back" value="/admin/brand-rooms/${f.orgId}?channel=${f.projectId}"`);
     const general = await html(RoomPage({ params: Promise.resolve({ organizationId: f.orgId }), searchParams: Promise.resolve({}) }));
     expect(general).toContain('data-room-channel="general"');
     expect(general).not.toContain('data-admin-room-work-links');
+    // The general conversation has nothing waiting: its 확인함 is off.
+    expect(general).toMatch(/data-admin-desk-ack="general"[\s\S]*?<button type="submit" class="admin-btn" disabled=""/);
   });
 
   it('is a 404 for a missing organization and while the flag is off', async () => {

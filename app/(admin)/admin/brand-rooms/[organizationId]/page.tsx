@@ -9,7 +9,8 @@ import { AdminShell, OutcomeBanner } from "@/components/admin/chrome";
 import { AdminPageHeader } from "@/components/admin/patterns";
 import { formatAdminTime } from "@/lib/admin/format";
 import { AdminRoomChannel } from "@/components/brand-rooms/chat/admin";
-import { roomAdminPath, staffRoomChannels } from "@/lib/brand-rooms/messages";
+import { RoomDeskAck } from "@/components/brand-rooms/desk/desk-frame";
+import { acknowledgementLine, roomAdminPath, staffRoomChannels } from "@/lib/brand-rooms/messages";
 import { GENERAL_CHANNEL, roomDeskPath } from "@/lib/brand-rooms/message-contracts";
 
 /**
@@ -18,7 +19,9 @@ import { GENERAL_CHANNEL, roomDeskPath } from "@/lib/brand-rooms/message-contrac
  * the team. Right: the chosen channel (`?channel=<projectId|general>`), the same stream the brand sees;
  * the team reads everything, replies, pins and takes lines down through the registered
  * `brand_rooms.*` operations (`author_role = 'studio'`). A project channel's header links to that
- * project's storyboards and deliverables on the team's own pages (slices S and R).
+ * project's storyboards and deliverables on the team's own pages (slices S and R). The count beside a channel
+ * is the customer's lines the team has not answered yet; opening it changes nothing, an answer or the head's
+ * 확인함 does (docs/BRAND-ROOMS-FEEDBACK.md §3).
  */
 export const dynamic = "force-dynamic";
 
@@ -34,6 +37,7 @@ export default async function AdminBrandRoom({
   const dict = getDictionary(locale);
   const c = dict.roomsChat;
   const a = c.admin;
+  const desk = dict.adminConsole.roomDesk;
   if (!sql) return <p role="alert">{dict.brandWorkspace.unavailable}</p>;
   const room = await staffRoomChannels({ sql }, viewer, organizationId);
   if (!room.ok) notFound();
@@ -107,6 +111,14 @@ export default async function AdminBrandRoom({
                     <h2>{name}</h2>
                     <p>{current.projectId ? c.channel.projectLede : c.channel.generalLede}</p>
                   </div>
+                  <RoomDeskAck
+                    organizationId={room.organization.id}
+                    channel={current.channel}
+                    count={current.teamUnread}
+                    back={roomAdminPath(room.organization.id, current.channel)}
+                    acknowledged={acknowledgementLine(current.acknowledged, desk, (at) => formatAdminTime(at, locale))}
+                    copy={{ button: desk.acknowledge, hint: desk.acknowledgeHint, failed: desk.acknowledgeFailed }}
+                  />
                   {current.projectId && (
                     <div className="brc-admin-links" data-admin-room-work-links>
                       <span>{a.workLinks}</span>

@@ -27,7 +27,7 @@ vi.mock('next/navigation', () => ({
 }));
 
 import DeskPage from '@/app/(admin)/admin/brand-rooms/[organizationId]/[projectId]/page';
-import { runRoomOperation } from '@/lib/brand-rooms/messages';
+import { runRoomOperation, staffAcknowledge } from '@/lib/brand-rooms/messages';
 import { createShare } from '@/lib/brand-rooms/shares';
 import { staffCreateStoryboard, staffReplaceFrames, staffShareStoryboard } from '@/lib/brand-rooms/storyboards';
 import { staffAddComment } from '@/lib/brand-studio/review';
@@ -45,6 +45,12 @@ const hrefOf = (page: string, marker: string): string | null => {
   // Markers here are plain `name="value"` pairs: nothing in them needs escaping for a RegExp.
   const tag = page.match(new RegExp(`<a [^>]*${marker}[^>]*>`))?.[0];
   return tag?.match(/href="([^"]*)"/)?.[1] ?? null;
+};
+
+/** The desk header's 확인함 form. */
+const ackForm = (page: string): string => {
+  const start = page.indexOf('<form class="brc-desk-ack"');
+  return start < 0 ? '' : page.slice(start, page.indexOf('</form>', start));
 };
 
 const open = (organizationId: string, projectId: string, search: Record<string, string> = {}) =>
@@ -117,6 +123,13 @@ describe('/admin/brand-rooms/[organizationId]/[projectId]', () => {
     expect(page).toContain('data-admin-desk-mode="list"');
     expect(page).toContain('data-desk-mode="list"');
     expect(page).not.toContain('data-admin-desk-chat-toggle');
+    // 확인함 in the header, enabled while something waits, posting the registered operation back to this page.
+    const ack = ackForm(page);
+    expect(ack).toContain('value="brand_rooms.channel.ack"');
+    expect(ack).toContain(`name="_back" value="/admin/brand-rooms/${f.orgId}/${f.projectId}"`);
+    expect(ack).toContain(`name="projectId" value="${f.projectId}"`);
+    expect(ack).toMatch(/<button type="submit" class="admin-btn" title="숫자는 아직 답하지 않은 고객 메시지예요\.[^"]*" data-admin-desk-ack-button="true">확인함<\/button>/);
+    expect(ack).not.toContain('data-admin-desk-ack-by');
   });
 
   it('opens the chosen version full width in the review frame, the conversation as a drawer, and keeps the version in the address', async () => {
@@ -144,6 +157,9 @@ describe('/admin/brand-rooms/[organizationId]/[projectId]', () => {
     expect(page).toContain('data-admin-desk-chat-close');
     expect(page).toMatch(/aria-expanded="false" aria-controls="brc-desk-chat" data-admin-desk-chat-toggle="true">대화<span class="admin-count-chip" aria-label="1개 기다림">1<\/span>/);
     expect(page.match(/aria-label="1개 기다림"/g)).toHaveLength(1);
+    // 확인함 is reachable in review mode too, keeping the chosen version in its way back.
+    expect(ackForm(page)).toContain(`name="_back" value="/admin/brand-rooms/${f.orgId}/${f.projectId}?review=${v2}"`);
+    expect(ackForm(page)).not.toMatch(/disabled=""/);
     // A version of another project is not opened here.
     const other = await html(open(f.orgId, f.projectId, { review: elsewhere }));
     expect(other).not.toContain('data-admin-desk-stage');
@@ -201,5 +217,14 @@ describe('/admin/brand-rooms/[organizationId]/[projectId]', () => {
     vi.stubEnv('BRAND_ROOMS', 'off');
     await expect(open(f.orgId, f.projectId)).rejects.toThrow('NEXT_NOT_FOUND');
     vi.stubEnv('BRAND_ROOMS', 'on');
+  });
+
+  // Last: it changes what waits for the other cases.
+  it('after 확인함: no count, the button off until the next customer line, and who pressed it', async () => {
+    expect(await staffAcknowledge({ sql: f.sql }, db.viewer!, { organizationId: f.orgId, projectId: f.projectId })).toMatchObject({ ok: true });
+    const page = await html(open(f.orgId, f.projectId));
+    expect(page).not.toContain('aria-label="1개 기다림"');
+    expect(ackForm(page)).toMatch(/<button type="submit" class="admin-btn" disabled="" title="[^"]*" data-admin-desk-ack-button="true">확인함<\/button>/);
+    expect(ackForm(page)).toMatch(/<span class="brc-desk-ack-by" data-admin-desk-ack-by="true">admin · [^<]+<\/span>/);
   });
 });
