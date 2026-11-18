@@ -8,7 +8,7 @@
  */
 export const studioVideoEn = {
   title: 'Video studio',
-  views: { label: 'Video studio screens', make: 'Make', compose: 'Compose clips', request: 'Ask our team' },
+  views: { label: 'Video studio screens', make: 'Make', compose: 'Editing Studio', request: 'Ask our team' },
   intro: {
     title: 'Remake a scene from one reference video',
     line: 'We read the video into a shot table and remake it with your product and people from that blueprint. A finished video can become the format of a campaign on twings.app.',
@@ -392,7 +392,6 @@ export const studioVideoEn = {
       exportNle: 'Export Premiere · DaVinci (.xml)',
       exportingNle: 'Bundling XML…',
       exportMp4: 'Export MP4',
-      exportMp4WithCredits: 'Export MP4 · {credits} credits',
       exportingMp4: 'Exporting {percent}%…',
       expandDock: '+ Make a new clip…',
       addToSequence: 'Add to sequence',
@@ -403,7 +402,7 @@ export const studioVideoEn = {
       projectCompletedNotice: 'Marked project as completed.',
       nleExportedNotice: 'Downloaded Premiere · DaVinci bundle ({filename}).',
       nleFailedNotice: 'Could not bundle Premiere · DaVinci XML right now.',
-      mp4ExportedNotice: 'Exported MP4 ({seconds}s · {credits} credits used).',
+      mp4ExportedNotice: 'Exported MP4 ({seconds}s).',
       mp4FailedNotice: 'Could not finish MP4 export. Please try again.',
       reviewNeedsClipNotice: 'Add or select a clip first to open review & share.',
     },
@@ -451,6 +450,8 @@ export const studioVideoEn = {
       cutMarkersBadge: '{count} cuts',
       splitDetectedBtn: 'Split {count} cuts',
       bgmEmpty: 'BGM: None (generate guide music or pick audio)',
+      /** `bgmEmpty` without the generation hint, while music generation is closed. */
+      bgmNone: 'BGM: None',
       bgmActive: 'BGM: {label}',
       bgmRemove: 'Clear BGM',
       captionsEmpty: 'Captions: None',
@@ -528,7 +529,7 @@ export const studioVideoEn = {
 
 export const studioVideoKo: typeof studioVideoEn = {
   title: '영상 스튜디오',
-  views: { label: '영상 스튜디오 화면', make: '만들기', compose: '영상 합치기', request: '제작 의뢰' },
+  views: { label: '영상 스튜디오 화면', make: '만들기', compose: '편집 스튜디오', request: '제작 의뢰' },
   intro: {
     title: '참고 영상 하나로 같은 장면을 다시 찍어요',
     line: '영상을 읽어 샷 표로 바꾸고, 그 설계도대로 우리 제품과 인물을 넣어 새로 만들어요. 완성한 영상은 twings.app 캠페인의 포맷이 될 수 있어요.',
@@ -912,7 +913,6 @@ export const studioVideoKo: typeof studioVideoEn = {
       exportNle: 'Premiere · DaVinci (.xml)',
       exportingNle: 'XML 묶는 중…',
       exportMp4: 'MP4 내보내기',
-      exportMp4WithCredits: 'MP4 내보내기 · {credits} 크레딧',
       exportingMp4: '{percent}% 내보내는 중…',
       expandDock: '+ 새 클립 만들기…',
       addToSequence: '시퀀스에 올리기',
@@ -923,7 +923,7 @@ export const studioVideoKo: typeof studioVideoEn = {
       projectCompletedNotice: '프로젝트를 완료 처리했어요.',
       nleExportedNotice: 'Premiere · DaVinci 패키지({filename})를 내려받았어요.',
       nleFailedNotice: 'Premiere · DaVinci 패키지를 만들지 못했어요.',
-      mp4ExportedNotice: 'MP4 내보내기가 완료되었어요 ({seconds}초 · {credits} 크레딧 사용).',
+      mp4ExportedNotice: 'MP4 내보내기가 완료되었어요 ({seconds}초).',
       mp4FailedNotice: 'MP4 내보내기를 완료하지 못했어요. 다시 시도해 주세요.',
       reviewNeedsClipNotice: '검수 · 공유를 열려면 먼저 클립을 추가하거나 선택해 주세요.',
     },
@@ -971,6 +971,7 @@ export const studioVideoKo: typeof studioVideoEn = {
       cutMarkersBadge: '컷 {count}개',
       splitDetectedBtn: '감지 컷 {count}개 분할',
       bgmEmpty: '배경음악 없음 (구간 음악 생성 또는 음원 선택)',
+      bgmNone: '배경음악 없음',
       bgmActive: '배경음악: {label}',
       bgmRemove: '음악 제거',
       captionsEmpty: '자막 없음',

@@ -1949,6 +1949,13 @@
   gap: 6px;
 }
 
+/* Music generation closed: the sound-effect block opens the panel, nothing above it to divide from. */
+.seqSfxDivider:first-child {
+  margin-top: 0;
+  padding-top: 0;
+  border-top: 0;
+}
+
 .seqSfxInput {
   min-width: 0;
   width: 100%;

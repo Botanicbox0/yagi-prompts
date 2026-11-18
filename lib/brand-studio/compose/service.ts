@@ -5,13 +5,15 @@
  *   (`20` requests / `60s` per member+organization). Uses deterministic `parseComposeChatCommand` first and
  *   falls back to TWINGS's server-side structured parser (`callGeminiJson`) when configured — zero BYOK keys
  *   or external vendor names.
- * - `render.reserve`: Deducts TWINGS credits (`composeFinalRenderKrw`) before high-resolution 1080p MP4 export
- *   under the organization lock (`reserveAllowance` + `brand_studio_jobs` `video_final` / `compose-1080p`).
- * - `render.refund`: Marks a failed client 1080p export row as `failed` (`usage_krw = null`) for an automatic
- *   100% credit refund. It applies only to the caller's own export reservation written by `render.reserve`
- *   (`params.source = 'compose'`, `status = 'succeeded'`) and only within `COMPOSE_RENDER_REFUND_WINDOW_MS`
- *   of its `created_at`. Music, SFX and upscale rows share the `compose-1080p` ledger model but refund
- *   themselves server-side, so this operation never touches them; any other row yields `refunded: false`.
+ * - `render.reserve`: Records one browser 1080p MP4 export (`brand_studio_jobs` `video_final` / `compose-1080p`,
+ *   `params.source = 'compose'`) under the organization lock. Export is free (docs/BRAND-EDITING-STUDIO.md
+ *   §8-3: the browser encodes, we have no cost): the row carries `estimate_krw = usage_krw = 0`, no allowance
+ *   is reserved, so an organization with no allowance or over its cap can still export. Idempotent by request id.
+ * - `render.refund`: Kept for pages loaded before export became free and for exports charged in the last
+ *   `COMPOSE_RENDER_REFUND_WINDOW_MS`: marks the caller's own charged export row (`params.source = 'compose'`,
+ *   `status = 'succeeded'`, `usage_krw > 0`) as `failed` (`usage_krw = null`). Free (0-KRW) export rows, older
+ *   rows, other members' rows and music / SFX / upscale rows (same ledger model, they refund themselves
+ *   server-side) are never touched and yield `refunded: false`.
  * - `assist.plan`: "말로 편집" (`docs/BRAND-EDITING-STUDIO.md` §4, `lib/brand-studio/edit-assist/service.ts`).
  *   Behind `BRAND_STUDIO_EDIT_ASSIST`; off, it answers exactly like an unknown operation. Same gate and the
  *   same per-minute budget as `chat.edit`, free.
@@ -23,14 +25,14 @@ import type { StudioAllowanceView, StudioErrorCode } from '@/lib/brand-studio/co
 import { creditsOf } from '@/lib/brand-studio/credits';
 import { callGeminiJson, studioGeminiConfig } from '@/lib/brand-studio/enhancer/gemini';
 import type { StudioDeps } from '@/lib/brand-studio/types';
-import { allowanceView, loadAllowance, reserveAllowance } from '@/lib/brand-studio/usage';
+import { allowanceView, loadAllowance } from '@/lib/brand-studio/usage';
 import { AssistPlanInputSchema, planEditAssist, type AssistPlanResult } from '../edit-assist/service';
 import {
   ComposePatchesEnvelopeSchema,
   describeTimelinePatches,
   parseComposeChatCommand,
 } from './chat-intent';
-import { COMPOSE_FINAL_RENDER_MODEL, COMPOSE_RENDER_REFUND_WINDOW_MS, composeFinalRenderKrw } from './credits';
+import { COMPOSE_FINAL_RENDER_MODEL, COMPOSE_RENDER_REFUND_WINDOW_MS } from './credits';
 import { COMPOSE_ASPECTS, type ComposerProject, type TimelinePatch } from './timeline';
 
 export const COMPOSE_OPERATIONS = ['chat.edit', 'render.reserve', 'render.refund', 'assist.plan'] as const;
@@ -377,7 +379,6 @@ export async function runComposeOperation(
     const parsed = RenderReserveInputSchema.safeParse(input);
     if (!parsed.success) return { ok: false, code: 'invalid' };
     const v = parsed.data;
-    const krw = composeFinalRenderKrw(v.durationSec);
 
     try {
       return await deps.sql.transaction(async (tx) => {
@@ -408,9 +409,7 @@ export async function runComposeOperation(
           return { ok: false as const, code: 'conflict' as const };
         }
 
-        const verdict = await reserveAllowance(tx, v.organizationId, krw, deps.env, now);
-        if (!verdict.ok) return { ok: false as const, code: verdict.code };
-
+        // Free export: no allowance check or reservation, just the 0-KRW row (one per request id).
         const ts = now.toISOString();
         const params = JSON.stringify({
           resolution: '1080p',
@@ -423,16 +422,16 @@ export async function runComposeOperation(
              prompt, enhance, refs, params, estimate_krw, usage_krw, created_at, started_at, finished_at
            ) values (
              $1, $2, $3, 'video_final', 'succeeded', null, $4,
-             '1080p MP4 compose', false, '[]'::jsonb, $5::jsonb, $6, $6, $7, $7, $7
+             '1080p MP4 compose', false, '[]'::jsonb, $5::jsonb, 0, 0, $6, $6, $6
            ) returning id`,
-          [v.organizationId, seat.userId, v.requestId, COMPOSE_FINAL_RENDER_MODEL, params, krw, ts],
+          [v.organizationId, seat.userId, v.requestId, COMPOSE_FINAL_RENDER_MODEL, params, ts],
         );
 
         const updated = await loadAllowance(tx, v.organizationId, deps.env, now);
         return {
           ok: true as const,
           jobId: inserted.rows[0]!.id,
-          creditsUsed: creditsOf(krw),
+          creditsUsed: 0,
           allowance: allowanceView(updated),
         };
       });
@@ -459,6 +458,7 @@ export async function runComposeOperation(
             set status = 'failed', usage_krw = null, error_code = 'failed', finished_at = $4
           where id = $1 and organization_id = $2 and created_by = $3 and model = $5 and status = 'succeeded'
             and params->>'source' = 'compose'
+            and usage_krw > 0
             and created_at >= $6
           returning id`,
         [

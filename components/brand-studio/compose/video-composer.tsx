@@ -29,7 +29,6 @@ import {
   applyTimelinePatches,
   clamp,
   clipPlayDuration,
-  composeFinalRenderCredits,
   composeStorageKey,
   cssFilterForColorGrade,
   detectVideoSceneCutsInBrowser,
@@ -92,6 +91,11 @@ export interface VideoComposerProps {
   initialProject?: ComposerProject;
   /** `BRAND_STUDIO_EDIT_ASSIST`: the right panel becomes "말로 편집" (preview, apply, undo, redo). */
   editAssist?: boolean;
+  /**
+   * `BRAND_STUDIO_MUSIC_GENERATION`: shows the music generation card. Closed (default), the music tab keeps
+   * only uploading and using your own audio; volume and removal stay on the timeline.
+   */
+  musicGeneration?: boolean;
 }
 
 type ToolTab = 'clips' | 'color' | 'music' | 'captions' | 'upscale';
@@ -225,6 +229,7 @@ export function VideoComposer({
   initialBrowserFilter = 'recent',
   initialProject,
   editAssist = false,
+  musicGeneration = false,
 }: VideoComposerProps) {
   const api = useMemo(() => createStudioApi({ organizationId }), [organizationId]);
   const [allowance, setAllowance] = useState<StudioAllowanceView>(initialAllowance);
@@ -397,12 +402,6 @@ export function VideoComposer({
   const spans = useMemo(() => timelineSpans(shownProject), [shownProject]);
   const frameAtPlayhead = useMemo(() => frameStateAtTime(shownProject, playheadSec), [shownProject, playheadSec]);
   const remainingCredits = useMemo(() => creditsLeft(allowance.capKrw, allowance.usedKrw), [allowance]);
-  // The export button prices the real timeline, never a previewed draft.
-  const realTotalSec = useMemo(() => projectDurationSec(project), [project]);
-  const renderCostCredits = useMemo(
-    () => (project.clips.length > 0 ? composeFinalRenderCredits(realTotalSec) : 0),
-    [project.clips.length, realTotalSec],
-  );
 
   const safeSelectedIdx = useMemo(
     () => Math.min(selectedClipIdx, Math.max(0, project.clips.length - 1)),
@@ -1695,10 +1694,9 @@ export function VideoComposer({
     setStatusMessage(null);
     setSavedAssetId(null);
 
-    let reservedJobId: string | null = null;
-    let creditsUsed = renderCostCredits;
-
     try {
+      // Export is free (docs/BRAND-EDITING-STUDIO.md §8-3): the server only records the export, so there is
+      // nothing to refund when the browser fails to encode.
       const reserve = await postComposeOperation('render.reserve', {
         organizationId,
         requestId: makeComposeRequestId(),
@@ -1706,26 +1704,8 @@ export function VideoComposer({
       });
 
       if (reserve.ok !== true || typeof reserve.jobId !== 'string') {
-        if (reserve.code === 'allowance_exhausted') {
-          setStatusMessage(
-            interpolate(copy.status.exportAllowanceExhausted, {
-              credits: formatCredits(renderCostCredits, locale),
-            }),
-          );
-        } else if (reserve.code === 'allowance_closed') {
-          setStatusMessage(copy.status.exportAllowanceClosed);
-        } else {
-          setStatusMessage(copy.status.exportFailed);
-        }
+        setStatusMessage(copy.status.exportFailed);
         return;
-      }
-
-      reservedJobId = reserve.jobId;
-      if (typeof reserve.creditsUsed === 'number') {
-        creditsUsed = reserve.creditsUsed;
-      }
-      if (reserve.allowance && typeof reserve.allowance === 'object') {
-        setAllowance(reserve.allowance as StudioAllowanceView);
       }
 
       const result = await exportCompositionMp4(project, (ratio) => setExportingRatio(ratio));
@@ -1737,44 +1717,19 @@ export function VideoComposer({
       triggerDownload(objectUrl, result.filename);
       const mb = (result.blob.size / (1024 * 1024)).toFixed(1);
       const elapsed = (result.elapsedMs / 1000).toFixed(1);
-      const creditsText = formatCredits(creditsUsed, locale);
       setStatusMessage(
         result.mime === 'video/mp4'
           ? interpolate(copy.status.exportedReady, {
               seconds: result.durationSec,
               mb,
               elapsed,
-              credits: creditsText,
             })
           : interpolate(copy.status.exportWebmFallback, {
               seconds: result.durationSec,
-              credits: creditsText,
             }),
       );
     } catch {
-      if (reservedJobId) {
-        try {
-          const refund = await postComposeOperation('render.refund', {
-            organizationId,
-            jobId: reservedJobId,
-          });
-          if (refund.ok === true && refund.allowance && typeof refund.allowance === 'object') {
-            setAllowance(refund.allowance as StudioAllowanceView);
-          }
-          // Say "refunded" only when the server really refunded (it declines reservations past the window).
-          setStatusMessage(
-            refund.ok === true && refund.refunded === true
-              ? interpolate(copy.status.exportFailedRefunded, {
-                  credits: formatCredits(creditsUsed, locale),
-                })
-              : copy.status.exportFailed,
-          );
-        } catch {
-          setStatusMessage(copy.status.exportFailed);
-        }
-      } else {
-        setStatusMessage(copy.status.exportFailed);
-      }
+      setStatusMessage(copy.status.exportFailed);
     } finally {
       setExportingRatio(null);
     }
@@ -2124,11 +2079,7 @@ export function VideoComposer({
           >
             {exportingRatio !== null
               ? interpolate(copy.actions.exporting, { percent: Math.round(exportingRatio * 100) })
-              : project.clips.length > 0
-                ? interpolate(copy.actions.exportMp4WithCredits, {
-                    credits: formatCredits(renderCostCredits, locale),
-                  })
-                : copy.actions.exportMp4}
+              : copy.actions.exportMp4}
           </button>
         </div>
       </header>
@@ -2453,21 +2404,24 @@ export function VideoComposer({
                               {audio.name}
                             </p>
                             <div className={s.cardActions}>
-                              <button
-                                type="button"
-                                className={s.smallBtn}
-                                aria-pressed={isRef}
-                                onClick={() =>
-                                  setMusicRefAudio({
-                                    label: audio.name,
-                                    assetId: audio.id,
-                                    url: audio.url,
-                                  })
-                                }
-                                data-compose-pick-ref-audio={audio.id}
-                              >
-                                {copy.musicGen.pickLibraryRef}
-                              </button>
+                              {/* Only feeds music generation, so it goes with it when generation is closed. */}
+                              {musicGeneration ? (
+                                <button
+                                  type="button"
+                                  className={s.smallBtn}
+                                  aria-pressed={isRef}
+                                  onClick={() =>
+                                    setMusicRefAudio({
+                                      label: audio.name,
+                                      assetId: audio.id,
+                                      url: audio.url,
+                                    })
+                                  }
+                                  data-compose-pick-ref-audio={audio.id}
+                                >
+                                  {copy.musicGen.pickLibraryRef}
+                                </button>
+                              ) : null}
                               <button
                                 type="button"
                                 className={s.smallBtn}
@@ -2488,172 +2442,174 @@ export function VideoComposer({
                 )}
               </div>
 
-              {/* Sub-section 2: Reference-Based Non-Commercial Music Generation */}
-              <div className={s.toolCard} data-compose-music-gen>
-                <p className={s.sectionLabel}>{copy.musicGen.genHeading}</p>
+              {/* Sub-section 2: Reference-Based Non-Commercial Music Generation (BRAND_STUDIO_MUSIC_GENERATION) */}
+              {musicGeneration ? (
+                <div className={s.toolCard} data-compose-music-gen>
+                  <p className={s.sectionLabel}>{copy.musicGen.genHeading}</p>
 
-                <div className={s.noticeCard} data-compose-music-license-notice>
-                  <span className={s.noticePill}>{copy.musicGen.licenseBadge}</span>
-                  <p className={s.noticeBody}>{copy.musicGen.licenseNotice}</p>
-                </div>
+                  <div className={s.noticeCard} data-compose-music-license-notice>
+                    <span className={s.noticePill}>{copy.musicGen.licenseBadge}</span>
+                    <p className={s.noticeBody}>{copy.musicGen.licenseNotice}</p>
+                  </div>
 
-                <div className={s.audioRowHead}>
-                  <span className={s.sectionLabel}>{copy.musicGen.refAudioLabel}</span>
-                  <div className={s.cardActions}>
-                    <label className={s.smallBtn}>
-                      <span>{copy.musicGen.uploadRefAudio}</span>
-                      <input
-                        type="file"
-                        accept="audio/mpeg,audio/wav,.mp3,.wav"
-                        hidden
-                        onChange={(e) => void handleRefAudioFilePick(e)}
-                        data-compose-ref-audio-input
-                      />
-                    </label>
-                    {musicRefAudio ? (
+                  <div className={s.audioRowHead}>
+                    <span className={s.sectionLabel}>{copy.musicGen.refAudioLabel}</span>
+                    <div className={s.cardActions}>
+                      <label className={s.smallBtn}>
+                        <span>{copy.musicGen.uploadRefAudio}</span>
+                        <input
+                          type="file"
+                          accept="audio/mpeg,audio/wav,.mp3,.wav"
+                          hidden
+                          onChange={(e) => void handleRefAudioFilePick(e)}
+                          data-compose-ref-audio-input
+                        />
+                      </label>
+                      {musicRefAudio ? (
+                        <button
+                          type="button"
+                          className={s.smallBtn}
+                          onClick={() => setMusicRefAudio(null)}
+                        >
+                          {copy.musicGen.clearRefAudio}
+                        </button>
+                      ) : null}
+                    </div>
+                  </div>
+
+                  {musicRefAudio ? (
+                    <span className={s.summaryBadge} data-compose-active-ref-audio>
+                      {interpolate(copy.musicGen.activeRefAudio, { name: musicRefAudio.label })}
+                    </span>
+                  ) : null}
+
+                  <p className={s.sectionLabel}>{copy.musicGen.modeLabel}</p>
+                  <div className={s.filterPillRow} role="group" aria-label={copy.musicGen.modeLabel}>
+                    {(
+                      [
+                        ['instrumental', copy.musicGen.modeInstrumental],
+                        ['vocal_guide', copy.musicGen.modeVocalGuide],
+                      ] as const
+                    ).map(([modeKey, label]) => (
+                      <button
+                        key={modeKey}
+                        type="button"
+                        className={s.filterPill}
+                        aria-pressed={musicMode === modeKey}
+                        onClick={() => setMusicMode(modeKey)}
+                        data-compose-music-mode={modeKey}
+                      >
+                        {label}
+                      </button>
+                    ))}
+                  </div>
+
+                  <label className={s.sliderRow}>
+                    <span className={s.sliderHead}>
+                      <span>{interpolate(copy.musicGen.bpmLabel, { bpm: musicBpm })}</span>
+                      <span className={s.monoValue}>{musicBpm} BPM</span>
+                    </span>
+                    <input
+                      type="range"
+                      className={s.rangeSlider}
+                      min={60}
+                      max={180}
+                      value={musicBpm}
+                      onChange={(e) => setMusicBpm(Number(e.target.value))}
+                      data-compose-music-bpm
+                    />
+                  </label>
+
+                  <p className={s.sectionLabel}>{copy.musicGen.styleLabel}</p>
+                  <div className={s.presetGrid}>
+                    {(['frenchHouse', 'ambientCello', 'marimbaPerc', 'warmSynth'] as const).map((styleKey) => (
+                      <button
+                        key={styleKey}
+                        type="button"
+                        className={s.presetPill}
+                        aria-pressed={musicStyle === styleKey}
+                        onClick={() => setMusicStyle(styleKey)}
+                        data-compose-music-style={styleKey}
+                      >
+                        {copy.musicGen.styles[styleKey]}
+                      </button>
+                    ))}
+                  </div>
+
+                  <div className={s.audioRowHead}>
+                    <button
+                      type="button"
+                      className={s.filterPill}
+                      aria-pressed={musicDropSync}
+                      onClick={() => {
+                        const next = !musicDropSync;
+                        setMusicDropSync(next);
+                        if (next) {
+                          setMusicRevealCustom(false);
+                          setMusicRevealSec(suggestedDropSec);
+                        }
+                      }}
+                      data-compose-music-dropsync
+                    >
+                      {copy.musicGen.dropSyncToggle}
+                    </button>
+                    {musicDropSync ? (
                       <button
                         type="button"
                         className={s.smallBtn}
-                        onClick={() => setMusicRefAudio(null)}
+                        onClick={() => {
+                          setMusicRevealCustom(true);
+                          setMusicRevealSec(suggestedDropSec);
+                        }}
+                        data-compose-sync-cut-btn
                       >
-                        {copy.musicGen.clearRefAudio}
+                        {interpolate(copy.musicGen.syncFromCutBtn, { seconds: suggestedDropSec })}
                       </button>
                     ) : null}
                   </div>
-                </div>
 
-                {musicRefAudio ? (
-                  <span className={s.summaryBadge} data-compose-active-ref-audio>
-                    {interpolate(copy.musicGen.activeRefAudio, { name: musicRefAudio.label })}
-                  </span>
-                ) : null}
+                  {musicDropSync ? (
+                    <p className={s.monoValue} data-compose-music-drop-readout>
+                      {interpolate(copy.musicGen.dropSyncAt, { seconds: musicRevealSec })}
+                    </p>
+                  ) : null}
 
-                <p className={s.sectionLabel}>{copy.musicGen.modeLabel}</p>
-                <div className={s.filterPillRow} role="group" aria-label={copy.musicGen.modeLabel}>
-                  {(
-                    [
-                      ['instrumental', copy.musicGen.modeInstrumental],
-                      ['vocal_guide', copy.musicGen.modeVocalGuide],
-                    ] as const
-                  ).map(([modeKey, label]) => (
-                    <button
-                      key={modeKey}
-                      type="button"
-                      className={s.filterPill}
-                      aria-pressed={musicMode === modeKey}
-                      onClick={() => setMusicMode(modeKey)}
-                      data-compose-music-mode={modeKey}
-                    >
-                      {label}
-                    </button>
-                  ))}
-                </div>
-
-                <label className={s.sliderRow}>
-                  <span className={s.sliderHead}>
-                    <span>{interpolate(copy.musicGen.bpmLabel, { bpm: musicBpm })}</span>
-                    <span className={s.monoValue}>{musicBpm} BPM</span>
-                  </span>
-                  <input
-                    type="range"
-                    className={s.rangeSlider}
-                    min={60}
-                    max={180}
-                    value={musicBpm}
-                    onChange={(e) => setMusicBpm(Number(e.target.value))}
-                    data-compose-music-bpm
-                  />
-                </label>
-
-                <p className={s.sectionLabel}>{copy.musicGen.styleLabel}</p>
-                <div className={s.presetGrid}>
-                  {(['frenchHouse', 'ambientCello', 'marimbaPerc', 'warmSynth'] as const).map((styleKey) => (
-                    <button
-                      key={styleKey}
-                      type="button"
-                      className={s.presetPill}
-                      aria-pressed={musicStyle === styleKey}
-                      onClick={() => setMusicStyle(styleKey)}
-                      data-compose-music-style={styleKey}
-                    >
-                      {copy.musicGen.styles[styleKey]}
-                    </button>
-                  ))}
-                </div>
-
-                <div className={s.audioRowHead}>
                   <button
                     type="button"
-                    className={s.filterPill}
-                    aria-pressed={musicDropSync}
-                    onClick={() => {
-                      const next = !musicDropSync;
-                      setMusicDropSync(next);
-                      if (next) {
-                        setMusicRevealCustom(false);
-                        setMusicRevealSec(suggestedDropSec);
-                      }
-                    }}
-                    data-compose-music-dropsync
+                    className={s.smallDarkBtn}
+                    disabled={!canCreate || musicBusy}
+                    onClick={() => void handleGenerateMusic()}
+                    data-compose-music-submit
                   >
-                    {copy.musicGen.dropSyncToggle}
+                    {musicBusy
+                      ? copy.musicGen.generatingBtn
+                      : interpolate(copy.musicGen.generateBtn, {
+                          credits: formatCredits(musicEstimateCredits, locale),
+                        })}
                   </button>
-                  {musicDropSync ? (
-                    <button
-                      type="button"
-                      className={s.smallBtn}
-                      onClick={() => {
-                        setMusicRevealCustom(true);
-                        setMusicRevealSec(suggestedDropSec);
-                      }}
-                      data-compose-sync-cut-btn
-                    >
-                      {interpolate(copy.musicGen.syncFromCutBtn, { seconds: suggestedDropSec })}
-                    </button>
+
+                  {generatedMusic ? (
+                    <div className={s.audioPreviewCard} data-compose-generated-music-card>
+                      <p className={s.sourceName}>{generatedMusic.label}</p>
+                      <audio
+                        controls
+                        className={s.audioPlayer}
+                        src={generatedMusic.previewUrl}
+                        data-compose-music-preview
+                      />
+                      <button
+                        type="button"
+                        className={s.smallDarkBtn}
+                        disabled={!canCreate}
+                        onClick={handlePlaceGeneratedMusicOnTimeline}
+                        data-compose-apply-generated-bgm
+                      >
+                        {copy.musicGen.placeOnTimelineBtn}
+                      </button>
+                    </div>
                   ) : null}
                 </div>
-
-                {musicDropSync ? (
-                  <p className={s.monoValue} data-compose-music-drop-readout>
-                    {interpolate(copy.musicGen.dropSyncAt, { seconds: musicRevealSec })}
-                  </p>
-                ) : null}
-
-                <button
-                  type="button"
-                  className={s.smallDarkBtn}
-                  disabled={!canCreate || musicBusy}
-                  onClick={() => void handleGenerateMusic()}
-                  data-compose-music-submit
-                >
-                  {musicBusy
-                    ? copy.musicGen.generatingBtn
-                    : interpolate(copy.musicGen.generateBtn, {
-                        credits: formatCredits(musicEstimateCredits, locale),
-                      })}
-                </button>
-
-                {generatedMusic ? (
-                  <div className={s.audioPreviewCard} data-compose-generated-music-card>
-                    <p className={s.sourceName}>{generatedMusic.label}</p>
-                    <audio
-                      controls
-                      className={s.audioPlayer}
-                      src={generatedMusic.previewUrl}
-                      data-compose-music-preview
-                    />
-                    <button
-                      type="button"
-                      className={s.smallDarkBtn}
-                      disabled={!canCreate}
-                      onClick={handlePlaceGeneratedMusicOnTimeline}
-                      data-compose-apply-generated-bgm
-                    >
-                      {copy.musicGen.placeOnTimelineBtn}
-                    </button>
-                  </div>
-                ) : null}
-              </div>
+              ) : null}
             </div>
           ) : null}
 

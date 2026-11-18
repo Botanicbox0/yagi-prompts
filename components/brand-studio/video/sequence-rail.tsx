@@ -134,6 +134,11 @@ export interface SequenceRailProps {
   railCopy: StudioVideoCopy["workspace"]["rail"];
   floatingCopy: StudioVideoCopy["workspace"]["floatingBar"];
   extendingScene?: boolean;
+  /**
+   * `BRAND_STUDIO_MUSIC_GENERATION`. Closed (default): no generate-music button, no music generation in the
+   * inspector (its tab keeps the sound-effect generator), and the empty BGM lane does not offer generation.
+   */
+  musicGeneration?: boolean;
   onHeightChange(next: SequenceRailHeight): void;
   onSelectClip(clipId: string | null): void;
   onInspectorTabChange(tab: SequenceInspectorTab): void;
@@ -157,6 +162,7 @@ export function SequenceRail({
   railCopy,
   floatingCopy,
   extendingScene = false,
+  musicGeneration = false,
   onHeightChange,
   onSelectClip,
   onInspectorTabChange,
@@ -1003,7 +1009,7 @@ export function SequenceRail({
           onColorGrade={handleOpenColorGrade}
           onAttachAsReference={() => onAttachClipToDock(selectedClip)}
           onExtendScene={onExtendNextScene ? () => onExtendNextScene(selectedClip) : undefined}
-          onGenerateMusic={handleOpenMusicGen}
+          onGenerateMusic={musicGeneration ? handleOpenMusicGen : undefined}
           onUpscale={handleOpenUpscale}
           onDelete={handleDeleteSelected}
         />
@@ -1160,7 +1166,7 @@ export function SequenceRail({
                       </button>
                     )}
                   </>
-                ) : (
+                ) : musicGeneration ? (
                   <button
                     type="button"
                     className={w.seqLaneGhost}
@@ -1168,6 +1174,8 @@ export function SequenceRail({
                   >
                     {railCopy.bgmEmpty}
                   </button>
+                ) : (
+                  <span>{railCopy.bgmNone}</span>
                 )}
               </div>
 
@@ -1277,7 +1285,7 @@ export function SequenceRail({
                       )}
                     </>
                   ) : (
-                    <span>{railCopy.bgmEmpty}</span>
+                    <span>{musicGeneration ? railCopy.bgmEmpty : railCopy.bgmNone}</span>
                   )}
                 </div>
 
@@ -1486,7 +1494,9 @@ export function SequenceRail({
                     {tab === "color"
                       ? railCopy.inspector.colorTab
                       : tab === "music"
-                        ? railCopy.inspector.musicTab
+                        ? musicGeneration
+                          ? railCopy.inspector.musicTab
+                          : railCopy.inspector.sfxTitle
                         : tab === "captions"
                           ? railCopy.inspector.captionsTab
                           : railCopy.inspector.upscaleTab}
@@ -1652,83 +1662,90 @@ export function SequenceRail({
 
               {inspectorTab === "music" && (
                 <div className={w.seqInspectorBody} data-inspector-panel="music">
-                  <span className={w.seqLicenseTag} data-music-license-badge>
-                    {project.bgm?.nonCommercialGuide === true
-                      ? railCopy.inspector.musicLicense
-                      : railCopy.inspector.musicCommercialLicense}
-                  </span>
-                  <div className={w.seqPresetGrid}>
-                    {(["frenchHouse", "ambientCello", "marimbaPerc", "warmSynth"] as const).map((st) => (
-                      <button
-                        key={st}
-                        type="button"
-                        className={w.seqPresetBtn}
-                        aria-pressed={musicStyle === st}
-                        disabled={!canEdit}
-                        onClick={() => setMusicStyle(st)}
-                        data-music-style={st}
-                      >
-                        {railCopy.inspector.musicStyles[st]}
-                      </button>
-                    ))}
-                  </div>
-
-                  <label className={w.seqSliderRow}>
-                    <span>{interpolate(railCopy.inspector.musicBpm, { bpm: musicBpm })}</span>
-                    <input
-                      type="range"
-                      min={80}
-                      max={150}
-                      step={2}
-                      value={musicBpm}
-                      disabled={!canEdit}
-                      onChange={(e) => setMusicBpm(Number(e.target.value))}
-                    />
-                  </label>
-
-                  {audioAssets.length > 0 && (
-                    <div className={w.seqAudioAssetRow}>
-                      {audioAssets.slice(0, 4).map((a) => (
-                        <button
-                          key={a.id}
-                          type="button"
-                          className={w.seqPresetBtn}
-                          aria-pressed={musicRefAssetId === a.id}
-                          disabled={!canEdit}
-                          onClick={() => {
-                            setMusicRefAssetId(a.id);
-                            setMusicRefLabel(a.name);
-                          }}
-                        >
-                          {a.name.slice(0, 20)}
-                        </button>
-                      ))}
-                    </div>
+                  {/* Closed generation keeps the badge only to flag a guide track already on the timeline. */}
+                  {(musicGeneration || project.bgm?.nonCommercialGuide === true) && (
+                    <span className={w.seqLicenseTag} data-music-license-badge>
+                      {project.bgm?.nonCommercialGuide === true
+                        ? railCopy.inspector.musicLicense
+                        : railCopy.inspector.musicCommercialLicense}
+                    </span>
                   )}
+                  {musicGeneration && (
+                    <>
+                      <div className={w.seqPresetGrid}>
+                        {(["frenchHouse", "ambientCello", "marimbaPerc", "warmSynth"] as const).map((st) => (
+                          <button
+                            key={st}
+                            type="button"
+                            className={w.seqPresetBtn}
+                            aria-pressed={musicStyle === st}
+                            disabled={!canEdit}
+                            onClick={() => setMusicStyle(st)}
+                            data-music-style={st}
+                          >
+                            {railCopy.inspector.musicStyles[st]}
+                          </button>
+                        ))}
+                      </div>
 
-                  <div className={w.seqPillRow}>
-                    <button
-                      type="button"
-                      className={w.seqUploadBtn}
-                      disabled={!canEdit}
-                      onClick={() => musicRefInputRef.current?.click()}
-                    >
-                      {musicRefLabel ? musicRefLabel.slice(0, 20) : railCopy.inspector.musicAttachRef}
-                    </button>
-                    <button
-                      type="button"
-                      className={w.barDarkBtn}
-                      disabled={!canEdit || musicBusy}
-                      onClick={() => void handleGenerateMusic()}
-                      data-inspector-generate-music
-                    >
-                      {musicBusy
-                        ? railCopy.inspector.musicGenerating
-                        : interpolate(railCopy.inspector.musicGenerateBtn, {
-                            credits: formatCredits(musicCostCredits, locale),
-                          })}
-                    </button>
-                  </div>
+                      <label className={w.seqSliderRow}>
+                        <span>{interpolate(railCopy.inspector.musicBpm, { bpm: musicBpm })}</span>
+                        <input
+                          type="range"
+                          min={80}
+                          max={150}
+                          step={2}
+                          value={musicBpm}
+                          disabled={!canEdit}
+                          onChange={(e) => setMusicBpm(Number(e.target.value))}
+                        />
+                      </label>
+
+                      {audioAssets.length > 0 && (
+                        <div className={w.seqAudioAssetRow}>
+                          {audioAssets.slice(0, 4).map((a) => (
+                            <button
+                              key={a.id}
+                              type="button"
+                              className={w.seqPresetBtn}
+                              aria-pressed={musicRefAssetId === a.id}
+                              disabled={!canEdit}
+                              onClick={() => {
+                                setMusicRefAssetId(a.id);
+                                setMusicRefLabel(a.name);
+                              }}
+                            >
+                              {a.name.slice(0, 20)}
+                            </button>
+                          ))}
+                        </div>
+                      )}
+
+                      <div className={w.seqPillRow}>
+                        <button
+                          type="button"
+                          className={w.seqUploadBtn}
+                          disabled={!canEdit}
+                          onClick={() => musicRefInputRef.current?.click()}
+                        >
+                          {musicRefLabel ? musicRefLabel.slice(0, 20) : railCopy.inspector.musicAttachRef}
+                        </button>
+                        <button
+                          type="button"
+                          className={w.barDarkBtn}
+                          disabled={!canEdit || musicBusy}
+                          onClick={() => void handleGenerateMusic()}
+                          data-inspector-generate-music
+                        >
+                          {musicBusy
+                            ? railCopy.inspector.musicGenerating
+                            : interpolate(railCopy.inspector.musicGenerateBtn, {
+                                credits: formatCredits(musicCostCredits, locale),
+                              })}
+                        </button>
+                      </div>
+                    </>
+                  )}
 
                   <div className={w.seqSfxDivider} data-sfx-generator>
                     <span className={w.seqLicenseTag}>{railCopy.inspector.sfxTitle}</span>

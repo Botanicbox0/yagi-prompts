@@ -131,7 +131,7 @@ function allowedText(copy: StudioComposeCopy, entries: readonly AssistEntry[]): 
 }
 
 describe('AssistPanel — empty', () => {
-  it('shows the heading, the hint, three examples, the input and the cost line, all from the dictionary', () => {
+  it('shows no heading (no product name), the hint, three examples, the input and the cost line, all from the dictionary', () => {
     const ko = studioComposeKo.assist;
     const html = render(studioComposeKo, model([], { current: base, undo: [], redo: [] }));
     for (const marker of ['data-assist-panel', 'data-assist-log', 'data-assist-input', 'data-assist-send']) {
@@ -139,7 +139,11 @@ describe('AssistPanel — empty', () => {
     }
     expect(html).toContain('role="log"');
     expect(html).toContain('aria-live="polite"');
-    expect(html).toContain(esc(ko.heading));
+    // docs/BRAND-EDITING-STUDIO.md §8-1: no visible name; the panel and the log are named by the input label.
+    expect(html).not.toMatch(/<h[1-6][\s>]/);
+    expect('heading' in ko).toBe(false);
+    expect(tagWith(html, 'data-assist-panel')).toContain(`aria-label="${esc(ko.inputLabel)}"`);
+    expect(tagWith(html, 'data-assist-log')).toContain(`aria-label="${esc(ko.inputLabel)}"`);
     expect(html).toContain(esc(ko.emptyHint));
     expect(html).toContain(`placeholder="${esc(ko.placeholder)}"`);
     expect(html).toContain(`aria-label="${esc(ko.inputLabel)}"`);

@@ -25,6 +25,7 @@ import {
   type TimelinePatch,
 } from '../compose/timeline';
 import { applyEditSteps, resolveAskChoices, resolveEditPlan, type ResolvedStep, type StepProblem } from './apply';
+import { captionTextProblems, restoreCaptionTexts } from './caption-text';
 import { buildEditContext, type EditContext } from './context';
 import {
   ASK_ABOUT,
@@ -38,10 +39,31 @@ import {
 } from './plan';
 
 /**
- * Per model call; there are at most two (one corrective call when the first answer fails). Live calls ran
- * 2.5–5 s (median 3.1 s) with one cold call at 7.4 s (2026-11-18), so 8 s was too close.
+ * Per model call; there are at most two: one corrective call when the first answer fails, or the same
+ * request once more when the first call never answered (timeout, network, 5xx) — never both. Live calls ran
+ * 2.5–5 s (median 3.1 s) with one cold call at 7.4 s (2026-11-18), so 8 s was too close; one of 60 first
+ * calls (2026-11-18, gemini-4-hydrogen) still hit 12 s and answered in 5.5 s on the next try.
  */
 export const EDIT_ASSIST_TIMEOUT_MS = 12_000;
+
+/**
+ * The one model this feature runs on (founder decision 2026-11-18). Pinned here rather than inherited:
+ * the studio-wide override `BRAND_STUDIO_ENHANCER_MODEL` does not move it, because the prompt, the key
+ * order of the examples and the response schema were all measured against this model.
+ */
+export const EDIT_ASSIST_DEFAULT_MODEL = 'gemini-4-hydrogen';
+
+/**
+ * Key and base URL are the studio's; the model is this feature's own. `BRAND_STUDIO_EDIT_ASSIST_MODEL`
+ * swaps it without a code change (a malformed value falls back to the default). Null when no key is set.
+ */
+export function editAssistGeminiConfig(env: Record<string, string | undefined>): GeminiConfig | null {
+  const base = studioGeminiConfig(env);
+  if (!base) return null;
+  const override = env.BRAND_STUDIO_EDIT_ASSIST_MODEL?.trim();
+  const model = override && /^[a-z0-9.-]{1,60}$/i.test(override) ? override : EDIT_ASSIST_DEFAULT_MODEL;
+  return { ...base, model };
+}
 
 /* --------------------------------------------------------------- input */
 
@@ -192,6 +214,12 @@ const FALLBACK_LOOK = 'twings-french-blue';
 const NAMES_FALLBACK_LOOK = /(?:프렌치\s*블루|트윙스\s*블루|french\s*blue)/i;
 /** A caption placed on a cut ("달리는 컷에"): the rule parser only knows start, end and whole. */
 const ON_A_CUT = /(?:(?:컷|클립|장면|샷)\s*(?:에|위에|에서)|\b(?:on|over)\s+(?:the\s+)?(?:\w+\s+)?(?:clip|cut|shot)\b)/i;
+/**
+ * Every cut named outright ("모든 컷", "전체", "원본 소리 다 꺼줘", "all clips"). The parser reads a bare "다"
+ * anywhere as "all", so "다" counts only right before the sound verb or a number.
+ */
+const ALL_CUTS =
+  /(?:모든|모두|전부|전체|각\s*(?:컷|클립)|(?:^|\s)다\s*(?:꺼|켜|줄|낮|높|키|올|내|살|없|빼|음소거|무음|\d)|\ball\b|\bevery\b|\beach\b)/i;
 
 /**
  * Where the rule parser is known to answer wrongly, the model decides instead (found by running the
@@ -201,19 +229,32 @@ const ON_A_CUT = /(?:(?:컷|클립|장면|샷)\s*(?:에|위에|에서)|\b(?:on|o
  *   counts source seconds, not played ones);
  * - two actions but one patch: the other action was dropped (or the whole sentence was misread, e.g.
  *   "반으로 나누고 뒤쪽은 지워줘" removing the whole cut);
- * - a caption "added" where one should change, or placed on a cut;
- * - a colour look the sentence did not name (the parser falls back to one preset).
+ * - a caption "added" where one should change, or placed on a cut, or with the text of a caption already
+ *   on the timeline (the sentence names it to move or change it; the parser would add a copy);
+ * - a colour look the sentence did not name (the parser falls back to one preset);
+ * - a cut's sound with no scope named: with no cut named the parser changes every cut ("소리 꺼줘" muted all
+ *   four, and "음악 소리 켜줘" turned every cut on), though the user may mean one cut or the music. Kept only
+ *   when the sentence names every cut (and no single one) or the cut by number or order.
  */
 function ruleResultTrusted(message: string, patches: readonly TimelinePatch[], project: ComposerProject): boolean {
   if (POINTING.test(message)) return false;
   if (patches.length < 2 && TWO_ACTIONS.test(message)) return false;
   for (const patch of patches) {
+    if (patch.op === 'set_clip_audio') {
+      const scoped = patch.clipIndex === 'all' ? ALL_CUTS.test(message) && !NAMED_CUT.test(message) : NAMED_CUT.test(message);
+      if (!scoped) return false;
+    }
     if (patch.op === 'trim_clip') {
       if (WHOLE_VIDEO.test(message) || !NAMED_CUT.test(message)) return false;
       const rate = project.clips[patch.clipIndex]?.playbackRate;
       if (rate !== undefined && rate !== 1) return false;
     }
     if (patch.op === 'add_caption' && (CHANGE_WORDS.test(message) || ON_A_CUT.test(message))) return false;
+    // The text of a caption already there: the sentence names that caption to move or change it ("'봄 신상
+    // 출시' 자막 위로 올려줘"), and the parser would add a second copy.
+    if (patch.op === 'add_caption' && project.captions.some((caption) => caption.text.trim() === patch.text.trim())) {
+      return false;
+    }
     // A look the sentence did not name: the parser put its fallback there ("청록·주황 톤" became French blue).
     if (patch.op === 'set_color_grade' && patch.enabled && patch.presetId === FALLBACK_LOOK && !NAMES_FALLBACK_LOOK.test(message)) {
       return false;
@@ -243,6 +284,7 @@ export const EDIT_ASSIST_SYSTEM = [
   '- {"do":"caption_add","where":"end","text":"..."}: add a caption with the text exactly as the user wrote it (up to 80 characters). "where": "start", "end" or "whole" (the whole video).',
   '- {"do":"caption_add","where":"clip","clip":"c2","text":"..."}: a caption over that cut. {"do":"caption_add","where":"range","from":3,"to":5,"text":"..."}: from..to seconds of the video.',
   '  Optional on caption_add, in this order: "seconds" right before "text" (how long it shows; only with "start", "end" or "clip"), then "position" ("top", "center", "bottom") and "size" ("sm", "md", "lg") after "text": {"do":"caption_add","where":"start","seconds":2,"text":"...","position":"top","size":"sm"}.',
+  '  "text" of caption_add and caption_edit is copied exactly as the user wrote it, without the quote marks around it; never escape or encode it (write #, not %23).',
   '- {"do":"caption_edit","caption":"t1","from":0,"to":2,"text":"...","position":"top","size":"lg"}: change only the fields given (any of them, in this order); leave the others out, e.g. {"do":"caption_edit","caption":"t2","text":"..."}.',
   '- {"do":"caption_remove","caption":"t1"}: remove that caption; "caption":"all" removes every caption.',
   '- {"do":"aspect","aspect":"16:9"}: one of "9:16", "16:9", "4:5", "1:1".',
@@ -342,11 +384,29 @@ function logRefusals(fetchImpl: typeof fetch, config: GeminiConfig, instruction:
   };
 }
 
+/**
+ * Whether a failed call is worth the same request once more: its own timeout, a network failure (`fetch`
+ * itself threw), or a passing outage (5xx, 408, 429). A refused request (any other 4xx) or an answer that
+ * came back unusable (blocked, cut off, not JSON) would fail the same way again. `callGeminiJson` throws for
+ * all of them: the timeout is its abort (`AbortError`), the status is in `gemini_http_<status>`.
+ */
+function passingFailure(error: unknown, fetchThrew: boolean): boolean {
+  if (fetchThrew) return true;
+  const name = (error as { name?: unknown } | null)?.name;
+  if (name === 'AbortError' || name === 'TimeoutError') return true;
+  const status = Number(/^gemini_http_(\d{3})$/.exec(error instanceof Error ? error.message : '')?.[1] ?? NaN);
+  return status >= 500 || status === 408 || status === 429;
+}
+
 type Judged = { ok: true; result: AssistPlanResult } | { ok: false; problems: string[] };
 
-/** Validates one model answer, resolves its refs and dry-runs a plan on the server's copy of the timeline. */
-function judge(raw: unknown, project: ComposerProject, refs: EditRefs): Judged {
-  const parsed = parseModelReply(raw);
+/**
+ * Validates one model answer, resolves its refs and dry-runs a plan on the server's copy of the timeline.
+ * Caption text the model wrapped in quote marks or percent-encoded is restored first; caption text that is
+ * still not one of the instruction's quoted texts is a problem like any other (`caption-text.ts`).
+ */
+function judge(raw: unknown, project: ComposerProject, refs: EditRefs, instruction: string): Judged {
+  const parsed = parseModelReply(restoreCaptionTexts(raw, instruction));
   if (!parsed.ok) return { ok: false, problems: parsed.problems };
   const plan = parsed.plan;
   if (plan.kind === 'cannot') return { ok: true, result: cannot(plan.reason) };
@@ -355,10 +415,16 @@ function judge(raw: unknown, project: ComposerProject, refs: EditRefs): Judged {
     if (!choices) return { ok: false, problems: ['ask: unknown_ref'] };
     return { ok: true, result: { ok: true, kind: 'ask', about: plan.about, choices, creditsUsed: 0 } };
   }
+  const textProblems = captionTextProblems(
+    plan.steps,
+    instruction,
+    project.captions.map((caption) => caption.text),
+  );
   const resolved = resolveEditPlan(plan.steps, refs);
-  if (!resolved.ok) return { ok: false, problems: resolved.problems.map(describeProblem) };
+  if (!resolved.ok) return { ok: false, problems: [...textProblems, ...resolved.problems.map(describeProblem)] };
   const dryRun = applyEditSteps(project, resolved.steps);
-  if (dryRun.problems.length > 0) return { ok: false, problems: dryRun.problems.map(describeProblem) };
+  const problems = [...textProblems, ...dryRun.problems.map(describeProblem)];
+  if (problems.length > 0) return { ok: false, problems };
   return { ok: true, result: { ok: true, kind: 'plan', steps: resolved.steps, creditsUsed: 0 } };
 }
 
@@ -383,7 +449,7 @@ export async function planEditAssist(input: AssistPlanInput, options: AssistPlan
   }
 
   // 2. The model: same convention as `chat.edit` — the fake provider never calls out unless a test injects fetch.
-  const config = studioGeminiConfig(options.env);
+  const config = editAssistGeminiConfig(options.env);
   if (!config || (options.providerMode === 'fake' && !options.fetchImpl)) return cannot('unavailable');
 
   const { context, refs } = buildEditContext(project, {
@@ -393,31 +459,51 @@ export async function planEditAssist(input: AssistPlanInput, options: AssistPlan
     ...(input.answer ? { answer: input.answer as { about: AskAbout; value: AskChoice } } : {}),
   });
   const parts: GeminiPart[] = [{ text: dataBlock(context) }, { text: instructionBlock(input.message) }];
-  const fetchImpl = logRefusals(options.fetchImpl ?? fetch, config, input.message);
-  const callModel = (extra: GeminiPart[]) =>
-    callGeminiJson(config, fetchImpl, {
-      system: EDIT_ASSIST_SYSTEM,
-      parts: [...parts, ...extra],
-      schema: EDIT_PLAN_MODEL_SCHEMA,
-      thinking: 'LOW',
-      timeoutMs: EDIT_ASSIST_TIMEOUT_MS,
-    });
+  // Notes whether `fetch` itself threw (no answer at all), which `callGeminiJson`'s error does not say.
+  let fetchThrew = false;
+  const baseFetch = options.fetchImpl ?? fetch;
+  const noting: typeof fetch = async (url, init) => {
+    try {
+      return await baseFetch(url, init);
+    } catch (error) {
+      fetchThrew = true;
+      throw error;
+    }
+  };
+  const fetchImpl = logRefusals(noting, config, input.message);
+  type Called = { ok: true; answer: unknown } | { ok: false; again: boolean };
+  const callModel = async (extra: GeminiPart[]): Promise<Called> => {
+    fetchThrew = false;
+    try {
+      const answer = await callGeminiJson(config, fetchImpl, {
+        system: EDIT_ASSIST_SYSTEM,
+        parts: [...parts, ...extra],
+        schema: EDIT_PLAN_MODEL_SCHEMA,
+        thinking: 'LOW',
+        timeoutMs: EDIT_ASSIST_TIMEOUT_MS,
+      });
+      return { ok: true, answer };
+    } catch (error) {
+      return { ok: false, again: passingFailure(error, fetchThrew) };
+    }
+  };
 
-  let first: unknown;
-  try {
+  // 3. At most two calls. A first call that never answered (timeout, network, outage) is sent once more and
+  //    that try takes the corrective call's place; a refused request is `unavailable` at once.
+  let first = await callModel([]);
+  let retried = false;
+  if (!first.ok) {
+    if (!first.again) return cannot('unavailable');
     first = await callModel([]);
-  } catch {
-    return cannot('unavailable');
+    if (!first.ok) return cannot('unavailable');
+    retried = true;
   }
-  const firstJudged = judge(first, project, refs);
+  const firstJudged = judge(first.answer, project, refs, input.message);
   if (firstJudged.ok) return firstJudged.result;
+  if (retried) return cannot('could_not_plan');
 
-  let second: unknown;
-  try {
-    second = await callModel([{ text: correctionBlock(first, firstJudged.problems) }]);
-  } catch {
-    return cannot('unavailable');
-  }
-  const secondJudged = judge(second, project, refs);
+  const second = await callModel([{ text: correctionBlock(first.answer, firstJudged.problems) }]);
+  if (!second.ok) return cannot('unavailable');
+  const secondJudged = judge(second.answer, project, refs, input.message);
   return secondJudged.ok ? secondJudged.result : cannot('could_not_plan');
 }

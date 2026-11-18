@@ -16,7 +16,8 @@ export interface FloatingClipBarProps {
   onColorGrade(): void;
   onAttachAsReference(): void;
   onExtendScene?: () => void;
-  onGenerateMusic(): void;
+  /** Absent while music generation is closed (`BRAND_STUDIO_MUSIC_GENERATION`): the button is not shown. */
+  onGenerateMusic?: () => void;
   onUpscale(): void;
   onDelete(): void;
 }
@@ -110,15 +111,17 @@ export function FloatingClipBar({
             {extendingScene ? copy.extendingScene : copy.extendScene}
           </button>
         )}
-        <button
-          type="button"
-          className={w.floatingBtn}
-          disabled={!canEdit}
-          onClick={onGenerateMusic}
-          data-floating-action="generate-music"
-        >
-          {copy.generateMusic}
-        </button>
+        {onGenerateMusic && (
+          <button
+            type="button"
+            className={w.floatingBtn}
+            disabled={!canEdit}
+            onClick={onGenerateMusic}
+            data-floating-action="generate-music"
+          >
+            {copy.generateMusic}
+          </button>
+        )}
         <button
           type="button"
           className={w.floatingBtn}

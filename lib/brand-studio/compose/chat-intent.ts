@@ -413,13 +413,17 @@ function parseSingleClause(clause: string, project: ComposerProject, context?: C
   // 7. Clip original sound / audio controls
   if (/(?:원본\s*소리|클립\s*소리|영상\s*소리|소리|오디오|볼륨|\bclip\s*audio\b|\bsound\b|\bmute\b|\bunmute\b|\bvolume\b)/i.test(clause)) {
     const targetIdx = /(?:모두|다|전체|\ball\b)/i.test(clause) ? ('all' as const) : (resolveClipIndex(clause, clipCount) ?? ('all' as const));
+    const pct = /(\d{1,3})\s*%/.exec(clause);
+    // Mute is a switch, not a level: each cut keeps its volume, so turning the sound back on brings it back.
     if (/(?:꺼|음소거|무음|\bmute\b|\boff\b)/i.test(clause)) {
-      return { op: 'set_clip_audio', clipIndex: targetIdx, volume: 0, muted: true };
+      return { op: 'set_clip_audio', clipIndex: targetIdx, muted: true };
     }
     if (/(?:켜|살려|\bunmute\b|\bon\b)/i.test(clause)) {
-      return { op: 'set_clip_audio', clipIndex: targetIdx, volume: 1, muted: false };
+      // Back on at the cut's own level, or at the level the user names.
+      return pct
+        ? { op: 'set_clip_audio', clipIndex: targetIdx, volume: Math.min(100, Number(pct[1])) / 100, muted: false }
+        : { op: 'set_clip_audio', clipIndex: targetIdx, muted: false };
     }
-    const pct = /(\d{1,3})\s*%/.exec(clause);
     if (pct) {
       const vol = Math.min(100, Number(pct[1])) / 100;
       return { op: 'set_clip_audio', clipIndex: targetIdx, volume: vol, muted: vol === 0 };

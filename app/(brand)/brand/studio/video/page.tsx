@@ -6,6 +6,7 @@ import { studioRouteOrShowroom } from "@/components/brand-studio/route-context";
 import { StudioShowroom } from "@/components/brand-studio/studio-showroom";
 import { studioShowroomVisible, studioV2Visible } from "@/lib/brand-studio/visibility";
 import { hasProductionContracts } from "@/components/brand-studio/video/contracts-link";
+import { studioEnv } from "@/lib/brand-studio/env";
 import { VideoStudioWorkspace } from "@/components/brand-studio/video/workspace";
 import s from "@/components/brand-studio/video/video.module.css";
 import { scopedHref } from "@/lib/brands/workspace/selection";
@@ -128,6 +129,7 @@ export default async function StudioVideoPage({
         initialCreateMode={opensReverse ? "blueprint" : "prompt"}
         initialAssetId={asset && UUID.test(asset) ? asset : null}
         initialProjectId={projectParam && UUID.test(projectParam) ? projectParam : null}
+        musicGeneration={studioEnv().musicGeneration === true}
       />
     </div>
   );
