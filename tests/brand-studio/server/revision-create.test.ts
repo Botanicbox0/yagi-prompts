@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { randomUUID } from 'node:crypto';
 import { createStudioJob } from '@/lib/brand-studio/jobs';
-import { studioModel, type StudioVideoModel } from '@/lib/brand-studio/models';
+import { estimateVideoUsd, studioModel, type StudioVideoModel } from '@/lib/brand-studio/models';
 import type { JobRow } from '@/lib/brand-studio/types';
 import { remixRunUsd, usageKrw, videoRunUsd } from '@/lib/brand-studio/usage-rate';
 import { requestId, seedImageAsset, seedVideoAsset, studioDeps, studioFixture, viewerOf, type StudioFixture } from './helpers';
@@ -49,6 +49,14 @@ describe('job.create video_revise: edit', () => {
     void product;
   });
 
+  it('quotes an edit of a generated clip on its exact length: 15,042 ms (24n + 1 frames) is 16 s out, not 15', async () => {
+    const root = await seedRun(deps, f.orgId, f.ids.owner, { prompt: 'a bottle turns', seconds: 15.042 });
+    const edited = await createStudioJob(deps, viewerOf(f.ids.owner), revise(root.outputId));
+    if (!edited.ok) throw new Error(JSON.stringify(edited));
+    expect(edited.job.estimateKrw).toBe(usageKrw(estimateVideoUsd({ resolution: '720p', seconds: 16, referenceVideoSeconds: 15.042 }), 'video'));
+    expect((await row(edited.job.id)).params).toMatchObject({ referenceVideoSeconds: 15.042 });
+  });
+
   it('gives two concurrent revisions of one clip different version numbers', async () => {
     const root = await seedRun(deps, f.orgId, f.ids.owner, { prompt: 'a bottle turns' });
     const [a, b] = await Promise.all([
@@ -68,7 +76,7 @@ describe('job.create video_revise: edit', () => {
     expect(await createStudioJob(deps, viewerOf(f.ids.owner), { ...input, kind: 'video', model: 'seedance-2.5', aspect: '9:16', resolution: '720p', seconds: 5, prompt: 'x' })).toEqual({ ok: false, code: 'conflict' });
   });
 
-  it('edits a 1080p final at 1080p and keeps a draft a draft', async () => {
+  it('edits a 1080p final at 1080p, and a draft at 480p as a run that is not a draft', async () => {
     const draft = await seedRun(deps, f.orgId, f.ids.owner, { prompt: 'a bottle', params: { resolution: 'draft' }, isDraft: true });
     const final = await seedFinal(deps, f.orgId, f.ids.owner, draft);
     const ofFinal = await createStudioJob(deps, viewerOf(f.ids.owner), revise(final.outputId));
@@ -77,10 +85,14 @@ describe('job.create video_revise: edit', () => {
     expect(stored.params).toMatchObject({ resolution: '1080p', revision: { baseJobId: draft.jobId, baseOutputId: final.outputId, version: 2 } });
     expect(stored.parent_output_id).toBe(final.outputId);
 
+    // An edit follows its source's length, and such a run cannot be a draft on the account lane (the CLI:
+    // "Duration -1 cannot be a preview"). It runs as the standard 480p run, at the draft's price, and its
+    // result offers no 1080p final.
     const ofDraft = await createStudioJob(deps, viewerOf(f.ids.owner), revise(draft.outputId));
     if (!ofDraft.ok) throw new Error();
-    expect((await row(ofDraft.job.id)).params.resolution).toBe('draft');
-    expect((await f.sql.query('select is_draft from brand_studio_outputs where job_id = $1', [ofDraft.job.id])).rows[0]).toEqual({ is_draft: true });
+    expect((await row(ofDraft.job.id)).params.resolution).toBe('480p');
+    expect(ofDraft.job.estimateKrw).toBe(usageKrw(remixRunUsd({ model: seedance, resolution: 'draft', method: 'edit', seconds: null, referenceSeconds: 6 }).usd, 'video'));
+    expect((await f.sql.query('select is_draft from brand_studio_outputs where job_id = $1', [ofDraft.job.id])).rows[0]).toEqual({ is_draft: false });
   });
 
   it('refuses a clip shorter than the edit minimum, bad added pictures, and results that are not this organization\'s videos', async () => {
@@ -112,8 +124,9 @@ describe('job.create video_revise: reshoot', () => {
       prompt: '향수병', finalPrompt: '@Image1 turns.', refs: [{ assetId: product, role: 'product' }],
       params: { aspect: '9:16', resolution: '1080p', seconds: 8, audio: 'silent' },
     });
-    const v2 = await seedRevision(deps, f.orgId, f.ids.owner, { base: root, rootJobId: root.jobId, version: 2, mode: 'edit', request: 'logo', added: [{ assetId: logo }] });
-    const v3 = await seedRevision(deps, f.orgId, f.ids.owner, { base: v2, rootJobId: root.jobId, version: 3, mode: 'edit', request: 'label', added: [{ assetId: label }, { assetId: logo }] });
+    // Edits of a 1080p run are made at 1080p (a revision keeps its version's resolution), and so is this reshoot.
+    const v2 = await seedRevision(deps, f.orgId, f.ids.owner, { base: root, rootJobId: root.jobId, version: 2, mode: 'edit', request: 'logo', added: [{ assetId: logo }], params: { resolution: '1080p' } });
+    const v3 = await seedRevision(deps, f.orgId, f.ids.owner, { base: v2, rootJobId: root.jobId, version: 3, mode: 'edit', request: 'label', added: [{ assetId: label }, { assetId: logo }], params: { resolution: '1080p' } });
 
     const made = await createStudioJob(deps, viewerOf(f.ids.owner), revise(v3.outputId, { mode: 'reshoot', prompt: '카메라를 왼쪽으로, 이미지 1 추가', references: [{ assetId: fresh }, { assetId: logo }] }));
     if (!made.ok) throw new Error(JSON.stringify(made));

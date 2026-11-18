@@ -18,6 +18,11 @@ import type { AssetRow, JobRow, OutputRow } from './types';
 
 const iso = (v: Date | string | null | undefined): string | null => (v == null ? null : v instanceof Date ? v.toISOString() : new Date(String(v)).toISOString());
 const seconds = (ms: number | null | undefined): number | null => (ms == null ? null : Math.round(Number(ms) / 100) / 10);
+/** The exact length for pricing (`durationMs` on a view): whole milliseconds, or nothing when unknown. */
+const exactMs = (ms: number | string | null | undefined): { durationMs: number } | Record<string, never> => {
+  const n = ms == null ? Number.NaN : Math.round(Number(ms));
+  return Number.isFinite(n) && n > 0 ? { durationMs: n } : {};
+};
 
 export function tagsOf(value: string[] | string | null | undefined): string[] {
   if (Array.isArray(value)) return value.map(String);
@@ -40,6 +45,7 @@ export function assetView(row: AssetRow, media: StudioMediaStore): StudioAssetVi
     width: row.width,
     height: row.height,
     seconds: seconds(row.duration_ms),
+    ...exactMs(row.duration_ms),
     source: row.source,
     createdAt: iso(row.created_at)!,
   };
@@ -62,6 +68,7 @@ export function outputView(
     width: row.width,
     height: row.height,
     seconds: seconds(row.duration_ms),
+    ...exactMs(row.duration_ms),
     draft: row.is_draft && Boolean(row.draft_task_id),
     savedAssetId: row.saved_asset_id,
     ...(extra?.regionPatch !== undefined ? { regionPatch: extra.regionPatch } : {}),

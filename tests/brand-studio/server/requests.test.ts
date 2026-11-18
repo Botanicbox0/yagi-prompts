@@ -144,7 +144,9 @@ describe('video requests (Seedance 2.5)', () => {
     expect(() => buildStudioRequest(video({ videos: [{ url: img(5) }] }))).toThrow(StudioRequestError);
   });
 
-  it('a remix edit pins the edit task, follows the source (duration -1, adaptive) and can be a draft', () => {
+  it('a remix edit pins the edit task and follows the source (duration -1, adaptive); it is never sent as a draft', () => {
+    // Asked for as a draft (a row planned before the rule, or any caller), it still goes out as the standard
+    // 480p run: the account lane refuses a preview that follows its source, so neither lane makes one.
     const request = buildStudioRequest(
       input({
         kind: 'video_remix', model: 'seedance-2.5', videos: [{ url: img(7) }], images: [{ url: img(1) }],
@@ -152,8 +154,17 @@ describe('video requests (Seedance 2.5)', () => {
       }),
     );
     expect(request.endpoint).toBe('bytedance/seedance-2.5/reference-to-video');
-    expect(request.body).toMatchObject({ reference_videos: [img(7)], reference_images: [img(1)], duration: -1, ratio: 'adaptive', omni_reference_task_type: 'edit', draft: true, resolution: '480p' });
+    expect(request.body).toMatchObject({ reference_videos: [img(7)], reference_images: [img(1)], duration: -1, ratio: 'adaptive', omni_reference_task_type: 'edit', draft: false, resolution: '480p' });
     expectValid(request);
+  });
+
+  it('a new take that follows its reference length is not a draft either; one with its own length is', () => {
+    const remix = (seconds: number | null) =>
+      buildStudioRequest(
+        input({ kind: 'video_remix', model: 'seedance-2.5', videos: [{ url: img(7) }], params: params({ aspect: '9:16', resolution: 'draft', seconds, audio: 'native', method: 'reference' }) }),
+      ).body;
+    expect(remix(null)).toMatchObject({ duration: -1, draft: false, resolution: '480p', ratio: '9:16' });
+    expect(remix(8)).toMatchObject({ duration: 8, draft: true, resolution: '480p' });
   });
 
   it('a remix reference takes the asked shape and length', () => {

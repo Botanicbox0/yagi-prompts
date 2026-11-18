@@ -35,7 +35,17 @@ export interface RevisionHistoryItem {
 
 export interface RevisionRecipe {
   /** The clip being revised. For a 1080p final, `jobId`/`version` are those of its draft's job; `outputId` stays the final. */
-  base: { outputId: string; jobId: string; version: number; seconds: number | null; width: number | null; height: number | null; isFinal: boolean };
+  base: {
+    outputId: string;
+    jobId: string;
+    version: number;
+    seconds: number | null;
+    width: number | null;
+    height: number | null;
+    isFinal: boolean;
+    /** A 480p draft a final can still be made from (planned as one, with a draft id): `StudioOutputView.draft`. */
+    isDraft: boolean;
+  };
   /** The job that made `base` (the draft's job for a final). */
   baseJob: JobRow;
   rootJobId: string;
@@ -177,6 +187,7 @@ export async function loadRevisionRecipe(sql: SqlRunner, organizationId: string,
       width: output.width,
       height: output.height,
       isFinal: own.kind === 'video_final',
+      isDraft: own.kind !== 'video_final' && output.is_draft && Boolean(output.draft_task_id),
     },
     baseJob,
     rootJobId,

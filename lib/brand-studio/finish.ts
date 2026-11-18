@@ -92,7 +92,9 @@ async function storeOne(deps: StudioDeps, job: JobRow, output: OutputRow, result
         `update brand_studio_outputs set status = 'ready', storage_key = $2, thumb_key = $3, mime = $4, bytes = $5, width = $6,
             height = $7, duration_ms = $8, sha256 = $9, draft_task_id = coalesce($10, draft_task_id)
           where id = $1 and status = 'pending' and deleted_at is null returning id`,
-        [output.id, key, thumbKey, mime, bytes.byteLength, width, height, durationMs, sha256Hex(bytes), result.draftTaskId ?? null],
+        // A draft id is kept only on a result planned as a draft (./reference-video.ts `isDraftRun`), whatever
+        // a lane reports: "finish at 1080p" is offered from it, and the provider refuses any other task id.
+        [output.id, key, thumbKey, mime, bytes.byteLength, width, height, durationMs, sha256Hex(bytes), output.is_draft ? (result.draftTaskId ?? null) : null],
       )
     ).rows[0];
     if (!stored) throw new Error('output no longer pending');

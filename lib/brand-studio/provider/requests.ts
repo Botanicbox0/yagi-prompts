@@ -4,8 +4,9 @@
  * Shapes follow docs/research/SUNRA-API-SCHEMAS-2026-11-10.txt and the per-model OpenAPI documents
  * of the Sunra catalogue (read 2026-11-10): image inputs are arrays of URL strings; Seedance's
  * image-to-video takes no `ratio` (it follows the start frame); an explicit edit needs `duration: -1`
- * and `ratio: 'adaptive'`; a draft is `draft: true` at 480p; a final is `draft-to-video` with the
- * draft id only.
+ * and `ratio: 'adaptive'`; a draft is `draft: true` at 480p with a length of its own (a run that follows
+ * its source, `duration: -1`, never is: ../reference-video.ts `isDraftRun`); a final is `draft-to-video`
+ * with the draft id only.
  *
  * `enable_safety_checker` is sent as `true` on every endpoint that has the field (the Seedream family).
  * There is deliberately no parameter that could turn it off.
@@ -178,6 +179,7 @@ function remixRequest(input: StudioRequestInput): StudioProviderRequest {
   const quality = videoQuality(model, p.resolution);
   const audios = (input.audios ?? []).map((a) => a.url);
   const edit = p.method === 'edit';
+  const duration = edit ? -1 : typeof p.seconds === 'number' ? seconds(model, p.seconds) : -1;
   return {
     endpoint: `${model.api.alias}/${model.endpoints.reference}`,
     body: {
@@ -188,9 +190,10 @@ function remixRequest(input: StudioRequestInput): StudioProviderRequest {
       resolution: quality.resolution,
       // An explicit edit follows the source: its length and its shape.
       ratio: edit ? 'adaptive' : pick(p.aspect, model.aspects, model.aspects[0]!),
-      duration: edit ? -1 : typeof p.seconds === 'number' ? seconds(model, p.seconds) : -1,
+      duration,
       omni_reference_task_type: edit ? 'edit' : 'reference',
-      draft: quality.draft,
+      // A run that follows its source's length is never a draft, on either lane (../reference-video.ts `isDraftRun`).
+      draft: quality.draft && duration !== -1,
       output_format: 'mp4',
       generate_audio: p.audio !== 'silent',
     },
