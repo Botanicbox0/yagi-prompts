@@ -16,15 +16,21 @@ import {
   extractProjectReferencedAssetIds,
   MAX_COMPOSE_CAPTIONS,
   MAX_COMPOSE_CLIPS,
+  MAX_COMPOSE_OVERLAYS,
+  MAX_COMPOSE_SFX,
   normalizeClipBounds,
   normalizeColorGradeState,
+  normalizeOverlayClip,
+  normalizeSfxClip,
   normalizeTakeBounds,
   projectDurationSec,
   type ComposeAspect,
   type ComposeCaption,
   type ComposeClip,
   type ComposeColorGradeState,
+  type ComposeOverlayClip,
   type ComposerProject,
+  type ComposeSfxClip,
   type TimelineClipTake,
 } from '@/lib/brand-studio/compose/timeline';
 import type { StudioMediaStore } from '@/lib/brand-studio/media-store';
@@ -83,6 +89,10 @@ function iso(v: Date | string | null | undefined): string | null {
 function secondsFromMs(ms: number | null | undefined): number | null {
   if (ms == null || !Number.isFinite(Number(ms)) || Number(ms) <= 0) return null;
   return Math.round(Number(ms) / 100) / 10;
+}
+
+function finiteNumber(value: unknown): number | undefined {
+  return typeof value === 'number' && Number.isFinite(value) ? value : undefined;
 }
 
 function isComposeAspect(value: unknown): value is ComposeAspect {
@@ -190,6 +200,13 @@ export function normalizeStoredTimeline(raw: unknown, fallbackAspect: ComposeAsp
     }
 
     const durationSec = typeof c.durationSec === 'number' && Number.isFinite(c.durationSec) ? c.durationSec : 5;
+    // Speed, J/L offset and incoming transition: only readable values pass; `normalizeClipBounds`
+    // clamps them and omits the neutral ones (rate 1, offset 0, no transition).
+    const playbackRate = finiteNumber(c.playbackRate);
+    const audioOffsetSec = finiteNumber(c.audioOffsetSec);
+    const transitionIn =
+      c.transitionIn === 'cross_dissolve' || c.transitionIn === 'dip_to_black' ? c.transitionIn : undefined;
+    const transitionDurationSec = transitionIn ? finiteNumber(c.transitionDurationSec) : undefined;
     clips.push(
       normalizeClipBounds({
         id: c.id.trim(),
@@ -204,6 +221,11 @@ export function normalizeStoredTimeline(raw: unknown, fallbackAspect: ComposeAsp
         trimEndSec: typeof c.trimEndSec === 'number' && Number.isFinite(c.trimEndSec) ? c.trimEndSec : durationSec,
         volume: typeof c.volume === 'number' && Number.isFinite(c.volume) ? c.volume : 1,
         muted: Boolean(c.muted),
+        ...(playbackRate !== undefined ? { playbackRate } : {}),
+        ...(audioOffsetSec !== undefined ? { audioOffsetSec } : {}),
+        ...(transitionIn
+          ? { transitionIn, ...(transitionDurationSec !== undefined ? { transitionDurationSec } : {}) }
+          : {}),
         ...(Array.isArray(c.cutMarkers) ? { cutMarkers: c.cutMarkers } : {}),
         ...(takes.length > 0
           ? {
@@ -271,6 +293,71 @@ export function normalizeStoredTimeline(raw: unknown, fallbackAspect: ComposeAsp
     });
   }
 
+  // Overlay (V2) track: same source rule as clips — a `blob:` URL never persists, an item needs an
+  // asset id, an output id or a non-blob URL, and the browser-only `local` kind becomes `asset`/`output`.
+  const rawOverlays = Array.isArray(parsed.overlays) ? parsed.overlays : [];
+  const overlays: ComposeOverlayClip[] = [];
+  for (const item of rawOverlays) {
+    if (overlays.length >= MAX_COMPOSE_OVERLAYS) break;
+    if (!item || typeof item !== 'object') continue;
+    const o = item as Partial<ComposeOverlayClip>;
+    if (typeof o.id !== 'string' || !o.id.trim()) continue;
+    if (o.mediaKind !== 'image' && o.mediaKind !== 'video') continue;
+    const startSec = finiteNumber(o.startSec);
+    const endSec = finiteNumber(o.endSec);
+    if (startSec === undefined || endSec === undefined) continue;
+    const hasAsset = typeof o.assetId === 'string' && UUID.test(o.assetId);
+    const hasOutput = typeof o.outputId === 'string' && UUID.test(o.outputId);
+    const rawSrc = typeof o.srcUrl === 'string' && !o.srcUrl.startsWith('blob:') ? o.srcUrl : '';
+    if (!hasAsset && !hasOutput && !rawSrc) continue;
+    overlays.push(
+      normalizeOverlayClip({
+        id: o.id.trim(),
+        label: typeof o.label === 'string' ? o.label : '',
+        sourceKind: o.sourceKind === 'output' || o.sourceKind === 'asset' ? o.sourceKind : hasOutput ? 'output' : 'asset',
+        ...(hasAsset ? { assetId: o.assetId!.trim() } : {}),
+        ...(hasOutput ? { outputId: o.outputId!.trim() } : {}),
+        srcUrl: rawSrc,
+        thumbUrl: typeof o.thumbUrl === 'string' && !o.thumbUrl.startsWith('blob:') ? o.thumbUrl : null,
+        mediaKind: o.mediaKind,
+        startSec,
+        endSec,
+        x: finiteNumber(o.x) ?? 0.5,
+        y: finiteNumber(o.y) ?? 0.5,
+        scale: finiteNumber(o.scale) ?? 0.45,
+        opacity: finiteNumber(o.opacity) ?? 1,
+      }),
+    );
+  }
+
+  // Sound-effect (A2) track: same source rule as BGM — stored as `asset`, needs an asset id or a non-blob URL.
+  const rawSfx = Array.isArray(parsed.sfxClips) ? parsed.sfxClips : [];
+  const sfxClips: ComposeSfxClip[] = [];
+  for (const item of rawSfx) {
+    if (sfxClips.length >= MAX_COMPOSE_SFX) break;
+    if (!item || typeof item !== 'object') continue;
+    const s = item as Partial<ComposeSfxClip>;
+    if (typeof s.id !== 'string' || !s.id.trim()) continue;
+    const startSec = finiteNumber(s.startSec);
+    const sfxDurationSec = finiteNumber(s.durationSec);
+    if (startSec === undefined || sfxDurationSec === undefined) continue;
+    const sfxHasAsset = typeof s.assetId === 'string' && UUID.test(s.assetId);
+    const sfxSrc = typeof s.srcUrl === 'string' && !s.srcUrl.startsWith('blob:') ? s.srcUrl : '';
+    if (!sfxHasAsset && !sfxSrc) continue;
+    sfxClips.push(
+      normalizeSfxClip({
+        id: s.id.trim(),
+        label: typeof s.label === 'string' ? s.label : '',
+        sourceKind: 'asset',
+        ...(sfxHasAsset ? { assetId: s.assetId!.trim() } : {}),
+        srcUrl: sfxSrc,
+        startSec,
+        durationSec: sfxDurationSec,
+        volume: finiteNumber(s.volume) ?? 0.85,
+      }),
+    );
+  }
+
   const referenceAssetIds = Array.isArray(parsed.referenceAssetIds)
     ? [...new Set(parsed.referenceAssetIds.filter((id): id is string => typeof id === 'string' && UUID.test(id.trim())).map((id) => id.trim()))]
     : [];
@@ -282,6 +369,8 @@ export function normalizeStoredTimeline(raw: unknown, fallbackAspect: ComposeAsp
     captions,
     bgm,
     colorGrade,
+    ...(overlays.length > 0 ? { overlays } : {}),
+    ...(sfxClips.length > 0 ? { sfxClips } : {}),
     ...(referenceAssetIds.length > 0 ? { referenceAssetIds } : {}),
   };
 }
@@ -310,6 +399,13 @@ export function collectMediaRefs(timelines: readonly ComposerProject[]): { asset
     if (timeline.colorGrade) {
       addAsset(timeline.colorGrade.referenceAssetId);
       addOutput(timeline.colorGrade.referenceOutputId);
+    }
+    for (const overlay of timeline.overlays ?? []) {
+      addAsset(overlay.assetId);
+      addOutput(overlay.outputId);
+    }
+    for (const sfx of timeline.sfxClips ?? []) {
+      addAsset(sfx.assetId);
     }
   }
   return { assetIds: [...assetIds], outputIds: [...outputIds] };
@@ -437,11 +533,28 @@ function hydrateTimelineWithMaps(
     }
   }
 
+  const overlays = timeline.overlays?.map((overlay) => {
+    const resolved = resolveRef(overlay.assetId, overlay.outputId);
+    if (!resolved) return overlay;
+    return {
+      ...overlay,
+      srcUrl: resolved.srcUrl,
+      thumbUrl: resolved.thumbUrl ?? overlay.thumbUrl ?? null,
+    };
+  });
+
+  const sfxClips = timeline.sfxClips?.map((sfx) => {
+    if (!sfx.assetId || !maps.assets.has(sfx.assetId)) return sfx;
+    return { ...sfx, srcUrl: maps.assets.get(sfx.assetId)!.srcUrl };
+  });
+
   return {
     ...timeline,
     clips,
     bgm,
     colorGrade,
+    ...(overlays ? { overlays } : {}),
+    ...(sfxClips ? { sfxClips } : {}),
   };
 }
 

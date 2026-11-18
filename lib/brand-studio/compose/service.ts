@@ -8,7 +8,10 @@
  * - `render.reserve`: Deducts TWINGS credits (`composeFinalRenderKrw`) before high-resolution 1080p MP4 export
  *   under the organization lock (`reserveAllowance` + `brand_studio_jobs` `video_final` / `compose-1080p`).
  * - `render.refund`: Marks a failed client 1080p export row as `failed` (`usage_krw = null`) for an automatic
- *   100% credit refund.
+ *   100% credit refund. It applies only to the caller's own export reservation written by `render.reserve`
+ *   (`params.source = 'compose'`, `status = 'succeeded'`) and only within `COMPOSE_RENDER_REFUND_WINDOW_MS`
+ *   of its `created_at`. Music, SFX and upscale rows share the `compose-1080p` ledger model but refund
+ *   themselves server-side, so this operation never touches them; any other row yields `refunded: false`.
  */
 import { z } from 'zod';
 import type { Viewer } from '@/lib/auth/identity';
@@ -23,7 +26,7 @@ import {
   describeTimelinePatches,
   parseComposeChatCommand,
 } from './chat-intent';
-import { COMPOSE_FINAL_RENDER_MODEL, composeFinalRenderKrw } from './credits';
+import { COMPOSE_FINAL_RENDER_MODEL, COMPOSE_RENDER_REFUND_WINDOW_MS, composeFinalRenderKrw } from './credits';
 import { COMPOSE_ASPECTS, type ComposerProject, type TimelinePatch } from './timeline';
 
 export const COMPOSE_OPERATIONS = ['chat.edit', 'render.reserve', 'render.refund'] as const;
@@ -428,12 +431,22 @@ export async function runComposeOperation(
       requireCreate(seat);
 
       await lockOrganization(tx, v.organizationId);
+      const refundableSince = new Date(now.getTime() - COMPOSE_RENDER_REFUND_WINDOW_MS);
       const updatedJob = await tx.query<{ id: string }>(
         `update brand_studio_jobs
             set status = 'failed', usage_krw = null, error_code = 'failed', finished_at = $4
           where id = $1 and organization_id = $2 and created_by = $3 and model = $5 and status = 'succeeded'
+            and params->>'source' = 'compose'
+            and created_at >= $6
           returning id`,
-        [v.jobId, v.organizationId, seat.userId, now.toISOString(), COMPOSE_FINAL_RENDER_MODEL],
+        [
+          v.jobId,
+          v.organizationId,
+          seat.userId,
+          now.toISOString(),
+          COMPOSE_FINAL_RENDER_MODEL,
+          refundableSince.toISOString(),
+        ],
       );
       const updated = await loadAllowance(tx, v.organizationId, deps.env, now);
       return {
