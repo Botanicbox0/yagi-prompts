@@ -18,6 +18,7 @@
 import { STUDIO_LIMITS, type StudioAssetView, type StudioJobView, type StudioOutputView, type StudioReference } from "@/lib/brand-studio/contracts";
 import type { MentionKind } from "@/lib/brand-studio/enhancer/mentions";
 import { draftFromJob, type DockDraft } from "./dock-model";
+import { reusableModels, withModels } from "./group-model";
 import { trayItemFromAsset, trayItemFromOutput, type RefSource, type TrayItem } from "./refs";
 import type { LayerEditorRegionPreset } from "./seams";
 
@@ -96,6 +97,8 @@ export function planReuse(
     outputName: string;
     /** The result it was pressed on (a partial edit's fallback when its original is gone). */
     from?: StudioOutputView | null;
+    /** The runs made with it on other models in one request (group-model.ts `groupSiblings`). */
+    siblings?: readonly StudioJobView[];
   },
 ): ReusePlan {
   if (job.kind === "video_remix" && job.method === "blueprint") return { to: "reverse", jobId: job.id };
@@ -104,7 +107,8 @@ export function planReuse(
     const { items, missing } = restoreTray(job.references, ctx.lookup, ctx.outputName, "image");
     const base = draftFromJob(job, ctx.current);
     // The typed words, never the written sentence; the switch as it was when it was sent.
-    return { to: "dock", draft: { ...base, prompt: job.prompt.slice(0, STUDIO_LIMITS.promptMax), enhance: architectWasOn(job) }, tray: items, missing, reviewed: null };
+    const draft = { ...base, prompt: job.prompt.slice(0, STUDIO_LIMITS.promptMax), enhance: architectWasOn(job) };
+    return { to: "dock", draft: job.group ? groupDraft(job, draft, ctx.siblings ?? []) : draft, tray: items, missing, reviewed: null };
   }
   // Video runs: as before ("설정 다시 쓰기" brings back the sentence that was read and the typed words).
   const reviewed = job.reviewed && job.finalPrompt ? job.finalPrompt.slice(0, STUDIO_LIMITS.promptMax) : null;
@@ -117,6 +121,18 @@ export function planReuse(
     missing,
     reviewed: reviewed ? { original: job.prompt, improved: reviewed } : null,
   };
+}
+
+/**
+ * A run made on several models at once comes back as the whole pick: every model of its group still
+ * offered, in its order, with the quality the group's GPT Image run had. The typed words come back, not
+ * any model's designed sentence (2026-11-19, #266).
+ */
+function groupDraft(job: StudioJobView, draft: DockDraft, siblings: readonly StudioJobView[]): DockDraft {
+  const ids = reusableModels(job);
+  if (ids.length < 2) return draft;
+  const quality = [job, ...siblings].find((run) => run.quality)?.quality ?? draft.quality;
+  return withModels({ ...draft, quality }, ids).draft;
 }
 
 function planRegionReuse(job: StudioJobView, ctx: Parameters<typeof planReuse>[1]): ReusePlan {

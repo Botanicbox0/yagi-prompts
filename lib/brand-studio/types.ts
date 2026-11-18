@@ -190,6 +190,11 @@ export interface StudioJobParams {
    */
   regionWindow?: true;
   draftOutputId?: string;
+  /**
+   * One request made on several image models at once (`job.create_group`): every run of it shares `id`,
+   * and `models` is the group in the order they were picked. Absent on every other run.
+   */
+  group?: { id: string; models: string[] };
   /** Seconds of the attached reference video (estimates, the film reader). Never set for `blueprint`: its video is not attached. */
   referenceVideoSeconds?: number;
   /** Remix (`blueprint`, `reference`): the shot table the customer sent, cleaned (lib/brand-studio/reference-video.ts). */

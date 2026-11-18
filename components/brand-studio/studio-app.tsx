@@ -19,6 +19,7 @@ import { AllowanceLine, Dock } from "./dock";
 import { DRAFT_RESOLUTION, dockCredits, regionEditInput, regionEditModel, regionEditModels, remixActive, remixFit, withMedium, type EnhancePreviewInput } from "./dock-model";
 import { Explainer } from "./explainer";
 import { Wall, type SendingTile, type TileAction, type WallTileItem } from "./gallery/wall";
+import { groupCredits, groupSiblings, isGroupDraft, orderGroups } from "./group-model";
 import { HandoffDialog, handoffInput } from "./handoff-dialog";
 import { naturalSize } from "./layers/browser";
 import { LibraryRail } from "./rail";
@@ -223,7 +224,8 @@ export function StudioApp({ organizationId, locale, copy, mode, libraryCopy, lay
   const rawJobs = useMemo(() => state?.jobs ?? [], [state?.jobs]);
   // What the screen shows and takes results from: never a fill strip.
   const allJobs = useMemo(() => listedJobs(rawJobs), [rawJobs]);
-  const jobs = useMemo(() => jobsFor(allJobs, mode), [allJobs, mode]);
+  // A request made on several models shows its results side by side, in the order the models were picked.
+  const jobs = useMemo(() => orderGroups(jobsFor(allJobs, mode)), [allJobs, mode]);
   // Pictures uploaded for "빈 곳 채우기": hidden from the screen, deleted once their runs have settled.
   const [fillSources, setFillSources] = useState<ReadonlyMap<string, readonly string[] | null>>(() => new Map());
   const deletingFillRef = useRef<Set<string>>(new Set());
@@ -893,7 +895,7 @@ export function StudioApp({ organizationId, locale, copy, mode, libraryCopy, lay
             copy={copy}
             locale={locale}
             allowance={state.allowance}
-            credits={dockCredits(dock.draft, dock.tray)}
+            credits={isGroupDraft(dock.draft) ? groupCredits(dock.draft, dock.tray) : dockCredits(dock.draft, dock.tray)}
             busy={dock.busy}
             message={dock.message}
             notice={dock.notice}
@@ -920,6 +922,15 @@ export function StudioApp({ organizationId, locale, copy, mode, libraryCopy, lay
             }}
             onEnhance={() => void dock.enhanceNow()}
             onUndoEnhance={dock.undoEnhance}
+            {...(mode === "image"
+              ? {
+                  onModels: (ids: string[]) => dock.setModels(ids),
+                  tabs: dock.tabs,
+                  onTab: dock.selectTab,
+                  onTabText: dock.setTabText,
+                  onDesignOne: dock.designOne,
+                }
+              : {})}
           />
         )}
         {state && canCreate && !dockOpen && (
@@ -979,6 +990,8 @@ export function StudioApp({ organizationId, locale, copy, mode, libraryCopy, lay
           notice={viewer.notice}
           regionPreset={viewer.preset}
           revise={viewer.revise}
+          siblingsOf={(job) => groupSiblings(job, jobs)}
+          onOpenOutput={(outputId) => viewer.show({ list: "outputs", key: `o:${outputId}` })}
           region={
             dockOpen && mode === "image"
               ? {

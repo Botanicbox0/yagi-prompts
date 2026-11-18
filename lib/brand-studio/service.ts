@@ -16,6 +16,7 @@ import {
   type StudioFilmAnalysis,
   type StudioHandoffDone,
   type StudioJobCreated,
+  type StudioJobGroupCreated,
   type StudioJobsPoll,
   type StudioOperation,
   type StudioPromptPreview,
@@ -28,6 +29,7 @@ import { loadOrganizationStorageSummary, toStudioStorageQuotaView } from '@/lib/
 import { assetFromOutput, completeStudioAsset, deleteStudioAsset, deleteStudioOutput, reserveStudioAsset, updateStudioAsset } from './assets';
 import { handoffToCampaign } from './handoff';
 import { analyzeStudioFilm, cancelStudioJob, createStudioJob, deleteStudioJob, previewStudioPrompt } from './jobs';
+import { createStudioJobGroup } from './job-group';
 import { assignStudioJobProject, liveProjectsOf, studioProjectsReady } from './job-projects';
 import { failure, guarded } from './outcome';
 import { planStudioRevise } from './revision/advise';
@@ -43,6 +45,7 @@ export function isStudioOperation(value: unknown): value is StudioOperation {
 export type StudioOperationResult =
   | StudioFailure
   | StudioJobCreated
+  | StudioJobGroupCreated
   | StudioDone
   | StudioPromptPreview
   | StudioFilmAnalysis
@@ -54,6 +57,7 @@ export type StudioOperationResult =
 
 const SELF_STUDIO_OPS: ReadonlySet<StudioOperation> = new Set([
   'job.create',
+  'job.create_group',
   'job.cancel',
   'prompt.enhance',
   'film.analyze',
@@ -78,6 +82,8 @@ export async function runStudioOperation(deps: StudioDeps, viewer: Viewer, opera
   switch (operation) {
     case 'job.create':
       return createStudioJob(deps, viewer, input);
+    case 'job.create_group':
+      return createStudioJobGroup(deps, viewer, input);
     case 'job.cancel':
       return cancelStudioJob(deps, viewer, input);
     case 'prompt.enhance':

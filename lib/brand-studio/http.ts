@@ -30,6 +30,7 @@ export function studioStatus(code: StudioErrorCode): number {
     case 'invalid':
       return 400;
     case 'conflict':
+    case 'model_unavailable':
     case 'allowance_closed':
     case 'allowance_exhausted':
     case 'asset_limit':

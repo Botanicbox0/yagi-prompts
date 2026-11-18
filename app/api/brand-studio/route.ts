@@ -102,6 +102,10 @@ export async function POST(request: NextRequest) {
       if (STUDIO_JOB_OPEN_STATUSES.includes(result.job.status)) advanceLater(deps, [result.job.id]);
       return studioJson(result, 201);
     }
+    if (body.operation === 'job.create_group' && 'jobs' in result) {
+      advanceLater(deps, result.jobs.filter((job) => STUDIO_JOB_OPEN_STATUSES.includes(job.status)).map((job) => job.id));
+      return studioJson(result, 201);
+    }
     return studioJson(result);
   } catch (error) {
     studioLog('studio_post_failed', { operation: String(body.operation).slice(0, 40), message: error instanceof Error ? error.message.slice(0, 200) : 'unknown' });

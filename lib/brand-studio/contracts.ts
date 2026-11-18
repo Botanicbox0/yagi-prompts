@@ -101,6 +101,8 @@ export const STUDIO_ERROR_CODES = [
   'provider_rejected',
   'provider_unavailable',
   'region_misaligned',
+  /** A model picked for a run with several models is no longer offered (the screen was older than the list). */
+  'model_unavailable',
   'failed',
 ] as const;
 export type StudioErrorCode = (typeof STUDIO_ERROR_CODES)[number];
@@ -380,6 +382,54 @@ export const VideoReviseJobSchema = z.object({
   clarified: ReviseClarifiedSchema.optional(),
 });
 
+/**
+ * One request on two or three image models at once (founder 2026-11-19: "이미지 모델을 2개 이상을 동시 선택해서
+ * 만드는 것도"). The same words, references and settings go to every model; each model is one ordinary
+ * image job of its own, with its own prompt design. `count` is per model.
+ */
+export const STUDIO_GROUP_MODELS = { min: 2, max: 3 } as const;
+
+/**
+ * The group's idempotency key. Each model's job is keyed `groupRunRequestId(requestId, model)`, which must
+ * still fit the 80 characters of a job's key (`RequestId`), so the group's own key is shorter.
+ */
+const GroupRequestId = z.string().min(8).max(56).regex(/^[A-Za-z0-9_-]+$/);
+
+/** The idempotency key of one model's job inside a group: the group's key and the model, in the key's alphabet. */
+export function groupRunRequestId(groupRequestId: string, model: string): string {
+  return `${groupRequestId}-${model.replace(/[^A-Za-z0-9_-]/g, '_')}`.slice(0, 80);
+}
+
+/** One model of a group: its own quality (models with qualities only) and its own reviewed sentence. */
+export const ImageGroupRunSchema = z.object({
+  model: z.string().min(1).max(60),
+  /** As on an image job: only for a model that declares `qualities`. */
+  quality: z.enum(STUDIO_IMAGE_QUALITIES).optional(),
+  /** The sentence the customer read for THIS model after "설계하기" (sent as it is, with `enhance` off for this model). */
+  reviewedPrompt: ReviewedPrompt,
+});
+
+export const ImageJobGroupSchema = z
+  .object({
+    kind: z.literal('image'),
+    organizationId: Id,
+    requestId: GroupRequestId,
+    /** What the customer typed; every model's job keeps it as its `prompt`. */
+    prompt: JobBase.prompt.min(1),
+    /** Prompt Architect at send for every model that has no reviewed sentence. */
+    enhance: z.boolean().default(true),
+    references: JobBase.references,
+    projectId: JobBase.projectId,
+    aspect: z.string().max(8),
+    resolution: z.string().max(8),
+    /** Pictures per model. */
+    count: z.number().int().min(1).max(STUDIO_LIMITS.imageCountMax).default(1),
+    background: z.enum(STUDIO_IMAGE_BACKGROUNDS).optional(),
+    runs: z.array(ImageGroupRunSchema).min(STUDIO_GROUP_MODELS.min).max(STUDIO_GROUP_MODELS.max),
+  })
+  .refine((v) => new Set(v.runs.map((r) => r.model)).size === v.runs.length, { error: 'each model once' });
+export type StudioJobGroupCreate = z.infer<typeof ImageJobGroupSchema>;
+
 export const StudioJobCreateSchema = z.discriminatedUnion('kind', [
   ImageJobSchema,
   RegionEditJobSchema,
@@ -499,6 +549,7 @@ export const CampaignHandoffSchema = z
 /** `POST /api/brand-studio` body: `{ operation, input }`. */
 export const STUDIO_OPERATIONS = [
   'job.create',
+  'job.create_group',
   'job.cancel',
   'prompt.enhance',
   'film.analyze',
@@ -638,6 +689,11 @@ export interface StudioJobView {
     /** The question asked about this version's request and the customer's answer. */
     clarified?: ReviseClarified;
   } | null;
+  /**
+   * Set on a run made with others in one request on several image models (`job.create_group`): the group
+   * and its models in the order they were picked. Every run of the group carries the same value.
+   */
+  group?: { id: string; models: string[] };
   outputs: StudioOutputView[];
   /** Usage this run is expected to take from the monthly allowance, in KRW (the settled amount once finished). */
   estimateKrw: number;
@@ -735,6 +791,8 @@ export interface StudioJobsPoll {
 }
 
 export type StudioJobCreated = { ok: true; job: StudioJobView };
+/** `job.create_group`: one run per model, in the order the models were sent. */
+export type StudioJobGroupCreated = { ok: true; groupId: string; jobs: StudioJobView[] };
 export type StudioPromptPreview = { ok: true; prompt: string; notes: string };
 export type StudioFilmAnalysis = { ok: true; sheet: FilmSheet | null };
 /**

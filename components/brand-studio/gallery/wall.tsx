@@ -486,12 +486,27 @@ function VersionBadge({ n, copy, extra }: { n: number | undefined; copy: StudioC
   );
 }
 
+/**
+ * The model of a run made with others in one request, on its place in the wall (nothing for a lone run).
+ * `inline`: in the flow of a failed tile's centred column, so it never sits on its "다시" button.
+ */
+function GroupModelBadge({ job, inline = false }: { job: StudioJobView; inline?: boolean }) {
+  const model = job.group ? studioModelOrLegacy(job.model) : null;
+  if (!model) return null;
+  return (
+    <span className="bs-tile-model" data-studio-tile-model={job.model} data-inline={inline ? "" : undefined}>
+      {model.label}
+    </span>
+  );
+}
+
 function PendingTile({ entry, copy, canStop = false, stopping = null, onCancel, badges }: WallProps & Badges & Picking & { entry: Extract<Entry, { type: "pending" }> }) {
   const { job } = entry;
   const stage = copy.board.stage[job.status as keyof typeof copy.board.stage] ?? copy.board.stage.queued;
   return (
     <div className="bs-tile" data-state="pending" data-job-status={job.status} data-studio-job={job.id} style={tileStyle(entry.ratio)} role="group" aria-label={fill(copy.board.pending, { n: entry.n })}>
       <span className="bs-stage">{stage}</span>
+      <GroupModelBadge job={job} />
       <VersionBadge n={badges.get(job.id)} copy={copy} extra={job.kind === "region_edit" ? copy.board.editBadge : null} />
       {canStop && onCancel && canCancel(job) && entry.n === job.outputs.length + 1 && (
         <button
@@ -527,6 +542,7 @@ function FailedTile({ entry, copy, canGenerate, onRetry, onRemove, canRemove, se
       <span className="bs-tile-failed-icon" aria-hidden="true">
         <StudioIcon name="info" />
       </span>
+      <GroupModelBadge job={job} inline />
       <p className="bs-tile-reason">{reason}</p>
       <VersionBadge n={badges.get(job.id)} copy={copy} />
       {canGenerate && (
@@ -706,6 +722,12 @@ function ResultTile(props: WallProps & Badges & Picking & { entry: Extract<Entry
           <StudioIcon name="more" />
         </button>
       </div>
+      {job.group && model && (
+        // Made with other models in one request: which model this one is, without hovering.
+        <span className="bs-tile-model" data-studio-tile-model={job.model} aria-hidden="true">
+          {model.label}
+        </span>
+      )}
       {(model || usage > 0) && (
         <figcaption className="bs-tile-info">
           {model && <span>{model.label}</span>}

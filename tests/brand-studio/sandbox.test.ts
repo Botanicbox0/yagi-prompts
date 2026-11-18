@@ -41,6 +41,9 @@ function validInput(operation: StudioOperation, organizationId: string): Record<
   switch (operation) {
     case 'job.create':
       return { kind: 'image', organizationId, requestId: requestId(), model: 'seedream-5.5', prompt: 'a bottle', aspect: '1:1', resolution: '2K', count: 1 };
+    case 'job.create_group':
+      // One request on two image models (lib/brand-studio/job-group.ts): closed exactly like `job.create`.
+      return { kind: 'image', organizationId, requestId: requestId(), prompt: 'a bottle', aspect: '1:1', resolution: '2K', count: 1, runs: [{ model: 'seedream-5.5' }, { model: 'nano-banana-pro' }] };
     case 'job.cancel':
     case 'job.delete':
       return { organizationId, jobId: id };

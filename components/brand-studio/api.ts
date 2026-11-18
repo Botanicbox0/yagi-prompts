@@ -19,6 +19,7 @@ import {
   type AssetUpdateSchema,
   type CampaignHandoffSchema,
   type FilmAnalyzeSchema,
+  type ImageJobGroupSchema,
   type JobAssignProjectSchema,
   type JobRefSchema,
   type OutputRefSchema,
@@ -36,6 +37,7 @@ import {
   type StudioHandoffDone,
   type StudioJobCreateSchema,
   type StudioJobCreated,
+  type StudioJobGroupCreated,
   type StudioJobProjectAssigned,
   type StudioJobsPoll,
   type StudioOperation,
@@ -51,6 +53,7 @@ export const STUDIO_ENDPOINT = "/api/brand-studio";
 /** Operation name -> [request input, success answer]. */
 export interface StudioOps {
   "job.create": [z.input<typeof StudioJobCreateSchema>, StudioJobCreated];
+  "job.create_group": [z.input<typeof ImageJobGroupSchema>, StudioJobGroupCreated];
   "job.cancel": [z.input<typeof JobRefSchema>, StudioDone];
   "prompt.enhance": [z.input<typeof PromptPreviewSchema>, StudioPromptPreview];
   "film.analyze": [z.input<typeof FilmAnalyzeSchema>, StudioFilmAnalysis];
