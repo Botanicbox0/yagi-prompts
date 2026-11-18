@@ -28,6 +28,7 @@ import {
   appendClip,
   applyTimelinePatches,
   clamp,
+  clipPlaybackRate,
   clipPlayDuration,
   composeStorageKey,
   cssFilterForColorGrade,
@@ -264,7 +265,6 @@ export function VideoComposer({
 
   // Color grading UI state
   const [analyzingRef, setAnalyzingRef] = useState(false);
-  const [savingMaster, setSavingMaster] = useState(false);
   const dragRegionRef = useRef<{
     startClientX: number;
     startClientY: number;
@@ -277,7 +277,6 @@ export function VideoComposer({
 
   // Upscale UI state
   const [upscaleRes, setUpscaleRes] = useState<UpscaleResolution>(1080);
-  const [upscaleScope, setUpscaleScope] = useState<'selected_clip' | 'full_timeline'>('selected_clip');
   const [upscaleColorMode, setUpscaleColorMode] = useState<'lab' | 'wavelet'>('lab');
   const [upscaleBusy, setUpscaleBusy] = useState(false);
   const [upscalePollStatus, setUpscalePollStatus] = useState<string | null>(null);
@@ -529,7 +528,11 @@ export function VideoComposer({
     }
     v.muted = active.clip.muted;
     v.volume = active.clip.muted ? 0 : active.clip.volume;
-    if (Math.abs(v.currentTime - active.mediaTimeSec) > (playing ? 0.28 : 0.05)) {
+    // Play at the cut's speed, as the exported file does (a new source resets the rate to the default one).
+    const rate = clipPlaybackRate(active.clip);
+    if (v.defaultPlaybackRate !== rate) v.defaultPlaybackRate = rate;
+    if (v.playbackRate !== rate) v.playbackRate = rate;
+    if (Math.abs(v.currentTime - active.mediaTimeSec) > (playing ? 0.28 * rate : 0.05)) {
       try {
         v.currentTime = active.mediaTimeSec;
       } catch {
@@ -889,6 +892,8 @@ export function VideoComposer({
         } catch {
           browserProfile = null;
         }
+        // The reference could not be read: apply nothing rather than a made-up look (E2).
+        if (!browserProfile) return;
 
         let serverProfile: ColorGradeProfile | null = null;
         try {
@@ -912,21 +917,7 @@ export function VideoComposer({
           // Keep browserProfile when offline or in pure client mode
         }
 
-        const finalProfile =
-          serverProfile ??
-          browserProfile ?? {
-            lumaMean: 0.52,
-            lumaStd: 0.24,
-            rMean: 0.54,
-            gMean: 0.51,
-            bMean: 0.47,
-            rStd: 0.24,
-            gStd: 0.22,
-            bStd: 0.21,
-            warmth: 0.12,
-            contrast: 1.09,
-            saturation: 1.05,
-          };
+        const finalProfile = serverProfile ?? browserProfile;
 
         applyPatches([
           {
@@ -954,42 +945,6 @@ export function VideoComposer({
     },
     [applyPatches, canCreate, currentGrade, displayedRegion, organizationId, safeSelectedIdx, selectedClip?.id],
   );
-
-  const handleSaveGradedMaster = async () => {
-    if (!canCreate || savingMaster) return;
-    setSavingMaster(true);
-    try {
-      const res = await postPostProduction('grade.master', {
-        organizationId,
-        presetId: currentGrade.presetId ?? 'twings-french-blue',
-        settings: {
-          intensity: currentGrade.intensity,
-          skin_protect: currentGrade.skinProtect,
-          halation: currentGrade.halation,
-          grain: currentGrade.grain,
-        },
-        scope: currentGrade.scope,
-        targetClipId: currentGrade.scope === 'selected_clip' ? (selectedClip?.id ?? null) : null,
-        region: currentGrade.scope === 'region' ? displayedRegion : null,
-        referenceProfile: currentGrade.referenceProfile ?? null,
-      });
-
-      if (res.ok === true) {
-        const used = typeof res.creditsUsed === 'number' ? res.creditsUsed : 0;
-        setStatusMessage(
-          interpolate(copy.colorGrade.masterSaved, {
-            credits: formatCredits(used, locale),
-          }),
-        );
-      } else {
-        setStatusMessage(copy.colorGrade.masterFailed);
-      }
-    } catch {
-      setStatusMessage(copy.colorGrade.masterFailed);
-    } finally {
-      setSavingMaster(false);
-    }
-  };
 
   // Interactive pointer drag for Region Mask on preview monitor
   const handleRegionPointerDown = (event: ReactPointerEvent<HTMLDivElement>) => {
@@ -1050,40 +1005,21 @@ export function VideoComposer({
 
   /* ---------------------------------------------------------------- Automatic Scene Cut Detection */
 
-  const detectCutsForClip = useCallback(
-    async (clip: ComposeClip): Promise<number[]> => {
-      let detected: DetectedCut[] = [];
-      try {
-        detected = await detectVideoSceneCutsInBrowser(clip.srcUrl, {
-          minShotSec: 0.4,
-          maxDurationSec: Math.min(120, clip.durationSec),
-        });
-      } catch {
-        detected = [];
-      }
-
-      if (detected.length === 0) {
-        try {
-          const fallback = await postPostProduction('cuts.detect', {
-            organizationId,
-            ...(clip.assetId ? { assetId: clip.assetId } : {}),
-            ...(clip.outputId ? { outputId: clip.outputId } : {}),
-            minShotSec: 0.4,
-          });
-          if (fallback.ok === true && Array.isArray(fallback.cuts)) {
-            detected = fallback.cuts as DetectedCut[];
-          }
-        } catch {
-          detected = [];
-        }
-      }
-
-      return detected
-        .map((c) => Number(c.timeSec))
-        .filter((n) => Number.isFinite(n) && n > 0.05 && n < clip.durationSec - 0.05);
-    },
-    [organizationId],
-  );
+  // Only what the browser analysis found: the server has no analysis of its own and never guesses a cut.
+  const detectCutsForClip = useCallback(async (clip: ComposeClip): Promise<number[]> => {
+    let detected: DetectedCut[] = [];
+    try {
+      detected = await detectVideoSceneCutsInBrowser(clip.srcUrl, {
+        minShotSec: 0.4,
+        maxDurationSec: Math.min(120, clip.durationSec),
+      });
+    } catch {
+      detected = [];
+    }
+    return detected
+      .map((c) => Number(c.timeSec))
+      .filter((n) => Number.isFinite(n) && n > 0.05 && n < clip.durationSec - 0.05);
+  }, []);
 
   const handleDetectCuts = async () => {
     if (!canCreate || !selectedClip || detectingCuts) return;
@@ -1119,30 +1055,18 @@ export function VideoComposer({
 
   /* ---------------------------------------------------------------- Upscaling (`1080p` / `1440p` / `4K`) */
 
-  const upscaleTargetDuration = useMemo(() => {
-    if (upscaleScope === 'selected_clip') {
-      return selectedClip ? clipPlayDuration(selectedClip) : 5;
-    }
-    return Math.max(1, totalSec || 5);
-  }, [selectedClip, totalSec, upscaleScope]);
+  // Upscale works on the selected cut only. "The edited timeline" sent the FIRST cut's source while charging
+  // for the whole timeline length and changed nothing on screen (docs/BRAND-EDITING-STUDIO.md §1.4), so that
+  // choice is gone until the export itself can be sent (E2).
+  const upscaleTargetDuration = useMemo(
+    () => (selectedClip ? clipPlayDuration(selectedClip) : 5),
+    [selectedClip],
+  );
 
-  const upscaleShotCuts = useMemo(() => {
-    if (upscaleScope === 'selected_clip') {
-      return (selectedClip?.cutMarkers ?? []).filter((t) => t > 0 && t < (selectedClip?.durationSec ?? 600));
-    }
-    const pts = new Set<number>();
-    for (const sp of spans.slice(0, -1)) {
-      pts.add(roundTenths(sp.timelineEndSec));
-    }
-    for (const sp of spans) {
-      for (const m of sp.clip.cutMarkers ?? []) {
-        if (m > sp.clip.trimStartSec + 0.2 && m < sp.clip.trimEndSec - 0.2) {
-          pts.add(roundTenths(sp.timelineStartSec + (m - sp.clip.trimStartSec)));
-        }
-      }
-    }
-    return [...pts].sort((a, b) => a - b);
-  }, [selectedClip, spans, upscaleScope]);
+  const upscaleShotCuts = useMemo(
+    () => (selectedClip?.cutMarkers ?? []).filter((t) => t > 0 && t < (selectedClip?.durationSec ?? 600)),
+    [selectedClip],
+  );
 
   const upscaleEstimateCredits = useMemo(
     () => upscaleCredits(upscaleRes, upscaleTargetDuration, 'video'),
@@ -1151,14 +1075,13 @@ export function VideoComposer({
 
   const handleRunUpscale = async () => {
     if (!canCreate || upscaleBusy || project.clips.length === 0) return;
-    const targetClip = upscaleScope === 'selected_clip' ? selectedClip : (project.clips[0] ?? null);
+    const targetClip = selectedClip;
     if (!targetClip) return;
 
     setUpscaleBusy(true);
     setUpscalePollStatus(null);
     try {
-      const targetAssetId =
-        upscaleScope === 'full_timeline' && savedAssetId ? savedAssetId : targetClip.assetId;
+      const targetAssetId = targetClip.assetId;
       const targetOutputId = !targetAssetId ? targetClip.outputId : undefined;
 
       let current = await postPostProduction('upscale.submit', {
@@ -1230,19 +1153,15 @@ export function VideoComposer({
         ? sameOriginComposeUrl(organizationId, 'asset', newAssetId)
         : (outputUrl ?? targetClip.srcUrl);
 
-      if (upscaleScope === 'selected_clip' && selectedClip) {
-        const nextClips = [...project.clips];
-        nextClips[safeSelectedIdx] = {
-          ...selectedClip,
-          label: `${selectedClip.label.replace(/\s*\((1080p|1440p|4K UHD)\)$/i, '')} (${resBadge})`,
-          sourceKind: newAssetId ? 'asset' : selectedClip.sourceKind,
-          ...(newAssetId ? { assetId: newAssetId } : {}),
-          srcUrl: nextStreamUrl,
-        };
-        commitProject({ ...project, clips: nextClips });
-      } else if (newAssetId) {
-        setSavedAssetId(newAssetId);
-      }
+      const nextClips = [...project.clips];
+      nextClips[safeSelectedIdx] = {
+        ...targetClip,
+        label: `${targetClip.label.replace(/\s*\((1080p|1440p|4K UHD)\)$/i, '')} (${resBadge})`,
+        sourceKind: newAssetId ? 'asset' : targetClip.sourceKind,
+        ...(newAssetId ? { assetId: newAssetId } : {}),
+        srcUrl: nextStreamUrl,
+      };
+      commitProject({ ...project, clips: nextClips });
 
       const used = typeof current.creditsUsed === 'number' ? current.creditsUsed : upscaleEstimateCredits;
       setStatusMessage(
@@ -2335,16 +2254,6 @@ export function VideoComposer({
                     />
                   </label>
                 </div>
-
-                <button
-                  type="button"
-                  className={s.smallDarkBtn}
-                  disabled={!canCreate || savingMaster}
-                  onClick={() => void handleSaveGradedMaster()}
-                  data-compose-grade-master
-                >
-                  {savingMaster ? copy.colorGrade.savingMasterBtn : copy.colorGrade.saveMasterBtn}
-                </button>
               </div>
 
               <div className={s.toolCard}>
@@ -2739,25 +2648,9 @@ export function VideoComposer({
                 </div>
 
                 <p className={s.sectionLabel}>{copy.upscale.scopeLabel}</p>
-                <div className={s.filterPillRow} role="group" aria-label={copy.upscale.scopeLabel}>
-                  {(
-                    [
-                      ['selected_clip', copy.upscale.scopeClip],
-                      ['full_timeline', copy.upscale.scopeTimeline],
-                    ] as const
-                  ).map(([scopeKey, label]) => (
-                    <button
-                      key={scopeKey}
-                      type="button"
-                      className={s.filterPill}
-                      aria-pressed={upscaleScope === scopeKey}
-                      onClick={() => setUpscaleScope(scopeKey)}
-                      data-compose-upscale-scope={scopeKey}
-                    >
-                      {label}
-                    </button>
-                  ))}
-                </div>
+                <p className={s.uploadHint} data-compose-upscale-scope="selected_clip">
+                  {copy.upscale.scopeClip}
+                </p>
 
                 <p className={s.sectionLabel}>{copy.upscale.colorModeLabel}</p>
                 <div className={s.filterPillRow} role="group" aria-label={copy.upscale.colorModeLabel}>

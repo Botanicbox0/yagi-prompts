@@ -20,11 +20,10 @@ import {
   DEFAULT_COLOR_REGION,
   applyTimelinePatches,
   clamp,
+  clipPlaybackRate,
   clipPlayDuration,
-  computeShotMatchMatrices,
   cssFilterForColorGrade,
   detectVideoSceneCutsInBrowser,
-  extractColorProfileFromRgba,
   extractColorProfileInBrowser,
   frameStateAtTime,
   generate33CubeLutFromSpec,
@@ -180,7 +179,6 @@ export function SequenceRail({
 
   // Inspector states
   const [analyzingRef, setAnalyzingRef] = useState(false);
-  const [shotMatching, setShotMatching] = useState(false);
   const [musicStyle, setMusicStyle] = useState<MusicStyleKey>("frenchHouse");
   const [musicBpm, setMusicBpm] = useState(122);
   const [musicRefLabel, setMusicRefLabel] = useState<string | null>(null);
@@ -257,7 +255,11 @@ export function SequenceRail({
       v.setAttribute("data-src", active.clip.srcUrl);
       v.src = active.clip.srcUrl;
     }
-    if (Math.abs(v.currentTime - active.mediaTimeSec) > 0.35) {
+    // Play at the cut's speed, as the exported file does (a new source resets the rate to the default one).
+    const rate = clipPlaybackRate(active.clip);
+    if (v.defaultPlaybackRate !== rate) v.defaultPlaybackRate = rate;
+    if (v.playbackRate !== rate) v.playbackRate = rate;
+    if (Math.abs(v.currentTime - active.mediaTimeSec) > 0.35 * rate) {
       try {
         v.currentTime = active.mediaTimeSec;
       } catch {
@@ -313,6 +315,7 @@ export function SequenceRail({
     if (!canEdit || !selectedClip || selectedIdx < 0 || detectingCuts) return;
     setDetectingCuts(true);
     try {
+      // Only what the browser analysis found: the server has no analysis of its own and never guesses a cut.
       let detected: DetectedCut[] = [];
       try {
         detected = await detectVideoSceneCutsInBrowser(selectedClip.srcUrl, {
@@ -321,21 +324,6 @@ export function SequenceRail({
         });
       } catch {
         detected = [];
-      }
-      if (detected.length === 0) {
-        try {
-          const res = await postPostProduction("cuts.detect", {
-            organizationId,
-            ...(selectedClip.assetId ? { assetId: selectedClip.assetId } : {}),
-            ...(selectedClip.outputId ? { outputId: selectedClip.outputId } : {}),
-            minShotSec: 0.4,
-          });
-          if (res.ok === true && Array.isArray(res.cuts)) {
-            detected = res.cuts as DetectedCut[];
-          }
-        } catch {
-          detected = [];
-        }
       }
 
       const cutMarkers = detected
@@ -348,11 +336,11 @@ export function SequenceRail({
           { op: "set_clip_cuts", clipIndex: selectedIdx, cutMarkers },
           { op: "split_clip_cuts", clipIndex: selectedIdx, cutMediaSecs: valid },
         ]);
-        if (railHeight === "compact") onHeightChange("medium");
       } else {
         applyPatches([{ op: "set_clip_cuts", clipIndex: selectedIdx, cutMarkers }]);
-        if (railHeight === "compact") onHeightChange("medium");
+        onNotice(railCopy.noCutsDetected);
       }
+      if (railHeight === "compact") onHeightChange("medium");
     } finally {
       setDetectingCuts(false);
     }
@@ -467,6 +455,8 @@ export function SequenceRail({
       } catch {
         profile = null;
       }
+      // The reference could not be read: apply nothing rather than a made-up look (E2).
+      if (!profile) return;
       try {
         const res = await postPostProduction("grade.analyze", {
           organizationId,
@@ -493,19 +483,7 @@ export function SequenceRail({
           clipId: currentGrade.scope === "selected_clip" ? (selectedClip?.id ?? null) : null,
           clipIndex: currentGrade.scope === "selected_clip" ? Math.max(0, selectedIdx) : null,
           referenceLabel: file.name.slice(0, 60),
-          referenceProfile: profile ?? {
-            lumaMean: 0.52,
-            lumaStd: 0.24,
-            rMean: 0.54,
-            gMean: 0.51,
-            bMean: 0.47,
-            rStd: 0.24,
-            gStd: 0.22,
-            bStd: 0.21,
-            warmth: 0.1,
-            contrast: 1.08,
-            saturation: 1.04,
-          },
+          referenceProfile: profile,
           intensity: currentGrade.intensity,
           skinProtect: currentGrade.skinProtect,
           grain: currentGrade.grain,
@@ -642,56 +620,6 @@ export function SequenceRail({
       }
     } finally {
       setSfxBusy(false);
-    }
-  };
-
-  const handleShotMatch = async () => {
-    if (!canEdit || project.clips.length < 2 || shotMatching) return;
-    setShotMatching(true);
-    try {
-      const neutral = extractColorProfileFromRgba(new Uint8Array(0));
-      const clipProfiles = await Promise.all(
-        project.clips.map(async (clip) => {
-          const profile = await extractColorProfileInBrowser(
-            clip.thumbUrl ?? clip.srcUrl,
-            clip.thumbUrl ? "image" : "video",
-            clip.trimStartSec + 0.2,
-          ).catch(() => neutral);
-          return { clipId: clip.id, profile };
-        }),
-      );
-      const anchorIdx = Math.max(0, selectedIdx);
-      const anchorProfile = clipProfiles[anchorIdx]?.profile ?? clipProfiles[0]!.profile;
-      const res = await postPostProduction("grade.shot_match", {
-        organizationId,
-        anchorIndex: anchorIdx,
-        intensity: currentGrade.intensity,
-        skinProtect: currentGrade.skinProtect,
-        presetId: currentGrade.presetId,
-        clips: clipProfiles,
-      });
-      if (res.ok !== true) {
-        computeShotMatchMatrices(clipProfiles, anchorIdx, {
-          intensity: currentGrade.intensity,
-          skinProtect: currentGrade.skinProtect,
-        });
-      }
-      applyPatches([
-        {
-          op: "set_color_grade",
-          enabled: true,
-          scope: "full_timeline",
-          referenceLabel: railCopy.inspector.shotMatchBtn,
-          referenceProfile: anchorProfile,
-          intensity: currentGrade.intensity,
-          skinProtect: currentGrade.skinProtect,
-          grain: currentGrade.grain,
-          halation: currentGrade.halation,
-        },
-      ]);
-      onNotice(railCopy.inspector.shotMatchedNotice);
-    } finally {
-      setShotMatching(false);
     }
   };
 
@@ -967,12 +895,14 @@ export function SequenceRail({
               </label>
             </div>
 
-            {clip.cutMarkers && clip.cutMarkers.length > 0 && (
+            {/* Only the cut points inside this cut's trim, the ones its split button uses: a piece of a split
+                source keeps the source's points, and none of those may fall inside it (E2). */}
+            {splittableCuts.length > 0 && (
               <div className={w.seqCutMarkerRow} data-clip-cut-markers={clip.id}>
                 <span className={w.seqCutBadge}>
-                  {interpolate(railCopy.cutMarkersBadge, { count: clip.cutMarkers.length })}
+                  {interpolate(railCopy.cutMarkersBadge, { count: splittableCuts.length })}
                 </span>
-                {splittableCuts.length > 0 && canEdit && (
+                {canEdit && (
                   <button
                     type="button"
                     className={w.seqSplitCutsBtn}
@@ -983,7 +913,7 @@ export function SequenceRail({
                     }
                     data-clip-split-cuts={clip.id}
                   >
-                    {interpolate(railCopy.splitDetectedBtn, { count: splittableCuts.length + 1 })}
+                    {interpolate(railCopy.splitDetectedBtn, { count: splittableCuts.length })}
                   </button>
                 )}
               </div>
@@ -1373,28 +1303,8 @@ export function SequenceRail({
                       >
                         {railCopy.audioLag}
                       </button>
-                      <button
-                        type="button"
-                        className={w.seqHeightBtn}
-                        aria-pressed={selectedClip.transitionIn === "cross_dissolve"}
-                        disabled={!canEdit}
-                        onClick={() =>
-                          applyPatches([
-                            {
-                              op: "set_clip_transition",
-                              clipIndex: selectedIdx,
-                              transitionIn:
-                                selectedClip.transitionIn === "cross_dissolve" ? "none" : "cross_dissolve",
-                              transitionDurationSec: 0.4,
-                            },
-                          ])
-                        }
-                        data-nle-transition
-                      >
-                        {selectedClip.transitionIn === "cross_dissolve"
-                          ? railCopy.transitionDissolve
-                          : railCopy.transitionNone}
-                      </button>
+                      {/* No transition control: a dissolve plays in neither the preview nor the MP4, only in the
+                          XML export (E5 renders it). A stored transition still goes to that export unchanged. */}
                     </div>
                   )}
 
@@ -1630,15 +1540,6 @@ export function SequenceRail({
                     <button
                       type="button"
                       className={w.seqUploadBtn}
-                      disabled={!canEdit || project.clips.length < 2 || shotMatching}
-                      onClick={() => void handleShotMatch()}
-                      data-grade-shot-match
-                    >
-                      {shotMatching ? railCopy.inspector.shotMatching : railCopy.inspector.shotMatchBtn}
-                    </button>
-                    <button
-                      type="button"
-                      className={w.seqUploadBtn}
                       disabled={project.clips.length === 0}
                       onClick={handleDownloadCubeLut}
                       data-grade-download-cube
@@ -1748,7 +1649,8 @@ export function SequenceRail({
                   )}
 
                   <div className={w.seqSfxDivider} data-sfx-generator>
-                    <span className={w.seqLicenseTag}>{railCopy.inspector.sfxTitle}</span>
+                    {/* Closed music generation: the tab itself is named after this block, so no second heading. */}
+                    {musicGeneration && <span className={w.seqLicenseTag}>{railCopy.inspector.sfxTitle}</span>}
                     <input
                       type="text"
                       className={w.seqSfxInput}

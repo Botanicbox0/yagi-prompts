@@ -163,6 +163,18 @@ export function brandStudioRegionV2Open(env: Record<string, string | undefined> 
 }
 
 /**
+ * The clip edit panel as a conversation (docs/BRAND-STUDIO-VIDEO-REMIX.md §3, slice D1): no method cards;
+ * the customer says what to change, we answer with how it will be made, why and the credits, and one
+ * button makes it. Drafts and finals are named, the step to the final sits on a draft's version card, and
+ * a version made from an earlier one shows where it came from. Default OFF: open only when the server
+ * environment says exactly `BRAND_STUDIO_REVISE_V2=on`. Off means every screen, request and answer is as
+ * it was.
+ */
+export function brandStudioReviseV2Open(env: Record<string, string | undefined> = process.env): boolean {
+  return env.BRAND_STUDIO_REVISE_V2 === 'on';
+}
+
+/**
  * "말로 편집" in the editing studio (docs/BRAND-EDITING-STUDIO.md §4, §7 E1): an instruction becomes a
  * validated plan of timeline steps that the screen previews and applies (compose operation `assist.plan`).
  * Default OFF: open only when the server environment says exactly `BRAND_STUDIO_EDIT_ASSIST=on`. Off means

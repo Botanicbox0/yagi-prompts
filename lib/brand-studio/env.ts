@@ -10,6 +10,7 @@ import {
   brandStudioOutpaintOpen,
   brandStudioProjectsOpen,
   brandStudioRegionV2Open,
+  brandStudioReviseV2Open,
 } from '@/lib/flags';
 import { STUDIO_LANES, type StudioLane } from './models';
 
@@ -35,6 +36,8 @@ export interface StudioEnv {
   regionV2?: boolean;
   /** `BRAND_STUDIO_EDIT_ASSIST=on`: the editing studio's "말로 편집" (`assist.plan`, lib/flags.ts). */
   editAssist?: boolean;
+  /** `BRAND_STUDIO_REVISE_V2=on`: the clip edit panel as a conversation, drafts and finals named (lib/flags.ts). */
+  reviseV2?: boolean;
   /** `BRAND_STUDIO_MUSIC_GENERATION=on`: `music.generate` and its controls (lib/flags.ts). Closed by default. */
   musicGeneration?: boolean;
 }
@@ -84,6 +87,7 @@ export function studioEnv(env: StudioEnvSource = process.env): StudioEnv {
     projects: brandStudioProjectsOpen(env),
     regionV2: brandStudioRegionV2Open(env),
     editAssist: brandStudioEditAssistOpen(env),
+    reviseV2: brandStudioReviseV2Open(env),
     musicGeneration: brandStudioMusicGenerationOpen(env),
   };
 }

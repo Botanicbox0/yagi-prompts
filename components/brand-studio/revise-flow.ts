@@ -15,6 +15,15 @@
  * request at the caret and, separately, `readMark` asks `revise.mark` what it is on (free; never blocks the
  * form). Removing one takes its digit out and renumbers the rest. Marks travel with `revise.plan` and with
  * the created version, then clear.
+ *
+ * Dialogue (`dialogue: true`, flag `BRAND_STUDIO_REVISE_V2`, docs/BRAND-STUDIO-VIDEO-REMIX.md §3): the
+ * customer never picks a way. `send` moves what was typed (with its pictures, videos and marks) into the
+ * conversation and asks `revise.plan` about everything said so far; the answer is the way we picked, why
+ * and its credits (`answer`), and only `make` creates the version, with exactly that way. The one question
+ * works as before. When the plan cannot be had, the answer falls back to the server's own rule for an
+ * unread request (edit when open, else reshoot, no reason) on the last plan the panel has (the per-way
+ * credits do not depend on the words). With no plan at all the error shows and `send` asks again. Without
+ * `dialogue` none of this runs and the form is exactly as above.
  */
 import {
   STUDIO_LIMITS,
@@ -25,12 +34,31 @@ import {
   type StudioReviseMarkRead,
   type StudioReviseMode,
   type StudioRevisePlan,
+  type StudioReviseProblem,
   type StudioReviseReason,
 } from "@/lib/brand-studio/contracts";
 import { isFailure, type ApiResult } from "./api";
 import { newRequestId } from "./copy";
 import { toReferences, type TrayItem } from "./refs";
 import { MARKS_MAX, insertDigit, removeDigit, toWireMarks, wireGeometry, type MarkGeometry, type MarkState } from "./revise-marks";
+
+/** Dialogue: one thing the customer sent, with what was attached to it and the keys of the marks it placed. */
+export interface ReviseSaid {
+  text: string;
+  marks: string[];
+  references: TrayItem[];
+  materials: TrayItem[];
+}
+
+/** Dialogue: our answer to what was said. The way is ours; the credits are what the server reserves for it. */
+export interface ReviseAnswer {
+  mode: StudioReviseMode;
+  /** Why, when the request was read and fits this way; null otherwise (the line then says only how). */
+  reason: StudioReviseReason | null;
+  estimateKrw: number;
+  /** The request fits the other way, which is closed: why (shown under the answer). */
+  blocked: StudioReviseProblem | null;
+}
 
 export interface ReviseState {
   phase: "loading" | "ready" | "checking" | "clarify" | "suggest" | "sending";
@@ -54,6 +82,16 @@ export interface ReviseState {
   marks: MarkState[];
   /** An error code or `empty_prompt` / `unavailable`; the form turns it into a line. */
   note: string | null;
+  /**
+   * Dialogue only (always empty otherwise): what was sent for this version, oldest first. `prompt`,
+   * `references`, `materials` and the marks not listed here are what is being typed now. Mark n is still
+   * the n-th circled digit across everything said and typed.
+   */
+  said: ReviseSaid[];
+  /** Dialogue only: our answer to `said`; null until read, and while there is nothing to make. */
+  answer: ReviseAnswer | null;
+  /** Dialogue only: how many things had been said when the question was asked (where it sits in the thread). */
+  clarifiedAt: number | null;
 }
 
 export interface ReviseDeps {
@@ -68,6 +106,8 @@ export interface ReviseDeps {
   frame?(mark: MarkGeometry): Promise<string | null>;
   /** A version is on its way (the strip shows it from the store; the screen may say so too). */
   onCreated?(created: StudioJobCreated): void;
+  /** The panel is a conversation (`BRAND_STUDIO_REVISE_V2`): `send` and `make` instead of `submit`. */
+  dialogue?: boolean;
 }
 
 export interface RevisePlanInput {
@@ -102,12 +142,49 @@ export const initialReviseState = (): ReviseState => ({
   clarified: null,
   marks: [],
   note: null,
+  said: [],
+  answer: null,
+  clarifiedAt: null,
 });
 
 /** The way to select: the one asked for when it is open, else the first open one, else the one asked for. */
 export function openMode(plan: StudioRevisePlan | null, wanted: StudioReviseMode): StudioReviseMode {
   if (!plan || plan.methods[wanted]?.available) return wanted;
   return STUDIO_REVISE_MODES.find((mode) => plan.methods[mode]?.available) ?? wanted;
+}
+
+/** The way a reason points at (lib/brand-studio/revision/advise.ts): the look is edited, anything else is made again. */
+export const wayOf = (reason: StudioReviseReason): StudioReviseMode => (reason === "surface" ? "edit" : "reshoot");
+
+/** Dialogue: everything said for the version, as one request (one line per message). */
+export const requestOf = (said: readonly ReviseSaid[]) => said.map((s) => s.text).join("\n");
+
+/**
+ * Dialogue: the answer a plan gives. The way is the server's `recommended` (it already falls back to edit
+ * when open, else reshoot), kept to an open way; the reason only when it points at that way. Null when no
+ * way is open.
+ */
+export function answerOf(plan: StudioRevisePlan): ReviseAnswer | null {
+  const mode = openMode(plan, plan.recommended ?? "edit");
+  const method = plan.methods[mode];
+  if (!method?.available) return null;
+  const fits = plan.reason ? wayOf(plan.reason) : null;
+  return {
+    mode,
+    reason: fits === mode ? plan.reason : null,
+    estimateKrw: method.estimateKrw,
+    blocked: fits && fits !== mode ? (plan.methods[fits]?.problem ?? "unsupported") : null,
+  };
+}
+
+/**
+ * Dialogue: the answer when the plan could not be had, from the last plan the panel holds. It follows
+ * the server's own rule for a request it could not read (advise.ts: edit when open, else reshoot) and
+ * gives no reason. The per-way credits do not depend on the words, so the figure is still the one the
+ * server reserves.
+ */
+export function fallbackAnswer(plan: StudioRevisePlan): ReviseAnswer | null {
+  return answerOf({ ...plan, recommended: "edit", reason: null });
 }
 
 export type ReviseCreateInput = ReturnType<typeof toCreate>;
@@ -159,11 +236,18 @@ export function createReviseFlow(deps: ReviseDeps) {
   /**
    * A typing or marking change: a pending suggestion no longer applies. A question left unanswered counts
    * as asked: the request was changed instead, and it is not asked again for this version.
+   * Dialogue: typing is the next message, so nothing on screen changes until it is sent.
    */
   const edited = (): Partial<ReviseState> => {
+    if (deps.dialogue) return {};
     if (state.phase === "clarify" && state.clarify) return { suggestion: null, clarify: null, clarified: { question: state.clarify.question, answer: null }, phase: "ready" };
     return { suggestion: null, phase: state.phase === "suggest" ? "ready" : state.phase };
   };
+  /** Keys of the marks already said (dialogue); empty otherwise. */
+  const saidMarks = () => new Set(state.said.flatMap((s) => s.marks));
+  /** Pictures and videos still allowed on what is being typed: the version's limit less what was already said. */
+  const roomFor = (kind: "image" | "video") =>
+    (kind === "image" ? REVISE_REFERENCES_MAX : REVISE_MATERIALS_MAX) - state.said.reduce((n, s) => n + (kind === "image" ? s.references.length : s.materials.length), 0);
   let nextKey = 0;
   /** Bumped on every read and move, so a late answer for an older position is dropped. */
   const reads = new Map<string, number>();
@@ -202,7 +286,10 @@ export function createReviseFlow(deps: ReviseDeps) {
   async function load() {
     set({ phase: "loading", note: null });
     const plan = await ask("");
-    if (isFailure(plan)) return set({ phase: "ready", note: plan.code });
+    // Dialogue: something was sent while this was on its way; it only keeps a plan to fall back on.
+    if (deps.dialogue && state.phase !== "loading") return isFailure(plan) || state.plan ? undefined : set({ plan });
+    // Dialogue: this plan is only something to fall back on, so a failure here says nothing before anything was asked.
+    if (isFailure(plan)) return set({ phase: "ready", note: deps.dialogue ? null : plan.code });
     set({ phase: "ready", plan, mode: openMode(plan, state.picked ? state.mode : (plan.recommended ?? state.mode)) });
   }
 
@@ -241,6 +328,88 @@ export function createReviseFlow(deps: ReviseDeps) {
     await proceed(plan);
   }
 
+  /** Dialogue: asks the plan about everything said so far, then shows the question or our answer. */
+  async function askSaid() {
+    set({ phase: "checking", note: null, answer: null });
+    const keys = saidMarks();
+    const plan = await deps.plan({
+      organizationId: deps.organizationId,
+      outputId: deps.outputId,
+      prompt: requestOf(state.said),
+      references: toReferences(state.said.flatMap((s) => s.references), "image"),
+      marks: toWireMarks(state.marks.filter((m) => keys.has(m.key))),
+      materials: state.said.reduce((n, s) => n + s.materials.length, 0),
+      ...(state.clarified ? { clarified: { ...state.clarified } } : {}),
+    });
+    if (isFailure(plan)) {
+      const answer = state.plan ? fallbackAnswer(state.plan) : null;
+      if (!answer) return set({ phase: "ready", note: plan.code });
+      return set({ phase: "ready", mode: answer.mode, answer });
+    }
+    set({ plan });
+    if (plan.clarify && !state.clarified && plan.clarify.options.length >= 2)
+      return set({ phase: "clarify", clarify: { question: plan.clarify.question, options: [...plan.clarify.options] }, clarifiedAt: state.said.length });
+    settle(plan);
+  }
+
+  /** Dialogue: our answer from a plan, or the line that no way is open. */
+  function settle(plan: StudioRevisePlan) {
+    const answer = answerOf(plan);
+    if (!answer) return set({ phase: "ready", note: "unavailable" });
+    set({ phase: "ready", mode: answer.mode, answer, note: null });
+  }
+
+  /**
+   * Dialogue: what was typed (with its pictures, videos and marks) joins the conversation and everything
+   * said is read again. With nothing typed, a request that got no answer is asked again.
+   */
+  async function send() {
+    if (state.phase === "checking" || state.phase === "sending") return;
+    const room = STUDIO_LIMITS.promptMax - (state.said.length ? requestOf(state.said).length + 1 : 0);
+    const text = state.prompt.trim().slice(0, Math.max(0, room));
+    if (!text) {
+      if (state.said.length && !state.answer && state.phase !== "clarify") return askSaid();
+      return set({ note: "empty_prompt" });
+    }
+    const taken = saidMarks();
+    const said: ReviseSaid = { text, marks: state.marks.filter((m) => !taken.has(m.key)).map((m) => m.key), references: state.references, materials: state.materials };
+    // A question left unanswered counts as asked once something new is said; it is not asked again.
+    const skipped = state.phase === "clarify" && state.clarify ? { clarify: null, clarified: { question: state.clarify.question, answer: null } } : {};
+    set({ said: [...state.said, said], prompt: "", references: [], materials: [], answer: null, note: null, ...skipped });
+    await askSaid();
+  }
+
+  /**
+   * Dialogue: "이대로 만들기". Creates exactly what the answer describes: everything said, on the answer's
+   * way. Anything typed but not sent stays in the box for the next version (its digits renumbered).
+   */
+  async function make() {
+    const answer = state.answer;
+    if (state.phase !== "ready" || !answer || !state.said.length) return;
+    const keys = saidMarks();
+    const marks = state.marks.filter((m) => keys.has(m.key));
+    set({ phase: "sending", note: null });
+    const result = await deps.create(
+      toCreate({
+        organizationId: deps.organizationId,
+        outputId: deps.outputId,
+        mode: answer.mode,
+        prompt: requestOf(state.said),
+        references: state.said.flatMap((s) => s.references),
+        materials: state.said.flatMap((s) => s.materials),
+        marks,
+        clarified: state.clarified,
+      }),
+    );
+    if (isFailure(result)) return set({ phase: "ready", note: result.code });
+    let prompt = state.prompt;
+    for (let i = 0; i < marks.length; i += 1) prompt = removeDigit(prompt, 1);
+    for (const key of keys) reads.delete(key);
+    const plan = state.plan ? { ...state.plan, version: state.plan.version + 1 } : null;
+    set({ phase: "ready", said: [], answer: null, marks: state.marks.filter((m) => !keys.has(m.key)), prompt, plan, clarify: null, clarified: null, clarifiedAt: null });
+    deps.onCreated?.(result);
+  }
+
   /** The request is settled: the way suggestion when it applies (once), else the version at once. */
   async function proceed(plan: StudioRevisePlan) {
     const { recommended } = plan;
@@ -260,9 +429,12 @@ export function createReviseFlow(deps: ReviseDeps) {
     },
     load,
     submit,
+    send,
+    make,
     /**
      * The question row: a choice (one of `clarify.options`), or null to make it exactly as written. A choice
      * asks the plan once more with the answer; then the way suggestion follows only when it applies.
+     * Dialogue: nothing is made here; the answer line follows (from the plan that asked when it is as written).
      */
     async answer(choice: string | null) {
       const clarify = state.clarify;
@@ -270,6 +442,11 @@ export function createReviseFlow(deps: ReviseDeps) {
       const answer = choice !== null && clarify.options.includes(choice) ? choice : null;
       if (choice !== null && answer === null) return;
       set({ clarify: null, clarified: { question: clarify.question, answer }, phase: "checking", note: null });
+      if (deps.dialogue) {
+        if (answer !== null) return askSaid();
+        if (!state.plan) return set({ phase: "ready", note: "failed" });
+        return settle(state.plan);
+      }
       let plan = state.plan;
       if (answer !== null) {
         const again = await ask(state.prompt.trim());
@@ -296,10 +473,10 @@ export function createReviseFlow(deps: ReviseDeps) {
       set({ prompt: prompt.slice(0, STUDIO_LIMITS.promptMax), note: null, ...edited() });
     },
     setReferences(references: TrayItem[]) {
-      set({ references: references.filter((r) => r.kind === "image").slice(0, REVISE_REFERENCES_MAX), ...edited() });
+      set({ references: references.filter((r) => r.kind === "image").slice(0, roomFor("image")), ...edited() });
     },
     setMaterials(materials: TrayItem[]) {
-      set({ materials: materials.filter((m) => m.kind === "video").slice(0, REVISE_MATERIALS_MAX), ...edited() });
+      set({ materials: materials.filter((m) => m.kind === "video").slice(0, roomFor("video")), ...edited() });
     },
     /**
      * Adds what the customer dropped or picked: pictures become references, videos material to read.
@@ -313,7 +490,7 @@ export function createReviseFlow(deps: ReviseDeps) {
         const list = item.kind === "image" ? references : item.kind === "video" ? materials : null;
         if (!list) continue;
         if (list.some((x) => x.key === item.key)) continue;
-        if (list.length >= (item.kind === "image" ? REVISE_REFERENCES_MAX : REVISE_MATERIALS_MAX)) left += 1;
+        if (list.length >= roomFor(item.kind === "image" ? "image" : "video")) left += 1;
         else list.push(item);
       }
       if (references.length !== state.references.length || materials.length !== state.materials.length) set({ references, materials, ...edited() });
@@ -338,7 +515,8 @@ export function createReviseFlow(deps: ReviseDeps) {
     /** Takes a mark away with its digit; the later marks and their digits move up one. */
     removeMark(key: string) {
       const index = state.marks.findIndex((m) => m.key === key);
-      if (index < 0 || state.phase === "sending" || state.phase === "checking") return;
+      // A mark already said stays with what was said (its digit is in a sent message).
+      if (index < 0 || state.phase === "sending" || state.phase === "checking" || saidMarks().has(key)) return;
       reads.delete(key);
       set({ marks: state.marks.filter((m) => m.key !== key), prompt: removeDigit(state.prompt, index + 1), ...edited() });
     },

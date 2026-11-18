@@ -49,7 +49,8 @@ import { resolveRequestUrl, sameOriginMutation } from '@/lib/routing/surfaces';
  * Brand Studio Post-Production Gateway (`STUDIO-PRO-SUITE-V4.md` §2.3).
  *
  * Operations (`POST`):
- * - `cuts.detect`: Automatic shot-cut boundary detection (`FrameHistogramSample[]` or FFmpeg `scdet`)
+ * - `cuts.detect`: Automatic shot-cut boundary detection (`FrameHistogramSample[]` or FFmpeg `scdet`);
+ *   with neither it answers no cuts (it never guesses one)
  * - `grade.analyze`: Reference RGBA / profile color transfer matrix + CSS filter + scoped `ColorGradeSpec`
  * - `grade.master`: Authorized 33^3 `.cube` / 5-stage FFmpeg active look master (`color_grading` policy)
  * - `upscale.submit` / `upscale.status`: SeedVR2 (`1080p` / `1440p` / `4K 2160p`) pluggable upscale + 100% refund on error
@@ -286,20 +287,20 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
       if (!parsed.success) return studioJson({ ok: false, code: 'invalid' }, 400);
       const v = parsed.data;
 
-      let mediaDurationSec: number | null = null;
       if (v.assetId || v.outputId) {
-        mediaDurationSec = await deps.sql.transaction(async (tx) => {
+        await deps.sql.transaction(async (tx) => {
           if (v.assetId) {
             const asset = await readyAsset(tx, v.organizationId, v.assetId);
             if (!asset || asset.kind !== 'video') throw new StudioDenied('reference_missing');
-            return asset.duration_ms != null ? asset.duration_ms / 1000 : 6;
+            return;
           }
           const out = await readyOutput(tx, v.organizationId, v.outputId!);
           if (!out || out.kind !== 'video') throw new StudioDenied('reference_missing');
-          return out.duration_ms != null ? out.duration_ms / 1000 : 6;
         });
       }
 
+      // Only what an analysis found. Without frame samples or scdet output there is nothing to analyse
+      // here, so the answer is "no cuts" (docs/BRAND-EDITING-STUDIO.md §5 E2: never an invented cut).
       const cuts = v.ffmpegStderr
         ? parseFfmpegScdetOutput(v.ffmpegStderr, v.minShotSec)
         : v.samples
@@ -307,15 +308,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
               threshold: v.threshold,
               minShotSec: v.minShotSec,
             })
-          : mediaDurationSec && mediaDurationSec >= 4
-            ? [
-                {
-                  timeSec: Math.round((mediaDurationSec / 2) * 10) / 10,
-                  confidence: 0.72,
-                  delta: 0.35,
-                },
-              ]
-            : [];
+          : [];
 
       return NextResponse.json(
         { ok: true, cuts, creditsUsed: 0 },

@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { applyTimelinePatches, type ComposerProject } from '@/lib/brand-studio/compose/timeline';
-import { applyEditSteps, resolveEditPlan } from '@/lib/brand-studio/edit-assist/apply';
-import { diffTimelines, isInstantEdit, type EditDelta } from '@/lib/brand-studio/edit-assist/diff';
+import { applyEditSteps, resolveEditPlan, stepSubjects } from '@/lib/brand-studio/edit-assist/apply';
+import { diffTimelines, isInstantEdit, patchSubjects, type EditDelta } from '@/lib/brand-studio/edit-assist/diff';
 import type { EditStep } from '@/lib/brand-studio/edit-assist/plan';
 import { assistFixture, FIXTURE_REFS } from './fixture';
 
@@ -177,21 +177,101 @@ describe('diffTimelines — captions, music, aspect, look', () => {
     expect(deltasOf([{ do: 'look', preset: 'off' }], warm)).toEqual([{ kind: 'look', preset: 'off' }]);
   });
 
-  it('lists deltas in a fixed order: cuts, captions, music, aspect, look, other, total', () => {
+  it('without the steps, lists cuts by cut number, then captions, music, aspect, look, other, total', () => {
     expect(
       deltasOf([
-        { do: 'trim', clip: 'c1', keep: 'start', seconds: 2 },
         { do: 'remove', clip: 'c4' },
+        { do: 'trim', clip: 'c1', keep: 'start', seconds: 2 },
         { do: 'caption_add', text: '지금 만나보세요', where: 'end' },
         { do: 'sound', target: 'music', volume: 0.3 },
         { do: 'aspect', aspect: '1:1' },
       ]),
     ).toEqual([
-      { kind: 'clip_removed', cut: 4, label: '로고 엔딩' },
       { kind: 'clip_trimmed', cut: 1, beforeSec: 5, afterSec: 2 },
+      { kind: 'clip_removed', cut: 4, label: '로고 엔딩' },
       { kind: 'caption_added', text: '지금 만나보세요', fromSec: 10.5, toSec: 13 },
       { kind: 'music_volume', beforePct: 60, afterPct: 30 },
       { kind: 'aspect', before: '9:16', after: '1:1' },
+      { kind: 'total', beforeSec: 20, afterSec: 13 },
+    ]);
+  });
+});
+
+describe('diffTimelines — lines follow what was asked (E2)', () => {
+  function ordered(steps: EditStep[], project: ComposerProject = assistFixture()): EditDelta[] {
+    const resolved = resolveEditPlan(steps, FIXTURE_REFS);
+    if (!resolved.ok) throw new Error('unresolved');
+    const result = applyEditSteps(project, resolved.steps);
+    expect(result.problems).toEqual([]);
+    return diffTimelines(project, result.project, stepSubjects(resolved.steps));
+  }
+
+  it('"2번 컷 2초로 줄이고 마지막 컷은 지워줘": the trim first, then the removal', () => {
+    expect(
+      ordered([
+        { do: 'trim', clip: 'c2', keep: 'start', seconds: 2 },
+        { do: 'remove', clip: 'c4' },
+      ]),
+    ).toEqual([
+      { kind: 'clip_trimmed', cut: 2, beforeSec: 5, afterSec: 2 },
+      { kind: 'clip_removed', cut: 4, label: '로고 엔딩' },
+      { kind: 'total', beforeSec: 20, afterSec: 13 },
+    ]);
+  });
+
+  it('said the other way round, the removal comes first', () => {
+    expect(
+      ordered([
+        { do: 'remove', clip: 'c4' },
+        { do: 'trim', clip: 'c2', keep: 'start', seconds: 2 },
+      ]),
+    ).toEqual([
+      { kind: 'clip_removed', cut: 4, label: '로고 엔딩' },
+      { kind: 'clip_trimmed', cut: 2, beforeSec: 5, afterSec: 2 },
+      { kind: 'total', beforeSec: 20, afterSec: 13 },
+    ]);
+  });
+
+  it('orders captions, music and look by their steps too', () => {
+    expect(
+      ordered([
+        { do: 'look', preset: 'kodak-2383-warm' },
+        { do: 'caption_edit', caption: 't1', position: 'top' },
+        { do: 'sound', target: 'music', volume: 0.3 },
+        { do: 'trim', clip: 'c1', keep: 'start', seconds: 4 },
+      ]),
+    ).toEqual([
+      { kind: 'look', preset: 'kodak-2383-warm' },
+      { kind: 'caption_changed', text: '봄 신상 출시', changed: ['position'] },
+      { kind: 'music_volume', beforePct: 60, afterPct: 30 },
+      { kind: 'clip_trimmed', cut: 1, beforeSec: 5, afterSec: 4 },
+      { kind: 'total', beforeSec: 20, afterSec: 19 },
+    ]);
+  });
+
+  it('orders a split by the step that named its cut', () => {
+    expect(
+      ordered([
+        { do: 'trim', clip: 'c4', keep: 'start', seconds: 2 },
+        { do: 'split', clip: 'c3', at: 2 },
+      ]),
+    ).toEqual([
+      { kind: 'clip_trimmed', cut: 4, beforeSec: 4, afterSec: 2 },
+      { kind: 'clip_split', cut: 3, atSec: 2 },
+      { kind: 'total', beforeSec: 20, afterSec: 18 },
+    ]);
+  });
+
+  it('orders index patches (rule answers) the same way', () => {
+    const base = assistFixture();
+    const patches = [
+      { op: 'remove_clip' as const, clipIndex: 3 },
+      { op: 'trim_clip' as const, clipIndex: 1, trimEndSec: 3 },
+    ];
+    const draft = applyTimelinePatches(base, patches).project;
+    expect(diffTimelines(base, draft, patchSubjects(base, patches))).toEqual([
+      { kind: 'clip_removed', cut: 4, label: '로고 엔딩' },
+      { kind: 'clip_trimmed', cut: 2, beforeSec: 5, afterSec: 2 },
       { kind: 'total', beforeSec: 20, afterSec: 13 },
     ]);
   });

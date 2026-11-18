@@ -68,21 +68,53 @@ export interface ChainVersion {
   /** The question asked about that request and the customer's answer; null when none was asked. */
   clarified: { question: string; answer: string } | null;
   state: "ready" | "making";
+  /**
+   * The version this one was made from (v5 made from v2 says 2); null for v1 and when that result is gone.
+   * Versions are a tree: a new version may start from any earlier one.
+   */
+  base: number | null;
+  /** The version's 1080p final: none yet, one being made, or one ready (then `output` is the final). */
+  final: "none" | "making" | "ready";
+}
+
+/** A ready result is a draft the customer can still take to its final. */
+export type ClipStage = "draft" | "final";
+
+/**
+ * What the result on screen is: a draft (it can still go to its final: the view's `draft` flag, true only
+ * for a real draft with a usable id) or a final (made by that step). Anything else is neither, whatever
+ * its resolution: a clip made straight at a quality, or an edit of a draft that came out as a plain 480p
+ * video (owner decision 2026-11-18: a version keeps the resolution of the one it comes from). Never keyed
+ * off the resolution.
+ */
+export function stageOf(job: StudioJobView, output: StudioOutputView): ClipStage | null {
+  if (job.kind === "video_final") return "final";
+  return output.kind === "video" && output.draft ? "draft" : null;
 }
 
 /** The versions of the clip `job` belongs to, ready or being made, for the viewer's strip. Failed ones are left out. */
 export function chainOf(jobs: readonly StudioJobView[], job: StudioJobView): ChainVersion[] {
-  const place = places(jobs).get(job.id);
+  const at = places(jobs);
+  const place = at.get(job.id);
   if (!place) return [];
   const chain = revisionChains(jobs).get(place.root) ?? [];
+  // The version each result belongs to, so a version can say which one it was made from.
+  const owner = new Map<string, number>();
+  for (const run of jobs) {
+    const where = at.get(run.id);
+    if (where && where.root === place.root) for (const output of run.outputs) owner.set(output.id, where.version);
+  }
   const list: ChainVersion[] = [];
   for (const { version, jobs: runs } of chain) {
     const main = runs.find((run) => run.kind !== "video_final") ?? null;
     const final = runs.find((run) => run.kind === "video_final" && run.status === "succeeded" && run.outputs.length > 0) ?? null;
+    const finishing = runs.some((run) => run.kind === "video_final" && isOpen(run));
     const request = main?.revision ? main.prompt : null;
     const marks = (main?.revision && main.revision.marks) || [];
     const clarified = main?.revision?.clarified ?? null;
-    const shared = { version, request, marks, clarified };
+    const baseOutput = main?.revision?.baseOutputId ?? null;
+    const base = baseOutput ? (owner.get(baseOutput) ?? null) : null;
+    const shared = { version, request, marks, clarified, base, final: final ? ("ready" as const) : finishing ? ("making" as const) : ("none" as const) };
     if (final) list.push({ ...shared, job: final, output: final.outputs[0]!, state: "ready" });
     else if (main && main.status === "succeeded" && main.outputs.length > 0) list.push({ ...shared, job: main, output: main.outputs[0]!, state: "ready" });
     else if (main && isOpen(main)) list.push({ ...shared, job: main, output: null, state: "making" });

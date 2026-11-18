@@ -30,7 +30,7 @@ import {
   type ComposerProject,
   type TimelinePatch,
 } from '../compose/timeline';
-import { sameValue } from './diff';
+import { sameValue, type DeltaSubject } from './diff';
 import {
   CAPTION_PLACES,
   CAPTION_REF_PATTERN,
@@ -587,6 +587,38 @@ function applyStep(state: ApplyState, step: ResolvedStep): StepOutcome {
     case 'even_pace':
       return evenPaceStep(state, step);
   }
+}
+
+/**
+ * What each step is about, in step order, for `diffTimelines` to put the change lines in the order the user
+ * asked for them. A split piece (`c2b`) is its cut; "fit the length" and "even the pace" touch every cut.
+ */
+export function stepSubjects(steps: readonly ResolvedStep[]): DeltaSubject[] {
+  const cut = (target: ClipTarget): DeltaSubject => ({ clip: 'clipId' in target ? target.clipId : target.splitOf });
+  return steps.map((step): DeltaSubject => {
+    switch (step.do) {
+      case 'trim':
+      case 'split':
+      case 'remove':
+      case 'move':
+        return cut(step.clip);
+      case 'sound':
+        return step.target === 'all_clips' ? 'clips' : step.target === 'music' ? 'music' : cut(step.target);
+      case 'caption_add':
+        return 'new_caption';
+      case 'caption_edit':
+        return { caption: step.caption.captionId };
+      case 'caption_remove':
+        return step.caption === 'all' ? 'captions' : { caption: step.caption.captionId };
+      case 'aspect':
+        return 'aspect';
+      case 'look':
+        return 'look';
+      case 'fit_total':
+      case 'even_pace':
+        return 'clips';
+    }
+  });
 }
 
 /**

@@ -147,6 +147,24 @@ describe('1. Post-Production Route Security & Morphic Sandbox Hardlines', () => 
     mocks.viewer = null;
   });
 
+  it('cuts.detect never invents a cut: a clip with no browser samples gets no cuts, whatever its length (E2)', async () => {
+    f = await studioFixture({ capKrw: 1_000_000 });
+    mocks.sql = f.sql;
+    mocks.viewer = viewerOf(f.ids.owner);
+    const deps = studioDeps(f.sql);
+    for (const seconds of [6, 12, 3]) {
+      const assetId = await seedVideoAsset(deps, f.orgId, f.ids.owner, seconds);
+      const res = await postPostProd({ operation: 'cuts.detect', input: { organizationId: f.orgId, assetId, minShotSec: 0.4 } });
+      expect(res.status).toBe(200);
+      expect(await res.json()).toMatchObject({ ok: true, cuts: [], creditsUsed: 0 });
+    }
+    // Real analysis input still answers with what it found.
+    const scdet = '[Parsed_scdet_0 @ 0x1] lavfi.scd.score: 32.1, lavfi.scd.time: 2.4';
+    const found = await postPostProd({ operation: 'cuts.detect', input: { organizationId: f.orgId, ffmpegStderr: scdet } });
+    expect(found.status).toBe(200);
+    expect(((await found.json()) as { cuts: unknown[] }).cuts.length).toBe(1);
+  });
+
   it('enforces 404 when BRAND_STUDIO_V2 is off, 403 on cross-origin POST, and 401 when signed out', async () => {
     const orgId = randomUUID();
     vi.stubEnv('BRAND_STUDIO_V2', 'off');

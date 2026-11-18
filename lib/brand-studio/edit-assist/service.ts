@@ -220,6 +220,21 @@ const ON_A_CUT = /(?:(?:컷|클립|장면|샷)\s*(?:에|위에|에서)|\b(?:on|o
  */
 const ALL_CUTS =
   /(?:모든|모두|전부|전체|각\s*(?:컷|클립)|(?:^|\s)다\s*(?:꺼|켜|줄|낮|높|키|올|내|살|없|빼|음소거|무음|\d)|\ball\b|\bevery\b|\beach\b)/i;
+/**
+ * A range said as a range: "1초부터 3초까지", "1~3초", "1-3초", "from 1s to 3s", "between 1s and 3s". Not
+ * "cut 1 to 2s", which the parser also reads as the range 1–2 s.
+ */
+const N = String.raw`\d+(?:\.\d+)?`;
+const SECONDS = String.raw`(?:초|s\b|secs?\b|seconds?\b)`;
+const STATES_RANGE = new RegExp(
+  [
+    String.raw`${N}\s*초?\s*부터\s*${N}\s*초?\s*까지`,
+    String.raw`${N}\s*${SECONDS}?\s*[~\-–—]\s*${N}\s*${SECONDS}`,
+    String.raw`\bfrom\s+${N}\s*${SECONDS}?\s+to\s+${N}`,
+    String.raw`\bbetween\s+${N}\s*${SECONDS}?\s+and\s+${N}`,
+  ].join('|'),
+  'i',
+);
 
 /**
  * Where the rule parser is known to answer wrongly, the model decides instead (found by running the
@@ -234,7 +249,10 @@ const ALL_CUTS =
  * - a colour look the sentence did not name (the parser falls back to one preset);
  * - a cut's sound with no scope named: with no cut named the parser changes every cut ("소리 꺼줘" muted all
  *   four, and "음악 소리 켜줘" turned every cut on), though the user may mean one cut or the music. Kept only
- *   when the sentence names every cut (and no single one) or the cut by number or order.
+ *   when the sentence names every cut (and no single one) or the cut by number or order;
+ * - a range trim (start and end both set) the sentence never said as a range: "shorten cut 1 to 2s" became
+ *   the range 1–2 s, a 1 s cut (live, 2026-11-18). Judged by the patch shape, not by whether the start moved:
+ *   a cut whose in-point already equals the misread start would otherwise slip through.
  */
 function ruleResultTrusted(message: string, patches: readonly TimelinePatch[], project: ComposerProject): boolean {
   if (POINTING.test(message)) return false;
@@ -248,6 +266,7 @@ function ruleResultTrusted(message: string, patches: readonly TimelinePatch[], p
       if (WHOLE_VIDEO.test(message) || !NAMED_CUT.test(message)) return false;
       const rate = project.clips[patch.clipIndex]?.playbackRate;
       if (rate !== undefined && rate !== 1) return false;
+      if (patch.trimStartSec !== undefined && patch.trimEndSec !== undefined && !STATES_RANGE.test(message)) return false;
     }
     if (patch.op === 'add_caption' && (CHANGE_WORDS.test(message) || ON_A_CUT.test(message))) return false;
     // The text of a caption already there: the sentence names that caption to move or change it ("'봄 신상

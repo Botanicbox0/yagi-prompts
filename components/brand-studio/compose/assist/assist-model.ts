@@ -18,8 +18,8 @@ import {
   type ComposerProject,
   type TimelinePatch,
 } from '@/lib/brand-studio/compose';
-import { applyEditSteps, type ResolvedStep } from '@/lib/brand-studio/edit-assist/apply';
-import { diffTimelines, isInstantEdit, sameValue, type EditDelta } from '@/lib/brand-studio/edit-assist/diff';
+import { applyEditSteps, stepSubjects, type ResolvedStep } from '@/lib/brand-studio/edit-assist/apply';
+import { diffTimelines, isInstantEdit, patchSubjects, sameValue, type EditDelta } from '@/lib/brand-studio/edit-assist/diff';
 import { ASK_ABOUT, CANNOT_REASONS, type AskAbout, type AskChoice, type CannotReason } from '@/lib/brand-studio/edit-assist/plan';
 
 /* ---------------------------------------------------------------- server answer */
@@ -147,7 +147,9 @@ export function draftFrom(real: ComposerProject, source: DraftSource): DraftOutc
     if (result.appliedCount === 0) return { type: 'nothing' };
     draft = result.project;
   }
-  const deltas = diffTimelines(real, draft);
+  // Lines in the order the user asked for the changes (E2), by what each step or patch was about.
+  const asked = source.kind === 'plan' ? stepSubjects(source.steps) : patchSubjects(real, source.patches);
+  const deltas = diffTimelines(real, draft, asked);
   return deltas.length === 0 ? { type: 'nothing' } : { type: 'draft', draft, deltas };
 }
 
