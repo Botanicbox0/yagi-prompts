@@ -22,8 +22,8 @@ describe('image reference visual grounding — multimodal payload & thinking lev
       {
         profile: 'seedream' as const,
         answer:
-          'A frosted pale-blue cylindrical glass bottle from Figure 1 stands upright on honed travertine; keep the exact label, proportions and colours of Figure 1. Take only the warm golden side light and soft shadows from Figure 2, ignoring its original setting. Eye-level medium shot, calm.',
-        tokenRegex: /Figure 1/,
+          'A frosted pale-blue cylindrical glass bottle from Image 1 stands upright on honed travertine; keep the exact label, proportions and colours of Image 1. Take only the warm golden side light and soft shadows from Image 2, ignoring its original setting. Eye-level medium shot, calm.',
+        tokenRegex: /Image 1/,
       },
       {
         profile: 'nano-banana' as const,
@@ -73,7 +73,11 @@ describe('image reference visual grounding — multimodal payload & thinking lev
       const body = sentBody(fetchMock);
       const system = body.systemInstruction.parts[0]!.text;
       expect(system).toContain('Inspect every attached reference picture');
-      expect(system).toContain('Never write generic blind placeholders when pixels are attached');
+      // 2026-11-19: products and logos are bound by what to keep; style and place pictures are described.
+      expect(system).toContain('bind each token to what it really shows');
+      expect(system).toMatch(/keep the exact label, cap, proportions and colours of <token>/);
+      expect(system).toMatch(/style \/ place: describe in concrete words/);
+      expect(system).toMatch(/person: their face, hair, build and skin come from the picture, never its backdrop, light or colour grade unless the request asks for them/);
       expect(system).toContain('Optical integration:');
       expect(body.generationConfig.thinkingConfig).toEqual({ thinkingLevel: 'MEDIUM' });
 
@@ -98,7 +102,7 @@ describe('image reference visual grounding — multimodal payload & thinking lev
 
   it('keeps thinkingLevel=LOW and visualAttached=false when no inline image bytes are attached, and upgrades region_edit with inline source visuals', async () => {
     const noThumbFetch = mockGemini({
-      prompt: 'A glass bottle from Figure 1 on stone in soft side light; keep the exact label, proportions and colours of Figure 1.',
+      prompt: 'A glass bottle from Image 1 on stone in soft side light; keep the exact label, proportions and colours of Image 1.',
       notes: NOTE_KO,
     });
     await enhancePrompt(
@@ -227,7 +231,7 @@ describe('image reference grounding across storage, preview, prepareJob & upscal
             ...intelDeps,
             fetch: mockGemini({
               prompt:
-                'A red cylindrical glass bottle from Figure 1 stands on marble under soft light; keep the exact label, proportions and colours of Figure 1.',
+                'A red cylindrical glass bottle from Image 1 stands on marble under soft light; keep the exact label, proportions and colours of Image 1.',
               notes: NOTE_KO,
             }) as unknown as typeof fetch,
             env: { GEMINI_API_KEY: 'test-key' },

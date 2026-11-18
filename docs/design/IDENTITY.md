@@ -102,6 +102,7 @@
 | 업스케일 | 로컬 SeedVR2(ComfyUI) 또는 Topaz Video | 원본 720p 영상과 사진을 1080p 이상으로 올린다 |
 
 - GPT Image는 쓰지 않는다.
+  - 2026-11-19 대표: "인물은 GPT Image로 만들어도 됨. 이거는 이전 gpt image2.0이고 패션 룩북 특화 이미지였어서 그래." 위 금지는 GPT Image 2.0으로 만든 패션 룩북 인물에 대한 판정이었다. 브랜드 스튜디오에서 GPT Image 2.6으로 인물을 만드는 것은 허용한다(인물 프롬프트 규칙은 `lib/brand-studio/enhancer/profiles/gpt-image.ts`·`skin.ts`).
 - Morphic MCP가 인증돼 있으면 같은 모델을 Morphic으로 먼저 돌린다. Soul과 Genjutsu는 Higgsfield에서 돌린다.
 - Pinterest, 인스타그램 같은 제3자 이미지와 영상은 글로 분석만 한다. 모델 입력이나 공개에 쓰지 않는다. 인물은 가상 인물만 쓴다.
 - 고해상도 렌더는 드래프트를 키운 것이 아니라 새로 뽑은 것이라 색과 인물이 달라질 수 있다. 영상은 480p 드래프트를 먼저 만들어 대표에게 보여 주고, 승인받은 뒤에 고해상도로 간다(`D:\dev\Video-Creator\AGENTS.md`). 프롬프트는 `seedance-film-director` 스킬로 쓴다.

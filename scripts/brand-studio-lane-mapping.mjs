@@ -42,6 +42,127 @@ export function failureCodeOf(error) {
   return 'failed';
 }
 
+/* ------------------------------------------------- a busy create, retried */
+
+/**
+ * "Reference image processing is busy. Retry shortly, or reuse earlier returned CDN image_urls." — the account
+ * lane's refusal of a `create_image` while it copies reference pictures (4 of 54 production runs on 2026-11-19,
+ * each 3–4 s after the claim, before any task id). A refusal carries no task id, so nothing was staged or paid.
+ */
+export function isTransientRefusal(message) {
+  return /reference image processing is busy|retry shortly/i.test(String(message ?? ''));
+}
+
+/** Waits before retries 1, 2 and 3 (each jittered ±20 %); after the third the run fails as before. */
+export const CREATE_RETRY_DELAYS_MS = [4000, 10_000, 20_000];
+
+export function retryDelayMs(attempt, random = Math.random) {
+  const base = CREATE_RETRY_DELAYS_MS[Math.max(0, attempt - 1)] ?? CREATE_RETRY_DELAYS_MS[CREATE_RETRY_DELAYS_MS.length - 1];
+  return Math.round(base * (0.8 + 0.4 * Math.min(1, Math.max(0, random()))));
+}
+
+/**
+ * Pictures the account lane already copied to its own CDN, so a later run with the same references skips the
+ * copy ("An address already on our CDN is kept … the response image_urls are those CDN addresses", `create_image`
+ * description, 2026-11-19). Keyed by our address without its query string (a signed address changes per run,
+ * the object does not). In memory only, bounded, and short-lived: an entry that fails a run is dropped.
+ */
+export class ReferenceCdnCache {
+  constructor({ max = 500, ttlMs = 30 * 60 * 1000, now = () => Date.now() } = {}) {
+    this.max = max;
+    this.ttlMs = ttlMs;
+    this.now = now;
+    this.entries = new Map();
+  }
+
+  static keyOf(url) {
+    return String(url).replace(/[?#].*$/, '');
+  }
+
+  /** Our addresses with every fresh CDN copy put in place, and how many were. */
+  apply(urls) {
+    let hits = 0;
+    const out = urls.map((url) => {
+      const key = ReferenceCdnCache.keyOf(url);
+      const hit = this.entries.get(key);
+      if (!hit) return url;
+      if (hit.until <= this.now()) {
+        this.entries.delete(key);
+        return url;
+      }
+      hits += 1;
+      return hit.cdn;
+    });
+    return { urls: out, hits };
+  }
+
+  /** Learns from a create: `returned[i]` is the CDN copy of `sent[i]`. Ignores an answer that does not line up. */
+  remember(sent, returned) {
+    if (!Array.isArray(sent) || !Array.isArray(returned) || sent.length !== returned.length) return 0;
+    let learned = 0;
+    sent.forEach((url, i) => {
+      const cdn = returned[i];
+      if (typeof cdn !== 'string' || !/^https:\/\/\S+$/i.test(cdn) || cdn === url) return;
+      const key = ReferenceCdnCache.keyOf(url);
+      this.entries.delete(key);
+      this.entries.set(key, { cdn, until: this.now() + this.ttlMs });
+      learned += 1;
+    });
+    while (this.entries.size > this.max) this.entries.delete(this.entries.keys().next().value);
+    return learned;
+  }
+
+  forget(urls) {
+    for (const url of urls ?? []) this.entries.delete(ReferenceCdnCache.keyOf(url));
+  }
+}
+
+/**
+ * One paid create for one result slot, safe to retry:
+ * - a stable `request_id` for this slot of this run (the provider's own "reuse on a retry of this entire create"),
+ *   so even a refusal that did stage something cannot become a second paid result;
+ * - the busy refusal is retried up to three times (4 s, 10 s, 20 s, jittered), each logged as `job_retry`;
+ * - anything else that is not an answer with a task id (an unreadable line, a crash) is NOT retried: a task may
+ *   exist, and the run fails as before;
+ * - CDN copies from the cache are used when there are any; a refusal of a run that used them drops them and the
+ *   create is sent once more with our own addresses.
+ * deps: { create(input) -> created, sleep(ms), log?(event, detail), cache?: ReferenceCdnCache, random?() }
+ * Returns the created task (it has a `task_id`; the caller checks).
+ */
+export async function createOnce(call, deps, context = {}) {
+  const images = call.tool === 'create_image' && Array.isArray(call.input.image_urls) ? call.input.image_urls : null;
+  const base = {
+    ...call.input,
+    ...(call.tool === 'create_image' && context.requestId ? { request_id: String(context.requestId).slice(0, 128) } : {}),
+  };
+  let cached = images && deps.cache ? deps.cache.apply(images) : { urls: images, hits: 0 };
+  let input = cached.hits ? { ...base, image_urls: cached.urls } : base;
+  let retries = 0;
+  for (;;) {
+    try {
+      const created = await deps.create(input);
+      if (images && deps.cache && Array.isArray(created?.image_urls)) deps.cache.remember(images, created.image_urls);
+      return created;
+    } catch (error) {
+      const refused = error instanceof CliRefusal;
+      const busy = refused && isTransientRefusal(error.message);
+      if (refused && !busy && cached.hits) {
+        // A CDN copy that no longer works must not fail this run or the next one: once more with our addresses.
+        deps.cache.forget(images);
+        deps.log?.('cdn_reference_dropped', { ...context.log, references: cached.hits });
+        cached = { urls: images, hits: 0 };
+        input = base;
+        continue;
+      }
+      if (!busy || retries >= CREATE_RETRY_DELAYS_MS.length) throw error;
+      retries += 1;
+      const waitMs = retryDelayMs(retries, deps.random);
+      deps.log?.('job_retry', { ...context.log, attempt: retries, waitMs, reason: 'reference_busy' });
+      await deps.sleep(waitMs);
+    }
+  }
+}
+
 /* ------------------------------------------------------------- mapping */
 
 const imagesOf = (job) => job.inputs.filter((i) => i.kind === 'image');
@@ -69,6 +190,8 @@ export function toolCall(job, project) {
         ...(p.resolution ? { resolution: p.resolution } : {}),
         // GPT Image: low / medium / high (absent for models without a quality choice).
         ...(p.quality ? { quality: p.quality } : {}),
+        // GPT Image 2.6 only: planning depth, the value the API lane sends (lib/brand-studio/provider/complexity.ts).
+        ...(p.reasoningEffort ? { reasoning_effort: p.reasoningEffort } : {}),
         ...(urls.length ? { image_urls: urls } : {}),
         // A region edit is pasted back into the original, so it stays lossless; a plain picture travels lighter.
         output_format: job.kind === 'region_edit' ? 'png' : 'jpeg',

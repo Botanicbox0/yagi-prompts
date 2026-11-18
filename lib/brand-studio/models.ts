@@ -67,6 +67,13 @@ export interface StudioImageModel extends StudioModelBase {
   defaultQuality?: StudioImageQuality;
   /** True when `background: 'auto' | 'transparent' | 'opaque'` is supported (PNG on transparent). */
   supportsTransparentBackground?: boolean;
+  /**
+   * GPT Image 2.6: `reasoning_effort` (low | medium | high; OpenAI calls it complexity) on both lanes, same price
+   * at every level (provider/complexity.ts). Absent for models without it.
+   */
+  supportsReasoningEffort?: boolean;
+  /** GPT Image 2.6: `markup` (a transparent overlay marking the area to edit), API lane only; not wired yet (provider/markup.ts). */
+  supportsMarkup?: boolean;
 }
 
 /** Background mode for image generation models that support cutout output (Seedream 5.5). */
@@ -210,6 +217,8 @@ export const STUDIO_MODELS = [
     pixels: GPT_IMAGE_PIXELS,
     qualities: STUDIO_IMAGE_QUALITIES,
     defaultQuality: 'medium',
+    supportsReasoningEffort: true,
+    supportsMarkup: true,
   },
   {
     id: 'gpt-image-2.6-sunburst',
@@ -229,6 +238,8 @@ export const STUDIO_MODELS = [
     pixels: GPT_IMAGE_PIXELS,
     qualities: STUDIO_IMAGE_QUALITIES,
     defaultQuality: 'medium',
+    supportsReasoningEffort: true,
+    supportsMarkup: true,
   },
   {
     id: 'nano-banana-pro',
@@ -244,6 +255,29 @@ export const STUDIO_MODELS = [
     defaultResolution: '2K',
     maxReferences: 10,
     regionEdit: true,
+    endpoints: { textToImage: 'text-to-image', edit: 'image-editing' },
+  },
+  // Nano Banana 2.1 (founder 2026-11-19: "nano banana2.1을 그럼 공개하자"). API lane: public OpenAPI document
+  // (oapi.sunra.ai, read 2026-11-19): `google/gemini-nano-banana-2.1` text-to-image / image-editing, images up to
+  // 14, resolution 1K|2K|4K, 14 aspects (the 10 the studio's Gemini aspects already show are offered; 1:4, 4:1, 1:8
+  // and 8:1 are left out), `thinking_level` minimal|medium|high (left at the upstream default, medium) and
+  // `enable_web_search` (never sent). Account lane (`get_model_schema`, 2026-11-19): id `nano-banana-2.1`, the same
+  // aspects and tiers, 14 references, web search off by default. Google: up to 10 object and 4 character images.
+  {
+    id: 'nano-banana-2.1',
+    medium: 'image',
+    label: 'Nano Banana 2.1',
+    hintKey: 'nanoBanana21',
+    availability: 'live',
+    promptProfile: 'nano-banana',
+    api: { alias: 'google/gemini-nano-banana-2.1' },
+    mcp: { model: 'nano-banana-2.1' },
+    aspects: GEMINI_PRO_ASPECTS,
+    resolutions: ['1K', '2K', '4K'],
+    defaultResolution: '2K',
+    maxReferences: 14,
+    // Partial edits run on Seedream 5.5 only (founder 2026-11-17); not offered for the flag-off region edit either.
+    regionEdit: false,
     endpoints: { textToImage: 'text-to-image', edit: 'image-editing' },
   },
   // Seedream 5.0 Flash: no longer offered for a new run (2026-11-15). It stays `live` so an earlier run can be
@@ -326,7 +360,7 @@ export function studioModelOrLegacy(id: string): StudioModel | null {
 
 /**
  * Models a screen may offer for a new run: live and listed ones, in registry order (the order the model
- * list shows: Seedream 5.5, GPT Image 2.6 Flare and Sunburst, Nano Banana Pro).
+ * list shows: Seedream 5.5, GPT Image 2.6 Flare and Sunburst, Nano Banana Pro, Nano Banana 2.1).
  */
 export function selectableModels(medium?: StudioMedium): StudioModel[] {
   return (STUDIO_MODELS as readonly StudioModel[]).filter(
@@ -402,6 +436,11 @@ export function estimateImageUsd(input: {
       return 0.027;
     case 'nano-banana-pro':
       return billedUsd(input.resolution === '4K' ? 0.24 : 0.134);
+    case 'nano-banana-2.1':
+      // Sunra price card (2026-11-19): $0.034 at 1K, $0.050 at 2K, $0.113 at 4K, whatever the references (web
+      // search, +$0.015, is never sent). The account lane's `estimate_cost` gave 4 / 5 / 12 credits with 0, 1 and
+      // 3 references (2026-11-19): the same figures rounded up to the cent.
+      return billedUsd(input.resolution === '4K' ? 0.113 : input.resolution === '2K' ? 0.05 : 0.034);
     case 'gpt-image-2.6-flare':
     case 'gpt-image-2.6-sunburst': {
       // The account lane's per-image credits, used for both lanes. The API lane settles by tokens after the

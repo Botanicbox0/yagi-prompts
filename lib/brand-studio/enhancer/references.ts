@@ -1,11 +1,11 @@
 /**
  * Binds the tray's references to each model's own reference syntax.
  *
- *  seedream     images in send order: "Figure 1", "Figure 2" …
+ *  seedream     images in send order: "Image 1", "Image 2" … (capital I; "Figure N" until 2026-11-19, still read)
  *  nano-banana  images in send order: "image 1", "image 2" …
  *  seedance     per kind in send order: "@Image1", "@Video1", "@Audio1" (reference-to-video only)
  *
- * A region edit sends the enlarged crop first, so it is "image 1" / "Figure 1" and the tray's
+ * A region edit sends the enlarged crop first, so it is "image 1" / "Image 1" and the tray's
  * images start at 2. Seedance writes tokens only when the run goes to the reference endpoint: a run
  * whose images are all opening/closing frames goes to image-to-video, which takes no tokens.
  * The caller must send each kind's files in tray order for these numbers to hold.
@@ -62,7 +62,7 @@ function tokenFor(
   const offset = input.kind === 'region_edit' ? 1 : 0;
   switch (input.profile) {
     case 'seedream':
-      return ref.kind === 'image' ? `Figure ${ordinal + offset}` : null;
+      return ref.kind === 'image' ? `Image ${ordinal + offset}` : null;
     case 'nano-banana':
     case 'gpt-image':
       return ref.kind === 'image' ? `image ${ordinal + offset}` : null;
@@ -93,7 +93,7 @@ export function bindReferences(input: Pick<EnhanceInput, 'kind' | 'profile' | 'r
     return { ref, position: i + 1, ordinal, token: tokenFor(input, ref, ordinal, mode), name: nameFor(ref) };
   });
   const editTarget =
-    input.kind !== 'region_edit' ? null : input.profile === 'seedream' ? 'Figure 1' : 'image 1';
+    input.kind !== 'region_edit' ? null : input.profile === 'seedream' ? 'Image 1' : 'image 1';
   return { bound, editTarget, seedanceMode: mode };
 }
 
@@ -121,9 +121,10 @@ export function tokensIn(
   text: string,
 ): Array<{ kind: 'image' | 'video' | 'audio'; number: number }> {
   const out: Array<{ kind: 'image' | 'video' | 'audio'; number: number }> = [];
+  // Seedream reads "Image N" since 2026-11-19 and "Figure N" before; both count (old prompts, typed words).
   const re =
     profile === 'seedream'
-      ? /\bFigure\s*(\d{1,2})\b/gi
+      ? /\b(?:Figure|Image)\s*(\d{1,2})\b/gi
       : profile === 'nano-banana' || profile === 'gpt-image'
         ? /\bimage\s*(\d{1,2})\b/gi
         : /@(Image|Video|Audio)\s?(\d{1,2})\b/gi;
@@ -138,7 +139,7 @@ export function tokensIn(
   return out;
 }
 
-/** Whether a token (e.g. "@Image2", "Figure 1") appears in the text, tolerant of spacing and case. */
+/** Whether a token (e.g. "@Image2", "Image 1") appears in the text, tolerant of spacing and case. */
 export function hasToken(text: string, token: string): boolean {
   const m = /^(@?)([A-Za-z]+)\s?(\d+)$/.exec(token);
   if (!m) return text.includes(token);

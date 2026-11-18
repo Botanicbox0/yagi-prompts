@@ -2114,6 +2114,7 @@ export const en = {
     models: {
       seedreamPro: 'Product and people photos',
       nanoBananaPro: 'Text, logos and partial edits',
+      nanoBanana21: 'Maintains consistency with reference images',
       seedreamFlash: 'Quick drafts',
       seedream55: 'Product and people photos',
       gptImageFlare: 'Fast to make and edit',

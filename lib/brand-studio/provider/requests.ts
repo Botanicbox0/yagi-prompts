@@ -12,6 +12,7 @@
  * There is deliberately no parameter that could turn it off.
  */
 import type { StudioJobKind } from '../contracts';
+import { gptReasoningEffort } from './complexity';
 import { pixelSize, studioModel, type StudioImageModel, type StudioModel, type StudioVideoModel } from '../models';
 import type { StudioJobParams } from '../types';
 import type { StudioProviderRequest } from './types';
@@ -77,12 +78,21 @@ function pixelShape(model: StudioImageModel, resolution: string | null | undefin
   return { width: size[0], height: size[1], quality: pick(quality, qualities, model.defaultQuality ?? 'medium') };
 }
 
+/** GPT Image 2.6 planning depth (provider/complexity.ts); nothing for models without the field. */
+function reasoning(model: StudioImageModel, kind: StudioJobKind, prompt: string, references: number): Record<string, unknown> {
+  return model.supportsReasoningEffort ? { reasoning_effort: gptReasoningEffort({ kind, prompt, references }) } : {};
+}
+
 function imageRequest(input: StudioRequestInput): StudioProviderRequest {
   const model = imageModel(input.model);
   const urls = input.images.map((i) => i.url);
   if (urls.length > model.maxReferences) throw new StudioRequestError('too many reference images');
   if (model.pixels) {
-    const body = { prompt: input.prompt, ...pixelShape(model, input.params.resolution, pick(input.params.aspect, model.aspects, model.aspects[0]!), input.params.quality) };
+    const body = {
+      prompt: input.prompt,
+      ...pixelShape(model, input.params.resolution, pick(input.params.aspect, model.aspects, model.aspects[0]!), input.params.quality),
+      ...reasoning(model, 'image', input.prompt, urls.length),
+    };
     if (urls.length === 0) return { endpoint: `${model.api.alias}/${model.endpoints.textToImage}`, body };
     return { endpoint: `${model.api.alias}/${model.endpoints.edit}`, body: { ...body, images: urls } };
   }
@@ -106,7 +116,7 @@ function regionRequest(input: StudioRequestInput): StudioProviderRequest {
   if (model.pixels)
     return {
       endpoint: `${model.api.alias}/${model.endpoints.edit}`,
-      body: { prompt: input.prompt, images: urls, ...pixelShape(model, input.params.resolution ?? '2K', input.regionCrop.aspect, input.params.quality), output_format: 'png' },
+      body: { prompt: input.prompt, images: urls, ...pixelShape(model, input.params.resolution ?? '2K', input.regionCrop.aspect, input.params.quality), ...reasoning(model, 'region_edit', input.prompt, urls.length), output_format: 'png' },
     };
   return {
     endpoint: `${model.api.alias}/${model.endpoints.edit}`,
@@ -118,6 +128,38 @@ function regionRequest(input: StudioRequestInput): StudioProviderRequest {
       resolution: pick('2K', model.resolutions, model.defaultResolution),
       output_format: 'png',
       ...safety(model),
+    },
+  };
+}
+
+/**
+ * GPT Image 2.6 edit with a markup overlay (provider/markup.ts): the API lane's `image-editing` with `markup`, the
+ * overlay's URL (a transparent PNG the size of the first image; mutually exclusive with `mask`, which is never
+ * sent). NOT CALLED by any studio flow yet (2026-11-19, see provider/markup.ts for what it would take); kept
+ * typed and tested so the day a GPT Image run carries a drawn box it is one call.
+ */
+export function gptMarkupEditRequest(input: {
+  model: string;
+  prompt: string;
+  images: ReadonlyArray<{ url: string }>;
+  markupUrl: string;
+  params: Pick<StudioJobParams, 'resolution' | 'aspect' | 'quality'>;
+}): StudioProviderRequest {
+  const model = imageModel(input.model);
+  if (!model.supportsMarkup || !model.pixels) throw new StudioRequestError(`no markup on ${model.id}`);
+  const urls = input.images.map((i) => i.url);
+  if (urls.length === 0) throw new StudioRequestError('markup needs the picture it marks');
+  if (urls.length > model.maxReferences) throw new StudioRequestError('too many reference images');
+  if (!/^https:\/\/\S+$/i.test(input.markupUrl)) throw new StudioRequestError('markup must be an https URL');
+  return {
+    endpoint: `${model.api.alias}/${model.endpoints.edit}`,
+    body: {
+      prompt: input.prompt,
+      images: urls,
+      markup: input.markupUrl,
+      ...pixelShape(model, input.params.resolution, pick(input.params.aspect, model.aspects, model.aspects[0]!), input.params.quality),
+      ...reasoning(model, 'region_edit', input.prompt, urls.length),
+      output_format: 'png',
     },
   };
 }

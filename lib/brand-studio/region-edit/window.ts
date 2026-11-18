@@ -131,7 +131,7 @@ export function describeSelection(plan: Pick<RegionPlan, 'roi' | 'select' | 'box
 }
 
 /** The sentence every v2 partial edit ends with, so the engine finds the part without a mask. */
-export function selectionLine(place: SelectionPlace, target = 'Figure 1'): string {
+export function selectionLine(place: SelectionPlace, target = 'Image 1'): string {
   return `The part to change is in the ${place.where} of ${target}, about ${place.left}-${place.right}% from the left edge and ${place.top}-${place.bottom}% from the top edge; change nothing outside it.`;
 }
 

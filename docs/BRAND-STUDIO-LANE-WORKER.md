@@ -51,6 +51,14 @@ pythonw.exe D:/dev/agent-harnesses/windows-background/agent-harness/quiet_run.py
   바꿔 보낸다(무료, 50 MB 상한 = 스튜디오 업로드 상한, 받기 2분·올리기 3분 제한). 레퍼런스 이미지·오디오는 바깥 주소를 그대로 받는다.
   올리기에 실패하면 아무것도 쓰지 않은 채 `failed`로 끝난다(`provider_unavailable`은 계정 경로 전체를 10분 닫으므로 쓰지 않는다).
   매핑과 업로드는 `scripts/brand-studio-lane-mapping.mjs`에 있고 워커 옆에 있어야 한다. 워커 버전 2부터.
+- 워커 버전 3(2026-11-19). 그림 생성이 "Reference image processing is busy. Retry shortly, or reuse earlier returned CDN
+  image_urls."로 거절되면(운영 54건 중 4건, 받은 지 3~4초, 작업 id 없음 = 아무것도 쓰지 않음) 같은 호출을 약 4초·10초·20초 뒤
+  최대 3번 다시 보낸다(`job_retry` 로그, 마지막에도 거절되면 예전처럼 `failed`). 작업 id가 있는 답이나 읽을 수 없는 답은 다시
+  보내지 않는다(이미 결제됐을 수 있다). 그림 생성마다 결과 칸·실행별 `request_id`를 붙여, 다시 보낸 요청이 두 번째 결제가 될 수 없게 한다.
+  생성 답의 `image_urls`(제공사 CDN 사본)를 우리 주소(쿼리 문자열 제외)별로 30분, 최대 500개 기억해 다음 실행에 그대로 넘기고
+  (CLI 설명: "An address already on our CDN is kept"), 그 사본으로 거절되면 지우고 우리 주소로 한 번 더 보낸다. 기다리는 동안 작업은
+  `running`으로 남고 계정 경로 하트비트는 받기 루프가 계속 보낸다. 매핑은 `createOnce`(`scripts/brand-studio-lane-mapping.mjs`).
+  GPT Image 2.6에는 `reasoning_effort`도 함께 보낸다(`lib/brand-studio/provider/complexity.ts`).
 - CLI는 `--no-download`로 부른다. 끝난 파일을 워커 PC에 먼저 내려받게 두면 제공사 파일 서버가 느려서(연결당 초당 약 50KB)
   결과 확인 한 번이 수십 초씩 걸린다. 파일은 앱이 조각으로 나눠 직접 받는다.
 - 안전 검수는 Sunra 쪽에서 항상 돈다. 워커에 끄는 옵션은 없다.

@@ -27,10 +27,10 @@ const CASES: Case[] = [
       ],
     }),
     answer:
-      'A clear glass perfume bottle from Figure 1 stands upright on white marble; keep the exact label, proportions and colours of Figure 1. Take only the soft side light and pale palette from Figure 2, not its subject. The camera sits at bottle height, the bottle fills the centre third, the background falls out of focus. Calm and bright.',
-    system: [/"Figure N"/, /60 to 140 words/, /new still image/],
-    request: 'Figure 1의 병을 Figure 2의 빛으로',
-    final: [/Figure 1/, /Figure 2/, /keep the exact label, proportions and colours of Figure 1/],
+      'A clear glass perfume bottle from Image 1 stands upright on white marble; keep the exact label, proportions and colours of Image 1. Take only the soft side light and pale palette from Image 2, not its subject. The camera sits at bottle height, the bottle fills the centre third, the background falls out of focus. Calm and bright.',
+    system: [/"Image N"/, /60 to 140 words/, /new still image/],
+    request: 'Image 1의 병을 Image 2의 빛으로',
+    final: [/Image 1/, /Image 2/, /keep the exact label, proportions and colours of Image 1/],
   },
   {
     name: 'seedream × region_edit',
@@ -40,10 +40,10 @@ const CASES: Case[] = [
       references: [{ index: 1, kind: 'image', label: '이미지 1', role: 'logo' }],
     }),
     answer:
-      'In Figure 1, change only the label so it carries the exact mark from Figure 2, printed flat on the curved glass at the same size; do not move or resize anything else. Keep the light, reflections and grain of Figure 1.',
-    system: [/In Figure 1, change only/, /do not move or resize anything else/],
-    request: '라벨을 Figure 2 로고로 바꿔 주세요',
-    final: [/In Figure 1, change only/, /Figure 2/, /do not move or resize anything else/],
+      'In Image 1, change only the label so it carries the exact mark from Image 2, printed flat on the curved glass at the same size; do not move or resize anything else. Keep the light, reflections and grain of Image 1.',
+    system: [/In Image 1, change only/, /do not move or resize anything else/],
+    request: '라벨을 Image 2 로고로 바꿔 주세요',
+    final: [/In Image 1, change only/, /Image 2/, /do not move or resize anything else/],
   },
   {
     name: 'nano-banana × image',
@@ -179,11 +179,11 @@ describe('enhancePrompt — request', () => {
   it('sends at most nine reference pictures, each labelled with its token', async () => {
     const thumb = { bytes: new Uint8Array([1, 2, 3]), mime: 'image/jpeg' };
     const references = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map((i) => ({ index: i, kind: 'image' as const, label: `이미지 ${i}`, thumb }));
-    const fetchMock = mockGemini({ prompt: 'Figure 1 to Figure 10 arranged in a row on a table, soft daylight.', notes: NOTE });
+    const fetchMock = mockGemini({ prompt: 'Image 1 to Image 10 arranged in a row on a table, soft daylight.', notes: NOTE });
     await enhancePrompt(input({ prompt: '열 개를 나란히', references }), { fetch: fetchMock as unknown as typeof fetch, env: ENV });
     const parts = sentBody(fetchMock).contents[0]!.parts;
     expect(parts.filter((p) => 'inlineData' in p)).toHaveLength(9);
-    expect(parts[1]).toMatchObject({ text: expect.stringContaining('Figure 1') });
+    expect(parts[1]).toMatchObject({ text: expect.stringContaining('Image 1') });
   });
 
   it('gives the remix the reference shots fitted to the output length', async () => {
@@ -221,16 +221,16 @@ describe('enhancePrompt — output checks', () => {
     ['an internal word', `${base.answer} Rendered through Sunra.`, 'internal_term'],
     ['a template slot', `${base.answer} {{selfie}}`, 'internal_term'],
     ['a camera brand', `${base.answer} Shot on Kodak Portra.`, 'brand_name'],
-    ['a reference that does not exist', `${base.answer} Add the cup from Figure 5.`, 'unknown_token'],
+    ['a reference that does not exist', `${base.answer} Add the cup from Image 5.`, 'unknown_token'],
     ['no reference at all', 'A glass bottle on marble in soft light, calm.', 'lost_references'],
-    ['a dropped mention', 'A glass bottle from Figure 1 on marble; keep the exact label, proportions and colours of Figure 1.', 'lost_mentioned_reference'],
-    ['too short', 'Figure 1', 'too_short'],
+    ['a dropped mention', 'A glass bottle from Image 1 on marble; keep the exact label, proportions and colours of Image 1.', 'lost_mentioned_reference'],
+    ['too short', 'Image 1', 'too_short'],
     ['too long', `${base.answer} ${'x'.repeat(6100)}`, 'too_long'],
   ])('falls back on %s', async (_label, prompt, reason) => {
     const { result, reasons } = await run(prompt);
     expect(result.source).toBe('fallback');
     expect(reasons).toEqual([reason]);
-    expect(result.prompt).toContain('Figure 1');
+    expect(result.prompt).toContain('Image 1');
   });
 
   it('lets a word through when the customer wrote it', async () => {
@@ -335,7 +335,7 @@ describe('enhancePrompt — never throws, always falls back', () => {
     });
     expect(result.source).toBe('fallback');
     expect(reasons).toEqual([reason]);
-    expect(result.prompt).toContain('Figure 1');
+    expect(result.prompt).toContain('Image 1');
     expect(result.notes).toMatch(/[가-힣]/);
   });
 

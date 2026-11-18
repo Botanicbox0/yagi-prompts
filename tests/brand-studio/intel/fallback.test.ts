@@ -6,12 +6,12 @@ const product = { index: 1, kind: 'image' as const, label: '이미지 1', role: 
 const logo = { index: 1, kind: 'image' as const, label: '이미지 1', role: 'logo' as const };
 
 describe('composeFallbackPrompt — images', () => {
-  it('seedream: one paragraph, Figure tokens, the product line', () => {
+  it('seedream: one paragraph, Image tokens, the product line', () => {
     const r = composeFallbackPrompt(input({ prompt: '이미지 1 병을 대리석 위에', references: [product] }));
     expect(r.source).toBe('fallback');
     expect(r.prompt).not.toContain('\n');
-    expect(r.prompt).toMatch(/^Figure 1 병을 대리석 위에\./);
-    expect(r.prompt).toContain('keep the exact label, proportions and colours of Figure 1');
+    expect(r.prompt).toMatch(/^Image 1 병을 대리석 위에\./);
+    expect(r.prompt).toContain('keep the exact label, proportions and colours of Image 1');
     expect(r.prompt).toContain('take from it: 병 모양과 라벨');
     expect(r.prompt).toContain('do not take: 배경');
     expect(r.notes).toMatch(/[가-힣]/);
@@ -32,13 +32,14 @@ describe('composeFallbackPrompt — images', () => {
     );
     expect(r.prompt).toMatch(/^Using image 1, change only this: 로고를 image 2 로고로\./);
     expect(r.prompt).toContain('Do not move or resize anything else.');
-    expect(r.prompt).toContain('Use the exact mark from image 2');
+    // Nano Banana reads the logo line positively (2026-11-19).
+    expect(r.prompt).toContain('Reproduce the mark from image 2 exactly as drawn');
     expect(r.prompt).not.toMatch(/image 3/);
   });
 
-  it('seedream region edit uses Figure 1 for the crop', () => {
+  it('seedream region edit uses Image 1 for the crop', () => {
     const r = composeFallbackPrompt(input({ kind: 'region_edit', prompt: '라벨 글자를 선명하게' }));
-    expect(r.prompt).toMatch(/^In Figure 1, change only this: 라벨 글자를 선명하게\./);
+    expect(r.prompt).toMatch(/^In Image 1, change only this: 라벨 글자를 선명하게\./);
     expect(r.prompt).toContain('Do not move or resize anything else.');
   });
 

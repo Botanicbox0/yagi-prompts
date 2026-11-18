@@ -136,7 +136,8 @@ describe('GPT Image 2.6 on the API lane', () => {
     for (const id of IDS) {
       const request = buildStudioRequest(base({ model: id, params: params({ aspect: '9:16', resolution: '4K', quality: 'low' }) }));
       expect(request.endpoint).toBe(`openai/${id}/text-to-image`);
-      expect(request.body).toEqual({ prompt: 'a bottle', width: 2160, height: 3840, quality: 'low' });
+      // A plain shot plans at medium (provider/complexity.ts); same price at every level.
+      expect(request.body).toEqual({ prompt: 'a bottle', width: 2160, height: 3840, quality: 'low', reasoning_effort: 'medium' });
       expectCatalogueShape(request, `openai/${id}`);
     }
     expect(buildStudioRequest(base({ params: params({ aspect: '3:2', resolution: '1K' }) })).body).toMatchObject({ width: 1536, height: 1024, quality: 'medium' });

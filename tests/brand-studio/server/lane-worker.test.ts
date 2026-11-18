@@ -1,6 +1,11 @@
 import { describe, expect, it } from 'vitest';
 import {
+  CREATE_RETRY_DELAYS_MS,
   CliRefusal,
+  ReferenceCdnCache,
+  createOnce,
+  isTransientRefusal,
+  retryDelayMs,
   REFERENCE_VIDEO_MAX_BYTES,
   ReferenceUploadError,
   draftTaskIdOf,
@@ -211,5 +216,133 @@ describe('what the worker logs and reports', () => {
       'PUT https://uploads.sunra.test/put/ref.mp4 failed; see https://cdn.sunra.ai/a.mp4 and http://x.test/y',
     );
     expect(redactUrls('no address here')).toBe('no address here');
+  });
+});
+
+/**
+ * "Reference image processing is busy. Retry shortly, or reuse earlier returned CDN image_urls." — 4 of 54
+ * production picture runs on 2026-11-19 were refused this way 3–4 s after the claim, before any task id.
+ */
+const BUSY = 'Reference image processing is busy. Retry shortly, or reuse earlier returned CDN image_urls.';
+const imageCall = (urls: string[] = ['https://media.test/a.png?sig=1', 'https://media.test/b.png?sig=1']) => ({
+  tool: 'create_image',
+  input: { project_id: 'p', model: 'seedream-5.5', prompt: 'x', count: 1, auto_confirm: true, image_urls: urls },
+});
+
+function harness(answers: Array<Error | Record<string, unknown>>, cache?: unknown) {
+  const sent: Array<Record<string, unknown>> = [];
+  const waits: number[] = [];
+  const logs: Array<{ event: string; detail: Record<string, unknown> }> = [];
+  const deps = {
+    create: async (input: Record<string, unknown>) => {
+      sent.push(input);
+      const next = answers.shift();
+      if (!next) throw new Error('no more answers');
+      if (next instanceof Error) throw next;
+      return next;
+    },
+    sleep: async (ms: number) => {
+      waits.push(ms);
+    },
+    log: (event: string, detail: Record<string, unknown>) => logs.push({ event, detail }),
+    random: () => 0.5,
+    ...(cache ? { cache } : {}),
+  };
+  return { deps, sent, waits, logs };
+}
+
+describe('a busy reference copy on the account lane', () => {
+  it('recognises the refusal by its stable words, nothing else', () => {
+    expect(isTransientRefusal(BUSY)).toBe(true);
+    expect(isTransientRefusal('reference image processing is BUSY')).toBe(true);
+    expect(isTransientRefusal('Please retry shortly.')).toBe(true);
+    expect(isTransientRefusal('content policy violation')).toBe(false);
+    expect(isTransientRefusal('insufficient credits')).toBe(false);
+    // After the last retry it fails as before: a plain failure, never a closed lane.
+    expect(failureCodeOf(new CliRefusal(BUSY))).toBe('failed');
+  });
+
+  it('waits about 4, 10 and 20 seconds, jittered', () => {
+    expect(CREATE_RETRY_DELAYS_MS).toEqual([4000, 10_000, 20_000]);
+    expect([1, 2, 3].map((a) => retryDelayMs(a, () => 0.5))).toEqual([4000, 10_000, 20_000]);
+    expect(retryDelayMs(1, () => 0)).toBe(3200);
+    expect(retryDelayMs(3, () => 1)).toBe(24_000);
+  });
+
+  it('busy, then a task: retried with the same request id, one result, each retry logged', async () => {
+    const h = harness([new CliRefusal(BUSY), new CliRefusal(BUSY), { task_id: 't1' }]);
+    const created = await createOnce(imageCall(), h.deps, { requestId: 'job-1:0:abcd', log: { jobId: 'job-1', slot: 0 } });
+    expect(created).toEqual({ task_id: 't1' });
+    expect(h.sent).toHaveLength(3);
+    expect(new Set(h.sent.map((i) => i.request_id))).toEqual(new Set(['job-1:0:abcd']));
+    expect(h.waits).toEqual([4000, 10_000]);
+    expect(h.logs.map((l) => [l.event, l.detail.attempt])).toEqual([['job_retry', 1], ['job_retry', 2]]);
+    expect(h.logs[0]!.detail).toMatchObject({ jobId: 'job-1', slot: 0, reason: 'reference_busy' });
+  });
+
+  it('busy four times: three retries, then the run fails as before', async () => {
+    const h = harness([new CliRefusal(BUSY), new CliRefusal(BUSY), new CliRefusal(BUSY), new CliRefusal(BUSY), { task_id: 'never' }]);
+    await expect(createOnce(imageCall(), h.deps, { requestId: 'r' })).rejects.toThrow(/reference image processing is busy/i);
+    expect(h.sent).toHaveLength(4);
+    expect(h.waits).toEqual([4000, 10_000, 20_000]);
+  });
+
+  it('any other refusal, or an answer that may hide a task, is not retried', async () => {
+    const policy = harness([new CliRefusal('content policy violation'), { task_id: 'never' }]);
+    await expect(createOnce(imageCall(), policy.deps, { requestId: 'r' })).rejects.toThrow('content policy violation');
+    expect(policy.sent).toHaveLength(1);
+    // An unreadable line is not a refusal: a task may exist and be paid, so it is never sent twice.
+    const lost = harness([new Error('sunra create_image: unreadable output'), { task_id: 'never' }]);
+    await expect(createOnce(imageCall(), lost.deps, { requestId: 'r' })).rejects.toThrow(/unreadable output/);
+    expect(lost.sent).toHaveLength(1);
+    expect(lost.waits).toEqual([]);
+  });
+
+  it('never two results: a create that returned a task is not repeated', async () => {
+    const h = harness([{ task_id: 't1' }, { task_id: 't2' }]);
+    expect(await createOnce(imageCall(), h.deps, { requestId: 'r' })).toEqual({ task_id: 't1' });
+    expect(h.sent).toHaveLength(1);
+  });
+
+  it('a video create keeps its input as it was (no request id)', async () => {
+    const h = harness([{ task_id: 'v1' }]);
+    const call = { tool: 'create_video', input: { project_id: 'p', model: 'seedance-2.5', prompt: 'x' } };
+    await createOnce(call, h.deps, { requestId: 'r' });
+    expect(h.sent[0]).toEqual(call.input);
+  });
+});
+
+describe('reference pictures the provider already copied to its CDN', () => {
+  it('remembers the CDN copies a create answers with and reuses them, keyed without the signature', async () => {
+    let now = 1_000;
+    const cache = new ReferenceCdnCache({ now: () => now, ttlMs: 60_000 });
+    const first = harness([{ task_id: 't1', image_urls: ['https://cdn.sunra.test/a.png', 'https://cdn.sunra.test/b.png'] }], cache);
+    await createOnce(imageCall(), first.deps, { requestId: 'r1' });
+    expect(first.sent[0]!.image_urls).toEqual(['https://media.test/a.png?sig=1', 'https://media.test/b.png?sig=1']);
+    // The next run signs the same objects differently: the CDN copies are sent instead.
+    const second = harness([{ task_id: 't2' }], cache);
+    await createOnce(imageCall(['https://media.test/a.png?sig=2', 'https://media.test/c.png?sig=2']), second.deps, { requestId: 'r2' });
+    expect(second.sent[0]!.image_urls).toEqual(['https://cdn.sunra.test/a.png', 'https://media.test/c.png?sig=2']);
+    // Past the time limit an entry is not used.
+    now += 61_000;
+    expect(cache.apply(['https://media.test/a.png']).hits).toBe(0);
+  });
+
+  it('a refused run that used a CDN copy drops it and is sent once more with our own addresses', async () => {
+    const cache = new ReferenceCdnCache();
+    cache.remember(['https://media.test/a.png'], ['https://cdn.sunra.test/old-a.png']);
+    const h = harness([new CliRefusal('Reference image URL is not accessible'), { task_id: 't1' }], cache);
+    expect(await createOnce(imageCall(['https://media.test/a.png?sig=9']), h.deps, { requestId: 'r' })).toEqual({ task_id: 't1' });
+    expect(h.sent.map((i) => i.image_urls)).toEqual([['https://cdn.sunra.test/old-a.png'], ['https://media.test/a.png?sig=9']]);
+    expect(h.logs.map((l) => l.event)).toEqual(['cdn_reference_dropped']);
+    expect(cache.apply(['https://media.test/a.png']).hits).toBe(0);
+  });
+
+  it('ignores an answer that does not line up, and stays bounded', () => {
+    const cache = new ReferenceCdnCache({ max: 2 });
+    expect(cache.remember(['https://m/a.png', 'https://m/b.png'], ['https://cdn/a.png'])).toBe(0);
+    expect(cache.remember(['https://m/a.png'], ['not a url'])).toBe(0);
+    cache.remember(['https://m/a.png', 'https://m/b.png', 'https://m/c.png'], ['https://cdn/a.png', 'https://cdn/b.png', 'https://cdn/c.png']);
+    expect(cache.apply(['https://m/a.png', 'https://m/b.png', 'https://m/c.png']).hits).toBe(2);
   });
 });

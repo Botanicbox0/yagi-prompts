@@ -11,12 +11,16 @@ import { composeFallbackPrompt } from './fallback';
 import { hasMarkSign, replaceMarks } from './marks';
 import { callGeminiJson, inlinePart, studioGeminiConfig, type GeminiPart } from './gemini';
 import { effectiveSeconds, keepPhrase, planShots, type PlannedShot } from './lines';
-import { buildSystemInstruction } from './profiles';
+import { enhanceMeta } from './meta';
+import { buildSystemInstruction, skinVariantOf } from './profiles';
 import { bindReferences, mapCustomerMentions, type Binding } from './references';
 import { checkEnhancedPrompt, cleanNotes, ENHANCER_RESPONSE_SCHEMA, EnhancerOutputSchema } from './schema';
-import type { EnhanceDeps, EnhanceInput, EnhanceResult } from './types';
+import type { EnhanceDeps, EnhanceInput, EnhanceMeta, EnhanceResult } from './types';
 
-export type { EnhanceDeps, EnhanceInput, EnhanceKind, EnhanceMark, EnhanceMaterial, EnhanceReference, EnhanceResult, EnhanceRevision, EnhanceVideo } from './types';
+export { enhanceMeta } from './meta';
+
+export type { EnhanceDeps, EnhanceInput, EnhanceKind, EnhanceMark, EnhanceMaterial, EnhanceMeta, EnhanceReference, EnhanceResult, EnhanceRevision, EnhanceVideo } from './types';
+export { CORE_VERSION, PROFILE_HEADERS, MODEL_BLOCKS, profileVersionOf, planSkin, skinVariantOf } from './profiles';
 export { composeFallbackPrompt } from './fallback';
 export {
   findMissingReferences,
@@ -31,7 +35,17 @@ export { effectiveSeconds } from './lines';
 
 export const THUMBS_MAX = 9;
 const THUMB_MIMES = new Set(['image/jpeg', 'image/png', 'image/webp']);
-const ENHANCE_TIMEOUT_MS = 25_000;
+/**
+ * 2026-11-19 eval: with pictures attached the writer took 17 s at the median and 8 of 45 calls ran past the
+ * old 25 s, so they silently fell back. `BRAND_STUDIO_ENHANCER_TIMEOUT_MS` (10–90 s) overrides it.
+ */
+const ENHANCE_TIMEOUT_MS = 45_000;
+
+function timeoutOf(env: Record<string, string | undefined>): number {
+  const n = Number(env.BRAND_STUDIO_ENHANCER_TIMEOUT_MS);
+  return Number.isFinite(n) && n >= 10_000 && n <= 90_000 ? Math.round(n) : ENHANCE_TIMEOUT_MS;
+}
+
 
 const MODEL_NOTES = {
   ko: '장면과 참조 설명을 모델이 알아듣기 쉽게 구체적으로 다듬었어요.',
@@ -169,10 +183,16 @@ export async function enhancePrompt(input: EnhanceInput, deps: EnhanceDeps): Pro
     } catch {
       // a broken logger must not change the result
     }
+    let meta: EnhanceMeta | undefined;
     try {
-      return composeFallbackPrompt(input);
+      meta = enhanceMeta(input, 'fallback', { fallbackReason: reason, env: deps.env });
     } catch {
-      return { prompt: input.revision ? replaceMarks(input.prompt.trim(), []) : input.prompt.trim(), notes: '', source: 'fallback' };
+      meta = undefined;
+    }
+    try {
+      return { ...composeFallbackPrompt(input), ...(meta ? { meta } : {}) };
+    } catch {
+      return { prompt: input.revision ? replaceMarks(input.prompt.trim(), []) : input.prompt.trim(), notes: '', source: 'fallback', ...(meta ? { meta } : {}) };
     }
   };
   try {
@@ -202,12 +222,13 @@ export async function enhancePrompt(input: EnhanceInput, deps: EnhanceDeps): Pro
         : [];
     const visualParts = thumbParts(effectiveInput, binding);
     const hasVisualParts = visualParts.some((p) => 'inlineData' in p);
+    const skinVariant = skinVariantOf(effectiveInput.model, deps.env);
     const raw = await callGeminiJson(config, deps.fetch, {
-      system: buildSystemInstruction(effectiveInput, binding, seconds, shots),
+      system: buildSystemInstruction(effectiveInput, binding, seconds, shots, { skinVariant }),
       parts: [{ text: JSON.stringify(payload(effectiveInput, binding, seconds, shots)) }, ...visualParts],
       schema: ENHANCER_RESPONSE_SCHEMA,
       thinking: hasVisualParts ? 'MEDIUM' : 'LOW',
-      timeoutMs: ENHANCE_TIMEOUT_MS,
+      timeoutMs: timeoutOf(deps.env),
     });
     const parsed = EnhancerOutputSchema.safeParse(raw);
     if (!parsed.success) return fallback('bad_shape');
@@ -221,9 +242,11 @@ export async function enhancePrompt(input: EnhanceInput, deps: EnhanceDeps): Pro
       prompt: checked.prompt,
       notes: cleanNotes(parsed.data.notes, input.locale, MODEL_NOTES[input.locale]),
       source: 'model',
+      meta: enhanceMeta(effectiveInput, 'model', { llmModel: config.model, env: deps.env }),
     };
   } catch (error) {
     const reason = error instanceof Error ? error.message : 'unknown';
-    return fallback(/^gemini_[a-z0-9_]+$/.test(reason) ? reason : error instanceof SyntaxError ? 'bad_json' : 'request_failed');
+    const timedOut = error instanceof Error && (error.name === 'AbortError' || error.name === 'TimeoutError');
+    return fallback(/^gemini_[a-z0-9_]+$/.test(reason) ? reason : timedOut ? 'timeout' : error instanceof SyntaxError ? 'bad_json' : 'request_failed');
   }
 }

@@ -116,12 +116,12 @@ export function containsInternalTerm(text: string, exempt = ''): boolean {
 
 export type PromptCheck = { ok: true; prompt: string } | { ok: false; reason: string };
 
-/** One spelling per token: "@image 1" → "@Image1", "figure 2" → "Figure 2". */
+/** One spelling per token: "@image 1" → "@Image1"; Seedream "figure 2" / "image 2" → "Image 2" (2026-11-19). */
 export function canonicalTokens(profile: EnhanceInput['profile'], prompt: string): string {
   if (profile === 'seedance') {
     return prompt.replace(/@(image|video|audio)\s?(\d{1,2})\b/gi, (_m, word: string, n: string) => `@${word[0]!.toUpperCase()}${word.slice(1).toLowerCase()}${n}`);
   }
-  if (profile === 'seedream') return prompt.replace(/\bfigure\s*(\d{1,2})\b/gi, 'Figure $1');
+  if (profile === 'seedream') return prompt.replace(/\b(?:figure|image)\s*(\d{1,2})\b/gi, 'Image $1');
   return prompt.replace(/\bimage\s*(\d{1,2})\b/g, 'image $1');
 }
 
@@ -129,6 +129,8 @@ export function canonicalTokens(profile: EnhanceInput['profile'], prompt: string
 export function checkEnhancedPrompt(raw: string, input: EnhanceInput, binding: Binding): PromptCheck {
   const exempt = exemptText(input);
   let prompt = tidyPrompt(raw, exempt);
+  // Seedream: an answer in the old "Figure N" form is the same reference; it is checked and sent as "Image N".
+  if (input.profile === 'seedream') prompt = canonicalTokens('seedream', prompt);
   if (prompt.length < PROMPT_MIN) return { ok: false, reason: 'too_short' };
   if (prompt.length > ENHANCED_PROMPT_MAX) return { ok: false, reason: 'too_long' };
   if (containsInternalTerm(prompt, exempt)) return { ok: false, reason: 'internal_term' };
