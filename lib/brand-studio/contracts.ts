@@ -690,6 +690,11 @@ export interface StudioState {
    */
   regionV2?: boolean;
   /**
+   * Present (true) only when `BRAND_STUDIO_REVISE_V2=on` and the member can create: the clip edit panel
+   * is a conversation (we pick the way and say why), and drafts and finals are named on version cards.
+   */
+  reviseV2?: boolean;
+  /**
    * Present only while runs can belong to a project (`BRAND_STUDIO_PROJECTS=on` and migration 0091
    * applied): the projects a run can be put in, newest first. Absent means the feature is closed.
    */

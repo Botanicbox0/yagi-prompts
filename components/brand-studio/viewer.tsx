@@ -21,7 +21,7 @@ import { RegionForm } from "./gallery/region-form";
 import { StudioIcon, type StudioIconName } from "./icons";
 import type { RefSource, TrayItem } from "./refs";
 import { RegionEditor } from "./region-editor";
-import { ReviseForm, VersionStrip, type ReviseSupport } from "./revise-form";
+import { ReviseForm, VersionPanel, VersionStrip, type ReviseSupport } from "./revise-form";
 import { chainOf, versionOf, type ChainVersion } from "./revision-model";
 
 export type ViewerItem = { type: "output"; output: StudioOutputView; job: StudioJobView } | { type: "asset"; asset: StudioAssetView };
@@ -230,6 +230,9 @@ function ViewerContent({
   const v = copy.viewer;
   // Versions of a generated clip: the strip swaps what is shown here without leaving the viewer.
   const clip = revise && openedItem.type === "output" && openedItem.output.kind === "video" ? openedItem.job : null;
+  // `BRAND_STUDIO_REVISE_V2`: the edit panel is a conversation and the step to the final sits on the
+  // version card of a draft (not among the actions).
+  const dialogue = Boolean(clip && revise?.dialogue);
   const chain = useMemo(() => (clip && revise ? chainOf(revise.jobs, clip) : []), [clip, revise]);
   const ownVersion = clip && revise ? (versionOf(revise.jobs, clip) ?? 1) : 1;
   // A version of this clip is never offered as material for its own next version.
@@ -363,7 +366,7 @@ function ViewerContent({
     { name: "to-video", icon: "video", label: v.toVideo, run: () => actions.toVideo(item), show: canGenerate && image },
     { name: "reference", icon: "attach", label: v.reference, run: () => actions.reference(item), show: canGenerate },
     { name: "save", icon: "save", label: v.save, run: () => output && actions.save(output), show: canCreate && Boolean(output) && !output?.savedAssetId },
-    { name: "finalize", icon: "spark", label: v.finalize, run: () => output && actions.finalize(output), show: canGenerate && Boolean(output?.draft) },
+    { name: "finalize", icon: "spark", label: v.finalize, run: () => output && actions.finalize(output), show: canGenerate && Boolean(output?.draft) && !dialogue },
     { name: "review", icon: "review", label: locale === "en" ? "Review & Share" : "검수 · 공유", run: () => actions.review?.(item), show: canCreate && Boolean(actions.review) },
     { name: "campaign", icon: "send", label: v.campaign, hint: v.campaignHint, run: () => actions.campaign(item), show: canCreate },
   ];
@@ -389,7 +392,20 @@ function ViewerContent({
         )}
       </figure>
       <div className="bs-viewer-side">
-        {clip && chain.length >= 2 && <VersionStrip versions={chain} selected={selected} copy={copy} onSelect={selectVersion} />}
+        {clip && dialogue ? (
+          <VersionPanel
+            versions={chain}
+            selected={selected}
+            shown={item.type === "output" ? { job: item.job, output: item.output } : null}
+            copy={copy}
+            canFinish={canGenerate}
+            finishing={busy === "finalize"}
+            onSelect={selectVersion}
+            onFinal={(draft) => actions.finalize(draft)}
+          />
+        ) : (
+          clip && chain.length >= 2 && <VersionStrip versions={chain} selected={selected} copy={copy} onSelect={selectVersion} />
+        )}
         {clip && revise && canGenerate && output && (
           <ReviseForm
             key={output.id}
@@ -400,6 +416,7 @@ function ViewerContent({
             fallbackVersion={Math.max(1, ...chain.map((entry) => entry.version)) + 1}
             exclude={reviseExclude}
             stage={file.kind === "video" && !region ? { video: videoRef, host: mediaHost, url: file.url } : null}
+            {...(dialogue ? { sameQuality: !output.draft } : {})}
           />
         )}
         {region && support ? (

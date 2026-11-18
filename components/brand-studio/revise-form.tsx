@@ -5,6 +5,11 @@
  * form under that: a titled box for what to change (pictures and videos can be dropped anywhere on the
  * viewer), the two ways with their credits, and the button that makes the next version.
  * The logic is `revise-flow.ts`; this file is only the screen.
+ *
+ * With `ReviseSupport.dialogue` (flag `BRAND_STUDIO_REVISE_V2`, docs/BRAND-STUDIO-VIDEO-REMIX.md §3) the
+ * form is a conversation instead: what was said, our answer (how it will be made, why, the credits) with
+ * one button, and the box at the bottom; no way to pick. `VersionPanel` then replaces `VersionStrip`: the
+ * version card names a draft or a final, says which version it came from, and carries the step to the final.
  */
 import { useEffect, useId, useMemo, useRef, useState, type Ref, type RefObject } from "react";
 import {
@@ -13,6 +18,7 @@ import {
   STUDIO_UPLOAD_MIMES,
   type StudioJobCreated,
   type StudioJobView,
+  type StudioOutputView,
   type StudioReviseMarkRead,
   type StudioReviseMode,
   type StudioRevisePlan,
@@ -36,7 +42,7 @@ import {
 import { createFrameGrabber, type FrameGrabber } from "./revise-mark-frame";
 import { MarkLayer } from "./revise-mark-layer";
 import { MARKS_MAX, chipText, circled, nudge, type MarkGeometry } from "./revise-marks";
-import type { ChainVersion } from "./revision-model";
+import { stageOf, type ChainVersion } from "./revision-model";
 
 /** What the screen hands the viewer so a generated clip can get its next version. */
 export interface ReviseSupport {
@@ -50,6 +56,11 @@ export interface ReviseSupport {
   create(input: ReviseCreateInput): Promise<ApiResult<StudioJobCreated>>;
   /** `revise.mark` (free): what a marked spot is on. Without it marks work by position only. */
   readMark?(input: ReviseMarkReadInput): Promise<ApiResult<StudioReviseMarkRead>>;
+  /**
+   * `StudioState.reviseV2` (flag `BRAND_STUDIO_REVISE_V2`): the form is a conversation with no way to pick,
+   * and the viewer names drafts and finals on the version card (where the step to the final sits).
+   */
+  dialogue?: boolean;
 }
 
 /** The clip on screen, for marks: the viewer's `<video>`, the figure the marks are drawn in, and its address. */
@@ -135,6 +146,148 @@ export function VersionStrip({
   );
 }
 
+/**
+ * The versions of a clip when the panel is a conversation (`ReviseSupport.dialogue`): the strip when there
+ * is more than one version (a version made from an earlier one than the one before it reads "v4 ← v2"),
+ * then the card of the version on screen: its stage (draft or final), the version it was made from, what
+ * was asked for it, and on a draft without a final the step to the final.
+ */
+export function VersionPanel({
+  versions,
+  selected,
+  shown,
+  copy,
+  canFinish,
+  finishing,
+  onSelect,
+  onFinal,
+}: {
+  versions: readonly ChainVersion[];
+  selected: number;
+  /** The result on screen (the opened one, or the one that represents the picked version). */
+  shown: { job: StudioJobView; output: StudioOutputView } | null;
+  copy: StudioCopy;
+  /** May start runs (the step to the final is offered only then). */
+  canFinish: boolean;
+  /** The step to the final was just pressed and is on its way. */
+  finishing: boolean;
+  onSelect(version: number): void;
+  onFinal(output: StudioOutputView): void;
+}) {
+  const r = copy.revise;
+  const current = versions.find((v) => v.version === selected) ?? null;
+  const stage = shown ? stageOf(shown.job, shown.output) : null;
+  const base = current?.base ?? null;
+  const branch = (v: ChainVersion) => (v.base !== null && v.base !== v.version - 1 ? v.base : null);
+  const final = current?.final ?? "none";
+  if (versions.length < 2 && !stage && base === null) return null;
+  return (
+    <div className="bs-revise-versions" data-version-panel>
+      {versions.length >= 2 && (
+        <div className="bs-revise-strip" role="group" aria-label={r.versions} data-revision-strip>
+          {versions.map((v) => {
+            const making = v.state === "making";
+            const on = v.version === selected;
+            const from = branch(v);
+            return (
+              <button
+                key={v.version}
+                type="button"
+                className="bs-chip bs-revise-chip"
+                data-size="sm"
+                data-state={v.state}
+                data-selected={on ? "" : undefined}
+                data-revision-version={v.version}
+                aria-pressed={on}
+                disabled={making}
+                aria-busy={making || undefined}
+                title={making ? r.making : undefined}
+                onClick={() => onSelect(v.version)}
+              >
+                <span className="bs-num">{fill(r.version, { n: v.version })}</span>
+                {from !== null && (
+                  <>
+                    <span className="bs-revise-from bs-num" aria-hidden="true" data-revision-from={from}>
+                      {`← ${fill(r.version, { n: from })}`}
+                    </span>
+                    <span className="bs-sr">{fill(r.from, { n: from })}</span>
+                  </>
+                )}
+                {making && (
+                  <>
+                    <StudioIcon name="spark" />
+                    <span>{r.making}</span>
+                  </>
+                )}
+              </button>
+            );
+          })}
+        </div>
+      )}
+      <div className="bs-version-card" data-version-card={selected} data-stage={stage ?? undefined}>
+        <div className="bs-version-card-head">
+          <span className="bs-num bs-version-card-n">{fill(r.version, { n: selected })}</span>
+          {stage && (
+            <span className="bs-version-stage" data-version-stage={stage}>
+              {r.stage[stage]}
+            </span>
+          )}
+          {base !== null && (
+            <span className="bs-muted bs-version-from" data-version-from={base}>
+              {fill(r.from, { n: base })}
+            </span>
+          )}
+        </div>
+        {current?.request && (
+          <p className="bs-revise-request" data-revision-request>
+            {current.request}
+          </p>
+        )}
+        {current?.request && current.clarified && (
+          <div className="bs-revise-clarified" data-revision-clarified>
+            <span className="bs-sr">{r.clarifiedLabel}</span>
+            <p className="bs-muted">{current.clarified.question}</p>
+            <p>{current.clarified.answer}</p>
+          </div>
+        )}
+        {current?.request && current.marks.length > 0 && (
+          <ul className="bs-mark-chips" data-revision-marks>
+            {current.marks.map((mark, i) => (
+              <li key={i} className="bs-mark-chip" data-static="" data-revision-mark={i + 1}>
+                <span className="bs-mark-n" aria-hidden="true">
+                  {circled(i + 1)}
+                </span>
+                <span className="bs-mark-text">{chipText(mark)}</span>
+              </li>
+            ))}
+          </ul>
+        )}
+        {stage === "draft" && final === "making" && (
+          <p className="bs-muted bs-version-finishing" role="status" data-version-finishing>
+            <span className="bs-mark-spin" aria-hidden="true" />
+            {r.finalMaking}
+          </p>
+        )}
+        {stage === "draft" && final === "none" && canFinish && shown && (
+          <button
+            type="button"
+            className="bs-btn bs-version-final"
+            data-variant="soft"
+            data-size="sm"
+            data-version-final
+            disabled={finishing}
+            aria-busy={finishing || undefined}
+            onClick={() => onFinal(shown.output)}
+          >
+            <StudioIcon name="spark" />
+            {r.toFinal}
+          </button>
+        )}
+      </div>
+    </div>
+  );
+}
+
 export interface ReviseFormViewProps {
   state: ReviseState;
   /** The number the next version gets. */
@@ -163,6 +316,20 @@ export interface ReviseFormViewProps {
   promptRef?: Ref<HTMLTextAreaElement>;
   /** Where the caret is in the request (marks write their digit there). */
   onCaret?(at: number): void;
+  /**
+   * The conversation layout (`BRAND_STUDIO_REVISE_V2`): what was said, our answer (how, why, credits) with
+   * one button, and the box at the bottom. No way to pick. `onPick`, `onAccept` and `onSubmit` are unused.
+   */
+  dialogue?: boolean;
+  /** Dialogue: send what is typed (asks; makes nothing). */
+  onSend?(): void;
+  /** Dialogue: "이대로 만들기" on our answer. */
+  onMake?(): void;
+  /**
+   * Dialogue: the version on screen is not a draft, so the answer also says the new version comes out at
+   * its quality (a version is made at the resolution of the one it comes from; nothing to pick).
+   */
+  sameQuality?: boolean;
 }
 
 export function noteLine(note: string, state: ReviseState, copy: StudioCopy): string {
@@ -194,10 +361,15 @@ export function ReviseFormView(props: ReviseFormViewProps) {
   const [dragging, setDragging] = useState(false);
   const busy = state.phase === "checking" || state.phase === "sending";
   const videos = Boolean(props.onMaterials);
-  const refsFull = state.references.length >= REVISE_REFERENCES_MAX;
-  const materialsFull = !videos || state.materials.length >= REVISE_MATERIALS_MAX;
+  const dialogue = props.dialogue === true;
+  // Dialogue: what was already said counts against the version's limits and numbering.
+  const saidRefs = state.said.flatMap((s) => s.references);
+  const saidMaterials = state.said.flatMap((s) => s.materials);
+  const refsFull = state.references.length + saidRefs.length >= REVISE_REFERENCES_MAX;
+  const materialsFull = !videos || state.materials.length + saidMaterials.length >= REVISE_MATERIALS_MAX;
   const full = refsFull && materialsFull;
-  const taken = (item: TrayItem) => (item.kind === "video" ? state.materials : state.references).some((x) => x.key === item.key);
+  const taken = (item: TrayItem) =>
+    (item.kind === "video" ? [...saidMaterials, ...state.materials] : [...saidRefs, ...state.references]).some((x) => x.key === item.key);
   const closed = (item: TrayItem) => (item.kind === "video" ? materialsFull : item.kind === "image" ? refsFull : true);
   const add = (item: TrayItem | null) => {
     if (!item || taken(item) || closed(item)) return;
@@ -267,6 +439,373 @@ export function ReviseFormView(props: ReviseFormViewProps) {
     if (asking) question.current?.querySelector<HTMLButtonElement>("button")?.focus();
   }, [asking]);
 
+  // Dialogue: the version's limits less what was said; numbers continue after the pictures already said.
+  const refsRoom = REVISE_REFERENCES_MAX - saidRefs.length;
+  const promptRoom = STUDIO_LIMITS.promptMax - (state.said.length ? state.said.reduce((n, s) => n + s.text.length + 1, 0) : 0);
+  const saidKeys = new Set(state.said.flatMap((s) => s.marks));
+  const markIndex = new Map(state.marks.map((mark, i) => [mark.key, i]));
+  const typing = state.marks.filter((mark) => !saidKeys.has(mark.key));
+  // Something new can always be said (also instead of answering the question); with nothing typed, a
+  // request that got no answer can be asked again.
+  const canSend = !busy && (state.prompt.trim() !== "" || (state.said.length > 0 && !state.answer && !asking));
+
+  const box = (
+    <div className="bs-revise-box" data-revise-box>
+      <label className="bs-sr" htmlFor={`${id}-prompt`}>
+        {r.prompt}
+      </label>
+      <textarea
+        id={`${id}-prompt`}
+        className="bs-field bs-revise-prompt"
+        rows={dialogue ? 3 : 4}
+        maxLength={dialogue ? Math.max(0, promptRoom) : STUDIO_LIMITS.promptMax}
+        value={state.prompt}
+        placeholder={dialogue && state.said.length > 0 ? r.talk.placeholderMore : r.placeholder}
+        data-revise-prompt
+        ref={props.promptRef}
+        onSelect={(event) => props.onCaret?.(event.currentTarget.selectionStart)}
+        onChange={(event) => props.onPrompt(event.target.value)}
+        onKeyDown={(event) => {
+          if (event.key === "Enter" && (event.ctrlKey || event.metaKey)) {
+            event.preventDefault();
+            event.currentTarget.form?.requestSubmit();
+            return;
+          }
+          // Dialogue: Enter sends (it only asks), Shift+Enter is a new line; never while a syllable is being composed.
+          if (dialogue && event.key === "Enter" && !event.shiftKey && !event.nativeEvent.isComposing) {
+            event.preventDefault();
+            event.currentTarget.form?.requestSubmit();
+          }
+        }}
+      />
+      {(dialogue ? typing : state.marks).length > 0 && (
+        <ul className="bs-mark-chips" data-revise-marks>
+          {(dialogue ? typing : state.marks).map((mark) => {
+            const i = markIndex.get(mark.key) ?? 0;
+            return (
+              <li key={mark.key} className="bs-mark-chip" data-revise-mark={i + 1} data-reading={mark.reading ? "" : undefined}>
+                <button type="button" className="bs-mark-chip-go" onClick={() => props.onMarkSeek?.(mark.key)}>
+                  <span className="bs-mark-n" aria-hidden="true">
+                    {circled(i + 1)}
+                  </span>
+                  <span className="bs-mark-text">{chipText(mark)}</span>
+                  {mark.reading && (
+                    <span className="bs-mark-spin" role="status">
+                      <span className="bs-sr">{r.markReading}</span>
+                    </span>
+                  )}
+                </button>
+                <button type="button" className="bs-mark-chip-x" aria-label={fill(r.removeMark, { n: i + 1 })} disabled={busy} onClick={() => props.onMarkRemove?.(mark.key)}>
+                  <StudioIcon name="close" />
+                </button>
+              </li>
+            );
+          })}
+        </ul>
+      )}
+      {attached && (
+        <ul className="bs-region-ref-list" data-revise-refs>
+          {state.references.map((ref, i) => (
+            <li key={ref.key} className="bs-region-ref" data-revise-ref={saidRefs.length + i + 1}>
+              <span className="bs-thumb" data-static>
+                <AttachThumb item={ref} />
+              </span>
+              <span className="bs-thumb-n bs-num" aria-hidden="true">
+                {saidRefs.length + i + 1}
+              </span>
+              <button type="button" className="bs-thumb-x" aria-label={fill(r.removeRef, { n: saidRefs.length + i + 1 })} onClick={() => props.onReferences(state.references.filter((x) => x.key !== ref.key))}>
+                <StudioIcon name="close" />
+              </button>
+            </li>
+          ))}
+          {state.materials.map((material, i) => (
+            <li key={material.key} className="bs-region-ref" data-revise-material={saidMaterials.length + i + 1}>
+              <span className="bs-thumb" data-static data-kind="video">
+                <AttachThumb item={material} />
+                <span className="bs-thumb-play" aria-hidden="true">
+                  <StudioIcon name="play" />
+                </span>
+              </span>
+              <span className="bs-thumb-n" aria-hidden="true">
+                {r.materialLabel}
+              </span>
+              <button type="button" className="bs-thumb-x" aria-label={fill(r.removeMaterial, { n: saidMaterials.length + i + 1 })} onClick={() => props.onMaterials?.(state.materials.filter((x) => x.key !== material.key))}>
+                <StudioIcon name="close" />
+              </button>
+            </li>
+          ))}
+        </ul>
+      )}
+      {state.materials.length > 0 && (
+        <p className="bs-muted bs-revise-material-note" data-revise-material-note>
+          {r.materialNote}
+        </p>
+      )}
+      <div className="bs-revise-tools">
+        <button type="button" className="bs-btn" data-variant="soft" data-size="sm" data-revise-add disabled={full || props.uploading} onClick={() => files.current?.click()}>
+          <StudioIcon name={props.uploading ? "spark" : "plus"} />
+          {videos ? r.addRefs : r.addImages}
+        </button>
+        <input
+          ref={files}
+          type="file"
+          className="bs-sr"
+          tabIndex={-1}
+          accept={[...STUDIO_UPLOAD_MIMES.image, ...(videos ? STUDIO_UPLOAD_MIMES.video : [])].join(",")}
+          multiple
+          onChange={(event) => {
+            const picked = Array.from(event.target.files ?? []);
+            event.target.value = "";
+            if (picked.length) props.onFiles(picked);
+          }}
+        />
+        {markable && (
+          <button
+            type="button"
+            className="bs-btn bs-mark-toggle"
+            data-variant="soft"
+            data-size="sm"
+            data-revise-mark-toggle
+            aria-pressed={marking}
+            disabled={busy || (!marking && marksFull)}
+            onClick={() => props.onMarkMode?.(!marking)}
+          >
+            <StudioIcon name="region" />
+            {r.mark}
+          </button>
+        )}
+        {dialogue && (
+          <button
+            type="submit"
+            className="bs-btn bs-icon-btn bs-revise-send"
+            data-variant="soft"
+            data-size="sm"
+            data-revise-send
+            aria-disabled={!canSend || undefined}
+            aria-busy={state.phase === "checking" || undefined}
+            aria-label={r.talk.send}
+            title={r.talk.send}
+          >
+            <StudioIcon name="arrow" />
+          </button>
+        )}
+      </div>
+      <p className="bs-revise-drop" data-revise-drop-hint>
+        <StudioIcon name="upload" />
+        <span>{dragging ? r.dropHere : videos ? r.dropHint : r.dropHintImages}</span>
+      </p>
+    </div>
+  );
+  const markHint = marking && state.marks.length === 0 && (
+    <p className="bs-muted bs-mark-hint" data-revise-mark-hint>
+      {r.markHint}
+    </p>
+  );
+  const recent = props.recent.length > 0 && (
+    <div className="bs-revise-recent">
+      <p className="bs-label">{r.recent}</p>
+      <ul className="bs-strip" aria-label={r.recent}>
+        {props.recent.map((item) => {
+          const on = taken(item);
+          return (
+            <li key={item.key}>
+              <button
+                type="button"
+                className="bs-thumb"
+                data-kind={item.kind}
+                data-taken={on ? "" : undefined}
+                disabled={on || closed(item)}
+                draggable
+                onDragStart={(event) => startRefDrag(event, item.assetId ? { assetId: item.assetId } : { outputId: item.outputId! })}
+                aria-label={fill(r.addOne, { name: item.name })}
+                onClick={() => add(item)}
+              >
+                <AttachThumb item={item} />
+                {item.kind === "video" && (
+                  <span className="bs-thumb-play" aria-hidden="true">
+                    <StudioIcon name="play" />
+                  </span>
+                )}
+              </button>
+            </li>
+          );
+        })}
+      </ul>
+    </div>
+  );
+  const questionRow = asking && state.clarify && (
+    <div ref={question} className="bs-revise-suggestion bs-revise-clarify" role="group" aria-labelledby={`${id}-question`} data-revise-clarify>
+      <p id={`${id}-question`}>
+        {state.clarify.question}
+      </p>
+      <div className="bs-revise-choices">
+        {state.clarify.options.map((option, i) => (
+          <button key={option} type="button" className="bs-btn" data-variant="soft" data-size="sm" data-revise-choice={i + 1} onClick={() => props.onAnswer?.(option)}>
+            {option}
+          </button>
+        ))}
+        <button type="button" className="bs-btn" data-variant="ghost" data-size="sm" data-revise-choice="as-written" onClick={() => props.onAnswer?.(null)}>
+          {dialogue ? r.talk.asWritten : r.asWritten}
+        </button>
+      </div>
+    </div>
+  );
+  const noteRow = state.note && (
+    <p className="bs-dock-message" role="alert" data-revise-note>
+      {noteLine(state.note, state, copy)}
+    </p>
+  );
+
+  if (dialogue) {
+    const answer = state.answer;
+    const price = answer && answer.estimateKrw > 0 ? credits(copy.credits.amount, creditsOf(answer.estimateKrw), locale) : null;
+    // The question sits after what had been said when it was asked; once answered it stays as a static pair.
+    const asked = (after: number) =>
+      state.clarifiedAt === after &&
+      (asking ? questionRow : state.clarified?.answer ? (
+        <div className="bs-revise-clarified bs-revise-asked" data-revise-asked>
+          <span className="bs-sr">{r.clarifiedLabel}</span>
+          <p className="bs-muted">{state.clarified.question}</p>
+          <p className="bs-revise-said" data-revise-said-answer>
+            {state.clarified.answer}
+          </p>
+        </div>
+      ) : null);
+    const making = state.phase === "sending";
+    return (
+      <form
+        ref={form}
+        className="bs-revise"
+        data-revise-form
+        data-revise-dialogue
+        data-phase={state.phase}
+        data-drop-target={dragging ? "" : undefined}
+        onSubmit={(event) => {
+          event.preventDefault();
+          if (canSend) props.onSend?.();
+        }}
+        onKeyDown={(event) => {
+          if (marking && event.key === "Escape") {
+            event.preventDefault();
+            props.onMarkMode?.(false);
+          }
+        }}
+        onDragOver={(event) => {
+          if (!acceptsDrag(event.dataTransfer?.types)) return;
+          event.preventDefault();
+          event.dataTransfer.dropEffect = "copy";
+        }}
+        onDrop={drop}
+      >
+        <div className="bs-revise-head">
+          <h3 className="bs-revise-title" data-revise-title>
+            {r.title}
+          </h3>
+          <span className="bs-revise-next bs-num" data-revise-next>
+            {fill(r.version, { n: props.version })}
+          </span>
+        </div>
+        {/* What was said and our answer; read out as it changes. */}
+        <div className="bs-revise-thread" role="log" aria-live="polite" aria-label={r.title} data-revise-thread data-empty={state.said.length === 0 ? "" : undefined}>
+          {state.said.map((said, i) => {
+            const offset = state.said.slice(0, i).reduce((n, s) => n + s.references.length, 0);
+            const chips = said.marks.flatMap((key) => {
+              const mark = state.marks.find((m) => m.key === key);
+              return mark ? [{ mark, n: (markIndex.get(key) ?? 0) + 1 }] : [];
+            });
+            return (
+              <div key={i} className="bs-revise-turn">
+                <div className="bs-revise-said" data-revise-said={i + 1}>
+                  <span className="bs-sr">{r.prompt}</span>
+                  <p>{said.text}</p>
+                  {chips.length > 0 && (
+                    <ul className="bs-mark-chips">
+                      {chips.map(({ mark, n }) => (
+                        <li key={mark.key} className="bs-mark-chip" data-static="" data-revise-said-mark={n}>
+                          <span className="bs-mark-n" aria-hidden="true">
+                            {circled(n)}
+                          </span>
+                          <span className="bs-mark-text">{chipText(mark)}</span>
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                  {said.references.length + said.materials.length > 0 && (
+                    <ul className="bs-region-ref-list bs-revise-said-refs">
+                      {said.references.map((ref, j) => (
+                        <li key={ref.key} className="bs-region-ref">
+                          <span className="bs-thumb" data-static>
+                            <AttachThumb item={ref} />
+                          </span>
+                          <span className="bs-thumb-n bs-num" aria-hidden="true">
+                            {offset + j + 1}
+                          </span>
+                        </li>
+                      ))}
+                      {said.materials.map((material) => (
+                        <li key={material.key} className="bs-region-ref">
+                          <span className="bs-thumb" data-static data-kind="video">
+                            <AttachThumb item={material} />
+                            <span className="bs-thumb-play" aria-hidden="true">
+                              <StudioIcon name="play" />
+                            </span>
+                          </span>
+                          <span className="bs-thumb-n" aria-hidden="true">
+                            {r.materialLabel}
+                          </span>
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                </div>
+                {asked(i + 1)}
+              </div>
+            );
+          })}
+          {state.phase === "checking" && (
+            <p className="bs-muted bs-revise-reading" data-revise-reading>
+              <span className="bs-mark-spin" aria-hidden="true" />
+              {r.talk.reading}
+            </p>
+          )}
+          {answer && state.said.length > 0 && state.phase !== "checking" && (
+            <div className="bs-revise-answer" data-revise-answer={answer.mode}>
+              <p className="bs-revise-answer-line" data-revise-answer-line>
+                {props.sameQuality ? `${r.talk.answer[answer.reason ?? answer.mode]} ${r.talk.sameQuality}` : r.talk.answer[answer.reason ?? answer.mode]}
+                {price && <span className="bs-revise-answer-cost bs-num">{price}</span>}
+              </p>
+              {answer.blocked && (
+                <p className="bs-muted bs-revise-problem" data-revise-blocked={answer.blocked}>
+                  {r.problems[answer.blocked]}
+                </p>
+              )}
+              <button
+                type="button"
+                className="bs-btn bs-submit"
+                data-variant="solid"
+                data-size="md"
+                data-revise-make
+                disabled={busy}
+                aria-busy={making || undefined}
+                onClick={() => props.onMake?.()}
+              >
+                <span>{r.talk.make}</span>
+                {price && <span className="bs-submit-cost bs-num">{price}</span>}
+              </button>
+              <p className="bs-muted bs-revise-after" data-revise-after>
+                {fill(r.after, { n: props.version })}
+              </p>
+            </div>
+          )}
+        </div>
+        {noteRow}
+        {box}
+        {markHint}
+        {recent}
+      </form>
+    );
+  }
+
   return (
     <form
       ref={form}
@@ -300,164 +839,9 @@ export function ReviseFormView(props: ReviseFormViewProps) {
           {fill(r.version, { n: props.version })}
         </span>
       </div>
-      <div className="bs-revise-box" data-revise-box>
-        <label className="bs-sr" htmlFor={`${id}-prompt`}>
-          {r.prompt}
-        </label>
-        <textarea
-          id={`${id}-prompt`}
-          className="bs-field bs-revise-prompt"
-          rows={4}
-          maxLength={STUDIO_LIMITS.promptMax}
-          value={state.prompt}
-          placeholder={r.placeholder}
-          data-revise-prompt
-          ref={props.promptRef}
-          onSelect={(event) => props.onCaret?.(event.currentTarget.selectionStart)}
-          onChange={(event) => props.onPrompt(event.target.value)}
-          onKeyDown={(event) => {
-            if (event.key === "Enter" && (event.ctrlKey || event.metaKey)) {
-              event.preventDefault();
-              event.currentTarget.form?.requestSubmit();
-            }
-          }}
-        />
-        {state.marks.length > 0 && (
-          <ul className="bs-mark-chips" data-revise-marks>
-            {state.marks.map((mark, i) => (
-              <li key={mark.key} className="bs-mark-chip" data-revise-mark={i + 1} data-reading={mark.reading ? "" : undefined}>
-                <button type="button" className="bs-mark-chip-go" onClick={() => props.onMarkSeek?.(mark.key)}>
-                  <span className="bs-mark-n" aria-hidden="true">
-                    {circled(i + 1)}
-                  </span>
-                  <span className="bs-mark-text">{chipText(mark)}</span>
-                  {mark.reading && (
-                    <span className="bs-mark-spin" role="status">
-                      <span className="bs-sr">{r.markReading}</span>
-                    </span>
-                  )}
-                </button>
-                <button type="button" className="bs-mark-chip-x" aria-label={fill(r.removeMark, { n: i + 1 })} disabled={busy} onClick={() => props.onMarkRemove?.(mark.key)}>
-                  <StudioIcon name="close" />
-                </button>
-              </li>
-            ))}
-          </ul>
-        )}
-        {attached && (
-          <ul className="bs-region-ref-list" data-revise-refs>
-            {state.references.map((ref, i) => (
-              <li key={ref.key} className="bs-region-ref" data-revise-ref={i + 1}>
-                <span className="bs-thumb" data-static>
-                  <AttachThumb item={ref} />
-                </span>
-                <span className="bs-thumb-n bs-num" aria-hidden="true">
-                  {i + 1}
-                </span>
-                <button type="button" className="bs-thumb-x" aria-label={fill(r.removeRef, { n: i + 1 })} onClick={() => props.onReferences(state.references.filter((x) => x.key !== ref.key))}>
-                  <StudioIcon name="close" />
-                </button>
-              </li>
-            ))}
-            {state.materials.map((material, i) => (
-              <li key={material.key} className="bs-region-ref" data-revise-material={i + 1}>
-                <span className="bs-thumb" data-static data-kind="video">
-                  <AttachThumb item={material} />
-                  <span className="bs-thumb-play" aria-hidden="true">
-                    <StudioIcon name="play" />
-                  </span>
-                </span>
-                <span className="bs-thumb-n" aria-hidden="true">
-                  {r.materialLabel}
-                </span>
-                <button type="button" className="bs-thumb-x" aria-label={fill(r.removeMaterial, { n: i + 1 })} onClick={() => props.onMaterials?.(state.materials.filter((x) => x.key !== material.key))}>
-                  <StudioIcon name="close" />
-                </button>
-              </li>
-            ))}
-          </ul>
-        )}
-        {state.materials.length > 0 && (
-          <p className="bs-muted bs-revise-material-note" data-revise-material-note>
-            {r.materialNote}
-          </p>
-        )}
-        <div className="bs-revise-tools">
-          <button type="button" className="bs-btn" data-variant="soft" data-size="sm" data-revise-add disabled={full || props.uploading} onClick={() => files.current?.click()}>
-            <StudioIcon name={props.uploading ? "spark" : "plus"} />
-            {videos ? r.addRefs : r.addImages}
-          </button>
-          <input
-            ref={files}
-            type="file"
-            className="bs-sr"
-            tabIndex={-1}
-            accept={[...STUDIO_UPLOAD_MIMES.image, ...(videos ? STUDIO_UPLOAD_MIMES.video : [])].join(",")}
-            multiple
-            onChange={(event) => {
-              const picked = Array.from(event.target.files ?? []);
-              event.target.value = "";
-              if (picked.length) props.onFiles(picked);
-            }}
-          />
-          {markable && (
-            <button
-              type="button"
-              className="bs-btn bs-mark-toggle"
-              data-variant="soft"
-              data-size="sm"
-              data-revise-mark-toggle
-              aria-pressed={marking}
-              disabled={busy || (!marking && marksFull)}
-              onClick={() => props.onMarkMode?.(!marking)}
-            >
-              <StudioIcon name="region" />
-              {r.mark}
-            </button>
-          )}
-        </div>
-        <p className="bs-revise-drop" data-revise-drop-hint>
-          <StudioIcon name="upload" />
-          <span>{dragging ? r.dropHere : videos ? r.dropHint : r.dropHintImages}</span>
-        </p>
-      </div>
-      {marking && state.marks.length === 0 && (
-        <p className="bs-muted bs-mark-hint" data-revise-mark-hint>
-          {r.markHint}
-        </p>
-      )}
-      {props.recent.length > 0 && (
-        <div className="bs-revise-recent">
-          <p className="bs-label">{r.recent}</p>
-          <ul className="bs-strip" aria-label={r.recent}>
-            {props.recent.map((item) => {
-              const on = taken(item);
-              return (
-                <li key={item.key}>
-                  <button
-                    type="button"
-                    className="bs-thumb"
-                    data-kind={item.kind}
-                    data-taken={on ? "" : undefined}
-                    disabled={on || closed(item)}
-                    draggable
-                    onDragStart={(event) => startRefDrag(event, item.assetId ? { assetId: item.assetId } : { outputId: item.outputId! })}
-                    aria-label={fill(r.addOne, { name: item.name })}
-                    onClick={() => add(item)}
-                  >
-                    <AttachThumb item={item} />
-                    {item.kind === "video" && (
-                      <span className="bs-thumb-play" aria-hidden="true">
-                        <StudioIcon name="play" />
-                      </span>
-                    )}
-                  </button>
-                </li>
-              );
-            })}
-          </ul>
-        </div>
-      )}
+      {box}
+      {markHint}
+      {recent}
       <fieldset className="bs-revise-methods">
         <legend className="bs-label">{r.method}</legend>
         {STUDIO_REVISE_MODES.map((mode) => {
@@ -483,23 +867,7 @@ export function ReviseFormView(props: ReviseFormViewProps) {
           );
         })}
       </fieldset>
-      {asking && state.clarify && (
-        <div ref={question} className="bs-revise-suggestion bs-revise-clarify" role="group" aria-labelledby={`${id}-question`} data-revise-clarify>
-          <p id={`${id}-question`}>
-            {state.clarify.question}
-          </p>
-          <div className="bs-revise-choices">
-            {state.clarify.options.map((option, i) => (
-              <button key={option} type="button" className="bs-btn" data-variant="soft" data-size="sm" data-revise-choice={i + 1} onClick={() => props.onAnswer?.(option)}>
-                {option}
-              </button>
-            ))}
-            <button type="button" className="bs-btn" data-variant="ghost" data-size="sm" data-revise-choice="as-written" onClick={() => props.onAnswer?.(null)}>
-              {r.asWritten}
-            </button>
-          </div>
-        </div>
-      )}
+      {questionRow}
       {state.phase === "suggest" && state.suggestion && (
         <div className="bs-revise-suggestion" role="group" data-revise-suggestion={state.suggestion.mode}>
           {state.suggestion.reason && <p>{r.reasons[state.suggestion.reason]}</p>}
@@ -515,11 +883,7 @@ export function ReviseFormView(props: ReviseFormViewProps) {
           </div>
         </div>
       )}
-      {state.note && (
-        <p className="bs-dock-message" role="alert" data-revise-note>
-          {noteLine(state.note, state, copy)}
-        </p>
-      )}
+      {noteRow}
       <button type="submit" className="bs-btn bs-submit" data-variant="solid" data-size="md" data-revise-submit disabled={busy || state.phase === "suggest" || asking} aria-busy={busy || undefined}>
         <span>{r.submit}</span>
         {cost(state.mode) && <span className="bs-submit-cost bs-num">{cost(state.mode)}</span>}
@@ -540,6 +904,7 @@ export function ReviseForm({
   fallbackVersion,
   exclude,
   stage = null,
+  sameQuality = false,
 }: {
   outputId: string;
   support: ReviseSupport;
@@ -551,6 +916,8 @@ export function ReviseForm({
   exclude?: readonly string[];
   /** The clip on screen; marks need it (no "mark" button without it). */
   stage?: ReviseStage | null;
+  /** Dialogue: the clip on screen is not a draft; the answer says the new version keeps its quality. */
+  sameQuality?: boolean;
 }) {
   const [state, setState] = useState<ReviseState>(initialReviseState);
   const [uploading, setUploading] = useState(false);
@@ -570,10 +937,11 @@ export function ReviseForm({
         onChange: setState,
         ...(support.readMark ? { readMark: (input: ReviseMarkReadInput) => live.current.readMark!(input) } : {}),
         frame: (mark) => grabber.current?.capture(mark, accentOf(liveStage.current?.host ?? null)) ?? Promise.resolve(null),
+        ...(support.dialogue ? { dialogue: true } : {}),
       }),
     // A flow per shown result; `support` and the stage are read through refs.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [outputId, support.organizationId],
+    [outputId, support.organizationId, support.dialogue],
   );
   useEffect(() => {
     void flow.load();
@@ -636,7 +1004,10 @@ export function ReviseForm({
     void flow.readMark(placed.key);
   };
   const move = (dx: number, dy: number) => {
-    const last = flow.state.marks[flow.state.marks.length - 1];
+    // Dialogue: a mark already sent stays where it was said; only one still being typed moves.
+    const said = new Set(flow.state.said.flatMap((s) => s.marks));
+    const open = flow.state.marks.filter((m) => !said.has(m.key));
+    const last = open[open.length - 1];
     if (!last) return;
     const moved = nudge(last, dx, dy);
     flow.moveMark(last.key, { x: moved.x, y: moved.y });
@@ -696,8 +1067,29 @@ export function ReviseForm({
         setMarking(false);
         void flow.submit();
       }}
+      {...(support.dialogue
+        ? {
+            dialogue: true,
+            onSend: () => {
+              setMarking(false);
+              caret.current = null;
+              // The keyboard stays in the box: the answer is read out from the thread above it.
+              prompt.current?.focus();
+              void flow.send();
+            },
+            onMake: () => {
+              setMarking(false);
+              void flow.make();
+            },
+            sameQuality,
+          }
+        : {})}
       onAccept={(change) => void flow.accept(change)}
-      onAnswer={(choice) => void flow.answer(choice)}
+      onAnswer={(choice) => {
+        // Dialogue: the question leaves with the press, so the keyboard goes back to the box; the answer is read out.
+        if (support.dialogue) prompt.current?.focus();
+        void flow.answer(choice);
+      }}
       markMode={stage?.host ? marking : null}
       onMarkMode={setMarking}
       onMarkSeek={(key) => {

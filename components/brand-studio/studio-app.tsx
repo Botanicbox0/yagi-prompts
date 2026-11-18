@@ -463,6 +463,7 @@ export function StudioApp({ organizationId, locale, copy, mode, libraryCopy, lay
 
   const viewer = useViewer({
     regionV2,
+    reviseV2: Boolean(state?.reviseV2),
     studio,
     dock,
     copy,

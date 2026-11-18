@@ -794,6 +794,7 @@ export function VideoStudioWorkspace({
     onToVideoScreen: () => undefined,
     onRegionSending: () => undefined,
     focusPrompt,
+    reviseV2: Boolean(state?.reviseV2),
   });
 
   const attachSource = useCallback(
