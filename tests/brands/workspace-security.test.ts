@@ -94,6 +94,7 @@ describe('brand invitations, attachment bytes and database boundary', () => {
     await db.exec(readMigration('0161_glue_brand_storage_quotas.sql'));
     await db.exec(readMigration('0162_glue_brand_studio_projects_workflows_mcp.sql'));
     await db.exec(readMigration('0167_glue_brand_room_notices.sql'));
+    await db.exec(readMigration('0170_glue_brand_room_guest_invites.sql'));
     const tables =(await sql.query<{ relname: string; relrowsecurity: boolean; relforcerowsecurity: boolean }>("select relname,relrowsecurity,relforcerowsecurity from pg_class where relkind='r' and relname like 'brand_%' and relname not in ('brand_inquiries', 'brand_inquiry_deliveries') and relname not like 'brand_usage_%'")).rows; // Inquiry delivery and brand_usage_* have their own RLS tests.
     expect(tables.map(t=>t.relname)).toEqual(expect.arrayContaining(['brand_project_members','brand_contract_documents','brand_contract_sharing_events','brand_support_messages','brand_shortlist_candidates','brand_feature_policies','brand_feature_policy_events','brand_plan_assignments','brand_plan_events','brand_identities','brand_identity_events','brand_memory_events','brand_looks','brand_studio_assets','brand_studio_jobs','brand_studio_outputs','brand_studio_allowances','brand_studio_lanes','brand_studio_folders','brand_studio_folder_items','brand_studio_likes','brand_studio_reviews','brand_studio_review_comments','brand_room_messages','brand_room_reactions','brand_room_reads','brand_storage_quotas','brand_storage_quota_events','brand_studio_video_projects','brand_studio_workflows','brand_studio_playbooks','brand_studio_mcp_tokens','brand_room_notice_prefs','brand_room_notices']));
     expect(tables.length).toBe(55); // + rooms (0082..0084) + storage quotas (0086/0161) + studio v5 projects/workflows/mcp (0087/0162) + room notices (0094/0167)
@@ -114,8 +115,15 @@ describe('brand invitations, attachment bytes and database boundary', () => {
         expect((await sql.query<{ allowed: boolean }>('select has_table_privilege(\'service_role\',$1,$2) as allowed', [notices, privilege])).rows[0]?.allowed, `${notices} ${privilege}`).toBe(true);
       }
     }
+    // Room guest invitations (0097/0170): exactly the mail outcome and the accepting account's e-mail are
+    // writable on the server role; the token and the scope never are.
+    for (const [column, allowed] of [['mail_state', true], ['mail_sent_at', true], ['accepted_email', true], ['revoked_at', true], ['token_hash', false], ['email', false], ['project_id', false], ['can_comment', false], ['target_id', false]] as const) {
+      expect((await sql.query<{ allowed: boolean }>("select has_column_privilege('service_role','brand_invites',$1,'UPDATE') as allowed", [column])).rows[0]?.allowed, column).toBe(allowed);
+    }
+    expect((await sql.query<{ allowed: boolean }>("select has_table_privilege('service_role','brand_invites','DELETE') as allowed")).rows[0]?.allowed).toBe(false);
     await db.exec('set role authenticated');
     await expect(sql.query('select * from brand_projects')).rejects.toThrow(/permission denied/i);
+    await expect(sql.query('select * from brand_invites')).rejects.toThrow(/permission denied/i);
     await expect(sql.query('select * from brand_room_notices')).rejects.toThrow(/permission denied/i);
     await db.exec('reset role');
   });

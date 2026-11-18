@@ -65,12 +65,12 @@ export function createLiveMailer(config: MailerConfig): Mailer {
             subject: message.subject,
             html: message.html,
             text: message.text,
-            headers: {
-              // RFC 8058: the mail client renders its own unsubscribe control, and pressing it is
-              // a POST the signed GET link also honours (§3.5 "one-click unsubscribe").
-              'List-Unsubscribe': `<${message.unsubscribeUrl}>`,
-              'List-Unsubscribe-Post': 'List-Unsubscribe=One-Click',
-            },
+            // RFC 8058: the mail client renders its own unsubscribe control, and pressing it is
+            // a POST the signed GET link also honours (§3.5 "one-click unsubscribe"). A one-off
+            // invitation has no list to leave and carries no header.
+            ...(message.unsubscribeUrl
+              ? { headers: { 'List-Unsubscribe': `<${message.unsubscribeUrl}>`, 'List-Unsubscribe-Post': 'List-Unsubscribe=One-Click' } }
+              : {}),
           },
           // resend@6 spreads request options into its `fetch` call, so the signal really aborts the
           // HTTP request even though its `PostOptions` type does not list it.

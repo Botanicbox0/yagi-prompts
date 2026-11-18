@@ -38,7 +38,7 @@ import { imageInfo, sha256Hex, sniffMime, thumbnailWebp } from '@/lib/brand-stud
 import { isStudioMediaKey, type StudioMediaStore } from '@/lib/brand-studio/media-store';
 import { dropUnreferencedStudioKeys } from '@/lib/brand-studio/physical-cleanup';
 import type { StudioStaging } from '@/lib/brand-studio/types';
-import { RoomDenied, requireEdit, requireRoomProject, roomSeat, type RoomSeat } from './access';
+import { canTalkIn, RoomDenied, requireEdit, requireRoomProject, roomSeat, type RoomSeat } from './access';
 import { postRoomEvent, type RoomEventInput, type RoomEventKind } from './events';
 import { storyboardDecisionNotice, type RoomTeamNotice, type RoomTeamNotify } from './team-notice';
 import {
@@ -740,7 +740,7 @@ export async function loadStoryboardList(deps: StoryboardDeps, viewer: Viewer, o
       const seat = await roomSeat(sql, viewer.userId, organizationId);
       await requireRoomProject(sql, seat, projectId);
       const rows = (await sql.query<BoardRow>(`${BOARD_SELECT} and b.organization_id = $1 and b.project_id = $2 ${BRAND_VISIBLE}`, [organizationId, projectId])).rows;
-      return { ok: true as const, canEdit: seat.canEdit, canTalk: seat.canTalk, boards: orderBoards(rows.map((r) => listItem(r, deps.media))) };
+      return { ok: true as const, canEdit: seat.canEdit, canTalk: canTalkIn(seat, projectId), boards: orderBoards(rows.map((r) => listItem(r, deps.media))) };
     }),
   );
 }
@@ -759,7 +759,7 @@ export async function loadStoryboardDetail(
       await requireRoomProject(sql, seat, projectId);
       const row = await boardRow(sql, boardId, { organizationId, projectId, brandVisible: true });
       if (!row) throw new StoryboardDenied('not_found');
-      return detailOf(sql, deps.media, row, seat, true);
+      return detailOf(sql, deps.media, row, { canEdit: seat.canEdit, canTalk: canTalkIn(seat, projectId) }, true);
     }),
   );
 }

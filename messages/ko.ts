@@ -5,6 +5,7 @@ import { roomsStoryboardKo } from './rooms-storyboard';
 import { roomsReviewKo } from './rooms-review';
 import { roomsShellKo } from './rooms-shell';
 import { roomsNoticesKo } from './rooms-notices';
+import { roomsShareKo } from './rooms-share';
 import { intakeBriefKo } from './intake-brief';
 import { studioShellKo } from './studio-shell';
 import { studioLibraryKo } from './studio-library';
@@ -62,6 +63,7 @@ export const ko: Dictionary = {
   roomsReview: roomsReviewKo,
   roomsShell: roomsShellKo,
   roomsNotices: roomsNoticesKo,
+  roomsShare: roomsShareKo,
   intakeBrief: intakeBriefKo,
   studioShell: studioShellKo,
   studioLibrary: studioLibraryKo,

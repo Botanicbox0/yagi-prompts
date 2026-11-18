@@ -383,3 +383,122 @@ count = 1 uses the singular form: "1 unread message in {project}" · "There is 1
 - 로컬 두 역할(내구 PGlite, 고객 `…0001`·관리자 `…0003`)에서 23.976fps 가로·30fps 세로 테스트 영상(프레임 번호를 2진 상자로 새김)을 CLI로 올려 직접 봤다. →와 `,`가 캔버스로 읽은 프레임 번호 0→12, 11→9로 한 칸씩 움직였고, 세로 영상은 `?t=1000`에서 30번 프레임으로 열렸다. 반복은 1.0–3.0초 안에서만 돌았다. 전체 화면(헤드리스 크로미움)에서 의견 칸이 접힌 채 열리고, 펼쳐 쓴 글이 빠져나온 뒤에도 남았다. 공유 페이지는 회원이 쓴 의견을 새로고침 없이 3초 남짓에 보였다. 단독 팀 리뷰 화면은 쓰는 동안 다시 읽지 않다가 글을 지우자마자 새 의견을 보였다.
 - 작업대의 대기 수와 확인함은 대화 줄이 움직인다(§3 끝, 새 줄마다 페이지를 다시 읽는다). 후속 작업(대기 = 답하지 않은 것, 확인함)을 합친 뒤 로컬에서 고객 줄을 남기고 작업대 검토 모드를 열었을 때 대기 3이 보였고, 확인함을 누르자 1.4초 뒤 0이 되고 확인 줄이 붙었다. 맥박 요청과 스테이지는 그대로였다. 맥박은 시안 도장만 보고 그 갱신과 겹치지 않는다. 대화 줄로 다시 읽을 때는 맥박의 "쓰는 중 기다리기"를 거치지 않지만 쓰던 글은 지워지지 않는다(페이지를 다시 그려도 입력 상태는 남는다).
 - 확인하지 못한 것: 실제 iPhone·iPad 사파리, 파이어폭스(크로미움 헤드리스로만 봤다. `requestVideoFrameCallback`이 없는 브라우저는 화면 갱신마다 시계가 돌고, 레이트를 재지 못하면 한 칸을 1/24초로 본다), 크롬이 재생하지 못하는 코덱의 시안, 가변 프레임 레이트 영상, 운영 데이터베이스에서의 맥박 쿼리 속도.
+
+## 12. 초대로 공유 (2026-11-18, 플래그 `BRAND_ROOM_INVITES`)
+
+> 대표 결정(2026-11-18): 공유는 디자인 도구의 공유 창처럼 두 가지 접근 방식을 둔다. **"초대한 사람만"이 기본**이고, **"링크가 있는 누구나"**는 고객이 직접 바꿀 때만 켜지며, 켤 때 만료와 암호를 권한다. 쓰임: 초대는 공개 전 시안·외부 파트너·임원 검토, 링크는 한 번 빨리 보여 줄 때.
+>
+> 플래그 `BRAND_ROOM_INVITES`(기본 꺼짐, `BRAND_ROOMS`도 켜져 있어야 함). 꺼져 있으면 지금과 똑같다: 예전 공유 창, `/api/brand-rooms/people`은 404, 초대 메일 없음, 모든 초대는 이메일이 같아야 수락된다. 예외 하나: 보기 권한 손님의 읽기 전용은 플래그와 상관없이 적용된다(아래). 켜기 전에 0097·0170을 적용한다(클라우드 적용 필요). 켜는 것은 대표 결정이다.
+
+### 12.1 무엇이 바뀌나
+
+- **공유 창 하나에 두 부분.** 시안·스토리보드의 "공유" 버튼과 룸 머리의 "공유"(프로젝트 전체)가 같은 창을 연다. 소유자·편집자만 보인다. 뷰어와 초대 손님에게는 버튼이 없다.
+  1. **사람 초대(프로젝트 단위).** 이메일을 쉼표·띄어쓰기·Enter로 여러 개(한 번에 10개까지, 형식 확인, 중복 제거) 넣고 권한(보기 / 의견 남기기, 기본 의견 남기기)을 골라 보낸다. 초대받은 사람은 그 프로젝트 룸 하나를 손님으로 본다(`brand_project_members`). 아래 목록: 브랜드 멤버(역할만, 여기서 못 바꿈), 초대로 들어온 사람(들어온 계정의 이름·이메일과 초대한 주소, 권한 바꾸기, 내보내기), 수락 전 초대(남은 날 또는 "전송 실패", 다시 보내기, 초대 취소). 내보내면 `brand_project_members`가 바로 `revoked`가 되고, 그 사람을 들인 초대도 끊긴다.
+  2. **링크 공유(그 시안·스토리보드 하나).** 선택 하나: "초대한 사람만"(기본, 링크 없음) / "링크가 있는 누구나". 누구나로 바꾸면 기존 옵션(만료 1·7·14·30·90일 중 14일 선택, 암호, 의견, 내려받기)과 권고 한 줄이 펼쳐지고, "링크 만들기"를 눌러야 링크가 생긴다(기존 `brand_room_shares` 그대로). 다시 "초대한 사람만"으로 바꾸면 확인 한 번 뒤 그 항목의 열린 링크를 모두 끈다. 이 기능 전에 만든 링크가 열려 있으면 처음부터 "링크가 있는 누구나"로 보인다.
+- **브랜드가 초대한다.** 지금까지는 야기 팀만 프로젝트 초대를 만들었다. 이제 소유자·편집자도 고객 공개(`client_visible`) 프로젝트에 손님(뷰어 + `can_comment`)을 초대한다. 같은 쓰기 함수(`storeInvitation`, 팀 초대도 이것을 쓴다)와 같은 수락 함수다. 한도: 조직당 하루 20건(팀 초대 포함), 프로젝트당 수락 대기 20건. 같은 주소를 다시 초대하면 기존 대기 초대를 끊고 새 링크를 보낸다(목록에는 하나).
+- **초대 메일.** 기존 메일러와 거래 메일 틀(`sheet()`). 초대한 사람 이름, 브랜드 이름, 프로젝트 이름, 버튼 하나(수락 화면, 토큰은 주소의 `#` 뒤), 만료 날짜, "받은 분만 쓰라"는 줄, 맨 아래 "왜 받았는지" 한 줄과 회사 줄. 광고 없음, 수신 거부 헤더 없음(한 번 보내는 메일). 플래그가 켜지고 메일러가 있을 때만 나간다. 결과는 초대 행에 남는다(`mail_state` sent / failed / skipped). 못 보냈으면 목록에 "전송 실패"가 보이고, 보낸 사람 화면에 복사할 링크가 한 번 나온다(다시 보내기도 같다).
+- **수락 규칙(정확히).** 프로젝트 초대만 바뀐다. 플래그가 켜져 있으면, 로그인(Google·카카오)한 계정의 확인된 이메일이 초대 주소와 같거나, **같지 않아도** 토큰이 유효하고(만료 전, 취소 안 됨) 아직 쓰이지 않았으면 그 계정에 묶는다. 한 번만 쓰인다: 수락한 계정이 다시 열면 그대로 들어가고, 다른 계정은 404(`not_found`). 수락한 계정 id와 그때의 이메일을 초대 행에 남긴다(`accepted_by`, `accepted_email`). 초대한 사람이 그 사이 소유자·편집자 자리를 잃었으면 초대는 죽는다. **조직 초대(프로젝트 없음)는 이메일 일치 규칙 그대로**다. 플래그가 꺼져 있으면 모든 초대가 예전처럼 이메일 일치를 요구한다.
+- **수락 뒤.** 바로 그 프로젝트 룸으로 간다. 시안·스토리보드의 공유 창에서 보낸 초대면 그 항목이 열린다(`target_kind`/`target_id`). 수락 화면 버튼 아래 줄은 "지금 로그인한 계정으로 들어가고 초대한 사람이 그 계정을 본다"로 바뀐다.
+- **보기 권한 손님은 쓰지 못한다.** `roomSeat`가 손님의 `can_comment`를 읽고(`readOnlyProjectIds`), `canTalkIn`이 프로젝트별로 판단한다. 막는 곳: 대화 글쓰기·수정·리액션·첨부(예약·완료), 시안 의견(시각·구간·그리기 포함), 스토리보드 컷 스레드(대화와 같은 길). 승인·상태·스토리보드 결정은 원래 소유자·편집자만이다. 화면은 입력창을 감추고 기존 문구 "이 대화는 읽기만 할 수 있어요."를 보인다. 조직 멤버의 권한은 그대로다. **이 판단은 플래그와 상관없이 늘 적용된다**(대표 위임 검토 2026-11-18): 팀이 "보기"로 초대한 기존 손님도 룸에서 쓰지 못하게 바로잡는 수정이다. 전에는 룸이 `can_comment`를 읽지 않아 보기 손님도 대화를 쓸 수 있었다.
+- **손님이 보지 못하는 것**(기존 규칙, 테스트로 다시 고정): 다른 프로젝트(404), 일반 문의 채널(404), 조직 설정·스튜디오·크레딧, 공유 창과 사람 목록(API 403), 팀 메모.
+- **알림.** 들어온 손님은 그 프로젝트의 새 시안·스토리보드·멘션 알림을 받는다(`roomAudience`, 이미 손님 포함). 내보내면 보낼 때 다시 판단해서 `skipped/no_access`가 된다.
+- **팀 작업대.** 플래그가 켜져 있으면 작업대의 공유 링크 탭 아래에 "이 프로젝트의 손님" 표가 읽기 전용으로 붙는다: 들어온 손님(이름, 계정 이메일과 초대 주소, 권한, 들어온 날)과 수락 전 초대(이메일, 권한, 만료, 메일 실패 여부). 관리자 읽기(`staffProjectGuests`, 관리자 여부를 DB에서 다시 확인)로 읽고 브랜드 API는 쓰지 않는다. 문구는 관리자 사전(`adminConsole.roomDesk.guest*`).
+- **수락 화면 로그인 전 줄.** 토큰이 주소의 `#` 뒤에만 있어 로그인 전에는 서버도 화면도 초대 종류를 모른다. 그래서 플래그가 켜져 있으면 두 종류 모두에 맞는 줄(아래 `accept.login`)로 바꾸고, 꺼져 있으면 지금 줄 그대로다.
+
+### 12.2 데이터 (0097 core · 0170 glue, 새 테이블 없음)
+
+`brand_invites`에 `accepted_email`(소문자, 254자), `mail_state`('sent'·'failed'·'skipped', null = 메일 시도 없음), `mail_sent_at`, `target_kind`('review'·'storyboard')·`target_id`(둘 다 있거나 둘 다 없음, 프로젝트 초대에만). 범위 제약을 "프로젝트 초대는 뷰어"로 넓혔다(전에는 "팀이 발행한 뷰어"). 소유자 초대는 여전히 팀만. 대기 초대 부분 인덱스. glue는 RLS 켜고 강제, 브라우저 권한 회수, `service_role`에 새 세 열(`mail_state`·`mail_sent_at`·`accepted_email`)의 update만 더한다. 토큰은 고치지 않는다(다시 보내기는 새 행 + 옛 행 `revoked_at`).
+
+### 12.3 문안 (Gemma 4 2패스)
+
+실행: 2026-11-18, `yagi-crm-gemma4:31b-q8_0`. 1패스(맥락 전체, 규칙 없음) 188초, 2패스(`docs/wording/ai-tell-quick-rules.md`를 시스템 프롬프트로)까지 597초, 두 패스 모두 완료. 아래는 2패스 결과이고, 원문 대조에서 사실과 달라 고친 두 줄만 표시했다. "초대한 사람만"·"링크가 있는 누구나"는 대표가 정한 이름이다. 공유 창 제목·닫기, 멤버 역할 이름, 일반 오류, 링크 옵션(만료·암호·의견·내려받기, 만든 링크 상자)은 기존 사전 문구를 그대로 쓴다.
+
+| 키 | 한국어 | English |
+| --- | --- | --- |
+| people.title | 사람 초대 | Invite people |
+| people.scopeNote | 초대받은 사람은 이 프로젝트의 시안, 스토리보드, 대화를 확인할 수 있습니다. | Invited people can view drafts, storyboards, and chats in this project. |
+| people.emailLabel | 이메일 | Email |
+| people.emailPlaceholder | 이메일을 입력하세요. 쉼표로 구분해 여러 명을 초대할 수 있습니다. | Enter emails. Separate multiple addresses with commas. |
+| people.permissionLabel | 권한 | Permission |
+| people.permView | 보기 | View |
+| people.permComment | 의견 남기기 | Comment |
+| people.send | 초대하기 | Invite |
+| people.sending | 초대 보내는 중 | Sending invitation |
+| people.sent | {count}명에게 초대를 보냈습니다. | Sent invitations to {count} people. |
+| people.mailFailed | 일부 메일을 보내지 못했습니다. 아래 링크를 복사해 직접 전달해 주세요. | Some emails couldn't be sent. Please copy the link below and send it directly. |
+| people.listTitle | 접근 가능한 사람 | People with access |
+| people.memberTag | 멤버 | Member |
+| people.guestTag | 게스트 | Guest |
+| people.noEmail | 이메일 없음 | No email |
+| people.remove | 내보내기 | Remove |
+| people.removeConfirm | {name}님을 이 프로젝트에서 내보낼까요? | Remove {name} from this project? |
+| people.pending | {days}일 후 만료 | Expires in {days} days |
+| people.pendingToday | 오늘 만료 | Expires today |
+| people.failed | 전송 실패 | Failed to send |
+| people.resend | 다시 보내기 | Resend |
+| people.cancel | 초대 취소 | Cancel invitation |
+| people.cancelConfirm | {email}님의 초대를 취소할까요? | Cancel invitation for {email}? |
+| people.copyLink | 링크 복사 | Copy link |
+| people.copied | 링크를 복사했습니다. | Link copied. |
+| people.empty | 초대한 사람이 없습니다. | No one has been invited yet. |
+| errors.email | {email}은(는) 유효한 이메일 주소가 아닙니다. | {email} is not a valid email address. |
+| errors.too_many | 한 번에 최대 10명까지 초대할 수 있습니다. | You can invite up to 10 people at a time. |
+| errors.rate_limited | 오늘 보낼 수 있는 초대 횟수를 모두 사용했습니다. | You've reached the daily invitation limit. |
+| errors.project_limit | 수락 대기 중인 초대가 너무 많아 초대를 더 보낼 수 없습니다. | Too many pending invitations to send more. |
+| errors.already_member | {email}님은 이미 브랜드 멤버입니다. | {email} is already a brand member. |
+| link.title | 링크 공유 | Share link |
+| link.invited | 초대한 사람만 (대표 결정) | Only people invited |
+| link.anyone | 링크가 있는 누구나 (대표 결정) | Anyone with the link |
+| link.invitedHelp | 초대한 사람만 로그인해서 볼 수 있습니다. **(대조 후 수정)** | Only people invited can open it, after signing in. **(fixed)** |
+| link.anyoneHelp | 로그인 없이 누구나 이 작업 하나만 확인할 수 있습니다. | Anyone with the link can view this work without logging in. |
+| link.recommend | 보안을 위해 만료일과 암호를 설정해 주세요. | We recommend setting an expiration date and password for security. |
+| link.create | 링크 만들기 | Create link |
+| link.offConfirm | '초대한 사람만'으로 변경하면 기존 링크가 즉시 꺼집니다. 변경하시겠어요? **(대조 후 수정)** | Switching to 'Only people invited' will immediately turn off existing links. Do you want to proceed? **(fixed)** |
+| link.offOk | 변경하기 | Change |
+| link.offCancel | 취소 | Cancel |
+| mail.subject | {inviter}님이 {project} 프로젝트에 초대했습니다. | {inviter} invited you to the {project} project. |
+| mail.heading | {organization}의 {project} 프로젝트에 초대받았습니다. | You've been invited to the {project} project by {organization}. |
+| mail.body | {inviter}님이 초대를 보냈습니다. 아래 버튼을 눌러 로그인하면 시안과 스토리보드를 확인할 수 있습니다. | {inviter} has sent you an invitation. Log in via the button below to view the drafts and storyboards. |
+| mail.bodyComment | 시안에 의견을 남길 수도 있습니다. | You can also leave comments on the drafts. |
+| mail.expiry | 이 링크는 {date}까지 유효합니다. | This link is valid until {date}. |
+| mail.personal | 이 링크는 초대받은 분만 사용해 주세요. | Please use this link only if you were the intended recipient. |
+| mail.button | 초대 수락하기 | Accept invitation |
+| mail.why | {inviter}님이 프로젝트 협업을 위해 이 메일을 보냈습니다. | {inviter} sent this email for project collaboration. |
+| accept.note | 현재 로그인한 계정으로 접속합니다. 초대한 사람이 이 계정 정보를 확인할 수 있습니다. | You will join with your current account, and the inviter will be able to see your account information. |
+| accept.login | 로그인 후 초대를 수락해 주세요. 작업공간 초대를 받으셨다면 초대받은 이메일로 로그인해야 합니다. | Log in to accept the invitation. For workspace invitations, please use the invited email address. |
+
+`accept.login`은 따로 돌린 2패스(2026-11-18, 같은 모델, 1패스 99초, 2패스까지 203초, 두 패스 완료)의 2패스 결과 그대로다. 지금 줄의 두 번째 문장("로그인 뒤 초대가 나타나지 않으면 원래 받은 초대 링크를 다시 열어주세요")은 빠졌다.
+
+원문 대조에서 걸린 곳:
+
+1. **link.invitedHelp**: 2패스는 "초대한 사람만 이 링크로 접속할 수 있습니다"였다. 이 모드에는 링크가 없으므로 "로그인해서 볼 수 있습니다"로 고쳤다.
+2. **link.offConfirm**: 2패스는 "기존 링크가 즉시 만료됩니다"였다. 실제로는 끊기(`revoked`, 화면 표기 "꺼짐")이고 만료와 다르므로 "꺼집니다"로 고쳤다.
+3. 고치지 않고 남긴 것(대표가 볼 것): 권한 이름이 "보기 / 의견 남기기"로 짧아졌다(제안은 "볼 수 있음 / 의견을 남길 수 있음"). 메일의 "의견을 남길 수도 있습니다"는 시안 의견만 말하고 대화는 말하지 않는다. "{email}님"은 주소에 존칭이 붙는다. 메일 맨 아래 줄은 실제로는 TWINGS가 대신 보낸 메일이다.
+4. 메일 맨 아래 회사 줄은 기존 `companyLine()`이라 주소가 예전 본점(구로구)으로 나온다. 다른 거래 메일과 같은 문제이고 이 작업에서 바꾸지 않았다.
+
+### 12.4 개인정보처리방침에 필요한 문장 (제안, 대표 판단)
+
+약관·방침 문구는 바꾸지 않았다(`lib/legal/documents.ts` 그대로). 켜기 전에 방침에 아래 취지가 있는지 대표가 확인한다.
+
+- 수집 항목·목적: "회원이 프로젝트에 다른 사람을 초대할 때 입력한 초대받는 분의 이메일 주소는 초대 메일 발송과, 그 프로젝트에 접근할 수 있는 사람 목록 표시에만 이용합니다."
+- 보유 기간: "초대가 만료되거나 취소되거나, 초대받은 분의 접근이 해제될 때까지 보관합니다." (지금 구현은 행을 지우지 않고 `revoked_at`·만료로 끊는다. 이 문장대로라면 만료·해제 뒤 이메일을 지우는 정리 작업이 필요하다 — 12.6-3.)
+
+### 12.5 확인 (2026-11-18, 브랜치 `claude/rooms-share-invite`)
+
+- `npx tsc --noEmit` 통과.
+- 새 테스트: `tests/brand-rooms/invites/service.test.ts`(발행 권한, 10개·하루 20·프로젝트 20 한도, 같은 주소 갱신, 재시도 멱등, 메일 내용·메일러 없음·실패·다시 보내기, 조직 초대 엄격 일치, 프로젝트 초대 1회 결합·만료·취소·플래그 꺼짐, 초대한 편집자 퇴장, 보기 손님의 모든 쓰기 경로, 권한 변경, 손님 벽, 내보내기와 알림), `schema.test.ts`(0097), `ui.test.tsx`(머리 공유 버튼, 창 기본값, 플래그 꺼짐 = 예전 창), `tests/brand-rooms/sandbox.test.ts`에 초대 블록(샌드박스 다섯 경우 404·쓰기 0, 스위치 꺼짐 404, 권한), `tests/brands/workspace-security.test.ts`에 0170 열 권한.
+- 로컬 화면(가짜 메일러, 한 durable PGlite에 소유자·손님 서버를 번갈아): 소유자가 머리 "공유"로 두 주소 초대 → 메일 두 통 캡처 → 다른 계정(이메일 다름)으로 수락 → 프로젝트 룸에 손님으로 도착, 대화 작성 → 소유자 목록에 그 계정과 초대 주소 → 보기로 바꿈 → 손님 화면에 입력창 없음, API 403 → 내보냄 → 손님 룸 접근 불가. 시안 공유 창의 링크 모드 전환(기본 초대한 사람만, 누구나 → 14일 선택 → 링크 만들기 → 초대한 사람만 → 확인 → 열린 링크 0). 1440×900, 390×844. 브라우저 콘솔 오류 0.
+- 후속(같은 날): 보기 손님 제한을 플래그와 무관하게, 수락 화면 로그인 전 줄, 작업대 손님 표. origin/main(`ce8486cd`)을 합친 뒤 전체 루프: `npx tsc --noEmit` 통과, `npx vitest run --maxWorkers=8` 610개 파일·6,299개 테스트 통과, `npm run db:local`, `npm run build:local` 통과, `npm run start:local`(3000) + `npm run sweep:anon` "SWEEP PASSED — 1453/1453 checks passed". 다시 찍은 화면: 새 초대가 "7일 후 만료"로 보이는 창(1440·390), 플래그를 끈 상태에서 보기 손님의 읽기 전용 룸(입력창 없음, 쓰기 API 403, 사람 API 404), 작업대 손님 표, 로그인 전 수락 화면.
+
+### 12.6 대표 결정 필요
+
+1. ~~보기 손님 제한을 플래그와 묶을지~~ 정했다(2026-11-18 검토): 늘 막는다. 이 코드가 배포되면 팀이 "보기"로 초대한 운영 손님은 플래그와 상관없이 룸에서 쓰지 못한다. 그런 손님에게 대화를 열어 주려면 팀이 의견 가능으로 다시 초대해야 한다.
+2. **문안 확정**: 12.3 표(특히 권한 이름과 초대 메일). 외부 발송 문안이다.
+3. **초대 이메일 보관**: 12.4의 보유 기간 문장과, 만료·해제 뒤 주소를 지우는 정리 작업을 둘지.
+4. **이메일이 다른 계정의 결합**: 토큰을 가진 첫 계정이 들어온다. 링크가 전달되면 다른 사람이 들어올 수 있고, 초대한 사람이 목록에서 보고 내보낸다(대표 결정의 전제). 수락 화면과 메일에 그 사실을 한 줄씩 적었다.
+
+### 12.7 하지 않은 것·남은 것
+
+- 작업대의 손님 표는 읽기 전용이다. 팀이 손님을 내보내는 것은 지금처럼 관리자 워크스페이스 화면(`brandWorkspace.revokeAccess`)에서 한다.
+- 미디어 주의(기존): 납품 영상은 추측 불가 키의 공개 버킷에 있어서, 이미 불러온 미디어 주소는 룸 접근 제어로 막히지 않는다. 내보낸 손님이 전에 받아 둔 주소는 계속 열린다. 이 작업에서 바꾸지 않았다.
+- 빌드·스윕은 하지 않았다(별도 검증). 새 주소는 API 하나(`/api/brand-rooms/people`, 브랜드 호스트 허용 목록에 추가)라 엣지 게이트·스윕 변경은 없다.
