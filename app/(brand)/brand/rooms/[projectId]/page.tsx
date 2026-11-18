@@ -20,7 +20,10 @@ import { isProjectOnlyArchived, studioShowroomVisible } from "@/lib/brand-studio
 import { PROJECT_ONLY_RETENTION_DAYS } from "@/lib/brands/plans";
 import { loadOrganizationStorageSummary } from "@/lib/brands/storage-quota";
 import { scopedHref } from "@/lib/brands/workspace/selection";
-import { brandStudioV2Open } from "@/lib/flags";
+import { brandRoomInvitesOpen, brandStudioV2Open } from "@/lib/flags";
+import { canTalkIn, roomSeat } from "@/lib/brand-rooms/access";
+import { RoomShareInvitesProvider, type RoomShareInvites } from "@/components/brand-rooms/share/invites-context";
+import { ProjectShareButton } from "@/components/brand-rooms/share/invite-dialog";
 
 /**
  * `/brand/rooms/[projectId]` — one project's room (docs/BRAND-ROOMS.md §3, §7, slice H).
@@ -71,8 +74,20 @@ export default async function ProjectRoomPage({
   const retentionDays = storageSummary?.retentionDays ?? PROJECT_ONLY_RETENTION_DAYS;
   const archivedReadOnly = isProjectOnlyOrg && isProjectOnlyArchived(project, retentionDays);
   const canEdit = !archivedReadOnly && (choice.role === "owner" || choice.role === "editor");
-  // Everyone seated in the room talks unless a project-only project has entered post-90d read-only archive mode.
-  const canTalk = !archivedReadOnly;
+  // Everyone seated in the room talks unless a project-only project has entered post-90d read-only archive
+  // mode — or a guest invited to view only (docs/BRAND-ROOMS-FEEDBACK.md §12), with or without invitations
+  // on. The APIs enforce the same (`canTalkIn`); this only hides the composers.
+  const invitesOn = brandRoomInvitesOpen();
+  let canTalk = !archivedReadOnly;
+  if (canTalk && (choice.role === "guest" || access.projectScopedOnly)) {
+    const seat = await roomSeat(sql, ctx.userId, choice.id).catch(() => null);
+    canTalk = seat !== null && canTalkIn(seat, project.id);
+  }
+  // Owners and editors invite people and choose who may open a link; everyone else keeps today's view.
+  const invites: RoomShareInvites | null =
+    invitesOn && canEdit
+      ? { organizationId: choice.id, projectId: project.id, locale, copy: dict.roomsShare, roles: dict.brandWorkspace.roles }
+      : null;
   const href = (target: RoomTab, extra: Record<string, string> = {}) => roomHref(project.id, choice.id, target, extra);
   const counts: Record<RoomTab, number> = {
     overview: 0,
@@ -97,6 +112,7 @@ export default async function ProjectRoomPage({
   const retentionNotice = isProjectOnlyOrg && project.status === "completed";
 
   return (
+    <RoomShareInvitesProvider value={invites}>
     <div className="brr-room" data-project-room={project.id} data-room-tab-current={activeTab}>
       <RoomHeader
         project={project}
@@ -105,6 +121,7 @@ export default async function ProjectRoomPage({
         statusLabel={dict.brandWorkspace.status[project.status]}
         backHref={scopedHref("/brand", choice)}
         detailHref={project.track === "creator_campaign" ? scopedHref(`/brand/projects/${project.id}`, choice) : null}
+        share={invites ? <ProjectShareButton invites={invites} shareCopy={dict.roomsReview.share} /> : null}
       />
       {retentionNotice && (
         <section
@@ -163,5 +180,6 @@ export default async function ProjectRoomPage({
         )}
       </section>
     </div>
+    </RoomShareInvitesProvider>
   );
 }

@@ -235,3 +235,16 @@ export function brandRoomsOpen(env: NodeJS.ProcessEnv = process.env): boolean {
 export function brandRoomNotifyOpen(env: NodeJS.ProcessEnv = process.env): boolean {
   return env.BRAND_ROOM_NOTIFY === 'on';
 }
+
+/**
+ * docs/BRAND-ROOMS-FEEDBACK.md §12 — sharing a project room by invitation: brand owners and editors invite
+ * people by e-mail to one project (view only or with comments), the share dialog's two link modes
+ * ("초대한 사람만" by default, "링크가 있는 누구나" only when switched on), the invitation mail, single-use
+ * binding of a project invitation to the account that accepts it, and a guest's `can_comment` in rooms.
+ * Default OFF: on only when the server environment says exactly `BRAND_ROOM_INVITES=on` (and rooms are
+ * open). Off means today's share dialog, no `/api/brand-rooms/people` (404), no invitation mail, and the
+ * strict e-mail match on every invitation.
+ */
+export function brandRoomInvitesOpen(env: NodeJS.ProcessEnv = process.env): boolean {
+  return env.BRAND_ROOM_INVITES === 'on' && brandRoomsOpen(env);
+}

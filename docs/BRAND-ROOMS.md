@@ -37,6 +37,7 @@ Slack(채널 · 스레드 · 멘션 · 리액션 · 안 읽음), Storyboarder.ai
 | `/s/[token]` | 공유 링크(로그인 없이 보기, 허용하면 이름을 적고 의견 남기기) |
 | `/admin/brand-rooms` | 야기 팀: 모든 조직의 룸 목록·대화·스토리보드 편집·시안 올리기 |
 | `/api/brand-rooms/{messages,storyboards,reviews,shares,summary,ingest}` | API |
+| `/api/brand-rooms/people` | 프로젝트에 사람 초대·접근 목록(플래그 `BRAND_ROOM_INVITES`, `docs/BRAND-ROOMS-FEEDBACK.md` §12) |
 
 기존 프로젝트 상세(`/brand/projects/[id]`)는 그대로 두고, 머리에 "룸 열기" 버튼과 안 읽음 배지만 더한다.
 캠페인 목록 카드에도 같은 버튼.
