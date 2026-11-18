@@ -15,7 +15,7 @@
  * folder; download; delete). A tile is exactly what is on screen: a clip with versions shows one version,
  * and that version alone is selected or deleted (./selection.ts).
  */
-import { Fragment, useEffect, useId, useRef, useState, type KeyboardEvent, type MouseEvent, type ReactNode } from "react";
+import { Fragment, useEffect, useId, useRef, useState, type FocusEvent, type KeyboardEvent, type MouseEvent, type PointerEvent, type ReactNode } from "react";
 import type { StudioJobView, StudioOutputView } from "@/lib/brand-studio/contracts";
 import { creditsOf } from "@/lib/brand-studio/credits";
 import { studioModelOrLegacy, type StudioMedium } from "@/lib/brand-studio/models";
@@ -249,7 +249,16 @@ export function Wall(props: WallProps) {
       sendAsReferences();
     }
   };
-  const tileProps = { ...props, badges, select, canRemove };
+  // A run made with others in one request: pointing at (or focusing) one of its tiles outlines all of them.
+  // The pointer and the keyboard are kept apart, so leaving one tile never clears the group focus is in.
+  const [pointed, setPointed] = useState<string | null>(null);
+  const [focused, setFocused] = useState<string | null>(null);
+  const group: GroupLight = {
+    lit: pointed ?? focused,
+    point: (id, on) => setPointed((current) => (on ? id : current === id ? null : current)),
+    focus: (id, on) => setFocused((current) => (on ? id : current === id ? null : current)),
+  };
+  const tileProps = { ...props, badges, select, canRemove, group };
   const groups = groupByDay(wallEntries(collapseRevisions(jobs), parentOf), (entry) => entry.job.createdAt, now);
   const label = mode === "video" ? g.labelVideo : g.label;
   if (!groups.length && !sending.length)
@@ -475,7 +484,33 @@ function SendingSlot({ tile, copy }: { tile: SendingTile; copy: StudioCopy }) {
 /** Version numbers of clips with more than one version, by run id. */
 type Badges = { badges: ReadonlyMap<string, number> };
 /** The selection, and whether runs with no result can be removed here. */
-type Picking = { select: Select; canRemove: boolean };
+type Picking = { select: Select; canRemove: boolean; group: GroupLight };
+/** Which request made on several models is lit (pointer first, else keyboard focus), and how a tile reports it. */
+type GroupLight = { lit: string | null; point(groupId: string, on: boolean): void; focus(groupId: string, on: boolean): void };
+
+/**
+ * The attributes and handlers that tie a tile to the other runs of its request: every tile of the group gets
+ * one quiet ink outline while any of them is under a mouse or pen, or holds keyboard focus. A touch alone
+ * lights nothing beyond what its focus gives. Nothing for a run made alone.
+ */
+function groupTile(job: StudioJobView, group: GroupLight) {
+  const id = job.group?.id;
+  if (!id) return {};
+  return {
+    "data-group": id,
+    "data-group-lit": group.lit === id ? "" : undefined,
+    onPointerEnter: (event: PointerEvent<HTMLElement>) => {
+      if (event.pointerType !== "touch") group.point(id, true);
+    },
+    onPointerLeave: (event: PointerEvent<HTMLElement>) => {
+      if (event.pointerType !== "touch") group.point(id, false);
+    },
+    onFocus: () => group.focus(id, true),
+    onBlur: (event: FocusEvent<HTMLElement>) => {
+      if (!(event.relatedTarget instanceof Node && event.currentTarget.contains(event.relatedTarget))) group.focus(id, false);
+    },
+  };
+}
 
 function VersionBadge({ n, copy, extra }: { n: number | undefined; copy: StudioCopy; extra?: string | null }) {
   if (!n) return extra ? <span className="bs-tile-badge">{extra}</span> : null;
@@ -500,11 +535,11 @@ function GroupModelBadge({ job, inline = false }: { job: StudioJobView; inline?:
   );
 }
 
-function PendingTile({ entry, copy, canStop = false, stopping = null, onCancel, badges }: WallProps & Badges & Picking & { entry: Extract<Entry, { type: "pending" }> }) {
+function PendingTile({ entry, copy, canStop = false, stopping = null, onCancel, badges, group }: WallProps & Badges & Picking & { entry: Extract<Entry, { type: "pending" }> }) {
   const { job } = entry;
   const stage = copy.board.stage[job.status as keyof typeof copy.board.stage] ?? copy.board.stage.queued;
   return (
-    <div className="bs-tile" data-state="pending" data-job-status={job.status} data-studio-job={job.id} style={tileStyle(entry.ratio)} role="group" aria-label={fill(copy.board.pending, { n: entry.n })}>
+    <div className="bs-tile" data-state="pending" data-job-status={job.status} data-studio-job={job.id} style={tileStyle(entry.ratio)} role="group" aria-label={fill(copy.board.pending, { n: entry.n })} {...groupTile(job, group)}>
       <span className="bs-stage">{stage}</span>
       <GroupModelBadge job={job} />
       <VersionBadge n={badges.get(job.id)} copy={copy} extra={job.kind === "region_edit" ? copy.board.editBadge : null} />
@@ -525,14 +560,14 @@ function PendingTile({ entry, copy, canStop = false, stopping = null, onCancel, 
   );
 }
 
-function FailedTile({ entry, copy, canGenerate, onRetry, onRemove, canRemove, select, badges }: WallProps & Badges & Picking & { entry: Extract<Entry, { type: "failed" }> }) {
+function FailedTile({ entry, copy, canGenerate, onRetry, onRemove, canRemove, select, badges, group }: WallProps & Badges & Picking & { entry: Extract<Entry, { type: "failed" }> }) {
   const { job } = entry;
   const key = failedKey(job.id);
   const selected = select.has(key);
   // A block with attachments usually comes from the attachment, so say where to look.
   const reason = job.errorCode === "provider_rejected" && job.references.length > 0 ? copy.board.rejectedWithReferences : errorLine(copy, job.errorCode);
   return (
-    <div className="bs-tile" data-state="failed" data-studio-job={job.id} data-selected={selected ? "" : undefined} style={tileStyle(entry.ratio)} role="group" aria-label={copy.gallery.failed}>
+    <div className="bs-tile" data-state="failed" data-studio-job={job.id} data-selected={selected ? "" : undefined} style={tileStyle(entry.ratio)} role="group" aria-label={copy.gallery.failed} {...groupTile(job, group)}>
       {canRemove && <TileCheck selected={selected} label={copy.gallery.selectFailed} onPress={(event) => select.press(key, event.shiftKey)} />}
       {canRemove && (
         <button type="button" className="bs-tile-btn bs-tile-remove" data-studio-remove aria-label={copy.gallery.removeFailed} title={copy.gallery.removeFailed} onClick={() => void onRemove?.(job)}>
@@ -556,7 +591,7 @@ function FailedTile({ entry, copy, canGenerate, onRetry, onRemove, canRemove, se
 }
 
 function ResultTile(props: WallProps & Badges & Picking & { entry: Extract<Entry, { type: "result" }>; n: number }) {
-  const { entry, n, copy, locale, canGenerate, canEdit, library, onAction, onNotice, badges, select } = props;
+  const { entry, n, copy, locale, canGenerate, canEdit, library, onAction, onNotice, badges, select, group } = props;
   const { output, job } = entry.item;
   const key = resultKey(output.id);
   const selected = select.has(key);
@@ -631,6 +666,7 @@ function ResultTile(props: WallProps & Badges & Picking & { entry: Extract<Entry
       data-liked={liked ? "" : undefined}
       data-selected={selected ? "" : undefined}
       style={tileStyle(entry.ratio)}
+      {...groupTile(job, group)}
     >
       <button
         type="button"

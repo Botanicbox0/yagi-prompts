@@ -31,7 +31,8 @@ import {
 import { trayItemFromAsset, type TrayItem } from "@/components/brand-studio/refs";
 import { planReuse } from "@/components/brand-studio/reuse-model";
 import { movedLine } from "@/components/brand-studio/use-dock";
-import { SiblingSwitcher, comparePartner } from "@/components/brand-studio/viewer";
+import { SiblingSwitcher } from "@/components/brand-studio/viewer";
+import { ModelCompare, canCompareModels, compareEntries, resultCredits } from "@/components/brand-studio/gallery/model-compare";
 import type { StudioJobView } from "@/lib/brand-studio/contracts";
 import { creditsOf } from "@/lib/brand-studio/credits";
 import { selectableModels, type StudioImageModel } from "@/lib/brand-studio/models";
@@ -339,8 +340,13 @@ describe("results", () => {
       />,
     );
     expect([...html.matchAll(/data-studio-tile-model="([^"]+)"/g)].map((m) => m[1])).toEqual(["nano-banana-pro", "seedream-5.5", "gpt-image-2.6-flare"]);
-    // A lone run carries no model badge.
-    expect(renderToStaticMarkup(<Wall mode="image" jobs={[job(1, { outputs: [output(1)] })]} copy={ko} locale="ko" canGenerate canEdit library={{ ready: true, liked: new Set(), folders: [] } as never} parentOf={() => null} onAction={() => {}} onRetry={() => {}} onNotice={() => {}} />)).not.toContain("data-studio-tile-model");
+    // Every tile of the group (results and the failed one) can be outlined together; none is lit at rest.
+    expect([...html.matchAll(/class="bs-tile"[^>]*data-group="([^"]+)"/g)].map((m) => m[1])).toEqual(["g-1", "g-1", "g-1"]);
+    expect(html).not.toContain("data-group-lit");
+    // A lone run carries no model badge and nothing to outline.
+    const lone = renderToStaticMarkup(<Wall mode="image" jobs={[job(1, { outputs: [output(1)] })]} copy={ko} locale="ko" canGenerate canEdit library={{ ready: true, liked: new Set(), folders: [] } as never} parentOf={() => null} onAction={() => {}} onRetry={() => {}} onNotice={() => {}} />);
+    expect(lone).not.toContain("data-studio-tile-model");
+    expect(lone).not.toContain("data-group");
   });
 
   it("switches between results made together, keeping a failed one in the row with its reason", () => {
@@ -358,12 +364,32 @@ describe("results", () => {
     expect(renderToStaticMarkup(<SiblingSwitcher job={job(1)} output={null} siblings={[job(1)]} copy={ko} onOpen={() => {}} />)).toBe("");
   });
 
-  it("offers 모델 비교 with the next model of the group that has a picture, skipping a failed one", () => {
-    const runs = orderGroups(groupRuns());
+  it("lays every model side by side in 모델 비교, a failed one as a quiet tile, never a wipe line", () => {
+    const runs = orderGroups(groupRuns()).map((run) => (run.outputs.length ? { ...run, estimateKrw: 220, countedOutputs: 1 } : run));
     const [nano, seedream] = runs;
-    expect(comparePartner(nano!, nano!.outputs[0]!, groupSiblings(nano!, runs))?.run.model).toBe("seedream-5.5");
-    // From Seedream the next one (GPT Image) failed, so it wraps round to Nano Banana Pro.
-    expect(comparePartner(seedream!, seedream!.outputs[0]!, groupSiblings(seedream!, runs))?.run.model).toBe("nano-banana-pro");
+    // Different shapes on purpose: each keeps its own ratio (a portrait and a landscape at one height).
+    const portrait = { ...seedream!, outputs: [{ ...seedream!.outputs[0]!, width: 768, height: 1024 }] };
+    const set = [nano!, portrait, runs[2]!];
+    const entries = compareEntries(nano!, nano!.outputs[0]!, set, ko);
+    expect(entries.map((e) => [e.run.model, Boolean(e.output), e.current, e.credits, e.reason])).toEqual([
+      ["nano-banana-pro", true, true, 22, null],
+      ["seedream-5.5", true, false, 22, null],
+      ["gpt-image-2.6-flare", false, false, null, ko.errors.provider_rejected],
+    ]);
+    expect(canCompareModels(entries)).toBe(true);
+    expect(resultCredits(nano!)).toBe(22);
+    const html = renderToStaticMarkup(<ModelCompare entries={entries} copy={ko} locale="ko" onOpen={() => {}} />);
+    expect(html).not.toContain('type="range"');
+    expect([...html.matchAll(/data-compare-model="([^"]+)"/g)].map((m) => m[1])).toEqual(["nano-banana-pro", "seedream-5.5", "gpt-image-2.6-flare"]);
+    // Each picture's own shape drives its width at the shared height.
+    expect(html).toMatch(/data-compare-model="nano-banana-pro" data-current="" style="--r:1.3333"/);
+    expect(html).toMatch(/data-compare-model="seedream-5.5" style="--r:0.7500"/);
+    expect(html).toContain('aria-label="Seedream 5.5 결과 보기"');
+    expect(html).toContain(`<span class="bs-mcompare-credits bs-num">22 크레딧</span>`);
+    expect(html).toMatch(/class="bs-mcompare-empty" data-state="failed"><span class="bs-mcompare-empty-why">[^<]+<\/span><\/div><figcaption class="bs-mcompare-caption"><span class="bs-mcompare-name">GPT Image 2.6 Flare<\/span><\/figcaption>/);
+    expect(html).toContain('data-studio-compare-at="true">1 / 3</span>');
+    // One model with a picture is nothing to compare.
+    expect(canCompareModels(compareEntries(nano!, nano!.outputs[0]!, [nano!, runs[2]!], ko))).toBe(false);
     const off = renderToStaticMarkup(<SiblingSwitcher job={nano!} output={nano!.outputs[0]!} siblings={groupSiblings(nano!, runs)} copy={ko} onOpen={() => {}} onCompare={() => {}} />);
     expect(off).toMatch(/aria-pressed="false" data-studio-compare-models="true">[\s\S]*모델 비교/);
     const on = renderToStaticMarkup(<SiblingSwitcher job={nano!} output={nano!.outputs[0]!} siblings={groupSiblings(nano!, runs)} copy={ko} onOpen={() => {}} onCompare={() => {}} comparing />);

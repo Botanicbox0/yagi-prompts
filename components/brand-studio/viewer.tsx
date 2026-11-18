@@ -18,6 +18,7 @@ import { errorLine, fill, type StudioCopy, type StudioLocale } from "./copy";
 import { qualityOf, regionCredits, regionInstructionForForm, regionProblem, type RegionProblem } from "./dock-model";
 import { CopyButton, promptToCopy, sentPromptCopyable } from "./copy-prompt";
 import { CompareSlider } from "./gallery/compare";
+import { ModelCompare, canCompareModels, compareEntries, siblingOutput } from "./gallery/model-compare";
 import { RegionForm } from "./gallery/region-form";
 import { StudioIcon, type StudioIconName } from "./icons";
 import type { RefSource, TrayItem } from "./refs";
@@ -187,6 +188,12 @@ export function Viewer(props: ViewerProps) {
       data-studio-viewer
       data-docked={docked ? "" : undefined}
       onKeyDown={(event) => {
+        // Escape leaves "모델 비교" first; the next Escape closes the viewer.
+        if (comparing && event.key === "Escape" && !event.defaultPrevented) {
+          event.preventDefault();
+          setComparing(false);
+          return;
+        }
         // A non-modal dialog gets no `cancel` from Escape, so the docked form closes itself.
         if (docked && event.key === "Escape" && !event.defaultPrevented) {
           event.preventDefault();
@@ -197,7 +204,8 @@ export function Viewer(props: ViewerProps) {
       }}
       onCancel={(event) => {
         event.preventDefault();
-        onClose();
+        if (comparing) setComparing(false);
+        else onClose();
       }}
     >
       <div className="bs-viewer-bar">
@@ -225,27 +233,6 @@ export function Viewer(props: ViewerProps) {
 
 /** Set when the switcher moved with a key, so the next result's switcher takes focus back (the content remounts). */
 let switcherHadFocus = false;
-
-/** A sibling's result in the same place as `output` in its own run (its 2nd picture for this one's 2nd), else its first. */
-function siblingOutput(job: StudioJobView, output: StudioOutputView | null, run: StudioJobView): StudioOutputView | null {
-  const slot = output ? Math.max(0, job.outputs.findIndex((o) => o.id === output.id)) : 0;
-  return run.outputs[Math.min(slot, run.outputs.length - 1)] ?? null;
-}
-
-/** What "모델 비교" lays over this result: the next model of the group (in pick order) that has a picture. */
-export function comparePartner(
-  job: StudioJobView,
-  output: StudioOutputView | null,
-  siblings: readonly StudioJobView[],
-): { run: StudioJobView; output: StudioOutputView } | null {
-  const at = siblings.findIndex((run) => run.id === job.id);
-  for (let step = 1; step < siblings.length; step++) {
-    const run = siblings[(at + step + siblings.length) % siblings.length]!;
-    const out = run.id === job.id ? null : siblingOutput(job, output, run);
-    if (out && out.kind === "image") return { run, output: out };
-  }
-  return null;
-}
 
 /**
  * "같이 만든 결과": the results of one request made on several models, one pill per model in the order they
@@ -276,7 +263,7 @@ export function SiblingSwitcher({
   const shown = siblings.filter((run) => !(run.status === "succeeded" && run.outputs.length === 0));
   const target = (run: StudioJobView) => siblingOutput(job, output, run);
   const ready = shown.filter((run) => run.id === job.id || target(run));
-  const canCompare = Boolean(onCompare && output?.kind === "image" && comparePartner(job, output, siblings));
+  const canCompare = Boolean(onCompare && output?.kind === "image" && canCompareModels(compareEntries(job, output, siblings, copy)));
   useEffect(() => {
     if (!switcherHadFocus) return;
     switcherHadFocus = false;
@@ -353,7 +340,8 @@ export function SiblingSwitcher({
         })}
       </div>
       {notes.map((note) => (
-        <p key={note.id} id={`sib-${note.id}-why`} className="bs-sibling-note" data-studio-sibling-note={note.failed ? "failed" : "open"}>
+        // While comparing, the stage's own tile says why; the line stays for screen readers only.
+        <p key={note.id} id={`sib-${note.id}-why`} className={comparing ? "bs-sr" : "bs-sibling-note"} data-studio-sibling-note={note.failed ? "failed" : "open"}>
           <span className="bs-sibling-note-model">{note.label}:</span> {note.reason}
         </p>
       ))}
@@ -472,9 +460,15 @@ function ViewerContent({
   }, [image, file.url]);
   const name = item.type === "asset" ? item.asset.name : "";
   const comparing = !region && image && job?.kind === "region_edit" && before?.kind === "image";
-  // Results of one request on several models: the switcher, and "모델 비교" with the next model's picture.
+  // Results of one request on several models: the switcher, and "모델 비교" with every model side by side.
   const siblings = job?.group && siblingsOf ? siblingsOf(job) : [];
-  const partner = comparingModels && !region && image && job && item.type === "output" ? comparePartner(job, item.output, siblings) : null;
+  const entries = job && item.type === "output" && siblings.length > 1 ? compareEntries(job, item.output, siblings, copy) : [];
+  const comparable = !region && image && canCompareModels(entries);
+  const modelCompare = comparingModels && comparable;
+  // Moving on to a result made alone ends the comparison, so Escape then closes the viewer as always.
+  useEffect(() => {
+    if (comparingModels && !comparable) onCompare?.(false);
+  }, [comparable, comparingModels, onCompare]);
 
   const setRegion = (open: boolean) => {
     setRegionState(open);
@@ -552,18 +546,15 @@ function ViewerContent({
             height={file.height}
             labels={{ before: v.before, after: v.after, range: v.compareRange, hint: v.compareHint }}
           />
-        ) : partner && job ? (
-          <CompareSlider
-            key={partner.output.id}
-            before={partner.output.url}
-            after={file.url}
-            width={file.width}
-            height={file.height}
-            labels={{
-              before: studioModelOrLegacy(partner.run.model)?.label ?? partner.run.model,
-              after: studioModelOrLegacy(job.model)?.label ?? job.model,
-              range: v.compareModelsRange,
-              hint: v.compareModelsHint,
+        ) : modelCompare ? (
+          <ModelCompare
+            entries={entries}
+            copy={copy}
+            locale={locale}
+            onOpen={(entry) => {
+              // A press on a picture leaves the comparison and opens that result on its own.
+              onCompare?.(false);
+              if (!entry.current && entry.output) onOpenOutput?.(entry.output.id);
             }}
           />
         ) : (
@@ -578,7 +569,7 @@ function ViewerContent({
             siblings={siblings}
             copy={copy}
             onOpen={onOpenOutput}
-            comparing={Boolean(partner)}
+            comparing={modelCompare}
             onCompare={onCompare}
           />
         )}

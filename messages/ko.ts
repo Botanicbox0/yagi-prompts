@@ -1998,8 +1998,6 @@ export const ko: Dictionary = {
       siblings: '같이 만든 결과',
       siblingShow: '{model} 결과 보기',
       compareModels: '모델 비교',
-      compareModelsRange: '비교 슬라이더',
-      compareModelsHint: '선을 좌우로 끌어 두 모델의 결과를 비교해요.',
     },
     revise: {
       versions: '버전',

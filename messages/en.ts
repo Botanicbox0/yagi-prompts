@@ -1986,8 +1986,6 @@ export const en = {
       siblings: 'Made together',
       siblingShow: 'See the {model} result',
       compareModels: 'Compare models',
-      compareModelsRange: 'Comparison slider',
-      compareModelsHint: 'Drag the line left or right to compare the two results.',
     },
     revise: {
       versions: 'Versions',
