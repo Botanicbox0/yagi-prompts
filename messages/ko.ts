@@ -1965,6 +1965,13 @@ export const ko: Dictionary = {
       sentPrompt: '보낸 문장',
       notEnhanced: '적은 그대로 보냈어요.',
       reuse: '이 설정 다시 쓰기',
+      /** 수정한 이미지: 수정 전 원본을 같은 칸·문장·참조로 부분 수정에 연다 (Gemma 2패스, 2026-11-19). */
+      reuseRegion: '같은 영역 다시 수정하기',
+      reuseMissing: '찾을 수 없는 참조: {label}. 필요하면 다시 추가해 주세요.',
+      sourceGone: '원본 이미지를 찾을 수 없어 이 결과물에서 수정해요.',
+      copyPrompt: '프롬프트 복사',
+      copy: '복사',
+      copied: '복사했어요',
       compare: '수정 전후',
       compareRange: '수정 전후를 나누는 선의 위치',
       compareHint: '가운데 선을 좌우로 끌어 수정 전과 후를 비교해요.',

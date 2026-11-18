@@ -480,10 +480,12 @@ describe("3. Zero-Drift <PromptHighlight>, Bidirectional Tray Ring, Collapsed Do
     const html = renderToStaticMarkup(createElement(PromptHighlight, { prompt, tray }));
     expect(html).toContain('class="bs-prompt-backdrop"');
     expect(html).toContain('data-prompt-highlight=""');
-    expect(html).toContain('<mark class="bs-mention-mark" data-mention-bound="true">@image1</mark>');
-    expect(html).toContain('<mark class="bs-mention-mark" data-mention-bound="true">@video1</mark>');
-    expect(html).toContain('<mark class="bs-mention-mark" data-mention-bound="true">@이미지1</mark>');
-    expect(html).toContain('<mark class="bs-mention-mark" data-mention-bound="false">@image9</mark>');
+    const mark = (bound: boolean, text: string, key?: string) =>
+      new RegExp(`<mark class="bs-mention-mark" data-mention-bound="${bound}" data-mention-start="\\d+"${key ? ` data-mention-keys="${key}"` : ""}>${text}</mark>`);
+    expect(html).toMatch(mark(true, "@image1", img1.key));
+    expect(html).toMatch(mark(true, "@video1", vid1.key));
+    expect(html).toMatch(mark(true, "@이미지1", img1.key));
+    expect(html).toMatch(mark(false, "@image9"));
     // Ends with `\n </div>` so CSS pre-wrap mirrors `<textarea>`'s trailing blank line without drift.
     expect(html.endsWith("\n </div>")).toBe(true);
   });
@@ -547,8 +549,8 @@ describe("3. Zero-Drift <PromptHighlight>, Bidirectional Tray Ring, Collapsed Do
     expect(expandedHtml).not.toContain("data-studio-enhance");
     expect(expandedHtml).not.toContain("data-studio-enhance-now");
     expect(expandedHtml).not.toContain("data-studio-enhance-group");
-    expect(expandedHtml).toContain('data-mention-bound="true">@image1</mark>');
-    expect(expandedHtml).toContain('data-mention-bound="false">@image9</mark>');
+    expect(expandedHtml).toMatch(/data-mention-bound="true" data-mention-start="0" data-mention-keys="[^"]+">@image1<\/mark>/);
+    expect(expandedHtml).toMatch(/data-mention-bound="false" data-mention-start="\d+">@image9<\/mark>/);
 
     const collapsedHtml = renderToStaticMarkup(
       createElement(Dock, {

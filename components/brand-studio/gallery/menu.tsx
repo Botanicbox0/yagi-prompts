@@ -54,6 +54,9 @@ export interface MenuEntry {
   disabled?: boolean;
   /** Keep the menu open after this entry runs (it changes what the menu shows). */
   keepOpen?: boolean;
+  /** A label the entry flips to in place while `done` ("복사했어요"); both share one cell, so nothing moves. */
+  doneLabel?: string;
+  done?: boolean;
   run(): void;
 }
 
@@ -128,6 +131,7 @@ export function Menu({
           role="menuitem"
           data-menu-item={entry.key}
           data-tone={entry.tone}
+          data-copied={entry.doneLabel && entry.done ? "" : undefined}
           disabled={entry.disabled}
           onClick={() => {
             entry.run();
@@ -135,7 +139,14 @@ export function Menu({
           }}
         >
           {entry.icon && <StudioIcon name={entry.icon} />}
-          <span>{entry.label}</span>
+          {entry.doneLabel ? (
+            <span className="bs-menu-swap">
+              <span>{entry.label}</span>
+              <span>{entry.doneLabel}</span>
+            </span>
+          ) : (
+            <span>{entry.label}</span>
+          )}
         </button>
       ))}
       {footer}
