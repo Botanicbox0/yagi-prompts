@@ -616,9 +616,9 @@ export function StudioApp({ organizationId, locale, copy, mode, libraryCopy, lay
       case "open":
         return viewer.show({ list: "outputs", key });
       case "rerun":
-        return canRerun(job) ? viewer.rerun(job) : viewer.reuse(job);
+        return canRerun(job) ? viewer.rerun(job) : viewer.reuse(job, output);
       case "reuse":
-        return viewer.reuse(job);
+        return viewer.reuse(job, output);
       case "region":
         return void openLayerEditor({ outputId: output.id }, { tool: "marquee" });
       case "decorate":

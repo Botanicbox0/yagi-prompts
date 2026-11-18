@@ -28,6 +28,10 @@ export interface TrayProps {
   initialOpen?: string | null;
   /** Keys of tray items currently referenced by `@` / natural mentions in the prompt bar. */
   mentionedKeys?: ReadonlySet<string>;
+  /** Keys the member is pointing at right now: a mention under the pointer or caret, or this thumbnail itself. */
+  linkedKeys?: ReadonlySet<string>;
+  /** A thumbnail is hovered or focused (its key) or left (null), so the field can emphasise its mentions. */
+  onLink?(key: string | null): void;
   /** Optional segment & crop trigger for `@video1` on the video screen. */
   onTrimVideo?(item: TrayItem): void;
   trimLabel?: string;
@@ -52,6 +56,8 @@ export function Tray({
   uploading,
   initialOpen = null,
   mentionedKeys,
+  linkedKeys,
+  onLink,
   onTrimVideo,
   trimLabel,
   onUpdate,
@@ -88,6 +94,7 @@ export function Tray({
           const popoverId = `${base}-ref-${i}`;
           const expanded = open === item.key;
           const mentioned = Boolean(mentionedKeys?.has(item.key));
+          const linked = Boolean(linkedKeys?.has(item.key));
           return (
             <li
               key={item.key}
@@ -95,6 +102,11 @@ export function Tray({
               data-ref-kind={item.kind}
               data-virtual-tag={virtualTag}
               data-mentioned={mentioned ? "" : undefined}
+              data-linked={linked ? "" : undefined}
+              onPointerEnter={onLink ? () => onLink(item.key) : undefined}
+              onPointerLeave={onLink ? () => onLink(null) : undefined}
+              onFocus={onLink ? () => onLink(item.key) : undefined}
+              onBlur={onLink ? () => onLink(null) : undefined}
               data-dragging={dragging === i ? "" : undefined}
               data-drop-before={over === i && dragging !== null && dragging !== i ? "" : undefined}
               onDragOver={(event) => {

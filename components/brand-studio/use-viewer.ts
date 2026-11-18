@@ -13,12 +13,13 @@ import type { StudioMedium } from "@/lib/brand-studio/models";
 import { isFailure, uploadProblem } from "./api";
 import { errorLine, newRequestId, type StudioCopy } from "./copy";
 import { finalInput, regionEditInput, rerunInput, withMedium } from "./dock-model";
-import { trayFromReferences, trayItemFromAsset, trayItemFromOutput, withStartFrame, type RefSource, type TrayItem } from "./refs";
+import { trayItemFromAsset, trayItemFromOutput, withStartFrame, type RefSource, type TrayItem } from "./refs";
+import { planReuse, type ReusePlan } from "./reuse-model";
 import type { ReviseSupport } from "./revise-form";
 import { STUDIO_OPEN_REVERSE, announce, type LayerEditorRegionPreset } from "./seams";
 import { collapseRevisions, reviseRerunInput } from "./revision-model";
 import { boardOutputs } from "./store";
-import type { DockController } from "./use-dock";
+import { missingReferencesLine, type DockController } from "./use-dock";
 import type { StudioController } from "./use-studio";
 import { itemKey, type RegionPreset, type RegionRequest, type ViewerActions, type ViewerItem } from "./viewer";
 
@@ -85,30 +86,22 @@ export function useViewer(input: {
     [copy],
   );
 
-  /** A partial edit set up again: its picture open, the same box, words and references. */
-  const reopenRegion = (job: StudioJobView) => {
-    const resolved = job.parentOutputId && lookup.output(job.parentOutputId)
-      ? { list: "outputs" as const, key: `o:${job.parentOutputId}`, source: { outputId: job.parentOutputId } as RefSource }
-      : job.parentAssetId && lookup.asset(job.parentAssetId)
-        ? { list: "assets" as const, key: `a:${job.parentAssetId}`, source: { assetId: job.parentAssetId } as RefSource }
-        : null;
-    if (!resolved) return setNotice(errorLine(copy, "not_found"));
-    const references = trayFromReferences(job.references, lookup, copy.viewer.label);
+  /**
+   * "같은 영역 다시 수정하기": the partial-edit tool on the picture the edit was made from, with the same box,
+   * words, references and switch; on the result itself (with a notice) when that picture is gone.
+   */
+  const reopenRegion = (plan: Extract<ReusePlan, { to: "region" }>) => {
+    const missing = missingReferencesLine(plan.missing, copy);
+    const notice = [plan.onResult ? copy.viewer.sourceGone : null, missing].filter(Boolean).join(" ") || null;
     if (input.onOpenRegionEditor) {
       show(null);
-      input.onOpenRegionEditor(resolved.source, {
-        box: job.box,
-        instruction: job.prompt,
-        serverNumbered: job.finalPrompt !== null,
-        model: job.model,
-        quality: job.quality ?? null,
-        references,
-      });
+      input.onOpenRegionEditor(plan.source, { ...plan.preset, notice });
       return;
     }
-    setPreset({ key: resolved.key, box: job.box, instruction: job.prompt, model: job.model, quality: job.quality ?? null, references });
-    setOpen({ list: resolved.list, key: resolved.key });
-    setNotice(null);
+    const { box, instruction, model, quality, references } = plan.preset;
+    setPreset({ key: plan.open.key, box, instruction, model, quality: quality ?? null, references });
+    setOpen(plan.open);
+    setNotice(notice);
   };
 
   /** Opens a picture straight on its partial-edit form (the wall's "부분 수정"). */
@@ -124,18 +117,27 @@ export function useViewer(input: {
     setNotice(null);
   };
 
-  const reuse = (target: StudioJobView) => {
+  /** "이 설정 다시 쓰기" (reuse-model.ts): the bar with the whole setting, or the partial-edit tool for an edit. */
+  const reuse = (target: StudioJobView, from?: StudioOutputView | null) => {
     // A version's own words are only the change; its settings are the clip's first run.
     const job = (target.revision && jobs.find((j) => j.id === target.revision!.rootJobId)) || target;
-    // A blueprint is set up again in the reverse panel (slice C), not in the bar.
-    if (job.kind === "video_remix" && job.method === "blueprint") {
-      show(null);
-      announce(STUDIO_OPEN_REVERSE, { jobId: job.id });
-      return;
+    const plan = planReuse(job, { current: dock.draft, lookup, outputName: copy.viewer.label, from: from ?? null });
+    switch (plan.to) {
+      case "reverse":
+        // A blueprint is set up again in the reverse panel (slice C), not in the bar.
+        show(null);
+        announce(STUDIO_OPEN_REVERSE, { jobId: plan.jobId });
+        return;
+      case "none":
+        return setNotice(errorLine(copy, "not_found"));
+      case "region":
+        return reopenRegion(plan);
+      case "dock":
+        dock.reuse(plan);
+        show(null);
+        focusPrompt();
+        return;
     }
-    dock.reuse(job, lookup);
-    show(null);
-    focusPrompt();
   };
 
   const regionEdit = async (item: ViewerItem, request: RegionRequest): Promise<boolean> => {
@@ -173,8 +175,7 @@ export function useViewer(input: {
           const result = await studio.createJob(again);
           return isFailure(result) ? errorLine(copy, result.code) : copy.state.started;
         });
-      if (job.kind === "region_edit") return reopenRegion(job);
-      if (job.kind === "video_remix") return reuse(job);
+      if (job.kind === "region_edit" || job.kind === "video_remix") return reuse(job);
       void run("rerun", async () => {
         const again = rerunInput(job, { organizationId, requestId: newRequestId() });
         if (!again) return null;

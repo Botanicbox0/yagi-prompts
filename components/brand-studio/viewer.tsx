@@ -16,6 +16,7 @@ import type { RegionBox, StudioAssetView, StudioJobView, StudioOutputView } from
 import type { StudioImageModel } from "@/lib/brand-studio/models";
 import { errorLine, fill, type StudioCopy, type StudioLocale } from "./copy";
 import { qualityOf, regionCredits, regionInstructionForForm, regionProblem, type RegionProblem } from "./dock-model";
+import { CopyButton, promptToCopy, sentPromptCopyable } from "./copy-prompt";
 import { CompareSlider } from "./gallery/compare";
 import { RegionForm } from "./gallery/region-form";
 import { StudioIcon, type StudioIconName } from "./icons";
@@ -47,7 +48,12 @@ export interface ViewerActions {
   save(output: StudioOutputView): void;
   campaign(item: ViewerItem): void;
   finalize(output: StudioOutputView): void;
-  reuse(job: StudioJobView): void;
+  /**
+   * "이 설정 다시 쓰기": a run's whole setting back in the bar. A partial edit instead opens on its original
+   * with the same area ("같은 영역 다시 수정하기"); `from` is the result it was pressed on (the fallback when
+   * the original is gone).
+   */
+  reuse(job: StudioJobView, from?: StudioOutputView | null): void;
   /** True when the result is gone. */
   remove(output: StudioOutputView): Promise<boolean>;
   /** "꾸미기": the layer editor on this picture. */
@@ -278,6 +284,11 @@ function ViewerContent({
   const [confirming, setConfirming] = useState(false);
   const file = media(item);
   const job = item.type === "output" ? item.job : null;
+  const id = useId();
+  // "프롬프트 복사": the typed words (a partial edit's instruction), else an image run's sent sentence.
+  const promptText = job ? promptToCopy(job) : null;
+  const sentCopy = Boolean(job && sentPromptCopyable(job));
+  const protectedSent = Boolean(job?.finalPrompt) && !sentCopy;
   // Only a partial edit compares against what it was made from (a final or a clip version also has a parent).
   const parent = job?.kind === "region_edit" ? parentOf(job.parentOutputId) : null;
   const parentAsset = job?.kind === "region_edit" && !parent && parentAssetOf ? parentAssetOf(job.parentAssetId) : null;
@@ -355,7 +366,10 @@ function ViewerContent({
       run: () => (actions.openRegionInLayers ? actions.openRegionInLayers(item) : setRegion(true)),
       show: canGenerate && image && Boolean(support || actions.openRegionInLayers),
     },
-    { name: "rerun", icon: "rerun", label: v.rerun, run: () => job && actions.rerun(job), show: canGenerate && Boolean(job && canRerun(job)) },
+    // A partial edit is made again from its original, on the same area ("같은 영역 다시 수정하기").
+    job?.kind === "region_edit"
+      ? { name: "rerun", icon: "rerun", label: v.reuseRegion, run: () => actions.reuse(job, item.type === "output" ? item.output : null), show: canGenerate }
+      : { name: "rerun", icon: "rerun", label: v.rerun, run: () => job && actions.rerun(job), show: canGenerate && Boolean(job && canRerun(job)) },
     {
       name: "decorate",
       icon: "layers",
@@ -526,27 +540,50 @@ function ViewerContent({
         )}
         {notice && <p className="bs-notice" role="status">{notice}</p>}
         {job && !region && (
+          <div className="bs-prompt-block" data-studio-prompt-block>
           <details className="bs-prompt-details" data-studio-prompt-details>
             <summary>{v.promptToggle}</summary>
-            <p className="bs-label">{v.yourPrompt}</p>
+            <div className="bs-prompt-head">
+              <p className="bs-label" id={`${id}-typed`}>{v.yourPrompt}</p>
+              {job.prompt.trim() && (
+                <CopyButton text={job.prompt} label={v.copy} copiedLabel={v.copied} describedBy={`${id}-typed`} onFailed={() => setCopyToast(v.copyFailed)} compact marker="copy-typed" />
+              )}
+            </div>
             <p>{job.prompt || copy.board.noPrompt}</p>
-            <p className="bs-label">{v.sentPrompt}</p>
-            {/* Read here, not copied: no selection (CSS), no copy, cut, drag or context menu. */}
+            <div className="bs-prompt-head">
+              <p className="bs-label" id={`${id}-sent`}>{v.sentPrompt}</p>
+              {sentCopy && job.finalPrompt && (
+                <CopyButton text={job.finalPrompt} label={v.copy} copiedLabel={v.copied} describedBy={`${id}-sent`} onFailed={() => setCopyToast(v.copyFailed)} compact marker="copy-sent" />
+              )}
+            </div>
+            {/* A video run's sentence is read here, not copied: no selection (CSS), no copy, cut, drag or context menu. */}
             <p
-              data-no-copy={job.finalPrompt ? "" : undefined}
-              onCopy={job.finalPrompt ? (event) => event.preventDefault() : undefined}
-              onCut={job.finalPrompt ? (event) => event.preventDefault() : undefined}
-              onDragStart={job.finalPrompt ? (event) => event.preventDefault() : undefined}
-              onContextMenu={job.finalPrompt ? (event) => event.preventDefault() : undefined}
+              data-no-copy={protectedSent ? "" : undefined}
+              onCopy={protectedSent ? (event) => event.preventDefault() : undefined}
+              onCut={protectedSent ? (event) => event.preventDefault() : undefined}
+              onDragStart={protectedSent ? (event) => event.preventDefault() : undefined}
+              onContextMenu={protectedSent ? (event) => event.preventDefault() : undefined}
             >
               {job.finalPrompt ?? v.notEnhanced}
             </p>
             {canGenerate && job.kind !== "video_final" && (
-              <button type="button" className="bs-btn" data-variant="soft" data-size="sm" onClick={() => actions.reuse(job)}>
-                {v.reuse}
+              <button
+                type="button"
+                className="bs-btn"
+                data-variant="soft"
+                data-size="sm"
+                data-studio-reuse={job.kind === "region_edit" ? "region" : "dock"}
+                onClick={() => actions.reuse(job, item.type === "output" ? item.output : null)}
+              >
+                {job.kind === "region_edit" ? v.reuseRegion : v.reuse}
               </button>
             )}
           </details>
+          {/* One press, without opening: the typed words (a partial edit's instruction). Hidden while open. */}
+          {promptText && (
+            <CopyButton text={promptText} label={v.copyPrompt} copiedLabel={v.copied} onFailed={() => setCopyToast(v.copyFailed)} marker="copy-prompt" />
+          )}
+          </div>
         )}
       </div>
     </div>

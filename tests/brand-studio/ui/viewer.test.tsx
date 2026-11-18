@@ -41,9 +41,14 @@ describe("viewer", () => {
     expect(html).toMatch(/<dialog[^>]*aria-labelledby=/);
     expect(html).toContain(copy.viewer.label);
     expect(actionNames(html)).toEqual(["region", "rerun", "decorate", "to-video", "reference", "save", "review", "campaign", "download", "delete"]);
-    // The sentence we wrote for the model is shown but not selectable; the customer's own words are.
-    expect(html).toContain('<p data-no-copy="">Enhanced prompt 1</p>');
-    expect(html.match(/data-no-copy/g)).toHaveLength(1);
+    // An image run's sentence can be read and copied in one press (2026-11-19); a video run's stays protected.
+    expect(html).toContain("<p>Enhanced prompt 1</p>");
+    expect(html).not.toContain("data-no-copy");
+    expect(html).toContain("data-copy-sent");
+    const clip = output(4, { kind: "video" });
+    const video = render([{ type: "output", output: clip, job: job(4, { kind: "video", outputs: [clip] }) }]);
+    expect(video).toContain('<p data-no-copy="">Enhanced prompt 4</p>');
+    expect(video.match(/data-no-copy/g)).toHaveLength(1);
     // The handoff says where the result goes, in the rail's words.
     expect(html).toContain(`title="${copyFor("ko").viewer.campaignHint}"`);
     expect(html.match(/class="bs-btn bs-action" data-variant="soft"/g)).toHaveLength(8);

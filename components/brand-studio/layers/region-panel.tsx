@@ -82,7 +82,7 @@ export function RegionEditPanel(props: RegionEditPanelProps) {
         : regionInstructionForForm(props.preset.instruction, locale)
       : "",
   );
-  const [enhance, setEnhance] = useState(true);
+  const [enhance, setEnhance] = useState(props.preset?.enhance ?? true);
   const [enhancing, setEnhancing] = useState(false);
   const [beforeEnhance, setBeforeEnhance] = useState<string | null>(null);
   const [showAssistantTip, setShowAssistantTip] = useState(false);

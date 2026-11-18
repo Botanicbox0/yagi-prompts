@@ -12,7 +12,7 @@
  * When Video Studio's Sequence Rail expands to full timeline height, `collapsed` renders a sleek 1-line
  * floating pill button.
  */
-import { useEffect, useId, useMemo, useRef, useState, type DragEvent, type ReactNode } from "react";
+import { useEffect, useId, useLayoutEffect, useMemo, useRef, useState, type DragEvent, type ReactNode } from "react";
 import { extractClipboardImages, prepareClipboardUploadFiles } from "@/lib/brand-studio/clipboard-image";
 import {
   STUDIO_AUDIO_MODES,
@@ -32,6 +32,7 @@ import {
   buildAtMentionCandidates,
   detectMentionTrigger,
   stepMentionIndex,
+  trayVirtualTags,
   type AtMentionCandidate,
 } from "./at-mention-menu";
 import { credits, fill, formatDay, type StudioCopy, type StudioLocale } from "./copy";
@@ -50,7 +51,7 @@ import {
 import { AspectShape, ChipSelect } from "./gallery/chip-select";
 import { ModelMenu } from "./gallery/model-menu";
 import { StudioIcon } from "./icons";
-import { PromptHighlight, resolvePromptMentions } from "./prompt-highlight";
+import { PromptHighlight, mentionAtCaret, resolvePromptMentions, type PromptMentionSegment } from "./prompt-highlight";
 import { RemixPanel } from "./remix-panel";
 import { REF_DRAG_TYPE, acceptsDrag, decodeRefDrag, type RefSource, type TrayItem } from "./refs";
 import { Tray } from "./tray";
@@ -132,22 +133,34 @@ function useDockHeight(collapsed: boolean) {
   return ref;
 }
 
-/** Grows the text field with what is typed, up to six lines, keeping the backdrop height & scroll synced. */
-function useAutoGrow(value: string, backdropRef: React.RefObject<HTMLDivElement | null>, collapsed: boolean) {
-  const ref = useRef<HTMLTextAreaElement>(null);
-  useEffect(() => {
-    if (collapsed) return;
-    const el = ref.current;
-    if (!el) return;
-    el.style.height = "auto";
-    const nextHeight = `${Math.min(el.scrollHeight, 6 * 24 + 20)}px`;
-    el.style.height = nextHeight;
-    if (backdropRef.current) {
-      backdropRef.current.style.height = nextHeight;
-      backdropRef.current.scrollTop = el.scrollTop;
+/** Where a tooltip for one mention goes: above its first painted line, in the prompt box's coordinates. */
+interface MentionTip {
+  start: number;
+  left: number;
+  top: number;
+}
+
+/** The first visible rect of the mark that starts at `start`, relative to `host`; null when scrolled away. */
+function markTip(backdrop: HTMLElement | null, host: HTMLElement | null, scroller: HTMLElement | null, start: number): MentionTip | null {
+  if (!backdrop || !host) return null;
+  const mark = backdrop.querySelector<HTMLElement>(`mark[data-mention-start="${start}"]`);
+  const rect = mark?.getClientRects()[0];
+  if (!rect) return null;
+  const view = scroller?.getBoundingClientRect();
+  if (view && (rect.bottom < view.top || rect.top > view.bottom)) return null;
+  const box = host.getBoundingClientRect();
+  return { start, left: Math.round(rect.left + rect.width / 2 - box.left), top: Math.round(rect.top - box.top) };
+}
+
+/** The mark under a pointer position, read from the painted layer (the field above it is transparent). */
+function markAtPoint(backdrop: HTMLElement | null, x: number, y: number): number | null {
+  if (!backdrop) return null;
+  for (const mark of backdrop.querySelectorAll<HTMLElement>("mark[data-mention-start]")) {
+    for (const r of mark.getClientRects()) {
+      if (x >= r.left - 1 && x <= r.right + 1 && y >= r.top - 1 && y <= r.bottom + 1) return Number(mark.dataset.mentionStart);
     }
-  }, [backdropRef, collapsed, value]);
-  return ref;
+  }
+  return null;
 }
 
 export function Dock(props: DockProps) {
@@ -155,9 +168,18 @@ export function Dock(props: DockProps) {
   const d = copy.dock;
   const id = useId();
   const backdropRef = useRef<HTMLDivElement>(null);
+  const scrollRef = useRef<HTMLDivElement>(null);
+  const wrapRef = useRef<HTMLDivElement>(null);
   const isComposingRef = useRef(false);
+  const [composing, setComposing] = useState(false);
   const form = useDockHeight(collapsed);
-  const field = useAutoGrow(draft.prompt, backdropRef, collapsed);
+  const field = useRef<HTMLTextAreaElement>(null);
+  // The link between a mention in the field and its thumbnail: the mention under the pointer or the caret,
+  // and the thumbnail under the pointer or keyboard focus.
+  const [pointerStart, setPointerStart] = useState<number | null>(null);
+  const [caretStart, setCaretStart] = useState<number | null>(null);
+  const [thumbKey, setThumbKey] = useState<string | null>(null);
+  const [tip, setTip] = useState<MentionTip | null>(null);
   const controls = dockControls(draft);
   const remix = remixActive(draft, tray);
   const effectiveMethod = remix ? resolveUnifiedRemixMethod(draft, tray) : draft.method;
@@ -197,10 +219,51 @@ export function Dock(props: DockProps) {
   const cost = credits(copy.credits.amount, props.credits, locale);
   const opens = (control: string) => props.initialOpenControl === control;
 
-  const { mentionedKeys } = useMemo(
+  const { mentionedKeys, segments } = useMemo(
     () => resolvePromptMentions(draft.prompt, tray),
     [draft.prompt, tray],
   );
+  // "@image1" under each thumbnail, by tray key: the name a mention's tooltip and announcement use.
+  const tags = useMemo(() => {
+    const list = trayVirtualTags(tray);
+    return new Map(tray.map((item, i) => [item.key, list[i] ?? ""]));
+  }, [tray]);
+  const activeStart = pointerStart ?? caretStart;
+  const active = activeStart === null ? null : (segments.find((seg) => seg.type === "mention" && seg.start === activeStart) ?? null);
+  const activeMention = active && active.type === "mention" ? active : null;
+  const linkedKeys = useMemo(
+    () => new Set(activeMention ? activeMention.matchedKeys : thumbKey ? [thumbKey] : []),
+    [activeMention, thumbKey],
+  );
+  const describe = (seg: PromptMentionSegment) =>
+    seg.bound ? seg.matchedKeys.map((key) => tags.get(key) ?? "").filter(Boolean).join(", ") : fill(copy.tray.missing, { label: seg.text });
+  const caretSeg = caretStart === null ? null : segments.find((seg) => seg.type === "mention" && seg.start === caretStart);
+  const caretMention = caretSeg && caretSeg.type === "mention" ? caretSeg : null;
+  // "Figure 1: @image1", or the unbound sentence (it names the mention itself).
+  const caretLine = caretMention ? (caretMention.bound ? `${caretMention.text}: ${describe(caretMention)}` : describe(caretMention)) : "";
+
+  // The tooltip follows the active mention (re-measured after every paint that can move it).
+  useLayoutEffect(() => {
+    setTip(activeStart === null ? null : markTip(backdropRef.current, wrapRef.current, scrollRef.current, activeStart));
+  }, [activeStart, draft.prompt, tray]);
+
+  const syncCaret = (el: HTMLTextAreaElement) => {
+    const at = el.selectionStart === el.selectionEnd ? el.selectionStart : null;
+    const seg = at === null ? null : mentionAtCaret(segments, at);
+    setCaretStart(seg ? seg.start : null);
+  };
+  // The caret also moves without a key or a click of ours (arrow keys held, a script, the IME).
+  useEffect(() => {
+    const onSelection = () => {
+      const el = field.current;
+      if (!el || document.activeElement !== el) return;
+      const at = el.selectionStart === el.selectionEnd ? el.selectionStart : null;
+      const seg = at === null ? null : mentionAtCaret(segments, at);
+      setCaretStart(seg ? seg.start : null);
+    };
+    document.addEventListener("selectionchange", onSelection);
+    return () => document.removeEventListener("selectionchange", onSelection);
+  }, [segments]);
 
   const candidates = useMemo(
     () =>
@@ -378,6 +441,8 @@ export function Dock(props: DockProps) {
         uploading={props.uploading}
         initialOpen={props.initialOpenRef ?? null}
         mentionedKeys={mentionedKeys}
+        linkedKeys={linkedKeys}
+        onLink={setThumbKey}
         onTrimVideo={props.onTrimVideo}
         trimLabel={resolvedVideoCopy.remix.trayTrim}
         onUpdate={props.onTrayUpdate}
@@ -401,7 +466,13 @@ export function Dock(props: DockProps) {
           onChange={set}
         />
       )}
-      <div className="bs-prompt-wrap" data-enhancing={enhancing ? "" : undefined} data-enhanced={props.enhanced ? "" : undefined}>
+      <div
+        ref={wrapRef}
+        className="bs-prompt-wrap"
+        data-enhancing={enhancing ? "" : undefined}
+        data-enhanced={props.enhanced ? "" : undefined}
+        data-composing={composing ? "" : undefined}
+      >
         {mention.open && (
           <AtMentionMenu
             id={`${id}-at-menu`}
@@ -417,100 +488,134 @@ export function Dock(props: DockProps) {
         <label className="bs-sr" htmlFor={`${id}-prompt`}>
           {d.label}
         </label>
-        <PromptHighlight prompt={draft.prompt} tray={tray} backdropRef={backdropRef} />
-        <textarea
-          ref={field}
-          id={`${id}-prompt`}
-          className="bs-prompt"
-          rows={1}
-          maxLength={STUDIO_LIMITS.promptMax}
-          value={draft.prompt}
-          placeholder={mode === "video" ? d.placeholderVideo : d.placeholder}
-          aria-describedby={message ? `${id}-message` : undefined}
-          aria-expanded={mention.open ? true : undefined}
-          aria-controls={mention.open ? `${id}-at-menu` : undefined}
-          aria-activedescendant={mention.open && candidates.flat.length > 0 ? `${id}-at-menu-opt-${safeMentionIndex}` : undefined}
-          aria-busy={enhancing}
-          readOnly={enhancing}
-          aria-keyshortcuts="Control+Enter Meta+Enter"
-          onScroll={(event) => {
-            if (backdropRef.current) {
-              backdropRef.current.scrollTop = event.currentTarget.scrollTop;
-            }
+        {/* One scroller around both layers: they share a grid cell, so their width is the same by construction. */}
+        <div
+          ref={scrollRef}
+          className="bs-prompt-scroll"
+          data-prompt-scroll
+          onScroll={() => {
+            setPointerStart(null);
+            if (caretStart !== null) setTip(markTip(backdropRef.current, wrapRef.current, scrollRef.current, caretStart));
           }}
-          onCompositionStart={() => {
-            isComposingRef.current = true;
-          }}
-          onCompositionEnd={(event) => {
-            isComposingRef.current = false;
-            const el = event.currentTarget;
-            syncMentionFromCursor(el.value, el.selectionStart ?? el.value.length);
-          }}
-          onChange={(event) => {
-            const nextText = event.target.value;
-            const cursor = event.target.selectionStart ?? nextText.length;
-            set({ prompt: nextText });
-            const nativeComposing = Boolean((event.nativeEvent as InputEvent | undefined)?.isComposing);
-            if (!isComposingRef.current && !nativeComposing) {
-              syncMentionFromCursor(nextText, cursor);
-            }
-          }}
-          onClick={(event) => {
-            if (isComposingRef.current) return;
-            syncMentionFromCursor(event.currentTarget.value, event.currentTarget.selectionStart ?? event.currentTarget.value.length);
-          }}
-          onKeyUp={(event) => {
-            if (isComposingRef.current || event.nativeEvent.isComposing) return;
-            if (event.key === "ArrowDown" || event.key === "ArrowUp" || event.key === "Enter" || event.key === "Tab" || event.key === "Escape") return;
-            syncMentionFromCursor(event.currentTarget.value, event.currentTarget.selectionStart ?? event.currentTarget.value.length);
-          }}
-          onKeyDown={(event) => {
-            if (isComposingRef.current || event.nativeEvent.isComposing) return;
-            if (mention.open) {
-              if (event.key === "Escape") {
+        >
+          <div className="bs-prompt-stack">
+            <PromptHighlight prompt={draft.prompt} tray={tray} backdropRef={backdropRef} linkedKey={thumbKey} activeStart={activeStart} />
+            <textarea
+              ref={field}
+              id={`${id}-prompt`}
+              className="bs-prompt"
+              rows={1}
+              maxLength={STUDIO_LIMITS.promptMax}
+              value={draft.prompt}
+              placeholder={mode === "video" ? d.placeholderVideo : d.placeholder}
+              aria-describedby={[message ? `${id}-message` : null, caretLine ? `${id}-mention` : null].filter(Boolean).join(" ") || undefined}
+              aria-expanded={mention.open ? true : undefined}
+              aria-controls={mention.open ? `${id}-at-menu` : undefined}
+              aria-activedescendant={mention.open && candidates.flat.length > 0 ? `${id}-at-menu-opt-${safeMentionIndex}` : undefined}
+              aria-busy={enhancing}
+              readOnly={enhancing}
+              aria-keyshortcuts="Control+Enter Meta+Enter"
+              onPointerMove={(event) => {
+                if (event.pointerType !== "mouse" && event.pointerType !== "pen") return;
+                const at = markAtPoint(backdropRef.current, event.clientX, event.clientY);
+                if (at !== pointerStart) setPointerStart(at);
+              }}
+              onPointerLeave={() => setPointerStart(null)}
+              onSelect={(event) => syncCaret(event.currentTarget)}
+              onFocus={(event) => syncCaret(event.currentTarget)}
+              onBlur={() => setCaretStart(null)}
+              onCompositionStart={() => {
+                isComposingRef.current = true;
+                // While a syllable is being composed the field draws its own words, so the IME's underline shows.
+                setComposing(true);
+              }}
+              onCompositionEnd={(event) => {
+                isComposingRef.current = false;
+                setComposing(false);
+                const el = event.currentTarget;
+                syncMentionFromCursor(el.value, el.selectionStart ?? el.value.length);
+              }}
+              onChange={(event) => {
+                const nextText = event.target.value;
+                const cursor = event.target.selectionStart ?? nextText.length;
+                set({ prompt: nextText });
+                const nativeComposing = Boolean((event.nativeEvent as InputEvent | undefined)?.isComposing);
+                if (!isComposingRef.current && !nativeComposing) {
+                  syncMentionFromCursor(nextText, cursor);
+                }
+              }}
+              onClick={(event) => {
+                if (isComposingRef.current) return;
+                syncMentionFromCursor(event.currentTarget.value, event.currentTarget.selectionStart ?? event.currentTarget.value.length);
+              }}
+              onKeyUp={(event) => {
+                if (isComposingRef.current || event.nativeEvent.isComposing) return;
+                if (event.key === "ArrowDown" || event.key === "ArrowUp" || event.key === "Enter" || event.key === "Tab" || event.key === "Escape") return;
+                syncMentionFromCursor(event.currentTarget.value, event.currentTarget.selectionStart ?? event.currentTarget.value.length);
+              }}
+              onKeyDown={(event) => {
+                if (isComposingRef.current || event.nativeEvent.isComposing) return;
+                if (mention.open) {
+                  if (event.key === "Escape") {
+                    event.preventDefault();
+                    event.stopPropagation();
+                    setMention((cur) => ({ ...cur, open: false }));
+                    return;
+                  }
+                  if (event.key === "ArrowDown" && candidates.flat.length > 0) {
+                    event.preventDefault();
+                    setMention((cur) => ({ ...cur, activeIndex: stepMentionIndex(safeMentionIndex, 1, candidates.flat.length) }));
+                    return;
+                  }
+                  if (event.key === "ArrowUp" && candidates.flat.length > 0) {
+                    event.preventDefault();
+                    setMention((cur) => ({ ...cur, activeIndex: stepMentionIndex(safeMentionIndex, -1, candidates.flat.length) }));
+                    return;
+                  }
+                  if (
+                    ((event.key === "Enter" && !event.ctrlKey && !event.metaKey && !event.shiftKey) || event.key === "Tab") &&
+                    candidates.flat.length > 0
+                  ) {
+                    event.preventDefault();
+                    const chosen = candidates.flat[safeMentionIndex];
+                    if (chosen) pickMentionCandidate(chosen);
+                    return;
+                  }
+                }
+                if (event.key === "Enter" && (event.ctrlKey || event.metaKey)) {
+                  event.preventDefault();
+                  event.currentTarget.form?.requestSubmit();
+                }
+              }}
+              onPaste={(event) => {
+                const clipboardImages = extractClipboardImages(event.clipboardData);
+                if (clipboardImages.length > 0) {
+                  event.preventDefault();
+                  void prepareClipboardUploadFiles(clipboardImages).then((ready) => props.onFiles(ready));
+                  return;
+                }
+                const files = Array.from(event.clipboardData?.files ?? []).filter((file) => uploadKind(file.type) !== null);
+                if (!files.length) return;
                 event.preventDefault();
-                event.stopPropagation();
-                setMention((cur) => ({ ...cur, open: false }));
-                return;
-              }
-              if (event.key === "ArrowDown" && candidates.flat.length > 0) {
-                event.preventDefault();
-                setMention((cur) => ({ ...cur, activeIndex: stepMentionIndex(safeMentionIndex, 1, candidates.flat.length) }));
-                return;
-              }
-              if (event.key === "ArrowUp" && candidates.flat.length > 0) {
-                event.preventDefault();
-                setMention((cur) => ({ ...cur, activeIndex: stepMentionIndex(safeMentionIndex, -1, candidates.flat.length) }));
-                return;
-              }
-              if (
-                ((event.key === "Enter" && !event.ctrlKey && !event.metaKey && !event.shiftKey) || event.key === "Tab") &&
-                candidates.flat.length > 0
-              ) {
-                event.preventDefault();
-                const chosen = candidates.flat[safeMentionIndex];
-                if (chosen) pickMentionCandidate(chosen);
-                return;
-              }
-            }
-            if (event.key === "Enter" && (event.ctrlKey || event.metaKey)) {
-              event.preventDefault();
-              event.currentTarget.form?.requestSubmit();
-            }
-          }}
-          onPaste={(event) => {
-            const clipboardImages = extractClipboardImages(event.clipboardData);
-            if (clipboardImages.length > 0) {
-              event.preventDefault();
-              void prepareClipboardUploadFiles(clipboardImages).then((ready) => props.onFiles(ready));
-              return;
-            }
-            const files = Array.from(event.clipboardData?.files ?? []).filter((file) => uploadKind(file.type) !== null);
-            if (!files.length) return;
-            event.preventDefault();
-            props.onFiles(files);
-          }}
-        />
+                props.onFiles(files);
+              }}
+            />
+          </div>
+        </div>
+        {tip && activeMention && (
+          <span
+            className="bs-mention-tip bs-num"
+            role="tooltip"
+            data-mention-tip
+            data-bound={activeMention.bound ? "true" : "false"}
+            style={{ left: tip.left, top: tip.top }}
+          >
+            {describe(activeMention)}
+          </span>
+        )}
+        <span id={`${id}-mention`} className="bs-sr" aria-live="polite" data-mention-live>
+          {caretLine}
+        </span>
       </div>
       {message && (
         <p id={`${id}-message`} className="bs-dock-message" role="alert" data-studio-dock-message>
