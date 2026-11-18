@@ -29,6 +29,7 @@ import { brandRoomsOpen } from '@/lib/flags';
 import { requireCreate, StudioDenied, studioSeat, type StudioSeat } from './access';
 import type { StudioMediaStore } from './media-store';
 import { publicNotesOnly, teamNotesReady } from './review-visibility';
+import { assetFpsReady, recordAssetFps, storableFps } from './asset-fps';
 import {
   CommentAddSchema,
   CommentRefSchema,
@@ -167,6 +168,8 @@ interface ReviewRow {
   s_width: number | null;
   s_height: number | null;
   s_ms: number | null;
+  /** 0096 only: the asset's frame rate (numeric, so a string from the driver). */
+  s_fps?: number | string | null;
   s_live: boolean | null;
   open_count: number;
   total_count: number;
@@ -219,7 +222,8 @@ type CountsFor = 'brand' | 'team';
 async function reviewSelect(sql: SqlRunner, countsFor: CountsFor = 'brand'): Promise<string> {
   const room = await roomReviewReady(sql);
   const team = await teamNotesReady(sql);
-  return reviewSelectText(room, team, countsFor);
+  const fps = await assetFpsReady(sql);
+  return reviewSelectText(room, team, countsFor, fps);
 }
 const ROOM_REVIEW_COLUMNS = 'r.project_id, coalesce(r.stack_id, r.id) as stack_id, r.version, r.source';
 
@@ -229,13 +233,13 @@ function noteCount(name: string, open: boolean, visibility: string): string {
            where c.review_id = r.id and c.deleted_at is null${open ? ' and c.parent_id is null and c.resolved_at is null' : ''}${visibility}) as ${name}`;
 }
 
-function reviewSelectText(room: boolean, team: boolean, countsFor: CountsFor): string {
+function reviewSelectText(room: boolean, team: boolean, countsFor: CountsFor, fps = false): string {
   const shown = publicNotesOnly('c', team);
   const counts = [noteCount('open_count', true, shown), noteCount('total_count', false, shown)];
   if (team && countsFor === 'team') counts.push(noteCount('team_open_count', true, " and c.visibility = 'team'"), noteCount('team_total_count', false, " and c.visibility = 'team'"));
   return `
   select r.id, r.organization_id, r.asset_id, r.output_id, r.title, r.status, r.created_role, r.status_changed_at,
-         r.created_at, r.updated_at,${room ? ` ${ROOM_REVIEW_COLUMNS},` : ''}
+         r.created_at, r.updated_at,${room ? ` ${ROOM_REVIEW_COLUMNS},` : ''}${fps ? ' a.fps as s_fps,' : ''}
          coalesce(a.kind, o.kind) as s_kind,
          coalesce(a.storage_key, o.storage_key) as s_key,
          coalesce(a.thumb_key, o.thumb_key) as s_thumb,
@@ -320,6 +324,7 @@ function itemView(row: ReviewRow, media: StudioMediaStore): ReviewItem {
     seconds: row.s_ms == null ? null : Math.round(Number(row.s_ms) / 100) / 10,
     createdRole: row.created_role,
     statusChangedAt: isoOrNull(row.status_changed_at),
+    ...(row.s_fps !== undefined ? { fps: base.kind === 'video' ? storableFps(row.s_fps == null ? null : Number(row.s_fps)) : null } : {}),
   };
 }
 
@@ -1272,6 +1277,8 @@ export interface DeliveredFile {
   width: number | null;
   height: number | null;
   durationMs: number | null;
+  /** A film's frame rate as the probe read it (0096); null when unknown. */
+  fps?: number | null;
   name: string;
 }
 
@@ -1321,6 +1328,8 @@ export async function staffDeliver(
         ).rows[0]!.id;
         await adjustOrganizationStorageBytes(sql, input.organizationId, f.sizeBytes);
       }
+      // The film's frame rate (0096), also onto the same bytes delivered before it was measured.
+      if (f.kind === 'video') await recordAssetFps(sql, assetId, f.fps);
       const result = input.stackReviewId
         ? await postVersion(
             sql,

@@ -128,6 +128,8 @@ export interface ProjectReviewTabProps {
   initial?: { reviewId?: string; atMs?: number; commentId?: string };
   filterStatus?: "approved";
   finalsEmptyText?: string;
+  /** Told when a draft opens in review mode (the stage takes the page) and when it closes back to the list. */
+  onReviewModeChange?: (open: boolean) => void;
 }
 
 /** The share button + dialog for one storyboard or one review item. */

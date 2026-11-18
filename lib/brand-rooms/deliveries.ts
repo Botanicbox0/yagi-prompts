@@ -15,7 +15,7 @@ import { createHash, randomBytes } from 'node:crypto';
 import { z } from 'zod';
 import { STAGING_BUCKET } from '@/lib/storage';
 import type { StudioStaging } from '@/lib/brand-studio/types';
-import { imageInfo, sniffMime, thumbnailWebp, videoInfo } from '@/lib/brand-studio/files';
+import { imageInfo, sniffMime, thumbnailWebp, videoFrameRate, videoInfo } from '@/lib/brand-studio/files';
 import { checkDeliveryGate, staffDeliver, type DeliveryActor, type DeliveryOutcome, type ReviewDeps } from '@/lib/brand-studio/review';
 import { roomReviewHref, type ReviewFailure } from '@/lib/brand-studio/review-contracts';
 import type { SqlRunner } from '@/lib/db/sql-runner';
@@ -108,6 +108,7 @@ export async function deliverFile(
   let width: number | null = null;
   let height: number | null = null;
   let durationMs: number | null = null;
+  let fps: number | null = null;
   const stored: string[] = [];
   let thumbKey: string | null = null;
   try {
@@ -123,6 +124,8 @@ export async function deliverFile(
       height = info?.height ?? null;
       durationMs = info?.durationMs ?? null;
       if (durationMs !== null && durationMs > DELIVERY_LIMITS.videoMsMax) return { ok: false, code: 'unsupported_file' };
+      // The whole file is in memory here, so a `moov` at its end is read too (lib/brand-studio/files.ts).
+      fps = videoFrameRate(bytes);
     }
     const { key } = await deps.media.put(bytes, mime);
     stored.push(key);
@@ -141,6 +144,7 @@ export async function deliverFile(
         width,
         height,
         durationMs,
+        fps,
         name: (input.name ?? '').replace(/\.[A-Za-z0-9]{2,5}$/, '').replace(/\s+/g, ' ').trim(),
       },
     });

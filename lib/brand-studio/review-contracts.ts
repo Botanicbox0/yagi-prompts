@@ -227,6 +227,11 @@ export interface ReviewItem extends ReviewListItem {
   seconds: number | null;
   createdRole: ReviewRole;
   statusChangedAt: string | null;
+  /**
+   * A film's frame rate read from the file (0096, lib/brand-studio/review-frames.ts). Absent before 0096,
+   * null when not measured; the player then measures it while the film plays.
+   */
+  fps?: number | null;
 }
 
 export interface ReviewComment {
