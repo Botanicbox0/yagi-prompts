@@ -27,7 +27,7 @@ describe('legal documents', () => {
   });
 
   it('states the owner-approved campaign service receipt and quote policy separately from template rendering',()=>{
-    expect(LEGAL_EFFECTIVE).toBe('2026-11-15');
+    expect(LEGAL_EFFECTIVE).toBe('2026-11-18');
     const ko=legalDocument('terms','ko').body,en=legalDocument('terms','en').body;
     expect(ko).toContain('TWINGS 자체 서비스 대금');expect(ko).toContain('총액, 세금 기준, 제공 범위, 시작 조건과 환불 조건');expect(ko).toContain('입금 확인');expect(ko).toContain('자동 실행하지 않습니다');
     expect(en).toContain("TWINGS's own service fees");expect(en).toContain('total, tax basis, scope, start conditions and refund conditions');expect(en).toContain('does not automatically');
@@ -133,6 +133,14 @@ describe('legal documents', () => {
     expect(legalDocument('privacy', 'ko').body).toContain('| Google LLC (미국) | 이미지 생성(Gemini), 저장한 사진의 적합성 확인 | 얼굴 사진 |');
     expect(legalDocument('privacy', 'en').body).toContain('| Google LLC (United States) | Image generation (Gemini); suitability check of a saved photo | Face photo |');
     expect(legalDocument('terms', 'ko').body).toContain('Google의 Gemini 이미지 모델');
+    // 2026-11-18: Gemini reads uploaded references and writes generation instructions (template scene
+    // edits, brand studio), and the brand studio generates through Sunra — both receive uploaded media.
+    expect(legalDocument('privacy', 'ko').body).toContain('| Google LLC (미국) | 참고 이미지·영상 분석, 생성 지시문 작성(Gemini) | 이용자가 올리거나 만든 이미지·영상, 요청 문구 |');
+    expect(legalDocument('privacy', 'en').body).toContain('| Google LLC (United States) | Analysis of reference images and video; writing generation instructions (Gemini) | Images and video you upload or make; request text |');
+    expect(legalDocument('privacy', 'ko').body).toContain('| Second Enlightenment Global Private Limited (Sunra 운영사, 싱가포르) | 브랜드 스튜디오 이미지·영상·효과음 생성(Seedream·Seedance·GPT Image·Gemini·ElevenLabs 모델 중개) | 이용자가 올리거나 만든 이미지·영상·오디오, 요청 문구 |');
+    expect(legalDocument('privacy', 'en').body).toContain('| Second Enlightenment Global Private Limited (operator of Sunra, Singapore) | Brand studio image, film and sound-effect generation (access to Seedream, Seedance, GPT Image, Gemini and ElevenLabs models) | Images, video and audio you upload or make; request text |');
+    expect(legalDocument('privacy', 'ko').body).toContain('요청 문구는 그 요청을 처리하기 위해 아래 5항의 AI 모델 제공사로 전송됩니다.');
+    expect(legalDocument('privacy', 'en').body).toContain('are sent to the AI model providers in section 5 to carry out that request.');
     expect(legalDocument('privacy', 'ko').body).toContain('만 14세 미만');
   });
 
