@@ -129,6 +129,7 @@ export default async function StudioComposePage({
       initialLikedKeys={initialLikedKeys}
       initialLikedItems={initialLikedItems}
       initialFolderItems={initialFolderItems}
+      editAssist={studioEnv().editAssist === true}
     />
   );
 }

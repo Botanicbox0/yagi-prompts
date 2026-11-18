@@ -163,6 +163,17 @@ export function brandStudioRegionV2Open(env: Record<string, string | undefined> 
 }
 
 /**
+ * "말로 편집" in the editing studio (docs/BRAND-EDITING-STUDIO.md §4, §7 E1): an instruction becomes a
+ * validated plan of timeline steps that the screen previews and applies (compose operation `assist.plan`).
+ * Default OFF: open only when the server environment says exactly `BRAND_STUDIO_EDIT_ASSIST=on`. Off means
+ * `assist.plan` answers exactly like an unknown operation and every other screen, request and answer is as
+ * it was (`chat.edit` included).
+ */
+export function brandStudioEditAssistOpen(env: Record<string, string | undefined> = process.env): boolean {
+  return env.BRAND_STUDIO_EDIT_ASSIST === 'on';
+}
+
+/**
  * A studio run can belong to a project (docs/BRAND-STUDIO-V6-PLAN.md §7 C, migration 0091): the image
  * studio gets the video studio's project switcher, new runs carry the chosen project, and the assets page
  * can put an existing run in a project. Default OFF: open only when the server environment says exactly
