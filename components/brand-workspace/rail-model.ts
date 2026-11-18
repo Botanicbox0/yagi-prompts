@@ -245,7 +245,7 @@ export interface RailCreateLink {
 }
 
 /**
- * The "+" menu. Without rooms: 이미지 만들기 · 영상 만들기 · 참고 영상으로 만들기 · 영상 합치기 · 캠페인 의뢰. With rooms the
+ * The "+" menu. Without rooms: 이미지 만들기 · 영상 만들기 · 참고 영상으로 만들기 · 편집 스튜디오 · 캠페인 의뢰. With rooms the
  * request is what the brand hands to the YAGI team, so it leaves the list and becomes the last entry,
  * 야기 팀에 의뢰하기 (`commission`), which the menu shows under a divider.
  */

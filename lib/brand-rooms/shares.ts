@@ -32,6 +32,7 @@ import type { ReviewComment, ReviewCommentAdded, ReviewItem } from '@/lib/brand-
 import { RoomDenied, requireEdit, requireRoomProject, roomSeat, type RoomSeat } from './access';
 import { postRoomEvent } from './events';
 import { guestNoteNotice, type RoomTeamNotice, type RoomTeamNotify } from './team-notice';
+import { pulseStamp, type PulseScope, type SharePulseResult } from './pulse';
 import type { StoryboardView } from '@/components/brand-rooms/seams';
 import { storyboardForShare } from './storyboards';
 import {
@@ -677,6 +678,29 @@ export async function guestComment(
     }
   }
   return result;
+}
+
+/**
+ * The share page's live check (docs/BRAND-ROOMS-FEEDBACK.md §11, ./pulse.ts): a stamp of the one shared
+ * item, for a live link the browser has unlocked. Public notes only, like the page itself; a link that
+ * does not resolve is `not_found`, a locked one `forbidden`.
+ */
+export async function sharePulse(deps: Pick<ShareDeps, 'sql'>, raw: unknown, cookies: { get(name: string): string | undefined }): Promise<SharePulseResult | ShareFailure> {
+  const parsed = ShareViewSchema.safeParse(raw);
+  if (!parsed.success) return failure('invalid');
+  return guard(() =>
+    deps.sql.transaction(async (sql) => {
+      const row = await resolveShare(sql, parsed.data.token);
+      if (!row) throw new ShareDenied('not_found');
+      if (!proofMatches(row, cookies.get(unlockCookieName(String(row.id))))) throw new ShareDenied('forbidden');
+      const scope: PulseScope =
+        row.kind === 'review'
+          ? { kind: 'review', organizationId: String(row.organization_id), reviewId: String(row.target_id), team: false }
+          : { kind: 'storyboard', organizationId: String(row.organization_id), storyboardId: String(row.target_id) };
+      const parts = await pulseStamp(sql, scope);
+      return { ok: true as const, stamp: { item: parts.item ?? '' } };
+    }),
+  );
 }
 
 /** One view per visitor per hour. Returns the visitor id to keep in the cookie. */

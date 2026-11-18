@@ -2,14 +2,12 @@
 
 import { useEffect, useRef, useState } from "react";
 import { fill as interpolate } from "@/components/brand-studio/copy";
-import { formatCredits } from "@/lib/brand-studio/credits";
 import type { VideoProjectStatus, VideoProjectSummary } from "@/lib/brand-studio/video-projects";
 import type { StudioVideoCopy } from "@/messages/studio-video";
 import type { SequenceRailHeight } from "./sequence-rail";
 import w from "./video-workspace.module.css";
 
 export interface VideoProjectBarProps {
-  locale: "ko" | "en";
   canEdit: boolean;
   projectId: string | null;
   projectTitle: string;
@@ -17,7 +15,6 @@ export interface VideoProjectBarProps {
   savingProject: boolean;
   projects: VideoProjectSummary[];
   clipCount: number;
-  renderCredits: number;
   railHeight: SequenceRailHeight;
   solidMp4Cta: boolean;
   exportingNle: boolean;
@@ -37,7 +34,6 @@ export interface VideoProjectBarProps {
 }
 
 export function VideoProjectBar({
-  locale,
   canEdit,
   projectId,
   projectTitle,
@@ -45,7 +41,6 @@ export function VideoProjectBar({
   savingProject,
   projects,
   clipCount,
-  renderCredits,
   railHeight,
   solidMp4Cta,
   exportingNle,
@@ -339,9 +334,7 @@ export function VideoProjectBar({
         >
           {exportingMp4Ratio !== null
             ? interpolate(copy.exportingMp4, { percent: Math.round(exportingMp4Ratio * 100) })
-            : clipCount > 0
-              ? interpolate(copy.exportMp4WithCredits, { credits: formatCredits(renderCredits, locale) })
-              : copy.exportMp4}
+            : copy.exportMp4}
         </button>
       </div>
     </div>

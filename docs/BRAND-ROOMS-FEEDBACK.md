@@ -121,6 +121,7 @@ RLS는 다른 룸 테이블과 같다: 켜고 강제, `service_role`만. 번호�
   - 사건 줄 가운데 `detail.actorRole = 'brand'`이고 종류가 `review_commented`, `review_changes_requested`, `review_approved`, `storyboard_approved`, `storyboard_changes_requested`인 것.
   - "마지막으로 본 시점"에는 팀이 낸 사건 줄(팀의 의견 답글, 새 버전)도 포함한다. 팀이 답하면 대기가 풀린다.
 - **새 의뢰**: 의뢰 접수는 룸에 줄을 남기지 않는다(0082 제약). 작업대 목록에 "팀 글이 아직 없는 프로젝트"를 따로 "새 의뢰"로 올린다.
+- **2026-11-18 대표 변경: "대기" = 아직 답하지 않은 고객 메시지**. 고객 쪽 줄(위 정의 그대로)은 같은 채널에 그보다 늦은 팀 줄(팀 대화·답글, 고객이 보는 팀 의견, 새 버전·스토리보드 공유 같은 팀 사건 줄. 팀 메모와 지운 팀 줄은 아님)이 생기거나, 팀원이 "확인함"을 누를 때까지 센다. 대화·서랍을 여는 것만으로는 줄지 않는다(관리자 읽음 표시 오퍼레이션 `brand_rooms.channel.read`를 없앴다). "확인함"은 작업대 머리말(목록·검토 모드 모두)과 조직 대화 화면에 있고, 기다리는 수가 있을 때만 눌린다. 누른 사람과 시각은 버튼 옆에 "확인함 · 이름 · 시각"으로 보인다. 저장은 새 마이그레이션 없이 그 팀원의 `brand_room_reads` 행(지금은 이 버튼만 쓴다)이다. 고객 화면·알림·Slack에는 아무것도 생기지 않는다.
 
 ## 4. 팀 작업대
 
@@ -142,7 +143,7 @@ RLS는 다른 룸 테이블과 같다: 켜고 강제, `service_role`만. 번호�
 
 구현(N3)에서 달라진 것·정한 것. 원본은 코드다(`lib/brand-rooms/messages.ts`의 `teamWaiting`, `staffRoomOverview`, `staffProjectDesk`).
 
-- **대기**: 팀이 마지막으로 본 시점 = 관리자 읽음 표시, 팀 글(`author_role = 'studio'`), 팀이 낸 사건 줄(`detail.actorRole = 'studio'`) 가운데 가장 늦은 것. 그 뒤의 지워지지 않은 고객 글과, §3의 다섯 사건(`actorRole = 'brand'`)을 센다. 외부인 의견의 사건 줄은 `actorRole = 'brand'`(행위자 없음)이라 대기에 들어간다. 팀 메모는 줄이 없어 더하지도 풀지도 않는다.
+- **대기**(2026-11-18에 "답하지 않은 것"으로 바뀜, §3 끝): 팀이 마지막으로 본 시점 = 관리자 읽음 표시, 팀 글(`author_role = 'studio'`), 팀이 낸 사건 줄(`detail.actorRole = 'studio'`) 가운데 가장 늦은 것. 그 뒤의 지워지지 않은 고객 글과, §3의 다섯 사건(`actorRole = 'brand'`)을 센다. 외부인 의견의 사건 줄은 `actorRole = 'brand'`(행위자 없음)이라 대기에 들어간다. 팀 메모는 줄이 없어 더하지도 풀지도 않는다.
 - **새 의뢰**: 열린 조직의 고객 공개 프로젝트 중 팀 글도 팀 사건도 없는 것, 상태가 `requested`·`active`인 것만(끝난 프로젝트·취소는 뺀다). 고객이 이미 글을 남긴 새 의뢰는 새 의뢰 묶음에만 한 번 나온다.
 - **목록**: 프로젝트 행은 작업대로 간다. 조직의 일반 문의 대화도 대기가 있으므로 행으로 남기고, 그 행은 기존 조직 대화 화면으로 간다.
 - **Slack**: 외부인 의견은 보낸 사람 줄이 "이름 (공유 링크 외부인)"이고, 이름·본문은 Slack 마크업(`<!channel>` 등)이 동작하지 않게 바꿔 보낸다. 바로가기는 그 버전을 연 작업대. 스토리보드는 승인·수정 요청만 보낸다(다시 열기·같은 상태 반복은 보내지 않는다).
@@ -280,7 +281,7 @@ Footer: "This is a project notification. You can manage your notification settin
 
 ## 10. 확정 문안과 메일 모양 (2026-11-18 대표 확정)
 
-대표가 §9 초안을 보고 "이대로 진행하자"고 했다(2026-11-18). §2.1의 발송 대상과 §8-3의 간격(10분, 30분)도 제안값대로 간다. 걸린 네 곳은 함께 올린 권고대로 처리했다: 응답 약속 문장과 재촉 문장을 빼고, "정상적으로"·"성공적으로"를 빼고, 멘션 낱말을 "부르다"로 맞췄다. 접수 메일에 기한 약속은 넣지 않는다. 뺀 문장을 되살리거나 약속을 넣는 것은 대표가 다시 정한다.
+대표가 §9 초안을 보고 "이대로 진행하자"고 했다(2026-11-18). §2.1의 발송 대상과 §8-3의 간격(10분, 30분)도 제안값대로 간다. 걸린 네 곳은 함께 올린 권고대로 처리했다: 응답 약속 문장과 재촉 문장을 빼고, "정상적으로"·"성공적으로"를 빼고, 멘션 낱말을 "부르다"로 맞췄다. 접수 메일에 기한 약속은 넣지 않는다. 뺀 문장을 되살리거나 약속을 넣는 것은 대표가 다시 정한다. (같은 날 대표가 접수 메일에 "영업일 3일 안에 연락드립니다."를 직접 넣었다. §10.2·§10.3 표가 그것을 반영한다.)
 
 초안에 없던 문구(멘션 본문, 수신 거부 링크, 알림 설정, 수신 거부 뒤 페이지)는 같은 날 Gemma 4 2패스로 뽑아 원문과 대조했다. 발송은 여전히 `BRAND_ROOM_NOTIFY`가 켜져야 시작된다.
 
@@ -302,8 +303,9 @@ Footer: "This is a project notification. You can manage your notification settin
 | 스토리보드 | [{project}] 스토리보드가 공유되었습니다 | {title} 스토리보드를 확인해 보세요. | 야기 팀이 작업 방향을 담은 스토리보드를 올렸습니다. 내용을 검토해 주세요. | 스토리보드 보기 | 스토리보드 공유 | [{project}] {title}의 스토리보드가 도착했습니다. |
 | 묶음(대화·답글) | [{project}] 읽지 않은 메시지가 {count}건 있어요 | 야기 팀의 메시지를 확인해 주세요. | 아직 확인하지 않은 의견과 답글이 {count}건 있습니다. | 메시지 확인하기 | 새 메시지 {count}건 | [{project}] 야기 팀이 보낸 메시지가 {count}건 있습니다. |
 | 멘션 | [{project}] {name}님이 불렀어요 | {name}님이 불렀어요 | {name}님이 프로젝트 대화에서 불렀어요. 내용을 확인해 주세요. | 대화 바로가기 | 나를 불렀어요 | [{project}] {name}님이 불렀어요 |
-| 의뢰 접수 | [{project}] 의뢰가 접수되었습니다 | 요청하신 내용이 잘 전달되었습니다. | 야기 팀이 보내주신 의뢰 내용을 확인하고 있습니다. | 내 의뢰 확인하기 | (푸시 없음) | (푸시 없음) |
+| 의뢰 접수 | [{project}] 의뢰가 접수되었습니다 | 요청하신 내용이 잘 전달되었습니다. | 야기 팀이 보내주신 의뢰 내용을 확인하고 있습니다. 영업일 3일 안에 연락드립니다. | 내 의뢰 확인하기 | (푸시 없음) | (푸시 없음) |
 
+- 의뢰 접수 본문의 둘째 문장 "영업일 3일 안에 연락드립니다."는 대표 문장이다(2026-11-18). §8-4의 약속 문장 결정이 이것으로 끝났다.
 - 맨 아래 문장: "이 메일은 프로젝트 진행 알림이며, 알림 설정에서 수신 여부를 변경할 수 있습니다." 링크 글자: "수신 거부"
 - 알림 설정(알림함): 제목 "알림 설정" · "이메일 알림" — "새 시안, 스토리보드, 메시지, 멘션 알림을 메일로 보내드려요." · "푸시 알림" — "현재 사용 중인 브라우저에서 알림을 보내드려요." · 차단됨 "브라우저 설정에서 알림을 허용해 주세요." · 미지원 "이 브라우저는 알림을 지원하지 않아요." · "저장됐어요" · "저장하지 못했어요. 다시 시도해 주세요."
 - 수신 거부 뒤 페이지: "메일 수신을 거부했습니다" · "이제 이 브랜드의 프로젝트 메일은 발송되지 않아요. 다시 받으려면 알림 설정에서 켤 수 있어요." · 링크 "알림 설정으로 가기"
@@ -316,10 +318,68 @@ Footer: "This is a project notification. You can manage your notification settin
 | storyboard | Storyboard shared for {project} | Your storyboard for {title} is ready. | The YAGI team has shared the storyboard outlining the project direction. Please take a look. | View Storyboard | Storyboard Shared | The storyboard for {title} in {project} is now available. |
 | replies | {count} unread messages in {project} | You have new messages from the YAGI team. | There are {count} unread replies and messages. | View Messages | {count} New Messages | You have {count} new messages from the YAGI team in {project}. |
 | mention | {name} mentioned you in {project} | {name} mentioned you | {name} mentioned you in the project conversation. Please check the message. | Go to Chat | You were mentioned | [{project}] {name} mentioned you |
-| intake_received | Request received for {project} | Your request has been submitted. | The YAGI team is reviewing your requirements. | View Request | (none) | (none) |
+| intake_received | Request received for {project} | Your request has been submitted. | The YAGI team is reviewing your requirements. We'll get back to you within 3 business days. | View Request | (none) | (none) |
+
+The receipt's second sentence follows the founder's Korean sentence (대표 문장, 2026-11-18).
 
 count = 1 uses the singular form: "1 unread message in {project}" · "There is 1 unread reply or message." · "1 New Message" · "You have 1 new message from the YAGI team in {project}." (한국어는 한 가지 문장 그대로)
 
 - Footer: "This is a project notification. You can manage your notification settings in the workspace." Link: "Unsubscribe"
 - Settings: "Notification settings" · "Email notifications" — "Get emails for new drafts, storyboards, messages, and mentions." · "Push notifications" — "Get notifications on your current browser." · blocked "Please allow notifications in your browser settings." · unsupported "This browser does not support notifications." · "Saved" · "Failed to save. Please try again."
 - After unsubscribing: "Email notifications turned off" · "You will no longer receive project emails from this brand. You can turn them back on in notification settings." · link "Go to notification settings"
+
+
+## 11. 2단계: 크게 보기·프레임·구간 반복·빠른 갱신 (2026-11-18)
+
+브랜치 `claude/rooms-review-stage2`(main `81ff208b`에서). 마이그레이션 0096·0168은 **클라우드 적용 필요**이고, 적용 전에도 코드는 예전처럼 동작한다.
+
+### 11.1 크게 보기와 전체 화면
+
+- **검토 모드**: 룸의 시안 탭에서 시안을 열면(`?tab=review&review=<id>`) 스테이지가 워크스페이스 본문 전체 폭을 쓴다. 룸의 1180px 상한과 셸의 상한이 이때만 풀리고, 파일 탭의 분류 칩·기획서·스토리보드는 잠시 비킨다. 위쪽 "← 시안 목록"(이미 있던 `roomsReview.tab.back`)으로 목록에 돌아간다. 주소에 `review`가 있으면(알림 메일 버튼, 대화 카드, 복사한 링크) 바로 검토 모드로 열리고 스테이지가 화면 맨 위로 온다. 없으면 목록부터 보인다(예전에는 첫 시안을 저절로 열었다).
+- **영상 크기**: 검토 모드와 공유 페이지(`layout="wide"`)는 창 높이에서 머리말·조작 줄을 뺀 만큼을 쓴다(예전 상한 66vh·760px 대신). 9:16 영상은 높이에 맞춘다. 1440×900에서 가로 영상 848×477(예전 약 450px 폭), 세로 영상 336×597.
+- **전체 화면**: 조작 줄의 버튼 또는 `F`. `<video>`가 아니라 플레이어 전체(핀, 그림, 구간 막대, 조작 줄)와 의견 칸을 담은 틀을 전체 화면으로 올린다. 의견 칸은 처음에 접혀 있고 버튼으로 펼친다. 구간·위치·그리기를 시작하거나 글을 쓰기 시작하면 저절로 펼쳐진다. 빠져나와도 쓰던 글은 그대로다. 브라우저가 요소 전체 화면을 못 하면(iPhone 사파리) 버튼을 그리지 않고 크게 보기로 대신한다.
+- **떠 있는 문의 버튼**: 검토 모드에서는 오른쪽 아래 "실시간 문의" 버튼이 의견 칸의 보내기 버튼과 폰의 의견 목록을 가려서, 시안이 열려 있는 동안만 숨긴다(목록으로 돌아오면 다시 보인다). 전체 화면에는 원래 나오지 않는다.
+- **단축키**: 스테이지 안 어디에 포커스가 있어도 듣는다(스테이지가 클릭으로 포커스를 받는다). 글 칸·선택 상자·편집 가능한 글·대화 상자 안에서는 듣지 않는다. 나란히 비교 중에는 쉰다.
+
+### 11.2 실제 프레임
+
+- **파일에서 읽기**: 팀이 시안을 올리거나 고객이 영상을 올릴 때 MP4/MOV의 상자를 맨 위부터 차례로 읽어(파일 끝에 있는 `moov`도) 영상 트랙의 `mdhd` 시간 단위와 `stts`로 평균 프레임 레이트를 구한다. 0.5% 안이면 흔한 값(23.976, 24, 25, 29.97, 30, 48, 50, 59.94, 60) 중 가장 가까운 것으로 맞춘다. 조각난 MP4(`mvex`)나 읽을 수 없는 파일은 비워 둔다.
+- **저장**: `brand_studio_assets.fps`(0096). 폭·높이·길이가 이미 에셋에 있어서 같은 자리에 둔다. 같은 파일이 다시 오면 처음 값을 지킨다. 스튜디오 결과물과 예전 행은 비어 있다. 열이 없으면(`assetFpsReady`) 읽지도 쓰지도 않는다.
+- **브라우저에서 재기**: 저장된 값이 없으면 1배속 재생 중 `requestVideoFrameCallback`이 알려 주는 프레임 시각 간격의 중앙값으로 잰다. 재기 전에는 한 칸을 1/24초로 본다.
+- **쓰는 곳**: ←/→와 `,`/`.`는 진짜 한 프레임(그 프레임 시작보다 조금 뒤로 보내 정확히 그 프레임에 선다). 재생 시계, 의견 시각, 칩, 구간, 핀 설명은 `m:ss:ff`(초 안의 프레임 번호, 100fps 이상은 세 자리). 레이트를 아직 모를 때만 예전 `m:ss.t`.
+- **화면에서 읽히는 모양**: `0:08:00`이 8분처럼 읽혀서, 화면의 시각(재생 위치, 길이, 의견 시각 칩, 구간·장면 칩)은 `0:08` 뒤에 프레임 `:00`을 작고 옅게(0.82em, 보조 잉크) 붙인다. 옅은 부분의 대비는 어두운 칩 위에서 7.4:1(기본값 #a1a1aa / #111113), 워크스페이스 토큰으로 8.0:1이다. 더 옅은 회색(#71717a)은 3.9:1이라 쓰지 않았다. 길이가 정확히 초에서 끝나면(1프레임 안) 프레임 없이 `0:08`만 쓴다. 화면 낭독기 이름, CSV·체크리스트·편집기 마커, 링크 주소는 예전처럼 글자 그대로다. 의견은 그대로 ms로 저장하되 화면에 보이던 프레임의 시작으로 맞춘다. `?t=ms`는 그대로다. 플레이어 시간 옆에 "23.976 fps"를 작게 보인다(좁은 화면에서는 숨김).
+
+### 11.3 구간 반복
+
+- 구간이 있을 때(막 찍은 I/O 구간, 아니면 고른 구간 의견) 조작 줄의 반복 버튼이나 `R`로 켠다. 끝에 닿으면 시작으로 돌아가 계속 재생한다(끝은 포함하지 않는다). 다른 의견을 고르거나 구간을 지우면 꺼진다. 구간 의견의 시각을 한 번 누르면 예전처럼 시작으로 가고, 두 번 누르면 그 구간을 반복 재생한다. 그림 표시 규칙(멈춘 상태에서 시작 ±400ms)은 바꾸지 않았다.
+
+### 11.4 빠른 갱신(맥박)
+
+- **한 번의 가벼운 읽기**: `lib/brand-rooms/pulse.ts`가 부분별로 짧은 도장(대화, 시안, 스토리보드, 공유 링크)을 돌려준다. 도장은 몇 개의 개수·최근 시각을 해시한 16자이고 내용은 담지 않는다. 문 세 개가 같은 함수를 쓰고, 각자 그 데이터를 읽을 수 있는 사람만 들인다.
+  - 고객: `GET /api/brand-rooms/pulse?organizationId=&projectId=` (룸 좌석 → 샌드박스·생성 정책 → 프로젝트. 공유 링크 부분은 소유자·편집자만)
+  - 공유 링크 손님: `POST /api/brand-rooms/shares/public {op:'pulse', token}` (토큰과 암호 증명, 그 항목 하나만. 주소당 분당 60회의 별도 묶음이라 한 사무실 주소 뒤의 탭 다섯 개까지 막히지 않고, 다른 묶음은 그대로)
+  - 팀: `GET /admin/brand-rooms/<org>/pulse?projectId=` 또는 `?review=`(그 시안의 버전 묶음 전체)
+- **팀 메모는 고객·손님 도장을 움직이지 않는다**: 공개 의견만 센다. 팀 도장은 팀 메모까지 센다(테스트로 확인).
+- **화면 쪽**: 탭이 보일 때 5초마다 묻고, 10분 동안 바뀐 게 없으면 15초로 늦춘다. 탭이 숨으면 묻지 않고, 돌아오면 바로 묻는다. 401·403·404면 그 페이지에서는 멈춘다. 바뀐 부분만 다시 읽는다.
+  - 고객 시안 탭: 30초 전체 다시 읽기 대신, 시안 도장이 바뀔 때 목록과 열린 시안을 다시 읽는다.
+  - 팀 리뷰 화면(작업대·단독): 15초 `router.refresh()` 대신, 시안 도장이 바뀔 때 다시 읽는다. 쓰는 중이면 기다렸다가 손을 떼는 즉시 다시 읽는다("새 의견 있음" 같은 문구는 없어서 새로 만들지 않았다). 맥박 문이 없으면(룸 플래그 꺼짐) 예전 15초 갱신으로 돌아간다.
+  - 공유 페이지: 처음으로 실시간 갱신이 생겼다. 손님이 쓰던 글이 있으면 기다린다.
+  - 대화의 4초 폴링은 그대로 두었다.
+
+### 11.5 문구
+
+새 문구는 아이콘 버튼 이름 다섯 개뿐이다(`studioReview.player`). Gemma 4 2패스를 모두 돌렸다(1패스 맥락 전체로 쓰기, 2패스 `docs/wording/ai-tell-quick-rules.md`로 윤문). 2패스는 1패스와 글자 하나 다르지 않았고, 사실과 대조해 그대로 넣었다.
+
+| 키 | 한국어 | English |
+| --- | --- | --- |
+| `fullscreen` | 전체 화면 | Full screen |
+| `exitFullscreen` | 전체 화면 나가기 | Exit full screen |
+| `loop` | 구간 반복 | Loop |
+| `notesShow` | 의견 펼치기 | Expand notes |
+| `notesHide` | 의견 접기 | Collapse notes |
+
+### 11.6 확인한 것과 남은 것
+
+- 로컬 두 역할(내구 PGlite, 고객 `…0001`·관리자 `…0003`)에서 23.976fps 가로·30fps 세로 테스트 영상(프레임 번호를 2진 상자로 새김)을 CLI로 올려 직접 봤다. →와 `,`가 캔버스로 읽은 프레임 번호 0→12, 11→9로 한 칸씩 움직였고, 세로 영상은 `?t=1000`에서 30번 프레임으로 열렸다. 반복은 1.0–3.0초 안에서만 돌았다. 전체 화면(헤드리스 크로미움)에서 의견 칸이 접힌 채 열리고, 펼쳐 쓴 글이 빠져나온 뒤에도 남았다. 공유 페이지는 회원이 쓴 의견을 새로고침 없이 3초 남짓에 보였다. 단독 팀 리뷰 화면은 쓰는 동안 다시 읽지 않다가 글을 지우자마자 새 의견을 보였다.
+- 작업대의 대기 수와 확인함은 대화 줄이 움직인다(§3 끝, 새 줄마다 페이지를 다시 읽는다). 후속 작업(대기 = 답하지 않은 것, 확인함)을 합친 뒤 로컬에서 고객 줄을 남기고 작업대 검토 모드를 열었을 때 대기 3이 보였고, 확인함을 누르자 1.4초 뒤 0이 되고 확인 줄이 붙었다. 맥박 요청과 스테이지는 그대로였다. 맥박은 시안 도장만 보고 그 갱신과 겹치지 않는다. 대화 줄로 다시 읽을 때는 맥박의 "쓰는 중 기다리기"를 거치지 않지만 쓰던 글은 지워지지 않는다(페이지를 다시 그려도 입력 상태는 남는다).
+- 확인하지 못한 것: 실제 iPhone·iPad 사파리, 파이어폭스(크로미움 헤드리스로만 봤다. `requestVideoFrameCallback`이 없는 브라우저는 화면 갱신마다 시계가 돌고, 레이트를 재지 못하면 한 칸을 1/24초로 본다), 크롬이 재생하지 못하는 코덱의 시안, 가변 프레임 레이트 영상, 운영 데이터베이스에서의 맥박 쿼리 속도.

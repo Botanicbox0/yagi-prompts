@@ -536,8 +536,13 @@ export interface StudioAssetView {
   thumbUrl: string | null;
   width: number | null;
   height: number | null;
-  /** Seconds, for video and audio. */
+  /** Seconds, for video and audio, in tenths: what a screen shows. */
   seconds: number | null;
+  /**
+   * The exact stored length in whole milliseconds, absent when unknown. Never shown; a run that follows
+   * this file is priced from it (usage-rate.ts `remixRunUsd` `referenceMs`), exactly as the server reserves.
+   */
+  durationMs?: number;
   source: StudioAssetSource;
   createdAt: string;
 }
@@ -550,7 +555,10 @@ export interface StudioOutputView {
   thumbUrl: string | null;
   width: number | null;
   height: number | null;
+  /** Seconds in tenths, as a screen shows them. */
   seconds: number | null;
+  /** The exact stored length in whole milliseconds, absent when unknown; for pricing only (see `StudioAssetView`). */
+  durationMs?: number;
   /** True for a 480p draft that can still be finished at 1080p. */
   draft: boolean;
   /** The library asset this result was saved as, if any. */

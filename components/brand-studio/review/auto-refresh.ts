@@ -1,4 +1,8 @@
 /**
+ * Since stage 2 (docs/BRAND-ROOMS-FEEDBACK.md §11) the team's stage re-reads when the room's pulse moves;
+ * this timer is its fallback where the pulse door is not there (rooms switched off), and `composerHolds`
+ * still decides when a re-read must wait.
+ *
  * The team's review stage re-reads its notes on its own (docs/BRAND-ROOMS-FEEDBACK.md §4): every 15 seconds
  * while the tab is visible, and once on coming back to it. It holds off while the composer has unsent text,
  * a drawing is open or not yet sent, or a note is being sent, so a re-read never lands on half-written work

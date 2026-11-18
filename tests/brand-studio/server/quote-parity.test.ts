@@ -95,6 +95,67 @@ describe('video: the provider quote, to the credit, with no allowance on top', (
     expect(cents(run.usd)).toBe(278);
   });
 
+  /*
+   * A run that follows its source (`duration: -1`) is priced on the source's length rounded up, 4 to 30 s
+   * (CLI help for `create_video.duration`), and the source itself for its real length. Quoted free on
+   * 2026-11-18 with the source uploaded to the account, on public TWINGS films whose stored length
+   * (`duration_ms`, read from the file's movie header as the studio does) is:
+   *
+   *   15,042 ms (15.04 s, 361 frames at 24 fps, like every clip we generate): 192 credits = 16 s out + 15.042 s in
+   *   11,100 ms: 143 = 12 s out + 11.1 s in
+   *   20,067 ms: 253 = 21 s out + 20.067 s in, past the 15 s a new take can pick
+   *
+   * Priced from the exact milliseconds when they are known; from the tenths a screen shows only when not.
+   */
+  it('prices the exact source length: a 15,042 ms source is 16 s out and 192 credits', () => {
+    const model = { minSeconds: 4, maxSeconds: 15, defaultSeconds: 5 };
+    for (const [ms, out, quoted] of [[15_042, 16, 192], [11_100, 12, 143], [20_067, 21, 253]] as const) {
+      for (const method of ['edit', 'reference'] as const) {
+        const run = remixRunUsd({ model, resolution: '480p', method, seconds: null, referenceSeconds: Math.round(ms / 100) / 10, referenceMs: ms });
+        expect(run.outputSeconds, `${ms} ${method}`).toBe(out);
+        expect(cents(run.usd), `${ms} ${method}`).toBe(quoted);
+      }
+    }
+    // A new take with a length of its own bills that source for its real length too.
+    expect(cents(remixRunUsd({ model, resolution: '480p', method: 'reference', seconds: 8, referenceSeconds: 15, referenceMs: 15_042 }).usd))
+      .toBe(cents(estimateVideoUsd({ resolution: '480p', seconds: 8, referenceVideoSeconds: 15.042 })));
+  });
+
+  it('falls back to the tenths a screen shows when the exact length is not known', () => {
+    const model = { minSeconds: 4, maxSeconds: 15, defaultSeconds: 5 };
+    // 15.0 shown: 15 s out, 185 credits, one output second short of the provider's 192.
+    const shown = remixRunUsd({ model, resolution: '480p', method: 'edit', seconds: null, referenceSeconds: 15 });
+    expect(shown.outputSeconds).toBe(15);
+    expect(cents(shown.usd)).toBe(185);
+    for (const referenceMs of [null, undefined, Number.NaN, 0, -5]) {
+      expect(remixRunUsd({ model, resolution: '480p', method: 'edit', seconds: null, referenceSeconds: 15, referenceMs }).outputSeconds).toBe(15);
+    }
+    // A blueprint keeps the length it is planned at from the tenths (reference-video.ts `remakeSeconds`).
+    expect(remixRunUsd({ model, resolution: '480p', method: 'blueprint', seconds: null, referenceSeconds: 7.5, referenceMs: 7_451 }).outputSeconds).toBe(8);
+  });
+
+  it('a run that follows its source counts the source rounded up (an 11.1 s source is 12 s out)', () => {
+    const model = { minSeconds: 4, maxSeconds: 15, defaultSeconds: 5 };
+    for (const method of ['edit', 'reference'] as const) {
+      const run = remixRunUsd({ model, resolution: '480p', method, seconds: null, referenceSeconds: 11.1 });
+      expect(run.outputSeconds, method).toBe(12);
+      expect(cents(run.usd), method).toBe(143);
+    }
+    // The figure a screen has, in tenths, gives the same: 11.14 s is shown 11.1.
+    expect(remixRunUsd({ model, resolution: '480p', method: 'edit', seconds: null, referenceSeconds: 11.14 }).outputSeconds).toBe(12);
+  });
+
+  it('a source longer than a new take can be still sets the length it follows, up to 30 s', () => {
+    const model = { minSeconds: 4, maxSeconds: 15, defaultSeconds: 5 };
+    const run = remixRunUsd({ model, resolution: '480p', method: 'edit', seconds: null, referenceSeconds: 20.07 });
+    expect(run.outputSeconds).toBe(21);
+    expect(cents(run.usd)).toBe(253);
+    // And never under 4 s: a 2.5 s reference followed by a new take.
+    expect(remixRunUsd({ model, resolution: '480p', method: 'reference', seconds: null, referenceSeconds: 2.5 }).outputSeconds).toBe(4);
+    // A blueprint never sends its video: it runs at a length of its own, inside the model's range.
+    expect(remixRunUsd({ model, resolution: '480p', method: 'blueprint', seconds: null, referenceSeconds: 20.07 }).outputSeconds).toBe(15);
+  });
+
   it('the production draft of 2026-11-15 (4 s, 480p) is quoted what it was charged', () => {
     const usd = estimateVideoUsd({ resolution: '480p', seconds: 4, referenceVideoSeconds: 0 });
     expect(cents(usd)).toBe(42);

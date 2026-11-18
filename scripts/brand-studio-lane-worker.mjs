@@ -18,13 +18,18 @@
  *   STUDIO_LANE_PROJECT_ID     Sunra project to file generations under (default: find or create
  *                              "TWINGS Brand Studio")
  *   SUNRA_BIN                  CLI command (default "sunra")
+ *
+ * How a job becomes a CLI call (and how its reference videos are uploaded first) is in
+ * ./brand-studio-lane-mapping.mjs, which must sit next to this file.
  */
 import { spawn } from 'node:child_process';
 import { existsSync, mkdirSync, readFileSync, rmSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { join } from 'node:path';
+import { CliRefusal, draftTaskIdOf, failureCodeOf, mimeOf, redactUrls, toolCall, withUploadedVideos } from './brand-studio-lane-mapping.mjs';
 
-const VERSION = '1';
+// 2: reference videos are uploaded to the account first; a run that follows its source is never a preview.
+const VERSION = '2';
 const PROJECT_NAME = 'TWINGS Brand Studio';
 const JOB_TIMEOUT_MS = 25 * 60 * 1000;
 const args = process.argv.slice(2);
@@ -110,14 +115,6 @@ function sunra(tool, input, { spend = false } = {}) {
   });
 }
 
-class CliRefusal extends Error {}
-
-function failureCode(message) {
-  if (/safety|policy|sensitive|moderat|violat|prohibit|not allowed|copyright/i.test(message)) return 'provider_rejected';
-  if (/insufficient|credit|balance|concurren|rate limit|too many|unavailable|timeout/i.test(message)) return 'provider_unavailable';
-  return 'failed';
-}
-
 let projectId = process.env.STUDIO_LANE_PROJECT_ID ?? null;
 async function ensureProject() {
   if (projectId) return projectId;
@@ -128,67 +125,8 @@ async function ensureProject() {
   return projectId;
 }
 
-/* ------------------------------------------------------------- mapping */
-
-const imagesOf = (job) => job.inputs.filter((i) => i.kind === 'image');
-
-/** One CLI call per result slot; an image job with count N is N calls. */
-function toolCall(job, project) {
-  const p = job.params;
-  const base = { project_id: project, model: job.model, prompt: job.prompt, count: 1, auto_confirm: true };
-  if (job.kind === 'image' || job.kind === 'region_edit') {
-    const urls = imagesOf(job).map((i) => i.url);
-    return {
-      tool: 'create_image',
-      input: {
-        ...base,
-        ...(p.aspect ? { aspect_ratio: p.aspect } : {}),
-        ...(p.resolution ? { resolution: p.resolution } : {}),
-        // GPT Image: low / medium / high (absent for models without a quality choice).
-        ...(p.quality ? { quality: p.quality } : {}),
-        ...(urls.length ? { image_urls: urls } : {}),
-        // A region edit is pasted back into the original, so it stays lossless; a plain picture travels lighter.
-        output_format: job.kind === 'region_edit' ? 'png' : 'jpeg',
-      },
-    };
-  }
-  if (job.kind === 'video_final') {
-    if (!job.draftTaskId) throw new CliRefusal('final without a draft id');
-    return { tool: 'create_video', input: { project_id: project, model: job.model, draft_source_task_id: job.draftTaskId, auto_confirm: true } };
-  }
-  const video = job.inputs.find((i) => i.kind === 'video');
-  const audios = job.inputs.filter((i) => i.kind === 'audio').map((i) => i.url);
-  const start = imagesOf(job).find((i) => i.frame === 'start');
-  const end = imagesOf(job).find((i) => i.frame === 'end');
-  const refs = imagesOf(job).filter((i) => !i.frame).map((i) => i.url);
-  const edit = job.kind === 'video_remix' && p.method === 'edit';
-  // A reference run cannot mix first/last frames with reference media: frames then travel as references.
-  const referenceRun = Boolean(video) || refs.length > 0 || audios.length > 0;
-  const frameRefs = referenceRun ? [start, end].filter(Boolean).map((i) => i.url) : [];
-  return {
-    tool: 'create_video',
-    input: {
-      ...base,
-      generate_audio: p.audio !== 'silent',
-      resolution: p.resolution ?? '720p',
-      // An edit follows the source video: no ratio, length -1, and never a preview.
-      ...(edit ? { duration: -1 } : { ...(p.aspect ? { aspect_ratio: p.aspect } : {}), ...(p.seconds ? { duration: p.seconds } : {}) }),
-      ...(p.resolution === '480p' ? { draft: Boolean(p.draft) && !edit } : {}),
-      ...(!referenceRun && start ? { start_image: start.url } : {}),
-      ...(!referenceRun && start && end ? { end_image: end.url } : {}),
-      ...(referenceRun && [...frameRefs, ...refs].length ? { reference_images: [...frameRefs, ...refs] } : {}),
-      ...(video ? { reference_videos: [video.url] } : {}),
-      ...(audios.length ? { reference_audios: audios } : {}),
-    },
-  };
-}
-
-function mimeOf(url, type) {
-  if (type === 'VIDEO' || /\.(mp4|mov)(\?|$)/i.test(url)) return /\.mov(\?|$)/i.test(url) ? 'video/quicktime' : 'video/mp4';
-  if (/\.png(\?|$)/i.test(url)) return 'image/png';
-  if (/\.webp(\?|$)/i.test(url)) return 'image/webp';
-  return 'image/jpeg';
-}
+/** Reference videos go to the account first: it takes no video from another address. */
+const uploadDeps = { fetch: (url, init) => fetch(url, init), uploadSlot: (input) => sunra('get_upload_url', input) };
 
 async function waitFor(taskId) {
   const deadline = Date.now() + JOB_TIMEOUT_MS;
@@ -205,7 +143,7 @@ async function waitFor(taskId) {
       // Seen in production on 2026-11-10: one "HTTP 520" from the provider failed a finished picture.
       if (error instanceof CliRefusal) throw error;
       misses += 1;
-      log('poll_retry', { misses, message: String(error instanceof Error ? error.message : error).slice(0, 120) });
+      log('poll_retry', { misses, message: redactUrls(error instanceof Error ? error.message : error).slice(0, 120) });
       if (misses >= 12 || Date.now() > deadline) throw error;
       await sleep(Math.min(30_000, 5000 * misses));
       continue;
@@ -237,7 +175,10 @@ async function runJob(job) {
   const started = Date.now();
   try {
     const project = await ensureProject();
-    const call = toolCall(job, project);
+    // Before anything is spent: a video that cannot be uploaded fails the run with nothing charged.
+    const ready = await withUploadedVideos(job, uploadDeps);
+    if (ready.uploads > 0) log('references_uploaded', { jobId: job.jobId, videos: ready.uploads, bytes: ready.bytes, seconds: Math.round((Date.now() - started) / 1000) });
+    const call = toolCall(ready.job, project);
     const slots = job.outputs.length ? job.outputs : [{ idx: 0 }];
     let credits = 0;
     const outputs = await Promise.all(
@@ -246,20 +187,18 @@ async function runJob(job) {
         if (!created.task_id) throw new Error('create returned no task id');
         credits += Number(created.estimated_credits ?? 0) || 0;
         const done = await waitFor(created.task_id);
-        return {
-          idx: slot.idx,
-          url: done.url,
-          mime: mimeOf(done.url, done.type),
-          ...(job.params.draft && job.kind !== 'video_final' ? { draftTaskId: created.task_id } : {}),
-        };
+        // A draft id only for a run sent as a preview: a final is made from it, and the provider refuses any other.
+        const draftTaskId = draftTaskIdOf(call, created);
+        return { idx: slot.idx, url: done.url, mime: mimeOf(done.url, done.type), ...(draftTaskId ? { draftTaskId } : {}) };
       }),
     );
     // One account credit is priced at one US cent of list price; the app turns that into usage.
     await lane('complete', { jobId: job.jobId, outputs, costUsd: Math.round(credits) / 100 });
     log('job_done', { jobId: job.jobId, kind: job.kind, outputs: outputs.length, credits, seconds: Math.round((Date.now() - started) / 1000) });
   } catch (error) {
-    const message = error instanceof Error ? error.message : String(error);
-    const code = error instanceof CliRefusal ? failureCode(message) : 'failed';
+    // No signed address (a query string) reaches the log or the app.
+    const message = redactUrls(error instanceof Error ? error.message : String(error));
+    const code = failureCodeOf(error);
     log('job_failed', { jobId: job.jobId, kind: job.kind, code, message: message.slice(0, 200) });
     try {
       await lane('fail', { jobId: job.jobId, code, detail: message.slice(0, 900) });

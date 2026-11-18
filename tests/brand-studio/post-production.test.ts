@@ -20,6 +20,7 @@ import {
   parseFfmpegScdetOutput,
   type FrameHistogramSample,
 } from '@/lib/brand-studio/compose/scene-detect';
+import { studioEnv } from '@/lib/brand-studio/env';
 import { memberUsage } from '@/lib/brand-studio/member-usage';
 import {
   generateReferenceMusic,
@@ -134,6 +135,8 @@ describe('1. Post-Production Route Security & Morphic Sandbox Hardlines', () => 
     vi.stubEnv('BRAND_STUDIO_PROVIDER', 'fake');
     vi.stubEnv('BRAND_STUDIO_UPSCALE_PROVIDER', 'fake');
     vi.stubEnv('BRAND_STUDIO_MUSIC_PROVIDER', 'fake');
+    // Open, so the `sound` policy gate below is what refuses `music.generate` (closed is in music-generation-flag.test.ts).
+    vi.stubEnv('BRAND_STUDIO_MUSIC_GENERATION', 'on');
   });
 
   afterEach(async () => {
@@ -731,6 +734,7 @@ describe('5. Reference Music Engine, 0ms Drop Sync, WAV Synth & License Gate (`m
     vi.stubEnv('BRAND_STUDIO_V2', 'on');
     vi.stubEnv('BRAND_STUDIO_PROVIDER', 'fake');
     vi.stubEnv('BRAND_STUDIO_MUSIC_PROVIDER', 'fake');
+    vi.stubEnv('BRAND_STUDIO_MUSIC_GENERATION', 'on');
     f = await studioFixture({ capKrw: 5_000 });
     mocks.sql = f.sql;
     mocks.viewer = viewerOf(f.ids.owner);
@@ -831,7 +835,9 @@ describe('5. Reference Music Engine, 0ms Drop Sync, WAV Synth & License Gate (`m
     ).toBe('suno');
     expect(resolveMusicProviderId({ ELEVENLABS_API_KEY: 'el_secret' })).toBe('elevenlabs');
 
-    const deps = studioDeps(f!.sql);
+    const deps = studioDeps(f!.sql, {
+      env: studioEnv({ BRAND_STUDIO_PROVIDER: 'fake', BRAND_STUDIO_DEFAULT_LANE: 'sunra_api', BRAND_STUDIO_MUSIC_GENERATION: 'on' }),
+    });
     let capturedBody: Record<string, unknown> | null = null;
     const sunoFetch: typeof fetch = (async (url: string | URL | Request, init?: RequestInit) => {
       if (String(url).endsWith('/generate')) {

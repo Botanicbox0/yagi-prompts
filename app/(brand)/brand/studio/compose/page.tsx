@@ -130,6 +130,7 @@ export default async function StudioComposePage({
       initialLikedItems={initialLikedItems}
       initialFolderItems={initialFolderItems}
       editAssist={studioEnv().editAssist === true}
+      musicGeneration={studioEnv().musicGeneration === true}
     />
   );
 }

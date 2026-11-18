@@ -19,6 +19,7 @@ import { studioModel } from './models';
 import { requestInputOf } from './engine';
 import { buildStudioRequest, type StudioRequestInput } from './provider/requests';
 import { sendPrompt } from './prepare';
+import { isDraftRun } from './reference-video';
 import type { JobRow, OutputRow, StudioDeps } from './types';
 
 export interface LaneJob {
@@ -39,8 +40,11 @@ export interface LaneJob {
     method: string | null;
     keep: string[];
   };
-  /** Reference files in tray order; a region edit's crop comes first. */
-  inputs: Array<{ kind: 'image' | 'video' | 'audio'; url: string; frame?: 'start' | 'end'; regionCrop?: true }>;
+  /**
+   * Reference files in tray order; a region edit's crop comes first. A video carries its stored type: the
+   * account lane takes a reference video only as one of its own uploads, which the worker makes with it.
+   */
+  inputs: Array<{ kind: 'image' | 'video' | 'audio'; url: string; frame?: 'start' | 'end'; regionCrop?: true; mime?: string }>;
   draftTaskId: string | null;
   /** Slots to fill, one result each. */
   outputs: Array<{ outputId: string; idx: number }>;
@@ -94,13 +98,14 @@ function laneJob(deps: Pick<StudioDeps, 'media' | 'env'>, job: JobRow, outputs: 
       seconds: p.seconds ?? null,
       audio: p.audio ?? null,
       count: outputs.length,
-      draft: p.resolution === 'draft',
+      // A draft only when the run is one (./reference-video.ts): never for a run that follows its source.
+      draft: isDraftRun(job.kind, p),
       method: p.method ?? null,
       keep: p.keep ?? [],
     },
     inputs: [
       ...(request.regionCrop ? [{ kind: 'image' as const, url: request.regionCrop.url, regionCrop: true as const }] : []),
-      ...(job.work.inputs ?? []).map((i) => ({ kind: i.kind, url: i.url, ...(i.frame ? { frame: i.frame } : {}) })),
+      ...(job.work.inputs ?? []).map((i) => ({ kind: i.kind, url: i.url, ...(i.frame ? { frame: i.frame } : {}), ...(i.kind === 'video' && i.mime ? { mime: i.mime } : {}) })),
     ],
     draftTaskId: job.work.draftTaskId ?? null,
     outputs: outputs.map((o) => ({ outputId: o.id, idx: o.idx })),
@@ -162,9 +167,12 @@ export async function laneComplete(deps: StudioDeps, raw: unknown): Promise<Lane
     const slots = (await sql.query<OutputRow>("select idx from brand_studio_outputs where job_id = $1 and status = 'pending'", [job.id])).rows.map((o) => o.idx);
     const results = { ...(job.work.results ?? {}) };
     const share = v.costUsd !== undefined ? v.costUsd / Math.max(1, v.outputs.length) : null;
+    // A draft id counts only for a run that was a draft: worker version 1 reported one for an edit too,
+    // although it had sent that run as a standard video, and a final made from it would be refused.
+    const draftRun = isDraftRun(job.kind, job.params);
     for (const o of v.outputs) {
       if (!slots.includes(o.idx)) continue;
-      results[String(o.idx)] = { url: o.url, mime: o.mime ?? null, seconds: o.seconds ?? null, costUsd: share, draftTaskId: o.draftTaskId ?? null };
+      results[String(o.idx)] = { url: o.url, mime: o.mime ?? null, seconds: o.seconds ?? null, costUsd: share, draftTaskId: draftRun ? (o.draftTaskId ?? null) : null };
     }
     await sql.query("update brand_studio_jobs set status = 'finishing', work = $2::jsonb, claimed_at = null where id = $1", [job.id, JSON.stringify({ ...job.work, results })]);
     return { ok: true as const, jobId: job.id };

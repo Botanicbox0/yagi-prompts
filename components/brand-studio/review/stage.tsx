@@ -10,9 +10,29 @@
  *
  * The stage owns no data: it receives the review and its comments and calls `actions`; the owner
  * (brand app or admin wrapper) refreshes the props after a write.
+ *
+ * Stage 2 (docs/BRAND-ROOMS-FEEDBACK.md §11): the wide layout fills the window's height, full screen holds
+ * the player with its marks and the notes as a side panel, steps and timecodes use the film's real frame
+ * rate (stored, else measured while it plays), a range loops, and the keys work anywhere in the stage.
  */
 import "./review.css";
-import { useCallback, useEffect, useMemo, useRef, useState, type KeyboardEvent, type MouseEvent, type ReactNode } from "react";
+import { Fragment, useCallback, useEffect, useMemo, useRef, useState, type KeyboardEvent, type MouseEvent, type MutableRefObject, type ReactNode } from "react";
+import {
+  FALLBACK_FPS,
+  estimateFps,
+  formatFrameTimecode,
+  frameAt,
+  endsOnWholeSecond,
+  frameSeekSeconds,
+  frameStartMs,
+  frameTimecodeParts,
+  lastFrame,
+  loopKeyOf,
+  loopTarget,
+  snapToFrameMs,
+  stepFrame,
+  type LoopRange,
+} from "@/lib/brand-studio/review-frames";
 import {
   REVIEW_FRAME_MS,
   REVIEW_LIMITS,
@@ -114,10 +134,62 @@ export interface ReviewStageProps {
    * status) it drops the separate status mark. Every other screen leaves it out.
    */
   compactHead?: boolean;
+  /**
+   * `wide` (the room's review mode and the share page, docs/BRAND-ROOMS-FEEDBACK.md §11): the film takes the
+   * height the window has, not the old two-thirds cap, so a 9:16 film fits by height. `inline` (default): as before.
+   */
+  layout?: "inline" | "wide";
+}
+
+/** Typing in a field: the stage's keys stay out of the way. */
+export function isTypingTarget(target: EventTarget | null): boolean {
+  const el = target as (Element & { isContentEditable?: boolean }) | null;
+  if (!el || typeof el.closest !== "function") return false;
+  if (el.isContentEditable || el.closest("textarea, select, [contenteditable]:not([contenteditable='false'])")) return true;
+  const input = el.closest("input");
+  if (!input) return false;
+  return !["range", "checkbox", "radio", "button", "submit", "reset", "color", "file", "image"].includes((input.getAttribute("type") ?? "text").toLowerCase());
+}
+
+/** Note times land on the start of the frame on screen when the rate is known (stored or measured). */
+export function snapNoteToFrames(note: ReviewNoteInput, fps: number | null): ReviewNoteInput {
+  if (!fps) return note;
+  const out = { ...note };
+  if (out.atMs != null) out.atMs = snapToFrameMs(out.atMs, fps);
+  if (out.endMs != null) {
+    out.endMs = snapToFrameMs(out.endMs, fps);
+    // A range never collapses onto its own start.
+    if (out.atMs != null && out.endMs <= out.atMs) out.endMs = null;
+  }
+  return out;
 }
 
 export function fill(template: string, values: Record<string, string | number>): string {
   return template.replace(/\{(\w+)\}/g, (match, key: string) => (key in values ? String(values[key]) : match));
+}
+
+/** `fill` for a screen: the same template with elements (a `Timecode`) in its slots. */
+export function fillNodes(template: string, values: Record<string, ReactNode>): ReactNode[] {
+  return template.split(/(\{\w+\})/).map((part, i) => {
+    const key = /^\{(\w+)\}$/.exec(part)?.[1];
+    return <Fragment key={i}>{key && key in values ? values[key] : part}</Fragment>;
+  });
+}
+
+/**
+ * A timecode on screen. With a frame rate the frame number is set apart, smaller and quieter, so `0:08`
+ * + `:00` reads as eight seconds and not eight minutes (docs/BRAND-ROOMS-FEEDBACK.md §11). Without one it
+ * is the old tenths. `clockOnly`: the frame part left off (a length that ends on a whole second).
+ */
+export function Timecode({ ms, fps, clockOnly = false }: { ms: number | null | undefined; fps: number | null; clockOnly?: boolean }) {
+  if (!fps) return <>{formatTimecode(ms)}</>;
+  const { clock, frames } = frameTimecodeParts(ms, fps);
+  return (
+    <span className="bsv-tc" data-review-timecode="">
+      {clock}
+      {clockOnly ? null : <span className="bsv-tc-ff">{frames}</span>}
+    </span>
+  );
 }
 
 export type ReviewExportFormat = "csv" | "markdown" | "markers";
@@ -219,8 +291,17 @@ export function reviewErrorText(copy: ReviewCopy, code: string): string {
 const clamp01 = (v: number) => Math.min(1, Math.max(0, v));
 const round4 = (v: number) => Math.round(v * 10_000) / 10_000;
 
-/** Fit a box of `ratio` into the wrapper's width and a height cap, so spot pins map 1:1 onto the media. */
-function useFitBox(ratio: number) {
+/** The tallest the media may be: the old cap inline, or the window minus the stage's own chrome when filling. */
+export function fitHeightCap(viewportH: number, fill: boolean, reserve: number): number {
+  return fill ? Math.max(200, viewportH - reserve) : Math.max(220, Math.min(760, viewportH * 0.66));
+}
+
+/**
+ * Fit a box of `ratio` into the wrapper's width and a height cap, so spot pins map 1:1 onto the media.
+ * `fill` (wide layout, full screen): the cap is the window's height minus `reserve()` (the head, the
+ * controls, the paddings), so the frame, its controls and the head fit in one view.
+ */
+function useFitBox(ratio: number, fill: boolean, reserve: MutableRefObject<() => number>, layoutKey: string) {
   const wrapRef = useRef<HTMLDivElement>(null);
   const [box, setBox] = useState<{ w: number; h: number } | null>(null);
   useEffect(() => {
@@ -229,24 +310,28 @@ function useFitBox(ratio: number) {
     const measure = () => {
       const avail = el.clientWidth;
       if (!avail) return;
-      const maxH = Math.max(220, Math.min(760, window.innerHeight * 0.66));
+      const maxH = fitHeightCap(window.innerHeight, fill, fill ? reserve.current() : 0);
       let w = avail;
       let h = w / ratio;
       if (h > maxH) {
         h = maxH;
         w = h * ratio;
       }
-      setBox({ w: Math.round(w), h: Math.round(h) });
+      const next = { w: Math.round(w), h: Math.round(h) };
+      setBox((prev) => (prev && prev.w === next.w && prev.h === next.h ? prev : next));
     };
     measure();
+    // A second pass once the controls under the frame have laid out at their final size.
+    const raf = typeof requestAnimationFrame === "undefined" ? 0 : requestAnimationFrame(measure);
     const observer = typeof ResizeObserver === "undefined" ? null : new ResizeObserver(measure);
     observer?.observe(el);
     window.addEventListener("resize", measure);
     return () => {
+      if (raf) cancelAnimationFrame(raf);
       observer?.disconnect();
       window.removeEventListener("resize", measure);
     };
-  }, [ratio]);
+  }, [ratio, fill, reserve, layoutKey]);
   return { wrapRef, box };
 }
 
@@ -272,6 +357,10 @@ const ICONS = {
   compare: "M4 5h7v14H4zM13 5h7v14h-7",
   download: "M12 4v11M7 10l5 5 5-5M5 20h14",
   pen: "M4 20l4-1 10.5-10.5a2.1 2.1 0 0 0-3-3L5 16l-1 4zM14 7l3 3",
+  fullscreen: "M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5",
+  exitFullscreen: "M9 4v5H4M15 4v5h5M9 20v-5H4M15 20v-5h5",
+  loop: "M17 3l3 3-3 3M4 11V9a3 3 0 0 1 3-3h13M7 21l-3-3 3-3M20 13v2a3 3 0 0 1-3 3H4",
+  notes: "M4 5h16v14H4zM14 5v14",
 } as const;
 
 type Mark = { atMs: number | null; endMs?: number | null; x: number | null; y: number | null; strokes?: ReviewStroke[] | null };
@@ -373,6 +462,7 @@ export function ReviewStage({
   team = null,
   onComposingChange,
   compactHead = false,
+  layout = "inline",
 }: ReviewStageProps) {
   // Outside the team's page a team note is never shown, whatever the caller passed.
   const comments = useMemo(() => (team ? allComments : allComments.filter((c) => !c.team)), [team, allComments]);
@@ -382,8 +472,42 @@ export function ReviewStage({
   const videoRef = useRef<HTMLVideoElement>(null);
   const textRef = useRef<HTMLTextAreaElement>(null);
   const laneRef = useRef<HTMLDivElement>(null);
+  const headRef = useRef<HTMLElement>(null);
+  const sectionRef = useRef<HTMLElement>(null);
+  const bodyRef = useRef<HTMLDivElement>(null);
+  const playerRef = useRef<HTMLDivElement>(null);
+  // Full screen holds the player, its marks and controls, and the notes as a side panel (shown on demand).
+  const [fullscreen, setFullscreen] = useState(false);
+  const [fullscreenAvailable, setFullscreenAvailable] = useState(false);
+  const [notesOpen, setNotesOpen] = useState(false);
+  // The film's frame rate: read from the file (0096), else measured while it plays; 24 until then for steps.
+  const [measuredFps, setMeasuredFps] = useState<number | null>(null);
+  const frameRate = isVideo ? (review.fps ?? measuredFps) : null;
+  const stepRate = frameRate ?? FALLBACK_FPS;
+  const tc = useCallback((ms: number | null | undefined) => (frameRate ? formatFrameTimecode(ms, frameRate) : formatTimecode(ms)), [frameRate]);
+  // The loop runs on one range; picking another range or clearing it ends the loop.
+  const [loopKey, setLoopKey] = useState<string | null>(null);
   const [ratio, setRatio] = useState(() => (review.width && review.height ? review.width / review.height : isVideo ? 16 / 9 : 1));
-  const { wrapRef, box } = useFitBox(ratio);
+  const reserveRef = useRef<() => number>(() => 260);
+  reserveRef.current = () => {
+    const player = playerRef.current;
+    const wrap = wrapRef.current;
+    if (!player || !wrap) return 260;
+    // Everything in the player column but the frame: the mat's padding, the controls, the keys line.
+    const chrome = Math.max(0, player.offsetHeight - wrap.offsetHeight);
+    // A narrow screen in full screen stacks the open notes under the picture: leave them about half.
+    if (fullscreen) return chrome + 40 + (notesOpen && window.innerWidth <= 900 ? Math.round(window.innerHeight * 0.45) : 0);
+    // Wide: everything from the top of what scrolls into view (the room's review mode, with its "시안 목록"
+    // bar, or this stage) down to the frame, plus everything under it, plus the stage's bottom padding.
+    const section = sectionRef.current;
+    if (!section) return chrome + (headRef.current?.offsetHeight ?? 0) + 72;
+    const anchor = section.closest("[data-room-review-mode]") ?? section;
+    const above = wrap.getBoundingClientRect().top - anchor.getBoundingClientRect().top;
+    const below = player.getBoundingClientRect().bottom - wrap.getBoundingClientRect().bottom;
+    return Math.max(0, above) + Math.max(0, below) + 32;
+  };
+  const fillHeight = layout === "wide" || fullscreen;
+  const { wrapRef, box } = useFitBox(ratio, fillHeight, reserveRef, `${fullscreen}:${notesOpen}`);
   const [playing, setPlaying] = useState(false);
   const [muted, setMuted] = useState(false);
   const [speed, setSpeed] = useState<number>(1);
@@ -429,6 +553,8 @@ export function ReviewStage({
     setComparing(false);
     setDragRange(null);
     setTeamOnly(false);
+    setMeasuredFps(null);
+    setLoopKey(null);
     ink.reset();
     seededRef.current = false;
     // `ink.reset` is stable (useInk).
@@ -441,18 +567,112 @@ export function ReviewStage({
     return () => window.clearTimeout(id);
   }, [toast]);
 
-  // The playhead follows the film smoothly while it plays.
+  // Read by the clock below on every frame: the range being looped (or null) and the known rate.
+  const loopRef = useRef<LoopRange | null>(null);
+  const rateRef = useRef<number | null>(null);
+  rateRef.current = frameRate;
+  const needsRate = isVideo && review.fps == null && measuredFps == null;
+
+  /** Put the player on `ms`; with a known rate, on that frame's start plus the small bias that lands on it. */
+  const placeAt = useCallback((v: HTMLVideoElement, ms: number) => {
+    const rate = rateRef.current;
+    v.currentTime = rate ? frameSeekSeconds(frameAt(ms, rate), rate) : ms / 1000;
+  }, []);
+
+  // The playhead follows the film while it plays: on every presented frame where the browser says which one
+  // it is (requestVideoFrameCallback), else on every paint. The same clock measures the frame rate when none
+  // was stored, and keeps a looping range inside its bounds.
   useEffect(() => {
     if (!playing) return;
+    const v = videoRef.current;
+    if (!v) return;
+    let stopped = false;
+    const gaps: number[] = [];
+    let lastMedia: number | null = null;
+    let measuring = needsRate;
+    const onTime = (seconds: number) => {
+      let ms = seconds * 1000;
+      const target = loopTarget(ms, loopRef.current, rateRef.current);
+      if (target != null) {
+        placeAt(v, target);
+        ms = target;
+      }
+      setCurrentMs(ms);
+    };
+    type FrameVideo = HTMLVideoElement & {
+      requestVideoFrameCallback?: (cb: (now: number, meta: { mediaTime: number }) => void) => number;
+      cancelVideoFrameCallback?: (handle: number) => void;
+    };
+    const fv = v as FrameVideo;
+    if (typeof fv.requestVideoFrameCallback === "function") {
+      let handle = 0;
+      const onFrame = (_now: number, meta: { mediaTime: number }) => {
+        if (stopped) return;
+        if (measuring && fv.playbackRate === 1 && lastMedia != null) {
+          gaps.push(meta.mediaTime - lastMedia);
+          if (gaps.length >= 12) {
+            const rate = estimateFps(gaps);
+            if (rate) {
+              measuring = false;
+              setMeasuredFps(rate);
+            } else if (gaps.length > 120) measuring = false;
+          }
+        }
+        lastMedia = meta.mediaTime;
+        onTime(meta.mediaTime);
+        handle = fv.requestVideoFrameCallback!(onFrame);
+      };
+      handle = fv.requestVideoFrameCallback(onFrame);
+      return () => {
+        stopped = true;
+        fv.cancelVideoFrameCallback?.(handle);
+      };
+    }
     let raf = 0;
     const tick = () => {
-      const v = videoRef.current;
-      if (v) setCurrentMs(v.currentTime * 1000);
+      if (stopped) return;
+      onTime(v.currentTime);
       raf = requestAnimationFrame(tick);
     };
     raf = requestAnimationFrame(tick);
-    return () => cancelAnimationFrame(raf);
-  }, [playing]);
+    return () => {
+      stopped = true;
+      cancelAnimationFrame(raf);
+    };
+  }, [playing, needsRate, placeAt]);
+
+  // Full screen: whether this browser can put an element there (not iPhone Safari), and when it leaves.
+  useEffect(() => {
+    const doc = document as Document & { webkitFullscreenEnabled?: boolean; webkitFullscreenElement?: Element | null };
+    setFullscreenAvailable(Boolean(doc.fullscreenEnabled || doc.webkitFullscreenEnabled));
+    const onChange = () => {
+      const on = bodyRef.current != null && (doc.fullscreenElement ?? doc.webkitFullscreenElement ?? null) === bodyRef.current;
+      setFullscreen(on);
+      if (!on) setNotesOpen(false);
+    };
+    document.addEventListener("fullscreenchange", onChange);
+    document.addEventListener("webkitfullscreenchange", onChange);
+    return () => {
+      document.removeEventListener("fullscreenchange", onChange);
+      document.removeEventListener("webkitfullscreenchange", onChange);
+    };
+  }, []);
+
+  const toggleFullscreen = useCallback(() => {
+    const doc = document as Document & { webkitFullscreenElement?: Element | null; webkitExitFullscreen?: () => Promise<void> | void };
+    const el = bodyRef.current as (HTMLDivElement & { webkitRequestFullscreen?: () => Promise<void> | void }) | null;
+    if (!el) return;
+    try {
+      if (doc.fullscreenElement ?? doc.webkitFullscreenElement) {
+        void (doc.exitFullscreen ? doc.exitFullscreen() : doc.webkitExitFullscreen?.());
+      } else {
+        const ask = el.requestFullscreen ? el.requestFullscreen() : el.webkitRequestFullscreen?.();
+        if (ask && typeof (ask as Promise<void>).catch === "function") (ask as Promise<void>).catch(() => undefined);
+      }
+    } catch {
+      // A browser that refuses (no user gesture, a policy): the wide layout stays.
+    }
+  }, []);
 
   const threads = useMemo(() => threadComments(comments), [comments]);
   const numberOf = useMemo(() => new Map(threads.map((t, i) => [t.root.id, i + 1])), [threads]);
@@ -491,15 +711,29 @@ export function ReviewStage({
   const timed = threads.filter((t) => !t.root.deleted && t.root.atMs != null);
   const activeThread = activeId ? threads.find((t) => t.root.id === activeId) ?? null : null;
 
+  // The range a loop would run on: the one being marked (I / O, the lane) first, else the picked range note.
+  const markRange: LoopRange | null = isVideo && mark?.atMs != null && mark.endMs != null ? { startMs: mark.atMs, endMs: mark.endMs } : null;
+  const noteRange: LoopRange | null =
+    isVideo && activeThread && !activeThread.root.deleted && activeThread.root.atMs != null && activeThread.root.endMs != null
+      ? { startMs: activeThread.root.atMs, endMs: activeThread.root.endMs }
+      : null;
+  const loopRange = markRange ?? noteRange;
+  const rangeKey = markRange ? loopKeyOf("mark", null, markRange) : loopKeyOf("note", activeThread?.root.id ?? null, noteRange);
+  const looping = extended && loopKey !== null && loopKey === rangeKey;
+  loopRef.current = looping ? loopRange : null;
+  useEffect(() => {
+    if (loopKey !== null && loopKey !== rangeKey) setLoopKey(null);
+  }, [loopKey, rangeKey]);
+
   const seek = useCallback(
     (ms: number) => {
       const v = videoRef.current;
       const max = durationMs > 0 ? durationMs : Number.MAX_SAFE_INTEGER;
       const next = Math.min(Math.max(0, ms), max);
-      if (v) v.currentTime = next / 1000;
+      if (v) placeAt(v, next);
       setCurrentMs(next);
     },
-    [durationMs],
+    [durationMs, placeAt],
   );
   const togglePlay = useCallback(() => {
     const v = videoRef.current;
@@ -507,17 +741,57 @@ export function ReviewStage({
     if (v.paused) void v.play().catch(() => undefined);
     else v.pause();
   }, []);
-  const step = useCallback(
-    (direction: -1 | 1, size = REVIEW_FRAME_MS) => {
-      videoRef.current?.pause();
-      seek(Math.round(currentMs + direction * size));
+  /** R and the loop button: run the current range over and over, or stop. Starts from the range's start. */
+  const toggleLoop = useCallback(() => {
+    if (!rangeKey || !loopRange) return;
+    if (looping) {
+      setLoopKey(null);
+      return;
+    }
+    setLoopKey(rangeKey);
+    const v = videoRef.current;
+    const at = v && Number.isFinite(v.currentTime) ? v.currentTime * 1000 : currentMs;
+    if (at < loopRange.startMs || at >= loopRange.endMs) seek(loopRange.startMs);
+  }, [rangeKey, loopRange, looping, currentMs, seek]);
+
+  /** A double click on a range note's time: pick it and play it on a loop. */
+  const loopThread = useCallback(
+    (thread: ReviewThread) => {
+      const { atMs, endMs } = thread.root;
+      if (thread.root.deleted || atMs == null || endMs == null || !extended) return;
+      setActiveId(thread.root.id);
+      if (fullscreen) setNotesOpen(true);
+      setLoopKey(loopKeyOf("note", thread.root.id, { startMs: atMs, endMs }));
+      seek(atMs);
+      void videoRef.current?.play().catch(() => undefined);
     },
-    [currentMs, seek],
+    [extended, fullscreen, seek],
+  );
+
+  /** One real frame (the stored or measured rate, 24 until known), or `seconds` when given (J / L). */
+  const step = useCallback(
+    (direction: -1 | 1, seconds?: number) => {
+      const v = videoRef.current;
+      v?.pause();
+      const from = v && Number.isFinite(v.currentTime) ? v.currentTime * 1000 : currentMs;
+      if (seconds) {
+        seek(Math.round(from + direction * seconds * 1000));
+        return;
+      }
+      const frame = stepFrame(from, stepRate, direction, durationMs);
+      const max = durationMs > 0 ? durationMs : Number.MAX_SAFE_INTEGER;
+      const at = Math.min(frameSeekSeconds(frame, stepRate) * 1000, max);
+      if (v) v.currentTime = at / 1000;
+      setCurrentMs(at);
+    },
+    [currentMs, seek, stepRate, durationMs],
   );
 
   const focusThread = useCallback(
     (thread: ReviewThread) => {
       setActiveId(thread.root.id);
+      // In full screen a note picked on the frame or the timeline shows in the side panel.
+      if (fullscreen) setNotesOpen(true);
       if (isVideo && thread.root.atMs != null) {
         videoRef.current?.pause();
         seek(thread.root.atMs);
@@ -525,7 +799,7 @@ export function ReviewStage({
       const reduce = typeof window !== "undefined" && window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
       document.getElementById(`bsv-thread-${thread.root.id}`)?.scrollIntoView({ block: "nearest", behavior: reduce ? "auto" : "smooth" });
     },
-    [isVideo, seek],
+    [isVideo, seek, fullscreen],
   );
 
   useEffect(() => {
@@ -563,7 +837,7 @@ export function ReviewStage({
     if (!seededRef.current) {
       seededRef.current = true;
       if (initialMs && initialMs > 0) {
-        v.currentTime = initialMs / 1000;
+        placeAt(v, initialMs);
         setCurrentMs(initialMs);
         const near = timed.find((t) => Math.abs((t.root.atMs ?? 0) - initialMs) <= 400);
         if (near) setActiveId(near.root.id);
@@ -664,9 +938,14 @@ export function ReviewStage({
     if (isVideo) togglePlay();
   }
 
-  function onKeyDown(event: KeyboardEvent<HTMLDivElement>) {
+  /**
+   * The stage's keys, wherever focus is inside the stage (the whole section takes focus on a click), except
+   * while typing in a field, a select or editable text.
+   */
+  function onKeyDown(event: KeyboardEvent<HTMLElement>) {
     const target = event.target as HTMLElement;
-    if (target.closest("textarea, input[type='text'], input[type='password'], select")) return;
+    if (isTypingTarget(target) || target.closest("dialog")) return;
+    if (comparing) return;
     if (event.key === "Escape" && ink.active) {
       finishDrawing();
       return;
@@ -675,7 +954,19 @@ export function ReviewStage({
       setSpotMode(false);
       return;
     }
-    if (!isVideo || event.metaKey || event.ctrlKey || event.altKey) return;
+    if (event.metaKey || event.ctrlKey || event.altKey) return;
+    if ((event.key === "f" || event.key === "F") && fullscreenAvailable && media && !comparing) {
+      event.preventDefault();
+      toggleFullscreen();
+      return;
+    }
+    if (!isVideo) return;
+    if (extended && (event.key === "r" || event.key === "R")) {
+      if (!rangeKey) return;
+      event.preventDefault();
+      toggleLoop();
+      return;
+    }
     if (extended && canComment && (event.key === "i" || event.key === "I")) {
       event.preventDefault();
       videoRef.current?.pause();
@@ -717,12 +1008,12 @@ export function ReviewStage({
       case "j":
       case "J":
         event.preventDefault();
-        step(-1, 1000);
+        step(-1, 1);
         break;
       case "l":
       case "L":
         event.preventDefault();
-        step(1, 1000);
+        step(1, 1);
         break;
     }
   }
@@ -754,7 +1045,7 @@ export function ReviewStage({
     }
     const pending = ink.active ? ink.finish() : null;
     const strokes = pending && pending.length ? pending : (mark?.strokes ?? null);
-    const composed = composeNote(body, mark, { isVideo, general, extended, currentMs, strokes });
+    const composed = snapNoteToFrames(composeNote(body, mark, { isVideo, general, extended, currentMs, strokes }), frameRate);
     const note = team && teamOnly ? { ...composed, team: true } : composed;
     const ok = await run("send", () => actions.addComment(note));
     if (ok) {
@@ -811,6 +1102,13 @@ export function ReviewStage({
     }
   }
 
+  // In full screen, starting a note (a range, a spot, the pen, typed text) brings the side panel out. The
+  // bare moment the composer pins when it takes focus is not on its own a note being written.
+  const composing = holding || ink.active || spotMode || (mark !== null && (mark.endMs != null || mark.x != null || (mark.strokes?.length ?? 0) > 0));
+  useEffect(() => {
+    if (fullscreen && composing) setNotesOpen(true);
+  }, [fullscreen, composing]);
+
   const setStatus = actions.setStatus;
   const resolveComment = canManage ? actions.resolveComment : undefined;
   const activeStrokes =
@@ -818,10 +1116,50 @@ export function ReviewStage({
       ? activeThread.root.strokes
       : null;
   const spans = extended ? timed.filter((t) => t.root.endMs != null) : [];
+  // The length as a timecode: the end of the last frame, so a stored length rounded to 0.1 s and the
+  // browser's own length read the same (192 frames at 23.976 end at 0:08:00 either way).
+  const lastFrameIndex = frameRate ? lastFrame(durationMs, frameRate) : null;
+  const endOfFilm = frameRate && lastFrameIndex != null ? frameStartMs(lastFrameIndex + 1, frameRate) : durationMs;
+  const fullscreenButton =
+    fullscreenAvailable && media ? (
+      <button
+        type="button"
+        className="bsv-icon-btn"
+        onClick={toggleFullscreen}
+        aria-label={fullscreen ? copy.player.exitFullscreen : copy.player.fullscreen}
+        title={`${fullscreen ? copy.player.exitFullscreen : copy.player.fullscreen} (F)`}
+        data-review-fullscreen={fullscreen ? "on" : "off"}
+      >
+        <Icon d={fullscreen ? ICONS.exitFullscreen : ICONS.fullscreen} />
+      </button>
+    ) : null;
+  const notesButton = fullscreen ? (
+    <button
+      type="button"
+      className="bsv-icon-btn"
+      onClick={() => setNotesOpen((open) => !open)}
+      aria-label={notesOpen ? copy.player.notesHide : copy.player.notesShow}
+      title={notesOpen ? copy.player.notesHide : copy.player.notesShow}
+      aria-pressed={notesOpen}
+      aria-controls={`bsv-notes-${review.id}`}
+      data-review-notes-toggle
+    >
+      <Icon d={ICONS.notes} />
+    </button>
+  ) : null;
 
   return (
-    <section className="bsv-stage" data-review-stage={review.id} data-review-kind={review.kind} aria-labelledby={`bsv-title-${review.id}`}>
-      <header className="bsv-stage-head">
+    <section
+      ref={sectionRef}
+      className="bsv-stage"
+      data-review-stage={review.id}
+      data-review-kind={review.kind}
+      data-layout={layout}
+      aria-labelledby={`bsv-title-${review.id}`}
+      tabIndex={-1}
+      onKeyDown={onKeyDown}
+    >
+      <header className="bsv-stage-head" ref={headRef}>
         <div className={compactHead ? "bsv-visually-hidden" : "bsv-stage-heading"} data-review-heading={compactHead ? "hidden" : undefined}>
           {onBack && (
             <button type="button" className="bsv-back" onClick={onBack}>
@@ -913,8 +1251,14 @@ export function ReviewStage({
       {comparing && stack ? (
         <CompareView versions={stack} currentId={review.id} copy={copy} onClose={() => setComparing(false)} />
       ) : (
-      <div className="bsv-stage-body">
-        <div className="bsv-player" onKeyDown={onKeyDown} data-review-player>
+      <div
+        className="bsv-stage-body"
+        ref={bodyRef}
+        data-fullscreen={fullscreen ? "" : undefined}
+        data-notes-open={fullscreen && notesOpen ? "" : undefined}
+        data-review-body
+      >
+        <div className="bsv-player" ref={playerRef} data-review-player>
           <div className="bsv-mat">
           <div className="bsv-frame-wrap" ref={wrapRef}>
             {media ? (
@@ -943,7 +1287,18 @@ export function ReviewStage({
                       setPlaying(false);
                       if (videoRef.current) setCurrentMs(videoRef.current.currentTime * 1000);
                     }}
-                    onEnded={() => setPlaying(false)}
+                    onEnded={() => {
+                      // A range that runs to the very end loops from its start like any other.
+                      const v = videoRef.current;
+                      const range = loopRef.current;
+                      if (v && range) {
+                        placeAt(v, range.startMs);
+                        setCurrentMs(range.startMs);
+                        void v.play().catch(() => setPlaying(false));
+                        return;
+                      }
+                      setPlaying(false);
+                    }}
                     onSeeked={() => videoRef.current && setCurrentMs(videoRef.current.currentTime * 1000)}
                   />
                 ) : (
@@ -1006,6 +1361,13 @@ export function ReviewStage({
           </div>
           </div>
 
+          {!isVideo && media && (fullscreenButton || notesButton) && (
+            <div className="bsv-still-tools" data-review-still-tools>
+              {notesButton}
+              {fullscreenButton}
+            </div>
+          )}
+
           {isVideo && media && (
             <div className="bsv-controls" data-review-timeline>
               <div className="bsv-transport">
@@ -1018,28 +1380,54 @@ export function ReviewStage({
                 <button type="button" className="bsv-icon-btn" onClick={() => step(1)} aria-label={copy.player.forward}>
                   <Icon d={ICONS.forward} />
                 </button>
-                <span className="bsv-time" aria-live="off">
-                  {formatTimecode(currentMs)} <span className="bsv-time-total">/ {formatTimecode(durationMs)}</span>
+                <span className="bsv-time" aria-live="off" data-review-time>
+                  <Timecode ms={currentMs} fps={frameRate} />{" "}
+                  <span className="bsv-time-total">
+                    / <Timecode ms={endOfFilm} fps={frameRate} clockOnly={frameRate != null && endsOnWholeSecond(endOfFilm, frameRate)} />
+                  </span>
                 </span>
-                {extended && (
-                  <select
-                    className="bsv-version-select"
-                    aria-label={copy.player.speed}
-                    data-review-speed
-                    value={String(speed)}
-                    onChange={(e) => changeSpeed(Number(e.target.value))}
-                    style={{ marginLeft: "auto", fontSize: 12, padding: "2px 8px", height: 28 }}
-                  >
-                    {[0.5, 1, 1.5, 2].map((rate) => (
-                      <option key={rate} value={String(rate)}>
-                        {`${rate}×`}
-                      </option>
-                    ))}
-                  </select>
-                )}
-                <button type="button" className="bsv-icon-btn bsv-mute" onClick={() => setMuted((m) => !m)} aria-label={muted ? copy.player.unmute : copy.player.mute} aria-pressed={muted}>
-                  <Icon d={muted ? ICONS.muted : ICONS.sound} />
-                </button>
+                {frameRate ? (
+                  <span className="bsv-fps" data-review-fps={frameRate}>
+                    {`${frameRate} fps`}
+                  </span>
+                ) : null}
+                <span className="bsv-transport-end">
+                  {extended && (
+                    <select
+                      className="bsv-version-select"
+                      aria-label={copy.player.speed}
+                      data-review-speed
+                      value={String(speed)}
+                      onChange={(e) => changeSpeed(Number(e.target.value))}
+                      style={{ fontSize: 12, padding: "2px 8px", height: 28 }}
+                    >
+                      {[0.5, 1, 1.5, 2].map((rate) => (
+                        <option key={rate} value={String(rate)}>
+                          {`${rate}×`}
+                        </option>
+                      ))}
+                    </select>
+                  )}
+                  {extended && (
+                    <button
+                      type="button"
+                      className="bsv-icon-btn"
+                      onClick={toggleLoop}
+                      disabled={!rangeKey}
+                      aria-label={copy.player.loop}
+                      title={`${copy.player.loop} (R)`}
+                      aria-pressed={looping}
+                      data-review-loop={looping ? "on" : rangeKey ? "off" : "none"}
+                    >
+                      <Icon d={ICONS.loop} />
+                    </button>
+                  )}
+                  <button type="button" className="bsv-icon-btn bsv-mute" onClick={() => setMuted((m) => !m)} aria-label={muted ? copy.player.unmute : copy.player.mute} aria-pressed={muted}>
+                    <Icon d={muted ? ICONS.muted : ICONS.sound} />
+                  </button>
+                  {notesButton}
+                  {fullscreenButton}
+                </span>
               </div>
               <div className="bsv-track">
                 {extended && (
@@ -1051,6 +1439,7 @@ export function ReviewStage({
                     aria-label={copy.range.lane}
                     aria-describedby={`bsv-keys-${review.id}`}
                     data-active={dragRange ? "" : undefined}
+                    data-looping={looping ? "" : undefined}
                     onPointerDown={(e) => {
                       if (!canComment || durationMs <= 0 || e.button !== 0) return;
                       e.currentTarget.setPointerCapture?.(e.pointerId);
@@ -1086,7 +1475,7 @@ export function ReviewStage({
                         data-resolved={t.root.resolved ? "" : undefined}
                         data-active={activeId === t.root.id ? "" : undefined}
                         style={{ left: pct(t.root.atMs ?? 0), width: `calc(${pct(t.root.endMs ?? 0)} - ${pct(t.root.atMs ?? 0)})` }}
-                        aria-label={fill(copy.range.spanLabel, { start: formatTimecode(t.root.atMs), end: formatTimecode(t.root.endMs), text: t.root.body.slice(0, 80) })}
+                        aria-label={fill(copy.range.spanLabel, { start: tc(t.root.atMs), end: tc(t.root.endMs), text: t.root.body.slice(0, 80) })}
                         onPointerDown={(e) => e.stopPropagation()}
                         onClick={() => focusThread(t)}
                       />
@@ -1119,7 +1508,7 @@ export function ReviewStage({
                       data-resolved={t.root.resolved ? "" : undefined}
                       data-active={activeId === t.root.id ? "" : undefined}
                       style={{ left: pct(t.root.atMs ?? 0), ["--bsv-nudge" as string]: nudge.get(t.root.id) ?? 0 }}
-                      aria-label={fill(copy.pinLabel, { time: formatTimecode(t.root.atMs), text: t.root.body.slice(0, 80) })}
+                      aria-label={fill(copy.pinLabel, { time: tc(t.root.atMs), text: t.root.body.slice(0, 80) })}
                       onClick={() => focusThread(t)}
                     >
                       <span aria-hidden="true">{numberOf.get(t.root.id)}</span>
@@ -1132,14 +1521,14 @@ export function ReviewStage({
                   className="bsv-range"
                   min={0}
                   max={Math.max(durationMs, 1)}
-                  step={REVIEW_FRAME_MS}
+                  step={frameRate ? 1000 / frameRate : REVIEW_FRAME_MS}
                   value={Math.min(currentMs, Math.max(durationMs, 1))}
                   onChange={(e) => {
                     videoRef.current?.pause();
                     seek(Number(e.target.value));
                   }}
                   aria-label={copy.player.timeline}
-                  aria-valuetext={formatTimecode(currentMs)}
+                  aria-valuetext={tc(currentMs)}
                   style={{ ["--bsv-progress" as string]: pct(currentMs) }}
                 />
               </div>
@@ -1151,7 +1540,7 @@ export function ReviewStage({
           )}
         </div>
 
-        <aside className="bsv-comments" data-review-comments aria-label={copy.commentsTitle}>
+        <aside className="bsv-comments" id={`bsv-notes-${review.id}`} data-review-comments aria-label={copy.commentsTitle}>
           <div className="bsv-comments-head">
             <h3 className="bsv-comments-title">
               {copy.commentsTitle} <span className="bsv-count">{threads.filter((t) => !t.root.deleted).length}</span>
@@ -1264,11 +1653,11 @@ export function ReviewStage({
                   {mark?.atMs != null &&
                     (mark.endMs != null ? (
                       <span className="bsv-chip" data-review-range-chip>
-                        {fill(copy.range.chip, { start: formatTimecode(mark.atMs), end: formatTimecode(mark.endMs) })}
+                        {fillNodes(copy.range.chip, { start: <Timecode ms={mark.atMs} fps={frameRate} />, end: <Timecode ms={mark.endMs} fps={frameRate} /> })}
                       </span>
                     ) : (
                       <span className="bsv-chip" data-review-moment-chip>
-                        {fill(copy.momentChip, { time: formatTimecode(mark.atMs) })}
+                        {fillNodes(copy.momentChip, { time: <Timecode ms={mark.atMs} fps={frameRate} /> })}
                         {isVideo && !ink.active && !(mark.strokes && mark.strokes.length) && (
                           <button type="button" className="bsv-chip-x" onClick={dropMoment} aria-label={copy.dropMoment} title={copy.dropMoment} data-review-moment-drop>
                             <Icon d={ICONS.close} />
@@ -1390,7 +1779,17 @@ export function ReviewStage({
           if (!t.root.deleted) focusThread(t);
         }}
       >
-        <CommentBody comment={t.root} number={numberOf.get(t.root.id) ?? 0} copy={copy} locale={locale} onSeek={() => focusThread(t)} teamTag={team && t.root.team ? team.copy.tag : null} />
+        <CommentBody
+          comment={t.root}
+          number={numberOf.get(t.root.id) ?? 0}
+          copy={copy}
+          locale={locale}
+          onSeek={() => focusThread(t)}
+          onLoop={isVideo && extended ? () => loopThread(t) : undefined}
+          teamTag={team && t.root.team ? team.copy.tag : null}
+          tc={tc}
+          fps={frameRate}
+        />
         {!t.root.deleted && (canComment || canManage) && (
           <div className="bsv-thread-actions">
             {canComment && !carried && (
@@ -1418,7 +1817,7 @@ export function ReviewStage({
           <ul className="bsv-replies">
             {t.replies.map((r) => (
               <li key={r.id} className="bsv-reply" data-review-reply={r.id}>
-                <CommentBody comment={r} copy={copy} locale={locale} />
+                <CommentBody comment={r} copy={copy} locale={locale} tc={tc} fps={frameRate} />
                 {canComment && r.mine && actions.deleteComment && (
                   <div className="bsv-thread-actions">
                     <DeleteButton copy={copy} disabled={busy !== null} onConfirm={() => void run(`delete:${r.id}`, () => actions.deleteComment!(r.id))} />
@@ -1487,7 +1886,10 @@ function CommentBody({
   copy,
   locale,
   onSeek,
+  onLoop,
   teamTag = null,
+  tc = formatTimecode,
+  fps = null,
 }: {
   comment: ReviewComment;
   number?: number;
@@ -1495,11 +1897,17 @@ function CommentBody({
   locale: "ko" | "en";
   /** Thread heads only: the moment (or spot) is a button that brings the film or the pin to it. */
   onSeek?: () => void;
+  /** A range note on the room stage: a double click on its time plays the range on a loop. */
+  onLoop?: () => void;
   /** The team's page only: the "팀 메모" tag on a team note's thread head. */
   teamTag?: string | null;
+  /** The stage's timecode as text (labels): `m:ss:ff` once the frame rate is known, `m:ss.t` before. */
+  tc?: (ms: number | null | undefined) => string;
+  /** The frame rate, for the timecode drawn on the chip (`Timecode`). */
+  fps?: number | null;
 }) {
   const role = comment.guest ? "guest" : comment.authorRole;
-  const timecode = comment.atMs == null ? "" : comment.endMs != null ? `${formatTimecode(comment.atMs)}–${formatTimecode(comment.endMs)}` : formatTimecode(comment.atMs);
+  const timecode = comment.atMs == null ? "" : comment.endMs != null ? `${tc(comment.atMs)}–${tc(comment.endMs)}` : tc(comment.atMs);
   return (
     <article className="bsv-comment" data-role={role}>
       <header className="bsv-comment-head">
@@ -1532,8 +1940,20 @@ function CommentBody({
           {onSeek && (
             <div className="bsv-meta">
               {comment.atMs != null ? (
-                <button type="button" className="bsv-timecode" onClick={onSeek} aria-label={fill(copy.seekTo, { time: timecode })} data-range={comment.endMs != null ? "" : undefined}>
-                  {timecode}
+                <button
+                  type="button"
+                  className="bsv-timecode"
+                  onClick={onSeek}
+                  onDoubleClick={comment.endMs != null ? onLoop : undefined}
+                  aria-label={fill(copy.seekTo, { time: timecode })}
+                  data-range={comment.endMs != null ? "" : undefined}
+                >
+                  <Timecode ms={comment.atMs} fps={fps} />
+                  {comment.endMs != null ? (
+                    <>
+                      –<Timecode ms={comment.endMs} fps={fps} />
+                    </>
+                  ) : null}
                 </button>
               ) : comment.x == null && !comment.strokes?.length ? (
                 <span className="bsv-timecode" data-whole="">

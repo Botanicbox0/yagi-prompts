@@ -183,7 +183,9 @@ describe('video', () => {
     await advanceStudioJobsWith(deps, { jobIds: [job.id] });
     expect((await view(job.id)).status).toBe('succeeded');
     expect(deps.intel.calls.film).toBe(1);
-    expect(sent[0]!.body).toMatchObject({ omni_reference_task_type: 'edit', duration: -1, ratio: 'adaptive', draft: true });
+    // Asked for as a draft, an edit still follows its source (-1), so it goes out as the standard 480p run
+    // (tests/brand-studio/server/draft-runs.test.ts).
+    expect(sent[0]!.body).toMatchObject({ omni_reference_task_type: 'edit', duration: -1, ratio: 'adaptive', draft: false, resolution: '480p' });
     expect((sent[0]!.body.reference_videos as string[])[0]).toContain('.mp4');
   });
 });

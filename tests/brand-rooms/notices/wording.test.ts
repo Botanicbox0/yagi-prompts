@@ -59,7 +59,8 @@ const KO: Record<Kind, Row> = {
   intake_received: {
     subject: '[{project}] 의뢰가 접수되었습니다',
     heading: '요청하신 내용이 잘 전달되었습니다.',
-    body: '야기 팀이 보내주신 의뢰 내용을 확인하고 있습니다.',
+    // The second sentence is the founder's own (2026-11-18).
+    body: '야기 팀이 보내주신 의뢰 내용을 확인하고 있습니다. 영업일 3일 안에 연락드립니다.',
     button: '내 의뢰 확인하기',
     pushTitle: null,
     pushBody: null,
@@ -103,7 +104,7 @@ const EN: Record<Kind, Row> = {
   intake_received: {
     subject: 'Request received for {project}',
     heading: 'Your request has been submitted.',
-    body: 'The YAGI team is reviewing your requirements.',
+    body: "The YAGI team is reviewing your requirements. We'll get back to you within 3 business days.",
     button: 'View Request',
     pushTitle: null,
     pushBody: null,
@@ -120,6 +121,8 @@ const FOOTER = {
 const REMOVED = ['곧 안내해 드릴게요', '원활한 프로젝트 진행', '정상적으로', '성공적으로', '호출', 'We will get back to you soon', 'successfully', 'keep the project moving'];
 
 const fill = (template: string, values: Record<string, string | number>) => template.replace(/\{(\w+)\}/g, (_, key: string) => String(values[key]));
+/** The HTML carries the same sentence with markup characters escaped (the apostrophe in "We'll"). */
+const html = (text: string) => text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;');
 
 const VALUES = { project: 'Spring launch', title: 'Hero film', version: 2, name: 'Mina', count: 3 };
 
@@ -160,8 +163,8 @@ describe.each([
     const lines = mail.text.split('\n');
     expect(lines[0]).toBe(fill(row.heading, VALUES));
     expect(lines[2]).toBe(fill(row.body, VALUES));
-    expect(mail.html).toContain(`>${fill(row.heading, VALUES)}</h1>`);
-    expect(mail.html).toContain(`>${fill(row.body, VALUES)}</p>`);
+    expect(mail.html).toContain(`>${html(fill(row.heading, VALUES))}</h1>`);
+    expect(mail.html).toContain(`>${html(fill(row.body, VALUES))}</p>`);
     expect(mail.text).toContain(`${row.button}: ${mail.buttonUrl}`);
     expect(mail.html).toContain(`>${row.button}</a>`);
   });

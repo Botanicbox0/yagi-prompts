@@ -22,7 +22,10 @@ export interface TrayItem {
   name: string;
   url: string;
   thumbUrl: string | null;
+  /** Length in tenths, as shown. */
   seconds: number | null;
+  /** Exact stored length in milliseconds, when known: a run that follows this clip is priced from it. */
+  durationMs?: number;
   /** Measured size, when known (a reference video's limits use it). */
   width?: number | null;
   height?: number | null;
@@ -43,6 +46,7 @@ export function trayItemFromAsset(asset: StudioAssetView): TrayItem {
     url: asset.url,
     thumbUrl: asset.thumbUrl,
     seconds: asset.seconds,
+    ...(asset.durationMs !== undefined ? { durationMs: asset.durationMs } : {}),
     width: asset.width,
     height: asset.height,
     ...(asset.role ? { role: asset.role } : {}),
@@ -58,6 +62,7 @@ export function trayItemFromOutput(output: StudioOutputView, name: string): Tray
     url: output.url,
     thumbUrl: output.thumbUrl,
     seconds: output.seconds,
+    ...(output.durationMs !== undefined ? { durationMs: output.durationMs } : {}),
     width: output.width,
     height: output.height,
   };

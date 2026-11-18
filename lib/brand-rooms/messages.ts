@@ -17,6 +17,7 @@
 import { randomBytes } from 'node:crypto';
 import type { Viewer } from '@/lib/auth/identity';
 import type { SqlRunner } from '@/lib/db/sql-runner';
+import { interpolate } from '@/lib/i18n/format';
 import { STAGING_BUCKET, type StorageDriver } from '@/lib/storage';
 import { featureDenied, isSandboxedClientOrganization } from '@/lib/brands/features';
 import { loadFeaturePolicies } from '@/lib/brands/entitlements';
@@ -1364,17 +1365,61 @@ const waitingLine = (m: string) =>
   `(${m}.deleted_at is null and (${m}.author_role = 'brand'
      or (${m}.kind = 'event' and ${m}.author_role = 'system' and ${m}.detail ->> 'actorRole' = 'brand' and ${m}.event in (${WAITING_EVENT_LIST}))))`;
 
-/** The last moment the team saw a channel: its newest read mark, team line or team event there. */
-const teamSeen = (m: string) => `
+/**
+ * The team's 확인함 marks on a channel: an admin's row in `brand_room_reads`. Since 2026-11-18 only the desk's
+ * 확인함 button writes a team member's row (`brand_rooms.channel.ack`); opening a conversation, its drawer or a
+ * thread writes nothing on the team side. The brand never reads these rows (each member reads only their own).
+ */
+const teamAckRows = (organization: string, channel: string) =>
+  `brand_room_reads r join profiles ap on ap.id = r.user_id and ap.is_admin where r.organization_id = ${organization} and r.channel = ${channel}`;
+
+/**
+ * Where the team caught up on a channel: its newest live team line or team event (a reply, a note the brand can
+ * see, a new version, a shared board), or its newest 확인함. A team note (§5) leaves no line, so it is not here.
+ */
+const teamCaughtUp = (m: string) => `
   greatest(
-    coalesce((select max(r.last_read_at) from brand_room_reads r join profiles p on p.id = r.user_id and p.is_admin
-               where r.organization_id = ${m}.organization_id and r.channel = ${m}.channel), '-infinity'::timestamptz),
+    coalesce((select max(r.last_read_at) from ${teamAckRows(`${m}.organization_id`, `${m}.channel`)}), '-infinity'::timestamptz),
     coalesce((select max(s.created_at) from brand_room_messages s
-               where s.organization_id = ${m}.organization_id and s.channel = ${m}.channel and ${teamAnswer('s')}), '-infinity'::timestamptz)
+               where s.organization_id = ${m}.organization_id and s.channel = ${m}.channel and s.deleted_at is null and ${teamAnswer('s')}), '-infinity'::timestamptz)
   )`;
 
-/** Team unread ("waiting"): the waiting lines after the team last saw the channel. `m` is the counted alias. */
-const teamWaiting = (m: string) => `${waitingLine(m)} and ${m}.created_at > ${teamSeen(m)}`;
+/**
+ * Team "waiting" (docs/BRAND-ROOMS-FEEDBACK.md §3, as changed 2026-11-18): the customer's lines the team has not
+ * answered yet — the waiting lines after the team's newest answer and its newest 확인함. Reading does not clear
+ * them. `m` is the counted alias.
+ */
+const teamWaiting = (m: string) => `${waitingLine(m)} and ${m}.created_at > ${teamCaughtUp(m)}`;
+
+/** The newest 확인함 on a channel, as two columns (`ack_at`, `ack_by`) for a select list. */
+const teamAckColumns = (organization: string, channel: string) => `
+  (select max(r.last_read_at) from ${teamAckRows(organization, channel)}) as ack_at,
+  (select coalesce(nullif(btrim(ap.display_name), ''), split_part(ap.email, '@', 1)) from ${teamAckRows(organization, channel)}
+    order by r.last_read_at desc limit 1) as ack_by`;
+
+/** Who pressed 확인함 last on a channel, and when. Team pages only. */
+export interface StaffAcknowledgement {
+  at: string;
+  /** The team member's display name, else the part of their address before the @. */
+  by: string | null;
+}
+
+/** "확인함 · 이름 · 시각" (or without the name) for the team pages; null when nobody has pressed it. */
+export function acknowledgementLine(
+  ack: StaffAcknowledgement | null | undefined,
+  words: { acknowledged: string; acknowledgedAt: string },
+  time: (iso: string) => string,
+): string | null {
+  if (!ack) return null;
+  return ack.by ? interpolate(words.acknowledged, { name: ack.by, time: time(ack.at) }) : interpolate(words.acknowledgedAt, { time: time(ack.at) });
+}
+
+function acknowledgementOf(row: { ack_at?: Date | string | null; ack_by?: string | null }): StaffAcknowledgement | null {
+  const at = isoOrNull(row.ack_at ?? null);
+  if (!at) return null;
+  const by = typeof row.ack_by === 'string' ? row.ack_by.replace(/\s+/g, ' ').trim().slice(0, 60) : '';
+  return { at, by: by || null };
+}
 
 export interface StaffRoomChannel {
   organizationId: string;
@@ -1385,7 +1430,10 @@ export interface StaffRoomChannel {
   lastAt: string | null;
   lastLine: string | null;
   lastRole: RoomAuthorRole | null;
+  /** The customer's lines the team has not answered or acknowledged yet. */
   teamUnread: number;
+  /** The newest 확인함 (one organization's channel list only; the cross-brand overview leaves it out). */
+  acknowledged?: StaffAcknowledgement | null;
 }
 
 interface StaffChannelRow {
@@ -1399,6 +1447,8 @@ interface StaffChannelRow {
   last_role: RoomAuthorRole | null;
   team_unread: number;
   created_at: Date | string | null;
+  ack_at?: Date | string | null;
+  ack_by?: string | null;
 }
 
 function staffChannelView(r: StaffChannelRow): StaffRoomChannel {
@@ -1412,6 +1462,7 @@ function staffChannelView(r: StaffChannelRow): StaffRoomChannel {
     lastLine: lastLineOf(r.last_line),
     lastRole: r.last_role,
     teamUnread: Number(r.team_unread ?? 0),
+    ...('ack_at' in r ? { acknowledged: acknowledgementOf(r) } : {}),
   };
 }
 
@@ -1506,13 +1557,16 @@ export interface StaffProjectDesk {
   ok: true;
   organization: { id: string; name: string };
   project: { id: string; title: string; status: string; createdAt: string | null };
+  /** The customer's lines the team has not answered or acknowledged yet. */
   teamUnread: number;
+  /** The newest 확인함 on the project's conversation, or null. */
+  acknowledged: StaffAcknowledgement | null;
 }
 
 /**
  * `/admin/brand-rooms/[organizationId]/[projectId]` — the team's desk for one project: the same gate as the
  * project's conversation (an admin re-read on the profile row, an open organization, a client-visible
- * project of that organization; anything else `not_found`), its status and the waiting count.
+ * project of that organization; anything else `not_found`), its status, the waiting count and the last 확인함.
  */
 export async function staffProjectDesk(deps: Pick<RoomMessageDeps, 'sql'>, viewer: Viewer, organizationId: string, projectId: string): Promise<StaffProjectDesk | RoomFailure> {
   return guard(() =>
@@ -1520,10 +1574,11 @@ export async function staffProjectDesk(deps: Pick<RoomMessageDeps, 'sql'>, viewe
       const reader = await staffReader(sql, viewer, organizationId, projectId);
       if (!reader.projectId) throw new MessageDenied('not_found');
       const row = (
-        await sql.query<{ status: string; created_at: Date | string | null; team_unread: number }>(
+        await sql.query<{ status: string; created_at: Date | string | null; team_unread: number; ack_at: Date | string | null; ack_by: string | null }>(
           `select p.status, p.created_at,
                   (select count(*)::int from brand_room_messages m0
-                    where m0.organization_id = p.organization_id and m0.channel = p.id::text and ${teamWaiting('m0')}) as team_unread
+                    where m0.organization_id = p.organization_id and m0.channel = p.id::text and ${teamWaiting('m0')}) as team_unread,
+                  ${teamAckColumns('p.organization_id', 'p.id::text')}
              from brand_projects p where p.id = $1 and p.organization_id = $2`,
           [reader.projectId, reader.organizationId],
         )
@@ -1534,6 +1589,7 @@ export async function staffProjectDesk(deps: Pick<RoomMessageDeps, 'sql'>, viewe
         organization: { id: reader.organizationId, name: reader.organizationName },
         project: { id: reader.projectId, title: String(reader.title ?? ''), status: String(row.status), createdAt: isoOrNull(row.created_at) },
         teamUnread: Number(row.team_unread ?? 0),
+        acknowledged: acknowledgementOf(row),
       };
     }),
   );
@@ -1566,7 +1622,8 @@ export async function staffRoomChannels(
                     where m.organization_id = $1 and m.channel = c.channel and m.deleted_at is null and m.kind = 'text'
                     order by m.created_at desc limit 1) as last_role,
                   (select count(*)::int from brand_room_messages m0
-                    where m0.organization_id = $1 and m0.channel = c.channel and ${teamWaiting('m0')}) as team_unread
+                    where m0.organization_id = $1 and m0.channel = c.channel and ${teamWaiting('m0')}) as team_unread,
+                  ${teamAckColumns('$1::uuid', 'c.channel')}
              from chans c`,
           [org.id, org.name],
         )
@@ -1637,13 +1694,23 @@ export async function staffDeleteMessage(deps: RoomMessageDeps, viewer: Viewer, 
   return result;
 }
 
-/** The team has read a channel up to `at` (`brand_rooms.channel.read`): team unread counts start after it. */
-export async function staffMarkRead(deps: RoomMessageDeps, viewer: Viewer, input: { organizationId: string; projectId: string; at?: string | null }): Promise<RoomReadDone | RoomFailure> {
+/**
+ * 확인함 (`brand_rooms.channel.ack`, the desk's button): a team member has looked at what waits in a channel and
+ * owes no answer for now, so its waiting count starts again after this moment. Stored as that member's row in
+ * `brand_room_reads` at the database's now (who and when; the row only moves forward). Team-only: no line in
+ * the conversation, no notice, nothing a brand member or a share guest reads. Opening a conversation no longer
+ * writes this row for the team (the admin transport has no read mark).
+ */
+export async function staffAcknowledge(
+  deps: Pick<RoomMessageDeps, 'sql'>,
+  viewer: Viewer,
+  input: { organizationId: string; projectId: string },
+): Promise<{ ok: true; acknowledgedAt: string } | RoomFailure> {
   return guard(() =>
     deps.sql.transaction(async (sql) => {
       const reader = await staffReader(sql, viewer, input.organizationId, input.projectId);
-      const at = input.at && !Number.isNaN(Date.parse(input.at)) ? new Date(input.at).toISOString() : null;
-      return markRead(sql, reader, at);
+      const done = await markRead(sql, reader, null);
+      return { ok: true as const, acknowledgedAt: done.lastReadAt };
     }),
   );
 }

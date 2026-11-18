@@ -356,7 +356,7 @@ export function useFeed(transport: ChatTransport, channel: string, mode: FeedMod
 /**
  * Mark a channel read up to its newest line, once it has been seen. Debounced; announces to the rail.
  * `seen` already folds in whether the conversation is on screen (./presence.ts); the tab must be in front
- * when the timer fires, by the same rule (`readMarkAllowed`).
+ * when the timer fires, by the same rule (`readMarkAllowed`). A transport without `read` (the team's) marks nothing.
  */
 export function useReadMark(transport: ChatTransport, channel: string, newestAt: string | null, seen: boolean) {
   const marked = useRef<string | null>(null);
@@ -364,11 +364,12 @@ export function useReadMark(transport: ChatTransport, channel: string, newestAt:
     marked.current = null;
   }, [channel]);
   useEffect(() => {
-    if (!seen || !newestAt || (marked.current && marked.current >= newestAt)) return;
+    const read = transport.read;
+    if (!read || !seen || !newestAt || (marked.current && marked.current >= newestAt)) return;
     const timer = window.setTimeout(() => {
       if (!readMarkAllowed({ seen, ready: true, visible: true, pageVisible: document.visibilityState === "visible" })) return;
       marked.current = newestAt;
-      void transport.read(channel, newestAt).then(announceRoomActivity);
+      void read.call(transport, channel, newestAt).then(announceRoomActivity);
     }, 1200);
     return () => window.clearTimeout(timer);
   }, [channel, newestAt, seen, transport]);

@@ -29,6 +29,7 @@ import {
   selectMusicProvider,
   sfxCredits,
 } from '@/lib/brand-studio/music';
+import { studioEnv } from '@/lib/brand-studio/env';
 import { usedKrwIn, studioMonthWindow } from '@/lib/brand-studio/usage';
 import { studioDeps, studioFixture, viewerOf, type StudioFixture } from './server/helpers';
 
@@ -351,7 +352,10 @@ describe('Pro Suite Pillar 3 — 5-Lane NLE, Shot-Match LUT, Commercial Sunra Mu
 
     // Offline local_yue2 must NOT silently synthesize fake preview WAV; refunds 100%
     f = await studioFixture({ capKrw: 1_000_000 });
-    const deps = studioDeps(f.sql);
+    // Music generation open, so the provider (not the closed flag) is what this case exercises.
+    const deps = studioDeps(f.sql, {
+      env: studioEnv({ BRAND_STUDIO_PROVIDER: 'fake', BRAND_STUDIO_DEFAULT_LANE: 'sunra_api', BRAND_STUDIO_MUSIC_GENERATION: 'on' }),
+    });
     const offline = await generateReferenceMusic(
       deps,
       viewerOf(f.ids.owner),

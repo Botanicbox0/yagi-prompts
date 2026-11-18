@@ -7,17 +7,23 @@
  * A passphrase-protected link shows the gate first; the right answer sets an http-only cookie on the
  * server and the page re-renders. A view is counted once, after the item is visible (link previews that
  * never run scripts do not count). The guest's name is remembered on this device only.
+ *
+ * The open page stays live (docs/BRAND-ROOMS-FEEDBACK.md §11): the share door's pulse gives a short stamp of
+ * the one shared item every 5 seconds while the tab is on screen, and the page re-reads when it moved; a
+ * guest's half-written note holds the re-read until it is sent or cleared. The draft plays in the wide
+ * layout, with full screen where the browser has it.
  */
 import "@/components/brand-studio/review/review.css";
 import "./share.css";
 import { useRouter } from "next/navigation";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { ReviewComment, ReviewItem } from "@/lib/brand-studio/review-contracts";
 import type { PublicShare } from "@/lib/brand-rooms/share-contracts";
 import { ReviewStage, type ReviewActions, type ReviewCopy } from "@/components/brand-studio/review/stage";
 import type { RoomLocale, StoryboardView } from "../seams";
 import { StoryboardReadOnly } from "../storyboard";
-import { sharePublic } from "../review/api";
+import { SHARE_PUBLIC_ENDPOINT, sharePublic } from "../review/api";
+import { readPulse, sharePulseInit, usePulse } from "../pulse";
 import type { roomsReviewEn } from "@/messages/rooms-review";
 import type { roomsStoryboardEn } from "@/messages/rooms-storyboard";
 
@@ -76,6 +82,32 @@ export function SharedPage({
       </main>
       <footer className="brh-page-foot">{p.footer}</footer>
     </div>
+  );
+}
+
+/**
+ * Re-read the page when the shared item's stamp moves. `holding` (a guest's unsent note) delays the re-read
+ * until it lets go; the returned callback is the stage's `onComposingChange`.
+ */
+function useLiveShare(token: string): (holding: boolean) => void {
+  const router = useRouter();
+  const holding = useRef(false);
+  const pending = useRef(false);
+  const read = useCallback(() => readPulse<{ item: string }>(SHARE_PUBLIC_ENDPOINT, sharePulseInit(token)), [token]);
+  const onChange = useCallback(() => {
+    if (holding.current) pending.current = true;
+    else router.refresh();
+  }, [router]);
+  usePulse(token, read, onChange);
+  return useCallback(
+    (value: boolean) => {
+      holding.current = value;
+      if (!value && pending.current) {
+        pending.current = false;
+        router.refresh();
+      }
+    },
+    [router],
   );
 }
 
@@ -156,6 +188,7 @@ function SharedReview({
 }) {
   useCountView(token);
   const router = useRouter();
+  const onComposingChange = useLiveShare(token);
   const [name, setName] = useState("");
   useEffect(() => {
     try {
@@ -196,6 +229,8 @@ function SharedReview({
       canComment={share.allowComments}
       canManage={false}
       extended
+      layout="wide"
+      onComposingChange={onComposingChange}
       guest={share.allowComments ? { name, onName: remember } : null}
       copy={stageCopy}
       locale={locale}
@@ -207,5 +242,6 @@ function SharedReview({
 
 function SharedStoryboard({ token, board, locale, copy }: { token: string; board: StoryboardView; locale: RoomLocale; copy: StoryboardCopy }) {
   useCountView(token);
+  useLiveShare(token);
   return <StoryboardReadOnly board={board} locale={locale} copy={copy} />;
 }

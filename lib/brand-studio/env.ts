@@ -6,6 +6,7 @@
 import { timingSafeEqual } from 'node:crypto';
 import {
   brandStudioEditAssistOpen,
+  brandStudioMusicGenerationOpen,
   brandStudioOutpaintOpen,
   brandStudioProjectsOpen,
   brandStudioRegionV2Open,
@@ -37,6 +38,8 @@ export interface StudioEnv {
   editAssist?: boolean;
   /** `BRAND_STUDIO_REVISE_V2=on`: the clip edit panel as a conversation, drafts and finals named (lib/flags.ts). */
   reviseV2?: boolean;
+  /** `BRAND_STUDIO_MUSIC_GENERATION=on`: `music.generate` and its controls (lib/flags.ts). Closed by default. */
+  musicGeneration?: boolean;
 }
 
 function whole(value: string | undefined, fallback: number, max: number): number {
@@ -85,6 +88,7 @@ export function studioEnv(env: StudioEnvSource = process.env): StudioEnv {
     regionV2: brandStudioRegionV2Open(env),
     editAssist: brandStudioEditAssistOpen(env),
     reviseV2: brandStudioReviseV2Open(env),
+    musicGeneration: brandStudioMusicGenerationOpen(env),
   };
 }
 

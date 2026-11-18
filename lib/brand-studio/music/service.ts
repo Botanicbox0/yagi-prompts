@@ -6,6 +6,9 @@
  * - Compiles dual-voice ABC score (`buildValidatedDualVoiceAbcScore`), `0ms` drop sync
  *   (`computeViralDropSlice`), and strict Commercial License Gate (`validateAudioLicenseGate`).
  * - Reserves TWINGS credits (`reserveAllowance`) and refunds 100% automatically on provider failure.
+ * - `generateReferenceMusic` is closed unless `BRAND_STUDIO_MUSIC_GENERATION=on` (`deps.env.musicGeneration`,
+ *   lib/flags.ts): closed, it answers `feature_unavailable` before any query or credit reservation.
+ *   `getMusicJobStatus` stays open so jobs already running finish or refund.
  * - Customer strings are 100% sanitized — zero internal tool/model/server identifiers.
  */
 import { createHash } from 'node:crypto';
@@ -197,6 +200,10 @@ export async function generateReferenceMusic(
   rawInput: unknown,
   options?: MusicServiceOptions,
 ): Promise<MusicOperationResult> {
+  // Closed (no commercially cleared engine, docs/BRAND-EDITING-STUDIO.md §8-5): refuse before anything else.
+  if (deps.env.musicGeneration !== true) {
+    return { ok: false, code: 'feature_unavailable' };
+  }
   const parsed = MusicGenerateInputSchema.safeParse(rawInput);
   if (!parsed.success) {
     return { ok: false, code: 'invalid' };

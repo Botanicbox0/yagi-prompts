@@ -30,7 +30,8 @@ import {
   type StudioFailure,
 } from './contracts';
 import { lockOrganization, requireCreate, studioSeat, StudioDenied } from './access';
-import { bytesLimit, checkUpload, imageInfo, kindOfMime, sha256Hex, thumbnailWebp, videoInfo } from './files';
+import { bytesLimit, checkUpload, imageInfo, kindOfMime, sha256Hex, thumbnailWebp, videoFrameRate, videoInfo } from './files';
+import { recordAssetFps } from './asset-fps';
 import { failure, guarded } from './outcome';
 import { dropUnreferencedStudioKeys, type PhysicalCleanupExclusion } from './physical-cleanup';
 import { assetView, readyOutput } from './repo';
@@ -143,6 +144,7 @@ async function completeOnce(deps: StudioDeps, viewer: Viewer, raw: unknown, atte
         return same;
       }
       let width: number | null = null, height: number | null = null, durationMs: number | null = null, thumbKey: string | null = null;
+      let fps: number | null = null;
       if (verdict.kind === 'image') {
         const size = await imageInfo(bytes);
         if (!size) throw new StudioDenied('unsupported_file');
@@ -154,6 +156,7 @@ async function completeOnce(deps: StudioDeps, viewer: Viewer, raw: unknown, atte
         width = info?.width ?? v.width ?? null;
         height = info?.height ?? v.height ?? null;
         durationMs = info?.durationMs ?? (v.seconds ? Math.round(v.seconds * 1000) : null);
+        fps = videoFrameRate(bytes);
       } else {
         durationMs = v.seconds ? Math.round(v.seconds * 1000) : null;
       }
@@ -161,13 +164,16 @@ async function completeOnce(deps: StudioDeps, viewer: Viewer, raw: unknown, atte
       const { key } = await deps.media.put(bytes, verdict.mime);
       stored.push(key);
       releasedStagingKey = row.storage_key;
-      return (
+      const ready = (
         await sql.query<AssetRow>(
           `update brand_studio_assets set status = 'ready', kind = $2, mime = $3, storage_key = $4, thumb_key = $5, sha256 = $6,
               width = $7, height = $8, duration_ms = $9 where id = $1 returning *`,
           [row.id, verdict.kind, verdict.mime, key, thumbKey, sha, width, height, durationMs],
         )
       ).rows[0]!;
+      // A film's frame rate for the review stage (0096); nothing happens before the column exists.
+      if (fps != null) await recordAssetFps(sql, row.id, fps);
+      return ready;
     }),
   ).catch(async (error) => {
     for (const key of stored) await deps.media.delete(key).catch(() => undefined);

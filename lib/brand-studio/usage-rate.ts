@@ -116,28 +116,54 @@ export function videoRunUsd(input: { resolution: string; seconds: number }): num
 }
 
 /**
- * A run with a reference video. An edit follows the source length (clamped to the model); a new take
- * uses the seconds asked for. The source is billed for at least one second. A blueprint run never
- * attaches the video (docs/BRAND-STUDIO-V3.md §6), so it is billed as a plain video run.
+ * The length a run that follows its reference video (`duration: -1`) is priced at: the reference's length
+ * rounded up, 4 to 30 s (Sunra CLI help for `create_video.duration`; quoted free 2026-11-18: an 11.1 s source
+ * is 12 s out, a 20.07 s one 21 s). Only Seedance 2.5 takes -1. The studio refuses longer references itself.
+ */
+export const FOLLOW_SOURCE_SECONDS = { min: 4, max: 30 } as const;
+
+/**
+ * A run with a reference video. An edit, or a new take with no length of its own, follows the source
+ * (`FOLLOW_SOURCE_SECONDS`); a new take otherwise uses the seconds asked for. The source is billed for at
+ * least one second. A blueprint run never attaches the video (docs/BRAND-STUDIO-V3.md §6), so it is billed
+ * as a plain video run at a length of its own, inside the model's range, from the tenths a screen shows
+ * (as reference-video.ts `remakeSeconds` plans it).
+ *
+ * The source is priced from its exact length (`referenceMs`, the stored `duration_ms`) whenever the caller
+ * has it: every clip we generate is 24n + 1 frames (5.04 s, 15.04 s), which the tenths show as 5.0 and 15.0
+ * while the provider counts 6 and 16 s out. Only without it does the tenths value stand in.
  */
 export function remixRunUsd(input: {
   model: Pick<StudioVideoModel, 'minSeconds' | 'maxSeconds' | 'defaultSeconds'>;
   resolution: string;
   method: StudioRemixMethod;
   seconds: number | null;
-  /** The reference video's length, or null when it was never measured. */
+  /** The reference video's length as a screen shows it (tenths), or null when it was never measured. */
   referenceSeconds: number | null;
+  /** The reference video's exact length in milliseconds, when known; it wins over `referenceSeconds`. */
+  referenceMs?: number | null;
 }): { usd: number; outputSeconds: number } {
   const { model } = input;
-  const ref = tenthsOfSeconds(input.referenceSeconds);
+  const shown = tenthsOfSeconds(input.referenceSeconds);
   const asked = input.method === 'edit' ? null : input.seconds;
-  const outputSeconds = asked ?? Math.min(model.maxSeconds, Math.max(model.minSeconds, Math.round(ref ?? model.defaultSeconds)));
-  if (input.method === 'blueprint') return { usd: videoRunUsd({ resolution: input.resolution, seconds: outputSeconds }), outputSeconds };
+  if (input.method === 'blueprint') {
+    const tenths = shown ?? tenthsOfSeconds(exactSeconds(input.referenceMs));
+    const outputSeconds = asked ?? Math.min(model.maxSeconds, Math.max(model.minSeconds, Math.round(tenths ?? model.defaultSeconds)));
+    return { usd: videoRunUsd({ resolution: input.resolution, seconds: outputSeconds }), outputSeconds };
+  }
+  const ref = exactSeconds(input.referenceMs) ?? shown;
+  const followed = Math.min(FOLLOW_SOURCE_SECONDS.max, Math.max(FOLLOW_SOURCE_SECONDS.min, Math.ceil((ref ?? model.defaultSeconds) - 1e-6)));
+  const outputSeconds = asked ?? followed;
   const usd = estimateVideoUsd({
     resolution: billedResolution(input.resolution),
     seconds: outputSeconds,
-    // The input is billed for its real length, not a whole number of seconds (a 14.1 s source is 14.1 s).
+    // The input is billed for its real length, not a whole number of seconds (a 15,042 ms source is 15.042 s).
     referenceVideoSeconds: Math.max(1, ref ?? outputSeconds),
   });
   return { usd, outputSeconds };
+}
+
+/** Exact seconds from a stored length in milliseconds; null when there is none worth trusting. */
+export function exactSeconds(ms: number | null | undefined): number | null {
+  return typeof ms === 'number' && Number.isFinite(ms) && ms > 0 ? ms / 1000 : null;
 }
