@@ -17,6 +17,11 @@ import {
   type DockDraft,
 } from '@/components/brand-studio/dock-model';
 import { trayItemFromAsset, type TrayItem } from '@/components/brand-studio/refs';
+import { draftCredits } from '@/components/brand-studio/video/reverse-model';
+import { videoEditCredits } from '@/components/brand-studio/video/workspace-model';
+import type { StudioAssetView } from '@/lib/brand-studio/contracts';
+import { creditsOf } from '@/lib/brand-studio/credits';
+import { estimateVideoUsd, studioModel, type StudioVideoModel } from '@/lib/brand-studio/models';
 import { requestId, seedImageAsset, studioDeps, studioFixture, viewerOf, type StudioFixture } from './helpers';
 
 /** docs/BRAND-STUDIO-V2.md §9: the figure the dock shows before a press is the one the server reserves. */
@@ -41,10 +46,14 @@ describe('one usage arithmetic for the dock and the server', () => {
   });
 });
 
-async function libraryTray(ids: string[]): Promise<TrayItem[]> {
+async function libraryAsset(id: string): Promise<StudioAssetView> {
   const state = await loadStudioState(deps, viewerOf(f.ids.owner), f.orgId);
   if (!state.ok) throw new Error(state.code);
-  return ids.map((id) => trayItemFromAsset(state.assets.find((a) => a.id === id)!));
+  return state.assets.find((a) => a.id === id)!;
+}
+
+async function libraryTray(ids: string[]): Promise<TrayItem[]> {
+  return Promise.all(ids.map(async (id) => trayItemFromAsset(await libraryAsset(id))));
 }
 
 /** A video asset whose length is not a whole number of tenths, the case where rounding could drift. */
@@ -103,6 +112,30 @@ describe('the dock quotes what the server reserves', () => {
       [{ ...base, method: 'edit', resolution: DRAFT_RESOLUTION }, film],
     ];
     for (const [draft, tray] of cases) expect(await reserved(draft, tray)).toBe(dockEstimateKrw(draft, tray));
+  });
+
+  it('for a film a few hundredths past a whole second (15,042 ms, as every clip we generate): its exact length, on both sides', async () => {
+    const id = await seedFilm(15_042);
+    const asset = await libraryAsset(id);
+    expect(asset).toMatchObject({ seconds: 15, durationMs: 15_042 });
+    const film = await libraryTray([id]);
+    expect(film[0]).toMatchObject({ seconds: 15, durationMs: 15_042 });
+    const base = { ...withMedium(initialDraft('image'), 'video'), prompt: '', change: '병을 파란 병으로' };
+    // An edit at 480p is the provider's own quote for this source: 16 s out + 15.042 s in, 192 credits.
+    const edit: DockDraft = { ...base, method: 'edit', resolution: '480p' };
+    const exact = usageKrw(estimateVideoUsd({ resolution: '480p', seconds: 16, referenceVideoSeconds: 15.042 }), 'video');
+    expect(Math.round(estimateVideoUsd({ resolution: '480p', seconds: 16, referenceVideoSeconds: 15.042 }) * 100)).toBe(192);
+    expect(dockEstimateKrw(edit, film)).toBe(exact);
+    const cases: Array<[DockDraft, TrayItem[]]> = [
+      [edit, film],
+      [{ ...base, method: 'edit', resolution: DRAFT_RESOLUTION }, film],
+      [{ ...base, method: 'edit', resolution: '1080p' }, film],
+      [{ ...base, method: 'reference', resolution: DRAFT_RESOLUTION, seconds: 6 }, film],
+    ];
+    for (const [draft, tray] of cases) expect(await reserved(draft, tray), `${draft.method} ${draft.resolution}`).toBe(dockEstimateKrw(draft, tray));
+    // The video screen's edit figure and the remake panel's figure are the same arithmetic.
+    expect(creditsOf(exact)).toBe(videoEditCredits(asset, '480p'));
+    expect(creditsOf(exact)).toBe(draftCredits({ method: 'edit', seconds: 6 }, asset, studioModel('seedance-2.5') as StudioVideoModel));
   });
 
   it('for a partial edit: one edit call on the edit model', async () => {

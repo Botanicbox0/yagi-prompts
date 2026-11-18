@@ -63,7 +63,7 @@ export interface ReverseDraft {
   note: string;
 }
 
-export type ReverseVideo = Pick<StudioAssetView, "id" | "seconds" | "width" | "height">;
+export type ReverseVideo = Pick<StudioAssetView, "id" | "seconds" | "durationMs" | "width" | "height">;
 
 export function emptyDraft(model: StudioVideoModel = reverseModel()): ReverseDraft {
   return {
@@ -261,6 +261,7 @@ export function draftCredits(draft: Pick<ReverseDraft, "method" | "seconds">, vi
     method: draft.method,
     seconds: draft.method === "edit" ? null : draft.seconds,
     referenceSeconds: video.seconds,
+    referenceMs: video.durationMs ?? null,
   });
   return creditsOf(usageKrw(usd, "video"));
 }

@@ -226,8 +226,8 @@ export interface StudioJobWork {
   stickLane?: StudioLane | null;
   /** Lanes that could not pay for this job; it never goes back to one of them (no ping-pong). */
   triedLanes?: StudioLane[];
-  /** Resolved input addresses as sent (also what the account-lane worker receives). */
-  inputs?: Array<{ kind: StudioAssetKind; url: string; frame?: 'start' | 'end' }>;
+  /** Resolved input addresses as sent (also what the account-lane worker receives); a video keeps its stored type. */
+  inputs?: Array<{ kind: StudioAssetKind; url: string; frame?: 'start' | 'end'; mime?: string }>;
   sheet?: FilmSheet | null;
   enhanceNotes?: string;
   region?: {
