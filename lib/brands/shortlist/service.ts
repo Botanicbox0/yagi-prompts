@@ -33,6 +33,8 @@ export interface ShortlistCandidate {
   metrics: ShortlistMetrics;
   measuredOn: string | null;
   picked: boolean;
+  /** The brand put this shared candidate into Reviewing ("검토"). */
+  reviewing: boolean;
   /** The brand set this candidate aside on its own page; still shown there under "제외". */
   passed: boolean;
   /** The creator's booking for this campaign is confirmed ("섭외 확정"). */
@@ -62,7 +64,7 @@ const day = (v: unknown): string | null => v == null ? null : stamp(v).slice(0, 
 /** 0066 not applied yet: the campaign page shows no shortlist instead of failing. */
 const missingTable = (error: unknown) => (error as { code?: string }).code === '42P01';
 
-const COLUMNS = 'id,handle,display_name,category,metrics,measured_on,avatar_key,avatar_sha256,avatar_tone,shared_at,excluded_at,picked_at,passed_at,confirmed_at,created_at,updated_at';
+const COLUMNS = 'id,handle,display_name,category,metrics,measured_on,avatar_key,avatar_sha256,avatar_tone,shared_at,excluded_at,picked_at,reviewing_at,passed_at,confirmed_at,created_at,updated_at';
 const ORDER = "order by nullif(metrics->>'followers','')::numeric desc nulls last, handle";
 
 export const shortlistAvatarPath = (id: string, sha256: string) => `/api/brand-workspace/shortlist/${id}/avatar?v=${sha256.slice(0, 12)}`;
@@ -84,7 +86,7 @@ function candidate(row: Row): ShortlistCandidate {
     avatarUrl: row.avatar_key ? shortlistAvatarPath(String(row.id), String(row.avatar_sha256)) : null,
     avatarTone: row.avatar_key && typeof row.avatar_tone === 'string' && TONE.test(row.avatar_tone) ? row.avatar_tone : null,
     metrics: metricsOf(row.metrics), measuredOn: day(row.measured_on), picked: row.picked_at != null,
-    passed: row.passed_at != null, confirmed: row.confirmed_at != null,
+    reviewing: row.reviewing_at != null, passed: row.passed_at != null, confirmed: row.confirmed_at != null,
   };
 }
 function studioCandidate(row: Row): StudioShortlistCandidate {
@@ -358,17 +360,17 @@ export async function pickShortlistCandidate(deps: { sql: SqlRunner; verifiedEma
     if (seat.role === 'studio' || !seat.canComment) throw new Denied('forbidden');
     if (seat.status === 'cancelled') throw new Denied('not_active');
     if (v.picked) await sql.query(`update brand_shortlist_candidates set picked_at=coalesce(picked_at,now()),picked_by=case when picked_at is null then $2 else picked_by end,
-        passed_at=null,passed_by=null where id=$1`, [v.candidateId, viewer.userId]);
+        reviewing_at=null,reviewing_by=null,passed_at=null,passed_by=null where id=$1`, [v.candidateId, viewer.userId]);
     else await sql.query('update brand_shortlist_candidates set picked_at=null,picked_by=null where id=$1', [v.candidateId]);
     return { id: v.candidateId, picked: v.picked };
   });
 }
 
 /**
- * The brand's sorting of many shared candidates at once: prefer, set aside, or clear either mark.
- * Same seats as the preference mark. Every ID must be a shared candidate of one campaign the viewer
- * can see, or nothing changes (`not_found`). Marking keeps the first marker; a candidate is never
- * preferred and set aside at once.
+ * The brand's sorting of many shared candidates at once: select, move to reviewing, exclude, or clear
+ * back to applied. Same seats as the preference mark. Every ID must be a shared candidate of one
+ * campaign the viewer can see, or nothing changes (`not_found`). Marking keeps the first marker; a
+ * candidate holds at most one of picked / reviewing / passed at a time.
  */
 export async function chooseShortlistCandidates(
   deps: { sql: SqlRunner; verifiedEmail?: string }, viewer: Viewer, input: unknown,
@@ -387,13 +389,16 @@ export async function chooseShortlistCandidates(
     if (seat.role === 'studio' || !seat.canComment) throw new Denied('forbidden');
     if (seat.status === 'cancelled') throw new Denied('not_active');
     const changed = (await sql.query(v.choice === 'picked'
-      ? `update brand_shortlist_candidates set picked_at=now(),picked_by=$2,passed_at=null,passed_by=null
+      ? `update brand_shortlist_candidates set picked_at=now(),picked_by=$2,reviewing_at=null,reviewing_by=null,passed_at=null,passed_by=null
           where id=any($1::uuid[]) and picked_at is null returning id`
-      : v.choice === 'passed'
-        ? `update brand_shortlist_candidates set passed_at=now(),passed_by=$2,picked_at=null,picked_by=null
-            where id=any($1::uuid[]) and passed_at is null returning id`
-        : `update brand_shortlist_candidates set picked_at=null,picked_by=null,passed_at=null,passed_by=null
-            where id=any($1::uuid[]) and (picked_at is not null or passed_at is not null) returning id`,
+      : v.choice === 'reviewing'
+        ? `update brand_shortlist_candidates set reviewing_at=now(),reviewing_by=$2,picked_at=null,picked_by=null,passed_at=null,passed_by=null
+            where id=any($1::uuid[]) and reviewing_at is null returning id`
+        : v.choice === 'passed'
+          ? `update brand_shortlist_candidates set passed_at=now(),passed_by=$2,picked_at=null,picked_by=null,reviewing_at=null,reviewing_by=null
+              where id=any($1::uuid[]) and passed_at is null returning id`
+          : `update brand_shortlist_candidates set picked_at=null,picked_by=null,reviewing_at=null,reviewing_by=null,passed_at=null,passed_by=null
+              where id=any($1::uuid[]) and (picked_at is not null or reviewing_at is not null or passed_at is not null) returning id`,
     v.choice === 'none' ? [v.candidateIds] : [v.candidateIds, viewer.userId])).rows.length;
     return { id: projectId!, choice: v.choice, changed };
   });

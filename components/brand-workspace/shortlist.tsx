@@ -10,7 +10,7 @@ import {
 } from "@/lib/brands/shortlist/format";
 
 type Copy = Dictionary["brandWorkspace"]["shortlist"];
-type Tab = "open" | "picked" | "passed" | "confirmed";
+type Tab = "open" | "reviewing" | "selected" | "passed";
 type View = "cards" | "list";
 type Undo = Array<[ShortlistChoice, string[]]>;
 const COMPARE_MAX = 4;
@@ -22,7 +22,9 @@ const CARD_TAGS = 2;
 const MEDIAN_FROM = 3;
 const VIEW_KEY = "twings.shortlist.view";
 type Medians = { views: number | null; engagement: number | null; followers: number | null };
-const choiceOf = (c: ShortlistCandidate): ShortlistChoice => (c.picked ? "picked" : c.passed ? "passed" : "none");
+const choiceOf = (c: ShortlistCandidate): ShortlistChoice => (c.picked ? "picked" : c.reviewing ? "reviewing" : c.passed ? "passed" : "none");
+const stageOf = (c: ShortlistCandidate, mark: ShortlistChoice): Tab =>
+  c.confirmed || mark === "picked" ? "selected" : mark === "reviewing" ? "reviewing" : mark === "passed" ? "passed" : "open";
 
 /**
  * The campaign's creator shortlist (docs/BRAND-SHORTLIST.md): every shared candidate as a photo card
@@ -54,7 +56,6 @@ export function CampaignShortlist({ candidates, canPick: seatCanPick, copy, loca
   const [preview, setPreview] = useState(defaultPreview && canPreview);
   const canPick = seatCanPick || preview;
   const [sort, setSort] = useState<ShortlistSort>("followers");
-  const [tab, setTab] = useState<Tab>("open");
   const [view, setView] = useState<View>(defaultView);
   const [choices, setChoices] = useState(() => new Map(candidates.map((c) => [c.id, choiceOf(c)])));
   const [selected, setSelected] = useState<Set<string>>(() => new Set());
@@ -77,16 +78,12 @@ export function CampaignShortlist({ candidates, canPick: seatCanPick, copy, loca
   const choice = (c: ShortlistCandidate) => choices.get(c.id) ?? "none";
   const days = [...new Set(candidates.map((c) => c.measuredOn).filter((d): d is string => d !== null))].sort();
   const measured = days.at(-1) ?? null;
-  const counts = { open: 0, picked: 0, passed: 0, confirmed: 0 };
-  for (const c of candidates) {
-    const mark = choice(c);
-    if (mark !== "passed") counts.open++;
-    if (mark === "picked") counts.picked++;
-    if (mark === "passed") counts.passed++;
-    if (c.confirmed) counts.confirmed++;
-  }
-  const inTab = (c: ShortlistCandidate) =>
-    tab === "open" ? choice(c) !== "passed" : tab === "confirmed" ? c.confirmed : choice(c) === tab;
+  const counts = { open: 0, reviewing: 0, selected: 0, passed: 0 };
+  for (const c of candidates) counts[stageOf(c, choice(c))]++;
+  const [tab, setTab] = useState<Tab>(() =>
+    counts.open > 0 ? "open" : counts.reviewing > 0 ? "reviewing" : counts.selected > 0 ? "selected" : "open",
+  );
+  const inTab = (c: ShortlistCandidate) => stageOf(c, choice(c)) === tab;
   const needle = query.trim().replace(/^@/, "").toLowerCase();
   const matches = (c: ShortlistCandidate) =>
     !needle || [c.handle, c.displayName, c.category].some((text) => text?.toLowerCase().includes(needle));
@@ -161,7 +158,8 @@ export function CampaignShortlist({ candidates, canPick: seatCanPick, copy, loca
     setSelected(new Set());
     setToast(null);
   };
-  const toggleOne = (c: ShortlistCandidate, target: "picked" | "passed") => mark([c.id], choice(c) === target ? "none" : target);
+  const toggleOne = (c: ShortlistCandidate, target: "picked" | "reviewing" | "passed") =>
+    mark([c.id], choice(c) === target ? "none" : target);
 
   async function copyHandles(people: ShortlistCandidate[]) {
     try {
@@ -194,13 +192,19 @@ export function CampaignShortlist({ candidates, canPick: seatCanPick, copy, loca
   const allSelected = shown.length > 0 && shown.every((c) => selected.has(c.id));
   const selectAll = () => setSelected(allSelected ? new Set() : new Set(shown.map((c) => c.id)));
   const chosen = shown.filter((c) => selected.has(c.id));
+  const actionable = chosen.filter((c) => !c.confirmed);
+  const actionableTo = (target: ShortlistChoice) => actionable.filter((c) => choice(c) !== target).map((c) => c.id);
   const compared = chosen.slice(0, COMPARE_MAX);
-  const tabs: Array<[Tab, number]> = [["open", counts.open]];
-  if (counts.confirmed > 0) tabs.push(["confirmed", counts.confirmed]);
-  tabs.push(["picked", counts.picked], ["passed", counts.passed]);
+  const tabs: Array<[Tab, number]> = [
+    ["open", counts.open],
+    ["reviewing", counts.reviewing],
+    ["selected", counts.selected],
+    ["passed", counts.passed],
+  ];
   const cardProps = (c: ShortlistCandidate) => ({
     candidate: c, choice: choice(c), canPick, busy, selected: selected.has(c.id),
-    onSelect: () => toggleSelect(c.id), onPick: () => toggleOne(c, "picked"), onPass: () => toggleOne(c, "passed"), onOpen: () => setOpenId(c.id), copy, locale,
+    onSelect: () => toggleSelect(c.id), onPick: () => toggleOne(c, "picked"), onReview: () => toggleOne(c, "reviewing"),
+    onPass: () => toggleOne(c, "passed"), onOpen: () => setOpenId(c.id), copy, locale,
   });
 
   // The open candidate stays open after a mark moves it off this tab; next and previous carry on from where it was.
@@ -280,14 +284,17 @@ export function CampaignShortlist({ candidates, canPick: seatCanPick, copy, loca
             </span>
             {interpolate(copy.selected, { count: chosen.length })}
           </span>
-          {canPick && chosen.some((c) => choice(c) !== "picked") && (
-            <button type="button" className="bw-button bw-primary" disabled={busy} onClick={() => mark(chosen.map((c) => c.id), "picked")} data-shortlist-bulk-mark="picked">{copy.actions.picked}</button>
+          {canPick && actionableTo("picked").length > 0 && (
+            <button type="button" className="bw-button bw-primary" disabled={busy} onClick={() => mark(actionableTo("picked"), "picked")} data-shortlist-bulk-mark="picked">{copy.actions.picked}</button>
           )}
-          {canPick && chosen.some((c) => choice(c) !== "passed") && (
-            <button type="button" className="bw-button" disabled={busy} onClick={() => mark(chosen.map((c) => c.id), "passed")} data-shortlist-bulk-mark="passed">{copy.actions.passed}</button>
+          {canPick && actionableTo("reviewing").length > 0 && (
+            <button type="button" className="bw-button" disabled={busy} onClick={() => mark(actionableTo("reviewing"), "reviewing")} data-shortlist-bulk-mark="reviewing">{copy.actions.reviewing}</button>
           )}
-          {canPick && chosen.some((c) => choice(c) !== "none") && (
-            <button type="button" className="bw-button" disabled={busy} onClick={() => mark(chosen.map((c) => c.id), "none")} data-shortlist-bulk-mark="none">
+          {canPick && actionableTo("passed").length > 0 && (
+            <button type="button" className="bw-button" disabled={busy} onClick={() => mark(actionableTo("passed"), "passed")} data-shortlist-bulk-mark="passed">{copy.actions.passed}</button>
+          )}
+          {canPick && actionableTo("none").length > 0 && (
+            <button type="button" className="bw-button" disabled={busy} onClick={() => mark(actionableTo("none"), "none")} data-shortlist-bulk-mark="none">
               {tab === "passed" ? copy.actions.restore : copy.actions.none}
             </button>
           )}
@@ -307,7 +314,8 @@ export function CampaignShortlist({ candidates, canPick: seatCanPick, copy, loca
       {opened && (
         <CandidateSheet candidate={opened} choice={choice(opened)} canPick={canPick} busy={busy} medians={medians} copy={copy} locale={locale}
           position={openedIndex >= 0 ? `${openedIndex + 1} / ${shown.length}` : null}
-          onPick={() => toggleOne(opened, "picked")} onPass={() => toggleOne(opened, "passed")} onClose={() => setOpenId(null)}
+          onPick={() => toggleOne(opened, "picked")} onReview={() => toggleOne(opened, "reviewing")} onPass={() => toggleOne(opened, "passed")}
+          onRevert={() => mark([opened.id], "none")} onClose={() => setOpenId(null)}
           onStep={shown.length > 1 ? step : null} />
       )}
       {sending && projectId && (
@@ -333,6 +341,7 @@ type ItemProps = {
   selected: boolean;
   onSelect: () => void;
   onPick: () => void;
+  onReview: () => void;
   onPass: () => void;
   onOpen: () => void;
   copy: Copy;
@@ -355,10 +364,25 @@ function ListIcon() {
   );
 }
 
-function HeartIcon({ filled }: { filled: boolean }) {
+function CheckIcon() {
   return (
-    <svg width="18" height="18" viewBox="0 0 18 18" fill={filled ? "currentColor" : "none"} stroke="currentColor" strokeWidth="1.6" strokeLinejoin="round" aria-hidden="true">
-      <path d="M9 15.25S2.5 11.4 2.5 6.9A3.4 3.4 0 0 1 9 5.5a3.4 3.4 0 0 1 6.5 1.4c0 4.5-6.5 8.35-6.5 8.35Z" />
+    <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <path d="m3.5 8.5 3 3 6-6.5" />
+    </svg>
+  );
+}
+function PauseIcon() {
+  return (
+    <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" aria-hidden="true">
+      <path d="M5.75 4.25v7.5M10.25 4.25v7.5" />
+    </svg>
+  );
+}
+function RevertIcon() {
+  return (
+    <svg width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <path d="M3.5 6.5H10a3.5 3.5 0 1 1 0 7H7.5" />
+      <path d="M6 4 3.5 6.5 6 9" />
     </svg>
   );
 }
@@ -384,28 +408,30 @@ function ChevronIcon({ to }: { to: "left" | "right" }) {
   );
 }
 
-/** The marks a card or row carries: preferred, set aside, booked. */
+/** The stage badge a card or row carries: booked, selected, reviewing, or excluded. */
 function Badges({ choice, confirmed, copy }: { choice: ShortlistChoice; confirmed: boolean; copy: Copy }) {
-  return (
-    <>
-      {confirmed && <span className="bw-shortlist-badge" data-tone="booked" data-shortlist-confirmed>{copy.confirmed}</span>}
-      {choice === "picked" && <span className="bw-shortlist-badge" data-shortlist-picked>{copy.preferred}</span>}
-      {choice === "passed" && <span className="bw-shortlist-badge" data-tone="muted" data-shortlist-passed>{copy.passed}</span>}
-    </>
-  );
+  if (confirmed) return <span className="bw-shortlist-badge" data-tone="booked" data-shortlist-confirmed>{copy.confirmed}</span>;
+  if (choice === "picked") return <span className="bw-shortlist-badge" data-shortlist-picked>{copy.preferred}</span>;
+  if (choice === "reviewing") return <span className="bw-shortlist-badge" data-tone="reviewing" data-shortlist-reviewing>{copy.reviewing}</span>;
+  if (choice === "passed") return <span className="bw-shortlist-badge" data-tone="muted" data-shortlist-passed>{copy.passed}</span>;
+  return null;
 }
 
-/** ✕ and ♥: each toggles its own mark; pressing one clears the other. */
-function Marks({ candidate: c, choice, busy, onPick, onPass, copy }: Pick<ItemProps, "candidate" | "choice" | "busy" | "onPick" | "onPass" | "copy">) {
+/** ✕, ‖ and ✓: each sets or clears its stage; picking one clears any prior stage. */
+function Marks({ candidate: c, choice, busy, onPick, onReview, onPass, copy }: Pick<ItemProps, "candidate" | "choice" | "busy" | "onPick" | "onReview" | "onPass" | "copy">) {
   const pickLabel = choice === "picked" ? copy.unprefer : copy.prefer;
+  const reviewLabel = choice === "reviewing" ? copy.unreview : copy.review;
   const passLabel = choice === "passed" ? copy.unpass : copy.pass;
   return (
     <div className="bw-shortlist-marks bw-no-print">
       <button type="button" className="bw-shortlist-pass" aria-pressed={choice === "passed"} aria-label={busy ? copy.working : `${passLabel} · @${c.handle}`} title={passLabel} disabled={busy} onClick={onPass} data-shortlist-pass={choice === "passed" ? "on" : "off"}>
         <CrossIcon />
       </button>
+      <button type="button" className="bw-shortlist-review" aria-pressed={choice === "reviewing"} aria-label={busy ? copy.working : `${reviewLabel} · @${c.handle}`} title={reviewLabel} disabled={busy} onClick={onReview} data-shortlist-review={choice === "reviewing" ? "on" : "off"}>
+        <PauseIcon />
+      </button>
       <button type="button" className="bw-shortlist-pick" aria-pressed={choice === "picked"} aria-label={busy ? copy.working : `${pickLabel} · @${c.handle}`} title={pickLabel} disabled={busy} onClick={onPick} data-shortlist-pick={choice === "picked" ? "on" : "off"}>
-        <HeartIcon filled={choice === "picked"} />
+        <CheckIcon />
       </button>
     </div>
   );
@@ -478,7 +504,7 @@ function ShortlistList({ candidates, rowProps, allSelected, onSelectAll, sort, o
                 <td className="bw-shortlist-list-num">{shortlistCount(c.metrics.viewsMedian90d, locale)}</td>
                 <td className="bw-shortlist-list-num">{engagement == null ? SHORTLIST_UNKNOWN : shortlistPercent(engagement, locale)}</td>
                 <td className="bw-shortlist-list-num">{shortlistPercent(c.metrics.adShare, locale)}</td>
-                {canPick && <td className="bw-no-print"><Marks {...p} /></td>}
+                {canPick && <td className="bw-no-print">{!c.confirmed && <Marks {...p} />}</td>}
               </tr>
             );
           })}
@@ -544,7 +570,7 @@ function useSheet(onClose: () => void, onStep?: ((by: 1 | -1) => void) | null) {
   return root;
 }
 
-function ShortlistCard({ candidate: c, choice, canPick, busy, selected, onSelect, onPick, onPass, onOpen, medians, copy, locale }: ItemProps & { medians: Medians | null }) {
+function ShortlistCard({ candidate: c, choice, canPick, busy, selected, onSelect, onPick, onReview, onPass, onOpen, medians, copy, locale }: ItemProps & { medians: Medians | null }) {
   const m = c.metrics;
   const engagement = shortlistSortValue(m, "engagement");
   const tags = shortlistTags(m, medians?.engagement ?? null).slice(0, CARD_TAGS);
@@ -554,6 +580,7 @@ function ShortlistCard({ candidate: c, choice, canPick, busy, selected, onSelect
       className="bw-shortlist-card"
       data-shortlist-candidate={c.handle}
       data-picked={choice === "picked" ? "true" : undefined}
+      data-reviewing={choice === "reviewing" ? "true" : undefined}
       data-passed={choice === "passed" ? "true" : undefined}
       data-selected={selected ? "true" : undefined}
       data-toned={c.avatarTone ? "true" : undefined}
@@ -564,7 +591,7 @@ function ShortlistCard({ candidate: c, choice, canPick, busy, selected, onSelect
           <Photo candidate={c} />
         </button>
         <Select handle={c.handle} selected={selected} canPick={canPick} onSelect={onSelect} copy={copy} />
-        {canPick && <Marks candidate={c} choice={choice} busy={busy} onPick={onPick} onPass={onPass} copy={copy} />}
+        {canPick && !c.confirmed && <Marks candidate={c} choice={choice} busy={busy} onPick={onPick} onReview={onReview} onPass={onPass} copy={copy} />}
         <span className="bw-shortlist-photo-badges"><Badges choice={choice} confirmed={c.confirmed} copy={copy} /></span>
       </div>
       <div className="bw-shortlist-body">
@@ -663,7 +690,7 @@ function Figures({ candidate: c, copy, locale }: { candidate: ShortlistCandidate
 }
 
 /** One candidate in full: the photo, every figure, where they sit against the others, and the marks. */
-export function CandidateSheet({ candidate: c, choice, canPick, busy, medians, position, onPick, onPass, onClose, onStep, copy, locale }: {
+export function CandidateSheet({ candidate: c, choice, canPick, busy, medians, position, onPick, onReview, onPass, onRevert, onClose, onStep, copy, locale }: {
   candidate: ShortlistCandidate;
   choice: ShortlistChoice;
   canPick: boolean;
@@ -672,7 +699,9 @@ export function CandidateSheet({ candidate: c, choice, canPick, busy, medians, p
   /** "3 / 36", or null when a mark just moved this candidate off the tab. */
   position: string | null;
   onPick: () => void;
+  onReview: () => void;
   onPass: () => void;
+  onRevert: () => void;
   onClose: () => void;
   onStep: ((by: 1 | -1) => void) | null;
   copy: Copy;
@@ -724,8 +753,35 @@ export function CandidateSheet({ candidate: c, choice, canPick, busy, medians, p
           )}
           {canPick && (
             <div className="bw-shortlist-sheet-marks">
-              <button type="button" className="bw-button" aria-pressed={choice === "passed"} disabled={busy} onClick={onPass} data-shortlist-sheet-mark="passed">{choice === "passed" ? copy.unpass : copy.pass}</button>
-              <button type="button" className={choice === "picked" ? "bw-button" : "bw-button bw-primary"} aria-pressed={choice === "picked"} disabled={busy} onClick={onPick} data-shortlist-sheet-mark="picked">{choice === "picked" ? copy.unprefer : copy.prefer}</button>
+              {c.confirmed ? (
+                <span className="bw-shortlist-confirmed-pill" data-shortlist-sheet-confirmed>
+                  <CheckIcon /> {copy.confirmedDone}
+                </span>
+              ) : choice === "none" ? (
+                <>
+                  <button type="button" className="bw-button" disabled={busy} onClick={onPass} data-shortlist-sheet-mark="passed">{copy.pass}</button>
+                  <button type="button" className="bw-button" disabled={busy} onClick={onReview} data-shortlist-sheet-mark="reviewing">{copy.review}</button>
+                  <button type="button" className="bw-button bw-primary" disabled={busy} onClick={onPick} data-shortlist-sheet-mark="picked">{copy.prefer}</button>
+                </>
+              ) : choice === "reviewing" ? (
+                <>
+                  <button type="button" className="bw-button" disabled={busy} onClick={onPass} data-shortlist-sheet-mark="passed">{copy.pass}</button>
+                  <button type="button" className="bw-button" disabled={busy} onClick={onRevert} data-shortlist-sheet-mark="none"><RevertIcon /> {copy.revertToApplied}</button>
+                  <button type="button" className="bw-button bw-primary" disabled={busy} onClick={onPick} data-shortlist-sheet-mark="picked">{copy.prefer}</button>
+                </>
+              ) : choice === "picked" ? (
+                <>
+                  <button type="button" className="bw-button" disabled={busy} onClick={onPass} data-shortlist-sheet-mark="passed">{copy.pass}</button>
+                  <button type="button" className="bw-button" disabled={busy} onClick={onReview} data-shortlist-sheet-mark="reviewing">{copy.review}</button>
+                  <button type="button" className="bw-button" disabled={busy} onClick={onPick} data-shortlist-sheet-mark="none"><RevertIcon /> {copy.unprefer}</button>
+                </>
+              ) : (
+                <>
+                  <button type="button" className="bw-button" disabled={busy} onClick={onRevert} data-shortlist-sheet-mark="none"><RevertIcon /> {copy.revertToApplied}</button>
+                  <button type="button" className="bw-button" disabled={busy} onClick={onReview} data-shortlist-sheet-mark="reviewing">{copy.review}</button>
+                  <button type="button" className="bw-button bw-primary" disabled={busy} onClick={onPick} data-shortlist-sheet-mark="picked">{copy.prefer}</button>
+                </>
+              )}
             </div>
           )}
         </div>
@@ -741,7 +797,7 @@ export function shortlistSheet(people: readonly ShortlistCandidate[], choice: (c
     copy.followers, copy.viewsMedian, copy.viewsMax, copy.engagement, copy.adShare, copy.list.columns.measuredOn];
   const state = (c: ShortlistCandidate) => {
     const mark = choice(c);
-    return [c.confirmed && copy.confirmed, mark === "picked" && copy.preferred, mark === "passed" && copy.passed].filter(Boolean).join(" · ");
+    return [c.confirmed && copy.confirmed, mark === "picked" && copy.preferred, mark === "reviewing" && copy.reviewing, mark === "passed" && copy.passed].filter(Boolean).join(" · ");
   };
   return shortlistCsv(columns, people.map((c) => [
     c.handle, c.displayName, c.category, `https://www.instagram.com/${c.handle}/`, state(c),

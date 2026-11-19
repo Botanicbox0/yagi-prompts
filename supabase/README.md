@@ -104,6 +104,7 @@ operation for a superuser, and it is not something app code can do — that is t
 | 2026-11-18 | `0093_core_brand_review_team_notes` · `0166_glue_brand_review_team_notes` | 시안 리뷰의 팀 메모(`brand_studio_review_comments.visibility` 'public'\|'team', `docs/BRAND-ROOMS-FEEDBACK.md` §5; 적용 후 확인: 컬럼 존재, 제약 2개, 기존 행 전부 public(team 0건), RLS on+forced·정책 0개, anon·authenticated 권한 없음) |
 | 2026-11-18 | `0094_core_brand_room_notices` · `0167_glue_brand_room_notices` | 프로젝트 룸 고객 알림 대기열과 수신 설정(`brand_room_notices`·`brand_room_notice_prefs`, `docs/BRAND-ROOMS-FEEDBACK.md` §2; 적용 후 확인: 두 테이블 RLS on+forced·정책 0개, anon·authenticated 권한 없음, service_role만). 발송은 `BRAND_ROOM_NOTIFY=on` 전까지 없다 |
 | 2026-11-19 | `0098_core_brand_studio_asset_role_source` · `0171_glue_brand_studio_asset_role_source` | 라이브러리 사진의 분류를 누가 정했는지(`brand_studio_assets.role_source` text, null 허용, `'auto'\|'user'` 검사; `docs/BRAND-STUDIO-V3.md` §4.1; 적용 후 확인: 열 존재, 제약 `brand_studio_assets_role_source`, RLS on+forced). 업로드 직후 자동 분류가 확실할 때만 `role`을 채우고 `'auto'`로, 고객이 정하거나 지우면 `'user'`로 적는다 |
+| 2026-11-20 | `0099_core_brand_shortlist_reviewing` | 고객 4단계 크리에이터 선별(`지원 · 검토 · 선정 · 제외`, `docs/BRAND-SHORTLIST.md`). `brand_shortlist_candidates.reviewing_at`·`reviewing_by` 추가 및 3자 상호배타 제약(`brand_shortlist_choice_shape`). glue 없음(0146의 표 전체 권한이 덮음). 적용 후 확인: `reviewing_at`(timestamptz)·`reviewing_by`(uuid) 존재, `brand_shortlist_choice_shape` 존재(`brand_shortlist_pass_shape` 제거), `RLS=true, FORCE=true`·정책 0개·anon/authenticated SELECT 권한 없음·service_role UPDATE 권한 있음 확인 | #274 |
 
 미적용: 0029/0115(옛 portrait 비교, 폐지 경로). 0063(prom-queen 비율)은 원장에 없지만 운영 데이터에는 이미 반영돼 있다.
 
@@ -111,4 +112,4 @@ operation for a superuser, and it is not something app code can do — that is t
 
 - `0097_core_brand_room_guest_invites` · `0170_glue_brand_room_guest_invites` — 프로젝트 룸 초대 공유(`docs/BRAND-ROOMS-FEEDBACK.md` §12). `brand_invites`에 `accepted_email`·`mail_state`·`mail_sent_at`·`target_kind`·`target_id`, 범위 제약을 "프로젝트 초대는 뷰어"로 넓힘(브랜드 소유자·편집자도 발행), 대기 초대 인덱스, service_role에 새 세 열의 update 권한. 새 테이블 없음. `BRAND_ROOM_INVITES=on` 전에 한 트랜잭션으로 적용하고, 적용 뒤 `brand_invites` RLS on+forced·정책 0개·anon·authenticated 권한 없음을 확인한다. core 0095·0096과 glue 0168·0169는 다른 브랜치가 쓰고 있다.
 
-다음 번호: core 0099, glue 0172 (core 0092는 열린 PR이 쓰고 있다).
+다음 번호: core 0100, glue 0172 (core 0092는 열린 PR이 쓰고 있다).

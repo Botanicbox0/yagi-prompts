@@ -92,10 +92,11 @@ export const ShortlistRemoveSchema = z.object({ projectId: z.uuid(), candidateId
 export const ShortlistPickSchema = z.object({ candidateId: z.uuid(), picked: z.boolean() }).strict();
 
 /**
- * The brand's own sorting of shared candidates: prefer, set aside, or clear the mark, for one or many
- * at once (a selection on its page). Every ID must be a shared candidate of the same campaign.
+ * The brand's own sorting of shared candidates: select (preferred), move to reviewing, exclude, or
+ * clear the mark back to applied, for one or many at once (a selection on its page). Every ID must
+ * be a shared candidate of the same campaign.
  */
-export const SHORTLIST_CHOICES = ['picked', 'passed', 'none'] as const;
+export const SHORTLIST_CHOICES = ['picked', 'reviewing', 'passed', 'none'] as const;
 export type ShortlistChoice = typeof SHORTLIST_CHOICES[number];
 export const SHORTLIST_CHOOSE_MAX = 200;
 export const ShortlistChooseSchema = z.object({
