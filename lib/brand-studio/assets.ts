@@ -191,7 +191,8 @@ async function completeOnce(deps: StudioDeps, viewer: Viewer, raw: unknown, atte
     await deps.staging.releaseStaging?.(releasedStagingKey).catch(() => undefined);
   }
   // The category check runs after this answer, never on it; a picture nobody categorised yet is read once.
-  const roleCheck = scheduleRoleCheck(deps, outcome);
+  // A transient source (made for one run, hidden and deleted afterwards) is not read at all.
+  const roleCheck = v.transient ? false : scheduleRoleCheck(deps, outcome);
   return { ok: true, asset: assetView(outcome, deps.media), ...(roleCheck ? { roleCheck: true as const } : {}) };
 }
 

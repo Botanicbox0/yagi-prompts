@@ -393,12 +393,30 @@
 
 /* --------------------------------------------------------------- dialog */
 
-.bsr-dialog { width: min(420px, calc(100vw - 32px)); padding: 0; border: 0; border-radius: 24px; background: var(--ys-surface); box-shadow: var(--ys-float); color: var(--ys-ink); }
-.bsr-dialog::backdrop { background: rgba(16, 18, 24, 0.28); }
+/* The page's reset takes every margin to 0, which pins a modal dialog to the top-left corner; centre it here
+   (as `.bs-dialog` does in studio-v2.css) and dim the page as the studio's own dialogs do. */
+.bsr-dialog {
+  inset: 0;
+  width: min(420px, calc(100vw - 32px));
+  max-height: calc(100dvh - 32px);
+  margin: auto;
+  padding: 0;
+  overflow: auto;
+  border: 0;
+  border-radius: 24px;
+  background: var(--ys-surface);
+  box-shadow: var(--ys-float);
+  color: var(--ys-ink);
+}
+.bsr-dialog::backdrop { background: rgba(17, 17, 19, 0.56); }
 .bsr-dialog-body { display: flex; flex-direction: column; gap: 6px; padding: 20px; }
 .bsr-dialog-body h2 { margin: 0 0 8px; font-size: 17px; font-weight: 560; letter-spacing: -0.02em; }
-.bsr-dialog-body label { margin-top: 6px; color: var(--ys-ink-secondary); font-size: 12px; font-weight: 500; }
+.bsr-dialog-body label, .bsr-dialog-label { margin-top: 6px; color: var(--ys-ink-secondary); font-size: 12px; font-weight: 500; }
 .bsr-dialog-actions { margin-top: 12px; }
+/* The role picker: the upload tab's filter chips, raised off the dialog's own surface. */
+.bsr-role-pick { margin-top: 2px; }
+.bsr-role-pick .bsr-chip:not([data-selected]) { background: var(--ys-raised); }
+.bsr-role-pick .bsr-chip:not([data-selected]):hover { background: var(--ys-hover); color: var(--ys-ink); }
 
 /* --------------------------------------------------------------- phones */
 

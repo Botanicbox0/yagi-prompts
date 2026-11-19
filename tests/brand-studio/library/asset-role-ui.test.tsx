@@ -2,7 +2,8 @@ import { describe, expect, it } from "vitest";
 import { renderToStaticMarkup } from "react-dom/server";
 import type { StudioAssetView } from "@/lib/brand-studio/contracts";
 import { getDictionary } from "@/lib/i18n/dictionaries";
-import { AssetDialog } from "@/components/brand-studio/rail/asset-dialog";
+import { createStudioApi } from "@/components/brand-studio/api";
+import { AssetDialog, ROLE_CHOICES, roleChoiceAfterKey } from "@/components/brand-studio/rail/asset-dialog";
 import { UploadsTab } from "@/components/brand-studio/rail/uploads-tab";
 import type { RailKit } from "@/components/brand-studio/rail/parts";
 import { filterUploads } from "@/components/brand-studio/rail/text";
@@ -103,6 +104,48 @@ describe("recognised roles on the screen", () => {
     expect(withRecognisedRoles(cleared, [asset(1, { role: "product", roleSource: "auto" })])[0]!.role).toBeUndefined();
     // The marker never reaches the server.
     expect(toReferences(tray, "image")[0]).toEqual({ assetId: uuid(1) });
+  });
+
+  it("picks the role with a row of chips, one stop on Tab, never a browser select", () => {
+    const copy = copyFor("ko");
+    const html = renderToStaticMarkup(
+      <AssetDialog asset={asset(1, { role: "logo", roleSource: "auto" })} copy={copy} onUpdate={async () => ({ ok: true })} onDelete={async () => ({ ok: true })} onClose={() => {}} />,
+    );
+    expect(html).not.toContain("<select");
+    expect(html).toMatch(/role="radiogroup"[^>]*aria-describedby="[^"]+-role-hint"/);
+    expect(html.match(/role="radio"/g)).toHaveLength(ROLE_CHOICES.length);
+    expect(ROLE_CHOICES).toEqual(["", "product", "person", "logo", "style", "place", "other"]);
+    // The chosen chip is the one Tab stop and reads as checked; "no role" is the first chip.
+    expect(html).toMatch(/aria-checked="true" data-selected="" data-role-choice="logo" tabindex="0"/);
+    expect(html.match(/tabindex="0"/g)).toHaveLength(1);
+    expect(html).toContain(`data-role-choice="none" tabindex="-1">${copy.uploads.roleNone}<`);
+    const empty = renderToStaticMarkup(<AssetDialog asset={asset(2)} copy={copy} onUpdate={async () => ({ ok: true })} onDelete={async () => ({ ok: true })} onClose={() => {}} />);
+    expect(empty).toMatch(/aria-checked="true" data-selected="" data-role-choice="none" tabindex="0"/);
+    // Arrows move and wrap like native radios; Home and End jump; other keys do nothing.
+    expect(roleChoiceAfterKey("ArrowRight", 0)).toBe(1);
+    expect(roleChoiceAfterKey("ArrowDown", 6)).toBe(0);
+    expect(roleChoiceAfterKey("ArrowLeft", 0)).toBe(6);
+    expect(roleChoiceAfterKey("ArrowUp", 3)).toBe(2);
+    expect(roleChoiceAfterKey("Home", 4)).toBe(0);
+    expect(roleChoiceAfterKey("End", 1)).toBe(6);
+    expect(roleChoiceAfterKey("Enter", 1)).toBeNull();
+  });
+
+  it("marks the fill source as transient on the finishing call, and nothing else", async () => {
+    const bodies: Array<{ operation: string; input: Record<string, unknown> }> = [];
+    const fakeFetch = (async (_url: RequestInfo | URL, init?: RequestInit) => {
+      if (typeof init?.body === "string") bodies.push(JSON.parse(init.body));
+      const op = bodies.at(-1)?.operation;
+      const body = op === "asset.reserve" ? { ok: true, id: uuid(1), direct: false, url: "/x" } : { ok: true, asset: asset(1) };
+      return new Response(JSON.stringify(body), { status: 200, headers: { "content-type": "application/json" } });
+    }) as typeof fetch;
+    const api = createStudioApi({ organizationId: uuid(99), fetch: fakeFetch });
+    const file = new File([new Uint8Array([1, 2, 3])], "fill.png", { type: "image/png" });
+    await api.upload(file, { transient: true });
+    await api.upload(file);
+    const completes = bodies.filter((b) => b.operation === "asset.complete").map((b) => b.input);
+    expect(completes[0]).toMatchObject({ transient: true });
+    expect(completes[1]).not.toHaveProperty("transient");
   });
 
   it("has the new line in both languages", () => {

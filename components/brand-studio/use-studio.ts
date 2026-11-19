@@ -276,11 +276,12 @@ export function useStudio({
 
   const [uploads, setUploads] = useState<Array<{ id: string; name: string }>>([]);
   const upload = useCallback(
-    async (file: File) => {
+    /** `transient`: a source made for one run and deleted afterwards ("빈 곳 채우기"); its role is not read. */
+    async (file: File, options: { transient?: boolean } = {}) => {
       const id = newRequestId();
       setUploads((current) => [...current, { id, name: file.name }]);
       try {
-        const result = await api.upload(file, { requestId: id, measure: measureInBrowser });
+        const result = await api.upload(file, { requestId: id, measure: measureInBrowser, ...(options.transient ? { transient: true } : {}) });
         if (!isFailure(result)) {
           dispatch({ type: "assetUpserted", asset: result.asset });
           refreshSilently();

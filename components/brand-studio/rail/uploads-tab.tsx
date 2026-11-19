@@ -129,7 +129,16 @@ export function UploadsTab({ kit, assets, notice, uploading, searchId, dropActiv
           })}
         </ul>
       )}
-      {editing && <AssetDialog asset={editing} copy={copy} onUpdate={onUpdate} onDelete={onDelete} onClose={() => setEditing(null)} />}
+      {editing && (
+        <AssetDialog
+          asset={editing}
+          copy={copy}
+          onUpdate={onUpdate}
+          onDelete={onDelete}
+          onClose={() => setEditing(null)}
+          returnFocus={() => document.querySelector<HTMLElement>(`[data-library-item="a:${editing.id}"] .bsr-thumb-main`)}
+        />
+      )}
     </section>
   );
 }

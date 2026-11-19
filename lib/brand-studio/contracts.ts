@@ -509,6 +509,11 @@ export const AssetCompleteSchema = z.object({
   width: z.number().int().positive().max(12_000).optional(),
   height: z.number().int().positive().max(12_000).optional(),
   seconds: z.number().positive().max(600).optional(),
+  /**
+   * A picture made for one run and deleted when its runs settle ("빈 곳 채우기"'s whole-canvas source): it is
+   * hidden from the library, so its role is not recognised (asset-role.ts). Skipping is all it does.
+   */
+  transient: z.boolean().optional(),
 });
 
 /** Read a reference video already in the library. `depth` defaults to `basic`. */

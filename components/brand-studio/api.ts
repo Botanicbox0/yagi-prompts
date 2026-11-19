@@ -171,7 +171,13 @@ export function createStudioApi({ organizationId, fetch: fetcher = (...args) => 
     /** Library upload. `measure` reads width/height/length in the browser; tests pass a stub. */
     async upload(
       file: UploadFile & Blob,
-      options: { role?: StudioAssetRole; requestId?: string; measure?: (file: Blob, kind: StudioAssetKind) => Promise<MeasuredMedia> } = {},
+      options: {
+        role?: StudioAssetRole;
+        requestId?: string;
+        measure?: (file: Blob, kind: StudioAssetKind) => Promise<MeasuredMedia>;
+        /** A source made for one run and deleted afterwards ("빈 곳 채우기"): its role is not recognised. */
+        transient?: boolean;
+      } = {},
     ): Promise<ApiResult<StudioAssetSaved>> {
       const problem = uploadProblem(file);
       const kind = uploadKind(file.type);
@@ -202,7 +208,7 @@ export function createStudioApi({ organizationId, fetch: fetcher = (...args) => 
       }
       if (!put.ok) return failed(STATUS_CODES[put.status] ?? "failed");
       const size = options.measure ? await options.measure(file, kind).catch(() => ({}) as MeasuredMedia) : {};
-      return call("asset.complete", { organizationId, assetId: reserved.id, ...cleanMeasure(size) });
+      return call("asset.complete", { organizationId, assetId: reserved.id, ...cleanMeasure(size), ...(options.transient ? { transient: true } : {}) });
     },
   };
 }

@@ -71,7 +71,7 @@ export const studioLibraryEn = {
     name: 'Name',
     role: 'Role',
     roleNone: 'No role',
-    roleAuto: 'Automatically assigned. Manual changes are kept.',
+    roleAuto: 'Set automatically. If you change it, your choice stays.',
     tags: 'Tags',
     tagsHint: 'Separate with commas, up to {n}.',
     save: 'Save',

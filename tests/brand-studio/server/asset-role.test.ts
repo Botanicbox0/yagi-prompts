@@ -130,6 +130,22 @@ describe('the upload role check', () => {
     }
   });
 
+  it('does not read a transient source ("빈 곳 채우기"), and reads the next ordinary upload', async () => {
+    const deps = depsWith(geminiAnswer(sure, calls));
+    const bytes = await pngBytes(90, 30);
+    const reserved = await reserveStudioAsset(deps, owner(), { organizationId: f.orgId, requestId: requestId(), name: 'fill.png', mime: 'image/png', sizeBytes: bytes.byteLength });
+    if (!reserved.ok) throw new Error(reserved.code);
+    const key = (await f.sql.query<{ storage_key: string }>('select storage_key from brand_studio_assets where id = $1', [reserved.id])).rows[0]!.storage_key;
+    await deps.staging.putStaging(key, bytes, 'image/png');
+    const fill = await completeStudioAsset(deps, owner(), { organizationId: f.orgId, assetId: reserved.id, transient: true });
+    expect(fill).toMatchObject({ ok: true, asset: { role: null } });
+    expect(fill.ok && fill.roleCheck).toBeUndefined();
+    expect(tasks).toHaveLength(0);
+    expect(await roleRow(reserved.id)).toEqual({ role: null, role_source: null });
+    const ordinary = await upload(deps, await pngBytes(91, 30), 'image/png');
+    expect(ordinary.ok && ordinary.roleCheck).toBe(true);
+  });
+
   it('does nothing with the kill switch, without a key, for video, or without a scheduler', async () => {
     const off = depsWith(geminiAnswer(sure, calls), { GEMINI_API_KEY: 'k', BRAND_STUDIO_ASSET_AUTO_ROLE: 'off' });
     const a = await upload(off, await pngBytes(70, 20), 'image/png');

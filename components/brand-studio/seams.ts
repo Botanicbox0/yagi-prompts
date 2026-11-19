@@ -199,8 +199,8 @@ export interface LayerEditorProps {
    * possibly none). The screen hides that picture and deletes it once all those runs have settled.
    */
   onFillSource?(assetId: string, jobIds?: readonly string[]): void;
-  /** Stores the exported PNG as a new asset. */
-  upload(file: File): Promise<{ ok: true; asset: StudioAssetView } | StudioFailure>;
+  /** Stores the exported PNG as a new asset. `transient` marks "빈 곳 채우기"'s source: its role is not read. */
+  upload(file: File, options?: { transient?: boolean }): Promise<{ ok: true; asset: StudioAssetView } | StudioFailure>;
   onSaved(asset: StudioAssetView): void;
   onClose(): void;
 }

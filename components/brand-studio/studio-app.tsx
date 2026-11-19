@@ -1135,7 +1135,7 @@ export function StudioApp({ organizationId, locale, copy, mode, libraryCopy, lay
                 }
               : null
           }
-          upload={(file) => studio.upload(file)}
+          upload={(file, options) => studio.upload(file, options)}
           onSaved={(asset) => {
             setStatus(copy.gallery.decorated);
             void asset;

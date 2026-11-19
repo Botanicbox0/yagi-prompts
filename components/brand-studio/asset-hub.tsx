@@ -639,6 +639,7 @@ export function BrandAssetHub({
           onUpdate={(assetId, patch) => studio.updateAsset({ assetId, ...patch })}
           onDelete={(assetId) => studio.deleteAsset(assetId)}
           onClose={() => setEditing(null)}
+          returnFocus={() => document.querySelector<HTMLElement>(`[data-asset-hub-card="a:${editing.id}"] [data-asset-hub-open]`)}
         />
       )}
       {picking && picking.jobId && studioProjects && (
