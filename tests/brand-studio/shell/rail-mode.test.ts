@@ -10,6 +10,8 @@ import {
   rememberRailMode,
   rememberedRailMode,
   resolveRailMode,
+  RAIL_MODE_FOLLOWS_ATTRIBUTE,
+  railModeSwitchEffect,
 } from '@/components/brand-workspace/rail-mode';
 import { RAIL_HREF, groupItems, railItems } from '@/components/brand-workspace/rail-model';
 
@@ -173,5 +175,37 @@ describe('switching', () => {
 
   it('never opens 에셋 as the landing of 야기 팀과 while a team item exists', () => {
     expect(railModeSwitchTarget('/brand/studio', 'team', ['assets', 'campaigns', 'messages'], href)).toBe('/brand');
+  });
+});
+
+describe('what a switch does to the page (production defect 2026-11-20: home content stayed on the old side)', () => {
+  const groups = groupItems(railItems({ ...MAKER, creators: false, identity: false }), []);
+  const href = (id: keyof typeof RAIL_HREF) => RAIL_HREF[id];
+
+  it('refreshes a shared page whose content follows the mode (the home), in both directions', () => {
+    expect(railModeSwitchEffect({ path: '/brand/home', next: 'make', items: railModeItems(groups, 'make'), hrefOf: href, pageFollowsMode: true })).toEqual({ kind: 'refresh' });
+    expect(railModeSwitchEffect({ path: '/brand/home', next: 'team', items: railModeItems(groups, 'team'), hrefOf: href, pageFollowsMode: true })).toEqual({ kind: 'refresh' });
+  });
+
+  it('leaves a shared page alone when nothing on it depends on the mode', () => {
+    for (const path of ['/brand/library', '/brand/members', '/brand/settings']) {
+      expect(railModeSwitchEffect({ path, next: 'team', items: railModeItems(groups, 'team'), hrefOf: href, pageFollowsMode: false }), path).toEqual({ kind: 'none' });
+    }
+  });
+
+  it("opens the new side's first page from a page of the other side, whatever the marker says", () => {
+    expect(railModeSwitchEffect({ path: '/brand/studio/video', next: 'team', items: railModeItems(groups, 'team'), hrefOf: href, pageFollowsMode: true })).toEqual({ kind: 'navigate', href: '/brand' });
+    expect(railModeSwitchEffect({ path: '/brand/rooms', next: 'make', items: railModeItems(groups, 'make'), hrefOf: href, pageFollowsMode: false })).toEqual({ kind: 'navigate', href: '/brand/studio' });
+  });
+
+  it('is wired into the rail: a refresh goes through the router, and both homes carry the marker', async () => {
+    const { readFileSync } = await import('node:fs');
+    const rail = readFileSync('components/brand-workspace/rail-nav.tsx', 'utf8');
+    expect(rail).toContain('railModeSwitchEffect(');
+    expect(rail).toMatch(/router\.refresh\(\)/);
+    expect(rail).toContain('RAIL_MODE_FOLLOWS_ATTRIBUTE');
+    for (const file of ['components/brand-workspace/home/home-view.tsx', 'components/brand-workspace/home/team-home.tsx']) {
+      expect(readFileSync(file, 'utf8'), file).toContain(RAIL_MODE_FOLLOWS_ATTRIBUTE);
+    }
   });
 });

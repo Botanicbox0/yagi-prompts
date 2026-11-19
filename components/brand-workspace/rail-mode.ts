@@ -145,3 +145,26 @@ export function railModeSwitchTarget(path: string, next: RailMode, items: readon
   const first = items.find((id) => !railModeGuest(id, next)) ?? items[0];
   return first ? hrefOf(first) : null;
 }
+
+/**
+ * A page whose server-rendered content depends on the mode marks its root with this attribute (the home
+ * today: the making home or the team home, components/brand-workspace/home/). A switch on such a page
+ * refreshes the server-rendered tree after the cookie is written, so the content follows at once without
+ * a reload; a shared page without it (team, settings, assets) only changes the rail.
+ */
+export const RAIL_MODE_FOLLOWS_ATTRIBUTE = 'data-follows-rail-mode';
+
+export type RailModeSwitchEffect = { kind: 'navigate'; href: string } | { kind: 'refresh' } | { kind: 'none' };
+
+/** What pressing the switch does to the page (the rail itself always changes). */
+export function railModeSwitchEffect(input: {
+  path: string;
+  next: RailMode;
+  items: readonly RailItemId[];
+  hrefOf: (id: RailItemId) => string;
+  pageFollowsMode: boolean;
+}): RailModeSwitchEffect {
+  const href = railModeSwitchTarget(input.path, input.next, input.items, input.hrefOf);
+  if (href) return { kind: 'navigate', href };
+  return input.pageFollowsMode ? { kind: 'refresh' } : { kind: 'none' };
+}

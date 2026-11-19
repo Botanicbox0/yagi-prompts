@@ -22,7 +22,7 @@ import {
   type PointerEvent as ReactPointerEvent,
   type ReactNode,
 } from 'react';
-import { usePathname } from 'next/navigation';
+import { usePathname, useRouter } from 'next/navigation';
 import { interpolate } from '@/lib/i18n/format';
 import type { StudioShellCopy } from '@/messages/studio-shell';
 import type { RoomsShellCopy } from '@/messages/rooms-shell';
@@ -33,7 +33,8 @@ import {
   parseRailModeCookie,
   railModeGuest,
   railModeItems,
-  railModeSwitchTarget,
+  railModeSwitchEffect,
+  RAIL_MODE_FOLLOWS_ATTRIBUTE,
   railModes,
   rememberRailMode,
   rememberedRailMode,
@@ -151,6 +152,7 @@ type Tip = { text: string; top: number; left: number };
 export function RailNavigation(props: RailNavigationProps) {
   const { copy, scope, studio, canCreate, locale } = props;
   const path = usePathname() ?? '/brand';
+  const router = useRouter();
   const [expanded, setExpanded] = useState(props.initialExpanded);
   const [order, setOrder] = useState<string[]>([]);
   const [reordering, setReordering] = useState(false);
@@ -528,8 +530,19 @@ export function RailNavigation(props: RailNavigationProps) {
     setCreateAt(null);
     writeMode(organizationId, next);
     setModeMemory((memory) => parseRailModeCookie(rememberRailMode(memory, organizationId, next)));
-    const target = railModeSwitchTarget(path, next, railModeItems(groups, next), (id) => scope(RAIL_HREF[id]));
-    if (target) {
+    // The page's content may depend on the mode too (the home): its root carries the marker.
+    let pageFollowsMode = false;
+    try {
+      pageFollowsMode = document.querySelector(`[${RAIL_MODE_FOLLOWS_ATTRIBUTE}]`) !== null;
+    } catch {
+      // no document: nothing to refresh
+    }
+    const effect = railModeSwitchEffect({ path, next, items: railModeItems(groups, next), hrefOf: (id) => scope(RAIL_HREF[id]), pageFollowsMode });
+    // Same page, new content: the server tree is fetched again with the cookie just written. The rail and
+    // the switch stay mounted, so focus stays where it is.
+    if (effect.kind === 'refresh') router.refresh();
+    if (effect.kind === 'navigate') {
+      const target = effect.href;
       setLeavingTo(next);
       if (focus) {
         try {
