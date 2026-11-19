@@ -55,6 +55,8 @@ function validInput(operation: StudioOperation, organizationId: string): Record<
       return { organizationId, outputId: id, prompt: 'make the bottle blue' };
     case 'revise.mark':
       return { organizationId, outputId: id, time: 1, x: 0.5, y: 0.5, frame: 'data:image/jpeg;base64,/9j/4AAQ' };
+    case 'revise.talk':
+      return { organizationId, outputId: id, message: 'make the bottle blue' };
     case 'film.analyze':
     case 'asset.complete':
     case 'asset.delete':

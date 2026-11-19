@@ -130,6 +130,17 @@ function payload(input: EnhanceInput, binding: Binding, seconds: number | null, 
           ...(revision.clarified
             ? { clarified: { question: revision.clarified.question, answer: mapCustomerMentions(revision.clarified.answer, binding.bound) } }
             : {}),
+          // Made from the revise conversation: the settled request and the run's exact length.
+          ...(revision.sheet
+            ? {
+                sheet: {
+                  change: revision.sheet.change.map((c) => mapCustomerMentions(c, binding.bound)),
+                  keep: [...revision.sheet.keep],
+                  exclude: [...revision.sheet.exclude],
+                },
+                seconds: revision.seconds ?? null,
+              }
+            : {}),
         }
       : null,
   };

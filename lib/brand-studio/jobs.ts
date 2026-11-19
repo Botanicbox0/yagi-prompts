@@ -16,6 +16,7 @@ import {
   type StudioDone,
   type StudioFailure,
   type StudioFilmAnalysis,
+  type StudioJobCreate,
   type StudioJobCreated,
   type StudioPromptPreview,
 } from './contracts';
@@ -26,6 +27,7 @@ import { routeJob } from './lanes';
 import type { StudioImageModel } from './models';
 import { planFinal, planJob, type JobPlan } from './plan';
 import { planRevision } from './revision/plan';
+import { ReviseDialogueRecordSchema } from './revision/sheet';
 import { brandSummary, enhanceInputOf, enhanceReferences, keepSheet, readSheet, regionEditPlan, remixContext, runEnhancer } from './prepare';
 import { readCachedFilmSheet } from './film-sheet';
 import { jobSoftDeleteReady, jobView, openJobCount, readyAsset, readyOutput } from './repo';
@@ -117,6 +119,18 @@ export async function insertJob(deps: StudioDeps, sql: StudioDeps['sql'], userId
   return jobView(job, outputs, deps.media);
 }
 
+/**
+ * A `video_revise` request as the planner takes it. The conversation record (`dialogue`) is read only while
+ * `BRAND_STUDIO_REVISE_V2` is on; with the flag off it is dropped unread, as an unknown key always was.
+ */
+function reviseInput(v: Extract<StudioJobCreate, { kind: 'video_revise' }>, dialogueOpen: boolean) {
+  const { dialogue: raw, ...rest } = v;
+  if (!dialogueOpen || raw === undefined) return rest;
+  const parsed = ReviseDialogueRecordSchema.safeParse(raw);
+  if (!parsed.success) throw new StudioDenied('invalid');
+  return { ...rest, dialogue: parsed.data };
+}
+
 export async function createStudioJob(deps: StudioDeps, viewer: Viewer, raw: unknown): Promise<StudioJobCreated | StudioFailure> {
   const parsed = StudioJobCreateSchema.safeParse(raw);
   if (!parsed.success) return failure('invalid');
@@ -145,7 +159,7 @@ export async function createStudioJob(deps: StudioDeps, viewer: Viewer, raw: unk
       const plan = v.kind === 'video_final'
         ? await planFinal(sql, v.organizationId, v.draftOutputId, locale)
         : v.kind === 'video_revise'
-          ? await planRevision(sql, v.organizationId, v, deps.media, locale)
+          ? await planRevision(sql, v.organizationId, reviseInput(v, deps.env.reviseV2 === true), deps.media, locale)
           : await planJob(sql, v.organizationId, v, deps.media, locale, { regionV2: deps.env.regionV2 });
       if ((await openJobCount(sql, v.organizationId)) >= STUDIO_LIMITS.openJobsPerOrganization) throw new StudioDenied('too_many_running');
       const verdict = await reserveAllowance(sql, v.organizationId, plan.estimateKrw, deps.env, deps.now?.() ?? new Date());
