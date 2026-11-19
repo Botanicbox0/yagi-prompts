@@ -16,6 +16,23 @@ const look = (text: string) => ({ text, kind: "look" as const });
 const said = (text: string) => ({ id: text, from: "customer" as const, text, references: [], materials: [], marks: [] });
 
 describe("the conversation on screen", () => {
+  it("before anything is said: the same chat input with the example as its placeholder, and one quiet line above it, nothing else", () => {
+    for (const phase of ["loading", "idle"] as const) {
+      const html = view({ phase });
+      expect(html).toContain(`data-talk-first="true">${ko.revise.talk.first}</p>`);
+      expect(html.indexOf("data-talk-first")).toBeLessThan(html.indexOf("data-talk-box"));
+      expect(html).toMatch(new RegExp(`<textarea[^>]*class="bs-talk-input"[^>]*rows="1"[^>]*placeholder="${ko.revise.placeholder}"`));
+      expect(html).toContain("bs-talk-field");
+      expect(html).not.toContain("bs-revise-tools");
+      expect(html).not.toContain("data-talk-sheet");
+      expect(html).not.toContain("data-talk-start-over");
+    }
+    // Once something is said the line goes; the input stays the same control.
+    const after = view({ thread: [said("배경 바꿔줘")] });
+    expect(after).not.toContain("data-talk-first");
+    expect(after).toContain("bs-talk-field");
+  });
+
   it("announces the thread politely and shows the studio as plain text; no sheet, no button", () => {
     const html = view({ thread: [said("ㅇㅇ"), { id: "s", from: "studio", text: "무엇을 바꿀까요?", kind: "unreadable" }] });
     expect(html).toContain('role="log"');

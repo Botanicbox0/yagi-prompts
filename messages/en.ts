@@ -2062,6 +2062,7 @@ export const en = {
         makingNote: "It shows up here when it's ready. Closing this keeps it going.",
         asked: 'Asked',
         kept: 'Unfinished conversation',
+        first: 'Tell me in your own words what to change. Nothing is made until you press the button.',
         answer: {
           edit: 'We’ll edit the requested parts. The length will remain the same.',
           reshoot: 'We’ll recreate it from scratch, incorporating all requests. The composition or motion may change.',
