@@ -3,6 +3,7 @@
  * the staging bucket and the provider chosen by the environment. Tests never import this file; they
  * build `StudioDeps` with fakes.
  */
+import { after } from 'next/server';
 import type { SqlRunner } from '@/lib/db/sql-runner';
 import { getStorage } from '@/lib/storage';
 import { compileDirectorPrompt, composeDirectorFallbackPrompt } from './director';
@@ -51,7 +52,21 @@ export async function studioRuntimeDeps(sql: SqlRunner, source: Record<string, s
     intel,
     intelDeps: { fetch: globalThis.fetch, env: source },
     log: studioLog,
+    later: runAfterAnswer,
   };
+}
+
+/**
+ * Next's `after()` inside a request; outside one (the cron's own scope, a script) `after` throws, and the
+ * task then simply runs on its own. Either way a failure only reaches the server log.
+ */
+function runAfterAnswer(task: () => Promise<void>): void {
+  const guarded = () => task().catch((error) => studioLog('studio_later_failed', { message: error instanceof Error ? error.message.slice(0, 200) : 'unknown' }));
+  try {
+    after(guarded);
+  } catch {
+    void guarded();
+  }
 }
 
 /** `advanceStudioJobs(sql, { jobIds?, limit? })` with the live dependencies (after(), webhook, poll, lane, cron). */

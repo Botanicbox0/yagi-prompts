@@ -40,6 +40,7 @@ export function assetView(row: AssetRow, media: StudioMediaStore): StudioAssetVi
     id: row.id,
     kind: row.kind,
     role: row.role,
+    ...(row.role_source === 'auto' || row.role_source === 'user' ? { roleSource: row.role_source } : {}),
     name: row.name,
     tags: tagsOf(row.tags),
     url: media.url(row.storage_key),

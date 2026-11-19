@@ -20,6 +20,8 @@ export function AssetDialog({ asset, copy, onUpdate, onDelete, onClose }: AssetD
   const id = useId();
   const [name, setName] = useState(asset.name);
   const [role, setRole] = useState<StudioAssetRole | "">(asset.role ?? "");
+  // Said only while the shown role is still the recognised one.
+  const recognised = asset.roleSource === "auto" && Boolean(asset.role) && role === asset.role;
   const [tags, setTags] = useState(asset.tags.join(", "));
   const [confirming, setConfirming] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -49,14 +51,22 @@ export function AssetDialog({ asset, copy, onUpdate, onDelete, onClose }: AssetD
         className="bsr-dialog-body"
         onSubmit={(event) => {
           event.preventDefault();
-          if (name.trim()) void run(() => onUpdate(asset.id, { name: name.trim().slice(0, STUDIO_LIMITS.nameMax), role: role || null, tags: tagsFrom(tags) }));
+          // The role goes only when it changed: saving a new name must not turn a recognised role into a chosen one.
+          const changedRole = role !== (asset.role ?? "") ? { role: role || null } : {};
+          if (name.trim()) void run(() => onUpdate(asset.id, { name: name.trim().slice(0, STUDIO_LIMITS.nameMax), ...changedRole, tags: tagsFrom(tags) }));
         }}
       >
         <h2 id={`${id}-title`}>{u.edit}</h2>
         <label htmlFor={`${id}-name`}>{u.name}</label>
         <input id={`${id}-name`} className="bsr-field" value={name} maxLength={STUDIO_LIMITS.nameMax} required onChange={(event) => setName(event.target.value)} />
         <label htmlFor={`${id}-role`}>{u.role}</label>
-        <select id={`${id}-role`} className="bsr-field" value={role} onChange={(event) => setRole(event.target.value as StudioAssetRole | "")}>
+        <select
+          id={`${id}-role`}
+          className="bsr-field"
+          value={role}
+          aria-describedby={recognised ? `${id}-role-hint` : undefined}
+          onChange={(event) => setRole(event.target.value as StudioAssetRole | "")}
+        >
           <option value="">{u.roleNone}</option>
           {STUDIO_ASSET_ROLES.map((value) => (
             <option key={value} value={value}>
@@ -64,6 +74,11 @@ export function AssetDialog({ asset, copy, onUpdate, onDelete, onClose }: AssetD
             </option>
           ))}
         </select>
+        {recognised && (
+          <p id={`${id}-role-hint`} className="bsr-muted" data-library-role-auto>
+            {u.roleAuto}
+          </p>
+        )}
         <label htmlFor={`${id}-tags`}>{u.tags}</label>
         <input id={`${id}-tags`} className="bsr-field" value={tags} aria-describedby={`${id}-tags-hint`} onChange={(event) => setTags(event.target.value)} />
         <p id={`${id}-tags-hint`} className="bsr-muted">

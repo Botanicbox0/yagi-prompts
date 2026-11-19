@@ -117,6 +117,7 @@ export function UploadsTab({ kit, assets, notice, uploading, searchId, dropActiv
                 attachOnPress={kit.attachOnPress}
                 onAttach={kit.onAttach}
                 onView={kit.onView}
+                label={asset.role ? copy.roles[asset.role] : null}
                 actions={[kit.likeAction(item)]}
                 menu={
                   items.length > 0 && (
