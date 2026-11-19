@@ -2073,6 +2073,7 @@ export const ko: Dictionary = {
         makingTitle: '만드는 중이에요',
         makingNote: '완성되면 여기에 바로 보여요. 창을 닫아도 계속 만들어져요.',
         asked: '요청 내용',
+        kept: '미반영 대화 있음',
         answer: {
           edit: '요청하신 부분을 고칠게요. 길이는 그대로예요.',
           reshoot: '지금까지의 요청을 모두 담아 다시 만들게요. 구도나 움직임이 달라질 수 있어요.',

@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import type { StudioReviseTalk } from '@/lib/brand-studio/contracts';
 import { createTalkFlow, type TalkDeps } from '@/components/brand-studio/revise-talk-flow';
-import { memoryTalkStore } from '@/components/brand-studio/revise-talk-store';
+import { browserTalkStore, memoryTalkStore, savedTalkOutputs } from '@/components/brand-studio/revise-talk-store';
 
 /** The revise conversation on screen (components/brand-studio/revise-talk-flow.ts), without a DOM. */
 
@@ -199,5 +199,35 @@ describe('the revise conversation on screen', () => {
     h.flow.startOver();
     expect(h.flow.state).toMatchObject({ thread: [], canMake: false, phase: 'idle' });
     expect(h.store.value).toBeNull();
+  });
+});
+
+describe('the conversations kept in this browser (the version row dots)', () => {
+  const memory = () => {
+    const items = new Map<string, string>();
+    return { getItem: (k: string) => items.get(k) ?? null, setItem: (k: string, v: string) => void items.set(k, v), removeItem: (k: string) => void items.delete(k) };
+  };
+  const saved = (said: boolean) => ({
+    thread: said ? [{ id: 'a', from: 'customer' as const, text: '배경 바꿔줘', references: [], materials: [], marks: [] }] : [],
+    sheet: { change: [], keep: [], exclude: [] },
+    questions: [], open: null, way: null, estimateKrw: 0, seconds: null, canMake: false, editStudio: false, draft: said ? '' : '바다', references: [], materials: [], marks: [], pending: null,
+  });
+  it('are the results with something said and not made yet; blocked storage is none', () => {
+    const before = (globalThis as { window?: unknown }).window;
+    (globalThis as { window?: unknown }).window = { localStorage: memory() };
+    try {
+      const A = '00000000-0000-4000-8000-00000000000a';
+      const B = '00000000-0000-4000-8000-00000000000b';
+      const C = '00000000-0000-4000-8000-00000000000c';
+      browserTalkStore(ORG, A).save(saved(true));
+      browserTalkStore(ORG, B).save(saved(false)); // only a draft typed: no dot
+      expect([...savedTalkOutputs(ORG, [A, B, C])]).toEqual([A]);
+      browserTalkStore(ORG, A).clear(); // made into a version
+      expect(savedTalkOutputs(ORG, [A, B, C]).size).toBe(0);
+      (globalThis as { window?: unknown }).window = { get localStorage(): Storage { throw new Error('blocked'); } };
+      expect(savedTalkOutputs(ORG, [A]).size).toBe(0);
+    } finally {
+      (globalThis as { window?: unknown }).window = before;
+    }
   });
 });

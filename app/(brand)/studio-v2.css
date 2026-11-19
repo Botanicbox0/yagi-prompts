@@ -913,7 +913,7 @@ button.bs-sibling:focus-visible { outline: 2px solid var(--ys-focus); outline-of
 .bs-talk-group li { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; min-height: 30px; padding: 4px 4px 4px 8px; border-radius: 8px; color: var(--ys-ink); font-size: 13px; line-height: 1.45; word-break: keep-all; overflow-wrap: break-word; }
 .bs-talk-group li[data-fresh] { animation: bs-talk-fresh 1600ms var(--ease-editorial, cubic-bezier(0.22, 1, 0.36, 1)) 1; }
 @keyframes bs-talk-fresh { from { background: color-mix(in srgb, var(--ys-accent) 16%, transparent); } to { background: transparent; } }
-.bs-talk-line-text { flex: 1 1 auto; min-width: 0; }
+.bs-talk-line-text { flex: 1 1 0%; min-width: 0; }
 .bs-talk-line-x { display: grid; place-items: center; flex: none; width: 26px; height: 26px; margin-left: auto; padding: 0; border: 0; border-radius: 50%; background: transparent; color: var(--ys-ink-muted); cursor: pointer; }
 .bs-talk-line-x:hover:not(:disabled) { background: var(--ys-hover); color: var(--ys-ink); }
 .bs-talk-line-x:focus-visible { outline: 2px solid var(--ys-focus); outline-offset: 1px; }
@@ -928,3 +928,38 @@ button.bs-sibling:focus-visible { outline: 2px solid var(--ys-focus); outline-of
 @media (prefers-reduced-motion: reduce) {
   .bs-talk-group li[data-fresh] { animation: none; box-shadow: inset 2px 0 0 0 var(--ys-accent); }
 }
+/* The panel while the conversation is open: one column exactly as tall as the panel. The version row and card
+   on top, the thread is the only part that scrolls (it keeps to its newest line), the sheet with its button and
+   the box are always in view. The actions stay below, reached by scrolling the panel. */
+.bs-talk-stage { display: flex; flex-direction: column; gap: 8px; flex: none; height: 100%; min-height: 0; }
+/* The version row stays one line here (it scrolls sideways when there are many versions). */
+.bs-talk-stage .bs-revise-strip { flex-wrap: nowrap; margin: -2px; padding: 2px; overflow-x: auto; scrollbar-width: none; }
+.bs-talk-stage .bs-revise-strip::-webkit-scrollbar { display: none; }
+.bs-talk-stage .bs-revise-chip { flex: none; }
+.bs-talk-stage > * { flex: none; min-width: 0; }
+.bs-talk-stage > .bs-talk { display: flex; flex-direction: column; gap: 8px; flex: 1 1 auto; min-height: 0; }
+.bs-talk-stage .bs-talk > * { flex: none; min-width: 0; }
+.bs-talk-stage .bs-talk-thread { flex: 1 1 auto; min-height: 44px; align-content: start; margin-right: -6px; padding-right: 6px; overflow-y: auto; overscroll-behavior: contain; scrollbar-width: thin; }
+.bs-talk-stage .bs-talk-sheet { gap: 4px; padding: 8px 12px; }
+.bs-talk-stage .bs-talk-group li { min-height: 26px; padding: 1px 2px 1px 8px; }
+.bs-talk-stage [data-talk-group="change"] ul { max-height: calc(3 * 26px + 2 * 2px); overflow-y: auto; overscroll-behavior: contain; scrollbar-width: thin; }
+.bs-talk-oneline { display: flex; align-items: baseline; gap: 8px; width: 100%; min-width: 0; padding: 0; border: 0; background: none; color: inherit; font: inherit; text-align: left; cursor: pointer; }
+.bs-talk-oneline .bs-talk-group-label { flex: none; }
+.bs-talk-oneline .bs-talk-group-text { flex: 1 1 auto; min-width: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+.bs-talk-oneline[aria-expanded="true"] .bs-talk-group-text { overflow: visible; white-space: normal; }
+.bs-talk-oneline:focus-visible { outline: 2px solid var(--ys-focus); outline-offset: 2px; border-radius: 4px; }
+.bs-talk-stage .bs-talk-make { gap: 4px; padding-top: 2px; }
+.bs-talk-stage .bs-talk-draft { margin: 0; font-size: 12px; }
+.bs-talk-stage .bs-talk-make .bs-revise-after { margin: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; font-size: 12px; }
+.bs-talk-stage .bs-talk-box { position: static; margin: 0; padding: 0; background: none; box-shadow: none; gap: 6px; }
+/* One row of tools under the box, also with the longer English labels. */
+.bs-talk-stage .bs-revise-tools { flex-wrap: nowrap; min-width: 0; }
+.bs-talk-stage .bs-revise-tools .bs-btn:not(.bs-revise-send) { min-width: 0; padding: 0 11px; }
+.bs-talk-stage .bs-revise-tools .bs-revise-send { flex: none; }
+.bs-talk-input { min-height: calc(2 * 1.5em + 16px); max-height: calc(5 * 1.5em + 16px); line-height: 1.5; resize: none; overflow-y: auto; }
+.bs-revise-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--ys-ink-muted); }
+.bs-revise-chip[data-selected] .bs-revise-dot { background: currentColor; opacity: 0.72; }
+/* The card on one line while a conversation is under way: number, stage, base, and the step to the final. */
+.bs-version-card[data-compact] { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; padding: 6px 8px 6px 12px; }
+.bs-version-card[data-compact] .bs-version-card-head { flex: 1 1 auto; flex-wrap: nowrap; }
+.bs-version-card[data-compact] .bs-version-final { justify-self: auto; }

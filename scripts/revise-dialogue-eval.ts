@@ -30,10 +30,12 @@ import { creditsOf } from '@/lib/brand-studio/credits';
 import { billedResolution, remixRunUsd, usageKrw, videoRunUsd } from '@/lib/brand-studio/usage-rate';
 import {
   factCredits,
+  mentionsMissingAttachment,
   readTalkWithTries,
   settleTalk,
   talkFacts,
   type TalkSettled,
+  type TalkSlips,
   type TalkTerms,
 } from '@/lib/brand-studio/revision/talk';
 import { emptySheet, openQuestion, type ReviseQuestion, type ReviseSheet, type ReviseTurn } from '@/lib/brand-studio/revision/sheet';
@@ -337,6 +339,7 @@ interface TurnRecord {
   ms: number;
   tries: number;
   productSlip: boolean;
+  slips: TalkSlips;
   tokens: Omit<Usage, 'ms'>;
   failed: boolean;
   settled: TalkSettled;
@@ -355,7 +358,23 @@ function sentences(text: string): number {
   return (text.match(/[^.!?。？！]+[.!?。？！]?/g) ?? []).filter((s) => s.trim().length > 1).length;
 }
 
-function check(step: Step, s: TalkSettled, standingBefore: ReviseSheet, questionsBefore: ReviseQuestion[], shownBefore: boolean): TurnRecord['checks'] {
+/**
+ * An option that gives the product a new look, judged from its words alone (independent of the reading's own
+ * "about" label): it names the product and a new colour, material, mark or placement on it, and leaves nothing
+ * open to the customer.
+ */
+const PRODUCT_WORD = /병|향수|액체|립글로스|글로스|튜브|뚜껑|캡|라벨|제품|bottle|liquid|gloss|tube|\bcap\b|label|product/i;
+const NEW_LOOK = /색|핑크|분홍|빨|레드|코랄|화이트|흰|하얀|검정|블랙|골드|금빛|금색|은색|투명|파란|파랑|보라|노란|초록|앞면|표면|위에\s*넣|blue|pink|red|coral|white|black|gold|silver|clear|purple|yellow|green|on the (?:bottle|front|product)/i;
+const LEFT_OPEN = /원하는|알려\s*주|직접|tell me|your own|of your choice|you choose/i;
+const KEEPS_IT = /그대로|두고|남기고|빼고|없이|keep|without/i;
+export const inventsProductLook = (option: string) => PRODUCT_WORD.test(option) && NEW_LOOK.test(option) && !LEFT_OPEN.test(option) && !KEEPS_IT.test(option);
+/** A confirmation that sounds as if making had started. */
+const SOUNDS_STARTED = /진행할게요|진행하겠|진행해\s*드릴|진행됩니다|만들고\s*있|만드는\s*중|만들기\s*시작|시작할게요|시작했|확정|go ahead|going ahead|proceed|being made|started/i;
+const FILLER_OPENER = /^[^.!?]{0,24}(?:모두|전부|다)\s*(?:한\s*번에|함께)?\s*(?:반영|적용|바꿀|수정|변경)할?\s*수\s*있어요|^I can (?:do|make|change) (?:all|both|every)/i;
+/** The question asks which of several people (or all of them). */
+const ASKS_WHICH = /어느|누구|몇\s*번째|중\s*(?:누구|어느|어떤\s*분|한\s*분)|어떤\s*분을|which|who\b/i;
+
+function check(step: Step, s: TalkSettled, standingBefore: ReviseSheet, questionsBefore: ReviseQuestion[], shownBefore: boolean, ctx: { pictures: number; manyPeople: boolean; caseId: string }): TurnRecord['checks'] {
   const out: TurnRecord['checks'] = [];
   const e = step.expect;
   const texts = s.sheet.change.map((c) => c.text);
@@ -389,11 +408,33 @@ function check(step: Step, s: TalkSettled, standingBefore: ReviseSheet, question
     if (s.kind === 'confirm' && standingBefore.change.length) {
       out.push({ name: 'confirm starts with 네, and has no 확정', ok: (english ? /^Sure,/.test(s.reply) : /^네,/.test(s.reply)) && !/확정/.test(s.reply) });
     }
+    // 1. A yes is a confirmation only when a plan stands; "네," only then; a confirmation never sounds started.
+    if (!standingBefore.change.length) {
+      out.push({ name: 'no confirmation with nothing standing', ok: s.kind !== 'confirm', note: s.kind ?? 'none' });
+      out.push({ name: 'no "네," with nothing standing', ok: !/^(네|Sure)\s*,/i.test(s.reply) });
+    }
+    if (s.kind === 'confirm') out.push({ name: 'confirmation does not sound started', ok: !SOUNDS_STARTED.test(s.reply), note: SOUNDS_STARTED.exec(s.reply)?.[0] });
+    // 5. No opener that only says it can be done; drafts and finals in two sentences.
+    out.push({ name: 'no filler opener', ok: !FILLER_OPENER.test(s.reply.trim()) });
+    if (ctx.caseId === 'A19') out.push({ name: 'drafts and finals in two sentences', ok: sentences(s.reply) <= 2, note: String(sentences(s.reply)) });
+    // 3. Never an attachment that is not there.
+    out.push({ name: 'reply names no missing attachment', ok: !mentionsMissingAttachment(s.reply, { pictures: ctx.pictures, videos: 0 }) });
   }
   if (s.open !== null) {
     const before = (s.reply ?? '').replace(s.questions[s.open]!.question, '');
     out.push({ name: 'question turn without parroting', ok: !PARROT.test(before), note: PARROT.exec(before)?.[0] });
     out.push({ name: 'question said once', ok: (s.reply ?? '').split(s.questions[s.open]!.question).length === 2 });
+    const options = s.questions[s.open]!.options;
+    // 2. Options never invent a new look for the product (judged from their words).
+    const invented = options.filter(inventsProductLook);
+    out.push({ name: 'no option invents a product look', ok: invented.length === 0, note: invented.join(' / ') || undefined });
+    // 3. ... nor speak of an attachment that is not there.
+    const missing = options.filter((o) => mentionsMissingAttachment(o, { pictures: ctx.pictures, videos: 0 }));
+    out.push({ name: 'no option names a missing attachment', ok: missing.length === 0, note: missing.join(' / ') || undefined });
+    // 4. Several people and a request to change "the model": which of them is asked first.
+    if (ctx.manyPeople && /모델|model/i.test(step.say) && s.questions.length === 1) {
+      out.push({ name: 'asks which of the people', ok: ASKS_WHICH.test(s.questions[s.open]!.question) || options.some((o) => /모두|전부|all\b/i.test(o)), note: s.questions[s.open]!.question });
+    }
   }
   if (s.reply && shownBefore && (s.changed.way || s.changed.credits) && s.way !== null) {
     out.push({ name: 'explains a change of way or credits', ok: /\d[\d,]*\s*(크레딧|credits?)/i.test(s.reply) });
@@ -446,11 +487,13 @@ async function runCase(c: Case, set: SetName, clips: Record<ClipName, ClipFixtur
     );
     const outcome = read.outcome;
     const settled = settleTalk(
-      { reading: outcome.ok ? outcome.reading : null, message, standing: { sheet, questions }, answering: opened !== null ? (step.answering ?? null) : null, terms, shown },
+      { reading: outcome.ok ? outcome.reading : null, message, standing: { sheet, questions }, answering: opened !== null ? (step.answering ?? null) : null, terms, shown, attached: { pictures, videos: 0 } },
       factCredits(facts),
     );
-    const checks = outcome.ok && !settled.failed ? check({ ...step, say: message }, settled, sheet, questions, shown !== null) : [{ name: 'read', ok: false, note: outcome.ok ? 'emptied' : outcome.why }];
-    records.push({ step: i + 1, say: message, answering: step.answering ?? null, category: step.category, ms: read.ms, tries: read.tries, productSlip: read.productSlip, tokens, failed: !outcome.ok || Boolean(settled.failed), settled, checks });
+    // Several different people over its shots (the inventory counts the most at once: one per shot here).
+    const ctx = { pictures, manyPeople: clipName === 'montage', caseId: c.id };
+    const checks = outcome.ok && !settled.failed ? check({ ...step, say: message }, settled, sheet, questions, shown !== null, ctx) : [{ name: 'read', ok: false, note: outcome.ok ? 'emptied' : outcome.why }];
+    records.push({ step: i + 1, say: message, answering: step.answering ?? null, category: step.category, ms: read.ms, tries: read.tries, productSlip: read.productSlip, slips: read.slips, tokens, failed: !outcome.ok || Boolean(settled.failed), settled, checks });
     turns.push({ role: 'customer', text: message });
     if (settled.reply) turns.push({ role: 'studio', text: settled.reply });
     sheet = settled.sheet;
@@ -490,6 +533,15 @@ function metrics(records: CaseRecord[]) {
     productByStudioShown: read.filter(({ t }) => t.settled.sheet.change.some((c) => c.chosen && c.about === 'product')).length,
     productSlipsRetried: all.filter(({ t }) => t.productSlip).length,
     productChoicesDropped: read.reduce((n, { t }) => n + t.settled.dropped.productChoices, 0),
+    failing: (name: string) => checks.filter((c) => c.name === name && !c.ok).length,
+    counted: (name: string) => checks.filter((c) => c.name === name).length,
+    optionsDropped: read.reduce((n, { t }) => n + t.settled.dropped.options, 0),
+    attachmentDropped: read.reduce((n, { t }) => n + t.settled.dropped.attachment, 0),
+    reclassified: read.filter(({ t }) => t.settled.dropped.reclassified).length,
+    confirmFixed: read.filter(({ t }) => t.settled.dropped.confirmFixed).length,
+    fillerDropped: read.filter(({ t }) => t.settled.dropped.filler).length,
+    capped: read.filter(({ t }) => t.settled.dropped.capped).length,
+    slipRetries: all.filter(({ t }) => t.slips && t.slips.product + t.slips.options + t.slips.attachment > 0).length,
     checks: pct(checks.filter((c) => c.ok).length, checks.length),
     failedReadings: all.filter(({ t }) => t.failed).length,
     secondTries: all.filter(({ t }) => t.tries > 1).length,
@@ -515,6 +567,13 @@ function table(m: ReturnType<typeof metrics>): string[] {
     `| question turns that show a parroting sentence | ${m.parrotingShown} | 0 |`,
     `| product changed by the studio's own choice (shown) | ${m.productByStudioShown} | 0 |`,
     `| (model slips: parroting removed by the server / product slips retried / product choices dropped) | ${m.parrotingRemoved} / ${m.productSlipsRetried} / ${m.productChoicesDropped} | |`,
+    `| 1. yes with nothing standing shown as a confirmation / with "네," | ${m.failing('no confirmation with nothing standing')} / ${m.failing('no "네," with nothing standing')} of ${m.counted('no confirmation with nothing standing')} | 0 |`,
+    `| 1. confirmations that sound started | ${m.failing('confirmation does not sound started')} of ${m.counted('confirmation does not sound started')} | 0 |`,
+    `| 2. question turns showing an option that invents a product look (judged by its words) | ${m.failing('no option invents a product look')} of ${m.counted('no option invents a product look')} | 0 |`,
+    `| 3. replies / question turns naming a missing attachment | ${m.failing('reply names no missing attachment')} / ${m.failing('no option names a missing attachment')} | 0 |`,
+    `| 4. several people: which of them asked first | ${m.counted('asks which of the people') - m.failing('asks which of the people')}/${m.counted('asks which of the people')} | all |`,
+    `| 5. replies over three sentences / filler openers / drafts-finals over two sentences | ${m.failing('at most three sentences')} / ${m.failing('no filler opener')} / ${m.failing('drafts and finals in two sentences')} | 0 |`,
+    `| (server repairs: options dropped / attachment lines dropped / yes re-read / confirmation replaced / opener dropped / capped; turns retried for a rule) | ${m.optionsDropped} / ${m.attachmentDropped} / ${m.reclassified} / ${m.confirmFixed} / ${m.fillerDropped} / ${m.capped}; ${m.slipRetries} | |`,
     `| all mechanical checks | ${m.checks} | |`,
     `| failed after two tries / turns that needed a second try | ${m.failedReadings} / ${m.secondTries} | |`,
     `| reading named another way than the server | ${m.wayDisagreements} | |`,

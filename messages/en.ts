@@ -2061,6 +2061,7 @@ export const en = {
         makingTitle: 'Being made',
         makingNote: "It shows up here when it's ready. Closing this keeps it going.",
         asked: 'Asked',
+        kept: 'Unfinished conversation',
         answer: {
           edit: 'We’ll edit the requested parts. The length will remain the same.',
           reshoot: 'We’ll recreate it from scratch, incorporating all requests. The composition or motion may change.',

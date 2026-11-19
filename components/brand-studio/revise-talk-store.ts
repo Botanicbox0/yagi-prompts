@@ -56,6 +56,19 @@ export function browserTalkStore(organizationId: string, outputId: string, now: 
   };
 }
 
+/**
+ * Which of these results have a conversation kept in this browser that has not become a version yet (the
+ * version row marks them with a quiet dot). Making the version clears it, so a kept thread means unfinished.
+ */
+export function savedTalkOutputs(organizationId: string, outputIds: readonly string[], now: () => number = () => Date.now()): Set<string> {
+  const out = new Set<string>();
+  for (const outputId of outputIds) {
+    const saved = browserTalkStore(organizationId, outputId, now).load();
+    if (saved && saved.thread.some((item) => item.from === "customer")) out.add(outputId);
+  }
+  return out;
+}
+
 /** A store that keeps nothing (tests, and the screen when no output is open). */
 export const memoryTalkStore = (): TalkStore & { value: TalkSaved | null } => {
   const store = {

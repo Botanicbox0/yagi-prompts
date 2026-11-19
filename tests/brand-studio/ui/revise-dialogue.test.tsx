@@ -125,6 +125,22 @@ describe("the version card", () => {
   const card = (versions: ReturnType<typeof chainOf>, selected: number, shown: StudioJobView, patch: Partial<Parameters<typeof VersionPanel>[0]> = {}) =>
     VersionPanel({ versions, selected, shown: { job: shown, output: shown.outputs[0]! }, copy: ko, locale: "ko", canFinish: true, finishing: false, onSelect: noop, onFinal: noop, ...patch });
 
+  it("keeps to one line while a conversation is under way, and marks the versions that have one kept", () => {
+    const v1 = clip(1);
+    const v2 = clip(2, { prompt: "배경을 바다로", revision: rev(2, 1, { sheet: { change: [{ text: "배경을 바다로", kind: "look" }], keep: [], exclude: [] } }) }, { draft: false });
+    const chain = chainOf([v1, v2], v2);
+    const quiet = renderToStaticMarkup(card(chain, 2, v2, { compact: true, talking: new Set([1]) })!);
+    expect(quiet).toMatch(/data-version-card="2"[^>]*data-compact=""/);
+    expect(quiet).not.toContain("data-revision-asked");
+    expect(quiet.match(/data-revision-talking/g)).toHaveLength(1);
+    expect(quiet).toMatch(/data-revision-version="1"[^]*data-revision-talking[^]*data-revision-version="2"/);
+    expect(quiet).toContain(ko.revise.talk.kept);
+    const plain = renderToStaticMarkup(card(chain, 2, v2)!);
+    expect(plain).not.toContain("data-compact");
+    expect(plain).toContain("data-revision-asked");
+    expect(plain).not.toContain("data-revision-talking");
+  });
+
   it("names the stage of what is on screen", () => {
     const draft = clip(1);
     const straight = clip(2, { resolution: "720p" }, { draft: false });

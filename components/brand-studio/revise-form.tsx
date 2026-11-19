@@ -162,6 +162,8 @@ export function VersionPanel({
   finishing,
   onSelect,
   onFinal,
+  compact = false,
+  talking,
 }: {
   versions: readonly ChainVersion[];
   selected: number;
@@ -175,6 +177,10 @@ export function VersionPanel({
   finishing: boolean;
   onSelect(version: number): void;
   onFinal(output: StudioOutputView): void;
+  /** A conversation is under way below: the card keeps to one line (number, stage, the step to the final). */
+  compact?: boolean;
+  /** Versions with a conversation kept in this browser and not made yet (a quiet dot on the chip). */
+  talking?: ReadonlySet<number>;
 }) {
   const r = copy.revise;
   const current = versions.find((v) => v.version === selected) ?? null;
@@ -223,12 +229,24 @@ export function VersionPanel({
                     <span>{r.making}</span>
                   </>
                 )}
+                {talking?.has(v.version) && (
+                  <>
+                    <span className="bs-revise-dot" aria-hidden="true" data-revision-talking />
+                    <span className="bs-sr">{r.talk.kept}</span>
+                  </>
+                )}
               </button>
             );
           })}
         </div>
       )}
-      <div className="bs-version-card" data-version-card={selected} data-stage={stage ?? undefined}>
+      <div
+        className="bs-version-card"
+        data-version-card={selected}
+        data-stage={stage ?? undefined}
+        data-compact={compact ? "" : undefined}
+        title={compact && current?.job.revision?.sheet?.change.length ? current.job.revision.sheet.change.map((c) => c.text).join(" · ") : undefined}
+      >
         <div className="bs-version-card-head">
           <span className="bs-num bs-version-card-n">{fill(r.version, { n: selected })}</span>
           {stage && (
@@ -242,7 +260,7 @@ export function VersionPanel({
             </span>
           )}
         </div>
-        {current?.job.revision?.sheet?.change.length ? (
+        {compact ? null : current?.job.revision?.sheet?.change.length ? (
           // Made from the conversation: how it was asked, in one line (the history of versions reads as a story).
           <p className="bs-revise-request" data-revision-asked>
             <span className="bs-sr">{r.talk.asked}</span>
@@ -253,14 +271,14 @@ export function VersionPanel({
             {current.request}
           </p>
         ) : null}
-        {current?.request && current.clarified && (
+        {!compact && current?.request && current.clarified && (
           <div className="bs-revise-clarified" data-revision-clarified>
             <span className="bs-sr">{r.clarifiedLabel}</span>
             <p className="bs-muted">{current.clarified.question}</p>
             <p>{current.clarified.answer}</p>
           </div>
         )}
-        {current?.request && current.marks.length > 0 && (
+        {!compact && current?.request && current.marks.length > 0 && (
           <ul className="bs-mark-chips" data-revision-marks>
             {current.marks.map((mark, i) => (
               <li key={i} className="bs-mark-chip" data-static="" data-revision-mark={i + 1}>

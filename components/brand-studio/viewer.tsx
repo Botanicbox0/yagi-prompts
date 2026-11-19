@@ -25,6 +25,7 @@ import type { RefSource, TrayItem } from "./refs";
 import { RegionEditor } from "./region-editor";
 import { ReviseForm, VersionPanel, VersionStrip, type ReviseSupport } from "./revise-form";
 import { ReviseTalk, SheetCard, type TalkSupport } from "./revise-talk";
+import { savedTalkOutputs } from "./revise-talk-store";
 import { chainOf, versionOf, type ChainVersion } from "./revision-model";
 
 export type ViewerItem = { type: "output"; output: StudioOutputView; job: StudioJobView } | { type: "asset"; asset: StudioAssetView };
@@ -436,6 +437,28 @@ function ViewerContent({
   // shows what was asked and the picture says it is on its way.
   const selectedEntry = chain.find((entry) => entry.version === selected) ?? null;
   const makingSelected = dialogue && selectedEntry?.state === "making";
+  // Conversations kept in this browser and not made yet, per result: the version row marks their versions,
+  // and the card keeps to one line while the shown one is under way.
+  const talkOrg = dialogue ? (revise?.talk?.organizationId ?? null) : null;
+  const chainOutputs = useMemo(() => chain.flatMap((entry) => (entry.output ? [entry.output.id] : [])), [chain]);
+  const [talkingOutputs, setTalkingOutputs] = useState<ReadonlySet<string>>(() => new Set());
+  const chainKey = chainOutputs.join(",");
+  useEffect(() => {
+    if (!talkOrg) return;
+    setTalkingOutputs(savedTalkOutputs(talkOrg, chainKey ? chainKey.split(",") : []));
+  }, [talkOrg, chainKey]);
+  const markTalking = (outputId: string, open: boolean) =>
+    setTalkingOutputs((current) => {
+      if (current.has(outputId) === open) return current;
+      const next = new Set(current);
+      if (open) next.add(outputId);
+      else next.delete(outputId);
+      return next;
+    });
+  const talkingVersions = useMemo(
+    () => new Set(chain.flatMap((entry) => (entry.output && talkingOutputs.has(entry.output.id) ? [entry.version] : []))),
+    [chain, talkingOutputs],
+  );
   const videoRef = useRef<HTMLVideoElement>(null);
   // The figure the revise form draws marks into (a state, so the form re-renders once it exists).
   const [mediaHost, setMediaHost] = useState<HTMLElement | null>(null);
@@ -651,18 +674,74 @@ function ViewerContent({
           if (!modelCompare) sideTop.current = event.currentTarget.scrollTop;
         }}
       >
-        {job?.group && siblingsOf && onOpenOutput && !region && !modelCompare && (
-          <SiblingSwitcher
-            job={job}
-            output={item.type === "output" ? item.output : null}
-            siblings={siblings}
-            copy={copy}
-            onOpen={onOpenOutput}
-            comparing={modelCompare}
-            onCompare={onCompare}
-          />
+        {clip && revise && canGenerate && output && dialogue && revise.talk ? (
+          // `BRAND_STUDIO_REVISE_V2`: the conversation fills the panel. The version row and card sit on top
+          // (the card on one line while a conversation is under way), the thread is the one part that
+          // scrolls, and the sheet with its button and the box stay in view below it.
+          <div className="bs-talk-stage" data-talk-stage>
+            {job?.group && siblingsOf && onOpenOutput && !region && !modelCompare && (
+              <SiblingSwitcher
+                job={job}
+                output={item.type === "output" ? item.output : null}
+                siblings={siblings}
+                copy={copy}
+                onOpen={onOpenOutput}
+                comparing={modelCompare}
+                onCompare={onCompare}
+              />
+            )}
+            <VersionPanel
+              versions={chain}
+              selected={selected}
+              shown={item.type === "output" ? { job: item.job, output: item.output } : null}
+              copy={copy}
+              locale={locale}
+              canFinish={canGenerate}
+              finishing={busy === "finalize"}
+              onSelect={selectVersion}
+              onFinal={(draft) => actions.finalize(draft)}
+              compact={!makingSelected && talkingOutputs.has(output.id)}
+              talking={talkingVersions}
+            />
+            {makingSelected && selectedEntry ? (
+              <section className="bs-talk" data-talk-making>
+                <div className="bs-talk-head">
+                  <h3 className="bs-revise-title">{copy.revise.talk.makingTitle}</h3>
+                  <span className="bs-revise-next bs-num">{fill(copy.revise.version, { n: selectedEntry.version })}</span>
+                </div>
+                {selectedEntry.job.revision?.sheet ? <SheetCard sheet={selectedEntry.job.revision.sheet} copy={copy} /> : selectedEntry.request ? <p className="bs-revise-request">{selectedEntry.request}</p> : null}
+                <p className="bs-muted bs-talk-making-note">{copy.revise.talk.makingNote}</p>
+              </section>
+            ) : (
+              <ReviseTalk
+                key={output.id}
+                outputId={output.id}
+                support={revise.talk}
+                copy={copy}
+                locale={locale}
+                draftClip={Boolean(output.draft)}
+                fallbackVersion={Math.max(1, ...chain.map((entry) => entry.version)) + 1}
+                stage={file.kind === "video" && !region ? { video: videoRef, host: mediaHost, url: file.url } : null}
+                onCreated={(created, version) => selectVersion(created.job.revision?.version ?? version)}
+                onTalking={markTalking}
+              />
+            )}
+          </div>
+        ) : (
+          job?.group && siblingsOf && onOpenOutput && !region && !modelCompare && (
+            <SiblingSwitcher
+              job={job}
+              output={item.type === "output" ? item.output : null}
+              siblings={siblings}
+              copy={copy}
+              onOpen={onOpenOutput}
+              comparing={modelCompare}
+              onCompare={onCompare}
+            />
+          )
         )}
-        {clip && dialogue ? (
+        {/* Without the conversation, these three keep their places in the panel exactly as before. */}
+        {clip && revise && canGenerate && output && dialogue && revise.talk ? null : clip && dialogue ? (
           <VersionPanel
             versions={chain}
             selected={selected}
@@ -677,30 +756,7 @@ function ViewerContent({
         ) : (
           clip && chain.length >= 2 && <VersionStrip versions={chain} selected={selected} copy={copy} onSelect={selectVersion} />
         )}
-        {clip && revise && canGenerate && output && dialogue && revise.talk ? (
-          makingSelected && selectedEntry ? (
-            <section className="bs-talk" data-talk-making>
-              <div className="bs-talk-head">
-                <h3 className="bs-revise-title">{copy.revise.talk.makingTitle}</h3>
-                <span className="bs-revise-next bs-num">{fill(copy.revise.version, { n: selectedEntry.version })}</span>
-              </div>
-              {selectedEntry.job.revision?.sheet ? <SheetCard sheet={selectedEntry.job.revision.sheet} copy={copy} /> : selectedEntry.request ? <p className="bs-revise-request">{selectedEntry.request}</p> : null}
-              <p className="bs-muted bs-talk-making-note">{copy.revise.talk.makingNote}</p>
-            </section>
-          ) : (
-            <ReviseTalk
-              key={output.id}
-              outputId={output.id}
-              support={revise.talk}
-              copy={copy}
-              locale={locale}
-              draftClip={Boolean(output.draft)}
-              fallbackVersion={Math.max(1, ...chain.map((entry) => entry.version)) + 1}
-              stage={file.kind === "video" && !region ? { video: videoRef, host: mediaHost, url: file.url } : null}
-              onCreated={(created, version) => selectVersion(created.job.revision?.version ?? version)}
-            />
-          )
-        ) : clip && revise && canGenerate && output && (
+        {clip && revise && canGenerate && output && dialogue && revise.talk ? null : clip && revise && canGenerate && output && (
           <ReviseForm
             key={output.id}
             outputId={output.id}

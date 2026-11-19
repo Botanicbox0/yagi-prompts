@@ -1,9 +1,23 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { studioEnv } from '@/lib/brand-studio/env';
-import { resetFreeIntelRateLimits } from '@/lib/brand-studio/jobs';
+import { createStudioJob, resetFreeIntelRateLimits } from '@/lib/brand-studio/jobs';
 import { runStudioOperation } from '@/lib/brand-studio/service';
+import { advanceStudioJobsWith } from '@/lib/brand-studio/engine';
+import { keepClip } from '@/lib/brand-studio/revision/clip';
 import { reshootLength } from '@/lib/brand-studio/revision/plan';
-import { guardCredits, settleTalk, TALK_SYSTEM, type SettleInput, type TalkReading } from '@/lib/brand-studio/revision/talk';
+import {
+  OPTIONS_CORRECTION,
+  ATTACHMENT_CORRECTION,
+  TALK_LINES,
+  guardCredits,
+  mentionsMissingAttachment,
+  settleTalk,
+  talkFacts,
+  TALK_SYSTEM,
+  type SettleInput,
+  type TalkOption,
+  type TalkReading,
+} from '@/lib/brand-studio/revision/talk';
 import type { ReviseQuestion, ReviseSheet } from '@/lib/brand-studio/revision/sheet';
 import { usageKrw, videoRunUsd } from '@/lib/brand-studio/usage-rate';
 import { geminiAnswer, mockGemini, sentBody } from '../intel/helpers';
@@ -36,12 +50,107 @@ const terms: SettleInput['terms'] = {
 const settle = (o: Partial<SettleInput> = {}) =>
   settleTalk({ reading: reading(), message: '배경을 바다로 바꿔줘', standing: { sheet: sheet(), questions: [] }, answering: null, terms, shown: null, ...o });
 const question = (o: Partial<ReviseQuestion> = {}): ReviseQuestion => ({ point: 'background target', question: '어떤 배경으로 바꿀까요?', options: ['바다', '숲'], answer: null, ...o });
+const opts = (...texts: string[]): TalkOption[] => texts.map((text) => ({ text, product: false, open: false }));
+const productOpt = (text: string, open = false): TalkOption => ({ text, product: true, open });
+
+describe('settleTalk: a yes with nothing standing, and how a confirmation reads', () => {
+  it('reads "응 그렇게 해줘" on an empty sheet as unreadable, without "네," and asking what to change', () => {
+    const out = settle({ message: '응 그렇게 해줘', reading: reading({ kind: 'confirm', sheet: sheet(), reply: '네, 아직 바꿀 내용이 정해지지 않았어요.' }) });
+    expect(out).toMatchObject({ kind: 'unreadable', canMake: false, open: null });
+    expect(out.reply).toBe(`아직 바꿀 내용이 정해지지 않았어요. ${TALK_LINES.ko.ask}`);
+    expect(out.dropped.reclassified).toBe(true);
+    // A reply that already asks is kept as it is (only the "네," goes).
+    const asks = settle({ message: '응 그렇게 해줘', reading: reading({ kind: 'confirm', sheet: sheet(), reply: '네, 어떤 부분을 바꿀까요?' }) });
+    expect(asks.reply).toBe('어떤 부분을 바꿀까요?');
+    const en = settle({ message: 'yes do it', reading: reading({ kind: 'confirm', sheet: sheet(), reply: 'Sure, nothing is planned yet.' }) });
+    expect(en.reply).toBe(`Nothing is planned yet. ${TALK_LINES.en.ask}`);
+  });
+
+  it('keeps "네," when a plan stands, and never lets a confirmation sound started', () => {
+    const standing = { sheet: sheet([look('배경을 바다로')]), questions: [] };
+    const plain = settle({ standing, message: '응', reading: reading({ kind: 'confirm', reply: '네, 계획은 그대로예요. 아래 버튼을 누르면 새 버전을 만들어요.' }) });
+    expect(plain).toMatchObject({ kind: 'confirm', canMake: true, reply: '네, 계획은 그대로예요. 아래 버튼을 누르면 새 버전을 만들어요.' });
+    for (const said of ['네, 이 계획대로 진행할게요. 아래 버튼을 누르면 만들어져요.', '네, 바로 만들기 시작할게요.', '네, 확정했어요.']) {
+      const out = settle({ standing, message: '응', reading: reading({ kind: 'confirm', reply: said }) });
+      expect(out.reply, said).toBe(TALK_LINES.ko.confirm);
+      expect(out.dropped.confirmFixed).toBe(true);
+    }
+    expect(settle({ standing, message: 'ok go', reading: reading({ kind: 'confirm', reply: "Sure, I'll go ahead with it now." }) }).reply).toBe(TALK_LINES.en.confirm);
+  });
+});
+
+describe("settleTalk: options never invent a new look for the product", () => {
+  const ask = (options: TalkOption[]) => reading({ sheet: sheet(), reply: '', question: { point: 'colour target', text: '어떤 색을 바꿀까요?', options } });
+  it('drops an option that gives the product a new look, keeps one that names it and leaves the look open', () => {
+    const out = settle({
+      message: '색 바꿔줘',
+      reading: ask([productOpt('향수병의 액체를 핑크빛으로'), productOpt('제품 색 (원하는 색을 알려 주세요)', true), ...opts('배경을 베이지로', '조명을 노을빛으로')]),
+    });
+    expect(out.questions[0]!.options).toEqual(['제품 색 (원하는 색을 알려 주세요)', '배경을 베이지로', '조명을 노을빛으로']);
+    expect(out.dropped.options).toBe(1);
+  });
+  it('drops a logo placed on the product', () => {
+    const out = settle({ message: '로고 넣어줘', reading: ask([productOpt('향수병 앞면에 넣기'), ...opts('오른쪽 아래에 작게', '왼쪽 위에')]) });
+    expect(out.questions[0]!.options).toEqual(['오른쪽 아래에 작게', '왼쪽 위에']);
+  });
+  it('keeps the question with what is left when fewer than two remain', () => {
+    const out = settle({ message: '색 바꿔줘', reading: ask([productOpt('뚜껑을 화이트로'), productOpt('액체를 코랄로'), ...opts('배경을 베이지로')]) });
+    expect(out).toMatchObject({ open: 0, canMake: false });
+    expect(out.questions[0]!.options).toEqual(['배경을 베이지로']);
+  });
+});
+
+describe('settleTalk: never an attachment that is not there', () => {
+  it('knows what speaks of an attachment, and that an invitation to attach is fine', () => {
+    for (const text of ['첨부한 사진 속 인물', '보내 주신 로고를 넣을게요', '이미지 1처럼', 'the attached photo', 'your attached logo']) {
+      expect(mentionsMissingAttachment(text, { pictures: 0, videos: 0 }), text).toBe(true);
+    }
+    for (const text of ['+ 버튼으로 로고를 첨부해 주실 수 있어요', '로고 이미지를 첨부해 주세요', 'You can attach a photo with the + button']) {
+      expect(mentionsMissingAttachment(text, { pictures: 0, videos: 0 }), text).toBe(false);
+    }
+    expect(mentionsMissingAttachment('첨부한 로고를 넣을게요', { pictures: 1, videos: 0 })).toBe(false);
+    expect(mentionsMissingAttachment('이미지 2처럼', { pictures: 1, videos: 0 })).toBe(true);
+  });
+  it('takes such an option and such a sentence out', () => {
+    const out = settle({
+      message: '여자 모델로 바꿔줘',
+      reading: reading({
+        sheet: sheet(),
+        reply: '',
+        question: { point: 'which person', text: '네 분 중 누구를 바꿀까요?', options: opts('첫 장면의 모델만', '네 분 모두', '첨부한 사진 속 인물') },
+      }),
+    });
+    expect(out.questions[0]!.options).toEqual(['첫 장면의 모델만', '네 분 모두']);
+    const said = settle({ reading: reading({ reply: '배경을 바다로 바꿀게요. 첨부한 사진처럼 밝게 할게요.' }) });
+    expect(said.reply).toBe('배경을 바다로 바꿀게요.');
+    expect(said.dropped.attachment).toBe(1);
+    // With a picture attached, it may be spoken of.
+    expect(settle({ attached: { pictures: 1, videos: 0 }, reading: reading({ reply: '첨부한 로고를 오른쪽 아래에 넣을게요.' }) }).reply).toBe('첨부한 로고를 오른쪽 아래에 넣을게요.');
+  });
+});
+
+describe('settleTalk: short replies', () => {
+  it('drops an opener that only says it can be done, and keeps at most three sentences', () => {
+    const out = settle({ reading: reading({ reply: '세 가지 모두 한 번에 반영할 수 있어요. 배경을 남색으로 바꾸고 꽃잎은 뺄게요. 카메라는 더 천천히 다가가요. 처음부터 다시 만들어서 구도가 조금 달라질 수 있어요.' }) });
+    expect(out.reply).toBe('배경을 남색으로 바꾸고 꽃잎은 뺄게요. 카메라는 더 천천히 다가가요. 처음부터 다시 만들어서 구도가 조금 달라질 수 있어요.');
+    expect(out.dropped.filler).toBe(true);
+    const long = settle({ reading: reading({ reply: '하나요. 둘이에요. 셋이에요. 넷이에요.' }) });
+    expect(long.reply).toBe('하나요. 둘이에요. 셋이에요.');
+    expect(long.dropped.capped).toBe(true);
+  });
+  it('the facts say why changing inside can cost more, only when it does', () => {
+    const t = (edit: number, reshoot: number) =>
+      talkFacts({ edit: { available: true, estimateKrw: edit }, reshoot: { available: true, estimateKrw: reshoot }, reshootAt: null, length: { current: 5, min: 4, max: 15, changeable: false }, stage: 'draft', finalKrw: null, remainingCredits: 100, picturesMax: 8, videosMax: 2 }, null).rules.join(' ');
+    expect(t(970, 810)).toContain('keeps the whole clip as it is');
+    expect(t(970, 1620)).not.toContain('keeps the whole clip as it is');
+  });
+});
 
 describe('settleTalk: the make button', () => {
   it('exists only for a standing sheet with a change and no open question', () => {
     expect(settle()).toMatchObject({ kind: 'change', canMake: true, way: 'edit', estimateKrw: 970 });
     expect(settle({ reading: reading({ sheet: sheet() }) })).toMatchObject({ canMake: false, way: null, estimateKrw: 0 });
-    const asked = settle({ reading: reading({ question: { point: 'background target', text: '어떤 배경으로?', options: ['바다', '숲'] } }) });
+    const asked = settle({ reading: reading({ question: { point: 'background target', text: '어떤 배경으로?', options: opts('바다', '숲') } }) });
     expect(asked).toMatchObject({ canMake: false, open: 0 });
   });
 
@@ -67,10 +176,10 @@ describe('settleTalk: the make button', () => {
 describe('settleTalk: questions', () => {
   it('asks at most three in a conversation and never the same point twice', () => {
     const asked = [question({ point: 'a', answer: 'x' }), question({ point: 'b', answer: 'y' }), question({ point: 'c', answer: 'z' })];
-    const fourth = settle({ standing: { sheet: sheet(), questions: asked }, reading: reading({ question: { point: 'd', text: '또?', options: ['1', '2'] } }) });
+    const fourth = settle({ standing: { sheet: sheet(), questions: asked }, reading: reading({ question: { point: 'd', text: '또?', options: opts('1', '2') } }) });
     expect(fourth.questions).toHaveLength(3);
     expect(fourth).toMatchObject({ open: null, canMake: true });
-    const again = settle({ standing: { sheet: sheet(), questions: [question({ answer: '바다' })] }, reading: reading({ question: { point: 'Background-Target', text: '다시?', options: ['1', '2'] } }) });
+    const again = settle({ standing: { sheet: sheet(), questions: [question({ answer: '바다' })] }, reading: reading({ question: { point: 'Background-Target', text: '다시?', options: opts('1', '2') } }) });
     expect(again.questions).toHaveLength(1);
     expect(again.open).toBeNull();
   });
@@ -90,7 +199,7 @@ describe('settleTalk: questions', () => {
 
   it('marks an open question skipped when the customer goes on with something else, and never asks that point again', () => {
     const standing = { sheet: sheet(), questions: [question()] };
-    const out = settle({ standing, message: '꽃잎도 빼줘', reading: reading({ kind: 'change', sheet: sheet([look('꽃잎 빼기')]), question: { point: 'background target', text: '배경은요?', options: ['바다', '숲'] } }) });
+    const out = settle({ standing, message: '꽃잎도 빼줘', reading: reading({ kind: 'change', sheet: sheet([look('꽃잎 빼기')]), question: { point: 'background target', text: '배경은요?', options: opts('바다', '숲') } }) });
     expect(out.questions).toEqual([{ ...question(), skipped: true }]);
     expect(out).toMatchObject({ open: null, canMake: true });
   });
@@ -101,7 +210,7 @@ describe('settleTalk: questions', () => {
 });
 
 describe('settleTalk: a question turn is one message', () => {
-  const ask = { point: 'background target', text: '배경을 어떤 곳으로 바꿀까요?', options: ['바다', '숲'] };
+  const ask = { point: 'background target', text: '배경을 어떤 곳으로 바꿀까요?', options: opts('바다', '숲') };
   it('is the question alone when nothing was settled, whatever the reply said', () => {
     const out = settle({ reading: reading({ sheet: sheet(), reply: '배경을 바꾸고 싶으시군요.', question: ask }) });
     expect(out.reply).toBe('배경을 어떤 곳으로 바꿀까요?');
@@ -217,7 +326,7 @@ describe('revise.talk on the server', () => {
       background: 'a pale oval mirror', light: 'soft, from the left', music: false, speech: false, textOnScreen: '',
     },
   };
-  const depsWith = (answer: unknown, flag = true) => {
+  const depsWith = (answer: unknown, flag = true, o: { readMs?: number; clipWaitMs?: number; later?: Array<() => Promise<void>> } = {}) => {
     const fetchMock = mockGemini(answer);
     const clipReads = { n: 0 };
     const deps = studioDeps(f.sql, {
@@ -225,13 +334,132 @@ describe('revise.talk on the server', () => {
       intelDeps: { fetch: fetchMock as unknown as typeof fetch, env: { GEMINI_API_KEY: 'test-key' } },
       readClip: async () => {
         clipReads.n += 1;
+        if (o.readMs) await new Promise((r) => setTimeout(r, o.readMs));
         return CLIP;
       },
+      ...(o.clipWaitMs !== undefined ? { clipWaitMs: o.clipWaitMs } : {}),
+      ...(o.later ? { later: (task: () => Promise<void>) => o.later!.push(task) } : {}),
     } as never);
     return { deps, fetchMock, clipReads };
   };
   const talk = (deps: ReturnType<typeof studioDeps>, input: Record<string, unknown>) =>
     runStudioOperation(deps, viewerOf(f.ids.owner), 'revise.talk', { organizationId: f.orgId, ...input });
+  const params = async (jobId: string) =>
+    (await f.sql.query<{ params: { clipSheets?: Record<string, unknown>; clipReading?: Record<string, string> } }>('select params from brand_studio_jobs where id = $1', [jobId])).rows[0]!.params;
+  const payloadOf = (fetchMock: ReturnType<typeof mockGemini>, call = 0) => JSON.parse((sentBody(fetchMock, call).contents[0]!.parts[0] as { text: string }).text);
+
+  it('starts the reading on the opening call without waiting for it; a message waits for the reading in flight', async () => {
+    const { deps, fetchMock, clipReads } = depsWith(reading(), true, { readMs: 300 });
+    const root = await seedRun(deps, f.orgId, f.ids.owner, { prompt: 'a bottle', params: { seconds: 5 }, seconds: 5 });
+    const started = Date.now();
+    expect(await talk(deps, { outputId: root.outputId })).toMatchObject({ ok: true, clipKnown: false });
+    expect(Date.now() - started).toBeLessThan(250);
+    // A second opening call (the screen's StrictMode, another tab) never starts a second reading.
+    expect(await talk(deps, { outputId: root.outputId })).toMatchObject({ ok: true, clipKnown: false });
+    const turn = await talk(deps, { outputId: root.outputId, message: '배경을 바다로 바꿔줘' });
+    expect(turn).toMatchObject({ ok: true, kind: 'change', clipKnown: true });
+    expect(clipReads.n).toBe(1);
+    expect(payloadOf(fetchMock).clip).toMatchObject({ inventory: { people: 0 } });
+    const kept = await params(root.jobId);
+    expect(Object.keys(kept.clipSheets ?? {})).toEqual([`${root.outputId}:ko:v2`]);
+    expect(kept.clipReading ?? {}).toEqual({});
+  });
+
+  it('a message goes on without the reading once it has waited its share', async () => {
+    const { deps, fetchMock, clipReads } = depsWith(reading(), true, { readMs: 1500, clipWaitMs: 100 });
+    const root = await seedRun(deps, f.orgId, f.ids.owner, { prompt: 'a bottle', params: { seconds: 5 }, seconds: 5 });
+    const turn = await talk(deps, { outputId: root.outputId, message: '배경을 바다로 바꿔줘' });
+    expect(turn).toMatchObject({ ok: true, kind: 'change', clipKnown: false });
+    expect(payloadOf(fetchMock).clip).toBeNull();
+    expect(clipReads.n).toBe(1);
+  });
+
+  it('two calls at the same moment read the clip once', async () => {
+    const { deps, clipReads } = depsWith(reading(), true, { readMs: 200 });
+    const root = await seedRun(deps, f.orgId, f.ids.owner, { prompt: 'a bottle', params: { seconds: 5 }, seconds: 5 });
+    const answers = await Promise.all([talk(deps, { outputId: root.outputId, message: '배경을 바다로' }), talk(deps, { outputId: root.outputId, message: '조명을 따뜻하게' })]);
+    expect(answers.map((a) => (a as { clipKnown?: boolean }).clipKnown)).toEqual([true, true]);
+    expect(clipReads.n).toBe(1);
+  });
+
+  it('a reading marked in flight on the row (another process) is waited for, not started again', async () => {
+    const { deps, fetchMock, clipReads } = depsWith(reading(), true, { clipWaitMs: 3000 });
+    const root = await seedRun(deps, f.orgId, f.ids.owner, { prompt: 'a bottle', params: { seconds: 5 }, seconds: 5 });
+    await f.sql.query(`update brand_studio_jobs set params = params || jsonb_build_object('clipReading', jsonb_build_object($2::text, $3::text)) where id = $1`, [
+      root.jobId,
+      `${root.outputId}:ko`,
+      new Date().toISOString(),
+    ]);
+    setTimeout(() => {
+      void keepClip(f.sql, { organizationId: f.orgId, jobId: root.jobId, outputId: root.outputId, locale: 'ko', reading: CLIP as never });
+    }, 400);
+    const turn = await talk(deps, { outputId: root.outputId, message: '배경을 바다로 바꿔줘' });
+    expect(turn).toMatchObject({ ok: true, clipKnown: true });
+    expect(clipReads.n).toBe(0);
+    expect(payloadOf(fetchMock).clip).not.toBeNull();
+  });
+
+  it('a clip that becomes ready is read after the answer (flag on), so the panel opens with it', async () => {
+    const later: Array<() => Promise<void>> = [];
+    const { deps, clipReads } = depsWith(reading(), true, { later });
+    const created = await createStudioJob(deps, viewerOf(f.ids.owner), {
+      organizationId: f.orgId, requestId: crypto.randomUUID(), kind: 'video', model: 'seedance-2.5', prompt: 'slow push in on the bottle', aspect: '9:16', seconds: 5, audio: 'native', resolution: 'draft',
+    });
+    if (!created.ok) throw new Error(created.code);
+    await advanceStudioJobsWith(deps, { jobIds: [created.job.id] });
+    const outputId = (await f.sql.query<{ id: string }>(`select id from brand_studio_outputs where job_id = $1 and status = 'ready'`, [created.job.id])).rows[0]!.id;
+    expect(later.length).toBeGreaterThan(0);
+    for (const task of later.splice(0)) await task();
+    expect(clipReads.n).toBe(1);
+    expect(await talk(deps, { outputId })).toMatchObject({ ok: true, clipKnown: true });
+    expect(clipReads.n).toBe(1);
+    // Flag off: nothing is scheduled.
+    const offLater: Array<() => Promise<void>> = [];
+    const off = depsWith(reading(), false, { later: offLater });
+    const plain = await createStudioJob(off.deps, viewerOf(f.ids.owner), {
+      organizationId: f.orgId, requestId: crypto.randomUUID(), kind: 'video', model: 'seedance-2.5', prompt: 'a bottle', aspect: '9:16', seconds: 5, audio: 'native', resolution: 'draft',
+    });
+    if (!plain.ok) throw new Error(plain.code);
+    await advanceStudioJobsWith(off.deps, { jobIds: [plain.job.id] });
+    expect(offLater).toHaveLength(0);
+  });
+
+  it('retries once when an option gives the product a new look or a line speaks of a missing attachment; then drops what is left', async () => {
+    const raw = {
+      kind: 'change',
+      reply: '',
+      sheet: { change: [], keep: [], exclude: [] },
+      way: 'none',
+      impossible: false,
+      question: {
+        point: 'colour target',
+        text: '어떤 색을 바꿀까요?',
+        options: [
+          { text: '향수병의 액체를 핑크빛으로', about: 'product', value_open: false },
+          { text: '첨부한 사진 속 색으로', about: 'scene', value_open: false },
+          { text: '배경을 베이지로', about: 'scene', value_open: false },
+        ],
+      },
+    };
+    const { deps, fetchMock } = depsWith(raw);
+    const root = await seedRun(deps, f.orgId, f.ids.owner, { prompt: 'a bottle', params: { seconds: 5 }, seconds: 5 });
+    const out = await talk(deps, { outputId: root.outputId, message: '색 바꿔줘' });
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    const correction = payloadOf(fetchMock, 1).correction as string;
+    expect(correction).toContain(OPTIONS_CORRECTION);
+    expect(correction).toContain(ATTACHMENT_CORRECTION);
+    expect(out).toMatchObject({ ok: true, open: 0, questions: [{ options: ['배경을 베이지로'] }] });
+  });
+
+  it('when the retry fails, the first answer stands with its broken parts taken out', async () => {
+    let n = 0;
+    const first = { kind: 'change', reply: '', sheet: { change: [], keep: [], exclude: [] }, way: 'none', impossible: false, question: { point: 'c', text: '어떤 색을 바꿀까요?', options: [{ text: '뚜껑을 화이트로', about: 'product', value_open: false }, { text: '배경을 베이지로', about: 'scene', value_open: false }, { text: '조명을 노을빛으로', about: 'scene', value_open: false }] } };
+    const { deps, fetchMock } = depsWith(() => (n++ === 0 ? geminiAnswer(first) : new Response('busy', { status: 503 })));
+    const root = await seedRun(deps, f.orgId, f.ids.owner, { prompt: 'a bottle', params: { seconds: 5 }, seconds: 5 });
+    const out = await talk(deps, { outputId: root.outputId, message: '색 바꿔줘' });
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    expect(out).toMatchObject({ ok: true, open: 0, questions: [{ options: ['배경을 베이지로', '조명을 노을빛으로'] }] });
+  });
 
   it('is invalid with the flag off and never reads anything', async () => {
     const { deps, fetchMock, clipReads } = depsWith(reading(), false);
@@ -242,11 +470,14 @@ describe('revise.talk on the server', () => {
     expect(clipReads.n).toBe(0);
   });
 
-  it('reads the clip once on the opening call, keeps it on the job, and talks with it afterwards', async () => {
+  it('reads the clip once from the opening call, keeps it on the job, and talks with it afterwards', async () => {
     const { deps, fetchMock, clipReads } = depsWith(reading());
     const root = await seedRun(deps, f.orgId, f.ids.owner, { prompt: 'a bottle', finalPrompt: 'A blue perfume bottle.', params: { seconds: 5, resolution: 'draft' }, seconds: 5, isDraft: true });
     const opening = await talk(deps, { outputId: root.outputId });
-    expect(opening).toMatchObject({ ok: true, kind: null, reply: null, canMake: false, clipKnown: true, version: 2 });
+    expect(opening).toMatchObject({ ok: true, kind: null, reply: null, canMake: false, version: 2 });
+    // The reading went on after the answer; the next opening call finds it kept.
+    await new Promise((r) => setTimeout(r, 50));
+    expect(await talk(deps, { outputId: root.outputId })).toMatchObject({ ok: true, clipKnown: true });
     expect(clipReads.n).toBe(1);
     expect(fetchMock).not.toHaveBeenCalled();
     const kept = (await f.sql.query<{ params: { clipSheets?: Record<string, unknown> } }>('select params from brand_studio_jobs where id = $1', [root.jobId])).rows[0]!;

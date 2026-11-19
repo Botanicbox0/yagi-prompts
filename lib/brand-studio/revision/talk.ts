@@ -36,7 +36,7 @@ import { failure, guarded } from '../outcome';
 import type { IntelDeps, StudioDeps } from '../types';
 import { loadAllowance } from '../usage';
 import { videoRunUsd, usageKrw } from '../usage-rate';
-import { clipFor, storedClip, type ClipInventory, type ClipReading } from './clip';
+import { CLIP_WAIT_MS, clipFor, readingInFlight, storedClip, type ClipInventory, type ClipReading } from './clip';
 import { withClarified } from './clarify';
 import { editWay, reshootLength, reshootWay, resolveAdded, revisionResolution, wayForSheet } from './plan';
 import { loadRevisionRecipe, type RevisionRecipe } from './recipe';
@@ -92,7 +92,7 @@ Sheet (the one current request, always the whole of it after this message):
   motion: the camera's path or speed; slow motion or a faster pace; what a person or thing does.
   framing: how large something is in the frame or where it sits; how close the shot is; the camera angle; the order or the number of shots; what a shot shows; adding or removing a person.
   length: a longer clip; also "seconds", the new total length.
-  "about": "product" when the change touches the brand's product itself (its shape, colour, material, label, mark, lettering, size), else "scene".
+  "about": "product" when the change touches the brand's product itself (its shape, colour, material, label, mark, lettering, its own size or proportions), else "scene". How large the product appears in the frame, or where it sits, is framing and "scene".
   "chosen": true when you chose this change for the customer (a taste wish, "decide for me", "아무 …나") rather than them asking for exactly it.
   "marks": the numbers of the marked spots this change is about, when any.
 - keep: what must stay as it is: what the customer named, and what this change could disturb (for a new background: the product and the camera movement). Short phrases, at most four.
@@ -106,7 +106,7 @@ Taste and degree ("좀 더 고급스럽게", "더 밝게", "느낌 있게", "mor
 
 Asking ("question"). Ask one short question only when the answer changes the picture and you cannot guess it well:
 - a missing target: a change with no destination ("배경 바꿔줘": into what; "색 바꿔줘": which thing, which colour; "로고 넣어줘" with no logo attached: which logo, and where; "처음 부분만 수정해줘": change what about it).
-- which one: the message names something the clip shows several of, or in several shots, and the change could apply to one or to all ("병을 더 크게" in a clip with bottles in four shots): ask which, unless the message says.
+- which one: the message names something the clip shows several of, or in several shots, and the change could apply to one or to all ("병을 더 크게" in a clip with bottles in four shots): ask which, unless the message says. People too: in a clip with several people, "여자 모델로 바꿔줘" first asks which of them (or all of them), before asking into whom.
 - opposite directions are both possible ("속도 조절해줘": faster or slower).
 - a contradiction ("그대로 두고 완전히 다르게").
 - a complaint or a wish about the clip with no direction at all ("느낌이 별로야. 다시", "이거 말고 다른 걸로", "이상해"): ask what to change, with proposals that fit this clip.
@@ -115,6 +115,7 @@ Do not ask when the message is clear, about taste, about cost or how it is made.
 A point in "questions" is settled for good, answered or not: never ask it again, not even part of it, and not in the reply either. If an answer left part of it open (a logo given but no place), choose the most likely reading for that part, put it in the sheet and say they can change it. If the customer went on without answering, leave that part out of the sheet and say in one short clause that they can still tell you.
 When questionsLeft is 0 do not ask: choose the most likely concrete reading, put it in the sheet and say they can change it.
 A question has "point" (a few English words naming what it settles, such as "background target"), "text" (the question itself, in natural words a person would ask: "배경을 어떤 곳으로 바꿀까요?"; when the clip lacks the thing, one short clause first: "지금 영상에는 사람이 없어요. 어떤 인물을 넣을까요?"), and "options": two or three concrete proposals that fit this clip, each a short phrase that alone says what to do. No "other", "as written" or "decide for me" option: the screen adds that.
+Each option has "about" and "value_open". An option never invents a new look for the brand's product itself (a new colour for its liquid or cap, a new label, a logo or text placed on the product): it may name the product as the thing to change and leave the new look to the customer ("제품 색 (원하는 색을 알려 주세요)"; "about": "product", "value_open": true), or propose surroundings ("about": "scene"). A logo or text goes in the picture around the product unless the customer asked in words for it on the product.
 When you ask, "reply" holds only what this message settled, as one short clause ("꽃잎은 뺄게요."), or "" when it settled nothing. Never restate the request ("배경을 바꾸고 싶으시군요", "…로 이해했어요"), never say something will be done while it is still open, never put the question in "reply". While a question is open, put in the sheet only what is settled.
 When "answering" has decide true, choose one concrete reading yourself among the surroundings, put it in the sheet and say in the reply what you chose.
 
@@ -130,11 +131,14 @@ Limits (when any part of the message hits one, set "impossible": true and say so
 - A real, named person (a celebrity, a public figure) cannot appear; a person can be shown from a photo the customer owns, attached with the + button.
 - Anything else facts says the studio cannot do.
 
+Attachments: refer to a picture, a logo or a video as attached only when "attached" counts it. With attached.pictures 0 there is no "첨부한 사진", "보내 주신 로고" or "이미지 1", in the reply or in an option; you may say they can attach one with the + button.
+
 Reply ("reply"), what the customer reads:
 - In the customer's language: Korean when they write Korean, in 존댓말 ~요체; English when they write English, saying "I'll" (never "We'll" or "I will").
-- Two or three short sentences at most, one thought per sentence.
+- At most three short sentences, one thought per sentence. Start with what changes: no opener that only says it can be done ("세 가지 모두 한 번에 반영할 수 있어요", "I can do all of that").
 - For change, correction, answer: say back what will change and what stays, in their nouns. For a correction, name what was replaced ("…는 빼고 …로 바꿀게요").
-- For confirm: start with "네," (English: "Sure,"), say the plan stays as it is and that the button below makes it. Never say it is being made, never "확정".
+- For confirm (only when the sheet has a change): start with "네," (English: "Sure,"), say the plan is unchanged and that the button below makes the new version. Never "진행할게요", nothing that sounds started or under way, never "확정". A yes with nothing in the sheet is unreadable: ask what to change.
+- Drafts and finals, when asked: two sentences.
 - For withdraw: say what was taken back, or that there is nothing to take back yet.
 - For tool_question: answer only from facts. If facts does not say, say you do not know.
 - For unreadable: one short question asking what they would like to change. When a sheet stands, first say in one clause what it is now.
@@ -172,7 +176,18 @@ export const TALK_SCHEMA = {
     way: { type: 'string', enum: ['in_place', 'again', 'none'] },
     question: {
       type: 'object',
-      properties: { point: { type: 'string' }, text: { type: 'string' }, options: { type: 'array', items: { type: 'string' } } },
+      properties: {
+        point: { type: 'string' },
+        text: { type: 'string' },
+        options: {
+          type: 'array',
+          items: {
+            type: 'object',
+            properties: { text: { type: 'string' }, about: { type: 'string', enum: ['product', 'scene'] }, value_open: { type: 'boolean' } },
+            required: ['text', 'about', 'value_open'],
+          },
+        },
+      },
       required: ['point', 'text', 'options'],
     },
     length: {
@@ -188,6 +203,52 @@ export const TALK_SCHEMA = {
 /** What the reading is told when its answer changed the product by its own choice (the one retry). */
 export const PRODUCT_CORRECTION =
   'Your last answer changed the brand\'s product itself (an item with "about": "product" and "chosen": true). Choose among the surroundings instead (background, light, props, camera, pace) and say what you chose.';
+/** ... when an option invented a new look for the product (the one retry, then the option is dropped). */
+export const OPTIONS_CORRECTION =
+  'An option in your last answer gave the brand\'s product itself a new look ("about": "product" without "value_open"). Give two or three options again: name the product as the thing to change and leave the new look to the customer ("value_open": true), or propose surroundings.';
+/** ... when the answer spoke of an attachment that is not there. */
+export const ATTACHMENT_CORRECTION =
+  'Your last answer spoke of an attached picture, logo or video, but "attached" has none of that. Do not mention one; you may say they can attach one with the + button.';
+
+/** What a reply line may never pretend: something attached that is not (`attached` counts what is). */
+const ATTACHED_REF =
+  /첨부(?:하신|한|해\s*주신|된|해\s*둔)|올려\s*주신|올리신|보내\s*주신|주신\s*(?:사진|이미지|로고|영상)|(?:이미지|사진|그림)\s*\d|\b(?:the|your)\s+attached\b|\battached\s+(?:photo|image|picture|logo|video)|\b(?:image|picture)\s+\d/i;
+
+/** True when `text` speaks of an attachment `attached` does not have. */
+export function mentionsMissingAttachment(text: string, attached: { pictures: number; videos: number }): boolean {
+  if (!text) return false;
+  if (attached.pictures + attached.videos === 0) return ATTACHED_REF.test(text);
+  // Something is attached: only a picture number beyond what is there is wrong.
+  return [...text.matchAll(/(?:이미지|사진|그림|image|picture)\s*(\d+)/gi)].some((m) => Number(m[1]) > attached.pictures);
+}
+
+/** An option that gives the product a new look by the studio's own proposal (never shown). */
+export const inventsProduct = (o: TalkOption) => o.product && !o.open;
+
+export interface TalkSlips {
+  /** Sheet changes to the product the studio chose by itself. */
+  product: number;
+  /** Options that invent a new look for the product. */
+  options: number;
+  /** Lines (reply, question, options) that speak of a missing attachment. */
+  attachment: number;
+}
+
+export function talkSlips(reading: TalkReading, attached: { pictures: number; videos: number }): TalkSlips {
+  const options = reading.question?.options ?? [];
+  const texts = [reading.reply, reading.question?.text ?? '', ...options.map((o) => o.text)];
+  return {
+    product: reading.sheet.change.filter((c) => c.chosen && c.about === 'product').length,
+    options: options.filter(inventsProduct).length,
+    attachment: texts.filter((t) => mentionsMissingAttachment(t, attached)).length,
+  };
+}
+
+const anySlip = (s: TalkSlips) => s.product + s.options + s.attachment > 0;
+
+export function correctionFor(s: TalkSlips): string {
+  return [s.product ? PRODUCT_CORRECTION : '', s.options ? OPTIONS_CORRECTION : '', s.attachment ? ATTACHMENT_CORRECTION : ''].filter(Boolean).join(' ');
+}
 
 /* ------------------------------------------------------------------ facts */
 
@@ -248,6 +309,10 @@ export function talkFacts(terms: TalkTerms, shown: { way: StudioReviseMode | nul
       : terms.stage === 'final'
         ? 'This clip is a final (1080p). A new version keeps that quality.'
         : 'A new version keeps this clip’s quality.',
+    // Said when both ways' credits come up, or when asked why the smaller change costs more.
+    ...(terms.edit.available && terms.reshoot.available && terms.edit.estimateKrw > terms.reshoot.estimateKrw
+      ? ['Changing something inside the clip keeps the whole clip as it is while changing that part, which is why it costs a little more than making a short clip again.']
+      : []),
     'Cutting a part or making the clip shorter is done in the editing studio, for free.',
     terms.length.changeable ? `Made again, the clip can be ${terms.length.min} to ${terms.length.max} seconds long.` : 'This clip’s length cannot be changed here.',
     'The studio adds no background music and cannot add or change music here.',
@@ -293,13 +358,20 @@ export interface TalkReadingInput {
   correction?: string;
 }
 
+/** A proposal under a question: its words, whether it touches the product, and whether it leaves the new look open. */
+export interface TalkOption {
+  text: string;
+  product: boolean;
+  open: boolean;
+}
+
 /** The reading as the server takes it: shape-checked, trimmed; never trusted for spending. */
 export interface TalkReading {
   kind: StudioTalkKind;
   reply: string;
   sheet: ReviseSheet;
   way: 'in_place' | 'again' | 'none';
-  question: { point: string; text: string; options: string[] } | null;
+  question: { point: string; text: string; options: TalkOption[] } | null;
   length: { action: 'none' | 'longer' | 'shorter'; seconds: number | null };
   impossible: boolean;
 }
@@ -363,10 +435,11 @@ export function cleanReading(raw: unknown): TalkReading | null {
   if (q && typeof q === 'object') {
     const point = oneLine(q.point, SHEET_LIMITS.pointMax);
     const text = oneLine(q.text, SHEET_LIMITS.questionMax);
-    const options: string[] = [];
+    const options: TalkOption[] = [];
     for (const o of Array.isArray(q.options) ? q.options : []) {
-      const option = oneLine(o, SHEET_LIMITS.optionMax);
-      if (option && !options.some((x) => x.toLowerCase() === option.toLowerCase())) options.push(option);
+      const raw = (typeof o === 'string' ? { text: o } : (o ?? {})) as { text?: unknown; about?: unknown; value_open?: unknown };
+      const text = oneLine(raw.text, SHEET_LIMITS.optionMax);
+      if (text && !options.some((x) => x.text.toLowerCase() === text.toLowerCase())) options.push({ text, product: raw.about === 'product', open: raw.value_open === true });
     }
     if (point && text && options.length >= SHEET_LIMITS.optionsMin) question = { point, text, options: options.slice(0, SHEET_LIMITS.optionsMax) };
   }
@@ -418,21 +491,31 @@ export interface TalkTries {
   tries: number;
   /** The first answer changed the product by its own choice (before the retry). */
   productSlip: boolean;
+  /** What the first answer broke (all zero when it broke nothing or failed). */
+  slips: TalkSlips;
   ms: number;
 }
 
+const NO_SLIPS: TalkSlips = { product: 0, options: 0, attachment: 0 };
+
 /**
  * The reading with its one retry: after a failure or a timeout (12 s, then 15 s), or after an answer that
- * changed the product by the studio's own choice (then told so). Nothing reaches the customer in between.
+ * broke a rule the server checks (the product changed or given a new look by the studio's own choice, an
+ * attachment that is not there): then it is told which. When that retry fails, the first answer stands and
+ * the server takes the broken parts out. Nothing reaches the customer in between.
  */
 export async function readTalkWithTries(deps: IntelDeps, input: TalkReadingInput, opts: { thinking?: 'LOW' | 'MEDIUM' } = {}): Promise<TalkTries> {
   const started = Date.now();
   const first = await readTalk(deps, input, { ...opts, timeoutMs: TALK_TRIES_MS[0] });
-  if (first.ok && !choseProduct(first.reading).length) return { outcome: first, tries: 1, productSlip: false, ms: Date.now() - started };
-  if (!first.ok && first.why === 'no_key') return { outcome: first, tries: 1, productSlip: false, ms: 0 };
-  const slip = first.ok;
-  const second = await readTalk(deps, slip ? { ...input, correction: PRODUCT_CORRECTION } : input, { ...opts, timeoutMs: slip ? TALK_TRIES_MS[0] : TALK_TRIES_MS[1] });
-  return { outcome: second, tries: 2, productSlip: slip, ms: Date.now() - started };
+  if (!first.ok && first.why === 'no_key') return { outcome: first, tries: 1, productSlip: false, slips: NO_SLIPS, ms: 0 };
+  if (first.ok) {
+    const slips = talkSlips(first.reading, input.attached);
+    if (!anySlip(slips)) return { outcome: first, tries: 1, productSlip: false, slips, ms: Date.now() - started };
+    const second = await readTalk(deps, { ...input, correction: correctionFor(slips) }, { ...opts, timeoutMs: TALK_TRIES_MS[0] });
+    return { outcome: second.ok ? second : first, tries: 2, productSlip: slips.product > 0, slips, ms: Date.now() - started };
+  }
+  const second = await readTalk(deps, input, { ...opts, timeoutMs: TALK_TRIES_MS[1] });
+  return { outcome: second, tries: 2, productSlip: false, slips: NO_SLIPS, ms: Date.now() - started };
 }
 
 /* ------------------------------------------------------------------ the server's decision */
@@ -445,14 +528,50 @@ export interface SettleInput {
   answering: { option?: number; decide?: boolean } | null;
   terms: Pick<TalkTerms, 'edit' | 'reshoot' | 'reshootAt' | 'length'>;
   shown: { way: StudioReviseMode | null; estimateKrw: number } | null;
+  /** What is attached in this conversation (a line may only speak of what is). Absent: nothing. */
+  attached?: { pictures: number; videos: number };
+}
+
+export interface TalkDropped {
+  parroting: boolean;
+  questionTwice: boolean;
+  productChoices: number;
+  /** Options taken out: a new look for the product, or an attachment that is not there. */
+  options: number;
+  /** Reply or question sentences taken out for an attachment that is not there. */
+  attachment: number;
+  /** A yes with nothing standing, read as "what should change?". */
+  reclassified: boolean;
+  /** A confirmation that sounded started, replaced by the plain line. */
+  confirmFixed: boolean;
+  /** An opener that only said it can be done. */
+  filler: boolean;
+  /** Sentences beyond three. */
+  capped: boolean;
 }
 
 export type TalkSettled = Omit<StudioReviseTalk, 'ok' | 'version' | 'clipKnown'> & {
   /** For the eval and logs only: the reading named another way than the server chose. */
   wayAgrees: boolean;
   /** For the eval and logs only: what the server took out of the reply or the sheet. */
-  dropped: { parroting: boolean; questionTwice: boolean; productChoices: number };
+  dropped: TalkDropped;
 };
+
+const noneDropped = (): TalkDropped => ({ parroting: false, questionTwice: false, productChoices: 0, options: 0, attachment: 0, reclassified: false, confirmFixed: false, filler: false, capped: false });
+
+/** The server's own lines, used only when the reading's words broke a rule. */
+export const TALK_LINES = {
+  ko: { confirm: '네, 계획은 그대로예요. 아래 버튼을 누르면 새 버전이 만들어져요.', ask: '어떤 부분을 수정할까요?' },
+  en: { confirm: 'Sure, the plan stays as it is. The button below makes the new version.', ask: 'What would you like to change?' },
+} as const;
+
+/** A confirmation that sounds as if making had started (it starts only with the button). */
+const STARTED = /진행할게요|진행하겠|진행해\s*드릴|진행됩니다|진행\s*중|만들고\s*있|만드는\s*중|만들기\s*시작|시작할게요|시작했|확정|go ahead|going ahead|proceed|I'?m making|being made|started/i;
+/** A line that asks the customer for something. */
+const ASKS = /[?？]|말씀해\s*주세요|알려\s*주세요|tell me|let me know/i;
+/** A first sentence that only says the request can be done. */
+const FILLER = /^(?:[^.!?]{0,24}\s)?(?:모두|전부|다)\s*(?:한\s*번에|함께)?\s*(?:반영|적용|바꿀|수정|변경)할?\s*수\s*있어요[.!]?$|^(?:I can (?:do|make|change) (?:all|both|every)|All of (?:this|these|them) can be)\b[^.!?]*[.!]?$/i;
+export const REPLY_SENTENCES_MAX = 3;
 
 /** Sentences of `reply` that name a credit figure the facts never gave are taken out (a wrong price is never shown). */
 export function guardCredits(reply: string, allowed: ReadonlySet<number>): string {
@@ -473,6 +592,7 @@ export function tidyCredits(reply: string): string {
 }
 
 const PARROT = /(싶으시군요|하시는군요|시는군요|원하시는군요|이해했어요|이해했습니다|드릴게요|드리겠습니다|you'?d like to|you want to|I understand|I see you)/i;
+const HANGUL = /[가-힣]/;
 const sentencesOf = (text: string) => (text.match(/[^.!?。？！]+[.!?。？！]?/g) ?? []).map((s) => s.trim()).filter(Boolean);
 
 /**
@@ -539,8 +659,44 @@ export function settleRemoval(input: Omit<SettleInput, 'reading' | 'message' | '
     editStudio: false,
     changed: input.shown ? { way: input.shown.way !== way, credits: input.shown.estimateKrw !== estimateKrw } : { way: false, credits: false },
     wayAgrees: true,
-    dropped: { parroting: false, questionTwice: false, productChoices: 0 },
+    dropped: noneDropped(),
   };
+}
+
+/**
+ * The reply as the customer reads it (not a question turn): no sentence about a missing attachment, no
+ * opener that only says it can be done, "네," only when a plan stands, a confirmation that never sounds
+ * started, a yes with nothing standing turned into "what should change?", and at most three sentences.
+ */
+export function tidyReply(
+  reply: string,
+  input: { kind: StudioTalkKind; standing: boolean; reclassified: boolean; english: boolean; attached: { pictures: number; videos: number } },
+  dropped: TalkDropped,
+): string {
+  const lines = input.english ? TALK_LINES.en : TALK_LINES.ko;
+  let kept = sentencesOf(reply);
+  const before = kept.length;
+  kept = kept.filter((s) => !mentionsMissingAttachment(s, input.attached));
+  dropped.attachment += before - kept.length;
+  if (kept.length > 1 && FILLER.test(kept[0]!)) {
+    kept = kept.slice(1);
+    dropped.filler = true;
+  }
+  if (kept.length > REPLY_SENTENCES_MAX) {
+    kept = kept.slice(0, REPLY_SENTENCES_MAX);
+    dropped.capped = true;
+  }
+  let out = kept.join(' ').trim();
+  if (!input.standing) {
+    const bare = out.replace(/^(?:네|Sure|Yes)\s*[,.!]\s*/i, '');
+    out = bare ? bare.charAt(0).toUpperCase() + bare.slice(1) : bare;
+  }
+  if (input.kind === 'confirm' && STARTED.test(out)) {
+    out = lines.confirm;
+    dropped.confirmFixed = true;
+  }
+  if (input.reclassified && !ASKS.test(out)) out = `${out} ${lines.ask}`.trim();
+  return out;
 }
 
 export function settleTalk(input: SettleInput, allowedCredits: ReadonlySet<number> = new Set()): TalkSettled {
@@ -556,7 +712,9 @@ export function settleTalk(input: SettleInput, allowedCredits: ReadonlySet<numbe
   const open = { edit: terms.edit.available, reshoot: terms.reshoot.available };
   const changedFrom = (way: StudioReviseMode | null, krw: number) =>
     input.shown ? { way: input.shown.way !== way, credits: input.shown.estimateKrw !== krw } : { way: false, credits: false };
-  const dropped = { parroting: false, questionTwice: false, productChoices: 0 };
+  const dropped = noneDropped();
+  const attached = input.attached ?? { pictures: 0, videos: 0 };
+  const english = !HANGUL.test(input.message) && /[a-z]/i.test(input.message);
 
   if (!reading) {
     // Nothing was read: the sheet, the questions and the open question stay; no button until it is read.
@@ -583,6 +741,13 @@ export function settleTalk(input: SettleInput, allowedCredits: ReadonlySet<numbe
   } else if (kind === 'answer') {
     // An "answer" with no question open is a change in its own right.
     kind = 'change';
+  }
+  // A yes with nothing standing agrees with nothing: it is read as "what should change?".
+  let reclassified = false;
+  if (kind === 'confirm' && !hasChange(standing.sheet)) {
+    kind = 'unreadable';
+    reclassified = true;
+    dropped.reclassified = true;
   }
 
   let sheet: ReviseSheet;
@@ -619,10 +784,19 @@ export function settleTalk(input: SettleInput, allowedCredits: ReadonlySet<numbe
   // One question at a time, three in all, never the same point twice; never while confirming or answering a tool question.
   let openNow: number | null = null;
   const q = reading.question;
-  const asking = q && kind !== 'confirm' && kind !== 'tool_question' && kind !== 'withdraw';
+  const asking = q && kind !== 'confirm' && kind !== 'tool_question' && kind !== 'withdraw' && !reclassified;
   if (asking && questions.length < SHEET_LIMITS.questionsMax && !questions.some((x) => samePoint(x.point, q.point))) {
-    questions.push({ point: q.point, question: q.text, options: q.options, answer: null });
-    openNow = questions.length - 1;
+    // Never shown: an option that invents a new look for the product, or one that speaks of a missing
+    // attachment (the reading was retried once already); nor a sentence of the question about one.
+    const options = q.options.filter((o) => !inventsProduct(o) && !mentionsMissingAttachment(o.text, attached)).map((o) => o.text);
+    dropped.options = q.options.length - options.length;
+    const parts = sentencesOf(q.text);
+    const text = parts.filter((s) => !mentionsMissingAttachment(s, attached)).join(' ').trim();
+    dropped.attachment += parts.length - sentencesOf(text).length;
+    if (text) {
+      questions.push({ point: q.point, question: text, options, answer: null });
+      openNow = questions.length - 1;
+    }
   }
 
   const way = wayForSheet(sheet, open);
@@ -632,10 +806,13 @@ export function settleTalk(input: SettleInput, allowedCredits: ReadonlySet<numbe
   const allowed = new Set<number>([...allowedCredits, creditsOf(estimateKrw)]);
   let reply = tidyCredits(guardCredits(reading.reply, allowed) || reading.reply.replace(/\d[\d,]*\s*(?:크레딧|credits?)/gi, '').trim());
   if (openNow !== null) {
-    const message = questionMessage(reply, questions[openNow]!.question, changesDiffer(standing.sheet, sheet));
+    const clean = sentencesOf(reply).filter((s) => !mentionsMissingAttachment(s, attached)).join(' ');
+    const message = questionMessage(clean, questions[openNow]!.question, changesDiffer(standing.sheet, sheet));
     reply = message.text;
     dropped.parroting = message.parroting;
     dropped.questionTwice = message.twice;
+  } else {
+    reply = tidyReply(reply, { kind, standing: hasChange(standing.sheet), reclassified, english, attached }, dropped);
   }
   if (!reply) {
     // A reply emptied by the guards and no question to stand for it: nothing truthful to show.
@@ -698,8 +875,10 @@ export async function talkStudioRevise(deps: StudioDeps, viewer: Viewer, raw: un
       if (allowance.capKrw <= 0) throw new StudioDenied('allowance_closed');
       const recipe = await loadRevisionRecipe(sql, v.organizationId, v.outputId);
       // Only a turn that reads something takes a slot of the per-minute cap: a message, or an opening call
-      // that has to read the clip. An opening call on a clip already read, and a line's removal, are free.
-      const reads = v.remove === undefined && (Boolean(v.message) || !storedClip(recipe.baseJob, v.outputId, locale));
+      // that has to start the clip's reading. An opening call on a clip read or being read, and a line's
+      // removal, are free.
+      const reads =
+        v.remove === undefined && (Boolean(v.message) || (!storedClip(recipe.baseJob, v.outputId, locale) && !readingInFlight(recipe.baseJob, v.outputId, locale, now)));
       if (reads && !takeFreeIntelSlot(`revise:${v.organizationId}`, FREE_INTEL_LIMITS.revisePerMinute, now.getTime())) throw new StudioDenied('too_many_running');
       await resolveAdded(sql, v.organizationId, v.references, deps.media, locale);
       const request = { prompt: v.message || 'x', references: [...v.references], marks: v.marks };
@@ -734,7 +913,10 @@ export async function talkStudioRevise(deps: StudioDeps, viewer: Viewer, raw: un
     return { ...base, clipKnown: Boolean(recipe.baseJob.params?.clipSheets), ...strip(settleRemoval({ standing, terms, shown: v.shown, index: v.remove })) };
   }
 
-  const clip = await clipFor(deps, { organizationId: v.organizationId, job: recipe.baseJob, outputId: v.outputId, locale, read: !v.message });
+  // The opening call starts the reading (when the result's own one has not) and answers at once; a message
+  // waits up to CLIP_WAIT_MS for a reading still in flight, then goes on without it.
+  const waitMs = (deps as StudioDeps & { clipWaitMs?: number }).clipWaitMs ?? CLIP_WAIT_MS;
+  const clip = await clipFor(deps, { organizationId: v.organizationId, job: recipe.baseJob, outputId: v.outputId, locale, start: true, waitMs: v.message ? waitMs : 0 });
   if (!v.message) {
     const way = wayForSheet(standing.sheet, { edit: terms.edit.available, reshoot: terms.reshoot.available });
     const settled = settleTalk({ reading: null, message: '', standing, answering: null, terms, shown: v.shown });
@@ -771,6 +953,7 @@ export async function talkStudioRevise(deps: StudioDeps, viewer: Viewer, raw: un
       answering: opened !== null ? (v.answering ?? null) : null,
       terms,
       shown: v.shown,
+      attached: { pictures: v.references.length, videos: v.materials },
     },
     factCredits(facts),
   );

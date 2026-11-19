@@ -60,6 +60,17 @@ describe("the conversation on screen", () => {
     expect(view({ sheet: { change: [look("배경")], keep: [], exclude: [] }, canMake: true, way: "edit", estimateKrw: 970 }, false)).not.toContain(ko.revise.talk.draftOnce);
   });
 
+  it("keeps the sheet compact: what stays and what is left out are one line each that opens on press; the box is two lines", () => {
+    const html = view({ sheet: { change: [look("배경을 바다로"), look("조명을 따뜻하게"), look("꽃잎 빼기"), look("카메라를 천천히")], keep: ["향수병", "카메라 움직임"], exclude: ["꽃잎"] }, canMake: true, way: "reshoot", estimateKrw: 810 });
+    expect(html).toMatch(/data-talk-group="keep"><button type="button" class="bs-talk-oneline" aria-expanded="false" title="향수병 · 카메라 움직임">/);
+    expect(html).toMatch(/data-talk-group="exclude"><button type="button" class="bs-talk-oneline" aria-expanded="false" title="꽃잎">/);
+    expect(html.match(/data-talk-line=/g)).toHaveLength(4);
+    expect(html).toMatch(/<textarea[^>]*rows="2"/);
+    // The thread comes first, then the one sheet card with the button, then the box.
+    expect(html.indexOf("data-talk-thread")).toBeLessThan(html.indexOf("data-talk-sheet"));
+    expect(html.indexOf("data-talk-make")).toBeLessThan(html.indexOf("data-talk-box"));
+  });
+
   it("says a failed reading out loud with 'send again', and 'taking a little longer' while slow", () => {
     expect(view({ phase: "failed", thread: [said("배경"), { id: "n", from: "note", note: "failed" }] })).toContain(ko.revise.talk.resend);
     expect(view({ phase: "slow", thread: [said("배경")] })).toContain(ko.revise.talk.slow);

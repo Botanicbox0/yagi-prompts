@@ -9,6 +9,8 @@ import type { StudioErrorCode } from './contracts';
 import { kindOfMime, imageInfo, sha256Hex, sniffMime, thumbnailWebp, videoInfo } from './files';
 import { dropWorkingFiles, failPendingOutputs, saveJob } from './job-store';
 import { downloadResult } from './provider/download';
+import { scheduleClipReading } from './revision/clip';
+import { loadRevisionRecipe } from './revision/recipe';
 import type { JobRow, OutputRow, StudioDeps, StudioPendingResult } from './types';
 import { settledUsageKrw } from './usage-rate';
 
@@ -207,7 +209,7 @@ async function settleJob(deps: StudioDeps, job: JobRow, token: string, work: Job
     const reported = work.results?.[String(o.idx)]?.costUsd;
     return sum + (typeof reported === 'number' && reported >= 0 ? reported : share);
   }, 0);
-  return saveJob(deps.sql, job, token, {
+  const saved = await saveJob(deps.sql, job, token, {
     status: 'succeeded',
     error_code: null,
     error_detail: detail,
@@ -216,6 +218,16 @@ async function settleJob(deps: StudioDeps, job: JobRow, token: string, work: Job
     usage_krw: settledUsageKrw(Number(job.estimate_krw), outputs.length, ready.length),
     finished_at: now(deps),
   });
+  // `BRAND_STUDIO_REVISE_V2`: a ready clip is read after the answer, so the revise conversation has it at hand.
+  if (saved) {
+    const locale = job.params?.locale === 'en' ? 'en' : 'ko';
+    for (const output of ready.filter((o) => o.kind === 'video')) {
+      scheduleClipReading(deps, { organizationId: job.organization_id, outputId: output.id, locale }, async (organizationId, outputId) =>
+        (await loadRevisionRecipe(deps.sql, organizationId, outputId)).baseJob,
+      );
+    }
+  }
+  return saved;
 }
 
 /** A job that cannot go on: every pending slot fails, nothing is counted. */

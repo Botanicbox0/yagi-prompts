@@ -83,19 +83,23 @@ export function SheetCard({
           </ul>
         </div>
       )}
-      {sheet.keep.length > 0 && (
-        <div className="bs-talk-group" data-talk-group="keep">
-          <p className="bs-talk-group-label">{t.groupKeep}</p>
-          <p className="bs-talk-group-text">{sheet.keep.join(" · ")}</p>
-        </div>
-      )}
-      {sheet.exclude.length > 0 && (
-        <div className="bs-talk-group" data-talk-group="exclude">
-          <p className="bs-talk-group-label">{t.groupExclude}</p>
-          <p className="bs-talk-group-text">{sheet.exclude.join(" · ")}</p>
-        </div>
-      )}
+      {sheet.keep.length > 0 && <OneLine group="keep" label={t.groupKeep} items={sheet.keep} />}
+      {sheet.exclude.length > 0 && <OneLine group="exclude" label={t.groupExclude} items={sheet.exclude} />}
       {children}
+    </div>
+  );
+}
+
+/** "그대로 둘 것" and "넣지 않을 것": one muted line, cut short when long; pressing it shows all of it. */
+function OneLine({ group, label, items }: { group: "keep" | "exclude"; label: string; items: readonly string[] }) {
+  const [all, setAll] = useState(false);
+  const text = items.join(" · ");
+  return (
+    <div className="bs-talk-group" data-talk-group={group}>
+      <button type="button" className="bs-talk-oneline" aria-expanded={all} title={all ? undefined : text} onClick={() => setAll((v) => !v)}>
+        <span className="bs-talk-group-label">{label}</span>
+        <span className="bs-talk-group-text">{text}</span>
+      </button>
     </div>
   );
 }
@@ -149,6 +153,24 @@ export function TalkView({
   const t = r.talk;
   const id = useId();
   const files = useRef<HTMLInputElement>(null);
+  const thread = useRef<HTMLDivElement>(null);
+  const ownBox = useRef<HTMLTextAreaElement>(null);
+  const box = composer ?? ownBox;
+  // The thread is the one part that scrolls, and it keeps to the newest line.
+  const lines = state.thread.length;
+  useEffect(() => {
+    const el = thread.current;
+    if (el) el.scrollTop = el.scrollHeight;
+  }, [lines, state.phase]);
+  // The box is two lines tall and grows with what is typed, up to about five (min and max are in the CSS;
+  // while the viewer is still closed nothing is laid out, and the CSS height stands).
+  useEffect(() => {
+    const el = box.current;
+    if (!el) return;
+    el.style.height = "auto";
+    if (el.scrollHeight > 0) el.style.height = `${el.scrollHeight}px`;
+    else el.style.removeProperty("height");
+  }, [state.draft, box]);
   const reading = state.phase === "reading" || state.phase === "slow";
   const busy = reading || state.phase === "making" || state.phase === "loading";
   const open = state.open;
@@ -168,7 +190,7 @@ export function TalkView({
           </button>
         )}
       </div>
-      <div className="bs-talk-thread" role="log" aria-live="polite" aria-label={r.title} data-talk-thread>
+      <div ref={thread} className="bs-talk-thread" role="log" aria-live="polite" aria-label={r.title} data-talk-thread>
         {state.thread.map((item) => {
           if (item.from === "customer") {
             return (
@@ -249,7 +271,9 @@ export function TalkView({
               <span>{t.make}</span>
               {price && <span className="bs-submit-cost bs-num">{price}</span>}
             </button>
-            <p className="bs-muted bs-revise-after">{fill(r.after, { n: state.version })}</p>
+            <p className="bs-muted bs-revise-after" title={fill(r.after, { n: state.version })}>
+              {fill(r.after, { n: state.version })}
+            </p>
           </div>
         )}
       </SheetCard>
@@ -279,9 +303,9 @@ export function TalkView({
         </label>
         <textarea
           id={`${id}-box`}
-          ref={composer}
-          className="bs-field bs-revise-prompt"
-          rows={3}
+          ref={box}
+          className="bs-field bs-revise-prompt bs-talk-input"
+          rows={2}
           maxLength={STUDIO_LIMITS.promptMax}
           value={state.draft}
           placeholder={placeholder}
@@ -364,6 +388,7 @@ export function ReviseTalk({
   fallbackVersion,
   stage = null,
   onCreated,
+  onTalking,
 }: {
   outputId: string;
   support: TalkSupport;
@@ -374,6 +399,8 @@ export function ReviseTalk({
   fallbackVersion: number;
   stage?: { video: RefObject<HTMLVideoElement | null>; host: HTMLElement | null; url: string } | null;
   onCreated?(created: StudioJobCreated, version: number, sheet: ReviseSheet): void;
+  /** Whether a conversation is under way here (the viewer shortens the version card and marks the version). */
+  onTalking?(outputId: string, open: boolean): void;
 }) {
   const [state, setState] = useState<TalkState>(() => initialTalkState(fallbackVersion));
   const [uploading, setUploading] = useState(false);
@@ -405,6 +432,13 @@ export function ReviseTalk({
     void flow.load();
     return () => flow.dispose();
   }, [flow]);
+  // A conversation under way: something was said and it has not become a version yet.
+  const talking = state.phase !== "making" && state.thread.some((item) => item.from === "customer");
+  const reportTalking = useRef(onTalking);
+  reportTalking.current = onTalking;
+  useEffect(() => {
+    reportTalking.current?.(outputId, talking);
+  }, [outputId, talking]);
   // The keyboard goes back to the box after every studio message.
   const lastFrom = state.thread[state.thread.length - 1]?.from;
   useEffect(() => {
