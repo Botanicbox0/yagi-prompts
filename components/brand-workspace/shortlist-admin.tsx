@@ -29,6 +29,7 @@ export function ShortlistAdmin({ projectId, view, back, copy, locale, brandHost 
   const shared = list.filter((c) => c.state === "shared").length;
   const excluded = list.filter((c) => c.state === "excluded").length;
   const picked = list.filter((c) => c.picked).length;
+  const reviewing = list.filter((c) => c.reviewing).length;
   const passed = list.filter((c) => c.passed).length;
   const confirmed = list.filter((c) => c.confirmed).length;
   const hidden = list.length - shared - excluded;
@@ -66,7 +67,7 @@ export function ShortlistAdmin({ projectId, view, back, copy, locale, brandHost 
       ) : (
         <>
           <div className="bw-row">
-            <p data-shortlist-summary>{interpolate(copy.summary, { total: list.length, shared, hidden, excluded, picked, passed, confirmed })}</p>
+            <p data-shortlist-summary>{interpolate(copy.summary, { total: list.length, shared, hidden, excluded, picked, reviewing, passed, confirmed })}</p>
             {hidden > 0 && (
               <Form op="brandWorkspace.shortlistShare" back={back}>
                 {hiddenIds("projectId", projectId)}

@@ -267,29 +267,42 @@ describe("the brand's preference", () => {
 
 describe("the brand's own sorting", () => {
   let a: string, b: string, c: string, hidden: string;
-  const marks = async () => Object.fromEntries((await sl.loadBrandShortlist({ sql }, owner, projectId))!.candidates.map(x => [x.handle, x.picked ? "picked" : x.passed ? "passed" : "none"]));
+  const marks = async () => Object.fromEntries((await sl.loadBrandShortlist({ sql }, owner, projectId))!.candidates.map(x => [
+    x.handle, x.picked ? "picked" : x.reviewing ? "reviewing" : x.passed ? "passed" : "none",
+  ]));
   beforeEach(async () => {
     await studioImport([candidate("fixture_a", 300), candidate("fixture_b", 200), candidate("fixture_c", 100), candidate("fixture_hidden", 50)]);
     [a, b, c, hidden] = await Promise.all(["fixture_a", "fixture_b", "fixture_c", "fixture_hidden"].map(candidateId)) as [string, string, string, string];
     expect(await sl.triageShortlist({ sql }, studio, { projectId, share: [a, b, c] })).toMatchObject({ ok: true, changed: 3 });
   });
 
-  it("prefers, sets aside and clears many at once, never both marks on one candidate", async () => {
+  it("selects, moves to reviewing, excludes and clears many at once, never two stages on one candidate", async () => {
     expect(await sl.chooseShortlistCandidates({ sql }, owner, { candidateIds: [a, b], choice: "picked" })).toEqual({ ok: true, id: projectId, choice: "picked", changed: 2 });
-    expect(await sl.chooseShortlistCandidates({ sql }, guest, { candidateIds: [b, c], choice: "passed" })).toMatchObject({ ok: true, changed: 2 });
-    expect(await marks()).toEqual({ fixture_a: "picked", fixture_b: "passed", fixture_c: "passed" });
-    expect((await sql.query("select count(*)::int as n from brand_shortlist_candidates where picked_at is not null and passed_at is not null")).rows[0]!.n).toBe(0);
+    expect(await sl.chooseShortlistCandidates({ sql }, guest, { candidateIds: [b], choice: "reviewing" })).toMatchObject({ ok: true, changed: 1 });
+    expect(await sl.chooseShortlistCandidates({ sql }, guest, { candidateIds: [c], choice: "passed" })).toMatchObject({ ok: true, changed: 1 });
+    expect(await marks()).toEqual({ fixture_a: "picked", fixture_b: "reviewing", fixture_c: "passed" });
+    expect((await sql.query("select count(*)::int as n from brand_shortlist_candidates where (picked_at is not null)::int + (reviewing_at is not null)::int + (passed_at is not null)::int > 1")).rows[0]!.n).toBe(0);
+    expect((await sql.query("select reviewing_by from brand_shortlist_candidates where id=$1", [b])).rows[0]!.reviewing_by).toBe(ids.guest);
     expect((await sql.query("select passed_by from brand_shortlist_candidates where id=$1", [c])).rows[0]!.passed_by).toBe(ids.guest);
-    // The single heart also takes a candidate out of "set aside".
+    // Database guard refuses setting any two stage timestamps at once.
+    await expect(sql.query("update brand_shortlist_candidates set picked_at=now(), reviewing_at=now() where id=$1", [a])).rejects.toThrow();
+    await expect(sql.query("update brand_shortlist_candidates set reviewing_at=now(), passed_at=now() where id=$1", [b])).rejects.toThrow();
+    // Refreshing figures via import preserves reviewing state.
+    await studioImport([candidate("fixture_b", 250)], { measuredOn: "2026-11-20" });
+    expect((await sl.loadBrandShortlist({ sql }, owner, projectId))!.candidates.find(x => x.handle === "fixture_b")).toMatchObject({ reviewing: true, picked: false, passed: false, metrics: { followers: 250 } });
+    // Single-pick clears reviewing; clearing resets all stages back to applied.
     await sl.pickShortlistCandidate({ sql }, owner, { candidateId: b, picked: true });
     expect(await marks()).toEqual({ fixture_a: "picked", fixture_b: "picked", fixture_c: "passed" });
-    // Marking what is already marked changes nothing; clearing clears both kinds.
+    // Marking what is already marked changes nothing; clearing clears every stage.
     expect(await sl.chooseShortlistCandidates({ sql }, owner, { candidateIds: [a], choice: "picked" })).toMatchObject({ ok: true, changed: 0 });
+    await sl.chooseShortlistCandidates({ sql }, owner, { candidateIds: [b], choice: "reviewing" });
     expect(await sl.chooseShortlistCandidates({ sql }, owner, { candidateIds: [a, b, c], choice: "none" })).toMatchObject({ ok: true, changed: 3 });
     expect(await marks()).toEqual({ fixture_a: "none", fixture_b: "none", fixture_c: "none" });
-    // The studio sees the brand's marks; the figures' refresh date does not move.
+    // The studio sees the client's reviewing and excluded marks; the figures' refresh date does not move.
+    await sl.chooseShortlistCandidates({ sql }, owner, { candidateIds: [b], choice: "reviewing" });
     await sl.chooseShortlistCandidates({ sql }, owner, { candidateIds: [c], choice: "passed" });
-    expect((await sl.loadStudioShortlist({ sql }, studio, projectId))!.candidates.find(x => x.handle === "fixture_c")).toMatchObject({ passed: true, picked: false, state: "shared" });
+    expect((await sl.loadStudioShortlist({ sql }, studio, projectId))!.candidates.find(x => x.handle === "fixture_b")).toMatchObject({ reviewing: true, picked: false, passed: false, state: "shared" });
+    expect((await sl.loadStudioShortlist({ sql }, studio, projectId))!.candidates.find(x => x.handle === "fixture_c")).toMatchObject({ passed: true, reviewing: false, picked: false, state: "shared" });
   });
 
   it("lets only commenting seats sort, and only shared candidates of one campaign", async () => {

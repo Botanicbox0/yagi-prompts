@@ -111,4 +111,6 @@ operation for a superuser, and it is not something app code can do — that is t
 
 - `0097_core_brand_room_guest_invites` · `0170_glue_brand_room_guest_invites` — 프로젝트 룸 초대 공유(`docs/BRAND-ROOMS-FEEDBACK.md` §12). `brand_invites`에 `accepted_email`·`mail_state`·`mail_sent_at`·`target_kind`·`target_id`, 범위 제약을 "프로젝트 초대는 뷰어"로 넓힘(브랜드 소유자·편집자도 발행), 대기 초대 인덱스, service_role에 새 세 열의 update 권한. 새 테이블 없음. `BRAND_ROOM_INVITES=on` 전에 한 트랜잭션으로 적용하고, 적용 뒤 `brand_invites` RLS on+forced·정책 0개·anon·authenticated 권한 없음을 확인한다. core 0095·0096과 glue 0168·0169는 다른 브랜치가 쓰고 있다.
 
-다음 번호: core 0099, glue 0172 (core 0092는 열린 PR이 쓰고 있다).
+- `0099_core_brand_shortlist_reviewing` — 고객 4단계 크리에이터 선별(`지원 · 검토 · 선정 · 제외`, `docs/BRAND-SHORTLIST.md`). `brand_shortlist_candidates.reviewing_at`·`reviewing_by` 추가 및 3자 상호배타 제약(`brand_shortlist_choice_shape`). glue 없음(0146의 table-wide 권한이 덮음). 코드 배포 **전**에 적용한다. 브랜치 `gemini/shortlist-casting-stages`.
+
+다음 번호: core 0100, glue 0172 (core 0092는 열린 PR이 쓰고 있다).
