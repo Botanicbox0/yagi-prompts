@@ -129,7 +129,8 @@ describe('1. Left Rail Promotion (편집 스튜디오 + Clear Client Room Labels
     });
 
     const showroomItems = railItems({ studio: false, studioShowroom: true, creators: false, identity: false, rooms: true });
-    expect(showroomItems).toEqual(['campaigns', 'messages', 'assets', 'image', 'video', 'compose', 'workflows']);
+    // Same order as any brand; the two-mode rail opens a project-only brand on 야기 팀과 (rail-mode.ts).
+    expect(showroomItems).toEqual(['image', 'video', 'compose', 'workflows', 'assets', 'campaigns', 'messages']);
   });
 
   it('activates compose on /brand/studio/compose, workflows on /brand/studio/workflows, and does NOT activate video or image', () => {
@@ -156,7 +157,7 @@ describe('1. Left Rail Promotion (편집 스튜디오 + Clear Client Room Labels
     const choice: BrandWorkspaceChoice = { id: ORG, name: 'Studio Brand', role: 'owner', logoUrl: null, denied: [] };
     const scope: BrandWorkspaceScope = { choices: [choice], projectOrganizations: {} };
     const b = ko.brandWorkspace;
-    const html = renderToStaticMarkup(
+    const renderRail = () => renderToStaticMarkup(
       createElement(WorkspaceNavigation, {
         home: b.home,
         members: b.members,
@@ -173,16 +174,20 @@ describe('1. Left Rail Promotion (편집 스튜디오 + Clear Client Room Labels
         roomsCopy: ko.roomsShell.nav,
       }),
     );
+    const html = renderRail();
 
     expect(html).toContain(`href="/brand/studio/compose?organizationId=${ORG}"`);
     expect(html).toContain(`href="/brand/studio/workflows?organizationId=${ORG}"`);
     expect(html).toContain('>영상 스튜디오<');
     expect(html).toContain('>편집 스튜디오<');
     expect(html).toContain('>워크플로우<');
-    expect(html).toContain('>프로젝트<');
-    expect(html).toContain('>알림함<');
     const activeIds = [...html.matchAll(/data-rail-item="(\w+)"[^>]*aria-current="page"/g)].map((m) => m[1]);
     expect(activeIds).toEqual(['compose']);
+    // 프로젝트 and 알림함 live on the other side of the switch (rail-mode.ts), where /brand opens it.
+    navState.path = '/brand';
+    const team = renderRail();
+    expect(team).toContain('>프로젝트<');
+    expect(team).toContain('>알림함<');
   });
 
   it('enables BRAND_ROOMS and BRAND_STUDIO_V2 in .claude/launch.json local dev profiles without secrets', () => {

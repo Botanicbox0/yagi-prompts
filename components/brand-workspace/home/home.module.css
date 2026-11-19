@@ -153,6 +153,13 @@ form.prompt:focus-within {
   gap: 10px 12px;
   min-width: 0;
 }
+/* On 야기 팀과 (the rail's mode, rail-mode.ts) the team tile leads; the same cards, mirrored. */
+.tools[data-home-first='team'] {
+  grid-template-areas:
+    'label label label label label label label label label label label label'
+    'team team team team doors doors doors doors doors doors doors doors'
+    'list list list list list list list list list list list list';
+}
 .label {
   grid-area: label;
   margin: 0;
@@ -851,6 +858,13 @@ a.starter:hover .starterAction :global(.bs-icon) {
       'doors doors'
       'list list'
       'team team';
+  }
+  .tools[data-home-first='team'] {
+    grid-template-areas:
+      'label label'
+      'team team'
+      'doors doors'
+      'list list';
   }
   .team {
     height: auto;

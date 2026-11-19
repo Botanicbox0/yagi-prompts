@@ -15,6 +15,8 @@ export const roomsShellEn = {
     commission: 'New project brief',
     unread: '{count} unread notifications',
     unreadShort: '{count} unread',
+    /** The two-way switch's name for assistive tech (the rail's 직접 만들기 | 야기 팀과). */
+    mode: 'How to work',
   },
   space: {
     eyebrow: 'With the YAGI team · Project space',
@@ -153,6 +155,7 @@ export const roomsShellKo: typeof roomsShellEn = {
     commission: '새 프로젝트 의뢰',
     unread: '확인할 알림 {count}개',
     unreadShort: '{count}개 알림',
+    mode: '제작 방식',
   },
   space: {
     eyebrow: '야기 팀과 · 프로젝트 공간',

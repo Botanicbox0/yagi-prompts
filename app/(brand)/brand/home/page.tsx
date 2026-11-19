@@ -1,5 +1,7 @@
 import type { Metadata } from 'next';
+import { cookies } from 'next/headers';
 import { notFound, redirect } from 'next/navigation';
+import { RAIL_MODE_COOKIE, parseRailModeCookie, rememberedRailMode, resolveRailMode, type RailMode } from '@/components/brand-workspace/rail-mode';
 import { brandContext } from '@/components/brand-workspace/context';
 import { brandScope, selectedAccess } from '@/components/brand-workspace/scope';
 import { StaffNotice, adminOrganizationHref } from '@/components/brand-workspace/staff-notice';
@@ -30,6 +32,15 @@ import { brandRoomsOpen, brandStudioV2Open } from '@/lib/flags';
 export const dynamic = 'force-dynamic';
 
 const RECENT_JOBS = 24;
+
+/** The rail mode this browser last used for this brand; null when the cookie is missing or unreadable. */
+async function rememberedMode(organizationId: string): Promise<RailMode | null> {
+  try {
+    return rememberedRailMode(parseRailModeCookie((await cookies()).get(RAIL_MODE_COOKIE)?.value), organizationId);
+  } catch {
+    return null;
+  }
+}
 
 export async function generateMetadata({
   searchParams,
@@ -80,6 +91,9 @@ export default async function BrandWorkspaceHome({
   const reviews: RoomAlertItem[] = summary && summary.ok ? (summary.alerts ?? []) : [];
   const activeProjects = workspace.projects.filter((p) => p.status === 'active').length;
   const studioLocale = locale === 'en' ? 'en' : 'ko';
+  // The rail's mode for this brand (rail-mode.ts): the home is shared by both sides, so the remembered one decides.
+  const remembered = rooms ? await rememberedMode(choice.id) : null;
+  const first = resolveRailMode({ studio: true, rooms, path: '/brand/home', remembered }) ?? 'make';
   const dock = dict.brandStudio.dock;
 
   return (
@@ -88,6 +102,7 @@ export default async function BrandWorkspaceHome({
       organizationName={choice.name}
       locale={studioLocale}
       layout={layout}
+      first={first}
       allowance={allowance ? allowanceView(allowance) : null}
       doors={homeDoorPictures(jobs, choice.id)}
       reviews={reviews}
