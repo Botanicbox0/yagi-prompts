@@ -14,10 +14,7 @@ import {
   quoteBrandVideoMatrix,
   quoteBrandVideoRender,
 } from "@/lib/brands/production/pricing";
-import {
-  BRAND_STUDIO_IMAGE_MODELS,
-  resolveCategoryReferenceWorkflows,
-} from "@/lib/brands/production/reference-studio";
+import { resolveCategoryReferenceWorkflows } from "@/lib/brands/production/reference-studio";
 import { brandRouteAllowed } from "@/lib/routing/surfaces";
 import { getDictionary } from "@/lib/i18n/dictionaries";
 
@@ -225,8 +222,9 @@ describe("brand workspace taste", () => {
     expect(html).toContain('data-ref-slot="4"');
     expect(html).toContain('data-upload-slot="product"');
     expect(html).toContain('data-upload-slot="reference"');
-    expect(html).toContain("data-studio-image-model-picker");
-    expect(html).toContain("data-studio-active-model-detail");
+    // No image model is chosen or described on this screen (founder 2026-11-20).
+    expect(html).not.toContain("data-studio-image-model-picker");
+    expect(html).not.toContain("data-studio-active-model-detail");
     expect(html).toContain("data-studio-ref-token-bar");
     expect(html).toContain('class="bw-scene-thumb"');
     expect(html).toContain("data-studio-live-canvas");
@@ -247,17 +245,12 @@ describe("brand workspace taste", () => {
     expect(html).toContain("data-studio-creator-format-panel");
     expect(html).toContain("data-studio-creator-distribution-panel");
     expect(html).toContain("data-studio-audio-panel");
-    expect(html).toContain("GPT Image 2.6");
-    expect(html).toContain("Nano Banana Pro");
-    expect(html).toContain("Nano Banana 2.1");
-    expect(html).toContain("Nano Banana 2.0");
-    expect(html).toContain("Seedream 5.5");
+    expect(html).not.toMatch(/GPT Image|Nano Banana|Seedream/);
     expect(html).toContain("Seedance 2.5");
     expect(html).toContain("data-studio-upscaling-studio");
     expect(html).not.toMatch(/comfyui|higgsfield/i);
     expect(html).not.toContain(".mp4");
 
-    expect(BRAND_STUDIO_IMAGE_MODELS).toHaveLength(5);
     const workflows = resolveCategoryReferenceWorkflows("fashion_apparel");
     expect(workflows.lookbook_composite.slots).toHaveLength(4);
     expect(workflows.product_swap.slots).toHaveLength(4);
@@ -286,7 +279,7 @@ describe("brand workspace taste", () => {
     expect(unconfirmedHtml).toContain("data-studio-identity-confirm-btn");
     expect(unconfirmedHtml).toContain("STEP 01 · 브랜드 아이덴티티 먼저 등록");
     expect(unconfirmedHtml).toContain("STEP 02 · 1~4번 레퍼런스 이미지 배치");
-    expect(unconfirmedHtml).toContain("STEP 03 · 이미지 생성 모델 선택");
+    expect(unconfirmedHtml).not.toContain("STEP 03 · 이미지 생성 모델 선택");
 
     const confirmedHtml = renderToStaticMarkup(
       <BrandBriefStudio

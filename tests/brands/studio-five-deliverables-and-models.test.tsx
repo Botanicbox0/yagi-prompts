@@ -22,7 +22,6 @@ import {
   BRAND_CREATOR_DISTRIBUTION_TIERS,
   BRAND_CREATOR_FORMAT_MODES,
   BRAND_SEEDANCE_VIDEO_TIERS,
-  BRAND_STUDIO_IMAGE_MODELS,
   BRAND_UPSCALING_STUDIO_ENGINES,
   DEFAULT_CUSTOM_MOODBOARD_ITEMS,
   DEFAULT_SPATIAL_BOARD_NODES,
@@ -30,14 +29,12 @@ import {
   IG_OPTIMIZED_UPSCALE_LOGIC_MODULES,
   MAX_BRAND_MOODBOARD_IMAGES,
   MICRO_REGION_SELECTION_PRESETS,
-  MODEL_EASY_COMPARISON_MATRIX,
   PINNED_COLOR_REFERENCES,
   PINNED_TEXTURE_REFERENCES,
   STUDIO_SPLIT_PANE_MODES,
   VIDEO_REFERENCE_TARGET_SLOTS,
   bridgeLeftImageToRightVideoReference,
   clampMoodboardItemsToMax,
-  compileAestheticPromptForModel,
   compileSunraVideoAndUpscalePlan,
   extractBrandKitFromDomain,
   findClosestSupportedAspectRatio,
@@ -81,34 +78,10 @@ describe("Brand Studio 5 Core Deliverables & 5 Image Models (12-Round Verificati
     }
   });
 
-  it("02. includes the exact 5 founder-specified image models (GPT Image 2.6, Nano Banana Pro, 2.1, 2.0, Seedream 5.5) and excludes 2.5", () => {
-    expect(BRAND_STUDIO_IMAGE_MODELS.map((m) => m.id)).toEqual([
-      "gpt_image_2_6",
-      "nano_banana_pro",
-      "nano_banana_2_1",
-      "nano_banana_2_0",
-      "seedream_5_5",
-    ]);
-    expect(BRAND_STUDIO_IMAGE_MODELS.map((m) => m.nameEn)).toEqual([
-      "GPT Image 2.6",
-      "Nano Banana Pro",
-      "Nano Banana 2.1",
-      "Nano Banana 2.0",
-      "Seedream 5.5",
-    ]);
-    const serialized = JSON.stringify(BRAND_STUDIO_IMAGE_MODELS);
-    expect(serialized).not.toMatch(/2\.5/);
-  });
-
-  it("03. provides prompt formula badges, 1-line traits, 3 strength pills, 3 best deliverables, and valid B2B pricing for each of the 5 image models", () => {
-    for (const model of BRAND_STUDIO_IMAGE_MODELS) {
-      expect(model.promptFormulaBadgeKo.length).toBeGreaterThan(10);
-      expect(model.promptFormulaBadgeEn.length).toBeGreaterThan(10);
-      expect(model.shortTraitKo.length).toBeGreaterThan(15);
-      expect(model.strengthsKo).toHaveLength(3);
-      expect(model.bestForDeliverablesKo).toHaveLength(3);
-      expect(model.creditsPer5Set).toBeGreaterThan(0);
-      expect(model.priceKrwPer5Set).toBeGreaterThanOrEqual(400);
+  it("02-03. keeps no image model list of its own: the studio offers the models in lib/brand-studio/models.ts (founder 2026-11-20)", async () => {
+    const studio = await import("@/lib/brands/production/reference-studio");
+    for (const gone of ["BRAND_STUDIO_IMAGE_MODELS", "MODEL_EASY_COMPARISON_MATRIX", "BRAND_STUDIO_MICRO_EDIT_MODELS", "compileAestheticPromptForModel"]) {
+      expect(Object.keys(studio)).not.toContain(gone);
     }
   });
 
@@ -165,15 +138,12 @@ describe("Brand Studio 5 Core Deliverables & 5 Image Models (12-Round Verificati
     expect(BRAND_AUDIO_STUDIO_PRESETS[0]!.duckingRuleKo).toContain("-3 dB");
   });
 
-  it("08. maps FIRST_CREATION_GOALS across all 5 Core Deliverable Tracks and valid 5-model IDs", () => {
+  it("08. maps FIRST_CREATION_GOALS across all 5 Core Deliverable Tracks (no image model per goal)", () => {
     const coveredTracks = new Set(FIRST_CREATION_GOALS.map((g) => g.targetTrack));
     expect(Array.from(coveredTracks).sort()).toEqual(
       ["audio", "creator_distribution", "creator_format", "image", "video"],
     );
-    const validModelIds = new Set(BRAND_STUDIO_IMAGE_MODELS.map((m) => m.id));
-    for (const goal of FIRST_CREATION_GOALS) {
-      expect(validModelIds.has(goal.targetImageModelId)).toBe(true);
-    }
+    for (const goal of FIRST_CREATION_GOALS) expect(goal).not.toHaveProperty("targetImageModelId");
   });
 
   it("09. ensures extractBrandKitFromDomain returns valid Pinned Color & Pinned Texture preset IDs across all categories", () => {
@@ -311,8 +281,6 @@ describe("Brand Studio 5 Core Deliverables & 5 Image Models (12-Round Verificati
       imageSrc: "/reel/brands/slot-1-subject-editorial.jpg",
       imageLabelKo: "컷 01 · 정면 히어로",
       imageLabelEn: "Cut 01 · Front Hero",
-      sourceModelNameKo: "GPT Image 2.6",
-      sourceModelNameEn: "GPT Image 2.6",
     });
     expect(bridged).toHaveLength(1);
     expect(bridged[0]!.slotId).toBe("first_frame");
@@ -385,7 +353,7 @@ describe("Brand Studio 5 Core Deliverables & 5 Image Models (12-Round Verificati
     expect(html).toContain('data-node-inspector-lock-slot="4"');
 
     // 01 · Image Studio Optimal Model Formula & Smart Mask Pixel Lock
-    expect(html).toContain("data-apply-model-optimal-prompt");
+    expect(html).not.toContain("data-apply-model-optimal-prompt");
     expect(html).toContain("data-smart-mask-pixel-lock-badge");
 
     // 02 · Video & Instagram 1080p Anti-Compression Before/After Inspector + 480p->1080p Loop
@@ -495,7 +463,7 @@ describe("Brand Studio 5 Core Deliverables & 5 Image Models (12-Round Verificati
 
     // Round 17: Smart Mask Feathering Slider & 5-Model Optimal Prompt Auto-Tune Button
     expect(html).toContain('data-smart-mask-feather-slider="25"');
-    expect(html).toContain("data-model-prompt-autotune-btn");
+    expect(html).not.toContain("data-model-prompt-autotune-btn");
 
     // Round 18: FFmpeg Filter-Chain Code Drawer & 480p->1080p ETA/Savings Badge
     expect(html).toContain("data-draft-to-master-eta-badge");
@@ -555,9 +523,9 @@ describe("Brand Studio 5 Core Deliverables & 5 Image Models (12-Round Verificati
     expect(html).toContain("data-shortcuts-toggle-btn");
     expect(html).toContain("data-studio-keyboard-shortcuts-hud");
 
-    // Round 28: Track 01 · 1x/2x/4x Parallel Batch Generation & 2-Model A/B Compare Mode
+    // Round 28: Track 01 · 1x/2x/4x Parallel Batch Generation (the 2-model A/B compare left with the model cards)
     expect(html).toContain('data-image-batch-parallel-switcher="4"');
-    expect(html).toContain("data-image-model-ab-compare-mode");
+    expect(html).not.toContain("data-image-model-ab-compare-mode");
 
     // Round 29: Track 01 · 1~4 Reference Slot Individual Weight Chips & 1-Click Slot Swap
     expect(html).toContain("data-reference-slot-strength-bar");
@@ -894,7 +862,7 @@ describe("Brand Studio 5 Core Deliverables & 5 Image Models (12-Round Verificati
     expect(hydratedHtml).toContain("data-data-privacy-shield-badge");
   });
 
-  it("26. verifies Brand Aesthetic Presets (6 reverse-engineered styles), Custom Project Moodboard (max 20 images), 5-Model Empirical Prompt Compiler (GPT Image 2.6, Nano Banana family, Seedream 5.5), and live-verified comparison assets", () => {
+  it("26. verifies Brand Aesthetic Presets (6 reverse-engineered styles), Custom Project Moodboard (max 20 images) and live-verified preset assets", () => {
     expect(MAX_BRAND_MOODBOARD_IMAGES).toBe(20);
     expect(BRAND_AESTHETIC_PRESETS).toHaveLength(6);
     expect(BRAND_AESTHETIC_PRESETS.map((p) => p.id)).toEqual([
@@ -914,62 +882,6 @@ describe("Brand Studio 5 Core Deliverables & 5 Image Models (12-Round Verificati
     const clamped = clampMoodboardItemsToMax(twentyFiveItems);
     expect(clamped).toHaveLength(20);
 
-    // Verify model-specific prompt optimization structures
-    const subjectPrompt = "프렌치 블루 리본이 묶인 플루티드 향수 보틀과 손 클로즈업";
-    const gptPrompt = compileAestheticPromptForModel({
-      modelId: "gpt_image_2_6",
-      mode: "twings_preset",
-      presetId: "french_blue_glass",
-      userBrief: subjectPrompt,
-      locale: "ko",
-    });
-    expect(gptPrompt.compiledPrompt).toContain("1. 구도·광학:");
-    expect(gptPrompt.compiledPrompt).toContain("5. 미감 팔레트");
-
-    const nanoProPrompt = compileAestheticPromptForModel({
-      modelId: "nano_banana_pro",
-      mode: "twings_preset",
-      presetId: "french_blue_glass",
-      userBrief: subjectPrompt,
-      locale: "ko",
-    });
-    expect(nanoProPrompt.compiledPrompt).toContain("[MOODBOARD LOCK: 프렌치 블루 글래스]");
-    expect(nanoProPrompt.compiledPrompt).toContain("[SLOT 1–4 REFERENCE LOCK]");
-
-    const nanoFastPrompt = compileAestheticPromptForModel({
-      modelId: "nano_banana_2_0",
-      mode: "custom_moodboard",
-      presetId: "french_blue_glass",
-      customItems: clamped,
-      customTitle: "24FW 블루 글래스 무드보드",
-      userBrief: subjectPrompt,
-      locale: "ko",
-    });
-    expect(nanoFastPrompt.compiledPrompt).toContain("[FAST CONCEPT LOCK: 24FW 블루 글래스 무드보드");
-    expect(nanoFastPrompt.compiledPrompt).toContain("무드보드 20장 평균");
-
-    const seedreamPrompt = compileAestheticPromptForModel({
-      modelId: "seedream_5_5",
-      mode: "twings_preset",
-      presetId: "french_blue_glass",
-      userBrief: subjectPrompt,
-      locale: "ko",
-    });
-    expect(seedreamPrompt.compiledPrompt).toContain("COLOUR AUTHORITY:");
-    expect(seedreamPrompt.compiledPrompt).toContain("HEX VALUES:");
-    expect(seedreamPrompt.compiledPrompt).toContain("실제 피부 모공");
-
-    // Verify all 5 models in MODEL_EASY_COMPARISON_MATRIX and all 6 presets have live-verified sample images on disk
-    expect(MODEL_EASY_COMPARISON_MATRIX).toHaveLength(5);
-    for (const guide of MODEL_EASY_COMPARISON_MATRIX) {
-      expect(brandRouteAllowed(guide.verifiedSampleImage, "GET")).toBe(true);
-      const diskPath = path.join(
-        process.cwd(),
-        "public",
-        guide.verifiedSampleImage.replace(/^\//, ""),
-      );
-      expect(fs.existsSync(diskPath)).toBe(true);
-    }
     for (const preset of BRAND_AESTHETIC_PRESETS) {
       expect(brandRouteAllowed(preset.coverImage, "GET")).toBe(true);
       for (const sampleUrl of preset.moodboardThumbs) {
@@ -995,7 +907,7 @@ describe("Brand Studio 5 Core Deliverables & 5 Image Models (12-Round Verificati
     );
     expect(studioHtml).toContain("data-studio-aesthetic-trigger");
     expect(studioHtml).toContain("data-image-board-aesthetic-pill");
-    expect(studioHtml).toContain("data-studio-model-guide-trigger");
+    expect(studioHtml).not.toContain("data-studio-model-guide-trigger");
     expect(studioHtml).toContain('data-ref-slot-empty="true"');
     expect(studioHtml).toContain('data-canvas-empty="true"');
     expect(studioHtml).toContain("레퍼런스 사진을 드래그하거나 아래에서 바로 화보를 만드세요");

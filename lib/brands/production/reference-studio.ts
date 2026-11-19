@@ -1,7 +1,7 @@
 import type { BrandClientCategory } from "@/lib/brands/category-experience";
 
 /**
- * Multi-Reference Slot Composer, 5 Core Deliverable Tracks & 5-Model Image Suite (`brand.twings.app/brand/studio`).
+ * Multi-Reference Slot Composer and 5 Core Deliverable Tracks (`brand.twings.app/brand/studio` while the v2 studio is off).
  *
  * Core Service Pillars (5 Core Deliverable Tracks):
  *   1. `image` — 이미지 (1~4번 멀티 레퍼런스 생성 + 극소 부위 정밀 수정 + 색감/질감 상시 고정)
@@ -10,12 +10,8 @@ import type { BrandClientCategory } from "@/lib/brands/category-experience";
  *   4. `creator_distribution` — 크리에이터 캠페인용 영상 + 유통까지 (포맷 제작 + 3,000+ 팔로워 크리에이터 다중 시딩 + IG/TikTok/Shorts 유통 + D+21 ROI 리포트 & 2차 광고 활용권)
  *   5. `audio` — 오디오 (시그니처 BGM + 현장 폴리/공간음 + Act 1 -3 dB 자동 더킹 + -14 LUFS 상업 마스터링)
  *
- * Image Model Lineup (5 Models):
- *   - `gpt_image_2_6` (`GPT Image 2.6`)
- *   - `nano_banana_pro` (`Nano Banana Pro`)
- *   - `nano_banana_2_1` (`Nano Banana 2.1`)
- *   - `nano_banana_2_0` (`Nano Banana 2.0`)
- *   - `seedream_5_5` (`Seedream 5.5`)
+ * No image model list lives here: the studio offers the models in lib/brand-studio/models.ts (founder 2026-11-20:
+ * the old model cards and guide were removed from this screen).
  */
 
 export type BrandCoreDeliverableTrackId =
@@ -233,249 +229,6 @@ export interface StudioReferenceWorkflowPreset {
     StudioReferenceSlotSpec,
   ];
 }
-
-/**
- * Founder-specified 5 Image Models for Brand Studio:
- *   1. `gpt_image_2_6` (`GPT Image 2.6`)
- *   2. `nano_banana_pro` (`Nano Banana Pro`)
- *   3. `nano_banana_2_1` (`Nano Banana 2.1`)
- *   4. `nano_banana_2_0` (`Nano Banana 2.0`)
- *   5. `seedream_5_5` (`Seedream 5.5`)
- */
-export type BrandStudioImageModelId =
-  | "gpt_image_2_6"
-  | "nano_banana_pro"
-  | "nano_banana_2_1"
-  | "nano_banana_2_0"
-  | "seedream_5_5";
-
-export interface BrandStudioImageModelSpec {
-  id: BrandStudioImageModelId;
-  nameKo: string;
-  nameEn: string;
-  tierBadgeKo: string;
-  tierBadgeEn: string;
-  promptFormulaBadgeKo: string;
-  promptFormulaBadgeEn: string;
-  /** Short 1-line summary shown right inside the model selection card */
-  shortTraitKo: string;
-  shortTraitEn: string;
-  /** Key strength tags shown as compact pills on the card */
-  strengthsKo: readonly [string, string, string];
-  strengthsEn: readonly [string, string, string];
-  /** Detailed explanation of how the model behaves */
-  detailDescriptionKo: string;
-  detailDescriptionEn: string;
-  /** Which deliverables / scenarios this model is best suited for */
-  bestForDeliverablesKo: readonly [string, string, string];
-  bestForDeliverablesEn: readonly [string, string, string];
-  /** Recommended 1~4 reference slot combination for this model */
-  recommendedSlotFormulaKo: string;
-  recommendedSlotFormulaEn: string;
-  /** Recommended workflow mode when this model is selected */
-  preferredWorkflow: StudioReferenceWorkflowId;
-  /** B2B credits for a 5-shot 2K set */
-  creditsPer5Set: number;
-  /** B2B card checkout KRW for a 5-shot 2K set */
-  priceKrwPer5Set: number;
-  /** B2B credits for 1 single 2K image */
-  creditsPerSingle: number;
-  supportedResolutions: readonly ("1K" | "1.5K" | "2K" | "4K")[];
-}
-
-export const BRAND_STUDIO_IMAGE_MODELS: ReadonlyArray<BrandStudioImageModelSpec> =
-  [
-    {
-      id: "gpt_image_2_6",
-      nameKo: "GPT Image 2.6",
-      nameEn: "GPT Image 2.6",
-      tierBadgeKo: "제품 로고 글자 보존 · 복잡한 지시문 · 부분 수정 1순위",
-      tierBadgeEn: "Flagship · Complex Briefs & Exact Typography",
-      promptFormulaBadgeKo: "얼굴·제품은 그대로 두고 배경·의상·조명만 깔끔하게 분리 연출",
-      promptFormulaBadgeEn: "5-Tier Director Brief (Crop -> Ref Authority -> Pose/Garment -> Space -> #HEX Light)",
-      shortTraitKo:
-        "제품 라벨의 영문·한글 로고 철자를 뭉개짐 없이 가장 또렷하게 살리고, 복잡한 요청이나 어색한 부위 부분 수정에 가장 강한 모델입니다",
-      shortTraitEn:
-        "Flagship precision for complex multi-constraint briefs, exact package label typography, and surgical micro-region edits",
-      strengthsKo: ["제품 로고·글자 선명 유지", "복잡한 요청 정확히 반영", "어색한 부위 정밀 수정"],
-      strengthsEn: ["Exact Label Typography", "Complex Brief Fidelity", "Surgical Region Edit"],
-      detailDescriptionKo:
-        "여러 가지 조건이 섞인 까다로운 요청도 정확히 이해합니다. 예를 들어 '1번 사진에서는 얼굴만 가져오고 원래 배경과 소품은 완전히 지운 뒤, 2번 제품의 전면 로고 글자를 선명하게 살려 달라'는 식의 세밀한 연출에 가장 뛰어납니다.",
-      detailDescriptionEn:
-        "Parses 5-tier creative director briefs with strict reference authority isolation—locking facial identity or bottle geometry from Slot 1 while cleanly discarding unwanted source props and preserving crisp label lettering.",
-      bestForDeliverablesKo: [
-        "제품 앞면의 작은 로고 글자와 심볼 모양이 조금도 깨지면 안 되는 대표 상품컷",
-        "1번 사진에서 인물 얼굴만 가져오고 의상·배경·조명은 완전히 새로 꾸미는 화보",
-        "완성된 사진에서 손 모양·소품·로고 등 원하는 부위만 드래그해 자연스럽게 고칠 때",
-      ],
-      bestForDeliverablesEn: [
-        "Hero key visuals where front package typography and brand marks must remain razor-sharp",
-        "Editorial portraits isolating facial likeness from Slot 1 while building a brand-new set and outfit",
-        "Targeted micro-region corrections on hands, held props, and engraved hardware",
-      ],
-      recommendedSlotFormulaKo:
-        "1번(인물 또는 기본 배경) + 2번(우리 제품 정면 사진) + 3번(로고·소재 확대컷) + 4번(조명·색감 참고)",
-      recommendedSlotFormulaEn:
-        "Slot 1 (Subject/Base) + Slot 2 (Product Master) + Slot 3 (Label Close-Up) + Slot 4 (#HEX Light Ref)",
-      preferredWorkflow: "product_swap",
-      creditsPer5Set: 95,
-      priceKrwPer5Set: 1100,
-      creditsPerSingle: 20,
-      supportedResolutions: ["1K", "2K", "4K"],
-    },
-    {
-      id: "nano_banana_pro",
-      nameKo: "Nano Banana Pro",
-      nameEn: "Nano Banana Pro",
-      tierBadgeKo: "1~4번 참고 사진 동시 조합 · 4K 대표 화보 1순위",
-      tierBadgeEn: "Master · 1–4 Slot Multi-Ref & 4K Lookbook",
-      promptFormulaBadgeKo: "1번 인물 + 2번 배경 + 3번 포즈 + 4번 색감 동시 조합",
-      promptFormulaBadgeEn: "ALL-CAPS Lock Blocks (IDENTITY LOCK · COMPOSITION LOCK · POSE LOCK · COLOR GRADE)",
-      shortTraitKo:
-        "1번 인물, 2번 배경 공간, 3번 포즈·구도, 4번 색감을 한 번에 자연스럽게 합쳐 최대 4K 고화질 캠페인 화보로 완성하는 대표 모델입니다",
-      shortTraitEn:
-        "Master of locking Slot 1 (Person) + Slot 2 (Space) + Slot 3 (Pose Vibe) + Slot 4 (Color Grade) into 2K/4K editorial frames",
-      strengthsKo: ["1~4번 사진 동시 조합", "최대 4K 초고화질 화보", "조명·색감 자연스러운 흡수"],
-      strengthsEn: ["4-Slot Simultaneous Lock", "Native 2K/4K Output", "Seamless Color Transfer"],
-      detailDescriptionKo:
-        "참고 사진 4장의 역할을 각각 정확히 나누어 반영합니다. 1번 사진의 얼굴, 2번 사진의 공간 분위기, 3번 사진의 카메라 각도와 포즈, 4번 사진의 색감을 어색한 합성 티 없이 한 장의 4K급 화보로 묶어 줍니다.",
-      detailDescriptionEn:
-        "Uses explicit IDENTITY LOCK, COMPOSITION LOCK, and COLOR GRADE compartments to fuse up to 4 references with zero composition drift and rich optical halation up to 4K.",
-      bestForDeliverablesKo: [
-        "1번 모델이 2번 장소에서 3번 포즈와 4번 색감으로 서 있는 메인 캠페인 화보",
-        "화보를 먼저 만든 뒤 영상 스튜디오의 '첫 장면'으로 바로 이어서 쓸 고화질 원본",
-        "고정해 둔 브랜드 색감과 필름 입자감을 시즌 화보 전체에 똑같이 입힐 때",
-      ],
-      bestForDeliverablesEn: [
-        "Main campaign lookbooks combining Person (1) + Space (2) + Pose Vibe (3) + Color Grade (4)",
-        "High-density 2K/4K keyframes ready to lock as Frame 1 in the Video Studio",
-        "Season lookbooks enforcing pinned brand color temperature and 35mm grain",
-      ],
-      recommendedSlotFormulaKo:
-        "1번(모델 얼굴) + 2번(배경 장소) + 3번(원하는 포즈·앵글) + 4번(원하는 색감·조명)",
-      recommendedSlotFormulaEn:
-        "Slot 1 (Model Identity) + Slot 2 (Space) + Slot 3 (Pose/Vibe) + Slot 4 (Color Grade Ref)",
-      preferredWorkflow: "lookbook_composite",
-      creditsPer5Set: 71,
-      priceKrwPer5Set: 900,
-      creditsPerSingle: 15,
-      supportedResolutions: ["1K", "2K", "4K"],
-    },
-    {
-      id: "nano_banana_2_1",
-      nameKo: "Nano Banana 2.1",
-      nameEn: "Nano Banana 2.1",
-      tierBadgeKo: "1번 장면 그대로 → 2번 우리 제품으로 교체 · 가성비 주력",
-      tierBadgeEn: "Production Standard · 1->2 Product Swap",
-      promptFormulaBadgeKo: "원본 조명·손 모양·그림자는 유지하고 제품만 감쪽같이 교체",
-      promptFormulaBadgeEn: "High-Thinking Scene Lock + Target SKU 1:1 Swap Protocol",
-      shortTraitKo:
-        "1번 사진의 배경 조명, 손 모양, 바닥 그림자는 그대로 살려 두고, 안에 있는 제품만 2번 우리 제품으로 자연스럽게 바꿔 끼우는 실무 주력 모델입니다",
-      shortTraitEn:
-        "High-thinking production workhorse for keeping Image 1's lighting, hands, and shadows while swapping in your SKU from Image 2",
-      strengthsKo: ["1→2번 제품 감쪽같은 교체", "손 모양·바닥 그림자 유지", "빠른 속도·합리적 비용"],
-      strengthsEn: ["1->2 SKU Product Swap", "Hand & Contact Shadow Lock", "Fast Production ROI"],
-      detailDescriptionKo:
-        "1번 사진의 공간감과 테이블 반사광, 제품을 쥐고 있는 손가락 모양을 흐트러뜨리지 않고 그 자리에 2번 우리 브랜드 제품을 자연스럽게 앉혀 줍니다. 상세페이지용 제품 연출컷을 여러 장 만들 때 가장 효율적입니다.",
-      detailDescriptionEn:
-        "Leverages high-thinking spatial reasoning to preserve perspective, surface reflections, and finger occlusion in Image 1 while seamlessly swapping in your product from Image 2.",
-      bestForDeliverablesKo: [
-        "마음에 드는 1번 연출 사진 속 기존 화장품·음료·소품을 2번 우리 제품으로 바꿀 때",
-        "모델 손에 들린 병·가방·패키지만 우리 브랜드 신제품으로 깔끔하게 교체할 때",
-        "상세페이지에 쓸 여러 각도의 제품 연출 사진 5장 세트를 부담 없는 비용으로 만들 때",
-      ],
-      bestForDeliverablesEn: [
-        "Replacing an existing bottle, jar, or object in Image 1 with your own product in Image 2",
-        "Swapping held props (cosmetics, beverages, bags) in a model's hand without finger distortion",
-        "Producing 5-cut e-commerce PDP product sets with consistent studio lighting",
-      ],
-      recommendedSlotFormulaKo:
-        "1번(유지할 배경·손 구도) + 2번(교체할 우리 제품 정면) + 3번(제품 측면·질감) + 4번(색감 참고)",
-      recommendedSlotFormulaEn:
-        "Slot 1 (Base Scene/Hand) + Slot 2 (Target SKU Front) + Slot 3 (SKU Side Detail) + Slot 4 (Color Ref)",
-      preferredWorkflow: "product_swap",
-      creditsPer5Set: 48,
-      priceKrwPer5Set: 600,
-      creditsPerSingle: 10,
-      supportedResolutions: ["1K", "2K", "4K"],
-    },
-    {
-      id: "nano_banana_2_0",
-      nameKo: "Nano Banana 2.0",
-      nameEn: "Nano Banana 2.0",
-      tierBadgeKo: "초고속 시안 확인 · 여러 구도 가볍게 테스트",
-      tierBadgeEn: "Ultra-Fast Drafts · Angle & Mood Exploration",
-      promptFormulaBadgeKo: "가장 저렴한 비용으로 10초 만에 5가지 구도·배경 시안 빠르게 비교",
-      promptFormulaBadgeEn: "Lightweight Multi-Ref Fast Framing & Color Variation",
-      shortTraitKo:
-        "최종 고화질 화보를 뽑기 전에 여러 가지 카메라 각도, 배경 분위기, SNS 썸네일 구도를 가장 빠르고 저렴하게 테스트해 볼 때 좋습니다",
-      shortTraitEn:
-        "Fastest and most economical engine for exploring camera angles, moodboards, and 9:16 social thumbnail variations",
-      strengthsKo: ["10초대 빠른 5컷 생성", "가장 부담 없는 비용", "여러 구도 한눈에 비교"],
-      strengthsEn: ["Ultra-Fast 5-Cut Drafts", "Lowest Credit Cost", "Rapid Angle Exploration"],
-      detailDescriptionKo:
-        "1~4번 참고 사진의 전체적인 구도와 분위기만 빠르게 잡아 10초대에 5장 시안을 보여 줍니다. 본 작업(Nano Banana Pro나 GPT Image 2.6)에 들어가기 전에 어떤 구도와 배경이 가장 잘 어울리는지 먼저 골라낼 때 유용합니다.",
-      detailDescriptionEn:
-        "Generates 5-shot multi-reference concept sets in seconds at minimal credit cost—ideal for locking framing and lighting before final 2K/4K mastering in Nano Banana Pro or GPT Image 2.6.",
-      bestForDeliverablesKo: [
-        "본격적인 화보 제작 전에 10~20가지 배경·각도 조합을 빠르게 눈으로 비교해 볼 때",
-        "인스타그램 릴스·틱톡·유튜브 쇼츠용 9:16 세로 표지 시안을 여러 장 뽑아볼 때",
-        "캠페인 영상 제작 전에 전체적인 장면 흐름(스토리보드)을 가볍게 스케치할 때",
-      ],
-      bestForDeliverablesEn: [
-        "Comparing 10–20 background and camera angle combinations during campaign pre-production",
-        "Batch-creating 9:16 vertical cover thumbnails for Instagram Reels, TikTok, and Shorts",
-        "Sketching storyboard frames for creator campaign formats before final lock",
-      ],
-      recommendedSlotFormulaKo:
-        "1번(주제·인물) + 2번(배경 분위기) + 3번(구도 참고) + 4번(전체 색감)",
-      recommendedSlotFormulaEn:
-        "Slot 1 (Subject) + Slot 2 (Mood Space) + Slot 3 (Angle Ref) + Slot 4 (Color Palette)",
-      preferredWorkflow: "lookbook_composite",
-      creditsPer5Set: 34,
-      priceKrwPer5Set: 400,
-      creditsPerSingle: 7,
-      supportedResolutions: ["1K", "2K"],
-    },
-    {
-      id: "seedream_5_5",
-      nameKo: "Seedream 5.5",
-      nameEn: "Seedream 5.5",
-      tierBadgeKo: "실제 같은 피부결 · 전신 비율 · 의류 착장 1순위",
-      tierBadgeEn: "Master · Real Matte Skin, 8-Head Lookbook & VTO",
-      promptFormulaBadgeKo: "인위적인 AI 피부 광택 제거 · 실제 모공과 원단 결 · 의류 핏 고정",
-      promptFormulaBadgeEn: "Authentic Matte Skin Pores · Zero Plastic Sheen · Exact Garment Fit Lock",
-      shortTraitKo:
-        "AI 특유의 번들거리는 인형 피부 느낌을 없애고 실제 사람 같은 보송한 피부결, 자연스러운 전신 비율, 옷 원래 핏을 그대로 살리는 패션·뷰티 특화 모델입니다",
-      shortTraitEn:
-        "Unmatched for authentic matte skin pores (zero plastic sheen), natural full-body lookbook proportions, and exact garment virtual try-on",
-      strengthsKo: ["번들거림 없는 실제 피부결", "옷 기장·주름·봉제선 유지", "자연스러운 전신 모델 비율"],
-      strengthsEn: ["Matte Real Skin Pores", "100% Garment Fit Lock", "Natural Full-Body Proportions"],
-      detailDescriptionKo:
-        "AI 사진에서 흔히 보이는 플라스틱처럼 매끈하고 번들거리는 피부 광택을 잡아서, 실제 카메라로 찍은 매거진 화보처럼 잔잔한 피부결과 원단 조직감을 살려 줍니다. 바닥에 놓고 찍은 옷 사진을 모델에게 자연스럽게 입히는 작업에도 가장 뛰어납니다.",
-      detailDescriptionEn:
-        "Eliminates synthetic waxy highlights to preserve natural skin micro-texture and strict garment construction (length, seams, print scale) for fashion lookbooks and beauty editorials.",
-      bestForDeliverablesKo: [
-        "바닥컷·옷걸이컷 의류(2번)의 기장과 핏을 변형 없이 모델(1번)에게 그대로 입히는 룩북",
-        "인위적인 보정 느낌 없이 실제 피부 모공과 솜털 결이 살아 있어야 하는 뷰티·패션 화보",
-        "한 명의 브랜드 모델로 정면·측면·후면 전신 컷을 흔들림 없는 비율로 연달아 찍을 때",
-      ],
-      bestForDeliverablesEn: [
-        "Virtual Try-On (VTO) dressing Slot 1's model in Slot 2's flat-lay garment with zero seam or print drift",
-        "Beauty & fashion editorials requiring real matte skin pores with zero synthetic waxy highlights",
-        "Full-body front/side/back agency digitals and lookbooks with consistent model proportions",
-      ],
-      recommendedSlotFormulaKo:
-        "1번(착장할 모델 사진) + 2번(입힐 의류·제품 정면) + 3번(원하는 착장 핏·포즈) + 4번(차분한 필름 색감)",
-      recommendedSlotFormulaEn:
-        "Slot 1 (Model Master) + Slot 2 (Garment/SKU Packshot) + Slot 3 (Worn Fit/Back Ref) + Slot 4 (Matte Film Grade)",
-      preferredWorkflow: "lookbook_composite",
-      creditsPer5Set: 65,
-      priceKrwPer5Set: 800,
-      creditsPerSingle: 13,
-      supportedResolutions: ["1K", "1.5K", "2K"],
-    },
-  ];
 
 export function resolveCategoryReferenceWorkflows(
   category: BrandClientCategory,
@@ -871,155 +624,6 @@ export const MICRO_REGION_SELECTION_PRESETS: ReadonlyArray<MicroRegionSelectionP
     },
   ];
 
-export type BrandStudioMicroEditModelId =
-  | "precision_region_editor"
-  | "seamless_edge_inpaint"
-  | "texture_fit_reshape"
-  | "film_grain_skin_enhancer";
-
-export interface BrandStudioMicroEditModelSpec {
-  id: BrandStudioMicroEditModelId;
-  nameKo: string;
-  nameEn: string;
-  badgeKo: string;
-  badgeEn: string;
-  shortTraitKo: string;
-  shortTraitEn: string;
-  howItWorksKo: string;
-  howItWorksEn: string;
-  bestWhenKo: readonly [string, string, string];
-  bestWhenEn: readonly [string, string, string];
-  supportsQualityTier: boolean;
-  supportedResolutions: readonly MicroEditResolutionTier[];
-  smartMaskLock: boolean;
-  creditsPerEdit: number;
-  priceKrwPerEdit: number;
-}
-
-export const BRAND_STUDIO_MICRO_EDIT_MODELS: ReadonlyArray<BrandStudioMicroEditModelSpec> =
-  [
-    {
-      id: "precision_region_editor",
-      nameKo: "GPT Image 2.6 · 부위 정밀 수정 & 로고/소품 교정",
-      nameEn: "GPT Image 2.6 · Precision Region & Label Editor",
-      badgeKo: "부분 수정 · 제품/로고 교정 1순위",
-      badgeEn: "Best for Micro-Region Product & Label Edit",
-      shortTraitKo:
-        "드래그한 영역과 참고 사진을 함께 읽어서, 선택한 부위 안쪽만 깔끔하게 교체하거나 다듬습니다 (바깥 원본은 100% 그대로 유지)",
-      shortTraitEn:
-        "Reads the cropped selection patch + reference images and replaces only the masked region via a non-destructive Smart Layer Mask",
-      howItWorksKo:
-        "캔버스에서 네모 박스나 브러시로 표시한 부분만 골라 수정한 뒤 새 레이어로 얹어 줍니다. 선택한 영역 바깥의 원본 사진은 1픽셀도 바뀌지 않아 안심하고 부분 수정을 반복할 수 있습니다.",
-      howItWorksEn:
-        "Crops and pads only the selected bounds to the closest supported aspect ratio, runs multi-image region editing, and places the result as a masked layer so pixels outside the selection remain 100% untouched.",
-      bestWhenKo: [
-        "사진 전체는 마음에 드는데 제품 라벨 글자나 로고만 살짝 흐릿할 때",
-        "모델 손에 들린 소품이나 손가락 모양만 어색해서 그 부위만 다시 고치고 싶을 때",
-        "원하는 위치에 2번 참고 사진의 우리 제품(화장품·음료·가방·시계)을 자연스럽게 넣을 때",
-      ],
-      bestWhenEn: [
-        "When the whole shot is great except a slightly distorted logo or package label",
-        "When only a model's hand grip or held prop needs targeted correction",
-        "When inserting Reference #2 (bottle, bag, watch) into a specific selected area",
-      ],
-      supportsQualityTier: true,
-      supportedResolutions: ["1K", "2K"],
-      smartMaskLock: true,
-      creditsPerEdit: 11,
-      priceKrwPerEdit: 140,
-    },
-    {
-      id: "seamless_edge_inpaint",
-      nameKo: "Nano Banana 2.1 · 경계선 티 안 나는 자연 합성",
-      nameEn: "Nano Banana 2.1 · Seamless Edge & Lighting Blend",
-      badgeKo: "표정·배경 소품 정리 추천",
-      badgeEn: "Best for Zero-Seam Edge & Lighting Blend",
-      shortTraitKo:
-        "선택한 부위와 주변 원본 사이의 조명·그림자·피부 톤을 자동으로 맞춰서 수정한 티가 전혀 나지 않게 이어 줍니다",
-      shortTraitEn:
-        "Automatically matches surrounding lighting, shadows, and skin tone across selection edges with zero visible seams",
-      howItWorksKo:
-        "선택한 영역 주변의 빛 방향과 색온도를 함께 읽어서, 표정 수정·잔머리 정리·불필요한 배경 소품 지우기 등을 할 때 경계선 자국 없이 자연스럽게 마감합니다.",
-      howItWorksEn:
-        "Analyzes surrounding context and color temperature around the selection mask so expression tweaks, hairline cleanup, and object removal blend invisibly.",
-      bestWhenKo: [
-        "모델의 시선 방향이나 미소, 잔머리·헤어라인만 자연스럽게 다듬고 싶을 때",
-        "배경에 걸린 불필요한 소품·전선·얼룩을 지우고 주변 배경으로 감쪽같이 메울 때",
-        "제품 바닥면의 그림자나 반사광을 주변 조명에 맞게 자연스럽게 정리할 때",
-      ],
-      bestWhenEn: [
-        "Refining gaze direction, subtle facial expressions, or flyaway hairlines",
-        "Removing unwanted background objects or wires and filling with matching set texture",
-        "Polishing contact shadows and reflections beneath a product",
-      ],
-      supportsQualityTier: false,
-      supportedResolutions: ["1K", "2K", "4K"],
-      smartMaskLock: true,
-      creditsPerEdit: 14,
-      priceKrwPerEdit: 180,
-    },
-    {
-      id: "texture_fit_reshape",
-      nameKo: "Nano Banana Pro · 4K 원단 질감 & 옷 핏 다듬기",
-      nameEn: "Nano Banana Pro · 4K Texture & Garment Fit Reshape",
-      badgeKo: "옷 주름 · 핏 · 4K 디테일 보정",
-      badgeEn: "Best for Fabric Drape & 4K Detail",
-      shortTraitKo:
-        "선택한 의류·가방·제품 부위의 옷 주름과 실루엣을 정돈하고, 흐릿한 표면 질감을 4K급으로 선명하게 되살립니다",
-      shortTraitEn:
-        "Restores 2K/4K surface micro-textures and refines garment silhouette or drape within the selected region",
-      howItWorksKo:
-        "고정해 둔 질감 참고 사진(원단 직조·가죽 결·금속 질감)을 선택한 영역에 집중 반영해, 뭉개진 옷 주름이나 흐릿한 장식 디테일을 최대 4K 해상도로 또렷하게 복원합니다.",
-      howItWorksEn:
-        "Injects your pinned texture reference directly into the selected bounds to sharpen fabric folds, leather grain, or metallic edges up to 4K.",
-      bestWhenKo: [
-        "자켓 옷깃·소매 길이·바지 밑단 주름 등 옷 핏 일부만 깔끔하게 다듬을 때",
-        "확대했을 때 흐릿해 보이는 원단 조직감이나 금속 장식을 선명하게 살릴 때",
-        "화장품 제형이나 음료 얼음·물방울 부위의 선명도를 한 단계 높일 때",
-      ],
-      bestWhenEn: [
-        "Tailoring jacket lapels, sleeve lengths, or trouser hems in a lookbook cut",
-        "Restoring 4K fabric weave or metallic hardware sharpness on zoomed-in regions",
-        "Boosting macro detail on cosmetic smears or beverage ice condensation",
-      ],
-      supportsQualityTier: false,
-      supportedResolutions: ["2K", "4K"],
-      smartMaskLock: true,
-      creditsPerEdit: 16,
-      priceKrwPerEdit: 200,
-    },
-    {
-      id: "film_grain_skin_enhancer",
-      nameKo: "Seedream 5.5 · 실제 피부결 & 필름 입자감 마감",
-      nameEn: "Seedream 5.5 · Real Matte Skin & 35mm Grain Finish",
-      badgeKo: "인위적인 AI 광택 제거 · 최종 마감",
-      badgeEn: "Removes AI Plastic Look · Final Finish",
-      shortTraitKo:
-        "부분 수정 후 생기기 쉬운 매끈한 AI 피부 광택을 없애고, 실제 카메라 필름 입자와 보송한 피부결로 전체 톤을 맞춥니다",
-      shortTraitEn:
-        "Eliminates synthetic AI smoothness by blending physical RGB/Mono film grain and matte skin pore micro-contrast",
-      howItWorksKo:
-        "수정한 부위와 원본 부위의 밝기와 필름 입자감을 하나로 맞춰 주어, 여러 번 부분 수정을 거쳐도 처음부터 실제 카메라로 한 번에 찍은 사진처럼 자연스럽게 어우러집니다.",
-      howItWorksEn:
-        "Blends brightness-compensated physical grain patches and skin pore micro-contrast so edited patches and original pixels share one cohesive camera sensor look.",
-      bestWhenKo: [
-        "부분 수정 후 고친 부위와 주변 원본의 입자감을 티 나지 않게 하나로 맞출 때",
-        "인물 피부에서 번들거리는 AI 느낌을 빼고 잡지 화보 같은 실제 피부결을 만들 때",
-        "완성된 화보 사진을 영상 스튜디오(첫 장면)로 넘기기 전에 필름 질감을 입힐 때",
-      ],
-      bestWhenEn: [
-        "Unifying sensor grain between an edited micro-region and the rest of the frame",
-        "Removing synthetic sheen from model skin for an authentic magazine finish",
-        "Applying final film texture before sending the cut to Video Studio as Frame 1",
-      ],
-      supportsQualityTier: false,
-      supportedResolutions: ["2K", "4K"],
-      smartMaskLock: true,
-      creditsPerEdit: 8,
-      priceKrwPerEdit: 100,
-    },
-  ];
-
 const SUPPORTED_EDIT_RATIOS: ReadonlyArray<{ label: string; value: number }> = [
   { label: "1:1", value: 1 },
   { label: "16:9", value: 16 / 9 },
@@ -1393,52 +997,48 @@ export interface FirstCreationGoalCard {
   targetMedium: "image" | "video";
   targetSubMode: StudioImageSubMode;
   targetWorkflowMode: StudioReferenceWorkflowId;
-  targetImageModelId: BrandStudioImageModelId;
   targetAspect: "1:1" | "4:5" | "3:4" | "16:9" | "9:16";
 }
 
 /**
  * Onboarding "What are you here to make first?" goal cards covering all 5 Core Deliverables.
- * Selecting a goal automatically configures the studio's track, sub-mode, reference workflow, model, and aspect ratio.
+ * Selecting a goal automatically configures the studio's track, sub-mode, reference workflow and aspect ratio.
  */
 export const FIRST_CREATION_GOALS: readonly FirstCreationGoalCard[] = [
   {
     id: "fashion_lookbook",
     titleKo: "이미지 · 1~4번 참고 사진 화보",
     titleEn: "Image · Multi-Ref Lookbook",
-    subtitleKo: "Nano Banana Pro / Seedream 5.5 · 인물·배경·포즈·색감 조합 화보",
-    subtitleEn: "Nano Banana Pro / Seedream 5.5 · 4-slot lookbook composite",
+    subtitleKo: "인물·배경·포즈·색감 조합 화보",
+    subtitleEn: "4-slot lookbook composite",
     targetTrack: "image",
     targetMedium: "image",
     targetSubMode: "multi_ref_generate",
     targetWorkflowMode: "lookbook_composite",
-    targetImageModelId: "nano_banana_pro",
     targetAspect: "4:5",
   },
   {
     id: "product_ecommerce",
     titleKo: "이미지 · 제품만 우리 것으로 교체",
     titleEn: "Image · Product Swap & SKU",
-    subtitleKo: "Nano Banana 2.1 / GPT Image 2.6 · 1번 배경 유지 → 2번 우리 제품 교체",
-    subtitleEn: "Nano Banana 2.1 / GPT Image 2.6 · Swap scene product with your SKU",
+    subtitleKo: "1번 배경 유지 → 2번 우리 제품 교체",
+    subtitleEn: "Swap scene product with your SKU",
     targetTrack: "image",
     targetMedium: "image",
     targetSubMode: "multi_ref_generate",
     targetWorkflowMode: "product_swap",
-    targetImageModelId: "nano_banana_2_1",
     targetAspect: "1:1",
   },
   {
     id: "micro_retouch_edit",
     titleKo: "이미지 · 원하는 부위만 부분 수정",
     titleEn: "Image · Micro-Region Edit",
-    subtitleKo: "GPT Image 2.6 · 드래그한 영역(로고·손·표정)만 감쪽같이 수정",
-    subtitleEn: "GPT Image 2.6 · Drag selection box to edit only that region",
+    subtitleKo: "드래그한 영역(로고·손·표정)만 감쪽같이 수정",
+    subtitleEn: "Drag selection box to edit only that region",
     targetTrack: "image",
     targetMedium: "image",
     targetSubMode: "micro_region_edit",
     targetWorkflowMode: "lookbook_composite",
-    targetImageModelId: "gpt_image_2_6",
     targetAspect: "4:5",
   },
   {
@@ -1451,7 +1051,6 @@ export const FIRST_CREATION_GOALS: readonly FirstCreationGoalCard[] = [
     targetMedium: "video",
     targetSubMode: "multi_ref_generate",
     targetWorkflowMode: "lookbook_composite",
-    targetImageModelId: "nano_banana_pro",
     targetAspect: "9:16",
   },
   {
@@ -1464,7 +1063,6 @@ export const FIRST_CREATION_GOALS: readonly FirstCreationGoalCard[] = [
     targetMedium: "video",
     targetSubMode: "multi_ref_generate",
     targetWorkflowMode: "lookbook_composite",
-    targetImageModelId: "seedream_5_5",
     targetAspect: "9:16",
   },
   {
@@ -1477,7 +1075,6 @@ export const FIRST_CREATION_GOALS: readonly FirstCreationGoalCard[] = [
     targetMedium: "video",
     targetSubMode: "multi_ref_generate",
     targetWorkflowMode: "lookbook_composite",
-    targetImageModelId: "seedream_5_5",
     targetAspect: "9:16",
   },
   {
@@ -1490,7 +1087,6 @@ export const FIRST_CREATION_GOALS: readonly FirstCreationGoalCard[] = [
     targetMedium: "video",
     targetSubMode: "multi_ref_generate",
     targetWorkflowMode: "lookbook_composite",
-    targetImageModelId: "nano_banana_2_0",
     targetAspect: "9:16",
   },
 ];
@@ -2077,7 +1673,7 @@ export const STUDIO_SPLIT_PANE_MODES: readonly StudioSplitPaneModeSpec[] = [
     labelKo: "이미지 스튜디오만 펼치기 (우측 접기)",
     labelEn: "Image Studio Only (Fold Right)",
     shortDescKo:
-      "우측 영상 탭을 접고 5종 이미지 모델·제품 교체·부분 수정 캔버스를 전체 화면으로 넓게 씁니다",
+      "우측 영상 탭을 접고 제품 교체·부분 수정 캔버스를 전체 화면으로 넓게 씁니다",
     shortDescEn:
       "Collapse the right video pane and focus 100% of the screen on image generation & micro-region editing",
     leftImageVisible: true,
@@ -2167,8 +1763,6 @@ export interface BridgedVideoReferenceItem {
   imageSrc: string;
   imageLabelKo: string;
   imageLabelEn: string;
-  sourceModelNameKo: string;
-  sourceModelNameEn: string;
   citationKo: string;
   citationEn: string;
 }
@@ -2179,8 +1773,6 @@ export function bridgeLeftImageToRightVideoReference(input: {
   imageSrc: string;
   imageLabelKo: string;
   imageLabelEn: string;
-  sourceModelNameKo: string;
-  sourceModelNameEn: string;
 }): BridgedVideoReferenceItem[] {
   const spec =
     VIDEO_REFERENCE_TARGET_SLOTS.find((s) => s.id === input.slotId) ??
@@ -2190,8 +1782,6 @@ export function bridgeLeftImageToRightVideoReference(input: {
     imageSrc: input.imageSrc,
     imageLabelKo: input.imageLabelKo,
     imageLabelEn: input.imageLabelEn,
-    sourceModelNameKo: input.sourceModelNameKo,
-    sourceModelNameEn: input.sourceModelNameEn,
     citationKo: spec.promptCitationKo,
     citationEn: spec.promptCitationEn,
   };
@@ -2276,8 +1866,8 @@ export const DEFAULT_SPATIAL_BOARD_NODES: readonly SpatialBoardAssetNode[] = [
     badgeEn: "Generated Still A",
     titleKo: "정면 히어로 컷 (2K)",
     titleEn: "Front Hero Still (2K)",
-    metaKo: "Nano Banana Pro · 4:5",
-    metaEn: "Nano Banana Pro · 4:5",
+    metaKo: "4:5",
+    metaEn: "4:5",
     thumbSrc: "/reel/brands/slot-1-subject-editorial.jpg",
     aspectRatio: "4 / 5",
     defaultSelected: true,
@@ -2290,8 +1880,8 @@ export const DEFAULT_SPATIAL_BOARD_NODES: readonly SpatialBoardAssetNode[] = [
     badgeEn: "Generated Still B",
     titleKo: "측면 로우앵글 룩북 (2K)",
     titleEn: "Low-Angle Lookbook (2K)",
-    metaKo: "GPT Image 2.6 · 4:5",
-    metaEn: "GPT Image 2.6 · 4:5",
+    metaKo: "4:5",
+    metaEn: "4:5",
     thumbSrc: "/reel/brands/slot-3-pose-lowangle-lookbook.jpg",
     aspectRatio: "4 / 5",
     defaultSelected: false,
@@ -2492,9 +2082,7 @@ export const VERIFIED_CREATOR_CANDIDATES: readonly AnonymousCreatorCandidateSpec
  * ============================================================================
  * Brand Aesthetic Moodboard & Preset Lock System (`미감 프리셋 · 우리 브랜드 무드보드`)
  * ============================================================================
- * Context-less image models (GPT Image 2.6, Nano Banana Pro/2.1/2.0, Seedream 5.5)
- * lose brand consistency unless a reverse-engineered Visual DNA preset is locked
- * before generation and compiled into each model's native prompt architecture.
+ * A reverse-engineered Visual DNA preset (or the brand's own moodboard) keeps a look consistent across pictures.
  */
 export const MAX_BRAND_MOODBOARD_IMAGES = 20 as const;
 
@@ -2532,7 +2120,6 @@ export interface BrandAestheticPreset {
   summaryEn: string;
   coverImage: string;
   moodboardThumbs: readonly [string, string, string, string];
-  recommendedModelId: BrandStudioImageModelId;
   pinnedColorId: string;
   pinnedTextureId: string;
   slotDefaults: Record<StudioReferenceSlotNumber, string>;
@@ -2556,7 +2143,6 @@ export const BRAND_AESTHETIC_PRESETS: ReadonlyArray<BrandAestheticPreset> = [
       "/reel/landing/c-logo-ours.webp",
       "/reel/landing/cut-cheek.webp",
     ],
-    recommendedModelId: "seedream_5_5",
     pinnedColorId: "color_editorial_cobalt",
     pinnedTextureId: "texture_dewy_glass_smear",
     slotDefaults: {
@@ -2593,7 +2179,6 @@ export const BRAND_AESTHETIC_PRESETS: ReadonlyArray<BrandAestheticPreset> = [
       "/reel/studio/vto-set-front.webp",
       "/reel/studio/vto-garment.webp",
     ],
-    recommendedModelId: "seedream_5_5",
     pinnedColorId: "color_crisp_studio_neutral",
     pinnedTextureId: "texture_macro_fabric_weave",
     slotDefaults: {
@@ -2630,7 +2215,6 @@ export const BRAND_AESTHETIC_PRESETS: ReadonlyArray<BrandAestheticPreset> = [
       "/reel/landing/c-skin-wide.webp",
       "/reel/landing/cut-hands.webp",
     ],
-    recommendedModelId: "nano_banana_pro",
     pinnedColorId: "color_crisp_studio_neutral",
     pinnedTextureId: "texture_matte_skin_35mm",
     slotDefaults: {
@@ -2667,7 +2251,6 @@ export const BRAND_AESTHETIC_PRESETS: ReadonlyArray<BrandAestheticPreset> = [
       "/reel/landing/look-drape.webp",
       "/reel/brands/slot-3-pose-lowangle-lookbook.jpg",
     ],
-    recommendedModelId: "nano_banana_pro",
     pinnedColorId: "color_editorial_cobalt",
     pinnedTextureId: "texture_macro_fabric_weave",
     slotDefaults: {
@@ -2704,7 +2287,6 @@ export const BRAND_AESTHETIC_PRESETS: ReadonlyArray<BrandAestheticPreset> = [
       "/reel/landing/cut-hands.webp",
       "/reel/landing/cut-beads.webp",
     ],
-    recommendedModelId: "gpt_image_2_6",
     pinnedColorId: "color_warm_film_2383",
     pinnedTextureId: "texture_matte_skin_35mm",
     slotDefaults: {
@@ -2741,7 +2323,6 @@ export const BRAND_AESTHETIC_PRESETS: ReadonlyArray<BrandAestheticPreset> = [
       "/reel/landing/cut-beads.webp",
       "/reel/brands/production-paris.jpg",
     ],
-    recommendedModelId: "nano_banana_2_1",
     pinnedColorId: "color_editorial_cobalt",
     pinnedTextureId: "texture_dewy_glass_smear",
     slotDefaults: {
@@ -2866,237 +2447,3 @@ export function synthesizeCustomMoodboardDna(
     },
   };
 }
-
-export interface ModelEasyComparisonRow {
-  modelId: BrandStudioImageModelId;
-  shortName: string;
-  oneLineWhenKo: string;
-  oneLineWhenEn: string;
-  bestBadgeKo: string;
-  bestBadgeEn: string;
-  speedBadgeKo: string;
-  speedBadgeEn: string;
-  promptStructureLabelKo: string;
-  promptStructureLabelEn: string;
-  empiricalStrengthKo: string;
-  empiricalStrengthEn: string;
-  verifiedSampleImage: string;
-}
-
-export const MODEL_EASY_COMPARISON_MATRIX: ReadonlyArray<ModelEasyComparisonRow> = [
-  {
-    modelId: "gpt_image_2_6",
-    shortName: "GPT Image 2.6",
-    oneLineWhenKo: "제품 로고·영문/한글 글자를 1글자도 안 틀리고 넣거나, 네모 친 부위만 정밀 수정할 때",
-    oneLineWhenEn: "When front package text/logos must be 100% accurate or when fixing a boxed region",
-    bestBadgeKo: "로고 글자 · 부분 수정 1위",
-    bestBadgeEn: "Best for Text & Region Edit",
-    speedBadgeKo: "약 18초 · 정밀 추론",
-    speedBadgeEn: "~18s · High Precision",
-    promptStructureLabelKo: "5단계 디렉터 지시서 (구도 → 로고/레퍼런스 → 피사체 → 공간 → #HEX 조명)",
-    promptStructureLabelEn: "5-Tier Director Brief (Framing -> Label Lock -> Subject -> Space -> #HEX Light)",
-    empiricalStrengthKo: "복잡한 다중 조건과 제품 전면 타이포그래피 보존율 가장 높음",
-    empiricalStrengthEn: "Highest letterform accuracy and multi-constraint instruction adherence",
-    verifiedSampleImage: "/reel/brands/verified-gpt-image-2-6.png",
-  },
-  {
-    modelId: "nano_banana_pro",
-    shortName: "Nano Banana Pro",
-    oneLineWhenKo: "1~4번 참고 사진(인물+제품+포즈+색감)을 한 번에 합쳐 4K 메인 화보를 만들 때",
-    oneLineWhenEn: "When fusing Slots 1–4 (Model + Product + Pose + Color) into a 4K campaign cut",
-    bestBadgeKo: "4장 동시 조합 · 4K 화보 1위",
-    bestBadgeEn: "Best for 1–4 Multi-Ref & 4K",
-    speedBadgeKo: "약 11초 · 2K/4K",
-    speedBadgeEn: "~11s · Native 2K/4K",
-    promptStructureLabelKo: "역할 잠금 블록 ([MOODBOARD LOCK] · [IDENTITY LOCK] · [COLOR GRADE])",
-    promptStructureLabelEn: "ALL-CAPS Compartment Locks ([MOODBOARD LOCK] · [IDENTITY LOCK] · [COLOR GRADE])",
-    empiricalStrengthKo: "원본 구도·손 모양·조명을 픽셀 단위로 유지하면서 색감과 텍스트만 정교하게 전환",
-    empiricalStrengthEn: "Preserves pixel-level framing and hand geometry while locking moodboard color grade",
-    verifiedSampleImage: "/reel/brands/verified-nano-banana-pro.png",
-  },
-  {
-    modelId: "nano_banana_2_1",
-    shortName: "Nano Banana 2.1",
-    oneLineWhenKo: "1번 사진의 배경·손 모양은 그대로 두고, 들려 있는 제품만 2번 우리 제품으로 바꿀 때",
-    oneLineWhenEn: "When keeping Image 1's scene and hand grip while swapping in your SKU from Image 2",
-    bestBadgeKo: "1→2번 제품 교체 · 가성비 주력",
-    bestBadgeEn: "Best for 1->2 Product Swap",
-    speedBadgeKo: "약 9초 · 실무 주력",
-    speedBadgeEn: "~9s · Workhorse",
-    promptStructureLabelKo: "1번 장면 잠금 + 2번 제품 1:1 교체 프로토콜",
-    promptStructureLabelEn: "Scene & Hand Lock (Slot 1) + 1:1 Target SKU Swap (Slot 2)",
-    empiricalStrengthKo: "손가락 가림(Occlusion)과 바닥 접촉 그림자를 깨뜨리지 않고 제품만 자연스럽게 교체",
-    empiricalStrengthEn: "Swaps held or tabletop products without breaking finger occlusion or contact shadows",
-    verifiedSampleImage: "/reel/brands/swap-product-luxury-bottle.jpg",
-  },
-  {
-    modelId: "nano_banana_2_0",
-    shortName: "Nano Banana 2.0",
-    oneLineWhenKo: "본 화보 촬영 전에 가장 저렴한 비용으로 여러 구도·배경 시안을 빠르게 뽑아볼 때",
-    oneLineWhenEn: "When exploring angles and moodboard drafts in under 10 seconds at lowest cost",
-    bestBadgeKo: "10초 초고속 시안 · 최저 비용",
-    bestBadgeEn: "Fastest Drafts · Lowest Cost",
-    speedBadgeKo: "약 6초 · 초고속",
-    speedBadgeEn: "~6s · Ultra-Fast",
-    promptStructureLabelKo: "경량 구도 · 무드보드 컬러칩 잠금",
-    promptStructureLabelEn: "Lightweight Framing + Moodboard Palette Lock",
-    empiricalStrengthKo: "릴스 표지나 촬영 스토리보드용 다중 구도 시안을 가장 빠르게 대량 생성",
-    empiricalStrengthEn: "Fastest batch ideation for Reels covers and pre-production storyboards",
-    verifiedSampleImage: "/reel/brands/house-french-blue-hero-1080p.jpg",
-  },
-  {
-    modelId: "seedream_5_5",
-    shortName: "Seedream 5.5",
-    oneLineWhenKo: "번들거리는 AI 광택 없이 실제 카메라로 찍은 듯한 보송한 피부결과 전신 착장 핏을 원할 때",
-    oneLineWhenEn: "When you need authentic matte skin pores (zero plastic sheen) and true garment fit",
-    bestBadgeKo: "실제 피부결 · 전신 착장 1위",
-    bestBadgeEn: "Best for Real Skin & Lookbook Fit",
-    speedBadgeKo: "약 20초 · 2K 마스터",
-    speedBadgeEn: "~20s · 2K Editorial Master",
-    promptStructureLabelKo: "4단 자연어 산문 + 실제 피부결 보호 규칙 + COLOUR AUTHORITY & HEX 배열",
-    promptStructureLabelEn: "4-Part Cohesive Prose + Matte Skin Contract + COLOUR AUTHORITY & HEX Array",
-    empiricalStrengthKo: "실제 모공·솜털·새틴 리본 직조 결까지 살아나며 AI 특유의 플라스틱 피부 광택 0%",
-    empiricalStrengthEn: "Renders living skin pores, fine fabric weave, and glass caustics with zero AI waxiness",
-    verifiedSampleImage: "/reel/brands/verified-seedream-5-0-pro.png",
-  },
-];
-
-/**
- * Compiles a locked Brand Aesthetic (either a TWINGS Preset or Custom Moodboard up to 20 images)
- * into the model-specific optimal prompt format for:
- *   - `gpt_image_2_6` (5-Tier Numbered Director Brief)
- *   - `nano_banana_pro` (ALL-CAPS Compartment Locks)
- *   - `nano_banana_2_1` (Scene Lock + 1->2 SKU Swap Protocol)
- *   - `nano_banana_2_0` (Fast Concept & Palette Lock)
- *   - `seedream_5_5` (4-Part Cohesive Natural-Language Prose + Matte Skin Contract + COLOUR AUTHORITY + HEX VALUES)
- */
-export function compileAestheticPromptForModel(opts: {
-  modelId: BrandStudioImageModelId;
-  mode: BrandAestheticSourceMode;
-  presetId?: BrandAestheticPresetId;
-  customItems?: readonly BrandCustomMoodboardItem[];
-  customTitle?: string;
-  userBrief?: string;
-  locale: "ko" | "en";
-}): {
-  modelId: BrandStudioImageModelId;
-  aestheticTitle: string;
-  paletteHex: readonly [string, string, string, string];
-  structureBadge: string;
-  compiledPrompt: string;
-} {
-  const { modelId, mode, presetId, customItems, customTitle, userBrief, locale } = opts;
-  const isKo = locale === "ko";
-  const preset =
-    BRAND_AESTHETIC_PRESETS.find((p) => p.id === presetId) ??
-    BRAND_AESTHETIC_PRESETS[0]!;
-  const customSynthesized = synthesizeCustomMoodboardDna(
-    customItems ?? DEFAULT_CUSTOM_MOODBOARD_ITEMS,
-    customTitle,
-  );
-
-  const aestheticTitle =
-    mode === "custom_moodboard"
-      ? isKo
-        ? customSynthesized.titleKo
-        : customSynthesized.titleEn
-      : isKo
-        ? preset.titleKo
-        : preset.titleEn;
-  const dna = mode === "custom_moodboard" ? customSynthesized.dna : preset.dna;
-  const hexList = dna.paletteHex.join(", ");
-  const cleanBrief =
-    (userBrief ?? "").trim() ||
-    (isKo
-      ? "1번 인물과 2번 우리 제품을 중심으로 브랜드 화보 촬영"
-      : "Brand editorial featuring Subject 1 and Product 2");
-
-  const easyRow =
-    MODEL_EASY_COMPARISON_MATRIX.find((r) => r.modelId === modelId) ??
-    MODEL_EASY_COMPARISON_MATRIX[0]!;
-  const structureBadge = isKo
-    ? easyRow.promptStructureLabelKo
-    : easyRow.promptStructureLabelEn;
-
-  if (modelId === "gpt_image_2_6") {
-    const compiledPrompt = isKo
-      ? [
-          `1. 구도·광학: ${dna.opticsKo}`,
-          `2. 레퍼런스·로고 고정: 2번 제품의 용기 비례와 전면 로고 타이포그래피 100% 정확히 보존`,
-          `3. 피사체·표면 질감: ${cleanBrief} (${dna.surfaceSkinKo})`,
-          `4. 배경·조명 설계: ${dna.lightingKo}`,
-          `5. 미감 팔레트(${hexList}) & 금지: [${aestheticTitle}] 적용 · ${dna.negativeRuleKo}`,
-        ].join(" / ")
-      : [
-          `1. Deliverable & Optics: ${dna.opticsEn}`,
-          `2. Reference & Typography Lock: Preserve 100% package geometry and crisp front label lettering from Slot 2`,
-          `3. Subject & Surface: ${cleanBrief} (${dna.surfaceSkinEn})`,
-          `4. Environment & Light: ${dna.lightingEn}`,
-          `5. Palette (${hexList}) & Exclusions: [${aestheticTitle}] · ${dna.negativeRuleEn}`,
-        ].join(" / ");
-    return {
-      modelId,
-      aestheticTitle,
-      paletteHex: dna.paletteHex,
-      structureBadge,
-      compiledPrompt,
-    };
-  }
-
-  if (modelId === "nano_banana_pro") {
-    const compiledPrompt = isKo
-      ? `[MOODBOARD LOCK: ${aestheticTitle}] [SLOT 1–4 REFERENCE LOCK] ${cleanBrief} [COLOR & LIGHT: ${hexList} · ${dna.lightingKo}] [OPTICS & TEXTURE: ${dna.opticsKo} · ${dna.surfaceSkinKo}] [NEGATIVE: ${dna.negativeRuleKo}]`
-      : `[MOODBOARD LOCK: ${aestheticTitle}] [SLOT 1–4 REFERENCE LOCK] ${cleanBrief} [COLOR & LIGHT: ${hexList} · ${dna.lightingEn}] [OPTICS & TEXTURE: ${dna.opticsEn} · ${dna.surfaceSkinEn}] [NEGATIVE: ${dna.negativeRuleEn}]`;
-    return {
-      modelId,
-      aestheticTitle,
-      paletteHex: dna.paletteHex,
-      structureBadge,
-      compiledPrompt,
-    };
-  }
-
-  if (modelId === "nano_banana_2_1") {
-    const compiledPrompt = isKo
-      ? `[SCENE & HAND LOCK (1번 이미지)] 원본 배경·조명·손 모양과 접촉 그림자 유지 [TARGET SKU SWAP (2번 제품)] ${cleanBrief} [MOODBOARD GRADE: ${aestheticTitle} (${hexList}) · ${dna.lightingKo}]`
-      : `[SCENE & HAND LOCK (Image 1)] Preserve background, lighting, hand grip & contact shadows [TARGET SKU SWAP (Image 2)] ${cleanBrief} [MOODBOARD GRADE: ${aestheticTitle} (${hexList}) · ${dna.lightingEn}]`;
-    return {
-      modelId,
-      aestheticTitle,
-      paletteHex: dna.paletteHex,
-      structureBadge,
-      compiledPrompt,
-    };
-  }
-
-  if (modelId === "nano_banana_2_0") {
-    const compiledPrompt = isKo
-      ? `[FAST CONCEPT LOCK: ${aestheticTitle} (${hexList})] ${dna.opticsKo} · ${dna.lightingKo} · ${cleanBrief}`
-      : `[FAST CONCEPT LOCK: ${aestheticTitle} (${hexList})] ${dna.opticsEn} · ${dna.lightingEn} · ${cleanBrief}`;
-    return {
-      modelId,
-      aestheticTitle,
-      paletteHex: dna.paletteHex,
-      structureBadge,
-      compiledPrompt,
-    };
-  }
-
-  // seedream_5_5 — 4-Part Cohesive Natural-Language Prose + Matte Skin Contract + COLOUR AUTHORITY + HEX VALUES
-  const compiledPrompt = isKo
-    ? `${cleanBrief}. ${dna.opticsKo}, ${dna.lightingKo}. ${dna.surfaceSkinKo}(번들거리는 인위적 광택 없이 실제 피부 모공과 원단·유리 질감 보존). COLOUR AUTHORITY: ${aestheticTitle}. HEX VALUES: [${hexList}].`
-    : `${cleanBrief}. Shot with ${dna.opticsEn} under ${dna.lightingEn}. Preserve ${dna.surfaceSkinEn} with zero synthetic plastic sheen. COLOUR AUTHORITY: ${aestheticTitle}. HEX VALUES: [${hexList}].`;
-
-  return {
-    modelId,
-    aestheticTitle,
-    paletteHex: dna.paletteHex,
-    structureBadge,
-    compiledPrompt,
-  };
-}
-
-
-
-
-

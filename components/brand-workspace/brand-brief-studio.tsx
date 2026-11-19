@@ -57,8 +57,6 @@ import {
   BRAND_CREATOR_DISTRIBUTION_TIERS,
   BRAND_CREATOR_FORMAT_MODES,
   BRAND_SEEDANCE_VIDEO_TIERS,
-  BRAND_STUDIO_IMAGE_MODELS,
-  BRAND_STUDIO_MICRO_EDIT_MODELS,
   BRAND_UPSCALING_STUDIO_ENGINES,
   DEFAULT_CUSTOM_MOODBOARD_ITEMS,
   DEFAULT_SPATIAL_BOARD_NODES,
@@ -66,7 +64,6 @@ import {
   IG_OPTIMIZED_UPSCALE_LOGIC_MODULES,
   MAX_BRAND_MOODBOARD_IMAGES,
   MICRO_REGION_SELECTION_PRESETS,
-  MODEL_EASY_COMPARISON_MATRIX,
   PINNED_COLOR_REFERENCES,
   PINNED_TEXTURE_REFERENCES,
   STUDIO_SKU_MULTI_ANGLE_PACKS,
@@ -76,7 +73,6 @@ import {
   VIDEO_STORYBOARD_CUT_STEPS,
   bridgeLeftImageToRightVideoReference,
   clampMoodboardItemsToMax,
-  compileAestheticPromptForModel,
   compileSunraVideoAndUpscalePlan,
   extractBrandKitFromDomain,
   findClosestSupportedAspectRatio,
@@ -88,8 +84,6 @@ import {
   type BrandCoreDeliverableTrackId,
   type BrandCustomMoodboardItem,
   type BrandSeedanceVideoTierId,
-  type BrandStudioImageModelId,
-  type BrandStudioMicroEditModelId,
   type BrandUpscalerEngineId,
   type BridgedVideoReferenceItem,
   type CreatorCampaignFormatModeId,
@@ -298,6 +292,9 @@ const CATEGORY_STUDIO_VISUALS: Record<
   },
 };
 
+/** The picture the studio falls back to when no slot or canvas cut is chosen (it was the old model guide's sample). */
+const SAMPLE_STILL = "/reel/brands/verified-nano-banana-pro.png";
+
 const CSS_ASPECT_MAP: Record<ShotAspect, string> = {
   "1:1": "1 / 1",
   "4:5": "4 / 5",
@@ -476,12 +473,9 @@ export function BrandBriefStudio({
     y: number;
   } | null>(null);
 
-  const [selectedMicroEditModelId, setSelectedMicroEditModelId] =
-    useState<BrandStudioMicroEditModelId>("precision_region_editor");
   const [microEditQuality, setMicroEditQuality] =
     useState<MicroEditQualityTier>("High");
-  const [microEditResolution, setMicroEditResolution] =
-    useState<MicroEditResolutionTier>("2K");
+  const [microEditResolution] = useState<MicroEditResolutionTier>("2K");
   const [microEditBatchSize, setMicroEditBatchSize] = useState<1 | 2 | 4>(2);
   const [layerVisibility, setLayerVisibility] = useState<{
     regionMask: boolean;
@@ -493,10 +487,6 @@ export function BrandBriefStudio({
     baseImage: true,
   });
 
-  const activeMicroEditModel =
-    BRAND_STUDIO_MICRO_EDIT_MODELS.find(
-      (m) => m.id === selectedMicroEditModelId,
-    ) ?? BRAND_STUDIO_MICRO_EDIT_MODELS[0]!;
   const activeRegionPreset =
     MICRO_REGION_SELECTION_PRESETS.find((r) => r.id === activeRegionPresetId) ??
     MICRO_REGION_SELECTION_PRESETS[0]!;
@@ -529,13 +519,8 @@ export function BrandBriefStudio({
     BRAND_AUDIO_STUDIO_PRESETS.find((a) => a.id === audioPresetId) ??
     BRAND_AUDIO_STUDIO_PRESETS[0]!;
 
-  // Image Model Selection & Full Comparison Guide Toggle (5 Models: GPT Image 2.6, Nano Banana Pro, 2.1, 2.0, Seedream 5.5)
-  const [selectedImageModelId, setSelectedImageModelId] =
-    useState<BrandStudioImageModelId>("nano_banana_pro");
-  const [showFullModelGuide, setShowFullModelGuide] = useState<boolean>(false);
-  const activeImageModel =
-    BRAND_STUDIO_IMAGE_MODELS.find((m) => m.id === selectedImageModelId) ??
-    BRAND_STUDIO_IMAGE_MODELS[0]!;
+  // No image model is chosen or named on this screen (founder 2026-11-20): nothing here runs a model, and the
+  // studio's one model list is lib/brand-studio/models.ts. The sample still below stands in where a picture is needed.
 
   // Video production controls (Seedance 2.5 480p Draft / 720p / 1080p + Dedicated Upscaling Studio)
   const [videoResolution, setVideoResolution] =
@@ -694,8 +679,6 @@ export function BrandBriefStudio({
         imageSrc: defaultTake.src,
         imageLabelKo: defaultTake.labelKo,
         imageLabelEn: defaultTake.labelEn,
-        sourceModelNameKo: "Nano Banana Pro",
-        sourceModelNameEn: "Nano Banana Pro",
         citationKo: VIDEO_REFERENCE_TARGET_SLOTS[0]!.promptCitationKo,
         citationEn: VIDEO_REFERENCE_TARGET_SLOTS[0]!.promptCitationEn,
       },
@@ -704,8 +687,6 @@ export function BrandBriefStudio({
         imageSrc: studioVisuals.sceneThumbs[1],
         imageLabelKo: "2번 · 우리 제품 정면 마스터",
         imageLabelEn: "Slot 2 · Product Front Master",
-        sourceModelNameKo: "Nano Banana 2.1",
-        sourceModelNameEn: "Nano Banana 2.1",
         citationKo: VIDEO_REFERENCE_TARGET_SLOTS[2]!.promptCitationKo,
         citationEn: VIDEO_REFERENCE_TARGET_SLOTS[2]!.promptCitationEn,
       },
@@ -733,8 +714,6 @@ export function BrandBriefStudio({
         imageSrc: imgSrc,
         imageLabelKo: labelKo,
         imageLabelEn: labelEn,
-        sourceModelNameKo: activeImageModel.nameKo,
-        sourceModelNameEn: activeImageModel.nameEn,
       }),
     );
     if (splitPaneMode === "image_only") {
@@ -849,10 +828,6 @@ export function BrandBriefStudio({
   // Rounds 27–42 SOTA Enterprise Production Controls State
   const [isShortcutsHudOpen, setIsShortcutsHudOpen] = useState<boolean>(true);
   const [imageBatchCount, setImageBatchCount] = useState<1 | 2 | 4>(4);
-  const [isModelAbCompareMode, setIsModelAbCompareMode] =
-    useState<boolean>(false);
-  const [compareSecondModelId, setCompareSecondModelId] =
-    useState<BrandStudioImageModelId>("seedream_5_5");
   const [slotWeights, setSlotWeights] = useState<
     Record<1 | 2 | 3 | 4, "0.3" | "0.7" | "1.0">
   >({
@@ -1127,8 +1102,8 @@ export function BrandBriefStudio({
       labelEn: "Generated Lookbook Cut",
       roleBadgeKo: "화보 마스터 컷",
       roleBadgeEn: "Generated Still",
-      modelBadgeKo: "Nano Banana Pro",
-      modelBadgeEn: "Nano Banana Pro",
+      modelBadgeKo: "",
+      modelBadgeEn: "",
       resBadge: "2K · 4:5",
       connectedFromIds: ["canvas-item-portrait", "canvas-item-product"],
       wireLabelKo: "1+2번 슬롯 합성",
@@ -1224,14 +1199,14 @@ export function BrandBriefStudio({
         : studioVisuals.takes[newIndex % studioVisuals.takes.length]!.src,
       labelKo: isVid
         ? `Seedance 2.5 (${videoResolution}) 생성 영상 #${newIndex}`
-        : `${activeImageModel.nameKo} 생성 화보 #${newIndex}`,
+        : `생성 화보 #${newIndex}`,
       labelEn: isVid
         ? `Seedance 2.5 (${videoResolution}) Clip #${newIndex}`
-        : `${activeImageModel.nameEn} Cut #${newIndex}`,
+        : `Cut #${newIndex}`,
       roleBadgeKo: isVid ? "생성 영상 노드" : "생성 화보 노드",
       roleBadgeEn: isVid ? "Generated Video" : "Generated Still",
-      modelBadgeKo: isVid ? "Seedance 2.5" : activeImageModel.nameKo,
-      modelBadgeEn: isVid ? "Seedance 2.5" : activeImageModel.nameEn,
+      modelBadgeKo: isVid ? "Seedance 2.5" : "",
+      modelBadgeEn: isVid ? "Seedance 2.5" : "",
       resBadge: isVid ? `${videoResolution} · ${videoSeconds}s` : `2K · ${aspect}`,
       connectedFromIds: sourceConnectIds,
       wireLabelKo: isVid ? "모션 확장" : "레퍼런스 파생",
@@ -1250,8 +1225,8 @@ export function BrandBriefStudio({
           ? `캔버스에 Seedance 2.5 (${videoResolution}) 새 영상 노드가 연결·배치되었습니다.`
           : `New Seedance 2.5 (${videoResolution}) video node connected and placed on canvas.`
         : isKo
-          ? `캔버스에 ${activeImageModel.nameKo} 새 화보 노드가 연결·배치되었습니다.`
-          : `New ${activeImageModel.nameEn} image node connected and placed on canvas.`,
+          ? `캔버스에 새 화보 노드가 연결·배치되었습니다.`
+          : `New image node connected and placed on canvas.`,
     );
   }
 
@@ -1276,12 +1251,12 @@ export function BrandBriefStudio({
             id: newId,
             kind: "image" as const,
             src: studioVisuals.takes[newIndex % studioVisuals.takes.length]!.src,
-            labelKo: `${activeImageModel.nameKo} 레퍼런스 화보 #${newIndex}`,
-            labelEn: `${activeImageModel.nameEn} Ref Still #${newIndex}`,
+            labelKo: `레퍼런스 화보 #${newIndex}`,
+            labelEn: `Ref Still #${newIndex}`,
             roleBadgeKo: `@Image ${(newIndex % 4) + 1} · 화보 레퍼런스`,
             roleBadgeEn: `@Image ${(newIndex % 4) + 1} · Still Ref`,
-            modelBadgeKo: activeImageModel.nameKo,
-            modelBadgeEn: activeImageModel.nameEn,
+            modelBadgeKo: "",
+            modelBadgeEn: "",
             resBadge: `2K · ${aspect}`,
             connectedFromIds: sourceConnectIds,
             wireLabelKo: "레퍼런스 파생",
@@ -1563,7 +1538,6 @@ export function BrandBriefStudio({
       handleSwitchMediumMode("image");
       setImageSubMode(goal.targetSubMode);
       setRefWorkflowId(goal.targetWorkflowMode);
-      setSelectedImageModelId(goal.targetImageModelId);
       setAspect(goal.targetAspect);
     }
   }
@@ -1621,15 +1595,6 @@ export function BrandBriefStudio({
     setRefWorkflowId(mode);
     const wf = referenceWorkflows[mode];
     setBriefText(isKo ? wf.defaultPromptKo : wf.defaultPromptEn);
-    if (mode === "product_swap") {
-      setSelectedImageModelId("nano_banana_2_1");
-    } else {
-      setSelectedImageModelId("nano_banana_pro");
-    }
-  }
-
-  function handleSelectImageModel(modelId: BrandStudioImageModelId) {
-    setSelectedImageModelId(modelId);
   }
 
   const managedObjectUrlsRef = useRef<Set<string>>(new Set());
@@ -2038,8 +2003,8 @@ export function BrandBriefStudio({
               ? `${videoSeconds}초 ${videoResolution} 영상을 생성했습니다.`
               : `${videoSeconds}s ${videoResolution} video generated.`
             : isKo
-              ? `${activeImageModel.nameKo.split("·")[0]?.trim()} 화보를 생성했습니다.`
-              : `Generated image with ${activeImageModel.nameEn.split("·")[0]?.trim()}.`,
+              ? "화보를 생성했습니다."
+              : "Image generated.",
         );
       }
     } catch {
@@ -2246,19 +2211,6 @@ export function BrandBriefStudio({
     aestheticSourceMode === "custom_moodboard"
       ? customMoodboardItems[0]?.src ?? activeAestheticPreset.coverImage
       : activeAestheticPreset.coverImage;
-  const activeEasyModelRow =
-    MODEL_EASY_COMPARISON_MATRIX.find(
-      (r) => r.modelId === selectedImageModelId,
-    ) ?? MODEL_EASY_COMPARISON_MATRIX[0]!;
-  const compiledModelAestheticPreview = compileAestheticPromptForModel({
-    modelId: selectedImageModelId,
-    mode: aestheticSourceMode,
-    presetId: activeAestheticPresetId,
-    customItems: customMoodboardItems,
-    customTitle: customMoodboardTitle,
-    userBrief: briefText,
-    locale,
-  });
 
   // Practitioner Image & Video Studio State:
   // - Supports up to 14 Reference Slots (1..14), starting with 4 visible cards and expanding up to 14 on demand or multi-file drop.
@@ -2308,7 +2260,6 @@ export function BrandBriefStudio({
     id: string;
     runNumber: number;
     createdAtLabel: string;
-    modelName: string;
     aspect: string;
     focalMm: number;
     moodLabel: string;
@@ -2579,8 +2530,8 @@ export function BrandBriefStudio({
         ? "자연스럽고 입체적인 스튜디오 채광과"
         : "with sculpted studio daylight and";
     const modelAndLensClause = isKo
-      ? `${cameraFocalMm}mm 프라임 렌즈 아웃포커싱, ${aspect} 프레임 구도, 실제 매거진 커버급 하이패션 에디토리얼 화보로 정교하게 촬영 (${shortImageModelName} 최적화)`
-      : `shot on ${cameraFocalMm}mm prime lens, ${aspect} framing, magazine-grade high-fashion editorial finish (${shortImageModelName} optimized)`;
+      ? `${cameraFocalMm}mm 프라임 렌즈 아웃포커싱, ${aspect} 프레임 구도, 실제 매거진 커버급 하이패션 에디토리얼 화보로 정교하게 촬영`
+      : `shot on ${cameraFocalMm}mm prime lens, ${aspect} framing, magazine-grade high-fashion editorial finish`;
     const composed = [lockPrefix, freeClause, moodClause, modelAndLensClause]
       .filter(Boolean)
       .join(" ")
@@ -2590,8 +2541,8 @@ export function BrandBriefStudio({
     setGuideProgress((p) => ({ ...p, refs: true }));
     setStatusMessage(
       isKo
-        ? `고정된 슬롯(${lockedSlotEntries.length}개)과 ${shortImageModelName} 모델 특성에 맞춰 AI 프롬프트를 자동 작성했습니다.`
-        : `Auto-composed AI prompt with ${lockedSlotEntries.length} locked slot(s) for ${shortImageModelName}.`,
+        ? `고정된 슬롯(${lockedSlotEntries.length}개)에 맞춰 AI 프롬프트를 자동 작성했습니다.`
+        : `Auto-composed AI prompt with ${lockedSlotEntries.length} locked slot(s).`,
     );
   }
 
@@ -3384,7 +3335,7 @@ export function BrandBriefStudio({
         label: isKo
           ? `${activeAestheticPreset.titleKo} 샘플 화보 #1`
           : `${activeAestheticPreset.titleEn} Sample #1`,
-        meta: `${shortImageModelName} · 4:5 · 2K`,
+        meta: "4:5 · 2K",
         promptText: autoPrompt,
         lockedSummary: [
           isKo ? "01번 인물 고정" : "#01 Subject Lock",
@@ -3524,16 +3475,6 @@ export function BrandBriefStudio({
       isKo
         ? "커스텀 무드보드 사진을 모두 비웠습니다. 새 레퍼런스 사진을 드래그해 추가하세요."
         : "Cleared all custom moodboard photos.",
-    );
-  }
-
-  function handleApplyModelOptimizedAestheticPrompt() {
-    setBriefText(compiledModelAestheticPreview.compiledPrompt);
-    setGuideProgress((p) => ({ ...p, refs: true }));
-    setStatusMessage(
-      isKo
-        ? `'${activeAestheticLabel}' 미감을 ${shortImageModelName} 전용 프롬프트 구조(${compiledModelAestheticPreview.structureBadge})로 변환해 요청창에 적용했습니다.`
-        : `Applied ${shortImageModelName}-optimized prompt for '${activeAestheticLabel}'.`,
     );
   }
 
@@ -4307,7 +4248,7 @@ export function BrandBriefStudio({
     const activeSrc =
       canvasCut?.src ??
       customSlotThumbs[1] ??
-      activeEasyModelRow.verifiedSampleImage;
+      SAMPLE_STILL;
     if (!activeSrc || typeof document === "undefined") return;
 
     setIsRemovingBg(true);
@@ -4666,7 +4607,7 @@ export function BrandBriefStudio({
       adBgRemovedSrc ??
       canvasCut?.src ??
       customSlotThumbs[1] ??
-      activeEasyModelRow.verifiedSampleImage;
+      SAMPLE_STILL;
     if (!activeSrc || typeof document === "undefined") return null;
 
     const loadImg = (url: string) =>
@@ -4922,7 +4863,7 @@ export function BrandBriefStudio({
       adBgRemovedSrc ??
       canvasCut?.src ??
       customSlotThumbs[1] ??
-      activeEasyModelRow.verifiedSampleImage;
+      SAMPLE_STILL;
     const presetMeta =
       AD_LAYOUT_TEMPLATES.find((t) => t.id === adLayoutPresetId)?.ko ??
       "디자인 에셋";
@@ -4966,7 +4907,6 @@ export function BrandBriefStudio({
     titleKo: string;
     titleEn: string;
     directorTag: string;
-    modelBadge: string;
     aspectLabel: string;
     src: string;
     presetId: string;
@@ -4982,7 +4922,6 @@ export function BrandBriefStudio({
       titleKo: "크롬 아이웨어 & 브루탈리즘 콘크리트 로우앵글",
       titleEn: "Chrome Eyewear & Brutalist Concrete Low-Angle",
       directorTag: "35mm · 로우앵글",
-      modelBadge: "Seedream 5.5",
       aspectLabel: "4:5",
       src: "/reel/brands/slot-3-pose-lowangle-lookbook.jpg",
       presetId: "seoul_editorial",
@@ -5000,7 +4939,6 @@ export function BrandBriefStudio({
       titleKo: "세라믹 퍼퓸 보틀 & 자연광 스톤 스틸라이프",
       titleEn: "Ceramic Perfume Bottle & Daylight Stone Still",
       directorTag: "85mm · 자연광",
-      modelBadge: "Nano Banana Pro",
       aspectLabel: "4:5",
       src: "/reel/landing/cut-scent.webp",
       presetId: "clean_beauty",
@@ -5018,7 +4956,6 @@ export function BrandBriefStudio({
       titleKo: "오버사이즈 실크 셔츠 드레이프 & 호리존 룩북",
       titleEn: "Oversized Silk Shirt Drape & Cyclorama Lookbook",
       directorTag: "50mm · 스튜디오",
-      modelBadge: "FLUX.2 Pro",
       aspectLabel: "4:5",
       src: "/reel/landing/c-garment-wide.webp",
       presetId: "quiet_luxury",
@@ -5036,7 +4973,6 @@ export function BrandBriefStudio({
       titleKo: "신제품 드롭 캠페인 키비주얼 & 타이포 포스터",
       titleEn: "Product Drop Key Visual & Typographic Poster",
       directorTag: "4:5 · 키비주얼",
-      modelBadge: "Nano Banana 2",
       aspectLabel: "4:5",
       src: "/reel/brands/house-french-blue-hero-1080p.jpg",
       presetId: "seoul_editorial",
@@ -5054,7 +4990,6 @@ export function BrandBriefStudio({
       titleKo: "나이트 아스팔트 빗물 반사광 & 네온 시네마 컷",
       titleEn: "Night Wet Asphalt Specular & Cinema Still",
       directorTag: "35mm · 시네마",
-      modelBadge: "Seedance 2.5",
       aspectLabel: "16:9",
       src: "/reel/brands/studio-rain-editorial-1080p.jpg",
       presetId: "cyber_pop",
@@ -5072,7 +5007,6 @@ export function BrandBriefStudio({
       titleKo: "우드 테이블 & 수제 세라믹 오브제 에디토리얼",
       titleEn: "Crafted Ceramic Object & Warm Timber Editorial",
       directorTag: "85mm · 오브제",
-      modelBadge: "FLUX.2 Pro",
       aspectLabel: "4:5",
       src: "/reel/brands/tea-editorial.jpg",
       presetId: "quiet_luxury",
@@ -5135,7 +5069,7 @@ export function BrandBriefStudio({
       id: `cut-arc-${item.id}-${Date.now()}`,
       src: item.src,
       label: isKo ? item.titleKo : item.titleEn,
-      meta: `${item.modelBadge} · ${item.aspectLabel}`,
+      meta: item.aspectLabel,
       promptText: isKo ? item.promptKo : item.promptEn,
       sourceKind: "generated" as const,
     };
@@ -5178,10 +5112,6 @@ export function BrandBriefStudio({
     : !guideProgress.image
       ? 2
       : 3;
-  const shortImageModelName =
-    (isKo ? activeImageModel.nameKo : activeImageModel.nameEn)
-      .split("·")[0]
-      ?.trim() ?? activeImageModel.id;
   const shellBusyLabel = isKo ? "생성 중…" : "Generating…";
   const shellPaintingRef = useRef(false);
   const shellDragStartRef = useRef<{ x: number; y: number } | null>(null);
@@ -5200,7 +5130,6 @@ export function BrandBriefStudio({
 
   function selectStudioTab(tab: "image" | "video" | "audio") {
     setVisibleStudioTab(tab);
-    setShowFullModelGuide(false);
     setShowAestheticPicker(false);
     if (tab === "audio") {
       setStudioSurfaceMode("track_audio");
@@ -5282,7 +5211,7 @@ export function BrandBriefStudio({
       ...filledSlotNumbers
         .map((n) => customSlotThumbs[n])
         .filter((s): s is string => Boolean(s && s !== primaryUserThumb)),
-      activeEasyModelRow.verifiedSampleImage,
+      SAMPLE_STILL,
       activeAestheticPreset.coverImage,
       ...studioVisuals.takes.map((t) => t.src),
       ...studioVisuals.sceneThumbs,
@@ -5335,7 +5264,7 @@ export function BrandBriefStudio({
               : isKo
                 ? `Run #${String(runNum).padStart(2, "0")} · 컷 0${idx + 1} (${varSpec.tagKo})`
                 : `Run #${String(runNum).padStart(2, "0")} · Cut 0${idx + 1} (${varSpec.tagEn})`,
-          meta: `${shortImageModelName} · ${aspect} · ${cameraFocalMm}mm · 2K`,
+          meta: `${aspect} · ${cameraFocalMm}mm · 2K`,
           variationTag: isKo ? varSpec.tagKo : varSpec.tagEn,
           promptText: finalPrompt,
           lockedSummary: lockedBadges,
@@ -5348,7 +5277,6 @@ export function BrandBriefStudio({
       id: `run-${Date.now()}`,
       runNumber: runNum,
       createdAtLabel: nowTime,
-      modelName: shortImageModelName,
       aspect,
       focalMm: cameraFocalMm,
       moodLabel: isAestheticLockEnabled
@@ -5374,10 +5302,10 @@ export function BrandBriefStudio({
     setCanvasViewMode("single");
     setStatusMessage(
       isKo
-        ? `생성 완료 (Run #${String(runNum).padStart(2, "0")}) — ${shortImageModelName} (${aspect} · ${cameraFocalMm}mm) 화보 ${generatedBatchCuts.length}매가 생성 스트림과 보드에 반영되었습니다.${
+        ? `생성 완료 (Run #${String(runNum).padStart(2, "0")}) — ${aspect} · ${cameraFocalMm}mm 화보 ${generatedBatchCuts.length}매가 생성 스트림과 보드에 반영되었습니다.${
             lockedBadges.length > 0 ? ` [${lockedBadges.join(", ")}]` : ""
           }`
-        : `Run #${String(runNum).padStart(2, "0")} complete — Generated ${generatedBatchCuts.length} cut(s) with ${shortImageModelName}.`,
+        : `Run #${String(runNum).padStart(2, "0")} complete — Generated ${generatedBatchCuts.length} cut(s).`,
     );
 
     void runCompile({
@@ -5667,7 +5595,6 @@ export function BrandBriefStudio({
                   data-studio-aesthetic-trigger
                   aria-expanded={showAestheticPicker}
                   onClick={() => {
-                    setShowFullModelGuide(false);
                     setShowAestheticPicker((p) => !p);
                   }}
                 >
@@ -6081,80 +6008,6 @@ export function BrandBriefStudio({
           </section>
         ) : null}
 
-        {/* ===================================================================
-            COMPACT 5-MODEL SELECTOR POPOVER (`[data-studio-model-comparison-drawer]`)
-           =================================================================== */}
-        {isBoardSurface && showFullModelGuide ? (
-          <section
-            className="tws-model-guide-drawer"
-            data-studio-model-comparison-drawer
-            aria-label={isKo ? "이미지 모델 선택" : "Select image model"}
-          >
-            <div className="tws-model-guide-head">
-              <div>
-                <strong>
-                  {isKo ? "이미지 모델 선택" : "Select Image Model"}
-                </strong>
-                <span>
-                  {isKo
-                    ? "작업 목적에 맞는 모델을 고르면 해당 모델에 최적화된 구조로 화보를 생성합니다."
-                    : "Choose the model that fits your shot; prompts adapt automatically."}
-                </span>
-              </div>
-              <button
-                type="button"
-                className="tws-btn tws-btn-sm tws-btn-quiet"
-                onClick={() => setShowFullModelGuide(false)}
-              >
-                {isKo ? "닫기" : "Close"}
-              </button>
-            </div>
-            <div
-              className="tws-model-guide-grid"
-              role="radiogroup"
-              aria-label={isKo ? "이미지 모델 선택" : "Image model selection"}
-            >
-              {MODEL_EASY_COMPARISON_MATRIX.map((row) => {
-                const isSelected = selectedImageModelId === row.modelId;
-                return (
-                  <button
-                    key={row.modelId}
-                    type="button"
-                    role="radio"
-                    aria-checked={isSelected}
-                    className="tws-model-guide-card"
-                    data-model-comparison-card={row.modelId}
-                    onClick={() => {
-                      setSelectedImageModelId(row.modelId);
-                      setShowFullModelGuide(false);
-                    }}
-                  >
-                    <div className="tws-model-guide-thumb">
-                      <img
-                        src={row.verifiedSampleImage}
-                        alt={row.shortName}
-                        loading="lazy"
-                      />
-                    </div>
-                    <div className="tws-model-guide-body">
-                      <div className="tws-model-guide-title">
-                        <strong>{row.shortName}</strong>
-                        <span className="tws-model-guide-tag">
-                          {isKo
-                            ? row.bestBadgeKo.split("·")[0]?.trim()
-                            : row.bestBadgeEn.split("·")[0]?.trim()}
-                        </span>
-                      </div>
-                      <p className="tws-model-guide-when">
-                        {isKo ? row.oneLineWhenKo : row.oneLineWhenEn}
-                      </p>
-                    </div>
-                  </button>
-                );
-              })}
-            </div>
-          </section>
-        ) : null}
 
         <div id="tws-panel" role="tabpanel" aria-labelledby={`tws-tab-${studioTab}`}>
           {isBoardSurface ? (
@@ -6224,10 +6077,10 @@ export function BrandBriefStudio({
                                         : `Region ${selectionRect.wPct}×${selectionRect.hPct}%`
                                       : canvasCut.meta
                                     : isAestheticLockEnabled
-                                      ? `${activeAestheticLabel} · ${shortImageModelName}`
+                                      ? activeAestheticLabel
                                       : isKo
-                                        ? `무드보드 없음 (자유 연출) · ${shortImageModelName}`
-                                        : `No moodboard (Free) · ${shortImageModelName}`}
+                                        ? "무드보드 없음 (자유 연출)"
+                                        : "No moodboard (Free)"}
                             </span>
                           </div>
                           <div className="tws-artboard-actions">
@@ -6308,7 +6161,7 @@ export function BrandBriefStudio({
                                       label: isKo
                                         ? `${activeAestheticPreset.titleKo} 베이스 화보`
                                         : `${activeAestheticPreset.titleEn} Base Still`,
-                                      meta: `${shortImageModelName} · 4:5`,
+                                      meta: "4:5",
                                       sourceKind: "generated" as const,
                                     };
                                     setCanvasCut(autoCut);
@@ -6370,15 +6223,15 @@ export function BrandBriefStudio({
                                   <strong>
                                     {busy
                                       ? isKo
-                                        ? `${shortImageModelName} 생성 요청 처리 중…`
-                                        : `Generating with ${shortImageModelName}…`
+                                        ? "생성 요청 처리 중…"
+                                        : "Generating…"
                                       : isKo
                                         ? `Run #${String(generationRuns[0]!.runNumber).padStart(2, "0")} 생성 완료 (${generationRuns[0]!.cuts.length}매 · ${generationRuns[0]!.createdAtLabel})`
                                         : `Run #${String(generationRuns[0]!.runNumber).padStart(2, "0")} Ready (${generationRuns[0]!.cuts.length} cuts)`}
                                   </strong>
                                   {generationRuns[0] ? (
                                     <span className="tws-gen-banner-spec">
-                                      {generationRuns[0].modelName} · {generationRuns[0].aspect} ·{" "}
+                                      {generationRuns[0].aspect} ·{" "}
                                       {generationRuns[0].focalMm}mm · {generationRuns[0].moodLabel}
                                     </span>
                                   ) : null}
@@ -6663,7 +6516,7 @@ export function BrandBriefStudio({
                                       adBgRemovedSrc ??
                                       canvasCut?.src ??
                                       customSlotThumbs[1] ??
-                                      activeEasyModelRow.verifiedSampleImage
+                                      SAMPLE_STILL
                                     }
                                     alt={
                                       canvasCut?.label ?? "Marketing Asset Base"
@@ -7683,7 +7536,7 @@ export function BrandBriefStudio({
                                             Run #{String(run.runNumber).padStart(2, "0")}
                                           </strong>
                                           <span>
-                                            {run.modelName} · {run.aspect} · {run.focalMm}mm ·{" "}
+                                            {run.aspect} · {run.focalMm}mm ·{" "}
                                             {run.moodLabel} · {run.createdAtLabel}
                                           </span>
                                         </div>
@@ -8279,7 +8132,7 @@ export function BrandBriefStudio({
                                       {run.createdAtLabel}
                                     </span>
                                     <span className="tws-gen-inline-spec">
-                                      {run.modelName} · {run.aspect} · {run.focalMm}mm
+                                      {run.aspect} · {run.focalMm}mm
                                     </span>
                                     {run.lockedSlots
                                       .filter((s) => s.roleId !== "free")
@@ -8929,34 +8782,9 @@ export function BrandBriefStudio({
                           <button
                             type="button"
                             className="tws-trigger-pill"
-                            data-studio-model-guide-trigger
-                            data-quick-model-pill={selectedImageModelId}
-                            aria-expanded={showFullModelGuide}
-                            onClick={() => {
-                              setShowAestheticPicker(false);
-                              setShowFullModelGuide((p) => !p);
-                            }}
-                          >
-                            <strong>{shortImageModelName}</strong>
-                            <span>
-                              {isKo
-                                ? activeEasyModelRow.bestBadgeKo
-                                    .split("·")[0]
-                                    ?.trim()
-                                : activeEasyModelRow.bestBadgeEn
-                                    .split("·")[0]
-                                    ?.trim()}
-                            </span>
-                            <em aria-hidden="true">▾</em>
-                          </button>
-
-                          <button
-                            type="button"
-                            className="tws-trigger-pill"
                             data-image-board-aesthetic-pill
                             aria-expanded={showAestheticPicker}
                             onClick={() => {
-                              setShowFullModelGuide(false);
                               setShowAestheticPicker((p) => !p);
                             }}
                           >
@@ -9657,7 +9485,7 @@ export function BrandBriefStudio({
                                 : item.categoryBadgeEn}
                             </span>
                             <span className="tws-archive-spec">
-                              {item.modelBadge} · {item.aspectLabel}
+                              {item.aspectLabel}
                             </span>
                           </div>
                           <div className="tws-archive-overlay">
@@ -9890,8 +9718,8 @@ export function BrandBriefStudio({
                 id: "track_image",
                 labelKo: "01 · 이미지 캔버스",
                 labelEn: "01 · Image Canvas",
-                subKo: "5대 모델 · 1~4슬롯 · 1440px ROI",
-                subEn: "5 Models · 1–4 Slots · ROI",
+                subKo: "1~4슬롯 · 1440px ROI",
+                subEn: "1–4 Slots · ROI",
                 onActivate: () => {
                   setStudioSurfaceMode("track_image");
                   handleSelectCoreTrack("image");
@@ -10182,8 +10010,8 @@ export function BrandBriefStudio({
             onFocus={() => setIsCommandPaletteOpen(true)}
             placeholder={
               isKo
-                ? "명령 빠른 실행 (예: Nano Banana Pro, 1080p 인스타 마스터, 30인 시딩)..."
-                : "Quick Command (e.g., Nano Banana Pro, 1080p IG, 30 Creators)..."
+                ? "명령 빠른 실행 (예: 1080p 인스타 마스터, 30인 시딩)..."
+                : "Quick Command (e.g., 1080p IG, 30 Creators)..."
             }
             style={{
               width: isCommandPaletteOpen ? "240px" : "190px",
@@ -10931,10 +10759,8 @@ export function BrandBriefStudio({
                 }}
               >
                 <span>
-                  {isKo ? "생성 실행" : "Generate"} ·{" "}
-                  {isVideoMode
-                    ? `${activeVideoQuote.credits} cr`
-                    : `${activeImageModel.creditsPer5Set} cr`}
+                  {isKo ? "생성 실행" : "Generate"}
+                  {isVideoMode ? ` · ${activeVideoQuote.credits} cr` : ""}
                 </span>
               </button>
             </div>
@@ -10950,7 +10776,8 @@ export function BrandBriefStudio({
               }}
             >
               <div style={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: "6px" }}>
-                {/* Model Picker Trigger */}
+                {/* Seedance tier trigger (video only: this screen chooses no image model) */}
+                {isVideoMode && (
                 <button
                   type="button"
                   onClick={() =>
@@ -10977,14 +10804,11 @@ export function BrandBriefStudio({
                   }}
                 >
                   <span>
-                    {isVideoMode
-                      ? `Seedance 2.5 · ${videoResolution}`
-                      : isKo
-                        ? activeImageModel.nameKo
-                        : activeImageModel.nameEn}
+                    {`Seedance 2.5 · ${videoResolution}`}
                   </span>
                   <span style={{ fontSize: "10px", color: "var(--ys-ink-muted)" }}>▾</span>
                 </button>
+                )}
 
                 {/* Aspect Ratio & Duration Trigger */}
                 <button
@@ -11157,7 +10981,7 @@ export function BrandBriefStudio({
           </div>
 
           {/* Popover Below Top Directing Bar: Model Picker */}
-          {dockPopover === "model" && (
+          {dockPopover === "model" && isVideoMode && (
             <div
               style={{
                 padding: "12px",
@@ -11171,13 +10995,7 @@ export function BrandBriefStudio({
             >
               <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "2px 4px" }}>
                 <strong style={{ fontSize: "12px", color: "var(--ys-ink)" }}>
-                  {isVideoMode
-                    ? isKo
-                      ? "Seedance 2.5 해상도 · 모드 선택"
-                      : "Select Seedance 2.5 Tier"
-                    : isKo
-                      ? "이미지 생성 모델 선택 (5종)"
-                      : "Select Image Model (5)"}
+                  {isKo ? "Seedance 2.5 해상도 · 모드 선택" : "Select Seedance 2.5 Tier"}
                 </strong>
                 <button
                   type="button"
@@ -11187,51 +11005,6 @@ export function BrandBriefStudio({
                   ×
                 </button>
               </div>
-              {!isVideoMode ? (
-                <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(210px, 1fr))", gap: "6px" }}>
-                  {BRAND_STUDIO_IMAGE_MODELS.map((m) => {
-                    const active = selectedImageModelId === m.id;
-                    return (
-                      <button
-                        key={m.id}
-                        type="button"
-                        onClick={() => {
-                          handleSelectImageModel(m.id);
-                          setDockPopover("none");
-                        }}
-                        style={{
-                          display: "flex",
-                          alignItems: "center",
-                          justifyContent: "space-between",
-                          padding: "8px 10px",
-                          borderRadius: "10px",
-                          border: active
-                            ? "1.5px solid var(--ys-accent)"
-                            : "1px solid var(--ys-line)",
-                          background: active
-                            ? "color-mix(in srgb, var(--ys-accent) 8%, transparent)"
-                            : "var(--ys-panel)",
-                          color: "var(--ys-ink)",
-                          textAlign: "left",
-                          cursor: "pointer",
-                        }}
-                      >
-                        <div>
-                          <strong style={{ fontSize: "12.5px", display: "block" }}>
-                            {isKo ? m.nameKo : m.nameEn}
-                          </strong>
-                          <span style={{ fontSize: "11px", color: "var(--ys-ink-muted)" }}>
-                            {isKo ? m.shortTraitKo : m.shortTraitEn}
-                          </span>
-                        </div>
-                        <span style={{ fontSize: "11px", fontWeight: 700, color: "var(--ys-accent-text)" }}>
-                          {m.creditsPer5Set} cr
-                        </span>
-                      </button>
-                    );
-                  })}
-                </div>
-              ) : (
                 <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: "6px" }}>
                   {BRAND_SEEDANCE_VIDEO_TIERS.map((tier) => {
                     const active = selectedSeedanceTierId === tier.id;
@@ -11275,7 +11048,6 @@ export function BrandBriefStudio({
                     );
                   })}
                 </div>
-              )}
             </div>
           )}
 
@@ -11718,9 +11490,7 @@ export function BrandBriefStudio({
                     LEFT CANVAS · IMAGE
                   </span>
                   <strong style={{ fontSize: "13.5px", color: "var(--ys-ink)" }}>
-                    {isKo
-                      ? `이미지 캔버스 · ${activeImageModel.nameKo}`
-                      : `Image Canvas · ${activeImageModel.nameEn}`}
+                    {isKo ? "이미지 캔버스" : "Image Canvas"}
                   </strong>
                 </div>
 
@@ -11802,7 +11572,7 @@ export function BrandBriefStudio({
                       fontWeight: 700,
                     }}
                   >
-                    {isKo ? activeImageModel.nameKo : activeImageModel.nameEn} · 2K
+                    2K
                   </span>
                   <span
                     style={{
@@ -13596,8 +13366,8 @@ export function BrandBriefStudio({
           <strong style={{ fontSize: "14px", color: "var(--ys-ink)" }}>
             {studioSurfaceMode === "track_image"
               ? isKo
-                ? "이미지 단독 스튜디오 — 5대 생성 모델 · 1~4번 역할 슬롯 · 1440px 스마트 마스크 부분 수정"
-                : "Standalone Image Studio — 5 Models · 1–4 Role Slots · 1440px Smart Mask Inpainting"
+                ? "이미지 단독 스튜디오 — 1~4번 역할 슬롯 · 1440px 스마트 마스크 부분 수정"
+                : "Standalone Image Studio — 1–4 Role Slots · 1440px Smart Mask Inpainting"
               : studioSurfaceMode === "track_video_upscale"
                 ? isKo
                   ? "영상 & 인스타 마스터링 단독 스튜디오 — Seedance 2.5 (480p/720p/1080p) · Sunra 1080p 무열화 & SeedVR2 4K"
@@ -15737,65 +15507,6 @@ export function BrandBriefStudio({
               {/* Expanded Micro-Edit Model & Resolution Controls when in micro_region_edit mode */}
               {imageSubMode === "micro_region_edit" && (
                 <>
-                  <div
-                    className="bw-model-picker-grid"
-                    style={{ marginBottom: 0 }}
-                    data-studio-micro-edit-model-picker
-                  >
-                    {BRAND_STUDIO_MICRO_EDIT_MODELS.map((editModel) => {
-                      const selected =
-                        selectedMicroEditModelId === editModel.id;
-                      return (
-                        <button
-                          key={editModel.id}
-                          type="button"
-                          className="bw-model-card"
-                          data-studio-micro-edit-model={editModel.id}
-                          aria-pressed={selected}
-                          onClick={() => {
-                            setSelectedMicroEditModelId(editModel.id);
-                            setImageSubMode("micro_region_edit");
-                          }}
-                          disabled={busy}
-                        >
-                          <div
-                            style={{
-                              display: "flex",
-                              alignItems: "center",
-                              justifyContent: "space-between",
-                              gap: "6px",
-                              width: "100%",
-                            }}
-                          >
-                            <strong style={{ fontSize: "12.5px" }}>
-                              {isKo ? editModel.nameKo : editModel.nameEn}
-                            </strong>
-                            <span
-                              className="bw-scene-spec"
-                              style={{ fontWeight: 600 }}
-                            >
-                              {editModel.creditsPerEdit} cr ·{" "}
-                              {isKo
-                                ? `${editModel.priceKrwPerEdit}원`
-                                : `KRW ${editModel.priceKrwPerEdit}`}
-                            </span>
-                          </div>
-                          <span
-                            style={{
-                              fontSize: "11.5px",
-                              lineHeight: 1.4,
-                              color: "var(--ys-ink-secondary)",
-                            }}
-                          >
-                            {isKo
-                              ? editModel.shortTraitKo
-                              : editModel.shortTraitEn}
-                          </span>
-                        </button>
-                      );
-                    })}
-                  </div>
-
                   {/* Oplux-style Parameter Pills: Resolution (1K/2K/4K), Quality (Low/Medium/High), Batch Size (1/2/4), Attach Selection */}
                   <div
                     data-studio-oplux-controls
@@ -15817,23 +15528,6 @@ export function BrandBriefStudio({
                         gap: "8px",
                       }}
                     >
-                      {/* Resolution */}
-                      <div className="bw-seg-track">
-                        {activeMicroEditModel.supportedResolutions.map(
-                          (res) => (
-                            <button
-                              key={res}
-                              type="button"
-                              className="bw-seg-btn"
-                              aria-pressed={microEditResolution === res}
-                              onClick={() => setMicroEditResolution(res)}
-                              disabled={busy}
-                            >
-                              {res}
-                            </button>
-                          ),
-                        )}
-                      </div>
 
                       {/* Quality Tier (Low / Medium / High) */}
                       <div className="bw-seg-track">
@@ -15910,334 +15604,10 @@ export function BrandBriefStudio({
             </div>
           )}
 
-          {/* STEP 3: Image Model Selector + Quick Characteristics + Detailed Suitability Guide */}
+          {/* STEP 3 run controls (no image model is chosen on this screen) */}
           {!isVideoMode && (
-            <div data-studio-image-model-section>
-              <div
-                style={{
-                  display: "flex",
-                  flexWrap: "wrap",
-                  alignItems: "center",
-                  justifyContent: "space-between",
-                  gap: "8px",
-                  marginBottom: "8px",
-                }}
-              >
-                <div>
-                  <strong style={{ fontSize: "13.5px", color: "var(--ys-ink)" }}>
-                    {isKo
-                      ? "STEP 03 · 이미지 생성 모델 선택"
-                      : "STEP 03 · Select Image Generation Model"}
-                  </strong>
-                  <span
-                    className="bw-muted"
-                    style={{ marginLeft: "8px", fontSize: "12px" }}
-                  >
-                    {isKo
-                      ? "만들려는 결과물(제품 교체 · 메인 화보 · 로고 선명도 · 의류 착장)에 맞춰 모델을 고르세요"
-                      : "Pick the model tailored to your target deliverable"}
-                  </span>
-                </div>
-                <button
-                  type="button"
-                  className="bw-quick-chip"
-                  data-studio-model-guide-toggle
-                  aria-expanded={showFullModelGuide}
-                  onClick={() => setShowFullModelGuide((prev) => !prev)}
-                  style={{ fontWeight: 600 }}
-                >
-                  {showFullModelGuide
-                    ? isKo
-                      ? "모델 비교 가이드 접기"
-                      : "Hide Model Guide"
-                    : isKo
-                      ? "어떤 결과물에 어떤 모델이 적합한가요? (상세 가이드)"
-                      : "Which model fits my deliverable? (Full Guide)"}
-                </button>
-              </div>
-
-              {/* 5 Image Model Cards (GPT Image 2.6 · Nano Banana Pro · Nano Banana 2.1 · Nano Banana 2.0 · Seedream 5.5) */}
-              <div
-                className="bw-model-picker-grid"
-                data-studio-image-model-picker
-                data-selected-image-model={selectedImageModelId}
-              >
-                {BRAND_STUDIO_IMAGE_MODELS.map((model, idx) => {
-                  const selected = selectedImageModelId === model.id;
-                  const isFullSpanCard =
-                    idx === BRAND_STUDIO_IMAGE_MODELS.length - 1 &&
-                    BRAND_STUDIO_IMAGE_MODELS.length % 2 === 1;
-                  return (
-                    <button
-                      key={model.id}
-                      type="button"
-                      className="bw-model-card"
-                      data-studio-image-model-card={model.id}
-                      aria-pressed={selected}
-                      onClick={() => handleSelectImageModel(model.id)}
-                      disabled={busy}
-                      style={
-                        isFullSpanCard ? { gridColumn: "1 / -1" } : undefined
-                      }
-                    >
-                      <div
-                        style={{
-                          display: "flex",
-                          alignItems: "center",
-                          justifyContent: "space-between",
-                          gap: "8px",
-                          width: "100%",
-                        }}
-                      >
-                        <strong style={{ fontSize: "13.5px" }}>
-                          {isKo ? model.nameKo : model.nameEn}
-                        </strong>
-                        <span
-                          className="bw-scene-spec"
-                          style={{ fontWeight: 600 }}
-                        >
-                          {model.creditsPer5Set} cr ·{" "}
-                          {isKo
-                            ? `${model.priceKrwPer5Set.toLocaleString("ko-KR")}원`
-                            : `KRW ${model.priceKrwPer5Set}`}
-                        </span>
-                      </div>
-
-                      <span
-                        style={{
-                          fontSize: "10.5px",
-                          fontWeight: 700,
-                          color: selected
-                            ? "var(--ys-brand-text)"
-                            : "var(--ys-ink-secondary)",
-                        }}
-                      >
-                        {isKo ? model.tierBadgeKo : model.tierBadgeEn}
-                      </span>
-
-                      <span
-                        style={{
-                          fontSize: "12px",
-                          lineHeight: 1.45,
-                          color: "var(--ys-ink-secondary)",
-                        }}
-                      >
-                        {isKo ? model.shortTraitKo : model.shortTraitEn}
-                      </span>
-
-                      <div
-                        style={{
-                          display: "flex",
-                          flexWrap: "wrap",
-                          gap: "5px",
-                          marginTop: "2px",
-                        }}
-                      >
-                        {(isKo ? model.strengthsKo : model.strengthsEn).map(
-                          (tag) => (
-                            <span
-                              key={tag}
-                              style={{
-                                fontSize: "10.5px",
-                                padding: "2px 7px",
-                                borderRadius: "999px",
-                                background: "var(--ys-raised)",
-                                color: "var(--ys-ink-secondary)",
-                                fontWeight: 500,
-                              }}
-                            >
-                              {tag}
-                            </span>
-                          ),
-                        )}
-                      </div>
-                    </button>
-                  );
-                })}
-              </div>
-
-              {/* Active Model Detail & Deliverable Recommendation Box */}
-              <div
-                className="bw-model-guide-panel"
-                data-studio-active-model-detail={activeImageModel.id}
-              >
-                <div
-                  style={{
-                    display: "flex",
-                    flexWrap: "wrap",
-                    alignItems: "center",
-                    justifyContent: "space-between",
-                    gap: "8px",
-                  }}
-                >
-                  <strong style={{ fontSize: "13px", color: "var(--ys-ink)" }}>
-                    {isKo
-                      ? `${activeImageModel.nameKo} — 상세 특징 & 추천 결과물`
-                      : `${activeImageModel.nameEn} — Detailed Characteristics & Best Use Cases`}
-                  </strong>
-                  <div
-                    style={{
-                      display: "flex",
-                      flexWrap: "wrap",
-                      alignItems: "center",
-                      gap: "6px",
-                    }}
-                  >
-                    <span
-                      className="bw-chip"
-                      style={{
-                        fontSize: "10.5px",
-                        fontWeight: 600,
-                        background: "var(--ys-brand-tint)",
-                        color: "var(--ys-brand-text)",
-                      }}
-                    >
-                      {isKo
-                        ? activeImageModel.promptFormulaBadgeKo
-                        : activeImageModel.promptFormulaBadgeEn}
-                    </span>
-                    <span
-                      className="bw-badge"
-                      style={{ fontSize: "11px", fontWeight: 600 }}
-                    >
-                      {isKo
-                        ? `권장 슬롯 공식: ${activeImageModel.recommendedSlotFormulaKo}`
-                        : `Slot Formula: ${activeImageModel.recommendedSlotFormulaEn}`}
-                    </span>
-                    <button
-                      type="button"
-                      className="bw-quick-chip"
-                      data-model-prompt-autotune-btn
-                      data-apply-model-optimal-prompt={activeImageModel.id}
-                      onClick={() => {
-                        setBriefText(
-                          isKo
-                            ? `[${activeImageModel.nameKo} 최적화 공식 · ${cameraFocalMm}mm · ${lightColourK}K] ${activeImageModel.recommendedSlotFormulaKo} — 1번 인물(동양인 자연 피부 질감)에 2번 제품을 자연스럽게 매칭하고 4번 브랜드 색감 핀을 100% 고정해 촬영해 주세요.`
-                            : `[${activeImageModel.nameEn} Optimal Formula · ${cameraFocalMm}mm · ${lightColourK}K] ${activeImageModel.recommendedSlotFormulaEn} — Match @Image 1 subject with @Image 2 product under @Image 4 pinned lighting.`,
-                        );
-                      }}
-                      style={{
-                        fontSize: "11px",
-                        fontWeight: 700,
-                        background: "var(--ys-accent)",
-                        color: "var(--ys-on-accent)",
-                        border: "1px solid var(--ys-accent)",
-                      }}
-                    >
-                      {isKo
-                        ? "+ 이 모델 최적화 프롬프트·슬롯 공식 1클릭 적용"
-                        : "+ Apply Optimal Model Prompt Formula"}
-                    </button>
-                  </div>
-                </div>
-
-                <p
-                  style={{
-                    margin: 0,
-                    fontSize: "12.5px",
-                    lineHeight: 1.55,
-                    color: "var(--ys-ink-secondary)",
-                  }}
-                >
-                  {isKo
-                    ? activeImageModel.detailDescriptionKo
-                    : activeImageModel.detailDescriptionEn}
-                </p>
-
-                <div
-                  style={{
-                    display: "grid",
-                    gridTemplateColumns: "repeat(auto-fit, minmax(210px, 1fr))",
-                    gap: "8px",
-                  }}
-                >
-                  {(isKo
-                    ? activeImageModel.bestForDeliverablesKo
-                    : activeImageModel.bestForDeliverablesEn
-                  ).map((useCase, idx) => (
-                    <div
-                      key={useCase}
-                      style={{
-                        padding: "8px 10px",
-                        borderRadius: "10px",
-                        background: "var(--ys-surface)",
-                        boxShadow: "var(--ys-ring)",
-                        fontSize: "11.5px",
-                        lineHeight: 1.45,
-                        color: "var(--ys-ink)",
-                      }}
-                    >
-                      <strong
-                        style={{
-                          display: "block",
-                          fontSize: "10.5px",
-                          color: "var(--ys-ink-muted)",
-                          marginBottom: "2px",
-                        }}
-                      >
-                        {isKo ? `추천 결과물 0${idx + 1}` : `Best Fit 0${idx + 1}`}
-                      </strong>
-                      {useCase}
-                    </div>
-                  ))}
-                </div>
-
-                {/* Full 5-Model Comparison Matrix when toggled open */}
-                {showFullModelGuide && (
-                  <div
-                    data-studio-model-comparison-matrix
-                    style={{
-                      paddingTop: "10px",
-                      borderTop: "1px solid var(--ys-hairline)",
-                      display: "grid",
-                      gap: "8px",
-                    }}
-                  >
-                    <strong style={{ fontSize: "12px", color: "var(--ys-ink)" }}>
-                      {isKo
-                        ? "상황별 5종 이미지 모델 한눈에 비교하기"
-                        : "5-Model Suitability Comparison by Deliverable"}
-                    </strong>
-                    {BRAND_STUDIO_IMAGE_MODELS.map((m) => (
-                      <div
-                        key={m.id}
-                        style={{
-                          display: "flex",
-                          flexWrap: "wrap",
-                          alignItems: "baseline",
-                          justifyContent: "space-between",
-                          gap: "8px",
-                          padding: "8px 10px",
-                          borderRadius: "9px",
-                          background: "var(--ys-surface)",
-                          fontSize: "12px",
-                        }}
-                      >
-                        <div>
-                          <strong style={{ color: "var(--ys-ink)" }}>
-                            {isKo ? m.nameKo : m.nameEn}
-                          </strong>{" "}
-                          <span style={{ color: "var(--ys-ink-secondary)" }}>
-                            — {isKo ? m.shortTraitKo : m.shortTraitEn}
-                          </span>
-                        </div>
-                        <span
-                          style={{
-                            fontFamily: "var(--ys-mono)",
-                            fontSize: "11px",
-                            color: "var(--ys-ink-muted)",
-                          }}
-                        >
-                          {isKo
-                            ? m.recommendedSlotFormulaKo
-                            : m.recommendedSlotFormulaEn}
-                        </span>
-                      </div>
-                    ))}
-                  </div>
-                )}
-
-                {/* Round 28 & Round 29 Upgrade: Sunra 4x Parallel Batch Switcher, 2-Model A/B Compare & 1~4 Slot Weight/Swap Bar */}
+            <div data-studio-image-run-controls>
+                {/* Sunra 4x parallel batch switcher and the 1~4 slot weight/swap bar */}
                 <div
                   style={{
                     paddingTop: "10px",
@@ -16307,36 +15677,6 @@ export function BrandBriefStudio({
                       ))}
                     </div>
 
-                    <button
-                      type="button"
-                      data-image-model-ab-compare-mode={String(isModelAbCompareMode)}
-                      aria-pressed={isModelAbCompareMode}
-                      onClick={() => setIsModelAbCompareMode((p) => !p)}
-                      style={{
-                        padding: "3px 9px",
-                        borderRadius: "999px",
-                        border: isModelAbCompareMode
-                          ? "1px solid var(--ys-accent)"
-                          : "1px solid var(--ys-line)",
-                        background: isModelAbCompareMode
-                          ? "color-mix(in srgb, var(--ys-accent) 10%, transparent)"
-                          : "var(--ys-surface)",
-                        color: isModelAbCompareMode
-                          ? "var(--ys-accent-text)"
-                          : "var(--ys-ink-secondary)",
-                        fontSize: "10.5px",
-                        fontWeight: 700,
-                        cursor: "pointer",
-                      }}
-                    >
-                      {isModelAbCompareMode
-                        ? isKo
-                          ? `2모델 A/B 동시 비교 ON (${activeImageModel.nameKo} vs Seedream 5.5)`
-                          : `2-Model A/B Compare ON (${activeImageModel.nameEn} vs Seedream 5.5)`
-                        : isKo
-                          ? "2개 모델 A/B 동시 비교 켜기"
-                          : "Enable 2-Model A/B Compare"}
-                    </button>
                   </div>
 
                   {/* Round 29: 1~4 Reference Slot Strength (0.3 / 0.7 / 1.0) & 1-Click Swap */}
@@ -16413,7 +15753,6 @@ export function BrandBriefStudio({
                     </button>
                   </div>
                 </div>
-              </div>
             </div>
           )}
 
@@ -20339,11 +19678,11 @@ export function BrandBriefStudio({
                         : `Generate ${videoSeconds}s ${videoResolution} Video`
                       : imageSubMode === "micro_region_edit"
                         ? isKo
-                          ? `선택 부위 정밀 수정하기 (${activeMicroEditModel.creditsPerEdit} cr · 마스크 잠금)`
-                          : `Edit Selected Region (${activeMicroEditModel.creditsPerEdit} cr · Mask Lock)`
+                          ? "선택 부위 정밀 수정하기 (마스크 잠금)"
+                          : "Edit Selected Region (Mask Lock)"
                         : isKo
-                          ? `화보 5장 생성하기 (${activeImageModel.creditsPer5Set} cr)`
-                          : `Generate 5 Stills (${activeImageModel.creditsPer5Set} cr)`}
+                          ? "화보 5장 생성하기"
+                          : "Generate 5 Stills"}
                 </button>
               )}
             </div>
@@ -20536,11 +19875,11 @@ export function BrandBriefStudio({
                     : `${videoResolution} Video Canvas · ${videoSeconds}s`
                   : imageSubMode === "micro_region_edit"
                     ? isKo
-                      ? activeMicroEditModel.nameKo
-                      : activeMicroEditModel.nameEn
+                      ? "부분 리터치"
+                      : "Retouch"
                     : isKo
-                      ? activeImageModel.nameKo
-                      : activeImageModel.nameEn}
+                      ? "이미지 캔버스"
+                      : "Image Canvas"}
               </span>
               <span
                 style={{
@@ -21319,8 +20658,8 @@ export function BrandBriefStudio({
                     {isVideoMode
                       ? `Seedance 2.5 (${videoResolution})`
                       : isKo
-                        ? activeImageModel.nameKo
-                        : activeImageModel.nameEn}
+                        ? "이미지 캔버스"
+                        : "Image Canvas"}
                   </span>
                   <span style={{ fontFamily: "var(--ys-mono)" }}>
                     {aspect} · {isVideoMode ? `${videoSeconds}s` : "1x"}
@@ -21351,12 +20690,14 @@ export function BrandBriefStudio({
                     cursor: "pointer",
                   }}
                 >
-                  <span>CR</span>
-                  <span>
-                    {isVideoMode
-                      ? activeVideoQuote.credits
-                      : activeImageModel.creditsPer5Set}
-                  </span>
+                  {isVideoMode ? (
+                    <>
+                      <span>CR</span>
+                      <span>{activeVideoQuote.credits}</span>
+                    </>
+                  ) : (
+                    <span>{isKo ? "영상 만들기" : "Make video"}</span>
+                  )}
                 </button>
               </div>
             </div>
