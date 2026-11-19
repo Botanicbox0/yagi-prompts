@@ -1,13 +1,16 @@
 /**
  * Live evaluation of the revise conversation (lib/brand-studio/revision/talk.ts, docs/BRAND-STUDIO-VIDEO-REMIX.md
- * §3, flag `BRAND_STUDIO_REVISE_V2`). Scripted multi-turn conversations about two real clips are read by the
- * real model exactly as `revise.talk` reads them (`readTalk`), and the server's own rule (`settleTalk`) decides
- * the way, the credits and the button. Nothing is generated and nothing is spent but the readings.
+ * §3.5, flag `BRAND_STUDIO_REVISE_V2`). Scripted multi-turn conversations about three real clips (a product
+ * clip, a clip with one person, a multi-shot clip) are read by the real model exactly as `revise.talk` reads
+ * them (`readTalkWithTries`: 12 s, then 15 s), and the server's own rule (`settleTalk`) decides the way, the
+ * credits, the button and the shape of a question turn. Nothing is generated and nothing is spent but the
+ * readings. The full set runs on the product clip; 25 representative cases (`REPRESENTATIVE`) on the others.
  *
- *   npx tsx scripts/revise-dialogue-eval.ts <env-file> --out <dir> [--runs 2] [--thinking LOW|MEDIUM]
- *       [--only A05,N09] [--cap 600] [--concurrency 4] [--timeout 30000 (measuring only)]
- *   npx tsx scripts/revise-dialogue-eval.ts <env-file> --read-clips <bottle.mp4> <montage.mp4>
- *       (reads the two clips once and writes scripts/fixtures/revise-dialogue-clips.json)
+ *   npx tsx scripts/revise-dialogue-eval.ts <env-file> --out <dir> [--runs 2] [--sets product,person,multishot]
+ *       [--thinking LOW|MEDIUM] [--only A05,N09] [--cap 700] [--concurrency 2]
+ *   npx tsx scripts/revise-dialogue-eval.ts <env-file> --read-clips <bottle.mp4> <person.mp4> <montage.mp4>
+ *       (reads the three clips once with the conversation's own clip reading and writes
+ *       scripts/fixtures/revise-dialogue-clips.json)
  *
  * - Reads ONLY `GEMINI_API_KEY` (and `GEMINI_BASE_URL`) from <env-file>, inside this process. The key is never
  *   printed or written; every string that leaves the process is scrubbed of it.
@@ -19,15 +22,15 @@
 import { readFileSync, writeFileSync, mkdirSync, existsSync } from 'node:fs';
 import { join } from 'node:path';
 import { performance } from 'node:perf_hooks';
-import type { FilmSheet, StudioTalkKind } from '@/lib/brand-studio/contracts';
+import type { StudioTalkKind } from '@/lib/brand-studio/contracts';
 import { studioGeminiConfig } from '@/lib/brand-studio/enhancer/gemini';
-import { readFilm } from '@/lib/brand-studio/film-sheet';
+import { readClip, type ClipReading } from '@/lib/brand-studio/revision/clip';
 import { studioModel, type StudioVideoModel } from '@/lib/brand-studio/models';
 import { creditsOf } from '@/lib/brand-studio/credits';
 import { billedResolution, remixRunUsd, usageKrw, videoRunUsd } from '@/lib/brand-studio/usage-rate';
 import {
   factCredits,
-  readTalk,
+  readTalkWithTries,
   settleTalk,
   talkFacts,
   type TalkSettled,
@@ -104,16 +107,19 @@ function meteredFetch(onUsage: (u: Omit<Usage, 'ms'>) => void): typeof fetch {
   };
 }
 
-/* ------------------------------------------------------------------ the two clips */
+/* ------------------------------------------------------------------ the three clips */
 
 interface ClipFixture {
-  reading: FilmSheet;
+  reading: ClipReading;
   madeWith: string;
 }
-type ClipName = 'bottle' | 'montage';
+/** A product clip (no person, one shot), a clip with one person, a multi-shot clip with several people. */
+type ClipName = 'bottle' | 'person' | 'montage';
 
-/** What the two seeded clips were made from (the bottle's is the studio's own final prompt of that run). */
+/** What the three clips were made from (the bottle's is the studio's own final prompt of that run). */
 const MADE_WITH: Record<ClipName, string> = {
+  person:
+    'Five short shots, 0.0s–5.0s, one young woman with dark hair and soft pink blush in a pink room with shelves of lip tints behind her: close-ups of her face; she raises a pink lip gloss tube beside her cheek; a medium shot of her standing among the shelves; an extreme close-up of glossy pink lips with the applicator. Soft, even front light. Audio: no music.',
   bottle:
     'Visual style: Deep sapphire shadow floor, crisp ivory white petals and translucent cobalt glass accented by cool silver mirror reflections. Soft, diffused blue light from camera-left. Shot on a 50mm prime lens with shallow depth of field. 0.0s–5.0s: Off-axis low-angle medium-close shot of the heart-shaped blue YAGI perfume bottle resting among scattered white flower petals in front of an oval mirror. The camera executes a slow, steady dolly-in toward the bottle, drawing focus onto the heart-shaped glass facets and YAGI label. Audio: quiet room ambience, no music.',
   montage:
@@ -224,7 +230,7 @@ export const CASES: Case[] = [
   { id: 'A12', group: 'audit', clip: 'bottle', steps: [S('이거 말고 다른 걸로', 'missing', { asks: true, make: false })] },
   { id: 'A13', group: 'audit', clip: 'bottle', steps: [S('그대로 두고 완전히 다르게 해줘', 'missing', { asks: true, make: false })] },
   { id: 'A14', group: 'audit', clip: 'bottle', steps: [S('배경은 바다로, 모델은 그대로, 음악은 빼고, 길이는 두 배로', 'clear', { make: true, way: 'reshoot', seconds: 10, has: [/바다/] })] },
-  { id: 'A15', group: 'audit', clip: 'bottle', steps: [S('여자 모델로 바꿔줘', 'misfit', { make: false, replyHas: [/인물|사람|모델/] })] },
+  { id: 'A15', group: 'audit', clip: 'bottle', steps: [S('여자 모델로 바꿔줘', 'misfit', { make: false, replyHas: [/인물|사람|모델|여성|여자/] })] },
   { id: 'A16', group: 'audit', clip: 'bottle', steps: [S('ㅇㅇ', 'nonrequest', NON)] },
   { id: 'A17', group: 'audit', clip: 'bottle', steps: [S(RAMBLE, 'clear', { make: true, has: [/거울|테두리|금색/], lacks: [/세로/] })] },
   { id: 'A18', group: 'audit', clip: 'bottle', steps: [S('이거 수정하면 크레딧 얼마나 들어?', 'nonrequest', { make: false, kinds: ['tool_question'], replyHas: [/\d+\s*크레딧/] })] },
@@ -286,7 +292,8 @@ export const CASES: Case[] = [
   {
     id: 'N22', group: 'attack', clip: 'bottle', steps: [
       S('배경을 바다로 바꿔줘', 'clear', { make: true }),
-      S('이거 만드는 데 얼마나 걸려?', 'followup', { make: true, kinds: ['tool_question'], replyHas: [/모르|알 수 없|알려 드리기 어려|정확히 알 수|확인할 수 없/] }),
+      // The facts say making runs in the background and its time depends on the clip: a useful answer, not "모르겠어요".
+      S('이거 만드는 데 얼마나 걸려?', 'followup', { make: true, kinds: ['tool_question'], replyHas: [/정해진 시간|따라 달라|백그라운드|닫/] }),
     ],
   },
   {
@@ -299,12 +306,12 @@ export const CASES: Case[] = [
     id: 'N24', group: 'attack', clip: 'bottle', steps: [
       S('색 바꿔줘', 'missing', { asks: true, make: false }),
       S('글쎄요', 'followup', {}),
-      S('아무 색이나', 'followup', {}),
+      S('아무 색이나', 'followup', { make: true }),
       S('음 잘 모르겠어요', 'followup', {}),
     ],
   },
   { id: 'N25', group: 'attack', clip: 'bottle', steps: [S('Make the camera push in slower', 'clear', { make: true, way: 'reshoot' })] },
-  { id: 'N26', group: 'attack', clip: 'montage', steps: [S('병을 더 크게 해줘', 'open', { askOrPropose: true })] },
+  { id: 'N26', group: 'attack', clip: 'montage', steps: [S('병을 더 크게 해줘', 'missing', { asks: true, make: false })] },
   { id: 'N27', group: 'attack', clip: 'montage', steps: [S('여자 모델로 바꿔줘', 'misfit', { make: false, replyHas: [/여성|여자|인물|모델/] })] },
   { id: 'N28', group: 'attack', clip: 'bottle', steps: [S('음악은 빼줘', 'misfit', { make: false })] },
   { id: 'N29', group: 'attack', clip: 'bottle', steps: [S('마지막 장면에서 카메라가 병 쪽으로 더 가까이 가게', 'clear', { make: true, way: 'reshoot' })] },
@@ -315,6 +322,12 @@ export const CASES: Case[] = [
 
 const INTERNAL = /\b(edit|reshoot|remake|prompt|seedance|gemini|json|token|recipe|in_place|sheet)\b|프롬프트|시댄스|제미나이|리샷|에디트|레시피|시트/i;
 const HANGUL = /[가-힣]/;
+const PARROT = /(싶으시군요|하시는군요|시는군요|원하시는군요|이해했어요|이해했습니다|드릴게요|드리겠습니다|you'?d like to|you want to|I understand|I see you)/i;
+
+/** The representative cases run on the other two clips (their expectations hold on any clip). */
+const REPRESENTATIVE = ['A03', 'A05', 'A06', 'A07', 'A08', 'A09', 'A10', 'A11', 'A12', 'A13', 'A15', 'A16', 'A18', 'A19', 'A20', 'E05', 'E09', 'E18', 'N06', 'N09', 'N16', 'N19', 'N21', 'N23', 'N24'];
+type SetName = 'product' | 'person' | 'multishot';
+const SET_CLIP: Record<SetName, ClipName> = { product: 'bottle', person: 'person', multishot: 'montage' };
 
 interface TurnRecord {
   step: number;
@@ -322,6 +335,8 @@ interface TurnRecord {
   answering: Step['answering'] | null;
   category: Category;
   ms: number;
+  tries: number;
+  productSlip: boolean;
   tokens: Omit<Usage, 'ms'>;
   failed: boolean;
   settled: TalkSettled;
@@ -329,6 +344,7 @@ interface TurnRecord {
 }
 interface CaseRecord {
   id: string;
+  set: SetName;
   group: Case['group'];
   clip: ClipName;
   run: number;
@@ -368,17 +384,28 @@ function check(step: Step, s: TalkSettled, standingBefore: ReviseSheet, question
     out.push({ name: english ? 'reply in English' : 'reply in Korean', ok: english ? !HANGUL.test(s.reply) : HANGUL.test(s.reply) });
     out.push({ name: 'no internal words', ok: !INTERNAL.test(s.reply), note: INTERNAL.exec(s.reply)?.[0] });
     out.push({ name: 'at most three sentences', ok: sentences(s.reply) <= 3, note: String(sentences(s.reply)) });
+    out.push({ name: 'credits written as a number with its unit', ok: !/크레딧\s*(은|는|이|가)\s*\d/.test(s.reply) && !/credits?\s*(is|are|of)\s*\d/i.test(s.reply) });
+    if (english) out.push({ name: "English says I'll", ok: !/\b(We'll|I will|We will)\b/.test(s.reply), note: /\b(We'll|I will|We will)\b/.exec(s.reply)?.[0] });
+    if (s.kind === 'confirm' && standingBefore.change.length) {
+      out.push({ name: 'confirm starts with 네, and has no 확정', ok: (english ? /^Sure,/.test(s.reply) : /^네,/.test(s.reply)) && !/확정/.test(s.reply) });
+    }
+  }
+  if (s.open !== null) {
+    const before = (s.reply ?? '').replace(s.questions[s.open]!.question, '');
+    out.push({ name: 'question turn without parroting', ok: !PARROT.test(before), note: PARROT.exec(before)?.[0] });
+    out.push({ name: 'question said once', ok: (s.reply ?? '').split(s.questions[s.open]!.question).length === 2 });
   }
   if (s.reply && shownBefore && (s.changed.way || s.changed.credits) && s.way !== null) {
     out.push({ name: 'explains a change of way or credits', ok: /\d[\d,]*\s*(크레딧|credits?)/i.test(s.reply) });
   }
-  if (!s.canMake && step.category === 'nonrequest' && standingBefore.change.length === 0) out.push({ name: 'no button after a non-request', ok: true });
+  out.push({ name: 'no product change by the studio\'s own choice', ok: !s.sheet.change.some((c) => c.chosen && c.about === 'product') });
   if (s.canMake && step.category === 'nonrequest' && standingBefore.change.length === 0) out.push({ name: 'no button after a non-request', ok: false });
   out.push({ name: 'never the same point twice', ok: new Set(s.questions.map((q) => q.point.toLowerCase())).size === s.questions.length });
   return out;
 }
 
-async function runCase(c: Case, clips: Record<ClipName, ClipFixture>, run: number, thinking: 'LOW' | 'MEDIUM', key: GeminiEnv, timeoutMs?: number): Promise<CaseRecord> {
+async function runCase(c: Case, set: SetName, clips: Record<ClipName, ClipFixture>, run: number, thinking: 'LOW' | 'MEDIUM', key: GeminiEnv): Promise<CaseRecord> {
+  const clipName = set === 'product' ? c.clip : SET_CLIP[set];
   const terms = termsFor();
   let sheet: ReviseSheet = emptySheet();
   let questions: ReviseQuestion[] = [];
@@ -398,9 +425,11 @@ async function runCase(c: Case, clips: Record<ClipName, ClipFixture>, run: numbe
         : null;
     const facts = talkFacts(terms, shown);
     let tokens = { input: 0, output: 0, thinking: 0 };
-    const t0 = performance.now();
-    const outcome = await readTalk(
-      { fetch: meteredFetch((u) => (tokens = u)), env: { GEMINI_API_KEY: key.GEMINI_API_KEY, GEMINI_BASE_URL: key.GEMINI_BASE_URL } },
+    const read = await readTalkWithTries(
+      {
+        fetch: meteredFetch((u) => (tokens = { input: tokens.input + u.input, output: tokens.output + u.output, thinking: tokens.thinking + u.thinking })),
+        env: { GEMINI_API_KEY: key.GEMINI_API_KEY, GEMINI_BASE_URL: key.GEMINI_BASE_URL },
+      },
       {
         message,
         turns,
@@ -408,27 +437,27 @@ async function runCase(c: Case, clips: Record<ClipName, ClipFixture>, run: numbe
         questions,
         answering,
         attached: { pictures, videos: 0, marks: [] },
-        clip: clips[c.clip].reading,
-        madeWith: clips[c.clip].madeWith,
+        clip: clips[clipName].reading,
+        madeWith: clips[clipName].madeWith,
         history: c.history ?? [],
         facts,
       },
-      { thinking, ...(timeoutMs ? { timeoutMs } : {}) },
+      { thinking },
     );
-    const ms = Math.round(performance.now() - t0);
+    const outcome = read.outcome;
     const settled = settleTalk(
       { reading: outcome.ok ? outcome.reading : null, message, standing: { sheet, questions }, answering: opened !== null ? (step.answering ?? null) : null, terms, shown },
       factCredits(facts),
     );
-    const checks = outcome.ok ? check({ ...step, say: message }, settled, sheet, questions, shown !== null) : [{ name: 'read', ok: false, note: outcome.why }];
-    records.push({ step: i + 1, say: message, answering: step.answering ?? null, category: step.category, ms, tokens, failed: !outcome.ok, settled, checks });
+    const checks = outcome.ok && !settled.failed ? check({ ...step, say: message }, settled, sheet, questions, shown !== null) : [{ name: 'read', ok: false, note: outcome.ok ? 'emptied' : outcome.why }];
+    records.push({ step: i + 1, say: message, answering: step.answering ?? null, category: step.category, ms: read.ms, tries: read.tries, productSlip: read.productSlip, tokens, failed: !outcome.ok || Boolean(settled.failed), settled, checks });
     turns.push({ role: 'customer', text: message });
     if (settled.reply) turns.push({ role: 'studio', text: settled.reply });
     sheet = settled.sheet;
     questions = settled.questions;
     shown = settled.way ? { way: settled.way, estimateKrw: settled.estimateKrw } : shown;
   }
-  return { id: c.id, group: c.group, clip: c.clip, run, turns: records };
+  return { id: c.id, set, group: c.group, clip: clipName, run, turns: records };
 }
 
 /* ------------------------------------------------------------------ report */
@@ -438,80 +467,97 @@ function median(values: number[]): number {
   const s = [...values].sort((a, b) => a - b);
   return s.length % 2 ? s[(s.length - 1) / 2]! : Math.round((s[s.length / 2 - 1]! + s[s.length / 2]!) / 2);
 }
-
 const pct = (a: number, b: number) => (b ? `${a}/${b} (${Math.round((100 * a) / b)}%)` : '—');
 
 function metrics(records: CaseRecord[]) {
   const all = records.flatMap((r) => r.turns.map((t) => ({ r, t })));
-  const first = (cat: Category) => all.filter(({ t }) => t.category === cat && !t.failed);
-  const nonreq = all.filter(({ t }) => t.category === 'nonrequest' && !t.failed);
-  const nonreqButtons = nonreq.filter(({ t }) => t.settled.canMake).length;
-  const missing = first('missing');
-  const missingAsked = missing.filter(({ t }) => t.settled.open !== null).length;
-  const clear = first('clear');
-  const clearNoQ = clear.filter(({ t }) => t.settled.open === null && t.settled.canMake).length;
-  const taste = first('taste');
-  const tasteOk = taste.filter(({ t }) => t.settled.open === null && t.settled.canMake && t.settled.sheet.change.length > 0).length;
+  const read = all.filter(({ t }) => !t.failed);
+  const of = (cat: Category) => read.filter(({ t }) => t.category === cat);
+  const nonreq = of('nonrequest');
+  const missing = of('missing');
+  const clear = of('clear');
+  const taste = of('taste');
+  const questionTurns = read.filter(({ t }) => t.settled.open !== null);
   const checks = all.flatMap(({ t }) => t.checks);
+  const ms = all.map(({ t }) => t.ms).sort((a, b) => a - b);
   return {
-    nonRequestButtons: `${nonreqButtons} of ${nonreq.length}`,
-    missingAsked: pct(missingAsked, missing.length),
-    clearNoQuestion: pct(clearNoQ, clear.length),
-    tasteProposed: pct(tasteOk, taste.length),
+    nonRequestButtons: `${nonreq.filter(({ t }) => t.settled.canMake).length} of ${nonreq.length}`,
+    missingAsked: pct(missing.filter(({ t }) => t.settled.open !== null).length, missing.length),
+    clearNoQuestion: pct(clear.filter(({ t }) => t.settled.open === null && t.settled.canMake).length, clear.length),
+    tasteProposed: pct(taste.filter(({ t }) => t.settled.open === null && t.settled.canMake && t.settled.sheet.change.length > 0).length, taste.length),
+    parrotingShown: `${questionTurns.filter(({ t }) => t.checks.some((c) => c.name === 'question turn without parroting' && !c.ok)).length} of ${questionTurns.length}`,
+    parrotingRemoved: read.filter(({ t }) => t.settled.dropped.parroting).length,
+    productByStudioShown: read.filter(({ t }) => t.settled.sheet.change.some((c) => c.chosen && c.about === 'product')).length,
+    productSlipsRetried: all.filter(({ t }) => t.productSlip).length,
+    productChoicesDropped: read.reduce((n, { t }) => n + t.settled.dropped.productChoices, 0),
     checks: pct(checks.filter((c) => c.ok).length, checks.length),
     failedReadings: all.filter(({ t }) => t.failed).length,
-    wayDisagreements: all.filter(({ t }) => !t.failed && !t.settled.wayAgrees).length,
-    latencyMedian: median(all.map(({ t }) => t.ms)),
-    latencyMax: Math.max(0, ...all.map(({ t }) => t.ms)),
-    inputTokensMedian: median(all.map(({ t }) => t.tokens.input)),
-    outputTokensMedian: median(all.map(({ t }) => t.tokens.output)),
-    thinkingTokensMedian: median(all.map(({ t }) => t.tokens.thinking)),
+    secondTries: all.filter(({ t }) => t.tries > 1).length,
+    wayDisagreements: read.filter(({ t }) => !t.settled.wayAgrees).length,
+    latencyMedian: median(ms),
+    latencyP90: ms[Math.floor(ms.length * 0.9)] ?? 0,
+    latencyMax: Math.max(0, ...ms),
+    inputTokensMedian: median(read.map(({ t }) => t.tokens.input)),
+    outputTokensMedian: median(read.map(({ t }) => t.tokens.output)),
+    thinkingTokensMedian: median(read.map(({ t }) => t.tokens.thinking)),
     turns: all.length,
   };
 }
 
-function markdown(records: CaseRecord[], runs: number, thinking: string): string {
+function table(m: ReturnType<typeof metrics>): string[] {
+  return [
+    '| measure | result | target |',
+    '| --- | --- | --- |',
+    `| make button after a non-request (no plan standing) | ${m.nonRequestButtons} | 0 |`,
+    `| missing-target requests asked | ${m.missingAsked} | ≥ 90% |`,
+    `| clear requests answered without a question | ${m.clearNoQuestion} | ≥ 90% |`,
+    `| taste requests: concrete proposal, no question | ${m.tasteProposed} | ≥ 90% |`,
+    `| question turns that show a parroting sentence | ${m.parrotingShown} | 0 |`,
+    `| product changed by the studio's own choice (shown) | ${m.productByStudioShown} | 0 |`,
+    `| (model slips: parroting removed by the server / product slips retried / product choices dropped) | ${m.parrotingRemoved} / ${m.productSlipsRetried} / ${m.productChoicesDropped} | |`,
+    `| all mechanical checks | ${m.checks} | |`,
+    `| failed after two tries / turns that needed a second try | ${m.failedReadings} / ${m.secondTries} | |`,
+    `| reading named another way than the server | ${m.wayDisagreements} | |`,
+    `| latency median / p90 / max, both tries (ms) | ${m.latencyMedian} / ${m.latencyP90} / ${m.latencyMax} | |`,
+    `| tokens per turn, median (input / output / thinking) | ${m.inputTokensMedian} / ${m.outputTokensMedian} / ${m.thinkingTokensMedian} | |`,
+    `| turns | ${m.turns} | |`,
+  ];
+}
+
+function markdown(records: CaseRecord[], runs: number, thinking: string, sets: SetName[]): string {
   const lines: string[] = [`# Revise conversation eval (${thinking} thinking, ${runs} run${runs > 1 ? 's' : ''}, ${new Date().toISOString()})`, ''];
-  for (let run = 1; run <= runs; run++) {
-    const m = metrics(records.filter((r) => r.run === run));
-    lines.push(`## Run ${run}: targets`, '', '| measure | result | target |', '| --- | --- | --- |');
-    lines.push(`| make button after a non-request (no plan standing) | ${m.nonRequestButtons} | 0 |`);
-    lines.push(`| missing-target requests asked | ${m.missingAsked} | ≥ 90% |`);
-    lines.push(`| clear requests answered without a question | ${m.clearNoQuestion} | ≥ 90% |`);
-    lines.push(`| taste requests: concrete proposal, no question | ${m.tasteProposed} | ≥ 90% |`);
-    lines.push(`| all mechanical checks | ${m.checks} | |`);
-    lines.push(`| failed readings | ${m.failedReadings} | |`, `| reading named another way than the server | ${m.wayDisagreements} | |`);
-    lines.push(`| latency median / max (ms) | ${m.latencyMedian} / ${m.latencyMax} | 12,000 budget |`);
-    lines.push(`| tokens per turn, median (input / output / thinking) | ${m.inputTokensMedian} / ${m.outputTokensMedian} / ${m.thinkingTokensMedian} | |`, '');
-    lines.push('| case | turn | category | ms | kind | question | button | way · credits | failed checks |', '| --- | --- | --- | --- | --- | --- | --- | --- | --- |');
-    for (const r of records.filter((x) => x.run === run)) {
-      for (const t of r.turns) {
-        const bad = t.checks.filter((c) => !c.ok).map((c) => c.name + (c.note ? ` (${c.note})` : '')).join('; ');
-        const s = t.settled;
-        lines.push(`| ${r.id} | ${t.step} | ${t.category} | ${t.ms} | ${s.kind ?? 'failed'} | ${s.open !== null ? 'yes' : '—'} | ${s.canMake ? 'yes' : '—'} | ${s.way ?? '—'} · ${creditsOf(s.estimateKrw)} | ${bad || 'ok'} |`);
+  for (const set of sets) {
+    for (let run = 1; run <= runs; run++) {
+      const rs = records.filter((r) => r.run === run && r.set === set);
+      if (!rs.length) continue;
+      lines.push(`## ${set} clip · run ${run}`, '', ...table(metrics(rs)), '');
+      lines.push('| case | turn | category | ms | tries | kind | question | button | way · credits | failed checks |', '| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |');
+      for (const r of rs) {
+        for (const t of r.turns) {
+          const bad = t.checks.filter((c) => !c.ok).map((c) => c.name + (c.note ? ` (${c.note})` : '')).join('; ');
+          const s = t.settled;
+          lines.push(`| ${r.id} | ${t.step} | ${t.category} | ${t.ms} | ${t.tries} | ${s.kind ?? 'failed'} | ${s.open !== null ? 'yes' : '—'} | ${s.canMake ? 'yes' : '—'} | ${s.way ?? '—'} · ${creditsOf(s.estimateKrw)} | ${bad || 'ok'} |`);
+        }
       }
+      lines.push('');
     }
-    lines.push('');
   }
   lines.push('## Transcripts', '');
   for (const r of records) {
-    lines.push(`### ${r.id} · run ${r.run} · ${r.clip}`, '');
+    lines.push(`### ${r.id} · ${r.set} clip · run ${r.run}`, '');
     for (const t of r.turns) {
       const s = t.settled;
       lines.push(`**Customer${t.answering ? (t.answering.decide ? ' (pressed "decide for me")' : ` (pressed option ${(t.answering.option ?? 0) + 1})`) : ''}:** ${t.say}`, '');
       if (t.failed) {
-        lines.push('_Reading failed._', '');
+        lines.push(`_Could not be read (${t.tries} tries, ${t.ms} ms)._`, '');
         continue;
       }
-      lines.push(`**Studio** (${s.kind}, ${t.ms} ms): ${s.reply}`, '');
-      if (s.open !== null) {
-        const q = s.questions[s.open]!;
-        lines.push(`> Question: ${q.question}  ·  options: ${q.options.map((o) => `[${o}]`).join(' ')}`, '');
-      }
+      lines.push(`**Studio** (${s.kind}, ${t.ms} ms${t.tries > 1 ? `, ${t.tries} tries` : ''}): ${s.reply}`, '');
+      if (s.open !== null) lines.push(`> Options: ${s.questions[s.open]!.options.map((o) => `[${o}]`).join(' ')} [decide for me]`, '');
       const sheet = s.sheet;
       lines.push(
-        `> Sheet — change: ${sheet.change.map((c) => `${c.text} (${c.kind}${c.seconds ? ` ${c.seconds}s` : ''})`).join('; ') || '—'} · keep: ${sheet.keep.join('; ') || '—'} · exclude: ${sheet.exclude.join('; ') || '—'}`,
-        `> Server — way: ${s.way ?? '—'}, ${creditsOf(s.estimateKrw)} credits${s.seconds ? `, ${s.seconds} s` : ''}, button: ${s.canMake ? 'yes' : 'no'}${s.editStudio ? ', editing studio offered' : ''}${s.impossible ? ', impossible part' : ''}${s.changed.way || s.changed.credits ? `, changed (way ${s.changed.way}, credits ${s.changed.credits})` : ''}${s.wayAgrees ? '' : ', reading named another way'}`,
+        `> Sheet — change: ${sheet.change.map((c) => `${c.text} (${c.kind}${c.seconds ? ` ${c.seconds}s` : ''}${c.about === 'product' ? ', product' : ''}${c.chosen ? ', chosen' : ''})`).join('; ') || '—'} · keep: ${sheet.keep.join('; ') || '—'} · exclude: ${sheet.exclude.join('; ') || '—'}`,
+        `> Server — way: ${s.way ?? '—'}, ${creditsOf(s.estimateKrw)} credits${s.seconds ? `, ${s.seconds} s` : ''}, button: ${s.canMake ? 'yes' : 'no'}${s.editStudio ? ', editing studio offered' : ''}${s.impossible ? ', impossible part' : ''}${s.changed.way || s.changed.credits ? `, changed (way ${s.changed.way}, credits ${s.changed.credits})` : ''}${s.wayAgrees ? '' : ', reading named another way'}${s.dropped.parroting ? ', parroting removed' : ''}${s.dropped.productChoices ? `, ${s.dropped.productChoices} product choice(s) dropped` : ''}${t.productSlip ? ', product slip retried' : ''}`,
         `> Checks: ${t.checks.map((c) => `${c.ok ? '✓' : '✗'} ${c.name}${c.note && !c.ok ? ` (${c.note})` : ''}`).join(' · ')}`,
         '',
       );
@@ -522,14 +568,16 @@ function markdown(records: CaseRecord[], runs: number, thinking: string): string
 
 /* ------------------------------------------------------------------ main */
 
-async function readClips(env: GeminiEnv, bottle: string, montage: string): Promise<void> {
-  const fetchImpl = meteredFetch(() => undefined);
-  const out: Record<ClipName, ClipFixture> = {} as never;
-  for (const [name, path] of [['bottle', bottle], ['montage', montage]] as const) {
-    const reading = await readFilm({ video: { bytes: new Uint8Array(readFileSync(path)), mime: 'video/mp4' }, locale: 'ko' }, { fetch: fetchImpl, env: env as Record<string, string> });
+async function readClips(env: GeminiEnv, files: Record<ClipName, string>): Promise<void> {
+  let usage = { input: 0, output: 0, thinking: 0 };
+  const fetchImpl = meteredFetch((u) => (usage = u));
+  const out = {} as Record<ClipName, ClipFixture>;
+  for (const name of ['bottle', 'person', 'montage'] as const) {
+    const t0 = performance.now();
+    const reading = await readClip({ video: { bytes: new Uint8Array(readFileSync(files[name])), mime: 'video/mp4' }, locale: 'ko' }, { fetch: fetchImpl, env: env as Record<string, string> });
     if (!reading) throw new Error(`could not read ${name}`);
     out[name] = { reading, madeWith: MADE_WITH[name] };
-    say(`${name}: ${reading.summary}`);
+    say(`${name} (${Math.round(performance.now() - t0)} ms, tokens in ${usage.input} / out ${usage.output} / thinking ${usage.thinking}): people ${reading.inventory.people}, product "${reading.inventory.product}", mark "${reading.inventory.mark}"`);
   }
   mkdirSync(join(process.cwd(), 'scripts', 'fixtures'), { recursive: true });
   writeFileSync(FIXTURE, JSON.stringify(out, null, 2) + '\n');
@@ -538,15 +586,15 @@ async function readClips(env: GeminiEnv, bottle: string, montage: string): Promi
 
 async function main(): Promise<void> {
   const envFile = argv[0];
-  if (!envFile || envFile.startsWith('--')) throw new Error('usage: revise-dialogue-eval.ts <env-file> --out <dir> | --read-clips <bottle.mp4> <montage.mp4>');
+  if (!envFile || envFile.startsWith('--')) throw new Error('usage: revise-dialogue-eval.ts <env-file> --out <dir> | --read-clips <bottle.mp4> <person.mp4> <montage.mp4>');
   const env = readGeminiEnv(envFile);
   SECRET = env.GEMINI_API_KEY ?? '';
   const config = studioGeminiConfig({ GEMINI_API_KEY: env.GEMINI_API_KEY, GEMINI_BASE_URL: env.GEMINI_BASE_URL });
   if (!config) throw new Error('no GEMINI_API_KEY in the env file');
   if (config.model !== EXPECTED_MODEL) throw new Error(`studio model is ${config.model}, expected ${EXPECTED_MODEL}`);
-  state.cap = intFlag('--cap', 600, 1, 2000);
+  state.cap = intFlag('--cap', 700, 1, 2000);
   const readAt = argv.indexOf('--read-clips');
-  if (readAt >= 0) return readClips(env, argv[readAt + 1]!, argv[readAt + 2]!);
+  if (readAt >= 0) return readClips(env, { bottle: argv[readAt + 1]!, person: argv[readAt + 2]!, montage: argv[readAt + 3]! });
 
   const outDir = flag('--out');
   if (!outDir) throw new Error('--out <dir> is required');
@@ -555,28 +603,38 @@ async function main(): Promise<void> {
   const runs = intFlag('--runs', 2, 1, 5);
   const thinking = (flag('--thinking') ?? 'LOW').toUpperCase() === 'MEDIUM' ? 'MEDIUM' : 'LOW';
   const only = flag('--only')?.split(',').map((s) => s.trim()).filter(Boolean) ?? null;
-  const cases = only ? CASES.filter((c) => only.includes(c.id)) : CASES;
-  const concurrency = intFlag('--concurrency', 4, 1, 8);
-  // Measuring only: a longer budget than the operation's 12 s, to see how long slow readings really take.
-  const timeoutMs = flag('--timeout') ? intFlag('--timeout', 12_000, 1_000, 60_000) : undefined;
+  const sets = (flag('--sets')?.split(',').map((s) => s.trim()) ?? ['product', 'person', 'multishot']) as SetName[];
+  const concurrency = intFlag('--concurrency', 2, 1, 8);
+  const jobs: Array<{ c: Case; set: SetName }> = [];
+  for (const set of sets) {
+    const list =
+      set === 'product'
+        ? CASES.filter((c) => c.clip === 'bottle')
+        : CASES.filter((c) => REPRESENTATIVE.includes(c.id) || (set === 'multishot' && c.clip === 'montage'));
+    for (const c of list) if (!only || only.includes(c.id)) jobs.push({ c, set });
+  }
   const records: CaseRecord[] = [];
   for (let run = 1; run <= runs && !state.stop; run++) {
     let next = 0;
     const worker = async () => {
-      while (next < cases.length && !state.stop) {
-        const c = cases[next++]!;
-        records.push(await runCase(c, clips, run, thinking, env, timeoutMs));
+      while (next < jobs.length && !state.stop) {
+        const { c, set } = jobs[next++]!;
+        records.push(await runCase(c, set, clips, run, thinking, env));
       }
     };
     await Promise.all(Array.from({ length: concurrency }, worker));
     say(`run ${run} done (${state.calls} calls so far)`);
   }
   const order = new Map(CASES.map((c, i) => [c.id, i]));
-  records.sort((a, b) => a.run - b.run || order.get(a.id)! - order.get(b.id)!);
+  const setOrder = new Map(sets.map((s, i) => [s, i]));
+  records.sort((a, b) => setOrder.get(a.set)! - setOrder.get(b.set)! || a.run - b.run || order.get(a.id)! - order.get(b.id)!);
   mkdirSync(outDir, { recursive: true });
-  writeFileSync(join(outDir, 'revise-dialogue-eval.md'), scrub(markdown(records, runs, thinking)));
+  writeFileSync(join(outDir, 'revise-dialogue-eval.md'), scrub(markdown(records, runs, thinking, sets)));
   writeFileSync(join(outDir, 'revise-dialogue-eval.json'), scrub(JSON.stringify(records, null, 1)));
-  for (let run = 1; run <= runs; run++) say(`run ${run}: ${JSON.stringify(metrics(records.filter((r) => r.run === run)))}`);
+  for (const set of sets) for (let run = 1; run <= runs; run++) {
+    const rs = records.filter((r) => r.run === run && r.set === set);
+    if (rs.length) say(`${set} run ${run}: ${JSON.stringify(metrics(rs))}`);
+  }
   say(`calls: ${state.calls}${state.stop ? ` · stopped: ${state.stop}` : ''}`);
 }
 

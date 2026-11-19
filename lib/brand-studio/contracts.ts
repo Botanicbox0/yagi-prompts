@@ -506,6 +506,8 @@ export const ReviseTalkSchema = z.object({
   materials: z.number().int().min(0).max(STUDIO_REVISE_MATERIALS_MAX).default(0),
   /** What the customer saw last turn (so a change of way or credits is explained). */
   shown: z.object({ way: z.enum(STUDIO_REVISE_MODES).nullable(), estimateKrw: z.number().int().min(0) }).nullable().default(null),
+  /** A line's remove control: take out `sheet.change[remove]` (the server settles it; nothing is read). */
+  remove: z.number().int().min(0).max(SHEET_LIMITS.changeMax - 1).optional(),
 });
 
 /** Why a way is closed. The screen has one short line per code. */
@@ -741,6 +743,8 @@ export interface StudioJobView {
     materials?: Array<{ assetId?: string; outputId?: string }>;
     /** The question asked about this version's request and the customer's answer. */
     clarified?: ReviseClarified;
+    /** Made from the revise conversation (`BRAND_STUDIO_REVISE_V2`): the sheet it was asked with. */
+    sheet?: ReviseSheet;
   } | null;
   /**
    * Set on a run made with others in one request on several image models (`job.create_group`): the group

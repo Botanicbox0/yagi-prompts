@@ -887,3 +887,44 @@ button.bs-sibling:focus-visible { outline: 2px solid var(--ys-focus); outline-of
   .bs-model-box, .bs-prompt-tab, .bs-prompt-tab::after, .bs-tile-model, button.bs-sibling { transition: none; }
   .bs-prompt-tab[data-status="designing"] .bs-prompt-tab-mark { animation: none; }
 }
+/* The revise conversation (BRAND_STUDIO_REVISE_V2, revise-talk.tsx): the customer on the right, the studio as plain
+   text on the left, one change sheet pinned under the thread with the only primary action, the box last. */
+.bs-talk { display: grid; gap: 12px; min-width: 0; }
+.bs-talk-head { display: flex; align-items: center; gap: 8px; min-width: 0; }
+.bs-talk-head .bs-revise-title { margin: 0; }
+.bs-talk-over { margin-left: auto; color: var(--ys-ink-secondary); }
+.bs-talk-thread { display: grid; gap: 10px; min-width: 0; }
+.bs-talk-me { justify-self: end; display: grid; gap: 6px; max-width: 88%; padding: 8px 12px; border-radius: 14px 14px 4px 14px; background: var(--ys-hover); color: var(--ys-ink); font-size: 13.5px; line-height: 1.5; word-break: keep-all; overflow-wrap: anywhere; }
+.bs-talk-me > p, .bs-talk-studio > p { margin: 0; white-space: pre-wrap; }
+.bs-talk-refs { justify-content: flex-end; }
+.bs-talk-studio { justify-self: start; display: grid; gap: 8px; max-width: 94%; color: var(--ys-ink); font-size: 13.5px; line-height: 1.55; word-break: keep-all; overflow-wrap: break-word; }
+.bs-talk-choices { display: flex; flex-wrap: wrap; gap: 6px; }
+.bs-talk-choices .bs-chip { height: auto; min-height: 32px; padding: 6px 12px; white-space: normal; text-align: left; }
+.bs-talk-choices .bs-chip[data-variant="quiet"] { color: var(--ys-ink-secondary); box-shadow: inset 0 0 0 1px var(--ys-hairline); background: transparent; }
+.bs-talk-link { justify-self: start; }
+.bs-talk-removed { margin: 0; font-size: 12px; }
+.bs-talk-failed { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; font-size: 13px; color: var(--ys-ink); }
+.bs-talk-failed > p { margin: 0; }
+.bs-talk-sheet { display: grid; gap: 10px; padding: 12px; border-radius: var(--ys-r-control); box-shadow: inset 0 0 0 1px var(--ys-hairline); background: var(--ys-panel); }
+.bs-talk-group { display: grid; gap: 4px; min-width: 0; }
+.bs-talk-group-label { margin: 0; color: var(--ys-ink-muted); font-size: 11.5px; font-weight: 600; letter-spacing: -0.01em; }
+.bs-talk-group-text { margin: 0; color: var(--ys-ink-secondary); font-size: 12.5px; line-height: 1.5; word-break: keep-all; overflow-wrap: break-word; }
+.bs-talk-group ul { display: grid; gap: 2px; margin: 0; padding: 0; list-style: none; }
+.bs-talk-group li { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; min-height: 30px; padding: 4px 4px 4px 8px; border-radius: 8px; color: var(--ys-ink); font-size: 13px; line-height: 1.45; word-break: keep-all; overflow-wrap: break-word; }
+.bs-talk-group li[data-fresh] { animation: bs-talk-fresh 1600ms var(--ease-editorial, cubic-bezier(0.22, 1, 0.36, 1)) 1; }
+@keyframes bs-talk-fresh { from { background: color-mix(in srgb, var(--ys-accent) 16%, transparent); } to { background: transparent; } }
+.bs-talk-line-text { flex: 1 1 auto; min-width: 0; }
+.bs-talk-line-x { display: grid; place-items: center; flex: none; width: 26px; height: 26px; margin-left: auto; padding: 0; border: 0; border-radius: 50%; background: transparent; color: var(--ys-ink-muted); cursor: pointer; }
+.bs-talk-line-x:hover:not(:disabled) { background: var(--ys-hover); color: var(--ys-ink); }
+.bs-talk-line-x:focus-visible { outline: 2px solid var(--ys-focus); outline-offset: 1px; }
+.bs-talk-line-x .bs-icon { width: 13px; height: 13px; }
+.bs-talk-make { display: grid; gap: 6px; padding-top: 4px; }
+.bs-talk-make .bs-submit { justify-self: stretch; }
+.bs-talk-draft { margin: 0; font-size: 12px; }
+.bs-talk-box { position: sticky; bottom: -16px; z-index: 2; display: grid; gap: 8px; margin: 0 -16px; padding: 10px 16px 16px; background: var(--ys-surface); box-shadow: 0 -1px 0 0 var(--ys-hairline); }
+.bs-talk-attached { align-items: center; gap: 8px; }
+.bs-talk-making-note { margin: 0; font-size: 12.5px; }
+.bs-talk-making-media { position: absolute; left: 50%; bottom: 18px; z-index: 3; display: inline-flex; align-items: center; gap: 8px; padding: 6px 12px; border-radius: var(--ys-r-pill); background: rgba(9, 9, 11, 0.68); color: #fff; font-size: 12.5px; transform: translateX(-50%); pointer-events: none; }
+@media (prefers-reduced-motion: reduce) {
+  .bs-talk-group li[data-fresh] { animation: none; box-shadow: inset 2px 0 0 0 var(--ys-accent); }
+}

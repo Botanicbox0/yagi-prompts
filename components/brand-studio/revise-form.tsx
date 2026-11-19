@@ -204,7 +204,6 @@ export function VersionPanel({
                 data-selected={on ? "" : undefined}
                 data-revision-version={v.version}
                 aria-pressed={on}
-                disabled={making}
                 aria-busy={making || undefined}
                 title={making ? r.making : undefined}
                 onClick={() => onSelect(v.version)}
@@ -243,11 +242,17 @@ export function VersionPanel({
             </span>
           )}
         </div>
-        {current?.request && (
+        {current?.job.revision?.sheet?.change.length ? (
+          // Made from the conversation: how it was asked, in one line (the history of versions reads as a story).
+          <p className="bs-revise-request" data-revision-asked>
+            <span className="bs-sr">{r.talk.asked}</span>
+            {current.job.revision.sheet.change.map((c) => c.text).join(" · ")}
+          </p>
+        ) : current?.request ? (
           <p className="bs-revise-request" data-revision-request>
             {current.request}
           </p>
-        )}
+        ) : null}
         {current?.request && current.clarified && (
           <div className="bs-revise-clarified" data-revision-clarified>
             <span className="bs-sr">{r.clarifiedLabel}</span>

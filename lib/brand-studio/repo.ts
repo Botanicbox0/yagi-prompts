@@ -3,6 +3,7 @@
  * callers pass an organization they already seated (./access.ts) and every query is scoped to it.
  */
 import { clarifiedOf } from './revision/clarify';
+import { cleanSheet } from './revision/sheet';
 import { brandStudioProjectsOpen } from '@/lib/flags';
 import type { SqlRunner } from '@/lib/db/sql-runner';
 import type {
@@ -152,6 +153,8 @@ export function jobView(row: JobRow, outputs: OutputRow[], media: StudioMediaSto
             ...(Array.isArray(p.revision.marks) && p.revision.marks.length
               ? { marks: p.revision.marks.map((m) => ({ ...m })) }
               : {}),
+            // Made from the revise conversation: the sheet it was asked with (the version card tells it in one line).
+            ...(p.revision.dialogue?.sheet ? { sheet: cleanSheet(p.revision.dialogue.sheet) } : {}),
           },
         }
       : {}),

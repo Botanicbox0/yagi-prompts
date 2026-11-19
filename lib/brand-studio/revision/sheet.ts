@@ -39,6 +39,12 @@ export const SheetChangeSchema = z.object({
   kind: z.enum(SHEET_ITEM_KINDS),
   /** A `length` item only: the new total length in whole seconds. */
   seconds: z.number().int().min(1).max(120).optional(),
+  /** Whether the change touches the brand's product itself (shape, colour, label, mark) or its surroundings. */
+  about: z.enum(['product', 'scene']).optional(),
+  /** The studio chose this change for the customer (a taste wish, "decide for me"), rather than being asked for it. */
+  chosen: z.boolean().optional(),
+  /** The marked spots (①②③, from 1) this change is about. */
+  marks: z.array(z.number().int().min(1).max(3)).max(3).optional(),
 });
 export type SheetChange = z.infer<typeof SheetChangeSchema>;
 
@@ -129,7 +135,19 @@ export function cleanSheet(raw: unknown): ReviseSheet {
     const seconds = kind === 'length' && typeof c.seconds === 'number' && Number.isFinite(c.seconds) ? Math.round(c.seconds) : undefined;
     // A length item without a length says nothing the studio can make.
     if (kind === 'length' && seconds === undefined) continue;
-    change.push({ text, kind, ...(seconds !== undefined ? { seconds } : {}) });
+    const extra = c as { about?: unknown; chosen?: unknown; marks?: unknown };
+    const about = extra.about === 'product' || extra.about === 'scene' ? extra.about : undefined;
+    const marks = Array.isArray(extra.marks)
+      ? [...new Set(extra.marks.filter((n): n is number => typeof n === 'number' && Number.isInteger(n) && n >= 1 && n <= 3))].slice(0, 3)
+      : [];
+    change.push({
+      text,
+      kind,
+      ...(seconds !== undefined ? { seconds } : {}),
+      ...(about ? { about } : {}),
+      ...(extra.chosen === true ? { chosen: true } : {}),
+      ...(marks.length ? { marks } : {}),
+    });
     if (change.length >= SHEET_LIMITS.changeMax) break;
   }
   return {
@@ -156,6 +174,13 @@ export function openQuestion(questions: readonly ReviseQuestion[]): number | nul
   if (last < 0) return null;
   const q = questions[last]!;
   return q.answer === null && !q.skipped ? last : null;
+}
+
+/** Whether the change list differs between two sheets (by text, order aside). */
+export function changesDiffer(a: Pick<ReviseSheet, 'change'>, b: Pick<ReviseSheet, 'change'>): boolean {
+  const ka = new Set(a.change.map((c) => key(c.text)));
+  const kb = new Set(b.change.map((c) => key(c.text)));
+  return ka.size !== kb.size || [...ka].some((k) => !kb.has(k));
 }
 
 /** Whether two question points are the same point (case, spacing and punctuation aside). */

@@ -1,13 +1,16 @@
 /**
  * `revise.talk`: one turn of the revise conversation (flag `BRAND_STUDIO_REVISE_V2`, docs/BRAND-STUDIO-VIDEO-
- * REMIX.md §3). The customer's message is read by one Gemini JSON call that sees the turns as turns, the
- * standing change sheet, what the clip shows, what was attached and a block of facts; it says what the
- * message was, writes the studio's reply and returns the updated sheet (and, rarely, one question).
+ * REMIX.md §3.5). The customer's message is read by one Gemini JSON call that sees the turns as turns, the
+ * standing change sheet, what the clip shows (./clip.ts), what was attached and a block of facts; it says
+ * what the message was, writes the studio's reply and returns the updated sheet (and, when it must, one
+ * question). A reading that times out or fails is tried once more (12 s, then 15 s).
  *
  * The reading never decides spending. The server (`settleTalk`, pure) decides the way from the sheet
  * (look-only changes are edited, anything else is made again), its credits, whether a longer clip can be
  * made, which question may stand, and whether a make button may exist: only for a standing sheet with at
- * least one change and no open question. A failed reading changes nothing and offers no button.
+ * least one change and no open question. It also writes a question turn as one message (what was settled,
+ * then the question, said once), and never lets the studio change the brand's product by its own choice.
+ * A failed reading changes nothing and offers no button.
  */
 import type { Viewer } from '@/lib/auth/identity';
 import { creditsLeft, creditsOf } from '../credits';
@@ -33,27 +36,27 @@ import { failure, guarded } from '../outcome';
 import type { IntelDeps, StudioDeps } from '../types';
 import { loadAllowance } from '../usage';
 import { videoRunUsd, usageKrw } from '../usage-rate';
-import { clipSheetFor } from './clip';
+import { clipFor, storedClip, type ClipInventory, type ClipReading } from './clip';
 import { withClarified } from './clarify';
 import { editWay, reshootLength, reshootWay, resolveAdded, revisionResolution, wayForSheet } from './plan';
 import { loadRevisionRecipe, type RevisionRecipe } from './recipe';
 import {
   SHEET_ITEM_KINDS,
   SHEET_LIMITS,
+  changesDiffer,
   cleanSheet,
   hasChange,
   lengthOfSheet,
   onlyRemoved,
   openQuestion,
   samePoint,
-  withoutLast,
   type ReviseQuestion,
   type ReviseSheet,
   type ReviseTurn,
 } from './sheet';
 
-/** The reading's budget (the same as the old one-word reading). */
-export const TALK_TIMEOUT_MS = 12_000;
+/** The reading's budget per try: the first try, then one more with a little longer. */
+export const TALK_TRIES_MS = [12_000, 15_000] as const;
 const MADE_WITH_MAX = 1500;
 
 /* ------------------------------------------------------------------ instruction */
@@ -61,7 +64,7 @@ const MADE_WITH_MAX = 1500;
 export const TALK_SYSTEM = `You are the editor in a chat beside one short video clip a brand made with our studio. The customer tells you, in their own words, what to change for the next version of the clip. For each new message you answer once, as JSON.
 
 Input (JSON):
-- clip: what the clip shows, read from the video itself (length, shots with framing, camera and action, look, sound, summary). This is the truth about the picture. null means nobody has looked at the clip yet: then never say what is or is not in it.
+- clip: what the clip shows, read from the video itself: length, shots (framing, camera, action), look, sound, summary, and an inventory (how many people, the product and its colours, its mark or label and that colour, the background, where the light comes from, music, speech, text on screen). This is the truth about the picture. null means nobody has looked at the clip yet: then never say what is or is not in it.
 - madeWith: the text the clip was generated from (a second source on what is in it).
 - history: changes already made in earlier versions; they are already in the clip.
 - conversation: the turns so far, oldest first. "customer" or "studio". The last turn is the customer's new message.
@@ -69,7 +72,8 @@ Input (JSON):
 - questions: questions the studio already asked in this conversation and the answer (null = not answered, skipped = went on without answering). questionsLeft: how many more you may ask.
 - answering: present when the new message answers the open question. "option" is the choice the customer pressed. "decide": true means the customer asked you to choose.
 - attached: pictures attached so far (numbered from 1), videos attached to show a look or a movement, and spots marked on the clip (n, what is there).
-- facts: the only source for any number, price, length, rule or limit you state.
+- facts: the only source for any number, price, length, time, rule or limit you state.
+- correction: present only when your last answer broke a rule; follow it.
 
 What the new message is ("kind"), exactly one:
 - change: asks for one or more new changes.
@@ -77,37 +81,47 @@ What the new message is ("kind"), exactly one:
 - answer: answers the open question, in any words, even a short phrase, as long as it settles it ("바다로", "the second one", "알아서 해 줘"). "글쎄요", "모르겠어요" settle nothing: unreadable.
 - confirm: agrees with the standing sheet without changing it ("응", "좋아요", "그렇게 해줘", "ok", "go").
 - withdraw: takes back a change without replacing it ("방금 그거 취소", "그건 하지 마", "never mind the last one").
-- tool_question: asks about the tool, not for a change (credits, price, drafts and finals, versions, length limits, what can be changed, how long it takes).
+- tool_question: asks about the tool, not for a change (credits, price, drafts and finals, versions, length limits, what can be changed, how long making takes).
 - unreadable: nothing to act on: a stray syllable or emoji with no standing sheet, a joke, an unrelated topic. A complaint about the clip is not unreadable (see Asking).
 - not_possible: asks only for things the studio cannot do (see Limits).
 If a message mixes a change and a question about the tool, kind is change and the reply also answers the question in one short sentence.
 
 Sheet (the one current request, always the whole of it after this message):
-- change: one item per change. "text": a short phrase in the customer's own nouns ("배경을 해 질 녘 바다로"). "kind": look (appearance, colour, material, label or logo, text on screen, background, light, objects added or removed), motion (the camera's path or speed, the action, the pace), framing (shot order, composition, how close, how many shots, what a shot shows), length (a longer clip: also "seconds", the new total length).
-- keep: what must stay as it is: what the customer named, and what this change could disturb (for a new background: the bottle and the camera movement). Short phrases, at most four.
+- change: one item per change. "text": a short phrase in the customer's own nouns ("배경을 해 질 녘 바다로"). "kind", decided by what changes, never by the clip:
+  look: colour, material or texture; a label, mark or logo; text laid over the picture; the background; the light, its colour and its direction; adding or removing a still object or prop.
+  motion: the camera's path or speed; slow motion or a faster pace; what a person or thing does.
+  framing: how large something is in the frame or where it sits; how close the shot is; the camera angle; the order or the number of shots; what a shot shows; adding or removing a person.
+  length: a longer clip; also "seconds", the new total length.
+  "about": "product" when the change touches the brand's product itself (its shape, colour, material, label, mark, lettering, size), else "scene".
+  "chosen": true when you chose this change for the customer (a taste wish, "decide for me", "아무 …나") rather than them asking for exactly it.
+  "marks": the numbers of the marked spots this change is about, when any.
+- keep: what must stay as it is: what the customer named, and what this change could disturb (for a new background: the product and the camera movement). Short phrases, at most four.
 - exclude: what must not appear, when the customer said so.
 - A correction replaces the item it corrects: remove the old item and add the new one. A withdrawal removes the item taken back (the last change when not named). For confirm, tool_question and unreadable return the sheet unchanged.
 - Never put into change something the studio cannot do, or a shorter clip.
 
-Taste and degree ("좀 더 고급스럽게", "더 밝게", "느낌 있게", "more premium", "warmer"): do not ask. Turn the wish into one to three concrete changes you can see in this clip (for example softer light from the side, a deeper and calmer background, slower petals), put them in the sheet, and say in the reply that they can change it in words.
+The product belongs to the brand. Change the product itself (shape, colour, material, label, mark, lettering, size) only when the customer asks for that in words. Whenever you choose for them (a taste wish, "decide for me", "아무 …나"), choose among the surroundings: background, light, props, camera, pace. Never the product.
+
+Taste and degree ("좀 더 고급스럽게", "더 밝게", "느낌 있게", "more premium", "warmer"): do not ask. Turn the wish into one to three concrete changes to the surroundings you can see in this clip (for example softer light from the side, a deeper and calmer background, a slower camera), put them in the sheet, and say in the reply that they can change it in words.
 
 Asking ("question"). Ask one short question only when the answer changes the picture and you cannot guess it well:
 - a missing target: a change with no destination ("배경 바꿔줘": into what; "색 바꿔줘": which thing, which colour; "로고 넣어줘" with no logo attached: which logo, and where; "처음 부분만 수정해줘": change what about it).
-- the message names something the clip shows more than once and nothing says which.
+- which one: the message names something the clip shows several of, or in several shots, and the change could apply to one or to all ("병을 더 크게" in a clip with bottles in four shots): ask which, unless the message says.
 - opposite directions are both possible ("속도 조절해줘": faster or slower).
 - a contradiction ("그대로 두고 완전히 다르게").
 - a complaint or a wish about the clip with no direction at all ("느낌이 별로야. 다시", "이거 말고 다른 걸로", "이상해"): ask what to change, with proposals that fit this clip.
-- the message wants to change or add something the clip does not have (a model or a person in a clip with no person): say in the reply what the clip has, then ask what they want.
+- the message wants to change or add something the clip does not have (a model or a person in a clip with no person): ask what they want, and let the question say what the clip has.
 Do not ask when the message is clear, about taste, about cost or how it is made. When the message only asks to keep or remove something the clip does not have ("모델은 그대로", "음악은 빼고" with no model or music), do not ask: say in one clause that the clip has none and go on.
 A point in "questions" is settled for good, answered or not: never ask it again, not even part of it, and not in the reply either. If an answer left part of it open (a logo given but no place), choose the most likely reading for that part, put it in the sheet and say they can change it. If the customer went on without answering, leave that part out of the sheet and say in one short clause that they can still tell you.
 When questionsLeft is 0 do not ask: choose the most likely concrete reading, put it in the sheet and say they can change it.
-A question has "point" (a few English words naming what it settles, such as "background target"), "text" (one short question), and "options": two or three concrete proposals that fit this clip, each a short phrase that alone says what to do. No "other" or "as written" option. The customer may also answer in their own words.
-While a question is open, put in the sheet only what is settled; the reply says what you understood so far and does not repeat the question.
-When "answering" has decide true, choose one concrete reading yourself, put it in the sheet and say in the reply what you chose.
+A question has "point" (a few English words naming what it settles, such as "background target"), "text" (the question itself, in natural words a person would ask: "배경을 어떤 곳으로 바꿀까요?"; when the clip lacks the thing, one short clause first: "지금 영상에는 사람이 없어요. 어떤 인물을 넣을까요?"), and "options": two or three concrete proposals that fit this clip, each a short phrase that alone says what to do. No "other", "as written" or "decide for me" option: the screen adds that.
+When you ask, "reply" holds only what this message settled, as one short clause ("꽃잎은 뺄게요."), or "" when it settled nothing. Never restate the request ("배경을 바꾸고 싶으시군요", "…로 이해했어요"), never say something will be done while it is still open, never put the question in "reply". While a question is open, put in the sheet only what is settled.
+When "answering" has decide true, choose one concrete reading yourself among the surroundings, put it in the sheet and say in the reply what you chose.
 
 How it is made (the studio decides, never the customer): a sheet with only look changes is changed inside this clip, which keeps its movement and length (facts.in_place); a sheet with any motion, framing or length change makes the clip again from the start (facts.again), so composition and movement can come out a little different. Say which in "way": in_place, again, or none (no change).
-Credits: the button under your reply shows them, so do not repeat them on a first plan. When facts.shown is not null and the way or the credits now differ from it, say why in one plain sentence ("카메라 움직임이 바뀌어서 처음부터 다시 만들어요") and give the new credits from facts. When the plan makes the clip again, say once, in one clause, that composition and movement can come out a little different. Mention credits otherwise only when asked.
-Name each change by the exact thing in the clip it touches (the camera's push-in, the YAGI label, the oval mirror), not by a quality alone ("속도", "느낌").
+Credits: the button under your reply shows them, so do not repeat them on a first plan. When facts.shown is not null and the way or the credits now differ from it, say why in one plain sentence ("카메라 움직임이 바뀌어서 처음부터 다시 만들어요, 81크레딧이에요") and give the new credits from facts. When the plan makes the clip again, say once, in one clause, that composition and movement can come out a little different. Mention credits otherwise only when asked. Write credits as "81크레딧" or "81 credits".
+Name each change by the exact thing in the clip it touches (the camera's push-in, the label on the product, the wall behind it), not by a quality alone ("속도", "느낌").
+When the clip makes a change doubtful, do it and say the risk in one clause: a new colour that is already around it ("병이 이미 파란색이라 파란 라벨은 잘 안 보일 수 있어요"), a very small thing, a change that hides the product.
 
 Limits (when any part of the message hits one, set "impossible": true and say so in one sentence):
 - A shorter clip or cutting a part is done in the editing studio, for free (facts.length.shorten). Never put it in the sheet; set "length": {"action": "shorter"}.
@@ -117,15 +131,15 @@ Limits (when any part of the message hits one, set "impossible": true and say so
 - Anything else facts says the studio cannot do.
 
 Reply ("reply"), what the customer reads:
-- In the customer's language: Korean when they write Korean, in 존댓말 ~요체; English when they write English.
+- In the customer's language: Korean when they write Korean, in 존댓말 ~요체; English when they write English, saying "I'll" (never "We'll" or "I will").
 - Two or three short sentences at most, one thought per sentence.
 - For change, correction, answer: say back what will change and what stays, in their nouns. For a correction, name what was replaced ("…는 빼고 …로 바꿀게요").
-- For confirm: say the plan stands and that the button below makes it. Never say it is being made.
+- For confirm: start with "네," (English: "Sure,"), say the plan stays as it is and that the button below makes it. Never say it is being made, never "확정".
 - For withdraw: say what was taken back, or that there is nothing to take back yet.
 - For tool_question: answer only from facts. If facts does not say, say you do not know.
 - For unreadable: one short question asking what they would like to change. When a sheet stands, first say in one clause what it is now.
 - No superlatives, no praise, no promises about how the result will look, no emoji.
-- Never use internal words: edit, reshoot, remake, prompt, model name, Seedance, Gemini, sheet, JSON, token, recipe, in_place, again, "look change", "painted", "category". ("모델" only for a person who appears in a clip.) Say how it is made only when it is made again or when the way changes, in plain words ("처음부터 다시 만들어요"); a change made inside the clip needs no word on how.
+- Never use internal words: edit, reshoot, remake, prompt, model name, Seedance, Gemini, sheet, JSON, token, recipe, in_place, again, "look change", "painted", "category", "scene", "product" as a label. ("모델" only for a person who appears in a clip.) Say how it is made only when it is made again or when the way changes, in plain words ("처음부터 다시 만들어요"); a change made inside the clip needs no word on how.
 Answer with JSON only.`;
 
 const ITEM_SCHEMA = {
@@ -134,8 +148,11 @@ const ITEM_SCHEMA = {
     text: { type: 'string' },
     kind: { type: 'string', enum: [...SHEET_ITEM_KINDS] },
     seconds: { type: 'integer' },
+    about: { type: 'string', enum: ['product', 'scene'] },
+    chosen: { type: 'boolean' },
+    marks: { type: 'array', items: { type: 'integer' } },
   },
-  required: ['text', 'kind'],
+  required: ['text', 'kind', 'about', 'chosen'],
 } as const;
 
 export const TALK_SCHEMA = {
@@ -168,6 +185,10 @@ export const TALK_SCHEMA = {
   required: ['kind', 'reply', 'sheet', 'way', 'impossible'],
 } as const;
 
+/** What the reading is told when its answer changed the product by its own choice (the one retry). */
+export const PRODUCT_CORRECTION =
+  'Your last answer changed the brand\'s product itself (an item with "about": "product" and "chosen": true). Choose among the surroundings instead (background, light, props, camera, pace) and say what you chose.';
+
 /* ------------------------------------------------------------------ facts */
 
 /** What the reading may state. Credits are whole studio credits; nothing here is a guess. */
@@ -183,9 +204,9 @@ export interface TalkFacts {
 }
 
 const WHY_NOT: Record<StudioReviseProblem, string> = {
-  too_short: 'the clip is under 4 seconds, too short to paint changes into',
-  too_long: 'the clip is over 30 seconds, too long to paint changes into',
-  unsupported: 'this clip cannot take changes painted into it',
+  too_short: 'the clip is under 4 seconds, too short to change inside',
+  too_long: 'the clip is over 30 seconds, too long to change inside',
+  unsupported: 'this clip cannot take changes inside it',
   references_gone: 'a picture it was first made with is gone, so it cannot be made again',
   too_many_references: 'too many pictures are attached',
 };
@@ -221,8 +242,9 @@ export function talkFacts(terms: TalkTerms, shown: { way: StudioReviseMode | nul
   const rules = [
     'Asking, changing the plan and answering questions are free. Credits are used only when the make button is pressed.',
     'Each change is saved as a new version next to the current one. The current version stays as it is.',
+    'Making runs in the background: the customer can keep working or close this panel, and the new version appears in the version row when it is ready. How long it takes depends on the clip (its length and quality) and on how busy the service is; there is no fixed time.',
     terms.stage === 'draft'
-      ? `This clip is a draft: the quick 480p take. Its final is the same take made again at 1080p, from the button on the version card${terms.finalKrw ? ` (${creditsOf(terms.finalKrw)} credits)` : ''}. A version with changes painted into a draft comes out as a plain 480p clip that cannot become a final; to get a final with the change, make the final first and change that.`
+      ? `This clip is a draft: the quick 480p take. Its final is the same take made again at 1080p, from the button on the version card${terms.finalKrw ? ` (${creditsOf(terms.finalKrw)} credits)` : ''}. A version with changes made inside a draft comes out as a plain 480p clip that cannot become a final; to get a final with the change, make the final first and change that.`
       : terms.stage === 'final'
         ? 'This clip is a final (1080p). A new version keeps that quality.'
         : 'A new version keeps this clip’s quality.',
@@ -263,10 +285,12 @@ export interface TalkReadingInput {
   questions: readonly ReviseQuestion[];
   answering: { question: string; option?: string; decide?: boolean } | null;
   attached: { pictures: number; videos: number; marks: Array<{ n: number; what: string | null }> };
-  clip: FilmSheet | null;
+  clip: ClipReading | null;
   madeWith: string;
   history: string[];
   facts: TalkFacts;
+  /** Set only on the retry after a broken rule. */
+  correction?: string;
 }
 
 /** The reading as the server takes it: shape-checked, trimmed; never trusted for spending. */
@@ -282,16 +306,33 @@ export interface TalkReading {
 
 const oneLine = (value: unknown, max: number) => (typeof value === 'string' ? value.replace(/\s+/g, ' ').trim().slice(0, max).trim() : '');
 
-/** The clip as the reading sees it: no base64, no blueprint extras. */
-function clipForReading(clip: FilmSheet | null) {
-  if (!clip) return null;
+function inventoryForReading(i: ClipInventory) {
   return {
-    seconds: clip.seconds,
-    aspect: clip.aspect,
-    shots: clip.shots.map((s) => ({ start: s.start, end: s.end, framing: s.framing, camera: s.camera, action: s.action })),
-    look: clip.look,
-    audio: clip.audio,
-    summary: clip.summary,
+    people: i.people,
+    people_note: i.peopleNote,
+    product: i.product,
+    product_colours: i.productColours,
+    mark: i.mark,
+    background: i.background,
+    light: i.light,
+    music: i.music,
+    speech: i.speech,
+    text_on_screen: i.textOnScreen,
+  };
+}
+
+/** The clip as the reading sees it: no base64, no blueprint extras. */
+function clipForReading(clip: ClipReading | null) {
+  if (!clip) return null;
+  const s: FilmSheet = clip.sheet;
+  return {
+    seconds: s.seconds,
+    aspect: s.aspect,
+    shots: s.shots.map((x) => ({ start: x.start, end: x.end, framing: x.framing, camera: x.camera, action: x.action })),
+    look: s.look,
+    audio: s.audio,
+    summary: s.summary,
+    inventory: inventoryForReading(clip.inventory),
   };
 }
 
@@ -307,6 +348,7 @@ export function talkPayload(input: TalkReadingInput): Record<string, unknown> {
     answering: input.answering,
     attached: input.attached,
     facts: input.facts,
+    ...(input.correction ? { correction: input.correction } : {}),
   };
 }
 
@@ -316,7 +358,6 @@ export function cleanReading(raw: unknown): TalkReading | null {
   if (!r || typeof r !== 'object') return null;
   if (typeof r.kind !== 'string' || !(STUDIO_TALK_KINDS as readonly string[]).includes(r.kind)) return null;
   const reply = typeof r.reply === 'string' ? r.reply.replace(/[ \t]+/g, ' ').trim().slice(0, SHEET_LIMITS.replyMax).trim() : '';
-  if (!reply) return null;
   const q = r.question as { point?: unknown; text?: unknown; options?: unknown } | undefined;
   let question: TalkReading['question'] = null;
   if (q && typeof q === 'object') {
@@ -329,6 +370,8 @@ export function cleanReading(raw: unknown): TalkReading | null {
     }
     if (point && text && options.length >= SHEET_LIMITS.optionsMin) question = { point, text, options: options.slice(0, SHEET_LIMITS.optionsMax) };
   }
+  // A reply may be empty only when it carries a question (the question is then the whole message).
+  if (!reply && !question) return null;
   const l = r.length as { action?: unknown; seconds?: unknown } | undefined;
   const action = l && (l.action === 'longer' || l.action === 'shorter') ? l.action : 'none';
   const seconds = l && typeof l.seconds === 'number' && Number.isFinite(l.seconds) ? Math.round(l.seconds) : null;
@@ -347,7 +390,7 @@ export type TalkReadOutcome =
   | { ok: true; reading: TalkReading; ms: number }
   | { ok: false; why: 'no_key' | 'failed' | 'shape'; ms: number };
 
-/** `opts` exist for the eval (scripts/revise-dialogue-eval.ts); the operation always uses LOW and `TALK_TIMEOUT_MS`. */
+/** One try. `opts` other than the budget exist for the eval (scripts/revise-dialogue-eval.ts). */
 export async function readTalk(deps: IntelDeps, input: TalkReadingInput, opts: { thinking?: 'LOW' | 'MEDIUM'; timeoutMs?: number } = {}): Promise<TalkReadOutcome> {
   const started = Date.now();
   const config = studioGeminiConfig(deps.env);
@@ -358,13 +401,38 @@ export async function readTalk(deps: IntelDeps, input: TalkReadingInput, opts: {
       parts: [{ text: JSON.stringify(talkPayload(input)) }],
       schema: TALK_SCHEMA as unknown as Record<string, unknown>,
       thinking: opts.thinking ?? 'LOW',
-      timeoutMs: opts.timeoutMs ?? TALK_TIMEOUT_MS,
+      timeoutMs: opts.timeoutMs ?? TALK_TRIES_MS[0],
     });
     const reading = cleanReading(raw);
     return reading ? { ok: true, reading, ms: Date.now() - started } : { ok: false, why: 'shape', ms: Date.now() - started };
   } catch {
     return { ok: false, why: 'failed', ms: Date.now() - started };
   }
+}
+
+/** Changes the studio chose by itself that touch the brand's product (never allowed). */
+export const choseProduct = (reading: Pick<TalkReading, 'sheet'>) => reading.sheet.change.filter((c) => c.chosen && c.about === 'product');
+
+export interface TalkTries {
+  outcome: TalkReadOutcome;
+  tries: number;
+  /** The first answer changed the product by its own choice (before the retry). */
+  productSlip: boolean;
+  ms: number;
+}
+
+/**
+ * The reading with its one retry: after a failure or a timeout (12 s, then 15 s), or after an answer that
+ * changed the product by the studio's own choice (then told so). Nothing reaches the customer in between.
+ */
+export async function readTalkWithTries(deps: IntelDeps, input: TalkReadingInput, opts: { thinking?: 'LOW' | 'MEDIUM' } = {}): Promise<TalkTries> {
+  const started = Date.now();
+  const first = await readTalk(deps, input, { ...opts, timeoutMs: TALK_TRIES_MS[0] });
+  if (first.ok && !choseProduct(first.reading).length) return { outcome: first, tries: 1, productSlip: false, ms: Date.now() - started };
+  if (!first.ok && first.why === 'no_key') return { outcome: first, tries: 1, productSlip: false, ms: 0 };
+  const slip = first.ok;
+  const second = await readTalk(deps, slip ? { ...input, correction: PRODUCT_CORRECTION } : input, { ...opts, timeoutMs: slip ? TALK_TRIES_MS[0] : TALK_TRIES_MS[1] });
+  return { outcome: second, tries: 2, productSlip: slip, ms: Date.now() - started };
 }
 
 /* ------------------------------------------------------------------ the server's decision */
@@ -382,16 +450,97 @@ export interface SettleInput {
 export type TalkSettled = Omit<StudioReviseTalk, 'ok' | 'version' | 'clipKnown'> & {
   /** For the eval and logs only: the reading named another way than the server chose. */
   wayAgrees: boolean;
+  /** For the eval and logs only: what the server took out of the reply or the sheet. */
+  dropped: { parroting: boolean; questionTwice: boolean; productChoices: number };
 };
 
 /** Sentences of `reply` that name a credit figure the facts never gave are taken out (a wrong price is never shown). */
 export function guardCredits(reply: string, allowed: ReadonlySet<number>): string {
   const sentences = reply.match(/[^.!?。？！]+[.!?。？！]?/g) ?? [reply];
   const kept = sentences.filter((s) => {
-    const figures = [...s.matchAll(/(\d[\d,]*)\s*(?:크레딧|credits?)/gi)].map((m) => Number(m[1]!.replace(/,/g, '')));
+    const figures = [
+      ...[...s.matchAll(/(\d[\d,]*)\s*(?:크레딧|credits?)/gi)].map((m) => Number(m[1]!.replace(/,/g, ''))),
+      ...[...s.matchAll(/(?:크레딧|credits?)\s*(?:은|는|이|가|:)?\s*(\d[\d,]*)/gi)].map((m) => Number(m[1]!.replace(/,/g, ''))),
+    ];
     return figures.every((n) => allowed.has(n));
   });
   return kept.join('').trim();
+}
+
+/** "크레딧은 81이 들고" -> "81크레딧이 들고": a credit figure is always written as a number with its unit. */
+export function tidyCredits(reply: string): string {
+  return reply.replace(/크레딧은\s*(\d[\d,]*)\s*(이|가)\s/g, '$1크레딧이 ');
+}
+
+const PARROT = /(싶으시군요|하시는군요|시는군요|원하시는군요|이해했어요|이해했습니다|드릴게요|드리겠습니다|you'?d like to|you want to|I understand|I see you)/i;
+const sentencesOf = (text: string) => (text.match(/[^.!?。？！]+[.!?。？！]?/g) ?? []).map((s) => s.trim()).filter(Boolean);
+
+/**
+ * A question turn as one message: what this message settled (one short clause, only when the sheet's
+ * changes moved), then the question, said once. A clause that restates the request, sounds done while it
+ * is open, or asks something itself is taken out.
+ */
+export function questionMessage(reply: string, question: string, settled: boolean): { text: string; parroting: boolean; twice: boolean } {
+  let parroting = false;
+  let twice = false;
+  const kept: string[] = [];
+  if (settled) {
+    for (const s of sentencesOf(reply)) {
+      if (/[?？]$/.test(s) || s.includes(question) || question.includes(s)) {
+        twice = true;
+        continue;
+      }
+      if (PARROT.test(s)) {
+        parroting = true;
+        continue;
+      }
+      kept.push(s);
+      break;
+    }
+  } else if (reply.trim()) {
+    parroting = sentencesOf(reply).some((s) => PARROT.test(s));
+    twice = sentencesOf(reply).some((s) => /[?？]$/.test(s));
+  }
+  return { text: [...kept, question].join(' ').trim(), parroting, twice };
+}
+
+/** The server's own withdrawal of one line of the sheet (the line's remove control; no reading). */
+/**
+ * The sheet without one change, and without what that change put into "leave out" or "keep" (taking back
+ * "꽃잎 빼기" also takes "꽃잎" out of what must not appear).
+ */
+export function withoutChange(sheet: ReviseSheet, index: number): ReviseSheet {
+  const gone = sheet.change[index];
+  if (!gone) return sheet;
+  const k = (t: string) => t.replace(/\s+/g, '').toLowerCase();
+  const touched = (item: string) => k(gone.text).includes(k(item)) || k(item).includes(k(gone.text));
+  return { change: sheet.change.filter((_, i) => i !== index), keep: sheet.keep, exclude: sheet.exclude.filter((x) => !touched(x)) };
+}
+
+export function settleRemoval(input: Omit<SettleInput, 'reading' | 'message' | 'answering'> & { index: number }): TalkSettled {
+  const { standing, terms } = input;
+  const sheet = withoutChange(standing.sheet, input.index);
+  const open = { edit: terms.edit.available, reshoot: terms.reshoot.available };
+  const way = wayForSheet(sheet, open);
+  const seconds = lengthOfSheet(sheet);
+  const estimateKrw = way === 'edit' ? terms.edit.estimateKrw : way === 'reshoot' ? (seconds !== null && terms.reshootAt ? terms.reshootAt(seconds) : terms.reshoot.estimateKrw) : 0;
+  const opened = openQuestion(standing.questions);
+  return {
+    kind: 'withdraw',
+    reply: null,
+    sheet,
+    questions: standing.questions.map((q) => ({ ...q, options: [...q.options] })),
+    open: opened,
+    way,
+    estimateKrw,
+    seconds,
+    canMake: way !== null && hasChange(sheet) && opened === null,
+    impossible: false,
+    editStudio: false,
+    changed: input.shown ? { way: input.shown.way !== way, credits: input.shown.estimateKrw !== estimateKrw } : { way: false, credits: false },
+    wayAgrees: true,
+    dropped: { parroting: false, questionTwice: false, productChoices: 0 },
+  };
 }
 
 export function settleTalk(input: SettleInput, allowedCredits: ReadonlySet<number> = new Set()): TalkSettled {
@@ -407,6 +556,7 @@ export function settleTalk(input: SettleInput, allowedCredits: ReadonlySet<numbe
   const open = { edit: terms.edit.available, reshoot: terms.reshoot.available };
   const changedFrom = (way: StudioReviseMode | null, krw: number) =>
     input.shown ? { way: input.shown.way !== way, credits: input.shown.estimateKrw !== krw } : { way: false, credits: false };
+  const dropped = { parroting: false, questionTwice: false, productChoices: 0 };
 
   if (!reading) {
     // Nothing was read: the sheet, the questions and the open question stay; no button until it is read.
@@ -414,7 +564,7 @@ export function settleTalk(input: SettleInput, allowedCredits: ReadonlySet<numbe
     const krw = priceOf(standing.sheet, way);
     return {
       kind: null, reply: null, sheet: standing.sheet, questions, open: opened, way, estimateKrw: krw, seconds: lengthOfSheet(standing.sheet),
-      canMake: false, impossible: false, editStudio: false, changed: changedFrom(way, krw), failed: true, wayAgrees: true,
+      canMake: false, impossible: false, editStudio: false, changed: changedFrom(way, krw), failed: true, wayAgrees: true, dropped,
     };
   }
 
@@ -441,9 +591,16 @@ export function settleTalk(input: SettleInput, allowedCredits: ReadonlySet<numbe
   if (kind === 'confirm' || kind === 'tool_question' || kind === 'unreadable' || kind === 'not_possible') {
     sheet = standing.sheet;
   } else if (kind === 'withdraw') {
-    sheet = !hasChange(standing.sheet) ? standing.sheet : onlyRemoved(standing.sheet, reading.sheet) ? reading.sheet : withoutLast(standing.sheet);
+    sheet = !hasChange(standing.sheet) ? standing.sheet : onlyRemoved(standing.sheet, reading.sheet) ? reading.sheet : withoutChange(standing.sheet, standing.sheet.change.length - 1);
   } else {
     sheet = reading.sheet;
+  }
+
+  // The brand's product is never changed by the studio's own choice (the reading was retried once already).
+  const slips = sheet.change.filter((c) => c.chosen && c.about === 'product');
+  if (slips.length) {
+    dropped.productChoices = slips.length;
+    sheet = { ...sheet, change: sheet.change.filter((c) => !(c.chosen && c.about === 'product')) };
   }
 
   // Length is never booked as anything else: a longer clip only within what a remake of this clip can take;
@@ -473,7 +630,17 @@ export function settleTalk(input: SettleInput, allowedCredits: ReadonlySet<numbe
   const seconds = lengthOfSheet(sheet);
   const canMake = way !== null && hasChange(sheet) && openNow === null && kind !== 'unreadable';
   const allowed = new Set<number>([...allowedCredits, creditsOf(estimateKrw)]);
-  const reply = guardCredits(reading.reply, allowed) || reading.reply.replace(/\d[\d,]*\s*(?:크레딧|credits?)/gi, '').trim();
+  let reply = tidyCredits(guardCredits(reading.reply, allowed) || reading.reply.replace(/\d[\d,]*\s*(?:크레딧|credits?)/gi, '').trim());
+  if (openNow !== null) {
+    const message = questionMessage(reply, questions[openNow]!.question, changesDiffer(standing.sheet, sheet));
+    reply = message.text;
+    dropped.parroting = message.parroting;
+    dropped.questionTwice = message.twice;
+  }
+  if (!reply) {
+    // A reply emptied by the guards and no question to stand for it: nothing truthful to show.
+    return { ...settleTalk({ ...input, reading: null }), wayAgrees: true, dropped };
+  }
   return {
     kind,
     reply,
@@ -488,6 +655,7 @@ export function settleTalk(input: SettleInput, allowedCredits: ReadonlySet<numbe
     editStudio,
     changed: changedFrom(way, estimateKrw),
     wayAgrees: reading.way === wayWord(way),
+    dropped,
   };
 }
 
@@ -528,8 +696,11 @@ export async function talkStudioRevise(deps: StudioDeps, viewer: Viewer, raw: un
       requireCreate(await studioSeat(sql, viewer.userId, v.organizationId));
       const allowance = await loadAllowance(sql, v.organizationId, deps.env, now);
       if (allowance.capKrw <= 0) throw new StudioDenied('allowance_closed');
-      if (!takeFreeIntelSlot(`revise:${v.organizationId}`, FREE_INTEL_LIMITS.revisePerMinute, now.getTime())) throw new StudioDenied('too_many_running');
       const recipe = await loadRevisionRecipe(sql, v.organizationId, v.outputId);
+      // Only a turn that reads something takes a slot of the per-minute cap: a message, or an opening call
+      // that has to read the clip. An opening call on a clip already read, and a line's removal, are free.
+      const reads = v.remove === undefined && (Boolean(v.message) || !storedClip(recipe.baseJob, v.outputId, locale));
+      if (reads && !takeFreeIntelSlot(`revise:${v.organizationId}`, FREE_INTEL_LIMITS.revisePerMinute, now.getTime())) throw new StudioDenied('too_many_running');
       await resolveAdded(sql, v.organizationId, v.references, deps.media, locale);
       const request = { prompt: v.message || 'x', references: [...v.references], marks: v.marks };
       const edit = await editWay(sql, v.organizationId, recipe, { ...request, mode: 'edit' }, deps.media, locale);
@@ -553,15 +724,24 @@ export async function talkStudioRevise(deps: StudioDeps, viewer: Viewer, raw: un
     picturesMax: STUDIO_LIMITS.referencesMax - 1,
     videosMax: STUDIO_REVISE_MATERIALS_MAX,
   };
-  const clip = await clipSheetFor(deps, { organizationId: v.organizationId, job: recipe.baseJob, outputId: v.outputId, locale, read: !v.message });
-  const facts = talkFacts(terms, v.shown);
-  const base = { ok: true as const, version: recipe.nextVersion, clipKnown: Boolean(clip) };
-  if (!v.message) {
-    const way = wayForSheet(v.sheet, { edit: terms.edit.available, reshoot: terms.reshoot.available });
-    const settled = settleTalk({ reading: null, message: '', standing: { sheet: cleanSheet(v.sheet), questions: v.questions }, answering: null, terms, shown: v.shown });
-    const { wayAgrees: _w, failed: _f, ...rest } = settled;
-    return { ...base, ...rest, way, canMake: way !== null && hasChange(v.sheet) && openQuestion(v.questions) === null };
+  const standing = { sheet: cleanSheet(v.sheet), questions: v.questions };
+  const base = { ok: true as const, version: recipe.nextVersion };
+  const strip = ({ wayAgrees: _w, dropped: _d, ...rest }: TalkSettled) => rest;
+
+  // A line's remove control: the server takes it out; nothing is read.
+  if (v.remove !== undefined) {
+    if (v.remove >= standing.sheet.change.length) return failure('invalid');
+    return { ...base, clipKnown: Boolean(recipe.baseJob.params?.clipSheets), ...strip(settleRemoval({ standing, terms, shown: v.shown, index: v.remove })) };
   }
+
+  const clip = await clipFor(deps, { organizationId: v.organizationId, job: recipe.baseJob, outputId: v.outputId, locale, read: !v.message });
+  if (!v.message) {
+    const way = wayForSheet(standing.sheet, { edit: terms.edit.available, reshoot: terms.reshoot.available });
+    const settled = settleTalk({ reading: null, message: '', standing, answering: null, terms, shown: v.shown });
+    const { failed: _f, ...rest } = strip(settled);
+    return { ...base, clipKnown: Boolean(clip), ...rest, way, canMake: way !== null && hasChange(standing.sheet) && openQuestion(v.questions) === null };
+  }
+  const facts = talkFacts(terms, v.shown);
   const opened = openQuestion(v.questions);
   const answering =
     opened !== null && v.answering
@@ -571,10 +751,10 @@ export async function talkStudioRevise(deps: StudioDeps, viewer: Viewer, raw: un
           ...(v.answering.decide ? { decide: true } : {}),
         }
       : null;
-  const outcome = await readTalk(deps.intelDeps, {
+  const read = await readTalkWithTries(deps.intelDeps, {
     message: v.message,
     turns: v.turns,
-    sheet: cleanSheet(v.sheet),
+    sheet: standing.sheet,
     questions: v.questions,
     answering,
     attached: { pictures: v.references.length, videos: v.materials, marks: v.marks.map((m, i) => ({ n: i + 1, what: m.what ?? m.label ?? null })) },
@@ -585,15 +765,14 @@ export async function talkStudioRevise(deps: StudioDeps, viewer: Viewer, raw: un
   });
   const settled = settleTalk(
     {
-      reading: outcome.ok ? outcome.reading : null,
+      reading: read.outcome.ok ? read.outcome.reading : null,
       message: v.message,
-      standing: { sheet: cleanSheet(v.sheet), questions: v.questions },
+      standing,
       answering: opened !== null ? (v.answering ?? null) : null,
       terms,
       shown: v.shown,
     },
     factCredits(facts),
   );
-  const { wayAgrees: _agrees, ...rest } = settled;
-  return { ...base, ...rest };
+  return { ...base, clipKnown: Boolean(clip), ...strip(settled) };
 }
