@@ -509,6 +509,11 @@ export const AssetCompleteSchema = z.object({
   width: z.number().int().positive().max(12_000).optional(),
   height: z.number().int().positive().max(12_000).optional(),
   seconds: z.number().positive().max(600).optional(),
+  /**
+   * A picture made for one run and deleted when its runs settle ("빈 곳 채우기"'s whole-canvas source): it is
+   * hidden from the library, so its role is not recognised (asset-role.ts). Skipping is all it does.
+   */
+  transient: z.boolean().optional(),
 });
 
 /** Read a reference video already in the library. `depth` defaults to `basic`. */
@@ -579,6 +584,11 @@ export interface StudioAssetView {
   id: string;
   kind: StudioAssetKind;
   role: StudioAssetRole | null;
+  /**
+   * Who set `role`: `auto` = the upload check (with a role: recognised automatically; without: it was not sure
+   * and will not ask again), `user` = the customer. Absent while nobody has, e.g. while the check runs.
+   */
+  roleSource?: 'auto' | 'user';
   name: string;
   tags: string[];
   /** Displayable address (full size for images, the file for video and audio). */
@@ -817,6 +827,7 @@ export interface StudioRevisePlan {
   clarify?: { question: string; options: string[] };
 }
 export type StudioAssetReserved = { ok: true; id: string; direct: boolean; url?: string };
-export type StudioAssetSaved = { ok: true; asset: StudioAssetView };
+/** `roleCheck`: an upload whose category is being recognised now; the screen reads the library again shortly. */
+export type StudioAssetSaved = { ok: true; asset: StudioAssetView; roleCheck?: true };
 export type StudioHandoffDone = { ok: true; projectId: string; href: string };
 export type StudioDone = { ok: true };

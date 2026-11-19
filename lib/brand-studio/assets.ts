@@ -32,6 +32,7 @@ import {
 import { lockOrganization, requireCreate, studioSeat, StudioDenied } from './access';
 import { bytesLimit, checkUpload, imageInfo, kindOfMime, sha256Hex, thumbnailWebp, videoFrameRate, videoInfo } from './files';
 import { recordAssetFps } from './asset-fps';
+import { scheduleRoleCheck } from './asset-role';
 import { failure, guarded } from './outcome';
 import { dropUnreferencedStudioKeys, type PhysicalCleanupExclusion } from './physical-cleanup';
 import { assetView, readyOutput } from './repo';
@@ -76,9 +77,10 @@ export async function reserveStudioAsset(deps: StudioDeps, viewer: Viewer, raw: 
       const id = randomUUID();
       const key = `brand-studio/${v.organizationId}/${id}`;
       await sql.query(
-        `insert into brand_studio_assets (id, organization_id, kind, role, name, mime, size_bytes, storage_key, source, status, created_by, request_id)
-          values ($1, $2, $3, $4, $5, $6, $7, $8, 'upload', 'pending', $9, $10)`,
-        [id, v.organizationId, kind, v.role ?? null, v.name, v.mime, v.sizeBytes, key, viewer.userId, v.requestId],
+        `insert into brand_studio_assets (id, organization_id, kind, role, role_source, name, mime, size_bytes, storage_key, source, status, created_by, request_id)
+          values ($1, $2, $3, $4, $5, $6, $7, $8, $9, 'upload', 'pending', $10, $11)`,
+        // A category the uploader chose is theirs: the upload check (asset-role.ts) never touches it.
+        [id, v.organizationId, kind, v.role ?? null, v.role ? 'user' : null, v.name, v.mime, v.sizeBytes, key, viewer.userId, v.requestId],
       );
       await adjustOrganizationStorageBytes(sql, v.organizationId, v.sizeBytes);
       return { id, key, pending: true };
@@ -188,7 +190,10 @@ async function completeOnce(deps: StudioDeps, viewer: Viewer, raw: unknown, atte
   if (releasedStagingKey && releasedStagingKey !== outcome.storage_key) {
     await deps.staging.releaseStaging?.(releasedStagingKey).catch(() => undefined);
   }
-  return { ok: true, asset: assetView(outcome, deps.media) };
+  // The category check runs after this answer, never on it; a picture nobody categorised yet is read once.
+  // A transient source (made for one run, hidden and deleted afterwards) is not read at all.
+  const roleCheck = v.transient ? false : scheduleRoleCheck(deps, outcome);
+  return { ok: true, asset: assetView(outcome, deps.media), ...(roleCheck ? { roleCheck: true as const } : {}) };
 }
 
 export async function updateStudioAsset(deps: StudioDeps, viewer: Viewer, raw: unknown): Promise<StudioAssetSaved | StudioFailure> {
@@ -198,15 +203,23 @@ export async function updateStudioAsset(deps: StudioDeps, viewer: Viewer, raw: u
   const outcome = await guarded(() =>
     deps.sql.transaction(async (sql) => {
       requireCreate(await studioSeat(sql, viewer.userId, v.organizationId));
+      const before =
+        v.role !== undefined
+          ? (await sql.query<Pick<AssetRow, 'role' | 'role_source'>>('select role, role_source from brand_studio_assets where id = $1 and organization_id = $2 for update', [v.assetId, v.organizationId])).rows[0]
+          : undefined;
+      // Sending a category (or clearing it) makes it the customer's: `role_source = 'user'`, never overwritten.
       const row = (
         await sql.query<AssetRow>(
           `update brand_studio_assets set name = coalesce($3, name), role = case when $4::boolean then $5 else role end,
+              role_source = case when $4::boolean then 'user' else role_source end,
               tags = coalesce($6::text[], tags)
             where id = $1 and organization_id = $2 and status = 'ready' and deleted_at is null returning *`,
           [v.assetId, v.organizationId, v.name ?? null, v.role !== undefined, v.role ?? null, v.tags ? [...new Set(v.tags)] : null],
         )
       ).rows[0];
       if (!row) throw new StudioDenied('not_found');
+      // How often the recognised category is changed (the only record of a correction; the row now says 'user').
+      if (before?.role_source === 'auto' && before.role !== row.role) deps.log?.('asset_role_corrected', { from: before.role, to: row.role });
       return row;
     }),
   );
@@ -263,11 +276,11 @@ export async function assetFromOutput(deps: StudioDeps, viewer: Viewer, raw: unk
       const fallback = (job?.prompt ?? '').replace(/\s+/g, ' ').trim().slice(0, 40) || `${output.kind} ${new Date().toISOString().slice(0, 10)}`;
       const asset = (
         await sql.query<AssetRow>(
-          `insert into brand_studio_assets (organization_id, kind, role, name, mime, size_bytes, width, height, duration_ms, storage_key,
+          `insert into brand_studio_assets (organization_id, kind, role, role_source, name, mime, size_bytes, width, height, duration_ms, storage_key,
               thumb_key, sha256, source, source_output_id, status, created_by)
-            values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, 'generation', $13, 'ready', $14) returning *`,
+            values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, 'generation', $14, 'ready', $15) returning *`,
           [
-            v.organizationId, output.kind, v.role ?? null, v.name ?? fallback, output.mime ?? 'image/png', Number(output.bytes ?? 1),
+            v.organizationId, output.kind, v.role ?? null, v.role ? 'user' : null, v.name ?? fallback, output.mime ?? 'image/png', Number(output.bytes ?? 1),
             output.width, output.height, output.duration_ms, output.storage_key, output.thumb_key, output.sha256, output.id, viewer.userId,
           ],
         )

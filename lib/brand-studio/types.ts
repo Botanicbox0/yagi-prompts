@@ -157,6 +157,11 @@ export interface StudioDeps {
   now?: () => Date;
   /** Server log line; never shown to a customer. */
   log?: (event: string, detail?: Record<string, unknown>) => void;
+  /**
+   * Work that runs after the answer is sent (Next's `after()` in the runtime). Absent means such work is not
+   * scheduled at all (tests, scripts): today only the upload's category check (asset-role.ts).
+   */
+  later?: (task: () => Promise<void>) => void;
 }
 
 /* ------------------------------------------------------------------- rows */
@@ -328,6 +333,8 @@ export interface AssetRow {
   organization_id: string;
   kind: StudioAssetKind;
   role: StudioAssetRole | null;
+  /** Who set `role` (migration 0098): `user` = the customer, `auto` = the upload check (asset-role.ts), null = nobody yet. */
+  role_source: 'auto' | 'user' | null;
   name: string;
   tags: string[] | string;
   mime: string;

@@ -931,7 +931,8 @@ export default function LayerEditor(
         return;
       }
       const name = exportFileName(base.name ?? copy.export.fallbackName, copy.canvas.fillFileSuffix, rendered.mime);
-      const uploaded = await props.upload(new File([rendered.blob], name, { type: rendered.mime }));
+      // Hidden from the library and deleted once its runs settle: not read for a role.
+      const uploaded = await props.upload(new File([rendered.blob], name, { type: rendered.mime }), { transient: true });
       if (!uploaded.ok) {
         setFillError(region.errorText(uploaded.code));
         return;

@@ -30,6 +30,11 @@ export interface TrayItem {
   width?: number | null;
   height?: number | null;
   role?: StudioAssetRole;
+  /**
+   * Attached while the library was still recognising this upload's role: the role is filled in once it
+   * arrives (`withRecognisedRoles`), unless a role is picked here first. Never sent to the server.
+   */
+  roleCheck?: true;
   use?: string;
   avoid?: string;
   frame?: "start" | "end";
@@ -50,7 +55,25 @@ export function trayItemFromAsset(asset: StudioAssetView): TrayItem {
     width: asset.width,
     height: asset.height,
     ...(asset.role ? { role: asset.role } : {}),
+    ...(!asset.role && !asset.roleSource && asset.kind === "image" && asset.source === "upload" ? { roleCheck: true as const } : {}),
   };
+}
+
+/**
+ * Pictures attached before their recognised role arrived get it now; one already given a role in the tray
+ * keeps it. The same array comes back when nothing changed.
+ */
+export function withRecognisedRoles(items: TrayItem[], assets: readonly StudioAssetView[]): TrayItem[] {
+  let changed = false;
+  const next = items.map((item) => {
+    if (!item.roleCheck || !item.assetId) return item;
+    const asset = assets.find((a) => a.id === item.assetId);
+    if (!asset?.roleSource) return item;
+    changed = true;
+    const { roleCheck: _answered, ...rest } = item;
+    return asset.role && !rest.role ? { ...rest, role: asset.role } : rest;
+  });
+  return changed ? next : items;
 }
 
 export function trayItemFromOutput(output: StudioOutputView, name: string): TrayItem {
@@ -106,7 +129,13 @@ export function addToTray(items: readonly TrayItem[], item: TrayItem, first = fa
 }
 
 export function updateTrayItem(items: readonly TrayItem[], key: string, patch: Partial<Omit<TrayItem, "key" | "kind">>): TrayItem[] {
-  return items.map((item) => (item.key === key ? { ...item, ...patch } : item));
+  return items.map((item) => {
+    if (item.key !== key) return item;
+    // A role picked (or cleared) here is the customer's: a recognised one arriving later does not replace it.
+    if (!("role" in patch)) return { ...item, ...patch };
+    const { roleCheck: _picked, ...rest } = item;
+    return { ...rest, ...patch };
+  });
 }
 
 export function removeFromTray(items: readonly TrayItem[], key: string): TrayItem[] {

@@ -5,7 +5,7 @@
  */
 import { useCallback, useEffect, useMemo, useReducer, useRef, useState } from "react";
 import type { z } from "zod";
-import type { FilmSheet, ReviseMarkReadSchema, StudioFailure, StudioJobCreate, StudioJobGroupCreate, StudioJobView, StudioProjectRef, StudioReviseMarkRead, StudioState } from "@/lib/brand-studio/contracts";
+import type { FilmSheet, ReviseMarkReadSchema, StudioAssetView, StudioFailure, StudioJobCreate, StudioJobGroupCreate, StudioJobView, StudioProjectRef, StudioReviseMarkRead, StudioState } from "@/lib/brand-studio/contracts";
 import { createStudioApi, isFailure, measureInBrowser, type ApiResult, type StudioApi, type StudioOps } from "./api";
 import { newRequestId } from "./copy";
 import { createPollLoop, type PollLoop } from "./poller";
@@ -257,16 +257,36 @@ export function useStudio({
     [api, organizationId],
   );
 
+  // Uploads whose role the server is recognising (`roleCheck`): the library is read again a few times until
+  // each has its answer (`roleSource`), at most ROLE_READ_DELAYS_MS.length times.
+  const [awaitingRoles, setAwaitingRoles] = useState<{ ids: string[]; reads: number }>({ ids: [], reads: 0 });
+  const assets = store.state?.assets;
+  useEffect(() => {
+    if (!awaitingRoles.ids.length) return;
+    const still = stillAwaitingRole(awaitingRoles.ids, assets ?? []);
+    if (still.length !== awaitingRoles.ids.length) return setAwaitingRoles((current) => ({ ...current, ids: still }));
+    const delay = ROLE_READ_DELAYS_MS[awaitingRoles.reads];
+    if (delay === undefined) return setAwaitingRoles({ ids: [], reads: 0 });
+    const timer = window.setTimeout(() => {
+      refreshSilently();
+      setAwaitingRoles((current) => ({ ...current, reads: current.reads + 1 }));
+    }, delay);
+    return () => window.clearTimeout(timer);
+  }, [awaitingRoles, assets, refreshSilently]);
+
   const [uploads, setUploads] = useState<Array<{ id: string; name: string }>>([]);
   const upload = useCallback(
-    async (file: File) => {
+    /** `transient`: a source made for one run and deleted afterwards ("빈 곳 채우기"); its role is not read. */
+    async (file: File, options: { transient?: boolean } = {}) => {
       const id = newRequestId();
       setUploads((current) => [...current, { id, name: file.name }]);
       try {
-        const result = await api.upload(file, { requestId: id, measure: measureInBrowser });
+        const result = await api.upload(file, { requestId: id, measure: measureInBrowser, ...(options.transient ? { transient: true } : {}) });
         if (!isFailure(result)) {
           dispatch({ type: "assetUpserted", asset: result.asset });
           refreshSilently();
+          const assetId = result.asset.id;
+          if (result.roleCheck) setAwaitingRoles((current) => ({ ids: [...new Set([...current.ids, assetId])], reads: 0 }));
         }
         return result;
       } finally {
@@ -277,6 +297,20 @@ export function useStudio({
   );
 
   return { store, load, createJob, createGroup, assignProject, createProject, cancelJob, saveOutput, deleteOutput, deleteJob, updateAsset, deleteAsset, handoff, enhancePrompt, planRevision, readMark, films, analyzeFilm, uploads, upload };
+}
+
+/**
+ * When the library is read again after an upload whose role is being recognised: about 4, 8, 14 and 24 s
+ * after it (one reading takes about 4 s and gives up at 15 s).
+ */
+export const ROLE_READ_DELAYS_MS: readonly number[] = [4000, 4000, 6000, 10_000];
+
+/** The uploads still waiting for their role: in the library and with no answer yet. */
+export function stillAwaitingRole(ids: readonly string[], assets: readonly Pick<StudioAssetView, "id" | "roleSource">[]): string[] {
+  return ids.filter((id) => {
+    const asset = assets.find((a) => a.id === id);
+    return Boolean(asset && !asset.roleSource);
+  });
 }
 
 /**

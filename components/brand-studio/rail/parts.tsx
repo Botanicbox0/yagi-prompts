@@ -30,9 +30,11 @@ export interface ThumbProps {
   actions?: ThumbAction[];
   /** A menu after the actions (more). */
   menu?: ReactNode;
+  /** One short label over the bottom-right corner (an upload's role), shown with the actions. */
+  label?: string | null;
 }
 
-export function Thumb({ item, copy, draggable, attachOnPress, onAttach, onView, actions = [], menu }: ThumbProps) {
+export function Thumb({ item, copy, draggable, attachOnPress, onAttach, onView, actions = [], menu, label }: ThumbProps) {
   const name = itemName(item, copy);
   const still = item.thumbUrl ?? (item.kind === "image" ? item.url : null);
   return (
@@ -58,6 +60,11 @@ export function Thumb({ item, copy, draggable, attachOnPress, onAttach, onView, 
         )}
         {item.kind !== "image" && item.seconds != null && <span className="bsr-dur">{clock(item.seconds)}</span>}
         {item.kind === "video" && item.seconds == null && <span className="bsr-dur">{copy.item.video}</span>}
+        {label && (
+          <span className="bsr-dur bsr-label" data-library-role>
+            {label}
+          </span>
+        )}
       </button>
       <div className="bsr-thumb-actions">
         {actions.map((action) => (

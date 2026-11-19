@@ -234,6 +234,12 @@
   -webkit-backdrop-filter: blur(24px) saturate(190%);
   backdrop-filter: blur(24px) saturate(190%);
 }
+/* An upload's role: the photo stays the card (TASTE.md 2026-11-16), so it shows with the corner actions. */
+.bsr-label { left: auto; right: 4px; opacity: 0; transition: opacity var(--ys-dur) var(--ys-ease); }
+.bsr-thumb:hover .bsr-label, .bsr-thumb:focus-within .bsr-label { opacity: 1; }
+@media (hover: none) {
+  .bsr-label { opacity: 1; }
+}
 .bsr-audio { display: flex; flex-direction: column; justify-content: center; align-items: center; gap: 4px; width: 100%; height: 100%; padding: 6px; background: var(--ys-raised); color: var(--ys-ink-secondary); }
 .bsr-audio .bsr-icon { width: 22px; height: 22px; }
 .bsr-audio-name { display: -webkit-box; max-width: 100%; overflow: hidden; color: var(--ys-ink); font-size: 11px; line-height: 1.3; text-align: center; overflow-wrap: anywhere; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
@@ -387,12 +393,30 @@
 
 /* --------------------------------------------------------------- dialog */
 
-.bsr-dialog { width: min(420px, calc(100vw - 32px)); padding: 0; border: 0; border-radius: 24px; background: var(--ys-surface); box-shadow: var(--ys-float); color: var(--ys-ink); }
-.bsr-dialog::backdrop { background: rgba(16, 18, 24, 0.28); }
+/* The page's reset takes every margin to 0, which pins a modal dialog to the top-left corner; centre it here
+   (as `.bs-dialog` does in studio-v2.css) and dim the page as the studio's own dialogs do. */
+.bsr-dialog {
+  inset: 0;
+  width: min(420px, calc(100vw - 32px));
+  max-height: calc(100dvh - 32px);
+  margin: auto;
+  padding: 0;
+  overflow: auto;
+  border: 0;
+  border-radius: 24px;
+  background: var(--ys-surface);
+  box-shadow: var(--ys-float);
+  color: var(--ys-ink);
+}
+.bsr-dialog::backdrop { background: rgba(17, 17, 19, 0.56); }
 .bsr-dialog-body { display: flex; flex-direction: column; gap: 6px; padding: 20px; }
 .bsr-dialog-body h2 { margin: 0 0 8px; font-size: 17px; font-weight: 560; letter-spacing: -0.02em; }
-.bsr-dialog-body label { margin-top: 6px; color: var(--ys-ink-secondary); font-size: 12px; font-weight: 500; }
+.bsr-dialog-body label, .bsr-dialog-label { margin-top: 6px; color: var(--ys-ink-secondary); font-size: 12px; font-weight: 500; }
 .bsr-dialog-actions { margin-top: 12px; }
+/* The role picker: the upload tab's filter chips, raised off the dialog's own surface. */
+.bsr-role-pick { margin-top: 2px; }
+.bsr-role-pick .bsr-chip:not([data-selected]) { background: var(--ys-raised); }
+.bsr-role-pick .bsr-chip:not([data-selected]):hover { background: var(--ys-hover); color: var(--ys-ink); }
 
 /* --------------------------------------------------------------- phones */
 

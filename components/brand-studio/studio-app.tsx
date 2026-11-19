@@ -24,7 +24,7 @@ import { HandoffDialog, handoffInput } from "./handoff-dialog";
 import { naturalSize } from "./layers/browser";
 import { LibraryRail } from "./rail";
 import { useStudioLibrary } from "./rail/use-library";
-import { trayItemFromAsset, trayItemFromOutput, trayLabels, withStartFrame, type RefSource, type TrayItem } from "./refs";
+import { trayItemFromAsset, trayItemFromOutput, trayLabels, withRecognisedRoles, withStartFrame, type RefSource, type TrayItem } from "./refs";
 import { ShareReviewDialog, useShareReviewEvent, type ShareReviewTarget } from "./share-review-dialog";
 import { libraryKey, type LayerEditorProps, type LayerEditorRegionPreset } from "./seams";
 import { fillSourcesToDelete, findOutput, listedJobs } from "./store";
@@ -231,6 +231,11 @@ export function StudioApp({ organizationId, locale, copy, mode, libraryCopy, lay
   const deletingFillRef = useRef<Set<string>>(new Set());
   const allAssets = useMemo(() => state?.assets ?? [], [state?.assets]);
   const assets = useMemo(() => (fillSources.size ? allAssets.filter((a) => !fillSources.has(a.id)) : allAssets), [allAssets, fillSources]);
+  // A picture attached while its role was still being recognised shows that role in the tray once it is in.
+  const setTray = dock.setTray;
+  useEffect(() => {
+    setTray((current) => withRecognisedRoles(current, allAssets));
+  }, [allAssets, setTray]);
   const canCreate = state?.canCreate ?? false;
   // Present only while runs can belong to a project (flag on, migration applied) and on the image screen.
   const projects = mode === "image" && projectsCopy ? state?.projects : undefined;
@@ -1130,7 +1135,7 @@ export function StudioApp({ organizationId, locale, copy, mode, libraryCopy, lay
                 }
               : null
           }
-          upload={(file) => studio.upload(file)}
+          upload={(file, options) => studio.upload(file, options)}
           onSaved={(asset) => {
             setStatus(copy.gallery.decorated);
             void asset;

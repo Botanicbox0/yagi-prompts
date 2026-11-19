@@ -117,6 +117,7 @@ export function UploadsTab({ kit, assets, notice, uploading, searchId, dropActiv
                 attachOnPress={kit.attachOnPress}
                 onAttach={kit.onAttach}
                 onView={kit.onView}
+                label={asset.role ? copy.roles[asset.role] : null}
                 actions={[kit.likeAction(item)]}
                 menu={
                   items.length > 0 && (
@@ -128,7 +129,16 @@ export function UploadsTab({ kit, assets, notice, uploading, searchId, dropActiv
           })}
         </ul>
       )}
-      {editing && <AssetDialog asset={editing} copy={copy} onUpdate={onUpdate} onDelete={onDelete} onClose={() => setEditing(null)} />}
+      {editing && (
+        <AssetDialog
+          asset={editing}
+          copy={copy}
+          onUpdate={onUpdate}
+          onDelete={onDelete}
+          onClose={() => setEditing(null)}
+          returnFocus={() => document.querySelector<HTMLElement>(`[data-library-item="a:${editing.id}"] .bsr-thumb-main`)}
+        />
+      )}
     </section>
   );
 }
