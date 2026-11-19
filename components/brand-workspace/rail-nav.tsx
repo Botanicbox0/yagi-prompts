@@ -29,6 +29,18 @@ import type { RoomsShellCopy } from '@/messages/rooms-shell';
 import { BRAND_HOME_PATH } from '@/lib/brands/workspace/home';
 import { CreditsMeter, RailToasts, useRoomUnread, useStudioActivity } from './rail-activity';
 import {
+  RAIL_MODE_COOKIE,
+  parseRailModeCookie,
+  railModeGuest,
+  railModeItems,
+  railModeSwitchTarget,
+  railModes,
+  rememberRailMode,
+  rememberedRailMode,
+  resolveRailMode,
+  type RailMode,
+} from './rail-mode';
+import {
   NAV_ORDER_STORAGE_KEY,
   RAIL_COOKIE,
   RAIL_GROUP,
@@ -48,7 +60,6 @@ import {
   railCreateLinks,
   railItems,
   type RailCreateKey,
-  type RailGroupId,
   type RailItemId,
 } from './rail-model';
 
@@ -72,9 +83,9 @@ export interface RailNavigationProps {
   initialExpanded: boolean;
   scope: (path: string) => string;
   /**
-   * Project rooms are open for this brand (docs/BRAND-ROOMS.md §2): the rail splits into 직접 만들기 and
-   * 야기 팀과, 메시지 appears with its unread badge, and "+" gains 야기 팀에 의뢰하기. Needs `roomsCopy`;
-   * without both the rail is exactly the ungrouped one.
+   * Project rooms are open for this brand (docs/BRAND-ROOMS.md §2): the rail has two modes, 직접 만들기 and
+   * 야기 팀과 (rail-mode.ts), with a switch when the brand has both; 알림함 appears with its unread badge, and
+   * 야기 팀과 gets 새 프로젝트 의뢰. Needs `roomsCopy`; without both the rail is exactly the ungrouped one.
    */
   rooms?: boolean;
   roomsCopy?: RoomsShellCopy['nav'];
@@ -83,6 +94,31 @@ export interface RailNavigationProps {
    * It sits above both groups, fixed: never dragged, reordered or folded into a group.
    */
   home?: string;
+  /** The mode this browser last used per brand (the layout's reading of the `twings_brand_mode` cookie). */
+  modeMemory?: Readonly<Record<string, RailMode>>;
+}
+
+/** The switch's two sides: a pen for making it yourself, two people for working with the team. */
+const MODE_ICON: Readonly<Record<RailMode, string>> = {
+  make: 'M4.5 15.5l1-3.6 7.6-7.6 2.6 2.6-7.6 7.6z M11.6 5.8l2.6 2.6',
+  team: 'M7 8a3 3 0 1 0 0-.01M2.5 16.5v-.5a4.5 4.5 0 0 1 9 0v.5M13.5 6a2.5 2.5 0 1 1 0 5M14.5 13a4 4 0 0 1 3 3.5',
+};
+
+/** sessionStorage: the side a keyboard switch just opened, so the next page puts focus back on the switch. */
+const MODE_FOCUS_KEY = 'twings_brand_mode_focus';
+
+function writeMode(organizationId: string, mode: RailMode): void {
+  try {
+    const current = document.cookie
+      .split('; ')
+      .find((part) => part.startsWith(`${RAIL_MODE_COOKIE}=`))
+      ?.slice(RAIL_MODE_COOKIE.length + 1);
+    const value = rememberRailMode(parseRailModeCookie(current), organizationId, mode);
+    const secure = window.location.protocol === 'https:' ? '; Secure' : '';
+    document.cookie = `${RAIL_MODE_COOKIE}=${encodeURIComponent(value)}; Path=/; Max-Age=31536000; SameSite=Lax${secure}`;
+  } catch {
+    // Cookies blocked: the rail still follows the page, and the next visit opens on the brand's default.
+  }
 }
 
 /** 18px stroke house on the rail's 20-unit grid. */
@@ -130,7 +166,7 @@ export function RailNavigation(props: RailNavigationProps) {
   const menuId = useId();
   const sheetId = useId();
   const sheetTitleId = useId();
-  const groupTitleId = useId();
+  const modeButtons = useRef<Partial<Record<RailMode, HTMLButtonElement | null>>>({});
 
   const nav = props.rooms && props.roomsCopy ? props.roomsCopy : null;
   const activity = useStudioActivity({ organizationId: props.organizationId, enabled: studio, path });
@@ -152,7 +188,6 @@ export function RailNavigation(props: RailNavigationProps) {
     }
   }, [initialExpanded]);
 
-  const projectFirst = Boolean(props.studioShowroom && !studio);
   const visibleItems = railItems({
     studio,
     studioShowroom: props.studioShowroom,
@@ -162,14 +197,54 @@ export function RailNavigation(props: RailNavigationProps) {
   });
   // With rooms, the saved order applies inside each group and never moves an item across groups.
   const groups = nav ? groupItems(visibleItems, order) : null;
-  const groupOrder: readonly RailGroupId[] = projectFirst ? ['team', 'make'] : ['make', 'team'];
-  const items = groups ? [...groups[groupOrder[0]!], ...groups[groupOrder[1]!]] : orderItems(visibleItems, order);
+
+  /* ---------------------------------------------------------- the two modes (rail-mode.ts) */
+  const modeInput = { studio, studioShowroom: props.studioShowroom, rooms: nav !== null };
+  const modes = railModes(modeInput);
+  const [modeMemory, setModeMemory] = useState<Readonly<Record<string, RailMode>>>(props.modeMemory ?? {});
+  const remembered = rememberedRailMode(modeMemory, props.organizationId);
+  const resolved = resolveRailMode({ ...modeInput, path, remembered });
+  // Set while a switch opens the other side's first page: the rail shows that side at once, and this
+  // page's own side is not written back while the next page loads.
+  const [leavingTo, setLeavingTo] = useState<RailMode | null>(null);
+  const mode = leavingTo ?? resolved;
+  const switchable = modes.length > 1 && props.organizationId !== null;
+  // A page of one side (a deep link, a notice, a home card) flips the rail; remember that side for this brand.
+  const organizationId = props.organizationId;
+  useEffect(() => {
+    if (leavingTo || !switchable || !resolved || !organizationId || resolved === remembered) return;
+    writeMode(organizationId, resolved);
+    setModeMemory((memory) => parseRailModeCookie(rememberRailMode(memory, organizationId, resolved)));
+  }, [leavingTo, switchable, resolved, remembered, organizationId]);
+  // Back to this page from the browser's cache: show its own side again.
+  useEffect(() => {
+    const restored = (event: PageTransitionEvent) => {
+      if (event.persisted) setLeavingTo(null);
+    };
+    window.addEventListener('pageshow', restored);
+    return () => window.removeEventListener('pageshow', restored);
+  }, []);
+  // A keyboard switch that opened the other side's page: focus comes back to the switch, not the page top.
+  useEffect(() => {
+    if (!switchable || !mode) return;
+    let returning = false;
+    try {
+      returning = window.sessionStorage.getItem(MODE_FOCUS_KEY) === mode;
+      window.sessionStorage.removeItem(MODE_FOCUS_KEY);
+    } catch {
+      // Storage blocked: focus starts at the top of the page, as any page load.
+    }
+    if (returning) modeButtons.current[mode]?.focus();
+    // Once per page: the flag is read on arrival only.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const items = groups && mode ? railModeItems(groups, mode) : orderItems(visibleItems, order);
   const label = (id: RailItemId): string => {
     if (id === 'messages') return copy.rail.messages || nav?.messages || '';
     if (id === 'campaigns' && nav) return copy.rail.campaigns || nav.commissions;
     return copy.rail[id];
   };
-  const groupTitle = (group: RailGroupId) => (nav ? (group === 'make' ? nav.groupMake : nav.groupTeam) : '');
   const badge = (id: RailItemId) =>
     id === 'image' ? activity.counts.image : id === 'video' ? activity.counts.video : id === 'messages' ? unread : 0;
   /** What the badge says to a screen reader and in the collapsed tooltip. */
@@ -265,8 +340,9 @@ export function RailNavigation(props: RailNavigationProps) {
   };
   const allCreateLinks = railCreateLinks(nav !== null, studio).map((link) => ({ ...link, text: createText[link.key] }));
   // With rooms the request sits below a divider as 새 프로젝트 의뢰 (unless studio is closed, where it is the sole entry).
-  const createLinks = allCreateLinks.filter((link) => link.key !== 'commission');
-  const commissionLink = allCreateLinks.find((link) => link.key === 'commission') ?? null;
+  // In a mode, "+" belongs to 직접 만들기 and 새 프로젝트 의뢰 to 야기 팀과: neither shows on the other side.
+  const createLinks = mode === 'team' ? [] : allCreateLinks.filter((link) => link.key !== 'commission');
+  const commissionLink = mode === 'make' ? null : (allCreateLinks.find((link) => link.key === 'commission') ?? null);
 
   /* ---------------------------------------------------------- phone sheet */
   const closeSheet = useCallback(() => {
@@ -344,8 +420,7 @@ export function RailNavigation(props: RailNavigationProps) {
     const href = RAIL_HREF[id];
     const count = badge(id);
     const runningText = badgeText(id, count);
-    // Grouped, the tooltip names the group too ("야기 팀과 · 메시지") so the split reads without labels.
-    const tipBase = nav ? `${groupTitle(RAIL_GROUP[id])} · ${label(id)}` : label(id);
+    const tipBase = label(id);
     const tipCount = nav ? badgeText(id, count, true) : runningText;
     return (
       <a
@@ -385,17 +460,23 @@ export function RailNavigation(props: RailNavigationProps) {
   // Phone tab bar: 이미지 스튜디오 · 영상 스튜디오 · 캠페인 · 에셋 when they exist, filled up from the rest; the others go in 더보기.
   // With rooms: 이미지 스튜디오 · 영상 스튜디오 · 의뢰 · 메시지 (rail-model `groupedTabIds`).
   const tabIds = nav
-    ? groupedTabIds(items, projectFirst)
+    ? groupedTabIds(items)
     : [
         ...(['image', 'video', 'campaigns', 'assets'] as RailItemId[]).filter((id) => items.includes(id)),
         ...items.filter((id) => !['image', 'video', 'campaigns', 'assets'].includes(id)),
       ].slice(0, 4);
   const sheetIds = items.filter((id) => !tabIds.includes(id));
 
-  const row = (id: RailItemId, index: number, list: readonly RailItemId[]) => (
+  // In a mode, the arrows move an item among its own group; 에셋 listed on 야기 팀과 stays where it is there.
+  const ownList = (id: RailItemId): readonly RailItemId[] => (groups && mode ? groups[RAIL_GROUP[id]] : items);
+  const row = (id: RailItemId) => {
+    const list = ownList(id);
+    const index = list.indexOf(id);
+    const guest = mode !== null && railModeGuest(id, mode);
+    return (
     <li key={id} className="bw-rail-row" data-drag-over={dragOver === id ? 'true' : undefined}>
       {itemLink(id)}
-      {reordering && expanded ? (
+      {reordering && expanded && !guest ? (
         <span className="bw-rail-move" role="group" aria-label={label(id)}>
           <button
             type="button"
@@ -420,13 +501,104 @@ export function RailNavigation(props: RailNavigationProps) {
         </span>
       ) : null}
     </li>
-  );
+    );
+  };
+
+  /* ---------------------------------------------------------- the switch */
+  const modeName = (m: RailMode) => (nav ? (m === 'make' ? nav.groupMake : nav.groupTeam) : '');
+  const running = activity.counts.image + activity.counts.video;
+  /** Something waiting on the side the person is not on: unread notices for 야기 팀과, runs in progress for 직접 만들기. */
+  const waiting = (m: RailMode): { count: number; text: string; short: string } | null => {
+    if (m === mode || !nav) return null;
+    if (m === 'team' && unread > 0) {
+      return { count: unread, text: interpolate(nav.unread, { count: unread }), short: interpolate(nav.unreadShort, { count: unread }) };
+    }
+    if (m === 'make' && running > 0) {
+      const text = interpolate(copy.rail.running, { count: running });
+      return { count: running, text, short: text };
+    }
+    return null;
+  };
+  const choose = (next: RailMode, focus = false) => {
+    if (!organizationId || !groups) return;
+    if (focus) modeButtons.current[next]?.focus();
+    if (next === mode) return;
+    setTip(null);
+    setReordering(false);
+    setCreateAt(null);
+    writeMode(organizationId, next);
+    setModeMemory((memory) => parseRailModeCookie(rememberRailMode(memory, organizationId, next)));
+    const target = railModeSwitchTarget(path, next, railModeItems(groups, next), (id) => scope(RAIL_HREF[id]));
+    if (target) {
+      setLeavingTo(next);
+      if (focus) {
+        try {
+          window.sessionStorage.setItem(MODE_FOCUS_KEY, next);
+        } catch {
+          // ignore: the next page simply starts at the top
+        }
+      }
+      window.location.assign(target);
+    }
+  };
+  const modeKeys = (event: KeyboardEvent<HTMLDivElement>) => {
+    if (!mode) return;
+    const at = modes.indexOf(mode);
+    const step =
+      event.key === 'ArrowRight' || event.key === 'ArrowDown' ? 1 : event.key === 'ArrowLeft' || event.key === 'ArrowUp' ? -1 : 0;
+    let next: RailMode | undefined;
+    if (step) next = modes[(at + step + modes.length) % modes.length];
+    else if (event.key === 'Home') next = modes[0];
+    else if (event.key === 'End') next = modes[modes.length - 1];
+    if (!next) return;
+    event.preventDefault();
+    choose(next, true);
+  };
+  const modeSwitch = (where: 'rail' | 'sheet') =>
+    switchable && mode ? (
+      <div className="bw-rail-mode" role="radiogroup" aria-label={nav?.mode} data-rail-mode-switch={where} onKeyDown={modeKeys}>
+        {modes.map((m) => {
+          const wait = waiting(m);
+          return (
+            <button
+              key={m}
+              ref={
+                where === 'rail'
+                  ? (element) => {
+                      modeButtons.current[m] = element;
+                    }
+                  : undefined
+              }
+              type="button"
+              role="radio"
+              aria-checked={m === mode}
+              tabIndex={m === mode ? 0 : -1}
+              className="bw-rail-mode-option"
+              data-rail-mode-option={m}
+              data-rail-tip={wait ? `${modeName(m)} · ${wait.short}` : modeName(m)}
+              // A click from the keyboard (Space or Enter, `detail` 0) keeps focus on the switch across the page load.
+              onClick={(event) => choose(m, event.detail === 0)}
+            >
+              <Icon d={MODE_ICON[m]} />
+              <span className="bw-rail-mode-name">{modeName(m)}</span>
+              {wait ? (
+                <span className="bw-rail-mode-wait" data-rail-mode-waiting={m}>
+                  <span aria-hidden="true">{wait.count > 99 ? '99+' : wait.count}</span>
+                  <span className="bw-rail-sr">{wait.text}</span>
+                </span>
+              ) : null}
+            </button>
+          );
+        })}
+      </div>
+    ) : null;
 
   return (
     <>
       <nav
         data-brand-sidebar-nav
         data-brand-layout-mode="rail"
+        data-rail-mode={mode ?? undefined}
         data-rail-expanded={expanded ? 'true' : 'false'}
         data-nav-reordering={reordering ? 'true' : undefined}
         aria-label={copy.rail.label}
@@ -434,6 +606,7 @@ export function RailNavigation(props: RailNavigationProps) {
         onKeyDown={navKeys}
         {...tipHandlers}
       >
+        {modeSwitch('rail')}
         {props.home ? (
           <ul className="bw-rail-list" data-rail-group="home">
             <li className="bw-rail-row">
@@ -452,30 +625,9 @@ export function RailNavigation(props: RailNavigationProps) {
             </li>
           </ul>
         ) : null}
-        {groups ? (
-          groupOrder.map((group) =>
-            groups[group].length > 0 ? (
-              <div
-                key={group}
-                className="bw-rail-group"
-                data-rail-section={group}
-                role="group"
-                aria-labelledby={`${groupTitleId}-${group}`}
-              >
-                <p id={`${groupTitleId}-${group}`} className="bw-rail-group-title">
-                  {groupTitle(group)}
-                </p>
-                <ul className="bw-rail-list" data-rail-group="primary">
-                  {groups[group].map((id, index) => row(id, index, groups[group]))}
-                </ul>
-              </div>
-            ) : null,
-          )
-        ) : (
-          <ul className="bw-rail-list" data-rail-group="primary">
-            {items.map((id, index) => row(id, index, items))}
-          </ul>
-        )}
+        <ul className="bw-rail-list" data-rail-group="primary">
+          {items.map((id) => row(id))}
+        </ul>
 
         {expanded && items.length > 1 ? (
           <div className="bw-rail-order" data-rail-order>
@@ -490,7 +642,21 @@ export function RailNavigation(props: RailNavigationProps) {
           </div>
         ) : null}
 
-        {canCreate ? (
+        {canCreate && mode === 'team' && commissionLink ? (
+          <div className="bw-rail-create" data-rail-create="team">
+            <a
+              href={scope(commissionLink.href)}
+              className="bw-rail-create-button"
+              data-rail-create-link={commissionLink.key}
+              data-rail-tip={commissionLink.text}
+            >
+              <span className="bw-rail-create-disc" aria-hidden="true">
+                <Icon d={RAIL_ICON.create} />
+              </span>
+              <span className="bw-rail-label">{commissionLink.text}</span>
+            </a>
+          </div>
+        ) : canCreate && (createLinks.length > 0 || commissionLink) ? (
           <div className="bw-rail-create" data-rail-create>
             <button
               ref={createButton}
@@ -510,7 +676,7 @@ export function RailNavigation(props: RailNavigationProps) {
         ) : null}
 
         <div className="bw-rail-foot">
-          {studio ? <CreditsMeter allowance={activity.summary?.allowance} copy={copy} locale={locale} expanded={expanded} /> : null}
+          {studio && mode !== 'team' ? <CreditsMeter allowance={activity.summary?.allowance} copy={copy} locale={locale} expanded={expanded} /> : null}
           {utilities.some((u) => u.shown) ? (
             <ul className="bw-rail-list" data-rail-group="utility">
               {utilities
@@ -649,8 +815,9 @@ export function RailNavigation(props: RailNavigationProps) {
                 </svg>
               </button>
             </div>
-            {studio ? <CreditsMeter allowance={activity.summary?.allowance} copy={copy} locale={locale} expanded /> : null}
-            {canCreate ? (
+            {modeSwitch('sheet')}
+            {studio && mode !== 'team' ? <CreditsMeter allowance={activity.summary?.allowance} copy={copy} locale={locale} expanded /> : null}
+            {canCreate && (createLinks.length > 0 || commissionLink) ? (
               <div className="bw-rail-sheet-create" role="group" aria-label={copy.create.menu}>
                 {createLinks.map((link) => (
                   <a key={link.key} href={scope(link.href)} data-rail-create-link={link.key}>
@@ -676,28 +843,8 @@ export function RailNavigation(props: RailNavigationProps) {
                 </li>
               </ul>
             ) : null}
-            {groups
-              ? groupOrder.map((group) => {
-                  const ids = sheetIds.filter((id) => RAIL_GROUP[id] === group);
-                  return ids.length > 0 ? (
-                    <div key={group} className="bw-rail-sheet-group" data-rail-section={group}>
-                      <p className="bw-rail-sheet-group-title">{groupTitle(group)}</p>
-                      <ul className="bw-rail-sheet-list">
-                        {ids.map((id) => (
-                          <li key={id}>
-                            <a href={scope(RAIL_HREF[id])} aria-current={railActive(RAIL_HREF[id], path) ? 'page' : undefined}>
-                              <Icon d={RAIL_ICON[id]} />
-                              <span>{label(id)}</span>
-                            </a>
-                          </li>
-                        ))}
-                      </ul>
-                    </div>
-                  ) : null;
-                })
-              : null}
             <ul className="bw-rail-sheet-list">
-              {(groups ? [] : sheetIds).map((id) => (
+              {sheetIds.map((id) => (
                 <li key={id}>
                   <a href={scope(RAIL_HREF[id])} aria-current={railActive(RAIL_HREF[id], path) ? 'page' : undefined}>
                     <Icon d={RAIL_ICON[id]} />

@@ -10,6 +10,7 @@ import type { RoomsShellCopy } from '@/messages/rooms-shell';
 import { useWorkspaceSelection } from './identity';
 import type { NavigationVisibility } from './access';
 import { RailNavigation } from './rail-nav';
+import type { RailMode } from './rail-mode';
 
 const ALL: NavigationVisibility = { studio: true, identity: true, settings: true, members: true };
 const NAV_ORDER_STORAGE_KEY = 'twings_brand_nav_order_v1';
@@ -276,9 +277,11 @@ type RailInputs = {
    * may receive studio copy. The rail shows it, at the top, only for a brand that has the home.
    */
   homeLabel?: string;
+  /** The rail mode this browser last used per brand (the layout reads the `twings_brand_mode` cookie, rail-mode.ts). */
+  railModes?: Readonly<Record<string, RailMode>>;
 };
 
-function Scoped({ scope, studioV2 = false, shell, locale = 'ko', railExpanded = false, rooms = false, roomsCopy, homeLabel, ...labels }: Labels & RailInputs & { scope: BrandWorkspaceScope }) {
+function Scoped({ scope, studioV2 = false, shell, locale = 'ko', railExpanded = false, rooms = false, roomsCopy, homeLabel, railModes, ...labels }: Labels & RailInputs & { scope: BrandWorkspaceScope }) {
   const choice = selectedChoice(useWorkspaceSelection(scope).selection);
   const isMorphic = Boolean(
     choice && (isSandboxedClientOrganization(choice) || featureDenied(choice.denied, 'generative_media')),
@@ -310,6 +313,7 @@ function Scoped({ scope, studioV2 = false, shell, locale = 'ko', railExpanded = 
         rooms={roomsActive}
         roomsCopy={roomsCopy}
         home={homeLabel && brandHomeVisible(choice, true) ? homeLabel : undefined}
+        modeMemory={roomsActive ? railModes : undefined}
       />
     );
   }
@@ -335,10 +339,11 @@ export function WorkspaceNavigation({
   rooms,
   roomsCopy,
   homeLabel,
+  railModes,
   ...labels
 }: Labels & RailInputs & { scope?: BrandWorkspaceScope | null }) {
   return scope ? (
-    <Scoped scope={scope} studioV2={studioV2} shell={shell} locale={locale} railExpanded={railExpanded} rooms={rooms} roomsCopy={roomsCopy} homeLabel={homeLabel} {...labels} />
+    <Scoped scope={scope} studioV2={studioV2} shell={shell} locale={locale} railExpanded={railExpanded} rooms={rooms} roomsCopy={roomsCopy} homeLabel={homeLabel} railModes={railModes} {...labels} />
   ) : (
     <Links labels={labels} visible={ALL} pool layoutMode="topbar" scope={(path) => path} />
   );

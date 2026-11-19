@@ -13,6 +13,7 @@ import { cookies } from "next/headers";
 import { brandRoomNotifyOpen, brandRoomsOpen, brandStudioV2Open } from "@/lib/flags";
 import { RegisterServiceWorker } from "@/components/pwa/register-sw";
 import { RAIL_COOKIE, railCookieExpanded } from "@/components/brand-workspace/rail-model";
+import { RAIL_MODE_COOKIE, parseRailModeCookie } from "@/components/brand-workspace/rail-mode";
 import { WorkspaceLanguage } from '@/components/brand-workspace/language';
 import { WorkspaceNavigation } from '@/components/brand-workspace/navigation';
 import { studioCopyAllowed } from "@/lib/brand-studio/visibility";
@@ -65,6 +66,8 @@ export default async function BrandLayout({
   // (`scope` is read with a session only; a visitor on /brand/invite gets no worker).
   const roomPush=Boolean(scope)&&rooms&&brandRoomNotifyOpen();
   const railExpanded=studioV2&&scope?railCookieExpanded((await cookies()).get(RAIL_COOKIE)?.value):false;
+  // The rail's two modes (rail-mode.ts): the side this browser last used per brand, read only where they exist.
+  const railModes=studioV2&&rooms&&scope?parseRailModeCookie((await cookies()).get(RAIL_MODE_COOKIE)?.value):undefined;
   return (
     <html lang={locale} className={fontVariables} data-brand-workspace>
       <head>
@@ -88,7 +91,7 @@ export default async function BrandLayout({
             {/* URL-derived: dynamic render resolves this on the server, the empty fallback never shows. */}
             <Suspense fallback={null}>
               {scope?<WorkspaceIdentity scope={scope} copy={b.identity} roles={b.roles}/>:<p className="bw-kicker">{b.title}</p>}
-              <WorkspaceNavigation home={b.home} members={b.members} settings={b.managed.settings} library={b.managed.library} studio={studioCopy?b.productionStudio.title:""} identity={undefined} creators={influencersOpen() ? b.creatorPool.nav : undefined} scope={scope} studioV2={studioV2} shell={studioCopy?d.studioShell:undefined} locale={locale==="en"?"en":"ko"} railExpanded={railExpanded} rooms={rooms} roomsCopy={rooms?d.roomsShell.nav:undefined} homeLabel={studioV2?d.brandHome.nav.home:undefined}/>
+              <WorkspaceNavigation home={b.home} members={b.members} settings={b.managed.settings} library={b.managed.library} studio={studioCopy?b.productionStudio.title:""} identity={undefined} creators={influencersOpen() ? b.creatorPool.nav : undefined} scope={scope} studioV2={studioV2} shell={studioCopy?d.studioShell:undefined} locale={locale==="en"?"en":"ko"} railExpanded={railExpanded} rooms={rooms} roomsCopy={rooms?d.roomsShell.nav:undefined} homeLabel={studioV2?d.brandHome.nav.home:undefined} railModes={railModes}/>
             </Suspense>
             <div className="bw-sidebar-utilities">
               <WorkspaceLanguage locale={locale} label={d.nav.localeToggle} compact applyLabel={b.languageApply}/>
