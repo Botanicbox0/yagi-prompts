@@ -33,6 +33,7 @@ import { createStudioJobGroup } from './job-group';
 import { assignStudioJobProject, liveProjectsOf, studioProjectsReady } from './job-projects';
 import { failure, guarded } from './outcome';
 import { planStudioRevise } from './revision/advise';
+import { talkStudioRevise } from './revision/talk';
 import { readStudioMark } from './revision/mark';
 import { assetView, assetsOf, campaignsOf, jobSoftDeleteReady, jobsByIds, jobsOfStudioState, viewsOf } from './repo';
 import type { StudioDeps } from './types';
@@ -63,6 +64,7 @@ const SELF_STUDIO_OPS: ReadonlySet<StudioOperation> = new Set([
   'film.analyze',
   'revise.plan',
   'revise.mark',
+  'revise.talk',
   'handoff.campaign',
   'job.assign_project',
 ]);
@@ -94,6 +96,9 @@ export async function runStudioOperation(deps: StudioDeps, viewer: Viewer, opera
       return planStudioRevise(deps, viewer, input);
     case 'revise.mark':
       return readStudioMark(deps, viewer, input);
+    case 'revise.talk':
+      // Behind BRAND_STUDIO_REVISE_V2 (the handler answers `invalid` when it is off), after the same gate as every operation.
+      return talkStudioRevise(deps, viewer, input);
     case 'asset.reserve':
       return reserveStudioAsset(deps, viewer, input);
     case 'asset.complete':

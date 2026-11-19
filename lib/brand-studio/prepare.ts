@@ -384,7 +384,14 @@ export async function revisionInput(
     // Earlier requests pointed at their own marks: those are written out here, so only this request's
     // ①②③ reach the prompt writer, with `marks` beside them. An earlier answer follows its request.
     const earlier = chain.history.map((h) => ({ ...h, request: withClarified(replaceMarks(h.request, h.marks ?? []), h.clarified) }));
-    const extra = { ...(marks.length ? { marks } : {}), ...(clarified ? { clarified } : {}) };
+    // Made from the revise conversation: the settled sheet and the run's exact length go to the writer.
+    const dialogue = r.dialogue
+      ? {
+          sheet: { change: r.dialogue.sheet.change.map((c) => c.text), keep: [...r.dialogue.sheet.keep], exclude: [...r.dialogue.sheet.exclude] },
+          seconds: r.mode === 'edit' ? null : (job.params?.seconds ?? null),
+        }
+      : null;
+    const extra = { ...(marks.length ? { marks } : {}), ...(clarified ? { clarified } : {}), ...(dialogue ?? {}) };
     if (r.mode === 'edit') {
       return {
         revision: { mode: 'edit', version: r.version, madeWith: chain.madeWith, history: earlier.map((h) => h.request), ...extra },
@@ -408,6 +415,8 @@ export async function revisionInput(
         ...extra,
         // The answer names pictures the way the request does, so it is renumbered with it.
         ...(clarified ? { clarified: { ...clarified, answer: renumberRequest(clarified.answer, addedRefsOf(job), tray, locale) } } : {}),
+        // So do the sheet's changes.
+        ...(dialogue ? { sheet: { ...dialogue.sheet, change: dialogue.sheet.change.map((c) => renumberRequest(c, addedRefsOf(job), tray, locale)) } } : {}),
       },
       prompt: renumberRequest(job.prompt, addedRefsOf(job), tray, locale),
     };

@@ -29,6 +29,7 @@ import type { StudioEnv } from './env';
 import type { StudioMediaStore } from './media-store';
 import type { StudioImageBackground, StudioImageQuality, StudioLane, StudioPromptProfile } from './models';
 import type { StudioProvider, StudioProviderFailure } from './provider/types';
+import type { ReviseDialogueRecord } from './revision/sheet';
 
 /* ------------------------------------------------------------ intelligence (S2) */
 
@@ -222,7 +223,17 @@ export interface StudioJobParams {
     materials?: Array<{ assetId?: string; outputId?: string }>;
     /** The one question asked about this request (revise.plan) and what the customer answered. */
     clarified?: { question: string; answer: string };
+    /**
+     * Made from the revise conversation (`revise.talk`, flag `BRAND_STUDIO_REVISE_V2`): the sheet is the
+     * request (the job's `prompt` is its changes, one per line), with the questions and the transcript.
+     */
+    dialogue?: ReviseDialogueRecord;
   };
+  /**
+   * The reading of a result of this job, kept for the revise conversation (`revise.talk`), by
+   * `<outputId>:<locale>`: what the clip shows, read once per output and reused on every turn.
+   */
+  clipSheets?: Record<string, FilmSheet>;
 }
 
 /** A provider (or worker) result waiting to be stored, per output slot. */

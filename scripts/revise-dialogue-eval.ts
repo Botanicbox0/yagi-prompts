@@ -1,0 +1,703 @@
+/**
+ * Live evaluation of the revise conversation (lib/brand-studio/revision/talk.ts, docs/BRAND-STUDIO-VIDEO-REMIX.md
+ * §3.5, flag `BRAND_STUDIO_REVISE_V2`). Scripted multi-turn conversations about three real clips (a product
+ * clip, a clip with one person, a multi-shot clip) are read by the real model exactly as `revise.talk` reads
+ * them (`readTalkWithTries`: 12 s, then 15 s), and the server's own rule (`settleTalk`) decides the way, the
+ * credits, the button and the shape of a question turn. Nothing is generated and nothing is spent but the
+ * readings. The full set runs on the product clip; 25 representative cases (`REPRESENTATIVE`) on the others.
+ *
+ *   npx tsx scripts/revise-dialogue-eval.ts <env-file> --out <dir> [--runs 2] [--sets product,person,multishot]
+ *       [--thinking LOW|MEDIUM] [--only A05,N09] [--cap 700] [--concurrency 2]
+ *   npx tsx scripts/revise-dialogue-eval.ts <env-file> --read-clips <bottle.mp4> <person.mp4> <montage.mp4>
+ *       (reads the three clips once with the conversation's own clip reading and writes
+ *       scripts/fixtures/revise-dialogue-clips.json)
+ *
+ * - Reads ONLY `GEMINI_API_KEY` (and `GEMINI_BASE_URL`) from <env-file>, inside this process. The key is never
+ *   printed or written; every string that leaves the process is scrubbed of it.
+ * - The model is the studio default (`gemini-4-hydrogen`); a request for any other model stops the run.
+ * - Writes <dir>/revise-dialogue-eval.md (every turn verbatim, then the pass table) and <dir>/revise-dialogue-eval.json.
+ * - Checks per turn are mechanical (button, question, kind, sheet contents, language, internal words, credit
+ *   figures). Whether a reply restates the change well is read by a person in the transcript.
+ */
+import { readFileSync, writeFileSync, mkdirSync, existsSync } from 'node:fs';
+import { join } from 'node:path';
+import { performance } from 'node:perf_hooks';
+import type { StudioTalkKind } from '@/lib/brand-studio/contracts';
+import { studioGeminiConfig } from '@/lib/brand-studio/enhancer/gemini';
+import { readClip, type ClipReading } from '@/lib/brand-studio/revision/clip';
+import { studioModel, type StudioVideoModel } from '@/lib/brand-studio/models';
+import { creditsOf } from '@/lib/brand-studio/credits';
+import { billedResolution, remixRunUsd, usageKrw, videoRunUsd } from '@/lib/brand-studio/usage-rate';
+import {
+  factCredits,
+  mentionsMissingAttachment,
+  readTalkWithTries,
+  settleTalk,
+  talkFacts,
+  type TalkSettled,
+  type TalkSlips,
+  type TalkTerms,
+} from '@/lib/brand-studio/revision/talk';
+import { emptySheet, openQuestion, type ReviseQuestion, type ReviseSheet, type ReviseTurn } from '@/lib/brand-studio/revision/sheet';
+
+const EXPECTED_MODEL = 'gemini-4-hydrogen';
+const FIXTURE = join(process.cwd(), 'scripts', 'fixtures', 'revise-dialogue-clips.json');
+
+const argv = process.argv.slice(2);
+function flag(name: string): string | null {
+  const at = argv.indexOf(name);
+  return at >= 0 && at + 1 < argv.length ? argv[at + 1]! : null;
+}
+function intFlag(name: string, fallback: number, min: number, max: number): number {
+  const raw = flag(name);
+  if (raw === null) return fallback;
+  const n = Number(raw);
+  if (!Number.isInteger(n) || n < min || n > max) throw new Error(`${name} must be an integer ${min}..${max}`);
+  return n;
+}
+
+type GeminiEnv = { GEMINI_API_KEY?: string; GEMINI_BASE_URL?: string };
+/** Only these two names are read from the file; every other line is skipped unparsed. */
+function readGeminiEnv(path: string): GeminiEnv {
+  const out: GeminiEnv = {};
+  for (const line of readFileSync(path, 'utf8').split(/\r?\n/)) {
+    const m = /^\s*(?:export\s+)?(GEMINI_API_KEY|GEMINI_BASE_URL)\s*=(.*)$/.exec(line);
+    if (!m) continue;
+    const raw = m[2]!.trim();
+    const quoted = /^(['"])(.*)\1$/.exec(raw);
+    const value = quoted ? quoted[2]! : raw.replace(/\s+#.*$/, '').trim();
+    if (value) out[m[1] as keyof GeminiEnv] = value;
+  }
+  return out;
+}
+
+let SECRET = '';
+const scrub = (text: string) => (SECRET ? text.split(SECRET).join('[key]') : text);
+const say = (text: string) => process.stdout.write(scrub(text) + '\n');
+
+const state = { calls: 0, cap: 600, stop: '' };
+interface Usage { ms: number; input: number; output: number; thinking: number }
+
+function requestUrl(input: Parameters<typeof fetch>[0]): string {
+  if (typeof input === 'string') return input;
+  if (input instanceof URL) return input.href;
+  return input.url;
+}
+
+/** Checks the model, counts calls against the cap and reads each answer's token usage. */
+function meteredFetch(onUsage: (u: Omit<Usage, 'ms'>) => void): typeof fetch {
+  return async (input, init) => {
+    const model = /\/models\/([^/:]+):generateContent/.exec(requestUrl(input))?.[1] ?? '?';
+    if (model !== EXPECTED_MODEL) {
+      state.stop = `request for model ${model}`;
+      throw new Error('unexpected_model');
+    }
+    if (state.calls >= state.cap) throw new Error('call_cap_reached');
+    state.calls += 1;
+    const response = await fetch(input, init);
+    if (!response.ok && response.status >= 400 && response.status < 500 && response.status !== 408 && response.status !== 429) {
+      state.stop = `API refused a request (HTTP ${response.status})`;
+    }
+    try {
+      const body = (await response.clone().json()) as { usageMetadata?: { promptTokenCount?: number; candidatesTokenCount?: number; thoughtsTokenCount?: number } };
+      const u = body.usageMetadata ?? {};
+      onUsage({ input: u.promptTokenCount ?? 0, output: u.candidatesTokenCount ?? 0, thinking: u.thoughtsTokenCount ?? 0 });
+    } catch {
+      // No usage on a failed answer.
+    }
+    return response;
+  };
+}
+
+/* ------------------------------------------------------------------ the three clips */
+
+interface ClipFixture {
+  reading: ClipReading;
+  madeWith: string;
+}
+/** A product clip (no person, one shot), a clip with one person, a multi-shot clip with several people. */
+type ClipName = 'bottle' | 'person' | 'montage';
+
+/** What the three clips were made from (the bottle's is the studio's own final prompt of that run). */
+const MADE_WITH: Record<ClipName, string> = {
+  person:
+    'Five short shots, 0.0s–5.0s, one young woman with dark hair and soft pink blush in a pink room with shelves of lip tints behind her: close-ups of her face; she raises a pink lip gloss tube beside her cheek; a medium shot of her standing among the shelves; an extreme close-up of glossy pink lips with the applicator. Soft, even front light. Audio: no music.',
+  bottle:
+    'Visual style: Deep sapphire shadow floor, crisp ivory white petals and translucent cobalt glass accented by cool silver mirror reflections. Soft, diffused blue light from camera-left. Shot on a 50mm prime lens with shallow depth of field. 0.0s–5.0s: Off-axis low-angle medium-close shot of the heart-shaped blue YAGI perfume bottle resting among scattered white flower petals in front of an oval mirror. The camera executes a slow, steady dolly-in toward the bottle, drawing focus onto the heart-shaped glass facets and YAGI label. Audio: quiet room ambience, no music.',
+  montage:
+    'Five quick shots, 0.0s–5.0s, soft blue studio light: a woman lies on white pearls among blue heart-shaped YAGI perfume bottles; the blue YAGI bottle on pearls in front of blurred bottles; a blonde woman lies on her side on pearls with a white ribbon; a dark-haired woman rests the bottle against her cheek, eyes closed; a woman with braided hair holds the bottle near her lips. Audio: no music.',
+};
+
+/** The clips' ways and prices exactly as the server works them out for a 5 s 480p draft made by Seedance 2.5. */
+function termsFor(): TalkTerms {
+  const model = studioModel('seedance-2.5') as StudioVideoModel;
+  const editUsd = remixRunUsd({ model, resolution: billedResolution('draft'), method: 'edit', seconds: null, referenceSeconds: 5, referenceMs: 5000 }).usd;
+  const at = (s: number) => usageKrw(videoRunUsd({ resolution: 'draft', seconds: s }), 'video');
+  return {
+    edit: { available: true, estimateKrw: usageKrw(editUsd, 'video') },
+    reshoot: { available: true, estimateKrw: at(5) },
+    reshootAt: at,
+    length: { current: 5, min: model.minSeconds, max: model.maxSeconds, changeable: true },
+    stage: 'draft',
+    finalKrw: usageKrw(videoRunUsd({ resolution: '1080p', seconds: 5 }), 'video'),
+    remainingCredits: 29_741,
+    picturesMax: 8,
+    videosMax: 2,
+  };
+}
+
+/* ------------------------------------------------------------------ the cases */
+
+type Category = 'clear' | 'missing' | 'taste' | 'nonrequest' | 'limit' | 'misfit' | 'open' | 'followup';
+interface Expect {
+  make?: boolean;
+  asks?: boolean;
+  /** Either a question or a concrete proposal with a button (never neither). */
+  askOrPropose?: boolean;
+  kinds?: StudioTalkKind[];
+  has?: RegExp[];
+  lacks?: RegExp[];
+  keepHas?: RegExp[];
+  changeCount?: number;
+  way?: 'edit' | 'reshoot' | null;
+  seconds?: number | null;
+  editStudio?: boolean;
+  impossible?: boolean;
+  replyHas?: RegExp[];
+  /** The open question was paired with this answer text. */
+  answered?: string;
+}
+interface Step {
+  say: string;
+  answering?: { option?: number; decide?: boolean };
+  attachPictures?: number;
+  category: Category;
+  expect: Expect;
+}
+interface Case {
+  id: string;
+  group: 'audit' | 'english' | 'attack';
+  clip: ClipName;
+  history?: string[];
+  steps: Step[];
+}
+
+const RAMBLE =
+  '어제 팀 회의에서 이 영상 얘기가 나왔는데요, 다들 전반적으로는 괜찮다고 했어요. 마케팅 팀장님은 요즘 향수 광고가 다 비슷비슷해서 우리 것도 너무 튀지 않는 게 낫겠다고 하셨고, 디자인 팀은 파란색이 브랜드 색이랑 잘 맞는다고 좋아했어요. 저도 처음 봤을 때 꽃잎이 흩어져 있는 느낌이 예뻤고요. 대표님은 아직 못 보셨는데 아마 괜찮다고 하실 것 같아요. 다만 한 가지, 뒤에 있는 둥근 거울 테두리가 좀 밋밋해 보인다는 말이 있어서 그 테두리만 은은한 금색으로 바꿔 보면 어떨까 싶어요. 나머지는 손대지 말아 주세요. 아 그리고 다음 주에 인스타 릴스로 올릴 예정이라 세로 버전도 언젠가 필요할 것 같은데 그건 나중에 따로 말씀드릴게요. 혹시 금색이 너무 튀면 말씀해 주세요, 그럼 다른 방법을 생각해 볼게요. 바쁘실 텐데 늘 감사합니다!';
+const LONG =
+  '이번 주 금요일에 신제품 런칭 행사가 있어서 이 영상을 메인 화면에 띄울 예정이에요. 행사장 조명이 꽤 어두운 편이라 화면이 너무 밝으면 눈이 부시다는 의견이 있었고, 반대로 너무 어두우면 병이 안 보인다는 의견도 있었어요. 여러 의견을 정리해 보면 결국 세 가지예요. 첫째, 배경을 지금보다 깊은 남색으로 바꿔서 병의 파란색이 더 또렷하게 보이게 해 주세요. 둘째, 꽃잎은 행사 콘셉트와 맞지 않는다는 얘기가 많아서 이번에는 빼 주세요. 셋째, 카메라가 병 쪽으로 다가가는 속도를 지금보다 조금 더 천천히 해 주세요. 행사장에서 반복 재생될 거라 너무 빠르면 정신없어 보일 것 같아요. 병 모양이나 YAGI 글자는 절대 바뀌면 안 되고, 거울은 있어도 괜찮아요. 참고로 행사장 스크린은 가로형이라 비율은 지금 그대로 쓰면 돼요. 소리는 원래 없는 영상이라 신경 쓰지 않으셔도 돼요. 전체적으로는 지금 분위기가 마음에 들어서 크게 바꾸고 싶지는 않고, 위의 세 가지만 반영되면 충분할 것 같아요. 혹시 세 가지를 한 번에 하는 게 어렵다면 어떤 것부터 하면 좋을지 알려 주세요. 행사 준비로 정신이 없어서 메시지가 길어졌네요. 확인 부탁드려요.';
+
+const S = (say: string, category: Category, expect: Expect, extra: Partial<Step> = {}): Step => ({ say, category, expect, ...extra });
+const NON: Expect = { make: false };
+
+export const CASES: Case[] = [
+  // The audit's twenty, with their follow-ups.
+  { id: 'A01', group: 'audit', clip: 'bottle', steps: [S('병 라벨 색을 파란색으로 바꿔줘', 'clear', { make: true, has: [/라벨|YAGI|글자|로고/] })] },
+  { id: 'A01v2', group: 'audit', clip: 'bottle', history: ['병 라벨 색을 파란색으로'], steps: [S('색은 좋은데 라벨 글자가 뭉개졌어', 'clear', { make: true, has: [/글자|라벨|YAGI|로고/] })] },
+  { id: 'A02', group: 'audit', clip: 'bottle', steps: [S('카메라가 더 천천히 다가가게 해줘', 'clear', { make: true, way: 'reshoot', has: [/카메라|천천히/] })] },
+  { id: 'A03', group: 'audit', clip: 'bottle', steps: [S('마지막 1초는 잘라줘', 'limit', { make: false, editStudio: true, replyHas: [/편집 스튜디오/] })] },
+  { id: 'A04', group: 'audit', clip: 'bottle', steps: [S('배경을 해 질 녘 바다로 바꾸고 카메라 움직임은 그대로 둬', 'clear', { make: true, has: [/바다|노을|해 질/], keepHas: [/카메라/] })] },
+  {
+    id: 'A05', group: 'audit', clip: 'bottle', steps: [
+      S('좀 더 고급스럽게', 'taste', { make: true, asks: false }),
+      S('아니 그게 아니라 조명만 따뜻하게', 'followup', { make: true, kinds: ['correction', 'change'], has: [/조명|빛/], changeCount: 1 }),
+    ],
+  },
+  { id: 'A06', group: 'audit', clip: 'bottle', steps: [S('느낌이 별로야. 다시', 'open', { askOrPropose: true })] },
+  {
+    id: 'A07', group: 'audit', clip: 'bottle', steps: [
+      S('더 밝게', 'taste', { make: true, asks: false }),
+      S('응 그렇게 해줘', 'followup', { make: true, kinds: ['confirm'] }),
+    ],
+  },
+  {
+    id: 'A08', group: 'audit', clip: 'bottle', steps: [
+      S('속도 조절해줘', 'missing', { asks: true, make: false }),
+      S('', 'followup', { make: true, way: 'reshoot', kinds: ['answer'] }, { answering: { option: 1 } }),
+    ],
+  },
+  {
+    id: 'A09', group: 'audit', clip: 'bottle', steps: [
+      S('배경 바꿔줘', 'missing', { asks: true, make: false }),
+      S('눈 오는 서울 골목', 'followup', { make: true, kinds: ['answer'], has: [/눈|서울|골목/], answered: '눈 오는 서울 골목' }),
+    ],
+  },
+  {
+    id: 'A10', group: 'audit', clip: 'bottle', steps: [
+      S('로고 넣어줘', 'missing', { asks: true, make: false }),
+      S('이 로고로', 'followup', { make: true, has: [/로고|이미지 1|1번/] }, { attachPictures: 1 }),
+    ],
+  },
+  { id: 'A11', group: 'audit', clip: 'bottle', steps: [S('처음 부분만 수정해줘', 'missing', { asks: true, make: false })] },
+  { id: 'A12', group: 'audit', clip: 'bottle', steps: [S('이거 말고 다른 걸로', 'missing', { asks: true, make: false })] },
+  { id: 'A13', group: 'audit', clip: 'bottle', steps: [S('그대로 두고 완전히 다르게 해줘', 'missing', { asks: true, make: false })] },
+  { id: 'A14', group: 'audit', clip: 'bottle', steps: [S('배경은 바다로, 모델은 그대로, 음악은 빼고, 길이는 두 배로', 'clear', { make: true, way: 'reshoot', seconds: 10, has: [/바다/] })] },
+  { id: 'A15', group: 'audit', clip: 'bottle', steps: [S('여자 모델로 바꿔줘', 'misfit', { make: false, replyHas: [/인물|사람|모델|여성|여자/] })] },
+  { id: 'A16', group: 'audit', clip: 'bottle', steps: [S('ㅇㅇ', 'nonrequest', NON)] },
+  { id: 'A17', group: 'audit', clip: 'bottle', steps: [S(RAMBLE, 'clear', { make: true, has: [/거울|테두리|금색/], lacks: [/세로/] })] },
+  { id: 'A18', group: 'audit', clip: 'bottle', steps: [S('이거 수정하면 크레딧 얼마나 들어?', 'nonrequest', { make: false, kinds: ['tool_question'], replyHas: [/\d+\s*크레딧/] })] },
+  { id: 'A19', group: 'audit', clip: 'bottle', steps: [S('초안이랑 완성본이 뭐가 달라?', 'nonrequest', { make: false, kinds: ['tool_question'], replyHas: [/1080|완성본/] })] },
+  { id: 'A20', group: 'audit', clip: 'bottle', steps: [S('방금 그거 취소', 'nonrequest', { make: false })] },
+  // The English four.
+  { id: 'E05', group: 'english', clip: 'bottle', steps: [S('Make it more premium', 'taste', { make: true, asks: false })] },
+  {
+    id: 'E09', group: 'english', clip: 'bottle', steps: [
+      S('Change the background', 'missing', { asks: true, make: false }),
+      S('a snowy alley in Seoul', 'followup', { make: true, kinds: ['answer'], has: [/snow|Seoul|alley/i], answered: 'a snowy alley in Seoul' }),
+    ],
+  },
+  { id: 'E13', group: 'english', clip: 'bottle', steps: [S('Keep it as it is but make it completely different', 'missing', { asks: true, make: false })] },
+  { id: 'E18', group: 'english', clip: 'bottle', steps: [S('How many credits would this edit cost?', 'nonrequest', { make: false, kinds: ['tool_question'], replyHas: [/\d+\s*credits?/i] })] },
+  // New conversations written to attack the contract.
+  { id: 'N01', group: 'attack', clip: 'bottle', steps: [S('로고를 조금 더 크게 해줘', 'clear', { make: true, has: [/로고|YAGI|글자/] })] },
+  { id: 'N02', group: 'attack', clip: 'bottle', steps: [S('꽃잎을 빼줘', 'clear', { make: true })] },
+  { id: 'N03', group: 'attack', clip: 'bottle', steps: [S('조명을 조금 더 따뜻하게', 'clear', { make: true, has: [/조명|빛/] })] },
+  { id: 'N04', group: 'attack', clip: 'bottle', steps: [S('카메라를 고정해줘', 'clear', { make: true, way: 'reshoot' })] },
+  { id: 'N05', group: 'attack', clip: 'bottle', steps: [S('Remove the petals and make the background white', 'clear', { make: true, has: [/white|petal/i] })] },
+  { id: 'N06', group: 'attack', clip: 'bottle', steps: [S('색 바꿔줘', 'missing', { asks: true, make: false })] },
+  { id: 'N07', group: 'attack', clip: 'bottle', steps: [S('소품 하나 추가해줘', 'missing', { asks: true, make: false })] },
+  { id: 'N08', group: 'attack', clip: 'bottle', steps: [S('텍스트 넣어줘', 'missing', { asks: true, make: false })] },
+  {
+    id: 'N09', group: 'attack', clip: 'bottle', steps: [
+      S('배경을 하얀색으로', 'clear', { make: true, has: [/하얀|흰/] }),
+      S('아니 하얀색 말고 연한 회색으로', 'followup', { make: true, kinds: ['correction', 'change'], has: [/회색/], lacks: [/하얀|흰색/], changeCount: 1 }),
+    ],
+  },
+  {
+    id: 'N10', group: 'attack', clip: 'bottle', steps: [
+      S('꽃잎 빼고 배경을 바다로', 'clear', { make: true, changeCount: 2 }),
+      S('꽃잎은 그냥 둬', 'followup', { make: true, kinds: ['withdraw', 'correction', 'change'], has: [/바다/], lacks: [/꽃잎/] }),
+    ],
+  },
+  {
+    id: 'N11', group: 'attack', clip: 'bottle', steps: [
+      S('배경을 바다로 바꿔줘', 'clear', { make: true }),
+      S('병을 조금 더 크게', 'clear', { make: true, changeCount: 2 }),
+      S('방금 그거 취소', 'followup', { make: true, kinds: ['withdraw'], has: [/바다/], lacks: [/크게/], changeCount: 1 }),
+    ],
+  },
+  {
+    id: 'N12', group: 'attack', clip: 'bottle', steps: [
+      S('배경 바꿔줘', 'missing', { asks: true, make: false }),
+      S('아 그리고 꽃잎도 빼줘', 'followup', { has: [/꽃잎/] }),
+    ],
+  },
+  { id: 'N13', group: 'attack', clip: 'bottle', steps: [S('이게 뭐야 진짜 별로네', 'nonrequest', NON)] },
+  { id: 'N14', group: 'attack', clip: 'bottle', steps: [S('ㅋㅋ 오늘 점심 뭐 먹지', 'nonrequest', { make: false, kinds: ['unreadable'] })] },
+  { id: 'N15', group: 'attack', clip: 'bottle', steps: [S('background를 좀 더 dark하게, 그리고 bottle은 keep', 'clear', { make: true, has: [/배경|background/i] })] },
+  { id: 'N16', group: 'attack', clip: 'bottle', steps: [S('아이유가 향수 뿌리는 장면으로 바꿔줘', 'nonrequest', { make: false, impossible: true })] },
+  { id: 'N17', group: 'attack', clip: 'bottle', steps: [S('배경 음악을 신나는 걸로 바꿔줘', 'nonrequest', { make: false, impossible: true })] },
+  { id: 'N18', group: 'attack', clip: 'bottle', steps: [S(LONG, 'clear', { make: true, way: 'reshoot', has: [/남색|배경/, /꽃잎/, /카메라|천천히/] })] },
+  { id: 'N19', group: 'attack', clip: 'bottle', steps: [S('영상을 10초로 늘려줘', 'clear', { make: true, way: 'reshoot', seconds: 10, replyHas: [/10\s*초/] })] },
+  { id: 'N20', group: 'attack', clip: 'bottle', steps: [S('30초로 늘려줘', 'limit', { make: false, impossible: true })] },
+  { id: 'N21', group: 'attack', clip: 'bottle', steps: [S('응 그렇게 해줘', 'nonrequest', NON)] },
+  {
+    id: 'N22', group: 'attack', clip: 'bottle', steps: [
+      S('배경을 바다로 바꿔줘', 'clear', { make: true }),
+      // The facts say making runs in the background and its time depends on the clip: a useful answer, not "모르겠어요".
+      S('이거 만드는 데 얼마나 걸려?', 'followup', { make: true, kinds: ['tool_question'], replyHas: [/정해진 시간|따라 달라|백그라운드|닫/] }),
+    ],
+  },
+  {
+    id: 'N23', group: 'attack', clip: 'bottle', steps: [
+      S('배경 바꿔줘', 'missing', { asks: true, make: false }),
+      S('알아서 정해 주세요', 'followup', { make: true, kinds: ['answer'], changeCount: 1 }, { answering: { decide: true } }),
+    ],
+  },
+  {
+    id: 'N24', group: 'attack', clip: 'bottle', steps: [
+      S('색 바꿔줘', 'missing', { asks: true, make: false }),
+      S('글쎄요', 'followup', {}),
+      S('아무 색이나', 'followup', { make: true }),
+      S('음 잘 모르겠어요', 'followup', {}),
+    ],
+  },
+  { id: 'N25', group: 'attack', clip: 'bottle', steps: [S('Make the camera push in slower', 'clear', { make: true, way: 'reshoot' })] },
+  { id: 'N26', group: 'attack', clip: 'montage', steps: [S('병을 더 크게 해줘', 'missing', { asks: true, make: false })] },
+  { id: 'N27', group: 'attack', clip: 'montage', steps: [S('여자 모델로 바꿔줘', 'misfit', { make: false, replyHas: [/여성|여자|인물|모델/] })] },
+  { id: 'N28', group: 'attack', clip: 'bottle', steps: [S('음악은 빼줘', 'misfit', { make: false })] },
+  { id: 'N29', group: 'attack', clip: 'bottle', steps: [S('마지막 장면에서 카메라가 병 쪽으로 더 가까이 가게', 'clear', { make: true, way: 'reshoot' })] },
+  { id: 'N30', group: 'attack', clip: 'bottle', steps: [S('배경을 바다로 바꿔줘. 그리고 이거 얼마야?', 'clear', { make: true, kinds: ['change'], replyHas: [/\d+\s*크레딧/] })] },
+];
+
+/* ------------------------------------------------------------------ running */
+
+const INTERNAL = /\b(edit|reshoot|remake|prompt|seedance|gemini|json|token|recipe|in_place|sheet)\b|프롬프트|시댄스|제미나이|리샷|에디트|레시피|시트/i;
+const HANGUL = /[가-힣]/;
+const PARROT = /(싶으시군요|하시는군요|시는군요|원하시는군요|이해했어요|이해했습니다|드릴게요|드리겠습니다|you'?d like to|you want to|I understand|I see you)/i;
+
+/** The representative cases run on the other two clips (their expectations hold on any clip). */
+const REPRESENTATIVE = ['A03', 'A05', 'A06', 'A07', 'A08', 'A09', 'A10', 'A11', 'A12', 'A13', 'A15', 'A16', 'A18', 'A19', 'A20', 'E05', 'E09', 'E18', 'N06', 'N09', 'N16', 'N19', 'N21', 'N23', 'N24'];
+type SetName = 'product' | 'person' | 'multishot';
+const SET_CLIP: Record<SetName, ClipName> = { product: 'bottle', person: 'person', multishot: 'montage' };
+
+interface TurnRecord {
+  step: number;
+  say: string;
+  answering: Step['answering'] | null;
+  category: Category;
+  ms: number;
+  tries: number;
+  productSlip: boolean;
+  slips: TalkSlips;
+  tokens: Omit<Usage, 'ms'>;
+  failed: boolean;
+  settled: TalkSettled;
+  checks: Array<{ name: string; ok: boolean; note?: string }>;
+}
+interface CaseRecord {
+  id: string;
+  set: SetName;
+  group: Case['group'];
+  clip: ClipName;
+  run: number;
+  turns: TurnRecord[];
+}
+
+function sentences(text: string): number {
+  return (text.match(/[^.!?。？！]+[.!?。？！]?/g) ?? []).filter((s) => s.trim().length > 1).length;
+}
+
+/**
+ * An option that gives the product a new look, judged from its words alone (independent of the reading's own
+ * "about" label): it names the product and a new colour, material, mark or placement on it, and leaves nothing
+ * open to the customer.
+ */
+const PRODUCT_WORD = /병|향수|액체|립글로스|글로스|튜브|뚜껑|캡|라벨|제품|bottle|liquid|gloss|tube|\bcap\b|label|product/i;
+const NEW_LOOK = /색|핑크|분홍|빨|레드|코랄|화이트|흰|하얀|검정|블랙|골드|금빛|금색|은색|투명|파란|파랑|보라|노란|초록|앞면|표면|위에\s*넣|blue|pink|red|coral|white|black|gold|silver|clear|purple|yellow|green|on the (?:bottle|front|product)/i;
+const LEFT_OPEN = /원하는|알려\s*주|직접|tell me|your own|of your choice|you choose/i;
+const KEEPS_IT = /그대로|두고|남기고|빼고|없이|keep|without/i;
+export const inventsProductLook = (option: string) => PRODUCT_WORD.test(option) && NEW_LOOK.test(option) && !LEFT_OPEN.test(option) && !KEEPS_IT.test(option);
+/** A confirmation that sounds as if making had started. */
+const SOUNDS_STARTED = /진행할게요|진행하겠|진행해\s*드릴|진행됩니다|만들고\s*있|만드는\s*중|만들기\s*시작|시작할게요|시작했|확정|go ahead|going ahead|proceed|being made|started/i;
+const FILLER_OPENER = /^[^.!?]{0,24}(?:모두|전부|다)\s*(?:한\s*번에|함께)?\s*(?:반영|적용|바꿀|수정|변경)할?\s*수\s*있어요|^I can (?:do|make|change) (?:all|both|every)/i;
+/** The question asks which of several people (or all of them). */
+const ASKS_WHICH = /어느|누구|몇\s*번째|중\s*(?:누구|어느|어떤\s*분|한\s*분)|어떤\s*분을|which|who\b/i;
+
+function check(step: Step, s: TalkSettled, standingBefore: ReviseSheet, questionsBefore: ReviseQuestion[], shownBefore: boolean, ctx: { pictures: number; manyPeople: boolean; caseId: string }): TurnRecord['checks'] {
+  const out: TurnRecord['checks'] = [];
+  const e = step.expect;
+  const texts = s.sheet.change.map((c) => c.text);
+  const any = (re: RegExp) => texts.some((t) => re.test(t));
+  const asks = s.open !== null;
+  if (e.make !== undefined) out.push({ name: `button ${e.make ? 'shown' : 'absent'}`, ok: s.canMake === e.make });
+  if (e.asks !== undefined) out.push({ name: e.asks ? 'asks' : 'no question', ok: asks === e.asks });
+  if (e.askOrPropose) out.push({ name: 'asks or proposes', ok: asks || (s.canMake && s.sheet.change.length > 0) });
+  if (e.kinds) out.push({ name: `kind ${e.kinds.join('|')}`, ok: s.kind !== null && e.kinds.includes(s.kind), note: s.kind ?? 'none' });
+  for (const re of e.has ?? []) out.push({ name: `change has ${re}`, ok: any(re) });
+  for (const re of e.lacks ?? []) out.push({ name: `change lacks ${re}`, ok: !any(re) });
+  for (const re of e.keepHas ?? []) out.push({ name: `keep has ${re}`, ok: s.sheet.keep.some((k) => re.test(k)) });
+  if (e.changeCount !== undefined) out.push({ name: `${e.changeCount} change(s)`, ok: s.sheet.change.length === e.changeCount, note: String(s.sheet.change.length) });
+  if (e.way !== undefined) out.push({ name: `way ${e.way}`, ok: s.way === e.way, note: String(s.way) });
+  if (e.seconds !== undefined) out.push({ name: `length ${e.seconds}`, ok: s.seconds === e.seconds, note: String(s.seconds) });
+  if (e.editStudio !== undefined) out.push({ name: 'editing studio offered', ok: s.editStudio === e.editStudio });
+  if (e.impossible !== undefined) out.push({ name: 'impossible flagged', ok: s.impossible === e.impossible });
+  for (const re of e.replyHas ?? []) out.push({ name: `reply has ${re}`, ok: re.test(s.reply ?? '') });
+  if (e.answered !== undefined) {
+    const at = questionsBefore.length - 1;
+    out.push({ name: 'typed answer paired', ok: s.questions[at]?.answer === e.answered, note: s.questions[at]?.answer ?? 'none' });
+  }
+  // Every turn.
+  if (s.reply) {
+    const english = !HANGUL.test(step.say) && /[a-z]/i.test(step.say);
+    out.push({ name: english ? 'reply in English' : 'reply in Korean', ok: english ? !HANGUL.test(s.reply) : HANGUL.test(s.reply) });
+    out.push({ name: 'no internal words', ok: !INTERNAL.test(s.reply), note: INTERNAL.exec(s.reply)?.[0] });
+    out.push({ name: 'at most three sentences', ok: sentences(s.reply) <= 3, note: String(sentences(s.reply)) });
+    out.push({ name: 'credits written as a number with its unit', ok: !/크레딧\s*(은|는|이|가)\s*\d/.test(s.reply) && !/credits?\s*(is|are|of)\s*\d/i.test(s.reply) });
+    if (english) out.push({ name: "English says I'll", ok: !/\b(We'll|I will|We will)\b/.test(s.reply), note: /\b(We'll|I will|We will)\b/.exec(s.reply)?.[0] });
+    if (s.kind === 'confirm' && standingBefore.change.length) {
+      out.push({ name: 'confirm starts with 네, and has no 확정', ok: (english ? /^Sure,/.test(s.reply) : /^네,/.test(s.reply)) && !/확정/.test(s.reply) });
+    }
+    // 1. A yes is a confirmation only when a plan stands; "네," only then; a confirmation never sounds started.
+    if (!standingBefore.change.length) {
+      out.push({ name: 'no confirmation with nothing standing', ok: s.kind !== 'confirm', note: s.kind ?? 'none' });
+      out.push({ name: 'no "네," with nothing standing', ok: !/^(네|Sure)\s*,/i.test(s.reply) });
+    }
+    if (s.kind === 'confirm') out.push({ name: 'confirmation does not sound started', ok: !SOUNDS_STARTED.test(s.reply), note: SOUNDS_STARTED.exec(s.reply)?.[0] });
+    // 5. No opener that only says it can be done; drafts and finals in two sentences.
+    out.push({ name: 'no filler opener', ok: !FILLER_OPENER.test(s.reply.trim()) });
+    if (ctx.caseId === 'A19') out.push({ name: 'drafts and finals in two sentences', ok: sentences(s.reply) <= 2, note: String(sentences(s.reply)) });
+    // 3. Never an attachment that is not there.
+    out.push({ name: 'reply names no missing attachment', ok: !mentionsMissingAttachment(s.reply, { pictures: ctx.pictures, videos: 0 }) });
+  }
+  if (s.open !== null) {
+    const before = (s.reply ?? '').replace(s.questions[s.open]!.question, '');
+    out.push({ name: 'question turn without parroting', ok: !PARROT.test(before), note: PARROT.exec(before)?.[0] });
+    out.push({ name: 'question said once', ok: (s.reply ?? '').split(s.questions[s.open]!.question).length === 2 });
+    const options = s.questions[s.open]!.options;
+    // 2. Options never invent a new look for the product (judged from their words).
+    const invented = options.filter(inventsProductLook);
+    out.push({ name: 'no option invents a product look', ok: invented.length === 0, note: invented.join(' / ') || undefined });
+    // 3. ... nor speak of an attachment that is not there.
+    const missing = options.filter((o) => mentionsMissingAttachment(o, { pictures: ctx.pictures, videos: 0 }));
+    out.push({ name: 'no option names a missing attachment', ok: missing.length === 0, note: missing.join(' / ') || undefined });
+    // 4. Several people and a request to change "the model": which of them is asked first.
+    if (ctx.manyPeople && /모델|model/i.test(step.say) && s.questions.length === 1) {
+      out.push({ name: 'asks which of the people', ok: ASKS_WHICH.test(s.questions[s.open]!.question) || options.some((o) => /모두|전부|all\b/i.test(o)), note: s.questions[s.open]!.question });
+    }
+  }
+  if (s.reply && shownBefore && (s.changed.way || s.changed.credits) && s.way !== null) {
+    out.push({ name: 'explains a change of way or credits', ok: /\d[\d,]*\s*(크레딧|credits?)/i.test(s.reply) });
+  }
+  out.push({ name: 'no product change by the studio\'s own choice', ok: !s.sheet.change.some((c) => c.chosen && c.about === 'product') });
+  if (s.canMake && step.category === 'nonrequest' && standingBefore.change.length === 0) out.push({ name: 'no button after a non-request', ok: false });
+  out.push({ name: 'never the same point twice', ok: new Set(s.questions.map((q) => q.point.toLowerCase())).size === s.questions.length });
+  return out;
+}
+
+async function runCase(c: Case, set: SetName, clips: Record<ClipName, ClipFixture>, run: number, thinking: 'LOW' | 'MEDIUM', key: GeminiEnv): Promise<CaseRecord> {
+  const clipName = set === 'product' ? c.clip : SET_CLIP[set];
+  const terms = termsFor();
+  let sheet: ReviseSheet = emptySheet();
+  let questions: ReviseQuestion[] = [];
+  let shown: { way: 'edit' | 'reshoot' | null; estimateKrw: number } | null = null;
+  const turns: ReviseTurn[] = [];
+  let pictures = 0;
+  const records: TurnRecord[] = [];
+  for (const [i, step] of c.steps.entries()) {
+    if (state.stop) break;
+    pictures += step.attachPictures ?? 0;
+    const opened = openQuestion(questions);
+    const option = step.answering?.option !== undefined && opened !== null ? questions[opened]!.options[step.answering.option] : undefined;
+    const message = step.say || option || '';
+    const answering =
+      opened !== null && step.answering
+        ? { question: questions[opened]!.question, ...(option ? { option } : {}), ...(step.answering.decide ? { decide: true } : {}) }
+        : null;
+    const facts = talkFacts(terms, shown);
+    let tokens = { input: 0, output: 0, thinking: 0 };
+    const read = await readTalkWithTries(
+      {
+        fetch: meteredFetch((u) => (tokens = { input: tokens.input + u.input, output: tokens.output + u.output, thinking: tokens.thinking + u.thinking })),
+        env: { GEMINI_API_KEY: key.GEMINI_API_KEY, GEMINI_BASE_URL: key.GEMINI_BASE_URL },
+      },
+      {
+        message,
+        turns,
+        sheet,
+        questions,
+        answering,
+        attached: { pictures, videos: 0, marks: [] },
+        clip: clips[clipName].reading,
+        madeWith: clips[clipName].madeWith,
+        history: c.history ?? [],
+        facts,
+      },
+      { thinking },
+    );
+    const outcome = read.outcome;
+    const settled = settleTalk(
+      { reading: outcome.ok ? outcome.reading : null, message, standing: { sheet, questions }, answering: opened !== null ? (step.answering ?? null) : null, terms, shown, attached: { pictures, videos: 0 } },
+      factCredits(facts),
+    );
+    // Several different people over its shots (the inventory counts the most at once: one per shot here).
+    const ctx = { pictures, manyPeople: clipName === 'montage', caseId: c.id };
+    const checks = outcome.ok && !settled.failed ? check({ ...step, say: message }, settled, sheet, questions, shown !== null, ctx) : [{ name: 'read', ok: false, note: outcome.ok ? 'emptied' : outcome.why }];
+    records.push({ step: i + 1, say: message, answering: step.answering ?? null, category: step.category, ms: read.ms, tries: read.tries, productSlip: read.productSlip, slips: read.slips, tokens, failed: !outcome.ok || Boolean(settled.failed), settled, checks });
+    turns.push({ role: 'customer', text: message });
+    if (settled.reply) turns.push({ role: 'studio', text: settled.reply });
+    sheet = settled.sheet;
+    questions = settled.questions;
+    shown = settled.way ? { way: settled.way, estimateKrw: settled.estimateKrw } : shown;
+  }
+  return { id: c.id, set, group: c.group, clip: clipName, run, turns: records };
+}
+
+/* ------------------------------------------------------------------ report */
+
+function median(values: number[]): number {
+  if (!values.length) return 0;
+  const s = [...values].sort((a, b) => a - b);
+  return s.length % 2 ? s[(s.length - 1) / 2]! : Math.round((s[s.length / 2 - 1]! + s[s.length / 2]!) / 2);
+}
+const pct = (a: number, b: number) => (b ? `${a}/${b} (${Math.round((100 * a) / b)}%)` : '—');
+
+function metrics(records: CaseRecord[]) {
+  const all = records.flatMap((r) => r.turns.map((t) => ({ r, t })));
+  const read = all.filter(({ t }) => !t.failed);
+  const of = (cat: Category) => read.filter(({ t }) => t.category === cat);
+  const nonreq = of('nonrequest');
+  const missing = of('missing');
+  const clear = of('clear');
+  const taste = of('taste');
+  const questionTurns = read.filter(({ t }) => t.settled.open !== null);
+  const checks = all.flatMap(({ t }) => t.checks);
+  const ms = all.map(({ t }) => t.ms).sort((a, b) => a - b);
+  return {
+    nonRequestButtons: `${nonreq.filter(({ t }) => t.settled.canMake).length} of ${nonreq.length}`,
+    missingAsked: pct(missing.filter(({ t }) => t.settled.open !== null).length, missing.length),
+    clearNoQuestion: pct(clear.filter(({ t }) => t.settled.open === null && t.settled.canMake).length, clear.length),
+    tasteProposed: pct(taste.filter(({ t }) => t.settled.open === null && t.settled.canMake && t.settled.sheet.change.length > 0).length, taste.length),
+    parrotingShown: `${questionTurns.filter(({ t }) => t.checks.some((c) => c.name === 'question turn without parroting' && !c.ok)).length} of ${questionTurns.length}`,
+    parrotingRemoved: read.filter(({ t }) => t.settled.dropped.parroting).length,
+    productByStudioShown: read.filter(({ t }) => t.settled.sheet.change.some((c) => c.chosen && c.about === 'product')).length,
+    productSlipsRetried: all.filter(({ t }) => t.productSlip).length,
+    productChoicesDropped: read.reduce((n, { t }) => n + t.settled.dropped.productChoices, 0),
+    failing: (name: string) => checks.filter((c) => c.name === name && !c.ok).length,
+    counted: (name: string) => checks.filter((c) => c.name === name).length,
+    optionsDropped: read.reduce((n, { t }) => n + t.settled.dropped.options, 0),
+    attachmentDropped: read.reduce((n, { t }) => n + t.settled.dropped.attachment, 0),
+    reclassified: read.filter(({ t }) => t.settled.dropped.reclassified).length,
+    confirmFixed: read.filter(({ t }) => t.settled.dropped.confirmFixed).length,
+    fillerDropped: read.filter(({ t }) => t.settled.dropped.filler).length,
+    capped: read.filter(({ t }) => t.settled.dropped.capped).length,
+    slipRetries: all.filter(({ t }) => t.slips && t.slips.product + t.slips.options + t.slips.attachment > 0).length,
+    checks: pct(checks.filter((c) => c.ok).length, checks.length),
+    failedReadings: all.filter(({ t }) => t.failed).length,
+    secondTries: all.filter(({ t }) => t.tries > 1).length,
+    wayDisagreements: read.filter(({ t }) => !t.settled.wayAgrees).length,
+    latencyMedian: median(ms),
+    latencyP90: ms[Math.floor(ms.length * 0.9)] ?? 0,
+    latencyMax: Math.max(0, ...ms),
+    inputTokensMedian: median(read.map(({ t }) => t.tokens.input)),
+    outputTokensMedian: median(read.map(({ t }) => t.tokens.output)),
+    thinkingTokensMedian: median(read.map(({ t }) => t.tokens.thinking)),
+    turns: all.length,
+  };
+}
+
+function table(m: ReturnType<typeof metrics>): string[] {
+  return [
+    '| measure | result | target |',
+    '| --- | --- | --- |',
+    `| make button after a non-request (no plan standing) | ${m.nonRequestButtons} | 0 |`,
+    `| missing-target requests asked | ${m.missingAsked} | ≥ 90% |`,
+    `| clear requests answered without a question | ${m.clearNoQuestion} | ≥ 90% |`,
+    `| taste requests: concrete proposal, no question | ${m.tasteProposed} | ≥ 90% |`,
+    `| question turns that show a parroting sentence | ${m.parrotingShown} | 0 |`,
+    `| product changed by the studio's own choice (shown) | ${m.productByStudioShown} | 0 |`,
+    `| (model slips: parroting removed by the server / product slips retried / product choices dropped) | ${m.parrotingRemoved} / ${m.productSlipsRetried} / ${m.productChoicesDropped} | |`,
+    `| 1. yes with nothing standing shown as a confirmation / with "네," | ${m.failing('no confirmation with nothing standing')} / ${m.failing('no "네," with nothing standing')} of ${m.counted('no confirmation with nothing standing')} | 0 |`,
+    `| 1. confirmations that sound started | ${m.failing('confirmation does not sound started')} of ${m.counted('confirmation does not sound started')} | 0 |`,
+    `| 2. question turns showing an option that invents a product look (judged by its words) | ${m.failing('no option invents a product look')} of ${m.counted('no option invents a product look')} | 0 |`,
+    `| 3. replies / question turns naming a missing attachment | ${m.failing('reply names no missing attachment')} / ${m.failing('no option names a missing attachment')} | 0 |`,
+    `| 4. several people: which of them asked first | ${m.counted('asks which of the people') - m.failing('asks which of the people')}/${m.counted('asks which of the people')} | all |`,
+    `| 5. replies over three sentences / filler openers / drafts-finals over two sentences | ${m.failing('at most three sentences')} / ${m.failing('no filler opener')} / ${m.failing('drafts and finals in two sentences')} | 0 |`,
+    `| (server repairs: options dropped / attachment lines dropped / yes re-read / confirmation replaced / opener dropped / capped; turns retried for a rule) | ${m.optionsDropped} / ${m.attachmentDropped} / ${m.reclassified} / ${m.confirmFixed} / ${m.fillerDropped} / ${m.capped}; ${m.slipRetries} | |`,
+    `| all mechanical checks | ${m.checks} | |`,
+    `| failed after two tries / turns that needed a second try | ${m.failedReadings} / ${m.secondTries} | |`,
+    `| reading named another way than the server | ${m.wayDisagreements} | |`,
+    `| latency median / p90 / max, both tries (ms) | ${m.latencyMedian} / ${m.latencyP90} / ${m.latencyMax} | |`,
+    `| tokens per turn, median (input / output / thinking) | ${m.inputTokensMedian} / ${m.outputTokensMedian} / ${m.thinkingTokensMedian} | |`,
+    `| turns | ${m.turns} | |`,
+  ];
+}
+
+function markdown(records: CaseRecord[], runs: number, thinking: string, sets: SetName[]): string {
+  const lines: string[] = [`# Revise conversation eval (${thinking} thinking, ${runs} run${runs > 1 ? 's' : ''}, ${new Date().toISOString()})`, ''];
+  for (const set of sets) {
+    for (let run = 1; run <= runs; run++) {
+      const rs = records.filter((r) => r.run === run && r.set === set);
+      if (!rs.length) continue;
+      lines.push(`## ${set} clip · run ${run}`, '', ...table(metrics(rs)), '');
+      lines.push('| case | turn | category | ms | tries | kind | question | button | way · credits | failed checks |', '| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |');
+      for (const r of rs) {
+        for (const t of r.turns) {
+          const bad = t.checks.filter((c) => !c.ok).map((c) => c.name + (c.note ? ` (${c.note})` : '')).join('; ');
+          const s = t.settled;
+          lines.push(`| ${r.id} | ${t.step} | ${t.category} | ${t.ms} | ${t.tries} | ${s.kind ?? 'failed'} | ${s.open !== null ? 'yes' : '—'} | ${s.canMake ? 'yes' : '—'} | ${s.way ?? '—'} · ${creditsOf(s.estimateKrw)} | ${bad || 'ok'} |`);
+        }
+      }
+      lines.push('');
+    }
+  }
+  lines.push('## Transcripts', '');
+  for (const r of records) {
+    lines.push(`### ${r.id} · ${r.set} clip · run ${r.run}`, '');
+    for (const t of r.turns) {
+      const s = t.settled;
+      lines.push(`**Customer${t.answering ? (t.answering.decide ? ' (pressed "decide for me")' : ` (pressed option ${(t.answering.option ?? 0) + 1})`) : ''}:** ${t.say}`, '');
+      if (t.failed) {
+        lines.push(`_Could not be read (${t.tries} tries, ${t.ms} ms)._`, '');
+        continue;
+      }
+      lines.push(`**Studio** (${s.kind}, ${t.ms} ms${t.tries > 1 ? `, ${t.tries} tries` : ''}): ${s.reply}`, '');
+      if (s.open !== null) lines.push(`> Options: ${s.questions[s.open]!.options.map((o) => `[${o}]`).join(' ')} [decide for me]`, '');
+      const sheet = s.sheet;
+      lines.push(
+        `> Sheet — change: ${sheet.change.map((c) => `${c.text} (${c.kind}${c.seconds ? ` ${c.seconds}s` : ''}${c.about === 'product' ? ', product' : ''}${c.chosen ? ', chosen' : ''})`).join('; ') || '—'} · keep: ${sheet.keep.join('; ') || '—'} · exclude: ${sheet.exclude.join('; ') || '—'}`,
+        `> Server — way: ${s.way ?? '—'}, ${creditsOf(s.estimateKrw)} credits${s.seconds ? `, ${s.seconds} s` : ''}, button: ${s.canMake ? 'yes' : 'no'}${s.editStudio ? ', editing studio offered' : ''}${s.impossible ? ', impossible part' : ''}${s.changed.way || s.changed.credits ? `, changed (way ${s.changed.way}, credits ${s.changed.credits})` : ''}${s.wayAgrees ? '' : ', reading named another way'}${s.dropped.parroting ? ', parroting removed' : ''}${s.dropped.productChoices ? `, ${s.dropped.productChoices} product choice(s) dropped` : ''}${t.productSlip ? ', product slip retried' : ''}`,
+        `> Checks: ${t.checks.map((c) => `${c.ok ? '✓' : '✗'} ${c.name}${c.note && !c.ok ? ` (${c.note})` : ''}`).join(' · ')}`,
+        '',
+      );
+    }
+  }
+  return lines.join('\n');
+}
+
+/* ------------------------------------------------------------------ main */
+
+async function readClips(env: GeminiEnv, files: Record<ClipName, string>): Promise<void> {
+  let usage = { input: 0, output: 0, thinking: 0 };
+  const fetchImpl = meteredFetch((u) => (usage = u));
+  const out = {} as Record<ClipName, ClipFixture>;
+  for (const name of ['bottle', 'person', 'montage'] as const) {
+    const t0 = performance.now();
+    const reading = await readClip({ video: { bytes: new Uint8Array(readFileSync(files[name])), mime: 'video/mp4' }, locale: 'ko' }, { fetch: fetchImpl, env: env as Record<string, string> });
+    if (!reading) throw new Error(`could not read ${name}`);
+    out[name] = { reading, madeWith: MADE_WITH[name] };
+    say(`${name} (${Math.round(performance.now() - t0)} ms, tokens in ${usage.input} / out ${usage.output} / thinking ${usage.thinking}): people ${reading.inventory.people}, product "${reading.inventory.product}", mark "${reading.inventory.mark}"`);
+  }
+  mkdirSync(join(process.cwd(), 'scripts', 'fixtures'), { recursive: true });
+  writeFileSync(FIXTURE, JSON.stringify(out, null, 2) + '\n');
+  say(`wrote ${FIXTURE} (${state.calls} calls)`);
+}
+
+async function main(): Promise<void> {
+  const envFile = argv[0];
+  if (!envFile || envFile.startsWith('--')) throw new Error('usage: revise-dialogue-eval.ts <env-file> --out <dir> | --read-clips <bottle.mp4> <person.mp4> <montage.mp4>');
+  const env = readGeminiEnv(envFile);
+  SECRET = env.GEMINI_API_KEY ?? '';
+  const config = studioGeminiConfig({ GEMINI_API_KEY: env.GEMINI_API_KEY, GEMINI_BASE_URL: env.GEMINI_BASE_URL });
+  if (!config) throw new Error('no GEMINI_API_KEY in the env file');
+  if (config.model !== EXPECTED_MODEL) throw new Error(`studio model is ${config.model}, expected ${EXPECTED_MODEL}`);
+  state.cap = intFlag('--cap', 700, 1, 2000);
+  const readAt = argv.indexOf('--read-clips');
+  if (readAt >= 0) return readClips(env, { bottle: argv[readAt + 1]!, person: argv[readAt + 2]!, montage: argv[readAt + 3]! });
+
+  const outDir = flag('--out');
+  if (!outDir) throw new Error('--out <dir> is required');
+  if (!existsSync(FIXTURE)) throw new Error(`no clip readings at ${FIXTURE}: run with --read-clips first`);
+  const clips = JSON.parse(readFileSync(FIXTURE, 'utf8')) as Record<ClipName, ClipFixture>;
+  const runs = intFlag('--runs', 2, 1, 5);
+  const thinking = (flag('--thinking') ?? 'LOW').toUpperCase() === 'MEDIUM' ? 'MEDIUM' : 'LOW';
+  const only = flag('--only')?.split(',').map((s) => s.trim()).filter(Boolean) ?? null;
+  const sets = (flag('--sets')?.split(',').map((s) => s.trim()) ?? ['product', 'person', 'multishot']) as SetName[];
+  const concurrency = intFlag('--concurrency', 2, 1, 8);
+  const jobs: Array<{ c: Case; set: SetName }> = [];
+  for (const set of sets) {
+    const list =
+      set === 'product'
+        ? CASES.filter((c) => c.clip === 'bottle')
+        : CASES.filter((c) => REPRESENTATIVE.includes(c.id) || (set === 'multishot' && c.clip === 'montage'));
+    for (const c of list) if (!only || only.includes(c.id)) jobs.push({ c, set });
+  }
+  const records: CaseRecord[] = [];
+  for (let run = 1; run <= runs && !state.stop; run++) {
+    let next = 0;
+    const worker = async () => {
+      while (next < jobs.length && !state.stop) {
+        const { c, set } = jobs[next++]!;
+        records.push(await runCase(c, set, clips, run, thinking, env));
+      }
+    };
+    await Promise.all(Array.from({ length: concurrency }, worker));
+    say(`run ${run} done (${state.calls} calls so far)`);
+  }
+  const order = new Map(CASES.map((c, i) => [c.id, i]));
+  const setOrder = new Map(sets.map((s, i) => [s, i]));
+  records.sort((a, b) => setOrder.get(a.set)! - setOrder.get(b.set)! || a.run - b.run || order.get(a.id)! - order.get(b.id)!);
+  mkdirSync(outDir, { recursive: true });
+  writeFileSync(join(outDir, 'revise-dialogue-eval.md'), scrub(markdown(records, runs, thinking, sets)));
+  writeFileSync(join(outDir, 'revise-dialogue-eval.json'), scrub(JSON.stringify(records, null, 1)));
+  for (const set of sets) for (let run = 1; run <= runs; run++) {
+    const rs = records.filter((r) => r.run === run && r.set === set);
+    if (rs.length) say(`${set} run ${run}: ${JSON.stringify(metrics(rs))}`);
+  }
+  say(`calls: ${state.calls}${state.stop ? ` · stopped: ${state.stop}` : ''}`);
+}
+
+main().catch((error) => {
+  say(`failed: ${error instanceof Error ? error.message : String(error)}`);
+  process.exit(1);
+});

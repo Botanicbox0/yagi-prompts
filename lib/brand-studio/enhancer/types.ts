@@ -105,6 +105,14 @@ export interface EnhanceRevision {
    * they meant and outranks the request's ambiguous wording. Absent when nothing was asked.
    */
   clarified?: { question: string; answer: string };
+  /**
+   * Made from the revise conversation (flag `BRAND_STUDIO_REVISE_V2`): the settled request. `change` is
+   * what changes (later corrections already applied), `keep` what must stay, `exclude` what must not
+   * appear. Absent for a version made the older way.
+   */
+  sheet?: { change: string[]; keep: string[]; exclude: string[] };
+  /** With `sheet`: the run's exact length in seconds, or null when it follows the clip's own length. */
+  seconds?: number | null;
 }
 
 export interface EnhanceMaterial {

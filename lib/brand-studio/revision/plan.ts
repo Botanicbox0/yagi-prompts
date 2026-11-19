@@ -18,6 +18,7 @@ import { followsReferenceLength, isDraftRun, referenceVideoFit } from '../refere
 import type { StudioJobParams } from '../types';
 import { billedResolution, remixRunUsd, usageKrw, videoRunUsd } from '../usage-rate';
 import { dedupeRefs, loadRevisionRecipe, refKey, type RevisionRecipe } from './recipe';
+import { lengthOfSheet, sheetRequest, wayOfSheet, type ReviseDialogueRecord, type ReviseSheet } from './sheet';
 
 export type WayOutcome = { ok: true; plan: JobPlan } | { ok: false; problem: StudioReviseProblem };
 
@@ -51,6 +52,37 @@ export interface ReviseRequest {
   materials?: ReadonlyArray<{ assetId?: string; outputId?: string }>;
   /** The customer's answer to the one question asked about this request. */
   clarified?: { question: string; answer: string } | null;
+  /** Reshoot only: a new total length (a longer clip asked for in the conversation), within `reshootLength`. */
+  seconds?: number | null;
+  /** Made from the revise conversation: stored with the version (`params.revision.dialogue`). */
+  dialogue?: ReviseDialogueRecord | null;
+}
+
+/**
+ * What length a remake of this clip can take. A text / picture run (`video`) and a blueprint remix take any
+ * whole length the model allows, on both lanes (provider/requests.ts and the lane mapping send `p.seconds`),
+ * priced as a plain run of that length. An edit, and a remix with its reference video (which follows that
+ * video's length, or is priced with it), are not offered a new length here.
+ */
+export function reshootLength(recipe: Pick<RevisionRecipe, 'recipeJob' | 'base'>): { current: number | null; min: number; max: number; changeable: boolean } {
+  const run = recipe.recipeJob;
+  const model = run ? liveVideoModel(run.model) : null;
+  const p = run?.params ?? null;
+  const current = typeof p?.seconds === 'number' ? p.seconds : recipe.base.seconds !== null ? Math.round(recipe.base.seconds) : null;
+  if (!run || !model) return { current, min: 0, max: 0, changeable: false };
+  const changeable = run.kind === 'video' || (run.kind === 'video_remix' && p?.method === 'blueprint');
+  return { current, min: model.minSeconds, max: model.maxSeconds, changeable };
+}
+
+/**
+ * The way a sheet is made, given which ways are open: look-only sheets are edited when editing is open,
+ * anything else (or a look sheet whose edit is closed) is made again. Null when nothing can make it.
+ */
+export function wayForSheet(sheet: Pick<ReviseSheet, 'change'>, open: { edit: boolean; reshoot: boolean }): StudioReviseMode | null {
+  const wanted = wayOfSheet(sheet);
+  if (!wanted) return null;
+  if (wanted === 'edit') return open.edit ? 'edit' : open.reshoot ? 'reshoot' : null;
+  return open.reshoot ? 'reshoot' : null;
 }
 
 type StoredMark = NonNullable<NonNullable<StudioJobParams['revision']>['marks']>[number];
@@ -134,6 +166,7 @@ function revisionParams(
   marks?: readonly ReviseMark[],
   materials?: ReadonlyArray<{ assetId?: string; outputId?: string }>,
   clarified?: { question: string; answer: string } | null,
+  dialogue?: ReviseDialogueRecord | null,
 ): NonNullable<StudioJobParams['revision']> {
   const kept = storedMarks(marks);
   return {
@@ -146,6 +179,7 @@ function revisionParams(
     ...(kept.length ? { marks: kept } : {}),
     ...(materials?.length ? { materials: materials.map((m) => ({ ...m })) } : {}),
     ...(clarified ? { clarified: { question: clarified.question, answer: clarified.answer } } : {}),
+    ...(dialogue ? { dialogue: structuredClone(dialogue) } : {}),
   };
 }
 
@@ -203,7 +237,7 @@ export async function editWay(
         keep: [],
         change: '',
         ...(base.seconds !== null ? { referenceVideoSeconds: base.seconds } : {}),
-        revision: revisionParams(recipe, 'edit', request.references.length, request.marks, request.materials, request.clarified),
+        revision: revisionParams(recipe, 'edit', request.references.length, request.marks, request.materials, request.clarified, request.dialogue),
       },
       refs,
       resolved,
@@ -247,7 +281,11 @@ export async function reshootWay(
   if (imageCount(freshResolved) > model.maxReferenceImages) return { ok: false, problem: 'too_many_references' };
 
   const p = run.params ?? ({} as StudioJobParams);
-  const seconds = p.seconds ?? null;
+  // A longer clip asked for in the conversation, when this recipe can take a length of its own.
+  const length = reshootLength(recipe);
+  const longer = typeof request.seconds === 'number' ? request.seconds : null;
+  if (longer !== null && (!length.changeable || longer < length.min || longer > length.max)) return { ok: false, problem: 'unsupported' };
+  const seconds = longer ?? p.seconds ?? null;
   // The version's own resolution, not the recipe run's: a reshoot of a 1080p final (whose recipe is its draft)
   // is made at 1080p, and one of a 480p version that is no draft is no draft either (`revisionResolution`).
   const asked = revisionResolution(recipe, model);
@@ -270,7 +308,7 @@ export async function reshootWay(
     audio: p.audio ?? 'native',
     count: 1,
     locale,
-    revision: revisionParams(recipe, 'reshoot', fresh.length, request.marks, request.materials, request.clarified),
+    revision: revisionParams(recipe, 'reshoot', fresh.length, request.marks, request.materials, request.clarified, request.dialogue),
   };
   if (run.kind === 'video') {
     const usd = videoRunUsd({ resolution, seconds: seconds ?? model.defaultSeconds });
@@ -326,26 +364,47 @@ export async function planRevision(
     marks?: ReviseMark[];
     materials?: StudioReference[];
     clarified?: { question: string; answer: string };
+    /** Only when `BRAND_STUDIO_REVISE_V2` is on (the caller drops it otherwise). */
+    dialogue?: ReviseDialogueRecord;
   },
   media: StudioMediaStore,
   locale: 'ko' | 'en',
 ): Promise<JobPlan> {
-  requireMarksBehind(input.prompt, input.marks);
+  const dialogue = input.dialogue ?? null;
+  // From the conversation the sheet is the request: its changes, one per line, and its length.
+  const prompt = dialogue ? sheetRequest(dialogue.sheet) : input.prompt;
+  if (dialogue && !prompt.trim()) throw new StudioDenied('invalid');
+  requireMarksBehind(prompt, input.marks);
   const recipe = await loadRevisionRecipe(sql, organizationId, input.outputId);
   const added = await resolveAdded(sql, organizationId, input.references, media, locale);
   // The customer numbers the pictures they attached for this request from 1, whatever the way, and the
   // clip itself is "영상 1".
   const clip = { kind: 'video' } as ResolvedRef;
-  if (mentionsMissing(input.prompt, [clip, ...added])) throw new StudioDenied('reference_missing');
+  if (mentionsMissing(prompt, [clip, ...added])) throw new StudioDenied('reference_missing');
   const materials = await resolveMaterials(sql, organizationId, input.materials, media, locale);
+  const seconds = dialogue ? lengthOfSheet(dialogue.sheet) : null;
   const request = {
     mode: input.mode,
-    prompt: input.prompt,
+    prompt,
     references: [...input.references],
     marks: input.marks ?? [],
     materials,
-    clarified: input.clarified ?? null,
+    clarified: dialogue ? null : (input.clarified ?? null),
+    ...(seconds !== null ? { seconds } : {}),
+    ...(dialogue ? { dialogue } : {}),
   };
+  if (dialogue) {
+    // The way follows from the sheet, never from the caller: a sheet that changes motion, framing or
+    // length is made again (a longer clip only so), a look-only sheet is edited unless editing is closed.
+    const wanted = wayOfSheet(dialogue.sheet);
+    if (wanted === 'reshoot' && input.mode !== 'reshoot') throw new StudioDenied('invalid');
+    // Only a longer clip is booked here; shortening is the editing studio's (free).
+    const current = reshootLength(recipe).current;
+    if (seconds !== null && current !== null && seconds <= current) throw new StudioDenied('invalid');
+    if (wanted === 'edit' && input.mode === 'reshoot' && (await editWay(sql, organizationId, recipe, { ...request, mode: 'edit' }, media, locale)).ok) {
+      throw new StudioDenied('invalid');
+    }
+  }
   const way = input.mode === 'edit'
     ? await editWay(sql, organizationId, recipe, request, media, locale)
     : await reshootWay(sql, organizationId, recipe, request, media, locale);

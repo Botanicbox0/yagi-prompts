@@ -169,6 +169,19 @@ function clarifiedRule(): string {
 }
 
 /**
+ * A version made from the revise conversation (lib/brand-studio/revision/talk.ts): the settled sheet is the
+ * request, and the run's length is fixed by the studio, so the writer never states another one.
+ */
+function sheetRule(mode: 'edit' | 'reshoot', seconds: number | null): string {
+  const length =
+    mode === 'edit' || seconds === null
+      ? 'The new clip keeps the length of the video exactly. Never write a length, and never say in "notes" that the length changes.'
+      : `The new clip is exactly ${seconds} seconds long: lay the timing marks from 0.0s to ${seconds.toFixed(1)}s (stretch the earlier ones to fit). Never write any other length, and never say in "notes" that it has any other length.`;
+  return `"revision.sheet" is the request, settled with the customer in a conversation: apply every item of "sheet.change"; keep every item of "sheet.keep" exactly as it is; make sure nothing in "sheet.exclude" appears. Corrections are already applied in it: where the request's lines and the sheet differ, follow the sheet.
+${length}`;
+}
+
+/**
  * A new version of a generated clip (lib/brand-studio/revision). The earlier prompt and requests travel
  * in the user turn ("revision.madeWith", "revision.history"); these rules say what to do with them.
  */
@@ -181,7 +194,8 @@ function revisionTask(input: EnhanceInput, binding: Binding): string {
   const marks =
     (revision.marks?.length ? `\n${marksRule(revision.mode)}` : '') +
     (revision.materials?.length ? `\n${materialsRule()}` : '') +
-    (revision.clarified || revision.history.some((h) => /\)\s*$/.test(h)) ? `\n${clarifiedRule()}` : '');
+    (revision.clarified || revision.history.some((h) => /\)\s*$/.test(h)) ? `\n${clarifiedRule()}` : '') +
+    (revision.sheet ? `\n${sheetRule(revision.mode, revision.seconds ?? null)}` : '');
   if (revision.mode === 'edit') {
     const ref = binding.bound.find((b) => b.ref.kind === 'video')?.token ?? '@Video1';
     const pictures = binding.bound.some((b) => b.ref.kind === 'image' && b.token)

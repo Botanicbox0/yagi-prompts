@@ -10,6 +10,14 @@
 import { z } from 'zod';
 import type { StudioStorageQuotaView } from '@/lib/brands/storage-quota-format';
 import { STUDIO_IMAGE_BACKGROUNDS, STUDIO_IMAGE_QUALITIES, type StudioImageQuality } from './models';
+import {
+  ReviseQuestionSchema,
+  ReviseSheetSchema,
+  ReviseTurnSchema,
+  SHEET_LIMITS,
+  type ReviseQuestion,
+  type ReviseSheet,
+} from './revision/sheet';
 
 export type { StudioStorageQuotaView };
 
@@ -380,6 +388,13 @@ export const VideoReviseJobSchema = z.object({
   materials: z.array(StudioReferenceSchema).max(STUDIO_REVISE_MATERIALS_MAX).default([]),
   /** The customer's answer to the one question `revise.plan` asked about this request. Absent: none was asked, or it was made as written. */
   clarified: ReviseClarifiedSchema.optional(),
+  /**
+   * Made from the revise conversation (`revise.talk`, flag `BRAND_STUDIO_REVISE_V2` only; ignored when the
+   * flag is off): the sheet is the request, the way follows from it, and the questions and the transcript
+   * travel with the version. Read with `ReviseDialogueRecordSchema` only while the flag is on, so with the
+   * flag off any value here is ignored exactly as an unknown key always was.
+   */
+  dialogue: z.unknown().optional(),
 });
 
 /**
@@ -464,6 +479,35 @@ export const RevisePlanSchema = z.object({
       answer: z.string().trim().min(1).max(STUDIO_REVISE_CLARIFY.optionMax).nullable(),
     })
     .optional(),
+});
+
+/**
+ * `revise.talk` (flag `BRAND_STUDIO_REVISE_V2`, docs/BRAND-STUDIO-VIDEO-REMIX.md §3): one turn of the revise
+ * conversation. The screen keeps the conversation and sends it whole every turn: the turns so far, the
+ * standing sheet and the questions asked. `message` is the customer's new message; empty, the call only
+ * gets the clip ready to talk about (its reading is kept per output) and answers the ways and credits.
+ * Nothing is spent here; `job.create` with `video_revise` and `dialogue` makes the version.
+ */
+export const ReviseTalkSchema = z.object({
+  organizationId: Id,
+  outputId: Id,
+  message: z.string().trim().max(STUDIO_LIMITS.promptMax).default(''),
+  turns: z.array(ReviseTurnSchema).max(SHEET_LIMITS.transcriptMax).default([]),
+  sheet: ReviseSheetSchema.default({ change: [], keep: [], exclude: [] }),
+  questions: z.array(ReviseQuestionSchema).max(SHEET_LIMITS.questionsMax).default([]),
+  /**
+   * The message answers the open question: `option` is the pressed choice (its index), `decide` the
+   * "decide for me" choice; neither when the customer typed the answer under the question.
+   */
+  answering: z.object({ option: z.number().int().min(0).max(SHEET_LIMITS.optionsMax - 1).optional(), decide: z.boolean().optional() }).optional(),
+  /** Pictures attached so far in this conversation (numbered from 1 in that order). */
+  references: z.array(StudioReferenceSchema).max(STUDIO_LIMITS.referencesMax - 1).default([]),
+  marks: z.array(ReviseMarkSchema).max(STUDIO_REVISE_MARKS_MAX).default([]),
+  materials: z.number().int().min(0).max(STUDIO_REVISE_MATERIALS_MAX).default(0),
+  /** What the customer saw last turn (so a change of way or credits is explained). */
+  shown: z.object({ way: z.enum(STUDIO_REVISE_MODES).nullable(), estimateKrw: z.number().int().min(0) }).nullable().default(null),
+  /** A line's remove control: take out `sheet.change[remove]` (the server settles it; nothing is read). */
+  remove: z.number().int().min(0).max(SHEET_LIMITS.changeMax - 1).optional(),
 });
 
 /** Why a way is closed. The screen has one short line per code. */
@@ -560,6 +604,7 @@ export const STUDIO_OPERATIONS = [
   'film.analyze',
   'revise.plan',
   'revise.mark',
+  'revise.talk',
   'asset.reserve',
   'asset.complete',
   'asset.update',
@@ -698,6 +743,8 @@ export interface StudioJobView {
     materials?: Array<{ assetId?: string; outputId?: string }>;
     /** The question asked about this version's request and the customer's answer. */
     clarified?: ReviseClarified;
+    /** Made from the revise conversation (`BRAND_STUDIO_REVISE_V2`): the sheet it was asked with. */
+    sheet?: ReviseSheet;
   } | null;
   /**
    * Set on a run made with others in one request on several image models (`job.create_group`): the group
@@ -825,6 +872,47 @@ export interface StudioRevisePlan {
    * when `clarified` was sent.
    */
   clarify?: { question: string; options: string[] };
+}
+
+/** What a revise-conversation message was read as (`revise.talk`). */
+export const STUDIO_TALK_KINDS = ['change', 'correction', 'answer', 'confirm', 'withdraw', 'tool_question', 'unreadable', 'not_possible'] as const;
+export type StudioTalkKind = (typeof STUDIO_TALK_KINDS)[number];
+
+/**
+ * `revise.talk` answer. The reply and the sheet come from the reading; everything about spending is the
+ * server's: the way (from the sheet), its credits, and whether a make button may exist. `failed`: the
+ * message could not be read (the screen says so and offers to send it again; no button).
+ */
+export interface StudioReviseTalk {
+  ok: true;
+  /** The version number the next revision of this clip gets. */
+  version: number;
+  /** Null on the opening call (no message) and when the reading failed. */
+  kind: StudioTalkKind | null;
+  /** The studio's turn, in the customer's language. Null on the opening call and when the reading failed. */
+  reply: string | null;
+  /** The standing request after this message (unchanged when the message changed nothing or failed). */
+  sheet: ReviseSheet;
+  /** Every question asked in this conversation, answered or not, in order. */
+  questions: ReviseQuestion[];
+  /** The question now open (its index in `questions`), or null. While one is open there is no button. */
+  open: number | null;
+  /** How the sheet would be made, and what that takes (KRW; the screen shows credits). Null way: nothing to make. */
+  way: StudioReviseMode | null;
+  estimateKrw: number;
+  /** A longer clip asked for and accepted: its new length in seconds. */
+  seconds: number | null;
+  /** The only thing that may show "이대로 만들기". */
+  canMake: boolean;
+  /** Part of the message cannot be done here (a real person, music, a length out of range). */
+  impossible: boolean;
+  /** The message asked for a shorter clip: that is done in the editing studio (free); offer the way there. */
+  editStudio: boolean;
+  /** The way or the credits differ from what the customer saw last turn (`shown`). */
+  changed: { way: boolean; credits: boolean };
+  /** Whether the clip's own reading was available to this turn (the opening call prepares it). */
+  clipKnown: boolean;
+  failed?: true;
 }
 export type StudioAssetReserved = { ok: true; id: string; direct: boolean; url?: string };
 /** `roleCheck`: an upload whose category is being recognised now; the screen reads the library again shortly. */

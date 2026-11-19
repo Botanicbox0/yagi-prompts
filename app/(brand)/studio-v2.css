@@ -887,3 +887,79 @@ button.bs-sibling:focus-visible { outline: 2px solid var(--ys-focus); outline-of
   .bs-model-box, .bs-prompt-tab, .bs-prompt-tab::after, .bs-tile-model, button.bs-sibling { transition: none; }
   .bs-prompt-tab[data-status="designing"] .bs-prompt-tab-mark { animation: none; }
 }
+/* The revise conversation (BRAND_STUDIO_REVISE_V2, revise-talk.tsx): the customer on the right, the studio as plain
+   text on the left, one change sheet pinned under the thread with the only primary action, the box last. */
+.bs-talk { display: grid; gap: 12px; min-width: 0; }
+.bs-talk-head { display: flex; align-items: center; gap: 8px; min-width: 0; }
+.bs-talk-head .bs-revise-title { margin: 0; }
+.bs-talk-over { margin-left: auto; color: var(--ys-ink-secondary); }
+.bs-talk-thread { display: grid; gap: 10px; min-width: 0; }
+.bs-talk-me { justify-self: end; display: grid; gap: 6px; max-width: 88%; padding: 8px 12px; border-radius: 14px 14px 4px 14px; background: var(--ys-hover); color: var(--ys-ink); font-size: 13.5px; line-height: 1.5; word-break: keep-all; overflow-wrap: anywhere; }
+.bs-talk-me > p, .bs-talk-studio > p { margin: 0; white-space: pre-wrap; }
+.bs-talk-refs { justify-content: flex-end; }
+.bs-talk-studio { justify-self: start; display: grid; gap: 8px; max-width: 94%; color: var(--ys-ink); font-size: 13.5px; line-height: 1.55; word-break: keep-all; overflow-wrap: break-word; }
+.bs-talk-choices { display: flex; flex-wrap: wrap; gap: 6px; }
+.bs-talk-choices .bs-chip { height: auto; min-height: 32px; padding: 6px 12px; white-space: normal; text-align: left; }
+.bs-talk-choices .bs-chip[data-variant="quiet"] { color: var(--ys-ink-secondary); box-shadow: inset 0 0 0 1px var(--ys-hairline); background: transparent; }
+.bs-talk-link { justify-self: start; }
+.bs-talk-removed { margin: 0; font-size: 12px; }
+.bs-talk-failed { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; font-size: 13px; color: var(--ys-ink); }
+.bs-talk-failed > p { margin: 0; }
+.bs-talk-sheet { display: grid; gap: 10px; padding: 12px; border-radius: var(--ys-r-control); box-shadow: inset 0 0 0 1px var(--ys-hairline); background: var(--ys-panel); }
+.bs-talk-group { display: grid; gap: 4px; min-width: 0; }
+.bs-talk-group-label { margin: 0; color: var(--ys-ink-muted); font-size: 11.5px; font-weight: 600; letter-spacing: -0.01em; }
+.bs-talk-group-text { margin: 0; color: var(--ys-ink-secondary); font-size: 12.5px; line-height: 1.5; word-break: keep-all; overflow-wrap: break-word; }
+.bs-talk-group ul { display: grid; gap: 2px; margin: 0; padding: 0; list-style: none; }
+.bs-talk-group li { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; min-height: 30px; padding: 4px 4px 4px 8px; border-radius: 8px; color: var(--ys-ink); font-size: 13px; line-height: 1.45; word-break: keep-all; overflow-wrap: break-word; }
+.bs-talk-group li[data-fresh] { animation: bs-talk-fresh 1600ms var(--ease-editorial, cubic-bezier(0.22, 1, 0.36, 1)) 1; }
+@keyframes bs-talk-fresh { from { background: color-mix(in srgb, var(--ys-accent) 16%, transparent); } to { background: transparent; } }
+.bs-talk-line-text { flex: 1 1 0%; min-width: 0; }
+.bs-talk-line-x { display: grid; place-items: center; flex: none; width: 26px; height: 26px; margin-left: auto; padding: 0; border: 0; border-radius: 50%; background: transparent; color: var(--ys-ink-muted); cursor: pointer; }
+.bs-talk-line-x:hover:not(:disabled) { background: var(--ys-hover); color: var(--ys-ink); }
+.bs-talk-line-x:focus-visible { outline: 2px solid var(--ys-focus); outline-offset: 1px; }
+.bs-talk-line-x .bs-icon { width: 13px; height: 13px; }
+.bs-talk-make { display: grid; gap: 6px; padding-top: 4px; }
+.bs-talk-make .bs-submit { justify-self: stretch; }
+.bs-talk-draft { margin: 0; font-size: 12px; }
+.bs-talk-box { position: sticky; bottom: -16px; z-index: 2; display: grid; gap: 8px; margin: 0 -16px; padding: 10px 16px 16px; background: var(--ys-surface); box-shadow: 0 -1px 0 0 var(--ys-hairline); }
+.bs-talk-attached { align-items: center; gap: 8px; }
+.bs-talk-making-note { margin: 0; font-size: 12.5px; }
+.bs-talk-making-media { position: absolute; left: 50%; bottom: 18px; z-index: 3; display: inline-flex; align-items: center; gap: 8px; padding: 6px 12px; border-radius: var(--ys-r-pill); background: rgba(9, 9, 11, 0.68); color: #fff; font-size: 12.5px; transform: translateX(-50%); pointer-events: none; }
+@media (prefers-reduced-motion: reduce) {
+  .bs-talk-group li[data-fresh] { animation: none; box-shadow: inset 2px 0 0 0 var(--ys-accent); }
+}
+/* The panel while the conversation is open: one column exactly as tall as the panel. The version row and card
+   on top, the thread is the only part that scrolls (it keeps to its newest line), the sheet with its button and
+   the box are always in view. The actions stay below, reached by scrolling the panel. */
+.bs-talk-stage { display: flex; flex-direction: column; gap: 8px; flex: none; height: 100%; min-height: 0; }
+/* The version row stays one line here (it scrolls sideways when there are many versions). */
+.bs-talk-stage .bs-revise-strip { flex-wrap: nowrap; margin: -2px; padding: 2px; overflow-x: auto; scrollbar-width: none; }
+.bs-talk-stage .bs-revise-strip::-webkit-scrollbar { display: none; }
+.bs-talk-stage .bs-revise-chip { flex: none; }
+.bs-talk-stage > * { flex: none; min-width: 0; }
+.bs-talk-stage > .bs-talk { display: flex; flex-direction: column; gap: 8px; flex: 1 1 auto; min-height: 0; }
+.bs-talk-stage .bs-talk > * { flex: none; min-width: 0; }
+.bs-talk-stage .bs-talk-thread { flex: 1 1 auto; min-height: 44px; align-content: start; margin-right: -6px; padding-right: 6px; overflow-y: auto; overscroll-behavior: contain; scrollbar-width: thin; }
+.bs-talk-stage .bs-talk-sheet { gap: 4px; padding: 8px 12px; }
+.bs-talk-stage .bs-talk-group li { min-height: 26px; padding: 1px 2px 1px 8px; }
+.bs-talk-stage [data-talk-group="change"] ul { max-height: calc(3 * 26px + 2 * 2px); overflow-y: auto; overscroll-behavior: contain; scrollbar-width: thin; }
+.bs-talk-oneline { display: flex; align-items: baseline; gap: 8px; width: 100%; min-width: 0; padding: 0; border: 0; background: none; color: inherit; font: inherit; text-align: left; cursor: pointer; }
+.bs-talk-oneline .bs-talk-group-label { flex: none; }
+.bs-talk-oneline .bs-talk-group-text { flex: 1 1 auto; min-width: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+.bs-talk-oneline[aria-expanded="true"] .bs-talk-group-text { overflow: visible; white-space: normal; }
+.bs-talk-oneline:focus-visible { outline: 2px solid var(--ys-focus); outline-offset: 2px; border-radius: 4px; }
+.bs-talk-stage .bs-talk-make { gap: 4px; padding-top: 2px; }
+.bs-talk-stage .bs-talk-draft { margin: 0; font-size: 12px; }
+.bs-talk-stage .bs-talk-make .bs-revise-after { margin: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; font-size: 12px; }
+.bs-talk-stage .bs-talk-box { position: static; margin: 0; padding: 0; background: none; box-shadow: none; gap: 6px; }
+/* One row of tools under the box, also with the longer English labels. */
+.bs-talk-stage .bs-revise-tools { flex-wrap: nowrap; min-width: 0; }
+.bs-talk-stage .bs-revise-tools .bs-btn:not(.bs-revise-send) { min-width: 0; padding: 0 11px; }
+.bs-talk-stage .bs-revise-tools .bs-revise-send { flex: none; }
+.bs-talk-input { min-height: calc(2 * 1.5em + 16px); max-height: calc(5 * 1.5em + 16px); line-height: 1.5; resize: none; overflow-y: auto; }
+.bs-revise-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--ys-ink-muted); }
+.bs-revise-chip[data-selected] .bs-revise-dot { background: currentColor; opacity: 0.72; }
+/* The card on one line while a conversation is under way: number, stage, base, and the step to the final. */
+.bs-version-card[data-compact] { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; padding: 6px 8px 6px 12px; }
+.bs-version-card[data-compact] .bs-version-card-head { flex: 1 1 auto; flex-wrap: nowrap; }
+.bs-version-card[data-compact] .bs-version-final { justify-self: auto; }

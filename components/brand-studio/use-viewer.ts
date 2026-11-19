@@ -17,6 +17,7 @@ import { trayItemFromAsset, trayItemFromOutput, withStartFrame, type RefSource, 
 import { planReuse, type ReusePlan } from "./reuse-model";
 import { groupSiblings } from "./group-model";
 import type { ReviseSupport } from "./revise-form";
+import type { TalkSupport } from "./revise-talk";
 import { STUDIO_OPEN_REVERSE, announce, type LayerEditorRegionPreset } from "./seams";
 import { collapseRevisions, reviseRerunInput } from "./revision-model";
 import { boardOutputs } from "./store";
@@ -240,7 +241,7 @@ export function useViewer(input: {
   };
 
   /** The viewer's version strip and form; the screen adds the picture sources (recent, resolve, upload). */
-  const revise: ReviseSupport = useMemo(
+  const revise: ReviseSupport & { talk?: TalkSupport } = useMemo(
     () => ({
       organizationId,
       jobs,
@@ -268,7 +269,29 @@ export function useViewer(input: {
       plan: (body) => studio.planRevision(body),
       create: (body: StudioJobCreate) => studio.createJob(body),
       readMark: (body) => studio.readMark(body),
-      ...(input.reviseV2 ? { dialogue: true } : {}),
+      ...(input.reviseV2
+        ? {
+            dialogue: true,
+            // The conversation (revise-talk.tsx): the same uploads, marks and job creation, and the turn call.
+            talk: {
+              organizationId,
+              talk: (body) => studio.talkRevision(body),
+              create: (body) => studio.createJob(body as StudioJobCreate),
+              upload: async (files: File[]) => {
+                const added: TrayItem[] = [];
+                for (const file of files) {
+                  if (!(file.type.startsWith("image/") || file.type.startsWith("video/")) || uploadProblem(file)) continue;
+                  const result = await studio.upload(file);
+                  if (!isFailure(result)) added.push(trayItemFromAsset(result.asset));
+                }
+                return added;
+              },
+              readMark: (body) => studio.readMark(body),
+              // The editing studio with this clip ready (as videoComposeClipHref in studio-app.tsx builds it).
+              editStudioHref: (outputId: string) => `/brand/studio/compose?${new URLSearchParams({ organizationId, clip: `o:${outputId}` }).toString()}`,
+            } satisfies TalkSupport,
+          }
+        : {}),
     }),
     [organizationId, jobs, assets, lookup, studio, copy.viewer.label, input.reviseV2],
   );

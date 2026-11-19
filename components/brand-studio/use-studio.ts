@@ -202,6 +202,7 @@ export function useStudio({
 
   /** The viewer's "next version" form: which ways are open, what each uses and which fits the request. Spends nothing. */
   const planRevision = useCallback((input: StudioOps["revise.plan"][0]) => api.call("revise.plan", input), [api]);
+  const talkRevision = useCallback((input: StudioOps["revise.talk"][0]) => api.call("revise.talk", input), [api]);
 
   /** A spot marked on a clip: what it is on (a short label for the chip, a description for the request). Spends nothing. */
   const readMark = useCallback(
@@ -296,7 +297,7 @@ export function useStudio({
     [api, refreshSilently],
   );
 
-  return { store, load, createJob, createGroup, assignProject, createProject, cancelJob, saveOutput, deleteOutput, deleteJob, updateAsset, deleteAsset, handoff, enhancePrompt, planRevision, readMark, films, analyzeFilm, uploads, upload };
+  return { store, load, createJob, createGroup, assignProject, createProject, cancelJob, saveOutput, deleteOutput, deleteJob, updateAsset, deleteAsset, handoff, enhancePrompt, planRevision, talkRevision, readMark, films, analyzeFilm, uploads, upload };
 }
 
 /**
