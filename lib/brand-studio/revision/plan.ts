@@ -59,9 +59,10 @@ export interface ReviseRequest {
 }
 
 /**
- * What length a remake of this clip can take. A text / picture run (`video`) and a remix with a length of
- * its own take any whole length the model allows, on both lanes (provider/requests.ts and the lane mapping
- * send `p.seconds`); an edit, or a remix that follows its reference video's length, cannot change it.
+ * What length a remake of this clip can take. A text / picture run (`video`) and a blueprint remix take any
+ * whole length the model allows, on both lanes (provider/requests.ts and the lane mapping send `p.seconds`),
+ * priced as a plain run of that length. An edit, and a remix with its reference video (which follows that
+ * video's length, or is priced with it), are not offered a new length here.
  */
 export function reshootLength(recipe: Pick<RevisionRecipe, 'recipeJob' | 'base'>): { current: number | null; min: number; max: number; changeable: boolean } {
   const run = recipe.recipeJob;
@@ -69,7 +70,7 @@ export function reshootLength(recipe: Pick<RevisionRecipe, 'recipeJob' | 'base'>
   const p = run?.params ?? null;
   const current = typeof p?.seconds === 'number' ? p.seconds : recipe.base.seconds !== null ? Math.round(recipe.base.seconds) : null;
   if (!run || !model) return { current, min: 0, max: 0, changeable: false };
-  const changeable = run.kind === 'video' || (run.kind === 'video_remix' && (p?.method === 'blueprint' || typeof p?.seconds === 'number'));
+  const changeable = run.kind === 'video' || (run.kind === 'video_remix' && p?.method === 'blueprint');
   return { current, min: model.minSeconds, max: model.maxSeconds, changeable };
 }
 

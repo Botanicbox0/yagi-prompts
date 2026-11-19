@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { studioEnv } from '@/lib/brand-studio/env';
 import { resetFreeIntelRateLimits } from '@/lib/brand-studio/jobs';
 import { runStudioOperation } from '@/lib/brand-studio/service';
+import { reshootLength } from '@/lib/brand-studio/revision/plan';
 import { guardCredits, settleTalk, TALK_SYSTEM, type SettleInput, type TalkReading } from '@/lib/brand-studio/revision/talk';
 import type { ReviseQuestion, ReviseSheet } from '@/lib/brand-studio/revision/sheet';
 import { usageKrw, videoRunUsd } from '@/lib/brand-studio/usage-rate';
@@ -150,6 +151,18 @@ describe('settleTalk: failure and prices', () => {
   it('makes again a look-only sheet when editing is closed', () => {
     const closed = { ...terms, edit: { available: false, estimateKrw: 0, problem: 'too_short' as const } };
     expect(settle({ terms: closed })).toMatchObject({ way: 'reshoot', estimateKrw: 810, canMake: true });
+  });
+});
+
+describe('reshootLength: which remakes may take a new length', () => {
+  const recipe = (kind: string, params: Record<string, unknown>) =>
+    ({ recipeJob: { kind, model: 'seedance-2.5', params }, base: { seconds: 5 } }) as unknown as Parameters<typeof reshootLength>[0];
+  it('a plain run and a blueprint remix: 4 to 15 s; an edit or a remix with its reference video: never', () => {
+    expect(reshootLength(recipe('video', { seconds: 5 }))).toEqual({ current: 5, min: 4, max: 15, changeable: true });
+    expect(reshootLength(recipe('video_remix', { method: 'blueprint', seconds: 6 })).changeable).toBe(true);
+    expect(reshootLength(recipe('video_remix', { method: 'reference', seconds: 6 })).changeable).toBe(false);
+    expect(reshootLength(recipe('video_remix', { method: 'reference', seconds: null })).changeable).toBe(false);
+    expect(reshootLength({ recipeJob: null, base: { seconds: 5 } } as never)).toMatchObject({ current: 5, changeable: false });
   });
 });
 
