@@ -200,7 +200,10 @@ export function toolCall(job, project) {
   }
   if (job.kind === 'video_final') {
     if (!job.draftTaskId) throw new CliRefusal('final without a draft id');
-    return { tool: 'create_video', input: { project_id: project, model: job.model, draft_source_task_id: job.draftTaskId, auto_confirm: true } };
+    // `create_video` requires `prompt` even when it finishes a draft ("data must have required property
+    // 'prompt'", 2026-11-20): the server hands the text the draft was made from (lib/brand-studio/prepare.ts).
+    if (!String(job.prompt ?? '').trim()) throw new CliRefusal('final without a prompt');
+    return { tool: 'create_video', input: { project_id: project, model: job.model, prompt: job.prompt, draft_source_task_id: job.draftTaskId, auto_confirm: true } };
   }
   const video = job.inputs.find((i) => i.kind === 'video');
   const audios = job.inputs.filter((i) => i.kind === 'audio').map((i) => i.url);

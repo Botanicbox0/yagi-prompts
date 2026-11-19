@@ -73,8 +73,11 @@ export interface ChainVersion {
    * Versions are a tree: a new version may start from any earlier one.
    */
   base: number | null;
-  /** The version's 1080p final: none yet, one being made, or one ready (then `output` is the final). */
-  final: "none" | "making" | "ready";
+  /**
+   * The version's 1080p final: none yet, one being made, one ready (then `output` is the final), or the last
+   * one asked for failed (nothing was taken; it may be asked for again).
+   */
+  final: "none" | "making" | "ready" | "failed";
 }
 
 /** A ready result is a draft the customer can still take to its final. */
@@ -109,12 +112,15 @@ export function chainOf(jobs: readonly StudioJobView[], job: StudioJobView): Cha
     const main = runs.find((run) => run.kind !== "video_final") ?? null;
     const final = runs.find((run) => run.kind === "video_final" && run.status === "succeeded" && run.outputs.length > 0) ?? null;
     const finishing = runs.some((run) => run.kind === "video_final" && isOpen(run));
+    // The last final asked for, by when it was asked: failed or stopped means the card says so.
+    const lastFinal = runs.filter((run) => run.kind === "video_final").sort((a, b) => a.createdAt.localeCompare(b.createdAt)).at(-1) ?? null;
+    const finalFailed = !final && !finishing && lastFinal !== null && (lastFinal.status === "failed" || lastFinal.status === "canceled");
     const request = main?.revision ? main.prompt : null;
     const marks = (main?.revision && main.revision.marks) || [];
     const clarified = main?.revision?.clarified ?? null;
     const baseOutput = main?.revision?.baseOutputId ?? null;
     const base = baseOutput ? (owner.get(baseOutput) ?? null) : null;
-    const shared = { version, request, marks, clarified, base, final: final ? ("ready" as const) : finishing ? ("making" as const) : ("none" as const) };
+    const shared = { version, request, marks, clarified, base, final: final ? ("ready" as const) : finishing ? ("making" as const) : finalFailed ? ("failed" as const) : ("none" as const) };
     if (final) list.push({ ...shared, job: final, output: final.outputs[0]!, state: "ready" });
     else if (main && main.status === "succeeded" && main.outputs.length > 0) list.push({ ...shared, job: main, output: main.outputs[0]!, state: "ready" });
     else if (main && isOpen(main)) list.push({ ...shared, job: main, output: null, state: "making" });

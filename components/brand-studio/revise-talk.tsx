@@ -33,6 +33,34 @@ export interface TalkSupport {
 
 const REFS_MAX = STUDIO_LIMITS.referencesMax - 1;
 
+/** The viewer's other actions behind one quiet control in the conversation's title row. */
+export interface TalkMore {
+  label: string;
+  open: boolean;
+  /** The id of the panel it opens. */
+  controls: string;
+  onToggle(): void;
+}
+
+export function MoreButton({ more }: { more: TalkMore }) {
+  return (
+    <button
+      type="button"
+      className="bs-btn bs-icon-btn bs-talk-more"
+      data-variant="ghost"
+      data-size="sm"
+      aria-label={more.label}
+      title={more.label}
+      aria-expanded={more.open}
+      aria-controls={more.controls}
+      onClick={more.onToggle}
+      data-talk-more
+    >
+      <StudioIcon name="more" />
+    </button>
+  );
+}
+
 /** The sheet, read-only or with remove controls: what changes, what stays, what is left out (empty groups hidden). */
 export function SheetCard({
   sheet,
@@ -126,6 +154,7 @@ export function TalkView({
   onRemoveAttachment,
   onMarkMode,
   onCaret,
+  more,
 }: {
   state: TalkState;
   copy: StudioCopy;
@@ -148,12 +177,15 @@ export function TalkView({
   onRemoveAttachment(key: string): void;
   onMarkMode(on: boolean): void;
   onCaret?(at: number): void;
+  /** The viewer's other actions, folded behind one control while the conversation is open. */
+  more?: TalkMore;
 }) {
   const r = copy.revise;
   const t = r.talk;
   const id = useId();
   const files = useRef<HTMLInputElement>(null);
   const thread = useRef<HTMLDivElement>(null);
+  const [dragging, setDragging] = useState(false);
   const ownBox = useRef<HTMLTextAreaElement>(null);
   const box = composer ?? ownBox;
   // The thread is the one part that scrolls, and it keeps to the newest line.
@@ -179,6 +211,7 @@ export function TalkView({
   const draftMarks = state.marks.filter((m) => !saidKeys.has(m.key));
   const attachedCount = state.thread.reduce((n, i) => n + (i.from === "customer" ? i.references.length : 0), 0) + state.references.length;
   const placeholder = open !== null ? t.answerPlaceholder : state.thread.length ? t.placeholderMore : r.placeholder;
+  const afterText = fill(r.after, { n: state.version });
   return (
     <section className="bs-talk" data-revise-talk data-phase={state.phase} aria-label={r.title}>
       <div className="bs-talk-head">
@@ -189,6 +222,7 @@ export function TalkView({
             {t.startOver}
           </button>
         )}
+        {more && <MoreButton more={more} />}
       </div>
       <div ref={thread} className="bs-talk-thread" role="log" aria-live="polite" aria-label={r.title} data-talk-thread>
         {state.thread.map((item) => {
@@ -261,19 +295,38 @@ export function TalkView({
       </div>
       <SheetCard sheet={state.sheet} copy={copy} marks={state.marks} fresh={state.fresh} onRemove={onRemove} busy={busy}>
         {state.canMake && state.way && (
+          // The button, then one quiet line: the note about drafts when it applies (then "saved as vN" is the
+          // button's description and tooltip), else "saved as vN". Both on one line never fit this column.
           <div className="bs-talk-make" data-talk-make-row>
-            {draftClip && state.way === "edit" && (
-              <p className="bs-muted bs-talk-draft" data-talk-draft-note>
-                {t.draftOnce}
-              </p>
-            )}
-            <button type="button" className="bs-btn bs-submit" data-variant="solid" data-size="md" disabled={busy} aria-busy={state.phase === "making" || undefined} onClick={onMake} data-talk-make>
+            <button
+              type="button"
+              className="bs-btn bs-submit"
+              data-variant="solid"
+              data-size="md"
+              disabled={busy}
+              aria-busy={state.phase === "making" || undefined}
+              aria-describedby={`${id}-after`}
+              title={afterText}
+              onClick={onMake}
+              data-talk-make
+            >
               <span>{t.make}</span>
               {price && <span className="bs-submit-cost bs-num">{price}</span>}
             </button>
-            <p className="bs-muted bs-revise-after" title={fill(r.after, { n: state.version })}>
-              {fill(r.after, { n: state.version })}
-            </p>
+            {draftClip && state.way === "edit" ? (
+              <>
+                <p className="bs-muted bs-talk-note bs-talk-draft" data-talk-draft-note>
+                  {t.draftOnce}
+                </p>
+                <span className="bs-sr" id={`${id}-after`}>
+                  {afterText}
+                </span>
+              </>
+            ) : (
+              <p className="bs-muted bs-talk-note bs-revise-after" id={`${id}-after`}>
+                {afterText}
+              </p>
+            )}
           </div>
         )}
       </SheetCard>
@@ -285,14 +338,21 @@ export function TalkView({
       <form
         className="bs-talk-box"
         data-talk-box
+        data-dragging={dragging ? "" : undefined}
         onSubmit={(event) => {
           event.preventDefault();
           onSend();
         }}
         onDragOver={(event) => {
-          if (event.dataTransfer?.types.includes("Files")) event.preventDefault();
+          if (!event.dataTransfer?.types.includes("Files")) return;
+          event.preventDefault();
+          if (!dragging) setDragging(true);
+        }}
+        onDragLeave={(event) => {
+          if (!event.currentTarget.contains(event.relatedTarget as Node | null)) setDragging(false);
         }}
         onDrop={(event) => {
+          setDragging(false);
           if (!event.dataTransfer?.files.length) return;
           event.preventDefault();
           onFiles(Array.from(event.dataTransfer.files));
@@ -301,77 +361,98 @@ export function TalkView({
         <label className="bs-sr" htmlFor={`${id}-box`}>
           {r.prompt}
         </label>
-        <textarea
-          id={`${id}-box`}
-          ref={box}
-          className="bs-field bs-revise-prompt bs-talk-input"
-          rows={2}
-          maxLength={STUDIO_LIMITS.promptMax}
-          value={state.draft}
-          placeholder={placeholder}
-          disabled={state.phase === "making"}
-          data-talk-input
-          onSelect={(event) => onCaret?.(event.currentTarget.selectionStart)}
-          onChange={(event) => onDraft(event.target.value)}
-          onKeyDown={(event) => {
-            if (event.key === "Enter" && !event.shiftKey && !event.nativeEvent.isComposing) {
-              event.preventDefault();
-              onSend();
-            }
-          }}
-        />
-        {(state.references.length > 0 || state.materials.length > 0 || draftMarks.length > 0) && (
-          <ul className="bs-region-ref-list bs-talk-attached" data-talk-attached>
-            {[...state.references, ...state.materials].map((ref) => (
-              <li key={ref.key} className="bs-region-ref">
-                <span className="bs-thumb" data-static data-kind={ref.kind}>
-                  {ref.kind === "video" ? <video src={ref.url} muted playsInline preload="metadata" /> : <img src={ref.thumbUrl ?? ref.url} alt="" />}
-                </span>
-                <button type="button" className="bs-thumb-x" aria-label={fill(r.removeRef, { n: "" })} onClick={() => onRemoveAttachment(ref.key)}>
-                  <StudioIcon name="close" />
-                </button>
-              </li>
-            ))}
-            {draftMarks.map((mark) => {
-              const n = state.marks.indexOf(mark) + 1;
-              return (
-                <li key={mark.key} className="bs-mark-chip" data-reading={mark.reading ? "" : undefined}>
-                  <span className="bs-mark-n" aria-hidden="true">
-                    {circled(n)}
+        {/* One chat input: what is attached on top, the text (one line, growing to five), then the tools inside. */}
+        <div className="bs-talk-field">
+          {(state.references.length > 0 || state.materials.length > 0 || draftMarks.length > 0) && (
+            <ul className="bs-region-ref-list bs-talk-attached" data-talk-attached>
+              {[...state.references, ...state.materials].map((ref) => (
+                <li key={ref.key} className="bs-region-ref">
+                  <span className="bs-thumb" data-static data-kind={ref.kind}>
+                    {ref.kind === "video" ? <video src={ref.url} muted playsInline preload="metadata" /> : <img src={ref.thumbUrl ?? ref.url} alt="" />}
                   </span>
-                  <span className="bs-mark-text">{chipText(mark)}</span>
+                  <button type="button" className="bs-thumb-x" aria-label={fill(r.removeRef, { n: "" })} onClick={() => onRemoveAttachment(ref.key)}>
+                    <StudioIcon name="close" />
+                  </button>
                 </li>
-              );
-            })}
-          </ul>
-        )}
-        <div className="bs-revise-tools">
-          <button type="button" className="bs-btn" data-variant="soft" data-size="sm" disabled={uploading || busy || attachedCount >= REFS_MAX + STUDIO_REVISE_MATERIALS_MAX} onClick={() => files.current?.click()} data-talk-attach>
-            <StudioIcon name={uploading ? "spark" : "plus"} />
-            {r.addRefs}
-          </button>
-          <input
-            ref={files}
-            type="file"
-            className="bs-sr"
-            tabIndex={-1}
-            accept={[...STUDIO_UPLOAD_MIMES.image, ...STUDIO_UPLOAD_MIMES.video].join(",")}
-            multiple
-            onChange={(event) => {
-              const picked = Array.from(event.target.files ?? []);
-              event.target.value = "";
-              if (picked.length) onFiles(picked);
+              ))}
+              {draftMarks.map((mark) => {
+                const n = state.marks.indexOf(mark) + 1;
+                return (
+                  <li key={mark.key} className="bs-mark-chip" data-reading={mark.reading ? "" : undefined}>
+                    <span className="bs-mark-n" aria-hidden="true">
+                      {circled(n)}
+                    </span>
+                    <span className="bs-mark-text">{chipText(mark)}</span>
+                  </li>
+                );
+              })}
+            </ul>
+          )}
+          <textarea
+            id={`${id}-box`}
+            ref={box}
+            className="bs-talk-input"
+            rows={1}
+            maxLength={STUDIO_LIMITS.promptMax}
+            value={state.draft}
+            placeholder={placeholder}
+            disabled={state.phase === "making"}
+            data-talk-input
+            onSelect={(event) => onCaret?.(event.currentTarget.selectionStart)}
+            onChange={(event) => onDraft(event.target.value)}
+            onKeyDown={(event) => {
+              if (event.key === "Enter" && !event.shiftKey && !event.nativeEvent.isComposing) {
+                event.preventDefault();
+                onSend();
+              }
             }}
           />
-          {markable && (
-            <button type="button" className="bs-btn bs-mark-toggle" data-variant="soft" data-size="sm" aria-pressed={marking} disabled={busy || (!marking && state.marks.length >= MARKS_MAX)} onClick={() => onMarkMode(!marking)}>
-              <StudioIcon name="region" />
-              {r.mark}
+          <div className="bs-talk-field-tools">
+            <button
+              type="button"
+              className="bs-btn bs-icon-btn bs-talk-tool"
+              data-variant="ghost"
+              data-size="sm"
+              aria-label={r.addRefs}
+              title={r.addRefs}
+              disabled={uploading || busy || attachedCount >= REFS_MAX + STUDIO_REVISE_MATERIALS_MAX}
+              onClick={() => files.current?.click()}
+              data-talk-attach
+            >
+              <StudioIcon name={uploading ? "spark" : "plus"} />
             </button>
-          )}
-          <button type="submit" className="bs-btn bs-icon-btn bs-revise-send" data-variant="soft" data-size="sm" aria-disabled={busy || !state.draft.trim() || undefined} aria-label={t.send} title={t.send} data-talk-send>
-            <StudioIcon name="arrow" />
-          </button>
+            <input
+              ref={files}
+              type="file"
+              className="bs-sr"
+              tabIndex={-1}
+              accept={[...STUDIO_UPLOAD_MIMES.image, ...STUDIO_UPLOAD_MIMES.video].join(",")}
+              multiple
+              onChange={(event) => {
+                const picked = Array.from(event.target.files ?? []);
+                event.target.value = "";
+                if (picked.length) onFiles(picked);
+              }}
+            />
+            {markable && (
+              <button
+                type="button"
+                className="bs-btn bs-icon-btn bs-talk-tool bs-mark-toggle"
+                data-variant="ghost"
+                data-size="sm"
+                aria-label={r.mark}
+                title={r.mark}
+                aria-pressed={marking}
+                disabled={busy || (!marking && state.marks.length >= MARKS_MAX)}
+                onClick={() => onMarkMode(!marking)}
+              >
+                <StudioIcon name="region" />
+              </button>
+            )}
+            <button type="submit" className="bs-btn bs-icon-btn bs-revise-send" data-variant="soft" data-size="sm" aria-disabled={busy || !state.draft.trim() || undefined} aria-label={t.send} title={t.send} data-talk-send>
+              <StudioIcon name="arrow" />
+            </button>
+          </div>
         </div>
       </form>
     </section>
@@ -389,6 +470,8 @@ export function ReviseTalk({
   stage = null,
   onCreated,
   onTalking,
+  more,
+  onSettled,
 }: {
   outputId: string;
   support: TalkSupport;
@@ -401,6 +484,9 @@ export function ReviseTalk({
   onCreated?(created: StudioJobCreated, version: number, sheet: ReviseSheet): void;
   /** Whether a conversation is under way here (the viewer shortens the version card and marks the version). */
   onTalking?(outputId: string, open: boolean): void;
+  more?: TalkMore;
+  /** The conversation opened or a studio message arrived: the viewer puts its panel back at the top. */
+  onSettled?(): void;
 }) {
   const [state, setState] = useState<TalkState>(() => initialTalkState(fallbackVersion));
   const [uploading, setUploading] = useState(false);
@@ -439,10 +525,18 @@ export function ReviseTalk({
   useEffect(() => {
     reportTalking.current?.(outputId, talking);
   }, [outputId, talking]);
-  // The keyboard goes back to the box after every studio message.
+  // The keyboard goes back to the box after every studio message, without moving the panel; the panel itself
+  // goes back to the top of the conversation when it opens and on every studio message.
   const lastFrom = state.thread[state.thread.length - 1]?.from;
+  const settled = useRef(onSettled);
+  settled.current = onSettled;
+  const studioLines = state.thread.filter((item) => item.from === "studio").length;
+  const loading = state.phase === "loading";
   useEffect(() => {
-    if (state.phase === "idle" && lastFrom === "studio") composer.current?.focus();
+    settled.current?.();
+  }, [studioLines, loading]);
+  useEffect(() => {
+    if (state.phase === "idle" && lastFrom === "studio") composer.current?.focus({ preventScroll: true });
   }, [state.phase, lastFrom]);
 
   // Marks: one offscreen copy of the clip per panel, loaded when the first mark is read.
@@ -534,6 +628,7 @@ export function ReviseTalk({
         onCaret={(at) => {
           caret.current = at;
         }}
+        more={more}
       />
     </>
   );
