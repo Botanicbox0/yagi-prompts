@@ -2077,6 +2077,7 @@ export const en = {
       },
       toFinal: 'Create final version',
       finalMaking: 'Creating final version',
+      finalFailed: "The final version couldn't be made. No credits were used.",
       from: 'Based on v{n}',
     },
     region: {

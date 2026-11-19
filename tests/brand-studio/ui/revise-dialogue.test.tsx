@@ -121,6 +121,26 @@ describe("flag on: the viewer", () => {
   });
 });
 
+describe("the panel while the conversation is open", () => {
+  it("does not scroll: the actions and the prompt fold behind one control in the title row, closed at first", () => {
+    const v1 = clip(1);
+    const talk = { organizationId: ORG, talk: async () => ({ ok: false as const, code: "failed" }), create: async () => ({ ok: false as const, code: "failed" }), upload: async () => [], editStudioHref: () => "/x" };
+    const html = renderToStaticMarkup(
+      <Viewer items={[{ type: "output", output: v1.outputs[0]!, job: v1 }]} index={0} copy={ko} locale="ko" canCreate canGenerate busy={null} notice={null}
+        revise={{ ...support([v1], true), talk } as never} parentOf={() => null} onIndex={noop} onClose={noop} actions={actions} />,
+    );
+    expect(html).toMatch(/class="bs-viewer-side"[^>]*data-talk-open=""/);
+    expect(html).toMatch(/data-talk-more=""|data-talk-more="true"/);
+    expect(html).toMatch(/aria-expanded="false"[^>]*aria-controls="[^"]+-more"/);
+    const panel = html.slice(html.indexOf("data-talk-more-panel"));
+    expect(html).toMatch(/hidden=""[^>]*data-talk-more-panel/);
+    expect(panel).toContain("data-studio-viewer-actions");
+    expect(panel).toContain("data-studio-prompt-block");
+    // Nothing of it outside the folded panel.
+    expect(html.indexOf("data-studio-viewer-actions")).toBeGreaterThan(html.indexOf("data-talk-more-panel"));
+  });
+});
+
 describe("the version card", () => {
   const card = (versions: ReturnType<typeof chainOf>, selected: number, shown: StudioJobView, patch: Partial<Parameters<typeof VersionPanel>[0]> = {}) =>
     VersionPanel({ versions, selected, shown: { job: shown, output: shown.outputs[0]! }, copy: ko, locale: "ko", canFinish: true, finishing: false, onSelect: noop, onFinal: noop, ...patch });
@@ -170,6 +190,44 @@ describe("the version card", () => {
     expect(viewerHtml).not.toContain("data-version-final");
     expect(viewerHtml).not.toContain(`data-action="finalize"`);
     expect(viewerHtml).not.toContain("data-version-stage");
+  });
+
+  it("says on the card when a final could not be made and nothing was taken, and offers it again", () => {
+    const v1 = clip(1, {}, { finalEstimateKrw: 3_580 });
+    const failed = finalOf(5, 1, { status: "failed", errorCode: "failed", outputs: [] });
+    const chain = chainOf([failed, v1], v1);
+    expect(chain[0]!.final).toBe("failed");
+    const html = renderToStaticMarkup(card(chain, 1, v1)!);
+    expect(html).toContain(`data-version-final-failed="true"`);
+    expect(html).toContain(ko.revise.finalFailed);
+    expect(html).toContain("data-version-final=");
+    expect(html).toContain(credits(ko.credits.amount, creditsOf(3_580), "ko"));
+    // A newer final on its way or made replaces the old failure.
+    const again = finalOf(6, 1, { status: "running", outputs: [] });
+    expect(chainOf([failed, again, v1], v1)[0]!.final).toBe("making");
+    expect(renderToStaticMarkup(card(chainOf([failed, again, v1], v1), 1, v1)!)).not.toContain(ko.revise.finalFailed);
+    expect(renderToStaticMarkup(card(chainOf([clip(1)], clip(1)), 1, clip(1))!)).not.toContain(ko.revise.finalFailed);
+  });
+
+  it("offers no final and names no stage for a version still being made, whatever is on screen meanwhile", () => {
+    const v1 = clip(1, {}, { finalEstimateKrw: 3_580 });
+    const v2 = clip(2, { status: "running", outputs: [], revision: rev(2, 1, { mode: "reshoot" }) });
+    // The viewer shows v1's picture while v2 is made; the card is v2's.
+    const html = renderToStaticMarkup(card(chainOf([v1, v2], v1), 2, v1)!);
+    expect(html).toMatch(/data-version-card="2"/);
+    expect(html).not.toContain("data-version-final");
+    expect(html).not.toContain("data-version-stage");
+  });
+
+  it("a version changed inside a draft is no draft: no badge and no final, while it is made and after", () => {
+    const v1 = clip(1, {}, { finalEstimateKrw: 3_580 });
+    const making = clip(3, { kind: "video_remix", method: "edit", status: "running", outputs: [], revision: rev(3, 1) });
+    const ready = clip(3, { kind: "video_remix", method: "edit", revision: rev(3, 1) }, { draft: false });
+    for (const [v3, shown] of [[making, v1], [ready, ready], [ready, v1]] as const) {
+      const html = renderToStaticMarkup(card(chainOf([v1, v3], v1), 3, shown)!);
+      expect(html).not.toContain("data-version-final");
+      expect(html).not.toContain(`data-version-stage="draft"`);
+    }
   });
 
   it("shows on the step to the final the credits its final takes, as the server prices it", () => {

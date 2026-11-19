@@ -84,12 +84,25 @@ describe('the CLI call for a video', () => {
     expect(draftTaskIdOf(hd, { task_id: 't-4' })).toBeUndefined();
   });
 
-  it('a final names the draft task and nothing else', () => {
-    expect(toolCall(job({ kind: 'video_final', inputs: [], draftTaskId: 'preview-9', params: { resolution: '1080p' } }), 'p')).toEqual({
+  it('a final names the draft task and carries the prompt the draft was made from (create_video requires it)', () => {
+    expect(toolCall(job({ kind: 'video_final', inputs: [], draftTaskId: 'preview-9', prompt: 'slow push in on the bottle', params: { resolution: '1080p' } }), 'p')).toEqual({
       tool: 'create_video',
-      input: { project_id: 'p', model: 'seedance-2.5', draft_source_task_id: 'preview-9', auto_confirm: true },
+      input: { project_id: 'p', model: 'seedance-2.5', prompt: 'slow push in on the bottle', draft_source_task_id: 'preview-9', auto_confirm: true },
     });
     expect(() => toolCall(job({ kind: 'video_final', inputs: [], params: { resolution: '1080p' } }), 'p')).toThrow(CliRefusal);
+    // Without a prompt the tool refuses the call ("data must have required property 'prompt'"): refused here, said plainly.
+    expect(() => toolCall(job({ kind: 'video_final', inputs: [], draftTaskId: 'preview-9', prompt: '  ', params: { resolution: '1080p' } }), 'p')).toThrow(/prompt/);
+  });
+
+  it('every create call carries a prompt', () => {
+    const kinds = [
+      job(),
+      job({ kind: 'video', inputs: [], params: { method: null, resolution: '480p', aspect: '9:16', seconds: 5, draft: true } }),
+      job({ kind: 'image', inputs: [], params: { method: null, resolution: '2K', aspect: '1:1' } }),
+      job({ kind: 'region_edit', inputs: [{ kind: 'image', url: PICTURE }], params: { method: null, resolution: '2K', aspect: '1:1' } }),
+      job({ kind: 'video_final', inputs: [], draftTaskId: 'preview-9', params: { resolution: '1080p' } }),
+    ];
+    for (const j of kinds) expect(toolCall(j, 'p').input.prompt, j.kind).toBe('turn the bottle blue');
   });
 });
 

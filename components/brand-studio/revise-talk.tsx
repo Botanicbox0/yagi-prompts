@@ -33,6 +33,34 @@ export interface TalkSupport {
 
 const REFS_MAX = STUDIO_LIMITS.referencesMax - 1;
 
+/** The viewer's other actions behind one quiet control in the conversation's title row. */
+export interface TalkMore {
+  label: string;
+  open: boolean;
+  /** The id of the panel it opens. */
+  controls: string;
+  onToggle(): void;
+}
+
+export function MoreButton({ more }: { more: TalkMore }) {
+  return (
+    <button
+      type="button"
+      className="bs-btn bs-icon-btn bs-talk-more"
+      data-variant="ghost"
+      data-size="sm"
+      aria-label={more.label}
+      title={more.label}
+      aria-expanded={more.open}
+      aria-controls={more.controls}
+      onClick={more.onToggle}
+      data-talk-more
+    >
+      <StudioIcon name="more" />
+    </button>
+  );
+}
+
 /** The sheet, read-only or with remove controls: what changes, what stays, what is left out (empty groups hidden). */
 export function SheetCard({
   sheet,
@@ -126,6 +154,7 @@ export function TalkView({
   onRemoveAttachment,
   onMarkMode,
   onCaret,
+  more,
 }: {
   state: TalkState;
   copy: StudioCopy;
@@ -148,6 +177,8 @@ export function TalkView({
   onRemoveAttachment(key: string): void;
   onMarkMode(on: boolean): void;
   onCaret?(at: number): void;
+  /** The viewer's other actions, folded behind one control while the conversation is open. */
+  more?: TalkMore;
 }) {
   const r = copy.revise;
   const t = r.talk;
@@ -189,6 +220,7 @@ export function TalkView({
             {t.startOver}
           </button>
         )}
+        {more && <MoreButton more={more} />}
       </div>
       <div ref={thread} className="bs-talk-thread" role="log" aria-live="polite" aria-label={r.title} data-talk-thread>
         {state.thread.map((item) => {
@@ -389,6 +421,8 @@ export function ReviseTalk({
   stage = null,
   onCreated,
   onTalking,
+  more,
+  onSettled,
 }: {
   outputId: string;
   support: TalkSupport;
@@ -401,6 +435,9 @@ export function ReviseTalk({
   onCreated?(created: StudioJobCreated, version: number, sheet: ReviseSheet): void;
   /** Whether a conversation is under way here (the viewer shortens the version card and marks the version). */
   onTalking?(outputId: string, open: boolean): void;
+  more?: TalkMore;
+  /** The conversation opened or a studio message arrived: the viewer puts its panel back at the top. */
+  onSettled?(): void;
 }) {
   const [state, setState] = useState<TalkState>(() => initialTalkState(fallbackVersion));
   const [uploading, setUploading] = useState(false);
@@ -439,10 +476,18 @@ export function ReviseTalk({
   useEffect(() => {
     reportTalking.current?.(outputId, talking);
   }, [outputId, talking]);
-  // The keyboard goes back to the box after every studio message.
+  // The keyboard goes back to the box after every studio message, without moving the panel; the panel itself
+  // goes back to the top of the conversation when it opens and on every studio message.
   const lastFrom = state.thread[state.thread.length - 1]?.from;
+  const settled = useRef(onSettled);
+  settled.current = onSettled;
+  const studioLines = state.thread.filter((item) => item.from === "studio").length;
+  const loading = state.phase === "loading";
   useEffect(() => {
-    if (state.phase === "idle" && lastFrom === "studio") composer.current?.focus();
+    settled.current?.();
+  }, [studioLines, loading]);
+  useEffect(() => {
+    if (state.phase === "idle" && lastFrom === "studio") composer.current?.focus({ preventScroll: true });
   }, [state.phase, lastFrom]);
 
   // Marks: one offscreen copy of the clip per panel, loaded when the first mark is read.
@@ -534,6 +579,7 @@ export function ReviseTalk({
         onCaret={(at) => {
           caret.current = at;
         }}
+        more={more}
       />
     </>
   );

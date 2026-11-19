@@ -24,7 +24,7 @@ import { StudioIcon, type StudioIconName } from "./icons";
 import type { RefSource, TrayItem } from "./refs";
 import { RegionEditor } from "./region-editor";
 import { ReviseForm, VersionPanel, VersionStrip, type ReviseSupport } from "./revise-form";
-import { ReviseTalk, SheetCard, type TalkSupport } from "./revise-talk";
+import { MoreButton, ReviseTalk, SheetCard, type TalkSupport } from "./revise-talk";
 import { savedTalkOutputs } from "./revise-talk-store";
 import { chainOf, versionOf, type ChainVersion } from "./revision-model";
 
@@ -553,6 +553,20 @@ function ViewerContent({
   useLayoutEffect(() => {
     if (!modelCompare && side.current) side.current.scrollTop = sideTop.current;
   }, [modelCompare]);
+  // `BRAND_STUDIO_REVISE_V2`: while the conversation is open the panel does not scroll (the thread does); the
+  // other actions fold behind one control in its title row and open over the panel.
+  const talkOpen = Boolean(clip && revise && canGenerate && item.type === "output" && dialogue && revise.talk);
+  const [moreOpen, setMoreOpen] = useState(false);
+  const moreId = `${id}-more`;
+  const shownId = item.type === "output" ? item.output.id : null;
+  useEffect(() => setMoreOpen(false), [shownId]);
+  const toTop = () => {
+    if (side.current) side.current.scrollTop = 0;
+  };
+  useLayoutEffect(() => {
+    if (talkOpen) toTop();
+  }, [talkOpen, shownId, moreOpen]);
+  const more = talkOpen ? { label: copy.gallery.more, open: moreOpen, controls: moreId, onToggle: () => setMoreOpen((v) => !v) } : undefined;
 
   const setRegion = (open: boolean) => {
     setRegionState(open);
@@ -614,6 +628,122 @@ function ViewerContent({
     { name: "campaign", icon: "send", label: v.campaign, hint: v.campaignHint, run: () => actions.campaign(item), show: canCreate },
   ];
   const saved = canCreate && Boolean(output?.savedAssetId);
+  // The action tiles and the prompt: in their place below, or (conversation open) behind the title row's control.
+  const actionsBlock = (
+    <div className="bs-viewer-actions" data-studio-viewer-actions>
+      {comparing && <p className="bs-muted">{v.compareHint}</p>}
+      {sentLine && (
+        <p className="bs-notice" role="status" data-studio-region-sent>
+          {sentLine}
+        </p>
+      )}
+      <div className="bs-action-grid">
+        {tiles.filter((tile) => tile.show).map((tile) => (
+          <button
+            key={tile.name}
+            type="button"
+            className="bs-btn bs-action"
+            data-variant="soft"
+            data-action={tile.name}
+            disabled={busy === tile.name}
+            aria-busy={busy === tile.name}
+            title={tile.hint}
+            onClick={tile.run}
+          >
+            <StudioIcon name={tile.icon} />
+            <span>{tile.label}</span>
+          </button>
+        ))}
+        {saved && (
+          <p className="bs-action bs-action-done" data-studio-saved>
+            <StudioIcon name="save" />
+            <span>{v.saved}</span>
+          </p>
+        )}
+      </div>
+      <div className="bs-row bs-quiet-actions">
+        {image && (
+          <button type="button" className="bs-btn" data-variant="ghost" data-size="sm" data-copy-image onClick={() => void copyCurrentImage()}>
+            {v.copyImage}
+          </button>
+        )}
+        <a className="bs-btn" data-variant="ghost" data-size="sm" href={file.url} download target="_blank" rel="noopener noreferrer" data-action="download">
+          <StudioIcon name="download" />
+          {v.download}
+        </a>
+        {canCreate && output && !confirming && (
+          <button type="button" className="bs-btn" data-variant="ghost" data-size="sm" data-action="delete" onClick={() => setConfirming(true)}>
+            <StudioIcon name="trash" />
+            {v.delete}
+          </button>
+        )}
+      </div>
+      {copyToast && (
+        <p className="bs-notice" role="status" data-viewer-copy-toast>
+          {copyToast}
+        </p>
+      )}
+      {confirming && output && (
+        <div className="bs-confirm-box" role="group" aria-label={v.delete} data-studio-delete-confirm>
+          <p>{v.deleteConfirm}</p>
+          <div className="bs-row">
+            <button type="button" className="bs-btn" data-variant="soft" data-size="sm" data-tone="danger" disabled={busy === "delete"} onClick={() => void actions.remove(output).then((gone) => !gone && setConfirming(false))}>
+              {v.delete}
+            </button>
+            <button type="button" className="bs-btn" data-variant="ghost" data-size="sm" onClick={() => setConfirming(false)}>
+              {v.cancel}
+            </button>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+  const promptBlock = job && !region && (
+    <div className="bs-prompt-block" data-studio-prompt-block>
+    <details className="bs-prompt-details" data-studio-prompt-details>
+      <summary>{v.promptToggle}</summary>
+      <div className="bs-prompt-head">
+        <p className="bs-label" id={`${id}-typed`}>{v.yourPrompt}</p>
+        {job.prompt.trim() && (
+          <CopyButton text={job.prompt} label={v.copy} copiedLabel={v.copied} describedBy={`${id}-typed`} onFailed={() => setCopyToast(v.copyFailed)} compact marker="copy-typed" />
+        )}
+      </div>
+      <p>{job.prompt || copy.board.noPrompt}</p>
+      <div className="bs-prompt-head">
+        <p className="bs-label" id={`${id}-sent`}>{v.sentPrompt}</p>
+        {sentCopy && job.finalPrompt && (
+          <CopyButton text={job.finalPrompt} label={v.copy} copiedLabel={v.copied} describedBy={`${id}-sent`} onFailed={() => setCopyToast(v.copyFailed)} compact marker="copy-sent" />
+        )}
+      </div>
+      {/* A video run's sentence is read here, not copied: no selection (CSS), no copy, cut, drag or context menu. */}
+      <p
+        data-no-copy={protectedSent ? "" : undefined}
+        onCopy={protectedSent ? (event) => event.preventDefault() : undefined}
+        onCut={protectedSent ? (event) => event.preventDefault() : undefined}
+        onDragStart={protectedSent ? (event) => event.preventDefault() : undefined}
+        onContextMenu={protectedSent ? (event) => event.preventDefault() : undefined}
+      >
+        {job.finalPrompt ?? v.notEnhanced}
+      </p>
+      {canGenerate && job.kind !== "video_final" && (
+        <button
+          type="button"
+          className="bs-btn"
+          data-variant="soft"
+          data-size="sm"
+          data-studio-reuse={job.kind === "region_edit" ? "region" : "dock"}
+          onClick={() => actions.reuse(job, item.type === "output" ? item.output : null)}
+        >
+          {job.kind === "region_edit" ? v.reuseRegion : v.reuse}
+        </button>
+      )}
+    </details>
+    {/* One press, without opening: the typed words (a partial edit's instruction). Hidden while open. */}
+    {promptText && (
+      <CopyButton text={promptText} label={v.copyPrompt} copiedLabel={v.copied} onFailed={() => setCopyToast(v.copyFailed)} marker="copy-prompt" />
+    )}
+    </div>
+  );
 
   return (
     // "모델 비교" gives the pictures the whole body: the action column is hidden (kept mounted, so it comes back
@@ -670,6 +800,7 @@ function ViewerContent({
         ref={side}
         className="bs-viewer-side"
         aria-hidden={modelCompare || undefined}
+        data-talk-open={talkOpen ? "" : undefined}
         onScroll={(event) => {
           if (!modelCompare) sideTop.current = event.currentTarget.scrollTop;
         }}
@@ -703,11 +834,13 @@ function ViewerContent({
               compact={!makingSelected && talkingOutputs.has(output.id)}
               talking={talkingVersions}
             />
+            {notice && <p className="bs-notice" role="status">{notice}</p>}
             {makingSelected && selectedEntry ? (
               <section className="bs-talk" data-talk-making>
                 <div className="bs-talk-head">
                   <h3 className="bs-revise-title">{copy.revise.talk.makingTitle}</h3>
                   <span className="bs-revise-next bs-num">{fill(copy.revise.version, { n: selectedEntry.version })}</span>
+                  {more && <MoreButton more={more} />}
                 </div>
                 {selectedEntry.job.revision?.sheet ? <SheetCard sheet={selectedEntry.job.revision.sheet} copy={copy} /> : selectedEntry.request ? <p className="bs-revise-request">{selectedEntry.request}</p> : null}
                 <p className="bs-muted bs-talk-making-note">{copy.revise.talk.makingNote}</p>
@@ -724,6 +857,8 @@ function ViewerContent({
                 stage={file.kind === "video" && !region ? { video: videoRef, host: mediaHost, url: file.url } : null}
                 onCreated={(created, version) => selectVersion(created.job.revision?.version ?? version)}
                 onTalking={markTalking}
+                more={more}
+                onSettled={toTop}
               />
             )}
           </div>
@@ -804,122 +939,21 @@ function ViewerContent({
             }}
             onSend={() => void sendRegion()}
           />
-        ) : (
-          <div className="bs-viewer-actions" data-studio-viewer-actions>
-            {comparing && <p className="bs-muted">{v.compareHint}</p>}
-            {sentLine && (
-              <p className="bs-notice" role="status" data-studio-region-sent>
-                {sentLine}
-              </p>
-            )}
-            <div className="bs-action-grid">
-              {tiles.filter((tile) => tile.show).map((tile) => (
-                <button
-                  key={tile.name}
-                  type="button"
-                  className="bs-btn bs-action"
-                  data-variant="soft"
-                  data-action={tile.name}
-                  disabled={busy === tile.name}
-                  aria-busy={busy === tile.name}
-                  title={tile.hint}
-                  onClick={tile.run}
-                >
-                  <StudioIcon name={tile.icon} />
-                  <span>{tile.label}</span>
-                </button>
-              ))}
-              {saved && (
-                <p className="bs-action bs-action-done" data-studio-saved>
-                  <StudioIcon name="save" />
-                  <span>{v.saved}</span>
-                </p>
-              )}
-            </div>
-            <div className="bs-row bs-quiet-actions">
-              {image && (
-                <button type="button" className="bs-btn" data-variant="ghost" data-size="sm" data-copy-image onClick={() => void copyCurrentImage()}>
-                  {v.copyImage}
-                </button>
-              )}
-              <a className="bs-btn" data-variant="ghost" data-size="sm" href={file.url} download target="_blank" rel="noopener noreferrer" data-action="download">
-                <StudioIcon name="download" />
-                {v.download}
-              </a>
-              {canCreate && output && !confirming && (
-                <button type="button" className="bs-btn" data-variant="ghost" data-size="sm" data-action="delete" onClick={() => setConfirming(true)}>
-                  <StudioIcon name="trash" />
-                  {v.delete}
-                </button>
-              )}
-            </div>
-            {copyToast && (
-              <p className="bs-notice" role="status" data-viewer-copy-toast>
-                {copyToast}
-              </p>
-            )}
-            {confirming && output && (
-              <div className="bs-confirm-box" role="group" aria-label={v.delete} data-studio-delete-confirm>
-                <p>{v.deleteConfirm}</p>
-                <div className="bs-row">
-                  <button type="button" className="bs-btn" data-variant="soft" data-size="sm" data-tone="danger" disabled={busy === "delete"} onClick={() => void actions.remove(output).then((gone) => !gone && setConfirming(false))}>
-                    {v.delete}
-                  </button>
-                  <button type="button" className="bs-btn" data-variant="ghost" data-size="sm" onClick={() => setConfirming(false)}>
-                    {v.cancel}
-                  </button>
-                </div>
-              </div>
-            )}
-          </div>
-        )}
-        {notice && <p className="bs-notice" role="status">{notice}</p>}
-        {job && !region && (
-          <div className="bs-prompt-block" data-studio-prompt-block>
-          <details className="bs-prompt-details" data-studio-prompt-details>
-            <summary>{v.promptToggle}</summary>
-            <div className="bs-prompt-head">
-              <p className="bs-label" id={`${id}-typed`}>{v.yourPrompt}</p>
-              {job.prompt.trim() && (
-                <CopyButton text={job.prompt} label={v.copy} copiedLabel={v.copied} describedBy={`${id}-typed`} onFailed={() => setCopyToast(v.copyFailed)} compact marker="copy-typed" />
-              )}
-            </div>
-            <p>{job.prompt || copy.board.noPrompt}</p>
-            <div className="bs-prompt-head">
-              <p className="bs-label" id={`${id}-sent`}>{v.sentPrompt}</p>
-              {sentCopy && job.finalPrompt && (
-                <CopyButton text={job.finalPrompt} label={v.copy} copiedLabel={v.copied} describedBy={`${id}-sent`} onFailed={() => setCopyToast(v.copyFailed)} compact marker="copy-sent" />
-              )}
-            </div>
-            {/* A video run's sentence is read here, not copied: no selection (CSS), no copy, cut, drag or context menu. */}
-            <p
-              data-no-copy={protectedSent ? "" : undefined}
-              onCopy={protectedSent ? (event) => event.preventDefault() : undefined}
-              onCut={protectedSent ? (event) => event.preventDefault() : undefined}
-              onDragStart={protectedSent ? (event) => event.preventDefault() : undefined}
-              onContextMenu={protectedSent ? (event) => event.preventDefault() : undefined}
-            >
-              {job.finalPrompt ?? v.notEnhanced}
-            </p>
-            {canGenerate && job.kind !== "video_final" && (
-              <button
-                type="button"
-                className="bs-btn"
-                data-variant="soft"
-                data-size="sm"
-                data-studio-reuse={job.kind === "region_edit" ? "region" : "dock"}
-                onClick={() => actions.reuse(job, item.type === "output" ? item.output : null)}
-              >
-                {job.kind === "region_edit" ? v.reuseRegion : v.reuse}
+        ) : talkOpen ? (
+          <div className="bs-talk-more-panel" id={moreId} role="region" aria-label={copy.gallery.more} hidden={!moreOpen} data-talk-more-panel>
+            <div className="bs-talk-more-head">
+              <button type="button" className="bs-btn bs-icon-btn" data-variant="ghost" data-size="sm" aria-label={copy.viewer.close} title={copy.viewer.close} onClick={() => setMoreOpen(false)} data-talk-more-close>
+                <StudioIcon name="close" />
               </button>
-            )}
-          </details>
-          {/* One press, without opening: the typed words (a partial edit's instruction). Hidden while open. */}
-          {promptText && (
-            <CopyButton text={promptText} label={v.copyPrompt} copiedLabel={v.copied} onFailed={() => setCopyToast(v.copyFailed)} marker="copy-prompt" />
-          )}
+            </div>
+            {actionsBlock}
+            {promptBlock}
           </div>
+        ) : (
+          actionsBlock
         )}
+        {talkOpen ? null : notice && <p className="bs-notice" role="status">{notice}</p>}
+        {talkOpen ? null : promptBlock}
       </div>
     </div>
   );

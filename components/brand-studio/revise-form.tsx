@@ -184,12 +184,21 @@ export function VersionPanel({
 }) {
   const r = copy.revise;
   const current = versions.find((v) => v.version === selected) ?? null;
-  const stage = shown ? stageOf(shown.job, shown.output) : null;
+  // The card speaks for the selected version only. While it is being made it has no stage and no final (the
+  // picture meanwhile may be another version's); a result of another version is never read for it.
+  const own = !current
+    ? shown
+    : current.state === "making" || !current.output
+      ? null
+      : shown && (shown.output.id === current.output.id || shown.job.id === current.job.id || current.job.parentOutputId === shown.output.id)
+        ? shown
+        : { job: current.job, output: current.output };
+  const stage = own ? stageOf(own.job, own.output) : null;
   const base = current?.base ?? null;
   const branch = (v: ChainVersion) => (v.base !== null && v.base !== v.version - 1 ? v.base : null);
   const final = current?.final ?? "none";
   // What the final takes, as the server will reserve it (`finalEstimateKrw`, lib/brand-studio/final-price.ts).
-  const finalKrw = shown?.output.finalEstimateKrw;
+  const finalKrw = own?.output.finalEstimateKrw;
   const finalPrice = finalKrw !== undefined && finalKrw > 0 ? credits(copy.credits.amount, creditsOf(finalKrw), locale) : null;
   if (versions.length < 2 && !stage && base === null) return null;
   return (
@@ -296,7 +305,13 @@ export function VersionPanel({
             {r.finalMaking}
           </p>
         )}
-        {stage === "draft" && final === "none" && canFinish && shown && (
+        {stage === "draft" && final === "failed" && (
+          // The last final asked for failed; a failed run takes nothing. The button below offers it again.
+          <p className="bs-muted bs-version-final-failed" role="status" data-version-final-failed>
+            {r.finalFailed}
+          </p>
+        )}
+        {stage === "draft" && (final === "none" || final === "failed") && canFinish && own && (
           <button
             type="button"
             className="bs-btn bs-version-final"
@@ -305,7 +320,7 @@ export function VersionPanel({
             data-version-final
             disabled={finishing}
             aria-busy={finishing || undefined}
-            onClick={() => onFinal(shown.output)}
+            onClick={() => onFinal(own.output)}
           >
             <StudioIcon name="spark" />
             <span>{r.toFinal}</span>

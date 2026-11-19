@@ -2089,6 +2089,7 @@ export const ko: Dictionary = {
       },
       toFinal: '완성본 만들기',
       finalMaking: '완성본을 만들고 있어요',
+      finalFailed: '완성본을 만들지 못했어요. 크레딧은 차감되지 않았어요.',
       from: 'v{n} 기반',
     },
     region: {

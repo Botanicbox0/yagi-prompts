@@ -170,6 +170,24 @@ describe('video', () => {
     expect(lanes.map((l) => l.lane)).toEqual(['sunra_api', 'sunra_api']);
   });
 
+  it('a final handed to the account lane carries the prompt its draft was made from', async () => {
+    const draftJob = await create({ ...video, resolution: 'draft' });
+    await advanceStudioJobsWith(deps, { jobIds: [draftJob.id] });
+    const draft = await view(draftJob.id);
+    const draftSent = (await f.sql.query<{ final_prompt: string }>('select final_prompt from brand_studio_jobs where id = $1', [draftJob.id])).rows[0]!.final_prompt;
+    expect(draftSent).toBeTruthy();
+    await f.sql.query("update brand_studio_allowances set preferred_lane = 'sunra_mcp' where organization_id = $1", [f.orgId]);
+    await recordLaneHeartbeat(f.sql, 'sunra_mcp', {});
+    // The draft lives on the API lane in this fixture; a final sticks to its draft's lane, so move the draft there.
+    await f.sql.query("update brand_studio_jobs set lane = 'sunra_mcp' where id = $1", [draftJob.id]);
+    const finalJob = await create({ kind: 'video_final', draftOutputId: draft.outputs[0]!.id });
+    await advanceStudioJobsWith(deps, { jobIds: [finalJob.id] });
+    const claimed = await laneClaim(deps, { limit: 4 });
+    if (!claimed.ok) throw new Error();
+    const handed = claimed.jobs.find((j) => j.jobId === finalJob.id);
+    expect(handed).toMatchObject({ kind: 'video_final', prompt: draftSent, draftTaskId: expect.stringMatching(/^fake-draft-/) });
+  });
+
   it('a final of a result that is not a draft is not found', async () => {
     const job = await create({ ...video, resolution: '720p' });
     await advanceStudioJobsWith(deps, { jobIds: [job.id] });

@@ -22,7 +22,7 @@ import type { ReviseQuestion, ReviseSheet } from '@/lib/brand-studio/revision/sh
 import { usageKrw, videoRunUsd } from '@/lib/brand-studio/usage-rate';
 import { geminiAnswer, mockGemini, sentBody } from '../intel/helpers';
 import { studioDeps, studioFixture, viewerOf, type StudioFixture } from './helpers';
-import { seedRun } from './revision-helpers';
+import { seedRevision, seedRun } from './revision-helpers';
 
 /**
  * `revise.talk` (lib/brand-studio/revision/talk.ts): the reading writes the reply and the sheet; the server
@@ -459,6 +459,27 @@ describe('revise.talk on the server', () => {
     const out = await talk(deps, { outputId: root.outputId, message: '색 바꿔줘' });
     expect(fetchMock).toHaveBeenCalledTimes(2);
     expect(out).toMatchObject({ ok: true, open: 0, questions: [{ options: ['배경을 베이지로', '조명을 노을빛으로'] }] });
+  });
+
+  it('a draft made again from a draft still offers both ways, and the facts carry both credits', async () => {
+    const { deps, fetchMock } = depsWith(reading({ kind: 'tool_question', sheet: sheet(), reply: '영상 안에서 바꾸면 88크레딧이에요. 처음부터 다시 만들면 66크레딧이에요.' }));
+    const root = await seedRun(deps, f.orgId, f.ids.owner, { prompt: 'a bottle', finalPrompt: 'A blue perfume bottle.', params: { seconds: 4, resolution: 'draft' }, seconds: 4, isDraft: true });
+    const v2 = await seedRevision(deps, f.orgId, f.ids.owner, {
+      base: root, rootJobId: root.jobId, version: 2, mode: 'reshoot', request: '카메라를 더 천천히', refs: [],
+      kind: 'video', params: { seconds: 4, resolution: 'draft' }, finalPrompt: 'A blue perfume bottle, slower.', seconds: 4,
+    });
+    await f.sql.query('update brand_studio_outputs set is_draft = true, draft_task_id = $2 where id = $1', [v2.outputId, 'draft_v2']);
+    const out = await talk(deps, { outputId: v2.outputId, message: '이거 수정하면 크레딧 얼마나 들어?' });
+    expect(out).toMatchObject({ ok: true, kind: 'tool_question' });
+    const facts = payloadOf(fetchMock).facts;
+    expect(facts.in_place).toMatchObject({ possible: true });
+    expect(facts.again).toMatchObject({ possible: true });
+    expect(facts.in_place.credits).toBeGreaterThan(0);
+    expect(facts.again.credits).toBeGreaterThan(0);
+  });
+
+  it('the instruction asks for both ways when the credits are asked and both are open', () => {
+    expect(TALK_SYSTEM).toMatch(/both ways are open.*name both ways, one sentence each/);
   });
 
   it('is invalid with the flag off and never reads anything', async () => {

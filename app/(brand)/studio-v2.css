@@ -963,3 +963,15 @@ button.bs-sibling:focus-visible { outline: 2px solid var(--ys-focus); outline-of
 .bs-version-card[data-compact] { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; padding: 6px 8px 6px 12px; }
 .bs-version-card[data-compact] .bs-version-card-head { flex: 1 1 auto; flex-wrap: nowrap; }
 .bs-version-card[data-compact] .bs-version-final { justify-self: auto; }
+/* While the conversation is open the panel itself never scrolls: the thread does. The viewer's other actions
+   and the prompt fold behind one quiet control in the title row and open over the panel. */
+.bs-viewer-side[data-talk-open] { position: relative; overflow: hidden; }
+.bs-talk-head .bs-talk-more { flex: none; margin-left: auto; color: var(--ys-ink-secondary); }
+.bs-talk-head .bs-talk-over + .bs-talk-more { margin-left: 0; }
+.bs-talk-more[aria-expanded="true"] { background: var(--ys-active-bg); color: var(--ys-active-fg); }
+.bs-talk-more-panel { position: absolute; inset: 0; z-index: 6; display: grid; align-content: start; gap: 14px; padding: 12px 16px 16px; overflow-y: auto; overscroll-behavior: contain; background: var(--ys-surface); }
+.bs-talk-more-panel[hidden] { display: none; }
+.bs-talk-more-head { display: flex; justify-content: flex-end; }
+/* A final that could not be made: one line on the card, the button under it offers it again. */
+.bs-version-final-failed { margin: 0; font-size: 12.5px; }
+.bs-version-card[data-compact] .bs-version-final-failed { flex: 1 0 100%; }

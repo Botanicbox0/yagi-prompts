@@ -474,13 +474,17 @@ export async function prepareJob(deps: StudioDeps, job: JobRow): Promise<{ final
 
   if (job.kind === 'video_final') {
     const draft = (
-      await deps.sql.query<{ draft_task_id: string | null }>(
-        "select draft_task_id from brand_studio_outputs where id = $1 and organization_id = $2 and status = 'ready'",
+      await deps.sql.query<{ draft_task_id: string | null; final_prompt: string | null; prompt: string; params: StudioJobParams }>(
+        `select o.draft_task_id, j.final_prompt, j.prompt, j.params
+           from brand_studio_outputs o join brand_studio_jobs j on j.id = o.job_id
+          where o.id = $1 and o.organization_id = $2 and o.status = 'ready'`,
         [job.parent_output_id, job.organization_id],
       )
     ).rows[0];
     if (!draft?.draft_task_id) throw new PrepareFailure('reference_missing', 'the draft is gone');
-    return { finalPrompt: null, work: { ...work, draftTaskId: draft.draft_task_id, prepared: true } };
+    // The API lane finishes a draft by its id alone; the account lane's `create_video` also requires a prompt,
+    // so the final carries the text its draft was made from (the API lane never reads it).
+    return { finalPrompt: sendPrompt(draft) || null, work: { ...work, draftTaskId: draft.draft_task_id, prepared: true } };
   }
 
   let editCropThumb: EnhanceInput['editCropThumb'] = null;
