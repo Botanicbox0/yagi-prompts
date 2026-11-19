@@ -395,6 +395,8 @@ describe('the home in 야기 팀과 (founder 2026-11-20: team customers do not s
       mocks.modeCookie = cookie;
       const html = await openHome(fx.orgId);
       expect(html, String(cookie)).toContain('data-home-mode="make"');
+      // The rail refreshes a page that carries this when the switch is pressed (rail-mode.ts).
+      expect(html).toContain('data-follows-rail-mode');
       expect(html).toContain('data-home-prompt');
       expect(html).not.toContain('data-home-team-projects');
     }
@@ -408,6 +410,7 @@ describe('the home in 야기 팀과 (founder 2026-11-20: team customers do not s
     mocks.modeCookie = `${fx.orgId}:team`;
     const html = await openHome(fx.orgId);
     expect(html).toContain('data-home-mode="team"');
+    expect(html).toContain('data-follows-rail-mode');
     for (const marker of MAKING) expect(html, marker).not.toContain(marker);
     expect(html).not.toContain(nav.groupMake);
     expect(html).toContain('Home fixture brand 작업공간');

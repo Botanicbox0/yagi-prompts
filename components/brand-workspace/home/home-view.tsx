@@ -133,7 +133,7 @@ export function WorkspaceHome(props: WorkspaceHomeProps) {
   const lower = reviewCount > 0 ? 'split' : 'full';
 
   return (
-    <div className={s.home} data-workspace-home={organizationId} data-home-mode="make" data-home-read-only={props.readOnly ? 'true' : undefined} data-home-state={hasResults ? 'content' : 'empty'}>
+    <div className={s.home} data-workspace-home={organizationId} data-follows-rail-mode="" data-home-mode="make" data-home-read-only={props.readOnly ? 'true' : undefined} data-home-state={hasResults ? 'content' : 'empty'}>
       <header className={s.head}>
         <h1 className={s.title} title={heading}>
           {heading}
