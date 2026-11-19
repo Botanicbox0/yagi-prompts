@@ -142,6 +142,7 @@ export function railActive(href: string, path: string): boolean {
       !under(path, '/brand/studio/video') &&
       !under(path, '/brand/studio/review') &&
       !under(path, '/brand/studio/compose') &&
+      !under(path, '/brand/studio/editor') &&
       !under(path, '/brand/studio/workflows')
     );
   }
@@ -150,6 +151,10 @@ export function railActive(href: string, path: string): boolean {
   }
   if (href === '/brand/studio/workflows') {
     return under(path, '/brand/studio/workflows');
+  }
+  // The rebuilt editor (`/brand/studio/editor`, docs/BRAND-EDITING-STUDIO-V2.md) is the editing studio too.
+  if (href === '/brand/studio/compose') {
+    return under(path, '/brand/studio/compose') || under(path, '/brand/studio/editor');
   }
   return under(path, href);
 }

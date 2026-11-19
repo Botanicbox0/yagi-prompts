@@ -1,5 +1,7 @@
 # 브랜드 편집 스튜디오 개선 · 말로 편집 설계 (`brand.twings.app`)
 
+> **2026-11-20:** 화면 구조는 `docs/BRAND-EDITING-STUDIO-V2.md`에서 다시 설계했다(대표: "내가 생각한거랑 너무 달라"). 그 문서가 아래 E3~E5를 대신하고, 말로 편집(§4), 대표 결정(§8), E6·E7은 그대로 유효하다.
+
 > **문서 성격**: 편집 공간(영상을 잇고 자르고 자막·음악·색을 얹어 내보내는 곳)을 고치는 순서와, 말로 편집하는 기능의 설계. `docs/BRAND-STUDIO-V6-PLAN.md` §5(편집기)·§7(D·E·G)을 이어받아 구체화한다. 둘이 다르면 편집 공간에 한해 이 문서가 맞다.
 > **대표 지시(2026-11-18)**: "editing studio도 개선이 많이 필요함. openchatcut이랑 OpenCut을 역설계해서 우리와 맞는, 제일 괜찮은 부분들을 적용하고 거기서 ai 기반으로 editing까지 가능하게 하고 싶음."
 > **기준 커밋**: `origin/main` `459f7810`. 작업 브랜치 `claude/editing-studio`(`D:\dev\.worktrees\twings\editing-studio`).

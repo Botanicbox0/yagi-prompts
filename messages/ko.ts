@@ -13,6 +13,7 @@ import { studioVideoKo } from './studio-video';
 import { studioReviewKo } from './studio-review';
 import { studioLayersKo } from './studio-layers';
 import { studioComposeKo } from './studio-compose';
+import { studioEditorKo } from './studio-editor';
 import { studioWorkflowsKo } from './studio-workflows';
 import { adminConsoleKo } from './admin-console';
 import { campaignHubKo } from './campaign-hub';
@@ -72,6 +73,7 @@ export const ko: Dictionary = {
   studioReview: studioReviewKo,
   studioLayers: studioLayersKo,
   studioCompose: studioComposeKo,
+  studioEditor: studioEditorKo,
   studioWorkflows: studioWorkflowsKo,
   adminConsole: adminConsoleKo,
   brandHome: brandHomeKo,

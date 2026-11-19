@@ -13,6 +13,7 @@ import { studioVideoEn } from './studio-video';
 import { studioReviewEn } from './studio-review';
 import { studioLayersEn } from './studio-layers';
 import { studioComposeEn } from './studio-compose';
+import { studioEditorEn } from './studio-editor';
 import { studioWorkflowsEn } from './studio-workflows';
 import { adminConsoleEn } from './admin-console';
 import { campaignHubEn } from './campaign-hub';
@@ -63,6 +64,7 @@ export const en = {
   studioReview: studioReviewEn,
   studioLayers: studioLayersEn,
   studioCompose: studioComposeEn,
+  studioEditor: studioEditorEn,
   studioWorkflows: studioWorkflowsEn,
   adminConsole: adminConsoleEn,
   brandHome: brandHomeEn,
