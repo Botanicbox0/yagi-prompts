@@ -1,9 +1,10 @@
 "use client";
 /** Rename, re-role, re-tag or delete one upload (delete asks once more, inline). A centred modal: Esc and a
  * press on the backdrop close it, and focus goes back to the tile it was opened for (`returnFocus`). */
-import { useId, useRef, useState, type KeyboardEvent } from "react";
-import { STUDIO_ASSET_ROLES, STUDIO_LIMITS, type StudioAssetRole, type StudioAssetView } from "@/lib/brand-studio/contracts";
+import { useId, useState } from "react";
+import { STUDIO_LIMITS, type StudioAssetRole, type StudioAssetView } from "@/lib/brand-studio/contracts";
 import { useBackdropClose, useModal } from "../modal";
+import { RoleChips } from "../role-chips";
 import { libraryFailed } from "./library-api";
 import { fill, tagsFrom, writeError, type LibraryCopy } from "./text";
 
@@ -15,18 +16,6 @@ export interface AssetDialogProps {
   onClose(): void;
   /** Where focus goes when the dialog closes (the tile; the menu that opened the dialog is gone by then). */
   returnFocus?(): HTMLElement | null;
-}
-
-/** "No role" first, then the six roles: the order the chips show and the arrow keys walk. */
-export const ROLE_CHOICES: readonly (StudioAssetRole | "")[] = ["", ...STUDIO_ASSET_ROLES];
-
-/** The choice an arrow, Home or End key moves to from `at` (wrapping), or null for any other key. */
-export function roleChoiceAfterKey(key: string, at: number, count = ROLE_CHOICES.length): number | null {
-  if (key === "ArrowRight" || key === "ArrowDown") return (at + 1) % count;
-  if (key === "ArrowLeft" || key === "ArrowUp") return (at + count - 1) % count;
-  if (key === "Home") return 0;
-  if (key === "End") return count - 1;
-  return null;
 }
 
 export function AssetDialog({ asset, copy, onUpdate, onDelete, onClose, returnFocus }: AssetDialogProps) {
@@ -42,7 +31,6 @@ export function AssetDialog({ asset, copy, onUpdate, onDelete, onClose, returnFo
   const [confirming, setConfirming] = useState(false);
   const [busy, setBusy] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
-  const chips = useRef<Array<HTMLButtonElement | null>>([]);
 
   async function run(work: () => Promise<unknown>) {
     if (busy) return;
@@ -51,15 +39,6 @@ export function AssetDialog({ asset, copy, onUpdate, onDelete, onClose, returnFo
     setBusy(false);
     if (libraryFailed(result)) setNotice(writeError(copy, result.code, "asset"));
     else onClose();
-  }
-
-  // A radio group: one stop on Tab (the chosen chip), arrows move and choose, as native radios do.
-  function onRoleKey(event: KeyboardEvent<HTMLButtonElement>, at: number) {
-    const next = roleChoiceAfterKey(event.key, at);
-    if (next === null) return;
-    event.preventDefault();
-    setRole(ROLE_CHOICES[next]!);
-    chips.current[next]?.focus();
   }
 
   return (
@@ -89,36 +68,14 @@ export function AssetDialog({ asset, copy, onUpdate, onDelete, onClose, returnFo
         <span id={`${id}-role`} className="bsr-dialog-label">
           {u.role}
         </span>
-        <div
-          className="bsr-filter bsr-role-pick"
-          role="radiogroup"
-          aria-labelledby={`${id}-role`}
-          aria-describedby={recognised ? `${id}-role-hint` : undefined}
-          data-library-role-pick
-        >
-          {ROLE_CHOICES.map((value, at) => {
-            const chosen = role === value;
-            return (
-              <button
-                key={value || "none"}
-                ref={(node) => {
-                  chips.current[at] = node;
-                }}
-                type="button"
-                role="radio"
-                className="bsr-chip"
-                aria-checked={chosen}
-                data-selected={chosen ? "" : undefined}
-                data-role-choice={value || "none"}
-                tabIndex={chosen ? 0 : -1}
-                onClick={() => setRole(value)}
-                onKeyDown={(event) => onRoleKey(event, at)}
-              >
-                {value ? copy.roles[value] : u.roleNone}
-              </button>
-            );
-          })}
-        </div>
+        <RoleChips
+          value={role}
+          onChange={setRole}
+          noneLabel={u.roleNone}
+          roleLabels={copy.roles}
+          labelledBy={`${id}-role`}
+          describedBy={recognised ? `${id}-role-hint` : undefined}
+        />
         {recognised && (
           <p id={`${id}-role-hint`} className="bsr-muted" data-library-role-auto>
             {u.roleAuto}

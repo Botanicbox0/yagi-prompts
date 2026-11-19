@@ -233,6 +233,13 @@ describe('routing table & 7 model prompt grammars (knowhow-corpus.md §2.1–2.4
     expect(seedream.prompt).toContain(SKIN_MATTE_CONTRACT_A10);
     expect(seedream.lint).toEqual([]);
 
+    // People may be made with GPT Image (founder 2026-11-19; the old ban was about GPT Image 2.0 lookbooks):
+    // a person shot on GPT Image compiles with its people skin contract and no lint error.
+    const gptPerson = compilePrompt(personSpec, IDENTITY, undefined, { target: 'gpt-image-2.5-flare' });
+    expect(gptPerson.params.grammar).toBe('gpt-image-2.5');
+    expect(gptPerson.prompt).toContain(SKIN_MATTE_CONTRACT_A10);
+    expect(gptPerson.lint).toEqual([]);
+
     // 4. FLUX Kontext (camera-first 5-block positive prose)
     const flux = compilePrompt(personSpec, IDENTITY, undefined, { target: 'flux-kontext' });
     expect(flux.params.grammar).toBe('flux-kontext');
@@ -383,11 +390,41 @@ describe('routing table & 7 model prompt grammars (knowhow-corpus.md §2.1–2.4
     expect(rules.has('timeline_gap_or_overlap')).toBe(true);
     expect(rules.has('subsecond_continuous_push_in')).toBe(true);
 
-    // GPT Image with a person is blocked
+    // GPT Image with a person is no longer a lint error of its own (the other hardlines still apply).
     const gptWithPerson = compilePrompt(badSpec, IDENTITY, undefined, {
       target: 'gpt-image-2.5-flare'
     });
-    expect(gptWithPerson.lint.map((i) => i.rule)).toContain('gpt_image_person_disallowed');
+    const gptRules = gptWithPerson.lint.map((i) => i.rule as string);
+    expect(gptRules).not.toContain('gpt_image_person_disallowed');
+    expect(gptRules).toContain('equipment_brand');
+  });
+});
+
+describe('people briefs on GPT Image (founder 2026-11-19)', () => {
+  const peopleSpec = ShotSpecSchema.parse({
+    ...measurementToShotSpec(sampleAnalysis(), {
+      brief: '세럼을 든 크리에이터 상반신 화보',
+      identity: IDENTITY,
+      cutKind: 'person_portrait',
+      references: [
+        { asset_id: 'ast_creator_face', role: 'identity', consented: true, controls: ['face', 'skin', 'hair'], ignore: ['outfit', 'background'] }
+      ]
+    }),
+    subject: { kind: 'consented_creator', cast_id: 'cast_01', age_band: '20s', hair: 'sleek low bun', pose: { torso_deg: 25, head_tilt: 'slight left', gaze: 'off-axis camera-left', hands: 'holding serum bottle at collarbone height' } }
+  });
+
+  it('approves and finishes a people brief aimed at GPT Image; the default route is unchanged', () => {
+    // No target: the routing table decides, and it never picked GPT Image for people (before or after).
+    expect(routeShotEngine(peopleSpec).engineId).toBe('nano-banana-pro');
+    expect(routeShotEngine({ ...peopleSpec, cutKind: 'editorial_full_body' }).engineId).toBe('text2image_soul_v2');
+    const draft = createDraftBrief({ organizationId: '11111111-1111-4111-8111-111111111111', spec: peopleSpec, identity: IDENTITY, target: 'gpt-image-2.5-flare' });
+    expect(draft.compiled.params.engineId).toBe('gpt-image-2.5-flare');
+    expect(draft.compiled.lint.filter((issue) => issue.severity === 'error')).toEqual([]);
+    const approved = approveBrief(draft, { approvedBy: 'pd-user-1', aestheticGatePassed: true });
+    expect(approved.ok).toBe(true);
+    if (!approved.ok) return;
+    const finalized = promoteBriefToFinal(approved.data, IDENTITY);
+    expect(finalized.ok).toBe(true);
   });
 });
 

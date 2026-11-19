@@ -2131,12 +2131,12 @@ export const en = {
     },
     models: {
       seedreamPro: 'Product and people photos',
-      nanoBananaPro: 'Text, logos and partial edits',
+      nanoBananaPro: 'Keeps text and logos accurate',
       nanoBanana21: 'Maintains consistency with reference images',
       seedreamFlash: 'Quick drafts',
       seedream55: 'Product and people photos',
-      gptImageFlare: 'Fast to make and edit',
-      gptImageSunburst: 'Slightly slower, with sharper detail edits for the same credits.',
+      gptImageFlare: 'Fast, and takes up to 16 reference images',
+      gptImageSunburst: 'Slower than Flare, aimed at fine detail',
       seedance25: 'Video from text, pictures or a reference',
     },
     errors: {

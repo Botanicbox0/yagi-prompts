@@ -91,11 +91,22 @@ describe("square popover", () => {
     const html = render({ items, initialOpen: items[0]!.key });
     expect(html).toContain(`role="dialog" aria-label="이미지 1 설정"`);
     expect(html).toContain('aria-expanded="true"');
-    for (const role of STUDIO_ASSET_ROLES) expect(html).toContain(`>${copy.roles[role]}</option>`);
+    // The role is a row of chips (a radio group), never a browser select (TASTE.md 2026-11-16, 2026-11-19).
+    expect(html).not.toContain("<select");
+    expect(html).toMatch(/role="radiogroup" aria-labelledby="[^"]+-role"/);
+    for (const role of STUDIO_ASSET_ROLES) expect(html).toContain(`data-role-choice="${role}" tabindex="-1">${copy.roles[role]}</button>`);
+    expect(html).toContain(`aria-checked="true" data-selected="" data-role-choice="none" tabindex="0">${copy.tray.roleNone}</button>`);
     expect(html).toContain(copy.tray.use);
     expect(html).toContain(copy.tray.avoid);
     expect(html).toContain(copy.tray.remove);
     expect(html).not.toContain("data-studio-frame");
+  });
+
+  it("shows the picture's role as the chosen chip, the one Tab stop", () => {
+    const items = [{ ...pic(1), role: "logo" as const }, film(2)];
+    const html = render({ items, initialOpen: items[0]!.key });
+    expect(html).toContain('aria-checked="true" data-selected="" data-role-choice="logo" tabindex="0"');
+    expect(html.match(/role="radio"[^>]*tabindex="0"/g)).toHaveLength(1);
   });
 
   it("asks a picture in a video run whether it opens or closes the shot", () => {

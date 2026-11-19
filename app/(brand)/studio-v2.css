@@ -287,7 +287,7 @@ textarea.bs-field { resize: vertical; }
 .bs-tray-hint { align-self: center; margin: 0 4px; font-size: 13px; color: var(--ys-ink-muted); }
 .bs-popover { position: absolute; bottom: calc(100% + 8px); left: 0; z-index: 20; display: grid; gap: 6px; width: min(320px, calc(100vw - 48px)); max-height: calc(100dvh - 32px); overflow: auto; padding: 14px; border: 1px solid var(--ys-line-strong); border-radius: var(--ys-r-panel); background: var(--ys-surface); box-shadow: none; font-size: 13px; }
 .bs-popover[data-place="below"] { top: calc(100% + 8px); bottom: auto; }
-.bs-popover label { color: var(--ys-ink-muted); font-size: 12px; }
+.bs-popover label, .bs-popover-label { color: var(--ys-ink-muted); font-size: 12px; }
 .bs-popover-title { margin: 0 0 2px; font-size: 13px; font-weight: 600; }
 .bs-popover-actions { margin-top: 4px; }
 

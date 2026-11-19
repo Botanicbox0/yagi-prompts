@@ -7,13 +7,14 @@
  * picture opens or closes the shot. Drops of new references land on the whole bar.
  */
 import { useEffect, useId, useLayoutEffect, useRef, useState, type DragEvent } from "react";
-import { STUDIO_ASSET_ROLES, STUDIO_LIMITS, type StudioAssetRole } from "@/lib/brand-studio/contracts";
+import { STUDIO_LIMITS } from "@/lib/brand-studio/contracts";
 import type { StudioMedium } from "@/lib/brand-studio/models";
 import { studioVideoEn, studioVideoKo } from "@/messages/studio-video";
 import { virtualMentionTag } from "./at-mention-menu";
 import { fill, type StudioCopy } from "./copy";
 import { StudioIcon } from "./icons";
 import { TRAY_MOVE_TYPE, trayNumbers, type TrayItem } from "./refs";
+import { RoleChips } from "./role-chips";
 import w from "./video/video-workspace.module.css";
 
 export interface TrayProps {
@@ -255,7 +256,8 @@ function RefPopover({
 }) {
   const t = copy.tray;
   const box = useRef<HTMLDivElement>(null);
-  const first = useRef<HTMLSelectElement>(null);
+  // The chosen role chip: focus lands there when the popover opens.
+  const first = useRef<HTMLButtonElement>(null);
   const [below, setBelow] = useState(false);
   const fields = useId();
   const close = useRef(onClose);
@@ -308,21 +310,17 @@ function RefPopover({
           {trimLabel}
         </button>
       )}
-      <label htmlFor={`${fields}-role`}>{t.role}</label>
-      <select
-        id={`${fields}-role`}
-        ref={first}
-        className="bs-field"
+      <span id={`${fields}-role`} className="bs-popover-label">
+        {t.role}
+      </span>
+      <RoleChips
         value={item.role ?? ""}
-        onChange={(event) => onUpdate({ role: (event.target.value || undefined) as StudioAssetRole | undefined })}
-      >
-        <option value="">{t.roleNone}</option>
-        {STUDIO_ASSET_ROLES.map((role) => (
-          <option key={role} value={role}>
-            {copy.roles[role]}
-          </option>
-        ))}
-      </select>
+        onChange={(role) => onUpdate({ role: role || undefined })}
+        noneLabel={t.roleNone}
+        roleLabels={copy.roles}
+        labelledBy={`${fields}-role`}
+        chosenRef={first}
+      />
       <label htmlFor={`${fields}-use`}>{t.use}</label>
       <input
         id={`${fields}-use`}
