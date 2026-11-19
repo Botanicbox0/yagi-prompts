@@ -130,6 +130,54 @@ describe('the upload role check', () => {
     }
   });
 
+  describe('one more try when the first read gives no answer', () => {
+    /** Answers in order; `null` = an HTTP 503, `'blocked'` = a blocked prompt. */
+    function sequence(answers: Array<unknown | null | 'blocked'>): typeof fetch {
+      return (async () => {
+        const answer = answers[Math.min(calls.n, answers.length - 1)];
+        calls.n += 1;
+        if (answer === null) return new Response('{}', { status: 503 });
+        if (answer === 'blocked') return new Response(JSON.stringify({ promptFeedback: { blockReason: 'SAFETY' } }), { status: 200 });
+        return new Response(JSON.stringify({ candidates: [{ finishReason: 'STOP', content: { parts: [{ text: JSON.stringify(answer) }] } }] }), { status: 200 });
+      }) as typeof fetch;
+    }
+    async function check(fetchImpl: typeof fetch) {
+      const logs: Array<{ event: string; detail?: Record<string, unknown> }> = [];
+      const deps = studioDeps(f.sql, { intelDeps: { fetch: fetchImpl, env: { GEMINI_API_KEY: 'k' } }, later: (task) => tasks.push(task), log: (event, detail) => logs.push({ event, detail }) });
+      const saved = await upload(deps, await pngBytes(110, 30 + calls.n), 'image/png');
+      if (!saved.ok) throw new Error();
+      await runLater();
+      return { row: await roleRow(saved.asset.id), logs: logs.filter((l) => l.event.startsWith('asset_role')) };
+    }
+
+    it('saves the role when the second try answers', async () => {
+      const { row, logs } = await check(sequence([null, sure]));
+      expect(calls.n).toBe(2);
+      expect(row).toEqual({ role: 'product', role_source: 'auto' });
+      expect(logs.map((l) => l.event)).toEqual(['asset_role']);
+    });
+
+    it('writes nothing after two failed tries, and logs one line with the tries', async () => {
+      const { row, logs } = await check(sequence([null, { role: 'bottle' }]));
+      expect(calls.n).toBe(2);
+      expect(row).toEqual({ role: null, role_source: null });
+      expect(logs).toEqual([{ event: 'asset_role_failed', detail: { reason: 'no_answer', tries: 2 } }]);
+    });
+
+    it('asks once when the first try answers', async () => {
+      const { row } = await check(sequence([sure, sure]));
+      expect(calls.n).toBe(1);
+      expect(row).toEqual({ role: 'product', role_source: 'auto' });
+    });
+
+    it('does not ask again after a blocked answer', async () => {
+      const { row, logs } = await check(sequence(['blocked', sure]));
+      expect(calls.n).toBe(1);
+      expect(row).toEqual({ role: null, role_source: null });
+      expect(logs).toEqual([{ event: 'asset_role_failed', detail: { reason: 'blocked', tries: 1 } }]);
+    });
+  });
+
   it('does not read a transient source ("빈 곳 채우기"), and reads the next ordinary upload', async () => {
     const deps = depsWith(geminiAnswer(sure, calls));
     const bytes = await pngBytes(90, 30);

@@ -2,10 +2,11 @@
  * The category of an uploaded picture, recognised once (docs/BRAND-STUDIO-V3.md §4.1).
  *
  * After an image upload is finalized (`completeStudioAsset`), one Gemini call reads the asset's 512 px WebP
- * thumbnail. The model reports FACTS only (its best category, the next category a careful art director could
- * pick, what sort of picture it is, who is in it, how much text it carries); `roleFromFacts` alone decides.
- * A role is saved only when the facts leave no doubt; any doubt, failure, block or timeout leaves the role
- * empty and the writer keeps inferring it per run (enhancer/index.ts), as before this existed.
+ * thumbnail (a second only when the first gives no answer; never after a refusal). The model reports FACTS only
+ * (its best category, the next category a careful art director could pick, what sort of picture it is, who is
+ * in it, how much text it carries); `roleFromFacts` alone decides. A role is saved only when the facts leave no
+ * doubt; any doubt, a refusal, or two failed tries leaves the role empty and the writer keeps inferring it per
+ * run (enhancer/index.ts), as before this existed.
  *
  * Why so strict: the saved role steers Prompt Architect's reference directive (enhancer/lines.ts) and the
  * skin rules (enhancer/profiles/skin.ts). A style picture saved as `product` makes the writer say "keep the
@@ -154,13 +155,19 @@ export function assetAutoRoleConfig(env: Record<string, string | undefined>): Ge
   return studioGeminiConfig(env);
 }
 
-/** The model's facts about one thumbnail, or null for ANY failure (HTTP, block, timeout, JSON, schema). */
-export async function readAssetRoleFacts(
+/**
+ * What `callGeminiJson` throws when the provider refused the picture (a blocked prompt or a safety stop):
+ * asking again gets the same refusal, so it is not retried.
+ */
+const BLOCKED = /^gemini_(blocked|finish_(safety|prohibited_content|blocklist|spii|image_safety))$/;
+
+/** One read: the facts, or why there are none (`blocked`, or `no_answer` for HTTP, timeout, JSON, schema). */
+export async function askAssetRoleFacts(
   config: GeminiConfig,
   fetchImpl: typeof fetch,
   thumb: { bytes: Uint8Array; mime: string },
   timeoutMs = ASSET_ROLE_TIMEOUT_MS,
-): Promise<AssetRoleFacts | null> {
+): Promise<{ facts: AssetRoleFacts } | { failure: 'blocked' | 'no_answer' }> {
   try {
     const picture = await pictureForReading(thumb);
     const raw = await callGeminiJson(config, fetchImpl, {
@@ -171,11 +178,29 @@ export async function readAssetRoleFacts(
       timeoutMs,
     });
     const parsed = assetRoleFactsSchema.safeParse(raw);
-    return parsed.success ? parsed.data : null;
-  } catch {
-    return null;
+    return parsed.success ? { facts: parsed.data } : { failure: 'no_answer' };
+  } catch (error) {
+    return { failure: error instanceof Error && BLOCKED.test(error.message) ? 'blocked' : 'no_answer' };
   }
 }
+
+/** The model's facts about one thumbnail, or null for ANY failure (HTTP, block, timeout, JSON, schema). */
+export async function readAssetRoleFacts(
+  config: GeminiConfig,
+  fetchImpl: typeof fetch,
+  thumb: { bytes: Uint8Array; mime: string },
+  timeoutMs = ASSET_ROLE_TIMEOUT_MS,
+): Promise<AssetRoleFacts | null> {
+  const answer = await askAssetRoleFacts(config, fetchImpl, thumb, timeoutMs);
+  return 'facts' in answer ? answer.facts : null;
+}
+
+/**
+ * At most two reads per upload: a second only when the first gave no answer (a timeout, an HTTP error, bad
+ * JSON — 4 of 63 calls timed out at 15 s in the 2026-11-19 eval). A refusal is not asked twice. Both reads fit
+ * the route's 300 s `maxDuration` many times over (2 × 15 s plus the thumbnail read).
+ */
+export const ASSET_ROLE_TRIES = 2;
 
 type RoleCheckRow = Pick<AssetRow, 'id' | 'kind' | 'source' | 'role' | 'role_source' | 'thumb_key' | 'status' | 'deleted_at'>;
 
@@ -196,9 +221,10 @@ export function wantsRoleCheck(row: RoleCheckRow, env: Record<string, string | u
 export type RoleCheckOutcome = 'saved' | 'blank' | 'skipped' | 'failed';
 
 /**
- * Reads the thumbnail, asks once, writes the verdict. A sure role is saved with `role_source = 'auto'`; a
- * doubtful picture keeps an empty role and is marked `'auto'` too, so it is never asked about again. A
- * failure writes nothing. The write only lands while the row still has no role and no source.
+ * Reads the thumbnail once, asks (twice at most, `ASSET_ROLE_TRIES`), writes the verdict. A sure role is saved
+ * with `role_source = 'auto'`; a doubtful picture keeps an empty role and is marked `'auto'` too, so it is never
+ * asked about again. A failure writes nothing and logs one `asset_role_failed` line with the tries made. The
+ * write only lands while the row still has no role and no source.
  */
 export async function recogniseAssetRole(deps: StudioDeps, assetId: string): Promise<RoleCheckOutcome> {
   const row = (
@@ -216,11 +242,17 @@ export async function recogniseAssetRole(deps: StudioDeps, assetId: string): Pro
     deps.log?.('asset_role_failed', { reason: 'thumb_unreadable' });
     return 'failed';
   }
-  const facts = await readAssetRoleFacts(config, deps.intelDeps.fetch, { bytes, mime: 'image/webp' });
-  if (!facts) {
-    deps.log?.('asset_role_failed', { reason: 'no_answer' });
+  let answer = await askAssetRoleFacts(config, deps.intelDeps.fetch, { bytes, mime: 'image/webp' });
+  let tries = 1;
+  while (!('facts' in answer) && answer.failure === 'no_answer' && tries < ASSET_ROLE_TRIES) {
+    answer = await askAssetRoleFacts(config, deps.intelDeps.fetch, { bytes, mime: 'image/webp' });
+    tries += 1;
+  }
+  if (!('facts' in answer)) {
+    deps.log?.('asset_role_failed', { reason: answer.failure, tries });
     return 'failed';
   }
+  const facts = answer.facts;
   const role = roleFromFacts(facts);
   const written = (
     await deps.sql.query<{ id: string }>(

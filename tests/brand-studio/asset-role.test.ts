@@ -2,6 +2,8 @@ import sharp from 'sharp';
 import { describe, expect, it } from 'vitest';
 import {
   ASSET_ROLE_SCHEMA,
+  ASSET_ROLE_TRIES,
+  askAssetRoleFacts,
   assetAutoRoleConfig,
   pictureForReading,
   readAssetRoleFacts,
@@ -110,6 +112,18 @@ describe('the kill switch and the call', () => {
     const started = Date.now();
     expect(await readAssetRoleFacts(config, hanging, thumb, 50)).toBeNull();
     expect(Date.now() - started).toBeLessThan(2000);
+  });
+
+  it('tells a refusal apart from no answer', async () => {
+    const config = assetAutoRoleConfig({ GEMINI_API_KEY: 'k' })!;
+    const thumb = { bytes: new Uint8Array(await sharp({ create: { width: 8, height: 8, channels: 3, background: '#888' } }).webp().toBuffer()), mime: 'image/webp' };
+    const reply = (body: unknown, status = 200) => (async () => new Response(JSON.stringify(body), { status })) as typeof fetch;
+    expect(await askAssetRoleFacts(config, reply({ promptFeedback: { blockReason: 'SAFETY' } }), thumb)).toEqual({ failure: 'blocked' });
+    expect(await askAssetRoleFacts(config, reply({ candidates: [{ finishReason: 'SAFETY' }] }), thumb)).toEqual({ failure: 'blocked' });
+    expect(await askAssetRoleFacts(config, reply({ candidates: [{ finishReason: 'MAX_TOKENS' }] }), thumb)).toEqual({ failure: 'no_answer' });
+    expect(await askAssetRoleFacts(config, reply({}, 503), thumb)).toEqual({ failure: 'no_answer' });
+    expect(await askAssetRoleFacts(config, geminiAnswer(facts()), thumb)).toEqual({ facts: facts() });
+    expect(ASSET_ROLE_TRIES).toBe(2);
   });
 
   it('shows a transparent thumbnail on grey and leaves an opaque one as it is', async () => {
