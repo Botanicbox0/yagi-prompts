@@ -3,7 +3,7 @@
 2026-10-28 · 브랜치 `claude/brand-shortlist` · 마이그레이션 0066/0146 (운영 적용됨)
 2026-10-29 · 선별(대기·공개·제외, 범위 필터, 캠페인 기준)과 새 카드 · 브랜치 `codex/shortlist-triage` · 마이그레이션 0068/0148 (운영 적용됨)
 2026-10-29 · 고객의 일괄 선별(선호·제외·되돌리기, 보이는 후보 모두 선택), 카드/리스트 보기, 섭외 확정 표시 · 브랜치 `codex/shortlist-choice` · 마이그레이션 0070 (운영 적용됨)
-2026-11-20 · 고객 4단계 크리에이터 선별(`지원 · 검토 · 선정 · 제외`, 상세 시트 상태별 액션 바, `reviewing` 상태 저장) · 브랜치 `gemini/shortlist-casting-stages` · 마이그레이션 0099 (**클라우드 적용 필요, 코드보다 먼저**)
+2026-11-20 · 고객 4단계 크리에이터 선별(`지원 · 검토 · 선정 · 제외`, 상세 시트 상태별 액션 바, `reviewing` 상태 저장) · 브랜치 `gemini/shortlist-casting-stages` · 마이그레이션 0099 (운영 적용됨)
 
 인플루언서 협업 캠페인에서 스튜디오가 추린 크리에이터 후보를 고객(브랜드 담당자)에게 보여 주고, 고객이 직접 **지원 · 검토 · 선정 · 제외** 4단계로 분류할 수 있게 하는 기능이다. 섭외 확정은 TWINGS가 하고, 확정되면 **선정** 탭에 **섭외 확정** 배지로 표시된다(스튜디오가 확정한 후보는 고객이 임의로 검토·제외로 내리지 못한다).
 
@@ -142,6 +142,6 @@ Content-Type: application/json
 3. `0068_core_brand_shortlist_triage.sql` — `excluded_at`/`excluded_by`, `avatar_tone`, `brand_projects.shortlist_criteria`(범위 키 4개만). 운영 적용됨.
 4. `0148_glue_brand_shortlist_triage.sql` — `brand_projects.shortlist_criteria` 갱신 권한(service_role). 0068과 함께. 운영 적용됨.
 5. `0070_core_brand_shortlist_choice.sql` — `passed_at`/`passed_by`(고객 제외), `confirmed_at`(섭외 확정), "선호이면서 제외" 금지. glue 없음(0146의 표 전체 권한이 새 열도 덮는다). 운영 적용됨.
-6. `0099_core_brand_shortlist_reviewing.sql` — `reviewing_at`/`reviewing_by`(고객 검토), `brand_shortlist_choice_shape`(선정·검토·제외 3자 상호배타 제약). glue 없음(0146의 표 전체 권한이 새 열도 덮는다). **클라우드 적용 필요, 코드 배포 전에**: 적용 전에 코드가 나가면 후보·관리자 화면이 `reviewing_at`을 못 읽고 `검토` 분류가 실패한다.
+6. `0099_core_brand_shortlist_reviewing.sql` — `reviewing_at`/`reviewing_by`(고객 검토), `brand_shortlist_choice_shape`(선정·검토·제외 3자 상호배타 제약). glue 없음(0146의 표 전체 권한이 새 열도 덮는다). 운영 적용됨.
 
 0066 적용 전에도 배포는 안전했다: 표가 없으면 후보 탭이 생기지 않고, 관리자 패널은 "아직 가져온 후보가 없어요"를 보이며, 가져오기는 `storage_unavailable`로 끝난다.
