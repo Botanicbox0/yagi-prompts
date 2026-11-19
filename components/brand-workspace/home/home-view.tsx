@@ -57,8 +57,6 @@ export interface WorkspaceHomeProps {
   reviews: readonly RoomAlertItem[];
   /** Newest results, at most 8. */
   results: readonly HomeResult[];
-  /** The rail's current mode (rail-mode.ts): `team` puts the YAGI team tile before the two doors. */
-  first?: 'make' | 'team';
   /** Projects in progress, for the team tile's facts. */
   activeProjects: number;
   /** A viewer-role member or the team view: no prompt bar, no request. */
@@ -134,76 +132,8 @@ export function WorkspaceHome(props: WorkspaceHomeProps) {
   const heading = interpolate(h.heading, { name: props.organizationName });
   const lower = reviewCount > 0 ? 'split' : 'full';
 
-  // The rail's current mode decides which side leads (rail-mode.ts): 야기 팀과 puts the team tile first.
-  const teamFirst = props.first === 'team';
-  const doorList = (
-    <ul className={s.doors} data-home-doors>
-      {layout.doors.map((door) => {
-        const result = props.doors[door.key];
-        return (
-          <li key={door.key}>
-            <a href={scope(door.path)} className={s.door} data-home-action={door.key} data-home-door={door.key} data-door-picture={result ? 'own' : 'example'}>
-              <span className={s.doorPicture}>
-                {result ? (
-                  <ResultPicture result={result} />
-                ) : (
-                  // A house frame, marked as an example (lib/brands/workspace/home.ts HOME_DOOR_EXAMPLES).
-                  // eslint-disable-next-line @next/next/no-img-element
-                  <img src={HOME_DOOR_EXAMPLES[door.key]} alt="" loading="eager" decoding="async" />
-                )}
-              </span>
-              {result ? null : (
-                <span className={s.exampleBadge} data-home-example>
-                  {h.exampleBadge}
-                </span>
-              )}
-              <span className={s.doorPlate}>
-                <Icon d={ICON[door.key]} className={s.doorIcon} />
-                <span className={s.doorText}>
-                  <span className={s.doorName}>{doorName(door.key)}</span>
-                  <span className={s.doorLine}>{h.lines[door.key]}</span>
-                </span>
-                <Chevron className={s.doorArrow} />
-              </span>
-            </a>
-          </li>
-        );
-      })}
-    </ul>
-  );
-  const teamTile = (
-    <div className={s.team} data-home-team={layout.team.key}>
-      <a href={scope(layout.team.path)} className={s.teamMain} data-home-action={layout.team.key}>
-        <span className={s.teamEyebrow}>{copy.roomsNav.groupTeam}</span>
-        <span className={s.teamName}>
-          <Icon d={ICON[layout.team.key]} className={s.teamIcon} />
-          <span>{teamName}</span>
-        </span>
-        <span className={s.teamLine}>{teamLine}</span>
-      </a>
-      {layout.team.key === 'campaign' ? null : (
-        // How a project with the team goes, in the rooms' own words.
-        <ol className={s.stages} data-home-team-stages>
-          {(['requested', 'storyboard', 'draft', 'revision', 'done'] as const).map((stage) => (
-            <li key={stage}>{copy.roomStages[stage]}</li>
-          ))}
-        </ol>
-      )}
-      {facts.length > 0 ? (
-        <a href={scope('/brand')} className={s.teamFacts} data-home-team-facts>
-          {facts.map((fact) => (
-            <span key={fact} className={s.fact}>
-              {fact}
-            </span>
-          ))}
-          <Chevron className={s.factArrow} />
-        </a>
-      ) : null}
-    </div>
-  );
-
   return (
-    <div className={s.home} data-workspace-home={organizationId} data-home-read-only={props.readOnly ? 'true' : undefined} data-home-state={hasResults ? 'content' : 'empty'}>
+    <div className={s.home} data-workspace-home={organizationId} data-home-mode="make" data-home-read-only={props.readOnly ? 'true' : undefined} data-home-state={hasResults ? 'content' : 'empty'}>
       <header className={s.head}>
         <h1 className={s.title} title={heading}>
           {heading}
@@ -225,13 +155,71 @@ export function WorkspaceHome(props: WorkspaceHomeProps) {
         />
       )}
 
-      <section className={s.tools} aria-labelledby="workspace-home-make" data-home-tools data-home-first={teamFirst ? 'team' : undefined}>
+      <section className={s.tools} aria-labelledby="workspace-home-make" data-home-tools>
         <p id="workspace-home-make" className={s.label}>
           {copy.roomsNav.groupMake}
         </p>
-        {teamFirst ? teamTile : null}
-        {doorList}
-        {teamFirst ? null : teamTile}
+        <ul className={s.doors} data-home-doors>
+          {layout.doors.map((door) => {
+            const result = props.doors[door.key];
+            return (
+              <li key={door.key}>
+                <a href={scope(door.path)} className={s.door} data-home-action={door.key} data-home-door={door.key} data-door-picture={result ? 'own' : 'example'}>
+                  <span className={s.doorPicture}>
+                    {result ? (
+                      <ResultPicture result={result} />
+                    ) : (
+                      // A house frame, marked as an example (lib/brands/workspace/home.ts HOME_DOOR_EXAMPLES).
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img src={HOME_DOOR_EXAMPLES[door.key]} alt="" loading="eager" decoding="async" />
+                    )}
+                  </span>
+                  {result ? null : (
+                    <span className={s.exampleBadge} data-home-example>
+                      {h.exampleBadge}
+                    </span>
+                  )}
+                  <span className={s.doorPlate}>
+                    <Icon d={ICON[door.key]} className={s.doorIcon} />
+                    <span className={s.doorText}>
+                      <span className={s.doorName}>{doorName(door.key)}</span>
+                      <span className={s.doorLine}>{h.lines[door.key]}</span>
+                    </span>
+                    <Chevron className={s.doorArrow} />
+                  </span>
+                </a>
+              </li>
+            );
+          })}
+        </ul>
+        <div className={s.team} data-home-team={layout.team.key}>
+          <a href={scope(layout.team.path)} className={s.teamMain} data-home-action={layout.team.key}>
+            <span className={s.teamEyebrow}>{copy.roomsNav.groupTeam}</span>
+            <span className={s.teamName}>
+              <Icon d={ICON[layout.team.key]} className={s.teamIcon} />
+              <span>{teamName}</span>
+            </span>
+            <span className={s.teamLine}>{teamLine}</span>
+          </a>
+          {layout.team.key === 'campaign' ? null : (
+            // How a project with the team goes, in the rooms' own words.
+            <ol className={s.stages} data-home-team-stages>
+              {(['requested', 'storyboard', 'draft', 'revision', 'done'] as const).map((stage) => (
+                <li key={stage}>{copy.roomStages[stage]}</li>
+              ))}
+            </ol>
+          )}
+          {facts.length > 0 ? (
+            <a href={scope('/brand')} className={s.teamFacts} data-home-team-facts>
+              {facts.map((fact) => (
+                <span key={fact} className={s.fact}>
+                  {fact}
+                </span>
+              ))}
+              <Chevron className={s.factArrow} />
+            </a>
+          ) : null}
+        </div>
         <ul className={s.toolList} data-count={layout.tools.length}>
           {layout.tools.map((tool) => (
             <li key={tool.key}>

@@ -6,15 +6,17 @@ import { brandContext } from '@/components/brand-workspace/context';
 import { brandScope, selectedAccess } from '@/components/brand-workspace/scope';
 import { StaffNotice, adminOrganizationHref } from '@/components/brand-workspace/staff-notice';
 import { WorkspaceHome } from '@/components/brand-workspace/home/home-view';
+import { WorkspaceTeamHome, type TeamHomeProject } from '@/components/brand-workspace/home/team-home';
 import { roomsOpenFor } from '@/components/brand-rooms/room/visibility';
 import type { RoomAlertItem } from '@/components/brand-rooms/seams';
 import { loadRoomSummary } from '@/lib/brand-rooms/messages';
+import { loadRoomOverview, roomUnreadCounts } from '@/lib/brand-rooms/overview';
 import { studioEnv } from '@/lib/brand-studio/env';
 import { createStudioMediaStore } from '@/lib/brand-studio/media-store';
 import { jobsOf, viewsOf } from '@/lib/brand-studio/repo';
 import { allowanceView, loadAllowance } from '@/lib/brand-studio/usage';
 import { featureDenied, isSandboxedClientOrganization } from '@/lib/brands/features';
-import { brandHomeVisible, homeDoorPictures, homeLayout, homeResults } from '@/lib/brands/workspace/home';
+import { brandHomeVisible, homeDoorPictures, homeLayout, homeResults, teamHomeProjects } from '@/lib/brands/workspace/home';
 import { loadBrandWorkspace } from '@/lib/brands/workspace/service';
 import { scopedHref } from '@/lib/brands/workspace/selection';
 import { brandRoomsOpen, brandStudioV2Open } from '@/lib/flags';
@@ -28,6 +30,11 @@ import { brandRoomsOpen, brandStudioV2Open } from '@/lib/flags';
  * media, an address naming a brand this account cannot open and a deployment with studio v2 off all get
  * a 404 that names nothing. A brand without the studio (project-only, a campaign-only guest, no brand
  * yet) is sent to `/brand`, its landing as before.
+ *
+ * Two homes, one per rail mode (components/brand-workspace/rail-mode.ts, founder 2026-11-20): 직접 만들기
+ * gets the making home above; 야기 팀과 gets the team home (team-home.tsx): what waits on the person, the
+ * projects with their stage and 새 프로젝트 의뢰, with nothing of the making side. The mode comes from the
+ * same cookie the rail reads, on the server, so the page never flips after it loads.
  */
 export const dynamic = 'force-dynamic';
 
@@ -77,8 +84,67 @@ export default async function BrandWorkspaceHome({
   const canRequest = !access.staff && access.canRequest;
   const layout = homeLayout({ choice, flagOn: true, canRequest, rooms });
   if (!layout) notFound();
-  const media = createStudioMediaStore();
+  // The rail's mode for this brand (rail-mode.ts): the home is shared by both sides, so the remembered
+  // one decides which home this is. The TWINGS team view has no rooms in its rail, so no modes either.
+  const modes = rooms && choice.role !== 'studio';
+  const remembered = modes ? await rememberedMode(choice.id) : null;
+  const mode = resolveRailMode({ studio: true, rooms: modes, path: '/brand/home', remembered }) ?? 'make';
+  const viewerNote = choice.role === 'viewer';
+  const notice = access.staff ? <StaffNotice b={b} manageHref={viewer.isAdmin ? adminOrganizationHref(choice.id, brandHost) : null} /> : null;
 
+  if (mode === 'team') {
+    // Every read is scoped to the brand the guard above resolved for this account. Nothing of the making
+    // side is read: no credits, no runs.
+    const [summary, workspace] = await Promise.all([
+      loadRoomSummary({ sql }, viewer, choice.id).catch(() => null),
+      loadBrandWorkspace({ sql, verifiedEmail }, viewer, { organizationId: choice.id }).catch(() => ({ organizations: [], projects: [] })),
+    ]);
+    const reviews: RoomAlertItem[] = summary && summary.ok ? (summary.alerts ?? []) : [];
+    const visible = workspace.projects.filter((p) => p.clientVisible !== false);
+    const unread = viewer.userId
+      ? await roomUnreadCounts(sql, { organizationId: choice.id, userId: viewer.userId, projectIds: visible.map((p) => p.id) }).catch(() => ({}) as Record<string, number>)
+      : ({} as Record<string, number>);
+    const waiting: Record<string, number> = { ...unread };
+    for (const alert of reviews) waiting[alert.projectId] = (waiting[alert.projectId] ?? 0) + 1;
+    const shown = teamHomeProjects(visible, waiting);
+    const projects: TeamHomeProject[] = await Promise.all(
+      shown.map(async (p) => {
+        const overview = await loadRoomOverview(sql, {
+          organizationId: choice.id,
+          project: { id: p.id, status: p.status, createdAt: p.createdAt, updatedAt: p.updatedAt, title: p.title },
+          userId: viewer.userId ?? '',
+        }).catch(() => null);
+        return {
+          id: p.id,
+          title: p.title,
+          stage: overview?.stage ?? 'requested',
+          steps: overview?.steps ?? (['requested', 'storyboard', 'draft', 'revision', 'done'] as const).map((stage, i) => ({ stage, state: i === 0 ? 'current' : 'ahead', at: null }) as const),
+          unread: unread[p.id] ?? 0,
+        };
+      }),
+    );
+    return (
+      <WorkspaceTeamHome
+        organizationId={choice.id}
+        organizationName={choice.name}
+        projects={projects}
+        totalProjects={visible.filter((p) => p.status !== 'cancelled').length}
+        reviews={reviews}
+        canRequest={canRequest}
+        viewerNote={viewerNote}
+        notice={notice}
+        copy={{
+          home: dict.brandHome,
+          nav: dict.roomsShell.nav,
+          space: dict.roomsShell.space,
+          overview: dict.roomsShell.overview,
+          inbox: dict.roomsChat.inbox,
+        }}
+      />
+    );
+  }
+
+  const media = createStudioMediaStore();
   // Every read is scoped to the brand the guard above resolved for this account.
   const [allowance, jobs, summary, workspace] = await Promise.all([
     loadAllowance(sql, choice.id, studioEnv()).catch(() => null),
@@ -91,9 +157,6 @@ export default async function BrandWorkspaceHome({
   const reviews: RoomAlertItem[] = summary && summary.ok ? (summary.alerts ?? []) : [];
   const activeProjects = workspace.projects.filter((p) => p.status === 'active').length;
   const studioLocale = locale === 'en' ? 'en' : 'ko';
-  // The rail's mode for this brand (rail-mode.ts): the home is shared by both sides, so the remembered one decides.
-  const remembered = rooms ? await rememberedMode(choice.id) : null;
-  const first = resolveRailMode({ studio: true, rooms, path: '/brand/home', remembered }) ?? 'make';
   const dock = dict.brandStudio.dock;
 
   return (
@@ -102,7 +165,6 @@ export default async function BrandWorkspaceHome({
       organizationName={choice.name}
       locale={studioLocale}
       layout={layout}
-      first={first}
       allowance={allowance ? allowanceView(allowance) : null}
       doors={homeDoorPictures(jobs, choice.id)}
       reviews={reviews}

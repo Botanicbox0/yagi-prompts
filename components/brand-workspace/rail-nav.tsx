@@ -104,6 +104,9 @@ const MODE_ICON: Readonly<Record<RailMode, string>> = {
   team: 'M7 8a3 3 0 1 0 0-.01M2.5 16.5v-.5a4.5 4.5 0 0 1 9 0v.5M13.5 6a2.5 2.5 0 1 1 0 5M14.5 13a4 4 0 0 1 3 3.5',
 };
 
+/** sessionStorage: the side a keyboard switch just opened, so the next page puts focus back on the switch. */
+const MODE_FOCUS_KEY = 'twings_brand_mode_focus';
+
 function writeMode(organizationId: string, mode: RailMode): void {
   try {
     const current = document.cookie
@@ -220,6 +223,20 @@ export function RailNavigation(props: RailNavigationProps) {
     };
     window.addEventListener('pageshow', restored);
     return () => window.removeEventListener('pageshow', restored);
+  }, []);
+  // A keyboard switch that opened the other side's page: focus comes back to the switch, not the page top.
+  useEffect(() => {
+    if (!switchable || !mode) return;
+    let returning = false;
+    try {
+      returning = window.sessionStorage.getItem(MODE_FOCUS_KEY) === mode;
+      window.sessionStorage.removeItem(MODE_FOCUS_KEY);
+    } catch {
+      // Storage blocked: focus starts at the top of the page, as any page load.
+    }
+    if (returning) modeButtons.current[mode]?.focus();
+    // Once per page: the flag is read on arrival only.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const items = groups && mode ? railModeItems(groups, mode) : orderItems(visibleItems, order);
@@ -514,6 +531,13 @@ export function RailNavigation(props: RailNavigationProps) {
     const target = railModeSwitchTarget(path, next, railModeItems(groups, next), (id) => scope(RAIL_HREF[id]));
     if (target) {
       setLeavingTo(next);
+      if (focus) {
+        try {
+          window.sessionStorage.setItem(MODE_FOCUS_KEY, next);
+        } catch {
+          // ignore: the next page simply starts at the top
+        }
+      }
       window.location.assign(target);
     }
   };
@@ -552,7 +576,8 @@ export function RailNavigation(props: RailNavigationProps) {
               className="bw-rail-mode-option"
               data-rail-mode-option={m}
               data-rail-tip={wait ? `${modeName(m)} · ${wait.short}` : modeName(m)}
-              onClick={() => choose(m)}
+              // A click from the keyboard (Space or Enter, `detail` 0) keeps focus on the switch across the page load.
+              onClick={(event) => choose(m, event.detail === 0)}
             >
               <Icon d={MODE_ICON[m]} />
               <span className="bw-rail-mode-name">{modeName(m)}</span>
