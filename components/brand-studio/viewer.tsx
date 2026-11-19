@@ -748,7 +748,7 @@ function ViewerContent({
   return (
     // "모델 비교" gives the pictures the whole body: the action column is hidden (kept mounted, so it comes back
     // exactly as it was) and the model pills with the toggle sit in one quiet row above the pictures.
-    <div className="bs-viewer-body" data-region={region ? "" : undefined} data-compare={modelCompare ? "" : undefined}>
+    <div className="bs-viewer-body" data-region={region ? "" : undefined} data-compare={modelCompare ? "" : undefined} data-talk={talkOpen ? "" : undefined}>
       <figure ref={setMediaHost} className="bs-viewer-media" data-kind={file.kind} data-compare={modelCompare ? "" : undefined}>
         {modelCompare && job && siblingsOf && onOpenOutput && (
           <SiblingSwitcher

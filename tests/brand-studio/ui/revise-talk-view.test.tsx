@@ -60,12 +60,21 @@ describe("the conversation on screen", () => {
     expect(view({ sheet: { change: [look("배경")], keep: [], exclude: [] }, canMake: true, way: "edit", estimateKrw: 970 }, false)).not.toContain(ko.revise.talk.draftOnce);
   });
 
-  it("keeps the sheet compact: what stays and what is left out are one line each that opens on press; the box is two lines", () => {
-    const html = view({ sheet: { change: [look("배경을 바다로"), look("조명을 따뜻하게"), look("꽃잎 빼기"), look("카메라를 천천히")], keep: ["향수병", "카메라 움직임"], exclude: ["꽃잎"] }, canMake: true, way: "reshoot", estimateKrw: 810 });
+  it("keeps the sheet compact: what stays and what is left out are one line each that opens on press; one chat input", () => {
+    const html = view({ sheet: { change: [look("배경을 바다로"), look("조명을 따뜻하게"), look("꽃잎 빼기"), look("카메라를 천천히")], keep: ["향수병", "카메라 움직임"], exclude: ["꽃잎"] }, canMake: true, way: "edit", estimateKrw: 970 });
     expect(html).toMatch(/data-talk-group="keep"><button type="button" class="bs-talk-oneline" aria-expanded="false" title="향수병 · 카메라 움직임">/);
     expect(html).toMatch(/data-talk-group="exclude"><button type="button" class="bs-talk-oneline" aria-expanded="false" title="꽃잎">/);
     expect(html.match(/data-talk-line=/g)).toHaveLength(4);
-    expect(html).toMatch(/<textarea[^>]*rows="2"/);
+    // One chat input: the text one line tall, attach and mark as icon buttons with names inside the box, send at the end; no tool row.
+    expect(html).toMatch(/<textarea[^>]*rows="1"/);
+    const field = html.slice(html.indexOf('class="bs-talk-field"'));
+    expect(field).toMatch(new RegExp(`aria-label="${ko.revise.addRefs}"[^>]*title="${ko.revise.addRefs}"[^>]*data-talk-attach`));
+    expect(field.indexOf("data-talk-attach")).toBeLessThan(field.indexOf("data-talk-send"));
+    expect(html).not.toContain("bs-revise-tools");
+    // Changed inside a draft: the draft note shows; "saved as vN" becomes the button's description and tooltip.
+    expect(html).toMatch(/aria-describedby="[^"]+-after" title="[^"]+" data-talk-make/);
+    const described = /aria-describedby="([^"]+-after)"/.exec(html)![1]!;
+    expect(html).toContain(`class="bs-sr" id="${described}"`);
     // The thread comes first, then the one sheet card with the button, then the box.
     expect(html.indexOf("data-talk-thread")).toBeLessThan(html.indexOf("data-talk-sheet"));
     expect(html.indexOf("data-talk-make")).toBeLessThan(html.indexOf("data-talk-box"));

@@ -952,11 +952,6 @@ button.bs-sibling:focus-visible { outline: 2px solid var(--ys-focus); outline-of
 .bs-talk-stage .bs-talk-draft { margin: 0; font-size: 12px; }
 .bs-talk-stage .bs-talk-make .bs-revise-after { margin: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; font-size: 12px; }
 .bs-talk-stage .bs-talk-box { position: static; margin: 0; padding: 0; background: none; box-shadow: none; gap: 6px; }
-/* One row of tools under the box, also with the longer English labels. */
-.bs-talk-stage .bs-revise-tools { flex-wrap: nowrap; min-width: 0; }
-.bs-talk-stage .bs-revise-tools .bs-btn:not(.bs-revise-send) { min-width: 0; padding: 0 11px; }
-.bs-talk-stage .bs-revise-tools .bs-revise-send { flex: none; }
-.bs-talk-input { min-height: calc(2 * 1.5em + 16px); max-height: calc(5 * 1.5em + 16px); line-height: 1.5; resize: none; overflow-y: auto; }
 .bs-revise-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--ys-ink-muted); }
 .bs-revise-chip[data-selected] .bs-revise-dot { background: currentColor; opacity: 0.72; }
 /* The card on one line while a conversation is under way: number, stage, base, and the step to the final. */
@@ -975,3 +970,37 @@ button.bs-sibling:focus-visible { outline: 2px solid var(--ys-focus); outline-of
 /* A final that could not be made: one line on the card, the button under it offers it again. */
 .bs-version-final-failed { margin: 0; font-size: 12.5px; }
 .bs-version-card[data-compact] .bs-version-final-failed { flex: 1 0 100%; }
+/* Dialogue flag on: a wider conversation column; the stage takes the rest and keeps the clip centred. */
+@media (min-width: 901px) {
+  .bs-viewer-body[data-talk]:not([data-compare]) { grid-template-columns: minmax(0, 1fr) clamp(380px, 30vw, 520px); }
+}
+/* Messages: 14 px, 1.55; the customer's bubbles at most 85 % wide; 10 px between messages, 16 px between exchanges. */
+.bs-talk-stage .bs-talk-thread { gap: 10px; }
+.bs-talk-stage .bs-talk-me, .bs-talk-stage .bs-talk-studio { font-size: 14px; line-height: 1.55; }
+.bs-talk-stage .bs-talk-me { max-width: 85%; padding: 7px 12px; }
+.bs-talk-stage .bs-talk-studio { max-width: 100%; }
+.bs-talk-stage .bs-talk-studio + .bs-talk-me, .bs-talk-stage .bs-talk-removed + .bs-talk-me { margin-top: 6px; }
+/* The sheet, tighter: a two-line sheet with its button and one quiet line stays near 150 px. */
+.bs-talk-stage .bs-talk-sheet { gap: 1px; padding: 5px 10px 7px 12px; }
+.bs-talk-stage .bs-talk-group { gap: 1px; }
+.bs-talk-stage .bs-talk-group-label { line-height: 1.3; }
+.bs-talk-stage .bs-talk-oneline { line-height: 1.35; }
+.bs-talk-stage .bs-talk-group li { min-height: 22px; padding: 0 0 0 8px; line-height: 1.35; }
+.bs-talk-stage [data-talk-group="change"] ul { gap: 0; max-height: calc(3 * 22px); }
+.bs-talk-stage .bs-talk-line-x { width: 22px; height: 22px; }
+.bs-talk-stage .bs-talk-make { gap: 2px; padding-top: 3px; }
+.bs-talk-stage .bs-talk-make .bs-submit { min-height: 36px; }
+.bs-talk-note { margin: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; font-size: 12px; line-height: 1.3; }
+/* One chat input: the attached items, the text (one line, growing to five), the tools inside along the bottom. */
+.bs-talk-field { display: grid; gap: 2px; padding: 8px 6px 6px 12px; border-radius: var(--ys-r-control); background: var(--ys-panel); box-shadow: inset 0 0 0 1px var(--ys-hairline); }
+.bs-talk-field:focus-within { box-shadow: inset 0 0 0 1.5px var(--ys-ink); }
+.bs-talk-box[data-dragging] .bs-talk-field { box-shadow: inset 0 0 0 1.5px var(--ys-accent); }
+.bs-talk-input { display: block; width: 100%; min-height: calc(1.55em + 4px); max-height: calc(5 * 1.55em + 4px); margin: 0; padding: 2px 6px 2px 0; border: 0; border-radius: 0; background: transparent; box-shadow: none; color: var(--ys-ink); font: inherit; font-size: 14px; line-height: 1.55; resize: none; overflow-y: auto; outline: none; }
+.bs-talk-input:focus, .bs-talk-input:focus-visible { outline: none; box-shadow: none; }
+.bs-talk-field-tools { display: flex; align-items: center; gap: 2px; margin-left: -8px; }
+.bs-talk-field-tools .bs-btn[data-size="sm"] { width: 32px; min-height: 32px; height: 32px; }
+.bs-talk-tool { color: var(--ys-ink-secondary); }
+.bs-talk-tool[aria-pressed="true"] { background: var(--ys-active-bg); color: var(--ys-active-fg); }
+.bs-talk-field-tools .bs-revise-send { margin-left: auto; border-radius: 50%; background: var(--ys-active-bg); color: var(--ys-active-fg); }
+.bs-talk-field-tools .bs-revise-send:hover:not([aria-disabled]) { background: var(--ys-active-bg); opacity: 0.88; }
+.bs-talk-field-tools .bs-revise-send[aria-disabled="true"] { background: var(--ys-raised); color: var(--ys-ink-muted); cursor: not-allowed; }
