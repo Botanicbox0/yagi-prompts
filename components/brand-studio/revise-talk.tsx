@@ -335,6 +335,12 @@ export function TalkView({
           {errorLine(copy, state.note)}
         </p>
       )}
+      {state.thread.length === 0 && (
+        // Nothing said yet: one quiet line on what to do, right above the same input the conversation keeps.
+        <p className="bs-muted bs-talk-first" data-talk-first>
+          {t.first}
+        </p>
+      )}
       <form
         className="bs-talk-box"
         data-talk-box

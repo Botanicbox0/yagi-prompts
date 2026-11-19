@@ -1004,3 +1004,5 @@ button.bs-sibling:focus-visible { outline: 2px solid var(--ys-focus); outline-of
 .bs-talk-field-tools .bs-revise-send { margin-left: auto; border-radius: 50%; background: var(--ys-active-bg); color: var(--ys-active-fg); }
 .bs-talk-field-tools .bs-revise-send:hover:not([aria-disabled]) { background: var(--ys-active-bg); opacity: 0.88; }
 .bs-talk-field-tools .bs-revise-send[aria-disabled="true"] { background: var(--ys-raised); color: var(--ys-ink-muted); cursor: not-allowed; }
+/* Nothing said yet: one quiet line right above the input. */
+.bs-talk-first { margin: 0; color: var(--ys-ink-secondary); font-size: 13px; line-height: 1.5; word-break: keep-all; }
