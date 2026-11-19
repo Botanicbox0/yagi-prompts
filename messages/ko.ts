@@ -5712,7 +5712,7 @@ export const ko: Dictionary = {
     fieldTemplateRuntime: '길이 (초)',
     templateRuntimeHint: '영상만. 이미지는 비워둡니다.',
     fieldTemplateEngine: '생성 엔진',
-    templateEngineHint: '결과물 종류와 맞는 엔진만 저장됩니다. 비우면 기본값(영상 Seedance 2.0, 이미지 GPT Image 2).',
+    templateEngineHint: '결과물 종류와 맞는 엔진만 저장됩니다. 비우면 기본값(영상 Seedance 2.0, 이미지 GPT Image 2.5 Flare).',
     templateEngineDefault: '기본 엔진',
     fieldTemplateAspect: '기본 비율',
     templateAspectHint: '만들기 화면이 열리는 비율. 사용자는 다른 비율을 고를 수 있습니다. 비우면 이미지 4:5, 영상 9:16.',

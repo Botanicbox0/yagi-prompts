@@ -18,13 +18,10 @@ import {
   BRAND_AESTHETIC_PRESETS,
   DEFAULT_CUSTOM_MOODBOARD_ITEMS,
   MAX_BRAND_MOODBOARD_IMAGES,
-  MODEL_EASY_COMPARISON_MATRIX,
   clampMoodboardItemsToMax,
-  compileAestheticPromptForModel,
   type BrandAestheticPresetId,
   type BrandAestheticSourceMode,
   type BrandCustomMoodboardItem,
-  type BrandStudioImageModelId,
 } from "@/lib/brands/production/reference-studio";
 
 export interface BrandOnboardingWizardProps {
@@ -641,18 +638,6 @@ export function BrandOnboardingWizard({
   const [identityMoodboardItems, setIdentityMoodboardItems] = useState<
     BrandCustomMoodboardItem[]
   >(() => clampMoodboardItemsToMax(DEFAULT_CUSTOM_MOODBOARD_ITEMS));
-  const [identityPreviewModelId, setIdentityPreviewModelId] =
-    useState<BrandStudioImageModelId>("seedream_5_5");
-
-  const compiledIdentityPreview = compileAestheticPromptForModel({
-    modelId: identityPreviewModelId,
-    mode: identityAestheticMode,
-    presetId: identityPresetId,
-    customItems: identityMoodboardItems,
-    customTitle: identityMoodboardTitle,
-    locale,
-  });
-
   const identityMoodboardFileInputRef = useRef<HTMLInputElement | null>(null);
 
   function handleIdentityMoodboardFiles(files: FileList | File[]) {

@@ -5743,7 +5743,7 @@ export const en = {
     fieldTemplateRuntime: 'Runtime (seconds)',
     templateRuntimeHint: 'Films only. Leave empty for an image.',
     fieldTemplateEngine: 'Render engine',
-    templateEngineHint: 'Only an engine that matches the output is saved. Empty = the default (video Seedance 2.0, image GPT Image 2).',
+    templateEngineHint: 'Only an engine that matches the output is saved. Empty = the default (video Seedance 2.0, image GPT Image 2.5 Flare).',
     templateEngineDefault: 'Default engine',
     fieldTemplateAspect: 'Opening aspect',
     templateAspectHint: 'The aspect the make step opens in; visitors can pick another. Empty = image 4:5, video 9:16.',

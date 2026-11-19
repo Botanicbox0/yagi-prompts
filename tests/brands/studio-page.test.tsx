@@ -47,11 +47,8 @@ describe("brand studio page", () => {
     expect(html).toContain(t.previewPending);
     expect(html).toContain("data-brand-brief-studio");
     expect(html).toContain("data-studio-core-tracks");
-    expect(html).toContain("GPT Image 2.6");
-    expect(html).toContain("Nano Banana Pro");
-    expect(html).toContain("Nano Banana 2.1");
-    expect(html).toContain("Nano Banana 2.0");
-    expect(html).toContain("Seedream 5.5");
+    // No image model is named on this screen (founder 2026-11-20); the video track keeps its Seedance tiers.
+    expect(html).not.toMatch(/GPT Image|Nano Banana|Seedream/);
     expect(html).toContain("Seedance 2.5");
     expect(html).not.toMatch(/comfyui|higgsfield/i);
   });
