@@ -228,8 +228,7 @@ export type PromptLintRule =
   | 'seedream_reference_limit'
   | 'palette_out_of_world'
   | 'timeline_gap_or_overlap'
-  | 'subsecond_continuous_push_in'
-  | 'gpt_image_person_disallowed';
+  | 'subsecond_continuous_push_in';
 
 export interface PromptLintIssue {
   rule: PromptLintRule;
@@ -507,16 +506,11 @@ export function lintCompiledPrompt(
   const issues: PromptLintIssue[] = [];
   const lowerPrompt = prompt.toLowerCase();
   const lowerBrief = spec.brief.toLowerCase();
-  const hasPerson = shotHasPerson(spec);
 
-  // 1. GPT Image person prohibition (knowhow-corpus.md §2.1: plastic skin -> disallowed for people)
-  if (hasPerson && (target === 'gpt-image-2.5-flare' || target === 'gpt-image-2')) {
-    issues.push({
-      rule: 'gpt_image_person_disallowed',
-      severity: 'error',
-      text: `Target ${target} is disallowed for shots with a person (plastic skin artifact); route to seedream-5.5 or nano-banana-pro.`
-    });
-  }
+  // 1. (removed 2026-11-20) GPT Image is no longer refused for a shot with a person: the founder allowed people on
+  // GPT Image on 2026-11-19 (the old knowhow-corpus §2.1 ban was about GPT Image 2.0 for fashion lookbooks), and
+  // the studio's Prompt Architect already allows it (lib/brand-studio/enhancer/profiles/gpt-image.ts). A person
+  // shot on GPT Image still gets the a10 skin contract (serializeGptImage).
 
   // 2. a12 equipment brand names
   for (const brand of BANNED_EQUIPMENT_BRANDS) {
