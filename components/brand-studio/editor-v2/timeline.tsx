@@ -251,7 +251,12 @@ export function Timeline({ api }: { api: EditorApi }) {
     }
     return tiles;
   };
-  const strips = realFrames ? spans.map((span) => (span.end >= viewFrom && span.start <= viewTo ? tilesOf(span) : [])) : null;
+  // A cut with no poster of its own (an upload without a thumbnail) shows decoded frames at every zoom.
+  const strips = spans.map((span) => {
+    const visible = span.end >= viewFrom && span.start <= viewTo;
+    if (realFrames) return visible ? tilesOf(span) : [];
+    return !span.clip.thumbUrl && visible ? tilesOf(span) : null;
+  });
   const wantedKey = wanted.map((request) => `${request.src}#${request.sourceFrame}`).join('|');
   useEffect(() => {
     thumbs.current?.want(wanted);
@@ -397,7 +402,7 @@ export function Timeline({ api }: { api: EditorApi }) {
               }
               const look = doc.looks[span.clip.id];
               const selected = api.selection.includes(span.clip.id);
-              const inScope = workspace !== 'cut' && api.targetIds.includes(span.clip.id);
+              const inScope = workspace !== 'cut' && !api.locked && api.targetIds.includes(span.clip.id);
               const tiles = strips?.[span.index] ?? null;
               return (
                 <div
@@ -429,6 +434,8 @@ export function Timeline({ api }: { api: EditorApi }) {
                   data-in-frame={span.clip.inFrame}
                   data-phase={span.clip.phase}
                   data-speed={`${span.clip.speedNum}/${span.clip.speedDen}`}
+                  data-source-fps={span.clip.sourceFps}
+                  data-source-frames={span.clip.sourceFrames}
                   data-clip-id={span.clip.id}
                 >
                   {tiles?.map((tile) => (

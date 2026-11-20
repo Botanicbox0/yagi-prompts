@@ -257,6 +257,10 @@
 }
 .materialCard:hover .materialThumb i,
 .materialCard:focus-visible .materialThumb i { opacity: 1; }
+/* A clip with no poster shows its own first frame. */
+.materialThumb video { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; pointer-events: none; }
+.materialThumb em,
+.materialThumb i { z-index: 1; }
 .materialMeta { display: grid; gap: 1px; padding: 0 3px; }
 .materialMeta strong,
 .lookTile strong,

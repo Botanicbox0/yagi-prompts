@@ -332,11 +332,12 @@ export function Preview({ api }: { api: EditorApi }) {
         <span className={styles.clock} title={copy.timeline.timecodeNote}>
           <strong data-editor-timecode>{formatTimecode(playhead, fps)}</strong>
           <span>/ {formatTimecode(api.total, fps)}</span>
-          <em>{fps} fps</em>
+          {/* An empty real film has no rate yet: its first clip sets it. */}
+          {(!api.real || sequence.clips.length > 0) && <em>{fps} fps</em>}
           {rate !== 0 && rate !== 1 && <em data-editor-shuttle>{rate > 0 ? `${rate}×` : `−${Math.abs(rate)}×`}</em>}
         </span>
         <span className={styles.transportSpace} />
-        {workspace === 'color' && (
+        {workspace === 'color' && !api.real && (
           <button
             type="button"
             className={styles.chipBtn}

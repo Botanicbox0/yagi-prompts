@@ -200,6 +200,7 @@ function RealBin({ api }: { api: EditorApi }) {
                   data-busy={busy ? '' : undefined}
                 >
                   <span className={styles.materialThumb} style={source.thumbUrl ? { backgroundImage: `url(${source.thumbUrl})` } : undefined}>
+                    {!source.thumbUrl && <video src={`${source.srcUrl}#t=0.1`} muted playsInline preload="metadata" aria-hidden="true" />}
                     {seconds !== null && <em>{formatClock(seconds)}</em>}
                     <i aria-hidden="true"><EditorIcon name="plus" /></i>
                   </span>
@@ -603,6 +604,9 @@ function CutPanel({ api }: { api: EditorApi }) {
   return (
     <>
       <PanelHead title={copy.panel.film} meta={fill(copy.panel.filmSummary, { count: sequence.clips.length, duration: formatTimecode(api.total, fps) })} />
+      {api.real && (api.readOnly || !api.storageOk) && (
+        <p className={styles.note} role="status" data-editor-film-note>{api.readOnly ? copy.real.readOnly : copy.real.noStorage}</p>
+      )}
       <Section title={c.film.shape}>
         <div className={styles.shapeGrid} role="group" aria-label={c.film.shape}>
           {COMPOSE_ASPECTS.map((aspect) => {
