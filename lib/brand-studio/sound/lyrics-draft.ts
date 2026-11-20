@@ -36,13 +36,12 @@ import {
   defaultStructure,
   LYRICS_LIMITS,
   ownLyrics,
-  singingRate,
   structureMarks,
-  syllableRange,
   tempoOf,
   type LyricCheckInput,
   type LyricStructure,
 } from './lyrics';
+import { bandOf, cleanBpm, draftStanzaLines, DRAFT_STANZAS, LINE_SYLLABLES, runTempo, TEMPO_BANDS, type TempoBand } from './length-plan';
 import { isLyricsModel, lyricsGeminiConfig, type LyricsModel } from './lyrics-model';
 import { namedArtist } from './names';
 import { videoFitOf, videoTargetSeconds } from './video-fit';
@@ -56,7 +55,10 @@ export interface LyricsRequest {
   lyrics?: string;
   language: 'ko' | 'en' | 'mixed';
   seconds: number | null;
-  /** The tempo (read from the description): the singing rate the syllables are sized by (§12.8). */
+  /**
+   * A tempo the request fixes (a BPM written in the description). Null: the model picks the tempo band that fits
+   * and answers its BPM; the lines asked follow that band's plan (./length-plan.ts, §12.11).
+   */
   bpm?: number | null;
   structure: LyricStructure;
   tone: 'haeyo' | 'banmal' | null;
@@ -64,8 +66,11 @@ export interface LyricsRequest {
   mustInclude: string[];
 }
 
-/** How many stanzas each structure asks for; the marks come from `structureMarks` (the last one is `[Outro]`). */
-export const STANZAS: Readonly<Record<LyricStructure, number>> = { hook: 2, 'hook-verse': 4, full: 5 };
+/**
+ * How many stanzas a draft has in each structure (marks from `structureMarks`, the last of two or more `[Outro]`).
+ * The hook alone is one stanza: the length plan sings it again with an intro and a break around it (§12.11).
+ */
+export const STANZAS: Readonly<Record<LyricStructure, number>> = DRAFT_STANZAS;
 
 const ROLE: Readonly<Record<string, string>> = {
   '[Chorus]': 'hook: one short sentence that survives repetition; the brand name goes here',
@@ -91,19 +96,52 @@ export const LYRICS_SYSTEM = [
   '8. One register for the whole song. No translationese, no ad-copy noun lists.',
   'The brand name: exactly as given (its Korean reading when one is given), in the hook, three times or fewer in the',
   'whole song. Every word the request says to include appears as written.',
-  'Answer with the stanzas only, in the order asked: no section labels, no title, no notes, no brackets.',
+  'Length is counted in lines: write exactly the number of lines asked for each stanza, each line a short singable',
+  'phrase of the syllables asked. The music is planned at the tempo you answer in "bpm".',
+  'Answer the tempo and the stanzas only, in the order asked: no section labels, no title, no notes, no brackets.',
 ].join('\n');
 
 const SCHEMA = {
   type: 'object',
-  properties: { stanzas: { type: 'array', items: { type: 'array', items: { type: 'string' } } } },
-  required: ['stanzas'],
+  properties: { bpm: { type: 'number' }, stanzas: { type: 'array', items: { type: 'array', items: { type: 'string' } } } },
+  required: ['bpm', 'stanzas'],
 } as const;
+
+const BAND_LABEL: Readonly<Record<TempoBand, string>> = { fast: '110 BPM and above', mid: '90 to 109 BPM', slow: 'below 90 BPM' };
+
+/** The lines each stanza needs at a tempo (a topic draft with a length; null otherwise). */
+export function askedLines(req: LyricsRequest, bpm: number): number[] | null {
+  return req.flow === 'topic' && req.seconds ? draftStanzaLines(req.structure, req.seconds, bpm) : null;
+}
+
+/** The tempo a draft is planned at: the request's, else the one the model answered, else the mid band. */
+export function draftBpm(req: LyricsRequest, answered: unknown): number {
+  return cleanBpm(req.bpm) ?? cleanBpm(answered) ?? TEMPO_BANDS.mid.bpm;
+}
 
 /** What the model is asked, as one JSON block (no customer text outside it). */
 export function lyricsTask(req: LyricsRequest, problems: readonly string[] = []): string {
   const marks = structureMarks(req.structure, STANZAS[req.structure]);
-  const syllables = req.seconds && req.language !== 'en' ? syllableRange(req.seconds, req.bpm) : null;
+  const line = LINE_SYLLABLES[req.language === 'en' ? 'en' : 'ko'];
+  const fixed = cleanBpm(req.bpm);
+  const stanzasFor = (bpm: number) => {
+    const lines = askedLines(req, bpm);
+    // A long hook gets a 2-line outro as a second stanza (§12.11), so the marks follow the lines asked.
+    const named = lines ? structureMarks(req.structure, lines.length) : marks;
+    return named.map((m, i) => `${i + 1}. ${ROLE[m] ?? m}${lines ? `: ${lines[i]} lines` : ''}`);
+  };
+  // With a length: one plan per tempo band, or the fixed tempo's plan (§12.11: lines per stanza depend on the tempo).
+  const plan =
+    req.flow !== 'topic' || !req.seconds
+      ? { stanzas: req.flow === 'topic' ? stanzasFor(fixed ?? TEMPO_BANDS.mid.bpm) : null }
+      : fixed
+        ? { tempo: `${fixed} BPM, as the request gives it: answer bpm ${fixed}`, stanzas: stanzasFor(fixed) }
+        : {
+            tempo: 'pick the tempo band that fits the description, answer its BPM, and write the stanzas of that band',
+            stanzasByTempo: Object.fromEntries(
+              (Object.keys(TEMPO_BANDS) as TempoBand[]).map((band) => [`${band} (${BAND_LABEL[band]}, e.g. ${TEMPO_BANDS[band].bpm} BPM)`, stanzasFor(TEMPO_BANDS[band].bpm)]),
+            ),
+          };
   const task = {
     flow:
       req.flow === 'topic'
@@ -114,10 +152,8 @@ export function lyricsTask(req: LyricsRequest, problems: readonly string[] = [])
     language:
       req.language === 'ko' ? 'Korean' : req.language === 'en' ? 'English' : 'Korean, with English only in the hook and ad-libs',
     lengthSeconds: req.seconds,
-    ...(syllables
-      ? { koreanSyllablesInTotal: `${syllables.min}-${syllables.max}`, singingRate: `about ${singingRate(req.bpm)} syllables a second at this tempo` }
-      : {}),
-    stanzas: marks.map((m, i) => `${i + 1}. ${ROLE[m] ?? m}`),
+    ...plan,
+    syllablesPerLine: `${line.min}-${line.max}${req.language === 'en' ? '' : ' Korean syllables'}`,
     tone: req.tone === 'haeyo' ? '해요체 throughout' : req.tone === 'banmal' ? '반말 throughout' : 'pick one and keep it',
     brand: req.brand ? { name: req.brand.name, writeItAs: req.brand.readAs?.trim() || req.brand.name } : null,
     mustInclude: req.mustInclude,
@@ -144,21 +180,23 @@ export function stanzasText(answer: unknown): string {
     .slice(0, LYRICS_LIMITS.max);
 }
 
-/** The checks for a drafted or polished lyric, plus the stanza count the structure asks for. */
-export function draftProblems(req: LyricsRequest, text: string): { hard: string[]; soft: string[] } {
+/** The checks for a drafted or polished lyric: the lines asked at the planned tempo (`bpm`), and the line length. */
+export function draftProblems(req: LyricsRequest, text: string, bpm: number = draftBpm(req, null)): { hard: string[]; soft: string[] } {
   const input: LyricCheckInput = {
     lyrics: text,
     language: req.language,
-    seconds: req.seconds,
-    bpm: req.bpm ?? null,
+    stanzaLines: askedLines(req, bpm),
+    lineLength: req.flow === 'topic',
     tone: req.tone,
     brand: req.brand,
     mustInclude: req.mustInclude,
   };
   const { hard, soft } = checkLyrics(input);
-  const count = text ? text.split(/\n\s*\n/).length : 0;
-  const want = STANZAS[req.structure];
-  if (text && count !== want) soft.push(`${count} stanzas where ${want} were asked`);
+  if (req.flow === 'topic' && !input.stanzaLines) {
+    const count = text ? text.split(/\n\s*\n/).length : 0;
+    const want = STANZAS[req.structure];
+    if (text && count !== want) soft.push(`${count} stanzas where ${want} were asked`);
+  }
   if (namedArtist(text)) hard.push('names a singer, a band or a song');
   return { hard, soft };
 }
@@ -183,10 +221,10 @@ export async function writeLyrics(
   fetchImpl: typeof fetch,
   log?: (event: string, detail: Record<string, unknown>) => void,
   options: { callMs?: number; deadline?: number; onCall?: (call: { model: string; ms: number; ok: boolean }) => void } = {},
-): Promise<string | null> {
+): Promise<{ text: string; bpm: number } | null> {
   const deadline = options.deadline ?? Date.now() + LYRICS_TIMEOUTS.totalMs;
   let problems: string[] = [];
-  let kept: string | null = null;
+  let kept: { text: string; bpm: number } | null = null;
   for (let attempt = 0; attempt < 2; attempt += 1) {
     const left = deadline - Date.now();
     if (left < LYRICS_TIMEOUTS.minCallMs) {
@@ -209,9 +247,11 @@ export async function writeLyrics(
       options.onCall?.({ model: config.model, ms: Date.now() - started, ok: answer !== undefined });
     }
     const text = stanzasText(answer);
-    const found = draftProblems(req, text);
-    if (found.hard.length === 0 && (found.soft.length === 0 || attempt === 1)) return text;
-    kept = found.hard.length === 0 ? text : null;
+    // The tempo the model chose (or the request fixed) decides how many lines each stanza must have (§12.11).
+    const bpm = draftBpm(req, (answer as { bpm?: unknown })?.bpm);
+    const found = draftProblems(req, text, bpm);
+    if (found.hard.length === 0 && (found.soft.length === 0 || attempt === 1)) return { text, bpm };
+    kept = found.hard.length === 0 ? { text, bpm } : null;
     problems = [...found.hard, ...found.soft];
     log?.('studio_lyrics_rule_retry', { attempt, hard: found.hard.length, soft: found.soft.length });
   }
@@ -231,23 +271,35 @@ export function isTransportFailure(error: unknown): boolean {
  * request once to `LYRICS_FALLBACK_MODEL`. Returns the lyrics (or null when the rules still fail) and the model
  * that wrote them, so the run records the right one. A refusal or a second failure throws.
  */
+/** A draft as the studio keeps it: the text (null when the rules still fail), the tempo it was planned at, and who wrote it. */
+export interface WrittenLyrics {
+  text: string | null;
+  bpm: number;
+  model: string;
+}
+
 export async function writeLyricsWithFallback(
   req: LyricsRequest,
   config: GeminiConfig,
   fetchImpl: typeof fetch,
   log?: (event: string, detail: Record<string, unknown>) => void,
   onCall?: (call: { model: string; ms: number; ok: boolean }) => void,
-): Promise<{ text: string | null; model: string }> {
+): Promise<WrittenLyrics> {
   const deadline = Date.now() + LYRICS_TIMEOUTS.totalMs;
+  const as = (written: { text: string; bpm: number } | null, model: string): WrittenLyrics => ({
+    text: written?.text ?? null,
+    bpm: written?.bpm ?? draftBpm(req, null),
+    model,
+  });
   try {
-    return { text: await writeLyrics(req, config, fetchImpl, log, { callMs: LYRICS_TIMEOUTS.firstCallMs, deadline, onCall }), model: config.model };
+    return as(await writeLyrics(req, config, fetchImpl, log, { callMs: LYRICS_TIMEOUTS.firstCallMs, deadline, onCall }), config.model);
   } catch (error) {
     if (config.model === LYRICS_FALLBACK_MODEL || !isTransportFailure(error)) throw error;
     // Not enough of the total left for the fast model to answer: the first failure stands.
     if (deadline - Date.now() < LYRICS_TIMEOUTS.minCallMs) throw error;
     log?.('studio_lyrics_fallback_model', { from: config.model, to: LYRICS_FALLBACK_MODEL, message: error instanceof Error ? error.message.slice(0, 120) : 'unknown' });
     const fast = { ...config, model: LYRICS_FALLBACK_MODEL };
-    return { text: await writeLyrics(req, fast, fetchImpl, log, { callMs: LYRICS_TIMEOUTS.fallbackCallMs, deadline, onCall }), model: LYRICS_FALLBACK_MODEL };
+    return as(await writeLyrics(req, fast, fetchImpl, log, { callMs: LYRICS_TIMEOUTS.fallbackCallMs, deadline, onCall }), LYRICS_FALLBACK_MODEL);
   }
 }
 
@@ -265,11 +317,19 @@ export function localLyrics(req: LyricsRequest): string {
       .join('\n')
       .replace(/\n{3,}/g, '\n\n');
   }
-  const pool = LOCAL_DRAFT[req.language === 'en' ? 'en' : 'ko'];
+  const pool = LOCAL_DRAFT[req.language === 'en' ? 'en' : 'ko'].flatMap((stanza) => stanza.split('\n'));
   const brand = req.brand ? req.brand.readAs?.trim() || req.brand.name : null;
-  const stanzas = Array.from({ length: STANZAS[req.structure] }, (_, i) => pool[i % pool.length]!);
-  if (brand) stanzas[0] = `${stanzas[0]!.split('\n')[0]}\n${req.language === 'en' ? `${brand}, every morning` : `${brand}와 함께`}`;
-  return stanzas.join('\n\n');
+  // The plan's lines at the local tempo, filled from the fixed pool (the brand closes the first stanza).
+  const lines = askedLines(req, localBpm(req)) ?? Array.from({ length: STANZAS[req.structure] }, () => 2);
+  let n = 0;
+  const stanzas = lines.map((count) => Array.from({ length: count }, () => pool[n++ % pool.length]!));
+  if (brand) stanzas[0]![stanzas[0]!.length - 1] = req.language === 'en' ? `${brand}, every morning` : `${brand}와 함께 맑게`;
+  return stanzas.map((stanza) => stanza.join('\n')).join('\n\n');
+}
+
+/** The tempo local mode plans a draft at: the request's, else the description's words, else the mid band. */
+export function localBpm(req: LyricsRequest): number {
+  return runTempo({ description: req.topic, draftBpm: req.bpm ?? null, wordsBpm: tempoOf(req.topic) });
 }
 
 export async function draftLyrics(deps: StudioDeps, viewer: Viewer, raw: unknown): Promise<StudioLyricsDraft | (StudioFailure & { blocked?: 'name' }) | StudioFailure> {
@@ -310,16 +370,17 @@ export async function draftLyrics(deps: StudioDeps, viewer: Viewer, raw: unknown
     ...(v.lyrics ? { lyrics: v.lyrics } : {}),
     language: v.language,
     seconds,
-    bpm: tempoOf(v.topic),
+    // A BPM written in the description fixes the tempo; otherwise the model picks the band (§12.11).
+    bpm: cleanBpm(/(\d{2,3})\s*bpm/i.exec(v.topic)?.[1]),
     structure: v.structure ?? defaultStructure(seconds),
     tone: v.tone ?? null,
     brand: v.brand ?? null,
     mustInclude: v.mustInclude ?? [],
   };
-  if (deps.env.provider === 'fake' && !lyricsGeminiConfig(deps.intelDeps.env)) return { ok: true, flow: v.flow, lyrics: localLyrics(req), model: 'local' };
+  if (deps.env.provider === 'fake' && !lyricsGeminiConfig(deps.intelDeps.env)) return { ok: true, flow: v.flow, lyrics: localLyrics(req), model: 'local', bpm: localBpm(req) };
   const config = lyricsGeminiConfig(deps.intelDeps.env);
   if (!config) return failure('provider_unavailable');
-  let written: { text: string | null; model: string };
+  let written: WrittenLyrics;
   try {
     written = await writeLyricsWithFallback(req, config, deps.intelDeps.fetch, deps.log);
   } catch (error) {
@@ -327,5 +388,5 @@ export async function draftLyrics(deps: StudioDeps, viewer: Viewer, raw: unknown
     return failure('provider_unavailable');
   }
   if (!written.text) return failure('failed');
-  return { ok: true, flow: v.flow, lyrics: written.text, model: isLyricsModel(written.model) ? written.model : (config.model as LyricsModel) };
+  return { ok: true, flow: v.flow, lyrics: written.text, model: isLyricsModel(written.model) ? written.model : (config.model as LyricsModel), bpm: written.bpm };
 }

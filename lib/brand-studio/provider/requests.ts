@@ -290,7 +290,7 @@ function musicRequestOf(input: StudioRequestInput): StudioProviderRequest {
       mode: music.mode,
       prompt: input.prompt,
       vocal: music.vocal,
-      ...(music.mode === 'custom' ? { title: input.designedTitle || music.title, lyrics: markLyrics(music.lyrics ?? '', music.structure ?? null), careful: music.careful } : {}),
+      ...(music.mode === 'custom' ? { title: input.designedTitle || music.title, lyrics: markLyrics(music.lyrics ?? '', music.structure ?? null, music.plan?.form ?? null), careful: music.careful } : {}),
     });
   } catch (error) {
     throw new StudioRequestError(error instanceof Error ? error.message : 'music request');

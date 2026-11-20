@@ -37,6 +37,7 @@ import { describeSentence, musicTitle } from './music-text';
 
 export { describeSentence, musicTitle };
 import { namedArtist } from './names';
+import { planRecord, sungPlan } from './length-plan';
 import { LYRIC_STRUCTURES, LYRICS_LIMITS, markLyrics, musicWay, ownLyrics } from './lyrics';
 import { LYRICS_MODELS, lyricsGeminiConfig } from './lyrics-model';
 import { videoFitOf, videoStructure, videoTargetSeconds, type MusicVideoFit } from './video-fit';
@@ -85,6 +86,11 @@ export const MusicJobCreateSchema = z
       })
       .strict()
       .optional(),
+    /**
+     * The tempo the drafted lyrics were planned at (`lyrics.draft` answers it, §12.11). A BPM written in the
+     * description wins over it; without either the words and then the mid band decide (./length-plan.ts).
+     */
+    bpm: z.number().int().min(60).max(160).optional(),
     /** "더 고르게 만들기" (Max Mode): twice the credits. */
     careful: z.boolean().optional(),
     /** Language to sing in when there are vocals and no lyrics; the screen's language when absent. */
@@ -122,7 +128,10 @@ export interface MusicPlan {
 
 /** Pure: the request, the name, the quote and what the row keeps. Throws `StudioDenied('invalid')` on a request the engine refuses. */
 export function designInputOf(
-  input: Pick<MusicJobCreate, 'prompt' | 'vocal' | 'lyrics' | 'careful' | 'language' | 'structure' | 'words'> & { video?: MusicVideoFit | null },
+  input: Pick<MusicJobCreate, 'prompt' | 'vocal' | 'lyrics' | 'careful' | 'language' | 'structure' | 'words' | 'targetSeconds' | 'bpm'> & {
+    video?: MusicVideoFit | null;
+    lyricsBy?: { flow: 'topic' | 'polish' } | null;
+  },
   screenLocale: 'ko' | 'en',
 ): MusicDesignInput {
   return {
@@ -135,6 +144,16 @@ export function designInputOf(
     language: input.language ?? screenLocale,
     locale: screenLocale,
     words: wordsFor(input),
+    // The length plan (§12.11): one tempo, the form around the lines; the hook is sung again only when drafted.
+    plan: sungPlan({
+      prompt: input.prompt,
+      vocal: input.vocal,
+      lyrics: input.lyrics,
+      structure: input.structure ?? null,
+      seconds: input.targetSeconds ?? (input.video ? videoTargetSeconds(input.video) : null),
+      draftBpm: input.bpm ?? null,
+      drafted: input.lyricsBy?.flow === 'topic',
+    }),
   };
 }
 
@@ -180,7 +199,7 @@ export function planMusic(
   const request: MusicRequest =
     way === 'describe'
       ? { mode: 'describe', prompt: design.style, vocal: input.vocal }
-      : { mode: 'custom', prompt: design.style, vocal: input.vocal, title: design.title, lyrics: markLyrics(lyrics, input.structure ?? null), careful };
+      : { mode: 'custom', prompt: design.style, vocal: input.vocal, title: design.title, lyrics: markLyrics(lyrics, input.structure ?? null, designInput.plan?.form ?? null), careful };
   let endpoint: string;
   try {
     endpoint = engine.request(request).endpoint;
@@ -216,6 +235,8 @@ export function planMusic(
         ...(lyrics && input.targetSeconds ? { targetSeconds: input.targetSeconds } : {}),
         ...(input.video ? { video: input.video } : {}),
         ...(designInput.words ? { words: designInput.words } : {}),
+        // The plan, kept to send the same form and to fit the coefficients again against the measured lengths.
+        ...(designInput.plan ? { plan: planRecord(designInput.plan) } : {}),
         ...(lyrics ? { lyricsBy: input.lyricsBy ? { flow: input.lyricsBy.flow, model: input.lyricsBy.model } : { flow: 'own' as const, model: null } } : {}),
         // The conditions the track was made under (§7.2): which engine and endpoint, which version of our terms.
         made: { engine: engine.id, endpoint, terms: SOUND_TERMS_VERSION },

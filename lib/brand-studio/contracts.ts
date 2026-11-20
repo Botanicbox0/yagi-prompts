@@ -601,6 +601,8 @@ export type StudioLyricsDraft = {
   lyrics: string;
   /** Which model wrote them, sent back with the music request so the run records it (`params.music.lyricsBy`). */
   model: LyricsModel | 'local';
+  /** The tempo the lyrics were planned at (§12.11): sent back with the music request so the design keeps it. */
+  bpm: number;
 };
 /** `music.design`: "지금 설계하기" in the music dock (docs/BRAND-SOUND-STUDIO.md §12.2). Free, rate-limited. */
 export const MusicDesignSchema = z
@@ -624,6 +626,10 @@ export const MusicDesignSchema = z
       .optional(),
     /** SA4: the library video the music goes under. */
     videoAssetId: Id.optional(),
+    /** The length plan's inputs (§12.11): the length, the drafted tempo, and whether the lyrics were drafted. */
+    targetSeconds: z.number().int().min(5).max(240).optional(),
+    bpm: z.number().int().min(60).max(160).optional(),
+    lyricsBy: z.object({ flow: z.enum(['topic', 'polish']), model: z.string().max(40) }).strict().optional(),
   })
   .strict();
 export type StudioMusicDesign = {

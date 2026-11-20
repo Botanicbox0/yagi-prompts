@@ -12,8 +12,6 @@ import {
   markLyrics,
   ownLyrics,
   structureMarks,
-  singingRate,
-  syllableRange,
   tempoOf,
   withoutAddedLines,
   type LyricCheckInput,
@@ -94,14 +92,8 @@ describe('내 가사 그대로: the customer’s lines go byte for byte', () => 
     expect(defaultStructure(30)).toBe('hook');
     expect(defaultStructure(60)).toBe('hook-verse');
     expect(defaultStructure(null)).toBe('full');
-    // Target × singing rate by tempo, ±25 % (§12.8): fast 1.6, middle 1.2, slow 0.9 syllables a second.
-    expect(singingRate(118)).toBe(1.6);
-    expect(singingRate(96)).toBe(1.2);
-    expect(singingRate(78)).toBe(0.9);
-    expect(singingRate(null)).toBe(1.2);
-    expect(syllableRange(15, 120)).toEqual({ min: 18, max: 30 });
-    expect(syllableRange(30)).toEqual({ min: 27, max: 45 });
-    expect(syllableRange(60, 80)).toEqual({ min: 41, max: 68 });
+    // Length is lines now (§12.11, tests/brand-studio/sound/length-plan.test.ts): the tempo words still read.
+    expect(tempoOf('레몬 탄산수 광고, 상쾌하고 가볍게')).toBe(120);
     expect(tempoOf('밝은 팝, 112 BPM')).toBe(112);
     expect(tempoOf('신나는 댄스')).toBe(120);
     expect(tempoOf('잔잔한 발라드')).toBe(80);
@@ -121,7 +113,7 @@ describe('내 가사 그대로: the customer’s lines go byte for byte', () => 
 });
 
 describe('checks without a model', () => {
-  const base = (over: Partial<LyricCheckInput> = {}): LyricCheckInput => ({ lyrics: '', language: 'ko', seconds: null, tone: null, brand: null, mustInclude: [], ...over });
+  const base = (over: Partial<LyricCheckInput> = {}): LyricCheckInput => ({ lyrics: '', language: 'ko', stanzaLines: null, tone: null, brand: null, mustInclude: [], ...over });
 
   it('hard: brackets other than marks, long parentheses, superlatives, missing words, brand count', () => {
     expect(checkLyrics(base({ lyrics: '[Guitar solo]\n노래' })).hard.join()).toMatch(/bracket/);
@@ -134,19 +126,20 @@ describe('checks without a model', () => {
     expect(checkLyrics(base({ lyrics: '(oh) 에코핀과 함께\n\n[Outro]\n아침', brand: { name: 'Ecofin', readAs: '에코핀' } })).hard).toEqual([]);
   });
 
-  it('soft: brand outside the hook, syllables outside the range, hard finals, mixed register', () => {
+  it('soft: brand outside the hook, lines asked and their length, hard finals, mixed register', () => {
     expect(checkLyrics(base({ lyrics: '아침\n\n에코핀', brand: { name: 'Ecofin', readAs: '에코핀' } })).soft.join()).toMatch(/hook/);
-    const short = checkLyrics(base({ lyrics: '아침 햇살', seconds: 30 }));
+    const short = checkLyrics(base({ lyrics: '아침 햇살', stanzaLines: [4], lineLength: true }));
     expect(short.syllables).toBe(4);
-    expect(short.soft.join()).toMatch(/4 syllables for 30 s \(aim 27–45\)/);
+    expect(short.soft.join()).toMatch(/stanza lines 1 where 4 were asked/);
+    expect(short.soft.join()).toMatch(/1 of 1 lines outside 7–10 syllables/);
+    // A polish keeps the customer's lines: no line-length rule there.
+    expect(checkLyrics(base({ lyrics: '아침 햇살' })).soft.join()).not.toMatch(/syllables/);
     expect(checkLyrics(base({ lyrics: '밥을 먹\n길을 걷\n책을 읽\n문을 닫' })).soft.join()).toMatch(/hard final/);
     expect(checkLyrics(base({ lyrics: '함께해요\n같이 가자\n웃어 봐\n노래해', tone: 'haeyo' })).soft.join()).toMatch(/해요체/);
-    // Thirty seconds of a fast song (1.6 a second, 36–60) holds these 55 syllables; a slow one (0.9, 20–34) does not.
-    const thirty = '창가에 스민 아침빛 오늘은 조금 더 가볍게\n천천히 숨을 고르고 나답게 하루를 시작해\n\n물 한 잔을 따르고 커튼을 열어 두면\n맑은 하루가 와요';
-    const ok = checkLyrics(base({ lyrics: thirty, seconds: 30, bpm: 118 }));
-    expect(ok.syllables).toBe(55);
-    expect(checkLyrics(base({ lyrics: thirty, seconds: 30, bpm: 78 })).soft.join()).toMatch(/55 syllables for 30 s \(aim 20–34\)/);
-    expect(ok.soft.join()).not.toMatch(/syllables/);
+    // Four lines of 7–10 syllables, as a 30 s fast hook asks (§12.11).
+    const hook = '창가에 스민 아침빛이\n오늘은 조금 더 가볍게\n천천히 숨을 고르고\n나답게 하루를 열어요';
+    const ok = checkLyrics(base({ lyrics: hook, stanzaLines: [4], lineLength: true }));
+    expect(ok.soft).toEqual([]);
   });
 });
 
@@ -174,11 +167,18 @@ describe('what the model is asked', () => {
     ...over,
   });
 
-  it('carries the options: length in syllables, the stanzas by role, tone, brand reading, words to include', () => {
+  it('carries the options: lines per stanza for each tempo band, line length, tone, brand reading, words to include', () => {
     const task = JSON.parse(lyricsTask(req())) as Record<string, unknown>;
-    expect(task.koreanSyllablesInTotal).toBe('27-45');
-    expect(task.singingRate).toMatch(/1.2 syllables/);
-    expect(task.stanzas).toHaveLength(STANZAS.hook);
+    // 30 s: fast (118) 7 line-equivalents → a 4-line hook (the form adds the rest), slow (78) 4 lines.
+    const byTempo = task.stanzasByTempo as Record<string, string[]>;
+    expect(Object.keys(byTempo)).toHaveLength(3);
+    expect(Object.values(byTempo).every((stanzas) => stanzas.length === STANZAS.hook)).toBe(true);
+    expect(byTempo[Object.keys(byTempo).find((k) => k.startsWith('fast'))!]![0]).toMatch(/: 4 lines$/);
+    expect(task.syllablesPerLine).toBe('7-10 Korean syllables');
+    expect(task.tempo).toMatch(/pick the tempo band/);
+    const fixed = JSON.parse(lyricsTask(req({ bpm: 92 }))) as Record<string, unknown>;
+    expect(fixed.tempo).toMatch(/92 BPM/);
+    expect(fixed).not.toHaveProperty('stanzasByTempo');
     expect(task.brand).toEqual({ name: 'Ecofin', writeItAs: '에코핀' });
     expect(task.mustInclude).toEqual(['물 한 잔']);
     expect(task.tone).toMatch(/해요체/);
@@ -189,7 +189,8 @@ describe('what the model is asked', () => {
   });
 
   it('counts the stanzas the structure asks for, and a name is a hard problem', () => {
-    expect(draftProblems(req({ brand: null, mustInclude: [], seconds: null }), 'a\n\nb\n\nc').soft.join()).toMatch(/3 stanzas where 2/);
+    expect(draftProblems(req({ brand: null, mustInclude: [], seconds: null }), 'a\n\nb\n\nc').soft.join()).toMatch(/3 stanzas where 1/);
+    expect(draftProblems(req({ brand: null, mustInclude: [], seconds: 30 }), '아침 햇살\n\n물 한 잔', 118).soft.join()).toMatch(/stanza lines 1\/1 where 4 were asked/);
     expect(draftProblems(req({ brand: null, mustInclude: [], seconds: null }), '뉴진스처럼\n\n라라').hard.join()).toMatch(/names a singer/);
   });
 
@@ -226,21 +227,19 @@ describe('lyrics.draft (SA2 flows)', () => {
     await f.db.close();
   });
 
-  it('rewrites once on a broken rule, sends the problems, and names the model', async () => {
-    const tooShort = { stanzas: [['아침 햇살'], ['물 한 잔']] };
-    const inRange = { stanzas: [['창가에 스민 아침빛 오늘은 조금 더 가볍게', '천천히 숨을 고르고 나답게 하루를 시작해'], ['물 한 잔을 따르고 커튼을 열어 두면', '맑은 하루가 와요']] };
-    const { fetchStub, calls } = answers(tooShort, inRange);
+  it('rewrites once on a broken rule, sends the problems, and names the model and the tempo it chose', async () => {
+    const tooShort = { bpm: 118, stanzas: [['아침 햇살', '물 한 잔']] };
+    const planned = { bpm: 118, stanzas: [['창가에 스민 아침빛이', '오늘은 조금 더 가볍게', '물 한 잔을 따르고서', '나답게 하루를 열어요']] };
+    const { fetchStub, calls } = answers(tooShort, planned);
     const deps = live(fetchStub, { GEMINI_API_KEY: 'k', BRAND_SOUND_LYRICS_MODEL: 'gemini-3.8-flash' });
-    // A fast description: 30 s at 1.6 syllables a second, 36–60 (§12.8).
+    // 30 s at the fast band the model chose: a 4-line hook, lines of 7–10 syllables (§12.11).
     const out = await draft(deps, { topic: '신나는 아침 스킨케어 광고', seconds: 30, structure: 'hook', mustInclude: ['물 한 잔'] });
-    expect(out).toMatchObject({ ok: true, flow: 'topic', model: 'gemini-3.8-flash' });
+    expect(out).toMatchObject({ ok: true, flow: 'topic', model: 'gemini-3.8-flash', bpm: 118 });
     expect(calls).toHaveLength(2);
     expect(calls[0]!.url).toContain('/models/gemini-3.8-flash:generateContent');
-    expect(calls[0]!.text).toContain('"koreanSyllablesInTotal": "36-60"');
-    expect(calls[1]!.text).toMatch(/syllables for 30 s \(aim 36–60\)/);
-    const syllables = ((out as { lyrics: string }).lyrics.match(/[가-힣]/g) ?? []).length;
-    expect(syllables).toBeGreaterThanOrEqual(36);
-    expect(syllables).toBeLessThanOrEqual(60);
+    expect(calls[0]!.text).toContain('"stanzasByTempo"');
+    expect(calls[1]!.text).toMatch(/stanza lines 2 where 4 were asked/);
+    expect((out as { lyrics: string }).lyrics.split('\n')).toHaveLength(4);
   });
 
   it('refuses when a hard rule survives the rewrite, and accepts a soft one', async () => {
@@ -254,7 +253,7 @@ describe('lyrics.draft (SA2 flows)', () => {
   it('polishes the customer’s lyrics; a name in them stops it before a call', async () => {
     const { fetchStub, calls } = answers({ stanzas: [['아침이에요'], ['같이 가요']] });
     const out = await draft(live(fetchStub), { flow: 'polish', topic: '', lyrics: '아침이 왔어요 정말로.\n\n같이 가 봐요!', structure: 'hook' });
-    expect(out).toEqual({ ok: true, flow: 'polish', lyrics: '아침이에요\n\n같이 가요', model: LYRICS_DEFAULT_MODEL });
+    expect(out).toEqual({ ok: true, flow: 'polish', lyrics: '아침이에요\n\n같이 가요', model: LYRICS_DEFAULT_MODEL, bpm: 100 });
     expect(calls[0]!.text).toContain('"customerLyrics": "아침이 왔어요 정말로.\\n\\n같이 가 봐요!"');
     expect(await draft(live(fetchStub), { flow: 'polish', lyrics: 'BTS처럼 신나게' })).toEqual({ ok: false, code: 'invalid', blocked: 'name' });
     expect(await draft(live(fetchStub), { flow: 'polish' })).toEqual({ ok: false, code: 'invalid' });
@@ -264,7 +263,7 @@ describe('lyrics.draft (SA2 flows)', () => {
   it('answers locally without a key in local mode, for both flows', async () => {
     const deps = studioDeps(f.sql, { env: studioEnv({ BRAND_STUDIO_PROVIDER: 'fake', BRAND_SOUND_STUDIO: 'on' }) });
     expect(await draft(deps, { seconds: 15, brand: { name: 'Ecofin', readAs: '에코핀' } })).toMatchObject({ ok: true, flow: 'topic', model: 'local' });
-    expect(await draft(deps, { flow: 'polish', lyrics: '하나.\n\n둘!' })).toEqual({ ok: true, flow: 'polish', lyrics: '하나\n\n둘', model: 'local' });
+    expect(await draft(deps, { flow: 'polish', lyrics: '하나.\n\n둘!' })).toMatchObject({ ok: true, flow: 'polish', lyrics: '하나\n\n둘', model: 'local' });
   });
 });
 

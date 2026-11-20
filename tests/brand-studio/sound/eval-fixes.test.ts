@@ -136,7 +136,7 @@ describe('2. the lyrics draft does not leave the customer with an error when the
       // The fast model gets its own rewrite when a soft rule is off (the second answer), like any draft.
       const { fetchStub, calls } = geminiAnswers(first, good, good);
       const answer = await writeLyricsWithFallback(req, config, fetchStub);
-      expect(answer).toEqual({ text: '창가에 스민 아침빛\n오늘은 조금 더 가볍게\n\n맑은 하루가 와요\n오늘도 가볍게', model: 'gemini-3.8-flash' });
+      expect(answer).toMatchObject({ text: '창가에 스민 아침빛\n오늘은 조금 더 가볍게\n\n맑은 하루가 와요\n오늘도 가볍게', model: 'gemini-3.8-flash' });
       const models = calls.map((c) => c.url.split('/models/')[1]);
       expect(models[0]).toBe('gemini-4-argon:generateContent');
       expect(models.length).toBeGreaterThan(1);
