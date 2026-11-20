@@ -13,6 +13,7 @@ import {
   type StudioAssetSaved,
   type StudioDone,
   type StudioLyricsDraft,
+  type StudioMusicDesign,
   type StudioFailure,
   type StudioFilmAnalysis,
   type StudioHandoffDone,
@@ -35,6 +36,7 @@ import { assignStudioJobProject, liveProjectsOf, studioProjectsReady } from './j
 import { failure, guarded } from './outcome';
 import { saveOutputWaveform } from './sound/waveform-store';
 import { draftLyrics } from './sound/lyrics-draft';
+import { designMusicPreview } from './sound/design-op';
 import { planStudioRevise } from './revision/advise';
 import { talkStudioRevise } from './revision/talk';
 import { readStudioMark } from './revision/mark';
@@ -52,6 +54,7 @@ export type StudioOperationResult =
   | StudioJobGroupCreated
   | StudioDone
   | StudioLyricsDraft
+  | StudioMusicDesign
   | StudioPromptPreview
   | StudioFilmAnalysis
   | StudioRevisePlan
@@ -117,6 +120,8 @@ export async function runStudioOperation(deps: StudioDeps, viewer: Viewer, opera
       return saveOutputWaveform(deps, viewer, input);
     case 'lyrics.draft':
       return draftLyrics(deps, viewer, input);
+    case 'music.design':
+      return designMusicPreview(deps, viewer, input);
     case 'output.delete':
       return deleteStudioOutput(deps, viewer, input);
     case 'job.delete':

@@ -272,7 +272,8 @@ export interface StudioJobWork {
   sheet?: FilmSheet | null;
   enhanceNotes?: string;
   /** Which rules wrote the sent prompt (lib/brand-studio/enhancer `EnhanceMeta`). Internal; never shown. */
-  enhancer?: import('./enhancer/types').EnhanceMeta;
+  /** How the prompt was designed: the image/video Architect's record, or the music Architect's (sound/architect.ts). */
+  enhancer?: import('./enhancer/types').EnhanceMeta | import('./sound/architect').MusicEnhanceMeta;
   region?: {
     plan: RegionPlan;
     cropKey: string;

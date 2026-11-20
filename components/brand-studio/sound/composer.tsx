@@ -6,11 +6,15 @@
  *  SS3: with vocals, a lyrics field (written by hand, or a free first draft to edit), the language note, and
  *       "더 고르게 만들기" (twice the credits; hidden when the server setting is off). The customer never picks
  *       a "way": lyrics or the switch make it a custom request on the server.
+ *  SA1: the music Prompt Architect (§12.2), as in the image studio: a switch that stays on, "지금 설계하기"
+ *       (free) that opens the design in the dock to read and edit, and "원래 문장으로". A design shown when
+ *       만들기 is pressed is sent as it is; otherwise the server designs the same way before sending. Any
+ *       change to the description, vocals, lyrics or the switch puts the design away (it no longer matches).
  *
  * Names of real singers are caught here before a press, in the description and in the lyrics (the server
  * checks again and refuses before reserving).
  */
-import { forwardRef, useId, useImperativeHandle, useRef, useState, type FormEvent, type KeyboardEvent } from 'react';
+import { forwardRef, useEffect, useId, useImperativeHandle, useRef, useState, type FormEvent, type KeyboardEvent } from 'react';
 import { formatCredits } from '@/lib/brand-studio/credits';
 import { LYRICS_LIMITS, musicWay } from '@/lib/brand-studio/sound/lyrics';
 import { MUSIC_LIMITS, musicQuoteCredits } from '@/lib/brand-studio/sound/music-limits';
@@ -29,6 +33,18 @@ export interface ComposerInput {
   vocal: boolean;
   lyrics: string;
   careful: boolean;
+  /** The Prompt Architect switch. */
+  architect: boolean;
+  /** The design the customer read (and may have edited) in the dock. */
+  designed?: { style: string; title?: string };
+}
+
+export interface ComposerDesign {
+  mode: 'describe' | 'custom';
+  style: string;
+  title: string;
+  notes: string | null;
+  source: 'model' | 'fallback';
 }
 
 const EXAMPLES = ['skincare', 'fashion', 'shortform', 'launch'] as const;
@@ -50,6 +66,8 @@ export const MusicComposer = forwardRef<
     onClearError: () => void;
     /** A free first draft of lyrics from the description; resolves to the draft or a line to show. */
     onDraft: (topic: string) => Promise<{ lyrics: string } | { error: string }>;
+    /** "지금 설계하기": the free design preview; resolves to the design or a line to show. */
+    onDesign: (input: Omit<ComposerInput, 'architect' | 'designed'>) => Promise<{ design: ComposerDesign } | { error: string }>;
   }
 >(function MusicComposer(props, ref) {
   const { copy } = props;
@@ -60,6 +78,9 @@ export const MusicComposer = forwardRef<
   const [drafting, setDrafting] = useState(false);
   const [drafted, setDrafted] = useState(false);
   const [localError, setLocalError] = useState<string | null>(null);
+  const [architect, setArchitect] = useState(true);
+  const [design, setDesign] = useState<ComposerDesign | null>(null);
+  const [designing, setDesigning] = useState(false);
   const field = useRef<HTMLTextAreaElement | null>(null);
   const hintId = useId();
   const errorId = useId();
@@ -84,6 +105,11 @@ export const MusicComposer = forwardRef<
   const credits = musicQuoteCredits({ mode: musicWay({ vocal, lyrics: sentLyrics, careful: switchOn }), careful: switchOn });
   const creditsText = formatCredits(credits, props.locale);
 
+  // A design belongs to the settings it was made from: changing them puts it away.
+  useEffect(() => {
+    setDesign(null);
+  }, [prompt, vocal, sentLyrics, switchOn, architect]);
+
   const clearErrors = () => {
     if (localError) setLocalError(null);
     if (props.error) props.onClearError();
@@ -93,7 +119,25 @@ export const MusicComposer = forwardRef<
     if (!trimmed || props.busy) return;
     if (namedArtist(trimmed)) return setLocalError(copy.errors.artist);
     if (sentLyrics && namedArtist(sentLyrics)) return setLocalError(copy.composer.lyricsBlocked);
-    props.onCreate({ prompt: trimmed, vocal, lyrics: sentLyrics, careful: switchOn });
+    props.onCreate({
+      prompt: trimmed,
+      vocal,
+      lyrics: sentLyrics,
+      careful: switchOn,
+      architect,
+      ...(architect && design ? { designed: { style: design.style, ...(design.mode === 'custom' ? { title: design.title } : {}) } } : {}),
+    });
+  };
+  const designNow = async () => {
+    if (!trimmed || designing) return;
+    if (namedArtist(trimmed)) return setLocalError(copy.errors.artist);
+    if (sentLyrics && namedArtist(sentLyrics)) return setLocalError(copy.composer.lyricsBlocked);
+    setDesigning(true);
+    clearErrors();
+    const answer = await props.onDesign({ prompt: trimmed, vocal, lyrics: sentLyrics, careful: switchOn });
+    setDesigning(false);
+    if ('design' in answer) setDesign(answer.design);
+    else setLocalError(answer.error);
   };
   const onKey = (event: KeyboardEvent<HTMLTextAreaElement>) => {
     if (event.key === 'Enter' && (event.metaKey || event.ctrlKey)) submit();
@@ -182,7 +226,60 @@ export const MusicComposer = forwardRef<
           </label>
         </div>
       ) : null}
+      {design ? (
+        <div className={s.designBox} data-sound-design={design.source}>
+          <div className={s.lyricsHead}>
+            <span className={s.lyricsLabel}>{copy.architect.styleLabel}</span>
+            <span className={s.lyricsNote}>{design.source === 'model' ? (design.notes ?? copy.architect.designed) : copy.architect.fallbackNote}</span>
+            <button type="button" className={s.textBtn} onClick={() => setDesign(null)} data-sound-design-undo>
+              {copy.architect.undo}
+            </button>
+          </div>
+          <label className={s.well}>
+            <span className="bs-sr">{copy.architect.styleLabel}</span>
+            <textarea
+              value={design.style}
+              rows={3}
+              maxLength={1000}
+              onChange={(event) => setDesign({ ...design, style: event.target.value.slice(0, 1000) })}
+              className={s.designField}
+              data-sound-design-style
+            />
+          </label>
+          {design.mode === 'custom' ? (
+            <label className={s.titleRow}>
+              <span className={s.lyricsLabel}>{copy.architect.titleLabel}</span>
+              <input
+                value={design.title}
+                maxLength={80}
+                onChange={(event) => setDesign({ ...design, title: event.target.value.slice(0, 80) })}
+                className={s.titleField}
+                data-sound-design-title
+              />
+            </label>
+          ) : null}
+        </div>
+      ) : null}
       <div className={s.dockBar}>
+        <button
+          type="button"
+          role="switch"
+          aria-checked={architect}
+          className={s.switch}
+          onClick={() => setArchitect((v) => !v)}
+          title={`${copy.architect.tip} ${copy.architect.free}`}
+          data-sound-architect={architect ? 'on' : 'off'}
+        >
+          <span className={s.switchTrack} aria-hidden="true">
+            <span className={s.switchKnob} />
+          </span>
+          {copy.architect.name}
+        </button>
+        {architect ? (
+          <button type="button" className={s.textBtn} onClick={() => void designNow()} disabled={!trimmed || designing} data-sound-design-now>
+            {designing ? copy.architect.designing : copy.architect.designNow}
+          </button>
+        ) : null}
         <div className={s.segment} role="radiogroup" aria-label={copy.composer.vocals} data-sound-vocal={vocal ? 'on' : 'off'}>
           {([false, true] as const).map((value) => (
             <button

@@ -52,6 +52,7 @@ export function requestInputOf(deps: Pick<StudioDeps, 'media' | 'env'>, job: Job
     audios: inputs.filter((i) => i.kind === 'audio').map((i) => ({ url: i.url })),
     regionCrop: region ? { url: providerUrl(deps, deps.media.url(region.cropKey)), aspect: region.plan.aspect } : null,
     draftTaskId: job.work.draftTaskId ?? null,
+    ...(job.kind === 'music' && job.work.enhancer && 'title' in job.work.enhancer ? { designedTitle: job.work.enhancer.title ?? null } : {}),
   };
 }
 

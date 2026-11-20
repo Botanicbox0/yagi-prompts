@@ -5,6 +5,7 @@
  * Rule tags used in the profile files' comments:
  *   [official]  the provider's own prompting guide or API document (URL in `sources`)
  *   [aggregator] the Sunra catalogue / schema the studio calls through (URL in `sources`)
+ *   [practitioner] guides and community sources that broadly agree, where the provider documents nothing (music)
  *   [house]     our own measurement or a studio decision on evidence (named, never a private path)
  *   [founder: YYYY-MM-DD] a decision by the founder on that date
  *

@@ -201,8 +201,8 @@ describe('job.create kind music, end to end on the fake provider', () => {
     if (!('job' in created)) throw new Error(JSON.stringify(created));
     expect(created.job.kind).toBe('music');
     expect(created.job.music).toEqual({ title: '잔잔한 어쿠스틱 기타', vocal: false, mode: 'describe', careful: false, lyrics: null });
-    // The engine sentence is never handed to the screen.
-    expect(created.job.finalPrompt).toBeNull();
+    // With the Prompt Architect (on by default, §12.2) what is sent shows under "보낸 문장 보기".
+    expect(created.job.finalPrompt).not.toBeNull();
     await run(created.job.id);
     const [job] = await jobsOf();
     expect(job).toMatchObject({ status: 'succeeded', usage_krw: 16 * STUDIO_CREDIT_KRW, estimate_krw: 16 * STUDIO_CREDIT_KRW, lane: 'sunra_api' });

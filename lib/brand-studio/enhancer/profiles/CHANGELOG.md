@@ -4,6 +4,19 @@ Every rule change bumps the `version` in the file's header, adds a line here, an
 tables of `scripts/architect-eval.ts` in the PR. Jobs record the versions they were written with
 (`work.enhancer.profileVersion`, `coreVersion`).
 
+## suno 2026-11-20.1 (music, new)
+
+- **New profile for Suno v6** (`suno.ts`, docs/BRAND-SOUND-STUDIO.md §12.1–§12.2): one English style paragraph of
+  400–900 characters in the order genre → tempo (BPM with a feel word) → voice and language, or what carries an
+  instrumental → two or three instruments with their role → structure → mix → how it ends; a title of at most 40
+  characters in the lyrics' language; one sentence of notes in the customer's language. Never a real artist or song,
+  never "no X", never a length in seconds.
+- New evidence tag `[practitioner]` (meta.ts): Suno documents almost nothing about prompting.
+- A rule check after writing (lib/brand-studio/sound/architect.ts `checkMusicDesign`), one rewrite, then the deterministic
+  fallback (the description cut to 900 characters plus the language line, as before this profile).
+- Before/after: `scripts/sound-architect-eval.ts` (text only). Not run live yet: it calls the text model, which
+  waits for approval like every paid call.
+
 ## core 2026-11-19.2 (shared rules: core, tasks, skin)
 
 - **Tone variant default stays `short` for every model.** The founder's paid check on production (54 cells, close-ups

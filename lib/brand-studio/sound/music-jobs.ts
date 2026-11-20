@@ -13,8 +13,10 @@
  *  - The way is the server's (§4.2, §7.5): lyrics with vocals, or "더 고르게 만들기", make a custom request
  *    (title, style, lyrics, Max Mode); anything else is a description request. "더 고르게 만들기" exists only
  *    while the server setting `BRAND_SOUND_MAX_MODE` is exactly `on` (hidden until the founder decides, §8-4).
- *  - Nothing to prepare: no references, no rewriting. The row is stored prepared, with the sentence the
- *    engine receives in `final_prompt` (never shown to the customer).
+ *  - The music Prompt Architect (./architect.ts, §12.2) designs what is sent. On (the default): the row starts
+ *    unprepared and the engine's prepare step designs it (../prepare.ts), as for an image. A design the customer
+ *    read and maybe edited in the dock (`designed`) goes as it is after the hard checks. Off: the description as
+ *    typed, plus the language line (the fallback). What was sent is `final_prompt`, shown under "보낸 문장 보기".
  */
 import { z } from 'zod';
 import type { Viewer } from '@/lib/auth/identity';
@@ -29,8 +31,12 @@ import { usageKrw } from '../usage-rate';
 import { reserveAllowance } from '../usage';
 import { musicEngine, type MusicEngine, type MusicRequest } from './engine';
 import { MUSIC_LIMITS, musicQuoteKrw } from './music-limits';
+import { describeSentence, musicTitle } from './music-text';
+
+export { describeSentence, musicTitle };
 import { namedArtist } from './names';
-import { LYRICS_LIMITS, musicStyle, musicWay, withSections } from './lyrics';
+import { LYRICS_LIMITS, musicWay, withSections } from './lyrics';
+import { DESIGN_LIMITS, designMeta, fallbackDesign, reviewedDesign, type MusicDesign, type MusicDesignInput } from './architect';
 
 export { MUSIC_LIMITS, musicQuoteKrw };
 
@@ -56,54 +62,74 @@ export const MusicJobCreateSchema = z
     careful: z.boolean().optional(),
     /** Language to sing in when there are vocals and no lyrics; the screen's language when absent. */
     language: z.enum(['ko', 'en']).optional(),
+    /** The music Prompt Architect (§12.2): on unless the customer switched it off. */
+    architect: z.boolean().default(true),
+    /** A design the customer read in the dock (and may have edited): sent as it is after the hard checks. */
+    designed: z.object({ style: z.string().max(DESIGN_LIMITS.styleHardMax), title: z.string().max(80).optional() }).strict().optional(),
   })
   .strict();
 export type MusicJobCreate = z.infer<typeof MusicJobCreateSchema>;
 
+/** An edited design that breaks the hard checks (a name stops it like a name in the description). */
+export class MusicDesignRefused extends Error {
+  constructor(readonly named: boolean) {
+    super('music design refused');
+    this.name = 'MusicDesignRefused';
+  }
+}
+
 /** A refusal the screen explains in its own words (and nothing was reserved): a name in the description or in the lyrics. */
 export type MusicJobBlocked = StudioFailure & { blocked: 'name' | 'lyrics' };
-
-const SUNG_IN: Readonly<Record<'ko' | 'en', string>> = { ko: 'Vocals sung in Korean.', en: 'Vocals sung in English.' };
-
-/**
- * The list name of a track (§4.2): the description's first phrase, at most 40 characters on a word boundary,
- * never more than the engine's title limit. The customer's own words, so it reads like they wrote it.
- */
-export function musicTitle(prompt: string): string {
-  const flat = prompt.replace(/\s+/g, ' ').trim();
-  const first = flat.split(/[.,!?\n。，、]|\s[-–—]\s/)[0]!.trim() || flat;
-  if (first.length <= 40) return first.slice(0, MUSIC_LIMITS.titleMax);
-  const cut = first.slice(0, 40);
-  const space = cut.lastIndexOf(' ');
-  return `${(space > 20 ? cut.slice(0, space) : cut).trim()}…`;
-}
-
-/** What the engine receives for a description-only request (§4.2): the words, plus the language to sing in. */
-export function describeSentence(prompt: string, vocal: boolean, language: 'ko' | 'en'): string {
-  const words = prompt.replace(/\s+/g, ' ').trim();
-  return vocal ? `${words} ${SUNG_IN[language]}` : words;
-}
 
 export interface MusicPlan {
   engine: MusicEngine;
   request: MusicRequest;
   title: string;
+  /** How the request was designed; `prepared: false` when the prepare step still designs it. */
+  design: MusicDesign;
+  prepared: boolean;
   estimateUsd: number;
   estimateKrw: number;
   params: StudioJobParams;
 }
 
 /** Pure: the request, the name, the quote and what the row keeps. Throws `StudioDenied('invalid')` on a request the engine refuses. */
-export function planMusic(input: MusicJobCreate, screenLocale: 'ko' | 'en', engine: MusicEngine = musicEngine(process.env)): MusicPlan {
+export function designInputOf(input: Pick<MusicJobCreate, 'prompt' | 'vocal' | 'lyrics' | 'careful' | 'language'>, screenLocale: 'ko' | 'en'): MusicDesignInput {
+  return {
+    prompt: input.prompt,
+    vocal: input.vocal,
+    lyrics: input.vocal ? (input.lyrics ?? '').trim() : '',
+    careful: input.careful === true,
+    language: input.language ?? screenLocale,
+    locale: screenLocale,
+  };
+}
+
+/**
+ * Pure: the request, the name, the quote and what the row keeps. Throws `StudioDenied('invalid')` on a request the
+ * engine refuses, and `MusicDesignRefused` on an edited design that breaks the hard checks.
+ */
+export function planMusic(input: Omit<MusicJobCreate, 'architect'> & { architect?: boolean }, screenLocale: 'ko' | 'en', engine: MusicEngine = musicEngine(process.env)): MusicPlan {
   const language = input.language ?? screenLocale;
   const lyrics = input.vocal ? (input.lyrics ?? '').trim() : '';
   const careful = input.careful === true;
   const way = musicWay({ vocal: input.vocal, lyrics, careful });
   const title = musicTitle(input.prompt);
+  const designInput = designInputOf(input, screenLocale);
+  let design: MusicDesign;
+  if (input.designed) {
+    const reviewed = reviewedDesign(designInput, input.designed);
+    if ('problems' in reviewed) throw new MusicDesignRefused(reviewed.named);
+    design = reviewed;
+  } else {
+    design = fallbackDesign(designInput, input.architect === false ? 'off' : undefined);
+  }
+  // With the Architect on and nothing reviewed, the prepare step designs it; the fallback stands in until then.
+  const prepared = Boolean(input.designed) || input.architect === false;
   const request: MusicRequest =
     way === 'describe'
-      ? { mode: 'describe', prompt: describeSentence(input.prompt, input.vocal, language), vocal: input.vocal }
-      : { mode: 'custom', prompt: musicStyle(input.prompt, input.vocal, Boolean(lyrics), language), vocal: input.vocal, title, lyrics: withSections(lyrics), careful };
+      ? { mode: 'describe', prompt: design.style, vocal: input.vocal }
+      : { mode: 'custom', prompt: design.style, vocal: input.vocal, title: design.title, lyrics: withSections(lyrics), careful };
   let endpoint: string;
   try {
     endpoint = engine.request(request).endpoint;
@@ -115,6 +141,8 @@ export function planMusic(input: MusicJobCreate, screenLocale: 'ko' | 'en', engi
     engine,
     request,
     title,
+    design,
+    prepared,
     estimateUsd,
     estimateKrw: usageKrw(estimateUsd, 'audio'),
     params: {
@@ -175,7 +203,16 @@ export async function createMusicJob(deps: StudioDeps, viewer: Viewer, raw: unkn
       if (v.vocal && v.lyrics && namedArtist(v.lyrics)) return { blocked: 'lyrics' as const };
       // "더 고르게 만들기" hidden by the server setting: a request still carrying it is refused, nothing reserved.
       if (v.careful === true && deps.env.soundMaxMode !== true) throw new StudioDenied('invalid');
-      const plan = planMusic(v, locale);
+      let plan: MusicPlan;
+      try {
+        plan = planMusic(v, locale);
+      } catch (error) {
+        if (error instanceof MusicDesignRefused) {
+          if (error.named) return { blocked: 'name' as const };
+          throw new StudioDenied('invalid');
+        }
+        throw error;
+      }
       if ((await openJobCount(sql, v.organizationId)) >= STUDIO_LIMITS.openJobsPerOrganization) throw new StudioDenied('too_many_running');
       const verdict = await reserveAllowance(sql, v.organizationId, plan.estimateKrw, deps.env, deps.now?.() ?? new Date());
       if (!verdict.ok) throw new StudioDenied(verdict.code);
@@ -193,7 +230,7 @@ export async function createMusicJob(deps: StudioDeps, viewer: Viewer, raw: unkn
         await sql.query<JobRow>(
           `insert into brand_studio_jobs (organization_id, created_by, request_id, kind, status, lane, model, prompt, final_prompt, enhance, params, refs,
               parent_output_id, estimate_usd, estimate_krw, work)
-            values ($1, $2, $3, 'music', $4, $5, $6, $7, $8, false, $9::jsonb, '[]'::jsonb, null, $10, $11, $12::jsonb) returning *`,
+            values ($1, $2, $3, 'music', $4, $5, $6, $7, $8, $13, $9::jsonb, '[]'::jsonb, null, $10, $11, $12::jsonb) returning *`,
           [
             v.organizationId,
             seat.userId,
@@ -206,7 +243,9 @@ export async function createMusicJob(deps: StudioDeps, viewer: Viewer, raw: unkn
             JSON.stringify(plan.params),
             Math.round(plan.estimateUsd * 10_000) / 10_000,
             plan.estimateKrw,
-            JSON.stringify({ prepared: true }),
+            JSON.stringify(plan.prepared ? { prepared: true, enhancer: designMeta(plan.design) } : {}),
+            // "보낸 문장 보기" shows what went whenever the Architect took part (designed here or in the dock).
+            v.architect !== false,
           ],
         )
       ).rows[0]!;

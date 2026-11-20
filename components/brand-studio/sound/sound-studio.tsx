@@ -6,6 +6,7 @@
  *  SS2: the music composer (description + vocals), runs in progress, the versions each request returned
  *       (A, B…), failures that took nothing, save to assets, "비슷하게 만들기", copy the description.
  *  SS3: lyrics (by hand or a free draft), "더 고르게 만들기", lyrics and the terms line on a made version.
+ *  SA1: the music Prompt Architect in the dock, and "보낸 문장 보기" on a made version.
  *
  * Techniques (docs/design/TOOLBOX.md §1-3), four: hairline rows instead of cards (TASTE 16), recessed wells for
  * the search field and the description, tabular numerals for every length, time and credit, frosted glass on
@@ -199,6 +200,8 @@ export function SoundStudio(props: SoundStudioProps) {
             language: locale,
             ...(input.vocal && input.lyrics ? { lyrics: input.lyrics } : {}),
             ...(input.careful ? { careful: true } : {}),
+            architect: input.architect,
+            ...(input.designed ? { designed: input.designed } : {}),
           },
         }),
       });
@@ -529,6 +532,21 @@ export function SoundStudio(props: SoundStudioProps) {
           onCreate={(input) => void create(input)}
           onClearError={() => setComposerError(null)}
           maxMode={props.maxMode}
+          onDesign={async (request) => {
+            const answer = await api.call('music.design', {
+              organizationId,
+              prompt: request.prompt,
+              vocal: request.vocal,
+              language: locale,
+              ...(request.vocal && request.lyrics ? { lyrics: request.lyrics } : {}),
+              ...(request.careful ? { careful: true } : {}),
+            });
+            if (!isFailure(answer)) return { design: answer.design };
+            const blocked = (answer as { blocked?: string }).blocked;
+            if (blocked === 'name') return { error: copy.errors.artist };
+            if (blocked === 'lyrics') return { error: copy.composer.lyricsBlocked };
+            return { error: answer.code === 'too_many_running' ? copy.errors.busy : copy.architect.failed };
+          }}
           onDraft={async (topic) => {
             const answer = await api.call('lyrics.draft', { organizationId, topic, language: locale });
             if (!isFailure(answer)) return { lyrics: answer.lyrics };

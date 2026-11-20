@@ -65,6 +65,8 @@ export interface SoundTrackView {
   lyrics?: string | null;
   /** Made versions: "더 고르게 만들기" was on. */
   careful?: boolean;
+  /** Made versions: what went to the engine when the Prompt Architect took part ("보낸 문장 보기"), else null. */
+  sent?: string | null;
   tab: SoundTab;
   /** The stored name (searched), and what the row draws (null: the screen's fallback). */
   name: string;
@@ -115,6 +117,7 @@ export function musicTracks(organizationId: string, jobs: readonly StudioJobView
         vocal: job.music?.vocal ?? false,
         lyrics: job.music?.lyrics ?? null,
         careful: job.music?.careful ?? false,
+        sent: job.finalPrompt,
         tab: 'music',
         name,
         displayName: title ? name : null,

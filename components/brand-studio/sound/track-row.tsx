@@ -91,6 +91,7 @@ export function TrackRow(props: {
 }) {
   const { track, name, copy, open, playing, actions } = props;
   const row = useRef<HTMLLIElement | null>(null);
+  const [showSent, setShowSent] = useState(false);
   const [peaks, setPeaks] = useState<number[] | 'failed' | null>(() => track.waveform ?? peakCache.get(track.streamUrl) ?? null);
 
   // Stored peaks draw at once; otherwise decode the file when the row comes into view (and keep the peaks).
@@ -196,8 +197,18 @@ export function TrackRow(props: {
               <Icon d={DOWNLOAD} />
               {copy.actions.download}
             </a>
-            {track.outputId && props.canCreate ? <RowMenu track={track} name={name} copy={copy} actions={actions} /> : null}
+            {track.outputId && props.canCreate ? (
+              <RowMenu track={track} name={name} copy={copy} actions={actions} sentShown={showSent} onToggleSent={track.sent ? () => setShowSent((v) => !v) : undefined} />
+            ) : null}
           </div>
+          {showSent && track.sent ? (
+            <div className={s.sent} data-sound-sent>
+              <span className={s.lyricsLabel}>{copy.architect.yourWords}</span>
+              <p className={s.sungText}>{track.prompt}</p>
+              <span className={s.lyricsLabel}>{copy.architect.sentLabel}</span>
+              <p className={s.sungText}>{track.sent}</p>
+            </div>
+          ) : null}
           {track.lyrics ? (
             <div className={s.sung} data-sound-sung>
               <span className={s.lyricsLabel}>{copy.composer.lyrics}</span>
@@ -211,7 +222,15 @@ export function TrackRow(props: {
   );
 }
 
-function RowMenu(props: { track: SoundTrackView; name: string; copy: StudioSoundCopy; actions: RowActions }) {
+function RowMenu(props: {
+  track: SoundTrackView;
+  name: string;
+  copy: StudioSoundCopy;
+  actions: RowActions;
+  /** "보낸 문장 보기": only when the Prompt Architect took part. */
+  onToggleSent?: () => void;
+  sentShown?: boolean;
+}) {
   const { track, copy, actions } = props;
   const [open, setOpen] = useState(false);
   const [state, setState] = useState<{ saved?: boolean; copied?: boolean }>({});
@@ -299,6 +318,21 @@ function RowMenu(props: { track: SoundTrackView; name: string; copy: StudioSound
           >
             {state.copied ? copy.more.copied : copy.more.copy}
           </button>
+          {props.onToggleSent ? (
+            <button
+              type="button"
+              role="menuitem"
+              className={s.menuItem}
+              aria-pressed={props.sentShown}
+              onClick={() => {
+                setOpen(false);
+                props.onToggleSent?.();
+              }}
+              data-sound-sent-toggle
+            >
+              {copy.architect.sentToggle}
+            </button>
+          ) : null}
         </div>
       ) : null}
     </div>

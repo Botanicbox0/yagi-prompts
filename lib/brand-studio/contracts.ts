@@ -571,6 +571,21 @@ export const LyricsDraftSchema = z
   .object({ organizationId: Id, topic: z.string().trim().min(1).max(1000), language: z.enum(['ko', 'en']) })
   .strict();
 export type StudioLyricsDraft = { ok: true; lyrics: string };
+/** `music.design`: "지금 설계하기" in the music dock (docs/BRAND-SOUND-STUDIO.md §12.2). Free, rate-limited. */
+export const MusicDesignSchema = z
+  .object({
+    organizationId: Id,
+    prompt: z.string().trim().min(1).max(1000),
+    vocal: z.boolean().default(false),
+    lyrics: z.string().max(3000).optional(),
+    careful: z.boolean().optional(),
+    language: z.enum(['ko', 'en']).optional(),
+  })
+  .strict();
+export type StudioMusicDesign = {
+  ok: true;
+  design: { mode: 'describe' | 'custom'; style: string; title: string; notes: string | null; source: 'model' | 'fallback' };
+};
 /** `output.waveform`: the first browser that decodes an audio result keeps its peaks (docs/BRAND-SOUND-STUDIO.md §7.4). */
 export const OutputWaveformSchema = z
   .object({ organizationId: Id, outputId: Id, peaks: z.array(z.number().min(0).max(1)).min(1).max(1000) })
@@ -626,6 +641,7 @@ export const STUDIO_OPERATIONS = [
   'handoff.campaign',
   'output.waveform',
   'lyrics.draft',
+  'music.design',
 ] as const;
 export type StudioOperation = (typeof STUDIO_OPERATIONS)[number];
 

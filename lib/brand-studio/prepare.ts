@@ -4,6 +4,7 @@
  * crop, and run the prompt enhancer. Enhancement never blocks a run: a model failure falls back to the
  * deterministic composer, and a composer failure sends the customer's own words.
  */
+import { prepareMusic } from './sound/prepare-music';
 import { confirmedIdentityFor } from '@/lib/brands/identity/service';
 import type { FilmDepth, FilmSheet, FilmShot, StudioErrorCode, StudioReference } from './contracts';
 import { extractStoredFilmSheet, isFilmSheetExpired, readCachedFilmSheet, writeCachedFilmSheet } from './film-sheet';
@@ -457,6 +458,8 @@ export async function materialNotes(
 }
 
 export async function prepareJob(deps: StudioDeps, job: JobRow): Promise<{ finalPrompt: string | null; work: StudioJobWork }> {
+  // Music has no references: its Prompt Architect designs the request (docs/BRAND-SOUND-STUDIO.md §12.2).
+  if (job.kind === 'music') return prepareMusic(deps, job);
   const model = studioModel(job.model);
   if (!model) throw new PrepareFailure('failed', `unknown model ${job.model}`);
   const locale = job.params?.locale ?? 'ko';

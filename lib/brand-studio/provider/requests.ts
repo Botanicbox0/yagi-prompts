@@ -33,6 +33,8 @@ export interface StudioRequestInput {
   regionCrop?: { url: string; aspect: string } | null;
   /** video_final: the draft to finish. */
   draftTaskId?: string | null;
+  /** Music in custom mode: the title the Prompt Architect designed (else the list name). */
+  designedTitle?: string | null;
 }
 
 export class StudioRequestError extends Error {
@@ -288,7 +290,7 @@ function musicRequestOf(input: StudioRequestInput): StudioProviderRequest {
       mode: music.mode,
       prompt: input.prompt,
       vocal: music.vocal,
-      ...(music.mode === 'custom' ? { title: music.title, lyrics: withSections(music.lyrics ?? ''), careful: music.careful } : {}),
+      ...(music.mode === 'custom' ? { title: input.designedTitle || music.title, lyrics: withSections(music.lyrics ?? ''), careful: music.careful } : {}),
     });
   } catch (error) {
     throw new StudioRequestError(error instanceof Error ? error.message : 'music request');

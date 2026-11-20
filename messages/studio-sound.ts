@@ -23,6 +23,12 @@
  * New lines (drafting, draft failure, draft limit, close) went through the same two Gemma
  * passes on 2026-11-20; pass 2 was taken for both of its changes.
  *
+ * Slice SA1 (the music Prompt Architect, §12.2): the switch's name and the shared verbs are the image studio's own
+ * approved lines (Prompt Architect, 지금 설계하기, 프롬프트를 설계하고 있어요., 원래 문장으로, 설계하지 못했어요…,
+ * 크레딧은 들지 않아요., 보낸 문장 보기, 보낸 문장, 입력한 문장). `architect.tip` and `architect.designed` are §12.7
+ * drafts; `fallbackNote`, `styleLabel` and `titleLabel` are new drafts. **Gemma not run** for these five: the local
+ * model was unreachable on 2026-11-20 (connection refused); they wait for the two passes before the flag opens.
+ *
  * Amounts are credits, never won. No engine, vendor or model name appears here.
  */
 export const studioSoundEn = {
@@ -80,6 +86,22 @@ export const studioSoundEn = {
     draftBusy: 'Too many requests. Please try again in a moment.',
     careful: 'Consistent output',
     carefulNote: 'More consistent quality. Costs double credits.',
+  },
+  architect: {
+    name: 'Prompt Architect',
+    tip: 'Reads your description and designs the prompt for the music.',
+    free: 'No credits are used.',
+    designNow: 'Design now',
+    designing: 'Designing the prompt.',
+    designed: 'Designed for the music. Use it as is or edit it.',
+    undo: 'Back to my words',
+    failed: "Couldn't design it. You can still create with your own words.",
+    fallbackNote: 'We sent your words with only basic directions added.',
+    styleLabel: 'Designed prompt',
+    titleLabel: 'Song title',
+    sentToggle: 'Show what was sent',
+    sentLabel: 'Sent',
+    yourWords: 'Your words',
   },
   terms: {
     link: 'Terms',
@@ -189,6 +211,22 @@ export const studioSoundKo: StudioSoundCopy = {
     draftBusy: '요청이 너무 많아요. 잠시 후 다시 시도해 주세요.',
     careful: '더 고르게 만들기',
     carefulNote: '곡이 더 고르게 나오고 크레딧이 두 배로 들어요.',
+  },
+  architect: {
+    name: 'Prompt Architect',
+    tip: '설명을 읽고, 음악에 맞춰 프롬프트를 설계해요.',
+    free: '크레딧은 들지 않아요.',
+    designNow: '지금 설계하기',
+    designing: '프롬프트를 설계하고 있어요.',
+    designed: '음악에 맞게 설계했어요. 그대로 쓰거나 수정해도 돼요.',
+    undo: '원래 문장으로',
+    failed: '설계하지 못했어요. 작성한 문장 그대로 생성할 수 있어요.',
+    fallbackNote: '입력하신 문장에 기본 지시만 더해 보냈어요.',
+    styleLabel: '설계한 프롬프트',
+    titleLabel: '곡 제목',
+    sentToggle: '보낸 문장 보기',
+    sentLabel: '보낸 문장',
+    yourWords: '입력한 문장',
   },
   terms: {
     link: '이용 조건',
