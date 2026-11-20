@@ -41,6 +41,8 @@ export interface MusicDesignInput {
   /** The screen's language: the notes are written in it. */
   locale: 'ko' | 'en';
   brand?: { name?: string | null; tone?: string | null; rules?: readonly string[] } | null;
+  /** "다르게 설계하기" (SA3, §12.5): the engine refused a request made from these words; design around it. */
+  avoid?: boolean;
 }
 
 export interface MusicDesign {
@@ -151,6 +153,11 @@ function taskBlock(input: MusicDesignInput, mode: MusicWay): string {
         : `There are vocals and no lyrics: name the language to sing in, ${input.language === 'ko' ? 'Korean' : 'English'}, in the voice sentence.`
       : 'Instrumental: name what carries the melody; never mention a voice except to say the piece is instrumental.',
     `Notes language: ${input.locale === 'ko' ? 'Korean (해요체, one sentence)' : 'English (one sentence)'}.`,
+    ...(input.avoid
+      ? [
+          'The music engine refused a request made from these words. Leave out anything that could read as a real artist, a song, an album, a brand other than the customer\'s, or explicit content; describe genre, tempo, instruments, voice and mood only.',
+        ]
+      : []),
   ];
   return `This run:\n${lines.map((l) => `- ${l}`).join('\n')}`;
 }

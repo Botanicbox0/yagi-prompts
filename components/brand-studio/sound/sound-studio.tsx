@@ -210,7 +210,7 @@ export function SoundStudio(props: SoundStudioProps) {
       answer = null;
     }
     setCreating(false);
-    const result = answer as { ok?: boolean; job?: StudioJobView; code?: StudioErrorCode; blocked?: 'name' | 'lyrics' } | null;
+    const result = answer as { ok?: boolean; job?: StudioJobView; code?: StudioErrorCode; blocked?: 'name' | 'lyrics' | 'paused' } | null;
     if (result?.ok && result.job) {
       draftRequest.current = null;
       setJobs((all) => [result.job!, ...all.filter((j) => j.id !== result.job!.id)]);
@@ -219,6 +219,7 @@ export function SoundStudio(props: SoundStudioProps) {
     }
     if (result?.blocked === 'name') setComposerError(errorLine(copy, 'artist'));
     else if (result?.blocked === 'lyrics') setComposerError(copy.composer.lyricsBlocked);
+    else if (result?.blocked === 'paused') setComposerError(copy.errors.paused);
     else setComposerError(errorLine(copy, result?.code ?? 'failed'));
     // A refused request reserved nothing: the next press is a new one.
     if (result?.code) draftRequest.current = null;
@@ -489,7 +490,19 @@ export function SoundStudio(props: SoundStudioProps) {
               <PendingRow key={job.id} job={job} copy={copy} state="making" />
             ))}
             {failedJobs.map((job) => (
-              <PendingRow key={job.id} job={job} copy={copy} state="failed" line={job.errorCode === 'provider_rejected' ? copy.errors.blocked : copy.errors.failed} />
+              <PendingRow
+                key={job.id}
+                job={job}
+                copy={copy}
+                state="failed"
+                line={job.errorCode === 'provider_rejected' ? copy.errors.blocked : copy.errors.failed}
+                {...(job.errorCode === 'provider_rejected'
+                  ? {
+                      onRedesign: () =>
+                        composer.current?.redesign({ prompt: job.prompt ?? '', vocal: job.music?.vocal ?? false, lyrics: job.music?.lyrics ?? null, careful: job.music?.careful ?? false }),
+                    }
+                  : {})}
+              />
             ))}
           </ul>
         ) : null}
@@ -536,6 +549,7 @@ export function SoundStudio(props: SoundStudioProps) {
             const answer = await api.call('music.design', {
               organizationId,
               structure: request.structure,
+              ...(request.avoid ? { avoid: true } : {}),
               prompt: request.prompt,
               vocal: request.vocal,
               language: locale,

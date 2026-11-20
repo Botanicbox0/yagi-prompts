@@ -36,7 +36,8 @@ import { describeSentence, musicTitle } from './music-text';
 export { describeSentence, musicTitle };
 import { namedArtist } from './names';
 import { LYRIC_STRUCTURES, LYRICS_LIMITS, markLyrics, musicWay, ownLyrics } from './lyrics';
-import { LYRICS_MODELS } from './lyrics-model';
+import { LYRICS_MODELS, lyricsGeminiConfig } from './lyrics-model';
+import { FAKE_EXISTING, judgeExistingLyrics, logMusicBlock, musicPaused, noteMusicBlock, strictMusicChecks, type MusicBlockRecord } from './warnings';
 import { DESIGN_LIMITS, designMeta, fallbackDesign, reviewedDesign, type MusicDesign, type MusicDesignInput } from './architect';
 
 export { MUSIC_LIMITS, musicQuoteKrw };
@@ -89,7 +90,7 @@ export class MusicDesignRefused extends Error {
 }
 
 /** A refusal the screen explains in its own words (and nothing was reserved): a name in the description or in the lyrics. */
-export type MusicJobBlocked = StudioFailure & { blocked: 'name' | 'lyrics' };
+export type MusicJobBlocked = StudioFailure & { blocked: 'name' | 'lyrics' | 'paused' };
 
 export interface MusicPlan {
   engine: MusicEngine;
@@ -187,8 +188,54 @@ export async function createMusicJob(deps: StudioDeps, viewer: Viewer, raw: unkn
   if (!deps.env.soundStudio) return failure('invalid');
   const parsed = MusicJobCreateSchema.safeParse(raw);
   if (!parsed.success) return failure('invalid');
-  const v = parsed.data;
+  const parsedInput = parsed.data;
   const locale: 'ko' | 'en' = viewer.locale === 'en' ? 'en' : 'ko';
+  const now = deps.now?.() ?? new Date();
+  const org = parsedInput.organizationId;
+  const record = (field: MusicBlockRecord['field'], check: MusicBlockRecord['check']) =>
+    logMusicBlock(deps.log, { organizationId: org, userId: viewer.userId, field, check, lyrics: field === 'lyrics' ? parsedInput.lyrics : null }, now);
+
+  // Repeated blocks pause the organization's music requests for a minute (§12.5): nothing checked, nothing reserved.
+  if (musicPaused(org, now.getTime())) {
+    record('request', 'paused');
+    return { ok: false, code: 'too_many_running', blocked: 'paused' };
+  }
+  // Before the transaction that reserves credits: the seat (so nobody outside the studio triggers a judgment),
+  // whether the organization's checks are strict today, and the lyrics judgment (a text-model call).
+  const pre = await guarded(() =>
+    deps.sql.transaction(async (sql) => {
+      const seat = await studioSeat(sql, viewer.userId, org, { requireSelfStudio: true });
+      if (seat.role === 'guest') throw new StudioDenied('not_found');
+      try {
+        await assertBrandFeature(sql, org, 'sound');
+      } catch (error) {
+        if (error instanceof BrandFeatureDenied) throw new StudioDenied('feature_unavailable');
+        throw error;
+      }
+      requireCreate(seat);
+      return { ok: true as const, strict: await strictMusicChecks(sql, org, now) };
+    }),
+  );
+  if (!('strict' in pre)) return pre as StudioFailure;
+  // Strict (more than five engine refusals today): the Architect cannot be switched off.
+  const v: MusicJobCreate = pre.strict ? { ...parsedInput, architect: true } : parsedInput;
+  const sung = v.vocal ? ownLyrics(v.lyrics) : '';
+  // The customer's own or polished lyrics are judged; drafts written to our rules are judged only when strict.
+  if (sung.trim() && !namedArtist(sung) && !namedArtist(v.prompt) && (pre.strict || !v.lyricsBy || v.lyricsBy.flow === 'polish')) {
+    const config = lyricsGeminiConfig(deps.intelDeps.env);
+    const verdict =
+      deps.env.provider === 'fake' && sung.includes(FAKE_EXISTING)
+        ? 'existing'
+        : config
+          ? await judgeExistingLyrics(sung, config, deps.intelDeps.fetch, deps.log)
+          : 'unknown';
+    if (verdict === 'existing') {
+      record('lyrics', 'judge');
+      noteMusicBlock(org, now.getTime());
+      return { ok: false, code: 'invalid', blocked: 'lyrics' };
+    }
+  }
+
   const outcome = await guarded(() =>
     deps.sql.transaction(async (sql) => {
       const seat = await studioSeat(sql, viewer.userId, v.organizationId, { requireSelfStudio: true });
@@ -273,6 +320,10 @@ export async function createMusicJob(deps: StudioDeps, viewer: Viewer, raw: unkn
       return { ok: true as const, job: jobView(job, outputs, deps.media) };
     }),
   );
-  if ('blocked' in outcome) return { ok: false, code: 'invalid', blocked: outcome.blocked };
+  if ('blocked' in outcome) {
+    record(outcome.blocked === 'lyrics' ? 'lyrics' : 'prompt', 'ours');
+    noteMusicBlock(org, now.getTime());
+    return { ok: false, code: 'invalid', blocked: outcome.blocked };
+  }
   return outcome;
 }

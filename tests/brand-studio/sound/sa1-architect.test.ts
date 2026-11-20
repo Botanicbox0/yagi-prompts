@@ -35,7 +35,7 @@ const input = (over: Partial<MusicDesignInput> = {}): MusicDesignInput => ({
   ...over,
 });
 
-function geminiAnswers(...answers: Array<Record<string, string> | Error>) {
+function geminiAnswers(...answers: Array<Record<string, unknown> | Error>) {
   const calls: Array<{ url: string; body: { systemInstruction: { parts: Array<{ text: string }> }; contents: Array<{ parts: Array<{ text: string }> }> } }> = [];
   const fetchStub = (async (url: string, init: RequestInit) => {
     calls.push({ url: String(url), body: JSON.parse(String(init.body)) });
@@ -182,7 +182,8 @@ describe('a music run with the Architect', () => {
 
   it('sends the designed title in custom mode and the customer’s lyrics untouched', async () => {
     const lyrics = '햇살 같은 하루\n\n같이 걸어요';
-    const { fetchStub } = geminiAnswers({ style: GOOD_STYLE, title: '맑은 하루', notes: 'ok' });
+    // SA3: the customer's own lyrics are judged first (not a known song), then the style is designed.
+    const { fetchStub } = geminiAnswers({ existing: false, confidence: 0.05 }, { style: GOOD_STYLE, title: '맑은 하루', notes: 'ok' });
     const deps = studioDeps(f.sql, { env: liveEnv, provider: recording as never, intelDeps: { fetch: fetchStub, env: { GEMINI_API_KEY: 'k' } } });
     const created = await createStudioJob(deps, viewerOf(f.ids.owner), music({ vocal: true, lyrics }));
     if (!('job' in created)) throw new Error('created');

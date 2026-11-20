@@ -972,3 +972,11 @@
   white-space: pre-wrap;
   word-break: keep-all;
 }
+
+/* SA3: a refused run carries "다르게 설계하기" at the end of its line. */
+.runLine[data-redesign] {
+  grid-template-columns: 36px minmax(160px, 1.1fr) minmax(120px, 2fr) auto;
+}
+.runLine[data-redesign] .textBtn {
+  white-space: nowrap;
+}

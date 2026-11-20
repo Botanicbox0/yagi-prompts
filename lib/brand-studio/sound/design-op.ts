@@ -50,6 +50,7 @@ export async function designMusicPreview(deps: StudioDeps, viewer: { userId: str
   const brand = await brandSummary(deps, v.organizationId, gate.name);
   const design = await designForDeps(deps, {
     ...designInputOf(v, locale),
+    ...(v.avoid ? { avoid: true } : {}),
     brand: brand ? { name: brand.name ?? null, tone: brand.tone ?? null, rules: brand.rules ?? [] } : null,
   });
   return {

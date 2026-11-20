@@ -610,6 +610,8 @@ export const MusicDesignSchema = z
     careful: z.boolean().optional(),
     language: z.enum(['ko', 'en']).optional(),
     structure: z.enum(LYRIC_STRUCTURES).optional(),
+    /** "다르게 설계하기" after the engine refused (§12.5). */
+    avoid: z.boolean().optional(),
   })
   .strict();
 export type StudioMusicDesign = {

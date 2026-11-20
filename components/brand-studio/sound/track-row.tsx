@@ -392,18 +392,30 @@ function TermsLine({ copy }: { copy: StudioSoundCopy }) {
 }
 
 /** A run still being made, or one that failed and took nothing. */
-export function PendingRow(props: { job: StudioJobView; copy: StudioSoundCopy; state: 'making' | 'failed'; line?: string }) {
+export function PendingRow(props: {
+  job: StudioJobView;
+  copy: StudioSoundCopy;
+  state: 'making' | 'failed';
+  line?: string;
+  /** A refused run (§12.5): "다르게 설계하기". */
+  onRedesign?: () => void;
+}) {
   const { job, copy } = props;
   const title = job.music?.title ?? job.prompt;
   return (
     <li className={s.row} data-sound-run={props.state} data-sound-job={job.id}>
-      <div className={s.runLine}>
+      <div className={s.runLine} data-redesign={props.onRedesign ? '' : undefined}>
         <span className={s.runMark} data-state={props.state} aria-hidden="true" />
         <span className={s.nameText}>{title}</span>
         <span className={s.runText} role={props.state === 'failed' ? 'note' : undefined}>
           {props.state === 'making' ? copy.composer.making : props.line}
         </span>
         {props.state === 'making' ? <span className={s.progress} aria-hidden="true" /> : null}
+        {props.onRedesign ? (
+          <button type="button" className={s.textBtn} onClick={props.onRedesign} data-sound-redesign>
+            {copy.errors.redesign}
+          </button>
+        ) : null}
       </div>
     </li>
   );

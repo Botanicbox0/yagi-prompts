@@ -36,6 +36,10 @@
  * lines went through two local Gemma passes on 2026-11-20 and follow the reviewed verb (고치기): polishing,
  * polishFailed and polished were re-worded from 손보다 to 고치다 to match it (see the PR body for their Gemma check).
  *
+ * Slice SA3 (warnings, §12.5): the blocked lines take the §12.7 reviewed additions as merged in #292 (two Gemma
+ * passes): `errors.artist` and `composer.lyricsBlocked` keep their first sentence and add the reviewed one,
+ * `errors.blocked` (the engine refused), `errors.redesign` (다르게 설계하기) and `errors.paused` are the reviewed lines.
+ *
  * Amounts are credits, never won. No engine, vendor or model name appears here.
  */
 export const studioSoundEn = {
@@ -85,7 +89,7 @@ export const studioSoundEn = {
     lyrics: 'Lyrics',
     lyricsPlaceholder: 'Enter lyrics or leave blank.',
     lyricsLanguage: 'Sings in the language you write.',
-    lyricsBlocked: 'You cannot use existing lyrics or artist names.',
+    lyricsBlocked: 'You cannot use existing lyrics or artist names. Please enter your own lyrics or try creating a lyric draft.',
     draft: 'Draft lyrics',
     draftNote: 'Review and edit the draft.',
     drafting: 'Drafting',
@@ -167,8 +171,10 @@ export const studioSoundEn = {
   },
   errors: {
     failed: 'Failed to create music. No credits were used.',
-    artist: 'Please avoid artist names or song titles. Describe the mood, instruments, and tempo instead.',
-    blocked: "This description can't be used. No credits were used.",
+    artist: 'Please avoid artist names or song titles. Please describe using genre, tempo, instruments, or voice instead of names.',
+    blocked: 'Unable to create music with this description. No credits were used.',
+    redesign: 'Redesign description',
+    paused: 'Please try again in a moment.',
     allowance: 'Not enough credits this month.',
     closed: "Creating music isn't available for this workspace right now.",
     busy: 'Too much music is being made at once. Please try again shortly.',
@@ -239,7 +245,7 @@ export const studioSoundKo: StudioSoundCopy = {
     lyrics: '가사',
     lyricsPlaceholder: '가사를 입력하세요. 비워 두면 자동으로 만들어져요.',
     lyricsLanguage: '쓴 언어 그대로 노래해요.',
-    lyricsBlocked: '기존 노래 가사나 가수 이름은 넣을 수 없어요.',
+    lyricsBlocked: '기존 노래 가사나 가수 이름은 넣을 수 없어요. 직접 쓴 가사를 넣거나 가사 초안을 만들어 보세요.',
     draft: '가사 초안 만들기',
     draftNote: '초안을 확인하고 고쳐 쓰세요.',
     drafting: '초안을 만들고 있어요.',
@@ -321,8 +327,10 @@ export const studioSoundKo: StudioSoundCopy = {
   },
   errors: {
     failed: '음악을 만들지 못했어요. 크레딧은 빠지지 않았어요.',
-    artist: '가수 이름이나 곡 제목은 넣을 수 없어요. 분위기, 악기, 빠르기로 설명해 주세요.',
-    blocked: '사용할 수 없는 설명이에요. 크레딧은 빠지지 않았어요.',
+    artist: '가수 이름이나 곡 제목은 넣을 수 없어요. 이름 대신 장르, 빠르기, 악기, 목소리로 설명해 주세요.',
+    blocked: '이번 설명으로는 음악을 만들 수 없어요. 크레딧은 빠지지 않았어요.',
+    redesign: '다르게 설계하기',
+    paused: '잠시 뒤에 다시 시도해 주세요.',
     allowance: '이번 달 크레딧이 부족해요.',
     closed: '지금은 이 워크스페이스에서 음악을 만들 수 없어요.',
     busy: '동시에 만드는 음악이 너무 많아요. 잠시 후 다시 시도해 주세요.',

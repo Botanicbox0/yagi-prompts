@@ -27,6 +27,11 @@ import s from './sound.module.css';
 export interface ComposerHandle {
   /** "비슷하게 만들기": the same settings back in the dock (description, vocals, lyrics, switch), focused. */
   fill(settings: { prompt: string; vocal: boolean; lyrics?: string | null; careful?: boolean }): void;
+  /**
+   * "다르게 설계하기" (SA3, §12.5): a refused run's settings back in the dock with the Architect on, and a new design
+   * that avoids what may have been refused, shown for the customer to read before pressing again. Lyrics unchanged.
+   */
+  redesign(settings: { prompt: string; vocal: boolean; lyrics?: string | null; careful?: boolean }): void;
 }
 
 export interface ComposerInput {
@@ -87,7 +92,7 @@ export const MusicComposer = forwardRef<
     /** Free: a draft from the description, or the customer's lyrics polished; resolves to the lyrics or a line to show. */
     onDraft: (request: LyricsDraftRequest) => Promise<{ lyrics: string; model: string } | { error: string }>;
     /** "지금 설계하기": the free design preview; resolves to the design or a line to show. */
-    onDesign: (input: Pick<ComposerInput, 'prompt' | 'vocal' | 'lyrics' | 'careful' | 'structure'>) => Promise<{ design: ComposerDesign } | { error: string }>;
+    onDesign: (input: Pick<ComposerInput, 'prompt' | 'vocal' | 'lyrics' | 'careful' | 'structure'> & { avoid?: boolean }) => Promise<{ design: ComposerDesign } | { error: string }>;
   }
 >(function MusicComposer(props, ref) {
   const { copy } = props;
@@ -101,6 +106,8 @@ export const MusicComposer = forwardRef<
   const [architect, setArchitect] = useState(true);
   const [design, setDesign] = useState<ComposerDesign | null>(null);
   const [designing, setDesigning] = useState(false);
+  const designingRef = useRef(false);
+  designingRef.current = designing;
   const [options, setOptions] = useState<LyricsOptionsValue>(() => ({
     seconds: 30,
     structure: defaultStructure(30),
@@ -121,6 +128,20 @@ export const MusicComposer = forwardRef<
   const lyricsNoteId = useId();
 
   useImperativeHandle(ref, () => ({
+    redesign(settings) {
+      const prompt = settings.prompt.slice(0, MUSIC_LIMITS.promptMax);
+      const sung = settings.vocal && (settings.lyrics ?? '').trim() ? ownLyrics(settings.lyrics) : '';
+      this.fill(settings);
+      setArchitect(true);
+      setDesigning(true);
+      void props
+        .onDesign({ prompt: prompt.trim(), vocal: settings.vocal, lyrics: sung, careful: props.maxMode && settings.careful === true, structure: options.structure, avoid: true })
+        .then((answer) => {
+          setDesigning(false);
+          if ('design' in answer) setDesign(answer.design);
+          else setLocalError(answer.error);
+        });
+    },
     fill(settings) {
       setPrompt(settings.prompt.slice(0, MUSIC_LIMITS.promptMax));
       setVocal(settings.vocal);
@@ -142,9 +163,10 @@ export const MusicComposer = forwardRef<
   const credits = musicQuoteCredits({ mode: musicWay({ vocal, lyrics: sentLyrics, careful: switchOn }), careful: switchOn });
   const creditsText = formatCredits(credits, props.locale);
 
-  // A design belongs to the settings it was made from: changing them puts it away.
+  // A design belongs to the settings it was made from: changing them puts it away (a redesign that is still
+  // arriving is kept: it was asked for these settings).
   useEffect(() => {
-    setDesign(null);
+    if (!designingRef.current) setDesign(null);
   }, [prompt, vocal, sentLyrics, switchOn, architect]);
 
   const clearErrors = () => {
