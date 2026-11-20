@@ -549,7 +549,7 @@ export const MusicComposer = forwardRef<
           </button>
         ) : null}
         <p id={hintId} className={s.dockNote}>
-          {switchOn ? copy.composer.carefulNote : copy.composer.lengthNote}
+          {switchOn ? copy.composer.carefulNote : vocal ? copy.composer.lengthNote : copy.composer.instrumentalNote}
         </p>
         <span className={s.count} aria-hidden="true">
           {prompt.length}/{MUSIC_LIMITS.promptMax}

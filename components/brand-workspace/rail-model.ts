@@ -320,14 +320,17 @@ export function railCookieExpanded(value: string | undefined | null): boolean {
 
 /* ------------------------------------------------------------- jobs */
 
-export type RailJobGroup = 'image' | 'video';
+export type RailJobGroup = 'image' | 'video' | 'sound';
 
 /** Which studio screen shows a job of `kind`. */
 export function jobGroup(kind: StudioJobKind | string): RailJobGroup {
-  return kind === 'image' || kind === 'region_edit' ? 'image' : 'video';
+  if (kind === 'image' || kind === 'region_edit') return 'image';
+  // Music and effects are made on the sound screen (before, the rail counted them as video).
+  if (kind === 'music' || kind === 'sound_effect') return 'sound';
+  return 'video';
 }
 
-export const GROUP_SCREEN: Readonly<Record<RailJobGroup, string>> = { image: '/brand/studio', video: '/brand/studio/video' };
+export const GROUP_SCREEN: Readonly<Record<RailJobGroup, string>> = { image: '/brand/studio', video: '/brand/studio/video', sound: '/brand/studio/sound' };
 
 /** True on the screen whose board already shows (and polls) jobs of this group. */
 export function onBoardFor(group: RailJobGroup, path: string): boolean {
@@ -335,7 +338,7 @@ export function onBoardFor(group: RailJobGroup, path: string): boolean {
 }
 
 export function countByGroup(open: ReadonlyArray<{ kind: StudioJobKind | string }>): Record<RailJobGroup, number> {
-  const counts: Record<RailJobGroup, number> = { image: 0, video: 0 };
+  const counts: Record<RailJobGroup, number> = { image: 0, video: 0, sound: 0 };
   for (const job of open) counts[jobGroup(job.kind)] += 1;
   return counts;
 }

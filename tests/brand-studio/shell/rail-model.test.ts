@@ -144,7 +144,7 @@ describe('background jobs', () => {
     expect(jobGroup('image')).toBe('image');
     expect(jobGroup('region_edit')).toBe('image');
     for (const kind of ['video', 'video_remix', 'video_final']) expect(jobGroup(kind)).toBe('video');
-    expect(countByGroup([{ kind: 'image' }, { kind: 'region_edit' }, { kind: 'video_remix' }])).toEqual({ image: 2, video: 1 });
+    expect(countByGroup([{ kind: 'image' }, { kind: 'region_edit' }, { kind: 'video_remix' }])).toEqual({ image: 2, video: 1, sound: 0 });
     expect(onBoardFor('image', '/brand/studio')).toBe(true);
     expect(onBoardFor('image', '/brand/studio/video')).toBe(false);
     expect(onBoardFor('video', '/brand/studio/video')).toBe(true);

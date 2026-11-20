@@ -16,6 +16,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ChangeEvent, type KeyboardEvent } from 'react';
 import { createStudioApi, isFailure, measureInBrowser } from '@/components/brand-studio/api';
 import { newRequestId } from '@/components/brand-studio/copy';
+import { STUDIO_JOB_SETTLED, STUDIO_JOB_STARTED, announce } from '@/components/brand-studio/seams';
+import { settledJobs } from '@/components/brand-studio/use-studio';
 import { composeStorageKey } from '@/lib/brand-studio/compose/timeline';
 import type { StudioAllowanceView, StudioErrorCode, StudioJobView } from '@/lib/brand-studio/contracts';
 import { creditsLeft, formatCredits } from '@/lib/brand-studio/credits';
@@ -86,12 +88,20 @@ export function SoundStudio(props: SoundStudioProps) {
   const [tab, setTab] = useState<SoundTab>(props.initialTab);
   const [files, setFiles] = useState<SoundTrackView[]>(props.initialTracks.filter((t) => !t.outputId));
   const [jobs, setJobs] = useState<StudioJobView[]>(props.initialJobs);
+  // A run this screen watched has settled: the rail refreshes its credits and shows a toast elsewhere (as the
+  // image board does). Real-screen check 2026-11-21: the rail kept the old figure until a reload.
+  const seenJobs = useRef<Map<string, StudioJobView['status']> | null>(null);
+  useEffect(() => {
+    for (const event of settledJobs(seenJobs.current, jobs)) announce(STUDIO_JOB_SETTLED, event);
+    seenJobs.current = new Map(jobs.map((job) => [job.id, job.status]));
+  }, [jobs]);
   const [likes, setLikes] = useState<Record<string, boolean>>({});
   const [saved, setSaved] = useState<Record<string, string>>({});
   const [allowance, setAllowance] = useState<StudioAllowanceView>(props.initialAllowance);
   const [query, setQuery] = useState('');
   const [likedOnly, setLikedOnly] = useState(false);
   const [openKey, setOpenKey] = useState<string | null>(null);
+  const pageRef = useRef<HTMLDivElement | null>(null);
   const [playingKey, setPlayingKey] = useState<string | null>(null);
   const [position, setPosition] = useState(0);
   const [uploading, setUploading] = useState(false);
@@ -217,6 +227,12 @@ export function SoundStudio(props: SoundStudioProps) {
     if (result?.ok && result.job) {
       draftRequest.current = null;
       setJobs((all) => [result.job!, ...all.filter((j) => j.id !== result.job!.id)]);
+      // The rail reads the credits and the running count again (as the reverse panel tells it), and this screen's
+      // own figure reads the reservation at once instead of on the next poll: both show the same number.
+      announce(STUDIO_JOB_STARTED, { jobId: result.job.id });
+      void api.poll([result.job.id]).then((polled) => {
+        if (!isFailure(polled)) setAllowance(polled.allowance);
+      });
       chooseTab('music');
       return true;
     }
@@ -408,8 +424,20 @@ export function SoundStudio(props: SoundStudioProps) {
   const left = creditsLeft(allowance.capKrw, allowance.usedKrw);
   const showComposer = canCreate && tab === 'music';
 
+  // The dock's height, for the rows' scroll margin (an opened row comes into view above it).
+  useEffect(() => {
+    const page = pageRef.current;
+    const dock = page?.querySelector<HTMLElement>('[data-sound-composer]');
+    if (!page || !dock || typeof ResizeObserver === 'undefined') return;
+    const measure = () => page.style.setProperty('--sound-dock-h', `${Math.round(dock.getBoundingClientRect().height)}px`);
+    measure();
+    const observer = new ResizeObserver(measure);
+    observer.observe(dock);
+    return () => observer.disconnect();
+  }, [showComposer]);
+
   return (
-    <div className={`bs-page ${s.page}`} data-brand-studio-v2 data-studio-sound data-sound-tab-current={tab} data-sound-composer-open={showComposer ? '' : undefined}>
+    <div ref={pageRef} className={`bs-page ${s.page}`} data-brand-studio-v2 data-studio-sound data-sound-tab-current={tab} data-sound-composer-open={showComposer ? '' : undefined}>
       <header className={s.head}>
         <div className={s.titles}>
           <h1 className="bs-title">{copy.title}</h1>

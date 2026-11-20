@@ -20,6 +20,8 @@
  * Slice SS3 (music with lyrics, "더 고르게 만들기", the terms line and panel): §4.7 lines as they are. The
  * terms lines (marked † in §4.7) wait for the founder's final wording and the terms clauses (§8-3); they are the
  * §4.7 drafts until then. The panel's fourth line ("download the creation record") waits for that download to exist.
+ * The length lines (`composer.lengthNote`, `composer.instrumentalNote`, `lyricsKit.lengthNote`, real-screen check
+ * 2026-11-21) say only what the studio does now: the length tool (SS4) does not exist yet. Two Gemma passes.
  * `lyricsFirst` and `draftWait` (eval fixes, 2026-11-21) went through two Gemma passes: its diagnosis taken (say a
  * draft was made; no number in the wait line), the button's name kept as the screen shows it.
  * New lines (drafting, draft failure, draft limit, close) went through the same two Gemma
@@ -87,7 +89,8 @@ export const studioSoundEn = {
     vocals: 'Vocals',
     noVocals: 'No vocals',
     withVocals: 'With vocals',
-    lengthNote: 'Adjust the length after creating.',
+    lengthNote: 'Actual length varies a little between versions.',
+    instrumentalNote: 'Instrumentals usually run 2 to 4 minutes.',
     create: 'Create',
     createLabel: 'Create, {credits} credits',
     creating: 'Starting',
@@ -136,7 +139,7 @@ export const studioSoundEn = {
     options: 'Lyrics options',
     length: 'Match lyric amount',
     seconds: '{n}s',
-    lengthNote: "Adjusts length by the amount of lyrics; finalize with 'Fit length' after creating.",
+    lengthNote: 'Lyrics are sized to the length. The version closest to it is shown first.',
     structure: 'Structure',
     structures: { hook: 'Hook only', 'hook-verse': 'Hook & 1 Verse', full: '2 Verses & Hook' },
     tone: 'Tone',
@@ -249,7 +252,8 @@ export const studioSoundKo: StudioSoundCopy = {
     vocals: '보컬',
     noVocals: '보컬 없음',
     withVocals: '보컬 있음',
-    lengthNote: '곡마다 길이가 달라요. 만든 후 조절하세요.',
+    lengthNote: '곡마다 실제 길이는 조금씩 달라요.',
+    instrumentalNote: '연주곡은 보통 2~4분 길이로 나와요.',
     create: '만들기',
     createLabel: '{credits}크레딧으로 만들기',
     creating: '만드는 중이에요.',
@@ -298,7 +302,7 @@ export const studioSoundKo: StudioSoundCopy = {
     options: '가사 옵션',
     length: '가사 분량 맞추기',
     seconds: '{n}초',
-    lengthNote: '가사 양으로 길이를 맞추고, 만든 뒤 길이 맞추기로 마무리해요.',
+    lengthNote: '가사 분량을 길이에 맞춰요. 선택한 길이에 가까운 곡을 먼저 보여 드려요.',
     structure: '구성',
     structures: { hook: '후크만', 'hook-verse': '후크와 한 절', full: '두 절과 후크' },
     tone: '말투',
