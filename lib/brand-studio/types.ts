@@ -409,6 +409,8 @@ export interface StudioMusicParams {
   targetSeconds?: number;
   /** SA4: the library video the music was fitted to (its length and cuts, read from what the library keeps). */
   video?: { assetId: string; seconds: number; cuts: number[] };
+  /** The length plan of sung lyrics (../sound/length-plan.ts, §12.11): tempo, target bars, form, estimate. */
+  plan?: import('./sound/length-plan').RunPlanRecord;
   /** Sung with no lyrics: the brand (and how to write it) and the words to include, sent with the request. */
   words?: { brand?: { name: string; readAs?: string | null } | null; mustInclude?: readonly string[] };
   /** The conditions snapshot: engine, endpoint, and our terms version. */

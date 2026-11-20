@@ -50,7 +50,9 @@ import { checkMusicDesign, designMusic, fallbackDesign, MUSIC_PROFILE_VERSION, t
 import { musicEngine } from '@/lib/brand-studio/sound/engine';
 import { audioSeconds } from '@/lib/brand-studio/sound/audio-info';
 import { defaultStructure, markLyrics, ownLyrics, tempoOf, withoutAddedLines } from '@/lib/brand-studio/sound/lyrics';
-import { draftProblems, LYRICS_FALLBACK_MODEL, localLyrics, writeLyrics, writeLyricsWithFallback, type LyricsRequest } from '@/lib/brand-studio/sound/lyrics-draft';
+import { askedLines, draftProblems, LYRICS_FALLBACK_MODEL, localBpm, localLyrics, writeLyrics, writeLyricsWithFallback, type LyricsRequest, type WrittenLyrics } from '@/lib/brand-studio/sound/lyrics-draft';
+import { formText, lineSyllables, stanzaLines, sungPlan, type LengthPlan } from '@/lib/brand-studio/sound/length-plan';
+import { planProblems } from '@/lib/brand-studio/sound/architect';
 import { isLyricsModel, LYRICS_DEFAULT_MODEL, lyricsGeminiConfig } from '@/lib/brand-studio/sound/lyrics-model';
 import { namedArtist } from '@/lib/brand-studio/sound/names';
 
@@ -125,7 +127,11 @@ export function scoreDesign(c: EvalCase, design: MusicDesign, ms: number): Score
     return { id: c.id, verdict: 'pass', source: design.source, problems: ['refused before design (name check)'], chars: 0, ms: Math.round(ms) };
   }
   const problems = design.source === 'model' ? checkMusicDesign({ style: design.style, title: design.title }, design.mode) : [];
-  if (c.input.lyrics.trim() && design.lyrics !== markLyrics(c.input.vocal ? c.input.lyrics : '', c.input.structure ?? null)) problems.push("the customer's lyrics changed");
+  if (c.input.lyrics.trim() && design.lyrics !== markLyrics(c.input.vocal ? c.input.lyrics : '', c.input.structure ?? null, c.input.plan?.form ?? null)) {
+    problems.push('the lyrics sent are not the planned form of the lyrics');
+  }
+  // The length plan (§12.11): the style keeps the planned tempo and does not contradict the form.
+  if (design.source === 'model') problems.push(...planProblems(design.style, c.input));
   if (namedArtist(design.style)) problems.push('a name reached the style');
   if (c.trap === 'superlative' && /\b(best|no\.?\s*1|number one|#1)\b/i.test(design.style)) problems.push('a superlative reached the style');
   // Sung with no lyrics written: what the song is about must reach the engine (2026-11-21 real run: the brand was lost).
@@ -213,7 +219,13 @@ const lyricsBase = (over: Partial<LyricsRequest>): LyricsRequest => ({
   ...over,
 });
 
+/** The real-screen check of 2026-11-21: 30 s chosen, 3 lines came back, both versions 16 s (§12.10, §12.11). */
+export const LENGTH_FIT_TOPIC = '레몬 탄산수 광고, 상쾌하고 가볍게, 밝은 여성 보컬';
+
 export const LYRICS_TRAPS: LyricsCase[] = [
+  { id: 'length-15-lemon', req: lyricsBase({ topic: LENGTH_FIT_TOPIC, seconds: 15, structure: 'hook', tone: null, brand: { name: '모아' } }) },
+  { id: 'length-30-lemon', req: lyricsBase({ topic: LENGTH_FIT_TOPIC, seconds: 30, structure: 'hook', tone: null, brand: { name: '모아' } }) },
+  { id: 'length-60-lemon', req: lyricsBase({ topic: LENGTH_FIT_TOPIC, seconds: 60, structure: 'hook-verse', tone: null, brand: { name: '모아' } }) },
   { id: 'trap-lyrics-name', trap: 'name', req: lyricsBase({ topic: '아이유 느낌의 잔잔한 카페 광고 노래' }) },
   { id: 'trap-lyrics-superlative', trap: 'superlative', req: lyricsBase({ topic: '업계 최고, 1위 정수기라고 강조하는 광고 노래' }) },
   { id: 'trap-lyrics-reading', trap: 'reading', req: lyricsBase({ topic: '친환경 세제 광고, 밝게', brand: { name: 'Ecofin', readAs: '에코핀' } }) },
@@ -236,12 +248,15 @@ export interface LyricsScored {
   model?: string;
   source: 'model' | 'local' | 'blocked' | 'none';
   syllables: number;
+  /** The tempo the draft was planned at, and its lines per stanza against the plan at that tempo ("4 / 4"). */
+  bpm?: number;
+  lines?: string;
   problems: string[];
   ms: number;
 }
 
 /** The rules, without a model: the engine's own check, and the customer's lyrics unchanged on the way out. */
-export function scoreLyrics(c: LyricsCase, text: string | null, source: LyricsScored['source'], ms: number): LyricsScored {
+export function scoreLyrics(c: LyricsCase, text: string | null, source: LyricsScored['source'], ms: number, bpm?: number): LyricsScored {
   const round = Math.round(ms);
   if (c.trap === 'keep-lyrics') {
     // "내 가사 그대로": what the engine receives, minus the added marks and [End], is the customer's text.
@@ -254,15 +269,20 @@ export function scoreLyrics(c: LyricsCase, text: string | null, source: LyricsSc
   }
   if (source === 'blocked') return { id: c.id, verdict: 'pass', source, syllables: 0, problems: ['refused before a call (name check)'], ms: round };
   if (text === null) return { id: c.id, verdict: 'allow', source, syllables: 0, problems: ['no lyrics after the rewrite (the screen says it could not draft)'], ms: round };
-  const found = draftProblems(c.req, text);
+  const tempo = bpm ?? localBpm(c.req);
+  const found = draftProblems(c.req, text, tempo);
   const syllables = (text.match(/[가-힣]/g) ?? []).length;
+  const asked = askedLines(c.req, tempo);
+  const lines = `${stanzaLines(text).join('/')}${asked ? ` / plan ${asked.join('/')}` : ''}`;
   const verdict: LyricsScored['verdict'] = found.hard.length ? 'fail' : found.soft.length ? 'allow' : 'pass';
-  return { id: c.id, verdict, source, syllables, problems: [...found.hard, ...found.soft], ms: round };
+  return { id: c.id, verdict, source, syllables, bpm: tempo, lines, problems: [...found.hard, ...found.soft], ms: round };
 }
 
 export function lyricsTable(label: string, model: string, rows: readonly LyricsScored[]): string {
-  const head = `### lyrics ${label} (${model})\n\n| case | verdict | source | written by | syllables | ms | problems |\n| --- | --- | --- | --- | --- | --- | --- |`;
-  const body = rows.map((r) => `| ${r.id} | ${r.verdict} | ${r.source} | ${r.model ?? '—'} | ${r.syllables || '—'} | ${r.ms} | ${r.problems.join('; ') || '—'} |`);
+  const head = `### lyrics ${label} (${model})\n\n| case | verdict | source | written by | bpm | lines | syllables | ms | problems |\n| --- | --- | --- | --- | --- | --- | --- | --- | --- |`;
+  const body = rows.map(
+    (r) => `| ${r.id} | ${r.verdict} | ${r.source} | ${r.model ?? '—'} | ${r.bpm ?? '—'} | ${r.lines ?? '—'} | ${r.syllables || '—'} | ${r.ms} | ${r.problems.join('; ') || '—'} |`,
+  );
   const count = (v: LyricsScored['verdict']) => rows.filter((r) => r.verdict === v).length;
   return [head, ...body, '', `pass ${count('pass')} · allow ${count('allow')} · fail ${count('fail')} · error ${count('error')} of ${rows.length}`].join('\n');
 }
@@ -326,7 +346,9 @@ export function timedFetch(inner: typeof fetch, calls: CallTime[]): typeof fetch
 export interface RawEntry {
   id: string;
   input: unknown;
-  lyrics: { text: string | null; model: string } | null;
+  lyrics: { text: string | null; model: string; bpm?: number } | null;
+  /** The length plan the run would send (§12.11). */
+  plan?: LengthPlan | null;
   design: MusicDesign | null;
   body: unknown;
   calls: readonly CallTime[];
@@ -344,7 +366,18 @@ export function rawSection(entry: RawEntry, scrub: (text: string) => string): st
     'input:',
     fence('json', JSON.stringify(entry.input, null, 2)),
   ];
-  if (entry.lyrics) parts.push('', `lyrics (${entry.lyrics.model}):`, fence('text', entry.lyrics.text ?? '(none: the rules still failed after the rewrite)'));
+  if (entry.lyrics) {
+    const text = entry.lyrics.text;
+    parts.push('', `lyrics (${entry.lyrics.model}${entry.lyrics.bpm ? `, planned at ${entry.lyrics.bpm} BPM` : ''}):`, fence('text', text ?? '(none: the rules still failed after the rewrite)'));
+    if (text) parts.push(`lines per stanza: ${stanzaLines(text).join('/')}; syllables per line: ${text.split('\n').filter((l) => l.trim()).map(lineSyllables).join(' ')}`);
+  }
+  if (entry.plan) {
+    parts.push(
+      '',
+      `plan: ${entry.plan.bpm} BPM (${entry.plan.band}), ${entry.plan.seconds ?? '—'} s = ${entry.plan.targetBars} bars, ${entry.plan.units} of ${entry.plan.needed} line-equivalents, ${entry.plan.enough ? 'enough' : `short by ${entry.plan.missingLines} lines`}, expected ${entry.plan.estimate.min}–${entry.plan.estimate.max} s`,
+      `form: ${formText(entry.plan.form)}`,
+    );
+  }
   if (entry.design) parts.push('', 'design:', fence('json', JSON.stringify(entry.design, null, 2)));
   if (entry.body) parts.push('', 'engine body (not sent):', fence('json', JSON.stringify(entry.body, null, 2)));
   if (entry.error) parts.push('', `error: ${entry.error}`);
@@ -422,8 +455,14 @@ async function main(): Promise<void> {
         let input = c.input;
         const req = lyricsReqs.get(id);
         if (lyricsConfig && req && input.vocal && !input.lyrics.trim() && !namedArtist(input.prompt)) {
-          entry.lyrics = await writeLyricsWithFallback(req, lyricsConfig, fetcher, log);
-          if (entry.lyrics.text) input = { ...input, lyrics: entry.lyrics.text, structure: req.structure };
+          const written: WrittenLyrics = await writeLyricsWithFallback(req, lyricsConfig, fetcher, log);
+          entry.lyrics = written;
+          if (written.text) {
+            // As the dock sends it: the lyrics, the length and the draft's tempo make the plan the run keeps.
+            const plan = sungPlan({ prompt: input.prompt, vocal: true, lyrics: written.text, structure: req.structure, seconds: req.seconds, draftBpm: written.bpm, drafted: true });
+            entry.plan = plan;
+            input = { ...input, lyrics: written.text, structure: req.structure, plan };
+          }
         }
         entry.design = await designMusic(input, { fetch: fetcher, env, log });
         entry.input = input;
@@ -470,14 +509,19 @@ async function runLyrics(sheet: string, label: string, only: string[] | undefine
       const asked = [c.req.topic, c.req.lyrics ?? '', c.req.brand?.name ?? '', ...c.req.mustInclude].join('\n');
       if (namedArtist(asked)) return scoreLyrics(c, null, 'blocked', performance.now() - started);
       if (!config || !guarded) {
-        entry.lyrics = { text: localLyrics(c.req), model: 'local' };
-        return scoreLyrics(c, entry.lyrics.text, 'local', performance.now() - started);
+        entry.lyrics = { text: localLyrics(c.req), model: 'local', bpm: localBpm(c.req) };
+        if (c.req.flow === 'topic') entry.plan = sungPlan({ prompt: c.req.topic, vocal: true, lyrics: entry.lyrics.text, structure: c.req.structure, seconds: c.req.seconds, draftBpm: entry.lyrics.bpm, drafted: true });
+        return scoreLyrics(c, entry.lyrics.text, 'local', performance.now() - started, entry.lyrics.bpm);
       }
       const fetcher = timedFetch(guarded, calls);
-      entry.lyrics = fallback
+      const written: WrittenLyrics = fallback
         ? await writeLyricsWithFallback(c.req, config, fetcher, log)
-        : { text: await writeLyrics(c.req, config, fetcher, log), model: config.model };
-      return { ...scoreLyrics(c, entry.lyrics.text, 'model', performance.now() - started), model: entry.lyrics.model };
+        : await writeLyrics(c.req, config, fetcher, log).then((w) => ({ text: w?.text ?? null, bpm: w?.bpm ?? localBpm(c.req), model: config.model }));
+      entry.lyrics = written;
+      if (written.text && c.req.flow === 'topic') {
+        entry.plan = sungPlan({ prompt: c.req.topic, vocal: true, lyrics: written.text, structure: c.req.structure, seconds: c.req.seconds, draftBpm: written.bpm, drafted: true });
+      }
+      return { ...scoreLyrics(c, written.text, 'model', performance.now() - started, written.bpm), model: written.model };
     } catch (error) {
       entry.error = error instanceof Error ? error.message : String(error);
       throw error;

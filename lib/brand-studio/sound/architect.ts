@@ -19,6 +19,7 @@ import { z } from 'zod';
 import { callGeminiJson, studioGeminiConfig } from '../enhancer/gemini';
 import { SUNO_HEADER, SUNO_PROFILE } from '../enhancer/profiles/suno';
 import { videoDesignLine, type MusicVideoFit } from './video-fit';
+import { formSentence, opensOnIntro, type RunPlanRecord } from './length-plan';
 import { markLyrics, musicStyle, ownLyrics, musicWay, SUPERLATIVE, type LyricStructure, type MusicWay } from './lyrics';
 import { describeSentence, musicTitle } from './music-text';
 import { namedArtist } from './names';
@@ -51,6 +52,11 @@ export interface MusicDesignInput {
    * engine in the sentence that says what the song is about (`subjectSentence`), written the way the customer asked.
    */
   words?: MusicWords | null;
+  /**
+   * The length plan of sung lyrics (./length-plan.ts, §12.11): the tempo decided once and the form (sections, the
+   * hook again). The sent lyrics follow the form and the design keeps the tempo and describes the form.
+   */
+  plan?: RunPlanRecord | null;
 }
 
 export interface MusicWords {
@@ -147,12 +153,12 @@ export function fallbackDesign(input: MusicDesignInput, reason?: string): MusicD
   const style =
     mode === 'describe'
       ? [describeSentence(input.prompt, input.vocal, input.language), words].filter(Boolean).join(' ')
-      : musicStyle(input.prompt, input.vocal, Boolean(lyrics), input.language);
+      : [musicStyle(input.prompt, input.vocal, Boolean(lyrics), input.language), input.plan && lyrics ? formSentence(input.plan) : ''].filter(Boolean).join(' ');
   return {
     mode,
     style: style.slice(0, DESIGN_LIMITS.styleHardMax),
     title: musicTitle(input.prompt),
-    lyrics: markLyrics(lyrics, input.structure ?? null),
+    lyrics: markLyrics(lyrics, input.structure ?? null, input.plan?.form ?? null),
     notes: null,
     source: 'fallback',
     ...(reason ? { fallbackReason: reason } : {}),
@@ -210,6 +216,20 @@ export function checkMusicTitle(raw: string, request?: string): string[] {
   return problems;
 }
 
+/** The style against the plan: the planned tempo (within 3 BPM), and no "straight into the hook" over an intro. */
+export function planProblems(style: string, input: Pick<MusicDesignInput, 'plan' | 'vocal' | 'lyrics'>): string[] {
+  const plan = input.plan;
+  if (!plan || !input.vocal || !input.lyrics.trim()) return [];
+  const problems: string[] = [];
+  const written = /(\d{2,3})\s*BPM/i.exec(style);
+  if (!written) problems.push(`the style gives no tempo; write around ${plan.bpm} BPM`);
+  else if (Math.abs(Number(written[1]) - plan.bpm) > 3) problems.push(`the style's tempo is ${written[1]} BPM; the lyrics are planned at ${plan.bpm} BPM`);
+  if (opensOnIntro(plan.form) && /right away|straight (?:in)?to|immediately|no intro|without (?:an )?intro/i.test(style)) {
+    problems.push('the form opens on an instrumental intro; do not say it goes straight into the hook');
+  }
+  return problems;
+}
+
 /** A fixed name when no other is safe, in the language the title would be in (Gemma 2 passes: "곡" over "음악" for one track). */
 export const PLAIN_TITLE: Readonly<Record<'ko' | 'en', string>> = { ko: '새 곡', en: 'New track' };
 
@@ -246,6 +266,12 @@ function taskBlock(input: MusicDesignInput, mode: MusicWay, styleMax: number): s
         ? 'There are vocals and the customer wrote the lyrics: the voice sings them as written. Name the language of the lyrics in the voice sentence. Never quote or change the lyrics.'
         : `There are vocals and no lyrics: name the language to sing in, ${input.language === 'ko' ? 'Korean' : 'English'}, in the voice sentence.`
       : 'Instrumental: name what carries the melody; never mention a voice except to say the piece is instrumental.',
+    ...(input.plan && input.vocal && input.lyrics.trim()
+      ? [
+          `Tempo: ${input.plan.bpm} BPM exactly; the lyrics are planned at it. Write "around ${input.plan.bpm} BPM".`,
+          `The form is fixed: ${formSentence(input.plan).replace(/^Around \d+ BPM\. /, '')} Describe this arrangement in the structure sentence${opensOnIntro(input.plan.form) ? '; it opens on the intro, so never say it goes straight into the hook' : ''}.`,
+        ]
+      : []),
     ...(styleMax < DESIGN_LIMITS.styleHardMax
       ? [`Keep the style under ${styleMax} characters: a sentence saying what the song is about is added after it. Do not write the lyrics or the message yourself.`]
       : []),
@@ -310,13 +336,13 @@ export async function designMusic(input: MusicDesignInput, deps: DesignDeps): Pr
       return fallbackDesign(input, 'model_error');
     }
     const design = { style: answer.style.replace(/\s+/g, ' ').trim(), title: answer.title.trim() };
-    problems = checkMusicDesign(design, mode, input.prompt, styleMax);
+    problems = [...planProblems(design.style, input), ...checkMusicDesign(design, mode, input.prompt, styleMax)];
     if (problems.length === 0) {
       return {
         mode,
         style: subject ? `${design.style} ${subject}` : design.style,
         title: design.title,
-        lyrics: markLyrics(input.vocal ? input.lyrics : '', input.structure ?? null),
+        lyrics: markLyrics(input.vocal ? input.lyrics : '', input.structure ?? null, input.plan?.form ?? null),
         notes: safeNotes(answer.notes),
         source: 'model',
         profileVersion: MUSIC_PROFILE_VERSION,
@@ -334,7 +360,7 @@ export async function designMusic(input: MusicDesignInput, deps: DesignDeps): Pr
       mode,
       style: subject ? `${lastStyleOk.style} ${subject}` : lastStyleOk.style,
       title: safeTitle(input, mode),
-      lyrics: markLyrics(input.vocal ? input.lyrics : '', input.structure ?? null),
+      lyrics: markLyrics(input.vocal ? input.lyrics : '', input.structure ?? null, input.plan?.form ?? null),
       notes: safeNotes(lastStyleOk.notes),
       source: 'model',
       fallbackReason: 'title_check_failed',
@@ -362,7 +388,7 @@ export function reviewedDesign(input: MusicDesignInput, edited: { style: string;
     mode,
     style,
     title,
-    lyrics: markLyrics(input.vocal ? input.lyrics : '', input.structure ?? null),
+    lyrics: markLyrics(input.vocal ? input.lyrics : '', input.structure ?? null, input.plan?.form ?? null),
     notes: null,
     source: 'reviewed',
     profileVersion: MUSIC_PROFILE_VERSION,

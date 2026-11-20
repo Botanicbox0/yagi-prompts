@@ -213,6 +213,7 @@ export function SoundStudio(props: SoundStudioProps) {
             ...(input.vocal && input.lyrics ? { lyrics: input.lyrics, structure: input.structure, targetSeconds: input.targetSeconds, ...(input.lyricsBy ? { lyricsBy: input.lyricsBy } : {}), ...(input.videoAssetId ? { videoAssetId: input.videoAssetId } : {}) } : {}),
             ...(input.careful ? { careful: true } : {}),
             ...(input.vocal && !input.lyrics && input.words ? { words: input.words } : {}),
+            ...(input.vocal && input.lyrics && input.bpm ? { bpm: input.bpm } : {}),
             architect: input.architect,
             ...(input.designed ? { designed: input.designed } : {}),
           },
@@ -588,6 +589,9 @@ export function SoundStudio(props: SoundStudioProps) {
               language: locale,
               ...(request.vocal && request.lyrics ? { lyrics: request.lyrics } : {}),
               ...(request.vocal && !request.lyrics && request.words ? { words: request.words } : {}),
+              ...(request.vocal && request.lyrics
+                ? { targetSeconds: request.targetSeconds, ...(request.bpm ? { bpm: request.bpm } : {}), ...(request.lyricsBy ? { lyricsBy: request.lyricsBy } : {}) }
+                : {}),
               ...(request.careful ? { careful: true } : {}),
             });
             if (!isFailure(answer)) return { design: answer.design };
@@ -598,7 +602,7 @@ export function SoundStudio(props: SoundStudioProps) {
           }}
           onDraft={async (request) => {
             const answer = await api.call('lyrics.draft', { organizationId, ...request });
-            if (!isFailure(answer)) return { lyrics: answer.lyrics, model: answer.model };
+            if (!isFailure(answer)) return { lyrics: answer.lyrics, model: answer.model, bpm: answer.bpm };
             if ((answer as { blocked?: string }).blocked === 'name') return { error: request.flow === 'polish' ? copy.composer.lyricsBlocked : copy.errors.artist };
             if (answer.code === 'too_many_running') return { error: copy.composer.draftBusy };
             return { error: request.flow === 'polish' ? copy.lyricsKit.polishFailed : copy.composer.draftFailed };

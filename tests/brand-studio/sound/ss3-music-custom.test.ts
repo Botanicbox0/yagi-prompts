@@ -215,7 +215,8 @@ describe('lyrics.draft', () => {
 
   it('asks the model live, cleans marks out, and refuses a draft naming a singer', async () => {
     const answers: unknown[] = [
-      { stanzas: [['[Chorus]', ' 아침 햇살 '], ['함께해요']] },
+      // One stanza for the hook (§12.11), lines of a singable length; the mark is cleaned out.
+      { bpm: 100, stanzas: [['[Chorus]', ' 아침 햇살이 비추면 ', '오늘도 함께해요']] },
       { stanzas: [['뉴진스와 함께 노래해'], ['라라라']] },
       { stanzas: [['뉴진스와 함께 노래해'], ['라라라']] },
     ];
@@ -229,7 +230,7 @@ describe('lyrics.draft', () => {
       env: studioEnv({ BRAND_STUDIO_PROVIDER: 'live', BRAND_SOUND_STUDIO: 'on' }),
       intelDeps: { fetch: fetchStub, env: { GEMINI_API_KEY: 'test-key' } },
     });
-    expect(await draft({ structure: 'hook' })).toEqual({ ok: true, flow: 'topic', lyrics: '아침 햇살\n\n함께해요', model: LYRICS_DEFAULT_MODEL });
+    expect(await draft({ structure: 'hook' })).toEqual({ ok: true, flow: 'topic', lyrics: '아침 햇살이 비추면\n오늘도 함께해요', model: LYRICS_DEFAULT_MODEL, bpm: 100 });
     expect(calls[0]).toContain(`/models/${LYRICS_DEFAULT_MODEL}:generateContent`);
     // A singer's name survives the one rewrite: nothing is handed over.
     expect(await draft({ structure: 'hook' })).toEqual({ ok: false, code: 'failed' });

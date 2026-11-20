@@ -90,11 +90,17 @@ export function soundStreamUrl(organizationId: string, id: string, source: 'asse
  * The order of one request's versions: with a target length (가사 분량 맞추기), the one closest to it first, so it
  * becomes A (§12.8: two songs of one request differed by up to 2.5×); otherwise the order they came back in.
  */
+/**
+ * The version listed first (§12.11): of those at least the target, the closest; when none reaches it, the longest
+ * (a long song can be cut, a short one cannot be stretched). Unknown lengths go last.
+ */
 export function closestFirst(target: number | null) {
   return (a: { seconds: number | null }, b: { seconds: number | null }): number => {
     if (target == null) return 0;
-    const gap = (s: number | null) => (s == null ? Number.POSITIVE_INFINITY : Math.abs(s - target));
-    return gap(a.seconds) - gap(b.seconds);
+    const rank = (s: number | null): [number, number] => (s == null ? [2, 0] : s >= target ? [0, s - target] : [1, target - s]);
+    const [ra, ga] = rank(a.seconds);
+    const [rb, gb] = rank(b.seconds);
+    return ra !== rb ? ra - rb : ga - gb;
   };
 }
 

@@ -22,6 +22,7 @@ export function musicDesignInputOf(job: Pick<JobRow, 'prompt' | 'params'>, brand
     structure: m.structure ?? null,
     video: m.video ?? null,
     words: m.words ?? null,
+    plan: m.plan ?? null,
     language: m.language,
     locale: job.params.locale === 'en' ? 'en' : 'ko',
     brand,
@@ -36,14 +37,14 @@ export function localDesign(input: MusicDesignInput): MusicDesign {
     ? `A warm, close ${input.language === 'ko' ? 'Korean' : 'English'} vocal sings in a relaxed, conversational way.`
     : 'Instrumental: a soft felt piano carries the melody.';
   const style =
-    `Local design for: "${words}". Warm acoustic pop with a light, hopeful feel, around 96 BPM with a gentle swing. ${voice} ` +
+    `Local design for: "${words}". Warm acoustic pop with a light, hopeful feel, around ${input.plan && input.vocal && input.lyrics.trim() ? input.plan.bpm : 96} BPM with a gentle swing. ${voice} ` +
     'Fingerpicked acoustic guitar keeps a steady pulse, a round upright bass walks under it, and brushed drums keep time softly. ' +
     'A short intro, the hook arrives early and returns once. Warm and close, with a little room. Ends cleanly on a held chord.';
   return {
     mode,
     style,
     title: input.locale === 'ko' ? '맑은 하루' : 'Clear Day',
-    lyrics: markLyrics(input.vocal ? input.lyrics : '', input.structure ?? null),
+    lyrics: markLyrics(input.vocal ? input.lyrics : '', input.structure ?? null, input.plan?.form ?? null),
     notes: input.locale === 'ko' ? '로컬 설계 예시예요. 실제 설계는 운영 환경에서 만들어져요.' : 'A local design example; the real design is made in production.',
     source: 'model',
     profileVersion: MUSIC_PROFILE_VERSION,

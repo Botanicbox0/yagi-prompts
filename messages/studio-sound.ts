@@ -140,6 +140,7 @@ export const studioSoundEn = {
     length: 'Match lyric amount',
     seconds: '{n}s',
     lengthNote: 'Lyrics are sized to the length. The version closest to it is shown first.',
+    short: 'Expected length: about {min}–{max} s. Add {n} more lines to fill {target} s.',
     structure: 'Structure',
     structures: { hook: 'Hook only', 'hook-verse': 'Hook & 1 Verse', full: '2 Verses & Hook' },
     tone: 'Tone',
@@ -303,6 +304,8 @@ export const studioSoundKo: StudioSoundCopy = {
     length: '가사 분량 맞추기',
     seconds: '{n}초',
     lengthNote: '가사 분량을 길이에 맞춰요. 선택한 길이에 가까운 곡을 먼저 보여 드려요.',
+    // Own lyrics short of the length (§12.11). Gemma 2 passes: "예상 길이는", "채우려면", no "정도".
+    short: '예상 길이는 {min}~{max}초예요. {target}초를 채우려면 {n}줄 더 써 주세요.',
     structure: '구성',
     structures: { hook: '후크만', 'hook-verse': '후크와 한 절', full: '두 절과 후크' },
     tone: '말투',

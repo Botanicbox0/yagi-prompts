@@ -17,6 +17,7 @@
 import { forwardRef, useEffect, useId, useImperativeHandle, useRef, useState, type FormEvent, type KeyboardEvent } from 'react';
 import { formatCredits } from '@/lib/brand-studio/credits';
 import { defaultStructure, LYRICS_LIMITS, markLyrics, musicWay, ownLyrics, type LyricStructure } from '@/lib/brand-studio/sound/lyrics';
+import { sungPlan } from '@/lib/brand-studio/sound/length-plan';
 import { MUSIC_LIMITS, musicQuoteCredits } from '@/lib/brand-studio/sound/music-limits';
 import { namedArtist } from '@/lib/brand-studio/sound/names';
 import { interpolate } from '@/lib/i18n/format';
@@ -53,6 +54,8 @@ export interface ComposerInput {
   videoAssetId?: string;
   /** Sung with no lyrics: the brand and words to include from the lyrics options, sent with the request. */
   words?: ComposerWords;
+  /** The tempo a draft was planned at (§12.11), sent with its lyrics so the run and the design keep it. */
+  bpm?: number;
 }
 
 export interface ComposerWords {
@@ -100,11 +103,13 @@ export const MusicComposer = forwardRef<
     onCreate: (input: ComposerInput) => void;
     onClearError: () => void;
     /** Free: a draft from the description, or the customer's lyrics polished; resolves to the lyrics or a line to show. */
-    onDraft: (request: LyricsDraftRequest) => Promise<{ lyrics: string; model: string } | { error: string }>;
+    onDraft: (request: LyricsDraftRequest) => Promise<{ lyrics: string; model: string; bpm?: number } | { error: string }>;
     /** SA4: library videos "영상 길이" can fit the lyrics and the design to. */
     videos?: readonly LyricsVideo[];
     /** "지금 설계하기": the free design preview; resolves to the design or a line to show. */
-    onDesign: (input: Pick<ComposerInput, 'prompt' | 'vocal' | 'lyrics' | 'careful' | 'structure' | 'videoAssetId' | 'words'> & { avoid?: boolean }) => Promise<{ design: ComposerDesign } | { error: string }>;
+    onDesign: (
+      input: Pick<ComposerInput, 'prompt' | 'vocal' | 'lyrics' | 'careful' | 'structure' | 'videoAssetId' | 'words' | 'targetSeconds' | 'bpm' | 'lyricsBy'> & { avoid?: boolean },
+    ) => Promise<{ design: ComposerDesign } | { error: string }>;
   }
 >(function MusicComposer(props, ref) {
   const { copy } = props;
@@ -136,7 +141,9 @@ export const MusicComposer = forwardRef<
   }));
   const [structurePicked, setStructurePicked] = useState(false);
   const [lyricsBy, setLyricsBy] = useState<{ flow: 'topic' | 'polish'; model: string } | null>(null);
-  const [polish, setPolish] = useState<{ lyrics: string; model: string } | null>(null);
+  /** The tempo the drafted lyrics were planned at; kept while there are lyrics in the box. */
+  const [draftBpm, setDraftBpm] = useState<number | null>(null);
+  const [polish, setPolish] = useState<{ lyrics: string; model: string; bpm?: number } | null>(null);
   const [polishing, setPolishing] = useState(false);
   const [showSent, setShowSent] = useState(false);
   const field = useRef<HTMLTextAreaElement | null>(null);
@@ -159,6 +166,7 @@ export const MusicComposer = forwardRef<
       setDrafted(false);
       setFirstDraft(false);
       setLyricsBy(null);
+      setDraftBpm(null);
       setPolish(null);
       setLocalError(null);
       requestAnimationFrame(() => field.current?.focus());
@@ -185,6 +193,18 @@ export const MusicComposer = forwardRef<
       ...(must.length ? { mustInclude: must } : {}),
     };
   })();
+  // The length plan (§12.11), the same function the server runs: the form "보낼 가사 보기" shows, and whether the
+  // customer's own lines can fill the length.
+  const plan = sungPlan({
+    prompt: trimmed,
+    vocal,
+    lyrics: sentLyrics,
+    structure: options.structure,
+    seconds: targetOf(options),
+    draftBpm,
+    drafted: lyricsBy?.flow === 'topic',
+  });
+  const sentBpm = sentLyrics && draftBpm ? draftBpm : undefined;
   const credits = musicQuoteCredits({ mode: musicWay({ vocal, lyrics: sentLyrics, careful: switchOn }), careful: switchOn });
   const creditsText = formatCredits(credits, props.locale);
 
@@ -214,6 +234,7 @@ export const MusicComposer = forwardRef<
       ...(videoId ? { videoAssetId: videoId } : {}),
       ...(sentLyrics && lyricsBy ? { lyricsBy } : {}),
       ...(words ? { words } : {}),
+      ...(sentBpm ? { bpm: sentBpm } : {}),
       ...(architect && design ? { designed: { style: design.style, title: design.title } } : {}),
     });
   };
@@ -258,6 +279,10 @@ export const MusicComposer = forwardRef<
       structure: options.structure,
       ...(videoId ? { videoAssetId: videoId } : {}),
       ...(words ? { words } : {}),
+      // The plan's inputs, so the preview designs for the same tempo and form the run will send.
+      targetSeconds: targetOf(options),
+      ...(sentBpm ? { bpm: sentBpm } : {}),
+      ...(sentLyrics && lyricsBy ? { lyricsBy } : {}),
       ...(avoid ? { avoid: true } : {}),
     });
     setDesigning(false);
@@ -312,6 +337,7 @@ export const MusicComposer = forwardRef<
     if ('lyrics' in answer) {
       setLyrics(answer.lyrics.slice(0, LYRICS_LIMITS.max));
       setLyricsBy({ flow: 'topic', model: answer.model });
+      setDraftBpm(answer.bpm ?? null);
       setPolish(null);
       setDrafted(true);
       return true;
@@ -326,10 +352,15 @@ export const MusicComposer = forwardRef<
     clearErrors();
     const answer = await props.onDraft(draftRequest('polish'));
     setPolishing(false);
-    if ('lyrics' in answer) setPolish({ lyrics: answer.lyrics.slice(0, LYRICS_LIMITS.max), model: answer.model });
+    if ('lyrics' in answer) setPolish({ lyrics: answer.lyrics.slice(0, LYRICS_LIMITS.max), model: answer.model, ...(answer.bpm ? { bpm: answer.bpm } : {}) });
     else setLocalError(answer.error);
   };
-  const sentPreview = sentLyrics ? markLyrics(sentLyrics, options.structure) : '';
+  const sentPreview = sentLyrics ? markLyrics(sentLyrics, options.structure, plan?.form ?? null) : '';
+  // The customer's own lines are short of the length even with sections around them: say it, never block.
+  const shortNote =
+    plan && !plan.enough && lyricsBy?.flow !== 'topic'
+      ? interpolate(copy.lyricsKit.short, { min: String(plan.estimate.min), max: String(plan.estimate.max), target: String(plan.seconds), n: String(plan.missingLines) })
+      : null;
 
   return (
     <form className={s.dock} onSubmit={submit} data-sound-composer aria-busy={props.busy}>
@@ -427,6 +458,7 @@ export const MusicComposer = forwardRef<
                 setLyrics(next);
                 // An edited draft is the customer's text: the record of who wrote it goes (§12.5, review 1).
                 setLyricsBy(null);
+                if (!next.trim()) setDraftBpm(null);
                 setPolish(null);
                 setDrafted(false);
                 setFirstDraft(false);
@@ -437,6 +469,11 @@ export const MusicComposer = forwardRef<
               data-sound-lyrics
             />
           </label>
+          {shortNote ? (
+            <p className={s.optionNote} role="status" data-sound-lyrics-short>
+              {shortNote}
+            </p>
+          ) : null}
           {polish ? (
             <PolishCompare
               copy={copy}
@@ -446,6 +483,7 @@ export const MusicComposer = forwardRef<
               onAccept={() => {
                 setLyrics(polish.lyrics);
                 setLyricsBy({ flow: 'polish', model: polish.model });
+                if (polish.bpm) setDraftBpm(polish.bpm);
                 setPolish(null);
               }}
             />

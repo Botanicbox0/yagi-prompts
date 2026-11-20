@@ -14,6 +14,8 @@
  *
  * Client-safe: the composer shows the same limits and the same way.
  */
+import type { FormPart } from './length-plan';
+import { LINE_SYLLABLES, lineSyllables } from './length-plan';
 import { MUSIC_LIMITS } from './music-limits';
 
 export const LYRICS_LIMITS = { max: 3000 } as const;
@@ -53,17 +55,9 @@ export function defaultStructure(seconds: number | null | undefined): LyricStruc
   return seconds <= 30 ? 'hook' : seconds <= 60 ? 'hook-verse' : 'full';
 }
 
-/**
- * How fast Korean is sung, in syllables a second, by tempo (§12.8, measured on 34 sung tracks): about 1.6 at 110 BPM
- * and above, 1.2 at 90–110, 0.9 below 90. Without a tempo, the middle rate.
- */
-export function singingRate(bpm: number | null | undefined): number {
-  if (bpm == null || !Number.isFinite(bpm)) return 1.2;
-  return bpm >= 110 ? 1.6 : bpm >= 90 ? 1.2 : 0.9;
-}
-
-const FAST_WORDS = /빠른|빠르게|신나|경쾌|댄스|업템포|발랄|통통|에너지|fast|upbeat|energetic|dance|uptempo|bouncy|punchy/i;
-const SLOW_WORDS = /느린|느리게|잔잔|차분|발라드|서정|몽환|고요|slow|ballad|calm|gentle|dreamy|tender|ambient/i;
+// The words the dock reads a tempo from (./length-plan.ts `runTempo`): "상쾌하고 가볍게" was missed on 2026-11-21.
+const FAST_WORDS = /빠른|빠르게|신나|경쾌|댄스|업템포|발랄|통통|에너지|상쾌|청량|산뜻|가볍|활기|톡톡|리듬감|fast|upbeat|energetic|dance|uptempo|bouncy|punchy|lively|playful/i;
+const SLOW_WORDS = /느린|느리게|잔잔|차분|발라드|서정|몽환|고요|은은|담백|절제|느긋|slow|ballad|calm|gentle|dreamy|tender|ambient|mellow/i;
 
 /** A tempo read from the words: a written BPM, else 120 for fast words, 80 for slow ones, else null. */
 export function tempoOf(text: string | null | undefined): number | null {
@@ -73,15 +67,6 @@ export function tempoOf(text: string | null | undefined): number | null {
   if (FAST_WORDS.test(words) && !SLOW_WORDS.test(words)) return 120;
   if (SLOW_WORDS.test(words) && !FAST_WORDS.test(words)) return 80;
   return null;
-}
-
-/**
- * The Korean syllables a length holds: target × singing rate, ±25 %. Only a rough range: two songs from one request
- * differed in length by up to 2.5×, so the length tool finishes it (§12.8). 15 s fast ≈ 24, 30 s ≈ 48, 60 s slow ≈ 54.
- */
-export function syllableRange(seconds: number, bpm?: number | null): { min: number; max: number } {
-  const center = seconds * singingRate(bpm);
-  return { min: Math.round(center * 0.75), max: Math.round(center * 1.25) };
 }
 
 const SEQUENCES: Readonly<Record<LyricStructure, readonly string[]>> = {
@@ -120,11 +105,12 @@ export function ownLyrics(lyrics: string | null | undefined): string {
  * byte (only line endings become \n); a mark line goes before each stanza (blank lines separate stanzas) unless the
  * customer wrote marks of their own; `[End]` closes the song. Removing the added lines gives the customer's text back.
  */
-export function markLyrics(lyrics: string, structure: LyricStructure | null): string {
+export function markLyrics(lyrics: string, structure: LyricStructure | null, form?: readonly FormPart[] | null): string {
   const text = ownLyrics(lyrics);
   if (!text.trim()) return '';
   const lines = text.split('\n');
   const own = MARKED.test(text);
+  if (form?.length && !own) return formLyrics(lines, form);
   const starts: number[] = [];
   lines.forEach((line, i) => {
     if (line.trim() && (i === 0 || !lines[i - 1]!.trim())) starts.push(i);
@@ -140,6 +126,34 @@ export function markLyrics(lyrics: string, structure: LyricStructure | null): st
   return out.join('\n');
 }
 
+/**
+ * The lyrics in the planned form (./length-plan.ts, §12.11): sections are a mark and a blank line, a stanza is its
+ * mark and its lines as written, a repeated hook is the same lines again. The measured requests used this layout.
+ */
+function formLyrics(lines: readonly string[], form: readonly FormPart[]): string {
+  const stanzas: string[][] = [];
+  let current: string[] = [];
+  for (const line of lines) {
+    if (line.trim()) current.push(line);
+    else if (current.length) {
+      stanzas.push(current);
+      current = [];
+    }
+  }
+  if (current.length) stanzas.push(current);
+  const blocks: string[] = [];
+  for (const part of form) {
+    if (part.kind === 'section') blocks.push(part.mark);
+    else if (stanzas[part.stanza]) blocks.push([part.mark, ...stanzas[part.stanza]!].join('\n'));
+  }
+  // A stanza the form did not name (lyrics changed after planning) still goes, so nothing written is lost.
+  stanzas.forEach((stanza, i) => {
+    if (!form.some((part) => part.kind === 'sung' && part.stanza === i)) blocks.push(stanza.join('\n'));
+  });
+  if (END_MARK) blocks.push(END_MARK);
+  return blocks.join('\n\n');
+}
+
 /** `marked` without the lines `markLyrics` added: equals `ownLyrics(original)` when nothing of the customer's changed. */
 export function withoutAddedLines(marked: string, original: string): string {
   const own = new Set(ownLyrics(original).split('\n'));
@@ -151,7 +165,7 @@ export function withoutAddedLines(marked: string, original: string): string {
 
 /* ------------------------------------------------------------------ checks without a model (§12.2, §12.3) */
 
-const ALLOWED_MARKS = /^\[(Intro|Verse(?: \d)?|Pre-Chorus|Chorus|Hook|Bridge|Outro|End)\]$/;
+const ALLOWED_MARKS = /^\[(Intro|Verse(?: \d)?|Pre-Chorus|Chorus|Hook|Bridge|Instrumental Break|Outro|End)\]$/;
 /** A superlative or a claim (also kept out of a music design's title and notes, ./architect.ts). */
 export const SUPERLATIVE = /최고|최초|유일|1위|넘버\s*원|\bno\.?\s*1\b|\bnumber one\b|\bthe best\b/i;
 const HANGUL = /[가-힣]/g;
@@ -167,9 +181,10 @@ export interface LyricCheckInput {
   /** Plain stanzas (no marks), as the customer sees them. */
   lyrics: string;
   language: 'ko' | 'en' | 'mixed';
-  seconds: number | null;
-  /** The tempo the song is written for (a BPM, or read from the description): sets the singing rate. */
-  bpm?: number | null;
+  /** The lines asked for each stanza (./length-plan.ts `draftStanzaLines`); null: no length was asked. */
+  stanzaLines?: readonly number[] | null;
+  /** Hold each line to a singable length (new drafts; a polish keeps the customer's lines). */
+  lineLength?: boolean;
   tone: 'haeyo' | 'banmal' | null;
   brand: { name: string; readAs?: string | null } | null;
   mustInclude: readonly string[];
@@ -206,10 +221,18 @@ export function checkLyrics(input: LyricCheckInput): LyricCheck {
     if (count > 0 && !firstStanza.includes(brandWord)) soft.push('the brand name is not in the hook');
   }
   const syllables = (text.match(HANGUL) ?? []).length;
-  if (input.language === 'ko' && input.seconds) {
-    const range = syllableRange(input.seconds, input.bpm);
-    if (syllables < range.min || syllables > range.max) soft.push(`${syllables} syllables for ${input.seconds} s (aim ${range.min}–${range.max})`);
+  // Length is lines, not syllables (§12.11): the stanzas hold the lines asked, and each line a singable length.
+  if (input.stanzaLines?.length) {
+    const got = text.split(/\n\s*\n/).map((block) => block.split('\n').filter((l) => l.trim() && !/^\[.*\]$/.test(l.trim())).length).filter((n) => n > 0);
+    if (got.join(',') !== input.stanzaLines.join(',')) soft.push(`stanza lines ${got.join('/') || '0'} where ${input.stanzaLines.join('/')} were asked`);
   }
+  const range = LINE_SYLLABLES[input.language === 'en' ? 'en' : 'ko'];
+  const sungLines = input.lineLength ? lines.filter((l) => !/^\[.*\]$/.test(l)) : [];
+  const outside = sungLines.filter((l) => {
+    const n = lineSyllables(l);
+    return n < range.min || n > range.max;
+  });
+  if (sungLines.length && outside.length / sungLines.length > 0.34) soft.push(`${outside.length} of ${sungLines.length} lines outside ${range.min}–${range.max} syllables`);
   if (input.language !== 'en') {
     const ends = lines.filter((l) => !/^\[.*\]$/.test(l)).map((l) => l.replace(/[^가-힣]+$/g, '')).filter((l) => /[가-힣]$/.test(l));
     const hardEnds = ends.filter((l) => HARD_FINALS.has(finalJong(l.slice(-1)))).length;
