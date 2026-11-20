@@ -12,6 +12,7 @@ import {
   type ComposeClip,
   type ComposerProject,
 } from '@/lib/brand-studio/compose/timeline';
+import type { GradeNames } from '@/lib/brand-studio/editor-v2/film-contents';
 import { createFilmSession, type FilmConflict, type FilmSession } from '@/lib/brand-studio/editor-v2/film-session';
 import { snapFilmFps, sourceFramesOf } from '@/lib/brand-studio/editor-v2/fps';
 import { emptyFilm, realAssistAllowed, realDoc, sampleHrefFor, workspaceLocked } from '@/lib/brand-studio/editor-v2/real';
@@ -142,6 +143,8 @@ export interface RealFilmOptions {
   sources: readonly EditorSource[];
   /** The sample film's address for this organization (`?sample=1`). */
   sampleBase: string;
+  /** The current editor's own names for colour grades, so the film's grade is named as it names it. */
+  gradeNames?: GradeNames;
 }
 
 export interface EditorOptions {
@@ -1064,6 +1067,7 @@ export function useEditor(copy: StudioEditorCopy, options: EditorOptions = {}) {
     real: isReal,
     /** The stored film as last read or written (real film only): what v2 shows but does not own. */
     storedFilm,
+    gradeNames: real?.gradeNames ?? null,
     status,
     readOnly,
     /** `false` once browser storage refused a read or a write: the film then lives in memory only. */

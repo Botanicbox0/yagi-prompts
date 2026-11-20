@@ -6,9 +6,11 @@ import type { ComposerProject } from '@/lib/brand-studio/compose/timeline';
 import { burnsCaptions, formatBytes, notIncluded, writesCaptionFile } from '@/lib/brand-studio/editor-v2/export-plan';
 import { formatTimecode, totalFrames } from '@/lib/brand-studio/editor-v2/frames';
 import { captionsToSrt, type EditorWorkspace } from '@/lib/brand-studio/editor-v2/model';
+import { filmContents } from '@/lib/brand-studio/editor-v2/film-contents';
 import { captionsOnFrames } from '@/lib/brand-studio/editor-v2/stored';
 import { browserCanExport } from './export-film';
 import { cancelExport, exportJobSnapshot, idleExportJob, startExport, subscribeExportJob, watchExportJob, type ExportJob } from './export-job';
+import { FilmContentsList } from './film-contents-list';
 import { EditorIcon } from './icons';
 import type { EditorApi } from './use-editor';
 import styles from './editor-v2.module.css';
@@ -124,6 +126,12 @@ export function ExportSheet({ api }: { api: EditorApi }) {
           <dd>{sequence.captions.length > 0 ? copy.captions.output[sampleDoc ? sampleDoc.captionSettings.output : 'burn'] : e.captionsNone}</dd>
         </div>
       </dl>
+      {real && extras && (
+        <section className={styles.section} data-editor-export-contents>
+          <h3>{e.contents.heading}</h3>
+          <FilmContentsList contents={filmContents(sequence, extras)} copy={copy} gradeNames={api.gradeNames} withCuts />
+        </section>
+      )}
       {missing.length > 0 && (
         <section className={styles.section} data-editor-export-missing={missing.join(' ')}>
           <h3>{e.missingHeading}</h3>

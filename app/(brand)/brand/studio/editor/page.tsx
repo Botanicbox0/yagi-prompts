@@ -74,6 +74,7 @@ export default async function StudioEditorV2Page({
         canEdit,
         sources: editorSources(choice.id, assets, videoOutputs),
         sampleBase: scopedHref('/brand/studio/editor?sample=1', choice),
+        gradeNames: { presets: dict.studioCompose.colorGrade.presets, reference: dict.studioCompose.colorGrade.activeRef },
       }}
     />
   );

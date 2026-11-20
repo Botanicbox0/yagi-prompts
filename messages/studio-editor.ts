@@ -355,6 +355,18 @@ export const studioEditorEn = {
     captions: 'Captions',
     captionsNone: 'None',
     missingHeading: 'Not in this file',
+    /** A real film: what the stored film puts into the file besides the cuts (review round 1, item 6). */
+    contents: {
+      heading: 'In this file',
+      cuts: '{count} cuts',
+      captions: '{count} captions',
+      grade: 'Color: {name}',
+      gradeCustom: 'a color set in the earlier editor',
+      music: 'Music: {name}',
+      effects: '{count} sound effects',
+      stills: '{count} images over the picture',
+      notHeard: 'not heard in this preview',
+    },
     missing: {
       looks: 'Color looks on cuts',
       titles: 'Titles',
@@ -429,6 +441,11 @@ export const studioEditorEn = {
     },
     assistUnknown: 'For now it follows cut sentences like the examples below.',
     assistNotReady: 'That part is not ready yet. For now it follows cut sentences only.',
+    /** What the stored film carries besides the cuts, shown in the film panel (review round 1, item 6). */
+    contents: {
+      heading: 'What this film carries',
+      note: 'Added in the earlier editor. They go into the exported file.',
+    },
     /** Another tab (an open earlier editor) wrote over this screen's cuts. */
     conflict: {
       body: 'This film was changed in another tab. Choose which version to keep.',
@@ -787,6 +804,17 @@ export const studioEditorKo: typeof studioEditorEn = {
     captions: '자막',
     captionsNone: '없음',
     missingHeading: '이번 파일에 들어가지 않는 것',
+    contents: {
+      heading: '이 파일에 들어가는 것',
+      cuts: '컷 {count}개',
+      captions: '자막 {count}개',
+      grade: '색: {name}',
+      gradeCustom: '예전 편집기에서 맞춘 색',
+      music: '음악: {name}',
+      effects: '효과음 {count}개',
+      stills: '화면 위 이미지 {count}개',
+      notHeard: '이 미리 보기에서는 들리지 않습니다',
+    },
     missing: {
       looks: '컷별 색 보정',
       titles: '제목',
@@ -860,6 +888,10 @@ export const studioEditorKo: typeof studioEditorEn = {
     },
     assistUnknown: '지금은 컷 편집만 말로 할 수 있습니다. 아래 예시처럼 적어 주세요.',
     assistNotReady: '그 작업은 아직 준비 중입니다. 지금은 컷 편집만 말로 할 수 있습니다.',
+    contents: {
+      heading: '이 영상에 들어 있는 것',
+      note: '예전 편집기에서 넣은 것입니다. 내보낸 파일에 들어갑니다.',
+    },
     conflict: {
       body: '다른 탭에서 이 영상이 바뀌었습니다. 어느 쪽을 남길지 골라 주세요.',
       keep: '이 화면의 영상 남기기',

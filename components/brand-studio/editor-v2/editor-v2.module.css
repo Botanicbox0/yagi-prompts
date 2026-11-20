@@ -1016,3 +1016,10 @@
 }
 .conflictBar p { margin: 0; font-size: 13px; line-height: 1.4; }
 .conflictBar .fixBtn { flex: none; }
+
+/* ── What a real film's file carries besides the cuts (review round 1, item 6) ── */
+.filmContents { list-style: none; margin: 0; padding: 0; display: grid; gap: 4px; font-size: 12px; }
+.filmContents li::before { content: '·'; margin-right: 6px; color: var(--ys-ink-secondary); }
+.filmContents li[data-quiet] { color: var(--ys-ink-secondary); }
+.stillOverlay { position: absolute; transform: translate(-50%, -50%); height: auto; pointer-events: none; }
+.gradeRegion { position: absolute; pointer-events: none; }

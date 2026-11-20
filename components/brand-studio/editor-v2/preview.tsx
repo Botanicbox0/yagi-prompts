@@ -3,7 +3,9 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { fill } from '@/components/brand-studio/copy';
 import { materialBySrc } from '@/lib/brand-studio/editor-v2/fixture';
-import { COMPOSE_DIMENSIONS } from '@/lib/brand-studio/compose/timeline';
+import { cssFilterForColorGrade } from '@/lib/brand-studio/compose/color-grade';
+import { COMPOSE_DIMENSIONS, activeColorGradeForFrame, toColorGradeSpec } from '@/lib/brand-studio/compose/timeline';
+import { imageOverlaysAt, storedCutFor } from '@/lib/brand-studio/editor-v2/export-plan';
 import { CURRENT_EXPORT_BACKGROUND, currentExportFrame } from '@/lib/brand-studio/editor-v2/framing';
 import { formatTimecode, frameStateAt, spansOf, totalFrames } from '@/lib/brand-studio/editor-v2/frames';
 import { DEFAULT_REFRAME, gradeMatrix, isNeutral } from '@/lib/brand-studio/editor-v2/model';
@@ -242,8 +244,27 @@ export function Preview({ api }: { api: EditorApi }) {
   const framed = api.real
     ? currentExportFrame(natural && natural.src === src ? natural.width : 0, natural && natural.src === src ? natural.height : 0, dims.width, dims.height)
     : null;
+  // The stored film's colour grade, the way the current editor's own preview shows it (its exported CSS
+  // approximation, cssFilterForColorGrade): on the picture, or over its region. Still images over the
+  // picture where the export draws them (review round 1, item 6). Music and effects are not played here.
+  const storedFilm = api.real ? api.storedFilm : null;
+  const activeCut = activeClip?.clip ?? null;
+  const activeIndex = activeClip?.index ?? 0;
+  const storedGrade = useMemo(
+    () => (storedFilm && activeCut ? activeColorGradeForFrame(storedFilm, storedCutFor(storedFilm, activeCut, activeIndex)) : null),
+    [storedFilm, activeCut, activeIndex],
+  );
+  const gradeFilter = useMemo(() => (storedGrade ? cssFilterForColorGrade(toColorGradeSpec(storedGrade)) : 'none'), [storedGrade]);
+  const gradeOnPicture = !!storedGrade && storedGrade.scope !== 'region' && gradeFilter !== 'none';
+  const gradeRegion = !!storedGrade && storedGrade.scope === 'region' && gradeFilter !== 'none' ? storedGrade.region : null;
+  const stills = storedFilm ? imageOverlaysAt(storedFilm, playhead, fps) : [];
   const videoStyle: React.CSSProperties = framed
-    ? { objectFit: framed.fit === 'fit' ? 'contain' : 'cover', objectPosition: '50% 50%', backgroundColor: CURRENT_EXPORT_BACKGROUND }
+    ? {
+        objectFit: framed.fit === 'fit' ? 'contain' : 'cover',
+        objectPosition: '50% 50%',
+        backgroundColor: CURRENT_EXPORT_BACKGROUND,
+        filter: gradeOnPicture ? gradeFilter : undefined,
+      }
     : { objectFit: reframe.fit === 'fill' ? 'cover' : 'contain', objectPosition: `${reframe.x}% 50%`, filter: graded ? 'url(#ev2-grade)' : undefined };
 
   return (
@@ -278,7 +299,34 @@ export function Preview({ api }: { api: EditorApi }) {
             poster={material?.poster ?? (api.real ? (clip?.thumbUrl ?? undefined) : undefined)}
             style={videoStyle}
             data-editor-framing={framed ? framed.fit : undefined}
+            data-editor-grade={gradeOnPicture ? gradeFilter : undefined}
           />
+          {gradeRegion && (
+            <div
+              className={styles.gradeRegion}
+              style={{
+                left: `${gradeRegion.x * 100}%`,
+                top: `${gradeRegion.y * 100}%`,
+                width: `${gradeRegion.w * 100}%`,
+                height: `${gradeRegion.h * 100}%`,
+                backdropFilter: gradeFilter,
+                WebkitBackdropFilter: gradeFilter,
+              }}
+              aria-hidden="true"
+              data-editor-grade-region
+            />
+          )}
+          {stills.map((still) => (
+            // eslint-disable-next-line @next/next/no-img-element -- the stored film's own image, drawn where the export draws it
+            <img
+              key={still.id}
+              className={styles.stillOverlay}
+              src={still.srcUrl}
+              alt=""
+              style={{ left: `${still.x * 100}%`, top: `${still.y * 100}%`, width: `${still.scale * 100}%`, opacity: Math.max(0, Math.min(1, still.opacity)) }}
+              data-editor-still={still.id}
+            />
+          ))}
           {comparing && (
             <>
               <canvas ref={canvasRef} className={styles.beforeCanvas} style={{ clipPath: `inset(0 ${100 - split}% 0 0)` }} />

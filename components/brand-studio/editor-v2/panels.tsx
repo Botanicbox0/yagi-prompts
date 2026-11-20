@@ -12,6 +12,7 @@ import {
   materialBySrc,
   materialSeconds,
 } from '@/lib/brand-studio/editor-v2/fixture';
+import { filmContents } from '@/lib/brand-studio/editor-v2/film-contents';
 import { clipFrameAt, formatTimecode, type FrameCaption } from '@/lib/brand-studio/editor-v2/frames';
 import { sourceSeconds } from '@/lib/brand-studio/editor-v2/sources';
 import { formatBinding, type ShortcutAction } from '@/lib/brand-studio/editor-v2/shortcuts';
@@ -32,6 +33,7 @@ import {
   type ScopeMode,
 } from '@/lib/brand-studio/editor-v2/model';
 import { EditorIcon } from './icons';
+import { FilmContentsList } from './film-contents-list';
 import { ASPECT_KEYS, SPEEDS, type EditorApi } from './use-editor';
 import styles from './editor-v2.module.css';
 
@@ -483,6 +485,23 @@ export function ActionPanel({ api, classicHref }: { api: EditorApi; classicHref?
   );
 }
 
+/**
+ * What the stored film carries besides the cuts (music, effects, colour, images, captions made in the
+ * earlier editor), read-only, so nobody is surprised by the exported file (review round 1, item 6).
+ */
+function StoredContents({ api }: { api: EditorApi }) {
+  const contents = filmContents(api.sequence, api.storedFilm);
+  if (!contents.captions && !contents.grade && !contents.music && !contents.effects && !contents.stills) return null;
+  return (
+    <Section title={api.copy.real.contents.heading}>
+      <div data-editor-film-contents>
+        <FilmContentsList contents={contents} copy={api.copy} gradeNames={api.gradeNames} withCuts={false} />
+        <p className={styles.note}>{api.copy.real.contents.note}</p>
+      </div>
+    </Section>
+  );
+}
+
 function PanelHead({ title, meta }: { title: string; meta?: string }) {
   return (
     <header className={styles.panelHead}>
@@ -619,6 +638,7 @@ function CutPanel({ api }: { api: EditorApi }) {
       {api.real && api.tentative && (
         <p className={styles.note} data-editor-rate-tentative>{fill(copy.real.rateTentative, { fps })}</p>
       )}
+      {api.real && <StoredContents api={api} />}
       <Section title={c.film.shape}>
         <div className={styles.shapeGrid} role="group" aria-label={c.film.shape}>
           {COMPOSE_ASPECTS.map((aspect) => {
