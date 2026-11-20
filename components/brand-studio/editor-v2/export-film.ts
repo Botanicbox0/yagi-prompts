@@ -34,6 +34,7 @@ import {
   type AudioPlan,
   type NotIncludedKey,
 } from '@/lib/brand-studio/editor-v2/export-plan';
+import { CURRENT_EXPORT_BACKGROUND, currentExportFrame } from '@/lib/brand-studio/editor-v2/framing';
 import { totalFrames, type FrameSequence } from '@/lib/brand-studio/editor-v2/frames';
 import { DEFAULT_REFRAME, type Reframe } from '@/lib/brand-studio/editor-v2/model';
 
@@ -47,8 +48,13 @@ export interface ExportFilmOptions {
   sequence: FrameSequence;
   /** The stored film in real mode (captions are taken from `sequence`); `null` for the sample film. */
   extras?: ComposerProject | null;
-  /** Per-cut framing, as the preview draws it. */
+  /** Per-cut framing, as the preview draws it (the sample film). */
   reframe?: Readonly<Record<string, Reframe>>;
+  /**
+   * `current`: every picture framed by the current exporter's rule (lib/brand-studio/editor-v2/framing.ts),
+   * as the preview shows it on a real film; `reframe` (default): the sample film's own framing control.
+   */
+  framing?: 'reframe' | 'current';
   /** Draw the captions into the picture (`false` when the person wants them only as a file). */
   burnCaptions?: boolean;
   onProgress?: (progress: ExportProgress) => void;
@@ -303,6 +309,14 @@ export function drawFramed(ctx: CanvasRenderingContext2D, video: HTMLVideoElemen
   ctx.drawImage(video, (width - dw) * x, (height - dh) * 0.5, dw, dh);
 }
 
+/** Draws by the current exporter's framing rule (real film): the same rectangle the v2 preview shows. */
+export function drawCurrentFraming(ctx: CanvasRenderingContext2D, video: HTMLVideoElement, width: number, height: number): void {
+  ctx.fillStyle = CURRENT_EXPORT_BACKGROUND;
+  ctx.fillRect(0, 0, width, height);
+  const framed = currentExportFrame(video.videoWidth, video.videoHeight, width, height);
+  ctx.drawImage(video, framed.x, framed.y, framed.width, framed.height);
+}
+
 /** The current exporter's overlay drawing, for still images (centre at `x,y`, width `scale` of the frame). */
 function drawImageOverlays(ctx: CanvasRenderingContext2D, overlays: readonly ComposeOverlayClip[], images: ReadonlyMap<string, HTMLImageElement>, width: number, height: number) {
   for (const overlay of overlays) {
@@ -550,7 +564,7 @@ async function encodeAac(rendered: AudioBuffer, signal?: AbortSignal): Promise<{
 // ── The export ─────────────────────────────────────────────────────────────────────────────────
 
 export async function exportFilm(options: ExportFilmOptions): Promise<ExportFilmResult> {
-  const { sequence, extras = null, reframe = {}, burnCaptions = true, onProgress, signal } = options;
+  const { sequence, extras = null, reframe = {}, framing = 'reframe', burnCaptions = true, onProgress, signal } = options;
   const started = performance.now();
   const frames = totalFrames(sequence);
   if (frames === 0 || sequence.clips.length === 0) throw new ExportStop('empty', 'the film has no frames');
@@ -618,7 +632,8 @@ export async function exportFilm(options: ExportFilmOptions): Promise<ExportFilm
       }
       // Consecutive frames on the same source frame (a slowed cut) reuse the picture: no second seek.
       await present(source, entry.sourceFrame, entry.frame, label, signal);
-      drawFramed(ctx, source.video, width, height, reframe[entry.clipId] ?? DEFAULT_REFRAME);
+      if (framing === 'current') drawCurrentFraming(ctx, source.video, width, height);
+      else drawFramed(ctx, source.video, width, height, reframe[entry.clipId] ?? DEFAULT_REFRAME);
       if (graded && extras) {
         const index = indexOf.get(entry.clipId) ?? 0;
         applyProjectColorGradeFrame(ctx, width, height, extras, storedCutFor(extras, sequence.clips[index]!, index));

@@ -3,6 +3,8 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { fill } from '@/components/brand-studio/copy';
 import { materialBySrc } from '@/lib/brand-studio/editor-v2/fixture';
+import { COMPOSE_DIMENSIONS } from '@/lib/brand-studio/compose/timeline';
+import { CURRENT_EXPORT_BACKGROUND, currentExportFrame } from '@/lib/brand-studio/editor-v2/framing';
 import { formatTimecode, frameStateAt, spansOf, totalFrames } from '@/lib/brand-studio/editor-v2/frames';
 import { DEFAULT_REFRAME, gradeMatrix, isNeutral } from '@/lib/brand-studio/editor-v2/model';
 import { formatBinding } from '@/lib/brand-studio/editor-v2/shortcuts';
@@ -27,6 +29,8 @@ export function Preview({ api }: { api: EditorApi }) {
   const frameRef = useRef<HTMLDivElement | null>(null);
   const [split, setSplit] = useState(50);
   const [shown, setShown] = useState<{ src: string; sourceFrame: number } | null>(null);
+  /** The picture's own size, once the video knows it: a real film is framed by it (framing.ts). */
+  const [natural, setNatural] = useState<{ src: string; width: number; height: number } | null>(null);
 
   const latest = useRef({ sequence, playhead, seek: api.seek, setRate: api.setRate });
   latest.current = { sequence, playhead, seek: api.seek, setRate: api.setRate };
@@ -71,6 +75,21 @@ export function Preview({ api }: { api: EditorApi }) {
       video.removeEventListener('loadedmetadata', apply);
     };
   }, [rate, src, seekSec, sourceFrame]);
+
+  useEffect(() => {
+    const video = videoRef.current;
+    if (!video) return;
+    const read = () => {
+      if (video.videoWidth > 0 && video.videoHeight > 0) setNatural({ src: video.dataset.src ?? '', width: video.videoWidth, height: video.videoHeight });
+    };
+    video.addEventListener('loadedmetadata', read);
+    video.addEventListener('resize', read);
+    read();
+    return () => {
+      video.removeEventListener('loadedmetadata', read);
+      video.removeEventListener('resize', read);
+    };
+  }, []);
 
   // Playing forward (1×, or 2× and 4× on the shuttle): the video element is the clock and the playhead
   // follows it, one whole frame at a time, cut by cut.
@@ -217,6 +236,15 @@ export function Preview({ api }: { api: EditorApi }) {
     return binding ? formatBinding(binding, api.mac) : [];
   };
   const settledOnFrame = rate === 0 && !!shown && shown.src === src && shown.sourceFrame === sourceFrame;
+  // A real film is framed exactly as the current editor's file frames it (and v2's export does): cover,
+  // or fit inside on the exporter's background when the shapes are far apart (review round 1, item 5).
+  const dims = COMPOSE_DIMENSIONS[sequence.aspect];
+  const framed = api.real
+    ? currentExportFrame(natural && natural.src === src ? natural.width : 0, natural && natural.src === src ? natural.height : 0, dims.width, dims.height)
+    : null;
+  const videoStyle: React.CSSProperties = framed
+    ? { objectFit: framed.fit === 'fit' ? 'contain' : 'cover', objectPosition: '50% 50%', backgroundColor: CURRENT_EXPORT_BACKGROUND }
+    : { objectFit: reframe.fit === 'fill' ? 'cover' : 'contain', objectPosition: `${reframe.x}% 50%`, filter: graded ? 'url(#ev2-grade)' : undefined };
 
   return (
     <section
@@ -248,11 +276,8 @@ export function Preview({ api }: { api: EditorApi }) {
             playsInline
             preload="auto"
             poster={material?.poster ?? (api.real ? (clip?.thumbUrl ?? undefined) : undefined)}
-            style={{
-              objectFit: reframe.fit === 'fill' ? 'cover' : 'contain',
-              objectPosition: `${reframe.x}% 50%`,
-              filter: graded ? 'url(#ev2-grade)' : undefined,
-            }}
+            style={videoStyle}
+            data-editor-framing={framed ? framed.fit : undefined}
           />
           {comparing && (
             <>

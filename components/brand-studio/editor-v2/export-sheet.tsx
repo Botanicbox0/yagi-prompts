@@ -68,6 +68,8 @@ export function ExportSheet({ api }: { api: EditorApi }) {
     startExport({
       sequence: film ? { ...sequence, captions: captionsOnFrames(film.captions, sequence.fps) } : sequence,
       reframe: doc.reframe,
+      // A real film is framed like the current editor's file (and v2's preview of it): no control of its own yet.
+      framing: real ? 'current' : 'reframe',
       extras: film,
       burnCaptions: burnsCaptions(sampleDoc),
       captionText: writesCaptionFile(sampleDoc, sequence) ? captionsToSrt(sequence.captions, sequence.fps) : null,

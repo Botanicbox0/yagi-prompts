@@ -26,6 +26,8 @@ export type ExportJob =
 export interface ExportRequest {
   sequence: FrameSequence;
   reframe: Readonly<Record<string, Reframe>>;
+  /** `current` on a real film: the current exporter's framing rule (lib/brand-studio/editor-v2/framing.ts). */
+  framing: 'reframe' | 'current';
   extras: ComposerProject | null;
   burnCaptions: boolean;
   /** SubRip text to hand over beside the video, or `null`. */
@@ -101,7 +103,7 @@ export function startExport(request: ExportRequest): void {
     set({ status: 'running', progress, frames, fps });
   };
 
-  exportFilm({ sequence, extras: request.extras, reframe: request.reframe, burnCaptions: request.burnCaptions, onProgress, signal: own.signal }).then(
+  exportFilm({ sequence, extras: request.extras, reframe: request.reframe, framing: request.framing, burnCaptions: request.burnCaptions, onProgress, signal: own.signal }).then(
     (result) => {
       if (controller !== own) return;
       controller = null;
