@@ -94,6 +94,17 @@ export function TrackRow(props: {
   const [showSent, setShowSent] = useState(false);
   const [peaks, setPeaks] = useState<number[] | 'failed' | null>(() => track.waveform ?? peakCache.get(track.streamUrl) ?? null);
 
+  // Opened: bring the whole row into view above the dock, which can be tall with the lyrics options open
+  // (real-screen check 2026-11-21: an opened version's text sat behind the dock). Not on first render.
+  const wasOpen = useRef(open);
+  useEffect(() => {
+    if (open && !wasOpen.current) {
+      const reduce = typeof window !== 'undefined' && window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
+      requestAnimationFrame(() => row.current?.scrollIntoView({ block: 'nearest', behavior: reduce ? 'auto' : 'smooth' }));
+    }
+    wasOpen.current = open;
+  }, [open]);
+
   // Stored peaks draw at once; otherwise decode the file when the row comes into view (and keep the peaks).
   useEffect(() => {
     if (peaks) return;

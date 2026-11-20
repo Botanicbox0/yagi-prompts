@@ -179,6 +179,9 @@
 }
 .row {
   border-bottom: 1px solid var(--ys-hairline);
+  /* An opened row scrolls into view above the sticky dock (its height is measured into --sound-dock-h). */
+  scroll-margin-top: 12px;
+  scroll-margin-bottom: calc(var(--sound-dock-h, 0px) + 28px);
 }
 .line {
   display: grid;

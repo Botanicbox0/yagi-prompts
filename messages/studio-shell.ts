@@ -51,6 +51,8 @@ export const studioShellEn = {
     videoDone: 'Your video is ready',
     imageFailed: "We couldn't make your image",
     videoFailed: "We couldn't make your video",
+    soundDone: 'Your sound is ready',
+    soundFailed: "We couldn't make your sound",
     view: 'View',
     dismiss: 'Close',
   },
@@ -180,6 +182,9 @@ export const studioShellKo: typeof studioShellEn = {
     videoDone: '영상이 완성됐어요',
     imageFailed: '이미지를 만들지 못했어요',
     videoFailed: '영상을 만들지 못했어요',
+    // Music and effects (sound studio): Gemma 2 passes kept the image/video pattern (2026-11-21).
+    soundDone: '사운드가 완성됐어요',
+    soundFailed: '사운드를 만들지 못했어요',
     view: '보기',
     dismiss: '닫기',
   },

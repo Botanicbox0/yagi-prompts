@@ -251,7 +251,7 @@ export function RailNavigation(props: RailNavigationProps) {
     return copy.rail[id];
   };
   const badge = (id: RailItemId) =>
-    id === 'image' ? activity.counts.image : id === 'video' ? activity.counts.video : id === 'messages' ? unread : 0;
+    id === 'image' ? activity.counts.image : id === 'video' ? activity.counts.video : id === 'sound' ? activity.counts.sound : id === 'messages' ? unread : 0;
   /** What the badge says to a screen reader and in the collapsed tooltip. */
   const badgeText = (id: RailItemId, count: number, short = false) =>
     count <= 0 ? '' : id === 'messages' && nav ? interpolate(short ? nav.unreadShort : nav.unread, { count }) : interpolate(copy.rail.running, { count });
@@ -511,7 +511,7 @@ export function RailNavigation(props: RailNavigationProps) {
 
   /* ---------------------------------------------------------- the switch */
   const modeName = (m: RailMode) => (nav ? (m === 'make' ? nav.groupMake : nav.groupTeam) : '');
-  const running = activity.counts.image + activity.counts.video;
+  const running = activity.counts.image + activity.counts.video + activity.counts.sound;
   /** Something waiting on the side the person is not on: unread notices for 야기 팀과, runs in progress for 직접 만들기. */
   const waiting = (m: RailMode): { count: number; text: string; short: string } | null => {
     if (m === mode || !nav) return null;

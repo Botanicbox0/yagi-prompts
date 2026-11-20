@@ -171,7 +171,7 @@ export function useStudioActivity({ organizationId, enabled, path }: { organizat
 
   return {
     summary,
-    counts: summary ? countByGroup(summary.open) : { image: 0, video: 0 },
+    counts: summary ? countByGroup(summary.open) : { image: 0, video: 0, sound: 0 },
     toasts,
     dismiss,
   };
@@ -370,9 +370,13 @@ export function RailToasts({
             ? toast.outcome === 'done'
               ? copy.toast.imageDone
               : copy.toast.imageFailed
-            : toast.outcome === 'done'
-              ? copy.toast.videoDone
-              : copy.toast.videoFailed;
+            : toast.group === 'sound'
+              ? toast.outcome === 'done'
+                ? copy.toast.soundDone
+                : copy.toast.soundFailed
+              : toast.outcome === 'done'
+                ? copy.toast.videoDone
+                : copy.toast.videoFailed;
         return (
           <div key={toast.id} className="bw-rail-toast" data-rail-toast={toast.outcome}>
             <span className="bw-rail-toast-dot" aria-hidden="true" />
