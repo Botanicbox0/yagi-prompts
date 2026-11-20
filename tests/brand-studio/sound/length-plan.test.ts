@@ -1,5 +1,17 @@
 import { describe, expect, it } from 'vitest';
-import { draftStanzaLines, formText, lengthPlan, lineSyllables, linesNeeded, runTempo, SECTION_BARS, barsPerLine, stanzaLines } from '@/lib/brand-studio/sound/length-plan';
+import {
+  barsPerLine,
+  draftStanzaLines,
+  formText,
+  lengthPlan,
+  lineSyllables,
+  linesNeeded,
+  LONG_RATIO,
+  runTempo,
+  SECTION_BARS,
+  stanzaLines,
+} from '@/lib/brand-studio/sound/length-plan';
+import type { LyricStructure } from '@/lib/brand-studio/sound/lyrics';
 
 /**
  * The length plan (docs/BRAND-SOUND-STUDIO.md §12.11) against the lead's real engine measurement of 2026-11-21
@@ -29,67 +41,90 @@ const MEASURED: Measured[] = [
   { name: 'H 78 BPM 30 s: 4 lines', bpm: 78, target: 30, lines: 4, sections: 0, clips: [43.2, 42.8] },
 ];
 
-/** The plan's own judgement for a measured form: line-equivalents against what the length needs. */
+/** The plan's own judgement for a measured form: planned bars against the bars the length wants. */
 function judged(m: Measured): boolean {
-  const per = barsPerLine(m.bpm).plan;
-  return m.lines + (m.sections * SECTION_BARS) / per >= linesNeeded(m.target, m.bpm);
+  return m.lines * barsPerLine(m.bpm).plan + m.sections * SECTION_BARS.plan >= (m.target * m.bpm) / 240;
 }
 
 describe('the plan against the measurement', () => {
-  it('needs the lines the rule gives: 118 BPM 15/30/60 s → 4/7/14, 78 BPM 30/60 s → 4/7', () => {
-    expect([15, 30, 60].map((s) => linesNeeded(s, 118))).toEqual([4, 7, 14]);
+  it('counts the bars: 118 BPM 15/30/60 s want 3/6/12 lines, 78 BPM 30/60 s 4/7 (sections aside)', () => {
+    expect([15, 30, 60].map((s) => linesNeeded(s, 118))).toEqual([3, 6, 12]);
     expect([30, 60].map((s) => linesNeeded(s, 78))).toEqual([4, 7]);
   });
 
-  it('calls the production run (3 lines, 118 BPM, 30 s) short, and the forms it calls enough reach the length', () => {
-    expect(judged(MEASURED[0]!)).toBe(false);
-    const enough = MEASURED.filter(judged);
-    const clips = enough.flatMap((m) => m.clips.map((c) => c >= m.target));
-    // A, D, G, H: 13 of 14 songs at least the length (one A song 25.8 s against 30).
-    expect(enough.map((m) => m.name[0])).toEqual(['A', 'D', 'G', 'H']);
-    expect(clips.filter(Boolean).length / clips.length).toBeGreaterThanOrEqual(0.9);
-    // Every song the plan calls short that was in fact short is the 3-line form the screen made.
-    const shortSongs = MEASURED.flatMap((m) => m.clips.filter((c) => c < m.target).map(() => m.name));
-    expect(shortSongs.every((n) => /3 lines|A more words/.test(n))).toBe(true);
+  it('calls the forms that reached the length enough, and the 3 lines alone short', () => {
+    expect(MEASURED.filter((m) => !judged(m)).map((m) => m.name[0])).toEqual(['p', 'E']);
+    // 30 s: 7 lines, 3 lines with intro, break and empty outro, the hook twice; 60 s: the padded hook form.
+    expect(MEASURED.filter(judged).map((m) => m.name[0])).toEqual(['A', 'B', 'C', 'D', 'F', 'G', 'H']);
+    const clips = MEASURED.filter(judged).flatMap((m) => m.clips.map((c) => c >= m.target));
+    // 25 of 26 songs at least the length (one A song 25.8 s against 30).
+    expect(clips.filter(Boolean).length).toBe(25);
+    expect(clips).toHaveLength(26);
+  });
+
+  it('produces the two measured forms that reached the length', () => {
+    // 60 s, fast, a drafted hook: intro, hook 4, break, hook again, break, 2-line outro (69.1 70.0 66.8 67.6 s).
+    const f = lengthPlan({ seconds: 60, bpm: 118, structure: 'hook', stanzas: draftStanzaLines('hook', 60, 118), repeatHook: true });
+    expect(draftStanzaLines('hook', 60, 118)).toEqual([4, 2]);
+    expect(formText(f.form)).toBe('[Intro] [Chorus] [Instrumental Break] [Chorus]* [Instrumental Break] [Outro]');
+    // 30 s, fast, the customer's 3 lines: intro, the lines, break, empty outro (34.0 32.3 47.4 34.8 s).
+    const c = lengthPlan({ seconds: 30, bpm: 118, structure: 'hook', stanzas: [3], repeatHook: false });
+    expect(formText(c.form)).toBe('[Intro] [Chorus] [Instrumental Break] [Outro]');
+    expect(c.enough).toBe(true);
   });
 });
 
-describe('drafted lyrics', () => {
-  it('spreads the lines over the stanzas, 2 to 4 each', () => {
-    expect(draftStanzaLines('hook', 15, 118)).toEqual([4]);
-    expect(draftStanzaLines('hook', 30, 118)).toEqual([4]);
-    expect(draftStanzaLines('hook-verse', 30, 118)).toEqual([2, 2, 2, 2]);
-    expect(draftStanzaLines('full', 60, 118)).toEqual([3, 3, 3, 3, 2]);
-    expect(draftStanzaLines('hook', 30, 78)).toEqual([4]);
+/** The standard 27: three lengths × three tempos × three structures, drafted (§12.11 table). */
+const ROWS = ([15, 30, 60] as const).flatMap((seconds) =>
+  ([118, 100, 78] as const).flatMap((bpm) =>
+    (['hook', 'hook-verse', 'full'] as const).map((structure: LyricStructure) => {
+      const stanzas = draftStanzaLines(structure, seconds, bpm);
+      const plan = lengthPlan({ seconds, bpm, structure, stanzas, repeatHook: true });
+      return { seconds, bpm, structure, stanzas, plan, ratio: plan.estimate.max / seconds };
+    }),
+  ),
+);
+
+describe('the standard 27', () => {
+  it('lands every default structure (15 and 30 s hook, 60 s hook and verse) and the 60 s hook at 1.0–1.45 of the length', () => {
+    const asked = ROWS.filter((r) => (r.structure === 'hook' && r.seconds <= 30) || (r.seconds === 60 && (r.structure === 'hook-verse' || r.structure === 'hook')));
+    expect(asked).toHaveLength(12);
+    for (const r of asked) {
+      expect(r.plan.enough, `${r.seconds} s ${r.bpm} ${r.structure}`).toBe(true);
+      expect(r.ratio, `${r.seconds} s ${r.bpm} ${r.structure}`).toBeGreaterThanOrEqual(1);
+      expect(r.ratio, `${r.seconds} s ${r.bpm} ${r.structure}`).toBeLessThanOrEqual(1.45);
+    }
   });
 
-  it('fills a short hook with an intro, a break and the hook again, never with more words', () => {
-    const p30 = lengthPlan({ seconds: 30, bpm: 118, structure: 'hook', stanzas: [4], repeatHook: true });
-    expect(formText(p30.form)).toBe('[Intro] [Chorus] [Instrumental Break] [Chorus]*');
-    expect(p30).toMatchObject({ needed: 7, units: 10, enough: true, missingLines: 0, targetBars: 14.8 });
-    const p60 = lengthPlan({ seconds: 60, bpm: 118, structure: 'hook', stanzas: [4], repeatHook: true });
-    expect(formText(p60.form)).toBe('[Intro] [Chorus] [Instrumental Break] [Chorus]* [Instrumental Break] [Chorus]* [Outro]');
-    expect(p60.enough).toBe(true);
-    const p15 = lengthPlan({ seconds: 15, bpm: 118, structure: 'hook', stanzas: [4], repeatHook: true });
-    expect(formText(p15.form)).toBe('[Chorus]');
-    expect(p15.enough).toBe(true);
+  it('never ends on a break, and fills a hook in the measured order', () => {
+    for (const r of ROWS) expect(r.plan.form[r.plan.form.length - 1]!.mark, `${r.seconds} ${r.bpm} ${r.structure}`).not.toBe('[Instrumental Break]');
+    const at = (s: number, bpm: number) => formText(ROWS.find((r) => r.seconds === s && r.bpm === bpm && r.structure === 'hook')!.plan.form);
+    expect(at(15, 118)).toBe('[Chorus]');
+    expect(at(30, 118)).toBe('[Intro] [Chorus] [Outro]');
+    expect(at(30, 100)).toBe('[Intro] [Chorus]');
+    expect(at(60, 100)).toBe('[Intro] [Chorus] [Instrumental Break] [Chorus]* [Outro]');
+    expect(at(60, 78)).toBe('[Intro] [Chorus] [Outro]');
   });
 
-  it('plans a longer structure with its own lines, sections only when they run out', () => {
-    const full = lengthPlan({ seconds: 60, bpm: 118, structure: 'full', stanzas: [3, 3, 3, 3, 2], repeatHook: true });
-    expect(formText(full.form)).toBe('[Verse 1] [Chorus] [Verse 2] [Chorus] [Outro]');
-    expect(full.enough).toBe(true);
+  it('a structure with more stanzas than the length needs runs long, and says so (more than 1.45)', () => {
+    const long = ROWS.filter((r) => r.ratio > LONG_RATIO).map((r) => `${r.seconds}/${r.bpm}/${r.structure}`);
+    expect([...long].sort()).toEqual(
+      [
+        '15/118/hook-verse', '15/118/full', '15/100/hook-verse', '15/100/full', '15/78/hook-verse', '15/78/full',
+        '30/100/hook-verse', '30/100/full', '30/118/full', '30/78/hook-verse', '30/78/full', '60/78/full',
+      ].sort(),
+    );
   });
 });
 
 describe('the customer’s own lyrics', () => {
   it('adds sections only, never repeats their lines, and says how short it still is', () => {
-    const three = lengthPlan({ seconds: 30, bpm: 118, structure: 'hook', stanzas: stanzaLines('노란 레몬 탄산이 톡 터지는 모아\n\n유리잔 위로 방울이 올라와\n내 손안에 시원한 모아'), repeatHook: false });
+    const own = stanzaLines('노란 레몬 탄산이 톡 터지는 모아\n\n유리잔 위로 방울이 올라와\n내 손안에 시원한 모아');
+    const three = lengthPlan({ seconds: 30, bpm: 118, structure: 'hook', stanzas: own, repeatHook: false });
+    // The last stanza is a sung [Outro]: no empty one; 3 lines × 2.5 + 2 sections × 2.7 = 12.9 of 14.75 bars.
     expect(formText(three.form)).toBe('[Intro] [Chorus] [Instrumental Break] [Outro]');
     expect(three.form.some((p) => p.kind === 'sung' && p.repeat)).toBe(false);
-    // 3 lines + 2 sections = 5 of 7 line-equivalents (the last stanza is a sung [Outro], so no empty one is added).
-    expect(three).toMatchObject({ enough: false, needed: 7, units: 5, missingLines: 2 });
-    expect(three.estimate.min).toBeLessThan(30);
+    expect(three).toMatchObject({ enough: false, targetBars: 14.8, bars: 12.9, missingLines: 1 });
     const seven = lengthPlan({ seconds: 30, bpm: 118, structure: 'hook', stanzas: [4, 3], repeatHook: false });
     expect(seven.form.filter((p) => p.kind === 'section')).toHaveLength(0);
     expect(seven.enough).toBe(true);

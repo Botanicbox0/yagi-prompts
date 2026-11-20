@@ -16,8 +16,8 @@
  */
 import { forwardRef, useEffect, useId, useImperativeHandle, useRef, useState, type FormEvent, type KeyboardEvent } from 'react';
 import { formatCredits } from '@/lib/brand-studio/credits';
-import { defaultStructure, LYRICS_LIMITS, markLyrics, musicWay, ownLyrics, type LyricStructure } from '@/lib/brand-studio/sound/lyrics';
-import { sungPlan } from '@/lib/brand-studio/sound/length-plan';
+import { defaultStructure, LYRICS_LIMITS, markLyrics, musicWay, ownLyrics, tempoOf, type LyricStructure } from '@/lib/brand-studio/sound/lyrics';
+import { draftStanzaLines, lengthPlan, LONG_RATIO, runTempo, sungPlan } from '@/lib/brand-studio/sound/length-plan';
 import { MUSIC_LIMITS, musicQuoteCredits } from '@/lib/brand-studio/sound/music-limits';
 import { namedArtist } from '@/lib/brand-studio/sound/names';
 import { interpolate } from '@/lib/i18n/format';
@@ -86,6 +86,12 @@ export interface ComposerDesign {
 }
 
 const EXAMPLES = ['skincare', 'fashion', 'shortform', 'launch'] as const;
+
+/** The plan a draft would get for this description, structure and length (before there are lyrics). */
+function draftView(description: string, structure: LyricStructure, seconds: number) {
+  const bpm = runTempo({ description, wordsBpm: tempoOf(description) });
+  return lengthPlan({ seconds, bpm, structure, stanzas: draftStanzaLines(structure, seconds, bpm), repeatHook: true });
+}
 
 export const MusicComposer = forwardRef<
   ComposerHandle,
@@ -361,6 +367,16 @@ export const MusicComposer = forwardRef<
     plan && !plan.enough && lyricsBy?.flow !== 'topic'
       ? interpolate(copy.lyricsKit.short, { min: String(plan.estimate.min), max: String(plan.estimate.max), target: String(plan.seconds), n: String(plan.missingLines) })
       : null;
+  // A structure with more stanzas than the length needs runs long (§12.11: 15 s with two verses, 45–105 s). Before
+  // there are lyrics, the plan a draft would get says it; with lyrics, their own plan. Never blocks.
+  const seconds = targetOf(options);
+  const lengthView =
+    plan ??
+    (vocal && !sentLyrics && seconds ? draftView(trimmed, options.structure, seconds) : null);
+  const longNote =
+    lengthView?.seconds && lengthView.estimate.max > lengthView.seconds * LONG_RATIO
+      ? interpolate(copy.lyricsKit.long, { min: String(lengthView.estimate.min), max: String(lengthView.estimate.max), target: String(lengthView.seconds) })
+      : null;
 
   return (
     <form className={s.dock} onSubmit={submit} data-sound-composer aria-busy={props.busy}>
@@ -472,6 +488,11 @@ export const MusicComposer = forwardRef<
           {shortNote ? (
             <p className={s.optionNote} role="status" data-sound-lyrics-short>
               {shortNote}
+            </p>
+          ) : null}
+          {longNote ? (
+            <p className={s.optionNote} role="status" data-sound-lyrics-long>
+              {longNote}
             </p>
           ) : null}
           {polish ? (

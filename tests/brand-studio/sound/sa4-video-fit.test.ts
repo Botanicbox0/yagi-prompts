@@ -145,9 +145,9 @@ describe('music fitted to a library video', () => {
     const first = asked[0]!;
     const later = asked.find((text) => JSON.parse(text.split('\n\nThe previous answer')[0]!).lengthSeconds === 45)!;
     expect(JSON.parse(first.split('\n\nThe previous answer')[0]!).lengthSeconds).toBe(12);
-    // Lines at the fast band (§12.11): 12 s at 118 BPM is 3 lines (one hook); 45 s is 11 over hook and verse.
+    // Lines at the fast band (§12.11): 12 s at 118 BPM is 3 lines (one hook); 45 s is 9 over hook and verse.
     expect(range(first)).toBe(3);
-    expect(range(later)).toBe(11);
+    expect(range(later)).toBe(9);
   });
 
   it('gives the design preview the video’s length and cuts', async () => {

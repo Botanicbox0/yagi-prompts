@@ -374,7 +374,7 @@ export function rawSection(entry: RawEntry, scrub: (text: string) => string): st
   if (entry.plan) {
     parts.push(
       '',
-      `plan: ${entry.plan.bpm} BPM (${entry.plan.band}), ${entry.plan.seconds ?? '—'} s = ${entry.plan.targetBars} bars, ${entry.plan.units} of ${entry.plan.needed} line-equivalents, ${entry.plan.enough ? 'enough' : `short by ${entry.plan.missingLines} lines`}, expected ${entry.plan.estimate.min}–${entry.plan.estimate.max} s`,
+      `plan: ${entry.plan.bpm} BPM (${entry.plan.band}), ${entry.plan.seconds ?? '—'} s, ${entry.plan.bars} of ${entry.plan.targetBars} bars planned, ${entry.plan.enough ? 'enough' : `short by ${entry.plan.missingLines} lines`}, expected ${entry.plan.estimate.min}–${entry.plan.estimate.max} s`,
       `form: ${formText(entry.plan.form)}`,
     );
   }

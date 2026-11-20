@@ -9,13 +9,16 @@
  * lines and sections at a fixed tempo, and aims at "at least the chosen length": a long song can be cut later, a
  * short one cannot be stretched.
  *
- *  - Bars wanted: seconds × BPM / 240. Bars per line: 2.8 below 90 BPM, else 2.2; an instrumental section 2.2.
- *    Lines needed (sections counted in line-equivalents): ceil(bars / per line). 118 BPM: 15 s 4, 30 s 7, 60 s 14;
- *    78 BPM: 30 s 4, 60 s 7.
- *  - Stanzas hold 2 to 4 lines. A drafted hook is never padded with more words: an intro, a break after the first
- *    hook, the hook again, an empty outro, then another break and hook, until the lines are enough. The customer's
- *    own lyrics are never repeated by us: only sections are added, and the dock says when that is still short.
- *  - A line holds 7 to 10 syllables in Korean, 7 to 11 in English.
+ *  - Bars wanted: seconds × BPM / 240. A sung line is planned at 2.5 bars (2.8 below 90 BPM) and a section at 2.7:
+ *    with these, the forms that reached the length in the measurement (30 s: 7 lines, 3 lines with intro, break
+ *    and empty outro, the hook twice; 60 s: intro, hook, break, hook again, break, 2-line outro) count as enough,
+ *    and the forms that came back short (3 lines alone) do not. The expected length runs from the lower quartile
+ *    (2.2 or 2.75 a line, 2.2 a section) to the median (2.6 or 3.4 a line, 2.7 a section).
+ *  - Stanzas hold 2 to 4 lines, a line 7 to 10 syllables in Korean, 7 to 11 in English.
+ *  - Filling, in order, each step only while the form is short: an intro, an empty outro (the song never ends on a
+ *    break), a break after the first stanza, then for a drafted hook the hook again (with a break before a sung
+ *    outro), then breaks after later stanzas. A drafted hook that needs more than one stanza with all of that gets a
+ *    2-line sung outro as its second stanza. The customer's own lines are never repeated by us.
  */
 import { defaultStructure, ownLyrics, structureMarks, tempoOf, type LyricStructure } from './lyrics';
 
@@ -40,14 +43,17 @@ export function cleanBpm(value: unknown): number | null {
   return bpm >= 60 && bpm <= 160 ? bpm : null;
 }
 
-/** Bars one sung line takes: the lower quartile of the measurement (planning toward "at least"), and the median. */
-export function barsPerLine(bpm: number): { plan: number; median: number } {
-  return bpm < 90 ? { plan: 2.8, median: 3.4 } : { plan: 2.2, median: 2.6 };
+/** Bars one sung line takes: what the plan counts, and the measurement's lower quartile and median. */
+export function barsPerLine(bpm: number): { plan: number; low: number; median: number } {
+  return bpm < 90 ? { plan: 2.8, low: 2.75, median: 3.4 } : { plan: 2.5, low: 2.2, median: 2.6 };
 }
 
-export const SECTION_BARS = 2.2;
+/** Bars one instrumental section takes: planned and median about 2.7 (measured), 2.2 for the low estimate. */
+export const SECTION_BARS = { plan: 2.7, low: 2.2, median: 2.7 } as const;
 export const STANZA_LINES = { min: 2, max: 4 } as const;
 export const LINE_SYLLABLES: Readonly<Record<'ko' | 'en', { min: number; max: number }>> = { ko: { min: 7, max: 10 }, en: { min: 7, max: 11 } };
+/** The expected median over the chosen length above which the dock says the song will run long. */
+export const LONG_RATIO = 1.45;
 
 export type SectionMark = '[Intro]' | '[Instrumental Break]' | '[Outro]';
 
@@ -60,10 +66,10 @@ export interface LengthPlan {
   band: TempoBand;
   /** seconds × BPM / 240, one decimal. */
   targetBars: number;
-  /** Line-equivalents wanted (sections included). */
+  /** Bars the form is planned to fill, one decimal. */
+  bars: number;
+  /** Lines the length wants at the planned bars a line (without sections). */
   needed: number;
-  /** Line-equivalents in the form. */
-  units: number;
   form: FormPart[];
   /** The form reaches the target (always true without a length). */
   enough: boolean;
@@ -73,110 +79,119 @@ export interface LengthPlan {
   estimate: { min: number; max: number };
 }
 
-/** How many stanzas a drafted lyric has in each structure (the hook alone: one stanza, the rest is form). */
+/** How many stanzas a drafted lyric has in each structure without a length (the hook alone: one stanza). */
 export const DRAFT_STANZAS: Readonly<Record<LyricStructure, number>> = { hook: 1, 'hook-verse': 4, full: 5 };
 
 function round1(n: number): number {
   return Math.round(n * 10) / 10;
 }
 
-/** Line-equivalents wanted for a length at a tempo. */
-export function linesNeeded(seconds: number, bpm: number): number {
-  return Math.ceil((seconds * bpm) / 240 / barsPerLine(bpm).plan - 1e-9);
+function targetBarsOf(seconds: number, bpm: number): number {
+  return (seconds * bpm) / 240;
 }
 
-/** Lines per drafted stanza for a length: the lines needed spread over the structure's stanzas, 2 to 4 each. */
+/** Lines a length wants at a tempo, sections aside. */
+export function linesNeeded(seconds: number, bpm: number): number {
+  return Math.ceil(targetBarsOf(seconds, bpm) / barsPerLine(bpm).plan - 1e-9);
+}
+
+const clampLines = (n: number) => Math.max(STANZA_LINES.min, Math.min(STANZA_LINES.max, n));
+
+/**
+ * Lines per drafted stanza for a length. The hook: one stanza of up to 4 lines, filled with sections and a repeat;
+ * when that is not enough (or a 2-line outro reaches the length without a repeat) a 2-line sung outro joins it.
+ * The other structures spread the lines the length wants over their stanzas, 2 to 4 each.
+ */
 export function draftStanzaLines(structure: LyricStructure, seconds: number | null, bpm: number): number[] {
+  if (!seconds) return Array.from({ length: DRAFT_STANZAS[structure] }, () => 3);
+  const want = linesNeeded(seconds, bpm);
+  if (structure === 'hook') {
+    const hook = clampLines(want);
+    const options: Array<{ stanzas: number[]; repeat: boolean }> = [
+      { stanzas: [hook], repeat: false },
+      { stanzas: [hook, 2], repeat: false },
+      { stanzas: [hook], repeat: true },
+      { stanzas: [hook, 2], repeat: true },
+    ];
+    const pick = options.find((o) => lengthPlan({ seconds, bpm, structure, stanzas: o.stanzas, repeatHook: o.repeat }).enough) ?? options[options.length - 1]!;
+    return pick.stanzas;
+  }
   const count = DRAFT_STANZAS[structure];
-  const want = seconds ? linesNeeded(seconds, bpm) : count * 3;
-  const clamp = (n: number) => Math.max(STANZA_LINES.min, Math.min(STANZA_LINES.max, n));
   const base = Math.floor(want / count);
   let extra = want - base * count;
   return Array.from({ length: count }, () => {
-    const lines = clamp(base + (extra > 0 ? 1 : 0));
+    const lines = clampLines(base + (extra > 0 ? 1 : 0));
     if (extra > 0) extra -= 1;
     return lines;
   });
 }
 
-function sectionUnit(bpm: number): number {
-  return SECTION_BARS / barsPerLine(bpm).plan;
-}
-
 /**
  * The form for lyrics already written: `stanzas` is the line count of each stanza in order. `repeatHook` lets the
- * plan sing the first hook again (drafted lyrics only; the customer's own lines are never repeated by us).
+ * plan sing the first hook again (a drafted "후크만" only; the customer's own lines are never repeated by us).
  */
 export function lengthPlan(input: { seconds: number | null; bpm: number; structure: LyricStructure; stanzas: readonly number[]; repeatHook: boolean }): LengthPlan {
   const bpm = input.bpm;
   const marks = structureMarks(input.structure, input.stanzas.length);
-  const sung: FormPart[] = input.stanzas.map((_, i) => ({ kind: 'sung', stanza: i, mark: marks[i]! }));
   const per = barsPerLine(bpm);
-  const unit = sectionUnit(bpm);
-  const needed = input.seconds ? linesNeeded(input.seconds, bpm) : 0;
+  const target = input.seconds ? targetBarsOf(input.seconds, bpm) : 0;
+  const last = marks.length - 1;
+  const sungOutro = last >= 1 && marks[last] === '[Outro]';
+  const canRepeat = input.repeatHook && input.structure === 'hook' && marks[0] === '[Chorus]';
 
   let intro = false;
-  let outro = false;
-  /** Breaks after stanza i, and (one-stanza hook only) how many times the hook is sung again. */
+  let emptyOutro = false;
+  let repeat = false;
   const breaksAfter = new Set<number>();
-  let repeats = 0;
-  const hasSungOutro = marks[marks.length - 1] === '[Outro]';
-  // Only a drafted "후크만" is repeated: the other structures reach 60 s with their own lines (5 x 4 = 20).
-  const canRepeat = input.repeatHook && input.stanzas.length === 1;
 
   const build = (): FormPart[] => {
     const out: FormPart[] = [];
     if (intro) out.push({ kind: 'section', mark: '[Intro]' });
-    sung.forEach((part, i) => {
-      out.push(part);
+    marks.forEach((mark, i) => {
+      out.push({ kind: 'sung', stanza: i, mark });
       if (breaksAfter.has(i)) out.push({ kind: 'section', mark: '[Instrumental Break]' });
-      if (i === 0) {
-        for (let r = 0; r < repeats; r += 1) {
-          if (r > 0) out.push({ kind: 'section', mark: '[Instrumental Break]' });
-          out.push({ kind: 'sung', stanza: 0, mark: part.mark, repeat: true });
-        }
+      if (i === 0 && repeat) {
+        out.push({ kind: 'sung', stanza: 0, mark, repeat: true });
+        // Back from the repeated hook into a sung outro through a break (as measured at 60 s).
+        if (sungOutro) out.push({ kind: 'section', mark: '[Instrumental Break]' });
       }
     });
-    if (outro) out.push({ kind: 'section', mark: '[Outro]' });
+    if (emptyOutro) out.push({ kind: 'section', mark: '[Outro]' });
     return out;
   };
-  const unitsOf = (form: readonly FormPart[]) =>
-    form.reduce((sum, part) => sum + (part.kind === 'section' ? unit : input.stanzas[part.stanza] ?? 0), 0);
+  const barsOf = (form: readonly FormPart[], line: number, section: number) =>
+    form.reduce((sum, part) => sum + (part.kind === 'section' ? section : (input.stanzas[part.stanza] ?? 0) * line), 0);
 
-  // The padding steps, in order (§12.11): intro, a break after the first stanza, the hook again, an empty outro,
-  // then breaks after later stanzas, then (hook) one more break and hook. Each is taken only while still short.
+  // The filling steps, in order (§12.11), each taken only while the form is short.
   const steps: Array<() => boolean> = [
     () => (intro ? false : ((intro = true), true)),
-    () => (sung.length && !breaksAfter.has(0) ? (breaksAfter.add(0), true) : false),
-    () => (canRepeat && repeats === 0 ? ((repeats = 1), true) : false),
-    () => (!hasSungOutro && !outro ? ((outro = true), true) : false),
+    () => (!sungOutro && !emptyOutro ? ((emptyOutro = true), true) : false),
+    () => (marks.length && !breaksAfter.has(0) ? (breaksAfter.add(0), true) : false),
+    () => (canRepeat && !repeat ? ((repeat = true), true) : false),
   ];
-  for (let i = 1; i < sung.length - 1; i += 1) steps.push(() => (breaksAfter.has(i) ? false : (breaksAfter.add(i), true)));
-  if (canRepeat) steps.push(() => (repeats === 1 ? ((repeats = 2), true) : false));
+  for (let i = 1; i < last; i += 1) steps.push(() => (breaksAfter.has(i) ? false : (breaksAfter.add(i), true)));
 
   let form = build();
   if (input.seconds) {
     for (const step of steps) {
-      if (unitsOf(form) >= needed) break;
+      if (barsOf(form, per.plan, SECTION_BARS.plan) >= target - 1e-9) break;
       if (step()) form = build();
     }
   }
-  const units = round1(unitsOf(form));
-  const lines = form.reduce((sum, part) => sum + (part.kind === 'sung' ? input.stanzas[part.stanza] ?? 0 : 0), 0);
-  const sections = form.filter((part) => part.kind === 'section').length;
-  const seconds = (barsLine: number) => Math.round(((lines * barsLine + sections * SECTION_BARS) * 240) / bpm);
-  const enough = !input.seconds || unitsOf(form) >= needed - 1e-9;
+  const planned = barsOf(form, per.plan, SECTION_BARS.plan);
+  const enough = !input.seconds || planned >= target - 1e-9;
+  const seconds = (bars: number) => Math.round((bars * 240) / bpm);
   return {
     seconds: input.seconds,
     bpm,
     band: bandOf(bpm),
-    targetBars: input.seconds ? round1((input.seconds * bpm) / 240) : 0,
-    needed,
-    units,
+    targetBars: round1(target),
+    bars: round1(planned),
+    needed: input.seconds ? linesNeeded(input.seconds, bpm) : 0,
     form,
     enough,
-    missingLines: enough ? 0 : Math.ceil(needed - unitsOf(form) - 1e-9),
-    estimate: { min: seconds(per.plan), max: seconds(per.median) },
+    missingLines: enough ? 0 : Math.ceil((target - planned) / per.plan - 1e-9),
+    estimate: { min: seconds(barsOf(form, per.low, SECTION_BARS.low)), max: seconds(barsOf(form, per.median, SECTION_BARS.median)) },
   };
 }
 
@@ -225,15 +240,15 @@ export interface RunPlanRecord {
   seconds: number | null;
   targetBars: number;
   needed: number;
-  units: number;
+  bars: number;
   enough: boolean;
   estimate: { min: number; max: number };
   form: FormPart[];
 }
 
 export function planRecord(plan: RunPlanRecord): RunPlanRecord {
-  const { bpm, band, seconds, targetBars, needed, units, enough, estimate, form } = plan;
-  return { bpm, band, seconds, targetBars, needed, units, enough, estimate, form };
+  const { bpm, band, seconds, targetBars, needed, bars, enough, estimate, form } = plan;
+  return { bpm, band, seconds, targetBars, needed, bars, enough, estimate, form };
 }
 
 /**

@@ -126,7 +126,9 @@ export function lyricsTask(req: LyricsRequest, problems: readonly string[] = [])
   const fixed = cleanBpm(req.bpm);
   const stanzasFor = (bpm: number) => {
     const lines = askedLines(req, bpm);
-    return marks.map((m, i) => `${i + 1}. ${ROLE[m] ?? m}${lines ? `: ${lines[i]} lines` : ''}`);
+    // A long hook gets a 2-line outro as a second stanza (§12.11), so the marks follow the lines asked.
+    const named = lines ? structureMarks(req.structure, lines.length) : marks;
+    return named.map((m, i) => `${i + 1}. ${ROLE[m] ?? m}${lines ? `: ${lines[i]} lines` : ''}`);
   };
   // With a length: one plan per tempo band, or the fixed tempo's plan (§12.11: lines per stanza depend on the tempo).
   const plan =

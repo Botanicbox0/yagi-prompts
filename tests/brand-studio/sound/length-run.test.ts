@@ -47,18 +47,25 @@ describe('the plan a run sends and keeps', () => {
     ...over,
   });
 
-  it('a drafted 4-line hook for 30 s at 118 BPM: intro, hook, break, hook again, the plan on the row', () => {
+  it('a drafted 4-line hook for 30 s at 118 BPM: intro, hook, an empty outro, the plan on the row', () => {
     const plan = planMusic({ ...create(), lyricsBy: { flow: 'topic', model: 'gemini-4-argon' }, bpm: 118 }, 'ko');
-    expect(plan.request.lyrics).toBe(`[Intro]\n\n[Chorus]\n${HOOK}\n\n[Instrumental Break]\n\n[Chorus]\n${HOOK}`);
-    expect(plan.params.music?.plan).toMatchObject({ bpm: 118, band: 'fast', seconds: 30, targetBars: 14.8, needed: 7, units: 10, enough: true });
-    expect(plan.request.prompt).toContain('Around 118 BPM. The form, in order: a four-bar instrumental intro, then the hook, then an instrumental break, then the hook again.');
+    expect(plan.request.lyrics).toBe(`[Intro]\n\n[Chorus]\n${HOOK}\n\n[Outro]`);
+    // 4 × 2.5 + 2 × 2.7 = 15.4 of 14.75 bars.
+    expect(plan.params.music?.plan).toMatchObject({ bpm: 118, band: 'fast', seconds: 30, targetBars: 14.8, needed: 6, bars: 15.4, enough: true });
+    expect(plan.request.prompt).toContain('Around 118 BPM. The form, in order: a four-bar instrumental intro, then the hook, then an instrumental outro.');
+  });
+
+  it('a drafted hook for 60 s at 118 BPM is the measured form: intro, hook, break, hook again, break, 2-line outro', () => {
+    const lyrics = `${HOOK}\n\n오늘도 가볍게 모아\n맑아지는 이 기분`;
+    const plan = planMusic({ ...create({ lyrics, targetSeconds: 60 }), lyricsBy: { flow: 'topic', model: 'gemini-4-argon' }, bpm: 118 }, 'ko');
+    expect(plan.request.lyrics).toBe(`[Intro]\n\n[Chorus]\n${HOOK}\n\n[Instrumental Break]\n\n[Chorus]\n${HOOK}\n\n[Instrumental Break]\n\n[Outro]\n오늘도 가볍게 모아\n맑아지는 이 기분`);
   });
 
   it('the customer’s own three lines: sections only, never their lines again, and the row says it is short', () => {
     const plan = planMusic(create({ lyrics: '노란 레몬 탄산이 톡 터지는 모아\n\n유리잔 위로 방울이 올라와\n내 손안에 시원한 모아' }), 'ko');
     expect(plan.request.lyrics).toBe('[Intro]\n\n[Chorus]\n노란 레몬 탄산이 톡 터지는 모아\n\n[Instrumental Break]\n\n[Outro]\n유리잔 위로 방울이 올라와\n내 손안에 시원한 모아');
-    // "상쾌·가볍게" read as fast (120 BPM): 7 line-equivalents wanted, 3 lines + 2 sections.
-    expect(plan.params.music?.plan).toMatchObject({ bpm: 120, enough: false, needed: 7, units: 5 });
+    // "상쾌·가볍게" read as fast (120 BPM): 15 bars wanted, 3 lines + 2 sections plan 12.9.
+    expect(plan.params.music?.plan).toMatchObject({ bpm: 120, enough: false, targetBars: 15, bars: 12.9 });
   });
 
   it('a BPM written in the description wins over the draft’s; no length, no plan (as before)', () => {
@@ -72,7 +79,7 @@ describe('the design keeps the tempo and describes the form', () => {
   const input = (over: Partial<MusicDesignInput> = {}): MusicDesignInput => ({ prompt: PROMPT, vocal: true, lyrics: HOOK, careful: false, structure: 'hook', language: 'ko', locale: 'ko', plan, ...over });
 
   it('tells the model the tempo and the form, and rewrites a style at another tempo or "straight into the hook"', async () => {
-    expect(formText(plan.form)).toBe('[Intro] [Chorus] [Instrumental Break] [Chorus]*');
+    expect(formText(plan.form)).toBe('[Intro] [Chorus] [Outro]');
     const { fetchStub, texts } = geminiAnswers(
       { style: STYLE(96), title: '맑은 한 모금', notes: 'ok' },
       { style: STYLE(118, 'It drops into a catchy hook right away.'), title: '맑은 한 모금', notes: 'ok' },
@@ -134,7 +141,7 @@ describe('a whole run, and the version listed first', () => {
     });
     if (!('job' in created)) throw new Error(JSON.stringify(created));
     await advanceStudioJobsWith(deps, { jobIds: [created.job.id] });
-    expect(sent[0]!.body).toMatchObject({ style: STYLE(118), lyrics: `[Intro]\n\n[Chorus]\n${HOOK}\n\n[Instrumental Break]\n\n[Chorus]\n${HOOK}` });
+    expect(sent[0]!.body).toMatchObject({ style: STYLE(118), lyrics: `[Intro]\n\n[Chorus]\n${HOOK}\n\n[Outro]` });
     const preview = await runStudioOperation(deps, viewerOf(f.ids.owner), 'music.design', {
       organizationId: f.orgId,
       prompt: PROMPT,
