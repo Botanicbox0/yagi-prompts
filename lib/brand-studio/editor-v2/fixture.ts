@@ -4,6 +4,11 @@
  * Every file is one of our own films already published under `public/reel`. Nothing comes from a
  * customer, a database or a reference product, and the footage has no sound: the voice and music lanes
  * are drawn from the numbers below, which is why the sound workspace marks itself as a sample.
+ *
+ * The workspace host (brand.twings.app) serves public files by exact name only
+ * (`STUDIO_DEMO_FILES` in lib/routing/surfaces.ts): a file that is committed and loads on twings.app
+ * still answers 404 there unless it is on that list. Every path below must be on it;
+ * tests/brand-studio/editor-v2/fixture-served.test.ts fails otherwise.
  */
 import type { ComposerProject } from '@/lib/brand-studio/compose/timeline';
 import type { EditorDoc, MusicTrack, SpeechRegion } from './model';
@@ -29,14 +34,14 @@ export const FIXTURE_MATERIALS: readonly FixtureMaterial[] = [
   { id: 'm1', src: '/reel/landing/v7/rx-beauty-world.mp4', poster: '/reel/landing/v7/rx-beauty-world.jpg', durationSec: 4.7, ratio: 16 / 9, origin: 'video_studio', focusX: 50 },
   { id: 'm2', src: '/reel/landing/v7/rx-beauty-product.mp4', poster: '/reel/landing/v7/rx-beauty-product.jpg', durationSec: 4.7, ratio: 16 / 9, origin: 'video_studio', focusX: 56 },
   { id: 'm3', src: '/reel/landing/v7/film-tutu.mp4', poster: '/reel/landing/v7/film-tutu.jpg', durationSec: 17, ratio: 16 / 9, origin: 'video_studio', focusX: 48 },
-  { id: 'm4', src: '/reel/landing/v7/film-aquarium.mp4', poster: '/reel/landing/v7/film-aquarium.jpg', durationSec: 10, ratio: 4 / 3, origin: 'asset', focusX: 50 },
-  { id: 'm5', src: '/reel/landing/v7/film-daydream.mp4', poster: '/reel/landing/v7/film-daydream.jpg', durationSec: 13, ratio: 4 / 3, origin: 'asset', focusX: 50 },
-  { id: 'm6', src: '/reel/brands/tea-editorial.mp4', poster: '/reel/brands/tea-editorial.jpg', durationSec: 12, ratio: 4 / 3, origin: 'asset', focusX: 44 },
+  { id: 'm4', src: '/reel/brands/tea-editorial.mp4', poster: '/reel/brands/tea-editorial.jpg', durationSec: 12, ratio: 4 / 3, origin: 'asset', focusX: 44 },
+  { id: 'm5', src: '/reel/landing/v7/rx-beauty-orig.mp4', poster: '/reel/landing/v7/rx-beauty-orig.jpg', durationSec: 4.9, ratio: 16 / 9, origin: 'asset', focusX: 52 },
+  { id: 'm6', src: '/reel/brands/production-paris.mp4', poster: '/reel/brands/production-paris.jpg', durationSec: 18, ratio: 16 / 9, origin: 'asset', focusX: 50 },
 ];
 
 export const FIXTURE_REFERENCES: readonly FixtureReference[] = [
   { id: 'r1', src: '/reel/brands/slot-4-color-french-cobalt.jpg' },
-  { id: 'r2', src: '/reel/brands/tea-editorial.jpg' },
+  { id: 'r2', src: '/reel/brands/slot-2-space-concrete-blue.jpg' },
 ];
 
 /** A narration the sample film is assumed to carry: three spoken stretches. */
