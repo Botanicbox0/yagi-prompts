@@ -1,11 +1,11 @@
 'use client';
 
 import { useEffect, useRef } from 'react';
-import { fill } from '@/components/brand-studio/copy';
-import { EDITOR_WORKSPACES, type EditorWorkspace } from '@/lib/brand-studio/editor-v2/model';
+import { EDITOR_WORKSPACES } from '@/lib/brand-studio/editor-v2/model';
 import { actionFor, bindingFromEvent, formatBinding, typingTarget } from '@/lib/brand-studio/editor-v2/shortcuts';
 import type { StudioEditorCopy } from '@/messages/studio-editor';
 import { Assistant } from './assistant';
+import { ExportSheet } from './export-sheet';
 import { EditorIcon } from './icons';
 import { ActionPanel, Materials } from './panels';
 import { Preview } from './preview';
@@ -118,64 +118,6 @@ export function EditorV2({ copy, currentEditorHref }: { copy: StudioEditorCopy; 
       {api.exportOpen && <ExportSheet api={api} />}
       {api.shortcutsOpen && <ShortcutsPanel api={api} />}
       {api.toast && <p className={styles.toast} role="status" data-editor-toast>{api.toast}</p>}
-    </div>
-  );
-}
-
-function ExportSheet({ api }: { api: EditorApi }) {
-  const { copy, doc, sequence } = api;
-  const e = copy.export;
-  const open = (Object.keys(api.openCount) as EditorWorkspace[]).filter((workspace) => api.openCount[workspace] > 0);
-  const total = open.reduce((sum, workspace) => sum + api.openCount[workspace], 0);
-  return (
-    <div className={styles.exportSheet} role="dialog" aria-label={e.heading} data-editor-export-sheet>
-      <header className={styles.panelHead}>
-        <h2>{e.heading}</h2>
-        <button type="button" className={styles.iconBtn} onClick={() => api.setExportOpen(false)} aria-label={copy.assist.dismiss} title={copy.assist.dismiss}>
-          <EditorIcon name="close" />
-        </button>
-      </header>
-      <section className={styles.section}>
-        <h3>{e.checks}</h3>
-        <p className={styles.note}>{total > 0 ? fill(e.open, { count: total }) : e.clear}</p>
-        {open.length > 0 && (
-          <ul className={styles.findings}>
-            {open.map((workspace) => (
-              <li key={workspace} className={styles.finding}>
-                <p>{copy.workspaces[workspace]} · {api.openCount[workspace]}</p>
-                <button
-                  type="button"
-                  className={styles.fixBtn}
-                  onClick={() => {
-                    api.setWorkspace(workspace);
-                    api.setExportOpen(false);
-                  }}
-                >
-                  {e.show}
-                </button>
-              </li>
-            ))}
-          </ul>
-        )}
-      </section>
-      <dl className={styles.exportFacts}>
-        <div>
-          <dt>{copy.cut.film.shape}</dt>
-          <dd>{sequence.aspect} · {sequence.fps} fps · {e.file}</dd>
-        </div>
-        <div>
-          <dt>{e.captions}</dt>
-          <dd>{sequence.captions.length > 0 ? copy.captions.output[doc.captionSettings.output] : e.captionsNone}</dd>
-        </div>
-        <div>
-          <dt>{e.loudness}</dt>
-          <dd>{doc.sound.loudness ? e.loudnessOn : e.loudnessOff}</dd>
-        </div>
-      </dl>
-      <button type="button" className={styles.exportBtn} onClick={() => api.say(e.inert)}>
-        <EditorIcon name="download" />
-        {e.start}
-      </button>
     </div>
   );
 }
