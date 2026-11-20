@@ -145,7 +145,7 @@ export function EditorV2({ copy, currentEditorHref, initialWorkspace, real }: Ed
 
       <Materials api={api} />
       <Preview api={api} />
-      <ActionPanel api={api} />
+      <ActionPanel api={api} classicHref={currentEditorHref} />
       {api.assistDock === 'side' && <Assistant api={api} placement="side" />}
 
       <div className={styles.bottom}>

@@ -222,9 +222,10 @@ function RealBin({ api }: { api: EditorApi }) {
 }
 
 /** A workspace a real film cannot use yet: says so, and shows the way to the sample film. */
-function LockedPanel({ api }: { api: EditorApi }) {
+function LockedPanel({ api, classicHref }: { api: EditorApi; classicHref?: string }) {
   const { copy, workspace } = api;
   const name = copy.workspaces[workspace];
+  const inClassic = workspace === 'color' ? copy.real.locked.classicColor : workspace === 'sound' ? copy.real.locked.classicSound : copy.real.locked.classicCaptions;
   return (
     <>
       <PanelHead title={name} />
@@ -236,6 +237,14 @@ function LockedPanel({ api }: { api: EditorApi }) {
           {copy.real.locked.open}
         </a>
       </section>
+      {classicHref && workspace !== 'cut' && (
+        <section className={styles.lockedCard} data-editor-locked-classic={workspace}>
+          <p className={styles.note}>{inClassic}</p>
+          <a className={styles.sampleLink} href={classicHref} data-editor-classic-link={workspace}>
+            {copy.notice.current}
+          </a>
+        </section>
+      )}
     </>
   );
 }
@@ -456,12 +465,12 @@ function CaptionMaterials({ api }: { api: EditorApi }) {
 
 // ── Right: what you can do, following the selection ────────────────────────────────────────────
 
-export function ActionPanel({ api }: { api: EditorApi }) {
+export function ActionPanel({ api, classicHref }: { api: EditorApi; classicHref?: string }) {
   const { copy, workspace } = api;
   return (
     <aside className={styles.panel} aria-label={copy.panel.actions} data-editor-panel={workspace}>
       {api.locked ? (
-        <LockedPanel api={api} />
+        <LockedPanel api={api} classicHref={classicHref} />
       ) : (
         <>
           {workspace === 'cut' && <CutPanel api={api} />}
