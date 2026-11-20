@@ -17,8 +17,10 @@ export interface StudioProviderRequest {
 export interface StudioProviderOutput {
   url: string;
   mime: string | null;
-  /** Video length when the provider reports it. */
+  /** Video or audio length when the provider reports it. */
   seconds?: number | null;
+  /** Music: the engine's own ids and words for this version (clip id, task id, title, lyrics). */
+  meta?: Record<string, string>;
 }
 
 export type StudioTaskStatus =

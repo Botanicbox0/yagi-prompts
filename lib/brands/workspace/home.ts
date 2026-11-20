@@ -146,6 +146,8 @@ export function homeResults(jobs: readonly StudioJobView[], organizationId: stri
     if (job.status !== 'succeeded' || job.purpose === 'fill') continue;
     for (const output of job.outputs) {
       if (out.length >= limit) return out;
+      // The home's doors and results show pictures and films; sound lives in the sound studio.
+      if (output.kind === 'audio') continue;
       const src = output.kind === 'image' ? output.thumbUrl ?? output.url : output.thumbUrl;
       const clip = output.kind === 'video' && !src ? output.url : null;
       if (!src && !clip) continue;

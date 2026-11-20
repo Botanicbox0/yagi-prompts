@@ -1,39 +1,45 @@
 'use client';
 /**
- * The sound studio screen (docs/BRAND-SOUND-STUDIO.md §4.2, §7.3). Slice SS1: the two tabs, the list of the
- * brand's audio as hairline rows, one shared player, a waveform per visible row, upload, likes, and sending
- * a sound to the editing studio or a saved video studio project. Nothing here spends credits.
+ * The sound studio screen (docs/BRAND-SOUND-STUDIO.md §4.2, §7.3, §7.4).
+ *  SS1: the two tabs, the brand's audio as hairline rows, one shared player, a waveform per visible row,
+ *       upload, likes, and sending a sound to the editing studio or a saved video studio project.
+ *  SS2: the music composer (description + vocals), runs in progress, the versions each request returned
+ *       (A, B…), failures that took nothing, save to assets, "비슷하게 만들기", copy the description.
  *
- * Techniques (docs/design/TOOLBOX.md §1-3), four: hairline rows instead of cards (TASTE 16), a recessed well
- * for the search field, tabular numerals for every length and time, frosted glass only on the one overlay
- * (the project picker). One filled button on the screen: the open row's main action.
+ * Techniques (docs/design/TOOLBOX.md §1-3), four: hairline rows instead of cards (TASTE 16), recessed wells for
+ * the search field and the description, tabular numerals for every length, time and credit, frosted glass on
+ * the floating dock and the one overlay. One accent-filled button on the screen: 만들기 when the composer is
+ * there, else the open row's main action (TASTE 19); with the composer, the row's main action is ink-filled.
  */
-import { useCallback, useEffect, useMemo, useRef, useState, type ChangeEvent, type KeyboardEvent, type ReactNode } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, type ChangeEvent, type KeyboardEvent } from 'react';
 import { createStudioApi, isFailure, measureInBrowser } from '@/components/brand-studio/api';
 import { newRequestId } from '@/components/brand-studio/copy';
 import { composeStorageKey } from '@/lib/brand-studio/compose/timeline';
-import {
-  filterTracks,
-  formatTrackLength,
-  soundTracks,
-  type SoundTab,
-  type SoundTrackView,
-} from '@/lib/brand-studio/sound/library';
+import type { StudioAllowanceView, StudioErrorCode, StudioJobView } from '@/lib/brand-studio/contracts';
+import { creditsLeft, formatCredits } from '@/lib/brand-studio/credits';
+import { filterTracks, mergeTracks, musicTracks, soundTracks, type SoundTab, type SoundTrackView } from '@/lib/brand-studio/sound/library';
+import { musicQuoteCredits } from '@/lib/brand-studio/sound/music-limits';
 import { composeBgmHandoff, composeSfxHandoff, type SoundSendTrack } from '@/lib/brand-studio/sound/send';
-import { peaksFromChannels } from '@/lib/brand-studio/sound/waveform';
 import { interpolate } from '@/lib/i18n/format';
 import type { StudioSoundCopy } from '@/messages/studio-sound';
+import { MusicComposer, type ComposerHandle } from './composer';
 import { SendToVideoDialog, type SendTarget } from './send-dialog';
-import { Waveform } from './waveform';
+import { PendingRow, TrackRow, type RowActions } from './track-row';
 import s from './sound.module.css';
 
 export interface SoundStudioProps {
   organizationId: string;
   locale: 'ko' | 'en';
   copy: StudioSoundCopy;
+  /** `brandStudio.credits`: `{n} 크레딧`, `남은 크레딧 {n}`. */
+  creditsCopy: { amount: string; left: string };
   initialTab: SoundTab;
+  /** The brand's audio files (uploads, older generated sound). */
   initialTracks: SoundTrackView[];
-  /** Owners and editors: upload and send. Viewers and the TWINGS team view listen and download. */
+  /** Music runs: open, finished, and failed in the last day. */
+  initialJobs: StudioJobView[];
+  initialAllowance: StudioAllowanceView;
+  /** Owners and editors: create, upload and send. Viewers and the TWINGS team view listen and download. */
   canCreate: boolean;
   audioMaxMb: number;
   hrefs: { page: string; compose: string; video: string };
@@ -41,54 +47,8 @@ export interface SoundStudioProps {
 
 type Notice = { text: string; href?: string } | null;
 
-function Icon({ d, filled }: { d: string; filled?: boolean }) {
-  return (
-    <svg viewBox="0 0 20 20" aria-hidden="true" className="bs-icon" data-filled={filled ? '' : undefined}>
-      <path d={d} />
-    </svg>
-  );
-}
-
-const PLAY = 'M7 4.8v10.4l8.4-5.2z';
-const PAUSE = 'M6.5 4.5h2.4v11H6.5z M11.1 4.5h2.4v11h-2.4z';
-const HEART = 'M10 16.2s-5.8-3.4-5.8-7.6A3.2 3.2 0 0 1 10 6.6a3.2 3.2 0 0 1 5.8 2c0 4.2-5.8 7.6-5.8 7.6z';
-const CHEVRON = 'M6 8l4 4 4-4';
-const UPLOAD = 'M10 13.5V4.5 M6.5 8 10 4.5 13.5 8 M4.5 15.5h11';
-const DOWNLOAD = 'M10 4.5v9 M6.5 10 10 13.5 13.5 10 M4.5 15.5h11';
-
-/** One decoded waveform at a time is plenty; a long list fills in as it scrolls. */
-const peakCache = new Map<string, number[] | 'failed'>();
-let decoding: Promise<unknown> = Promise.resolve();
-
-function decodePeaks(url: string): Promise<number[] | 'failed'> {
-  const cached = peakCache.get(url);
-  if (cached) return Promise.resolve(cached);
-  const run = decoding.then(async () => {
-    try {
-      const response = await fetch(url, { credentials: 'same-origin' });
-      if (!response.ok) throw new Error('fetch');
-      const bytes = await response.arrayBuffer();
-      const Ctx: typeof AudioContext | undefined =
-        typeof window !== 'undefined' ? window.AudioContext ?? (window as unknown as { webkitAudioContext?: typeof AudioContext }).webkitAudioContext : undefined;
-      if (!Ctx) throw new Error('no audio');
-      const context = new Ctx();
-      try {
-        const buffer = await context.decodeAudioData(bytes);
-        const channels = Array.from({ length: Math.min(2, buffer.numberOfChannels) }, (_, i) => buffer.getChannelData(i));
-        const peaks = peaksFromChannels(channels);
-        peakCache.set(url, peaks);
-        return peaks;
-      } finally {
-        void context.close().catch(() => undefined);
-      }
-    } catch {
-      peakCache.set(url, 'failed');
-      return 'failed' as const;
-    }
-  });
-  decoding = run.catch(() => undefined);
-  return run;
-}
+const OPEN = new Set(['held', 'queued', 'running', 'finishing']);
+const POLL_MS = 3000;
 
 function dateLabel(iso: string, locale: 'ko' | 'en'): string {
   const date = new Date(iso);
@@ -96,25 +56,69 @@ function dateLabel(iso: string, locale: 'ko' | 'en'): string {
   return new Intl.DateTimeFormat(locale === 'en' ? 'en-US' : 'ko-KR', { month: 'short', day: 'numeric' }).format(date);
 }
 
+function errorLine(copy: StudioSoundCopy, code: StudioErrorCode | 'artist'): string {
+  switch (code) {
+    case 'artist':
+      return copy.errors.artist;
+    case 'allowance_exhausted':
+      return copy.errors.allowance;
+    case 'allowance_closed':
+    case 'feature_unavailable':
+    case 'not_found':
+      return copy.errors.closed;
+    case 'too_many_running':
+      return copy.errors.busy;
+    case 'provider_rejected':
+      return copy.errors.blocked;
+    default:
+      return copy.errors.generic;
+  }
+}
+
 export function SoundStudio(props: SoundStudioProps) {
   const { copy, organizationId, locale, canCreate } = props;
   const api = useMemo(() => createStudioApi({ organizationId }), [organizationId]);
   const [tab, setTab] = useState<SoundTab>(props.initialTab);
-  const [tracks, setTracks] = useState<SoundTrackView[]>(props.initialTracks);
+  const [files, setFiles] = useState<SoundTrackView[]>(props.initialTracks.filter((t) => !t.outputId));
+  const [jobs, setJobs] = useState<StudioJobView[]>(props.initialJobs);
+  const [likes, setLikes] = useState<Record<string, boolean>>({});
+  const [saved, setSaved] = useState<Record<string, string>>({});
+  const [allowance, setAllowance] = useState<StudioAllowanceView>(props.initialAllowance);
   const [query, setQuery] = useState('');
   const [likedOnly, setLikedOnly] = useState(false);
   const [openKey, setOpenKey] = useState<string | null>(null);
   const [playingKey, setPlayingKey] = useState<string | null>(null);
   const [position, setPosition] = useState(0);
   const [uploading, setUploading] = useState(false);
+  const [creating, setCreating] = useState(false);
+  const [composerError, setComposerError] = useState<string | null>(null);
   const [notice, setNotice] = useState<Notice>(null);
   const [replace, setReplace] = useState<{ track: SoundTrackView; current: string } | null>(null);
   const [videoTarget, setVideoTarget] = useState<SendTarget | null>(null);
   const audio = useRef<HTMLAudioElement | null>(null);
   const fileInput = useRef<HTMLInputElement | null>(null);
+  const composer = useRef<ComposerHandle | null>(null);
+  const draftRequest = useRef<string | null>(null);
 
+  /* ------------------------------------------------------------------ rows */
+  const initialMadeLikes = useMemo(
+    () => Object.fromEntries(props.initialTracks.filter((t) => t.outputId).map((t) => [t.key, t.liked])),
+    [props.initialTracks],
+  );
+  const tracks = useMemo(() => {
+    const made = musicTracks(organizationId, jobs, []).map((t) => ({
+      ...t,
+      liked: likes[t.key] ?? initialMadeLikes[t.key] ?? false,
+      assetId: saved[t.key] ?? t.assetId,
+    }));
+    const own = files.map((t) => ({ ...t, liked: likes[t.key] ?? t.liked }));
+    return mergeTracks(made, own);
+  }, [files, jobs, likes, saved, initialMadeLikes, organizationId]);
   const shown = useMemo(() => filterTracks(tracks, tab, { query, likedOnly }), [tracks, tab, query, likedOnly]);
   const tabCount = useMemo(() => tracks.filter((t) => t.tab === tab).length, [tracks, tab]);
+  const openJobs = useMemo(() => jobs.filter((j) => OPEN.has(j.status)), [jobs]);
+  const failedJobs = useMemo(() => jobs.filter((j) => j.status === 'failed' || j.status === 'canceled'), [jobs]);
+  const searching = query.trim() !== '' || likedOnly;
 
   const nameOf = useCallback(
     (track: SoundTrackView) =>
@@ -142,6 +146,68 @@ export function SoundStudio(props: SoundStudioProps) {
     const next: SoundTab = tab === 'music' ? 'sfx' : 'music';
     chooseTab(next);
     (event.currentTarget.querySelector(`[data-sound-tab="${next}"]`) as HTMLButtonElement | null)?.focus();
+  };
+
+  /* ------------------------------------------------------------------ runs */
+  // Open runs are polled; the poll also moves them forward on the server (the studio's own engine).
+  const openIds = openJobs.map((j) => j.id).join(',');
+  useEffect(() => {
+    if (!openIds) return;
+    let alive = true;
+    const timer = window.setInterval(async () => {
+      const answer = await api.poll(openIds.split(','));
+      if (!alive || isFailure(answer)) return;
+      setAllowance(answer.allowance);
+      setJobs((all) => {
+        const next = all.map((job) => answer.jobs.find((j) => j.id === job.id) ?? job);
+        for (const job of answer.jobs) {
+          const before = all.find((j) => j.id === job.id);
+          if (before && OPEN.has(before.status) && job.status === 'succeeded') {
+            setNotice({ text: interpolate(copy.composer.versions, { count: job.outputs.length }) });
+          }
+        }
+        return next;
+      });
+    }, POLL_MS);
+    return () => {
+      alive = false;
+      window.clearInterval(timer);
+    };
+  }, [api, openIds, copy.composer.versions]);
+
+  const create = async (input: { prompt: string; vocal: boolean }) => {
+    setCreating(true);
+    setComposerError(null);
+    // One id per draft: a retried press (double click, a dropped answer) is the same request on the server.
+    draftRequest.current ??= newRequestId();
+    let answer: unknown;
+    try {
+      const response = await fetch('/api/brand-studio', {
+        method: 'POST',
+        credentials: 'same-origin',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          operation: 'job.create',
+          input: { kind: 'music', organizationId, requestId: draftRequest.current, mode: 'describe', prompt: input.prompt, vocal: input.vocal, language: locale },
+        }),
+      });
+      answer = await response.json();
+    } catch {
+      answer = null;
+    }
+    setCreating(false);
+    const result = answer as { ok?: boolean; job?: StudioJobView; code?: StudioErrorCode; blocked?: 'name' } | null;
+    if (result?.ok && result.job) {
+      draftRequest.current = null;
+      setJobs((all) => [result.job!, ...all.filter((j) => j.id !== result.job!.id)]);
+      chooseTab('music');
+      return true;
+    }
+    if (result?.blocked === 'name') setComposerError(errorLine(copy, 'artist'));
+    else setComposerError(errorLine(copy, result?.code ?? 'failed'));
+    // A refused request reserved nothing: the next press is a new one.
+    if (result?.code) draftRequest.current = null;
+    return false;
   };
 
   /* ------------------------------------------------------------------ player */
@@ -190,8 +256,8 @@ export function SoundStudio(props: SoundStudioProps) {
     const element = audio.current;
     if (!element || !track.seconds) return;
     if (element.dataset.key !== track.key) {
-      element.src = track.streamUrl;
       element.dataset.key = track.key;
+      element.src = track.streamUrl;
     }
     element.currentTime = Math.max(0, Math.min(track.seconds, ratio * track.seconds));
     setPosition(element.currentTime);
@@ -200,51 +266,67 @@ export function SoundStudio(props: SoundStudioProps) {
   /* ------------------------------------------------------------------ likes */
   const like = async (track: SoundTrackView) => {
     const liked = !track.liked;
-    setTracks((all) => all.map((t) => (t.key === track.key ? { ...t, liked } : t)));
+    setLikes((all) => ({ ...all, [track.key]: liked }));
+    const ref = track.outputId ? { outputId: track.outputId } : { assetId: track.assetId };
     try {
       const response = await fetch('/api/brand-studio/library', {
         method: 'POST',
         credentials: 'same-origin',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ operation: 'like.toggle', input: { organizationId, ref: { assetId: track.assetId }, liked } }),
+        body: JSON.stringify({ operation: 'like.toggle', input: { organizationId, ref, liked } }),
       });
       if (!response.ok) throw new Error('like');
     } catch {
-      setTracks((all) => all.map((t) => (t.key === track.key ? { ...t, liked: !liked } : t)));
+      setLikes((all) => ({ ...all, [track.key]: !liked }));
     }
   };
 
   /* ------------------------------------------------------------------ upload */
   const onFiles = async (event: ChangeEvent<HTMLInputElement>) => {
-    const files = Array.from(event.target.files ?? []);
+    const picked = Array.from(event.target.files ?? []);
     event.target.value = '';
-    if (files.length === 0) return;
+    if (picked.length === 0) return;
     setUploading(true);
     setNotice(null);
     let failed = false;
-    for (const file of files) {
-      const saved = await api.upload(file, { measure: measureInBrowser });
-      if (isFailure(saved) || saved.asset.kind !== 'audio') {
+    for (const file of picked) {
+      const result = await api.upload(file, { measure: measureInBrowser });
+      if (isFailure(result) || result.asset.kind !== 'audio') {
         failed = true;
         continue;
       }
-      const [row] = soundTracks(organizationId, [saved.asset], []);
-      if (row) setTracks((all) => [row, ...all.filter((t) => t.key !== row.key)]);
+      const [row] = soundTracks(organizationId, [result.asset], []);
+      if (row) setFiles((all) => [row, ...all.filter((t) => t.key !== row.key)]);
     }
     setUploading(false);
     if (failed) setNotice({ text: copy.upload.failed });
     else chooseTab('music');
   };
 
-  /* ------------------------------------------------------------------ send */
-  const sendTrack = (track: SoundTrackView): SoundSendTrack => ({
-    assetId: track.assetId,
+  /* ------------------------------------------------------------------ save and send */
+  /** A made version is saved to the assets first (named as the row), so it can be sent and found again. */
+  const ensureAsset = async (track: SoundTrackView): Promise<string | null> => {
+    if (track.assetId) return track.assetId;
+    if (!track.outputId) return null;
+    const result = await api.call('asset.from_output', { organizationId, outputId: track.outputId, name: nameOf(track).slice(0, 120) });
+    if (isFailure(result)) return null;
+    setSaved((all) => ({ ...all, [track.key]: result.asset.id }));
+    return result.asset.id;
+  };
+
+  const sendTrack = (track: SoundTrackView, assetId: string): SoundSendTrack => ({
+    assetId,
     label: nameOf(track),
     seconds: track.seconds,
-    srcUrl: track.streamUrl,
+    srcUrl: `/api/brand-studio/compose?${new URLSearchParams({ organizationId, source: 'asset', id: assetId }).toString()}`,
   });
 
-  const sendToCompose = (track: SoundTrackView, replaceExisting: boolean) => {
+  const sendToCompose = async (track: SoundTrackView, replaceExisting: boolean) => {
+    const assetId = await ensureAsset(track);
+    if (!assetId) {
+      setNotice({ text: copy.send.failed });
+      return;
+    }
     let raw: string | null = null;
     try {
       raw = window.localStorage.getItem(composeStorageKey(organizationId));
@@ -252,16 +334,16 @@ export function SoundStudio(props: SoundStudioProps) {
       raw = null;
     }
     if (track.tab === 'sfx') {
-      const placed = composeSfxHandoff(raw, sendTrack(track), `sfx_${newRequestId().slice(-12)}`);
+      const placed = composeSfxHandoff(raw, sendTrack(track, assetId), `sfx_${newRequestId().slice(-12)}`);
       if (placed.status === 'full') {
         setNotice({ text: copy.send.sfxFull });
         return;
       }
       return writeAndOpen(placed.stored);
     }
-    const placed = composeBgmHandoff(raw, sendTrack(track), replaceExisting);
+    const placed = composeBgmHandoff(raw, sendTrack(track, assetId), replaceExisting);
     if (placed.status === 'replace_needed') {
-      setReplace({ track, current: placed.currentLabel });
+      setReplace({ track: { ...track, assetId }, current: placed.currentLabel });
       return;
     }
     writeAndOpen(placed.stored);
@@ -279,8 +361,36 @@ export function SoundStudio(props: SoundStudioProps) {
     window.location.assign(props.hrefs.compose);
   };
 
+  const addToVideo = async (track: SoundTrackView) => {
+    const assetId = await ensureAsset(track);
+    if (!assetId) {
+      setNotice({ text: copy.send.failed });
+      return;
+    }
+    setVideoTarget({ track: sendTrack(track, assetId), kind: track.tab === 'sfx' ? 'sfx' : 'bgm' });
+  };
+
+  const actions: RowActions = {
+    toggle,
+    seek,
+    like: (track) => void like(track),
+    sendCompose: (track) => void sendToCompose(track, false),
+    addVideo: (track) => void addToVideo(track),
+    save: async (track) => Boolean(await ensureAsset(track)),
+    similar: (track) => {
+      composer.current?.fill(track.prompt ?? '', track.vocal ?? false);
+    },
+    saveWaveform: (track, peaks) => {
+      if (!track.outputId || track.waveform) return;
+      void api.call('output.waveform', { organizationId, outputId: track.outputId, peaks });
+    },
+  };
+
+  const left = creditsLeft(allowance.capKrw, allowance.usedKrw);
+  const showComposer = canCreate && tab === 'music';
+
   return (
-    <div className={`bs-page ${s.page}`} data-brand-studio-v2 data-studio-sound data-sound-tab-current={tab}>
+    <div className={`bs-page ${s.page}`} data-brand-studio-v2 data-studio-sound data-sound-tab-current={tab} data-sound-composer-open={showComposer ? '' : undefined}>
       <header className={s.head}>
         <div className={s.titles}>
           <h1 className="bs-title">{copy.title}</h1>
@@ -308,16 +418,12 @@ export function SoundStudio(props: SoundStudioProps) {
             <svg viewBox="0 0 20 20" aria-hidden="true" className={s.searchIcon}>
               <path d="M9 14.5a5.5 5.5 0 1 1 0-11 5.5 5.5 0 0 1 0 11z M13 13l3.5 3.5" />
             </svg>
-            <input
-              type="search"
-              value={query}
-              onChange={(event) => setQuery(event.target.value)}
-              placeholder={copy.search.placeholder}
-              data-sound-search
-            />
+            <input type="search" value={query} onChange={(event) => setQuery(event.target.value)} placeholder={copy.search.placeholder} data-sound-search />
           </label>
           <button type="button" className={s.pill} aria-pressed={likedOnly} onClick={() => setLikedOnly((v) => !v)} data-sound-liked-only>
-            <Icon d={HEART} filled={likedOnly} />
+            <svg viewBox="0 0 20 20" aria-hidden="true" className="bs-icon" data-filled={likedOnly ? '' : undefined}>
+              <path d="M10 16.2s-5.8-3.4-5.8-7.6A3.2 3.2 0 0 1 10 6.6a3.2 3.2 0 0 1 5.8 2c0 4.2-5.8 7.6-5.8 7.6z" />
+            </svg>
             {copy.likedOnly}
           </button>
           {canCreate ? (
@@ -332,12 +438,17 @@ export function SoundStudio(props: SoundStudioProps) {
                 title={interpolate(copy.upload.hint, { mb: props.audioMaxMb })}
                 data-sound-upload
               >
-                <Icon d={UPLOAD} />
+                <svg viewBox="0 0 20 20" aria-hidden="true" className="bs-icon">
+                  <path d="M10 13.5V4.5 M6.5 8 10 4.5 13.5 8 M4.5 15.5h11" />
+                </svg>
                 {uploading ? copy.upload.uploading : copy.upload.button}
               </button>
               <input ref={fileInput} type="file" accept="audio/mpeg,audio/wav,.mp3,.wav" multiple hidden onChange={onFiles} />
             </>
           ) : null}
+          <span className={s.credits} data-sound-credits>
+            {interpolate(props.creditsCopy.left, { n: formatCredits(left, locale) })}
+          </span>
         </div>
       </header>
 
@@ -357,12 +468,24 @@ export function SoundStudio(props: SoundStudioProps) {
       {tab === 'sfx' ? <p className={s.use}>{copy.sfxUse}</p> : null}
 
       <section className={s.list} role="tabpanel" aria-label={copy.tabs[tab]} data-sound-list={tab} data-sound-count={shown.length}>
+        {tab === 'music' && !searching && (openJobs.length > 0 || failedJobs.length > 0) ? (
+          <ul className={s.rows} data-sound-runs>
+            {openJobs.map((job) => (
+              <PendingRow key={job.id} job={job} copy={copy} state="making" />
+            ))}
+            {failedJobs.map((job) => (
+              <PendingRow key={job.id} job={job} copy={copy} state="failed" line={job.errorCode === 'provider_rejected' ? copy.errors.blocked : copy.errors.failed} />
+            ))}
+          </ul>
+        ) : null}
         {shown.length === 0 ? (
-          <p className={s.empty} data-sound-empty>
-            {tabCount === 0 ? copy.empty[tab] : copy.noMatch}
-          </p>
+          tab === 'music' && !searching && openJobs.length + failedJobs.length > 0 ? null : (
+            <p className={s.empty} data-sound-empty>
+              {tabCount === 0 ? copy.empty[tab] : copy.noMatch}
+            </p>
+          )
         ) : (
-          <ul className={s.rows}>
+          <ul className={s.rows} data-sound-tracks>
             {shown.map((track) => (
               <TrackRow
                 key={track.key}
@@ -373,17 +496,29 @@ export function SoundStudio(props: SoundStudioProps) {
                 playing={playingKey === track.key}
                 position={audio.current?.dataset.key === track.key ? position : 0}
                 canCreate={canCreate}
+                primaryInk={showComposer}
                 onToggleOpen={() => setOpenKey((key) => (key === track.key ? null : track.key))}
-                onPlay={() => toggle(track)}
-                onSeek={(ratio) => seek(track, ratio)}
-                onLike={() => void like(track)}
-                onSendCompose={() => sendToCompose(track, false)}
-                onAddVideo={() => setVideoTarget({ track: sendTrack(track), kind: track.tab === 'sfx' ? 'sfx' : 'bgm' })}
+                actions={actions}
               />
             ))}
           </ul>
         )}
       </section>
+
+      {showComposer ? (
+        <MusicComposer
+          ref={composer}
+          copy={copy}
+          locale={locale}
+          credits={musicQuoteCredits({ mode: 'describe' })}
+          amountTemplate={props.creditsCopy.amount}
+          busy={creating}
+          showExamples={!tracks.some((t) => t.outputId) && openJobs.length === 0}
+          error={composerError}
+          onCreate={(input) => void create(input)}
+          onClearError={() => setComposerError(null)}
+        />
+      ) : null}
 
       {replace ? (
         <ConfirmReplace
@@ -393,7 +528,7 @@ export function SoundStudio(props: SoundStudioProps) {
           onReplace={() => {
             const track = replace.track;
             setReplace(null);
-            sendToCompose(track, true);
+            void sendToCompose(track, true);
           }}
         />
       ) : null}
@@ -414,130 +549,6 @@ export function SoundStudio(props: SoundStudioProps) {
       ) : null}
     </div>
   );
-}
-
-interface TrackRowProps {
-  track: SoundTrackView;
-  name: string;
-  copy: StudioSoundCopy;
-  open: boolean;
-  playing: boolean;
-  position: number;
-  canCreate: boolean;
-  onToggleOpen: () => void;
-  onPlay: () => void;
-  onSeek: (ratio: number) => void;
-  onLike: () => void;
-  onSendCompose: () => void;
-  onAddVideo: () => void;
-}
-
-function TrackRow(props: TrackRowProps) {
-  const { track, name, copy, open, playing } = props;
-  const row = useRef<HTMLLIElement | null>(null);
-  const [peaks, setPeaks] = useState<number[] | 'failed' | null>(() => peakCache.get(track.streamUrl) ?? null);
-
-  // Decode only rows that come into view.
-  useEffect(() => {
-    if (peaks) return;
-    const element = row.current;
-    if (!element || typeof IntersectionObserver === 'undefined') return;
-    let alive = true;
-    const observer = new IntersectionObserver((entries) => {
-      if (!entries.some((entry) => entry.isIntersecting)) return;
-      observer.disconnect();
-      void decodePeaks(track.streamUrl).then((value) => {
-        if (alive) setPeaks(value);
-      });
-    });
-    observer.observe(element);
-    return () => {
-      alive = false;
-      observer.disconnect();
-    };
-  }, [peaks, track.streamUrl]);
-
-  const progress = track.seconds ? Math.min(1, props.position / track.seconds) : 0;
-  const values = Array.isArray(peaks) ? peaks : null;
-  const panelId = `sound-row-${track.assetId}`;
-  const download = `${name.replace(/[\\/:*?"<>|]+/g, ' ').trim() || 'audio'}`;
-
-  return (
-    <li ref={row} className={s.row} data-sound-row={track.assetId} data-open={open ? '' : undefined} data-playing={playing ? '' : undefined}>
-      <div className={s.line}>
-        <button
-          type="button"
-          className={s.play}
-          aria-label={interpolate(playing ? copy.row.pause : copy.row.play, { name })}
-          aria-pressed={playing}
-          onClick={props.onPlay}
-          data-sound-play
-        >
-          <Icon d={playing ? PAUSE : PLAY} filled />
-        </button>
-        <button
-          type="button"
-          className={s.name}
-          aria-expanded={open}
-          aria-controls={panelId}
-          aria-label={interpolate(open ? copy.row.collapse : copy.row.expand, { name })}
-          onClick={props.onToggleOpen}
-          data-sound-open
-        >
-          <span className={s.nameText}>{name}</span>
-        </button>
-        <div className={s.mini} aria-hidden="true">
-          <Waveform peaks={values} progress={progress} compact />
-        </div>
-        <span className={s.length} data-sound-length>
-          {formatTrackLength(track.seconds)}
-        </span>
-        <button
-          type="button"
-          className={s.iconBtn}
-          aria-label={interpolate(track.liked ? copy.row.unlike : copy.row.like, { name })}
-          aria-pressed={track.liked}
-          onClick={props.onLike}
-          data-sound-like
-        >
-          <Icon d={HEART} filled={track.liked} />
-        </button>
-        <button type="button" className={s.iconBtn} aria-hidden="true" tabIndex={-1} onClick={props.onToggleOpen} data-chevron>
-          <Icon d={CHEVRON} />
-        </button>
-      </div>
-      {open ? (
-        <div id={panelId} className={s.panel} data-sound-panel>
-          <div className={s.big}>
-            <Waveform peaks={values} progress={progress} onSeek={track.seconds ? props.onSeek : undefined} label={name} />
-            <span className={s.time} data-sound-time>
-              {formatTrackLength(props.position)} / {formatTrackLength(track.seconds)}
-            </span>
-          </div>
-          <Actions>
-            {props.canCreate ? (
-              <button type="button" className="bs-btn" data-variant="solid" data-size="sm" onClick={props.onSendCompose} data-sound-send-compose>
-                {copy.actions.sendCompose}
-              </button>
-            ) : null}
-            {props.canCreate ? (
-              <button type="button" className="bs-btn" data-variant="soft" data-size="sm" onClick={props.onAddVideo} data-sound-add-video>
-                {copy.actions.addVideo}
-              </button>
-            ) : null}
-            <a className="bs-btn" data-variant="ghost" data-size="sm" href={track.streamUrl} download={download} data-sound-download>
-              <Icon d={DOWNLOAD} />
-              {copy.actions.download}
-            </a>
-          </Actions>
-        </div>
-      ) : null}
-    </li>
-  );
-}
-
-function Actions({ children }: { children: ReactNode }) {
-  return <div className={s.actions}>{children}</div>;
 }
 
 function ConfirmReplace(props: { copy: StudioSoundCopy; current: string; onCancel: () => void; onReplace: () => void }) {

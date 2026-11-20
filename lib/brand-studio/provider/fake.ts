@@ -6,12 +6,17 @@
  * bundled 5-second 854x480 clip (./fake-clip.ts); a draft also gets a fake draft id so the
  * draft -> final path runs end to end.
  *
- * A prompt containing `[[fake:reject]]` or `[[fake:fail]]` fails the task with `provider_rejected` /
- * `failed`, so tests can exercise the failure paths without a real provider.
+ * Music (an endpoint under `suno/`) answers with two versions, real MP3 files of 12 s and 8 s (./fake-music.ts),
+ * so a local screen plays, draws and measures them (docs/BRAND-SOUND-STUDIO.md §7.4).
+ *
+ * A prompt (or a music style or lyrics) containing `[[fake:reject]]` or `[[fake:fail]]` fails the task with
+ * `provider_rejected` / `failed`, and `[[fake:none]]` makes a music request finish with no version, so tests
+ * can exercise the failure paths without a real provider.
  */
 import { randomBytes } from 'node:crypto';
 import sharp from 'sharp';
 import { FAKE_CLIP_MP4_BASE64, FAKE_CLIP_SECONDS } from './fake-clip';
+import { FAKE_MUSIC_CLIPS } from './fake-music';
 import type { StudioProvider, StudioProviderRequest } from './types';
 
 const LONG_SIDE = 512;
@@ -47,11 +52,11 @@ export function fakeClipBytes(): Uint8Array {
 }
 
 interface FakeTask {
-  medium: 'image' | 'video';
+  medium: 'image' | 'video' | 'audio';
   width: number;
   height: number;
   draft: boolean;
-  outcome: 'ok' | 'reject' | 'fail';
+  outcome: 'ok' | 'reject' | 'fail' | 'none';
   polls: number;
 }
 
@@ -63,14 +68,15 @@ export function createFakeStudioProvider(options: { pollsBeforeDone?: number } =
     tasks,
     async submit(request: StudioProviderRequest) {
       const video = /-to-video$/.test(request.endpoint);
-      const prompt = typeof request.body.prompt === 'string' ? request.body.prompt : '';
+      const music = request.endpoint.startsWith('suno/');
+      const prompt = ['prompt', 'style', 'lyrics', 'title'].map((k) => (typeof request.body[k] === 'string' ? request.body[k] : '')).join(' ');
       const size = fakeImageSize(request.body.aspect_ratio);
       const id = `fake_${randomBytes(9).toString('hex')}`;
       tasks.set(id, {
-        medium: video ? 'video' : 'image',
+        medium: music ? 'audio' : video ? 'video' : 'image',
         ...size,
         draft: request.body.draft === true,
-        outcome: prompt.includes('[[fake:reject]]') ? 'reject' : prompt.includes('[[fake:fail]]') ? 'fail' : 'ok',
+        outcome: prompt.includes('[[fake:reject]]') ? 'reject' : prompt.includes('[[fake:fail]]') ? 'fail' : music && prompt.includes('[[fake:none]]') ? 'none' : 'ok',
         polls: 0,
       });
       return { taskId: id };
@@ -82,6 +88,18 @@ export function createFakeStudioProvider(options: { pollsBeforeDone?: number } =
       if (task.polls < doneAfter) return { state: 'pending' };
       if (task.outcome === 'reject') return { state: 'failed', code: 'provider_rejected', detail: 'fake rejection' };
       if (task.outcome === 'fail') return { state: 'failed', code: 'failed', detail: 'fake failure' };
+      if (task.outcome === 'none') return { state: 'failed', code: 'failed', detail: 'fake: completed without a version' };
+      if (task.medium === 'audio') {
+        return {
+          state: 'succeeded',
+          outputs: FAKE_MUSIC_CLIPS.map((clip, i) => ({
+            url: `fake://audio/${i}/${taskId}`,
+            mime: 'audio/mpeg',
+            seconds: clip.seconds,
+            meta: { taskId, clipId: `${taskId}-${i}` },
+          })),
+        };
+      }
       if (task.medium === 'video') {
         return {
           state: 'succeeded',
@@ -98,6 +116,9 @@ export function createFakeStudioProvider(options: { pollsBeforeDone?: number } =
       const image = /^fake:\/\/image\/(\d{1,4})x(\d{1,4})\//.exec(url);
       if (image) return { bytes: await fakeImagePng(Number(image[1]), Number(image[2])), mime: 'image/png' };
       if (url.startsWith('fake://video/')) return { bytes: fakeClipBytes(), mime: 'video/mp4' };
+      const audio = /^fake:\/\/audio\/(\d)\//.exec(url);
+      const clip = audio ? FAKE_MUSIC_CLIPS[Number(audio[1])] : undefined;
+      if (clip) return { bytes: new Uint8Array(Buffer.from(clip.mp3Base64, 'base64')), mime: 'audio/mpeg' };
       throw new Error('fake download: unknown address');
     },
   };

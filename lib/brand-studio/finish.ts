@@ -12,7 +12,8 @@ import { downloadResult } from './provider/download';
 import { scheduleClipReading } from './revision/clip';
 import { loadRevisionRecipe } from './revision/recipe';
 import type { JobRow, OutputRow, StudioDeps, StudioPendingResult } from './types';
-import { settledUsageKrw } from './usage-rate';
+import { musicUsageKrw, settledUsageKrw } from './usage-rate';
+import { audioSeconds } from './sound/audio-info';
 
 const now = (deps: StudioDeps) => (deps.now?.() ?? new Date()).toISOString();
 
@@ -40,7 +41,13 @@ async function storeOne(deps: StudioDeps, job: JobRow, output: OutputRow, result
   const fetched = await fetchResult(deps, result.url);
   let bytes = fetched.bytes;
   let mime = sniffMime(bytes);
-  if (output.kind === 'image' ? !mime || kindOfMime(mime) !== 'image' : mime !== 'video/mp4' && mime !== 'video/quicktime') {
+  const wrongKind =
+    output.kind === 'image'
+      ? !mime || kindOfMime(mime) !== 'image'
+      : output.kind === 'audio'
+        ? mime !== 'audio/mpeg' && mime !== 'audio/wav'
+        : mime !== 'video/mp4' && mime !== 'video/quicktime';
+  if (wrongKind) {
     throw new Error(`result is not ${output.kind} (${fetched.mime ?? 'unknown'})`);
   }
   const region = job.kind === 'region_edit' ? job.work.region : undefined;
@@ -83,6 +90,11 @@ async function storeOne(deps: StudioDeps, job: JobRow, output: OutputRow, result
         }
         storedPatch = { patchKey, maskKey, box: { ...(patchBox ?? region.plan.box) } };
       }
+    } else if (output.kind === 'audio') {
+      // The file's own length; the engine's reported one only when the bytes say nothing.
+      const read = audioSeconds(bytes, mime);
+      const seconds = read ?? (typeof result.seconds === 'number' && result.seconds > 0 ? result.seconds : null);
+      durationMs = seconds === null ? null : Math.round(seconds * 1000);
     } else {
       const info = videoInfo(bytes);
       width = info?.width ?? null;
@@ -121,10 +133,35 @@ function hostOf(url: string): string {
   }
 }
 
+/**
+ * Music (docs/BRAND-SOUND-STUDIO.md §7.2): one request, one slot, one or more versions. Each version after the
+ * first gets its own pending result row and its own entry in `results`, so storing, retries and the list treat
+ * every version alike. Safe to run again: a row already there is kept (`brand_studio_outputs_slot`).
+ */
+async function spreadVersions(deps: StudioDeps, job: JobRow, work: JobRow['work'] & { results: NonNullable<JobRow['work']['results']> }): Promise<void> {
+  const first = work.results['0'];
+  const versions = first?.versions ?? [];
+  for (let i = 1; i < Math.min(versions.length, MAX_VERSIONS); i += 1) {
+    const v = versions[i]!;
+    await deps.sql.query(
+      `insert into brand_studio_outputs (job_id, organization_id, idx, kind) values ($1, $2, $3, 'audio')
+        on conflict on constraint brand_studio_outputs_slot do nothing`,
+      [job.id, job.organization_id, i],
+    );
+    if (!work.results[String(i)] && !work.failures?.[String(i)]) {
+      work.results[String(i)] = { url: v.url, mime: v.mime, seconds: v.seconds ?? null, costUsd: null, ...(v.meta ? { meta: v.meta } : {}) };
+    }
+  }
+}
+
+/** Result rows one job may hold (`brand_studio_outputs_idx`: 0..15). */
+const MAX_VERSIONS = 16;
+
 /** Store every pending output that has a result; returns the job after settling, or null when it lost the lease. */
 export async function finishJob(deps: StudioDeps, job: JobRow, token: string): Promise<JobRow | null> {
-  const outputs = (await deps.sql.query<OutputRow>('select * from brand_studio_outputs where job_id = $1 order by idx', [job.id])).rows;
   const work = { ...job.work, results: { ...(job.work.results ?? {}) }, failures: { ...(job.work.failures ?? {}) } };
+  if (job.kind === 'music') await spreadVersions(deps, job, work);
+  const outputs = (await deps.sql.query<OutputRow>('select * from brand_studio_outputs where job_id = $1 order by idx', [job.id])).rows;
   let retry = false;
   let requeueForAlign = false;
   for (const output of outputs.filter((o) => o.status === 'pending')) {
@@ -202,6 +239,19 @@ async function settleJob(deps: StudioDeps, job: JobRow, token: string, work: Job
     const rawCode: StudioErrorCode = failures.find(([, f]) => f.code !== 'failed')?.[1].code ?? 'failed';
     const dbCode: StudioErrorCode = rawCode === 'region_misaligned' ? 'failed' : rawCode;
     return saveJob(deps.sql, job, token, { status: 'failed', error_code: dbCode, error_detail: detail, work, finished_at: now(deps), usage_krw: 0 });
+  }
+  // Music is charged per request (docs/BRAND-SOUND-STUDIO.md §3.4): one version or several, the quote once.
+  if (job.kind === 'music') {
+    const reported = work.results?.['0']?.costUsd;
+    return saveJob(deps.sql, job, token, {
+      status: 'succeeded',
+      error_code: null,
+      error_detail: detail,
+      work,
+      cost_usd: typeof reported === 'number' && reported >= 0 ? Math.round(reported * 10_000) / 10_000 : Number(job.estimate_usd),
+      usage_krw: musicUsageKrw(Number(job.estimate_krw), ready.length),
+      finished_at: now(deps),
+    });
   }
   // What the provider charged, kept for our own margin only. It never changes what the run takes.
   const share = Number(job.estimate_usd) / Math.max(1, outputs.length);

@@ -6,7 +6,7 @@
  * Client-safe: no env, no db. The page reads the rows (already scoped to a seated organization) and hands
  * them here.
  */
-import type { StudioAssetView } from '../contracts';
+import type { StudioAssetView, StudioJobView } from '../contracts';
 
 export const SOUND_TABS = ['music', 'sfx'] as const;
 export type SoundTab = (typeof SOUND_TABS)[number];
@@ -48,9 +48,19 @@ export function trackDisplayName(name: string): string | null {
 }
 
 export interface SoundTrackView {
-  /** Library key (`a:<assetId>`), the same key likes and folders use. */
+  /** Library key (`a:<assetId>` or `o:<outputId>`), the same key likes and folders use. */
   key: string;
-  assetId: string;
+  /** An upload or a saved file; null for a made version not saved to the assets yet (it is saved on send). */
+  assetId: string | null;
+  /** A version made here (SS2 on): its result, its run, its letter (A, B…). */
+  outputId?: string;
+  jobId?: string;
+  letter?: string;
+  /** Stored waveform peaks, when a browser has saved them. */
+  waveform?: number[] | null;
+  /** The description it was made from (made versions only), for "설명 복사하기" and "비슷하게 만들기". */
+  prompt?: string;
+  vocal?: boolean;
   tab: SoundTab;
   /** The stored name (searched), and what the row draws (null: the screen's fallback). */
   name: string;
@@ -65,9 +75,63 @@ export interface SoundTrackView {
 }
 
 /** The compose gateway streams organization audio by id, after the same studio checks as every screen. */
-export function soundStreamUrl(organizationId: string, assetId: string): string {
-  const q = new URLSearchParams({ organizationId, source: 'asset', id: assetId });
+export function soundStreamUrl(organizationId: string, id: string, source: 'asset' | 'output' = 'asset'): string {
+  const q = new URLSearchParams({ organizationId, source, id });
   return `/api/brand-studio/compose?${q.toString()}`;
+}
+
+/** `A`, `B`, … for the versions one request returned (§4.2). */
+export function versionLetter(idx: number): string {
+  return String.fromCharCode(65 + Math.max(0, Math.min(25, idx)));
+}
+
+/**
+ * The versions made here, as rows (§4.2): every ready result of a finished music run, named "<title> · A".
+ * A version already saved to the assets keeps its asset id, so sending it needs no second save.
+ */
+export function musicTracks(organizationId: string, jobs: readonly StudioJobView[], likedKeys: ReadonlySet<string> | readonly string[]): SoundTrackView[] {
+  const liked = likedKeys instanceof Set ? likedKeys : new Set(likedKeys as readonly string[]);
+  const rows: SoundTrackView[] = [];
+  for (const job of jobs) {
+    if (job.kind !== 'music' || job.status !== 'succeeded') continue;
+    const title = job.music?.title ?? '';
+    job.outputs.forEach((output, i) => {
+      if (output.kind !== 'audio') return;
+      const letter = versionLetter(i);
+      const name = title ? `${title} · ${letter}` : letter;
+      const key = `o:${output.id}`;
+      rows.push({
+        key,
+        assetId: output.savedAssetId,
+        outputId: output.id,
+        jobId: job.id,
+        letter,
+        waveform: output.waveform ?? null,
+        prompt: job.prompt,
+        vocal: job.music?.vocal ?? false,
+        tab: 'music',
+        name,
+        displayName: title ? name : null,
+        seconds: output.seconds,
+        streamUrl: soundStreamUrl(organizationId, output.id, 'output'),
+        source: 'generation',
+        liked: liked.has(key),
+        createdAt: job.createdAt,
+      });
+    });
+  }
+  return rows;
+}
+
+/**
+ * Rows for the list: made versions and the brand's audio files, newest first. A saved version appears once,
+ * as the version (its asset is the same file).
+ */
+export function mergeTracks(made: readonly SoundTrackView[], files: readonly SoundTrackView[]): SoundTrackView[] {
+  const savedAs = new Set(made.map((t) => t.assetId).filter((id): id is string => Boolean(id)));
+  const order = (a: SoundTrackView, b: SoundTrackView) =>
+    a.createdAt < b.createdAt ? 1 : a.createdAt > b.createdAt ? -1 : (a.letter ?? '').localeCompare(b.letter ?? '');
+  return [...made, ...files.filter((t) => !t.assetId || !savedAs.has(t.assetId))].sort(order);
 }
 
 export function soundTracks(

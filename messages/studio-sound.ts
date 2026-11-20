@@ -10,6 +10,13 @@
  * ("다시 시도해 주세요") instead of pass 2's "다시 시도해요". `replaceTitle` was reworded after the screen check:
  * a quoted name ending in a consonant took the wrong particle ("…음원"를), so it says "대신" and needs none.
  *
+ * Slice SS2 (music by description): the composer, examples, versions, save, copy and error lines are §4.7 lines
+ * where §4.7 has them; the rest went through the same two Gemma passes on 2026-11-20. Taken from pass 2 (examples
+ * as a song's description, not an order; buttons ending in a verb noun) except: `composer.label` stays a label,
+ * error lines say "빠지지 않았어요" like §4.7 instead of "차감되지", and "다시 시도해 주세요" instead of "다시 시도해요".
+ * `composer.making` is the first sentence of §4.7's "만드는 동안" line: its "{seconds}초 정도" waits for the measured
+ * time of the paid smoke test (§4.7, §7.7) and is not shown until then.
+ *
  * Amounts are credits, never won. No engine, vendor or model name appears here.
  */
 export const studioSoundEn = {
@@ -43,6 +50,43 @@ export const studioSoundEn = {
     sendCompose: 'Send to Editing Studio',
     addVideo: 'Add to Video Studio',
     download: 'Download',
+  },
+  composer: {
+    label: 'Describe the music',
+    placeholder: 'Describe the mood, instruments, and tempo. (e.g., Calm piano)',
+    vocals: 'Vocals',
+    noVocals: 'No vocals',
+    withVocals: 'With vocals',
+    lengthNote: 'Adjust the length after creating.',
+    create: 'Create',
+    createLabel: 'Create, {credits} credits',
+    creating: 'Starting',
+    making: 'Creating music.',
+    versions: '{count} versions created.',
+  },
+  examples: {
+    label: 'Example descriptions',
+    skincare: 'Clean, calm, slow piano',
+    fashion: 'Sleek, urban beat at a fast tempo',
+    shortform: 'Bouncy, upbeat synth track, fast',
+    launch: 'Grand, confident orchestral piece at a medium tempo',
+  },
+  version: 'Version {letter}',
+  more: {
+    save: 'Save to assets',
+    saved: 'Saved to assets',
+    similar: 'Create similar',
+    copy: 'Copy description',
+    copied: 'Copied',
+  },
+  errors: {
+    failed: 'Failed to create music. No credits were used.',
+    artist: 'Please avoid artist names or song titles. Describe the mood, instruments, and tempo instead.',
+    blocked: "This description can't be used. No credits were used.",
+    allowance: 'Not enough credits this month.',
+    closed: "Creating music isn't available for this workspace right now.",
+    busy: 'Too much music is being made at once. Please try again shortly.',
+    generic: 'Something went wrong. Please try again.',
   },
   send: {
     sentCompose: 'Sent to Editing Studio.',
@@ -93,6 +137,43 @@ export const studioSoundKo: StudioSoundCopy = {
     sendCompose: '편집 스튜디오로 보내기',
     addVideo: '영상 스튜디오에 넣기',
     download: '내려받기',
+  },
+  composer: {
+    label: '음악 설명',
+    placeholder: '분위기, 악기, 빠르기를 적어 주세요. (예: 차분한 피아노 곡)',
+    vocals: '보컬',
+    noVocals: '보컬 없음',
+    withVocals: '보컬 있음',
+    lengthNote: '곡마다 길이가 달라요. 만든 후 조절하세요.',
+    create: '만들기',
+    createLabel: '{credits}크레딧으로 만들기',
+    creating: '만드는 중이에요.',
+    making: '음악을 만들고 있어요.',
+    versions: '{count}개의 버전이 만들어졌어요.',
+  },
+  examples: {
+    label: '예시 설명',
+    skincare: '깨끗하고 차분한 분위기의 느린 피아노 곡',
+    fashion: '세련되고 도시적인 비트의 빠른 곡',
+    shortform: '통통 튀고 경쾌한 신시사이저 사운드의 빠른 곡',
+    launch: '웅장하고 신뢰감 있는 중간 속도의 오케스트라 곡',
+  },
+  version: '버전 {letter}',
+  more: {
+    save: '에셋에 저장하기',
+    saved: '에셋에 저장했어요',
+    similar: '비슷하게 만들기',
+    copy: '설명 복사하기',
+    copied: '복사했어요',
+  },
+  errors: {
+    failed: '음악을 만들지 못했어요. 크레딧은 빠지지 않았어요.',
+    artist: '가수 이름이나 곡 제목은 넣을 수 없어요. 분위기, 악기, 빠르기로 설명해 주세요.',
+    blocked: '사용할 수 없는 설명이에요. 크레딧은 빠지지 않았어요.',
+    allowance: '이번 달 크레딧이 부족해요.',
+    closed: '지금은 이 워크스페이스에서 음악을 만들 수 없어요.',
+    busy: '동시에 만드는 음악이 너무 많아요. 잠시 후 다시 시도해 주세요.',
+    generic: '문제가 생겼어요. 다시 시도해 주세요.',
   },
   send: {
     sentCompose: '편집 스튜디오로 보냈어요.',

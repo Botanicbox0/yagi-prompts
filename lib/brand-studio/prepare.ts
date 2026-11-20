@@ -302,7 +302,7 @@ export function sentInputs(deps: Pick<StudioDeps, 'env'>, job: Pick<JobRow, 'kin
 }
 
 export function enhanceKind(kind: JobRow['kind']): EnhanceInput['kind'] | null {
-  return kind === 'video_final' ? null : kind;
+  return kind === 'video_final' || kind === 'music' || kind === 'sound_effect' ? null : kind;
 }
 
 export function enhanceInputOf(

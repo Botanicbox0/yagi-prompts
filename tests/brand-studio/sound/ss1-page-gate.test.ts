@@ -15,7 +15,7 @@ const ORG = '00000000-0000-4000-8000-0000000000ab';
 
 const mocks = vi.hoisted(() => ({
   studioRouteContext: vi.fn(),
-  loadSoundTracks: vi.fn(),
+  loadSoundStudio: vi.fn(),
   assertBrandFeature: vi.fn(),
 }));
 
@@ -28,7 +28,7 @@ vi.mock('next/navigation', () => ({
 vi.mock('@/components/brand-workspace/context', () => ({ brandContext: vi.fn() }));
 vi.mock('@/components/brand-workspace/scope', () => ({ brandScope: vi.fn() }));
 vi.mock('@/components/brand-studio/route-context', () => ({ studioRouteContext: mocks.studioRouteContext }));
-vi.mock('@/lib/brand-studio/sound/load', () => ({ loadSoundTracks: mocks.loadSoundTracks }));
+vi.mock('@/lib/brand-studio/sound/load', () => ({ loadSoundStudio: mocks.loadSoundStudio }));
 vi.mock('@/components/brand-studio/sound/sound-studio', () => ({
   SoundStudio: function SoundStudioStub() {
     return null;
@@ -45,9 +45,9 @@ describe('/brand/studio/sound page gate', () => {
 
   beforeEach(() => {
     mocks.studioRouteContext.mockReset();
-    mocks.loadSoundTracks.mockReset();
+    mocks.loadSoundStudio.mockReset();
     mocks.assertBrandFeature.mockReset();
-    mocks.loadSoundTracks.mockResolvedValue([]);
+    mocks.loadSoundStudio.mockResolvedValue({ tracks: [], jobs: [], allowance: { capKrw: 0, usedKrw: 0, resetsAt: '2026-12-01T00:00:00.000Z' } });
     mocks.assertBrandFeature.mockResolvedValue(undefined);
     mocks.studioRouteContext.mockResolvedValue({
       choice,
@@ -70,14 +70,14 @@ describe('/brand/studio/sound page gate', () => {
       vi.stubEnv('BRAND_SOUND_STUDIO', value);
       await expect(call()).rejects.toThrow('NEXT_NOT_FOUND');
     }
-    expect(mocks.loadSoundTracks).not.toHaveBeenCalled();
+    expect(mocks.loadSoundStudio).not.toHaveBeenCalled();
   });
 
   it('404s when the studio guard does (sandboxed, generation closed, project-only guest), whatever the flag', async () => {
     vi.stubEnv('BRAND_SOUND_STUDIO', 'on');
     mocks.studioRouteContext.mockRejectedValueOnce(new Error('NEXT_NOT_FOUND'));
     await expect(call()).rejects.toThrow('NEXT_NOT_FOUND');
-    expect(mocks.loadSoundTracks).not.toHaveBeenCalled();
+    expect(mocks.loadSoundStudio).not.toHaveBeenCalled();
   });
 
   it('404s for a brand whose policy denies sound, from the choice or from the policy row', async () => {
@@ -87,7 +87,7 @@ describe('/brand/studio/sound page gate', () => {
     const { BrandFeatureDenied } = await vi.importActual<typeof import('@/lib/brands/entitlements')>('@/lib/brands/entitlements');
     mocks.assertBrandFeature.mockRejectedValueOnce(new BrandFeatureDenied('sound'));
     await expect(call()).rejects.toThrow('NEXT_NOT_FOUND');
-    expect(mocks.loadSoundTracks).not.toHaveBeenCalled();
+    expect(mocks.loadSoundStudio).not.toHaveBeenCalled();
   });
 
   it('renders the studio with its copy, the tab from the address, and scoped links', async () => {

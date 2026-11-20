@@ -32,6 +32,7 @@ import { analyzeStudioFilm, cancelStudioJob, createStudioJob, deleteStudioJob, p
 import { createStudioJobGroup } from './job-group';
 import { assignStudioJobProject, liveProjectsOf, studioProjectsReady } from './job-projects';
 import { failure, guarded } from './outcome';
+import { saveOutputWaveform } from './sound/waveform-store';
 import { planStudioRevise } from './revision/advise';
 import { talkStudioRevise } from './revision/talk';
 import { readStudioMark } from './revision/mark';
@@ -109,6 +110,8 @@ export async function runStudioOperation(deps: StudioDeps, viewer: Viewer, opera
       return deleteStudioAsset(deps, viewer, input);
     case 'asset.from_output':
       return assetFromOutput(deps, viewer, input);
+    case 'output.waveform':
+      return saveOutputWaveform(deps, viewer, input);
     case 'output.delete':
       return deleteStudioOutput(deps, viewer, input);
     case 'job.delete':

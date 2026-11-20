@@ -16,6 +16,7 @@ import { gptReasoningEffort } from './complexity';
 import { pixelSize, studioModel, type StudioImageModel, type StudioModel, type StudioVideoModel } from '../models';
 import type { StudioJobParams } from '../types';
 import type { StudioProviderRequest } from './types';
+import { musicEngineOfModel } from '../sound/engine';
 
 export interface StudioRequestInput {
   kind: StudioJobKind;
@@ -264,5 +265,30 @@ export function buildStudioRequest(input: StudioRequestInput): StudioProviderReq
       return input.params.method === 'blueprint' ? videoRequest(input) : remixRequest(input);
     case 'video_final':
       return finalRequest(input);
+    case 'music':
+      return musicRequestOf(input);
+    case 'sound_effect':
+      // Sound effects arrive with their own slice (docs/BRAND-SOUND-STUDIO.md §7.6, SS5).
+      throw new StudioRequestError('sound effects are not built yet');
+  }
+}
+
+/**
+ * A music run goes out exactly as its engine adapter shapes it (docs/BRAND-SOUND-STUDIO.md §7.1): the engine
+ * the row names, the sentence in `final_prompt`, the choices in `params.music`.
+ */
+function musicRequestOf(input: StudioRequestInput): StudioProviderRequest {
+  const engine = musicEngineOfModel(input.model);
+  const music = input.params.music;
+  if (!engine || !music) throw new StudioRequestError(`not a music run: ${input.model}`);
+  try {
+    return engine.request({
+      mode: music.mode,
+      prompt: input.prompt,
+      vocal: music.vocal,
+      ...(music.mode === 'custom' ? { title: music.title, lyrics: music.lyrics ?? '', careful: music.careful } : {}),
+    });
+  } catch (error) {
+    throw new StudioRequestError(error instanceof Error ? error.message : 'music request');
   }
 }

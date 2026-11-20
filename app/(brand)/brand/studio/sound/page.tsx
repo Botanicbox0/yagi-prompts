@@ -6,7 +6,8 @@ import { studioRouteContext } from '@/components/brand-studio/route-context';
 import { SoundStudio } from '@/components/brand-studio/sound/sound-studio';
 import { createStudioMediaStore } from '@/lib/brand-studio/media-store';
 import { soundTabParam } from '@/lib/brand-studio/sound/library';
-import { loadSoundTracks } from '@/lib/brand-studio/sound/load';
+import { loadSoundStudio } from '@/lib/brand-studio/sound/load';
+import { studioEnv } from '@/lib/brand-studio/env';
 import { soundStudioVisible } from '@/lib/brand-studio/visibility';
 import { STUDIO_LIMITS } from '@/lib/brand-studio/contracts';
 import { assertBrandFeature, BrandFeatureDenied } from '@/lib/brands/entitlements';
@@ -21,8 +22,8 @@ import { brandSoundStudioOpen, brandStudioV2Open } from '@/lib/flags';
  * `BRAND_STUDIO_V2` off all 404 there), then this page's own flag `BRAND_SOUND_STUDIO` (default off), then
  * the `sound` group of the feature policy. Any of them closed: 404, the same answer as a missing page.
  *
- * SS1 makes nothing: it lists the brand's audio, plays it, and sends it to the editing studio or a video
- * studio project. Generation arrives in SS2.
+ * SS1 lists the brand's audio, plays it, and sends it to the editing studio or a video studio project. SS2 adds
+ * music by description: the composer, its runs and their versions (§7.4).
  */
 export const dynamic = 'force-dynamic';
 
@@ -56,7 +57,7 @@ export default async function StudioSoundPage({
   }
 
   const media = createStudioMediaStore();
-  const tracks = await loadSoundTracks(deps.sql, media, choice.id, viewer.userId ?? null);
+  const data = await loadSoundStudio(deps.sql, media, studioEnv(), choice.id, viewer.userId ?? null);
   const canCreate = !access.staff && (choice.role === 'owner' || choice.role === 'editor');
 
   return (
@@ -65,7 +66,10 @@ export default async function StudioSoundPage({
       locale={locale}
       copy={dict.studioSound}
       initialTab={soundTabParam(params.tab)}
-      initialTracks={tracks}
+      creditsCopy={dict.brandStudio.credits}
+      initialTracks={data.tracks}
+      initialJobs={data.jobs}
+      initialAllowance={data.allowance}
       canCreate={canCreate}
       audioMaxMb={Math.round(STUDIO_LIMITS.audioBytesMax / 1_000_000)}
       hrefs={{

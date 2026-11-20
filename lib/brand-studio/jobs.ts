@@ -35,6 +35,7 @@ import type { EnhanceInput, JobRow, OutputRow, StudioDeps } from './types';
 import { loadAllowance, reserveAllowance } from './usage';
 import { projectForNewJob, studioProjectsReady } from './job-projects';
 import { failure, guarded } from './outcome';
+import { createMusicJob } from './sound/music-jobs';
 
 const localeOf = (viewer: Viewer): 'ko' | 'en' => (viewer.locale === 'en' ? 'en' : 'ko');
 
@@ -132,6 +133,8 @@ function reviseInput(v: Extract<StudioJobCreate, { kind: 'video_revise' }>, dial
 }
 
 export async function createStudioJob(deps: StudioDeps, viewer: Viewer, raw: unknown): Promise<StudioJobCreated | StudioFailure> {
+  // Music (docs/BRAND-SOUND-STUDIO.md §7.4): same table and money rules, its own request shape and gates.
+  if (raw && typeof raw === 'object' && (raw as { kind?: unknown }).kind === 'music') return createMusicJob(deps, viewer, raw);
   const parsed = StudioJobCreateSchema.safeParse(raw);
   if (!parsed.success) return failure('invalid');
   const v = parsed.data;

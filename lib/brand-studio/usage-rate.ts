@@ -40,10 +40,11 @@ export const STUDIO_USAGE_FACTORS = {
  * that reads "8 credits" takes 80 KRW of the allowance, so the amounts on the results add up to what the
  * balance lost. Call it once per result (one picture, one video), never on a sum of several.
  */
-export function usageKrw(usd: number, medium: StudioMedium): number {
+export function usageKrw(usd: number, medium: StudioMedium | 'audio'): number {
   if (!Number.isFinite(usd) || usd <= 0) return 0;
   const f = STUDIO_USAGE_FACTORS;
-  const factor = medium === 'image' ? f.imageMarkup : 1 + f.videoMargin;
+  // Music and sound effects take the image factor for now (docs/BRAND-SOUND-STUDIO.md §3.4, provisional).
+  const factor = medium === 'image' || medium === 'audio' ? f.imageMarkup : 1 + f.videoMargin;
   return Math.ceil((usd * f.krwPerUsd * factor) / STUDIO_CREDIT_KRW - 1e-9) * STUDIO_CREDIT_KRW;
 }
 
@@ -60,6 +61,15 @@ export function settledUsageKrw(estimateKrw: number, planned: number, ready: num
 }
 
 /** Seconds in tenths, the precision a screen sees (`StudioAssetView.seconds`), so both sides round alike. */
+/**
+ * A music request is one charge (docs/BRAND-SOUND-STUDIO.md §3.4): the quote when at least one version was
+ * stored, nothing when none was. The number of versions never changes it.
+ */
+export function musicUsageKrw(estimateKrw: number, ready: number): number {
+  if (!Number.isFinite(estimateKrw) || estimateKrw <= 0 || ready <= 0) return 0;
+  return estimateKrw;
+}
+
 export function tenthsOfSeconds(seconds: number | null): number | null {
   return seconds === null || !Number.isFinite(seconds) ? null : Math.round(seconds * 10) / 10;
 }

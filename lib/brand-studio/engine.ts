@@ -17,7 +17,8 @@ import { planBlockRetry } from './block-retry';
 import { failJob, finishJob } from './finish';
 import { claimJobs, releaseJob, saveJob, tokenOf, failPendingOutputs } from './job-store';
 import { closeLane, failoverLane, heartbeatFresh, lanesUp, loadLaneClosures, loadLaneHeartbeats, routeJob } from './lanes';
-import { studioModel, type StudioLane } from './models';
+import { studioModel, type StudioLane, type StudioModel } from './models';
+import { musicEngineOfModel } from './sound/engine';
 import { PrepareFailure, prepareJob, providerUrl, sendPrompt } from './prepare';
 import { buildStudioRequest, StudioRequestError, type StudioRequestInput } from './provider/requests';
 import { StudioProviderError } from './provider/types';
@@ -26,6 +27,11 @@ import type { JobRow, OutputRow, StudioDeps } from './types';
 const MAX_ATTEMPTS = 5;
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const nowOf = (deps: StudioDeps) => deps.now?.() ?? new Date();
+
+/** What the lane router needs of a job's model: a studio model, or a music engine (API lane only, `mcp: null`). */
+function laneModelOf(id: string): Pick<StudioModel, 'mcp'> | null {
+  return studioModel(id) ?? musicEngineOfModel(id)?.model ?? null;
+}
 
 export function requestInputOf(deps: Pick<StudioDeps, 'media' | 'env'>, job: JobRow): StudioRequestInput {
   const inputs = job.work.inputs ?? [];
@@ -61,7 +67,7 @@ async function failover(deps: StudioDeps, job: JobRow, token: string, detail: st
   const now = nowOf(deps);
   await closeLane(deps.sql, 'sunra_api', now);
   deps.log?.('studio_lane_closed', { lane: 'sunra_api', jobId: job.id });
-  const model = studioModel(job.model);
+  const model = laneModelOf(job.model);
   const next = model
     ? await failoverLane(deps.sql, {
         from: 'sunra_api',
@@ -83,7 +89,7 @@ async function failover(deps: StudioDeps, job: JobRow, token: string, detail: st
 }
 
 async function route(deps: StudioDeps, job: JobRow, token: string): Promise<JobRow | null> {
-  const model = studioModel(job.model);
+  const model = laneModelOf(job.model);
   if (!model) return failJob(deps, job, token, 'failed', `unknown model ${job.model}`);
   const lane = await routeJob(deps.sql, {
     organizationId: job.organization_id,
@@ -161,6 +167,11 @@ async function poll(deps: StudioDeps, job: JobRow, token: string): Promise<JobRo
     else {
       const first = status.outputs[0]!;
       results[key] = { url: first.url, mime: first.mime, seconds: first.seconds ?? null, costUsd: status.costUsd ?? null, draftTaskId: status.draftTaskId ?? null };
+      // One music request answers with one or more versions: keep them all (finishing gives each a row).
+      if (job.kind === 'music') {
+        if (first.meta) results[key]!.meta = first.meta;
+        results[key]!.versions = status.outputs.map((o) => ({ url: o.url, mime: o.mime, seconds: o.seconds ?? null, ...(o.meta ? { meta: o.meta } : {}) }));
+      }
     }
   }
   const done = outputs.every((o) => results[String(o.idx)] || failures[String(o.idx)]);

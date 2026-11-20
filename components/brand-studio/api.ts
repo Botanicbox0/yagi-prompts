@@ -18,6 +18,7 @@ import {
   type AssetReserveSchema,
   type AssetUpdateSchema,
   type CampaignHandoffSchema,
+  type OutputWaveformSchema,
   type FilmAnalyzeSchema,
   type ImageJobGroupSchema,
   type JobAssignProjectSchema,
@@ -71,6 +72,7 @@ export interface StudioOps {
   "job.delete": [z.input<typeof JobRefSchema>, StudioDone];
   "job.assign_project": [z.input<typeof JobAssignProjectSchema>, StudioJobProjectAssigned];
   "handoff.campaign": [z.input<typeof CampaignHandoffSchema>, StudioHandoffDone];
+  "output.waveform": [z.input<typeof OutputWaveformSchema>, StudioDone];
 }
 // Compile-time guard: every contract operation has a row above and nothing else does.
 type Exact<A, B> = [A] extends [B] ? ([B] extends [A] ? true : never) : never;
