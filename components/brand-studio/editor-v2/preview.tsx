@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useMemo, useRef, useState } from 'react';
+import { fill } from '@/components/brand-studio/copy';
 import { materialBySrc } from '@/lib/brand-studio/editor-v2/fixture';
 import { formatTimecode, frameStateAt, spansOf, totalFrames } from '@/lib/brand-studio/editor-v2/frames';
 import { DEFAULT_REFRAME, gradeMatrix, isNeutral } from '@/lib/brand-studio/editor-v2/model';
@@ -333,7 +334,11 @@ export function Preview({ api }: { api: EditorApi }) {
           <strong data-editor-timecode>{formatTimecode(playhead, fps)}</strong>
           <span>/ {formatTimecode(api.total, fps)}</span>
           {/* An empty real film has no rate yet: its first clip sets it. */}
-          {(!api.real || sequence.clips.length > 0) && <em>{fps} fps</em>}
+          {(!api.real || sequence.clips.length > 0) && (
+            <em title={api.tentative ? fill(copy.real.rateTentative, { fps }) : undefined} data-editor-fps-tentative={api.tentative ? '' : undefined}>
+              {fps} fps{api.tentative ? ` · ${copy.real.rateTentativeShort}` : ''}
+            </em>
+          )}
           {rate !== 0 && rate !== 1 && <em data-editor-shuttle>{rate > 0 ? `${rate}×` : `−${Math.abs(rate)}×`}</em>}
         </span>
         <span className={styles.transportSpace} />

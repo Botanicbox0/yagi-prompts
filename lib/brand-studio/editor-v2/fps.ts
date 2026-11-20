@@ -56,14 +56,61 @@ export const MIN_FRAME_GAPS = 6;
  * a frame the browser skipped while busy does not halve the answer. `null` when there are too few.
  */
 export function fpsFromMediaTimes(times: readonly number[], minGaps = MIN_FRAME_GAPS): number | null {
+  return rateFromMediaTimes(times, minGaps).fps;
+}
+
+/** A gap further than this share of a frame from a whole number of frames is not a constant rate. */
+const VARIABLE_GAP_TOLERANCE = 0.06;
+/** More than this share of such gaps means the footage's frames are not evenly spaced. */
+const VARIABLE_SHARE = 0.2;
+
+/**
+ * The footage's rate, and whether its frames are evenly spaced. A skipped frame is a gap of two (or
+ * three) frames and still constant; gaps that are not a whole number of frames (1/24 s next to 1/30 s,
+ * as in phone footage that changes its rate while recording) mean a variable rate. The editor does not
+ * support variable-rate footage; it says so (review round 1, item 10).
+ */
+export function rateFromMediaTimes(times: readonly number[], minGaps = MIN_FRAME_GAPS): { fps: number | null; variable: boolean } {
   const gaps: number[] = [];
   for (let i = 1; i < times.length; i += 1) {
     const gap = times[i]! - times[i - 1]!;
     if (Number.isFinite(gap) && gap > 1e-4 && gap < 0.5) gaps.push(gap);
   }
-  if (gaps.length < minGaps) return null;
+  if (gaps.length < minGaps) return { fps: null, variable: false };
   const middle = median(gaps);
-  return middle ? snapSourceFps(1 / middle) : null;
+  if (!middle) return { fps: null, variable: false };
+  const uneven = gaps.filter((gap) => {
+    const whole = Math.max(1, Math.round(gap / middle));
+    return Math.abs(gap - whole * middle) / middle > VARIABLE_GAP_TOLERANCE;
+  }).length;
+  return { fps: snapSourceFps(1 / middle), variable: uneven / gaps.length > VARIABLE_SHARE };
+}
+
+/**
+ * How long one try at measuring may take, counted only while the page is visible: a first try, then
+ * one longer try before the editor gives up for this visit (the clip is then measured again next visit).
+ */
+export const MEASURE_LIMITS_MS = [8000, 20000] as const;
+
+export interface MeasureSteps<T> {
+  visible(): boolean;
+  /** Resolves when the page is visible again. */
+  untilVisible(): Promise<void>;
+  /** One try, limited to `limitMs` of visible time; `null` when it could not tell. */
+  attempt(limitMs: number): Promise<T | null>;
+}
+
+/**
+ * Measures only while the page is visible (a hidden tab presents no frames, so waiting there would only
+ * burn the limit), and tries once more with a longer limit before giving up. Review round 1, item 3.
+ */
+export async function measureWithRetry<T>(steps: MeasureSteps<T>, limits: readonly number[] = MEASURE_LIMITS_MS): Promise<T | null> {
+  for (const limit of limits) {
+    if (!steps.visible()) await steps.untilVisible();
+    const result = await steps.attempt(limit);
+    if (result !== null) return result;
+  }
+  return null;
 }
 
 /** The footage's length in its own frames. */

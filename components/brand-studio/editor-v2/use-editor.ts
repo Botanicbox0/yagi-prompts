@@ -212,6 +212,13 @@ export function useEditor(copy: StudioEditorCopy, options: EditorOptions = {}) {
   /** Measured rate of each piece of footage (`srcUrl`), and the ones that could not be measured. */
   const [rates, setRates] = useState<Record<string, number>>({});
   const [unknownRates, setUnknownRates] = useState<Record<string, true>>({});
+  /** Footage whose frames are not evenly spaced (variable frame rate): shown, not supported (review round 1, item 10). */
+  const [variableRates, setVariableRates] = useState<Record<string, true>>({});
+  /**
+   * No cut's rate is measured: the film runs at a stand-in rate and nothing frame-based is stored until a
+   * later visit measures one (review round 1, item 3).
+   */
+  const [tentative, setTentative] = useState(false);
   const readOnly = isReal && !real.canEdit;
   const blocked = isReal && (readOnly || status !== 'ready');
   const [selection, setSelection] = useState<string[]>([]);
@@ -246,6 +253,12 @@ export function useEditor(copy: StudioEditorCopy, options: EditorOptions = {}) {
   docRef.current = doc;
   const unknownRef = useRef(unknownRates);
   unknownRef.current = unknownRates;
+  const variableRef = useRef(variableRates);
+  variableRef.current = variableRates;
+  const tentativeRef = useRef(tentative);
+  tentativeRef.current = tentative;
+  /** Footage that gets no frame data when stored: not measured, or not evenly spaced. */
+  const unmeasuredSources = () => [...Object.keys(unknownRef.current), ...Object.keys(variableRef.current)];
   /** Stored clips by id: what each cut carries that v2 does not own (lib/brand-studio/editor-v2/stored.ts). */
   const catalogue = useRef<Record<string, ComposeClip>>({});
   /** Reading and writing the shared key, kept in step with other tabs (lib/brand-studio/editor-v2/film-session.ts). */
@@ -373,9 +386,18 @@ export function useEditor(copy: StudioEditorCopy, options: EditorOptions = {}) {
     return source ? sourceSeconds(source) : null;
   }, []);
 
-  const noteRates = useCallback((known: Record<string, number>, unknown: readonly string[]) => {
-    if (Object.keys(known).length > 0) setRates((current) => ({ ...current, ...known }));
-    if (unknown.length > 0) setUnknownRates((current) => ({ ...current, ...Object.fromEntries(unknown.map((src) => [src, true as const])) }));
+  /** What measuring found: rates read, footage that could not be read, footage whose frames are uneven. */
+  const noteRates = useCallback((known: Record<string, number>, unknown: readonly string[], variable: readonly string[] = []) => {
+    const without = (current: Record<string, true>, srcs: readonly string[]) => {
+      if (!srcs.some((src) => current[src])) return current;
+      const next = { ...current };
+      for (const src of srcs) delete next[src];
+      return next;
+    };
+    const read = Object.keys(known);
+    if (read.length > 0) setRates((current) => ({ ...current, ...known }));
+    setUnknownRates((current) => ({ ...without(current, read), ...Object.fromEntries(unknown.map((src) => [src, true as const])) }));
+    setVariableRates((current) => ({ ...without(current, read.filter((src) => !variable.includes(src))), ...Object.fromEntries(variable.map((src) => [src, true as const])) }));
   }, []);
 
   /**
@@ -395,11 +417,13 @@ export function useEditor(copy: StudioEditorCopy, options: EditorOptions = {}) {
       const unknown = film.sequence.clips.filter((clip) => film.rateUnknown.includes(clip.id)).map((clip) => clip.srcUrl);
       const known: Record<string, number> = {};
       for (const clip of film.sequence.clips) if (!unknown.includes(clip.srcUrl)) known[clip.srcUrl] = clip.sourceFps;
-      noteRates(known, unknown);
+      const variable = Object.entries(measured).filter(([, seen]) => seen?.variable).map(([src]) => src);
+      noteRates(known, unknown, variable);
       // The captions stay with the stored film; the document holds the cuts only.
       const cuts = { ...film.sequence, captions: [] };
       if (!session.opened(ticket, cuts)) return;
       for (const clip of project.clips) catalogue.current[clip.id] = clip;
+      setTentative(film.tentative && cuts.clips.length > 0);
       setStoredFilm(project);
       setStored({ doc: realDoc(cuts), history: { past: [], future: [] } });
       setStatus('ready');
@@ -432,7 +456,7 @@ export function useEditor(copy: StudioEditorCopy, options: EditorOptions = {}) {
         conflict: setConflict,
         storageFailed: () => setStorageOk(false),
       },
-      merge: (text, sequence) => mergeFilmText(text, sequence, { known: catalogue.current, guessedSources: Object.keys(unknownRef.current) }),
+      merge: (text, sequence) => mergeFilmText(text, sequence, { known: catalogue.current, unmeasuredSources: unmeasuredSources(), tentative: tentativeRef.current }),
       canEdit: film.canEdit,
     });
     sessionRef.current = session;
@@ -476,7 +500,7 @@ export function useEditor(copy: StudioEditorCopy, options: EditorOptions = {}) {
     const read = readFilmText(film.organizationId);
     const sequence = docRef.current.sequence;
     const current = (read.ok ? parseStoredProject(read.text) : null) ?? emptyComposerProject(sequence.aspect);
-    return toStored(sequence, current, { known: catalogue.current, guessedSources: Object.keys(unknownRef.current) });
+    return toStored(sequence, current, { known: catalogue.current, unmeasuredSources: unmeasuredSources(), tentative: tentativeRef.current });
   }, []);
 
   /** The bar's two choices when another tab overwrote this screen's cuts. */
@@ -598,8 +622,10 @@ export function useEditor(copy: StudioEditorCopy, options: EditorOptions = {}) {
       const seconds = sourceSeconds(source) ?? (measured ? measured.frames / measured.fps : null);
       const sourceFps = measured?.fps ?? fps;
       const sourceFrames = measured?.frames ?? sourceFramesOf(seconds ?? 5, sourceFps);
-      if (measured) noteRates({ [source.srcUrl]: measured.fps }, []);
+      if (measured) noteRates({ [source.srcUrl]: measured.fps }, [], measured.variable ? [source.srcUrl] : []);
       else noteRates({}, [source.srcUrl]);
+      // The first cut of an empty film sets its rate: a stand-in when that cut's rate could not be read.
+      if (fresh) setTentative(!measured);
       const id = newId('cut');
       catalogue.current[id] = storedClipForSource(source, id, seconds);
       edit((current) => {
@@ -1052,6 +1078,9 @@ export function useEditor(copy: StudioEditorCopy, options: EditorOptions = {}) {
     busySource,
     rates,
     unknownRates,
+    variableRates,
+    /** No cut's rate is measured yet: the film's rate is a stand-in and nothing frame-based is stored. */
+    tentative,
     sampleHref: (target: EditorWorkspace) => sampleHrefFor(real?.sampleBase ?? '', target),
     doc,
     sequence,

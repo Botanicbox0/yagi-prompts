@@ -56,10 +56,9 @@ export interface FrameV2Block {
   frames: number;
   speedNum: number;
   speedDen: number;
+  /** Always measured: a block is never written from a guessed rate (review round 1, item 3). */
   sourceFps: number;
   sourceFrames: number;
-  /** The footage's rate could not be measured; `sourceFps` is the film's. */
-  rateGuessed?: true;
   mirror: FrameV2Mirror;
   /**
    * The cuts this one was split or copied from in v2, nearest first (at most `MAX_LINEAGE`). The new
@@ -95,6 +94,8 @@ export function inheritClip(parent: ComposeClip, id: string): ComposeClip {
 export interface MeasuredSource {
   fps: number;
   frames: number;
+  /** Its frames are not evenly spaced (variable frame rate): shown, not supported (review round 1, item 10). */
+  variable?: boolean;
 }
 
 export type MeasuredSources = Readonly<Record<string, MeasuredSource | null | undefined>>;
@@ -105,8 +106,10 @@ export interface StoredFilm {
   exact: string[];
   /** Cuts rebuilt from seconds: made or changed in the current editor. */
   derived: string[];
-  /** Cuts whose footage rate is not known; the film's rate stands in. */
+  /** Cuts whose footage rate is not known; the film's rate stands in, and they are measured again next time. */
   rateUnknown: string[];
+  /** No cut's rate is known: the film runs at a stand-in rate and nothing frame-based may be stored. */
+  tentative: boolean;
 }
 
 type FrameFields = Pick<FrameClip, 'inFrame' | 'phase' | 'frames' | 'speedNum' | 'speedDen'>;
@@ -117,10 +120,13 @@ const isNum = (value: unknown): value is number => typeof value === 'number' && 
 const clamp = (value: number, min: number, max: number) => Math.min(max, Math.max(min, value));
 const gcd = (a: number, b: number): number => (b === 0 ? Math.abs(a) : gcd(b, a % b));
 
-/** The clip's block when it is well formed, else `null`. */
+/**
+ * The clip's block when it is well formed, else `null`. A block an earlier version wrote from a guessed
+ * rate (`rateGuessed`) is not trusted: the cut is rebuilt from its seconds and measured again.
+ */
 export function frameBlockOf(clip: ComposeClip): FrameV2Block | null {
-  const block = (clip as StoredClip).frameV2 as Partial<FrameV2Block> | undefined;
-  if (!block || typeof block !== 'object') return null;
+  const block = (clip as StoredClip).frameV2 as (Partial<FrameV2Block> & { rateGuessed?: unknown }) | undefined;
+  if (!block || typeof block !== 'object' || block.rateGuessed !== undefined) return null;
   const { fps, inFrame, phase, frames, speedNum, speedDen, sourceFps, sourceFrames, mirror } = block;
   if (!isInt(fps, 1) || !isInt(inFrame, 0) || !isInt(phase, 0) || !isInt(frames, 1) || !isInt(speedNum, 1) || !isInt(speedDen, 1)) return null;
   if (phase >= speedDen || !isNum(sourceFps) || sourceFps <= 0 || !isInt(sourceFrames, 1)) return null;
@@ -143,18 +149,25 @@ function exactBlock(clip: ComposeClip, fps: number): FrameV2Block | null {
 }
 
 /**
- * The film's rate: the rate of the first cut that carries a block; otherwise the first cut's measured
- * rate brought onto a whole film rate; otherwise 30.
+ * The film's rate, taken only from measured footage: the rate of the first cut that carries a block
+ * (blocks are written only from measured rates); otherwise the measured rate of the first cut, in film
+ * order, whose footage could be measured, brought onto a whole film rate; otherwise 30, tentatively.
  */
-export function filmFpsOf(project: Pick<ComposerProject, 'clips'>, measured: MeasuredSources = {}): number {
+export function filmRateOf(project: Pick<ComposerProject, 'clips'>, measured: MeasuredSources = {}): { fps: number; tentative: boolean } {
   const clips = project.clips.slice(0, MAX_COMPOSE_CLIPS);
   for (const clip of clips) {
     const block = frameBlockOf(clip);
-    if (block) return block.fps;
+    if (block) return { fps: block.fps, tentative: false };
   }
-  const first = clips[0];
-  const rate = first ? measured[first.srcUrl]?.fps : undefined;
-  return rate ? snapFilmFps(rate) : DEFAULT_FILM_FPS;
+  for (const clip of clips) {
+    const rate = measured[clip.srcUrl]?.fps;
+    if (rate) return { fps: snapFilmFps(rate), tentative: false };
+  }
+  return { fps: DEFAULT_FILM_FPS, tentative: true };
+}
+
+export function filmFpsOf(project: Pick<ComposerProject, 'clips'>, measured: MeasuredSources = {}): number {
+  return filmRateOf(project, measured).fps;
 }
 
 /** The footage the browser must measure before this film can be opened on frames. */
@@ -189,7 +202,7 @@ function sourceOf(clip: ComposeClip, fps: number, measured: MeasuredSources): So
   const seen = measured[clip.srcUrl];
   if (seen && isNum(seen.fps) && seen.fps > 0 && isInt(seen.frames, 1)) return { sourceFps: seen.fps, sourceFrames: seen.frames, guessed: false };
   const block = frameBlockOf(clip);
-  if (block) return { sourceFps: block.sourceFps, sourceFrames: block.sourceFrames, guessed: block.rateGuessed === true };
+  if (block) return { sourceFps: block.sourceFps, sourceFrames: block.sourceFrames, guessed: false };
   return { sourceFps: fps, sourceFrames: sourceFramesOf(clip.durationSec, fps), guessed: true };
 }
 
@@ -219,7 +232,7 @@ export function captionsOnFrames(captions: readonly ComposeCaption[], fps: numbe
 
 /** The stored film on frames. `measured` holds what the browser measured, by `srcUrl`. */
 export function fromStored(project: ComposerProject, measured: MeasuredSources = {}): StoredFilm {
-  const fps = filmFpsOf(project, measured);
+  const { fps, tentative } = filmRateOf(project, measured);
   const exact: string[] = [];
   const derived: string[] = [];
   const rateUnknown: string[] = [];
@@ -235,7 +248,6 @@ export function fromStored(project: ComposerProject, measured: MeasuredSources =
     const block = exactBlock(stored, fps);
     if (block) {
       exact.push(stored.id);
-      if (block.rateGuessed) rateUnknown.push(stored.id);
       const { inFrame, phase, frames, speedNum, speedDen, sourceFps, sourceFrames } = block;
       return { ...base, sourceFps, sourceFrames, inFrame, phase, frames, speedNum, speedDen };
     }
@@ -245,7 +257,7 @@ export function fromStored(project: ComposerProject, measured: MeasuredSources =
     return { ...base, ...source, ...deriveFrames(stored, fps, source) };
   });
   const aspect: ComposeAspect = (COMPOSE_ASPECTS as readonly string[]).includes(project.aspect) ? project.aspect : '9:16';
-  return { sequence: { fps, aspect, clips, captions: captionsOnFrames(project.captions, fps) }, exact, derived, rateUnknown };
+  return { sequence: { fps, aspect, clips, captions: captionsOnFrames(project.captions, fps) }, exact, derived, rateUnknown, tentative };
 }
 
 export interface ToStoredOptions {
@@ -254,8 +266,10 @@ export interface ToStoredOptions {
    * cut, or a copy of the cut a split or paste came from. Used only for ids `previous` does not have.
    */
   known?: Readonly<Record<string, ComposeClip>>;
-  /** Footage (`srcUrl`) whose rate could not be measured. */
-  guessedSources?: readonly string[];
+  /** Footage (`srcUrl`) whose rate could not be measured: its cuts get no frame data, only seconds. */
+  unmeasuredSources?: readonly string[];
+  /** No cut's rate is measured, so the film's own rate is a stand-in: no cut gets frame data. */
+  tentative?: boolean;
 }
 
 /** The seconds a cut covers on its footage, on the film's frame grid. */
@@ -304,7 +318,7 @@ function storedClipOf(
   fps: number,
   own: ComposeClip | undefined,
   template: ComposeClip | undefined,
-  guessed: boolean,
+  measuredRate: boolean,
   from: readonly string[],
 ): StoredClip {
   const frames: FrameFields = clip;
@@ -317,7 +331,13 @@ function storedClipOf(
   const seconds = unchanged
     ? { trimStartSec: own!.trimStartSec, trimEndSec: own!.trimEndSec, playbackRate: own!.playbackRate }
     : secondsOf(clip, fps);
-  const written = normalizeClipBounds({ ...base, ...seconds, volume: clip.volume, muted: clip.muted });
+  // The block is v2's and is written fresh below; an old one (or a parent's line) is never carried over.
+  const rest: StoredClip = { ...base };
+  delete rest.frameV2;
+  const written = normalizeClipBounds({ ...rest, ...seconds, volume: clip.volume, muted: clip.muted });
+  // Frame data only from a measured rate: a cut whose rate is a stand-in keeps its seconds, is rebuilt
+  // from them on every load and measured again (review round 1, item 3). Its line of parents stays.
+  if (!measuredRate) return from.length > 0 ? ({ ...written, frameV2: { from: [...from] } } as StoredClip) : written;
   const block: FrameV2Block = {
     fps,
     inFrame: clip.inFrame,
@@ -327,7 +347,6 @@ function storedClipOf(
     speedDen: clip.speedDen,
     sourceFps: clip.sourceFps,
     sourceFrames: clip.sourceFrames,
-    ...(guessed ? { rateGuessed: true as const } : {}),
     mirror: { trimStartSec: written.trimStartSec, trimEndSec: written.trimEndSec, playbackRate: written.playbackRate ?? 1 },
     ...(from.length > 0 ? { from: [...from] } : {}),
   };
@@ -349,13 +368,13 @@ function storedClipOf(
 export function toStored(sequence: FrameSequence, previous: ComposerProject, options: ToStoredOptions = {}): ComposerProject {
   const fps = sequence.fps;
   const byId = new Map(previous.clips.map((clip) => [clip.id, clip]));
-  const guessed = new Set(options.guessedSources ?? []);
+  const unmeasured = new Set(options.unmeasuredSources ?? []);
   const clips = sequence.clips.slice(0, MAX_COMPOSE_CLIPS).map((clip) => {
     const own = byId.get(clip.id);
     const known = own ? undefined : options.known?.[clip.id];
     const template = own ? undefined : (known ?? previous.clips.find((stored) => stored.srcUrl === clip.srcUrl));
     const from = own ? lineageOf(own) : known ? lineageOf(known) : [];
-    return storedClipOf(clip, fps, own, template, guessed.has(clip.srcUrl), from);
+    return storedClipOf(clip, fps, own, template, !options.tentative && !unmeasured.has(clip.srcUrl), from);
   });
   return { ...previous, version: 1, aspect: sequence.aspect, clips, captions: previous.captions };
 }

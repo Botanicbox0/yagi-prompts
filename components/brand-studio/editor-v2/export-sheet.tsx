@@ -46,7 +46,19 @@ export function ExportSheet({ api }: { api: EditorApi }) {
   const empty = frames === 0;
   const missing = notIncluded({ sequence, doc: sampleDoc, extras: real ? extras : null });
   const running = job.status === 'running';
-  const blocked = empty || !supported || api.readOnly;
+  // A cut whose footage rate is not measured cannot be exported frame-exactly: refused before it starts.
+  const unmeasured = real ? sequence.clips.find((clip) => api.unknownRates[clip.srcUrl]) : undefined;
+  const uneven = real ? sequence.clips.find((clip) => api.variableRates[clip.srcUrl]) : undefined;
+  const blocked = empty || !supported || api.readOnly || !!unmeasured;
+  const blockedAs = api.readOnly ? 'read-only' : empty ? 'empty' : !supported ? 'unsupported' : 'rate';
+  const blockedSentence =
+    blockedAs === 'read-only'
+      ? copy.real.readOnly
+      : blockedAs === 'empty'
+        ? e.empty
+        : blockedAs === 'unsupported'
+          ? e.unsupported
+          : fill(e.rateUnknown, { clip: unmeasured?.label ?? '' });
 
   const start = () => {
     if (blocked || running) return;
@@ -128,8 +140,13 @@ export function ExportSheet({ api }: { api: EditorApi }) {
       ) : (
         <>
           {blocked && (
-            <p className={styles.note} data-editor-export-blocked={api.readOnly ? 'read-only' : empty ? 'empty' : 'unsupported'}>
-              {api.readOnly ? copy.real.readOnly : empty ? e.empty : e.unsupported}
+            <p className={styles.note} data-editor-export-blocked={blockedAs}>
+              {blockedSentence}
+            </p>
+          )}
+          {!blocked && uneven && (
+            <p className={styles.note} data-editor-export-variable>
+              {fill(e.variable, { clip: uneven.label })}
             </p>
           )}
           <button type="button" className={styles.exportBtn} onClick={start} disabled={blocked} data-editor-export-start>

@@ -426,12 +426,14 @@ describe('what v2 does not own is never dropped or changed', () => {
     expect(fromStored(stored, MEASURED).sequence.clips[2]).toEqual(fresh);
   });
 
-  it('marks footage whose rate was assumed, and reads that back', () => {
+  it('writes no frame data for footage whose rate was not measured, and measures it again next time (review round 1, item 3)', () => {
     const seq = fromStored(rich, { [SRC_A]: { fps: 24, frames: 240 } }).sequence;
-    const stored = toStored(seq, rich, { guessedSources: [SRC_B] });
-    expect(frameBlockOf(stored.clips[1]!)!.rateGuessed).toBe(true);
-    expect(frameBlockOf(stored.clips[0]!)!.rateGuessed).toBeUndefined();
-    expect(fromStored(stored, MEASURED).rateUnknown).toEqual(['r2']);
+    const stored = toStored(seq, rich, { unmeasuredSources: [SRC_B] });
+    expect(frameBlockOf(stored.clips[1]!)).toBeNull();
+    expect(frameBlockOf(stored.clips[0]!)).not.toBeNull();
+    expect(sourcesToMeasure(stored)).toEqual([SRC_B]);
+    expect(fromStored(stored, { [SRC_A]: { fps: 24, frames: 240 }, [SRC_B]: null }).rateUnknown).toEqual(['r2']);
+    expect(fromStored(stored, MEASURED).rateUnknown).toEqual([]);
   });
 });
 

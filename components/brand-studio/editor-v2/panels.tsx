@@ -553,6 +553,9 @@ function CutPanel({ api }: { api: EditorApi }) {
             ) : api.real && clip.sourceFps !== fps ? (
               <p className={styles.note} data-editor-source-rate>{fill(copy.real.sourceRate, { rate: clip.sourceFps, fps })}</p>
             ) : null}
+            {api.real && api.variableRates[clip.srcUrl] && (
+              <p className={styles.note} data-editor-rate-variable>{copy.real.rateVariable}</p>
+            )}
           </Section>
           <Section title={c.clip.speed}>
             <Seg
@@ -613,6 +616,9 @@ function CutPanel({ api }: { api: EditorApi }) {
   return (
     <>
       <PanelHead title={copy.panel.film} meta={fill(copy.panel.filmSummary, { count: sequence.clips.length, duration: formatTimecode(api.total, fps) })} />
+      {api.real && api.tentative && (
+        <p className={styles.note} data-editor-rate-tentative>{fill(copy.real.rateTentative, { fps })}</p>
+      )}
       <Section title={c.film.shape}>
         <div className={styles.shapeGrid} role="group" aria-label={c.film.shape}>
           {COMPOSE_ASPECTS.map((aspect) => {
