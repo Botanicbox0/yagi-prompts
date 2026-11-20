@@ -246,7 +246,7 @@ export function Preview({ api }: { api: EditorApi }) {
             muted
             playsInline
             preload="auto"
-            poster={material?.poster}
+            poster={material?.poster ?? (api.real ? (clip?.thumbUrl ?? undefined) : undefined)}
             style={{
               objectFit: reframe.fit === 'fill' ? 'cover' : 'contain',
               objectPosition: `${reframe.x}% 50%`,
@@ -301,6 +301,12 @@ export function Preview({ api }: { api: EditorApi }) {
               {caption.text}
             </p>
           ))}
+          {api.real && api.status === 'loading' && (
+            <p className={styles.stageNote} role="status" data-editor-loading>{copy.real.loading}</p>
+          )}
+          {api.real && api.status === 'ready' && sequence.clips.length === 0 && (
+            <p className={styles.stageNote} data-editor-empty>{copy.real.empty}</p>
+          )}
         </div>
       </div>
       <div className={styles.transport}>
@@ -343,7 +349,7 @@ export function Preview({ api }: { api: EditorApi }) {
             {copy.color.applied.compare}
           </button>
         )}
-        <button type="button" className={styles.chipBtn} onClick={api.splitAtPlayhead} data-editor-split-button>
+        <button type="button" className={styles.chipBtn} onClick={api.splitAtPlayhead} disabled={api.readOnly || sequence.clips.length === 0} data-editor-split-button>
           <EditorIcon name="split" />
           {copy.timeline.split}
           <kbd>{key('split').join(' ')}</kbd>

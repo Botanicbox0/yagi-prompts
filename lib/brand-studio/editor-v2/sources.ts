@@ -6,6 +6,7 @@
  * the picture, the public thumbnail for the poster), so a clip added in either editor is the same clip
  * in the other. Video only in V1: no stills, no audio files. Pure.
  */
+import type { ComposeClip } from '@/lib/brand-studio/compose/timeline';
 import type { StudioAssetView, StudioOutputView } from '@/lib/brand-studio/contracts';
 import type { FrameSequence } from './frames';
 
@@ -75,6 +76,27 @@ export function sourceSeconds(source: Pick<EditorSource, 'seconds' | 'durationMs
   if (typeof source.durationMs === 'number' && source.durationMs > 0) return source.durationMs / 1000;
   if (typeof source.seconds === 'number' && source.seconds > 0) return source.seconds;
   return null;
+}
+
+/**
+ * The stored clip a new cut from the bin becomes: what the current editor's own "add" writes (whole
+ * footage, length from the view, at least a second).
+ */
+export function storedClipForSource(source: EditorSource, id: string, measuredSeconds: number | null): ComposeClip {
+  const durationSec = Math.max(1, source.seconds ?? measuredSeconds ?? 5);
+  return {
+    id,
+    label: source.label,
+    sourceKind: source.kind,
+    ...(source.kind === 'asset' ? { assetId: source.id } : { outputId: source.id }),
+    srcUrl: source.srcUrl,
+    thumbUrl: source.thumbUrl,
+    durationSec,
+    trimStartSec: 0,
+    trimEndSec: durationSec,
+    volume: 1,
+    muted: false,
+  };
 }
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;

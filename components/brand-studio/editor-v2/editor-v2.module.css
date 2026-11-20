@@ -407,6 +407,48 @@
 }
 .quietBtn:hover { background: var(--ys-panel); color: var(--ys-ink); }
 
+/* A workspace a real film cannot use yet (V1): one calm card and the way to the sample film. */
+.lockedCard {
+  display: grid;
+  gap: 8px;
+  padding: 14px;
+  border-radius: var(--ys-r-control);
+  background: var(--ys-panel);
+  box-shadow: inset 0 0 0 1px var(--ys-line);
+}
+.lockedCard strong { font-size: 13px; font-weight: 600; line-height: 1.4; }
+.sampleLink {
+  display: inline-flex;
+  align-items: center;
+  justify-self: start;
+  min-height: 30px;
+  margin-top: 4px;
+  padding: 0 12px;
+  border-radius: var(--ys-r-pill);
+  background: var(--ys-hover);
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--ys-ink);
+  text-decoration: none;
+  white-space: nowrap;
+  transition: background-color var(--ys-dur) var(--ys-ease);
+}
+.sampleLink:hover { background: #3f3f46; }
+
+/* Loading and empty film (V1): a quiet line where the picture would be. */
+.stageNote {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.5;
+  text-align: center;
+  color: var(--ys-ink-secondary);
+}
+
 .actions { display: grid; gap: 6px; }
 .actionBtn,
 .actionMain {
@@ -786,6 +828,10 @@
 .timeline[data-ws='sound'] { --h-video: 34px; --h-voice: 40px; --h-music: 40px; }
 .timeline[data-ws='captions'] { --h-video: 40px; --h-captions: 38px; --h-music: 22px; }
 .laneNames { display: grid; grid-template-rows: var(--h-ruler) var(--h-titles) var(--h-video) var(--h-captions) var(--h-voice) var(--h-music); gap: var(--lane-gap); padding-right: 8px; }
+/* A real film (V1) has no titles, voice or music lanes yet: the ruler, the cuts and its captions. */
+.timeline[data-real] { --h-video: 64px; --h-captions: 24px; }
+.timeline[data-real] .laneNames,
+.timeline[data-real] .laneContent { grid-template-rows: var(--h-ruler) var(--h-video) var(--h-captions); }
 .laneNames > span { display: flex; align-items: center; font-size: 11px; font-weight: 600; color: var(--ys-ink-secondary); transition: color var(--ys-dur) var(--ys-ease); }
 .timeline[data-ws='cut'] .laneNames [data-lane='video'],
 .timeline[data-ws='color'] .laneNames [data-lane='video'],

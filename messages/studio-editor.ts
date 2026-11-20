@@ -365,6 +365,30 @@ export const studioEditorEn = {
     lastCut: 'The film needs at least one cut.',
     full: 'The film cannot take more cuts.',
   },
+  /** The organization's own film (V1): only cutting is real; the rest says so plainly. */
+  real: {
+    filmName: '{name} film',
+    notice: 'The same film the current editor opens. Changes are kept in this browser.',
+    noStorage: 'This browser cannot keep the film. Changes last only while this page is open.',
+    readOnly: 'You can view this film but not change it.',
+    loading: 'Opening the film…',
+    empty: 'Add a clip from the left to start the film.',
+    emptyLane: 'Clips you add go here.',
+    binNote: 'Videos in your assets and cuts finished in the video studio. Only video can go in for now.',
+    binEmpty: 'No videos yet. Upload one to your assets or make one in the video studio.',
+    adding: 'Reading the clip…',
+    sourceRate: 'Shot at {rate} fps, shown at the film’s {fps} fps.',
+    rateUnknown: 'The clip’s own frame rate could not be read, so it follows the film’s {fps} fps.',
+    locked: {
+      heading: '{workspace} is still being built',
+      body: 'It cannot change your film yet. You can try it on the sample film.',
+      materials: 'Nothing to bring in here yet.',
+      captionsKept: 'Captions already in this film stay as they are and show on the timeline.',
+      open: 'Try it on the sample film',
+    },
+    assistUnknown: 'For now it follows cut sentences like the examples below.',
+    assistNotReady: 'That part is not ready yet. For now it follows cut sentences only.',
+  },
 };
 
 export const studioEditorKo: typeof studioEditorEn = {
@@ -725,6 +749,29 @@ export const studioEditorKo: typeof studioEditorEn = {
     splitNo: '재생 위치를 컷 안쪽에 두면 나눌 수 있습니다.',
     lastCut: '영상에는 컷이 하나는 있어야 합니다.',
     full: '컷을 더 넣을 수 없습니다.',
+  },
+  real: {
+    filmName: '{name} 영상',
+    notice: '지금 편집기와 같은 영상입니다. 고친 내용은 이 브라우저에 저장됩니다.',
+    noStorage: '이 브라우저에는 저장할 수 없습니다. 고친 내용은 이 화면을 닫으면 사라집니다.',
+    readOnly: '보기 권한이라 이 영상을 고칠 수 없습니다.',
+    loading: '영상을 여는 중입니다…',
+    empty: '왼쪽에서 클립을 넣으면 영상이 시작됩니다.',
+    emptyLane: '넣은 클립이 여기에 놓입니다.',
+    binNote: '에셋의 영상과 비디오 스튜디오에서 완성한 컷입니다. 지금은 영상만 넣을 수 있습니다.',
+    binEmpty: '아직 넣을 영상이 없습니다. 에셋에 영상을 올리거나 비디오 스튜디오에서 만들어 보세요.',
+    adding: '클립을 읽는 중입니다…',
+    sourceRate: '원본은 {rate}fps이고, 영상의 {fps}fps에 맞춰 보여 줍니다.',
+    rateUnknown: '클립의 프레임 레이트를 읽지 못해 영상의 {fps}fps를 따릅니다.',
+    locked: {
+      heading: '{workspace} 작업 공간은 만드는 중입니다',
+      body: '아직 이 영상을 바꿀 수 없습니다. 예시 필름에서 먼저 써 볼 수 있습니다.',
+      materials: '여기서 넣을 재료는 아직 없습니다.',
+      captionsKept: '이 영상에 이미 있는 자막은 그대로 남고 타임라인에 보입니다.',
+      open: '예시 필름에서 써 보기',
+    },
+    assistUnknown: '지금은 아래 예시 같은 컷 편집 문장만 알아듣습니다.',
+    assistNotReady: '그 작업은 아직 준비 중입니다. 지금은 컷 편집 문장만 알아듣습니다.',
   },
 };
 

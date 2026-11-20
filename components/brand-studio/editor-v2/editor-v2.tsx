@@ -11,19 +11,30 @@ import { ActionPanel, Materials } from './panels';
 import { Preview } from './preview';
 import { ShortcutsPanel } from './shortcuts-panel';
 import { Timeline } from './timeline';
-import { useEditor, type EditorApi } from './use-editor';
+import { useEditor, type EditorApi, type RealFilmOptions } from './use-editor';
 import styles from './editor-v2.module.css';
 
+export interface EditorV2Props {
+  copy: StudioEditorCopy;
+  currentEditorHref: string;
+  initialWorkspace?: EditorWorkspace;
+  /** The organization's own film (V1). `null` runs the sample film (`?sample=1`), as the prototype did. */
+  real: (RealFilmOptions & { organizationName: string }) | null;
+}
+
 /**
- * Editing studio v2 — structure prototype (docs/BRAND-EDITING-STUDIO-V2.md).
+ * Editing studio v2 (docs/BRAND-EDITING-STUDIO-V2.md).
  *
  * One preview and one timeline, four workspaces around them. The left column holds what you bring in
  * (clips, looks and references, music, the script), the right column what you can get done for the
- * current scope, and "말로 편집" sits between the preview and the timeline in every workspace. It runs
- * on sample footage and keeps everything in memory: no request, no storage, no file.
+ * current scope, and "말로 편집" sits between the preview and the timeline in every workspace.
+ *
+ * With `real` it opens the organization's film, the one the current editor opens, on frames, and saves
+ * the cuts back (V1). Only cutting is real there; colour, sound and captions are locked and say so.
+ * Without it, it runs the sample film and keeps everything in memory.
  */
-export function EditorV2({ copy, currentEditorHref }: { copy: StudioEditorCopy; currentEditorHref: string }) {
-  const api = useEditor(copy);
+export function EditorV2({ copy, currentEditorHref, initialWorkspace, real }: EditorV2Props) {
+  const api = useEditor(copy, { real, initialWorkspace });
   const latest = useRef<EditorApi>(api);
   latest.current = api;
 
@@ -52,15 +63,34 @@ export function EditorV2({ copy, currentEditorHref }: { copy: StudioEditorCopy; 
   }, []);
 
   return (
-    <div className={styles.root} data-studio-editor-v2 data-ws={api.workspace} data-dock={api.assistDock}>
+    <div
+      className={styles.root}
+      data-studio-editor-v2
+      data-ws={api.workspace}
+      data-dock={api.assistDock}
+      data-editor-mode={api.real ? 'real' : 'sample'}
+      data-editor-status={api.status}
+      data-editor-read-only={api.readOnly ? '' : undefined}
+    >
       <header className={styles.top}>
         <div className={styles.topLeft}>
-          <a className={styles.iconBtn} href={currentEditorHref} aria-label={copy.notice.current} title={copy.notice.current}>
+          <a className={styles.iconBtn} href={currentEditorHref} aria-label={copy.notice.current} title={copy.notice.current} data-editor-current>
             <EditorIcon name="back" />
           </a>
-          <h1>{copy.filmName}</h1>
-          <span className={styles.noticeBadge} data-editor-notice>{copy.notice.badge}</span>
-          <span className={styles.noticeBody}>{copy.notice.body}</span>
+          {real ? (
+            <>
+              <h1>{fill(copy.real.filmName, { name: real.organizationName })}</h1>
+              <span className={styles.noticeBody} data-editor-real-notice>
+                {api.readOnly ? copy.real.readOnly : api.storageOk ? copy.real.notice : copy.real.noStorage}
+              </span>
+            </>
+          ) : (
+            <>
+              <h1>{copy.filmName}</h1>
+              <span className={styles.noticeBadge} data-editor-notice>{copy.notice.badge}</span>
+              <span className={styles.noticeBody}>{copy.notice.body}</span>
+            </>
+          )}
         </div>
         <nav className={styles.workspaces} aria-label={copy.top.workspaceLabel}>
           {EDITOR_WORKSPACES.map((workspace) => (
@@ -70,6 +100,7 @@ export function EditorV2({ copy, currentEditorHref }: { copy: StudioEditorCopy; 
               aria-pressed={api.workspace === workspace}
               onClick={() => api.setWorkspace(workspace)}
               data-editor-workspace={workspace}
+              data-locked={api.real && workspace !== 'cut' ? '' : undefined}
               title={api.openCount[workspace] > 0 ? `${copy.panel.found} ${api.openCount[workspace]}` : undefined}
             >
               {copy.workspaces[workspace]}
@@ -94,10 +125,12 @@ export function EditorV2({ copy, currentEditorHref }: { copy: StudioEditorCopy; 
           >
             <EditorIcon name="keyboard" />
           </button>
-          <button type="button" className={styles.topBtn} onClick={() => api.say(copy.review.inert)}>
-            <EditorIcon name="review" />
-            {copy.top.review}
-          </button>
+          {!api.real && (
+            <button type="button" className={styles.topBtn} onClick={() => api.say(copy.review.inert)}>
+              <EditorIcon name="review" />
+              {copy.top.review}
+            </button>
+          )}
           <button type="button" className={styles.exportBtn} onClick={() => api.setExportOpen(!api.exportOpen)} aria-expanded={api.exportOpen} data-editor-export>
             <EditorIcon name="download" />
             {copy.top.export}
