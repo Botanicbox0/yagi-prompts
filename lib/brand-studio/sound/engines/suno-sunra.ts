@@ -34,6 +34,14 @@ function clean(text: string | undefined, max: number, what: string): string {
   return value;
 }
 
+/** Lyrics go as marked (../lyrics.ts `markLyrics`): never trimmed, so the customer's first and last lines keep their spaces. */
+function asWritten(text: string | undefined, max: number): string {
+  const value = text ?? '';
+  if (!value.trim()) return '';
+  if (value.length > max) throw new MusicRequestError(`lyrics over ${max} characters`);
+  return value;
+}
+
 export const sunoV6Sunra: MusicEngine = {
   id: 'suno-v6-sunra',
   model: { id: 'suno-v6', mcp: null },
@@ -61,7 +69,7 @@ export const sunoV6Sunra: MusicEngine = {
     const style = clean(request.prompt, LIMITS.style, 'style');
     if (!title || !style) throw new MusicRequestError('custom mode needs a title and a style');
     // Instrumental (with or without Max Mode): no lyrics are sent, whatever the request carried.
-    const lyrics = request.vocal ? clean(request.lyrics, LIMITS.lyrics, 'lyrics') : '';
+    const lyrics = request.vocal ? asWritten(request.lyrics, LIMITS.lyrics) : '';
     return {
       endpoint: `${ALIAS}/custom-mode`,
       body: { title, style, lyrics, instrumental: !request.vocal, max_mode: request.careful === true },

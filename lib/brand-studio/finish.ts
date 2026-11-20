@@ -14,6 +14,7 @@ import { loadRevisionRecipe } from './revision/recipe';
 import type { JobRow, OutputRow, StudioDeps, StudioPendingResult } from './types';
 import { musicUsageKrw, settledUsageKrw } from './usage-rate';
 import { audioSeconds } from './sound/audio-info';
+import { logMusicBlock } from './sound/warnings';
 
 const now = (deps: StudioDeps) => (deps.now?.() ?? new Date()).toISOString();
 
@@ -238,7 +239,9 @@ async function settleJob(deps: StudioDeps, job: JobRow, token: string, work: Job
   if (ready.length === 0) {
     const rawCode: StudioErrorCode = failures.find(([, f]) => f.code !== 'failed')?.[1].code ?? 'failed';
     const dbCode: StudioErrorCode = rawCode === 'region_misaligned' ? 'failed' : rawCode;
-    return saveJob(deps.sql, job, token, { status: 'failed', error_code: dbCode, error_detail: detail, work, finished_at: now(deps), usage_krw: 0 });
+    const failedRow = await saveJob(deps.sql, job, token, { status: 'failed', error_code: dbCode, error_detail: detail, work, finished_at: now(deps), usage_krw: 0 });
+    if (failedRow) noteEngineRefusal(deps, job, dbCode, detail ?? '');
+    return failedRow;
   }
   // Music is charged per request (docs/BRAND-SOUND-STUDIO.md §3.4): one version or several, the quote once.
   if (job.kind === 'music') {
@@ -281,6 +284,16 @@ async function settleJob(deps: StudioDeps, job: JobRow, token: string, work: Job
 }
 
 /** A job that cannot go on: every pending slot fails, nothing is counted. */
+/** A music run the engine refused (§12.5): the record, never the lyrics. No retry; the screen offers a redesign. */
+function noteEngineRefusal(deps: StudioDeps, job: JobRow, code: StudioErrorCode, detail: string): void {
+  if (job.kind !== 'music' || code !== 'provider_rejected') return;
+  logMusicBlock(
+    deps.log,
+    { organizationId: job.organization_id, userId: job.created_by, field: 'request', check: 'engine', errorClass: detail.slice(0, 60), lyrics: job.params.music?.lyrics ?? null },
+    deps.now?.() ?? new Date(),
+  );
+}
+
 export async function failJob(deps: StudioDeps, job: JobRow, token: string, code: StudioErrorCode, detail: string): Promise<JobRow | null> {
   const isMisaligned = code === 'region_misaligned';
   const dbCode: StudioErrorCode = isMisaligned ? 'failed' : code;
@@ -297,6 +310,7 @@ export async function failJob(deps: StudioDeps, job: JobRow, token: string, code
     usage_krw: 0,
   });
   if (saved) {
+    noteEngineRefusal(deps, job, code, detail);
     await failPendingOutputs(deps.sql, job.id);
     await dropWorkingFiles(deps.media, saved.work);
   }

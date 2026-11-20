@@ -65,6 +65,8 @@ export interface SoundTrackView {
   lyrics?: string | null;
   /** Made versions: "더 고르게 만들기" was on. */
   careful?: boolean;
+  /** Made versions: what went to the engine when the Prompt Architect took part ("보낸 문장 보기"), else null. */
+  sent?: string | null;
   tab: SoundTab;
   /** The stored name (searched), and what the row draws (null: the screen's fallback). */
   name: string;
@@ -84,6 +86,18 @@ export function soundStreamUrl(organizationId: string, id: string, source: 'asse
   return `/api/brand-studio/compose?${q.toString()}`;
 }
 
+/**
+ * The order of one request's versions: with a target length (가사 분량 맞추기), the one closest to it first, so it
+ * becomes A (§12.8: two songs of one request differed by up to 2.5×); otherwise the order they came back in.
+ */
+export function closestFirst(target: number | null) {
+  return (a: { seconds: number | null }, b: { seconds: number | null }): number => {
+    if (target == null) return 0;
+    const gap = (s: number | null) => (s == null ? Number.POSITIVE_INFINITY : Math.abs(s - target));
+    return gap(a.seconds) - gap(b.seconds);
+  };
+}
+
 /** `A`, `B`, … for the versions one request returned (§4.2). */
 export function versionLetter(idx: number): string {
   return String.fromCharCode(65 + Math.max(0, Math.min(25, idx)));
@@ -99,8 +113,10 @@ export function musicTracks(organizationId: string, jobs: readonly StudioJobView
   for (const job of jobs) {
     if (job.kind !== 'music' || job.status !== 'succeeded') continue;
     const title = job.music?.title ?? '';
-    job.outputs.forEach((output, i) => {
-      if (output.kind !== 'audio') return;
+    job.outputs
+      .filter((output) => output.kind === 'audio')
+      .sort(closestFirst(job.music?.targetSeconds ?? null))
+      .forEach((output, i) => {
       const letter = versionLetter(i);
       const name = title ? `${title} · ${letter}` : letter;
       const key = `o:${output.id}`;
@@ -115,6 +131,7 @@ export function musicTracks(organizationId: string, jobs: readonly StudioJobView
         vocal: job.music?.vocal ?? false,
         lyrics: job.music?.lyrics ?? null,
         careful: job.music?.careful ?? false,
+        sent: job.finalPrompt,
         tab: 'music',
         name,
         displayName: title ? name : null,

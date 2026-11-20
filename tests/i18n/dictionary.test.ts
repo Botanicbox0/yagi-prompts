@@ -111,6 +111,8 @@ describe('dictionary completeness (§3.9)', () => {
       // the prompt for the chosen model, so it is not called "polish"; a name is the same in both locales.
       'brandStudio.dock.enhance',
       'brandStudio.explainer.steps.enhance.title',
+      // The same feature in the sound studio (docs/BRAND-SOUND-STUDIO.md §12.2).
+      'studioSound.architect.name',
       // PLATFORM-2.0 §14.1 (2026-10-24): the credit is "by @handle" in Korean too — the local idiom.
       'prompts.byAuthor',
       'prompts.cardAuthor',

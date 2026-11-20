@@ -680,6 +680,43 @@
   cursor: default;
 }
 
+/* SA1: the design the Prompt Architect made, read and edited in the dock. */
+.designBox {
+  display: grid;
+  gap: 6px;
+}
+.well textarea.designField {
+  min-height: 72px;
+  max-height: 180px;
+  font-size: 13px;
+}
+.titleRow {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.titleField {
+  flex: 1;
+  min-height: 34px;
+  padding: 0 12px;
+  border: 1px solid var(--ys-border-subtle);
+  border-radius: 10px;
+  background: var(--ys-well);
+  box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.24);
+  color: var(--ys-ink);
+  font: inherit;
+  font-size: 13px;
+}
+.titleField:focus-visible {
+  outline: 2px solid var(--ys-focus);
+  outline-offset: 1px;
+}
+.sent {
+  display: grid;
+  gap: 4px;
+  max-width: 820px;
+}
+
 /* SS3: lyrics, the "더 고르게 만들기" switch, the terms line. */
 .lyricsBox {
   display: grid;
@@ -858,4 +895,182 @@
   .iconBtn {
     transition: none;
   }
+}
+
+/* SA2: lyrics options, the polish side by side, "보낼 가사". */
+.lyricsOptions {
+  display: grid;
+  gap: 8px;
+  padding: 10px 12px;
+  border: 1px solid var(--ys-border-subtle);
+  border-radius: 14px;
+}
+.optionRow {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 18px;
+}
+.option {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+.optionLabel {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--ys-ink-secondary);
+  white-space: nowrap;
+}
+.fieldRow {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) minmax(0, 2fr);
+  gap: 8px 12px;
+}
+.optionField {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+}
+.optionNote {
+  margin: 0;
+  font-size: 12px;
+  color: var(--ys-ink-muted);
+  word-break: keep-all;
+}
+.compare {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px 12px;
+  padding: 10px 12px;
+  border: 1px solid var(--ys-border-subtle);
+  border-radius: 14px;
+}
+.compareCol {
+  display: grid;
+  align-content: start;
+  gap: 4px;
+  min-width: 0;
+}
+.compareBar {
+  grid-column: 1 / -1;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.lyricsPre {
+  margin: 0;
+  max-height: 200px;
+  overflow: auto;
+  padding: 8px 10px;
+  border-radius: 10px;
+  background: var(--ys-well);
+  color: var(--ys-ink);
+  font: inherit;
+  font-size: 13px;
+  line-height: 1.55;
+  white-space: pre-wrap;
+  word-break: keep-all;
+}
+
+/* SA3: a refused run carries "다르게 설계하기" at the end of its line. */
+.runLine[data-redesign] {
+  grid-template-columns: 36px minmax(160px, 1.1fr) minmax(120px, 2fr) auto;
+}
+.runLine[data-redesign] .textBtn {
+  white-space: nowrap;
+}
+
+/* SA4: "영상 길이" picks a library video. */
+.videoPick {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  max-height: 84px;
+  overflow: auto;
+}
+.videoChip {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  max-width: 260px;
+  min-height: 30px;
+  padding: 0 12px;
+  border: 1px solid var(--ys-border-subtle);
+  border-radius: var(--ys-r-pill);
+  background: transparent;
+  color: var(--ys-ink-secondary);
+  font: inherit;
+  font-size: 12.5px;
+  cursor: pointer;
+}
+.videoChip[aria-checked='true'] {
+  background: var(--ys-active-bg);
+  color: var(--ys-active-fg);
+  border-color: transparent;
+}
+.videoChip:focus-visible {
+  outline: 2px solid var(--ys-focus);
+  outline-offset: 1px;
+}
+.videoName {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.videoTime {
+  font-family: var(--ys-mono);
+  font-variant-numeric: tabular-nums;
+}
+
+/* Review 1: structure, tone, brand and words to include fold behind one quiet disclosure. */
+.moreToggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-left: auto;
+  padding: 4px 6px;
+  border: 0;
+  background: transparent;
+  color: var(--ys-ink-secondary);
+  font: inherit;
+  font-size: 12.5px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.moreToggle:hover {
+  color: var(--ys-ink);
+}
+.moreToggle:focus-visible {
+  outline: 2px solid var(--ys-focus);
+  outline-offset: 1px;
+  border-radius: 6px;
+}
+.moreCount {
+  display: inline-grid;
+  place-items: center;
+  min-width: 16px;
+  height: 16px;
+  padding: 0 4px;
+  border-radius: var(--ys-r-pill);
+  background: var(--ys-active-bg);
+  color: var(--ys-active-fg);
+  font-size: 10.5px;
+  font-variant-numeric: tabular-nums;
+}
+.moreChevron {
+  width: 7px;
+  height: 7px;
+  border-right: 1.5px solid currentColor;
+  border-bottom: 1.5px solid currentColor;
+  transform: translateY(-2px) rotate(45deg);
+  transition: transform 160ms var(--ys-ease);
+}
+.moreChevron[data-open] {
+  transform: translateY(2px) rotate(-135deg);
+}
+.moreBody {
+  display: grid;
+  gap: 8px;
 }

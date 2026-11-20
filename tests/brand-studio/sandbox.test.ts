@@ -72,6 +72,8 @@ function validInput(operation: StudioOperation, organizationId: string): Record<
       return { organizationId, outputId: id, peaks: [0, 0.5, 1] };
     case 'lyrics.draft':
       return { organizationId, topic: 'a calm morning', language: 'ko' };
+    case 'music.design':
+      return { organizationId, prompt: 'calm piano', vocal: false };
     case 'handoff.campaign':
       return { organizationId, requestId: requestId(), outputId: id, newProject: { title: 'A campaign', objective: 'An objective' } };
   }

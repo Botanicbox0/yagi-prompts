@@ -21,6 +21,8 @@ import {
   type OutputWaveformSchema,
   type LyricsDraftSchema,
   type StudioLyricsDraft,
+  type MusicDesignSchema,
+  type StudioMusicDesign,
   type FilmAnalyzeSchema,
   type ImageJobGroupSchema,
   type JobAssignProjectSchema,
@@ -76,6 +78,7 @@ export interface StudioOps {
   "handoff.campaign": [z.input<typeof CampaignHandoffSchema>, StudioHandoffDone];
   "output.waveform": [z.input<typeof OutputWaveformSchema>, StudioDone];
   "lyrics.draft": [z.input<typeof LyricsDraftSchema>, StudioLyricsDraft];
+  "music.design": [z.input<typeof MusicDesignSchema>, StudioMusicDesign];
 }
 // Compile-time guard: every contract operation has a row above and nothing else does.
 type Exact<A, B> = [A] extends [B] ? ([B] extends [A] ? true : never) : never;

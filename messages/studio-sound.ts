@@ -23,6 +23,28 @@
  * New lines (drafting, draft failure, draft limit, close) went through the same two Gemma
  * passes on 2026-11-20; pass 2 was taken for both of its changes.
  *
+ * Slice SA1 (the music Prompt Architect, §12.2): the switch's name and the shared verbs are the image studio's own
+ * approved lines (Prompt Architect, 지금 설계하기, 프롬프트를 설계하고 있어요., 원래 문장으로, 설계하지 못했어요…,
+ * 크레딧은 들지 않아요., 보낸 문장 보기, 보낸 문장, 입력한 문장). `architect.tip` and `architect.designed` are the
+ * §12.7 lines as reviewed (two Gemma passes, PR #292, both languages). `fallbackNote`, `styleLabel` and `titleLabel`
+ * went through the same two passes on the evening of 2026-11-20 (the arbiter answered again); pass 1 changed
+ * 입력하신 → 입력한 and kept the two labels, pass 2 changed none of them.
+ *
+ * Slice SA2 (the lyrics engine, §12.3): `lyricsKit`. The lines §12.7 lists are its reviewed versions as merged in
+ * #292 (two Gemma passes, both languages): ownNote, polish, polishNote, length, lengthNote, the three structures,
+ * readAs (label and example). The word "후크" (structures) is the founder's to approve; it lives only here. The other
+ * lines went through two local Gemma passes on 2026-11-20 and follow the reviewed verb (고치기): polishing,
+ * polishFailed and polished were re-worded from 손보다 to 고치다 to match it (see the PR body for their Gemma check).
+ *
+ * Slice SA3 (warnings, §12.5): the blocked lines take the §12.7 reviewed additions as merged in #292 (two Gemma
+ * passes): `errors.artist` and `composer.lyricsBlocked` keep their first sentence and add the reviewed one,
+ * `errors.blocked` (the engine refused), `errors.redesign` (다르게 설계하기) and `errors.paused` are the reviewed lines.
+ *
+ * Review 1 (2026-11-21): `lyricsKit.ownNote` no longer says an ending is added (END_MARK is held out); `more` and
+ * `moreSet` are the options disclosure. All three went through two local Gemma passes; pass 2 gave
+ * "가사는 바꾸지 않고 구간 표시만 더해요." and "더 보기", taken as written. When the ending rule is decided, ownNote can
+ * say so again.
+ *
  * Amounts are credits, never won. No engine, vendor or model name appears here.
  */
 export const studioSoundEn = {
@@ -72,7 +94,7 @@ export const studioSoundEn = {
     lyrics: 'Lyrics',
     lyricsPlaceholder: 'Enter lyrics or leave blank.',
     lyricsLanguage: 'Sings in the language you write.',
-    lyricsBlocked: 'You cannot use existing lyrics or artist names.',
+    lyricsBlocked: 'You cannot use existing lyrics or artist names. Please enter your own lyrics or try creating a lyric draft.',
     draft: 'Draft lyrics',
     draftNote: 'Review and edit the draft.',
     drafting: 'Drafting',
@@ -80,6 +102,55 @@ export const studioSoundEn = {
     draftBusy: 'Too many requests. Please try again in a moment.',
     careful: 'Consistent output',
     carefulNote: 'More consistent quality. Costs double credits.',
+  },
+  architect: {
+    name: 'Prompt Architect',
+    tip: 'Reads the description and designs the prompt for the music.',
+    free: 'No credits are used.',
+    designNow: 'Design now',
+    designing: 'Designing the prompt.',
+    designed: 'Designed for your music. You can use it as is or edit it.',
+    undo: 'Back to my words',
+    failed: "Couldn't design it. You can still create with your own words.",
+    fallbackNote: 'We sent your words with only basic directions added.',
+    styleLabel: 'Designed prompt',
+    titleLabel: 'Song title',
+    sentToggle: 'Show what was sent',
+    sentLabel: 'Sent',
+    yourWords: 'Your words',
+  },
+  lyricsKit: {
+    ownNote: 'Your lyrics remain unchanged; only section markers are added.',
+    polish: 'Adjust for singing',
+    polishing: 'Adjusting the lyrics.',
+    polishNote: 'Adjusts the phrasing for better singing while keeping the meaning.',
+    polishFailed: "Couldn't adjust the lyrics. Please try again.",
+    current: 'Your lyrics',
+    polished: 'Adjusted',
+    accept: 'Apply',
+    keep: 'Keep mine',
+    options: 'Lyrics options',
+    length: 'Match lyric amount',
+    seconds: '{n}s',
+    lengthNote: "Adjusts length by the amount of lyrics; finalize with 'Fit length' after creating.",
+    structure: 'Structure',
+    structures: { hook: 'Hook only', 'hook-verse': 'Hook & 1 Verse', full: '2 Verses & Hook' },
+    tone: 'Tone',
+    tones: { haeyo: 'Polite', banmal: 'Casual' },
+    language: 'Language',
+    languages: { ko: 'Korean', en: 'English', mixed: 'Mixed' },
+    brand: 'Brand name',
+    readAs: 'Brand pronunciation',
+    readAsExample: 'e.g., Twings',
+    mustInclude: 'Words to include',
+    mustIncludeHint: 'Separate with commas',
+    videoLength: 'Video length',
+    more: 'More',
+    moreSet: '{n} set',
+    videoPick: 'Choose a video',
+    previewShow: 'See lyrics to send',
+    previewHide: 'Hide lyrics to send',
+    preview: 'Lyrics to send',
   },
   terms: {
     link: 'Terms',
@@ -109,8 +180,10 @@ export const studioSoundEn = {
   },
   errors: {
     failed: 'Failed to create music. No credits were used.',
-    artist: 'Please avoid artist names or song titles. Describe the mood, instruments, and tempo instead.',
-    blocked: "This description can't be used. No credits were used.",
+    artist: 'Please avoid artist names or song titles. Please describe using genre, tempo, instruments, or voice instead of names.',
+    blocked: 'Unable to create music with this description. No credits were used.',
+    redesign: 'Redesign description',
+    paused: 'Please try again in a moment.',
     allowance: 'Not enough credits this month.',
     closed: "Creating music isn't available for this workspace right now.",
     busy: 'Too much music is being made at once. Please try again shortly.',
@@ -181,7 +254,7 @@ export const studioSoundKo: StudioSoundCopy = {
     lyrics: '가사',
     lyricsPlaceholder: '가사를 입력하세요. 비워 두면 자동으로 만들어져요.',
     lyricsLanguage: '쓴 언어 그대로 노래해요.',
-    lyricsBlocked: '기존 노래 가사나 가수 이름은 넣을 수 없어요.',
+    lyricsBlocked: '기존 노래 가사나 가수 이름은 넣을 수 없어요. 직접 쓴 가사를 넣거나 가사 초안을 만들어 보세요.',
     draft: '가사 초안 만들기',
     draftNote: '초안을 확인하고 고쳐 쓰세요.',
     drafting: '초안을 만들고 있어요.',
@@ -189,6 +262,55 @@ export const studioSoundKo: StudioSoundCopy = {
     draftBusy: '요청이 너무 많아요. 잠시 후 다시 시도해 주세요.',
     careful: '더 고르게 만들기',
     carefulNote: '곡이 더 고르게 나오고 크레딧이 두 배로 들어요.',
+  },
+  architect: {
+    name: 'Prompt Architect',
+    tip: '설명을 읽고 음악에 맞춰 프롬프트를 설계해요.',
+    free: '크레딧은 들지 않아요.',
+    designNow: '지금 설계하기',
+    designing: '프롬프트를 설계하고 있어요.',
+    designed: '음악에 맞게 설계했어요. 그대로 쓰거나 수정해도 돼요.',
+    undo: '원래 문장으로',
+    failed: '설계하지 못했어요. 작성한 문장 그대로 생성할 수 있어요.',
+    fallbackNote: '입력한 문장에 기본 지시만 더해 보냈어요.',
+    styleLabel: '설계한 프롬프트',
+    titleLabel: '곡 제목',
+    sentToggle: '보낸 문장 보기',
+    sentLabel: '보낸 문장',
+    yourWords: '입력한 문장',
+  },
+  lyricsKit: {
+    ownNote: '가사는 바꾸지 않고 구간 표시만 더해요.',
+    polish: '노래에 맞게 고치기',
+    polishing: '가사를 고치고 있어요.',
+    polishNote: '뜻은 그대로 두고 노래하기 좋게 고쳐요. 확인하면 적용돼요.',
+    polishFailed: '가사를 고치지 못했어요. 다시 시도해 주세요.',
+    current: '쓴 가사',
+    polished: '고친 가사',
+    accept: '적용하기',
+    keep: '유지하기',
+    options: '가사 옵션',
+    length: '가사 분량 맞추기',
+    seconds: '{n}초',
+    lengthNote: '가사 양으로 길이를 맞추고, 만든 뒤 길이 맞추기로 마무리해요.',
+    structure: '구성',
+    structures: { hook: '후크만', 'hook-verse': '후크와 한 절', full: '두 절과 후크' },
+    tone: '말투',
+    tones: { haeyo: '해요체', banmal: '반말' },
+    language: '언어',
+    languages: { ko: '한국어', en: '영어', mixed: '한국어·영어 섞어 쓰기' },
+    brand: '브랜드 이름',
+    readAs: '브랜드 이름 읽는 법',
+    readAsExample: '예: 트윙스',
+    mustInclude: '꼭 넣을 말',
+    mustIncludeHint: '쉼표로 구분해 입력',
+    videoLength: '영상 길이',
+    more: '더 보기',
+    moreSet: '{n}개 설정됨',
+    videoPick: '영상 선택',
+    previewShow: '보낼 가사 보기',
+    previewHide: '보낼 가사 닫기',
+    preview: '보낼 가사',
   },
   terms: {
     link: '이용 조건',
@@ -218,8 +340,10 @@ export const studioSoundKo: StudioSoundCopy = {
   },
   errors: {
     failed: '음악을 만들지 못했어요. 크레딧은 빠지지 않았어요.',
-    artist: '가수 이름이나 곡 제목은 넣을 수 없어요. 분위기, 악기, 빠르기로 설명해 주세요.',
-    blocked: '사용할 수 없는 설명이에요. 크레딧은 빠지지 않았어요.',
+    artist: '가수 이름이나 곡 제목은 넣을 수 없어요. 이름 대신 장르, 빠르기, 악기, 목소리로 설명해 주세요.',
+    blocked: '이번 설명으로는 음악을 만들 수 없어요. 크레딧은 빠지지 않았어요.',
+    redesign: '다르게 설계하기',
+    paused: '잠시 뒤에 다시 시도해 주세요.',
     allowance: '이번 달 크레딧이 부족해요.',
     closed: '지금은 이 워크스페이스에서 음악을 만들 수 없어요.',
     busy: '동시에 만드는 음악이 너무 많아요. 잠시 후 다시 시도해 주세요.',

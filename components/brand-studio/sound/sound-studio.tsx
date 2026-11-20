@@ -6,6 +6,7 @@
  *  SS2: the music composer (description + vocals), runs in progress, the versions each request returned
  *       (A, B…), failures that took nothing, save to assets, "비슷하게 만들기", copy the description.
  *  SS3: lyrics (by hand or a free draft), "더 고르게 만들기", lyrics and the terms line on a made version.
+ *  SA1: the music Prompt Architect in the dock, and "보낸 문장 보기" on a made version.
  *
  * Techniques (docs/design/TOOLBOX.md §1-3), four: hairline rows instead of cards (TASTE 16), recessed wells for
  * the search field and the description, tabular numerals for every length, time and credit, frosted glass on
@@ -38,6 +39,8 @@ export interface SoundStudioProps {
   initialTracks: SoundTrackView[];
   /** Music runs: open, finished, and failed in the last day. */
   initialJobs: StudioJobView[];
+  /** SA4: library videos "영상 길이" can fit music to (ready, with a length). */
+  initialVideos?: Array<{ assetId: string; name: string; seconds: number }>;
   initialAllowance: StudioAllowanceView;
   /** "더 고르게 만들기" is offered (server setting `BRAND_SOUND_MAX_MODE=on`; hidden by default). */
   maxMode: boolean;
@@ -197,8 +200,10 @@ export function SoundStudio(props: SoundStudioProps) {
             prompt: input.prompt,
             vocal: input.vocal,
             language: locale,
-            ...(input.vocal && input.lyrics ? { lyrics: input.lyrics } : {}),
+            ...(input.vocal && input.lyrics ? { lyrics: input.lyrics, structure: input.structure, targetSeconds: input.targetSeconds, ...(input.lyricsBy ? { lyricsBy: input.lyricsBy } : {}), ...(input.videoAssetId ? { videoAssetId: input.videoAssetId } : {}) } : {}),
             ...(input.careful ? { careful: true } : {}),
+            architect: input.architect,
+            ...(input.designed ? { designed: input.designed } : {}),
           },
         }),
       });
@@ -207,7 +212,7 @@ export function SoundStudio(props: SoundStudioProps) {
       answer = null;
     }
     setCreating(false);
-    const result = answer as { ok?: boolean; job?: StudioJobView; code?: StudioErrorCode; blocked?: 'name' | 'lyrics' } | null;
+    const result = answer as { ok?: boolean; job?: StudioJobView; code?: StudioErrorCode; blocked?: 'name' | 'lyrics' | 'paused' } | null;
     if (result?.ok && result.job) {
       draftRequest.current = null;
       setJobs((all) => [result.job!, ...all.filter((j) => j.id !== result.job!.id)]);
@@ -216,6 +221,7 @@ export function SoundStudio(props: SoundStudioProps) {
     }
     if (result?.blocked === 'name') setComposerError(errorLine(copy, 'artist'));
     else if (result?.blocked === 'lyrics') setComposerError(copy.composer.lyricsBlocked);
+    else if (result?.blocked === 'paused') setComposerError(copy.errors.paused);
     else setComposerError(errorLine(copy, result?.code ?? 'failed'));
     // A refused request reserved nothing: the next press is a new one.
     if (result?.code) draftRequest.current = null;
@@ -486,7 +492,19 @@ export function SoundStudio(props: SoundStudioProps) {
               <PendingRow key={job.id} job={job} copy={copy} state="making" />
             ))}
             {failedJobs.map((job) => (
-              <PendingRow key={job.id} job={job} copy={copy} state="failed" line={job.errorCode === 'provider_rejected' ? copy.errors.blocked : copy.errors.failed} />
+              <PendingRow
+                key={job.id}
+                job={job}
+                copy={copy}
+                state="failed"
+                line={job.errorCode === 'provider_rejected' ? copy.errors.blocked : copy.errors.failed}
+                {...(job.errorCode === 'provider_rejected'
+                  ? {
+                      onRedesign: () =>
+                        composer.current?.redesign({ prompt: job.prompt ?? '', vocal: job.music?.vocal ?? false, lyrics: job.music?.lyrics ?? null, careful: job.music?.careful ?? false }),
+                    }
+                  : {})}
+              />
             ))}
           </ul>
         ) : null}
@@ -529,11 +547,31 @@ export function SoundStudio(props: SoundStudioProps) {
           onCreate={(input) => void create(input)}
           onClearError={() => setComposerError(null)}
           maxMode={props.maxMode}
-          onDraft={async (topic) => {
-            const answer = await api.call('lyrics.draft', { organizationId, topic, language: locale });
-            if (!isFailure(answer)) return { lyrics: answer.lyrics };
-            if ((answer as { blocked?: string }).blocked === 'name') return { error: copy.errors.artist };
-            return { error: answer.code === 'too_many_running' ? copy.composer.draftBusy : copy.composer.draftFailed };
+          videos={props.initialVideos ?? []}
+          onDesign={async (request) => {
+            const answer = await api.call('music.design', {
+              organizationId,
+              structure: request.structure,
+              ...(request.avoid ? { avoid: true } : {}),
+              ...(request.videoAssetId ? { videoAssetId: request.videoAssetId } : {}),
+              prompt: request.prompt,
+              vocal: request.vocal,
+              language: locale,
+              ...(request.vocal && request.lyrics ? { lyrics: request.lyrics } : {}),
+              ...(request.careful ? { careful: true } : {}),
+            });
+            if (!isFailure(answer)) return { design: answer.design };
+            const blocked = (answer as { blocked?: string }).blocked;
+            if (blocked === 'name') return { error: copy.errors.artist };
+            if (blocked === 'lyrics') return { error: copy.composer.lyricsBlocked };
+            return { error: answer.code === 'too_many_running' ? copy.errors.busy : copy.architect.failed };
+          }}
+          onDraft={async (request) => {
+            const answer = await api.call('lyrics.draft', { organizationId, ...request });
+            if (!isFailure(answer)) return { lyrics: answer.lyrics, model: answer.model };
+            if ((answer as { blocked?: string }).blocked === 'name') return { error: request.flow === 'polish' ? copy.composer.lyricsBlocked : copy.errors.artist };
+            if (answer.code === 'too_many_running') return { error: copy.composer.draftBusy };
+            return { error: request.flow === 'polish' ? copy.lyricsKit.polishFailed : copy.composer.draftFailed };
           }}
         />
       ) : null}

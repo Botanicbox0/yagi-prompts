@@ -6,8 +6,9 @@ import { studioEnv } from '@/lib/brand-studio/env';
 import { createStudioJob, resetFreeIntelRateLimits } from '@/lib/brand-studio/jobs';
 import { buildStudioRequest } from '@/lib/brand-studio/provider/requests';
 import { runStudioOperation } from '@/lib/brand-studio/service';
-import { musicStyle, musicWay, withSections } from '@/lib/brand-studio/sound/lyrics';
-import { cleanDraft, LYRICS_DEFAULT_MODEL, lyricsGeminiConfig } from '@/lib/brand-studio/sound/lyrics-draft';
+import { markLyrics, musicStyle, musicWay } from '@/lib/brand-studio/sound/lyrics';
+import { stanzasText } from '@/lib/brand-studio/sound/lyrics-draft';
+import { LYRICS_DEFAULT_MODEL, lyricsGeminiConfig } from '@/lib/brand-studio/sound/lyrics-model';
 import { planMusic } from '@/lib/brand-studio/sound/music-jobs';
 import { musicQuoteCredits } from '@/lib/brand-studio/sound/music-limits';
 import { brandSoundMaxModeShown } from '@/lib/flags';
@@ -33,13 +34,15 @@ describe('the way is decided on the server', () => {
 });
 
 describe('lyrics as sent', () => {
-  it('get a section mark per stanza, unless the customer wrote marks', () => {
-    expect(withSections('첫 줄\n둘째 줄\n\n후렴 하나\n후렴 둘\n\n\n셋째 절')).toBe('[Verse 1]\n첫 줄\n둘째 줄\n\n[Chorus]\n후렴 하나\n후렴 둘\n\n[Verse 2]\n셋째 절');
-    expect(withSections('[Intro]\nla la\n\n[Chorus]\nhey')).toBe('[Intro]\nla la\n\n[Chorus]\nhey');
-    expect(withSections('a\r\n\r\nb')).toBe('[Verse 1]\na\n\n[Chorus]\nb');
-    expect(withSections('   ')).toBe('');
+  it('get a section mark per stanza, unless the customer wrote marks (SA2: lines kept as written)', () => {
+    expect(markLyrics('첫 줄\n둘째 줄\n\n후렴 하나\n후렴 둘\n\n\n셋째 절', null)).toBe(
+      '[Verse 1]\n첫 줄\n둘째 줄\n\n[Chorus]\n후렴 하나\n후렴 둘\n\n\n[Verse 2]\n셋째 절',
+    );
+    expect(markLyrics('[Intro]\nla la\n\n[Chorus]\nhey', null)).toBe('[Intro]\nla la\n\n[Chorus]\nhey');
+    expect(markLyrics('a\r\n\r\nb', null)).toBe('[Verse 1]\na\n\n[Chorus]\nb');
+    expect(markLyrics('   ', null)).toBe('');
     const many = Array.from({ length: 9 }, (_, i) => `line ${i}`).join('\n\n');
-    expect(withSections(many).split('\n\n').at(-1)).toBe('[Outro]\nline 8');
+    expect(markLyrics(many, null).split('\n\n').at(-1)).toBe('[Outro]\nline 8');
   });
 
   it('style is the description, plus the language only for vocals without lyrics', () => {
@@ -211,30 +214,37 @@ describe('lyrics.draft', () => {
   });
 
   it('asks the model live, cleans marks out, and refuses a draft naming a singer', async () => {
-    const answers = ['[Verse]\n아침 햇살\n\n\n\n[Chorus]\n함께해요', '뉴진스와 함께 노래해'];
+    const answers: unknown[] = [
+      { stanzas: [['[Chorus]', ' 아침 햇살 '], ['함께해요']] },
+      { stanzas: [['뉴진스와 함께 노래해'], ['라라라']] },
+      { stanzas: [['뉴진스와 함께 노래해'], ['라라라']] },
+    ];
     const calls: string[] = [];
     const fetchStub = (async (url: string) => {
       calls.push(String(url));
-      const lyrics = answers.shift()!;
-      return new Response(JSON.stringify({ candidates: [{ finishReason: 'STOP', content: { parts: [{ text: JSON.stringify({ lyrics }) }] } }] }), { status: 200 });
+      const answer = answers.shift()!;
+      return new Response(JSON.stringify({ candidates: [{ finishReason: 'STOP', content: { parts: [{ text: JSON.stringify(answer) }] } }] }), { status: 200 });
     }) as unknown as typeof fetch;
     deps = studioDeps(f.sql, {
       env: studioEnv({ BRAND_STUDIO_PROVIDER: 'live', BRAND_SOUND_STUDIO: 'on' }),
       intelDeps: { fetch: fetchStub, env: { GEMINI_API_KEY: 'test-key' } },
     });
-    expect(await draft()).toEqual({ ok: true, lyrics: '아침 햇살\n\n함께해요' });
+    expect(await draft({ structure: 'hook' })).toEqual({ ok: true, flow: 'topic', lyrics: '아침 햇살\n\n함께해요', model: LYRICS_DEFAULT_MODEL });
     expect(calls[0]).toContain(`/models/${LYRICS_DEFAULT_MODEL}:generateContent`);
-    expect(await draft()).toEqual({ ok: false, code: 'failed' });
+    // A singer's name survives the one rewrite: nothing is handed over.
+    expect(await draft({ structure: 'hook' })).toEqual({ ok: false, code: 'failed' });
+    expect(calls).toHaveLength(3);
     deps = studioDeps(f.sql, { env: studioEnv({ BRAND_STUDIO_PROVIDER: 'live', BRAND_SOUND_STUDIO: 'on' }), intelDeps: { fetch: fetchStub, env: {} } });
     expect(await draft()).toEqual({ ok: false, code: 'provider_unavailable' });
   });
 
-  it('runs on the editing studio’s model unless the server names another', () => {
+  it('runs on the server setting, checked against the compared models (SA2)', () => {
     expect(lyricsGeminiConfig({})).toBeNull();
-    expect(lyricsGeminiConfig({ GEMINI_API_KEY: 'k' })?.model).toBe('gemini-4-hydrogen');
-    expect(lyricsGeminiConfig({ GEMINI_API_KEY: 'k', BRAND_SOUND_LYRICS_MODEL: 'gemini-x' })?.model).toBe('gemini-x');
-    expect(lyricsGeminiConfig({ GEMINI_API_KEY: 'k', BRAND_SOUND_LYRICS_MODEL: 'bad model!' })?.model).toBe('gemini-4-hydrogen');
-    expect(cleanDraft('[Chorus]\n  a  \n\n\n\nb')).toBe('a\n\nb');
+    expect(lyricsGeminiConfig({ GEMINI_API_KEY: 'k' })?.model).toBe('gemini-4-argon');
+    expect(lyricsGeminiConfig({ GEMINI_API_KEY: 'k', BRAND_SOUND_LYRICS_MODEL: 'gemini-3.8-flash' })?.model).toBe('gemini-3.8-flash');
+    expect(lyricsGeminiConfig({ GEMINI_API_KEY: 'k', BRAND_SOUND_LYRICS_MODEL: 'gemini-x' })?.model).toBe('gemini-4-argon');
+    expect(lyricsGeminiConfig({ GEMINI_API_KEY: 'k', BRAND_SOUND_LYRICS_MODEL: 'bad model!' })?.model).toBe('gemini-4-argon');
+    expect(stanzasText({ stanzas: [['[Chorus]', '  a  '], [], ['b']] })).toBe('a\n\nb');
   });
 });
 
