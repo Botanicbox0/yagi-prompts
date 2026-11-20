@@ -190,7 +190,7 @@ describe('job.create kind music, end to end on the fake provider', () => {
   });
 
   it('refuses malformed requests before anything is reserved', async () => {
-    for (const bad of [music({ prompt: '' }), music({ prompt: 'x'.repeat(1001) }), music({ extra: 1 }), music({ mode: 'custom' }), music({ vocal: 'yes' })]) {
+    for (const bad of [music({ prompt: '' }), music({ prompt: 'x'.repeat(1001) }), music({ extra: 1 }), music({ vocal: 'yes' })]) {
       expect(await createStudioJob(deps, viewerOf(f.ids.owner), bad)).toEqual({ ok: false, code: 'invalid' });
     }
     expect(await jobsOf()).toHaveLength(0);

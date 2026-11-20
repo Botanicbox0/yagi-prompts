@@ -221,6 +221,16 @@ export function brandSoundStudioOpen(env: Record<string, string | undefined> = p
 }
 
 /**
+ * "더 고르게 만들기" (the music engine's Max Mode, twice the credits) in the sound studio (docs/BRAND-SOUND-STUDIO.md
+ * §4.2, §8-4). Shown unless the server environment says exactly `BRAND_SOUND_MAX_MODE=off`: the founder hides it
+ * if the paid smoke test finds no audible difference. Off means the switch is not drawn and a request still
+ * carrying it is refused before anything is reserved.
+ */
+export function brandSoundMaxModeShown(env: Record<string, string | undefined> = process.env): boolean {
+  return env.BRAND_SOUND_MAX_MODE !== 'off';
+}
+
+/**
  * A studio run can belong to a project (docs/BRAND-STUDIO-V6-PLAN.md §7 C, migration 0091): the image
  * studio gets the video studio's project switcher, new runs carry the chosen project, and the assets page
  * can put an existing run in a project. Default OFF: open only when the server environment says exactly

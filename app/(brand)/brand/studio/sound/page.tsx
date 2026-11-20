@@ -70,6 +70,7 @@ export default async function StudioSoundPage({
       initialTracks={data.tracks}
       initialJobs={data.jobs}
       initialAllowance={data.allowance}
+      maxMode={studioEnv().soundMaxMode !== false}
       canCreate={canCreate}
       audioMaxMb={Math.round(STUDIO_LIMITS.audioBytesMax / 1_000_000)}
       hrefs={{

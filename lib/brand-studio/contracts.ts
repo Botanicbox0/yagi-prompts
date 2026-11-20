@@ -566,6 +566,11 @@ export const FilmAnalyzeSchema = z.object({ organizationId: Id, assetId: Id, dep
 
 export const AssetRefSchema = z.object({ organizationId: Id, assetId: Id });
 export const OutputRefSchema = z.object({ organizationId: Id, outputId: Id });
+/** `lyrics.draft`: a first draft of lyrics for the sound studio (docs/BRAND-SOUND-STUDIO.md §7.5). Free, rate-limited. */
+export const LyricsDraftSchema = z
+  .object({ organizationId: Id, topic: z.string().trim().min(1).max(1000), language: z.enum(['ko', 'en']) })
+  .strict();
+export type StudioLyricsDraft = { ok: true; lyrics: string };
 /** `output.waveform`: the first browser that decodes an audio result keeps its peaks (docs/BRAND-SOUND-STUDIO.md §7.4). */
 export const OutputWaveformSchema = z
   .object({ organizationId: Id, outputId: Id, peaks: z.array(z.number().min(0).max(1)).min(1).max(1000) })
@@ -620,6 +625,7 @@ export const STUDIO_OPERATIONS = [
   'job.assign_project',
   'handoff.campaign',
   'output.waveform',
+  'lyrics.draft',
 ] as const;
 export type StudioOperation = (typeof STUDIO_OPERATIONS)[number];
 

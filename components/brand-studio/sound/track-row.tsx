@@ -198,6 +198,13 @@ export function TrackRow(props: {
             </a>
             {track.outputId && props.canCreate ? <RowMenu track={track} name={name} copy={copy} actions={actions} /> : null}
           </div>
+          {track.lyrics ? (
+            <div className={s.sung} data-sound-sung>
+              <span className={s.lyricsLabel}>{copy.composer.lyrics}</span>
+              <p className={s.sungText}>{track.lyrics}</p>
+            </div>
+          ) : null}
+          {track.outputId ? <TermsLine copy={copy} /> : null}
         </div>
       ) : null}
     </li>
@@ -291,6 +298,58 @@ function RowMenu(props: { track: SoundTrackView; name: string; copy: StudioSound
             data-sound-copy
           >
             {state.copied ? copy.more.copied : copy.more.copy}
+          </button>
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
+/**
+ * The terms line under a made version, and its small panel (docs/BRAND-SOUND-STUDIO.md §4.6). The wording is the
+ * §4.7 draft that waits for the founder's final text and the terms clauses (§8-3). Only on music made here: an
+ * uploaded file is the brand's own.
+ */
+function TermsLine({ copy }: { copy: StudioSoundCopy }) {
+  const [open, setOpen] = useState(false);
+  const panelId = useRef(`sound-terms-${Math.random().toString(36).slice(2, 8)}`);
+  const closeButton = useRef<HTMLButtonElement | null>(null);
+  useEffect(() => {
+    if (!open) return;
+    // The page's floating dock may cover the panel: measure it, then bring the panel above it.
+    const dock = document.querySelector<HTMLElement>('[data-sound-composer]');
+    if (dock) document.documentElement.style.setProperty('--sound-dock-h', `${Math.round(dock.getBoundingClientRect().height)}px`);
+    const panel = document.getElementById(panelId.current);
+    panel?.scrollIntoView({ block: 'nearest', behavior: 'auto' });
+    closeButton.current?.focus({ preventScroll: true });
+  }, [open]);
+  return (
+    <div className={s.terms} data-sound-terms>
+      <p className={s.termsLine}>
+        {copy.terms.line}
+        <button type="button" className={s.textBtn} aria-expanded={open} aria-controls={panelId.current} onClick={() => setOpen((v) => !v)} data-sound-terms-link>
+          {copy.terms.link}
+        </button>
+      </p>
+      {open ? (
+        <div
+          id={panelId.current}
+          className={s.termsPanel}
+          role="dialog"
+          aria-label={copy.terms.title}
+          onKeyDown={(event) => {
+            if (event.key === 'Escape') setOpen(false);
+          }}
+          data-sound-terms-panel
+        >
+          <p className={s.termsTitle}>{copy.terms.title}</p>
+          <ul className={s.termsList}>
+            {copy.terms.points.map((point) => (
+              <li key={point}>{point}</li>
+            ))}
+          </ul>
+          <button ref={closeButton} type="button" className="bs-btn" data-variant="soft" data-size="sm" onClick={() => setOpen(false)}>
+            {copy.terms.close}
           </button>
         </div>
       ) : null}

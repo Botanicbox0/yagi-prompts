@@ -5,6 +5,7 @@
  *       upload, likes, and sending a sound to the editing studio or a saved video studio project.
  *  SS2: the music composer (description + vocals), runs in progress, the versions each request returned
  *       (A, B…), failures that took nothing, save to assets, "비슷하게 만들기", copy the description.
+ *  SS3: lyrics (by hand or a free draft), "더 고르게 만들기", lyrics and the terms line on a made version.
  *
  * Techniques (docs/design/TOOLBOX.md §1-3), four: hairline rows instead of cards (TASTE 16), recessed wells for
  * the search field and the description, tabular numerals for every length, time and credit, frosted glass on
@@ -18,11 +19,10 @@ import { composeStorageKey } from '@/lib/brand-studio/compose/timeline';
 import type { StudioAllowanceView, StudioErrorCode, StudioJobView } from '@/lib/brand-studio/contracts';
 import { creditsLeft, formatCredits } from '@/lib/brand-studio/credits';
 import { filterTracks, mergeTracks, musicTracks, soundTracks, type SoundTab, type SoundTrackView } from '@/lib/brand-studio/sound/library';
-import { musicQuoteCredits } from '@/lib/brand-studio/sound/music-limits';
 import { composeBgmHandoff, composeSfxHandoff, type SoundSendTrack } from '@/lib/brand-studio/sound/send';
 import { interpolate } from '@/lib/i18n/format';
 import type { StudioSoundCopy } from '@/messages/studio-sound';
-import { MusicComposer, type ComposerHandle } from './composer';
+import { MusicComposer, type ComposerHandle, type ComposerInput } from './composer';
 import { SendToVideoDialog, type SendTarget } from './send-dialog';
 import { PendingRow, TrackRow, type RowActions } from './track-row';
 import s from './sound.module.css';
@@ -39,6 +39,8 @@ export interface SoundStudioProps {
   /** Music runs: open, finished, and failed in the last day. */
   initialJobs: StudioJobView[];
   initialAllowance: StudioAllowanceView;
+  /** "더 고르게 만들기" is offered (server setting `BRAND_SOUND_MAX_MODE` not `off`). */
+  maxMode: boolean;
   /** Owners and editors: create, upload and send. Viewers and the TWINGS team view listen and download. */
   canCreate: boolean;
   audioMaxMb: number;
@@ -175,7 +177,7 @@ export function SoundStudio(props: SoundStudioProps) {
     };
   }, [api, openIds, copy.composer.versions]);
 
-  const create = async (input: { prompt: string; vocal: boolean }) => {
+  const create = async (input: ComposerInput) => {
     setCreating(true);
     setComposerError(null);
     // One id per draft: a retried press (double click, a dropped answer) is the same request on the server.
@@ -188,7 +190,16 @@ export function SoundStudio(props: SoundStudioProps) {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           operation: 'job.create',
-          input: { kind: 'music', organizationId, requestId: draftRequest.current, mode: 'describe', prompt: input.prompt, vocal: input.vocal, language: locale },
+          input: {
+            kind: 'music',
+            organizationId,
+            requestId: draftRequest.current,
+            prompt: input.prompt,
+            vocal: input.vocal,
+            language: locale,
+            ...(input.vocal && input.lyrics ? { lyrics: input.lyrics } : {}),
+            ...(input.careful ? { careful: true } : {}),
+          },
         }),
       });
       answer = await response.json();
@@ -196,7 +207,7 @@ export function SoundStudio(props: SoundStudioProps) {
       answer = null;
     }
     setCreating(false);
-    const result = answer as { ok?: boolean; job?: StudioJobView; code?: StudioErrorCode; blocked?: 'name' } | null;
+    const result = answer as { ok?: boolean; job?: StudioJobView; code?: StudioErrorCode; blocked?: 'name' | 'lyrics' } | null;
     if (result?.ok && result.job) {
       draftRequest.current = null;
       setJobs((all) => [result.job!, ...all.filter((j) => j.id !== result.job!.id)]);
@@ -204,6 +215,7 @@ export function SoundStudio(props: SoundStudioProps) {
       return true;
     }
     if (result?.blocked === 'name') setComposerError(errorLine(copy, 'artist'));
+    else if (result?.blocked === 'lyrics') setComposerError(copy.composer.lyricsBlocked);
     else setComposerError(errorLine(copy, result?.code ?? 'failed'));
     // A refused request reserved nothing: the next press is a new one.
     if (result?.code) draftRequest.current = null;
@@ -378,7 +390,7 @@ export function SoundStudio(props: SoundStudioProps) {
     addVideo: (track) => void addToVideo(track),
     save: async (track) => Boolean(await ensureAsset(track)),
     similar: (track) => {
-      composer.current?.fill(track.prompt ?? '', track.vocal ?? false);
+      composer.current?.fill({ prompt: track.prompt ?? '', vocal: track.vocal ?? false, lyrics: track.lyrics, careful: track.careful });
     },
     saveWaveform: (track, peaks) => {
       if (!track.outputId || track.waveform) return;
@@ -510,13 +522,19 @@ export function SoundStudio(props: SoundStudioProps) {
           ref={composer}
           copy={copy}
           locale={locale}
-          credits={musicQuoteCredits({ mode: 'describe' })}
           amountTemplate={props.creditsCopy.amount}
           busy={creating}
           showExamples={!tracks.some((t) => t.outputId) && openJobs.length === 0}
           error={composerError}
           onCreate={(input) => void create(input)}
           onClearError={() => setComposerError(null)}
+          maxMode={props.maxMode}
+          onDraft={async (topic) => {
+            const answer = await api.call('lyrics.draft', { organizationId, topic, language: locale });
+            if (!isFailure(answer)) return { lyrics: answer.lyrics };
+            if ((answer as { blocked?: string }).blocked === 'name') return { error: copy.errors.artist };
+            return { error: answer.code === 'too_many_running' ? copy.composer.draftBusy : copy.composer.draftFailed };
+          }}
         />
       ) : null}
 

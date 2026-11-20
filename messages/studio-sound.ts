@@ -17,6 +17,12 @@
  * `composer.making` is the first sentence of §4.7's "만드는 동안" line: its "{seconds}초 정도" waits for the measured
  * time of the paid smoke test (§4.7, §7.7) and is not shown until then.
  *
+ * Slice SS3 (music with lyrics, "더 고르게 만들기", the terms line and panel): §4.7 lines as they are. The
+ * terms lines (marked † in §4.7) wait for the founder's final wording and the terms clauses (§8-3); they are the
+ * §4.7 drafts until then. The panel's fourth line ("download the creation record") waits for that download to exist.
+ * New lines (drafting, draft failure, draft limit, close) went through the same two Gemma
+ * passes on 2026-11-20; pass 2 was taken for both of its changes.
+ *
  * Amounts are credits, never won. No engine, vendor or model name appears here.
  */
 export const studioSoundEn = {
@@ -63,6 +69,28 @@ export const studioSoundEn = {
     creating: 'Starting',
     making: 'Creating music.',
     versions: '{count} versions created.',
+    lyrics: 'Lyrics',
+    lyricsPlaceholder: 'Enter lyrics or leave blank.',
+    lyricsLanguage: 'Sings in the language you write.',
+    lyricsBlocked: 'You cannot use existing lyrics or artist names.',
+    draft: 'Draft lyrics',
+    draftNote: 'Review and edit the draft.',
+    drafting: 'Drafting',
+    draftFailed: "Couldn't draft lyrics. Please try again.",
+    draftBusy: 'Too many requests. Please try again in a moment.',
+    careful: 'Consistent output',
+    carefulNote: 'More consistent quality. Costs double credits.',
+  },
+  terms: {
+    link: 'Terms',
+    title: 'Terms',
+    line: 'Use in ads and social media. No royalties or attribution required.',
+    points: [
+      'Each request creates a new piece of music.',
+      'Use in ads and social media posts. No royalties or attribution required.',
+      'We do not register this music in content identification systems.',
+    ],
+    close: 'Close',
   },
   examples: {
     label: 'Example descriptions',
@@ -150,6 +178,28 @@ export const studioSoundKo: StudioSoundCopy = {
     creating: '만드는 중이에요.',
     making: '음악을 만들고 있어요.',
     versions: '{count}개의 버전이 만들어졌어요.',
+    lyrics: '가사',
+    lyricsPlaceholder: '가사를 입력하세요. 비워 두면 자동으로 만들어져요.',
+    lyricsLanguage: '쓴 언어 그대로 노래해요.',
+    lyricsBlocked: '기존 노래 가사나 가수 이름은 넣을 수 없어요.',
+    draft: '가사 초안 만들기',
+    draftNote: '초안을 확인하고 고쳐 쓰세요.',
+    drafting: '초안을 만들고 있어요.',
+    draftFailed: '초안을 만들지 못했어요. 다시 시도해 주세요.',
+    draftBusy: '요청이 너무 많아요. 잠시 후 다시 시도해 주세요.',
+    careful: '더 고르게 만들기',
+    carefulNote: '곡이 더 고르게 나오고 크레딧이 두 배로 들어요.',
+  },
+  terms: {
+    link: '이용 조건',
+    title: '이용 조건',
+    line: '광고와 SNS에 쓸 수 있어요. 사용료를 낼 필요가 없고 출처를 적지 않아도 돼요.',
+    points: [
+      '요청할 때마다 새로 만든 음악이에요.',
+      '광고와 SNS 게시물에 쓸 수 있어요. 사용료를 낼 필요가 없고 출처를 적지 않아도 돼요.',
+      '이 음악을 음원 식별 시스템에 등록하지 않아요.',
+    ],
+    close: '닫기',
   },
   examples: {
     label: '예시 설명',

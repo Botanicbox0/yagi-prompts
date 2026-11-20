@@ -8,7 +8,11 @@
  *  - Gates: `BRAND_SOUND_STUDIO` (off: like an unknown kind), the self-serve studio, then the `sound` group.
  *  - The quote is per request (§3.4): however many versions come back, the press takes the quote once; a
  *    request that returns none takes nothing (../finish.ts).
- *  - A description naming a real singer, group or song is refused before anything is reserved (§5).
+ *  - A description naming a real singer, group or song is refused before anything is reserved (§5), and so are
+ *    lyrics naming one (SS3).
+ *  - The way is the server's (§4.2, §7.5): lyrics with vocals, or "더 고르게 만들기", make a custom request
+ *    (title, style, lyrics, Max Mode); anything else is a description request. "더 고르게 만들기" exists only
+ *    while the server setting `BRAND_SOUND_MAX_MODE` is not `off` (founder decision §8-4 is open).
  *  - Nothing to prepare: no references, no rewriting. The row is stored prepared, with the sentence the
  *    engine receives in `final_prompt` (never shown to the customer).
  */
@@ -26,6 +30,7 @@ import { reserveAllowance } from '../usage';
 import { musicEngine, type MusicEngine, type MusicRequest } from './engine';
 import { MUSIC_LIMITS, musicQuoteKrw } from './music-limits';
 import { namedArtist } from './names';
+import { LYRICS_LIMITS, musicStyle, musicWay, withSections } from './lyrics';
 
 export { MUSIC_LIMITS, musicQuoteKrw };
 
@@ -41,17 +46,22 @@ export const MusicJobCreateSchema = z
     kind: z.literal('music'),
     organizationId: Id,
     requestId: RequestId,
-    mode: z.literal('describe').default('describe'),
+    /** Accepted for clarity, never trusted: the server decides the way from the lyrics and the switch. */
+    mode: z.enum(['describe', 'custom']).optional(),
     prompt: z.string().trim().min(1).max(MUSIC_LIMITS.promptMax),
     vocal: z.boolean().default(false),
+    /** Sung as written (with vocals only); section marks are added when sent. */
+    lyrics: z.string().max(LYRICS_LIMITS.max).optional(),
+    /** "더 고르게 만들기" (Max Mode): twice the credits. */
+    careful: z.boolean().optional(),
     /** Language to sing in when there are vocals and no lyrics; the screen's language when absent. */
     language: z.enum(['ko', 'en']).optional(),
   })
   .strict();
 export type MusicJobCreate = z.infer<typeof MusicJobCreateSchema>;
 
-/** A refusal the screen explains in its own words (and nothing was reserved). */
-export type MusicJobBlocked = StudioFailure & { blocked: 'name' };
+/** A refusal the screen explains in its own words (and nothing was reserved): a name in the description or in the lyrics. */
+export type MusicJobBlocked = StudioFailure & { blocked: 'name' | 'lyrics' };
 
 const SUNG_IN: Readonly<Record<'ko' | 'en', string>> = { ko: 'Vocals sung in Korean.', en: 'Vocals sung in English.' };
 
@@ -86,7 +96,14 @@ export interface MusicPlan {
 /** Pure: the request, the name, the quote and what the row keeps. Throws `StudioDenied('invalid')` on a request the engine refuses. */
 export function planMusic(input: MusicJobCreate, screenLocale: 'ko' | 'en', engine: MusicEngine = musicEngine(process.env)): MusicPlan {
   const language = input.language ?? screenLocale;
-  const request: MusicRequest = { mode: 'describe', prompt: describeSentence(input.prompt, input.vocal, language), vocal: input.vocal };
+  const lyrics = input.vocal ? (input.lyrics ?? '').trim() : '';
+  const careful = input.careful === true;
+  const way = musicWay({ vocal: input.vocal, lyrics, careful });
+  const title = musicTitle(input.prompt);
+  const request: MusicRequest =
+    way === 'describe'
+      ? { mode: 'describe', prompt: describeSentence(input.prompt, input.vocal, language), vocal: input.vocal }
+      : { mode: 'custom', prompt: musicStyle(input.prompt, input.vocal, Boolean(lyrics), language), vocal: input.vocal, title, lyrics: withSections(lyrics), careful };
   let endpoint: string;
   try {
     endpoint = engine.request(request).endpoint;
@@ -94,7 +111,6 @@ export function planMusic(input: MusicJobCreate, screenLocale: 'ko' | 'en', engi
     throw new StudioDenied('invalid');
   }
   const estimateUsd = engine.quoteUsd(request);
-  const title = musicTitle(input.prompt);
   return {
     engine,
     request,
@@ -110,11 +126,13 @@ export function planMusic(input: MusicJobCreate, screenLocale: 'ko' | 'en', engi
       count: 1,
       locale: screenLocale,
       music: {
-        mode: 'describe',
+        mode: way,
         vocal: input.vocal,
         language,
         title,
-        careful: false,
+        careful: way === 'custom' && careful,
+        // What the customer typed (marks are added when sent), so "설정 다시 쓰기" gives it back as written.
+        ...(lyrics ? { lyrics } : {}),
         // The conditions the track was made under (§7.2): which engine and endpoint, which version of our terms.
         made: { engine: engine.id, endpoint, terms: SOUND_TERMS_VERSION },
       },
@@ -154,6 +172,9 @@ export async function createMusicJob(deps: StudioDeps, viewer: Viewer, raw: unkn
         return { ok: true as const, job: jobView(prior, outputs, deps.media) };
       }
       if (namedArtist(v.prompt)) return { blocked: 'name' as const };
+      if (v.vocal && v.lyrics && namedArtist(v.lyrics)) return { blocked: 'lyrics' as const };
+      // "더 고르게 만들기" hidden by the server setting: a request still carrying it is refused, nothing reserved.
+      if (v.careful === true && deps.env.soundMaxMode === false) throw new StudioDenied('invalid');
       const plan = planMusic(v, locale);
       if ((await openJobCount(sql, v.organizationId)) >= STUDIO_LIMITS.openJobsPerOrganization) throw new StudioDenied('too_many_running');
       const verdict = await reserveAllowance(sql, v.organizationId, plan.estimateKrw, deps.env, deps.now?.() ?? new Date());

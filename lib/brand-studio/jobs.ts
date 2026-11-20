@@ -52,6 +52,8 @@ export const FREE_INTEL_LIMITS = {
   revisePerMinute: 20,
   /** `revise.mark` (lib/brand-studio/revision/mark.ts): one call per mark placed. */
   markPerMinute: 30,
+  /** `lyrics.draft` (lib/brand-studio/sound/lyrics-draft.ts): a first draft of lyrics, per organization. */
+  lyricsPerMinute: 6,
 } as const;
 
 const freeIntelBuckets = new Map<string, number[]>();

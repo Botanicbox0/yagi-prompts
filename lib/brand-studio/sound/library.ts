@@ -61,6 +61,10 @@ export interface SoundTrackView {
   /** The description it was made from (made versions only), for "설명 복사하기" and "비슷하게 만들기". */
   prompt?: string;
   vocal?: boolean;
+  /** Made versions: the lyrics as the customer wrote them (none for an instrumental or a description request). */
+  lyrics?: string | null;
+  /** Made versions: "더 고르게 만들기" was on. */
+  careful?: boolean;
   tab: SoundTab;
   /** The stored name (searched), and what the row draws (null: the screen's fallback). */
   name: string;
@@ -109,6 +113,8 @@ export function musicTracks(organizationId: string, jobs: readonly StudioJobView
         waveform: output.waveform ?? null,
         prompt: job.prompt,
         vocal: job.music?.vocal ?? false,
+        lyrics: job.music?.lyrics ?? null,
+        careful: job.music?.careful ?? false,
         tab: 'music',
         name,
         displayName: title ? name : null,
