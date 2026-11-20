@@ -9,11 +9,10 @@
  * lines and sections at a fixed tempo, and aims at "at least the chosen length": a long song can be cut later, a
  * short one cannot be stretched.
  *
- *  - Bars wanted: seconds × BPM / 240. A sung line is planned at 2.5 bars (2.8 below 90 BPM) and a section at 2.7:
- *    with these, the forms that reached the length in the measurement (30 s: 7 lines, 3 lines with intro, break
- *    and empty outro, the hook twice; 60 s: intro, hook, break, hook again, break, 2-line outro) count as enough,
- *    and the forms that came back short (3 lines alone) do not. The expected length runs from the lower quartile
- *    (2.2 or 2.75 a line, 2.2 a section) to the median (2.6 or 3.4 a line, 2.7 a section).
+ *  - Bars wanted: seconds × BPM / 240. The plan counts the lower quartile: 2.2 bars a sung line (2.75 below 90 BPM)
+ *    and 2.2 a section. A form is enough when that low estimate reaches 0.95 of the length (the measured 60 s form,
+ *    four of four songs long enough, is 58 s on the low count). The median (2.6 or 3.4 a line, 2.7 a section) stays
+ *    within 1.5 of the length for the default structures. The shortest form that meets both is chosen.
  *  - Stanzas hold 2 to 4 lines, a line 7 to 10 syllables in Korean, 7 to 11 in English.
  *  - Filling, in order, each step only while the form is short: an intro, an empty outro (the song never ends on a
  *    break), a break after the first stanza, then for a drafted hook the hook again (with a break before a sung
@@ -45,15 +44,17 @@ export function cleanBpm(value: unknown): number | null {
 
 /** Bars one sung line takes: what the plan counts, and the measurement's lower quartile and median. */
 export function barsPerLine(bpm: number): { plan: number; low: number; median: number } {
-  return bpm < 90 ? { plan: 2.8, low: 2.75, median: 3.4 } : { plan: 2.5, low: 2.2, median: 2.6 };
+  return bpm < 90 ? { plan: 2.75, low: 2.75, median: 3.4 } : { plan: 2.2, low: 2.2, median: 2.6 };
 }
 
-/** Bars one instrumental section takes: planned and median about 2.7 (measured), 2.2 for the low estimate. */
-export const SECTION_BARS = { plan: 2.7, low: 2.2, median: 2.7 } as const;
+/** Bars one instrumental section takes: about 2.7 measured (median); planned at the low 2.2. */
+export const SECTION_BARS = { plan: 2.2, low: 2.2, median: 2.7 } as const;
+/** A form is enough when its low estimate reaches this share of the length (§12.11, the lead's criterion). */
+export const ENOUGH_RATIO = 0.95;
 export const STANZA_LINES = { min: 2, max: 4 } as const;
 export const LINE_SYLLABLES: Readonly<Record<'ko' | 'en', { min: number; max: number }>> = { ko: { min: 7, max: 10 }, en: { min: 7, max: 11 } };
-/** The expected median over the chosen length above which the dock says the song will run long. */
-export const LONG_RATIO = 1.45;
+/** The expected median over the chosen length above which the dock says the song will run long (the cap, §12.11). */
+export const LONG_RATIO = 1.5;
 
 export type SectionMark = '[Intro]' | '[Instrumental Break]' | '[Outro]';
 
@@ -92,7 +93,7 @@ function targetBarsOf(seconds: number, bpm: number): number {
 
 /** Lines a length wants at a tempo, sections aside. */
 export function linesNeeded(seconds: number, bpm: number): number {
-  return Math.ceil(targetBarsOf(seconds, bpm) / barsPerLine(bpm).plan - 1e-9);
+  return Math.ceil((ENOUGH_RATIO * targetBarsOf(seconds, bpm)) / barsPerLine(bpm).plan - 1e-9);
 }
 
 const clampLines = (n: number) => Math.max(STANZA_LINES.min, Math.min(STANZA_LINES.max, n));
@@ -174,12 +175,12 @@ export function lengthPlan(input: { seconds: number | null; bpm: number; structu
   let form = build();
   if (input.seconds) {
     for (const step of steps) {
-      if (barsOf(form, per.plan, SECTION_BARS.plan) >= target - 1e-9) break;
+      if (barsOf(form, per.plan, SECTION_BARS.plan) >= ENOUGH_RATIO * target - 1e-9) break;
       if (step()) form = build();
     }
   }
   const planned = barsOf(form, per.plan, SECTION_BARS.plan);
-  const enough = !input.seconds || planned >= target - 1e-9;
+  const enough = !input.seconds || planned >= ENOUGH_RATIO * target - 1e-9;
   const seconds = (bars: number) => Math.round((bars * 240) / bpm);
   return {
     seconds: input.seconds,
@@ -190,7 +191,7 @@ export function lengthPlan(input: { seconds: number | null; bpm: number; structu
     needed: input.seconds ? linesNeeded(input.seconds, bpm) : 0,
     form,
     enough,
-    missingLines: enough ? 0 : Math.ceil((target - planned) / per.plan - 1e-9),
+    missingLines: enough ? 0 : Math.ceil((ENOUGH_RATIO * target - planned) / per.plan - 1e-9),
     estimate: { min: seconds(barsOf(form, per.low, SECTION_BARS.low)), max: seconds(barsOf(form, per.median, SECTION_BARS.median)) },
   };
 }
