@@ -56,3 +56,50 @@ Terms of Service, "Effective Date: September 3, 2026" (suno.com/terms).
 - Written: Sunra lets API customers use outputs commercially and build customer-facing products; Suno assigns paid-tier output to the user with perpetual commercial rights in downloads and no attribution; v6 is trained with licensed catalogues from three partners.
 - Not written: under which agreement Sunra serves Suno; whether output obtained through an API provider counts as downloaded "through an approved channel"; what `commercial_use` means and why it is absent on these entries; who the "applicable rights holders" are and when they may collect; whether files delivered through Sunra carry Suno's watermark or metadata; any indemnity from either company; what a model's withdrawal does to earlier outputs.
 - A written answer from Sunra on those points would close the record. A draft of that question is in `docs/BRAND-SOUND-STUDIO.md`, appendix A.
+
+## 5. Paid smoke test, 2026-11-20 (founder approved; Sunra API lane)
+
+Nine call types as planned in the design doc §7.7. Charged in total **US$0.684** (`billing.amount` of each status response; the two failed calls were not charged). Request bodies below are exactly what was sent; ids are shortened.
+
+| call | endpoint | request body | seconds to result | outcome | charged |
+| --- | --- | --- | --- | --- | --- |
+| 01-describe-instrumental | `suno/suno-v6/inspire-mode` | `{"prompt": "Warm, calm acoustic guitar and soft piano for a skincare advertisement, gentle and slow, clean ending", "instrumental": true}` | 63 | 01-describe-instrumental-a.mp3 203.12 s, 01-describe-instrumental-b.mp3 232.4 s | $0.1 |
+| 02-describe-vocal-korean-no-lyrics | `suno/suno-v6/inspire-mode` | `{"prompt": "Bright, cheerful pop song for a summer drink short video, female vocal, sung in Korean", "instrumental": false}` | 52 | 02-describe-vocal-korean-no-lyrics-a.mp3 69.92 s, 02-describe-vocal-korean-no-lyrics-b.mp3 67.92 s | $0.1 |
+| 03-custom-korean-lyrics | `suno/suno-v6/custom-mode` | `{"title": "맑은 아침", "style": "soft acoustic pop, warm female vocal, light percussion, 95 bpm", "lyrics": "[Verse]\n아침 햇살이 창을 두드리면\n물 한 잔으로 하루를 열어요\n[Chorus]\n오늘도 맑게 오늘도 가볍게\n내 피부에 닿는 작은 약속", "instrumental": false, "max_mode": false}` | 40 | 03-custom-korean-lyrics-a.mp3 22.0 s, 03-custom-korean-lyrics-b.mp3 43.6 s | $0.1 |
+| 04-custom-english-lyrics-max | `suno/suno-v6/custom-mode` | `{"title": "Something Bright", "style": "upbeat synth pop, confident male vocal, driving bass, 120 bpm", "lyrics": "[Verse]\nCity lights are waking up tonight\nEvery step is moving with the beat\n[Chorus]\nWe are running into something bright\nHold the moment, feel it under your feet", "instrumental": false, "max_mode": true}` | 46 | 04-custom-english-lyrics-max-a.mp3 61.12 s, 04-custom-english-lyrics-max-b.mp3 45.96 s | $0.2 |
+| 05-custom-instrumental-style | `suno/suno-v6/custom-mode` | `{"title": "Runway", "style": "minimal house, cool and sleek, tight kick, airy pads, fashion film, 124 bpm", "lyrics": "", "instrumental": true, "max_mode": false}` | 69 | 05-custom-instrumental-style-a.mp3 207.2 s, 05-custom-instrumental-style-b.mp3 217.36 s | $0.1 |
+| 06-extend-on-01 | `suno/suno-v5.5-relay/extend` | `{"task_id": "2892e9d4-f…", "clip_id": "sunra_f972…", "continue_at": 30, "title": "Suno v6 track 1", "lyrics": "", "style": "warm calm acoustic guitar and soft piano", "instrumental": true}` | 13 | failed: service_provider_error — Predict failed. Please try again. | $0 |
+| 07-crop-on-01 | `suno/suno-v5.5-relay/clip` | `{"task_id": "2892e9d4-f…", "clip_id": "sunra_f972…", "crop_start": "0", "crop_end": "18"}` | about 1,130 (the status stayed IN_PROGRESS, then failed) | failed: service_provider_error — Predict failed. Please try again. | $0 |
+| 08-sfx-5s-1 | `elevenlabs/sound-effects/text-to-sound-effects` | `{"text": "A glass bottle set down gently on a marble counter", "duration": 5, "prompt_influence": 0.45}` | 12 | 08-sfx-5s-1-a.mp3 5.0 s | $0.01 |
+| 08-sfx-5s-2 | `elevenlabs/sound-effects/text-to-sound-effects` | `{"text": "A can of sparkling soda opening with a crisp fizz", "duration": 5, "prompt_influence": 0.45}` | 12 | 08-sfx-5s-2-a.mp3 5.0 s | $0.01 |
+| 08-sfx-5s-3 | `elevenlabs/sound-effects/text-to-sound-effects` | `{"text": "A soft whoosh transition, airy and short", "duration": 5, "prompt_influence": 0.45}` | 12 | 08-sfx-5s-3-a.mp3 5.0 s | $0.01 |
+| 08-sfx-5s-4 | `elevenlabs/sound-effects/text-to-sound-effects` | `{"text": "A cosmetic compact snapping shut", "duration": 5, "prompt_influence": 0.45}` | 12 | 08-sfx-5s-4-a.mp3 5.0 s | $0.01 |
+| 09-sfx-22s | `elevenlabs/sound-effects/text-to-sound-effects` | `{"text": "Calm cafe ambience with quiet chatter and cups, steady and even", "duration": 22, "prompt_influence": 0.45}` | 17 | 09-sfx-22s-a.mp3 22.0 s | $0.044 |
+
+Measured on the files (ffprobe; faster-whisper small on CPU with voice-activity detection for the vocal checks):
+
+| file | format | length | size | tags | transcription check |
+| --- | --- | --- | --- | --- | --- |
+| 01-describe-instrumental-a.mp3 | mp3 48000 Hz, 2 ch, 188 kbps | 203.12 s | 4.78 MB | comment: `made with suno; created=…; id=…` | language en (0.36), 0 s of voice found |
+| 01-describe-instrumental-b.mp3 | mp3 48000 Hz, 2 ch, 190 kbps | 232.4 s | 5.54 MB | comment: `made with suno; created=…; id=…` | language en (0.36), 0 s of voice found |
+| 02-describe-vocal-korean-no-lyrics-a.mp3 | mp3 48000 Hz, 2 ch, 182 kbps | 69.92 s | 1.6 MB | comment: `made with suno; created=…; id=…` | language ko (0.98), 30.9 s of voice found: "차가운 한모금 여름이 똑같기가 살며 시와 한모금 이물처럼" |
+| 02-describe-vocal-korean-no-lyrics-b.mp3 | mp3 48000 Hz, 2 ch, 185 kbps | 67.92 s | 1.57 MB | comment: `made with suno; created=…; id=…` | language ko (0.92), 2.0 s of voice found: "잘가운 핸드폰" |
+| 03-custom-korean-lyrics-a.mp3 | mp3 48000 Hz, 2 ch, 179 kbps | 22.0 s | 0.49 MB | comment: `made with suno; created=…; id=…` | language ko (0.98), 4.0 s of voice found: "아침에 쌀이 장을 두둘..." |
+| 03-custom-korean-lyrics-b.mp3 | mp3 48000 Hz, 2 ch, 181 kbps | 43.6 s | 0.99 MB | comment: `made with suno; created=…; id=…` | language ko (0.98), 16.5 s of voice found: "아침 햇살이 창을 두드리며 한 잔으로" |
+| 04-custom-english-lyrics-max-a.mp3 | mp3 48000 Hz, 2 ch, 188 kbps | 61.12 s | 1.44 MB | comment: `made with suno; created=…; id=…` | language en (0.36), 0 s of voice found |
+| 04-custom-english-lyrics-max-b.mp3 | mp3 48000 Hz, 2 ch, 185 kbps | 45.96 s | 1.07 MB | comment: `made with suno; created=…; id=…` | language en (0.6), 13.4 s of voice found: "City lights are waking up tonight Every single day" |
+| 05-custom-instrumental-style-a.mp3 | mp3 48000 Hz, 2 ch, 188 kbps | 207.2 s | 4.88 MB | comment: `made with suno; created=…; id=…` | language en (0.61), 0 s of voice found |
+| 05-custom-instrumental-style-b.mp3 | mp3 48000 Hz, 2 ch, 188 kbps | 217.36 s | 5.12 MB | comment: `made with suno; created=…; id=…` | language en (0.36), 0 s of voice found |
+| 08-sfx-5s-1-a.mp3 | mp3 44100 Hz, 2 ch, 128 kbps | 5.0 s | 0.08 MB | encoder only | — |
+| 08-sfx-5s-2-a.mp3 | mp3 44100 Hz, 2 ch, 128 kbps | 5.0 s | 0.08 MB | encoder only | — |
+| 08-sfx-5s-3-a.mp3 | mp3 44100 Hz, 2 ch, 128 kbps | 5.0 s | 0.08 MB | encoder only | — |
+| 08-sfx-5s-4-a.mp3 | mp3 44100 Hz, 2 ch, 128 kbps | 5.0 s | 0.08 MB | encoder only | — |
+| 09-sfx-22s-a.mp3 | mp3 44100 Hz, 2 ch, 128 kbps | 22.0 s | 0.35 MB | encoder only | — |
+
+- Every Suno request returned two clips. `duration` and `lyrics` in the returned clip objects were empty; `clip_id` values start with `sunra_`; the inspire-mode `title` was a default ("Suno v6 track 1").
+- A failed request reports `status: COMPLETED` with `success: false` and an `error` object.
+- `extend` and `clip` (crop) on a clip made with `suno/suno-v6` both failed with `service_provider_error` ("Predict failed. Please try again.", marked retryable). One attempt each, so the cause is not settled.
+- Result URLs (host `assets.sunra.ai`) still answered 24 minutes after the result.
+- No free balance endpoint was found (`/v1/balance`, `/v1/account`, `/v1/credits` and similar return 404); the key authenticates (404 for an unknown request id with the key, 401 without).
+- The transcription tool is weak on singing: it found no voice in `04-…-a`, a clip that should have vocals, so its "0 s of voice" on the instrumental clips is not proof that no vocal leaked. Pronunciation quality and the Max Mode difference need listening.
+- Sound effects ran on the same path the studio uses (`elevenlabs/sound-effects/text-to-sound-effects` with the Sunra API key); durations came back exactly as requested.
