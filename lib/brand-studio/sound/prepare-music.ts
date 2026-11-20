@@ -11,7 +11,6 @@ import { brandSummary } from '../prepare';
 import type { JobRow, StudioDeps, StudioJobWork } from '../types';
 import { designMeta, designMusic, MUSIC_PROFILE_VERSION, type MusicDesign, type MusicDesignInput } from './architect';
 import { markLyrics, musicWay } from './lyrics';
-import { musicTitle } from './music-text';
 
 export function musicDesignInputOf(job: Pick<JobRow, 'prompt' | 'params'>, brand: MusicDesignInput['brand'] = null): MusicDesignInput {
   const m = job.params.music!;
@@ -22,6 +21,7 @@ export function musicDesignInputOf(job: Pick<JobRow, 'prompt' | 'params'>, brand
     careful: m.careful,
     structure: m.structure ?? null,
     video: m.video ?? null,
+    words: m.words ?? null,
     language: m.language,
     locale: job.params.locale === 'en' ? 'en' : 'ko',
     brand,
@@ -42,7 +42,7 @@ export function localDesign(input: MusicDesignInput): MusicDesign {
   return {
     mode,
     style,
-    title: mode === 'custom' ? (input.locale === 'ko' ? '맑은 하루' : 'Clear Day') : musicTitle(input.prompt),
+    title: input.locale === 'ko' ? '맑은 하루' : 'Clear Day',
     lyrics: markLyrics(input.vocal ? input.lyrics : '', input.structure ?? null),
     notes: input.locale === 'ko' ? '로컬 설계 예시예요. 실제 설계는 운영 환경에서 만들어져요.' : 'A local design example; the real design is made in production.',
     source: 'model',

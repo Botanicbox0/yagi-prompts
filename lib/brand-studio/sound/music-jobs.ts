@@ -41,7 +41,7 @@ import { LYRIC_STRUCTURES, LYRICS_LIMITS, markLyrics, musicWay, ownLyrics } from
 import { LYRICS_MODELS, lyricsGeminiConfig } from './lyrics-model';
 import { videoFitOf, videoStructure, videoTargetSeconds, type MusicVideoFit } from './video-fit';
 import { FAKE_EXISTING, judgeExistingLyrics, logMusicBlock, musicPaused, noteMusicBlock, strictMusicChecks, type MusicBlockRecord } from './warnings';
-import { DESIGN_LIMITS, designMeta, fallbackDesign, reviewedDesign, type MusicDesign, type MusicDesignInput } from './architect';
+import { DESIGN_LIMITS, designMeta, fallbackDesign, reviewedDesign, type MusicDesign, type MusicDesignInput, type MusicWords } from './architect';
 
 export { MUSIC_LIMITS, musicQuoteKrw };
 
@@ -74,6 +74,17 @@ export const MusicJobCreateSchema = z
      * answer named it. Absent with lyrics: the customer wrote them. Only the allowed models are accepted.
      */
     lyricsBy: z.object({ flow: z.enum(['topic', 'polish']), model: z.enum([...LYRICS_MODELS, 'local']) }).strict().optional(),
+    /**
+     * The brand name and words to include from the lyrics options. Sung with no lyrics, they go to the engine with
+     * the request (./architect.ts `subjectSentence`); checked for names like the description.
+     */
+    words: z
+      .object({
+        brand: z.object({ name: z.string().trim().min(1).max(60), readAs: z.string().trim().max(60).optional() }).strict().optional(),
+        mustInclude: z.array(z.string().trim().min(1).max(40)).max(5).optional(),
+      })
+      .strict()
+      .optional(),
     /** "더 고르게 만들기" (Max Mode): twice the credits. */
     careful: z.boolean().optional(),
     /** Language to sing in when there are vocals and no lyrics; the screen's language when absent. */
@@ -111,7 +122,7 @@ export interface MusicPlan {
 
 /** Pure: the request, the name, the quote and what the row keeps. Throws `StudioDenied('invalid')` on a request the engine refuses. */
 export function designInputOf(
-  input: Pick<MusicJobCreate, 'prompt' | 'vocal' | 'lyrics' | 'careful' | 'language' | 'structure'> & { video?: MusicVideoFit | null },
+  input: Pick<MusicJobCreate, 'prompt' | 'vocal' | 'lyrics' | 'careful' | 'language' | 'structure' | 'words'> & { video?: MusicVideoFit | null },
   screenLocale: 'ko' | 'en',
 ): MusicDesignInput {
   return {
@@ -123,7 +134,21 @@ export function designInputOf(
     video: input.video ?? null,
     language: input.language ?? screenLocale,
     locale: screenLocale,
+    words: wordsFor(input),
   };
+}
+
+/** The words go only where the engine writes the lyrics itself: vocals and nothing written. */
+function wordsFor(input: Pick<MusicJobCreate, 'vocal' | 'lyrics' | 'words'>): MusicWords | null {
+  if (!input.vocal || ownLyrics(input.lyrics) || !input.words) return null;
+  const { brand, mustInclude } = input.words;
+  if (!brand && !mustInclude?.length) return null;
+  return { ...(brand ? { brand: { name: brand.name, ...(brand.readAs ? { readAs: brand.readAs } : {}) } } : {}), ...(mustInclude?.length ? { mustInclude: [...mustInclude] } : {}) };
+}
+
+/** The words as one text, for the name check. */
+export function wordsText(words: MusicJobCreate['words']): string {
+  return [words?.brand?.name ?? '', words?.brand?.readAs ?? '', ...(words?.mustInclude ?? [])].join('\n');
 }
 
 /**
@@ -139,7 +164,6 @@ export function planMusic(
   const lyrics = input.vocal ? ownLyrics(input.lyrics) : '';
   const careful = input.careful === true;
   const way = musicWay({ vocal: input.vocal, lyrics, careful });
-  const title = musicTitle(input.prompt);
   const designInput = designInputOf(input, screenLocale);
   let design: MusicDesign;
   if (input.designed) {
@@ -151,6 +175,8 @@ export function planMusic(
   }
   // With the Architect on and nothing reviewed, the prepare step designs it; the fallback stands in until then.
   const prepared = Boolean(input.designed) || input.architect === false;
+  // The list name: the reviewed title, or the request's first words until the prepare step names it (../repo.ts).
+  const title = design.title || musicTitle(input.prompt);
   const request: MusicRequest =
     way === 'describe'
       ? { mode: 'describe', prompt: design.style, vocal: input.vocal }
@@ -189,6 +215,7 @@ export function planMusic(
         ...(lyrics && input.structure ? { structure: input.structure } : {}),
         ...(lyrics && input.targetSeconds ? { targetSeconds: input.targetSeconds } : {}),
         ...(input.video ? { video: input.video } : {}),
+        ...(designInput.words ? { words: designInput.words } : {}),
         ...(lyrics ? { lyricsBy: input.lyricsBy ? { flow: input.lyricsBy.flow, model: input.lyricsBy.model } : { flow: 'own' as const, model: null } } : {}),
         // The conditions the track was made under (§7.2): which engine and endpoint, which version of our terms.
         made: { engine: engine.id, endpoint, terms: SOUND_TERMS_VERSION },
@@ -255,6 +282,7 @@ export async function createMusicJob(deps: StudioDeps, viewer: Viewer, raw: unkn
       if (musicPaused(org, now.getTime())) return { paused: true as const };
       if (namedArtist(asked.prompt)) return { blocked: 'name' as const };
       if (asked.vocal && asked.lyrics && namedArtist(asked.lyrics)) return { blocked: 'lyrics' as const };
+      if (asked.words && namedArtist(wordsText(asked.words))) return { blocked: 'name' as const };
       // "더 고르게 만들기" hidden by the server setting: a request still carrying it is refused, nothing reserved.
       if (asked.careful === true && deps.env.soundMaxMode !== true) throw new StudioDenied('invalid');
       const strict = await strictMusicChecks(sql, org, now);

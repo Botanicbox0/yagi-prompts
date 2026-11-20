@@ -152,7 +152,8 @@ export function withoutAddedLines(marked: string, original: string): string {
 /* ------------------------------------------------------------------ checks without a model (§12.2, §12.3) */
 
 const ALLOWED_MARKS = /^\[(Intro|Verse(?: \d)?|Pre-Chorus|Chorus|Hook|Bridge|Outro|End)\]$/;
-const SUPERLATIVE = /최고|최초|유일|1위|넘버\s*원|\bno\.?\s*1\b|\bnumber one\b|\bthe best\b/i;
+/** A superlative or a claim (also kept out of a music design's title and notes, ./architect.ts). */
+export const SUPERLATIVE = /최고|최초|유일|1위|넘버\s*원|\bno\.?\s*1\b|\bnumber one\b|\bthe best\b/i;
 const HANGUL = /[가-힣]/g;
 
 function finalJong(ch: string): number {

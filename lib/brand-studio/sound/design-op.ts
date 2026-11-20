@@ -15,7 +15,7 @@ import { failure, guarded } from '../outcome';
 import { brandSummary } from '../prepare';
 import type { StudioDeps } from '../types';
 import { loadAllowance } from '../usage';
-import { designInputOf } from './music-jobs';
+import { designInputOf, wordsText } from './music-jobs';
 import { namedArtist } from './names';
 import { designForDeps } from './prepare-music';
 import { videoFitOf, videoStructure } from './video-fit';
@@ -47,6 +47,7 @@ export async function designMusicPreview(deps: StudioDeps, viewer: { userId: str
   if (!('name' in gate)) return gate;
   if (namedArtist(v.prompt)) return { ok: false, code: 'invalid', blocked: 'name' };
   if (v.vocal && v.lyrics && namedArtist(v.lyrics)) return { ok: false, code: 'invalid', blocked: 'lyrics' };
+  if (v.words && namedArtist(wordsText(v.words))) return { ok: false, code: 'invalid', blocked: 'name' };
   if (v.careful === true && deps.env.soundMaxMode !== true) return failure('invalid');
   if (!takeFreeIntelSlot(`music-design:${v.organizationId}`, FREE_INTEL_LIMITS.enhancePerMinute, now.getTime())) return failure('too_many_running');
   const locale: 'ko' | 'en' = viewer.locale === 'en' ? 'en' : 'ko';

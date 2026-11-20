@@ -10,7 +10,7 @@ import type { ProfileHeader } from './meta';
 
 export const SUNO_HEADER: ProfileHeader = {
   id: 'suno',
-  version: '2026-11-21.1',
+  version: '2026-11-21.2',
   models: ['suno-v6'],
   sources: [
     {
@@ -73,9 +73,9 @@ Write the style as ONE paragraph of plain English, 400 to 900 characters, in thi
 
 Never write a length in seconds or minutes, mixing console values, or a pile of adjectives. Never name a real singer, band, song, album, producer or label: describe the era and the musical traits instead. No brand names other than one the request itself gives, and never in the style.
 
-Title: a short title (at most 40 characters) in the language of the lyrics, or of the customer's request when there are none.
+Title: a short name for the track (at most 40 characters) in the language of the lyrics, or of the customer's request when there are none. It is the track's name in the customer's list: name the track, do not copy the request's first words, and never use a superlative or a claim (best, No.1, 최고, 1위).
 
-Notes: one plain sentence in the customer's language saying what you designed (genre, voice, feel), for the customer to read.`;
+Notes: one plain sentence in the customer's language saying what you designed (genre, voice, feel), for the customer to read. Describe the sound only: never repeat the request's claims or superlatives.`;
 // [official] no artist or song names (Suno blog); more direction is better (help); a written length is not kept (Suno's own
 // ad example: "15 seconds max" came back at 39 s); Max Mode is for long songs. [practitioner] English paragraph, one sentence per
 // instrument, order, BPM with a feel word. [aggregator] field limits (Sunra schema).

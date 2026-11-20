@@ -8,7 +8,7 @@ import { SUNO_HEADER, SUNO_PROFILE } from '@/lib/brand-studio/enhancer/profiles/
 import { createStudioJob, resetFreeIntelRateLimits } from '@/lib/brand-studio/jobs';
 import type { StudioProvider, StudioProviderRequest } from '@/lib/brand-studio/provider/types';
 import { runStudioOperation } from '@/lib/brand-studio/service';
-import { checkMusicDesign, designMusic, fallbackDesign, MUSIC_PROFILE_VERSION, reviewedDesign, safeNotes, type MusicDesignInput } from '@/lib/brand-studio/sound/architect';
+import { checkMusicDesign, designMusic, fallbackDesign, MUSIC_PROFILE_VERSION, reviewedDesign, safeNotes, subjectSentence, type MusicDesignInput } from '@/lib/brand-studio/sound/architect';
 import { markLyrics, withoutAddedLines } from '@/lib/brand-studio/sound/lyrics';
 import { describeSentence, musicTitle } from '@/lib/brand-studio/sound/music-text';
 import { requestId, studioDeps, studioFixture, viewerOf, type StudioFixture } from '../server/helpers';
@@ -65,7 +65,7 @@ describe('the Suno profile', () => {
 
 describe('the rule check after writing', () => {
   it('passes a good paragraph and catches every rule', () => {
-    expect(checkMusicDesign({ style: GOOD_STYLE }, 'describe')).toEqual([]);
+    expect(checkMusicDesign({ style: GOOD_STYLE, title: '맑은 아침' }, 'describe')).toEqual([]);
     const cases: Array<[string, RegExp]> = [
       ['Calm piano.', /too short/],
       [`${GOOD_STYLE} `.repeat(6), /over 1000/],
@@ -75,16 +75,17 @@ describe('the rule check after writing', () => {
       [`${GOOD_STYLE} Keep it to 30 seconds.`, /seconds or minutes/],
       [`${GOOD_STYLE} 15초 광고용.`, /seconds or minutes/],
     ];
-    for (const [style, problem] of cases) expect(checkMusicDesign({ style }, 'describe').join(' | '), style.slice(-40)).toMatch(problem);
+    for (const [style, problem] of cases) expect(checkMusicDesign({ style, title: '맑은 아침' }, 'describe').join(' | '), style.slice(-40)).toMatch(problem);
     expect(checkMusicDesign({ style: GOOD_STYLE, title: '' }, 'custom').join()).toMatch(/title is required/);
     expect(checkMusicDesign({ style: GOOD_STYLE, title: 'x'.repeat(41) }, 'custom').join()).toMatch(/title is over 40/);
     expect(checkMusicDesign({ style: GOOD_STYLE, title: '맑은 아침' }, 'custom')).toEqual([]);
   });
 
   it('holds out the ending, "no X" and brand-spelling rules until the founder has listened (2026-11-21.1)', () => {
-    expect(checkMusicDesign({ style: `${GOOD_STYLE} No vocals at all.` }, 'describe')).toEqual([]);
+    expect(checkMusicDesign({ style: `${GOOD_STYLE} No vocals at all.`, title: '맑은 아침' }, 'describe')).toEqual([]);
     expect(SUNO_PROFILE).not.toMatch(/How it ends|never "no X"/);
-    expect(SUNO_HEADER.version).toBe('2026-11-21.1');
+    // 2026-11-21.2 changed only the title and notes wording; the three held-out rules are still out.
+    expect(SUNO_HEADER.version).toBe('2026-11-21.2');
   });
 });
 
@@ -99,9 +100,11 @@ describe('designing', () => {
   });
 
   it('takes a model answer that passes the check, and records the model', async () => {
-    const { fetchStub, calls } = geminiAnswers({ style: GOOD_STYLE, title: '', notes: '잔잔한 어쿠스틱에 따뜻한 여성 보컬로 설계했어요.' });
+    const { fetchStub, calls } = geminiAnswers({ style: GOOD_STYLE, title: '맑은 아침', notes: '잔잔한 어쿠스틱에 따뜻한 여성 보컬로 설계했어요.' });
     const design = await designMusic(input({ vocal: true }), { fetch: fetchStub, env });
-    expect(design).toMatchObject({ source: 'model', style: GOOD_STYLE, notes: '잔잔한 어쿠스틱에 따뜻한 여성 보컬로 설계했어요.', profileVersion: MUSIC_PROFILE_VERSION });
+    // Sung with no lyrics: what the song is about follows the designed paragraph (eval fixes, 2026-11-21).
+    expect(design).toMatchObject({ source: 'model', title: '맑은 아침', notes: '잔잔한 어쿠스틱에 따뜻한 여성 보컬로 설계했어요.', profileVersion: MUSIC_PROFILE_VERSION });
+    expect(design.style).toBe(`${GOOD_STYLE} ${subjectSentence(input({ vocal: true }))}`);
     expect(design.llmModel).toBeTruthy();
     expect(calls).toHaveLength(1);
     expect(calls[0]!.body.systemInstruction.parts[0]!.text).toContain('Never name a real singer');
@@ -109,15 +112,15 @@ describe('designing', () => {
 
   it('shows the model’s notes only when they pass the name and technical-word check (review 1)', async () => {
     for (const notes of ['Suno v6에 맞춰 설계했어요.', '아이유 느낌으로 설계했어요.', '   ']) {
-      const { fetchStub } = geminiAnswers({ style: GOOD_STYLE, title: '', notes });
+      const { fetchStub } = geminiAnswers({ style: GOOD_STYLE, title: '맑은 아침', notes });
       expect((await designMusic(input({ vocal: true }), { fetch: fetchStub, env })).notes).toBeNull();
     }
     expect(safeNotes('잔잔한 어쿠스틱으로 설계했어요.')).toBe('잔잔한 어쿠스틱으로 설계했어요.');
   });
 
   it('gives one rewrite with the problems listed, then falls back', async () => {
-    const bad = { style: `${GOOD_STYLE} Keep it to 30 seconds.`, title: '', notes: 'x' };
-    const fixed = geminiAnswers(bad, { style: GOOD_STYLE, title: '', notes: 'ok' });
+    const bad = { style: `${GOOD_STYLE} Keep it to 30 seconds.`, title: '맑은 아침', notes: 'x' };
+    const fixed = geminiAnswers(bad, { style: GOOD_STYLE, title: '맑은 아침', notes: 'ok' });
     expect((await designMusic(input(), { fetch: fixed.fetchStub, env })).source).toBe('model');
     expect(fixed.calls).toHaveLength(2);
     expect(fixed.calls[1]!.body.contents[0]!.parts[0]!.text).toContain('seconds or minutes');
@@ -174,7 +177,7 @@ describe('a music run with the Architect', () => {
   });
 
   it('designs in the prepare step, sends the design, records it, and charges the same 16', async () => {
-    const { fetchStub } = geminiAnswers({ style: GOOD_STYLE, title: '', notes: 'ok' });
+    const { fetchStub } = geminiAnswers({ style: GOOD_STYLE, title: '맑은 아침', notes: 'ok' });
     const deps = studioDeps(f.sql, { env: liveEnv, provider: recording as never, intelDeps: { fetch: fetchStub, env: { GEMINI_API_KEY: 'k' } } });
     const created = await createStudioJob(deps, viewerOf(f.ids.owner), music());
     if (!('job' in created)) throw new Error(JSON.stringify(created));
@@ -265,9 +268,9 @@ describe('music.design (지금 설계하기)', () => {
   });
 
   it('answers the model’s design when a key is set', async () => {
-    const { fetchStub } = geminiAnswers({ style: GOOD_STYLE, title: '', notes: '따뜻하게 설계했어요.' });
+    const { fetchStub } = geminiAnswers({ style: GOOD_STYLE, title: '맑은 아침', notes: '따뜻하게 설계했어요.' });
     deps = studioDeps(f.sql, { env: studioEnv({ BRAND_STUDIO_PROVIDER: 'live', SUNRA_API_KEY: 'k', BRAND_SOUND_STUDIO: 'on' }), intelDeps: { fetch: fetchStub, env: { GEMINI_API_KEY: 'k' } } });
-    expect(await design()).toEqual({ ok: true, design: { mode: 'describe', style: GOOD_STYLE, title: musicTitle('아침 스킨케어 광고'), notes: '따뜻하게 설계했어요.', source: 'model' } });
+    expect(await design()).toEqual({ ok: true, design: { mode: 'describe', style: GOOD_STYLE, title: '맑은 아침', notes: '따뜻하게 설계했어요.', source: 'model' } });
   });
 
   it('keeps the gates, names, the hidden switch and the per-organization limit', async () => {

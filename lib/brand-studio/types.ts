@@ -393,7 +393,7 @@ export interface StudioMusicParams {
   vocal: boolean;
   /** The language sung in when there are vocals and no lyrics. */
   language: 'ko' | 'en';
-  /** The list name, made from the description. */
+  /** The list name at creation: a reviewed design's title, or the description's first words (the designed title replaces it in the view). */
   title: string;
   /** "더 고르게 만들기" (custom mode only). */
   careful: boolean;
@@ -409,6 +409,8 @@ export interface StudioMusicParams {
   targetSeconds?: number;
   /** SA4: the library video the music was fitted to (its length and cuts, read from what the library keeps). */
   video?: { assetId: string; seconds: number; cuts: number[] };
+  /** Sung with no lyrics: the brand (and how to write it) and the words to include, sent with the request. */
+  words?: { brand?: { name: string; readAs?: string | null } | null; mustInclude?: readonly string[] };
   /** The conditions snapshot: engine, endpoint, and our terms version. */
   made: { engine: string; endpoint: string; terms: string };
 }

@@ -14,6 +14,11 @@
  * The model is one server setting (./lyrics-model.ts, `BRAND_SOUND_LYRICS_MODEL`, checked against the five models
  * of the blind comparison) and the answer names it, so the music run can record who wrote its lyrics.
  *
+ * Time (real run of 2026-11-21: the default model's calls took 7.9 s at the median, 19 s at most, and one went past
+ * the old 25 s limit, which left the customer with an error): each call gets `LYRICS_TIMEOUTS.firstCallMs`, and a
+ * first model that times out or cannot be reached hands the request once to the fast model
+ * (`LYRICS_FALLBACK_MODEL`). The answer names the model that actually wrote the lyrics.
+ *
  * No credits; a per-organization limit per minute instead, and only while this month's allowance is open.
  * Local mode (`BRAND_STUDIO_PROVIDER=fake`) answers with fixed text: no network, no model.
  */
@@ -38,7 +43,7 @@ import {
   type LyricCheckInput,
   type LyricStructure,
 } from './lyrics';
-import { lyricsGeminiConfig, type LyricsModel } from './lyrics-model';
+import { isLyricsModel, lyricsGeminiConfig, type LyricsModel } from './lyrics-model';
 import { namedArtist } from './names';
 import { videoFitOf, videoTargetSeconds } from './video-fit';
 
@@ -159,24 +164,40 @@ export function draftProblems(req: LyricsRequest, text: string): { hard: string[
 }
 
 /**
+ * How long a draft may take. The route allows 300 s; the customer waits behind a live line in the dock. Worst case:
+ * the first model's call times out (40 s), then the fast model writes with its own rewrite (2 x 20 s).
+ */
+export const LYRICS_TIMEOUTS = { firstCallMs: 40_000, fallbackCallMs: 20_000, totalMs: 120_000 } as const;
+/** The model a timed-out or unreachable first model hands the request to, once (fastest of the five compared). */
+export const LYRICS_FALLBACK_MODEL: LyricsModel = 'gemini-3.8-flash';
+
+/**
  * Writes or polishes lyrics: one call, one rewrite on any broken rule, then the hard rules decide.
  * Throws on a transport failure (the caller answers `provider_unavailable`); `null` when the rules still fail.
+ * `onCall` hears each call's model and time (the eval keeps them).
  */
 export async function writeLyrics(
   req: LyricsRequest,
   config: GeminiConfig,
   fetchImpl: typeof fetch,
   log?: (event: string, detail: Record<string, unknown>) => void,
+  options: { callMs?: number; onCall?: (call: { model: string; ms: number; ok: boolean }) => void } = {},
 ): Promise<string | null> {
   let problems: string[] = [];
   for (let attempt = 0; attempt < 2; attempt += 1) {
-    const answer = await callGeminiJson(config, fetchImpl, {
-      system: LYRICS_SYSTEM,
-      parts: [{ text: lyricsTask(req, problems) }],
-      schema: SCHEMA as unknown as Record<string, unknown>,
-      thinking: 'LOW',
-      timeoutMs: 25_000,
-    });
+    const started = Date.now();
+    let answer: unknown;
+    try {
+      answer = await callGeminiJson(config, fetchImpl, {
+        system: LYRICS_SYSTEM,
+        parts: [{ text: lyricsTask(req, problems) }],
+        schema: SCHEMA as unknown as Record<string, unknown>,
+        thinking: 'LOW',
+        timeoutMs: options.callMs ?? LYRICS_TIMEOUTS.firstCallMs,
+      });
+    } finally {
+      options.onCall?.({ model: config.model, ms: Date.now() - started, ok: answer !== undefined });
+    }
     const text = stanzasText(answer);
     const found = draftProblems(req, text);
     if (found.hard.length === 0 && (found.soft.length === 0 || attempt === 1)) return text;
@@ -184,6 +205,36 @@ export async function writeLyrics(
     log?.('studio_lyrics_rule_retry', { attempt, hard: found.hard.length, soft: found.soft.length });
   }
   return null;
+}
+
+/** A timeout or a failure to reach the model (not a refusal, not a bad answer): worth one try on the fast model. */
+export function isTransportFailure(error: unknown): boolean {
+  if (!(error instanceof Error)) return false;
+  if (error.name === 'AbortError' || error.name === 'TimeoutError' || /aborted|timed? ?out/i.test(error.message)) return true;
+  if (error instanceof TypeError) return true; // fetch failed: DNS, reset, offline
+  return /^gemini_http_(408|429|5\d\d)$/.test(error.message);
+}
+
+/**
+ * The draft as the studio runs it: the configured model first; a timeout or a transport failure there hands the
+ * request once to `LYRICS_FALLBACK_MODEL`. Returns the lyrics (or null when the rules still fail) and the model
+ * that wrote them, so the run records the right one. A refusal or a second failure throws.
+ */
+export async function writeLyricsWithFallback(
+  req: LyricsRequest,
+  config: GeminiConfig,
+  fetchImpl: typeof fetch,
+  log?: (event: string, detail: Record<string, unknown>) => void,
+  onCall?: (call: { model: string; ms: number; ok: boolean }) => void,
+): Promise<{ text: string | null; model: string }> {
+  try {
+    return { text: await writeLyrics(req, config, fetchImpl, log, { callMs: LYRICS_TIMEOUTS.firstCallMs, onCall }), model: config.model };
+  } catch (error) {
+    if (config.model === LYRICS_FALLBACK_MODEL || !isTransportFailure(error)) throw error;
+    log?.('studio_lyrics_fallback_model', { from: config.model, to: LYRICS_FALLBACK_MODEL, message: error instanceof Error ? error.message.slice(0, 120) : 'unknown' });
+    const fast = { ...config, model: LYRICS_FALLBACK_MODEL };
+    return { text: await writeLyrics(req, fast, fetchImpl, log, { callMs: LYRICS_TIMEOUTS.fallbackCallMs, onCall }), model: LYRICS_FALLBACK_MODEL };
+  }
 }
 
 const LOCAL_DRAFT: Readonly<Record<'ko' | 'en', readonly string[]>> = {
@@ -254,13 +305,13 @@ export async function draftLyrics(deps: StudioDeps, viewer: Viewer, raw: unknown
   if (deps.env.provider === 'fake' && !lyricsGeminiConfig(deps.intelDeps.env)) return { ok: true, flow: v.flow, lyrics: localLyrics(req), model: 'local' };
   const config = lyricsGeminiConfig(deps.intelDeps.env);
   if (!config) return failure('provider_unavailable');
-  let text: string | null;
+  let written: { text: string | null; model: string };
   try {
-    text = await writeLyrics(req, config, deps.intelDeps.fetch, deps.log);
+    written = await writeLyricsWithFallback(req, config, deps.intelDeps.fetch, deps.log);
   } catch (error) {
     deps.log?.('studio_lyrics_draft_failed', { flow: v.flow, message: error instanceof Error ? error.message.slice(0, 120) : 'unknown' });
     return failure('provider_unavailable');
   }
-  if (!text) return failure('failed');
-  return { ok: true, flow: v.flow, lyrics: text, model: config.model as LyricsModel };
+  if (!written.text) return failure('failed');
+  return { ok: true, flow: v.flow, lyrics: written.text, model: isLyricsModel(written.model) ? written.model : (config.model as LyricsModel) };
 }

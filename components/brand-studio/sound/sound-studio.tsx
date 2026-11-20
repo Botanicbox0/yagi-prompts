@@ -202,6 +202,7 @@ export function SoundStudio(props: SoundStudioProps) {
             language: locale,
             ...(input.vocal && input.lyrics ? { lyrics: input.lyrics, structure: input.structure, targetSeconds: input.targetSeconds, ...(input.lyricsBy ? { lyricsBy: input.lyricsBy } : {}), ...(input.videoAssetId ? { videoAssetId: input.videoAssetId } : {}) } : {}),
             ...(input.careful ? { careful: true } : {}),
+            ...(input.vocal && !input.lyrics && input.words ? { words: input.words } : {}),
             architect: input.architect,
             ...(input.designed ? { designed: input.designed } : {}),
           },
@@ -558,6 +559,7 @@ export function SoundStudio(props: SoundStudioProps) {
               vocal: request.vocal,
               language: locale,
               ...(request.vocal && request.lyrics ? { lyrics: request.lyrics } : {}),
+              ...(request.vocal && !request.lyrics && request.words ? { words: request.words } : {}),
               ...(request.careful ? { careful: true } : {}),
             });
             if (!isFailure(answer)) return { design: answer.design };

@@ -4,6 +4,19 @@ Every rule change bumps the `version` in the file's header, adds a line here, an
 tables of `scripts/architect-eval.ts` in the PR. Jobs record the versions they were written with
 (`work.enhancer.profileVersion`, `coreVersion`).
 
+## suno 2026-11-21.2 (music: the real text-model eval)
+
+From the lead's real run of 2026-11-21 (25 designs on gemini-4-hydrogen, all `pass`, read in full):
+- **Title** is the track's name in the list in both modes, not only custom mode: a short name of its own, never
+  the request's first words ("브랜드 모아 (레몬 탄산수)" came back as the title) and never a superlative. The check
+  (`checkMusicDesign`) now holds the title in both modes and catches both, with one rewrite.
+- **Notes** describe the sound only and never repeat the request's claims ("국내 최고 브랜드의 위상에 어울리는" came
+  back). `safeNotes` drops notes with a superlative; the screen shows its own sentence instead.
+- Not a profile rule: sung with no lyrics, describe mode sent only this paragraph and the brand and message never
+  reached the engine. The studio now adds its own sentence after the paragraph (`subjectSentence`: the request
+  quoted, the brand and words to include), and the dock drafts the lyrics first (docs/BRAND-SOUND-STUDIO.md §12.9).
+- The three held-out rules (ending, "no X", Latin vs Hangul) stay out.
+
 ## suno 2026-11-21.1 (music: three rules held out, sung confirmation)
 
 - **Held out until the founder has listened** (docs/BRAND-SOUND-STUDIO.md §12.8, listening sheet pairs b, e, f): the
