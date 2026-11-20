@@ -43,7 +43,7 @@ export const MusicComposer = forwardRef<
     busy: boolean;
     /** Example descriptions, for a brand that has made no music yet (the first minute, §4.2). */
     showExamples: boolean;
-    /** "더 고르게 만들기" is offered (server setting `BRAND_SOUND_MAX_MODE` not `off`). */
+    /** "더 고르게 만들기" is offered (server setting `BRAND_SOUND_MAX_MODE=on`; hidden by default). */
     maxMode: boolean;
     error: string | null;
     onCreate: (input: ComposerInput) => void;

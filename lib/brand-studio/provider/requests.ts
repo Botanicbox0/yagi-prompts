@@ -269,8 +269,9 @@ export function buildStudioRequest(input: StudioRequestInput): StudioProviderReq
     case 'music':
       return musicRequestOf(input);
     case 'sound_effect':
-      // Sound effects arrive with their own slice (docs/BRAND-SOUND-STUDIO.md §7.6, SS5).
-      throw new StudioRequestError('sound effects are not built yet');
+      // This job kind is for the sound studio's own effects tab (docs/BRAND-SOUND-STUDIO.md §7.6, SS5). The sound
+      // effects the video studio makes today run on their own working path (lib/brand-studio/music/sfx.ts).
+      throw new StudioRequestError('sound_effect jobs arrive with SS5');
   }
 }
 

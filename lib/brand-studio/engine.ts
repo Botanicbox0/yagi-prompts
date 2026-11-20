@@ -18,7 +18,7 @@ import { failJob, finishJob } from './finish';
 import { claimJobs, releaseJob, saveJob, tokenOf, failPendingOutputs } from './job-store';
 import { closeLane, failoverLane, heartbeatFresh, lanesUp, loadLaneClosures, loadLaneHeartbeats, routeJob } from './lanes';
 import { studioModel, type StudioLane, type StudioModel } from './models';
-import { musicEngineOfModel } from './sound/engine';
+import { MUSIC_WAIT_CEILING_MS, musicEngineOfModel } from './sound/engine';
 import { PrepareFailure, prepareJob, providerUrl, sendPrompt } from './prepare';
 import { buildStudioRequest, StudioRequestError, type StudioRequestInput } from './provider/requests';
 import { StudioProviderError } from './provider/types';
@@ -27,6 +27,12 @@ import type { JobRow, OutputRow, StudioDeps } from './types';
 const MAX_ATTEMPTS = 5;
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const nowOf = (deps: StudioDeps) => deps.now?.() ?? new Date();
+
+function waitedPast(job: JobRow, now: Date, ms: number): boolean {
+  const since = job.started_at ?? job.created_at;
+  const at = since instanceof Date ? since.getTime() : Date.parse(String(since));
+  return Number.isFinite(at) && now.getTime() - at > ms;
+}
 
 /** What the lane router needs of a job's model: a studio model, or a music engine (API lane only, `mcp: null`). */
 function laneModelOf(id: string): Pick<StudioModel, 'mcp'> | null {
@@ -174,7 +180,20 @@ async function poll(deps: StudioDeps, job: JobRow, token: string): Promise<JobRo
       }
     }
   }
-  const done = outputs.every((o) => results[String(o.idx)] || failures[String(o.idx)]);
+  let done = outputs.every((o) => results[String(o.idx)] || failures[String(o.idx)]);
+  // Music has a ceiling of its own (sound/engine.ts): an answer still missing after it fails the run, which then
+  // settles at nothing. An answer already there when we look was taken above.
+  if (!done && job.kind === 'music' && waitedPast(job, nowOf(deps), MUSIC_WAIT_CEILING_MS)) {
+    for (const o of outputs) {
+      const key = String(o.idx);
+      if (results[key] || failures[key]) continue;
+      failures[key] = { code: 'failed', detail: 'no answer within the music ceiling (10 minutes)' };
+      if (o.provider_task_id) await provider.cancel?.(o.provider_task_id).catch(() => undefined);
+    }
+    deps.log?.('studio_music_ceiling', { jobId: job.id });
+    changed = true;
+    done = true;
+  }
   if (!changed && !done) return null;
   // Every result was stopped by the safety review and nothing came back: one retry with the wording
   // looked over (lib/brand-studio/block-retry.ts). The retry is reviewed again like any other run.
