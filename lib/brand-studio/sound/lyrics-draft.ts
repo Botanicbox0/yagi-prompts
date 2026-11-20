@@ -164,10 +164,11 @@ export function draftProblems(req: LyricsRequest, text: string): { hard: string[
 }
 
 /**
- * How long a draft may take. The route allows 300 s; the customer waits behind a live line in the dock. Worst case:
- * the first model's call times out (40 s), then the fast model writes with its own rewrite (2 x 20 s).
+ * How long a draft may take. The route allows 300 s; the customer waits behind a live line in the dock. Each call
+ * gets its own limit and never more than what is left of `totalMs`: a call with less than `minCallMs` left is not
+ * started (no rewrite, no hand-over), so the whole draft ends within `totalMs`.
  */
-export const LYRICS_TIMEOUTS = { firstCallMs: 40_000, fallbackCallMs: 20_000, totalMs: 120_000 } as const;
+export const LYRICS_TIMEOUTS = { firstCallMs: 40_000, fallbackCallMs: 20_000, totalMs: 120_000, minCallMs: 5_000 } as const;
 /** The model a timed-out or unreachable first model hands the request to, once (fastest of the five compared). */
 export const LYRICS_FALLBACK_MODEL: LyricsModel = 'gemini-3.8-flash';
 
@@ -181,10 +182,19 @@ export async function writeLyrics(
   config: GeminiConfig,
   fetchImpl: typeof fetch,
   log?: (event: string, detail: Record<string, unknown>) => void,
-  options: { callMs?: number; onCall?: (call: { model: string; ms: number; ok: boolean }) => void } = {},
+  options: { callMs?: number; deadline?: number; onCall?: (call: { model: string; ms: number; ok: boolean }) => void } = {},
 ): Promise<string | null> {
+  const deadline = options.deadline ?? Date.now() + LYRICS_TIMEOUTS.totalMs;
   let problems: string[] = [];
+  let kept: string | null = null;
   for (let attempt = 0; attempt < 2; attempt += 1) {
+    const left = deadline - Date.now();
+    if (left < LYRICS_TIMEOUTS.minCallMs) {
+      // No time for this call: before any answer it is a timeout; for the rewrite, the first answer stands if only a
+      // soft rule was off (as a rewrite that still misses one would be accepted).
+      if (attempt === 0) throw Object.assign(new Error('lyrics draft out of time'), { name: 'TimeoutError' });
+      return kept;
+    }
     const started = Date.now();
     let answer: unknown;
     try {
@@ -193,7 +203,7 @@ export async function writeLyrics(
         parts: [{ text: lyricsTask(req, problems) }],
         schema: SCHEMA as unknown as Record<string, unknown>,
         thinking: 'LOW',
-        timeoutMs: options.callMs ?? LYRICS_TIMEOUTS.firstCallMs,
+        timeoutMs: Math.min(options.callMs ?? LYRICS_TIMEOUTS.firstCallMs, left),
       });
     } finally {
       options.onCall?.({ model: config.model, ms: Date.now() - started, ok: answer !== undefined });
@@ -201,6 +211,7 @@ export async function writeLyrics(
     const text = stanzasText(answer);
     const found = draftProblems(req, text);
     if (found.hard.length === 0 && (found.soft.length === 0 || attempt === 1)) return text;
+    kept = found.hard.length === 0 ? text : null;
     problems = [...found.hard, ...found.soft];
     log?.('studio_lyrics_rule_retry', { attempt, hard: found.hard.length, soft: found.soft.length });
   }
@@ -227,13 +238,16 @@ export async function writeLyricsWithFallback(
   log?: (event: string, detail: Record<string, unknown>) => void,
   onCall?: (call: { model: string; ms: number; ok: boolean }) => void,
 ): Promise<{ text: string | null; model: string }> {
+  const deadline = Date.now() + LYRICS_TIMEOUTS.totalMs;
   try {
-    return { text: await writeLyrics(req, config, fetchImpl, log, { callMs: LYRICS_TIMEOUTS.firstCallMs, onCall }), model: config.model };
+    return { text: await writeLyrics(req, config, fetchImpl, log, { callMs: LYRICS_TIMEOUTS.firstCallMs, deadline, onCall }), model: config.model };
   } catch (error) {
     if (config.model === LYRICS_FALLBACK_MODEL || !isTransportFailure(error)) throw error;
+    // Not enough of the total left for the fast model to answer: the first failure stands.
+    if (deadline - Date.now() < LYRICS_TIMEOUTS.minCallMs) throw error;
     log?.('studio_lyrics_fallback_model', { from: config.model, to: LYRICS_FALLBACK_MODEL, message: error instanceof Error ? error.message.slice(0, 120) : 'unknown' });
     const fast = { ...config, model: LYRICS_FALLBACK_MODEL };
-    return { text: await writeLyrics(req, fast, fetchImpl, log, { callMs: LYRICS_TIMEOUTS.fallbackCallMs, onCall }), model: LYRICS_FALLBACK_MODEL };
+    return { text: await writeLyrics(req, fast, fetchImpl, log, { callMs: LYRICS_TIMEOUTS.fallbackCallMs, deadline, onCall }), model: LYRICS_FALLBACK_MODEL };
   }
 }
 
