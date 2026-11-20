@@ -10,11 +10,12 @@ import {
   type CaptionPosition,
   type ComposeAspect,
   type ComposeClip,
+  type ComposerProject,
 } from '@/lib/brand-studio/compose/timeline';
 import { snapFilmFps, sourceFramesOf } from '@/lib/brand-studio/editor-v2/fps';
 import { emptyFilm, realAssistAllowed, realDoc, sampleHrefFor, workspaceLocked } from '@/lib/brand-studio/editor-v2/real';
 import { deepLinkSource, parseClipParam, sourceSeconds, storedClipForSource, type EditorSource } from '@/lib/brand-studio/editor-v2/sources';
-import { fromStored, mergeFilmText, sourcesToMeasure, type MeasuredSource } from '@/lib/brand-studio/editor-v2/stored';
+import { fromStored, inheritClip, mergeFilmText, sourcesToMeasure, toStored, type MeasuredSource } from '@/lib/brand-studio/editor-v2/stored';
 import {
   FIXTURE_MATERIALS,
   FIXTURE_MEASURED_LUFS,
@@ -346,11 +347,14 @@ export function useEditor(copy: StudioEditorCopy, options: EditorOptions = {}) {
 
   // ── The organization's film: read, written, kept in step with the other screens ──
 
-  /** A new cut (a split's right half, a copy) carries what the cut it came from carried. */
+  /**
+   * A new cut (a split's right half, a copy) carries what the cut it came from carried, and remembers
+   * that cut as its parent (so a colour grade scoped to the parent covers it in the export).
+   */
   function remember(pairs: ReadonlyArray<readonly [string, string]>) {
     for (const [to, from] of pairs) {
       const origin = catalogue.current[from];
-      if (origin && !catalogue.current[to]) catalogue.current[to] = { ...origin, id: to };
+      if (origin && !catalogue.current[to]) catalogue.current[to] = inheritClip(origin, to);
     }
   }
 
@@ -402,6 +406,23 @@ export function useEditor(copy: StudioEditorCopy, options: EditorOptions = {}) {
     if (writeFilmText(film.organizationId, text)) lastText.current = text;
     else setStorageOk(false);
   }, []);
+
+  /**
+   * The stored film the export carries besides the cuts (real film only; `null` on the sample film).
+   * What waits to be saved is written first, then the key is read back and the cuts on screen are put
+   * onto it the way the next save would, so captions, the colour grade, music, sound effects and still
+   * overlays made in the current editor (or the sound studio) go into the file with exactly these cuts,
+   * even when this browser could not write.
+   */
+  const filmForExport = useCallback((): ComposerProject | null => {
+    const film = realRef.current;
+    if (!film) return null;
+    flush();
+    const read = readFilmText(film.organizationId);
+    const sequence = docRef.current.sequence;
+    const current = (read.ok ? parseStoredProject(read.text) : null) ?? emptyComposerProject(sequence.aspect);
+    return toStored(sequence, current, { known: catalogue.current, guessedSources: Object.keys(unknownRef.current) });
+  }, [flush]);
 
   // First read, after mount. Without browser storage the film lives in memory for this visit.
   useEffect(() => {
@@ -1075,6 +1096,7 @@ export function useEditor(copy: StudioEditorCopy, options: EditorOptions = {}) {
     setAssistDock,
     exportOpen,
     setExportOpen,
+    filmForExport,
     shortcutsOpen,
     setShortcutsOpen,
     shortcutPrefs,

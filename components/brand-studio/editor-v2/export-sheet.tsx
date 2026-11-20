@@ -17,30 +17,46 @@ import styles from './editor-v2.module.css';
  * what it will not carry, then one button. The export runs in the browser and frame by frame; the sheet
  * can be closed while it runs and editing goes on, because the file is made from the film as it was
  * when the button was pressed.
+ *
+ * On the organization's own film the file also carries what the stored film holds besides the cuts
+ * (`api.filmForExport()`: captions, colour grade, music, sound effects, still overlays made in the
+ * current editor), read when the sheet opens to name what cannot go in, and read again the moment the
+ * export starts. The sample film's workspaces (findings, looks, titles, sample music, caption styles)
+ * have no part in it there. People who may only look at the film cannot export it.
  */
-export function ExportSheet({ api, extras = null }: { api: EditorApi; extras?: ComposerProject | null }) {
+export function ExportSheet({ api }: { api: EditorApi }) {
   const { copy, doc, sequence } = api;
   const e = copy.export;
   const job = useSyncExternalStore(subscribeExportJob, exportJobSnapshot, idleExportJob);
   const [supported, setSupported] = useState(true);
+  const [extras, setExtras] = useState<ComposerProject | null>(null);
   useEffect(() => setSupported(browserCanExport()), []);
   useEffect(() => watchExportJob(), []);
+  const { real, filmForExport } = api;
+  useEffect(() => {
+    if (real) setExtras(filmForExport());
+  }, [real, filmForExport, sequence]);
 
-  const open = (Object.keys(api.openCount) as EditorWorkspace[]).filter((workspace) => api.openCount[workspace] > 0);
+  // The sample film's document (looks, titles, music, sound fixes, caption output) says nothing about a real film.
+  const sampleDoc = real ? null : doc;
+  const open = real ? [] : (Object.keys(api.openCount) as EditorWorkspace[]).filter((workspace) => api.openCount[workspace] > 0);
   const openTotal = open.reduce((sum, workspace) => sum + api.openCount[workspace], 0);
   const frames = totalFrames(sequence);
   const empty = frames === 0;
-  const missing = notIncluded({ sequence, doc, extras });
+  const missing = notIncluded({ sequence, doc: sampleDoc, extras: real ? extras : null });
   const running = job.status === 'running';
+  const blocked = empty || !supported || api.readOnly;
 
   const start = () => {
-    if (empty || !supported || running) return;
+    if (blocked || running) return;
+    // The stored film as it is the moment export starts, with whatever waited to be saved written first.
+    const film = real ? filmForExport() : null;
     startExport({
       sequence,
       reframe: doc.reframe,
-      extras,
-      burnCaptions: burnsCaptions(doc),
-      captionText: writesCaptionFile(doc, sequence) ? captionsToSrt(sequence.captions, sequence.fps) : null,
+      extras: film,
+      burnCaptions: burnsCaptions(sampleDoc),
+      captionText: writesCaptionFile(sampleDoc, sequence) ? captionsToSrt(sequence.captions, sequence.fps) : null,
       notify: (outcome) => api.say(outcome === 'done' ? e.toastDone : e.toastFailed),
     });
   };
@@ -53,29 +69,31 @@ export function ExportSheet({ api, extras = null }: { api: EditorApi; extras?: C
           <EditorIcon name="close" />
         </button>
       </header>
-      <section className={styles.section}>
-        <h3>{e.checks}</h3>
-        <p className={styles.note}>{openTotal > 0 ? fill(e.open, { count: openTotal }) : e.clear}</p>
-        {open.length > 0 && (
-          <ul className={styles.findings}>
-            {open.map((workspace) => (
-              <li key={workspace} className={styles.finding}>
-                <p>{copy.workspaces[workspace]} · {api.openCount[workspace]}</p>
-                <button
-                  type="button"
-                  className={styles.fixBtn}
-                  onClick={() => {
-                    api.setWorkspace(workspace);
-                    api.setExportOpen(false);
-                  }}
-                >
-                  {e.show}
-                </button>
-              </li>
-            ))}
-          </ul>
-        )}
-      </section>
+      {!real && (
+        <section className={styles.section}>
+          <h3>{e.checks}</h3>
+          <p className={styles.note}>{openTotal > 0 ? fill(e.open, { count: openTotal }) : e.clear}</p>
+          {open.length > 0 && (
+            <ul className={styles.findings}>
+              {open.map((workspace) => (
+                <li key={workspace} className={styles.finding}>
+                  <p>{copy.workspaces[workspace]} · {api.openCount[workspace]}</p>
+                  <button
+                    type="button"
+                    className={styles.fixBtn}
+                    onClick={() => {
+                      api.setWorkspace(workspace);
+                      api.setExportOpen(false);
+                    }}
+                  >
+                    {e.show}
+                  </button>
+                </li>
+              ))}
+            </ul>
+          )}
+        </section>
+      )}
       <dl className={styles.exportFacts}>
         <div>
           <dt>{copy.cut.film.shape}</dt>
@@ -87,7 +105,7 @@ export function ExportSheet({ api, extras = null }: { api: EditorApi; extras?: C
         </div>
         <div>
           <dt>{e.captions}</dt>
-          <dd>{sequence.captions.length > 0 ? copy.captions.output[doc.captionSettings.output] : e.captionsNone}</dd>
+          <dd>{sequence.captions.length > 0 ? copy.captions.output[sampleDoc ? sampleDoc.captionSettings.output : 'burn'] : e.captionsNone}</dd>
         </div>
       </dl>
       {missing.length > 0 && (
@@ -107,8 +125,12 @@ export function ExportSheet({ api, extras = null }: { api: EditorApi; extras?: C
         </button>
       ) : (
         <>
-          {(empty || !supported) && <p className={styles.note}>{empty ? e.empty : e.unsupported}</p>}
-          <button type="button" className={styles.exportBtn} onClick={start} disabled={empty || !supported} data-editor-export-start>
+          {blocked && (
+            <p className={styles.note} data-editor-export-blocked={api.readOnly ? 'read-only' : empty ? 'empty' : 'unsupported'}>
+              {api.readOnly ? copy.real.readOnly : empty ? e.empty : e.unsupported}
+            </p>
+          )}
+          <button type="button" className={styles.exportBtn} onClick={start} disabled={blocked} data-editor-export-start>
             <EditorIcon name="download" />
             {job.status === 'failed' && job.reason !== 'cancelled' ? e.retry : e.start}
           </button>

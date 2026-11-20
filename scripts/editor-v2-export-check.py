@@ -14,7 +14,7 @@ source frame number the timeline put there. Finally the same file is played to t
 Needs Python Playwright with Chromium (the full build: `playwright install chromium`), and ffmpeg/ffprobe on PATH. Launches its own browser with a fresh
 profile and talks only to the address below. Not part of the vitest suite.
 
-  EDITOR_BASE_URL=http://localhost:3613 EDITOR_ORG_ID=<organization id> python scripts/editor-v2-export-check.py <out-dir>
+  EDITOR_BASE_URL=http://localhost:3611 EDITOR_ORG_ID=<organization id> python scripts/editor-v2-export-check.py <out-dir>
 
 Keeps the exported file and 1440x900 captures of the sheet during and after the export in <out-dir>.
 """
@@ -26,7 +26,7 @@ import time
 
 from playwright.sync_api import sync_playwright
 
-BASE = os.environ.get('EDITOR_BASE_URL', 'http://localhost:3613')
+BASE = os.environ.get('EDITOR_BASE_URL', 'http://localhost:3611')
 ORG = os.environ.get('EDITOR_ORG_ID', '')
 OUT = sys.argv[1] if len(sys.argv) > 1 else None
 FPS = 24
@@ -106,6 +106,8 @@ def main():
     if not OUT:
         print('usage: editor-v2-export-check.py <out-dir>')
         sys.exit(2)
+    if not BASE.startswith(('http://localhost:', 'http://127.0.0.1:')):
+        sys.exit('EDITOR_BASE_URL must be a local address')
     os.makedirs(OUT, exist_ok=True)
     with sync_playwright() as p:
         # The full Chromium build in new headless mode: Playwright's default headless shell crashes the
@@ -117,7 +119,8 @@ def main():
         page = context.new_page()
         errors = []
         page.on('pageerror', lambda e: errors.append(str(e)))
-        url = f'{BASE}/brand/studio/editor' + (f'?organizationId={ORG}' if ORG else '')
+        # The sample film (`?sample=1`); the organization's own film is exported by editor-v2-real-export-check.py.
+        url = f'{BASE}/brand/studio/editor?sample=1' + (f'&organizationId={ORG}' if ORG else '')
         page.goto(url, wait_until='domcontentloaded', timeout=180000)
         page.wait_for_selector('[data-studio-editor-v2]', timeout=90000)
         page.wait_for_timeout(1500)

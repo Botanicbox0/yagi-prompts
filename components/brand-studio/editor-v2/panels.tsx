@@ -604,9 +604,6 @@ function CutPanel({ api }: { api: EditorApi }) {
   return (
     <>
       <PanelHead title={copy.panel.film} meta={fill(copy.panel.filmSummary, { count: sequence.clips.length, duration: formatTimecode(api.total, fps) })} />
-      {api.real && (api.readOnly || !api.storageOk) && (
-        <p className={styles.note} role="status" data-editor-film-note>{api.readOnly ? copy.real.readOnly : copy.real.noStorage}</p>
-      )}
       <Section title={c.film.shape}>
         <div className={styles.shapeGrid} role="group" aria-label={c.film.shape}>
           {COMPOSE_ASPECTS.map((aspect) => {

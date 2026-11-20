@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useRef } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { fill } from '@/components/brand-studio/copy';
 import { EDITOR_WORKSPACES, type EditorWorkspace } from '@/lib/brand-studio/editor-v2/model';
 import { actionFor, bindingFromEvent, formatBinding, typingTarget } from '@/lib/brand-studio/editor-v2/shortcuts';
@@ -81,15 +81,19 @@ export function EditorV2({ copy, currentEditorHref, initialWorkspace, real }: Ed
           {real ? (
             <>
               <h1>{fill(copy.real.filmName, { name: real.organizationName })}</h1>
-              <span className={styles.noticeBody} data-editor-real-notice>
-                {api.readOnly ? copy.real.readOnly : api.storageOk ? copy.real.notice : copy.real.noStorage}
-              </span>
+              {api.readOnly ? (
+                <HeaderNotice state="read-only" full={copy.real.readOnly} short={copy.real.readOnlyShort} />
+              ) : api.storageOk ? (
+                <HeaderNotice state="saved" full={copy.real.notice} short={copy.real.noticeShort} />
+              ) : (
+                <HeaderNotice state="no-storage" full={copy.real.noStorage} short={copy.real.noStorageShort} />
+              )}
             </>
           ) : (
             <>
               <h1>{copy.filmName}</h1>
-              <span className={styles.noticeBadge} data-editor-notice>{copy.notice.badge}</span>
-              <span className={styles.noticeBody}>{copy.notice.body}</span>
+              <span className={styles.noticeBadge} title={copy.notice.body} data-editor-notice>{copy.notice.badge}</span>
+              <HeaderNotice state="sample" full={copy.notice.body} short="" />
             </>
           )}
         </div>
@@ -153,5 +157,41 @@ export function EditorV2({ copy, currentEditorHref, initialWorkspace, real }: Ed
       {api.shortcutsOpen && <ShortcutsPanel api={api} />}
       {api.toast && <p className={styles.toast} role="status" data-editor-toast>{api.toast}</p>}
     </div>
+  );
+}
+
+/**
+ * The line beside the film's name. The whole sentence shows where the header has room for it; where it
+ * does not (1280-wide screens, a long organization name) a short form shows instead, never a sentence
+ * cut off in the middle, and the whole sentence stays in the tooltip and for screen readers.
+ */
+function HeaderNotice({ full, short, state }: { full: string; short: string; state: string }) {
+  const box = useRef<HTMLSpanElement>(null);
+  const measure = useRef<HTMLSpanElement>(null);
+  const [fits, setFits] = useState(false);
+  useLayoutEffect(() => {
+    const room = box.current;
+    const sentence = measure.current;
+    if (!room || !sentence) return;
+    const check = () => setFits(sentence.offsetWidth <= room.clientWidth);
+    check();
+    const observer = new ResizeObserver(check);
+    observer.observe(room);
+    return () => observer.disconnect();
+  }, [full]);
+  return (
+    <span ref={box} className={styles.noticeBody} title={full} data-editor-real-notice={state === 'sample' ? undefined : state} data-editor-line-shown={fits ? 'full' : 'short'}>
+      <span ref={measure} className={styles.noticeMeasure} aria-hidden="true">
+        {full}
+      </span>
+      {fits ? (
+        full
+      ) : (
+        <>
+          <span aria-hidden="true">{short}</span>
+          <span className={styles.srOnly}>{full}</span>
+        </>
+      )}
+    </span>
   );
 }

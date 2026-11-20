@@ -60,9 +60,35 @@ export interface FrameV2Block {
   /** The footage's rate could not be measured; `sourceFps` is the film's. */
   rateGuessed?: true;
   mirror: FrameV2Mirror;
+  /**
+   * The cuts this one was split or copied from in v2, nearest first (at most `MAX_LINEAGE`). The new
+   * cut carries the parent's stored fields (its sound offset among them); this line lets a colour grade
+   * the current editor scoped to the parent cover the pieces too (export-plan.ts `storedCutFor`).
+   */
+  from?: string[];
 }
 
 export type StoredClip = ComposeClip & { frameV2?: FrameV2Block };
+
+/** The longest line of parents a cut keeps. */
+export const MAX_LINEAGE = 32;
+
+/** The cuts a stored clip was split or copied from in v2, nearest first; `[]` when it was not. */
+export function lineageOf(clip: ComposeClip): string[] {
+  const from = ((clip as StoredClip).frameV2 as { from?: unknown } | undefined)?.from;
+  if (!Array.isArray(from)) return [];
+  return from.filter((id): id is string => typeof id === 'string' && id !== '').slice(0, MAX_LINEAGE);
+}
+
+/**
+ * The stored clip for a cut v2 makes from `parent` (a split's right half, a copy): every field the
+ * parent carries, a new id, and the parent at the head of its line. Its frame data is written on save.
+ */
+export function inheritClip(parent: ComposeClip, id: string): ComposeClip {
+  const block = (parent as StoredClip).frameV2;
+  const from = [parent.id, ...lineageOf(parent)].slice(0, MAX_LINEAGE);
+  return { ...parent, id, frameV2: { ...(block ?? {}), from } } as ComposeClip;
+}
 
 /** What the browser measured for one piece of footage. `null` when measuring failed. */
 export interface MeasuredSource {
@@ -264,7 +290,14 @@ function freshClip(clip: FrameClip): ComposeClip {
   };
 }
 
-function storedClipOf(clip: FrameClip, fps: number, own: ComposeClip | undefined, template: ComposeClip | undefined, guessed: boolean): StoredClip {
+function storedClipOf(
+  clip: FrameClip,
+  fps: number,
+  own: ComposeClip | undefined,
+  template: ComposeClip | undefined,
+  guessed: boolean,
+  from: readonly string[],
+): StoredClip {
   const frames: FrameFields = clip;
   const source: SourceFields = clip;
   // A cut v2 did not change keeps the exact seconds it had, so a visit moves nothing in the current editor.
@@ -287,6 +320,7 @@ function storedClipOf(clip: FrameClip, fps: number, own: ComposeClip | undefined
     sourceFrames: clip.sourceFrames,
     ...(guessed ? { rateGuessed: true as const } : {}),
     mirror: { trimStartSec: written.trimStartSec, trimEndSec: written.trimEndSec, playbackRate: written.playbackRate ?? 1 },
+    ...(from.length > 0 ? { from: [...from] } : {}),
   };
   return { ...written, frameV2: block };
 }
@@ -307,6 +341,8 @@ function storedCaptionOf(caption: FrameCaption, fps: number, own: ComposeCaption
  * A cut whose id `previous` has keeps every field v2 does not own; a new cut (a split's right half, a
  * paste, a cut from the bin) takes them from `known`, else from the first stored cut of the same footage
  * (the current editor's own split copies them onto both halves too), else from its footage alone.
+ * The line of parents (`frameV2.from`) comes only from the cut itself or from `known`, never from
+ * another cut of the same footage.
  */
 export function toStored(sequence: FrameSequence, previous: ComposerProject, options: ToStoredOptions = {}): ComposerProject {
   const fps = sequence.fps;
@@ -314,8 +350,10 @@ export function toStored(sequence: FrameSequence, previous: ComposerProject, opt
   const guessed = new Set(options.guessedSources ?? []);
   const clips = sequence.clips.slice(0, MAX_COMPOSE_CLIPS).map((clip) => {
     const own = byId.get(clip.id);
-    const template = own ? undefined : (options.known?.[clip.id] ?? previous.clips.find((stored) => stored.srcUrl === clip.srcUrl));
-    return storedClipOf(clip, fps, own, template, guessed.has(clip.srcUrl));
+    const known = own ? undefined : options.known?.[clip.id];
+    const template = own ? undefined : (known ?? previous.clips.find((stored) => stored.srcUrl === clip.srcUrl));
+    const from = own ? lineageOf(own) : known ? lineageOf(known) : [];
+    return storedClipOf(clip, fps, own, template, guessed.has(clip.srcUrl), from);
   });
   const captionsById = new Map(previous.captions.map((caption) => [caption.id, caption]));
   const captions = sequence.captions.slice(0, MAX_COMPOSE_CAPTIONS).map((caption) => storedCaptionOf(caption, fps, captionsById.get(caption.id)));

@@ -11,8 +11,12 @@ import { getDictionary } from '@/lib/i18n/dictionaries';
  * The truth since V1: the studio guard runs first, then the flag; with the flag off the route is 404 and
  * the current editor's markup does not change (compose-entry.test.ts). With it on, the page loads the
  * same clips the current editor offers and the editor reads and writes the film the current editor
- * keeps in this browser. `?sample=1` opens the sample film and loads nothing. The editor sends no
- * request, and only two files touch browser storage, always inside try/catch.
+ * keeps in this browser. `?sample=1` opens the sample film and loads nothing.
+ *
+ * Where the editor may reach anything, in one place: network access only in the frame-exact export
+ * (`export-film.ts`; what it may request is pinned in export-film-network.test.ts), browser storage
+ * only in the shortcut store and the film store (always inside try/catch), and nothing anywhere keeps
+ * session storage, a database or a cache.
  */
 const ROOT = process.cwd();
 const ORG = '00000000-0000-4000-8000-0000000000aa';
@@ -156,7 +160,7 @@ describe('/brand/studio/editor page gate', () => {
     const element = (await Page({ searchParams: Promise.resolve({ organizationId: ORG }) })) as Element;
     expect((element.type as { name?: string }).name).toBe('EditorV2Stub');
     expect(element.props.copy).toBe(dict.studioEditor);
-    expect(element.props.currentEditorHref).toBe(`/brand/studio/compose?organizationId=${ORG}`);
+    expect(element.props.currentEditorHref).toBe(`/brand/studio/compose?classic=1&organizationId=${ORG}`);
     expect(element.props.initialWorkspace).toBe('cut');
     expect(mocks.assetsOf).toHaveBeenCalledWith(expect.anything(), ORG, 200);
     expect(mocks.jobsOf).toHaveBeenCalledWith(expect.anything(), ORG, 60);
@@ -188,7 +192,7 @@ describe('/brand/studio/editor page gate', () => {
     const element = (await Page({ searchParams: Promise.resolve({ organizationId: ORG, sample: '1', ws: 'sound' }) })) as Element;
     expect(element.props.real).toBeNull();
     expect(element.props.initialWorkspace).toBe('sound');
-    expect(element.props.currentEditorHref).toBe(`/brand/studio/compose?organizationId=${ORG}`);
+    expect(element.props.currentEditorHref).toBe(`/brand/studio/compose?classic=1&organizationId=${ORG}`);
     expect(mocks.assetsOf).not.toHaveBeenCalled();
     expect(mocks.jobsOf).not.toHaveBeenCalled();
     expect(mocks.viewsOf).not.toHaveBeenCalled();
@@ -226,12 +230,24 @@ describe('where the editor keeps anything', () => {
   const dir = join(ROOT, 'components/brand-studio/editor-v2');
   const files = readdirSync(dir).filter((name) => /\.(tsx?|ts)$/.test(name));
   const STORES = ['shortcut-store.ts', 'film-store.ts'];
+  /** The one file that may make a request: the export reads the film's own media to decode its sound. */
+  const NETWORK_FILE = 'export-film.ts';
+  const NETWORK = ['fetch(', 'XMLHttpRequest', 'sendBeacon', 'WebSocket', 'EventSource'];
 
-  it('components make no request and touch no session storage or database', () => {
+  it('only the export makes a request', () => {
+    expect(files).toContain(NETWORK_FILE);
+    for (const name of files) {
+      if (name === NETWORK_FILE) continue;
+      const source = readFileSync(join(dir, name), 'utf8');
+      for (const banned of NETWORK) expect(source.includes(banned), `${name} contains ${banned}`).toBe(false);
+    }
+  });
+
+  it('no component keeps session storage, a database or a cache', () => {
     expect(files.length).toBeGreaterThan(0);
     for (const name of files) {
       const source = readFileSync(join(dir, name), 'utf8');
-      for (const banned of ['fetch(', 'XMLHttpRequest', 'sendBeacon', 'indexedDB', 'sessionStorage']) {
+      for (const banned of ['indexedDB', 'sessionStorage', 'caches.open']) {
         expect(source.includes(banned), `${name} contains ${banned}`).toBe(false);
       }
     }

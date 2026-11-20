@@ -15,7 +15,7 @@
 import { corsMediaUrl } from '@/lib/brand-studio/cors-media-url';
 import { applyProjectColorGradeFrame, drawCaptionsOverlay } from '@/lib/brand-studio/compose/export-client';
 import { muxAvc1ToMp4, type EncodedAudioSample, type EncodedVideoSample } from '@/lib/brand-studio/compose/mp4-muxer';
-import { COMPOSE_DIMENSIONS, type ComposeClip, type ComposeOverlayClip, type ComposerProject } from '@/lib/brand-studio/compose/timeline';
+import { COMPOSE_DIMENSIONS, type ComposeOverlayClip, type ComposerProject } from '@/lib/brand-studio/compose/timeline';
 import {
   EXPORT_SAMPLE_RATE,
   audioPlan,
@@ -25,14 +25,16 @@ import {
   imageOverlaysAt,
   isKeyFrame,
   notIncluded,
+  soundShiftSec,
   soundSourceUrls,
   soundWindow,
+  storedCutFor,
   timestampUs,
   videoPlan,
   type AudioPlan,
   type NotIncludedKey,
 } from '@/lib/brand-studio/editor-v2/export-plan';
-import { totalFrames, type FrameClip, type FrameSequence } from '@/lib/brand-studio/editor-v2/frames';
+import { totalFrames, type FrameSequence } from '@/lib/brand-studio/editor-v2/frames';
 import { DEFAULT_REFRAME, type Reframe } from '@/lib/brand-studio/editor-v2/model';
 
 export interface ExportProgress {
@@ -339,17 +341,6 @@ function loadImage(url: string, label: string, signal?: AbortSignal): Promise<HT
   });
 }
 
-/** The stored film's clip for a cut (for its colour grade and sound offset), else a stand-in built from the cut. */
-function storedClipFor(extras: ComposerProject, cut: FrameClip, sequenceIndex: number): { clip: ComposeClip; index: number } {
-  const index = extras.clips.findIndex((clip) => clip.id === cut.id);
-  if (index >= 0) return { clip: extras.clips[index]!, index };
-  const seconds = cut.sourceFrames / cut.sourceFps;
-  return {
-    clip: { id: cut.id, label: cut.label, sourceKind: 'asset', srcUrl: cut.srcUrl, durationSec: seconds, trimStartSec: 0, trimEndSec: seconds, volume: cut.volume, muted: cut.muted },
-    index: sequenceIndex,
-  };
-}
-
 // ── Video encoding ─────────────────────────────────────────────────────────────────────────────
 
 async function pickAvcCodec(width: number, height: number, fps: number): Promise<string | null> {
@@ -475,11 +466,7 @@ async function mixSound(
     }
   };
 
-  const shiftOf = (clipId: string) => {
-    const stored = extras?.clips.find((clip) => clip.id === clipId);
-    return stored?.audioOffsetSec ?? 0;
-  };
-  scheduleCutSound(context, plan, buffers, shiftOf);
+  scheduleCutSound(context, plan, buffers, (clipId) => soundShiftSec(extras, clipId));
 
   // Music and effects, by the current exporter's rules: music loops from its in-point for the whole film.
   if (bgm) {
@@ -634,7 +621,7 @@ export async function exportFilm(options: ExportFilmOptions): Promise<ExportFilm
       drawFramed(ctx, source.video, width, height, reframe[entry.clipId] ?? DEFAULT_REFRAME);
       if (graded && extras) {
         const index = indexOf.get(entry.clipId) ?? 0;
-        applyProjectColorGradeFrame(ctx, width, height, extras, storedClipFor(extras, sequence.clips[index]!, index));
+        applyProjectColorGradeFrame(ctx, width, height, extras, storedCutFor(extras, sequence.clips[index]!, index));
       }
       drawImageOverlays(ctx, imageOverlaysAt(extras, entry.frame, fps), overlayImages, width, height);
       if (burnCaptions) drawCaptionsOverlay(ctx, captionsAt(sequence, entry.frame), width, height);

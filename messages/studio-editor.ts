@@ -12,7 +12,7 @@ export const studioEditorEn = {
   filmName: 'Sample film',
   notice: {
     badge: 'Structure preview',
-    body: 'This runs on sample footage. Nothing is saved, generated or exported.',
+    body: 'A draft made with sample footage. Changes are not saved.',
     current: 'Open the current editor',
   },
   workspaces: { cut: 'Cut', color: 'Color', sound: 'Sound', captions: 'Captions' },
@@ -399,8 +399,11 @@ export const studioEditorEn = {
   real: {
     filmName: '{name} film',
     notice: 'The same film the current editor opens. Changes are kept in this browser.',
+    noticeShort: 'Saved in this browser',
     noStorage: 'This browser cannot keep the film. Changes last only while this page is open.',
+    noStorageShort: 'Not saved',
     readOnly: 'You can view this film but not change it.',
+    readOnlyShort: 'View only',
     loading: 'Opening the film…',
     empty: 'Add a clip from the left to start the film.',
     emptyLane: 'Clips you add go here.',
@@ -427,7 +430,7 @@ export const studioEditorKo: typeof studioEditorEn = {
   filmName: '예시 필름',
   notice: {
     badge: '구조 시안',
-    body: '예시 영상으로 만든 시안입니다. 저장, 생성, 내보내기는 하지 않습니다.',
+    body: '예시 영상으로 만든 시안입니다. 고친 내용은 저장되지 않습니다.',
     current: '지금 편집기 열기',
   },
   workspaces: { cut: '컷 편집', color: '색', sound: '사운드', captions: '자막' },
@@ -813,8 +816,11 @@ export const studioEditorKo: typeof studioEditorEn = {
   real: {
     filmName: '{name} 영상',
     notice: '지금 편집기와 같은 영상입니다. 고친 내용은 이 브라우저에 저장됩니다.',
+    noticeShort: '이 브라우저에 저장',
     noStorage: '이 브라우저에는 저장할 수 없습니다. 고친 내용은 이 화면을 닫으면 사라집니다.',
+    noStorageShort: '저장 안 됨',
     readOnly: '보기 권한이라 이 영상을 고칠 수 없습니다.',
+    readOnlyShort: '보기 전용',
     loading: '영상을 여는 중입니다…',
     empty: '왼쪽에서 클립을 넣으면 영상이 시작됩니다.',
     emptyLane: '넣은 클립이 여기에 놓입니다.',

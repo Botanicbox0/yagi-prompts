@@ -9,9 +9,10 @@
  * Pure: no DOM, no network, no storage. `components/brand-studio/editor-v2/export-film.ts` carries it
  * out in the browser.
  */
-import type { ComposeCaption, ComposeOverlayClip, ComposerProject } from '@/lib/brand-studio/compose/timeline';
-import { frameStateAt, spansOf, totalFrames, type FrameSequence } from './frames';
+import type { ComposeCaption, ComposeClip, ComposeOverlayClip, ComposerProject } from '@/lib/brand-studio/compose/timeline';
+import { frameStateAt, spansOf, totalFrames, type FrameClip, type FrameSequence } from './frames';
 import { isNeutral, type EditorDoc } from './model';
+import { lineageOf } from './stored';
 
 /** Sound is mixed and written at this rate. */
 export const EXPORT_SAMPLE_RATE = 48_000;
@@ -160,6 +161,39 @@ export function captionsAt(sequence: FrameSequence, frame: number): ComposeCapti
     position: caption.position,
     size: caption.size,
   }));
+}
+
+type CutView = Pick<FrameClip, 'id' | 'label' | 'srcUrl' | 'sourceFrames' | 'sourceFps' | 'volume' | 'muted'>;
+
+/**
+ * The stored film's clip a cut is graded as, with its place in the stored film (the current editor's
+ * colour grade is scoped by clip id, or by place when it has no id). A cut v2 split or copied from
+ * another stays inside a grade scoped to that parent: its line (`frameV2.from`, stored.ts) names the
+ * parent, and the clip is handed to the grade under the parent's id. A cut the stored film does not
+ * hold is a stand-in at its place in the film.
+ */
+export function storedCutFor(extras: ComposerProject, cut: CutView, sequenceIndex: number): { clip: ComposeClip; index: number } {
+  const index = extras.clips.findIndex((clip) => clip.id === cut.id);
+  if (index < 0) {
+    const seconds = cut.sourceFrames / cut.sourceFps;
+    return {
+      clip: { id: cut.id, label: cut.label, sourceKind: 'asset', srcUrl: cut.srcUrl, durationSec: seconds, trimStartSec: 0, trimEndSec: seconds, volume: cut.volume, muted: cut.muted },
+      index: sequenceIndex,
+    };
+  }
+  const clip = extras.clips[index]!;
+  const gradedId = extras.colorGrade?.clipId;
+  if (gradedId && clip.id !== gradedId && lineageOf(clip).includes(gradedId)) return { clip: { ...clip, id: gradedId }, index };
+  return { clip, index };
+}
+
+/**
+ * A cut's stored sound offset (the current editor's `audioOffsetSec`): a piece v2 split or copied from
+ * another carries the parent's, because the stored-film bridge copies it onto the new clip.
+ */
+export function soundShiftSec(extras: ComposerProject | null | undefined, clipId: string): number {
+  const offset = extras?.clips.find((clip) => clip.id === clipId)?.audioOffsetSec;
+  return typeof offset === 'number' && Number.isFinite(offset) ? offset : 0;
 }
 
 /** Still-image overlays on film frame `frame`, by the current exporter's rule (`start ≤ t ≤ end`). */
