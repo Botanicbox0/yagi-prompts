@@ -153,6 +153,17 @@ export function EditorV2({ copy, currentEditorHref, initialWorkspace, real }: Ed
         <Timeline api={api} />
       </div>
 
+      {api.conflict && (
+        <div className={styles.conflictBar} role="alert" data-editor-conflict>
+          <p>{copy.real.conflict.body}</p>
+          <button type="button" className={styles.fixBtn} onClick={api.keepThisFilm} data-editor-conflict-keep>
+            {copy.real.conflict.keep}
+          </button>
+          <button type="button" className={styles.fixBtn} onClick={api.openOtherFilm} data-editor-conflict-open>
+            {copy.real.conflict.open}
+          </button>
+        </div>
+      )}
       {api.exportOpen && <ExportSheet api={api} />}
       {api.shortcutsOpen && <ShortcutsPanel api={api} />}
       {api.toast && <p className={styles.toast} role="status" data-editor-toast>{api.toast}</p>}

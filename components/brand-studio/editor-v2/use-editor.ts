@@ -12,6 +12,7 @@ import {
   type ComposeClip,
   type ComposerProject,
 } from '@/lib/brand-studio/compose/timeline';
+import { createFilmSession, type FilmConflict, type FilmSession } from '@/lib/brand-studio/editor-v2/film-session';
 import { snapFilmFps, sourceFramesOf } from '@/lib/brand-studio/editor-v2/fps';
 import { emptyFilm, realAssistAllowed, realDoc, sampleHrefFor, workspaceLocked } from '@/lib/brand-studio/editor-v2/real';
 import { deepLinkSource, parseClipParam, sourceSeconds, storedClipForSource, type EditorSource } from '@/lib/brand-studio/editor-v2/sources';
@@ -150,9 +151,6 @@ export interface EditorOptions {
 
 export type FilmStatus = 'loading' | 'ready';
 
-/** How long after the last change the film is written (and on leaving the page, at once). */
-const SAVE_DELAY_MS = 300;
-
 const NO_FINDINGS: { color: ColorFinding[]; sound: SoundFinding[]; captions: CaptionFinding[]; croppedIds: string[] } = {
   color: [],
   sound: [],
@@ -250,11 +248,10 @@ export function useEditor(copy: StudioEditorCopy, options: EditorOptions = {}) {
   unknownRef.current = unknownRates;
   /** Stored clips by id: what each cut carries that v2 does not own (lib/brand-studio/editor-v2/stored.ts). */
   const catalogue = useRef<Record<string, ComposeClip>>({});
-  /** The cuts as last read or written, the text last read or written, and whether an edit waits to be written. */
-  const savedSequence = useRef<FrameSequence | null>(null);
-  const lastText = useRef<string | null | undefined>(undefined);
-  const dirty = useRef(false);
-  const loadToken = useRef(0);
+  /** Reading and writing the shared key, kept in step with other tabs (lib/brand-studio/editor-v2/film-session.ts). */
+  const sessionRef = useRef<FilmSession | null>(null);
+  /** Another tab overwrote this screen's cuts: the bar with two choices is up. */
+  const [conflict, setConflict] = useState<FilmConflict | null>(null);
   const deepLinkRead = useRef(false);
 
   // Frame averages of every material and reference: what the colour outcomes compute from. On the device.
@@ -381,122 +378,110 @@ export function useEditor(copy: StudioEditorCopy, options: EditorOptions = {}) {
     if (unknown.length > 0) setUnknownRates((current) => ({ ...current, ...Object.fromEntries(unknown.map((src) => [src, true as const])) }));
   }, []);
 
-  /** Opens the stored film: measures the footage that has no frame data yet, then puts it on frames. */
+  /**
+   * Opens a stored film for the session: measures the footage that has no frame data yet, puts it on
+   * frames, and replaces the film (and clears undo) only if the session still wants it: an edit made
+   * while this ran is never replaced (review round 1, item 8).
+   */
   const openFilm = useCallback(
-    async (text: string | null) => {
-      const token = (loadToken.current += 1);
+    async (session: FilmSession, text: string | null, ticket: number) => {
       const project = parseStoredProject(text) ?? emptyComposerProject('9:16');
       const entries = await Promise.all(
         sourcesToMeasure(project).map(async (src) => [src, await measureSource(src, secondsOfSrc(src))] as const),
       );
-      if (token !== loadToken.current) return;
+      if (sessionRef.current !== session) return;
       const measured: Record<string, MeasuredSource | null> = Object.fromEntries(entries);
       const film = fromStored(project, measured);
       const unknown = film.sequence.clips.filter((clip) => film.rateUnknown.includes(clip.id)).map((clip) => clip.srcUrl);
       const known: Record<string, number> = {};
       for (const clip of film.sequence.clips) if (!unknown.includes(clip.srcUrl)) known[clip.srcUrl] = clip.sourceFps;
       noteRates(known, unknown);
-      for (const clip of project.clips) catalogue.current[clip.id] = clip;
       // The captions stay with the stored film; the document holds the cuts only.
       const cuts = { ...film.sequence, captions: [] };
-      savedSequence.current = cuts;
-      lastText.current = text;
-      dirty.current = false;
+      if (!session.opened(ticket, cuts)) return;
+      for (const clip of project.clips) catalogue.current[clip.id] = clip;
       setStoredFilm(project);
       setStored({ doc: realDoc(cuts), history: { past: [], future: [] } });
       setStatus('ready');
     },
     [secondsOfSrc, noteRates],
   );
+  const openFilmRef = useRef(openFilm);
+  openFilmRef.current = openFilm;
 
-  /** Read, merge, write: v2's cuts onto whatever the key holds now. */
-  const flush = useCallback(() => {
-    const film = realRef.current;
-    if (!film || !film.canEdit || !dirty.current) return;
-    const sequence = docRef.current.sequence;
-    dirty.current = false;
-    savedSequence.current = sequence;
-    const now = readFilmText(film.organizationId);
-    if (!now.ok) return setStorageOk(false);
-    const text = mergeFilmText(now.text, sequence, { known: catalogue.current, guessedSources: Object.keys(unknownRef.current) });
-    setStoredFilm(parseStoredProject(text));
-    if (writeFilmText(film.organizationId, text)) lastText.current = text;
-    else setStorageOk(false);
+  /** The stored film the session says the key now holds (after a write, or a change around the cuts). */
+  const showStored = useCallback((text: string | null) => {
+    const project = parseStoredProject(text);
+    if (!project) return;
+    for (const clip of project.clips) catalogue.current[clip.id] = clip;
+    setStoredFilm(project);
   }, []);
+
+  // The session: first read after mount, then every write, every other tab's change, focus and leaving.
+  // Without browser storage the film lives in memory for this visit.
+  useEffect(() => {
+    const film = realRef.current;
+    if (!film) return;
+    let session: FilmSession | null = null;
+    session = createFilmSession({
+      store: { read: () => readFilmText(film.organizationId), write: (text) => writeFilmText(film.organizationId, text) },
+      clock: { set: (run, ms) => window.setTimeout(run, ms), clear: (handle) => window.clearTimeout(handle as number) },
+      host: {
+        open: (text, ticket) => void openFilmRef.current(session!, text, ticket),
+        show: showStored,
+        conflict: setConflict,
+        storageFailed: () => setStorageOk(false),
+      },
+      merge: (text, sequence) => mergeFilmText(text, sequence, { known: catalogue.current, guessedSources: Object.keys(unknownRef.current) }),
+      canEdit: film.canEdit,
+    });
+    sessionRef.current = session;
+    session.start();
+    const stopWatching = watchFilmText(film.organizationId, () => session!.external());
+    const onFocus = () => session!.focus();
+    const onVisibility = () => {
+      if (document.visibilityState === 'hidden') session!.flush();
+    };
+    const onPageHide = () => session!.flush();
+    window.addEventListener('focus', onFocus);
+    document.addEventListener('visibilitychange', onVisibility);
+    window.addEventListener('pagehide', onPageHide);
+    return () => {
+      stopWatching();
+      window.removeEventListener('focus', onFocus);
+      document.removeEventListener('visibilitychange', onVisibility);
+      window.removeEventListener('pagehide', onPageHide);
+      session!.dispose();
+      if (sessionRef.current === session) sessionRef.current = null;
+    };
+  }, [showStored]);
+
+  // Every change to the cuts (undo and redo included) goes to the session, which writes it after a pause.
+  useEffect(() => {
+    if (!isReal || status !== 'ready') return;
+    sessionRef.current?.edited(doc.sequence);
+  }, [isReal, status, doc.sequence]);
 
   /**
    * The stored film the export carries besides the cuts (real film only; `null` on the sample film).
    * What waits to be saved is written first, then the key is read back and the cuts on screen are put
    * onto it the way the next save would, so captions, the colour grade, music, sound effects and still
    * overlays made in the current editor (or the sound studio) go into the file with exactly these cuts,
-   * even when this browser could not write.
+   * even when this browser could not write (or another tab's film is waiting for a choice).
    */
   const filmForExport = useCallback((): ComposerProject | null => {
     const film = realRef.current;
     if (!film) return null;
-    flush();
+    sessionRef.current?.flush();
     const read = readFilmText(film.organizationId);
     const sequence = docRef.current.sequence;
     const current = (read.ok ? parseStoredProject(read.text) : null) ?? emptyComposerProject(sequence.aspect);
     return toStored(sequence, current, { known: catalogue.current, guessedSources: Object.keys(unknownRef.current) });
-  }, [flush]);
+  }, []);
 
-  // First read, after mount. Without browser storage the film lives in memory for this visit.
-  useEffect(() => {
-    const film = realRef.current;
-    if (!film) return;
-    const read = readFilmText(film.organizationId);
-    if (!read.ok) setStorageOk(false);
-    void openFilm(read.ok ? read.text : null);
-  }, [openFilm]);
-
-  // Another screen changed the film (another tab's write, or different text when this window gets focus
-  // back). The rule: if this screen has an edit not yet written, its next write wins (merged onto what is
-  // there then); otherwise the film is read again and undo starts over.
-  useEffect(() => {
-    const film = realRef.current;
-    if (!film) return;
-    const consider = (text: string | null) => {
-      if (dirty.current || text === lastText.current) return;
-      void openFilm(text);
-    };
-    const stop = watchFilmText(film.organizationId, consider);
-    const onFocus = () => {
-      const read = readFilmText(film.organizationId);
-      if (read.ok) consider(read.text);
-    };
-    window.addEventListener('focus', onFocus);
-    return () => {
-      stop();
-      window.removeEventListener('focus', onFocus);
-    };
-  }, [openFilm]);
-
-  // Written shortly after each change, and at once when the page is hidden or left.
-  useEffect(() => {
-    if (!isReal || readOnly || status !== 'ready') return;
-    if (doc.sequence === savedSequence.current) {
-      // Undone back to what is stored: nothing waits to be written.
-      dirty.current = false;
-      return;
-    }
-    dirty.current = true;
-    const timer = setTimeout(flush, SAVE_DELAY_MS);
-    return () => clearTimeout(timer);
-  }, [isReal, readOnly, status, doc.sequence, flush]);
-  useEffect(() => {
-    if (!realRef.current) return;
-    const onVisibility = () => {
-      if (document.visibilityState === 'hidden') flush();
-    };
-    document.addEventListener('visibilitychange', onVisibility);
-    window.addEventListener('pagehide', flush);
-    return () => {
-      document.removeEventListener('visibilitychange', onVisibility);
-      window.removeEventListener('pagehide', flush);
-      flush();
-    };
-  }, [flush]);
+  /** The bar's two choices when another tab overwrote this screen's cuts. */
+  const keepThisFilm = useCallback(() => sessionRef.current?.keep(), []);
+  const openOtherFilm = useCallback(() => sessionRef.current?.openOther(), []);
 
   // ── Moving through the film: always on a whole frame ──
   const seek = useCallback((target: number) => setPlayhead(Math.min(Math.max(0, Math.round(target)), lastFrame)), [lastFrame]);
@@ -1057,6 +1042,10 @@ export function useEditor(copy: StudioEditorCopy, options: EditorOptions = {}) {
     readOnly,
     /** `false` once browser storage refused a read or a write: the film then lives in memory only. */
     storageOk,
+    /** Another tab overwrote this screen's cuts; `keepThisFilm` writes them back, `openOtherFilm` opens that tab's film. */
+    conflict,
+    keepThisFilm,
+    openOtherFilm,
     locked: workspaceLocked(isReal, workspace),
     sources: real?.sources ?? [],
     addSource,

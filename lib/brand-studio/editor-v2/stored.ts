@@ -361,6 +361,22 @@ export function toStored(sequence: FrameSequence, previous: ComposerProject, opt
 }
 
 /**
+ * What v2 owns of a stored film, as one string: the aspect and, per cut in order, its id, footage,
+ * trims, speed, volume, mute and frame data. Two texts with the same signature hold the same cuts, so a
+ * write by another screen that keeps it (a caption, music, the current editor reloading the film) did
+ * not overwrite v2's work (lib/brand-studio/editor-v2/film-session.ts). A missing or unreadable film
+ * is an empty one.
+ */
+export function ownedSignature(text: string | null | undefined): string {
+  const project = parseStoredProject(text ?? null);
+  if (!project || project.clips.length === 0) return JSON.stringify(['', []]);
+  const clips = project.clips
+    .slice(0, MAX_COMPOSE_CLIPS)
+    .map((clip) => [clip.id, clip.srcUrl, clip.trimStartSec, clip.trimEndSec, clip.playbackRate ?? 1, clip.volume, clip.muted, (clip as StoredClip).frameV2 ?? null]);
+  return JSON.stringify([project.aspect, clips]);
+}
+
+/**
  * Read, merge, write: v2's part of the film put onto whatever the key holds now (the sound studio and
  * the current editor write it too), in the current editor's own storage format.
  */

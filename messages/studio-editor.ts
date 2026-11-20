@@ -424,6 +424,12 @@ export const studioEditorEn = {
     },
     assistUnknown: 'For now it follows cut sentences like the examples below.',
     assistNotReady: 'That part is not ready yet. For now it follows cut sentences only.',
+    /** Another tab (an open earlier editor) wrote over this screen's cuts. */
+    conflict: {
+      body: 'This film was changed in another tab. Choose which version to keep.',
+      keep: 'Keep this screen’s film',
+      open: 'Open the other tab’s film',
+    },
   },
 };
 
@@ -844,6 +850,11 @@ export const studioEditorKo: typeof studioEditorEn = {
     },
     assistUnknown: '지금은 컷 편집만 말로 할 수 있습니다. 아래 예시처럼 적어 주세요.',
     assistNotReady: '그 작업은 아직 준비 중입니다. 지금은 컷 편집만 말로 할 수 있습니다.',
+    conflict: {
+      body: '다른 탭에서 이 영상이 바뀌었습니다. 어느 쪽을 남길지 골라 주세요.',
+      keep: '이 화면의 영상 남기기',
+      open: '다른 탭의 영상 열기',
+    },
   },
 };
 

@@ -997,3 +997,22 @@
   line-height: 1.45;
 }
 .exportBtn:disabled { opacity: 0.45; cursor: not-allowed; }
+
+/* ── Another tab overwrote this screen's cuts: one bar, two choices; editing goes on (review round 1, item 7) ── */
+.conflictBar {
+  position: absolute;
+  left: 50%;
+  top: 52px;
+  transform: translateX(-50%);
+  z-index: 31;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  max-width: min(760px, calc(100% - 32px));
+  padding: 8px 8px 8px 16px;
+  border-radius: var(--ys-r-pill);
+  background: var(--ys-panel);
+  box-shadow: 0 0 0 1px var(--ys-line-strong), 0 8px 24px rgba(0, 0, 0, 0.12);
+}
+.conflictBar p { margin: 0; font-size: 13px; line-height: 1.4; }
+.conflictBar .fixBtn { flex: none; }

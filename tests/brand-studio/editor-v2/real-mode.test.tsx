@@ -1,3 +1,5 @@
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
 import { createElement as h } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it } from 'vitest';
@@ -116,6 +118,32 @@ describe('a real film shows nothing that comes from the sample data', () => {
     expect(html).toContain('Sample Brand 영상');
     expect(html).toContain(studioEditorKo.real.notice);
     expect(html).toContain(`href="/brand/studio/compose?organizationId=${ORG}"`);
+  });
+
+  it('the ways between the two editors open in the same tab, so the ordinary path never leaves two live editors (review round 1, item 7)', () => {
+    const anchors = (html: string, marker: string) => [...html.matchAll(new RegExp(`<a [^>]*${marker}[^>]*>`, 'g'))].map((m) => m[0]);
+    const header = anchors(render(studioEditorKo, 'cut'), 'data-editor-current');
+    const locked = anchors(render(studioEditorKo, 'color'), 'data-editor-classic-link');
+    expect(header).toHaveLength(1);
+    expect(locked).toHaveLength(1);
+    for (const anchor of [...header, ...locked]) {
+      expect(anchor).not.toMatch(/\btarget=/);
+      expect(anchor).toContain('/brand/studio/compose');
+    }
+    // The current editor's link to v2 (compose-entry.test.ts pins its whole markup) has no target either.
+    const composer = readFileSync(join(process.cwd(), 'components/brand-studio/compose/video-composer.tsx'), 'utf8');
+    const link = composer.slice(composer.indexOf('{editorV2Href && ('), composer.indexOf('{copy.previewV2.link}'));
+    expect(link).toContain('data-compose-editor-v2');
+    expect(link).not.toContain('target=');
+  });
+
+  it('a conflict with another tab is one bar with two choices, absent until there is one', () => {
+    const html = render(studioEditorKo, 'cut');
+    expect(html).not.toContain('data-editor-conflict');
+    for (const copy of [studioEditorKo, studioEditorEn]) {
+      expect(copy.real.conflict.body.length).toBeGreaterThan(10);
+      expect(copy.real.conflict.keep).not.toBe(copy.real.conflict.open);
+    }
   });
 
   it('locks colour, sound and captions with a way to the sample film in that workspace', () => {
