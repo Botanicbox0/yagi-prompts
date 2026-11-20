@@ -974,3 +974,24 @@
 @media (prefers-reduced-motion: reduce) {
   .root *, .root *::before, .root *::after { transition-duration: 0ms !important; animation-duration: 0ms !important; }
 }
+
+/* ── Export: progress, result, what the file leaves out (frame-exact export, doc §5.1.5 · §6.4) ── */
+.exportSheet .fixBtn { justify-self: stretch; }
+.exportRun { display: grid; gap: 8px; }
+.exportBar { height: 6px; border-radius: var(--ys-r-pill); background: var(--ys-canvas); box-shadow: inset 0 0 0 1px var(--ys-line); overflow: hidden; }
+.exportBar i { display: block; height: 100%; border-radius: inherit; background: var(--ys-ink); transition: width 120ms linear; }
+.exportCount { margin: 0; font-size: 13px; font-weight: 600; font-variant-numeric: tabular-nums; }
+.exportLinks { margin: 0; display: flex; flex-wrap: wrap; gap: 6px 14px; font-size: 12px; font-weight: 600; }
+.exportLinks a { color: var(--ys-ink); text-decoration: underline; text-underline-offset: 3px; }
+.exportMissing { list-style: none; margin: 0; padding: 0; display: grid; gap: 4px; font-size: 12px; color: var(--ys-ink-secondary); }
+.exportMissing li::before { content: '·'; margin-right: 6px; }
+.exportError {
+  margin: 0;
+  padding: 10px 12px;
+  border-radius: var(--ys-r-control);
+  background: var(--ys-panel);
+  box-shadow: inset 0 0 0 1px var(--ys-line-strong);
+  font-size: 13px;
+  line-height: 1.45;
+}
+.exportBtn:disabled { opacity: 0.45; cursor: not-allowed; }
