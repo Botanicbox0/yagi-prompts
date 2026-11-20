@@ -140,38 +140,38 @@ describe('gradeMatrix', () => {
 });
 
 describe('colorFindings and balanceLooks', () => {
-  const project = fixtureDoc((id) => id).project;
-  const src = project.clips.map((clip) => clip.srcUrl);
+  const sequence = fixtureDoc((id) => id).sequence;
+  const src = sequence.clips.map((clip) => clip.srcUrl);
   const statsFor = (values: Array<Partial<FrameStats>>) =>
     Object.fromEntries(values.map((v, i) => [src[i]!, { luma: 0.5, warmth: 0, saturation: 0.3, ...v }]));
 
   it('finds the dark cut', () => {
     const stats = statsFor([{}, {}, { luma: 0.3 }, {}]);
-    expect(colorFindings(project, stats, {})).toEqual([{ kind: 'dark_cut', clipId: 'cut-3', clipNumber: 3 }]);
+    expect(colorFindings(sequence, stats, {})).toEqual([{ kind: 'dark_cut', clipId: 'cut-3', clipNumber: 3 }]);
   });
 
   it('finds mixed temperature', () => {
     const stats = statsFor([{ warmth: 0 }, { warmth: 0.1 }, {}, {}]);
-    expect(colorFindings(project, stats, {})).toEqual([
+    expect(colorFindings(sequence, stats, {})).toEqual([
       { kind: 'mixed_temperature', clipIds: ['cut-1', 'cut-2', 'cut-3', 'cut-4'] },
     ]);
   });
 
   it('says nothing with fewer than two measured cuts', () => {
-    expect(colorFindings(project, {}, {})).toEqual([]);
-    expect(colorFindings(project, { [src[2]!]: { luma: 0.05, warmth: 0.4, saturation: 0.3 } }, {})).toEqual([]);
+    expect(colorFindings(sequence, {}, {})).toEqual([]);
+    expect(colorFindings(sequence, { [src[2]!]: { luma: 0.05, warmth: 0.4, saturation: 0.3 } }, {})).toEqual([]);
   });
 
   it('leaves out cuts that already carry a look', () => {
     const stats = statsFor([{}, {}, { luma: 0.3, warmth: 0.2 }, {}]);
     const looks = { 'cut-3': { source: 'auto' as const, detail: NEUTRAL_DETAIL, strength: 1 } };
-    expect(colorFindings(project, stats, looks)).toEqual([]);
+    expect(colorFindings(sequence, stats, looks)).toEqual([]);
   });
 
   it('balanceLooks only touches the requested, measured cuts', () => {
     const stats = statsFor([{ luma: 0.3 }, { luma: 0.6 }, {}]);
     const target = { luma: 0.5, warmth: 0, saturation: 0.3 };
-    const looks = balanceLooks(project, ['cut-2', 'cut-4'], stats, target, 'match', 'cut 1');
+    const looks = balanceLooks(sequence, ['cut-2', 'cut-4'], stats, target, 'match', 'cut 1');
     // cut-4 has no measurement, so only cut-2 gets a look.
     expect(Object.keys(looks)).toEqual(['cut-2']);
     expect(looks['cut-2']).toEqual({
@@ -180,7 +180,7 @@ describe('colorFindings and balanceLooks', () => {
       strength: 1,
       detail: balanceDetail(stats[src[1]!]!, target),
     });
-    const auto = balanceLooks(project, ['cut-1'], stats, target, 'auto');
+    const auto = balanceLooks(sequence, ['cut-1'], stats, target, 'auto');
     expect(Object.keys(auto)).toEqual(['cut-1']);
     expect(auto['cut-1']).not.toHaveProperty('reference');
   });

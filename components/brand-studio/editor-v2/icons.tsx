@@ -20,6 +20,9 @@ const paths = {
   review: 'M4 5h16v11H9l-5 4z',
   back: 'M15 5l-7 7 7 7',
   chevron: 'M7 10l5 5 5-5',
+  forward: 'M9 5l7 7-7 7',
+  magnet: 'M6 4v8a6 6 0 0 0 12 0V4M6 4h4v8a2 2 0 0 0 4 0V4h4M6 8h4M14 8h4',
+  keyboard: 'M3 7h18v10H3zM7 11h.01M11 11h.01M15 11h.01M8 14h8',
 } as const;
 
 export type EditorIconName = keyof typeof paths;

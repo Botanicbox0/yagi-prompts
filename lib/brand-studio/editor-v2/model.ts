@@ -1,20 +1,15 @@
 /**
  * Editing studio v2 — the pure model behind the structure prototype (docs/BRAND-EDITING-STUDIO-V2.md).
  *
- * The cut itself is the production timeline model (`ComposerProject` + `applyTimelinePatches`), so
- * trims, splits, moves and captions in the prototype are the real operations. Everything the current
- * model cannot hold yet (a look per cut, reframing, sound outcomes, caption settings, titles) lives
- * beside it in `EditorDoc`; the build plan (doc §9) says where each of those lands in the real model.
+ * The cut itself is a frame sequence (`./frames.ts`): every position is a whole frame at the film's
+ * frame rate. Everything that hangs off a cut (its look, its framing) and everything the film carries
+ * besides cuts (sound outcomes, caption settings, titles) lives beside it in `EditorDoc`; the build
+ * plan (doc §11) says where each of those lands in the production model.
  *
  * Nothing here touches the DOM, the network or storage.
  */
-import {
-  applyTimelinePatches,
-  frameStateAtTime,
-  timelineSpans,
-  type ComposerProject,
-  type TimelinePatch,
-} from '@/lib/brand-studio/compose/timeline';
+import type { ComposeAspect } from '@/lib/brand-studio/compose/timeline';
+import { frameStateAt, totalFrames, type FrameCaption, type FrameSequence } from './frames';
 
 export const EDITOR_WORKSPACES = ['cut', 'color', 'sound', 'captions'] as const;
 export type EditorWorkspace = (typeof EDITOR_WORKSPACES)[number];
@@ -109,8 +104,10 @@ export type TitlePreset = (typeof TITLE_PRESETS)[number];
 export interface TitleItem {
   id: string;
   text: string;
-  startSec: number;
-  endSec: number;
+  /** First frame the title shows on. */
+  start: number;
+  /** One past the last frame it shows on. */
+  end: number;
   preset: TitlePreset;
 }
 
@@ -123,7 +120,7 @@ export interface Reframe {
 export const DEFAULT_REFRAME: Reframe = { fit: 'fill', x: 50 };
 
 export interface EditorDoc {
-  project: ComposerProject;
+  sequence: FrameSequence;
   looks: Record<string, ClipLook>;
   reframe: Record<string, Reframe>;
   sound: SoundState;
@@ -135,58 +132,54 @@ export interface EditorDoc {
 // ── Cut ────────────────────────────────────────────────────────────────────────────────────────
 
 /**
- * Applies production timeline patches and keeps the per-cut extras in step: the right half of a split
- * inherits the look and framing of the cut it came from, and extras of removed cuts are dropped.
+ * Puts a changed sequence into the document and keeps the per-cut extras in step: `inherit` lists new
+ * cuts and the cut each came from (the right half of a split, a pasted or duplicated cut), extras of
+ * removed cuts are dropped, and titles never run past the end of the film.
  */
-export function applyDocPatches(
-  doc: EditorDoc,
-  patches: readonly TimelinePatch[],
-): { doc: EditorDoc; appliedCount: number } {
-  const { project, appliedCount } = applyTimelinePatches(doc.project, patches);
-  if (appliedCount === 0) return { doc, appliedCount };
+export function withSequence(doc: EditorDoc, sequence: FrameSequence, inherit: ReadonlyArray<readonly [string, string]> = []): EditorDoc {
+  if (sequence === doc.sequence) return doc;
   const looks: Record<string, ClipLook> = {};
   const reframe: Record<string, Reframe> = {};
-  const knownIds = new Set(doc.project.clips.map((clip) => clip.id));
-  project.clips.forEach((clip, index) => {
-    const previous = index > 0 ? project.clips[index - 1] : undefined;
-    const inherits = !knownIds.has(clip.id) && previous && previous.srcUrl === clip.srcUrl;
-    const look = inherits ? looks[previous.id] : doc.looks[clip.id];
-    const frame = inherits ? reframe[previous.id] : doc.reframe[clip.id];
+  const origin = new Map(inherit);
+  for (const clip of sequence.clips) {
+    const from = origin.get(clip.id) ?? clip.id;
+    const look = doc.looks[from];
+    const frame = doc.reframe[from];
     if (look) looks[clip.id] = look;
     if (frame) reframe[clip.id] = frame;
-  });
-  const total = timelineSpans(project).at(-1)?.timelineEndSec ?? 0;
+  }
+  const total = totalFrames(sequence);
   const titles = doc.titles
-    .filter((title) => title.startSec < total)
-    .map((title) => (title.endSec > total ? { ...title, endSec: total } : title));
-  return { doc: { ...doc, project, looks, reframe, titles }, appliedCount };
+    .filter((title) => title.start < total)
+    .map((title) => (title.end > total ? { ...title, end: total } : title));
+  return { ...doc, sequence, looks, reframe, titles };
 }
 
 /** The cut ids an outcome action will touch, in timeline order. */
 export function scopeClipIds(
-  project: ComposerProject,
+  sequence: FrameSequence,
   mode: ScopeMode,
   selection: readonly string[],
-  playheadSec: number,
+  playheadFrame: number,
 ): string[] {
   if (mode === 'selected') {
-    const picked = project.clips.filter((clip) => selection.includes(clip.id)).map((clip) => clip.id);
+    const picked = sequence.clips.filter((clip) => selection.includes(clip.id)).map((clip) => clip.id);
     if (picked.length > 0) return picked;
   }
   if (mode === 'current') {
-    const active = frameStateAtTime(project, playheadSec).activeClip;
+    const active = frameStateAt(sequence, playheadFrame).active;
     if (active) return [active.clip.id];
   }
-  return project.clips.map((clip) => clip.id);
+  return sequence.clips.map((clip) => clip.id);
 }
 
 /** A selection never outlives its cuts, and `selected` falls back to the whole film when it empties. */
 export function settleScope(
-  project: ComposerProject,
+  sequence: FrameSequence,
   mode: ScopeMode,
   selection: readonly string[],
 ): { mode: ScopeMode; selection: string[] } {
-  const alive = selection.filter((id) => project.clips.some((clip) => clip.id === id));
+  const alive = selection.filter((id) => sequence.clips.some((clip) => clip.id === id));
   return { mode: mode === 'selected' && alive.length === 0 ? 'all' : mode, selection: alive };
 }
 
@@ -284,13 +277,13 @@ export type ColorFinding =
 
 /** What the colour workspace says before anyone touches a control. Cuts that already carry a look are left out. */
 export function colorFindings(
-  project: ComposerProject,
+  sequence: FrameSequence,
   stats: Readonly<Record<string, FrameStats>>,
   looks: Readonly<Record<string, ClipLook>>,
 ): ColorFinding[] {
-  const measured = project.clips
+  const measured = sequence.clips
     .map((clip, index) => ({ clip, number: index + 1, stats: stats[clip.srcUrl] }))
-    .filter((entry): entry is { clip: ComposerProject['clips'][number]; number: number; stats: FrameStats } => !!entry.stats);
+    .filter((entry): entry is { clip: FrameSequence['clips'][number]; number: number; stats: FrameStats } => !!entry.stats);
   if (measured.length < 2) return [];
   const target = filmTarget(measured.map((entry) => entry.stats));
   const open = measured.filter((entry) => !looks[entry.clip.id]);
@@ -312,7 +305,7 @@ export function colorFindings(
 
 /** Looks for the given cuts: each balanced towards `target` (the film's middle, or a reference frame). */
 export function balanceLooks(
-  project: ComposerProject,
+  sequence: FrameSequence,
   clipIds: readonly string[],
   stats: Readonly<Record<string, FrameStats>>,
   target: FrameStats,
@@ -320,7 +313,7 @@ export function balanceLooks(
   reference?: string,
 ): Record<string, ClipLook> {
   const out: Record<string, ClipLook> = {};
-  for (const clip of project.clips) {
+  for (const clip of sequence.clips) {
     if (!clipIds.includes(clip.id)) continue;
     const own = stats[clip.srcUrl];
     if (!own) continue;
@@ -420,33 +413,33 @@ export type CaptionFinding =
   | { kind: 'no_captions'; spoken: number }
   | { kind: 'covered'; count: number; platform: Exclude<SafeArea, 'none'> };
 
-export function captionFindings(doc: Pick<EditorDoc, 'project' | 'captionSettings'>, regions: readonly SpeechRegion[]): CaptionFinding[] {
-  const { project, captionSettings } = doc;
-  if (project.captions.length === 0) return regions.length > 0 ? [{ kind: 'no_captions', spoken: regions.length }] : [];
-  const bottom = project.captions.filter((caption) => caption.position === 'bottom').length;
-  if (project.aspect === '9:16' && captionSettings.safeArea !== 'none' && !captionSettings.lift && bottom > 0) {
+export function captionFindings(doc: Pick<EditorDoc, 'sequence' | 'captionSettings'>, regions: readonly SpeechRegion[]): CaptionFinding[] {
+  const { sequence, captionSettings } = doc;
+  if (sequence.captions.length === 0) return regions.length > 0 ? [{ kind: 'no_captions', spoken: regions.length }] : [];
+  const bottom = sequence.captions.filter((caption) => caption.position === 'bottom').length;
+  if (sequence.aspect === '9:16' && captionSettings.safeArea !== 'none' && !captionSettings.lift && bottom > 0) {
     return [{ kind: 'covered', count: bottom, platform: captionSettings.safeArea }];
   }
   return [];
 }
 
-/** SubRip text for the film's captions: what "as a file" hands over. */
-export function captionsToSrt(captions: ComposerProject['captions']): string {
-  const stamp = (sec: number) => {
-    const ms = Math.round(sec * 1000);
+/** SubRip text for the film's captions: what "as a file" hands over. Frame positions become milliseconds. */
+export function captionsToSrt(captions: readonly FrameCaption[], fps: number): string {
+  const stamp = (frame: number) => {
+    const ms = Math.round((frame * 1000) / fps);
     const pad = (value: number, width: number) => String(value).padStart(width, '0');
     return `${pad(Math.floor(ms / 3600000), 2)}:${pad(Math.floor(ms / 60000) % 60, 2)}:${pad(Math.floor(ms / 1000) % 60, 2)},${pad(ms % 1000, 3)}`;
   };
   return [...captions]
-    .sort((a, b) => a.startSec - b.startSec)
-    .map((caption, index) => `${index + 1}\n${stamp(caption.startSec)} --> ${stamp(caption.endSec)}\n${caption.text}\n`)
+    .sort((a, b) => a.start - b.start)
+    .map((caption, index) => `${index + 1}\n${stamp(caption.start)} --> ${stamp(caption.end)}\n${caption.text}\n`)
     .join('\n');
 }
 
 // ── Words → the same actions ───────────────────────────────────────────────────────────────────
 
 export type AssistIntent =
-  | { kind: 'aspect'; aspect: ComposerProject['aspect'] }
+  | { kind: 'aspect'; aspect: ComposeAspect }
   | { kind: 'trim'; clipNumber: number; seconds: number }
   | { kind: 'remove_last' }
   | { kind: 'auto_balance' }

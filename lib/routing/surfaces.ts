@@ -117,6 +117,8 @@ export function adminRouteAllowed(pathname: string, method: string): boolean {
  */
 const STUDIO_DEMO_FILES = new Set([
   ...['designed-format.jpg', 'designed-format.mp4', 'different-person.jpg', 'different-person.mp4', 'reference-selfie.jpeg'].map((f) => `/reel/studio-demo/${f}`),
+  // The editing studio's frame-numbered sample clip (lib/brand-studio/editor-v2/fixture.ts, `m7`).
+  ...['frame-count-24.jpg', 'frame-count-24.mp4'].map((f) => `/reel/studio-demo/${f}`),
   ...[
     'vto-free-alley.webp',
     'vto-free-amber.webp',

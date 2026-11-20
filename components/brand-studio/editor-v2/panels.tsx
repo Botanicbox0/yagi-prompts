@@ -2,7 +2,7 @@
 
 import { useEffect, useState, type ReactNode } from 'react';
 import { fill } from '@/components/brand-studio/copy';
-import { COMPOSE_ASPECTS, COMPOSE_DIMENSIONS, clipPlaybackRate, type CaptionPosition } from '@/lib/brand-studio/compose/timeline';
+import { COMPOSE_ASPECTS, COMPOSE_DIMENSIONS, type CaptionPosition } from '@/lib/brand-studio/compose/timeline';
 import {
   FIXTURE_MATERIALS,
   FIXTURE_MEASURED_LUFS,
@@ -10,7 +10,10 @@ import {
   FIXTURE_TRACK_IDS,
   fixtureTrack,
   materialBySrc,
+  materialSeconds,
 } from '@/lib/brand-studio/editor-v2/fixture';
+import { clipFrameAt, formatTimecode, type FrameCaption } from '@/lib/brand-studio/editor-v2/frames';
+import { formatBinding, type ShortcutAction } from '@/lib/brand-studio/editor-v2/shortcuts';
 import {
   CAPTION_OUTPUTS,
   CAPTION_STYLE_IDS,
@@ -28,7 +31,7 @@ import {
   type ScopeMode,
 } from '@/lib/brand-studio/editor-v2/model';
 import { EditorIcon } from './icons';
-import { ASPECT_KEYS, type EditorApi } from './use-editor';
+import { ASPECT_KEYS, SPEEDS, type EditorApi } from './use-editor';
 import styles from './editor-v2.module.css';
 
 // ── Small shared controls ──────────────────────────────────────────────────────────────────────
@@ -181,12 +184,15 @@ function CutMaterials({ api }: { api: EditorApi }) {
               <li key={material.id}>
                 <button type="button" className={styles.materialCard} onClick={() => api.addMaterial(material)} title={c.materials.add} data-editor-material={material.id}>
                   <span className={styles.materialThumb} style={{ backgroundImage: `url(${material.poster})` }}>
-                    <em>{formatClock(material.durationSec)}</em>
+                    <em>{formatClock(materialSeconds(material))}</em>
                     <i aria-hidden="true"><EditorIcon name="plus" /></i>
                   </span>
                   <span className={styles.materialMeta}>
-                    <strong>{fill(c.materials.clipLabel, { number: material.id.replace(/\D/g, '') })}</strong>
-                    <small>{material.origin === 'video_studio' ? c.materials.fromVideoStudio : c.materials.fromAssets}</small>
+                    <strong>{material.origin === 'sample' ? c.materials.frameClip : fill(c.materials.clipLabel, { number: material.id.replace(/\D/g, '') })}</strong>
+                    <small>
+                      {material.origin === 'video_studio' ? c.materials.fromVideoStudio : material.origin === 'sample' ? c.materials.fromSample : c.materials.fromAssets}
+                      {` · ${material.fps} fps`}
+                    </small>
                   </span>
                 </button>
               </li>
@@ -213,10 +219,10 @@ function CutMaterials({ api }: { api: EditorApi }) {
 }
 
 function ColorMaterials({ api }: { api: EditorApi }) {
-  const { copy, doc, project } = api;
+  const { copy, doc, sequence } = api;
   const tab = api.tabs.color;
   const c = copy.color;
-  const poster = api.activeClip?.clip.thumbUrl ?? project.clips[0]?.thumbUrl ?? '';
+  const poster = api.activeClip?.clip.thumbUrl ?? sequence.clips[0]?.thumbUrl ?? '';
   const uniformLook = api.targetIds.length > 0 ? doc.looks[api.targetIds[0]!]?.lookId : undefined;
   const lookOn = (id: string) => api.targetIds.every((target) => doc.looks[target]?.source === 'look' && doc.looks[target]?.lookId === id);
   return (
@@ -247,7 +253,7 @@ function ColorMaterials({ api }: { api: EditorApi }) {
         <>
           <p className={styles.note}>{c.materials.referencesNote}</p>
           <ul className={styles.lookGrid}>
-            {project.clips.map((clip, index) => {
+            {sequence.clips.map((clip, index) => {
               const label = fill(c.materials.cut, { number: index + 1 });
               return (
                 <li key={clip.id}>
@@ -307,38 +313,37 @@ function SoundMaterials({ api }: { api: EditorApi }) {
   );
 }
 
-function CaptionLine({ api, index }: { api: EditorApi; index: number }) {
-  const caption = api.project.captions[index]!;
+function CaptionLine({ api, caption, number }: { api: EditorApi; caption: FrameCaption; number: number }) {
   const [draft, setDraft] = useState(caption.text);
   useEffect(() => setDraft(caption.text), [caption.text]);
   const save = () => {
     const text = draft.trim();
-    if (text && text !== caption.text) api.patch([{ op: 'update_caption', captionIndex: index, text }]);
+    if (text && text !== caption.text) api.updateCaptionText(caption.id, text);
     else setDraft(caption.text);
   };
-  const active = api.playheadSec >= caption.startSec && api.playheadSec <= caption.endSec;
+  const active = api.playhead >= caption.start && api.playhead < caption.end;
   return (
     <li className={styles.scriptLine} data-active={active ? '' : undefined}>
-      <button type="button" className={styles.scriptTime} onClick={() => api.seek(caption.startSec + 0.05)}>
-        {formatClock(caption.startSec, true)}
+      <button type="button" className={styles.scriptTime} onClick={() => api.seek(caption.start)}>
+        {formatTimecode(caption.start, api.fps)}
       </button>
       <textarea
         value={draft}
         rows={2}
-        aria-label={fill(api.copy.captions.materials.line, { number: index + 1 })}
+        aria-label={fill(api.copy.captions.materials.line, { number })}
         onChange={(event) => setDraft(event.target.value)}
-        onFocus={() => api.seek(caption.startSec + 0.05)}
+        onFocus={() => api.seek(caption.start)}
         onBlur={save}
         onKeyDown={(event) => {
           event.stopPropagation();
-          if (event.key === 'Enter' && !event.shiftKey) {
+          if (event.key === 'Enter' && !event.shiftKey && !event.nativeEvent.isComposing) {
             event.preventDefault();
             event.currentTarget.blur();
           }
         }}
-        data-editor-caption-text={index + 1}
+        data-editor-caption-text={number}
       />
-      <button type="button" className={styles.iconBtn} onClick={() => api.patch([{ op: 'remove_caption', captionIndex: index }])} aria-label={api.copy.captions.materials.remove} title={api.copy.captions.materials.remove}>
+      <button type="button" className={styles.iconBtn} onClick={() => api.removeCaption(caption.id)} aria-label={api.copy.captions.materials.remove} title={api.copy.captions.materials.remove}>
         <EditorIcon name="trash" />
       </button>
     </li>
@@ -346,8 +351,8 @@ function CaptionLine({ api, index }: { api: EditorApi; index: number }) {
 }
 
 function CaptionMaterials({ api }: { api: EditorApi }) {
-  const { copy, project } = api;
-  const order = project.captions.map((caption, index) => ({ caption, index })).sort((a, b) => a.caption.startSec - b.caption.startSec);
+  const { copy, sequence } = api;
+  const order = [...sequence.captions].sort((a, b) => a.start - b.start);
   return (
     <>
       <div className={styles.tabs} role="presentation">
@@ -357,8 +362,8 @@ function CaptionMaterials({ api }: { api: EditorApi }) {
         <p className={styles.note}>{copy.captions.materials.empty}</p>
       ) : (
         <ul className={styles.script}>
-          {order.map(({ caption, index }) => (
-            <CaptionLine key={caption.id} api={api} index={index} />
+          {order.map((caption, index) => (
+            <CaptionLine key={caption.id} api={api} caption={caption} number={index + 1} />
           ))}
         </ul>
       )}
@@ -389,25 +394,29 @@ function PanelHead({ title, meta }: { title: string; meta?: string }) {
   );
 }
 
-const KEY_ROWS: ReadonlyArray<[keyof EditorApi['copy']['cut']['keys'], string]> = [
-  ['play', 'Space'],
-  ['split', 'S'],
-  ['trimStart', 'Q'],
-  ['trimEnd', 'W'],
-  ['remove', 'Delete'],
-  ['undo', 'Ctrl Z · Ctrl Shift Z'],
-  ['step', '← →'],
-  ['workspace', '1 2 3 4'],
-];
+/** The keys a first-time person needs; the full list and rebinding live in the shortcut panel. */
+const KEY_ROWS: ReadonlyArray<ShortcutAction> = ['play', 'split', 'trimStart', 'trimEnd', 'stepForward', 'stepForward10', 'nextCut', 'remove', 'undo', 'zoomFrames', 'magnet'];
+
+function KeyCaps({ api, action }: { api: EditorApi; action: ShortcutAction }) {
+  const keys = api.shortcutMap[action];
+  if (keys.length === 0) return <span className={styles.keyNone}>{api.copy.shortcuts.none}</span>;
+  return (
+    <>
+      {keys.map((binding) => (
+        <kbd key={binding}>{formatBinding(binding, api.mac).join(' ')}</kbd>
+      ))}
+    </>
+  );
+}
 
 function CutPanel({ api }: { api: EditorApi }) {
-  const { copy, doc, project, spans } = api;
+  const { copy, doc, sequence, spans, fps } = api;
   const c = copy.cut;
   const title = doc.titles.find((item) => item.id === api.selectedTitleId);
   if (title) {
     return (
       <>
-        <PanelHead title={c.titles[title.preset]} meta={`${formatClock(title.startSec, true)} – ${formatClock(title.endSec, true)}`} />
+        <PanelHead title={c.titles[title.preset]} meta={`${formatTimecode(title.start, fps)} – ${formatTimecode(title.end, fps)}`} />
         <Section title={c.title.text}>
           <input className={styles.textInput} value={title.text} maxLength={40} onChange={(event) => api.updateTitle(title.id, event.target.value)} onKeyDown={(event) => event.stopPropagation()} />
         </Section>
@@ -424,25 +433,32 @@ function CutPanel({ api }: { api: EditorApi }) {
       const clip = span.clip;
       const reframe = doc.reframe[clip.id] ?? DEFAULT_REFRAME;
       const material = materialBySrc(clip.srcUrl);
-      const dims = COMPOSE_DIMENSIONS[project.aspect];
+      const dims = COMPOSE_DIMENSIONS[sequence.aspect];
+      const outFrame = clipFrameAt(clip, clip.frames - 1, fps).mediaFrame + 1;
+      const speedKey = `${clip.speedNum}/${clip.speedDen}`;
       const canSlide = !!material && material.ratio > dims.width / dims.height + 0.01 && reframe.fit === 'fill';
       return (
         <>
-          <PanelHead title={fill(copy.panel.cut, { number: span.index + 1 })} meta={formatClock(span.durationSec, true)} />
+          <PanelHead title={fill(copy.panel.cut, { number: span.index + 1 })} meta={formatTimecode(span.frames, fps)} />
           <Section title={c.clip.length}>
-            <p className={styles.readout}>
-              <span>{formatClock(clip.trimStartSec, true)}</span>
+            <p className={styles.readout} data-editor-clip-readout>
+              <span>{formatTimecode(clip.inFrame, fps)}</span>
               <i aria-hidden="true" />
-              <span>{formatClock(clip.trimEndSec, true)}</span>
+              <span>{formatTimecode(outFrame, fps)}</span>
             </p>
-            <p className={styles.note}>{c.clip.lengthHint}</p>
+            <p className={styles.note}>
+              {fill(c.clip.frames, { count: span.frames, fps })} {c.clip.lengthHint}
+            </p>
           </Section>
           <Section title={c.clip.speed}>
             <Seg
               label={c.clip.speed}
-              value={clipPlaybackRate(clip)}
-              options={[0.5, 1, 1.5, 2].map((rate) => ({ value: rate, label: `${rate}×` }))}
-              onChange={(rate) => api.patch([{ op: 'set_clip_speed', clipIndex: span.index, playbackRate: rate }])}
+              value={speedKey}
+              options={SPEEDS.map((speed) => ({ value: `${speed.num}/${speed.den}`, label: speed.label }))}
+              onChange={(value) => {
+                const speed = SPEEDS.find((entry) => `${entry.num}/${entry.den}` === value);
+                if (speed) api.setSpeed(span.index, speed.num, speed.den);
+              }}
             />
           </Section>
           <Section title={c.clip.framing}>
@@ -463,7 +479,7 @@ function CutPanel({ api }: { api: EditorApi }) {
               min={0}
               max={100}
               display={clip.muted ? c.clip.mute : `${Math.round(clip.volume * 100)}`}
-              onChange={(value) => api.patch([{ op: 'set_clip_audio', clipIndex: span.index, volume: value / 100, muted: value === 0 }], 'clip-volume')}
+              onChange={(value) => api.setClipAudio(span.index, value === 0 ? clip.volume : value / 100, value === 0)}
             />
           </Section>
           <button type="button" className={styles.quietBtn} onClick={() => api.removeClips([clip.id])}>
@@ -487,13 +503,13 @@ function CutPanel({ api }: { api: EditorApi }) {
   }
   return (
     <>
-      <PanelHead title={copy.panel.film} meta={fill(copy.panel.filmSummary, { count: project.clips.length, duration: formatClock(api.durationSec) })} />
+      <PanelHead title={copy.panel.film} meta={fill(copy.panel.filmSummary, { count: sequence.clips.length, duration: formatTimecode(api.total, fps) })} />
       <Section title={c.film.shape}>
         <div className={styles.shapeGrid} role="group" aria-label={c.film.shape}>
           {COMPOSE_ASPECTS.map((aspect) => {
             const dims = COMPOSE_DIMENSIONS[aspect];
             return (
-              <button key={aspect} type="button" aria-pressed={project.aspect === aspect} onClick={() => api.patch([{ op: 'set_aspect', aspect }])} data-editor-aspect={aspect}>
+              <button key={aspect} type="button" aria-pressed={sequence.aspect === aspect} onClick={() => api.setAspect(aspect)} data-editor-aspect={aspect}>
                 <i style={{ aspectRatio: `${dims.width} / ${dims.height}` }} aria-hidden="true" />
                 <strong>{aspect}</strong>
                 <small>{copy.aspectNames[ASPECT_KEYS[aspect]]}</small>
@@ -511,21 +527,24 @@ function CutPanel({ api }: { api: EditorApi }) {
       )}
       <Section title={c.quick.heading}>
         <div className={styles.quickRow}>
-          <button type="button" className={styles.fixBtn} onClick={api.splitAtPlayhead}>{c.quick.split}<kbd>S</kbd></button>
-          <button type="button" className={styles.fixBtn} onClick={() => api.trimToPlayhead('start')}>{c.quick.trimStart}<kbd>Q</kbd></button>
-          <button type="button" className={styles.fixBtn} onClick={() => api.trimToPlayhead('end')}>{c.quick.trimEnd}<kbd>W</kbd></button>
+          <button type="button" className={styles.fixBtn} onClick={api.splitAtPlayhead}>{c.quick.split}<KeyCaps api={api} action="split" /></button>
+          <button type="button" className={styles.fixBtn} onClick={() => api.trimToPlayhead('start')}>{c.quick.trimStart}<KeyCaps api={api} action="trimStart" /></button>
+          <button type="button" className={styles.fixBtn} onClick={() => api.trimToPlayhead('end')}>{c.quick.trimEnd}<KeyCaps api={api} action="trimEnd" /></button>
         </div>
       </Section>
-      <details className={styles.fine}>
-        <summary>{c.keys.heading}<EditorIcon name="chevron" /></summary>
+      <details className={styles.fine} data-editor-keys>
+        <summary>{copy.shortcuts.heading}<EditorIcon name="chevron" /></summary>
         <dl className={styles.keys}>
-          {KEY_ROWS.map(([key, keys]) => (
-            <div key={key}>
-              <dt>{c.keys[key]}</dt>
-              <dd><kbd>{keys}</kbd></dd>
+          {KEY_ROWS.map((action) => (
+            <div key={action}>
+              <dt>{copy.shortcuts.actions[action]}</dt>
+              <dd><KeyCaps api={api} action={action} /></dd>
             </div>
           ))}
         </dl>
+        <button type="button" className={styles.fixBtn} onClick={() => api.setShortcutsOpen(true)} data-editor-shortcuts-open>
+          {copy.shortcuts.open}
+        </button>
       </details>
     </>
   );
@@ -699,7 +718,7 @@ function SoundPanel({ api }: { api: EditorApi }) {
             min={0}
             max={100}
             display={`${Math.round((selected.clip.muted ? 0 : selected.clip.volume) * 100)}`}
-            onChange={(value) => api.patch([{ op: 'set_clip_audio', clipIndex: selected.index, volume: value / 100, muted: value === 0 }], 'clip-volume')}
+            onChange={(value) => api.setClipAudio(selected.index, value === 0 ? selected.clip.volume : value / 100, value === 0)}
           />
         )}
       </details>
@@ -708,11 +727,11 @@ function SoundPanel({ api }: { api: EditorApi }) {
 }
 
 function CaptionsPanel({ api }: { api: EditorApi }) {
-  const { copy, doc, project } = api;
+  const { copy, doc, sequence } = api;
   const c = copy.captions;
   const settings = doc.captionSettings;
-  const has = project.captions.length > 0;
-  const position: CaptionPosition | null = has && project.captions.every((caption) => caption.position === project.captions[0]!.position) ? project.captions[0]!.position : null;
+  const has = sequence.captions.length > 0;
+  const position: CaptionPosition | null = has && sequence.captions.every((caption) => caption.position === sequence.captions[0]!.position) ? sequence.captions[0]!.position : null;
   const poster = api.activeClip?.clip.thumbUrl ?? '';
   const platform = (id: 'reels' | 'shorts' | 'tiktok') => c.safe[id];
   return (
@@ -762,14 +781,14 @@ function CaptionsPanel({ api }: { api: EditorApi }) {
       </Section>
       <Section title={c.safe.heading}>
         <Seg label={c.safe.heading} value={settings.safeArea} options={SAFE_AREAS.map((value) => ({ value, label: c.safe[value] }))} onChange={(safeArea) => api.setCaptionSettings({ safeArea, ...(safeArea === 'none' ? { lift: false } : {}) })} />
-        <p className={styles.note}>{project.aspect === '9:16' ? c.safe.note : c.safe.verticalOnly}</p>
+        <p className={styles.note}>{sequence.aspect === '9:16' ? c.safe.note : c.safe.verticalOnly}</p>
       </Section>
       <Section title={c.output.heading}>
         <Seg label={c.output.heading} value={settings.output} options={CAPTION_OUTPUTS.map((value) => ({ value, label: c.output[value] }))} onChange={(output) => api.setCaptionSettings({ output })} />
         {settings.output !== 'burn' && <p className={styles.note}>{c.output.fileNote}</p>}
       </Section>
       {has && (
-        <button type="button" className={styles.quietBtn} onClick={() => api.patch([{ op: 'remove_caption', captionIndex: 'all' }])}>
+        <button type="button" className={styles.quietBtn} onClick={() => api.removeCaption('all')}>
           <EditorIcon name="trash" />
           {c.removeAll}
         </button>

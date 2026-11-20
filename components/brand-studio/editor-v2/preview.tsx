@@ -1,9 +1,10 @@
 'use client';
 
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { clipPlaybackRate, frameStateAtTime, timelineSpans } from '@/lib/brand-studio/compose/timeline';
 import { materialBySrc } from '@/lib/brand-studio/editor-v2/fixture';
-import { DEFAULT_REFRAME, formatClock, gradeMatrix, isNeutral } from '@/lib/brand-studio/editor-v2/model';
+import { formatTimecode, frameStateAt, spansOf, totalFrames } from '@/lib/brand-studio/editor-v2/frames';
+import { DEFAULT_REFRAME, gradeMatrix, isNeutral } from '@/lib/brand-studio/editor-v2/model';
+import { formatBinding } from '@/lib/brand-studio/editor-v2/shortcuts';
 import { EditorIcon } from './icons';
 import type { EditorApi } from './use-editor';
 import styles from './editor-v2.module.css';
@@ -19,14 +20,15 @@ const SAFE_ZONES = {
 } as const;
 
 export function Preview({ api }: { api: EditorApi }) {
-  const { copy, doc, project, frame, activeClip, playing, workspace } = api;
+  const { copy, doc, sequence, frame, activeClip, rate, workspace, fps, playhead } = api;
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const frameRef = useRef<HTMLDivElement | null>(null);
   const [split, setSplit] = useState(50);
+  const [shown, setShown] = useState<{ src: string; sourceFrame: number } | null>(null);
 
-  const latest = useRef({ project, playheadSec: api.playheadSec, seek: api.seek, setPlaying: api.setPlaying });
-  latest.current = { project, playheadSec: api.playheadSec, seek: api.seek, setPlaying: api.setPlaying };
+  const latest = useRef({ sequence, playhead, seek: api.seek, setRate: api.setRate });
+  latest.current = { sequence, playhead, seek: api.seek, setRate: api.setRate };
 
   const clip = activeClip?.clip ?? null;
   const look = clip ? doc.looks[clip.id] : undefined;
@@ -35,11 +37,13 @@ export function Preview({ api }: { api: EditorApi }) {
   const reframe = (clip && doc.reframe[clip.id]) || DEFAULT_REFRAME;
   const comparing = api.compare && graded && workspace === 'color';
 
-  // Paused: the frame under the playhead.
+  // Stopped (or shuttling backwards): show exactly the frame the playhead is on. The seek aims at the
+  // middle of the source frame, so the browser cannot round onto a neighbour.
   const src = clip?.srcUrl ?? null;
-  const mediaTime = activeClip?.mediaTimeSec ?? 0;
+  const seekSec = activeClip?.seekSec ?? 0;
+  const sourceFrame = activeClip?.sourceFrame ?? 0;
   useEffect(() => {
-    if (playing) return;
+    if (rate > 0) return;
     const video = videoRef.current;
     if (!video || !src) return;
     if (video.dataset.src !== src) {
@@ -47,60 +51,72 @@ export function Preview({ api }: { api: EditorApi }) {
       video.src = src;
     }
     video.pause();
-    const apply = () => {
-      if (Math.abs(video.currentTime - mediaTime) > 0.04) video.currentTime = mediaTime;
+    let alive = true;
+    const landed = () => {
+      if (alive && !video.seeking && Math.abs(video.currentTime - seekSec) < 0.002) setShown({ src, sourceFrame });
     };
+    const apply = () => {
+      if (Math.abs(video.currentTime - seekSec) > 0.0005) video.currentTime = seekSec;
+      else if (video.readyState >= 2) landed();
+    };
+    video.addEventListener('seeked', landed);
+    video.addEventListener('loadeddata', landed);
     if (video.readyState >= 1) apply();
     else video.addEventListener('loadedmetadata', apply, { once: true });
-    return () => video.removeEventListener('loadedmetadata', apply);
-  }, [playing, src, mediaTime]);
+    return () => {
+      alive = false;
+      video.removeEventListener('seeked', landed);
+      video.removeEventListener('loadeddata', landed);
+      video.removeEventListener('loadedmetadata', apply);
+    };
+  }, [rate, src, seekSec, sourceFrame]);
 
-  // Playing: the video element is the clock; the playhead follows it cut by cut.
+  // Playing forward (1×, or 2× and 4× on the shuttle): the video element is the clock and the playhead
+  // follows it, one whole frame at a time, cut by cut.
   useEffect(() => {
-    if (!playing) return;
+    if (rate <= 0) return;
     const video = videoRef.current;
     if (!video) return;
     let raf = 0;
     let lastPush = 0;
     let expectedId: string | null = null;
     let seekTo: number | null = null;
-    const total = timelineSpans(latest.current.project).at(-1)?.timelineEndSec ?? 0;
-    let cursor = latest.current.playheadSec >= total - 0.05 ? 0 : latest.current.playheadSec;
+    const startTotal = totalFrames(latest.current.sequence);
+    let cursor = latest.current.playhead >= startTotal - 1 ? 0 : latest.current.playhead;
     const tick = (now: number) => {
-      const current = latest.current.project;
-      const spans = timelineSpans(current);
-      const end = spans.at(-1)?.timelineEndSec ?? 0;
-      const active = frameStateAtTime(current, cursor).activeClip;
-      if (!active || cursor >= end - 0.01) {
-        latest.current.seek(end);
-        latest.current.setPlaying(false);
+      const current = latest.current.sequence;
+      const end = totalFrames(current);
+      const active = cursor < end ? frameStateAt(current, cursor).active : null;
+      if (!active) {
+        latest.current.seek(end - 1);
+        latest.current.setRate(0);
         return;
       }
-      const span = spans[active.index]!;
-      const rate = clipPlaybackRate(active.clip);
-      if (video.dataset.src !== active.clip.srcUrl) {
-        video.dataset.src = active.clip.srcUrl;
-        video.src = active.clip.srcUrl;
-        seekTo = active.mediaTimeSec;
-      } else if (expectedId !== active.clip.id && Math.abs(video.currentTime - active.mediaTimeSec) > 0.08) {
-        seekTo = active.mediaTimeSec;
+      const { clip: playing } = active;
+      const span = spansOf(current)[active.index]!;
+      if (video.dataset.src !== playing.srcUrl) {
+        video.dataset.src = playing.srcUrl;
+        video.src = playing.srcUrl;
+        seekTo = active.seekSec;
+      } else if (expectedId !== playing.id && Math.abs(video.currentTime - active.seekSec) > 0.5 / playing.sourceFps) {
+        seekTo = active.seekSec;
       }
-      expectedId = active.clip.id;
+      expectedId = playing.id;
       if (seekTo !== null) {
         if (video.readyState >= 1) {
           video.currentTime = seekTo;
           seekTo = null;
         }
       } else {
-        video.playbackRate = rate;
+        video.playbackRate = Math.min(16, (playing.speedNum / playing.speedDen) * rate);
         if (video.paused) void video.play().catch(() => undefined);
-        const media = video.currentTime;
-        if (media >= active.clip.trimEndSec - 0.03 || video.ended) cursor = span.timelineEndSec + 0.001;
-        else if (media >= active.clip.trimStartSec - 0.05) {
-          cursor = Math.max(cursor, span.timelineStartSec + (media - active.clip.trimStartSec) / rate);
-        }
+        // The film-grid frame the video is on, then back through the cut's speed to a timeline frame.
+        const mediaFrame = Math.floor(video.currentTime * current.fps + 1e-6);
+        const offset = Math.floor(((mediaFrame - playing.inFrame) * playing.speedDen - playing.phase) / playing.speedNum);
+        if (offset >= playing.frames || video.ended) cursor = span.end;
+        else if (offset >= 0) cursor = Math.max(cursor, span.start + offset);
       }
-      if (now - lastPush > 66) {
+      if (now - lastPush > 40 && cursor < end) {
         lastPush = now;
         latest.current.seek(cursor);
       }
@@ -111,7 +127,19 @@ export function Preview({ api }: { api: EditorApi }) {
       cancelAnimationFrame(raf);
       video.pause();
     };
-  }, [playing]);
+  }, [rate]);
+
+  // Shuttling backwards: a browser cannot play a video in reverse, so the playhead steps back at the
+  // film's rate and the frame is shown by seeking.
+  useEffect(() => {
+    if (rate >= 0) return;
+    const timer = setInterval(() => {
+      const at = latest.current.playhead;
+      if (at <= 0) return latest.current.setRate(0);
+      latest.current.seek(at + rate);
+    }, 1000 / fps);
+    return () => clearInterval(timer);
+  }, [rate, fps]);
 
   // Before/after: the untouched picture is drawn over the left part of the frame.
   useEffect(() => {
@@ -177,15 +205,28 @@ export function Preview({ api }: { api: EditorApi }) {
   };
 
   const settings = doc.captionSettings;
-  const vertical = project.aspect === '9:16';
+  const vertical = sequence.aspect === '9:16';
   const zone = settings.safeArea !== 'none' ? SAFE_ZONES[settings.safeArea] : null;
   const showZones = workspace === 'captions' && vertical && !!zone;
   const lifted = vertical && settings.lift && zone ? zone.bottom + 2 : 6;
-  const activeTitles = doc.titles.filter((title) => api.playheadSec >= title.startSec && api.playheadSec <= title.endSec);
+  const activeTitles = doc.titles.filter((title) => playhead >= title.start && playhead < title.end);
   const material = clip ? materialBySrc(clip.srcUrl) : undefined;
+  const key = (action: 'split' | 'play') => {
+    const binding = api.shortcutMap[action][0];
+    return binding ? formatBinding(binding, api.mac) : [];
+  };
+  const settledOnFrame = rate === 0 && !!shown && shown.src === src && shown.sourceFrame === sourceFrame;
 
   return (
-    <section className={styles.stage} aria-label={copy.title} data-editor-preview>
+    <section
+      className={styles.stage}
+      aria-label={copy.title}
+      data-editor-preview
+      data-editor-playhead={playhead}
+      data-editor-fps={fps}
+      data-editor-source-frame={sourceFrame}
+      data-editor-settled={settledOnFrame ? '' : undefined}
+    >
       <svg className={styles.defs} aria-hidden="true" focusable="false">
         <filter id="ev2-grade" colorInterpolationFilters="sRGB">
           <feColorMatrix type="matrix" values={(matrix ?? gradeMatrix({ exposure: 0, contrast: 0, temperature: 0, saturation: 0 })).join(' ')} />
@@ -195,8 +236,8 @@ export function Preview({ api }: { api: EditorApi }) {
         <div
           ref={frameRef}
           className={styles.frame}
-          style={{ aspectRatio: ASPECT_CSS[project.aspect], '--ev-ratio': ASPECT_RATIO[project.aspect] } as React.CSSProperties}
-          data-aspect={project.aspect}
+          style={{ aspectRatio: ASPECT_CSS[sequence.aspect], '--ev-ratio': ASPECT_RATIO[sequence.aspect] } as React.CSSProperties}
+          data-aspect={sequence.aspect}
           data-editor-frame
         >
           <video
@@ -228,8 +269,9 @@ export function Preview({ api }: { api: EditorApi }) {
                 aria-valuenow={Math.round(split)}
                 tabIndex={0}
                 onKeyDown={(event) => {
-                  if (event.key === 'ArrowLeft') setSplit((value) => Math.max(4, value - 4));
-                  if (event.key === 'ArrowRight') setSplit((value) => Math.min(96, value + 4));
+                  if (event.key !== 'ArrowLeft' && event.key !== 'ArrowRight') return;
+                  event.stopPropagation();
+                  setSplit((value) => Math.min(96, Math.max(4, value + (event.key === 'ArrowLeft' ? -4 : 4))));
                 }}
                 data-editor-split
               >
@@ -247,7 +289,7 @@ export function Preview({ api }: { api: EditorApi }) {
           {activeTitles.map((title) => (
             <p key={title.id} className={styles.title} data-preset={title.preset}>{title.text}</p>
           ))}
-          {frame.activeCaptions.map((caption) => (
+          {frame.captions.map((caption) => (
             <p
               key={caption.id}
               className={styles.caption}
@@ -262,22 +304,30 @@ export function Preview({ api }: { api: EditorApi }) {
         </div>
       </div>
       <div className={styles.transport}>
-        <button type="button" className={styles.iconBtn} onClick={() => { api.setPlaying(false); api.seek(0); }} aria-label={copy.timeline.toStart} title={copy.timeline.toStart}>
+        <button type="button" className={styles.iconBtn} onClick={() => api.step(-api.total)} aria-label={copy.timeline.toStart} title={copy.timeline.toStart}>
           <EditorIcon name="toStart" />
+        </button>
+        <button type="button" className={styles.iconBtn} onClick={() => api.step(-1)} aria-label={copy.timeline.stepBack} title={copy.timeline.stepBack} data-editor-step="-1">
+          <EditorIcon name="back" />
         </button>
         <button
           type="button"
           className={styles.playBtn}
-          onClick={() => api.setPlaying(!playing)}
-          aria-label={playing ? copy.timeline.pause : copy.timeline.play}
-          title={playing ? copy.timeline.pause : copy.timeline.play}
+          onClick={() => api.setPlaying(rate === 0)}
+          aria-label={rate !== 0 ? copy.timeline.pause : copy.timeline.play}
+          title={`${rate !== 0 ? copy.timeline.pause : copy.timeline.play} (${key('play').join(' ')})`}
           data-editor-play
         >
-          <EditorIcon name={playing ? 'pause' : 'play'} />
+          <EditorIcon name={rate !== 0 ? 'pause' : 'play'} />
         </button>
-        <span className={styles.clock}>
-          <strong>{formatClock(api.playheadSec, true)}</strong>
-          <span>/ {formatClock(api.durationSec, true)}</span>
+        <button type="button" className={styles.iconBtn} onClick={() => api.step(1)} aria-label={copy.timeline.stepForward} title={copy.timeline.stepForward} data-editor-step="1">
+          <EditorIcon name="forward" />
+        </button>
+        <span className={styles.clock} title={copy.timeline.timecodeNote}>
+          <strong data-editor-timecode>{formatTimecode(playhead, fps)}</strong>
+          <span>/ {formatTimecode(api.total, fps)}</span>
+          <em>{fps} fps</em>
+          {rate !== 0 && rate !== 1 && <em data-editor-shuttle>{rate > 0 ? `${rate}×` : `−${Math.abs(rate)}×`}</em>}
         </span>
         <span className={styles.transportSpace} />
         {workspace === 'color' && (
@@ -293,10 +343,10 @@ export function Preview({ api }: { api: EditorApi }) {
             {copy.color.applied.compare}
           </button>
         )}
-        <button type="button" className={styles.chipBtn} onClick={api.splitAtPlayhead} title="S">
+        <button type="button" className={styles.chipBtn} onClick={api.splitAtPlayhead} data-editor-split-button>
           <EditorIcon name="split" />
           {copy.timeline.split}
-          <kbd>S</kbd>
+          <kbd>{key('split').join(' ')}</kbd>
         </button>
       </div>
     </section>
