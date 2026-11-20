@@ -387,7 +387,8 @@ async function sweepNotFound(privateKeys: string[], brandWorkspace: BrandWorkspa
     const project = '00000000-0000-4000-8000-000000000000';
     // docs/BRAND-STUDIO-V2.md §5: the studio and its formats tab ask for sign-in like every brand page.
     // docs/BRAND-STUDIO-V3.md §12: so do the workspace home and the default landing that picks it.
-    for (const path of ['/brand/projects/new', `/brand/projects/${project}`, `/brand/projects/${project}/participants`, `/brand/projects/${project}/funding`, '/brand/creators', '/brand/studio', '/brand/studio?tab=formats', '/brand/home', '/brand/start']) {
+    // docs/BRAND-SOUND-STUDIO.md §7.3: and the sound studio, whatever its flag says.
+    for (const path of ['/brand/projects/new', `/brand/projects/${project}`, `/brand/projects/${project}/participants`, `/brand/projects/${project}/funding`, '/brand/creators', '/brand/studio', '/brand/studio?tab=formats', '/brand/studio/sound', '/brand/home', '/brand/start']) {
       const page = await request(path, { headers: { host: 'brand.twings.app' } });
       const next = page.location ? new URL(page.location, BASE).searchParams.get('next') : null;
       expectEqual(`brand.twings.app${path}: asks to sign in and returns here`, page.status >= 300 && page.status < 400 && next === path, true);

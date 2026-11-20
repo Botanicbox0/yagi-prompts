@@ -13,6 +13,7 @@ import { studioVideoEn } from './studio-video';
 import { studioReviewEn } from './studio-review';
 import { studioLayersEn } from './studio-layers';
 import { studioComposeEn } from './studio-compose';
+import { studioSoundEn } from './studio-sound';
 import { studioEditorEn } from './studio-editor';
 import { studioWorkflowsEn } from './studio-workflows';
 import { adminConsoleEn } from './admin-console';
@@ -64,6 +65,7 @@ export const en = {
   studioReview: studioReviewEn,
   studioLayers: studioLayersEn,
   studioCompose: studioComposeEn,
+  studioSound: studioSoundEn,
   studioEditor: studioEditorEn,
   studioWorkflows: studioWorkflowsEn,
   adminConsole: adminConsoleEn,

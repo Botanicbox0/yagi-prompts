@@ -25,6 +25,16 @@ export function studioV2Visible(org: StudioVisibilityOrg | null | undefined, fla
 }
 
 /**
+ * The sound studio (docs/BRAND-SOUND-STUDIO.md §4.1): the studio is open for this brand, the `sound` group is
+ * not denied, and the server's `BRAND_SOUND_STUDIO` flag (`soundFlagOn`) is on. A sandboxed organization is
+ * already `false` through `studioV2Visible`, and `DEFAULT_SANDBOX_DENIED` closes `sound` for it as well.
+ */
+export function soundStudioVisible(org: StudioVisibilityOrg | null | undefined, flagOn: boolean, soundFlagOn: boolean): boolean {
+  if (!soundFlagOn || !studioV2Visible(org, flagOn)) return false;
+  return !featureDenied(org?.denied, 'sound');
+}
+
+/**
  * Non-subscribing commissioned organizations (`self_studio` denied while `generative_media` is open and not
  * sandboxed) see an inviting Studio Showroom when they click Image/Video Studio in the rail instead of a
  * cold 404 block screen (founder decision 2026-11-12 §5). Morphic and `generative_media`-denied orgs remain

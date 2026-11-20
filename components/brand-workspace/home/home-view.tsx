@@ -37,6 +37,7 @@ import s from './home.module.css';
 const ICON: Record<HomeDoorKey | HomeToolKey | HomeTeamKey, string> = {
   image: RAIL_ICON.image,
   video: RAIL_ICON.video,
+  sound: RAIL_ICON.sound,
   compose: RAIL_ICON.compose,
   workflows: RAIL_ICON.workflows,
   assets: RAIL_ICON.assets,

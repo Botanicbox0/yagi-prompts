@@ -4,7 +4,12 @@ import type { ComposeAspect, ComposerProject } from '@/lib/brand-studio/compose/
 export const VIDEO_PROJECT_STATUSES = ['active', 'completed', 'archived'] as const;
 export type VideoProjectStatus = (typeof VIDEO_PROJECT_STATUSES)[number];
 
-export const VIDEO_PROJECT_OPERATIONS = ['create', 'save', 'status', 'delete'] as const;
+/**
+ * `bgm.set` and `sfx.add` put an organization audio asset into a project's background-music slot or onto its
+ * effects track (docs/BRAND-SOUND-STUDIO.md §7.3). They exist only while `BRAND_SOUND_STUDIO=on` and the
+ * `sound` group is open; otherwise they answer like an unknown operation (`invalid`) or a closed feature.
+ */
+export const VIDEO_PROJECT_OPERATIONS = ['create', 'save', 'status', 'delete', 'bgm.set', 'sfx.add'] as const;
 export type VideoProjectOperation = (typeof VIDEO_PROJECT_OPERATIONS)[number];
 
 export interface VideoProjectSummary {
@@ -50,4 +55,8 @@ export type VideoProjectMutationResult =
       ok: false;
       code: StudioErrorCode;
       currentRevision?: number;
+      /** `bgm.set` without `replace` on a project whose slot already holds other music: what is there now. */
+      currentBgmLabel?: string;
+      /** `sfx.add` on a project whose effects track is full. */
+      sfxFull?: boolean;
     };

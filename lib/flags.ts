@@ -210,6 +210,17 @@ export function brandStudioMusicGenerationOpen(env: Record<string, string | unde
 }
 
 /**
+ * The sound studio (docs/BRAND-SOUND-STUDIO.md §7): `/brand/studio/sound`, its rail item and home card, and
+ * the two "send to a project" operations. Default OFF: open only when the server environment says exactly
+ * `BRAND_SOUND_STUDIO=on`. Off means the route answers 404, the rail and home are as they were, and the two
+ * operations answer like unknown ones. The studio route guard and the `sound` feature policy run first, so a
+ * sandboxed organization gets 404 whatever this flag says.
+ */
+export function brandSoundStudioOpen(env: Record<string, string | undefined> = process.env): boolean {
+  return env.BRAND_SOUND_STUDIO === 'on';
+}
+
+/**
  * A studio run can belong to a project (docs/BRAND-STUDIO-V6-PLAN.md §7 C, migration 0091): the image
  * studio gets the video studio's project switcher, new runs carry the chosen project, and the assets page
  * can put an existing run in a project. Default OFF: open only when the server environment says exactly

@@ -10,6 +10,7 @@ import type { StudioJobKind } from '@/lib/brand-studio/contracts';
 export type RailItemId =
   | 'image'
   | 'video'
+  | 'sound'
   | 'compose'
   | 'workflows'
   | 'review'
@@ -27,6 +28,7 @@ export type RailGroupId = 'make' | 'team';
 export const RAIL_GROUP: Readonly<Record<RailItemId, RailGroupId>> = {
   image: 'make',
   video: 'make',
+  sound: 'make',
   compose: 'make',
   workflows: 'make',
   assets: 'make',
@@ -49,6 +51,7 @@ export const RAIL_JOBS_SESSION_KEY = 'twings_brand_rail_jobs_v1';
 export const RAIL_HREF: Readonly<Record<RailItemId, string>> = {
   image: '/brand/studio',
   video: '/brand/studio/video',
+  sound: '/brand/studio/sound',
   compose: '/brand/studio/compose',
   workflows: '/brand/studio/workflows',
   review: '/brand/studio/review',
@@ -67,6 +70,8 @@ export const RAIL_ICON: Readonly<Record<RailItemId | 'team' | 'settings' | 'crea
   workflows: 'M3.5 5.5h4.5v4.5H3.5z M12 5.5h4.5v4.5H12z M12 12h4.5v4.5H12z M8 7.75h4 M5.75 10v4.25h6.25',
   image: 'M3.5 4.5h13v11h-13z M3.5 13l3.8-3.6 3 2.8 2.2-2 4 3.6 M12.6 7.4h.1',
   video: 'M3 5.5h10v9H3z M13 8.6l4-2.4v7.6l-4-2.4',
+  /** A short waveform: five bars of different heights. */
+  sound: 'M4 8.5v3 M7 6v8 M10 4v12 M13 6.5v7 M16 8.5v3',
   review: 'M4 4.5h12v8.5H9l-3.5 3v-3H4z M7 8h6M7 10.5h4',
   campaigns: 'M3.5 3.5h13v13h-13z M3.5 8h13M8 8v8.5',
   creators: 'M7 8a3 3 0 1 0 0-.01M2.5 16.5v-.5a4.5 4.5 0 0 1 9 0v.5M13.5 6a2.5 2.5 0 1 1 0 5M14.5 13a4 4 0 0 1 3 3.5',
@@ -89,21 +94,28 @@ export interface RailVisibility {
   identity: boolean;
   /** Project rooms are open for this brand (docs/BRAND-ROOMS.md §2): the two groups and 메시지. */
   rooms?: boolean;
+  /**
+   * The sound studio is open (docs/BRAND-SOUND-STUDIO.md §4.1): the studio itself, the `sound` group not
+   * denied, `BRAND_SOUND_STUDIO=on`. Only with `studio`: a project-only brand's showroom has no sound door.
+   */
+  sound?: boolean;
 }
 
 /**
- * Default order (§3): 이미지 스튜디오 · 영상 스튜디오 · 편집 스튜디오 · 워크플로우 · 캠페인 · 크리에이터 · 에셋.
+ * Default order (§3): 이미지 스튜디오 · 영상 스튜디오 · (사운드 스튜디오) · 편집 스튜디오 · 워크플로우 · 캠페인 · 크리에이터 · 에셋.
  * With rooms (묶음 E, docs/BRAND-PROJECTS-E.md): 이미지 스튜디오 · 영상 스튜디오 · 편집 스튜디오 · 워크플로우 · 에셋 | 프로젝트 · 알림함.
  * A project-only org (`studioShowroom` without `studio`) has the same order; it opens on 야기 팀과 (rail-mode.ts).
  */
 export function railItems(visible: RailVisibility): RailItemId[] {
   const showStudio = Boolean(visible.studio || visible.studioShowroom);
+  const showSound = Boolean(visible.studio && visible.sound);
   if (visible.rooms) {
     // A project-only brand used to get 프로젝트 · 알림함 first; the two-mode rail (rail-mode.ts) now opens it
     // on 야기 팀과 instead, so every brand lists its items in the same order.
     const grouped: Array<[RailItemId, boolean]> = [
       ['image', showStudio],
       ['video', showStudio],
+      ['sound', showSound],
       ['compose', showStudio],
       ['workflows', showStudio],
       ['assets', true],
@@ -115,6 +127,7 @@ export function railItems(visible: RailVisibility): RailItemId[] {
   const all: Array<[RailItemId, boolean]> = [
     ['image', showStudio],
     ['video', showStudio],
+    ['sound', showSound],
     ['compose', showStudio],
     ['workflows', showStudio],
     ['campaigns', true],
@@ -139,6 +152,7 @@ export function railActive(href: string, path: string): boolean {
     return (
       under(path, '/brand/studio') &&
       !under(path, '/brand/studio/video') &&
+      !under(path, '/brand/studio/sound') &&
       !under(path, '/brand/studio/review') &&
       !under(path, '/brand/studio/compose') &&
       !under(path, '/brand/studio/editor') &&

@@ -44,14 +44,14 @@ export function brandLandingPath(choices: readonly BrandWorkspaceChoice[], flagO
 }
 
 export type HomeDoorKey = 'image' | 'video';
-export type HomeToolKey = 'compose' | 'workflows' | 'assets';
+export type HomeToolKey = 'sound' | 'compose' | 'workflows' | 'assets';
 /** `commission`: 새 프로젝트 의뢰 (rooms open); `campaign`: 캠페인 의뢰 (rooms closed); `projects`: 프로젝트, for a role that cannot request. */
 export type HomeTeamKey = 'commission' | 'campaign' | 'projects';
 
 export interface HomeLayout {
   /** The two big doors: 이미지 스튜디오, 영상 스튜디오. */
   doors: Array<{ key: HomeDoorKey; path: string }>;
-  /** The compact tools: 편집 스튜디오, 워크플로우, 에셋 (when the asset hub is open). */
+  /** The compact tools: 사운드 스튜디오 (when open), 편집 스튜디오, 워크플로우, 에셋 (when the asset hub is open). */
   tools: Array<{ key: HomeToolKey; path: string }>;
   /** The YAGI team tile: a service, not a tool. */
   team: { key: HomeTeamKey; path: string };
@@ -64,6 +64,8 @@ export interface HomeLayoutInput {
   canRequest: boolean;
   /** Project rooms are open for this brand: the request is a project brief to the YAGI team. */
   rooms: boolean;
+  /** The sound studio is open for this brand (lib/brand-studio/visibility.ts `soundStudioVisible`). */
+  sound?: boolean;
 }
 
 /**
@@ -76,6 +78,7 @@ export function homeLayout(input: HomeLayoutInput): HomeLayout | null {
   const { choice, flagOn } = input;
   if (!brandHomeVisible(choice, flagOn)) return null;
   const tools: HomeLayout['tools'] = [
+    ...(input.sound ? [{ key: 'sound' as const, path: '/brand/studio/sound' }] : []),
     { key: 'compose', path: '/brand/studio/compose' },
     { key: 'workflows', path: '/brand/studio/workflows' },
   ];

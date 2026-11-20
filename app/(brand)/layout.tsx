@@ -10,7 +10,7 @@ import "./rail.css";
 import "./studio-v2.css";
 import "@/components/brand-rooms/room/room.css";
 import { cookies } from "next/headers";
-import { brandRoomNotifyOpen, brandRoomsOpen, brandStudioV2Open } from "@/lib/flags";
+import { brandRoomNotifyOpen, brandRoomsOpen, brandSoundStudioOpen, brandStudioV2Open } from "@/lib/flags";
 import { RegisterServiceWorker } from "@/components/pwa/register-sw";
 import { RAIL_COOKIE, railCookieExpanded } from "@/components/brand-workspace/rail-model";
 import { RAIL_MODE_COOKIE, parseRailModeCookie } from "@/components/brand-workspace/rail-mode";
@@ -91,7 +91,7 @@ export default async function BrandLayout({
             {/* URL-derived: dynamic render resolves this on the server, the empty fallback never shows. */}
             <Suspense fallback={null}>
               {scope?<WorkspaceIdentity scope={scope} copy={b.identity} roles={b.roles}/>:<p className="bw-kicker">{b.title}</p>}
-              <WorkspaceNavigation home={b.home} members={b.members} settings={b.managed.settings} library={b.managed.library} studio={studioCopy?b.productionStudio.title:""} identity={undefined} creators={influencersOpen() ? b.creatorPool.nav : undefined} scope={scope} studioV2={studioV2} shell={studioCopy?d.studioShell:undefined} locale={locale==="en"?"en":"ko"} railExpanded={railExpanded} rooms={rooms} roomsCopy={rooms?d.roomsShell.nav:undefined} homeLabel={studioV2?d.brandHome.nav.home:undefined} railModes={railModes}/>
+              <WorkspaceNavigation home={b.home} members={b.members} settings={b.managed.settings} library={b.managed.library} studio={studioCopy?b.productionStudio.title:""} identity={undefined} creators={influencersOpen() ? b.creatorPool.nav : undefined} scope={scope} studioV2={studioV2} shell={studioCopy?d.studioShell:undefined} locale={locale==="en"?"en":"ko"} railExpanded={railExpanded} rooms={rooms} roomsCopy={rooms?d.roomsShell.nav:undefined} homeLabel={studioV2?d.brandHome.nav.home:undefined} railModes={railModes} soundStudio={studioV2&&brandSoundStudioOpen()}/>
             </Suspense>
             <div className="bw-sidebar-utilities">
               <WorkspaceLanguage locale={locale} label={d.nav.localeToggle} compact applyLabel={b.languageApply}/>

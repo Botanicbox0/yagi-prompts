@@ -34,6 +34,11 @@ import {
   type TimelineClipTake,
 } from '@/lib/brand-studio/compose/timeline';
 import type { StudioMediaStore } from '@/lib/brand-studio/media-store';
+import { readyAsset } from '@/lib/brand-studio/repo';
+import { placeBgm, placeSfx, type SoundSendTrack } from '@/lib/brand-studio/sound/send';
+import { trackDisplayName } from '@/lib/brand-studio/sound/library';
+import { assertBrandFeature, BrandFeatureDenied } from '@/lib/brands/entitlements';
+import { brandSoundStudioOpen } from '@/lib/flags';
 import {
   VIDEO_PROJECT_OPERATIONS,
   VIDEO_PROJECT_STATUSES,
@@ -755,6 +760,77 @@ export async function loadVideoProjects(
   }
 }
 
+/**
+ * `bgm.set` / `sfx.add` (docs/BRAND-SOUND-STUDIO.md §7.3). Runs inside the seated transaction, after the
+ * membership, hardline, studio policy and role checks; then the `sound` group, then the asset: it must be a
+ * ready audio file of this organization (another organization's id answers `not_found`, a picture or film
+ * `invalid`). The slot is single: other music already there is replaced only with `replace: true`.
+ */
+async function placeSound(
+  tx: SqlRunner,
+  media: StudioMediaStore,
+  organizationId: string,
+  projectId: string,
+  op: 'bgm.set' | 'sfx.add',
+  input: Record<string, unknown>,
+): Promise<VideoProjectMutationResult> {
+  await assertBrandFeature(tx, organizationId, 'sound');
+  const assetId = typeof input.assetId === 'string' ? input.assetId : '';
+  if (!UUID.test(assetId)) return { ok: false, code: 'invalid' };
+  const asset = await readyAsset(tx, organizationId, assetId);
+  if (!asset) return { ok: false, code: 'not_found' };
+  if (asset.kind !== 'audio') return { ok: false, code: 'invalid' };
+
+  const current = (
+    await tx.query<VideoProjectRow>(
+      `select *
+         from brand_studio_video_projects
+        where id = $1
+          and organization_id = $2
+          and deleted_at is null
+        for update`,
+      [projectId, organizationId],
+    )
+  ).rows[0];
+  if (!current) return { ok: false, code: 'not_found' };
+
+  const label =
+    (typeof input.label === 'string' && input.label.trim() ? input.label.trim() : trackDisplayName(String(asset.name))) ??
+    String(asset.name).slice(0, 80);
+  const track: SoundSendTrack = {
+    assetId,
+    label,
+    seconds: secondsFromMs(asset.duration_ms),
+    srcUrl: media.url(String(asset.storage_key)),
+  };
+  const timeline = normalizeStoredTimeline(current.timeline, current.aspect);
+  let next: ComposerProject;
+  if (op === 'bgm.set') {
+    const placed = placeBgm(timeline, track, input.replace === true);
+    if (placed.status === 'replace_needed') return { ok: false, code: 'conflict', currentBgmLabel: placed.currentLabel };
+    next = placed.timeline;
+  } else {
+    const startSec = finiteNumber(input.startSec) ?? 0;
+    const placed = placeSfx(timeline, track, `sfx_${Date.now().toString(36)}_${assetId.slice(0, 8)}`, startSec);
+    if (placed.status === 'full') return { ok: false, code: 'invalid', sfxFull: true };
+    next = placed.timeline;
+  }
+
+  const updated = (
+    await tx.query<VideoProjectRow>(
+      `update brand_studio_video_projects
+          set timeline = $3::jsonb,
+              revision = revision + 1,
+              updated_at = now()
+        where id = $1
+          and organization_id = $2
+        returning *`,
+      [projectId, organizationId, JSON.stringify(next)],
+    )
+  ).rows[0]!;
+  return { ok: true, project: await hydrateSingleRow(tx, media, updated) };
+}
+
 export async function runVideoProjectOperation(
   deps: VideoProjectsDeps,
   viewer: VideoProjectViewer,
@@ -770,6 +846,8 @@ export async function runVideoProjectOperation(
     return { ok: false, code: 'invalid' };
   }
   const op = rawOp as VideoProjectOperation;
+  // The sound studio's two operations do not exist while its flag is off: same answer as an unknown one.
+  if ((op === 'bgm.set' || op === 'sfx.add') && !brandSoundStudioOpen()) return { ok: false, code: 'invalid' };
   const input = rawInput as Record<string, unknown>;
   const organizationId = typeof input.organizationId === 'string' ? input.organizationId : '';
 
@@ -851,6 +929,10 @@ export async function runVideoProjectOperation(
       const projectId = typeof input.projectId === 'string' ? input.projectId : '';
       if (!UUID.test(projectId)) {
         return { ok: false, code: 'invalid' };
+      }
+
+      if (op === 'bgm.set' || op === 'sfx.add') {
+        return await placeSound(tx, deps.media, organizationId, projectId, op, input);
       }
 
       if (op === 'save') {
@@ -1009,6 +1091,7 @@ export async function runVideoProjectOperation(
     });
   } catch (error) {
     if (error instanceof StudioDenied) return { ok: false, code: error.code };
+    if (error instanceof BrandFeatureDenied) return { ok: false, code: 'feature_unavailable' };
     throw error;
   }
 }
