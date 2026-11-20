@@ -397,6 +397,7 @@
 - 경로: `/brand/studio/editor?organizationId=<조직>`.
 - 스튜디오 경로 가드(`studioRouteContext`)가 먼저 돈다. 샌드박스 조직, 생성형 미디어가 막힌 조직, 프로젝트 전용 손님은 플래그와 상관없이 404다.
 - 시안은 조직의 어떤 것도 읽지 않는다. 요청을 보내지 않고, 저장하지 않고, 파일을 만들지 않는다(테스트가 막는다).
+- 예시 파일은 워크스페이스 호스트가 여는 공개 파일 목록(`STUDIO_DEMO_FILES`, `lib/routing/surfaces.ts`)에 있는 것만 쓴다. brand.twings.app은 공개 파일을 이름 단위로만 열어서, 커밋돼 있고 twings.app에서 열리는 파일도 목록에 없으면 404다. 2026-11-20 운영에서 예시 필름 두 편이 이 때문에 검게 나왔고, 목록에 있는 필름으로 바꿨다(`tests/brand-studio/editor-v2/fixture-served.test.ts`).
 
 ### 10.2 실제로 움직이는 것 / 예시 / 눌러도 아무 일 없는 것
 
