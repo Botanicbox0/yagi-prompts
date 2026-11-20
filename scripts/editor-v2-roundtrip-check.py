@@ -14,7 +14,9 @@ running local server with uploaded clips, that a film moves between them without
 Needs Python Playwright with Chromium (`pip install playwright && playwright install chromium`). It
 launches its own browser with a fresh profile (so the key starts empty) and talks only to the address
 below; it never attaches to another browser. Not part of the vitest suite. Run against a local server
-started with BRAND_STUDIO_V2=on BRAND_STUDIO_EDITOR_V2=on and at least three uploaded video assets:
+started with BRAND_STUDIO_V2=on BRAND_STUDIO_EDITOR_V2=on and at least three uploaded video assets. It
+opens the current editor with `?classic=1`, so it runs whether or not the organization is listed in
+BRAND_STUDIO_EDITOR_V2_ORGS:
 
   EDITOR_BASE_URL=http://localhost:3611 EDITOR_ORG_ID=<organization id> python scripts/editor-v2-roundtrip-check.py [capture-dir]
 
@@ -110,7 +112,7 @@ def main():
             return page.evaluate(V2_STATE)
 
         def open_current():
-            page.goto(f'{BASE}/brand/studio/compose?organizationId={ORG}', wait_until='domcontentloaded', timeout=240000)
+            page.goto(f'{BASE}/brand/studio/compose?classic=1&organizationId={ORG}', wait_until='domcontentloaded', timeout=240000)
             page.wait_for_selector('[data-brand-studio-compose]', timeout=120000)
             page.wait_for_timeout(1200)
 
@@ -298,7 +300,7 @@ def main():
         had_redo = not redo.is_disabled()
         before_tab = page.evaluate(V2_STATE)
         other = context.new_page()
-        other.goto(f'{BASE}/brand/studio/compose?organizationId={ORG}', wait_until='domcontentloaded', timeout=240000)
+        other.goto(f'{BASE}/brand/studio/compose?classic=1&organizationId={ORG}', wait_until='domcontentloaded', timeout=240000)
         other.wait_for_selector('[data-brand-studio-compose]', timeout=120000)
         other.wait_for_timeout(1200)
         other.fill('[data-compose-trim-start="0"]', '1')
