@@ -59,6 +59,13 @@ export interface FrameV2Block {
   /** Always measured: a block is never written from a guessed rate (review round 1, item 3). */
   sourceFps: number;
   sourceFrames: number;
+  /**
+   * The file the block describes and the footage length the clip carried when it was written (review
+   * round 1, item 4): the current editor's upscale gives a clip a new file and keeps its other fields.
+   * A block whose file or length is not the clip's is not used.
+   */
+  srcUrl: string;
+  durationSec: number;
   mirror: FrameV2Mirror;
   /**
    * The cuts this one was split or copied from in v2, nearest first (at most `MAX_LINEAGE`). The new
@@ -128,6 +135,8 @@ export function frameBlockOf(clip: ComposeClip): FrameV2Block | null {
   const block = (clip as StoredClip).frameV2 as (Partial<FrameV2Block> & { rateGuessed?: unknown }) | undefined;
   if (!block || typeof block !== 'object' || block.rateGuessed !== undefined) return null;
   const { fps, inFrame, phase, frames, speedNum, speedDen, sourceFps, sourceFrames, mirror } = block;
+  // It describes this clip's file, at this length: anything else is other footage (review round 1, item 4).
+  if (block.srcUrl !== clip.srcUrl || block.durationSec !== clip.durationSec) return null;
   if (!isInt(fps, 1) || !isInt(inFrame, 0) || !isInt(phase, 0) || !isInt(frames, 1) || !isInt(speedNum, 1) || !isInt(speedDen, 1)) return null;
   if (phase >= speedDen || !isNum(sourceFps) || sourceFps <= 0 || !isInt(sourceFrames, 1)) return null;
   if (!mirror || typeof mirror !== 'object' || !isNum(mirror.trimStartSec) || !isNum(mirror.trimEndSec) || !isNum(mirror.playbackRate)) return null;
@@ -347,6 +356,8 @@ function storedClipOf(
     speedDen: clip.speedDen,
     sourceFps: clip.sourceFps,
     sourceFrames: clip.sourceFrames,
+    srcUrl: written.srcUrl,
+    durationSec: written.durationSec,
     mirror: { trimStartSec: written.trimStartSec, trimEndSec: written.trimEndSec, playbackRate: written.playbackRate ?? 1 },
     ...(from.length > 0 ? { from: [...from] } : {}),
   };
