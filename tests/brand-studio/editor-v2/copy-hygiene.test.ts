@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { SHORTCUT_ACTIONS, SHORTCUT_GROUPS, SHORTCUT_SETS } from '@/lib/brand-studio/editor-v2/shortcuts';
 import { studioEditorEn, studioEditorKo } from '@/messages/studio-editor';
 
 /** The editing studio copy names no vendor, tool, engine or reference product, and quotes no money. */
@@ -76,6 +77,37 @@ describe('studio editor copy hygiene', () => {
       expect(hits).toEqual([]);
     });
   }
+
+  describe('shortcut and timeline copy (2026-11-20)', () => {
+    /** The reference editors the shortcut sets are modelled on must never be named on screen. */
+    const EDITOR_NAMES = [/capcut/i, /캡컷/, /premiere/i, /프리미어/, /davinci/i, /다빈치/, /final\s*cut/i, /파이널\s*컷/, /vrew/i, /브루/];
+
+    for (const [locale, copy] of [
+      ['ko', studioEditorKo],
+      ['en', studioEditorEn],
+    ] as const) {
+      it(`${locale} names a set for every shortcut set and a label for every action and group`, () => {
+        expect(Object.keys(copy.shortcuts.sets).sort()).toEqual([...SHORTCUT_SETS].sort());
+        expect(Object.keys(copy.shortcuts.actions).sort()).toEqual([...SHORTCUT_ACTIONS].sort());
+        expect(Object.keys(copy.shortcuts.groups).sort()).toEqual(SHORTCUT_GROUPS.map((group) => group.id).sort());
+      });
+
+      it(`${locale} shortcut set names and all shortcut and timeline strings name no editing program`, () => {
+        const strings = [
+          ...leaves(copy.shortcuts, 'shortcuts'),
+          ...leaves(copy.timeline, 'timeline'),
+          ...SHORTCUT_SETS.map((id) => [`shortcuts.sets.${id}`, copy.shortcuts.sets[id]] as [string, string]),
+        ];
+        expect(strings.length).toBeGreaterThan(40);
+        const hits = strings.filter(([, text]) => EDITOR_NAMES.some((p) => p.test(text)));
+        expect(hits).toEqual([]);
+      });
+    }
+
+    it('the set ids themselves name no editing program', () => {
+      for (const id of SHORTCUT_SETS) expect(EDITOR_NAMES.some((p) => p.test(id)), id).toBe(false);
+    });
+  });
 
   it('ko and en have the same keys', () => {
     expect(leaves(studioEditorKo).map(([k]) => k)).toEqual(leaves(studioEditorEn).map(([k]) => k));

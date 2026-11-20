@@ -2,31 +2,42 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { fill } from '@/components/brand-studio/copy';
-import {
-  COMPOSE_DIMENSIONS,
-  MAX_COMPOSE_CLIPS,
-  frameStateAtTime,
-  playheadClipSplitTarget,
-  timelineSpans,
-  type CaptionPosition,
-  type ComposeAspect,
-  type TimelinePatch,
-} from '@/lib/brand-studio/compose/timeline';
+import { COMPOSE_DIMENSIONS, MAX_COMPOSE_CLIPS, type CaptionPosition, type ComposeAspect } from '@/lib/brand-studio/compose/timeline';
 import {
   FIXTURE_MATERIALS,
   FIXTURE_MEASURED_LUFS,
   FIXTURE_REFERENCES,
   FIXTURE_SPEECH,
+  clipOfMaterial,
   fixtureDoc,
   materialBySrc,
   type FixtureMaterial,
 } from '@/lib/brand-studio/editor-v2/fixture';
 import {
+  addCaption,
+  frameStateAt,
+  insertClips,
+  moveClip as moveClipInSequence,
+  neighbourCut,
+  removeCaption as removeCaptionFromSequence,
+  removeClips as removeClipsFromSequence,
+  setAspect as setSequenceAspect,
+  setClipAudio as setSequenceClipAudio,
+  setClipSpeed as setSequenceClipSpeed,
+  spansOf,
+  splitAtFrame,
+  totalFrames,
+  trimClipEdge,
+  updateCaption as updateSequenceCaption,
+  type FrameCaption,
+  type FrameClip,
+  type FrameSequence,
+} from '@/lib/brand-studio/editor-v2/frames';
+import {
   DEFAULT_REFRAME,
   LOOK_DETAILS,
   NEUTRAL_DETAIL,
   PLATFORM_LUFS,
-  applyDocPatches,
   balanceLooks,
   captionFindings,
   colorFindings,
@@ -39,6 +50,7 @@ import {
   soundFindings,
   statsFromPixels,
   undo as undoHistory,
+  withSequence,
   type AssistIntent,
   type CaptionSettings,
   type ClipLook,
@@ -54,7 +66,14 @@ import {
   type SoundState,
   type TitlePreset,
 } from '@/lib/brand-studio/editor-v2/model';
+import {
+  DEFAULT_SHORTCUT_PREFS,
+  effectiveBindings,
+  type ShortcutAction,
+  type ShortcutPrefs,
+} from '@/lib/brand-studio/editor-v2/shortcuts';
 import type { StudioEditorCopy } from '@/messages/studio-editor';
+import { loadShortcutPrefs, saveShortcutPrefs } from './shortcut-store';
 
 export const ASPECT_KEYS: Readonly<Record<ComposeAspect, keyof StudioEditorCopy['aspectNames']>> = {
   '16:9': 'r16x9',
@@ -62,6 +81,14 @@ export const ASPECT_KEYS: Readonly<Record<ComposeAspect, keyof StudioEditorCopy[
   '1:1': 'r1x1',
   '4:5': 'r4x5',
 };
+
+/** Speeds offered in the cut panel, as fractions so a retimed cut still cuts on whole frames. */
+export const SPEEDS: ReadonlyArray<{ label: string; num: number; den: number }> = [
+  { label: '0.5×', num: 1, den: 2 },
+  { label: '1×', num: 1, den: 1 },
+  { label: '1.5×', num: 3, den: 2 },
+  { label: '2×', num: 2, den: 1 },
+];
 
 export interface Proposal {
   key: number;
@@ -76,10 +103,25 @@ export interface EditorTabs {
   color: 'looks' | 'references';
 }
 
+/** A request to the timeline, which owns the zoom because it knows its own width. */
+export interface ZoomCommand {
+  kind: 'in' | 'out' | 'fit' | 'frames';
+  n: number;
+}
+
 interface Stored {
   doc: EditorDoc;
   history: EditorHistory;
 }
+
+interface Clipboard {
+  clips: FrameClip[];
+  looks: Record<string, ClipLook>;
+  reframe: Record<string, Reframe>;
+}
+
+let idCounter = 0;
+const newId = (prefix: string) => `${prefix}-${Date.now().toString(36)}-${(idCounter += 1).toString(36)}`;
 
 function loadStats(src: string): Promise<FrameStats | null> {
   return new Promise((resolve) => {
@@ -105,7 +147,7 @@ function loadStats(src: string): Promise<FrameStats | null> {
 
 export function useEditor(copy: StudioEditorCopy) {
   const labelOf = useCallback(
-    (materialId: string) => fill(copy.cut.materials.clipLabel, { number: materialId.replace(/\D/g, '') }),
+    (materialId: string) => (materialId === 'm7' ? copy.cut.materials.frameClip : fill(copy.cut.materials.clipLabel, { number: materialId.replace(/\D/g, '') })),
     [copy],
   );
   const [stored, setStored] = useState<Stored>(() => ({ doc: fixtureDoc(labelOf), history: { past: [], future: [] } }));
@@ -114,12 +156,17 @@ export function useEditor(copy: StudioEditorCopy) {
   const [selection, setSelection] = useState<string[]>([]);
   const [selectedTitleId, setSelectedTitleId] = useState<string | null>(null);
   const [scopeMode, setScopeMode] = useState<ScopeMode>('all');
-  const [playheadSec, setPlayheadSec] = useState(0);
-  const [playing, setPlaying] = useState(false);
+  const [playhead, setPlayhead] = useState(0);
+  /** `0` stopped, `1` playing; `2`/`4` and the negatives are the shuttle (J · K · L). */
+  const [rate, setRate] = useState(0);
   const [compare, setCompare] = useState(false);
-  const [zoom, setZoom] = useState(1);
+  const [magnet, setMagnet] = useState(true);
+  const [zoomCommand, setZoomCommand] = useState<ZoomCommand>({ kind: 'fit', n: 0 });
   const [assistDock, setAssistDock] = useState<'bar' | 'side'>('bar');
   const [exportOpen, setExportOpen] = useState(false);
+  const [shortcutsOpen, setShortcutsOpen] = useState(false);
+  const [shortcutPrefs, setShortcutPrefsState] = useState<ShortcutPrefs>(DEFAULT_SHORTCUT_PREFS);
+  const [mac, setMac] = useState(false);
   const [toast, setToast] = useState<string | null>(null);
   const [captionsBusy, setCaptionsBusy] = useState(false);
   const [stats, setStats] = useState<Record<string, FrameStats>>({});
@@ -128,6 +175,7 @@ export function useEditor(copy: StudioEditorCopy) {
   const setTab = useCallback(<K extends keyof EditorTabs>(key: K, value: EditorTabs[K]) => setTabs((current) => ({ ...current, [key]: value })), []);
   const proposalKey = useRef(0);
   const lastChange = useRef<{ key: string; at: number } | null>(null);
+  const clipboard = useRef<Clipboard | null>(null);
   const toastTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // Frame averages of every material and reference: what the colour outcomes compute from. On the device.
@@ -148,6 +196,17 @@ export function useEditor(copy: StudioEditorCopy) {
     };
   }, []);
 
+  // A person's keys and their keyboard's modifier, read after mount so the first paint matches the server.
+  useEffect(() => {
+    setShortcutPrefsState(loadShortcutPrefs());
+    setMac(/Mac|iPhone|iPad/i.test(navigator.platform || navigator.userAgent));
+  }, []);
+  const setShortcutPrefs = useCallback((next: ShortcutPrefs) => {
+    setShortcutPrefsState(next);
+    saveShortcutPrefs(next);
+  }, []);
+  const shortcutMap = useMemo(() => effectiveBindings(shortcutPrefs), [shortcutPrefs]);
+
   useEffect(() => () => {
     if (toastTimer.current) clearTimeout(toastTimer.current);
   }, []);
@@ -158,16 +217,17 @@ export function useEditor(copy: StudioEditorCopy) {
     toastTimer.current = setTimeout(() => setToast(null), 3200);
   }, []);
 
-  const project = doc.project;
-  const spans = useMemo(() => timelineSpans(project), [project]);
-  const durationSec = spans.length > 0 ? spans[spans.length - 1]!.timelineEndSec : 0;
-  const frame = useMemo(() => frameStateAtTime(project, playheadSec), [project, playheadSec]);
-  const activeClip = frame.activeClip;
-  const settled = useMemo(() => settleScope(project, scopeMode, selection), [project, scopeMode, selection]);
-  const targetIds = useMemo(
-    () => scopeClipIds(project, settled.mode, settled.selection, playheadSec),
-    [project, settled, playheadSec],
-  );
+  const sequence = doc.sequence;
+  const fps = sequence.fps;
+  const spans = useMemo(() => spansOf(sequence), [sequence]);
+  const total = useMemo(() => totalFrames(sequence), [sequence]);
+  const lastFrame = Math.max(0, total - 1);
+  const frame = useMemo(() => frameStateAt(sequence, playhead), [sequence, playhead]);
+  const activeClip = frame.active;
+  const durationSec = total / fps;
+  const playheadSec = frame.frame / fps;
+  const settled = useMemo(() => settleScope(sequence, scopeMode, selection), [sequence, scopeMode, selection]);
+  const targetIds = useMemo(() => scopeClipIds(sequence, settled.mode, settled.selection, playhead), [sequence, settled, playhead]);
 
   /**
    * One undo step: `mutate` returns the next document, or `null` when nothing changes. A slider passes
@@ -184,13 +244,10 @@ export function useEditor(copy: StudioEditorCopy) {
     });
   }, []);
 
-  const patch = useCallback(
-    (patches: readonly TimelinePatch[], coalesce?: string) => {
-      change((current) => {
-        const result = applyDocPatches(current, patches);
-        return result.appliedCount > 0 ? result.doc : null;
-      }, coalesce);
-    },
+  /** A change to the cuts. `inherit` pairs each new cut with the cut whose look and framing it keeps. */
+  const edit = useCallback(
+    (mutate: (current: FrameSequence) => FrameSequence, inherit?: ReadonlyArray<readonly [string, string]>, coalesce?: string) =>
+      change((current) => withSequence(current, mutate(current.sequence), inherit), coalesce),
     [change],
   );
 
@@ -207,10 +264,31 @@ export function useEditor(copy: StudioEditorCopy) {
     });
   }, []);
 
-  const seek = useCallback(
-    (sec: number) => setPlayheadSec(Math.min(Math.max(0, Math.round(sec * 100) / 100), durationSec)),
-    [durationSec],
+  // ── Moving through the film: always on a whole frame ──
+  const seek = useCallback((target: number) => setPlayhead(Math.min(Math.max(0, Math.round(target)), lastFrame)), [lastFrame]);
+  const step = useCallback(
+    (frames: number) => {
+      setRate(0);
+      setPlayhead((current) => Math.min(Math.max(0, current + frames), lastFrame));
+    },
+    [lastFrame],
   );
+  const toCut = useCallback(
+    (direction: -1 | 1) => {
+      setRate(0);
+      setPlayhead((current) => neighbourCut(sequence, current, direction));
+    },
+    [sequence],
+  );
+  const setPlaying = useCallback((on: boolean) => setRate(on ? 1 : 0), []);
+  const shuttle = useCallback((direction: -1 | 0 | 1) => {
+    setRate((current) => {
+      if (direction === 0) return 0;
+      if (direction === 1) return current > 0 ? Math.min(4, current * 2) : 1;
+      return current < 0 ? Math.max(-4, current * 2) : -1;
+    });
+  }, []);
+  const zoom = useCallback((kind: ZoomCommand['kind']) => setZoomCommand((current) => ({ kind, n: current.n + 1 })), []);
 
   const select = useCallback((clipId: string, additive: boolean) => {
     setSelectedTitleId(null);
@@ -220,6 +298,11 @@ export function useEditor(copy: StudioEditorCopy) {
     });
     setScopeMode('selected');
   }, []);
+  const selectAll = useCallback(() => {
+    setSelectedTitleId(null);
+    setSelection(sequence.clips.map((clip) => clip.id));
+    setScopeMode('selected');
+  }, [sequence]);
   const clearSelection = useCallback(() => {
     setSelection([]);
     setSelectedTitleId(null);
@@ -228,60 +311,126 @@ export function useEditor(copy: StudioEditorCopy) {
 
   // ── Cut ──
   const splitAtPlayhead = useCallback(() => {
-    const target = playheadClipSplitTarget(project, playheadSec);
-    if (!target) return say(copy.toast.splitNo);
-    if (project.clips.length >= MAX_COMPOSE_CLIPS) return say(copy.toast.full);
-    patch([{ op: 'split_clip_at', clipIndex: target.clipIndex, atMediaSec: target.atMediaSec }]);
-  }, [project, playheadSec, patch, say, copy]);
+    if (sequence.clips.length >= MAX_COMPOSE_CLIPS) return say(copy.toast.full);
+    const parent = frameStateAt(sequence, playhead).active;
+    if (!parent || parent.offset === 0) return say(copy.toast.splitNo);
+    const id = newId('cut');
+    edit((current) => splitAtFrame(current, playhead, id), [[id, parent.clip.id]]);
+  }, [sequence, playhead, edit, say, copy]);
 
   const trimToPlayhead = useCallback(
     (edge: 'start' | 'end') => {
-      if (!activeClip) return;
-      const at = Math.round(activeClip.mediaTimeSec * 10) / 10;
-      patch([{ op: 'trim_clip', clipIndex: activeClip.index, ...(edge === 'start' ? { trimStartSec: at } : { trimEndSec: at }) }]);
-      if (edge === 'start') seek(spans[activeClip.index]?.timelineStartSec ?? 0);
+      const active = frameStateAt(sequence, playhead).active;
+      if (!active || active.offset === 0) return;
+      if (edge === 'start') {
+        edit((current) => trimClipEdge(current, active.index, 'start', active.offset).seq);
+        seek(active.start);
+      } else {
+        edit((current) => trimClipEdge(current, active.index, 'end', active.offset - active.clip.frames).seq);
+      }
     },
-    [activeClip, patch, seek, spans],
+    [sequence, playhead, edit, seek],
   );
+
+  const trimEdge = useCallback(
+    (index: number, edge: 'start' | 'end', delta: number) => edit((current) => trimClipEdge(current, index, edge, delta).seq),
+    [edit],
+  );
+  const moveClip = useCallback((from: number, to: number) => edit((current) => moveClipInSequence(current, from, to)), [edit]);
 
   const removeClips = useCallback(
     (ids: readonly string[]) => {
-      const indexes = project.clips.map((clip, index) => (ids.includes(clip.id) ? index : -1)).filter((index) => index >= 0);
-      if (indexes.length === 0) return;
-      if (indexes.length >= project.clips.length) return say(copy.toast.lastCut);
-      patch(indexes.reverse().map((clipIndex): TimelinePatch => ({ op: 'remove_clip', clipIndex })));
+      const hit = sequence.clips.filter((clip) => ids.includes(clip.id));
+      if (hit.length === 0) return;
+      if (hit.length >= sequence.clips.length) return say(copy.toast.lastCut);
+      edit((current) => removeClipsFromSequence(current, ids));
       setSelection([]);
     },
-    [project, patch, say, copy],
+    [sequence, edit, say, copy],
   );
 
   const addMaterial = useCallback(
     (material: FixtureMaterial) => {
-      if (project.clips.length >= MAX_COMPOSE_CLIPS) return say(copy.toast.full);
-      change((current) => ({
-        ...current,
-        project: {
-          ...current.project,
-          clips: [
-            ...current.project.clips,
-            {
-              id: `cut-${Date.now().toString(36)}`,
-              label: labelOf(material.id),
-              sourceKind: 'local',
-              srcUrl: material.src,
-              thumbUrl: material.poster,
-              durationSec: material.durationSec,
-              trimStartSec: 0,
-              trimEndSec: Math.min(material.durationSec, 5),
-              volume: 1,
-              muted: false,
-            },
-          ],
-        },
-      }));
+      if (sequence.clips.length >= MAX_COMPOSE_CLIPS) return say(copy.toast.full);
+      const clip = clipOfMaterial(material, newId('cut'), labelOf(material.id), sequence.fps);
+      edit((current) => insertClips(current, current.clips.length, [clip]));
     },
-    [project, change, say, copy, labelOf],
+    [sequence, edit, say, copy, labelOf],
   );
+
+  const setSpeed = useCallback((index: number, num: number, den: number) => edit((current) => setSequenceClipSpeed(current, index, num, den)), [edit]);
+  const setClipAudio = useCallback(
+    (index: number, volume: number, muted: boolean) => edit((current) => setSequenceClipAudio(current, index, volume, muted), undefined, 'clip-volume'),
+    [edit],
+  );
+  const setAspect = useCallback((aspect: ComposeAspect) => edit((current) => setSequenceAspect(current, aspect)), [edit]);
+
+  // Copy, cut, paste, duplicate: whole cuts with their look and framing. Kept in memory, never on the system clipboard.
+  const pick = useCallback(
+    (): FrameClip[] => {
+      const chosen = sequence.clips.filter((clip) => selection.includes(clip.id));
+      if (chosen.length > 0) return chosen;
+      const active = frameStateAt(sequence, playhead).active;
+      return active ? [active.clip] : [];
+    },
+    [sequence, selection, playhead],
+  );
+  const copyClips = useCallback(() => {
+    const clips = pick();
+    if (clips.length === 0) return false;
+    const looks: Record<string, ClipLook> = {};
+    const reframe: Record<string, Reframe> = {};
+    for (const clip of clips) {
+      if (doc.looks[clip.id]) looks[clip.id] = doc.looks[clip.id]!;
+      if (doc.reframe[clip.id]) reframe[clip.id] = doc.reframe[clip.id]!;
+    }
+    clipboard.current = { clips, looks, reframe };
+    return true;
+  }, [pick, doc]);
+  const cutClips = useCallback(() => {
+    const clips = pick();
+    if (clips.length === 0 || clips.length >= sequence.clips.length) return clips.length > 0 ? say(copy.toast.lastCut) : undefined;
+    copyClips();
+    removeClips(clips.map((clip) => clip.id));
+  }, [pick, sequence, copyClips, removeClips, say, copy]);
+  const insertCopies = useCallback(
+    (source: Clipboard, atIndex: number) => {
+      if (sequence.clips.length + source.clips.length > MAX_COMPOSE_CLIPS) return say(copy.toast.full);
+      const copies = source.clips.map((clip) => ({ ...clip, id: newId('cut') }));
+      change((current) => {
+        const next = withSequence(current, insertClips(current.sequence, atIndex, copies));
+        const looks = { ...next.looks };
+        const reframe = { ...next.reframe };
+        copies.forEach((made, i) => {
+          const from = source.clips[i]!.id;
+          if (source.looks[from]) looks[made.id] = source.looks[from]!;
+          if (source.reframe[from]) reframe[made.id] = source.reframe[from]!;
+        });
+        return { ...next, looks, reframe };
+      });
+      setSelectedTitleId(null);
+      setSelection(copies.map((clip) => clip.id));
+      setScopeMode('selected');
+    },
+    [sequence, change, say, copy],
+  );
+  const pasteClips = useCallback(() => {
+    if (!clipboard.current) return;
+    const active = frameStateAt(sequence, playhead).active;
+    insertCopies(clipboard.current, active ? active.index + 1 : sequence.clips.length);
+  }, [sequence, playhead, insertCopies]);
+  const duplicateClips = useCallback(() => {
+    const clips = pick();
+    if (clips.length === 0) return;
+    const looks: Record<string, ClipLook> = {};
+    const reframe: Record<string, Reframe> = {};
+    for (const clip of clips) {
+      if (doc.looks[clip.id]) looks[clip.id] = doc.looks[clip.id]!;
+      if (doc.reframe[clip.id]) reframe[clip.id] = doc.reframe[clip.id]!;
+    }
+    const last = Math.max(...clips.map((clip) => sequence.clips.findIndex((entry) => entry.id === clip.id)));
+    insertCopies({ clips, looks, reframe }, last + 1);
+  }, [pick, doc, sequence, insertCopies]);
 
   const setReframe = useCallback(
     (ids: readonly string[], next: Partial<Reframe>) => {
@@ -294,21 +443,21 @@ export function useEditor(copy: StudioEditorCopy) {
     [change],
   );
 
-  const frameRatio = COMPOSE_DIMENSIONS[project.aspect].width / COMPOSE_DIMENSIONS[project.aspect].height;
+  const frameRatio = COMPOSE_DIMENSIONS[sequence.aspect].width / COMPOSE_DIMENSIONS[sequence.aspect].height;
   const croppedIds = useMemo(
     () =>
-      project.clips
+      sequence.clips
         .filter((clip) => {
           const material = materialBySrc(clip.srcUrl);
           return !!material && material.ratio > frameRatio * 1.2 && !doc.reframe[clip.id];
         })
         .map((clip) => clip.id),
-    [project, frameRatio, doc.reframe],
+    [sequence, frameRatio, doc.reframe],
   );
   const centerOnSubject = useCallback(() => {
     change((current) => {
       const reframe = { ...current.reframe };
-      for (const clip of current.project.clips) {
+      for (const clip of current.sequence.clips) {
         if (!croppedIds.includes(clip.id)) continue;
         reframe[clip.id] = { fit: 'fill', x: materialBySrc(clip.srcUrl)?.focusX ?? 50 };
       }
@@ -319,16 +468,14 @@ export function useEditor(copy: StudioEditorCopy) {
   const addTitle = useCallback(
     (preset: TitlePreset) => {
       const text = preset === 'big' ? copy.cut.titles.bigText : preset === 'lower' ? copy.cut.titles.lowerText : copy.cut.titles.endText;
-      const startSec = preset === 'end' ? Math.max(0, durationSec - 2.5) : Math.min(playheadSec, Math.max(0, durationSec - 1));
-      const id = `title-${Date.now().toString(36)}`;
-      change((current) => ({
-        ...current,
-        titles: [...current.titles, { id, text, preset, startSec, endSec: Math.min(durationSec, startSec + 2.5) }],
-      }));
+      const length = Math.round(fps * 2.5);
+      const start = preset === 'end' ? Math.max(0, total - length) : Math.min(playhead, Math.max(0, total - fps));
+      const id = newId('title');
+      change((current) => ({ ...current, titles: [...current.titles, { id, text, preset, start, end: Math.min(total, start + length) }] }));
       setSelection([]);
       setSelectedTitleId(id);
     },
-    [change, copy, durationSec, playheadSec],
+    [change, copy, fps, total, playhead],
   );
   const updateTitle = useCallback(
     (id: string, text: string) => change((current) => ({ ...current, titles: current.titles.map((t) => (t.id === id ? { ...t, text } : t)) }), 'title'),
@@ -358,20 +505,20 @@ export function useEditor(copy: StudioEditorCopy) {
   );
 
   const filmStats = useMemo(
-    () => project.clips.map((clip) => stats[clip.srcUrl]).filter((value): value is FrameStats => !!value),
-    [project, stats],
+    () => sequence.clips.map((clip) => stats[clip.srcUrl]).filter((value): value is FrameStats => !!value),
+    [sequence, stats],
   );
   const applyAuto = useCallback(
-    (ids: readonly string[] = targetIds) => setLooks(balanceLooks(project, ids, stats, filmTarget(filmStats), 'auto')),
-    [project, targetIds, stats, filmStats, setLooks],
+    (ids: readonly string[] = targetIds) => setLooks(balanceLooks(sequence, ids, stats, filmTarget(filmStats), 'auto')),
+    [sequence, targetIds, stats, filmStats, setLooks],
   );
   const applyMatch = useCallback(
     (referenceKey: string, label: string, ids: readonly string[] = targetIds) => {
       const target = stats[referenceKey];
       if (!target) return;
-      setLooks(balanceLooks(project, ids, stats, target, 'match', label));
+      setLooks(balanceLooks(sequence, ids, stats, target, 'match', label));
     },
-    [project, targetIds, stats, setLooks],
+    [sequence, targetIds, stats, setLooks],
   );
   const applyLook = useCallback(
     (lookId: LookId) => {
@@ -417,51 +564,53 @@ export function useEditor(copy: StudioEditorCopy) {
     () => [copy.captions.transcript.l1, copy.captions.transcript.l2, copy.captions.transcript.l3],
     [copy],
   );
-  const captionPatches = useMemo(
+  const captionDrafts = useMemo(
     () =>
-      FIXTURE_SPEECH.map((region, index): TimelinePatch => ({
-        op: 'add_caption',
+      FIXTURE_SPEECH.map((region, index): FrameCaption => ({
+        id: `cap-${index + 1}`,
         text: transcript[index] ?? '',
-        startSec: region.startSec,
-        endSec: Math.min(region.endSec, Math.max(durationSec, 1)),
+        start: Math.round(region.startSec * fps),
+        end: Math.round(region.endSec * fps),
         position: 'bottom',
         size: 'md',
-      })).filter((entry) => entry.op === 'add_caption' && (entry.startSec ?? 0) < durationSec),
-    [transcript, durationSec],
+      })).filter((caption) => caption.start < total),
+    [transcript, fps, total],
   );
   const makeCaptions = useCallback(
     (immediate = false) => {
-      if (project.captions.length > 0 || captionsBusy) return;
+      if (sequence.captions.length > 0 || captionsBusy) return;
       const run = () => {
-        patch(captionPatches);
+        edit((current) => captionDrafts.reduce((next, caption) => addCaption(next, { ...caption, id: newId('cap') }), current));
         setCaptionsBusy(false);
-        say(fill(copy.captions.made, { count: captionPatches.length }));
+        say(fill(copy.captions.made, { count: captionDrafts.length }));
       };
       if (immediate) return run();
       setCaptionsBusy(true);
       setTimeout(run, 1400);
     },
-    [project, captionsBusy, patch, captionPatches, say, copy],
+    [sequence, captionsBusy, edit, captionDrafts, say, copy],
   );
+  const updateCaptionText = useCallback((id: string, text: string) => edit((current) => updateSequenceCaption(current, id, { text })), [edit]);
+  const removeCaption = useCallback((id: string | 'all') => edit((current) => removeCaptionFromSequence(current, id)), [edit]);
   const setCaptionSettings = useCallback(
     (next: Partial<CaptionSettings>) => change((current) => ({ ...current, captionSettings: { ...current.captionSettings, ...next } })),
     [change],
   );
   const setCaptionPosition = useCallback(
     (position: CaptionPosition) =>
-      patch(project.captions.map((_, captionIndex): TimelinePatch => ({ op: 'update_caption', captionIndex, position }))),
-    [project, patch],
+      edit((current) => current.captions.reduce((next, caption) => updateSequenceCaption(next, caption.id, { position }), current)),
+    [edit],
   );
 
   // ── Findings: what each workspace says before anyone touches a control ──
   const findings = useMemo(
     () => ({
-      color: colorFindings(project, stats, doc.looks),
+      color: colorFindings(sequence, stats, doc.looks),
       sound: soundFindings(doc, FIXTURE_MEASURED_LUFS, FIXTURE_SPEECH),
       captions: captionFindings(doc, FIXTURE_SPEECH),
       croppedIds,
     }),
-    [project, stats, doc, croppedIds],
+    [sequence, stats, doc, croppedIds],
   );
   const openCount: Record<EditorWorkspace, number> = {
     cut: croppedIds.length > 0 ? 1 : 0,
@@ -479,38 +628,39 @@ export function useEditor(copy: StudioEditorCopy) {
       if (!intent) return setProposal({ ...base, lines: [], run: null, note: copy.assist.unknown });
       const none = () => setProposal({ ...base, lines: [], run: null, note: copy.assist.nothing });
       const lines = copy.assist.lines;
-      const all = project.clips.map((clip) => clip.id);
+      const all = sequence.clips.map((clip) => clip.id);
       switch (intent.kind) {
         case 'aspect':
-          if (intent.aspect === project.aspect) return none();
+          if (intent.aspect === sequence.aspect) return none();
           return setProposal({
             ...base,
             note: null,
             lines: [fill(lines.aspect, { aspect: copy.aspectNames[ASPECT_KEYS[intent.aspect]] })],
-            run: () => patch([{ op: 'set_aspect', aspect: intent.aspect }]),
+            run: () => setAspect(intent.aspect),
           });
         case 'trim': {
-          const clip = project.clips[intent.clipNumber - 1];
-          if (!clip) return none();
+          const clip = sequence.clips[intent.clipNumber - 1];
+          const want = Math.max(1, Math.round(intent.seconds * fps));
+          if (!clip || want === clip.frames) return none();
           return setProposal({
             ...base,
             note: null,
             lines: [fill(lines.trim, { number: intent.clipNumber, seconds: intent.seconds })],
-            run: () => patch([{ op: 'trim_clip', clipIndex: intent.clipNumber - 1, targetDurationSec: intent.seconds }]),
+            run: () => trimEdge(intent.clipNumber - 1, 'end', want - clip.frames),
           });
         }
         case 'remove_last':
-          if (project.clips.length < 2) return none();
+          if (sequence.clips.length < 2) return none();
           return setProposal({
             ...base,
             note: null,
-            lines: [fill(lines.removeLast, { number: project.clips.length })],
-            run: () => patch([{ op: 'remove_clip', clipIndex: project.clips.length - 1 }]),
+            lines: [fill(lines.removeLast, { number: sequence.clips.length })],
+            run: () => removeClips([sequence.clips[sequence.clips.length - 1]!.id]),
           });
         case 'auto_balance':
           return setProposal({ ...base, note: null, lines: [fill(lines.autoBalance, { count: all.length })], run: () => applyAuto(all) });
         case 'match_first': {
-          const first = project.clips[0];
+          const first = sequence.clips[0];
           if (!first || all.length < 2) return none();
           return setProposal({
             ...base,
@@ -529,24 +679,86 @@ export function useEditor(copy: StudioEditorCopy) {
           if (doc.sound.speechClear) return none();
           return setProposal({ ...base, note: null, lines: [lines.speech], run: () => setSound({ speechClear: true }) });
         case 'make_captions':
-          if (project.captions.length > 0) return none();
-          return setProposal({ ...base, note: null, lines: [fill(lines.makeCaptions, { count: captionPatches.length })], run: () => makeCaptions(true) });
+          if (sequence.captions.length > 0) return none();
+          return setProposal({ ...base, note: null, lines: [fill(lines.makeCaptions, { count: captionDrafts.length })], run: () => makeCaptions(true) });
         case 'lift_captions':
-          if (project.captions.length === 0 || doc.captionSettings.lift) return none();
+          if (sequence.captions.length === 0 || doc.captionSettings.lift) return none();
           return setProposal({ ...base, note: null, lines: [lines.lift], run: () => setCaptionSettings({ lift: true }) });
       }
     },
-    [copy, project, doc, patch, applyAuto, applyMatch, setSound, makeCaptions, setCaptionSettings, captionPatches],
+    [copy, sequence, fps, doc, setAspect, trimEdge, removeClips, applyAuto, applyMatch, setSound, makeCaptions, setCaptionSettings, captionDrafts],
   );
+
+  /** Every keyboard action, by id. The key that means it comes from the person's shortcut map. */
+  const runAction = (action: ShortcutAction) => {
+    switch (action) {
+      case 'play': return setRate(rate === 0 ? 1 : 0);
+      case 'stepBack': return step(-1);
+      case 'stepForward': return step(1);
+      case 'stepBack10': return step(-10);
+      case 'stepForward10': return step(10);
+      case 'prevCut': return toCut(-1);
+      case 'nextCut': return toCut(1);
+      case 'toStart': return step(-total);
+      case 'toEnd': return step(total);
+      case 'shuttleBack': return shuttle(-1);
+      case 'shuttleStop': return shuttle(0);
+      case 'shuttleForward': return shuttle(1);
+      case 'split': return splitAtPlayhead();
+      case 'trimStart': return trimToPlayhead('start');
+      case 'trimEnd': return trimToPlayhead('end');
+      case 'remove':
+        if (selectedTitleId) return removeTitle(selectedTitleId);
+        return settled.selection.length > 0 ? removeClips(settled.selection) : undefined;
+      case 'magnet': return setMagnet((on) => !on);
+      case 'undo': return undo();
+      case 'redo': return redo();
+      case 'copy': return void copyClips();
+      case 'cut': return cutClips();
+      case 'paste': return pasteClips();
+      case 'duplicate': return duplicateClips();
+      case 'selectAll': return selectAll();
+      case 'deselect':
+        if (shortcutsOpen) return setShortcutsOpen(false);
+        if (exportOpen) return setExportOpen(false);
+        return clearSelection();
+      case 'zoomIn': return zoom('in');
+      case 'zoomOut': return zoom('out');
+      case 'zoomFit': return zoom('fit');
+      case 'zoomFrames': return zoom('frames');
+      case 'workspaceCut': return setWorkspace('cut');
+      case 'workspaceColor': return setWorkspace('color');
+      case 'workspaceSound': return setWorkspace('sound');
+      case 'workspaceCaptions': return setWorkspace('captions');
+      case 'shortcuts': return setShortcutsOpen((open) => !open);
+    }
+  };
 
   return {
     copy,
     doc,
-    project,
+    sequence,
+    fps,
     spans,
+    total,
+    lastFrame,
     durationSec,
     frame,
     activeClip,
+    playhead: frame.frame,
+    playheadSec,
+    seek,
+    step,
+    toCut,
+    rate,
+    setRate,
+    playing: rate !== 0,
+    setPlaying,
+    shuttle,
+    magnet,
+    setMagnet,
+    zoom,
+    zoomCommand,
     stats,
     findings,
     openCount,
@@ -555,7 +767,7 @@ export function useEditor(copy: StudioEditorCopy) {
     undo,
     redo,
     change,
-    patch,
+    edit,
     tabs,
     setTab,
     workspace,
@@ -564,22 +776,24 @@ export function useEditor(copy: StudioEditorCopy) {
     selectedTitleId,
     setSelectedTitleId,
     select,
+    selectAll,
     clearSelection,
     scopeMode: settled.mode,
     setScopeMode,
     targetIds,
-    playheadSec,
-    seek,
-    playing,
-    setPlaying,
     compare,
     setCompare,
-    zoom,
-    setZoom,
     assistDock,
     setAssistDock,
     exportOpen,
     setExportOpen,
+    shortcutsOpen,
+    setShortcutsOpen,
+    shortcutPrefs,
+    setShortcutPrefs,
+    shortcutMap,
+    mac,
+    runAction,
     toast,
     say,
     captionsBusy,
@@ -588,8 +802,17 @@ export function useEditor(copy: StudioEditorCopy) {
     propose,
     splitAtPlayhead,
     trimToPlayhead,
+    trimEdge,
+    moveClip,
     removeClips,
     addMaterial,
+    setSpeed,
+    setClipAudio,
+    setAspect,
+    copyClips,
+    cutClips,
+    pasteClips,
+    duplicateClips,
     setReframe,
     centerOnSubject,
     addTitle,
@@ -603,6 +826,8 @@ export function useEditor(copy: StudioEditorCopy) {
     setSound,
     setMusic,
     makeCaptions,
+    updateCaptionText,
+    removeCaption,
     setCaptionSettings,
     setCaptionPosition,
   };

@@ -127,15 +127,58 @@ describe('the prototype reads, sends and stores nothing', () => {
     }
   });
 
-  it('components make no request and touch no browser storage', () => {
-    const dir = join(ROOT, 'components/brand-studio/editor-v2');
-    const files = readdirSync(dir).filter((name) => /\.(tsx?|ts)$/.test(name));
+  const dir = join(ROOT, 'components/brand-studio/editor-v2');
+  const files = readdirSync(dir).filter((name) => /\.(tsx?|ts)$/.test(name));
+  const STORE = 'shortcut-store.ts';
+
+  it('components make no request and touch no session storage or database', () => {
     expect(files.length).toBeGreaterThan(0);
     for (const name of files) {
       const source = readFileSync(join(dir, name), 'utf8');
-      for (const banned of ['fetch(', 'localStorage', 'sessionStorage', 'indexedDB', 'XMLHttpRequest', 'navigator.sendBeacon']) {
+      for (const banned of ['fetch(', 'XMLHttpRequest', 'sendBeacon', 'indexedDB', 'sessionStorage']) {
         expect(source.includes(banned), `${name} contains ${banned}`).toBe(false);
       }
+    }
+  });
+
+  it('only the shortcut store touches localStorage', () => {
+    expect(files).toContain(STORE);
+    for (const name of files) {
+      if (name === STORE) continue;
+      const source = readFileSync(join(dir, name), 'utf8');
+      expect(source.includes('localStorage'), `${name} contains localStorage`).toBe(false);
+    }
+  });
+
+  it('the shortcut store reaches localStorage only inside try blocks', () => {
+    const source = readFileSync(join(dir, STORE), 'utf8');
+    // Each `try {` block, from its brace to the matching closing brace.
+    const blocks: Array<[number, number]> = [];
+    for (const match of source.matchAll(/\btry\s*\{/g)) {
+      const open = match.index! + match[0].length - 1;
+      let depth = 0;
+      let close = -1;
+      for (let i = open; i < source.length; i += 1) {
+        if (source[i] === '{') depth += 1;
+        else if (source[i] === '}') {
+          depth -= 1;
+          if (depth === 0) {
+            close = i;
+            break;
+          }
+        }
+      }
+      expect(close, 'unclosed try block').toBeGreaterThan(open);
+      // Every try is followed by a catch that swallows the failure.
+      expect(source.slice(close + 1).trimStart().startsWith('catch')).toBe(true);
+      blocks.push([open, close]);
+    }
+    const uses = [...source.matchAll(/localStorage/g)].map((m) => m.index!);
+    expect(uses.length).toBeGreaterThan(0);
+    expect(blocks.length).toBeGreaterThan(0);
+    for (const at of uses) {
+      const line = source.slice(0, at).split('\n').length;
+      expect(blocks.some(([open, close]) => at > open && at < close), `localStorage on line ${line} is outside a try block`).toBe(true);
     }
   });
 });

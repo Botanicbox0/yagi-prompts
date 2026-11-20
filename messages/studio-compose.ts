@@ -9,6 +9,11 @@ export const studioComposeEn = {
   title: 'Editing Studio',
   subtitle: 'Detect cuts, match reference color grades, upscale up to 4K, and render one clean MP4.',
   backToVideo: 'Back to Video studio',
+  previewV2: {
+    link: 'Preview the new Editing Studio',
+    tag: 'Structure preview',
+    note: 'A preview made with sample footage. It does not save, generate or export.',
+  },
   summary: '{clips} clips · {seconds}s total',
   emptySummary: 'Add clips to begin',
   credits: {
@@ -322,6 +327,11 @@ export const studioComposeKo: typeof studioComposeEn = {
   title: '편집 스튜디오',
   subtitle: '컷 전환 자동 분할, 레퍼런스 컬러 그레이딩, 4K 업스케일까지 한곳에서 마감하세요.',
   backToVideo: '영상 스튜디오로',
+  previewV2: {
+    link: '새 편집 스튜디오 미리 보기',
+    tag: '구조 시안',
+    note: '예시 영상으로 만든 시안입니다. 저장, 생성, 내보내기는 하지 않습니다.',
+  },
   summary: '{clips}개 컷 · 총 {seconds}초',
   emptySummary: '편집할 영상을 담아 주세요',
   credits: {

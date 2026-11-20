@@ -79,6 +79,12 @@ export interface VideoComposerProps {
   canCreate: boolean;
   copy: StudioComposeCopy;
   videoStudioHref: string;
+  /**
+   * Where the editing studio v2 structure prototype lives, or nothing. The page passes it only while
+   * `BRAND_STUDIO_EDITOR_V2` is on (docs/BRAND-EDITING-STUDIO-V2.md §10.1); without it this header is
+   * exactly as it was. The rail keeps opening this editor: the prototype cannot save or export.
+   */
+  editorV2Href?: string | null;
   initialAllowance: StudioAllowanceView;
   initialAssets: StudioAssetView[];
   initialVideoOutputs: Array<StudioOutputView & { label: string }>;
@@ -218,6 +224,7 @@ export function VideoComposer({
   canCreate,
   copy,
   videoStudioHref,
+  editorV2Href = null,
   initialAllowance,
   initialAssets,
   initialVideoOutputs,
@@ -1921,6 +1928,12 @@ export function VideoComposer({
                 ? interpolate(copy.summary, { clips: shownProject.clips.length, seconds: totalSec })
                 : copy.emptySummary}
             </span>
+            {editorV2Href && (
+              <a className={s.previewLink} href={editorV2Href} title={copy.previewV2.note} data-compose-editor-v2>
+                {copy.previewV2.link}
+                <span className={s.previewTag}>{copy.previewV2.tag}</span>
+              </a>
+            )}
           </div>
           <p className={s.subtitle}>{copy.subtitle}</p>
         </div>

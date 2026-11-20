@@ -1,15 +1,16 @@
 import { describe, expect, it } from 'vitest';
 import { fixtureDoc } from '@/lib/brand-studio/editor-v2/fixture';
+import { removeClips, setAspect, splitAtFrame, spansOf, totalFrames, wholeFrameViolations } from '@/lib/brand-studio/editor-v2/frames';
 import {
   HISTORY_LIMIT,
   LOOK_DETAILS,
-  applyDocPatches,
   commit,
   formatClock,
   redo,
   scopeClipIds,
   settleScope,
   undo,
+  withSequence,
   type ClipLook,
   type EditorDoc,
   type EditorHistory,
@@ -18,20 +19,28 @@ import {
 const label = (id: string) => id;
 const warm: ClipLook = { source: 'look', lookId: 'warm', detail: LOOK_DETAILS.warm, strength: 1 };
 
-describe('applyDocPatches', () => {
+// The sample film: cut-1 0–113, cut-2 113–226, cut-3 226–346, cut-4 346–454 (frames at 24 fps).
+
+describe('withSequence', () => {
   it('gives the right half of a split the look and framing of the cut it came from', () => {
     const doc: EditorDoc = { ...fixtureDoc(label), looks: { 'cut-1': warm }, reframe: { 'cut-1': { fit: 'fill', x: 30 } } };
-    const { doc: next, appliedCount } = applyDocPatches(doc, [{ op: 'split_clip_at', clipIndex: 0, atMediaSec: 2 }]);
-    expect(appliedCount).toBe(1);
-    expect(next.project.clips).toHaveLength(5);
-    const [left, right] = next.project.clips;
+    const next = withSequence(doc, splitAtFrame(doc.sequence, 48, 'cut-1b'), [['cut-1b', 'cut-1']]);
+    expect(next.sequence.clips).toHaveLength(5);
+    const [left, right] = next.sequence.clips;
     expect(left!.id).toBe('cut-1');
-    expect(right!.id).not.toBe('cut-1');
-    expect(next.looks[right!.id]).toEqual(warm);
-    expect(next.reframe[right!.id]).toEqual({ fit: 'fill', x: 30 });
+    expect(right!.id).toBe('cut-1b');
+    expect(spansOf(next.sequence)[1]!.start).toBe(48);
+    expect(next.looks['cut-1b']).toEqual(warm);
+    expect(next.reframe['cut-1b']).toEqual({ fit: 'fill', x: 30 });
     expect(next.looks['cut-1']).toEqual(warm);
     expect(next.looks['cut-2']).toBeUndefined();
-    expect(Object.keys(next.looks).sort()).toEqual(['cut-1', right!.id].sort());
+    expect(Object.keys(next.looks).sort()).toEqual(['cut-1', 'cut-1b']);
+  });
+
+  it('without the inherit pair a new cut starts with no extras', () => {
+    const doc: EditorDoc = { ...fixtureDoc(label), looks: { 'cut-1': warm } };
+    const next = withSequence(doc, splitAtFrame(doc.sequence, 48, 'cut-1b'));
+    expect(Object.keys(next.looks)).toEqual(['cut-1']);
   });
 
   it('drops the extras of a removed cut', () => {
@@ -40,58 +49,77 @@ describe('applyDocPatches', () => {
       looks: { 'cut-2': warm, 'cut-3': warm },
       reframe: { 'cut-2': { fit: 'fit', x: 50 } },
     };
-    const { doc: next } = applyDocPatches(doc, [{ op: 'remove_clip', clipIndex: 1 }]);
-    expect(next.project.clips.map((c) => c.id)).toEqual(['cut-1', 'cut-3', 'cut-4']);
+    const next = withSequence(doc, removeClips(doc.sequence, ['cut-2']));
+    expect(next.sequence.clips.map((c) => c.id)).toEqual(['cut-1', 'cut-3', 'cut-4']);
     expect(next.looks).toEqual({ 'cut-3': warm });
     expect(next.reframe).toEqual({});
   });
 
-  it('returns the same doc when nothing applies', () => {
+  it('returns the same doc when the sequence did not change', () => {
     const doc = fixtureDoc(label);
-    const result = applyDocPatches(doc, [{ op: 'remove_clip', clipIndex: 99 }]);
-    expect(result.appliedCount).toBe(0);
-    expect(result.doc).toBe(doc);
+    expect(withSequence(doc, removeClips(doc.sequence, ['ghost']))).toBe(doc);
+    expect(withSequence(doc, splitAtFrame(doc.sequence, 113, 'x'))).toBe(doc);
+    expect(withSequence(doc, setAspect(doc.sequence, '16:9'))).toBe(doc);
   });
 
-  it('clips titles to the new duration', () => {
-    // 4.7 + 4.7 + 5 + 4.5 = 18.9 seconds; without the last cut, 14.4.
+  it('clips titles to the new total', () => {
+    // 454 frames; without the last cut, 346.
     const doc: EditorDoc = {
       ...fixtureDoc(label),
       titles: [
-        { id: 'a', text: 'A', startSec: 0, endSec: 18.9, preset: 'big' },
-        { id: 'b', text: 'B', startSec: 17, endSec: 18.9, preset: 'end' },
-        { id: 'c', text: 'C', startSec: 1, endSec: 3, preset: 'lower' },
+        { id: 'a', text: 'A', start: 0, end: 454, preset: 'big' },
+        { id: 'b', text: 'B', start: 400, end: 454, preset: 'end' },
+        { id: 'c', text: 'C', start: 24, end: 72, preset: 'lower' },
+        { id: 'd', text: 'D', start: 346, end: 360, preset: 'lower' },
       ],
     };
-    const { doc: next } = applyDocPatches(doc, [{ op: 'remove_clip', clipIndex: 3 }]);
+    const next = withSequence(doc, removeClips(doc.sequence, ['cut-4']));
+    expect(totalFrames(next.sequence)).toBe(346);
     expect(next.titles.map((t) => t.id)).toEqual(['a', 'c']);
-    expect(next.titles[0]!.endSec).toBeCloseTo(14.4, 5);
-    expect(next.titles[1]).toEqual(doc.titles[2]);
+    expect(next.titles[0]!.end).toBe(346);
+    expect(next.titles[1]).toBe(doc.titles[2]);
+  });
+
+  it('keeps every frame whole when the film is split at any of its frames', () => {
+    const doc: EditorDoc = { ...fixtureDoc(label), looks: { 'cut-3': warm } };
+    const total = totalFrames(doc.sequence);
+    for (let at = 0; at <= total; at += 1) {
+      const under = spansOf(doc.sequence).find((span) => at > span.start && at < span.end);
+      const sequence = splitAtFrame(doc.sequence, at, 'split');
+      const next = withSequence(doc, sequence, under ? [['split', under.clip.id]] : []);
+      expect(wholeFrameViolations(next.sequence), `split at ${at}`).toEqual([]);
+      expect(totalFrames(next.sequence)).toBe(total);
+      expect(next.sequence.clips.length, `split at ${at}`).toBe(under ? 5 : 4);
+      if (!under) expect(next, `split at ${at}`).toBe(doc);
+      expect(next.looks.split, `split at ${at}`).toEqual(under?.clip.id === 'cut-3' ? warm : undefined);
+    }
   });
 });
 
 describe('scope', () => {
-  const project = fixtureDoc(label).project;
+  const sequence = fixtureDoc(label).sequence;
   const all = ['cut-1', 'cut-2', 'cut-3', 'cut-4'];
 
   it('resolves all, current and selected', () => {
-    expect(scopeClipIds(project, 'all', ['cut-2'], 0)).toEqual(all);
-    // cut 3 runs from 9.4 to 14.4 on the timeline.
-    expect(scopeClipIds(project, 'current', [], 11)).toEqual(['cut-3']);
-    expect(scopeClipIds(project, 'current', [], 1)).toEqual(['cut-1']);
-    expect(scopeClipIds(project, 'selected', ['cut-4', 'cut-2'], 0)).toEqual(['cut-2', 'cut-4']);
+    expect(scopeClipIds(sequence, 'all', ['cut-2'], 0)).toEqual(all);
+    expect(scopeClipIds(sequence, 'current', [], 264)).toEqual(['cut-3']);
+    expect(scopeClipIds(sequence, 'current', [], 24)).toEqual(['cut-1']);
+    // Boundaries: frame 113 is the first frame of cut 2, 112 the last of cut 1.
+    expect(scopeClipIds(sequence, 'current', [], 112)).toEqual(['cut-1']);
+    expect(scopeClipIds(sequence, 'current', [], 113)).toEqual(['cut-2']);
+    expect(scopeClipIds(sequence, 'selected', ['cut-4', 'cut-2'], 0)).toEqual(['cut-2', 'cut-4']);
   });
 
   it('falls back to the whole film when the selection is empty or dead', () => {
-    expect(scopeClipIds(project, 'selected', [], 0)).toEqual(all);
-    expect(scopeClipIds(project, 'selected', ['ghost'], 0)).toEqual(all);
+    expect(scopeClipIds(sequence, 'selected', [], 0)).toEqual(all);
+    expect(scopeClipIds(sequence, 'selected', ['ghost'], 0)).toEqual(all);
   });
 
   it('settleScope drops dead ids and leaves selected for all when nothing is left', () => {
-    expect(settleScope(project, 'selected', ['cut-1', 'ghost'])).toEqual({ mode: 'selected', selection: ['cut-1'] });
-    expect(settleScope(project, 'selected', ['ghost'])).toEqual({ mode: 'all', selection: [] });
-    expect(settleScope(project, 'current', ['ghost'])).toEqual({ mode: 'current', selection: [] });
-    expect(settleScope(project, 'all', [])).toEqual({ mode: 'all', selection: [] });
+    expect(settleScope(sequence, 'selected', ['cut-1', 'ghost'])).toEqual({ mode: 'selected', selection: ['cut-1'] });
+    expect(settleScope(sequence, 'selected', ['ghost'])).toEqual({ mode: 'all', selection: [] });
+    expect(settleScope(sequence, 'current', ['ghost'])).toEqual({ mode: 'current', selection: [] });
+    expect(settleScope(sequence, 'all', [])).toEqual({ mode: 'all', selection: [] });
   });
 });
 
