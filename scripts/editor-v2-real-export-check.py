@@ -25,7 +25,9 @@ sample `public/reel/studio-demo/frame-count-24.mp4` (every frame carries its num
 
 Needs Python Playwright with the full Chromium build (`playwright install chromium`; the headless
 shell crashes on the first video encode) and ffmpeg/ffprobe on PATH. Launches its own browser with a
-fresh profile and talks only to the local address below; never attaches to another browser.
+fresh profile and talks only to the local address below; never attaches to another browser. The server
+must run with BRAND_STUDIO_EDITOR_V2_ORGS=<the organization id> (v2 opens an organization's own film
+only when it is listed; review round 1, item 2); the id comes from the environment at run time.
 
   EDITOR_BASE_URL=http://localhost:3611 EDITOR_ORG_ID=<organization id> python scripts/editor-v2-real-export-check.py <out-dir>
 

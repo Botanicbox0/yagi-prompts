@@ -2,6 +2,8 @@ import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { ReactElement } from 'react';
+import { getRedirectStatusCodeFromError, getURLFromRedirectError } from 'next/dist/client/components/redirect';
+import { isRedirectError } from 'next/dist/client/components/redirect-error';
 import { getDictionary } from '@/lib/i18n/dictionaries';
 
 /**
@@ -28,15 +30,23 @@ const mocks = vi.hoisted(() => ({
   loadFolderItems: vi.fn(),
 }));
 
-vi.mock('next/navigation', () => ({
-  useRouter: () => ({ refresh: vi.fn(), push: vi.fn(), replace: vi.fn() }),
-  usePathname: () => '/brand/studio/compose',
-  useSearchParams: () => new URLSearchParams(),
-  redirect: mocks.redirect,
-  notFound: vi.fn(() => {
-    throw new Error('NEXT_NOT_FOUND');
-  }),
-}));
+// The real `redirect`: it throws Next's own redirect error (digest `NEXT_REDIRECT;replace;<url>;307;`).
+// The spy only records the call order; the tests read the destination from the thrown error.
+vi.mock('next/navigation', async () => {
+  const actual = await vi.importActual<typeof import('next/navigation')>('next/navigation');
+  return {
+    useRouter: () => ({ refresh: vi.fn(), push: vi.fn(), replace: vi.fn() }),
+    usePathname: () => '/brand/studio/compose',
+    useSearchParams: () => new URLSearchParams(),
+    redirect: (url: string) => {
+      mocks.redirect(url);
+      return actual.redirect(url);
+    },
+    notFound: vi.fn(() => {
+      throw new Error('NEXT_NOT_FOUND');
+    }),
+  };
+});
 
 vi.mock('@/components/brand-studio/route-context', () => ({ studioRouteOrShowroom: mocks.studioRouteOrShowroom }));
 vi.mock('@/components/brand-studio/compose/video-composer', () => ({
@@ -105,7 +115,7 @@ describe('brandStudioEditorV2DefaultFor', () => {
   });
 });
 
-type ComposerElement = ReactElement<{ copy: { previewV2: { link: string; tag: string; note: string } }; editorV2Href: string | null; organizationId: string }>;
+type ComposerElement = ReactElement<{ copy: { previewV2: { link: string; tag: string; note: string; back: string; backNote: string } }; editorV2Href: string | null; organizationId: string }>;
 
 describe('/brand/studio/compose with the switch', () => {
   const dict = getDictionary('ko');
@@ -127,10 +137,8 @@ describe('/brand/studio/compose with the switch', () => {
       mocks.calls.push('guard');
       return studio();
     });
-    // Like next/navigation's redirect: it never returns.
-    mocks.redirect.mockImplementation((url: string) => {
+    mocks.redirect.mockImplementation(() => {
       mocks.calls.push('redirect');
-      throw new Error(`NEXT_REDIRECT ${url}`);
     });
     const loaded = (name: string, value: unknown) => async () => {
       mocks.calls.push(name);
@@ -156,30 +164,38 @@ describe('/brand/studio/compose with the switch', () => {
     return (await import('@/app/(brand)/brand/studio/compose/page')).default;
   }
   const params = (query: Record<string, string | string[]>) => ({ searchParams: Promise.resolve(query) });
-  const target = () => {
-    expect(mocks.redirect).toHaveBeenCalledTimes(1);
-    const url = new URL(mocks.redirect.mock.calls[0]![0] as string, 'https://brand.invalid');
+  /** Runs the page and returns where Next's own redirect error sends the person (status checked too). */
+  const redirected = async (query: Record<string, string | string[]>) => {
+    const Page = await loadPage();
+    const error: unknown = await Page(params(query)).then(
+      () => null,
+      (thrown: unknown) => thrown,
+    );
+    expect(isRedirectError(error), 'the page threw Next’s redirect error').toBe(true);
+    const redirect = error as Parameters<typeof getURLFromRedirectError>[0];
+    expect(getRedirectStatusCodeFromError(redirect)).toBe(307);
+    const url = new URL(getURLFromRedirectError(redirect)!, 'https://brand.invalid');
     return { path: url.pathname, query: Object.fromEntries(url.searchParams) };
   };
 
   it('listed + flag on: the server sends the person to the new editor with the organization', async () => {
-    const Page = await loadPage();
-    await expect(Page(params({ organizationId: ORG }))).rejects.toThrow('NEXT_REDIRECT');
-    expect(target()).toEqual({ path: '/brand/studio/editor', query: { organizationId: ORG } });
+    expect(await redirected({ organizationId: ORG })).toEqual({ path: '/brand/studio/editor', query: { organizationId: ORG } });
+    expect(mocks.redirect).toHaveBeenCalledTimes(1);
   });
 
   it('keeps the clip= link (asset and output) and drops every other parameter', async () => {
-    const Page = await loadPage();
-    await expect(Page(params({ organizationId: ORG, clip: `a:${ASSET}`, sample: '1', ws: 'sound', foo: 'bar' }))).rejects.toThrow('NEXT_REDIRECT');
-    expect(target()).toEqual({ path: '/brand/studio/editor', query: { organizationId: ORG, clip: `a:${ASSET}` } });
-    mocks.redirect.mockClear();
-    await expect(Page(params({ organizationId: ORG, clip: [`o:${OUTPUT}`, `a:${ASSET}`] }))).rejects.toThrow('NEXT_REDIRECT');
-    expect(target()).toEqual({ path: '/brand/studio/editor', query: { organizationId: ORG, clip: `o:${OUTPUT}` } });
+    expect(await redirected({ organizationId: ORG, clip: `a:${ASSET}`, sample: '1', ws: 'sound', foo: 'bar' })).toEqual({
+      path: '/brand/studio/editor',
+      query: { organizationId: ORG, clip: `a:${ASSET}` },
+    });
+    expect(await redirected({ organizationId: ORG, clip: [`o:${OUTPUT}`, `a:${ASSET}`] })).toEqual({
+      path: '/brand/studio/editor',
+      query: { organizationId: ORG, clip: `o:${OUTPUT}` },
+    });
   });
 
   it('the redirect comes before any of the current editor’s loaders', async () => {
-    const Page = await loadPage();
-    await expect(Page(params({ organizationId: ORG, clip: `a:${ASSET}` }))).rejects.toThrow('NEXT_REDIRECT');
+    await redirected({ organizationId: ORG, clip: `a:${ASSET}` });
     expect(mocks.calls).toEqual(['guard', 'list', 'redirect']);
     for (const loader of [mocks.assetsOf, mocks.jobsOf, mocks.viewsOf, mocks.loadAllowance, mocks.loadLibrary, mocks.loadFolderItems]) expect(loader).not.toHaveBeenCalled();
   });
@@ -191,12 +207,17 @@ describe('/brand/studio/compose with the switch', () => {
     expect((element.type as { name?: string }).name).toBe('VideoComposerStub');
     expect(element.props.organizationId).toBe(ORG);
     expect(element.props.editorV2Href).toBe(`/brand/studio/editor?organizationId=${ORG}`);
-    expect(element.props.copy.previewV2).toEqual({ ...dict.studioCompose.previewV2, link: dict.studioCompose.previewV2.back, tag: '' });
+    const back = dict.studioCompose.previewV2;
+    expect(element.props.copy.previewV2).toEqual({ ...back, link: back.back, tag: '', note: back.backNote });
+    expect(element.props.copy.previewV2).toMatchObject({
+      link: '새 편집 스튜디오로 돌아가기',
+      tag: '',
+      note: '같은 영상을 새 화면에서 엽니다. 색, 사운드, 자막 공간은 아직 준비 중입니다.',
+    });
     expect(mocks.assetsOf).toHaveBeenCalled();
     // Only exactly `1` keeps it: anything else is not the way back.
     for (const value of ['0', 'true', '']) {
-      mocks.redirect.mockClear();
-      await expect(Page(params({ organizationId: ORG, classic: value }))).rejects.toThrow('NEXT_REDIRECT');
+      expect((await redirected({ organizationId: ORG, classic: value })).path).toBe('/brand/studio/editor');
     }
   });
 
@@ -206,8 +227,14 @@ describe('/brand/studio/compose with the switch', () => {
     const element = (await Page(params({ organizationId: ORG, clip: `a:${ASSET}` }))) as ComposerElement;
     expect(mocks.redirect).not.toHaveBeenCalled();
     expect(element.props.copy).toBe(dict.studioCompose);
-    expect(element.props.editorV2Href).toBe(`/brand/studio/editor?organizationId=${ORG}`);
+    // Its link goes to the sample film: the new editor opens an organization's own film only when listed.
+    expect(element.props.editorV2Href).toBe(`/brand/studio/editor?sample=1&organizationId=${ORG}`);
     expect(element.props.editorV2Href).not.toContain('classic');
+    expect(element.props.copy.previewV2).toMatchObject({
+      link: '새 편집 스튜디오 미리 보기',
+      tag: '구조 시안',
+      note: dict.studioEditor.notice.body,
+    });
   });
 
   it('flag off: no redirect even when listed, and no link at all', async () => {
@@ -271,7 +298,9 @@ describe('the switch in the source', () => {
   it('the new editor’s way back always carries classic=1; the current editor’s link never does', () => {
     expect(editor).toContain("scopedHref('/brand/studio/compose?classic=1', choice)");
     expect(editor).not.toMatch(/scopedHref\('\/brand\/studio\/compose'/);
-    expect(compose).toContain("editorV2Href={brandStudioEditorV2Open() ? scopedHref('/brand/studio/editor', choice) : null}");
+    expect(compose).toContain(
+      "editorV2Href={brandStudioEditorV2Open() ? scopedHref(opensEditorV2 ? '/brand/studio/editor' : '/brand/studio/editor?sample=1', choice) : null}",
+    );
     expect(compose.match(/classic/g)?.length ?? 0).toBeGreaterThan(0);
     expect(compose).not.toMatch(/\/brand\/studio\/editor[^'"`]*classic/);
   });

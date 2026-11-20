@@ -12,8 +12,11 @@ Run it twice against a local server started with BRAND_STUDIO_V2=on and BRAND_ST
               its link "back to the new editor" (no tag) opens the new editor;
             - the new editor's way back opens the current editor (classic=1);
             - a clip= link through the compose address arrives in the new editor with the clip appended.
-  unlisted  the server WITHOUT the variable: the compose address shows the current editor, and its link
-            reads the "try it" copy with the in-progress tag, without classic.
+  unlisted  the server WITHOUT the variable (review round 1, item 2): the compose address shows the
+            current editor, and its link previews the SAMPLE film (`?sample=1`, the structure-preview tag,
+            the sample notice as its tooltip). Opening the new editor's own address directly, with no
+            `sample` and with a `clip=` link, also shows the sample film, and editing there leaves the
+            film this browser keeps for the organization byte for byte as it was.
 
   EDITOR_BASE_URL=http://localhost:3611 EDITOR_ORG_ID=<organization id> python scripts/editor-v2-switch-check.py listed|unlisted <out-dir>
 
@@ -36,11 +39,13 @@ OUT = sys.argv[2] if len(sys.argv) > 2 else None
 results = []
 
 COPY = {
-    'try': '새 편집 스튜디오 열어 보기',
-    'tag': '준비 중',
+    'try': '새 편집 스튜디오 미리 보기',
+    'tag': '구조 시안',
+    'sampleNote': '예시 영상으로 만든 시안입니다. 고친 내용은 저장되지 않습니다.',
     'back': '새 편집 스튜디오로 돌아가기',
     'note': '같은 영상을 새 화면에서 엽니다. 색, 사운드, 자막 공간은 아직 준비 중입니다.',
 }
+KEY = f'twings_studio_compose_v1:{ORG}'
 
 # Reports to the script the moment the current editor's root is put into any page of this browser.
 WATCH = """(() => {
@@ -92,7 +97,7 @@ def main():
     editor_path = '/brand/studio/editor'
 
     with sync_playwright() as p:
-        browser = p.chromium.launch(headless=True)
+        browser = p.chromium.launch(headless=True, channel=os.environ.get('EDITOR_BROWSER_CHANNEL', 'chromium'))
         context = browser.new_context(viewport={'width': 1440, 'height': 900}, device_scale_factor=1)
         context.add_cookies([{'name': 'playbook.locale', 'value': 'ko', 'url': BASE}])
         context.route('**/*', lambda route: route.continue_() if route.request.url.startswith((BASE, 'data:', 'blob:')) else route.abort())
@@ -148,13 +153,42 @@ def main():
                   first is not None and first['status'] == 200 and 'data-brand-studio-compose' in first['body'] and urlparse(page.url).path == '/brand/studio/compose',
                   f'status {first["status"] if first else "?"}, now at {urlparse(page.url).path}')
             found = link()
-            check('unlisted: its link to the new editor reads “try it” with the in-progress tag, without classic',
-                  found and found['text'] == f'{COPY["try"]} {COPY["tag"]}' and found['tags'] == 1 and found['title'] == COPY['note']
-                  and urlparse(found['href']).path == editor_path and 'classic' not in found['href'], json.dumps(found, ensure_ascii=False))
+            check('unlisted: its link previews the sample film: “미리 보기” with the structure-preview tag, the sample notice as tooltip, sample=1, without classic',
+                  found and found['text'] == f'{COPY["try"]} {COPY["tag"]}' and found['tags'] == 1 and found['title'] == COPY['sampleNote']
+                  and urlparse(found['href']).path == editor_path and query(found['href']) == {'sample': '1', 'organizationId': ORG} and 'classic' not in found['href'],
+                  json.dumps(found, ensure_ascii=False).replace(ORG, '<org>'))
             shot('switch-unlisted-current-editor')
+            # The film this browser keeps for the organization, as the current editor left it.
+            kept = page.evaluate('(key) => localStorage.getItem(key)', KEY)
+            check('unlisted: the current editor keeps a film for the organization (the thing that must not change)', bool(kept), f'{len(kept or "")} characters')
             page.click('[data-compose-editor-v2]')
             wait_v2()
-            check('unlisted: the link opens the new editor on the organization’s film', urlparse(page.url).path == editor_path and page.get_attribute('[data-studio-editor-v2]', 'data-editor-mode') == 'real')
+            check('unlisted: the link opens the sample film', urlparse(page.url).path == editor_path and page.get_attribute('[data-studio-editor-v2]', 'data-editor-mode') == 'sample')
+            # Straight to the new editor's own address, with nothing that asks for the sample, and with a clip= link.
+            sources = []
+            # A real clip= link: one of the organization's own clips, taken from the film the current editor keeps.
+            film = json.loads(kept or '{}')
+            first_clip = next((c for c in film.get('clips', []) if c.get('assetId') or c.get('outputId')), {})
+            clip_key = f'a:{first_clip["assetId"]}' if first_clip.get('assetId') else f'o:{first_clip.get("outputId", "")}'
+            for label, address in (('no sample', f'{BASE}{editor_path}?organizationId={ORG}'),
+                                   ('clip= link', f'{BASE}{editor_path}?organizationId={ORG}&clip={clip_key}'),
+                                   ('sample=0', f'{BASE}{editor_path}?organizationId={ORG}&sample=0')):
+                page.goto(address, wait_until='domcontentloaded', timeout=240000)
+                wait_v2()
+                mode = page.get_attribute('[data-studio-editor-v2]', 'data-editor-mode')
+                sources.append(page.locator('[data-editor-source]').count())
+                check(f'unlisted: the editor address directly ({label}) shows the sample film', mode == 'sample' and page.locator('[data-editor-notice]').count() == 1, f'mode {mode}')
+                # Edit there: change the shape, split at the playhead, remove a cut, undo, redo.
+                page.click('[data-editor-aspect="1:1"]')
+                page.locator('[data-editor-step="1"]').click(click_count=6)
+                page.click('[data-editor-split-button]')
+                page.keyboard.press('Control+z')
+                page.keyboard.press('Control+Shift+z')
+                page.wait_for_timeout(1500)
+                after = page.evaluate('(key) => localStorage.getItem(key)', KEY)
+                check(f'unlisted: editing there ({label}) leaves the stored film byte for byte as it was', after == kept,
+                      f'{len(kept or "")} → {len(after or "")} characters')
+            check('unlisted: the sample film offers none of the organization’s clips', all(count == 0 for count in sources), json.dumps(sources))
             check('no page errors', not errors, '; '.join(errors[:3]))
             return finish(browser)
 
@@ -189,7 +223,7 @@ def main():
         wait_current()
         check('listed: classic=1 keeps the current editor after a reload', urlparse(page.url).path == '/brand/studio/compose' and query(page.url).get('classic') == '1')
         found = link()
-        check('listed: its link reads “back to the new editor”, no tag, without classic',
+        check('listed: its link reads “back to the new editor”, no tag, the same-film tooltip, without classic',
               found and found['text'] == COPY['back'] and found['tags'] == 0 and found['title'] == COPY['note']
               and urlparse(found['href']).path == editor_path and 'classic' not in found['href'], json.dumps(found, ensure_ascii=False))
         shot('switch-listed-classic')

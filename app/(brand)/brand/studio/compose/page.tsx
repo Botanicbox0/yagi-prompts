@@ -134,9 +134,13 @@ export default async function StudioComposePage({
 
   const canCreate = !access.staff && (choice.role === 'owner' || choice.role === 'editor');
   // Reached through `?classic=1` by an organization that opens the new editor by default: its link
-  // to the new editor reads as the way back, without the "in progress" tag.
+  // goes back to its own film there, without a tag. Any other organization previews the sample film
+  // there (the new editor opens an organization's own film only when it is listed).
   const copy = opensEditorV2
-    ? { ...dict.studioCompose, previewV2: { ...dict.studioCompose.previewV2, link: dict.studioCompose.previewV2.back, tag: '' } }
+    ? {
+        ...dict.studioCompose,
+        previewV2: { ...dict.studioCompose.previewV2, link: dict.studioCompose.previewV2.back, tag: '', note: dict.studioCompose.previewV2.backNote },
+      }
     : dict.studioCompose;
 
   return (
@@ -146,7 +150,7 @@ export default async function StudioComposePage({
       canCreate={canCreate}
       copy={copy}
       videoStudioHref={scopedHref('/brand/studio/video', choice)}
-      editorV2Href={brandStudioEditorV2Open() ? scopedHref('/brand/studio/editor', choice) : null}
+      editorV2Href={brandStudioEditorV2Open() ? scopedHref(opensEditorV2 ? '/brand/studio/editor' : '/brand/studio/editor?sample=1', choice) : null}
       initialAllowance={allowanceView(allowance)}
       initialAssets={assets}
       initialVideoOutputs={videoOutputs}

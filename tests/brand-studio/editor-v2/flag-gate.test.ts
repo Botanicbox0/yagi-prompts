@@ -20,6 +20,7 @@ import { getDictionary } from '@/lib/i18n/dictionaries';
  */
 const ROOT = process.cwd();
 const ORG = '00000000-0000-4000-8000-0000000000aa';
+const OTHER = '00000000-0000-4000-8000-0000000000bb';
 const ASSET = '30000000-0000-4000-8000-000000000001';
 const OUTPUT = '30000000-0000-4000-8000-000000000002';
 
@@ -154,8 +155,46 @@ describe('/brand/studio/editor page gate', () => {
     expect(mocks.assetsOf).not.toHaveBeenCalled();
   });
 
+  it('an organization not on the list gets the sample film whatever the address says, and nothing of its own is loaded', async () => {
+    vi.stubEnv('BRAND_STUDIO_EDITOR_V2', 'on');
+    const Page = await loadPage();
+    for (const list of [undefined, '', OTHER, `${OTHER},${ORG.slice(0, 20)}`]) {
+      if (list === undefined) vi.stubEnv('BRAND_STUDIO_EDITOR_V2_ORGS', undefined as unknown as string);
+      else vi.stubEnv('BRAND_STUDIO_EDITOR_V2_ORGS', list);
+      for (const query of [
+        { organizationId: ORG },
+        { organizationId: ORG, clip: `a:${ASSET}` },
+        { organizationId: ORG, clip: `o:${OUTPUT}`, sample: '0' },
+        { organizationId: ORG, sample: '1' },
+        { organizationId: ORG, sample: ['0', '1'], ws: 'color' },
+      ]) {
+        const element = (await Page({ searchParams: Promise.resolve(query) })) as Element;
+        expect((element.type as { name?: string }).name, JSON.stringify(query)).toBe('EditorV2Stub');
+        expect(element.props.real, `${list} ${JSON.stringify(query)}`).toBeNull();
+        expect(element.props.currentEditorHref).toBe(`/brand/studio/compose?classic=1&organizationId=${ORG}`);
+      }
+    }
+    expect(mocks.assetsOf).not.toHaveBeenCalled();
+    expect(mocks.jobsOf).not.toHaveBeenCalled();
+    expect(mocks.viewsOf).not.toHaveBeenCalled();
+  });
+
+  it('a listed organization gets its own film; the list is consulted after the guard and the flag', async () => {
+    vi.stubEnv('BRAND_STUDIO_EDITOR_V2', 'on');
+    vi.stubEnv('BRAND_STUDIO_EDITOR_V2_ORGS', ` ${OTHER} , ${ORG} `);
+    const Page = await loadPage();
+    const element = (await Page({ searchParams: Promise.resolve({ organizationId: ORG, clip: `a:${ASSET}` }) })) as Element;
+    expect(element.props.real).not.toBeNull();
+    expect(mocks.assetsOf).toHaveBeenCalledTimes(1);
+    // `sample=1` still opens the sample film for a listed organization.
+    const sample = (await Page({ searchParams: Promise.resolve({ organizationId: ORG, sample: '1' }) })) as Element;
+    expect(sample.props.real).toBeNull();
+    expect(mocks.assetsOf).toHaveBeenCalledTimes(1);
+  });
+
   it('opens the organization’s film with the clips the current editor offers: video only, same addresses', async () => {
     vi.stubEnv('BRAND_STUDIO_EDITOR_V2', 'on');
+    vi.stubEnv('BRAND_STUDIO_EDITOR_V2_ORGS', ORG);
     const Page = await loadPage();
     const element = (await Page({ searchParams: Promise.resolve({ organizationId: ORG }) })) as Element;
     expect((element.type as { name?: string }).name).toBe('EditorV2Stub');
@@ -175,6 +214,7 @@ describe('/brand/studio/editor page gate', () => {
 
   it('lets owners and editors change the film; viewers and the studio team only look', async () => {
     vi.stubEnv('BRAND_STUDIO_EDITOR_V2', 'on');
+    vi.stubEnv('BRAND_STUDIO_EDITOR_V2_ORGS', ORG);
     const Page = await loadPage();
     const canEdit = async (role: string, staff = false) => {
       mocks.studioRouteContext.mockResolvedValueOnce(context(role, staff));
@@ -188,6 +228,7 @@ describe('/brand/studio/editor page gate', () => {
 
   it('?sample=1 opens the sample film, reads nothing of the organization’s, and keeps the workspace asked for', async () => {
     vi.stubEnv('BRAND_STUDIO_EDITOR_V2', 'on');
+    vi.stubEnv('BRAND_STUDIO_EDITOR_V2_ORGS', ORG);
     const Page = await loadPage();
     const element = (await Page({ searchParams: Promise.resolve({ organizationId: ORG, sample: '1', ws: 'sound' }) })) as Element;
     expect(element.props.real).toBeNull();
@@ -204,14 +245,16 @@ describe('/brand/studio/editor page gate', () => {
 describe('the page source', () => {
   const pageSource = readFileSync(join(ROOT, 'app/(brand)/brand/studio/editor/page.tsx'), 'utf8');
 
-  it('runs the studio guard, then its own flag, then reads the organization’s clips', () => {
+  it('runs the studio guard, then its own flag, then the list, then reads the organization’s clips', () => {
     const guard = pageSource.indexOf('studioRouteContext(');
     const flag = pageSource.indexOf('brandStudioEditorV2Open(');
+    const list = pageSource.indexOf('brandStudioEditorV2DefaultFor(choice.id)');
     const sample = pageSource.indexOf("=== '1'");
     const load = pageSource.indexOf('assetsOf(');
     expect(guard).toBeGreaterThan(-1);
     expect(guard).toBeLessThan(flag);
-    expect(flag).toBeLessThan(sample);
+    expect(flag).toBeLessThan(list);
+    expect(list).toBeLessThan(sample);
     expect(sample).toBeLessThan(load);
   });
 

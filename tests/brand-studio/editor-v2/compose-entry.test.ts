@@ -59,24 +59,28 @@ describe('the working editor links to the v2 prototype only while the flag is on
       expect(link).toContain(`title="${copy.note}"`);
       expect(on.replace(link, '')).toBe(render(locale, {}));
     }
-    // The new editor opens the same film and saves: the link no longer calls it a sample.
+    // An organization not on the list previews the sample film there (review round 1, item 2): the link
+    // says so, and its tooltip is the sample film's own notice.
     const ko = getDictionary('ko').studioCompose.previewV2;
     expect(ko).toEqual({
-      link: '새 편집 스튜디오 열어 보기',
-      tag: '준비 중',
-      note: '같은 영상을 새 화면에서 엽니다. 색, 사운드, 자막 공간은 아직 준비 중입니다.',
+      link: '새 편집 스튜디오 미리 보기',
+      tag: '구조 시안',
+      note: '예시 영상으로 만든 시안입니다. 고친 내용은 저장되지 않습니다.',
       back: '새 편집 스튜디오로 돌아가기',
+      backNote: '같은 영상을 새 화면에서 엽니다. 색, 사운드, 자막 공간은 아직 준비 중입니다.',
     });
-    expect(ko.note).not.toBe(getDictionary('ko').studioEditor.notice.body);
+    for (const locale of ['ko', 'en'] as const) {
+      expect(getDictionary(locale).studioCompose.previewV2.note).toBe(getDictionary(locale).studioEditor.notice.body);
+    }
   });
 
   it('an organization that opens the new editor by default sees the way back, without a tag', () => {
     for (const locale of ['ko', 'en'] as const) {
       const base = getDictionary(locale).studioCompose;
-      const copy = { ...base, previewV2: { ...base.previewV2, link: base.previewV2.back, tag: '' } };
+      const copy = { ...base, previewV2: { ...base.previewV2, link: base.previewV2.back, tag: '', note: base.previewV2.backNote } };
       const on = render(locale, { editorV2Href: HREF, copy });
       const link = on.match(/<a[^>]*data-compose-editor-v2[^>]*>.*?<\/a>/)?.[0] ?? '';
-      expect(link).toBe(`<a class="${link.match(/class="([^"]*)"/)?.[1]}" href="${HREF.replace('&', '&amp;')}" title="${base.previewV2.note}" data-compose-editor-v2="true">${base.previewV2.back}</a>`);
+      expect(link).toBe(`<a class="${link.match(/class="([^"]*)"/)?.[1]}" href="${HREF.replace('&', '&amp;')}" title="${base.previewV2.backNote}" data-compose-editor-v2="true">${base.previewV2.back}</a>`);
       expect(link).not.toContain('classic');
       expect(on.replace(link, '')).toBe(render(locale, {}));
     }
@@ -84,7 +88,9 @@ describe('the working editor links to the v2 prototype only while the flag is on
 
   it('the page hands over the address only when the flag function says so, after the studio guard', () => {
     const page = readFileSync(join(root, 'app/(brand)/brand/studio/compose/page.tsx'), 'utf8');
-    expect(page).toContain("editorV2Href={brandStudioEditorV2Open() ? scopedHref('/brand/studio/editor', choice) : null}");
+    expect(page).toContain(
+      "editorV2Href={brandStudioEditorV2Open() ? scopedHref(opensEditorV2 ? '/brand/studio/editor' : '/brand/studio/editor?sample=1', choice) : null}",
+    );
     expect(page.indexOf('studioRouteOrShowroom(')).toBeGreaterThan(-1);
     expect(page.indexOf('studioRouteOrShowroom(params.organizationId)')).toBeLessThan(page.indexOf('editorV2Href='));
     // The showroom branch (no studio seat) returns before the editor and never mentions the prototype.

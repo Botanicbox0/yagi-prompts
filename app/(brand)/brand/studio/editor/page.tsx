@@ -6,7 +6,7 @@ import { editorSources } from '@/lib/brand-studio/editor-v2/sources';
 import { createStudioMediaStore } from '@/lib/brand-studio/media-store';
 import { assetView, assetsOf, jobsOf, viewsOf } from '@/lib/brand-studio/repo';
 import { scopedHref } from '@/lib/brands/workspace/selection';
-import { brandStudioEditorV2Open } from '@/lib/flags';
+import { brandStudioEditorV2DefaultFor, brandStudioEditorV2Open } from '@/lib/flags';
 
 /**
  * `/brand/studio/editor` — the editing studio v2 (docs/BRAND-EDITING-STUDIO-V2.md §10, §11 V1).
@@ -16,10 +16,11 @@ import { brandStudioEditorV2Open } from '@/lib/flags';
  * `BRAND_STUDIO_V2` off all get 404 before anything else is decided. Then the page's own flag,
  * `BRAND_STUDIO_EDITOR_V2` (default off).
  *
- * It opens the organization's own film: the film the current editor (`/brand/studio/compose`) keeps in
- * this browser, with the same clips the current editor offers (video assets and finished video-studio
- * results, loaded the same way). `?sample=1` opens the sample film instead and reads nothing of the
- * organization's, as the structure prototype did; `ws=` picks the workspace it opens on.
+ * For an organization on the list (`BRAND_STUDIO_EDITOR_V2_ORGS`, lib/flags.ts) it opens the
+ * organization's own film: the film the current editor (`/brand/studio/compose`) keeps in this browser,
+ * with the same clips the current editor offers (video assets and finished video-studio results, loaded
+ * the same way). Every other organization, and `?sample=1`, gets the sample film, which reads and writes
+ * nothing of the organization's, as the structure prototype did; `ws=` picks the workspace it opens on.
  */
 export const dynamic = 'force-dynamic';
 
@@ -41,7 +42,11 @@ export default async function StudioEditorV2Page({
   // organization whose `/brand/studio/compose` would send it here (lib/flags.ts).
   const currentEditorHref = scopedHref('/brand/studio/compose?classic=1', choice);
 
-  if (first(params.sample) === '1') {
+  // Only an organization on the list (`BRAND_STUDIO_EDITOR_V2_ORGS`) opens its own film here. Every other
+  // one gets the sample film whatever the address says (`sample`, `clip`, anything): nothing of its own
+  // is loaded or written, as before the switch (review round 1, item 2).
+  const ownFilm = brandStudioEditorV2DefaultFor(choice.id);
+  if (!ownFilm || first(params.sample) === '1') {
     return <EditorV2 copy={dict.studioEditor} currentEditorHref={currentEditorHref} initialWorkspace={initialWorkspace} real={null} />;
   }
 
