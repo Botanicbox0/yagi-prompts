@@ -15,7 +15,7 @@ import {
 import { snapFilmFps, sourceFramesOf } from '@/lib/brand-studio/editor-v2/fps';
 import { emptyFilm, realAssistAllowed, realDoc, sampleHrefFor, workspaceLocked } from '@/lib/brand-studio/editor-v2/real';
 import { deepLinkSource, parseClipParam, sourceSeconds, storedClipForSource, type EditorSource } from '@/lib/brand-studio/editor-v2/sources';
-import { fromStored, inheritClip, mergeFilmText, sourcesToMeasure, toStored, type MeasuredSource } from '@/lib/brand-studio/editor-v2/stored';
+import { captionsOnFrames, fromStored, inheritClip, mergeFilmText, sourcesToMeasure, toStored, type MeasuredSource } from '@/lib/brand-studio/editor-v2/stored';
 import {
   FIXTURE_MATERIALS,
   FIXTURE_MEASURED_LUFS,
@@ -205,6 +205,12 @@ export function useEditor(copy: StudioEditorCopy, options: EditorOptions = {}) {
   const [status, setStatus] = useState<FilmStatus>(isReal ? 'loading' : 'ready');
   const [storageOk, setStorageOk] = useState(true);
   const [busySource, setBusySource] = useState<string | null>(null);
+  /**
+   * The stored film as last read or written (real film only). v2 does not own its captions, music,
+   * colour grade, effects or overlays: they are shown from here, never from the undo history, so a
+   * caption hidden because the film got shorter shows again when it is long enough (review round 1, item 1).
+   */
+  const [storedFilm, setStoredFilm] = useState<ComposerProject | null>(null);
   /** Measured rate of each piece of footage (`srcUrl`), and the ones that could not be measured. */
   const [rates, setRates] = useState<Record<string, number>>({});
   const [unknownRates, setUnknownRates] = useState<Record<string, true>>({});
@@ -292,7 +298,14 @@ export function useEditor(copy: StudioEditorCopy, options: EditorOptions = {}) {
     toastTimer.current = setTimeout(() => setToast(null), 3200);
   }, []);
 
-  const sequence = doc.sequence;
+  // On a real film the cuts come from the document (and its undo history), the captions from the stored
+  // film: all of them, on this film's frames; one past the end is simply not shown.
+  const docSequence = doc.sequence;
+  const storedCaptions = storedFilm?.captions;
+  const sequence = useMemo(
+    () => (isReal ? { ...docSequence, captions: captionsOnFrames(storedCaptions ?? [], docSequence.fps) } : docSequence),
+    [isReal, docSequence, storedCaptions],
+  );
   const fps = sequence.fps;
   const spans = useMemo(() => spansOf(sequence), [sequence]);
   const total = useMemo(() => totalFrames(sequence), [sequence]);
@@ -384,10 +397,13 @@ export function useEditor(copy: StudioEditorCopy, options: EditorOptions = {}) {
       for (const clip of film.sequence.clips) if (!unknown.includes(clip.srcUrl)) known[clip.srcUrl] = clip.sourceFps;
       noteRates(known, unknown);
       for (const clip of project.clips) catalogue.current[clip.id] = clip;
-      savedSequence.current = film.sequence;
+      // The captions stay with the stored film; the document holds the cuts only.
+      const cuts = { ...film.sequence, captions: [] };
+      savedSequence.current = cuts;
       lastText.current = text;
       dirty.current = false;
-      setStored({ doc: realDoc(film.sequence), history: { past: [], future: [] } });
+      setStoredFilm(project);
+      setStored({ doc: realDoc(cuts), history: { past: [], future: [] } });
       setStatus('ready');
     },
     [secondsOfSrc, noteRates],
@@ -403,6 +419,7 @@ export function useEditor(copy: StudioEditorCopy, options: EditorOptions = {}) {
     const now = readFilmText(film.organizationId);
     if (!now.ok) return setStorageOk(false);
     const text = mergeFilmText(now.text, sequence, { known: catalogue.current, guessedSources: Object.keys(unknownRef.current) });
+    setStoredFilm(parseStoredProject(text));
     if (writeFilmText(film.organizationId, text)) lastText.current = text;
     else setStorageOk(false);
   }, []);
@@ -1034,6 +1051,8 @@ export function useEditor(copy: StudioEditorCopy, options: EditorOptions = {}) {
     copy,
     /** The organization's own film (V1) rather than the sample film. */
     real: isReal,
+    /** The stored film as last read or written (real film only): what v2 shows but does not own. */
+    storedFilm,
     status,
     readOnly,
     /** `false` once browser storage refused a read or a write: the film then lives in memory only. */

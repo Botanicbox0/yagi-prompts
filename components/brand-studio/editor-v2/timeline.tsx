@@ -13,6 +13,7 @@ import {
   sliderToPpf,
   snapFrame,
   trimClipEdge,
+  visibleCaptions,
   zoomScrollLeft,
 } from '@/lib/brand-studio/editor-v2/frames';
 import { duckEnvelope, envelopeGainAt, waveform } from '@/lib/brand-studio/editor-v2/model';
@@ -463,11 +464,12 @@ export function Timeline({ api }: { api: EditorApi }) {
           </div>
 
           <div className={styles.lane} data-lane="captions" onPointerDown={blank}>
-            {sequence.captions.map((caption) => (
+            {visibleCaptions(sequence).map((caption) => (
               <button
                 key={caption.id}
                 type="button"
                 className={styles.textItem}
+                data-editor-caption-item={caption.id}
                 style={{ left: caption.start * ppf, width: Math.max(18, (caption.end - caption.start) * ppf - 2) }}
                 onClick={() => { api.setWorkspace('captions'); api.seek(caption.start); }}
               >

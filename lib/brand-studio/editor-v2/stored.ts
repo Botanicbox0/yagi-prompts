@@ -16,9 +16,10 @@
  * - otherwise the current editor changed the cut (or made it): rebuild it from its seconds to the
  *   nearest frame.
  *
- * v2 owns only the aspect, the list and order of cuts (per cut: trims, speed, volume, mute and the
- * block) and the captions. Everything else in the stored film is carried over untouched. A visit to v2
- * that changes nothing writes back exactly the seconds that were there. Pure: no DOM, no storage.
+ * v2 owns only the aspect and the list and order of cuts (per cut: trims, speed, volume, mute and the
+ * block). Everything else in the stored film is carried over untouched, the captions included (V1 does
+ * not edit captions, so they are written back exactly as stored). A visit to v2 that changes nothing
+ * writes back exactly the seconds that were there. Pure: no DOM, no storage.
  */
 import {
   COMPOSE_ASPECTS,
@@ -207,6 +208,15 @@ function captionFromStored(caption: ComposeCaption, fps: number): FrameCaption {
   };
 }
 
+/**
+ * The stored film's captions on the film's frames, all of them: a caption past the end of a film that
+ * got shorter is kept here and simply not shown (frames.ts `visibleCaptions`, `frameStateAt`), so it
+ * shows again when the film is long enough. v2 does not own captions in V1; this is a view of them.
+ */
+export function captionsOnFrames(captions: readonly ComposeCaption[], fps: number): FrameCaption[] {
+  return captions.slice(0, MAX_COMPOSE_CAPTIONS).map((caption) => captionFromStored(caption, fps));
+}
+
 /** The stored film on frames. `measured` holds what the browser measured, by `srcUrl`. */
 export function fromStored(project: ComposerProject, measured: MeasuredSources = {}): StoredFilm {
   const fps = filmFpsOf(project, measured);
@@ -235,8 +245,7 @@ export function fromStored(project: ComposerProject, measured: MeasuredSources =
     return { ...base, ...source, ...deriveFrames(stored, fps, source) };
   });
   const aspect: ComposeAspect = (COMPOSE_ASPECTS as readonly string[]).includes(project.aspect) ? project.aspect : '9:16';
-  const captions = project.captions.slice(0, MAX_COMPOSE_CAPTIONS).map((caption) => captionFromStored(caption, fps));
-  return { sequence: { fps, aspect, clips, captions }, exact, derived, rateUnknown };
+  return { sequence: { fps, aspect, clips, captions: captionsOnFrames(project.captions, fps) }, exact, derived, rateUnknown };
 }
 
 export interface ToStoredOptions {
@@ -325,24 +334,17 @@ function storedClipOf(
   return { ...written, frameV2: block };
 }
 
-function storedCaptionOf(caption: FrameCaption, fps: number, own: ComposeCaption | undefined): ComposeCaption {
-  const fields = { id: caption.id, text: caption.text, position: caption.position, size: caption.size };
-  if (own) {
-    // Keep the seconds the current editor had wherever they still land on the same frames.
-    const kept = { ...own, ...fields };
-    const back = captionFromStored(kept, fps);
-    if (back.start === caption.start && back.end === caption.end && back.position === own.position && back.size === own.size) return kept;
-  }
-  return { ...(own ?? {}), ...fields, startSec: caption.start / fps, endSec: caption.end / fps };
-}
-
 /**
- * The frame sequence written onto `previous`: v2's cuts and captions, everything else as it was.
+ * The frame sequence written onto `previous`: v2's cuts, everything else as it was.
  * A cut whose id `previous` has keeps every field v2 does not own; a new cut (a split's right half, a
  * paste, a cut from the bin) takes them from `known`, else from the first stored cut of the same footage
  * (the current editor's own split copies them onto both halves too), else from its footage alone.
  * The line of parents (`frameV2.from`) comes only from the cut itself or from `known`, never from
  * another cut of the same footage.
+ *
+ * Captions are not v2's in V1 (its captions workspace is locked): `previous.captions` is written back as
+ * it is, the same list, whatever the cuts look like now. A film that got shorter than a caption hides
+ * the caption on screen; storage keeps it (review round 1, item 1). `sequence.captions` is never read.
  */
 export function toStored(sequence: FrameSequence, previous: ComposerProject, options: ToStoredOptions = {}): ComposerProject {
   const fps = sequence.fps;
@@ -355,9 +357,7 @@ export function toStored(sequence: FrameSequence, previous: ComposerProject, opt
     const from = own ? lineageOf(own) : known ? lineageOf(known) : [];
     return storedClipOf(clip, fps, own, template, guessed.has(clip.srcUrl), from);
   });
-  const captionsById = new Map(previous.captions.map((caption) => [caption.id, caption]));
-  const captions = sequence.captions.slice(0, MAX_COMPOSE_CAPTIONS).map((caption) => storedCaptionOf(caption, fps, captionsById.get(caption.id)));
-  return { ...previous, version: 1, aspect: sequence.aspect, clips, captions };
+  return { ...previous, version: 1, aspect: sequence.aspect, clips, captions: previous.captions };
 }
 
 /**

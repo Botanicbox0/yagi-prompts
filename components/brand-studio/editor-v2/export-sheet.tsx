@@ -6,6 +6,7 @@ import type { ComposerProject } from '@/lib/brand-studio/compose/timeline';
 import { burnsCaptions, formatBytes, notIncluded, writesCaptionFile } from '@/lib/brand-studio/editor-v2/export-plan';
 import { formatTimecode, totalFrames } from '@/lib/brand-studio/editor-v2/frames';
 import { captionsToSrt, type EditorWorkspace } from '@/lib/brand-studio/editor-v2/model';
+import { captionsOnFrames } from '@/lib/brand-studio/editor-v2/stored';
 import { browserCanExport } from './export-film';
 import { cancelExport, exportJobSnapshot, idleExportJob, startExport, subscribeExportJob, watchExportJob, type ExportJob } from './export-job';
 import { EditorIcon } from './icons';
@@ -50,9 +51,10 @@ export function ExportSheet({ api }: { api: EditorApi }) {
   const start = () => {
     if (blocked || running) return;
     // The stored film as it is the moment export starts, with whatever waited to be saved written first.
+    // Its captions are the ones burned in: exactly what is stored, on this film's frames.
     const film = real ? filmForExport() : null;
     startExport({
-      sequence,
+      sequence: film ? { ...sequence, captions: captionsOnFrames(film.captions, sequence.fps) } : sequence,
       reframe: doc.reframe,
       extras: film,
       burnCaptions: burnsCaptions(sampleDoc),

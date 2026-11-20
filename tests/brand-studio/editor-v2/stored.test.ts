@@ -91,6 +91,9 @@ function frameFields(seq: FrameSequence) {
   return seq.clips.map((c) => [c.id, c.inFrame, c.phase, c.frames, c.speedNum, c.speedDen, c.sourceFps, c.sourceFrames]);
 }
 
+/** What v2 owns of a sequence: everything but the captions (they stay the stored film's, review round 1 item 1). */
+const cutsOf = (seq: FrameSequence): FrameSequence => ({ ...seq, captions: [] });
+
 const LEGACY = legacy({
   clips: [
     clip('c1', SRC_A, 10, 0.5, 3.2),
@@ -234,13 +237,15 @@ describe('v2 → stored → v2 keeps every frame', () => {
         if (seq.clips.length < MAX_COMPOSE_CLIPS - 1) seq = randomStep(seq, next, id);
         else seq = removeClips(seq, [seq.clips[0]!.id]);
         const stored = toStored(seq, previous);
+        // Captions are the stored film's, written back as they were.
+        expect(stored.captions, `seed ${seed} step ${step}`).toEqual(LEGACY.captions);
         // 1. Straight back.
         const back = fromStored(stored, MEASURED);
-        expect(back.sequence, `seed ${seed} step ${step}`).toEqual(seq);
+        expect(cutsOf(back.sequence), `seed ${seed} step ${step}`).toEqual(cutsOf(seq));
         expect(back.derived, `seed ${seed} step ${step}`).toEqual([]);
         // 2. Through the current editor's own load and save, twice.
         const visited = throughCurrentEditor(stored);
-        expect(fromStored(visited, MEASURED).sequence, `seed ${seed} step ${step} via current editor`).toEqual(seq);
+        expect(cutsOf(fromStored(visited, MEASURED).sequence), `seed ${seed} step ${step} via current editor`).toEqual(cutsOf(seq));
         previous = visited;
       }
     }
@@ -431,14 +436,17 @@ describe('what v2 does not own is never dropped or changed', () => {
 });
 
 describe('limits', () => {
-  it('stores at most the current editor’s clip and caption limits', () => {
+  it('stores at most the current editor’s clip limit, and never writes captions of its own', () => {
     let seq = fromStored(LEGACY, MEASURED).sequence;
     const extra = Array.from({ length: 40 }, (_, i) => ({ ...seq.clips[0]!, id: `x${i}` }));
     seq = { ...seq, clips: [...seq.clips, ...extra], captions: Array.from({ length: 45 }, (_, i) => ({ id: `c${i}`, text: `t${i}`, start: i, end: i + 1, position: 'bottom' as const, size: 'md' as const })) };
     const stored = toStored(seq, LEGACY);
     expect(stored.clips).toHaveLength(MAX_COMPOSE_CLIPS);
-    expect(stored.captions).toHaveLength(MAX_COMPOSE_CAPTIONS);
+    expect(stored.captions).toBe(LEGACY.captions);
     expect(fromStored({ ...stored, clips: [...stored.clips, ...stored.clips] }, MEASURED).sequence.clips).toHaveLength(MAX_COMPOSE_CLIPS);
+    // Reading a stored film keeps at most the current editor's caption limit.
+    const many = Array.from({ length: 45 }, (_, i) => ({ id: `c${i}`, text: `t${i}`, startSec: i / 10, endSec: i / 10 + 0.1, position: 'bottom' as const, size: 'md' as const }));
+    expect(fromStored({ ...LEGACY, captions: many }, MEASURED).sequence.captions).toHaveLength(MAX_COMPOSE_CAPTIONS);
   });
 });
 
@@ -457,7 +465,9 @@ describe('read, merge, write', () => {
     for (const text of [null, '', 'not json', JSON.stringify({ version: 9 })]) {
       const written = parseStoredProject(mergeFilmText(text, seq))!;
       expect(written.bgm).toBeNull();
-      expect(fromStored(written, MEASURED).sequence).toEqual(seq);
+      // Captions are not v2's to write: an empty key stays without captions.
+      expect(written.captions).toEqual([]);
+      expect(cutsOf(fromStored(written, MEASURED).sequence)).toEqual(cutsOf(seq));
     }
   });
 
