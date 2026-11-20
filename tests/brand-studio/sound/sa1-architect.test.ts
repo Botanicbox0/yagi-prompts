@@ -8,7 +8,7 @@ import { SUNO_HEADER, SUNO_PROFILE } from '@/lib/brand-studio/enhancer/profiles/
 import { createStudioJob, resetFreeIntelRateLimits } from '@/lib/brand-studio/jobs';
 import type { StudioProvider, StudioProviderRequest } from '@/lib/brand-studio/provider/types';
 import { runStudioOperation } from '@/lib/brand-studio/service';
-import { checkMusicDesign, designMusic, fallbackDesign, MUSIC_PROFILE_VERSION, reviewedDesign, type MusicDesignInput } from '@/lib/brand-studio/sound/architect';
+import { checkMusicDesign, designMusic, fallbackDesign, MUSIC_PROFILE_VERSION, reviewedDesign, safeNotes, type MusicDesignInput } from '@/lib/brand-studio/sound/architect';
 import { markLyrics, withoutAddedLines } from '@/lib/brand-studio/sound/lyrics';
 import { describeSentence, musicTitle } from '@/lib/brand-studio/sound/music-text';
 import { requestId, studioDeps, studioFixture, viewerOf, type StudioFixture } from '../server/helpers';
@@ -105,6 +105,14 @@ describe('designing', () => {
     expect(design.llmModel).toBeTruthy();
     expect(calls).toHaveLength(1);
     expect(calls[0]!.body.systemInstruction.parts[0]!.text).toContain('Never name a real singer');
+  });
+
+  it('shows the model’s notes only when they pass the name and technical-word check (review 1)', async () => {
+    for (const notes of ['Suno v6에 맞춰 설계했어요.', '아이유 느낌으로 설계했어요.', '   ']) {
+      const { fetchStub } = geminiAnswers({ style: GOOD_STYLE, title: '', notes });
+      expect((await designMusic(input({ vocal: true }), { fetch: fetchStub, env })).notes).toBeNull();
+    }
+    expect(safeNotes('잔잔한 어쿠스틱으로 설계했어요.')).toBe('잔잔한 어쿠스틱으로 설계했어요.');
   });
 
   it('gives one rewrite with the problems listed, then falls back', async () => {

@@ -1023,3 +1023,54 @@
   font-family: var(--ys-mono);
   font-variant-numeric: tabular-nums;
 }
+
+/* Review 1: structure, tone, brand and words to include fold behind one quiet disclosure. */
+.moreToggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-left: auto;
+  padding: 4px 6px;
+  border: 0;
+  background: transparent;
+  color: var(--ys-ink-secondary);
+  font: inherit;
+  font-size: 12.5px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.moreToggle:hover {
+  color: var(--ys-ink);
+}
+.moreToggle:focus-visible {
+  outline: 2px solid var(--ys-focus);
+  outline-offset: 1px;
+  border-radius: 6px;
+}
+.moreCount {
+  display: inline-grid;
+  place-items: center;
+  min-width: 16px;
+  height: 16px;
+  padding: 0 4px;
+  border-radius: var(--ys-r-pill);
+  background: var(--ys-active-bg);
+  color: var(--ys-active-fg);
+  font-size: 10.5px;
+  font-variant-numeric: tabular-nums;
+}
+.moreChevron {
+  width: 7px;
+  height: 7px;
+  border-right: 1.5px solid currentColor;
+  border-bottom: 1.5px solid currentColor;
+  transform: translateY(-2px) rotate(45deg);
+  transition: transform 160ms var(--ys-ease);
+}
+.moreChevron[data-open] {
+  transform: translateY(2px) rotate(-135deg);
+}
+.moreBody {
+  display: grid;
+  gap: 8px;
+}

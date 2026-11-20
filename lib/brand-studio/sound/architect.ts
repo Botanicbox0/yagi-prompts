@@ -114,6 +114,16 @@ export function fallbackDesign(input: MusicDesignInput, reason?: string): MusicD
 const INTERNAL_TERMS = /\b(suno|sunra|max[_ ]mode|inspire-mode|custom-mode|api|endpoint|prompt architect|json)\b/i;
 const SECONDS = /\b\d+(?:\.\d+)?\s*(?:s|sec|secs|second|seconds|min|mins|minute|minutes)\b|\d+\s*(?:초|분)/i;
 
+/**
+ * The model's one sentence for the screen, held to the same name and technical-word check as the style and title.
+ * A hit (or nothing) gives null: the screen shows its own fixed sentence instead (review 1, item 6).
+ */
+export function safeNotes(notes: string | null | undefined): string | null {
+  const text = (notes ?? '').replace(/\s+/g, ' ').trim().slice(0, DESIGN_LIMITS.notesMax);
+  if (!text || namedArtist(text) || INTERNAL_TERMS.test(text)) return null;
+  return text;
+}
+
 /** Problems in a design, for the one rewrite (empty when it may be sent). Pure: the same check runs on an edited design. */
 export function checkMusicDesign(design: { style: string; title?: string }, mode: MusicWay): string[] {
   const problems: string[] = [];
@@ -219,7 +229,7 @@ export async function designMusic(input: MusicDesignInput, deps: DesignDeps): Pr
         style: design.style,
         title: mode === 'custom' ? design.title : musicTitle(input.prompt),
         lyrics: markLyrics(input.vocal ? input.lyrics : '', input.structure ?? null),
-        notes: answer.notes.replace(/\s+/g, ' ').trim().slice(0, DESIGN_LIMITS.notesMax) || null,
+        notes: safeNotes(answer.notes),
         source: 'model',
         profileVersion: MUSIC_PROFILE_VERSION,
         llmModel: config.model,

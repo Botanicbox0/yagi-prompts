@@ -3,6 +3,10 @@
  *
  * Error mapping (customer codes only; Sunra's words go to `detail` and the server log):
  *   unsafe content (submit or prediction)      -> provider_rejected
+ *   every documented refusal class             -> provider_rejected (moderation categories incl. `copyright`, real-person
+ *                                                 and sensitive content; `SENSITIVE_WORD_ERROR`). The strings come from the
+ *                                                 docs (docs/research/brand-sound-studio-2026-11-20/suno-prompting.md), not
+ *                                                 from an observed response: none has been sent on purpose (§12.5).
  *   402/412 or INSUFFICIENT_CREDIT              -> provider_unavailable, plus a `studio_provider_balance` log
  *   401/403, upstream account trouble           -> provider_unavailable
  *   network, 429, 5xx                           -> provider_unavailable, retryable
@@ -14,7 +18,9 @@ import { StudioProviderError, type StudioProvider, type StudioTaskStatus } from 
 
 type Log = (event: string, detail?: Record<string, unknown>) => void;
 
-const UNSAFE = new Set(['unsafe_content', 'PREDICTION_UNSAFE_CONTENT', 'content_policy_violation']);
+const UNSAFE = new Set(['unsafe_content', 'PREDICTION_UNSAFE_CONTENT', 'content_policy_violation', 'copyright', 'SENSITIVE_WORD_ERROR']);
+/** Refusal words in a code or a reason: Sunra's moderation categories and the relay statuses the docs list. */
+const REFUSAL = /moderation|unsafe|sensitive|copyright|real[-_ ]?person|content[-_ ]?policy/i;
 
 function insufficient(error: SunraError): boolean {
   return error.insufficientCredit || error.status === 402;
@@ -25,7 +31,7 @@ export function mapSunraSubmitError(error: unknown, log?: Log): StudioProviderEr
     return new StudioProviderError('provider_unavailable', error instanceof Error ? error.message : 'submit failed', true);
   }
   const detail = `${error.code} (${error.status}): ${error.message}`.slice(0, 500);
-  if (error.moderated || UNSAFE.has(error.code)) return new StudioProviderError('provider_rejected', detail, false);
+  if (error.moderated || UNSAFE.has(error.code) || REFUSAL.test(error.code)) return new StudioProviderError('provider_rejected', detail, false);
   if (insufficient(error)) {
     log?.('studio_provider_balance', { lane: 'sunra_api', status: error.status, code: error.code });
     return new StudioProviderError('provider_unavailable', detail, false, 'balance');
@@ -42,7 +48,7 @@ export function mapSunraPredictionFailure(
   const code = error?.code ?? 'unknown';
   const reason = error?.reason ?? '';
   const detail = `${code}${reason ? `/${reason}` : ''}: ${error?.message ?? ''}`.slice(0, 500);
-  if (UNSAFE.has(code) || /moderation|unsafe|sensitive/i.test(reason)) return { state: 'failed', code: 'provider_rejected', detail };
+  if (UNSAFE.has(code) || REFUSAL.test(code) || REFUSAL.test(reason)) return { state: 'failed', code: 'provider_rejected', detail };
   if (/credit|balance|insufficient/i.test(reason) || /credit|balance/i.test(code)) {
     log?.('studio_provider_balance', { lane: 'sunra_api', code, reason });
     return { state: 'failed', code: 'provider_unavailable', detail };

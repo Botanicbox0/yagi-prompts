@@ -101,9 +101,18 @@ export function structureMarks(structure: LyricStructure, count: number): string
 /** The closing line, held out until the founder has listened (§12.8 b). Set it to '[End]' to add it again. */
 export const END_MARK: string | null = null;
 
-/** The customer's lyrics as kept: \n line endings, no leading blank lines, no trailing whitespace. Nothing else changes. */
+/**
+ * The customer's lyrics as kept: line endings become \n and blank lines before the first and after the last line
+ * with words are dropped. Everything from the first such line to the last stays untouched, its leading and trailing
+ * spaces (NBSP and U+3000 included) too (review 1, item 7).
+ */
 export function ownLyrics(lyrics: string | null | undefined): string {
-  return (lyrics ?? '').replace(/\r\n?/g, '\n').replace(/^(?:[ \t]*\n)+/, '').replace(/\s+$/, '');
+  const lines = (lyrics ?? '').replace(/\r\n?/g, '\n').split('\n');
+  const first = lines.findIndex((line) => line.trim() !== '');
+  if (first < 0) return '';
+  let last = lines.length - 1;
+  while (last > first && lines[last]!.trim() === '') last -= 1;
+  return lines.slice(first, last + 1).join('\n');
 }
 
 /**

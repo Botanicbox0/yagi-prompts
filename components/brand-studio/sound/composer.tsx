@@ -111,8 +111,7 @@ export const MusicComposer = forwardRef<
   const [architect, setArchitect] = useState(true);
   const [design, setDesign] = useState<ComposerDesign | null>(null);
   const [designing, setDesigning] = useState(false);
-  const designingRef = useRef(false);
-  designingRef.current = designing;
+  const [redesignAsked, setRedesignAsked] = useState(false);
   const [options, setOptions] = useState<LyricsOptionsValue>(() => ({
     seconds: 30,
     video: null,
@@ -135,18 +134,10 @@ export const MusicComposer = forwardRef<
 
   useImperativeHandle(ref, () => ({
     redesign(settings) {
-      const prompt = settings.prompt.slice(0, MUSIC_LIMITS.promptMax);
-      const sung = settings.vocal && (settings.lyrics ?? '').trim() ? ownLyrics(settings.lyrics) : '';
+      // The settings land first; the design is asked for from the next render, so its inputs are the filled ones.
       this.fill(settings);
       setArchitect(true);
-      setDesigning(true);
-      void props
-        .onDesign({ prompt: prompt.trim(), vocal: settings.vocal, lyrics: sung, careful: props.maxMode && settings.careful === true, structure: options.structure, avoid: true })
-        .then((answer) => {
-          setDesigning(false);
-          if ('design' in answer) setDesign(answer.design);
-          else setLocalError(answer.error);
-        });
+      setRedesignAsked(true);
     },
     fill(settings) {
       setPrompt(settings.prompt.slice(0, MUSIC_LIMITS.promptMax));
@@ -171,11 +162,14 @@ export const MusicComposer = forwardRef<
   const credits = musicQuoteCredits({ mode: musicWay({ vocal, lyrics: sentLyrics, careful: switchOn }), careful: switchOn });
   const creditsText = formatCredits(credits, props.locale);
 
-  // A design belongs to the settings it was made from: changing them puts it away (a redesign that is still
-  // arriving is kept: it was asked for these settings).
+  // A design belongs to the settings it was made from: description, vocals, lyrics, structure, video, language and
+  // the switches. Changing any of them puts it away, and an answer asked for other settings is dropped on arrival.
+  const designKey = JSON.stringify([trimmed, vocal, sentLyrics, options.structure, videoId ?? null, options.language, switchOn, architect]);
+  const designKeyRef = useRef(designKey);
+  designKeyRef.current = designKey;
   useEffect(() => {
-    if (!designingRef.current) setDesign(null);
-  }, [prompt, vocal, sentLyrics, switchOn, architect]);
+    setDesign(null);
+  }, [designKey]);
 
   const clearErrors = () => {
     if (localError) setLocalError(null);
@@ -199,17 +193,35 @@ export const MusicComposer = forwardRef<
       ...(architect && design ? { designed: { style: design.style, ...(design.mode === 'custom' ? { title: design.title } : {}) } } : {}),
     });
   };
-  const designNow = async () => {
+  const designNow = async (avoid = false) => {
     if (!trimmed || designing) return;
     if (namedArtist(trimmed)) return setLocalError(copy.errors.artist);
     if (sentLyrics && namedArtist(sentLyrics)) return setLocalError(copy.composer.lyricsBlocked);
+    const askedFor = designKeyRef.current;
     setDesigning(true);
     clearErrors();
-    const answer = await props.onDesign({ prompt: trimmed, vocal, lyrics: sentLyrics, careful: switchOn, structure: options.structure, ...(videoId ? { videoAssetId: videoId } : {}) });
+    const answer = await props.onDesign({
+      prompt: trimmed,
+      vocal,
+      lyrics: sentLyrics,
+      careful: switchOn,
+      structure: options.structure,
+      ...(videoId ? { videoAssetId: videoId } : {}),
+      ...(avoid ? { avoid: true } : {}),
+    });
     setDesigning(false);
+    // Settings changed while it was on its way: the answer no longer matches what would be sent.
+    if (designKeyRef.current !== askedFor) return;
     if ('design' in answer) setDesign(answer.design);
     else setLocalError(answer.error);
   };
+  // "다르게 설계하기": runs once the refused run's settings are in the dock.
+  useEffect(() => {
+    if (!redesignAsked) return;
+    setRedesignAsked(false);
+    void designNow(true);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- runs on the request only, with this render's settings
+  }, [redesignAsked]);
   const onKey = (event: KeyboardEvent<HTMLTextAreaElement>) => {
     if (event.key === 'Enter' && (event.metaKey || event.ctrlKey)) submit();
   };
@@ -323,6 +335,7 @@ export const MusicComposer = forwardRef<
           <LyricsOptions
             copy={copy}
             videos={props.videos ?? []}
+            structureDefault={defaultStructure(targetOf(options))}
             value={options}
             onChange={(next) => {
               const pickedNow = next.structure !== options.structure;
@@ -341,7 +354,8 @@ export const MusicComposer = forwardRef<
               onChange={(event) => {
                 const next = event.target.value.slice(0, LYRICS_LIMITS.max);
                 setLyrics(next);
-                if (!next.trim()) setLyricsBy(null);
+                // An edited draft is the customer's text: the record of who wrote it goes (§12.5, review 1).
+                setLyricsBy(null);
                 setPolish(null);
                 setDrafted(false);
                 clearErrors();

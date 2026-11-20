@@ -55,6 +55,30 @@ describe('내 가사 그대로: the customer’s lines go byte for byte', () => 
     }
   });
 
+  it('sends the raw text untouched through the real adapter: first-line spaces, own marks, NBSP and U+3000 kept (review 1)', () => {
+    const base = { kind: 'music' as const, organizationId: ORG, requestId: 'req_12345678', prompt: '밝은 팝', vocal: true, architect: false };
+    const raws = [
+      '\n\n   [Verse]\n  첫 줄 앞 공백\n둘째 줄\u00a0\n\n[Chorus]\n후렴\u3000\n\n\n',
+      '  첫 줄 앞 공백.\r\n둘째 줄!\u00a0\r\n\r\n마지막 줄\u3000',
+    ];
+    for (const raw of raws) {
+      for (const structure of [undefined, 'hook', 'full'] as const) {
+        const plan = planMusic({ ...base, lyrics: raw, ...(structure ? { structure } : {}) }, 'ko');
+        const sent = (plan.engine.request(plan.request).body as { lyrics: string }).lyrics;
+        const kept = raw.replace(/\r\n?/g, '\n').split('\n');
+        const first = kept.findIndex((l) => l.trim() !== '');
+        let last = kept.length - 1;
+        while (kept[last]!.trim() === '') last -= 1;
+        const expected = kept.slice(first, last + 1).join('\n');
+        expect(ownLyrics(raw)).toBe(expected);
+        expect(Buffer.from(withoutAddedLines(sent, raw), 'utf8').equals(Buffer.from(expected, 'utf8'))).toBe(true);
+      }
+    }
+    // The customer's own marks: what is sent is exactly their text (nothing added while the ending waits).
+    const own = planMusic({ ...base, lyrics: raws[0]! }, 'ko');
+    expect((own.engine.request(own.request).body as { lyrics: string }).lyrics).toBe('   [Verse]\n  첫 줄 앞 공백\n둘째 줄\u00a0\n\n[Chorus]\n후렴\u3000');
+  });
+
   it('marks the stanzas in the order of the chosen structure, the last one [Outro]', () => {
     const four = 'a\n\nb\n\nc\n\nd';
     expect(markLyrics(four, 'hook')).toBe('[Chorus]\na\n\n[Chorus]\nb\n\n[Chorus]\nc\n\n[Outro]\nd');

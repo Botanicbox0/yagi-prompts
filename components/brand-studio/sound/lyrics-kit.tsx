@@ -8,7 +8,7 @@
  *
  * Also here: the side-by-side "부르기 좋게 손보기" result (nothing changes unless the customer accepts it).
  */
-import { useId } from 'react';
+import { useEffect, useId, useState } from 'react';
 import { LYRIC_LENGTHS, LYRIC_STRUCTURES, type LyricStructure } from '@/lib/brand-studio/sound/lyrics';
 import { interpolate } from '@/lib/i18n/format';
 import type { StudioSoundCopy } from '@/messages/studio-sound';
@@ -91,16 +91,53 @@ function clock(seconds: number): string {
   return `${Math.floor(whole / 60)}:${String(whole % 60).padStart(2, '0')}`;
 }
 
+const MORE_KEY = 'twings.sound.lyricsMoreOpen';
+
+function readMoreOpen(): boolean {
+  try {
+    return window.localStorage.getItem(MORE_KEY) === '1';
+  } catch {
+    return false;
+  }
+}
+
+function writeMoreOpen(open: boolean): void {
+  try {
+    window.localStorage.setItem(MORE_KEY, open ? '1' : '0');
+  } catch {
+    // Private windows and blocked storage: the panel just starts closed next time.
+  }
+}
+
+/** How many of the folded options are set (the structure counts when it is not the length's default). */
+export function foldedSetCount(value: LyricsOptionsValue, structureDefault: LyricStructure): number {
+  return [
+    value.structure !== structureDefault,
+    value.tone != null,
+    value.brandName.trim() !== '',
+    value.readAs.trim() !== '',
+    value.mustInclude.trim() !== '',
+  ].filter(Boolean).length;
+}
+
 export function LyricsOptions(props: {
   copy: StudioSoundCopy;
   value: LyricsOptionsValue;
   onChange: (next: LyricsOptionsValue) => void;
   /** SA4: the library videos "영상 길이" offers; the option is hidden when there are none. */
   videos: readonly LyricsVideo[];
+  /** The structure the current length starts with: a different one counts as set. */
+  structureDefault: LyricStructure;
 }) {
   const { copy, value } = props;
   const k = copy.lyricsKit;
   const set = <K extends keyof LyricsOptionsValue>(key: K, next: LyricsOptionsValue[K]) => props.onChange({ ...value, [key]: next });
+  // Length and language stay in view; the rest folds behind one quiet disclosure, closed by default and remembered
+  // per browser (review 1: the open options read as a form to fill in).
+  const [moreOpen, setMoreOpen] = useState(false);
+  useEffect(() => setMoreOpen(readMoreOpen()), []);
+  const moreId = useId();
+  const setCount = foldedSetCount(value, props.structureDefault);
   return (
     <div className={s.lyricsOptions} role="group" aria-label={k.options} data-sound-lyrics-options>
       <div className={s.optionRow}>
@@ -116,25 +153,6 @@ export function LyricsOptions(props: {
           data="seconds"
         />
         <Segment
-          label={k.structure}
-          options={LYRIC_STRUCTURES}
-          value={value.structure}
-          name={(key) => k.structures[key]}
-          onChange={(key) => key != null && set('structure', key)}
-          data="structure"
-        />
-      </div>
-      <div className={s.optionRow}>
-        <Segment
-          label={k.tone}
-          options={['haeyo', 'banmal'] as const}
-          value={value.tone}
-          name={(key) => k.tones[key]}
-          onChange={(key) => set('tone', key)}
-          clearable
-          data="tone"
-        />
-        <Segment
           label={k.language}
           options={['ko', 'en', 'mixed'] as const}
           value={value.language}
@@ -142,6 +160,26 @@ export function LyricsOptions(props: {
           onChange={(key) => key != null && set('language', key)}
           data="language"
         />
+        <button
+          type="button"
+          className={s.moreToggle}
+          aria-expanded={moreOpen}
+          aria-controls={moreId}
+          onClick={() => {
+            const next = !moreOpen;
+            setMoreOpen(next);
+            writeMoreOpen(next);
+          }}
+          data-sound-lyrics-more={moreOpen ? 'open' : 'closed'}
+        >
+          {k.more}
+          {setCount > 0 ? (
+            <span className={s.moreCount} aria-label={interpolate(k.moreSet, { n: String(setCount) })} data-sound-lyrics-more-count={setCount}>
+              {setCount}
+            </span>
+          ) : null}
+          <span className={s.moreChevron} aria-hidden="true" data-open={moreOpen ? '' : undefined} />
+        </button>
       </div>
       {value.seconds === 'video' && props.videos.length ? (
         <div className={s.videoPick} role="radiogroup" aria-label={k.videoPick} data-sound-video-pick>
@@ -161,34 +199,57 @@ export function LyricsOptions(props: {
           ))}
         </div>
       ) : null}
-      <div className={s.fieldRow}>
-        <label className={s.optionField}>
-          <span className={s.optionLabel}>{k.brand}</span>
-          <input value={value.brandName} maxLength={60} onChange={(e) => set('brandName', e.target.value.slice(0, 60))} className={s.titleField} data-sound-lyrics-brand />
-        </label>
-        <label className={s.optionField}>
-          <span className={s.optionLabel}>{k.readAs}</span>
-          <input
-            value={value.readAs}
-            maxLength={60}
-            placeholder={k.readAsExample}
-            onChange={(e) => set('readAs', e.target.value.slice(0, 60))}
-            className={s.titleField}
-            data-sound-lyrics-read-as
-          />
-        </label>
-        <label className={s.optionField}>
-          <span className={s.optionLabel}>{k.mustInclude}</span>
-          <input
-            value={value.mustInclude}
-            maxLength={220}
-            placeholder={k.mustIncludeHint}
-            onChange={(e) => set('mustInclude', e.target.value.slice(0, 220))}
-            className={s.titleField}
-            data-sound-lyrics-must
-          />
-        </label>
-      </div>
+      {moreOpen ? (
+        <div className={s.moreBody} id={moreId} data-sound-lyrics-more-body>
+          <div className={s.optionRow}>
+            <Segment
+              label={k.structure}
+              options={LYRIC_STRUCTURES}
+              value={value.structure}
+              name={(key) => k.structures[key]}
+              onChange={(key) => key != null && set('structure', key)}
+              data="structure"
+            />
+            <Segment
+              label={k.tone}
+              options={['haeyo', 'banmal'] as const}
+              value={value.tone}
+              name={(key) => k.tones[key]}
+              onChange={(key) => set('tone', key)}
+              clearable
+              data="tone"
+            />
+          </div>
+          <div className={s.fieldRow}>
+            <label className={s.optionField}>
+              <span className={s.optionLabel}>{k.brand}</span>
+              <input value={value.brandName} maxLength={60} onChange={(e) => set('brandName', e.target.value.slice(0, 60))} className={s.titleField} data-sound-lyrics-brand />
+            </label>
+            <label className={s.optionField}>
+              <span className={s.optionLabel}>{k.readAs}</span>
+              <input
+                value={value.readAs}
+                maxLength={60}
+                placeholder={k.readAsExample}
+                onChange={(e) => set('readAs', e.target.value.slice(0, 60))}
+                className={s.titleField}
+                data-sound-lyrics-read-as
+              />
+            </label>
+            <label className={s.optionField}>
+              <span className={s.optionLabel}>{k.mustInclude}</span>
+              <input
+                value={value.mustInclude}
+                maxLength={220}
+                placeholder={k.mustIncludeHint}
+                onChange={(e) => set('mustInclude', e.target.value.slice(0, 220))}
+                className={s.titleField}
+                data-sound-lyrics-must
+              />
+            </label>
+          </div>
+        </div>
+      ) : null}
       <p className={s.optionNote}>{k.lengthNote}</p>
     </div>
   );

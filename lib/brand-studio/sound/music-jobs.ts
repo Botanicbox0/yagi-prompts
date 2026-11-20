@@ -25,10 +25,12 @@ import { lockOrganization, requireCreate, StudioDenied, studioSeat } from '../ac
 import { STUDIO_LIMITS, type StudioFailure, type StudioJobCreated } from '../contracts';
 import { routeJob } from '../lanes';
 import { failure, guarded } from '../outcome';
+import type { SqlRunner } from '@/lib/db/sql-runner';
+import { FREE_INTEL_LIMITS, takeFreeIntelSlot } from '../jobs';
 import { jobView, openJobCount } from '../repo';
 import type { JobRow, OutputRow, StudioDeps, StudioJobParams } from '../types';
 import { usageKrw } from '../usage-rate';
-import { reserveAllowance } from '../usage';
+import { loadAllowance, reserveAllowance } from '../usage';
 import { musicEngine, type MusicEngine, type MusicRequest } from './engine';
 import { MUSIC_LIMITS, musicQuoteKrw } from './music-limits';
 import { describeSentence, musicTitle } from './music-text';
@@ -196,96 +198,77 @@ export function planMusic(
 }
 
 
+/**
+ * Creating a music run (§7.4, §12.5). The steps before anything is spent, cheapest first:
+ *  1. the studio seat, the feature policy and the role (the gate order every studio screen keeps: seat → hardline and
+ *     feature policy → role). They come before the duplicate lookup so a closed organization never answers, not even
+ *     with a run made earlier;
+ *  2. a resend of the same request (`requestId`) returns that run, before any check or judgment runs again;
+ *  3. the pause after repeated blocks (only for a member: nobody else can probe an organization or write its log);
+ *  4. names in the description and the lyrics, the hidden "더 고르게 만들기", the video, the plan, the allowance and
+ *     the open-run cap;
+ *  5. the lyrics judgment, a paid text-model call, behind a per-minute limit like `lyrics.draft` and `music.design`.
+ *     Every sung lyric is judged: `lyricsBy` is a record only and never changes what is checked;
+ *  6. the reservation, in its own transaction with the organization locked (the duplicate is looked up again there).
+ * With strict checks (more than five engine refusals today) the Architect cannot be switched off and a design sent
+ * from the dock is ignored: the server designs again.
+ */
 export async function createMusicJob(deps: StudioDeps, viewer: Viewer, raw: unknown): Promise<StudioJobCreated | MusicJobBlocked | StudioFailure> {
   if (!deps.env.soundStudio) return failure('invalid');
   const parsed = MusicJobCreateSchema.safeParse(raw);
   if (!parsed.success) return failure('invalid');
-  const parsedInput = parsed.data;
+  const asked = parsed.data;
   const locale: 'ko' | 'en' = viewer.locale === 'en' ? 'en' : 'ko';
   const now = deps.now?.() ?? new Date();
-  const org = parsedInput.organizationId;
+  const org = asked.organizationId;
   const record = (field: MusicBlockRecord['field'], check: MusicBlockRecord['check']) =>
-    logMusicBlock(deps.log, { organizationId: org, userId: viewer.userId, field, check, lyrics: field === 'lyrics' ? parsedInput.lyrics : null }, now);
+    logMusicBlock(deps.log, { organizationId: org, userId: viewer.userId, field, check, lyrics: field === 'lyrics' ? asked.lyrics : null }, now);
 
-  // Repeated blocks pause the organization's music requests for a minute (§12.5): nothing checked, nothing reserved.
-  if (musicPaused(org, now.getTime())) {
-    record('request', 'paused');
-    return { ok: false, code: 'too_many_running', blocked: 'paused' };
-  }
-  // Before the transaction that reserves credits: the seat (so nobody outside the studio triggers a judgment),
-  // whether the organization's checks are strict today, and the lyrics judgment (a text-model call).
-  const pre = await guarded(() =>
-    deps.sql.transaction(async (sql) => {
-      const seat = await studioSeat(sql, viewer.userId, org, { requireSelfStudio: true });
-      if (seat.role === 'guest') throw new StudioDenied('not_found');
-      try {
-        await assertBrandFeature(sql, org, 'sound');
-      } catch (error) {
-        if (error instanceof BrandFeatureDenied) throw new StudioDenied('feature_unavailable');
-        throw error;
-      }
-      requireCreate(seat);
-      return { ok: true as const, strict: await strictMusicChecks(sql, org, now) };
-    }),
-  );
-  if (!('strict' in pre)) return pre as StudioFailure;
-  // Strict (more than five engine refusals today): the Architect cannot be switched off.
-  const v: MusicJobCreate = pre.strict ? { ...parsedInput, architect: true } : parsedInput;
-  const sung = v.vocal ? ownLyrics(v.lyrics) : '';
-  // The customer's own or polished lyrics are judged; drafts written to our rules are judged only when strict.
-  if (sung.trim() && !namedArtist(sung) && !namedArtist(v.prompt) && (pre.strict || !v.lyricsBy || v.lyricsBy.flow === 'polish')) {
-    const config = lyricsGeminiConfig(deps.intelDeps.env);
-    const verdict =
-      deps.env.provider === 'fake' && sung.includes(FAKE_EXISTING)
-        ? 'existing'
-        : config
-          ? await judgeExistingLyrics(sung, config, deps.intelDeps.fetch, deps.log)
-          : 'unknown';
-    if (verdict === 'existing') {
-      record('lyrics', 'judge');
-      noteMusicBlock(org, now.getTime());
-      return { ok: false, code: 'invalid', blocked: 'lyrics' };
+  const gate = async (sql: SqlRunner) => {
+    const seat = await studioSeat(sql, viewer.userId, org, { requireSelfStudio: true });
+    if (seat.role === 'guest') throw new StudioDenied('not_found');
+    try {
+      await assertBrandFeature(sql, org, 'sound');
+    } catch (error) {
+      if (error instanceof BrandFeatureDenied) throw new StudioDenied('feature_unavailable');
+      throw error;
     }
-  }
+    requireCreate(seat);
+    return seat;
+  };
+  const priorRun = async (sql: SqlRunner, userId: string | null) => {
+    const prior = (
+      await sql.query<JobRow>('select * from brand_studio_jobs where organization_id = $1 and created_by = $2 and request_id = $3', [org, userId, asked.requestId])
+    ).rows[0];
+    if (!prior) return null;
+    if (prior.kind !== 'music') throw new StudioDenied('conflict');
+    const outputs = (await sql.query<OutputRow>('select * from brand_studio_outputs where job_id = $1 order by idx', [prior.id])).rows;
+    return { ok: true as const, job: jobView(prior, outputs, deps.media) };
+  };
 
-  const outcome = await guarded(() =>
+  // Steps 1–4, without spending anything.
+  const checked = await guarded(() =>
     deps.sql.transaction(async (sql) => {
-      const seat = await studioSeat(sql, viewer.userId, v.organizationId, { requireSelfStudio: true });
-      if (seat.role === 'guest') throw new StudioDenied('not_found');
-      try {
-        await assertBrandFeature(sql, v.organizationId, 'sound');
-      } catch (error) {
-        if (error instanceof BrandFeatureDenied) throw new StudioDenied('feature_unavailable');
-        throw error;
-      }
-      requireCreate(seat);
-      await lockOrganization(sql, v.organizationId);
-      const prior = (
-        await sql.query<JobRow>('select * from brand_studio_jobs where organization_id = $1 and created_by = $2 and request_id = $3', [
-          v.organizationId,
-          seat.userId,
-          v.requestId,
-        ])
-      ).rows[0];
-      if (prior) {
-        if (prior.kind !== 'music') throw new StudioDenied('conflict');
-        const outputs = (await sql.query<OutputRow>('select * from brand_studio_outputs where job_id = $1 order by idx', [prior.id])).rows;
-        return { ok: true as const, job: jobView(prior, outputs, deps.media) };
-      }
-      if (namedArtist(v.prompt)) return { blocked: 'name' as const };
-      if (v.vocal && v.lyrics && namedArtist(v.lyrics)) return { blocked: 'lyrics' as const };
+      const seat = await gate(sql);
+      const prior = await priorRun(sql, seat.userId);
+      if (prior) return prior;
+      if (musicPaused(org, now.getTime())) return { paused: true as const };
+      if (namedArtist(asked.prompt)) return { blocked: 'name' as const };
+      if (asked.vocal && asked.lyrics && namedArtist(asked.lyrics)) return { blocked: 'lyrics' as const };
       // "더 고르게 만들기" hidden by the server setting: a request still carrying it is refused, nothing reserved.
-      if (v.careful === true && deps.env.soundMaxMode !== true) throw new StudioDenied('invalid');
+      if (asked.careful === true && deps.env.soundMaxMode !== true) throw new StudioDenied('invalid');
+      const strict = await strictMusicChecks(sql, org, now);
       // SA4: the video's length is the target and sets the structure; its cuts go to the design. Not found: refused.
       let video: MusicVideoFit | null = null;
-      if (v.videoAssetId) {
-        video = await videoFitOf(sql, { organizationId: v.organizationId, assetId: v.videoAssetId, locale, now });
+      if (asked.videoAssetId) {
+        video = await videoFitOf(sql, { organizationId: org, assetId: asked.videoAssetId, locale, now });
         if (!video) throw new StudioDenied('invalid');
       }
-      const fitted = video ? { ...v, video, targetSeconds: videoTargetSeconds(video), structure: v.structure ?? videoStructure(video) } : v;
+      const strictInput: MusicJobCreate = strict ? { ...asked, architect: true, designed: undefined } : asked;
+      const v = video ? { ...strictInput, video, targetSeconds: videoTargetSeconds(video), structure: strictInput.structure ?? videoStructure(video) } : strictInput;
       let plan: MusicPlan;
       try {
-        plan = planMusic(fitted, locale);
+        plan = planMusic(v, locale);
       } catch (error) {
         if (error instanceof MusicDesignRefused) {
           if (error.named) return { blocked: 'name' as const };
@@ -293,11 +276,53 @@ export async function createMusicJob(deps: StudioDeps, viewer: Viewer, raw: unkn
         }
         throw error;
       }
-      if ((await openJobCount(sql, v.organizationId)) >= STUDIO_LIMITS.openJobsPerOrganization) throw new StudioDenied('too_many_running');
-      const verdict = await reserveAllowance(sql, v.organizationId, plan.estimateKrw, deps.env, deps.now?.() ?? new Date());
+      const allowance = await loadAllowance(sql, org, deps.env, now);
+      if (allowance.capKrw <= 0) throw new StudioDenied('allowance_closed');
+      if (allowance.usedKrw + Math.max(0, plan.estimateKrw) > allowance.capKrw) throw new StudioDenied('allowance_exhausted');
+      if ((await openJobCount(sql, org)) >= STUDIO_LIMITS.openJobsPerOrganization) throw new StudioDenied('too_many_running');
+      return { ready: true as const, v, plan };
+    }),
+  );
+  if ('job' in checked) return checked;
+  if ('paused' in checked) {
+    record('request', 'paused');
+    return { ok: false, code: 'too_many_running', blocked: 'paused' };
+  }
+  if ('blocked' in checked) {
+    record(checked.blocked === 'lyrics' ? 'lyrics' : 'prompt', 'ours');
+    noteMusicBlock(org, now.getTime());
+    return { ok: false, code: 'invalid', blocked: checked.blocked };
+  }
+  if (!('ready' in checked)) return checked as StudioFailure;
+  const { v, plan } = checked;
+
+  // Step 5: every sung lyric is judged, whoever wrote it.
+  const sung = v.vocal ? ownLyrics(v.lyrics) : '';
+  if (sung.trim()) {
+    const config = lyricsGeminiConfig(deps.intelDeps.env);
+    const marked = deps.env.provider === 'fake' && sung.includes(FAKE_EXISTING);
+    // The limit counts real judgment calls only (a run with no text-model key is not judged and costs nothing).
+    if (!marked && config && !takeFreeIntelSlot(`lyrics-judge:${org}`, FREE_INTEL_LIMITS.lyricsJudgePerMinute, now.getTime())) return failure('too_many_running');
+    const verdict = marked ? 'existing' : config ? await judgeExistingLyrics(sung, config, deps.intelDeps.fetch, deps.log) : 'unknown';
+    if (verdict === 'existing') {
+      record('lyrics', 'judge');
+      noteMusicBlock(org, now.getTime());
+      return { ok: false, code: 'invalid', blocked: 'lyrics' };
+    }
+  }
+
+  // Step 6: the reservation.
+  return guarded(() =>
+    deps.sql.transaction(async (sql) => {
+      const seat = await gate(sql);
+      await lockOrganization(sql, org);
+      const prior = await priorRun(sql, seat.userId);
+      if (prior) return prior;
+      if ((await openJobCount(sql, org)) >= STUDIO_LIMITS.openJobsPerOrganization) throw new StudioDenied('too_many_running');
+      const verdict = await reserveAllowance(sql, org, plan.estimateKrw, deps.env, deps.now?.() ?? new Date());
       if (!verdict.ok) throw new StudioDenied(verdict.code);
       const lane = await routeJob(sql, {
-        organizationId: v.organizationId,
+        organizationId: org,
         model: plan.engine.model,
         defaultLane: deps.env.defaultLane,
         caps: deps.env.caps,
@@ -312,7 +337,7 @@ export async function createMusicJob(deps: StudioDeps, viewer: Viewer, raw: unkn
               parent_output_id, estimate_usd, estimate_krw, work)
             values ($1, $2, $3, 'music', $4, $5, $6, $7, $8, $13, $9::jsonb, '[]'::jsonb, null, $10, $11, $12::jsonb) returning *`,
           [
-            v.organizationId,
+            org,
             seat.userId,
             v.requestId,
             lane ? 'queued' : 'held',
@@ -333,16 +358,10 @@ export async function createMusicJob(deps: StudioDeps, viewer: Viewer, raw: unkn
       const outputs = (
         await sql.query<OutputRow>(
           `insert into brand_studio_outputs (job_id, organization_id, idx, kind) values ($1, $2, 0, 'audio') returning *`,
-          [job.id, v.organizationId],
+          [job.id, org],
         )
       ).rows;
       return { ok: true as const, job: jobView(job, outputs, deps.media) };
     }),
   );
-  if ('blocked' in outcome) {
-    record(outcome.blocked === 'lyrics' ? 'lyrics' : 'prompt', 'ours');
-    noteMusicBlock(org, now.getTime());
-    return { ok: false, code: 'invalid', blocked: outcome.blocked };
-  }
-  return outcome;
 }

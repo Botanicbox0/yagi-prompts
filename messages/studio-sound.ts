@@ -40,6 +40,11 @@
  * passes): `errors.artist` and `composer.lyricsBlocked` keep their first sentence and add the reviewed one,
  * `errors.blocked` (the engine refused), `errors.redesign` (다르게 설계하기) and `errors.paused` are the reviewed lines.
  *
+ * Review 1 (2026-11-21): `lyricsKit.ownNote` no longer says an ending is added (END_MARK is held out); `more` and
+ * `moreSet` are the options disclosure. All three went through two local Gemma passes; pass 2 gave
+ * "가사는 바꾸지 않고 구간 표시만 더해요." and "더 보기", taken as written. When the ending rule is decided, ownNote can
+ * say so again.
+ *
  * Amounts are credits, never won. No engine, vendor or model name appears here.
  */
 export const studioSoundEn = {
@@ -115,7 +120,7 @@ export const studioSoundEn = {
     yourWords: 'Your words',
   },
   lyricsKit: {
-    ownNote: 'Your lyrics remain unchanged; only section markers and endings are added.',
+    ownNote: 'Your lyrics remain unchanged; only section markers are added.',
     polish: 'Adjust for singing',
     polishing: 'Adjusting the lyrics.',
     polishNote: 'Adjusts the phrasing for better singing while keeping the meaning.',
@@ -140,6 +145,8 @@ export const studioSoundEn = {
     mustInclude: 'Words to include',
     mustIncludeHint: 'Separate with commas',
     videoLength: 'Video length',
+    more: 'More',
+    moreSet: '{n} set',
     videoPick: 'Choose a video',
     previewShow: 'See lyrics to send',
     previewHide: 'Hide lyrics to send',
@@ -273,7 +280,7 @@ export const studioSoundKo: StudioSoundCopy = {
     yourWords: '입력한 문장',
   },
   lyricsKit: {
-    ownNote: '쓴 가사는 그대로 부르고 구간 표시와 끝맺음만 더해요.',
+    ownNote: '가사는 바꾸지 않고 구간 표시만 더해요.',
     polish: '노래에 맞게 고치기',
     polishing: '가사를 고치고 있어요.',
     polishNote: '뜻은 그대로 두고 노래하기 좋게 고쳐요. 확인하면 적용돼요.',
@@ -298,6 +305,8 @@ export const studioSoundKo: StudioSoundCopy = {
     mustInclude: '꼭 넣을 말',
     mustIncludeHint: '쉼표로 구분해 입력',
     videoLength: '영상 길이',
+    more: '더 보기',
+    moreSet: '{n}개 설정됨',
     videoPick: '영상 선택',
     previewShow: '보낼 가사 보기',
     previewHide: '보낼 가사 닫기',
