@@ -1,4 +1,5 @@
 import type { Metadata } from 'next';
+import { redirect } from 'next/navigation';
 import { brandContext } from '@/components/brand-workspace/context';
 import { brandScope } from '@/components/brand-workspace/scope';
 import { studioRouteOrShowroom } from '@/components/brand-studio/route-context';
@@ -12,7 +13,7 @@ import { assetView, assetsOf, jobsOf, viewsOf } from '@/lib/brand-studio/repo';
 import { allowanceView, loadAllowance } from '@/lib/brand-studio/usage';
 import { studioShowroomVisible, studioV2Visible } from '@/lib/brand-studio/visibility';
 import { scopedHref } from '@/lib/brands/workspace/selection';
-import { brandStudioEditorV2Open, brandStudioV2Open } from '@/lib/flags';
+import { brandStudioEditorV2DefaultFor, brandStudioEditorV2Open, brandStudioV2Open } from '@/lib/flags';
 
 /**
  * `/brand/studio/compose` — simple video composer (`docs/BRAND-VIDEO-COMPOSE-D.md`, Founder Decisions 3 & 5a).
@@ -21,8 +22,21 @@ import { brandStudioEditorV2Open, brandStudioV2Open } from '@/lib/flags';
  * whose policy denies `generative_media`, campaign-only guests, and environments with `BRAND_STUDIO_V2`
  * off all receive `404` before any query executes. Non-subscribed `project_only` organizations receive
  * `<StudioShowroom focus="video" />`.
+ *
+ * Organizations that open the editing studio v2 by default (`BRAND_STUDIO_EDITOR_V2=on` and listed in
+ * `BRAND_STUDIO_EDITOR_V2_ORGS`, lib/flags.ts) are sent on to `/brand/studio/editor` right after the
+ * guard, before anything of this editor is loaded, with their `clip=` link. `?classic=1` keeps this
+ * editor (the new editor's way back carries it, and it stays in the address across reloads).
  */
 export const dynamic = 'force-dynamic';
+
+const first = (value: string | string[] | undefined) => (Array.isArray(value) ? value[0] : value);
+
+/** The new editor's address for this request: the organization and the `clip=` link, nothing else. */
+function editorV2Address(choice: { id: string }, clip: string | undefined): string {
+  const href = scopedHref('/brand/studio/editor', choice);
+  return clip ? `${href}&${new URLSearchParams({ clip }).toString()}` : href;
+}
 
 export async function generateMetadata({
   searchParams,
@@ -40,11 +54,17 @@ export async function generateMetadata({
 export default async function StudioComposePage({
   searchParams,
 }: {
-  searchParams: Promise<{ organizationId?: string | string[] }>;
+  searchParams: Promise<{ organizationId?: string | string[]; classic?: string | string[]; clip?: string | string[] }>;
 }) {
   const params = await searchParams;
   const ctx = await studioRouteOrShowroom(params.organizationId);
   const { choice, access, locale, dict } = ctx;
+  // Only a studio seat, only after the guard: an organization that opens the new editor by default goes
+  // there now, before anything of this editor loads, unless the address asks for this one.
+  const opensEditorV2 = ctx.kind === 'studio' && brandStudioEditorV2DefaultFor(choice.id);
+  if (opensEditorV2 && first(params.classic) !== '1') {
+    redirect(editorV2Address(choice, first(params.clip)));
+  }
   if (ctx.kind === 'showroom') {
     return (
       <StudioShowroom
@@ -113,13 +133,18 @@ export default async function StudioComposePage({
   }
 
   const canCreate = !access.staff && (choice.role === 'owner' || choice.role === 'editor');
+  // Reached through `?classic=1` by an organization that opens the new editor by default: its link
+  // to the new editor reads as the way back, without the "in progress" tag.
+  const copy = opensEditorV2
+    ? { ...dict.studioCompose, previewV2: { ...dict.studioCompose.previewV2, link: dict.studioCompose.previewV2.back, tag: '' } }
+    : dict.studioCompose;
 
   return (
     <VideoComposer
       organizationId={choice.id}
       locale={locale}
       canCreate={canCreate}
-      copy={dict.studioCompose}
+      copy={copy}
       videoStudioHref={scopedHref('/brand/studio/video', choice)}
       editorV2Href={brandStudioEditorV2Open() ? scopedHref('/brand/studio/editor', choice) : null}
       initialAllowance={allowanceView(allowance)}

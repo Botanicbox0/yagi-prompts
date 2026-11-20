@@ -37,8 +37,12 @@ export default async function StudioEditorV2Page({
   const ws = first(params.ws);
   const initialWorkspace: EditorWorkspace = (EDITOR_WORKSPACES as readonly string[]).includes(ws ?? '') ? (ws as EditorWorkspace) : 'cut';
 
+  // The way back to the current editor carries `classic=1`, so it opens that editor even for an
+  // organization whose `/brand/studio/compose` would send it here (lib/flags.ts).
+  const currentEditorHref = scopedHref('/brand/studio/compose?classic=1', choice);
+
   if (first(params.sample) === '1') {
-    return <EditorV2 copy={dict.studioEditor} currentEditorHref={scopedHref('/brand/studio/compose', choice)} initialWorkspace={initialWorkspace} real={null} />;
+    return <EditorV2 copy={dict.studioEditor} currentEditorHref={currentEditorHref} initialWorkspace={initialWorkspace} real={null} />;
   }
 
   const { deps } = ctx;
@@ -57,7 +61,7 @@ export default async function StudioEditorV2Page({
   return (
     <EditorV2
       copy={dict.studioEditor}
-      currentEditorHref={scopedHref('/brand/studio/compose', choice)}
+      currentEditorHref={currentEditorHref}
       initialWorkspace={initialWorkspace}
       real={{
         organizationId: choice.id,
