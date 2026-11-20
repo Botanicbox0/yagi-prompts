@@ -6,9 +6,15 @@
  *   inspire-mode  { prompt ≤ 3,000, instrumental }                                  $0.10 a request
  *   custom-mode   { title ≤ 80, style ≤ 1,000, lyrics ≤ 5,000, instrumental, max_mode }  $0.10, Max Mode $0.20
  *
- * No length, language, tempo, key, seed or reference-audio input. How many clips one request returns is not
- * written down (the paid smoke test counts it); the studio stores however many come back and charges the
- * request once (§3.4). Account lane: none (`mcp: null`), so the router keeps it on the API lane.
+ * No length, language, tempo, key, seed or reference-audio input. Account lane: none (`mcp: null`), so the router
+ * keeps it on the API lane.
+ *
+ * What the paid smoke test showed (2026-11-20, nine calls): a request returned two songs (never assumed: however
+ * many come back are stored, the request is charged once, §3.4); `duration` and `lyrics` come back empty (lengths
+ * are measured from the files, names are ours, the lyrics shown are the ones sent); a failed request also comes
+ * back `COMPLETED` with `success: false` (../../provider/sunra-api.ts); the charge is `billing.amount`; files are
+ * 48 kHz MP3 with a comment tag, stored as delivered. Short lyrics gave a 22 s song, instrumentals about 3.5 min.
+ * The legacy `extend` failed and the engine-side `clip` never answered (19 minutes): neither is offered.
  */
 import type { MusicEngine, MusicRequest } from '../engine';
 
@@ -36,7 +42,7 @@ export const sunoV6Sunra: MusicEngine = {
     vocals: true,
     lyrics: true,
     careful: true,
-    // The extend endpoint exists only under the legacy v5.5 name and is unconfirmed for v6 clips (§3.1).
+    // The legacy extend failed on a v6 clip in the smoke test: the length tool is ours alone (SS4).
     extend: false,
     inpaint: false,
     stems: false,

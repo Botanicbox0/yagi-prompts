@@ -12,7 +12,7 @@
  *    lyrics naming one (SS3).
  *  - The way is the server's (§4.2, §7.5): lyrics with vocals, or "더 고르게 만들기", make a custom request
  *    (title, style, lyrics, Max Mode); anything else is a description request. "더 고르게 만들기" exists only
- *    while the server setting `BRAND_SOUND_MAX_MODE` is not `off` (founder decision §8-4 is open).
+ *    while the server setting `BRAND_SOUND_MAX_MODE` is exactly `on` (hidden until the founder decides, §8-4).
  *  - Nothing to prepare: no references, no rewriting. The row is stored prepared, with the sentence the
  *    engine receives in `final_prompt` (never shown to the customer).
  */
@@ -174,7 +174,7 @@ export async function createMusicJob(deps: StudioDeps, viewer: Viewer, raw: unkn
       if (namedArtist(v.prompt)) return { blocked: 'name' as const };
       if (v.vocal && v.lyrics && namedArtist(v.lyrics)) return { blocked: 'lyrics' as const };
       // "더 고르게 만들기" hidden by the server setting: a request still carrying it is refused, nothing reserved.
-      if (v.careful === true && deps.env.soundMaxMode === false) throw new StudioDenied('invalid');
+      if (v.careful === true && deps.env.soundMaxMode !== true) throw new StudioDenied('invalid');
       const plan = planMusic(v, locale);
       if ((await openJobCount(sql, v.organizationId)) >= STUDIO_LIMITS.openJobsPerOrganization) throw new StudioDenied('too_many_running');
       const verdict = await reserveAllowance(sql, v.organizationId, plan.estimateKrw, deps.env, deps.now?.() ?? new Date());

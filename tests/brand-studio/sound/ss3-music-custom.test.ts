@@ -87,19 +87,22 @@ describe('the custom request and its quote', () => {
 });
 
 describe('BRAND_SOUND_MAX_MODE', () => {
-  it('shows the switch unless exactly "off"', () => {
-    expect(brandSoundMaxModeShown({})).toBe(true);
+  it('hides the switch unless exactly "on" (after the smoke test, until the founder decides)', () => {
+    expect(brandSoundMaxModeShown({})).toBe(false);
     expect(brandSoundMaxModeShown({ BRAND_SOUND_MAX_MODE: 'on' })).toBe(true);
-    expect(brandSoundMaxModeShown({ BRAND_SOUND_MAX_MODE: 'OFF' })).toBe(true);
+    expect(brandSoundMaxModeShown({ BRAND_SOUND_MAX_MODE: 'ON' })).toBe(false);
     expect(brandSoundMaxModeShown({ BRAND_SOUND_MAX_MODE: 'off' })).toBe(false);
-    expect(studioEnv({ BRAND_SOUND_MAX_MODE: 'off' }).soundMaxMode).toBe(false);
+    expect(studioEnv({}).soundMaxMode).toBe(false);
+    expect(studioEnv({ BRAND_SOUND_MAX_MODE: 'on' }).soundMaxMode).toBe(true);
   });
 });
 
 describe('job.create kind music, custom way, on the fake provider', () => {
   let f: StudioFixture;
   let deps: ReturnType<typeof studioDeps>;
-  const env = (extra: Record<string, string> = {}) => studioEnv({ BRAND_STUDIO_PROVIDER: 'fake', BRAND_STUDIO_DEFAULT_LANE: 'sunra_api', BRAND_SOUND_STUDIO: 'on', ...extra });
+  // The switch is shown here (the server setting is on) unless a test turns it off.
+  const env = (extra: Record<string, string> = {}) =>
+    studioEnv({ BRAND_STUDIO_PROVIDER: 'fake', BRAND_STUDIO_DEFAULT_LANE: 'sunra_api', BRAND_SOUND_STUDIO: 'on', BRAND_SOUND_MAX_MODE: 'on', ...extra });
   const music = (over: Record<string, unknown> = {}) => ({
     kind: 'music',
     organizationId: f.orgId,

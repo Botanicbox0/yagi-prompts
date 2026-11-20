@@ -222,12 +222,12 @@ export function brandSoundStudioOpen(env: Record<string, string | undefined> = p
 
 /**
  * "더 고르게 만들기" (the music engine's Max Mode, twice the credits) in the sound studio (docs/BRAND-SOUND-STUDIO.md
- * §4.2, §8-4). Shown unless the server environment says exactly `BRAND_SOUND_MAX_MODE=off`: the founder hides it
- * if the paid smoke test finds no audible difference. Off means the switch is not drawn and a request still
- * carrying it is refused before anything is reserved.
+ * §4.2, §8-4). Hidden until the founder decides (after the paid smoke test, 2026-11-20): shown only when the
+ * server environment says exactly `BRAND_SOUND_MAX_MODE=on`. Hidden means the switch is not drawn and a request
+ * still carrying it is refused before anything is reserved.
  */
 export function brandSoundMaxModeShown(env: Record<string, string | undefined> = process.env): boolean {
-  return env.BRAND_SOUND_MAX_MODE !== 'off';
+  return env.BRAND_SOUND_MAX_MODE === 'on';
 }
 
 /**

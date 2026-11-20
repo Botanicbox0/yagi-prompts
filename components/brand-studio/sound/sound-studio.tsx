@@ -39,7 +39,7 @@ export interface SoundStudioProps {
   /** Music runs: open, finished, and failed in the last day. */
   initialJobs: StudioJobView[];
   initialAllowance: StudioAllowanceView;
-  /** "더 고르게 만들기" is offered (server setting `BRAND_SOUND_MAX_MODE` not `off`). */
+  /** "더 고르게 만들기" is offered (server setting `BRAND_SOUND_MAX_MODE=on`; hidden by default). */
   maxMode: boolean;
   /** Owners and editors: create, upload and send. Viewers and the TWINGS team view listen and download. */
   canCreate: boolean;

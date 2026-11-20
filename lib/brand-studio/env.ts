@@ -44,7 +44,7 @@ export interface StudioEnv {
   musicGeneration?: boolean;
   /** `BRAND_SOUND_STUDIO=on`: the sound studio (docs/BRAND-SOUND-STUDIO.md, lib/flags.ts). Closed by default. */
   soundStudio?: boolean;
-  /** `BRAND_SOUND_MAX_MODE` is not `off`: "더 고르게 만들기" is offered (lib/flags.ts). */
+  /** `BRAND_SOUND_MAX_MODE=on`: "더 고르게 만들기" is offered (lib/flags.ts). Hidden by default. */
   soundMaxMode?: boolean;
 }
 

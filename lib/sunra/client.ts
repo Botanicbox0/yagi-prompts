@@ -150,6 +150,10 @@ export interface SunraQueueResult {
    * Their files are also in `files`.
    */
   clips?: Array<{ url: string; seconds: number | null; meta: Record<string, string> }>;
+  /** `billing.amount` of the result body (USD), when it carries one. */
+  billingUsd?: number | null;
+  /** The result body is an error (a failed request may still read `COMPLETED`). */
+  error?: { code: string | null; reason: string | null; message: string | null } | null;
   draftTaskId: string | null;
   /** Billing units (1000 units = $1), when reported. */
   units: number | null;
@@ -226,7 +230,27 @@ export function parseSunraQueueResult(raw: unknown): SunraQueueResult {
   }
   const video = asRecord(result.video);
   const draft = typeof result.draft_task_id === 'string' ? result.draft_task_id : typeof video.draft_task_id === 'string' ? video.draft_task_id : null;
-  return { files, ...(clips.length ? { clips } : {}), draftTaskId: draft || null, units: numberOf(result.units), durationSeconds: numberOf(result.duration) };
+  const billing = asRecord(result.billing);
+  const billingUsd = billing.currency === undefined || billing.currency === 'USD' ? numberOf(billing.amount) : null;
+  const errorBody = result.error && typeof result.error === 'object' ? asRecord(result.error) : null;
+  const details = errorBody && errorBody.details && typeof errorBody.details === 'object' ? asRecord(errorBody.details) : null;
+  return {
+    files,
+    ...(clips.length ? { clips } : {}),
+    draftTaskId: draft || null,
+    units: numberOf(result.units),
+    durationSeconds: numberOf(result.duration),
+    ...(billingUsd !== null ? { billingUsd } : {}),
+    ...(errorBody
+      ? {
+          error: {
+            code: typeof details?.code === 'string' ? details.code : typeof errorBody.code === 'string' ? errorBody.code : null,
+            reason: typeof errorBody.type === 'string' ? errorBody.type : null,
+            message: typeof errorBody.message === 'string' ? errorBody.message : null,
+          },
+        }
+      : {}),
+  };
 }
 
 export function createSunraClient(

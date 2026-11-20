@@ -60,6 +60,13 @@ export const MUSIC_ENGINES: Readonly<Record<string, MusicEngine>> = {
 
 export const DEFAULT_MUSIC_ENGINE = sunoV6Sunra.id;
 
+/**
+ * How long a music run may wait for the engine (paid smoke test 2026-11-20: 40–69 s per request). Past it, a run
+ * whose answer is still not there fails and takes nothing (../engine.ts `poll`); an answer that is already there
+ * when we look is still taken.
+ */
+export const MUSIC_WAIT_CEILING_MS = 10 * 60_000;
+
 /** The engine for this environment: `BRAND_SOUND_MUSIC_ENGINE` when it names a known one, else the default. */
 export function musicEngine(env: Record<string, string | undefined> = {}): MusicEngine {
   const picked = env.BRAND_SOUND_MUSIC_ENGINE?.trim();

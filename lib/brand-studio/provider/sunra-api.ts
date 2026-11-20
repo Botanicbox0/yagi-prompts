@@ -79,7 +79,8 @@ export function createSunraStudioProvider(
       }
       if (state.status === 'IN_QUEUE' || state.status === 'IN_PROGRESS') return { state: 'pending' };
       if (state.status === 'CANCELED') return { state: 'failed', code: 'failed', detail: 'canceled at the provider' };
-      if (state.success === false) return mapSunraPredictionFailure(state.error, deps.log);
+      // A failed request also reads COMPLETED (paid smoke test, 2026-11-20): `success` and `error` decide, never `status`.
+      if (state.success === false || (state.success !== true && state.error)) return mapSunraPredictionFailure(state.error, deps.log);
       let result;
       try {
         result = await client.queueResult(taskId);
@@ -88,8 +89,10 @@ export function createSunraStudioProvider(
         if (mapped.retryable) return { state: 'pending' };
         return { state: 'failed', code: mapped.code, detail: mapped.detail };
       }
+      if (result.error) return mapSunraPredictionFailure(result.error, deps.log);
       if (result.files.length === 0) return { state: 'failed', code: 'failed', detail: 'completed without a file' };
-      const costUsd = state.billingUsd ?? (result.units !== null && result.units > 0 ? result.units / 1000 : undefined);
+      // The charge is `billing.amount` (status first, then the result body).
+      const costUsd = state.billingUsd ?? result.billingUsd ?? (result.units !== null && result.units > 0 ? result.units / 1000 : undefined);
       return {
         state: 'succeeded',
         outputs: result.clips?.length
