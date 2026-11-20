@@ -186,6 +186,18 @@ export function brandStudioEditAssistOpen(env: Record<string, string | undefined
 }
 
 /**
+ * The rebuilt editing studio (docs/BRAND-EDITING-STUDIO-V2.md): four workspaces (cut, colour, sound,
+ * captions) around one preview and one timeline. Today the flag opens only the clickable structure
+ * prototype at `/brand/studio/editor`, which runs on sample data and never saves, generates or exports.
+ * Default OFF: open only when the server environment says exactly `BRAND_STUDIO_EDITOR_V2=on`. Off means
+ * the route answers 404 and every other screen is as it was. The studio route guard runs first, so a
+ * sandboxed organization gets 404 whatever this flag says.
+ */
+export function brandStudioEditorV2Open(env: Record<string, string | undefined> = process.env): boolean {
+  return env.BRAND_STUDIO_EDITOR_V2 === 'on';
+}
+
+/**
  * Music generation in the editing studio and the video studio (docs/BRAND-EDITING-STUDIO.md §8-5): no
  * commercially cleared music engine is confirmed, so it stays closed. Default OFF: open only when the server
  * environment says exactly `BRAND_STUDIO_MUSIC_GENERATION=on`. Off means `music.generate` answers
