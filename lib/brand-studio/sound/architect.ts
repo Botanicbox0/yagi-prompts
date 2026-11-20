@@ -18,6 +18,7 @@
 import { z } from 'zod';
 import { callGeminiJson, studioGeminiConfig } from '../enhancer/gemini';
 import { SUNO_HEADER, SUNO_PROFILE } from '../enhancer/profiles/suno';
+import { videoDesignLine, type MusicVideoFit } from './video-fit';
 import { markLyrics, musicStyle, ownLyrics, musicWay, type LyricStructure, type MusicWay } from './lyrics';
 import { describeSentence, musicTitle } from './music-text';
 import { namedArtist } from './names';
@@ -43,6 +44,8 @@ export interface MusicDesignInput {
   brand?: { name?: string | null; tone?: string | null; rules?: readonly string[] } | null;
   /** "다르게 설계하기" (SA3, §12.5): the engine refused a request made from these words; design around it. */
   avoid?: boolean;
+  /** SA4: the video the music goes under (length and cuts). */
+  video?: MusicVideoFit | null;
 }
 
 export interface MusicDesign {
@@ -153,6 +156,7 @@ function taskBlock(input: MusicDesignInput, mode: MusicWay): string {
         : `There are vocals and no lyrics: name the language to sing in, ${input.language === 'ko' ? 'Korean' : 'English'}, in the voice sentence.`
       : 'Instrumental: name what carries the melody; never mention a voice except to say the piece is instrumental.',
     `Notes language: ${input.locale === 'ko' ? 'Korean (해요체, one sentence)' : 'English (one sentence)'}.`,
+    ...(input.video ? [videoDesignLine(input.video)] : []),
     ...(input.avoid
       ? [
           'The music engine refused a request made from these words. Leave out anything that could read as a real artist, a song, an album, a brand other than the customer\'s, or explicit content; describe genre, tempo, instruments, voice and mood only.',

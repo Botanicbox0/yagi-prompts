@@ -39,6 +39,8 @@ export interface SoundStudioProps {
   initialTracks: SoundTrackView[];
   /** Music runs: open, finished, and failed in the last day. */
   initialJobs: StudioJobView[];
+  /** SA4: library videos "영상 길이" can fit music to (ready, with a length). */
+  initialVideos?: Array<{ assetId: string; name: string; seconds: number }>;
   initialAllowance: StudioAllowanceView;
   /** "더 고르게 만들기" is offered (server setting `BRAND_SOUND_MAX_MODE=on`; hidden by default). */
   maxMode: boolean;
@@ -198,7 +200,7 @@ export function SoundStudio(props: SoundStudioProps) {
             prompt: input.prompt,
             vocal: input.vocal,
             language: locale,
-            ...(input.vocal && input.lyrics ? { lyrics: input.lyrics, structure: input.structure, targetSeconds: input.targetSeconds, ...(input.lyricsBy ? { lyricsBy: input.lyricsBy } : {}) } : {}),
+            ...(input.vocal && input.lyrics ? { lyrics: input.lyrics, structure: input.structure, targetSeconds: input.targetSeconds, ...(input.lyricsBy ? { lyricsBy: input.lyricsBy } : {}), ...(input.videoAssetId ? { videoAssetId: input.videoAssetId } : {}) } : {}),
             ...(input.careful ? { careful: true } : {}),
             architect: input.architect,
             ...(input.designed ? { designed: input.designed } : {}),
@@ -545,11 +547,13 @@ export function SoundStudio(props: SoundStudioProps) {
           onCreate={(input) => void create(input)}
           onClearError={() => setComposerError(null)}
           maxMode={props.maxMode}
+          videos={props.initialVideos ?? []}
           onDesign={async (request) => {
             const answer = await api.call('music.design', {
               organizationId,
               structure: request.structure,
               ...(request.avoid ? { avoid: true } : {}),
+              ...(request.videoAssetId ? { videoAssetId: request.videoAssetId } : {}),
               prompt: request.prompt,
               vocal: request.vocal,
               language: locale,

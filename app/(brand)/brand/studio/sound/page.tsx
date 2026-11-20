@@ -69,6 +69,7 @@ export default async function StudioSoundPage({
       creditsCopy={dict.brandStudio.credits}
       initialTracks={data.tracks}
       initialJobs={data.jobs}
+      initialVideos={data.videos}
       initialAllowance={data.allowance}
       maxMode={studioEnv().soundMaxMode === true}
       canCreate={canCreate}

@@ -17,8 +17,17 @@ import s from './sound.module.css';
 export type LyricsLanguage = 'ko' | 'en' | 'mixed';
 export type LyricsTone = 'haeyo' | 'banmal';
 
+/** A library video "영상 길이" can fit the lyrics to (SA4). */
+export interface LyricsVideo {
+  assetId: string;
+  name: string;
+  seconds: number;
+}
+
 export interface LyricsOptionsValue {
-  seconds: (typeof LYRIC_LENGTHS)[number];
+  /** A fixed length, or `video`: the picked video's length. */
+  seconds: (typeof LYRIC_LENGTHS)[number] | 'video';
+  video: LyricsVideo | null;
   structure: LyricStructure;
   tone: LyricsTone | null;
   language: LyricsLanguage;
@@ -71,19 +80,39 @@ function Segment<T extends string | number>(props: {
   );
 }
 
-export function LyricsOptions(props: { copy: StudioSoundCopy; value: LyricsOptionsValue; onChange: (next: LyricsOptionsValue) => void }) {
+/** The target the lyrics are sized for: a fixed length, or the picked video's (whole seconds). */
+export function targetOf(value: Pick<LyricsOptionsValue, 'seconds' | 'video'>): number {
+  if (value.seconds === 'video') return value.video ? Math.min(240, Math.max(5, Math.round(value.video.seconds))) : 30;
+  return value.seconds;
+}
+
+function clock(seconds: number): string {
+  const whole = Math.round(seconds);
+  return `${Math.floor(whole / 60)}:${String(whole % 60).padStart(2, '0')}`;
+}
+
+export function LyricsOptions(props: {
+  copy: StudioSoundCopy;
+  value: LyricsOptionsValue;
+  onChange: (next: LyricsOptionsValue) => void;
+  /** SA4: the library videos "영상 길이" offers; the option is hidden when there are none. */
+  videos: readonly LyricsVideo[];
+}) {
   const { copy, value } = props;
   const k = copy.lyricsKit;
   const set = <K extends keyof LyricsOptionsValue>(key: K, next: LyricsOptionsValue[K]) => props.onChange({ ...value, [key]: next });
   return (
     <div className={s.lyricsOptions} role="group" aria-label={k.options} data-sound-lyrics-options>
       <div className={s.optionRow}>
-        <Segment
+        <Segment<(typeof LYRIC_LENGTHS)[number] | 'video'>
           label={k.length}
-          options={LYRIC_LENGTHS}
+          options={props.videos.length ? [...LYRIC_LENGTHS, 'video'] : LYRIC_LENGTHS}
           value={value.seconds}
-          name={(n) => interpolate(k.seconds, { n: String(n) })}
-          onChange={(n) => n != null && set('seconds', n)}
+          name={(n) => (n === 'video' ? k.videoLength : interpolate(k.seconds, { n: String(n) }))}
+          onChange={(n) => {
+            if (n == null) return;
+            props.onChange({ ...value, seconds: n, video: n === 'video' ? (value.video ?? props.videos[0] ?? null) : null });
+          }}
           data="seconds"
         />
         <Segment
@@ -114,6 +143,24 @@ export function LyricsOptions(props: { copy: StudioSoundCopy; value: LyricsOptio
           data="language"
         />
       </div>
+      {value.seconds === 'video' && props.videos.length ? (
+        <div className={s.videoPick} role="radiogroup" aria-label={k.videoPick} data-sound-video-pick>
+          {props.videos.map((video) => (
+            <button
+              key={video.assetId}
+              type="button"
+              role="radio"
+              aria-checked={value.video?.assetId === video.assetId}
+              className={s.videoChip}
+              onClick={() => props.onChange({ ...value, video })}
+              data-sound-video={video.assetId}
+            >
+              <span className={s.videoName}>{video.name}</span>
+              <span className={s.videoTime}>{clock(video.seconds)}</span>
+            </button>
+          ))}
+        </div>
+      ) : null}
       <div className={s.fieldRow}>
         <label className={s.optionField}>
           <span className={s.optionLabel}>{k.brand}</span>

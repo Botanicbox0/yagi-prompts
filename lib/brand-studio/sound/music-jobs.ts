@@ -37,6 +37,7 @@ export { describeSentence, musicTitle };
 import { namedArtist } from './names';
 import { LYRIC_STRUCTURES, LYRICS_LIMITS, markLyrics, musicWay, ownLyrics } from './lyrics';
 import { LYRICS_MODELS, lyricsGeminiConfig } from './lyrics-model';
+import { videoFitOf, videoStructure, videoTargetSeconds, type MusicVideoFit } from './video-fit';
 import { FAKE_EXISTING, judgeExistingLyrics, logMusicBlock, musicPaused, noteMusicBlock, strictMusicChecks, type MusicBlockRecord } from './warnings';
 import { DESIGN_LIMITS, designMeta, fallbackDesign, reviewedDesign, type MusicDesign, type MusicDesignInput } from './architect';
 
@@ -64,6 +65,8 @@ export const MusicJobCreateSchema = z
     structure: z.enum(LYRIC_STRUCTURES).optional(),
     /** 가사 분량 맞추기: the length the lyrics were sized for. The version closest to it is shown first (§12.8). */
     targetSeconds: z.number().int().min(5).max(240).optional(),
+    /** SA4 "영상 길이": a library video; its length sets the target and the structure, its cuts shape the design. */
+    videoAssetId: z.uuid().optional(),
     /**
      * The lyrics came from "가사 초안 만들기" (`topic`) or "부르기 좋게 손보기" (`polish`) and that model, as the draft
      * answer named it. Absent with lyrics: the customer wrote them. Only the allowed models are accepted.
@@ -105,13 +108,17 @@ export interface MusicPlan {
 }
 
 /** Pure: the request, the name, the quote and what the row keeps. Throws `StudioDenied('invalid')` on a request the engine refuses. */
-export function designInputOf(input: Pick<MusicJobCreate, 'prompt' | 'vocal' | 'lyrics' | 'careful' | 'language' | 'structure'>, screenLocale: 'ko' | 'en'): MusicDesignInput {
+export function designInputOf(
+  input: Pick<MusicJobCreate, 'prompt' | 'vocal' | 'lyrics' | 'careful' | 'language' | 'structure'> & { video?: MusicVideoFit | null },
+  screenLocale: 'ko' | 'en',
+): MusicDesignInput {
   return {
     prompt: input.prompt,
     vocal: input.vocal,
     lyrics: input.vocal ? ownLyrics(input.lyrics) : '',
     careful: input.careful === true,
     structure: input.structure ?? null,
+    video: input.video ?? null,
     language: input.language ?? screenLocale,
     locale: screenLocale,
   };
@@ -121,7 +128,11 @@ export function designInputOf(input: Pick<MusicJobCreate, 'prompt' | 'vocal' | '
  * Pure: the request, the name, the quote and what the row keeps. Throws `StudioDenied('invalid')` on a request the
  * engine refuses, and `MusicDesignRefused` on an edited design that breaks the hard checks.
  */
-export function planMusic(input: Omit<MusicJobCreate, 'architect'> & { architect?: boolean }, screenLocale: 'ko' | 'en', engine: MusicEngine = musicEngine(process.env)): MusicPlan {
+export function planMusic(
+  input: Omit<MusicJobCreate, 'architect'> & { architect?: boolean; video?: MusicVideoFit | null },
+  screenLocale: 'ko' | 'en',
+  engine: MusicEngine = musicEngine(process.env),
+): MusicPlan {
   const language = input.language ?? screenLocale;
   const lyrics = input.vocal ? ownLyrics(input.lyrics) : '';
   const careful = input.careful === true;
@@ -175,6 +186,7 @@ export function planMusic(input: Omit<MusicJobCreate, 'architect'> & { architect
         ...(lyrics ? { lyrics } : {}),
         ...(lyrics && input.structure ? { structure: input.structure } : {}),
         ...(lyrics && input.targetSeconds ? { targetSeconds: input.targetSeconds } : {}),
+        ...(input.video ? { video: input.video } : {}),
         ...(lyrics ? { lyricsBy: input.lyricsBy ? { flow: input.lyricsBy.flow, model: input.lyricsBy.model } : { flow: 'own' as const, model: null } } : {}),
         // The conditions the track was made under (§7.2): which engine and endpoint, which version of our terms.
         made: { engine: engine.id, endpoint, terms: SOUND_TERMS_VERSION },
@@ -264,9 +276,16 @@ export async function createMusicJob(deps: StudioDeps, viewer: Viewer, raw: unkn
       if (v.vocal && v.lyrics && namedArtist(v.lyrics)) return { blocked: 'lyrics' as const };
       // "더 고르게 만들기" hidden by the server setting: a request still carrying it is refused, nothing reserved.
       if (v.careful === true && deps.env.soundMaxMode !== true) throw new StudioDenied('invalid');
+      // SA4: the video's length is the target and sets the structure; its cuts go to the design. Not found: refused.
+      let video: MusicVideoFit | null = null;
+      if (v.videoAssetId) {
+        video = await videoFitOf(sql, { organizationId: v.organizationId, assetId: v.videoAssetId, locale, now });
+        if (!video) throw new StudioDenied('invalid');
+      }
+      const fitted = video ? { ...v, video, targetSeconds: videoTargetSeconds(video), structure: v.structure ?? videoStructure(video) } : v;
       let plan: MusicPlan;
       try {
-        plan = planMusic(v, locale);
+        plan = planMusic(fitted, locale);
       } catch (error) {
         if (error instanceof MusicDesignRefused) {
           if (error.named) return { blocked: 'name' as const };

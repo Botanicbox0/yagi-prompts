@@ -589,6 +589,8 @@ export const LyricsDraftSchema = z
     /** The brand or product name as the brief writes it, and how to write it in Korean lyrics (e.g. 에코핀). */
     brand: z.object({ name: z.string().trim().min(1).max(60), readAs: z.string().trim().max(60).optional() }).strict().optional(),
     mustInclude: z.array(z.string().trim().min(1).max(40)).max(5).optional(),
+    /** SA4 "영상 길이": the lyrics are sized to this library video's length (overrides `seconds`). */
+    videoAssetId: Id.optional(),
   })
   .strict()
   .refine((v) => (v.flow === 'topic' ? v.topic.length > 0 : Boolean(v.lyrics?.trim())));
@@ -612,6 +614,8 @@ export const MusicDesignSchema = z
     structure: z.enum(LYRIC_STRUCTURES).optional(),
     /** "다르게 설계하기" after the engine refused (§12.5). */
     avoid: z.boolean().optional(),
+    /** SA4: the library video the music goes under. */
+    videoAssetId: Id.optional(),
   })
   .strict();
 export type StudioMusicDesign = {

@@ -7,9 +7,10 @@ import type { StudioMediaStore } from '../media-store';
 import type { StudioAllowanceView, StudioJobView } from '../contracts';
 import type { StudioEnv } from '../env';
 import { assetView, assetsOf, viewsOf } from '../repo';
-import type { JobRow } from '../types';
+import type { AssetRow, JobRow } from '../types';
 import { allowanceView, loadAllowance } from '../usage';
 import { mergeTracks, musicTracks, soundTracks, type SoundTrackView } from './library';
+import { soundVideos, type SoundVideoView } from './video-fit';
 
 export async function loadSoundTracks(
   sql: SqlRunner,
@@ -35,6 +36,19 @@ export async function loadSoundTracks(
 }
 
 /** Music runs of this organization, newest first (open, finished and recently failed ones), as job views. */
+/** SA4: the library videos "영상 길이" can fit music to (ready, with a length, newest first). */
+export async function loadSoundVideos(sql: SqlRunner, media: StudioMediaStore, organizationId: string, limit = 30): Promise<SoundVideoView[]> {
+  const rows = (
+    await sql.query<AssetRow>(
+      `select * from brand_studio_assets
+        where organization_id = $1 and kind = 'video' and status = 'ready' and deleted_at is null and duration_ms > 0
+        order by created_at desc, id limit $2`,
+      [organizationId, limit],
+    )
+  ).rows;
+  return soundVideos(rows, (row) => assetView(row, media).thumbUrl, limit);
+}
+
 export async function loadMusicJobs(sql: SqlRunner, media: StudioMediaStore, organizationId: string, limit = 60): Promise<StudioJobView[]> {
   const rows = (
     await sql.query<JobRow>(
@@ -52,6 +66,8 @@ export interface SoundStudioData {
   tracks: SoundTrackView[];
   jobs: StudioJobView[];
   allowance: StudioAllowanceView;
+  /** SA4: library videos "영상 길이" can fit music to. */
+  videos: SoundVideoView[];
 }
 
 /** Everything the page renders first: the list (made versions and files), the runs still going, the credits. */
@@ -62,7 +78,7 @@ export async function loadSoundStudio(
   organizationId: string,
   userId: string | null,
 ): Promise<SoundStudioData> {
-  const [files, jobs, allowance, likes] = await Promise.all([
+  const [files, jobs, allowance, likes, videos] = await Promise.all([
     loadSoundTracks(sql, media, organizationId, userId),
     loadMusicJobs(sql, media, organizationId),
     loadAllowance(sql, organizationId, env),
@@ -72,7 +88,8 @@ export async function loadSoundStudio(
           [organizationId, userId],
         )
       : Promise.resolve({ rows: [] as Array<{ output_id: string }> }),
+    loadSoundVideos(sql, media, organizationId),
   ]);
   const made = musicTracks(organizationId, jobs, likes.rows.map((row) => `o:${row.output_id}`));
-  return { tracks: mergeTracks(made, files), jobs, allowance: allowanceView(allowance) };
+  return { tracks: mergeTracks(made, files), jobs, allowance: allowanceView(allowance), videos };
 }

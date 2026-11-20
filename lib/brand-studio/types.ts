@@ -407,6 +407,8 @@ export interface StudioMusicParams {
   lyricsBy?: { flow: 'own' | 'topic' | 'polish'; model: string | null };
   /** The length the lyrics were sized for (가사 분량 맞추기): the closest version is listed first (§12.8). */
   targetSeconds?: number;
+  /** SA4: the library video the music was fitted to (its length and cuts, read from what the library keeps). */
+  video?: { assetId: string; seconds: number; cuts: number[] };
   /** The conditions snapshot: engine, endpoint, and our terms version. */
   made: { engine: string; endpoint: string; terms: string };
 }

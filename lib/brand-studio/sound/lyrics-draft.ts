@@ -40,6 +40,7 @@ import {
 } from './lyrics';
 import { lyricsGeminiConfig, type LyricsModel } from './lyrics-model';
 import { namedArtist } from './names';
+import { videoFitOf, videoTargetSeconds } from './video-fit';
 
 export type LyricsFlow = 'topic' | 'polish';
 
@@ -225,7 +226,9 @@ export async function draftLyrics(deps: StudioDeps, viewer: Viewer, raw: unknown
       requireCreate(seat);
       const allowance = await loadAllowance(sql, v.organizationId, deps.env, now);
       if (allowance.capKrw <= 0) throw new StudioDenied('allowance_closed');
-      return { ok: true as const };
+      const video = v.videoAssetId ? await videoFitOf(sql, { organizationId: v.organizationId, assetId: v.videoAssetId, locale: viewer.locale === 'en' ? 'en' : 'ko', now }) : null;
+      if (v.videoAssetId && !video) throw new StudioDenied('invalid');
+      return { ok: true as const, video };
     }),
   );
   if (!('ok' in gate) || gate.ok !== true) return gate as StudioFailure;
@@ -234,14 +237,16 @@ export async function draftLyrics(deps: StudioDeps, viewer: Viewer, raw: unknown
   if (namedArtist(asked)) return { ok: false, code: 'invalid', blocked: 'name' };
   if (!takeFreeIntelSlot(`lyrics:${v.organizationId}`, FREE_INTEL_LIMITS.lyricsPerMinute, now.getTime())) return failure('too_many_running');
 
+  // SA4: a video's length replaces the chosen length; the structure follows it unless one was picked.
+  const seconds = gate.video ? videoTargetSeconds(gate.video) : (v.seconds ?? null);
   const req: LyricsRequest = {
     flow: v.flow,
     topic: v.topic,
     ...(v.lyrics ? { lyrics: v.lyrics } : {}),
     language: v.language,
-    seconds: v.seconds ?? null,
+    seconds,
     bpm: tempoOf(v.topic),
-    structure: v.structure ?? defaultStructure(v.seconds),
+    structure: v.structure ?? defaultStructure(seconds),
     tone: v.tone ?? null,
     brand: v.brand ?? null,
     mustInclude: v.mustInclude ?? [],

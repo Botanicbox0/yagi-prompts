@@ -980,3 +980,46 @@
 .runLine[data-redesign] .textBtn {
   white-space: nowrap;
 }
+
+/* SA4: "영상 길이" picks a library video. */
+.videoPick {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  max-height: 84px;
+  overflow: auto;
+}
+.videoChip {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  max-width: 260px;
+  min-height: 30px;
+  padding: 0 12px;
+  border: 1px solid var(--ys-border-subtle);
+  border-radius: var(--ys-r-pill);
+  background: transparent;
+  color: var(--ys-ink-secondary);
+  font: inherit;
+  font-size: 12.5px;
+  cursor: pointer;
+}
+.videoChip[aria-checked='true'] {
+  background: var(--ys-active-bg);
+  color: var(--ys-active-fg);
+  border-color: transparent;
+}
+.videoChip:focus-visible {
+  outline: 2px solid var(--ys-focus);
+  outline-offset: 1px;
+}
+.videoName {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.videoTime {
+  font-family: var(--ys-mono);
+  font-variant-numeric: tabular-nums;
+}

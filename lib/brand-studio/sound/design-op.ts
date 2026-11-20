@@ -18,6 +18,7 @@ import { loadAllowance } from '../usage';
 import { designInputOf } from './music-jobs';
 import { namedArtist } from './names';
 import { designForDeps } from './prepare-music';
+import { videoFitOf, videoStructure } from './video-fit';
 
 export async function designMusicPreview(deps: StudioDeps, viewer: { userId: string | null; locale?: string | null }, raw: unknown): Promise<StudioMusicDesign | (StudioFailure & { blocked?: 'name' | 'lyrics' })> {
   if (!deps.env.soundStudio) return failure('invalid');
@@ -38,7 +39,9 @@ export async function designMusicPreview(deps: StudioDeps, viewer: { userId: str
       requireCreate(seat);
       const allowance = await loadAllowance(sql, v.organizationId, deps.env, now);
       if (allowance.capKrw <= 0) throw new StudioDenied('allowance_closed');
-      return { ok: true as const, name: seat.organizationName };
+      const video = v.videoAssetId ? await videoFitOf(sql, { organizationId: v.organizationId, assetId: v.videoAssetId, locale: viewer.locale === 'en' ? 'en' : 'ko', now }) : null;
+      if (v.videoAssetId && !video) throw new StudioDenied('invalid');
+      return { ok: true as const, name: seat.organizationName, video };
     }),
   );
   if (!('name' in gate)) return gate;
@@ -51,6 +54,7 @@ export async function designMusicPreview(deps: StudioDeps, viewer: { userId: str
   const design = await designForDeps(deps, {
     ...designInputOf(v, locale),
     ...(v.avoid ? { avoid: true } : {}),
+    ...(gate.video ? { video: gate.video, structure: v.structure ?? videoStructure(gate.video) } : {}),
     brand: brand ? { name: brand.name ?? null, tone: brand.tone ?? null, rules: brand.rules ?? [] } : null,
   });
   return {

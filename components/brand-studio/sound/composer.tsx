@@ -21,7 +21,7 @@ import { MUSIC_LIMITS, musicQuoteCredits } from '@/lib/brand-studio/sound/music-
 import { namedArtist } from '@/lib/brand-studio/sound/names';
 import { interpolate } from '@/lib/i18n/format';
 import type { StudioSoundCopy } from '@/messages/studio-sound';
-import { LyricsOptions, mustIncludeWords, PolishCompare, type LyricsOptionsValue } from './lyrics-kit';
+import { LyricsOptions, mustIncludeWords, PolishCompare, targetOf, type LyricsOptionsValue, type LyricsVideo } from './lyrics-kit';
 import s from './sound.module.css';
 
 export interface ComposerHandle {
@@ -49,10 +49,13 @@ export interface ComposerInput {
   lyricsBy?: { flow: 'topic' | 'polish'; model: string };
   /** SA2: the length the lyrics were sized for (the closest version is shown first). */
   targetSeconds: number;
+  /** SA4: the library video the music is fitted to. */
+  videoAssetId?: string;
 }
 
 /** What "가사 초안 만들기" and "부르기 좋게 손보기" ask for (§12.3). */
 export interface LyricsDraftRequest {
+  videoAssetId?: string;
   flow: 'topic' | 'polish';
   topic: string;
   lyrics?: string;
@@ -91,8 +94,10 @@ export const MusicComposer = forwardRef<
     onClearError: () => void;
     /** Free: a draft from the description, or the customer's lyrics polished; resolves to the lyrics or a line to show. */
     onDraft: (request: LyricsDraftRequest) => Promise<{ lyrics: string; model: string } | { error: string }>;
+    /** SA4: library videos "영상 길이" can fit the lyrics and the design to. */
+    videos?: readonly LyricsVideo[];
     /** "지금 설계하기": the free design preview; resolves to the design or a line to show. */
-    onDesign: (input: Pick<ComposerInput, 'prompt' | 'vocal' | 'lyrics' | 'careful' | 'structure'> & { avoid?: boolean }) => Promise<{ design: ComposerDesign } | { error: string }>;
+    onDesign: (input: Pick<ComposerInput, 'prompt' | 'vocal' | 'lyrics' | 'careful' | 'structure' | 'videoAssetId'> & { avoid?: boolean }) => Promise<{ design: ComposerDesign } | { error: string }>;
   }
 >(function MusicComposer(props, ref) {
   const { copy } = props;
@@ -110,6 +115,7 @@ export const MusicComposer = forwardRef<
   designingRef.current = designing;
   const [options, setOptions] = useState<LyricsOptionsValue>(() => ({
     seconds: 30,
+    video: null,
     structure: defaultStructure(30),
     tone: null,
     language: props.locale,
@@ -159,6 +165,8 @@ export const MusicComposer = forwardRef<
   const trimmed = prompt.trim();
   // The customer's lyrics as written (only line endings and outer blank lines normalized): what is sent and previewed.
   const sentLyrics = vocal && lyrics.trim() ? ownLyrics(lyrics) : '';
+  // SA4: the picked video (lyrics with vocals only: the option sits with the lyrics).
+  const videoId = vocal && options.seconds === 'video' ? options.video?.assetId : undefined;
   const switchOn = props.maxMode && careful;
   const credits = musicQuoteCredits({ mode: musicWay({ vocal, lyrics: sentLyrics, careful: switchOn }), careful: switchOn });
   const creditsText = formatCredits(credits, props.locale);
@@ -185,7 +193,8 @@ export const MusicComposer = forwardRef<
       careful: switchOn,
       architect,
       structure: options.structure,
-      targetSeconds: options.seconds,
+      targetSeconds: targetOf(options),
+      ...(videoId ? { videoAssetId: videoId } : {}),
       ...(sentLyrics && lyricsBy ? { lyricsBy } : {}),
       ...(architect && design ? { designed: { style: design.style, ...(design.mode === 'custom' ? { title: design.title } : {}) } } : {}),
     });
@@ -196,7 +205,7 @@ export const MusicComposer = forwardRef<
     if (sentLyrics && namedArtist(sentLyrics)) return setLocalError(copy.composer.lyricsBlocked);
     setDesigning(true);
     clearErrors();
-    const answer = await props.onDesign({ prompt: trimmed, vocal, lyrics: sentLyrics, careful: switchOn, structure: options.structure });
+    const answer = await props.onDesign({ prompt: trimmed, vocal, lyrics: sentLyrics, careful: switchOn, structure: options.structure, ...(videoId ? { videoAssetId: videoId } : {}) });
     setDesigning(false);
     if ('design' in answer) setDesign(answer.design);
     else setLocalError(answer.error);
@@ -212,7 +221,8 @@ export const MusicComposer = forwardRef<
       topic: trimmed,
       ...(flow === 'polish' ? { lyrics: sentLyrics } : {}),
       language: options.language,
-      seconds: options.seconds,
+      seconds: targetOf(options),
+      ...(videoId ? { videoAssetId: videoId } : {}),
       structure: options.structure,
       ...(options.tone ? { tone: options.tone } : {}),
       ...(brandName ? { brand: { name: brandName, ...(options.readAs.trim() ? { readAs: options.readAs.trim() } : {}) } } : {}),
@@ -312,11 +322,13 @@ export const MusicComposer = forwardRef<
           </div>
           <LyricsOptions
             copy={copy}
+            videos={props.videos ?? []}
             value={options}
             onChange={(next) => {
               const pickedNow = next.structure !== options.structure;
               if (pickedNow) setStructurePicked(true);
-              setOptions(!structurePicked && !pickedNow && next.seconds !== options.seconds ? { ...next, structure: defaultStructure(next.seconds) } : next);
+              const lengthChanged = targetOf(next) !== targetOf(options);
+              setOptions(!structurePicked && !pickedNow && lengthChanged ? { ...next, structure: defaultStructure(targetOf(next)) } : next);
             }}
           />
           <label className={s.well}>

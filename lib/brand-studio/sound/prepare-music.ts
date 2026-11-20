@@ -21,6 +21,7 @@ export function musicDesignInputOf(job: Pick<JobRow, 'prompt' | 'params'>, brand
     lyrics: m.lyrics ?? '',
     careful: m.careful,
     structure: m.structure ?? null,
+    video: m.video ?? null,
     language: m.language,
     locale: job.params.locale === 'en' ? 'en' : 'ko',
     brand,
