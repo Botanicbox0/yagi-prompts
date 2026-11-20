@@ -3,11 +3,14 @@
 > **문서 성격**: 대표 말씀(2026-11-20) "영상 스튜디오 아래에 사운드 스튜디오를 만들어서 음악 만들 수 있게 기능 따로 빼야할 것 같아. 저작권 없는 음악을 만들 수 있는 공간."을 받아 쓴 설계다. 조사와 설계만 했다. 제품 코드는 없고 유료 생성도 하지 않았다.
 > 음악 엔진·가격·약관 문구·공개 대상은 대표 결정이다(§7). 이 문서는 근거와 추천을 적고 거기서 멈춘다.
 > 숫자(가격·라이선스·속도)는 2026-11-20에 읽은 값이다. 원문 인용과 링크는 `docs/research/brand-sound-studio-2026-11-20/`에 있다. 확인하지 못한 것은 "확인 못 함"이라고 적었다(§8).
+> **2026-11-20 저녁 추가**: 대표가 2026-11-18에 제외했던 업체(ElevenLabs)를 다시 검토하자고 해서 §10을 더했고, 그에 맞춰 §0·§1.4·§2.1·§6.4·§7을 고쳤다. 추천이 바뀌었다(§10.8).
 > 편집 스튜디오의 음악 결정(`docs/BRAND-EDITING-STUDIO.md` §8 "음악")과 `docs/BRAND-PRODUCT.md` §7·§9의 음악 항목은 이 문서가 이어받는다. 둘이 다르면 음악 생성에 한해 이 문서가 새 것이다.
 
 ## 0. 한눈에
 
-- **추천 엔진**: ACE-Step 1.5 XL을 우리가 직접 돌린다. 가중치가 MIT이고 모델 카드가 결과물의 상업 이용을 글로 허용하며, 길이를 10초~10분으로 정할 수 있다. 곡당 요금이 없고 GPU 시간만 든다. 단, 우리 귀로 들어 본 적이 없어서 **청음 테스트 통과가 조건**이다(§6.4). 떨어지면 Stable Audio 3.0 API(곡당 $0.08, 라이선스 학습 데이터, 약관이 "우리 제품 안에서 고객이 쓰는 것"을 글로 허용)로 간다.
+- **추천(2026-11-20 저녁 개정)**: 출시는 GPU 운영이 없는 API 엔진으로 한다. 1순위 후보는 **ElevenLabs 직접 계약**이다. 길이 지정(3초~10분), 보컬 없음 보장, 구간 구성, 구간 수정, 스템, 영상에 맞춘 음악, 효과음이 한 API에 있다. 조건이 둘이다. ① 우리 제품 안에서 고객이 음악을 만들어 쓰는 것이 어느 요금제에서 되는지 영업팀의 서면 답 ② 청음 테스트에서 다른 후보에 뒤지지 않을 것. 어느 하나라도 안 맞으면 Stable Audio 3.0 API(곡당 $0.08, 약관이 "우리 제품 안에서 고객이 쓰는 것"을 글로 허용)로 연다. ACE-Step 1.5 XL 자체 운영은 2단으로 내린다(물량이 커지거나 업체 약관이 바뀔 때의 대비, MIT). 근거는 §10.
+- **ElevenLabs의 음질이 더 낫다는 근거는 없다.** 공개 블라인드 순위(Artificial Analysis)에서 Eleven Music v2.5는 연주곡 11위(1001), 보컬 8위(1016)다. Suno v6(1148), Lyria 3 Pro(1080)보다 낮고 Stable Audio 3 Large(1014)와 오차 범위 안이다. 강점은 음질이 아니라 조작과 한 묶음(음악 + 효과음)이다. 우리 귀로는 어느 것도 들어 보지 않았다.
+- **지금 코드의 길(Sunra 경유)로 ElevenLabs를 여는 것은 안 된다.** 값이 직접 계약의 네 배이고(분당 $0.60 대 $0.15), ElevenLabs 음악 약관은 다른 모델과 나란히 음악 모델을 파는 중개 서비스에 서면 승인을 요구하는데 Sunra가 승인받았는지 공개된 근거가 없다. 지금 열려 있는 효과음 생성도 같은 길이라 근거를 댈 수 없다(§10.3).
 - **YuE2는 지금 쓸 수 없다.** 가중치가 CC BY-NC 4.0이고, 라이선스 파일이 "회사의 상업적 이용은 별도 상업 라이선스를 문의하라"고 적는다. ComfyUI 클라우드에서 돌려도 같다. 길이를 정하는 입력이 없고 보컬 없는 곡이 보장되지 않는 것도 광고 음악에는 걸린다. 쓰려면 m-a-p에 회사 라이선스를 문의해야 한다(§7-2).
 - **"저작권 없는 음악"은 화면에 그대로 쓰면 안 되는 말이다.** 우리가 사실대로 약속할 수 있는 것은 "요청할 때마다 새로 만든 음악이고, 광고와 SNS에 사용료와 출처 표기 없이 쓸 수 있고, 우리는 그 음악을 어디에도 등록하지 않으며, 만든 기록을 증빙으로 내준다"까지다. "어떤 신고도 들어오지 않는다"와 "저작권이 고객에게 있다"는 어느 엔진으로도 약속할 수 없다(§1).
 - **첫 버전은 보컬 없는 연주곡만** 만든다. 광고·숏폼 배경 음악이 쓰임의 대부분이고, 보컬은 가사·목소리 권리 문제를 함께 연다(§5).
@@ -49,7 +52,7 @@
 
 ### 1.4 엔진 후보별 라이선스 근거 (모두 2026-11-20에 읽음)
 
-대표가 2026-11-18에 제외한 업체는 후보에서 뺐다. [V]는 원문에서 문자열을 직접 대조한 인용, [WF]는 페이지 요약 도구가 뽑은 인용이라 계약 전에 원문을 다시 봐야 한다.
+대표가 2026-11-18에 제외했던 ElevenLabs는 2026-11-20 저녁 재검토 요청에 따라 표에 넣었다(자세한 인용은 §10.2). [V]는 원문에서 문자열을 직접 대조한 인용, [WF]는 페이지 요약 도구가 뽑은 인용이라 계약 전에 원문을 다시 봐야 한다.
 
 | 엔진 | 모델(가중치) 상업 이용 | 결과물 상업 이용 | 결정적 문장과 출처 | 판정 |
 | --- | --- | --- | --- | --- |
@@ -60,15 +63,19 @@
 | Stable Audio 3.0 / 2.5 (Stability API) | — (API) | 가능 | "we assign to you all of our right, title, and interest (if any) in the Outputs" [V], "you may permit your end users to access and use functionality enabled by the Services solely through your own product or service, as an integrated component" [V] — `stability.ai/terms-of-service` (2026-09-30 시행). "trained on fully licensed data" [V]. 면책 보증은 Enterprise 라이선스에서만 [V] | **가능. 대안 1순위** |
 | Stable Audio Open / 3 small·medium (오픈 가중치) | Stability Community License: 연 매출 $1M 미만 + 등록 | 가능 | "You own any outputs generated from the Models … to the extent permitted by applicable law.", 연 매출 $1,000,000 초과 시 라이선스 종료 — `stability.ai/community-license-agreement` | 조건부(매출 기준) |
 | Google Lyria 3.5 / 3 Pro (Gemini API, Vertex는 Pre-GA) | — (API) | 가능 | "Google does not assert any ownership rights in any new intellectual property created in the Generated Output." [V] — `cloud.google.com/terms/service-terms`. 결과물 면책 목록에 Lyria 없음 [WF]. 모든 음원에 SynthID 워터마크 [WF]. "…to develop a similar or competing product or service" 금지 [V] | 가능. 보컬이 필요할 때의 후보 |
+| **ElevenLabs Eleven Music v2.5, 직접 API** | — (API) | 가능. 온라인 광고·SNS 포함, 영화·TV·라디오 제외. 단 회사는 Scale(직원 10명 미만) 이상 | 요금제 표: "All online and offline commercial use permitted, except film, TV, radio, and Studio Games" [V] — `elevenlabs.io/music-terms` (2026-10-09). Scale: "Individuals, or entities or organizations with fewer than 10 employees" [V]. **우리 제품 안에서 고객에게 제공**: "You must not engage in, or permit any third party to engage in, Model Resale, including offering any Music Model alongside third-party models, unless ElevenLabs has expressly authorized that activity in writing." [V]. 예외: "an entity does not become a Reseller solely by generating and distributing Output through its own product, provided it does not make the Music Models or API access to them available to any third party" [V]. "Eleven Music is trained on licensed stems and music" [V] | **조건부 가능. API 1순위 후보.** 고객이 직접 설명을 넣는 구조가 예외에 드는지 서면 확인이 먼저 |
+| ElevenLabs 음악을 Sunra 경유로 (지금 코드의 길) | — | **불명확** | 위 재판매 조항이 중개 서비스에 서면 승인을 요구한다. 승인된 중개 서비스 목록은 공개돼 있지 않다. Sunra 카탈로그의 이 업체 음악·효과음 항목에는 `commercial_use` 표시가 없다(같은 업체의 음성 모델에는 있다) | **제품 경로로 쓰지 않는다** |
 | Suno v6 (Sunra 카탈로그에 있음) | — | **불명확** | Suno에는 공식 공개 API가 없다(파트너 베타) [WF]. Suno 약관(2026-09-03) [WF]: "You may not commercially exploit Output that has not been downloaded by you through an approved channel." Sunra 카탈로그의 `commercial_use` 표시가 259개 모델 중 155개에 있는데 Suno 항목에는 없다 | **후보 제외**(청음 기준점으로만) |
 | MiniMax Music 3.0 (Sunra 카탈로그에 있음) | — | **불명확** | Sunra 카탈로그는 `commercial_use: true`. MiniMax 자체 음악 API는 2026-08-20부터 신규 사용자에게 닫혔다 [V]. MiniMax 약관 원문은 확인 못 함 | 보류 |
 | Mureka 9.5 | — (API) | FAQ로만 확인 | "All content generated through paid API calls comes with full usage rights and commercial authorization … advertisements, videos" [V] — `platform.mureka.ai/docs/en/faq.html`. 약관·재판매·학습 데이터는 확인 못 함 | 보류(계약서 확인 필요) |
 | Meta MusicGen | CC BY-NC 4.0 | 불가 | "released under the CC-BY-NC 4.0 license" | 불가 |
 | HeartMuLa 3B | Apache 2.0 (2026-01-20 전환) | 가능 | 학습 데이터 언급 없음 | 가능하나 근거 약함 |
 
-효과음: Sunra 카탈로그에서 글로 효과음을 만드는 모델은 대표가 제외한 업체의 것 하나뿐이다. 다른 후보 중 MMAudio(가중치 CC BY-NC), ThinkSound("Commercial use is NOT permitted."), HunyuanVideo-Foley(라이선스가 한국을 제외)는 쓸 수 없다. Stable Audio 3.0 Small SFX는 Stability 약관 아래에서 가능하다. 효과음은 이 문서의 범위 밖이고 결정 항목으로만 올린다(§7-10).
+효과음: Sunra 카탈로그에서 글로 효과음을 만드는 모델은 ElevenLabs 것 하나뿐이고, 우리 스튜디오의 효과음 생성이 지금 그 길로 돈다. ElevenLabs 효과음 약관은 유료 요금제의 상업 이용(광고 포함)을 허용하지만 "다른 소재와 결합한 결과물"에만 권리를 주고 효과음 파일 단독 제공을 금지한다(§10.3). 다른 후보 중 MMAudio(가중치 CC BY-NC), ThinkSound("Commercial use is NOT permitted."), HunyuanVideo-Foley(라이선스가 한국을 제외)는 쓸 수 없다. Stable Audio 3.0 Small SFX는 Stability 약관 아래에서 가능하다. 결정 항목은 §7-10.
 
 ### 1.5 추천의 이유와 남는 위험
+
+> 2026-11-20 저녁: 아래는 처음 추천(ACE-Step 1.5 XL 자체 운영 1순위)의 근거다. ElevenLabs 재검토 뒤 ACE-Step은 2단으로 내렸다(§10.8). 아래 이유와 위험은 2단 엔진의 근거로 그대로 유효하다.
 
 ACE-Step 1.5 XL을 추천하는 이유는 넷이다.
 
@@ -95,12 +102,15 @@ ACE-Step 1.5 XL을 추천하는 이유는 넷이다.
 | ACE-Step, 임대 GPU (RunPod A6000 48GB $0.69/시간) | GPU 초 | 실행 30초에 $0.006 | 같음 | 같음 | 미측정. 상시 켜 두면 월 약 $497 |
 | Stable Audio 3.0 / 2.5 (Stability API) | 생성 1회 8크레딧 = $0.08 | $0.08 | $0.08 | $0.08 (3.0은 6분까지) | 제작사: 2.5가 "less than two seconds on a GPU, for tracks up to three minutes". API 응답 시간은 확인 못 함 |
 | Lyria 3.5 / 3 Pro | 곡당 | $0.08 (30초 전용 모델은 $0.04) | $0.08 | $0.08 (184초까지) | 확인 못 함 |
+| **ElevenLabs Eleven Music, 직접 API** | 분당 $0.15 (요금제와 무관). 회사가 쓸 수 있는 최저 요금제는 Scale 월 $299(1,993분 포함) | $0.075 | $0.15 | $0.45 (10분까지) | 공식 수치 없음("in seconds"). 확인 못 함 |
+| ElevenLabs 음악 v2.5, Sunra API 레인 | 출력 1분당 $0.60, 시작된 분 단위 | $0.60 | $0.60 (59.5초로 보냄) | $1.80 | 확인 못 함 |
+| ElevenLabs 음악, Sunra 계정 레인 | 시작된 분당 80크레딧($0.80). 어느 버전인지 표시 없음 | 80크레딧 | 80크레딧 | 240크레딧 | 확인 못 함 |
 | Suno v6 (Sunra) | 요청당 | $0.10 (Max Mode $0.20). 계정 레인 견적 10크레딧 | 같음 | 같음 | 길이 입력이 없어 30초·60초를 지정할 수 없다. 시간은 확인 못 함 |
 | MiniMax Music 3.0 (Sunra API 레인) | 곡당 | $0.16 | $0.16 | 한 번에 75초까지라 불가 | 확인 못 함 |
 | Mureka 9.5 (fal 표시가) | 곡당 | $0.15 (설명만으로는 $0.50) | 같음 | 같음 | 확인 못 함 |
 | YuE2, 워크스테이션 GPU (참고, 사용 불가) | 없음 | $0 | $0 | $0 | **실측(끝난 작업 10건)**: 작업 전체 25~91초(GPU가 비어 있을 때), 30초 이하 곡 23~70초, 168초·200초 곡 57초·64초. 길이를 정할 수 없다 |
 
-Sunra 값은 2026-11-20에 공개 카탈로그(`GET https://api.sunra.ai/v1/models`)와 가격 엔드포인트, 무료 견적(`estimate_cost`)으로 읽었다. Sunra의 음악 모델은 Suno v6·v6 Wild(+ 예전 이름의 커버·구간 수정·이어 만들기·자르기 엔드포인트), MiniMax Music 3.0, 보컬·반주 분리($0.01/분), 그리고 제외된 업체의 음악 모델이다. MiniMax Music 3.0은 계정 레인에 없다.
+Sunra 값은 2026-11-20에 공개 카탈로그(`GET https://api.sunra.ai/v1/models`)와 가격 엔드포인트, 무료 견적(`estimate_cost`)으로 읽었다. Sunra의 음악 모델은 Suno v6·v6 Wild(+ 예전 이름의 커버·구간 수정·이어 만들기·자르기 엔드포인트), MiniMax Music 3.0, 보컬·반주 분리($0.01/분), 그리고 ElevenLabs의 음악 모델 세 버전(v1 $0.80/분, v2·v2.5 $0.60/분)이다. MiniMax Music 3.0은 계정 레인에 없다. ElevenLabs 직접 API의 30초 값은 초 단위로 나눠 받는다는 가정이다(가격 페이지에 명시가 없다). 효과음은 ElevenLabs 직접이 분당 $0.12(초당 $0.002)라는 표시와 "한 번에 200크레딧, 길이를 정하면 초당 40크레딧"이라는 표시가 서로 어긋나고(§10.5), Sunra는 초당 $0.002다.
 
 ### 2.2 기존 사용량 계수로 환산하면
 
@@ -137,12 +147,12 @@ Sunra 값은 2026-11-20에 공개 카탈로그(`GET https://api.sunra.ai/v1/mode
 
 | 무엇 | 지금 상태 | 사운드 스튜디오에서 |
 | --- | --- | --- |
-| 음악 생성 `lib/brand-studio/music/service.ts` · `provider.ts` · `contracts.ts` | 구현돼 있고 닫혀 있다. `BRAND_STUDIO_MUSIC_GENERATION`이 정확히 `on`일 때만 열린다(`lib/flags.ts:196-198`). 엔진을 환경변수로 고르는데 그 안에 제외된 업체의 음악 모델을 Sunra로 부르는 길, Suno 직접 호출 길, 제작 브리지(YuE2) 길이 남아 있다. 입력은 BPM·조·리드 악기·드롭 시점 중심이고 보컬·가사 칸은 없다. 길이 3~60초 | **다시 쓰지 않는다.** 입력 모양, 과금, 작업 기록 방식이 모두 달라진다. 엔진이 정해지면 옛 엔진 길을 걷어 낸다(§6.1 정리 조각) |
+| 음악 생성 `lib/brand-studio/music/service.ts` · `provider.ts` · `contracts.ts` | 구현돼 있고 닫혀 있다. `BRAND_STUDIO_MUSIC_GENERATION`이 정확히 `on`일 때만 열린다(`lib/flags.ts:196-198`). 엔진을 환경변수로 고르는데 그 안에 ElevenLabs 음악 모델을 Sunra로 부르는 길(Sunra 키가 있으면 이것이 기본), Suno 직접 호출 길, 제작 브리지(YuE2) 길이 남아 있다(§10.6). 입력은 BPM·조·리드 악기·드롭 시점 중심이고 보컬·가사 칸은 없다. 길이 3~60초 | **다시 쓰지 않는다.** 입력 모양, 과금, 작업 기록 방식이 모두 달라진다. 엔진이 정해지면 옛 엔진 길을 걷어 낸다(§6.1 정리 조각) |
 | 작업 기록 | 음악·효과음을 `brand_studio_jobs`에 `kind='video_final'`, `model='compose-1080p'`, `status='succeeded'`, `lane=null`로 **처음부터 성공으로** 적고, 목록에서는 이 모델 이름을 걸러 낸다. 결과는 `brand_studio_outputs`가 아니라 `brand_studio_assets`(`kind='audio'`)에만 남는다 | **바꿔야 한다.** 진짜 작업 종류와 결과 종류가 필요하다(§6.2) |
 | 과금 | 원가와 무관한 고정 공식(§2.2). `estimate_usd`·`cost_usd`는 비어 있다 | 가격 기준 결정 뒤 다시 |
 | 화면 | 편집 스튜디오의 생성 카드, 영상 스튜디오의 구간 음악 버튼·탭. 플래그가 닫혀 있어 보이지 않는다. 화면이 7~9초 뒤 기다리기를 그만두는 결함이 남아 있다(`docs/BRAND-EDITING-STUDIO.md` §11) | 두 화면의 음악 만들기는 사운드 스튜디오로 가는 문으로 바꾼다 |
 | 표시 불일치 | 편집 스튜디오는 "비상업 시안 · CC BY-NC 4.0", 영상 스튜디오는 "상업용 라이선스 음원"이라고 서로 다르게 표시한다(같은 문서 §7.2) | 표시를 한 곳(사운드 스튜디오의 이용 조건)으로 모은다 |
-| 효과음 `music/sfx.ts` | **열려 있다.** 플래그가 없고 `sound` 기능 그룹만 본다. 엔진은 제외된 업체의 효과음 모델(Sunra 경유)이고 "상업 이용 가능"으로 표시하지만 조건은 확인된 적이 없다 | 범위 밖. 결정 항목(§7-10) |
+| 효과음 `music/sfx.ts` | **열려 있다.** 플래그가 없고 `sound` 기능 그룹만 본다. 엔진은 ElevenLabs 효과음 모델(Sunra 경유)이고 "상업 이용 가능"으로 표시한다. 2026-11-20에 조건을 확인했고 이 길은 덮여 있지 않다(§10.3) | 범위 밖. 결정 항목(§7-10) |
 | 내 음원 올리기 | 된다. MP3·WAV 15MB까지, 에셋에 `오디오` 필터와 재생기가 있다 | **그대로 쓴다**(목록·에셋·보내기의 바탕) |
 | 편집 스튜디오의 소리 | 배경 음악 하나(`ComposeBgm`: 음원·길이·시작점·음량) + 효과음 최대 24개 + 컷별 음량·끔·오프셋. 내보내기는 브라우저에서 섞는다(`compose/export-client.ts`). 배경 음악 시작점을 옮기는 조작, 페이드, 리미터는 없다(E5 예정) | "보내기"의 도착지. 길이 맞추기와 페이드는 사운드 스튜디오에서 미리 해서 보낸다 |
 | 영상 스튜디오의 소리 | 영상 생성이 자체 소리를 낸다(`native`). 내 음원을 배경 음악으로 넣는 길이 없다 | "영상 스튜디오에 넣기"를 새로 만든다(§4.6) |
@@ -351,7 +361,8 @@ Sunra 값은 2026-11-20에 공개 카탈로그(`GET https://api.sunra.ai/v1/mode
 
 ### 6.3 어디서 도나 (레인)
 
-- **추천 엔진(ACE-Step)**: 새 레인 `studio_gpu`. 워커가 기존 레인 규약으로 `music` 작업을 가져가(`claim`) ComfyUI HTTP API에 ACE-Step 워크플로를 넣고, 끝난 파일의 주소를 `complete`로 넘기면 서버가 내려받아 저장한다(계정 레인 워커와 같은 흐름). 워커가 보는 ComfyUI 주소가 워크스테이션이면 로컬 GPU, 호스팅 ComfyUI면 클라우드다. 코드가 같다.
+- **API 1순위 후보(ElevenLabs 직접 API)**: 서버가 직접 부른다. 응답이 길 수 있어(생성 시간 확인 못 함) 기존 엔진 진행 루프(`engine.ts`)에 한 갈래를 더하고, 레인과 워커는 쓰지 않는다. 키는 `ELEVENLABS_API_KEY`. Sunra를 거치지 않는다(§10.2). 이 길로 열면 `studio_gpu` 레인과 그 마이그레이션은 2단 엔진을 올릴 때로 미룬다.
+- **2단 엔진(ACE-Step)**: 새 레인 `studio_gpu`. 워커가 기존 레인 규약으로 `music` 작업을 가져가(`claim`) ComfyUI HTTP API에 ACE-Step 워크플로를 넣고, 끝난 파일의 주소를 `complete`로 넘기면 서버가 내려받아 저장한다(계정 레인 워커와 같은 흐름). 워커가 보는 ComfyUI 주소가 워크스테이션이면 로컬 GPU, 호스팅 ComfyUI면 클라우드다. 코드가 같다.
   - 워크스테이션에서는 결과 파일을 서버가 받을 수 있는 주소로 내줘야 한다. 제작 브리지가 쓰는 서명 다운로드 링크를 같이 쓸 수 있는지 SS2 시작 때 확인한다(확인 못 함).
   - 호스팅 ComfyUI의 API가 로컬 ComfyUI와 같은 모양인지, ACE-Step 1.5 XL 가중치가 미리 깔려 있는지도 계정을 만들어야 확인된다(확인 못 함. 유료 구독이 있어야 API가 열린다).
   - 워커는 설치본으로 돈다. 설치·교체·재시작은 대표 승인 뒤에만 한다(계정 레인 워커와 같은 규칙).
@@ -383,24 +394,27 @@ Sunra 값은 2026-11-20에 공개 카탈로그(`GET https://api.sunra.ai/v1/mode
 | Suno v6 (기준점, 제품 후보 아님) | 8요청 | Sunra 계정 크레딧 80 (약 $0.80) | Sunra 계정(잔액 충분, 2026-11-20 확인) | 길이 지정이 안 돼 음질 비교용. 요청 하나에 몇 곡이 오는지는 확인 못 함 |
 | Lyria 3.5 (보컬 후보 겸 비교) | 16 | $1.28 | 기존 Gemini 키의 계정 | 그 키로 Lyria가 열려 있는지 확인 못 함 |
 | Stable Audio 3.0 (대안 1순위) | 16 | $1.28 | **새 Stability 계정 결제가 필요** | 새 결제는 대표가 한다. 건너뛰고 ACE-Step이 떨어졌을 때만 해도 된다 |
+| **ElevenLabs Eleven Music v2.5** (API 1순위 후보) | 10 (설명 8개 × 30초 + 15초·60초 확인) + 구성 계획 2 | $7.20 (12곡 × $0.60) | Sunra API 레인 키(`SUNRA_API_KEY`)의 잔액 | 그 키의 오늘 잔액은 확인 못 함(2026-11-10에는 $0였다). 잔액이 없으면 Sunra 계정 레인으로 12 × 80 = 960크레딧(약 $9.60)인데, 계정 레인이 어느 버전을 돌리는지 표시가 없고 구성 계획을 받지 않는다. ElevenLabs 직접 계정으로 들으려면 새 유료 요금제가 필요하다(대표가 산다). 중개 경로의 결과물은 내부 청음에만 쓰고 밖으로 내보내지 않는다 |
+| ElevenLabs 효과음 (v2) | 8개 × 5초 | $0.08 또는 계정 크레딧 8 | 위와 같은 Sunra 키 또는 계정 | v3은 Sunra 카탈로그에 없다. 직접 계정에서만 들을 수 있다 |
 | YuE2 (참고) | 16 | 0원 | 워크스테이션 GPU | 이미 깔려 있다. 제품에 쓰려면 계약이 먼저라 "계약할 가치가 있는가"를 듣는 용도 |
 
-추천 묶음은 ACE-Step + Suno v6 기준점 + YuE2 참고다. 유료분은 Sunra 계정 크레딧 80뿐이고 새 결제가 없다.
+추천 묶음(2026-11-20 저녁 개정)은 **ElevenLabs v2.5 + Stable Audio 3.0 + ACE-Step + Suno v6 기준점**이다. API로 먼저 연다는 추천(§10.8)에서는 두 API 후보를 직접 비교해야 하므로 Stable Audio를 건너뛰지 않는다. 유료분: ElevenLabs 음악 $7.20과 효과음 $0.08(Sunra API 레인 키, 잔액이 없으면 계정 크레딧 968), Suno v6 계정 크레딧 80, Stable Audio 3.0 $1.28(**새 Stability 계정 결제가 필요, 대표가 한다**). ACE-Step과 YuE2는 0원이고 가중치 설치 승인이 필요하다. 새 결제를 하지 않으려면 Stable Audio를 빼고 나머지만 돌린다(그 경우 대안 엔진의 음질은 모르는 채로 남는다).
 
 ## 7. 대표 결정 (추천을 먼저 적는다)
 
-1. **엔진을 무엇으로 할까요?** 추천: ACE-Step 1.5 XL을 직접 운영, 청음 테스트 통과를 조건으로. 떨어지면 Stable Audio 3.0 API.
+1. **엔진을 무엇으로 할까요?** 추천(2026-11-20 저녁 개정): API로 먼저 연다. 1순위 후보는 ElevenLabs 직접 계약이고, 영업팀의 서면 답(§10.9)과 청음 통과가 조건이다. 어느 하나라도 안 맞으면 Stable Audio 3.0 API. ACE-Step 1.5 XL 자체 운영은 2단(물량이 커지거나 업체 약관이 바뀔 때)으로 둔다. 2026-11-18의 "ElevenLabs 뮤직을 쓰지 않는다"는 결정을 뒤집는 것이므로 대표의 명시적인 답이 필요하다.
 2. **YuE2를 쓰기 위해 m-a-p에 회사 라이선스를 문의할까요?** 추천: 문의는 보내 두되 출시를 거기에 묶지 않는다. 길이 지정이 안 되는 점은 계약으로 풀리지 않는다. 외부 발송이라 메일 문안은 대표가 확정한다.
 3. **출시 때 보컬을 넣을까요?** 추천: 넣지 않는다. 연주곡만. 보컬은 가사·목소리 조항이 약관에 들어간 뒤 SS6에서.
-4. **가격 기준을 무엇으로 할까요?** 추천: 길이별 고정 크레딧(예: 15초·30초·60초 세 단계). 직접 운영 엔진은 곡당 원가가 0이라 원가 연동 공식으로는 값이 나오지 않는다. 숫자는 §2의 원가 근거를 보고 대표가 정한다. 한 번에 두 버전을 줄지도 같이 정한다(추천: 직접 운영이면 두 버전, 곡당 요금 엔진이면 한 버전).
+4. **가격 기준을 무엇으로 할까요?** 추천: 길이별 고정 크레딧(예: 15초·30초·60초 세 단계). 엔진이 바뀌어도 고객이 보는 값이 그대로다. 직접 운영 엔진은 곡당 원가가 0이라 원가 연동 공식으로는 값이 나오지 않고, API 엔진은 원가가 길이에 비례한다(ElevenLabs 직접 API 30초 $0.075, 60초 $0.15, §10.5). 숫자는 §2의 원가 근거를 보고 대표가 정한다. 한 번에 두 버전을 줄지도 같이 정한다(추천: 직접 운영이면 두 버전, 곡당 요금 엔진이면 한 버전).
 5. **화면에 "저작권 없는 음악"이라고 쓸까요?** 추천: 쓰지 않는다. §4.10의 사실 문장("광고와 SNS에 쓸 수 있어요. 사용료를 낼 필요가 없고 출처를 적지 않아도 돼요.")과 이용 조건 패널로 말한다. 약관에 음악 결과물 조항을 넣는 것과 함께 법무 확인이 필요하다.
-6. **클라우드 GPU가 생기기 전에는 어디서 돌릴까요?** 추천: 워크스테이션은 청음 테스트와 테스트 조직까지만. 고객 공개는 호스팅 ComfyUI 또는 임대 GPU가 준비된 뒤. 그 전에 고객에게 열어야 하면 Stable Audio 3.0 API로 연다.
+6. **클라우드 GPU가 생기기 전에는 어디서 돌릴까요?** 추천: 워크스테이션은 청음 테스트와 테스트 조직까지만. 고객 공개는 호스팅 ComfyUI 또는 임대 GPU가 준비된 뒤. API 엔진으로 먼저 여는 추천(§7-1)을 따르면 이 질문은 2단 엔진을 올릴 때로 미뤄진다.
 7. **누구에게 열까요?** 추천: 샌드박스 조직과 프로젝트 전용 조직을 뺀, 셀프 스튜디오가 열린 모든 조직. 지금의 `sound` 그룹 규칙 그대로다. 공개 전에는 테스트 조직만.
-8. **청음 테스트를 진행할까요?** 추천: §6.4의 추천 묶음(Sunra 계정 크레딧 80 + ACE-Step 가중치를 워크스테이션 ComfyUI에 설치). 둘 다 승인이 필요하다.
+8. **청음 테스트를 진행할까요?** 추천: §6.4의 개정 묶음. 승인이 필요한 것은 넷이다. ① ElevenLabs 음악·효과음 $7.28(Sunra API 레인 키 잔액, 없으면 계정 크레딧 968) ② Suno v6 계정 크레딧 80 ③ Stable Audio 3.0 $1.28(새 Stability 계정 결제) ④ ACE-Step 가중치를 워크스테이션 ComfyUI에 설치.
 9. **AI 생성 표시를 어떻게 할까요?** 추천: 내려받는 파일의 메타데이터 + 이용 조건 패널의 한 줄. 화면에 배지를 붙이지 않는다. 법무 확인 필요.
-10. **지금 열려 있는 효과음 생성을 어떻게 할까요?** 추천: 상업 이용 조건을 확인할 때까지 닫는다. 엔진이 음악에서 제외한 업체의 것이고 조건이 확인된 적이 없다. 대체 후보는 Stable Audio 3.0 Small SFX.
-11. **문제가 생겼을 때 우리가 책임을 지는 보증(면책)을 약속할까요?** 추천: 약속하지 않고 만든 기록과 신고 처리 절차만 약속한다. 보증이 꼭 필요한 고객이 생기면 Stability Enterprise 라이선스를 그때 검토한다.
+10. **지금 열려 있는 효과음 생성을 어떻게 할까요?** 추천: 지금 닫는다. 조건을 확인해 보니 덮여 있지 않다(§10.3): Sunra 경유라 근거가 없고, 효과음을 단독 에셋으로 저장·내려받게 하는 방식이 "다른 소재와 결합한 결과물에만"이라는 조건과 맞지 않는다. 운영 사용은 0건이라 끊기는 작업이 없다. ElevenLabs 직접 계약이 되면 타임라인 안에서만 쓰이게(단독 내려받기 없이) 다시 연다. 직접 계약을 하지 않으면 대체 후보는 Stable Audio 3.0 Small SFX.
+11. **문제가 생겼을 때 우리가 책임을 지는 보증(면책)을 약속할까요?** 추천: 약속하지 않고 만든 기록과 신고 처리 절차만 약속한다. 보증이 꼭 필요한 고객이 생기면 Stability Enterprise 라이선스나 ElevenLabs Enterprise(범위 비공개, §10.9-6)를 그때 검토한다.
 12. **편집·영상 스튜디오의 옛 음악 만들기를 없애고 사운드 스튜디오로 모을까요?** 추천: 모은다(§6.1 정리 조각). 음악을 만드는 곳과 이용 조건 표시가 한 군데여야 한다.
+13. **ElevenLabs에 문의하고 직접 계약할까요?** 추천: §10.9의 아홉 가지를 영업팀에 글로 묻고, 답이 "Scale 또는 Business로 된다"이면 그 요금제로 계약한다. 먼저 정할 것은 셋이다. ① 회사 직원 수가 10명 미만인지(Scale 월 $299 자격) ② 월 고정비 $299를 음악·효과음에 쓸지 ③ 우리 약관에 ElevenLabs가 요구하는 조항(제3 수익자, 더 느슨하지 않은 조건, 식별 시스템 등록 금지)을 넣을지. 문의 문안과 발송, 새 유료 요금제 구매는 대표가 한다.
 
 ## 8. 확인하지 못한 것
 
@@ -413,6 +427,7 @@ Sunra 값은 2026-11-20에 공개 카탈로그(`GET https://api.sunra.ai/v1/mode
 - 인공지능기본법 시행령 제23조 원문, 메타(인스타그램·페이스북) 권리 관리 도구의 공식 문구. 제31조 조문과 한국저작권위원회 안내서 인용은 조사 도구가 읽어 온 값이라 법무 검토 때 원문을 다시 본다.
 - [WF]로 표시한 인용 전부(Suno 약관, Lyria 면책 목록·워터마크, fal 약관 등)는 원문 대조가 남았다.
 - 워크스테이션 결과 파일을 서버가 받아 가는 경로(§6.3).
+- ElevenLabs: 한 곡 생성 시간, 한국어 가사 지원, 직접 API가 30초를 초 단위로 나눠 받는지, 효과음의 실제 단가(공식 표시 둘이 어긋난다), 스템 분리의 API 가격, Enterprise 면책의 범위, Sunra가 승인된 리셀러인지, Sunra 계정 레인이 돌리는 음악 모델 버전, 배포 환경에 `ELEVENLABS_API_KEY`가 있는지, 음악 길이 상한(문서마다 5분과 10분).
 
 ## 9. 조사 근거
 
@@ -422,3 +437,199 @@ Sunra 값은 2026-11-20에 공개 카탈로그(`GET https://api.sunra.ai/v1/mode
 - `api-vendors.md` — API 음악·효과음 엔진의 가격·약관 인용, 공개 청취 순위.
 - `sunra-catalogue.md` — Sunra 카탈로그의 음악 모델·가격·입력·`commercial_use` 표시(무료 조회).
 - `local-music-workspace.md` — 로컬 음악 작업공간의 라이선스 파일 인용, 기능, 끝난 작업 10건의 실측 시간, GPU 가드.
+- `elevenlabs-terms.md` — ElevenLabs 음악·효과음 약관 인용(요금제 표, 재판매, OEM, 면책, 기존 결과물), 영업팀에 물을 것.
+- `elevenlabs-capability-price.md` — ElevenLabs 음악·효과음 API의 기능, 요금제와 단가, 공개 블라인드 순위.
+- `elevenlabs-sunra-and-repo.md` — Sunra의 ElevenLabs 표시가와 입력, 저장소의 기존 코드와 재사용 범위.
+
+## 10. ElevenLabs 재검토 (2026-11-20 저녁 추가)
+
+대표 말씀(2026-11-20): "음악 스튜디오에서 완성도 높이려면 그냥 elevenlabs의 음악 기능을 가져오는게 더 나으려나? api를 통해서? 거기에 뭐 sound effect설계도 가능하고 하니까". 2026-11-18의 제외 결정 때문에 처음 조사에서 뺐던 업체를 같은 기준으로 채운다. 약관 인용은 모두 2026-11-20에 원문에서 문자열을 대조했다([V]). 전체 인용은 `docs/research/brand-sound-studio-2026-11-20/elevenlabs-terms.md`, 기능·가격은 `elevenlabs-capability-price.md`, Sunra 표시가와 저장소 상태는 `elevenlabs-sunra-and-repo.md`에 있다. 유료 호출은 하지 않았다.
+
+### 10.1 질문에 대한 답
+
+1. **기능의 완성도와 출시 속도는 ElevenLabs API가 가장 좋다.** 길이 지정, 보컬 없음 보장, 구간 구성, 구간 수정, 스템, 영상에 맞춘 음악, 효과음이 한 API에 있고 GPU를 운영하지 않아도 된다.
+2. **음질이 더 낫다는 근거는 없다.** 공개 블라인드 순위에서 연주곡 11위, 보컬 8위로 중간이다(§10.7). 들어 보지 않았다.
+3. **지금 코드처럼 Sunra를 거쳐 열 수는 없고, 직접 계약과 서면 확인이 있어야 한다.** 회사가 쓸 수 있는 요금제는 Scale(직원 10명 미만, 월 $299)부터이고, 고객이 우리 제품 안에서 직접 음악을 만드는 구조가 약관의 재판매 금지에 걸리지 않는다는 답을 영업팀에게 글로 받아야 한다.
+
+### 10.2 음악: 약관이 말하는 것
+
+읽은 문서: 이용약관(2026-10-09), 음악 약관과 요금제 표 Exhibit A(2026-10-09), API 약관의 음악 부속서(2026-10-09), 금지 사용 정책(2026-10-09), OEM 약관(2025-02-28). 공개된 엔터프라이즈 계약서는 없다.
+
+| 질문 | 답 | 근거 [V] |
+| --- | --- | --- |
+| 유료 광고와 SNS에 쓸 수 있나 | **온라인 광고와 SNS는 된다. TV·라디오 광고와 영화는 안 된다**(Enterprise Music만 전부 허용). 광고비 상한은 없다 | Free~Enterprise Music Lite: "All online and offline commercial use permitted, except film, TV, radio, and Studio Games" |
+| 요금제에 따라 다른가 | **매체 범위는 같고, 누가 가입할 수 있는지가 다르다.** Free·Starter·Creator·Pro는 개인 전용. 회사는 Scale(직원 10명 미만), Business(50명 미만), 그 이상은 Enterprise. API는 유료 요금제에서만 | "For Individual Use Only" / "Individuals, or entities or organizations with fewer than 10 employees" / "…fewer than 50 employees" / "The Music API is only available to paid users." |
+| 어긋나는 문구가 있나 | 있다. 제품 FAQ는 광고에 추가 라이선스가 필요하다고 적는다. 첫 음악 약관(2025-08-14)은 셀프 요금제의 제외 대상에 광고를 넣었었다. 지금의 요금제 표가 더 나중의 계약 문서지만 서면 확인이 필요하다 | "Eleven Music requires an additional license for marketing campaigns, advertising, film, TV, games, and enterprise distribution." (`elevenlabs.io/creative`) |
+| 우리 제품 안에서 우리 고객에게 제공해도 되나 | **글로 확정되지 않았다.** 모델 재판매는 모든 셀프 요금제에서 금지이고 Enterprise에서만 "Custom"이다. "자기 제품으로 결과물을 만들어 배포하는 것"은 예외인데, 고객이 설명을 직접 넣어 만드는 구조가 "모델을 제3자에게 쓸 수 있게 하는 것"인지가 갈린다. 다른 엔진과 나란히 제공하는 것도 조항에 명시돼 있다 | "You must not engage in, or permit any third party to engage in, Model Resale, including offering any Music Model alongside third-party models, unless ElevenLabs has expressly authorized that activity in writing." / "an entity does not become a Reseller solely by generating and distributing Output through its own product, provided it does not make the Music Models or API access to them available to any third party" |
+| 최종 사용자에게 서비스를 열 때의 조건 | Pro 이하에서는 금지. Scale 이상에서는 우리 약관이 ElevenLabs를 제3 수익자로 두고, 우리 고객에게 주는 조건이 ElevenLabs가 우리에게 준 조건보다 느슨하면 안 된다. **우리 약관에 그런 조항이 없다** | "if you are a Customer accessing the Services under a Free, Starter, Creator, or Pro tier plan, you are expressly prohibited from Making Available the Services or any Bundled Service" / "ElevenLabs is a third-party beneficiary of Customer's agreement with End Users" / "Making our Services or Output available to your own end users or other third parties on terms more permissive than those that apply to you" |
+| 고객별 곡 보관이 "음악 라이브러리"인가 | 여러 고객이 같이 쓰는 곡 모음은 금지다. 고객 자신의 곡을 그 고객에게만 보관·전달하는 것이 해당하는지는 문구만으로는 확정되지 않는다 | "any collection of Output, in whole or in part, made available to third parties for those third parties to use, license, download, or incorporate into their content, whether or not for payment" |
+| 출처 표기·표시 의무 | 유료 요금제는 표기 의무 없음. ElevenLabs가 AI 생성 표시를 넣을 수 있고, 넣은 워터마크·메타데이터를 지우면 안 된다 | "No Attribution Required" / "ElevenLabs may mark Output as AI-generated but does not warrant that any Output carries a watermark or provenance signal" / "You must not remove, alter, or conceal ElevenLabs watermarks, metadata or other provenance signals" |
+| 누가 무엇을 가지나 | 결과물의 권리는 사용자에게 남는다(저작권이 생긴다는 보증은 없다). ElevenLabs는 서비스 제공·개선·신제품 개발을 위한 영구 라이선스를 가진다(학습 제외 설정이 있다). 같은 결과가 다른 사용자에게도 나올 수 있다 | "as between you and ElevenLabs, you retain all rights in and to your Output." / "the Output generated by you using the Services may not be unique across users" |
+| ElevenLabs나 음반사가 결과물을 등록·청구할 수 있나 | 약관 어디에도 Content ID 같은 식별 시스템 언급이 없다. 음반사·출판사에 청구권을 주는 조항도, 배제하는 조항도 없다. 스트리밍 유통은 Creator 이상에서 허용 | 해당 문구 없음(확인 못 함이 아니라 문서에 없다) |
+| 면책 보증 | 셀프 요금제에는 없다. 비침해 보증을 부인하고, 오히려 사용자가 ElevenLabs를 면책한다. Enterprise 보증은 홍보 문구로만 있고 범위가 공개돼 있지 않다 | "implied warranties of merchantability, fitness for a particular purpose, title, and non-infringement" (부인 조항) / "provides IP indemnification for audio" (`elevenlabs.io/creative`) |
+| 학습 데이터 | 라이선스받은 음악으로 학습했다고 밝힌다. 공식 글이 이름을 든 곳은 Believe다. Merlin·Kobalt 계약은 언론 보도(TechCrunch 2025-08-05)이고 ElevenLabs 페이지에서는 확인 못 함 | "Eleven Music is trained on licensed stems and music" / "Created in collaboration with labels, publishers, and artists, Eleven Music is cleared for nearly all commercial uses" / "including recent licensing collaborations with Believe" |
+| 가수·곡 이름 | 약관이 금지하고 API가 거절하면서 대신 쓸 문장을 돌려준다 | "any artist's real name or stage name, whether living or deceased" / "the API will return a `bad_prompt` error that contains a suggestion of what prompt you could use instead" |
+| 약관이 바뀌거나 구독을 끊으면 이미 만든 곡은 | **만든 시점의 요금제 조건이 유지된다.** 권리를 줄이는 변경은 통지 30일 뒤부터, 앞으로 만드는 것에만 적용 | "Output remains subject to the plan in effect when that Output was created, and new Output is subject to your then-current plan" / "An update that materially reduces your rights takes effect 30 days after ElevenLabs notifies you" / "you will still have a commercial license to use whatever you generated during that subscription forever" |
+| 중개 서비스(Sunra)로 만들면 | 음악 모델을 다른 모델과 나란히 제공하는 중개 서비스는 서면 승인이 필요한 리셀러다. 승인된 곳의 공개 목록이 없고, 그 경로로 만든 곡에 어느 요금제 조건이 적용되는지도 적혀 있지 않다 | 위 재판매 조항 / "these Terms will act as the end user license agreement" (승인된 리셀러 경유일 때) |
+
+**판정**: 온라인 광고·SNS용 음악은 직접 계약한 Scale 이상에서 매체 범위 안이다. 남는 문제는 "우리 고객이 우리 제품 안에서 직접 만든다"는 구조가 허용되는지 하나이고, 이것은 영업팀의 서면 답이나 Enterprise 계약으로만 풀린다. TV·라디오 광고에 쓰려는 고객에게는 Enterprise Music이 아니면 줄 수 없다.
+
+### 10.3 효과음: 약관이 말하는 것, 그리고 지금 열려 있는 효과음 생성
+
+| 질문 | 답 | 근거 [V] |
+| --- | --- | --- |
+| 광고·SNS에 쓸 수 있나 | 유료 요금제면 된다. 영화·TV 제외 조항도, 직원 수 조건도 없다 | "including by incorporating it into films, trailers, advertising, video, games, applications, and other productions" / "As long as you have a paid account, you can use our sound effects royalty-free in commercial projects, including YouTube videos, social media content, and even advertising" |
+| 조건 | **다른 소재와 결합한 결과물에만 권리가 있다.** 효과음 파일을 단독으로 제공하거나 효과음 모음으로 제공하면 안 된다 | "You may exercise those rights only in respect of Output combined with other material" / "or as part of any sound, sample, effects, or music library or other collection of sounds" |
+| 우리 고객에게 제공 | 효과음만의 재판매 조항은 없다. OEM 약관(Scale 이상 + 제3 수익자 조항)과 "더 느슨한 조건 금지"가 그대로 적용된다 | §10.2와 같은 조항 |
+| 표기·면책·기존 결과물 | 유료는 표기 의무 없음. 면책 보증 없음. 구독을 끊어도 만든 것은 계속 쓴다 | 음악과 같다 |
+| 학습 데이터 | Shutterstock 오디오 라이브러리로 미세 조정했다고 밝혔다(2024-05-31) | "we were able to fine tune our model using the expansive and diverse content from the Shutterstock audio library of licensed tracks" |
+
+**지금 스튜디오에 열려 있는 효과음 생성은 덮여 있지 않다.** 근거를 댈 수 있는 것이 하나도 없다.
+
+1. Sunra를 거쳐 돈다(`lib/brand-studio/music/sfx.ts`). Sunra가 이 업체의 서비스를 재판매할 권한이 있는지 공개된 근거가 없고, 그 경로의 결과물에 어느 조건이 붙는지도 적혀 있지 않다.
+2. 만든 효과음을 **단독 오디오 에셋으로 저장하고 에셋에서 내려받을 수 있다.** 약관은 다른 소재와 결합한 결과물에만 권리를 준다. 타임라인 안에서 영상과 섞여 나가는 것은 맞지만 파일 단독 제공은 금지 쪽에 가깝다.
+3. 최종 사용자에게 서비스를 열 때 요구되는 조항(제3 수익자, 더 느슨하지 않은 조건)이 우리 약관에 없다.
+4. 화면과 코드는 "상업 이용 가능"이라고 표시하지만(`commercialAllowed: true`) 그 표시를 받치는 문서가 저장소에 없다.
+
+2026-11-18 운영 DB 조회에서 효과음 작업은 0건이었다(`docs/BRAND-EDITING-STUDIO.md` §8). 지금 닫아도 끊기는 작업이 없다. 처리 방법은 §7-10.
+
+### 10.4 할 수 있는 것: 다른 후보와 나란히
+
+| 기능 | ElevenLabs (Eleven Music v2.5, 효과음 v2·v3) | ACE-Step 1.5 XL (자체 운영) | Stable Audio 3.0 API | Lyria 3.5 |
+| --- | --- | --- | --- | --- |
+| 길이 지정 | `music_length_ms` 3초~10분(가격 카드는 5분이라고 적어 어긋난다). 구성 계획에서는 구간 길이가 "always enforced" | 10초~10분 | 6분까지 | 184초까지 |
+| 보컬 없음 보장 | `force_instrumental`(Sunra 스키마의 설명: "guarantees that the generated song will be instrumental") | `[Instrumental]` 태그. 보장 문구 없음 | 연주곡 전용 | 연주곡 모드 |
+| 구간 구성 | 최대 30구간, 구간마다 길이·스타일·가사. 계획 초안을 만들어 주는 엔드포인트는 무료 | 가사 구조 태그 수준 | 없음 | 없음(한 번에 한 곡) |
+| 구간 수정·이어 만들기 | 인페인팅(남길 구간과 다시 만들 구간을 섞는다) | repaint, complete(xl-base) | inpaint, audio-to-audio | 없음 |
+| 스템 | 2개·6개 분리 엔드포인트 | track separation | 없음 | 없음 |
+| 영상에 맞춘 음악 | `video-to-music` 엔드포인트(효과음 함께 넣기 옵션) | 없음(우리가 만들어야 한다) | 없음 | 이미지 입력만 |
+| 반복 재생(loop) | 음악에는 없음. 효과음에는 `loop` | 확인 못 함 | 확인 못 함 | 없음 |
+| 빠르기·조 | 전용 입력 없음. 설명으로만("accurately follows BPM and often captures the intended musical key") | 확인 못 함(청음 테스트에서 확인) | 확인 못 함 | 설명으로 |
+| 보컬·가사 | 된다. 가사는 "any language", 이름이 적힌 언어에 한국어는 없다(확인 못 함) | 50개 이상 언어(한국어 품질 모름) | 없음 | 된다(한국어 포함) |
+| 가수·곡 이름 거르기 | API가 거절하고 대체 문장을 준다 | 우리가 만들어야 한다 | 일반 조항 | 거절 |
+| 효과음 | 0.5~30초, `prompt_influence`, `loop`, 48kHz WAV | 없음 | 별도 SFX 모델 | 없음 |
+| 한 곡 만드는 시간 (30초 / 60초 / 3분) | 공식 수치 없음. 확인 못 함 | 제작사 수치로 곡당 수 초. 우리 GPU 미측정 | 제작사: 3분까지 2초 미만(GPU 기준) | 확인 못 함 |
+| 동시 실행 | 음악: Scale·Business 5개, Enterprise 협의. 효과음: 8개 | 우리 GPU 수 | 확인 못 함 | 확인 못 함 |
+| 출력 형식 | MP3(48kHz 320kbps까지), PCM 48kHz, Opus. C2PA 서명 옵션 | WAV 등(직접 정한다) | 44.1kHz 스테레오 | 확인 못 함 |
+
+ElevenLabs만 가진 것은 구간 길이가 지켜지는 구성 계획, 영상에 맞춘 음악 엔드포인트, 같은 계약 안의 효과음이다. §4.4 "영상에 맞춰 만들기"의 둘째·셋째 단계(컷에 맞는 구간, 영상을 보고 제안)를 우리가 직접 만들지 않아도 되는 유일한 후보다.
+
+### 10.5 가격과 환산 (가격 제안이 아니다)
+
+**직접 API** (`elevenlabs.io/pricing/api`, [V]): "API usage is billed in US dollars, not credits… Eleven Music $0.15 per minute… Sound Effects $0.12 per minute". 요금제와 무관하게 같은 단가다.
+
+| 요금제 | 월 요금 | 포함된 API 음악 분 | 회사가 쓸 수 있나 |
+| --- | --- | --- | --- |
+| Starter / Creator / Pro | $6 / $22 / $99 | 40 / 147 / 660 | 아니다(개인 전용) |
+| Scale | $299 | 1,993 | 직원 10명 미만 |
+| Business | $990 | 6,600 | 직원 50명 미만 |
+| Enterprise | 협의 | 협의 | 제한 없음 |
+
+| 한 곡 | 직접 API | Sunra API 레인 (v2.5) | Sunra 계정 레인 |
+| --- | --- | --- | --- |
+| 30초 | $0.075 | $0.60 | 80크레딧 ($0.80) |
+| 60초 | $0.15 | $0.60 (59.5초) | 80크레딧 |
+| 3분 | $0.45 | $1.80 | 240크레딧 ($2.40) |
+| 효과음 5초 / 10초 | $0.01 / $0.02 또는 약 $0.03~0.04 / $0.07~0.08 | $0.01 / $0.02 | 1 / 2 크레딧 |
+
+- 직접 API의 30초 값은 초 단위로 나눠 받는다는 가정이다. 가격 페이지는 "billed per generation"이라고만 적는다. 분 단위 올림이면 30초도 $0.15다.
+- 효과음 직접 단가는 공식 표시 둘이 어긋난다. 분당 $0.12로 읽으면 초당 $0.002이고, "한 번에 200크레딧, 길이를 정하면 초당 40크레딧"으로 읽으면 5초에 $0.03~0.04다. 유료 호출 한 번이면 가려진다.
+- 스템 분리의 API 가격, 인페인팅 업로드의 정확한 값은 확인 못 함(앱 기준: 2스템은 생성가의 절반, 업로드는 생성과 같은 값).
+
+**기존 계수 환산**(§2.2와 같은 규칙: 센트 올림 × 1,400 × 계수 ÷ 10원, 결과마다 올림):
+
+| 제공사 청구액 | 이미지 계수(1.12) | 영상 계수(1.11) | 해당 |
+| --- | --- | --- | --- |
+| $0.08 ($0.075 올림) | 13 크레딧 | 13 크레딧 | 직접 API 30초 |
+| $0.15 | 24 | 24 | 직접 API 60초 |
+| $0.45 | 71 | 70 | 직접 API 3분 |
+| $0.60 | 95 | 94 | Sunra API 레인 30초·60초 |
+| $0.80 | 126 | 125 | Sunra 계정 레인 30초·60초 |
+| $1.80 | 283 | 280 | Sunra API 레인 3분 |
+| $0.01 / $0.02 | 2 / 4 | 2 / 4 | 효과음 5초 / 10초(초당 $0.002) |
+| $0.04 / $0.08 | 7 / 13 | 7 / 13 | 효과음 5초 / 10초(크레딧 읽기) |
+
+월 요금($299부터)은 곡당 환산에 들어가지 않는 고정비다. 지금 코드의 고정 공식은 30초 음악에 24크레딧(240원)을 받는데, 그 코드가 부르는 길(Sunra API 레인)의 원가는 $0.60(약 840원)이다. 플래그를 그대로 켜면 곡마다 손해가 난다.
+
+### 10.6 저장소에 이미 있는 것과 다시 쓸 수 있는 것
+
+| 무엇 | 상태 | 사운드 스튜디오에서 |
+| --- | --- | --- |
+| `music/provider.ts`의 `sunra_elevenlabs` | `elevenlabs/music-v2.5/text-to-music`을 `SUNRA_API_KEY`로 부른다. 길이 3~59.5초로 자름, `force_instrumental: true`. 환경에 Sunra 키가 있으면 플래그를 켰을 때 이 길이 기본으로 잡힌다 | 요청 필드(`music_length_ms`, `force_instrumental`, `output_format`)는 직접 API와 이름이 같아 그대로 쓴다. 호출 주소와 인증만 바꾼다. 59.5초 제한은 푼다 |
+| 같은 어댑터의 구성 계획 분기 | v1 모양(`positive_global_styles`, `sections[]`)을 v2.5 엔드포인트에 보낸다. v2.5는 `chunks[]`를 받으므로 거절될 것이다(유료 호출이라 실행해 확인하지 않았다) | v2.5 모양으로 다시 쓴다 |
+| `music/provider.ts`의 `elevenlabs`(직접) | 이름은 음악 어댑터인데 기본 주소가 효과음 엔드포인트(`/v1/sound-generation`)다. 22초 제한, 진행 조회 없음 | 쓰지 않는다. 음악 API(`/v1/music`)용으로 새로 쓴다 |
+| `music/sfx.ts` | 열려 있다. Sunra로 `elevenlabs/sound-effects/text-to-sound-effects` 호출 | 요청 모양은 직접 API와 같다. 결과를 단독 에셋으로 저장하는 방식은 약관과 맞지 않아 바꿔야 한다 |
+| 라이선스 표시 | 코드가 `commercialAllowed: true`, `STUDIO-COMMERCIAL-AUDIO-API`를 붙인다 | 받치는 문서가 없다. 계약이 생기면 그 계약을 가리키게 하고, 없으면 지운다 |
+| 과금 | 고정 공식(§2.2) | 다시 정한다(§7-4) |
+| 작업 기록 | 가짜 `video_final` 행 | §6.2의 `music`·`audio`로 |
+| 로컬 실행용 가짜 엔진과 합성음, 에셋 저장 도우미, Sunra 클라이언트 | 동작한다 | 그대로 쓴다 |
+| 환경변수 이름 | 코드가 읽는 것: `SUNRA_API_KEY`, `SUNRA_BASE_URL`, `ELEVENLABS_API_KEY`, `ELEVENLABS_API_URL`, `BRAND_STUDIO_MUSIC_PROVIDER`, `BRAND_STUDIO_MUSIC_GENERATION`. `.env.example`에는 ElevenLabs 이름이 없다 | 직접 계약을 하면 `ELEVENLABS_API_KEY`를 쓴다. 배포 환경에 이 키가 이미 있는지는 확인 못 함 |
+| 개인정보처리방침의 수탁자 표 | Sunra 운영사가 이미지·영상·효과음 생성의 수탁자로 적혀 있다 | 직접 계약으로 바꾸면 ElevenLabs를 수탁자로 더해야 한다(법무) |
+
+다시 쓸 수 있는 것은 요청 필드와 주변 부품이고, 화면·작업 기록·과금·표시는 어느 엔진으로 가든 §6의 계획대로 새로 놓는다. ElevenLabs로 간다고 줄어드는 일은 엔진 연결 한 조각(SS2의 일부)과 가수 이름 거르기, 그리고 SS4의 컷 맞추기다.
+
+### 10.7 비교: ElevenLabs 직접 API, ACE-Step 자체 운영, Stable Audio 3.0 API
+
+**음질 근거.** 인용할 수 있는 것은 Artificial Analysis Music Arena뿐이다(검증된 평가자의 블라인드 쌍대 비교, 페이지에 날짜 없음, 수록 항목은 2026-11-11까지).
+
+| | 연주곡 순위(Elo, ±21) | 보컬 순위(Elo, ±18) |
+| --- | --- | --- |
+| Suno v6 | 1위 1148 | 2위 1144 |
+| Lyria 3 Pro / 3.5 | 5위 1080 / 6위 1078 | 7위 1048 / 6위 1050 |
+| Eleven Music v1 | 7위 1021 | 11위 998 |
+| Stable Audio 3 Large | 8위 1014 | 대상 아님 |
+| Eleven Music v2.5 | **11위 1001** | **8위 1016** |
+| ACE-Step 1.5 XL (오픈 가중치) | 순위표에 없음 | 순위표에 없음 |
+
+ElevenLabs의 연주곡 점수는 Stable Audio 3 Large와 오차 범위 안이고 Lyria보다 80점쯤 낮다. ACE-Step 1.5 XL은 비교할 공개 수치가 없다(같은 회사의 호스팅 제품 "ACE Music v1"이 보컬 1위지만 같은 가중치인지 확인 못 함). **세 후보 모두 들어 보지 않음.** 효과음은 블라인드 비교 자료를 찾지 못했다.
+
+**나머지 기준.**
+
+| 기준 | ElevenLabs 직접 API | Stable Audio 3.0 API | ACE-Step 1.5 XL 자체 운영 |
+| --- | --- | --- | --- |
+| 출시까지 필요한 것 | 계정(Scale 이상) + 영업팀 서면 답 + 우리 약관 조항 → SS2에서 서버가 직접 호출. 레인·워커·GPU 없음 | 계정과 선불 크레딧 → SS2에서 서버가 직접 호출. 레인·워커·GPU 없음 | 가중치 설치 → 청음 → 워커와 새 레인 → 고객 공개 전 클라우드 GPU. 네 단계가 더 있다 |
+| 운영 부담 | 없음 | 없음 | GPU, 워커 설치본, 대기열, 장애 대응 |
+| 월 비용: 30초 곡 100개 | $299 (요금제 최저, 50분 사용) | $8 | 호스팅 GPU $1~3 + 구독 $20~100, 또는 전용 GPU 약 $497 |
+| 1,000개 | $299 (500분, 포함분 안) | $80 | $10~30 + 구독, 또는 약 $497 |
+| 10,000개 | 약 $750 (Scale + 초과 3,007분 × $0.15) 또는 Business $990 | $800 | $100~300 + 구독, 또는 약 $497 |
+| 라이선스의 힘 | 라이선스 학습을 밝히고 음반·출판 쪽과 계약이 있다. 이미 만든 곡은 조건이 유지된다. 재판매 조항이 걸려 있고 TV·라디오는 제외, 셀프 요금제에 면책 없음 | 라이선스 학습을 밝힌다. 결과물 권리를 양도하고 "우리 제품 안에서 최종 사용자가 쓰는 것"을 글로 허용한다. 면책은 Enterprise에서만 | MIT. 사이에 낀 약관이 없고 철회되지 않는다. 학습 데이터가 합법이라는 말은 제작사 주장이고 뒤에 서 줄 회사가 없다 |
+| 한 업체 약관에 묶이는 정도 | 크다. 음악 약관의 광고 허용 범위가 15개월 사이에 바뀌었다(2025-08 약관은 광고를 제외, 현행 2026-10 약관은 온라인 광고를 허용). 구 모델이 정해진 날짜에 내려간다(v1 2027-01-31) | 중간. 약관 하나, 요금 단순 | 없음 |
+| 제품 조작(§10.4) | 가장 많다 | 길이·인페인팅 | 길이·repaint·스템(품질 미확인) |
+| 효과음까지 한 계약 | 된다 | 된다(별도 모델) | 안 된다 |
+
+월 비용은 30초 곡 기준이고 60초면 분이 두 배다. 한 번에 두 버전을 주면 곡 수가 두 배다. ElevenLabs의 Scale은 직원 10명 미만 조직만 가입할 수 있다는 조건이 붙는다.
+
+### 10.8 추천과, 생각이 바뀔 조건
+
+**추천이 바뀌었다.** 처음에는 ACE-Step 자체 운영을 1순위, API를 대안으로 적었다. 지금은 **API로 먼저 열고(1순위 후보 ElevenLabs 직접 계약, 조건이 안 맞으면 Stable Audio 3.0), ACE-Step 자체 운영을 2단으로 둔다.**
+
+바꾼 이유는 셋이다.
+
+1. **지금 물량에서는 곡당 원가보다 운영이 비싸다.** 스튜디오 사용량이 아직 작다(2026-11-18 운영 DB 조회에서 스튜디오 작업 전체가 15건이었다). API 곡값은 월 몇 달러~몇백 달러인데, 자체 운영은 물량과 무관하게 워커·GPU·장애 대응을 먼저 지어야 한다. 전용 GPU가 API보다 싸지는 지점은 30초 곡으로 월 6,000곡 안팎이다(약 $497 ÷ $0.075~0.08).
+2. **대표가 완성도를 먼저 원한다.** 구간 구성과 영상에 맞춘 음악은 ElevenLabs에 이미 있고, ACE-Step으로는 우리가 만들어야 한다. 효과음 문제(§10.3)도 같은 계약으로 풀 수 있다.
+3. **라이선스 설명이 고객에게 더 쉽다.** "라이선스받은 음악으로 학습한 엔진"이라는 말은 오픈 모델의 자기 선언보다 브랜드 고객이 받아들이기 쉽다. 다만 이 말도 업체의 주장이고 면책은 붙지 않는다.
+
+ElevenLabs를 조건 없이 1순위로 적지 않은 이유도 분명하다. 음질이 낫다는 근거가 없고, 우리 사용 방식이 약관에서 확정돼 있지 않으며, 월 고정비($299부터)가 있다. Stable Audio 3.0은 음질 근거가 같은 급이고 약관이 우리 사용 방식을 이미 글로 허용하며 고정비가 없다. 그래서 ElevenLabs는 "조작과 한 묶음"이 필요해서 고르는 것이고, 그 값이 서면 확인과 고정비다.
+
+**생각이 바뀔 조건**
+
+- 영업팀이 "고객이 직접 만드는 구조는 Enterprise 계약이 필요하다"고 답하고 그 최소 금액이 크면 → Stable Audio 3.0으로 연다.
+- 청음에서 ElevenLabs가 Stable Audio 3.0이나 ACE-Step보다 뚜렷이 못하면 → 이긴 쪽으로 간다. ACE-Step이 같거나 나으면 2단을 앞당긴다.
+- 회사 직원 수가 10명(Scale)·50명(Business) 기준을 넘으면 → Enterprise 견적을 받아 다시 계산한다.
+- TV·라디오 광고에 쓰려는 고객이 있으면 → Enterprise Music 또는 다른 엔진이 필요하다.
+- 월 물량이 수천 곡을 넘으면 → ACE-Step 자체 운영을 주 엔진으로 올린다.
+- ElevenLabs가 약관을 다시 좁히면 → 이미 만든 곡은 유지되므로 새 생성만 2단 엔진으로 넘긴다. 이 대비 때문에 2단을 없애지 않는다.
+
+### 10.9 영업팀에 서면으로 물을 것
+
+1. 우리 제품 안에서 고객이 설명을 넣어 음악을 만드는 것이 "Model Resale"인가, "자기 제품으로 결과물을 만들어 배포"하는 예외인가. 필요한 요금제나 계약은 무엇인가.
+2. 고객별로 그 고객의 곡을 보관하고 내려받게 하는 것이 "Music Library"인가.
+3. 직원 수 기준(10명·50명)은 우리 회사만 보는가, 우리 고객사도 보는가.
+4. 광고 사용에 대해 제품 FAQ("additional license")와 요금제 표 중 어느 쪽이 맞는가.
+5. 온라인 광고가 커넥티드 TV 지면에 나가면 "TV"인가.
+6. Enterprise 면책 보증의 범위는 무엇이고 우리 고객에게도 미치는가.
+7. 어느 중개 서비스가 승인된 리셀러이고, 그 경로로 만든 결과물에는 어느 요금제 조건이 적용되는가.
+8. 우리 고객이 결과물을 콘텐츠 식별 시스템에 등록해도 되는가(우리는 약관으로 막을 계획이다).
+9. 효과음을 영상에 섞지 않은 파일로 고객에게 전달해도 되는가.
+
+외부 발송이라 문의 문안과 발송은 대표가 확정한다(§7-13).
