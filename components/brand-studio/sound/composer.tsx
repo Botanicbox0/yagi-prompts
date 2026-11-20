@@ -51,6 +51,13 @@ export interface ComposerInput {
   targetSeconds: number;
   /** SA4: the library video the music is fitted to. */
   videoAssetId?: string;
+  /** Sung with no lyrics: the brand and words to include from the lyrics options, sent with the request. */
+  words?: ComposerWords;
+}
+
+export interface ComposerWords {
+  brand?: { name: string; readAs?: string };
+  mustInclude?: string[];
 }
 
 /** What "가사 초안 만들기" and "부르기 좋게 손보기" ask for (§12.3). */
@@ -97,7 +104,7 @@ export const MusicComposer = forwardRef<
     /** SA4: library videos "영상 길이" can fit the lyrics and the design to. */
     videos?: readonly LyricsVideo[];
     /** "지금 설계하기": the free design preview; resolves to the design or a line to show. */
-    onDesign: (input: Pick<ComposerInput, 'prompt' | 'vocal' | 'lyrics' | 'careful' | 'structure' | 'videoAssetId'> & { avoid?: boolean }) => Promise<{ design: ComposerDesign } | { error: string }>;
+    onDesign: (input: Pick<ComposerInput, 'prompt' | 'vocal' | 'lyrics' | 'careful' | 'structure' | 'videoAssetId' | 'words'> & { avoid?: boolean }) => Promise<{ design: ComposerDesign } | { error: string }>;
   }
 >(function MusicComposer(props, ref) {
   const { copy } = props;
@@ -111,7 +118,12 @@ export const MusicComposer = forwardRef<
   const [architect, setArchitect] = useState(true);
   const [design, setDesign] = useState<ComposerDesign | null>(null);
   const [designing, setDesigning] = useState(false);
-  const [redesignAsked, setRedesignAsked] = useState(false);
+  /** A design asked for from the next render (after "다르게 설계하기" filled the dock, or after the lyrics were drafted first). */
+  const [designAsked, setDesignAsked] = useState<{ avoid: boolean } | null>(null);
+  /** The lyrics were drafted because 만들기 was pressed with vocals and none written: read them, then press again. */
+  const [firstDraft, setFirstDraft] = useState(false);
+  /** A draft past a few seconds shows a live line (real run: 15 to 20 seconds are common). */
+  const [slowDraft, setSlowDraft] = useState(false);
   const [options, setOptions] = useState<LyricsOptionsValue>(() => ({
     seconds: 30,
     video: null,
@@ -137,7 +149,7 @@ export const MusicComposer = forwardRef<
       // The settings land first; the design is asked for from the next render, so its inputs are the filled ones.
       this.fill(settings);
       setArchitect(true);
-      setRedesignAsked(true);
+      setDesignAsked({ avoid: true });
     },
     fill(settings) {
       setPrompt(settings.prompt.slice(0, MUSIC_LIMITS.promptMax));
@@ -145,6 +157,7 @@ export const MusicComposer = forwardRef<
       setLyrics((settings.lyrics ?? '').slice(0, LYRICS_LIMITS.max));
       setCareful(props.maxMode && settings.careful === true);
       setDrafted(false);
+      setFirstDraft(false);
       setLyricsBy(null);
       setPolish(null);
       setLocalError(null);
@@ -159,6 +172,19 @@ export const MusicComposer = forwardRef<
   // SA4: the picked video (lyrics with vocals only: the option sits with the lyrics).
   const videoId = vocal && options.seconds === 'video' ? options.video?.assetId : undefined;
   const switchOn = props.maxMode && careful;
+  // Sung with nothing written and the Architect on: the lyrics are drafted first, so the customer reads them before
+  // anything is spent (real run of 2026-11-21: without lyrics the brand and the message never reached the engine).
+  const lyricsFirst = vocal && !sentLyrics && architect;
+  const brandName = options.brandName.trim();
+  const words: ComposerWords | undefined = (() => {
+    if (!vocal || sentLyrics) return undefined;
+    const must = mustIncludeWords(options.mustInclude);
+    if (!brandName && !must.length) return undefined;
+    return {
+      ...(brandName ? { brand: { name: brandName, ...(options.readAs.trim() ? { readAs: options.readAs.trim() } : {}) } } : {}),
+      ...(must.length ? { mustInclude: must } : {}),
+    };
+  })();
   const credits = musicQuoteCredits({ mode: musicWay({ vocal, lyrics: sentLyrics, careful: switchOn }), careful: switchOn });
   const creditsText = formatCredits(credits, props.locale);
 
@@ -175,11 +201,8 @@ export const MusicComposer = forwardRef<
     if (localError) setLocalError(null);
     if (props.error) props.onClearError();
   };
-  const submit = (event?: FormEvent) => {
-    event?.preventDefault();
-    if (!trimmed || props.busy) return;
-    if (namedArtist(trimmed)) return setLocalError(copy.errors.artist);
-    if (sentLyrics && namedArtist(sentLyrics)) return setLocalError(copy.composer.lyricsBlocked);
+  const create = () => {
+    setFirstDraft(false);
     props.onCreate({
       prompt: trimmed,
       vocal,
@@ -190,13 +213,40 @@ export const MusicComposer = forwardRef<
       targetSeconds: targetOf(options),
       ...(videoId ? { videoAssetId: videoId } : {}),
       ...(sentLyrics && lyricsBy ? { lyricsBy } : {}),
-      ...(architect && design ? { designed: { style: design.style, ...(design.mode === 'custom' ? { title: design.title } : {}) } } : {}),
+      ...(words ? { words } : {}),
+      ...(architect && design ? { designed: { style: design.style, title: design.title } } : {}),
     });
+  };
+  const submit = (event?: FormEvent) => {
+    event?.preventDefault();
+    if (!trimmed || props.busy || drafting) return;
+    if (namedArtist(trimmed)) return setLocalError(copy.errors.artist);
+    if (sentLyrics && namedArtist(sentLyrics)) return setLocalError(copy.composer.lyricsBlocked);
+    // A name in the brand or the words to include stops here, as it would stop the draft and the run.
+    if (vocal && !sentLyrics && namedArtist(optionWords())) return setLocalError(copy.errors.artist);
+    if (lyricsFirst) {
+      // Drafted: shown in the box, nothing made until 만들기 is pressed again. Not drafted (busy, failed): the run
+      // goes as asked, and the request carries what the song is about (lib/brand-studio/sound/architect.ts).
+      void draft(true).then((ok) => {
+        if (ok) setFirstDraft(true);
+        else create();
+      });
+      return;
+    }
+    create();
   };
   const designNow = async (avoid = false) => {
     if (!trimmed || designing) return;
     if (namedArtist(trimmed)) return setLocalError(copy.errors.artist);
     if (sentLyrics && namedArtist(sentLyrics)) return setLocalError(copy.composer.lyricsBlocked);
+    if (vocal && !sentLyrics && namedArtist(optionWords())) return setLocalError(copy.errors.artist);
+    if (lyricsFirst) {
+      // The design is made for the lyrics, so they come first; it is asked for once they are in the box.
+      setDesigning(true);
+      const ok = await draft(true);
+      setDesigning(false);
+      if (ok) return setDesignAsked({ avoid });
+    }
     const askedFor = designKeyRef.current;
     setDesigning(true);
     clearErrors();
@@ -207,6 +257,7 @@ export const MusicComposer = forwardRef<
       careful: switchOn,
       structure: options.structure,
       ...(videoId ? { videoAssetId: videoId } : {}),
+      ...(words ? { words } : {}),
       ...(avoid ? { avoid: true } : {}),
     });
     setDesigning(false);
@@ -215,19 +266,23 @@ export const MusicComposer = forwardRef<
     if ('design' in answer) setDesign(answer.design);
     else setLocalError(answer.error);
   };
-  // "다르게 설계하기": runs once the refused run's settings are in the dock.
+  // Runs once the settings it needs are in the dock ("다르게 설계하기", or lyrics drafted first).
   useEffect(() => {
-    if (!redesignAsked) return;
-    setRedesignAsked(false);
-    void designNow(true);
+    if (!designAsked) return;
+    setDesignAsked(null);
+    void designNow(designAsked.avoid);
     // eslint-disable-next-line react-hooks/exhaustive-deps -- runs on the request only, with this render's settings
-  }, [redesignAsked]);
+  }, [designAsked]);
+  useEffect(() => {
+    if (!drafting) return setSlowDraft(false);
+    const timer = setTimeout(() => setSlowDraft(true), 4000);
+    return () => clearTimeout(timer);
+  }, [drafting]);
   const onKey = (event: KeyboardEvent<HTMLTextAreaElement>) => {
     if (event.key === 'Enter' && (event.metaKey || event.ctrlKey)) submit();
   };
   const draftRequest = (flow: 'topic' | 'polish'): LyricsDraftRequest => {
-    const brandName = options.brandName.trim();
-    const words = mustIncludeWords(options.mustInclude);
+    const must = mustIncludeWords(options.mustInclude);
     return {
       flow,
       topic: trimmed,
@@ -238,15 +293,20 @@ export const MusicComposer = forwardRef<
       structure: options.structure,
       ...(options.tone ? { tone: options.tone } : {}),
       ...(brandName ? { brand: { name: brandName, ...(options.readAs.trim() ? { readAs: options.readAs.trim() } : {}) } } : {}),
-      ...(words.length ? { mustInclude: words } : {}),
+      ...(must.length ? { mustInclude: must } : {}),
     };
   };
   const optionWords = () => [options.brandName, options.readAs, options.mustInclude].join(' ');
-  const draft = async () => {
-    if (!trimmed || drafting) return;
-    if (namedArtist(trimmed) || namedArtist(optionWords())) return setLocalError(copy.errors.artist);
+  /** "가사 초안 만들기". `quiet`: drafted on the way to a run or a design, so a failure shows nothing (the run goes on). */
+  const draft = async (quiet = false): Promise<boolean> => {
+    if (!trimmed || drafting) return false;
+    if (namedArtist(trimmed) || namedArtist(optionWords())) {
+      setLocalError(copy.errors.artist);
+      return false;
+    }
     setDrafting(true);
     clearErrors();
+    setFirstDraft(false);
     const answer = await props.onDraft(draftRequest('topic'));
     setDrafting(false);
     if ('lyrics' in answer) {
@@ -254,7 +314,10 @@ export const MusicComposer = forwardRef<
       setLyricsBy({ flow: 'topic', model: answer.model });
       setPolish(null);
       setDrafted(true);
-    } else setLocalError(answer.error);
+      return true;
+    }
+    if (!quiet) setLocalError(answer.error);
+    return false;
   };
   const polishNow = async () => {
     if (!sentLyrics || polishing) return;
@@ -307,11 +370,19 @@ export const MusicComposer = forwardRef<
         />
       </label>
       {vocal ? (
-        <div className={s.lyricsBox} data-sound-lyrics-box>
+        <div className={s.lyricsBox} data-sound-lyrics-box data-busy={drafting ? '' : undefined}>
           <div className={s.lyricsHead}>
             <span className={s.lyricsLabel}>{copy.composer.lyrics}</span>
-            <span className={s.lyricsNote} id={lyricsNoteId}>
-              {drafted ? copy.composer.draftNote : sentLyrics ? copy.lyricsKit.ownNote : copy.composer.lyricsLanguage}
+            <span className={s.lyricsNote} id={lyricsNoteId} aria-live="polite" data-sound-lyrics-note={firstDraft ? 'first' : drafting ? 'drafting' : undefined}>
+              {drafting && slowDraft
+                ? copy.composer.draftWait
+                : firstDraft
+                  ? copy.composer.lyricsFirst
+                  : drafted
+                    ? copy.composer.draftNote
+                    : sentLyrics
+                      ? copy.lyricsKit.ownNote
+                      : copy.composer.lyricsLanguage}
             </span>
             <span className={s.lyricsCount} aria-hidden="true">
               {lyrics.length}/{LYRICS_LIMITS.max}
@@ -358,6 +429,7 @@ export const MusicComposer = forwardRef<
                 setLyricsBy(null);
                 setPolish(null);
                 setDrafted(false);
+                setFirstDraft(false);
                 clearErrors();
               }}
               aria-describedby={lyricsNoteId}
@@ -412,18 +484,17 @@ export const MusicComposer = forwardRef<
               data-sound-design-style
             />
           </label>
-          {design.mode === 'custom' ? (
-            <label className={s.titleRow}>
-              <span className={s.lyricsLabel}>{copy.architect.titleLabel}</span>
-              <input
-                value={design.title}
-                maxLength={80}
-                onChange={(event) => setDesign({ ...design, title: event.target.value.slice(0, 80) })}
-                className={s.titleField}
-                data-sound-design-title
-              />
-            </label>
-          ) : null}
+          {/* The track's name in the list, in both modes (custom mode also sends it). */}
+          <label className={s.titleRow}>
+            <span className={s.lyricsLabel}>{copy.architect.titleLabel}</span>
+            <input
+              value={design.title}
+              maxLength={80}
+              onChange={(event) => setDesign({ ...design, title: event.target.value.slice(0, 80) })}
+              className={s.titleField}
+              data-sound-design-title
+            />
+          </label>
         </div>
       ) : null}
       <div className={s.dockBar}>
@@ -488,7 +559,7 @@ export const MusicComposer = forwardRef<
           className="bs-btn"
           data-variant="solid"
           data-size="md"
-          disabled={!trimmed || props.busy}
+          disabled={!trimmed || props.busy || drafting}
           aria-label={interpolate(copy.composer.createLabel, { credits: creditsText })}
           data-sound-create
         >

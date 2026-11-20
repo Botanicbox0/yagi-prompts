@@ -719,8 +719,22 @@
 
 /* SS3: lyrics, the "더 고르게 만들기" switch, the terms line. */
 .lyricsBox {
+  position: relative;
   display: grid;
   gap: 6px;
+}
+/* Drafting: the same quiet sweep a making run shows, under the lyrics box. */
+.lyricsBox[data-busy]::after {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: -4px;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, var(--ys-ink), transparent);
+  background-size: 40% 100%;
+  background-repeat: no-repeat;
+  animation: sound-sweep 1.6s var(--ys-ease) infinite;
 }
 .lyricsHead {
   display: flex;
@@ -880,7 +894,8 @@
     transition: none;
   }
   .runMark[data-state='making'],
-  .progress {
+  .progress,
+  .lyricsBox[data-busy]::after {
     animation: none;
   }
   .example,

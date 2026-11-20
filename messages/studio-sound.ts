@@ -20,6 +20,8 @@
  * Slice SS3 (music with lyrics, "더 고르게 만들기", the terms line and panel): §4.7 lines as they are. The
  * terms lines (marked † in §4.7) wait for the founder's final wording and the terms clauses (§8-3); they are the
  * §4.7 drafts until then. The panel's fourth line ("download the creation record") waits for that download to exist.
+ * `lyricsFirst` and `draftWait` (eval fixes, 2026-11-21) went through two Gemma passes: its diagnosis taken (say a
+ * draft was made; no number in the wait line), the button's name kept as the screen shows it.
  * New lines (drafting, draft failure, draft limit, close) went through the same two Gemma
  * passes on 2026-11-20; pass 2 was taken for both of its changes.
  *
@@ -97,6 +99,8 @@ export const studioSoundEn = {
     lyricsBlocked: 'You cannot use existing lyrics or artist names. Please enter your own lyrics or try creating a lyric draft.',
     draft: 'Draft lyrics',
     draftNote: 'Review and edit the draft.',
+    lyricsFirst: 'Lyrics drafted. Review them, then press Create again.',
+    draftWait: 'Writing the lyrics. This may take a moment.',
     drafting: 'Drafting',
     draftFailed: "Couldn't draft lyrics. Please try again.",
     draftBusy: 'Too many requests. Please try again in a moment.',
@@ -257,6 +261,8 @@ export const studioSoundKo: StudioSoundCopy = {
     lyricsBlocked: '기존 노래 가사나 가수 이름은 넣을 수 없어요. 직접 쓴 가사를 넣거나 가사 초안을 만들어 보세요.',
     draft: '가사 초안 만들기',
     draftNote: '초안을 확인하고 고쳐 쓰세요.',
+    lyricsFirst: '가사 초안을 만들었어요. 확인하고 만들기를 다시 눌러 주세요.',
+    draftWait: '가사를 쓰고 있어요. 잠시만 기다려 주세요.',
     drafting: '초안을 만들고 있어요.',
     draftFailed: '초안을 만들지 못했어요. 다시 시도해 주세요.',
     draftBusy: '요청이 너무 많아요. 잠시 후 다시 시도해 주세요.',

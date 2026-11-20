@@ -614,6 +614,14 @@ export const MusicDesignSchema = z
     structure: z.enum(LYRIC_STRUCTURES).optional(),
     /** "다르게 설계하기" after the engine refused (§12.5). */
     avoid: z.boolean().optional(),
+    /** The brand name and words to include from the lyrics options (sung with no lyrics, they reach the engine). */
+    words: z
+      .object({
+        brand: z.object({ name: z.string().trim().min(1).max(60), readAs: z.string().trim().max(60).optional() }).strict().optional(),
+        mustInclude: z.array(z.string().trim().min(1).max(40)).max(5).optional(),
+      })
+      .strict()
+      .optional(),
     /** SA4: the library video the music goes under. */
     videoAssetId: Id.optional(),
   })

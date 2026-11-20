@@ -19,7 +19,7 @@ import { z } from 'zod';
 import { callGeminiJson, studioGeminiConfig } from '../enhancer/gemini';
 import { SUNO_HEADER, SUNO_PROFILE } from '../enhancer/profiles/suno';
 import { videoDesignLine, type MusicVideoFit } from './video-fit';
-import { markLyrics, musicStyle, ownLyrics, musicWay, type LyricStructure, type MusicWay } from './lyrics';
+import { markLyrics, musicStyle, ownLyrics, musicWay, SUPERLATIVE, type LyricStructure, type MusicWay } from './lyrics';
 import { describeSentence, musicTitle } from './music-text';
 import { namedArtist } from './names';
 
@@ -46,6 +46,16 @@ export interface MusicDesignInput {
   avoid?: boolean;
   /** SA4: the video the music goes under (length and cuts). */
   video?: MusicVideoFit | null;
+  /**
+   * The brand name and the words to include from the lyrics options. With vocals and no lyrics they go to the
+   * engine in the sentence that says what the song is about (`subjectSentence`), written the way the customer asked.
+   */
+  words?: MusicWords | null;
+}
+
+export interface MusicWords {
+  brand?: { name: string; readAs?: string | null } | null;
+  mustInclude?: readonly string[];
 }
 
 export interface MusicDesign {
@@ -72,7 +82,7 @@ export interface MusicEnhanceMeta {
   llmModel: string | null;
   source: MusicDesign['source'];
   fallbackReason?: string;
-  /** The title sent to the engine in custom mode. */
+  /** The track's name: sent to the engine in custom mode, and the list name in both modes. */
   title?: string;
   notes?: string | null;
 }
@@ -84,7 +94,8 @@ export function designMeta(design: MusicDesign): MusicEnhanceMeta {
     llmModel: design.llmModel,
     source: design.source,
     ...(design.fallbackReason ? { fallbackReason: design.fallbackReason } : {}),
-    ...(design.mode === 'custom' ? { title: design.title } : {}),
+    // The track's name: sent in custom mode, and the list name in both (../repo.ts `jobView`).
+    title: design.title,
     notes: design.notes,
   };
 }
@@ -93,11 +104,48 @@ function wayOf(input: MusicDesignInput): MusicWay {
   return musicWay({ vocal: input.vocal, lyrics: input.lyrics, careful: input.careful });
 }
 
+/** True when the engine writes the lyrics itself: vocals, and nothing written to sing. */
+function sungWithoutLyrics(input: MusicDesignInput): boolean {
+  return input.vocal && !input.lyrics.trim();
+}
+
+/** The brand (as the customer asked it written) and the words to include, without repeats. */
+function wordsOf(input: MusicDesignInput): string[] {
+  const brand = input.words?.brand ? input.words.brand.readAs?.trim() || input.words.brand.name.trim() : '';
+  const list = [brand, ...(input.words?.mustInclude ?? []).map((w) => w.trim())].filter(Boolean);
+  return [...new Set(list)].slice(0, 6);
+}
+
+function wordsLine(words: readonly string[]): string {
+  return words.length ? `Sing these words as written: ${words.map((w) => `"${w}"`).join(', ')}.` : '';
+}
+
+/** How much of the request the sentence quotes. */
+const SUBJECT_QUOTE_MAX = 300;
+
+/**
+ * Sung with no lyrics, the engine writes them from the description alone (describe mode). The designed paragraph
+ * describes only the sound, so this sentence carries what the song is about: the customer's request, quoted, and
+ * the brand and words to include (real run of 2026-11-21: the brand and the message never reached the engine).
+ * Ours, added after the model's paragraph and its check; '' for an instrumental or written lyrics.
+ */
+export function subjectSentence(input: MusicDesignInput): string {
+  if (!sungWithoutLyrics(input)) return '';
+  const flat = input.prompt.replace(/\s+/g, ' ').replace(/"/g, "'").trim();
+  const about = flat.length > SUBJECT_QUOTE_MAX ? `${flat.slice(0, SUBJECT_QUOTE_MAX - 1).trim()}…` : flat;
+  return [`The lyrics are about this brief, in the customer's words: "${about}".`, wordsLine(wordsOf(input))].filter(Boolean).join(' ');
+}
+
 /** The deterministic design: exactly what the studio sent before the Architect (§12.2 "대체 결과"). */
 export function fallbackDesign(input: MusicDesignInput, reason?: string): MusicDesign {
   const mode = wayOf(input);
   const lyrics = input.vocal ? ownLyrics(input.lyrics) : '';
-  const style = mode === 'describe' ? describeSentence(input.prompt, input.vocal, input.language) : musicStyle(input.prompt, input.vocal, Boolean(lyrics), input.language);
+  // The fallback already sends the request itself; with no lyrics it adds only the words the options asked for.
+  const words = sungWithoutLyrics(input) ? wordsLine(wordsOf(input)) : '';
+  const style =
+    mode === 'describe'
+      ? [describeSentence(input.prompt, input.vocal, input.language), words].filter(Boolean).join(' ')
+      : musicStyle(input.prompt, input.vocal, Boolean(lyrics), input.language);
   return {
     mode,
     style: style.slice(0, DESIGN_LIMITS.styleHardMax),
@@ -120,25 +168,34 @@ const SECONDS = /\b\d+(?:\.\d+)?\s*(?:s|sec|secs|second|seconds|min|mins|minute|
  */
 export function safeNotes(notes: string | null | undefined): string | null {
   const text = (notes ?? '').replace(/\s+/g, ' ').trim().slice(0, DESIGN_LIMITS.notesMax);
-  if (!text || namedArtist(text) || INTERNAL_TERMS.test(text)) return null;
+  // The customer's claim ("국내 최고 브랜드의 위상") is not repeated back to them (real run, 2026-11-21).
+  if (!text || namedArtist(text) || INTERNAL_TERMS.test(text) || SUPERLATIVE.test(text) || /\b(?:best|greatest|finest)\b/i.test(text)) return null;
   return text;
 }
 
-/** Problems in a design, for the one rewrite (empty when it may be sent). Pure: the same check runs on an edited design. */
-export function checkMusicDesign(design: { style: string; title?: string }, mode: MusicWay): string[] {
+const squash = (text: string) => text.replace(/[\s.,!?()\[\]'"·…-]+/g, '').toLowerCase();
+
+/**
+ * Problems in a design, for the one rewrite (empty when it may be sent). Pure. `request` (the customer's words) lets
+ * it catch a title that only copies their first words; `styleMax` is lower when a subject sentence follows the style.
+ */
+export function checkMusicDesign(design: { style: string; title?: string }, _mode: MusicWay, request?: string, styleMax: number = DESIGN_LIMITS.styleHardMax): string[] {
   const problems: string[] = [];
   const style = design.style.trim();
   if (style.length < 40) problems.push('the style paragraph is too short');
-  if (style.length > DESIGN_LIMITS.styleHardMax) problems.push(`the style is over ${DESIGN_LIMITS.styleHardMax} characters`);
+  if (style.length > styleMax) problems.push(`the style is over ${styleMax} characters`);
   if (/\n/.test(style)) problems.push('the style must be one paragraph without line breaks');
   if (INTERNAL_TERMS.test(style)) problems.push('the style names the service or a technical term');
   if (namedArtist(style)) problems.push('the style names a real artist or song');
   if (SECONDS.test(style)) problems.push('the style gives a length in seconds or minutes');
-  if (mode === 'custom') {
-    const title = (design.title ?? '').trim();
-    if (!title) problems.push('a title is required');
-    if (title.length > DESIGN_LIMITS.titleMax) problems.push(`the title is over ${DESIGN_LIMITS.titleMax} characters`);
-    if (namedArtist(title)) problems.push('the title names a real artist or song');
+  // The title is the track's name in the list in both modes (custom mode also sends it).
+  const title = (design.title ?? '').trim();
+  if (!title) problems.push('a title is required');
+  if (title.length > DESIGN_LIMITS.titleMax) problems.push(`the title is over ${DESIGN_LIMITS.titleMax} characters`);
+  if (namedArtist(title)) problems.push('the title names a real artist or song');
+  if (SUPERLATIVE.test(title)) problems.push('the title carries a superlative or a claim');
+  if (request && title && squash(title).length >= 4 && squash(request).startsWith(squash(title))) {
+    problems.push('the title copies the start of the request; give the track a short name of its own');
   }
   return problems;
 }
@@ -155,7 +212,7 @@ const DESIGN_SCHEMA = {
   required: ['style', 'title', 'notes'],
 } as const;
 
-function taskBlock(input: MusicDesignInput, mode: MusicWay): string {
+function taskBlock(input: MusicDesignInput, mode: MusicWay, styleMax: number): string {
   const lines = [
     mode === 'describe'
       ? 'This run sends the style paragraph alone as the description of the track (no title, no lyrics).'
@@ -165,6 +222,9 @@ function taskBlock(input: MusicDesignInput, mode: MusicWay): string {
         ? 'There are vocals and the customer wrote the lyrics: the voice sings them as written. Name the language of the lyrics in the voice sentence. Never quote or change the lyrics.'
         : `There are vocals and no lyrics: name the language to sing in, ${input.language === 'ko' ? 'Korean' : 'English'}, in the voice sentence.`
       : 'Instrumental: name what carries the melody; never mention a voice except to say the piece is instrumental.',
+    ...(styleMax < DESIGN_LIMITS.styleHardMax
+      ? [`Keep the style under ${styleMax} characters: a sentence saying what the song is about is added after it. Do not write the lyrics or the message yourself.`]
+      : []),
     `Notes language: ${input.locale === 'ko' ? 'Korean (해요체, one sentence)' : 'English (one sentence)'}.`,
     ...(input.video ? [videoDesignLine(input.video)] : []),
     ...(input.avoid
@@ -200,7 +260,10 @@ export async function designMusic(input: MusicDesignInput, deps: DesignDeps): Pr
   const mode = wayOf(input);
   const config = studioGeminiConfig(deps.env);
   if (!config) return fallbackDesign(input, 'no_key');
-  const system = `${SUNO_PROFILE}\n\n${taskBlock(input, mode)}`;
+  const subject = subjectSentence(input);
+  // The whole request stays within what the dock can show and send back (1,000 characters).
+  const styleMax = subject ? DESIGN_LIMITS.styleHardMax - subject.length - 1 : DESIGN_LIMITS.styleHardMax;
+  const system = `${SUNO_PROFILE}\n\n${taskBlock(input, mode, styleMax)}`;
   let problems: string[] = [];
   for (let attempt = 0; attempt < 2; attempt += 1) {
     const text = attempt === 0
@@ -222,12 +285,12 @@ export async function designMusic(input: MusicDesignInput, deps: DesignDeps): Pr
       return fallbackDesign(input, 'model_error');
     }
     const design = { style: answer.style.replace(/\s+/g, ' ').trim(), title: answer.title.trim() };
-    problems = checkMusicDesign(design, mode);
+    problems = checkMusicDesign(design, mode, input.prompt, styleMax);
     if (problems.length === 0) {
       return {
         mode,
-        style: design.style,
-        title: mode === 'custom' ? design.title : musicTitle(input.prompt),
+        style: subject ? `${design.style} ${subject}` : design.style,
+        title: design.title,
         lyrics: markLyrics(input.vocal ? input.lyrics : '', input.structure ?? null),
         notes: safeNotes(answer.notes),
         source: 'model',

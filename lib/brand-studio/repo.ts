@@ -94,6 +94,13 @@ function countedOutputs(row: JobRow, outputs: OutputRow[]): number {
   return row.usage_krw != null && ready > 0 ? ready : Math.max(1, mine.length);
 }
 
+/** A music run's name in the list: the title the music Architect gave it once designed, else the one kept at creation. */
+function listTitle(row: JobRow): string {
+  const enhancer = row.work?.enhancer as { profile?: string; title?: string } | undefined;
+  const designed = enhancer?.profile === 'suno' ? enhancer.title?.trim() : '';
+  return designed || row.params.music!.title;
+}
+
 export function jobView(row: JobRow, outputs: OutputRow[], media: StudioMediaStore): StudioJobView {
   const p = row.params ?? ({} as JobRow['params']);
   // A finished clip on a model with drafts: its drafts carry what their 1080p final takes, priced by the
@@ -113,7 +120,7 @@ export function jobView(row: JobRow, outputs: OutputRow[], media: StudioMediaSto
             : null
       : undefined;
   const music = row.kind === 'music' && p.music
-    ? { music: { title: p.music.title, vocal: p.music.vocal, mode: p.music.mode, careful: p.music.careful, lyrics: p.music.lyrics ?? null, ...(p.music.targetSeconds ? { targetSeconds: p.music.targetSeconds } : {}) } }
+    ? { music: { title: listTitle(row), vocal: p.music.vocal, mode: p.music.mode, careful: p.music.careful, lyrics: p.music.lyrics ?? null, ...(p.music.targetSeconds ? { targetSeconds: p.music.targetSeconds } : {}) } }
     : {};
   return {
     ...music,
