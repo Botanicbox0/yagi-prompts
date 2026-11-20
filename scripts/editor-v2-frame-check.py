@@ -61,7 +61,7 @@ def check(name, ok, detail=''):
 
 def main():
     with sync_playwright() as p:
-        browser = p.chromium.launch(headless=True)
+        browser = p.chromium.launch(headless=True, channel=os.environ.get("EDITOR_BROWSER_CHANNEL", "chromium"))
         context = browser.new_context(viewport={'width': 1440, 'height': 900}, device_scale_factor=1)
         context.add_cookies([{'name': 'playbook.locale', 'value': 'ko', 'url': BASE}])
         context.route('**/*', lambda route: route.continue_() if route.request.url.startswith((BASE, 'data:', 'blob:')) else route.abort())

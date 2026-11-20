@@ -96,7 +96,7 @@ def frame_tuple(clip):
 
 def main():
     with sync_playwright() as p:
-        browser = p.chromium.launch(headless=True)
+        browser = p.chromium.launch(headless=True, channel=os.environ.get("EDITOR_BROWSER_CHANNEL", "chromium"))
         context = browser.new_context(viewport={'width': 1440, 'height': 900}, device_scale_factor=1)
         context.add_cookies([{'name': 'playbook.locale', 'value': 'ko', 'url': BASE}])
         context.route('**/*', lambda route: route.continue_() if route.request.url.startswith((BASE, 'data:', 'blob:')) else route.abort())
@@ -289,27 +289,41 @@ def main():
         page.wait_for_timeout(1500)
         check('(g) the same link again does not add it twice', len(page.evaluate(V2_STATE)['clips']) == 6 and 'clip=' not in page.url)
 
-        # ── (h) Another tab changes the film: v2 reads it again and starts its undo over ──
-        page.mouse.click(700, 400)
-        press('Home')
-        press('ArrowRight', 3)
-        press('s')
-        page.wait_for_timeout(200)
-        page.keyboard.press('Control+z')    # leaves an undo step behind, nothing waiting to be written
-        page.wait_for_timeout(700)
-        redo = page.locator('[data-editor-undo] + button')
-        had_redo = not redo.is_disabled()
-        before_tab = page.evaluate(V2_STATE)
+        # ── (h) Another tab changes the film (lib/brand-studio/editor-v2/film-session.ts, review round 1 item 7) ──
+        # (h1) v2 has no edits of its own since it opened the film: it opens the other tab's film, undo starts over.
         other = context.new_page()
         other.goto(f'{BASE}/brand/studio/compose?classic=1&organizationId={ORG}', wait_until='domcontentloaded', timeout=240000)
         other.wait_for_selector('[data-brand-studio-compose]', timeout=120000)
         other.wait_for_timeout(1200)
+        before_tab = page.evaluate(V2_STATE)
         other.fill('[data-compose-trim-start="0"]', '1')
-        other.wait_for_timeout(1500)
+        page.wait_for_function('(want) => Number(document.querySelector("[data-editor-clip=\\"1\\"]")?.dataset.inFrame) === want', arg=round(1 * before_tab['fps']), timeout=8000)
         after_tab = page.evaluate(V2_STATE)
-        check('(h) a change in another tab reaches v2 without a reload', after_tab['clips'][0]['inFrame'] == round(1 * after_tab['fps']) and after_tab['clips'][0] != before_tab['clips'][0] and after_tab['clips'][1:] == before_tab['clips'][1:],
+        check('(h1) no edits of v2’s own: a change in another tab reaches v2 without a reload', after_tab['clips'][0]['inFrame'] == round(1 * after_tab['fps']) and after_tab['clips'][1:] == before_tab['clips'][1:],
               f"cut 1 in-frame {before_tab['clips'][0]['inFrame']} → {after_tab['clips'][0]['inFrame']}")
-        check('(h) and v2 starts its undo history over', had_redo and redo.is_disabled() and page.locator('[data-editor-undo]').is_disabled(), f'redo before {had_redo}')
+        check('(h1) and v2’s undo history starts over', page.locator('[data-editor-undo]').is_disabled())
+        # (h2) v2 HAS written an edit of its own, then the other tab changes the cuts: one bar, two choices;
+        #      "open the other tab's film" opens it and starts undo over (v2 cannot tell this tab from a stale one).
+        page.bring_to_front()
+        page.mouse.click(700, 400)
+        press('Home')
+        press('ArrowDown')                 # first frame of cut 2: the first and last cuts stay as they are
+        press('ArrowRight', 5)
+        press('s')
+        page.wait_for_timeout(900)
+        mine = page.evaluate(V2_STATE)
+        check('(h2) v2 wrote its own split', len(stored()['clips']) == len(mine['clips']) == len(after_tab['clips']) + 1)
+        other.bring_to_front()
+        other.reload(wait_until='domcontentloaded')
+        other.wait_for_selector('[data-brand-studio-compose]', timeout=120000)
+        other.wait_for_timeout(1200)
+        other.fill('[data-compose-trim-start="0"]', '0.5')
+        page.bring_to_front()
+        page.wait_for_selector('[data-editor-conflict]', timeout=8000)
+        check('(h2) v2 neither opens the other film nor writes over it: it asks', page.evaluate(V2_STATE)['clips'] == mine['clips'] and stored()['clips'][0]['trimStartSec'] == 0.5)
+        page.click('[data-editor-conflict-open]')
+        page.wait_for_function('(want) => Number(document.querySelector("[data-editor-clip=\\"1\\"]")?.dataset.inFrame) === want', arg=round(0.5 * mine['fps']), timeout=8000)
+        check('(h2) “open the other tab’s film” opens it and starts undo over', page.locator('[data-editor-conflict]').count() == 0 and page.locator('[data-editor-undo]').is_disabled())
         other.close()
 
         # ── (i) "말로 편집" on a real film: the cut sentences work, the rest says it is not ready ──
@@ -323,6 +337,40 @@ def main():
         page.keyboard.press('Enter')
         page.wait_for_timeout(300)
         check('(i) a caption sentence is answered as not ready, with nothing to apply', page.locator('[data-editor-proposal]').count() == 1 and page.locator('[data-editor-apply]').count() == 0)
+
+        # ── (j) A caption the current editor made inside the last cut survives deleting that cut in v2
+        #        (review round 1, item 1): hidden while the film is shorter, back after undo, and in storage throughout.
+        open_current()
+        total = sum(c['end'] - c['start'] for c in current_cuts())
+        page.click('[data-compose-source-tab="captions"]')
+        page.wait_for_timeout(300)
+        page.locator('[data-compose-stage] input[type="range"][step="0.1"]').first.fill(f'{round(total - 0.6, 1)}')
+        page.wait_for_timeout(300)
+        page.fill('[data-compose-caption-input]', '마지막 컷 자막')
+        page.click('[data-compose-caption-add]')
+        page.wait_for_timeout(900)
+        made = [x for x in stored()['captions'] if x['text'] == '마지막 컷 자막']
+        check('(j) the current editor stored a caption inside the last cut', len(made) == 1 and made[0]['startSec'] >= round(total - 0.6, 1) - 1e-9, json.dumps(made, ensure_ascii=False))
+        if made:
+            caption = made[0]
+            j = open_v2()
+            lane = lambda: page.evaluate("(id) => document.querySelectorAll(`[data-editor-caption-item=\"${id}\"]`).length", caption['id'])
+            check('(j) v2 shows it on the caption lane', lane() == 1)
+            last = page.locator(f'[data-editor-clip="{len(j["clips"])}"]').bounding_box()
+            page.mouse.click(last['x'] + last['width'] / 2, last['y'] + last['height'] / 2)
+            page.wait_for_timeout(150)
+            page.keyboard.press('Delete')
+            page.wait_for_timeout(1000)
+            after = stored()
+            same = [x for x in after['captions'] if x['id'] == caption['id']]
+            check('(j) deleting the last cut in v2 leaves the caption in storage exactly as it was', len(after['clips']) == len(j['clips']) - 1 and same == [caption],
+                  f'{len(j["clips"])} → {len(after["clips"])} cuts; caption {json.dumps(same, ensure_ascii=False)}')
+            check('(j) …and only hides it on screen (the film is shorter than the caption)', lane() == 0)
+            page.keyboard.press('Control+z')
+            page.wait_for_timeout(1000)
+            check('(j) undo brings the cut back and the caption shows again', lane() == 1 and len(stored()['clips']) == len(j['clips']))
+            open_v2()
+            check('(j) after a reload it is still there, on the lane and in storage', lane() == 1 and [x for x in stored()['captions'] if x['id'] == caption['id']] == [caption])
 
         # The same film at the smaller desktop width.
         page.set_viewport_size({'width': 1280, 'height': 800})
