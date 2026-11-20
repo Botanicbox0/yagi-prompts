@@ -10,7 +10,7 @@ import type { ProfileHeader } from './meta';
 
 export const SUNO_HEADER: ProfileHeader = {
   id: 'suno',
-  version: '2026-11-20.1',
+  version: '2026-11-21.1',
   models: ['suno-v6'],
   sources: [
     {
@@ -44,12 +44,17 @@ export const SUNO_HEADER: ProfileHeader = {
       claim: 'write the ending (how the song stops); without it v6 repeats the chorus to a fade [practitioner]',
     },
     {
+      url: 'docs/research/brand-sound-studio-2026-11-20/sung-confirmation.md',
+      seen: '2026-11-21',
+      claim: 'an instrumental request with section marks in the lyrics is refused ("lyrics must be empty when instrumental is true"); instrumentals came back at 142-190 s; sung Korean ran 0.7-2.8 syllables a second by tempo; two songs of one request differed in length by up to 2.5x [house]',
+    },
+    {
       url: 'docs/research/brand-sound-studio-2026-11-20/suno-via-sunra.md',
       seen: '2026-11-20',
       claim: 'field limits: style 1,000, lyrics 5,000, title 80, prompt 3,000; a vocal track without lyrics sang in the language the style named (two of two, Korean) [aggregator, house]',
     },
   ],
-  lastVerified: '2026-11-20',
+  lastVerified: '2026-11-21',
 };
 
 /**
@@ -65,17 +70,20 @@ Write the style as ONE paragraph of plain English, 400 to 900 characters, in thi
 4. Two or three instruments, one short sentence each on what that instrument does.
 5. Structure in a phrase (a short intro, where the hook lands, the build).
 6. Mix and space in a phrase (warm and close, airy, punchy low end).
-7. How it ends ("ends cleanly on a held chord", "a short tag and a clean stop").
 
-Write what you want to hear, never "no X" or "without X": for an instrumental, name what plays the melody. Never write a length in seconds or minutes, mixing console values, or a pile of adjectives. Never name a real singer, band, song, album, producer or label: describe the era and the musical traits instead. No brand names other than one the request itself gives, and never in the style.
+Never write a length in seconds or minutes, mixing console values, or a pile of adjectives. Never name a real singer, band, song, album, producer or label: describe the era and the musical traits instead. No brand names other than one the request itself gives, and never in the style.
 
 Title: a short title (at most 40 characters) in the language of the lyrics, or of the customer's request when there are none.
 
 Notes: one plain sentence in the customer's language saying what you designed (genre, voice, feel), for the customer to read.`;
 // [official] no artist or song names (Suno blog); more direction is better (help); a written length is not kept (Suno's own
 // ad example: "15 seconds max" came back at 39 s); Max Mode is for long songs. [practitioner] English paragraph, one sentence per
-// instrument, order, BPM with a feel word, positive wording, write the ending. [aggregator] field limits (Sunra schema).
+// instrument, order, BPM with a feel word. [aggregator] field limits (Sunra schema).
 // [house] the language named in the style is the language sung (smoke test 2026-11-20, two of two).
-// Applied because §12.2 asks for them, still to be proved on our own output (§12.6): the 400–900 character paragraph against
-// short keywords (a), the written ending (b), positive wording against "no X" (f). Not in the profile until proved: [End] lines,
-// lyric quantity vs. length (c), instrumental length from section-only lyrics (d), brand-name spelling for pronunciation (e).
+// [house] from the sung confirmation (§12.8, 2026-11-20, 42 songs): no lyrics at all for an instrumental (the engine refuses even
+// section marks), and its length (142–190 s) is fitted only by the length tool; sung Korean runs about 1.6 syllables a second at
+// 110 BPM and above, 1.2 at 90–110, 0.9 below 90, so the lyrics amount sets only a rough range (one request's two songs
+// differed up to 2.5x). These shape the lyrics engine (../../sound/lyrics.ts), not this paragraph.
+// Applied because §12.2 asks for it, still to be proved by ear (§12.6 a): the 400–900 character paragraph against short keywords.
+// Held out until the founder's listening result (§12.8, §8-11): how it ends (b), Latin vs Hangul brand names (e), positive
+// wording against "no X" (f). See CHANGELOG 2026-11-21.1.

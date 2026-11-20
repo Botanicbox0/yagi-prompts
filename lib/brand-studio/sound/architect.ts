@@ -8,7 +8,7 @@
  *  - The customer's own lyrics are never rewritten here: only section marks are added (./lyrics.ts). Changing
  *    lyrics is the lyrics engine's, and only when asked (§12.3, SA2).
  *  - After writing, a rule check without a model (`checkMusicDesign`, the image Architect's `checkEnhancedPrompt`
- *    place): limits, no names, no "no X", no length in seconds. A failure gets one rewrite with the problems
+ *    place): limits, no names, no length in seconds (the "no X" rule is held out until the founder has listened, CHANGELOG 2026-11-21.1). A failure gets one rewrite with the problems
  *    listed; a second failure, no key, a timeout or any error falls back to the deterministic design (what the
  *    studio did before the Architect: the description cut to 900 characters plus the language line).
  *  - Free: no credits. The preview (`music.design`) is limited per organization like `prompt.enhance`.
@@ -105,7 +105,6 @@ export function fallbackDesign(input: MusicDesignInput, reason?: string): MusicD
 }
 
 const INTERNAL_TERMS = /\b(suno|sunra|max[_ ]mode|inspire-mode|custom-mode|api|endpoint|prompt architect|json)\b/i;
-const NEGATIVE = /\b(?:no|without)\s+(?:[a-z]+\s+){0,1}(?:vocals?|voices?|singing|lyrics|drums?|guitars?|piano|bass|synths?|strings|percussion|instruments?|beats?|choir|reverb|autotune)\b/i;
 const SECONDS = /\b\d+(?:\.\d+)?\s*(?:s|sec|secs|second|seconds|min|mins|minute|minutes)\b|\d+\s*(?:초|분)/i;
 
 /** Problems in a design, for the one rewrite (empty when it may be sent). Pure: the same check runs on an edited design. */
@@ -117,7 +116,6 @@ export function checkMusicDesign(design: { style: string; title?: string }, mode
   if (/\n/.test(style)) problems.push('the style must be one paragraph without line breaks');
   if (INTERNAL_TERMS.test(style)) problems.push('the style names the service or a technical term');
   if (namedArtist(style)) problems.push('the style names a real artist or song');
-  if (NEGATIVE.test(style)) problems.push('the style says "no X" or "without X"; describe what plays instead');
   if (SECONDS.test(style)) problems.push('the style gives a length in seconds or minutes');
   if (mode === 'custom') {
     const title = (design.title ?? '').trim();

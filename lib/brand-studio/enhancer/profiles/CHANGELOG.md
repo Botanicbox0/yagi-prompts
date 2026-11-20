@@ -4,6 +4,16 @@ Every rule change bumps the `version` in the file's header, adds a line here, an
 tables of `scripts/architect-eval.ts` in the PR. Jobs record the versions they were written with
 (`work.enhancer.profileVersion`, `coreVersion`).
 
+## suno 2026-11-21.1 (music: three rules held out, sung confirmation)
+
+- **Held out until the founder has listened** (docs/BRAND-SOUND-STUDIO.md §12.8, listening sheet pairs b, e, f): the
+  ending line of the order ("how it ends"), the "never no X / without X" wording rule (also dropped from
+  `checkMusicDesign`, so a design saying "no vocals" is no longer rewritten), and any rule on writing a brand in Latin
+  letters or Hangul (the profile never had one). They come back, or not, with his result.
+- New `[house]` source: the sung confirmation (42 songs). No lyrics for an instrumental, instrumentals fitted only by
+  the length tool, singing rate by tempo, lyrics amount sets only a range. These govern the lyrics engine, not the
+  style paragraph, so the paragraph rules are otherwise unchanged.
+
 ## suno 2026-11-20.1 (music, new)
 
 - **New profile for Suno v6** (`suno.ts`, docs/BRAND-SOUND-STUDIO.md §12.1–§12.2): one English style paragraph of

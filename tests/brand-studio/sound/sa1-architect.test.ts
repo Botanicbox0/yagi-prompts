@@ -4,7 +4,7 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { STUDIO_CREDIT_KRW } from '@/lib/brand-studio/credits';
 import { advanceStudioJobsWith } from '@/lib/brand-studio/engine';
 import { studioEnv } from '@/lib/brand-studio/env';
-import { SUNO_HEADER } from '@/lib/brand-studio/enhancer/profiles/suno';
+import { SUNO_HEADER, SUNO_PROFILE } from '@/lib/brand-studio/enhancer/profiles/suno';
 import { createStudioJob, resetFreeIntelRateLimits } from '@/lib/brand-studio/jobs';
 import type { StudioProvider, StudioProviderRequest } from '@/lib/brand-studio/provider/types';
 import { runStudioOperation } from '@/lib/brand-studio/service';
@@ -72,8 +72,6 @@ describe('the rule check after writing', () => {
       [`${GOOD_STYLE}\nSecond paragraph here, warm.`, /one paragraph/],
       [`${GOOD_STYLE} Made for Suno v6.`, /service or a technical term/],
       [`${GOOD_STYLE} In the style of Taylor Swift.`, /real artist/],
-      [`${GOOD_STYLE} No vocals at all.`, /no X/],
-      [`${GOOD_STYLE} Played without drums.`, /no X/],
       [`${GOOD_STYLE} Keep it to 30 seconds.`, /seconds or minutes/],
       [`${GOOD_STYLE} 15초 광고용.`, /seconds or minutes/],
     ];
@@ -81,6 +79,12 @@ describe('the rule check after writing', () => {
     expect(checkMusicDesign({ style: GOOD_STYLE, title: '' }, 'custom').join()).toMatch(/title is required/);
     expect(checkMusicDesign({ style: GOOD_STYLE, title: 'x'.repeat(41) }, 'custom').join()).toMatch(/title is over 40/);
     expect(checkMusicDesign({ style: GOOD_STYLE, title: '맑은 아침' }, 'custom')).toEqual([]);
+  });
+
+  it('holds out the ending, "no X" and brand-spelling rules until the founder has listened (2026-11-21.1)', () => {
+    expect(checkMusicDesign({ style: `${GOOD_STYLE} No vocals at all.` }, 'describe')).toEqual([]);
+    expect(SUNO_PROFILE).not.toMatch(/How it ends|never "no X"/);
+    expect(SUNO_HEADER.version).toBe('2026-11-21.1');
   });
 });
 
@@ -104,11 +108,11 @@ describe('designing', () => {
   });
 
   it('gives one rewrite with the problems listed, then falls back', async () => {
-    const bad = { style: `${GOOD_STYLE} No vocals.`, title: '', notes: 'x' };
+    const bad = { style: `${GOOD_STYLE} Keep it to 30 seconds.`, title: '', notes: 'x' };
     const fixed = geminiAnswers(bad, { style: GOOD_STYLE, title: '', notes: 'ok' });
     expect((await designMusic(input(), { fetch: fixed.fetchStub, env })).source).toBe('model');
     expect(fixed.calls).toHaveLength(2);
-    expect(fixed.calls[1]!.body.contents[0]!.parts[0]!.text).toContain('"no X"');
+    expect(fixed.calls[1]!.body.contents[0]!.parts[0]!.text).toContain('seconds or minutes');
     const twice = geminiAnswers(bad, bad);
     expect(await designMusic(input(), { fetch: twice.fetchStub, env })).toMatchObject({ source: 'fallback', fallbackReason: 'check_failed' });
     const broken = geminiAnswers(new Error('timeout'));
