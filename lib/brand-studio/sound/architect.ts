@@ -133,7 +133,9 @@ export function subjectSentence(input: MusicDesignInput): string {
   if (!sungWithoutLyrics(input)) return '';
   const flat = input.prompt.replace(/\s+/g, ' ').replace(/"/g, "'").trim();
   const about = flat.length > SUBJECT_QUOTE_MAX ? `${flat.slice(0, SUBJECT_QUOTE_MAX - 1).trim()}…` : flat;
-  return [`The lyrics are about this brief, in the customer's words: "${about}".`, wordsLine(wordsOf(input))].filter(Boolean).join(' ');
+  // Shown in the dock too: no full stop after a quote that already ends a sentence (review of #296).
+  const stop = /[.!?。…]$/u.test(about) ? '' : '.';
+  return [`The lyrics are about: "${about}"${stop}`, wordsLine(wordsOf(input))].filter(Boolean).join(' ');
 }
 
 /** The deterministic design: exactly what the studio sent before the Architect (§12.2 "대체 결과"). */
@@ -188,8 +190,16 @@ export function checkMusicDesign(design: { style: string; title?: string }, _mod
   if (INTERNAL_TERMS.test(style)) problems.push('the style names the service or a technical term');
   if (namedArtist(style)) problems.push('the style names a real artist or song');
   if (SECONDS.test(style)) problems.push('the style gives a length in seconds or minutes');
-  // The title is the track's name in the list in both modes (custom mode also sends it).
-  const title = (design.title ?? '').trim();
+  return [...problems, ...checkMusicTitle(design.title ?? '', request)];
+}
+
+/**
+ * The title's own problems. The title is the track's name in the list in both modes (custom mode also sends it).
+ * Without `request` it skips the "copies the request" rule (the safe-name check below).
+ */
+export function checkMusicTitle(raw: string, request?: string): string[] {
+  const problems: string[] = [];
+  const title = raw.trim();
   if (!title) problems.push('a title is required');
   if (title.length > DESIGN_LIMITS.titleMax) problems.push(`the title is over ${DESIGN_LIMITS.titleMax} characters`);
   if (namedArtist(title)) problems.push('the title names a real artist or song');
@@ -198,6 +208,20 @@ export function checkMusicDesign(design: { style: string; title?: string }, _mod
     problems.push('the title copies the start of the request; give the track a short name of its own');
   }
   return problems;
+}
+
+/** A fixed name when no other is safe, in the language the title would be in (Gemma 2 passes: "곡" over "음악" for one track). */
+export const PLAIN_TITLE: Readonly<Record<'ko' | 'en', string>> = { ko: '새 곡', en: 'New track' };
+
+/**
+ * The name used when the model's title failed twice but its style is good (review of #296): the request's first
+ * words if they hold the hard title rules (as the fallback design names a track), otherwise `PLAIN_TITLE`.
+ */
+export function safeTitle(input: MusicDesignInput, mode: MusicWay): string {
+  const fromRequest = musicTitle(input.prompt);
+  if (checkMusicTitle(fromRequest).length === 0) return fromRequest;
+  const korean = mode === 'custom' && input.lyrics.trim() ? /[가-힣]/.test(input.lyrics) : input.locale === 'ko';
+  return PLAIN_TITLE[korean ? 'ko' : 'en'];
 }
 
 const DesignAnswer = z.object({
@@ -265,6 +289,7 @@ export async function designMusic(input: MusicDesignInput, deps: DesignDeps): Pr
   const styleMax = subject ? DESIGN_LIMITS.styleHardMax - subject.length - 1 : DESIGN_LIMITS.styleHardMax;
   const system = `${SUNO_PROFILE}\n\n${taskBlock(input, mode, styleMax)}`;
   let problems: string[] = [];
+  let lastStyleOk: { style: string; notes: string } | null = null;
   for (let attempt = 0; attempt < 2; attempt += 1) {
     const text = attempt === 0
       ? JSON.stringify(payloadOf(input))
@@ -298,7 +323,24 @@ export async function designMusic(input: MusicDesignInput, deps: DesignDeps): Pr
         llmModel: config.model,
       };
     }
+    // `problems` is the style's problems followed by the title's: equal counts mean only the title failed.
+    const titleOnly = problems.length === checkMusicTitle(design.title, input.prompt).length;
+    lastStyleOk = titleOnly ? { style: design.style, notes: answer.notes } : null;
     deps.log?.('studio_music_design_rejected', { attempt, problems: problems.join('; ').slice(0, 300) });
+  }
+  // Only the title failed, twice: the designed style is good and stays; the name is a safe one (review of #296).
+  if (lastStyleOk) {
+    return {
+      mode,
+      style: subject ? `${lastStyleOk.style} ${subject}` : lastStyleOk.style,
+      title: safeTitle(input, mode),
+      lyrics: markLyrics(input.vocal ? input.lyrics : '', input.structure ?? null),
+      notes: safeNotes(lastStyleOk.notes),
+      source: 'model',
+      fallbackReason: 'title_check_failed',
+      profileVersion: MUSIC_PROFILE_VERSION,
+      llmModel: config.model,
+    };
   }
   return fallbackDesign(input, 'check_failed');
 }
