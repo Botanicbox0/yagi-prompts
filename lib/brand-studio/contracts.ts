@@ -10,6 +10,8 @@
 import { z } from 'zod';
 import type { StudioStorageQuotaView } from '@/lib/brands/storage-quota-format';
 import { STUDIO_IMAGE_BACKGROUNDS, STUDIO_IMAGE_QUALITIES, type StudioImageQuality } from './models';
+import { LYRIC_STRUCTURES } from './sound/lyrics';
+import type { LyricsModel } from './sound/lyrics-model';
 import {
   ReviseQuestionSchema,
   ReviseSheetSchema,
@@ -566,11 +568,38 @@ export const FilmAnalyzeSchema = z.object({ organizationId: Id, assetId: Id, dep
 
 export const AssetRefSchema = z.object({ organizationId: Id, assetId: Id });
 export const OutputRefSchema = z.object({ organizationId: Id, outputId: Id });
-/** `lyrics.draft`: a first draft of lyrics for the sound studio (docs/BRAND-SOUND-STUDIO.md §7.5). Free, rate-limited. */
+/**
+ * `lyrics.draft`: lyrics for the sound studio (docs/BRAND-SOUND-STUDIO.md §7.5, §12.3). Free, rate-limited.
+ * `topic` writes new lyrics from the description ("가사 초안 만들기"); `polish` returns the customer's lyrics made
+ * easier to sing ("부르기 좋게 손보기"), shown next to the original and used only if the customer accepts it.
+ */
 export const LyricsDraftSchema = z
-  .object({ organizationId: Id, topic: z.string().trim().min(1).max(1000), language: z.enum(['ko', 'en']) })
-  .strict();
-export type StudioLyricsDraft = { ok: true; lyrics: string };
+  .object({
+    organizationId: Id,
+    flow: z.enum(['topic', 'polish']).default('topic'),
+    /** The description (what the music is for). Required to write from a topic; context for a polish. */
+    topic: z.string().trim().max(1000).default(''),
+    /** `polish`: the customer's lyrics. */
+    lyrics: z.string().max(3000).optional(),
+    language: z.enum(['ko', 'en', 'mixed']),
+    /** 가사 길이: 15, 30, 60 s or a video's length. */
+    seconds: z.number().int().min(5).max(240).optional(),
+    structure: z.enum(LYRIC_STRUCTURES).optional(),
+    tone: z.enum(['haeyo', 'banmal']).optional(),
+    /** The brand or product name as the brief writes it, and how to write it in Korean lyrics (e.g. 에코핀). */
+    brand: z.object({ name: z.string().trim().min(1).max(60), readAs: z.string().trim().max(60).optional() }).strict().optional(),
+    mustInclude: z.array(z.string().trim().min(1).max(40)).max(5).optional(),
+  })
+  .strict()
+  .refine((v) => (v.flow === 'topic' ? v.topic.length > 0 : Boolean(v.lyrics?.trim())));
+export type StudioLyricsDraft = {
+  ok: true;
+  flow: 'topic' | 'polish';
+  /** Plain stanzas (no marks), as the lyrics box shows them. */
+  lyrics: string;
+  /** Which model wrote them, sent back with the music request so the run records it (`params.music.lyricsBy`). */
+  model: LyricsModel | 'local';
+};
 /** `music.design`: "지금 설계하기" in the music dock (docs/BRAND-SOUND-STUDIO.md §12.2). Free, rate-limited. */
 export const MusicDesignSchema = z
   .object({
@@ -580,6 +609,7 @@ export const MusicDesignSchema = z
     lyrics: z.string().max(3000).optional(),
     careful: z.boolean().optional(),
     language: z.enum(['ko', 'en']).optional(),
+    structure: z.enum(LYRIC_STRUCTURES).optional(),
   })
   .strict();
 export type StudioMusicDesign = {
@@ -750,7 +780,7 @@ export interface StudioJobView {
   /** `fill`: an internal "빈 곳 채우기" strip. Screens that list runs or results skip it. */
   purpose?: 'fill';
   /** Music only (docs/BRAND-SOUND-STUDIO.md §7.2): the list name and what the customer chose. */
-  music?: { title: string; vocal: boolean; mode: 'describe' | 'custom'; careful: boolean; lyrics: string | null };
+  music?: { title: string; vocal: boolean; mode: 'describe' | 'custom'; careful: boolean; lyrics: string | null; targetSeconds?: number | null };
   /** Remix only: how the reference video was used, what was kept and what was changed. */
   method: StudioRemixMethod | null;
   keep: StudioKeepKey[];

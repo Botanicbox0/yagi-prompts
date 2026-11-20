@@ -9,7 +9,7 @@ import { createStudioJob, resetFreeIntelRateLimits } from '@/lib/brand-studio/jo
 import type { StudioProvider, StudioProviderRequest } from '@/lib/brand-studio/provider/types';
 import { runStudioOperation } from '@/lib/brand-studio/service';
 import { checkMusicDesign, designMusic, fallbackDesign, MUSIC_PROFILE_VERSION, reviewedDesign, type MusicDesignInput } from '@/lib/brand-studio/sound/architect';
-import { withSections } from '@/lib/brand-studio/sound/lyrics';
+import { markLyrics, withoutAddedLines } from '@/lib/brand-studio/sound/lyrics';
 import { describeSentence, musicTitle } from '@/lib/brand-studio/sound/music-text';
 import { requestId, studioDeps, studioFixture, viewerOf, type StudioFixture } from '../server/helpers';
 
@@ -124,8 +124,8 @@ describe('designing', () => {
     const { fetchStub, calls } = geminiAnswers({ style: GOOD_STYLE, title: '맑은 아침', notes: 'ok' });
     const design = await designMusic(input({ vocal: true, lyrics }), { fetch: fetchStub, env });
     expect(design.mode).toBe('custom');
-    expect(design.lyrics).toBe(withSections(lyrics));
-    expect(design.lyrics.replace(/\[[^\]]+\]\n/g, '')).toBe(lyrics.replace(/\n\n/g, '\n\n'));
+    expect(design.lyrics).toBe(markLyrics(lyrics, null));
+    expect(withoutAddedLines(design.lyrics, lyrics)).toBe(lyrics);
     expect(JSON.stringify(calls[0]!.body)).not.toContain('아침 햇살');
   });
 
@@ -189,7 +189,7 @@ describe('a music run with the Architect', () => {
     await advanceStudioJobsWith(deps, { jobIds: [created.job.id] });
     expect(sent[0]).toEqual({
       endpoint: 'suno/suno-v6/custom-mode',
-      body: { title: '맑은 하루', style: GOOD_STYLE, lyrics: withSections(lyrics), instrumental: false, max_mode: false },
+      body: { title: '맑은 하루', style: GOOD_STYLE, lyrics: markLyrics(lyrics, null), instrumental: false, max_mode: false },
     });
   });
 

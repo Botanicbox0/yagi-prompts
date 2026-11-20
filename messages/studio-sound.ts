@@ -30,6 +30,12 @@
  * went through the same two passes on the evening of 2026-11-20 (the arbiter answered again); pass 1 changed
  * 입력하신 → 입력한 and kept the two labels, pass 2 changed none of them.
  *
+ * Slice SA2 (the lyrics engine, §12.3): `lyricsKit`. The lines §12.7 lists are its reviewed versions as merged in
+ * #292 (two Gemma passes, both languages): ownNote, polish, polishNote, length, lengthNote, the three structures,
+ * readAs (label and example). The word "후크" (structures) is the founder's to approve; it lives only here. The other
+ * lines went through two local Gemma passes on 2026-11-20 and follow the reviewed verb (고치기): polishing,
+ * polishFailed and polished were re-worded from 손보다 to 고치다 to match it (see the PR body for their Gemma check).
+ *
  * Amounts are credits, never won. No engine, vendor or model name appears here.
  */
 export const studioSoundEn = {
@@ -103,6 +109,35 @@ export const studioSoundEn = {
     sentToggle: 'Show what was sent',
     sentLabel: 'Sent',
     yourWords: 'Your words',
+  },
+  lyricsKit: {
+    ownNote: 'Your lyrics remain unchanged; only section markers and endings are added.',
+    polish: 'Adjust for singing',
+    polishing: 'Adjusting the lyrics.',
+    polishNote: 'Adjusts the phrasing for better singing while keeping the meaning.',
+    polishFailed: "Couldn't adjust the lyrics. Please try again.",
+    current: 'Your lyrics',
+    polished: 'Adjusted',
+    accept: 'Apply',
+    keep: 'Keep mine',
+    options: 'Lyrics options',
+    length: 'Match lyric amount',
+    seconds: '{n}s',
+    lengthNote: "Adjusts length by the amount of lyrics; finalize with 'Fit length' after creating.",
+    structure: 'Structure',
+    structures: { hook: 'Hook only', 'hook-verse': 'Hook & 1 Verse', full: '2 Verses & Hook' },
+    tone: 'Tone',
+    tones: { haeyo: 'Polite', banmal: 'Casual' },
+    language: 'Language',
+    languages: { ko: 'Korean', en: 'English', mixed: 'Mixed' },
+    brand: 'Brand name',
+    readAs: 'Brand pronunciation',
+    readAsExample: 'e.g., Twings',
+    mustInclude: 'Words to include',
+    mustIncludeHint: 'Separate with commas',
+    previewShow: 'See lyrics to send',
+    previewHide: 'Hide lyrics to send',
+    preview: 'Lyrics to send',
   },
   terms: {
     link: 'Terms',
@@ -228,6 +263,35 @@ export const studioSoundKo: StudioSoundCopy = {
     sentToggle: '보낸 문장 보기',
     sentLabel: '보낸 문장',
     yourWords: '입력한 문장',
+  },
+  lyricsKit: {
+    ownNote: '쓴 가사는 그대로 부르고 구간 표시와 끝맺음만 더해요.',
+    polish: '노래에 맞게 고치기',
+    polishing: '가사를 고치고 있어요.',
+    polishNote: '뜻은 그대로 두고 노래하기 좋게 고쳐요. 확인하면 적용돼요.',
+    polishFailed: '가사를 고치지 못했어요. 다시 시도해 주세요.',
+    current: '쓴 가사',
+    polished: '고친 가사',
+    accept: '적용하기',
+    keep: '유지하기',
+    options: '가사 옵션',
+    length: '가사 분량 맞추기',
+    seconds: '{n}초',
+    lengthNote: '가사 양으로 길이를 맞추고, 만든 뒤 길이 맞추기로 마무리해요.',
+    structure: '구성',
+    structures: { hook: '후크만', 'hook-verse': '후크와 한 절', full: '두 절과 후크' },
+    tone: '말투',
+    tones: { haeyo: '해요체', banmal: '반말' },
+    language: '언어',
+    languages: { ko: '한국어', en: '영어', mixed: '한국어·영어 섞어 쓰기' },
+    brand: '브랜드 이름',
+    readAs: '브랜드 이름 읽는 법',
+    readAsExample: '예: 트윙스',
+    mustInclude: '꼭 넣을 말',
+    mustIncludeHint: '쉼표로 구분해 입력',
+    previewShow: '보낼 가사 보기',
+    previewHide: '보낼 가사 닫기',
+    preview: '보낼 가사',
   },
   terms: {
     link: '이용 조건',

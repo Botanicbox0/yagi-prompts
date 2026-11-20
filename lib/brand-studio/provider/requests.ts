@@ -17,7 +17,7 @@ import { pixelSize, studioModel, type StudioImageModel, type StudioModel, type S
 import type { StudioJobParams } from '../types';
 import type { StudioProviderRequest } from './types';
 import { musicEngineOfModel } from '../sound/engine';
-import { withSections } from '../sound/lyrics';
+import { markLyrics } from '../sound/lyrics';
 
 export interface StudioRequestInput {
   kind: StudioJobKind;
@@ -290,7 +290,7 @@ function musicRequestOf(input: StudioRequestInput): StudioProviderRequest {
       mode: music.mode,
       prompt: input.prompt,
       vocal: music.vocal,
-      ...(music.mode === 'custom' ? { title: input.designedTitle || music.title, lyrics: withSections(music.lyrics ?? ''), careful: music.careful } : {}),
+      ...(music.mode === 'custom' ? { title: input.designedTitle || music.title, lyrics: markLyrics(music.lyrics ?? '', music.structure ?? null), careful: music.careful } : {}),
     });
   } catch (error) {
     throw new StudioRequestError(error instanceof Error ? error.message : 'music request');

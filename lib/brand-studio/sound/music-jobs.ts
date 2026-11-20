@@ -35,7 +35,8 @@ import { describeSentence, musicTitle } from './music-text';
 
 export { describeSentence, musicTitle };
 import { namedArtist } from './names';
-import { LYRICS_LIMITS, musicWay, withSections } from './lyrics';
+import { LYRIC_STRUCTURES, LYRICS_LIMITS, markLyrics, musicWay, ownLyrics } from './lyrics';
+import { LYRICS_MODELS } from './lyrics-model';
 import { DESIGN_LIMITS, designMeta, fallbackDesign, reviewedDesign, type MusicDesign, type MusicDesignInput } from './architect';
 
 export { MUSIC_LIMITS, musicQuoteKrw };
@@ -58,6 +59,15 @@ export const MusicJobCreateSchema = z
     vocal: z.boolean().default(false),
     /** Sung as written (with vocals only); section marks are added when sent. */
     lyrics: z.string().max(LYRICS_LIMITS.max).optional(),
+    /** 구성 (SA2, §12.3): the order of the section marks. Absent: verse, chorus, verse, ... as before. */
+    structure: z.enum(LYRIC_STRUCTURES).optional(),
+    /** 가사 분량 맞추기: the length the lyrics were sized for. The version closest to it is shown first (§12.8). */
+    targetSeconds: z.number().int().min(5).max(240).optional(),
+    /**
+     * The lyrics came from "가사 초안 만들기" (`topic`) or "부르기 좋게 손보기" (`polish`) and that model, as the draft
+     * answer named it. Absent with lyrics: the customer wrote them. Only the allowed models are accepted.
+     */
+    lyricsBy: z.object({ flow: z.enum(['topic', 'polish']), model: z.enum([...LYRICS_MODELS, 'local']) }).strict().optional(),
     /** "더 고르게 만들기" (Max Mode): twice the credits. */
     careful: z.boolean().optional(),
     /** Language to sing in when there are vocals and no lyrics; the screen's language when absent. */
@@ -94,12 +104,13 @@ export interface MusicPlan {
 }
 
 /** Pure: the request, the name, the quote and what the row keeps. Throws `StudioDenied('invalid')` on a request the engine refuses. */
-export function designInputOf(input: Pick<MusicJobCreate, 'prompt' | 'vocal' | 'lyrics' | 'careful' | 'language'>, screenLocale: 'ko' | 'en'): MusicDesignInput {
+export function designInputOf(input: Pick<MusicJobCreate, 'prompt' | 'vocal' | 'lyrics' | 'careful' | 'language' | 'structure'>, screenLocale: 'ko' | 'en'): MusicDesignInput {
   return {
     prompt: input.prompt,
     vocal: input.vocal,
-    lyrics: input.vocal ? (input.lyrics ?? '').trim() : '',
+    lyrics: input.vocal ? ownLyrics(input.lyrics) : '',
     careful: input.careful === true,
+    structure: input.structure ?? null,
     language: input.language ?? screenLocale,
     locale: screenLocale,
   };
@@ -111,7 +122,7 @@ export function designInputOf(input: Pick<MusicJobCreate, 'prompt' | 'vocal' | '
  */
 export function planMusic(input: Omit<MusicJobCreate, 'architect'> & { architect?: boolean }, screenLocale: 'ko' | 'en', engine: MusicEngine = musicEngine(process.env)): MusicPlan {
   const language = input.language ?? screenLocale;
-  const lyrics = input.vocal ? (input.lyrics ?? '').trim() : '';
+  const lyrics = input.vocal ? ownLyrics(input.lyrics) : '';
   const careful = input.careful === true;
   const way = musicWay({ vocal: input.vocal, lyrics, careful });
   const title = musicTitle(input.prompt);
@@ -129,7 +140,7 @@ export function planMusic(input: Omit<MusicJobCreate, 'architect'> & { architect
   const request: MusicRequest =
     way === 'describe'
       ? { mode: 'describe', prompt: design.style, vocal: input.vocal }
-      : { mode: 'custom', prompt: design.style, vocal: input.vocal, title: design.title, lyrics: withSections(lyrics), careful };
+      : { mode: 'custom', prompt: design.style, vocal: input.vocal, title: design.title, lyrics: markLyrics(lyrics, input.structure ?? null), careful };
   let endpoint: string;
   try {
     endpoint = engine.request(request).endpoint;
@@ -161,6 +172,9 @@ export function planMusic(input: Omit<MusicJobCreate, 'architect'> & { architect
         careful: way === 'custom' && careful,
         // What the customer typed (marks are added when sent), so "설정 다시 쓰기" gives it back as written.
         ...(lyrics ? { lyrics } : {}),
+        ...(lyrics && input.structure ? { structure: input.structure } : {}),
+        ...(lyrics && input.targetSeconds ? { targetSeconds: input.targetSeconds } : {}),
+        ...(lyrics ? { lyricsBy: input.lyricsBy ? { flow: input.lyricsBy.flow, model: input.lyricsBy.model } : { flow: 'own' as const, model: null } } : {}),
         // The conditions the track was made under (§7.2): which engine and endpoint, which version of our terms.
         made: { engine: engine.id, endpoint, terms: SOUND_TERMS_VERSION },
       },

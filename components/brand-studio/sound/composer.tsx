@@ -16,11 +16,12 @@
  */
 import { forwardRef, useEffect, useId, useImperativeHandle, useRef, useState, type FormEvent, type KeyboardEvent } from 'react';
 import { formatCredits } from '@/lib/brand-studio/credits';
-import { LYRICS_LIMITS, musicWay } from '@/lib/brand-studio/sound/lyrics';
+import { defaultStructure, LYRICS_LIMITS, markLyrics, musicWay, ownLyrics, type LyricStructure } from '@/lib/brand-studio/sound/lyrics';
 import { MUSIC_LIMITS, musicQuoteCredits } from '@/lib/brand-studio/sound/music-limits';
 import { namedArtist } from '@/lib/brand-studio/sound/names';
 import { interpolate } from '@/lib/i18n/format';
 import type { StudioSoundCopy } from '@/messages/studio-sound';
+import { LyricsOptions, mustIncludeWords, PolishCompare, type LyricsOptionsValue } from './lyrics-kit';
 import s from './sound.module.css';
 
 export interface ComposerHandle {
@@ -37,6 +38,25 @@ export interface ComposerInput {
   architect: boolean;
   /** The design the customer read (and may have edited) in the dock. */
   designed?: { style: string; title?: string };
+  /** SA2: the order of the section marks (lyrics only). */
+  structure: LyricStructure;
+  /** SA2: the lyrics came from a draft or a polish, and that model. */
+  lyricsBy?: { flow: 'topic' | 'polish'; model: string };
+  /** SA2: the length the lyrics were sized for (the closest version is shown first). */
+  targetSeconds: number;
+}
+
+/** What "가사 초안 만들기" and "부르기 좋게 손보기" ask for (§12.3). */
+export interface LyricsDraftRequest {
+  flow: 'topic' | 'polish';
+  topic: string;
+  lyrics?: string;
+  language: 'ko' | 'en' | 'mixed';
+  seconds: number;
+  structure: LyricStructure;
+  tone?: 'haeyo' | 'banmal';
+  brand?: { name: string; readAs?: string };
+  mustInclude?: string[];
 }
 
 export interface ComposerDesign {
@@ -64,10 +84,10 @@ export const MusicComposer = forwardRef<
     error: string | null;
     onCreate: (input: ComposerInput) => void;
     onClearError: () => void;
-    /** A free first draft of lyrics from the description; resolves to the draft or a line to show. */
-    onDraft: (topic: string) => Promise<{ lyrics: string } | { error: string }>;
+    /** Free: a draft from the description, or the customer's lyrics polished; resolves to the lyrics or a line to show. */
+    onDraft: (request: LyricsDraftRequest) => Promise<{ lyrics: string; model: string } | { error: string }>;
     /** "지금 설계하기": the free design preview; resolves to the design or a line to show. */
-    onDesign: (input: Omit<ComposerInput, 'architect' | 'designed'>) => Promise<{ design: ComposerDesign } | { error: string }>;
+    onDesign: (input: Pick<ComposerInput, 'prompt' | 'vocal' | 'lyrics' | 'careful' | 'structure'>) => Promise<{ design: ComposerDesign } | { error: string }>;
   }
 >(function MusicComposer(props, ref) {
   const { copy } = props;
@@ -81,6 +101,20 @@ export const MusicComposer = forwardRef<
   const [architect, setArchitect] = useState(true);
   const [design, setDesign] = useState<ComposerDesign | null>(null);
   const [designing, setDesigning] = useState(false);
+  const [options, setOptions] = useState<LyricsOptionsValue>(() => ({
+    seconds: 30,
+    structure: defaultStructure(30),
+    tone: null,
+    language: props.locale,
+    brandName: '',
+    readAs: '',
+    mustInclude: '',
+  }));
+  const [structurePicked, setStructurePicked] = useState(false);
+  const [lyricsBy, setLyricsBy] = useState<{ flow: 'topic' | 'polish'; model: string } | null>(null);
+  const [polish, setPolish] = useState<{ lyrics: string; model: string } | null>(null);
+  const [polishing, setPolishing] = useState(false);
+  const [showSent, setShowSent] = useState(false);
   const field = useRef<HTMLTextAreaElement | null>(null);
   const hintId = useId();
   const errorId = useId();
@@ -93,6 +127,8 @@ export const MusicComposer = forwardRef<
       setLyrics((settings.lyrics ?? '').slice(0, LYRICS_LIMITS.max));
       setCareful(props.maxMode && settings.careful === true);
       setDrafted(false);
+      setLyricsBy(null);
+      setPolish(null);
       setLocalError(null);
       requestAnimationFrame(() => field.current?.focus());
     },
@@ -100,7 +136,8 @@ export const MusicComposer = forwardRef<
 
   const error = localError ?? props.error;
   const trimmed = prompt.trim();
-  const sentLyrics = vocal ? lyrics.trim() : '';
+  // The customer's lyrics as written (only line endings and outer blank lines normalized): what is sent and previewed.
+  const sentLyrics = vocal && lyrics.trim() ? ownLyrics(lyrics) : '';
   const switchOn = props.maxMode && careful;
   const credits = musicQuoteCredits({ mode: musicWay({ vocal, lyrics: sentLyrics, careful: switchOn }), careful: switchOn });
   const creditsText = formatCredits(credits, props.locale);
@@ -125,6 +162,9 @@ export const MusicComposer = forwardRef<
       lyrics: sentLyrics,
       careful: switchOn,
       architect,
+      structure: options.structure,
+      targetSeconds: options.seconds,
+      ...(sentLyrics && lyricsBy ? { lyricsBy } : {}),
       ...(architect && design ? { designed: { style: design.style, ...(design.mode === 'custom' ? { title: design.title } : {}) } } : {}),
     });
   };
@@ -134,7 +174,7 @@ export const MusicComposer = forwardRef<
     if (sentLyrics && namedArtist(sentLyrics)) return setLocalError(copy.composer.lyricsBlocked);
     setDesigning(true);
     clearErrors();
-    const answer = await props.onDesign({ prompt: trimmed, vocal, lyrics: sentLyrics, careful: switchOn });
+    const answer = await props.onDesign({ prompt: trimmed, vocal, lyrics: sentLyrics, careful: switchOn, structure: options.structure });
     setDesigning(false);
     if ('design' in answer) setDesign(answer.design);
     else setLocalError(answer.error);
@@ -142,18 +182,47 @@ export const MusicComposer = forwardRef<
   const onKey = (event: KeyboardEvent<HTMLTextAreaElement>) => {
     if (event.key === 'Enter' && (event.metaKey || event.ctrlKey)) submit();
   };
+  const draftRequest = (flow: 'topic' | 'polish'): LyricsDraftRequest => {
+    const brandName = options.brandName.trim();
+    const words = mustIncludeWords(options.mustInclude);
+    return {
+      flow,
+      topic: trimmed,
+      ...(flow === 'polish' ? { lyrics: sentLyrics } : {}),
+      language: options.language,
+      seconds: options.seconds,
+      structure: options.structure,
+      ...(options.tone ? { tone: options.tone } : {}),
+      ...(brandName ? { brand: { name: brandName, ...(options.readAs.trim() ? { readAs: options.readAs.trim() } : {}) } } : {}),
+      ...(words.length ? { mustInclude: words } : {}),
+    };
+  };
+  const optionWords = () => [options.brandName, options.readAs, options.mustInclude].join(' ');
   const draft = async () => {
     if (!trimmed || drafting) return;
-    if (namedArtist(trimmed)) return setLocalError(copy.errors.artist);
+    if (namedArtist(trimmed) || namedArtist(optionWords())) return setLocalError(copy.errors.artist);
     setDrafting(true);
     clearErrors();
-    const answer = await props.onDraft(trimmed);
+    const answer = await props.onDraft(draftRequest('topic'));
     setDrafting(false);
     if ('lyrics' in answer) {
       setLyrics(answer.lyrics.slice(0, LYRICS_LIMITS.max));
+      setLyricsBy({ flow: 'topic', model: answer.model });
+      setPolish(null);
       setDrafted(true);
     } else setLocalError(answer.error);
   };
+  const polishNow = async () => {
+    if (!sentLyrics || polishing) return;
+    if (namedArtist(sentLyrics) || namedArtist(optionWords())) return setLocalError(copy.composer.lyricsBlocked);
+    setPolishing(true);
+    clearErrors();
+    const answer = await props.onDraft(draftRequest('polish'));
+    setPolishing(false);
+    if ('lyrics' in answer) setPolish({ lyrics: answer.lyrics.slice(0, LYRICS_LIMITS.max), model: answer.model });
+    else setLocalError(answer.error);
+  };
+  const sentPreview = sentLyrics ? markLyrics(sentLyrics, options.structure) : '';
 
   return (
     <form className={s.dock} onSubmit={submit} data-sound-composer aria-busy={props.busy}>
@@ -198,7 +267,7 @@ export const MusicComposer = forwardRef<
           <div className={s.lyricsHead}>
             <span className={s.lyricsLabel}>{copy.composer.lyrics}</span>
             <span className={s.lyricsNote} id={lyricsNoteId}>
-              {drafted ? copy.composer.draftNote : copy.composer.lyricsLanguage}
+              {drafted ? copy.composer.draftNote : sentLyrics ? copy.lyricsKit.ownNote : copy.composer.lyricsLanguage}
             </span>
             <span className={s.lyricsCount} aria-hidden="true">
               {lyrics.length}/{LYRICS_LIMITS.max}
@@ -206,7 +275,28 @@ export const MusicComposer = forwardRef<
             <button type="button" className={s.textBtn} onClick={() => void draft()} disabled={!trimmed || drafting} data-sound-draft>
               {drafting ? copy.composer.drafting : copy.composer.draft}
             </button>
+            {sentLyrics ? (
+              <button
+                type="button"
+                className={s.textBtn}
+                onClick={() => void polishNow()}
+                disabled={polishing}
+                title={copy.lyricsKit.polishNote}
+                data-sound-polish-now
+              >
+                {polishing ? copy.lyricsKit.polishing : copy.lyricsKit.polish}
+              </button>
+            ) : null}
           </div>
+          <LyricsOptions
+            copy={copy}
+            value={options}
+            onChange={(next) => {
+              const pickedNow = next.structure !== options.structure;
+              if (pickedNow) setStructurePicked(true);
+              setOptions(!structurePicked && !pickedNow && next.seconds !== options.seconds ? { ...next, structure: defaultStructure(next.seconds) } : next);
+            }}
+          />
           <label className={s.well}>
             <span className="bs-sr">{copy.composer.lyrics}</span>
             <textarea
@@ -215,7 +305,10 @@ export const MusicComposer = forwardRef<
               maxLength={LYRICS_LIMITS.max}
               placeholder={copy.composer.lyricsPlaceholder}
               onChange={(event) => {
-                setLyrics(event.target.value.slice(0, LYRICS_LIMITS.max));
+                const next = event.target.value.slice(0, LYRICS_LIMITS.max);
+                setLyrics(next);
+                if (!next.trim()) setLyricsBy(null);
+                setPolish(null);
                 setDrafted(false);
                 clearErrors();
               }}
@@ -224,6 +317,31 @@ export const MusicComposer = forwardRef<
               data-sound-lyrics
             />
           </label>
+          {polish ? (
+            <PolishCompare
+              copy={copy}
+              current={sentLyrics}
+              polished={polish.lyrics}
+              onKeep={() => setPolish(null)}
+              onAccept={() => {
+                setLyrics(polish.lyrics);
+                setLyricsBy({ flow: 'polish', model: polish.model });
+                setPolish(null);
+              }}
+            />
+          ) : null}
+          {sentLyrics ? (
+            <div className={s.sent} data-sound-lyrics-sent={showSent ? 'open' : 'closed'}>
+              <button type="button" className={s.textBtn} onClick={() => setShowSent((v) => !v)} aria-expanded={showSent} data-sound-lyrics-sent-toggle>
+                {showSent ? copy.lyricsKit.previewHide : copy.lyricsKit.previewShow}
+              </button>
+              {showSent ? (
+                <pre className={s.lyricsPre} aria-label={copy.lyricsKit.preview} data-sound-lyrics-sent-text>
+                  {sentPreview}
+                </pre>
+              ) : null}
+            </div>
+          ) : null}
         </div>
       ) : null}
       {design ? (

@@ -398,6 +398,15 @@ export interface StudioMusicParams {
   /** "더 고르게 만들기" (custom mode only). */
   careful: boolean;
   lyrics?: string;
+  /** How the lyrics are marked when sent (SA2, §12.3: 후크만 · 후크와 한 절 · 두 절과 후크). */
+  structure?: 'hook' | 'hook-verse' | 'full';
+  /**
+   * Who wrote the lyrics (§12.3): the customer (`own`), or a text model from "가사 초안 만들기" (`topic`) or
+   * "부르기 좋게 손보기" (`polish`), and which model, so the lyrics model can change without losing the record.
+   */
+  lyricsBy?: { flow: 'own' | 'topic' | 'polish'; model: string | null };
+  /** The length the lyrics were sized for (가사 분량 맞추기): the closest version is listed first (§12.8). */
+  targetSeconds?: number;
   /** The conditions snapshot: engine, endpoint, and our terms version. */
   made: { engine: string; endpoint: string; terms: string };
 }

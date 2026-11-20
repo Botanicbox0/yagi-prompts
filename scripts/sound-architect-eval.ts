@@ -19,6 +19,16 @@
  * - Verdicts: `pass` = the model's design holds every rule. `allow` = the fallback was used (the run still goes, the
  *   customer's words with basic directions). `fail` = a design that breaks a rule reached the engine, or the
  *   customer's lyrics changed.
+ * - `--lyrics` (SA2, §12.3): the lyrics engine instead of the style design. The 16 briefs become lyric requests
+ *   (length, structure for that length, brand, words to include, language from the sheet), plus traps (a singer's
+ *   name, a superlative, an English brand with a Korean reading (scored like any brand: Latin vs Hangul is the founder's call, §12.8 e), a polish of the customer's lyrics, the customer's
+ *   lyrics sent as written). `--model <id>` picks one of the five compared models (default: the server default);
+ *   `--label before` scores the local fixed text (no model). Verdicts: `pass` = every rule, `allow` = only soft
+ *   rules broken (syllables by tempo, hook, finals, register, stanza count), `fail` = a hard rule broken or the customer's
+ *   lyrics changed on the way to the engine.
+ *
+ *     npx tsx scripts/sound-architect-eval.ts <env-file> --lyrics [--model gemini-3.8-flash] [--label after]
+ *     npx tsx scripts/sound-architect-eval.ts --lyrics --label before
  * - `--sung <dir>`: for each MP3 the measured length and the loudness of the last 3 seconds (ffmpeg); transcription
  *   is not run here (no speech model in the repository): the column says so.
  */
@@ -30,7 +40,9 @@ import { studioGeminiConfig } from '@/lib/brand-studio/enhancer/gemini';
 import { checkMusicDesign, designMusic, fallbackDesign, MUSIC_PROFILE_VERSION, type MusicDesign, type MusicDesignInput } from '@/lib/brand-studio/sound/architect';
 import { musicEngine } from '@/lib/brand-studio/sound/engine';
 import { audioSeconds } from '@/lib/brand-studio/sound/audio-info';
-import { withSections } from '@/lib/brand-studio/sound/lyrics';
+import { defaultStructure, markLyrics, ownLyrics, tempoOf, withoutAddedLines } from '@/lib/brand-studio/sound/lyrics';
+import { draftProblems, localLyrics, writeLyrics, type LyricsRequest } from '@/lib/brand-studio/sound/lyrics-draft';
+import { isLyricsModel, LYRICS_DEFAULT_MODEL, lyricsGeminiConfig } from '@/lib/brand-studio/sound/lyrics-model';
 import { namedArtist } from '@/lib/brand-studio/sound/names';
 
 export interface EvalCase {
@@ -92,7 +104,7 @@ export function scoreDesign(c: EvalCase, design: MusicDesign, ms: number): Score
     return { id: c.id, verdict: 'pass', source: design.source, problems: ['refused before design (name check)'], chars: 0, ms: Math.round(ms) };
   }
   const problems = design.source === 'model' ? checkMusicDesign({ style: design.style, title: design.title }, design.mode) : [];
-  if (c.input.lyrics.trim() && design.lyrics !== withSections(c.input.vocal ? c.input.lyrics.trim() : '')) problems.push("the customer's lyrics changed");
+  if (c.input.lyrics.trim() && design.lyrics !== markLyrics(c.input.vocal ? c.input.lyrics : '', null)) problems.push("the customer's lyrics changed");
   if (namedArtist(design.style)) problems.push('a name reached the style');
   if (c.trap === 'superlative' && /\b(best|no\.?\s*1|number one|#1)\b/i.test(design.style)) problems.push('a superlative reached the style');
   const verdict: Scored['verdict'] = problems.length ? 'fail' : design.source === 'model' ? 'pass' : 'allow';
@@ -118,6 +130,107 @@ function readKeys(file: string): Record<string, string> {
     if (m) out[m[1]!] = m[2]!.trim();
   }
   return out;
+}
+
+/* ------------------------------------------------------------------ the lyrics engine (SA2) */
+
+export interface LyricsCase {
+  id: string;
+  req: LyricsRequest;
+  trap?: 'name' | 'superlative' | 'reading' | 'polish' | 'keep-lyrics';
+}
+
+/** The 16 briefs as lyric requests: "약 N초" is the length, "꼭 넣을 말" the words, the bold name the brand. */
+export function lyricsBriefCases(sheet: string): LyricsCase[] {
+  const out: LyricsCase[] = [];
+  for (const block of sheet.split(/^## /m).slice(1)) {
+    const head = block.split('\n')[0] ?? '';
+    const id = head.split(/\s+—\s+/)[0]?.trim();
+    const line = /^브리프:\s*(.+)$/m.exec(block)?.[1]?.trim();
+    if (!id || !line) continue;
+    const seconds = Number(/약\s*(\d+)\s*초/.exec(head)?.[1] ?? 30);
+    const brand = /\*\*([^*]+)\*\*/.exec(line)?.[1]?.trim() ?? null;
+    const must = /꼭 넣을 말:\s*([^.]+)\./.exec(line)?.[1] ?? '';
+    out.push({
+      id: `lyrics-${id}`,
+      req: {
+        flow: 'topic',
+        topic: line.replace(/\*\*/g, '').slice(0, 1000),
+        language: /한국어/.test(head) ? 'ko' : 'en',
+        seconds,
+        bpm: tempoOf(line),
+        structure: defaultStructure(seconds),
+        tone: null,
+        brand: brand ? { name: brand } : null,
+        mustInclude: must.split(/[,，、]/).map((w) => w.trim()).filter((w) => w && w !== brand).slice(0, 5),
+      },
+    });
+  }
+  return out;
+}
+
+const lyricsBase = (over: Partial<LyricsRequest>): LyricsRequest => ({
+  flow: 'topic',
+  topic: '',
+  language: 'ko',
+  seconds: 30,
+  structure: 'hook',
+  tone: 'haeyo',
+  brand: null,
+  mustInclude: [],
+  ...over,
+});
+
+export const LYRICS_TRAPS: LyricsCase[] = [
+  { id: 'trap-lyrics-name', trap: 'name', req: lyricsBase({ topic: '아이유 느낌의 잔잔한 카페 광고 노래' }) },
+  { id: 'trap-lyrics-superlative', trap: 'superlative', req: lyricsBase({ topic: '업계 최고, 1위 정수기라고 강조하는 광고 노래' }) },
+  { id: 'trap-lyrics-reading', trap: 'reading', req: lyricsBase({ topic: '친환경 세제 광고, 밝게', brand: { name: 'Ecofin', readAs: '에코핀' } }) },
+  {
+    id: 'trap-lyrics-polish',
+    trap: 'polish',
+    req: lyricsBase({ flow: 'polish', topic: '아침 스킨케어 광고', lyrics: '아침마다 거울 앞에서 나는 나에게 인사를 건네곤 해요\n\n하루결과 함께라면 오늘도 괜찮을 것 같아요', brand: { name: '하루결' } }),
+  },
+  {
+    id: 'trap-lyrics-keep',
+    trap: 'keep-lyrics',
+    req: lyricsBase({ flow: 'polish', lyrics: '  들여 쓴 첫 줄.\r\n둘째 줄!\r\n\r\n\r\n(oh) 마지막 절 🌿' }),
+  },
+];
+
+export interface LyricsScored {
+  id: string;
+  verdict: 'pass' | 'allow' | 'fail';
+  source: 'model' | 'local' | 'blocked' | 'none';
+  syllables: number;
+  problems: string[];
+  ms: number;
+}
+
+/** The rules, without a model: the engine's own check, and the customer's lyrics unchanged on the way out. */
+export function scoreLyrics(c: LyricsCase, text: string | null, source: LyricsScored['source'], ms: number): LyricsScored {
+  const round = Math.round(ms);
+  if (c.trap === 'keep-lyrics') {
+    // "내 가사 그대로": what the engine receives, minus the added marks and [End], is the customer's text.
+    const original = c.req.lyrics ?? '';
+    const problems: string[] = [];
+    for (const structure of ['hook', 'hook-verse', 'full'] as const) {
+      if (withoutAddedLines(markLyrics(original, structure), original) !== ownLyrics(original)) problems.push(`changed under ${structure}`);
+    }
+    return { id: c.id, verdict: problems.length ? 'fail' : 'pass', source: 'none', syllables: 0, problems, ms: round };
+  }
+  if (source === 'blocked') return { id: c.id, verdict: 'pass', source, syllables: 0, problems: ['refused before a call (name check)'], ms: round };
+  if (text === null) return { id: c.id, verdict: 'allow', source, syllables: 0, problems: ['no lyrics after the rewrite (the screen says it could not draft)'], ms: round };
+  const found = draftProblems(c.req, text);
+  const syllables = (text.match(/[가-힣]/g) ?? []).length;
+  const verdict: LyricsScored['verdict'] = found.hard.length ? 'fail' : found.soft.length ? 'allow' : 'pass';
+  return { id: c.id, verdict, source, syllables, problems: [...found.hard, ...found.soft], ms: round };
+}
+
+export function lyricsTable(label: string, model: string, rows: readonly LyricsScored[]): string {
+  const head = `### lyrics ${label} (${model})\n\n| case | verdict | source | syllables | ms | problems |\n| --- | --- | --- | --- | --- | --- |`;
+  const body = rows.map((r) => `| ${r.id} | ${r.verdict} | ${r.source} | ${r.syllables || '—'} | ${r.ms} | ${r.problems.join('; ') || '—'} |`);
+  const count = (v: LyricsScored['verdict']) => rows.filter((r) => r.verdict === v).length;
+  return [head, ...body, '', `pass ${count('pass')} · allow ${count('allow')} · fail ${count('fail')} of ${rows.length}`].join('\n');
 }
 
 /** A fetch that counts calls, stops at the cap, and only lets the expected model through. */
@@ -175,6 +288,7 @@ async function main(): Promise<void> {
   }
 
   const keys = envFile && existsSync(envFile) ? readKeys(envFile) : {};
+  if (process.argv.includes('--lyrics')) return runLyrics(sheet, label, only, cap, outDir, keys);
   const env: Record<string, string | undefined> = label === 'before' ? {} : { GEMINI_API_KEY: keys.GEMINI_API_KEY, GEMINI_BASE_URL: keys.GEMINI_BASE_URL };
   const config = studioGeminiConfig(env);
   if (label !== 'before' && !config) throw new Error('no GEMINI_API_KEY in the env file');
@@ -190,6 +304,41 @@ async function main(): Promise<void> {
   const text = table(label, rows);
   mkdirSync(outDir, { recursive: true });
   writeFileSync(join(outDir, `${label}.md`), scrub(text));
+  console.log(scrub(text));
+}
+
+async function runLyrics(sheet: string, label: string, only: string[] | undefined, cap: number, outDir: string, keys: Record<string, string>): Promise<void> {
+  const picked = arg('--model') ?? LYRICS_DEFAULT_MODEL;
+  if (!isLyricsModel(picked)) throw new Error(`--model must be one of the compared models, not ${picked}`);
+  const cases = [...lyricsBriefCases(sheet), ...LYRICS_TRAPS].filter((c) => !only || only.includes(c.id));
+  const env: Record<string, string | undefined> =
+    label === 'before' ? {} : { GEMINI_API_KEY: keys.GEMINI_API_KEY, GEMINI_BASE_URL: keys.GEMINI_BASE_URL, BRAND_SOUND_LYRICS_MODEL: picked };
+  const config = lyricsGeminiConfig(env);
+  if (label !== 'before' && !config) throw new Error('no GEMINI_API_KEY in the env file');
+  const fetcher = config ? guardedFetch(config.model, cap) : null;
+  const scrub = (text: string) => (keys.GEMINI_API_KEY ? text.split(keys.GEMINI_API_KEY).join('<key>') : text);
+  const rows: LyricsScored[] = [];
+  for (const c of cases) {
+    const started = performance.now();
+    if (c.trap === 'keep-lyrics') {
+      rows.push(scoreLyrics(c, null, 'none', 0));
+      continue;
+    }
+    const asked = [c.req.topic, c.req.lyrics ?? '', c.req.brand?.name ?? '', ...c.req.mustInclude].join('\n');
+    if (namedArtist(asked)) {
+      rows.push(scoreLyrics(c, null, 'blocked', performance.now() - started));
+      continue;
+    }
+    if (!config || !fetcher) {
+      rows.push(scoreLyrics(c, localLyrics(c.req), 'local', performance.now() - started));
+      continue;
+    }
+    const text = await writeLyrics(c.req, config, fetcher, (event, detail) => console.error(scrub(`${event} ${JSON.stringify(detail)}`)));
+    rows.push(scoreLyrics(c, text, 'model', performance.now() - started));
+  }
+  const text = lyricsTable(label, config?.model ?? 'local', rows);
+  mkdirSync(outDir, { recursive: true });
+  writeFileSync(join(outDir, `lyrics-${label}.md`), scrub(text));
   console.log(scrub(text));
 }
 

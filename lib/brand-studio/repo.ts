@@ -113,7 +113,7 @@ export function jobView(row: JobRow, outputs: OutputRow[], media: StudioMediaSto
             : null
       : undefined;
   const music = row.kind === 'music' && p.music
-    ? { music: { title: p.music.title, vocal: p.music.vocal, mode: p.music.mode, careful: p.music.careful, lyrics: p.music.lyrics ?? null } }
+    ? { music: { title: p.music.title, vocal: p.music.vocal, mode: p.music.mode, careful: p.music.careful, lyrics: p.music.lyrics ?? null, ...(p.music.targetSeconds ? { targetSeconds: p.music.targetSeconds } : {}) } }
     : {};
   return {
     ...music,

@@ -18,7 +18,7 @@
 import { z } from 'zod';
 import { callGeminiJson, studioGeminiConfig } from '../enhancer/gemini';
 import { SUNO_HEADER, SUNO_PROFILE } from '../enhancer/profiles/suno';
-import { musicStyle, musicWay, withSections, type MusicWay } from './lyrics';
+import { markLyrics, musicStyle, ownLyrics, musicWay, type LyricStructure, type MusicWay } from './lyrics';
 import { describeSentence, musicTitle } from './music-text';
 import { namedArtist } from './names';
 
@@ -34,6 +34,8 @@ export interface MusicDesignInput {
   /** The customer's lyrics ('' when none). Never rewritten here. */
   lyrics: string;
   careful: boolean;
+  /** How the lyrics are marked (SA2, §12.3); absent: the old order (verse, chorus, verse, ...). */
+  structure?: LyricStructure | null;
   /** The language to sing in when there are vocals and no lyrics. */
   language: 'ko' | 'en';
   /** The screen's language: the notes are written in it. */
@@ -89,13 +91,13 @@ function wayOf(input: MusicDesignInput): MusicWay {
 /** The deterministic design: exactly what the studio sent before the Architect (§12.2 "대체 결과"). */
 export function fallbackDesign(input: MusicDesignInput, reason?: string): MusicDesign {
   const mode = wayOf(input);
-  const lyrics = input.vocal ? input.lyrics.trim() : '';
+  const lyrics = input.vocal ? ownLyrics(input.lyrics) : '';
   const style = mode === 'describe' ? describeSentence(input.prompt, input.vocal, input.language) : musicStyle(input.prompt, input.vocal, Boolean(lyrics), input.language);
   return {
     mode,
     style: style.slice(0, DESIGN_LIMITS.styleHardMax),
     title: musicTitle(input.prompt),
-    lyrics: withSections(lyrics),
+    lyrics: markLyrics(lyrics, input.structure ?? null),
     notes: null,
     source: 'fallback',
     ...(reason ? { fallbackReason: reason } : {}),
@@ -205,7 +207,7 @@ export async function designMusic(input: MusicDesignInput, deps: DesignDeps): Pr
         mode,
         style: design.style,
         title: mode === 'custom' ? design.title : musicTitle(input.prompt),
-        lyrics: withSections(input.vocal ? input.lyrics.trim() : ''),
+        lyrics: markLyrics(input.vocal ? input.lyrics : '', input.structure ?? null),
         notes: answer.notes.replace(/\s+/g, ' ').trim().slice(0, DESIGN_LIMITS.notesMax) || null,
         source: 'model',
         profileVersion: MUSIC_PROFILE_VERSION,
@@ -234,7 +236,7 @@ export function reviewedDesign(input: MusicDesignInput, edited: { style: string;
     mode,
     style,
     title,
-    lyrics: withSections(input.vocal ? input.lyrics.trim() : ''),
+    lyrics: markLyrics(input.vocal ? input.lyrics : '', input.structure ?? null),
     notes: null,
     source: 'reviewed',
     profileVersion: MUSIC_PROFILE_VERSION,

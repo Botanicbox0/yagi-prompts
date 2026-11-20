@@ -198,7 +198,7 @@ export function SoundStudio(props: SoundStudioProps) {
             prompt: input.prompt,
             vocal: input.vocal,
             language: locale,
-            ...(input.vocal && input.lyrics ? { lyrics: input.lyrics } : {}),
+            ...(input.vocal && input.lyrics ? { lyrics: input.lyrics, structure: input.structure, targetSeconds: input.targetSeconds, ...(input.lyricsBy ? { lyricsBy: input.lyricsBy } : {}) } : {}),
             ...(input.careful ? { careful: true } : {}),
             architect: input.architect,
             ...(input.designed ? { designed: input.designed } : {}),
@@ -535,6 +535,7 @@ export function SoundStudio(props: SoundStudioProps) {
           onDesign={async (request) => {
             const answer = await api.call('music.design', {
               organizationId,
+              structure: request.structure,
               prompt: request.prompt,
               vocal: request.vocal,
               language: locale,
@@ -547,11 +548,12 @@ export function SoundStudio(props: SoundStudioProps) {
             if (blocked === 'lyrics') return { error: copy.composer.lyricsBlocked };
             return { error: answer.code === 'too_many_running' ? copy.errors.busy : copy.architect.failed };
           }}
-          onDraft={async (topic) => {
-            const answer = await api.call('lyrics.draft', { organizationId, topic, language: locale });
-            if (!isFailure(answer)) return { lyrics: answer.lyrics };
-            if ((answer as { blocked?: string }).blocked === 'name') return { error: copy.errors.artist };
-            return { error: answer.code === 'too_many_running' ? copy.composer.draftBusy : copy.composer.draftFailed };
+          onDraft={async (request) => {
+            const answer = await api.call('lyrics.draft', { organizationId, ...request });
+            if (!isFailure(answer)) return { lyrics: answer.lyrics, model: answer.model };
+            if ((answer as { blocked?: string }).blocked === 'name') return { error: request.flow === 'polish' ? copy.composer.lyricsBlocked : copy.errors.artist };
+            if (answer.code === 'too_many_running') return { error: copy.composer.draftBusy };
+            return { error: request.flow === 'polish' ? copy.lyricsKit.polishFailed : copy.composer.draftFailed };
           }}
         />
       ) : null}
