@@ -50,9 +50,27 @@ const render = (choice: BrandWorkspaceChoice | null, o: Opts = {}) =>
     />,
   );
 
-/** Markers and words only the grouped rail renders. */
+/** The rail with what this browser remembered per brand (the layout's reading of the mode cookie). */
+const renderWithMemory = (choice: BrandWorkspaceChoice, memory: Record<string, 'make' | 'team'>) =>
+  renderToStaticMarkup(
+    <WorkspaceNavigation
+      {...labels}
+      scope={scopeOf(choice)}
+      studioV2
+      shell={shell}
+      locale="ko"
+      rooms
+      roomsCopy={nav}
+      railModes={memory}
+    />,
+  );
+
+/** Markers and words only the rail with rooms renders. */
 const ROOMS_ONLY = [
   'data-rail-section',
+  'data-rail-mode',
+  'role="radiogroup"',
+  nav.mode,
   'data-rail-item="messages"',
   'href="/brand/rooms',
   'bw-rail-group',
@@ -87,76 +105,110 @@ describe.each(sandboxedChoices)('hardline with rooms on: %s', (_label, choice) =
   });
 });
 
-describe('the grouped rail', () => {
-  it('splits into 직접 만들기 and 야기 팀과 with 프로젝트 and 알림함', () => {
-    const html = render(owner, { studioV2: true, rooms: true });
+describe('the two-mode rail (founder 2026-11-20, components/brand-workspace/rail-mode.ts)', () => {
+  const ids = (html: string) => [...html.matchAll(/data-rail-item="(\w+)"/g)].map((m) => m[1]).filter((id) => id !== 'home');
+  const modeOf = (html: string) => /data-rail-mode="(\w+)"/.exec(html)?.[1] ?? null;
+  const team = { studioV2: true, rooms: true };
+
+  it('opens a brand that makes things itself on 직접 만들기, with only the making items and no headings', () => {
+    state.path = '/brand/library';
+    const html = render(owner, team);
     expect(html).toContain('data-brand-layout-mode="rail"');
-    const sections = [...html.matchAll(/data-rail-section="(\w+)"/g)].map((m) => m[1]);
-    expect(sections).toEqual(['make', 'team']);
-    const make = html.slice(html.indexOf('data-rail-section="make"'), html.indexOf('data-rail-section="team"'));
-    const team = html.slice(html.indexOf('data-rail-section="team"'));
-    const ids = (part: string) => [...part.matchAll(/data-rail-item="(\w+)"/g)].map((m) => m[1]);
-    expect(ids(make)).toEqual(['image', 'video', 'compose', 'workflows', 'assets']);
-    expect(ids(team)).toEqual(['campaigns', 'messages']);
-    expect(make).toContain(nav.groupMake);
-    expect(make).toContain(`>${shell.rail.compose}<`);
-    expect(team).toContain(nav.groupTeam);
-    // Clear client room labels: 프로젝트 at /brand, 알림함 at /brand/rooms.
-    expect(team).toContain(`href="/brand?organizationId=${OWNER}"`);
-    expect(team).toContain(`>${shell.rail.campaigns}<`);
-    expect(team).toContain(`href="/brand/rooms?organizationId=${OWNER}"`);
-    expect(team).toContain(`>${shell.rail.messages}<`);
-    // Collapsed tooltips name the group.
-    expect(html).toContain(`data-rail-tip="${nav.groupTeam} · ${shell.rail.messages}"`);
-    expect(html).toContain(`data-rail-tip="${nav.groupMake} · ${shell.rail.image}"`);
-    // Each group is a labelled group for assistive technology.
-    expect(html).toMatch(/role="group" aria-labelledby="[^"]+-make"/);
+    expect(modeOf(html)).toBe('make');
+    expect(ids(html)).toEqual(['image', 'video', 'compose', 'workflows', 'assets']);
+    expect(html).toContain(`>${shell.rail.compose}<`);
+    expect(html).not.toContain('data-rail-section');
+    expect(html).not.toContain('bw-rail-group');
+    // "+" is the making menu; 새 프로젝트 의뢰 lives on the other side.
+    expect(html).toContain('data-rail-create="true"');
+    expect(html).not.toContain(nav.commission);
+    // Tooltips name the item only.
+    expect(html).toContain(`data-rail-tip="${shell.rail.image}"`);
   });
 
-  it('puts 이미지 · 영상 · 의뢰 · 메시지 on the phone bar', () => {
-    const html = render(owner, { studioV2: true, rooms: true });
-    expect([...html.matchAll(/data-rail-tab="(\w+)"/g)].map((m) => m[1])).toEqual(['image', 'video', 'campaigns', 'messages', 'more']);
+  it('is a labelled two-option radio group under the brand switcher, the current side checked and focusable', () => {
+    state.path = '/brand/library';
+    const html = render(owner, team);
+    const at = html.indexOf('data-rail-mode-switch="rail"');
+    expect(at).toBeGreaterThan(-1);
+    expect(at).toBeLessThan(html.indexOf('data-rail-item='));
+    expect(html).toMatch(new RegExp(`role="radiogroup" aria-label="${nav.mode}"`));
+    expect(html).toMatch(/role="radio" aria-checked="true" tabindex="0"[^>]*data-rail-mode-option="make"/);
+    expect(html).toMatch(/role="radio" aria-checked="false" tabindex="-1"[^>]*data-rail-mode-option="team"/);
+    expect(html).toContain(`>${nav.groupMake}<`);
+    expect(html).toContain(`>${nav.groupTeam}<`);
+  });
+
+  it('shows 야기 팀과 with 프로젝트 · 알림함 · 에셋 and 새 프로젝트 의뢰 as its one action', () => {
+    state.path = '/brand';
+    const html = render(owner, team);
+    expect(modeOf(html)).toBe('team');
+    expect(ids(html)).toEqual(['campaigns', 'messages', 'assets']);
+    expect(html).toContain(`href="/brand?organizationId=${OWNER}"`);
+    expect(html).toContain(`href="/brand/rooms?organizationId=${OWNER}"`);
+    expect(html).toContain('data-rail-create="team"');
+    expect(html).toContain(`href="/brand/projects/new?organizationId=${OWNER}"`);
+    expect(html).toContain(`>${nav.commission}<`);
+    expect(html).not.toContain('/brand/studio');
+    expect(html).not.toContain('data-rail-credits');
+  });
+
+  it('flips to the side of the page it opens on, over the remembered side', () => {
+    state.path = '/brand/rooms/0b6a4bd6-6f43-4b5a-9f6c-2a1f0e7f6c11';
+    expect(modeOf(renderWithMemory(owner, { [OWNER]: 'make' }))).toBe('team');
+    state.path = '/brand/studio/video';
+    expect(modeOf(renderWithMemory(owner, { [OWNER]: 'team' }))).toBe('make');
+  });
+
+  it('opens a shared page on the side this browser last used for this brand', () => {
+    state.path = '/brand/library';
+    expect(modeOf(renderWithMemory(owner, { [OWNER]: 'team' }))).toBe('team');
+    expect(modeOf(renderWithMemory(owner, { [OWNER]: 'make' }))).toBe('make');
+    // Another brand's memory is not this brand's.
+    expect(modeOf(renderWithMemory(owner, { 'b0000000-0000-4000-8000-00000000000b': 'team' }))).toBe('make');
+  });
+
+  it('puts 이미지 · 영상 on the phone bar in 직접 만들기 and 프로젝트 · 알림함 in 야기 팀과', () => {
+    state.path = '/brand/studio';
+    expect([...render(owner, team).matchAll(/data-rail-tab="(\w+)"/g)].map((m) => m[1])).toEqual(['image', 'video', 'compose', 'workflows', 'more']);
+    state.path = '/brand';
+    expect([...render(owner, team).matchAll(/data-rail-tab="(\w+)"/g)].map((m) => m[1])).toEqual(['campaigns', 'messages', 'assets', 'more']);
   });
 
   it('marks 의뢰 current inside a project room and 메시지 on the inbox', () => {
     const current = (html: string) => [...html.matchAll(/data-rail-item="(\w+)"[^>]*aria-current="page"/g)].map((m) => m[1]);
     state.path = '/brand/rooms';
-    expect(current(render(owner, { studioV2: true, rooms: true }))).toEqual(['messages']);
+    expect(current(render(owner, team))).toEqual(['messages']);
     state.path = '/brand/rooms/0b6a4bd6-6f43-4b5a-9f6c-2a1f0e7f6c11';
-    expect(current(render(owner, { studioV2: true, rooms: true }))).toEqual(['campaigns']);
+    expect(current(render(owner, team))).toEqual(['campaigns']);
   });
 
-  it('gives a campaign-only guest 에셋, 프로젝트 and 알림함, still nothing of the studio', () => {
-    const html = render({ ...owner, role: 'guest' }, { studioV2: true, rooms: true });
-    expect([...html.matchAll(/data-rail-item="(\w+)"/g)].map((m) => m[1])).toEqual(['assets', 'campaigns', 'messages']);
+  it('gives a campaign-only guest (team side only) 프로젝트, 알림함 and 에셋 with no switch and nothing of the studio', () => {
+    state.path = '/brand/library';
+    const html = render({ ...owner, role: 'guest' }, team);
+    expect(modeOf(html)).toBe('team');
+    expect(ids(html)).toEqual(['campaigns', 'messages', 'assets']);
+    expect(html).not.toContain('data-rail-mode-switch');
+    expect(html).not.toContain('role="radiogroup"');
     expect(html).not.toContain('/brand/studio');
     expect(html).not.toContain('data-rail-create');
   });
 
-  it('puts 야기 팀과 (프로젝트 · 알림함) first and keeps 스튜디오 showroom tabs for a project-only owner (self_studio denied)', () => {
-    const html = render({ ...owner, denied: ['self_studio'] }, { studioV2: true, rooms: true });
-    const sections = [...html.matchAll(/data-rail-section="(\w+)"/g)].map((m) => m[1]);
-    expect(sections[0]).toBe('team');
-    expect(sections[1]).toBe('make');
-    expect([...html.matchAll(/data-rail-item="(\w+)"/g)].map((m) => m[1])).toEqual([
-      'campaigns',
-      'messages',
-      'assets',
-      'image',
-      'video',
-      'compose',
-      'workflows',
-    ]);
-    expect([...html.matchAll(/data-rail-tab="(\w+)"/g)].map((m) => m[1])).toEqual([
-      'campaigns',
-      'messages',
-      'assets',
-      'image',
-      'more',
-    ]);
-    expect(html).toContain('/brand/studio');
-    expect(html).toContain('data-rail-create');
+  it('opens a project-only owner (self_studio denied) on 야기 팀과 and keeps the studio showroom one switch away', () => {
+    state.path = '/brand/library';
+    const html = render({ ...owner, denied: ['self_studio'] }, team);
+    expect(modeOf(html)).toBe('team');
+    expect(ids(html)).toEqual(['campaigns', 'messages', 'assets']);
+    expect(html).toContain('data-rail-mode-switch="rail"');
+    expect(html).toContain('data-rail-create="team"');
     expect(html).not.toContain('data-rail-credits');
+    state.path = '/brand/studio';
+    const make = render({ ...owner, denied: ['self_studio'] }, team);
+    expect(modeOf(make)).toBe('make');
+    expect(ids(make)).toEqual(['image', 'video', 'compose', 'workflows', 'assets']);
+    // The showroom has nothing to make: no "+", no credits.
+    expect(make).not.toContain('data-rail-create');
+    expect(make).not.toContain('data-rail-credits');
   });
 
   it('is not grouped for the TWINGS team view', () => {

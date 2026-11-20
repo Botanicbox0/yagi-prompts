@@ -57,11 +57,14 @@ const closed: Array<[string, BrandWorkspaceChoice]> = [
 ];
 
 describe('the rail Home entry', () => {
-  it('sits first, above both groups, and is current on /brand/home', () => {
+  it('sits first under the mode switch, above the items, and is current on /brand/home', () => {
     const html = rail(choice());
     const home = html.indexOf('data-rail-item="home"');
     expect(home).toBeGreaterThan(-1);
-    expect(home).toBeLessThan(html.indexOf('data-rail-section="make"'));
+    const modeSwitch = html.indexOf('data-rail-mode-switch="rail"');
+    expect(modeSwitch).toBeGreaterThan(-1);
+    expect(home).toBeGreaterThan(modeSwitch);
+    expect(home).toBeLessThan(html.indexOf('data-rail-item="image"'));
     expect(html).toMatch(/href="\/brand\/home\?organizationId=a0000000-0000-4000-8000-00000000000a"[^>]*data-rail-item="home"[^>]*aria-current="page"/);
     // The phone sheet (rendered only once opened) carries it too; the logo is the other way home on a phone.
   });

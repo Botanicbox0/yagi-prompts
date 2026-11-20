@@ -29,7 +29,12 @@ import { seedImageOutput } from '../brand-studio/library/helpers';
  * generative media get a 404 on `/brand/home` for every role, keep `/brand` as their landing, and never
  * see the rail's Home entry. Do not weaken this file to make something pass.
  */
-const mocks = vi.hoisted(() => ({ sql: null as SqlRunner | null, viewer: null as Viewer | null, path: '/brand/home', query: '' }));
+const mocks = vi.hoisted(() => ({ sql: null as SqlRunner | null, viewer: null as Viewer | null, path: '/brand/home', query: '', modeCookie: undefined as string | undefined }));
+// The rail mode the browser remembered (components/brand-workspace/rail-mode.ts), as the home reads it.
+vi.mock('next/headers', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('next/headers')>()),
+  cookies: async () => ({ get: (name: string) => (name === 'twings_brand_mode' && mocks.modeCookie ? { name, value: mocks.modeCookie } : undefined) }),
+}));
 vi.mock('@/lib/db/connect', () => ({ getSqlRunner: async () => mocks.sql }));
 vi.mock('@/lib/auth/viewer', () => ({
   getViewer: async () => mocks.viewer ?? { userId: null, isAdmin: false, tier: 'anon', email: null, locale: null },
@@ -72,6 +77,7 @@ afterEach(() => {
   vi.unstubAllEnvs();
   mocks.path = '/brand/home';
   mocks.query = '';
+  mocks.modeCookie = undefined;
 });
 
 /* -------------------------------------------------------------------- who has it, where sign-in lands */
@@ -369,5 +375,128 @@ describe('the home page', () => {
     // Live facts on the team tile: drafts to look at.
     expect(html).toContain('data-home-team-facts');
     expect(html).toContain('확인할 시안 1개');
+  });
+});
+
+/* -------------------------------------------------------------------- the home follows the rail's mode */
+
+describe('the home in 야기 팀과 (founder 2026-11-20: team customers do not see the making side)', () => {
+  const nav = ko.roomsShell.nav;
+  const ov = ko.roomsShell.overview;
+  const sp = ko.roomsShell.space;
+  const MAKING = ['data-home-prompt', 'data-home-doors', 'data-home-tools', 'data-home-starters', 'data-home-credits', ko.brandStudio.dock.placeholder];
+
+  it('opens the making home with no remembered mode and with 직접 만들기 remembered', async () => {
+    vi.stubEnv('BRAND_STUDIO_V2', 'on');
+    vi.stubEnv('BRAND_ROOMS', 'on');
+    const fx = await homeFixture();
+    mocks.viewer = viewerOf(fx.ids.owner);
+    for (const cookie of [undefined, `${fx.orgId}:make`, 'garbage']) {
+      mocks.modeCookie = cookie;
+      const html = await openHome(fx.orgId);
+      expect(html, String(cookie)).toContain('data-home-mode="make"');
+      // The rail refreshes a page that carries this when the switch is pressed (rail-mode.ts).
+      expect(html).toContain('data-follows-rail-mode');
+      expect(html).toContain('data-home-prompt');
+      expect(html).not.toContain('data-home-team-projects');
+    }
+  });
+
+  it('shows projects with their stage, nothing of the making side, and one request action', async () => {
+    vi.stubEnv('BRAND_STUDIO_V2', 'on');
+    vi.stubEnv('BRAND_ROOMS', 'on');
+    const fx = await homeFixture();
+    mocks.viewer = viewerOf(fx.ids.owner);
+    mocks.modeCookie = `${fx.orgId}:team`;
+    const html = await openHome(fx.orgId);
+    expect(html).toContain('data-home-mode="team"');
+    expect(html).toContain('data-follows-rail-mode');
+    for (const marker of MAKING) expect(html, marker).not.toContain(marker);
+    expect(html).not.toContain(nav.groupMake);
+    expect(html).toContain('Home fixture brand 작업공간');
+    // The project, its room and where it stands, in the room's own words.
+    expect(html).toContain('data-home-team-projects');
+    expect(html).toContain(`data-home-project="${fx.projectId}"`);
+    expect(html).toContain(`/brand/rooms/${fx.projectId}?organizationId=${fx.orgId}`);
+    expect(html).toContain('data-home-project-stage="requested"');
+    for (const stage of ['requested', 'storyboard', 'draft', 'revision', 'done'] as const) expect(html).toContain(ov.stages[stage]);
+    expect(html).toContain(`>${sp.list.all}<`);
+    // One filled action: 새 프로젝트 의뢰.
+    expect(html.match(/data-variant="solid"/g)).toHaveLength(1);
+    expect(html).toContain('data-home-action="commission"');
+    expect(html).toContain(nav.commission);
+    expect(html).toContain(`href="/brand/projects/new?organizationId=${fx.orgId}"`);
+    expect(html).not.toContain('data-home-team-waiting');
+  });
+
+  it('puts what waits on the person first: a draft to review and unread team messages', async () => {
+    vi.stubEnv('BRAND_STUDIO_V2', 'on');
+    vi.stubEnv('BRAND_ROOMS', 'on');
+    const fx = await homeFixture();
+    const deps = studioDeps(fx.sql);
+    const draft = await seedImageOutput(deps, fx.orgId, fx.ids.admin);
+    await fx.sql.query(
+      `insert into brand_studio_reviews (organization_id, output_id, title, created_role, project_id, version, status, source)
+        values ($1, $2, 'Spring launch film', 'studio', $3, 1, 'open', 'delivery')`,
+      [fx.orgId, draft, fx.projectId],
+    );
+    await fx.sql.query(
+      `insert into brand_room_messages (organization_id, project_id, channel, author_id, author_role, kind, body)
+        values ($1, $2::uuid, $3, $4, 'studio', 'text', 'First cut is up')`,
+      [fx.orgId, fx.projectId, fx.projectId, fx.ids.admin],
+    );
+    mocks.viewer = viewerOf(fx.ids.owner);
+    mocks.modeCookie = `${fx.orgId}:team`;
+    const html = await openHome(fx.orgId);
+    const waiting = html.indexOf('data-home-team-waiting');
+    expect(waiting).toBeGreaterThan(-1);
+    expect(waiting).toBeLessThan(html.indexOf('data-home-team-projects'));
+    expect(html).toContain(ov.todoTitle);
+    expect(html).toContain('Spring launch film');
+    expect(html).toContain('시안 v1 확인 대기');
+    expect(html).toContain('안 읽은 메시지 1개');
+    expect(html).toContain(`/brand/rooms/${fx.projectId}?organizationId=${fx.orgId}&amp;tab=chat`);
+    for (const marker of MAKING) expect(html, marker).not.toContain(marker);
+  });
+
+  it('says what working with the team looks like when there is no project yet, with the one action', async () => {
+    vi.stubEnv('BRAND_STUDIO_V2', 'on');
+    vi.stubEnv('BRAND_ROOMS', 'on');
+    const fx = await homeFixture();
+    await fx.sql.query('update brand_projects set client_visible = false where organization_id = $1', [fx.orgId]);
+    mocks.viewer = viewerOf(fx.ids.owner);
+    mocks.modeCookie = `${fx.orgId}:team`;
+    const html = await openHome(fx.orgId);
+    expect(html).toContain('data-home-team-empty');
+    expect(html).toContain(sp.empty.title);
+    expect(html).toContain(sp.empty.body);
+    expect(html).not.toContain('data-home-team-projects');
+    expect(html.match(/data-variant="solid"/g)).toHaveLength(1);
+    expect(html).toContain(`href="/brand/projects/new?organizationId=${fx.orgId}"`);
+    for (const marker of MAKING) expect(html, marker).not.toContain(marker);
+  });
+
+  it('gives a viewer the projects without a request action', async () => {
+    vi.stubEnv('BRAND_STUDIO_V2', 'on');
+    vi.stubEnv('BRAND_ROOMS', 'on');
+    const fx = await homeFixture();
+    mocks.viewer = viewerOf(fx.ids.viewer);
+    mocks.modeCookie = `${fx.orgId}:team`;
+    const html = await openHome(fx.orgId);
+    expect(html).toContain('data-home-mode="team"');
+    expect(html).toContain('data-home-team-projects');
+    expect(html).not.toContain('/brand/projects/new');
+    expect(html).not.toContain('data-variant="solid"');
+    expect(html).toContain('data-home-viewer-note');
+  });
+
+  it('ignores a remembered 야기 팀과 while rooms are closed: no team side, the making home', async () => {
+    vi.stubEnv('BRAND_STUDIO_V2', 'on');
+    const fx = await homeFixture();
+    mocks.viewer = viewerOf(fx.ids.owner);
+    mocks.modeCookie = `${fx.orgId}:team`;
+    const html = await openHome(fx.orgId);
+    expect(html).toContain('data-home-mode="make"');
+    expect(html).toContain('data-home-prompt');
   });
 });

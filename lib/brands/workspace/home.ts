@@ -170,3 +170,38 @@ export function homeDoorPictures(jobs: readonly StudioJobView[], organizationId:
     video: all.find((r) => r.kind === 'video') ?? null,
   };
 }
+
+/* ------------------------------------------------------------------ the home on 야기 팀과 */
+
+/** At most this many projects on the team home; the full list is one link away. */
+export const TEAM_HOME_PROJECTS = 6;
+
+export interface TeamHomeProjectRank {
+  id: string;
+  status: string;
+  updatedAt: string;
+}
+
+/**
+ * Which projects the team home lists, and in what order (founder 2026-11-20: a brand that works with the
+ * team sees its projects, not the making side). Cancelled ones are left out. Projects with something
+ * waiting on the person (a draft or storyboard to decide, unread team messages) come first, then work in
+ * progress, then new requests, then finished work; newest first within each.
+ */
+export function teamHomeProjects<T extends TeamHomeProjectRank>(
+  projects: readonly T[],
+  waiting: Readonly<Record<string, number>>,
+  limit = TEAM_HOME_PROJECTS,
+): T[] {
+  const rank: Record<string, number> = { active: 0, requested: 1, completed: 2 };
+  const time = (value: string) => {
+    const at = Date.parse(value);
+    return Number.isFinite(at) ? at : 0;
+  };
+  return projects
+    .filter((p) => p.status !== 'cancelled')
+    .map((p, index) => ({ p, index, waits: (waiting[p.id] ?? 0) > 0 ? 0 : 1, status: rank[p.status] ?? 3 }))
+    .sort((a, b) => a.waits - b.waits || a.status - b.status || time(b.p.updatedAt) - time(a.p.updatedAt) || a.index - b.index)
+    .slice(0, limit)
+    .map(({ p }) => p);
+}

@@ -1,5 +1,5 @@
 // GitHub PR helper for a PC without `gh`: uses the git credential stored for github.com and never prints it.
-// Usage: node scripts/gh-pr.mjs checks <pr>... | create <head> <base> "<title>" <bodyfile|branch:path> | merge <pr> [title] | comment <pr> <file> | retarget <pr> <base> | close <pr>
+// Usage: node scripts/gh-pr.mjs checks <pr>... | create <head> <base> "<title>" <bodyfile|branch:path> | merge <pr> [title] | comment <pr> <file> | body <pr> <file> | retarget <pr> <base> | close <pr>
 //   node gh-api.mjs checks <pr>...            -> check runs + mergeable state per PR
 //   node gh-api.mjs merge <pr> "<title>"      -> merge PR with a merge commit (only if mergeable and checks green)
 import { execSync } from 'node:child_process';
@@ -60,10 +60,16 @@ if (cmd === 'checks') {
   const [n, base] = args;
   const res = await api(`/repos/${REPO}/pulls/${n}`, { method: 'PATCH', body: JSON.stringify({ base }) });
   console.log(res.ok ? `retargeted #${n} -> ${res.data.base.ref}` : `FAIL ${res.status}: ${res.data.message ?? ''}`);
+} else if (cmd === 'body') {
+  // Replace a PR's description with a local file (the same text `create` takes).
+  const [n, file] = args;
+  const body = (await import('node:fs')).readFileSync(file, 'utf8');
+  const res = await api(`/repos/${REPO}/pulls/${n}`, { method: 'PATCH', body: JSON.stringify({ body }) });
+  console.log(res.ok ? `updated body #${n}` : `FAIL ${res.status}: ${res.data.message ?? ''}`);
 } else if (cmd === 'close') {
   const [n] = args;
   const res = await api(`/repos/${REPO}/pulls/${n}`, { method: 'PATCH', body: JSON.stringify({ state: 'closed' }) });
   console.log(res.ok ? `closed #${n}` : `FAIL ${res.status}: ${res.data.message ?? ''}`);
 } else {
-  console.log('usage: checks <pr>... | merge <pr> [title] | comment <pr> <file> | retarget <pr> <base> | close <pr>');
+  console.log('usage: checks <pr>... | merge <pr> [title] | comment <pr> <file> | body <pr> <file> | retarget <pr> <base> | close <pr>');
 }
