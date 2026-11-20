@@ -158,8 +158,15 @@ def main():
                   and urlparse(found['href']).path == editor_path and query(found['href']) == {'sample': '1', 'organizationId': ORG} and 'classic' not in found['href'],
                   json.dumps(found, ensure_ascii=False).replace(ORG, '<org>'))
             shot('switch-unlisted-current-editor')
+            # Give the current editor a film with one uploaded clip: the thing that must not change.
+            page.click('[data-compose-browser-filter="uploads"]')
+            page.wait_for_timeout(400)
+            page.locator('[data-compose-add-asset]').first.click()
+            page.wait_for_selector('[data-compose-clip-card="0"]', timeout=15000)
+            page.wait_for_timeout(800)
             # The film this browser keeps for the organization, as the current editor left it.
             kept = page.evaluate('(key) => localStorage.getItem(key)', KEY)
+            check('unlisted: that film holds a clip', len(json.loads(kept or '{}').get('clips', [])) == 1)
             check('unlisted: the current editor keeps a film for the organization (the thing that must not change)', bool(kept), f'{len(kept or "")} characters')
             page.click('[data-compose-editor-v2]')
             wait_v2()
