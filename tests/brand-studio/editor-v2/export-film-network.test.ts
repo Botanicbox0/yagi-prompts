@@ -27,8 +27,10 @@ describe('what the export may request', () => {
     // The refusal comes before the request.
     expect(reader.indexOf('if (!allowed.has(url)) throw')).toBeGreaterThan(-1);
     expect(reader.indexOf('if (!allowed.has(url)) throw')).toBeLessThan(reader.indexOf('fetch('));
-    // The address is the allowed one, only rewritten for the media domain's cache entry; cookies stay on this site.
-    expect(reader).toMatch(/fetch\(corsMediaUrl\(url\), \{ credentials: 'same-origin', signal \}\)/);
+    // The address is the allowed one, only rewritten for the media domain's cache entry; cookies stay on this
+    // site. The method is GET (the bytes) or HEAD (only the size, checked before the export starts).
+    expect(reader).toMatch(/fetch\(corsMediaUrl\(url\), \{ method, credentials: 'same-origin', signal \}\)/);
+    expect(reader).toMatch(/method: 'GET' \| 'HEAD'/);
     // The allow list is the film's own media and nothing else.
     expect(source).toMatch(/mediaReader\(soundSourceUrls\(sequence, extras\), signal\)/);
   });

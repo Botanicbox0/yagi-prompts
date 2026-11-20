@@ -18,6 +18,7 @@ import { muxAvc1ToMp4, type EncodedAudioSample, type EncodedVideoSample } from '
 import { COMPOSE_DIMENSIONS, type ComposeOverlayClip, type ComposerProject } from '@/lib/brand-studio/compose/timeline';
 import {
   EXPORT_SAMPLE_RATE,
+  SOUND_BYTES_LIMIT,
   audioPlan,
   captionsAt,
   exportFilename,
@@ -25,6 +26,8 @@ import {
   imageOverlaysAt,
   isKeyFrame,
   notIncluded,
+  soundBytesCheck,
+  soundReads,
   soundShiftSec,
   soundSourceUrls,
   soundWindow,
@@ -36,6 +39,7 @@ import {
 } from '@/lib/brand-studio/editor-v2/export-plan';
 import { CURRENT_EXPORT_BACKGROUND, currentExportFrame } from '@/lib/brand-studio/editor-v2/framing';
 import { totalFrames, type FrameSequence } from '@/lib/brand-studio/editor-v2/frames';
+import { soundTrackOf } from '@/lib/brand-studio/editor-v2/media-probe';
 import { DEFAULT_REFRAME, type Reframe } from '@/lib/brand-studio/editor-v2/model';
 
 export interface ExportProgress {
@@ -73,21 +77,32 @@ export interface ExportFilmResult {
   elapsedMs: number;
   /** What the stored film carries that is not in this file (declared before export by the sheet too). */
   notIncluded: NotIncludedKey[];
+  /** Things the file lacks that the person should hear about (a sound track that could not be read). */
+  warnings: ExportWarning[];
 }
 
-export type ExportStopReason = 'empty' | 'unsupported' | 'load' | 'frame' | 'encode' | 'sound' | 'cancelled';
+/** A cut whose footage HAS a sound track the browser could not decode: its sound is not in the file. */
+export interface ExportWarning {
+  kind: 'sound';
+  clip: string;
+}
+
+export type ExportStopReason = 'empty' | 'unsupported' | 'load' | 'frame' | 'encode' | 'sound' | 'memory' | 'cancelled';
 
 /** Why an export stopped. `frame` (film frame) and `clip` (cut label) say where, when it was a picture. */
 export class ExportStop extends Error {
   readonly reason: ExportStopReason;
   readonly frame: number | null;
   readonly clip: string | null;
-  constructor(reason: ExportStopReason, message: string, where: { frame?: number; clip?: string } = {}) {
+  /** For `memory`: how many bytes the film's sound sources add up to. */
+  readonly bytes: number | null;
+  constructor(reason: ExportStopReason, message: string, where: { frame?: number; clip?: string; bytes?: number } = {}) {
     super(message);
     this.name = 'ExportStop';
     this.reason = reason;
     this.frame = where.frame ?? null;
     this.clip = where.clip ?? null;
+    this.bytes = where.bytes ?? null;
   }
 }
 
@@ -429,32 +444,54 @@ export function scheduleCutSound(
   return placed;
 }
 
-/** Reads one of the film's own media files. Any other address is refused before a request is made. */
+/**
+ * Reads one of the film's own media files, or asks only its size (`HEAD`). Any other address is refused
+ * before a request is made.
+ */
 function mediaReader(allowed: ReadonlySet<string>, signal?: AbortSignal) {
-  return async (url: string): Promise<ArrayBuffer> => {
+  const request = async (url: string, method: 'GET' | 'HEAD'): Promise<Response> => {
     if (!allowed.has(url)) throw new ExportStop('sound', `refused to read a file that is not part of the film: ${url}`);
     let response: Response;
     try {
-      response = await fetch(corsMediaUrl(url), { credentials: 'same-origin', signal });
+      response = await fetch(corsMediaUrl(url), { method, credentials: 'same-origin', signal });
     } catch (error) {
       if (signal?.aborted) throw cancelled();
       throw new ExportStop('sound', `could not read ${url}: ${error instanceof Error ? error.message : String(error)}`);
     }
     if (!response.ok) throw new ExportStop('sound', `could not read ${url}: HTTP ${response.status}`);
-    return await response.arrayBuffer();
+    return response;
+  };
+  return {
+    read: async (url: string): Promise<ArrayBuffer> => (await request(url, 'GET')).arrayBuffer(),
+    /** The file's length from its headers; `null` when the server does not say (or will not answer `HEAD`). */
+    size: async (url: string): Promise<number | null> => {
+      try {
+        const length = Number((await request(url, 'HEAD')).headers.get('content-length'));
+        return Number.isFinite(length) && length > 0 ? length : null;
+      } catch (error) {
+        if (signal?.aborted) throw cancelled();
+        if (error instanceof ExportStop && error.message.startsWith('refused')) throw error;
+        return null;
+      }
+    },
   };
 }
+
+type MediaReader = ReturnType<typeof mediaReader>;
 
 async function mixSound(
   sequence: FrameSequence,
   extras: ComposerProject | null,
+  reader: MediaReader,
   signal: AbortSignal | undefined,
   progress: (done: number, total: number) => void,
-): Promise<AudioBuffer> {
+): Promise<{ rendered: AudioBuffer; warnings: ExportWarning[] }> {
   const plan = audioPlan(sequence, EXPORT_SAMPLE_RATE);
   const totalSec = plan.totalSamples / plan.sampleRate;
   const context = new OfflineAudioContext(2, Math.max(1, plan.totalSamples), plan.sampleRate);
-  const read = mediaReader(soundSourceUrls(sequence, extras), signal);
+  const read = reader.read;
+  const warnings: ExportWarning[] = [];
+  const labelOf = (url: string) => sequence.clips.find((clip) => clip.srcUrl === url)?.label ?? url;
   const cutUrls = [...new Set(plan.segments.filter((s) => s.gain > 0).map((s) => s.srcUrl))];
   const bgm = extras?.bgm && extras.bgm.volume > 0 && extras.bgm.srcUrl ? extras.bgm : null;
   const sfx = (extras?.sfxClips ?? []).filter((clip) => clip.volume > 0 && clip.srcUrl);
@@ -462,12 +499,17 @@ async function mixSound(
   let step = 0;
   progress(step, steps);
 
-  // A cut's footage without a sound track decodes to nothing and is simply silent.
+  // A cut's footage without a sound track decodes to nothing and is simply silent. Footage that HAS a
+  // sound track the browser cannot decode (or that cannot be told) is silent too, and said so after export.
   const buffers = new Map<string, AudioBuffer | null>();
   for (const url of cutUrls) {
     throwIfAborted(signal);
     const bytes = await read(url);
-    buffers.set(url, await context.decodeAudioData(bytes).catch(() => null));
+    // Inspected before decoding: decoding hands the bytes over.
+    const track = soundTrackOf(new Uint8Array(bytes));
+    const decoded = await context.decodeAudioData(bytes).catch(() => null);
+    if (!decoded && track !== 'no') warnings.push({ kind: 'sound', clip: labelOf(url) });
+    buffers.set(url, decoded);
     progress((step += 1), steps);
   }
   // Music and effects are sound files: one that cannot be decoded stops the export.
@@ -512,7 +554,7 @@ async function mixSound(
   throwIfAborted(signal);
   const rendered = await context.startRendering();
   progress((step += 1), steps);
-  return rendered;
+  return { rendered, warnings };
 }
 
 async function encodeAac(rendered: AudioBuffer, signal?: AbortSignal): Promise<{ sampleRate: number; channelCount: number; samples: EncodedAudioSample[]; audioSpecificConfig: Uint8Array | null }> {
@@ -576,6 +618,12 @@ export async function exportFilm(options: ExportFilmOptions): Promise<ExportFilm
   if (!codec) throw new ExportStop('unsupported', `no H.264 encoder for ${width}×${height} at ${fps} fps`);
   const audioSupport = await AudioEncoder.isConfigSupported(AUDIO_CONFIG).catch(() => null);
   if (!audioSupport?.supported) throw new ExportStop('unsupported', 'this browser cannot write the sound track');
+
+  // Everything the sound mix reads whole into this tab, added up before the first frame: above the limit
+  // the export does not start (review round 1, item 10).
+  const reader = mediaReader(soundSourceUrls(sequence, extras), signal);
+  const weight = soundBytesCheck(await Promise.all(soundReads(sequence, extras).map((url) => reader.size(url))));
+  if (weight.over) throw new ExportStop('memory', `the film's sound sources add up to ${weight.total} bytes (limit ${SOUND_BYTES_LIMIT})`, { bytes: weight.total });
 
   const plan = videoPlan(sequence);
   const labels = new Map(sequence.clips.map((clip) => [clip.id, clip.label] as const));
@@ -655,7 +703,7 @@ export async function exportFilm(options: ExportFilmOptions): Promise<ExportFilm
     encoder.close();
     encoder = null;
 
-    const rendered = await mixSound(sequence, extras, signal, (done, total) => onProgress?.({ phase: 'audio', done, total }));
+    const { rendered, warnings } = await mixSound(sequence, extras, reader, signal, (done, total) => onProgress?.({ phase: 'audio', done, total }));
     const audio = await encodeAac(rendered, signal);
 
     throwIfAborted(signal);
@@ -673,6 +721,7 @@ export async function exportFilm(options: ExportFilmOptions): Promise<ExportFilm
       durationSec: frames / fps,
       elapsedMs: Math.round(performance.now() - started),
       notIncluded: notIncluded({ sequence, extras }),
+      warnings,
     };
   } finally {
     if (encoder && encoder.state !== 'closed') encoder.close();

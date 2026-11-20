@@ -249,6 +249,43 @@ export function soundSourceUrls(sequence: FrameSequence, extras?: ComposerProjec
   return urls;
 }
 
+/**
+ * What the export reads whole into the page to mix the sound, each once, in order: the cuts that are
+ * heard (a muted or silent cut is not read), then music and effects that are not silent.
+ */
+export function soundReads(sequence: FrameSequence, extras?: ComposerProject | null): string[] {
+  const urls: string[] = [];
+  const add = (url: string | null | undefined) => {
+    if (url && !urls.includes(url)) urls.push(url);
+  };
+  for (const clip of sequence.clips) if (!clip.muted && clip.volume > 0) add(clip.srcUrl);
+  if (extras?.bgm && extras.bgm.volume > 0) add(extras.bgm.srcUrl);
+  for (const sfx of extras?.sfxClips ?? []) if (sfx.volume > 0) add(sfx.srcUrl);
+  return urls;
+}
+
+/**
+ * How much the export may read into one tab for sound, all sources together (review round 1, item 10).
+ * Each source is read whole (then decoded), so a film of large sources can take the tab down. Measured on
+ * the development workstation (Chromium, full build): one tab held 15.5 GiB of response bodies before
+ * "Array buffer allocation failed". Customers' laptops share 8–16 GB with the whole browser, and the
+ * same tab also holds the video decoders, the decoded sound and the file being written, so the limit is
+ * 1 GiB: a sixteenth of that ceiling. Uploads are at most 50 MB per video (lib/brand-studio/contracts.ts),
+ * so only a film of about twenty large, different sources reaches it.
+ */
+export const SOUND_BYTES_LIMIT = 1024 ** 3;
+
+/** The sizes added up (unknown sizes are counted apart); `over` when they pass the limit. */
+export function soundBytesCheck(sizes: ReadonlyArray<number | null>, limit = SOUND_BYTES_LIMIT): { total: number; unknown: number; over: boolean } {
+  let total = 0;
+  let unknown = 0;
+  for (const size of sizes) {
+    if (typeof size === 'number' && Number.isFinite(size) && size >= 0) total += size;
+    else unknown += 1;
+  }
+  return { total, unknown, over: total > limit };
+}
+
 // ── Labels ─────────────────────────────────────────────────────────────────────────────────────
 
 /** `twings-edit-2026-11-21.mp4` */
@@ -257,8 +294,9 @@ export function exportFilename(date: Date, extension = 'mp4'): string {
   return `twings-edit-${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}.${extension}`;
 }
 
-/** `12.4 MB` / `840 KB` */
+/** `1.2 GB` / `12.4 MB` / `840 KB` */
 export function formatBytes(bytes: number): string {
+  if (bytes >= 1024 * 1024 * 1024) return `${(bytes / 1024 / 1024 / 1024).toFixed(1)} GB`;
   if (bytes >= 1024 * 1024) return `${(bytes / 1024 / 1024).toFixed(1)} MB`;
   return `${Math.max(1, Math.round(bytes / 1024))} KB`;
 }

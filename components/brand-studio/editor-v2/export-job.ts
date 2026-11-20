@@ -6,7 +6,7 @@
 import type { ComposerProject } from '@/lib/brand-studio/compose/timeline';
 import { totalFrames, type FrameSequence } from '@/lib/brand-studio/editor-v2/frames';
 import type { Reframe } from '@/lib/brand-studio/editor-v2/model';
-import { ExportStop, exportFilm, type ExportProgress, type ExportStopReason } from './export-film';
+import { ExportStop, exportFilm, type ExportProgress, type ExportStopReason, type ExportWarning } from './export-film';
 
 export type ExportJob =
   | { status: 'idle' }
@@ -20,8 +20,10 @@ export type ExportJob =
       fps: number;
       elapsedMs: number;
       captionFile: { url: string; filename: string } | null;
+      /** What the file lacks that the person should hear about (a clip's unreadable sound). */
+      warnings: ExportWarning[];
     }
-  | { status: 'failed'; reason: ExportStopReason; frame: number | null; clip: string | null; message: string; fps: number };
+  | { status: 'failed'; reason: ExportStopReason; frame: number | null; clip: string | null; bytes: number | null; message: string; fps: number };
 
 export interface ExportRequest {
   sequence: FrameSequence;
@@ -111,7 +113,7 @@ export function startExport(request: ExportRequest): void {
       const captionFile = request.captionText
         ? { url: URL.createObjectURL(new Blob([request.captionText], { type: 'application/x-subrip' })), filename: result.filename.replace(/\.mp4$/, '.srt') }
         : null;
-      set({ status: 'done', url, filename: result.filename, bytes: result.blob.size, frames: result.frames, fps: result.fps, elapsedMs: result.elapsedMs, captionFile });
+      set({ status: 'done', url, filename: result.filename, bytes: result.blob.size, frames: result.frames, fps: result.fps, elapsedMs: result.elapsedMs, captionFile, warnings: result.warnings });
       downloadFile(url, result.filename);
       if (openSheets === 0) request.notify('done');
     },
@@ -121,7 +123,7 @@ export function startExport(request: ExportRequest): void {
       const stop = error instanceof ExportStop ? error : new ExportStop('encode', error instanceof Error ? error.message : String(error));
       // The plain sentence goes on screen; the exact frame, clip and cause stay in the console for us.
       if (stop.reason !== 'cancelled') console.warn('[editor export]', stop.message);
-      set({ status: 'failed', reason: stop.reason, frame: stop.frame, clip: stop.clip, message: stop.message, fps });
+      set({ status: 'failed', reason: stop.reason, frame: stop.frame, clip: stop.clip, bytes: stop.bytes, message: stop.message, fps });
       if (stop.reason !== 'cancelled' && openSheets === 0) request.notify('failed');
     },
   );

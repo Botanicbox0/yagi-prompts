@@ -3,7 +3,7 @@
 import { useEffect, useState, useSyncExternalStore } from 'react';
 import { fill } from '@/components/brand-studio/copy';
 import type { ComposerProject } from '@/lib/brand-studio/compose/timeline';
-import { burnsCaptions, formatBytes, notIncluded, writesCaptionFile } from '@/lib/brand-studio/editor-v2/export-plan';
+import { SOUND_BYTES_LIMIT, burnsCaptions, formatBytes, notIncluded, writesCaptionFile } from '@/lib/brand-studio/editor-v2/export-plan';
 import { formatTimecode, totalFrames } from '@/lib/brand-studio/editor-v2/frames';
 import { captionsToSrt, type EditorWorkspace } from '@/lib/brand-studio/editor-v2/model';
 import { filmContents } from '@/lib/brand-studio/editor-v2/film-contents';
@@ -192,6 +192,11 @@ function ExportStatus({ job, copy: e }: { job: ExportJob; copy: ExportCopy }) {
       <div className={styles.exportRun} data-editor-export-done={job.filename} data-editor-export-ms={job.elapsedMs}>
         <p className={styles.exportCount} role="status">{e.done}</p>
         <p className={styles.note}>{fill(e.doneFacts, { size: formatBytes(job.bytes), length: formatTimecode(job.frames, job.fps) })}</p>
+        {job.warnings.map((warning) => (
+          <p key={`${warning.kind}-${warning.clip}`} className={styles.exportError} role="alert" data-editor-export-warning={warning.kind}>
+            {fill(e.warnSound, { clip: warning.clip })}
+          </p>
+        ))}
         <p className={styles.exportLinks}>
           <a href={job.url} download={job.filename} data-editor-export-again>
             {e.downloadAgain}
@@ -211,7 +216,9 @@ function ExportStatus({ job, copy: e }: { job: ExportJob; copy: ExportCopy }) {
         ? fill(e.failed.frame, { time: formatTimecode(job.frame ?? 0, job.fps), clip: job.clip ?? '' })
         : job.reason === 'load'
           ? fill(e.failed.load, { clip: job.clip ?? '' })
-          : e.failed[job.reason];
+          : job.reason === 'memory'
+            ? fill(e.failed.memory, { total: formatBytes(job.bytes ?? 0), limit: formatBytes(SOUND_BYTES_LIMIT) })
+            : e.failed[job.reason];
     return (
       <p className={job.reason === 'cancelled' ? styles.note : styles.exportError} role={job.reason === 'cancelled' ? 'status' : 'alert'} data-editor-export-failed={job.reason}>
         {sentence}
