@@ -145,6 +145,11 @@ export interface SunraQueueState {
 /** The result body of a completed prediction: every file it produced, plus the fields the brand studio needs. */
 export interface SunraQueueResult {
   files: Array<{ url: string; contentType: string | null }>;
+  /**
+   * Music (`clips[]`, Suno on Sunra): each version with its own length and the engine's ids, in order.
+   * Their files are also in `files`.
+   */
+  clips?: Array<{ url: string; seconds: number | null; meta: Record<string, string> }>;
   draftTaskId: string | null;
   /** Billing units (1000 units = $1), when reported. */
   units: number | null;
@@ -206,9 +211,22 @@ export function parseSunraQueueResult(raw: unknown): SunraQueueResult {
   if (result.audio) push(result.audio, 'audio/mpeg');
   if (typeof result.audio_url === 'string' && result.audio_url) push(result.audio_url, 'audio/mpeg');
   if (result.image) push(result.image);
+  const clips: NonNullable<SunraQueueResult['clips']> = [];
+  if (Array.isArray(result.clips)) {
+    for (const raw of result.clips) {
+      const clip = asRecord(raw);
+      if (typeof clip.audio_url !== 'string' || !clip.audio_url) continue;
+      const meta: Record<string, string> = {};
+      for (const [from, to] of [['task_id', 'taskId'], ['clip_id', 'clipId'], ['title', 'title'], ['lyrics', 'lyrics']] as const) {
+        if (typeof clip[from] === 'string' && clip[from]) meta[to] = String(clip[from]).slice(0, 6000);
+      }
+      clips.push({ url: clip.audio_url, seconds: numberOf(clip.duration), meta });
+      files.push({ url: clip.audio_url, contentType: 'audio/mpeg' });
+    }
+  }
   const video = asRecord(result.video);
   const draft = typeof result.draft_task_id === 'string' ? result.draft_task_id : typeof video.draft_task_id === 'string' ? video.draft_task_id : null;
-  return { files, draftTaskId: draft || null, units: numberOf(result.units), durationSeconds: numberOf(result.duration) };
+  return { files, ...(clips.length ? { clips } : {}), draftTaskId: draft || null, units: numberOf(result.units), durationSeconds: numberOf(result.duration) };
 }
 
 export function createSunraClient(

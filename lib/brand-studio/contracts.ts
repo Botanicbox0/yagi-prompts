@@ -41,7 +41,8 @@ export type StudioAssetSource = (typeof STUDIO_ASSET_SOURCES)[number];
  * `video_remix`   one reference video (+ images) + what to keep/change -> a video
  * `video_final`   a finished 480p draft -> its 1080p final
  */
-export const STUDIO_JOB_KINDS = ['image', 'region_edit', 'video', 'video_remix', 'video_final'] as const;
+/** `music` and `sound_effect`: the sound studio (docs/BRAND-SOUND-STUDIO.md §7.2, migration 0172). */
+export const STUDIO_JOB_KINDS = ['image', 'region_edit', 'video', 'video_remix', 'video_final', 'music', 'sound_effect'] as const;
 export type StudioJobKind = (typeof STUDIO_JOB_KINDS)[number];
 
 /**
@@ -565,6 +566,15 @@ export const FilmAnalyzeSchema = z.object({ organizationId: Id, assetId: Id, dep
 
 export const AssetRefSchema = z.object({ organizationId: Id, assetId: Id });
 export const OutputRefSchema = z.object({ organizationId: Id, outputId: Id });
+/** `lyrics.draft`: a first draft of lyrics for the sound studio (docs/BRAND-SOUND-STUDIO.md §7.5). Free, rate-limited. */
+export const LyricsDraftSchema = z
+  .object({ organizationId: Id, topic: z.string().trim().min(1).max(1000), language: z.enum(['ko', 'en']) })
+  .strict();
+export type StudioLyricsDraft = { ok: true; lyrics: string };
+/** `output.waveform`: the first browser that decodes an audio result keeps its peaks (docs/BRAND-SOUND-STUDIO.md §7.4). */
+export const OutputWaveformSchema = z
+  .object({ organizationId: Id, outputId: Id, peaks: z.array(z.number().min(0).max(1)).min(1).max(1000) })
+  .strict();
 export const JobRefSchema = z.object({ organizationId: Id, jobId: Id });
 
 /** `job.assign_project`: put a run (and everything made from it) in a project; `null` takes it out. */
@@ -614,6 +624,8 @@ export const STUDIO_OPERATIONS = [
   'job.delete',
   'job.assign_project',
   'handoff.campaign',
+  'output.waveform',
+  'lyrics.draft',
 ] as const;
 export type StudioOperation = (typeof STUDIO_OPERATIONS)[number];
 
@@ -656,7 +668,7 @@ export interface StudioAssetView {
 export interface StudioOutputView {
   id: string;
   jobId: string;
-  kind: 'image' | 'video';
+  kind: 'image' | 'video' | 'audio';
   url: string;
   thumbUrl: string | null;
   width: number | null;
@@ -685,6 +697,8 @@ export interface StudioOutputView {
   } | null;
   /** Region edit only: the source asset or output this result was cut from. */
   sourceRef?: { assetId?: string; outputId?: string } | null;
+  /** Audio results: the peaks the list draws (0..1), or null until a browser has saved them. */
+  waveform?: number[] | null;
   createdAt: string;
 }
 
@@ -719,6 +733,8 @@ export interface StudioJobView {
   box: RegionBox | null;
   /** `fill`: an internal "빈 곳 채우기" strip. Screens that list runs or results skip it. */
   purpose?: 'fill';
+  /** Music only (docs/BRAND-SOUND-STUDIO.md §7.2): the list name and what the customer chose. */
+  music?: { title: string; vocal: boolean; mode: 'describe' | 'custom'; careful: boolean; lyrics: string | null };
   /** Remix only: how the reference video was used, what was kept and what was changed. */
   method: StudioRemixMethod | null;
   keep: StudioKeepKey[];

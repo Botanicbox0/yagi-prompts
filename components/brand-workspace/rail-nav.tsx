@@ -73,6 +73,8 @@ export interface RailNavigationProps {
   studioShowroom?: boolean;
   /** The creator pool is open and this role may use it. */
   creators: boolean;
+  /** The sound studio is open for this brand (lib/brand-studio/visibility.ts `soundStudioVisible`). */
+  sound?: boolean;
   identity: boolean;
   team: boolean;
   settings: boolean;
@@ -196,6 +198,7 @@ export function RailNavigation(props: RailNavigationProps) {
     creators: props.creators,
     identity: props.identity,
     rooms: nav !== null,
+    sound: props.sound,
   });
   // With rooms, the saved order applies inside each group and never moves an item across groups.
   const groups = nav ? groupItems(visibleItems, order) : null;

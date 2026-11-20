@@ -92,7 +92,9 @@ export function createSunraStudioProvider(
       const costUsd = state.billingUsd ?? (result.units !== null && result.units > 0 ? result.units / 1000 : undefined);
       return {
         state: 'succeeded',
-        outputs: result.files.map((f) => ({ url: f.url, mime: f.contentType, seconds: result.durationSeconds })),
+        outputs: result.clips?.length
+          ? result.clips.map((c) => ({ url: c.url, mime: 'audio/mpeg', seconds: c.seconds, meta: c.meta }))
+          : result.files.map((f) => ({ url: f.url, mime: f.contentType, seconds: result.durationSeconds })),
         ...(costUsd !== undefined ? { costUsd } : {}),
         ...(result.draftTaskId ? { draftTaskId: result.draftTaskId } : {}),
       };

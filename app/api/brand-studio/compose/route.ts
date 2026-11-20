@@ -58,7 +58,8 @@ async function serve(request: NextRequest, head: boolean): Promise<NextResponse>
         return asset.storage_key;
       }
       const output = await readyOutput(tx, organizationId, id);
-      if (!output || output.kind !== 'video' || !output.storage_key || !isStudioMediaKey(output.storage_key)) {
+      // Audio results stream too: the sound studio plays and draws them from here (docs/BRAND-SOUND-STUDIO.md §7.4).
+      if (!output || (output.kind !== 'video' && output.kind !== 'audio') || !output.storage_key || !isStudioMediaKey(output.storage_key)) {
         throw new StudioDenied('not_found');
       }
       return output.storage_key;

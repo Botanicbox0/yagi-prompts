@@ -11,6 +11,8 @@ import {
   brandStudioProjectsOpen,
   brandStudioRegionV2Open,
   brandStudioReviseV2Open,
+  brandSoundMaxModeShown,
+  brandSoundStudioOpen,
 } from '@/lib/flags';
 import { STUDIO_LANES, type StudioLane } from './models';
 
@@ -40,6 +42,10 @@ export interface StudioEnv {
   reviseV2?: boolean;
   /** `BRAND_STUDIO_MUSIC_GENERATION=on`: `music.generate` and its controls (lib/flags.ts). Closed by default. */
   musicGeneration?: boolean;
+  /** `BRAND_SOUND_STUDIO=on`: the sound studio (docs/BRAND-SOUND-STUDIO.md, lib/flags.ts). Closed by default. */
+  soundStudio?: boolean;
+  /** `BRAND_SOUND_MAX_MODE` is not `off`: "더 고르게 만들기" is offered (lib/flags.ts). */
+  soundMaxMode?: boolean;
 }
 
 function whole(value: string | undefined, fallback: number, max: number): number {
@@ -89,6 +95,8 @@ export function studioEnv(env: StudioEnvSource = process.env): StudioEnv {
     editAssist: brandStudioEditAssistOpen(env),
     reviseV2: brandStudioReviseV2Open(env),
     musicGeneration: brandStudioMusicGenerationOpen(env),
+    soundStudio: brandSoundStudioOpen(env),
+    soundMaxMode: brandSoundMaxModeShown(env),
   };
 }
 

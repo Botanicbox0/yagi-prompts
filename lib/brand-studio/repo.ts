@@ -14,6 +14,7 @@ import type {
   StudioReference,
 } from './contracts';
 import { finalPrice } from './final-price';
+import { cleanPeaks } from './sound/waveform';
 import type { StudioMediaStore } from './media-store';
 import { studioModel } from './models';
 import { isStudioMediaKeyReferenced } from './physical-cleanup';
@@ -81,6 +82,7 @@ export function outputView(
     savedAssetId: row.saved_asset_id,
     ...(extra?.regionPatch !== undefined ? { regionPatch: extra.regionPatch } : {}),
     ...(extra?.sourceRef !== undefined ? { sourceRef: extra.sourceRef } : {}),
+    ...(row.kind === 'audio' ? { waveform: cleanPeaks(row.waveform) } : {}),
     createdAt: iso(row.created_at)!,
   };
 }
@@ -110,7 +112,11 @@ export function jobView(row: JobRow, outputs: OutputRow[], media: StudioMediaSto
             ? { outputId: p.source.outputId }
             : null
       : undefined;
+  const music = row.kind === 'music' && p.music
+    ? { music: { title: p.music.title, vocal: p.music.vocal, mode: p.music.mode, careful: p.music.careful, lyrics: p.music.lyrics ?? null } }
+    : {};
   return {
+    ...music,
     id: row.id,
     kind: row.kind,
     status: row.status,

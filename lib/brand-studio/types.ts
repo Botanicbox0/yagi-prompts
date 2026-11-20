@@ -178,6 +178,8 @@ export interface StudioJobParams {
   audio: StudioAudioMode | null;
   count: number;
   locale: 'ko' | 'en';
+  /** Music runs (docs/BRAND-SOUND-STUDIO.md §7.2): what the customer chose and the conditions it was made under. */
+  music?: StudioMusicParams;
   /**
    * The rewritten sentence the customer read in the prompt bar before sending (plain image and video runs).
    * It becomes `final_prompt` as it is; the row's `prompt` stays what they typed and `enhance` is false.
@@ -243,6 +245,20 @@ export interface StudioPendingResult {
   seconds?: number | null;
   costUsd?: number | null;
   draftTaskId?: string | null;
+  /**
+   * Music: every version the one request returned, in order (the first is this result). Finishing gives each
+   * further version its own result row (docs/BRAND-SOUND-STUDIO.md §7.2).
+   */
+  versions?: StudioPendingVersion[];
+  /** Music: the engine's ids for this version (needed later to extend it) and its own title and lyrics. */
+  meta?: Record<string, string>;
+}
+
+export interface StudioPendingVersion {
+  url: string;
+  mime: string | null;
+  seconds?: number | null;
+  meta?: Record<string, string>;
 }
 
 export interface StudioJobWork {
@@ -321,7 +337,7 @@ export interface OutputRow {
   job_id: string;
   organization_id: string;
   idx: number;
-  kind: 'image' | 'video';
+  kind: 'image' | 'video' | 'audio';
   status: 'pending' | 'ready' | 'failed';
   provider_task_id: string | null;
   draft_task_id: string | null;
@@ -337,6 +353,8 @@ export interface OutputRow {
   saved_asset_id: string | null;
   created_at: Date | string;
   deleted_at: Date | string | null;
+  /** Audio only (migration 0172): peaks the list draws; absent before the migration. */
+  waveform?: unknown;
 }
 
 export interface AssetRow {
@@ -366,4 +384,19 @@ export interface AssetRow {
   request_id: string | null;
   created_at: Date | string;
   deleted_at: Date | string | null;
+}
+
+/** A music run's settings (docs/BRAND-SOUND-STUDIO.md §7.2). Never sent to a screen as engine words. */
+export interface StudioMusicParams {
+  mode: 'describe' | 'custom';
+  vocal: boolean;
+  /** The language sung in when there are vocals and no lyrics. */
+  language: 'ko' | 'en';
+  /** The list name, made from the description. */
+  title: string;
+  /** "더 고르게 만들기" (custom mode only). */
+  careful: boolean;
+  lyrics?: string;
+  /** The conditions snapshot: engine, endpoint, and our terms version. */
+  made: { engine: string; endpoint: string; terms: string };
 }

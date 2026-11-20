@@ -16,7 +16,8 @@ export interface BlockRetryPlan {
 
 /** Null when the run may not be retried: it already was, it is a 1080p final, or the request is what the review is for. */
 export async function planBlockRetry(deps: Pick<StudioDeps, 'intel' | 'intelDeps' | 'log'>, job: JobRow): Promise<BlockRetryPlan | null> {
-  if (job.work.blockRetry || job.kind === 'video_final') return null;
+  // Music and sound effects have no rewording pass: a blocked description fails and takes nothing (docs/BRAND-SOUND-STUDIO.md §5).
+  if (job.work.blockRetry || job.kind === 'video_final' || job.kind === 'music' || job.kind === 'sound_effect') return null;
   const model = studioModel(job.model);
   const rewrite = deps.intel.rewriteBlockedPrompt;
   if (!model || !rewrite) return null;

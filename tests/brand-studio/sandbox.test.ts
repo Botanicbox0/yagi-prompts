@@ -68,6 +68,10 @@ function validInput(operation: StudioOperation, organizationId: string): Record<
     case 'asset.from_output':
     case 'output.delete':
       return { organizationId, outputId: id };
+    case 'output.waveform':
+      return { organizationId, outputId: id, peaks: [0, 0.5, 1] };
+    case 'lyrics.draft':
+      return { organizationId, topic: 'a calm morning', language: 'ko' };
     case 'handoff.campaign':
       return { organizationId, requestId: requestId(), outputId: id, newProject: { title: 'A campaign', objective: 'An objective' } };
   }

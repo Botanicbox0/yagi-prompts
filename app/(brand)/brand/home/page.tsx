@@ -19,7 +19,8 @@ import { featureDenied, isSandboxedClientOrganization } from '@/lib/brands/featu
 import { brandHomeVisible, homeDoorPictures, homeLayout, homeResults, teamHomeProjects } from '@/lib/brands/workspace/home';
 import { loadBrandWorkspace } from '@/lib/brands/workspace/service';
 import { scopedHref } from '@/lib/brands/workspace/selection';
-import { brandRoomsOpen, brandStudioV2Open } from '@/lib/flags';
+import { brandRoomsOpen, brandSoundStudioOpen, brandStudioV2Open } from '@/lib/flags';
+import { soundStudioVisible } from '@/lib/brand-studio/visibility';
 
 /**
  * `/brand/home` — the workspace home (docs/BRAND-STUDIO-V3.md §12): what this brand can do (one card per
@@ -82,7 +83,7 @@ export default async function BrandWorkspaceHome({
   const access = selectedAccess(choice, Object.values(projectOrganizations).filter((o) => o === choice.id));
   const rooms = roomsOpenFor(choice, brandRoomsOpen());
   const canRequest = !access.staff && access.canRequest;
-  const layout = homeLayout({ choice, flagOn: true, canRequest, rooms });
+  const layout = homeLayout({ choice, flagOn: true, canRequest, rooms, sound: soundStudioVisible(choice, true, brandSoundStudioOpen()) });
   if (!layout) notFound();
   // The rail's mode for this brand (rail-mode.ts): the home is shared by both sides, so the remembered
   // one decides which home this is. The TWINGS team view has no rooms in its rail, so no modes either.

@@ -22,6 +22,7 @@ export const brandHomeEn = {
   lines: {
     image: 'Create images with text and product photos.',
     video: 'Create short videos from text or images.',
+    sound: 'Create background music from text.',
     compose: 'Edit clips and export them as one video.',
     workflows: 'Save successful workflows as reusable templates.',
     assets: 'Manage brand files and results in one place.',
@@ -60,6 +61,7 @@ export const brandHomeKo: typeof brandHomeEn = {
   lines: {
     image: '텍스트와 제품 사진으로 이미지를 만들어요.',
     video: '텍스트나 이미지로 짧은 영상을 만들어요.',
+    sound: '글로 설명해서 배경 음악을 만들어요.',
     compose: '영상 클립을 편집해 한 편의 영상으로 내보내요.',
     workflows: '잘 나온 작업 방식을 템플릿으로 저장해 써요.',
     assets: '브랜드 파일과 작업 결과물을 한곳에서 관리해요.',

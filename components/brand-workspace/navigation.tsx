@@ -3,7 +3,7 @@ import { useEffect, useState, type DragEvent } from 'react';
 import { usePathname } from 'next/navigation';
 import { featureDenied, isSandboxedClientOrganization } from '@/lib/brands/features';
 import { poolVisible, scopedHref, sectionVisibility, selectedChoice, type BrandWorkspaceScope } from '@/lib/brands/workspace/selection';
-import { studioShowroomVisible, studioV2Visible } from '@/lib/brand-studio/visibility';
+import { soundStudioVisible, studioShowroomVisible, studioV2Visible } from '@/lib/brand-studio/visibility';
 import { brandHomeVisible } from '@/lib/brands/workspace/home';
 import type { StudioShellCopy } from '@/messages/studio-shell';
 import type { RoomsShellCopy } from '@/messages/rooms-shell';
@@ -279,9 +279,11 @@ type RailInputs = {
   homeLabel?: string;
   /** The rail mode this browser last used per brand (the layout reads the `twings_brand_mode` cookie, rail-mode.ts). */
   railModes?: Readonly<Record<string, RailMode>>;
+  /** `brandSoundStudioOpen()` read by the layout: the rail's 사운드 스튜디오 (docs/BRAND-SOUND-STUDIO.md §4.1). */
+  soundStudio?: boolean;
 };
 
-function Scoped({ scope, studioV2 = false, shell, locale = 'ko', railExpanded = false, rooms = false, roomsCopy, homeLabel, railModes, ...labels }: Labels & RailInputs & { scope: BrandWorkspaceScope }) {
+function Scoped({ scope, studioV2 = false, shell, locale = 'ko', railExpanded = false, rooms = false, roomsCopy, homeLabel, railModes, soundStudio = false, ...labels }: Labels & RailInputs & { scope: BrandWorkspaceScope }) {
   const choice = selectedChoice(useWorkspaceSelection(scope).selection);
   const isMorphic = Boolean(
     choice && (isSandboxedClientOrganization(choice) || featureDenied(choice.denied, 'generative_media')),
@@ -300,6 +302,7 @@ function Scoped({ scope, studioV2 = false, shell, locale = 'ko', railExpanded = 
         organizationId={choice?.id ?? null}
         studio={studio}
         studioShowroom={studioShowroom}
+        sound={studio && soundStudioVisible(choice, true, soundStudio)}
         creators={poolVisible(choice) && Boolean(labels.creators)}
         identity={Boolean(visible.identity && labels.identity)}
         team={visible.members}
@@ -340,10 +343,11 @@ export function WorkspaceNavigation({
   roomsCopy,
   homeLabel,
   railModes,
+  soundStudio,
   ...labels
 }: Labels & RailInputs & { scope?: BrandWorkspaceScope | null }) {
   return scope ? (
-    <Scoped scope={scope} studioV2={studioV2} shell={shell} locale={locale} railExpanded={railExpanded} rooms={rooms} roomsCopy={roomsCopy} homeLabel={homeLabel} railModes={railModes} {...labels} />
+    <Scoped scope={scope} studioV2={studioV2} shell={shell} locale={locale} railExpanded={railExpanded} rooms={rooms} roomsCopy={roomsCopy} homeLabel={homeLabel} railModes={railModes} soundStudio={soundStudio} {...labels} />
   ) : (
     <Links labels={labels} visible={ALL} pool layoutMode="topbar" scope={(path) => path} />
   );

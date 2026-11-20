@@ -241,7 +241,8 @@ export async function submitUpscaleJob(
         resolvedSourceUrl = deps.media.url(asset.storage_key);
       } else if (v.outputId) {
         const out = await readyOutput(tx, v.organizationId, v.outputId);
-        if (!out || !out.storage_key) {
+        // Audio results are not upscaled.
+        if (!out || !out.storage_key || out.kind === 'audio') {
           throw new StudioDenied('reference_missing');
         }
         resolvedKind = out.kind;

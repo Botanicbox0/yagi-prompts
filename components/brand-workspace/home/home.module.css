@@ -442,6 +442,9 @@ a.teamFacts:hover {
 .toolList[data-count='2'] {
   grid-template-columns: repeat(2, minmax(0, 1fr));
 }
+.toolList[data-count='4'] {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
 .toolList > li {
   display: grid;
   min-width: 0;
