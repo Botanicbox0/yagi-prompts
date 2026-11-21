@@ -547,7 +547,8 @@ function readPlaces(bytes: Uint8Array, parts: Box[], track: PictureTrack) {
   track.fileOffsets = places;
   track.sizes = sizes;
   track.sync = sync;
-  track.mixedEntries = descriptions.size > 1;
+  // A chunk that points at another sample description than the one entry (spec G, B6: one rule, below).
+  if ([...descriptions].some((description) => description !== 1)) track.mixedEntries = true;
 }
 
 function readPictureTrack(moov: Uint8Array): { timescale: number; track: PictureTrack | null; trex: Map<number, TrackDefaults> } {
@@ -597,6 +598,9 @@ function readPictureTrack(moov: Uint8Array): { timescale: number; track: Picture
       const tables = kids(moov, stbl);
       const stsd = tables.find((entry) => entry.type === 'stsd');
       candidate.stsd = stsd ? moov.subarray(stsd.body, stsd.end) : null;
+      // One rule for plain and fragmented files (spec G, B6): the picture track has exactly one sample entry.
+      // A fragment may point at any entry (tfhd), and the decoder is configured from the first one only.
+      if (candidate.stsd && candidate.stsd.length >= 8 && u32(candidate.stsd, 4) !== 1) candidate.mixedEntries = true;
       readTimes(moov, tables, candidate);
       try {
         readPlaces(moov, tables, candidate);

@@ -440,4 +440,27 @@ describe('spec G, B4–B6: fragments read by their own rules', () => {
     expect(answer.index.sizes).toEqual([1000, 300]);
   });
 
+  /** The stsd of the first track holds two sample entries (its entry count says 2). */
+  function twoEntries(bytes: Uint8Array): Uint8Array {
+    const out = bytes.slice();
+    for (let i = 0; i + 4 <= out.length; i += 1) {
+      if (out[i] === 0x73 && out[i + 1] === 0x74 && out[i + 2] === 0x73 && out[i + 3] === 0x64) {
+        out[i + 11] = 2;
+        return out;
+      }
+    }
+    throw new Error('no stsd');
+  }
+
+  it('B6: two sample entries on the picture track are not indexed, in a plain file (every sample on entry 1) as in a fragmented one', async () => {
+    const plain = concat(ftyp(), moov({ tracks: [{ handler: 'vide', timescale: 30, durations: frames(4, 1), chunks: { perChunk: [4], offsets: [100] }, entry: concat(AVC, AVC) }] }), mdat(500));
+    expect(await indexOf(twoEntries(plain))).toEqual({ ok: false, reason: 'mixed-entries' });
+    const header = concat(ftyp('iso5'), moov({ tracks: [{ handler: 'vide', timescale: 12288, durations: [], entry: concat(entry, entry) }], fragmented: { defaultDuration: { 1: 512 } } }));
+    const fragment = (dataOffset: number) => moof(1, [{ trackId: 1, base: 0, count: 2, sizes: [900, 300], firstFlags: SYNC, defaultFlags: NON_SYNC, dataOffset }]);
+    const size = fragment(0).length;
+    expect(await indexOf(twoEntries(concat(header, fragment(size + 8), mdat(1200))))).toEqual({ ok: false, reason: 'mixed-entries' });
+    // One entry is still read.
+    const single = concat(ftyp('iso5'), moov({ tracks: [{ handler: 'vide', timescale: 12288, durations: [], entry }], fragmented: { defaultDuration: { 1: 512 } } }));
+    expect((await indexOf(concat(single, fragment(size + 8), mdat(1200)))).ok).toBe(true);
+  });
 });
