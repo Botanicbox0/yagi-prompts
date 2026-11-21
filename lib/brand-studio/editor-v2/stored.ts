@@ -226,6 +226,45 @@ export function deriveFrames(clip: ComposeClip, fps: number, source: SourceField
   return { inFrame, phase: 0, frames: Math.min(wanted, clipMaxFrames(shape, fps)), speedNum, speedDen };
 }
 
+/** Rates the old playback measurement wrote rounded (fps.ts SOURCE_RATES), as the fractions they stand for. */
+const ROUNDED_RATES: ReadonlyArray<readonly [number, number]> = [[23.976, 24000 / 1001], [29.97, 30000 / 1001], [59.94, 60000 / 1001]];
+const exactRate = (rate: number) => ROUNDED_RATES.find(([rounded]) => Math.abs(rate - rounded) < 1e-9)?.[1] ?? rate;
+
+/** Two rates are one rate within a millionth (a block's rounded 23.976 is the file's 24000/1001). */
+export function sameRate(a: number, b: number): boolean {
+  const x = exactRate(a);
+  const y = exactRate(b);
+  return x > 0 && y > 0 && Math.abs(x - y) <= 1e-6 * Math.max(x, y);
+}
+
+type StoredKind = 'exact' | 'corrected' | 'derived';
+
+/**
+ * What a stored cut is on frames, given its footage's facts (`source`) — one rule for opening and for
+ * writing, so a cut v2 did not touch is written back with exactly the seconds it had:
+ *
+ * - its block holds (written at this film rate, the current editor has not touched it) and counts the
+ *   footage's pictures right → the block as it is (`exact`);
+ * - the block holds but counted pictures the file does not have (an earlier playback measurement: 98 for a
+ *   97-picture file), at the file's own rate → the block kept inside the real pictures (`corrected`): only
+ *   end frames the file lacks are taken away, so the stored seconds stay what they were (review round 1 of
+ *   part E, item 1);
+ * - otherwise (no block, a changed cut, or a block whose rate is not the file's: review item 5) → rebuilt
+ *   from the stored seconds with the footage's facts (`derived`).
+ */
+function framesOfStored(clip: ComposeClip, fps: number, source: SourceFields): { kind: StoredKind; frames: FrameFields } {
+  const block = exactBlock(clip, fps);
+  if (block) {
+    const { inFrame, phase, frames, speedNum, speedDen } = block;
+    if (source.sourceFrames === block.sourceFrames) return { kind: 'exact', frames: { inFrame, phase, frames, speedNum, speedDen } };
+    if (sameRate(source.sourceFps, block.sourceFps)) {
+      const kept = withinFootage({ sourceFps: block.sourceFps, sourceFrames: source.sourceFrames, inFrame, phase, frames, speedNum, speedDen }, fps);
+      return { kind: 'corrected', frames: { inFrame: kept.inFrame, phase: kept.phase, frames: kept.frames, speedNum, speedDen } };
+    }
+  }
+  return { kind: 'derived', frames: deriveFrames(clip, fps, source) };
+}
+
 function sourceOf(clip: ComposeClip, fps: number, measured: MeasuredSources): SourceFields & { guessed: boolean } {
   const seen = measured[clip.srcUrl];
   if (seen && isNum(seen.fps) && seen.fps > 0 && isInt(seen.frames, 1)) return { sourceFps: seen.fps, sourceFrames: seen.frames, guessed: false };
@@ -252,16 +291,16 @@ export function fromStored(project: ComposerProject, measured: MeasuredSources =
     };
     const block = exactBlock(stored, fps);
     if (block) {
-      const { inFrame, phase, frames, speedNum, speedDen, sourceFps, sourceFrames } = block;
-      // The file's own count (read from its sample table when it is opened) overrules the block's.
+      // The file's own count (read from its sample table when it is opened) is checked against the block's.
       const seen = measured[stored.srcUrl];
-      const real = seen?.counted ? seen.frames : undefined;
-      if (isInt(real, 1) && real !== sourceFrames) {
-        corrected.push(stored.id);
-        return { ...base, ...withinFootage({ sourceFps, sourceFrames: real, inFrame, phase, frames, speedNum, speedDen }, fps) };
-      }
-      exact.push(stored.id);
-      return { ...base, sourceFps, sourceFrames, inFrame, phase, frames, speedNum, speedDen };
+      const counted = seen?.counted && isInt(seen.frames, 1) && isNum(seen.fps) && seen.fps > 0 ? seen : null;
+      const source: SourceFields =
+        counted && counted.frames !== block.sourceFrames
+          ? { sourceFps: sameRate(counted.fps, block.sourceFps) ? block.sourceFps : counted.fps, sourceFrames: counted.frames }
+          : { sourceFps: block.sourceFps, sourceFrames: block.sourceFrames };
+      const { kind, frames } = framesOfStored(stored, fps, source);
+      (kind === 'exact' ? exact : kind === 'corrected' ? corrected : derived).push(stored.id);
+      return { ...base, ...source, ...frames };
     }
     derived.push(stored.id);
     const { guessed, ...source } = sourceOf(stored, fps, measured);
@@ -338,8 +377,9 @@ function storedClipOf(
 ): StoredClip {
   const frames: FrameFields = clip;
   const source: SourceFields = clip;
-  // A cut v2 did not change keeps the exact seconds it had, so a visit moves nothing in the current editor.
-  const expected = own ? (exactBlock(own, fps) ?? deriveFrames(own, fps, source)) : null;
+  // A cut v2 did not change keeps the exact seconds it had, so a visit moves nothing in the current editor;
+  // that includes a cut whose block was only corrected to its footage's real pictures (framesOfStored).
+  const expected = own ? framesOfStored(own, fps, source).frames : null;
   const unchanged = !!own && !!expected && sameFrames(expected, frames);
   const base: ComposeClip =
     own ?? (template ? { ...template, id: clip.id, label: clip.label, srcUrl: clip.srcUrl, thumbUrl: clip.thumbUrl } : freshClip(clip));

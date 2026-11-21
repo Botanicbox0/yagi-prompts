@@ -2,11 +2,12 @@ import { createElement as h } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it } from 'vitest';
 import { ExportStatus } from '@/components/brand-studio/editor-v2/export-sheet';
-import { parseStoredProject, serializeProjectForStorage, type ComposeClip, type ComposerProject } from '@/lib/brand-studio/compose/timeline';
+import { parseStoredProject, serializeProjectForStorage, timelineSpans, type ComposeClip, type ComposerProject } from '@/lib/brand-studio/compose/timeline';
+import { effectStartSec, overlayFrames, storedSecToFrame } from '@/lib/brand-studio/editor-v2/cut-anchor';
 import { picturePlace } from '@/lib/brand-studio/editor-v2/export-plan';
 import { framesFromPlayback, sourceFramesOf } from '@/lib/brand-studio/editor-v2/fps';
 import { totalFrames, type FrameClip, type FrameSequence } from '@/lib/brand-studio/editor-v2/frames';
-import { fromStored, toStored, type FrameV2Block } from '@/lib/brand-studio/editor-v2/stored';
+import { fromStored, mergeFilmText, ownedSignature, storedFilmView, toStored, type FrameV2Block, type MeasuredSources } from '@/lib/brand-studio/editor-v2/stored';
 import { studioEditorEn, studioEditorKo } from '@/messages/studio-editor';
 
 /**
@@ -79,19 +80,62 @@ describe('films stored with a picture too many are corrected on open', () => {
     expect(totalFrames(film.sequence)).toBe(97 * 2);
   });
 
-  it('stored corrected at the next write; the seconds the current editor reads agree with the frames', () => {
-    const film = fromStored(phantomFilm(), counted);
-    const stored = toStored(film.sequence, phantomFilm());
+  it('stored corrected at the next write, and the seconds the current editor reads do not move', () => {
+    // Review round 1 of part E, item 1: taking away end pictures the file does not have changes nothing
+    // the person set. The current editor still ends the cut at 4.1 s (it holds the last picture there).
+    const before = phantomFilm();
+    const film = fromStored(before, counted);
+    const stored = toStored(film.sequence, before);
     const block = (stored.clips[0] as ComposeClip & { frameV2: FrameV2Block }).frameV2;
-    expect(block).toMatchObject({ sourceFrames: 97, frames: 97 });
-    // 97 / 24 = 4.0417 s, normalised to the current editor's tenths.
-    expect(stored.clips[0]!.trimEndSec).toBe(4);
-    expect(block.mirror.trimEndSec).toBe(4);
-    // Opening it again changes nothing more.
+    expect(block).toMatchObject({ sourceFrames: 97, frames: 97, inFrame: 0 });
+    const seconds = (project: ComposerProject) => project.clips.map((c) => [c.trimStartSec, c.trimEndSec, c.playbackRate ?? 1, c.durationSec]);
+    expect(seconds(stored)).toEqual(seconds(before));
+    expect(block.mirror).toEqual({ trimStartSec: 0, trimEndSec: 4.1, playbackRate: 1 });
+    // The current editor's layout is the same before, on open, and after the write.
+    const layout = (project: ComposerProject) => timelineSpans(project).map((span) => [span.timelineStartSec, span.timelineEndSec]);
+    expect(layout(storedFilmView(film.sequence, before).film)).toEqual(layout(before));
+    expect(layout(stored)).toEqual(layout(before));
+    // Opening it again finds nothing to correct.
     const again = fromStored(stored, counted);
     expect(again.corrected).toEqual([]);
     expect(again.exact).toEqual(['cut-1', 'cut-2']);
     expect((again.sequence.clips[0] as FrameClip).frames).toBe(97);
+    // And a write after that changes nothing either.
+    expect(toStored(again.sequence, stored)).toEqual(stored);
+  });
+
+  it('a caption, an effect and a still overlay in a later cut stay on the same cut at the same point', () => {
+    const before: ComposerProject = {
+      ...phantomFilm(),
+      captions: [{ id: 'cap', text: 'cap', startSec: 5.0, endSec: 5.5, position: 'bottom', size: 'md' }],
+      sfxClips: [{ id: 'fx', label: 'fx', sourceKind: 'asset', srcUrl: '/fx.wav', startSec: 5.0, durationSec: 0.2, volume: 1 }],
+      overlays: [{ id: 'ov', label: 'ov', sourceKind: 'asset', srcUrl: '/ov.png', mediaKind: 'image', startSec: 5.0, endSec: 5.5, x: 0.5, y: 0.5, scale: 0.2, opacity: 1 }],
+    };
+    // Before the correction (the cuts as stored: 98 + 98 frames) and after it (97 + 97).
+    const uncorrected = fromStored(before, {}).sequence;
+    const corrected = fromStored(before, counted).sequence;
+    const place = (frame: number, cutStart: number) => frame - cutStart;
+    const viewBefore = storedFilmView(uncorrected, before);
+    const viewAfter = storedFilmView(corrected, before);
+    // 5.0 s is 0.9 s into cut 2 in the current editor's layout (it starts at 4.1 s): 22 pictures in.
+    expect(place(storedSecToFrame(viewBefore.anchor, 5.0), 98)).toBe(22);
+    expect(place(storedSecToFrame(viewAfter.anchor, 5.0), 97)).toBe(22);
+    expect(place(viewAfter.sequence.captions[0]!.start, 97)).toBe(place(viewBefore.sequence.captions[0]!.start, 98));
+    expect(place(overlayFrames(viewAfter.anchor, before.overlays![0]!).first, 97)).toBe(place(overlayFrames(viewBefore.anchor, before.overlays![0]!).first, 98));
+    expect(effectStartSec(viewAfter.anchor, before.sfxClips![0]!) - 97 / 24).toBeCloseTo(effectStartSec(viewBefore.anchor, before.sfxClips![0]!) - 98 / 24, 12);
+    // After the write, too.
+    const written = toStored(corrected, before);
+    const reopened = fromStored(written, counted).sequence;
+    expect(place(storedFilmView(reopened, written).sequence.captions[0]!.start, 97)).toBe(22);
+  });
+
+  it('the healed write is not a foreign change: the current editor’s load and save keep what v2 owns', () => {
+    const before = phantomFilm();
+    const film = fromStored(before, counted);
+    const text = mergeFilmText(serializeProjectForStorage(before), film.sequence);
+    const throughCurrentEditor = serializeProjectForStorage(parseStoredProject(text)!);
+    expect(ownedSignature(throughCurrentEditor)).toBe(ownedSignature(text));
+    expect(fromStored(parseStoredProject(throughCurrentEditor)!, counted).corrected).toEqual([]);
   });
 
   it('a cut that did not reach the missing picture keeps its length and its seconds', () => {
@@ -100,6 +144,25 @@ describe('films stored with a picture too many are corrected on open', () => {
     const stored = toStored(film.sequence, phantomFilm(48));
     expect(stored.clips[0]!.trimEndSec).toBe(2);
     expect((stored.clips[0] as ComposeClip & { frameV2: FrameV2Block }).frameV2.sourceFrames).toBe(97);
+  });
+
+  it('the file’s count corrects a block only at the block’s own rate; at another rate the cut is rebuilt from its seconds', () => {
+    // Review round 1 of part E, item 5: a block measured by playback at 30 fps for a 60 fps clip must not
+    // keep 30 fps with the file's 60 fps count (the footage's length would double).
+    const at30 = phantomFilm(48);
+    for (const clip of at30.clips) Object.assign((clip as ComposeClip & { frameV2: FrameV2Block }).frameV2, { sourceFps: 30, fps: 24 });
+    const sixty: MeasuredSources = { [SRC]: { fps: 60, frames: 242, counted: true } };
+    const film = fromStored(at30, sixty);
+    expect(film.corrected).toEqual([]);
+    expect(film.derived).toEqual(['cut-1', 'cut-2']);
+    expect(film.sequence.clips[0]).toMatchObject({ sourceFps: 60, sourceFrames: 242, frames: 48 });
+    // Its seconds stay what they were.
+    expect(toStored(film.sequence, at30).clips[0]!.trimEndSec).toBe(2);
+    // A block from the old playback measurement says 23.976 where the file says 24000/1001: the same rate.
+    const ntsc = phantomFilm();
+    for (const clip of ntsc.clips) Object.assign((clip as ComposeClip & { frameV2: FrameV2Block }).frameV2, { sourceFps: 23.976 });
+    const corrected = fromStored(ntsc, { [SRC]: { fps: 24000 / 1001, frames: 97, counted: true } });
+    expect(corrected.corrected).toEqual(['cut-1', 'cut-2']);
   });
 
   it('only the file’s own count corrects a block; a playback measurement does not', () => {
