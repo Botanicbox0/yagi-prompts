@@ -68,6 +68,7 @@ import { PicturePaths, type DecoderSession, type SourcePath } from '@/lib/brand-
 import { exportIndexReads, footageBytes, readFootage, readPictureIndex, type IndexRead } from './footage-facts';
 import { PictureDecoder, decoderConfig, decoderSupports } from './frame-decoder';
 import { screenTimer } from './screen-refresh';
+import { visibleStep } from '@/lib/brand-studio/editor-v2/refresh';
 
 export interface ExportProgress {
   phase: 'video' | 'audio' | 'writing';
@@ -175,14 +176,15 @@ const BACKGROUND = '#000';
 /**
  * A timer that does not run while the tab is hidden: a person switching tabs does not fail the export.
  * For loading files (network), which a covered window does not slow; waiting for a picture counts
- * screen time instead (`screenTimer`).
+ * screen time instead (`screenTimer`). A tick counts at most `VISIBLE_STEP_CAP_MS` (lib/brand-studio/
+ * editor-v2/refresh.ts `visibleStep`): the first tick after a hidden spell does not count the spell.
  */
-function visibleTimer(limitMs: number, onExpire: () => void): () => void {
+export function visibleTimer(limitMs: number, onExpire: () => void): () => void {
   let spent = 0;
   let last = performance.now();
   const id = window.setInterval(() => {
     const now = performance.now();
-    if (!document.hidden) spent += now - last;
+    spent += visibleStep(now - last, document.hidden);
     last = now;
     if (spent > limitMs) {
       window.clearInterval(id);
