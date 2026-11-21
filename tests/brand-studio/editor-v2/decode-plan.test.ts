@@ -3,6 +3,7 @@ import {
   JUMP_MIN_SAMPLES,
   byteRuns,
   choosePath,
+  codecMeasured,
   colourAdmitted,
   decoderColourSpace,
   cutRatesMatch,
@@ -225,6 +226,15 @@ describe('which path, and what the sheet says', () => {
     expect(choosePath({ ...ok, plainColour: false })).toEqual({ path: 'seek', reason: 'colour' });
     expect(choosePath({ ...ok, rateMatches: false })).toEqual({ path: 'seek', reason: 'rate' });
     expect(choosePath({ ...ok, plainColour: true, rateMatches: true })).toEqual({ path: 'decoder', reason: null });
+  });
+
+  it('spec G, B3: the decoder path only for H.264 and HEVC sample entries; VP9 and AV1 in MP4 are seeked, reason codec-unmeasured', () => {
+    for (const entry of ['avc1', 'avc3', 'hvc1', 'hev1']) expect(codecMeasured(entry)).toBe(true);
+    for (const entry of ['vp09', 'av01', 'mp4v', 'encv']) expect(codecMeasured(entry)).toBe(false);
+    expect(choosePath({ ...ok, codecMeasured: false })).toEqual({ path: 'seek', reason: 'codec-unmeasured' });
+    expect(choosePath({ ...ok, codecMeasured: true })).toEqual({ path: 'decoder', reason: null });
+    // It is asked before the colour: a 10-bit VP9 is seeked for its codec, not its colour.
+    expect(choosePath({ ...ok, codecMeasured: false, plainColour: false })).toEqual({ path: 'seek', reason: 'codec-unmeasured' });
   });
 
   it('a 29.97 file on a cut that says 30 does not match; on a cut that says 30000/1001 (or 29.97) it does; uneven footage keeps its time rule', () => {

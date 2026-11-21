@@ -37,3 +37,12 @@ describe('the export waits on shared reads with an end, before its encoder exist
     expect(facts).toMatch(/\(start: number, end: number, signal\?: AbortSignal\) => fetch\(corsMediaUrl\(srcUrl\), \{.*credentials: 'same-origin', signal \}\)/);
   });
 });
+
+describe('spec G, B3: the export asks whether the codec was measured before anything else about the footage', () => {
+  it('codecMeasured comes right after the index, before the colour and the rate', () => {
+    const choice = film.slice(film.indexOf('async function sourceChoice('), film.indexOf('function decoderSession('));
+    const codec = choice.indexOf('codecMeasured(answer.index.config.entry)');
+    expect(codec).toBeGreaterThan(choice.indexOf('if (!answer.ok)'));
+    expect(codec).toBeLessThan(choice.indexOf('colourAdmitted('));
+  });
+});

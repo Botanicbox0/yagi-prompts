@@ -54,7 +54,7 @@ import {
   type PlannedFrame,
 } from '@/lib/brand-studio/editor-v2/export-plan';
 import { cutAnchor, effectStartSec, type CutAnchor } from '@/lib/brand-studio/editor-v2/cut-anchor';
-import { choosePath, colourAdmitted, cutRatesMatch, decodeGroups, pictureFor, pictureTimes, type ExportPath, type ExportPathOverride } from '@/lib/brand-studio/editor-v2/decode-plan';
+import { choosePath, codecMeasured, colourAdmitted, cutRatesMatch, decodeGroups, pictureFor, pictureTimes, type ExportPath, type ExportPathOverride } from '@/lib/brand-studio/editor-v2/decode-plan';
 import { CURRENT_EXPORT_BACKGROUND, currentExportFrame } from '@/lib/brand-studio/editor-v2/framing';
 import { totalFrames, type FrameSequence } from '@/lib/brand-studio/editor-v2/frames';
 import { timingOfFile } from '@/lib/brand-studio/editor-v2/container';
@@ -800,6 +800,8 @@ async function sourceChoice(srcUrl: string, override: ExportPathOverride, cutRat
   const answer = await shared(readPictureIndex(srcUrl).catch(() => ({ ok: false as const, reason: 'unreadable' as const })));
   if (answer === 'timeout') return seek({ indexFailure: 'timeout' });
   if (!answer.ok) return seek({ indexFailure: answer.reason });
+  // H.264 and HEVC only: the decoder path was not measured on other codecs (spec G, B3).
+  if (!codecMeasured(answer.index.config.entry)) return seek({ codecMeasured: false });
   const plainColour = colourAdmitted(answer.index.config);
   const rateMatches = cutRatesMatch(cutRates, { fps: facts.answer.timing.video.fps, variable: answer.index.variable });
   if (!plainColour || !rateMatches) return seek({ plainColour, rateMatches });

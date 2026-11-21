@@ -339,8 +339,19 @@ export function cutRatesMatch(cutRates: readonly number[], file: { fps: number; 
   return cutRates.every((rate) => sameRate(rate, file.fps));
 }
 
+/**
+ * The sample entries the decoder path was measured on (spec F; spec G A0, B3): H.264 and HEVC. VP9 and AV1 in MP4
+ * would go through the same reader with a colour rule nobody measured for them: they are seeked, reason
+ * `codec-unmeasured`, until they are.
+ */
+const MEASURED_ENTRIES = new Set(['avc1', 'avc3', 'hvc1', 'hev1']);
+
+export function codecMeasured(entry: string): boolean {
+  return MEASURED_ENTRIES.has(entry);
+}
+
 /** Why a source is taken by seeking. */
-export type SeekReason = 'forced' | 'no-decoder' | 'container' | 'codec-unsupported' | 'error' | string;
+export type SeekReason = 'forced' | 'no-decoder' | 'container' | 'codec-unmeasured' | 'colour' | 'rate' | 'codec-unsupported' | 'error' | string;
 
 export function choosePath(input: {
   override: ExportPathOverride;
@@ -354,6 +365,8 @@ export function choosePath(input: {
   factsFailure?: string | null;
   /** The source's index could be read (`null` when not: a reason is given). */
   indexFailure: string | null;
+  /** Its sample entry is one the decoder path was measured on (`codecMeasured`). `false`: seeked, reason `codec-unmeasured`. */
+  codecMeasured?: boolean | null;
   /**
    * The footage is what the decoder path's colour was measured on (`colourAdmitted`). `false`: seeked, reason
    * `colour`. Omitted: not asked.
@@ -368,6 +381,7 @@ export function choosePath(input: {
   if (!input.hasDecoder) return { path: 'seek', reason: 'no-decoder' };
   if (input.factsFailure) return { path: 'seek', reason: `facts:${input.factsFailure}` };
   if (input.indexFailure !== null) return { path: 'seek', reason: `container:${input.indexFailure}` };
+  if (input.codecMeasured === false) return { path: 'seek', reason: 'codec-unmeasured' };
   if (input.plainColour === false) return { path: 'seek', reason: 'colour' };
   if (input.rateMatches === false) return { path: 'seek', reason: 'rate' };
   if (input.configSupported !== true) return { path: 'seek', reason: 'codec-unsupported' };
