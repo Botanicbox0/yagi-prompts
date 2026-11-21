@@ -26,6 +26,7 @@ import {
   imageOverlaysAt,
   isKeyFrame,
   notIncluded,
+  lastFrameWarnings,
   picturePlace,
   placeSound,
   soundBytesCheck,
@@ -697,8 +698,8 @@ export async function exportFilm(options: ExportFilmOptions): Promise<ExportFilm
   host.style.cssText = 'position:fixed;left:-10000px;top:0;width:64px;height:36px;overflow:hidden;pointer-events:none';
   document.body.appendChild(host);
   const sources = new Map<string, Source>();
-  /** Pictures asked for past a footage's last one, filled with it, by cut. */
-  const filled = new Map<string, number>();
+  /** Pictures asked for past a footage's last one, filled with it, by cut id (named by its clip). */
+  const filled = new Map<string, { clip: string; frames: number }>();
   let encoder: VideoEncoder | null = null;
 
   try {
@@ -745,7 +746,9 @@ export async function exportFilm(options: ExportFilmOptions): Promise<ExportFilm
         sources.set(entry.srcUrl, source);
       }
       // Consecutive frames on the same source frame (a slowed cut) reuse the picture: no second seek.
-      if (await present(source, entry.sourceFrame, entry.frame, label, signal)) filled.set(label, (filled.get(label) ?? 0) + 1);
+      if (await present(source, entry.sourceFrame, entry.frame, label, signal)) {
+        filled.set(entry.clipId, { clip: label, frames: (filled.get(entry.clipId)?.frames ?? 0) + 1 });
+      }
       if (framing === 'current') drawCurrentFraming(ctx, source.video, width, height);
       else drawFramed(ctx, source.video, width, height, reframe[entry.clipId] ?? DEFAULT_REFRAME);
       if (graded && extras) {
@@ -787,7 +790,7 @@ export async function exportFilm(options: ExportFilmOptions): Promise<ExportFilm
       durationSec: frames / fps,
       elapsedMs: Math.round(performance.now() - started),
       notIncluded: notIncluded({ sequence, extras }),
-      warnings: [...[...filled].map(([clip, frames]): ExportWarning => ({ kind: 'lastFrame', clip, frames })), ...warnings],
+      warnings: [...lastFrameWarnings(filled), ...warnings],
     };
   } finally {
     if (encoder && encoder.state !== 'closed') encoder.close();

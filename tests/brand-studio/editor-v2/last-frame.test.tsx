@@ -4,7 +4,7 @@ import { describe, expect, it } from 'vitest';
 import { ExportStatus } from '@/components/brand-studio/editor-v2/export-sheet';
 import { parseStoredProject, serializeProjectForStorage, timelineSpans, type ComposeClip, type ComposerProject } from '@/lib/brand-studio/compose/timeline';
 import { effectStartSec, overlayFrames, storedSecToFrame } from '@/lib/brand-studio/editor-v2/cut-anchor';
-import { picturePlace } from '@/lib/brand-studio/editor-v2/export-plan';
+import { LAST_FRAME_QUIET_MAX, lastFrameWarnings, picturePlace } from '@/lib/brand-studio/editor-v2/export-plan';
 import { framesFromPlayback, sourceFramesOf } from '@/lib/brand-studio/editor-v2/fps';
 import { totalFrames, type FrameClip, type FrameSequence } from '@/lib/brand-studio/editor-v2/frames';
 import { fromStored, mergeFilmText, ownedSignature, storedFilmView, toStored, type FrameV2Block, type MeasuredSources } from '@/lib/brand-studio/editor-v2/stored';
@@ -227,6 +227,29 @@ describe('the sheet says it after the export, quietly', () => {
     expect(html).toContain('&quot;영상 스튜디오 1&quot; 클립 끝의 1프레임');
     expect(html).not.toMatch(/role="alert"[^>]*data-editor-export-warning="lastFrame"/);
     expect(studioEditorEn.export.warnLastFrame).toContain('{count}');
+  });
+
+  it('more than two filled frames in one cut is a visible warning with its own line; the export still finished', () => {
+    const many = { ...done, warnings: [{ kind: 'lastFrame' as const, clip: '영상 스튜디오 1', frames: 3 }] };
+    const html = renderToStaticMarkup(h(ExportStatus, { job: many, copy: studioEditorKo.export }));
+    expect(html).toMatch(/role="alert"[^>]*data-editor-export-warning="lastFrame"/);
+    expect(html).toContain('data-editor-export-filled="3"');
+    expect(html).toContain('&quot;영상 스튜디오 1&quot; 클립 끝의 3프레임을 원본에서 읽지 못해 마지막 장면으로 채웠습니다. 내보낸 파일에서 그 부분을 확인해 주세요.');
+    expect(studioEditorEn.export.warnLastFrameMany).toBe('The last {count} frames of "{clip}" could not be read from its footage, so they repeat its last picture. Check that part of the exported file.');
+    expect(LAST_FRAME_QUIET_MAX).toBe(2);
+  });
+
+  it('filled frames are counted per cut: two cuts of one clip (or two clips with one name) stay apart', () => {
+    const filled = new Map([
+      ['cut-a', { clip: '영상 스튜디오 1', frames: 1 }],
+      ['cut-b', { clip: '영상 스튜디오 1', frames: 2 }],
+    ]);
+    expect(lastFrameWarnings(filled)).toEqual([
+      { kind: 'lastFrame', clip: '영상 스튜디오 1', frames: 1 },
+      { kind: 'lastFrame', clip: '영상 스튜디오 1', frames: 2 },
+    ]);
+    const html = renderToStaticMarkup(h(ExportStatus, { job: { ...done, warnings: lastFrameWarnings(filled) }, copy: studioEditorKo.export }));
+    expect(html.match(/data-editor-export-warning="lastFrame"/g)).toHaveLength(2);
   });
 });
 

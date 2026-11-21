@@ -90,6 +90,17 @@ export function isKeyFrame(index: number, fps: number): boolean {
  */
 export type PicturePlace = 'inside' | 'past-end' | 'failed';
 
+/** Up to this many filled frames in one cut are a quiet note after the export; more are a visible warning. */
+export const LAST_FRAME_QUIET_MAX = 2;
+
+/**
+ * The note for each cut that had pictures filled, in the order the cuts came: counted per cut (two cuts
+ * of one clip, or two clips with one name, stay apart), named by the clip.
+ */
+export function lastFrameWarnings(filled: ReadonlyMap<string, { clip: string; frames: number }>): Array<{ kind: 'lastFrame'; clip: string; frames: number }> {
+  return [...filled.values()].map(({ clip, frames }) => ({ kind: 'lastFrame' as const, clip, frames }));
+}
+
 export function picturePlace(input: {
   sourceFrame: number;
   /** The file's own number of pictures, or `null` when it could not be read. */

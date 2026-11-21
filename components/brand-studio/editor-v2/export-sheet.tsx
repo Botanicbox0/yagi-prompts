@@ -2,7 +2,7 @@
 
 import { useEffect, useState, useSyncExternalStore } from 'react';
 import { fill } from '@/components/brand-studio/copy';
-import { SOUND_BYTES_LIMIT, burnsCaptions, formatBytes, notIncluded, writesCaptionFile } from '@/lib/brand-studio/editor-v2/export-plan';
+import { LAST_FRAME_QUIET_MAX, SOUND_BYTES_LIMIT, burnsCaptions, formatBytes, notIncluded, writesCaptionFile } from '@/lib/brand-studio/editor-v2/export-plan';
 import { formatTimecode, totalFrames } from '@/lib/brand-studio/editor-v2/frames';
 import { captionsToSrt, type EditorWorkspace } from '@/lib/brand-studio/editor-v2/model';
 import { filmContents } from '@/lib/brand-studio/editor-v2/film-contents';
@@ -196,17 +196,22 @@ export function ExportStatus({ job, copy: e }: { job: ExportJob; copy: ExportCop
       <div className={styles.exportRun} data-editor-export-done={job.filename} data-editor-export-ms={job.elapsedMs}>
         <p className={styles.exportCount} role="status">{e.done}</p>
         <p className={styles.note}>{fill(e.doneFacts, { size: formatBytes(job.bytes), length: formatTimecode(job.frames, job.fps) })}</p>
-        {job.warnings.map((warning) =>
+        {job.warnings.map((warning, index) =>
           warning.kind === 'soundPosition' ? (
-            <p key={`${warning.kind}-${warning.clip}`} className={styles.note} data-editor-export-warning={warning.kind}>
+            <p key={`${warning.kind}-${index}`} className={styles.note} data-editor-export-warning={warning.kind}>
               {fill(e.warnSoundPosition, { clip: warning.clip })}
             </p>
-          ) : warning.kind === 'lastFrame' ? (
-            <p key={`${warning.kind}-${warning.clip}`} className={styles.note} data-editor-export-warning={warning.kind} data-editor-export-filled={warning.frames}>
+          ) : warning.kind === 'lastFrame' && warning.frames <= LAST_FRAME_QUIET_MAX ? (
+            <p key={`${warning.kind}-${index}`} className={styles.note} data-editor-export-warning={warning.kind} data-editor-export-filled={warning.frames}>
               {fill(e.warnLastFrame, { clip: warning.clip, count: warning.frames })}
             </p>
+          ) : warning.kind === 'lastFrame' ? (
+            // More than a couple of frames is not a quiet note: the person should look at that part.
+            <p key={`${warning.kind}-${index}`} className={styles.exportError} role="alert" data-editor-export-warning={warning.kind} data-editor-export-filled={warning.frames}>
+              {fill(e.warnLastFrameMany, { clip: warning.clip, count: warning.frames })}
+            </p>
           ) : (
-            <p key={`${warning.kind}-${warning.clip}`} className={styles.exportError} role="alert" data-editor-export-warning={warning.kind}>
+            <p key={`${warning.kind}-${index}`} className={styles.exportError} role="alert" data-editor-export-warning={warning.kind}>
               {fill(e.warnSound, { clip: warning.clip })}
             </p>
           ),
