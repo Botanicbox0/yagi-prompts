@@ -20,8 +20,9 @@ Parts (all by default, or name some):
   times     the standard four-clip film (665 frames) and a generated 60 s 1080p film, seek path vs decoder path,
             in a front window, a covered window, a minimised window and a background tab of a page NOTHING
             drives (spec F: the script starts Playwright's own Chromium as a separate process with a fresh
-            profile and a free debugging port, connects over CDP to set up and press export, disconnects, then
-            hides the window through Windows by its own handle; an in-page log records animation frames,
+            profile and a free debugging port, connects over CDP to set up, has the page press export a few
+            seconds later, disconnects, and hides it: covered by a second window of that browser with the same
+            bounds, minimised through Windows by its own handle, or behind a new tab; an in-page log records animation frames,
             visibility and progress), each twice; bytes read for pictures vs file sizes; peak memory of the
             browser's processes (working set, sampled every ~1.5 s).
 
@@ -526,17 +527,6 @@ try:
 except Exception:
     pass
 
-# A plain window of this script's own, always on top, over the browser window. (A borderless one is not
-# counted as covering by Chrome's occlusion check: measured, the page stayed visible under it.)
-COVER = r"""
-import ctypes, sys, tkinter as tk
-try: ctypes.windll.shcore.SetProcessDpiAwareness(2)
-except Exception: pass
-x, y, w, h = map(int, sys.argv[1:5])
-r = tk.Tk(); r.title('cover'); r.geometry(f'{w}x{h}+{x}+{y}'); r.attributes('-topmost', True); r.configure(bg='#4a4f5a')
-r.lift(); r.focus_force(); r.after(1500, lambda: (r.lift(), r.focus_force())); r.mainloop()
-"""
-
 PAGE_LOG = """() => {
   if (window.__ev2Log) return;
   const log = window.__ev2Log = { raf: [], vis: [[performance.now(), document.visibilityState]], progress: [], start: null, done: null };
@@ -689,14 +679,21 @@ def unattended_export(p, own, film, path, state, hidden_cap, name):
     clicked = time.time()
     if state == 'background':
         context.new_page()  # a new tab in front: the editor's tab is now a background tab
+    elif state == 'covered':
+        # Another window of this browser over it, same bounds, in front (as spec E's check covers a window):
+        # the editor's window is no longer kept on top, so the new window covers it whole.
+        own.on_top(False)
+        cdp = browser.new_browser_cdp_session()
+        editor = context.new_cdp_session(page).send('Target.getTargetInfo')['targetInfo']['targetId']
+        bounds = cdp.send('Browser.getWindowForTarget', {'targetId': editor})['bounds']
+        cover = cdp.send('Target.createTarget', {'url': 'about:blank', 'newWindow': True})['targetId']
+        window = cdp.send('Browser.getWindowForTarget', {'targetId': cover})['windowId']
+        cdp.send('Browser.setWindowBounds', {'windowId': window, 'bounds': {'windowState': 'normal'}})
+        cdp.send('Browser.setWindowBounds', {'windowId': window, 'bounds': {k: bounds[k] for k in ('left', 'top', 'width', 'height')}})
     browser.close()  # disconnects; the browser and its pages keep running, driven by nothing
     time.sleep(0.3)
-    cover = None
     if state == 'minimise':
         own.show('minimise')
-    elif state == 'covered':
-        x, y, w, h = own.rect()
-        cover = subprocess.Popen([sys.executable, '-c', COVER, str(x - 40), str(y - 40), str(w + 80), str(h + 80)], creationflags=NO_WINDOW)
     peak = [0, 0]
     stop = threading.Event()
 
@@ -718,13 +715,13 @@ def unattended_export(p, own, film, path, state, hidden_cap, name):
         file = None
         time.sleep(0.5)
     hidden_for = time.time() - clicked
-    if cover:
-        cover.kill()
     if state == 'minimise':
         own.show('restore')
     browser = p.chromium.connect_over_cdp(f'http://127.0.0.1:{own.port}')
     context = browser.contexts[0]
     page = next(pg for pg in context.pages if pg.url.startswith(BASE))
+    for extra in [pg for pg in context.pages if pg != page]:
+        extra.close()  # the cover window, or the tab in front of the editor's
     page.bring_to_front()
     page.wait_for_function("() => { const s = document.querySelector('[data-editor-export-sheet]'); return s && s.dataset.editorExportStatus !== 'running'; }", timeout=1200000, polling=500)
     own.on_top(False)
