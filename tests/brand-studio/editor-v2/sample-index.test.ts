@@ -11,11 +11,13 @@ import {
   clap,
   concat,
   fullBox,
+  i32,
   ftyp,
   hvcC,
   mdat,
   moof,
   moov,
+  trak,
   nclx,
   pasp,
   u32,
@@ -272,6 +274,15 @@ describe('only plain 8-bit SDR footage is decoded (review 1, item 1): the rest i
     expect(main.ok && main.config.bitDepth).toBe(8);
   });
 
+  it('spec G, A0: the profile is read (hvcC general_profile_idc, avcC profile_idc)', () => {
+    const main10 = readSampleEntry(stsd(visualEntry('hvc1', 1920, 1080, hvcCDepth(10, 10))));
+    expect(main10.ok && main10.config.profile).toBe(2);
+    const high = readSampleEntry(stsd(visualEntry('avc1', 640, 360, avcC(0x64, 0, 0x1f))));
+    expect(high.ok && high.config.profile).toBe(100);
+    const vp9 = readSampleEntry(stsd(visualEntry('vp09', 640, 360, vpcC(2, 31, 10, 1, 0, 1, 1, 1))));
+    expect(vp9.ok && vp9.config.profile).toBe(2);
+  });
+
   it('AVC: the High-profile tail gives the bit depth; High 10 and the 4:2:2 / 4:4:4 profiles without a tail are not taken as 8', () => {
     expect(readSampleEntry(stsd(visualEntry('avc1', 640, 360, avcCTail(110, 10)))).ok && true).toBe(true);
     const ten = readSampleEntry(stsd(visualEntry('avc1', 640, 360, avcCTail(110, 10))));
@@ -376,5 +387,80 @@ describe('what the index refuses', () => {
     const sound: TrackSpec = { handler: 'soun', timescale: 48000, durations: frames(10, 1024), chunks: { perChunk: [10], offsets: [100] } };
     expect(await indexOf(concat(ftyp(), moov({ tracks: [sound] }), mdat(64)))).toEqual({ ok: false, reason: 'no-video' });
     expect(readSampleIndex({ moov: box('moov', fullBox('mvhd', 0, 0)), moofs: [] })).toEqual({ ok: false, reason: 'unreadable' });
+  });
+});
+
+describe('spec G, B4–B6: fragments read by their own rules', () => {
+  const entry = visualEntry('avc1', 320, 180, avcC(0x42, 0xc0, 0x1e));
+  const mvhd = fullBox('mvhd', 0, 0, u32(0), u32(0), u32(1000), u32(0), new Uint8Array(80));
+  const trex = (track: number, duration: number, size: number, flags: number) => fullBox('trex', 0, 0, u32(track), u32(1), u32(duration), u32(size), u32(flags));
+
+  it('B4: a version 0 trun with a negative composition offset is read signed, as ctts is (index and frame facts)', async () => {
+    const header = concat(ftyp('iso5'), moov({ tracks: [{ handler: 'vide', timescale: 12288, durations: [], entry }], fragmented: { defaultDuration: { 1: 512 } } }));
+    // Decode order I P B, the P shown after the B: the B's offset is negative, written into a version 0 trun.
+    const fragment = (dataOffset: number) =>
+      moof(1, [{ trackId: 1, base: 512, count: 3, sizes: [900, 300, 200], offsets: [0, 1024, -512], trunVersion: 0, firstFlags: SYNC, defaultFlags: NON_SYNC, dataOffset }]);
+    const size = fragment(0).length;
+    const bytes = concat(header, fragment(size + 8), mdat(1400));
+    const answer = await indexOf(bytes);
+    expect(answer.ok).toBe(true);
+    if (!answer.ok) return;
+    // Decode times 512, 1024, 1536; composition 512, 2048, 1024: the third sample is shown second.
+    expect(answer.index.cts).toEqual([512, 2048, 1024]);
+    expect(answer.index.pictures).toEqual([0, 2, 1]);
+    const facts = await timingOfFile(bytes);
+    expect(facts.ok && facts.timing.video).toMatchObject({ frames: 3, variable: false });
+  });
+
+  it('B5: another track’s fragment before the picture track’s is measured by ITS trex defaults', async () => {
+    const header = concat(
+      ftyp('iso5'),
+      box(
+        'moov',
+        mvhd,
+        trak(1, { handler: 'vide', timescale: 12288, durations: [], entry }),
+        trak(2, { handler: 'soun', timescale: 48000, durations: [] }),
+        box('mvex', trex(1, 512, 999, NON_SYNC), trex(2, 1024, 200, 0)),
+      ),
+    );
+    const make = (dataOffset: number) => {
+      // The sound traf: no base, no sizes, its data from the moof + offset; three samples of its default 200 bytes.
+      const sound = box('traf', fullBox('tfhd', 0, 0, u32(2)), fullBox('tfdt', 0, 0, u32(0)), fullBox('trun', 0, 0x01, u32(3), i32(dataOffset)));
+      // The picture traf: no base and no data offset: its data starts where the sound's ended.
+      const video = box('traf', fullBox('tfhd', 0, 0, u32(1)), fullBox('tfdt', 0, 0, u32(0)), fullBox('trun', 0, 0x200 | 0x04, u32(2), u32(SYNC), u32(1000), u32(300)));
+      return box('moof', fullBox('mfhd', 0, 0, u32(1)), sound, video);
+    };
+    const size = make(0).length;
+    const bytes = concat(header, make(size + 8), mdat(1900));
+    const answer = await indexOf(bytes);
+    expect(answer.ok).toBe(true);
+    if (!answer.ok) return;
+    const data = header.length + size + 8;
+    expect(answer.index.offsets).toEqual([data + 600, data + 1600]);
+    expect(answer.index.sizes).toEqual([1000, 300]);
+  });
+
+  /** The stsd of the first track holds two sample entries (its entry count says 2). */
+  function twoEntries(bytes: Uint8Array): Uint8Array {
+    const out = bytes.slice();
+    for (let i = 0; i + 4 <= out.length; i += 1) {
+      if (out[i] === 0x73 && out[i + 1] === 0x74 && out[i + 2] === 0x73 && out[i + 3] === 0x64) {
+        out[i + 11] = 2;
+        return out;
+      }
+    }
+    throw new Error('no stsd');
+  }
+
+  it('B6: two sample entries on the picture track are not indexed, in a plain file (every sample on entry 1) as in a fragmented one', async () => {
+    const plain = concat(ftyp(), moov({ tracks: [{ handler: 'vide', timescale: 30, durations: frames(4, 1), chunks: { perChunk: [4], offsets: [100] }, entry: concat(AVC, AVC) }] }), mdat(500));
+    expect(await indexOf(twoEntries(plain))).toEqual({ ok: false, reason: 'mixed-entries' });
+    const header = concat(ftyp('iso5'), moov({ tracks: [{ handler: 'vide', timescale: 12288, durations: [], entry: concat(entry, entry) }], fragmented: { defaultDuration: { 1: 512 } } }));
+    const fragment = (dataOffset: number) => moof(1, [{ trackId: 1, base: 0, count: 2, sizes: [900, 300], firstFlags: SYNC, defaultFlags: NON_SYNC, dataOffset }]);
+    const size = fragment(0).length;
+    expect(await indexOf(twoEntries(concat(header, fragment(size + 8), mdat(1200))))).toEqual({ ok: false, reason: 'mixed-entries' });
+    // One entry is still read.
+    const single = concat(ftyp('iso5'), moov({ tracks: [{ handler: 'vide', timescale: 12288, durations: [], entry }], fragmented: { defaultDuration: { 1: 512 } } }));
+    expect((await indexOf(concat(single, fragment(size + 8), mdat(1200)))).ok).toBe(true);
   });
 });

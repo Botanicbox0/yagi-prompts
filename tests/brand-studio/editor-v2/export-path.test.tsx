@@ -90,6 +90,7 @@ describe('the finished file says which path made its pictures (for the proof)', 
     elapsedMs: 1200,
     captionFile: null,
     warnings: [],
+    restarts: 0,
     paths: paths.map((entry) => ({
       ...entry,
       srcUrl: `/${entry.clip}.mp4`,
@@ -98,6 +99,8 @@ describe('the finished file says which path made its pictures (for the proof)', 
       bytesRead: 10,
       fileBytes: 20,
       requests: 1,
+      reopened: 0,
+      reclaimed: 0,
     })),
   });
 

@@ -1,5 +1,6 @@
-import { describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { RangeRefused } from '@/lib/brand-studio/editor-v2/ranged-source';
+import { ReadCancelled, ReadTimedOut } from '@/lib/brand-studio/editor-v2/watched-read';
 import { WHOLE_FILE_LIMIT, WholeFileTooLarge, sampleBytes, totalFromContentRange, type RangeReply as RangeAnswer } from '@/lib/brand-studio/editor-v2/sample-bytes';
 
 /**
@@ -94,5 +95,72 @@ describe('reading pictures by range', () => {
     expect(totalFromContentRange('bytes 0-99/175533')).toBe(175533);
     expect(totalFromContentRange('bytes 0-99/*')).toBeNull();
     expect(totalFromContentRange(null)).toBeNull();
+  });
+});
+
+describe('spec G, B1: a run read ends on cancel, on a stall and after its total time', () => {
+  beforeEach(() => vi.useFakeTimers());
+  afterEach(() => vi.useRealTimers());
+
+  /** A 206 whose body sends `first` bytes, then nothing more (a stalled connection); the request's signal is kept. */
+  function stalling(first: number, signals: AbortSignal[]) {
+    return async (start: number, end: number, signal?: AbortSignal): Promise<RangeAnswer> => {
+      if (signal) signals.push(signal);
+      let sent = false;
+      const body = new ReadableStream<Uint8Array>({
+        pull(controller) {
+          if (!sent) {
+            sent = true;
+            controller.enqueue(new Uint8Array(first));
+            return;
+          }
+          return new Promise(() => undefined);
+        },
+      });
+      const headers = new Map([['content-range', `bytes ${start}-${end}/${FILE.length}`]]);
+      return { status: 206, body, arrayBuffer: async () => new ArrayBuffer(0), headers: { get: (name) => headers.get(name) ?? null } };
+    };
+  }
+
+  it('no bytes for 15 s: the read fails as stalled and its request is aborted', async () => {
+    const signals: AbortSignal[] = [];
+    const reader = sampleBytes(stalling(100, signals));
+    const outcome = reader.read({ start: 0, end: 400 }).catch((error: unknown) => error);
+    await vi.advanceTimersByTimeAsync(14_000);
+    expect(signals[0]!.aborted).toBe(false);
+    await vi.advanceTimersByTimeAsync(2_000);
+    const error = await outcome;
+    expect(error).toBeInstanceOf(ReadTimedOut);
+    expect((error as ReadTimedOut).kind).toBe('stall');
+    expect(signals[0]!.aborted).toBe(true);
+  });
+
+  it('an answer whose headers never come fails after 15 s too', async () => {
+    const signals: AbortSignal[] = [];
+    const reader = sampleBytes(async (_s, _e, signal) => {
+      if (signal) signals.push(signal);
+      return new Promise<RangeAnswer>(() => undefined);
+    });
+    const outcome = reader.read({ start: 0, end: 400 }).catch((error: unknown) => error);
+    await vi.advanceTimersByTimeAsync(15_500);
+    expect(await outcome).toBeInstanceOf(ReadTimedOut);
+    expect(signals[0]!.aborted).toBe(true);
+  });
+
+  it('cancelling the export ends a run read at once', async () => {
+    const signals: AbortSignal[] = [];
+    const controller = new AbortController();
+    const reader = sampleBytes(stalling(100, signals));
+    const outcome = reader.read({ start: 0, end: 400 }, controller.signal).catch((error: unknown) => error);
+    await vi.advanceTimersByTimeAsync(1_000);
+    controller.abort();
+    expect(await outcome).toBeInstanceOf(ReadCancelled);
+    expect(signals[0]!.aborted).toBe(true);
+  });
+
+  it('a finished read leaves no timer running', async () => {
+    const reader = sampleBytes(server(true));
+    await reader.read({ start: 0, end: 400 });
+    expect(vi.getTimerCount()).toBe(0);
   });
 });

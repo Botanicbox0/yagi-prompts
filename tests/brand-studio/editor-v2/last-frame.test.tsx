@@ -255,6 +255,7 @@ describe('the sheet says it after the export, quietly', () => {
     captionFile: null,
     warnings: [{ kind: 'lastFrame' as const, clip: '영상 스튜디오 1', frames: 1, pictures: 1 }],
     paths: [],
+    restarts: 0,
   };
 
   it('names the cut and how many frames repeat its last picture, as a note, not an alert', () => {
@@ -291,7 +292,7 @@ describe('the sheet says it after the export, quietly', () => {
 });
 
 describe('review round 2: how loud the note is depends on the pictures missing, not the film frames filled', () => {
-  const done = { status: 'done' as const, url: 'blob:x', filename: 'twings-edit.mp4', bytes: 1000, frames: 317, fps: 24, elapsedMs: 1000, captionFile: null, paths: [] };
+  const done = { status: 'done' as const, url: 'blob:x', filename: 'twings-edit.mp4', bytes: 1000, frames: 317, fps: 24, elapsedMs: 1000, captionFile: null, paths: [], restarts: 0 };
   const sheet = (filled: FilledCuts) => renderToStaticMarkup(h(ExportStatus, { job: { ...done, warnings: lastFrameWarnings(filled) }, copy: studioEditorKo.export }));
 
   it('a half-speed cut whose last picture is missing fills two film frames for one picture: a quiet note that says 2', () => {

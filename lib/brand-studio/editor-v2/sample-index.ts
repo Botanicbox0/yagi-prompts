@@ -52,6 +52,11 @@ export interface CodecConfig {
   /** `pasp` horizontal and vertical spacing; `[1, 1]` for square pixels or no box. */
   pixelAspect: readonly [number, number];
   colour: ColourDescription | null;
+  /**
+   * The profile the configuration record states: `avcC` profile_idc (100 High …), `hvcC` general_profile_idc
+   * (1 Main, 2 Main 10, 4 range extensions), `vpcC` and `av1C` profile; `null` when not read.
+   */
+  profile: number | null;
   /** Luma bit depth from the configuration record; `null` when the record does not say (taken as not 8). */
   bitDepth: number | null;
   /**
@@ -129,7 +134,9 @@ export type IndexFailure =
   | 'aperture'
   | 'times'
   | 'no-sync'
-  | 'disagrees';
+  | 'disagrees'
+  /** A refused request or a network error: not the file's answer, read again (spec G, B9). */
+  | 'network';
 
 export type IndexAnswer = { ok: true; index: VideoIndex } | { ok: false; reason: IndexFailure };
 
@@ -172,6 +179,13 @@ const W_ONE = 0x40000000;
 /** The most samples a track may list; the most top-level boxes walked (a fragmented file has two per fragment). */
 const MAX_SAMPLES = 4_000_000;
 export const MAX_INDEX_BOXES = 20_000;
+/**
+ * The requests a fragmented file may use to walk its fragments (spec G, B8): each fragment whose data is larger
+ * than a read (64 KiB) costs one, so about 60 fragments: a minute at a fragment a second, two at ffmpeg's
+ * fragment per key frame every 2 s. A plain file keeps ranged-source.ts `MAX_RANGE_REQUESTS` (8). Past the
+ * budget the index is `unreadable` and the source is seeked.
+ */
+export const FRAGMENTED_INDEX_REQUESTS = 64;
 
 // ── Finding the boxes ──────────────────────────────────────────────────────────────────────────
 
@@ -209,6 +223,7 @@ export async function gatherIndexBoxes(source: ByteSource, maxBoxes = MAX_INDEX_
         const top = boxes(box, 0, box.length)?.[0];
         fragmented = !!top && !!boxes(box, top.body, top.end)?.some((entry) => entry.type === 'mvex');
         if (!fragmented) break;
+        source.allow?.(FRAGMENTED_INDEX_REQUESTS);
       } else {
         moofs.push({ bytes: box, at });
       }
@@ -279,29 +294,36 @@ export function readSampleEntry(stsd: Uint8Array | null): EntryAnswer {
   let codec: string | null = null;
   let description: Uint8Array | null = null;
   let bitDepth: number | null = null;
+  let profile: number | null = null;
   let sdr = true;
   if (entry.type === 'avc1' || entry.type === 'avc3') {
     const avcC = body(find('avcC'));
     codec = avcC ? avcCodec(entry.type, avcC) : null;
     description = avcC ? avcC.slice() : null;
     bitDepth = avcC ? avcBitDepth(avcC) : null;
+    profile = avcC && avcC.length >= 2 ? avcC[1]! : null;
   } else if (entry.type === 'hvc1' || entry.type === 'hev1') {
     const hvcC = body(find('hvcC'));
     codec = hvcC ? hevcCodec(entry.type, hvcC) : null;
     description = hvcC ? hvcC.slice() : null;
+    profile = hvcC && hvcC.length >= 2 ? hvcC[1]! & 0x1f : null;
     // bitDepthLumaMinus8 and bitDepthChromaMinus8: the low three bits of bytes 17 and 18.
     if (hvcC && hvcC.length >= 19) bitDepth = Math.max((hvcC[17]! & 0x07) + 8, (hvcC[18]! & 0x07) + 8);
   } else if (entry.type === 'vp09') {
     const vpcC = body(find('vpcC'));
     codec = vpcC ? vp9Codec(vpcC) : null;
     if (vpcC && vpcC.length >= 10 && vpcC[0] === 1) {
+      profile = vpcC[4]!;
       bitDepth = vpcC[6]! >> 4;
       sdr = sdrCodes(vpcC[7]!, vpcC[8]!, vpcC[9]!);
     }
   } else if (entry.type === 'av01') {
     const av1C = body(find('av1C'));
     codec = av1C ? av1Codec(av1C) : null;
-    if (av1C && av1C.length >= 3) bitDepth = (av1C[2]! >> 6) & 1 ? ((av1C[2]! >> 5) & 1 ? 12 : 10) : 8;
+    if (av1C && av1C.length >= 3) {
+      profile = av1C[1]! >> 5;
+      bitDepth = (av1C[2]! >> 6) & 1 ? ((av1C[2]! >> 5) & 1 ? 12 : 10) : 8;
+    }
   }
   if (!codec) return { ok: false, reason: 'codec' };
 
@@ -335,7 +357,7 @@ export function readSampleEntry(stsd: Uint8Array | null): EntryAnswer {
       if (!sdrCodes(colour.primaries, colour.transfer, colour.matrix)) sdr = false;
     }
   }
-  return { ok: true, config: { entry: entry.type, codec, description, codedWidth: width, codedHeight: height, pixelAspect, colour, bitDepth, sdr } };
+  return { ok: true, config: { entry: entry.type, codec, description, codedWidth: width, codedHeight: height, pixelAspect, colour, profile, bitDepth, sdr } };
 }
 
 // ── The display matrix ─────────────────────────────────────────────────────────────────────────
@@ -383,8 +405,17 @@ interface PictureTrack {
   sync: boolean[];
   /** Where the next fragment continues without a `tfdt`; the `trex` defaults. */
   next: number;
-  defaults: { duration: number; size: number; flags: number };
+  defaults: TrackDefaults;
 }
+
+/** A track's `trex` defaults for its fragments' samples. */
+interface TrackDefaults {
+  duration: number;
+  size: number;
+  flags: number;
+}
+
+const NO_DEFAULTS: TrackDefaults = { duration: 0, size: 0, flags: 0 };
 
 function readEdits(bytes: Uint8Array, edts: Box | undefined): Edit[] | null {
   const elst = kid(bytes, edts, 'elst');
@@ -526,10 +557,11 @@ function readPlaces(bytes: Uint8Array, parts: Box[], track: PictureTrack) {
   track.fileOffsets = places;
   track.sizes = sizes;
   track.sync = sync;
-  track.mixedEntries = descriptions.size > 1;
+  // A chunk that points at another sample description than the one entry (spec G, B6: one rule, below).
+  if ([...descriptions].some((description) => description !== 1)) track.mixedEntries = true;
 }
 
-function readPictureTrack(moov: Uint8Array): { timescale: number; track: PictureTrack | null } {
+function readPictureTrack(moov: Uint8Array): { timescale: number; track: PictureTrack | null; trex: Map<number, TrackDefaults> } {
   const top = boxes(moov, 0, moov.length)?.find((entry) => entry.type === 'moov');
   if (!top) throw new Broken();
   const parts = kids(moov, top);
@@ -569,13 +601,16 @@ function readPictureTrack(moov: Uint8Array): { timescale: number; track: Picture
       sizes: [],
       sync: [],
       next: 0,
-      defaults: { duration: 0, size: 0, flags: 0 },
+      defaults: NO_DEFAULTS,
     };
     const stbl = kid(moov, kid(moov, mdia, 'minf'), 'stbl');
     if (stbl) {
       const tables = kids(moov, stbl);
       const stsd = tables.find((entry) => entry.type === 'stsd');
       candidate.stsd = stsd ? moov.subarray(stsd.body, stsd.end) : null;
+      // One rule for plain and fragmented files (spec G, B6): the picture track has exactly one sample entry.
+      // A fragment may point at any entry (tfhd), and the decoder is configured from the first one only.
+      if (candidate.stsd && candidate.stsd.length >= 8 && u32(candidate.stsd, 4) !== 1) candidate.mixedEntries = true;
       readTimes(moov, tables, candidate);
       try {
         readPlaces(moov, tables, candidate);
@@ -587,22 +622,25 @@ function readPictureTrack(moov: Uint8Array): { timescale: number; track: Picture
     track = candidate;
     break;
   }
+  // Every track's own defaults: another track's fragment before the picture track's is measured by ITS
+  // defaults, or the picture samples after it would be placed wrong (spec G, B5).
+  const trex = new Map<number, TrackDefaults>();
   const mvex = parts.find((entry) => entry.type === 'mvex');
-  if (track && mvex) {
-    for (const trex of kids(moov, mvex).filter((entry) => entry.type === 'trex')) {
-      need(trex, 24);
-      if (u32(moov, trex.body + 4) !== track.id) continue;
-      track.defaults = { duration: u32(moov, trex.body + 12), size: u32(moov, trex.body + 16), flags: u32(moov, trex.body + 20) };
+  if (mvex) {
+    for (const box of kids(moov, mvex).filter((entry) => entry.type === 'trex')) {
+      need(box, 24);
+      trex.set(u32(moov, box.body + 4), { duration: u32(moov, box.body + 12), size: u32(moov, box.body + 16), flags: u32(moov, box.body + 20) });
     }
   }
-  return { timescale, track };
+  if (track) track.defaults = trex.get(track.id) ?? NO_DEFAULTS;
+  return { timescale, track, trex };
 }
 
 /** A sample whose flags say `sample_is_non_sync_sample` (ISO/IEC 14496-12 §8.8.3.1) is not a sync sample. */
 const syncFromFlags = (flags: number) => (flags & 0x00010000) === 0;
 
 /** One fragment's samples of the picture track, appended with their places in the file. */
-function readFragment(bytes: Uint8Array, moofAt: number, track: PictureTrack) {
+function readFragment(bytes: Uint8Array, moofAt: number, track: PictureTrack, trex: ReadonlyMap<number, TrackDefaults>) {
   const moof = boxes(bytes, 0, bytes.length)?.find((entry) => entry.type === 'moof');
   if (!moof) throw new Broken();
   let previousEnd: number = moofAt;
@@ -612,7 +650,9 @@ function readFragment(bytes: Uint8Array, moofAt: number, track: PictureTrack) {
     if (!tfhd) throw new Broken();
     need(tfhd, 8);
     const flags = u32(bytes, tfhd.body) & 0xffffff;
-    const mine = u32(bytes, tfhd.body + 4) === track.id;
+    const id = u32(bytes, tfhd.body + 4);
+    const mine = id === track.id;
+    const defaults = mine ? track.defaults : (trex.get(id) ?? NO_DEFAULTS);
     let at = tfhd.body + 8;
     let base = flags & 0x020000 ? moofAt : previousEnd;
     const field = () => {
@@ -627,9 +667,9 @@ function readFragment(bytes: Uint8Array, moofAt: number, track: PictureTrack) {
       at += 8;
     }
     if (flags & 0x02) field();
-    const duration = flags & 0x08 ? field() : track.defaults.duration;
-    const size = flags & 0x10 ? field() : track.defaults.size;
-    const defaultFlags = flags & 0x20 ? field() : track.defaults.flags;
+    const duration = flags & 0x08 ? field() : defaults.duration;
+    const size = flags & 0x10 ? field() : defaults.size;
+    const defaultFlags = flags & 0x20 ? field() : defaults.flags;
     const tfdt = parts.find((entry) => entry.type === 'tfdt');
     let dt = track.next;
     if (tfdt) {
@@ -674,7 +714,10 @@ function readFragment(bytes: Uint8Array, moofAt: number, track: PictureTrack) {
           pos += 4;
         }
         if (runFlags & 0x800) {
-          offset = signed ? i32(bytes, pos) : u32(bytes, pos);
+          // Version 0 is unsigned by the standard, but writers put negative values there too: the ctts rule
+          // (signed when only that makes sense, more than half the 32-bit range; spec G, B4).
+          const raw = u32(bytes, pos);
+          offset = signed || raw > 0x7fffffff ? i32(bytes, pos) : raw;
           pos += 4;
         }
         if (mine) {
@@ -730,8 +773,9 @@ export function readSampleIndex(found: IndexBoxes): IndexAnswer {
   let movieTimescale: number;
   let track: PictureTrack | null;
   try {
-    ({ timescale: movieTimescale, track } = readPictureTrack(found.moov));
-    if (track) for (const moof of found.moofs) readFragment(moof.bytes, moof.at, track);
+    let trex: Map<number, TrackDefaults>;
+    ({ timescale: movieTimescale, track, trex } = readPictureTrack(found.moov));
+    if (track) for (const moof of found.moofs) readFragment(moof.bytes, moof.at, track, trex);
   } catch (error) {
     if (error instanceof Broken || error instanceof RangeError) return { ok: false, reason: 'unreadable' };
     throw error;

@@ -93,6 +93,8 @@ export interface ByteSource {
   read(start: number, length: number): Promise<Uint8Array>;
   /** The file's whole length when known (a Range answer's total), else `null`. */
   size?(): number | null;
+  /** Raises the most requests it may make (a fragmented file's own budget for its fragments, spec G B8). */
+  allow?(requests: number): void;
 }
 
 /** A byte source that has made all the requests it may (ranged-source.ts `MAX_RANGE_REQUESTS`). */
@@ -398,7 +400,9 @@ function readMoof(bytes: Uint8Array, movie: Movie) {
         if (runFlags & 0x200) pos += 4;
         if (runFlags & 0x400) pos += 4;
         if (runFlags & 0x800) {
-          offset = signed ? i32(bytes, pos) : u32(bytes, pos);
+          // As `cttsOffset`: version 0 read signed when only that makes sense (spec G, B4).
+          const raw = u32(bytes, pos);
+          offset = signed || raw > 0x7fffffff ? i32(bytes, pos) : raw;
           pos += 4;
         }
         if (track.mode === 'first') {
