@@ -231,6 +231,19 @@ describe('fragmented files: the fragments’ own tables', () => {
     expect(answer.timing.video!.firstSec).toBe(0.5);
     expect(answer.timing.video!.frames).toBe(12);
   });
+
+  it('spec G, B4: negative offsets written into a version 0 trun are read signed, as version 1 and ctts version 0 are', async () => {
+    // The first sample is shown 1024 ticks before its decode time.
+    const timing = async (trunVersion: 0 | 1) => {
+      const bytes = concat(movie, moof(1, [{ trackId: 1, base: 6144, count: 12, offsets: pyramidOffsets(12, 512).map((o) => o - 2048), trunVersion, wide: true }]), mdat(8));
+      const answer = await timingOfFile(bytes);
+      if (!answer.ok) throw new Error(answer.reason);
+      return answer.timing.video!;
+    };
+    const signed = await timing(1);
+    expect(signed.firstSec).toBeCloseTo((6144 - 1024) / 12288, 9);
+    expect(await timing(0)).toEqual(signed);
+  });
 });
 
 describe('what the reader refuses (the editor then measures by playback, and the export says the sound could not be placed)', () => {
