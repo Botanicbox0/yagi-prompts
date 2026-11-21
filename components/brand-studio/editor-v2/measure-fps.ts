@@ -1,6 +1,6 @@
 'use client';
 
-import { framesFromPlayback, measureWithRetry, measuredFromTiming, rateFromMediaTimes } from '@/lib/brand-studio/editor-v2/fps';
+import { framesFromPlayback, measureWithRetry, measuredFromTiming, rateFromMediaTimes, snapSourceFps } from '@/lib/brand-studio/editor-v2/fps';
 import type { MeasuredSource } from '@/lib/brand-studio/editor-v2/stored';
 import { readFootage } from './footage-facts';
 import { refreshReduced, screenTimer } from './screen-refresh';
@@ -80,7 +80,12 @@ function measureOnce(src: string, durationSec: number | null, limitMs: number): 
       const { fps, variable } = rateFromMediaTimes(times);
       const seconds = durationSec ?? (Number.isFinite(video.duration) ? video.duration : null);
       if (!fps || !seconds || seconds <= 0) return null;
-      return { fps, frames: framesFromPlayback({ fps, durationSec: seconds, firstSec, lastSec }), ...(variable ? { variable: true } : {}) };
+      const frames = framesFromPlayback({ fps, durationSec: seconds, firstSec, lastSec });
+      // With the first and last pictures known, the rate over the whole footage: a dozen frames on a
+      // millisecond clock cannot tell 24 from 23.976 (0.1 % apart), a hundred can.
+      const span = firstSec !== null && lastSec !== null ? lastSec - firstSec : 0;
+      const whole = span > 0 && frames > 1 ? snapSourceFps((frames - 1) / span) : null;
+      return { fps: whole ?? fps, frames, ...(variable ? { variable: true } : {}) };
     };
     /** Seeks to `at` and resolves with the media time of the picture then shown. */
     const shownAt = (at: number) =>

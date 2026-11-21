@@ -142,7 +142,7 @@ describe('the playback fallback counts the last picture it is shown (review roun
    * `endedOnSeek`: fire `ended` before `seeked` when a seek reaches the end (the order the review feared;
    * Chromium measured: no `ended` at all for a paused seek to the end, see measure-fps.ts).
    */
-  function fakeVideo(endedOnSeek: boolean) {
+  function fakeVideo(endedOnSeek: boolean, clock: (sec: number) => number = (sec) => sec) {
     const listeners = new Map<string, Array<() => void>>();
     let callbacks: Array<(now: number, meta: { mediaTime: number }) => void> = [];
     let time = 0;
@@ -177,7 +177,7 @@ describe('the playback fallback counts the last picture it is shown (review roun
       async play() {
         for (let k = 0; k < 13; k += 1) {
           await Promise.resolve();
-          present(k / 24);
+          present(clock(k / 24));
         }
       },
       set currentTime(at: number) {
@@ -186,7 +186,7 @@ describe('the playback fallback counts the last picture it is shown (review roun
           const shown = Math.min(96, Math.floor(at * 24 + 1e-9)) / 24;
           if (endedOnSeek && at >= 4.308 - 1e-9) fire('ended');
           fire('seeked');
-          present(shown);
+          present(clock(shown));
         });
       },
       get currentTime() {
@@ -206,6 +206,16 @@ describe('the playback fallback counts the last picture it is shown (review roun
     vi.doMock('@/components/brand-studio/editor-v2/footage-facts', () => ({ readFootage: async () => ({ answer: { ok: false, reason: 'not-mp4' }, requests: 1, received: 16, mode: 'range', ms: 1 }) }));
     const { measureSource } = await import('@/components/brand-studio/editor-v2/measure-fps');
     expect(await measureSource('/clip.webm', 4.308)).toEqual({ fps: 24, frames: 97 });
+  });
+
+  it('times kept to the millisecond (a WebM: 0, 42, 83 ms …) and a view that says 10 s: 24 fps, 97 pictures', async () => {
+    const ms = (sec: number) => Math.round(sec * 1000) / 1000;
+    vi.stubGlobal('document', { visibilityState: 'visible', hidden: false, createElement: () => fakeVideo(false, ms), body: { appendChild: () => undefined }, addEventListener: () => undefined, removeEventListener: () => undefined });
+    vi.stubGlobal('performance', { now: () => 0 });
+    vi.stubGlobal('window', { requestAnimationFrame: () => 1, cancelAnimationFrame: () => undefined, setInterval: () => 1, clearInterval: () => undefined });
+    vi.doMock('@/components/brand-studio/editor-v2/footage-facts', () => ({ readFootage: async () => ({ answer: { ok: false, reason: 'not-mp4' }, requests: 1, received: 16, mode: 'range', ms: 1 }) }));
+    const { measureSource } = await import('@/components/brand-studio/editor-v2/measure-fps');
+    expect(await measureSource('/clip.webm', 10)).toEqual({ fps: 24, frames: 97 });
   });
 });
 

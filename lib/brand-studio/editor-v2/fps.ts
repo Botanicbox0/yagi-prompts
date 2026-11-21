@@ -85,7 +85,12 @@ export function rateFromMediaTimes(times: readonly number[], minGaps = MIN_FRAME
     const whole = Math.max(1, Math.round(gap / middle));
     return Math.abs(gap - whole * middle) / middle > VARIABLE_GAP_TOLERANCE;
   }).length;
-  return { fps: snapSourceFps(1 / middle), variable: uneven / gaps.length > VARIABLE_SHARE };
+  // The median gap says how long one frame is; the rate is the frames over the time they span (a skipped
+  // frame counts as two). One gap alone is as coarse as the container's clock: a WebM keeps times to the
+  // millisecond (41, 42 ms), and 1 / 0.042 = 23.81 would miss 24 (review round 1 of part E, item 4).
+  const steps = gaps.reduce((sum, gap) => sum + Math.max(1, Math.round(gap / middle)), 0);
+  const span = gaps.reduce((sum, gap) => sum + gap, 0);
+  return { fps: snapSourceFps(steps / span), variable: uneven / gaps.length > VARIABLE_SHARE };
 }
 
 /**
