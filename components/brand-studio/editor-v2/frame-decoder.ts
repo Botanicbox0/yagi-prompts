@@ -1,6 +1,6 @@
 'use client';
 
-import { byteRuns, decodeSegments, type ByteRun, type DecodeSegment } from '@/lib/brand-studio/editor-v2/decode-plan';
+import { byteRuns, decodeSegments, elementColourSpace, type ByteRun, type DecodeSegment } from '@/lib/brand-studio/editor-v2/decode-plan';
 import type { SampleBytes } from '@/lib/brand-studio/editor-v2/sample-bytes';
 import { stampUs, type VideoIndex } from '@/lib/brand-studio/editor-v2/sample-index';
 
@@ -38,10 +38,13 @@ export class DecodeFailure extends Error {
 
 const gcd = (a: number, b: number): number => (b === 0 ? a : gcd(b, a % b));
 
-/** What `VideoDecoder.configure` is given for a source. */
+/**
+ * What `VideoDecoder.configure` is given for a source. The colour is the one the seek path's `<video>` draws
+ * with (`elementColourSpace`): the same pixels on both paths.
+ */
 export function decoderConfig(index: VideoIndex): VideoDecoderConfig {
   const { config } = index;
-  const out: VideoDecoderConfig = { codec: config.codec, codedWidth: config.codedWidth, codedHeight: config.codedHeight };
+  const out: VideoDecoderConfig = { codec: config.codec, codedWidth: config.codedWidth, codedHeight: config.codedHeight, colorSpace: elementColourSpace(config.codedHeight) };
   if (config.description) out.description = config.description;
   const [h, v] = config.pixelAspect;
   if (h !== v) {

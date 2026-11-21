@@ -228,6 +228,33 @@ export function byteRuns(
   return runs;
 }
 
+// ── Which colour ───────────────────────────────────────────────────────────────────────────────
+
+/** The colour description fields `VideoDecoderConfig.colorSpace` takes (a subset of WebCodecs' names). */
+export interface ColourSpaceInit {
+  matrix: 'smpte170m' | 'bt709';
+  primaries: 'smpte170m' | 'bt709';
+  transfer: 'smpte170m' | 'bt709';
+  fullRange: boolean;
+}
+
+/**
+ * The colour the seek path's `<video>` draws a picture with, so the decoder path draws the same pixels
+ * (spec F, F3). Measured on Chromium 2026-11-21, frame 0 drawn at native size from a `<video>` and from
+ * `VideoDecoder`: drawing a `<video>` ignores the colour a file states (its `colr` box, the H.264 stream's
+ * own description, full range) and picks by the picture's coded height: BT.709 from 720 rows up, BT.601
+ * (SMPTE 170M) below, limited range (1278×718 → 601, 960×720 → 709, 1280×544 → 601, 720×1280 → 709).
+ * `VideoDecoder` uses the stream's description, else BT.709, and a configured colour space overrides both.
+ * Unconfigured, an untagged 640×360 clip came out greener on saturated red (255, 24, 0 against the
+ * element's 254, 0, 0; mean |difference| in green 22.7); configured this way the difference was 0.000 on
+ * every size and tagging tried.
+ */
+export function elementColourSpace(codedHeight: number): ColourSpaceInit {
+  return codedHeight >= 720
+    ? { matrix: 'bt709', primaries: 'bt709', transfer: 'bt709', fullRange: false }
+    : { matrix: 'smpte170m', primaries: 'smpte170m', transfer: 'smpte170m', fullRange: false };
+}
+
 // ── Which path ─────────────────────────────────────────────────────────────────────────────────
 
 export type ExportPath = 'decoder' | 'seek';

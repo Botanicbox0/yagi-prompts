@@ -751,10 +751,11 @@ async function encodeAac(rendered: AudioBuffer, signal?: AbortSignal): Promise<{
 // ── Pictures: one path per source, verified either way ─────────────────────────────────────────
 
 /**
- * The most a picture source may hold of a whole file when its server ignores Range (answers 200): the same
- * limit the sound mix reads under. Above it the source is taken by seeking.
+ * The most a picture source may hold of a whole file when its server ignores Range (answers 200; neither the
+ * local media route nor production's media domain does). Uploads are at most 50 MB (lib/brand-studio/
+ * contracts.ts); above this the source is taken by seeking. Held until the pictures are done.
  */
-const WHOLE_FILE_LIMIT = SOUND_BYTES_LIMIT;
+const WHOLE_FILE_LIMIT = 256 * 1024 * 1024;
 
 /** Hands the main thread back after this much drawing, through a message (not a timer: timers throttle). */
 const YIELD_EVERY_MS = 12;

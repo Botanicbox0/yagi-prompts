@@ -5,6 +5,7 @@ import {
   choosePath,
   decodeGroups,
   decodeSegments,
+  elementColourSpace,
   exportPathOverride,
   pictureFor,
   pictureTimes,
@@ -229,5 +230,21 @@ describe('which path, and what the sheet says', () => {
     expect(unevenWarning(true, null)).toBe(true);
     expect(unevenWarning(true, 'decoder')).toBe(false);
     expect(unevenWarning(false, 'seek')).toBe(false);
+  });
+});
+
+describe('the colour the decoder path draws with is the seek path’s', () => {
+  /**
+   * Measured on this Chromium (scratchpad probes, spec F report): drawing a `<video>` ignores the colour a
+   * file states (`colr`, the stream's own description, full range) and picks by coded height; VideoDecoder
+   * would use the stream's description or BT.709. Stating the element's choice gave 0.000 mean difference per
+   * channel at native size on 640×360, 640×480, 720×576, 1024×576, 1280×544, 1278×718 (BT.601) and
+   * 960×720, 1280×720, 720×1280, 1080×1920, 1920×1080 (BT.709), tagged or not, full range or not.
+   */
+  it('BT.601 (SMPTE 170M) below 720 rows, BT.709 from 720 rows; always limited range', () => {
+    expect(elementColourSpace(360)).toEqual({ matrix: 'smpte170m', primaries: 'smpte170m', transfer: 'smpte170m', fullRange: false });
+    expect(elementColourSpace(718)).toEqual(elementColourSpace(360));
+    expect(elementColourSpace(720)).toEqual({ matrix: 'bt709', primaries: 'bt709', transfer: 'bt709', fullRange: false });
+    expect(elementColourSpace(1920)).toEqual(elementColourSpace(720));
   });
 });
