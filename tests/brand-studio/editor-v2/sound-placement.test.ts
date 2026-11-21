@@ -121,7 +121,7 @@ describe('a cut whose sound position could not be checked is named after the exp
     const job = { status: 'done' as const, url: 'blob:x', filename: 'f.mp4', bytes: 1, frames: 24, fps: 24, elapsedMs: 1, captionFile: null, warnings: [{ kind: 'soundPosition' as const, clip: 'webm clip' }] };
     const html = renderToStaticMarkup(h(ExportStatus, { job, copy: studioEditorKo.export }));
     expect(html).toContain('data-editor-export-warning="soundPosition"');
-    expect(html).toContain('&quot;webm clip&quot; 클립은 소리 위치를 확인하지 못해');
+    expect(html).toContain('&quot;webm clip&quot; 클립은 소리가 시작하는 지점을 파일에서 읽지 못해');
     expect(studioEditorEn.export.warnSoundPosition).toContain('{clip}');
   });
 });
