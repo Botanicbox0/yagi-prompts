@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { RUN_LIMITS, ReadCancelled, ReadTimedOut, readStream, waitShared, watchRead } from '@/lib/brand-studio/editor-v2/watched-read';
+import { RUN_LIMITS, ReadCancelled, ReadTimedOut, readStream, sharedWaits, waitShared, watchRead } from '@/lib/brand-studio/editor-v2/watched-read';
 
 /** Spec G, B1: every network wait of the export ends: on cancel at once, on a stall or after its total. */
 describe('a watched read', () => {
@@ -98,5 +98,37 @@ describe('a watched read', () => {
     // The shared read itself goes on and answers whoever asks next.
     settle('the file');
     await expect(waitShared(shared, undefined, 45_000, 'timed out', cancelled)).resolves.toBe('the file');
+  });
+});
+
+describe('spec H, F6: a shared read is waited for once per export', () => {
+  beforeEach(() => vi.useFakeTimers());
+  afterEach(() => vi.useRealTimers());
+
+  it('a read that timed out is not waited for again in the same export; other files wait in parallel; a new export waits again', async () => {
+    const never = () => new Promise<string>(() => undefined);
+    const cancelled = () => new ReadCancelled();
+    const waits = sharedWaits(never, undefined, 45_000, 'timed out' as const, cancelled);
+    const first = waits('/a.mp4');
+    const other = waits('/b.mp4');
+    await vi.advanceTimersByTimeAsync(45_000);
+    await expect(first).resolves.toBe('timed out');
+    await expect(other).resolves.toBe('timed out');
+    let again: string | null = null;
+    void waits('/a.mp4').then((value) => (again = value));
+    await vi.advanceTimersByTimeAsync(0);
+    expect(again).toBe('timed out');
+    let fresh: string | null = null;
+    void sharedWaits(never, undefined, 45_000, 'timed out' as const, cancelled)('/a.mp4').then((value) => (fresh = value));
+    await vi.advanceTimersByTimeAsync(1_000);
+    expect(fresh).toBeNull();
+  });
+
+  it('each file is read once per export', async () => {
+    let reads = 0;
+    const waits = sharedWaits(async (key: string) => (reads += 1, key), undefined, 45_000, null, () => new ReadCancelled());
+    await waits('/a.mp4');
+    await waits('/a.mp4');
+    expect(reads).toBe(1);
   });
 });

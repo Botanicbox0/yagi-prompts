@@ -45,7 +45,9 @@ describe('cancelling ends a picture request at once, in every wait', () => {
     const controller = new AbortController();
     await s.picture(0, [3], 3, controller.signal);
     expect(signals.length).toBeGreaterThan(0);
-    expect(signals.every((signal) => signal === controller.signal)).toBe(true);
+    expect(signals.some((signal) => signal?.aborted)).toBe(false);
+    controller.abort();
+    expect(signals.every((signal) => signal?.aborted)).toBe(true);
     s.close();
   });
 });

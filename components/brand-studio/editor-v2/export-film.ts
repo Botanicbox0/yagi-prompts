@@ -62,7 +62,7 @@ import { soundTrackOf } from '@/lib/brand-studio/editor-v2/media-probe';
 import { DEFAULT_REFRAME, type Reframe } from '@/lib/brand-studio/editor-v2/model';
 import { sampleBytes } from '@/lib/brand-studio/editor-v2/sample-bytes';
 import type { Rotation, VideoIndex } from '@/lib/brand-studio/editor-v2/sample-index';
-import { ReadCancelled, SHARED_WAIT_MS, STALL_MS, readStream, totalLimitMs, waitShared, watchRead } from '@/lib/brand-studio/editor-v2/watched-read';
+import { ReadCancelled, SHARED_WAIT_MS, STALL_MS, readStream, sharedWaits, totalLimitMs, waitShared, watchRead } from '@/lib/brand-studio/editor-v2/watched-read';
 import { CodecReclaimed, ReclaimedTooOften, isReclaim, restarter, whenVisible } from '@/lib/brand-studio/editor-v2/export-run';
 import { PicturePaths, type DecoderSession, type SourcePath } from '@/lib/brand-studio/editor-v2/picture-paths';
 import { encodeFrames } from '@/lib/brand-studio/editor-v2/frame-loop';
@@ -816,27 +816,37 @@ function yieldToPage(): Promise<void> {
  */
 type SourceChoice = { path: 'seek'; reason: string } | { path: 'decoder'; index: VideoIndex; config: VideoDecoderConfig };
 
-async function sourceChoice(
-  srcUrl: string,
-  override: ExportPathOverride,
-  cutRates: readonly number[],
-  signal?: AbortSignal,
-  readIndex: (srcUrl: string) => Promise<IndexRead> = readPictureIndex,
-): Promise<SourceChoice> {
+/**
+ * The shared reads as one export waits for them (spec G B1, spec H F6): until cancel or `SHARED_WAIT_MS`, never
+ * aborted, and each file's facts and index waited for ONCE in the export (a read that timed out is not waited for
+ * again when the path is chosen). The sheet's question (`plannedPath`) reads without them, as before.
+ */
+interface ExportWaits {
+  facts(srcUrl: string): Promise<Awaited<ReturnType<typeof readFootage>> | null | 'timeout'>;
+  index(srcUrl: string): Promise<IndexRead | null | 'timeout'>;
+}
+
+function exportWaits(signal: AbortSignal | undefined): ExportWaits {
+  const readIndex = exportIndexReads();
+  return {
+    facts: sharedWaits((url) => readFootage(url).catch(() => null), signal, SHARED_WAIT_MS, 'timeout' as const, cancelled),
+    index: sharedWaits((url) => readIndex(url).catch(() => null), signal, SHARED_WAIT_MS, 'timeout' as const, cancelled),
+  };
+}
+
+async function sourceChoice(srcUrl: string, override: ExportPathOverride, cutRates: readonly number[], waits?: ExportWaits): Promise<SourceChoice> {
   const hasDecoder = typeof VideoDecoder !== 'undefined' && typeof EncodedVideoChunk !== 'undefined';
   const seek = (input: Partial<Parameters<typeof choosePath>[0]>) =>
     ({ path: 'seek' as const, reason: choosePath({ override, hasDecoder, indexFailure: null, configSupported: null, ...input }).reason ?? 'seek' });
   if (override === 'seek' || !hasDecoder) return seek({});
-  // In the export, the shared reads are waited for until cancel or a limit, never aborted (spec G, B1); the
-  // sheet's question (`plannedPath`) waits as before.
-  const shared = <T,>(work: Promise<T>): Promise<T | 'timeout'> => (signal ? waitShared(work, signal, SHARED_WAIT_MS, 'timeout' as const, cancelled) : work);
   // The clip's frame facts first: when they could not be read the editor numbered it by playback.
-  const facts = await shared(readFootage(srcUrl).catch(() => null));
+  const facts = await (waits ? waits.facts(srcUrl) : readFootage(srcUrl).catch(() => null));
   if (facts === 'timeout') return seek({ factsFailure: 'timeout' });
   const factsFailure = !facts ? 'unreadable' : facts.answer.ok ? null : facts.answer.reason;
   if (factsFailure || !facts?.answer.ok || !facts.answer.timing.video) return seek({ factsFailure: factsFailure ?? 'no-video' });
-  const answer = await shared(readIndex(srcUrl).catch(() => ({ ok: false as const, reason: 'unreadable' as const })));
+  const answer = await (waits ? waits.index(srcUrl) : readPictureIndex(srcUrl).catch(() => null));
   if (answer === 'timeout') return seek({ indexFailure: 'timeout' });
+  if (!answer) return seek({ indexFailure: 'unreadable' });
   if (!answer.ok) return seek({ indexFailure: answer.reason });
   // H.264 and HEVC only: the decoder path was not measured on other codecs (spec G, B3).
   if (!codecMeasured(answer.index.config.entry)) return seek({ codecMeasured: false });
@@ -927,11 +937,11 @@ export async function exportFilm(options: ExportFilmOptions): Promise<ExportFilm
   const cutUrls = [...new Set(sequence.clips.map((clip) => clip.srcUrl))];
   // Each file's index read once for this export, a network failure too (spec G, B9); waited for until cancel or
   // a limit, never aborted: the editor shares these reads (B1).
-  const readIndex = exportIndexReads();
-  const indexes = override === 'seek' ? [] : await Promise.all(cutUrls.map((url) => waitShared(readIndex(url).catch(() => null), signal, SHARED_WAIT_MS, null, cancelled)));
+  const waits = exportWaits(signal);
+  const indexes = override === 'seek' ? [] : await Promise.all(cutUrls.map((url) => waits.index(url)));
   const noSoundTrack = new Set(cutUrls.filter((_, i) => {
     const answer = indexes[i];
-    return !!answer?.ok && answer.index.sound === 'no';
+    return !!answer && answer !== 'timeout' && answer.ok && answer.index.sound === 'no';
   }));
   // Everything the sound mix reads whole into this tab, added up before the first frame: above the limit
   // the export does not start (review round 1, item 10).
@@ -944,7 +954,7 @@ export async function exportFilm(options: ExportFilmOptions): Promise<ExportFilm
   // encoder left idle long enough in a hidden page is taken back by the browser (spec G, A1/A4).
   const choices = new Map(
     await Promise.all(
-      cutUrls.map(async (url) => [url, await sourceChoice(url, override, plan.filter((entry) => entry.srcUrl === url).map((entry) => entry.sourceFps), signal, readIndex)] as const),
+      cutUrls.map(async (url) => [url, await sourceChoice(url, override, plan.filter((entry) => entry.srcUrl === url).map((entry) => entry.sourceFps), waits)] as const),
     ),
   );
   if (document.fonts?.ready) await document.fonts.ready;

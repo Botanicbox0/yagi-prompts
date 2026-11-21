@@ -177,3 +177,33 @@ export function waitShared<T, U>(work: Promise<T>, signal: AbortSignal | undefin
     );
   });
 }
+
+/**
+ * The shared reads as ONE export waits for them (spec H, F6): each key read once and waited for once, so a read
+ * that timed out is not waited for again later in the same export (the index at the start, then again for the
+ * path; the frame facts likewise). Different keys wait in parallel. A new export starts a new one.
+ */
+export function sharedWaits<T, U>(read: (key: string) => Promise<T>, signal: AbortSignal | undefined, limitMs: number, timedOut: U, cancelled: () => Error): (key: string) => Promise<T | U> {
+  const seen = new Map<string, Promise<T | U>>();
+  return (key) => {
+    let waited = seen.get(key);
+    if (!waited) {
+      waited = waitShared(read(key), signal, limitMs, timedOut, cancelled);
+      seen.set(key, waited);
+    }
+    return waited;
+  };
+}
+
+/** A signal aborted when either is (the export's cancel, or the owner letting go of a read ahead). */
+export function eitherSignal(a: AbortSignal | undefined, b: AbortSignal): AbortSignal {
+  if (!a) return b;
+  const both = new AbortController();
+  const abort = () => both.abort();
+  if (a.aborted || b.aborted) abort();
+  else {
+    a.addEventListener('abort', abort, { once: true });
+    b.addEventListener('abort', abort, { once: true });
+  }
+  return both.signal;
+}

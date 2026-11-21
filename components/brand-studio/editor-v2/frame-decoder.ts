@@ -4,7 +4,7 @@ import { byteRuns, decodeSegments, decoderColourSpace, type ByteRun, type Decode
 import { isReclaim } from '@/lib/brand-studio/editor-v2/export-run';
 import type { SampleBytes } from '@/lib/brand-studio/editor-v2/sample-bytes';
 import { stampUs, type VideoIndex } from '@/lib/brand-studio/editor-v2/sample-index';
-import { ReadCancelled, ReadTimedOut, watchRead, type Watch } from '@/lib/brand-studio/editor-v2/watched-read';
+import { ReadCancelled, ReadTimedOut, eitherSignal, watchRead, type Watch } from '@/lib/brand-studio/editor-v2/watched-read';
 
 /**
  * Editing studio v2 — the export's decoder path (spec F, F3): a source's pictures from its own samples,
@@ -124,6 +124,11 @@ export class PictureDecoder {
   private fetched = new Map<number, Promise<Uint8Array>>();
   /** The export's cancel, for reads started ahead of the picture that needs them. */
   private signal: AbortSignal | undefined;
+  /**
+   * Aborts the reads started for this segment when the session lets go of them (suspend, close, another group or
+   * segment, a reclaim): no bytes read and thrown away after that (spec H, F6).
+   */
+  private reading = new AbortController();
   private readonly counts: DecoderStats = { fed: 0, outputs: 0, segments: 0, reopened: 0, reclaimed: 0 };
 
   constructor(
@@ -247,7 +252,7 @@ export class PictureDecoder {
     this.generation += 1;
     for (const frame of this.held.values()) frame.close();
     this.held.clear();
-    this.fetched.clear();
+    this.dropReads();
     const decoder = this.decoder;
     this.decoder = null;
     if (decoder && decoder.state !== 'closed') decoder.close();
@@ -269,6 +274,7 @@ export class PictureDecoder {
   private startGroup(group: number, pictures: readonly number[]) {
     const segments = decodeSegments(this.index, pictures);
     if (!segments) throw new DecodeFailure('a picture has no sync sample before it');
+    this.dropReads();
     for (const frame of this.held.values()) frame.close();
     this.held.clear();
     this.group = group;
@@ -290,7 +296,7 @@ export class PictureDecoder {
     this.flushState = 'none';
     this.runs = byteRuns(this.index, segment.from, segment.to);
     this.runOf.clear();
-    this.fetched.clear();
+    this.dropReads();
     this.runs.forEach((run, i) => {
       for (let sample = run.from; sample <= run.to; sample += 1) this.runOf.set(sample, i);
     });
@@ -307,10 +313,17 @@ export class PictureDecoder {
     this.floor = picture;
   }
 
+  /** The reads started so far are no longer wanted: aborted, and the next ones get a fresh signal. */
+  private dropReads() {
+    this.reading.abort();
+    this.reading = new AbortController();
+    this.fetched.clear();
+  }
+
   private fetchRun(i: number): Promise<Uint8Array> {
     let pending = this.fetched.get(i);
     if (!pending) {
-      pending = this.bytes.read(this.runs[i]!, this.signal);
+      pending = this.bytes.read(this.runs[i]!, eitherSignal(this.signal, this.reading.signal));
       // A read ahead that fails is reported when it is needed, not before.
       pending.catch(() => undefined);
       this.fetched.set(i, pending);
@@ -359,6 +372,7 @@ export class PictureDecoder {
     if (source !== this.decoder) return;
     if (isReclaim(error)) {
       // Closed by the browser: its frames go now, a new decoder is made on the next step.
+      this.dropReads();
       for (const frame of this.held.values()) frame.close();
       this.held.clear();
       this.decoder = null;
