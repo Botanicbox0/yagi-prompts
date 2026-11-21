@@ -4,7 +4,7 @@ import { describe, expect, it } from 'vitest';
 import { ExportStatus } from '@/components/brand-studio/editor-v2/export-sheet';
 import { parseStoredProject, serializeProjectForStorage, timelineSpans, type ComposeClip, type ComposerProject } from '@/lib/brand-studio/compose/timeline';
 import { effectStartSec, overlayFrames, storedSecToFrame } from '@/lib/brand-studio/editor-v2/cut-anchor';
-import { LAST_FRAME_QUIET_MAX, lastFrameWarnings, picturePlace } from '@/lib/brand-studio/editor-v2/export-plan';
+import { LAST_FRAME_QUIET_MAX, lastFrameWarnings, noteFilled, picturePlace, type FilledCuts } from '@/lib/brand-studio/editor-v2/export-plan';
 import { playbackFacts, sourceFramesOf } from '@/lib/brand-studio/editor-v2/fps';
 import { splitAtFrame, totalFrames, trimClipEdge, type FrameClip, type FrameSequence } from '@/lib/brand-studio/editor-v2/frames';
 import { fromStored, mergeFilmText, ownedSignature, storedFilmView, toStored, type FrameV2Block, type MeasuredSources } from '@/lib/brand-studio/editor-v2/stored';
@@ -253,7 +253,7 @@ describe('the sheet says it after the export, quietly', () => {
     fps: 24,
     elapsedMs: 1000,
     captionFile: null,
-    warnings: [{ kind: 'lastFrame' as const, clip: '영상 스튜디오 1', frames: 1 }],
+    warnings: [{ kind: 'lastFrame' as const, clip: '영상 스튜디오 1', frames: 1, pictures: 1 }],
   };
 
   it('names the cut and how many frames repeat its last picture, as a note, not an alert', () => {
@@ -266,7 +266,7 @@ describe('the sheet says it after the export, quietly', () => {
   });
 
   it('more than two filled frames in one cut is a visible warning with its own line; the export still finished', () => {
-    const many = { ...done, warnings: [{ kind: 'lastFrame' as const, clip: '영상 스튜디오 1', frames: 3 }] };
+    const many = { ...done, warnings: [{ kind: 'lastFrame' as const, clip: '영상 스튜디오 1', frames: 3, pictures: 3 }] };
     const html = renderToStaticMarkup(h(ExportStatus, { job: many, copy: studioEditorKo.export }));
     expect(html).toMatch(/role="alert"[^>]*data-editor-export-warning="lastFrame"/);
     expect(html).toContain('data-editor-export-filled="3"');
@@ -276,16 +276,44 @@ describe('the sheet says it after the export, quietly', () => {
   });
 
   it('filled frames are counted per cut: two cuts of one clip (or two clips with one name) stay apart', () => {
-    const filled = new Map([
-      ['cut-a', { clip: '영상 스튜디오 1', frames: 1 }],
-      ['cut-b', { clip: '영상 스튜디오 1', frames: 2 }],
-    ]);
+    const filled: FilledCuts = new Map();
+    noteFilled(filled, 'cut-a', '영상 스튜디오 1', 96);
+    noteFilled(filled, 'cut-b', '영상 스튜디오 1', 95);
+    noteFilled(filled, 'cut-b', '영상 스튜디오 1', 96);
     expect(lastFrameWarnings(filled)).toEqual([
-      { kind: 'lastFrame', clip: '영상 스튜디오 1', frames: 1 },
-      { kind: 'lastFrame', clip: '영상 스튜디오 1', frames: 2 },
+      { kind: 'lastFrame', clip: '영상 스튜디오 1', frames: 1, pictures: 1 },
+      { kind: 'lastFrame', clip: '영상 스튜디오 1', frames: 2, pictures: 2 },
     ]);
     const html = renderToStaticMarkup(h(ExportStatus, { job: { ...done, warnings: lastFrameWarnings(filled) }, copy: studioEditorKo.export }));
     expect(html.match(/data-editor-export-warning="lastFrame"/g)).toHaveLength(2);
+  });
+});
+
+describe('review round 2: how loud the note is depends on the pictures missing, not the film frames filled', () => {
+  const done = { status: 'done' as const, url: 'blob:x', filename: 'twings-edit.mp4', bytes: 1000, frames: 317, fps: 24, elapsedMs: 1000, captionFile: null };
+  const sheet = (filled: FilledCuts) => renderToStaticMarkup(h(ExportStatus, { job: { ...done, warnings: lastFrameWarnings(filled) }, copy: studioEditorKo.export }));
+
+  it('a half-speed cut whose last picture is missing fills two film frames for one picture: a quiet note that says 2', () => {
+    const filled: FilledCuts = new Map();
+    noteFilled(filled, 'slow', '느린 컷', 96);
+    noteFilled(filled, 'slow', '느린 컷', 96);
+    expect(lastFrameWarnings(filled)).toEqual([{ kind: 'lastFrame', clip: '느린 컷', frames: 2, pictures: 1 }]);
+    const html = sheet(filled);
+    expect(html).not.toMatch(/role="alert"[^>]*data-editor-export-warning="lastFrame"/);
+    expect(html).toContain('data-editor-export-filled="2"');
+    expect(html).toContain('&quot;느린 컷&quot; 클립 끝의 2프레임');
+  });
+
+  it('three missing pictures are the alert, at any speed; the sentence gives the film frames filled', () => {
+    const plain: FilledCuts = new Map();
+    for (const picture of [94, 95, 96]) noteFilled(plain, 'cut', '컷', picture);
+    expect(sheet(plain)).toMatch(/role="alert"[^>]*data-editor-export-warning="lastFrame"[^>]*data-editor-export-filled="3"/);
+    const slow: FilledCuts = new Map();
+    for (const picture of [94, 94, 95, 95, 96, 96]) noteFilled(slow, 'slow', '느린 컷', picture);
+    expect(lastFrameWarnings(slow)).toEqual([{ kind: 'lastFrame', clip: '느린 컷', frames: 6, pictures: 3 }]);
+    const html = sheet(slow);
+    expect(html).toMatch(/role="alert"[^>]*data-editor-export-warning="lastFrame"[^>]*data-editor-export-filled="6"/);
+    expect(html).toContain('&quot;느린 컷&quot; 클립 끝의 6프레임을 원본에서 읽지 못해');
   });
 });
 

@@ -27,6 +27,7 @@ import {
   isKeyFrame,
   notIncluded,
   lastFrameWarnings,
+  noteFilled,
   picturePlace,
   placeSound,
   soundBytesCheck,
@@ -39,6 +40,8 @@ import {
   timestampUs,
   videoPlan,
   type AudioPlan,
+  type FilledCuts,
+  type LastFrameWarning,
   type NotIncludedKey,
 } from '@/lib/brand-studio/editor-v2/export-plan';
 import { cutAnchor, effectStartSec, type CutAnchor } from '@/lib/brand-studio/editor-v2/cut-anchor';
@@ -99,7 +102,7 @@ export interface ExportFilmResult {
  * file's timing could not be read, so its sound may sit off its picture (spec E, item B1); a cut that asked for pictures past its
  * footage's last one, filled with that last picture (spec E addendum C3; `frames` of them).
  */
-export type ExportWarning = { kind: 'sound'; clip: string } | { kind: 'soundPosition'; clip: string } | { kind: 'lastFrame'; clip: string; frames: number };
+export type ExportWarning = { kind: 'sound'; clip: string } | { kind: 'soundPosition'; clip: string } | LastFrameWarning;
 
 export type ExportStopReason = 'empty' | 'unsupported' | 'load' | 'frame' | 'encode' | 'sound' | 'memory' | 'cancelled';
 
@@ -699,7 +702,7 @@ export async function exportFilm(options: ExportFilmOptions): Promise<ExportFilm
   document.body.appendChild(host);
   const sources = new Map<string, Source>();
   /** Pictures asked for past a footage's last one, filled with it, by cut id (named by its clip). */
-  const filled = new Map<string, { clip: string; frames: number }>();
+  const filled: FilledCuts = new Map();
   let encoder: VideoEncoder | null = null;
 
   try {
@@ -746,9 +749,7 @@ export async function exportFilm(options: ExportFilmOptions): Promise<ExportFilm
         sources.set(entry.srcUrl, source);
       }
       // Consecutive frames on the same source frame (a slowed cut) reuse the picture: no second seek.
-      if (await present(source, entry.sourceFrame, entry.frame, label, signal)) {
-        filled.set(entry.clipId, { clip: label, frames: (filled.get(entry.clipId)?.frames ?? 0) + 1 });
-      }
+      if (await present(source, entry.sourceFrame, entry.frame, label, signal)) noteFilled(filled, entry.clipId, label, entry.sourceFrame);
       if (framing === 'current') drawCurrentFraming(ctx, source.video, width, height);
       else drawFramed(ctx, source.video, width, height, reframe[entry.clipId] ?? DEFAULT_REFRAME);
       if (graded && extras) {

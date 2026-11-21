@@ -90,15 +90,40 @@ export function isKeyFrame(index: number, fps: number): boolean {
  */
 export type PicturePlace = 'inside' | 'past-end' | 'failed';
 
-/** Up to this many filled frames in one cut are a quiet note after the export; more are a visible warning. */
+/**
+ * Up to this many missing source pictures in one cut are a quiet note after the export; more are a visible
+ * warning (review round 2 of part E: counted in the footage's pictures, not in film frames, so a slowed cut
+ * that repeats one missing picture over two film frames stays quiet).
+ */
 export const LAST_FRAME_QUIET_MAX = 2;
+
+/** After the export: a cut whose last picture(s) were filled. */
+export interface LastFrameWarning {
+  kind: 'lastFrame';
+  clip: string;
+  /** Film frames filled: the number the sentence gives. */
+  frames: number;
+  /** Distinct source pictures that were missing: what decides how loud the note is. */
+  pictures: number;
+}
+
+/** Filled frames by cut id, as the export goes. */
+export type FilledCuts = Map<string, { clip: string; frames: number; pictures: Set<number> }>;
+
+/** Notes that film frame showing source picture `sourceFrame` of cut `cutId` (named `clip`) was filled. */
+export function noteFilled(filled: FilledCuts, cutId: string, clip: string, sourceFrame: number): void {
+  const entry = filled.get(cutId) ?? { clip, frames: 0, pictures: new Set<number>() };
+  entry.frames += 1;
+  entry.pictures.add(sourceFrame);
+  filled.set(cutId, entry);
+}
 
 /**
  * The note for each cut that had pictures filled, in the order the cuts came: counted per cut (two cuts
  * of one clip, or two clips with one name, stay apart), named by the clip.
  */
-export function lastFrameWarnings(filled: ReadonlyMap<string, { clip: string; frames: number }>): Array<{ kind: 'lastFrame'; clip: string; frames: number }> {
-  return [...filled.values()].map(({ clip, frames }) => ({ kind: 'lastFrame' as const, clip, frames }));
+export function lastFrameWarnings(filled: FilledCuts): LastFrameWarning[] {
+  return [...filled.values()].map(({ clip, frames, pictures }) => ({ kind: 'lastFrame' as const, clip, frames, pictures: pictures.size }));
 }
 
 export function picturePlace(input: {
