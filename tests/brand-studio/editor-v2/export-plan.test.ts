@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { muxAvc1ToMp4 } from '@/lib/brand-studio/compose/mp4-muxer';
+import { cutAnchor } from '@/lib/brand-studio/editor-v2/cut-anchor';
 import { videoInfo } from '@/lib/brand-studio/files';
 import {
   EXPORT_SAMPLE_RATE,
@@ -345,11 +346,13 @@ describe('captions, overlays and what is not included', () => {
 
   it('still-image overlays are drawn on the frames whose time lies in [start, end]; moving ones are not', () => {
     const film = extras({ overlays: [overlay('i', 'image', 1, 2), overlay('v', 'video', 0, 5)] });
-    expect(imageOverlaysAt(film, 23, 24)).toEqual([]);
-    expect(imageOverlaysAt(film, 24, 24).map((o) => o.id)).toEqual(['i']);
-    expect(imageOverlaysAt(film, 48, 24).map((o) => o.id)).toEqual(['i']);
-    expect(imageOverlaysAt(film, 49, 24)).toEqual([]);
-    expect(imageOverlaysAt(null, 30, 24)).toEqual([]);
+    // No cuts: stored seconds on the film's frames (cut-anchor.test.ts holds the mapping on cuts).
+    const anchor = cutAnchor(film, { fps: 24, clips: [] });
+    expect(imageOverlaysAt(film, 23, anchor)).toEqual([]);
+    expect(imageOverlaysAt(film, 24, anchor).map((o) => o.id)).toEqual(['i']);
+    expect(imageOverlaysAt(film, 48, anchor).map((o) => o.id)).toEqual(['i']);
+    expect(imageOverlaysAt(film, 49, anchor)).toEqual([]);
+    expect(imageOverlaysAt(null, 30, anchor)).toEqual([]);
   });
 
   it('names what the person set that the file will not carry', () => {

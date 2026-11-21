@@ -2,7 +2,9 @@ import { describe, expect, it } from 'vitest';
 import { COMPOSE_COLOR_PRESET_IDS, parseStoredProject, type ComposeClip, type ComposerProject } from '@/lib/brand-studio/compose/timeline';
 import { GRADE_PRESET_COPY_KEYS, filmContents, gradeName, type GradeNames } from '@/lib/brand-studio/editor-v2/film-contents';
 import { removeClips } from '@/lib/brand-studio/editor-v2/frames';
-import { fromStored } from '@/lib/brand-studio/editor-v2/stored';
+import { cutAnchor } from '@/lib/brand-studio/editor-v2/cut-anchor';
+import type { FrameSequence } from '@/lib/brand-studio/editor-v2/frames';
+import { fromStored, toStored } from '@/lib/brand-studio/editor-v2/stored';
 import { getDictionary } from '@/lib/i18n/dictionaries';
 
 /**
@@ -42,13 +44,16 @@ const FILM: ComposerProject = parseStoredProject(
   }),
 )!;
 
+/** How the stored film's timed things land on these cuts (spec E, item A). */
+const anchorOf = (sequence: FrameSequence, film: ComposerProject) => cutAnchor(toStored(sequence, film), sequence);
+
 const names: GradeNames = { presets: getDictionary('ko').studioCompose.colorGrade.presets, reference: getDictionary('ko').studioCompose.colorGrade.activeRef };
 
 describe('what the file of a real film carries', () => {
   const sequence = fromStored(FILM, MEASURED).sequence;
 
   it('names every part, counted the way the exporters draw and mix them', () => {
-    expect(filmContents(sequence, FILM)).toEqual({
+    expect(filmContents(sequence, FILM, anchorOf(sequence, FILM))).toEqual({
       cuts: 2,
       captions: 2, // the blank one is not drawn
       grade: { kind: 'preset', key: 'filmWarm' },
@@ -60,18 +65,18 @@ describe('what the file of a real film carries', () => {
 
   it('a film that got shorter carries only what lands inside it', () => {
     const shorter = removeClips(sequence, ['c2']); // 3 s
-    expect(filmContents(shorter, FILM)).toMatchObject({ cuts: 1, captions: 1, effects: 1, stills: 1 });
+    expect(filmContents(shorter, FILM, anchorOf(shorter, FILM))).toMatchObject({ cuts: 1, captions: 1, effects: 1, stills: 1 });
   });
 
   it('a grade scoped to a cut that is no longer in the film is not in the file', () => {
     const scoped = { ...FILM, colorGrade: { ...FILM.colorGrade!, scope: 'selected_clip' as const, clipId: 'c2', clipIndex: null } };
-    expect(filmContents(sequence, scoped).grade).toEqual({ kind: 'preset', key: 'filmWarm' });
-    expect(filmContents(removeClips(sequence, ['c2']), scoped).grade).toBeNull();
+    expect(filmContents(sequence, scoped, anchorOf(sequence, scoped)).grade).toEqual({ kind: 'preset', key: 'filmWarm' });
+    expect(filmContents(removeClips(sequence, ['c2']), scoped, anchorOf(removeClips(sequence, ['c2']), scoped)).grade).toBeNull();
   });
 
   it('nothing stored: only the cuts; muted music is not mixed', () => {
-    expect(filmContents(sequence, null)).toEqual({ cuts: 2, captions: 0, grade: null, music: null, effects: 0, stills: 0 });
-    expect(filmContents(sequence, { ...FILM, bgm: { ...FILM.bgm!, volume: 0 } }).music).toBeNull();
+    expect(filmContents(sequence, null, null)).toEqual({ cuts: 2, captions: 0, grade: null, music: null, effects: 0, stills: 0 });
+    expect(filmContents(sequence, { ...FILM, bgm: { ...FILM.bgm!, volume: 0 } }, anchorOf(sequence, FILM)).music).toBeNull();
   });
 
   it('the grade is named as the current editor names it', () => {

@@ -490,7 +490,7 @@ export function ActionPanel({ api, classicHref }: { api: EditorApi; classicHref?
  * earlier editor), read-only, so nobody is surprised by the exported file (review round 1, item 6).
  */
 function StoredContents({ api }: { api: EditorApi }) {
-  const contents = filmContents(api.sequence, api.storedFilm);
+  const contents = filmContents(api.sequence, api.filmView?.film ?? null, api.filmView?.anchor ?? null);
   if (!contents.captions && !contents.grade && !contents.music && !contents.effects && !contents.stills) return null;
   return (
     <Section title={api.copy.real.contents.heading}>

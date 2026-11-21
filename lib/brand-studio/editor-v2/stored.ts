@@ -30,15 +30,15 @@ import {
   normalizeClipBounds,
   parseStoredProject,
   serializeProjectForStorage,
-  type CaptionPosition,
-  type CaptionSize,
   type ComposeAspect,
-  type ComposeCaption,
   type ComposeClip,
   type ComposerProject,
 } from '@/lib/brand-studio/compose/timeline';
+import { captionsOnFrames, cutAnchor, type CutAnchor } from './cut-anchor';
 import { DEFAULT_FILM_FPS, snapFilmFps, sourceFramesOf } from './fps';
-import { clipMaxFrames, mediaFramesOf, type FrameCaption, type FrameClip, type FrameSequence } from './frames';
+
+export { captionsOnFrames } from './cut-anchor';
+import { clipMaxFrames, mediaFramesOf, type FrameClip, type FrameSequence } from './frames';
 
 /** The seconds a clip carried when v2 wrote its block, after the current editor's normalisation. */
 export interface FrameV2Mirror {
@@ -235,30 +235,6 @@ function sourceOf(clip: ComposeClip, fps: number, measured: MeasuredSources): So
   return { sourceFps: fps, sourceFrames: sourceFramesOf(clip.durationSec, fps), guessed: true };
 }
 
-const POSITIONS: readonly CaptionPosition[] = ['bottom', 'center', 'top'];
-const SIZES: readonly CaptionSize[] = ['sm', 'md', 'lg'];
-
-function captionFromStored(caption: ComposeCaption, fps: number): FrameCaption {
-  const start = Math.max(0, Math.round(caption.startSec * fps));
-  return {
-    id: caption.id,
-    text: caption.text,
-    start,
-    end: Math.max(start + 1, Math.round(caption.endSec * fps)),
-    position: POSITIONS.includes(caption.position) ? caption.position : 'bottom',
-    size: SIZES.includes(caption.size) ? caption.size : 'md',
-  };
-}
-
-/**
- * The stored film's captions on the film's frames, all of them: a caption past the end of a film that
- * got shorter is kept here and simply not shown (frames.ts `visibleCaptions`, `frameStateAt`), so it
- * shows again when the film is long enough. v2 does not own captions in V1; this is a view of them.
- */
-export function captionsOnFrames(captions: readonly ComposeCaption[], fps: number): FrameCaption[] {
-  return captions.slice(0, MAX_COMPOSE_CAPTIONS).map((caption) => captionFromStored(caption, fps));
-}
-
 /** The stored film on frames. `measured` holds what the browser measured, by `srcUrl`. */
 export function fromStored(project: ComposerProject, measured: MeasuredSources = {}): StoredFilm {
   const { fps, tentative } = filmRateOf(project, measured);
@@ -294,7 +270,10 @@ export function fromStored(project: ComposerProject, measured: MeasuredSources =
     return { ...base, ...source, ...deriveFrames(stored, fps, source) };
   });
   const aspect: ComposeAspect = (COMPOSE_ASPECTS as readonly string[]).includes(project.aspect) ? project.aspect : '9:16';
-  return { sequence: { fps, aspect, clips, captions: captionsOnFrames(project.captions, fps) }, exact, derived, corrected, rateUnknown, tentative };
+  // The stored captions on these cuts' frames, each at its offset into its cut (spec E, item A).
+  const cuts: FrameSequence = { fps, aspect, clips, captions: [] };
+  const anchor = cutAnchor(toStored(cuts, project), cuts);
+  return { sequence: { ...cuts, captions: captionsOnFrames(project.captions, anchor) }, exact, derived, corrected, rateUnknown, tentative };
 }
 
 export interface ToStoredOptions {
@@ -416,6 +395,27 @@ export function toStored(sequence: FrameSequence, previous: ComposerProject, opt
     return storedClipOf(clip, fps, own, template, !options.tentative && !unmeasured.has(clip.srcUrl), from);
   });
   return { ...previous, version: 1, aspect: sequence.aspect, clips, captions: previous.captions };
+}
+
+/** The stored film as the cuts on screen would store it, and what v2 shows of it. */
+export interface StoredFilmView {
+  /** `toStored` of the cuts onto the stored film: the seconds the current editor would read now. */
+  film: ComposerProject;
+  /** How the stored film's timed things (captions, effects, still overlays) land on these cuts' frames. */
+  anchor: CutAnchor;
+  /** The cuts with the stored captions on their frames. */
+  sequence: FrameSequence;
+}
+
+/**
+ * The one reading of a real film that the preview, the lists and the export all use (spec E, item A):
+ * the cuts on screen put onto the stored film, and its captions, effects and still overlays read through
+ * the cut anchor (lib/brand-studio/editor-v2/cut-anchor.ts). Nothing stored changes.
+ */
+export function storedFilmView(sequence: FrameSequence, previous: ComposerProject, options: ToStoredOptions = {}): StoredFilmView {
+  const film = toStored(sequence, previous, options);
+  const anchor = cutAnchor(film, sequence);
+  return { film, anchor, sequence: { ...sequence, captions: captionsOnFrames(film.captions, anchor) } };
 }
 
 /**

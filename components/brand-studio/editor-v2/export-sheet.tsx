@@ -2,12 +2,11 @@
 
 import { useEffect, useState, useSyncExternalStore } from 'react';
 import { fill } from '@/components/brand-studio/copy';
-import type { ComposerProject } from '@/lib/brand-studio/compose/timeline';
 import { SOUND_BYTES_LIMIT, burnsCaptions, formatBytes, notIncluded, writesCaptionFile } from '@/lib/brand-studio/editor-v2/export-plan';
 import { formatTimecode, totalFrames } from '@/lib/brand-studio/editor-v2/frames';
 import { captionsToSrt, type EditorWorkspace } from '@/lib/brand-studio/editor-v2/model';
 import { filmContents } from '@/lib/brand-studio/editor-v2/film-contents';
-import { captionsOnFrames } from '@/lib/brand-studio/editor-v2/stored';
+import type { StoredFilmView } from '@/lib/brand-studio/editor-v2/stored';
 import { browserCanExport } from './export-film';
 import { cancelExport, exportJobSnapshot, idleExportJob, startExport, subscribeExportJob, watchExportJob, type ExportJob } from './export-job';
 import { FilmContentsList } from './film-contents-list';
@@ -32,12 +31,12 @@ export function ExportSheet({ api }: { api: EditorApi }) {
   const e = copy.export;
   const job = useSyncExternalStore(subscribeExportJob, exportJobSnapshot, idleExportJob);
   const [supported, setSupported] = useState(true);
-  const [extras, setExtras] = useState<ComposerProject | null>(null);
+  const [view, setView] = useState<StoredFilmView | null>(null);
   useEffect(() => setSupported(browserCanExport()), []);
   useEffect(() => watchExportJob(), []);
   const { real, filmForExport } = api;
   useEffect(() => {
-    if (real) setExtras(filmForExport());
+    if (real) setView(filmForExport());
   }, [real, filmForExport, sequence]);
 
   // The sample film's document (looks, titles, music, sound fixes, caption output) says nothing about a real film.
@@ -46,7 +45,7 @@ export function ExportSheet({ api }: { api: EditorApi }) {
   const openTotal = open.reduce((sum, workspace) => sum + api.openCount[workspace], 0);
   const frames = totalFrames(sequence);
   const empty = frames === 0;
-  const missing = notIncluded({ sequence, doc: sampleDoc, extras: real ? extras : null });
+  const missing = notIncluded({ sequence, doc: sampleDoc, extras: real ? (view?.film ?? null) : null });
   const running = job.status === 'running';
   // A cut whose footage rate is not measured cannot be exported frame-exactly: refused before it starts.
   const unmeasured = real ? sequence.clips.find((clip) => api.unknownRates[clip.srcUrl]) : undefined;
@@ -65,14 +64,14 @@ export function ExportSheet({ api }: { api: EditorApi }) {
   const start = () => {
     if (blocked || running) return;
     // The stored film as it is the moment export starts, with whatever waited to be saved written first.
-    // Its captions are the ones burned in: exactly what is stored, on this film's frames.
+    // Its captions are the ones burned in: exactly what is stored, each at its offset into its cut.
     const film = real ? filmForExport() : null;
     startExport({
-      sequence: film ? { ...sequence, captions: captionsOnFrames(film.captions, sequence.fps) } : sequence,
+      sequence: film ? film.sequence : sequence,
       reframe: doc.reframe,
       // A real film is framed like the current editor's file (and v2's preview of it): no control of its own yet.
       framing: real ? 'current' : 'reframe',
-      extras: film,
+      extras: film ? film.film : null,
       burnCaptions: burnsCaptions(sampleDoc),
       captionText: writesCaptionFile(sampleDoc, sequence) ? captionsToSrt(sequence.captions, sequence.fps) : null,
       notify: (outcome) => api.say(outcome === 'done' ? e.toastDone : e.toastFailed),
@@ -126,10 +125,10 @@ export function ExportSheet({ api }: { api: EditorApi }) {
           <dd>{sequence.captions.length > 0 ? copy.captions.output[sampleDoc ? sampleDoc.captionSettings.output : 'burn'] : e.captionsNone}</dd>
         </div>
       </dl>
-      {real && extras && (
+      {real && view && (
         <section className={styles.section} data-editor-export-contents>
           <h3>{e.contents.heading}</h3>
-          <FilmContentsList contents={filmContents(sequence, extras)} copy={copy} gradeNames={api.gradeNames} withCuts />
+          <FilmContentsList contents={filmContents(view.sequence, view.film, view.anchor)} copy={copy} gradeNames={api.gradeNames} withCuts />
         </section>
       )}
       {missing.length > 0 && (

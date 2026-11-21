@@ -258,7 +258,9 @@ describe('v2 → stored → v2 keeps every frame', () => {
     const stored = toStored(seq, LEGACY);
     const first = stored.clips[0]!;
     expect(first.trimEndSec - first.trimStartSec).toBeGreaterThanOrEqual(0.3 - 1e-9);
-    expect(fromStored(throughCurrentEditor(stored), MEASURED).sequence).toEqual(seq);
+    // The cuts come back exact; the stored captions are read on the cuts as they now are (spec E item A,
+    // cut-anchor.test.ts), so they are compared there, not here.
+    expect(cutsOf(fromStored(throughCurrentEditor(stored), MEASURED).sequence)).toEqual(cutsOf(seq));
   });
 
   it('keeps a 30 fps clip in a 24 fps film exact, and a retimed cut split off its speed cycle', () => {
@@ -268,7 +270,7 @@ describe('v2 → stored → v2 keeps every frame', () => {
     expect(seq.clips[2]!.phase).not.toBe(0);
     seq = trimClipEdge(seq, 0, 'end', -1).seq;
     const back = fromStored(throughCurrentEditor(toStored(seq, LEGACY)), MEASURED).sequence;
-    expect(back).toEqual(seq);
+    expect(cutsOf(back)).toEqual(cutsOf(seq));
     expect(back.clips[1]!.sourceFps).toBe(30);
   });
 
@@ -460,7 +462,7 @@ describe('read, merge, write', () => {
     const text = mergeFilmText(serializeProjectForStorage(now), seq);
     const written = parseStoredProject(text)!;
     expect(written.bgm).toEqual(now.bgm);
-    expect(fromStored(written, MEASURED).sequence).toEqual(seq);
+    expect(cutsOf(fromStored(written, MEASURED).sequence)).toEqual(cutsOf(seq));
   });
 
   it('starts a film when the key is empty or unreadable', () => {

@@ -38,6 +38,7 @@ import {
   type AudioPlan,
   type NotIncludedKey,
 } from '@/lib/brand-studio/editor-v2/export-plan';
+import { cutAnchor, effectStartSec, type CutAnchor } from '@/lib/brand-studio/editor-v2/cut-anchor';
 import { CURRENT_EXPORT_BACKGROUND, currentExportFrame } from '@/lib/brand-studio/editor-v2/framing';
 import { totalFrames, type FrameSequence } from '@/lib/brand-studio/editor-v2/frames';
 import { soundTrackOf } from '@/lib/brand-studio/editor-v2/media-probe';
@@ -53,7 +54,11 @@ export interface ExportProgress {
 
 export interface ExportFilmOptions {
   sequence: FrameSequence;
-  /** The stored film in real mode (captions are taken from `sequence`); `null` for the sample film. */
+  /**
+   * The stored film in real mode, as these cuts would store it (`storedFilmView`; captions are taken from
+   * `sequence`); `null` for the sample film. Its effects and still overlays are read at their offsets into
+   * their cuts (`cutAnchor`, spec E item A).
+   */
   extras?: ComposerProject | null;
   /** Per-cut framing, as the preview draws it (the sample film). */
   reframe?: Readonly<Record<string, Reframe>>;
@@ -525,6 +530,7 @@ type MediaReader = ReturnType<typeof mediaReader>;
 async function mixSound(
   sequence: FrameSequence,
   extras: ComposerProject | null,
+  anchor: CutAnchor | null,
   reader: MediaReader,
   signal: AbortSignal | undefined,
   progress: (done: number, total: number) => void,
@@ -590,7 +596,8 @@ async function mixSound(
     const gain = context.createGain();
     gain.gain.value = effect.volume;
     source.connect(gain).connect(context.destination);
-    source.start(Math.max(0, effect.startSec), 0, Math.min(buffer.duration, effect.durationSec));
+    // At its exact offset into its cut, as the current editor placed it (spec E, item A); its own length.
+    source.start(anchor ? effectStartSec(anchor, effect) : 0, 0, Math.min(buffer.duration, effect.durationSec));
     progress((step += 1), steps);
   }
 
@@ -656,6 +663,7 @@ export async function exportFilm(options: ExportFilmOptions): Promise<ExportFilm
   if (!canConfirmFrames()) throw new ExportStop('unsupported', 'this browser cannot confirm video frames (requestVideoFrameCallback)');
   if (!browserCanExport()) throw new ExportStop('unsupported', 'this browser has no video or audio encoder');
   const fps = sequence.fps;
+  const anchor = extras ? cutAnchor(extras, sequence) : null;
   const { width, height } = COMPOSE_DIMENSIONS[sequence.aspect];
   const codec = await pickAvcCodec(width, height, fps);
   if (!codec) throw new ExportStop('unsupported', `no H.264 encoder for ${width}×${height} at ${fps} fps`);
@@ -731,7 +739,7 @@ export async function exportFilm(options: ExportFilmOptions): Promise<ExportFilm
         const index = indexOf.get(entry.clipId) ?? 0;
         applyProjectColorGradeFrame(ctx, width, height, extras, storedCutFor(extras, sequence.clips[index]!, index));
       }
-      drawImageOverlays(ctx, imageOverlaysAt(extras, entry.frame, fps), overlayImages, width, height);
+      drawImageOverlays(ctx, imageOverlaysAt(extras, entry.frame, anchor), overlayImages, width, height);
       if (burnCaptions) drawCaptionsOverlay(ctx, captionsAt(sequence, entry.frame), width, height);
 
       const frame = new VideoFrame(canvas, { timestamp: timestampUs(entry.frame, fps), duration: frameDurationUs(entry.frame, fps) });
@@ -748,7 +756,7 @@ export async function exportFilm(options: ExportFilmOptions): Promise<ExportFilm
     encoder.close();
     encoder = null;
 
-    const { rendered, warnings } = await mixSound(sequence, extras, reader, signal, (done, total) => onProgress?.({ phase: 'audio', done, total }));
+    const { rendered, warnings } = await mixSound(sequence, extras, anchor, reader, signal, (done, total) => onProgress?.({ phase: 'audio', done, total }));
     const audio = await encodeAac(rendered, signal);
 
     throwIfAborted(signal);

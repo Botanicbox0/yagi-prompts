@@ -11,6 +11,7 @@
  */
 import type { ComposeCaption, ComposeClip, ComposeOverlayClip, ComposerProject } from '@/lib/brand-studio/compose/timeline';
 import { frameStateAt, spansOf, totalFrames, type FrameClip, type FrameSequence } from './frames';
+import { overlayFrames, type CutAnchor } from './cut-anchor';
 import { isNeutral, type EditorDoc } from './model';
 import { lineageOf } from './stored';
 
@@ -230,10 +231,18 @@ export function soundShiftSec(extras: ComposerProject | null | undefined, clipId
   return typeof offset === 'number' && Number.isFinite(offset) ? offset : 0;
 }
 
-/** Still-image overlays on film frame `frame`, by the current exporter's rule (`start ≤ t ≤ end`). */
-export function imageOverlaysAt(extras: ComposerProject | null | undefined, frame: number, fps: number): ComposeOverlayClip[] {
-  const t = frame / fps;
-  return (extras?.overlays ?? []).filter((overlay) => overlay.mediaKind === 'image' && t >= overlay.startSec && t <= overlay.endSec);
+/**
+ * Still-image overlays on film frame `frame`: from the frame their stored start lands on to the one their
+ * end lands on, both included (the current exporter's `start ≤ t ≤ end`), each read at its offset into its
+ * cut (`anchor`, spec E item A). The preview and the export both draw from here.
+ */
+export function imageOverlaysAt(extras: ComposerProject | null | undefined, frame: number, anchor: CutAnchor | null | undefined): ComposeOverlayClip[] {
+  if (!extras || !anchor) return [];
+  return (extras.overlays ?? []).filter((overlay) => {
+    if (overlay.mediaKind !== 'image') return false;
+    const { first, last } = overlayFrames(anchor, overlay);
+    return frame >= first && frame <= last;
+  });
 }
 
 /** Things a person may have set that this export does not put in the file. The sheet names them first. */

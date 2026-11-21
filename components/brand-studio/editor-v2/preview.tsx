@@ -257,7 +257,7 @@ export function Preview({ api }: { api: EditorApi }) {
   const gradeFilter = useMemo(() => (storedGrade ? cssFilterForColorGrade(toColorGradeSpec(storedGrade)) : 'none'), [storedGrade]);
   const gradeOnPicture = !!storedGrade && storedGrade.scope !== 'region' && gradeFilter !== 'none';
   const gradeRegion = !!storedGrade && storedGrade.scope === 'region' && gradeFilter !== 'none' ? storedGrade.region : null;
-  const stills = storedFilm ? imageOverlaysAt(storedFilm, playhead, fps) : [];
+  const stills = api.real && api.filmView ? imageOverlaysAt(api.filmView.film, playhead, api.filmView.anchor) : [];
   const videoStyle: React.CSSProperties = framed
     ? {
         objectFit: framed.fit === 'fit' ? 'contain' : 'cover',
