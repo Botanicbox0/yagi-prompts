@@ -121,8 +121,8 @@ export interface ViewerProps {
 
 export const itemKey = (item: ViewerItem) => (item.type === "output" ? `o:${item.output.id}` : `a:${item.asset.id}`);
 const media = (item: ViewerItem) => (item.type === "output" ? item.output : item.asset);
-/** Everything but a 1080p final can be made again with the settings it had. */
-export const canRerun = (job: StudioJobView) => job.kind !== "video_final";
+/** Everything but a 1080p final can be made again with the settings it had (a preset workflow run cannot: its text is never shown). */
+export const canRerun = (job: StudioJobView) => job.kind !== "video_final" && !job.preset;
 
 /** What the viewer shows: the opened result for its own version, else the result that represents the picked version. */
 export function shownVersion(opened: ViewerItem, chain: readonly ChainVersion[], own: number, selected: number): ViewerItem {
@@ -700,6 +700,8 @@ function ViewerContent({
   );
   const promptBlock = job && !region && (
     <div className="bs-prompt-block" data-studio-prompt-block>
+    {/* A preset workflow run: what was sent is a server-side text, never shown, and its settings are not reused. */}
+    {!job.preset && (
     <details className="bs-prompt-details" data-studio-prompt-details>
       <summary>{v.promptToggle}</summary>
       <div className="bs-prompt-head">
@@ -738,6 +740,7 @@ function ViewerContent({
         </button>
       )}
     </details>
+    )}
     {/* One press, without opening: the typed words (a partial edit's instruction). Hidden while open. */}
     {promptText && (
       <CopyButton text={promptText} label={v.copyPrompt} copiedLabel={v.copied} onFailed={() => setCopyToast(v.copyFailed)} marker="copy-prompt" />

@@ -198,12 +198,14 @@ export function tileMenuKeys(input: {
   copyable?: boolean;
   /** Corner buttons the tile had no room for (`tileControls`): their actions come here instead. */
   inMenu?: { select?: boolean; like?: boolean; reference?: boolean };
+  /** A preset workflow run (`StudioJobView.preset`): its text is never shown, so it is not made again from here. */
+  preset?: boolean;
 }): TileMenuKey[] {
-  const { canGenerate, canEdit, kind, image, sized, saved, copyable = false, inMenu = {} } = input;
+  const { canGenerate, canEdit, kind, image, sized, saved, copyable = false, inMenu = {}, preset = false } = input;
   const keys: TileMenuKey[] = ["open"];
   if (inMenu.select) keys.push("select");
   if (canGenerate && kind === "region_edit") keys.push("reuse");
-  else if (canGenerate && kind !== "video_final") keys.push("rerun", "reuse");
+  else if (canGenerate && kind !== "video_final" && !preset) keys.push("rerun", "reuse");
   if (copyable) keys.push("copy-prompt");
   if (canGenerate && image) keys.push("region");
   if (canEdit && image && sized) keys.push("decorate");
@@ -627,7 +629,8 @@ function FailedTile({ entry, copy, canGenerate, onRetry, onRemove, canRemove, se
       <GroupModelBadge job={job} inline />
       <p className="bs-tile-reason">{reason}</p>
       <VersionBadge n={badges.get(job.id)} copy={copy} />
-      {canGenerate && (
+      {/* A preset workflow run is made again from the workflow, not from here (its text is never shown). */}
+      {canGenerate && !job.preset && (
         <button type="button" className="bs-btn bs-tile-retry" data-variant="soft" data-size="sm" onClick={() => onRetry(job)}>
           <StudioIcon name="rerun" />
           {copy.board.retry}
@@ -721,6 +724,7 @@ function ResultTile(props: WallProps & Badges & Picking & { entry: Extract<Entry
     saved: Boolean(output.savedAssetId),
     copyable: Boolean(promptText),
     inMenu: { select: !fit.check, like: canEdit && !fit.like, reference: canGenerate && (phone || fit.tools < wanted) },
+    preset: Boolean(job.preset),
   }).map((key) => ({ key, ...item[key] }));
 
   return (

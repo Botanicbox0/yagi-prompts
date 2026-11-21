@@ -515,6 +515,8 @@ export function enhancePreviewInput(
  * partial edit reopens its box, a reference-video run goes back to the bar).
  */
 export function rerunInput(job: StudioJobView, ids: { organizationId: string; requestId: string }): StudioJobCreate | null {
+  // A preset workflow run: its sent text is server-side and never shown, so it is never sent again with the visible line.
+  if (job.preset) return null;
   // A sentence the customer read before sending goes again as it was; anything else is rewritten like the first time.
   const reviewed = job.reviewed && job.finalPrompt ? job.finalPrompt.slice(0, STUDIO_LIMITS.promptMax) : null;
   const enhance = reviewed ? false : job.finalPrompt !== null;
