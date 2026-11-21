@@ -7,9 +7,9 @@
  */
 import type { ComposeColorPresetId, ComposerProject } from '@/lib/brand-studio/compose/timeline';
 import { activeColorGradeForFrame, normalizeColorGradeState } from '@/lib/brand-studio/compose/timeline';
+import { captionsOnFrames, effectStartSec, overlayFrames, type CutAnchor } from './cut-anchor';
 import { storedCutFor } from './export-plan';
 import { totalFrames, visibleCaptions, type FrameSequence } from './frames';
-import { captionsOnFrames } from './stored';
 
 /**
  * The current editor's names for its colour presets, by the copy key it shows each under
@@ -49,16 +49,15 @@ export interface FilmContents {
   stills: number;
 }
 
-export function filmContents(sequence: FrameSequence, film: ComposerProject | null | undefined): FilmContents {
+/** `anchor`: how the stored film's timed things land on these cuts (lib/brand-studio/editor-v2/cut-anchor.ts). */
+export function filmContents(sequence: FrameSequence, film: ComposerProject | null | undefined, anchor: CutAnchor | null | undefined): FilmContents {
   const total = totalFrames(sequence);
   const fps = sequence.fps;
   const seconds = total / fps;
-  if (!film) return { cuts: sequence.clips.length, captions: 0, grade: null, music: null, effects: 0, stills: 0 };
-  const shown = visibleCaptions({ ...sequence, captions: captionsOnFrames(film.captions, fps) }).filter((caption) => caption.text.trim() !== '');
+  if (!film || !anchor) return { cuts: sequence.clips.length, captions: 0, grade: null, music: null, effects: 0, stills: 0 };
+  const shown = visibleCaptions({ ...sequence, captions: captionsOnFrames(film.captions, anchor) }).filter((caption) => caption.text.trim() !== '');
   const grade = normalizeColorGradeState(film.colorGrade);
   const graded = !!grade && sequence.clips.some((clip, index) => activeColorGradeForFrame(film, storedCutFor(film, clip, index)) !== null);
-  // The current exporter's overlay rule is `start ≤ t ≤ end` at t = frame / fps (export-plan.ts imageOverlaysAt).
-  const onSomeFrame = (start: number, end: number) => total > 0 && Math.ceil(start * fps - 1e-9) <= Math.min(total - 1, Math.floor(end * fps + 1e-9));
   return {
     cuts: sequence.clips.length,
     captions: shown.length,
@@ -70,8 +69,9 @@ export function filmContents(sequence: FrameSequence, film: ComposerProject | nu
           ? { kind: 'reference', label: grade.referenceLabel }
           : { kind: 'custom' },
     music: film.bgm && film.bgm.volume > 0 && film.bgm.srcUrl ? film.bgm.label : null,
-    effects: (film.sfxClips ?? []).filter((effect) => effect.volume > 0 && !!effect.srcUrl && Math.max(0, effect.startSec) < seconds).length,
-    stills: (film.overlays ?? []).filter((overlay) => overlay.mediaKind === 'image' && onSomeFrame(overlay.startSec, overlay.endSec)).length,
+    effects: (film.sfxClips ?? []).filter((effect) => effect.volume > 0 && !!effect.srcUrl && effectStartSec(anchor, effect) < seconds).length,
+    // Shown on at least one frame (export-plan.ts imageOverlaysAt): its first frame is inside the film.
+    stills: (film.overlays ?? []).filter((overlay) => overlay.mediaKind === 'image' && overlayFrames(anchor, overlay).first < total).length,
   };
 }
 

@@ -7,10 +7,18 @@ import type { ComposerProject } from '@/lib/brand-studio/compose/timeline';
 import { totalFrames, type FrameSequence } from '@/lib/brand-studio/editor-v2/frames';
 import type { Reframe } from '@/lib/brand-studio/editor-v2/model';
 import { ExportStop, exportFilm, type ExportProgress, type ExportStopReason, type ExportWarning } from './export-film';
+import { watchRefresh } from './screen-refresh';
 
 export type ExportJob =
   | { status: 'idle' }
-  | { status: 'running'; progress: ExportProgress; frames: number; fps: number }
+  | {
+      status: 'running';
+      progress: ExportProgress;
+      frames: number;
+      fps: number;
+      /** The screen refreshes slowly (a covered or background window): the export runs, slower (spec E addendum, C2). */
+      slow: boolean;
+    }
   | {
       status: 'done';
       url: string;
@@ -94,7 +102,16 @@ export function startExport(request: ExportRequest): void {
   const fps = sequence.fps;
   let lastEmit = 0;
   let lastPhase: ExportProgress['phase'] = 'video';
-  set({ status: 'running', progress: { phase: 'video', done: 0, total: frames }, frames, fps });
+  let progressNow: ExportProgress = { phase: 'video', done: 0, total: frames };
+  let slow = false;
+  set({ status: 'running', progress: progressNow, frames, fps, slow });
+  // While it runs, whether the screen refreshes live: the sheet says so when it does not, and stops saying
+  // it when it does again.
+  const stopWatching = watchRefresh((reduced) => {
+    if (controller !== own || slow === reduced) return;
+    slow = reduced;
+    set({ status: 'running', progress: progressNow, frames, fps, slow });
+  });
 
   const onProgress = (progress: ExportProgress) => {
     const now = performance.now();
@@ -102,11 +119,13 @@ export function startExport(request: ExportRequest): void {
     if (progress.phase === lastPhase && !finished && now - lastEmit < 80) return;
     lastEmit = now;
     lastPhase = progress.phase;
-    set({ status: 'running', progress, frames, fps });
+    progressNow = progress;
+    set({ status: 'running', progress, frames, fps, slow });
   };
 
   exportFilm({ sequence, extras: request.extras, reframe: request.reframe, framing: request.framing, burnCaptions: request.burnCaptions, onProgress, signal: own.signal }).then(
     (result) => {
+      stopWatching();
       if (controller !== own) return;
       controller = null;
       const url = URL.createObjectURL(result.blob);
@@ -118,6 +137,7 @@ export function startExport(request: ExportRequest): void {
       if (openSheets === 0) request.notify('done');
     },
     (error: unknown) => {
+      stopWatching();
       if (controller !== own) return;
       controller = null;
       const stop = error instanceof ExportStop ? error : new ExportStop('encode', error instanceof Error ? error.message : String(error));

@@ -20,6 +20,7 @@ import {
   visibleCaptions,
   type FrameSequence,
 } from '@/lib/brand-studio/editor-v2/frames';
+import { cutAnchor } from '@/lib/brand-studio/editor-v2/cut-anchor';
 import { captionsOnFrames, fromStored, inheritClip, toStored, type MeasuredSources } from '@/lib/brand-studio/editor-v2/stored';
 
 /**
@@ -204,7 +205,7 @@ describe('a randomised run of v2 operations never changes what v2 does not own',
 describe('what a real film shows of the stored captions', () => {
   // use-editor keeps the cuts in its document and shows the stored captions on the film's frames.
   const cuts = { ...fromStored(RICH, MEASURED).sequence, captions: [] };
-  const view = (seq: FrameSequence): FrameSequence => ({ ...seq, captions: captionsOnFrames(RICH.captions, seq.fps) });
+  const view = (seq: FrameSequence): FrameSequence => ({ ...seq, captions: captionsOnFrames(RICH.captions, cutAnchor(toStored(seq, RICH), seq)) });
   const shownAnywhere = (seq: FrameSequence) => {
     const ids = new Set<string>();
     for (let frame = 0; frame < totalFrames(seq); frame += 1) for (const caption of frameStateAt(view(seq), frame).captions) ids.add(caption.id);
@@ -227,8 +228,9 @@ describe('what a real film shows of the stored captions', () => {
     const longer = insertClips(shorter, shorter.clips.length, [{ ...cuts.clips[0]!, id: 'again' }]);
     expect(totalFrames(longer)).toBeGreaterThan(Math.round(9.1 * 24));
     expect(shownAnywhere(longer)).toEqual(['k1', 'k2', 'k3']);
-    const reopened = fromStored(throughCurrentEditor(toStored(shorter, RICH)), MEASURED).sequence;
-    expect(reopened.captions).toEqual(captionsOnFrames(RICH.captions, reopened.fps));
+    const opened = throughCurrentEditor(toStored(shorter, RICH));
+    const reopened = fromStored(opened, MEASURED).sequence;
+    expect(reopened.captions).toEqual(captionsOnFrames(RICH.captions, cutAnchor(toStored(reopened, opened), reopened)));
   });
 });
 

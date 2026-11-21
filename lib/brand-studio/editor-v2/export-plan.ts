@@ -10,7 +10,9 @@
  * out in the browser.
  */
 import type { ComposeCaption, ComposeClip, ComposeOverlayClip, ComposerProject } from '@/lib/brand-studio/compose/timeline';
+import type { TimingAnswer } from './container';
 import { frameStateAt, spansOf, totalFrames, type FrameClip, type FrameSequence } from './frames';
+import { overlayFrames, type CutAnchor } from './cut-anchor';
 import { isNeutral, type EditorDoc } from './model';
 import { lineageOf } from './stored';
 
@@ -70,6 +72,77 @@ export function muxTicks(durationUs: number): number {
 /** A key frame every second of film. */
 export function isKeyFrame(index: number, fps: number): boolean {
   return index % Math.max(1, Math.round(fps)) === 0;
+}
+
+/**
+ * Where an asked-for picture of a source lies (spec E addendum C3). Production stopped a whole export on a
+ * cut's last frame: the playback measurement had counted 98 pictures in a file that holds 97.
+ *
+ * - The file's own count is known (its sample table, lib/brand-studio/editor-v2/container.ts): a picture at
+ *   or past that count is `past-end`.
+ * - Known or not: a picture that could not be confirmed is `past-end` when the element has reached its
+ *   end (`atEnd`: ended, or its current time at its length) and the last picture it showed lies more than
+ *   half a frame before the one asked for (the file lists a picture the browser cannot show, review round 1
+ *   of part E, item 8); anything else that could not be confirmed has `failed`.
+ *
+ * A `past-end` picture is filled with the source's last real one (and said after the export); a
+ * `failed` one stops the export as before: a wrong or missing picture inside the footage is never filled.
+ */
+export type PicturePlace = 'inside' | 'past-end' | 'failed';
+
+/**
+ * Up to this many missing source pictures in one cut are a quiet note after the export; more are a visible
+ * warning (review round 2 of part E: counted in the footage's pictures, not in film frames, so a slowed cut
+ * that repeats one missing picture over two film frames stays quiet).
+ */
+export const LAST_FRAME_QUIET_MAX = 2;
+
+/** After the export: a cut whose last picture(s) were filled. */
+export interface LastFrameWarning {
+  kind: 'lastFrame';
+  clip: string;
+  /** Film frames filled: the number the sentence gives. */
+  frames: number;
+  /** Distinct source pictures that were missing: what decides how loud the note is. */
+  pictures: number;
+}
+
+/** Filled frames by cut id, as the export goes. */
+export type FilledCuts = Map<string, { clip: string; frames: number; pictures: Set<number> }>;
+
+/** Notes that film frame showing source picture `sourceFrame` of cut `cutId` (named `clip`) was filled. */
+export function noteFilled(filled: FilledCuts, cutId: string, clip: string, sourceFrame: number): void {
+  const entry = filled.get(cutId) ?? { clip, frames: 0, pictures: new Set<number>() };
+  entry.frames += 1;
+  entry.pictures.add(sourceFrame);
+  filled.set(cutId, entry);
+}
+
+/**
+ * The note for each cut that had pictures filled, in the order the cuts came: counted per cut (two cuts
+ * of one clip, or two clips with one name, stay apart), named by the clip.
+ */
+export function lastFrameWarnings(filled: FilledCuts): LastFrameWarning[] {
+  return [...filled.values()].map(({ clip, frames, pictures }) => ({ kind: 'lastFrame' as const, clip, frames, pictures: pictures.size }));
+}
+
+export function picturePlace(input: {
+  sourceFrame: number;
+  /** The file's own number of pictures, or `null` when it could not be read. */
+  knownFrames: number | null;
+  confirmed: boolean;
+  /** Media time the asked-for picture would have. */
+  expectedSec: number;
+  /** Media time of the last picture the element showed while trying. */
+  lastSeenSec: number | null;
+  atEnd: boolean;
+  frameSec: number;
+}): PicturePlace {
+  const { sourceFrame, knownFrames, confirmed, expectedSec, lastSeenSec, atEnd, frameSec } = input;
+  if (knownFrames !== null && sourceFrame >= knownFrames) return 'past-end';
+  if (confirmed) return 'inside';
+  if (atEnd && lastSeenSec !== null && expectedSec > lastSeenSec + 0.5 * frameSec) return 'past-end';
+  return 'failed';
 }
 
 // ── Sound ──────────────────────────────────────────────────────────────────────────────────────
@@ -149,6 +222,40 @@ export function soundWindow(segment: AudioSegment, totalSamples: number, sampleR
   return { startSample, endSample, sourceOffsetSec };
 }
 
+/**
+ * How far the picture starts after the sound in a cut's file (spec E, item B1), from its own boxes
+ * (lib/brand-studio/editor-v2/container.ts): the first frame is shown at the picture track's start, and
+ * decodeAudioData's sample 0 is the sound track's start (both measured in Chromium; the numbers are in
+ * that file). So the sound for media time `m` after the first frame is decoded sample `(m + leadSec) × rate`.
+ * `known: false` when the file could not be read: the sound is placed as if both started together, as
+ * before, and the export says which cut's sound position could not be checked.
+ */
+export function soundLead(answer: TimingAnswer): { known: boolean; leadSec: number } {
+  if (!answer.ok) return { known: false, leadSec: 0 };
+  const { video, sound } = answer.timing;
+  // A sound edit list the reader cannot follow: where the sound sits is not known.
+  if (sound === 'unknown') return { known: false, leadSec: 0 };
+  if (!video || !sound) return { known: true, leadSec: 0 };
+  return { known: true, leadSec: video.firstSec - sound.firstSec };
+}
+
+/**
+ * A cut's sound window read `leadSec` further into its decoded sound. Where that falls before the sound's
+ * first sample (the sound starts after the picture), the head of the window is silent: the buffer starts
+ * that many output samples later (at the cut's speed), from its first sample. `null` when nothing is left.
+ */
+export function placeSound(window: SoundWindow, leadSec: number, rate: number, sampleRate = EXPORT_SAMPLE_RATE): { startSample: number; endSample: number; offsetSec: number } | null {
+  let offsetSec = window.sourceOffsetSec + (Number.isFinite(leadSec) ? leadSec : 0);
+  let startSample = window.startSample;
+  if (offsetSec < 0) {
+    const skip = Math.ceil((-offsetSec * sampleRate) / rate - 1e-9);
+    startSample += skip;
+    offsetSec = Math.max(0, offsetSec + (skip / sampleRate) * rate);
+  }
+  if (startSample >= window.endSample) return null;
+  return { startSample, endSample: window.endSample, offsetSec };
+}
+
 // ── What the film carries besides cuts ─────────────────────────────────────────────────────────
 
 /** The captions on film frame `frame`, in the shape the current exporter draws (frames become seconds). */
@@ -196,10 +303,18 @@ export function soundShiftSec(extras: ComposerProject | null | undefined, clipId
   return typeof offset === 'number' && Number.isFinite(offset) ? offset : 0;
 }
 
-/** Still-image overlays on film frame `frame`, by the current exporter's rule (`start ≤ t ≤ end`). */
-export function imageOverlaysAt(extras: ComposerProject | null | undefined, frame: number, fps: number): ComposeOverlayClip[] {
-  const t = frame / fps;
-  return (extras?.overlays ?? []).filter((overlay) => overlay.mediaKind === 'image' && t >= overlay.startSec && t <= overlay.endSec);
+/**
+ * Still-image overlays on film frame `frame`: from the frame their stored start lands on to the one their
+ * end lands on, both included (the current exporter's `start ≤ t ≤ end`), each read at its offset into its
+ * cut (`anchor`, spec E item A). The preview and the export both draw from here.
+ */
+export function imageOverlaysAt(extras: ComposerProject | null | undefined, frame: number, anchor: CutAnchor | null | undefined): ComposeOverlayClip[] {
+  if (!extras || !anchor) return [];
+  return (extras.overlays ?? []).filter((overlay) => {
+    if (overlay.mediaKind !== 'image') return false;
+    const { first, last } = overlayFrames(anchor, overlay);
+    return frame >= first && frame <= last;
+  });
 }
 
 /** Things a person may have set that this export does not put in the file. The sheet names them first. */

@@ -14,10 +14,10 @@ import {
 } from '@/lib/brand-studio/compose/timeline';
 import type { GradeNames } from '@/lib/brand-studio/editor-v2/film-contents';
 import { createFilmSession, type FilmConflict, type FilmSession } from '@/lib/brand-studio/editor-v2/film-session';
-import { snapFilmFps, sourceFramesOf } from '@/lib/brand-studio/editor-v2/fps';
+import { mapLimit, measuredFromTiming, snapFilmFps, sourceFramesOf } from '@/lib/brand-studio/editor-v2/fps';
 import { emptyFilm, realAssistAllowed, realDoc, sampleHrefFor, workspaceLocked } from '@/lib/brand-studio/editor-v2/real';
 import { deepLinkSource, parseClipParam, sourceSeconds, storedClipForSource, type EditorSource } from '@/lib/brand-studio/editor-v2/sources';
-import { captionsOnFrames, fromStored, inheritClip, mergeFilmText, sourcesToMeasure, toStored, type MeasuredSource } from '@/lib/brand-studio/editor-v2/stored';
+import { fromStored, inheritClip, mergeFilmText, sourcesToMeasure, storedFilmView, type MeasuredSource, type StoredFilmView } from '@/lib/brand-studio/editor-v2/stored';
 import {
   FIXTURE_MATERIALS,
   FIXTURE_MEASURED_LUFS,
@@ -93,6 +93,7 @@ import {
 } from '@/lib/brand-studio/editor-v2/shortcuts';
 import type { StudioEditorCopy } from '@/messages/studio-editor';
 import { readFilmText, watchFilmText, writeFilmText } from './film-store';
+import { readFootage } from './footage-facts';
 import { measureSource } from './measure-fps';
 import { loadShortcutPrefs, saveShortcutPrefs } from './shortcut-store';
 
@@ -312,13 +313,22 @@ export function useEditor(copy: StudioEditorCopy, options: EditorOptions = {}) {
   }, []);
 
   // On a real film the cuts come from the document (and its undo history), the captions from the stored
-  // film: all of them, on this film's frames; one past the end is simply not shown.
+  // film: all of them, each at its offset into its cut (spec E, item A); one past the end is not shown.
+  // The same view feeds the preview, the lanes, the lists and the export (`filmForExport`).
   const docSequence = doc.sequence;
-  const storedCaptions = storedFilm?.captions;
-  const sequence = useMemo(
-    () => (isReal ? { ...docSequence, captions: captionsOnFrames(storedCaptions ?? [], docSequence.fps) } : docSequence),
-    [isReal, docSequence, storedCaptions],
+  const filmView = useMemo(
+    (): StoredFilmView | null =>
+      isReal
+        ? storedFilmView(docSequence, storedFilm ?? emptyComposerProject(docSequence.aspect), {
+            known: catalogue.current,
+            unmeasuredSources: unmeasuredSources(),
+            tentative,
+          })
+        : null,
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- the catalogue and the unmeasured list change with these
+    [isReal, docSequence, storedFilm, tentative, unknownRates, variableRates],
   );
+  const sequence = filmView ? filmView.sequence : docSequence;
   const fps = sequence.fps;
   const spans = useMemo(() => spansOf(sequence), [sequence]);
   const total = useMemo(() => totalFrames(sequence), [sequence]);
@@ -411,11 +421,18 @@ export function useEditor(copy: StudioEditorCopy, options: EditorOptions = {}) {
   const openFilm = useCallback(
     async (session: FilmSession, text: string | null, ticket: number) => {
       const project = parseStoredProject(text) ?? emptyComposerProject('9:16');
-      const entries = await Promise.all(
-        sourcesToMeasure(project).map(async (src) => [src, await measureSource(src, secondsOfSrc(src))] as const),
+      const toMeasure = sourcesToMeasure(project);
+      // Footage that has frame data is checked against its file's own count (spec E addendum C3): a block an
+      // earlier playback measurement wrote with one picture too many is corrected, and stored so next time.
+      const toCheck = [...new Set(project.clips.slice(0, MAX_COMPOSE_CLIPS).map((clip) => clip.srcUrl))].filter((src) => !!src && !toMeasure.includes(src));
+      // At most four files at a time (review round 1 of part E, item 10).
+      const read = await mapLimit([...toMeasure.map((src) => ({ src, check: false })), ...toCheck.map((src) => ({ src, check: true }))], 4, async ({ src, check }) =>
+        check ? ([src, measuredFromTiming((await readFootage(src)).answer)] as const) : ([src, await measureSource(src, secondsOfSrc(src))] as const),
       );
+      const entries = read.slice(0, toMeasure.length);
+      const checks = read.slice(toMeasure.length);
       if (sessionRef.current !== session) return;
-      const measured: Record<string, MeasuredSource | null> = Object.fromEntries(entries);
+      const measured: Record<string, MeasuredSource | null> = { ...Object.fromEntries(checks.filter(([, seen]) => seen !== null)), ...Object.fromEntries(entries) };
       const film = fromStored(project, measured);
       const unknown = film.sequence.clips.filter((clip) => film.rateUnknown.includes(clip.id)).map((clip) => clip.srcUrl);
       const known: Record<string, number> = {};
@@ -496,14 +513,14 @@ export function useEditor(copy: StudioEditorCopy, options: EditorOptions = {}) {
    * overlays made in the current editor (or the sound studio) go into the file with exactly these cuts,
    * even when this browser could not write (or another tab's film is waiting for a choice).
    */
-  const filmForExport = useCallback((): ComposerProject | null => {
+  const filmForExport = useCallback((): StoredFilmView | null => {
     const film = realRef.current;
     if (!film) return null;
     sessionRef.current?.flush();
     const read = readFilmText(film.organizationId);
     const sequence = docRef.current.sequence;
     const current = (read.ok ? parseStoredProject(read.text) : null) ?? emptyComposerProject(sequence.aspect);
-    return toStored(sequence, current, { known: catalogue.current, unmeasuredSources: unmeasuredSources(), tentative: tentativeRef.current });
+    return storedFilmView(sequence, current, { known: catalogue.current, unmeasuredSources: unmeasuredSources(), tentative: tentativeRef.current });
   }, []);
 
   /** The bar's two choices when another tab overwrote this screen's cuts. */
@@ -1067,6 +1084,7 @@ export function useEditor(copy: StudioEditorCopy, options: EditorOptions = {}) {
     real: isReal,
     /** The stored film as last read or written (real film only): what v2 shows but does not own. */
     storedFilm,
+    filmView,
     gradeNames: real?.gradeNames ?? null,
     status,
     readOnly,

@@ -26,7 +26,12 @@ import {
   imageOverlaysAt,
   isKeyFrame,
   notIncluded,
+  lastFrameWarnings,
+  noteFilled,
+  picturePlace,
+  placeSound,
   soundBytesCheck,
+  soundLead,
   soundReads,
   soundShiftSec,
   soundSourceUrls,
@@ -35,12 +40,18 @@ import {
   timestampUs,
   videoPlan,
   type AudioPlan,
+  type FilledCuts,
+  type LastFrameWarning,
   type NotIncludedKey,
 } from '@/lib/brand-studio/editor-v2/export-plan';
+import { cutAnchor, effectStartSec, type CutAnchor } from '@/lib/brand-studio/editor-v2/cut-anchor';
 import { CURRENT_EXPORT_BACKGROUND, currentExportFrame } from '@/lib/brand-studio/editor-v2/framing';
 import { totalFrames, type FrameSequence } from '@/lib/brand-studio/editor-v2/frames';
+import { timingOfFile } from '@/lib/brand-studio/editor-v2/container';
 import { soundTrackOf } from '@/lib/brand-studio/editor-v2/media-probe';
 import { DEFAULT_REFRAME, type Reframe } from '@/lib/brand-studio/editor-v2/model';
+import { readFootage } from './footage-facts';
+import { screenTimer } from './screen-refresh';
 
 export interface ExportProgress {
   phase: 'video' | 'audio' | 'writing';
@@ -50,7 +61,11 @@ export interface ExportProgress {
 
 export interface ExportFilmOptions {
   sequence: FrameSequence;
-  /** The stored film in real mode (captions are taken from `sequence`); `null` for the sample film. */
+  /**
+   * The stored film in real mode, as these cuts would store it (`storedFilmView`; captions are taken from
+   * `sequence`); `null` for the sample film. Its effects and still overlays are read at their offsets into
+   * their cuts (`cutAnchor`, spec E item A).
+   */
   extras?: ComposerProject | null;
   /** Per-cut framing, as the preview draws it (the sample film). */
   reframe?: Readonly<Record<string, Reframe>>;
@@ -81,11 +96,13 @@ export interface ExportFilmResult {
   warnings: ExportWarning[];
 }
 
-/** A cut whose footage HAS a sound track the browser could not decode: its sound is not in the file. */
-export interface ExportWarning {
-  kind: 'sound';
-  clip: string;
-}
+/**
+ * What the file lacks or repeats that the person should hear about: a cut whose footage HAS a sound track
+ * the browser could not decode (its sound is not in the file); a cut whose sound is in the file but whose
+ * file's timing could not be read, so its sound may sit off its picture (spec E, item B1); a cut that asked for pictures past its
+ * footage's last one, filled with that last picture (spec E addendum C3; `frames` of them).
+ */
+export type ExportWarning = { kind: 'sound'; clip: string } | { kind: 'soundPosition'; clip: string } | LastFrameWarning;
 
 export type ExportStopReason = 'empty' | 'unsupported' | 'load' | 'frame' | 'encode' | 'sound' | 'memory' | 'cancelled';
 
@@ -112,7 +129,11 @@ const AUDIO_CONFIG = { codec: 'mp4a.40.2', sampleRate: EXPORT_SAMPLE_RATE, numbe
 /** High, Main, Baseline (level 4.0 holds 1080p up to 30 fps; 4.2 is tried first above that). */
 const AVC_CANDIDATES = ['avc1.640028', 'avc1.4d0028', 'avc1.42E028', 'avc1.42001f'];
 const AVC_CANDIDATES_HIGH_RATE = ['avc1.64002a', 'avc1.4d002a', 'avc1.42E02a'];
-/** How long a picture may take to be confirmed, counted only while the page is visible. */
+/**
+ * How long a picture may take to be confirmed, in screen time (./screen-refresh.ts): real time on a live
+ * screen, about ten times longer in a window covered by another one, which draws about once a second
+ * (spec E addendum, C2). The confirmation itself stays as strict: the very frame must be on the element.
+ */
 const FRAME_CONFIRM_MS = 4000;
 const FRAME_ATTEMPTS = 3;
 const LOAD_MS = 30_000;
@@ -120,7 +141,11 @@ const BACKGROUND = '#000';
 
 // ── Waiting that only counts while the page is on screen ──────────────────────────────────────
 
-/** A timer that does not run while the tab is hidden: a person switching tabs does not fail the export. */
+/**
+ * A timer that does not run while the tab is hidden: a person switching tabs does not fail the export.
+ * For loading files (network), which a covered window does not slow; waiting for a picture counts
+ * screen time instead (`screenTimer`).
+ */
 function visibleTimer(limitMs: number, onExpire: () => void): () => void {
   let spent = 0;
   let last = performance.now();
@@ -152,6 +177,8 @@ interface Source {
   firstSec: number;
   /** The source frame the element is confirmed to be showing, or `null` when unknown. */
   shown: number | null;
+  /** The file's own number of pictures (its sample table), or `null` when it could not be read. */
+  frames: number | null;
 }
 
 type VideoFrameCallbackVideo = HTMLVideoElement & {
@@ -226,7 +253,7 @@ function seekAndConfirm(
         handle = v.requestVideoFrameCallback(onFrame);
       }
     };
-    const stopTimer = visibleTimer(FRAME_CONFIRM_MS, () => finish(false));
+    const stopTimer = screenTimer(FRAME_CONFIRM_MS, () => finish(false));
     video.addEventListener('seeked', onSeeked);
     signal?.addEventListener('abort', onAbort, { once: true });
     handle = v.requestVideoFrameCallback(onFrame);
@@ -276,12 +303,44 @@ async function openSource(url: string, fps: number, label: string, host: HTMLEle
   // The first frame's presentation time: most files start at 0, some do not.
   const first = await seekAndConfirm(video, 0.5 / fps, () => true, signal);
   if (!first.ok || first.last === null) throw new ExportStop('frame', `first frame of ${label} could not be confirmed`, { frame: 0, clip: label });
-  return { url, video, fps, firstSec: first.last, shown: 0 };
+  const read = await readFootage(url).catch(() => null);
+  const frames = read?.answer.ok && read.answer.timing.video ? read.answer.timing.video.frames : null;
+  return { url, video, fps, firstSec: first.last, shown: 0, frames };
 }
 
-/** Puts source frame `sourceFrame` on the element and confirms it, or stops the export naming the frame. */
-async function present(source: Source, sourceFrame: number, filmFrame: number, label: string, signal?: AbortSignal): Promise<void> {
-  if (source.shown === sourceFrame) return;
+/**
+ * Puts source frame `sourceFrame` on the element and confirms it. A picture past the footage's last one
+ * (`picturePlace`, lib/brand-studio/editor-v2/export-plan.ts) is the last one instead: answers `true`
+ * when it filled. Anything else that cannot be confirmed stops the export naming the frame.
+ */
+async function present(source: Source, sourceFrame: number, filmFrame: number, label: string, signal?: AbortSignal): Promise<boolean> {
+  const frameSec = 1 / source.fps;
+  const stop = (seen: number | null) =>
+    new ExportStop('frame', `film frame ${filmFrame}: source frame ${sourceFrame} of "${label}" could not be confirmed (saw ${seen === null ? 'nothing' : `media time ${seen.toFixed(4)}s`})`, {
+      frame: filmFrame,
+      clip: label,
+    });
+  // Past the file's own count: its last picture instead.
+  const target = source.frames !== null ? Math.min(sourceFrame, source.frames - 1) : sourceFrame;
+  const result = await confirmPicture(source, target, signal);
+  if (result.ok) return target !== sourceFrame;
+  // Not confirmed: past the end only when the element has reached its end showing an earlier picture
+  // (the file may list a picture the browser cannot show, review round 1 of part E, item 8).
+  const video = source.video;
+  const atEnd = video.ended || (Number.isFinite(video.duration) && video.currentTime >= video.duration - 0.5 * frameSec);
+  const expectedSec = source.firstSec + target * frameSec;
+  const place = picturePlace({ sourceFrame: target, knownFrames: source.frames, confirmed: false, expectedSec, lastSeenSec: result.last, atEnd, frameSec });
+  if (place === 'past-end' && result.last !== null) {
+    // Filled with the last picture the element really showed.
+    const lastShown = Math.max(0, Math.round((result.last - source.firstSec) * source.fps));
+    if (lastShown < target && (await confirmPicture(source, lastShown, signal)).ok) return true;
+  }
+  throw stop(result.last);
+}
+
+/** Puts source frame `sourceFrame` on the element and confirms it is that very frame (a few tries). */
+async function confirmPicture(source: Source, sourceFrame: number, signal?: AbortSignal): Promise<{ ok: boolean; last: number | null }> {
+  if (source.shown === sourceFrame) return { ok: true, last: null };
   const frameSec = 1 / source.fps;
   const expected = source.firstSec + sourceFrame * frameSec;
   const target = expected + 0.5 * frameSec;
@@ -296,16 +355,12 @@ async function present(source: Source, sourceFrame: number, filmFrame: number, l
     const result = await seekAndConfirm(source.video, target, accept, signal);
     if (result.ok) {
       source.shown = sourceFrame;
-      return;
+      return { ok: true, last: result.last };
     }
     last = result.last;
     source.shown = null;
   }
-  const seen = last === null ? 'nothing' : `media time ${last.toFixed(4)}s`;
-  throw new ExportStop('frame', `film frame ${filmFrame}: source frame ${sourceFrame} of "${label}" could not be confirmed (saw ${seen})`, {
-    frame: filmFrame,
-    clip: label,
-  });
+  return { ok: false, last };
 }
 
 // ── Drawing ────────────────────────────────────────────────────────────────────────────────────
@@ -413,21 +468,25 @@ export type SoundGraph = Pick<BaseAudioContext, 'createBufferSource' | 'createGa
 
 /**
  * Places every cut's sound in the mix: a buffer source at the cut's speed, started on the cut's first
- * sample and stopped before the next cut's first sample, read from the cut's first frame. Returns how
- * many cuts were placed.
+ * sample and stopped before the next cut's first sample, read from the cut's first frame, `leadSecOf` its
+ * file further on (the picture track's start minus the sound track's, `soundLead`). Returns how many cuts
+ * were placed.
  */
 export function scheduleCutSound(
   graph: SoundGraph,
   plan: AudioPlan,
   buffers: ReadonlyMap<string, AudioBuffer | null>,
   shiftSecOf: (clipId: string) => number = () => 0,
+  leadSecOf: (srcUrl: string) => number = () => 0,
 ): number {
   let placed = 0;
   for (const segment of plan.segments) {
     if (segment.gain <= 0) continue;
     const buffer = buffers.get(segment.srcUrl);
     if (!buffer) continue;
-    const span = soundWindow(segment, plan.totalSamples, plan.sampleRate, shiftSecOf(segment.clipId));
+    const window = soundWindow(segment, plan.totalSamples, plan.sampleRate, shiftSecOf(segment.clipId));
+    // Read where the file's own timing puts the sound under this picture (spec E, item B1).
+    const span = window ? placeSound(window, leadSecOf(segment.srcUrl), segment.rate, plan.sampleRate) : null;
     if (!span) continue;
     const source = graph.createBufferSource();
     source.buffer = buffer;
@@ -436,7 +495,7 @@ export function scheduleCutSound(
     gain.gain.value = segment.gain;
     source.connect(gain);
     gain.connect(graph.destination);
-    source.start(span.startSample / plan.sampleRate, span.sourceOffsetSec);
+    source.start(span.startSample / plan.sampleRate, span.offsetSec);
     // Half a sample before the boundary: the next cut's first sample is never this cut's.
     source.stop((span.endSample - 0.5) / plan.sampleRate);
     placed += 1;
@@ -482,6 +541,7 @@ type MediaReader = ReturnType<typeof mediaReader>;
 async function mixSound(
   sequence: FrameSequence,
   extras: ComposerProject | null,
+  anchor: CutAnchor | null,
   reader: MediaReader,
   signal: AbortSignal | undefined,
   progress: (done: number, total: number) => void,
@@ -502,13 +562,19 @@ async function mixSound(
   // A cut's footage without a sound track decodes to nothing and is simply silent. Footage that HAS a
   // sound track the browser cannot decode (or that cannot be told) is silent too, and said so after export.
   const buffers = new Map<string, AudioBuffer | null>();
+  const leads = new Map<string, number>();
   for (const url of cutUrls) {
     throwIfAborted(signal);
     const bytes = await read(url);
     // Inspected before decoding: decoding hands the bytes over.
-    const track = soundTrackOf(new Uint8Array(bytes));
+    const view = new Uint8Array(bytes);
+    const track = soundTrackOf(view);
+    const lead = soundLead(await timingOfFile(view));
     const decoded = await context.decodeAudioData(bytes).catch(() => null);
     if (!decoded && track !== 'no') warnings.push({ kind: 'sound', clip: labelOf(url) });
+    // Its sound is in the file but where it sits under the picture could not be read (WebM, a broken file).
+    else if (decoded && !lead.known) warnings.push({ kind: 'soundPosition', clip: labelOf(url) });
+    leads.set(url, lead.leadSec);
     buffers.set(url, decoded);
     progress((step += 1), steps);
   }
@@ -522,7 +588,7 @@ async function mixSound(
     }
   };
 
-  scheduleCutSound(context, plan, buffers, (clipId) => soundShiftSec(extras, clipId));
+  scheduleCutSound(context, plan, buffers, (clipId) => soundShiftSec(extras, clipId), (url) => leads.get(url) ?? 0);
 
   // Music and effects, by the current exporter's rules: music loops from its in-point for the whole film.
   if (bgm) {
@@ -547,7 +613,8 @@ async function mixSound(
     const gain = context.createGain();
     gain.gain.value = effect.volume;
     source.connect(gain).connect(context.destination);
-    source.start(Math.max(0, effect.startSec), 0, Math.min(buffer.duration, effect.durationSec));
+    // At its exact offset into its cut, as the current editor placed it (spec E, item A); its own length.
+    source.start(anchor ? effectStartSec(anchor, effect) : 0, 0, Math.min(buffer.duration, effect.durationSec));
     progress((step += 1), steps);
   }
 
@@ -613,6 +680,7 @@ export async function exportFilm(options: ExportFilmOptions): Promise<ExportFilm
   if (!canConfirmFrames()) throw new ExportStop('unsupported', 'this browser cannot confirm video frames (requestVideoFrameCallback)');
   if (!browserCanExport()) throw new ExportStop('unsupported', 'this browser has no video or audio encoder');
   const fps = sequence.fps;
+  const anchor = extras ? cutAnchor(extras, sequence) : null;
   const { width, height } = COMPOSE_DIMENSIONS[sequence.aspect];
   const codec = await pickAvcCodec(width, height, fps);
   if (!codec) throw new ExportStop('unsupported', `no H.264 encoder for ${width}×${height} at ${fps} fps`);
@@ -633,6 +701,8 @@ export async function exportFilm(options: ExportFilmOptions): Promise<ExportFilm
   host.style.cssText = 'position:fixed;left:-10000px;top:0;width:64px;height:36px;overflow:hidden;pointer-events:none';
   document.body.appendChild(host);
   const sources = new Map<string, Source>();
+  /** Pictures asked for past a footage's last one, filled with it, by cut id (named by its clip). */
+  const filled: FilledCuts = new Map();
   let encoder: VideoEncoder | null = null;
 
   try {
@@ -679,14 +749,14 @@ export async function exportFilm(options: ExportFilmOptions): Promise<ExportFilm
         sources.set(entry.srcUrl, source);
       }
       // Consecutive frames on the same source frame (a slowed cut) reuse the picture: no second seek.
-      await present(source, entry.sourceFrame, entry.frame, label, signal);
+      if (await present(source, entry.sourceFrame, entry.frame, label, signal)) noteFilled(filled, entry.clipId, label, entry.sourceFrame);
       if (framing === 'current') drawCurrentFraming(ctx, source.video, width, height);
       else drawFramed(ctx, source.video, width, height, reframe[entry.clipId] ?? DEFAULT_REFRAME);
       if (graded && extras) {
         const index = indexOf.get(entry.clipId) ?? 0;
         applyProjectColorGradeFrame(ctx, width, height, extras, storedCutFor(extras, sequence.clips[index]!, index));
       }
-      drawImageOverlays(ctx, imageOverlaysAt(extras, entry.frame, fps), overlayImages, width, height);
+      drawImageOverlays(ctx, imageOverlaysAt(extras, entry.frame, anchor), overlayImages, width, height);
       if (burnCaptions) drawCaptionsOverlay(ctx, captionsAt(sequence, entry.frame), width, height);
 
       const frame = new VideoFrame(canvas, { timestamp: timestampUs(entry.frame, fps), duration: frameDurationUs(entry.frame, fps) });
@@ -703,7 +773,7 @@ export async function exportFilm(options: ExportFilmOptions): Promise<ExportFilm
     encoder.close();
     encoder = null;
 
-    const { rendered, warnings } = await mixSound(sequence, extras, reader, signal, (done, total) => onProgress?.({ phase: 'audio', done, total }));
+    const { rendered, warnings } = await mixSound(sequence, extras, anchor, reader, signal, (done, total) => onProgress?.({ phase: 'audio', done, total }));
     const audio = await encodeAac(rendered, signal);
 
     throwIfAborted(signal);
@@ -721,7 +791,7 @@ export async function exportFilm(options: ExportFilmOptions): Promise<ExportFilm
       durationSec: frames / fps,
       elapsedMs: Math.round(performance.now() - started),
       notIncluded: notIncluded({ sequence, extras }),
-      warnings,
+      warnings: [...lastFrameWarnings(filled), ...warnings],
     };
   } finally {
     if (encoder && encoder.state !== 'closed') encoder.close();

@@ -23,22 +23,21 @@
  */
 import {
   COMPOSE_ASPECTS,
-  MAX_COMPOSE_CAPTIONS,
   MAX_COMPOSE_CLIPS,
   clipPlaybackRate,
   emptyComposerProject,
   normalizeClipBounds,
   parseStoredProject,
   serializeProjectForStorage,
-  type CaptionPosition,
-  type CaptionSize,
   type ComposeAspect,
-  type ComposeCaption,
   type ComposeClip,
   type ComposerProject,
 } from '@/lib/brand-studio/compose/timeline';
+import { captionsOnFrames, cutAnchor, type CutAnchor } from './cut-anchor';
 import { DEFAULT_FILM_FPS, snapFilmFps, sourceFramesOf } from './fps';
-import { clipMaxFrames, mediaFramesOf, type FrameCaption, type FrameClip, type FrameSequence } from './frames';
+
+export { captionsOnFrames } from './cut-anchor';
+import { clipMaxFrames, mediaFramesOf, type FrameClip, type FrameSequence } from './frames';
 
 /** The seconds a clip carried when v2 wrote its block, after the current editor's normalisation. */
 export interface FrameV2Mirror {
@@ -103,6 +102,8 @@ export interface MeasuredSource {
   frames: number;
   /** Its frames are not evenly spaced (variable frame rate): shown, not supported (review round 1, item 10). */
   variable?: boolean;
+  /** `frames` is the file's own count of pictures (its sample table), not a measurement by playback. */
+  counted?: boolean;
 }
 
 export type MeasuredSources = Readonly<Record<string, MeasuredSource | null | undefined>>;
@@ -113,6 +114,12 @@ export interface StoredFilm {
   exact: string[];
   /** Cuts rebuilt from seconds: made or changed in the current editor. */
   derived: string[];
+  /**
+   * Cuts whose block counted pictures the file does not have (an earlier playback measurement rounded a
+   * 4.06 s, 97-picture file up to 98): their footage now has its real count, and a cut that ran into the
+   * missing pictures ends at the real last one (spec E addendum C3). Written back corrected at the next save.
+   */
+  corrected: string[];
   /** Cuts whose footage rate is not known; the film's rate stands in, and they are measured again next time. */
   rateUnknown: string[];
   /** No cut's rate is known: the film runs at a stand-in rate and nothing frame-based may be stored. */
@@ -197,6 +204,18 @@ function speedFraction(rate: number): [number, number] {
   return [hundredths / divisor, 100 / divisor];
 }
 
+/**
+ * A cut kept inside its footage's real pictures: its start on the last one at the latest, its length up to
+ * the last one. A cut that ran into pictures the file does not have gets shorter by exactly those frames.
+ */
+function withinFootage(clip: SourceFields & FrameFields, fps: number): SourceFields & FrameFields {
+  const media = mediaFramesOf(clip, fps);
+  const inFrame = Math.min(clip.inFrame, Math.max(0, media - 1));
+  const phase = inFrame === clip.inFrame ? clip.phase : 0;
+  const shape = { ...clip, inFrame, phase } as FrameClip;
+  return { ...clip, inFrame, phase, frames: Math.max(1, Math.min(clip.frames, clipMaxFrames(shape, fps))) };
+}
+
 /** A cut rebuilt from the seconds the current editor keeps: every position to the nearest frame. */
 export function deriveFrames(clip: ComposeClip, fps: number, source: SourceFields): FrameFields {
   const [speedNum, speedDen] = speedFraction(clipPlaybackRate(clip));
@@ -207,6 +226,45 @@ export function deriveFrames(clip: ComposeClip, fps: number, source: SourceField
   return { inFrame, phase: 0, frames: Math.min(wanted, clipMaxFrames(shape, fps)), speedNum, speedDen };
 }
 
+/** Rates the old playback measurement wrote rounded (fps.ts SOURCE_RATES), as the fractions they stand for. */
+const ROUNDED_RATES: ReadonlyArray<readonly [number, number]> = [[23.976, 24000 / 1001], [29.97, 30000 / 1001], [59.94, 60000 / 1001]];
+const exactRate = (rate: number) => ROUNDED_RATES.find(([rounded]) => Math.abs(rate - rounded) < 1e-9)?.[1] ?? rate;
+
+/** Two rates are one rate within a millionth (a block's rounded 23.976 is the file's 24000/1001). */
+export function sameRate(a: number, b: number): boolean {
+  const x = exactRate(a);
+  const y = exactRate(b);
+  return x > 0 && y > 0 && Math.abs(x - y) <= 1e-6 * Math.max(x, y);
+}
+
+type StoredKind = 'exact' | 'corrected' | 'derived';
+
+/**
+ * What a stored cut is on frames, given its footage's facts (`source`) — one rule for opening and for
+ * writing, so a cut v2 did not touch is written back with exactly the seconds it had:
+ *
+ * - its block holds (written at this film rate, the current editor has not touched it) and counts the
+ *   footage's pictures right → the block as it is (`exact`);
+ * - the block holds but counted pictures the file does not have (an earlier playback measurement: 98 for a
+ *   97-picture file), at the file's own rate → the block kept inside the real pictures (`corrected`): only
+ *   end frames the file lacks are taken away, so the stored seconds stay what they were (review round 1 of
+ *   part E, item 1);
+ * - otherwise (no block, a changed cut, or a block whose rate is not the file's: review item 5) → rebuilt
+ *   from the stored seconds with the footage's facts (`derived`).
+ */
+function framesOfStored(clip: ComposeClip, fps: number, source: SourceFields): { kind: StoredKind; frames: FrameFields } {
+  const block = exactBlock(clip, fps);
+  if (block) {
+    const { inFrame, phase, frames, speedNum, speedDen } = block;
+    if (source.sourceFrames === block.sourceFrames) return { kind: 'exact', frames: { inFrame, phase, frames, speedNum, speedDen } };
+    if (sameRate(source.sourceFps, block.sourceFps)) {
+      const kept = withinFootage({ sourceFps: block.sourceFps, sourceFrames: source.sourceFrames, inFrame, phase, frames, speedNum, speedDen }, fps);
+      return { kind: 'corrected', frames: { inFrame: kept.inFrame, phase: kept.phase, frames: kept.frames, speedNum, speedDen } };
+    }
+  }
+  return { kind: 'derived', frames: deriveFrames(clip, fps, source) };
+}
+
 function sourceOf(clip: ComposeClip, fps: number, measured: MeasuredSources): SourceFields & { guessed: boolean } {
   const seen = measured[clip.srcUrl];
   if (seen && isNum(seen.fps) && seen.fps > 0 && isInt(seen.frames, 1)) return { sourceFps: seen.fps, sourceFrames: seen.frames, guessed: false };
@@ -215,35 +273,12 @@ function sourceOf(clip: ComposeClip, fps: number, measured: MeasuredSources): So
   return { sourceFps: fps, sourceFrames: sourceFramesOf(clip.durationSec, fps), guessed: true };
 }
 
-const POSITIONS: readonly CaptionPosition[] = ['bottom', 'center', 'top'];
-const SIZES: readonly CaptionSize[] = ['sm', 'md', 'lg'];
-
-function captionFromStored(caption: ComposeCaption, fps: number): FrameCaption {
-  const start = Math.max(0, Math.round(caption.startSec * fps));
-  return {
-    id: caption.id,
-    text: caption.text,
-    start,
-    end: Math.max(start + 1, Math.round(caption.endSec * fps)),
-    position: POSITIONS.includes(caption.position) ? caption.position : 'bottom',
-    size: SIZES.includes(caption.size) ? caption.size : 'md',
-  };
-}
-
-/**
- * The stored film's captions on the film's frames, all of them: a caption past the end of a film that
- * got shorter is kept here and simply not shown (frames.ts `visibleCaptions`, `frameStateAt`), so it
- * shows again when the film is long enough. v2 does not own captions in V1; this is a view of them.
- */
-export function captionsOnFrames(captions: readonly ComposeCaption[], fps: number): FrameCaption[] {
-  return captions.slice(0, MAX_COMPOSE_CAPTIONS).map((caption) => captionFromStored(caption, fps));
-}
-
 /** The stored film on frames. `measured` holds what the browser measured, by `srcUrl`. */
 export function fromStored(project: ComposerProject, measured: MeasuredSources = {}): StoredFilm {
   const { fps, tentative } = filmRateOf(project, measured);
   const exact: string[] = [];
   const derived: string[] = [];
+  const corrected: string[] = [];
   const rateUnknown: string[] = [];
   const clips = project.clips.slice(0, MAX_COMPOSE_CLIPS).map((stored): FrameClip => {
     const base = {
@@ -256,9 +291,16 @@ export function fromStored(project: ComposerProject, measured: MeasuredSources =
     };
     const block = exactBlock(stored, fps);
     if (block) {
-      exact.push(stored.id);
-      const { inFrame, phase, frames, speedNum, speedDen, sourceFps, sourceFrames } = block;
-      return { ...base, sourceFps, sourceFrames, inFrame, phase, frames, speedNum, speedDen };
+      // The file's own count (read from its sample table when it is opened) is checked against the block's.
+      const seen = measured[stored.srcUrl];
+      const counted = seen?.counted && isInt(seen.frames, 1) && isNum(seen.fps) && seen.fps > 0 ? seen : null;
+      const source: SourceFields =
+        counted && counted.frames !== block.sourceFrames
+          ? { sourceFps: sameRate(counted.fps, block.sourceFps) ? block.sourceFps : counted.fps, sourceFrames: counted.frames }
+          : { sourceFps: block.sourceFps, sourceFrames: block.sourceFrames };
+      const { kind, frames } = framesOfStored(stored, fps, source);
+      (kind === 'exact' ? exact : kind === 'corrected' ? corrected : derived).push(stored.id);
+      return { ...base, ...source, ...frames };
     }
     derived.push(stored.id);
     const { guessed, ...source } = sourceOf(stored, fps, measured);
@@ -266,7 +308,10 @@ export function fromStored(project: ComposerProject, measured: MeasuredSources =
     return { ...base, ...source, ...deriveFrames(stored, fps, source) };
   });
   const aspect: ComposeAspect = (COMPOSE_ASPECTS as readonly string[]).includes(project.aspect) ? project.aspect : '9:16';
-  return { sequence: { fps, aspect, clips, captions: captionsOnFrames(project.captions, fps) }, exact, derived, rateUnknown, tentative };
+  // The stored captions on these cuts' frames, each at its offset into its cut (spec E, item A).
+  const cuts: FrameSequence = { fps, aspect, clips, captions: [] };
+  const anchor = cutAnchor(toStored(cuts, project), cuts);
+  return { sequence: { ...cuts, captions: captionsOnFrames(project.captions, anchor) }, exact, derived, corrected, rateUnknown, tentative };
 }
 
 export interface ToStoredOptions {
@@ -332,8 +377,9 @@ function storedClipOf(
 ): StoredClip {
   const frames: FrameFields = clip;
   const source: SourceFields = clip;
-  // A cut v2 did not change keeps the exact seconds it had, so a visit moves nothing in the current editor.
-  const expected = own ? (exactBlock(own, fps) ?? deriveFrames(own, fps, source)) : null;
+  // A cut v2 did not change keeps the exact seconds it had, so a visit moves nothing in the current editor;
+  // that includes a cut whose block was only corrected to its footage's real pictures (framesOfStored).
+  const expected = own ? framesOfStored(own, fps, source).frames : null;
   const unchanged = !!own && !!expected && sameFrames(expected, frames);
   const base: ComposeClip =
     own ?? (template ? { ...template, id: clip.id, label: clip.label, srcUrl: clip.srcUrl, thumbUrl: clip.thumbUrl } : freshClip(clip));
@@ -388,6 +434,27 @@ export function toStored(sequence: FrameSequence, previous: ComposerProject, opt
     return storedClipOf(clip, fps, own, template, !options.tentative && !unmeasured.has(clip.srcUrl), from);
   });
   return { ...previous, version: 1, aspect: sequence.aspect, clips, captions: previous.captions };
+}
+
+/** The stored film as the cuts on screen would store it, and what v2 shows of it. */
+export interface StoredFilmView {
+  /** `toStored` of the cuts onto the stored film: the seconds the current editor would read now. */
+  film: ComposerProject;
+  /** How the stored film's timed things (captions, effects, still overlays) land on these cuts' frames. */
+  anchor: CutAnchor;
+  /** The cuts with the stored captions on their frames. */
+  sequence: FrameSequence;
+}
+
+/**
+ * The one reading of a real film that the preview, the lists and the export all use (spec E, item A):
+ * the cuts on screen put onto the stored film, and its captions, effects and still overlays read through
+ * the cut anchor (lib/brand-studio/editor-v2/cut-anchor.ts). Nothing stored changes.
+ */
+export function storedFilmView(sequence: FrameSequence, previous: ComposerProject, options: ToStoredOptions = {}): StoredFilmView {
+  const film = toStored(sequence, previous, options);
+  const anchor = cutAnchor(film, sequence);
+  return { film, anchor, sequence: { ...sequence, captions: captionsOnFrames(film.captions, anchor) } };
 }
 
 /**
