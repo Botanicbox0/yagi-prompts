@@ -66,7 +66,10 @@
   font-weight: 600;
   color: var(--ys-ink);
 }
-.noticeBody { min-width: 0; font-size: 12px; color: var(--ys-ink-secondary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+/* The notice takes the room left beside the name; HeaderNotice shows the whole sentence only when it fits. */
+.noticeBody { position: relative; flex: 1 1 0; min-width: 0; font-size: 12px; color: var(--ys-ink-secondary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.noticeMeasure { position: absolute; left: 0; top: 0; visibility: hidden; white-space: nowrap; pointer-events: none; }
+.srOnly { position: absolute; width: 1px; height: 1px; margin: -1px; padding: 0; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0; }
 .topRight { display: flex; align-items: center; justify-content: flex-end; gap: 6px; }
 
 .workspaces {
@@ -257,6 +260,10 @@
 }
 .materialCard:hover .materialThumb i,
 .materialCard:focus-visible .materialThumb i { opacity: 1; }
+/* A clip with no poster shows its own first frame. */
+.materialThumb video { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; pointer-events: none; }
+.materialThumb em,
+.materialThumb i { z-index: 1; }
 .materialMeta { display: grid; gap: 1px; padding: 0 3px; }
 .materialMeta strong,
 .lookTile strong,
@@ -406,6 +413,48 @@
   color: var(--ys-ink-secondary);
 }
 .quietBtn:hover { background: var(--ys-panel); color: var(--ys-ink); }
+
+/* A workspace a real film cannot use yet (V1): one calm card and the way to the sample film. */
+.lockedCard {
+  display: grid;
+  gap: 8px;
+  padding: 14px;
+  border-radius: var(--ys-r-control);
+  background: var(--ys-panel);
+  box-shadow: inset 0 0 0 1px var(--ys-line);
+}
+.lockedCard strong { font-size: 13px; font-weight: 600; line-height: 1.4; }
+.sampleLink {
+  display: inline-flex;
+  align-items: center;
+  justify-self: start;
+  min-height: 30px;
+  margin-top: 4px;
+  padding: 0 12px;
+  border-radius: var(--ys-r-pill);
+  background: var(--ys-hover);
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--ys-ink);
+  text-decoration: none;
+  white-space: nowrap;
+  transition: background-color var(--ys-dur) var(--ys-ease);
+}
+.sampleLink:hover { background: #3f3f46; }
+
+/* Loading and empty film (V1): a quiet line where the picture would be. */
+.stageNote {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.5;
+  text-align: center;
+  color: var(--ys-ink-secondary);
+}
 
 .actions { display: grid; gap: 6px; }
 .actionBtn,
@@ -786,6 +835,10 @@
 .timeline[data-ws='sound'] { --h-video: 34px; --h-voice: 40px; --h-music: 40px; }
 .timeline[data-ws='captions'] { --h-video: 40px; --h-captions: 38px; --h-music: 22px; }
 .laneNames { display: grid; grid-template-rows: var(--h-ruler) var(--h-titles) var(--h-video) var(--h-captions) var(--h-voice) var(--h-music); gap: var(--lane-gap); padding-right: 8px; }
+/* A real film (V1) has no titles, voice or music lanes yet: the ruler, the cuts and its captions. */
+.timeline[data-real] { --h-video: 64px; --h-captions: 24px; }
+.timeline[data-real] .laneNames,
+.timeline[data-real] .laneContent { grid-template-rows: var(--h-ruler) var(--h-video) var(--h-captions); }
 .laneNames > span { display: flex; align-items: center; font-size: 11px; font-weight: 600; color: var(--ys-ink-secondary); transition: color var(--ys-dur) var(--ys-ease); }
 .timeline[data-ws='cut'] .laneNames [data-lane='video'],
 .timeline[data-ws='color'] .laneNames [data-lane='video'],
@@ -917,10 +970,56 @@
 @media (max-width: 1360px) {
   .root { --ev-left: 228px; --ev-right: 300px; --ev-chat: 268px; }
   .root[data-dock='side'] { --ev-left: 196px; --ev-right: 276px; }
-  .noticeBody { display: none; }
   .workspaces button { padding: 0 11px; }
   .assistBar .examples li:nth-child(n + 3) { display: none; }
 }
 @media (prefers-reduced-motion: reduce) {
   .root *, .root *::before, .root *::after { transition-duration: 0ms !important; animation-duration: 0ms !important; }
 }
+
+/* ── Export: progress, result, what the file leaves out (frame-exact export, doc §5.1.5 · §6.4) ── */
+.exportSheet .fixBtn { justify-self: stretch; }
+.exportRun { display: grid; gap: 8px; }
+.exportBar { height: 6px; border-radius: var(--ys-r-pill); background: var(--ys-canvas); box-shadow: inset 0 0 0 1px var(--ys-line); overflow: hidden; }
+.exportBar i { display: block; height: 100%; border-radius: inherit; background: var(--ys-ink); transition: width 120ms linear; }
+.exportCount { margin: 0; font-size: 13px; font-weight: 600; font-variant-numeric: tabular-nums; }
+.exportLinks { margin: 0; display: flex; flex-wrap: wrap; gap: 6px 14px; font-size: 12px; font-weight: 600; }
+.exportLinks a { color: var(--ys-ink); text-decoration: underline; text-underline-offset: 3px; }
+.exportMissing { list-style: none; margin: 0; padding: 0; display: grid; gap: 4px; font-size: 12px; color: var(--ys-ink-secondary); }
+.exportMissing li::before { content: '·'; margin-right: 6px; }
+.exportError {
+  margin: 0;
+  padding: 10px 12px;
+  border-radius: var(--ys-r-control);
+  background: var(--ys-panel);
+  box-shadow: inset 0 0 0 1px var(--ys-line-strong);
+  font-size: 13px;
+  line-height: 1.45;
+}
+.exportBtn:disabled { opacity: 0.45; cursor: not-allowed; }
+
+/* ── Another tab overwrote this screen's cuts: one bar, two choices; editing goes on (review round 1, item 7) ── */
+.conflictBar {
+  position: absolute;
+  left: 50%;
+  top: 52px;
+  transform: translateX(-50%);
+  z-index: 31;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  max-width: min(760px, calc(100% - 32px));
+  padding: 8px 8px 8px 16px;
+  border-radius: var(--ys-r-pill);
+  background: var(--ys-panel);
+  box-shadow: 0 0 0 1px var(--ys-line-strong), 0 8px 24px rgba(0, 0, 0, 0.12);
+}
+.conflictBar p { margin: 0; font-size: 13px; line-height: 1.4; }
+.conflictBar .fixBtn { flex: none; }
+
+/* ── What a real film's file carries besides the cuts (review round 1, item 6) ── */
+.filmContents { list-style: none; margin: 0; padding: 0; display: grid; gap: 4px; font-size: 12px; }
+.filmContents li::before { content: '·'; margin-right: 6px; color: var(--ys-ink-secondary); }
+.filmContents li[data-quiet] { color: var(--ys-ink-secondary); }
+.stillOverlay { position: absolute; transform: translate(-50%, -50%); height: auto; pointer-events: none; }
+.gradeRegion { position: absolute; pointer-events: none; }

@@ -17,14 +17,19 @@ const EXAMPLES: Readonly<Record<EditorWorkspace, ReadonlyArray<keyof StudioEdito
 /**
  * "말로 편집" at hand in every workspace. A sentence becomes a proposal card (what will change, apply
  * or close); applying runs the same action a button would, so it lands in the same undo history.
+ *
+ * On a real film (V1) it follows only the cut sentences, shows only those examples and carries a
+ * `예시` mark: the real assistant comes in V2 of the plan.
  */
 export function Assistant({ api, placement }: { api: EditorApi; placement: 'bar' | 'side' }) {
   const { copy, proposal } = api;
   const a = copy.assist;
   const [text, setText] = useState('');
+  const closed = api.readOnly || api.status !== 'ready';
+  const exampleKeys = api.real ? EXAMPLES.cut : EXAMPLES[api.workspace];
   const submit = (value: string) => {
     const utterance = value.trim();
-    if (!utterance) return;
+    if (!utterance || closed) return;
     api.propose(utterance);
     setText('');
   };
@@ -67,9 +72,9 @@ export function Assistant({ api, placement }: { api: EditorApi; placement: 'bar'
   );
   const examples = (
     <ul className={styles.examples}>
-      {EXAMPLES[api.workspace].map((key) => (
+      {exampleKeys.map((key) => (
         <li key={key}>
-          <button type="button" onClick={() => submit(a.examples[key])} data-editor-example={key}>{a.examples[key]}</button>
+          <button type="button" onClick={() => submit(a.examples[key])} disabled={closed} data-editor-example={key}>{a.examples[key]}</button>
         </li>
       ))}
     </ul>
@@ -89,18 +94,20 @@ export function Assistant({ api, placement }: { api: EditorApi; placement: 'bar'
         placeholder={a.placeholder}
         aria-label={a.heading}
         maxLength={200}
+        disabled={closed}
         data-editor-assist-input
       />
-      <button type="submit" className={styles.iconBtn} aria-label={a.send} title={a.send} disabled={!text.trim()}>
+      <button type="submit" className={styles.iconBtn} aria-label={a.send} title={a.send} disabled={!text.trim() || closed}>
         <EditorIcon name="send" />
       </button>
     </form>
   );
+  const mark = api.real ? <em className={styles.sampleTag} data-editor-assist-sample>{copy.panel.sample}</em> : null;
   if (placement === 'side') {
     return (
       <aside className={styles.assistSide} aria-label={a.heading} data-editor-assist="side">
         <header className={styles.panelHead}>
-          <h2><EditorIcon name="spark" />{a.heading}</h2>
+          <h2><EditorIcon name="spark" />{a.heading}{mark}</h2>
           <button type="button" className={styles.iconBtn} onClick={() => api.setAssistDock('bar')} aria-label={a.undock} title={a.undock}>
             <EditorIcon name="bar" />
           </button>
@@ -116,7 +123,7 @@ export function Assistant({ api, placement }: { api: EditorApi; placement: 'bar'
   return (
     <div className={styles.assistBar} data-editor-assist="bar">
       {card}
-      <span className={styles.assistLabel}><EditorIcon name="spark" />{a.heading}</span>
+      <span className={styles.assistLabel}><EditorIcon name="spark" />{a.heading}{mark}</span>
       {form}
       {examples}
       <button type="button" className={styles.iconBtn} onClick={() => api.setAssistDock('side')} aria-label={a.dock} title={a.dock}>

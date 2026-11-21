@@ -80,9 +80,10 @@ export interface VideoComposerProps {
   copy: StudioComposeCopy;
   videoStudioHref: string;
   /**
-   * Where the editing studio v2 structure prototype lives, or nothing. The page passes it only while
+   * Where the editing studio v2 lives, or nothing. The page passes it only while
    * `BRAND_STUDIO_EDITOR_V2` is on (docs/BRAND-EDITING-STUDIO-V2.md §10.1); without it this header is
-   * exactly as it was. The rail keeps opening this editor: the prototype cannot save or export.
+   * exactly as it was. The link's tag is left out when the copy has none (the way back for an
+   * organization that opens the new editor by default).
    */
   editorV2Href?: string | null;
   initialAllowance: StudioAllowanceView;
@@ -1931,7 +1932,7 @@ export function VideoComposer({
             {editorV2Href && (
               <a className={s.previewLink} href={editorV2Href} title={copy.previewV2.note} data-compose-editor-v2>
                 {copy.previewV2.link}
-                <span className={s.previewTag}>{copy.previewV2.tag}</span>
+                {copy.previewV2.tag && <span className={s.previewTag}>{copy.previewV2.tag}</span>}
               </a>
             )}
           </div>

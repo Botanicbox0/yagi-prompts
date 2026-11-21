@@ -12,7 +12,10 @@ export const studioComposeEn = {
   previewV2: {
     link: 'Preview the new Editing Studio',
     tag: 'Structure preview',
-    note: 'A preview made with sample footage. It does not save, generate or export.',
+    /** The sample film's own notice (`studioEditor.notice.body`): organizations not on the list preview the sample there. */
+    note: 'A draft made with sample footage. Changes are not saved.',
+    back: 'Back to the new Editing Studio',
+    backNote: 'Opens the same film in the new editor. Color, sound and captions are still being built there.',
   },
   summary: '{clips} clips · {seconds}s total',
   emptySummary: 'Add clips to begin',
@@ -330,7 +333,9 @@ export const studioComposeKo: typeof studioComposeEn = {
   previewV2: {
     link: '새 편집 스튜디오 미리 보기',
     tag: '구조 시안',
-    note: '예시 영상으로 만든 시안입니다. 저장, 생성, 내보내기는 하지 않습니다.',
+    note: '예시 영상으로 만든 시안입니다. 고친 내용은 저장되지 않습니다.',
+    back: '새 편집 스튜디오로 돌아가기',
+    backNote: '같은 영상을 새 화면에서 엽니다. 색, 사운드, 자막 공간은 아직 준비 중입니다.',
   },
   summary: '{clips}개 컷 · 총 {seconds}초',
   emptySummary: '편집할 영상을 담아 주세요',

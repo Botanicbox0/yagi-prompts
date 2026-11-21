@@ -2,7 +2,22 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { fill } from '@/components/brand-studio/copy';
-import { COMPOSE_DIMENSIONS, MAX_COMPOSE_CLIPS, type CaptionPosition, type ComposeAspect } from '@/lib/brand-studio/compose/timeline';
+import {
+  COMPOSE_DIMENSIONS,
+  MAX_COMPOSE_CLIPS,
+  emptyComposerProject,
+  parseStoredProject,
+  type CaptionPosition,
+  type ComposeAspect,
+  type ComposeClip,
+  type ComposerProject,
+} from '@/lib/brand-studio/compose/timeline';
+import type { GradeNames } from '@/lib/brand-studio/editor-v2/film-contents';
+import { createFilmSession, type FilmConflict, type FilmSession } from '@/lib/brand-studio/editor-v2/film-session';
+import { snapFilmFps, sourceFramesOf } from '@/lib/brand-studio/editor-v2/fps';
+import { emptyFilm, realAssistAllowed, realDoc, sampleHrefFor, workspaceLocked } from '@/lib/brand-studio/editor-v2/real';
+import { deepLinkSource, parseClipParam, sourceSeconds, storedClipForSource, type EditorSource } from '@/lib/brand-studio/editor-v2/sources';
+import { captionsOnFrames, fromStored, inheritClip, mergeFilmText, sourcesToMeasure, toStored, type MeasuredSource } from '@/lib/brand-studio/editor-v2/stored';
 import {
   FIXTURE_MATERIALS,
   FIXTURE_MEASURED_LUFS,
@@ -15,6 +30,7 @@ import {
 } from '@/lib/brand-studio/editor-v2/fixture';
 import {
   addCaption,
+  clipMaxFrames,
   frameStateAt,
   insertClips,
   moveClip as moveClipInSequence,
@@ -52,8 +68,10 @@ import {
   undo as undoHistory,
   withSequence,
   type AssistIntent,
+  type CaptionFinding,
   type CaptionSettings,
   type ClipLook,
+  type ColorFinding,
   type EditorDoc,
   type EditorHistory,
   type EditorWorkspace,
@@ -63,6 +81,7 @@ import {
   type MusicTrack,
   type Reframe,
   type ScopeMode,
+  type SoundFinding,
   type SoundState,
   type TitlePreset,
 } from '@/lib/brand-studio/editor-v2/model';
@@ -73,6 +92,8 @@ import {
   type ShortcutPrefs,
 } from '@/lib/brand-studio/editor-v2/shortcuts';
 import type { StudioEditorCopy } from '@/messages/studio-editor';
+import { readFilmText, watchFilmText, writeFilmText } from './film-store';
+import { measureSource } from './measure-fps';
 import { loadShortcutPrefs, saveShortcutPrefs } from './shortcut-store';
 
 export const ASPECT_KEYS: Readonly<Record<ComposeAspect, keyof StudioEditorCopy['aspectNames']>> = {
@@ -114,6 +135,32 @@ interface Stored {
   history: EditorHistory;
 }
 
+/** The organization's own film (V1). Without it the editor runs the sample film, as the prototype did. */
+export interface RealFilmOptions {
+  organizationId: string;
+  /** Owner or editor of the brand, and not the studio team looking in. */
+  canEdit: boolean;
+  sources: readonly EditorSource[];
+  /** The sample film's address for this organization (`?sample=1`). */
+  sampleBase: string;
+  /** The current editor's own names for colour grades, so the film's grade is named as it names it. */
+  gradeNames?: GradeNames;
+}
+
+export interface EditorOptions {
+  real?: RealFilmOptions | null;
+  initialWorkspace?: EditorWorkspace;
+}
+
+export type FilmStatus = 'loading' | 'ready';
+
+const NO_FINDINGS: { color: ColorFinding[]; sound: SoundFinding[]; captions: CaptionFinding[]; croppedIds: string[] } = {
+  color: [],
+  sound: [],
+  captions: [],
+  croppedIds: [],
+};
+
 interface Clipboard {
   clips: FrameClip[];
   looks: Record<string, ClipLook>;
@@ -145,14 +192,38 @@ function loadStats(src: string): Promise<FrameStats | null> {
   });
 }
 
-export function useEditor(copy: StudioEditorCopy) {
+export function useEditor(copy: StudioEditorCopy, options: EditorOptions = {}) {
+  const real = options.real ?? null;
+  const isReal = real !== null;
   const labelOf = useCallback(
     (materialId: string) => (materialId === 'm7' ? copy.cut.materials.frameClip : fill(copy.cut.materials.clipLabel, { number: materialId.replace(/\D/g, '') })),
     [copy],
   );
-  const [stored, setStored] = useState<Stored>(() => ({ doc: fixtureDoc(labelOf), history: { past: [], future: [] } }));
+  // A real film starts empty and neutral and is read after mount, so the first paint matches the server.
+  const [stored, setStored] = useState<Stored>(() => ({ doc: isReal ? realDoc(emptyFilm()) : fixtureDoc(labelOf), history: { past: [], future: [] } }));
   const { doc, history } = stored;
-  const [workspace, setWorkspace] = useState<EditorWorkspace>('cut');
+  const [workspace, setWorkspace] = useState<EditorWorkspace>(options.initialWorkspace ?? 'cut');
+  const [status, setStatus] = useState<FilmStatus>(isReal ? 'loading' : 'ready');
+  const [storageOk, setStorageOk] = useState(true);
+  const [busySource, setBusySource] = useState<string | null>(null);
+  /**
+   * The stored film as last read or written (real film only). v2 does not own its captions, music,
+   * colour grade, effects or overlays: they are shown from here, never from the undo history, so a
+   * caption hidden because the film got shorter shows again when it is long enough (review round 1, item 1).
+   */
+  const [storedFilm, setStoredFilm] = useState<ComposerProject | null>(null);
+  /** Measured rate of each piece of footage (`srcUrl`), and the ones that could not be measured. */
+  const [rates, setRates] = useState<Record<string, number>>({});
+  const [unknownRates, setUnknownRates] = useState<Record<string, true>>({});
+  /** Footage whose frames are not evenly spaced (variable frame rate): shown, not supported (review round 1, item 10). */
+  const [variableRates, setVariableRates] = useState<Record<string, true>>({});
+  /**
+   * No cut's rate is measured: the film runs at a stand-in rate and nothing frame-based is stored until a
+   * later visit measures one (review round 1, item 3).
+   */
+  const [tentative, setTentative] = useState(false);
+  const readOnly = isReal && !real.canEdit;
+  const blocked = isReal && (readOnly || status !== 'ready');
   const [selection, setSelection] = useState<string[]>([]);
   const [selectedTitleId, setSelectedTitleId] = useState<string | null>(null);
   const [scopeMode, setScopeMode] = useState<ScopeMode>('all');
@@ -177,9 +248,32 @@ export function useEditor(copy: StudioEditorCopy) {
   const lastChange = useRef<{ key: string; at: number } | null>(null);
   const clipboard = useRef<Clipboard | null>(null);
   const toastTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const realRef = useRef(real);
+  realRef.current = real;
+  const blockedRef = useRef(blocked);
+  blockedRef.current = blocked;
+  const docRef = useRef(doc);
+  docRef.current = doc;
+  const unknownRef = useRef(unknownRates);
+  unknownRef.current = unknownRates;
+  const variableRef = useRef(variableRates);
+  variableRef.current = variableRates;
+  const tentativeRef = useRef(tentative);
+  tentativeRef.current = tentative;
+  /** Footage that gets no frame data when stored: not measured, or not evenly spaced. */
+  const unmeasuredSources = () => [...Object.keys(unknownRef.current), ...Object.keys(variableRef.current)];
+  /** Stored clips by id: what each cut carries that v2 does not own (lib/brand-studio/editor-v2/stored.ts). */
+  const catalogue = useRef<Record<string, ComposeClip>>({});
+  /** Reading and writing the shared key, kept in step with other tabs (lib/brand-studio/editor-v2/film-session.ts). */
+  const sessionRef = useRef<FilmSession | null>(null);
+  /** Another tab overwrote this screen's cuts: the bar with two choices is up. */
+  const [conflict, setConflict] = useState<FilmConflict | null>(null);
+  const deepLinkRead = useRef(false);
 
   // Frame averages of every material and reference: what the colour outcomes compute from. On the device.
+  // The sample film only: a real film opens no colour work in V1.
   useEffect(() => {
+    if (isReal) return;
     let alive = true;
     const sources: Array<[string, string]> = [
       ...FIXTURE_MATERIALS.map((material): [string, string] => [material.src, material.poster]),
@@ -217,7 +311,14 @@ export function useEditor(copy: StudioEditorCopy) {
     toastTimer.current = setTimeout(() => setToast(null), 3200);
   }, []);
 
-  const sequence = doc.sequence;
+  // On a real film the cuts come from the document (and its undo history), the captions from the stored
+  // film: all of them, on this film's frames; one past the end is simply not shown.
+  const docSequence = doc.sequence;
+  const storedCaptions = storedFilm?.captions;
+  const sequence = useMemo(
+    () => (isReal ? { ...docSequence, captions: captionsOnFrames(storedCaptions ?? [], docSequence.fps) } : docSequence),
+    [isReal, docSequence, storedCaptions],
+  );
   const fps = sequence.fps;
   const spans = useMemo(() => spansOf(sequence), [sequence]);
   const total = useMemo(() => totalFrames(sequence), [sequence]);
@@ -234,6 +335,8 @@ export function useEditor(copy: StudioEditorCopy) {
    * `coalesce` so one drag is one step, not one per pixel.
    */
   const change = useCallback((mutate: (current: EditorDoc) => EditorDoc | null, coalesce?: string) => {
+    // A real film that is still loading, or that this person may only look at, takes no edits.
+    if (blockedRef.current) return;
     const now = Date.now();
     const merge = !!coalesce && lastChange.current?.key === coalesce && now - lastChange.current.at < 900;
     lastChange.current = coalesce ? { key: coalesce, at: now } : null;
@@ -246,23 +349,166 @@ export function useEditor(copy: StudioEditorCopy) {
 
   /** A change to the cuts. `inherit` pairs each new cut with the cut whose look and framing it keeps. */
   const edit = useCallback(
-    (mutate: (current: FrameSequence) => FrameSequence, inherit?: ReadonlyArray<readonly [string, string]>, coalesce?: string) =>
-      change((current) => withSequence(current, mutate(current.sequence), inherit), coalesce),
+    (mutate: (current: FrameSequence) => FrameSequence, inherit?: ReadonlyArray<readonly [string, string]>, coalesce?: string) => {
+      if (inherit) remember(inherit);
+      change((current) => withSequence(current, mutate(current.sequence), inherit), coalesce);
+    },
     [change],
   );
 
   const undo = useCallback(() => {
+    if (blockedRef.current) return;
     setStored((current) => {
       const result = undoHistory(current.history, current.doc);
       return result ? { doc: result.doc, history: result.history } : current;
     });
   }, []);
   const redo = useCallback(() => {
+    if (blockedRef.current) return;
     setStored((current) => {
       const result = redoHistory(current.history, current.doc);
       return result ? { doc: result.doc, history: result.history } : current;
     });
   }, []);
+
+  // ── The organization's film: read, written, kept in step with the other screens ──
+
+  /**
+   * A new cut (a split's right half, a copy) carries what the cut it came from carried, and remembers
+   * that cut as its parent (so a colour grade scoped to the parent covers it in the export).
+   */
+  function remember(pairs: ReadonlyArray<readonly [string, string]>) {
+    for (const [to, from] of pairs) {
+      const origin = catalogue.current[from];
+      if (origin && !catalogue.current[to]) catalogue.current[to] = inheritClip(origin, to);
+    }
+  }
+
+  const secondsOfSrc = useCallback((src: string): number | null => {
+    const source = realRef.current?.sources.find((entry) => entry.srcUrl === src);
+    return source ? sourceSeconds(source) : null;
+  }, []);
+
+  /** What measuring found: rates read, footage that could not be read, footage whose frames are uneven. */
+  const noteRates = useCallback((known: Record<string, number>, unknown: readonly string[], variable: readonly string[] = []) => {
+    const without = (current: Record<string, true>, srcs: readonly string[]) => {
+      if (!srcs.some((src) => current[src])) return current;
+      const next = { ...current };
+      for (const src of srcs) delete next[src];
+      return next;
+    };
+    const read = Object.keys(known);
+    if (read.length > 0) setRates((current) => ({ ...current, ...known }));
+    setUnknownRates((current) => ({ ...without(current, read), ...Object.fromEntries(unknown.map((src) => [src, true as const])) }));
+    setVariableRates((current) => ({ ...without(current, read.filter((src) => !variable.includes(src))), ...Object.fromEntries(variable.map((src) => [src, true as const])) }));
+  }, []);
+
+  /**
+   * Opens a stored film for the session: measures the footage that has no frame data yet, puts it on
+   * frames, and replaces the film (and clears undo) only if the session still wants it: an edit made
+   * while this ran is never replaced (review round 1, item 8).
+   */
+  const openFilm = useCallback(
+    async (session: FilmSession, text: string | null, ticket: number) => {
+      const project = parseStoredProject(text) ?? emptyComposerProject('9:16');
+      const entries = await Promise.all(
+        sourcesToMeasure(project).map(async (src) => [src, await measureSource(src, secondsOfSrc(src))] as const),
+      );
+      if (sessionRef.current !== session) return;
+      const measured: Record<string, MeasuredSource | null> = Object.fromEntries(entries);
+      const film = fromStored(project, measured);
+      const unknown = film.sequence.clips.filter((clip) => film.rateUnknown.includes(clip.id)).map((clip) => clip.srcUrl);
+      const known: Record<string, number> = {};
+      for (const clip of film.sequence.clips) if (!unknown.includes(clip.srcUrl)) known[clip.srcUrl] = clip.sourceFps;
+      const variable = Object.entries(measured).filter(([, seen]) => seen?.variable).map(([src]) => src);
+      noteRates(known, unknown, variable);
+      // The captions stay with the stored film; the document holds the cuts only.
+      const cuts = { ...film.sequence, captions: [] };
+      if (!session.opened(ticket, cuts)) return;
+      for (const clip of project.clips) catalogue.current[clip.id] = clip;
+      setTentative(film.tentative && cuts.clips.length > 0);
+      setStoredFilm(project);
+      setStored({ doc: realDoc(cuts), history: { past: [], future: [] } });
+      setStatus('ready');
+    },
+    [secondsOfSrc, noteRates],
+  );
+  const openFilmRef = useRef(openFilm);
+  openFilmRef.current = openFilm;
+
+  /** The stored film the session says the key now holds (after a write, or a change around the cuts). */
+  const showStored = useCallback((text: string | null) => {
+    const project = parseStoredProject(text);
+    if (!project) return;
+    for (const clip of project.clips) catalogue.current[clip.id] = clip;
+    setStoredFilm(project);
+  }, []);
+
+  // The session: first read after mount, then every write, every other tab's change, focus and leaving.
+  // Without browser storage the film lives in memory for this visit.
+  useEffect(() => {
+    const film = realRef.current;
+    if (!film) return;
+    let session: FilmSession | null = null;
+    session = createFilmSession({
+      store: { read: () => readFilmText(film.organizationId), write: (text) => writeFilmText(film.organizationId, text) },
+      clock: { set: (run, ms) => window.setTimeout(run, ms), clear: (handle) => window.clearTimeout(handle as number) },
+      host: {
+        open: (text, ticket) => void openFilmRef.current(session!, text, ticket),
+        show: showStored,
+        conflict: setConflict,
+        storageFailed: () => setStorageOk(false),
+      },
+      merge: (text, sequence) => mergeFilmText(text, sequence, { known: catalogue.current, unmeasuredSources: unmeasuredSources(), tentative: tentativeRef.current }),
+      canEdit: film.canEdit,
+    });
+    sessionRef.current = session;
+    session.start();
+    const stopWatching = watchFilmText(film.organizationId, () => session!.external());
+    const onFocus = () => session!.focus();
+    const onVisibility = () => {
+      if (document.visibilityState === 'hidden') session!.flush();
+    };
+    const onPageHide = () => session!.flush();
+    window.addEventListener('focus', onFocus);
+    document.addEventListener('visibilitychange', onVisibility);
+    window.addEventListener('pagehide', onPageHide);
+    return () => {
+      stopWatching();
+      window.removeEventListener('focus', onFocus);
+      document.removeEventListener('visibilitychange', onVisibility);
+      window.removeEventListener('pagehide', onPageHide);
+      session!.dispose();
+      if (sessionRef.current === session) sessionRef.current = null;
+    };
+  }, [showStored]);
+
+  // Every change to the cuts (undo and redo included) goes to the session, which writes it after a pause.
+  useEffect(() => {
+    if (!isReal || status !== 'ready') return;
+    sessionRef.current?.edited(doc.sequence);
+  }, [isReal, status, doc.sequence]);
+
+  /**
+   * The stored film the export carries besides the cuts (real film only; `null` on the sample film).
+   * What waits to be saved is written first, then the key is read back and the cuts on screen are put
+   * onto it the way the next save would, so captions, the colour grade, music, sound effects and still
+   * overlays made in the current editor (or the sound studio) go into the file with exactly these cuts,
+   * even when this browser could not write (or another tab's film is waiting for a choice).
+   */
+  const filmForExport = useCallback((): ComposerProject | null => {
+    const film = realRef.current;
+    if (!film) return null;
+    sessionRef.current?.flush();
+    const read = readFilmText(film.organizationId);
+    const sequence = docRef.current.sequence;
+    const current = (read.ok ? parseStoredProject(read.text) : null) ?? emptyComposerProject(sequence.aspect);
+    return toStored(sequence, current, { known: catalogue.current, unmeasuredSources: unmeasuredSources(), tentative: tentativeRef.current });
+  }, []);
+
+  /** The bar's two choices when another tab overwrote this screen's cuts. */
+  const keepThisFilm = useCallback(() => sessionRef.current?.keep(), []);
+  const openOtherFilm = useCallback(() => sessionRef.current?.openOther(), []);
 
   // ── Moving through the film: always on a whole frame ──
   const seek = useCallback((target: number) => setPlayhead(Math.min(Math.max(0, Math.round(target)), lastFrame)), [lastFrame]);
@@ -311,6 +557,7 @@ export function useEditor(copy: StudioEditorCopy) {
 
   // ── Cut ──
   const splitAtPlayhead = useCallback(() => {
+    if (blockedRef.current) return;
     if (sequence.clips.length >= MAX_COMPOSE_CLIPS) return say(copy.toast.full);
     const parent = frameStateAt(sequence, playhead).active;
     if (!parent || parent.offset === 0) return say(copy.toast.splitNo);
@@ -340,6 +587,7 @@ export function useEditor(copy: StudioEditorCopy) {
 
   const removeClips = useCallback(
     (ids: readonly string[]) => {
+      if (blockedRef.current) return;
       const hit = sequence.clips.filter((clip) => ids.includes(clip.id));
       if (hit.length === 0) return;
       if (hit.length >= sequence.clips.length) return say(copy.toast.lastCut);
@@ -357,6 +605,74 @@ export function useEditor(copy: StudioEditorCopy) {
     },
     [sequence, edit, say, copy, labelOf],
   );
+
+  /**
+   * Puts the organization's footage at the end of the film, whole, after measuring its rate. The first
+   * cut of an empty film sets the film's rate (23.976 → 24, 29.97 → 30).
+   */
+  const addSource = useCallback(
+    async (source: EditorSource) => {
+      if (blockedRef.current) return;
+      if (docRef.current.sequence.clips.length >= MAX_COMPOSE_CLIPS) return say(copy.toast.full);
+      setBusySource(source.key);
+      const measured = await measureSource(source.srcUrl, sourceSeconds(source));
+      setBusySource((current) => (current === source.key ? null : current));
+      const now = docRef.current.sequence;
+      if (blockedRef.current) return;
+      if (now.clips.length >= MAX_COMPOSE_CLIPS) return say(copy.toast.full);
+      const fresh = now.clips.length === 0 && now.captions.length === 0;
+      const fps = fresh ? snapFilmFps(measured?.fps ?? null) : now.fps;
+      const seconds = sourceSeconds(source) ?? (measured ? measured.frames / measured.fps : null);
+      const sourceFps = measured?.fps ?? fps;
+      const sourceFrames = measured?.frames ?? sourceFramesOf(seconds ?? 5, sourceFps);
+      if (measured) noteRates({ [source.srcUrl]: measured.fps }, [], measured.variable ? [source.srcUrl] : []);
+      else noteRates({}, [source.srcUrl]);
+      // The first cut of an empty film sets its rate: a stand-in when that cut's rate could not be read.
+      if (fresh) setTentative(!measured);
+      const id = newId('cut');
+      catalogue.current[id] = storedClipForSource(source, id, seconds);
+      edit((current) => {
+        const base = current.clips.length === 0 && current.captions.length === 0 ? { ...current, fps } : current;
+        const clip: FrameClip = {
+          id,
+          label: source.label,
+          srcUrl: source.srcUrl,
+          thumbUrl: source.thumbUrl,
+          sourceFps,
+          sourceFrames,
+          inFrame: 0,
+          phase: 0,
+          frames: 1,
+          speedNum: 1,
+          speedDen: 1,
+          volume: 1,
+          muted: false,
+        };
+        return insertClips(base, base.clips.length, [{ ...clip, frames: clipMaxFrames(clip, base.fps) }]);
+      });
+    },
+    [edit, say, copy, noteRates],
+  );
+
+  // A `clip=` link (asset hub, video studio): read once, the clip goes on the end, the link is tidied away.
+  useEffect(() => {
+    const film = realRef.current;
+    if (!film || status !== 'ready' || deepLinkRead.current) return;
+    deepLinkRead.current = true;
+    let key: string | null = null;
+    try {
+      const url = new URL(window.location.href);
+      if (!url.searchParams.has('clip')) return;
+      key = parseClipParam(url.searchParams.get('clip'));
+      url.searchParams.delete('clip');
+      window.history.replaceState(window.history.state, '', `${url.pathname}${url.search}${url.hash}`);
+    } catch {
+      return;
+    }
+    if (!film.canEdit) return;
+    const source = deepLinkSource(film.sources, key, docRef.current.sequence);
+    if (source) void addSource(source);
+  }, [status, addSource]);
 
   const setSpeed = useCallback((index: number, num: number, den: number) => edit((current) => setSequenceClipSpeed(current, index, num, den)), [edit]);
   const setClipAudio = useCallback(
@@ -395,8 +711,10 @@ export function useEditor(copy: StudioEditorCopy) {
   }, [pick, sequence, copyClips, removeClips, say, copy]);
   const insertCopies = useCallback(
     (source: Clipboard, atIndex: number) => {
+      if (blockedRef.current) return;
       if (sequence.clips.length + source.clips.length > MAX_COMPOSE_CLIPS) return say(copy.toast.full);
       const copies = source.clips.map((clip) => ({ ...clip, id: newId('cut') }));
+      remember(copies.map((made, i) => [made.id, source.clips[i]!.id] as const));
       change((current) => {
         const next = withSequence(current, insertClips(current.sequence, atIndex, copies));
         const looks = { ...next.looks };
@@ -446,13 +764,15 @@ export function useEditor(copy: StudioEditorCopy) {
   const frameRatio = COMPOSE_DIMENSIONS[sequence.aspect].width / COMPOSE_DIMENSIONS[sequence.aspect].height;
   const croppedIds = useMemo(
     () =>
-      sequence.clips
-        .filter((clip) => {
-          const material = materialBySrc(clip.srcUrl);
-          return !!material && material.ratio > frameRatio * 1.2 && !doc.reframe[clip.id];
-        })
-        .map((clip) => clip.id),
-    [sequence, frameRatio, doc.reframe],
+      isReal
+        ? []
+        : sequence.clips
+            .filter((clip) => {
+              const material = materialBySrc(clip.srcUrl);
+              return !!material && material.ratio > frameRatio * 1.2 && !doc.reframe[clip.id];
+            })
+            .map((clip) => clip.id),
+    [isReal, sequence, frameRatio, doc.reframe],
   );
   const centerOnSubject = useCallback(() => {
     change((current) => {
@@ -603,14 +923,18 @@ export function useEditor(copy: StudioEditorCopy) {
   );
 
   // ── Findings: what each workspace says before anyone touches a control ──
+  // Measured on the sample film only. A real film shows none: they would be the sample's numbers.
   const findings = useMemo(
-    () => ({
-      color: colorFindings(sequence, stats, doc.looks),
-      sound: soundFindings(doc, FIXTURE_MEASURED_LUFS, FIXTURE_SPEECH),
-      captions: captionFindings(doc, FIXTURE_SPEECH),
-      croppedIds,
-    }),
-    [sequence, stats, doc, croppedIds],
+    () =>
+      isReal
+        ? NO_FINDINGS
+        : {
+            color: colorFindings(sequence, stats, doc.looks),
+            sound: soundFindings(doc, FIXTURE_MEASURED_LUFS, FIXTURE_SPEECH),
+            captions: captionFindings(doc, FIXTURE_SPEECH),
+            croppedIds,
+          },
+    [isReal, sequence, stats, doc, croppedIds],
   );
   const openCount: Record<EditorWorkspace, number> = {
     cut: croppedIds.length > 0 ? 1 : 0,
@@ -625,6 +949,9 @@ export function useEditor(copy: StudioEditorCopy) {
       const intent: AssistIntent | null = interpretUtterance(utterance);
       proposalKey.current += 1;
       const base = { key: proposalKey.current, utterance };
+      if (isReal && (!intent || !realAssistAllowed(intent))) {
+        return setProposal({ ...base, lines: [], run: null, note: intent ? copy.real.assistNotReady : copy.real.assistUnknown });
+      }
       if (!intent) return setProposal({ ...base, lines: [], run: null, note: copy.assist.unknown });
       const none = () => setProposal({ ...base, lines: [], run: null, note: copy.assist.nothing });
       const lines = copy.assist.lines;
@@ -686,7 +1013,7 @@ export function useEditor(copy: StudioEditorCopy) {
           return setProposal({ ...base, note: null, lines: [lines.lift], run: () => setCaptionSettings({ lift: true }) });
       }
     },
-    [copy, sequence, fps, doc, setAspect, trimEdge, removeClips, applyAuto, applyMatch, setSound, makeCaptions, setCaptionSettings, captionDrafts],
+    [isReal, copy, sequence, fps, doc, setAspect, trimEdge, removeClips, applyAuto, applyMatch, setSound, makeCaptions, setCaptionSettings, captionDrafts],
   );
 
   /** Every keyboard action, by id. The key that means it comes from the person's shortcut map. */
@@ -736,6 +1063,29 @@ export function useEditor(copy: StudioEditorCopy) {
 
   return {
     copy,
+    /** The organization's own film (V1) rather than the sample film. */
+    real: isReal,
+    /** The stored film as last read or written (real film only): what v2 shows but does not own. */
+    storedFilm,
+    gradeNames: real?.gradeNames ?? null,
+    status,
+    readOnly,
+    /** `false` once browser storage refused a read or a write: the film then lives in memory only. */
+    storageOk,
+    /** Another tab overwrote this screen's cuts; `keepThisFilm` writes them back, `openOtherFilm` opens that tab's film. */
+    conflict,
+    keepThisFilm,
+    openOtherFilm,
+    locked: workspaceLocked(isReal, workspace),
+    sources: real?.sources ?? [],
+    addSource,
+    busySource,
+    rates,
+    unknownRates,
+    variableRates,
+    /** No cut's rate is measured yet: the film's rate is a stand-in and nothing frame-based is stored. */
+    tentative,
+    sampleHref: (target: EditorWorkspace) => sampleHrefFor(real?.sampleBase ?? '', target),
     doc,
     sequence,
     fps,
@@ -787,6 +1137,7 @@ export function useEditor(copy: StudioEditorCopy) {
     setAssistDock,
     exportOpen,
     setExportOpen,
+    filmForExport,
     shortcutsOpen,
     setShortcutsOpen,
     shortcutPrefs,

@@ -13,6 +13,7 @@ import {
   sliderToPpf,
   snapFrame,
   trimClipEdge,
+  visibleCaptions,
   zoomScrollLeft,
 } from '@/lib/brand-studio/editor-v2/frames';
 import { duckEnvelope, envelopeGainAt, waveform } from '@/lib/brand-studio/editor-v2/model';
@@ -179,6 +180,7 @@ export function Timeline({ api }: { api: EditorApi }) {
 
   const startMove = (event: React.PointerEvent<HTMLDivElement>, index: number, clipId: string) => {
     if (event.button !== 0) return;
+    if (api.readOnly) return api.select(clipId, event.shiftKey || event.ctrlKey || event.metaKey);
     const startX = event.clientX;
     const additive = event.shiftKey || event.ctrlKey || event.metaKey;
     let moved = false;
@@ -204,7 +206,7 @@ export function Timeline({ api }: { api: EditorApi }) {
 
   const startTrim = (event: React.PointerEvent<HTMLSpanElement>, index: number, edge: 'start' | 'end') => {
     event.stopPropagation();
-    if (event.button !== 0) return;
+    if (event.button !== 0 || api.readOnly) return;
     const span = spans[index];
     if (!span) return;
     const startX = event.clientX;
@@ -250,7 +252,12 @@ export function Timeline({ api }: { api: EditorApi }) {
     }
     return tiles;
   };
-  const strips = realFrames ? spans.map((span) => (span.end >= viewFrom && span.start <= viewTo ? tilesOf(span) : [])) : null;
+  // A cut with no poster of its own (an upload without a thumbnail) shows decoded frames at every zoom.
+  const strips = spans.map((span) => {
+    const visible = span.end >= viewFrom && span.start <= viewTo;
+    if (realFrames) return visible ? tilesOf(span) : [];
+    return !span.clip.thumbUrl && visible ? tilesOf(span) : null;
+  });
   const wantedKey = wanted.map((request) => `${request.src}#${request.sourceFrame}`).join('|');
   useEffect(() => {
     thumbs.current?.want(wanted);
@@ -298,6 +305,7 @@ export function Timeline({ api }: { api: EditorApi }) {
       data-ws={workspace}
       aria-label={lanes.video}
       data-editor-timeline
+      data-real={api.real ? '' : undefined}
       data-editor-ppf={ppf.toFixed(3)}
       data-editor-thumbs={usage ? `${usage.pictures}:${usage.bytes}` : undefined}
     >
@@ -342,11 +350,11 @@ export function Timeline({ api }: { api: EditorApi }) {
       </div>
       <div className={styles.laneNames}>
         <span className={styles.rulerName}>{formatTimecode(playhead, fps)}</span>
-        <span data-lane="titles">{lanes.titles}</span>
+        {!api.real && <span data-lane="titles">{lanes.titles}</span>}
         <span data-lane="video">{lanes.video}</span>
         <span data-lane="captions">{lanes.captions}</span>
-        <span data-lane="voice">{lanes.voice}</span>
-        <span data-lane="music">{lanes.music}</span>
+        {!api.real && <span data-lane="voice">{lanes.voice}</span>}
+        {!api.real && <span data-lane="music">{lanes.music}</span>}
       </div>
       <div className={styles.laneScroll} ref={scrollRef}>
         <div className={styles.laneContent} ref={contentRef} style={{ width: contentWidth }} onPointerDown={blank}>
@@ -358,22 +366,30 @@ export function Timeline({ api }: { api: EditorApi }) {
             ))}
           </div>
 
-          <div className={styles.lane} data-lane="titles" onPointerDown={blank}>
-            {doc.titles.map((title) => (
-              <button
-                key={title.id}
-                type="button"
-                className={styles.textItem}
-                style={{ left: title.start * ppf, width: Math.max(18, (title.end - title.start) * ppf - 2) }}
-                aria-pressed={api.selectedTitleId === title.id}
-                onClick={() => { api.setWorkspace('cut'); api.setSelectedTitleId(title.id); api.seek(title.start); }}
-              >
-                {title.text}
-              </button>
-            ))}
-          </div>
+          {/* Titles, voice and music lanes are the sample film's: a real film has none of them yet (V1). */}
+          {!api.real && (
+            <div className={styles.lane} data-lane="titles" onPointerDown={blank}>
+              {doc.titles.map((title) => (
+                <button
+                  key={title.id}
+                  type="button"
+                  className={styles.textItem}
+                  style={{ left: title.start * ppf, width: Math.max(18, (title.end - title.start) * ppf - 2) }}
+                  aria-pressed={api.selectedTitleId === title.id}
+                  onClick={() => { api.setWorkspace('cut'); api.setSelectedTitleId(title.id); api.seek(title.start); }}
+                >
+                  {title.text}
+                </button>
+              ))}
+            </div>
+          )}
 
-          <div className={styles.lane} data-lane="video" onPointerDown={blank}>
+          <div className={styles.lane} data-lane="video" onPointerDown={blank} data-empty={api.real && spans.length === 0 ? '' : undefined}>
+            {api.real && spans.length === 0 && (
+              <span className={styles.laneEmpty} style={{ left: scrollLeft }} data-editor-empty-lane>
+                {api.status === 'ready' ? copy.real.emptyLane : copy.real.loading}
+              </span>
+            )}
             {spans.map((span) => {
               const trimming = drag?.kind === 'trim' && drag.index === span.index ? drag : null;
               const moving = drag?.kind === 'move' && drag.index === span.index ? drag : null;
@@ -387,7 +403,7 @@ export function Timeline({ api }: { api: EditorApi }) {
               }
               const look = doc.looks[span.clip.id];
               const selected = api.selection.includes(span.clip.id);
-              const inScope = workspace !== 'cut' && api.targetIds.includes(span.clip.id);
+              const inScope = workspace !== 'cut' && !api.locked && api.targetIds.includes(span.clip.id);
               const tiles = strips?.[span.index] ?? null;
               return (
                 <div
@@ -416,6 +432,12 @@ export function Timeline({ api }: { api: EditorApi }) {
                   }}
                   data-editor-clip={span.index + 1}
                   data-frames={span.frames}
+                  data-in-frame={span.clip.inFrame}
+                  data-phase={span.clip.phase}
+                  data-speed={`${span.clip.speedNum}/${span.clip.speedDen}`}
+                  data-source-fps={span.clip.sourceFps}
+                  data-source-frames={span.clip.sourceFrames}
+                  data-clip-id={span.clip.id}
                 >
                   {tiles?.map((tile) => (
                     <i
@@ -442,11 +464,12 @@ export function Timeline({ api }: { api: EditorApi }) {
           </div>
 
           <div className={styles.lane} data-lane="captions" onPointerDown={blank}>
-            {sequence.captions.map((caption) => (
+            {visibleCaptions(sequence).map((caption) => (
               <button
                 key={caption.id}
                 type="button"
                 className={styles.textItem}
+                data-editor-caption-item={caption.id}
                 style={{ left: caption.start * ppf, width: Math.max(18, (caption.end - caption.start) * ppf - 2) }}
                 onClick={() => { api.setWorkspace('captions'); api.seek(caption.start); }}
               >
@@ -455,41 +478,45 @@ export function Timeline({ api }: { api: EditorApi }) {
             ))}
           </div>
 
-          <div className={styles.lane} data-lane="voice">
-            <span className={styles.laneTag} style={{ left: Math.max(6, scrollLeft + 6) }}>{copy.timeline.narration}</span>
-            <svg className={styles.wave} style={{ left: waveLeft }} width={waveWidth} height="100%" viewBox={`0 0 ${waveWidth} 40`} preserveAspectRatio="none" aria-hidden="true">
-              {barIndexes.map((index) => {
-                const sec = barSec(index);
-                const level = voiceBars[index % voiceBars.length] ?? 0.5;
-                const height = Math.max(1.5, level * (inSpeech(sec) ? (doc.sound.speechClear ? 36 : 28) : doc.sound.speechClear ? 1.5 : 5));
-                return <rect key={index} x={(index - firstBar) * BAR_PX} y={20 - height / 2} width={BAR_PX - 1.5} height={height} rx="1" />;
-              })}
-            </svg>
-          </div>
+          {!api.real && (
+            <div className={styles.lane} data-lane="voice">
+              <span className={styles.laneTag} style={{ left: Math.max(6, scrollLeft + 6) }}>{copy.timeline.narration}</span>
+              <svg className={styles.wave} style={{ left: waveLeft }} width={waveWidth} height="100%" viewBox={`0 0 ${waveWidth} 40`} preserveAspectRatio="none" aria-hidden="true">
+                {barIndexes.map((index) => {
+                  const sec = barSec(index);
+                  const level = voiceBars[index % voiceBars.length] ?? 0.5;
+                  const height = Math.max(1.5, level * (inSpeech(sec) ? (doc.sound.speechClear ? 36 : 28) : doc.sound.speechClear ? 1.5 : 5));
+                  return <rect key={index} x={(index - firstBar) * BAR_PX} y={20 - height / 2} width={BAR_PX - 1.5} height={height} rx="1" />;
+                })}
+              </svg>
+            </div>
+          )}
 
-          <div className={styles.lane} data-lane="music" data-empty={doc.music ? undefined : ''}>
-            {doc.music ? (
-              <>
-                <span className={styles.laneTag} style={{ left: Math.max(6, scrollLeft + 6) }}>{doc.music.label}</span>
-                <svg className={styles.wave} style={{ left: waveLeft }} width={waveWidth} height="100%" viewBox={`0 0 ${waveWidth} 40`} preserveAspectRatio="none" aria-hidden="true" data-editor-music-wave>
-                  {barIndexes.map((index) => {
-                    const level = musicBars[index % musicBars.length] ?? 0.5;
-                    const height = Math.max(1.5, level * 34 * musicGain(barSec(index)));
-                    return <rect key={index} x={(index - firstBar) * BAR_PX} y={20 - height / 2} width={BAR_PX - 1.5} height={height} rx="1" />;
-                  })}
-                  {doc.sound.duck && (
-                    <polyline
-                      className={styles.envelope}
-                      points={envelope.map((point) => `${point.sec * fps * ppf - waveLeft},${36 - point.gain * 32}`).join(' ')}
-                      data-editor-envelope
-                    />
-                  )}
-                </svg>
-              </>
-            ) : (
-              <span className={styles.laneEmpty} style={{ left: scrollLeft }}>{copy.timeline.noMusic}</span>
-            )}
-          </div>
+          {!api.real && (
+            <div className={styles.lane} data-lane="music" data-empty={doc.music ? undefined : ''}>
+              {doc.music ? (
+                <>
+                  <span className={styles.laneTag} style={{ left: Math.max(6, scrollLeft + 6) }}>{doc.music.label}</span>
+                  <svg className={styles.wave} style={{ left: waveLeft }} width={waveWidth} height="100%" viewBox={`0 0 ${waveWidth} 40`} preserveAspectRatio="none" aria-hidden="true" data-editor-music-wave>
+                    {barIndexes.map((index) => {
+                      const level = musicBars[index % musicBars.length] ?? 0.5;
+                      const height = Math.max(1.5, level * 34 * musicGain(barSec(index)));
+                      return <rect key={index} x={(index - firstBar) * BAR_PX} y={20 - height / 2} width={BAR_PX - 1.5} height={height} rx="1" />;
+                    })}
+                    {doc.sound.duck && (
+                      <polyline
+                        className={styles.envelope}
+                        points={envelope.map((point) => `${point.sec * fps * ppf - waveLeft},${36 - point.gain * 32}`).join(' ')}
+                        data-editor-envelope
+                      />
+                    )}
+                  </svg>
+                </>
+              ) : (
+                <span className={styles.laneEmpty} style={{ left: scrollLeft }}>{copy.timeline.noMusic}</span>
+              )}
+            </div>
+          )}
 
           <span
             className={styles.playhead}

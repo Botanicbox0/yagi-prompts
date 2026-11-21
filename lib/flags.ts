@@ -187,14 +187,40 @@ export function brandStudioEditAssistOpen(env: Record<string, string | undefined
 
 /**
  * The rebuilt editing studio (docs/BRAND-EDITING-STUDIO-V2.md): four workspaces (cut, colour, sound,
- * captions) around one preview and one timeline. Today the flag opens only the clickable structure
- * prototype at `/brand/studio/editor`, which runs on sample data and never saves, generates or exports.
- * Default OFF: open only when the server environment says exactly `BRAND_STUDIO_EDITOR_V2=on`. Off means
- * the route answers 404 and every other screen is as it was. The studio route guard runs first, so a
- * sandboxed organization gets 404 whatever this flag says.
+ * captions) around one preview and one timeline. Since V1 the flag opens `/brand/studio/editor` on the
+ * organization's own film (the film the current editor keeps, on frames, with a frame-exact export);
+ * `?sample=1` still opens the sample film. Default OFF: open only when the server environment says
+ * exactly `BRAND_STUDIO_EDITOR_V2=on`. Off means the route answers 404 and every other screen is as it
+ * was. The studio route guard runs first, so a sandboxed organization gets 404 whatever this flag says.
+ *
+ * Which organizations it opens for by default: `BRAND_STUDIO_EDITOR_V2_ORGS`, a comma-separated list of
+ * organization ids (spaces around ids and empty entries ignored, ids compared exactly). For a listed
+ * organization, and only while this flag is on, `/brand/studio/compose` sends the person to the new
+ * editor after the studio guard (`brandStudioEditorV2DefaultFor`); `?classic=1` keeps the current editor.
+ * The ids live only in the deployment's environment, never in the repository. Unset or empty: nobody.
  */
 export function brandStudioEditorV2Open(env: Record<string, string | undefined> = process.env): boolean {
   return env.BRAND_STUDIO_EDITOR_V2 === 'on';
+}
+
+/** The organizations listed in `BRAND_STUDIO_EDITOR_V2_ORGS` (see `brandStudioEditorV2Open`). */
+export function brandStudioEditorV2Orgs(env: Record<string, string | undefined> = process.env): string[] {
+  return (env.BRAND_STUDIO_EDITOR_V2_ORGS ?? '')
+    .split(',')
+    .map((id) => id.trim())
+    .filter((id) => id !== '');
+}
+
+/**
+ * Whether `/brand/studio/compose` opens the new editor for this organization: only with
+ * `BRAND_STUDIO_EDITOR_V2=on` AND the organization listed in `BRAND_STUDIO_EDITOR_V2_ORGS`.
+ */
+export function brandStudioEditorV2DefaultFor(
+  organizationId: string | null | undefined,
+  env: Record<string, string | undefined> = process.env,
+): boolean {
+  if (!brandStudioEditorV2Open(env) || !organizationId) return false;
+  return brandStudioEditorV2Orgs(env).includes(organizationId);
 }
 
 /**

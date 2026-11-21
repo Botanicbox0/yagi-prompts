@@ -11,6 +11,9 @@ launches its own browser with a fresh profile and talks only to the address belo
 vitest suite: run it against a local server started with BRAND_STUDIO_V2=on BRAND_STUDIO_EDITOR_V2=on.
 
   EDITOR_BASE_URL=http://localhost:3611 EDITOR_ORG_ID=<organization id> python scripts/editor-v2-frame-check.py [capture-dir]
+
+It runs on the sample film (`?sample=1`). The organization's own film is checked by
+scripts/editor-v2-roundtrip-check.py.
 """
 import json
 import os
@@ -58,14 +61,14 @@ def check(name, ok, detail=''):
 
 def main():
     with sync_playwright() as p:
-        browser = p.chromium.launch(headless=True)
+        browser = p.chromium.launch(headless=True, channel=os.environ.get("EDITOR_BROWSER_CHANNEL", "chromium"))
         context = browser.new_context(viewport={'width': 1440, 'height': 900}, device_scale_factor=1)
         context.add_cookies([{'name': 'playbook.locale', 'value': 'ko', 'url': BASE}])
         context.route('**/*', lambda route: route.continue_() if route.request.url.startswith((BASE, 'data:', 'blob:')) else route.abort())
         page = context.new_page()
         errors = []
         page.on('pageerror', lambda e: errors.append(str(e)))
-        url = f'{BASE}/brand/studio/editor' + (f'?organizationId={ORG}' if ORG else '')
+        url = f'{BASE}/brand/studio/editor?sample=1' + (f'&organizationId={ORG}' if ORG else '')
         page.goto(url, wait_until='domcontentloaded', timeout=180000)
         page.wait_for_selector('[data-studio-editor-v2]', timeout=90000)
         page.wait_for_timeout(1500)

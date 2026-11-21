@@ -133,6 +133,16 @@ export function frameStateAt(seq: FrameSequence, frame: number): FrameState {
   return { frame: at, active, captions };
 }
 
+/**
+ * The captions the film can show: those that start before its end, cut off at the end. On the sample
+ * film this is every caption (its operations fit them); on a real film the stored captions are kept
+ * whole (v2 does not own them) and one past the end is hidden until the film is long enough again.
+ */
+export function visibleCaptions(seq: FrameSequence): FrameCaption[] {
+  const total = totalFrames(seq);
+  return seq.captions.filter((caption) => caption.start < total).map((caption) => (caption.end > total ? { ...caption, end: total } : caption));
+}
+
 // ── Operations: each returns the same sequence when it changes nothing ─────────────────────────
 
 const withClips = (seq: FrameSequence, clips: FrameClip[]): FrameSequence => fitCaptions({ ...seq, clips });

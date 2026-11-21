@@ -5,15 +5,31 @@ import type { ReactElement } from 'react';
 import { getDictionary } from '@/lib/i18n/dictionaries';
 
 /**
- * Editing studio v2 prototype (`/brand/studio/editor`): the flag, the page gate order, and the promise
- * that the prototype reads nothing of the organization's and sends or stores nothing.
+ * Editing studio v2 (`/brand/studio/editor`), V1: the flag, the page gate order, what the page loads for
+ * the organization's own film, and where the editor may keep anything.
+ *
+ * The truth since V1: the studio guard runs first, then the flag; with the flag off the route is 404 and
+ * the current editor's markup does not change (compose-entry.test.ts). With it on, the page loads the
+ * same clips the current editor offers and the editor reads and writes the film the current editor
+ * keeps in this browser. `?sample=1` opens the sample film and loads nothing.
+ *
+ * Where the editor may reach anything, in one place: network access only in the frame-exact export
+ * (`export-film.ts`; what it may request is pinned in export-film-network.test.ts), browser storage
+ * only in the shortcut store and the film store (always inside try/catch), and nothing anywhere keeps
+ * session storage, a database or a cache.
  */
 const ROOT = process.cwd();
 const ORG = '00000000-0000-4000-8000-0000000000aa';
+const OTHER = '00000000-0000-4000-8000-0000000000bb';
+const ASSET = '30000000-0000-4000-8000-000000000001';
+const OUTPUT = '30000000-0000-4000-8000-000000000002';
 
 const mocks = vi.hoisted(() => ({
   studioRouteContext: vi.fn(),
   flagCalls: 0,
+  assetsOf: vi.fn(),
+  jobsOf: vi.fn(),
+  viewsOf: vi.fn(),
 }));
 
 vi.mock('next/navigation', () => ({
@@ -35,6 +51,15 @@ vi.mock('@/components/brand-studio/editor-v2/editor-v2', () => ({
     return null;
   },
 }));
+
+vi.mock('@/lib/brand-studio/media-store', () => ({
+  createStudioMediaStore: () => ({ url: (key: string) => `/media/${key}` }),
+}));
+
+vi.mock('@/lib/brand-studio/repo', async () => {
+  const actual = await vi.importActual<typeof import('@/lib/brand-studio/repo')>('@/lib/brand-studio/repo');
+  return { ...actual, assetsOf: mocks.assetsOf, jobsOf: mocks.jobsOf, viewsOf: mocks.viewsOf };
+});
 
 vi.mock('@/lib/flags', async () => {
   const actual = await vi.importActual<typeof import('@/lib/flags')>('@/lib/flags');
@@ -58,13 +83,45 @@ describe('brandStudioEditorV2Open', () => {
   });
 });
 
+interface RealProps {
+  organizationId: string;
+  organizationName: string;
+  canEdit: boolean;
+  sources: Array<{ key: string; kind: string; srcUrl: string; thumbUrl: string | null; label: string }>;
+  sampleBase: string;
+}
+type Element = ReactElement<{ copy: unknown; currentEditorHref: string; initialWorkspace: string; real: RealProps | null }>;
+
 describe('/brand/studio/editor page gate', () => {
   const dict = getDictionary('ko');
+  const context = (role: string, staff = false) => ({
+    choice: { id: ORG, name: 'Sample Brand', role },
+    dict,
+    access: { staff },
+    deps: { sql: { query: vi.fn() } },
+  });
 
   beforeEach(() => {
     mocks.flagCalls = 0;
     mocks.studioRouteContext.mockReset();
-    mocks.studioRouteContext.mockResolvedValue({ choice: { id: ORG }, dict });
+    mocks.studioRouteContext.mockResolvedValue(context('owner'));
+    mocks.assetsOf.mockReset();
+    mocks.jobsOf.mockReset();
+    mocks.viewsOf.mockReset();
+    mocks.assetsOf.mockResolvedValue([
+      { id: ASSET, kind: 'video', role: null, name: 'runway.mp4', tags: [], storage_key: 'a.mp4', thumb_key: 'a.jpg', width: 720, height: 1280, duration_ms: 5705, source: 'upload', created_at: new Date('2026-11-20T10:00:00Z') },
+      { id: '30000000-0000-4000-8000-000000000009', kind: 'image', role: null, name: 'still.png', tags: [], storage_key: 's.png', thumb_key: null, width: 10, height: 10, duration_ms: null, source: 'upload', created_at: new Date('2026-11-21T10:00:00Z') },
+    ]);
+    mocks.jobsOf.mockResolvedValue([{ id: 'job' }]);
+    mocks.viewsOf.mockResolvedValue([
+      {
+        prompt: 'A slow walk through the morning market',
+        outputs: [
+          { id: OUTPUT, jobId: 'job', kind: 'video', url: '/media/o.mp4', thumbUrl: '/media/o.jpg', width: 1080, height: 1920, seconds: 4, draft: false, savedAssetId: null, createdAt: '2026-11-21T09:00:00.000Z' },
+          { id: '30000000-0000-4000-8000-000000000007', jobId: 'job', kind: 'image', url: '/media/i.png', thumbUrl: null, width: 1, height: 1, seconds: null, draft: false, savedAssetId: null, createdAt: '2026-11-21T09:00:00.000Z' },
+        ],
+      },
+    ]);
   });
 
   afterEach(() => {
@@ -75,7 +132,7 @@ describe('/brand/studio/editor page gate', () => {
     return (await import('@/app/(brand)/brand/studio/editor/page')).default;
   }
 
-  it('404s after the guard when the flag is off', async () => {
+  it('404s after the guard when the flag is off, and loads nothing', async () => {
     const Page = await loadPage();
     for (const value of ['', 'off', 'ON']) {
       vi.stubEnv('BRAND_STUDIO_EDITOR_V2', value);
@@ -83,22 +140,11 @@ describe('/brand/studio/editor page gate', () => {
     }
     expect(mocks.studioRouteContext).toHaveBeenCalledWith(ORG);
     expect(mocks.flagCalls).toBe(3);
+    expect(mocks.assetsOf).not.toHaveBeenCalled();
+    expect(mocks.jobsOf).not.toHaveBeenCalled();
   });
 
-  it('renders the editor with the editing-studio copy and a scoped compose href when the flag is on', async () => {
-    vi.stubEnv('BRAND_STUDIO_EDITOR_V2', 'on');
-    const Page = await loadPage();
-    const element = (await Page({ searchParams: Promise.resolve({ organizationId: ORG }) })) as ReactElement<{
-      copy: unknown;
-      currentEditorHref: string;
-    }>;
-    expect((element.type as { name?: string }).name).toBe('EditorV2Stub');
-    expect(element.props.copy).toBe(dict.studioEditor);
-    expect(element.props.currentEditorHref.startsWith('/brand/studio/compose')).toBe(true);
-    expect(element.props.currentEditorHref).toContain(ORG);
-  });
-
-  it('never consults the flag when the guard itself 404s (sandboxed organization), whatever the flag says', async () => {
+  it('never consults the flag or loads anything when the guard itself 404s (sandboxed organization)', async () => {
     const Page = await loadPage();
     for (const value of ['on', 'off', '']) {
       vi.stubEnv('BRAND_STUDIO_EDITOR_V2', value);
@@ -106,79 +152,196 @@ describe('/brand/studio/editor page gate', () => {
       await expect(Page({ searchParams: Promise.resolve({ organizationId: ORG }) })).rejects.toThrow('NEXT_NOT_FOUND');
     }
     expect(mocks.flagCalls).toBe(0);
+    expect(mocks.assetsOf).not.toHaveBeenCalled();
+  });
+
+  it('an organization not on the list gets the sample film whatever the address says, and nothing of its own is loaded', async () => {
+    vi.stubEnv('BRAND_STUDIO_EDITOR_V2', 'on');
+    const Page = await loadPage();
+    for (const list of [undefined, '', OTHER, `${OTHER},${ORG.slice(0, 20)}`]) {
+      if (list === undefined) vi.stubEnv('BRAND_STUDIO_EDITOR_V2_ORGS', undefined as unknown as string);
+      else vi.stubEnv('BRAND_STUDIO_EDITOR_V2_ORGS', list);
+      for (const query of [
+        { organizationId: ORG },
+        { organizationId: ORG, clip: `a:${ASSET}` },
+        { organizationId: ORG, clip: `o:${OUTPUT}`, sample: '0' },
+        { organizationId: ORG, sample: '1' },
+        { organizationId: ORG, sample: ['0', '1'], ws: 'color' },
+      ]) {
+        const element = (await Page({ searchParams: Promise.resolve(query) })) as Element;
+        expect((element.type as { name?: string }).name, JSON.stringify(query)).toBe('EditorV2Stub');
+        expect(element.props.real, `${list} ${JSON.stringify(query)}`).toBeNull();
+        expect(element.props.currentEditorHref).toBe(`/brand/studio/compose?classic=1&organizationId=${ORG}`);
+      }
+    }
+    expect(mocks.assetsOf).not.toHaveBeenCalled();
+    expect(mocks.jobsOf).not.toHaveBeenCalled();
+    expect(mocks.viewsOf).not.toHaveBeenCalled();
+  });
+
+  it('a listed organization gets its own film; the list is consulted after the guard and the flag', async () => {
+    vi.stubEnv('BRAND_STUDIO_EDITOR_V2', 'on');
+    vi.stubEnv('BRAND_STUDIO_EDITOR_V2_ORGS', ` ${OTHER} , ${ORG} `);
+    const Page = await loadPage();
+    const element = (await Page({ searchParams: Promise.resolve({ organizationId: ORG, clip: `a:${ASSET}` }) })) as Element;
+    expect(element.props.real).not.toBeNull();
+    expect(mocks.assetsOf).toHaveBeenCalledTimes(1);
+    // `sample=1` still opens the sample film for a listed organization.
+    const sample = (await Page({ searchParams: Promise.resolve({ organizationId: ORG, sample: '1' }) })) as Element;
+    expect(sample.props.real).toBeNull();
+    expect(mocks.assetsOf).toHaveBeenCalledTimes(1);
+  });
+
+  it('opens the organization’s film with the clips the current editor offers: video only, same addresses', async () => {
+    vi.stubEnv('BRAND_STUDIO_EDITOR_V2', 'on');
+    vi.stubEnv('BRAND_STUDIO_EDITOR_V2_ORGS', ORG);
+    const Page = await loadPage();
+    const element = (await Page({ searchParams: Promise.resolve({ organizationId: ORG }) })) as Element;
+    expect((element.type as { name?: string }).name).toBe('EditorV2Stub');
+    expect(element.props.copy).toBe(dict.studioEditor);
+    expect(element.props.currentEditorHref).toBe(`/brand/studio/compose?classic=1&organizationId=${ORG}`);
+    expect(element.props.initialWorkspace).toBe('cut');
+    expect(mocks.assetsOf).toHaveBeenCalledWith(expect.anything(), ORG, 200);
+    expect(mocks.jobsOf).toHaveBeenCalledWith(expect.anything(), ORG, 60);
+    const real = element.props.real!;
+    expect(real).toMatchObject({ organizationId: ORG, organizationName: 'Sample Brand', canEdit: true });
+    expect(real.sampleBase).toBe(`/brand/studio/editor?sample=1&organizationId=${ORG}`);
+    expect(real.sources.map((s) => [s.key, s.kind, s.srcUrl, s.thumbUrl, s.label])).toEqual([
+      [`o:${OUTPUT}`, 'output', `/api/brand-studio/compose?organizationId=${ORG}&source=output&id=${OUTPUT}`, '/media/o.jpg', 'A slow walk through the morning market'.slice(0, 36)],
+      [`a:${ASSET}`, 'asset', `/api/brand-studio/compose?organizationId=${ORG}&source=asset&id=${ASSET}`, '/media/a.jpg', 'runway.mp4'],
+    ]);
+  });
+
+  it('lets owners and editors change the film; viewers and the studio team only look', async () => {
+    vi.stubEnv('BRAND_STUDIO_EDITOR_V2', 'on');
+    vi.stubEnv('BRAND_STUDIO_EDITOR_V2_ORGS', ORG);
+    const Page = await loadPage();
+    const canEdit = async (role: string, staff = false) => {
+      mocks.studioRouteContext.mockResolvedValueOnce(context(role, staff));
+      return ((await Page({ searchParams: Promise.resolve({ organizationId: ORG }) })) as Element).props.real!.canEdit;
+    };
+    expect(await canEdit('owner')).toBe(true);
+    expect(await canEdit('editor')).toBe(true);
+    expect(await canEdit('viewer')).toBe(false);
+    expect(await canEdit('owner', true)).toBe(false);
+  });
+
+  it('?sample=1 opens the sample film, reads nothing of the organization’s, and keeps the workspace asked for', async () => {
+    vi.stubEnv('BRAND_STUDIO_EDITOR_V2', 'on');
+    vi.stubEnv('BRAND_STUDIO_EDITOR_V2_ORGS', ORG);
+    const Page = await loadPage();
+    const element = (await Page({ searchParams: Promise.resolve({ organizationId: ORG, sample: '1', ws: 'sound' }) })) as Element;
+    expect(element.props.real).toBeNull();
+    expect(element.props.initialWorkspace).toBe('sound');
+    expect(element.props.currentEditorHref).toBe(`/brand/studio/compose?classic=1&organizationId=${ORG}`);
+    expect(mocks.assetsOf).not.toHaveBeenCalled();
+    expect(mocks.jobsOf).not.toHaveBeenCalled();
+    expect(mocks.viewsOf).not.toHaveBeenCalled();
+    const odd = (await Page({ searchParams: Promise.resolve({ organizationId: ORG, sample: '1', ws: 'titles' }) })) as Element;
+    expect(odd.props.initialWorkspace).toBe('cut');
   });
 });
 
-describe('the prototype reads, sends and stores nothing', () => {
+describe('the page source', () => {
   const pageSource = readFileSync(join(ROOT, 'app/(brand)/brand/studio/editor/page.tsx'), 'utf8');
 
-  it('runs the studio guard before its own flag', () => {
+  it('runs the studio guard, then its own flag, then the list, then reads the organization’s clips', () => {
     const guard = pageSource.indexOf('studioRouteContext(');
     const flag = pageSource.indexOf('brandStudioEditorV2Open(');
+    const list = pageSource.indexOf('brandStudioEditorV2DefaultFor(choice.id)');
+    const sample = pageSource.indexOf("=== '1'");
+    const load = pageSource.indexOf('assetsOf(');
     expect(guard).toBeGreaterThan(-1);
-    expect(flag).toBeGreaterThan(-1);
     expect(guard).toBeLessThan(flag);
+    expect(flag).toBeLessThan(list);
+    expect(list).toBeLessThan(sample);
+    expect(sample).toBeLessThan(load);
   });
 
-  it('imports nothing that reads organization data', () => {
-    const imports = [...pageSource.matchAll(/from\s+['"]([^'"]+)['"]/g)].map((m) => m[1]!);
-    for (const banned of ['@/lib/brand-studio/repo', 'media-store', 'usage', 'library']) {
-      expect(imports.filter((path) => path.includes(banned))).toEqual([]);
+  it('loads clips with the current editor’s own loaders and limits', () => {
+    const compose = readFileSync(join(ROOT, 'app/(brand)/brand/studio/compose/page.tsx'), 'utf8');
+    for (const call of ['assetsOf(deps.sql, choice.id, 200)', 'jobsOf(deps.sql, choice.id, 60)', 'viewsOf(deps.sql, rawJobs, media)']) {
+      expect(compose).toContain(call);
+      expect(pageSource).toContain(call);
+    }
+    expect(compose).toContain("const canCreate = !access.staff && (choice.role === 'owner' || choice.role === 'editor');");
+    expect(pageSource).toContain("const canEdit = !access.staff && (choice.role === 'owner' || choice.role === 'editor');");
+  });
+});
+
+describe('where the editor keeps anything', () => {
+  const dir = join(ROOT, 'components/brand-studio/editor-v2');
+  const files = readdirSync(dir).filter((name) => /\.(tsx?|ts)$/.test(name));
+  const STORES = ['shortcut-store.ts', 'film-store.ts'];
+  /** The one file that may make a request: the export reads the film's own media to decode its sound. */
+  const NETWORK_FILE = 'export-film.ts';
+  const NETWORK = ['fetch(', 'XMLHttpRequest', 'sendBeacon', 'WebSocket', 'EventSource'];
+
+  it('only the export makes a request', () => {
+    expect(files).toContain(NETWORK_FILE);
+    for (const name of files) {
+      if (name === NETWORK_FILE) continue;
+      const source = readFileSync(join(dir, name), 'utf8');
+      for (const banned of NETWORK) expect(source.includes(banned), `${name} contains ${banned}`).toBe(false);
     }
   });
 
-  const dir = join(ROOT, 'components/brand-studio/editor-v2');
-  const files = readdirSync(dir).filter((name) => /\.(tsx?|ts)$/.test(name));
-  const STORE = 'shortcut-store.ts';
-
-  it('components make no request and touch no session storage or database', () => {
+  it('no component keeps session storage, a database or a cache', () => {
     expect(files.length).toBeGreaterThan(0);
     for (const name of files) {
       const source = readFileSync(join(dir, name), 'utf8');
-      for (const banned of ['fetch(', 'XMLHttpRequest', 'sendBeacon', 'indexedDB', 'sessionStorage']) {
+      for (const banned of ['indexedDB', 'sessionStorage', 'caches.open']) {
         expect(source.includes(banned), `${name} contains ${banned}`).toBe(false);
       }
     }
   });
 
-  it('only the shortcut store touches localStorage', () => {
-    expect(files).toContain(STORE);
+  it('only the shortcut store and the film store touch browser storage', () => {
+    for (const store of STORES) expect(files).toContain(store);
     for (const name of files) {
-      if (name === STORE) continue;
+      if (STORES.includes(name)) continue;
       const source = readFileSync(join(dir, name), 'utf8');
       expect(source.includes('localStorage'), `${name} contains localStorage`).toBe(false);
     }
   });
 
-  it('the shortcut store reaches localStorage only inside try blocks', () => {
-    const source = readFileSync(join(dir, STORE), 'utf8');
-    // Each `try {` block, from its brace to the matching closing brace.
-    const blocks: Array<[number, number]> = [];
-    for (const match of source.matchAll(/\btry\s*\{/g)) {
-      const open = match.index! + match[0].length - 1;
-      let depth = 0;
-      let close = -1;
-      for (let i = open; i < source.length; i += 1) {
-        if (source[i] === '{') depth += 1;
-        else if (source[i] === '}') {
-          depth -= 1;
-          if (depth === 0) {
-            close = i;
-            break;
+  for (const store of STORES) {
+    it(`${store} reaches browser storage only inside try blocks`, () => {
+      const source = readFileSync(join(dir, store), 'utf8');
+      // Each `try {` block, from its brace to the matching closing brace.
+      const blocks: Array<[number, number]> = [];
+      for (const match of source.matchAll(/\btry\s*\{/g)) {
+        const open = match.index! + match[0].length - 1;
+        let depth = 0;
+        let close = -1;
+        for (let i = open; i < source.length; i += 1) {
+          if (source[i] === '{') depth += 1;
+          else if (source[i] === '}') {
+            depth -= 1;
+            if (depth === 0) {
+              close = i;
+              break;
+            }
           }
         }
+        expect(close, 'unclosed try block').toBeGreaterThan(open);
+        // Every try is followed by a catch that swallows the failure.
+        expect(source.slice(close + 1).trimStart().startsWith('catch')).toBe(true);
+        blocks.push([open, close]);
       }
-      expect(close, 'unclosed try block').toBeGreaterThan(open);
-      // Every try is followed by a catch that swallows the failure.
-      expect(source.slice(close + 1).trimStart().startsWith('catch')).toBe(true);
-      blocks.push([open, close]);
-    }
-    const uses = [...source.matchAll(/localStorage/g)].map((m) => m.index!);
-    expect(uses.length).toBeGreaterThan(0);
-    expect(blocks.length).toBeGreaterThan(0);
-    for (const at of uses) {
-      const line = source.slice(0, at).split('\n').length;
-      expect(blocks.some(([open, close]) => at > open && at < close), `localStorage on line ${line} is outside a try block`).toBe(true);
-    }
+      const uses = [...source.matchAll(/localStorage/g)].map((m) => m.index!);
+      expect(uses.length).toBeGreaterThan(0);
+      expect(blocks.length).toBeGreaterThan(0);
+      for (const at of uses) {
+        const line = source.slice(0, at).split('\n').length;
+        expect(blocks.some(([open, close]) => at > open && at < close), `localStorage on line ${line} is outside a try block`).toBe(true);
+      }
+    });
+  }
+
+  it('the film store uses the current editor’s own key', () => {
+    const source = readFileSync(join(dir, 'film-store.ts'), 'utf8');
+    expect(source).toContain('composeStorageKey(organizationId)');
+    expect(source).not.toMatch(/twings_studio_compose/);
   });
 });

@@ -12,7 +12,9 @@ import {
   materialBySrc,
   materialSeconds,
 } from '@/lib/brand-studio/editor-v2/fixture';
+import { filmContents } from '@/lib/brand-studio/editor-v2/film-contents';
 import { clipFrameAt, formatTimecode, type FrameCaption } from '@/lib/brand-studio/editor-v2/frames';
+import { sourceSeconds } from '@/lib/brand-studio/editor-v2/sources';
 import { formatBinding, type ShortcutAction } from '@/lib/brand-studio/editor-v2/shortcuts';
 import {
   CAPTION_OUTPUTS,
@@ -31,6 +33,7 @@ import {
   type ScopeMode,
 } from '@/lib/brand-studio/editor-v2/model';
 import { EditorIcon } from './icons';
+import { FilmContentsList } from './film-contents-list';
 import { ASPECT_KEYS, SPEEDS, type EditorApi } from './use-editor';
 import styles from './editor-v2.module.css';
 
@@ -65,6 +68,7 @@ function Range({
   max,
   step = 1,
   display,
+  disabled,
   onChange,
 }: {
   label: string;
@@ -73,13 +77,14 @@ function Range({
   max: number;
   step?: number;
   display: string;
+  disabled?: boolean;
   onChange: (value: number) => void;
 }) {
   return (
     <label className={styles.range}>
       <span>{label}</span>
       <output>{display}</output>
-      <input type="range" min={min} max={max} step={step} value={value} onChange={(event) => onChange(Number(event.target.value))} />
+      <input type="range" min={min} max={max} step={step} value={value} disabled={disabled} onChange={(event) => onChange(Number(event.target.value))} />
     </label>
   );
 }
@@ -149,11 +154,100 @@ export function Materials({ api }: { api: EditorApi }) {
   const { copy, workspace } = api;
   return (
     <aside className={styles.materials} aria-label={copy.panel.materials} data-editor-materials={workspace}>
-      {workspace === 'cut' && <CutMaterials api={api} />}
-      {workspace === 'color' && <ColorMaterials api={api} />}
-      {workspace === 'sound' && <SoundMaterials api={api} />}
-      {workspace === 'captions' && <CaptionMaterials api={api} />}
+      {api.locked ? (
+        <p className={styles.note} data-editor-locked-materials>{copy.real.locked.materials}</p>
+      ) : (
+        <>
+          {workspace === 'cut' && (api.real ? <RealBin api={api} /> : <CutMaterials api={api} />)}
+          {workspace === 'color' && <ColorMaterials api={api} />}
+          {workspace === 'sound' && <SoundMaterials api={api} />}
+          {workspace === 'captions' && <CaptionMaterials api={api} />}
+        </>
+      )}
     </aside>
+  );
+}
+
+/**
+ * The organization's footage (V1): video assets and finished video-studio cuts. A card puts the whole
+ * clip at the end of the film once its frame rate is read.
+ */
+function RealBin({ api }: { api: EditorApi }) {
+  const { copy } = api;
+  const c = copy.cut.materials;
+  const closed = api.readOnly || api.status !== 'ready';
+  return (
+    <>
+      <div className={styles.tabs} role="presentation">
+        <span className={styles.tabStatic}>{c.clips}</span>
+      </div>
+      <p className={styles.note}>{copy.real.binNote}</p>
+      {api.sources.length === 0 ? (
+        <p className={styles.note} data-editor-bin-empty>{copy.real.binEmpty}</p>
+      ) : (
+        <ul className={styles.clipGrid}>
+          {api.sources.map((source) => {
+            const busy = api.busySource === source.key;
+            const rate = api.rates[source.srcUrl];
+            const seconds = sourceSeconds(source);
+            return (
+              <li key={source.key}>
+                <button
+                  type="button"
+                  className={styles.materialCard}
+                  onClick={() => void api.addSource(source)}
+                  disabled={closed || busy}
+                  title={c.add}
+                  data-editor-source={source.key}
+                  data-busy={busy ? '' : undefined}
+                >
+                  <span className={styles.materialThumb} style={source.thumbUrl ? { backgroundImage: `url(${source.thumbUrl})` } : undefined}>
+                    {!source.thumbUrl && <video src={`${source.srcUrl}#t=0.1`} muted playsInline preload="metadata" aria-hidden="true" />}
+                    {seconds !== null && <em>{formatClock(seconds)}</em>}
+                    <i aria-hidden="true"><EditorIcon name="plus" /></i>
+                  </span>
+                  <span className={styles.materialMeta}>
+                    <strong title={source.label}>{source.label}</strong>
+                    <small>
+                      {busy ? copy.real.adding : source.kind === 'output' ? c.fromVideoStudio : c.fromAssets}
+                      {!busy && rate ? ` · ${rate} fps` : ''}
+                    </small>
+                  </span>
+                </button>
+              </li>
+            );
+          })}
+        </ul>
+      )}
+    </>
+  );
+}
+
+/** A workspace a real film cannot use yet: says so, and shows the way to the sample film. */
+function LockedPanel({ api, classicHref }: { api: EditorApi; classicHref?: string }) {
+  const { copy, workspace } = api;
+  const name = copy.workspaces[workspace];
+  const inClassic = workspace === 'color' ? copy.real.locked.classicColor : workspace === 'sound' ? copy.real.locked.classicSound : copy.real.locked.classicCaptions;
+  return (
+    <>
+      <PanelHead title={name} />
+      <section className={styles.lockedCard} data-editor-locked={workspace}>
+        <strong>{fill(copy.real.locked.heading, { workspace: name })}</strong>
+        <p className={styles.note}>{copy.real.locked.body}</p>
+        {workspace === 'captions' && <p className={styles.note}>{copy.real.locked.captionsKept}</p>}
+        <a className={styles.sampleLink} href={api.sampleHref(workspace)} data-editor-sample-link={workspace}>
+          {copy.real.locked.open}
+        </a>
+      </section>
+      {classicHref && workspace !== 'cut' && (
+        <section className={styles.lockedCard} data-editor-locked-classic={workspace}>
+          <p className={styles.note}>{inClassic}</p>
+          <a className={styles.sampleLink} href={classicHref} data-editor-classic-link={workspace}>
+            {copy.notice.current}
+          </a>
+        </section>
+      )}
+    </>
   );
 }
 
@@ -373,15 +467,38 @@ function CaptionMaterials({ api }: { api: EditorApi }) {
 
 // ── Right: what you can do, following the selection ────────────────────────────────────────────
 
-export function ActionPanel({ api }: { api: EditorApi }) {
+export function ActionPanel({ api, classicHref }: { api: EditorApi; classicHref?: string }) {
   const { copy, workspace } = api;
   return (
     <aside className={styles.panel} aria-label={copy.panel.actions} data-editor-panel={workspace}>
-      {workspace === 'cut' && <CutPanel api={api} />}
-      {workspace === 'color' && <ColorPanel api={api} />}
-      {workspace === 'sound' && <SoundPanel api={api} />}
-      {workspace === 'captions' && <CaptionsPanel api={api} />}
+      {api.locked ? (
+        <LockedPanel api={api} classicHref={classicHref} />
+      ) : (
+        <>
+          {workspace === 'cut' && <CutPanel api={api} />}
+          {workspace === 'color' && <ColorPanel api={api} />}
+          {workspace === 'sound' && <SoundPanel api={api} />}
+          {workspace === 'captions' && <CaptionsPanel api={api} />}
+        </>
+      )}
     </aside>
+  );
+}
+
+/**
+ * What the stored film carries besides the cuts (music, effects, colour, images, captions made in the
+ * earlier editor), read-only, so nobody is surprised by the exported file (review round 1, item 6).
+ */
+function StoredContents({ api }: { api: EditorApi }) {
+  const contents = filmContents(api.sequence, api.storedFilm);
+  if (!contents.captions && !contents.grade && !contents.music && !contents.effects && !contents.stills) return null;
+  return (
+    <Section title={api.copy.real.contents.heading}>
+      <div data-editor-film-contents>
+        <FilmContentsList contents={contents} copy={api.copy} gradeNames={api.gradeNames} withCuts={false} />
+        <p className={styles.note}>{api.copy.real.contents.note}</p>
+      </div>
+    </Section>
   );
 }
 
@@ -437,6 +554,7 @@ function CutPanel({ api }: { api: EditorApi }) {
       const outFrame = clipFrameAt(clip, clip.frames - 1, fps).mediaFrame + 1;
       const speedKey = `${clip.speedNum}/${clip.speedDen}`;
       const canSlide = !!material && material.ratio > dims.width / dims.height + 0.01 && reframe.fit === 'fill';
+      const rateUnknown = api.real && !!api.unknownRates[clip.srcUrl];
       return (
         <>
           <PanelHead title={fill(copy.panel.cut, { number: span.index + 1 })} meta={formatTimecode(span.frames, fps)} />
@@ -449,29 +567,40 @@ function CutPanel({ api }: { api: EditorApi }) {
             <p className={styles.note}>
               {fill(c.clip.frames, { count: span.frames, fps })} {c.clip.lengthHint}
             </p>
+            {rateUnknown ? (
+              <p className={styles.note} data-editor-rate-unknown>{fill(copy.real.rateUnknown, { fps })}</p>
+            ) : api.real && clip.sourceFps !== fps ? (
+              <p className={styles.note} data-editor-source-rate>{fill(copy.real.sourceRate, { rate: clip.sourceFps, fps })}</p>
+            ) : null}
+            {api.real && api.variableRates[clip.srcUrl] && (
+              <p className={styles.note} data-editor-rate-variable>{copy.real.rateVariable}</p>
+            )}
           </Section>
           <Section title={c.clip.speed}>
             <Seg
               label={c.clip.speed}
               value={speedKey}
-              options={SPEEDS.map((speed) => ({ value: `${speed.num}/${speed.den}`, label: speed.label }))}
+              options={SPEEDS.map((speed) => ({ value: `${speed.num}/${speed.den}`, label: speed.label, disabled: api.readOnly }))}
               onChange={(value) => {
                 const speed = SPEEDS.find((entry) => `${entry.num}/${entry.den}` === value);
                 if (speed) api.setSpeed(span.index, speed.num, speed.den);
               }}
             />
           </Section>
-          <Section title={c.clip.framing}>
-            <Seg
-              label={c.clip.framing}
-              value={reframe.fit}
-              options={[{ value: 'fill', label: c.clip.fill }, { value: 'fit', label: c.clip.fit }]}
-              onChange={(fit) => api.setReframe([clip.id], { fit })}
-            />
-            {canSlide && (
-              <Range label={c.clip.position} value={reframe.x} min={0} max={100} display={`${Math.round(reframe.x)}`} onChange={(x) => api.setReframe([clip.id], { x })} />
-            )}
-          </Section>
+          {/* Framing is not stored or exported yet, so a real film does not offer it (V7). */}
+          {!api.real && (
+            <Section title={c.clip.framing}>
+              <Seg
+                label={c.clip.framing}
+                value={reframe.fit}
+                options={[{ value: 'fill', label: c.clip.fill }, { value: 'fit', label: c.clip.fit }]}
+                onChange={(fit) => api.setReframe([clip.id], { fit })}
+              />
+              {canSlide && (
+                <Range label={c.clip.position} value={reframe.x} min={0} max={100} display={`${Math.round(reframe.x)}`} onChange={(x) => api.setReframe([clip.id], { x })} />
+              )}
+            </Section>
+          )}
           <Section title={c.clip.sound}>
             <Range
               label={c.clip.sound}
@@ -479,10 +608,11 @@ function CutPanel({ api }: { api: EditorApi }) {
               min={0}
               max={100}
               display={clip.muted ? c.clip.mute : `${Math.round(clip.volume * 100)}`}
+              disabled={api.readOnly}
               onChange={(value) => api.setClipAudio(span.index, value === 0 ? clip.volume : value / 100, value === 0)}
             />
           </Section>
-          <button type="button" className={styles.quietBtn} onClick={() => api.removeClips([clip.id])}>
+          <button type="button" className={styles.quietBtn} onClick={() => api.removeClips([clip.id])} disabled={api.readOnly}>
             <EditorIcon name="trash" />
             {c.clip.remove}
           </button>
@@ -494,22 +624,27 @@ function CutPanel({ api }: { api: EditorApi }) {
     return (
       <>
         <PanelHead title={fill(copy.panel.cuts, { count: api.selection.length })} />
-        <button type="button" className={styles.quietBtn} onClick={() => api.removeClips(api.selection)}>
+        <button type="button" className={styles.quietBtn} onClick={() => api.removeClips(api.selection)} disabled={api.readOnly}>
           <EditorIcon name="trash" />
           {c.clip.remove}
         </button>
       </>
     );
   }
+  const cannotCut = api.readOnly || sequence.clips.length === 0;
   return (
     <>
       <PanelHead title={copy.panel.film} meta={fill(copy.panel.filmSummary, { count: sequence.clips.length, duration: formatTimecode(api.total, fps) })} />
+      {api.real && api.tentative && (
+        <p className={styles.note} data-editor-rate-tentative>{fill(copy.real.rateTentative, { fps })}</p>
+      )}
+      {api.real && <StoredContents api={api} />}
       <Section title={c.film.shape}>
         <div className={styles.shapeGrid} role="group" aria-label={c.film.shape}>
           {COMPOSE_ASPECTS.map((aspect) => {
             const dims = COMPOSE_DIMENSIONS[aspect];
             return (
-              <button key={aspect} type="button" aria-pressed={sequence.aspect === aspect} onClick={() => api.setAspect(aspect)} data-editor-aspect={aspect}>
+              <button key={aspect} type="button" aria-pressed={sequence.aspect === aspect} onClick={() => api.setAspect(aspect)} disabled={api.readOnly} data-editor-aspect={aspect}>
                 <i style={{ aspectRatio: `${dims.width} / ${dims.height}` }} aria-hidden="true" />
                 <strong>{aspect}</strong>
                 <small>{copy.aspectNames[ASPECT_KEYS[aspect]]}</small>
@@ -527,9 +662,9 @@ function CutPanel({ api }: { api: EditorApi }) {
       )}
       <Section title={c.quick.heading}>
         <div className={styles.quickRow}>
-          <button type="button" className={styles.fixBtn} onClick={api.splitAtPlayhead}>{c.quick.split}<KeyCaps api={api} action="split" /></button>
-          <button type="button" className={styles.fixBtn} onClick={() => api.trimToPlayhead('start')}>{c.quick.trimStart}<KeyCaps api={api} action="trimStart" /></button>
-          <button type="button" className={styles.fixBtn} onClick={() => api.trimToPlayhead('end')}>{c.quick.trimEnd}<KeyCaps api={api} action="trimEnd" /></button>
+          <button type="button" className={styles.fixBtn} onClick={api.splitAtPlayhead} disabled={cannotCut}>{c.quick.split}<KeyCaps api={api} action="split" /></button>
+          <button type="button" className={styles.fixBtn} onClick={() => api.trimToPlayhead('start')} disabled={cannotCut}>{c.quick.trimStart}<KeyCaps api={api} action="trimStart" /></button>
+          <button type="button" className={styles.fixBtn} onClick={() => api.trimToPlayhead('end')} disabled={cannotCut}>{c.quick.trimEnd}<KeyCaps api={api} action="trimEnd" /></button>
         </div>
       </Section>
       <details className={styles.fine} data-editor-keys>

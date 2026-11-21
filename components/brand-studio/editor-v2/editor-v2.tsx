@@ -1,29 +1,41 @@
 'use client';
 
-import { useEffect, useRef } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { fill } from '@/components/brand-studio/copy';
 import { EDITOR_WORKSPACES, type EditorWorkspace } from '@/lib/brand-studio/editor-v2/model';
 import { actionFor, bindingFromEvent, formatBinding, typingTarget } from '@/lib/brand-studio/editor-v2/shortcuts';
 import type { StudioEditorCopy } from '@/messages/studio-editor';
 import { Assistant } from './assistant';
+import { ExportSheet } from './export-sheet';
 import { EditorIcon } from './icons';
 import { ActionPanel, Materials } from './panels';
 import { Preview } from './preview';
 import { ShortcutsPanel } from './shortcuts-panel';
 import { Timeline } from './timeline';
-import { useEditor, type EditorApi } from './use-editor';
+import { useEditor, type EditorApi, type RealFilmOptions } from './use-editor';
 import styles from './editor-v2.module.css';
 
+export interface EditorV2Props {
+  copy: StudioEditorCopy;
+  currentEditorHref: string;
+  initialWorkspace?: EditorWorkspace;
+  /** The organization's own film (V1). `null` runs the sample film (`?sample=1`), as the prototype did. */
+  real: (RealFilmOptions & { organizationName: string }) | null;
+}
+
 /**
- * Editing studio v2 — structure prototype (docs/BRAND-EDITING-STUDIO-V2.md).
+ * Editing studio v2 (docs/BRAND-EDITING-STUDIO-V2.md).
  *
  * One preview and one timeline, four workspaces around them. The left column holds what you bring in
  * (clips, looks and references, music, the script), the right column what you can get done for the
- * current scope, and "말로 편집" sits between the preview and the timeline in every workspace. It runs
- * on sample footage and keeps everything in memory: no request, no storage, no file.
+ * current scope, and "말로 편집" sits between the preview and the timeline in every workspace.
+ *
+ * With `real` it opens the organization's film, the one the current editor opens, on frames, and saves
+ * the cuts back (V1). Only cutting is real there; colour, sound and captions are locked and say so.
+ * Without it, it runs the sample film and keeps everything in memory.
  */
-export function EditorV2({ copy, currentEditorHref }: { copy: StudioEditorCopy; currentEditorHref: string }) {
-  const api = useEditor(copy);
+export function EditorV2({ copy, currentEditorHref, initialWorkspace, real }: EditorV2Props) {
+  const api = useEditor(copy, { real, initialWorkspace });
   const latest = useRef<EditorApi>(api);
   latest.current = api;
 
@@ -52,15 +64,38 @@ export function EditorV2({ copy, currentEditorHref }: { copy: StudioEditorCopy; 
   }, []);
 
   return (
-    <div className={styles.root} data-studio-editor-v2 data-ws={api.workspace} data-dock={api.assistDock}>
+    <div
+      className={styles.root}
+      data-studio-editor-v2
+      data-ws={api.workspace}
+      data-dock={api.assistDock}
+      data-editor-mode={api.real ? 'real' : 'sample'}
+      data-editor-status={api.status}
+      data-editor-read-only={api.readOnly ? '' : undefined}
+    >
       <header className={styles.top}>
         <div className={styles.topLeft}>
-          <a className={styles.iconBtn} href={currentEditorHref} aria-label={copy.notice.current} title={copy.notice.current}>
+          <a className={styles.iconBtn} href={currentEditorHref} aria-label={copy.notice.current} title={copy.notice.current} data-editor-current>
             <EditorIcon name="back" />
           </a>
-          <h1>{copy.filmName}</h1>
-          <span className={styles.noticeBadge} data-editor-notice>{copy.notice.badge}</span>
-          <span className={styles.noticeBody}>{copy.notice.body}</span>
+          {real ? (
+            <>
+              <h1>{fill(copy.real.filmName, { name: real.organizationName })}</h1>
+              {api.readOnly ? (
+                <HeaderNotice state="read-only" full={copy.real.readOnly} short={copy.real.readOnlyShort} />
+              ) : api.storageOk ? (
+                <HeaderNotice state="saved" full={copy.real.notice} short={copy.real.noticeShort} />
+              ) : (
+                <HeaderNotice state="no-storage" full={copy.real.noStorage} short={copy.real.noStorageShort} />
+              )}
+            </>
+          ) : (
+            <>
+              <h1>{copy.filmName}</h1>
+              <span className={styles.noticeBadge} title={copy.notice.body} data-editor-notice>{copy.notice.badge}</span>
+              <HeaderNotice state="sample" full={copy.notice.body} short="" />
+            </>
+          )}
         </div>
         <nav className={styles.workspaces} aria-label={copy.top.workspaceLabel}>
           {EDITOR_WORKSPACES.map((workspace) => (
@@ -70,6 +105,7 @@ export function EditorV2({ copy, currentEditorHref }: { copy: StudioEditorCopy; 
               aria-pressed={api.workspace === workspace}
               onClick={() => api.setWorkspace(workspace)}
               data-editor-workspace={workspace}
+              data-locked={api.real && workspace !== 'cut' ? '' : undefined}
               title={api.openCount[workspace] > 0 ? `${copy.panel.found} ${api.openCount[workspace]}` : undefined}
             >
               {copy.workspaces[workspace]}
@@ -94,10 +130,12 @@ export function EditorV2({ copy, currentEditorHref }: { copy: StudioEditorCopy; 
           >
             <EditorIcon name="keyboard" />
           </button>
-          <button type="button" className={styles.topBtn} onClick={() => api.say(copy.review.inert)}>
-            <EditorIcon name="review" />
-            {copy.top.review}
-          </button>
+          {!api.real && (
+            <button type="button" className={styles.topBtn} onClick={() => api.say(copy.review.inert)}>
+              <EditorIcon name="review" />
+              {copy.top.review}
+            </button>
+          )}
           <button type="button" className={styles.exportBtn} onClick={() => api.setExportOpen(!api.exportOpen)} aria-expanded={api.exportOpen} data-editor-export>
             <EditorIcon name="download" />
             {copy.top.export}
@@ -107,7 +145,7 @@ export function EditorV2({ copy, currentEditorHref }: { copy: StudioEditorCopy; 
 
       <Materials api={api} />
       <Preview api={api} />
-      <ActionPanel api={api} />
+      <ActionPanel api={api} classicHref={currentEditorHref} />
       {api.assistDock === 'side' && <Assistant api={api} placement="side" />}
 
       <div className={styles.bottom}>
@@ -115,6 +153,17 @@ export function EditorV2({ copy, currentEditorHref }: { copy: StudioEditorCopy; 
         <Timeline api={api} />
       </div>
 
+      {api.conflict && (
+        <div className={styles.conflictBar} role="alert" data-editor-conflict>
+          <p>{copy.real.conflict.body}</p>
+          <button type="button" className={styles.fixBtn} onClick={api.keepThisFilm} data-editor-conflict-keep>
+            {copy.real.conflict.keep}
+          </button>
+          <button type="button" className={styles.fixBtn} onClick={api.openOtherFilm} data-editor-conflict-open>
+            {copy.real.conflict.open}
+          </button>
+        </div>
+      )}
       {api.exportOpen && <ExportSheet api={api} />}
       {api.shortcutsOpen && <ShortcutsPanel api={api} />}
       {api.toast && <p className={styles.toast} role="status" data-editor-toast>{api.toast}</p>}
@@ -122,60 +171,38 @@ export function EditorV2({ copy, currentEditorHref }: { copy: StudioEditorCopy; 
   );
 }
 
-function ExportSheet({ api }: { api: EditorApi }) {
-  const { copy, doc, sequence } = api;
-  const e = copy.export;
-  const open = (Object.keys(api.openCount) as EditorWorkspace[]).filter((workspace) => api.openCount[workspace] > 0);
-  const total = open.reduce((sum, workspace) => sum + api.openCount[workspace], 0);
+/**
+ * The line beside the film's name. The whole sentence shows where the header has room for it; where it
+ * does not (1280-wide screens, a long organization name) a short form shows instead, never a sentence
+ * cut off in the middle, and the whole sentence stays in the tooltip and for screen readers.
+ */
+function HeaderNotice({ full, short, state }: { full: string; short: string; state: string }) {
+  const box = useRef<HTMLSpanElement>(null);
+  const measure = useRef<HTMLSpanElement>(null);
+  const [fits, setFits] = useState(false);
+  useLayoutEffect(() => {
+    const room = box.current;
+    const sentence = measure.current;
+    if (!room || !sentence) return;
+    const check = () => setFits(sentence.offsetWidth <= room.clientWidth);
+    check();
+    const observer = new ResizeObserver(check);
+    observer.observe(room);
+    return () => observer.disconnect();
+  }, [full]);
   return (
-    <div className={styles.exportSheet} role="dialog" aria-label={e.heading} data-editor-export-sheet>
-      <header className={styles.panelHead}>
-        <h2>{e.heading}</h2>
-        <button type="button" className={styles.iconBtn} onClick={() => api.setExportOpen(false)} aria-label={copy.assist.dismiss} title={copy.assist.dismiss}>
-          <EditorIcon name="close" />
-        </button>
-      </header>
-      <section className={styles.section}>
-        <h3>{e.checks}</h3>
-        <p className={styles.note}>{total > 0 ? fill(e.open, { count: total }) : e.clear}</p>
-        {open.length > 0 && (
-          <ul className={styles.findings}>
-            {open.map((workspace) => (
-              <li key={workspace} className={styles.finding}>
-                <p>{copy.workspaces[workspace]} · {api.openCount[workspace]}</p>
-                <button
-                  type="button"
-                  className={styles.fixBtn}
-                  onClick={() => {
-                    api.setWorkspace(workspace);
-                    api.setExportOpen(false);
-                  }}
-                >
-                  {e.show}
-                </button>
-              </li>
-            ))}
-          </ul>
-        )}
-      </section>
-      <dl className={styles.exportFacts}>
-        <div>
-          <dt>{copy.cut.film.shape}</dt>
-          <dd>{sequence.aspect} · {sequence.fps} fps · {e.file}</dd>
-        </div>
-        <div>
-          <dt>{e.captions}</dt>
-          <dd>{sequence.captions.length > 0 ? copy.captions.output[doc.captionSettings.output] : e.captionsNone}</dd>
-        </div>
-        <div>
-          <dt>{e.loudness}</dt>
-          <dd>{doc.sound.loudness ? e.loudnessOn : e.loudnessOff}</dd>
-        </div>
-      </dl>
-      <button type="button" className={styles.exportBtn} onClick={() => api.say(e.inert)}>
-        <EditorIcon name="download" />
-        {e.start}
-      </button>
-    </div>
+    <span ref={box} className={styles.noticeBody} title={full} data-editor-real-notice={state === 'sample' ? undefined : state} data-editor-line-shown={fits ? 'full' : 'short'}>
+      <span ref={measure} className={styles.noticeMeasure} aria-hidden="true">
+        {full}
+      </span>
+      {fits ? (
+        full
+      ) : (
+        <>
+          <span aria-hidden="true">{short}</span>
+          <span className={styles.srOnly}>{full}</span>
+        </>
+      )}
+    </span>
   );
 }
