@@ -1,7 +1,8 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { RUN_LIMITS, ReadCancelled, ReadTimedOut, readStream, sharedWaits, waitShared, watchRead } from '@/lib/brand-studio/editor-v2/watched-read';
+import { ReadCancelled, STALL_MS, totalLimitMs, ReadTimedOut, readStream, sharedWaits, waitShared, watchRead } from '@/lib/brand-studio/editor-v2/watched-read';
 
 /** Spec G, B1: every network wait of the export ends: on cancel at once, on a stall or after its total. */
+const LIMITS = { stallMs: 15_000, totalMs: 45_000 };
 describe('a watched read', () => {
   beforeEach(() => vi.useFakeTimers());
   afterEach(() => vi.useRealTimers());
@@ -23,12 +24,15 @@ describe('a watched read', () => {
     return { stream, cancelled: () => cancelled };
   }
 
-  it('the limits are 15 s without bytes and 45 s in all', () => {
-    expect(RUN_LIMITS).toEqual({ stallMs: 15_000, totalMs: 45_000 });
+  it('the limits: 15 s without a byte; in all, 45 s plus the bytes at 32 KiB/s (spec H, F2)', () => {
+    expect(STALL_MS).toBe(15_000);
+    expect(totalLimitMs(0)).toBe(45_000);
+    expect(totalLimitMs(8 * 1024 * 1024)).toBe(45_000 + 256_000);
+    expect(totalLimitMs(64 * 1024 * 1024)).toBe(45_000 + 2_048_000);
   });
 
   it('a body that stops sending fails after the stall limit, its request aborted and its body cancelled', async () => {
-    const watch = watchRead(RUN_LIMITS);
+    const watch = watchRead(LIMITS);
     const { stream, cancelled } = body([10, 10]);
     const read = readStream(stream, watch);
     const outcome = read.catch((error: unknown) => error);
@@ -43,7 +47,7 @@ describe('a watched read', () => {
   });
 
   it('bytes that keep coming slowly still end at the total limit', async () => {
-    const watch = watchRead(RUN_LIMITS);
+    const watch = watchRead(LIMITS);
     let pulls = 0;
     const stream = new ReadableStream<Uint8Array>({
       pull: (controller) =>
@@ -65,7 +69,7 @@ describe('a watched read', () => {
 
   it('cancelling ends the read at once, even when the request itself never answers', async () => {
     const controller = new AbortController();
-    const watch = watchRead(RUN_LIMITS, controller.signal);
+    const watch = watchRead(LIMITS, controller.signal);
     const never = new Promise<Response>(() => undefined);
     const outcome = watch.guard(never).catch((error: unknown) => error);
     controller.abort();
@@ -74,7 +78,7 @@ describe('a watched read', () => {
   });
 
   it('a read that finishes leaves no timer behind', async () => {
-    const watch = watchRead(RUN_LIMITS);
+    const watch = watchRead(LIMITS);
     const { stream } = body([4, 4], true);
     const bytes = await readStream(stream, watch);
     watch.done();

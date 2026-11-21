@@ -1,10 +1,10 @@
 'use client';
 
-import { byteRuns, decodeSegments, decoderColourSpace, type ByteRun, type DecodeSegment } from '@/lib/brand-studio/editor-v2/decode-plan';
+import { byteRuns, decodeSegments, decoderColourSpace, syncStart, type ByteRun, type DecodeSegment } from '@/lib/brand-studio/editor-v2/decode-plan';
 import { isReclaim } from '@/lib/brand-studio/editor-v2/export-run';
 import type { SampleBytes } from '@/lib/brand-studio/editor-v2/sample-bytes';
 import { stampUs, type VideoIndex } from '@/lib/brand-studio/editor-v2/sample-index';
-import { ReadCancelled, ReadTimedOut, eitherSignal, watchRead, type Watch } from '@/lib/brand-studio/editor-v2/watched-read';
+import { ReadCancelled, eitherSignal, watchRead, type Watch } from '@/lib/brand-studio/editor-v2/watched-read';
 
 /**
  * Editing studio v2 — the export's decoder path (spec F, F3): a source's pictures from its own samples,
@@ -20,10 +20,13 @@ import { ReadCancelled, ReadTimedOut, eitherSignal, watchRead, type Watch } from
  * decoder error or a stuck decoder is a `DecodeFailure`: the export never draws a frame it did not verify
  * by timestamp, and takes the rest of that source by seeking (lib/brand-studio/editor-v2/picture-paths.ts).
  *
- * Every wait has an end (spec G, B1): one picture request gives up after `PICTURE_LIMIT_MS` whatever it waits
- * for, a run of bytes after 15 s without bytes or 45 s in all (lib/brand-studio/editor-v2/watched-read.ts),
- * and cancelling ends it at once. So the encoder never waits on this path anywhere near the ~90 s after which
- * a hidden page's encoder is taken back (spec G, A1/A4).
+ * Every wait has an end (spec G, B1; spec H, F2): a picture request ends when one of its own waits does: a
+ * run of bytes after 15 s without a byte or after its size's time at the slowest connection given time for
+ * (lib/brand-studio/editor-v2/watched-read.ts `totalLimitMs`), the decoder after 20 s without an output, a
+ * dequeue or an error, and the export's cancel at once. There is no fixed total per picture any more: on a slow
+ * connection the encoder can wait longer than the ~90 s after which a HIDDEN page's encoder is taken back
+ * (spec G, A1); the export then starts again once the page is visible (A2). A visible page's idle encoder was not
+ * taken back in 200 s (measured, spec H F2).
  *
  * The decoder itself is made on first use and may be let go (`suspend`: the export keeps at most four open)
  * or taken back by the browser (a `QuotaExceededError`, spec G A3): either way it is made again and fed from
@@ -43,8 +46,6 @@ const QUEUE_CAP = 6;
 export const HOLD_CAP = 6;
 /** No output, dequeue or error for this long while waiting: the decoder is stuck. */
 const STALL_MS = 20_000;
-/** One picture request, whatever it waits for (bytes, the decoder): past this the source is seeked (spec G, B1). */
-export const PICTURE_LIMIT_MS = 45_000;
 
 export class DecodeFailure extends Error {
   constructor(message: string) {
@@ -156,15 +157,14 @@ export class PictureDecoder {
   async picture(group: number, pictures: readonly number[], picture: number, signal?: AbortSignal): Promise<VideoFrame> {
     if (this.closed) throw new DecodeFailure('the decoder session is closed');
     this.signal = signal;
-    const watch = watchRead({ stallMs: 0, totalMs: PICTURE_LIMIT_MS }, signal);
+    // No fixed total for a picture (spec H, F2): it ends when one of its own waits does: a read (a stall, or its
+    // size's time), the decoder's stall guard, or the export's cancel (this watch).
+    const watch = watchRead({ stallMs: 0, totalMs: 0 }, signal);
     try {
       return await this.take(group, pictures, picture, watch);
     } catch (error) {
       if (error instanceof DecodeFailure) throw error;
       if (error instanceof ReadCancelled) throw new DecodeFailure('cancelled');
-      if (error instanceof ReadTimedOut && error.kind === 'total' && watch.signal.aborted) {
-        throw new DecodeFailure(`picture ${picture} did not come in ${PICTURE_LIMIT_MS / 1000} s`);
-      }
       throw new DecodeFailure(error instanceof Error ? error.message : String(error));
     } finally {
       watch.done();
@@ -206,7 +206,7 @@ export class PictureDecoder {
       const at = this.segmentOf.get(picture);
       if (at === undefined || at < this.segment) throw new DecodeFailure(`picture ${picture} is in no segment ahead`);
       if (at !== this.segment || !this.decoder) {
-        this.startSegment(at);
+        this.startSegment(at, picture);
         continue;
       }
       // Later wanted pictures came out and this one did not: the decoder skipped it (spec G, B7).
@@ -285,16 +285,23 @@ export class PictureDecoder {
     this.floor = 0;
   }
 
-  private startSegment(at: number) {
+  /**
+   * Starts (or starts again) segment `at` for `picture`: fed from the latest sync sample at or before that
+   * picture's sample, not from the segment's start: pictures before it are not wanted any more (the floor), so a
+   * decoder made again near the end of a long segment (let go under the cap, taken back) reads and decodes only
+   * that group (spec H, F2). `syncStart` keeps the open-GOP rule: a leading picture starts one group earlier.
+   */
+  private startSegment(at: number, picture: number) {
     const segment = this.segments[at]!;
+    const from = Math.max(segment.from, syncStart(this.index, picture) ?? segment.from);
     this.generation += 1;
     if (this.decoder) this.decoder.reset();
     else this.decoder = this.makeDecoder();
     this.decoder.configure(this.config);
     this.segment = at;
-    this.next = segment.from;
+    this.next = from;
     this.flushState = 'none';
-    this.runs = byteRuns(this.index, segment.from, segment.to);
+    this.runs = byteRuns(this.index, from, segment.to);
     this.runOf.clear();
     this.dropReads();
     this.runs.forEach((run, i) => {

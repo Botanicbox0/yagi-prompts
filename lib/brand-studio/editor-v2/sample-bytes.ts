@@ -7,15 +7,17 @@
  * is no larger than `wholeLimit`, kept for the rest of the export and cut from there. Checked servers: the
  * local development media route answers 206; production's media domain answers 206 (spec E addendum).
  *
- * Every read ends (spec G, B1, ./watched-read.ts): no bytes for 15 s or not done in 45 s fails it (the source
- * is then taken by seeking), cancelling the export ends it at once, and the request itself is aborted.
+ * Every read ends (spec G B1, spec H F2, ./watched-read.ts): no byte for 15 s, or not done in its size's time at
+ * the slowest connection given time for (`totalLimitMs`: 45 s + bytes ÷ 32 KiB/s; a whole file by its stated
+ * length, else by `wholeLimit`), fails it (the source is then taken by seeking); cancelling the export ends it at
+ * once, and the request itself is aborted.
  *
  * Pure apart from the request function it is given (components/brand-studio/editor-v2/footage-facts.ts
  * makes the one real request, for the clip's own address).
  */
 import type { ByteRun } from './decode-plan';
 import { RangeRefused } from './ranged-source';
-import { RUN_LIMITS, readStream, watchRead, type ReadLimits, type Watch } from './watched-read';
+import { STALL_MS, readStream, totalLimitMs, watchRead, type Watch } from './watched-read';
 
 /** What a range request returns (the standard `Response` is one): the headers say the file's size. */
 export interface RangeReply {
@@ -69,7 +71,7 @@ async function readBody(answer: RangeReply, watch: Watch, limit: number, tooLarg
   return new Uint8Array(buffer);
 }
 
-export function sampleBytes(request: RangeFetch, wholeLimit = WHOLE_FILE_LIMIT, limits: ReadLimits = RUN_LIMITS): SampleBytes {
+export function sampleBytes(request: RangeFetch, wholeLimit = WHOLE_FILE_LIMIT, stallMs = STALL_MS): SampleBytes {
   let requests = 0;
   let received = 0;
   let mode: 'range' | 'whole' | null = null;
@@ -86,7 +88,7 @@ export function sampleBytes(request: RangeFetch, wholeLimit = WHOLE_FILE_LIMIT, 
     async read(run, signal) {
       if (whole) return cut(await whole, run, 0);
       requests += 1;
-      const watch = watchRead(limits, signal);
+      const watch = watchRead({ stallMs, totalMs: totalLimitMs(run.end - run.start) }, signal);
       try {
         const answer = await watch.guard(request(run.start, run.end - 1, watch.signal));
         watch.alive();
@@ -116,6 +118,8 @@ export function sampleBytes(request: RangeFetch, wholeLimit = WHOLE_FILE_LIMIT, 
             throw new WholeFileTooLarge(length);
           }
           mode = 'whole';
+          // The whole file instead of the run: its length's time (stated, else the most it may be).
+          watch.limitTotal(totalLimitMs(Number.isFinite(length) && length > 0 ? length : wholeLimit));
           whole = readBody(answer, watch, wholeLimit, () => new WholeFileTooLarge(null)).then((bytes) => {
             received += bytes.length;
             fileSize = bytes.length;

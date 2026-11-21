@@ -19,9 +19,6 @@ export interface ReadLimits {
   totalMs: number;
 }
 
-/** A run of samples (sample-bytes.ts): 15 s without bytes, 45 s in all. */
-export const RUN_LIMITS: ReadLimits = { stallMs: 15_000, totalMs: 45_000 };
-
 /** No byte for this long ends a read (spec G B1; spec H F2 keeps it). */
 export const STALL_MS = 15_000;
 /** The slowest connection a read is given time for: 32 KiB/s, about 256 kbit/s (spec H, F2). */

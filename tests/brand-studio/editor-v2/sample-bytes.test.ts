@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { RangeRefused } from '@/lib/brand-studio/editor-v2/ranged-source';
-import { ReadCancelled, ReadTimedOut } from '@/lib/brand-studio/editor-v2/watched-read';
+import { ReadCancelled, ReadTimedOut, totalLimitMs } from '@/lib/brand-studio/editor-v2/watched-read';
 import { WHOLE_FILE_LIMIT, WholeFileTooLarge, sampleBytes, totalFromContentRange, type RangeReply as RangeAnswer } from '@/lib/brand-studio/editor-v2/sample-bytes';
 
 /**
@@ -162,5 +162,33 @@ describe('spec G, B1: a run read ends on cancel, on a stall and after its total 
     const reader = sampleBytes(server(true));
     await reader.read({ start: 0, end: 400 });
     expect(vi.getTimerCount()).toBe(0);
+  });
+
+  it('spec H, F2: a run is given its size’s time: 8 MiB at 64 KiB/s (128 s) is read, more than a fixed 45 s', async () => {
+    const size = 8 * 1024 * 1024;
+    const reader = sampleBytes(async (start, end) => {
+      let sent = 0;
+      const body = new ReadableStream<Uint8Array>({
+        pull: (controller) =>
+          new Promise<void>((resolve) => {
+            if (sent >= size) {
+              controller.close();
+              return resolve();
+            }
+            setTimeout(() => {
+              const piece = Math.min(64 * 1024, size - sent);
+              sent += piece;
+              controller.enqueue(new Uint8Array(piece));
+              resolve();
+            }, 1000);
+          }),
+      });
+      const headers = new Map([['content-range', `bytes ${start}-${end}/${size}`]]);
+      return { status: 206, body, arrayBuffer: async () => new ArrayBuffer(0), headers: { get: (name) => headers.get(name) ?? null } };
+    });
+    const reading = reader.read({ start: 0, end: size });
+    await vi.advanceTimersByTimeAsync(130_000);
+    expect((await reading).length).toBe(size);
+    expect(totalLimitMs(size)).toBe(45_000 + 256_000);
   });
 });
