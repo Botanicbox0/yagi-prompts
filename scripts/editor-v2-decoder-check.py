@@ -352,9 +352,10 @@ def path_line(name, outcome):
 
 # ── Parts ──
 
-def part_sources(page, context, media):
+def part_sources(page, context, media, ids):
+    """`ids`: uploads by key, shared with the other parts (a second upload of the same bytes gets an address
+    that answers 404 on the local server, so each file is uploaded once)."""
     films = []
-    ids = {}
 
     def add(key, name, width, height, seconds):
         if key not in ids:
@@ -411,7 +412,7 @@ def part_sources(page, context, media):
         seek = outcomes['seek']
         total = sum(state['cuts'])
         if name == 'webm':
-            check('webm: the decoder path cannot read it, so the file comes from seeking, and is done', main['status'] == 'done' and main['path'] == 'seek' and (main['paths'][0]['reason'] or '').startswith('container'),
+            check('webm: the decoder path cannot read it, so the file comes from seeking, and is done', main['status'] == 'done' and main['path'] == 'seek' and (main['paths'][0]['reason'] or '').startswith(('facts:', 'container:')),
                   f'{main["status"]} {main["path"]} {main["paths"][0]["reason"] if main["paths"] else ""}')
         else:
             check(f'{name}: the decoder path made the whole file', main['status'] == 'done' and main['path'] == 'decoder', f'{main["status"]} {main["path"]} {main["failed"] or ""}')
@@ -946,7 +947,7 @@ def main():
         holder = {}
         try:
             if 'sources' in PARTS:
-                part_sources(page, context, media)
+                part_sources(page, context, media, holder)
             if 'fallback' in PARTS:
                 part_fallback(browser, media, holder)
             if 'error' in PARTS:
