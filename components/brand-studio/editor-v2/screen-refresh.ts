@@ -12,7 +12,8 @@ import { LIVE, nextRefreshState, screenStep, silentTooLong, type RefreshState } 
  */
 let state: RefreshState = LIVE;
 let last = 0;
-let frameHandle = 0;
+/** The animation frame asked for and not yet run, or 0: never more than one (review round 1 of part E, item 6). */
+let pending = 0;
 let silenceTimer = 0;
 let users = 0;
 const listeners = new Set<(reduced: boolean) => void>();
@@ -22,7 +23,12 @@ function notify() {
   for (const listener of listeners) listener(state.reduced);
 }
 
+function request() {
+  if (pending === 0) pending = window.requestAnimationFrame(onFrame);
+}
+
 function onFrame(now: number) {
+  pending = 0;
   const gap = last > 0 ? now - last : 0;
   last = now;
   const before = state.reduced;
@@ -30,7 +36,8 @@ function onFrame(now: number) {
   const step = screenStep(gap);
   for (const tick of [...tickers]) tick(step);
   if (state.reduced !== before) notify();
-  frameHandle = window.requestAnimationFrame(onFrame);
+  // Only while something still watches: the last user may have let go inside this frame.
+  if (users > 0) request();
 }
 
 function onSilence() {
@@ -44,14 +51,15 @@ function use() {
   if (users > 1) return;
   state = LIVE;
   last = 0;
-  frameHandle = window.requestAnimationFrame(onFrame);
+  request();
   silenceTimer = window.setInterval(onSilence, 250);
 }
 
 function release() {
   users = Math.max(0, users - 1);
   if (users > 0) return;
-  window.cancelAnimationFrame(frameHandle);
+  if (pending !== 0) window.cancelAnimationFrame(pending);
+  pending = 0;
   window.clearInterval(silenceTimer);
 }
 
@@ -74,28 +82,54 @@ export function refreshReduced(): boolean {
   return users > 0 && state.reduced;
 }
 
+/** The least wall-clock time a screen-time limit lasts on a visible page before it ends anyway. */
+export const SCREEN_WALL_CEILING_MIN_MS = 60_000;
+/** The wall-clock ceiling of a screen-time limit, as a multiple of the limit. */
+export const SCREEN_WALL_CEILING_FACTOR = 15;
+
 /**
  * A time limit in screen time: each animation frame adds its gap, at most `SCREEN_STEP_CAP_MS`, and a
- * hidden page adds nothing. On a live screen that is real time; in a covered window refreshing once a
- * second the same limit lasts about ten times longer. Returns a function that cancels it.
+ * hidden page adds nothing. It also ends after a wall-clock ceiling, `max(60 s, 15 × limit)`, counted by a
+ * timer (timers still run about once a second where frames do not) and only while the page is not hidden
+ * (review round 1 of part E, item 7). What each state does:
+ *
+ * - live screen: screen time is real time; the limit ends after `limitMs`;
+ * - visible, drawing slowly (a covered window, a frame a second): screen time is a tenth of real time,
+ *   so a 4 s limit ends after about 40 s, before its 60 s ceiling;
+ * - visible, drawing nothing at all: no screen time; the ceiling ends it (60 s for a 4 s limit);
+ * - hidden (another tab, minimised): nothing counts; it waits until the page is shown again or the
+ *   person cancels: switching tabs never fails an export.
+ *
+ * No path waits forever while the page is visible. Returns a function that cancels it.
  */
 export function screenTimer(limitMs: number, onExpire: () => void): () => void {
   let spent = 0;
+  let wall = 0;
+  let lastWall = performance.now();
+  const ceiling = Math.max(SCREEN_WALL_CEILING_MIN_MS, SCREEN_WALL_CEILING_FACTOR * limitMs);
   let done = false;
   const finish = () => {
     if (done) return;
     done = true;
     tickers.delete(tick);
+    window.clearInterval(wallTimer);
     release();
+  };
+  const expire = () => {
+    finish();
+    onExpire();
   };
   const tick = (step: number) => {
     if (done || document.hidden) return;
     spent += step;
-    if (spent > limitMs) {
-      finish();
-      onExpire();
-    }
+    if (spent > limitMs) expire();
   };
+  const wallTimer = window.setInterval(() => {
+    const now = performance.now();
+    if (!document.hidden) wall += now - lastWall;
+    lastWall = now;
+    if (!done && wall > ceiling) expire();
+  }, 500);
   tickers.add(tick);
   use();
   return finish;

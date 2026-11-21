@@ -129,3 +129,117 @@ describe('the export sheet says it while it is true', () => {
     expect(studioEditorEn.export.slowWindow).toMatch(/covered|background/);
   });
 });
+
+describe('the refresh watcher stops, and no wait outlasts a visible page (review round 1 of part E, items 6 and 7)', () => {
+  // A fake window with real cancelling: animation frames at a chosen gap (or none), intervals by the clock.
+  let now = 0;
+  let nextId = 1;
+  let frames = new Map<number, (t: number) => void>();
+  let intervals = new Map<number, { every: number; next: number; run: () => void }>();
+  let requested = 0;
+  const step = (ms: number, gap: number | null) => {
+    const end = now + ms;
+    while (now < end) {
+      const nextFrame = gap === null ? Infinity : now + gap;
+      const nextInterval = Math.min(Infinity, ...[...intervals.values()].map((i) => i.next));
+      const at = Math.min(nextFrame, nextInterval, end);
+      now = at;
+      for (const interval of [...intervals.values()]) {
+        if (interval.next <= now) {
+          interval.next += interval.every;
+          interval.run();
+        }
+      }
+      if (gap !== null && at === nextFrame) {
+        const due = frames;
+        frames = new Map();
+        for (const callback of due.values()) callback(now);
+      }
+    }
+  };
+
+  beforeEach(() => {
+    now = 0;
+    nextId = 1;
+    frames = new Map();
+    intervals = new Map();
+    requested = 0;
+    vi.resetModules();
+    vi.stubGlobal('document', { hidden: false, visibilityState: 'visible' });
+    vi.stubGlobal('performance', { now: () => now });
+    vi.stubGlobal('window', {
+      requestAnimationFrame: (callback: (t: number) => void) => {
+        requested += 1;
+        const id = nextId++;
+        frames.set(id, callback);
+        return id;
+      },
+      cancelAnimationFrame: (id: number) => frames.delete(id),
+      setInterval: (run: () => void, every: number) => {
+        const id = nextId++;
+        intervals.set(id, { every, next: now + every, run });
+        return id;
+      },
+      clearInterval: (id: number) => intervals.delete(id),
+    });
+  });
+  afterEach(() => vi.unstubAllGlobals());
+
+  it('after the last user lets go (a timer running out inside a frame), no further frame is asked for', async () => {
+    const { screenTimer } = await import('@/components/brand-studio/editor-v2/screen-refresh');
+    let expired = 0;
+    screenTimer(100, () => (expired += 1));
+    step(500, 1000 / 60);
+    expect(expired).toBe(1);
+    expect(frames.size).toBe(0);
+    const asked = requested;
+    step(2000, 1000 / 60);
+    expect(requested).toBe(asked);
+    // Used again: the loop runs again, once.
+    const stop = screenTimer(10_000, () => undefined);
+    step(100, 1000 / 60);
+    expect(frames.size).toBe(1);
+    stop();
+    expect(frames.size).toBe(0);
+  });
+
+  it('a timer that starts another from inside its expiry keeps one loop, not two', async () => {
+    const { screenTimer } = await import('@/components/brand-studio/editor-v2/screen-refresh');
+    screenTimer(50, () => {
+      screenTimer(10_000, () => undefined);
+    });
+    step(1000, 1000 / 60);
+    expect(frames.size).toBe(1);
+  });
+
+  it('visible, no animation frames at all: the wait still ends after its wall-clock ceiling (max(60 s, 15 × limit))', async () => {
+    const { SCREEN_WALL_CEILING_MIN_MS, screenTimer } = await import('@/components/brand-studio/editor-v2/screen-refresh');
+    expect(SCREEN_WALL_CEILING_MIN_MS).toBe(60_000);
+    let expired = false;
+    screenTimer(4000, () => (expired = true));
+    step(59_000, null);
+    expect(expired).toBe(false);
+    step(2_000, null);
+    expect(expired).toBe(true);
+    // A longer limit gets fifteen times its length.
+    let long = false;
+    screenTimer(8000, () => (long = true));
+    step(119_000, null);
+    expect(long).toBe(false);
+    step(2_000, null);
+    expect(long).toBe(true);
+  });
+
+  it('hidden: neither the screen time nor the ceiling counts (switching tabs never fails an export)', async () => {
+    const { screenTimer } = await import('@/components/brand-studio/editor-v2/screen-refresh');
+    (globalThis.document as { hidden: boolean }).hidden = true;
+    let expired = false;
+    screenTimer(4000, () => (expired = true));
+    step(600_000, null);
+    expect(expired).toBe(false);
+    // Visible again: the ceiling counts from here.
+    (globalThis.document as { hidden: boolean }).hidden = false;
+    step(61_000, null);
+    expect(expired).toBe(true);
+  });
+});
