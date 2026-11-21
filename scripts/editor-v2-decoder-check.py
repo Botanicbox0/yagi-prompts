@@ -312,6 +312,13 @@ def export_driven(page, name, watch_slow=False):
     page.wait_for_selector('[data-editor-export-sheet]', timeout=60000)
     looks = []
     started = time.time()
+    if page.locator('[data-editor-export-start][disabled]').count():
+        page.wait_for_timeout(3000)
+    if page.locator('[data-editor-export-start][disabled]').count():
+        blocked = page.locator('[data-editor-export-blocked]')
+        reason = (blocked.get_attribute('data-editor-export-blocked') + ': ' + blocked.inner_text()) if blocked.count() else '?'
+        page.keyboard.press('Escape')
+        return {'status': 'refused', 'ms': None, 'path': None, 'paths': [], 'failed': reason, 'warnings': [], 'took': 0.0, 'looks': [], 'file': None}
     page.click('[data-editor-export-start]')
     while True:
         info = page.evaluate("""() => { const s = document.querySelector('[data-editor-export-sheet]'); const p = document.querySelector('[data-editor-export-progress]');
@@ -515,12 +522,14 @@ try:
 except Exception:
     pass
 
+# A plain window of this script's own, always on top, over the browser window. (A borderless one is not
+# counted as covering by Chrome's occlusion check: measured, the page stayed visible under it.)
 COVER = r"""
 import ctypes, sys, tkinter as tk
 try: ctypes.windll.shcore.SetProcessDpiAwareness(2)
 except Exception: pass
 x, y, w, h = map(int, sys.argv[1:5])
-r = tk.Tk(); r.overrideredirect(True); r.geometry(f'{w}x{h}+{x}+{y}'); r.attributes('-topmost', True); r.configure(bg='#4a4f5a'); r.mainloop()
+r = tk.Tk(); r.title('cover'); r.geometry(f'{w}x{h}+{x}+{y}'); r.attributes('-topmost', True); r.configure(bg='#4a4f5a'); r.mainloop()
 """
 
 PAGE_LOG = """() => {
@@ -540,6 +549,9 @@ PAGE_LOG = """() => {
   new MutationObserver(seen).observe(document.body, { subtree: true, childList: true, attributes: true, attributeFilter: ['data-editor-export-progress', 'data-editor-export-status'] });
   document.addEventListener('click', (e) => { if (e.target && e.target.closest && e.target.closest('[data-editor-export-start]')) log.start = performance.now(); }, true);
 }"""
+
+
+START_DELAY_MS = 3000
 
 
 def free_port():
@@ -640,11 +652,22 @@ def unattended_export(p, own, film, path, state, hidden_cap, name):
     page.click('[data-editor-export]')
     page.wait_for_selector('[data-editor-export-sheet]', timeout=60000)
     page.wait_for_timeout(300)
+    # The page presses export itself, a few seconds from now: by then nothing drives it and its window is
+    # hidden, so the whole export runs hidden (a page Playwright drives stays visible, spec E's finding).
+    # In a window that is to be hidden it waits (up to 15 s more) until the page really is hidden.
+    page.evaluate("""([delay, hide]) => setTimeout(() => {
+      const go = () => document.querySelector('[data-editor-export-start]').click();
+      if (!hide || document.visibilityState === 'hidden') return go();
+      let done = false;
+      const once = () => { if (!done) { done = true; go(); } };
+      document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'hidden') once(); });
+      setTimeout(once, 15000);
+    }, delay)""", [START_DELAY_MS, state != 'front'])
     clicked = time.time()
-    page.click('[data-editor-export-start]')
     if state == 'background':
         context.new_page()  # a new tab in front: the editor's tab is now a background tab
     browser.close()  # disconnects; the browser and its pages keep running, driven by nothing
+    time.sleep(0.3)
     cover = None
     if state == 'minimise':
         own.show('minimise')
@@ -663,7 +686,7 @@ def unattended_export(p, own, film, path, state, hidden_cap, name):
 
     sampler = threading.Thread(target=sample, daemon=True)
     sampler.start()
-    deadline = clicked + (hidden_cap if state != 'front' else 1200)
+    deadline = clicked + START_DELAY_MS / 1000 + (hidden_cap if state != 'front' else 1200)
     file = None
     while time.time() < deadline:
         file = newest_download(own.downloads, clicked)
@@ -686,14 +709,23 @@ def unattended_export(p, own, film, path, state, hidden_cap, name):
     log = page.evaluate('() => window.__ev2Log')
     info = page.evaluate(DONE_INFO)
     file = file or newest_download(own.downloads, clicked)
-    for _ in range(40):
-        if file and not os.path.exists(file + '.crdownload'):
-            break
-        time.sleep(0.5)
-        file = newest_download(own.downloads, clicked)
+    target = os.path.join(OUT, f'{name}.mp4')
     if file:
-        target = os.path.join(OUT, f'{name}.mp4')
         shutil.move(file, target)
+        file = target
+    elif info['status'] == 'done':
+        # A download that comes while this script is attached is not delivered to the folder: the finished
+        # file is read from the page's own blob instead, in slices.
+        with open(target, 'wb') as f:
+            size = page.evaluate("async () => (await (await fetch(document.querySelector('[data-editor-export-again]').href)).blob()).size")
+            for start in range(0, size, 4 * 2 ** 20):
+                chunk = page.evaluate('''async ([start, end]) => {
+                  const blob = await (await fetch(document.querySelector('[data-editor-export-again]').href)).blob();
+                  const bytes = new Uint8Array(await blob.slice(start, end).arrayBuffer());
+                  let text = ''; for (let i = 0; i < bytes.length; i += 0x8000) text += String.fromCharCode(...bytes.subarray(i, i + 0x8000));
+                  return btoa(text);
+                }''', [start, min(size, start + 4 * 2 ** 20)])
+                f.write(__import__('base64').b64decode(chunk))
         file = target
     browser.close()
     return log, info, file, hidden_for, peak
