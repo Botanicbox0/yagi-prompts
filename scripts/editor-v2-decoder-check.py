@@ -559,6 +559,16 @@ PAGE_LOG = """() => {
 START_DELAY_MS = 3000
 
 
+def keep_display_on(on):
+    """Asks Windows to keep the display on while the window parts run, as a video player does (it lapses when
+    this script exits). Measured: with the display off after an hour idle, Chrome counted every window as
+    covered and a "front" run went hidden; such a run is now refused as a measurement (see `part_times`)."""
+    if os.name != 'nt':
+        return
+    ES_CONTINUOUS, ES_SYSTEM_REQUIRED, ES_DISPLAY_REQUIRED = 0x80000000, 0x00000001, 0x00000002
+    ctypes.windll.kernel32.SetThreadExecutionState(ES_CONTINUOUS | ((ES_SYSTEM_REQUIRED | ES_DISPLAY_REQUIRED) if on else 0))
+
+
 def free_port():
     with socket.socket() as s:
         s.bind(('127.0.0.1', 0))
@@ -846,6 +856,8 @@ def part_times(p, browser, media, holder):
                         if state != 'front':
                             check(f'times {film_name} {path} {state} #{repeat + 1}: the page really was hidden with no animation frames', s['became_hidden'] and s['raf_while_hidden'] == 0,
                                   f'hidden {s["hidden_s"]} s, {s["raf_while_hidden"]} animation frames while hidden')
+                        else:
+                            check(f'times {film_name} {path} front #{repeat + 1}: the page stayed visible (a valid front-window measurement)', not s['became_hidden'], f'hidden {s["hidden_s"]} s')
                         if path == 'decoder':
                             check(f'times {film_name} decoder {state} #{repeat + 1}: finished, made by the decoder path' + (' while hidden' if state != 'front' else ''),
                                   s['status'] == 'done' and s['path'] == 'decoder' and (state == 'front' or s['finished_while_hidden']), f'{row["seconds"]:.1f} s')
@@ -914,6 +926,8 @@ def part_c3(p, browser, media):
                               and (state_name == 'front' or s['finished_while_hidden']), f'{len(numbers)} frames, {len(wrong)} wrong, ends {ends}')
                     if state_name == 'covered':
                         check(f'c3 {path} covered #{repeat + 1}: the page really was hidden with no animation frames', s['became_hidden'] and s['raf_while_hidden'] == 0, f'{s["hidden_s"]} s, {s["raf_while_hidden"]} frames')
+                    else:
+                        check(f'c3 {path} front #{repeat + 1}: the page stayed visible (a valid front-window measurement)', not s['became_hidden'], f'hidden {s["hidden_s"]} s')
     finally:
         own.close()
 
@@ -953,12 +967,14 @@ def main():
             if 'error' in PARTS:
                 part_error(browser, media, holder)
             DRIVEN.append(page)
+            keep_display_on(True)
             if 'c3' in PARTS:
                 part_c3(p, browser, media)
             if 'times' in PARTS:
                 part_times(p, browser, media, holder)
             check('no page errors', not errors, '; '.join(errors[:3]))
         finally:
+            keep_display_on(False)
             try:
                 delete_uploads(context)
             finally:
