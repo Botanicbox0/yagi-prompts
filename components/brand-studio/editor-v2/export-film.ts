@@ -739,8 +739,11 @@ async function encodeAac(rendered: AudioBuffer, signal?: AbortSignal): Promise<{
         timestamp: Math.round((offset / rendered.sampleRate) * 1_000_000),
         data: planar,
       });
-      encoder.encode(data);
-      data.close();
+      try {
+        encoder.encode(data);
+      } finally {
+        data.close();
+      }
       if (encoder.encodeQueueSize > 64) await dequeued(encoder);
     }
     await encoder.flush();
@@ -1002,8 +1005,12 @@ export async function exportFilm(options: ExportFilmOptions): Promise<ExportFilm
       if (burnCaptions) drawCaptionsOverlay(ctx, captionsAt(sequence, entry.frame), width, height);
 
       const frame = new VideoFrame(canvas, { timestamp: timestampUs(entry.frame, fps), duration: frameDurationUs(entry.frame, fps) });
-      encoder.encode(frame, { keyFrame: isKeyFrame(entry.frame, fps) });
-      frame.close();
+      // Closed whatever encode() does: a frame left to the garbage collector is a warning (spec G, A0).
+      try {
+        encoder.encode(frame, { keyFrame: isKeyFrame(entry.frame, fps) });
+      } finally {
+        frame.close();
+      }
       while (encoder.encodeQueueSize > 6) await dequeued(encoder);
       onProgress?.({ phase: 'video', done: entry.frame + 1, total: frames, path: shown.path });
       if (performance.now() - lastYield > YIELD_EVERY_MS) {

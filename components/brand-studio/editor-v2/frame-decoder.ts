@@ -98,6 +98,7 @@ export class PictureDecoder {
   private runs: ByteRun[] = [];
   private runOf = new Map<number, number>();
   private fetched = new Map<number, Promise<Uint8Array>>();
+  private closed = false;
   private readonly counts: DecoderStats = { fed: 0, outputs: 0, segments: 0 };
 
   constructor(
@@ -119,6 +120,7 @@ export class PictureDecoder {
    * the decoder's: it is valid until the next call asks for a later picture, another group, or `close()`.
    */
   async picture(group: number, pictures: readonly number[], picture: number, signal?: AbortSignal): Promise<VideoFrame> {
+    if (this.closed) throw new DecodeFailure('the decoder session is closed');
     if (group !== this.group) this.startGroup(group, pictures);
     this.release(picture);
     for (;;) {
@@ -172,6 +174,7 @@ export class PictureDecoder {
   }
 
   close(): void {
+    this.closed = true;
     this.generation += 1;
     for (const frame of this.held.values()) frame.close();
     this.held.clear();
@@ -254,6 +257,12 @@ export class PictureDecoder {
   }
 
   private onOutput(frame: VideoFrame) {
+    // A frame that arrives after close() (a task already queued): nobody will ask for it, so it is closed here
+    // rather than left to the garbage collector (spec G, A0).
+    if (this.closed) {
+      frame.close();
+      return;
+    }
     this.counts.outputs += 1;
     const picture = this.stamps.get(frame.timestamp);
     if (picture === undefined || picture < this.floor || !this.wanted.has(picture) || this.held.has(picture)) frame.close();
