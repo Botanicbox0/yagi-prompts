@@ -113,6 +113,7 @@ describe('videoPlan: one entry per film frame, straight from the timeline', () =
           clipId: active.clip.id,
           srcUrl: active.clip.srcUrl,
           sourceFrame: active.sourceFrame,
+          mediaFrame: active.mediaFrame,
           seekSec: active.seekSec,
           sourceFps: active.clip.sourceFps,
         });

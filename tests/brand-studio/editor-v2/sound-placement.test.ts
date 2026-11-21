@@ -118,7 +118,7 @@ describe('a cut whose sound position could not be checked is named after the exp
     const { renderToStaticMarkup } = await import('react-dom/server');
     const { ExportStatus } = await import('@/components/brand-studio/editor-v2/export-sheet');
     const { studioEditorEn, studioEditorKo } = await import('@/messages/studio-editor');
-    const job = { status: 'done' as const, url: 'blob:x', filename: 'f.mp4', bytes: 1, frames: 24, fps: 24, elapsedMs: 1, captionFile: null, warnings: [{ kind: 'soundPosition' as const, clip: 'webm clip' }] };
+    const job = { status: 'done' as const, url: 'blob:x', filename: 'f.mp4', bytes: 1, frames: 24, fps: 24, elapsedMs: 1, captionFile: null, warnings: [{ kind: 'soundPosition' as const, clip: 'webm clip' }], paths: [] };
     const html = renderToStaticMarkup(h(ExportStatus, { job, copy: studioEditorKo.export }));
     expect(html).toContain('data-editor-export-warning="soundPosition"');
     expect(html).toContain('&quot;webm clip&quot; 클립은 소리 위치를 확인하지 못해');

@@ -143,6 +143,7 @@ describe('the sheet says it after the export, quietly', () => {
     elapsedMs: 1000,
     captionFile: null,
     warnings: [{ kind: 'lastFrame' as const, clip: '영상 스튜디오 1', frames: 1 }],
+    paths: [],
   };
 
   it('names the cut and how many frames repeat its last picture, as a note, not an alert', () => {

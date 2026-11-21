@@ -2,6 +2,7 @@
 
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { fill } from '@/components/brand-studio/copy';
+import type { ExportPathOverride } from '@/lib/brand-studio/editor-v2/decode-plan';
 import { EDITOR_WORKSPACES, type EditorWorkspace } from '@/lib/brand-studio/editor-v2/model';
 import { actionFor, bindingFromEvent, formatBinding, typingTarget } from '@/lib/brand-studio/editor-v2/shortcuts';
 import type { StudioEditorCopy } from '@/messages/studio-editor';
@@ -19,6 +20,8 @@ export interface EditorV2Props {
   copy: StudioEditorCopy;
   currentEditorHref: string;
   initialWorkspace?: EditorWorkspace;
+  /** The export's picture path forced for the checks (`?exportPath=`); `null` normally. */
+  exportPath?: ExportPathOverride;
   /** The organization's own film (V1). `null` runs the sample film (`?sample=1`), as the prototype did. */
   real: (RealFilmOptions & { organizationName: string }) | null;
 }
@@ -34,7 +37,7 @@ export interface EditorV2Props {
  * the cuts back (V1). Only cutting is real there; colour, sound and captions are locked and say so.
  * Without it, it runs the sample film and keeps everything in memory.
  */
-export function EditorV2({ copy, currentEditorHref, initialWorkspace, real }: EditorV2Props) {
+export function EditorV2({ copy, currentEditorHref, initialWorkspace, exportPath = null, real }: EditorV2Props) {
   const api = useEditor(copy, { real, initialWorkspace });
   const latest = useRef<EditorApi>(api);
   latest.current = api;
@@ -164,7 +167,7 @@ export function EditorV2({ copy, currentEditorHref, initialWorkspace, real }: Ed
           </button>
         </div>
       )}
-      {api.exportOpen && <ExportSheet api={api} />}
+      {api.exportOpen && <ExportSheet api={api} exportPath={exportPath} />}
       {api.shortcutsOpen && <ShortcutsPanel api={api} />}
       {api.toast && <p className={styles.toast} role="status" data-editor-toast>{api.toast}</p>}
     </div>

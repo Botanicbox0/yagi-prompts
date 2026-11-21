@@ -3,14 +3,22 @@
  *
  * Carries out `lib/brand-studio/editor-v2/export-plan.ts`: frame N of the file is the source frame the
  * timeline shows at N, at the film's own rate, and each cut's sound starts and stops on the matching
- * sample. Every picture is CONFIRMED before it is drawn: the hidden `<video>` is sent to the middle of
- * the source frame and `requestVideoFrameCallback` must report that very frame as presented. A frame
- * that cannot be confirmed stops the export with the film frame and the cut named; nothing is skipped
- * or guessed, and there is no real-time recording fallback (that path is what made the old export drift).
+ * sample. Every picture is VERIFIED before it is drawn, on one of two paths per source (spec F):
  *
- * This is the one editor-v2 file that reads over the network: it fetches the film's own media (its cuts,
- * and the stored film's music and effects) to decode their sound, and refuses any other address
- * (tests/brand-studio/editor-v2/export-film-network.test.ts).
+ * - the decoder path (./frame-decoder.ts): the source's own samples, read by range, fed to `VideoDecoder`;
+ *   each picture is matched to the sample it was asked for by its timestamp. Nothing waits for the screen,
+ *   so a covered, minimised or background window exports as fast as a front one;
+ * - the seek path, for a source the decoder path cannot take (a container it cannot read, a codec the
+ *   browser does not decode, an unusual transform) or that failed on it: the hidden `<video>` is sent to
+ *   the middle of the source frame and `requestVideoFrameCallback` must report that very frame as presented.
+ *
+ * A frame that cannot be verified on either path stops the export with the film frame and the cut named;
+ * nothing is skipped or guessed, and there is no real-time recording fallback (that path is what made the
+ * old export drift).
+ *
+ * This file reads the film's own media over the network to decode their sound (its cuts, and the stored
+ * film's music and effects) and refuses any other address (tests/brand-studio/editor-v2/
+ * export-film-network.test.ts); the pictures' byte ranges are read through ./footage-facts.ts.
  */
 import { corsMediaUrl } from '@/lib/brand-studio/cors-media-url';
 import { applyProjectColorGradeFrame, drawCaptionsOverlay } from '@/lib/brand-studio/compose/export-client';
@@ -39,20 +47,44 @@ import {
   videoPlan,
   type AudioPlan,
   type NotIncludedKey,
+  type PlannedFrame,
 } from '@/lib/brand-studio/editor-v2/export-plan';
 import { cutAnchor, effectStartSec, type CutAnchor } from '@/lib/brand-studio/editor-v2/cut-anchor';
+import { choosePath, decodeGroups, pictureFor, pictureTimes, type DecodeGroup, type ExportPath, type ExportPathOverride } from '@/lib/brand-studio/editor-v2/decode-plan';
 import { CURRENT_EXPORT_BACKGROUND, currentExportFrame } from '@/lib/brand-studio/editor-v2/framing';
 import { totalFrames, type FrameSequence } from '@/lib/brand-studio/editor-v2/frames';
 import { timingOfFile } from '@/lib/brand-studio/editor-v2/container';
 import { soundTrackOf } from '@/lib/brand-studio/editor-v2/media-probe';
 import { DEFAULT_REFRAME, type Reframe } from '@/lib/brand-studio/editor-v2/model';
-import { readFootage } from './footage-facts';
+import { sampleBytes, type SampleBytes } from '@/lib/brand-studio/editor-v2/sample-bytes';
+import { readSampleIndex, type Rotation, type VideoIndex } from '@/lib/brand-studio/editor-v2/sample-index';
+import { footageBytes, readFootage } from './footage-facts';
+import { PictureDecoder, decoderConfig, decoderSupports } from './frame-decoder';
 import { screenTimer } from './screen-refresh';
 
 export interface ExportProgress {
   phase: 'video' | 'audio' | 'writing';
   done: number;
   total: number;
+  /** Which path is making the pictures right now (the sheet's slow-window line depends on it). */
+  path?: ExportPath;
+}
+
+/** Which path made a source's pictures, for the proof (the sheet exposes it as data, never as words). */
+export interface SourcePath {
+  clip: string;
+  srcUrl: string;
+  /** The path its last picture came from. */
+  path: ExportPath;
+  /** Why it was seeked (`forced`, `container:…`, `codec-unsupported`, `error: …`), or `null`. */
+  reason: string | null;
+  /** Film frames drawn from each path. */
+  decoded: number;
+  seeked: number;
+  /** Bytes read for its pictures by range, the file's size, and requests made (decoder path). */
+  bytesRead: number;
+  fileBytes: number | null;
+  requests: number;
 }
 
 export interface ExportFilmOptions {
@@ -72,6 +104,8 @@ export interface ExportFilmOptions {
   framing?: 'reframe' | 'current';
   /** Draw the captions into the picture (`false` when the person wants them only as a file). */
   burnCaptions?: boolean;
+  /** The developer's override for the proof (`?exportPath=`, lib/brand-studio/editor-v2/decode-plan.ts). */
+  path?: ExportPathOverride;
   onProgress?: (progress: ExportProgress) => void;
   signal?: AbortSignal;
 }
@@ -90,6 +124,8 @@ export interface ExportFilmResult {
   notIncluded: NotIncludedKey[];
   /** Things the file lacks that the person should hear about (a sound track that could not be read). */
   warnings: ExportWarning[];
+  /** Which path made each source's pictures, in the order the film first uses them. */
+  paths: SourcePath[];
 }
 
 /**
@@ -362,26 +398,64 @@ async function confirmPicture(source: Source, sourceFrame: number, signal?: Abor
 
 // ── Drawing ────────────────────────────────────────────────────────────────────────────────────
 
+/**
+ * One picture to draw: a `<video>` showing it (the seek path: the element has already turned it and sized
+ * it for its pixel shape) or a decoded frame (the decoder path: `displayWidth/Height` carry the pixel
+ * shape, `rotation` is the turn the file asks for, which the drawing applies as the element would).
+ */
+export interface Picture {
+  image: CanvasImageSource;
+  /** Display size before the turn. */
+  width: number;
+  height: number;
+  rotation: Rotation;
+}
+
+export const videoPicture = (video: HTMLVideoElement): Picture => ({ image: video, width: video.videoWidth, height: video.videoHeight, rotation: 0 });
+
+/** The picture's size as shown: width and height swap for a quarter turn. */
+export function shownSize(picture: Pick<Picture, 'width' | 'height' | 'rotation'>): { width: number; height: number } {
+  const quarter = picture.rotation === 90 || picture.rotation === 270;
+  return quarter ? { width: picture.height, height: picture.width } : { width: picture.width, height: picture.height };
+}
+
+/** Draws the picture turned as the file asks, filling the rectangle `x, y, w, h` (in shown orientation). */
+function drawTurned(ctx: CanvasRenderingContext2D, picture: Picture, x: number, y: number, w: number, h: number) {
+  if (picture.rotation === 0) {
+    ctx.drawImage(picture.image, x, y, w, h);
+    return;
+  }
+  const quarter = picture.rotation === 90 || picture.rotation === 270;
+  const dw = quarter ? h : w;
+  const dh = quarter ? w : h;
+  ctx.save();
+  ctx.translate(x + w / 2, y + h / 2);
+  // Canvas angles turn clockwise (y points down), as the file's matrix does.
+  ctx.rotate((picture.rotation * Math.PI) / 180);
+  ctx.drawImage(picture.image, -dw / 2, -dh / 2, dw, dh);
+  ctx.restore();
+}
+
 /** Draws like the preview's `<video>`: `object-fit` cover or contain, `object-position: x% 50%`. */
-export function drawFramed(ctx: CanvasRenderingContext2D, video: HTMLVideoElement, width: number, height: number, reframe: Reframe): void {
+export function drawFramed(ctx: CanvasRenderingContext2D, picture: Picture, width: number, height: number, reframe: Reframe): void {
   ctx.fillStyle = BACKGROUND;
   ctx.fillRect(0, 0, width, height);
-  const vw = video.videoWidth;
-  const vh = video.videoHeight;
+  const { width: vw, height: vh } = shownSize(picture);
   if (vw <= 0 || vh <= 0) return;
   const scale = reframe.fit === 'fill' ? Math.max(width / vw, height / vh) : Math.min(width / vw, height / vh);
   const dw = vw * scale;
   const dh = vh * scale;
   const x = Math.min(100, Math.max(0, reframe.x)) / 100;
-  ctx.drawImage(video, (width - dw) * x, (height - dh) * 0.5, dw, dh);
+  drawTurned(ctx, picture, (width - dw) * x, (height - dh) * 0.5, dw, dh);
 }
 
 /** Draws by the current exporter's framing rule (real film): the same rectangle the v2 preview shows. */
-export function drawCurrentFraming(ctx: CanvasRenderingContext2D, video: HTMLVideoElement, width: number, height: number): void {
+export function drawCurrentFraming(ctx: CanvasRenderingContext2D, picture: Picture, width: number, height: number): void {
   ctx.fillStyle = CURRENT_EXPORT_BACKGROUND;
   ctx.fillRect(0, 0, width, height);
-  const framed = currentExportFrame(video.videoWidth, video.videoHeight, width, height);
-  ctx.drawImage(video, framed.x, framed.y, framed.width, framed.height);
+  const shown = shownSize(picture);
+  const framed = currentExportFrame(shown.width, shown.height, width, height);
+  drawTurned(ctx, picture, framed.x, framed.y, framed.width, framed.height);
 }
 
 /** The current exporter's overlay drawing, for still images (centre at `x,y`, width `scale` of the frame). */
@@ -444,9 +518,14 @@ function descriptionBytes(description: AllowSharedBufferSource | undefined): Uin
   return null;
 }
 
+/**
+ * Resolves when the encoder takes the next frame from its queue. The `dequeue` event is what ends the wait;
+ * the timer is only a guard against a missed event (in a hidden tab timers run at most once a second, so
+ * the event, not the timer, must set the pace: spec F, F4).
+ */
 function dequeued(encoder: VideoEncoder | AudioEncoder): Promise<void> {
   return new Promise((resolve) => {
-    const timer = window.setTimeout(resolve, 50);
+    const timer = window.setTimeout(resolve, 1000);
     encoder.addEventListener(
       'dequeue',
       () => {
@@ -542,6 +621,7 @@ async function mixSound(
   reader: MediaReader,
   signal: AbortSignal | undefined,
   progress: (done: number, total: number) => void,
+  noSoundTrack: ReadonlySet<string> = new Set(),
 ): Promise<{ rendered: AudioBuffer; warnings: ExportWarning[] }> {
   const plan = audioPlan(sequence, EXPORT_SAMPLE_RATE);
   const totalSec = plan.totalSamples / plan.sampleRate;
@@ -549,7 +629,8 @@ async function mixSound(
   const read = reader.read;
   const warnings: ExportWarning[] = [];
   const labelOf = (url: string) => sequence.clips.find((clip) => clip.srcUrl === url)?.label ?? url;
-  const cutUrls = [...new Set(plan.segments.filter((s) => s.gain > 0).map((s) => s.srcUrl))];
+  // A cut whose file's own boxes say it has no sound track is silent: it is not read whole (spec F, F2).
+  const cutUrls = [...new Set(plan.segments.filter((s) => s.gain > 0 && !noSoundTrack.has(s.srcUrl)).map((s) => s.srcUrl))];
   const bgm = extras?.bgm && extras.bgm.volume > 0 && extras.bgm.srcUrl ? extras.bgm : null;
   const sfx = (extras?.sfxClips ?? []).filter((clip) => clip.volume > 0 && clip.srcUrl);
   const steps = cutUrls.length + (bgm ? 1 : 0) + sfx.length + 2;
@@ -667,10 +748,95 @@ async function encodeAac(rendered: AudioBuffer, signal?: AbortSignal): Promise<{
   return { sampleRate: rendered.sampleRate, channelCount: 2, samples, audioSpecificConfig: config };
 }
 
+// ── Pictures: one path per source, verified either way ─────────────────────────────────────────
+
+/**
+ * The most a picture source may hold of a whole file when its server ignores Range (answers 200): the same
+ * limit the sound mix reads under. Above it the source is taken by seeking.
+ */
+const WHOLE_FILE_LIMIT = SOUND_BYTES_LIMIT;
+
+/** Hands the main thread back after this much drawing, through a message (not a timer: timers throttle). */
+const YIELD_EVERY_MS = 12;
+
+function yieldToPage(): Promise<void> {
+  return new Promise((resolve) => {
+    const channel = new MessageChannel();
+    channel.port1.onmessage = () => {
+      channel.port1.close();
+      resolve();
+    };
+    channel.port2.postMessage(0);
+  });
+}
+
+interface DecoderSource {
+  kind: 'decoder';
+  session: PictureDecoder;
+  index: VideoIndex;
+  bytes: SampleBytes;
+  groups: DecodeGroup[];
+  /** Film frame → its group, the picture it shows, and whether that is past the footage's end. */
+  at: Map<number, { group: number; picture: number; past: boolean }>;
+}
+
+interface SeekSource {
+  kind: 'seek';
+  source: Source | null;
+}
+
+type PictureSource = DecoderSource | SeekSource;
+
+/**
+ * Opens a source on the decoder path when it can be (lib/brand-studio/editor-v2/decode-plan.ts
+ * `choosePath`): its file's boxes indexed, its codec supported. Otherwise the reason it is seeked.
+ */
+async function openDecoderSource(
+  srcUrl: string,
+  plan: readonly PlannedFrame[],
+  fps: number,
+  override: ExportPathOverride,
+): Promise<DecoderSource | { reason: string }> {
+  const hasDecoder = typeof VideoDecoder !== 'undefined' && typeof EncodedVideoChunk !== 'undefined';
+  if (override === 'seek' || !hasDecoder) return { reason: choosePath({ override, hasDecoder, indexFailure: null, configSupported: null }).reason ?? 'seek' };
+  const read = await readFootage(srcUrl).catch(() => null);
+  const answer = read?.found ? readSampleIndex(read.found) : { ok: false as const, reason: read && !read.answer.ok ? read.answer.reason : 'unreadable' };
+  if (!answer.ok) return { reason: choosePath({ override, hasDecoder, indexFailure: answer.reason, configSupported: null }).reason! };
+  const config = decoderConfig(answer.index);
+  const supported = await decoderSupports(config);
+  const choice = choosePath({ override, hasDecoder, indexFailure: null, configSupported: supported });
+  if (choice.path === 'seek') return { reason: choice.reason ?? 'seek' };
+  const times = pictureTimes(answer.index);
+  const requests = plan
+    .filter((entry) => entry.srcUrl === srcUrl)
+    .map((entry) => ({ frame: entry.frame, srcUrl, ...pictureFor(entry, fps, times) }));
+  const groups = decodeGroups(requests);
+  const at = new Map<number, { group: number; picture: number; past: boolean }>();
+  let group = 0;
+  for (const request of requests) {
+    while (groups[group]!.last < request.frame) group += 1;
+    at.set(request.frame, { group, picture: request.picture, past: request.past });
+  }
+  const bytes = sampleBytes(footageBytes(srcUrl), WHOLE_FILE_LIMIT);
+  return { kind: 'decoder', session: new PictureDecoder(answer.index, bytes, config), index: answer.index, bytes, groups, at };
+}
+
+/**
+ * The path a source will be exported on, asked before export (the sheet's line about uneven footage
+ * depends on it): its boxes read (cached, shared with the export) and its codec asked of the decoder.
+ */
+export async function plannedPath(srcUrl: string, override: ExportPathOverride): Promise<ExportPath> {
+  if (override === 'seek' || typeof VideoDecoder === 'undefined') return 'seek';
+  const read = await readFootage(srcUrl).catch(() => null);
+  const answer = read?.found ? readSampleIndex(read.found) : null;
+  if (!answer?.ok) return 'seek';
+  return (await decoderSupports(decoderConfig(answer.index))) ? 'decoder' : 'seek';
+}
+
 // ── The export ─────────────────────────────────────────────────────────────────────────────────
 
 export async function exportFilm(options: ExportFilmOptions): Promise<ExportFilmResult> {
-  const { sequence, extras = null, reframe = {}, framing = 'reframe', burnCaptions = true, onProgress, signal } = options;
+  const { sequence, extras = null, reframe = {}, framing = 'reframe', burnCaptions = true, path: override = null, onProgress, signal } = options;
   const started = performance.now();
   const frames = totalFrames(sequence);
   if (frames === 0 || sequence.clips.length === 0) throw new ExportStop('empty', 'the film has no frames');
@@ -684,10 +850,17 @@ export async function exportFilm(options: ExportFilmOptions): Promise<ExportFilm
   const audioSupport = await AudioEncoder.isConfigSupported(AUDIO_CONFIG).catch(() => null);
   if (!audioSupport?.supported) throw new ExportStop('unsupported', 'this browser cannot write the sound track');
 
+  // Cut files whose own boxes say they carry no sound track are silent and never read whole (spec F, F2).
+  const cutUrls = [...new Set(sequence.clips.map((clip) => clip.srcUrl))];
+  const facts = await Promise.all(cutUrls.map((url) => readFootage(url).catch(() => null)));
+  const noSoundTrack = new Set(cutUrls.filter((_, i) => {
+    const answer = facts[i]?.answer;
+    return !!answer?.ok && !!answer.timing.video && answer.timing.sound === null;
+  }));
   // Everything the sound mix reads whole into this tab, added up before the first frame: above the limit
   // the export does not start (review round 1, item 10).
   const reader = mediaReader(soundSourceUrls(sequence, extras), signal);
-  const weight = soundBytesCheck(await Promise.all(soundReads(sequence, extras).map((url) => reader.size(url))));
+  const weight = soundBytesCheck(await Promise.all(soundReads(sequence, extras, noSoundTrack).map((url) => reader.size(url))));
   if (weight.over) throw new ExportStop('memory', `the film's sound sources add up to ${weight.total} bytes (limit ${SOUND_BYTES_LIMIT})`, { bytes: weight.total });
 
   const plan = videoPlan(sequence);
@@ -697,10 +870,66 @@ export async function exportFilm(options: ExportFilmOptions): Promise<ExportFilm
   host.setAttribute('aria-hidden', 'true');
   host.style.cssText = 'position:fixed;left:-10000px;top:0;width:64px;height:36px;overflow:hidden;pointer-events:none';
   document.body.appendChild(host);
-  const sources = new Map<string, Source>();
+  const sources = new Map<string, PictureSource>();
+  const records = new Map<string, SourcePath>();
   /** Pictures asked for past a footage's last one, filled with it, by cut. */
   const filled = new Map<string, number>();
   let encoder: VideoEncoder | null = null;
+  let pathNow: ExportPath | undefined;
+  let lastYield = performance.now();
+
+  /** The source of a film frame, opened on first use: the decoder path when it can, seeking when not. */
+  const sourceOf = async (entry: PlannedFrame, label: string): Promise<PictureSource> => {
+    const known = sources.get(entry.srcUrl);
+    if (known) return known;
+    const opened = await openDecoderSource(entry.srcUrl, plan, fps, override);
+    throwIfAborted(signal);
+    const record: SourcePath = { clip: label, srcUrl: entry.srcUrl, path: 'decoder', reason: null, decoded: 0, seeked: 0, bytesRead: 0, fileBytes: null, requests: 0 };
+    records.set(entry.srcUrl, record);
+    if ('reason' in opened) {
+      if (override === 'decoder') throw new ExportStop('unsupported', `"${label}" cannot be decoded (${opened.reason}) and the decoder path was required`, { clip: label });
+      record.path = 'seek';
+      record.reason = opened.reason;
+      const seek: SeekSource = { kind: 'seek', source: null };
+      sources.set(entry.srcUrl, seek);
+      return seek;
+    }
+    sources.set(entry.srcUrl, opened);
+    return opened;
+  };
+
+  /** The picture for one film frame, verified on its source's path; a decoder failure moves that source to seeking. */
+  const pictureOf = async (entry: PlannedFrame, label: string): Promise<{ picture: Picture; path: ExportPath; past: boolean }> => {
+    const source = await sourceOf(entry, label);
+    const record = records.get(entry.srcUrl)!;
+    if (source.kind === 'decoder') {
+      const at = source.at.get(entry.frame)!;
+      try {
+        const frame = await source.session.picture(at.group, source.groups[at.group]!.pictures, at.picture, signal);
+        record.decoded += 1;
+        return { picture: { image: frame, width: frame.displayWidth, height: frame.displayHeight, rotation: source.index.rotation }, path: 'decoder', past: at.past };
+      } catch (error) {
+        throwIfAborted(signal);
+        const message = error instanceof Error ? error.message : String(error);
+        if (override === 'decoder') throw new ExportStop('frame', `film frame ${entry.frame}: the decoder could not give picture ${at.picture} of "${label}" (${message})`, { frame: entry.frame, clip: label });
+        // Every frame already in the file was verified; the rest of this source is taken by seeking.
+        console.warn('[editor export] decoder path left for seeking', label, message);
+        source.session.close();
+        const stats = source.bytes.stats();
+        Object.assign(record, { reason: `error: ${message}`, bytesRead: stats.received, fileBytes: stats.fileSize, requests: stats.requests });
+        const seek: SeekSource = { kind: 'seek', source: null };
+        sources.set(entry.srcUrl, seek);
+        return pictureOf(entry, label);
+      }
+    }
+    if (pathNow !== 'seek') onProgress?.({ phase: 'video', done: entry.frame, total: frames, path: 'seek' });
+    if (!source.source) source.source = await openSource(entry.srcUrl, entry.sourceFps, label, host, signal);
+    // Consecutive frames on the same source frame (a slowed cut) reuse the picture: no second seek.
+    const past = await present(source.source, entry.sourceFrame, entry.frame, label, signal);
+    record.path = 'seek';
+    record.seeked += 1;
+    return { picture: videoPicture(source.source.video), path: 'seek', past };
+  };
 
   try {
     if (document.fonts?.ready) await document.fonts.ready;
@@ -740,15 +969,11 @@ export async function exportFilm(options: ExportFilmOptions): Promise<ExportFilm
       throwIfAborted(signal);
       if (failure) throw new ExportStop('encode', `the video encoder stopped at film frame ${entry.frame}`, { frame: entry.frame });
       const label = labels.get(entry.clipId) ?? entry.clipId;
-      let source = sources.get(entry.srcUrl);
-      if (!source) {
-        source = await openSource(entry.srcUrl, entry.sourceFps, label, host, signal);
-        sources.set(entry.srcUrl, source);
-      }
-      // Consecutive frames on the same source frame (a slowed cut) reuse the picture: no second seek.
-      if (await present(source, entry.sourceFrame, entry.frame, label, signal)) filled.set(label, (filled.get(label) ?? 0) + 1);
-      if (framing === 'current') drawCurrentFraming(ctx, source.video, width, height);
-      else drawFramed(ctx, source.video, width, height, reframe[entry.clipId] ?? DEFAULT_REFRAME);
+      const shown = await pictureOf(entry, label);
+      pathNow = shown.path;
+      if (shown.past) filled.set(label, (filled.get(label) ?? 0) + 1);
+      if (framing === 'current') drawCurrentFraming(ctx, shown.picture, width, height);
+      else drawFramed(ctx, shown.picture, width, height, reframe[entry.clipId] ?? DEFAULT_REFRAME);
       if (graded && extras) {
         const index = indexOf.get(entry.clipId) ?? 0;
         applyProjectColorGradeFrame(ctx, width, height, extras, storedCutFor(extras, sequence.clips[index]!, index));
@@ -760,7 +985,11 @@ export async function exportFilm(options: ExportFilmOptions): Promise<ExportFilm
       encoder.encode(frame, { keyFrame: isKeyFrame(entry.frame, fps) });
       frame.close();
       while (encoder.encodeQueueSize > 6) await dequeued(encoder);
-      onProgress?.({ phase: 'video', done: entry.frame + 1, total: frames });
+      onProgress?.({ phase: 'video', done: entry.frame + 1, total: frames, path: shown.path });
+      if (performance.now() - lastYield > YIELD_EVERY_MS) {
+        await yieldToPage();
+        lastYield = performance.now();
+      }
     }
     await encoder.flush();
     if (failure) throw new ExportStop('encode', `the video encoder failed: ${failure instanceof Error ? failure.message : String(failure)}`);
@@ -769,8 +998,14 @@ export async function exportFilm(options: ExportFilmOptions): Promise<ExportFilm
     if (misplaced >= 0) throw new ExportStop('encode', `encoded frame ${misplaced} carries the wrong time`, { frame: misplaced });
     encoder.close();
     encoder = null;
+    for (const [url, source] of sources) {
+      if (source.kind !== 'decoder') continue;
+      source.session.close();
+      const stats = source.bytes.stats();
+      Object.assign(records.get(url)!, { bytesRead: stats.received, fileBytes: stats.fileSize, requests: stats.requests });
+    }
 
-    const { rendered, warnings } = await mixSound(sequence, extras, anchor, reader, signal, (done, total) => onProgress?.({ phase: 'audio', done, total }));
+    const { rendered, warnings } = await mixSound(sequence, extras, anchor, reader, signal, (done, total) => onProgress?.({ phase: 'audio', done, total }), noSoundTrack);
     const audio = await encodeAac(rendered, signal);
 
     throwIfAborted(signal);
@@ -789,13 +1024,19 @@ export async function exportFilm(options: ExportFilmOptions): Promise<ExportFilm
       elapsedMs: Math.round(performance.now() - started),
       notIncluded: notIncluded({ sequence, extras }),
       warnings: [...[...filled].map(([clip, frames]): ExportWarning => ({ kind: 'lastFrame', clip, frames })), ...warnings],
+      paths: [...records.values()],
     };
   } finally {
     if (encoder && encoder.state !== 'closed') encoder.close();
     for (const source of sources.values()) {
-      source.video.pause();
-      source.video.removeAttribute('src');
-      source.video.load();
+      if (source.kind === 'decoder') {
+        source.session.close();
+        continue;
+      }
+      if (!source.source) continue;
+      source.source.video.pause();
+      source.source.video.removeAttribute('src');
+      source.source.video.load();
     }
     host.remove();
   }
