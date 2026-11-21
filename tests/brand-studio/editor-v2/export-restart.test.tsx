@@ -1,5 +1,3 @@
-import { readFileSync } from 'node:fs';
-import { join } from 'node:path';
 import { createElement as h } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { afterEach, describe, expect, it, vi } from 'vitest';
@@ -12,18 +10,8 @@ import { studioEditorEn, studioEditorKo } from '@/messages/studio-editor';
  * the export starts again from frame 0 once the page is visible again. The sheet's count goes back to 0, it
  * says why in one line, and the proof reads how many times (`data-editor-export-restarts`).
  */
-const film = readFileSync(join(process.cwd(), 'components/brand-studio/editor-v2/export-film.ts'), 'utf8');
 
-describe('the export asks its encoder after the picture arrives and before encode()', () => {
-  // The order of the encoder checks around a picture is tested on the loop itself (frame-loop.test.ts, spec H F1).
-  it('the whole pass is run again on a reclaim (from frame 0, after the page is visible); the sound encode alone again on its own', () => {
-    const run = film.slice(film.indexOf('export async function exportFilm('));
-    expect(run).toMatch(/runWithRestarts\(\(\) => videoPass\(pass\), waitVisible/);
-    expect(run).toMatch(/runWithRestarts\(\(\) => encodeAac\(rendered, signal\), waitVisible/);
-    expect(run).toMatch(/whenVisible\(document, signal, cancelled\)/);
-    expect(film).toMatch(/isReclaim\(failure\) \? new CodecReclaimed\('audio'\)/);
-  });
-});
+// The restart rules are tested on the loop (frame-loop.test.ts) and the restarter (export-run.test.ts) themselves.
 
 describe('the sheet after a restart', () => {
   const running = (restarts: number): ExportJob => ({ status: 'running', progress: { phase: 'video', done: 0, total: 315 }, frames: 315, fps: 24, slow: false, restarts });

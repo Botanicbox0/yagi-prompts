@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { CodecReclaimed, MAX_RESTARTS, ReclaimedTooOften, isReclaim, runWithRestarts, whenVisible, type VisibilitySource } from '@/lib/brand-studio/editor-v2/export-run';
+import { CodecReclaimed, MAX_RESTARTS, ReclaimedTooOften, isReclaim, restartBudget, restarter, runWithRestarts, whenVisible, type VisibilitySource } from '@/lib/brand-studio/editor-v2/export-run';
 
 /**
  * Spec G, A2: a hidden page's encoder taken back by the browser (QuotaExceededError, measured in A1) ends the
@@ -107,5 +107,64 @@ describe('an export whose encoder the browser took back starts again once the pa
     doc.visibilityState = 'visible';
     await expect(whenVisible(doc, undefined, () => new Cancelled())).resolves.toBeUndefined();
     expect(doc.waiting).toBe(0);
+  });
+});
+
+describe('spec H, F4: one restart budget for the whole export, pictures and sound together', () => {
+  it('two restarts for the pictures leave one for the sound; a second for the sound is one too many', async () => {
+    const budget = restartBudget();
+    let video = 0;
+    const pictures = await runWithRestarts(
+      async () => {
+        video += 1;
+        if (video <= 2) throw new CodecReclaimed('video');
+        return 'pictures';
+      },
+      async () => undefined,
+      { budget },
+    );
+    expect(pictures).toEqual({ result: 'pictures', restarts: 2 });
+    let sound = 0;
+    const outcome = runWithRestarts(
+      async () => {
+        sound += 1;
+        throw new CodecReclaimed('audio');
+      },
+      async () => undefined,
+      { budget },
+    );
+    await expect(outcome).rejects.toMatchObject({ name: 'ReclaimedTooOften', reclaims: 4, codec: 'audio' });
+    expect(sound).toBe(2);
+    expect(budget.used).toBe(MAX_RESTARTS);
+  });
+});
+
+describe('spec H, F6: no restart is announced after a cancel', () => {
+  it('reclaimed, but the export was already cancelled: onRestart is not called, the wait answers with the cancel', async () => {
+    const controller = new AbortController();
+    controller.abort();
+    const doc = new FakeDocument();
+    const announced: number[] = [];
+    const outcome = runWithRestarts(
+      async () => {
+        throw new CodecReclaimed('video');
+      },
+      () => whenVisible(doc, controller.signal, () => new Cancelled()),
+      { onRestart: (n) => announced.push(n), aborted: () => controller.signal.aborted },
+    );
+    await expect(outcome).rejects.toBeInstanceOf(Cancelled);
+    expect(announced).toEqual([]);
+  });
+});
+
+describe('spec H, F4: the export’s restarter (what export-film.ts uses)', () => {
+  it('one budget across the pictures and the sound; each restart announced with its part; used is the export’s count', async () => {
+    const announced: Array<[string, number]> = [];
+    const restarting = restarter({ waitVisible: async () => undefined, aborted: () => false, announce: (phase, n) => announced.push([phase, n]) });
+    let video = 0;
+    await expect(restarting.run('video', async () => (++video <= 2 ? Promise.reject(new CodecReclaimed('video')) : 'pictures'))).resolves.toBe('pictures');
+    await expect(restarting.run('audio', async () => Promise.reject(new CodecReclaimed('audio')))).rejects.toMatchObject({ name: 'ReclaimedTooOften', reclaims: 4 });
+    expect(announced).toEqual([['video', 1], ['video', 2], ['audio', 3]]);
+    expect(restarting.used).toBe(3);
   });
 });

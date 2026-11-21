@@ -63,7 +63,7 @@ import { DEFAULT_REFRAME, type Reframe } from '@/lib/brand-studio/editor-v2/mode
 import { sampleBytes } from '@/lib/brand-studio/editor-v2/sample-bytes';
 import type { Rotation, VideoIndex } from '@/lib/brand-studio/editor-v2/sample-index';
 import { SHARED_WAIT_MS, waitShared } from '@/lib/brand-studio/editor-v2/watched-read';
-import { CodecReclaimed, ReclaimedTooOften, isReclaim, runWithRestarts, whenVisible } from '@/lib/brand-studio/editor-v2/export-run';
+import { CodecReclaimed, ReclaimedTooOften, isReclaim, restarter, whenVisible } from '@/lib/brand-studio/editor-v2/export-run';
 import { PicturePaths, type DecoderSession, type SourcePath } from '@/lib/brand-studio/editor-v2/picture-paths';
 import { encodeFrames } from '@/lib/brand-studio/editor-v2/frame-loop';
 import { exportIndexReads, footageBytes, readFootage, readPictureIndex, type IndexRead } from './footage-facts';
@@ -925,25 +925,29 @@ export async function exportFilm(options: ExportFilmOptions): Promise<ExportFilm
   }
 
   // The browser takes back an encoder that sat idle about 90 s in a hidden page (spec G, A1): the attempt then
-  // starts again from frame 0 once the page is on screen again, at most MAX_RESTARTS times (A2). The sheet's
-  // count goes back to 0 and it says why (`restarts` in every progress report after the first restart).
+  // starts again once the page is on screen again (A2), at most MAX_RESTARTS times for the whole export,
+  // pictures and sound together (spec H, F4). The sheet's count goes back to 0 and it says why (`restarts` in
+  // every progress report after the first restart).
   let restarts = 0;
   const report = (progress: ExportProgress) => onProgress?.(restarts > 0 ? { ...progress, restarts } : progress);
-  const restarted = (phase: ExportProgress['phase'], total: number) => () => {
-    restarts += 1;
-    report({ phase, done: 0, total });
-  };
-  const waitVisible = () => whenVisible(document, signal, cancelled);
+  const restarting = restarter({
+    waitVisible: () => whenVisible(document, signal, cancelled),
+    aborted: () => !!signal?.aborted,
+    announce: (phase, count) => {
+      restarts = count;
+      report({ phase, done: 0, total: phase === 'video' ? frames : 1 });
+    },
+  });
   const pass: VideoPass = { sequence, extras, reframe, framing, burnCaptions, override, signal, plan, choices, codec, width, height, fps, anchor, overlayImages, report };
-  const video = await runWithRestarts(() => videoPass(pass), waitVisible, { onRestart: restarted('video', frames) }).catch(givenUp);
+  const video = await restarting.run('video', () => videoPass(pass)).catch(givenUp);
 
   const { rendered, warnings } = await mixSound(sequence, extras, anchor, reader, signal, (done, total) => report({ phase: 'audio', done, total }), noSoundTrack);
   // The rendered sound is still in hand: only its encoding starts again (spec G, A2).
-  const audio = await runWithRestarts(() => encodeAac(rendered, signal), waitVisible, { onRestart: restarted('audio', 1) }).catch(givenUp);
+  const audio = await restarting.run('audio', () => encodeAac(rendered, signal)).catch(givenUp);
 
   throwIfAborted(signal);
   report({ phase: 'writing', done: 0, total: 1 });
-  const bytes = muxAvc1ToMp4({ width, height, fps, videoSamples: video.result.samples, avcDecoderConfigRecord: video.result.avcConfig, audio: audio.result });
+  const bytes = muxAvc1ToMp4({ width, height, fps, videoSamples: video.samples, avcDecoderConfigRecord: video.avcConfig, audio });
   report({ phase: 'writing', done: 1, total: 1 });
   return {
     blob: new Blob([bytes.buffer as ArrayBuffer], { type: 'video/mp4' }),
@@ -956,9 +960,9 @@ export async function exportFilm(options: ExportFilmOptions): Promise<ExportFilm
     durationSec: frames / fps,
     elapsedMs: Math.round(performance.now() - started),
     notIncluded: notIncluded({ sequence, extras }),
-    warnings: [...lastFrameWarnings(video.result.filled), ...warnings],
-    paths: video.result.paths,
-    restarts,
+    warnings: [...lastFrameWarnings(video.filled), ...warnings],
+    paths: video.paths,
+    restarts: restarting.used,
   };
 }
 
