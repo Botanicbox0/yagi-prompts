@@ -13,13 +13,17 @@ the same movie time:
   s7 sound delay, no skip       s1 with the sound's edit set to media time 0: the AAC encoder delay (1024
                                 samples) is played, and nothing in the file says so (case (b)); the export
                                 must keep the file's own offset, as Chromium plays it
+  s8 edit inside a picture      s1 with the picture's edit starting half a frame into its first picture
+                                (case (a), the other placement)
 For each: a v2 film of that one cut (2.5 s from its first frame), exported; in the file, ffmpeg finds the
 white frame and the beep's first sample: sound − picture, target within ±10 ms. Then one film of two cuts
 from different sources (s2 for 1.5 s, then s3 from 0.5 s to 2.0 s): both events.
 
   (0) what the browser does (with `after`): per file, ffprobe's stream start times, the container reader's
       (lib/brand-studio/editor-v2/container.ts), Chromium's decodeAudioData sample 0 (movie time of the
-      beep minus its sample index) and the first frame's requestVideoFrameCallback mediaTime;
+      beep minus its sample index) and the first frame's requestVideoFrameCallback mediaTime; and the
+      file's own offset as Chromium plays it (the white frame's mediaTime against the beep, placed by the
+      reader's sound start), which is what the export must keep;
   (3) the exported file itself (B2): its sound track's edit list and ffprobe start times; and Chromium's
       own reading of it: decodeAudioData's beep against the white frame's mediaTime.
 
@@ -63,6 +67,7 @@ SOURCES = [
     ('s5 B-frames', 's5-bframes.mp4', 1.0, 24),
     ('s6 edit before the picture', 's6-edit-before-picture.mp4', 1.0, 24),
     ('s7 sound delay, no skip', 's7-sound-delay-kept.mp4', 1.0, 24),
+    ('s8 edit inside a picture', 's8-edit-inside-picture.mp4', 1.0, 24),
 ]
 # Where each file's own timeline puts its beep, when that is not where its picture's flash is: s7 plays the
 # encoder delay, so its beep sits 1024 samples (21.3 ms) after the flash in the file itself.
@@ -146,6 +151,15 @@ def make_sources(folder):
             open(path, 'wb').write(open(os.path.join(folder, base), 'rb').read())
             set_edit_media_time(path, handler, 0)
         recipes[name] = []
+    # (a), the other placement: the picture's edit half a frame into its first picture.
+    path = os.path.join(folder, 's8-edit-inside-picture.mp4')
+    if not os.path.exists(path):
+        base = os.path.join(folder, 's1-plain.mp4')
+        probe = json.loads(run(['ffprobe', '-v', 'error', '-select_streams', 'v:0', '-show_entries', 'stream=time_base,r_frame_rate', '-of', 'json', base]).stdout)['streams'][0]
+        ticks = int(probe['time_base'].split('/')[1]) * int(probe['r_frame_rate'].split('/')[1]) // int(probe['r_frame_rate'].split('/')[0])
+        open(path, 'wb').write(open(base, 'rb').read())
+        set_edit_media_time(path, 'vide', ticks // 2)
+    recipes['s8-edit-inside-picture.mp4'] = []
     return {name: os.path.join(folder, name) for name in recipes}
 
 
@@ -316,6 +330,7 @@ def run_checks(browser, files, bodies):
     context = browser.new_context(viewport={'width': 1440, 'height': 900}, device_scale_factor=1, accept_downloads=True)
     context.add_cookies([{'name': 'playbook.locale', 'value': 'ko', 'url': BASE}])
     probe_files = {}
+    own_offset = {}
     context.route('**/*', lambda route: (serve(probe_files[route.request.url.rsplit('/', 1)[1]])(route) if '/__sync/' in route.request.url and route.request.url.rsplit('/', 1)[1] in probe_files
                                          else route.fulfill(status=200, body='<!doctype html><body>', headers={'Content-Type': 'text/html'}) if route.request.url.endswith('/__sync/')
                                          else route.continue_() if route.request.url.startswith((BASE, 'data:', 'blob:')) else route.abort()))
@@ -335,6 +350,11 @@ def run_checks(browser, files, bodies):
             timing = answers[name].get('timing') or {}
             video = timing.get('video') or {}
             sound = timing.get('sound') if isinstance(timing.get('sound'), dict) else {}
+            played = page.evaluate(EXPORTED, {'url': f'{BASE}/__sync/{name}', 'fps': 24, 'frames': 60})
+            if played.get('beepSec') is not None and played.get('flashMediaTime') is not None and 'firstSec' in sound:
+                own_offset[name] = (sound['firstSec'] + played['beepSec'] - played['flashMediaTime']) * 1000
+            measure(f'(0) {label}: as Chromium plays it, the white frame at mediaTime {played.get("flashMediaTime")}, the beep at movie time '
+                    f'{(sound.get("firstSec", 0) + (played.get("beepSec") or 0)):.6f}: the file’s own offset {own_offset.get(name, float("nan")):+.1f} ms')
             measure(f'(0) {label}: ffprobe video {starts.get("video"):.6f} / audio {starts.get("audio"):.6f} | container video {video.get("firstSec")} / sound {sound.get("firstSec")} | '
                     f'Chromium first frame mediaTime {facts.get("firstMediaTime")}, decodeAudioData sample 0 at movie time {facts.get("sample0"):.6f} '
                     f'(beep at sample {facts.get("beepSample")} of {facts.get("length")})')
@@ -400,11 +420,17 @@ def run_checks(browser, files, bodies):
         error = (onsets[0] / 48000 - flashes[0] / fps) * 1000
         table.append((label, error))
         measure(f'(1) {label}: white frame {flashes[0]} ({flashes[0] / fps * 1000:.1f} ms), beep at sample {onsets[0]} ({onsets[0] / 48:.1f} ms): sound − picture {error:+.1f} ms; warnings {warnings}')
+        own = own_offset.get(name)
+        if own is not None:
+            measure(f'(1) {label}: the export {error:+.1f} ms against the file’s own {own:+.1f} ms as Chromium plays it')
         if name in SOUND_EVENT:
             # The file itself plays its beep this much after its flash (Chromium and ffmpeg alike); nothing in
             # the file says why, so the export keeps it: within 1 ms of the file's own offset.
             own = (SOUND_EVENT[name] - event) * 1000
             check(f'(1) {label}: the export keeps the file’s own offset ({own:+.1f} ms) within 1 ms', abs(error - own) <= 1, f'{error:+.1f} ms')
+        elif own is not None and abs(own) > TARGET_MS:
+            # The file itself is out of step as Chromium plays it: the export keeps what the person saw.
+            check(f'(1) {label}: the export keeps the file’s own offset as Chromium plays it ({own:+.1f} ms) within 1 ms', abs(error - own) <= 1, f'{error:+.1f} ms')
         else:
             check(f'(1) {label}: sound − picture within ±{TARGET_MS:.0f} ms', abs(error) <= TARGET_MS, f'{error:+.1f} ms')
 
