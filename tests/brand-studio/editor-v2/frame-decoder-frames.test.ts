@@ -42,12 +42,5 @@ describe('no frame of the decoder is left open', () => {
   });
 });
 
-describe('the export closes what it makes for the encoders, whatever encode() does', () => {
-  it('the picture frame and the sound data are closed in a finally after encode()', async () => {
-    const { readFileSync } = await import('node:fs');
-    const { join } = await import('node:path');
-    const source = readFileSync(join(process.cwd(), 'components/brand-studio/editor-v2/export-film.ts'), 'utf8');
-    expect(source).toMatch(/new VideoFrame\(canvas[\s\S]{0,240}?try \{\s*\w+\.encode\(frame[\s\S]{0,400}?\} finally \{\s*frame\.close\(\);/);
-    expect(source).toMatch(/try \{\s*encoder\.encode\(data\);[\s\S]{0,240}?\} finally \{\s*data\.close\(\);/);
-  });
-});
+// The export closes the picture frame and the sound data it hands an encoder whatever encode() does: frame-loop.ts
+// `handOver`, tested as behaviour in frame-loop.test.ts (spec H, F8).

@@ -65,7 +65,7 @@ import type { Rotation, VideoIndex } from '@/lib/brand-studio/editor-v2/sample-i
 import { ReadCancelled, SHARED_WAIT_MS, STALL_MS, readStream, sharedWaits, totalLimitMs, waitShared, watchRead } from '@/lib/brand-studio/editor-v2/watched-read';
 import { CodecReclaimed, ReclaimedTooOften, isReclaim, restarter, whenVisible } from '@/lib/brand-studio/editor-v2/export-run';
 import { PicturePaths, type DecoderSession, type SourcePath } from '@/lib/brand-studio/editor-v2/picture-paths';
-import { encodeFrames } from '@/lib/brand-studio/editor-v2/frame-loop';
+import { encodeFromPaths, handOver, type PictureSource } from '@/lib/brand-studio/editor-v2/frame-loop';
 import { exportIndexReads, footageBytes, readFootage, readPictureIndex, type IndexRead } from './footage-facts';
 import { PictureDecoder, decoderConfig, decoderSupports } from './frame-decoder';
 import { screenTimer } from './screen-refresh';
@@ -770,12 +770,11 @@ async function encodeAac(rendered: AudioBuffer, signal?: AbortSignal): Promise<{
         timestamp: Math.round((offset / rendered.sampleRate) * 1_000_000),
         data: planar,
       });
+      // Closed whatever encode() does (spec G, A0).
       try {
-        encoder.encode(data);
+        handOver(data, (given) => encoder.encode(given));
       } catch (error) {
         throw stopped() ?? new ExportStop('sound', `sound could not be written: ${describe(error)}`);
-      } finally {
-        data.close();
       }
       if (encoder.encodeQueueSize > 64) await dequeued(encoder);
     }
@@ -1122,15 +1121,20 @@ async function videoPass(pass: VideoPass): Promise<{ samples: EncodedVideoSample
       return null;
     };
 
-    // The frame loop (lib/brand-studio/editor-v2/frame-loop.ts): the encoder asked before each picture, after it
-    // arrives and after it fails (a picture that failed while the encoder was taken back restarts, spec H F1).
-    await encodeFrames<PlannedFrame, { picture: Picture; path: ExportPath; past: boolean; label: string }>(plan, {
-      checkCancel: () => throwIfAborted(signal),
-      stopped,
+    // The frame loop (lib/brand-studio/editor-v2/frame-loop.ts): every picture through the paths, the encoder asked
+    // before each picture, after it arrives and after it fails (a picture that failed while the encoder was taken
+    // back restarts, spec H F1); a frame marked done after its encode, every source let go when the loop ends.
+    const shownPictures: PictureSource<PlannedFrame, { picture: Picture; path: ExportPath; past: boolean; label: string }> = {
       picture: async (entry) => {
         const label = labels.get(entry.clipId) ?? entry.clipId;
         return { ...(await paths.picture(entry, label, signal)), label };
       },
+      done: (frame) => paths.done(frame),
+      closeAll: () => paths.closeAll(),
+    };
+    await encodeFromPaths(plan, shownPictures, {
+      checkCancel: () => throwIfAborted(signal),
+      stopped,
       encode: (entry, shown) => {
         pathNow = shown.path;
         // Filled frames are counted the same way on both paths: per cut, frames and the distinct pictures asked for.
@@ -1144,18 +1148,14 @@ async function videoPass(pass: VideoPass): Promise<{ samples: EncodedVideoSample
         drawImageOverlays(ctx, imageOverlaysAt(extras, entry.frame, anchor), overlayImages, width, height);
         if (burnCaptions) drawCaptionsOverlay(ctx, captionsAt(sequence, entry.frame), width, height);
         const frame = new VideoFrame(canvas, { timestamp: timestampUs(entry.frame, fps), duration: frameDurationUs(entry.frame, fps) });
-        // Closed whatever encode() does: a frame left to the garbage collector is a warning (spec G, A0).
+        // Closed whatever encode() does (spec G, A0).
         try {
-          made.encode(frame, { keyFrame: isKeyFrame(entry.frame, fps) });
+          handOver(frame, (given) => made.encode(given, { keyFrame: isKeyFrame(entry.frame, fps) }));
         } catch (error) {
           throw stopped(entry.frame) ?? new ExportStop('encode', `the video encoder refused film frame ${entry.frame}: ${describe(error)}`, { frame: entry.frame });
-        } finally {
-          frame.close();
         }
       },
       after: async (entry, shown) => {
-        // A source whose last film frame this was lets go of its decoder, frame and bytes now (spec G, B2).
-        paths.done(entry.frame);
         while (made.encodeQueueSize > 6 && !stopped(entry.frame)) await dequeued(made);
         report({ phase: 'video', done: entry.frame + 1, total: frames, path: shown.path });
         if (performance.now() - lastYield > YIELD_EVERY_MS) {

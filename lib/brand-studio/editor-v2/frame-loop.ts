@@ -45,3 +45,49 @@ export async function encodeFrames<E extends { frame: number }, P>(plan: readonl
     await step.after(entry, picture);
   }
 }
+
+/** What the video pass needs of the picture paths (picture-paths.ts `PicturePaths`). */
+export interface PictureSource<E extends { frame: number }, P> {
+  /** The picture of this film frame, by the path its source takes. */
+  picture(entry: E): Promise<P>;
+  /** This film frame is in the file: a source whose last frame it was lets go of its decoder, frame and bytes. */
+  done(frame: number): void;
+  /** Lets go of every source. Safe to call more than once. */
+  closeAll(): void;
+}
+
+/**
+ * The video pass's loop over the picture paths (spec G B2; spec H F8): every picture comes from `paths`; a film
+ * frame is marked done only after its picture went to the encoder, before the rest of the frame's work; every
+ * source is let go when the loop ends, however it ends (done, a failed picture, a refusing encoder, a cancel).
+ */
+export async function encodeFromPaths<E extends { frame: number }, P>(
+  plan: readonly E[],
+  paths: PictureSource<E, P>,
+  step: Omit<FrameStep<E, P>, 'picture'>,
+): Promise<void> {
+  try {
+    await encodeFrames(plan, {
+      ...step,
+      picture: (entry) => paths.picture(entry),
+      after: async (entry, picture) => {
+        paths.done(entry.frame);
+        await step.after(entry, picture);
+      },
+    });
+  } finally {
+    paths.closeAll();
+  }
+}
+
+/**
+ * Hands a picture frame or a block of sound to its encoder and closes it whatever the encoder does: one left to
+ * the garbage collector is a browser warning and holds memory until then (spec G, A0).
+ */
+export function handOver<T extends { close(): void }>(item: T, hand: (item: T) => void): void {
+  try {
+    hand(item);
+  } finally {
+    item.close();
+  }
+}
