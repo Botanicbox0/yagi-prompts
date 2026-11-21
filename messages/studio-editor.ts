@@ -386,7 +386,7 @@ export const studioEditorEn = {
     warnSoundPosition: 'Where the sound of "{clip}" starts could not be read from its file, so picture and sound may be slightly apart.',
     variable: 'The frames of "{clip}" are not evenly spaced, so a few frames in the file may differ from the screen.',
     keepEditing: 'You can keep editing. The file is made from the film as it was when you pressed export.',
-    slowWindow: 'This window is covered or in the background, so the export is slow. Bring it to the front to speed it up.',
+    slowWindow: 'This window is covered by another window, so the export is slow. Bring it to the front and it speeds up again.',
     progressVideo: 'Frame {done} / {total}',
     progressAudio: 'Putting the sound together',
     progressWriting: 'Writing the file',

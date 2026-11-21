@@ -126,7 +126,8 @@ describe('the export sheet says it while it is true', () => {
 
   it('both languages have the line', () => {
     expect(studioEditorKo.export.slowWindow).toMatch(/가려져|뒤에/);
-    expect(studioEditorEn.export.slowWindow).toMatch(/covered|background/);
+    // The English says what the Korean says: covered by another window (review round 1 of part E).
+    expect(studioEditorEn.export.slowWindow).toBe('This window is covered by another window, so the export is slow. Bring it to the front and it speeds up again.');
   });
 });
 
