@@ -224,8 +224,8 @@ export function ExportStatus({ job, copy: e }: { job: ExportJob; copy: ExportCop
         </div>
         <p className={styles.exportCount} aria-live="polite">{label}</p>
         {job.restarts > 0 && (
-          <p className={styles.note} role="status" data-editor-export-restarted>
-            {e.restarted}
+          <p className={styles.note} role="status" data-editor-export-restarted={job.restartedPhase ?? 'video'}>
+            {job.restartedPhase === 'audio' ? e.restartedSound : e.restarted}
           </p>
         )}
         {job.slow && (

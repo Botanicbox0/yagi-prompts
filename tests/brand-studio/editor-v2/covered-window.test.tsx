@@ -109,7 +109,7 @@ describe('screenTimer: the export’s wait for a picture does not run out in a c
 });
 
 describe('the export sheet says it while it is true', () => {
-  const running = (slow: boolean): ExportJob => ({ status: 'running', progress: { phase: 'video', done: 12, total: 48 }, frames: 48, fps: 24, slow, restarts: 0 });
+  const running = (slow: boolean): ExportJob => ({ status: 'running', progress: { phase: 'video', done: 12, total: 48 }, frames: 48, fps: 24, slow, restarts: 0, restartedPhase: null });
 
   it('a slow screen: one line saying why, and how to speed it up', () => {
     const html = renderToStaticMarkup(h(ExportStatus, { job: running(true), copy: studioEditorKo.export }));

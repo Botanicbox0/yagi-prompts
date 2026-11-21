@@ -25,6 +25,8 @@ export type ExportJob =
       slow: boolean;
       /** Times it started again because the browser took its encoder back while the page was hidden (spec G, A2). */
       restarts: number;
+      /** What the last restart made again: the pictures from the first frame, or only the sound (spec H, F3). */
+      restartedPhase: 'video' | 'audio' | null;
     }
   | {
       status: 'done';
@@ -120,12 +122,13 @@ export function startExport(request: ExportRequest): void {
   let path: ExportPath | null = null;
   let slow = false;
   let restarts = 0;
-  set({ status: 'running', progress: progressNow, frames, fps, slow, restarts });
+  let restartedPhase: 'video' | 'audio' | null = null;
+  set({ status: 'running', progress: progressNow, frames, fps, slow, restarts, restartedPhase });
   const update = (force: boolean) => {
     const next = slowNotice(reduced, path);
     if (!force && next === slow) return;
     slow = next;
-    set({ status: 'running', progress: progressNow, frames, fps, slow, restarts });
+    set({ status: 'running', progress: progressNow, frames, fps, slow, restarts, restartedPhase });
   };
   // While it runs, whether the screen refreshes live: the sheet says so when it does not and the seek path
   // is waiting for it, and stops saying it when either is no longer so.
@@ -142,7 +145,10 @@ export function startExport(request: ExportRequest): void {
     if (progress.path !== undefined) path = progress.path;
     // A restart is shown at once: the count went back to 0 and the sheet says why (spec G, A2).
     const restarted = (progress.restarts ?? 0) > restarts;
-    if (restarted) restarts = progress.restarts!;
+    if (restarted) {
+      restarts = progress.restarts!;
+      restartedPhase = progress.phase === 'audio' ? 'audio' : 'video';
+    }
     if (!pathChanged && !restarted && progress.phase === lastPhase && !finished && now - lastEmit < 80) return;
     lastEmit = now;
     lastPhase = progress.phase;

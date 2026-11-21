@@ -137,7 +137,8 @@ export interface ExportFilmResult {
  */
 export type ExportWarning = { kind: 'sound'; clip: string } | { kind: 'soundPosition'; clip: string } | LastFrameWarning;
 
-export type ExportStopReason = 'empty' | 'unsupported' | 'load' | 'frame' | 'encode' | 'sound' | 'memory' | 'cancelled';
+/** `hidden`: the browser took the encoder back more often than the export may start again (spec H, F3). */
+export type ExportStopReason = 'empty' | 'unsupported' | 'load' | 'frame' | 'encode' | 'sound' | 'memory' | 'hidden' | 'cancelled';
 
 /** Why an export stopped. `frame` (film frame) and `clip` (cut label) say where, when it was a picture. */
 export class ExportStop extends Error {
@@ -911,9 +912,12 @@ export async function plannedPath(srcUrl: string, override: ExportPathOverride, 
 /** An error's message, for the console. */
 const describe = (error: unknown) => (error instanceof Error ? error.message : String(error));
 
-/** Reclaimed after the last restart: the export stops as an encoding failure that says so (spec G, A2). */
-function givenUp(error: unknown): never {
-  if (error instanceof ReclaimedTooOften) throw new ExportStop('encode', error.message);
+/**
+ * Reclaimed after the last restart: the export stops with its own reason, so the sheet can say what happened and
+ * what to do (keep the window on screen), for the pictures and the sound alike (spec H, F3).
+ */
+export function givenUp(error: unknown): never {
+  if (error instanceof ReclaimedTooOften) throw new ExportStop('hidden', error.message);
   throw error;
 }
 
