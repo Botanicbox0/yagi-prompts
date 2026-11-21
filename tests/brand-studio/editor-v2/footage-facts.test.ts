@@ -3,7 +3,7 @@ import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { containerStats, gatherBoxes, readTiming, timingOfFile } from '@/lib/brand-studio/editor-v2/container';
 import { measuredFromTiming } from '@/lib/brand-studio/editor-v2/fps';
-import { MAX_RANGE_REQUESTS, RangeRefused, rangedSource, type RangeAnswer } from '@/lib/brand-studio/editor-v2/ranged-source';
+import { MAX_RANGE_REQUESTS, MAX_WHOLE_BYTES, RANGE_CHUNK, RangeRefused, rangedSource, type RangeAnswer } from '@/lib/brand-studio/editor-v2/ranged-source';
 import { mapLimit } from '@/lib/brand-studio/editor-v2/fps';
 import { box, concat, ftyp, mdat, moof, moov, type TrackSpec } from './mp4-bytes';
 
@@ -81,6 +81,62 @@ describe('reading only the boxes, through Range requests', () => {
     const host = server(concat(ftyp(), moov({ tracks: [VIDEO] })), true);
     const source = rangedSource(host.request, 8);
     expect((await source.read(10_000_000, 16)).length).toBe(0);
+  });
+
+  it('review round 2: a server that sends the whole file is read no further than the byte ceiling (64 MiB)', async () => {
+    expect(MAX_WHOLE_BYTES).toBe(64 * 1024 * 1024);
+    // The moov sits after 3 MB of media; with a 1 MiB ceiling the reader stops, cancels and fails.
+    const host = server(TAIL_MOOV, false);
+    const source = rangedSource(host.request, RANGE_CHUNK, 1024 * 1024);
+    expect(await gatherBoxes(source)).toEqual({ failure: 'too-large' });
+    expect(host.streamed()).toBeLessThanOrEqual(1024 * 1024 + 16 * 1024);
+    expect(host.cancelled()).toBe(true);
+    // Under the ceiling the same server is read as before.
+    expect('failure' in (await gatherBoxes(rangedSource(server(TAIL_MOOV, false).request, RANGE_CHUNK, 4 * 1024 * 1024)))).toBe(false);
+  });
+
+  it('review round 2: a 206 for another range than the one asked for is refused; one that does not show its range is read', async () => {
+    const bytes = concat(ftyp(), moov({ tracks: [VIDEO] }));
+    const elsewhere = rangedSource(async (start, end) => new Response(bytes.slice(start + 100, end + 101), { status: 206, headers: { 'Content-Range': `bytes ${start + 100}-${end + 100}/${bytes.length}` } }));
+    await expect(elsewhere.read(0, 16)).rejects.toBeInstanceOf(RangeRefused);
+    // A media domain that does not expose Content-Range to the page: the bytes are taken as asked.
+    const hidden = rangedSource(async (start, end) => new Response(bytes.slice(start, end + 1), { status: 206 }));
+    const found = await gatherBoxes(hidden);
+    expect('failure' in found).toBe(false);
+  });
+});
+
+describe('review round 2: a file that cannot be read for good is not fetched again in the same visit', () => {
+  beforeEach(() => vi.resetModules());
+  afterEach(() => vi.unstubAllGlobals());
+  const text = new TextEncoder().encode('not a video at all, just some words to fill sixty-four bytes long');
+
+  it('not an MP4 (and the other permanent answers): one fetch, remembered', async () => {
+    const fetch = vi.fn(async (_url: string, init: { headers: { Range: string } }) => {
+      const [start, end] = init.headers.Range.slice(6).split('-').map(Number) as [number, number];
+      return new Response(text.slice(start, end + 1), { status: 206, headers: { 'Content-Range': `bytes ${start}-${Math.min(end, text.length - 1)}/${text.length}` } });
+    });
+    vi.stubGlobal('fetch', fetch);
+    const { readFootage } = await import('@/components/brand-studio/editor-v2/footage-facts');
+    expect((await readFootage('/media/a.webm')).answer).toEqual({ ok: false, reason: 'not-mp4' });
+    expect((await readFootage('/media/a.webm')).answer).toEqual({ ok: false, reason: 'not-mp4' });
+    expect(fetch).toHaveBeenCalledTimes(1);
+  });
+
+  it('a refused request or a network error may pass: asked again', async () => {
+    const refused = vi.fn(async () => new Response(null, { status: 403 }));
+    vi.stubGlobal('fetch', refused);
+    const { readFootage } = await import('@/components/brand-studio/editor-v2/footage-facts');
+    expect((await readFootage('/media/b.mp4')).answer).toEqual({ ok: false, reason: 'broken' });
+    await readFootage('/media/b.mp4');
+    expect(refused).toHaveBeenCalledTimes(2);
+    const offline = vi.fn(async () => {
+      throw new TypeError('Failed to fetch');
+    });
+    vi.stubGlobal('fetch', offline);
+    await readFootage('/media/c.mp4');
+    await readFootage('/media/c.mp4');
+    expect(offline).toHaveBeenCalledTimes(2);
   });
 });
 

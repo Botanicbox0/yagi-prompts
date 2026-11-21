@@ -73,9 +73,12 @@ export interface FileTiming {
 
 /**
  * Why a file could not be read: not an MP4 / MOV; no `moov`; boxes cut off or inconsistent; an edit list
- * the export cannot follow (more than one piece of media, or a changed speed); too many fragments.
+ * the export cannot follow (more than one piece of media, or a changed speed); too many fragments; too many
+ * requests; a fragmented file too large to walk; more bytes than allowed from a server that sends the
+ * whole file. Only `broken` may pass on another try (a refused request or a network error lands there
+ * too); the others are the file's own and are remembered for the visit (footage-facts.ts).
  */
-export type TimingFailure = 'not-mp4' | 'no-moov' | 'broken' | 'edits' | 'too-many-boxes' | 'too-many-requests' | 'fragmented-too-large';
+export type TimingFailure = 'not-mp4' | 'no-moov' | 'broken' | 'edits' | 'too-many-boxes' | 'too-many-requests' | 'fragmented-too-large' | 'too-large';
 
 export type TimingAnswer = { ok: true; timing: FileTiming } | { ok: false; reason: TimingFailure };
 
@@ -97,6 +100,17 @@ export class ReadLimit extends Error {
   constructor() {
     super('too many requests for one file');
     this.name = 'ReadLimit';
+  }
+}
+
+/**
+ * A byte source that has received all the bytes it may without finding what was asked for (a server that
+ * sends the whole file, ranged-source.ts `MAX_WHOLE_BYTES`; review round 2 of part E).
+ */
+export class ByteLimit extends Error {
+  constructor() {
+    super('too many bytes for one file');
+    this.name = 'ByteLimit';
   }
 }
 
@@ -591,6 +605,7 @@ export async function gatherBoxes(source: ByteSource, fragmentedLimit = MAX_FRAG
     return await walkTopLevel(source, fragmentedLimit);
   } catch (error) {
     if (error instanceof ReadLimit) return { failure: 'too-many-requests' };
+    if (error instanceof ByteLimit) return { failure: 'too-large' };
     throw error;
   }
 }
