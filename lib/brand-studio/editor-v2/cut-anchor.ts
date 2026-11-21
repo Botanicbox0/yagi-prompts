@@ -69,19 +69,35 @@ function cutAt(anchor: CutAnchor, sec: number): number {
 
 const clean = (sec: number) => (Number.isFinite(sec) ? Math.max(0, sec) : 0);
 
-/** A stored time on v2's frames: the same cut, the same offset into it (rounded to a frame), never past its end. */
-export function storedSecToFrame(anchor: CutAnchor, sec: number): number {
+/**
+ * `last`: the furthest frame of the cut a time may land on. A start, or a last frame shown, stays on the
+ * cut's own last frame (`length − 1`): its end frame is the NEXT cut's first (review round 1 of part E,
+ * item 9). An end that is one past the last frame shown may be the cut's end (`length`).
+ */
+function onFrames(anchor: CutAnchor, sec: number, last: 'inside' | 'end'): number {
   const t = clean(sec);
   if (anchor.stored.length === 0) return Math.round(t * anchor.fps);
   const i = cutAt(anchor, t);
   if (i < 0) return anchor.total + Math.round((t - anchor.storedTotal) * anchor.fps);
   const cut = anchor.frames[i]!;
-  return cut.start + Math.min(Math.round((t - anchor.stored[i]!.start) * anchor.fps), cut.length);
+  const furthest = last === 'inside' ? Math.max(0, cut.length - 1) : cut.length;
+  return cut.start + Math.min(Math.round((t - anchor.stored[i]!.start) * anchor.fps), furthest);
+}
+
+/** A stored time on v2's frames: the same cut, the same offset into it (rounded to a frame), at most its last frame. */
+export function storedSecToFrame(anchor: CutAnchor, sec: number): number {
+  return onFrames(anchor, sec, 'inside');
+}
+
+/** A stored end time (one past the last frame shown) on v2's frames: at most the cut's end. */
+export function storedEndToFrame(anchor: CutAnchor, sec: number): number {
+  return onFrames(anchor, sec, 'end');
 }
 
 /**
  * The same mapping without rounding to a frame, in v2's film seconds: where a sound effect starts. A
- * sound is placed to the sample, so it keeps its exact offset into its cut (never past the cut's end).
+ * sound is placed to the sample, so it keeps its exact offset into its cut, at most where the cut's last
+ * frame starts (never in the next cut).
  */
 export function storedSecToFilmSec(anchor: CutAnchor, sec: number): number {
   const t = clean(sec);
@@ -89,13 +105,13 @@ export function storedSecToFilmSec(anchor: CutAnchor, sec: number): number {
   const i = cutAt(anchor, t);
   if (i < 0) return anchor.total / anchor.fps + (t - anchor.storedTotal);
   const cut = anchor.frames[i]!;
-  return cut.start / anchor.fps + Math.min(t - anchor.stored[i]!.start, cut.length / anchor.fps);
+  return cut.start / anchor.fps + Math.min(t - anchor.stored[i]!.start, Math.max(0, cut.length - 1) / anchor.fps);
 }
 
 /** A stored span on frames, start and end mapped apart: `[start, end)`, at least one frame long. */
 export function storedSpanToFrames(anchor: CutAnchor, startSec: number, endSec: number): { start: number; end: number } {
   const start = storedSecToFrame(anchor, startSec);
-  return { start, end: Math.max(start + 1, storedSecToFrame(anchor, endSec)) };
+  return { start, end: Math.max(start + 1, storedEndToFrame(anchor, endSec)) };
 }
 
 const POSITIONS: readonly CaptionPosition[] = ['bottom', 'center', 'top'];
