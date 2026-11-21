@@ -99,6 +99,8 @@ describe('the finished file says which path made its pictures (for the proof)', 
       bytesRead: 10,
       fileBytes: 20,
       requests: 1,
+      reopened: 0,
+      reclaimed: 0,
     })),
   });
 

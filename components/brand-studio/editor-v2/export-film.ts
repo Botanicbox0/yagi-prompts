@@ -96,6 +96,9 @@ export interface SourcePath {
   bytesRead: number;
   fileBytes: number | null;
   requests: number;
+  /** Times its decoder was made again after the browser took it back (spec G, A3), and of those, taken back. */
+  reopened: number;
+  reclaimed: number;
 }
 
 export interface ExportFilmOptions {
@@ -1011,7 +1014,7 @@ async function videoPass(pass: VideoPass): Promise<{ samples: EncodedVideoSample
     const known = sources.get(entry.srcUrl);
     if (known) return known;
     const opened = openDecoderSource(entry.srcUrl, plan, fps, choices.get(entry.srcUrl)!);
-    const record: SourcePath = { clip: label, srcUrl: entry.srcUrl, path: 'decoder', reason: null, decoded: 0, seeked: 0, bytesRead: 0, fileBytes: null, requests: 0 };
+    const record: SourcePath = { clip: label, srcUrl: entry.srcUrl, path: 'decoder', reason: null, decoded: 0, seeked: 0, bytesRead: 0, fileBytes: null, requests: 0, reopened: 0, reclaimed: 0 };
     records.set(entry.srcUrl, record);
     if ('reason' in opened) {
       if (override === 'decoder') throw new ExportStop('unsupported', `"${label}" cannot be decoded (${opened.reason}) and the decoder path was required`, { clip: label });
@@ -1043,7 +1046,8 @@ async function videoPass(pass: VideoPass): Promise<{ samples: EncodedVideoSample
         console.warn('[editor export] decoder path left for seeking', label, message);
         source.session.close();
         const stats = source.bytes.stats();
-        Object.assign(record, { reason: `error: ${message}`, bytesRead: stats.received, fileBytes: stats.fileSize, requests: stats.requests });
+        const decoded = source.session.stats();
+        Object.assign(record, { reason: `error: ${message}`, bytesRead: stats.received, fileBytes: stats.fileSize, requests: stats.requests, reopened: decoded.reopened, reclaimed: decoded.reclaimed });
         const seek: SeekSource = { kind: 'seek', source: null };
         sources.set(entry.srcUrl, seek);
         return pictureOf(entry, label);
@@ -1144,7 +1148,8 @@ async function videoPass(pass: VideoPass): Promise<{ samples: EncodedVideoSample
       if (source.kind !== 'decoder') continue;
       source.session.close();
       const stats = source.bytes.stats();
-      Object.assign(records.get(url)!, { bytesRead: stats.received, fileBytes: stats.fileSize, requests: stats.requests });
+      const decoded = source.session.stats();
+      Object.assign(records.get(url)!, { bytesRead: stats.received, fileBytes: stats.fileSize, requests: stats.requests, reopened: decoded.reopened, reclaimed: decoded.reclaimed });
     }
     return { samples, avcConfig, paths: [...records.values()], filled };
   } finally {

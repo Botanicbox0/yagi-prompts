@@ -245,7 +245,7 @@ export function ExportStatus({ job, copy: e }: { job: ExportJob; copy: ExportCop
         data-editor-export-ms={job.elapsedMs}
         data-editor-export-path={pathSummary(job.paths)}
         data-editor-export-restarts={job.restarts}
-        data-editor-export-paths={JSON.stringify(job.paths.map(({ clip, path, reason, decoded, seeked, bytesRead, fileBytes, requests }) => ({ clip, path, reason, decoded, seeked, bytesRead, fileBytes, requests })))}
+        data-editor-export-paths={JSON.stringify(job.paths.map(({ clip, path, reason, decoded, seeked, bytesRead, fileBytes, requests, reopened, reclaimed }) => ({ clip, path, reason, decoded, seeked, bytesRead, fileBytes, requests, reopened, reclaimed })))}
       >
         <p className={styles.exportCount} role="status">{e.done}</p>
         <p className={styles.note}>{fill(e.doneFacts, { size: formatBytes(job.bytes), length: formatTimecode(job.frames, job.fps) })}</p>

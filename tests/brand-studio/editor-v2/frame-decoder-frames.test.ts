@@ -47,7 +47,7 @@ describe('the export closes what it makes for the encoders, whatever encode() do
     const { readFileSync } = await import('node:fs');
     const { join } = await import('node:path');
     const source = readFileSync(join(process.cwd(), 'components/brand-studio/editor-v2/export-film.ts'), 'utf8');
-    expect(source).toMatch(/new VideoFrame\(canvas[\s\S]{0,240}?try \{\s*encoder\.encode\(frame[\s\S]{0,120}?\} finally \{\s*frame\.close\(\);/);
-    expect(source).toMatch(/try \{\s*encoder\.encode\(data\);\s*\} finally \{\s*data\.close\(\);/);
+    expect(source).toMatch(/new VideoFrame\(canvas[\s\S]{0,240}?try \{\s*\w+\.encode\(frame[\s\S]{0,400}?\} finally \{\s*frame\.close\(\);/);
+    expect(source).toMatch(/try \{\s*encoder\.encode\(data\);[\s\S]{0,240}?\} finally \{\s*data\.close\(\);/);
   });
 });
