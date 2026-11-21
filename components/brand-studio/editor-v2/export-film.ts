@@ -316,21 +316,20 @@ async function present(source: Source, sourceFrame: number, filmFrame: number, l
       frame: filmFrame,
       clip: label,
     });
-  if (source.frames !== null && sourceFrame >= source.frames) {
-    const last = await confirmPicture(source, source.frames - 1, signal);
-    if (!last.ok) throw stop(last.last);
-    return true;
-  }
-  const result = await confirmPicture(source, sourceFrame, signal);
+  // Past the file's own count: its last picture instead.
+  const target = source.frames !== null ? Math.min(sourceFrame, source.frames - 1) : sourceFrame;
+  const result = await confirmPicture(source, target, signal);
+  if (result.ok) return target !== sourceFrame;
+  // Not confirmed: past the end only when the element has reached its end showing an earlier picture
+  // (the file may list a picture the browser cannot show, review round 1 of part E, item 8).
   const video = source.video;
   const atEnd = video.ended || (Number.isFinite(video.duration) && video.currentTime >= video.duration - 0.5 * frameSec);
-  const expectedSec = source.firstSec + sourceFrame * frameSec;
-  const place = picturePlace({ sourceFrame, knownFrames: source.frames, confirmed: result.ok, expectedSec, lastSeenSec: result.last, atEnd, frameSec });
-  if (place === 'inside') return false;
+  const expectedSec = source.firstSec + target * frameSec;
+  const place = picturePlace({ sourceFrame: target, knownFrames: source.frames, confirmed: false, expectedSec, lastSeenSec: result.last, atEnd, frameSec });
   if (place === 'past-end' && result.last !== null) {
-    const lastReal = Math.max(0, Math.round((result.last - source.firstSec) * source.fps));
-    const filled = await confirmPicture(source, lastReal, signal);
-    if (filled.ok) return true;
+    // Filled with the last picture the element really showed.
+    const lastShown = Math.max(0, Math.round((result.last - source.firstSec) * source.fps));
+    if (lastShown < target && (await confirmPicture(source, lastShown, signal)).ok) return true;
   }
   throw stop(result.last);
 }

@@ -79,10 +79,11 @@ export function isKeyFrame(index: number, fps: number): boolean {
  * cut's last frame: the playback measurement had counted 98 pictures in a file that holds 97.
  *
  * - The file's own count is known (its sample table, lib/brand-studio/editor-v2/container.ts): a picture at
- *   or past that count is `past-end`; any other that could not be confirmed has `failed`.
- * - It is not known (a file the reader cannot read): `past-end` only when the element has reached its end
- *   (`atEnd`: ended, or its current time at its length) and the last picture it showed lies more than
- *   half a frame before the one asked for; anything else that could not be confirmed has `failed`.
+ *   or past that count is `past-end`.
+ * - Known or not: a picture that could not be confirmed is `past-end` when the element has reached its
+ *   end (`atEnd`: ended, or its current time at its length) and the last picture it showed lies more than
+ *   half a frame before the one asked for (the file lists a picture the browser cannot show, review round 1
+ *   of part E, item 8); anything else that could not be confirmed has `failed`.
  *
  * A `past-end` picture is filled with the source's last real one (and said after the export); a
  * `failed` one stops the export as before: a wrong or missing picture inside the footage is never filled.
@@ -104,7 +105,7 @@ export function picturePlace(input: {
   const { sourceFrame, knownFrames, confirmed, expectedSec, lastSeenSec, atEnd, frameSec } = input;
   if (knownFrames !== null && sourceFrame >= knownFrames) return 'past-end';
   if (confirmed) return 'inside';
-  if (knownFrames === null && atEnd && lastSeenSec !== null && expectedSec > lastSeenSec + 0.5 * frameSec) return 'past-end';
+  if (atEnd && lastSeenSec !== null && expectedSec > lastSeenSec + 0.5 * frameSec) return 'past-end';
   return 'failed';
 }
 

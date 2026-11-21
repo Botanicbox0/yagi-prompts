@@ -179,8 +179,20 @@ describe('a picture asked for past the footage’s end is filled; a failed one i
     expect(picturePlace({ ...base, sourceFrame: 97, knownFrames: 97, confirmed: false, atEnd: true })).toBe('past-end');
     expect(picturePlace({ ...base, sourceFrame: 120, knownFrames: 97, confirmed: false, atEnd: false })).toBe('past-end');
     expect(picturePlace({ ...base, sourceFrame: 96, knownFrames: 97, confirmed: true, atEnd: true })).toBe('inside');
-    // A picture inside the footage that never arrives, even with the element at its end: the export stops.
-    expect(picturePlace({ ...base, sourceFrame: 96, knownFrames: 97, confirmed: false, atEnd: true })).toBe('failed');
+    // A picture inside the footage that never arrives, the element not at its end: the export stops.
+    expect(picturePlace({ ...base, sourceFrame: 96, knownFrames: 97, confirmed: false, atEnd: false, expectedSec: 96 / 24, lastSeenSec: 95 / 24 })).toBe('failed');
+  });
+
+  it('count known, but the element cannot show its last picture(s): past the end once it has reached its end (review round 1 of part E, item 8)', () => {
+    // The file lists 97 pictures; the element ends showing picture 95: 96 is filled with 95.
+    const atEndShowing95 = { frameSec: 1 / 24, sourceFrame: 96, knownFrames: 97, confirmed: false, expectedSec: 96 / 24, lastSeenSec: 95 / 24 };
+    expect(picturePlace({ ...atEndShowing95, atEnd: true })).toBe('past-end');
+    // Not at its end: the picture simply did not come, and the export stops.
+    expect(picturePlace({ ...atEndShowing95, atEnd: false })).toBe('failed');
+    // At its end but the last picture shown is the one asked for (or later): something else is wrong.
+    expect(picturePlace({ ...atEndShowing95, atEnd: true, lastSeenSec: 96 / 24 })).toBe('failed');
+    // In the middle of the footage: stops.
+    expect(picturePlace({ frameSec: 1 / 24, sourceFrame: 40, knownFrames: 97, confirmed: false, atEnd: false, expectedSec: 40 / 24, lastSeenSec: 39 / 24 })).toBe('failed');
   });
 
   it('count unknown: past the end only when the element reached its end and its last picture is before the one asked for', () => {
