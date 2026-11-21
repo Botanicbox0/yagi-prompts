@@ -196,6 +196,8 @@ export function soundWindow(segment: AudioSegment, totalSamples: number, sampleR
 export function soundLead(answer: TimingAnswer): { known: boolean; leadSec: number } {
   if (!answer.ok) return { known: false, leadSec: 0 };
   const { video, sound } = answer.timing;
+  // A sound edit list the reader cannot follow: where the sound sits is not known.
+  if (sound === 'unknown') return { known: false, leadSec: 0 };
   if (!video || !sound) return { known: true, leadSec: 0 };
   return { known: true, leadSec: video.firstSec - sound.firstSec };
 }

@@ -63,7 +63,11 @@ export interface SoundTiming {
 
 export interface FileTiming {
   video: VideoTiming | null;
-  sound: SoundTiming | null;
+  /**
+   * `null`: the file has no sound track. `unknown`: it has one whose edit list the reader cannot follow
+   * (review round 1 of part E, item 3): the picture facts still stand, where the sound sits is not known.
+   */
+  sound: SoundTiming | 'unknown' | null;
   fragmented: boolean;
 }
 
@@ -446,9 +450,11 @@ export function readTiming(found: FoundBoxes): TimingAnswer {
     const sound = movie.tracks.find((track) => track.handler === 'soun' && track.dts.length > 0);
     const videoAnswer = video ? videoTiming(video, movie.timescale) : null;
     const soundAnswer = sound ? soundTiming(sound, movie.timescale) : null;
-    if (videoAnswer === 'edits' || soundAnswer === 'edits') return { ok: false, reason: 'edits' };
+    // A picture edit list it cannot follow makes frame numbering unsafe: the whole answer fails. A sound
+    // one only leaves the sound's start unknown.
+    if (videoAnswer === 'edits') return { ok: false, reason: 'edits' };
     if (movie.fragmented && !video && !sound) return { ok: false, reason: 'broken' };
-    return { ok: true, timing: { video: videoAnswer, sound: soundAnswer, fragmented: movie.fragmented } };
+    return { ok: true, timing: { video: videoAnswer, sound: soundAnswer === 'edits' ? 'unknown' : soundAnswer, fragmented: movie.fragmented } };
   } catch (error) {
     if (error instanceof Broken || error instanceof RangeError) return { ok: false, reason: 'broken' };
     throw error;

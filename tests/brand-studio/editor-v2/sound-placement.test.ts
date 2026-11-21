@@ -55,6 +55,9 @@ describe('the lead read from the file', () => {
     const soundLate = concat(ftyp(), moov({ tracks: [video(), sound([{ duration: 278, mediaTime: -1 }, { duration: 3000, mediaTime: 0 }])] }), mdat(8));
     expect(soundLead(await timingOfFile(soundLate))).toEqual({ known: true, leadSec: -0.278 });
     expect(soundLead(await timingOfFile(Uint8Array.of(0x1a, 0x45, 0xdf, 0xa3, 0, 0, 0, 0, 0, 0, 0, 0)))).toEqual({ known: false, leadSec: 0 });
+    // The sound's edit list cannot be followed: the picture is known, where the sound sits is not.
+    const twoPieces = concat(ftyp(), moov({ tracks: [video(), sound([{ duration: 500, mediaTime: 0 }, { duration: 500, mediaTime: 48000 }])] }), mdat(8));
+    expect(soundLead(await timingOfFile(twoPieces))).toEqual({ known: false, leadSec: 0 });
     // A file without sound has nothing to place.
     expect(soundLead(await timingOfFile(concat(ftyp(), moov({ tracks: [video()] }), mdat(8))))).toEqual({ known: true, leadSec: 0 });
   });

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { gatherBoxes, readTiming, timingOfFile, type ByteSource } from '@/lib/brand-studio/editor-v2/container';
+import { gatherBoxes, readTiming, timingOfFile, type ByteSource, type SoundTiming } from '@/lib/brand-studio/editor-v2/container';
 import { concat, ftyp, mdat, moof, moov, runs, wide, type TrackSpec } from './mp4-bytes';
 
 /**
@@ -151,7 +151,7 @@ describe('the two tracks’ start times (B1): the edit list applied, as ffprobe 
   it('sound with an encoder delay (media time 1024) starts at 0: the delay is not played', async () => {
     const answer = await timingOfFile(file(VIDEO_24, { ...SOUND, edits: [{ duration: 3000, mediaTime: 1024 }] }));
     if (!answer.ok) throw new Error(answer.reason);
-    expect(answer.timing.sound!.firstSec).toBe(0);
+    expect((answer.timing.sound as SoundTiming).firstSec).toBe(0);
   });
 
   it('picture behind an empty edit of 0.5 s starts at 0.5 s; the sound at 0', async () => {
@@ -160,25 +160,25 @@ describe('the two tracks’ start times (B1): the edit list applied, as ffprobe 
     );
     if (!answer.ok) throw new Error(answer.reason);
     expect(answer.timing.video!.firstSec).toBe(0.5);
-    expect(answer.timing.sound!.firstSec).toBe(0);
+    expect((answer.timing.sound as SoundTiming).firstSec).toBe(0);
   });
 
   it('sound behind an empty edit starts at the edit (ffmpeg writes 0.478 s for "0.5 s minus the encoder delay")', async () => {
     const answer = await timingOfFile(file(VIDEO_24, { ...SOUND, edits: [{ duration: 478, mediaTime: -1 }, { duration: 3000, mediaTime: 0 }] }));
     if (!answer.ok) throw new Error(answer.reason);
-    expect(answer.timing.sound!.firstSec).toBe(0.478);
+    expect((answer.timing.sound as SoundTiming).firstSec).toBe(0.478);
   });
 
   it('an empty edit and a media time together: the edit’s start', async () => {
     const answer = await timingOfFile(file(VIDEO_24, { ...SOUND, edits: [{ duration: 300, mediaTime: -1 }, { duration: 3000, mediaTime: 1024 }] }));
     if (!answer.ok) throw new Error(answer.reason);
-    expect(answer.timing.sound!.firstSec).toBe(0.3);
+    expect((answer.timing.sound as SoundTiming).firstSec).toBe(0.3);
   });
 
   it('no edit list: the first sample’s own time', async () => {
     const answer = await timingOfFile(file(VIDEO_24, SOUND));
     if (!answer.ok) throw new Error(answer.reason);
-    expect(answer.timing.sound!.firstSec).toBe(0);
+    expect((answer.timing.sound as SoundTiming).firstSec).toBe(0);
   });
 
   it('a file with only a picture, or only sound', async () => {
@@ -241,6 +241,15 @@ describe('what the reader refuses (the editor then measures by playback, and the
     const faster = file({ ...VIDEO_24, edits: [{ duration: 1000, mediaTime: 0, rate: 2 }] });
     expect(await timingOfFile(twoPieces)).toEqual({ ok: false, reason: 'edits' });
     expect(await timingOfFile(faster)).toEqual({ ok: false, reason: 'edits' });
+  });
+
+  it('a sound edit list it cannot follow keeps the picture facts; the sound start is unknown (review round 1 of part E, item 3)', async () => {
+    const answer = await timingOfFile(file(VIDEO_24, { ...SOUND, edits: [{ duration: 500, mediaTime: 0 }, { duration: 500, mediaTime: 48000 }] }));
+    if (!answer.ok) throw new Error(answer.reason);
+    expect(answer.timing.video).toMatchObject({ firstSec: 0, frames: 72, fps: 24 });
+    expect(answer.timing.sound).toBe('unknown');
+    // A picture edit list it cannot follow still fails the whole answer: frame numbering would be unsafe.
+    expect(await timingOfFile(file({ ...VIDEO_24, edits: [{ duration: 1000, mediaTime: 0, rate: 2 }] }, SOUND))).toEqual({ ok: false, reason: 'edits' });
   });
 });
 
