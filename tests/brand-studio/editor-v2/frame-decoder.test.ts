@@ -81,7 +81,7 @@ class FakeDecoder {
 
 const SAMPLES = 12;
 const index: VideoIndex = {
-  config: { entry: 'avc1', codec: 'avc1.64001e', description: null, codedWidth: 64, codedHeight: 36, pixelAspect: [1, 1], colour: null, bitDepth: 8, sdr: true },
+  config: { entry: 'avc1', codec: 'avc1.64001e', description: null, codedWidth: 64, codedHeight: 36, pixelAspect: [1, 1], colour: null, profile: 100, bitDepth: 8, sdr: true },
   rotation: 0,
   timescale: 12288,
   offsets: Array.from({ length: SAMPLES }, (_, i) => i * 10),

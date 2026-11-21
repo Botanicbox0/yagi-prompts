@@ -52,6 +52,11 @@ export interface CodecConfig {
   /** `pasp` horizontal and vertical spacing; `[1, 1]` for square pixels or no box. */
   pixelAspect: readonly [number, number];
   colour: ColourDescription | null;
+  /**
+   * The profile the configuration record states: `avcC` profile_idc (100 High …), `hvcC` general_profile_idc
+   * (1 Main, 2 Main 10, 4 range extensions), `vpcC` and `av1C` profile; `null` when not read.
+   */
+  profile: number | null;
   /** Luma bit depth from the configuration record; `null` when the record does not say (taken as not 8). */
   bitDepth: number | null;
   /**
@@ -279,29 +284,36 @@ export function readSampleEntry(stsd: Uint8Array | null): EntryAnswer {
   let codec: string | null = null;
   let description: Uint8Array | null = null;
   let bitDepth: number | null = null;
+  let profile: number | null = null;
   let sdr = true;
   if (entry.type === 'avc1' || entry.type === 'avc3') {
     const avcC = body(find('avcC'));
     codec = avcC ? avcCodec(entry.type, avcC) : null;
     description = avcC ? avcC.slice() : null;
     bitDepth = avcC ? avcBitDepth(avcC) : null;
+    profile = avcC && avcC.length >= 2 ? avcC[1]! : null;
   } else if (entry.type === 'hvc1' || entry.type === 'hev1') {
     const hvcC = body(find('hvcC'));
     codec = hvcC ? hevcCodec(entry.type, hvcC) : null;
     description = hvcC ? hvcC.slice() : null;
+    profile = hvcC && hvcC.length >= 2 ? hvcC[1]! & 0x1f : null;
     // bitDepthLumaMinus8 and bitDepthChromaMinus8: the low three bits of bytes 17 and 18.
     if (hvcC && hvcC.length >= 19) bitDepth = Math.max((hvcC[17]! & 0x07) + 8, (hvcC[18]! & 0x07) + 8);
   } else if (entry.type === 'vp09') {
     const vpcC = body(find('vpcC'));
     codec = vpcC ? vp9Codec(vpcC) : null;
     if (vpcC && vpcC.length >= 10 && vpcC[0] === 1) {
+      profile = vpcC[4]!;
       bitDepth = vpcC[6]! >> 4;
       sdr = sdrCodes(vpcC[7]!, vpcC[8]!, vpcC[9]!);
     }
   } else if (entry.type === 'av01') {
     const av1C = body(find('av1C'));
     codec = av1C ? av1Codec(av1C) : null;
-    if (av1C && av1C.length >= 3) bitDepth = (av1C[2]! >> 6) & 1 ? ((av1C[2]! >> 5) & 1 ? 12 : 10) : 8;
+    if (av1C && av1C.length >= 3) {
+      profile = av1C[1]! >> 5;
+      bitDepth = (av1C[2]! >> 6) & 1 ? ((av1C[2]! >> 5) & 1 ? 12 : 10) : 8;
+    }
   }
   if (!codec) return { ok: false, reason: 'codec' };
 
@@ -335,7 +347,7 @@ export function readSampleEntry(stsd: Uint8Array | null): EntryAnswer {
       if (!sdrCodes(colour.primaries, colour.transfer, colour.matrix)) sdr = false;
     }
   }
-  return { ok: true, config: { entry: entry.type, codec, description, codedWidth: width, codedHeight: height, pixelAspect, colour, bitDepth, sdr } };
+  return { ok: true, config: { entry: entry.type, codec, description, codedWidth: width, codedHeight: height, pixelAspect, colour, profile, bitDepth, sdr } };
 }
 
 // ── The display matrix ─────────────────────────────────────────────────────────────────────────

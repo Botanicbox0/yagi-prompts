@@ -8,6 +8,13 @@ Parts (all by default, or name some):
             must fall back): each film exported through the decoder path AND the seek path (forced with
             ?exportPath=), the picture numbers read back with ffmpeg and compared with the expected ones and
             with each other, and the two files compared pixel by pixel (mean difference per channel);
+  tenbit    spec G, A0: flat colour patches and frame numbers in HEVC Main 10 (tagged BT.709 limited in the stream
+            and the colr box, in the colr box only, untagged; 1080, 720 and 540 rows; one laid out like the
+            production file: ftyp, uuid, free, mdat, moov last) and 8-bit controls (H.264 and HEVC, the colr box
+            alone saying BT.709, BT.601 or full range): each exported on the path the product picks and by
+            seeking, frame numbers and pixels per patch compared (mean and largest |difference| per channel);
+            the decoder measured (isConfigSupported for prefer-hardware / prefer-software, VideoFrame.format and
+            colorSpace, the GPU). EDITOR_TENBIT_ONLY=key,key runs some of them;
   fallback  the decoder configuration refused (VideoDecoder.isConfigSupported stubbed in the page): the seek
             path makes the file, and in the "visible but one frame a second" state (the in-page stand-in of
             scripts/editor-v2-covered-window-check.py) the sheet says the window is slow; the same state on the
@@ -59,7 +66,7 @@ BASE = os.environ.get('EDITOR_BASE_URL', 'http://localhost:3621')
 ORG = os.environ.get('EDITOR_ORG_ID', '')
 OUT = sys.argv[1] if len(sys.argv) > 1 else None
 MEDIA = sys.argv[2] if len(sys.argv) > 2 else None
-PARTS = set(sys.argv[3:]) or {'sources', 'fallback', 'error', 'c3', 'times'}
+PARTS = set(sys.argv[3:]) or {'sources', 'tenbit', 'fallback', 'error', 'c3', 'times'}
 REPEATS = int(os.environ.get('EDITOR_REPEATS', '2'))
 KEY = f'twings_studio_compose_v1:{ORG}'
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -140,6 +147,100 @@ def make_media(folder):
     # The frames themselves carry the tags (setparams), or the colr box says unspecified for primaries and transfer.
     files['pq8'] = numbered(m('pq8.mp4'), '24', 120, post='setparams=color_primaries=bt2020:color_trc=smpte2084:colorspace=bt2020nc',
                             encode=('-c:v', 'libx264', '-bf', '0', '-pix_fmt', 'yuv420p', '-color_primaries', 'bt2020', '-color_trc', 'smpte2084', '-colorspace', 'bt2020nc'), out=('-movflags', '+write_colr'))
+    return files
+
+
+# Spec G, A0: flat patches (name, RGB, x, y in 640×360 units, 100×90 each) so a matrix, range or 10→8 bit
+# mistake shows as a number per colour; the frame number squares stay below them.
+PATCHES = [('red', 'FF0000', 20, 30), ('green', '00FF00', 140, 30), ('blue', '0000FF', 260, 30), ('skin', 'E0AC69', 380, 30), ('skin-dark', '8D5524', 500, 30),
+           ('black', '000000', 20, 150), ('grey-25', '404040', 140, 150), ('grey-50', '808080', 260, 150), ('grey-75', 'C0C0C0', 380, 150), ('white', 'FFFFFF', 500, 150)]
+
+
+def patched(path, width, height, ten_bit, tagged, frames=120, hevc=None):
+    """Patches and frame numbers, made in RGB and converted with the BT.709 matrix to limited range; HEVC Main 10
+    (`ten_bit`), else H.264 High 8-bit (or HEVC Main 8-bit with `hevc`); `tagged`: colr nclx 1/1/1 limited and the
+    same in the stream, else nothing said."""
+    if os.path.exists(path):
+        return path
+    hevc = ten_bit if hevc is None else hevc
+    s = width / 640
+    boxes = ','.join(f'drawbox=x={round(x * s)}:y={round(y * s)}:w={round(100 * s)}:h={round(90 * s)}:color=0x{c}:t=fill' for _, c, x, y in PATCHES)
+    tags = 'setparams=color_primaries=bt709:color_trc=bt709:colorspace=bt709:range=tv' if tagged else 'setparams=colorspace=unknown:color_primaries=unknown:color_trc=unknown'
+    pix = 'yuv420p10le' if ten_bit else 'yuv420p'
+    vf = f'format=rgb24,{boxes},{squares(s)},scale=out_color_matrix=bt709:out_range=tv,format={pix},{tags}'
+    codec = ['-c:v', 'libx265', '-tag:v', 'hvc1', '-x265-params', 'log-level=error:bframes=0:keyint=24'] if hevc else ['-c:v', 'libx264', '-bf', '0', '-g', '24']
+    run(['ffmpeg', '-v', 'error', '-y', '-f', 'lavfi', '-i', f'color=c=0x303030:s={width}x{height}:r=24', '-vf', vf, '-frames:v', str(frames), *codec, '-pix_fmt', pix, path])
+    return path
+
+
+def with_uuid(source, path, size=21456):
+    """The production file's layout: `ftyp`, a `uuid` box, `free`, `mdat`, `moov` last (ffmpeg writes the rest
+    in that order without faststart). The chunk offsets in the `moov` move by the inserted box's size."""
+    if os.path.exists(path):
+        return path
+    data = bytearray(open(source, 'rb').read())
+    ftyp = int.from_bytes(data[0:4], 'big')
+    assert data[4:8] == b'ftyp'
+    order, at = [], 0
+    while at + 8 <= len(data):
+        n = int.from_bytes(data[at:at + 4], 'big')
+        order.append(bytes(data[at + 4:at + 8]).decode())
+        at += n
+    assert order[-1] == 'moov' and 'mdat' in order, order
+    uuid = size.to_bytes(4, 'big') + b'uuid' + bytes(range(16)) + bytes(size - 24)
+    # The moov, and every stco/co64 entry in it moved by the box's size.
+    at, moov_at, moov_end = 0, 0, 0
+    while at + 8 <= len(data):
+        n = int.from_bytes(data[at:at + 4], 'big')
+        if data[at + 4:at + 8] == b'moov':
+            moov_at, moov_end = at, at + n
+        at += n
+    for kind, width in ((b'stco', 4), (b'co64', 8)):
+        i = data.find(kind, moov_at, moov_end)
+        while i >= 0:
+            count = int.from_bytes(data[i + 8:i + 12], 'big')
+            for k in range(count):
+                p = i + 12 + k * width
+                data[p:p + width] = (int.from_bytes(data[p:p + width], 'big') + size).to_bytes(width, 'big')
+            i = data.find(kind, i + 4, moov_end)
+    open(path, 'wb').write(bytes(data[:ftyp]) + uuid + bytes(data[ftyp:]))
+    return path
+
+
+def tenbit_media(folder):
+    os.makedirs(folder, exist_ok=True)
+    m = lambda name: os.path.join(folder, name)
+    files = {}
+    for rows, width in ((1080, 1920), (720, 1280), (540, 960)):
+        for tagged in (True, False):
+            key = f'm10-{rows}-{"709" if tagged else "untagged"}'
+            files[key] = (patched(m(f'{key}.mp4'), width, rows, True, tagged), width, rows)
+        files[f'h8-{rows}-709'] = (patched(m(f'h8-{rows}-709.mp4'), width, rows, False, True), width, rows)
+        # The container says BT.709 (colr 1/1/1, limited), the stream itself says nothing: the bitstream of the
+        # untagged source copied, the colour written only into the MP4's colr box.
+        key = f'm10-{rows}-colr-only'
+        path = m(f'{key}.mp4')
+        if not os.path.exists(path):
+            run(['ffmpeg', '-v', 'error', '-y', '-i', files[f'm10-{rows}-untagged'][0], '-c', 'copy', '-color_primaries', 'bt709', '-color_trc', 'bt709', '-colorspace', 'bt709',
+                 '-color_range', 'tv', '-movflags', '+write_colr', path])
+        files[key] = (path, width, rows)
+    files['m10-1080-709-layout'] = (with_uuid(files['m10-1080-709'][0], m('m10-1080-709-layout.mp4')), 1920, 1080)
+    # 8-bit controls for the same question below 720 rows: does the <video> follow the colr box when the stream
+    # says nothing? (H.264 High and HEVC Main.)
+    for name, hevc in (('h8', False), ('hevc8', True)):
+        untagged = patched(m(f'{name}-540-untagged.mp4'), 960, 540, False, False, hevc=hevc)
+        path = m(f'{name}-540-colr-only.mp4')
+        if not os.path.exists(path):
+            run(['ffmpeg', '-v', 'error', '-y', '-i', untagged, '-c', 'copy', '-color_primaries', 'bt709', '-color_trc', 'bt709', '-colorspace', 'bt709', '-color_range', 'tv', '-movflags', '+write_colr', path])
+        files[f'{name}-540-colr-only'] = (path, 960, 540)
+    # The colr box against the height rule at 1080 rows: BT.601 stated, and full range stated (the stream says nothing).
+    untagged = patched(m('h8-1080-untagged.mp4'), 1920, 1080, False, False)
+    for key, tags in (('h8-1080-colr-601', ['-color_primaries', 'smpte170m', '-color_trc', 'smpte170m', '-colorspace', 'smpte170m', '-color_range', 'tv']),
+                      ('h8-1080-colr-full', ['-color_primaries', 'bt709', '-color_trc', 'bt709', '-colorspace', 'bt709', '-color_range', 'pc'])):
+        path = m(f'{key}.mp4')
+        if not os.path.exists(path):
+            run(['ffmpeg', '-v', 'error', '-y', '-i', untagged, '-c', 'copy', *tags, '-movflags', '+write_colr', path])
+        files[key] = (path, 1920, 1080)
     return files
 
 
@@ -493,6 +594,132 @@ def part_sources(page, context, media, ids):
         reason = outcome['paths'][0]['reason'] if outcome['paths'] else None
         measure(f'a block that says 30 for a 29.97 file: opens as cuts {state["cuts"]} at {state["fps"]} fps; exported {outcome["status"]} by {outcome["path"]}, reason {reason}')
         check("review 1, item 2: a cut whose rate is not the file's is taken by seeking, reason rate", outcome['status'] == 'done' and outcome['path'] == 'seek' and reason == 'rate', f'{outcome["status"]} {outcome["path"]} {reason}')
+
+DECODER_INFO = """() => {
+  if (window.__decInfo) return;
+  const info = window.__decInfo = { configs: [], frames: [] };
+  const Orig = window.VideoDecoder;
+  window.VideoDecoder = class extends Orig {
+    constructor(init) {
+      super({ ...init, output: (f) => {
+        if (info.frames.length < 2) info.frames.push({ format: f.format, colorSpace: f.colorSpace && f.colorSpace.toJSON ? f.colorSpace.toJSON() : null, coded: [f.codedWidth, f.codedHeight], display: [f.displayWidth, f.displayHeight] });
+        init.output(f);
+      } });
+    }
+    configure(c) {
+      info.configs.push({ codec: c.codec, codedWidth: c.codedWidth, codedHeight: c.codedHeight, colorSpace: c.colorSpace || null, hw: c.hardwareAcceleration || 'no-preference' });
+      window.__lastDecoderConfig = c;
+      return super.configure(c);
+    }
+  };
+}"""
+
+DECODER_SUPPORT = """async () => {
+  const c = window.__lastDecoderConfig;
+  const out = {};
+  if (!c) return null;
+  for (const hw of ['prefer-hardware', 'prefer-software']) {
+    try { out[hw] = (await VideoDecoder.isConfigSupported({ ...c, hardwareAcceleration: hw })).supported; } catch (e) { out[hw] = 'error ' + e.name; }
+  }
+  return out;
+}"""
+
+GPU = """() => { const gl = document.createElement('canvas').getContext('webgl'); const ext = gl && gl.getExtension('WEBGL_debug_renderer_info'); return ext ? gl.getParameter(ext.UNMASKED_RENDERER_WEBGL) : null; }"""
+
+
+def patch_stats(files, width=1920, height=1080, rect=(0, 0, 1920, 1080)):
+    """Per patch, over every frame, the inner 60 % of each patch: each file's mean RGB, and between the first two
+    files the mean and the largest |difference| per channel. `files`: paths, or (path, extra filter) pairs."""
+    rx, ry, rw, rh = rect
+    sx, sy = rw / 640, rh / 360
+    regions = [(name, round(ry + (y + 18) * sy), round(ry + (y + 72) * sy), round(rx + (x + 20) * sx), round(rx + (x + 80) * sx)) for name, _, x, y in PATCHES]
+    procs = []
+    for item in files:
+        path, vf = item if isinstance(item, tuple) else (item, None)
+        args = ['ffmpeg', '-v', 'error', '-i', path] + (['-vf', vf] if vf else []) + ['-f', 'rawvideo', '-pix_fmt', 'rgb24', '-']
+        procs.append(subprocess.Popen(args, stdout=subprocess.PIPE, creationflags=NO_WINDOW))
+    size = width * height * 3
+    sums = {name: [np.zeros(3) for _ in files] for name, *_ in regions}
+    mad = {name: np.zeros(3) for name, *_ in regions}
+    big = {name: np.zeros(3) for name, *_ in regions}
+    frames = 0
+    while True:
+        raw = [proc.stdout.read(size) for proc in procs]
+        if any(len(r) < size for r in raw):
+            break
+        pics = [np.frombuffer(r, np.uint8).reshape(height, width, 3).astype(np.int16) for r in raw]
+        for name, y0, y1, x0, x1 in regions:
+            parts = [pic[y0:y1, x0:x1].reshape(-1, 3) for pic in pics]
+            for i, part in enumerate(parts):
+                sums[name][i] += part.mean(axis=0)
+            if len(parts) > 1:
+                d = np.abs(parts[0] - parts[1])
+                mad[name] += d.mean(axis=0)
+                big[name] = np.maximum(big[name], d.max(axis=0))
+        frames += 1
+    for proc in procs:
+        proc.stdout.close()
+        proc.wait()
+    n = max(1, frames)
+    return {name: {'means': [(s / n).round(1).tolist() for s in sums[name]], 'mad': (mad[name] / n).round(2).tolist(), 'max': big[name].astype(int).tolist()} for name, *_ in regions}, frames
+
+
+def part_tenbit(page, context, ids):
+    """Spec G, A0: 10-bit HEVC (Main 10) tagged BT.709 limited and untagged, at 1080, 720 and 540 rows, one laid out
+    like the production file, and 8-bit H.264 controls: each exported on the decoder path (when admitted) and by
+    seeking; frame numbers and pixels per patch compared, against each other and against the source decoded by
+    ffmpeg with BT.709 limited."""
+    media = tenbit_media(os.path.join(MEDIA, 'tenbit'))
+    measure(f'GPU (WebGL renderer): {page.evaluate(GPU)}')
+    main10 = page.evaluate("""() => document.createElement('video').canPlayType('video/mp4; codecs="hvc1.2.4.L120.90"')""")
+    measure(f'HEVC Main 10 in <video>: canPlayType "{main10}"')
+    rows = []
+    only = [k for k in os.environ.get('EDITOR_TENBIT_ONLY', '').split(',') if k]
+    for key, (path, width, rows_) in media.items():
+        if only and key not in only:
+            continue
+        if key not in ids:
+            ids[key] = upload(context, f'decoder-check {key}.mp4', path, width, rows_, 5)
+        film = stored_film([(ids[key], key, 5, 0, 5)])
+        outcomes = {}
+        info = None
+        for mode in ('', 'seek'):
+            open_film(page, film, mode)
+            page.evaluate(DECODER_INFO)
+            outcomes[mode or 'auto'] = export_driven(page, f'tenbit-{key}-{mode or "auto"}')
+            path_line(f'{key} ({mode or "auto"})', outcomes[mode or 'auto'])
+            if not mode:
+                info = {'decoder': page.evaluate('() => window.__decInfo'), 'support': page.evaluate(DECODER_SUPPORT)}
+        auto, seek = outcomes['auto'], outcomes['seek']
+        reason = auto['paths'][0]['reason'] if auto['paths'] else None
+        # What the gate lets in (decode-plan.ts `colourAdmitted`): 10-bit whose container says nothing stays seeked.
+        if 'untagged' in key:
+            check(f'tenbit {key}: 10-bit whose container says nothing is seeked, reason colour', auto['status'] == 'done' and auto['path'] == 'seek' and reason == 'colour', f'{auto["path"]} {reason}')
+        else:
+            check(f'tenbit {key}: taken by the decoder path', auto['status'] == 'done' and auto['path'] == 'decoder', f'{auto["path"]} {reason}')
+        if info and info['decoder'] and info['decoder']['configs']:
+            measure(f'{key}: decoder configured {json.dumps(info["decoder"]["configs"][:1])}; first frames {json.dumps(info["decoder"]["frames"][:1])}; '
+                    f'isConfigSupported {json.dumps(info["support"])}')
+        expected = list(range(120))
+        for name, o in outcomes.items():
+            got = decode_numbers(o['file'], 1920, 1080, (0, 0, 1920, 1080)) if o['file'] else []
+            wrong = [(i, n, e) for i, (n, e) in enumerate(zip(got, expected)) if n != e]
+            check(f'tenbit {key} ({name} → {o["path"]}): every frame shows the picture it should', len(got) == 120 and not wrong, f'{len(got)} frames, {len(wrong)} wrong {wrong[:3]}')
+        row = {'key': key, 'auto_path': auto['path'], 'reason': reason}
+        if auto['file'] and seek['file']:
+            mad, bias, frames = pixel_difference(auto['file'], seek['file'], 1920, 1080)
+            stats, _ = patch_stats([auto['file'], seek['file'], (path, 'scale=1920:1080:in_color_matrix=bt709:in_range=tv:flags=bicubic,format=rgb24')])
+            row.update({'mad': mad, 'bias': bias, 'patches': stats})
+            measure(f'{key}: auto path {auto["path"]} ({reason}) vs seek, whole frame over {frames} frames: mean |difference| {mad}, mean signed {bias}')
+            for name, s in stats.items():
+                measure(f'{key}   {name:9s} auto {s["means"][0]}  seek {s["means"][1]}  ffmpeg {s["means"][2]}  mean |d| {s["mad"]}  max |d| {s["max"]}')
+            if auto['path'] == 'decoder':
+                check(f'tenbit {key}: same picture on both paths (mean |difference| under 2 of 255 per channel, no shift over 1)', max(mad) < 2 and max(abs(x) for x in bias) < 1, f'{mad} {bias}')
+        rows.append(row)
+    with open(os.path.join(OUT, 'tenbit.json'), 'w') as f:
+        json.dump(rows, f, indent=1)
+    return rows
+
 
 def part_fallback(browser, media, ids_holder):
     context = browser.new_context(viewport={'width': 1440, 'height': 900}, accept_downloads=True)
@@ -1014,6 +1241,8 @@ def main():
         try:
             if 'sources' in PARTS:
                 part_sources(page, context, media, holder)
+            if 'tenbit' in PARTS:
+                part_tenbit(page, context, holder)
             if 'fallback' in PARTS:
                 part_fallback(browser, media, holder)
             if 'error' in PARTS:

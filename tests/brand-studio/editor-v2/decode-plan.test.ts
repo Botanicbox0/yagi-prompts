@@ -3,6 +3,8 @@ import {
   JUMP_MIN_SAMPLES,
   byteRuns,
   choosePath,
+  colourAdmitted,
+  decoderColourSpace,
   cutRatesMatch,
   decodeGroups,
   decodeSegments,
@@ -254,6 +256,62 @@ describe('which path, and what the sheet says', () => {
     expect(unevenWarning(true, null)).toBe(true);
     expect(unevenWarning(true, 'decoder')).toBe(false);
     expect(unevenWarning(false, 'seek')).toBe(false);
+  });
+});
+
+describe('spec G, A0: the footage whose colour the decoder path was measured on, and only that, goes there', () => {
+  const avc = { entry: 'avc1', profile: 100, bitDepth: 8, sdr: true, colour: null } as const;
+  const main10 = { entry: 'hvc1', profile: 2, bitDepth: 10, sdr: true, colour: { primaries: 1, transfer: 1, matrix: 1, fullRange: false } } as const;
+
+  it('8-bit that says nothing or says SDR: as before', () => {
+    expect(colourAdmitted(avc)).toBe(true);
+    expect(colourAdmitted({ ...avc, colour: { primaries: 6, transfer: 6, matrix: 6, fullRange: false } })).toBe(true);
+    expect(colourAdmitted({ ...avc, sdr: false })).toBe(false);
+    expect(colourAdmitted({ ...avc, bitDepth: null })).toBe(false);
+  });
+
+  it('HEVC Main 10 whose colr says BT.709, limited range (the studio’s own clips): the decoder path', () => {
+    expect(colourAdmitted(main10)).toBe(true);
+    expect(colourAdmitted({ ...main10, entry: 'hev1' })).toBe(true);
+  });
+
+  it('HEVC Main 10 that says nothing in its container, says full range, BT.601, BT.2020, PQ or HLG, or carries an ICC profile: seeked', () => {
+    // Said nothing: the stream itself may still say HLG or PQ, which this reader does not read.
+    expect(colourAdmitted({ ...main10, colour: null })).toBe(false);
+    expect(colourAdmitted({ ...main10, colour: { primaries: 1, transfer: 1, matrix: 1, fullRange: true } })).toBe(false);
+    expect(colourAdmitted({ ...main10, colour: { primaries: 6, transfer: 6, matrix: 6, fullRange: false } })).toBe(false);
+    expect(colourAdmitted({ ...main10, sdr: false, colour: { primaries: 9, transfer: 16, matrix: 9, fullRange: false } })).toBe(false);
+    expect(colourAdmitted({ ...main10, sdr: false, colour: { primaries: 9, transfer: 18, matrix: 9, fullRange: false } })).toBe(false);
+    expect(colourAdmitted({ ...main10, sdr: false })).toBe(false);
+  });
+
+  it('other 10-bit footage (H.264 High 10, HEVC range extensions, 12-bit) is seeked', () => {
+    expect(colourAdmitted({ ...main10, entry: 'avc1', profile: 110 })).toBe(false);
+    expect(colourAdmitted({ ...main10, profile: 4 })).toBe(false);
+    expect(colourAdmitted({ ...main10, bitDepth: 12 })).toBe(false);
+    expect(colourAdmitted({ ...main10, profile: null })).toBe(false);
+  });
+});
+
+describe('spec G, A0: the decoder is told the colour the MP4 box states, as the <video> follows it', () => {
+  /**
+   * Measured 2026-11-22: a stream that says nothing of its colour in a file whose colr box says BT.709 is
+   * drawn BT.709 by the <video> at 540 rows (H.264 8-bit, HEVC 8-bit, HEVC Main 10); BT.601 stated at 1080
+   * rows is drawn BT.601; full range stated is drawn full range. By the height rule alone the decoder path
+   * was 20 levels off on red (whole frame 2.0); told the box's colour, 0 on every patch.
+   */
+  const bt709 = { primaries: 1, transfer: 1, matrix: 1, fullRange: false };
+  it('the box’s colour when there is one; the height rule when not', () => {
+    expect(decoderColourSpace({ codedHeight: 540, colour: bt709 })).toEqual({ matrix: 'bt709', primaries: 'bt709', transfer: 'bt709', fullRange: false });
+    expect(decoderColourSpace({ codedHeight: 1080, colour: { primaries: 6, transfer: 6, matrix: 6, fullRange: false } })).toEqual(elementColourSpace(360));
+    expect(decoderColourSpace({ codedHeight: 1080, colour: { ...bt709, fullRange: true } })).toEqual({ ...elementColourSpace(1080), fullRange: true });
+    expect(decoderColourSpace({ codedHeight: 540, colour: null })).toEqual(elementColourSpace(540));
+    expect(decoderColourSpace({ codedHeight: 1080, colour: null })).toEqual(elementColourSpace(1080));
+  });
+
+  it('a part the box leaves unspecified (2) follows the height rule', () => {
+    expect(decoderColourSpace({ codedHeight: 540, colour: { primaries: 2, transfer: 2, matrix: 2, fullRange: false } })).toEqual(elementColourSpace(540));
+    expect(decoderColourSpace({ codedHeight: 540, colour: { primaries: 1, transfer: 2, matrix: 1, fullRange: false } })).toEqual({ matrix: 'bt709', primaries: 'bt709', transfer: 'smpte170m', fullRange: false });
   });
 });
 

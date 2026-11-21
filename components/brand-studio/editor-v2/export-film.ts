@@ -54,7 +54,7 @@ import {
   type PlannedFrame,
 } from '@/lib/brand-studio/editor-v2/export-plan';
 import { cutAnchor, effectStartSec, type CutAnchor } from '@/lib/brand-studio/editor-v2/cut-anchor';
-import { choosePath, cutRatesMatch, decodeGroups, pictureFor, pictureTimes, type DecodeGroup, type ExportPath, type ExportPathOverride } from '@/lib/brand-studio/editor-v2/decode-plan';
+import { choosePath, colourAdmitted, cutRatesMatch, decodeGroups, pictureFor, pictureTimes, type DecodeGroup, type ExportPath, type ExportPathOverride } from '@/lib/brand-studio/editor-v2/decode-plan';
 import { CURRENT_EXPORT_BACKGROUND, currentExportFrame } from '@/lib/brand-studio/editor-v2/framing';
 import { totalFrames, type FrameSequence } from '@/lib/brand-studio/editor-v2/frames';
 import { timingOfFile } from '@/lib/brand-studio/editor-v2/container';
@@ -787,7 +787,7 @@ type PictureSource = DecoderSource | SeekSource;
 
 /**
  * Which path a source takes (lib/brand-studio/editor-v2/decode-plan.ts `choosePath`), in ONE place for the
- * export and the sheet: its frame facts read, its index read, plain 8-bit SDR, every cut at the file's own
+ * export and the sheet: its frame facts read, its index read, a colour it was measured on, every cut at the file's own
  * rate, and its codec decoded by this browser. `cutRates`: the `sourceFps` of every cut on it.
  */
 async function sourceChoice(
@@ -805,7 +805,7 @@ async function sourceChoice(
   if (factsFailure || !facts?.answer.ok || !facts.answer.timing.video) return seek({ factsFailure: factsFailure ?? 'no-video' });
   const answer = await readPictureIndex(srcUrl).catch(() => ({ ok: false as const, reason: 'unreadable' as const }));
   if (!answer.ok) return seek({ indexFailure: answer.reason });
-  const plainColour = answer.index.config.bitDepth === 8 && answer.index.config.sdr;
+  const plainColour = colourAdmitted(answer.index.config);
   const rateMatches = cutRatesMatch(cutRates, { fps: facts.answer.timing.video.fps, variable: answer.index.variable });
   if (!plainColour || !rateMatches) return seek({ plainColour, rateMatches });
   const config = decoderConfig(answer.index);

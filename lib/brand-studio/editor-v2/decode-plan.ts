@@ -234,8 +234,8 @@ export function byteRuns(
 
 /** The colour description fields `VideoDecoderConfig.colorSpace` takes (a subset of WebCodecs' names). */
 export interface ColourSpaceInit {
-  matrix: 'smpte170m' | 'bt709';
-  primaries: 'smpte170m' | 'bt709';
+  matrix: 'smpte170m' | 'bt709' | 'bt470bg';
+  primaries: 'smpte170m' | 'bt709' | 'bt470bg';
   transfer: 'smpte170m' | 'bt709';
   fullRange: boolean;
 }
@@ -243,18 +243,70 @@ export interface ColourSpaceInit {
 /**
  * The colour the seek path's `<video>` draws a picture with, so the decoder path draws the same pixels
  * (spec F, F3). Measured on Chromium 2026-11-21, frame 0 drawn at native size from a `<video>` and from
- * `VideoDecoder`: drawing a `<video>` ignores the colour a file states (its `colr` box, the H.264 stream's
- * own description, full range) and picks by the picture's coded height: BT.709 from 720 rows up, BT.601
- * (SMPTE 170M) below, limited range (1278×718 → 601, 960×720 → 709, 1280×544 → 601, 720×1280 → 709).
- * `VideoDecoder` uses the stream's description, else BT.709, and a configured colour space overrides both.
- * Unconfigured, an untagged 640×360 clip came out greener on saturated red (255, 24, 0 against the
- * element's 254, 0, 0; mean |difference| in green 22.7); configured this way the difference was 0.000 on
- * every size and tagging tried.
+ * `VideoDecoder`: for a stream that does not describe its colour, drawing a `<video>` ignores the MP4's
+ * `colr` box and picks by the picture's coded height: BT.709 from 720 rows up, BT.601 (SMPTE 170M) below,
+ * limited range (1278×718 → 601, 960×720 → 709, 1280×544 → 601, 720×1280 → 709). Unconfigured,
+ * `VideoDecoder` used BT.709: an untagged 640×360 clip came out greener on saturated red (255, 24, 0 against
+ * the element's 254, 0, 0; mean |difference| in green 22.7); configured this way the difference was 0.000.
+ *
+ * Measured again 2026-11-22 (spec G, A0, flat colour patches, whole exported files): a stream that DOES
+ * describe its colour (H.264 or HEVC Main 10 with BT.709 in the stream itself) is drawn BT.709 by both paths
+ * at 540 rows too, and the decoder's frames say BT.709 although BT.601 was configured: the stream's own
+ * description wins on both. The configured colour only decides for a stream that says nothing, where it is
+ * the element's choice. Every combination tried came out the same on both paths (mean and largest
+ * |difference| 0 on every patch).
  */
 export function elementColourSpace(codedHeight: number): ColourSpaceInit {
   return codedHeight >= 720
     ? { matrix: 'bt709', primaries: 'bt709', transfer: 'bt709', fullRange: false }
     : { matrix: 'smpte170m', primaries: 'smpte170m', transfer: 'smpte170m', fullRange: false };
+}
+
+const PRIMARIES: Record<number, ColourSpaceInit['primaries']> = { 1: 'bt709', 5: 'bt470bg', 6: 'smpte170m' };
+const TRANSFER: Record<number, ColourSpaceInit['transfer']> = { 1: 'bt709', 6: 'smpte170m' };
+const MATRIX: Record<number, ColourSpaceInit['matrix']> = { 1: 'bt709', 5: 'bt470bg', 6: 'smpte170m' };
+
+/**
+ * The colour the decoder is told for a source: what the `<video>` draws it with when the stream says nothing
+ * of its colour (when it does, both paths follow the stream, measured). Measured 2026-11-22 (spec G, A0): the
+ * element follows the MP4's `colr` box then (H.264 8-bit, HEVC 8-bit and HEVC Main 10 at 540 rows, `colr`
+ * BT.709 only: red 232 on the element against 212 by the height rule; mean |difference| 2.0 per frame, 20 on
+ * a red patch); without a box, the height rule (`elementColourSpace`). A code the box leaves unspecified (2)
+ * falls back to the height rule for that part.
+ */
+export function decoderColourSpace(config: { codedHeight: number; colour: { primaries: number; transfer: number; matrix: number; fullRange: boolean } | null }): ColourSpaceInit {
+  const fallback = elementColourSpace(config.codedHeight);
+  const stated = config.colour;
+  if (!stated) return fallback;
+  return {
+    primaries: PRIMARIES[stated.primaries] ?? fallback.primaries,
+    transfer: TRANSFER[stated.transfer] ?? fallback.transfer,
+    matrix: MATRIX[stated.matrix] ?? fallback.matrix,
+    fullRange: stated.fullRange,
+  };
+}
+
+/**
+ * Footage whose colour the decoder path was measured on, so it may take it (`false`: seeked, reason
+ * `colour`). Exactly:
+ *
+ * - 8-bit footage whose `colr` says nothing or says SDR (sample-index.ts `sdr`; spec F review 1, item 1);
+ * - HEVC Main 10 (`hvc1` / `hev1`, general_profile_idc 2, 10 bits) whose `colr` says BT.709 primaries,
+ *   transfer and matrix (1/1/1) and limited range: what the studio's own video tool writes (seen on production,
+ *   spec G A0). Measured 2026-11-22 on Chromium 149 with its hardware HEVC decoder (no software decoder for
+ *   it here): at 1080, 720 and 540 rows, the colour in the stream and the box or in the box only, and laid out
+ *   like the production file, both paths gave the same pixels (mean and largest |difference| 0 per patch).
+ *
+ * Not taken: 10-bit footage whose container says nothing (the stream itself may say HLG or PQ, which this
+ * reader does not read), full range, BT.601 or BT.2020 tags, PQ, HLG, an ICC profile, H.264 High 10, HEVC
+ * range extensions, 12 bits, and 10-bit VP9 or AV1.
+ */
+export function colourAdmitted(config: { entry: string; profile: number | null; bitDepth: number | null; sdr: boolean; colour: { primaries: number; transfer: number; matrix: number; fullRange: boolean } | null }): boolean {
+  if (!config.sdr) return false;
+  if (config.bitDepth === 8) return true;
+  const hevc = config.entry === 'hvc1' || config.entry === 'hev1';
+  const bt709 = !!config.colour && config.colour.primaries === 1 && config.colour.transfer === 1 && config.colour.matrix === 1 && !config.colour.fullRange;
+  return hevc && config.profile === 2 && config.bitDepth === 10 && bt709;
 }
 
 // ── Which path ─────────────────────────────────────────────────────────────────────────────────
@@ -303,8 +355,8 @@ export function choosePath(input: {
   /** The source's index could be read (`null` when not: a reason is given). */
   indexFailure: string | null;
   /**
-   * The footage is plain 8-bit SDR (sample-index.ts `bitDepth` / `sdr`): the only footage the decoder path's
-   * colour rule was measured on (`elementColourSpace`). `false`: seeked, reason `colour`. Omitted: not asked.
+   * The footage is what the decoder path's colour was measured on (`colourAdmitted`). `false`: seeked, reason
+   * `colour`. Omitted: not asked.
    */
   plainColour?: boolean | null;
   /** Every cut on the source runs at the file's own rate (`cutRatesMatch`). `false`: seeked, reason `rate`. */

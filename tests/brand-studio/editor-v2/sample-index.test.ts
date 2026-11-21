@@ -272,6 +272,15 @@ describe('only plain 8-bit SDR footage is decoded (review 1, item 1): the rest i
     expect(main.ok && main.config.bitDepth).toBe(8);
   });
 
+  it('spec G, A0: the profile is read (hvcC general_profile_idc, avcC profile_idc)', () => {
+    const main10 = readSampleEntry(stsd(visualEntry('hvc1', 1920, 1080, hvcCDepth(10, 10))));
+    expect(main10.ok && main10.config.profile).toBe(2);
+    const high = readSampleEntry(stsd(visualEntry('avc1', 640, 360, avcC(0x64, 0, 0x1f))));
+    expect(high.ok && high.config.profile).toBe(100);
+    const vp9 = readSampleEntry(stsd(visualEntry('vp09', 640, 360, vpcC(2, 31, 10, 1, 0, 1, 1, 1))));
+    expect(vp9.ok && vp9.config.profile).toBe(2);
+  });
+
   it('AVC: the High-profile tail gives the bit depth; High 10 and the 4:2:2 / 4:4:4 profiles without a tail are not taken as 8', () => {
     expect(readSampleEntry(stsd(visualEntry('avc1', 640, 360, avcCTail(110, 10)))).ok && true).toBe(true);
     const ten = readSampleEntry(stsd(visualEntry('avc1', 640, 360, avcCTail(110, 10))));
