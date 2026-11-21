@@ -53,6 +53,39 @@ export function totalFromContentRange(value: string | null | undefined): number 
   return match ? Number(match[1]) : null;
 }
 
+/**
+ * A whole-file answer, read as a stream and stopped the moment more than `limit` bytes have come, whether or
+ * not the server said its length (spec F review 1, item 3): the body is cancelled and nothing is kept.
+ */
+async function readWhole(answer: RangeReply, limit: number): Promise<Uint8Array> {
+  if (!answer.body) {
+    const buffer = await answer.arrayBuffer();
+    if (buffer.byteLength > limit) throw new WholeFileTooLarge(buffer.byteLength);
+    return new Uint8Array(buffer);
+  }
+  const reader = answer.body.getReader();
+  const pieces: Uint8Array[] = [];
+  let total = 0;
+  for (;;) {
+    const { value, done } = await reader.read();
+    if (done) break;
+    if (!value) continue;
+    total += value.length;
+    if (total > limit) {
+      await reader.cancel().catch(() => undefined);
+      throw new WholeFileTooLarge(null);
+    }
+    pieces.push(value);
+  }
+  const bytes = new Uint8Array(total);
+  let at = 0;
+  for (const piece of pieces) {
+    bytes.set(piece, at);
+    at += piece.length;
+  }
+  return bytes;
+}
+
 export function sampleBytes(request: RangeFetch, wholeLimit = WHOLE_FILE_LIMIT): SampleBytes {
   let requests = 0;
   let received = 0;
@@ -97,11 +130,10 @@ export function sampleBytes(request: RangeFetch, wholeLimit = WHOLE_FILE_LIMIT):
           throw new WholeFileTooLarge(length);
         }
         mode = 'whole';
-        whole = answer.arrayBuffer().then((buffer) => {
-          if (buffer.byteLength > wholeLimit) throw new WholeFileTooLarge(buffer.byteLength);
-          received += buffer.byteLength;
-          fileSize = buffer.byteLength;
-          return new Uint8Array(buffer);
+        whole = readWhole(answer, wholeLimit).then((bytes) => {
+          received += bytes.length;
+          fileSize = bytes.length;
+          return bytes;
         });
         return cut(await whole, run, 0);
       }

@@ -42,6 +42,35 @@ describe('reading pictures by range', () => {
     await expect(sampleBytes(server(false), 5000).read({ start: 0, end: 10 })).rejects.toBeInstanceOf(WholeFileTooLarge);
   });
 
+  it('200 with no Content-Length: the body is read as a stream and stopped past the limit (review 1, item 3)', async () => {
+    let pulled = 0;
+    let cancelled = false;
+    const body = new ReadableStream<Uint8Array>({
+      pull(controller) {
+        pulled += 1;
+        controller.enqueue(new Uint8Array(4000));
+        if (pulled > 50) controller.close();
+      },
+      cancel() {
+        cancelled = true;
+      },
+    });
+    const endless = async (): Promise<RangeAnswer> => ({
+      status: 200,
+      body,
+      arrayBuffer: async () => {
+        throw new Error('the whole body must not be read at once');
+      },
+      headers: { get: () => null },
+    });
+    const reader = sampleBytes(endless, 10_000);
+    await expect(reader.read({ start: 0, end: 100 })).rejects.toBeInstanceOf(WholeFileTooLarge);
+    expect(cancelled).toBe(true);
+    expect(pulled).toBeLessThan(10);
+    // Nothing kept: a later read does not answer from a partial file.
+    await expect(reader.read({ start: 0, end: 100 })).rejects.toBeInstanceOf(WholeFileTooLarge);
+  });
+
   it('a short answer or a refusal is an error, never fewer bytes', async () => {
     await expect(sampleBytes(server(true), 1 << 20).read({ start: 9990, end: 10_020 })).rejects.toThrow(/ended/);
     const refusing = async (): Promise<RangeAnswer> => ({ status: 403, body: null, arrayBuffer: async () => new ArrayBuffer(0) });
