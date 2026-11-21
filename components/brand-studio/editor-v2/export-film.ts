@@ -65,6 +65,7 @@ import type { Rotation, VideoIndex } from '@/lib/brand-studio/editor-v2/sample-i
 import { SHARED_WAIT_MS, waitShared } from '@/lib/brand-studio/editor-v2/watched-read';
 import { CodecReclaimed, ReclaimedTooOften, isReclaim, runWithRestarts, whenVisible } from '@/lib/brand-studio/editor-v2/export-run';
 import { PicturePaths, type DecoderSession, type SourcePath } from '@/lib/brand-studio/editor-v2/picture-paths';
+import { encodeFrames } from '@/lib/brand-studio/editor-v2/frame-loop';
 import { exportIndexReads, footageBytes, readFootage, readPictureIndex, type IndexRead } from './footage-facts';
 import { PictureDecoder, decoderConfig, decoderSupports } from './frame-decoder';
 import { screenTimer } from './screen-refresh';
@@ -1074,48 +1075,48 @@ async function videoPass(pass: VideoPass): Promise<{ samples: EncodedVideoSample
       return null;
     };
 
-    for (const entry of plan) {
-      throwIfAborted(signal);
-      const before = stopped(entry.frame);
-      if (before) throw before;
-      const label = labels.get(entry.clipId) ?? entry.clipId;
-      const shown = await paths.picture(entry, label, signal).catch((error: unknown) => {
-        throwIfAborted(signal);
-        throw error;
-      });
-      pathNow = shown.path;
-      // The picture may have taken long (the seek path in a hidden window): the encoder is asked again (spec G, A2).
-      const after = stopped(entry.frame);
-      if (after) throw after;
-      // Filled frames are counted the same way on both paths: per cut, frames and the distinct pictures asked for.
-      if (shown.past) noteFilled(filled, entry.clipId, label, entry.sourceFrame);
-      if (framing === 'current') drawCurrentFraming(ctx, shown.picture, width, height);
-      else drawFramed(ctx, shown.picture, width, height, reframe[entry.clipId] ?? DEFAULT_REFRAME);
-      if (graded && extras) {
-        const index = indexOf.get(entry.clipId) ?? 0;
-        applyProjectColorGradeFrame(ctx, width, height, extras, storedCutFor(extras, sequence.clips[index]!, index));
-      }
-      drawImageOverlays(ctx, imageOverlaysAt(extras, entry.frame, anchor), overlayImages, width, height);
-      if (burnCaptions) drawCaptionsOverlay(ctx, captionsAt(sequence, entry.frame), width, height);
-
-      const frame = new VideoFrame(canvas, { timestamp: timestampUs(entry.frame, fps), duration: frameDurationUs(entry.frame, fps) });
-      // Closed whatever encode() does: a frame left to the garbage collector is a warning (spec G, A0).
-      try {
-        made.encode(frame, { keyFrame: isKeyFrame(entry.frame, fps) });
-      } catch (error) {
-        throw stopped(entry.frame) ?? new ExportStop('encode', `the video encoder refused film frame ${entry.frame}: ${describe(error)}`, { frame: entry.frame });
-      } finally {
-        frame.close();
-      }
-      // A source whose last film frame this was lets go of its decoder, frame and bytes now (spec G, B2).
-      paths.done(entry.frame);
-      while (made.encodeQueueSize > 6 && !stopped(entry.frame)) await dequeued(made);
-      report({ phase: 'video', done: entry.frame + 1, total: frames, path: shown.path });
-      if (performance.now() - lastYield > YIELD_EVERY_MS) {
-        await yieldToPage();
-        lastYield = performance.now();
-      }
-    }
+    // The frame loop (lib/brand-studio/editor-v2/frame-loop.ts): the encoder asked before each picture, after it
+    // arrives and after it fails (a picture that failed while the encoder was taken back restarts, spec H F1).
+    await encodeFrames<PlannedFrame, { picture: Picture; path: ExportPath; past: boolean; label: string }>(plan, {
+      checkCancel: () => throwIfAborted(signal),
+      stopped,
+      picture: async (entry) => {
+        const label = labels.get(entry.clipId) ?? entry.clipId;
+        return { ...(await paths.picture(entry, label, signal)), label };
+      },
+      encode: (entry, shown) => {
+        pathNow = shown.path;
+        // Filled frames are counted the same way on both paths: per cut, frames and the distinct pictures asked for.
+        if (shown.past) noteFilled(filled, entry.clipId, shown.label, entry.sourceFrame);
+        if (framing === 'current') drawCurrentFraming(ctx, shown.picture, width, height);
+        else drawFramed(ctx, shown.picture, width, height, reframe[entry.clipId] ?? DEFAULT_REFRAME);
+        if (graded && extras) {
+          const index = indexOf.get(entry.clipId) ?? 0;
+          applyProjectColorGradeFrame(ctx, width, height, extras, storedCutFor(extras, sequence.clips[index]!, index));
+        }
+        drawImageOverlays(ctx, imageOverlaysAt(extras, entry.frame, anchor), overlayImages, width, height);
+        if (burnCaptions) drawCaptionsOverlay(ctx, captionsAt(sequence, entry.frame), width, height);
+        const frame = new VideoFrame(canvas, { timestamp: timestampUs(entry.frame, fps), duration: frameDurationUs(entry.frame, fps) });
+        // Closed whatever encode() does: a frame left to the garbage collector is a warning (spec G, A0).
+        try {
+          made.encode(frame, { keyFrame: isKeyFrame(entry.frame, fps) });
+        } catch (error) {
+          throw stopped(entry.frame) ?? new ExportStop('encode', `the video encoder refused film frame ${entry.frame}: ${describe(error)}`, { frame: entry.frame });
+        } finally {
+          frame.close();
+        }
+      },
+      after: async (entry, shown) => {
+        // A source whose last film frame this was lets go of its decoder, frame and bytes now (spec G, B2).
+        paths.done(entry.frame);
+        while (made.encodeQueueSize > 6 && !stopped(entry.frame)) await dequeued(made);
+        report({ phase: 'video', done: entry.frame + 1, total: frames, path: shown.path });
+        if (performance.now() - lastYield > YIELD_EVERY_MS) {
+          await yieldToPage();
+          lastYield = performance.now();
+        }
+      },
+    });
     try {
       await made.flush();
     } catch (error) {

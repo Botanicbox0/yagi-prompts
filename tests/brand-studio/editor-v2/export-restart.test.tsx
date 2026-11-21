@@ -15,18 +15,7 @@ import { studioEditorEn, studioEditorKo } from '@/messages/studio-editor';
 const film = readFileSync(join(process.cwd(), 'components/brand-studio/editor-v2/export-film.ts'), 'utf8');
 
 describe('the export asks its encoder after the picture arrives and before encode()', () => {
-  const pass = film.slice(film.indexOf('async function videoPass('));
-  it('a taken-back encoder is checked after each picture and before encode(); encode() throwing is turned into that answer', () => {
-    const picture = pass.indexOf('await paths.picture(entry, label, signal)');
-    const check = pass.indexOf('const after = stopped(entry.frame);');
-    const encode = pass.indexOf('made.encode(frame');
-    expect(picture).toBeGreaterThan(0);
-    expect(check).toBeGreaterThan(picture);
-    expect(encode).toBeGreaterThan(check);
-    expect(pass).toMatch(/catch \(error\) \{\s*throw stopped\(entry\.frame\) \?\? new ExportStop\('encode'/);
-    expect(pass).toMatch(/isReclaim\(failure\) \? new CodecReclaimed\('video'\)/);
-  });
-
+  // The order of the encoder checks around a picture is tested on the loop itself (frame-loop.test.ts, spec H F1).
   it('the whole pass is run again on a reclaim (from frame 0, after the page is visible); the sound encode alone again on its own', () => {
     const run = film.slice(film.indexOf('export async function exportFilm('));
     expect(run).toMatch(/runWithRestarts\(\(\) => videoPass\(pass\), waitVisible/);
