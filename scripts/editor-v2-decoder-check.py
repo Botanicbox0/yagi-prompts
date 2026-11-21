@@ -693,6 +693,8 @@ def unattended_export(p, own, film, path, state, hidden_cap, name):
     browser.close()  # disconnects; the browser and its pages keep running, driven by nothing
     time.sleep(0.3)
     if state == 'minimise':
+        # Not on top any more: a window kept on top was not minimised from outside (measured: it stayed visible).
+        own.on_top(False)
         own.show('minimise')
     peak = [0, 0]
     stop = threading.Event()
