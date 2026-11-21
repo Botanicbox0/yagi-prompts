@@ -23,7 +23,6 @@
  */
 import {
   COMPOSE_ASPECTS,
-  MAX_COMPOSE_CAPTIONS,
   MAX_COMPOSE_CLIPS,
   clipPlaybackRate,
   emptyComposerProject,

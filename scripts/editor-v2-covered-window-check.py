@@ -632,13 +632,14 @@ def run_checks(browser, media):
         healed = page.evaluate(STATE)['cuts']
         measure(f'(6) a film stored with one picture too many in its first two cuts ({[c["frameV2"]["frames"] for c in phantom["clips"]]}): opens as {healed}')
         check('(6) it heals on open: the cuts end on the real last picture', healed == [n for _, _, n in C3_SOURCES], json.dumps(healed))
+        # Opened (and healed) in the reduced state; exported in front (the reduced export is (6) above).
+        throttle(False)
         page.click('[data-editor-export]')
         page.wait_for_selector('[data-editor-export-sheet]', timeout=60000)
         status, path, samples, took, _ = export('c3-phantom-healed')
-        throttle(False)
         numbers = decode_numbers(path, 1920, 1080) if path else []
         mismatches = [(k, n, e) for k, (n, e) in enumerate(zip(numbers, expected)) if n != e]
-        check('(6) and exports frame-exact in the reduced state', status == 'done' and len(numbers) == len(expected) and not mismatches, f'{status} after {took:.1f} s, {len(numbers)} frames, {len(mismatches)} mismatches')
+        check('(6) and exports frame-exact', status == 'done' and len(numbers) == len(expected) and not mismatches, f'{status} after {took:.1f} s, {len(numbers)} frames, {len(mismatches)} mismatches')
         # The next write stores the corrected frame data.
         page.keyboard.press('Escape')
         page.click('[data-editor-aspect="9:16"]')
@@ -648,6 +649,11 @@ def run_checks(browser, media):
         after = stored()
         blocks = [(c.get('frameV2') or {}).get('sourceFrames') for c in after['clips']]
         check('(6) the corrected frame data is what the next write stores', blocks == [n for _, _, n in C3_SOURCES], json.dumps(blocks))
+
+    # Leave the organization's uploads as they were found (the other checks take the first uploads they see).
+    for key in [k for k in keys if k]:
+        context.request.post(f'{BASE}/api/brand-studio', data=json.dumps({'operation': 'asset.delete', 'input': {'organizationId': ORG, 'assetId': key[2:]}}),
+                             headers={'Content-Type': 'application/json', 'Accept': 'application/json', 'Origin': BASE})
 
     check('no page errors', not errors, '; '.join(errors[:3]))
 

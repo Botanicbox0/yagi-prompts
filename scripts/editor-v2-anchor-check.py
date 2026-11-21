@@ -263,9 +263,14 @@ def main():
         v2 = analyse('v2 export', v2_path)
         page.keyboard.press('Escape')
 
-        # The stored intent: each thing's offset into its cut, in pictures of that cut.
-        intent = {'cap-six': round(0.3 * FPS), 'cap-three': round(0.5 * FPS), 'overlay': round(0.25 * FPS), 'effect ms': 200.0}
-        measure(f'stored intent (pictures into the cut): caption six {intent["cap-six"]}, caption three {intent["cap-three"]}, overlay {intent["overlay"]}; effect 200 ms')
+        # The stored intent: each thing's offset into its cut, in pictures of that cut, from the values as the
+        # current editor holds them (it rounds overlay times to tenths when it loads them: 3.95 s becomes 4.0 s).
+        caps = {c['id']: c for c in held['captions']}
+        into = lambda sec, cut: round((sec - spans[cut][0]) * FPS + 1e-9)
+        intent = {'cap-six': into(caps['cap-six']['startSec'], 5), 'cap-three': into(caps['cap-three']['startSec'], 2),
+                  'overlay': into(held['overlays'][0]['startSec'], 2), 'effect ms': round((held['sfxClips'][0]['startSec'] - spans[5][0]) * 1000, 1)}
+        measure(f'held by the current editor: captions {[(c["startSec"], c["endSec"]) for c in held["captions"]]}, overlay {held["overlays"][0]["startSec"]}–{held["overlays"][0]["endSec"]}, effect {held["sfxClips"][0]["startSec"]}')
+        measure(f'stored intent (pictures into the cut): caption six {intent["cap-six"]}, caption three {intent["cap-three"]}, overlay {intent["overlay"]}; effect {intent["effect ms"]} ms')
 
         def caption_in(facts, cut):
             return next((c for c in facts['captions'] if c['cut'] == cut), None)
@@ -284,9 +289,12 @@ def main():
         ov = v2.get('overlay')
         measure(f'overlay: v2 first picture {ov}; current editor {[c.get("overlay") for c in current]}; intent cut 3 picture {intent["overlay"]}')
         check('overlay: v2 shows it from its stored offset into the third cut, within one frame', ov is not None and ov['cut'] == 3 and abs(ov['firstPicture'] - intent['overlay']) <= 1, json.dumps(ov))
+        theirs = [c.get('overlay') for c in current]
+        check('overlay: v2 and the current editor start it on the same picture of the third cut, within one frame', ov is not None and all(t and t['cut'] == 3 and abs(t['firstPicture'] - ov['firstPicture']) <= 1 for t in theirs), json.dumps(theirs))
         fx = v2.get('effect')
         measure(f'effect: v2 {fx}; current editor {[c.get("effect") for c in current]}; intent 200 ms')
-        check('effect: v2 starts it 200 ms after the sixth cut’s first picture, within 10 ms', fx is not None and abs(fx['ms after the sixth cut’s first picture'] - 200) <= 10, json.dumps(fx))
+        check('effect: v2 starts it at its stored offset after the sixth cut’s first picture, within 10 ms', fx is not None and abs(fx['ms after the sixth cut’s first picture'] - intent['effect ms']) <= 10, json.dumps(fx))
+        check('effect: v2 and the current editor agree within 10 ms', fx is not None and all(c.get('effect') and abs(c['effect']['ms after the sixth cut’s first picture'] - fx['ms after the sixth cut’s first picture']) <= 10 for c in current))
 
         # v2's preview: on at the caption's frame, off one frame earlier.
         page.click('[data-editor-caption-item="cap-six"]')
