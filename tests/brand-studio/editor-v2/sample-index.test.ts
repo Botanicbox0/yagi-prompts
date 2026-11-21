@@ -11,11 +11,13 @@ import {
   clap,
   concat,
   fullBox,
+  i32,
   ftyp,
   hvcC,
   mdat,
   moof,
   moov,
+  trak,
   nclx,
   pasp,
   u32,
@@ -386,4 +388,28 @@ describe('what the index refuses', () => {
     expect(await indexOf(concat(ftyp(), moov({ tracks: [sound] }), mdat(64)))).toEqual({ ok: false, reason: 'no-video' });
     expect(readSampleIndex({ moov: box('moov', fullBox('mvhd', 0, 0)), moofs: [] })).toEqual({ ok: false, reason: 'unreadable' });
   });
+});
+
+describe('spec G, B4–B6: fragments read by their own rules', () => {
+  const entry = visualEntry('avc1', 320, 180, avcC(0x42, 0xc0, 0x1e));
+  const mvhd = fullBox('mvhd', 0, 0, u32(0), u32(0), u32(1000), u32(0), new Uint8Array(80));
+  const trex = (track: number, duration: number, size: number, flags: number) => fullBox('trex', 0, 0, u32(track), u32(1), u32(duration), u32(size), u32(flags));
+
+  it('B4: a version 0 trun with a negative composition offset is read signed, as ctts is (index and frame facts)', async () => {
+    const header = concat(ftyp('iso5'), moov({ tracks: [{ handler: 'vide', timescale: 12288, durations: [], entry }], fragmented: { defaultDuration: { 1: 512 } } }));
+    // Decode order I P B, the P shown after the B: the B's offset is negative, written into a version 0 trun.
+    const fragment = (dataOffset: number) =>
+      moof(1, [{ trackId: 1, base: 512, count: 3, sizes: [900, 300, 200], offsets: [0, 1024, -512], trunVersion: 0, firstFlags: SYNC, defaultFlags: NON_SYNC, dataOffset }]);
+    const size = fragment(0).length;
+    const bytes = concat(header, fragment(size + 8), mdat(1400));
+    const answer = await indexOf(bytes);
+    expect(answer.ok).toBe(true);
+    if (!answer.ok) return;
+    // Decode times 512, 1024, 1536; composition 512, 2048, 1024: the third sample is shown second.
+    expect(answer.index.cts).toEqual([512, 2048, 1024]);
+    expect(answer.index.pictures).toEqual([0, 2, 1]);
+    const facts = await timingOfFile(bytes);
+    expect(facts.ok && facts.timing.video).toMatchObject({ frames: 3, variable: false });
+  });
+
 });

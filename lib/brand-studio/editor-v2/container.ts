@@ -398,7 +398,9 @@ function readMoof(bytes: Uint8Array, movie: Movie) {
         if (runFlags & 0x200) pos += 4;
         if (runFlags & 0x400) pos += 4;
         if (runFlags & 0x800) {
-          offset = signed ? i32(bytes, pos) : u32(bytes, pos);
+          // As `cttsOffset`: version 0 read signed when only that makes sense (spec G, B4).
+          const raw = u32(bytes, pos);
+          offset = signed || raw > 0x7fffffff ? i32(bytes, pos) : raw;
           pos += 4;
         }
         if (track.mode === 'first') {

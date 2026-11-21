@@ -686,7 +686,10 @@ function readFragment(bytes: Uint8Array, moofAt: number, track: PictureTrack) {
           pos += 4;
         }
         if (runFlags & 0x800) {
-          offset = signed ? i32(bytes, pos) : u32(bytes, pos);
+          // Version 0 is unsigned by the standard, but writers put negative values there too: the ctts rule
+          // (signed when only that makes sense, more than half the 32-bit range; spec G, B4).
+          const raw = u32(bytes, pos);
+          offset = signed || raw > 0x7fffffff ? i32(bytes, pos) : raw;
           pos += 4;
         }
         if (mine) {
