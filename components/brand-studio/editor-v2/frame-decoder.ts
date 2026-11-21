@@ -35,8 +35,12 @@ import { ReadCancelled, ReadTimedOut, watchRead, type Watch } from '@/lib/brand-
 
 /** Decode requests waiting in the decoder before feeding pauses. */
 const QUEUE_CAP = 6;
-/** Wanted pictures held ahead of the one asked for before feeding pauses. */
-const HOLD_CAP = 6;
+/**
+ * Wanted pictures held after the one asked for, while it has not come out. A decoder gives its pictures out
+ * in presentation order, so later pictures before it mean it was skipped: at this many the request fails
+ * instead of feeding on (spec G, B7).
+ */
+export const HOLD_CAP = 6;
 /** No output, dequeue or error for this long while waiting: the decoder is stuck. */
 const STALL_MS = 20_000;
 /** One picture request, whatever it waits for (bytes, the decoder): past this the source is seeked (spec G, B1). */
@@ -200,11 +204,12 @@ export class PictureDecoder {
         this.startSegment(at);
         continue;
       }
+      // Later wanted pictures came out and this one did not: the decoder skipped it (spec G, B7).
+      if (this.held.size >= HOLD_CAP) throw new DecodeFailure(`picture ${picture} did not come out before ${this.held.size} later ones`);
       const decoder = this.decoder;
       const segment = this.segments[at]!;
       if (this.next <= segment.to) {
-        const queued = decoder.decodeQueueSize;
-        if (queued >= QUEUE_CAP || (this.held.size >= HOLD_CAP && queued > 0)) {
+        if (decoder.decodeQueueSize >= QUEUE_CAP) {
           await watch.guard(this.event());
           continue;
         }
