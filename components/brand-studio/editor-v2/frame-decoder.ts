@@ -86,7 +86,14 @@ export class PictureDecoder {
   private segmentOf = new Map<number, number>();
   private segment = -1;
   private next = 0;
-  private flushed = false;
+  /**
+   * The segment's flush: not asked yet, running in the background, or settled. It is never awaited: the
+   * decoder may need the frames held here back before it can finish, so every output wakes the loop and a
+   * wanted picture is taken as soon as it is out (measured: awaiting it deadlocked a second export).
+   */
+  private flushState: 'none' | 'running' | 'done' = 'none';
+  /** Bumped on every reset or close: a flush that settles afterwards belongs to an earlier segment. */
+  private generation = 0;
   private used = false;
   private runs: ByteRun[] = [];
   private runOf = new Map<number, number>();
@@ -139,13 +146,25 @@ export class PictureDecoder {
         this.next += 1;
         continue;
       }
-      if (!this.flushed) {
-        this.flushed = true;
-        try {
-          await this.decoder.flush();
-        } catch (error) {
-          this.fail(error);
-        }
+      if (this.flushState === 'none') {
+        this.flushState = 'running';
+        const generation = this.generation;
+        this.decoder.flush().then(
+          () => {
+            if (generation !== this.generation) return;
+            this.flushState = 'done';
+            this.wake();
+          },
+          (error: unknown) => {
+            if (generation !== this.generation) return;
+            this.flushState = 'done';
+            this.fail(error);
+          },
+        );
+        continue;
+      }
+      if (this.flushState === 'running') {
+        await this.event();
         continue;
       }
       throw new DecodeFailure(`picture ${picture} did not come out of the decoder`);
@@ -153,6 +172,7 @@ export class PictureDecoder {
   }
 
   close(): void {
+    this.generation += 1;
     for (const frame of this.held.values()) frame.close();
     this.held.clear();
     this.fetched.clear();
@@ -175,12 +195,13 @@ export class PictureDecoder {
 
   private startSegment(at: number) {
     const segment = this.segments[at]!;
+    this.generation += 1;
     if (this.used) this.decoder.reset();
     this.decoder.configure(this.config);
     this.used = true;
     this.segment = at;
     this.next = segment.from;
-    this.flushed = false;
+    this.flushState = 'none';
     this.runs = byteRuns(this.index, segment.from, segment.to);
     this.runOf.clear();
     this.fetched.clear();
