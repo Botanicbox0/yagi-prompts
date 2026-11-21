@@ -135,6 +135,11 @@ def make_media(folder):
     files['sar'] = numbered(m('sar43.mp4'), '24', 120, post='scale=480:360,setsar=4/3')
     files['hevc'] = numbered(m('hevc.mp4'), '24', 120, encode=('-c:v', 'libx265', '-tag:v', 'hvc1', '-x265-params', 'log-level=error:bframes=0', '-pix_fmt', 'yuv420p'))
     files['webm'] = numbered(m('vp9.webm'), '24', 120, encode=('-c:v', 'libvpx-vp9', '-b:v', '1M', '-pix_fmt', 'yuv420p'))
+    # Review 1, item 1: footage that is not plain 8-bit SDR keeps the seek path (reason colour).
+    files['hevc10'] = numbered(m('hevc10.mp4'), '24', 120, encode=('-c:v', 'libx265', '-tag:v', 'hvc1', '-x265-params', 'log-level=error:bframes=0', '-pix_fmt', 'yuv420p10le'))
+    # The frames themselves carry the tags (setparams), or the colr box says unspecified for primaries and transfer.
+    files['pq8'] = numbered(m('pq8.mp4'), '24', 120, post='setparams=color_primaries=bt2020:color_trc=smpte2084:colorspace=bt2020nc',
+                            encode=('-c:v', 'libx264', '-bf', '0', '-pix_fmt', 'yuv420p', '-color_primaries', 'bt2020', '-color_trc', 'smpte2084', '-colorspace', 'bt2020nc'), out=('-movflags', '+write_colr'))
     return files
 
 
@@ -448,6 +453,46 @@ def part_sources(page, context, media, ids):
             measure(f'{name}: picture spans columns {columns.min()}–{columns.max()} of 1920 (an upright 9:16 picture fitted in 1080 rows is 608 wide)')
             check(f'{name}: drawn upright and fitted like the <video> draws it', abs((columns.max() - columns.min() + 1) - 608) <= 4, f'{columns.max() - columns.min() + 1} px wide')
 
+
+    # ── Review 1, item 1: footage that is not plain 8-bit SDR keeps the seek path (reason colour) ──
+    main10 = page.evaluate("""async () => ({ element: document.createElement('video').canPlayType('video/mp4; codecs="hvc1.2.4.L93.90"') })""")
+    measure(f'HEVC Main10 on this Chromium: <video> canPlayType "{main10["element"]}"')
+    for key, label in (('hevc10', 'HEVC Main10 (10-bit)'), ('pq8', '8-bit tagged BT.2020 / PQ (colr 9/16/9)')):
+        if key == 'hevc10' and not main10['element']:
+            measure(f'{label}: this Chromium does not play it: not run')
+            continue
+        asset = add(key, f'decoder-check {key}.mp4', 640, 360, 5)
+        film = stored_film([(asset, key, 5, 0, 5)])
+        state = open_film(page, film)
+        outcome = export_driven(page, f'colour-{key}')
+        path_line(f'{label} (auto)', outcome)
+        reason = outcome['paths'][0]['reason'] if outcome['paths'] else None
+        check(f'{label}: taken by seeking, reason colour', outcome['status'] == 'done' and outcome['path'] == 'seek' and reason == 'colour', f'{outcome["status"]} {outcome["path"]} {reason}')
+        numbers = decode_numbers(outcome['file'], 1920, 1080, (0, 0, 1920, 1080)) if outcome['file'] else []
+        expected = expected_even(sum(state['cuts']), 24, state['fps'], 120)
+        wrong = [(i, n, e) for i, (n, e) in enumerate(zip(numbers, expected)) if n != e]
+        check(f'{label}: every frame shows the picture it should', len(numbers) == len(expected) and not wrong, f'{len(numbers)} frames, {len(wrong)} wrong {wrong[:4]}')
+
+    # ── Review 1, item 2: a stored block whose rate is not the file's (an old playback measurement wrote
+    # 30 for a 29.97 file) keeps the seek path (reason rate). The product's own way there: v2 stores the block
+    # at its next write; the block is changed to say 30 and the film opened again. ──
+    asset = ids['n29.97']
+    open_film(page, stored_film([(asset, 'n29.97', 150 / (30000 / 1001), 0, 150 / (30000 / 1001))]))
+    page.click('[data-editor-aspect="9:16"]')
+    page.wait_for_timeout(500)
+    page.click('[data-editor-aspect="16:9"]')
+    page.wait_for_timeout(1500)
+    saved = json.loads(page.evaluate('(key) => localStorage.getItem(key)', KEY) or 'null')
+    block = ((saved or {}).get('clips') or [{}])[0].get('frameV2') if saved else None
+    check("review 1, item 2: v2 stored the 29.97 file's block at its own rate", bool(block) and abs(block['sourceFps'] - 30000 / 1001) < 1e-6, json.dumps(block)[:160] if block else 'no block')
+    if block:
+        block['sourceFps'] = 30
+        state = open_film(page, saved)
+        outcome = export_driven(page, 'rate-30-for-29.97')
+        path_line('a block that says 30 for a 29.97 file (auto)', outcome)
+        reason = outcome['paths'][0]['reason'] if outcome['paths'] else None
+        measure(f'a block that says 30 for a 29.97 file: opens as cuts {state["cuts"]} at {state["fps"]} fps; exported {outcome["status"]} by {outcome["path"]}, reason {reason}')
+        check("review 1, item 2: a cut whose rate is not the file's is taken by seeking, reason rate", outcome['status'] == 'done' and outcome['path'] == 'seek' and reason == 'rate', f'{outcome["status"]} {outcome["path"]} {reason}')
 
 def part_fallback(browser, media, ids_holder):
     context = browser.new_context(viewport={'width': 1440, 'height': 900}, accept_downloads=True)
