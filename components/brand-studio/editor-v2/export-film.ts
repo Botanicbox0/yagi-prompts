@@ -63,6 +63,7 @@ import { DEFAULT_REFRAME, type Reframe } from '@/lib/brand-studio/editor-v2/mode
 import { sampleBytes, type SampleBytes } from '@/lib/brand-studio/editor-v2/sample-bytes';
 import type { Rotation, VideoIndex } from '@/lib/brand-studio/editor-v2/sample-index';
 import { SHARED_WAIT_MS, waitShared } from '@/lib/brand-studio/editor-v2/watched-read';
+import { CodecReclaimed, ReclaimedTooOften, isReclaim, runWithRestarts, whenVisible } from '@/lib/brand-studio/editor-v2/export-run';
 import { footageBytes, readFootage, readPictureIndex } from './footage-facts';
 import { PictureDecoder, decoderConfig, decoderSupports } from './frame-decoder';
 import { screenTimer } from './screen-refresh';
@@ -73,6 +74,11 @@ export interface ExportProgress {
   total: number;
   /** Which path is making the pictures right now (the sheet's slow-window line depends on it). */
   path?: ExportPath;
+  /**
+   * Times the export started again because the browser took its encoder back while the page was hidden
+   * (spec G, A2); present from the first restart on. The count goes back to 0 on a restart.
+   */
+  restarts?: number;
 }
 
 /** Which path made a source's pictures, for the proof (the sheet exposes it as data, never as words). */
@@ -131,6 +137,8 @@ export interface ExportFilmResult {
   warnings: ExportWarning[];
   /** Which path made each source's pictures, in the order the film first uses them. */
   paths: SourcePath[];
+  /** Times it started again after the browser took an encoder back (spec G, A2). */
+  restarts: number;
 }
 
 /**
@@ -721,13 +729,16 @@ async function encodeAac(rendered: AudioBuffer, signal?: AbortSignal): Promise<{
       failure = error;
     },
   });
+  /** Taken back by the browser (`CodecReclaimed`: the sound is encoded again, spec G A2), or failed. */
+  const stopped = (): Error | null => (failure ? (isReclaim(failure) ? new CodecReclaimed('audio') : new ExportStop('sound', `sound could not be written: ${describe(failure)}`)) : null);
   try {
     encoder.configure(AUDIO_CONFIG);
     const left = rendered.getChannelData(0);
     const right = rendered.numberOfChannels > 1 ? rendered.getChannelData(1) : left;
     for (let offset = 0; offset < rendered.length; offset += 1024) {
       throwIfAborted(signal);
-      if (failure) break;
+      const gone = stopped();
+      if (gone) throw gone;
       const frames = Math.min(1024, rendered.length - offset);
       const planar = new Float32Array(frames * 2);
       planar.set(left.subarray(offset, offset + frames), 0);
@@ -742,16 +753,24 @@ async function encodeAac(rendered: AudioBuffer, signal?: AbortSignal): Promise<{
       });
       try {
         encoder.encode(data);
+      } catch (error) {
+        throw stopped() ?? new ExportStop('sound', `sound could not be written: ${describe(error)}`);
       } finally {
         data.close();
       }
       if (encoder.encodeQueueSize > 64) await dequeued(encoder);
     }
-    await encoder.flush();
+    try {
+      await encoder.flush();
+    } catch (error) {
+      throw stopped() ?? new ExportStop('sound', `sound could not be written: ${describe(error)}`);
+    }
   } finally {
     if (encoder.state !== 'closed') encoder.close();
   }
-  if (failure || samples.length === 0) throw new ExportStop('sound', `sound could not be written: ${failure instanceof Error ? failure.message : 'no output'}`);
+  const gone = stopped();
+  if (gone) throw gone;
+  if (samples.length === 0) throw new ExportStop('sound', 'sound could not be written: no output');
   return { sampleRate: rendered.sampleRate, channelCount: 2, samples, audioSpecificConfig: config };
 }
 
@@ -854,6 +873,15 @@ export async function plannedPath(srcUrl: string, override: ExportPathOverride, 
 
 // ── The export ─────────────────────────────────────────────────────────────────────────────────
 
+/** An error's message, for the console. */
+const describe = (error: unknown) => (error instanceof Error ? error.message : String(error));
+
+/** Reclaimed after the last restart: the export stops as an encoding failure that says so (spec G, A2). */
+function givenUp(error: unknown): never {
+  if (error instanceof ReclaimedTooOften) throw new ExportStop('encode', error.message);
+  throw error;
+}
+
 export async function exportFilm(options: ExportFilmOptions): Promise<ExportFilmResult> {
   const { sequence, extras = null, reframe = {}, framing = 'reframe', burnCaptions = true, path: override = null, onProgress, signal } = options;
   const started = performance.now();
@@ -892,6 +920,78 @@ export async function exportFilm(options: ExportFilmOptions): Promise<ExportFilm
       cutUrls.map(async (url) => [url, await sourceChoice(url, override, plan.filter((entry) => entry.srcUrl === url).map((entry) => entry.sourceFps), signal)] as const),
     ),
   );
+  if (document.fonts?.ready) await document.fonts.ready;
+  const overlayImages = new Map<string, HTMLImageElement>();
+  for (const overlay of (extras?.overlays ?? []).filter((o) => o.mediaKind === 'image')) {
+    overlayImages.set(overlay.id, await loadImage(overlay.srcUrl, overlay.label, signal));
+  }
+
+  // The browser takes back an encoder that sat idle about 90 s in a hidden page (spec G, A1): the attempt then
+  // starts again from frame 0 once the page is on screen again, at most MAX_RESTARTS times (A2). The sheet's
+  // count goes back to 0 and it says why (`restarts` in every progress report after the first restart).
+  let restarts = 0;
+  const report = (progress: ExportProgress) => onProgress?.(restarts > 0 ? { ...progress, restarts } : progress);
+  const restarted = (phase: ExportProgress['phase'], total: number) => () => {
+    restarts += 1;
+    report({ phase, done: 0, total });
+  };
+  const waitVisible = () => whenVisible(document, signal, cancelled);
+  const pass: VideoPass = { sequence, extras, reframe, framing, burnCaptions, override, signal, plan, choices, codec, width, height, fps, anchor, overlayImages, report };
+  const video = await runWithRestarts(() => videoPass(pass), waitVisible, { onRestart: restarted('video', frames) }).catch(givenUp);
+
+  const { rendered, warnings } = await mixSound(sequence, extras, anchor, reader, signal, (done, total) => report({ phase: 'audio', done, total }), noSoundTrack);
+  // The rendered sound is still in hand: only its encoding starts again (spec G, A2).
+  const audio = await runWithRestarts(() => encodeAac(rendered, signal), waitVisible, { onRestart: restarted('audio', 1) }).catch(givenUp);
+
+  throwIfAborted(signal);
+  report({ phase: 'writing', done: 0, total: 1 });
+  const bytes = muxAvc1ToMp4({ width, height, fps, videoSamples: video.result.samples, avcDecoderConfigRecord: video.result.avcConfig, audio: audio.result });
+  report({ phase: 'writing', done: 1, total: 1 });
+  return {
+    blob: new Blob([bytes.buffer as ArrayBuffer], { type: 'video/mp4' }),
+    mime: 'video/mp4',
+    filename: exportFilename(new Date()),
+    width,
+    height,
+    fps,
+    frames,
+    durationSec: frames / fps,
+    elapsedMs: Math.round(performance.now() - started),
+    notIncluded: notIncluded({ sequence, extras }),
+    warnings: [...lastFrameWarnings(video.result.filled), ...warnings],
+    paths: video.result.paths,
+    restarts,
+  };
+}
+
+interface VideoPass {
+  sequence: FrameSequence;
+  extras: ComposerProject | null;
+  reframe: Readonly<Record<string, Reframe>>;
+  framing: 'reframe' | 'current';
+  burnCaptions: boolean;
+  override: ExportPathOverride;
+  signal: AbortSignal | undefined;
+  plan: readonly PlannedFrame[];
+  choices: ReadonlyMap<string, SourceChoice>;
+  codec: string;
+  width: number;
+  height: number;
+  fps: number;
+  anchor: CutAnchor | null;
+  overlayImages: ReadonlyMap<string, HTMLImageElement>;
+  report: (progress: ExportProgress) => void;
+}
+
+/**
+ * Every picture of the film, drawn and encoded once, from frame 0: one attempt. Everything it opens (sources,
+ * decoders, the hidden host, the encoder) is let go when it ends, however it ends. An encoder the browser took
+ * back ends it with `CodecReclaimed` (the export starts it again); that is checked after each picture arrives
+ * and before `encode()`, so no raw "closed codec" error escapes.
+ */
+async function videoPass(pass: VideoPass): Promise<{ samples: EncodedVideoSample[]; avcConfig: Uint8Array | null; paths: SourcePath[]; filled: FilledCuts }> {
+  const { sequence, extras, reframe, framing, burnCaptions, override, signal, plan, choices, codec, width, height, fps, anchor, overlayImages, report } = pass;
+  const frames = plan.length;
   const labels = new Map(sequence.clips.map((clip) => [clip.id, clip.label] as const));
   const indexOf = new Map(sequence.clips.map((clip, index) => [clip.id, index] as const));
   const host = document.createElement('div');
@@ -937,7 +1037,7 @@ export async function exportFilm(options: ExportFilmOptions): Promise<ExportFilm
         return { picture: { image: frame, width: frame.displayWidth, height: frame.displayHeight, rotation: source.index.rotation }, path: 'decoder', past: at.past };
       } catch (error) {
         throwIfAborted(signal);
-        const message = error instanceof Error ? error.message : String(error);
+        const message = describe(error);
         if (override === 'decoder') throw new ExportStop('frame', `film frame ${entry.frame}: the decoder could not give picture ${at.picture} of "${label}" (${message})`, { frame: entry.frame, clip: label });
         // Every frame already in the file was verified; the rest of this source is taken by seeking.
         console.warn('[editor export] decoder path left for seeking', label, message);
@@ -949,7 +1049,7 @@ export async function exportFilm(options: ExportFilmOptions): Promise<ExportFilm
         return pictureOf(entry, label);
       }
     }
-    if (pathNow !== 'seek') onProgress?.({ phase: 'video', done: entry.frame, total: frames, path: 'seek' });
+    if (pathNow !== 'seek') report({ phase: 'video', done: entry.frame, total: frames, path: 'seek' });
     if (!source.source) source.source = await openSource(entry.srcUrl, entry.sourceFps, label, host, signal);
     // Consecutive frames on the same source frame (a slowed cut) reuse the picture: no second seek.
     const past = await present(source.source, entry.sourceFrame, entry.frame, label, signal);
@@ -959,7 +1059,6 @@ export async function exportFilm(options: ExportFilmOptions): Promise<ExportFilm
   };
 
   try {
-    if (document.fonts?.ready) await document.fonts.ready;
     const canvas = document.createElement('canvas');
     canvas.width = width;
     canvas.height = height;
@@ -968,16 +1067,11 @@ export async function exportFilm(options: ExportFilmOptions): Promise<ExportFilm
     if (!ctx) throw new ExportStop('unsupported', 'no canvas');
     ctx.imageSmoothingQuality = 'high';
 
-    const overlayImages = new Map<string, HTMLImageElement>();
-    for (const overlay of (extras?.overlays ?? []).filter((o) => o.mediaKind === 'image')) {
-      overlayImages.set(overlay.id, await loadImage(overlay.srcUrl, overlay.label, signal));
-    }
-
     const samples: EncodedVideoSample[] = [];
     const stamps: number[] = [];
     let avcConfig: Uint8Array | null = null;
     let failure: unknown = null;
-    encoder = new VideoEncoder({
+    const made = new VideoEncoder({
       output: (chunk, meta) => {
         const data = new Uint8Array(chunk.byteLength);
         chunk.copyTo(data);
@@ -990,14 +1084,25 @@ export async function exportFilm(options: ExportFilmOptions): Promise<ExportFilm
         failure = error;
       },
     });
-    encoder.configure({ codec, width, height, bitrate: VIDEO_BITRATE, framerate: fps, avc: { format: 'avc' }, latencyMode: 'quality' });
+    encoder = made;
+    made.configure({ codec, width, height, bitrate: VIDEO_BITRATE, framerate: fps, avc: { format: 'avc' }, latencyMode: 'quality' });
+    /** The encoder takes no more frames: the browser took it back (`CodecReclaimed`: started again), or it failed. */
+    const stopped = (frame: number): Error | null => {
+      if (failure) return isReclaim(failure) ? new CodecReclaimed('video') : new ExportStop('encode', `the video encoder stopped at film frame ${frame}: ${describe(failure)}`, { frame });
+      if (made.state === 'closed') return new ExportStop('encode', `the video encoder was closed at film frame ${frame}`, { frame });
+      return null;
+    };
 
     for (const entry of plan) {
       throwIfAborted(signal);
-      if (failure) throw new ExportStop('encode', `the video encoder stopped at film frame ${entry.frame}`, { frame: entry.frame });
+      const before = stopped(entry.frame);
+      if (before) throw before;
       const label = labels.get(entry.clipId) ?? entry.clipId;
       const shown = await pictureOf(entry, label);
       pathNow = shown.path;
+      // The picture may have taken long (the seek path in a hidden window): the encoder is asked again (spec G, A2).
+      const after = stopped(entry.frame);
+      if (after) throw after;
       // Filled frames are counted the same way on both paths: per cut, frames and the distinct pictures asked for.
       if (shown.past) noteFilled(filled, entry.clipId, label, entry.sourceFrame);
       if (framing === 'current') drawCurrentFraming(ctx, shown.picture, width, height);
@@ -1012,52 +1117,36 @@ export async function exportFilm(options: ExportFilmOptions): Promise<ExportFilm
       const frame = new VideoFrame(canvas, { timestamp: timestampUs(entry.frame, fps), duration: frameDurationUs(entry.frame, fps) });
       // Closed whatever encode() does: a frame left to the garbage collector is a warning (spec G, A0).
       try {
-        encoder.encode(frame, { keyFrame: isKeyFrame(entry.frame, fps) });
+        made.encode(frame, { keyFrame: isKeyFrame(entry.frame, fps) });
+      } catch (error) {
+        throw stopped(entry.frame) ?? new ExportStop('encode', `the video encoder refused film frame ${entry.frame}: ${describe(error)}`, { frame: entry.frame });
       } finally {
         frame.close();
       }
-      while (encoder.encodeQueueSize > 6) await dequeued(encoder);
-      onProgress?.({ phase: 'video', done: entry.frame + 1, total: frames, path: shown.path });
+      while (made.encodeQueueSize > 6 && !stopped(entry.frame)) await dequeued(made);
+      report({ phase: 'video', done: entry.frame + 1, total: frames, path: shown.path });
       if (performance.now() - lastYield > YIELD_EVERY_MS) {
         await yieldToPage();
         lastYield = performance.now();
       }
     }
-    await encoder.flush();
-    if (failure) throw new ExportStop('encode', `the video encoder failed: ${failure instanceof Error ? failure.message : String(failure)}`);
+    try {
+      await made.flush();
+    } catch (error) {
+      throw stopped(frames) ?? new ExportStop('encode', `the video encoder failed: ${describe(error)}`);
+    }
+    const ended = stopped(frames);
+    if (ended) throw ended;
     if (samples.length !== frames) throw new ExportStop('encode', `the encoder returned ${samples.length} frames for ${frames}`);
     const misplaced = stamps.findIndex((stamp, index) => stamp !== timestampUs(index, fps));
     if (misplaced >= 0) throw new ExportStop('encode', `encoded frame ${misplaced} carries the wrong time`, { frame: misplaced });
-    encoder.close();
-    encoder = null;
     for (const [url, source] of sources) {
       if (source.kind !== 'decoder') continue;
       source.session.close();
       const stats = source.bytes.stats();
       Object.assign(records.get(url)!, { bytesRead: stats.received, fileBytes: stats.fileSize, requests: stats.requests });
     }
-
-    const { rendered, warnings } = await mixSound(sequence, extras, anchor, reader, signal, (done, total) => onProgress?.({ phase: 'audio', done, total }), noSoundTrack);
-    const audio = await encodeAac(rendered, signal);
-
-    throwIfAborted(signal);
-    onProgress?.({ phase: 'writing', done: 0, total: 1 });
-    const bytes = muxAvc1ToMp4({ width, height, fps, videoSamples: samples, avcDecoderConfigRecord: avcConfig, audio });
-    onProgress?.({ phase: 'writing', done: 1, total: 1 });
-    return {
-      blob: new Blob([bytes.buffer as ArrayBuffer], { type: 'video/mp4' }),
-      mime: 'video/mp4',
-      filename: exportFilename(new Date()),
-      width,
-      height,
-      fps,
-      frames,
-      durationSec: frames / fps,
-      elapsedMs: Math.round(performance.now() - started),
-      notIncluded: notIncluded({ sequence, extras }),
-      warnings: [...lastFrameWarnings(filled), ...warnings],
-      paths: [...records.values()],
-    };
+    return { samples, avcConfig, paths: [...records.values()], filled };
   } finally {
     if (encoder && encoder.state !== 'closed') encoder.close();
     for (const source of sources.values()) {

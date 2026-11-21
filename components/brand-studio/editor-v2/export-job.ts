@@ -23,6 +23,8 @@ export type ExportJob =
        * for the screen, so there it stays false (spec F, F4).
        */
       slow: boolean;
+      /** Times it started again because the browser took its encoder back while the page was hidden (spec G, A2). */
+      restarts: number;
     }
   | {
       status: 'done';
@@ -37,6 +39,7 @@ export type ExportJob =
       warnings: ExportWarning[];
       /** Which path made each source's pictures (for the proof; data on the sheet, never words). */
       paths: SourcePath[];
+      restarts: number;
     }
   | { status: 'failed'; reason: ExportStopReason; frame: number | null; clip: string | null; bytes: number | null; message: string; fps: number };
 
@@ -116,12 +119,13 @@ export function startExport(request: ExportRequest): void {
   /** The path making the pictures now: the slow line is only true for the seek path (`slowNotice`). */
   let path: ExportPath | null = null;
   let slow = false;
-  set({ status: 'running', progress: progressNow, frames, fps, slow });
+  let restarts = 0;
+  set({ status: 'running', progress: progressNow, frames, fps, slow, restarts });
   const update = (force: boolean) => {
     const next = slowNotice(reduced, path);
     if (!force && next === slow) return;
     slow = next;
-    set({ status: 'running', progress: progressNow, frames, fps, slow });
+    set({ status: 'running', progress: progressNow, frames, fps, slow, restarts });
   };
   // While it runs, whether the screen refreshes live: the sheet says so when it does not and the seek path
   // is waiting for it, and stops saying it when either is no longer so.
@@ -136,7 +140,10 @@ export function startExport(request: ExportRequest): void {
     const finished = progress.done >= progress.total;
     const pathChanged = progress.path !== undefined && progress.path !== path;
     if (progress.path !== undefined) path = progress.path;
-    if (!pathChanged && progress.phase === lastPhase && !finished && now - lastEmit < 80) return;
+    // A restart is shown at once: the count went back to 0 and the sheet says why (spec G, A2).
+    const restarted = (progress.restarts ?? 0) > restarts;
+    if (restarted) restarts = progress.restarts!;
+    if (!pathChanged && !restarted && progress.phase === lastPhase && !finished && now - lastEmit < 80) return;
     lastEmit = now;
     lastPhase = progress.phase;
     progressNow = progress;
@@ -163,6 +170,7 @@ export function startExport(request: ExportRequest): void {
         captionFile,
         warnings: result.warnings,
         paths: result.paths,
+        restarts: result.restarts,
       });
       downloadFile(url, result.filename);
       if (openSheets === 0) request.notify('done');

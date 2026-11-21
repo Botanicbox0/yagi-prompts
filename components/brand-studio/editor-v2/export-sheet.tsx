@@ -213,11 +213,21 @@ export function ExportStatus({ job, copy: e }: { job: ExportJob; copy: ExportCop
     const percent = Math.round(phase === 'video' ? share * 90 : phase === 'audio' ? 90 + share * 8 : 98 + share * 2);
     const label = phase === 'video' ? fill(e.progressVideo, { done, total }) : phase === 'audio' ? e.progressAudio : e.progressWriting;
     return (
-      <div className={styles.exportRun} data-editor-export-progress={phase === 'video' ? `${done}/${total}` : phase} data-editor-export-path-now={job.progress.path ?? ''}>
+      <div
+        className={styles.exportRun}
+        data-editor-export-progress={phase === 'video' ? `${done}/${total}` : phase}
+        data-editor-export-path-now={job.progress.path ?? ''}
+        data-editor-export-restarts={job.restarts}
+      >
         <div className={styles.exportBar} role="progressbar" aria-label={label} aria-valuemin={0} aria-valuemax={100} aria-valuenow={percent}>
           <i style={{ width: `${percent}%` }} />
         </div>
         <p className={styles.exportCount} aria-live="polite">{label}</p>
+        {job.restarts > 0 && (
+          <p className={styles.note} role="status" data-editor-export-restarted>
+            {e.restarted}
+          </p>
+        )}
         {job.slow && (
           <p className={styles.note} role="status" data-editor-export-slow>
             {e.slowWindow}
@@ -234,6 +244,7 @@ export function ExportStatus({ job, copy: e }: { job: ExportJob; copy: ExportCop
         data-editor-export-done={job.filename}
         data-editor-export-ms={job.elapsedMs}
         data-editor-export-path={pathSummary(job.paths)}
+        data-editor-export-restarts={job.restarts}
         data-editor-export-paths={JSON.stringify(job.paths.map(({ clip, path, reason, decoded, seeked, bytesRead, fileBytes, requests }) => ({ clip, path, reason, decoded, seeked, bytesRead, fileBytes, requests })))}
       >
         <p className={styles.exportCount} role="status">{e.done}</p>
