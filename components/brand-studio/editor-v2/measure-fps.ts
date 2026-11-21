@@ -74,6 +74,8 @@ function measureOnce(src: string, durationSec: number | null, limitMs: number): 
     let done = false;
     let firstSec: number | null = null;
     let lastSec: number | null = null;
+    /** The ends are being read: an `ended` now is the seek to the last picture, not the end of playing. */
+    let readingEnds = false;
     const result = (): MeasuredSource | null => {
       const { fps, variable } = rateFromMediaTimes(times);
       const seconds = durationSec ?? (Number.isFinite(video.duration) ? video.duration : null);
@@ -98,13 +100,23 @@ function measureOnce(src: string, durationSec: number | null, limitMs: number): 
         }, { once: true });
         video.currentTime = at;
       });
-    /** The rate is known: the first and the last picture give the count (the time limit still applies). */
+    /**
+     * The rate is known: the first and the last picture give the count (the time limit still applies).
+     * Measured in Chromium (full build, 2026-11-21) on a WebM of 97 pictures whose container runs to
+     * 4.308 s (its sound is longer): a paused seek to `duration` fires `seeked` (currentTime 4.308) and
+     * then the frame callback with mediaTime 4.000 in the same task, and no `ended` at all; a seek to
+     * `duration − 0.5/fps` gives the same picture. The last picture is asked for there (inside the
+     * picture's time, never past the end), and an `ended` while the ends are read is ignored, so a browser
+     * that does fire it cannot cut the count short (review round 1 of part E, item 4).
+     */
     const readEnds = () => {
+      readingEnds = true;
       video.pause();
+      const fps = rateFromMediaTimes(times).fps ?? 30;
       void shownAt(0)
         .then((first) => {
           firstSec = first;
-          return shownAt(Number.isFinite(video.duration) ? video.duration : 1e9);
+          return shownAt(Number.isFinite(video.duration) ? Math.max(0, video.duration - 0.5 / fps) : 1e9);
         })
         .then((last) => {
           lastSec = last;
@@ -131,7 +143,9 @@ function measureOnce(src: string, durationSec: number | null, limitMs: number): 
       video.requestVideoFrameCallback?.(onFrame);
     };
     video.addEventListener('error', () => finish(null), { once: true });
-    video.addEventListener('ended', () => finish(result()), { once: true });
+    video.addEventListener('ended', () => {
+      if (!readingEnds) finish(result());
+    });
     video.addEventListener(
       'loadeddata',
       () => {
