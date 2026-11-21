@@ -648,6 +648,14 @@ def newest_download(folder, after):
     return max(files, key=os.path.getmtime) if files else None
 
 
+def window_state(browser, context, page, state):
+    """Minimises or restores the page's window through the browser (`Browser.setWindowBounds`)."""
+    cdp = browser.new_browser_cdp_session()
+    target = context.new_cdp_session(page).send('Target.getTargetInfo')['targetInfo']['targetId']
+    window = cdp.send('Browser.getWindowForTarget', {'targetId': target})['windowId']
+    cdp.send('Browser.setWindowBounds', {'windowId': window, 'bounds': {'windowState': state}})
+
+
 def unattended_export(p, own, film, path, state, hidden_cap, name):
     """Sets up and presses export over CDP, disconnects, hides the window `state` (front/covered/minimised/
     background) with no one driving the page, waits, shows it again, reconnects and reads the page's own log."""
@@ -657,9 +665,9 @@ def unattended_export(p, own, film, path, state, hidden_cap, name):
     context.add_cookies([{'name': 'playbook.locale', 'value': 'ko', 'url': BASE}])
     for extra in [pg for pg in context.pages if pg != page]:
         extra.close()
+    window_state(browser, context, page, 'normal')
     open_film(page, film, path)
     page.evaluate(PAGE_LOG)
-    own.show('restore')
     own.on_top(True)
     page.bring_to_front()
     page.click('[data-editor-export]')
@@ -679,6 +687,11 @@ def unattended_export(p, own, film, path, state, hidden_cap, name):
     clicked = time.time()
     if state == 'background':
         context.new_page()  # a new tab in front: the editor's tab is now a background tab
+    elif state == 'minimise':
+        # Minimised by the browser itself, as spec E's check does (Windows' ShowWindow from outside was not
+        # dependable across runs: measured, a second run stayed visible).
+        own.on_top(False)
+        window_state(browser, context, page, 'minimized')
     elif state == 'covered':
         # Another window of this browser over it, same bounds, in front (as spec E's check covers a window):
         # the editor's window is no longer kept on top, so the new window covers it whole.
@@ -692,10 +705,6 @@ def unattended_export(p, own, film, path, state, hidden_cap, name):
         cdp.send('Browser.setWindowBounds', {'windowId': window, 'bounds': {k: bounds[k] for k in ('left', 'top', 'width', 'height')}})
     browser.close()  # disconnects; the browser and its pages keep running, driven by nothing
     time.sleep(0.3)
-    if state == 'minimise':
-        # Not on top any more: a window kept on top was not minimised from outside (measured: it stayed visible).
-        own.on_top(False)
-        own.show('minimise')
     peak = [0, 0]
     stop = threading.Event()
 
@@ -717,11 +726,10 @@ def unattended_export(p, own, film, path, state, hidden_cap, name):
         file = None
         time.sleep(0.5)
     hidden_for = time.time() - clicked
-    if state == 'minimise':
-        own.show('restore')
     browser = p.chromium.connect_over_cdp(f'http://127.0.0.1:{own.port}')
     context = browser.contexts[0]
     page = next(pg for pg in context.pages if pg.url.startswith(BASE))
+    window_state(browser, context, page, 'normal')
     for extra in [pg for pg in context.pages if pg != page]:
         extra.close()  # the cover window, or the tab in front of the editor's
     page.bring_to_front()
