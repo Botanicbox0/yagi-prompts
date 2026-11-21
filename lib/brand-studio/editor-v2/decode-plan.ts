@@ -351,6 +351,16 @@ export function exportPathOverride(value: string | string[] | null | undefined):
 }
 
 /**
+ * A developer's switch for the checks (`?exportDownload=off` on the editor page, no UI; spec H, F9): `false`
+ * skips only the automatic download when an export finishes. The finished sheet, its data and "download
+ * again" are unchanged. Anything else, or no parameter: the file downloads by itself, as always.
+ */
+export function exportAutoDownload(value: string | string[] | null | undefined): boolean {
+  const one = Array.isArray(value) ? value[0] : value;
+  return one !== 'off';
+}
+
+/**
  * Whether every cut on a source runs at the file's own rate (spec F review 1, item 2). For evenly spaced
  * footage the decoder path shows picture `sourceFrame` and the seek path the picture at
  * `(sourceFrame + ½) / sourceFps`: the same picture only when the cut's `sourceFps` is the file's rate. A

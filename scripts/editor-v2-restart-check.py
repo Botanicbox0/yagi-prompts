@@ -139,8 +139,9 @@ def main():
         try:
             browser, ctx, pg = connect(p, own)
             dc.window_state(browser, ctx, pg, 'normal')
-            state = dc.open_film(pg, film, 'seek')
-            line(f'MEASURE film: cuts {state["cuts"]} at {state["fps"]} fps, ?exportPath=seek')
+            # The file is read from the page's blob below, never from the download folder: no automatic download.
+            state = dc.open_film(pg, film, 'seek', download=False)
+            line(f'MEASURE film: cuts {state["cuts"]} at {state["fps"]} fps, ?exportPath=seek&exportDownload=off')
             pg.evaluate(dc.PAGE_LOG)
             pg.evaluate(CODEC_LOG)
             pg.evaluate("""() => { window.__errors = []; window.addEventListener('error', (e) => window.__errors.push([performance.now(), 'error ' + String(e.message)])); window.addEventListener('unhandledrejection', (e) => window.__errors.push([performance.now(), 'rejection ' + String(e.reason && (e.reason.stack || e.reason.message || e.reason))]));

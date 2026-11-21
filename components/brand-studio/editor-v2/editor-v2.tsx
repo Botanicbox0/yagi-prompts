@@ -22,6 +22,8 @@ export interface EditorV2Props {
   initialWorkspace?: EditorWorkspace;
   /** The export's picture path forced for the checks (`?exportPath=`); `null` normally. */
   exportPath?: ExportPathOverride;
+  /** `false` with `?exportDownload=off`: the finished file does not download by itself (checks only). */
+  autoDownload?: boolean;
   /** The organization's own film (V1). `null` runs the sample film (`?sample=1`), as the prototype did. */
   real: (RealFilmOptions & { organizationName: string }) | null;
 }
@@ -37,7 +39,7 @@ export interface EditorV2Props {
  * the cuts back (V1). Only cutting is real there; colour, sound and captions are locked and say so.
  * Without it, it runs the sample film and keeps everything in memory.
  */
-export function EditorV2({ copy, currentEditorHref, initialWorkspace, exportPath = null, real }: EditorV2Props) {
+export function EditorV2({ copy, currentEditorHref, initialWorkspace, exportPath = null, autoDownload = true, real }: EditorV2Props) {
   const api = useEditor(copy, { real, initialWorkspace });
   const latest = useRef<EditorApi>(api);
   latest.current = api;
@@ -167,7 +169,7 @@ export function EditorV2({ copy, currentEditorHref, initialWorkspace, exportPath
           </button>
         </div>
       )}
-      {api.exportOpen && <ExportSheet api={api} exportPath={exportPath} />}
+      {api.exportOpen && <ExportSheet api={api} exportPath={exportPath} autoDownload={autoDownload} />}
       {api.shortcutsOpen && <ShortcutsPanel api={api} />}
       {api.toast && <p className={styles.toast} role="status" data-editor-toast>{api.toast}</p>}
     </div>

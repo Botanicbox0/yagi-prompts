@@ -459,14 +459,16 @@ DONE_INFO = """() => {
 }"""
 
 
-def editor_url(path=''):
-    return f'{BASE}/brand/studio/editor?organizationId={ORG}' + (f'&exportPath={path}' if path else '')
+def editor_url(path='', download=True):
+    # `exportDownload=off` (spec H, F9): the finished file does not download by itself; for runs that read the
+    # file from the page's own blob and never from the download folder.
+    return f'{BASE}/brand/studio/editor?organizationId={ORG}' + (f'&exportPath={path}' if path else '') + ('' if download else '&exportDownload=off')
 
 
-def open_film(page, film, path=''):
+def open_film(page, film, path='', download=True):
     page.goto(BASE + '/brand/library', wait_until='domcontentloaded', timeout=300000) if page.url == 'about:blank' else None
     page.evaluate('([key, value]) => localStorage.setItem(key, value)', [KEY, json.dumps(film)])
-    page.goto(editor_url(path), wait_until='domcontentloaded', timeout=300000)
+    page.goto(editor_url(path, download), wait_until='domcontentloaded', timeout=300000)
     page.wait_for_selector('[data-studio-editor-v2][data-editor-status=ready]', timeout=300000)
     page.wait_for_timeout(600)
     return page.evaluate(STATE)

@@ -58,6 +58,8 @@ export interface ExportRequest {
   notify: (outcome: 'done' | 'failed') => void;
   /** The developer's path override for the proof (`?exportPath=` on the editor page); `null` normally. */
   path?: ExportPathOverride;
+  /** `false` (`?exportDownload=off`, checks only): the finished file is not downloaded by itself. */
+  download?: boolean;
 }
 
 const IDLE: ExportJob = { status: 'idle' };
@@ -178,7 +180,7 @@ export function startExport(request: ExportRequest): void {
         paths: result.paths,
         restarts: result.restarts,
       });
-      downloadFile(url, result.filename);
+      if (request.download !== false) downloadFile(url, result.filename);
       if (openSheets === 0) request.notify('done');
     },
     (error: unknown) => {

@@ -27,10 +27,11 @@ import styles from './editor-v2.module.css';
  * export starts. The sample film's workspaces (findings, looks, titles, sample music, caption styles)
  * have no part in it there. People who may only look at the film cannot export it.
  *
- * `exportPath` is the developer's override for the proof (`?exportPath=seek|decoder`, read by the page);
- * the sheet shows nothing of it.
+ * `exportPath` is the developer's override for the proof (`?exportPath=seek|decoder`, read by the page), and
+ * `autoDownload` `false` (`?exportDownload=off`) keeps the finished file from downloading by itself; the
+ * sheet shows nothing of either.
  */
-export function ExportSheet({ api, exportPath = null }: { api: EditorApi; exportPath?: ExportPathOverride }) {
+export function ExportSheet({ api, exportPath = null, autoDownload = true }: { api: EditorApi; exportPath?: ExportPathOverride; autoDownload?: boolean }) {
   const { copy, doc, sequence } = api;
   const e = copy.export;
   const job = useSyncExternalStore(subscribeExportJob, exportJobSnapshot, idleExportJob);
@@ -94,6 +95,7 @@ export function ExportSheet({ api, exportPath = null }: { api: EditorApi; export
       captionText: writesCaptionFile(sampleDoc, sequence) ? captionsToSrt(sequence.captions, sequence.fps) : null,
       notify: (outcome) => api.say(outcome === 'done' ? e.toastDone : e.toastFailed),
       path: exportPath,
+      download: autoDownload,
     });
   };
 
