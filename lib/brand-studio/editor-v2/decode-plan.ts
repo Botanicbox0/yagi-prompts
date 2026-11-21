@@ -241,20 +241,22 @@ export interface ColourSpaceInit {
 }
 
 /**
- * The colour the seek path's `<video>` draws a picture with, so the decoder path draws the same pixels
- * (spec F, F3). Measured on Chromium 2026-11-21, frame 0 drawn at native size from a `<video>` and from
- * `VideoDecoder`: for a stream that does not describe its colour, drawing a `<video>` ignores the MP4's
- * `colr` box and picks by the picture's coded height: BT.709 from 720 rows up, BT.601 (SMPTE 170M) below,
- * limited range (1278×718 → 601, 960×720 → 709, 1280×544 → 601, 720×1280 → 709). Unconfigured,
- * `VideoDecoder` used BT.709: an untagged 640×360 clip came out greener on saturated red (255, 24, 0 against
- * the element's 254, 0, 0; mean |difference| in green 22.7); configured this way the difference was 0.000.
+ * The colour the seek path's `<video>` draws a picture with when NEITHER the stream NOR the MP4's `colr` box
+ * says anything about its colour: picked by the picture's coded height, BT.709 from 720 rows up, BT.601
+ * (SMPTE 170M) below, limited range (1278×718 → 601, 960×720 → 709, 1280×544 → 601, 720×1280 → 709).
+ * It is the last step of the element's rule (measured 2026-11-22, spec G A0): the stream's own description
+ * first, then the `colr` box, then this. `decoderColourSpace` gives the decoder the whole rule.
  *
- * Measured again 2026-11-22 (spec G, A0, flat colour patches, whole exported files): a stream that DOES
- * describe its colour (H.264 or HEVC Main 10 with BT.709 in the stream itself) is drawn BT.709 by both paths
- * at 540 rows too, and the decoder's frames say BT.709 although BT.601 was configured: the stream's own
- * description wins on both. The configured colour only decides for a stream that says nothing, where it is
- * the element's choice. Every combination tried came out the same on both paths (mean and largest
- * |difference| 0 on every patch).
+ * Measured on Chromium 2026-11-21 (spec F, F3), frame 0 drawn at native size from a `<video>` and from
+ * `VideoDecoder`, on clips whose `colr` box was absent or agreed with this rule: unconfigured, `VideoDecoder`
+ * used BT.709, so an untagged 640×360 clip came out greener on saturated red (255, 24, 0 against the
+ * element's 254, 0, 0; mean |difference| in green 22.7); configured this way the difference was 0.000.
+ *
+ * Measured again 2026-11-22 (flat colour patches, whole exported files): a stream that describes its colour
+ * (H.264 or HEVC Main 10 with BT.709 in the stream itself) is drawn BT.709 by both paths at 540 rows too, and
+ * the decoder's frames say BT.709 although BT.601 was configured: the stream's own description wins on both.
+ * Every combination tried came out the same on both paths once the decoder was told the box's colour (mean
+ * and largest |difference| 0 on every patch).
  */
 export function elementColourSpace(codedHeight: number): ColourSpaceInit {
   return codedHeight >= 720

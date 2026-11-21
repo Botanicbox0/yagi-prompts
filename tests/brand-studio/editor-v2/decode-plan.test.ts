@@ -327,13 +327,13 @@ describe('spec G, A0: the decoder is told the colour the MP4 box states, as the 
 
 describe('the colour the decoder path draws with is the seek path’s', () => {
   /**
-   * Measured on this Chromium (scratchpad probes, spec F report): drawing a `<video>` ignores the colour a
-   * file states (`colr`, the stream's own description, full range) and picks by coded height; VideoDecoder
-   * would use the stream's description or BT.709. Stating the element's choice gave 0.000 mean difference per
-   * channel at native size on 640×360, 640×480, 720×576, 1024×576, 1280×544, 1278×718 (BT.601) and
-   * 960×720, 1280×720, 720×1280, 1080×1920, 1920×1080 (BT.709), tagged or not, full range or not.
+   * The height rule: what a `<video>` draws when neither the stream nor the `colr` box says anything (the
+   * element's rule is the stream's own description, then the box, then this; spec G A0, 2026-11-22). Measured
+   * on this Chromium (spec F report) on clips whose box was absent or agreed with it: stating it gave 0.000
+   * mean difference per channel at native size on 640×360, 640×480, 720×576, 1024×576, 1280×544, 1278×718
+   * (BT.601) and 960×720, 1280×720, 720×1280, 1080×1920, 1920×1080 (BT.709).
    */
-  it('BT.601 (SMPTE 170M) below 720 rows, BT.709 from 720 rows; always limited range', () => {
+  it('when nothing is said: BT.601 (SMPTE 170M) below 720 rows, BT.709 from 720 rows; limited range', () => {
     expect(elementColourSpace(360)).toEqual({ matrix: 'smpte170m', primaries: 'smpte170m', transfer: 'smpte170m', fullRange: false });
     expect(elementColourSpace(718)).toEqual(elementColourSpace(360));
     expect(elementColourSpace(720)).toEqual({ matrix: 'bt709', primaries: 'bt709', transfer: 'bt709', fullRange: false });
