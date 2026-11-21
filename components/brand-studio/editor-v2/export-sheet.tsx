@@ -2,12 +2,13 @@
 
 import { useEffect, useState, useSyncExternalStore } from 'react';
 import { fill } from '@/components/brand-studio/copy';
+import { unevenWarning, type ExportPath, type ExportPathOverride } from '@/lib/brand-studio/editor-v2/decode-plan';
 import { LAST_FRAME_QUIET_MAX, SOUND_BYTES_LIMIT, burnsCaptions, formatBytes, notIncluded, writesCaptionFile } from '@/lib/brand-studio/editor-v2/export-plan';
-import { formatTimecode, totalFrames } from '@/lib/brand-studio/editor-v2/frames';
+import { formatTimecode, totalFrames, type FrameClip, type FrameSequence } from '@/lib/brand-studio/editor-v2/frames';
 import { captionsToSrt, type EditorWorkspace } from '@/lib/brand-studio/editor-v2/model';
 import { filmContents } from '@/lib/brand-studio/editor-v2/film-contents';
 import type { StoredFilmView } from '@/lib/brand-studio/editor-v2/stored';
-import { browserCanExport } from './export-film';
+import { browserCanExport, plannedPath, type SourcePath } from './export-film';
 import { cancelExport, exportJobSnapshot, idleExportJob, startExport, subscribeExportJob, watchExportJob, type ExportJob } from './export-job';
 import { FilmContentsList } from './film-contents-list';
 import { EditorIcon } from './icons';
@@ -25,19 +26,36 @@ import styles from './editor-v2.module.css';
  * current editor), read when the sheet opens to name what cannot go in, and read again the moment the
  * export starts. The sample film's workspaces (findings, looks, titles, sample music, caption styles)
  * have no part in it there. People who may only look at the film cannot export it.
+ *
+ * `exportPath` is the developer's override for the proof (`?exportPath=seek|decoder`, read by the page);
+ * the sheet shows nothing of it.
  */
-export function ExportSheet({ api }: { api: EditorApi }) {
+export function ExportSheet({ api, exportPath = null }: { api: EditorApi; exportPath?: ExportPathOverride }) {
   const { copy, doc, sequence } = api;
   const e = copy.export;
   const job = useSyncExternalStore(subscribeExportJob, exportJobSnapshot, idleExportJob);
   const [supported, setSupported] = useState(true);
   const [view, setView] = useState<StoredFilmView | null>(null);
+  /** The path each uneven footage will take: through the decoder it follows its own timestamps (spec F, F5). */
+  const [paths, setPaths] = useState<Record<string, ExportPath>>({});
   useEffect(() => setSupported(browserCanExport()), []);
   useEffect(() => watchExportJob(), []);
-  const { real, filmForExport } = api;
+  const { real, filmForExport, variableRates } = api;
   useEffect(() => {
     if (real) setView(filmForExport());
   }, [real, filmForExport, sequence]);
+  useEffect(() => {
+    if (!real) return;
+    let alive = true;
+    const uneven = [...new Set(sequence.clips.map((clip) => clip.srcUrl))].filter((src) => variableRates[src]);
+    const ratesOf = (src: string) => sequence.clips.filter((clip) => clip.srcUrl === src).map((clip) => clip.sourceFps);
+    void Promise.all(uneven.map(async (src) => [src, await plannedPath(src, exportPath, ratesOf(src)).catch((): ExportPath => 'seek')] as const)).then((entries) => {
+      if (alive && entries.length > 0) setPaths((current) => ({ ...current, ...Object.fromEntries(entries) }));
+    });
+    return () => {
+      alive = false;
+    };
+  }, [real, sequence, variableRates, exportPath]);
 
   // The sample film's document (looks, titles, music, sound fixes, caption output) says nothing about a real film.
   const sampleDoc = real ? null : doc;
@@ -49,7 +67,7 @@ export function ExportSheet({ api }: { api: EditorApi }) {
   const running = job.status === 'running';
   // A cut whose footage rate is not measured cannot be exported frame-exactly: refused before it starts.
   const unmeasured = real ? sequence.clips.find((clip) => api.unknownRates[clip.srcUrl]) : undefined;
-  const uneven = real ? sequence.clips.find((clip) => api.variableRates[clip.srcUrl]) : undefined;
+  const uneven = real ? unevenClipOnSeek(sequence, variableRates, paths) : undefined;
   const blocked = empty || !supported || api.readOnly || !!unmeasured;
   const blockedAs = api.readOnly ? 'read-only' : empty ? 'empty' : !supported ? 'unsupported' : 'rate';
   const blockedSentence =
@@ -75,6 +93,7 @@ export function ExportSheet({ api }: { api: EditorApi }) {
       burnCaptions: burnsCaptions(sampleDoc),
       captionText: writesCaptionFile(sampleDoc, sequence) ? captionsToSrt(sequence.captions, sequence.fps) : null,
       notify: (outcome) => api.say(outcome === 'done' ? e.toastDone : e.toastFailed),
+      path: exportPath,
     });
   };
 
@@ -170,6 +189,23 @@ export function ExportSheet({ api }: { api: EditorApi }) {
 
 type ExportCopy = EditorApi['copy']['export'];
 
+/**
+ * The cut the "frames are not evenly spaced, a few may differ" line names: footage that is uneven AND will
+ * be seeked (or whose path is not known yet). Through the decoder the file follows the footage's own
+ * timestamps, so the line would not be true there (spec F, F5).
+ */
+export function unevenClipOnSeek(sequence: FrameSequence, variable: Readonly<Record<string, true>>, paths: Readonly<Record<string, ExportPath>>): FrameClip | undefined {
+  return sequence.clips.find((clip) => unevenWarning(!!variable[clip.srcUrl], paths[clip.srcUrl] ?? null));
+}
+
+/** `decoder` / `seek` when every source took that path whole, `mixed` otherwise (for the proof). */
+function pathSummary(paths: readonly SourcePath[]): 'decoder' | 'seek' | 'mixed' | 'none' {
+  if (paths.length === 0) return 'none';
+  if (paths.every((entry) => entry.seeked === 0 && entry.path === 'decoder')) return 'decoder';
+  if (paths.every((entry) => entry.decoded === 0 && entry.path === 'seek')) return 'seek';
+  return 'mixed';
+}
+
 export function ExportStatus({ job, copy: e }: { job: ExportJob; copy: ExportCopy }) {
   if (job.status === 'running') {
     const { phase, done, total } = job.progress;
@@ -177,7 +213,7 @@ export function ExportStatus({ job, copy: e }: { job: ExportJob; copy: ExportCop
     const percent = Math.round(phase === 'video' ? share * 90 : phase === 'audio' ? 90 + share * 8 : 98 + share * 2);
     const label = phase === 'video' ? fill(e.progressVideo, { done, total }) : phase === 'audio' ? e.progressAudio : e.progressWriting;
     return (
-      <div className={styles.exportRun} data-editor-export-progress={phase === 'video' ? `${done}/${total}` : phase}>
+      <div className={styles.exportRun} data-editor-export-progress={phase === 'video' ? `${done}/${total}` : phase} data-editor-export-path-now={job.progress.path ?? ''}>
         <div className={styles.exportBar} role="progressbar" aria-label={label} aria-valuemin={0} aria-valuemax={100} aria-valuenow={percent}>
           <i style={{ width: `${percent}%` }} />
         </div>
@@ -193,7 +229,13 @@ export function ExportStatus({ job, copy: e }: { job: ExportJob; copy: ExportCop
   }
   if (job.status === 'done') {
     return (
-      <div className={styles.exportRun} data-editor-export-done={job.filename} data-editor-export-ms={job.elapsedMs}>
+      <div
+        className={styles.exportRun}
+        data-editor-export-done={job.filename}
+        data-editor-export-ms={job.elapsedMs}
+        data-editor-export-path={pathSummary(job.paths)}
+        data-editor-export-paths={JSON.stringify(job.paths.map(({ clip, path, reason, decoded, seeked, bytesRead, fileBytes, requests }) => ({ clip, path, reason, decoded, seeked, bytesRead, fileBytes, requests })))}
+      >
         <p className={styles.exportCount} role="status">{e.done}</p>
         <p className={styles.note}>{fill(e.doneFacts, { size: formatBytes(job.bytes), length: formatTimecode(job.frames, job.fps) })}</p>
         {job.warnings.map((warning, index) =>

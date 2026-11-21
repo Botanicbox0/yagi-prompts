@@ -5,7 +5,8 @@ editor-v2/export-film.ts, lib/brand-studio/editor-v2/media-probe.ts).
       the clip in a warning (here the export's own read of an uploaded clip with sound is served with its
       sound codec name changed, so the track is still declared but cannot be decoded; the picture is the
       real file). A clip with no sound track at all gets no warning;
-  (2) sources that add up to more than the limit: the export does not start and says so plainly (here
+  (2) sources that add up to more than the limit: the export does not start and says so plainly (only files
+      read whole for their sound count: a clip with no sound track is not; here
       the export's size question about one source is answered with 2 GiB);
   (3) measurement, not a pass/fail: a source whose first frame is not at 0. Three generated files, each
       with a white flash and a 1 kHz beep at the same media time: first frame at 0; video starting at
@@ -34,6 +35,17 @@ import sys
 from playwright.sync_api import sync_playwright
 
 BASE = os.environ.get('EDITOR_BASE_URL', 'http://localhost:3611')
+
+# Spec F: EDITOR_EXPORT_PATH=seek|decoder forces the export's picture path (`?exportPath=` on the editor page),
+# and every finished export says which path made its pictures.
+EXPORT_PATH = os.environ.get('EDITOR_EXPORT_PATH', '')
+PATH_QUERY = f'&exportPath={EXPORT_PATH}' if EXPORT_PATH in ('seek', 'decoder') else ''
+
+
+def report_path(page):
+    info = page.evaluate("() => { const d = document.querySelector('[data-editor-export-done]'); return d ? [d.dataset.editorExportPath, d.dataset.editorExportPaths] : null; }")
+    if info:
+        print(f'MEASURE  export made by the {info[0]} path {info[1]}', flush=True)
 ORG = os.environ.get('EDITOR_ORG_ID', '')
 OUT = sys.argv[1] if len(sys.argv) > 1 else None
 KEY = f'twings_studio_compose_v1:{ORG}'
@@ -126,7 +138,7 @@ def main():
         page.on('pageerror', lambda e: errors.append(str(e)))
 
         def open_v2():
-            page.goto(f'{BASE}/brand/studio/editor?organizationId={ORG}', wait_until='domcontentloaded', timeout=240000)
+            page.goto(f'{BASE}/brand/studio/editor?organizationId={ORG}{PATH_QUERY}', wait_until='domcontentloaded', timeout=240000)
             page.wait_for_selector('[data-studio-editor-v2][data-editor-status=ready]', timeout=240000)
             page.wait_for_timeout(700)
 
@@ -145,6 +157,7 @@ def main():
                 with page.expect_download(timeout=20000) as info:
                     page.click('[data-editor-export-start]')
                     page.wait_for_selector('[data-editor-export-sheet][data-editor-export-status=done], [data-editor-export-sheet][data-editor-export-status=failed]', timeout=300000)
+                    report_path(page)
                 download = info.value
             except Exception:
                 pass
@@ -197,7 +210,8 @@ def main():
         status, path = export('safety-no-sound-track')
         check('(1) a clip with no sound track: done, no warning', status == 'done' and page.locator('[data-editor-export-warning]').count() == 0, f'status {status}')
 
-        # (2) More than the limit: the size question is answered with 2 GiB.
+        # (2) More than the limit: the size question is answered with 2 GiB. Only files the export reads whole
+        # for their sound count (spec F): a clip whose own boxes have no sound track is not read for sound.
         heavy = re.compile(r'/api/brand-studio/compose\?.*id=' + re.escape(asset_quiet))
 
         def huge(route):
@@ -207,12 +221,19 @@ def main():
 
         context.route(heavy, huge)
         open_v2()
+        status, _ = export('safety-silent-not-limited')
+        check('(2) a clip with no sound track is not read whole for sound: its size does not stop the export', status == 'done', f'status {status}')
+        context.unroute(heavy, huge)
+        loud = re.compile(r'/api/brand-studio/compose\?.*id=' + re.escape(asset))
+        context.route(loud, huge)
+        page.evaluate('([key, value]) => localStorage.setItem(key, value)', [KEY, json.dumps(film_of(asset, with_sound['src'], 2, duration=6))])
+        open_v2()
         status, _ = export('safety-too-large')
         failed = page.locator('[data-editor-export-failed="memory"]')
         check('(2) sources over the limit: the export does not start and says why', status == 'failed' and failed.count() == 1 and '2.0 GB' in failed.inner_text() and '1.0 GB' in failed.inner_text(),
               failed.inner_text() if failed.count() else f'status {status}')
         page.screenshot(path=os.path.join(OUT, 'safety-too-large-1440.png'))
-        context.unroute(heavy, huge)
+        context.unroute(loud, huge)
 
         # (3) First frame not at 0: export each generated file in place of the clip, read flash and beep back.
         def server_of(body):

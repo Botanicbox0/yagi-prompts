@@ -30,6 +30,8 @@ export interface PlannedFrame {
   srcUrl: string;
   /** The source frame this film frame shows. */
   sourceFrame: number;
+  /** The footage's frame on the film's frame grid (frames.ts `clipFrameAt`): the moment the decoder path's time rule reads. */
+  mediaFrame: number;
   /** The middle of that source frame, in seconds of its footage (before any first-frame offset). */
   seekSec: number;
   sourceFps: number;
@@ -47,6 +49,7 @@ export function videoPlan(sequence: FrameSequence): PlannedFrame[] {
       clipId: active.clip.id,
       srcUrl: active.clip.srcUrl,
       sourceFrame: active.sourceFrame,
+      mediaFrame: active.mediaFrame,
       seekSec: active.seekSec,
       sourceFps: active.clip.sourceFps,
     });
@@ -366,14 +369,16 @@ export function soundSourceUrls(sequence: FrameSequence, extras?: ComposerProjec
 
 /**
  * What the export reads whole into the page to mix the sound, each once, in order: the cuts that are
- * heard (a muted or silent cut is not read), then music and effects that are not silent.
+ * heard (a muted or silent cut is not read), then music and effects that are not silent. `noSoundTrack`:
+ * cut files whose own boxes say they have no sound track (spec F, F2): they would decode to nothing, so
+ * they are not read whole at all (the decoder path reads their pictures by range).
  */
-export function soundReads(sequence: FrameSequence, extras?: ComposerProject | null): string[] {
+export function soundReads(sequence: FrameSequence, extras?: ComposerProject | null, noSoundTrack: ReadonlySet<string> = new Set()): string[] {
   const urls: string[] = [];
   const add = (url: string | null | undefined) => {
     if (url && !urls.includes(url)) urls.push(url);
   };
-  for (const clip of sequence.clips) if (!clip.muted && clip.volume > 0) add(clip.srcUrl);
+  for (const clip of sequence.clips) if (!clip.muted && clip.volume > 0 && !noSoundTrack.has(clip.srcUrl)) add(clip.srcUrl);
   if (extras?.bgm && extras.bgm.volume > 0) add(extras.bgm.srcUrl);
   for (const sfx of extras?.sfxClips ?? []) if (sfx.volume > 0) add(sfx.srcUrl);
   return urls;

@@ -4,9 +4,10 @@
  * the export works on the film as it was when it started (the sequence is an immutable snapshot).
  */
 import type { ComposerProject } from '@/lib/brand-studio/compose/timeline';
+import { slowNotice, type ExportPath, type ExportPathOverride } from '@/lib/brand-studio/editor-v2/decode-plan';
 import { totalFrames, type FrameSequence } from '@/lib/brand-studio/editor-v2/frames';
 import type { Reframe } from '@/lib/brand-studio/editor-v2/model';
-import { ExportStop, exportFilm, type ExportProgress, type ExportStopReason, type ExportWarning } from './export-film';
+import { ExportStop, exportFilm, type ExportProgress, type ExportStopReason, type ExportWarning, type SourcePath } from './export-film';
 import { watchRefresh } from './screen-refresh';
 
 export type ExportJob =
@@ -16,7 +17,11 @@ export type ExportJob =
       progress: ExportProgress;
       frames: number;
       fps: number;
-      /** The screen refreshes slowly (a covered or background window): the export runs, slower (spec E addendum, C2). */
+      /**
+       * The screen refreshes slowly (a covered or background window) and the picture is being made by the seek
+       * path, which waits for it: the export runs, slower (spec E addendum, C2). The decoder path does not wait
+       * for the screen, so there it stays false (spec F, F4).
+       */
       slow: boolean;
     }
   | {
@@ -30,6 +35,8 @@ export type ExportJob =
       captionFile: { url: string; filename: string } | null;
       /** What the file lacks that the person should hear about (a clip's unreadable sound). */
       warnings: ExportWarning[];
+      /** Which path made each source's pictures (for the proof; data on the sheet, never words). */
+      paths: SourcePath[];
     }
   | { status: 'failed'; reason: ExportStopReason; frame: number | null; clip: string | null; bytes: number | null; message: string; fps: number };
 
@@ -44,6 +51,8 @@ export interface ExportRequest {
   captionText: string | null;
   /** Called when the export ends while no sheet is open to show it. */
   notify: (outcome: 'done' | 'failed') => void;
+  /** The developer's path override for the proof (`?exportPath=` on the editor page); `null` normally. */
+  path?: ExportPathOverride;
 }
 
 const IDLE: ExportJob = { status: 'idle' };
@@ -103,27 +112,38 @@ export function startExport(request: ExportRequest): void {
   let lastEmit = 0;
   let lastPhase: ExportProgress['phase'] = 'video';
   let progressNow: ExportProgress = { phase: 'video', done: 0, total: frames };
+  let reduced = false;
+  /** The path making the pictures now: the slow line is only true for the seek path (`slowNotice`). */
+  let path: ExportPath | null = null;
   let slow = false;
   set({ status: 'running', progress: progressNow, frames, fps, slow });
-  // While it runs, whether the screen refreshes live: the sheet says so when it does not, and stops saying
-  // it when it does again.
-  const stopWatching = watchRefresh((reduced) => {
-    if (controller !== own || slow === reduced) return;
-    slow = reduced;
+  const update = (force: boolean) => {
+    const next = slowNotice(reduced, path);
+    if (!force && next === slow) return;
+    slow = next;
     set({ status: 'running', progress: progressNow, frames, fps, slow });
+  };
+  // While it runs, whether the screen refreshes live: the sheet says so when it does not and the seek path
+  // is waiting for it, and stops saying it when either is no longer so.
+  const stopWatching = watchRefresh((now) => {
+    if (controller !== own) return;
+    reduced = now;
+    update(false);
   });
 
   const onProgress = (progress: ExportProgress) => {
     const now = performance.now();
     const finished = progress.done >= progress.total;
-    if (progress.phase === lastPhase && !finished && now - lastEmit < 80) return;
+    const pathChanged = progress.path !== undefined && progress.path !== path;
+    if (progress.path !== undefined) path = progress.path;
+    if (!pathChanged && progress.phase === lastPhase && !finished && now - lastEmit < 80) return;
     lastEmit = now;
     lastPhase = progress.phase;
     progressNow = progress;
-    set({ status: 'running', progress, frames, fps, slow });
+    update(true);
   };
 
-  exportFilm({ sequence, extras: request.extras, reframe: request.reframe, framing: request.framing, burnCaptions: request.burnCaptions, onProgress, signal: own.signal }).then(
+  exportFilm({ sequence, extras: request.extras, reframe: request.reframe, framing: request.framing, burnCaptions: request.burnCaptions, path: request.path ?? null, onProgress, signal: own.signal }).then(
     (result) => {
       stopWatching();
       if (controller !== own) return;
@@ -132,7 +152,18 @@ export function startExport(request: ExportRequest): void {
       const captionFile = request.captionText
         ? { url: URL.createObjectURL(new Blob([request.captionText], { type: 'application/x-subrip' })), filename: result.filename.replace(/\.mp4$/, '.srt') }
         : null;
-      set({ status: 'done', url, filename: result.filename, bytes: result.blob.size, frames: result.frames, fps: result.fps, elapsedMs: result.elapsedMs, captionFile, warnings: result.warnings });
+      set({
+        status: 'done',
+        url,
+        filename: result.filename,
+        bytes: result.blob.size,
+        frames: result.frames,
+        fps: result.fps,
+        elapsedMs: result.elapsedMs,
+        captionFile,
+        warnings: result.warnings,
+        paths: result.paths,
+      });
       downloadFile(url, result.filename);
       if (openSheets === 0) request.notify('done');
     },

@@ -27,6 +27,17 @@ import time
 from playwright.sync_api import sync_playwright
 
 BASE = os.environ.get('EDITOR_BASE_URL', 'http://localhost:3611')
+
+# Spec F: EDITOR_EXPORT_PATH=seek|decoder forces the export's picture path (`?exportPath=` on the editor page),
+# and every finished export says which path made its pictures.
+EXPORT_PATH = os.environ.get('EDITOR_EXPORT_PATH', '')
+PATH_QUERY = f'&exportPath={EXPORT_PATH}' if EXPORT_PATH in ('seek', 'decoder') else ''
+
+
+def report_path(page):
+    info = page.evaluate("() => { const d = document.querySelector('[data-editor-export-done]'); return d ? [d.dataset.editorExportPath, d.dataset.editorExportPaths] : null; }")
+    if info:
+        print(f'MEASURE  export made by the {info[0]} path {info[1]}', flush=True)
 ORG = os.environ.get('EDITOR_ORG_ID', '')
 OUT = sys.argv[1] if len(sys.argv) > 1 else None
 FPS = 24
@@ -120,7 +131,7 @@ def main():
         errors = []
         page.on('pageerror', lambda e: errors.append(str(e)))
         # The sample film (`?sample=1`); the organization's own film is exported by editor-v2-real-export-check.py.
-        url = f'{BASE}/brand/studio/editor?sample=1' + (f'&organizationId={ORG}' if ORG else '')
+        url = f'{BASE}/brand/studio/editor?sample=1' + (f'&organizationId={ORG}' if ORG else '') + PATH_QUERY
         page.goto(url, wait_until='domcontentloaded', timeout=180000)
         page.wait_for_selector('[data-studio-editor-v2]', timeout=90000)
         page.wait_for_timeout(1500)
@@ -238,6 +249,7 @@ def main():
                 check('editing goes on while the export runs', len(during) == len(final_cuts) - 1, json.dumps(during))
                 press('Control+z')
                 page.wait_for_selector('[data-editor-export-status=done], [data-editor-export-status=failed]', timeout=600000)
+                report_path(page)
                 if page.get_attribute('[data-editor-export-sheet]', 'data-editor-export-status') != 'done':
                     raise Stopped()
         except Stopped:

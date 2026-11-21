@@ -48,6 +48,17 @@ import urllib.parse
 from playwright.sync_api import sync_playwright
 
 BASE = os.environ.get('EDITOR_BASE_URL', 'http://localhost:3611')
+
+# Spec F: EDITOR_EXPORT_PATH=seek|decoder forces the export's picture path (`?exportPath=` on the editor page),
+# and every finished export says which path made its pictures.
+EXPORT_PATH = os.environ.get('EDITOR_EXPORT_PATH', '')
+PATH_QUERY = f'&exportPath={EXPORT_PATH}' if EXPORT_PATH in ('seek', 'decoder') else ''
+
+
+def report_path(page):
+    info = page.evaluate("() => { const d = document.querySelector('[data-editor-export-done]'); return d ? [d.dataset.editorExportPath, d.dataset.editorExportPaths] : null; }")
+    if info:
+        print(f'MEASURE  export made by the {info[0]} path {info[1]}', flush=True)
 ORG = os.environ.get('EDITOR_ORG_ID', '')
 OUT = sys.argv[1] if len(sys.argv) > 1 else None
 MEDIA = sys.argv[2] if len(sys.argv) > 2 else None
@@ -364,7 +375,7 @@ def run_checks(browser, files, bodies):
                   json.dumps({'reader': [video.get('firstSec'), sound.get('firstSec')], 'ffprobe': [starts.get('video'), starts.get('audio')], 'chromium': [facts.get('firstMediaTime'), facts.get('sample0')]}))
 
     def open_v2():
-        page.goto(f'{BASE}/brand/studio/editor?organizationId={ORG}', wait_until='domcontentloaded', timeout=240000)
+        page.goto(f'{BASE}/brand/studio/editor?organizationId={ORG}{PATH_QUERY}', wait_until='domcontentloaded', timeout=240000)
         page.wait_for_selector('[data-studio-editor-v2][data-editor-status=ready]', timeout=240000)
         page.wait_for_timeout(500)
 
@@ -376,6 +387,7 @@ def run_checks(browser, files, bodies):
             with page.expect_download(timeout=300000) as info:
                 page.click('[data-editor-export-start]')
                 page.wait_for_selector('[data-editor-export-sheet][data-editor-export-status=done], [data-editor-export-sheet][data-editor-export-status=failed]', timeout=300000)
+                report_path(page)
             download = info.value
         except Exception:
             pass

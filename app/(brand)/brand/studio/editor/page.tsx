@@ -1,6 +1,7 @@
 import { notFound } from 'next/navigation';
 import { EditorV2 } from '@/components/brand-studio/editor-v2/editor-v2';
 import { studioRouteContext } from '@/components/brand-studio/route-context';
+import { exportPathOverride } from '@/lib/brand-studio/editor-v2/decode-plan';
 import { EDITOR_WORKSPACES, type EditorWorkspace } from '@/lib/brand-studio/editor-v2/model';
 import { editorSources } from '@/lib/brand-studio/editor-v2/sources';
 import { createStudioMediaStore } from '@/lib/brand-studio/media-store';
@@ -21,6 +22,7 @@ import { brandStudioEditorV2DefaultFor, brandStudioEditorV2Open } from '@/lib/fl
  * with the same clips the current editor offers (video assets and finished video-studio results, loaded
  * the same way). Every other organization, and `?sample=1`, gets the sample film, which reads and writes
  * nothing of the organization's, as the structure prototype did; `ws=` picks the workspace it opens on.
+ * `exportPath=seek|decoder` forces the export's picture path for the checks (spec F, F5; no UI).
  */
 export const dynamic = 'force-dynamic';
 
@@ -29,7 +31,7 @@ const first = (value: string | string[] | undefined) => (Array.isArray(value) ? 
 export default async function StudioEditorV2Page({
   searchParams,
 }: {
-  searchParams: Promise<{ organizationId?: string | string[]; sample?: string | string[]; ws?: string | string[] }>;
+  searchParams: Promise<{ organizationId?: string | string[]; sample?: string | string[]; ws?: string | string[]; exportPath?: string | string[] }>;
 }) {
   const params = await searchParams;
   const ctx = await studioRouteContext(params.organizationId);
@@ -37,6 +39,7 @@ export default async function StudioEditorV2Page({
   const { choice, dict, access } = ctx;
   const ws = first(params.ws);
   const initialWorkspace: EditorWorkspace = (EDITOR_WORKSPACES as readonly string[]).includes(ws ?? '') ? (ws as EditorWorkspace) : 'cut';
+  const exportPath = exportPathOverride(params.exportPath);
 
   // The way back to the current editor carries `classic=1`, so it opens that editor even for an
   // organization whose `/brand/studio/compose` would send it here (lib/flags.ts).
@@ -47,7 +50,7 @@ export default async function StudioEditorV2Page({
   // is loaded or written, as before the switch (review round 1, item 2).
   const ownFilm = brandStudioEditorV2DefaultFor(choice.id);
   if (!ownFilm || first(params.sample) === '1') {
-    return <EditorV2 copy={dict.studioEditor} currentEditorHref={currentEditorHref} initialWorkspace={initialWorkspace} real={null} />;
+    return <EditorV2 copy={dict.studioEditor} currentEditorHref={currentEditorHref} initialWorkspace={initialWorkspace} exportPath={exportPath} real={null} />;
   }
 
   const { deps } = ctx;
@@ -68,6 +71,7 @@ export default async function StudioEditorV2Page({
       copy={dict.studioEditor}
       currentEditorHref={currentEditorHref}
       initialWorkspace={initialWorkspace}
+      exportPath={exportPath}
       real={{
         organizationId: choice.id,
         organizationName: choice.name,
