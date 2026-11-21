@@ -412,4 +412,32 @@ describe('spec G, B4–B6: fragments read by their own rules', () => {
     expect(facts.ok && facts.timing.video).toMatchObject({ frames: 3, variable: false });
   });
 
+  it('B5: another track’s fragment before the picture track’s is measured by ITS trex defaults', async () => {
+    const header = concat(
+      ftyp('iso5'),
+      box(
+        'moov',
+        mvhd,
+        trak(1, { handler: 'vide', timescale: 12288, durations: [], entry }),
+        trak(2, { handler: 'soun', timescale: 48000, durations: [] }),
+        box('mvex', trex(1, 512, 999, NON_SYNC), trex(2, 1024, 200, 0)),
+      ),
+    );
+    const make = (dataOffset: number) => {
+      // The sound traf: no base, no sizes, its data from the moof + offset; three samples of its default 200 bytes.
+      const sound = box('traf', fullBox('tfhd', 0, 0, u32(2)), fullBox('tfdt', 0, 0, u32(0)), fullBox('trun', 0, 0x01, u32(3), i32(dataOffset)));
+      // The picture traf: no base and no data offset: its data starts where the sound's ended.
+      const video = box('traf', fullBox('tfhd', 0, 0, u32(1)), fullBox('tfdt', 0, 0, u32(0)), fullBox('trun', 0, 0x200 | 0x04, u32(2), u32(SYNC), u32(1000), u32(300)));
+      return box('moof', fullBox('mfhd', 0, 0, u32(1)), sound, video);
+    };
+    const size = make(0).length;
+    const bytes = concat(header, make(size + 8), mdat(1900));
+    const answer = await indexOf(bytes);
+    expect(answer.ok).toBe(true);
+    if (!answer.ok) return;
+    const data = header.length + size + 8;
+    expect(answer.index.offsets).toEqual([data + 600, data + 1600]);
+    expect(answer.index.sizes).toEqual([1000, 300]);
+  });
+
 });

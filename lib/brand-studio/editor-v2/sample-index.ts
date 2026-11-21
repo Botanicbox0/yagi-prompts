@@ -395,8 +395,17 @@ interface PictureTrack {
   sync: boolean[];
   /** Where the next fragment continues without a `tfdt`; the `trex` defaults. */
   next: number;
-  defaults: { duration: number; size: number; flags: number };
+  defaults: TrackDefaults;
 }
+
+/** A track's `trex` defaults for its fragments' samples. */
+interface TrackDefaults {
+  duration: number;
+  size: number;
+  flags: number;
+}
+
+const NO_DEFAULTS: TrackDefaults = { duration: 0, size: 0, flags: 0 };
 
 function readEdits(bytes: Uint8Array, edts: Box | undefined): Edit[] | null {
   const elst = kid(bytes, edts, 'elst');
@@ -541,7 +550,7 @@ function readPlaces(bytes: Uint8Array, parts: Box[], track: PictureTrack) {
   track.mixedEntries = descriptions.size > 1;
 }
 
-function readPictureTrack(moov: Uint8Array): { timescale: number; track: PictureTrack | null } {
+function readPictureTrack(moov: Uint8Array): { timescale: number; track: PictureTrack | null; trex: Map<number, TrackDefaults> } {
   const top = boxes(moov, 0, moov.length)?.find((entry) => entry.type === 'moov');
   if (!top) throw new Broken();
   const parts = kids(moov, top);
@@ -581,7 +590,7 @@ function readPictureTrack(moov: Uint8Array): { timescale: number; track: Picture
       sizes: [],
       sync: [],
       next: 0,
-      defaults: { duration: 0, size: 0, flags: 0 },
+      defaults: NO_DEFAULTS,
     };
     const stbl = kid(moov, kid(moov, mdia, 'minf'), 'stbl');
     if (stbl) {
@@ -599,22 +608,25 @@ function readPictureTrack(moov: Uint8Array): { timescale: number; track: Picture
     track = candidate;
     break;
   }
+  // Every track's own defaults: another track's fragment before the picture track's is measured by ITS
+  // defaults, or the picture samples after it would be placed wrong (spec G, B5).
+  const trex = new Map<number, TrackDefaults>();
   const mvex = parts.find((entry) => entry.type === 'mvex');
-  if (track && mvex) {
-    for (const trex of kids(moov, mvex).filter((entry) => entry.type === 'trex')) {
-      need(trex, 24);
-      if (u32(moov, trex.body + 4) !== track.id) continue;
-      track.defaults = { duration: u32(moov, trex.body + 12), size: u32(moov, trex.body + 16), flags: u32(moov, trex.body + 20) };
+  if (mvex) {
+    for (const box of kids(moov, mvex).filter((entry) => entry.type === 'trex')) {
+      need(box, 24);
+      trex.set(u32(moov, box.body + 4), { duration: u32(moov, box.body + 12), size: u32(moov, box.body + 16), flags: u32(moov, box.body + 20) });
     }
   }
-  return { timescale, track };
+  if (track) track.defaults = trex.get(track.id) ?? NO_DEFAULTS;
+  return { timescale, track, trex };
 }
 
 /** A sample whose flags say `sample_is_non_sync_sample` (ISO/IEC 14496-12 §8.8.3.1) is not a sync sample. */
 const syncFromFlags = (flags: number) => (flags & 0x00010000) === 0;
 
 /** One fragment's samples of the picture track, appended with their places in the file. */
-function readFragment(bytes: Uint8Array, moofAt: number, track: PictureTrack) {
+function readFragment(bytes: Uint8Array, moofAt: number, track: PictureTrack, trex: ReadonlyMap<number, TrackDefaults>) {
   const moof = boxes(bytes, 0, bytes.length)?.find((entry) => entry.type === 'moof');
   if (!moof) throw new Broken();
   let previousEnd: number = moofAt;
@@ -624,7 +636,9 @@ function readFragment(bytes: Uint8Array, moofAt: number, track: PictureTrack) {
     if (!tfhd) throw new Broken();
     need(tfhd, 8);
     const flags = u32(bytes, tfhd.body) & 0xffffff;
-    const mine = u32(bytes, tfhd.body + 4) === track.id;
+    const id = u32(bytes, tfhd.body + 4);
+    const mine = id === track.id;
+    const defaults = mine ? track.defaults : (trex.get(id) ?? NO_DEFAULTS);
     let at = tfhd.body + 8;
     let base = flags & 0x020000 ? moofAt : previousEnd;
     const field = () => {
@@ -639,9 +653,9 @@ function readFragment(bytes: Uint8Array, moofAt: number, track: PictureTrack) {
       at += 8;
     }
     if (flags & 0x02) field();
-    const duration = flags & 0x08 ? field() : track.defaults.duration;
-    const size = flags & 0x10 ? field() : track.defaults.size;
-    const defaultFlags = flags & 0x20 ? field() : track.defaults.flags;
+    const duration = flags & 0x08 ? field() : defaults.duration;
+    const size = flags & 0x10 ? field() : defaults.size;
+    const defaultFlags = flags & 0x20 ? field() : defaults.flags;
     const tfdt = parts.find((entry) => entry.type === 'tfdt');
     let dt = track.next;
     if (tfdt) {
@@ -745,8 +759,9 @@ export function readSampleIndex(found: IndexBoxes): IndexAnswer {
   let movieTimescale: number;
   let track: PictureTrack | null;
   try {
-    ({ timescale: movieTimescale, track } = readPictureTrack(found.moov));
-    if (track) for (const moof of found.moofs) readFragment(moof.bytes, moof.at, track);
+    let trex: Map<number, TrackDefaults>;
+    ({ timescale: movieTimescale, track, trex } = readPictureTrack(found.moov));
+    if (track) for (const moof of found.moofs) readFragment(moof.bytes, moof.at, track, trex);
   } catch (error) {
     if (error instanceof Broken || error instanceof RangeError) return { ok: false, reason: 'unreadable' };
     throw error;
