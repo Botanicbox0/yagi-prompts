@@ -54,7 +54,7 @@ import {
   type PlannedFrame,
 } from '@/lib/brand-studio/editor-v2/export-plan';
 import { cutAnchor, effectStartSec, type CutAnchor } from '@/lib/brand-studio/editor-v2/cut-anchor';
-import { choosePath, decodeGroups, pictureFor, pictureTimes, type DecodeGroup, type ExportPath, type ExportPathOverride } from '@/lib/brand-studio/editor-v2/decode-plan';
+import { choosePath, cutRatesMatch, decodeGroups, pictureFor, pictureTimes, type DecodeGroup, type ExportPath, type ExportPathOverride } from '@/lib/brand-studio/editor-v2/decode-plan';
 import { CURRENT_EXPORT_BACKGROUND, currentExportFrame } from '@/lib/brand-studio/editor-v2/framing';
 import { totalFrames, type FrameSequence } from '@/lib/brand-studio/editor-v2/frames';
 import { timingOfFile } from '@/lib/brand-studio/editor-v2/container';
@@ -786,8 +786,37 @@ interface SeekSource {
 type PictureSource = DecoderSource | SeekSource;
 
 /**
- * Opens a source on the decoder path when it can be (lib/brand-studio/editor-v2/decode-plan.ts
- * `choosePath`): its file's boxes indexed, its codec supported. Otherwise the reason it is seeked.
+ * Which path a source takes (lib/brand-studio/editor-v2/decode-plan.ts `choosePath`), in ONE place for the
+ * export and the sheet: its frame facts read, its index read, plain 8-bit SDR, every cut at the file's own
+ * rate, and its codec decoded by this browser. `cutRates`: the `sourceFps` of every cut on it.
+ */
+async function sourceChoice(
+  srcUrl: string,
+  override: ExportPathOverride,
+  cutRates: readonly number[],
+): Promise<{ path: 'seek'; reason: string } | { path: 'decoder'; index: VideoIndex; config: VideoDecoderConfig }> {
+  const hasDecoder = typeof VideoDecoder !== 'undefined' && typeof EncodedVideoChunk !== 'undefined';
+  const seek = (input: Partial<Parameters<typeof choosePath>[0]>) =>
+    ({ path: 'seek' as const, reason: choosePath({ override, hasDecoder, indexFailure: null, configSupported: null, ...input }).reason ?? 'seek' });
+  if (override === 'seek' || !hasDecoder) return seek({});
+  // The clip's frame facts first: when they could not be read the editor numbered it by playback.
+  const facts = await readFootage(srcUrl).catch(() => null);
+  const factsFailure = !facts ? 'unreadable' : facts.answer.ok ? null : facts.answer.reason;
+  if (factsFailure || !facts?.answer.ok || !facts.answer.timing.video) return seek({ factsFailure: factsFailure ?? 'no-video' });
+  const answer = await readPictureIndex(srcUrl).catch(() => ({ ok: false as const, reason: 'unreadable' as const }));
+  if (!answer.ok) return seek({ indexFailure: answer.reason });
+  const plainColour = answer.index.config.bitDepth === 8 && answer.index.config.sdr;
+  const rateMatches = cutRatesMatch(cutRates, { fps: facts.answer.timing.video.fps, variable: answer.index.variable });
+  if (!plainColour || !rateMatches) return seek({ plainColour, rateMatches });
+  const config = decoderConfig(answer.index);
+  const supported = await decoderSupports(config);
+  const choice = choosePath({ override, hasDecoder, indexFailure: null, plainColour, rateMatches, configSupported: supported });
+  if (choice.path === 'seek') return { path: 'seek', reason: choice.reason ?? 'seek' };
+  return { path: 'decoder', index: answer.index, config };
+}
+
+/**
+ * Opens a source on the decoder path when it can be (`sourceChoice`). Otherwise the reason it is seeked.
  */
 async function openDecoderSource(
   srcUrl: string,
@@ -795,18 +824,10 @@ async function openDecoderSource(
   fps: number,
   override: ExportPathOverride,
 ): Promise<DecoderSource | { reason: string }> {
-  const hasDecoder = typeof VideoDecoder !== 'undefined' && typeof EncodedVideoChunk !== 'undefined';
-  if (override === 'seek' || !hasDecoder) return { reason: choosePath({ override, hasDecoder, indexFailure: null, configSupported: null }).reason ?? 'seek' };
-  // The clip's frame facts first: when they could not be read the editor numbered it by playback.
-  const facts = await readFootage(srcUrl).catch(() => null);
-  const factsFailure = !facts ? 'unreadable' : facts.answer.ok ? null : facts.answer.reason;
-  if (factsFailure) return { reason: choosePath({ override, hasDecoder, factsFailure, indexFailure: null, configSupported: null }).reason! };
-  const answer = await readPictureIndex(srcUrl).catch(() => ({ ok: false as const, reason: 'unreadable' as const }));
-  if (!answer.ok) return { reason: choosePath({ override, hasDecoder, indexFailure: answer.reason, configSupported: null }).reason! };
-  const config = decoderConfig(answer.index);
-  const supported = await decoderSupports(config);
-  const choice = choosePath({ override, hasDecoder, indexFailure: null, configSupported: supported });
-  if (choice.path === 'seek') return { reason: choice.reason ?? 'seek' };
+  const choice = await sourceChoice(srcUrl, override, plan.filter((entry) => entry.srcUrl === srcUrl).map((entry) => entry.sourceFps));
+  if (choice.path === 'seek') return { reason: choice.reason };
+  const answer = { index: choice.index };
+  const config = choice.config;
   const times = pictureTimes(answer.index);
   const requests = plan
     .filter((entry) => entry.srcUrl === srcUrl)
@@ -826,12 +847,8 @@ async function openDecoderSource(
  * The path a source will be exported on, asked before export (the sheet's line about uneven footage
  * depends on it): its boxes read (cached, shared with the export) and its codec asked of the decoder.
  */
-export async function plannedPath(srcUrl: string, override: ExportPathOverride): Promise<ExportPath> {
-  if (override === 'seek' || typeof VideoDecoder === 'undefined') return 'seek';
-  if (!(await readFootage(srcUrl).catch(() => null))?.answer.ok) return 'seek';
-  const answer = await readPictureIndex(srcUrl).catch(() => null);
-  if (!answer?.ok) return 'seek';
-  return (await decoderSupports(decoderConfig(answer.index))) ? 'decoder' : 'seek';
+export async function plannedPath(srcUrl: string, override: ExportPathOverride, cutRates: readonly number[]): Promise<ExportPath> {
+  return (await sourceChoice(srcUrl, override, cutRates)).path;
 }
 
 // ── The export ─────────────────────────────────────────────────────────────────────────────────

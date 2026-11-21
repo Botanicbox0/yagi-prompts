@@ -52,6 +52,47 @@ export interface CodecConfig {
   /** `pasp` horizontal and vertical spacing; `[1, 1]` for square pixels or no box. */
   pixelAspect: readonly [number, number];
   colour: ColourDescription | null;
+  /** Luma bit depth from the configuration record; `null` when the record does not say (taken as not 8). */
+  bitDepth: number | null;
+  /**
+   * Plain SDR by what the file states (`colr`, or `vpcC` for VP9): BT.709 / BT.601 / unspecified primaries and
+   * matrix, BT.709 / BT.601 / unspecified transfer, and no ICC profile; no statement at all counts as SDR.
+   * The decoder path's colour rule was measured on such footage only (spec F review 1, item 1).
+   */
+  sdr: boolean;
+}
+
+/** Primaries and matrix taken as SDR: 1 BT.709, 5 BT.470BG, 6 SMPTE 170M, 2 unspecified. */
+const SDR_PRIMARIES_MATRIX = new Set([1, 2, 5, 6]);
+/**
+ * Transfer taken as SDR: 1 BT.709 and 6 SMPTE 170M (both measured, 2026-11-21: the `<video>` drew them as the
+ * decoder path does), 2 unspecified. Not 13 (sRGB), 16 (PQ), 18 (HLG) or anything else: not measured.
+ */
+const SDR_TRANSFER = new Set([1, 2, 6]);
+
+const sdrCodes = (primaries: number, transfer: number, matrix: number) =>
+  SDR_PRIMARIES_MATRIX.has(primaries) && SDR_TRANSFER.has(transfer) && SDR_PRIMARIES_MATRIX.has(matrix);
+
+/**
+ * The luma bit depth an `avcC` record states: its High-profile tail (after the parameter sets) carries
+ * `bit_depth_luma_minus8`. Without a tail, the profiles that allow more than 8 bits (High 10, High 4:2:2,
+ * High 4:4:4, CAVLC 4:4:4) are not known; every other profile is 8 bits.
+ */
+export function avcBitDepth(avcC: Uint8Array): number | null {
+  if (avcC.length < 6) return null;
+  const profile = avcC[1]!;
+  let at = 5;
+  const parameterSets = (count: number) => {
+    for (let i = 0; i < count; i += 1) {
+      if (at + 2 > avcC.length) return false;
+      at += 2 + u16(avcC, at);
+    }
+    return at <= avcC.length;
+  };
+  if (!parameterSets(avcC[at++]! & 0x1f) || at >= avcC.length) return [110, 122, 244, 44].includes(profile) ? null : 8;
+  if (!parameterSets(avcC[at++]!)) return [110, 122, 244, 44].includes(profile) ? null : 8;
+  if (at + 2 <= avcC.length) return (avcC[at + 1]! & 0x07) + 8;
+  return [110, 122, 244, 44].includes(profile) ? null : 8;
 }
 
 export interface VideoIndex {
@@ -237,20 +278,30 @@ export function readSampleEntry(stsd: Uint8Array | null): EntryAnswer {
 
   let codec: string | null = null;
   let description: Uint8Array | null = null;
+  let bitDepth: number | null = null;
+  let sdr = true;
   if (entry.type === 'avc1' || entry.type === 'avc3') {
     const avcC = body(find('avcC'));
     codec = avcC ? avcCodec(entry.type, avcC) : null;
     description = avcC ? avcC.slice() : null;
+    bitDepth = avcC ? avcBitDepth(avcC) : null;
   } else if (entry.type === 'hvc1' || entry.type === 'hev1') {
     const hvcC = body(find('hvcC'));
     codec = hvcC ? hevcCodec(entry.type, hvcC) : null;
     description = hvcC ? hvcC.slice() : null;
+    // bitDepthLumaMinus8 and bitDepthChromaMinus8: the low three bits of bytes 17 and 18.
+    if (hvcC && hvcC.length >= 19) bitDepth = Math.max((hvcC[17]! & 0x07) + 8, (hvcC[18]! & 0x07) + 8);
   } else if (entry.type === 'vp09') {
     const vpcC = body(find('vpcC'));
     codec = vpcC ? vp9Codec(vpcC) : null;
+    if (vpcC && vpcC.length >= 10 && vpcC[0] === 1) {
+      bitDepth = vpcC[6]! >> 4;
+      sdr = sdrCodes(vpcC[7]!, vpcC[8]!, vpcC[9]!);
+    }
   } else if (entry.type === 'av01') {
     const av1C = body(find('av1C'));
     codec = av1C ? av1Codec(av1C) : null;
+    if (av1C && av1C.length >= 3) bitDepth = (av1C[2]! >> 6) & 1 ? ((av1C[2]! >> 5) & 1 ? 12 : 10) : 8;
   }
   if (!codec) return { ok: false, reason: 'codec' };
 
@@ -277,12 +328,14 @@ export function readSampleEntry(stsd: Uint8Array | null): EntryAnswer {
   for (const colr of children.filter((child) => child.type === 'colr')) {
     const data = body(colr)!;
     const kind = data.length >= 4 ? type4(data, 0) : '';
-    if ((kind === 'nclx' && data.length >= 11) || (kind === 'nclc' && data.length >= 10)) {
+    // An ICC profile describes colour the decoder path has not been measured on.
+    if (kind === 'prof' || kind === 'rICC') sdr = false;
+    if (!colour && ((kind === 'nclx' && data.length >= 11) || (kind === 'nclc' && data.length >= 10))) {
       colour = { primaries: u16(data, 4), transfer: u16(data, 6), matrix: u16(data, 8), fullRange: kind === 'nclx' ? (data[10]! & 0x80) !== 0 : false };
-      break;
+      if (!sdrCodes(colour.primaries, colour.transfer, colour.matrix)) sdr = false;
     }
   }
-  return { ok: true, config: { entry: entry.type, codec, description, codedWidth: width, codedHeight: height, pixelAspect, colour } };
+  return { ok: true, config: { entry: entry.type, codec, description, codedWidth: width, codedHeight: height, pixelAspect, colour, bitDepth, sdr } };
 }
 
 // ── The display matrix ─────────────────────────────────────────────────────────────────────────

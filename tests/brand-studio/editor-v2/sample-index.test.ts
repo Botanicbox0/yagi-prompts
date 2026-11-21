@@ -251,6 +251,67 @@ describe('the codec string and configuration for VideoDecoder.configure', () => 
   });
 });
 
+describe('only plain 8-bit SDR footage is decoded (review 1, item 1): the rest is seeked, reason colour', () => {
+  const stsd = (entry: Uint8Array) => concat(Uint8Array.of(0, 0, 0, 0), u32(1), entry);
+  const colr = (kind: string, ...rest: Uint8Array[]) => box('colr', Uint8Array.from(kind, (c) => c.charCodeAt(0)), ...rest);
+  /** An hvcC record with a stated luma bit depth (byte 17) and chroma bit depth (byte 18). */
+  const hvcCDepth = (luma: number, chroma: number) => {
+    const record = hvcC(0x02, 0x20000000, [0x90, 0, 0, 0, 0, 0], 120);
+    record[8 + 17] = 0xf8 | (luma - 8);
+    record[8 + 18] = 0xf8 | (chroma - 8);
+    return record;
+  };
+  /** An avcC record with the High-profile tail (chroma format, luma and chroma bit depth). */
+  const avcCTail = (profile: number, luma: number) =>
+    box('avcC', Uint8Array.of(1, profile, 0, 0x28, 0xff, 0xe1, 0, 4, 0x67, profile, 0, 0x28, 1, 0, 2, 0x68, 0xce, 0xfd, 0xf8 | (luma - 8), 0xf8 | (luma - 8), 0));
+
+  it('HEVC Main10 (hvcC bit depth 10): not 8-bit', () => {
+    const read = readSampleEntry(stsd(visualEntry('hvc1', 1920, 1080, hvcCDepth(10, 10))));
+    expect(read.ok && read.config.bitDepth).toBe(10);
+    const main = readSampleEntry(stsd(visualEntry('hvc1', 1920, 1080, hvcCDepth(8, 8))));
+    expect(main.ok && main.config.bitDepth).toBe(8);
+  });
+
+  it('AVC: the High-profile tail gives the bit depth; High 10 and the 4:2:2 / 4:4:4 profiles without a tail are not taken as 8', () => {
+    expect(readSampleEntry(stsd(visualEntry('avc1', 640, 360, avcCTail(110, 10)))).ok && true).toBe(true);
+    const ten = readSampleEntry(stsd(visualEntry('avc1', 640, 360, avcCTail(110, 10))));
+    expect(ten.ok && ten.config.bitDepth).toBe(10);
+    const high = readSampleEntry(stsd(visualEntry('avc1', 640, 360, avcCTail(100, 8))));
+    expect(high.ok && high.config.bitDepth).toBe(8);
+    const untold = readSampleEntry(stsd(visualEntry('avc1', 640, 360, avcC(110, 0, 0x28))));
+    expect(untold.ok && untold.config.bitDepth).toBeNull();
+    const plain = readSampleEntry(stsd(visualEntry('avc1', 640, 360, avcC(0x64, 0, 0x1f))));
+    expect(plain.ok && plain.config.bitDepth).toBe(8);
+  });
+
+  it('VP9 and AV1 state their bit depth in their records', () => {
+    const vp9 = readSampleEntry(stsd(visualEntry('vp09', 640, 360, vpcC(2, 31, 10, 1, 0, 1, 1, 1))));
+    expect(vp9.ok && vp9.config.bitDepth).toBe(10);
+    const av1 = readSampleEntry(stsd(visualEntry('av01', 640, 360, av1C(0, 8, 0, 10))));
+    expect(av1.ok && av1.config.bitDepth).toBe(10);
+    const av18 = readSampleEntry(stsd(visualEntry('av01', 640, 360, av1C(0, 8, 0, 8))));
+    expect(av18.ok && av18.config.bitDepth).toBe(8);
+  });
+
+  it('colour: BT.2020 with PQ (nclx 9/16/9) or HLG is not SDR; BT.709 and BT.601 are; no colr is; an ICC profile is not', () => {
+    const sdr = (...kids: Uint8Array[]) => {
+      const read = readSampleEntry(stsd(visualEntry('avc1', 640, 360, avcC(0x64, 0, 0x1f), ...kids)));
+      return read.ok ? read.config.sdr : null;
+    };
+    expect(sdr(nclx(9, 16, 9, false))).toBe(false);
+    expect(sdr(nclx(9, 18, 9, false))).toBe(false);
+    expect(sdr(nclx(1, 1, 1, false))).toBe(true);
+    expect(sdr(nclx(6, 6, 6, false))).toBe(true);
+    expect(sdr(nclx(1, 1, 1, true))).toBe(true);
+    expect(sdr()).toBe(true);
+    expect(sdr(colr('prof', new Uint8Array(16)))).toBe(false);
+    expect(sdr(colr('rICC', new Uint8Array(16)))).toBe(false);
+    // VP9 states its colour in vpcC: BT.2020 PQ there is not SDR either.
+    const vp9 = readSampleEntry(stsd(visualEntry('vp09', 640, 360, vpcC(0, 31, 8, 1, 0, 9, 16, 9))));
+    expect(vp9.ok && vp9.config.sdr).toBe(false);
+  });
+});
+
 describe('the display matrix: rotations a <video> applies', () => {
   const ONE = 0x10000;
   const W = 0x40000000;

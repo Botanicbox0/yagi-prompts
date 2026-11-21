@@ -7,6 +7,8 @@
  * components/brand-studio/editor-v2/frame-decoder.ts.
  */
 
+import { sameRate } from './stored';
+
 // ── Which picture ──────────────────────────────────────────────────────────────────────────────
 
 /** What the picture rule needs to know of a source. */
@@ -271,6 +273,20 @@ export function exportPathOverride(value: string | string[] | null | undefined):
   return one === 'seek' || one === 'decoder' ? one : null;
 }
 
+/**
+ * Whether every cut on a source runs at the file's own rate (spec F review 1, item 2). For evenly spaced
+ * footage the decoder path shows picture `sourceFrame` and the seek path the picture at
+ * `(sourceFrame + ½) / sourceFps`: the same picture only when the cut's `sourceFps` is the file's rate. A
+ * stored block can carry another rate (an old playback measurement wrote 30 for a 29.97 file); there the two
+ * paths part after a few hundred frames, so such a source keeps the seek path. Footage whose frames are not
+ * evenly spaced follows the time rule and its timestamps, not a rate. One rule for "the same rate":
+ * stored.ts `sameRate`.
+ */
+export function cutRatesMatch(cutRates: readonly number[], file: { fps: number; variable: boolean }): boolean {
+  if (file.variable) return true;
+  return cutRates.every((rate) => sameRate(rate, file.fps));
+}
+
 /** Why a source is taken by seeking. */
 export type SeekReason = 'forced' | 'no-decoder' | 'container' | 'codec-unsupported' | 'error' | string;
 
@@ -286,6 +302,13 @@ export function choosePath(input: {
   factsFailure?: string | null;
   /** The source's index could be read (`null` when not: a reason is given). */
   indexFailure: string | null;
+  /**
+   * The footage is plain 8-bit SDR (sample-index.ts `bitDepth` / `sdr`): the only footage the decoder path's
+   * colour rule was measured on (`elementColourSpace`). `false`: seeked, reason `colour`. Omitted: not asked.
+   */
+  plainColour?: boolean | null;
+  /** Every cut on the source runs at the file's own rate (`cutRatesMatch`). `false`: seeked, reason `rate`. */
+  rateMatches?: boolean | null;
   /** `VideoDecoder.isConfigSupported` said yes (`null` when not asked). */
   configSupported: boolean | null;
 }): { path: ExportPath; reason: SeekReason | null } {
@@ -293,6 +316,8 @@ export function choosePath(input: {
   if (!input.hasDecoder) return { path: 'seek', reason: 'no-decoder' };
   if (input.factsFailure) return { path: 'seek', reason: `facts:${input.factsFailure}` };
   if (input.indexFailure !== null) return { path: 'seek', reason: `container:${input.indexFailure}` };
+  if (input.plainColour === false) return { path: 'seek', reason: 'colour' };
+  if (input.rateMatches === false) return { path: 'seek', reason: 'rate' };
   if (input.configSupported !== true) return { path: 'seek', reason: 'codec-unsupported' };
   return { path: 'decoder', reason: null };
 }

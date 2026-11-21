@@ -48,7 +48,8 @@ export function ExportSheet({ api, exportPath = null }: { api: EditorApi; export
     if (!real) return;
     let alive = true;
     const uneven = [...new Set(sequence.clips.map((clip) => clip.srcUrl))].filter((src) => variableRates[src]);
-    void Promise.all(uneven.map(async (src) => [src, await plannedPath(src, exportPath).catch((): ExportPath => 'seek')] as const)).then((entries) => {
+    const ratesOf = (src: string) => sequence.clips.filter((clip) => clip.srcUrl === src).map((clip) => clip.sourceFps);
+    void Promise.all(uneven.map(async (src) => [src, await plannedPath(src, exportPath, ratesOf(src)).catch((): ExportPath => 'seek')] as const)).then((entries) => {
       if (alive && entries.length > 0) setPaths((current) => ({ ...current, ...Object.fromEntries(entries) }));
     });
     return () => {

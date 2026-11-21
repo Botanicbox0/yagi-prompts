@@ -3,6 +3,7 @@ import {
   JUMP_MIN_SAMPLES,
   byteRuns,
   choosePath,
+  cutRatesMatch,
   decodeGroups,
   decodeSegments,
   elementColourSpace,
@@ -216,6 +217,22 @@ describe('which path, and what the sheet says', () => {
     // that clip from playback, so its pictures are taken by seeking too, the way they are numbered.
     expect(choosePath({ ...ok, factsFailure: 'fragmented-too-large' })).toEqual({ path: 'seek', reason: 'facts:fragmented-too-large' });
     expect(choosePath({ ...ok, factsFailure: null })).toEqual({ path: 'decoder', reason: null });
+  });
+
+  it('footage that is not plain 8-bit SDR is seeked, reason colour; a cut whose rate is not the file’s, reason rate (review 1)', () => {
+    expect(choosePath({ ...ok, plainColour: false })).toEqual({ path: 'seek', reason: 'colour' });
+    expect(choosePath({ ...ok, rateMatches: false })).toEqual({ path: 'seek', reason: 'rate' });
+    expect(choosePath({ ...ok, plainColour: true, rateMatches: true })).toEqual({ path: 'decoder', reason: null });
+  });
+
+  it('a 29.97 file on a cut that says 30 does not match; on a cut that says 30000/1001 (or 29.97) it does; uneven footage keeps its time rule', () => {
+    const file = { fps: 30000 / 1001, variable: false };
+    expect(cutRatesMatch([30, 30], file)).toBe(false);
+    expect(cutRatesMatch([30000 / 1001], file)).toBe(true);
+    expect(cutRatesMatch([29.97], file)).toBe(true);
+    expect(cutRatesMatch([30000 / 1001, 30], file)).toBe(false);
+    expect(cutRatesMatch([30], { fps: 30000 / 1001, variable: true })).toBe(true);
+    expect(cutRatesMatch([24], { fps: 24, variable: false })).toBe(true);
   });
 
   it('the developer override is read from the address only as seek or decoder', () => {
