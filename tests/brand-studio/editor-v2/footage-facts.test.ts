@@ -180,7 +180,8 @@ describe('only these files make requests, each only for the film’s own media',
   it('footage-facts asks for the clip’s own address with a Range header, cookies on this site only', () => {
     const source = readFileSync(join(dir, 'footage-facts.ts'), 'utf8');
     expect(source.match(/\bfetch\(/g) ?? []).toHaveLength(1);
-    expect(source).toMatch(/fetch\(corsMediaUrl\(srcUrl\), \{ headers: \{ Range: `bytes=\$\{start\}-\$\{end\}` \}, credentials: 'same-origin' \}\)/);
+    // The export's run reads pass their abort signal (spec G, B1); nothing else is added to the request.
+    expect(source).toMatch(/fetch\(corsMediaUrl\(srcUrl\), \{ headers: \{ Range: `bytes=\$\{start\}-\$\{end\}` \}, credentials: 'same-origin', signal \}\)/);
     for (const banned of ['XMLHttpRequest', 'sendBeacon', 'WebSocket', 'EventSource', "method: 'POST'"]) expect(source.includes(banned), banned).toBe(false);
   });
 });

@@ -28,9 +28,12 @@ export interface FootageRead {
 
 const cache = new Map<string, Promise<FootageRead>>();
 
-/** Asks the clip's own file for bytes `start` to `end` (inclusive). The one request this file makes. */
+/**
+ * Asks the clip's own file for bytes `start` to `end` (inclusive). The one request this file makes. `signal`
+ * (the export's run reads, spec G B1) aborts it.
+ */
 export function footageBytes(srcUrl: string) {
-  return (start: number, end: number) => fetch(corsMediaUrl(srcUrl), { headers: { Range: `bytes=${start}-${end}` }, credentials: 'same-origin' });
+  return (start: number, end: number, signal?: AbortSignal) => fetch(corsMediaUrl(srcUrl), { headers: { Range: `bytes=${start}-${end}` }, credentials: 'same-origin', signal });
 }
 
 export function readFootage(srcUrl: string): Promise<FootageRead> {

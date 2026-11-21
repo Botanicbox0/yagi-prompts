@@ -7,11 +7,15 @@
  * is no larger than `wholeLimit`, kept for the rest of the export and cut from there. Checked servers: the
  * local development media route answers 206; production's media domain answers 206 (spec E addendum).
  *
+ * Every read ends (spec G, B1, ./watched-read.ts): no bytes for 15 s or not done in 45 s fails it (the source
+ * is then taken by seeking), cancelling the export ends it at once, and the request itself is aborted.
+ *
  * Pure apart from the request function it is given (components/brand-studio/editor-v2/footage-facts.ts
  * makes the one real request, for the clip's own address).
  */
 import type { ByteRun } from './decode-plan';
 import { RangeRefused } from './ranged-source';
+import { RUN_LIMITS, readStream, watchRead, type ReadLimits, type Watch } from './watched-read';
 
 /** What a range request returns (the standard `Response` is one): the headers say the file's size. */
 export interface RangeReply {
@@ -21,8 +25,8 @@ export interface RangeReply {
   headers?: { get(name: string): string | null };
 }
 
-/** Asks for bytes `start` to `end` inclusive. */
-export type RangeFetch = (start: number, end: number) => Promise<RangeReply>;
+/** Asks for bytes `start` to `end` inclusive; `signal` aborts the request. */
+export type RangeFetch = (start: number, end: number, signal?: AbortSignal) => Promise<RangeReply>;
 
 /**
  * The most a picture source may hold of a whole file when its server ignores Range: the frame facts reader's
@@ -42,8 +46,8 @@ export class WholeFileTooLarge extends Error {
 }
 
 export interface SampleBytes {
-  /** Exactly the run's bytes, `end − start` of them. */
-  read(run: Pick<ByteRun, 'start' | 'end'>): Promise<Uint8Array>;
+  /** Exactly the run's bytes, `end − start` of them. `signal`: the export's cancel. */
+  read(run: Pick<ByteRun, 'start' | 'end'>, signal?: AbortSignal): Promise<Uint8Array>;
   stats(): { requests: number; received: number; mode: 'range' | 'whole' | null; fileSize: number | null };
 }
 
@@ -54,39 +58,18 @@ export function totalFromContentRange(value: string | null | undefined): number 
 }
 
 /**
- * A whole-file answer, read as a stream and stopped the moment more than `limit` bytes have come, whether or
- * not the server said its length (spec F review 1, item 3): the body is cancelled and nothing is kept.
+ * An answer's body, read as a stream under the watch (a stall or the total time ends it) and stopped the moment
+ * more than `limit` bytes have come, whether or not the server said its length (spec F review 1, item 3): the
+ * body is then cancelled and nothing is kept.
  */
-async function readWhole(answer: RangeReply, limit: number): Promise<Uint8Array> {
-  if (!answer.body) {
-    const buffer = await answer.arrayBuffer();
-    if (buffer.byteLength > limit) throw new WholeFileTooLarge(buffer.byteLength);
-    return new Uint8Array(buffer);
-  }
-  const reader = answer.body.getReader();
-  const pieces: Uint8Array[] = [];
-  let total = 0;
-  for (;;) {
-    const { value, done } = await reader.read();
-    if (done) break;
-    if (!value) continue;
-    total += value.length;
-    if (total > limit) {
-      await reader.cancel().catch(() => undefined);
-      throw new WholeFileTooLarge(null);
-    }
-    pieces.push(value);
-  }
-  const bytes = new Uint8Array(total);
-  let at = 0;
-  for (const piece of pieces) {
-    bytes.set(piece, at);
-    at += piece.length;
-  }
-  return bytes;
+async function readBody(answer: RangeReply, watch: Watch, limit: number, tooLarge: () => Error): Promise<Uint8Array> {
+  if (answer.body) return readStream(answer.body, watch, limit, tooLarge);
+  const buffer = await watch.guard(answer.arrayBuffer());
+  if (buffer.byteLength > limit) throw tooLarge();
+  return new Uint8Array(buffer);
 }
 
-export function sampleBytes(request: RangeFetch, wholeLimit = WHOLE_FILE_LIMIT): SampleBytes {
+export function sampleBytes(request: RangeFetch, wholeLimit = WHOLE_FILE_LIMIT, limits: ReadLimits = RUN_LIMITS): SampleBytes {
   let requests = 0;
   let received = 0;
   let mode: 'range' | 'whole' | null = null;
@@ -100,44 +83,52 @@ export function sampleBytes(request: RangeFetch, wholeLimit = WHOLE_FILE_LIMIT):
   };
 
   return {
-    async read(run) {
+    async read(run, signal) {
       if (whole) return cut(await whole, run, 0);
       requests += 1;
-      const answer = await request(run.start, run.end - 1);
-      if (answer.status === 206) {
-        // A range other than the one asked for is refused, as the frame facts reader refuses it; an answer that
-        // does not show its range (a media domain that does not expose Content-Range) is taken as asked.
-        const shown = answer.headers?.get('content-range') ?? null;
-        const from = shown?.match(/^\s*bytes\s+(\d+)-/i);
-        if (shown && (!from || Number(from[1]) !== run.start)) {
-          void answer.body?.cancel().catch(() => undefined);
-          throw new Error(`the server sent a range from ${from ? from[1] : '?'} for ${run.start}`);
+      const watch = watchRead(limits, signal);
+      try {
+        const answer = await watch.guard(request(run.start, run.end - 1, watch.signal));
+        watch.alive();
+        if (answer.status === 206) {
+          // A range other than the one asked for is refused, as the frame facts reader refuses it; an answer that
+          // does not show its range (a media domain that does not expose Content-Range) is taken as asked.
+          const shown = answer.headers?.get('content-range') ?? null;
+          const from = shown?.match(/^\s*bytes\s+(\d+)-/i);
+          if (shown && (!from || Number(from[1]) !== run.start)) {
+            void answer.body?.cancel().catch(() => undefined);
+            throw new Error(`the server sent a range from ${from ? from[1] : '?'} for ${run.start}`);
+          }
+          mode = mode ?? 'range';
+          fileSize = fileSize ?? totalFromContentRange(shown);
+          const bytes = await readBody(answer, watch, Infinity, () => new Error('unreachable'));
+          received += bytes.length;
+          return cut(bytes, run, run.start);
         }
-        mode = mode ?? 'range';
-        fileSize = fileSize ?? totalFromContentRange(shown);
-        const bytes = new Uint8Array(await answer.arrayBuffer());
-        received += bytes.length;
-        return cut(bytes, run, run.start);
-      }
-      if (answer.status === 200) {
-        if (whole) {
-          void answer.body?.cancel().catch(() => undefined);
+        if (answer.status === 200) {
+          if (whole) {
+            void answer.body?.cancel().catch(() => undefined);
+            return cut(await whole, run, 0);
+          }
+          const length = Number(answer.headers?.get('content-length'));
+          if (Number.isFinite(length) && length > wholeLimit) {
+            void answer.body?.cancel().catch(() => undefined);
+            throw new WholeFileTooLarge(length);
+          }
+          mode = 'whole';
+          whole = readBody(answer, watch, wholeLimit, () => new WholeFileTooLarge(null)).then((bytes) => {
+            received += bytes.length;
+            fileSize = bytes.length;
+            return bytes;
+          });
+          whole.catch(() => undefined);
           return cut(await whole, run, 0);
         }
-        const length = Number(answer.headers?.get('content-length'));
-        if (Number.isFinite(length) && length > wholeLimit) {
-          void answer.body?.cancel().catch(() => undefined);
-          throw new WholeFileTooLarge(length);
-        }
-        mode = 'whole';
-        whole = readWhole(answer, wholeLimit).then((bytes) => {
-          received += bytes.length;
-          fileSize = bytes.length;
-          return bytes;
-        });
-        return cut(await whole, run, 0);
+        void answer.body?.cancel().catch(() => undefined);
+        throw new RangeRefused(answer.status);
+      } finally {
+        watch.done();
       }
-      throw new RangeRefused(answer.status);
     },
     stats: () => ({ requests, received, mode, fileSize }),
   };

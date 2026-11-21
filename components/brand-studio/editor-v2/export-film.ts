@@ -62,6 +62,7 @@ import { soundTrackOf } from '@/lib/brand-studio/editor-v2/media-probe';
 import { DEFAULT_REFRAME, type Reframe } from '@/lib/brand-studio/editor-v2/model';
 import { sampleBytes, type SampleBytes } from '@/lib/brand-studio/editor-v2/sample-bytes';
 import type { Rotation, VideoIndex } from '@/lib/brand-studio/editor-v2/sample-index';
+import { SHARED_WAIT_MS, waitShared } from '@/lib/brand-studio/editor-v2/watched-read';
 import { footageBytes, readFootage, readPictureIndex } from './footage-facts';
 import { PictureDecoder, decoderConfig, decoderSupports } from './frame-decoder';
 import { screenTimer } from './screen-refresh';
@@ -339,7 +340,7 @@ async function openSource(url: string, fps: number, label: string, host: HTMLEle
   // The first frame's presentation time: most files start at 0, some do not.
   const first = await seekAndConfirm(video, 0.5 / fps, () => true, signal);
   if (!first.ok || first.last === null) throw new ExportStop('frame', `first frame of ${label} could not be confirmed`, { frame: 0, clip: label });
-  const read = await readFootage(url).catch(() => null);
+  const read = await waitShared(readFootage(url).catch(() => null), signal, SHARED_WAIT_MS, null, cancelled);
   const frames = read?.answer.ok && read.answer.timing.video ? read.answer.timing.video.frames : null;
   return { url, video, fps, firstSec: first.last, shown: 0, frames };
 }
@@ -793,20 +794,23 @@ type PictureSource = DecoderSource | SeekSource;
  * export and the sheet: its frame facts read, its index read, a colour it was measured on, every cut at the file's own
  * rate, and its codec decoded by this browser. `cutRates`: the `sourceFps` of every cut on it.
  */
-async function sourceChoice(
-  srcUrl: string,
-  override: ExportPathOverride,
-  cutRates: readonly number[],
-): Promise<{ path: 'seek'; reason: string } | { path: 'decoder'; index: VideoIndex; config: VideoDecoderConfig }> {
+type SourceChoice = { path: 'seek'; reason: string } | { path: 'decoder'; index: VideoIndex; config: VideoDecoderConfig };
+
+async function sourceChoice(srcUrl: string, override: ExportPathOverride, cutRates: readonly number[], signal?: AbortSignal): Promise<SourceChoice> {
   const hasDecoder = typeof VideoDecoder !== 'undefined' && typeof EncodedVideoChunk !== 'undefined';
   const seek = (input: Partial<Parameters<typeof choosePath>[0]>) =>
     ({ path: 'seek' as const, reason: choosePath({ override, hasDecoder, indexFailure: null, configSupported: null, ...input }).reason ?? 'seek' });
   if (override === 'seek' || !hasDecoder) return seek({});
+  // In the export, the shared reads are waited for until cancel or a limit, never aborted (spec G, B1); the
+  // sheet's question (`plannedPath`) waits as before.
+  const shared = <T,>(work: Promise<T>): Promise<T | 'timeout'> => (signal ? waitShared(work, signal, SHARED_WAIT_MS, 'timeout' as const, cancelled) : work);
   // The clip's frame facts first: when they could not be read the editor numbered it by playback.
-  const facts = await readFootage(srcUrl).catch(() => null);
+  const facts = await shared(readFootage(srcUrl).catch(() => null));
+  if (facts === 'timeout') return seek({ factsFailure: 'timeout' });
   const factsFailure = !facts ? 'unreadable' : facts.answer.ok ? null : facts.answer.reason;
   if (factsFailure || !facts?.answer.ok || !facts.answer.timing.video) return seek({ factsFailure: factsFailure ?? 'no-video' });
-  const answer = await readPictureIndex(srcUrl).catch(() => ({ ok: false as const, reason: 'unreadable' as const }));
+  const answer = await shared(readPictureIndex(srcUrl).catch(() => ({ ok: false as const, reason: 'unreadable' as const })));
+  if (answer === 'timeout') return seek({ indexFailure: 'timeout' });
   if (!answer.ok) return seek({ indexFailure: answer.reason });
   const plainColour = colourAdmitted(answer.index.config);
   const rateMatches = cutRatesMatch(cutRates, { fps: facts.answer.timing.video.fps, variable: answer.index.variable });
@@ -821,13 +825,7 @@ async function sourceChoice(
 /**
  * Opens a source on the decoder path when it can be (`sourceChoice`). Otherwise the reason it is seeked.
  */
-async function openDecoderSource(
-  srcUrl: string,
-  plan: readonly PlannedFrame[],
-  fps: number,
-  override: ExportPathOverride,
-): Promise<DecoderSource | { reason: string }> {
-  const choice = await sourceChoice(srcUrl, override, plan.filter((entry) => entry.srcUrl === srcUrl).map((entry) => entry.sourceFps));
+function openDecoderSource(srcUrl: string, plan: readonly PlannedFrame[], fps: number, choice: SourceChoice): DecoderSource | { reason: string } {
   if (choice.path === 'seek') return { reason: choice.reason };
   const answer = { index: choice.index };
   const config = choice.config;
@@ -874,7 +872,8 @@ export async function exportFilm(options: ExportFilmOptions): Promise<ExportFilm
   // Cut files whose own boxes have no sound track at all (media-probe's `soundTrackOf`: `no`, never
   // `unknown`) are silent and never read whole (spec F, F2). Their picture index is read here once, for both.
   const cutUrls = [...new Set(sequence.clips.map((clip) => clip.srcUrl))];
-  const indexes = override === 'seek' ? [] : await Promise.all(cutUrls.map((url) => readPictureIndex(url).catch(() => null)));
+  // Waited for until cancel or a limit, never aborted: the editor shares these reads (spec G, B1).
+  const indexes = override === 'seek' ? [] : await Promise.all(cutUrls.map((url) => waitShared(readPictureIndex(url).catch(() => null), signal, SHARED_WAIT_MS, null, cancelled)));
   const noSoundTrack = new Set(cutUrls.filter((_, i) => {
     const answer = indexes[i];
     return !!answer?.ok && answer.index.sound === 'no';
@@ -886,6 +885,13 @@ export async function exportFilm(options: ExportFilmOptions): Promise<ExportFilm
   if (weight.over) throw new ExportStop('memory', `the film's sound sources add up to ${weight.total} bytes (limit ${SOUND_BYTES_LIMIT})`, { bytes: weight.total });
 
   const plan = videoPlan(sequence);
+  // Which path each source takes, settled before the encoder exists: these reads wait on the network, and an
+  // encoder left idle long enough in a hidden page is taken back by the browser (spec G, A1/A4).
+  const choices = new Map(
+    await Promise.all(
+      cutUrls.map(async (url) => [url, await sourceChoice(url, override, plan.filter((entry) => entry.srcUrl === url).map((entry) => entry.sourceFps), signal)] as const),
+    ),
+  );
   const labels = new Map(sequence.clips.map((clip) => [clip.id, clip.label] as const));
   const indexOf = new Map(sequence.clips.map((clip, index) => [clip.id, index] as const));
   const host = document.createElement('div');
@@ -904,8 +910,7 @@ export async function exportFilm(options: ExportFilmOptions): Promise<ExportFilm
   const sourceOf = async (entry: PlannedFrame, label: string): Promise<PictureSource> => {
     const known = sources.get(entry.srcUrl);
     if (known) return known;
-    const opened = await openDecoderSource(entry.srcUrl, plan, fps, override);
-    throwIfAborted(signal);
+    const opened = openDecoderSource(entry.srcUrl, plan, fps, choices.get(entry.srcUrl)!);
     const record: SourcePath = { clip: label, srcUrl: entry.srcUrl, path: 'decoder', reason: null, decoded: 0, seeked: 0, bytesRead: 0, fileBytes: null, requests: 0 };
     records.set(entry.srcUrl, record);
     if ('reason' in opened) {

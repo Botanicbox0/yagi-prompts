@@ -3,6 +3,7 @@
 import { byteRuns, decodeSegments, decoderColourSpace, type ByteRun, type DecodeSegment } from '@/lib/brand-studio/editor-v2/decode-plan';
 import type { SampleBytes } from '@/lib/brand-studio/editor-v2/sample-bytes';
 import { stampUs, type VideoIndex } from '@/lib/brand-studio/editor-v2/sample-index';
+import { ReadCancelled, ReadTimedOut, watchRead, type Watch } from '@/lib/brand-studio/editor-v2/watched-read';
 
 /**
  * Editing studio v2 — the export's decoder path (spec F, F3): a source's pictures from its own samples,
@@ -19,7 +20,11 @@ import { stampUs, type VideoIndex } from '@/lib/brand-studio/editor-v2/sample-in
  * by timestamp, and takes the rest of that source by seeking (export-film.ts).
  *
  * Waits are on the decoder's own events (output, dequeue, error); the one timer is a last-resort guard
- * against a decoder that stops answering.
+ * against a decoder that stops answering. Every wait has an end (spec G, B1): one picture request gives up
+ * after `PICTURE_LIMIT_MS` whatever it waits for (its bytes, the decoder), a run of bytes after 15 s without
+ * bytes or 45 s in all (lib/brand-studio/editor-v2/watched-read.ts, read with the export's own signal), and
+ * cancelling ends a request at once. So on this path the encoder never waits anywhere near the ~90 s after
+ * which a hidden page's encoder is taken back (spec G, A1/A4).
  */
 
 /** Decode requests waiting in the decoder before feeding pauses. */
@@ -28,6 +33,8 @@ const QUEUE_CAP = 6;
 const HOLD_CAP = 6;
 /** No output, dequeue or error for this long while waiting: the decoder is stuck. */
 const STALL_MS = 20_000;
+/** One picture request, whatever it waits for (bytes, the decoder): past this the source is seeked (spec G, B1). */
+export const PICTURE_LIMIT_MS = 45_000;
 
 export class DecodeFailure extends Error {
   constructor(message: string) {
@@ -99,6 +106,8 @@ export class PictureDecoder {
   private runOf = new Map<number, number>();
   private fetched = new Map<number, Promise<Uint8Array>>();
   private closed = false;
+  /** The export's cancel, for reads started ahead of the picture that needs them. */
+  private signal: AbortSignal | undefined;
   private readonly counts: DecoderStats = { fed: 0, outputs: 0, segments: 0 };
 
   constructor(
@@ -121,6 +130,21 @@ export class PictureDecoder {
    */
   async picture(group: number, pictures: readonly number[], picture: number, signal?: AbortSignal): Promise<VideoFrame> {
     if (this.closed) throw new DecodeFailure('the decoder session is closed');
+    this.signal = signal;
+    const watch = watchRead({ stallMs: 0, totalMs: PICTURE_LIMIT_MS }, signal);
+    try {
+      return await this.take(group, pictures, picture, watch);
+    } catch (error) {
+      if (error instanceof DecodeFailure) throw error;
+      if (error instanceof ReadCancelled) throw new DecodeFailure('cancelled');
+      if (error instanceof ReadTimedOut && error.kind === 'total' && watch.signal.aborted) throw new DecodeFailure(`picture ${picture} did not come in ${PICTURE_LIMIT_MS / 1000} s`);
+      throw new DecodeFailure(error instanceof Error ? error.message : String(error));
+    } finally {
+      watch.done();
+    }
+  }
+
+  private async take(group: number, pictures: readonly number[], picture: number, watch: Watch): Promise<VideoFrame> {
     if (group !== this.group) this.startGroup(group, pictures);
     this.release(picture);
     for (;;) {
@@ -130,7 +154,6 @@ export class PictureDecoder {
         return held;
       }
       if (this.failure) throw this.failure;
-      if (signal?.aborted) throw new DecodeFailure('cancelled');
       const at = this.segmentOf.get(picture);
       if (at === undefined || at < this.segment) throw new DecodeFailure(`picture ${picture} is in no segment ahead`);
       if (at !== this.segment) {
@@ -141,10 +164,10 @@ export class PictureDecoder {
       if (this.next <= segment.to) {
         const queued = this.decoder.decodeQueueSize;
         if (queued >= QUEUE_CAP || (this.held.size >= HOLD_CAP && queued > 0)) {
-          await this.event();
+          await watch.guard(this.event());
           continue;
         }
-        await this.feed(this.next);
+        await this.feed(this.next, watch);
         this.next += 1;
         continue;
       }
@@ -166,7 +189,7 @@ export class PictureDecoder {
         continue;
       }
       if (this.flushState === 'running') {
-        await this.event();
+        await watch.guard(this.event());
         continue;
       }
       throw new DecodeFailure(`picture ${picture} did not come out of the decoder`);
@@ -227,7 +250,7 @@ export class PictureDecoder {
   private fetchRun(i: number): Promise<Uint8Array> {
     let pending = this.fetched.get(i);
     if (!pending) {
-      pending = this.bytes.read(this.runs[i]!);
+      pending = this.bytes.read(this.runs[i]!, this.signal);
       // A prefetch that fails is reported when it is needed, not before.
       pending.catch(() => undefined);
       this.fetched.set(i, pending);
@@ -235,10 +258,10 @@ export class PictureDecoder {
     return pending;
   }
 
-  private async feed(sample: number) {
+  private async feed(sample: number, watch: Watch) {
     const i = this.runOf.get(sample);
     if (i === undefined) throw new DecodeFailure(`sample ${sample} is in no byte range`);
-    const bytes = await this.fetchRun(i);
+    const bytes = await watch.guard(this.fetchRun(i));
     if (i + 1 < this.runs.length) void this.fetchRun(i + 1);
     for (const key of this.fetched.keys()) if (key < i) this.fetched.delete(key);
     const run = this.runs[i]!;
