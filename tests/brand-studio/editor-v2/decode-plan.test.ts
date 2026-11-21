@@ -270,8 +270,8 @@ describe('which path, and what the sheet says', () => {
 });
 
 describe('spec G, A0: the footage whose colour the decoder path was measured on, and only that, goes there', () => {
-  const avc = { entry: 'avc1', profile: 100, bitDepth: 8, sdr: true, colour: null } as const;
-  const main10 = { entry: 'hvc1', profile: 2, bitDepth: 10, sdr: true, colour: { primaries: 1, transfer: 1, matrix: 1, fullRange: false } } as const;
+  const avc = { entry: 'avc1', profile: 100, chroma: 1, bitDepth: 8, sdr: true, colour: null } as const;
+  const main10 = { entry: 'hvc1', profile: 2, chroma: 1, bitDepth: 10, sdr: true, colour: { primaries: 1, transfer: 1, matrix: 1, fullRange: false } } as const;
 
   it('8-bit that says nothing or says SDR: as before', () => {
     expect(colourAdmitted(avc)).toBe(true);
@@ -300,6 +300,37 @@ describe('spec G, A0: the footage whose colour the decoder path was measured on,
     expect(colourAdmitted({ ...main10, profile: 4 })).toBe(false);
     expect(colourAdmitted({ ...main10, bitDepth: 12 })).toBe(false);
     expect(colourAdmitted({ ...main10, profile: null })).toBe(false);
+  });
+});
+
+describe('spec H, F7: the gate says exactly what was measured', () => {
+  const avc = { entry: 'avc1', profile: 100, chroma: 1, constraintFlags: 0, bitDepth: 8, sdr: true, colour: null } as const;
+  const hevc = { entry: 'hvc1', profile: 1, chroma: 1, bitDepth: 8, sdr: true, colour: null } as const;
+
+  it('H.264 8-bit 4:2:0: Constrained Baseline (66 + constraint_set1), Main (77) and High (100) only; not Extended (88, never measured), not High 10/4:2:2/4:4:4', () => {
+    expect(colourAdmitted({ ...avc, profile: 66, constraintFlags: 0xc0 })).toBe(true);
+    for (const profile of [77, 100]) expect(colourAdmitted({ ...avc, profile })).toBe(true);
+    // Baseline without constraint_set1 (it may use the tools Constrained Baseline leaves out): never measured.
+    expect(colourAdmitted({ ...avc, profile: 66, constraintFlags: 0x80 })).toBe(false);
+    for (const profile of [88, 110, 122, 244, 44]) expect(colourAdmitted({ ...avc, profile })).toBe(false);
+    expect(colourAdmitted({ ...avc, bitDepth: 10 })).toBe(false);
+    expect(colourAdmitted({ ...avc, entry: 'vp09' })).toBe(false);
+  });
+
+  it('the chroma format must be read and be 4:2:0', () => {
+    expect(colourAdmitted({ ...avc, chroma: null })).toBe(false);
+    expect(colourAdmitted({ ...avc, chroma: 2 })).toBe(false);
+    expect(colourAdmitted({ ...avc, chroma: 3 })).toBe(false);
+    expect(colourAdmitted({ ...hevc, chroma: null })).toBe(false);
+    expect(colourAdmitted({ ...hevc, chroma: 3 })).toBe(false);
+  });
+
+  it('HEVC: Main 8-bit 4:2:0; Main 10 10-bit 4:2:0 with colr BT.709 limited; no range extensions, no Main 10 at 8 bits', () => {
+    expect(colourAdmitted(hevc)).toBe(true);
+    expect(colourAdmitted({ ...hevc, profile: 4 })).toBe(false);
+    expect(colourAdmitted({ ...hevc, profile: 2 })).toBe(false);
+    expect(colourAdmitted({ ...hevc, profile: 1, bitDepth: 10 })).toBe(false);
+    expect(colourAdmitted({ ...hevc, profile: 2, bitDepth: 10, colour: { primaries: 1, transfer: 1, matrix: 1, fullRange: false } })).toBe(true);
   });
 });
 

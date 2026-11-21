@@ -60,6 +60,13 @@ export interface CodecConfig {
   /** Luma bit depth from the configuration record; `null` when the record does not say (taken as not 8). */
   bitDepth: number | null;
   /**
+   * The chroma format (0 monochrome, 1 4:2:0, 2 4:2:2, 3 4:4:4) the configuration record or the H.264 sequence
+   * parameter set states (`avcChroma`, `hvcC` chromaFormat); `null` when not read (spec H, F7).
+   */
+  chroma: number | null;
+  /** The `avcC` constraint flags byte (constraint_set0 is 0x80, constraint_set1 0x40); `null` for other codecs. */
+  constraintFlags: number | null;
+  /**
    * Plain SDR by what the file states (`colr`, or `vpcC` for VP9): BT.709 / BT.601 / unspecified primaries and
    * matrix, BT.709 / BT.601 / unspecified transfer, and no ICC profile; no statement at all counts as SDR.
    * The decoder path's colour rule was measured on such footage only (spec F review 1, item 1).
@@ -98,6 +105,84 @@ export function avcBitDepth(avcC: Uint8Array): number | null {
   if (!parameterSets(avcC[at++]!)) return [110, 122, 244, 44].includes(profile) ? null : 8;
   if (at + 2 <= avcC.length) return (avcC[at + 1]! & 0x07) + 8;
   return [110, 122, 244, 44].includes(profile) ? null : 8;
+}
+
+/** H.264 profiles whose sequence parameter set carries chroma_format_idc (ITU-T H.264 §7.3.2.1.1). */
+const AVC_CHROMA_PROFILES = new Set([100, 110, 122, 244, 44, 83, 86, 118, 128, 138, 139, 134, 135]);
+
+/**
+ * chroma_format_idc from an H.264 sequence parameter set NAL unit (header byte included): emulation prevention
+ * bytes are taken out, then profile_idc, the constraint byte, level_idc and seq_parameter_set_id are passed.
+ * Profiles that do not carry it are 4:2:0 by the standard. `null` when the unit is too short to say.
+ */
+export function spsChroma(nal: Uint8Array): number | null {
+  const bytes: number[] = [];
+  for (let i = 1, zeros = 0; i < nal.length; i += 1) {
+    const value = nal[i]!;
+    if (zeros >= 2 && value === 3) {
+      zeros = 0;
+      continue;
+    }
+    zeros = value === 0 ? zeros + 1 : 0;
+    bytes.push(value);
+  }
+  if (bytes.length < 4) return null;
+  if (!AVC_CHROMA_PROFILES.has(bytes[0]!)) return 1;
+  let bit = 24;
+  const readBit = () => {
+    if (bit >= bytes.length * 8) return null;
+    const value = (bytes[bit >> 3]! >> (7 - (bit & 7))) & 1;
+    bit += 1;
+    return value;
+  };
+  const ue = () => {
+    let zeros = 0;
+    for (;;) {
+      const next = readBit();
+      if (next === null || zeros > 31) return null;
+      if (next === 1) break;
+      zeros += 1;
+    }
+    let value = 0;
+    for (let i = 0; i < zeros; i += 1) {
+      const next = readBit();
+      if (next === null) return null;
+      value = value * 2 + next;
+    }
+    return 2 ** zeros - 1 + value;
+  };
+  if (ue() === null) return null;
+  const chroma = ue();
+  return chroma !== null && chroma <= 3 ? chroma : null;
+}
+
+/**
+ * The chroma format an `avcC` record says: profiles without chroma_format_idc are 4:2:0; for the others, the
+ * High-profile tail after the parameter sets (reserved bits all set, then chroma_format), else the first
+ * sequence parameter set. `null` when none of them can be read.
+ */
+export function avcChroma(avcC: Uint8Array): number | null {
+  if (avcC.length < 6) return null;
+  if (!AVC_CHROMA_PROFILES.has(avcC[1]!)) return 1;
+  let at = 5;
+  let firstSps: Uint8Array | null = null;
+  const spsCount = avcC[at++]! & 0x1f;
+  for (let i = 0; i < spsCount; i += 1) {
+    if (at + 2 > avcC.length) return null;
+    const length = u16(avcC, at);
+    if (at + 2 + length > avcC.length) return null;
+    if (!firstSps) firstSps = avcC.subarray(at + 2, at + 2 + length);
+    at += 2 + length;
+  }
+  const fromSps = () => (firstSps ? spsChroma(firstSps) : null);
+  if (at >= avcC.length) return fromSps();
+  const ppsCount = avcC[at++]!;
+  for (let i = 0; i < ppsCount; i += 1) {
+    if (at + 2 > avcC.length) return fromSps();
+    at += 2 + u16(avcC, at);
+  }
+  if (at < avcC.length && (avcC[at]! & 0xfc) === 0xfc) return avcC[at]! & 0x03;
+  return fromSps();
 }
 
 export interface VideoIndex {
@@ -295,6 +380,8 @@ export function readSampleEntry(stsd: Uint8Array | null): EntryAnswer {
   let description: Uint8Array | null = null;
   let bitDepth: number | null = null;
   let profile: number | null = null;
+  let chroma: number | null = null;
+  let constraintFlags: number | null = null;
   let sdr = true;
   if (entry.type === 'avc1' || entry.type === 'avc3') {
     const avcC = body(find('avcC'));
@@ -302,6 +389,8 @@ export function readSampleEntry(stsd: Uint8Array | null): EntryAnswer {
     description = avcC ? avcC.slice() : null;
     bitDepth = avcC ? avcBitDepth(avcC) : null;
     profile = avcC && avcC.length >= 2 ? avcC[1]! : null;
+    constraintFlags = avcC && avcC.length >= 3 ? avcC[2]! : null;
+    chroma = avcC ? avcChroma(avcC) : null;
   } else if (entry.type === 'hvc1' || entry.type === 'hev1') {
     const hvcC = body(find('hvcC'));
     codec = hvcC ? hevcCodec(entry.type, hvcC) : null;
@@ -309,6 +398,8 @@ export function readSampleEntry(stsd: Uint8Array | null): EntryAnswer {
     profile = hvcC && hvcC.length >= 2 ? hvcC[1]! & 0x1f : null;
     // bitDepthLumaMinus8 and bitDepthChromaMinus8: the low three bits of bytes 17 and 18.
     if (hvcC && hvcC.length >= 19) bitDepth = Math.max((hvcC[17]! & 0x07) + 8, (hvcC[18]! & 0x07) + 8);
+    // chromaFormat: the low two bits of byte 16.
+    if (hvcC && hvcC.length >= 17) chroma = hvcC[16]! & 0x03;
   } else if (entry.type === 'vp09') {
     const vpcC = body(find('vpcC'));
     codec = vpcC ? vp9Codec(vpcC) : null;
@@ -357,7 +448,7 @@ export function readSampleEntry(stsd: Uint8Array | null): EntryAnswer {
       if (!sdrCodes(colour.primaries, colour.transfer, colour.matrix)) sdr = false;
     }
   }
-  return { ok: true, config: { entry: entry.type, codec, description, codedWidth: width, codedHeight: height, pixelAspect, colour, profile, bitDepth, sdr } };
+  return { ok: true, config: { entry: entry.type, codec, description, codedWidth: width, codedHeight: height, pixelAspect, colour, profile, bitDepth, chroma, constraintFlags, sdr } };
 }
 
 // ── The display matrix ─────────────────────────────────────────────────────────────────────────

@@ -290,25 +290,48 @@ export function decoderColourSpace(config: { codedHeight: number; colour: { prim
 
 /**
  * Footage whose colour the decoder path was measured on, so it may take it (`false`: seeked, reason
- * `colour`). Exactly:
+ * `colour`). Every case below gave the same pixels on both paths (mean and largest |difference| 0 on every
+ * patch, every frame) on Chromium 149 with an NVIDIA RTX PRO 6000 Blackwell (D3D11). Exactly:
  *
- * - 8-bit footage whose `colr` says nothing or says SDR (sample-index.ts `sdr`; spec F review 1, item 1);
- * - HEVC Main 10 (`hvc1` / `hev1`, general_profile_idc 2, 10 bits) whose `colr` says BT.709 primaries,
- *   transfer and matrix (1/1/1) and limited range: what the studio's own video tool writes (seen on production,
- *   spec G A0). Measured 2026-11-22 on Chromium 149 with its hardware HEVC decoder (no software decoder for
- *   it here): at 1080, 720 and 540 rows, the colour in the stream and the box or in the box only, and laid out
- *   like the production file, both paths gave the same pixels (mean and largest |difference| 0 per patch).
+ * - SDR by what the file states (sample-index.ts `sdr`; spec F review 1, item 1), and the chroma format read
+ *   from the record and 4:2:0 (sample-index.ts `chroma`; not read: seeked);
+ * - H.264, 8 bits: Constrained Baseline (profile_idc 66 with constraint_set1), Main (77) and High (100).
+ *   Measured: High in spec F and G; Constrained Baseline and Main untagged and `colr`-only on 2026-11-22
+ *   (spec H, F7). Not Extended (88) or Baseline without constraint_set1: never measured;
+ * - HEVC Main (general_profile_idc 1), 8 bits;
+ * - HEVC Main 10 (profile 2), 10 bits, whose `colr` says BT.709 primaries, transfer and matrix (1/1/1) and
+ *   limited range: what the studio's own video tool writes (seen on production, spec G A0). Measured on
+ *   2026-11-22 with the hardware HEVC decoder (there is no software one here) at 1080, 720 and 540 rows.
  *
- * Not taken: 10-bit footage whose container says nothing (the stream itself may say HLG or PQ, which this
- * reader does not read), full range, BT.601 or BT.2020 tags, PQ, HLG, an ICC profile, H.264 High 10, HEVC
- * range extensions, 12 bits, and 10-bit VP9 or AV1.
+ * The colour the stream itself states (its parameter sets) is not read: the decoder used what the stream said
+ * whenever it differed from the box, in both directions (BT.601 in the stream with BT.709 in the box, and the
+ * reverse), and so did the `<video>` element, so the two paths agreed (spec H, F7).
+ *
+ * Not taken: anything else, among it 10-bit footage whose container says nothing (the stream itself may say
+ * HLG or PQ), full range, BT.2020, PQ, HLG, an ICC profile, H.264 High 10 / 4:2:2 / 4:4:4, HEVC Main 10 at
+ * 8 bits, HEVC range extensions, 12 bits, 4:2:2, 4:4:4 and monochrome.
  */
-export function colourAdmitted(config: { entry: string; profile: number | null; bitDepth: number | null; sdr: boolean; colour: { primaries: number; transfer: number; matrix: number; fullRange: boolean } | null }): boolean {
-  if (!config.sdr) return false;
-  if (config.bitDepth === 8) return true;
-  const hevc = config.entry === 'hvc1' || config.entry === 'hev1';
-  const bt709 = !!config.colour && config.colour.primaries === 1 && config.colour.transfer === 1 && config.colour.matrix === 1 && !config.colour.fullRange;
-  return hevc && config.profile === 2 && config.bitDepth === 10 && bt709;
+export function colourAdmitted(config: {
+  entry: string;
+  profile: number | null;
+  bitDepth: number | null;
+  chroma: number | null;
+  constraintFlags?: number | null;
+  sdr: boolean;
+  colour: { primaries: number; transfer: number; matrix: number; fullRange: boolean } | null;
+}): boolean {
+  if (!config.sdr || config.chroma !== 1) return false;
+  if (config.entry === 'avc1' || config.entry === 'avc3') {
+    if (config.bitDepth !== 8) return false;
+    if (config.profile === 66) return ((config.constraintFlags ?? 0) & 0x40) !== 0;
+    return config.profile === 77 || config.profile === 100;
+  }
+  if (config.entry === 'hvc1' || config.entry === 'hev1') {
+    if (config.profile === 1) return config.bitDepth === 8;
+    const bt709 = !!config.colour && config.colour.primaries === 1 && config.colour.transfer === 1 && config.colour.matrix === 1 && !config.colour.fullRange;
+    return config.profile === 2 && config.bitDepth === 10 && bt709;
+  }
+  return false;
 }
 
 // ── Which path ─────────────────────────────────────────────────────────────────────────────────
