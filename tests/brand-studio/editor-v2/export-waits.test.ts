@@ -13,8 +13,11 @@ const run = film.slice(film.indexOf('export async function exportFilm('));
 
 describe('the export waits on shared reads with an end, before its encoder exists', () => {
   it('the picture index read at the start is raced against cancel and a limit', () => {
-    expect(run).toMatch(/waitShared\(readPictureIndex\(url\)/);
+    expect(run).toMatch(/waitShared\(readIndex\(url\)/);
     expect(run).not.toMatch(/await Promise\.all\(cutUrls\.map\(\(url\) => readPictureIndex\(url\)/);
+    // One read per file for the whole export, shared with the path choice (spec G, B9).
+    expect(run).toMatch(/const readIndex = exportIndexReads\(\);/);
+    expect(run).toMatch(/sourceChoice\(url, override, .*signal, readIndex\)/);
   });
 
   it('every source’s path is settled before the encoder is made', () => {
@@ -28,7 +31,7 @@ describe('the export waits on shared reads with an end, before its encoder exist
     const choice = film.slice(film.indexOf('async function sourceChoice('), film.indexOf('function openDecoderSource('));
     expect(choice).toMatch(/waitShared\(work, signal, SHARED_WAIT_MS/);
     expect(choice).toMatch(/shared\(readFootage\(srcUrl\)/);
-    expect(choice).toMatch(/shared\(readPictureIndex\(srcUrl\)/);
+    expect(choice).toMatch(/shared\(readIndex\(srcUrl\)/);
     const open = film.slice(film.indexOf('async function openSource('), film.indexOf('async function present('));
     expect(open).toMatch(/waitShared\(readFootage\(url\)/);
   });

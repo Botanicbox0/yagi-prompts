@@ -1,7 +1,7 @@
 'use client';
 
 import { corsMediaUrl } from '@/lib/brand-studio/cors-media-url';
-import { gatherBoxes, readTiming, type TimingAnswer } from '@/lib/brand-studio/editor-v2/container';
+import { ByteLimit, ReadLimit, gatherBoxes, readTiming, type TimingAnswer } from '@/lib/brand-studio/editor-v2/container';
 import { rangedSource } from '@/lib/brand-studio/editor-v2/ranged-source';
 import { gatherIndexBoxes, readSampleIndex, type IndexAnswer } from '@/lib/brand-studio/editor-v2/sample-index';
 
@@ -66,22 +66,43 @@ export function readFootage(srcUrl: string): Promise<FootageRead> {
  */
 const INDEX_MAX_BOXES = 2000;
 
-const indexCache = new Map<string, Promise<IndexAnswer & { requests: number; received: number }>>();
+export type IndexRead = IndexAnswer & { requests: number; received: number };
 
-/** The picture track's sample index (spec F, F1), read by range and kept for the visit. */
-export function readPictureIndex(srcUrl: string): Promise<IndexAnswer & { requests: number; received: number }> {
+const indexCache = new Map<string, Promise<IndexRead>>();
+
+/**
+ * The picture track's sample index (spec F, F1), read by range. The file's own answers are kept for the visit,
+ * failures included (spec G, B9: not an MP4, broken boxes, a codec or layout the index does not take, past its
+ * request or byte budget): they would come out the same again. A failure that may pass (a refused request, a
+ * network error) is `network` and read again next time; within one export it is read once
+ * (`exportIndexReads`).
+ */
+export function readPictureIndex(srcUrl: string): Promise<IndexRead> {
   const hit = indexCache.get(srcUrl);
   if (hit) return hit;
   const source = rangedSource(footageBytes(srcUrl));
   const run = gatherIndexBoxes(source, INDEX_MAX_BOXES)
     .then((found): IndexAnswer => ('failure' in found ? { ok: false, reason: 'unreadable' } : readSampleIndex(found)))
-    .catch((): IndexAnswer => ({ ok: false, reason: 'unreadable' }))
+    .catch((error: unknown): IndexAnswer => (error instanceof ReadLimit || error instanceof ByteLimit ? { ok: false, reason: 'unreadable' } : { ok: false, reason: 'network' }))
     .then((answer) => {
       source.close();
       const { requests, received } = source.stats();
-      if (!answer.ok) indexCache.delete(srcUrl);
+      if (!answer.ok && answer.reason === 'network') indexCache.delete(srcUrl);
       return { ...answer, requests, received };
     });
   indexCache.set(srcUrl, run);
   return run;
+}
+
+/** The picture index as one export reads it: every answer, a network failure too, once per file (spec G, B9). */
+export function exportIndexReads(): (srcUrl: string) => Promise<IndexRead> {
+  const seen = new Map<string, Promise<IndexRead>>();
+  return (srcUrl) => {
+    let read = seen.get(srcUrl);
+    if (!read) {
+      read = readPictureIndex(srcUrl);
+      seen.set(srcUrl, read);
+    }
+    return read;
+  };
 }

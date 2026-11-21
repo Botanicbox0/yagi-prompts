@@ -65,7 +65,7 @@ import type { Rotation, VideoIndex } from '@/lib/brand-studio/editor-v2/sample-i
 import { SHARED_WAIT_MS, waitShared } from '@/lib/brand-studio/editor-v2/watched-read';
 import { CodecReclaimed, ReclaimedTooOften, isReclaim, runWithRestarts, whenVisible } from '@/lib/brand-studio/editor-v2/export-run';
 import { PicturePaths, type DecoderSession, type SourcePath } from '@/lib/brand-studio/editor-v2/picture-paths';
-import { footageBytes, readFootage, readPictureIndex } from './footage-facts';
+import { exportIndexReads, footageBytes, readFootage, readPictureIndex, type IndexRead } from './footage-facts';
 import { PictureDecoder, decoderConfig, decoderSupports } from './frame-decoder';
 import { screenTimer } from './screen-refresh';
 
@@ -784,7 +784,13 @@ function yieldToPage(): Promise<void> {
  */
 type SourceChoice = { path: 'seek'; reason: string } | { path: 'decoder'; index: VideoIndex; config: VideoDecoderConfig };
 
-async function sourceChoice(srcUrl: string, override: ExportPathOverride, cutRates: readonly number[], signal?: AbortSignal): Promise<SourceChoice> {
+async function sourceChoice(
+  srcUrl: string,
+  override: ExportPathOverride,
+  cutRates: readonly number[],
+  signal?: AbortSignal,
+  readIndex: (srcUrl: string) => Promise<IndexRead> = readPictureIndex,
+): Promise<SourceChoice> {
   const hasDecoder = typeof VideoDecoder !== 'undefined' && typeof EncodedVideoChunk !== 'undefined';
   const seek = (input: Partial<Parameters<typeof choosePath>[0]>) =>
     ({ path: 'seek' as const, reason: choosePath({ override, hasDecoder, indexFailure: null, configSupported: null, ...input }).reason ?? 'seek' });
@@ -797,7 +803,7 @@ async function sourceChoice(srcUrl: string, override: ExportPathOverride, cutRat
   if (facts === 'timeout') return seek({ factsFailure: 'timeout' });
   const factsFailure = !facts ? 'unreadable' : facts.answer.ok ? null : facts.answer.reason;
   if (factsFailure || !facts?.answer.ok || !facts.answer.timing.video) return seek({ factsFailure: factsFailure ?? 'no-video' });
-  const answer = await shared(readPictureIndex(srcUrl).catch(() => ({ ok: false as const, reason: 'unreadable' as const })));
+  const answer = await shared(readIndex(srcUrl).catch(() => ({ ok: false as const, reason: 'unreadable' as const })));
   if (answer === 'timeout') return seek({ indexFailure: 'timeout' });
   if (!answer.ok) return seek({ indexFailure: answer.reason });
   // H.264 and HEVC only: the decoder path was not measured on other codecs (spec G, B3).
@@ -887,8 +893,10 @@ export async function exportFilm(options: ExportFilmOptions): Promise<ExportFilm
   // Cut files whose own boxes have no sound track at all (media-probe's `soundTrackOf`: `no`, never
   // `unknown`) are silent and never read whole (spec F, F2). Their picture index is read here once, for both.
   const cutUrls = [...new Set(sequence.clips.map((clip) => clip.srcUrl))];
-  // Waited for until cancel or a limit, never aborted: the editor shares these reads (spec G, B1).
-  const indexes = override === 'seek' ? [] : await Promise.all(cutUrls.map((url) => waitShared(readPictureIndex(url).catch(() => null), signal, SHARED_WAIT_MS, null, cancelled)));
+  // Each file's index read once for this export, a network failure too (spec G, B9); waited for until cancel or
+  // a limit, never aborted: the editor shares these reads (B1).
+  const readIndex = exportIndexReads();
+  const indexes = override === 'seek' ? [] : await Promise.all(cutUrls.map((url) => waitShared(readIndex(url).catch(() => null), signal, SHARED_WAIT_MS, null, cancelled)));
   const noSoundTrack = new Set(cutUrls.filter((_, i) => {
     const answer = indexes[i];
     return !!answer?.ok && answer.index.sound === 'no';
@@ -904,7 +912,7 @@ export async function exportFilm(options: ExportFilmOptions): Promise<ExportFilm
   // encoder left idle long enough in a hidden page is taken back by the browser (spec G, A1/A4).
   const choices = new Map(
     await Promise.all(
-      cutUrls.map(async (url) => [url, await sourceChoice(url, override, plan.filter((entry) => entry.srcUrl === url).map((entry) => entry.sourceFps), signal)] as const),
+      cutUrls.map(async (url) => [url, await sourceChoice(url, override, plan.filter((entry) => entry.srcUrl === url).map((entry) => entry.sourceFps), signal, readIndex)] as const),
     ),
   );
   if (document.fonts?.ready) await document.fonts.ready;

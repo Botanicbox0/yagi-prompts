@@ -134,7 +134,9 @@ export type IndexFailure =
   | 'aperture'
   | 'times'
   | 'no-sync'
-  | 'disagrees';
+  | 'disagrees'
+  /** A refused request or a network error: not the file's answer, read again (spec G, B9). */
+  | 'network';
 
 export type IndexAnswer = { ok: true; index: VideoIndex } | { ok: false; reason: IndexFailure };
 
