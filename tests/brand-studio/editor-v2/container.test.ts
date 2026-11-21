@@ -317,3 +317,57 @@ describe('finding the boxes without the whole file (Range requests)', () => {
     expect(runs([1, 1, 2, 2, 2, 1])).toEqual([[2, 1], [3, 2], [1, 1]]);
   });
 });
+
+describe('the rate of footage on a clock that rounds each frame (review round 1 of part E, item 2)', () => {
+  /** Durations of `n` frames at `num/den` fps written on a clock of `tick` ticks per second, each frame's time rounded. */
+  const rounded = (n: number, num: number, den: number, tick: number, scale = 1) => {
+    const starts = Array.from({ length: n + 1 }, (_, k) => Math.round((k * den * tick) / num) * scale);
+    return starts.slice(1).map((t, k) => t - starts[k]!);
+  };
+  const rateOf = async (durations: number[], timescale: number) => {
+    const answer = await timingOfFile(file({ handler: 'vide', timescale, durations }));
+    if (!answer.ok) throw new Error(answer.reason);
+    return answer.timing.video!;
+  };
+
+  it.each([10, 11, 24, 100, 997, 2000])('24 fps on a millisecond clock, %i frames: 24/1, never 24000/1001', async (n) => {
+    const video = await rateOf(rounded(n, 24, 1, 1000), 1000);
+    expect([video.fpsNum, video.fpsDen]).toEqual([24, 1]);
+    expect(video.variable).toBe(false);
+  });
+
+  it.each([10, 11, 100, 997, 2000])('30 and 60 fps on a millisecond clock, %i frames', async (n) => {
+    const thirty = await rateOf(rounded(n, 30, 1, 1000), 1000);
+    const sixty = await rateOf(rounded(n, 60, 1, 1000), 1000);
+    expect([thirty.fpsNum, thirty.fpsDen, thirty.variable]).toEqual([30, 1, false]);
+    expect([sixty.fpsNum, sixty.fpsDen, sixty.variable]).toEqual([60, 1, false]);
+  });
+
+  it('true 23.976 on a millisecond clock, long enough to tell: 24000/1001', async () => {
+    const video = await rateOf(rounded(600, 24000, 1001, 1000), 1000);
+    expect([video.fpsNum, video.fpsDen, video.variable]).toEqual([24000, 1001, false]);
+  });
+
+  it('twelve frames: both 24 and 23.976 fit a millisecond clock; the one that fits best (nearest the average) is taken', async () => {
+    // Over 12 frames the two rates are 0.46 ms apart at the last frame, less than the clock's rounding:
+    // from so few frames the file cannot say which it is. Each answer is the rate that fits its times best.
+    expect((await rateOf(rounded(12, 24, 1, 1000), 1000)).fpsNum).toBe(24);
+    expect((await rateOf(rounded(12, 24000, 1001, 1000), 1000)).fpsNum).toBe(24000);
+  });
+
+  it('millisecond footage remuxed onto a 1/16000 clock (656 and 672 ticks): even, 24/1', async () => {
+    const durations = rounded(500, 24, 1, 1000, 16);
+    expect(new Set(durations)).toEqual(new Set([656, 672]));
+    const video = await rateOf(durations, 16000);
+    expect([video.fpsNum, video.fpsDen, video.variable]).toEqual([24, 1, false]);
+  });
+
+  it('real variable footage and a dropped frame on a millisecond clock stay variable', async () => {
+    const mixed = [...rounded(48, 24, 1, 1000), ...rounded(60, 30, 1, 1000)];
+    expect((await rateOf(mixed, 1000)).variable).toBe(true);
+    const dropped = rounded(100, 24, 1, 1000);
+    dropped[50] = dropped[50]! + dropped[51]!;
+    dropped.splice(51, 1);
+    expect((await rateOf(dropped, 1000)).variable).toBe(true);
+  });
+});

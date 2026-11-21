@@ -50,7 +50,7 @@ export interface VideoTiming {
   fps: number;
   fpsNum: number;
   fpsDen: number;
-  /** The frames are not evenly spaced (see `EVEN_TOLERANCE`): the editor does not support such footage. */
+  /** The frames are not evenly spaced (no rate fits their times, see `fitsRate`): the editor does not support such footage. */
   variable: boolean;
   /** The track's own time scale (`mdhd`). */
   timescale: number;
@@ -87,12 +87,12 @@ export interface ByteSource {
 }
 
 /**
- * A frame duration within one tick of the clock, or within this share of the usual duration, is the
- * usual duration: clocks that cannot hold the rate exactly round each frame's time (29.97 fps on a
- * 1/1000 s clock is 33, 33, 34 ms …). Anything further apart (1/24 s next to 1/30 s, a missing frame)
- * is not evenly spaced. The last frame's duration is not looked at: muxers often write it short.
+ * How far a picture's time may sit from where a rate puts it and still be on that rate: one tick of the
+ * track's clock or one millisecond, whichever is more (clocks that cannot hold a rate round each frame's
+ * time: 24 fps on a 1/1000 s clock is 41, 42, 42 ms …; the same footage remuxed onto a 1/16000 clock keeps
+ * those milliseconds as 656 and 672 ticks). Review round 1 of part E, item 2.
  */
-export const EVEN_TOLERANCE = 0.001;
+export const RATE_FIT_MS = 1;
 /** The most top-level boxes the reader walks (a fragmented file has two per fragment). */
 export const MAX_TOP_BOXES = 20_000;
 /** The most samples one track may list before the file is treated as broken. */
@@ -358,6 +358,44 @@ function fraction(num: number, den: number): [number, number] {
   return [Math.round(num) / divisor, Math.round(den) / divisor];
 }
 
+/**
+ * How far, at most, the pictures shown at `times` (sorted, track ticks) sit from where `num/den` fps puts
+ * them, counted from the first.
+ */
+function worstDeviation(times: readonly number[], timescale: number, num: number, den: number): number {
+  const period = (timescale * den) / num;
+  let worst = 0;
+  for (let k = 0; k < times.length; k += 1) worst = Math.max(worst, Math.abs(times[k]! - (times[0]! + k * period)));
+  return worst;
+}
+
+/**
+ * The footage's rate from its pictures' presentation times, whatever its clock (review round 1 of part E,
+ * item 2). A rate fits when every picture sits within `RATE_FIT_MS` (or one tick) of where it puts it.
+ * Candidates: every standard rate (the fit itself rules out the wrong ones: over a few frames a clock
+ * rounding to the millisecond can move the average by more than 0.1 %); the fitting one with the smallest worst
+ * deviation wins, a tie going to the one nearest the average (a true 24 fps file on a millisecond clock is
+ * 24, never 23.976; over a dozen frames the two cannot be told apart, and the closer fit is taken). Only
+ * when no standard rate fits, the average itself is tried. Nothing fits: not evenly spaced.
+ */
+function rateOfTimes(times: readonly number[], timescale: number): { num: number; den: number } | null {
+  const n = times.length;
+  const span = times[n - 1]! - times[0]!;
+  if (n < 2 || span <= 0) return null;
+  const average = ((n - 1) * timescale) / span;
+  const tolerance = Math.max(1, timescale * (RATE_FIT_MS / 1000)) + 1e-9;
+  let best: { num: number; den: number; worst: number } | null = null;
+  for (const [num, den] of RATES) {
+    const worst = worstDeviation(times, timescale, num, den);
+    if (worst > tolerance) continue;
+    const closer = !best || worst < best.worst - 1e-9 || (Math.abs(worst - best.worst) <= 1e-9 && Math.abs(num / den - average) < Math.abs(best.num / best.den - average));
+    if (closer) best = { num, den, worst };
+  }
+  if (best) return { num: best.num, den: best.den };
+  const [num, den] = fraction((n - 1) * timescale, span);
+  return worstDeviation(times, timescale, num, den) <= tolerance ? { num, den } : null;
+}
+
 function videoTiming(track: Track, movieTimescale: number): VideoTiming | 'edits' {
   const window = windowOf(track, movieTimescale);
   if (!window) return 'edits';
@@ -370,22 +408,23 @@ function videoTiming(track: Track, movieTimescale: number): VideoTiming | 'edits
   let first = Infinity;
   for (const i of shown) first = Math.min(first, track.dts[i]! + track.offsets[i]!);
   const durations = shown.map((i) => track.durations[i]!);
+  // The last picture's duration is not looked at: muxers often write it short.
   const body = durations.length > 1 ? durations.slice(0, -1) : durations;
-  const sorted = [...body].sort((a, b) => a - b);
-  const usual = sorted[Math.floor(sorted.length / 2)]!;
-  const tolerance = Math.max(1, usual * EVEN_TOLERANCE);
-  const even = usual > 0 && body.every((d) => Math.abs(d - usual) <= tolerance);
   let num: number;
   let den: number;
-  if (even && body.every((d) => d === usual)) {
-    [num, den] = fraction(track.timescale, usual);
-  } else if (even) {
-    // A clock that rounds each frame: the rate over the frames, brought onto the rate it almost surely is.
-    const average = (body.length * track.timescale) / body.reduce((a, b) => a + b, 0);
-    const near = RATES.find(([n, d]) => Math.abs(average - n / d) / (n / d) < 0.001);
-    [num, den] = near ? [near[0], near[1]] : fraction(body.length * track.timescale, body.reduce((a, b) => a + b, 0));
+  let even = true;
+  if (body[0]! > 0 && body.every((d) => d === body[0])) {
+    // Every picture lasts the same: the exact fraction (24000/1001 stays that).
+    [num, den] = fraction(track.timescale, body[0]!);
   } else {
-    [num, den] = fraction(durations.length * track.timescale, durations.reduce((a, b) => a + b, 0));
+    const times = shown.map((i) => track.dts[i]! + track.offsets[i]!).sort((a, b) => a - b);
+    const fit = rateOfTimes(times, track.timescale);
+    if (fit) {
+      ({ num, den } = fit);
+    } else {
+      even = false;
+      [num, den] = fraction(durations.length * track.timescale, durations.reduce((a, b) => a + b, 0));
+    }
   }
   if (!(num > 0 && den > 0)) return 'edits';
   return { firstSec: firstShownAt(window, track, first), frames: shown.length, fps: num / den, fpsNum: num, fpsDen: den, variable: !even, timescale: track.timescale };
