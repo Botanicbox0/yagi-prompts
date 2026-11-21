@@ -41,6 +41,7 @@ export const MAX_RANGE_REQUESTS = 8;
 export const MAX_WHOLE_BYTES = 64 * 1024 * 1024;
 
 export interface RangedSource extends ByteSource {
+  allow(requests: number): void;
   /** Stops a body still being read (a server that ignored Range). */
   close(): void;
   stats(): { requests: number; received: number; mode: 'range' | 'whole' | null };
@@ -58,6 +59,7 @@ export class RangeRefused extends Error {
 }
 
 export function rangedSource(request: RangeRequest, chunk = RANGE_CHUNK, wholeLimit = MAX_WHOLE_BYTES): RangedSource {
+  let budget = MAX_RANGE_REQUESTS;
   const pieces: Array<{ start: number; bytes: Uint8Array }> = [];
   let mode: 'range' | 'whole' | null = null;
   let requests = 0;
@@ -113,7 +115,7 @@ export function rangedSource(request: RangeRequest, chunk = RANGE_CHUNK, wholeLi
       const hit = cached(start, length);
       if (hit) return hit;
       const want = Math.max(length, chunk);
-      if (requests >= MAX_RANGE_REQUESTS) throw new ReadLimit();
+      if (requests >= budget) throw new ReadLimit();
       requests += 1;
       const answer = await request(start, start + want - 1);
       const contentRange = answer.headers?.get('content-range') ?? null;
@@ -154,5 +156,8 @@ export function rangedSource(request: RangeRequest, chunk = RANGE_CHUNK, wholeLi
     },
     stats: () => ({ requests, received, mode }),
     size: () => total,
+    allow(requests: number) {
+      budget = Math.max(budget, requests);
+    },
   };
 }

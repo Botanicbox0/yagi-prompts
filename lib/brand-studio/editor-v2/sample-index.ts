@@ -177,6 +177,13 @@ const W_ONE = 0x40000000;
 /** The most samples a track may list; the most top-level boxes walked (a fragmented file has two per fragment). */
 const MAX_SAMPLES = 4_000_000;
 export const MAX_INDEX_BOXES = 20_000;
+/**
+ * The requests a fragmented file may use to walk its fragments (spec G, B8): each fragment whose data is larger
+ * than a read (64 KiB) costs one, so about 60 fragments: a minute at a fragment a second, two at ffmpeg's
+ * fragment per key frame every 2 s. A plain file keeps ranged-source.ts `MAX_RANGE_REQUESTS` (8). Past the
+ * budget the index is `unreadable` and the source is seeked.
+ */
+export const FRAGMENTED_INDEX_REQUESTS = 64;
 
 // ── Finding the boxes ──────────────────────────────────────────────────────────────────────────
 
@@ -214,6 +221,7 @@ export async function gatherIndexBoxes(source: ByteSource, maxBoxes = MAX_INDEX_
         const top = boxes(box, 0, box.length)?.[0];
         fragmented = !!top && !!boxes(box, top.body, top.end)?.some((entry) => entry.type === 'mvex');
         if (!fragmented) break;
+        source.allow?.(FRAGMENTED_INDEX_REQUESTS);
       } else {
         moofs.push({ bytes: box, at });
       }

@@ -5,6 +5,8 @@ import { gatherBoxes, readTiming, type TimingAnswer } from '@/lib/brand-studio/e
 import { rangedSource } from '@/lib/brand-studio/editor-v2/ranged-source';
 import { gatherIndexBoxes, readSampleIndex, type IndexAnswer } from '@/lib/brand-studio/editor-v2/sample-index';
 
+export { FRAGMENTED_INDEX_REQUESTS } from '@/lib/brand-studio/editor-v2/sample-index';
+
 /**
  * Editing studio v2 — a clip's frame facts read from its own file (spec E addendum, C1): only the boxes
  * that hold its timing, fetched with Range requests (lib/brand-studio/editor-v2/ranged-source.ts), read by
@@ -58,8 +60,9 @@ export function readFootage(srcUrl: string): Promise<FootageRead> {
 }
 
 /**
- * The most top-level boxes walked for a picture index: a fragmented file has a `moof` per fragment, and
- * each is one request at worst. Past this the source is taken by seeking.
+ * The most top-level boxes walked for a picture index (a fragmented file has two per fragment): with fragments
+ * smaller than a read, several fit one request and this is what ends the walk; otherwise the request budget does
+ * (sample-index.ts `FRAGMENTED_INDEX_REQUESTS`). Past either the source is taken by seeking.
  */
 const INDEX_MAX_BOXES = 2000;
 
