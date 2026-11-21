@@ -305,16 +305,17 @@ describe('finding the boxes without the whole file (Range requests)', () => {
     expect(readTiming(found).ok).toBe(true);
   });
 
-  it('fragmented: every moof is read, the media between them is not', async () => {
+  it('fragmented: the rest after the moov is read in one piece and every moof in it is found (review round 1 of part E, item 10)', async () => {
     const movie = moov({ tracks: [{ handler: 'vide', timescale: 12288, durations: [] }], fragmented: { defaultDuration: { 1: 512 } } });
     const bytes = concat(ftyp('iso5'), movie, moof(1, [{ trackId: 1, base: 0, count: 24 }]), mdat(400_000), moof(2, [{ trackId: 1, count: 24 }]), mdat(400_000));
-    const source = rangedSource(bytes);
+    const source = { ...rangedSource(bytes), size: () => bytes.length };
     const found = await gatherBoxes(source);
     if ('failure' in found) throw new Error(found.failure);
     expect(found.moofs).toHaveLength(2);
     const answer = readTiming(found);
     expect(answer.ok && answer.timing.video!.frames).toBe(48);
-    expect(source.reads.reduce((n, [, length]) => n + length, 0)).toBeLessThan(20_000);
+    // Its size not known: not walked fragment by fragment, measured by playback instead.
+    expect(await gatherBoxes(rangedSource(bytes))).toEqual({ failure: 'fragmented-too-large' });
   });
 
   it('a file whose first box is not one an MP4 starts with is refused at once', async () => {

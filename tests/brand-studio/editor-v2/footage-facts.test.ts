@@ -1,10 +1,11 @@
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { gatherBoxes, readTiming, timingOfFile } from '@/lib/brand-studio/editor-v2/container';
+import { containerStats, gatherBoxes, readTiming, timingOfFile } from '@/lib/brand-studio/editor-v2/container';
 import { measuredFromTiming } from '@/lib/brand-studio/editor-v2/fps';
-import { RangeRefused, rangedSource, type RangeAnswer } from '@/lib/brand-studio/editor-v2/ranged-source';
-import { concat, ftyp, mdat, moov, type TrackSpec } from './mp4-bytes';
+import { MAX_RANGE_REQUESTS, RangeRefused, rangedSource, type RangeAnswer } from '@/lib/brand-studio/editor-v2/ranged-source';
+import { mapLimit } from '@/lib/brand-studio/editor-v2/fps';
+import { box, concat, ftyp, mdat, moof, moov, type TrackSpec } from './mp4-bytes';
 
 /**
  * Spec E addendum, C1: a clip's frame facts come from its own file, read with Range requests for the
@@ -23,7 +24,8 @@ function server(bytes: Uint8Array, ranges: boolean) {
     asked.push([start, end]);
     if (ranges) {
       if (start >= bytes.length) return new Response(null, { status: 416 });
-      return new Response(bytes.slice(start, Math.min(bytes.length, end + 1)), { status: 206 });
+      const last = Math.min(bytes.length, end + 1) - 1;
+      return new Response(bytes.slice(start, last + 1), { status: 206, headers: { 'Content-Range': `bytes ${start}-${last}/${bytes.length}` } });
     }
     const chunk = 16 * 1024;
     let at = 0;
@@ -204,5 +206,81 @@ describe('the playback fallback counts the last picture it is shown (review roun
     vi.doMock('@/components/brand-studio/editor-v2/footage-facts', () => ({ readFootage: async () => ({ answer: { ok: false, reason: 'not-mp4' }, requests: 1, received: 16, mode: 'range', ms: 1 }) }));
     const { measureSource } = await import('@/components/brand-studio/editor-v2/measure-fps');
     expect(await measureSource('/clip.webm', 4.308)).toEqual({ fps: 24, frames: 97 });
+  });
+});
+
+describe('a ceiling on requests and on memory (review round 1 of part E, item 10)', () => {
+  const fragmented = (fragments: number, mdatBytes: number) => {
+    const movie = moov({ tracks: [{ handler: 'vide', timescale: 12288, durations: [] }], fragmented: { defaultDuration: { 1: 512 } } });
+    const parts = [ftyp('iso5'), movie];
+    for (let f = 0; f < fragments; f += 1) parts.push(moof(f + 1, [{ trackId: 1, base: f * 24 * 512, count: 24 }]), mdat(mdatBytes));
+    return concat(...parts);
+  };
+  const count = async (bytes: Uint8Array) => {
+    const host = server(bytes, true);
+    const found = await gatherBoxes(rangedSource(host.request)).catch((error: unknown) => ({ failure: String(error) }));
+    return { found, requests: host.asked.length };
+  };
+
+  it('an ordinary file: moov first in at most 2 requests, moov at the end in at most 3', async () => {
+    expect((await count(concat(ftyp(), moov({ tracks: [VIDEO] }), mdat(3_000_000)))).requests).toBeLessThanOrEqual(2);
+    expect((await count(TAIL_MOOV)).requests).toBeLessThanOrEqual(3);
+  });
+
+  it('a small fragmented file: the rest in one request, walked in memory (at most 3 in all)', async () => {
+    const bytes = fragmented(40, 50_000);
+    const { found, requests } = await count(bytes);
+    expect(requests).toBeLessThanOrEqual(3);
+    if ('failure' in found) throw new Error(String(found.failure));
+    const answer = readTiming(found);
+    expect(answer.ok && answer.timing.video!.frames).toBe(40 * 24);
+  });
+
+  it('a fragmented file over 64 MiB is not walked over the network: it fails after at most 2 requests (measured by playback instead)', async () => {
+    const head = concat(ftyp('iso5'), moov({ tracks: [{ handler: 'vide', timescale: 12288, durations: [] }], fragmented: { defaultDuration: { 1: 512 } } }));
+    const total = 100 * 1024 * 1024;
+    const asked: Array<[number, number]> = [];
+    const request = async (start: number, end: number): Promise<RangeAnswer> => {
+      asked.push([start, end]);
+      const last = Math.min(total, end + 1) - 1;
+      const body = new Uint8Array(Math.min(last - start + 1, 128 * 1024));
+      if (start < head.length) body.set(head.subarray(start, Math.min(head.length, start + body.length)));
+      return new Response(body, { status: 206, headers: { 'Content-Range': `bytes ${start}-${start + body.length - 1}/${total}` } });
+    };
+    const found = await gatherBoxes(rangedSource(request));
+    expect(found).toEqual({ failure: 'fragmented-too-large' });
+    expect(asked.length).toBeLessThanOrEqual(2);
+  });
+
+  it('never more than 8 requests for one file, whatever its layout', async () => {
+    // Twenty 100 KB boxes before the moov: each needs its own request.
+    const bytes = concat(ftyp(), ...Array.from({ length: 20 }, () => box('free', new Uint8Array(100_000))), moov({ tracks: [VIDEO] }));
+    const { found, requests } = await count(bytes);
+    expect(requests).toBeLessThanOrEqual(MAX_RANGE_REQUESTS);
+    expect(MAX_RANGE_REQUESTS).toBe(8);
+    expect(found).toEqual({ failure: 'too-many-requests' });
+  });
+
+  it('a moov with many tracks expands only the two it uses; the sound track not at all', async () => {
+    const big: TrackSpec = { handler: 'vide', timescale: 12288, durations: Array.from({ length: 2000 }, () => 512) };
+    const sound: TrackSpec = { handler: 'soun', timescale: 48000, durations: Array.from({ length: 2000 }, () => 1024) };
+    const tracks = [big, sound, ...Array.from({ length: 30 }, () => big), ...Array.from({ length: 30 }, () => sound)];
+    const answer = await timingOfFile(concat(ftyp(), moov({ tracks }), mdat(8)));
+    expect(answer.ok).toBe(true);
+    expect(containerStats.expandedSamples).toBe(2000);
+  });
+
+  it('opening a film reads at most 4 sources at once', async () => {
+    let running = 0;
+    let most = 0;
+    const done = await mapLimit(Array.from({ length: 12 }, (_, i) => i), 4, async (i) => {
+      running += 1;
+      most = Math.max(most, running);
+      await new Promise((r) => setTimeout(r, 5));
+      running -= 1;
+      return i * 2;
+    });
+    expect(done).toEqual(Array.from({ length: 12 }, (_, i) => i * 2));
+    expect(most).toBe(4);
   });
 });

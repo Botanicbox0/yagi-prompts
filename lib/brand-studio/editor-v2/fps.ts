@@ -141,6 +141,23 @@ export function framesFromPlayback(input: { fps: number; durationSec: number; fi
 }
 
 /**
+ * Runs `work` over `items` with at most `limit` at a time, answers in their order (opening a film reads
+ * at most four files at once: review round 1 of part E, item 10).
+ */
+export async function mapLimit<T, R>(items: readonly T[], limit: number, work: (item: T, index: number) => Promise<R>): Promise<R[]> {
+  const out = new Array<R>(items.length);
+  let next = 0;
+  const runner = async () => {
+    while (next < items.length) {
+      const index = next++;
+      out[index] = await work(items[index]!, index);
+    }
+  };
+  await Promise.all(Array.from({ length: Math.min(Math.max(1, limit), items.length) }, runner));
+  return out;
+}
+
+/**
  * The footage's facts from its own file (lib/brand-studio/editor-v2/container.ts), in the shape the
  * editor keeps for measured footage; `null` when the file could not be read or has no picture, and the
  * editor measures it by playback instead (spec E addendum, C1). The rate stays exact (24000/1001).
