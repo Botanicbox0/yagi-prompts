@@ -5,7 +5,7 @@ import { ExportStatus } from '@/components/brand-studio/editor-v2/export-sheet';
 import { parseStoredProject, serializeProjectForStorage, timelineSpans, type ComposeClip, type ComposerProject } from '@/lib/brand-studio/compose/timeline';
 import { effectStartSec, overlayFrames, storedSecToFrame } from '@/lib/brand-studio/editor-v2/cut-anchor';
 import { LAST_FRAME_QUIET_MAX, lastFrameWarnings, picturePlace } from '@/lib/brand-studio/editor-v2/export-plan';
-import { framesFromPlayback, sourceFramesOf } from '@/lib/brand-studio/editor-v2/fps';
+import { playbackFacts, sourceFramesOf } from '@/lib/brand-studio/editor-v2/fps';
 import { totalFrames, type FrameClip, type FrameSequence } from '@/lib/brand-studio/editor-v2/frames';
 import { fromStored, mergeFilmText, ownedSignature, storedFilmView, toStored, type FrameV2Block, type MeasuredSources } from '@/lib/brand-studio/editor-v2/stored';
 import { studioEditorEn, studioEditorKo } from '@/messages/studio-editor';
@@ -37,13 +37,15 @@ describe('the number of pictures is never rounded up', () => {
   });
 
   it('playback: the first and last pictures shown give the count, never more than the length gives', () => {
+    const window = Array.from({ length: 13 }, (_, k) => k / 24);
+    const count = (durationSec: number, firstSec: number | null, lastSec: number | null) => playbackFacts({ windowTimes: window, durationSec, firstSec, lastSec })?.frames ?? null;
     // The container (its sound) runs to 4.1 s; the last picture is shown at 4.000 s.
-    expect(framesFromPlayback({ fps: 24, durationSec: 4.1, firstSec: 0, lastSec: 4.0 })).toBe(97);
-    expect(framesFromPlayback({ fps: 24, durationSec: 4.06, firstSec: 0, lastSec: 4.0 })).toBe(97);
+    expect(count(4.1, 0, 4.0)).toBe(97);
+    expect(count(4.06, 0, 4.0)).toBe(97);
     // A file whose first picture is at 0.5 s.
-    expect(framesFromPlayback({ fps: 24, durationSec: 4.56, firstSec: 0.5, lastSec: 4.5 })).toBe(97);
-    // Ends not seen: the length, rounded down.
-    expect(framesFromPlayback({ fps: 24, durationSec: 4.06 })).toBe(97);
+    expect(count(4.56, 0.5, 4.5)).toBe(97);
+    // Ends not seen: nothing is counted (review round 2 of part E, item 4: never the length rule).
+    expect(count(4.06, null, null)).toBeNull();
   });
 });
 

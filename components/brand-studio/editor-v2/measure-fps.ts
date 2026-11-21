@@ -1,6 +1,6 @@
 'use client';
 
-import { framesFromPlayback, measureWithRetry, measuredFromTiming, rateFromMediaTimes, snapSourceFps } from '@/lib/brand-studio/editor-v2/fps';
+import { MIN_FRAME_GAPS, measureWithRetry, measuredFromTiming, playbackFacts, rateFromMediaTimes } from '@/lib/brand-studio/editor-v2/fps';
 import type { MeasuredSource } from '@/lib/brand-studio/editor-v2/stored';
 import { readFootage } from './footage-facts';
 import { refreshReduced, screenTimer } from './screen-refresh';
@@ -20,8 +20,10 @@ import { refreshReduced, screenTimer } from './screen-refresh';
  * try is followed by one longer try (`measureWithRetry`, review round 1, item 3). Each piece of footage
  * is measured once per visit; a failure answers `null` and the editor stores nothing frame-based for it,
  * so the next visit measures it again. Frames that are not evenly spaced are reported (`variable`). The
- * number of pictures is never rounded up (spec E addendum C3): after the rate, the first and the last
- * picture are shown and their times give the count, capped by the length (`framesFromPlayback`).
+ * number of pictures is never rounded up (spec E addendum C3): after the window, the first and the last
+ * picture are shown, and the rate and the count come from the whole span between them, capped by the
+ * length (`playbackFacts`, review round 2 of part E, N1). When either end cannot be read the answer is
+ * `null` (not known yet), never a count from the length alone (round 2, item 4).
  */
 const FRAMES = 13;
 const cache = new Map<string, Promise<MeasuredSource | null>>();
@@ -76,16 +78,11 @@ function measureOnce(src: string, durationSec: number | null, limitMs: number): 
     let lastSec: number | null = null;
     /** The ends are being read: an `ended` now is the seek to the last picture, not the end of playing. */
     let readingEnds = false;
+    /** The numbers gathered, put together by `playbackFacts`; `null` until both ends have been read. */
     const result = (): MeasuredSource | null => {
-      const { fps, variable } = rateFromMediaTimes(times);
       const seconds = durationSec ?? (Number.isFinite(video.duration) ? video.duration : null);
-      if (!fps || !seconds || seconds <= 0) return null;
-      const frames = framesFromPlayback({ fps, durationSec: seconds, firstSec, lastSec });
-      // With the first and last pictures known, the rate over the whole footage: a dozen frames on a
-      // millisecond clock cannot tell 24 from 23.976 (0.1 % apart), a hundred can.
-      const span = firstSec !== null && lastSec !== null ? lastSec - firstSec : 0;
-      const whole = span > 0 && frames > 1 ? snapSourceFps((frames - 1) / span) : null;
-      return { fps: whole ?? fps, frames, ...(variable ? { variable: true } : {}) };
+      const facts = playbackFacts({ windowTimes: times, firstSec, lastSec, durationSec: seconds });
+      return facts ? { fps: facts.fps, frames: facts.frames, ...(facts.variable ? { variable: true } : {}) } : null;
     };
     /** Seeks to `at` and resolves with the media time of the picture then shown. */
     const shownAt = (at: number) =>
@@ -149,7 +146,10 @@ function measureOnce(src: string, durationSec: number | null, limitMs: number): 
     };
     video.addEventListener('error', () => finish(null), { once: true });
     video.addEventListener('ended', () => {
-      if (!readingEnds) finish(result());
+      // Footage shorter than the window: the frames it played are the window, if there are enough of them.
+      if (readingEnds || done) return;
+      if (times.length > MIN_FRAME_GAPS) readEnds();
+      else finish(null);
     });
     video.addEventListener(
       'loadeddata',
