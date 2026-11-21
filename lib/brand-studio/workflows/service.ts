@@ -17,7 +17,7 @@ import {
   type StudioReference,
 } from '@/lib/brand-studio/contracts';
 import { advanceStudioJobsWith } from '@/lib/brand-studio/engine';
-import { createStudioJob } from '@/lib/brand-studio/jobs';
+import { createStudioJob, FREE_INTEL_LIMITS, takeFreeIntelSlot } from '@/lib/brand-studio/jobs';
 import { normalizeLegacyStudioModelId, studioModelOrLegacy } from '@/lib/brand-studio/models';
 import { failure, guarded } from '@/lib/brand-studio/outcome';
 import { jobsByIds, jobsOf, readyAsset, readyOutput, tagsOf, viewsOf } from '@/lib/brand-studio/repo';
@@ -54,6 +54,9 @@ import {
   type WorkflowWire,
 } from './contracts';
 import { estimateRecipeCredits, findStarterWorkflow, STARTER_WORKFLOWS } from './starters';
+import { renderPresetPrompt } from './presets';
+import { SHEET_VAR_FALLBACK, VIDEO_CHARACTER_SHEET_PRESET_ID } from './presets/video-character-sheet';
+import { analyzeSheetInputs } from './sheet-analysis';
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const iso = (v: Date | string): string => (v instanceof Date ? v.toISOString() : new Date(String(v)).toISOString());
@@ -218,7 +221,16 @@ export async function resolveWorkflowTarget(sql: SqlRunner, organizationId: stri
 async function recentRunSummaries(deps: StudioDeps, sql: SqlRunner, organizationId: string): Promise<RecentRunSummaryWire[]> {
   const rawJobs = await jobsOf(sql, organizationId, 16);
   const views = await viewsOf(sql, rawJobs, deps.media);
+  return toRecentRunSummaries(views);
+}
+
+/**
+ * The runs the hub offers to "save as a workflow" (`loadWorkflowsHubState` and the hub page): picture and video
+ * runs, newest first, never a preset run (its text is server-side and it cannot be saved, `saveWorkflowFromJob`).
+ */
+export function toRecentRunSummaries(views: readonly StudioJobView[]): RecentRunSummaryWire[] {
   return views
+    .filter((j) => !j.preset)
     .filter((j) => j.kind === 'image' || j.kind === 'video' || j.kind === 'video_remix')
     .slice(0, 12)
     .map((j) => ({
@@ -445,6 +457,8 @@ export async function saveWorkflowFromJob(
       const jobRows = await jobsByIds(sql, v.organizationId, [v.jobId]);
       const job = jobRows[0];
       if (!job) throw new StudioDenied('not_found');
+      // A preset run's text is server-side and never shown: it cannot become a workflow of the team's own.
+      if (job.params?.preset) throw new StudioDenied('invalid');
 
       const isVideo = job.kind === 'video' || job.kind === 'video_remix' || job.kind === 'video_final';
       const hasVideoRef = job.kind === 'video_remix';
@@ -761,10 +775,12 @@ async function ensureSharedFolderAndFileOutputs(
   userId: string,
   folderNameRaw: string,
   jobIds: readonly string[],
-  anchorAssetId?: string | null,
+  anchorAssetId?: string | null | ReadonlyArray<string | null | undefined>,
 ): Promise<{ id: string; name: string } | null> {
   const cleanName = folderNameRaw.trim().replace(/\s+/g, ' ').slice(0, 60).trim();
   if (!cleanName || jobIds.length === 0) return null;
+  // One library picture (the anchor), or several (every input picture of a run), each filed once.
+  const anchorAssetIds = [...new Set((Array.isArray(anchorAssetId) ? anchorAssetId : [anchorAssetId]).filter((id): id is string => typeof id === 'string' && id.length > 0))];
 
   let folder = (
     await sql.query<FolderRow>(
@@ -782,12 +798,12 @@ async function ensureSharedFolderAndFileOutputs(
     ).rows[0]!;
   }
 
-  if (anchorAssetId) {
+  for (const assetId of anchorAssetIds) {
     await sql.query(
       `insert into brand_studio_folder_items (folder_id, organization_id, asset_id, output_id, added_by)
        values ($1, $2, $3, null, $4)
        on conflict do nothing`,
-      [folder.id, organizationId, anchorAssetId, userId],
+      [folder.id, organizationId, assetId, userId],
     );
   }
 
@@ -870,7 +886,40 @@ function buildStepJobCreateInput(input: {
     aspect: step.aspect,
     resolution: step.resolution,
     count: step.count ?? 1,
+    // A step that names its quality runs at it (and the estimate priced it there); the planner refuses it on a model without one.
+    ...(step.quality ? { quality: step.quality } : {}),
   };
+}
+
+/** A step's `preset` counts only on a built-in starter, on a picture step, and only when the preset exists. */
+function honoursPreset(workflow: WorkflowWire, step: WorkflowStep): step is WorkflowStep & { preset: string } {
+  return workflow.starter === true && step.medium === 'image' && typeof step.preset === 'string' && renderPresetPrompt({ id: step.preset, vars: {} }) !== null;
+}
+
+/** The pictures a preset step sends, in the order of its slots; null when one of them was not given. */
+function presetReferences(step: WorkflowStep, refs: Readonly<Record<string, StudioReference | null>>): StudioReference[] | null {
+  const out: StudioReference[] = [];
+  for (const slot of step.useReferenceSlots.filter((s) => /^image\d+$/.test(s))) {
+    const ref = refs[slot];
+    if (!ref) return null;
+    out.push(ref);
+  }
+  return out;
+}
+
+/**
+ * The two guards the studio puts on a free reading (lib/brand-studio/jobs.ts `previewStudioPrompt`,
+ * `analyzeStudioFilm`): no open monthly allowance fails the run with the code job creation would give
+ * (`allowance_closed`) before any call; a used-up per-organization window (`FREE_INTEL_LIMITS.analyzePerMinute`,
+ * key `sheet:<organizationId>`) skips the reading and the run goes on with the fallbacks.
+ */
+async function presetReadingGate(deps: StudioDeps, organizationId: string): Promise<{ read: boolean } | StudioFailure> {
+  const now = deps.now?.() ?? new Date();
+  return guarded(async () => {
+    const allowance = await loadAllowance(deps.sql, organizationId, deps.env, now);
+    if (allowance.capKrw <= 0) throw new StudioDenied('allowance_closed');
+    return { read: takeFreeIntelSlot(`sheet:${organizationId}`, FREE_INTEL_LIMITS.analyzePerMinute, now.getTime()) };
+  });
 }
 
 async function loadRefBytesIfReady(
@@ -899,7 +948,7 @@ async function loadRefBytesIfReady(
 }
 
 /**
- * Executes any Starter or Organization Workflow (`character-sheet-maker`, `product-packshot-sheet`,
+ * Executes any Starter or Organization Workflow (`character-sheet-maker`, `video-character-sheet`, `product-packshot-sheet`,
  * `reference-video-ad-pack`, or custom team recipe), dispatching real `brand_studio_jobs`, running
  * vision consistency verification (with 1-time auto-retry on drift for character sheets), and filing
  * outputs into a shared `brand_studio_folders` collection.
@@ -944,6 +993,20 @@ export async function runWorkflow(
         initialVideoRef = ref.assetId ? { assetId: ref.assetId } : { outputId: ref.outputId };
       }
 
+      // The second picture (`video-character-sheet`: the outfit), checked like the first.
+      let initialImage2Ref: StudioReference | null = null;
+      if (v.inputs.image2Ref) {
+        const ref = v.inputs.image2Ref;
+        const ok = ref.assetId
+          ? await readyAsset(sql, v.organizationId, ref.assetId)
+          : await readyOutput(sql, v.organizationId, ref.outputId!);
+        if (!ok || ok.kind !== 'image') throw new StudioDenied('reference_missing');
+        initialImage2Ref = {
+          ...(ref.assetId ? { assetId: ref.assetId } : { outputId: ref.outputId }),
+          role: ref.role ?? 'style',
+        };
+      }
+
       const injectedRows = (await tableExists(sql, 'brand_studio_playbooks'))
         ? (
             await sql.query<{ title: string; body_md: string }>(
@@ -959,17 +1022,21 @@ export async function runWorkflow(
         .join(' | ')
         .slice(0, 600);
 
-      return { seat, workflow, initialImageRef, initialVideoRef, directorRules };
+      return { seat, workflow, initialImageRef, initialImage2Ref, initialVideoRef, directorRules };
     }),
   );
   if ('ok' in prep) return prep;
 
-  const { seat, workflow, initialImageRef, initialVideoRef, directorRules } = prep;
+  const { seat, workflow, initialImageRef, initialImage2Ref, initialVideoRef, directorRules } = prep;
   const { recipe } = workflow;
+  // A starter with a preset step (`video-character-sheet`) takes no default name: without one the run line and the folder go without.
+  const locked = recipe.steps.some((s) => honoursPreset(workflow, s));
   const defaultSubject =
     recipe.slots.find((s) => s.key === 'subject')?.defaultValue ||
     (workflow.category === 'character' ? '기본 캐릭터' : workflow.title.slice(0, 24));
-  const subject = (v.inputs.subject?.trim() || defaultSubject).slice(0, 60);
+  const subject = locked
+    ? (v.inputs.subject ?? '').trim().replace(/\s+/g, ' ').slice(0, 60).trim()
+    : (v.inputs.subject?.trim() || defaultSubject).slice(0, 60);
   const userPrompt = (v.inputs.prompt ?? '').trim();
 
   const packSlot = recipe.slots.find((s) => s.key === 'outputs' && s.kind === 'multiselect');
@@ -979,6 +1046,32 @@ export async function runWorkflow(
       : packSlot?.options?.length
         ? new Set(packSlot.options.filter((o) => o.defaultSelected !== false).map((o) => o.id))
         : null;
+
+  // Preset steps (a built-in starter only), checked before anything is made: every picture they use, an open
+  // allowance, then one reading of the two pictures for the text's four descriptions.
+  const presetSteps = recipe.steps.filter(
+    (s) => !s.onlyWhenNoImageRef && !(s.packId && selectedPacks && !selectedPacks.has(s.packId)) && honoursPreset(workflow, s),
+  );
+  const presetSlotRefs: Readonly<Record<string, StudioReference | null>> = { image1: initialImageRef, image2: initialImage2Ref };
+  let presetVars: Record<string, string> = {};
+  if (presetSteps.length > 0) {
+    if (presetSteps.some((s) => presetReferences(s, presetSlotRefs) === null)) return failure('reference_missing');
+    const gate = await presetReadingGate(deps, v.organizationId);
+    if ('ok' in gate) return gate;
+    if (presetSteps.some((s) => s.preset === VIDEO_CHARACTER_SHEET_PRESET_ID)) {
+      const reading = gate.read
+        ? await analyzeSheetInputs(
+            {
+              person: await loadRefBytesIfReady(deps, v.organizationId, initialImageRef),
+              wardrobe: await loadRefBytesIfReady(deps, v.organizationId, initialImage2Ref),
+            },
+            deps.intelDeps,
+          )
+        : { vars: { ...SHEET_VAR_FALLBACK }, source: 'fallback' as const };
+      deps.log?.('studio_sheet_reading', { source: reading.source, skipped: !gate.read });
+      presetVars = { ...reading.vars };
+    }
+  }
 
   let lockedImageRef: StudioReference | null = initialImageRef;
   const stepJobMap = new Map<string, StudioJobView>();
@@ -1035,6 +1128,35 @@ export async function runWorkflow(
   if (activeSteps.length === 0) return failure('invalid');
 
   for (const [idx, step] of activeSteps.entries()) {
+    if (honoursPreset(workflow, step)) {
+      // A preset step: the run shows the workflow's name (and the name typed); the text it sends is assembled
+      // from the server-side original when the job is prepared. No step template, no team guides, no enhancer.
+      const title = viewer.locale === 'en' ? (workflow.titleEn ?? workflow.title) : workflow.title;
+      const visibleLine = (subject ? `${title} · ${subject}` : title).slice(0, Math.min(200, STUDIO_LIMITS.promptMax)).trim();
+      const presetReqId = `${v.requestId}_s${idx + 1}_${step.id}`.replace(/[^A-Za-z0-9_-]/g, '_').slice(0, 80);
+      const created = await createStudioJob(
+        deps,
+        viewer,
+        {
+          kind: 'image',
+          organizationId: v.organizationId,
+          requestId: presetReqId,
+          model: step.model,
+          prompt: visibleLine,
+          enhance: false,
+          references: presetReferences(step, presetSlotRefs) ?? [],
+          aspect: step.aspect,
+          resolution: step.resolution,
+          count: 1,
+          ...(step.quality ? { quality: step.quality } : {}),
+        },
+        { preset: { id: step.preset, vars: presetVars } },
+      );
+      if (!created.ok) return created;
+      stepJobMap.set(step.id, created.job);
+      orderedJobIds.push(created.job.id);
+      continue;
+    }
     const stepImageRef =
       lockedImageRef && (step.useReferenceSlots.includes('image1') || step.useHeroOutputAsRef) ? lockedImageRef : null;
     const stepVideoRef = initialVideoRef && step.useReferenceSlots.includes('video1') ? initialVideoRef : null;
@@ -1175,7 +1297,9 @@ export async function runWorkflow(
     viewer.locale === 'en' && recipe.defaultFolderPatternEn && !/[가-힣]/.test(subject)
       ? recipe.defaultFolderPatternEn
       : recipe.defaultFolderPattern ?? `${workflow.title.slice(0, 28)} · {subject}`;
-  const resolvedFolderName = (v.inputs.folderName?.trim() || pattern.replace(/\{subject\}/g, subject)).slice(0, 60);
+  // A preset starter run without a name files under the pattern's base ("영상용 시트", "Video Sheet").
+  const namedPattern = locked && !subject ? pattern.replace(/\s*·\s*\{subject\}/g, '').replace(/\{subject\}/g, '').trim() : pattern;
+  const resolvedFolderName = (v.inputs.folderName?.trim() || namedPattern.replace(/\{subject\}/g, subject)).slice(0, 60);
 
   const finalized = await guarded(() =>
     deps.sql.transaction(async (sql) => {
@@ -1185,7 +1309,8 @@ export async function runWorkflow(
         seat.userId,
         resolvedFolderName,
         orderedJobIds,
-        initialImageRef?.assetId ?? null,
+        // A preset run files both of its pictures with the result.
+        presetSteps.length > 0 ? [initialImageRef?.assetId, initialImage2Ref?.assetId] : initialImageRef?.assetId ?? null,
       );
       const rawJobs = await jobsByIds(sql, v.organizationId, orderedJobIds);
       const byId = new Map((await viewsOf(sql, rawJobs, deps.media)).map((j) => [j.id, j]));

@@ -138,6 +138,7 @@ describe('1. Starter Workflows (`캐릭터 시트 메이커`), Custom Workflows,
   it('exposes STARTER_WORKFLOWS led by #1 Flagship 캐릭터 시트 메이커 and executes multi-step turnaround + expression + detail sheets into a shared folder', async () => {
     expect(STARTER_WORKFLOWS.map((w) => w.slug)).toEqual([
       'character-sheet-maker',
+      'video-character-sheet',
       'product-packshot-sheet',
       'reference-video-ad-pack',
     ]);
@@ -682,6 +683,15 @@ describe('2. MCP SHA-256 Tokens, Revocation, Member Removal, OAuth 2.1 PKCE & Mo
       );
       expect(wfPost.status).toBe(404);
 
+      // 2b. Running the starter `video-character-sheet` -> 404 as well
+      const sheetPost = await postWorkflowsRoute(
+        sameOriginJsonPost('https://brand.twings.app/api/brand-studio/workflows', {
+          op: 'run',
+          input: { organizationId: fix.orgId, requestId: requestId(), workflowId: 'video-character-sheet', inputs: {} },
+        }),
+      );
+      expect(sheetPost.status).toBe(404);
+
       // 3. GET & POST /api/brand-studio/mcp-tokens -> 404
       const tokGet = await getMcpTokensRoute(
         new NextRequest(`https://brand.twings.app/api/brand-studio/mcp-tokens?organizationId=${fix.orgId}`),
@@ -716,6 +726,23 @@ describe('2. MCP SHA-256 Tokens, Revocation, Member Removal, OAuth 2.1 PKCE & Mo
         }),
       );
       expect(mcpPost.status).toBe(404);
+      const mcpSheetRun = await postMcpRoute(
+        new NextRequest('https://brand.twings.app/api/mcp', {
+          method: 'POST',
+          headers: {
+            host: 'brand.twings.app',
+            authorization: `Bearer ${forgedRaw}`,
+            'content-type': 'application/json',
+          },
+          body: JSON.stringify({
+            jsonrpc: '2.0',
+            id: 2,
+            method: 'tools/call',
+            params: { name: 'twings_run_workflow', arguments: { workflowId: 'video-character-sheet' } },
+          }),
+        }),
+      );
+      expect(mcpSheetRun.status).toBe(404);
 
       // 5. OAuth authorize -> 404
       const oauthUrl = new URL('https://brand.twings.app/api/mcp/oauth/authorize');

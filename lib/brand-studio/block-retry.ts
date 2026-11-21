@@ -18,6 +18,11 @@ export interface BlockRetryPlan {
 export async function planBlockRetry(deps: Pick<StudioDeps, 'intel' | 'intelDeps' | 'log'>, job: JobRow): Promise<BlockRetryPlan | null> {
   // Music and sound effects have no rewording pass: a blocked description fails and takes nothing (docs/BRAND-SOUND-STUDIO.md §5).
   if (job.work.blockRetry || job.kind === 'video_final' || job.kind === 'music' || job.kind === 'sound_effect') return null;
+  // A preset run is retried once with the same text: its wording is fixed, never rewritten, never shown.
+  if (job.params?.preset) {
+    deps.log?.('studio_block_retry', { jobId: job.id, source: 'same' });
+    return { finalPrompt: sendPrompt(job), source: 'same', work: { ...job.work, results: {}, failures: {}, blockRetry: { source: 'same' } } };
+  }
   const model = studioModel(job.model);
   const rewrite = deps.intel.rewriteBlockedPrompt;
   if (!model || !rewrite) return null;

@@ -1,0 +1,77 @@
+A photorealistic three-panel character reference sheet — a real photograph taken on a real
+camera in a professional studio, not an illustration or a render.
+
+REFERENCES
+Image 1 is the FACE REFERENCE and the only authority for identity. The face in PANEL 1
+matches Image 1 exactly: bone structure, eye shape, nose, lip shape, hairline, brow shape,
+skin undertone, and {{FACE_BOUND}}. Ignore the charcoal t-shirt in Image 1 — it is placeholder
+wardrobe only and does not appear anywhere in this sheet.
+
+Image 2 is the WARDROBE REFERENCE ONLY — ignore its face, body, pose, background, lighting
+and color grade entirely. Take only the garments: {{FASHION_TEXT}}.
+
+SUBJECT
+All three panels show one person: the face from Image 1 on a body of {{BUILD}}, wearing the
+garments from Image 2, photographed in a single session under one light.
+
+BACKDROP
+One seamless mid neutral grey backdrop, hex #808080 — a true achromatic grey with red, green
+and blue equal. Lit evenly edge to edge with one flat uniform tone, the same value in every
+corner of the frame, no seam, no gradient, no vignette, no wall shadow, no visible floor line.
+It never clips to white and never crushes to black — individual flyaway hairs and the garment
+edge both stay clearly readable against it. Three vertical panels of equal width divided by
+clean gutters of the same grey. All three figures stand on the same invisible ground line, at
+the same scale, under the same light.
+
+PANEL 1 — LEFT
+Chest-up portrait matching Image 1, occupying about 28% of the total frame width. Shoulders
+square to the camera, head turned 10 degrees to one side with the eyes returning level to the
+lens, no torso rotation. Expression neutral and unperformed, lips softly closed. The neckline
+of the Image 2 garment is visible across the shoulders and collarbone.
+Real skin at pore level: visible pores across the cheeks and nose, a natural sebum sheen on
+the forehead, nose bridge and cheekbones, fine vellus hair along the hairline and jaw, a faint
+capillary flush under the cheekbones, and the subtle asymmetry between the left and right side
+of the face. Both eyes fully open, iris pattern and color clearly readable, one large soft
+rectangular catchlight at ten o'clock in each eye, lashes individually separated.
+85mm portrait compression at f/4 — both eyes and the collarbone sharp, the hair edges softening.
+
+PANEL 2 — CENTER
+Full-body front view in a relaxed A-pose, arms hanging 15 degrees clear of the body, palms
+turned inward, weight even on both feet, shoulders square to the camera. This panel is cropped
+horizontally at the base of the neck: the head sits outside the panel and only the body from
+the collarbone down is shown. The garments match Image 2 exactly in color, fabric, cut, length
+and hardware — every seam, closure, hem and fabric weight readable. Footwear included, both
+feet flat on the ground line. 50mm neutral perspective at f/8, the whole figure sharp from the
+neck crop to the shoes.
+
+PANEL 3 — RIGHT
+Full-body back view in the identical A-pose, turned so the back faces camera, showing how the
+hair falls down the back, the shoulder blade line, the posture, and the rear construction of
+the garments. This panel is cropped horizontally at the base of the neck: the head sits outside
+the panel. Image 2 shows only the front, so build the back from the front's construction logic —
+continue every seam line, panel and hem around the body, keep the same fabric weight and drape,
+place a plausible closure where the garment requires one, and hold the color and texture
+identical to PANEL 2 under the same light. Same footwear seen from behind.
+50mm neutral perspective at f/8.
+
+LIGHTING (all three panels)
+One large diffused key light 1.5 meters wide, frontal and 20 degrees above eye level, with a
+gentle bounce fill from below at half the key intensity. Soft wraparound falloff, one soft
+contact shadow at the feet, white balance 5600K. The same light on all three panels.
+
+COLOR
+Neutral and ungraded, true-to-life skin tone with its natural undertone preserved. The grey
+backdrop reads the same value in every panel. No warm or yellow cast.
+
+PRESERVE
+The face in PANEL 1 stays identical to Image 1. All three figures are the same person with the
+same body proportions, same hair, same skin tone. The garments stay identical in color, fabric,
+cut and length between PANEL 2 and PANEL 3.
+
+EXCLUDE
+No text, no panel labels, no name plates, no captions, no measurement lines, no grid, no border,
+no frame, no watermark, no logo, no signature. The backdrop carries nothing but the three figures.
+
+FINISH
+A clean digital capture with no film grain, with every bit of skin texture left intact — not
+retouched, not smoothed, not airbrushed. 16:9.

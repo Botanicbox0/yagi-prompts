@@ -64,6 +64,9 @@ export const WorkflowInputSlotSchema = z.object({
   role: z.enum(STUDIO_ASSET_ROLES).optional(),
   options: z.array(WorkflowSlotOptionSchema).max(8).optional(),
   defaultValue: z.string().trim().max(120).optional(),
+  /** One line under the label (what to pick and what is taken from it). */
+  hint: z.string().trim().max(160).optional(),
+  hintEn: z.string().trim().max(160).optional(),
 });
 export type WorkflowInputSlot = z.infer<typeof WorkflowInputSlotSchema>;
 
@@ -86,6 +89,13 @@ export const WorkflowStepSchema = z.object({
   count: z.number().int().min(1).max(4).default(1),
   promptTemplate: z.string().trim().min(1).max(3200),
   useReferenceSlots: z.array(z.string().trim().min(1).max(40)).max(6).default([]),
+  /** Picture quality for a model that has a choice of it; the estimate prices the step at it. */
+  quality: z.enum(['low', 'medium', 'high']).optional(),
+  /**
+   * A server-side text (lib/brand-studio/workflows/presets) sent in place of `promptTemplate`. Honoured only on a
+   * built-in starter; a team, saved or AI-built workflow runs the step as an ordinary one.
+   */
+  preset: z.string().trim().min(1).max(60).optional(),
 });
 export type WorkflowStep = z.infer<typeof WorkflowStepSchema>;
 
@@ -98,6 +108,20 @@ export const WorkflowRecipeSchema = z.object({
   consistencyCheck: z.enum(['character_sheet', 'none']).default('none'),
   slots: z.array(WorkflowInputSlotSchema).max(10).default([]),
   steps: z.array(WorkflowStepSchema).min(1).max(6),
+  /** "Why it is built this way": a title and a few short rows (bold phrase + one sentence) shown with the guide. */
+  whyTitle: z.string().trim().max(60).optional(),
+  whyTitleEn: z.string().trim().max(60).optional(),
+  why: z
+    .array(
+      z.object({
+        title: z.string().trim().max(40),
+        titleEn: z.string().trim().max(40).optional(),
+        body: z.string().trim().max(160),
+        bodyEn: z.string().trim().max(160).optional(),
+      }),
+    )
+    .max(6)
+    .optional(),
 });
 export type WorkflowRecipe = z.infer<typeof WorkflowRecipeSchema>;
 
@@ -145,6 +169,8 @@ export const WorkflowDeleteSchema = z.object({
 
 export const WorkflowRunInputsSchema = z.object({
   image1Ref: WorkflowRefChoiceSchema.nullable().optional(),
+  /** The second picture (`video-character-sheet`: the outfit photo). */
+  image2Ref: WorkflowRefChoiceSchema.nullable().optional(),
   video1Ref: WorkflowRefChoiceSchema.nullable().optional(),
   subject: z.string().trim().max(80).optional(),
   prompt: z.string().trim().max(2400).default(''),

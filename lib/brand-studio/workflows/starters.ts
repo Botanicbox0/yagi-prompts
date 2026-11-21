@@ -6,12 +6,18 @@
  */
 import { creditsOf } from '@/lib/brand-studio/credits';
 import { estimateImageUsd, estimateVideoUsd, type StudioVideoResolution } from '@/lib/brand-studio/models';
-import { usageKrw } from '@/lib/brand-studio/usage-rate';
+import { imageRunKrw, usageKrw } from '@/lib/brand-studio/usage-rate';
 import type { WorkflowRecipe, WorkflowStep, WorkflowWire } from './contracts';
 
 
 export function estimateStepCredits(step: WorkflowStep, hasImageRef = true): number {
   if (step.onlyWhenNoImageRef && hasImageRef) return 0;
+  // A step that names its quality (a preset step always does) is priced exactly as the planner reserves it
+  // (plan.ts `imageRunKrw`): every picture slot it uses counts as a reference, the shape and quality as asked.
+  if (step.medium === 'image' && (step.preset || step.quality)) {
+    const references = step.useReferenceSlots.filter((slot) => /^image\d+$/.test(slot)).length;
+    return creditsOf(imageRunKrw({ model: step.model, resolution: step.resolution, references, count: step.count ?? 1, quality: step.quality ?? null, aspect: step.aspect }));
+  }
   if (step.medium === 'video') {
     const res: StudioVideoResolution =
       step.resolution === '1080p' ? '1080p' : step.resolution === '480p' || step.resolution === 'draft' ? '480p' : '720p';
@@ -181,6 +187,105 @@ const CHARACTER_SHEET_RECIPE: WorkflowRecipe = {
       useReferenceSlots: ['image1'],
       promptTemplate:
         'Editorial wardrobe and accessory callout sheet for {subject} strictly matching @image1 outfit: structured multi-panel close-ups of fabric weave, collar and lapel stitching, sleeve cuff hardware, and signature accessory details on clean #FFFFFF studio seamless, crisp macro studio lighting, true-to-reference colors. {prompt}',
+    },
+  ],
+};
+
+/**
+ * `영상화용 캐릭터 시트 생성기`: a person photo and an outfit photo become one 16:9 2K sheet (face close-up, full
+ * body front, full body back) to attach as a reference when making a video. The text the model receives is a
+ * server-side preset (lib/brand-studio/workflows/presets, never imported here); `promptTemplate` is only a
+ * placeholder, and the run shows a short line built by the service (docs/STUDIO-PRO-SUITE-V4.md §3).
+ */
+const VIDEO_CHARACTER_SHEET_RECIPE: WorkflowRecipe = {
+  version: 1,
+  guide: '인물과 의상 사진 2장을 넣으면 16:9 2K 시트 1장이 만들어집니다. 영상 제작 시 참조 이미지로 사용합니다.',
+  guideEn: 'Pick a photo of the person and a photo of the outfit. You get one 16:9 sheet at 2K to attach as a reference when you make a video.',
+  whyTitle: '왜 이렇게 구성했나요?',
+  whyTitleEn: 'Why the sheet looks like this',
+  why: [
+    {
+      title: '얼굴은 한 칸에만 크게',
+      titleEn: 'One large face, one panel',
+      body: '얼굴 기준이 하나여야 영상 속 얼굴이 일정하게 나옵니다.',
+      bodyEn: 'With a single face to follow, the face in the video stays the same.',
+    },
+    {
+      title: '전신 칸에는 머리 제외',
+      titleEn: 'No head on the body panels',
+      body: '작은 얼굴이 여러 개 있으면 서로 섞여 다른 얼굴이 될 수 있습니다.',
+      bodyEn: 'Several small faces can blend into a face that matches none of them.',
+    },
+    {
+      title: '회색 배경과 조명 하나',
+      titleEn: 'Grey backdrop, one light',
+      body: '시트의 색감이나 그림자가 영상 장면으로 옮겨가지 않게 합니다.',
+      bodyEn: "The sheet's colour and shadows do not carry over into your scene.",
+    },
+    {
+      title: '앞모습과 뒷모습 모두 포함',
+      titleEn: 'Front and back',
+      body: '인물이 돌아설 때 옷의 뒷면이 바뀌지 않고 유지됩니다.',
+      bodyEn: 'When the person turns, the back of the outfit stays the same.',
+    },
+  ],
+  defaultFolderPattern: '영상용 시트 · {subject}',
+  defaultFolderPatternEn: 'Video Sheet · {subject}',
+  consistencyCheck: 'none',
+  slots: [
+    {
+      key: 'image1',
+      kind: 'image_ref',
+      label: '인물 사진',
+      labelEn: 'Person photo',
+      hint: '얼굴이 선명하게 나온 사진을 골라 주세요. 옷은 반영되지 않습니다.',
+      hintEn: 'Choose a photo where the face is clear. The clothes in it are not used.',
+      required: true,
+      role: 'person',
+    },
+    {
+      key: 'image2',
+      kind: 'image_ref',
+      label: '의상 사진',
+      labelEn: 'Outfit photo',
+      hint: '입힐 옷이 전체적으로 보이는 사진을 골라 주세요. 옷만 반영됩니다.',
+      hintEn: 'Choose a photo that shows the whole outfit. Only the clothes are used.',
+      required: true,
+      role: 'style',
+    },
+    {
+      key: 'subject',
+      kind: 'text',
+      label: '인물 이름',
+      labelEn: 'Name',
+      placeholder: '예: 소라, 루카스, 26FW 버추얼 모델',
+      placeholderEn: 'e.g. Sora, Lucas, 26FW Campaign Persona',
+      required: false,
+    },
+    {
+      key: 'folderName',
+      kind: 'folder',
+      label: '저장할 공유 폴더명',
+      labelEn: 'Target shared folder',
+      placeholder: '영상용 시트 · {이름}',
+      placeholderEn: 'Video Sheet · {name}',
+      required: false,
+    },
+  ],
+  steps: [
+    {
+      id: 'sheet',
+      label: '세 칸 캐릭터 시트 (16:9 · 2K)',
+      labelEn: 'Three-panel character sheet (16:9 · 2K)',
+      medium: 'image',
+      model: 'gpt-image-2.6-sunburst',
+      aspect: '16:9',
+      resolution: '2K',
+      quality: 'high',
+      count: 1,
+      useReferenceSlots: ['image1', 'image2'],
+      preset: 'video-character-sheet',
+      promptTemplate: '영상화용 캐릭터 시트 · {subject}',
     },
   ],
 };
@@ -447,6 +552,17 @@ export const STARTER_WORKFLOWS: readonly WorkflowWire[] = [
       'Generate a coherent 16:9 3-view full-body turnaround, 4-panel expression sheet, and wardrobe detail sheet from one character reference with vision consistency verification.',
     category: 'character',
     recipe: CHARACTER_SHEET_RECIPE,
+  }),
+  buildStarterWire({
+    slug: 'video-character-sheet',
+    title: '영상화용 캐릭터 시트 생성기',
+    titleEn: 'Character Sheet for Video',
+    summary:
+      '인물과 의상 사진으로 영상 제작용 캐릭터 시트를 만듭니다. 16:9 이미지 한 장에 얼굴 클로즈업, 전신 앞모습과 뒷모습 세 칸을 담습니다.',
+    summaryEn:
+      'One photo of the person and one of the outfit become a single 16:9 sheet with three panels: a face close-up, the full body from the front, and from the back.',
+    category: 'character',
+    recipe: VIDEO_CHARACTER_SHEET_RECIPE,
   }),
   buildStarterWire({
     slug: 'product-packshot-sheet',

@@ -17,6 +17,7 @@ import { replaceMarks } from './enhancer/marks';
 import { describeSelection, selectionLine } from './region-edit/window';
 import { clarifiedOf, withClarified } from './revision/clarify';
 import { addedRefsOf, refKey, renumberRequest, revisionChain } from './revision/recipe';
+import { renderPresetPrompt } from './workflows/presets';
 import type { EnhanceInput, EnhanceResult, JobRow, RegionPlan, StudioDeps, StudioJobParams, StudioJobWork } from './types';
 
 export class PrepareFailure extends Error {
@@ -517,6 +518,13 @@ export async function prepareJob(deps: StudioDeps, job: JobRow): Promise<{ final
     sheet = remix.sheet;
     toEnhance = remix.resolved;
     work.sheet = sheet;
+  }
+
+  // A preset run (lib/brand-studio/workflows/presets): its text is assembled here from the server-only original.
+  if (job.params?.preset) {
+    const text = renderPresetPrompt(job.params.preset);
+    if (!text) throw new PrepareFailure('failed', 'unknown preset');
+    return { finalPrompt: text, work: { ...work, prepared: true } };
   }
 
   // Enhancement off: the customer's words go as they are, or the rewritten sentence they already read.
