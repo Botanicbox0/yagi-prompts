@@ -98,7 +98,7 @@ describe('the exporter uses them', () => {
   it('checks the sizes before the first frame, and inspects the bytes before decoding them', () => {
     const run = source.slice(source.indexOf('export async function exportFilm('));
     expect(run.indexOf('soundBytesCheck(')).toBeGreaterThan(-1);
-    expect(run.indexOf('soundBytesCheck(')).toBeLessThan(run.indexOf('runWithRestarts(() => videoPass(pass)'));
+    expect(run.indexOf('soundBytesCheck(')).toBeLessThan(run.indexOf("restarting.run('video'"));
     const mix = source.slice(source.indexOf('async function mixSound('), source.indexOf('async function encodeAac('));
     expect(mix.indexOf('soundTrackOf(')).toBeGreaterThan(-1);
     expect(mix.indexOf('soundTrackOf(')).toBeLessThan(mix.indexOf('decodeAudioData('));

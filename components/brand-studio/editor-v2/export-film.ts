@@ -62,7 +62,7 @@ import { soundTrackOf } from '@/lib/brand-studio/editor-v2/media-probe';
 import { DEFAULT_REFRAME, type Reframe } from '@/lib/brand-studio/editor-v2/model';
 import { sampleBytes } from '@/lib/brand-studio/editor-v2/sample-bytes';
 import type { Rotation, VideoIndex } from '@/lib/brand-studio/editor-v2/sample-index';
-import { SHARED_WAIT_MS, waitShared } from '@/lib/brand-studio/editor-v2/watched-read';
+import { ReadCancelled, SHARED_WAIT_MS, STALL_MS, readStream, totalLimitMs, waitShared, watchRead } from '@/lib/brand-studio/editor-v2/watched-read';
 import { CodecReclaimed, ReclaimedTooOften, isReclaim, restarter, whenVisible } from '@/lib/brand-studio/editor-v2/export-run';
 import { PicturePaths, type DecoderSession, type SourcePath } from '@/lib/brand-studio/editor-v2/picture-paths';
 import { encodeFrames } from '@/lib/brand-studio/editor-v2/frame-loop';
@@ -582,30 +582,53 @@ export function scheduleCutSound(
 
 /**
  * Reads one of the film's own media files, or asks only its size (`HEAD`). Any other address is refused
- * before a request is made.
+ * before a request is made. A whole read ends after 15 s without a byte or after its size's time at the
+ * slowest connection given time for (watched-read.ts `totalLimitMs`; the sound limit when the server does not
+ * say the size), failing as any unreadable sound source does (`ExportStop('sound')`); cancelling ends it as a
+ * cancel, in the request and while the body comes (spec H, F5).
  */
-function mediaReader(allowed: ReadonlySet<string>, signal?: AbortSignal) {
-  const request = async (url: string, method: 'GET' | 'HEAD'): Promise<Response> => {
+export function mediaReader(allowed: ReadonlySet<string>, exportSignal?: AbortSignal) {
+  const request = async (url: string, method: 'GET' | 'HEAD', signal: AbortSignal | undefined = exportSignal): Promise<Response> => {
     if (!allowed.has(url)) throw new ExportStop('sound', `refused to read a file that is not part of the film: ${url}`);
     let response: Response;
     try {
       response = await fetch(corsMediaUrl(url), { method, credentials: 'same-origin', signal });
     } catch (error) {
-      if (signal?.aborted) throw cancelled();
+      if (exportSignal?.aborted) throw cancelled();
       throw new ExportStop('sound', `could not read ${url}: ${error instanceof Error ? error.message : String(error)}`);
     }
     if (!response.ok) throw new ExportStop('sound', `could not read ${url}: HTTP ${response.status}`);
     return response;
   };
+  /** Whatever stopped a read, as the export says it: the cancel, an unreadable sound source, or the stop it was. */
+  const failed = (url: string, error: unknown): Error => {
+    if (exportSignal?.aborted || error instanceof ReadCancelled) return cancelled();
+    if (error instanceof ExportStop) return error;
+    return new ExportStop('sound', `could not read ${url}: ${error instanceof Error ? error.message : String(error)}`);
+  };
   return {
-    read: async (url: string): Promise<ArrayBuffer> => (await request(url, 'GET')).arrayBuffer(),
+    read: async (url: string): Promise<ArrayBuffer> => {
+      const watch = watchRead({ stallMs: STALL_MS, totalMs: 0 }, exportSignal);
+      try {
+        const response = await watch.guard(request(url, 'GET', watch.signal));
+        watch.alive();
+        const length = Number(response.headers.get('content-length'));
+        watch.limitTotal(totalLimitMs(Number.isFinite(length) && length > 0 ? length : SOUND_BYTES_LIMIT));
+        const bytes = response.body ? await readStream(response.body, watch) : new Uint8Array(await watch.guard(response.arrayBuffer()));
+        return bytes.buffer.byteLength === bytes.length ? (bytes.buffer as ArrayBuffer) : (bytes.slice().buffer as ArrayBuffer);
+      } catch (error) {
+        throw failed(url, error);
+      } finally {
+        watch.done();
+      }
+    },
     /** The file's length from its headers; `null` when the server does not say (or will not answer `HEAD`). */
     size: async (url: string): Promise<number | null> => {
       try {
         const length = Number((await request(url, 'HEAD')).headers.get('content-length'));
         return Number.isFinite(length) && length > 0 ? length : null;
       } catch (error) {
-        if (signal?.aborted) throw cancelled();
+        if (exportSignal?.aborted) throw cancelled();
         if (error instanceof ExportStop && error.message.startsWith('refused')) throw error;
         return null;
       }
@@ -650,6 +673,8 @@ async function mixSound(
     const track = soundTrackOf(view);
     const lead = soundLead(await timingOfFile(view));
     const decoded = await context.decodeAudioData(bytes).catch(() => null);
+    // Decoding does not hear the cancel: asked right after (spec H, F5).
+    throwIfAborted(signal);
     if (!decoded && track !== 'no') warnings.push({ kind: 'sound', clip: labelOf(url) });
     // Its sound is in the file but where it sits under the picture could not be read (WebM, a broken file).
     else if (decoded && !lead.known) warnings.push({ kind: 'soundPosition', clip: labelOf(url) });
@@ -661,8 +686,12 @@ async function mixSound(
   const decodeSoundFile = async (url: string, label: string) => {
     const bytes = await read(url);
     try {
-      return await context.decodeAudioData(bytes);
-    } catch {
+      const buffer = await context.decodeAudioData(bytes);
+      throwIfAborted(signal);
+      return buffer;
+    } catch (error) {
+      throwIfAborted(signal);
+      if (error instanceof ExportStop) throw error;
       throw new ExportStop('sound', `could not decode ${label}`, { clip: label });
     }
   };

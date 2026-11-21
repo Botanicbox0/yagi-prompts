@@ -22,6 +22,20 @@ export interface ReadLimits {
 /** A run of samples (sample-bytes.ts): 15 s without bytes, 45 s in all. */
 export const RUN_LIMITS: ReadLimits = { stallMs: 15_000, totalMs: 45_000 };
 
+/** No byte for this long ends a read (spec G B1; spec H F2 keeps it). */
+export const STALL_MS = 15_000;
+/** The slowest connection a read is given time for: 32 KiB/s, about 256 kbit/s (spec H, F2). */
+export const SLOWEST_BYTES_PER_SECOND = 32 * 1024;
+
+/**
+ * How long a read of `bytes` may take in all (spec H, F2): 45 s, plus the time those bytes take at the slowest
+ * connection given time for. A run of 8 MiB gets about 5 min, a whole file its length by the same rule; a slow
+ * but live connection is not cut, a stalled one ends after `STALL_MS` whatever the total.
+ */
+export function totalLimitMs(bytes: number): number {
+  return 45_000 + Math.ceil((Math.max(0, bytes) * 1000) / SLOWEST_BYTES_PER_SECOND);
+}
+
 /**
  * How long the export waits for a shared read (a clip's frame facts, its picture index) before going on
  * without it (that source is then seeked). These reads are made before the encoder exists.
@@ -53,6 +67,8 @@ export interface Watch {
   guard<T>(work: Promise<T>): Promise<T>;
   /** Bytes came: the stall clock starts again. */
   alive(): void;
+  /** The total limit, counted from when the watch began, once the answer says how much is coming. */
+  limitTotal(totalMs: number): void;
   /** The read is over: timers and listeners go. */
   done(): void;
 }
@@ -82,6 +98,12 @@ export function watchRead(limits: ReadLimits, signal?: AbortSignal): Watch {
     reject(error);
   };
   const cancelled = () => end(new ReadCancelled());
+  const started = Date.now();
+  const limitTotal = (totalMs: number) => {
+    if (over || totalMs <= 0) return;
+    if (total !== null) clearTimeout(total);
+    total = setTimeout(() => end(new ReadTimedOut('total', totalMs)), Math.max(0, totalMs - (Date.now() - started)));
+  };
   const restartStall = () => {
     if (over || limits.stallMs <= 0) return;
     if (stall !== null) clearTimeout(stall);
@@ -90,13 +112,14 @@ export function watchRead(limits: ReadLimits, signal?: AbortSignal): Watch {
   if (signal?.aborted) end(new ReadCancelled());
   else {
     signal?.addEventListener('abort', cancelled, { once: true });
-    if (limits.totalMs > 0) total = setTimeout(() => end(new ReadTimedOut('total', limits.totalMs)), limits.totalMs);
+    limitTotal(limits.totalMs);
     restartStall();
   }
   return {
     signal: controller.signal,
     guard: <T>(work: Promise<T>) => Promise.race([work, failed]),
     alive: restartStall,
+    limitTotal,
     done() {
       over = true;
       clear();
