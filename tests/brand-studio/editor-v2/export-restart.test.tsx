@@ -17,7 +17,7 @@ const film = readFileSync(join(process.cwd(), 'components/brand-studio/editor-v2
 describe('the export asks its encoder after the picture arrives and before encode()', () => {
   const pass = film.slice(film.indexOf('async function videoPass('));
   it('a taken-back encoder is checked after each picture and before encode(); encode() throwing is turned into that answer', () => {
-    const picture = pass.indexOf('await pictureOf(entry, label)');
+    const picture = pass.indexOf('await paths.picture(entry, label, signal)');
     const check = pass.indexOf('const after = stopped(entry.frame);');
     const encode = pass.indexOf('made.encode(frame');
     expect(picture).toBeGreaterThan(0);

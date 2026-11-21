@@ -25,9 +25,10 @@ import { ReadCancelled, ReadTimedOut, watchRead, type Watch } from '@/lib/brand-
  * and cancelling ends it at once. So the encoder never waits on this path anywhere near the ~90 s after which
  * a hidden page's encoder is taken back (spec G, A1/A4).
  *
- * The decoder itself is made on first use and may be taken back by the browser (a `QuotaExceededError`, spec
- * G A3): it is then made again and fed from the sync sample before the picture asked for, once per request. Every frame it gives is either held for a
- * picture asked for or closed at once, and everything held is closed on `close` and a reclaim; a
+ * The decoder itself is made on first use and may be let go (`suspend`: the export keeps at most four open)
+ * or taken back by the browser (a `QuotaExceededError`, spec G A3): either way it is made again and fed from
+ * the sync sample before the picture asked for, once per request. Every frame it gives is either held for a
+ * picture asked for or closed at once, and everything held is closed on `suspend`, `close` and a reclaim; a
  * frame that arrives from a decoder already let go is closed too (spec G A0: no frame left to the garbage
  * collector).
  */
@@ -129,6 +130,11 @@ export class PictureDecoder {
     index.pictures.forEach((sample, picture) => this.stamps.set(stampUs(index.cts[sample]!, index.timescale), picture));
   }
 
+  /** A decoder is open now (made on first use; let go by `suspend`, `close` or the browser). */
+  get live(): boolean {
+    return this.decoder !== null;
+  }
+
   stats(): DecoderStats {
     return { ...this.counts };
   }
@@ -154,6 +160,11 @@ export class PictureDecoder {
     } finally {
       watch.done();
     }
+  }
+
+  /** Lets go of the decoder, the frames it holds and the bytes read ahead; the next request makes them again. */
+  suspend(): void {
+    this.drop();
   }
 
   close(): void {

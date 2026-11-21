@@ -54,16 +54,17 @@ import {
   type PlannedFrame,
 } from '@/lib/brand-studio/editor-v2/export-plan';
 import { cutAnchor, effectStartSec, type CutAnchor } from '@/lib/brand-studio/editor-v2/cut-anchor';
-import { choosePath, colourAdmitted, cutRatesMatch, decodeGroups, pictureFor, pictureTimes, type DecodeGroup, type ExportPath, type ExportPathOverride } from '@/lib/brand-studio/editor-v2/decode-plan';
+import { choosePath, colourAdmitted, cutRatesMatch, decodeGroups, pictureFor, pictureTimes, type ExportPath, type ExportPathOverride } from '@/lib/brand-studio/editor-v2/decode-plan';
 import { CURRENT_EXPORT_BACKGROUND, currentExportFrame } from '@/lib/brand-studio/editor-v2/framing';
 import { totalFrames, type FrameSequence } from '@/lib/brand-studio/editor-v2/frames';
 import { timingOfFile } from '@/lib/brand-studio/editor-v2/container';
 import { soundTrackOf } from '@/lib/brand-studio/editor-v2/media-probe';
 import { DEFAULT_REFRAME, type Reframe } from '@/lib/brand-studio/editor-v2/model';
-import { sampleBytes, type SampleBytes } from '@/lib/brand-studio/editor-v2/sample-bytes';
+import { sampleBytes } from '@/lib/brand-studio/editor-v2/sample-bytes';
 import type { Rotation, VideoIndex } from '@/lib/brand-studio/editor-v2/sample-index';
 import { SHARED_WAIT_MS, waitShared } from '@/lib/brand-studio/editor-v2/watched-read';
 import { CodecReclaimed, ReclaimedTooOften, isReclaim, runWithRestarts, whenVisible } from '@/lib/brand-studio/editor-v2/export-run';
+import { PicturePaths, type DecoderSession, type SourcePath } from '@/lib/brand-studio/editor-v2/picture-paths';
 import { footageBytes, readFootage, readPictureIndex } from './footage-facts';
 import { PictureDecoder, decoderConfig, decoderSupports } from './frame-decoder';
 import { screenTimer } from './screen-refresh';
@@ -81,25 +82,7 @@ export interface ExportProgress {
   restarts?: number;
 }
 
-/** Which path made a source's pictures, for the proof (the sheet exposes it as data, never as words). */
-export interface SourcePath {
-  clip: string;
-  srcUrl: string;
-  /** The path its last picture came from. */
-  path: ExportPath;
-  /** Why it was seeked (`forced`, `container:…`, `codec-unsupported`, `error: …`), or `null`. */
-  reason: string | null;
-  /** Film frames drawn from each path. */
-  decoded: number;
-  seeked: number;
-  /** Bytes read for its pictures by range, the file's size, and requests made (decoder path). */
-  bytesRead: number;
-  fileBytes: number | null;
-  requests: number;
-  /** Times its decoder was made again after the browser took it back (spec G, A3), and of those, taken back. */
-  reopened: number;
-  reclaimed: number;
-}
+export type { SourcePath } from '@/lib/brand-studio/editor-v2/picture-paths';
 
 export interface ExportFilmOptions {
   sequence: FrameSequence;
@@ -794,23 +777,6 @@ function yieldToPage(): Promise<void> {
   });
 }
 
-interface DecoderSource {
-  kind: 'decoder';
-  session: PictureDecoder;
-  index: VideoIndex;
-  bytes: SampleBytes;
-  groups: DecodeGroup[];
-  /** Film frame → its group, the picture it shows, and whether that is past the footage's end. */
-  at: Map<number, { group: number; picture: number; past: boolean }>;
-}
-
-interface SeekSource {
-  kind: 'seek';
-  source: Source | null;
-}
-
-type PictureSource = DecoderSource | SeekSource;
-
 /**
  * Which path a source takes (lib/brand-studio/editor-v2/decode-plan.ts `choosePath`), in ONE place for the
  * export and the sheet: its frame facts read, its index read, a colour it was measured on, every cut at the file's own
@@ -845,17 +811,16 @@ async function sourceChoice(srcUrl: string, override: ExportPathOverride, cutRat
 }
 
 /**
- * Opens a source on the decoder path when it can be (`sourceChoice`). Otherwise the reason it is seeked.
+ * The decoder session of a source on the decoder path (`sourceChoice`), as lib/brand-studio/editor-v2/
+ * picture-paths.ts uses it; otherwise the reason it is seeked.
  */
-function openDecoderSource(srcUrl: string, plan: readonly PlannedFrame[], fps: number, choice: SourceChoice): DecoderSource | { reason: string } {
+function decoderSession(srcUrl: string, plan: readonly PlannedFrame[], fps: number, choice: SourceChoice): DecoderSession<Picture> | { reason: string } {
   if (choice.path === 'seek') return { reason: choice.reason };
-  const answer = { index: choice.index };
-  const config = choice.config;
-  const times = pictureTimes(answer.index);
-  const requests = plan
-    .filter((entry) => entry.srcUrl === srcUrl)
-    .map((entry) => ({ frame: entry.frame, srcUrl, ...pictureFor(entry, fps, times) }));
+  const { index, config } = choice;
+  const times = pictureTimes(index);
+  const requests = plan.filter((entry) => entry.srcUrl === srcUrl).map((entry) => ({ frame: entry.frame, srcUrl, ...pictureFor(entry, fps, times) }));
   const groups = decodeGroups(requests);
+  /** Film frame → its group, the picture it shows, and whether that is past the footage's end. */
   const at = new Map<number, { group: number; picture: number; past: boolean }>();
   let group = 0;
   for (const request of requests) {
@@ -863,7 +828,24 @@ function openDecoderSource(srcUrl: string, plan: readonly PlannedFrame[], fps: n
     at.set(request.frame, { group, picture: request.picture, past: request.past });
   }
   const bytes = sampleBytes(footageBytes(srcUrl));
-  return { kind: 'decoder', session: new PictureDecoder(answer.index, bytes, config), index: answer.index, bytes, groups, at };
+  const session = new PictureDecoder(index, bytes, config);
+  return {
+    async picture(frame, signal) {
+      const where = at.get(frame)!;
+      const image = await session.picture(where.group, groups[where.group]!.pictures, where.picture, signal);
+      return { picture: { image, width: image.displayWidth, height: image.displayHeight, rotation: index.rotation }, past: where.past };
+    },
+    suspend: () => session.suspend(),
+    get live() {
+      return session.live;
+    },
+    close: () => session.close(),
+    stats() {
+      const read = bytes.stats();
+      const decoded = session.stats();
+      return { bytesRead: read.received, fileBytes: read.fileSize, requests: read.requests, reopened: decoded.reopened, reclaimed: decoded.reclaimed };
+    },
+  };
 }
 
 /**
@@ -1001,66 +983,49 @@ async function videoPass(pass: VideoPass): Promise<{ samples: EncodedVideoSample
   host.setAttribute('aria-hidden', 'true');
   host.style.cssText = 'position:fixed;left:-10000px;top:0;width:64px;height:36px;overflow:hidden;pointer-events:none';
   document.body.appendChild(host);
-  const sources = new Map<string, PictureSource>();
-  const records = new Map<string, SourcePath>();
+  const seekSources = new Map<string, Source>();
   /** Pictures asked for past a footage's last one, filled with it, by cut id (named by its clip). */
   const filled: FilledCuts = new Map();
   let encoder: VideoEncoder | null = null;
   let pathNow: ExportPath | undefined;
   let lastYield = performance.now();
-
-  /** The source of a film frame, opened on first use: the decoder path when it can, seeking when not. */
-  const sourceOf = async (entry: PlannedFrame, label: string): Promise<PictureSource> => {
-    const known = sources.get(entry.srcUrl);
-    if (known) return known;
-    const opened = openDecoderSource(entry.srcUrl, plan, fps, choices.get(entry.srcUrl)!);
-    const record: SourcePath = { clip: label, srcUrl: entry.srcUrl, path: 'decoder', reason: null, decoded: 0, seeked: 0, bytesRead: 0, fileBytes: null, requests: 0, reopened: 0, reclaimed: 0 };
-    records.set(entry.srcUrl, record);
-    if ('reason' in opened) {
-      if (override === 'decoder') throw new ExportStop('unsupported', `"${label}" cannot be decoded (${opened.reason}) and the decoder path was required`, { clip: label });
-      record.path = 'seek';
-      record.reason = opened.reason;
-      const seek: SeekSource = { kind: 'seek', source: null };
-      sources.set(entry.srcUrl, seek);
-      return seek;
-    }
-    sources.set(entry.srcUrl, opened);
-    return opened;
+  const releaseVideo = (source: Source) => {
+    source.video.pause();
+    source.video.removeAttribute('src');
+    source.video.load();
   };
-
-  /** The picture for one film frame, verified on its source's path; a decoder failure moves that source to seeking. */
-  const pictureOf = async (entry: PlannedFrame, label: string): Promise<{ picture: Picture; path: ExportPath; past: boolean }> => {
-    const source = await sourceOf(entry, label);
-    const record = records.get(entry.srcUrl)!;
-    if (source.kind === 'decoder') {
-      const at = source.at.get(entry.frame)!;
-      try {
-        const frame = await source.session.picture(at.group, source.groups[at.group]!.pictures, at.picture, signal);
-        record.decoded += 1;
-        return { picture: { image: frame, width: frame.displayWidth, height: frame.displayHeight, rotation: source.index.rotation }, path: 'decoder', past: at.past };
-      } catch (error) {
-        throwIfAborted(signal);
-        const message = describe(error);
-        if (override === 'decoder') throw new ExportStop('frame', `film frame ${entry.frame}: the decoder could not give picture ${at.picture} of "${label}" (${message})`, { frame: entry.frame, clip: label });
-        // Every frame already in the file was verified; the rest of this source is taken by seeking.
-        console.warn('[editor export] decoder path left for seeking', label, message);
-        source.session.close();
-        const stats = source.bytes.stats();
-        const decoded = source.session.stats();
-        Object.assign(record, { reason: `error: ${message}`, bytesRead: stats.received, fileBytes: stats.fileSize, requests: stats.requests, reopened: decoded.reopened, reclaimed: decoded.reclaimed });
-        const seek: SeekSource = { kind: 'seek', source: null };
-        sources.set(entry.srcUrl, seek);
-        return pictureOf(entry, label);
+  // Which path makes each picture; a decoder failure hands the rest of that source to seeking; a source lets go
+  // of everything after its last film frame; at most four decoders open (spec G, B2).
+  const paths = new PicturePaths<Picture, PlannedFrame>(plan, {
+    decoder: (srcUrl, label) => {
+      const opened = decoderSession(srcUrl, plan, fps, choices.get(srcUrl)!);
+      if ('reason' in opened && override === 'decoder') throw new ExportStop('unsupported', `"${label}" cannot be decoded (${opened.reason}) and the decoder path was required`, { clip: label });
+      return opened;
+    },
+    seek: async (entry, label) => {
+      if (pathNow !== 'seek') report({ phase: 'video', done: entry.frame, total: frames, path: 'seek' });
+      let source = seekSources.get(entry.srcUrl);
+      if (!source) {
+        source = await openSource(entry.srcUrl, entry.sourceFps, label, host, signal);
+        seekSources.set(entry.srcUrl, source);
       }
-    }
-    if (pathNow !== 'seek') report({ phase: 'video', done: entry.frame, total: frames, path: 'seek' });
-    if (!source.source) source.source = await openSource(entry.srcUrl, entry.sourceFps, label, host, signal);
-    // Consecutive frames on the same source frame (a slowed cut) reuse the picture: no second seek.
-    const past = await present(source.source, entry.sourceFrame, entry.frame, label, signal);
-    record.path = 'seek';
-    record.seeked += 1;
-    return { picture: videoPicture(source.source.video), path: 'seek', past };
-  };
+      // Consecutive frames on the same source frame (a slowed cut) reuse the picture: no second seek.
+      const past = await present(source, entry.sourceFrame, entry.frame, label, signal);
+      return { picture: videoPicture(source.video), past };
+    },
+    releaseSeek: (srcUrl) => {
+      const source = seekSources.get(srcUrl);
+      if (!source) return;
+      releaseVideo(source);
+      seekSources.delete(srcUrl);
+    },
+    required:
+      override === 'decoder'
+        ? (entry, label, message) => new ExportStop('frame', `film frame ${entry.frame}: the decoder could not give its picture of "${label}" (${message})`, { frame: entry.frame, clip: label })
+        : undefined,
+    cancelled: () => !!signal?.aborted,
+    left: (label, message) => console.warn('[editor export] decoder path left for seeking', label, message),
+  });
 
   try {
     const canvas = document.createElement('canvas');
@@ -1102,7 +1067,10 @@ async function videoPass(pass: VideoPass): Promise<{ samples: EncodedVideoSample
       const before = stopped(entry.frame);
       if (before) throw before;
       const label = labels.get(entry.clipId) ?? entry.clipId;
-      const shown = await pictureOf(entry, label);
+      const shown = await paths.picture(entry, label, signal).catch((error: unknown) => {
+        throwIfAborted(signal);
+        throw error;
+      });
       pathNow = shown.path;
       // The picture may have taken long (the seek path in a hidden window): the encoder is asked again (spec G, A2).
       const after = stopped(entry.frame);
@@ -1127,6 +1095,8 @@ async function videoPass(pass: VideoPass): Promise<{ samples: EncodedVideoSample
       } finally {
         frame.close();
       }
+      // A source whose last film frame this was lets go of its decoder, frame and bytes now (spec G, B2).
+      paths.done(entry.frame);
       while (made.encodeQueueSize > 6 && !stopped(entry.frame)) await dequeued(made);
       report({ phase: 'video', done: entry.frame + 1, total: frames, path: shown.path });
       if (performance.now() - lastYield > YIELD_EVERY_MS) {
@@ -1144,26 +1114,11 @@ async function videoPass(pass: VideoPass): Promise<{ samples: EncodedVideoSample
     if (samples.length !== frames) throw new ExportStop('encode', `the encoder returned ${samples.length} frames for ${frames}`);
     const misplaced = stamps.findIndex((stamp, index) => stamp !== timestampUs(index, fps));
     if (misplaced >= 0) throw new ExportStop('encode', `encoded frame ${misplaced} carries the wrong time`, { frame: misplaced });
-    for (const [url, source] of sources) {
-      if (source.kind !== 'decoder') continue;
-      source.session.close();
-      const stats = source.bytes.stats();
-      const decoded = source.session.stats();
-      Object.assign(records.get(url)!, { bytesRead: stats.received, fileBytes: stats.fileSize, requests: stats.requests, reopened: decoded.reopened, reclaimed: decoded.reclaimed });
-    }
-    return { samples, avcConfig, paths: [...records.values()], filled };
+    return { samples, avcConfig, paths: paths.paths(), filled };
   } finally {
     if (encoder && encoder.state !== 'closed') encoder.close();
-    for (const source of sources.values()) {
-      if (source.kind === 'decoder') {
-        source.session.close();
-        continue;
-      }
-      if (!source.source) continue;
-      source.source.video.pause();
-      source.source.video.removeAttribute('src');
-      source.source.video.load();
-    }
+    paths.closeAll();
+    for (const source of seekSources.values()) releaseVideo(source);
     host.remove();
   }
 }
