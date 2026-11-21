@@ -6,7 +6,7 @@ import { parseStoredProject, serializeProjectForStorage, timelineSpans, type Com
 import { effectStartSec, overlayFrames, storedSecToFrame } from '@/lib/brand-studio/editor-v2/cut-anchor';
 import { LAST_FRAME_QUIET_MAX, lastFrameWarnings, picturePlace } from '@/lib/brand-studio/editor-v2/export-plan';
 import { playbackFacts, sourceFramesOf } from '@/lib/brand-studio/editor-v2/fps';
-import { totalFrames, type FrameClip, type FrameSequence } from '@/lib/brand-studio/editor-v2/frames';
+import { splitAtFrame, totalFrames, trimClipEdge, type FrameClip, type FrameSequence } from '@/lib/brand-studio/editor-v2/frames';
 import { fromStored, mergeFilmText, ownedSignature, storedFilmView, toStored, type FrameV2Block, type MeasuredSources } from '@/lib/brand-studio/editor-v2/stored';
 import { studioEditorEn, studioEditorKo } from '@/messages/studio-editor';
 
@@ -165,6 +165,40 @@ describe('films stored with a picture too many are corrected on open', () => {
     for (const clip of ntsc.clips) Object.assign((clip as ComposeClip & { frameV2: FrameV2Block }).frameV2, { sourceFps: 23.976 });
     const corrected = fromStored(ntsc, { [SRC]: { fps: 24000 / 1001, frames: 97, counted: true } });
     expect(corrected.corrected).toEqual(['cut-1', 'cut-2']);
+  });
+
+  it('review round 2: a corrected cut then trimmed or split in v2: the edited pieces are written from frames, nothing else moves', () => {
+    const before = phantomFilm();
+    const film = fromStored(before, counted);
+    expect(film.corrected).toEqual(['cut-1', 'cut-2']);
+    const seconds = (clip: ComposeClip) => [clip.trimStartSec, clip.trimEndSec, clip.playbackRate ?? 1, clip.durationSec];
+    const blockOf = (clip: ComposeClip) => (clip as ComposeClip & { frameV2: FrameV2Block }).frameV2;
+
+    // Trimmed: the end of cut 1 ten frames in (97 -> 87 frames, 3.625 s, stored to the tenth as the current editor keeps it).
+    const trimmed = toStored(trimClipEdge(film.sequence, 0, 'end', -10).seq, before);
+    expect(seconds(trimmed.clips[0]!)).toEqual([0, 3.6, 1, 4.1]);
+    expect(blockOf(trimmed.clips[0]!)).toMatchObject({ frames: 87, sourceFrames: 97, mirror: { trimStartSec: 0, trimEndSec: 3.6, playbackRate: 1 } });
+    // Cut 2 was not touched: its stored seconds and its block's mirror stay what they were.
+    expect(seconds(trimmed.clips[1]!)).toEqual(seconds(before.clips[1]!));
+    expect(blockOf(trimmed.clips[1]!)).toMatchObject({ frames: 97, sourceFrames: 97, mirror: { trimStartSec: 0, trimEndSec: 4.1, playbackRate: 1 } });
+    expect({ ...trimmed, clips: [] }).toEqual({ ...before, clips: [] });
+
+    // Split: cut 1 at its 40th frame. Both halves are written from their frames; cut 2 does not move.
+    const split = toStored(splitAtFrame(film.sequence, 40, 'cut-1b'), before);
+    expect(split.clips.map((clip) => clip.id)).toEqual(['cut-1', 'cut-1b', 'cut-2']);
+    expect(seconds(split.clips[0]!)).toEqual([0, 1.7, 1, 4.1]);
+    expect(seconds(split.clips[1]!)).toEqual([1.7, 4, 1, 4.1]);
+    expect(blockOf(split.clips[1]!)).toMatchObject({ inFrame: 40, frames: 57, sourceFrames: 97 });
+    expect(seconds(split.clips[2]!)).toEqual(seconds(before.clips[1]!));
+    expect(blockOf(split.clips[2]!).mirror).toEqual({ trimStartSec: 0, trimEndSec: 4.1, playbackRate: 1 });
+
+    // Opened again, every cut is exact: nothing is corrected twice, the frames are the ones written.
+    for (const written of [trimmed, split]) {
+      const again = fromStored(written, counted);
+      expect(again.corrected).toEqual([]);
+      expect(again.exact).toEqual(written.clips.map((clip) => clip.id));
+    }
+    expect(fromStored(split, counted).sequence.clips.map((clip) => (clip as FrameClip).frames)).toEqual([40, 57, 97]);
   });
 
   it('only the file’s own count corrects a block; a playback measurement does not', () => {
