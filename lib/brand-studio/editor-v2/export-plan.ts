@@ -10,6 +10,7 @@
  * out in the browser.
  */
 import type { ComposeCaption, ComposeClip, ComposeOverlayClip, ComposerProject } from '@/lib/brand-studio/compose/timeline';
+import type { TimingAnswer } from './container';
 import { frameStateAt, spansOf, totalFrames, type FrameClip, type FrameSequence } from './frames';
 import { overlayFrames, type CutAnchor } from './cut-anchor';
 import { isNeutral, type EditorDoc } from './model';
@@ -182,6 +183,38 @@ export function soundWindow(segment: AudioSegment, totalSamples: number, sampleR
   endSample = Math.min(endSample, totalSamples);
   if (endSample <= startSample) return null;
   return { startSample, endSample, sourceOffsetSec };
+}
+
+/**
+ * How far the picture starts after the sound in a cut's file (spec E, item B1), from its own boxes
+ * (lib/brand-studio/editor-v2/container.ts): the first frame is shown at the picture track's start, and
+ * decodeAudioData's sample 0 is the sound track's start (both measured in Chromium; the numbers are in
+ * that file). So the sound for media time `m` after the first frame is decoded sample `(m + leadSec) × rate`.
+ * `known: false` when the file could not be read: the sound is placed as if both started together, as
+ * before, and the export says which cut's sound position could not be checked.
+ */
+export function soundLead(answer: TimingAnswer): { known: boolean; leadSec: number } {
+  if (!answer.ok) return { known: false, leadSec: 0 };
+  const { video, sound } = answer.timing;
+  if (!video || !sound) return { known: true, leadSec: 0 };
+  return { known: true, leadSec: video.firstSec - sound.firstSec };
+}
+
+/**
+ * A cut's sound window read `leadSec` further into its decoded sound. Where that falls before the sound's
+ * first sample (the sound starts after the picture), the head of the window is silent: the buffer starts
+ * that many output samples later (at the cut's speed), from its first sample. `null` when nothing is left.
+ */
+export function placeSound(window: SoundWindow, leadSec: number, rate: number, sampleRate = EXPORT_SAMPLE_RATE): { startSample: number; endSample: number; offsetSec: number } | null {
+  let offsetSec = window.sourceOffsetSec + (Number.isFinite(leadSec) ? leadSec : 0);
+  let startSample = window.startSample;
+  if (offsetSec < 0) {
+    const skip = Math.ceil((-offsetSec * sampleRate) / rate - 1e-9);
+    startSample += skip;
+    offsetSec = Math.max(0, offsetSec + (skip / sampleRate) * rate);
+  }
+  if (startSample >= window.endSample) return null;
+  return { startSample, endSample: window.endSample, offsetSec };
 }
 
 // ── What the film carries besides cuts ─────────────────────────────────────────────────────────

@@ -197,7 +197,11 @@ export function ExportStatus({ job, copy: e }: { job: ExportJob; copy: ExportCop
         <p className={styles.exportCount} role="status">{e.done}</p>
         <p className={styles.note}>{fill(e.doneFacts, { size: formatBytes(job.bytes), length: formatTimecode(job.frames, job.fps) })}</p>
         {job.warnings.map((warning) =>
-          warning.kind === 'lastFrame' ? (
+          warning.kind === 'soundPosition' ? (
+            <p key={`${warning.kind}-${warning.clip}`} className={styles.note} data-editor-export-warning={warning.kind}>
+              {fill(e.warnSoundPosition, { clip: warning.clip })}
+            </p>
+          ) : warning.kind === 'lastFrame' ? (
             <p key={`${warning.kind}-${warning.clip}`} className={styles.note} data-editor-export-warning={warning.kind} data-editor-export-filled={warning.frames}>
               {fill(e.warnLastFrame, { clip: warning.clip, count: warning.frames })}
             </p>

@@ -27,7 +27,9 @@ import {
   isKeyFrame,
   notIncluded,
   picturePlace,
+  placeSound,
   soundBytesCheck,
+  soundLead,
   soundReads,
   soundShiftSec,
   soundSourceUrls,
@@ -41,6 +43,7 @@ import {
 import { cutAnchor, effectStartSec, type CutAnchor } from '@/lib/brand-studio/editor-v2/cut-anchor';
 import { CURRENT_EXPORT_BACKGROUND, currentExportFrame } from '@/lib/brand-studio/editor-v2/framing';
 import { totalFrames, type FrameSequence } from '@/lib/brand-studio/editor-v2/frames';
+import { timingOfFile } from '@/lib/brand-studio/editor-v2/container';
 import { soundTrackOf } from '@/lib/brand-studio/editor-v2/media-probe';
 import { DEFAULT_REFRAME, type Reframe } from '@/lib/brand-studio/editor-v2/model';
 import { readFootage } from './footage-facts';
@@ -91,10 +94,11 @@ export interface ExportFilmResult {
 
 /**
  * What the file lacks or repeats that the person should hear about: a cut whose footage HAS a sound track
- * the browser could not decode (its sound is not in the file); a cut that asked for pictures past its
+ * the browser could not decode (its sound is not in the file); a cut whose sound is in the file but whose
+ * file's timing could not be read, so its sound may sit off its picture (spec E, item B1); a cut that asked for pictures past its
  * footage's last one, filled with that last picture (spec E addendum C3; `frames` of them).
  */
-export type ExportWarning = { kind: 'sound'; clip: string } | { kind: 'lastFrame'; clip: string; frames: number };
+export type ExportWarning = { kind: 'sound'; clip: string } | { kind: 'soundPosition'; clip: string } | { kind: 'lastFrame'; clip: string; frames: number };
 
 export type ExportStopReason = 'empty' | 'unsupported' | 'load' | 'frame' | 'encode' | 'sound' | 'memory' | 'cancelled';
 
@@ -461,21 +465,25 @@ export type SoundGraph = Pick<BaseAudioContext, 'createBufferSource' | 'createGa
 
 /**
  * Places every cut's sound in the mix: a buffer source at the cut's speed, started on the cut's first
- * sample and stopped before the next cut's first sample, read from the cut's first frame. Returns how
- * many cuts were placed.
+ * sample and stopped before the next cut's first sample, read from the cut's first frame, `leadSecOf` its
+ * file further on (the picture track's start minus the sound track's, `soundLead`). Returns how many cuts
+ * were placed.
  */
 export function scheduleCutSound(
   graph: SoundGraph,
   plan: AudioPlan,
   buffers: ReadonlyMap<string, AudioBuffer | null>,
   shiftSecOf: (clipId: string) => number = () => 0,
+  leadSecOf: (srcUrl: string) => number = () => 0,
 ): number {
   let placed = 0;
   for (const segment of plan.segments) {
     if (segment.gain <= 0) continue;
     const buffer = buffers.get(segment.srcUrl);
     if (!buffer) continue;
-    const span = soundWindow(segment, plan.totalSamples, plan.sampleRate, shiftSecOf(segment.clipId));
+    const window = soundWindow(segment, plan.totalSamples, plan.sampleRate, shiftSecOf(segment.clipId));
+    // Read where the file's own timing puts the sound under this picture (spec E, item B1).
+    const span = window ? placeSound(window, leadSecOf(segment.srcUrl), segment.rate, plan.sampleRate) : null;
     if (!span) continue;
     const source = graph.createBufferSource();
     source.buffer = buffer;
@@ -484,7 +492,7 @@ export function scheduleCutSound(
     gain.gain.value = segment.gain;
     source.connect(gain);
     gain.connect(graph.destination);
-    source.start(span.startSample / plan.sampleRate, span.sourceOffsetSec);
+    source.start(span.startSample / plan.sampleRate, span.offsetSec);
     // Half a sample before the boundary: the next cut's first sample is never this cut's.
     source.stop((span.endSample - 0.5) / plan.sampleRate);
     placed += 1;
@@ -551,13 +559,19 @@ async function mixSound(
   // A cut's footage without a sound track decodes to nothing and is simply silent. Footage that HAS a
   // sound track the browser cannot decode (or that cannot be told) is silent too, and said so after export.
   const buffers = new Map<string, AudioBuffer | null>();
+  const leads = new Map<string, number>();
   for (const url of cutUrls) {
     throwIfAborted(signal);
     const bytes = await read(url);
     // Inspected before decoding: decoding hands the bytes over.
-    const track = soundTrackOf(new Uint8Array(bytes));
+    const view = new Uint8Array(bytes);
+    const track = soundTrackOf(view);
+    const lead = soundLead(await timingOfFile(view));
     const decoded = await context.decodeAudioData(bytes).catch(() => null);
     if (!decoded && track !== 'no') warnings.push({ kind: 'sound', clip: labelOf(url) });
+    // Its sound is in the file but where it sits under the picture could not be read (WebM, a broken file).
+    else if (decoded && !lead.known) warnings.push({ kind: 'soundPosition', clip: labelOf(url) });
+    leads.set(url, lead.leadSec);
     buffers.set(url, decoded);
     progress((step += 1), steps);
   }
@@ -571,7 +585,7 @@ async function mixSound(
     }
   };
 
-  scheduleCutSound(context, plan, buffers, (clipId) => soundShiftSec(extras, clipId));
+  scheduleCutSound(context, plan, buffers, (clipId) => soundShiftSec(extras, clipId), (url) => leads.get(url) ?? 0);
 
   // Music and effects, by the current exporter's rules: music loops from its in-point for the whole film.
   if (bgm) {
