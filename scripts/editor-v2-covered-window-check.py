@@ -183,6 +183,8 @@ def ffprobe(path):
 
 def container(paths):
     """The container reader's answers, through node with the repository's own TypeScript."""
+    if not paths:
+        return []
     code = ("import { readFileSync } from 'node:fs';"
             "const { timingOfFile } = await import('./lib/brand-studio/editor-v2/container.ts');"
             "for (const f of process.argv.slice(1)) console.log(JSON.stringify(await timingOfFile(new Uint8Array(readFileSync(f)))));")
@@ -510,6 +512,9 @@ def run_checks(browser, media):
     def export(name, uncover_after=None):
         samples = []
         started = time.time()
+        if page.locator('[data-editor-export-start][disabled]').count():
+            blocked = page.locator('[data-editor-export-blocked]')
+            return 'refused: ' + (blocked.inner_text() if blocked.count() else '?'), None, [], 0.0, None
         page.click('[data-editor-export-start]')
         page.wait_for_selector('[data-editor-export-sheet][data-editor-export-status=running]', timeout=60000)
         uncovered_at = None
