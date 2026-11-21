@@ -290,11 +290,15 @@ export function decoderColourSpace(config: { codedHeight: number; colour: { prim
 
 /**
  * Footage whose colour the decoder path was measured on, so it may take it (`false`: seeked, reason
- * `colour`). Every case below gave the same pixels on both paths (mean and largest |difference| 0 on every
- * patch, every frame) on Chromium 149 with an NVIDIA RTX PRO 6000 Blackwell (D3D11). Exactly:
+ * `colour`). Every case below, except the 8-bit full range it names as not measured, gave the same pixels on
+ * both paths (mean and largest |difference| 0 on every patch, every frame) on Chromium 149 with an NVIDIA
+ * RTX PRO 6000 Blackwell (D3D11). Exactly:
  *
  * - SDR by what the file states (sample-index.ts `sdr`; spec F review 1, item 1), and the chroma format read
- *   from the record and 4:2:0 (sample-index.ts `chroma`; not read: seeked);
+ *   from the record and 4:2:0 (sample-index.ts `chroma`; not read: seeked). At 8 bits the range is not
+ *   looked at: limited and full range are both taken. Full range was measured on H.264 High at 1080 rows
+ *   (spec G, `h8-1080-colr-full`: equal on both paths); on HEVC Main and H.264 Baseline/Main it is taken by
+ *   this rule but was not measured;
  * - H.264, 8 bits: Constrained Baseline (profile_idc 66 with constraint_set1), Main (77) and High (100).
  *   Measured: High in spec F and G; Constrained Baseline and Main untagged and `colr`-only on 2026-11-22
  *   (spec H, F7). Not Extended (88) or Baseline without constraint_set1: never measured;
@@ -308,8 +312,9 @@ export function decoderColourSpace(config: { codedHeight: number; colour: { prim
  * reverse), and so did the `<video>` element, so the two paths agreed (spec H, F7).
  *
  * Not taken: anything else, among it 10-bit footage whose container says nothing (the stream itself may say
- * HLG or PQ), full range, BT.2020, PQ, HLG, an ICC profile, H.264 High 10 / 4:2:2 / 4:4:4, HEVC Main 10 at
- * 8 bits, HEVC range extensions, 12 bits, 4:2:2, 4:4:4 and monochrome.
+ * HLG or PQ), 10-bit footage in full range or tagged BT.601, BT.2020 at any depth, PQ, HLG, an ICC profile,
+ * H.264 High 10 / 4:2:2 / 4:4:4, HEVC Main 10 at 8 bits, HEVC range extensions, 12 bits, 4:2:2, 4:4:4 and
+ * monochrome.
  */
 export function colourAdmitted(config: {
   entry: string;
