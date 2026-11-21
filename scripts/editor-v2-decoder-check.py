@@ -28,7 +28,8 @@ Parts (all by default, or name some):
   EDITOR_BASE_URL=http://localhost:3621 EDITOR_ORG_ID=<organization id> python scripts/editor-v2-decoder-check.py <out-dir> <media-dir> [part ...]
 
 The server runs with BRAND_STUDIO_V2=on BRAND_STUDIO_EDITOR_V2=on BRAND_STUDIO_EDITOR_V2_ORGS=<the organization id>
-(local mode). Generated sources are uploaded to that organization through the local API and deleted at the end.
+(local mode, proven first with the covered-window check's guard). Generated sources are uploaded to that
+organization through the local API and deleted at the end.
 Python Playwright with its own Chromium and fresh profiles; localhost only; CDP only to a Chromium process this
 script started; ffmpeg/ffprobe and numpy on PATH. Prints PASS/FAIL and MEASURE lines; exits non-zero on failure.
 Windows only for the window parts (ctypes). Leaves no browser running.
@@ -137,11 +138,13 @@ def make_media(folder):
 
 
 def long_media(folder):
-    """Three 20 s 1080p sources with sound (480 pictures each: the squares hold numbers up to 511)."""
+    """Three 20 s 1080p sources with sound, 3 Mb/s (480 pictures each: the squares hold numbers up to 511)."""
     paths = []
     for i in range(3):
-        path = os.path.join(folder, f'long{i + 1}.mp4')
-        numbered(path, '24', 480, 1920, 1080, encode=('-c:v', 'libx264', '-preset', 'fast', '-b:v', '8M', '-bf', '2', '-g', '48', '-pix_fmt', 'yuv420p'), out=('-movflags', '+faststart'), sound=20)
+        # 3 Mb/s keeps each under 10 MB: the local development server cuts request bodies above that (it
+        # clones them through middleware), so a larger upload arrives short and is refused.
+        path = os.path.join(folder, f'long3m-{i + 1}.mp4')
+        numbered(path, '24', 480, 1920, 1080, encode=('-c:v', 'libx264', '-preset', 'fast', '-b:v', '3M', '-maxrate', '3.5M', '-bufsize', '6M', '-bf', '2', '-g', '48', '-pix_fmt', 'yuv420p'), out=('-movflags', '+faststart'), sound=20)
         paths.append(path)
     return paths
 
@@ -247,6 +250,7 @@ def upload(context, name, path, width, height, seconds):
     reserved = reserved.get('data', reserved)
     if 'id' not in reserved:
         raise SystemExit(f'upload of {name} refused: {json.dumps(reserved)[:300]}')
+    uploaded.append(reserved['id'])
     target = reserved.get('url') if reserved.get('direct') else None
     if target and not target.startswith(BASE):
         raise SystemExit('refusing a non-local upload address')
@@ -257,7 +261,6 @@ def upload(context, name, path, width, height, seconds):
     if not put.ok:
         raise SystemExit(f'upload failed: {put.status}')
     context.request.post(API, data=json.dumps({'operation': 'asset.complete', 'input': {'organizationId': ORG, 'assetId': reserved['id'], 'width': width, 'height': height, 'seconds': round(seconds, 1)}}), headers=HEADERS)
-    uploaded.append(reserved['id'])
     return reserved['id']
 
 
@@ -529,7 +532,8 @@ import ctypes, sys, tkinter as tk
 try: ctypes.windll.shcore.SetProcessDpiAwareness(2)
 except Exception: pass
 x, y, w, h = map(int, sys.argv[1:5])
-r = tk.Tk(); r.title('cover'); r.geometry(f'{w}x{h}+{x}+{y}'); r.attributes('-topmost', True); r.configure(bg='#4a4f5a'); r.mainloop()
+r = tk.Tk(); r.title('cover'); r.geometry(f'{w}x{h}+{x}+{y}'); r.attributes('-topmost', True); r.configure(bg='#4a4f5a')
+r.lift(); r.focus_force(); r.after(1500, lambda: (r.lift(), r.focus_force())); r.mainloop()
 """
 
 PAGE_LOG = """() => {
@@ -613,6 +617,11 @@ class OwnChromium:
         handle = self.hwnd()
         user32.ShowWindow(handle, {'minimise': 6, 'restore': 9}[state])
 
+    def on_top(self, on):
+        """Keeps this window above the desktop's other windows (another program's window in front of it would
+        hide the page too); a cover window opened later, also on top, still covers it."""
+        user32.SetWindowPos(self.hwnd(), -1 if on else -2, 0, 0, 0, 0, 0x0001 | 0x0002 | 0x0010)
+
     def memory(self):
         """Working set of the browser's processes: total and the largest one, in bytes."""
         script = (f"$ids = @({self.proc.pid}) + @(Get-CimInstance Win32_Process -Filter 'ParentProcessId={self.proc.pid}' | ForEach-Object {{ $_.ProcessId }}); "
@@ -649,6 +658,9 @@ def unattended_export(p, own, film, path, state, hidden_cap, name):
         extra.close()
     open_film(page, film, path)
     page.evaluate(PAGE_LOG)
+    own.show('restore')
+    own.on_top(True)
+    page.bring_to_front()
     page.click('[data-editor-export]')
     page.wait_for_selector('[data-editor-export-sheet]', timeout=60000)
     page.wait_for_timeout(300)
@@ -686,7 +698,7 @@ def unattended_export(p, own, film, path, state, hidden_cap, name):
 
     sampler = threading.Thread(target=sample, daemon=True)
     sampler.start()
-    deadline = clicked + START_DELAY_MS / 1000 + (hidden_cap if state != 'front' else 1200)
+    deadline = clicked + START_DELAY_MS / 1000 + (hidden_cap if state != 'front' else 300)
     file = None
     while time.time() < deadline:
         file = newest_download(own.downloads, clicked)
@@ -704,6 +716,7 @@ def unattended_export(p, own, film, path, state, hidden_cap, name):
     page = next(pg for pg in context.pages if pg.url.startswith(BASE))
     page.bring_to_front()
     page.wait_for_function("() => { const s = document.querySelector('[data-editor-export-sheet]'); return s && s.dataset.editorExportStatus !== 'running'; }", timeout=1200000, polling=500)
+    own.on_top(False)
     stop.set()
     sampler.join()
     log = page.evaluate('() => window.__ev2Log')
@@ -729,6 +742,18 @@ def unattended_export(p, own, film, path, state, hidden_cap, name):
         file = target
     browser.close()
     return log, info, file, hidden_for, peak
+
+
+def hidden_export(p, own, film, path, state, cap, name, frames):
+    """`unattended_export`, run once more when the page's own log shows it never went hidden (Chrome's
+    occlusion check does not always count the cover window at once). Returns the summary and the run's facts."""
+    for attempt in (1, 2):
+        log, info, file, hidden_for, peak = unattended_export(p, own, film, path, state, cap, name)
+        s = summarise(log, info, hidden_for, frames)
+        if state == 'front' or s['became_hidden'] or attempt == 2:
+            s['attempts'] = attempt
+            return s, info, file, peak
+        measure(f'{name}: the page did not go hidden; once more')
 
 
 def summarise(log, info, hidden_for, frames):
@@ -796,6 +821,7 @@ def part_times(p, browser, media, holder):
     context.close()
 
     table = []
+    park()
     own = OwnChromium(p.chromium.executable_path, os.path.join(OUT, 'downloads'))
     try:
         for film_name, film, frames, bytes_total in films:
@@ -803,8 +829,7 @@ def part_times(p, browser, media, holder):
                 for state in ('front', 'covered', 'minimise', 'background'):
                     for repeat in range(REPEATS):
                         cap = 45 if path == 'seek' else 300
-                        log, info, file, hidden_for, peak = unattended_export(p, own, film, path, state, cap, f'times-{film_name}-{path}-{state}-{repeat + 1}')
-                        s = summarise(log, info, hidden_for, frames)
+                        s, info, file, peak = hidden_export(p, own, film, path, state, cap, f'times-{film_name}-{path}-{state}-{repeat + 1}', frames)
                         numbers_ok = None
                         if film_name == 'long' and file:
                             numbers = decode_numbers(file, 1920, 1080, (0, 0, 1920, 1080))
@@ -838,6 +863,20 @@ def part_times(p, browser, media, holder):
             measure(f'TABLE {film_name} {path}: ' + '; '.join(cells))
 
 
+DRIVEN = []
+
+
+def park():
+    """Minimises the window of the browser this script drives, once its pages are set up: it would otherwise
+    come back in front of the unattended window when a cover window closes, and cover it (measured: a "front"
+    run went hidden). Not before: a page opened in a minimised browser did not read its clips' rates."""
+    page = DRIVEN[0]
+    cdp = page.context.new_cdp_session(page)
+    window = cdp.send('Browser.getWindowForTarget')
+    cdp.send('Browser.setWindowBounds', {'windowId': window['windowId'], 'bounds': {'windowState': 'minimized'}})
+    cdp.detach()
+
+
 def part_c3(p, browser, media):
     context = browser.new_context(viewport={'width': 1440, 'height': 900}, accept_downloads=True)
     context.add_cookies([{'name': 'playbook.locale', 'value': 'ko', 'url': BASE}])
@@ -855,13 +894,13 @@ def part_c3(p, browser, media):
     measure(f'c3: cuts {state["cuts"]} at {state["fps"]} fps (pictures {[n for _, _, n in cw.C3_SOURCES]})')
     check('c3: each cut is its source whole (the real number of pictures)', state['cuts'] == [n for _, _, n in cw.C3_SOURCES], json.dumps(state['cuts']))
     context.close()
+    park()
     own = OwnChromium(p.chromium.executable_path, os.path.join(OUT, 'downloads'))
     try:
         for path in ('decoder', 'seek'):
             for state_name in ('front', 'covered'):
                 for repeat in range(REPEATS):
-                    log, info, file, hidden_for, peak = unattended_export(p, own, film, path, state_name, 45 if path == 'seek' else 300, f'c3-{path}-{state_name}-{repeat + 1}')
-                    s = summarise(log, info, hidden_for, len(expected))
+                    s, info, file, peak = hidden_export(p, own, film, path, state_name, 45 if path == 'seek' else 300, f'c3-{path}-{state_name}-{repeat + 1}', len(expected))
                     numbers = decode_numbers(file, 1920, 1080, (0, 0, 1920, 1080)) if file else []
                     wrong = [(i, n, e) for i, (n, e) in enumerate(zip(numbers, expected)) if n != e]
                     ends = [numbers[i - 1] if 0 < i <= len(numbers) else None for i in (97, 194, 315)]
@@ -891,6 +930,12 @@ def main():
     media = make_media(MEDIA)
     with sync_playwright() as p:
         browser = p.chromium.launch(headless=False, channel=os.environ.get('EDITOR_BROWSER_CHANNEL', 'chromium'), args=['--window-position=40,40', '--window-size=1460,980'])
+        # The covered-window check's guard: uploads are made and deleted only on a local-mode server.
+        if not cw.proves_local_mode(browser):
+            check('local mode proven before creating or deleting uploads', False, 'a request with no session was not signed in as the development identity')
+            browser.close()
+            sys.exit(1)
+        measure('the server is in local mode (a request with no session is signed in as the development identity)')
         context = browser.new_context(viewport={'width': 1440, 'height': 900}, accept_downloads=True)
         context.add_cookies([{'name': 'playbook.locale', 'value': 'ko', 'url': BASE}])
         context.route(re.compile(r'.*'), lambda route: route.fallback() if route.request.url.startswith((BASE, 'data:', 'blob:')) else route.abort())
@@ -906,6 +951,7 @@ def main():
                 part_fallback(browser, media, holder)
             if 'error' in PARTS:
                 part_error(browser, media, holder)
+            DRIVEN.append(page)
             if 'c3' in PARTS:
                 part_c3(p, browser, media)
             if 'times' in PARTS:
