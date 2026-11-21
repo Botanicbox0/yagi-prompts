@@ -57,8 +57,8 @@ import { timingOfFile } from '@/lib/brand-studio/editor-v2/container';
 import { soundTrackOf } from '@/lib/brand-studio/editor-v2/media-probe';
 import { DEFAULT_REFRAME, type Reframe } from '@/lib/brand-studio/editor-v2/model';
 import { sampleBytes, type SampleBytes } from '@/lib/brand-studio/editor-v2/sample-bytes';
-import { readSampleIndex, type Rotation, type VideoIndex } from '@/lib/brand-studio/editor-v2/sample-index';
-import { footageBytes, readFootage } from './footage-facts';
+import type { Rotation, VideoIndex } from '@/lib/brand-studio/editor-v2/sample-index';
+import { footageBytes, readFootage, readPictureIndex } from './footage-facts';
 import { PictureDecoder, decoderConfig, decoderSupports } from './frame-decoder';
 import { screenTimer } from './screen-refresh';
 
@@ -799,8 +799,7 @@ async function openDecoderSource(
 ): Promise<DecoderSource | { reason: string }> {
   const hasDecoder = typeof VideoDecoder !== 'undefined' && typeof EncodedVideoChunk !== 'undefined';
   if (override === 'seek' || !hasDecoder) return { reason: choosePath({ override, hasDecoder, indexFailure: null, configSupported: null }).reason ?? 'seek' };
-  const read = await readFootage(srcUrl).catch(() => null);
-  const answer = read?.found ? readSampleIndex(read.found) : { ok: false as const, reason: read && !read.answer.ok ? read.answer.reason : 'unreadable' };
+  const answer = await readPictureIndex(srcUrl).catch(() => ({ ok: false as const, reason: 'unreadable' as const }));
   if (!answer.ok) return { reason: choosePath({ override, hasDecoder, indexFailure: answer.reason, configSupported: null }).reason! };
   const config = decoderConfig(answer.index);
   const supported = await decoderSupports(config);
@@ -827,8 +826,7 @@ async function openDecoderSource(
  */
 export async function plannedPath(srcUrl: string, override: ExportPathOverride): Promise<ExportPath> {
   if (override === 'seek' || typeof VideoDecoder === 'undefined') return 'seek';
-  const read = await readFootage(srcUrl).catch(() => null);
-  const answer = read?.found ? readSampleIndex(read.found) : null;
+  const answer = await readPictureIndex(srcUrl).catch(() => null);
   if (!answer?.ok) return 'seek';
   return (await decoderSupports(decoderConfig(answer.index))) ? 'decoder' : 'seek';
 }
@@ -850,12 +848,13 @@ export async function exportFilm(options: ExportFilmOptions): Promise<ExportFilm
   const audioSupport = await AudioEncoder.isConfigSupported(AUDIO_CONFIG).catch(() => null);
   if (!audioSupport?.supported) throw new ExportStop('unsupported', 'this browser cannot write the sound track');
 
-  // Cut files whose own boxes say they carry no sound track are silent and never read whole (spec F, F2).
+  // Cut files whose own boxes have no sound track at all (media-probe's `soundTrackOf`: `no`, never
+  // `unknown`) are silent and never read whole (spec F, F2). Their picture index is read here once, for both.
   const cutUrls = [...new Set(sequence.clips.map((clip) => clip.srcUrl))];
-  const facts = await Promise.all(cutUrls.map((url) => readFootage(url).catch(() => null)));
+  const indexes = override === 'seek' ? [] : await Promise.all(cutUrls.map((url) => readPictureIndex(url).catch(() => null)));
   const noSoundTrack = new Set(cutUrls.filter((_, i) => {
-    const answer = facts[i]?.answer;
-    return !!answer?.ok && !!answer.timing.video && answer.timing.sound === null;
+    const answer = indexes[i];
+    return !!answer?.ok && answer.index.sound === 'no';
   }));
   // Everything the sound mix reads whole into this tab, added up before the first frame: above the limit
   // the export does not start (review round 1, item 10).

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { RangeRefused, type RangeAnswer } from '@/lib/brand-studio/editor-v2/ranged-source';
-import { WholeFileTooLarge, sampleBytes, totalFromContentRange } from '@/lib/brand-studio/editor-v2/sample-bytes';
+import { RangeRefused } from '@/lib/brand-studio/editor-v2/ranged-source';
+import { WholeFileTooLarge, sampleBytes, totalFromContentRange, type RangeReply as RangeAnswer } from '@/lib/brand-studio/editor-v2/sample-bytes';
 
 /**
  * Spec F, F2: the decoder path reads only the byte ranges that hold the pictures it shows. A server that

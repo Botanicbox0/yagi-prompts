@@ -19,8 +19,6 @@ export interface RangeAnswer {
   status: number;
   body: ReadableStream<Uint8Array> | null;
   arrayBuffer(): Promise<ArrayBuffer>;
-  /** `Content-Range` / `Content-Length` (the file's size, whether a whole file may be held). */
-  headers?: { get(name: string): string | null };
 }
 
 /** Asks for bytes `start` to `end` inclusive. */

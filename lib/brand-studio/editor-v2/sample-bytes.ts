@@ -11,7 +11,18 @@
  * makes the one real request, for the clip's own address).
  */
 import type { ByteRun } from './decode-plan';
-import { RangeRefused, type RangeRequest } from './ranged-source';
+import { RangeRefused } from './ranged-source';
+
+/** What a range request returns (the standard `Response` is one): the headers say the file's size. */
+export interface RangeReply {
+  status: number;
+  body: ReadableStream<Uint8Array> | null;
+  arrayBuffer(): Promise<ArrayBuffer>;
+  headers?: { get(name: string): string | null };
+}
+
+/** Asks for bytes `start` to `end` inclusive. */
+export type RangeFetch = (start: number, end: number) => Promise<RangeReply>;
 
 /** The whole file was sent and it is larger than the export may hold: the source is taken by seeking. */
 export class WholeFileTooLarge extends Error {
@@ -35,7 +46,7 @@ export function totalFromContentRange(value: string | null | undefined): number 
   return match ? Number(match[1]) : null;
 }
 
-export function sampleBytes(request: RangeRequest, wholeLimit: number): SampleBytes {
+export function sampleBytes(request: RangeFetch, wholeLimit: number): SampleBytes {
   let requests = 0;
   let received = 0;
   let mode: 'range' | 'whole' | null = null;

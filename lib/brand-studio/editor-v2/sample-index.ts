@@ -4,26 +4,32 @@
  * The seek path shows picture k of a source by sending a hidden `<video>` to `firstSec + (k + ½) / fps`
  * and waiting for the screen to confirm it; in a covered or minimised window that waits for a screen that
  * does not draw. The decoder path feeds the file's own samples to `VideoDecoder` instead, so it needs to
- * know, for every picture, where its bytes are and what it takes to decode it. This is read here from the
- * same boxes as the frame facts (lib/brand-studio/editor-v2/container.ts, `readMovie`):
+ * know, for every picture, where its bytes are and what it takes to decode it. That is read here, from the
+ * picture track's boxes (ISO/IEC 14496-12; QuickTime uses the same layout):
  *
- * - every sample in decode order: file offset, size, composition time, duration, sync or not;
- * - the pictures the edit list shows, in presentation order (`shownSamples`, the SAME rule the frame facts
- *   count with): picture k here is picture k of the seek path, which is what the proof checks;
+ * - every sample in decode order: file offset and size (`stsz` / `stz2`, `stsc`, `stco` / `co64`; in a
+ *   fragmented file the `trun` sizes and data offsets from the `tfhd` base: an explicit base, the `moof`
+ *   itself, or where the previous `traf`'s data ended), composition time (`stts`, `ctts` v0/v1; `tfdt`,
+ *   `trun`), duration, and whether it is a sync sample (`stss`; the `trun` / `tfhd` / `trex` sample flags);
+ * - the pictures the edit list shows, in presentation order: empty edits, then one piece of media at normal
+ *   speed, and the samples whose composition time lies inside it. Picture k here must be picture k of the
+ *   frame facts (lib/brand-studio/editor-v2/container.ts, which the timeline and the seek path number by):
+ *   the index is refused whenever its count differs from theirs, so the two paths can never number apart;
  * - the codec and its configuration record for `VideoDecoder.configure`: `avc1` / `avc3` (`avcC`),
- *   `hvc1` / `hev1` (`hvcC`), `vp09` (`vpcC` version 1), `av01` (`av1C`); the codec string is built from
- *   the record (ISO/IEC 14496-15 Annex E for HEVC, the VP9 and AV1 codec-string rules for the others);
- * - what a raw decoder does not apply and a `<video>` does: the track's rotation (`tkhd` matrix: 0, 90,
- *   180 or 270 degrees clockwise), non-square pixels (`pasp`) and the colour description (`colr`).
+ *   `hvc1` / `hev1` (`hvcC`, codec string by ISO/IEC 14496-15 Annex E), `vp09` (`vpcC` version 1),
+ *   `av01` (`av1C`);
+ * - what a raw decoder does not apply and a `<video>` does: the track's rotation (`tkhd` matrix: 0, 90, 180
+ *   or 270 degrees clockwise), non-square pixels (`pasp`), and the colour description (`colr`).
  *
  * Anything else unusual (a mirrored or scaled matrix, a clean aperture that crops, more than one sample
- * description, two pictures at one time, a codec not listed) is a failure with its reason: the export takes
- * that source by seeking, as before.
+ * description, two samples at one time, an edit list it cannot follow, a codec not listed) is a failure
+ * with its reason: the export then takes that source by seeking, as before.
  *
- * Pure: boxes in, an answer out.
+ * Pure: bytes in, an answer out. The browser reads the boxes with Range requests
+ * (components/brand-studio/editor-v2/footage-facts.ts, `readPictureIndex`).
  */
-import { movieOf, readTiming, shownSamples, type FoundBoxes, type Track } from './container';
-import { boxes, type Box } from './media-probe';
+import { readTiming, type ByteSource } from './container';
+import { TOP_LEVEL, boxes, soundTrackOf, type Box, type SoundTrack } from './media-probe';
 
 export type Rotation = 0 | 90 | 180 | 270;
 
@@ -66,8 +72,8 @@ export interface VideoIndex {
   syncs: number[];
   /** The frames are not evenly spaced (the frame facts' own verdict). */
   variable: boolean;
-  /** Movie time of picture 0. */
-  firstSec: number;
+  /** Whether the file has a sound track (`no`: the export need not read it for sound). */
+  sound: SoundTrack;
 }
 
 export type IndexFailure =
@@ -75,14 +81,22 @@ export type IndexFailure =
   | 'no-video'
   | 'not-located'
   | 'mixed-entries'
+  | 'edits'
   | 'entry'
   | 'codec'
   | 'transform'
   | 'aperture'
   | 'times'
-  | 'no-sync';
+  | 'no-sync'
+  | 'disagrees';
 
 export type IndexAnswer = { ok: true; index: VideoIndex } | { ok: false; reason: IndexFailure };
+
+/** The boxes the index is read from: the `moov`, and every `moof` with where it starts in the file. */
+export interface IndexBoxes {
+  moov: Uint8Array;
+  moofs: Array<{ bytes: Uint8Array; at: number }>;
+}
 
 // ── Bytes ──────────────────────────────────────────────────────────────────────────────────────
 
@@ -90,13 +104,78 @@ const type4 = (b: Uint8Array, at: number) => String.fromCharCode(b[at]!, b[at + 
 const u16 = (b: Uint8Array, at: number) => (b[at]! << 8) | b[at + 1]!;
 const u32 = (b: Uint8Array, at: number) => ((b[at]! << 24) >>> 0) + (b[at + 1]! << 16) + (b[at + 2]! << 8) + b[at + 3]!;
 const i32 = (b: Uint8Array, at: number) => u32(b, at) | 0;
+const u64 = (b: Uint8Array, at: number) => u32(b, at) * 2 ** 32 + u32(b, at + 4);
+const i64 = (b: Uint8Array, at: number) => i32(b, at) * 2 ** 32 + u32(b, at + 4);
+const i16 = (b: Uint8Array, at: number) => (((b[at]! << 8) | b[at + 1]!) << 16) >> 16;
 const hex = (value: number) => value.toString(16).toUpperCase();
 const pad2 = (value: number) => String(value).padStart(2, '0');
+
+class Broken extends Error {}
+
+function need(box: Box, bytes: number) {
+  if (box.body + bytes > box.end) throw new Broken();
+}
+
+function kids(bytes: Uint8Array, box: Box): Box[] {
+  const found = boxes(bytes, box.body, box.end);
+  if (!found) throw new Broken();
+  return found;
+}
+
+const kid = (bytes: Uint8Array, box: Box | undefined, type: string): Box | undefined => (box ? kids(bytes, box).find((entry) => entry.type === type) : undefined);
 
 /** One step in the matrix (16.16 fixed point). */
 const ONE = 0x10000;
 /** `w` in the matrix (2.30 fixed point). */
 const W_ONE = 0x40000000;
+/** The most samples a track may list; the most top-level boxes walked (a fragmented file has two per fragment). */
+const MAX_SAMPLES = 4_000_000;
+export const MAX_INDEX_BOXES = 20_000;
+
+// ── Finding the boxes ──────────────────────────────────────────────────────────────────────────
+
+/**
+ * Walks the file's top-level boxes, reading only their headers, the `moov` and (in a fragmented file) every
+ * `moof` with its place: media is stepped over by its size. An ordinary file is done once its `moov` is read.
+ */
+export async function gatherIndexBoxes(source: ByteSource, maxBoxes = MAX_INDEX_BOXES): Promise<IndexBoxes | { failure: 'not-mp4' | 'no-moov' | 'broken' | 'too-many-boxes' }> {
+  let at = 0;
+  let moov: Uint8Array | null = null;
+  let fragmented = false;
+  const moofs: IndexBoxes['moofs'] = [];
+  for (let count = 0; ; count += 1) {
+    if (count >= maxBoxes) return { failure: 'too-many-boxes' };
+    const head = await source.read(at, 16);
+    if (head.length < 8) break;
+    let size = u32(head, 0);
+    const type = type4(head, 4);
+    let header = 8;
+    if (count === 0 && !TOP_LEVEL.has(type)) return { failure: 'not-mp4' };
+    if (size === 1) {
+      if (head.length < 16) return { failure: 'broken' };
+      size = u64(head, 8);
+      header = 16;
+    } else if (size === 0) {
+      if (type === 'moov' || type === 'moof') return { failure: 'broken' };
+      break;
+    }
+    if (size < header) return { failure: 'broken' };
+    if (type === 'moov' || type === 'moof') {
+      const box = await source.read(at, size);
+      if (box.length < size) return { failure: 'broken' };
+      if (type === 'moov') {
+        moov = box;
+        const top = boxes(box, 0, box.length)?.[0];
+        fragmented = !!top && !!boxes(box, top.body, top.end)?.some((entry) => entry.type === 'mvex');
+        if (!fragmented) break;
+      } else {
+        moofs.push({ bytes: box, at });
+      }
+    }
+    at += size;
+  }
+  return moov ? { moov, moofs } : { failure: 'no-moov' };
+}
 
 // ── The sample entry ───────────────────────────────────────────────────────────────────────────
 
@@ -123,54 +202,38 @@ export function hevcCodec(entry: string, hvcC: Uint8Array): string | null {
   for (let bit = 0; bit < 32; bit += 1) reversed = ((reversed << 1) | ((flags >>> bit) & 1)) >>> 0;
   const constraints = Array.from(hvcC.subarray(6, 12));
   while (constraints.length > 0 && constraints[constraints.length - 1] === 0) constraints.pop();
-  const level = hvcC[12]!;
-  return [`${entry}.${space}${profile}`, hex(reversed), `${tier}${level}`, ...constraints.map(hex)].join('.');
+  return [`${entry}.${space}${profile}`, hex(reversed), `${tier}${hvcC[12]!}`, ...constraints.map(hex)].join('.');
 }
 
 /** `vp09.PP.LL.DD.CC.cp.tc.mc.FF` from a `vpcC` record (version 1). */
 export function vp9Codec(vpcC: Uint8Array): string | null {
   if (vpcC.length < 12 || vpcC[0] !== 1) return null;
-  const profile = vpcC[4]!;
-  const level = vpcC[5]!;
   const packed = vpcC[6]!;
-  const depth = packed >> 4;
-  const chroma = (packed >> 1) & 0x07;
-  const full = packed & 1;
-  return ['vp09', pad2(profile), pad2(level), pad2(depth), pad2(chroma), pad2(vpcC[7]!), pad2(vpcC[8]!), pad2(vpcC[9]!), pad2(full)].join('.');
+  return ['vp09', pad2(vpcC[4]!), pad2(vpcC[5]!), pad2(packed >> 4), pad2((packed >> 1) & 0x07), pad2(vpcC[7]!), pad2(vpcC[8]!), pad2(vpcC[9]!), pad2(packed & 1)].join('.');
 }
 
 /** `av01.P.LLT.DD` from an `av1C` record. */
 export function av1Codec(av1C: Uint8Array): string | null {
   if (av1C.length < 4 || av1C[0] !== 0x81) return null;
-  const profile = av1C[1]! >> 5;
-  const level = av1C[1]! & 0x1f;
-  const tier = av1C[2]! >> 7 ? 'H' : 'M';
   const high = (av1C[2]! >> 6) & 1;
   const twelve = (av1C[2]! >> 5) & 1;
   const depth = high ? (twelve ? 12 : 10) : 8;
-  return `av01.${profile}.${pad2(level)}${tier}.${pad2(depth)}`;
-}
-
-function sampleEntry(stsd: Uint8Array): { type: string; body: number; end: number; bytes: Uint8Array } | null {
-  // version and flags, entry count, then the first entry.
-  if (stsd.length < 16 || u32(stsd, 4) < 1) return null;
-  const found = boxes(stsd, 8, stsd.length);
-  const entry = found?.[0];
-  return entry ? { type: entry.type, body: entry.body, end: entry.end, bytes: stsd } : null;
+  return `av01.${av1C[1]! >> 5}.${pad2(av1C[1]! & 0x1f)}${av1C[2]! >> 7 ? 'H' : 'M'}.${pad2(depth)}`;
 }
 
 type EntryAnswer = { ok: true; config: CodecConfig } | { ok: false; reason: 'entry' | 'codec' | 'aperture' };
 
+/** The first sample entry of an `stsd` box's contents (version and flags, entry count, entries). */
 export function readSampleEntry(stsd: Uint8Array | null): EntryAnswer {
-  const entry = stsd ? sampleEntry(stsd) : null;
+  if (!stsd || stsd.length < 16 || u32(stsd, 4) < 1) return { ok: false, reason: 'entry' };
+  const entry = boxes(stsd, 8, stsd.length)?.[0];
   if (!entry || entry.end - entry.body < VISUAL_ENTRY_FIELDS) return { ok: false, reason: 'entry' };
-  const { bytes } = entry;
-  const width = u16(bytes, entry.body + 24);
-  const height = u16(bytes, entry.body + 26);
-  const kids = boxes(bytes, entry.body + VISUAL_ENTRY_FIELDS, entry.end);
-  if (!kids || width === 0 || height === 0) return { ok: false, reason: 'entry' };
-  const body = (box: Box | undefined) => (box ? bytes.subarray(box.body, box.end) : null);
-  const find = (type: string) => kids.find((kid) => kid.type === type);
+  const width = u16(stsd, entry.body + 24);
+  const height = u16(stsd, entry.body + 26);
+  const children = boxes(stsd, entry.body + VISUAL_ENTRY_FIELDS, entry.end);
+  if (!children || width === 0 || height === 0) return { ok: false, reason: 'entry' };
+  const body = (box: Box | undefined) => (box ? stsd.subarray(box.body, box.end) : null);
+  const find = (type: string) => children.find((child) => child.type === type);
 
   let codec: string | null = null;
   let description: Uint8Array | null = null;
@@ -211,7 +274,7 @@ export function readSampleEntry(stsd: Uint8Array | null): EntryAnswer {
   }
 
   let colour: ColourDescription | null = null;
-  for (const colr of kids.filter((kid) => kid.type === 'colr')) {
+  for (const colr of children.filter((child) => child.type === 'colr')) {
     const data = body(colr)!;
     const kind = data.length >= 4 ? type4(data, 0) : '';
     if ((kind === 'nclx' && data.length >= 11) || (kind === 'nclc' && data.length >= 10)) {
@@ -227,7 +290,7 @@ export function readSampleEntry(stsd: Uint8Array | null): EntryAnswer {
 /**
  * The rotation a `tkhd` matrix asks for, clockwise, or `null` for anything a `<video>` would draw
  * differently from a plain turn (a mirror, a scale, a shear, perspective). `x` / `y` only move the turned
- * picture back into view. `[0, 1, 0, -1, 0, 0, …]` is a phone's portrait clip: turn 90° clockwise.
+ * picture back into view. `a b c d = 0 1 −1 0` is a phone's portrait clip: turn 90° clockwise.
  */
 export function rotationOf(matrix: readonly number[] | null): Rotation | null {
   if (!matrix) return 0;
@@ -240,6 +303,369 @@ export function rotationOf(matrix: readonly number[] | null): Rotation | null {
   return null;
 }
 
+// ── The picture track ──────────────────────────────────────────────────────────────────────────
+
+interface Edit {
+  /** In the movie's time scale; `0` = to the end. */
+  duration: number;
+  /** In the track's time scale; `-1` = an empty edit. */
+  mediaTime: number;
+  rate: number;
+}
+
+interface PictureTrack {
+  id: number;
+  timescale: number;
+  edits: Edit[] | null;
+  matrix: number[] | null;
+  stsd: Uint8Array | null;
+  mixedEntries: boolean;
+  located: boolean;
+  /** Per sample, decode order. */
+  dts: number[];
+  durations: number[];
+  offsets: number[];
+  fileOffsets: number[];
+  sizes: number[];
+  sync: boolean[];
+  /** Where the next fragment continues without a `tfdt`; the `trex` defaults. */
+  next: number;
+  defaults: { duration: number; size: number; flags: number };
+}
+
+function readEdits(bytes: Uint8Array, edts: Box | undefined): Edit[] | null {
+  const elst = kid(bytes, edts, 'elst');
+  if (!elst) return null;
+  need(elst, 8);
+  const wide = bytes[elst.body] === 1;
+  const count = u32(bytes, elst.body + 4);
+  const row = wide ? 20 : 12;
+  need(elst, 8 + count * row);
+  const edits: Edit[] = [];
+  for (let i = 0, at = elst.body + 8; i < count; i += 1, at += row) {
+    const rateAt = at + (wide ? 16 : 8);
+    edits.push({ duration: wide ? u64(bytes, at) : u32(bytes, at), mediaTime: wide ? i64(bytes, at + 8) : i32(bytes, at + 4), rate: i16(bytes, rateAt) + i16(bytes, rateAt + 2) / 65536 });
+  }
+  return edits;
+}
+
+/** Decode times, durations and composition offsets (`stts`, `ctts`). */
+function readTimes(bytes: Uint8Array, parts: Box[], track: PictureTrack) {
+  const stts = parts.find((entry) => entry.type === 'stts');
+  if (!stts) return;
+  need(stts, 8);
+  const runs = u32(bytes, stts.body + 4);
+  need(stts, 8 + runs * 8);
+  let dt = 0;
+  for (let i = 0, at = stts.body + 8; i < runs; i += 1, at += 8) {
+    const count = u32(bytes, at);
+    const delta = u32(bytes, at + 4);
+    if (track.dts.length + count > MAX_SAMPLES) throw new Broken();
+    for (let k = 0; k < count; k += 1) {
+      track.dts.push(dt);
+      track.durations.push(delta);
+      track.offsets.push(0);
+      dt += delta;
+    }
+  }
+  track.next = dt;
+  const ctts = parts.find((entry) => entry.type === 'ctts');
+  if (!ctts) return;
+  need(ctts, 8);
+  const signed = bytes[ctts.body] === 1;
+  const cttsRuns = u32(bytes, ctts.body + 4);
+  need(ctts, 8 + cttsRuns * 8);
+  let index = 0;
+  for (let i = 0, at = ctts.body + 8; i < cttsRuns; i += 1, at += 8) {
+    const count = u32(bytes, at);
+    // Version 0 is unsigned by the standard, but writers put negative values there too.
+    const raw = u32(bytes, at + 4);
+    const offset = signed || raw > 0x7fffffff ? i32(bytes, at + 4) : raw;
+    for (let k = 0; k < count && index < track.offsets.length; k += 1, index += 1) track.offsets[index] = offset;
+  }
+}
+
+/** Where each sample of an ordinary table is: sizes, samples per chunk, chunk offsets, sync samples. */
+function readPlaces(bytes: Uint8Array, parts: Box[], track: PictureTrack) {
+  const count = track.dts.length;
+  if (count === 0) return;
+  const stsz = parts.find((entry) => entry.type === 'stsz');
+  const stz2 = parts.find((entry) => entry.type === 'stz2');
+  const sizes: number[] = [];
+  if (stsz) {
+    need(stsz, 12);
+    const fixed = u32(bytes, stsz.body + 4);
+    const n = u32(bytes, stsz.body + 8);
+    if (n !== count) throw new Broken();
+    if (fixed > 0) for (let i = 0; i < n; i += 1) sizes.push(fixed);
+    else {
+      need(stsz, 12 + n * 4);
+      for (let i = 0; i < n; i += 1) sizes.push(u32(bytes, stsz.body + 12 + i * 4));
+    }
+  } else if (stz2) {
+    need(stz2, 12);
+    const field = bytes[stz2.body + 7]!;
+    const n = u32(bytes, stz2.body + 8);
+    if (n !== count || ![4, 8, 16].includes(field)) throw new Broken();
+    need(stz2, 12 + Math.ceil((n * field) / 8));
+    const at = stz2.body + 12;
+    for (let i = 0; i < n; i += 1) {
+      if (field === 16) sizes.push(u16(bytes, at + i * 2));
+      else if (field === 8) sizes.push(bytes[at + i]!);
+      else sizes.push(i % 2 === 0 ? bytes[at + (i >> 1)]! >> 4 : bytes[at + (i >> 1)]! & 0x0f);
+    }
+  } else throw new Broken();
+
+  const stco = parts.find((entry) => entry.type === 'stco');
+  const co64 = parts.find((entry) => entry.type === 'co64');
+  const chunks: number[] = [];
+  if (stco) {
+    need(stco, 8);
+    const n = u32(bytes, stco.body + 4);
+    need(stco, 8 + n * 4);
+    for (let i = 0; i < n; i += 1) chunks.push(u32(bytes, stco.body + 8 + i * 4));
+  } else if (co64) {
+    need(co64, 8);
+    const n = u32(bytes, co64.body + 4);
+    need(co64, 8 + n * 8);
+    for (let i = 0; i < n; i += 1) chunks.push(u64(bytes, co64.body + 8 + i * 8));
+  } else throw new Broken();
+
+  const stsc = parts.find((entry) => entry.type === 'stsc');
+  if (!stsc) throw new Broken();
+  need(stsc, 8);
+  const rows = u32(bytes, stsc.body + 4);
+  need(stsc, 8 + rows * 12);
+  if (rows === 0) throw new Broken();
+  const places: number[] = [];
+  const descriptions = new Set<number>();
+  let sample = 0;
+  for (let r = 0; r < rows && sample < count; r += 1) {
+    const at = stsc.body + 8 + r * 12;
+    const firstChunk = u32(bytes, at);
+    const perChunk = u32(bytes, at + 4);
+    descriptions.add(u32(bytes, at + 8));
+    const lastChunk = r + 1 < rows ? u32(bytes, at + 12) - 1 : chunks.length;
+    if (firstChunk < 1 || lastChunk > chunks.length || perChunk < 1) throw new Broken();
+    for (let c = firstChunk; c <= lastChunk && sample < count; c += 1) {
+      let place = chunks[c - 1]!;
+      for (let k = 0; k < perChunk && sample < count; k += 1) {
+        places.push(place);
+        place += sizes[sample]!;
+        sample += 1;
+      }
+    }
+  }
+  if (sample !== count) throw new Broken();
+
+  const stss = parts.find((entry) => entry.type === 'stss');
+  const sync = new Array<boolean>(count).fill(!stss);
+  if (stss) {
+    need(stss, 8);
+    const n = u32(bytes, stss.body + 4);
+    need(stss, 8 + n * 4);
+    for (let i = 0; i < n; i += 1) {
+      const number = u32(bytes, stss.body + 8 + i * 4);
+      if (number < 1 || number > count) throw new Broken();
+      sync[number - 1] = true;
+    }
+  }
+  track.fileOffsets = places;
+  track.sizes = sizes;
+  track.sync = sync;
+  track.mixedEntries = descriptions.size > 1;
+}
+
+function readPictureTrack(moov: Uint8Array): { timescale: number; track: PictureTrack | null } {
+  const top = boxes(moov, 0, moov.length)?.find((entry) => entry.type === 'moov');
+  if (!top) throw new Broken();
+  const parts = kids(moov, top);
+  const mvhd = parts.find((entry) => entry.type === 'mvhd');
+  if (!mvhd) throw new Broken();
+  need(mvhd, 24);
+  const timescale = moov[mvhd.body] === 1 ? u32(moov, mvhd.body + 20) : u32(moov, mvhd.body + 12);
+  if (timescale <= 0) throw new Broken();
+  let track: PictureTrack | null = null;
+  for (const trak of parts.filter((entry) => entry.type === 'trak')) {
+    const trakParts = kids(moov, trak);
+    const tkhd = trakParts.find((entry) => entry.type === 'tkhd');
+    const mdia = trakParts.find((entry) => entry.type === 'mdia');
+    const hdlr = kid(moov, mdia, 'hdlr');
+    const mdhd = kid(moov, mdia, 'mdhd');
+    if (!tkhd || !mdia || !hdlr || !mdhd) throw new Broken();
+    need(hdlr, 12);
+    if (type4(moov, hdlr.body + 8) !== 'vide') continue;
+    need(tkhd, 24);
+    need(mdhd, 24);
+    const trackTimescale = moov[mdhd.body] === 1 ? u32(moov, mdhd.body + 20) : u32(moov, mdhd.body + 12);
+    if (trackTimescale <= 0) throw new Broken();
+    // version 0: 4 + 20 bytes, then reserved, layer, group, volume, reserved (16), then the matrix; version 1: 4 + 32.
+    const matrixAt = tkhd.body + (moov[tkhd.body] === 1 ? 52 : 40);
+    const candidate: PictureTrack = {
+      id: moov[tkhd.body] === 1 ? u32(moov, tkhd.body + 20) : u32(moov, tkhd.body + 12),
+      timescale: trackTimescale,
+      edits: readEdits(moov, trakParts.find((entry) => entry.type === 'edts')),
+      matrix: matrixAt + 36 <= tkhd.end ? Array.from({ length: 9 }, (_, i) => i32(moov, matrixAt + i * 4)) : null,
+      stsd: null,
+      mixedEntries: false,
+      located: true,
+      dts: [],
+      durations: [],
+      offsets: [],
+      fileOffsets: [],
+      sizes: [],
+      sync: [],
+      next: 0,
+      defaults: { duration: 0, size: 0, flags: 0 },
+    };
+    const stbl = kid(moov, kid(moov, mdia, 'minf'), 'stbl');
+    if (stbl) {
+      const tables = kids(moov, stbl);
+      const stsd = tables.find((entry) => entry.type === 'stsd');
+      candidate.stsd = stsd ? moov.subarray(stsd.body, stsd.end) : null;
+      readTimes(moov, tables, candidate);
+      try {
+        readPlaces(moov, tables, candidate);
+      } catch (error) {
+        if (!(error instanceof Broken || error instanceof RangeError)) throw error;
+        candidate.located = false;
+      }
+    }
+    track = candidate;
+    break;
+  }
+  const mvex = parts.find((entry) => entry.type === 'mvex');
+  if (track && mvex) {
+    for (const trex of kids(moov, mvex).filter((entry) => entry.type === 'trex')) {
+      need(trex, 24);
+      if (u32(moov, trex.body + 4) !== track.id) continue;
+      track.defaults = { duration: u32(moov, trex.body + 12), size: u32(moov, trex.body + 16), flags: u32(moov, trex.body + 20) };
+    }
+  }
+  return { timescale, track };
+}
+
+/** A sample whose flags say `sample_is_non_sync_sample` (ISO/IEC 14496-12 §8.8.3.1) is not a sync sample. */
+const syncFromFlags = (flags: number) => (flags & 0x00010000) === 0;
+
+/** One fragment's samples of the picture track, appended with their places in the file. */
+function readFragment(bytes: Uint8Array, moofAt: number, track: PictureTrack) {
+  const moof = boxes(bytes, 0, bytes.length)?.find((entry) => entry.type === 'moof');
+  if (!moof) throw new Broken();
+  let previousEnd: number = moofAt;
+  for (const traf of kids(bytes, moof).filter((entry) => entry.type === 'traf')) {
+    const parts = kids(bytes, traf);
+    const tfhd = parts.find((entry) => entry.type === 'tfhd');
+    if (!tfhd) throw new Broken();
+    need(tfhd, 8);
+    const flags = u32(bytes, tfhd.body) & 0xffffff;
+    const mine = u32(bytes, tfhd.body + 4) === track.id;
+    let at = tfhd.body + 8;
+    let base = flags & 0x020000 ? moofAt : previousEnd;
+    const field = () => {
+      if (at + 4 > tfhd.end) throw new Broken();
+      const value = u32(bytes, at);
+      at += 4;
+      return value;
+    };
+    if (flags & 0x01) {
+      if (at + 8 > tfhd.end) throw new Broken();
+      base = u64(bytes, at);
+      at += 8;
+    }
+    if (flags & 0x02) field();
+    const duration = flags & 0x08 ? field() : track.defaults.duration;
+    const size = flags & 0x10 ? field() : track.defaults.size;
+    const defaultFlags = flags & 0x20 ? field() : track.defaults.flags;
+    const tfdt = parts.find((entry) => entry.type === 'tfdt');
+    let dt = track.next;
+    if (tfdt) {
+      need(tfdt, 8);
+      dt = bytes[tfdt.body] === 1 ? (need(tfdt, 12), u64(bytes, tfdt.body + 4)) : u32(bytes, tfdt.body + 4);
+    }
+    let dataAt = base;
+    for (const trun of parts.filter((entry) => entry.type === 'trun')) {
+      need(trun, 8);
+      const signed = bytes[trun.body] === 1;
+      const runFlags = u32(bytes, trun.body) & 0xffffff;
+      const count = u32(bytes, trun.body + 4);
+      let pos = trun.body + 8;
+      if (runFlags & 0x01) {
+        need(trun, 12);
+        dataAt = base + i32(bytes, pos);
+        pos += 4;
+      }
+      let firstFlags: number | null = null;
+      if (runFlags & 0x04) {
+        if (pos + 4 > trun.end) throw new Broken();
+        firstFlags = u32(bytes, pos);
+        pos += 4;
+      }
+      const row = (runFlags & 0x100 ? 4 : 0) + (runFlags & 0x200 ? 4 : 0) + (runFlags & 0x400 ? 4 : 0) + (runFlags & 0x800 ? 4 : 0);
+      if (pos + count * row > trun.end || track.dts.length + count > MAX_SAMPLES) throw new Broken();
+      for (let k = 0; k < count; k += 1) {
+        let sampleDuration = duration;
+        let sampleSize = size;
+        let sampleFlags = k === 0 && firstFlags !== null ? firstFlags : defaultFlags;
+        let offset = 0;
+        if (runFlags & 0x100) {
+          sampleDuration = u32(bytes, pos);
+          pos += 4;
+        }
+        if (runFlags & 0x200) {
+          sampleSize = u32(bytes, pos);
+          pos += 4;
+        }
+        if (runFlags & 0x400) {
+          sampleFlags = u32(bytes, pos);
+          pos += 4;
+        }
+        if (runFlags & 0x800) {
+          offset = signed ? i32(bytes, pos) : u32(bytes, pos);
+          pos += 4;
+        }
+        if (mine) {
+          track.dts.push(dt);
+          track.durations.push(sampleDuration);
+          track.offsets.push(offset);
+          track.fileOffsets.push(dataAt);
+          track.sizes.push(sampleSize);
+          track.sync.push(syncFromFlags(sampleFlags));
+          if (sampleSize <= 0) track.located = false;
+          dt += sampleDuration;
+        }
+        dataAt += sampleSize;
+      }
+    }
+    previousEnd = dataAt;
+    if (mine) track.next = dt;
+  }
+}
+
+/**
+ * The samples the edit list shows: empty edits, then at most one piece of media at normal speed; a sample
+ * is shown when its composition time lies inside that piece (the frame facts' rule). `null` for an edit list
+ * the export cannot follow.
+ */
+function shown(track: PictureTrack, movieTimescale: number, cts: readonly number[]): number[] | null {
+  let from = -Infinity;
+  let to = Infinity;
+  if (track.edits && track.edits.length > 0) {
+    let i = 0;
+    while (i < track.edits.length && track.edits[i]!.mediaTime === -1) i += 1;
+    const rest = track.edits.slice(i);
+    if (rest.length !== 1 || rest[0]!.rate !== 1) return null;
+    const edit = rest[0]!;
+    from = edit.mediaTime;
+    to = edit.duration > 0 ? edit.mediaTime + (edit.duration * track.timescale) / movieTimescale : Infinity;
+  }
+  const out: number[] = [];
+  cts.forEach((time, i) => {
+    if (time >= from && time < to) out.push(i);
+  });
+  return out;
+}
+
 // ── The index ──────────────────────────────────────────────────────────────────────────────────
 
 /** A sample's composition time in whole microseconds: the timestamp it carries into and out of the decoder. */
@@ -247,25 +673,31 @@ export function stampUs(cts: number, timescale: number): number {
   return Math.round((cts * 1_000_000) / timescale);
 }
 
-export function readSampleIndex(found: FoundBoxes): IndexAnswer {
-  const timing = readTiming(found);
-  if (!timing.ok) return { ok: false, reason: 'unreadable' };
-  const video = timing.timing.video;
-  const movie = movieOf(found);
-  if (!movie) return { ok: false, reason: 'unreadable' };
-  const track: Track | undefined = movie.tracks.find((entry) => entry.handler === 'vide' && entry.dts.length > 0);
-  if (!video || !track) return { ok: false, reason: 'no-video' };
+export function readSampleIndex(found: IndexBoxes): IndexAnswer {
+  let movieTimescale: number;
+  let track: PictureTrack | null;
+  try {
+    ({ timescale: movieTimescale, track } = readPictureTrack(found.moov));
+    if (track) for (const moof of found.moofs) readFragment(moof.bytes, moof.at, track);
+  } catch (error) {
+    if (error instanceof Broken || error instanceof RangeError) return { ok: false, reason: 'unreadable' };
+    throw error;
+  }
+  if (!track || track.dts.length === 0) return { ok: false, reason: 'no-video' };
+  // The frame facts read the same boxes: the index is only used where it counts the pictures as they do.
+  const facts = readTiming({ moov: found.moov, moofs: found.moofs.map((moof) => moof.bytes) });
+  if (!facts.ok || !facts.timing.video) return { ok: false, reason: 'unreadable' };
   if (!track.located || track.fileOffsets.length !== track.dts.length) return { ok: false, reason: 'not-located' };
   if (track.mixedEntries) return { ok: false, reason: 'mixed-entries' };
   const entry = readSampleEntry(track.stsd);
   if (!entry.ok) return { ok: false, reason: entry.reason };
   const rotation = rotationOf(track.matrix);
   if (rotation === null) return { ok: false, reason: 'transform' };
-  const seen = shownSamples(track, movie.timescale);
-  if (seen === 'edits') return { ok: false, reason: 'unreadable' };
-
-  const cts = track.dts.map((dts, i) => dts + track.offsets[i]!);
-  const pictures = [...seen.shown].sort((x, y) => cts[x]! - cts[y]! || x - y);
+  const cts = track.dts.map((dts, i) => dts + track!.offsets[i]!);
+  const inside = shown(track, movieTimescale, cts);
+  if (!inside || inside.length === 0) return { ok: false, reason: 'edits' };
+  if (inside.length !== facts.timing.video.frames) return { ok: false, reason: 'disagrees' };
+  const pictures = [...inside].sort((x, y) => cts[x]! - cts[y]! || x - y);
   // Every sample's timestamp is its own: the decoder's output is matched back to a picture by it.
   const stamps = new Set<number>();
   for (const time of cts) {
@@ -291,8 +723,8 @@ export function readSampleIndex(found: FoundBoxes): IndexAnswer {
       sync: track.sync,
       pictures,
       syncs,
-      variable: video.variable,
-      firstSec: seen.firstSec,
+      variable: facts.timing.video.variable,
+      sound: soundTrackOf(found.moov),
     },
   };
 }

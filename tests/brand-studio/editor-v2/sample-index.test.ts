@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { gatherBoxes, type FoundBoxes } from '@/lib/brand-studio/editor-v2/container';
-import { av1Codec, avcCodec, hevcCodec, readSampleEntry, readSampleIndex, rotationOf, stampUs, vp9Codec } from '@/lib/brand-studio/editor-v2/sample-index';
+import { timingOfFile } from '@/lib/brand-studio/editor-v2/container';
+import { av1Codec, avcCodec, gatherIndexBoxes, hevcCodec, readSampleEntry, readSampleIndex, rotationOf, stampUs, vp9Codec, type IndexBoxes } from '@/lib/brand-studio/editor-v2/sample-index';
 import {
   IDENTITY,
   NON_SYNC,
@@ -27,8 +27,8 @@ import {
 /**
  * Spec F, F1: the decoder path's index of a source — where every sample's bytes are, which are sync
  * samples, which picture each is (the edit list applied, presentation order), and how to configure the
- * decoder — read from boxes built here. Picture k must be the seek path's picture k (the frame facts use
- * the same `shownSamples` rule; container.test.ts holds those).
+ * decoder — read from boxes built here. Picture k must be the seek path's picture k: the index counts the
+ * pictures the frame facts count (lib/brand-studio/editor-v2/container.ts), or it is refused.
  */
 const frames = (n: number, d: number) => Array.from({ length: n }, () => d);
 
@@ -44,8 +44,8 @@ function pyramidOffsets(n: number, d: number): number[] {
 
 const AVC = visualEntry('avc1', 640, 360, avcC(0x64, 0x00, 0x1f));
 
-async function found(bytes: Uint8Array): Promise<FoundBoxes> {
-  const result = await gatherBoxes({ read: async (start, length) => bytes.subarray(start, Math.min(bytes.length, start + length)) });
+async function found(bytes: Uint8Array): Promise<IndexBoxes> {
+  const result = await gatherIndexBoxes({ read: async (start, length) => bytes.subarray(start, Math.min(bytes.length, start + length)) });
   if ('failure' in result) throw new Error(result.failure);
   return result;
 }
@@ -96,7 +96,6 @@ describe('an ordinary file: every sample located, pictures in presentation order
     // Picture k is the sample shown k-th: composition times 1024, 1536, 2048 … with the edit at 1024.
     expect(index.pictures.map((sample) => index.cts[sample])).toEqual(Array.from({ length: 12 }, (_, k) => (k + 2) * 512));
     expect(index.pictures.slice(0, 6)).toEqual([0, 3, 2, 4, 1, 7]);
-    expect(index.firstSec).toBe(0);
     expect(index.variable).toBe(false);
     expect(index.rotation).toBe(0);
     expect(index.config.codec).toBe('avc1.64001f');
@@ -142,12 +141,10 @@ describe('an ordinary file: every sample located, pictures in presentation order
     if (!answer.ok) return;
     expect(answer.index.pictures).toEqual([3, 4, 5, 6, 7, 8, 9, 10, 11]);
     expect(answer.index.offsets).toHaveLength(12);
-    expect(answer.index.firstSec).toBe(0);
   });
 
-  it('a picture behind an empty edit starts at the edit', async () => {
+  it('a picture behind an empty edit: every picture is shown, from sample 0', async () => {
     const answer = await indexOf(concat(ftyp(), moov({ timescale: 1000, tracks: [{ ...track, offsets: undefined, edits: [{ duration: 500, mediaTime: -1 }, { duration: 0, mediaTime: 0 }] }] }), mdat(64)));
-    expect(answer.ok && answer.index.firstSec).toBe(0.5);
     expect(answer.ok && answer.index.pictures).toEqual(Array.from({ length: 12 }, (_, i) => i));
   });
 
@@ -279,6 +276,37 @@ describe('the display matrix: rotations a <video> applies', () => {
     const turned = await make([0, ONE, 0, -ONE, 0, 0, 360 * ONE, 0, W]);
     expect(turned.ok && turned.index.rotation).toBe(90);
     expect(await make([-ONE, 0, 0, 0, ONE, 0, 640 * ONE, 0, W])).toEqual({ ok: false, reason: 'transform' });
+  });
+});
+
+describe('the index and the frame facts count the same pictures', () => {
+  const layouts: Array<[string, TrackSpec[], number?]> = [
+    ['plain', [{ handler: 'vide', timescale: 12288, durations: frames(24, 512), chunks: { perChunk: [24], offsets: [100] }, entry: AVC }]],
+    ['B-frames, edit list', [{ handler: 'vide', timescale: 12288, durations: frames(12, 512), offsets: pyramidOffsets(12, 512), edits: [{ duration: 0, mediaTime: 1024 }], chunks: { perChunk: [12], offsets: [100] }, entry: AVC }]],
+    ['B-frames, no edit list', [{ handler: 'vide', timescale: 12288, durations: frames(12, 512), offsets: pyramidOffsets(12, 512), chunks: { perChunk: [12], offsets: [100] }, entry: AVC }]],
+    ['trimmed by the edit', [{ handler: 'vide', timescale: 12288, durations: frames(24, 512), edits: [{ duration: 0, mediaTime: 3686 }], chunks: { perChunk: [24], offsets: [100] }, entry: AVC }]],
+    ['ends early', [{ handler: 'vide', timescale: 12288, durations: frames(24, 512), edits: [{ duration: 500, mediaTime: 0 }], chunks: { perChunk: [24], offsets: [100] }, entry: AVC }], 1000],
+    ['empty edit first', [{ handler: 'vide', timescale: 12288, durations: frames(24, 512), edits: [{ duration: 500, mediaTime: -1 }, { duration: 0, mediaTime: 0 }], chunks: { perChunk: [24], offsets: [100] }, entry: AVC }], 1000],
+  ];
+  for (const [name, tracks, timescale] of layouts) {
+    it(name, async () => {
+      const bytes = concat(ftyp(), moov({ timescale, tracks }), mdat(64));
+      const facts = await timingOfFile(bytes);
+      const answer = await indexOf(bytes);
+      expect(facts.ok && facts.timing.video).toBeTruthy();
+      expect(answer.ok).toBe(true);
+      if (!answer.ok || !facts.ok || !facts.timing.video) return;
+      expect(answer.index.pictures).toHaveLength(facts.timing.video.frames);
+    });
+  }
+
+  it('a picture track with no sound track says so (the export then reads nothing for its sound)', async () => {
+    const solo = await indexOf(concat(ftyp(), moov({ tracks: [{ handler: 'vide', timescale: 30, durations: frames(4, 1), chunks: { perChunk: [4], offsets: [100] }, entry: AVC }] }), mdat(500)));
+    const both = await indexOf(
+      concat(ftyp(), moov({ tracks: [{ handler: 'vide', timescale: 30, durations: frames(4, 1), chunks: { perChunk: [4], offsets: [100] }, entry: AVC }, { handler: 'soun', timescale: 48000, durations: frames(4, 1024), chunks: { perChunk: [4], offsets: [900] } }] }), mdat(500)),
+    );
+    expect(solo.ok && solo.index.sound).toBe('no');
+    expect(both.ok && both.index.sound).toBe('yes');
   });
 });
 
