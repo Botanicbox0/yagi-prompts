@@ -134,6 +134,17 @@ describe('frame facts from the sample table (C1)', () => {
     expect(answer.timing.video).toMatchObject({ firstSec: 0, frames: 48, fps: 24, variable: false });
   });
 
+  it('an edit starting two frames before the first picture: the first picture still shows at the edit’s start', async () => {
+    // Measured (review round 1 of part E, sound case (a)): x264 B-frames with the picture's edit moved from
+    // media time 1024 to 0. Chromium's first frame mediaTime is 0 and ffprobe's start_time is 0 (it shows
+    // packet times 0, 0.0417 …): the gap before the first picture is not kept. The edit's length (3 s from
+    // media time 0) ends two frames earlier: ffprobe decodes 70 of the 72 pictures, and so does this.
+    const offsets = pyramidOffsets(72, 512);
+    const answer = await timingOfFile(file({ handler: 'vide', timescale: 12288, durations: frames(72, 512), offsets, edits: [{ duration: 3000, mediaTime: 0 }] }));
+    if (!answer.ok) throw new Error(answer.reason);
+    expect(answer.timing.video).toMatchObject({ firstSec: 0, frames: 70, fps: 24 });
+  });
+
   it('an edit list that ends early: frames past its end are not shown', async () => {
     const answer = await timingOfFile(file({ handler: 'vide', timescale: 12288, durations: frames(72, 512), edits: [{ duration: 1000, mediaTime: 0 }] }));
     if (!answer.ok) throw new Error(answer.reason);

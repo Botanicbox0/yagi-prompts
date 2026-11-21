@@ -212,12 +212,31 @@ def make_media(folder):
     make('trimmed.mp4', ['-ss', '0.3', '-i', clip, '-t', '2', '-c', 'copy'])
     make('tail-moov.mp4', ['-f', 'lavfi', '-i', 'testsrc2=s=320x180:r=24:d=2', '-c:v', 'libx264', '-bf', '0', '-pix_fmt', 'yuv420p'])
     make('r30.mov', ['-f', 'lavfi', '-i', 'testsrc2=s=320x180:r=30:d=2', '-c:v', 'libx264', '-bf', '0', '-pix_fmt', 'yuv420p', '-f', 'mov'])
+    # 24 fps on a millisecond clock (41/42 ms), and the same remuxed onto a 1/16000 clock (656/672 ticks).
+    make('ms24.mp4', ['-f', 'lavfi', '-i', 'testsrc2=s=320x180:r=24:d=4', '-c:v', 'libx264', '-bf', '0', '-pix_fmt', 'yuv420p', '-video_track_timescale', '1000'])
+    make('ms24-16k.mp4', ['-i', files['ms24.mp4'], '-c', 'copy', '-video_track_timescale', '16000'])
     return files
 
 
 # Sources like the video studio's results: a picture track that is not a whole number of frames long in a
 # container whose sound runs a little longer (spec E addendum C3). Name, first frame number, pictures.
 C3_SOURCES = [('c3-a 4.06s', 0, 97), ('c3-b 4.06s', 100, 97), ('c3-c 5.06s', 0, 121)]
+
+
+def proves_local_mode(browser):
+    """
+    Whether the server on BASE is a local-mode server (review round 1 of part E): localhost alone does not
+    prove the server uses the local database. A local-mode server signs every request in as its development
+    identity (PLAYBOOK_DEV_IDENTITY), so a fresh browser with no session cookie at all is shown the
+    organization's library page; production (any cloud mode) answers that with a redirect to sign-in. Only
+    then does this script create or delete anything.
+    """
+    fresh = browser.new_context()
+    try:
+        answer = fresh.request.get(f'{BASE}/brand/library', max_redirects=0)
+        return answer.status == 200 and f'organizationId={ORG}' in answer.text().replace('&amp;', '&')
+    finally:
+        fresh.close()
 
 
 def make_c3(folder):
@@ -587,6 +606,12 @@ def run_checks(browser, media):
         mismatches = [(k, n) for k, n in enumerate(numbers) if n != k]
         check('(5) that file is frame-exact too', len(numbers) == 72 and not mismatches, f'{len(numbers)} frames, mismatches {mismatches[:5]}')
     # ── (6) The last frame of a cut (addendum C3): sources whose length is not a whole number of frames ──
+    local = proves_local_mode(browser)
+    measure('(6) the server is in local mode (a request with no session is signed in as the development identity): ' + ('yes' if local else 'NO: nothing is created or deleted, (6) and (7) are skipped'))
+    check('(6)-(7) local mode proven before creating or deleting uploads', local)
+    if not local:
+        check('no page errors', not errors, '; '.join(errors[:3]))
+        return
     upload_c3(page, context, media)
     open_v2()
     page.evaluate('(key) => localStorage.removeItem(key)', KEY)
@@ -631,10 +656,42 @@ def run_checks(browser, media):
             clip['durationSec'] = block['durationSec'] = 4.1
             clip['trimEndSec'] = round((block['frames']) / 24 + 1e-9, 1)
             block['mirror']['trimEndSec'] = clip['trimEndSec']
+        # Captions in cut 2 and cut 3 (the current editor's layout: 4.1 s + 4.1 s + 5.1 s).
+        layout, cursor = [], 0.0
+        for clip in phantom['clips']:
+            length = max(0.3, round((clip['trimEndSec'] - clip['trimStartSec']) * 10) / 10)
+            layout.append((round(cursor * 10) / 10, round((cursor + length) * 10) / 10))
+            cursor = layout[-1][1]
+        phantom['captions'] = [
+            {'id': 'cap-2', 'text': 'cut two', 'startSec': round(layout[1][0] + 0.9, 3), 'endSec': round(layout[1][0] + 1.4, 3), 'position': 'top', 'size': 'md'},
+            {'id': 'cap-3', 'text': 'cut three', 'startSec': round(layout[2][0] + 0.5, 3), 'endSec': round(layout[2][0] + 1.0, 3), 'position': 'top', 'size': 'md'},
+        ]
+        seconds = lambda film: [[c['trimStartSec'], c['trimEndSec'], c.get('playbackRate', 1), c['durationSec']] for c in film['clips']]
+
+        def picture_under(caption):
+            page.click(f'[data-editor-caption-item="{caption}"]')
+            page.wait_for_timeout(500)
+            state = page.evaluate("() => { const p = document.querySelector('[data-editor-preview]'); return { playhead: Number(p.dataset.editorPlayhead), source: Number(p.dataset.editorSourceFrame), on: document.querySelectorAll('[data-editor-preview] [data-editor-caption]').length }; }")
+            page.locator('[data-editor-workspace="cut"]').click()
+            return state
+
+        # Before healing: the file's boxes cannot be read (the reader's own requests fail), so the stored block stands.
+        block_reader = lambda route: route.abort() if route.request.resource_type == 'fetch' and route.request.headers.get('range') else route.continue_()
+        for key in keys:
+            context.route(re.compile(r'/api/brand-studio/compose\?.*id=' + re.escape(key[2:])), block_reader)
         page.evaluate('([key, value]) => localStorage.setItem(key, value)', [KEY, json.dumps(phantom)])
+        open_v2()
+        unhealed = page.evaluate(STATE)['cuts']
+        before = {cap: picture_under(cap) for cap in ('cap-2', 'cap-3')}
+        for key in keys:
+            context.unroute(re.compile(r'/api/brand-studio/compose\?.*id=' + re.escape(key[2:])), block_reader)
         throttle(True)
         open_v2()
         healed = page.evaluate(STATE)['cuts']
+        after_heal = {cap: picture_under(cap) for cap in ('cap-2', 'cap-3')}
+        measure(f'(6) captions before healing (cuts {unhealed}): {before}; after (cuts {healed}): {after_heal}')
+        check('(6) healing moves no caption: the same picture of the same footage is under each caption before and after',
+              all(before[c]['source'] == after_heal[c]['source'] and before[c]['on'] == 1 and after_heal[c]['on'] == 1 for c in before), json.dumps([before, after_heal]))
         measure(f'(6) a film stored with one picture too many in its first two cuts ({[c["frameV2"]["frames"] for c in phantom["clips"]]}): opens as {healed}')
         check('(6) it heals on open: the cuts end on the real last picture', healed == [n for _, _, n in C3_SOURCES], json.dumps(healed))
         # Opened (and healed) in the reduced state; exported in front (the reduced export is (6) above).
@@ -654,6 +711,44 @@ def run_checks(browser, media):
         after = stored()
         blocks = [(c.get('frameV2') or {}).get('sourceFrames') for c in after['clips']]
         check('(6) the corrected frame data is what the next write stores', blocks == [n for _, _, n in C3_SOURCES], json.dumps(blocks))
+        check('(6) and the seconds the current editor reads are the ones stored before healing', seconds(after) == seconds(phantom), json.dumps([seconds(phantom), seconds(after)]))
+        # The current editor opens it and saves it: the same seconds.
+        page.goto(f'{BASE}/brand/studio/compose?classic=1&organizationId={ORG}', wait_until='domcontentloaded', timeout=240000)
+        page.wait_for_selector('[data-brand-studio-compose]', timeout=240000)
+        page.wait_for_timeout(1500)
+        current = stored()
+        check('(6) the current editor (classic) still holds the same seconds', seconds(current) == seconds(phantom), json.dumps(seconds(current)))
+
+    # ── (7) The playback fallback counts the pictures it is shown (review round 1, item 4) ──
+    # A WebM (the reader cannot read it: measured by playback) of 97 pictures whose sound runs to 4.3 s,
+    # served in place of the frame-numbered upload, whose view says 10 s: the length alone would say 240.
+    webm = os.path.join(MEDIA, 'webm97.webm')
+    if not os.path.exists(webm):
+        clip_file = os.path.join(ROOT, 'public', 'reel', 'studio-demo', 'frame-count-24.mp4')
+        run(['ffmpeg', '-v', 'error', '-y', '-i', clip_file, '-f', 'lavfi', '-i', 'sine=frequency=440:sample_rate=48000:duration=4.3',
+             '-filter_complex', '[0:v]trim=end_frame=97,setpts=PTS-STARTPTS[v]', '-map', '[v]', '-map', '1:a', '-c:v', 'libvpx-vp9', '-b:v', '300k', '-deadline', 'realtime', '-c:a', 'libopus', webm])
+    webm_body = open(webm, 'rb').read()
+
+    def serve_webm(route):
+        rng = route.request.headers.get('range')
+        if rng and rng.startswith('bytes='):
+            a, _, b = rng[6:].partition('-')
+            start, end = int(a or 0), min(int(b) if b else len(webm_body) - 1, len(webm_body) - 1)
+            return route.fulfill(status=206, body=webm_body[start:end + 1], headers={'Content-Type': 'video/webm', 'Accept-Ranges': 'bytes', 'Content-Range': f'bytes {start}-{end}/{len(webm_body)}'})
+        return route.fulfill(status=200, body=webm_body, headers={'Content-Type': 'video/webm', 'Accept-Ranges': 'bytes'})
+
+    webm_route = re.compile(r'/api/brand-studio/compose\?.*id=' + re.escape(frame_clip[2:]))
+    context.route(webm_route, serve_webm)
+    page.evaluate('(key) => localStorage.removeItem(key)', KEY)
+    open_v2()
+    page.click(f'[data-editor-source="{frame_clip}"]')
+    page.wait_for_function('() => document.querySelectorAll("[data-editor-clip]").length === 1', timeout=120000)
+    page.wait_for_timeout(1200)
+    film = stored() or {}
+    block = ((film.get('clips') or [{}])[0].get('frameV2') or {})
+    context.unroute(webm_route, serve_webm)
+    measure(f'(7) a WebM of 97 pictures whose container runs to 4.308 s, in place of a 10 s upload, measured by playback: stored sourceFrames {block.get("sourceFrames")}, sourceFps {block.get("sourceFps")}, cut {page.evaluate(STATE)["cuts"]}')
+    check('(7) the playback fallback stores the 97 pictures it is shown, not the length’s 240 or the container’s 103', block.get('sourceFrames') == 97, json.dumps({k: block.get(k) for k in ('sourceFrames', 'sourceFps', 'frames')}))
 
     # Leave the organization's uploads as they were found (the other checks take the first uploads they see).
     for key in [k for k in keys if k]:

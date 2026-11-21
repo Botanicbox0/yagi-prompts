@@ -8,6 +8,11 @@ the same movie time:
   s3 both late                  both from 0.5 s (-output_ts_offset)
   s4 sound late                 sound behind a 0.3 s empty edit
   s5 B-frames                   x264 with three B-frames: the picture's edit list starts at media time > 0
+  s6 edit before the picture    s5 with the picture's edit moved to media time 0, two frames before its first
+                                picture (review round 1 of part E, sound case (a))
+  s7 sound delay, no skip       s1 with the sound's edit set to media time 0: the AAC encoder delay (1024
+                                samples) is played, and nothing in the file says so (case (b)); the export
+                                must keep the file's own offset, as Chromium plays it
 For each: a v2 film of that one cut (2.5 s from its first frame), exported; in the file, ffmpeg finds the
 white frame and the beep's first sample: sound − picture, target within ±10 ms. Then one film of two cuts
 from different sources (s2 for 1.5 s, then s3 from 0.5 s to 2.0 s): both events.
@@ -56,7 +61,12 @@ SOURCES = [
     ('s3 both late', 's3-both-late.mp4', 1.5, 24),
     ('s4 sound late', 's4-sound-late.mp4', 1.0, 24),
     ('s5 B-frames', 's5-bframes.mp4', 1.0, 24),
+    ('s6 edit before the picture', 's6-edit-before-picture.mp4', 1.0, 24),
+    ('s7 sound delay, no skip', 's7-sound-delay-kept.mp4', 1.0, 24),
 ]
+# Where each file's own timeline puts its beep, when that is not where its picture's flash is: s7 plays the
+# encoder delay, so its beep sits 1024 samples (21.3 ms) after the flash in the file itself.
+SOUND_EVENT = {'s7-sound-delay-kept.mp4': 1.0 + 1024 / 48000}
 
 
 def check(name, ok, detail=''):
@@ -70,6 +80,38 @@ def measure(text):
 
 def run(args, **kw):
     return subprocess.run(args, capture_output=True, check=True, creationflags=NO_WINDOW, **kw)
+
+
+def set_edit_media_time(path, handler, media_time):
+    """Sets the media_time of the (single, normal) edit of the `handler` track in place; the sizes do not change."""
+    data = bytearray(open(path, 'rb').read())
+
+    def walk(start, end, in_track):
+        at = start
+        while at + 8 <= end:
+            size, kind = struct.unpack('>I4s', data[at:at + 8])
+            kind = kind.decode('latin1')
+            if size == 0:
+                size = end - at
+            if kind == 'moov' and walk(at + 8, at + size, False):
+                return True
+            if kind == 'trak':
+                hdlr = data.find(b'hdlr', at, at + size)
+                if hdlr >= 0 and data[hdlr + 12:hdlr + 16] == handler.encode() and walk(at + 8, at + size, True):
+                    return True
+            if kind == 'edts' and in_track and walk(at + 8, at + size, True):
+                return True
+            if kind == 'elst' and in_track:
+                assert data[at + 8] == 0 and struct.unpack('>I', data[at + 12:at + 16])[0] >= 1
+                rows = struct.unpack('>I', data[at + 12:at + 16])[0]
+                row = at + 16 + (rows - 1) * 12
+                data[row + 4:row + 8] = struct.pack('>i', media_time)
+                return True
+            at += size
+        return False
+
+    assert walk(0, len(data), False), f'no {handler} edit list in {path}'
+    open(path, 'wb').write(data)
 
 
 def make_sources(folder):
@@ -97,6 +139,13 @@ def make_sources(folder):
         path = os.path.join(folder, name)
         if not os.path.exists(path):
             ff(*args, path)
+    # (a) the picture's edit two frames before its first picture; (b) the encoder delay played.
+    for name, base, handler in (('s6-edit-before-picture.mp4', 's5-bframes.mp4', 'vide'), ('s7-sound-delay-kept.mp4', 's1-plain.mp4', 'soun')):
+        path = os.path.join(folder, name)
+        if not os.path.exists(path):
+            open(path, 'wb').write(open(os.path.join(folder, base), 'rb').read())
+            set_edit_media_time(path, handler, 0)
+        recipes[name] = []
     return {name: os.path.join(folder, name) for name in recipes}
 
 
@@ -281,10 +330,11 @@ def run_checks(browser, files, bodies):
         answers = dict(zip(names, container([files[n] for n in names])))
         for label, name, event, _ in SOURCES:
             probe_files[name] = bodies[name]
-            facts = page.evaluate(BROWSER_FACTS, {'url': f'{BASE}/__sync/{name}', 'fps': 24, 'eventSec': event})
+            facts = page.evaluate(BROWSER_FACTS, {'url': f'{BASE}/__sync/{name}', 'fps': 24, 'eventSec': SOUND_EVENT.get(name, event)})
             starts = ffprobe_starts(files[name])
             timing = answers[name].get('timing') or {}
-            video, sound = timing.get('video') or {}, timing.get('sound') or {}
+            video = timing.get('video') or {}
+            sound = timing.get('sound') if isinstance(timing.get('sound'), dict) else {}
             measure(f'(0) {label}: ffprobe video {starts.get("video"):.6f} / audio {starts.get("audio"):.6f} | container video {video.get("firstSec")} / sound {sound.get("firstSec")} | '
                     f'Chromium first frame mediaTime {facts.get("firstMediaTime")}, decodeAudioData sample 0 at movie time {facts.get("sample0"):.6f} '
                     f'(beep at sample {facts.get("beepSample")} of {facts.get("length")})')
@@ -350,7 +400,13 @@ def run_checks(browser, files, bodies):
         error = (onsets[0] / 48000 - flashes[0] / fps) * 1000
         table.append((label, error))
         measure(f'(1) {label}: white frame {flashes[0]} ({flashes[0] / fps * 1000:.1f} ms), beep at sample {onsets[0]} ({onsets[0] / 48:.1f} ms): sound − picture {error:+.1f} ms; warnings {warnings}')
-        check(f'(1) {label}: sound − picture within ±{TARGET_MS:.0f} ms', abs(error) <= TARGET_MS, f'{error:+.1f} ms')
+        if name in SOUND_EVENT:
+            # The file itself plays its beep this much after its flash (Chromium and ffmpeg alike); nothing in
+            # the file says why, so the export keeps it: within 1 ms of the file's own offset.
+            own = (SOUND_EVENT[name] - event) * 1000
+            check(f'(1) {label}: the export keeps the file’s own offset ({own:+.1f} ms) within 1 ms', abs(error - own) <= 1, f'{error:+.1f} ms')
+        else:
+            check(f'(1) {label}: sound − picture within ±{TARGET_MS:.0f} ms', abs(error) <= TARGET_MS, f'{error:+.1f} ms')
 
     # ── (2) Two cuts from different sources: the second cut's offset matters ──
     first, second = serve(bodies['s2-video-late.mp4']), serve(bodies['s3-both-late.mp4'])
