@@ -156,27 +156,29 @@ PATCHES = [('red', 'FF0000', 20, 30), ('green', '00FF00', 140, 30), ('blue', '00
            ('black', '000000', 20, 150), ('grey-25', '404040', 140, 150), ('grey-50', '808080', 260, 150), ('grey-75', 'C0C0C0', 380, 150), ('white', 'FFFFFF', 500, 150)]
 
 
-def patched(path, width, height, ten_bit, tagged, frames=120, hevc=None, profile=None):
-    """Patches and frame numbers, made in RGB and converted to limited range; HEVC Main 10 (`ten_bit`), else H.264
-    High 8-bit (or HEVC Main 8-bit with `hevc`; another H.264 `profile`: baseline, main). `tagged`: True or '709' =
-    BT.709 matrix, colr nclx 1/1/1 limited and the same in the stream; '601' = BT.601 matrix and SMPTE 170M in the
-    stream and the box; False = BT.709 matrix, nothing said."""
+def patched(path, width, height, ten_bit, tagged, frames=120, hevc=None, profile=None, full=False):
+    """Patches and frame numbers, made in RGB and converted to limited range (full range with `full`, stated in
+    the stream); HEVC Main 10 (`ten_bit`), else H.264 High 8-bit (or HEVC Main 8-bit with `hevc`; another H.264
+    `profile`: baseline, main). `tagged`: True or '709' = BT.709 matrix, colr nclx 1/1/1 and the same in the stream;
+    '601' = BT.601 matrix and SMPTE 170M in the stream and the box; False = BT.709 matrix, nothing said."""
     if os.path.exists(path):
         return path
     hevc = ten_bit if hevc is None else hevc
     s = width / 640
     boxes = ','.join(f'drawbox=x={round(x * s)}:y={round(y * s)}:w={round(100 * s)}:h={round(90 * s)}:color=0x{c}:t=fill' for _, c, x, y in PATCHES)
     matrix = 'bt601' if tagged == '601' else 'bt709'
+    rng = 'pc' if full else 'tv'
     if tagged == '601':
-        tags = 'setparams=color_primaries=smpte170m:color_trc=smpte170m:colorspace=smpte170m:range=tv'
+        tags = f'setparams=color_primaries=smpte170m:color_trc=smpte170m:colorspace=smpte170m:range={rng}'
     elif tagged:
-        tags = 'setparams=color_primaries=bt709:color_trc=bt709:colorspace=bt709:range=tv'
+        tags = f'setparams=color_primaries=bt709:color_trc=bt709:colorspace=bt709:range={rng}'
     else:
-        tags = 'setparams=colorspace=unknown:color_primaries=unknown:color_trc=unknown'
+        tags = 'setparams=colorspace=unknown:color_primaries=unknown:color_trc=unknown' + (':range=pc' if full else '')
     pix = 'yuv420p10le' if ten_bit else 'yuv420p'
-    vf = f'format=rgb24,{boxes},{squares(s)},scale=out_color_matrix={matrix}:out_range=tv,format={pix},{tags}'
-    codec = ['-c:v', 'libx265', '-tag:v', 'hvc1', '-x265-params', 'log-level=error:bframes=0:keyint=24'] if hevc else ['-c:v', 'libx264', '-bf', '0', '-g', '24', *(['-profile:v', profile] if profile else [])]
-    run(['ffmpeg', '-v', 'error', '-y', '-f', 'lavfi', '-i', f'color=c=0x303030:s={width}x{height}:r=24', '-vf', vf, '-frames:v', str(frames), *codec, '-pix_fmt', pix, path])
+    vf = f'format=rgb24,{boxes},{squares(s)},scale=out_color_matrix={matrix}:out_range={rng},format={pix},{tags}'
+    x265 = 'log-level=error:bframes=0:keyint=24' + (':range=full' if full else '')
+    codec = ['-c:v', 'libx265', '-tag:v', 'hvc1', '-x265-params', x265] if hevc else ['-c:v', 'libx264', '-bf', '0', '-g', '24', *(['-profile:v', profile] if profile else [])]
+    run(['ffmpeg', '-v', 'error', '-y', '-f', 'lavfi', '-i', f'color=c=0x303030:s={width}x{height}:r=24', '-vf', vf, '-frames:v', str(frames), *codec, '-pix_fmt', pix, *(['-color_range', 'pc'] if full else []), path])
     return path
 
 
@@ -253,13 +255,14 @@ def tenbit_media(folder):
 
 COLOUR_TAGS = {
     '709': ['-color_primaries', 'bt709', '-color_trc', 'bt709', '-colorspace', 'bt709', '-color_range', 'tv'],
+    '709full': ['-color_primaries', 'bt709', '-color_trc', 'bt709', '-colorspace', 'bt709', '-color_range', 'pc'],
     '601': ['-color_primaries', 'smpte170m', '-color_trc', 'smpte170m', '-colorspace', 'smpte170m', '-color_range', 'tv'],
     'none': ['-color_primaries', 'unknown', '-color_trc', 'unknown', '-colorspace', 'unknown'],
 }
 
 
 def rebox(source, path, box):
-    """The bitstream copied as it is; the container's colr box written as `box` says (709, 601 or none). A `.mov`
+    """The bitstream copied as it is; the container's colr box written as `box` says (709, 709full, 601 or none). A `.mov`
     path gets QuickTime's `nclc` box."""
     if not os.path.exists(path):
         run(['ffmpeg', '-v', 'error', '-y', '-i', source, '-c', 'copy', *COLOUR_TAGS[box], *(['-movflags', '+write_colr'] if box != 'none' else []), path])
@@ -297,6 +300,20 @@ def colour_media(folder):
         untagged = patched(m(f'h8{profile}-540-untagged.mp4'), 960, 540, False, False, profile=profile)
         files[f'h8{profile}-540-untagged'] = (untagged, 960, 540, 'bt709')
         files[f'h8{profile}-540-colr709'] = (rebox(untagged, m(f'h8{profile}-540-colr709.mp4'), '709'), 960, 540, 'bt709')
+    # Spec H round 2: 8-bit 4:2:0 full range. Constrained Baseline and Main, and HEVC Main, with full range in the
+    # stream and the box; H.264 High with full range in the stream only (no box: what phone recordings often are);
+    # and the reverse, the box saying full over a limited stream. The matrix entry carries the range the picture was
+    # made in (for the ffmpeg reference column only).
+    for rows, width in ((1080, 1920), (540, 960)):
+        for profile in ('baseline', 'main'):
+            source = patched(m(f'h8{profile}-{rows}-sfull.mp4'), width, rows, False, True, profile=profile, full=True)
+            files[f'h8{profile}-{rows}-full'] = (rebox(source, m(f'h8{profile}-{rows}-full.mp4'), '709full'), width, rows, 'bt709:pc')
+        source = patched(m(f'hevc8-{rows}-sfull.mp4'), width, rows, False, True, hevc=True, full=True)
+        files[f'hevc8-{rows}-full'] = (rebox(source, m(f'hevc8-{rows}-full.mp4'), '709full'), width, rows, 'bt709:pc')
+        source = patched(m(f'h8-{rows}-sfull.mp4'), width, rows, False, True, full=True)
+        files[f'h8-{rows}-sfull-nobox'] = (rebox(source, m(f'h8-{rows}-sfull-nobox.mp4'), 'none'), width, rows, 'bt709:pc')
+        source = patched(m(f'h8-{rows}-s709.mp4'), width, rows, False, '709')
+        files[f'h8-{rows}-slimited-bfull'] = (rebox(source, m(f'h8-{rows}-slimited-bfull.mp4'), '709full'), width, rows, 'bt709')
     return files
 
 
@@ -815,7 +832,8 @@ def part_colour(page, context, ids):
         row = {'key': key, 'box': colr_of(path), 'auto_path': auto['path'], 'reason': reason}
         if auto['file'] and seek['file']:
             mad, bias, frames = pixel_difference(auto['file'], seek['file'], 1920, 1080)
-            stats, _ = patch_stats([auto['file'], seek['file'], (path, f'scale=1920:1080:in_color_matrix={matrix}:in_range=tv:flags=bicubic,format=rgb24')])
+            made, _, made_range = matrix.partition(':')
+            stats, _ = patch_stats([auto['file'], seek['file'], (path, f'scale=1920:1080:in_color_matrix={made}:in_range={made_range or "tv"}:flags=bicubic,format=rgb24')])
             worst = max(max(st['max']) for st in stats.values())
             row.update({'mad': mad, 'bias': bias, 'largest_patch_difference': worst, 'patches': stats})
             measure(f'{key}: {auto["path"]} vs seek over {frames} frames: mean |difference| {mad}, mean signed {bias}, largest |difference| on a patch {worst}')

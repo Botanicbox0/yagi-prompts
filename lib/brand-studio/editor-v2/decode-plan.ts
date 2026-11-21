@@ -290,15 +290,16 @@ export function decoderColourSpace(config: { codedHeight: number; colour: { prim
 
 /**
  * Footage whose colour the decoder path was measured on, so it may take it (`false`: seeked, reason
- * `colour`). Every case below, except the 8-bit full range it names as not measured, gave the same pixels on
- * both paths (mean and largest |difference| 0 on every patch, every frame) on Chromium 149 with an NVIDIA
- * RTX PRO 6000 Blackwell (D3D11). Exactly:
+ * `colour`). Every case below gave the same pixels on both paths (mean and largest |difference| 0 on every
+ * patch, every frame) on Chromium 149 with an NVIDIA RTX PRO 6000 Blackwell (D3D11). Exactly:
  *
  * - SDR by what the file states (sample-index.ts `sdr`; spec F review 1, item 1), and the chroma format read
  *   from the record and 4:2:0 (sample-index.ts `chroma`; not read: seeked). At 8 bits the range is not
- *   looked at: limited and full range are both taken. Full range was measured on H.264 High at 1080 rows
- *   (spec G, `h8-1080-colr-full`: equal on both paths); on HEVC Main and H.264 Baseline/Main it is taken by
- *   this rule but was not measured;
+ *   looked at: limited and full range are both taken, as measured. H.264 High at 1080 rows with full range
+ *   in the box only (spec G, `h8-1080-colr-full`); on 2026-11-22 (spec H, round 2), at 1080 and 540 rows:
+ *   Constrained Baseline, Main and HEVC Main with full range in the stream and the box, H.264 High with full
+ *   range in the stream only (no box: what phone recordings often are), and the box saying full over a
+ *   limited stream. All equal on both paths;
  * - H.264, 8 bits: Constrained Baseline (profile_idc 66 with constraint_set1), Main (77) and High (100).
  *   Measured: High in spec F and G; Constrained Baseline and Main untagged and `colr`-only on 2026-11-22
  *   (spec H, F7). Not Extended (88) or Baseline without constraint_set1: never measured;
@@ -309,7 +310,9 @@ export function decoderColourSpace(config: { codedHeight: number; colour: { prim
  *
  * The colour the stream itself states (its parameter sets) is not read: the decoder used what the stream said
  * whenever it differed from the box, in both directions (BT.601 in the stream with BT.709 in the box, and the
- * reverse), and so did the `<video>` element, so the two paths agreed (spec H, F7).
+ * reverse), and so did the `<video>` element, so the two paths agreed (spec H, F7). The range too: told limited
+ * over a full-range stream with no box, and full over a limited stream, its frames came out in the stream's
+ * range (2026-11-22, round 2).
  *
  * Not taken: anything else, among it 10-bit footage whose container says nothing (the stream itself may say
  * HLG or PQ), 10-bit footage in full range or tagged BT.601, BT.2020 at any depth, PQ, HLG, an ICC profile,

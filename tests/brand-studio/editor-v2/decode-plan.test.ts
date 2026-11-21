@@ -303,6 +303,24 @@ describe('spec G, A0: the footage whose colour the decoder path was measured on,
   });
 });
 
+describe('spec H round 2: 8-bit full range is taken where it was measured equal', () => {
+  const full = { primaries: 1, transfer: 1, matrix: 1, fullRange: true };
+  const avc = { entry: 'avc1', profile: 100, chroma: 1, constraintFlags: 0, bitDepth: 8, sdr: true, colour: full } as const;
+
+  it('H.264 Constrained Baseline, Main and High, HEVC Main, with the box saying full range (1080 and 540 rows, 0 on every patch)', () => {
+    expect(colourAdmitted({ ...avc, profile: 66, constraintFlags: 0xc0 })).toBe(true);
+    expect(colourAdmitted({ ...avc, profile: 77 })).toBe(true);
+    expect(colourAdmitted(avc)).toBe(true);
+    expect(colourAdmitted({ ...avc, entry: 'hvc1', profile: 1 })).toBe(true);
+    // Full range in the stream only: the box says nothing, and that was measured equal too.
+    expect(colourAdmitted({ ...avc, colour: null })).toBe(true);
+  });
+
+  it('full range stays out at 10 bits', () => {
+    expect(colourAdmitted({ ...avc, entry: 'hvc1', profile: 2, bitDepth: 10 })).toBe(false);
+  });
+});
+
 describe('spec H, F7: the gate says exactly what was measured', () => {
   const avc = { entry: 'avc1', profile: 100, chroma: 1, constraintFlags: 0, bitDepth: 8, sdr: true, colour: null } as const;
   const hevc = { entry: 'hvc1', profile: 1, chroma: 1, bitDepth: 8, sdr: true, colour: null } as const;
