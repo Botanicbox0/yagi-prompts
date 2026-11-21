@@ -118,11 +118,13 @@ export async function measureWithRetry<T>(steps: MeasureSteps<T>, limits: readon
 /**
  * The footage's length in its own frames, from its length in seconds: never rounded up (spec E addendum
  * C3). A 4.06 s file at 24 fps holds 97 pictures (97.44 frames of time), not 98: a frame counted that is
- * not in the file is a picture the export would ask for and never get. A thousandth of a frame is allowed
- * for lengths written from a rounded rate (5.005 s at 23.976 is 119.9999 frames: 120).
+ * not in the file is a picture the export would ask for and never get. Two known roundings are allowed
+ * for, so a real last picture is not lost either: a length written from a rounded rate (5.005 s at 23.976
+ * is 119.9999 frames: 120) and a length written to the millisecond, as WebM does (119 pictures at 24 fps
+ * last 4.958333 s, written 4.958 s: 118.992 frames of time). 0.6 ms of time is the most that adds.
  */
 export function sourceFramesOf(durationSec: number, fps: number): number {
-  return Math.max(1, Math.floor(durationSec * fps + 1e-3));
+  return Math.max(1, Math.floor(durationSec * fps + 1e-3 + 0.0006 * fps));
 }
 
 /**

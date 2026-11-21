@@ -24,6 +24,17 @@ describe('the number of pictures is never rounded up', () => {
     expect(sourceFramesOf(10, 24)).toBe(240);
   });
 
+  it('a length written to the millisecond keeps its last picture (WebM states its length that way)', () => {
+    // 119 pictures at 24 fps last 4.958333 s; written as 4.958 s that is 118.992 frames of time.
+    expect(sourceFramesOf(4.958, 24)).toBe(119);
+    // 299 pictures at 60 fps last 4.983333 s → 4.983 s (298.98 frames of time).
+    expect(sourceFramesOf(4.983, 60)).toBe(299);
+    // 91 pictures at 29.97 fps last 3.036370 s → 3.036 s.
+    expect(sourceFramesOf(3.036, 29.97)).toBe(91);
+    // Nothing is invented: almost a whole frame short is still the smaller count.
+    expect(sourceFramesOf(4.95, 24)).toBe(118);
+  });
+
   it('playback: the first and last pictures shown give the count, never more than the length gives', () => {
     // The container (its sound) runs to 4.1 s; the last picture is shown at 4.000 s.
     expect(framesFromPlayback({ fps: 24, durationSec: 4.1, firstSec: 0, lastSec: 4.0 })).toBe(97);
