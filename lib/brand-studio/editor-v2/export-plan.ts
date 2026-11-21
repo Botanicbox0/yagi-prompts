@@ -72,6 +72,40 @@ export function isKeyFrame(index: number, fps: number): boolean {
   return index % Math.max(1, Math.round(fps)) === 0;
 }
 
+/**
+ * Where an asked-for picture of a source lies (spec E addendum C3). Production stopped a whole export on a
+ * cut's last frame: the playback measurement had counted 98 pictures in a file that holds 97.
+ *
+ * - The file's own count is known (its sample table, lib/brand-studio/editor-v2/container.ts): a picture at
+ *   or past that count is `past-end`; any other that could not be confirmed has `failed`.
+ * - It is not known (a file the reader cannot read): `past-end` only when the element has reached its end
+ *   (`atEnd`: ended, or its current time at its length) and the last picture it showed lies more than
+ *   half a frame before the one asked for; anything else that could not be confirmed has `failed`.
+ *
+ * A `past-end` picture is filled with the source's last real one (and said after the export); a
+ * `failed` one stops the export as before: a wrong or missing picture inside the footage is never filled.
+ */
+export type PicturePlace = 'inside' | 'past-end' | 'failed';
+
+export function picturePlace(input: {
+  sourceFrame: number;
+  /** The file's own number of pictures, or `null` when it could not be read. */
+  knownFrames: number | null;
+  confirmed: boolean;
+  /** Media time the asked-for picture would have. */
+  expectedSec: number;
+  /** Media time of the last picture the element showed while trying. */
+  lastSeenSec: number | null;
+  atEnd: boolean;
+  frameSec: number;
+}): PicturePlace {
+  const { sourceFrame, knownFrames, confirmed, expectedSec, lastSeenSec, atEnd, frameSec } = input;
+  if (knownFrames !== null && sourceFrame >= knownFrames) return 'past-end';
+  if (confirmed) return 'inside';
+  if (knownFrames === null && atEnd && lastSeenSec !== null && expectedSec > lastSeenSec + 0.5 * frameSec) return 'past-end';
+  return 'failed';
+}
+
 // ── Sound ──────────────────────────────────────────────────────────────────────────────────────
 
 export interface AudioSegment {

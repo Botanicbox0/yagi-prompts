@@ -103,6 +103,8 @@ export interface MeasuredSource {
   frames: number;
   /** Its frames are not evenly spaced (variable frame rate): shown, not supported (review round 1, item 10). */
   variable?: boolean;
+  /** `frames` is the file's own count of pictures (its sample table), not a measurement by playback. */
+  counted?: boolean;
 }
 
 export type MeasuredSources = Readonly<Record<string, MeasuredSource | null | undefined>>;
@@ -113,6 +115,12 @@ export interface StoredFilm {
   exact: string[];
   /** Cuts rebuilt from seconds: made or changed in the current editor. */
   derived: string[];
+  /**
+   * Cuts whose block counted pictures the file does not have (an earlier playback measurement rounded a
+   * 4.06 s, 97-picture file up to 98): their footage now has its real count, and a cut that ran into the
+   * missing pictures ends at the real last one (spec E addendum C3). Written back corrected at the next save.
+   */
+  corrected: string[];
   /** Cuts whose footage rate is not known; the film's rate stands in, and they are measured again next time. */
   rateUnknown: string[];
   /** No cut's rate is known: the film runs at a stand-in rate and nothing frame-based may be stored. */
@@ -197,6 +205,18 @@ function speedFraction(rate: number): [number, number] {
   return [hundredths / divisor, 100 / divisor];
 }
 
+/**
+ * A cut kept inside its footage's real pictures: its start on the last one at the latest, its length up to
+ * the last one. A cut that ran into pictures the file does not have gets shorter by exactly those frames.
+ */
+function withinFootage(clip: SourceFields & FrameFields, fps: number): SourceFields & FrameFields {
+  const media = mediaFramesOf(clip, fps);
+  const inFrame = Math.min(clip.inFrame, Math.max(0, media - 1));
+  const phase = inFrame === clip.inFrame ? clip.phase : 0;
+  const shape = { ...clip, inFrame, phase } as FrameClip;
+  return { ...clip, inFrame, phase, frames: Math.max(1, Math.min(clip.frames, clipMaxFrames(shape, fps))) };
+}
+
 /** A cut rebuilt from the seconds the current editor keeps: every position to the nearest frame. */
 export function deriveFrames(clip: ComposeClip, fps: number, source: SourceFields): FrameFields {
   const [speedNum, speedDen] = speedFraction(clipPlaybackRate(clip));
@@ -244,6 +264,7 @@ export function fromStored(project: ComposerProject, measured: MeasuredSources =
   const { fps, tentative } = filmRateOf(project, measured);
   const exact: string[] = [];
   const derived: string[] = [];
+  const corrected: string[] = [];
   const rateUnknown: string[] = [];
   const clips = project.clips.slice(0, MAX_COMPOSE_CLIPS).map((stored): FrameClip => {
     const base = {
@@ -256,8 +277,15 @@ export function fromStored(project: ComposerProject, measured: MeasuredSources =
     };
     const block = exactBlock(stored, fps);
     if (block) {
-      exact.push(stored.id);
       const { inFrame, phase, frames, speedNum, speedDen, sourceFps, sourceFrames } = block;
+      // The file's own count (read from its sample table when it is opened) overrules the block's.
+      const seen = measured[stored.srcUrl];
+      const real = seen?.counted ? seen.frames : undefined;
+      if (isInt(real, 1) && real !== sourceFrames) {
+        corrected.push(stored.id);
+        return { ...base, ...withinFootage({ sourceFps, sourceFrames: real, inFrame, phase, frames, speedNum, speedDen }, fps) };
+      }
+      exact.push(stored.id);
       return { ...base, sourceFps, sourceFrames, inFrame, phase, frames, speedNum, speedDen };
     }
     derived.push(stored.id);
@@ -266,7 +294,7 @@ export function fromStored(project: ComposerProject, measured: MeasuredSources =
     return { ...base, ...source, ...deriveFrames(stored, fps, source) };
   });
   const aspect: ComposeAspect = (COMPOSE_ASPECTS as readonly string[]).includes(project.aspect) ? project.aspect : '9:16';
-  return { sequence: { fps, aspect, clips, captions: captionsOnFrames(project.captions, fps) }, exact, derived, rateUnknown, tentative };
+  return { sequence: { fps, aspect, clips, captions: captionsOnFrames(project.captions, fps) }, exact, derived, corrected, rateUnknown, tentative };
 }
 
 export interface ToStoredOptions {

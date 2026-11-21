@@ -273,14 +273,18 @@ describe('where the editor keeps anything', () => {
   const dir = join(ROOT, 'components/brand-studio/editor-v2');
   const files = readdirSync(dir).filter((name) => /\.(tsx?|ts)$/.test(name));
   const STORES = ['shortcut-store.ts', 'film-store.ts'];
-  /** The one file that may make a request: the export reads the film's own media to decode its sound. */
-  const NETWORK_FILE = 'export-film.ts';
+  /**
+   * The files that may make a request, each only for the film's own media: the export reads it to decode
+   * its sound; footage-facts reads a clip's timing boxes with Range requests (spec E addendum, C1; pinned
+   * in footage-facts.test.ts).
+   */
+  const NETWORK_FILES = ['export-film.ts', 'footage-facts.ts'];
   const NETWORK = ['fetch(', 'XMLHttpRequest', 'sendBeacon', 'WebSocket', 'EventSource'];
 
-  it('only the export makes a request', () => {
-    expect(files).toContain(NETWORK_FILE);
+  it('only the export and the footage reader make a request', () => {
+    for (const name of NETWORK_FILES) expect(files).toContain(name);
     for (const name of files) {
-      if (name === NETWORK_FILE) continue;
+      if (NETWORK_FILES.includes(name)) continue;
       const source = readFileSync(join(dir, name), 'utf8');
       for (const banned of NETWORK) expect(source.includes(banned), `${name} contains ${banned}`).toBe(false);
     }

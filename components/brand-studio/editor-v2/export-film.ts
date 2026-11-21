@@ -26,6 +26,7 @@ import {
   imageOverlaysAt,
   isKeyFrame,
   notIncluded,
+  picturePlace,
   soundBytesCheck,
   soundReads,
   soundShiftSec,
@@ -41,6 +42,8 @@ import { CURRENT_EXPORT_BACKGROUND, currentExportFrame } from '@/lib/brand-studi
 import { totalFrames, type FrameSequence } from '@/lib/brand-studio/editor-v2/frames';
 import { soundTrackOf } from '@/lib/brand-studio/editor-v2/media-probe';
 import { DEFAULT_REFRAME, type Reframe } from '@/lib/brand-studio/editor-v2/model';
+import { readFootage } from './footage-facts';
+import { screenTimer } from './screen-refresh';
 
 export interface ExportProgress {
   phase: 'video' | 'audio' | 'writing';
@@ -81,11 +84,12 @@ export interface ExportFilmResult {
   warnings: ExportWarning[];
 }
 
-/** A cut whose footage HAS a sound track the browser could not decode: its sound is not in the file. */
-export interface ExportWarning {
-  kind: 'sound';
-  clip: string;
-}
+/**
+ * What the file lacks or repeats that the person should hear about: a cut whose footage HAS a sound track
+ * the browser could not decode (its sound is not in the file); a cut that asked for pictures past its
+ * footage's last one, filled with that last picture (spec E addendum C3; `frames` of them).
+ */
+export type ExportWarning = { kind: 'sound'; clip: string } | { kind: 'lastFrame'; clip: string; frames: number };
 
 export type ExportStopReason = 'empty' | 'unsupported' | 'load' | 'frame' | 'encode' | 'sound' | 'memory' | 'cancelled';
 
@@ -112,7 +116,11 @@ const AUDIO_CONFIG = { codec: 'mp4a.40.2', sampleRate: EXPORT_SAMPLE_RATE, numbe
 /** High, Main, Baseline (level 4.0 holds 1080p up to 30 fps; 4.2 is tried first above that). */
 const AVC_CANDIDATES = ['avc1.640028', 'avc1.4d0028', 'avc1.42E028', 'avc1.42001f'];
 const AVC_CANDIDATES_HIGH_RATE = ['avc1.64002a', 'avc1.4d002a', 'avc1.42E02a'];
-/** How long a picture may take to be confirmed, counted only while the page is visible. */
+/**
+ * How long a picture may take to be confirmed, in screen time (./screen-refresh.ts): real time on a live
+ * screen, about ten times longer in a window covered by another one, which draws about once a second
+ * (spec E addendum, C2). The confirmation itself stays as strict: the very frame must be on the element.
+ */
 const FRAME_CONFIRM_MS = 4000;
 const FRAME_ATTEMPTS = 3;
 const LOAD_MS = 30_000;
@@ -120,7 +128,11 @@ const BACKGROUND = '#000';
 
 // ── Waiting that only counts while the page is on screen ──────────────────────────────────────
 
-/** A timer that does not run while the tab is hidden: a person switching tabs does not fail the export. */
+/**
+ * A timer that does not run while the tab is hidden: a person switching tabs does not fail the export.
+ * For loading files (network), which a covered window does not slow; waiting for a picture counts
+ * screen time instead (`screenTimer`).
+ */
 function visibleTimer(limitMs: number, onExpire: () => void): () => void {
   let spent = 0;
   let last = performance.now();
@@ -152,6 +164,8 @@ interface Source {
   firstSec: number;
   /** The source frame the element is confirmed to be showing, or `null` when unknown. */
   shown: number | null;
+  /** The file's own number of pictures (its sample table), or `null` when it could not be read. */
+  frames: number | null;
 }
 
 type VideoFrameCallbackVideo = HTMLVideoElement & {
@@ -226,7 +240,7 @@ function seekAndConfirm(
         handle = v.requestVideoFrameCallback(onFrame);
       }
     };
-    const stopTimer = visibleTimer(FRAME_CONFIRM_MS, () => finish(false));
+    const stopTimer = screenTimer(FRAME_CONFIRM_MS, () => finish(false));
     video.addEventListener('seeked', onSeeked);
     signal?.addEventListener('abort', onAbort, { once: true });
     handle = v.requestVideoFrameCallback(onFrame);
@@ -276,12 +290,45 @@ async function openSource(url: string, fps: number, label: string, host: HTMLEle
   // The first frame's presentation time: most files start at 0, some do not.
   const first = await seekAndConfirm(video, 0.5 / fps, () => true, signal);
   if (!first.ok || first.last === null) throw new ExportStop('frame', `first frame of ${label} could not be confirmed`, { frame: 0, clip: label });
-  return { url, video, fps, firstSec: first.last, shown: 0 };
+  const read = await readFootage(url).catch(() => null);
+  const frames = read?.answer.ok && read.answer.timing.video ? read.answer.timing.video.frames : null;
+  return { url, video, fps, firstSec: first.last, shown: 0, frames };
 }
 
-/** Puts source frame `sourceFrame` on the element and confirms it, or stops the export naming the frame. */
-async function present(source: Source, sourceFrame: number, filmFrame: number, label: string, signal?: AbortSignal): Promise<void> {
-  if (source.shown === sourceFrame) return;
+/**
+ * Puts source frame `sourceFrame` on the element and confirms it. A picture past the footage's last one
+ * (`picturePlace`, lib/brand-studio/editor-v2/export-plan.ts) is the last one instead: answers `true`
+ * when it filled. Anything else that cannot be confirmed stops the export naming the frame.
+ */
+async function present(source: Source, sourceFrame: number, filmFrame: number, label: string, signal?: AbortSignal): Promise<boolean> {
+  const frameSec = 1 / source.fps;
+  const stop = (seen: number | null) =>
+    new ExportStop('frame', `film frame ${filmFrame}: source frame ${sourceFrame} of "${label}" could not be confirmed (saw ${seen === null ? 'nothing' : `media time ${seen.toFixed(4)}s`})`, {
+      frame: filmFrame,
+      clip: label,
+    });
+  if (source.frames !== null && sourceFrame >= source.frames) {
+    const last = await confirmPicture(source, source.frames - 1, signal);
+    if (!last.ok) throw stop(last.last);
+    return true;
+  }
+  const result = await confirmPicture(source, sourceFrame, signal);
+  const video = source.video;
+  const atEnd = video.ended || (Number.isFinite(video.duration) && video.currentTime >= video.duration - 0.5 * frameSec);
+  const expectedSec = source.firstSec + sourceFrame * frameSec;
+  const place = picturePlace({ sourceFrame, knownFrames: source.frames, confirmed: result.ok, expectedSec, lastSeenSec: result.last, atEnd, frameSec });
+  if (place === 'inside') return false;
+  if (place === 'past-end' && result.last !== null) {
+    const lastReal = Math.max(0, Math.round((result.last - source.firstSec) * source.fps));
+    const filled = await confirmPicture(source, lastReal, signal);
+    if (filled.ok) return true;
+  }
+  throw stop(result.last);
+}
+
+/** Puts source frame `sourceFrame` on the element and confirms it is that very frame (a few tries). */
+async function confirmPicture(source: Source, sourceFrame: number, signal?: AbortSignal): Promise<{ ok: boolean; last: number | null }> {
+  if (source.shown === sourceFrame) return { ok: true, last: null };
   const frameSec = 1 / source.fps;
   const expected = source.firstSec + sourceFrame * frameSec;
   const target = expected + 0.5 * frameSec;
@@ -296,16 +343,12 @@ async function present(source: Source, sourceFrame: number, filmFrame: number, l
     const result = await seekAndConfirm(source.video, target, accept, signal);
     if (result.ok) {
       source.shown = sourceFrame;
-      return;
+      return { ok: true, last: result.last };
     }
     last = result.last;
     source.shown = null;
   }
-  const seen = last === null ? 'nothing' : `media time ${last.toFixed(4)}s`;
-  throw new ExportStop('frame', `film frame ${filmFrame}: source frame ${sourceFrame} of "${label}" could not be confirmed (saw ${seen})`, {
-    frame: filmFrame,
-    clip: label,
-  });
+  return { ok: false, last };
 }
 
 // ── Drawing ────────────────────────────────────────────────────────────────────────────────────
@@ -633,6 +676,8 @@ export async function exportFilm(options: ExportFilmOptions): Promise<ExportFilm
   host.style.cssText = 'position:fixed;left:-10000px;top:0;width:64px;height:36px;overflow:hidden;pointer-events:none';
   document.body.appendChild(host);
   const sources = new Map<string, Source>();
+  /** Pictures asked for past a footage's last one, filled with it, by cut. */
+  const filled = new Map<string, number>();
   let encoder: VideoEncoder | null = null;
 
   try {
@@ -679,7 +724,7 @@ export async function exportFilm(options: ExportFilmOptions): Promise<ExportFilm
         sources.set(entry.srcUrl, source);
       }
       // Consecutive frames on the same source frame (a slowed cut) reuse the picture: no second seek.
-      await present(source, entry.sourceFrame, entry.frame, label, signal);
+      if (await present(source, entry.sourceFrame, entry.frame, label, signal)) filled.set(label, (filled.get(label) ?? 0) + 1);
       if (framing === 'current') drawCurrentFraming(ctx, source.video, width, height);
       else drawFramed(ctx, source.video, width, height, reframe[entry.clipId] ?? DEFAULT_REFRAME);
       if (graded && extras) {
@@ -721,7 +766,7 @@ export async function exportFilm(options: ExportFilmOptions): Promise<ExportFilm
       durationSec: frames / fps,
       elapsedMs: Math.round(performance.now() - started),
       notIncluded: notIncluded({ sequence, extras }),
-      warnings,
+      warnings: [...[...filled].map(([clip, frames]): ExportWarning => ({ kind: 'lastFrame', clip, frames })), ...warnings],
     };
   } finally {
     if (encoder && encoder.state !== 'closed') encoder.close();

@@ -14,7 +14,7 @@ import {
 } from '@/lib/brand-studio/compose/timeline';
 import type { GradeNames } from '@/lib/brand-studio/editor-v2/film-contents';
 import { createFilmSession, type FilmConflict, type FilmSession } from '@/lib/brand-studio/editor-v2/film-session';
-import { snapFilmFps, sourceFramesOf } from '@/lib/brand-studio/editor-v2/fps';
+import { measuredFromTiming, snapFilmFps, sourceFramesOf } from '@/lib/brand-studio/editor-v2/fps';
 import { emptyFilm, realAssistAllowed, realDoc, sampleHrefFor, workspaceLocked } from '@/lib/brand-studio/editor-v2/real';
 import { deepLinkSource, parseClipParam, sourceSeconds, storedClipForSource, type EditorSource } from '@/lib/brand-studio/editor-v2/sources';
 import { captionsOnFrames, fromStored, inheritClip, mergeFilmText, sourcesToMeasure, toStored, type MeasuredSource } from '@/lib/brand-studio/editor-v2/stored';
@@ -93,6 +93,7 @@ import {
 } from '@/lib/brand-studio/editor-v2/shortcuts';
 import type { StudioEditorCopy } from '@/messages/studio-editor';
 import { readFilmText, watchFilmText, writeFilmText } from './film-store';
+import { readFootage } from './footage-facts';
 import { measureSource } from './measure-fps';
 import { loadShortcutPrefs, saveShortcutPrefs } from './shortcut-store';
 
@@ -411,11 +412,16 @@ export function useEditor(copy: StudioEditorCopy, options: EditorOptions = {}) {
   const openFilm = useCallback(
     async (session: FilmSession, text: string | null, ticket: number) => {
       const project = parseStoredProject(text) ?? emptyComposerProject('9:16');
-      const entries = await Promise.all(
-        sourcesToMeasure(project).map(async (src) => [src, await measureSource(src, secondsOfSrc(src))] as const),
-      );
+      const toMeasure = sourcesToMeasure(project);
+      // Footage that has frame data is checked against its file's own count (spec E addendum C3): a block an
+      // earlier playback measurement wrote with one picture too many is corrected, and stored so next time.
+      const toCheck = [...new Set(project.clips.slice(0, MAX_COMPOSE_CLIPS).map((clip) => clip.srcUrl))].filter((src) => !!src && !toMeasure.includes(src));
+      const [entries, checks] = await Promise.all([
+        Promise.all(toMeasure.map(async (src) => [src, await measureSource(src, secondsOfSrc(src))] as const)),
+        Promise.all(toCheck.map(async (src) => [src, measuredFromTiming((await readFootage(src)).answer)] as const)),
+      ]);
       if (sessionRef.current !== session) return;
-      const measured: Record<string, MeasuredSource | null> = Object.fromEntries(entries);
+      const measured: Record<string, MeasuredSource | null> = { ...Object.fromEntries(checks.filter(([, seen]) => seen !== null)), ...Object.fromEntries(entries) };
       const film = fromStored(project, measured);
       const unknown = film.sequence.clips.filter((clip) => film.rateUnknown.includes(clip.id)).map((clip) => clip.srcUrl);
       const known: Record<string, number> = {};

@@ -10,12 +10,12 @@
  */
 export type SoundTrack = 'yes' | 'no' | 'unknown';
 
-const TOP_LEVEL = new Set(['ftyp', 'moov', 'mdat', 'free', 'skip', 'wide', 'styp', 'sidx', 'moof', 'mfra', 'pdin', 'uuid', 'meta']);
+export const TOP_LEVEL = new Set(['ftyp', 'moov', 'mdat', 'free', 'skip', 'wide', 'styp', 'sidx', 'moof', 'mfra', 'pdin', 'uuid', 'meta']);
 
 const type4 = (bytes: Uint8Array, at: number) => String.fromCharCode(bytes[at]!, bytes[at + 1]!, bytes[at + 2]!, bytes[at + 3]!);
 const u32 = (bytes: Uint8Array, at: number) => ((bytes[at]! << 24) >>> 0) + (bytes[at + 1]! << 16) + (bytes[at + 2]! << 8) + bytes[at + 3]!;
 
-interface Box {
+export interface Box {
   type: string;
   /** First byte of the box's contents. */
   body: number;
@@ -24,7 +24,7 @@ interface Box {
 }
 
 /** The boxes between `start` and `end`, or `null` when one of them runs past `end` (cut off or broken). */
-function boxes(bytes: Uint8Array, start: number, end: number): Box[] | null {
+export function boxes(bytes: Uint8Array, start: number, end: number): Box[] | null {
   const out: Box[] = [];
   let at = start;
   while (at + 8 <= end) {

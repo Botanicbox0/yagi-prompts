@@ -6,6 +6,8 @@
  * (components/brand-studio/editor-v2/measure-fps.ts). The arithmetic on those times lives here so it
  * can be tested without a browser. Pure.
  */
+import type { TimingAnswer } from './container';
+import type { MeasuredSource } from './stored';
 
 /** Rates footage is made at. A measurement within 0.5% of one of these is that rate. */
 export const SOURCE_RATES = [23.976, 24, 25, 29.97, 30, 50, 59.94, 60] as const;
@@ -113,7 +115,37 @@ export async function measureWithRetry<T>(steps: MeasureSteps<T>, limits: readon
   return null;
 }
 
-/** The footage's length in its own frames. */
+/**
+ * The footage's length in its own frames, from its length in seconds: never rounded up (spec E addendum
+ * C3). A 4.06 s file at 24 fps holds 97 pictures (97.44 frames of time), not 98: a frame counted that is
+ * not in the file is a picture the export would ask for and never get. A thousandth of a frame is allowed
+ * for lengths written from a rounded rate (5.005 s at 23.976 is 119.9999 frames: 120).
+ */
 export function sourceFramesOf(durationSec: number, fps: number): number {
-  return Math.max(1, Math.round(durationSec * fps));
+  return Math.max(1, Math.floor(durationSec * fps + 1e-3));
+}
+
+/**
+ * How many pictures footage measured by playback has, never more than it shows (spec E addendum C3):
+ * from the first and the last picture the browser presented when both are known, and never more than
+ * its length gives (`sourceFramesOf`). A container (or its sound) that runs past the last picture does
+ * not add one: 4.1 s of file whose last picture is shown at 4.000 s holds 97 pictures at 24 fps.
+ */
+export function framesFromPlayback(input: { fps: number; durationSec: number; firstSec?: number | null; lastSec?: number | null }): number {
+  const { fps, durationSec, firstSec, lastSec } = input;
+  const byLength = sourceFramesOf(durationSec, fps);
+  if (typeof firstSec !== 'number' || typeof lastSec !== 'number' || !Number.isFinite(firstSec) || !Number.isFinite(lastSec) || lastSec < firstSec) return byLength;
+  return Math.max(1, Math.min(byLength, Math.round((lastSec - firstSec) * fps) + 1));
+}
+
+/**
+ * The footage's facts from its own file (lib/brand-studio/editor-v2/container.ts), in the shape the
+ * editor keeps for measured footage; `null` when the file could not be read or has no picture, and the
+ * editor measures it by playback instead (spec E addendum, C1). The rate stays exact (24000/1001).
+ */
+export function measuredFromTiming(answer: TimingAnswer): MeasuredSource | null {
+  if (!answer.ok || !answer.timing.video) return null;
+  const { fps, frames, variable } = answer.timing.video;
+  if (!Number.isFinite(fps) || fps <= 0 || !Number.isInteger(frames) || frames < 1) return null;
+  return { fps, frames, ...(variable ? { variable: true } : {}), counted: true };
 }

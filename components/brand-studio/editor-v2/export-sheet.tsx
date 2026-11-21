@@ -171,7 +171,7 @@ export function ExportSheet({ api }: { api: EditorApi }) {
 
 type ExportCopy = EditorApi['copy']['export'];
 
-function ExportStatus({ job, copy: e }: { job: ExportJob; copy: ExportCopy }) {
+export function ExportStatus({ job, copy: e }: { job: ExportJob; copy: ExportCopy }) {
   if (job.status === 'running') {
     const { phase, done, total } = job.progress;
     const share = total > 0 ? done / total : 0;
@@ -183,6 +183,11 @@ function ExportStatus({ job, copy: e }: { job: ExportJob; copy: ExportCopy }) {
           <i style={{ width: `${percent}%` }} />
         </div>
         <p className={styles.exportCount} aria-live="polite">{label}</p>
+        {job.slow && (
+          <p className={styles.note} role="status" data-editor-export-slow>
+            {e.slowWindow}
+          </p>
+        )}
         <p className={styles.note}>{e.keepEditing}</p>
       </div>
     );
@@ -192,11 +197,17 @@ function ExportStatus({ job, copy: e }: { job: ExportJob; copy: ExportCopy }) {
       <div className={styles.exportRun} data-editor-export-done={job.filename} data-editor-export-ms={job.elapsedMs}>
         <p className={styles.exportCount} role="status">{e.done}</p>
         <p className={styles.note}>{fill(e.doneFacts, { size: formatBytes(job.bytes), length: formatTimecode(job.frames, job.fps) })}</p>
-        {job.warnings.map((warning) => (
-          <p key={`${warning.kind}-${warning.clip}`} className={styles.exportError} role="alert" data-editor-export-warning={warning.kind}>
-            {fill(e.warnSound, { clip: warning.clip })}
-          </p>
-        ))}
+        {job.warnings.map((warning) =>
+          warning.kind === 'lastFrame' ? (
+            <p key={`${warning.kind}-${warning.clip}`} className={styles.note} data-editor-export-warning={warning.kind} data-editor-export-filled={warning.frames}>
+              {fill(e.warnLastFrame, { clip: warning.clip, count: warning.frames })}
+            </p>
+          ) : (
+            <p key={`${warning.kind}-${warning.clip}`} className={styles.exportError} role="alert" data-editor-export-warning={warning.kind}>
+              {fill(e.warnSound, { clip: warning.clip })}
+            </p>
+          ),
+        )}
         <p className={styles.exportLinks}>
           <a href={job.url} download={job.filename} data-editor-export-again>
             {e.downloadAgain}

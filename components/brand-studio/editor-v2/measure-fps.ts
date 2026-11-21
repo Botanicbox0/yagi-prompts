@@ -1,20 +1,27 @@
 'use client';
 
-import { measureWithRetry, rateFromMediaTimes, sourceFramesOf } from '@/lib/brand-studio/editor-v2/fps';
+import { framesFromPlayback, measureWithRetry, measuredFromTiming, rateFromMediaTimes } from '@/lib/brand-studio/editor-v2/fps';
 import type { MeasuredSource } from '@/lib/brand-studio/editor-v2/stored';
+import { readFootage } from './footage-facts';
+import { refreshReduced, screenTimer } from './screen-refresh';
 
 /**
- * The footage's own frame rate, measured on this device (docs/BRAND-EDITING-STUDIO-V2.md §5.1.1).
+ * The footage's own frame rate and number of frames (docs/BRAND-EDITING-STUDIO-V2.md §5.1.1).
  *
- * No view the editor gets carries a rate, so a hidden, muted video plays a dozen frames and
- * `requestVideoFrameCallback` reports each frame's media time; the arithmetic is in
- * lib/brand-studio/editor-v2/fps.ts. The length is the view's exact one when given, else the video's.
+ * First from the file itself: its sample table, read with Range requests (./footage-facts.ts, spec E
+ * addendum C1). That takes a moment and does not depend on the screen: measuring by playback failed on
+ * production in a window covered by another window, which stays "visible" but draws about once a second.
  *
- * A hidden tab presents no frames, so measuring waits until the page is visible, and its time limit
- * counts only visible time; a failed try is followed by one longer try (`measureWithRetry`, review
- * round 1, item 3). Each piece of footage is measured once per visit; a failure answers `null` and the
- * editor stores nothing frame-based for it, so the next visit measures it again. Frames that are not
- * evenly spaced are reported (`variable`), not corrected.
+ * Only a file the reader cannot read (WebM, a broken file) is measured by playback: a hidden, muted video
+ * plays a dozen frames and `requestVideoFrameCallback` reports each frame's media time; the arithmetic is
+ * in lib/brand-studio/editor-v2/fps.ts. The length is the view's exact one when given, else the video's.
+ * It waits until the page is visible; its time limit counts screen time (./screen-refresh.ts), and frames
+ * reported while the screen refreshes slowly are not used (one a second would read as 1 fps). A failed
+ * try is followed by one longer try (`measureWithRetry`, review round 1, item 3). Each piece of footage
+ * is measured once per visit; a failure answers `null` and the editor stores nothing frame-based for it,
+ * so the next visit measures it again. Frames that are not evenly spaced are reported (`variable`). The
+ * number of pictures is never rounded up (spec E addendum C3): after the rate, the first and the last
+ * picture are shown and their times give the count, capped by the length (`framesFromPlayback`).
  */
 const FRAMES = 13;
 const cache = new Map<string, Promise<MeasuredSource | null>>();
@@ -28,11 +35,15 @@ export function measureSource(src: string, durationSec: number | null): Promise<
   const run =
     typeof document === 'undefined' || !src
       ? Promise.resolve(null)
-      : measureWithRetry<MeasuredSource>({
-          visible: () => document.visibilityState === 'visible',
-          untilVisible,
-          attempt: (limitMs) => measureOnce(src, durationSec, limitMs),
-        });
+      : readFootage(src).then(
+          (read) =>
+            measuredFromTiming(read.answer) ??
+            measureWithRetry<MeasuredSource>({
+              visible: () => document.visibilityState === 'visible',
+              untilVisible,
+              attempt: (limitMs) => measureOnce(src, durationSec, limitMs),
+            }),
+        );
   cache.set(src, run);
   return run;
 }
@@ -49,22 +60,6 @@ function untilVisible(): Promise<void> {
   });
 }
 
-/** A time limit that runs only while the page is visible. */
-function visibleTimer(limitMs: number, onExpire: () => void): () => void {
-  let spent = 0;
-  let last = performance.now();
-  const id = window.setInterval(() => {
-    const now = performance.now();
-    if (document.visibilityState === 'visible') spent += now - last;
-    last = now;
-    if (spent > limitMs) {
-      window.clearInterval(id);
-      onExpire();
-    }
-  }, 100);
-  return () => window.clearInterval(id);
-}
-
 function measureOnce(src: string, durationSec: number | null, limitMs: number): Promise<MeasuredSource | null> {
   return new Promise((resolve) => {
     const video = document.createElement('video') as FrameVideo;
@@ -77,10 +72,44 @@ function measureOnce(src: string, durationSec: number | null, limitMs: number): 
     Object.assign(video.style, { position: 'fixed', right: '0', bottom: '0', width: '2px', height: '2px', opacity: '0.01', pointerEvents: 'none' });
     const times: number[] = [];
     let done = false;
+    let firstSec: number | null = null;
+    let lastSec: number | null = null;
     const result = (): MeasuredSource | null => {
       const { fps, variable } = rateFromMediaTimes(times);
       const seconds = durationSec ?? (Number.isFinite(video.duration) ? video.duration : null);
-      return fps && seconds && seconds > 0 ? { fps, frames: sourceFramesOf(seconds, fps), ...(variable ? { variable: true } : {}) } : null;
+      if (!fps || !seconds || seconds <= 0) return null;
+      return { fps, frames: framesFromPlayback({ fps, durationSec: seconds, firstSec, lastSec }), ...(variable ? { variable: true } : {}) };
+    };
+    /** Seeks to `at` and resolves with the media time of the picture then shown. */
+    const shownAt = (at: number) =>
+      new Promise<number>((resolve) => {
+        let seeked = false;
+        let seen: number | null = null;
+        const settle = () => {
+          if (seeked && seen !== null) resolve(seen);
+        };
+        video.requestVideoFrameCallback?.((_now, metadata) => {
+          seen = metadata.mediaTime;
+          settle();
+        });
+        video.addEventListener('seeked', () => {
+          seeked = true;
+          settle();
+        }, { once: true });
+        video.currentTime = at;
+      });
+    /** The rate is known: the first and the last picture give the count (the time limit still applies). */
+    const readEnds = () => {
+      video.pause();
+      void shownAt(0)
+        .then((first) => {
+          firstSec = first;
+          return shownAt(Number.isFinite(video.duration) ? video.duration : 1e9);
+        })
+        .then((last) => {
+          lastSec = last;
+          finish(result());
+        });
     };
     const finish = (value: MeasuredSource | null) => {
       if (done) return;
@@ -92,11 +121,13 @@ function measureOnce(src: string, durationSec: number | null, limitMs: number): 
       video.remove();
       resolve(value);
     };
-    const stopTimer = visibleTimer(limitMs, () => finish(result()));
+    const stopTimer = screenTimer(limitMs, () => finish(result()));
     const onFrame: FrameCallback = (_now, metadata) => {
       if (done) return;
-      times.push(metadata.mediaTime);
-      if (times.length >= FRAMES) return finish(result());
+      // A frame reported while the screen draws slowly is a frame skipped by the screen, not by the file.
+      if (refreshReduced()) times.length = 0;
+      else times.push(metadata.mediaTime);
+      if (times.length >= FRAMES) return readEnds();
       video.requestVideoFrameCallback?.(onFrame);
     };
     video.addEventListener('error', () => finish(null), { once: true });
