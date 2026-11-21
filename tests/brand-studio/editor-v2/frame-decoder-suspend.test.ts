@@ -47,7 +47,8 @@ describe('a session let go comes back on its next use', () => {
     const again = FakeDecoder.made[1]!;
     // Sync samples at 0, 48, … 240, 288: from 240, not from 0.
     expect(again.decoded[0]).toBe(us(240 * STEP));
-    expect(again.decoded.length).toBe(251 - 240 + 1);
+    // From 240 to 251, and at most a decoder queue (6) more fed ahead before 251 came out: not 252 from 0.
+    expect(again.decoded.length).toBeLessThanOrEqual(251 - 240 + 1 + 6);
     expect(pictureOf(await s.picture(0, wanted, 299))).toBe(299);
     s.close();
     expect(counter.open).toBe(0);

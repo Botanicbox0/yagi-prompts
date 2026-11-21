@@ -15,9 +15,11 @@ describe('frames held while the asked picture has not come out are bounded', () 
     const { DecodeFailure, HOLD_CAP } = await import('@/components/brand-studio/editor-v2/frame-decoder');
     const wanted = Array.from({ length: 30 }, (_, i) => i + 3);
     await expect(s.picture(0, wanted, 3)).rejects.toBeInstanceOf(DecodeFailure);
-    // It stopped about HOLD_CAP pictures after the one asked for, not at the end of the run.
-    expect(FakeDecoder.made[0]!.decoded.length).toBeLessThanOrEqual(4 + HOLD_CAP + 1);
+    const fed = FakeDecoder.made[0]!.decoded.length;
     s.close();
+    // It stopped about HOLD_CAP pictures after the one asked for (plus what was still queued in the decoder, at
+    // most its queue of 6), not at the end of the 40 samples.
+    expect(fed).toBeLessThanOrEqual(4 + HOLD_CAP + 6 + 1);
     expect(counter.open).toBe(0);
   });
 

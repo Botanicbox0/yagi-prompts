@@ -218,6 +218,14 @@ export class PictureDecoder {
           await watch.guard(this.event());
           continue;
         }
+        // While the next sample's bytes come, a picture that comes out is looked at first: the one asked for may
+        // already be decoded, and a slow read for later samples must not hold it back (found with a decoder that
+        // answers in tasks, spec H F8). Waiting for bytes is not the decoder's silence: no stall guard here.
+        const run = this.runOf.get(this.next);
+        if (run === undefined) throw new DecodeFailure(`sample ${this.next} is in no byte range`);
+        const bytes = this.fetchRun(run);
+        const ready = await watch.guard(Promise.race([bytes.then(() => true, () => true), this.signalled().then(() => false)]));
+        if (!ready) continue;
         await this.feed(this.next, watch);
         this.next += 1;
         continue;
@@ -398,6 +406,11 @@ export class PictureDecoder {
     const waiting = this.waiters;
     this.waiters = [];
     for (const resolve of waiting) resolve();
+  }
+
+  /** The next output, dequeue, error or let-go, with no stall guard (waiting for bytes, not for the decoder). */
+  private signalled(): Promise<void> {
+    return new Promise((resolve) => this.waiters.push(resolve));
   }
 
   private event(): Promise<void> {

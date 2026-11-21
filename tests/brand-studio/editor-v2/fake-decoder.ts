@@ -25,6 +25,13 @@ export class FakeFrame {
 
 type Init = { output: (frame: FakeFrame) => void; error: (error: unknown) => void };
 
+/**
+ * Works like a real decoder where the session depends on it (spec H, F8): `decode()` queues the chunk and raises
+ * `decodeQueueSize`; the work is done in later tasks, one chunk per task, lowering the queue and firing
+ * `dequeue`; pictures come out in presentation order after `reorder` more samples, each in a task (not a
+ * microtask); `reset()` drops the queued work, the reorder buffer and anything already scheduled; `flush()`
+ * finishes the queue, gives out what it holds, then settles.
+ */
 export class FakeDecoder {
   static made: FakeDecoder[] = [];
   /** `eager`: frames come out as decoding goes (after `reorder` more samples); `never`: nothing ever comes out. */
@@ -32,13 +39,22 @@ export class FakeDecoder {
   static reorder = 0;
   /** Timestamps that never come out (a picture the decoder drops). */
   static drop = new Set<number>();
+  /** The most chunks ever waiting in any decoder's queue. */
+  static mostQueued = 0;
   state: 'unconfigured' | 'configured' | 'closed' = 'unconfigured';
-  decodeQueueSize = 0;
   decoded: number[] = [];
+  private queue: number[] = [];
   private buffer: number[] = [];
+  private flushing: Array<() => void> = [];
   private listeners: Array<() => void> = [];
+  /** Bumped by reset and close: work scheduled before belongs to an earlier configuration. */
+  private generation = 0;
+  private working = false;
   constructor(readonly init: Init) {
     FakeDecoder.made.push(this);
+  }
+  get decodeQueueSize() {
+    return this.queue.length;
   }
   addEventListener(_: string, listener: () => void) {
     this.listeners.push(listener);
@@ -50,40 +66,71 @@ export class FakeDecoder {
   decode(chunk: { timestamp: number }) {
     if (this.state !== 'configured') throw new DOMException("Cannot call 'decode' on a closed codec.", 'InvalidStateError');
     this.decoded.push(chunk.timestamp);
-    if (FakeDecoder.mode === 'never') return;
-    this.buffer.push(chunk.timestamp);
-    this.buffer.sort((a, b) => a - b);
-    while (this.buffer.length > FakeDecoder.reorder) this.emit(this.buffer.shift()!);
+    this.queue.push(chunk.timestamp);
+    FakeDecoder.mostQueued = Math.max(FakeDecoder.mostQueued, this.queue.length);
+    this.work();
   }
   flush(): Promise<void> {
     if (FakeDecoder.mode === 'never') return new Promise(() => undefined);
-    for (const stamp of this.buffer.splice(0)) this.emit(stamp);
-    return new Promise((resolve) => queueMicrotask(() => queueMicrotask(resolve)));
+    return new Promise((resolve) => {
+      this.flushing.push(resolve);
+      this.work();
+    });
   }
   reset() {
+    this.generation += 1;
+    this.queue = [];
     this.buffer = [];
+    this.flushing = [];
+    this.working = false;
   }
   close() {
+    this.reset();
     this.state = 'closed';
-    this.buffer = [];
   }
   /** The browser takes it back (the measured shape, spec G A1). */
   reclaim() {
-    this.state = 'closed';
-    this.buffer = [];
+    this.close();
     this.init.error(new DOMException('Codec reclaimed due to inactivity.', 'QuotaExceededError'));
   }
   /** A frame that arrives although the decoder was closed or reset (a task already queued). */
   late(stamp: number) {
     this.init.output(new FakeFrame(stamp));
   }
+  /** One queued chunk per task; pictures out in presentation order; a flush settles once all is out. */
+  private work() {
+    if (this.working) return;
+    this.working = true;
+    const generation = this.generation;
+    setTimeout(() => {
+      if (generation !== this.generation) return;
+      this.working = false;
+      const stamp = this.queue.shift();
+      if (stamp !== undefined) {
+        for (const listener of this.listeners) listener();
+        if (FakeDecoder.mode !== 'never') {
+          this.buffer.push(stamp);
+          this.buffer.sort((a, b) => a - b);
+          while (this.buffer.length > FakeDecoder.reorder) this.emit(this.buffer.shift()!);
+        }
+      }
+      if (this.queue.length > 0) return this.work();
+      if (this.flushing.length > 0) {
+        for (const left of this.buffer.splice(0)) this.emit(left);
+        const settle = this.flushing.splice(0);
+        setTimeout(() => {
+          if (generation === this.generation) for (const resolve of settle) resolve();
+        }, 0);
+      }
+    }, 0);
+  }
   private emit(stamp: number) {
     if (FakeDecoder.drop.has(stamp)) return;
-    queueMicrotask(() => {
-      if (this.state === 'closed') return;
+    const generation = this.generation;
+    setTimeout(() => {
+      if (generation !== this.generation || this.state === 'closed') return;
       this.init.output(new FakeFrame(stamp));
-      for (const listener of this.listeners) listener();
-    });
+    }, 0);
   }
 }
 
@@ -141,6 +188,7 @@ export function useFakeDecoder() {
     FakeDecoder.mode = 'eager';
     FakeDecoder.reorder = 0;
     FakeDecoder.drop = new Set();
+    FakeDecoder.mostQueued = 0;
     vi.stubGlobal('VideoDecoder', FakeDecoder);
     vi.stubGlobal(
       'EncodedVideoChunk',

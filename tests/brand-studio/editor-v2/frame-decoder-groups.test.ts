@@ -44,3 +44,29 @@ describe('several groups and restarts, with B-frame order', () => {
     expect(counter.open).toBe(0);
   });
 });
+
+describe('spec H, F8: with a decoder that works in tasks and has a real queue', () => {
+  it('no more than 6 chunks ever wait in the decoder (the session waits for a dequeue), and every picture comes out', async () => {
+    const s = await session(makeIndex(40));
+    const wanted = Array.from({ length: 40 }, (_, i) => i);
+    for (const picture of wanted) expect(pictureOf(await s.picture(0, wanted, picture))).toBe(picture);
+    expect(FakeDecoder.mostQueued).toBeGreaterThan(1);
+    expect(FakeDecoder.mostQueued).toBeLessThanOrEqual(6);
+    s.close();
+    expect(counter.open).toBe(0);
+  });
+
+  it('a picture already decoded is returned while the next run of bytes is still coming', async () => {
+    const index = makeIndex(24, 12);
+    const spread = { ...index, offsets: index.offsets.map((_, i) => i * 2_000_000) };
+    const bytes = {
+      read: (run: { start: number; end: number }) => (run.start >= 6 * 2_000_000 ? new Promise<Uint8Array>(() => undefined) : Promise.resolve(new Uint8Array(run.end - run.start))),
+      stats: () => ({ requests: 0, received: 0, mode: 'range' as const, fileSize: null }),
+    };
+    const s = await session(spread, bytes);
+    const started = Date.now();
+    expect(pictureOf(await s.picture(0, [5, 6, 7], 5))).toBe(5);
+    expect(Date.now() - started).toBeLessThan(1000);
+    s.close();
+  });
+});
