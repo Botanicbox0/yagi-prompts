@@ -44,8 +44,10 @@ export function readFootage(srcUrl: string): Promise<FootageRead> {
     .then((answer) => {
       source.close();
       const { requests, received, mode } = source.stats();
-      // A file that could not be read is asked again on the next visit (a passing network fault).
-      if (!answer.ok) cache.delete(srcUrl);
+      // Only a failure that may pass is asked again (`broken`: a refused request, a network error, a file
+      // cut off); the file's own answers (not an MP4, an edit list the export cannot follow, too large …)
+      // are remembered for the visit and not fetched again (review round 2 of part E).
+      if (!answer.ok && answer.reason === 'broken') cache.delete(srcUrl);
       return { answer, requests, received, mode, ms: Math.round(performance.now() - started) };
     });
   cache.set(srcUrl, run);

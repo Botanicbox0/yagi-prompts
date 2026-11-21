@@ -3,7 +3,7 @@ import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { containerStats, gatherBoxes, readTiming, timingOfFile } from '@/lib/brand-studio/editor-v2/container';
 import { measuredFromTiming } from '@/lib/brand-studio/editor-v2/fps';
-import { MAX_RANGE_REQUESTS, RangeRefused, rangedSource, type RangeAnswer } from '@/lib/brand-studio/editor-v2/ranged-source';
+import { MAX_RANGE_REQUESTS, MAX_WHOLE_BYTES, RANGE_CHUNK, RangeRefused, rangedSource, type RangeAnswer } from '@/lib/brand-studio/editor-v2/ranged-source';
 import { mapLimit } from '@/lib/brand-studio/editor-v2/fps';
 import { box, concat, ftyp, mdat, moof, moov, type TrackSpec } from './mp4-bytes';
 
@@ -82,6 +82,62 @@ describe('reading only the boxes, through Range requests', () => {
     const source = rangedSource(host.request, 8);
     expect((await source.read(10_000_000, 16)).length).toBe(0);
   });
+
+  it('review round 2: a server that sends the whole file is read no further than the byte ceiling (64 MiB)', async () => {
+    expect(MAX_WHOLE_BYTES).toBe(64 * 1024 * 1024);
+    // The moov sits after 3 MB of media; with a 1 MiB ceiling the reader stops, cancels and fails.
+    const host = server(TAIL_MOOV, false);
+    const source = rangedSource(host.request, RANGE_CHUNK, 1024 * 1024);
+    expect(await gatherBoxes(source)).toEqual({ failure: 'too-large' });
+    expect(host.streamed()).toBeLessThanOrEqual(1024 * 1024 + 16 * 1024);
+    expect(host.cancelled()).toBe(true);
+    // Under the ceiling the same server is read as before.
+    expect('failure' in (await gatherBoxes(rangedSource(server(TAIL_MOOV, false).request, RANGE_CHUNK, 4 * 1024 * 1024)))).toBe(false);
+  });
+
+  it('review round 2: a 206 for another range than the one asked for is refused; one that does not show its range is read', async () => {
+    const bytes = concat(ftyp(), moov({ tracks: [VIDEO] }));
+    const elsewhere = rangedSource(async (start, end) => new Response(bytes.slice(start + 100, end + 101), { status: 206, headers: { 'Content-Range': `bytes ${start + 100}-${end + 100}/${bytes.length}` } }));
+    await expect(elsewhere.read(0, 16)).rejects.toBeInstanceOf(RangeRefused);
+    // A media domain that does not expose Content-Range to the page: the bytes are taken as asked.
+    const hidden = rangedSource(async (start, end) => new Response(bytes.slice(start, end + 1), { status: 206 }));
+    const found = await gatherBoxes(hidden);
+    expect('failure' in found).toBe(false);
+  });
+});
+
+describe('review round 2: a file that cannot be read for good is not fetched again in the same visit', () => {
+  beforeEach(() => vi.resetModules());
+  afterEach(() => vi.unstubAllGlobals());
+  const text = new TextEncoder().encode('not a video at all, just some words to fill sixty-four bytes long');
+
+  it('not an MP4 (and the other permanent answers): one fetch, remembered', async () => {
+    const fetch = vi.fn(async (_url: string, init: { headers: { Range: string } }) => {
+      const [start, end] = init.headers.Range.slice(6).split('-').map(Number) as [number, number];
+      return new Response(text.slice(start, end + 1), { status: 206, headers: { 'Content-Range': `bytes ${start}-${Math.min(end, text.length - 1)}/${text.length}` } });
+    });
+    vi.stubGlobal('fetch', fetch);
+    const { readFootage } = await import('@/components/brand-studio/editor-v2/footage-facts');
+    expect((await readFootage('/media/a.webm')).answer).toEqual({ ok: false, reason: 'not-mp4' });
+    expect((await readFootage('/media/a.webm')).answer).toEqual({ ok: false, reason: 'not-mp4' });
+    expect(fetch).toHaveBeenCalledTimes(1);
+  });
+
+  it('a refused request or a network error may pass: asked again', async () => {
+    const refused = vi.fn(async () => new Response(null, { status: 403 }));
+    vi.stubGlobal('fetch', refused);
+    const { readFootage } = await import('@/components/brand-studio/editor-v2/footage-facts');
+    expect((await readFootage('/media/b.mp4')).answer).toEqual({ ok: false, reason: 'broken' });
+    await readFootage('/media/b.mp4');
+    expect(refused).toHaveBeenCalledTimes(2);
+    const offline = vi.fn(async () => {
+      throw new TypeError('Failed to fetch');
+    });
+    vi.stubGlobal('fetch', offline);
+    await readFootage('/media/c.mp4');
+    await readFootage('/media/c.mp4');
+    expect(offline).toHaveBeenCalledTimes(2);
+  });
 });
 
 describe('the frame facts the editor keeps', () => {
@@ -134,6 +190,7 @@ describe('the playback fallback counts the last picture it is shown (review roun
   afterEach(() => {
     vi.unstubAllGlobals();
     vi.doUnmock('@/components/brand-studio/editor-v2/footage-facts');
+    vi.doUnmock('@/components/brand-studio/editor-v2/screen-refresh');
   });
 
   /**
@@ -142,7 +199,12 @@ describe('the playback fallback counts the last picture it is shown (review roun
    * `endedOnSeek`: fire `ended` before `seeked` when a seek reaches the end (the order the review feared;
    * Chromium measured: no `ended` at all for a paused seek to the end, see measure-fps.ts).
    */
-  function fakeVideo(endedOnSeek: boolean, clock: (sec: number) => number = (sec) => sec) {
+  function fakeVideo(
+    endedOnSeek: boolean,
+    clock: (sec: number) => number = (sec) => sec,
+    options: { duration?: number; pictures?: number; played?: readonly number[]; endsShown?: boolean } = {},
+  ) {
+    const { duration = 4.308, pictures = 97, played = Array.from({ length: 13 }, (_, k) => k), endsShown = true } = options;
     const listeners = new Map<string, Array<() => void>>();
     let callbacks: Array<(now: number, meta: { mediaTime: number }) => void> = [];
     let time = 0;
@@ -158,7 +220,7 @@ describe('the playback fallback counts the last picture it is shown (review roun
     };
     const video = {
       style: {},
-      duration: 4.308,
+      duration,
       muted: false,
       playsInline: false,
       preload: '',
@@ -175,16 +237,18 @@ describe('the playback fallback counts the last picture it is shown (review roun
         listeners.set(name, [...(listeners.get(name) ?? []), run]);
       },
       async play() {
-        for (let k = 0; k < 13; k += 1) {
+        for (const k of played) {
           await Promise.resolve();
           present(clock(k / 24));
         }
       },
       set currentTime(at: number) {
         time = at;
+        // A seek whose picture never comes (the ends cannot be read): nothing at all.
+        if (!endsShown) return;
         queueMicrotask(() => {
-          const shown = Math.min(96, Math.floor(at * 24 + 1e-9)) / 24;
-          if (endedOnSeek && at >= 4.308 - 1e-9) fire('ended');
+          const shown = Math.min(pictures - 1, Math.floor(at * 24 + 1e-9)) / 24;
+          if (endedOnSeek && at >= duration - 1e-9) fire('ended');
           fire('seeked');
           present(clock(shown));
         });
@@ -216,6 +280,60 @@ describe('the playback fallback counts the last picture it is shown (review roun
     vi.doMock('@/components/brand-studio/editor-v2/footage-facts', () => ({ readFootage: async () => ({ answer: { ok: false, reason: 'not-mp4' }, requests: 1, received: 16, mode: 'range', ms: 1 }) }));
     const { measureSource } = await import('@/components/brand-studio/editor-v2/measure-fps');
     expect(await measureSource('/clip.webm', 10)).toEqual({ fps: 24, frames: 97 });
+  });
+
+  it('review round 2, N1: a 97-picture WebM of 4.042 s with a picture skipped in the window is 97 at 24, not 96 at 23.75', async () => {
+    const ms = (sec: number) => Math.round(sec * 1000) / 1000;
+    // Fourteen pictures played, the seventh not presented: thirteen steps over 542 ms read as 23.976 alone.
+    const played = Array.from({ length: 14 }, (_, k) => k).filter((k) => k !== 6);
+    vi.stubGlobal('document', { visibilityState: 'visible', hidden: false, createElement: () => fakeVideo(false, ms, { duration: 4.042, played }), body: { appendChild: () => undefined }, addEventListener: () => undefined, removeEventListener: () => undefined });
+    vi.stubGlobal('performance', { now: () => 0 });
+    vi.stubGlobal('window', { requestAnimationFrame: () => 1, cancelAnimationFrame: () => undefined, setInterval: () => 1, clearInterval: () => undefined });
+    vi.doMock('@/components/brand-studio/editor-v2/footage-facts', () => ({ readFootage: async () => ({ answer: { ok: false, reason: 'not-mp4' }, requests: 1, received: 16, mode: 'range', ms: 1 }) }));
+    const { measureSource } = await import('@/components/brand-studio/editor-v2/measure-fps');
+    expect(await measureSource('/clip.webm', 4.042)).toEqual({ fps: 24, frames: 97 });
+  });
+
+  it('review round 2, item 4: the ends cannot be read, so nothing is known yet: null, nothing stored, measured again next visit', async () => {
+    let made = 0;
+    let readable = false;
+    vi.stubGlobal('document', {
+      visibilityState: 'visible',
+      hidden: false,
+      createElement: () => (made++, fakeVideo(false, (sec) => sec, { endsShown: readable })),
+      body: { appendChild: () => undefined },
+      addEventListener: () => undefined,
+      removeEventListener: () => undefined,
+    });
+    vi.stubGlobal('performance', { now: () => 0 });
+    // Each try's time limit runs out at once (a macrotask: after the dozen frames, during the ends).
+    vi.doMock('@/components/brand-studio/editor-v2/screen-refresh', () => ({
+      refreshReduced: () => false,
+      screenTimer: (_limit: number, expire: () => void) => {
+        const id = setTimeout(expire, 0);
+        return () => clearTimeout(id);
+      },
+    }));
+    vi.doMock('@/components/brand-studio/editor-v2/footage-facts', () => ({ readFootage: async () => ({ answer: { ok: false, reason: 'not-mp4' }, requests: 1, received: 16, mode: 'range', ms: 1 }) }));
+    const first = await import('@/components/brand-studio/editor-v2/measure-fps');
+    // Never the length rule's 103 (the container runs to 4.308 s) or 240 (a view that says 10 s).
+    expect(await first.measureSource('/clip.webm', 10)).toBeNull();
+    expect(made).toBe(2); // a first try and one longer try
+    // Nothing frame-based is stored for it: the clip is one whose rate is not known.
+    const { fromStored, toStored } = await import('@/lib/brand-studio/editor-v2/stored');
+    const clip = { id: 'c', label: 'c', sourceKind: 'asset', assetId: 'a', srcUrl: '/clip.webm', thumbUrl: null, durationSec: 10, trimStartSec: 0, trimEndSec: 4, volume: 1, muted: false } as const;
+    const project = { version: 1 as const, aspect: '9:16' as const, clips: [clip], captions: [], bgm: null };
+    const film = fromStored(project, { '/clip.webm': null });
+    expect(film.rateUnknown).toEqual(['c']);
+    expect(toStored(film.sequence, project, { unmeasuredSources: ['/clip.webm'] }).clips[0]).not.toHaveProperty('frameV2');
+    // The same visit does not try again; the next one does, and this time the ends can be read.
+    expect(await first.measureSource('/clip.webm', 10)).toBeNull();
+    expect(made).toBe(2);
+    vi.resetModules();
+    readable = true;
+    const next = await import('@/components/brand-studio/editor-v2/measure-fps');
+    expect(await next.measureSource('/clip.webm', 10)).toEqual({ fps: 24, frames: 97 });
+    expect(made).toBe(3);
   });
 });
 

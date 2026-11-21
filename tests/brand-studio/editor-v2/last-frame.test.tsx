@@ -4,9 +4,9 @@ import { describe, expect, it } from 'vitest';
 import { ExportStatus } from '@/components/brand-studio/editor-v2/export-sheet';
 import { parseStoredProject, serializeProjectForStorage, timelineSpans, type ComposeClip, type ComposerProject } from '@/lib/brand-studio/compose/timeline';
 import { effectStartSec, overlayFrames, storedSecToFrame } from '@/lib/brand-studio/editor-v2/cut-anchor';
-import { LAST_FRAME_QUIET_MAX, lastFrameWarnings, picturePlace } from '@/lib/brand-studio/editor-v2/export-plan';
-import { framesFromPlayback, sourceFramesOf } from '@/lib/brand-studio/editor-v2/fps';
-import { totalFrames, type FrameClip, type FrameSequence } from '@/lib/brand-studio/editor-v2/frames';
+import { LAST_FRAME_QUIET_MAX, lastFrameWarnings, noteFilled, picturePlace, type FilledCuts } from '@/lib/brand-studio/editor-v2/export-plan';
+import { playbackFacts, sourceFramesOf } from '@/lib/brand-studio/editor-v2/fps';
+import { splitAtFrame, totalFrames, trimClipEdge, type FrameClip, type FrameSequence } from '@/lib/brand-studio/editor-v2/frames';
 import { fromStored, mergeFilmText, ownedSignature, storedFilmView, toStored, type FrameV2Block, type MeasuredSources } from '@/lib/brand-studio/editor-v2/stored';
 import { studioEditorEn, studioEditorKo } from '@/messages/studio-editor';
 
@@ -37,13 +37,15 @@ describe('the number of pictures is never rounded up', () => {
   });
 
   it('playback: the first and last pictures shown give the count, never more than the length gives', () => {
+    const window = Array.from({ length: 13 }, (_, k) => k / 24);
+    const count = (durationSec: number, firstSec: number | null, lastSec: number | null) => playbackFacts({ windowTimes: window, durationSec, firstSec, lastSec })?.frames ?? null;
     // The container (its sound) runs to 4.1 s; the last picture is shown at 4.000 s.
-    expect(framesFromPlayback({ fps: 24, durationSec: 4.1, firstSec: 0, lastSec: 4.0 })).toBe(97);
-    expect(framesFromPlayback({ fps: 24, durationSec: 4.06, firstSec: 0, lastSec: 4.0 })).toBe(97);
+    expect(count(4.1, 0, 4.0)).toBe(97);
+    expect(count(4.06, 0, 4.0)).toBe(97);
     // A file whose first picture is at 0.5 s.
-    expect(framesFromPlayback({ fps: 24, durationSec: 4.56, firstSec: 0.5, lastSec: 4.5 })).toBe(97);
-    // Ends not seen: the length, rounded down.
-    expect(framesFromPlayback({ fps: 24, durationSec: 4.06 })).toBe(97);
+    expect(count(4.56, 0.5, 4.5)).toBe(97);
+    // Ends not seen: nothing is counted (review round 2 of part E, item 4: never the length rule).
+    expect(count(4.06, null, null)).toBeNull();
   });
 });
 
@@ -165,6 +167,40 @@ describe('films stored with a picture too many are corrected on open', () => {
     expect(corrected.corrected).toEqual(['cut-1', 'cut-2']);
   });
 
+  it('review round 2: a corrected cut then trimmed or split in v2: the edited pieces are written from frames, nothing else moves', () => {
+    const before = phantomFilm();
+    const film = fromStored(before, counted);
+    expect(film.corrected).toEqual(['cut-1', 'cut-2']);
+    const seconds = (clip: ComposeClip) => [clip.trimStartSec, clip.trimEndSec, clip.playbackRate ?? 1, clip.durationSec];
+    const blockOf = (clip: ComposeClip) => (clip as ComposeClip & { frameV2: FrameV2Block }).frameV2;
+
+    // Trimmed: the end of cut 1 ten frames in (97 -> 87 frames, 3.625 s, stored to the tenth as the current editor keeps it).
+    const trimmed = toStored(trimClipEdge(film.sequence, 0, 'end', -10).seq, before);
+    expect(seconds(trimmed.clips[0]!)).toEqual([0, 3.6, 1, 4.1]);
+    expect(blockOf(trimmed.clips[0]!)).toMatchObject({ frames: 87, sourceFrames: 97, mirror: { trimStartSec: 0, trimEndSec: 3.6, playbackRate: 1 } });
+    // Cut 2 was not touched: its stored seconds and its block's mirror stay what they were.
+    expect(seconds(trimmed.clips[1]!)).toEqual(seconds(before.clips[1]!));
+    expect(blockOf(trimmed.clips[1]!)).toMatchObject({ frames: 97, sourceFrames: 97, mirror: { trimStartSec: 0, trimEndSec: 4.1, playbackRate: 1 } });
+    expect({ ...trimmed, clips: [] }).toEqual({ ...before, clips: [] });
+
+    // Split: cut 1 at its 40th frame. Both halves are written from their frames; cut 2 does not move.
+    const split = toStored(splitAtFrame(film.sequence, 40, 'cut-1b'), before);
+    expect(split.clips.map((clip) => clip.id)).toEqual(['cut-1', 'cut-1b', 'cut-2']);
+    expect(seconds(split.clips[0]!)).toEqual([0, 1.7, 1, 4.1]);
+    expect(seconds(split.clips[1]!)).toEqual([1.7, 4, 1, 4.1]);
+    expect(blockOf(split.clips[1]!)).toMatchObject({ inFrame: 40, frames: 57, sourceFrames: 97 });
+    expect(seconds(split.clips[2]!)).toEqual(seconds(before.clips[1]!));
+    expect(blockOf(split.clips[2]!).mirror).toEqual({ trimStartSec: 0, trimEndSec: 4.1, playbackRate: 1 });
+
+    // Opened again, every cut is exact: nothing is corrected twice, the frames are the ones written.
+    for (const written of [trimmed, split]) {
+      const again = fromStored(written, counted);
+      expect(again.corrected).toEqual([]);
+      expect(again.exact).toEqual(written.clips.map((clip) => clip.id));
+    }
+    expect(fromStored(split, counted).sequence.clips.map((clip) => (clip as FrameClip).frames)).toEqual([40, 57, 97]);
+  });
+
   it('only the file’s own count corrects a block; a playback measurement does not', () => {
     const film = fromStored(phantomFilm(), { [SRC]: { fps: 24, frames: 97 } });
     expect(film.corrected).toEqual([]);
@@ -217,7 +253,7 @@ describe('the sheet says it after the export, quietly', () => {
     fps: 24,
     elapsedMs: 1000,
     captionFile: null,
-    warnings: [{ kind: 'lastFrame' as const, clip: '영상 스튜디오 1', frames: 1 }],
+    warnings: [{ kind: 'lastFrame' as const, clip: '영상 스튜디오 1', frames: 1, pictures: 1 }],
     paths: [],
   };
 
@@ -231,7 +267,7 @@ describe('the sheet says it after the export, quietly', () => {
   });
 
   it('more than two filled frames in one cut is a visible warning with its own line; the export still finished', () => {
-    const many = { ...done, warnings: [{ kind: 'lastFrame' as const, clip: '영상 스튜디오 1', frames: 3 }] };
+    const many = { ...done, warnings: [{ kind: 'lastFrame' as const, clip: '영상 스튜디오 1', frames: 3, pictures: 3 }] };
     const html = renderToStaticMarkup(h(ExportStatus, { job: many, copy: studioEditorKo.export }));
     expect(html).toMatch(/role="alert"[^>]*data-editor-export-warning="lastFrame"/);
     expect(html).toContain('data-editor-export-filled="3"');
@@ -241,16 +277,44 @@ describe('the sheet says it after the export, quietly', () => {
   });
 
   it('filled frames are counted per cut: two cuts of one clip (or two clips with one name) stay apart', () => {
-    const filled = new Map([
-      ['cut-a', { clip: '영상 스튜디오 1', frames: 1 }],
-      ['cut-b', { clip: '영상 스튜디오 1', frames: 2 }],
-    ]);
+    const filled: FilledCuts = new Map();
+    noteFilled(filled, 'cut-a', '영상 스튜디오 1', 96);
+    noteFilled(filled, 'cut-b', '영상 스튜디오 1', 95);
+    noteFilled(filled, 'cut-b', '영상 스튜디오 1', 96);
     expect(lastFrameWarnings(filled)).toEqual([
-      { kind: 'lastFrame', clip: '영상 스튜디오 1', frames: 1 },
-      { kind: 'lastFrame', clip: '영상 스튜디오 1', frames: 2 },
+      { kind: 'lastFrame', clip: '영상 스튜디오 1', frames: 1, pictures: 1 },
+      { kind: 'lastFrame', clip: '영상 스튜디오 1', frames: 2, pictures: 2 },
     ]);
     const html = renderToStaticMarkup(h(ExportStatus, { job: { ...done, warnings: lastFrameWarnings(filled) }, copy: studioEditorKo.export }));
     expect(html.match(/data-editor-export-warning="lastFrame"/g)).toHaveLength(2);
+  });
+});
+
+describe('review round 2: how loud the note is depends on the pictures missing, not the film frames filled', () => {
+  const done = { status: 'done' as const, url: 'blob:x', filename: 'twings-edit.mp4', bytes: 1000, frames: 317, fps: 24, elapsedMs: 1000, captionFile: null, paths: [] };
+  const sheet = (filled: FilledCuts) => renderToStaticMarkup(h(ExportStatus, { job: { ...done, warnings: lastFrameWarnings(filled) }, copy: studioEditorKo.export }));
+
+  it('a half-speed cut whose last picture is missing fills two film frames for one picture: a quiet note that says 2', () => {
+    const filled: FilledCuts = new Map();
+    noteFilled(filled, 'slow', '느린 컷', 96);
+    noteFilled(filled, 'slow', '느린 컷', 96);
+    expect(lastFrameWarnings(filled)).toEqual([{ kind: 'lastFrame', clip: '느린 컷', frames: 2, pictures: 1 }]);
+    const html = sheet(filled);
+    expect(html).not.toMatch(/role="alert"[^>]*data-editor-export-warning="lastFrame"/);
+    expect(html).toContain('data-editor-export-filled="2"');
+    expect(html).toContain('&quot;느린 컷&quot; 클립 끝의 2프레임');
+  });
+
+  it('three missing pictures are the alert, at any speed; the sentence gives the film frames filled', () => {
+    const plain: FilledCuts = new Map();
+    for (const picture of [94, 95, 96]) noteFilled(plain, 'cut', '컷', picture);
+    expect(sheet(plain)).toMatch(/role="alert"[^>]*data-editor-export-warning="lastFrame"[^>]*data-editor-export-filled="3"/);
+    const slow: FilledCuts = new Map();
+    for (const picture of [94, 94, 95, 95, 96, 96]) noteFilled(slow, 'slow', '느린 컷', picture);
+    expect(lastFrameWarnings(slow)).toEqual([{ kind: 'lastFrame', clip: '느린 컷', frames: 6, pictures: 3 }]);
+    const html = sheet(slow);
+    expect(html).toMatch(/role="alert"[^>]*data-editor-export-warning="lastFrame"[^>]*data-editor-export-filled="6"/);
+    expect(html).toContain('&quot;느린 컷&quot; 클립 끝의 6프레임을 원본에서 읽지 못해');
   });
 });
 

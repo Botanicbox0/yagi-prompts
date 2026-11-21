@@ -242,12 +242,12 @@ export function ExportStatus({ job, copy: e }: { job: ExportJob; copy: ExportCop
             <p key={`${warning.kind}-${index}`} className={styles.note} data-editor-export-warning={warning.kind}>
               {fill(e.warnSoundPosition, { clip: warning.clip })}
             </p>
-          ) : warning.kind === 'lastFrame' && warning.frames <= LAST_FRAME_QUIET_MAX ? (
+          ) : warning.kind === 'lastFrame' && warning.pictures <= LAST_FRAME_QUIET_MAX ? (
             <p key={`${warning.kind}-${index}`} className={styles.note} data-editor-export-warning={warning.kind} data-editor-export-filled={warning.frames}>
               {fill(e.warnLastFrame, { clip: warning.clip, count: warning.frames })}
             </p>
           ) : warning.kind === 'lastFrame' ? (
-            // More than a couple of frames is not a quiet note: the person should look at that part.
+            // More than a couple of missing pictures is not a quiet note: the person should look at that part.
             <p key={`${warning.kind}-${index}`} className={styles.exportError} role="alert" data-editor-export-warning={warning.kind} data-editor-export-filled={warning.frames}>
               {fill(e.warnLastFrameMany, { clip: warning.clip, count: warning.frames })}
             </p>

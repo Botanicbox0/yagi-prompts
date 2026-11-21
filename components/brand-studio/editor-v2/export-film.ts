@@ -35,6 +35,7 @@ import {
   isKeyFrame,
   notIncluded,
   lastFrameWarnings,
+  noteFilled,
   picturePlace,
   placeSound,
   soundBytesCheck,
@@ -47,6 +48,8 @@ import {
   timestampUs,
   videoPlan,
   type AudioPlan,
+  type FilledCuts,
+  type LastFrameWarning,
   type NotIncludedKey,
   type PlannedFrame,
 } from '@/lib/brand-studio/editor-v2/export-plan';
@@ -135,7 +138,7 @@ export interface ExportFilmResult {
  * file's timing could not be read, so its sound may sit off its picture (spec E, item B1); a cut that asked for pictures past its
  * footage's last one, filled with that last picture (spec E addendum C3; `frames` of them).
  */
-export type ExportWarning = { kind: 'sound'; clip: string } | { kind: 'soundPosition'; clip: string } | { kind: 'lastFrame'; clip: string; frames: number };
+export type ExportWarning = { kind: 'sound'; clip: string } | { kind: 'soundPosition'; clip: string } | LastFrameWarning;
 
 export type ExportStopReason = 'empty' | 'unsupported' | 'load' | 'frame' | 'encode' | 'sound' | 'memory' | 'cancelled';
 
@@ -750,12 +753,6 @@ async function encodeAac(rendered: AudioBuffer, signal?: AbortSignal): Promise<{
 
 // ── Pictures: one path per source, verified either way ─────────────────────────────────────────
 
-/**
- * The most a picture source may hold of a whole file when its server ignores Range (answers 200; neither the
- * local media route nor production's media domain does). Uploads are at most 50 MB (lib/brand-studio/
- * contracts.ts); above this the source is taken by seeking. Held until the pictures are done.
- */
-const WHOLE_FILE_LIMIT = 256 * 1024 * 1024;
 
 /** Hands the main thread back after this much drawing, through a message (not a timer: timers throttle). */
 const YIELD_EVERY_MS = 12;
@@ -821,7 +818,7 @@ async function openDecoderSource(
     while (groups[group]!.last < request.frame) group += 1;
     at.set(request.frame, { group, picture: request.picture, past: request.past });
   }
-  const bytes = sampleBytes(footageBytes(srcUrl), WHOLE_FILE_LIMIT);
+  const bytes = sampleBytes(footageBytes(srcUrl));
   return { kind: 'decoder', session: new PictureDecoder(answer.index, bytes, config), index: answer.index, bytes, groups, at };
 }
 
@@ -878,7 +875,7 @@ export async function exportFilm(options: ExportFilmOptions): Promise<ExportFilm
   const sources = new Map<string, PictureSource>();
   const records = new Map<string, SourcePath>();
   /** Pictures asked for past a footage's last one, filled with it, by cut id (named by its clip). */
-  const filled = new Map<string, { clip: string; frames: number }>();
+  const filled: FilledCuts = new Map();
   let encoder: VideoEncoder | null = null;
   let pathNow: ExportPath | undefined;
   let lastYield = performance.now();
@@ -976,7 +973,8 @@ export async function exportFilm(options: ExportFilmOptions): Promise<ExportFilm
       const label = labels.get(entry.clipId) ?? entry.clipId;
       const shown = await pictureOf(entry, label);
       pathNow = shown.path;
-      if (shown.past) filled.set(entry.clipId, { clip: label, frames: (filled.get(entry.clipId)?.frames ?? 0) + 1 });
+      // Filled frames are counted the same way on both paths: per cut, frames and the distinct pictures asked for.
+      if (shown.past) noteFilled(filled, entry.clipId, label, entry.sourceFrame);
       if (framing === 'current') drawCurrentFraming(ctx, shown.picture, width, height);
       else drawFramed(ctx, shown.picture, width, height, reframe[entry.clipId] ?? DEFAULT_REFRAME);
       if (graded && extras) {

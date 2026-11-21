@@ -12,7 +12,7 @@
  * Pure apart from the request function it is given (components/brand-studio/editor-v2/footage-facts.ts
  * makes the one real request).
  */
-import { ReadLimit, type ByteSource } from './container';
+import { ByteLimit, ReadLimit, type ByteSource } from './container';
 
 /** What a request returns: the standard `Response` is one. */
 export interface RangeAnswer {
@@ -34,6 +34,12 @@ export const RANGE_CHUNK = 64 * 1024;
  */
 export const MAX_RANGE_REQUESTS = 8;
 
+/**
+ * The most bytes read from a server that ignores Range and sends the whole file (review round 2 of part
+ * E): past this without finding what is needed, reading stops and the file is measured by playback.
+ */
+export const MAX_WHOLE_BYTES = 64 * 1024 * 1024;
+
 export interface RangedSource extends ByteSource {
   /** Stops a body still being read (a server that ignored Range). */
   close(): void;
@@ -51,7 +57,7 @@ export class RangeRefused extends Error {
   }
 }
 
-export function rangedSource(request: RangeRequest, chunk = RANGE_CHUNK): RangedSource {
+export function rangedSource(request: RangeRequest, chunk = RANGE_CHUNK, wholeLimit = MAX_WHOLE_BYTES): RangedSource {
   const pieces: Array<{ start: number; bytes: Uint8Array }> = [];
   let mode: 'range' | 'whole' | null = null;
   let requests = 0;
@@ -66,6 +72,13 @@ export function rangedSource(request: RangeRequest, chunk = RANGE_CHUNK): Ranged
 
   const fromWhole = async (start: number, length: number) => {
     while (wholeLength < start + length && !wholeDone && reader) {
+      if (wholeLength >= wholeLimit) {
+        // More than the ceiling received and what is needed is further on: stop the body and give up.
+        void reader.cancel().catch(() => undefined);
+        reader = null;
+        wholeDone = true;
+        throw new ByteLimit();
+      }
       const { value, done } = await reader.read();
       if (done || !value) {
         wholeDone = true;
@@ -103,7 +116,8 @@ export function rangedSource(request: RangeRequest, chunk = RANGE_CHUNK): Ranged
       if (requests >= MAX_RANGE_REQUESTS) throw new ReadLimit();
       requests += 1;
       const answer = await request(start, start + want - 1);
-      const range = answer.headers?.get('content-range')?.match(/\/(\d+)\s*$/);
+      const contentRange = answer.headers?.get('content-range') ?? null;
+      const range = contentRange?.match(/\/(\d+)\s*$/);
       if (range) total = Number(range[1]);
       else if (answer.status === 200) {
         const length = Number(answer.headers?.get('content-length'));
@@ -114,6 +128,10 @@ export function rangedSource(request: RangeRequest, chunk = RANGE_CHUNK): Ranged
         return new Uint8Array(0);
       }
       if (answer.status === 206) {
+        // A range other than the one asked for is refused (review round 2 of part E). An answer that does not
+        // show its range (a media domain that does not expose Content-Range to the page) is taken as asked.
+        const from = contentRange?.match(/^\s*bytes\s+(\d+)-/i);
+        if (contentRange && (!from || Number(from[1]) !== start)) throw new RangeRefused(206);
         mode = 'range';
         const bytes = new Uint8Array(await answer.arrayBuffer());
         received += bytes.length;

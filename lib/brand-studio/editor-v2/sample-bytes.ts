@@ -24,6 +24,13 @@ export interface RangeReply {
 /** Asks for bytes `start` to `end` inclusive. */
 export type RangeFetch = (start: number, end: number) => Promise<RangeReply>;
 
+/**
+ * The most a picture source may hold of a whole file when its server ignores Range: the frame facts reader's
+ * own ceiling (ranged-source.ts `MAX_WHOLE_BYTES`, 64 MiB; uploads are at most 50 MB). Above it the source
+ * is taken by seeking.
+ */
+export const WHOLE_FILE_LIMIT = 64 * 1024 * 1024;
+
 /** The whole file was sent and it is larger than the export may hold: the source is taken by seeking. */
 export class WholeFileTooLarge extends Error {
   readonly bytes: number | null;
@@ -46,7 +53,7 @@ export function totalFromContentRange(value: string | null | undefined): number 
   return match ? Number(match[1]) : null;
 }
 
-export function sampleBytes(request: RangeFetch, wholeLimit: number): SampleBytes {
+export function sampleBytes(request: RangeFetch, wholeLimit = WHOLE_FILE_LIMIT): SampleBytes {
   let requests = 0;
   let received = 0;
   let mode: 'range' | 'whole' | null = null;
@@ -65,8 +72,16 @@ export function sampleBytes(request: RangeFetch, wholeLimit: number): SampleByte
       requests += 1;
       const answer = await request(run.start, run.end - 1);
       if (answer.status === 206) {
+        // A range other than the one asked for is refused, as the frame facts reader refuses it; an answer that
+        // does not show its range (a media domain that does not expose Content-Range) is taken as asked.
+        const shown = answer.headers?.get('content-range') ?? null;
+        const from = shown?.match(/^\s*bytes\s+(\d+)-/i);
+        if (shown && (!from || Number(from[1]) !== run.start)) {
+          void answer.body?.cancel().catch(() => undefined);
+          throw new Error(`the server sent a range from ${from ? from[1] : '?'} for ${run.start}`);
+        }
         mode = mode ?? 'range';
-        fileSize = fileSize ?? totalFromContentRange(answer.headers?.get('content-range'));
+        fileSize = fileSize ?? totalFromContentRange(shown);
         const bytes = new Uint8Array(await answer.arrayBuffer());
         received += bytes.length;
         return cut(bytes, run, run.start);

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { RangeRefused } from '@/lib/brand-studio/editor-v2/ranged-source';
-import { WholeFileTooLarge, sampleBytes, totalFromContentRange, type RangeReply as RangeAnswer } from '@/lib/brand-studio/editor-v2/sample-bytes';
+import { WHOLE_FILE_LIMIT, WholeFileTooLarge, sampleBytes, totalFromContentRange, type RangeReply as RangeAnswer } from '@/lib/brand-studio/editor-v2/sample-bytes';
 
 /**
  * Spec F, F2: the decoder path reads only the byte ranges that hold the pictures it shows. A server that
@@ -46,6 +46,19 @@ describe('reading pictures by range', () => {
     await expect(sampleBytes(server(true), 1 << 20).read({ start: 9990, end: 10_020 })).rejects.toThrow(/ended/);
     const refusing = async (): Promise<RangeAnswer> => ({ status: 403, body: null, arrayBuffer: async () => new ArrayBuffer(0) });
     await expect(sampleBytes(refusing, 1 << 20).read({ start: 0, end: 10 })).rejects.toBeInstanceOf(RangeRefused);
+  });
+
+  it('a 206 that starts somewhere else than asked is refused, never cut into pictures', async () => {
+    const shifted = async (start: number, end: number): Promise<RangeAnswer> => {
+      const from = Math.max(0, start - 100);
+      const headers = new Map([['content-range', `bytes ${from}-${end}/${FILE.length}`]]);
+      return { status: 206, body: null, arrayBuffer: async () => FILE.slice(from, end + 1).buffer, headers: { get: (name) => headers.get(name) ?? null } };
+    };
+    await expect(sampleBytes(shifted, 1 << 20).read({ start: 500, end: 900 })).rejects.toThrow(/range/);
+  });
+
+  it('the whole-file fallback holds at most the facts reader’s ceiling (64 MiB) by default', () => {
+    expect(WHOLE_FILE_LIMIT).toBe(64 * 1024 * 1024);
   });
 
   it('Content-Range totals', () => {

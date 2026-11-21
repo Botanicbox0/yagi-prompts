@@ -761,6 +761,47 @@ def run_checks(browser, media):
     context.unroute(webm_route, serve_webm)
     measure(f'(7) a WebM of 97 pictures whose container runs to 4.308 s, in place of a 10 s upload, measured by playback: stored sourceFrames {block.get("sourceFrames")}, sourceFps {block.get("sourceFps")}, cut {page.evaluate(STATE)["cuts"]}')
     check('(7) the playback fallback stores the 97 pictures it is shown, not the length’s 240 or the container’s 103', block.get('sourceFrames') == 97, json.dumps({k: block.get(k) for k in ('sourceFrames', 'sourceFps', 'frames')}))
+    check('(7) at 24 fps (review round 2, N1: the rate from the whole span, never from a count)', block.get('sourceFps') == 24, json.dumps(block.get('sourceFps')))
+
+    # The same WebM whose end cannot be read (review round 2, item 4): its bytes after the first 60 % never
+    # come, so the window plays but the seek to the last picture never finishes. Nothing is known yet: no
+    # frame data is stored for it and the export is refused naming it; never the length rule's 240.
+    tail_from = int(len(webm_body) * 0.6)
+    stalled = []
+
+    def serve_webm_head_only(route):
+        rng = route.request.headers.get('range') or 'bytes=0-'
+        a, _, b = rng[6:].partition('-') if rng.startswith('bytes=') else ('0', '', '')
+        start = int(a or 0)
+        if start >= tail_from:
+            stalled.append(route)
+            return  # left unanswered: the request hangs (aborted once the check is done)
+        end = min(int(b) if b else tail_from - 1, tail_from - 1)
+        return route.fulfill(status=206, body=webm_body[start:end + 1], headers={'Content-Type': 'video/webm', 'Accept-Ranges': 'bytes', 'Content-Range': f'bytes {start}-{end}/{len(webm_body)}'})
+
+    context.route(webm_route, serve_webm_head_only)
+    page.evaluate('(key) => localStorage.removeItem(key)', KEY)
+    open_v2()
+    started = time.time()
+    page.click(f'[data-editor-source="{frame_clip}"]')
+    page.wait_for_function('() => document.querySelectorAll("[data-editor-clip]").length === 1', timeout=180000)
+    waited = time.time() - started
+    page.wait_for_timeout(1200)
+    film = stored() or {}
+    block = ((film.get('clips') or [{}])[0].get('frameV2') or {})
+    page.click('[data-editor-export]')
+    page.wait_for_selector('[data-editor-export-sheet]', timeout=10000)
+    blocked = page.get_attribute('[data-editor-export-blocked]', 'data-editor-export-blocked') if page.locator('[data-editor-export-blocked]').count() else None
+    page.keyboard.press('Escape')
+    context.unroute(webm_route, serve_webm_head_only)
+    for route in stalled:
+        try:
+            route.abort()
+        except Exception:
+            pass  # the page already gave up on it
+    measure(f'(7) the same WebM with its end unreadable: requests left hanging from byte {tail_from} ({len(stalled)}); the cut came after {waited:.0f} s (two tries); stored frame data {json.dumps(block) if block else "none"}; export {blocked}')
+    check('(7) ends unreadable: nothing frame-based is stored for it (not the length rule’s 240)', 'sourceFrames' not in block and 'fps' not in block, json.dumps(block))
+    check('(7) ends unreadable: the export is refused for its rate', blocked == 'rate', str(blocked))
 
     # Leave the organization's uploads as they were found (the other checks take the first uploads they see).
     for key in [k for k in keys if k]:
