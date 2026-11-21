@@ -12,24 +12,34 @@
  * Pure apart from the request function it is given (components/brand-studio/editor-v2/footage-facts.ts
  * makes the one real request).
  */
-import type { ByteSource } from './container';
+import { ReadLimit, type ByteSource } from './container';
 
 /** What a request returns: the standard `Response` is one. */
 export interface RangeAnswer {
   status: number;
   body: ReadableStream<Uint8Array> | null;
   arrayBuffer(): Promise<ArrayBuffer>;
+  /** `Content-Range` (its total is the file's length) and `Content-Length`, when the answer shows them. */
+  headers?: { get(name: string): string | null };
 }
 
 /** Asks for bytes `start` to `end` inclusive. */
 export type RangeRequest = (start: number, end: number) => Promise<RangeAnswer>;
 
 export const RANGE_CHUNK = 64 * 1024;
+/**
+ * The most requests made for one file (review round 1 of part E, item 10). An ordinary file needs one to
+ * three; past this the file is measured by playback instead (the local media route reads the whole object
+ * for every Range request).
+ */
+export const MAX_RANGE_REQUESTS = 8;
 
 export interface RangedSource extends ByteSource {
   /** Stops a body still being read (a server that ignored Range). */
   close(): void;
   stats(): { requests: number; received: number; mode: 'range' | 'whole' | null };
+  /** The file's whole length when an answer said it. */
+  size(): number | null;
 }
 
 export class RangeRefused extends Error {
@@ -47,6 +57,7 @@ export function rangedSource(request: RangeRequest, chunk = RANGE_CHUNK): Ranged
   let requests = 0;
   let received = 0;
   let atEnd = Infinity;
+  let total: number | null = null;
   // The whole file, read from a 200 answer as far as needed.
   let whole = new Uint8Array(0);
   let wholeLength = 0;
@@ -89,8 +100,15 @@ export function rangedSource(request: RangeRequest, chunk = RANGE_CHUNK): Ranged
       const hit = cached(start, length);
       if (hit) return hit;
       const want = Math.max(length, chunk);
+      if (requests >= MAX_RANGE_REQUESTS) throw new ReadLimit();
       requests += 1;
       const answer = await request(start, start + want - 1);
+      const range = answer.headers?.get('content-range')?.match(/\/(\d+)\s*$/);
+      if (range) total = Number(range[1]);
+      else if (answer.status === 200) {
+        const length = Number(answer.headers?.get('content-length'));
+        if (Number.isFinite(length) && length > 0) total = length;
+      }
       if (answer.status === 416) {
         atEnd = Math.min(atEnd, start);
         return new Uint8Array(0);
@@ -117,5 +135,6 @@ export function rangedSource(request: RangeRequest, chunk = RANGE_CHUNK): Ranged
       wholeDone = true;
     },
     stats: () => ({ requests, received, mode }),
+    size: () => total,
   };
 }

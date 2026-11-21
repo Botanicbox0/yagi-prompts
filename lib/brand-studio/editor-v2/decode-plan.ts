@@ -278,6 +278,12 @@ export function choosePath(input: {
   override: ExportPathOverride;
   /** `VideoDecoder` exists in this browser. */
   hasDecoder: boolean;
+  /**
+   * Why the clip's frame facts (lib/brand-studio/editor-v2/container.ts) could not be read, or `null` when
+   * they were. The editor then measured the clip by playback and numbers its pictures that way, so its
+   * pictures are taken by seeking too (a fragmented file above the reader's limit, too many requests).
+   */
+  factsFailure?: string | null;
   /** The source's index could be read (`null` when not: a reason is given). */
   indexFailure: string | null;
   /** `VideoDecoder.isConfigSupported` said yes (`null` when not asked). */
@@ -285,6 +291,7 @@ export function choosePath(input: {
 }): { path: ExportPath; reason: SeekReason | null } {
   if (input.override === 'seek') return { path: 'seek', reason: 'forced' };
   if (!input.hasDecoder) return { path: 'seek', reason: 'no-decoder' };
+  if (input.factsFailure) return { path: 'seek', reason: `facts:${input.factsFailure}` };
   if (input.indexFailure !== null) return { path: 'seek', reason: `container:${input.indexFailure}` };
   if (input.configSupported !== true) return { path: 'seek', reason: 'codec-unsupported' };
   return { path: 'decoder', reason: null };

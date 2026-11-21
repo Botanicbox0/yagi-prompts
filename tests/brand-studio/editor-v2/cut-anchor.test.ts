@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { emptyComposerProject, timelineSpans, type ComposeCaption, type ComposeOverlayClip, type ComposeSfxClip, type ComposerProject } from '@/lib/brand-studio/compose/timeline';
-import { captionsOnFrames, cutAnchor, effectStartSec, overlayFrames, storedSecToFilmSec, storedSecToFrame, storedSpanToFrames } from '@/lib/brand-studio/editor-v2/cut-anchor';
+import { captionsOnFrames, cutAnchor, effectStartSec, overlayFrames, storedEndToFrame, storedSecToFilmSec, storedSecToFrame, storedSpanToFrames } from '@/lib/brand-studio/editor-v2/cut-anchor';
 import { captionsAt, imageOverlaysAt } from '@/lib/brand-studio/editor-v2/export-plan';
 import { filmContents } from '@/lib/brand-studio/editor-v2/film-contents';
 import { frameStateAt, totalFrames, visibleCaptions, type FrameClip, type FrameSequence } from '@/lib/brand-studio/editor-v2/frames';
@@ -74,22 +74,39 @@ describe('a stored time is the same moment of the same cut', () => {
   });
 });
 
-describe('the tail of a cut never spills into the next one', () => {
-  it('a cut the current editor rounds longer than v2 (22 frames from frame 1 read as 0.0 → 1.0 s): its tail lands on its end', () => {
+describe('the tail of a cut never spills into the next one (review round 1 of part E, item 9)', () => {
+  it('a cut the current editor rounds longer than v2 (22 frames from frame 1 read as 0.0 → 1.0 s): its tail lands on its last frame', () => {
     const { anchor } = anchorOf([cut('a', 1, 22), cut('b', 50, 24)]);
     expect(anchor.stored[0]).toEqual({ start: 0, end: 1 });
     expect(storedSecToFrame(anchor, 0.5)).toBe(12);
-    // 0.99 s into it is 23.76 frames: past v2's 22, so the cut's end (the next cut's first frame).
-    expect(storedSecToFrame(anchor, 0.99)).toBe(22);
-    expect(storedSecToFilmSec(anchor, 0.99)).toBeCloseTo(22 / 24, 12);
+    // 0.99 s into it is 23.76 frames: past v2's 22, so the cut's last frame (21), not the next cut's first (22).
+    expect(storedSecToFrame(anchor, 0.99)).toBe(21);
+    // A sound starts at the latest where the cut's last frame starts.
+    expect(storedSecToFilmSec(anchor, 0.99)).toBeCloseTo(21 / 24, 12);
+    // An end (one past the last frame shown) may be the cut's end.
+    expect(storedEndToFrame(anchor, 0.99)).toBe(22);
+    // A time on the boundary still belongs to the cut that starts there.
+    expect(storedSecToFrame(anchor, 1.0)).toBe(22);
+    expect(storedEndToFrame(anchor, 1.0)).toBe(22);
   });
 
-  it('a cut the current editor stretches to its 0.3 s minimum (3 frames): the tail lands on its end', () => {
+  it('a cut the current editor stretches to its 0.3 s minimum (3 frames): the tail lands on its last frame', () => {
     const { anchor } = anchorOf([cut('a', 0, 3), cut('b', 50, 24)]);
     expect(anchor.stored[0]).toEqual({ start: 0, end: 0.3 });
     expect(storedSecToFrame(anchor, 0.1)).toBe(2);
-    expect(storedSecToFrame(anchor, 0.25)).toBe(3);
+    expect(storedSecToFrame(anchor, 0.25)).toBe(2);
     expect(storedSecToFrame(anchor, 0.3)).toBe(3);
+  });
+
+  it('a caption, a still overlay and an effect starting in the tail stay in their cut', () => {
+    const { anchor, stored } = anchorOf([cut('a', 0, 3), cut('b', 50, 24)]);
+    const caption = captionsOnFrames([{ id: 'c', text: 'c', startSec: 0.25, endSec: 0.29, position: 'bottom', size: 'md' }], anchor)[0]!;
+    // Starts on the cut's last frame (2), ends at the cut's end (3): one frame long, never in cut b.
+    expect([caption.start, caption.end]).toEqual([2, 3]);
+    expect(overlayFrames(anchor, { startSec: 0.25, endSec: 0.28 })).toEqual({ first: 2, last: 2 });
+    expect(effectStartSec(anchor, { startSec: 0.28 })).toBeCloseTo(2 / 24, 12);
+    // Spans across the boundary keep their end in the next cut.
+    expect(storedSpanToFrames(anchor, 0.2, 0.5)).toEqual({ start: 2, end: 3 + 5 });
   });
 });
 
@@ -104,9 +121,19 @@ describe('speed: the offset is timeline time in both editors', () => {
 });
 
 describe('a film whose cuts never drifted: nothing moves', () => {
-  it('cut lengths and trims on whole half seconds at 24 fps: the mapping is round(t × fps)', () => {
+  it('cut lengths and trims on whole half seconds at 24 fps: the mapping is round(t × fps), never past the cut a time is in', () => {
     const { anchor } = anchorOf([cut('a', 0, 36), cut('b', 48, 12), cut('c', 120, 60), cut('d', 12, 24)]);
-    for (let t = 0; t <= 6.5; t += 0.01) expect(storedSecToFrame(anchor, t), `t=${t}`).toBe(Math.round(t * FPS));
+    // Cut ends at frames 36, 48, 108, 132. A time less than half a frame before a cut's end rounds onto the
+    // next cut's first frame; it is a moment of THIS cut, so it stays on this cut's last frame (item 9).
+    const ends = [36, 48, 108, 132];
+    for (let t = 0; t <= 6.5; t += 0.01) {
+      const exact = t * FPS;
+      const end = ends.find((e) => t < e / FPS);
+      const expected = end === undefined ? Math.round(exact) : Math.min(Math.round(exact), end - 1);
+      expect(storedSecToFrame(anchor, t), `t=${t}`).toBe(expected);
+      // An end (one past the last frame shown) is round(t × fps) everywhere.
+      expect(storedEndToFrame(anchor, t), `end t=${t}`).toBe(Math.round(exact));
+    }
   });
 });
 

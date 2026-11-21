@@ -50,7 +50,7 @@ export interface VideoTiming {
   fps: number;
   fpsNum: number;
   fpsDen: number;
-  /** The frames are not evenly spaced (see `EVEN_TOLERANCE`): the editor does not support such footage. */
+  /** The frames are not evenly spaced (no rate fits their times, see `fitsRate`): the editor does not support such footage. */
   variable: boolean;
   /** The track's own time scale (`mdhd`). */
   timescale: number;
@@ -63,7 +63,11 @@ export interface SoundTiming {
 
 export interface FileTiming {
   video: VideoTiming | null;
-  sound: SoundTiming | null;
+  /**
+   * `null`: the file has no sound track. `unknown`: it has one whose edit list the reader cannot follow
+   * (review round 1 of part E, item 3): the picture facts still stand, where the sound sits is not known.
+   */
+  sound: SoundTiming | 'unknown' | null;
   fragmented: boolean;
 }
 
@@ -71,7 +75,7 @@ export interface FileTiming {
  * Why a file could not be read: not an MP4 / MOV; no `moov`; boxes cut off or inconsistent; an edit list
  * the export cannot follow (more than one piece of media, or a changed speed); too many fragments.
  */
-export type TimingFailure = 'not-mp4' | 'no-moov' | 'broken' | 'edits' | 'too-many-boxes';
+export type TimingFailure = 'not-mp4' | 'no-moov' | 'broken' | 'edits' | 'too-many-boxes' | 'too-many-requests' | 'fragmented-too-large';
 
 export type TimingAnswer = { ok: true; timing: FileTiming } | { ok: false; reason: TimingFailure };
 
@@ -84,15 +88,33 @@ export interface FoundBoxes {
 /** Any way of reading a file's bytes: `[start, start + length)`, fewer at the end of the file. */
 export interface ByteSource {
   read(start: number, length: number): Promise<Uint8Array>;
+  /** The file's whole length when known (a Range answer's total), else `null`. */
+  size?(): number | null;
+}
+
+/** A byte source that has made all the requests it may (ranged-source.ts `MAX_RANGE_REQUESTS`). */
+export class ReadLimit extends Error {
+  constructor() {
+    super('too many requests for one file');
+    this.name = 'ReadLimit';
+  }
 }
 
 /**
- * A frame duration within one tick of the clock, or within this share of the usual duration, is the
- * usual duration: clocks that cannot hold the rate exactly round each frame's time (29.97 fps on a
- * 1/1000 s clock is 33, 33, 34 ms …). Anything further apart (1/24 s next to 1/30 s, a missing frame)
- * is not evenly spaced. The last frame's duration is not looked at: muxers often write it short.
+ * The most of a fragmented file read to walk its fragments: its fragments' `moof` boxes are spread over
+ * the whole file, so the rest after the `moov` is fetched in one request and walked in memory, up to this
+ * size; a larger one (or one whose size is not known) is measured by playback instead (review round 1 of
+ * part E, item 10).
  */
-export const EVEN_TOLERANCE = 0.001;
+export const MAX_FRAGMENTED_BYTES = 64 * 1024 * 1024;
+
+/**
+ * How far a picture's time may sit from where a rate puts it and still be on that rate: one tick of the
+ * track's clock or one millisecond, whichever is more (clocks that cannot hold a rate round each frame's
+ * time: 24 fps on a 1/1000 s clock is 41, 42, 42 ms …; the same footage remuxed onto a 1/16000 clock keeps
+ * those milliseconds as 656 and 672 ticks). Review round 1 of part E, item 2.
+ */
+export const RATE_FIT_MS = 1;
 /** The most top-level boxes the reader walks (a fragmented file has two per fragment). */
 export const MAX_TOP_BOXES = 20_000;
 /** The most samples one track may list before the file is treated as broken. */
@@ -142,10 +164,23 @@ interface Track {
   handler: string;
   timescale: number;
   edits: Edit[] | null;
-  /** Decode time, duration and composition offset of every sample, in decode order. */
+  /** The sample table's time boxes (read only for the tracks the timing uses). */
+  stts: Box | null;
+  ctts: Box | null;
+  /** Samples the sample table lists, counted without expanding them. */
+  listed: number;
+  /**
+   * `expand`: every sample's decode time, duration and composition offset (the picture track);
+   * `first`: only the first sample's composition time (the sound track); `skip`: nothing (every other track).
+   * Review round 1 of part E, item 10: a moov with many tracks must not fill the tab's memory.
+   */
+  mode: 'expand' | 'first' | 'skip';
+  /** Decode time, duration and composition offset of every sample, in decode order (`expand`). */
   dts: number[];
   durations: number[];
   offsets: number[];
+  /** Composition time of the first sample, and whether any was seen (`first`). */
+  first: number | null;
   /** Where the next fragment continues when it carries no `tfdt`. */
   next: number;
   /** `trex` default sample duration (fragmented files). */
@@ -156,7 +191,12 @@ interface Movie {
   timescale: number;
   tracks: Track[];
   fragmented: boolean;
+  video: Track | null;
+  sound: Track | null;
 }
+
+/** What the last read expanded (for the tests that hold the memory bound). */
+export const containerStats = { expandedSamples: 0 };
 
 function readMoov(bytes: Uint8Array): Movie {
   const top = boxes(bytes, 0, bytes.length);
@@ -177,7 +217,20 @@ function readMoov(bytes: Uint8Array): Movie {
       if (track) track.defaultDuration = u32(bytes, trex.body + 12);
     }
   }
-  return { timescale, tracks, fragmented: !!mvex };
+  // The tracks the timing uses: the first picture track and the first sound track with samples (in a
+  // fragmented file the samples are in the fragments: the first of each kind).
+  const pick = (handler: string) => tracks.find((track) => track.handler === handler && (track.listed > 0 || !!mvex)) ?? null;
+  const video = pick('vide');
+  const sound = pick('soun');
+  if (video) {
+    video.mode = 'expand';
+    expandSampleTable(bytes, video);
+  }
+  if (sound) {
+    sound.mode = 'first';
+    if (sound.listed > 0) sound.first = firstComposition(bytes, sound);
+  }
+  return { timescale, tracks, fragmented: !!mvex, video, sound };
 }
 
 function readTrak(bytes: Uint8Array, trak: Box): Track {
@@ -194,10 +247,33 @@ function readTrak(bytes: Uint8Array, trak: Box): Track {
   need(hdlr, 12);
   const timescale = bytes[mdhd.body] === 1 ? u32(bytes, mdhd.body + 20) : u32(bytes, mdhd.body + 12);
   if (timescale <= 0) throw new Broken();
-  const track: Track = { id, handler: type4(bytes, hdlr.body + 8), timescale, edits: readEdits(bytes, parts.find((entry) => entry.type === 'edts')), dts: [], durations: [], offsets: [], next: 0, defaultDuration: 0 };
   const stbl = child(bytes, child(bytes, mdia, 'minf'), 'stbl');
-  if (stbl) readSampleTable(bytes, stbl, track);
-  return track;
+  const tables = stbl ? children(bytes, stbl) : [];
+  const stts = tables.find((entry) => entry.type === 'stts') ?? null;
+  const ctts = tables.find((entry) => entry.type === 'ctts') ?? null;
+  let listed = 0;
+  if (stts) {
+    need(stts, 8);
+    const runs = u32(bytes, stts.body + 4);
+    need(stts, 8 + runs * 8);
+    for (let i = 0, at = stts.body + 8; i < runs; i += 1, at += 8) listed += u32(bytes, at);
+  }
+  return {
+    id,
+    handler: type4(bytes, hdlr.body + 8),
+    timescale,
+    edits: readEdits(bytes, parts.find((entry) => entry.type === 'edts')),
+    stts,
+    ctts,
+    listed,
+    mode: 'skip',
+    dts: [],
+    durations: [],
+    offsets: [],
+    first: null,
+    next: 0,
+    defaultDuration: 0,
+  };
 }
 
 function readEdits(bytes: Uint8Array, edts: Box | undefined): Edit[] | null {
@@ -218,18 +294,29 @@ function readEdits(bytes: Uint8Array, edts: Box | undefined): Edit[] | null {
   return edits;
 }
 
-function readSampleTable(bytes: Uint8Array, stbl: Box, track: Track) {
-  const parts = children(bytes, stbl);
-  const stts = parts.find((entry) => entry.type === 'stts');
+/** A composition offset as written: version 1 is signed; version 0 too when only that makes sense. */
+function cttsOffset(bytes: Uint8Array, ctts: Box, at: number): number {
+  const raw = u32(bytes, at);
+  return bytes[ctts.body] === 1 || raw > 0x7fffffff ? i32(bytes, at) : raw;
+}
+
+/** The first sample's composition time from the sample table, without expanding it (decode time 0). */
+function firstComposition(bytes: Uint8Array, track: Track): number {
+  const ctts = track.ctts;
+  if (!ctts) return 0;
+  need(ctts, 8);
+  return u32(bytes, ctts.body + 4) > 0 && ctts.body + 16 <= ctts.end ? cttsOffset(bytes, ctts, ctts.body + 12) : 0;
+}
+
+function expandSampleTable(bytes: Uint8Array, track: Track) {
+  const { stts, ctts } = track;
   if (!stts) return;
-  need(stts, 8);
+  if (track.listed > MAX_SAMPLES) throw new Broken();
   const runs = u32(bytes, stts.body + 4);
-  need(stts, 8 + runs * 8);
   let dt = 0;
   for (let i = 0, at = stts.body + 8; i < runs; i += 1, at += 8) {
     const count = u32(bytes, at);
     const delta = u32(bytes, at + 4);
-    if (track.durations.length + count > MAX_SAMPLES) throw new Broken();
     for (let k = 0; k < count; k += 1) {
       track.dts.push(dt);
       track.durations.push(delta);
@@ -238,10 +325,8 @@ function readSampleTable(bytes: Uint8Array, stbl: Box, track: Track) {
     }
   }
   track.next = dt;
-  const ctts = parts.find((entry) => entry.type === 'ctts');
   if (!ctts) return;
   need(ctts, 8);
-  const signed = bytes[ctts.body] === 1;
   const cttsRuns = u32(bytes, ctts.body + 4);
   need(ctts, 8 + cttsRuns * 8);
   let index = 0;
@@ -249,13 +334,12 @@ function readSampleTable(bytes: Uint8Array, stbl: Box, track: Track) {
     const count = u32(bytes, at);
     // Version 0 is unsigned by the standard, but writers put negative values there too: read as signed
     // when the value only makes sense that way (more than half the 32-bit range).
-    const raw = u32(bytes, at + 4);
-    const offset = signed || raw > 0x7fffffff ? i32(bytes, at + 4) : raw;
+    const offset = cttsOffset(bytes, ctts, at + 4);
     for (let k = 0; k < count && index < track.offsets.length; k += 1, index += 1) track.offsets[index] = offset;
   }
 }
 
-/** One fragment's samples, appended to their tracks. */
+/** One fragment's samples, added to the tracks the timing uses (the sound track: its first sample only). */
 function readMoof(bytes: Uint8Array, movie: Movie) {
   const top = boxes(bytes, 0, bytes.length);
   const moof = top?.find((entry) => entry.type === 'moof');
@@ -267,7 +351,7 @@ function readMoof(bytes: Uint8Array, movie: Movie) {
     need(tfhd, 8);
     const flags = u32(bytes, tfhd.body) & 0xffffff;
     const track = movie.tracks.find((entry) => entry.id === u32(bytes, tfhd.body + 4));
-    if (!track) continue;
+    if (!track || track.mode === 'skip' || (track.mode === 'first' && track.first !== null)) continue;
     let at = tfhd.body + 8;
     if (flags & 0x01) at += 8;
     if (flags & 0x02) at += 4;
@@ -303,9 +387,13 @@ function readMoof(bytes: Uint8Array, movie: Movie) {
           offset = signed ? i32(bytes, pos) : u32(bytes, pos);
           pos += 4;
         }
-        track.dts.push(dt);
-        track.durations.push(duration);
-        track.offsets.push(offset);
+        if (track.mode === 'first') {
+          if (track.first === null) track.first = dt + offset;
+        } else {
+          track.dts.push(dt);
+          track.durations.push(duration);
+          track.offsets.push(offset);
+        }
         dt += duration;
       }
     }
@@ -358,6 +446,44 @@ function fraction(num: number, den: number): [number, number] {
   return [Math.round(num) / divisor, Math.round(den) / divisor];
 }
 
+/**
+ * How far, at most, the pictures shown at `times` (sorted, track ticks) sit from where `num/den` fps puts
+ * them, counted from the first.
+ */
+function worstDeviation(times: readonly number[], timescale: number, num: number, den: number): number {
+  const period = (timescale * den) / num;
+  let worst = 0;
+  for (let k = 0; k < times.length; k += 1) worst = Math.max(worst, Math.abs(times[k]! - (times[0]! + k * period)));
+  return worst;
+}
+
+/**
+ * The footage's rate from its pictures' presentation times, whatever its clock (review round 1 of part E,
+ * item 2). A rate fits when every picture sits within `RATE_FIT_MS` (or one tick) of where it puts it.
+ * Candidates: every standard rate (the fit itself rules out the wrong ones: over a few frames a clock
+ * rounding to the millisecond can move the average by more than 0.1 %); the fitting one with the smallest worst
+ * deviation wins, a tie going to the one nearest the average (a true 24 fps file on a millisecond clock is
+ * 24, never 23.976; over a dozen frames the two cannot be told apart, and the closer fit is taken). Only
+ * when no standard rate fits, the average itself is tried. Nothing fits: not evenly spaced.
+ */
+function rateOfTimes(times: readonly number[], timescale: number): { num: number; den: number } | null {
+  const n = times.length;
+  const span = times[n - 1]! - times[0]!;
+  if (n < 2 || span <= 0) return null;
+  const average = ((n - 1) * timescale) / span;
+  const tolerance = Math.max(1, timescale * (RATE_FIT_MS / 1000)) + 1e-9;
+  let best: { num: number; den: number; worst: number } | null = null;
+  for (const [num, den] of RATES) {
+    const worst = worstDeviation(times, timescale, num, den);
+    if (worst > tolerance) continue;
+    const closer = !best || worst < best.worst - 1e-9 || (Math.abs(worst - best.worst) <= 1e-9 && Math.abs(num / den - average) < Math.abs(best.num / best.den - average));
+    if (closer) best = { num, den, worst };
+  }
+  if (best) return { num: best.num, den: best.den };
+  const [num, den] = fraction((n - 1) * timescale, span);
+  return worstDeviation(times, timescale, num, den) <= tolerance ? { num, den } : null;
+}
+
 function videoTiming(track: Track, movieTimescale: number): VideoTiming | 'edits' {
   const window = windowOf(track, movieTimescale);
   if (!window) return 'edits';
@@ -370,22 +496,23 @@ function videoTiming(track: Track, movieTimescale: number): VideoTiming | 'edits
   let first = Infinity;
   for (const i of shown) first = Math.min(first, track.dts[i]! + track.offsets[i]!);
   const durations = shown.map((i) => track.durations[i]!);
+  // The last picture's duration is not looked at: muxers often write it short.
   const body = durations.length > 1 ? durations.slice(0, -1) : durations;
-  const sorted = [...body].sort((a, b) => a - b);
-  const usual = sorted[Math.floor(sorted.length / 2)]!;
-  const tolerance = Math.max(1, usual * EVEN_TOLERANCE);
-  const even = usual > 0 && body.every((d) => Math.abs(d - usual) <= tolerance);
   let num: number;
   let den: number;
-  if (even && body.every((d) => d === usual)) {
-    [num, den] = fraction(track.timescale, usual);
-  } else if (even) {
-    // A clock that rounds each frame: the rate over the frames, brought onto the rate it almost surely is.
-    const average = (body.length * track.timescale) / body.reduce((a, b) => a + b, 0);
-    const near = RATES.find(([n, d]) => Math.abs(average - n / d) / (n / d) < 0.001);
-    [num, den] = near ? [near[0], near[1]] : fraction(body.length * track.timescale, body.reduce((a, b) => a + b, 0));
+  let even = true;
+  if (body[0]! > 0 && body.every((d) => d === body[0])) {
+    // Every picture lasts the same: the exact fraction (24000/1001 stays that).
+    [num, den] = fraction(track.timescale, body[0]!);
   } else {
-    [num, den] = fraction(durations.length * track.timescale, durations.reduce((a, b) => a + b, 0));
+    const times = shown.map((i) => track.dts[i]! + track.offsets[i]!).sort((a, b) => a - b);
+    const fit = rateOfTimes(times, track.timescale);
+    if (fit) {
+      ({ num, den } = fit);
+    } else {
+      even = false;
+      [num, den] = fraction(durations.length * track.timescale, durations.reduce((a, b) => a + b, 0));
+    }
   }
   if (!(num > 0 && den > 0)) return 'edits';
   return { firstSec: firstShownAt(window, track, first), frames: shown.length, fps: num / den, fpsNum: num, fpsDen: den, variable: !even, timescale: track.timescale };
@@ -395,21 +522,25 @@ function soundTiming(track: Track, movieTimescale: number): SoundTiming | 'edits
   const window = windowOf(track, movieTimescale);
   if (!window) return 'edits';
   // Samples before the edit's media time are dropped; an empty edit is not turned into silence.
-  return { firstSec: firstShownAt(window, track, track.dts[0]! + track.offsets[0]!) };
+  return { firstSec: firstShownAt(window, track, track.first ?? 0) };
 }
 
 /** The timing of a file from its `moov` (and its fragments). */
 export function readTiming(found: FoundBoxes): TimingAnswer {
   try {
+    containerStats.expandedSamples = 0;
     const movie = readMoov(found.moov);
     for (const moof of found.moofs) readMoof(moof, movie);
-    const video = movie.tracks.find((track) => track.handler === 'vide' && track.dts.length > 0);
-    const sound = movie.tracks.find((track) => track.handler === 'soun' && track.dts.length > 0);
+    const video = movie.video && movie.video.dts.length > 0 ? movie.video : null;
+    const sound = movie.sound && movie.sound.first !== null ? movie.sound : null;
+    containerStats.expandedSamples = movie.video?.dts.length ?? 0;
     const videoAnswer = video ? videoTiming(video, movie.timescale) : null;
     const soundAnswer = sound ? soundTiming(sound, movie.timescale) : null;
-    if (videoAnswer === 'edits' || soundAnswer === 'edits') return { ok: false, reason: 'edits' };
+    // A picture edit list it cannot follow makes frame numbering unsafe: the whole answer fails. A sound
+    // one only leaves the sound's start unknown.
+    if (videoAnswer === 'edits') return { ok: false, reason: 'edits' };
     if (movie.fragmented && !video && !sound) return { ok: false, reason: 'broken' };
-    return { ok: true, timing: { video: videoAnswer, sound: soundAnswer, fragmented: movie.fragmented } };
+    return { ok: true, timing: { video: videoAnswer, sound: soundAnswer === 'edits' ? 'unknown' : soundAnswer, fragmented: movie.fragmented } };
   } catch (error) {
     if (error instanceof Broken || error instanceof RangeError) return { ok: false, reason: 'broken' };
     throw error;
@@ -424,12 +555,47 @@ function hasMvex(moov: Uint8Array): boolean {
   return !!box && !!boxes(moov, box.body, box.end)?.some((entry) => entry.type === 'mvex');
 }
 
+/** The `moof` boxes in `bytes` (the part of the file after its `moov`, read whole). */
+function moofsIn(bytes: Uint8Array): Uint8Array[] | null {
+  const out: Uint8Array[] = [];
+  let at = 0;
+  for (let count = 0; at + 8 <= bytes.length; count += 1) {
+    if (count >= MAX_TOP_BOXES) return null;
+    let size = u32(bytes, at);
+    let header = 8;
+    if (size === 1) {
+      if (at + 16 > bytes.length) return null;
+      size = u64(bytes, at + 8);
+      header = 16;
+    } else if (size === 0) {
+      size = bytes.length - at;
+    }
+    if (size < header) return null;
+    if (type4(bytes, at + 4) === 'moof') {
+      if (at + size > bytes.length) return null;
+      out.push(bytes.subarray(at, at + size));
+    }
+    at += size;
+  }
+  return out;
+}
+
 /**
  * Walks the file's top-level boxes, reading only their headers and the boxes the timing lives in: the
- * `moov` (wherever it is: a media box is stepped over by its size) and, in a fragmented file, every
- * `moof`. An ordinary file is done as soon as its `moov` is read.
+ * `moov` (wherever it is: a media box is stepped over by its size). An ordinary file is done as soon as its
+ * `moov` is read. A fragmented one has its `moof` boxes spread over the file: the rest after the `moov`
+ * is read in one piece, when its size is known and at most `fragmentedLimit`, and walked in memory.
  */
-export async function gatherBoxes(source: ByteSource): Promise<FoundBoxes | { failure: TimingFailure }> {
+export async function gatherBoxes(source: ByteSource, fragmentedLimit = MAX_FRAGMENTED_BYTES): Promise<FoundBoxes | { failure: TimingFailure }> {
+  try {
+    return await walkTopLevel(source, fragmentedLimit);
+  } catch (error) {
+    if (error instanceof ReadLimit) return { failure: 'too-many-requests' };
+    throw error;
+  }
+}
+
+async function walkTopLevel(source: ByteSource, fragmentedLimit: number): Promise<FoundBoxes | { failure: TimingFailure }> {
   let at = 0;
   let moov: Uint8Array | null = null;
   const moofs: Uint8Array[] = [];
@@ -457,6 +623,14 @@ export async function gatherBoxes(source: ByteSource): Promise<FoundBoxes | { fa
       if (type === 'moov') {
         moov = box;
         if (!hasMvex(box)) break;
+        // Fragmented: the rest of the file in one read, walked here.
+        const total = source.size?.() ?? null;
+        const rest = at + size;
+        if (total === null || total > fragmentedLimit) return { failure: 'fragmented-too-large' };
+        const found = rest < total ? moofsIn(await source.read(rest, total - rest)) : [];
+        if (!found) return { failure: 'broken' };
+        moofs.push(...found);
+        break;
       } else {
         moofs.push(box);
       }
@@ -468,6 +642,6 @@ export async function gatherBoxes(source: ByteSource): Promise<FoundBoxes | { fa
 
 /** The timing of a file that is in memory whole (the export reads each cut's file for its sound). */
 export async function timingOfFile(bytes: Uint8Array): Promise<TimingAnswer> {
-  const found = await gatherBoxes({ read: async (start, length) => bytes.subarray(start, Math.min(bytes.length, start + length)) });
+  const found = await gatherBoxes({ read: async (start, length) => bytes.subarray(start, Math.min(bytes.length, start + length)), size: () => bytes.length }, Infinity);
   return 'failure' in found ? { ok: false, reason: found.failure } : readTiming(found);
 }

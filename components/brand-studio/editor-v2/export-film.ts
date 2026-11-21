@@ -34,6 +34,7 @@ import {
   imageOverlaysAt,
   isKeyFrame,
   notIncluded,
+  lastFrameWarnings,
   picturePlace,
   placeSound,
   soundBytesCheck,
@@ -352,21 +353,20 @@ async function present(source: Source, sourceFrame: number, filmFrame: number, l
       frame: filmFrame,
       clip: label,
     });
-  if (source.frames !== null && sourceFrame >= source.frames) {
-    const last = await confirmPicture(source, source.frames - 1, signal);
-    if (!last.ok) throw stop(last.last);
-    return true;
-  }
-  const result = await confirmPicture(source, sourceFrame, signal);
+  // Past the file's own count: its last picture instead.
+  const target = source.frames !== null ? Math.min(sourceFrame, source.frames - 1) : sourceFrame;
+  const result = await confirmPicture(source, target, signal);
+  if (result.ok) return target !== sourceFrame;
+  // Not confirmed: past the end only when the element has reached its end showing an earlier picture
+  // (the file may list a picture the browser cannot show, review round 1 of part E, item 8).
   const video = source.video;
   const atEnd = video.ended || (Number.isFinite(video.duration) && video.currentTime >= video.duration - 0.5 * frameSec);
-  const expectedSec = source.firstSec + sourceFrame * frameSec;
-  const place = picturePlace({ sourceFrame, knownFrames: source.frames, confirmed: result.ok, expectedSec, lastSeenSec: result.last, atEnd, frameSec });
-  if (place === 'inside') return false;
+  const expectedSec = source.firstSec + target * frameSec;
+  const place = picturePlace({ sourceFrame: target, knownFrames: source.frames, confirmed: false, expectedSec, lastSeenSec: result.last, atEnd, frameSec });
   if (place === 'past-end' && result.last !== null) {
-    const lastReal = Math.max(0, Math.round((result.last - source.firstSec) * source.fps));
-    const filled = await confirmPicture(source, lastReal, signal);
-    if (filled.ok) return true;
+    // Filled with the last picture the element really showed.
+    const lastShown = Math.max(0, Math.round((result.last - source.firstSec) * source.fps));
+    if (lastShown < target && (await confirmPicture(source, lastShown, signal)).ok) return true;
   }
   throw stop(result.last);
 }
@@ -800,6 +800,10 @@ async function openDecoderSource(
 ): Promise<DecoderSource | { reason: string }> {
   const hasDecoder = typeof VideoDecoder !== 'undefined' && typeof EncodedVideoChunk !== 'undefined';
   if (override === 'seek' || !hasDecoder) return { reason: choosePath({ override, hasDecoder, indexFailure: null, configSupported: null }).reason ?? 'seek' };
+  // The clip's frame facts first: when they could not be read the editor numbered it by playback.
+  const facts = await readFootage(srcUrl).catch(() => null);
+  const factsFailure = !facts ? 'unreadable' : facts.answer.ok ? null : facts.answer.reason;
+  if (factsFailure) return { reason: choosePath({ override, hasDecoder, factsFailure, indexFailure: null, configSupported: null }).reason! };
   const answer = await readPictureIndex(srcUrl).catch(() => ({ ok: false as const, reason: 'unreadable' as const }));
   if (!answer.ok) return { reason: choosePath({ override, hasDecoder, indexFailure: answer.reason, configSupported: null }).reason! };
   const config = decoderConfig(answer.index);
@@ -827,6 +831,7 @@ async function openDecoderSource(
  */
 export async function plannedPath(srcUrl: string, override: ExportPathOverride): Promise<ExportPath> {
   if (override === 'seek' || typeof VideoDecoder === 'undefined') return 'seek';
+  if (!(await readFootage(srcUrl).catch(() => null))?.answer.ok) return 'seek';
   const answer = await readPictureIndex(srcUrl).catch(() => null);
   if (!answer?.ok) return 'seek';
   return (await decoderSupports(decoderConfig(answer.index))) ? 'decoder' : 'seek';
@@ -872,8 +877,8 @@ export async function exportFilm(options: ExportFilmOptions): Promise<ExportFilm
   document.body.appendChild(host);
   const sources = new Map<string, PictureSource>();
   const records = new Map<string, SourcePath>();
-  /** Pictures asked for past a footage's last one, filled with it, by cut. */
-  const filled = new Map<string, number>();
+  /** Pictures asked for past a footage's last one, filled with it, by cut id (named by its clip). */
+  const filled = new Map<string, { clip: string; frames: number }>();
   let encoder: VideoEncoder | null = null;
   let pathNow: ExportPath | undefined;
   let lastYield = performance.now();
@@ -971,7 +976,7 @@ export async function exportFilm(options: ExportFilmOptions): Promise<ExportFilm
       const label = labels.get(entry.clipId) ?? entry.clipId;
       const shown = await pictureOf(entry, label);
       pathNow = shown.path;
-      if (shown.past) filled.set(label, (filled.get(label) ?? 0) + 1);
+      if (shown.past) filled.set(entry.clipId, { clip: label, frames: (filled.get(entry.clipId)?.frames ?? 0) + 1 });
       if (framing === 'current') drawCurrentFraming(ctx, shown.picture, width, height);
       else drawFramed(ctx, shown.picture, width, height, reframe[entry.clipId] ?? DEFAULT_REFRAME);
       if (graded && extras) {
@@ -1023,7 +1028,7 @@ export async function exportFilm(options: ExportFilmOptions): Promise<ExportFilm
       durationSec: frames / fps,
       elapsedMs: Math.round(performance.now() - started),
       notIncluded: notIncluded({ sequence, extras }),
-      warnings: [...[...filled].map(([clip, frames]): ExportWarning => ({ kind: 'lastFrame', clip, frames })), ...warnings],
+      warnings: [...lastFrameWarnings(filled), ...warnings],
       paths: [...records.values()],
     };
   } finally {

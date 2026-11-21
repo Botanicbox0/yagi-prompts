@@ -19,6 +19,19 @@ describe('frame rate from presented frames', () => {
     expect(fpsFromMediaTimes(times(60000 / 1001, 13))).toBe(59.94);
   });
 
+  it('a container that keeps times to the millisecond (WebM: 0, 42, 83, 125 ms …) reads 24, not 1 / 0.042 = 23.81', () => {
+    // Found by the real-screen check of review round 1 (part E, item 4): a 97-picture WebM measured by
+    // playback stored 96 pictures at 23.81 fps. The rate is the frames over the time they span.
+    const ms = (fps: number, count: number) => Array.from({ length: count }, (_, i) => Math.round((i * 1000) / fps) / 1000);
+    expect(fpsFromMediaTimes(ms(24, 13))).toBe(24);
+    expect(fpsFromMediaTimes(ms(30, 13))).toBe(30);
+    expect(fpsFromMediaTimes(ms(25, 13))).toBe(25);
+    // A skipped frame among them still counts as two frames of time. (Thirteen frames on a millisecond clock
+    // cannot tell 24 from 23.976, 0.1 % apart; the playback measurement refines the rate from the first and
+    // last pictures it reads, components/brand-studio/editor-v2/measure-fps.ts.)
+    expect(fpsFromMediaTimes(ms(24, 14).filter((_, i) => i !== 6))).toBeCloseTo(24, 1);
+  });
+
   it('takes the median gap, so a frame the browser skipped does not change the answer', () => {
     const seen = times(24, 14).filter((_, i) => i !== 4 && i !== 9);
     expect(fpsFromMediaTimes(seen)).toBe(24);

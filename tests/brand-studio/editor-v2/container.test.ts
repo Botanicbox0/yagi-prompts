@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { gatherBoxes, readTiming, timingOfFile, type ByteSource } from '@/lib/brand-studio/editor-v2/container';
+import { gatherBoxes, readTiming, timingOfFile, type ByteSource, type SoundTiming } from '@/lib/brand-studio/editor-v2/container';
 import { concat, ftyp, mdat, moof, moov, runs, wide, type TrackSpec } from './mp4-bytes';
 
 /**
@@ -134,6 +134,17 @@ describe('frame facts from the sample table (C1)', () => {
     expect(answer.timing.video).toMatchObject({ firstSec: 0, frames: 48, fps: 24, variable: false });
   });
 
+  it('an edit starting two frames before the first picture: the first picture still shows at the edit’s start', async () => {
+    // Measured (review round 1 of part E, sound case (a)): x264 B-frames with the picture's edit moved from
+    // media time 1024 to 0. Chromium's first frame mediaTime is 0 and ffprobe's start_time is 0 (it shows
+    // packet times 0, 0.0417 …): the gap before the first picture is not kept. The edit's length (3 s from
+    // media time 0) ends two frames earlier: ffprobe decodes 70 of the 72 pictures, and so does this.
+    const offsets = pyramidOffsets(72, 512);
+    const answer = await timingOfFile(file({ handler: 'vide', timescale: 12288, durations: frames(72, 512), offsets, edits: [{ duration: 3000, mediaTime: 0 }] }));
+    if (!answer.ok) throw new Error(answer.reason);
+    expect(answer.timing.video).toMatchObject({ firstSec: 0, frames: 70, fps: 24 });
+  });
+
   it('an edit list that ends early: frames past its end are not shown', async () => {
     const answer = await timingOfFile(file({ handler: 'vide', timescale: 12288, durations: frames(72, 512), edits: [{ duration: 1000, mediaTime: 0 }] }));
     if (!answer.ok) throw new Error(answer.reason);
@@ -151,7 +162,7 @@ describe('the two tracks’ start times (B1): the edit list applied, as ffprobe 
   it('sound with an encoder delay (media time 1024) starts at 0: the delay is not played', async () => {
     const answer = await timingOfFile(file(VIDEO_24, { ...SOUND, edits: [{ duration: 3000, mediaTime: 1024 }] }));
     if (!answer.ok) throw new Error(answer.reason);
-    expect(answer.timing.sound!.firstSec).toBe(0);
+    expect((answer.timing.sound as SoundTiming).firstSec).toBe(0);
   });
 
   it('picture behind an empty edit of 0.5 s starts at 0.5 s; the sound at 0', async () => {
@@ -160,25 +171,25 @@ describe('the two tracks’ start times (B1): the edit list applied, as ffprobe 
     );
     if (!answer.ok) throw new Error(answer.reason);
     expect(answer.timing.video!.firstSec).toBe(0.5);
-    expect(answer.timing.sound!.firstSec).toBe(0);
+    expect((answer.timing.sound as SoundTiming).firstSec).toBe(0);
   });
 
   it('sound behind an empty edit starts at the edit (ffmpeg writes 0.478 s for "0.5 s minus the encoder delay")', async () => {
     const answer = await timingOfFile(file(VIDEO_24, { ...SOUND, edits: [{ duration: 478, mediaTime: -1 }, { duration: 3000, mediaTime: 0 }] }));
     if (!answer.ok) throw new Error(answer.reason);
-    expect(answer.timing.sound!.firstSec).toBe(0.478);
+    expect((answer.timing.sound as SoundTiming).firstSec).toBe(0.478);
   });
 
   it('an empty edit and a media time together: the edit’s start', async () => {
     const answer = await timingOfFile(file(VIDEO_24, { ...SOUND, edits: [{ duration: 300, mediaTime: -1 }, { duration: 3000, mediaTime: 1024 }] }));
     if (!answer.ok) throw new Error(answer.reason);
-    expect(answer.timing.sound!.firstSec).toBe(0.3);
+    expect((answer.timing.sound as SoundTiming).firstSec).toBe(0.3);
   });
 
   it('no edit list: the first sample’s own time', async () => {
     const answer = await timingOfFile(file(VIDEO_24, SOUND));
     if (!answer.ok) throw new Error(answer.reason);
-    expect(answer.timing.sound!.firstSec).toBe(0);
+    expect((answer.timing.sound as SoundTiming).firstSec).toBe(0);
   });
 
   it('a file with only a picture, or only sound', async () => {
@@ -242,6 +253,15 @@ describe('what the reader refuses (the editor then measures by playback, and the
     expect(await timingOfFile(twoPieces)).toEqual({ ok: false, reason: 'edits' });
     expect(await timingOfFile(faster)).toEqual({ ok: false, reason: 'edits' });
   });
+
+  it('a sound edit list it cannot follow keeps the picture facts; the sound start is unknown (review round 1 of part E, item 3)', async () => {
+    const answer = await timingOfFile(file(VIDEO_24, { ...SOUND, edits: [{ duration: 500, mediaTime: 0 }, { duration: 500, mediaTime: 48000 }] }));
+    if (!answer.ok) throw new Error(answer.reason);
+    expect(answer.timing.video).toMatchObject({ firstSec: 0, frames: 72, fps: 24 });
+    expect(answer.timing.sound).toBe('unknown');
+    // A picture edit list it cannot follow still fails the whole answer: frame numbering would be unsafe.
+    expect(await timingOfFile(file({ ...VIDEO_24, edits: [{ duration: 1000, mediaTime: 0, rate: 2 }] }, SOUND))).toEqual({ ok: false, reason: 'edits' });
+  });
 });
 
 describe('MOV (QuickTime) is the same layout', () => {
@@ -296,16 +316,17 @@ describe('finding the boxes without the whole file (Range requests)', () => {
     expect(readTiming(found).ok).toBe(true);
   });
 
-  it('fragmented: every moof is read, the media between them is not', async () => {
+  it('fragmented: the rest after the moov is read in one piece and every moof in it is found (review round 1 of part E, item 10)', async () => {
     const movie = moov({ tracks: [{ handler: 'vide', timescale: 12288, durations: [] }], fragmented: { defaultDuration: { 1: 512 } } });
     const bytes = concat(ftyp('iso5'), movie, moof(1, [{ trackId: 1, base: 0, count: 24 }]), mdat(400_000), moof(2, [{ trackId: 1, count: 24 }]), mdat(400_000));
-    const source = rangedSource(bytes);
+    const source = { ...rangedSource(bytes), size: () => bytes.length };
     const found = await gatherBoxes(source);
     if ('failure' in found) throw new Error(found.failure);
     expect(found.moofs).toHaveLength(2);
     const answer = readTiming(found);
     expect(answer.ok && answer.timing.video!.frames).toBe(48);
-    expect(source.reads.reduce((n, [, length]) => n + length, 0)).toBeLessThan(20_000);
+    // Its size not known: not walked fragment by fragment, measured by playback instead.
+    expect(await gatherBoxes(rangedSource(bytes))).toEqual({ failure: 'fragmented-too-large' });
   });
 
   it('a file whose first box is not one an MP4 starts with is refused at once', async () => {
@@ -315,5 +336,59 @@ describe('finding the boxes without the whole file (Range requests)', () => {
 
   it('runs() is the table the builder writes', async () => {
     expect(runs([1, 1, 2, 2, 2, 1])).toEqual([[2, 1], [3, 2], [1, 1]]);
+  });
+});
+
+describe('the rate of footage on a clock that rounds each frame (review round 1 of part E, item 2)', () => {
+  /** Durations of `n` frames at `num/den` fps written on a clock of `tick` ticks per second, each frame's time rounded. */
+  const rounded = (n: number, num: number, den: number, tick: number, scale = 1) => {
+    const starts = Array.from({ length: n + 1 }, (_, k) => Math.round((k * den * tick) / num) * scale);
+    return starts.slice(1).map((t, k) => t - starts[k]!);
+  };
+  const rateOf = async (durations: number[], timescale: number) => {
+    const answer = await timingOfFile(file({ handler: 'vide', timescale, durations }));
+    if (!answer.ok) throw new Error(answer.reason);
+    return answer.timing.video!;
+  };
+
+  it.each([10, 11, 24, 100, 997, 2000])('24 fps on a millisecond clock, %i frames: 24/1, never 24000/1001', async (n) => {
+    const video = await rateOf(rounded(n, 24, 1, 1000), 1000);
+    expect([video.fpsNum, video.fpsDen]).toEqual([24, 1]);
+    expect(video.variable).toBe(false);
+  });
+
+  it.each([10, 11, 100, 997, 2000])('30 and 60 fps on a millisecond clock, %i frames', async (n) => {
+    const thirty = await rateOf(rounded(n, 30, 1, 1000), 1000);
+    const sixty = await rateOf(rounded(n, 60, 1, 1000), 1000);
+    expect([thirty.fpsNum, thirty.fpsDen, thirty.variable]).toEqual([30, 1, false]);
+    expect([sixty.fpsNum, sixty.fpsDen, sixty.variable]).toEqual([60, 1, false]);
+  });
+
+  it('true 23.976 on a millisecond clock, long enough to tell: 24000/1001', async () => {
+    const video = await rateOf(rounded(600, 24000, 1001, 1000), 1000);
+    expect([video.fpsNum, video.fpsDen, video.variable]).toEqual([24000, 1001, false]);
+  });
+
+  it('twelve frames: both 24 and 23.976 fit a millisecond clock; the one that fits best (nearest the average) is taken', async () => {
+    // Over 12 frames the two rates are 0.46 ms apart at the last frame, less than the clock's rounding:
+    // from so few frames the file cannot say which it is. Each answer is the rate that fits its times best.
+    expect((await rateOf(rounded(12, 24, 1, 1000), 1000)).fpsNum).toBe(24);
+    expect((await rateOf(rounded(12, 24000, 1001, 1000), 1000)).fpsNum).toBe(24000);
+  });
+
+  it('millisecond footage remuxed onto a 1/16000 clock (656 and 672 ticks): even, 24/1', async () => {
+    const durations = rounded(500, 24, 1, 1000, 16);
+    expect(new Set(durations)).toEqual(new Set([656, 672]));
+    const video = await rateOf(durations, 16000);
+    expect([video.fpsNum, video.fpsDen, video.variable]).toEqual([24, 1, false]);
+  });
+
+  it('real variable footage and a dropped frame on a millisecond clock stay variable', async () => {
+    const mixed = [...rounded(48, 24, 1, 1000), ...rounded(60, 30, 1, 1000)];
+    expect((await rateOf(mixed, 1000)).variable).toBe(true);
+    const dropped = rounded(100, 24, 1, 1000);
+    dropped[50] = dropped[50]! + dropped[51]!;
+    dropped.splice(51, 1);
+    expect((await rateOf(dropped, 1000)).variable).toBe(true);
   });
 });

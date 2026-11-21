@@ -211,6 +211,13 @@ describe('which path, and what the sheet says', () => {
     expect(choosePath({ ...ok, override: 'decoder' })).toEqual({ path: 'decoder', reason: null });
   });
 
+  it('when the frame facts could not be read (the editor then measured the clip by playback), the decoder path is not used', () => {
+    // A fragmented file above the reader's limit, or one that needs too many requests: the timeline numbers
+    // that clip from playback, so its pictures are taken by seeking too, the way they are numbered.
+    expect(choosePath({ ...ok, factsFailure: 'fragmented-too-large' })).toEqual({ path: 'seek', reason: 'facts:fragmented-too-large' });
+    expect(choosePath({ ...ok, factsFailure: null })).toEqual({ path: 'decoder', reason: null });
+  });
+
   it('the developer override is read from the address only as seek or decoder', () => {
     expect(exportPathOverride('seek')).toBe('seek');
     expect(exportPathOverride(['decoder', 'seek'])).toBe('decoder');

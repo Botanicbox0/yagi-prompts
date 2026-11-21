@@ -14,7 +14,7 @@ import {
 } from '@/lib/brand-studio/compose/timeline';
 import type { GradeNames } from '@/lib/brand-studio/editor-v2/film-contents';
 import { createFilmSession, type FilmConflict, type FilmSession } from '@/lib/brand-studio/editor-v2/film-session';
-import { measuredFromTiming, snapFilmFps, sourceFramesOf } from '@/lib/brand-studio/editor-v2/fps';
+import { mapLimit, measuredFromTiming, snapFilmFps, sourceFramesOf } from '@/lib/brand-studio/editor-v2/fps';
 import { emptyFilm, realAssistAllowed, realDoc, sampleHrefFor, workspaceLocked } from '@/lib/brand-studio/editor-v2/real';
 import { deepLinkSource, parseClipParam, sourceSeconds, storedClipForSource, type EditorSource } from '@/lib/brand-studio/editor-v2/sources';
 import { fromStored, inheritClip, mergeFilmText, sourcesToMeasure, storedFilmView, type MeasuredSource, type StoredFilmView } from '@/lib/brand-studio/editor-v2/stored';
@@ -425,10 +425,12 @@ export function useEditor(copy: StudioEditorCopy, options: EditorOptions = {}) {
       // Footage that has frame data is checked against its file's own count (spec E addendum C3): a block an
       // earlier playback measurement wrote with one picture too many is corrected, and stored so next time.
       const toCheck = [...new Set(project.clips.slice(0, MAX_COMPOSE_CLIPS).map((clip) => clip.srcUrl))].filter((src) => !!src && !toMeasure.includes(src));
-      const [entries, checks] = await Promise.all([
-        Promise.all(toMeasure.map(async (src) => [src, await measureSource(src, secondsOfSrc(src))] as const)),
-        Promise.all(toCheck.map(async (src) => [src, measuredFromTiming((await readFootage(src)).answer)] as const)),
-      ]);
+      // At most four files at a time (review round 1 of part E, item 10).
+      const read = await mapLimit([...toMeasure.map((src) => ({ src, check: false })), ...toCheck.map((src) => ({ src, check: true }))], 4, async ({ src, check }) =>
+        check ? ([src, measuredFromTiming((await readFootage(src)).answer)] as const) : ([src, await measureSource(src, secondsOfSrc(src))] as const),
+      );
+      const entries = read.slice(0, toMeasure.length);
+      const checks = read.slice(toMeasure.length);
       if (sessionRef.current !== session) return;
       const measured: Record<string, MeasuredSource | null> = { ...Object.fromEntries(checks.filter(([, seen]) => seen !== null)), ...Object.fromEntries(entries) };
       const film = fromStored(project, measured);

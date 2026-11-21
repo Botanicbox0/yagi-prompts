@@ -33,6 +33,7 @@ import {
   toStored,
   type MeasuredSources,
 } from '@/lib/brand-studio/editor-v2/stored';
+import { captionsOnFrames, cutAnchor } from '@/lib/brand-studio/editor-v2/cut-anchor';
 
 /**
  * Editing studio v2, V1 — the bridge between the current editor's stored film (seconds, tenths) and the
@@ -106,6 +107,24 @@ const LEGACY = legacy({
     { id: 'k2', text: 'second line', startSec: 2.5, endSec: 3.75, position: 'top', size: 'lg' },
   ],
 });
+
+/** LEGACY with everything else a stored film carries: music, a colour grade, sound effects, still overlays. */
+const LEGACY_EXTRAS: ComposerProject = parseStoredProject(
+  serializeProjectForStorage({
+    ...LEGACY,
+    bgm: { label: 'walk', sourceKind: 'asset', assetId: 'm', srcUrl: '/m.mp3', durationSec: 30, trimStartSec: 1, volume: 0.4 },
+    colorGrade: { enabled: true, scope: 'full_timeline', presetId: 'kodak-2383-warm', intensity: 0.8, skinProtect: 0.7, grain: 2, halation: 0.04 } as ComposerProject['colorGrade'],
+    sfxClips: [{ id: 'fx', label: 'whoosh', sourceKind: 'asset', assetId: 'f', srcUrl: '/f.mp3', startSec: 2.1, durationSec: 0.5, volume: 0.9 }],
+    overlays: [{ id: 'ov', label: 'logo', sourceKind: 'asset', assetId: 'l', srcUrl: '/l.png', mediaKind: 'image', startSec: 0.4, endSec: 5.2, x: 0.8, y: 0.1, scale: 0.2, opacity: 1 }],
+  }),
+)!;
+
+/** What a round trip must keep byte for byte: captions, effects, overlays, music and the grade. */
+const extrasOf = (project: ComposerProject) =>
+  JSON.stringify([project.captions, project.sfxClips ?? null, project.overlays ?? null, project.bgm ?? null, project.colorGrade ?? null]);
+
+/** The stored captions as v2 shows them on `sequence` (lib/brand-studio/editor-v2/cut-anchor.ts). */
+const shownCaptions = (sequence: FrameSequence, stored: ComposerProject) => captionsOnFrames(stored.captions, cutAnchor(toStored(sequence, stored), sequence));
 
 describe('film frame rate', () => {
   it('takes the rate of the first cut that carries frame data', () => {
@@ -252,25 +271,32 @@ describe('v2 → stored → v2 keeps every frame', () => {
   });
 
   it('keeps cuts shorter than the current editor’s 0.3 s floor exact', () => {
-    let seq = fromStored(LEGACY, MEASURED).sequence;
+    let seq = fromStored(LEGACY_EXTRAS, MEASURED).sequence;
     seq = splitAtFrame(seq, 5, 'short-right');
     expect(seq.clips[0]!.frames).toBe(5);
-    const stored = toStored(seq, LEGACY);
+    const stored = toStored(seq, LEGACY_EXTRAS);
     const first = stored.clips[0]!;
     expect(first.trimEndSec - first.trimStartSec).toBeGreaterThanOrEqual(0.3 - 1e-9);
-    // The cuts come back exact; the stored captions are read on the cuts as they now are (spec E item A,
-    // cut-anchor.test.ts), so they are compared there, not here.
-    expect(cutsOf(fromStored(throughCurrentEditor(stored), MEASURED).sequence)).toEqual(cutsOf(seq));
+    const visited = throughCurrentEditor(stored);
+    const back = fromStored(visited, MEASURED).sequence;
+    // The cuts come back exact; captions, effects, overlays, music and grade byte for byte as the current
+    // editor itself keeps them; the captions shown are the stored ones on the cuts as they now are.
+    expect(cutsOf(back)).toEqual(cutsOf(seq));
+    expect(extrasOf(visited)).toBe(extrasOf(throughCurrentEditor(LEGACY_EXTRAS)));
+    expect(back.captions).toEqual(shownCaptions(back, visited));
   });
 
   it('keeps a 30 fps clip in a 24 fps film exact, and a retimed cut split off its speed cycle', () => {
-    let seq = fromStored(LEGACY, MEASURED).sequence;
+    let seq = fromStored(LEGACY_EXTRAS, MEASURED).sequence;
     const b = spansOf(seq)[1]!;
     seq = splitAtFrame(seq, b.start + 7, 'b-right');
     expect(seq.clips[2]!.phase).not.toBe(0);
     seq = trimClipEdge(seq, 0, 'end', -1).seq;
-    const back = fromStored(throughCurrentEditor(toStored(seq, LEGACY)), MEASURED).sequence;
+    const visited = throughCurrentEditor(toStored(seq, LEGACY_EXTRAS));
+    const back = fromStored(visited, MEASURED).sequence;
     expect(cutsOf(back)).toEqual(cutsOf(seq));
+    expect(extrasOf(visited)).toBe(extrasOf(throughCurrentEditor(LEGACY_EXTRAS)));
+    expect(back.captions).toEqual(shownCaptions(back, visited));
     expect(back.clips[1]!.sourceFps).toBe(30);
   });
 
@@ -458,11 +484,14 @@ describe('read, merge, write', () => {
   const seq = trimClipEdge(fromStored(LEGACY, MEASURED).sequence, 0, 'end', -2).seq;
 
   it('puts v2’s cuts onto whatever the key holds now, keeping what another screen added meanwhile', () => {
-    const now = { ...LEGACY, bgm: { label: 'From the sound studio', sourceKind: 'asset' as const, assetId: 'm', srcUrl: '/m.mp3', durationSec: 30, trimStartSec: 0, volume: 0.5 } };
+    const now = { ...LEGACY_EXTRAS, bgm: { label: 'From the sound studio', sourceKind: 'asset' as const, assetId: 'm', srcUrl: '/m.mp3', durationSec: 30, trimStartSec: 0, volume: 0.5 } };
     const text = mergeFilmText(serializeProjectForStorage(now), seq);
     const written = parseStoredProject(text)!;
     expect(written.bgm).toEqual(now.bgm);
-    expect(cutsOf(fromStored(written, MEASURED).sequence)).toEqual(cutsOf(seq));
+    expect(extrasOf(written)).toBe(extrasOf(parseStoredProject(serializeProjectForStorage(now))!));
+    const back = fromStored(written, MEASURED).sequence;
+    expect(cutsOf(back)).toEqual(cutsOf(seq));
+    expect(back.captions).toEqual(shownCaptions(back, written));
   });
 
   it('starts a film when the key is empty or unreadable', () => {

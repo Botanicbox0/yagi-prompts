@@ -12,8 +12,10 @@ with frame data is never measured again, a 24 fps source stayed at 30 for good a
   (3) unblocked, the next visible visit measures 24: the film runs at 24, frame data is stored at 24;
   (4) the export works: ffprobe on disk reads 24 fps and the film's frame count, and the nine-square
       numbers read back are the source's own frames;
-  (5) a page that is hidden while it opens (visibility simulated in the page) does not burn the time
-      limit: it is still opening after longer than the first limit and measures 24 once it is shown.
+  (5) a page that is hidden while it opens (visibility simulated in the page): the clip's own boxes are
+      read at once whatever the page's state (spec E addendum C1), so it opens at 24 fps while hidden;
+      and with those reads refused (a file the reader cannot read), the playback measurement does not burn
+      its time limit: it is still opening after longer than the first limit and measures 24 once shown.
 
 Run against a local server started with BRAND_STUDIO_V2=on BRAND_STUDIO_EDITOR_V2=on and
 BRAND_STUDIO_EDITOR_V2_ORGS=<the organization id>, whose organization has the frame-numbered sample
@@ -210,9 +212,22 @@ def main():
         check('(4) every frame of the file is the source’s own frame (nine-square numbers 0..239)', numbers == expected,
               f'first {numbers[:6]}, last {numbers[-3:]}, mismatches {sum(1 for a, b in zip(numbers, expected) if a != b)}')
 
-        # (5) A page hidden while it opens: it waits instead of burning the limit, then measures.
+        # (5) A page hidden while it opens. First as it is now: the clip's boxes are read at once (C1).
+        page.evaluate('([key, value]) => localStorage.setItem(key, value)', [KEY, json.dumps(legacy)])
+        boxes_page = context.new_page()
+        boxes_page.on('pageerror', lambda e: errors.append(str(e)))
+        boxes_page.add_init_script(HIDE_UNTIL_SHOWN)
+        boxes_page.goto(editor, wait_until='domcontentloaded', timeout=240000)
+        boxes_page.wait_for_selector('[data-studio-editor-v2][data-editor-status=ready]', timeout=60000)
+        check('(5) hidden while it opens: the clip is read from its own file at once, the film runs at 24 fps',
+              boxes_page.get_attribute('[data-editor-preview]', 'data-editor-fps') == '24' and boxes_page.locator('[data-editor-fps-tentative]').count() == 0,
+              boxes_page.get_attribute('[data-editor-preview]', 'data-editor-fps'))
+        boxes_page.close()
+        # Then the playback measurement (the reader's own requests for the clip refused): it waits instead of
+        # burning the limit, then measures.
         page.evaluate('([key, value]) => localStorage.setItem(key, value)', [KEY, json.dumps(legacy)])
         hidden = context.new_page()
+        hidden.route(media, lambda route: route.abort() if route.request.resource_type == 'fetch' and route.request.headers.get('range') else route.continue_())
         hidden.on('pageerror', lambda e: errors.append(str(e)))
         hidden.add_init_script(HIDE_UNTIL_SHOWN)
         hidden.goto(editor, wait_until='domcontentloaded', timeout=240000)

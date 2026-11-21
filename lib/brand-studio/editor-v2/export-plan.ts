@@ -82,15 +82,27 @@ export function isKeyFrame(index: number, fps: number): boolean {
  * cut's last frame: the playback measurement had counted 98 pictures in a file that holds 97.
  *
  * - The file's own count is known (its sample table, lib/brand-studio/editor-v2/container.ts): a picture at
- *   or past that count is `past-end`; any other that could not be confirmed has `failed`.
- * - It is not known (a file the reader cannot read): `past-end` only when the element has reached its end
- *   (`atEnd`: ended, or its current time at its length) and the last picture it showed lies more than
- *   half a frame before the one asked for; anything else that could not be confirmed has `failed`.
+ *   or past that count is `past-end`.
+ * - Known or not: a picture that could not be confirmed is `past-end` when the element has reached its
+ *   end (`atEnd`: ended, or its current time at its length) and the last picture it showed lies more than
+ *   half a frame before the one asked for (the file lists a picture the browser cannot show, review round 1
+ *   of part E, item 8); anything else that could not be confirmed has `failed`.
  *
  * A `past-end` picture is filled with the source's last real one (and said after the export); a
  * `failed` one stops the export as before: a wrong or missing picture inside the footage is never filled.
  */
 export type PicturePlace = 'inside' | 'past-end' | 'failed';
+
+/** Up to this many filled frames in one cut are a quiet note after the export; more are a visible warning. */
+export const LAST_FRAME_QUIET_MAX = 2;
+
+/**
+ * The note for each cut that had pictures filled, in the order the cuts came: counted per cut (two cuts
+ * of one clip, or two clips with one name, stay apart), named by the clip.
+ */
+export function lastFrameWarnings(filled: ReadonlyMap<string, { clip: string; frames: number }>): Array<{ kind: 'lastFrame'; clip: string; frames: number }> {
+  return [...filled.values()].map(({ clip, frames }) => ({ kind: 'lastFrame' as const, clip, frames }));
+}
 
 export function picturePlace(input: {
   sourceFrame: number;
@@ -107,7 +119,7 @@ export function picturePlace(input: {
   const { sourceFrame, knownFrames, confirmed, expectedSec, lastSeenSec, atEnd, frameSec } = input;
   if (knownFrames !== null && sourceFrame >= knownFrames) return 'past-end';
   if (confirmed) return 'inside';
-  if (knownFrames === null && atEnd && lastSeenSec !== null && expectedSec > lastSeenSec + 0.5 * frameSec) return 'past-end';
+  if (atEnd && lastSeenSec !== null && expectedSec > lastSeenSec + 0.5 * frameSec) return 'past-end';
   return 'failed';
 }
 
@@ -199,6 +211,8 @@ export function soundWindow(segment: AudioSegment, totalSamples: number, sampleR
 export function soundLead(answer: TimingAnswer): { known: boolean; leadSec: number } {
   if (!answer.ok) return { known: false, leadSec: 0 };
   const { video, sound } = answer.timing;
+  // A sound edit list the reader cannot follow: where the sound sits is not known.
+  if (sound === 'unknown') return { known: false, leadSec: 0 };
   if (!video || !sound) return { known: true, leadSec: 0 };
   return { known: true, leadSec: video.firstSec - sound.firstSec };
 }
