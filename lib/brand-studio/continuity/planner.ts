@@ -312,6 +312,9 @@ export async function planSceneContinuation(
 
   // A preset run (lib/brand-studio/workflows/presets): its sent text is never read back, only the short line it shows.
   if (jobRow?.params?.preset) jobRow = { ...jobRow, final_prompt: null };
+  // …and the planner treats it as a run with no prior prompt at all: the short line is only its name, not a scene.
+  // Its pictures and references are used as for any run.
+  const presetRun = Boolean(jobRow?.params?.preset);
 
   const cachedSheet = pickCachedFilmSheet(assetRow?.film_sheets, input.locale);
   const filmSheetSummary = summarizeFilmSheet(cachedSheet, input.locale);
@@ -374,7 +377,7 @@ export async function planSceneContinuation(
   const fallback = buildFallbackPlan({
     input,
     path,
-    priorPrompt: jobRow?.final_prompt ?? jobRow?.prompt ?? null,
+    priorPrompt: presetRun ? null : jobRow?.final_prompt ?? jobRow?.prompt ?? null,
     filmSheetSummary,
     referenceRefs,
     selectedFrameIndex,
@@ -395,7 +398,7 @@ export async function planSceneContinuation(
       `Over 30s multi-scene workflow: ${fallback.over30sSequence ? 'yes' : 'no'}`,
     ];
     if (input.clipLabel) contextLines.push(`Clip label: ${input.clipLabel}`);
-    if (jobRow) {
+    if (jobRow && !presetRun) {
       contextLines.push(`Prior shot prompt: ${jobRow.final_prompt || jobRow.prompt}`);
     }
     if (filmSheetSummary) {

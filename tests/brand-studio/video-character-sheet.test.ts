@@ -17,6 +17,7 @@ import { toolCall } from '@/scripts/brand-studio-lane-mapping.mjs';
 import { studioSeat } from '@/lib/brand-studio/access';
 import { planBlockRetry } from '@/lib/brand-studio/block-retry';
 import { planSceneContinuation } from '@/lib/brand-studio/continuity/planner';
+import { STUDIO_LIMITS } from '@/lib/brand-studio/contracts';
 import { creditsOf } from '@/lib/brand-studio/credits';
 import { createStudioJob, FREE_INTEL_LIMITS, resetFreeIntelRateLimits, takeFreeIntelSlot } from '@/lib/brand-studio/jobs';
 import { laneClaim, laneFail } from '@/lib/brand-studio/lane-api';
@@ -28,6 +29,7 @@ import { buildStudioRequest } from '@/lib/brand-studio/provider/requests';
 import { jobView, jobsByIds, viewsOf } from '@/lib/brand-studio/repo';
 import { loadStudioState, pollStudioJobs } from '@/lib/brand-studio/service';
 import type { JobRow, OutputRow, StudioDeps, StudioJobParams } from '@/lib/brand-studio/types';
+import { loadAllowance } from '@/lib/brand-studio/usage';
 import { imageRunKrw } from '@/lib/brand-studio/usage-rate';
 import { renderPresetPrompt } from '@/lib/brand-studio/workflows/presets';
 import {
@@ -43,10 +45,14 @@ import {
   estimateRecipeCredits,
   findStarterWorkflow,
   loadWorkflowsHubState,
+  resolveWorkflowTarget,
   runWorkflowOperation,
   STARTER_WORKFLOWS,
   toRecentRunSummaries,
+  type RecentRunSummaryWire,
+  type WorkflowRecipe,
   type WorkflowRunResult,
+  type WorkflowWire,
 } from '@/lib/brand-studio/workflows';
 import { pngBytes, requestId, seedImageAsset, seedVideoAsset, studioDeps, studioFixture, viewerOf, type StudioFixture } from './server/helpers';
 
@@ -135,10 +141,10 @@ async function setup(options: { answer?: unknown; env?: Record<string, string>; 
   return { fix, deps, calls, person, outfit, submitted };
 }
 
-function runSheet(ctx: Ctx, inputs: Record<string, unknown> = {}, locale: 'ko' | 'en' = 'ko') {
+function runSheet(ctx: Ctx, inputs: Record<string, unknown> = {}, locale: 'ko' | 'en' = 'ko', rid: string = requestId()) {
   return runWorkflowOperation(ctx.deps, viewerOf(ctx.fix.ids.owner, locale), 'run', {
     organizationId: ctx.fix.orgId,
-    requestId: requestId(),
+    requestId: rid,
     workflowId: 'video-character-sheet',
     inputs: { image1Ref: { assetId: ctx.person }, image2Ref: { assetId: ctx.outfit }, subject: SUBJECT, ...inputs },
   });
@@ -172,6 +178,65 @@ async function mcp(ctx: Ctx, method: string, params: Record<string, unknown> = {
   if (out.kind !== 'json' || Array.isArray(out.payload)) throw new Error('unexpected MCP answer');
   return out.payload.result as { structuredContent?: Record<string, unknown>; isError?: boolean; tools?: Array<{ name: string; description: string; inputSchema: { properties: Record<string, { description?: string }> } }> } & Record<string, unknown>;
 }
+
+async function workflowCount(ctx: Ctx): Promise<number> {
+  return Number((await ctx.fix.sql.query<{ n: string }>('select count(*)::text as n from brand_studio_workflows where organization_id = $1', [ctx.fix.orgId])).rows[0]!.n);
+}
+
+/** What `twings://workflows/<id>` hands an MCP client, parsed. */
+async function workflowResource(ctx: Ctx, idOrSlug: string): Promise<WorkflowWire> {
+  const read = (await mcp(ctx, 'resources/read', { uri: `twings://workflows/${idOrSlug}` })) as unknown as { contents: Array<{ text: string }> };
+  return JSON.parse(read.contents[0]!.text) as WorkflowWire;
+}
+
+/** The organization's spend this month as the allowance counts it. */
+async function usedKrw(ctx: Ctx): Promise<number> {
+  return (await loadAllowance(ctx.fix.sql, ctx.fix.orgId, ctx.deps.env)).usedKrw;
+}
+
+/** Takes every slot left in the organization's reading window and says how many there were. */
+function readingWindowLeft(orgId: string): number {
+  let left = 0;
+  while (left < 100 && takeFreeIntelSlot(`sheet:${orgId}`, FREE_INTEL_LIMITS.analyzePerMinute, Date.now())) left += 1;
+  return left;
+}
+
+/** A plain picture run (no preset), the kind a team makes in the studio. */
+function plainImageRun(ctx: Ctx, prompt = 'a ceramic cup on stone') {
+  return createStudioJob(ctx.deps, viewerOf(ctx.fix.ids.owner), {
+    kind: 'image',
+    organizationId: ctx.fix.orgId,
+    requestId: requestId(),
+    model: 'nano-banana-pro',
+    prompt,
+    aspect: '4:5',
+    resolution: '2K',
+    count: 1,
+  });
+}
+
+/** A team recipe whose one step names the starter's preset (what F2 refuses to store). */
+const TEAM_RECIPE = {
+  version: 1,
+  guide: '',
+  slots: [{ key: 'image1', kind: 'image_ref', label: '사진', required: false }],
+  steps: [
+    {
+      id: 'sheet',
+      label: '시트',
+      medium: 'image',
+      model: 'gpt-image-2.6-sunburst',
+      aspect: '16:9',
+      resolution: '2K',
+      quality: 'high',
+      preset: 'video-character-sheet',
+      count: 1,
+      useReferenceSlots: ['image1', 'image2'],
+      promptTemplate: 'Team sheet for {subject}',
+    },
+  ],
+};
+const teamRecipeWithout = (): typeof TEAM_RECIPE => ({ ...TEAM_RECIPE, steps: TEAM_RECIPE.steps.map(({ preset: _preset, ...step }) => step) as typeof TEAM_RECIPE.steps });
 
 const atMax = (key: keyof typeof SHEET_VAR_MAX) => 'x'.repeat(SHEET_VAR_MAX[key]);
 const MAX_VARS = { faceBound: atMax('faceBound'), fashionText: atMax('fashionText'), build: atMax('build'), image1Wardrobe: atMax('image1Wardrobe') };
@@ -288,6 +353,140 @@ describe('3. sanitizer', () => {
     expect(sanitizeSheetVar('fashionText', 'a coat from http://example.test')).toBeNull();
     for (const bad of [42, null, undefined, {}, ['a'], true]) expect(sanitizeSheetVar('build', bad)).toBeNull();
     for (const empty of ['', '   ', '\n\t', '...', ' , ; ']) expect(sanitizeSheetVar('build', empty)).toBeNull();
+  });
+
+  /** Garment, face and build phrases a reading may give: each comes through unchanged, under every key. */
+  const MUST_PASS = [
+    'button-up shirt',
+    'zip closure',
+    'printed logo tee',
+    'change purse',
+    'show-stopping sequin gown',
+    'cover-up kimono',
+    'set of two gold rings',
+    'print scarf',
+    'drawstring hood',
+    'make-up bag',
+    'wrap dress',
+    'tie-front blouse',
+    'cut-out top',
+    'turn-up cuffs',
+    'pull-on trousers',
+    'slip dress',
+    'lace-up boots',
+    'fold-over waistband',
+    'white tee printed with "LOVE" in red',
+    'cap with an embroidered NY logo',
+    'belt with a round silver buckle',
+    'olive wool suit, powder-blue shirt, black tie, cobalt belt, black loafers',
+    'label-less denim jacket',
+    'paint-splattered overalls',
+    'type-set graphic tee',
+    'black and white striped shirt',
+    'slim adult man in his thirties, average height',
+    'rimless silver glasses, short black hair parted left',
+    'the navy hoodie and silver chain',
+    'place-mat check pattern skirt',
+    // Added for this table.
+    'overlay skirt in sheer black tulle',
+    'draw cord waistband on grey joggers',
+    'print a-line skirt with a tie waist',
+    'cover stitch hem on a white tee',
+    'added shoulder pads',
+    'typewriter-print shirt',
+    'used denim jacket with frayed hems',
+    'placement print sweatshirt',
+    'painted leather jacket',
+    'denim jacket with patches on the sleeves',
+    'tee with the word "SUN" across the back',
+    'hoodie with "PARIS" printed on the front',
+    'turtleneck, then a camel coat',
+    'trench coat but no belt',
+    'grey wool blazer, also a silver watch',
+    'set-in sleeves',
+    'round tortoiseshell glasses, a small mole above the left brow',
+    'a woman in her late twenties with a slim build and average height',
+    'the oatmeal crew-neck sweater',
+    'light stubble along the jaw, gold hoop earrings',
+    'appliqué floral jacket',
+    'removable faux-fur collar',
+    'turned-up collar',
+    'labelled tote bag',
+    'putty-colored chinos',
+  ];
+
+  /** Commands about the picture itself (text, backdrop, layout, other people): each value is refused and falls back. */
+  const MUST_BE_REFUSED = [
+    'add the words SALE across the backdrop',
+    'write "SALE" on the wall',
+    'navy blazer, add a watermark',
+    'please render a title above the figures',
+    'red dress and then replace the background with a beach',
+    'include a caption saying "NEW"',
+    'remove the grey backdrop',
+    'put the logo on the backdrop',
+    'show text "50% OFF" over the sheet',
+    'change the background to white',
+    'make the backdrop pink',
+    'use a white background',
+    'print "HELLO" across the panel',
+    'set the title to SUMMER',
+    'black coat. Add text at the top',
+    'insert a logo',
+    'generate a second person',
+    'display the brand name',
+    'type the word SALE',
+    'cover the face',
+    // Added for this table.
+    'turn the backdrop white',
+    'apply a vintage film filter',
+    'swap the outfit for a red dress',
+    'label the panels FRONT and BACK',
+    'paint the wall blue',
+    'place a logo in the corner',
+    'draw a border around the sheet',
+    'draw lines across the backdrop',
+    'overlay the brand logo',
+    'overlay "NEW" on the jacket',
+    'erase the tattoo',
+    'delete the background',
+    'create a third figure',
+    'grey suit; write the date below',
+    'black boots. Then render text on the floor',
+    'Also add a caption',
+    'make it look cinematic',
+    'show all three outfits from above',
+    'put "SALE" on it',
+    'set every light to warm',
+    'use your own background',
+    'change these to red',
+    'cover them with snow',
+    'red tee but replace its logo',
+    'navy tee and print "HELLO" on it',
+    'print text across the chest',
+    'show it on a beach',
+    'Generate a matching bag',
+    'white shirt, please draw a red tie',
+  ];
+
+  it('the tables are the size the review asked for', () => {
+    expect(MUST_PASS.length).toBeGreaterThanOrEqual(40);
+    expect(MUST_BE_REFUSED.length).toBeGreaterThanOrEqual(25);
+    expect(new Set(MUST_PASS).size).toBe(MUST_PASS.length);
+    expect(new Set(MUST_BE_REFUSED).size).toBe(MUST_BE_REFUSED.length);
+  });
+
+  it.each(MUST_PASS)('MUST PASS: %s', (phrase) => {
+    for (const key of Object.keys(SHEET_VAR_MAX) as Array<keyof typeof SHEET_VAR_MAX>) expect(sanitizeSheetVar(key, phrase), key).toBe(phrase);
+  });
+
+  it.each(MUST_BE_REFUSED)('MUST BE REFUSED: %s', (phrase) => {
+    for (const key of Object.keys(SHEET_VAR_MAX) as Array<keyof typeof SHEET_VAR_MAX>) expect(sanitizeSheetVar(key, phrase), key).toBeNull();
+    // Refused on its own: the other values of the same reading are kept.
+    const rendered = renderVideoCharacterSheetPrompt({ ...VISION, fashionText: phrase });
+    expect(rendered).toContain(SHEET_VAR_FALLBACK.fashionText);
+    expect(rendered).toContain(VISION.faceBound);
+    expect(rendered).toContain(VISION.build);
   });
 
   it('falls back field by field when rendering', () => {
@@ -427,6 +626,91 @@ describe('4. reading the two pictures', () => {
     expect(await runSheet(ctx)).toEqual({ ok: false, code: 'allowance_closed' });
     expect(ctx.calls).toHaveLength(0);
     expect(await jobCount(ctx)).toBe(0);
+    await ctx.fix.db.close();
+  });
+
+  it('(i) the happy path reads once, takes one window slot and spends exactly one estimate', async () => {
+    const ctx = await setup();
+    expect(await usedKrw(ctx)).toBe(0);
+    const run = asRun(await runSheet(ctx));
+    expect(ctx.calls).toHaveLength(1);
+    const estimate = imageRunKrw({ model: 'gpt-image-2.6-sunburst', resolution: '2K', references: 2, count: 1, quality: 'high', aspect: '16:9' });
+    expect((await rowOf(ctx, run.jobs[0]!.id)).estimate_krw).toBe(estimate);
+    // No second deduction anywhere: the month's spend is the one run's estimate.
+    expect(await usedKrw(ctx)).toBe(estimate);
+    expect(readingWindowLeft(ctx.fix.orgId)).toBe(FREE_INTEL_LIMITS.analyzePerMinute - 1);
+    await ctx.fix.db.close();
+  });
+
+  it('(i) the same request again: no reading, the same job back, its readings untouched', async () => {
+    const ctx = await setup();
+    const rid = requestId();
+    const first = asRun(await runSheet(ctx, {}, 'ko', rid));
+    expect(ctx.calls).toHaveLength(1);
+    const used = await usedKrw(ctx);
+    // A second reading would now answer differently; it must not happen at all.
+    ctx.deps.intelDeps = { fetch: geminiFetch({ ...VISION, build: 'a tall man in his fifties' }, ctx.calls), env: KEY_ENV };
+    const again = asRun(await runSheet(ctx, {}, 'ko', rid));
+    expect(ctx.calls).toHaveLength(1);
+    expect(again.jobs.map((j) => j.id)).toEqual(first.jobs.map((j) => j.id));
+    expect(await jobCount(ctx)).toBe(1);
+    expect((await rowOf(ctx, first.jobs[0]!.id)).params.preset).toEqual({ id: 'video-character-sheet', vars: VISION });
+    expect(await usedKrw(ctx)).toBe(used);
+    // The replay took no reading slot either.
+    expect(readingWindowLeft(ctx.fix.orgId)).toBe(FREE_INTEL_LIMITS.analyzePerMinute - 1);
+    await ctx.fix.db.close();
+  });
+
+  it('(i) too many open runs: refused before any reading, nothing made, no slot taken', async () => {
+    const ctx = await setup();
+    for (let i = 0; i < STUDIO_LIMITS.openJobsPerOrganization; i += 1) {
+      const made = await plainImageRun(ctx);
+      if (!made.ok) throw new Error(made.code);
+    }
+    const used = await usedKrw(ctx);
+    expect(await runSheet(ctx)).toEqual({ ok: false, code: 'too_many_running' });
+    expect(ctx.calls).toHaveLength(0);
+    expect(await jobCount(ctx)).toBe(STUDIO_LIMITS.openJobsPerOrganization);
+    expect(await usedKrw(ctx)).toBe(used);
+    expect(readingWindowLeft(ctx.fix.orgId)).toBe(FREE_INTEL_LIMITS.analyzePerMinute);
+    await ctx.fix.db.close();
+  });
+
+  it('(i) not enough allowance left for the sheet: refused before any reading, nothing made or spent, no slot taken', async () => {
+    const estimate = imageRunKrw({ model: 'gpt-image-2.6-sunburst', resolution: '2K', references: 2, count: 1, quality: 'high', aspect: '16:9' });
+    const ctx = await setup({ capKrw: estimate - 10 });
+    expect(await runSheet(ctx)).toEqual({ ok: false, code: 'allowance_exhausted' });
+    expect(ctx.calls).toHaveLength(0);
+    expect(await jobCount(ctx)).toBe(0);
+    expect(await usedKrw(ctx)).toBe(0);
+    expect(readingWindowLeft(ctx.fix.orgId)).toBe(FREE_INTEL_LIMITS.analyzePerMinute);
+    await ctx.fix.db.close();
+  });
+
+  it('(i) an allowance that fits the sheet exactly still runs, with one reading (the same sum the reservation makes)', async () => {
+    const estimate = imageRunKrw({ model: 'gpt-image-2.6-sunburst', resolution: '2K', references: 2, count: 1, quality: 'high', aspect: '16:9' });
+    const ctx = await setup({ capKrw: estimate });
+    const run = asRun(await runSheet(ctx));
+    expect(run.jobs).toHaveLength(1);
+    expect(ctx.calls).toHaveLength(1);
+    expect(await usedKrw(ctx)).toBe(estimate);
+    await ctx.fix.db.close();
+  });
+
+  it('(f) a command in one reading falls back on its own; the other three are used and the run goes on', async () => {
+    const answer = { ...VISION, fashionText: 'navy blazer, add a watermark' };
+    const pictures = { person: { bytes: await pngBytes(640, 800), mime: 'image/png' }, wardrobe: { bytes: await pngBytes(600, 800), mime: 'image/png' } };
+    const read = await analyzeSheetInputs(pictures, { fetch: geminiFetch(answer, []), env: KEY_ENV });
+    expect(read).toEqual({ vars: { ...VISION, fashionText: SHEET_VAR_FALLBACK.fashionText }, source: 'partial' });
+
+    const ctx = await setup({ answer });
+    const run = asRun(await runSheet(ctx));
+    expect(ctx.calls).toHaveLength(1);
+    const row = await rowOf(ctx, run.jobs[0]!.id);
+    expect(row.params.preset).toEqual({ id: 'video-character-sheet', vars: { ...VISION, fashionText: SHEET_VAR_FALLBACK.fashionText } });
+    expect(row.final_prompt).toContain(`Take only the garments: ${SHEET_VAR_FALLBACK.fashionText}.`);
+    expect(row.final_prompt).not.toContain('add a watermark');
+    expect(row.final_prompt).toContain(VISION.faceBound);
     await ctx.fix.db.close();
   });
 });
@@ -615,6 +899,15 @@ describe('7. the assembled text and the readings are never shown', () => {
     const input = { organizationId: ctx.fix.orgId, locale: 'ko' as const, clipLabel: '', outputId, clipDurationSec: 5, sequenceDurationSec: 0, targetNextSeconds: 6 };
     const fallback = await planSceneContinuation(ctx.deps, input, { env: {} });
     expectHidden('continuity fallback', fallback, ['three-panel character reference sheet']);
+    // A preset run counts as one with no prior text at all: not its sent text, not its short line either.
+    expect(JSON.stringify(fallback)).not.toContain('영상화용 캐릭터 시트 생성기');
+    expect(fallback.recommendedPrompt).not.toContain(SUBJECT);
+    // Its pictures are still used as before.
+    expect(fallback.path).toBe('studio_lineage');
+    expect(fallback.referenceRefs.map((r) => [r.id, r.role])).toEqual([
+      [ctx.person, 'subject'],
+      [ctx.outfit, 'style'],
+    ]);
     const calls: FetchCall[] = [];
     const planned = await planSceneContinuation(ctx.deps, input, {
       env: KEY_ENV,
@@ -622,8 +915,28 @@ describe('7. the assembled text and the readings are never shown', () => {
     });
     expect(calls).toHaveLength(1);
     expectHidden('continuity request', calls[0]!.raw, ['three-panel character reference sheet']);
-    expect(calls[0]!.raw).toContain(`영상화용 캐릭터 시트 생성기 · ${SUBJECT}`);
+    expect(calls[0]!.raw).not.toContain('Prior shot prompt');
+    expect(calls[0]!.raw).not.toContain('영상화용 캐릭터 시트 생성기');
+    expect(calls[0]!.raw).not.toContain(SUBJECT);
     expectHidden('continuity plan', planned);
+    await ctx.fix.db.close();
+  });
+
+  it('an ordinary run still hands the continuity planner its line, in both paths', async () => {
+    const ctx = await setup();
+    const plain = await plainImageRun(ctx, 'a ceramic cup on wet stone at dawn');
+    if (!plain.ok) throw new Error(plain.code);
+    const outputId = (await outputsOf(ctx, plain.job.id))[0]!.id;
+    const input = { organizationId: ctx.fix.orgId, locale: 'ko' as const, clipLabel: '', outputId, clipDurationSec: 5, sequenceDurationSec: 0, targetNextSeconds: 6 };
+    const fallback = await planSceneContinuation(ctx.deps, input, { env: {} });
+    expect(fallback.recommendedPrompt).toContain('a ceramic cup on wet stone at dawn');
+    const calls: FetchCall[] = [];
+    await planSceneContinuation(ctx.deps, input, {
+      env: KEY_ENV,
+      fetchImpl: geminiFetch({ recommendedPrompt: 'A slow push-in that continues the previous shot', cameraTransition: '같은 속도로 이어집니다.', continuityNotes: '이전 장면과 이어집니다.' }, calls),
+    });
+    expect(calls).toHaveLength(1);
+    expect(calls[0]!.raw).toContain('Prior shot prompt: a ceramic cup on wet stone at dawn');
     await ctx.fix.db.close();
   });
 });
@@ -731,41 +1044,85 @@ describe('9. guards', () => {
     await ctx.fix.db.close();
   });
 
-  it('a team (non-starter) workflow with a `preset` step runs it as an ordinary step', async () => {
+  it('a team workflow cannot be created with a `preset` step: `invalid`, nothing stored', async () => {
     const ctx = await setup();
     const owner = viewerOf(ctx.fix.ids.owner);
-    const created = await runWorkflowOperation(ctx.deps, owner, 'create', {
-      organizationId: ctx.fix.orgId,
-      requestId: requestId(),
-      title: '우리 팀 시트',
-      category: 'character',
-      recipe: {
-        version: 1,
-        guide: '',
-        slots: [{ key: 'image1', kind: 'image_ref', label: '사진', required: false }],
-        steps: [
-          {
-            id: 'sheet',
-            label: '시트',
-            medium: 'image',
-            model: 'gpt-image-2.6-sunburst',
-            aspect: '16:9',
-            resolution: '2K',
-            quality: 'high',
-            preset: 'video-character-sheet',
-            count: 1,
-            useReferenceSlots: ['image1', 'image2'],
-            promptTemplate: 'Team sheet for {subject}',
-          },
-        ],
-      },
-    });
+    const base = { organizationId: ctx.fix.orgId, title: '우리 팀 시트', category: 'character' };
+    expect(await runWorkflowOperation(ctx.deps, owner, 'create', { ...base, requestId: requestId(), recipe: TEAM_RECIPE })).toEqual({ ok: false, code: 'invalid' });
+    // An unknown preset name is refused the same way: only a built-in starter names one.
+    const unknown = { ...TEAM_RECIPE, steps: [{ ...TEAM_RECIPE.steps[0]!, preset: 'no-such-preset' }] };
+    expect(await runWorkflowOperation(ctx.deps, owner, 'create', { ...base, requestId: requestId(), recipe: unknown })).toEqual({ ok: false, code: 'invalid' });
+    expect(await workflowCount(ctx)).toBe(0);
+    // The same recipe without it is fine.
+    const plain = await runWorkflowOperation(ctx.deps, owner, 'create', { ...base, requestId: requestId(), recipe: teamRecipeWithout() });
+    expect(plain.ok).toBe(true);
+    expect(await workflowCount(ctx)).toBe(1);
+    await ctx.fix.db.close();
+  });
+
+  it('a team workflow cannot be updated to carry a `preset` step: `invalid`, the stored recipe unchanged', async () => {
+    const ctx = await setup();
+    const owner = viewerOf(ctx.fix.ids.owner);
+    const created = await runWorkflowOperation(ctx.deps, owner, 'create', { organizationId: ctx.fix.orgId, requestId: requestId(), title: '우리 팀 시트', category: 'character', recipe: teamRecipeWithout() });
     if (!created.ok || !('workflow' in created)) throw new Error('create failed');
-    expect(created.workflow.starter).toBe(false);
+    const before = (await ctx.fix.sql.query<{ recipe: unknown; revision: number }>('select recipe, revision from brand_studio_workflows where id = $1', [created.workflow.id])).rows[0]!;
+    expect(await runWorkflowOperation(ctx.deps, owner, 'update', { organizationId: ctx.fix.orgId, workflowId: created.workflow.id, recipe: TEAM_RECIPE })).toEqual({ ok: false, code: 'invalid' });
+    const after = (await ctx.fix.sql.query<{ recipe: unknown; revision: number }>('select recipe, revision from brand_studio_workflows where id = $1', [created.workflow.id])).rows[0]!;
+    expect(after).toEqual(before);
+    expect(JSON.stringify(after.recipe)).not.toContain('preset');
+    await ctx.fix.db.close();
+  });
+
+  it('an AI-built workflow never keeps a `preset` the model answered with, and never fails because of it', async () => {
+    const answer = {
+      title: '팀 캐릭터 시트',
+      summary: '인물 시트를 만듭니다.',
+      category: 'character',
+      guide: '사진을 고르고 실행합니다.',
+      needsReferenceVideo: false,
+      steps: [
+        { id: 'sheet', label: '시트', medium: 'image', model: 'gpt-image-2.6-sunburst', aspect: '16:9', promptTemplate: 'Sheet of {subject} from @image1. {prompt}', preset: 'video-character-sheet' },
+        { id: 'detail', label: '디테일', medium: 'image', aspect: '4:5', promptTemplate: 'Detail of {subject}. {prompt}', preset: 'no-such-preset' },
+      ],
+    };
+    const ctx = await setup({ answer });
+    const owner = viewerOf(ctx.fix.ids.owner);
+    const built = await runWorkflowOperation(ctx.deps, owner, 'build_with_ai', { organizationId: ctx.fix.orgId, requestId: requestId(), brief: '인물 사진 한 장으로 캐릭터 시트를 만드는 워크플로우' });
+    if (!built.ok || !('workflow' in built)) throw new Error(`build failed: ${JSON.stringify(built)}`);
+    expect(built.builderMode).toBe('gemini');
+    expect(built.workflow.recipe.steps).toHaveLength(2);
+    for (const step of built.workflow.recipe.steps) expect(step).not.toHaveProperty('preset');
+    const stored = (await ctx.fix.sql.query<{ recipe: unknown }>('select recipe from brand_studio_workflows where id = $1', [built.workflow.id])).rows[0]!;
+    expect(JSON.stringify(stored.recipe)).not.toContain('preset');
+    await ctx.fix.db.close();
+  });
+
+  it('a row stored earlier with a `preset` step is read without it everywhere and runs as an ordinary step', async () => {
+    const ctx = await setup();
+    const owner = viewerOf(ctx.fix.ids.owner);
+    // Stored by some other path (an older build, a manual fix): the readers must not surface it.
+    const workflowId = (
+      await ctx.fix.sql.query<{ id: string }>(
+        `insert into brand_studio_workflows (organization_id, slug, title, summary, category, recipe, source, created_by, request_id)
+         values ($1, 'team-sheet', '우리 팀 시트', '', 'character', $2::jsonb, 'web', $3, $4) returning id`,
+        [ctx.fix.orgId, JSON.stringify(TEAM_RECIPE), ctx.fix.ids.owner, requestId()],
+      )
+    ).rows[0]!.id;
+    const hub = await loadWorkflowsHubState(ctx.deps, owner, ctx.fix.orgId);
+    if (!hub.ok) throw new Error(hub.code);
+    const listed = hub.workflows.find((w) => w.id === workflowId)!;
+    expect(listed.starter).toBe(false);
+    expect(listed.recipe.steps[0]).not.toHaveProperty('preset');
+    expect(listed.recipe.steps[0]).toMatchObject({ id: 'sheet', quality: 'high', useReferenceSlots: ['image1', 'image2'] });
+    const resolved = (await resolveWorkflowTarget(ctx.fix.sql, ctx.fix.orgId, workflowId))!;
+    expect(resolved.recipe.steps[0]).not.toHaveProperty('preset');
+    expect((await resolveWorkflowTarget(ctx.fix.sql, ctx.fix.orgId, 'team-sheet'))!.recipe.steps[0]).not.toHaveProperty('preset');
+    expect((await workflowResource(ctx, workflowId)).recipe.steps[0]).not.toHaveProperty('preset');
+
     const run = await runWorkflowOperation(ctx.deps, owner, 'run', {
       organizationId: ctx.fix.orgId,
       requestId: requestId(),
-      workflowId: created.workflow.id,
+      workflowId,
       inputs: { image1Ref: { assetId: ctx.person }, image2Ref: { assetId: ctx.outfit }, subject: SUBJECT },
     });
     const res = asRun(run);
@@ -855,10 +1212,6 @@ describe('10. estimates', () => {
     expect(sheet.recipe.why?.map((w) => w.title)).toEqual(['얼굴은 한 칸에만 크게', '전신 칸에는 머리 제외', '회색 배경과 조명 하나', '앞모습과 뒷모습 모두 포함']);
     expect(sheet.recipe.defaultFolderPattern).toBe('영상용 시트 · {subject}');
     expect(sheet.recipe.defaultFolderPatternEn).toBe('Video Sheet · {subject}');
-    // The client-safe starter file never carries the server-side text.
-    const source = readFileSync('lib/brand-studio/workflows/starters.ts', 'utf8');
-    expect(source).not.toMatch(/(?:import|from)\s*\(?\s*['"][^'"]*presets/);
-    expect(source).not.toMatch(/require\(\s*['"][^'"]*presets/);
     const customer = JSON.stringify(STARTER_WORKFLOWS);
     for (const word of ['prompt', 'engine', 'pipeline', 'GPT', 'Sunra', 'OpenAI']) {
       for (const text of [sheet.title, sheet.titleEn, sheet.summary, sheet.summaryEn, sheet.recipe.guide, sheet.recipe.guideEn, JSON.stringify(sheet.recipe.why), JSON.stringify(sheet.recipe.slots)]) {
@@ -866,6 +1219,36 @@ describe('10. estimates', () => {
       }
     }
     expect(customer.length).toBeGreaterThan(0);
+  });
+
+  it('the client-safe starter catalogue and the hub load without ever loading the server-side text', async () => {
+    const PRESET_TEXT = '@/lib/brand-studio/workflows/presets/video-character-sheet';
+    const PRESET_REGISTRY = '@/lib/brand-studio/workflows/presets';
+    const loaded: string[] = [];
+    vi.resetModules();
+    vi.doMock(PRESET_TEXT, () => {
+      loaded.push('presets/video-character-sheet');
+      throw new Error('the preset text was loaded');
+    });
+    vi.doMock(PRESET_REGISTRY, () => {
+      loaded.push('presets');
+      throw new Error('the preset registry was loaded');
+    });
+    try {
+      const starters = await import('@/lib/brand-studio/workflows/starters');
+      expect(starters.STARTER_WORKFLOWS.map((w) => w.slug)).toContain('video-character-sheet');
+      expect(starters.findStarterWorkflow('video-character-sheet')!.estimatedCredits).toBe(15);
+      const hub = await import('@/components/brand-studio/workflows/workflows-hub');
+      expect(typeof hub.WorkflowsHub).toBe('function');
+      expect(loaded).toEqual([]);
+      // The trap works: a server module that does use the text trips it.
+      await expect(import('@/lib/brand-studio/workflows/sheet-analysis')).rejects.toThrow();
+      expect(loaded).toContain('presets/video-character-sheet');
+    } finally {
+      vi.doUnmock(PRESET_TEXT);
+      vi.doUnmock(PRESET_REGISTRY);
+      vi.resetModules();
+    }
   });
 });
 
@@ -905,6 +1288,53 @@ describe('11. MCP', () => {
     expect(one.structuredContent).toEqual({ ok: false, code: 'reference_missing' });
     await ctx.fix.db.close();
   });
+
+  it('twings_create_workflow with explicit steps refuses a `preset` (not dropped quietly) and stores nothing', async () => {
+    const ctx = await setup();
+    const step = { id: 'sheet', label: '시트', medium: 'image', model: 'gpt-image-2.6-sunburst', aspect: '16:9', resolution: '2K', promptTemplate: 'Sheet of {subject} from @image1. {prompt}' };
+    for (const preset of ['video-character-sheet', 'no-such-preset', 7]) {
+      const made = await mcp(ctx, 'tools/call', { name: 'twings_create_workflow', arguments: { title: '팀 시트', category: 'character', steps: [step, { ...step, id: 'second', preset }] } });
+      expect(made.isError, String(preset)).toBe(true);
+      expect(made.structuredContent, String(preset)).toMatchObject({ ok: false, code: 'invalid' });
+    }
+    expect(await workflowCount(ctx)).toBe(0);
+    const plain = await mcp(ctx, 'tools/call', { name: 'twings_create_workflow', arguments: { title: '팀 시트', category: 'character', steps: [step] } });
+    expect(plain.isError).toBe(false);
+    expect(await workflowCount(ctx)).toBe(1);
+    await ctx.fix.db.close();
+  });
+
+  it('resources/read never shows a step `preset`, and keeps every other field the starters expose', async () => {
+    const ctx = await setup();
+    const sheet = await workflowResource(ctx, 'video-character-sheet');
+    const maker = await workflowResource(ctx, 'character-sheet-maker');
+    for (const step of sheet.recipe.steps) expect(step).not.toHaveProperty('preset');
+    expect(JSON.stringify(sheet)).not.toContain('"preset"');
+    // The same answer shape as the other starters: the same top-level keys, and step keys from the same set
+    // (plus `quality`, which only this starter names).
+    expect(Object.keys(sheet).sort()).toEqual(Object.keys(maker).sort());
+    const makerKeys = maker.recipe.steps.map((s) => new Set(Object.keys(s)));
+    const everyMakerStep = [...makerKeys[0]!].filter((k) => makerKeys.every((keys) => keys.has(k)));
+    const anyMakerStep = new Set([...makerKeys.flatMap((keys) => [...keys]), 'quality']);
+    for (const step of sheet.recipe.steps) {
+      const keys = Object.keys(step);
+      for (const k of everyMakerStep) expect(keys, k).toContain(k);
+      for (const k of keys) expect(anyMakerStep.has(k), k).toBe(true);
+    }
+    // Only `preset` was taken away: everything else is the starter as the hub knows it.
+    const starter = findStarterWorkflow('video-character-sheet')!;
+    const expected = JSON.parse(JSON.stringify(starter)) as WorkflowWire;
+    expected.recipe = { ...expected.recipe, steps: expected.recipe.steps.map(({ preset: _preset, ...rest }) => rest) } as WorkflowRecipe;
+    expect(sheet).toEqual(expected);
+    // The browser hub keeps it: that is how it knows the runner is locked.
+    expect(starter.recipe.steps[0]!.preset).toBe('video-character-sheet');
+    const hub = await loadWorkflowsHubState(ctx.deps, viewerOf(ctx.fix.ids.owner), ctx.fix.orgId);
+    if (!hub.ok) throw new Error(hub.code);
+    expect(hub.starters.find((w) => w.slug === 'video-character-sheet')!.recipe.steps[0]!.preset).toBe('video-character-sheet');
+    // A starter without a preset reads exactly as before.
+    expect(maker).toEqual(JSON.parse(JSON.stringify(findStarterWorkflow('character-sheet-maker'))));
+    await ctx.fix.db.close();
+  });
 });
 
 /* ------------------------------------------------------- 12 save as workflow */
@@ -932,6 +1362,11 @@ describe('12. save as workflow and recent runs', () => {
     ).toEqual({ ok: false, code: 'invalid' });
     const saved = await runWorkflowOperation(ctx.deps, owner, 'save_from_job', { organizationId: ctx.fix.orgId, requestId: requestId(), jobId: plain.job.id, title: '컵 화보' });
     expect(saved.ok).toBe(true);
+    // A workflow saved from a run never names a preset either.
+    if (!saved.ok || !('workflow' in saved)) throw new Error('save failed');
+    for (const step of saved.workflow.recipe.steps) expect(step).not.toHaveProperty('preset');
+    const savedRow = (await ctx.fix.sql.query<{ recipe: unknown }>('select recipe from brand_studio_workflows where id = $1', [saved.workflow.id])).rows[0]!;
+    expect(JSON.stringify(savedRow.recipe)).not.toContain('preset');
 
     const hub = await loadWorkflowsHubState(ctx.deps, owner, ctx.fix.orgId);
     if (!hub.ok) throw new Error(hub.code);
@@ -941,8 +1376,51 @@ describe('12. save as workflow and recent runs', () => {
     // The list the hub page builds (app/(brand)/brand/studio/workflows/page.tsx) uses the same function.
     const views = await viewsOf(ctx.fix.sql, await jobsByIds(ctx.fix.sql, ctx.fix.orgId, [presetJobId, plain.job.id]), ctx.deps.media);
     expect(toRecentRunSummaries(views).map((r) => r.jobId)).toEqual([plain.job.id]);
-    const page = readFileSync('app/(brand)/brand/studio/workflows/page.tsx', 'utf8');
-    expect(page).toContain('toRecentRunSummaries(');
+    await ctx.fix.db.close();
+  });
+
+  it('the hub page hands the hub the ordinary run and never the preset run', async () => {
+    const ctx = await setup();
+    const owner = viewerOf(ctx.fix.ids.owner);
+    const presetJobId = asRun(await runSheet(ctx)).jobs[0]!.id;
+    const plain = await plainImageRun(ctx);
+    if (!plain.ok) throw new Error(plain.code);
+
+    // The page as the server renders it, on this fixture's database (the way tests/brand-studio/workflows-and-mcp.test.ts calls it).
+    const mocked = ['next/navigation', '@/lib/flags', '@/components/brand-workspace/context'];
+    vi.resetModules();
+    vi.doMock('next/navigation', () => ({
+      notFound: () => {
+        throw new Error('NEXT_NOT_FOUND');
+      },
+      redirect: (url: string) => {
+        throw new Error(`NEXT_REDIRECT:${url}`);
+      },
+      useRouter: () => ({ refresh: () => undefined, push: () => undefined }),
+      usePathname: () => '/brand/studio/workflows',
+      useSearchParams: () => new URLSearchParams(),
+    }));
+    vi.doMock('@/lib/flags', async (original) => ({ ...(await original<typeof import('@/lib/flags')>()), brandStudioV2Open: () => true }));
+    vi.doMock('@/components/brand-workspace/context', async () => {
+      const { getDictionary } = await import('@/lib/i18n/dictionaries');
+      const dict = getDictionary('ko');
+      return {
+        brandContext: async () => ({ viewer: owner, sql: ctx.fix.sql, verifiedEmail: owner.email ?? undefined, brandHost: true, locale: 'ko' as const, dict, b: dict.brandWorkspace }),
+      };
+    });
+    try {
+      const { default: StudioWorkflowsPage } = await import('@/app/(brand)/brand/studio/workflows/page');
+      const element = await StudioWorkflowsPage({ searchParams: Promise.resolve({ organizationId: ctx.fix.orgId }) });
+      const props = element.props as { organizationId: string; initialRecentRuns: RecentRunSummaryWire[] };
+      expect(props.organizationId).toBe(ctx.fix.orgId);
+      const runs = props.initialRecentRuns.map((r) => r.jobId);
+      expect(runs).toContain(plain.job.id);
+      expect(runs).not.toContain(presetJobId);
+      expectHidden('page recent runs', props.initialRecentRuns);
+    } finally {
+      for (const path of mocked) vi.doUnmock(path);
+      vi.resetModules();
+    }
     await ctx.fix.db.close();
   });
 });

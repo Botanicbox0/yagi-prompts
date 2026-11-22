@@ -26,6 +26,15 @@ export interface CompiledWorkflowSpec {
   mode: 'gemini' | 'fallback';
 }
 
+/**
+ * The recipe without any step `preset`. Only a built-in starter (starters.ts) may name a server-side preset
+ * (lib/brand-studio/workflows/presets); every team, saved, AI-built or MCP-made recipe is read and saved without one.
+ */
+export function withoutStepPresets(recipe: WorkflowRecipe): WorkflowRecipe {
+  if (!recipe.steps.some((step) => 'preset' in step)) return recipe;
+  return { ...recipe, steps: recipe.steps.map(({ preset: _preset, ...step }) => step) };
+}
+
 const IMAGE_ASPECTS = new Set(['1:1', '4:5', '3:4', '2:3', '9:16', '5:4', '4:3', '3:2', '16:9', '21:9']);
 const VIDEO_ASPECTS = new Set(['9:16', '3:4', '1:1', '4:3', '16:9', '21:9']);
 
@@ -344,14 +353,15 @@ export async function buildWorkflowWithAi(brief: string, intelDeps: IntelDeps): 
     ];
 
     const title = raw.title.trim().slice(0, 80) || fallback.title;
-    const recipe = WorkflowRecipeSchema.parse({
+    // The model's answer is not trusted: whatever it says, no step leaves here with a `preset`.
+    const recipe = withoutStepPresets(WorkflowRecipeSchema.parse({
       version: 1,
       guide: typeof raw.guide === 'string' && raw.guide.trim() ? raw.guide.trim().slice(0, 800) : fallback.recipe.guide,
       defaultFolderPattern: `${title.slice(0, 28)} · {subject}`,
       consistencyCheck: category === 'character' ? 'character_sheet' : 'none',
       slots,
       steps,
-    });
+    }));
 
     return {
       title,

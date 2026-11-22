@@ -11,6 +11,7 @@
  *
  * Server-only.
  */
+import 'server-only';
 import { callGeminiJson, inlinePart, studioGeminiConfig } from '@/lib/brand-studio/enhancer/gemini';
 import { thumbnailWebp } from '@/lib/brand-studio/files';
 import type { IntelDeps } from '@/lib/brand-studio/types';

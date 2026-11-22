@@ -5,6 +5,7 @@
  *
  * Server-only leaf modules: no studio runtime imports, and no client code imports this folder.
  */
+import 'server-only';
 import { renderVideoCharacterSheetPrompt, VIDEO_CHARACTER_SHEET_PRESET_ID } from './video-character-sheet';
 
 export interface StudioJobPreset {
