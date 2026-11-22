@@ -65,11 +65,14 @@ export function isReclaim(error: unknown): boolean {
  * for pictures and sound together, spec H F4; a budget of its own when none is given), calls `onRestart`
  * unless the export was already cancelled (`aborted`: no "starting again" line after a cancel, F6), waits for
  * `waitVisible` and runs it again from the start. `restarts`: how many times THIS run started again.
+ *
+ * A cancel is looked at before the budget (spec I, G3): an attempt that ends reclaimed after the person cancelled
+ * ends as the export's cancel (`cancelled()`), even when the budget is spent, never as `ReclaimedTooOften`.
  */
 export async function runWithRestarts<T>(
   attempt: (restarts: number) => Promise<T>,
   waitVisible: () => Promise<void>,
-  options: { max?: number; budget?: RestartBudget; aborted?: () => boolean; onRestart?: (restarts: number, codec: 'video' | 'audio') => void } = {},
+  options: { max?: number; budget?: RestartBudget; aborted?: () => boolean; cancelled?: () => Error; onRestart?: (restarts: number, codec: 'video' | 'audio') => void } = {},
 ): Promise<{ result: T; restarts: number }> {
   const budget = options.budget ?? restartBudget(options.max ?? MAX_RESTARTS);
   for (let restarts = 0; ; restarts += 1) {
@@ -77,6 +80,7 @@ export async function runWithRestarts<T>(
       return { result: await attempt(restarts), restarts };
     } catch (error) {
       if (!(error instanceof CodecReclaimed)) throw error;
+      if (options.aborted?.() && options.cancelled) throw options.cancelled();
       if (budget.used >= budget.max) throw new ReclaimedTooOften(budget.used + 1, error.codec);
       budget.used += 1;
       if (!options.aborted?.()) options.onRestart?.(budget.used, error.codec);
@@ -90,14 +94,23 @@ export async function runWithRestarts<T>(
  * together; `announce` (the sheet's line) is told which part starts again, except after a cancel. `used` is the
  * export's `restarts`.
  */
-export function restarter(options: { waitVisible: () => Promise<void>; aborted: () => boolean; announce: (phase: 'video' | 'audio', restarts: number) => void; max?: number }) {
+export function restarter(options: {
+  waitVisible: () => Promise<void>;
+  aborted: () => boolean;
+  /** The error the export's cancel throws everywhere else. */
+  cancelled: () => Error;
+  announce: (phase: 'video' | 'audio', restarts: number) => void;
+  max?: number;
+}) {
   const budget = restartBudget(options.max);
   return {
     get used() {
       return budget.used;
     },
     run: <T,>(phase: 'video' | 'audio', attempt: () => Promise<T>): Promise<T> =>
-      runWithRestarts(attempt, options.waitVisible, { budget, aborted: options.aborted, onRestart: (restarts) => options.announce(phase, restarts) }).then((done) => done.result),
+      runWithRestarts(attempt, options.waitVisible, { budget, aborted: options.aborted, cancelled: options.cancelled, onRestart: (restarts) => options.announce(phase, restarts) }).then(
+        (done) => done.result,
+      ),
   };
 }
 

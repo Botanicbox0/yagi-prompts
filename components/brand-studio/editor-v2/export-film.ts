@@ -975,6 +975,7 @@ export async function exportFilm(options: ExportFilmOptions): Promise<ExportFilm
   const restarting = restarter({
     waitVisible: () => whenVisible(document, signal, cancelled),
     aborted: () => !!signal?.aborted,
+    cancelled,
     announce: (phase, count) => {
       restarts = count;
       report({ phase, done: 0, total: phase === 'video' ? frames : 1 });
