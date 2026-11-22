@@ -62,7 +62,7 @@ import { soundTrackOf } from '@/lib/brand-studio/editor-v2/media-probe';
 import { DEFAULT_REFRAME, type Reframe } from '@/lib/brand-studio/editor-v2/model';
 import { sampleBytes } from '@/lib/brand-studio/editor-v2/sample-bytes';
 import type { Rotation, VideoIndex } from '@/lib/brand-studio/editor-v2/sample-index';
-import { ReadCancelled, SHARED_WAIT_MS, STALL_MS, readStream, sharedWaits, totalLimitMs, waitShared, watchRead } from '@/lib/brand-studio/editor-v2/watched-read';
+import { ReadCancelled, SHARED_WAIT_MS, STALL_MS, readStream, sharedWaits, totalLimitMs, watchRead } from '@/lib/brand-studio/editor-v2/watched-read';
 import { CodecReclaimed, ReclaimedTooOften, isReclaim, restarter, whenVisible } from '@/lib/brand-studio/editor-v2/export-run';
 import { PicturePaths, type DecoderSession, type SourcePath } from '@/lib/brand-studio/editor-v2/picture-paths';
 import { encodeFromPaths, handOver, type PictureSource } from '@/lib/brand-studio/editor-v2/frame-loop';
@@ -300,7 +300,12 @@ function seekAndConfirm(
   });
 }
 
-async function openSource(url: string, fps: number, label: string, host: HTMLElement, signal?: AbortSignal): Promise<Source> {
+/**
+ * Opens a footage on the seek path. Its frame facts come from the export's own wait (`facts`, `exportWaits`):
+ * a file whose facts timed out when its path was chosen is not waited for again here, nor on a restart
+ * (spec I, G1); it is then shown without its own picture count.
+ */
+async function openSource(url: string, fps: number, label: string, host: HTMLElement, facts: ExportWaits['facts'], signal?: AbortSignal): Promise<Source> {
   const video = document.createElement('video');
   video.crossOrigin = 'anonymous';
   video.muted = true;
@@ -338,8 +343,8 @@ async function openSource(url: string, fps: number, label: string, host: HTMLEle
   // The first frame's presentation time: most files start at 0, some do not.
   const first = await seekAndConfirm(video, 0.5 / fps, () => true, signal);
   if (!first.ok || first.last === null) throw new ExportStop('frame', `first frame of ${label} could not be confirmed`, { frame: 0, clip: label });
-  const read = await waitShared(readFootage(url).catch(() => null), signal, SHARED_WAIT_MS, null, cancelled);
-  const frames = read?.answer.ok && read.answer.timing.video ? read.answer.timing.video.frames : null;
+  const read = await facts(url);
+  const frames = read && read !== 'timeout' && read.answer.ok && read.answer.timing.video ? read.answer.timing.video.frames : null;
   return { url, video, fps, firstSec: first.last, shown: 0, frames };
 }
 
@@ -981,7 +986,7 @@ export async function exportFilm(options: ExportFilmOptions): Promise<ExportFilm
       report({ phase, done: 0, total: phase === 'video' ? frames : 1 });
     },
   });
-  const pass: VideoPass = { sequence, extras, reframe, framing, burnCaptions, override, signal, plan, choices, codec, width, height, fps, anchor, overlayImages, report };
+  const pass: VideoPass = { sequence, extras, reframe, framing, burnCaptions, override, signal, plan, choices, waits, codec, width, height, fps, anchor, overlayImages, report };
   const video = await restarting.run('video', () => videoPass(pass)).catch(givenUp);
 
   const { rendered, warnings } = await mixSound(sequence, extras, anchor, reader, signal, (done, total) => report({ phase: 'audio', done, total }), noSoundTrack);
@@ -1019,6 +1024,8 @@ interface VideoPass {
   signal: AbortSignal | undefined;
   plan: readonly PlannedFrame[];
   choices: ReadonlyMap<string, SourceChoice>;
+  /** The export's shared waits: a seeked footage's frame facts are taken from here (spec I, G1). */
+  waits: ExportWaits;
   codec: string;
   width: number;
   height: number;
@@ -1035,7 +1042,7 @@ interface VideoPass {
  * and before `encode()`, so no raw "closed codec" error escapes.
  */
 async function videoPass(pass: VideoPass): Promise<{ samples: EncodedVideoSample[]; avcConfig: Uint8Array | null; paths: SourcePath[]; filled: FilledCuts }> {
-  const { sequence, extras, reframe, framing, burnCaptions, override, signal, plan, choices, codec, width, height, fps, anchor, overlayImages, report } = pass;
+  const { sequence, extras, reframe, framing, burnCaptions, override, signal, plan, choices, waits, codec, width, height, fps, anchor, overlayImages, report } = pass;
   const frames = plan.length;
   const labels = new Map(sequence.clips.map((clip) => [clip.id, clip.label] as const));
   const indexOf = new Map(sequence.clips.map((clip, index) => [clip.id, index] as const));
@@ -1066,7 +1073,7 @@ async function videoPass(pass: VideoPass): Promise<{ samples: EncodedVideoSample
       if (pathNow !== 'seek') report({ phase: 'video', done: entry.frame, total: frames, path: 'seek' });
       let source = seekSources.get(entry.srcUrl);
       if (!source) {
-        source = await openSource(entry.srcUrl, entry.sourceFps, label, host, signal);
+        source = await openSource(entry.srcUrl, entry.sourceFps, label, host, waits.facts, signal);
         seekSources.set(entry.srcUrl, source);
       }
       // Consecutive frames on the same source frame (a slowed cut) reuse the picture: no second seek.
