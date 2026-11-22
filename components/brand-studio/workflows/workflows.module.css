@@ -156,6 +156,16 @@
   cursor: not-allowed;
 }
 
+/* Waiting for something the member still has to pick (pressing it says what): looks disabled, stays focusable. */
+.primaryCta[aria-disabled='true'] {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.primaryCta[aria-disabled='true']:hover:not(:disabled) {
+  background: var(--ys-accent, #ff58ae);
+}
+
 /* Hero AI Workflow Builder */
 .builderHero {
   background: var(--ys-surface, #111113);
@@ -685,6 +695,189 @@
   font-size: 12px;
   line-height: 1.5;
   color: var(--ys-ink-secondary, #a1a1aa);
+}
+
+/* Locked starter runner (video character sheet): why block with a drawing of the sheet, picture slots */
+.whyBlock {
+  background: var(--ys-panel, #18181b);
+  border-radius: 14px;
+  padding: 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  word-break: keep-all;
+  overflow-wrap: break-word;
+}
+
+/* The sheet as a 16:9 frame: a narrow face panel, then the body from the front and from the back. */
+.sheetSchematic {
+  width: 100%;
+  max-width: 240px;
+  aspect-ratio: 16 / 9;
+  box-sizing: border-box;
+  display: grid;
+  grid-template-columns: 0.72fr 1fr 1fr;
+  gap: 4px;
+  padding: 5px;
+  border-radius: 10px;
+  background: var(--ys-canvas, #09090b);
+  box-shadow: inset 0 0 0 1px var(--ys-hairline, rgba(255, 255, 255, 0.08));
+}
+
+.schematicPanel {
+  position: relative;
+  display: block;
+  overflow: hidden;
+  border-radius: 6px;
+  background: var(--ys-panel, #18181b);
+}
+
+.schematicHead,
+.schematicShoulders,
+.schematicFigure {
+  position: absolute;
+  left: 50%;
+  transform: translateX(-50%);
+  background: var(--ys-ink-muted, #71717a);
+  opacity: 0.45;
+}
+
+.schematicHead {
+  top: 28%;
+  width: 54%;
+  aspect-ratio: 1;
+  border-radius: 50%;
+}
+
+.schematicShoulders {
+  bottom: 0;
+  width: 88%;
+  height: 38%;
+  border-radius: 999px 999px 0 0;
+}
+
+/* A standing figure cut at the neck: torso, then two legs. */
+.schematicFigure {
+  top: 9%;
+  width: 34%;
+  height: 40%;
+  border-radius: 6px 6px 3px 3px;
+}
+
+.schematicFigure::before,
+.schematicFigure::after {
+  content: '';
+  position: absolute;
+  top: 100%;
+  width: 42%;
+  height: 112%;
+  border-radius: 0 0 3px 3px;
+  background: inherit;
+}
+
+.schematicFigure::before {
+  left: 4%;
+}
+
+.schematicFigure::after {
+  right: 4%;
+}
+
+.whyTitle {
+  margin: 0;
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--ys-ink, #ededed);
+}
+
+.whyList {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.whyRow {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 8px 0;
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.whyRow + .whyRow {
+  box-shadow: inset 0 1px 0 0 var(--ys-hairline, rgba(255, 255, 255, 0.08));
+}
+
+.whyRowTitle {
+  font-weight: 600;
+  color: var(--ys-ink, #ededed);
+}
+
+.whyRowBody {
+  color: var(--ys-ink-secondary, #a1a1aa);
+}
+
+.slotHint {
+  margin: 0;
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--ys-ink-secondary, #a1a1aa);
+  word-break: keep-all;
+  overflow-wrap: break-word;
+}
+
+.slotRow {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.slotThumb {
+  width: 64px;
+  height: 64px;
+  flex-shrink: 0;
+  border-radius: 10px;
+  overflow: hidden;
+  background: var(--ys-panel, #18181b);
+  box-shadow: inset 0 0 0 1px var(--ys-hairline, rgba(255, 255, 255, 0.08));
+}
+
+.slotThumbImg {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  object-position: 50% 15%;
+}
+
+.slotControls {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.slotControls .selectInput {
+  flex: 1;
+  min-width: 0;
+}
+
+.slotUpload {
+  flex-shrink: 0;
+  white-space: nowrap;
+}
+
+.inlineNotice {
+  margin: 0;
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--ys-ink, #ededed);
+  word-break: keep-all;
+  overflow-wrap: break-word;
 }
 
 .errorBanner {

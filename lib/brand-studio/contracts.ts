@@ -777,6 +777,8 @@ export interface StudioJobView {
   prompt: string;
   /** What was sent after enhancement; null until the enhancer has run or when it was off. */
   finalPrompt: string | null;
+  /** Set on a run made by a preset workflow (id only). Such a run's sent text is never shown and it cannot be re-run from the gallery. */
+  preset?: string;
   /** True when `finalPrompt` is the sentence the customer read (and may have edited) before sending. */
   reviewed?: boolean;
   /** How many results this job is expected to produce (drives the pending cards). */

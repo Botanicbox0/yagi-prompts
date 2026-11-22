@@ -132,6 +132,7 @@ export function jobView(row: JobRow, outputs: OutputRow[], media: StudioMediaSto
     // Shown when the wording was changed before sending: by the enhancer, or by the one retry after a
     // safety-review block (lib/brand-studio/block-retry.ts). What was sent is never hidden from the customer.
     finalPrompt: row.enhance || row.work?.blockRetry?.source === 'model' || p.reviewedPrompt ? row.final_prompt : null,
+    ...(p.preset ? { finalPrompt: null, preset: p.preset.id } : {}),
     ...(p.reviewedPrompt ? { reviewed: true } : {}),
     expected: row.kind === 'image' ? Math.max(1, Number(p.count ?? 1)) : 1,
     aspect: p.aspect ?? null,

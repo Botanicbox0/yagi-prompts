@@ -11,7 +11,7 @@ import { callGeminiJson, inlinePart, studioGeminiConfig, type GeminiPart } from 
 import { containsInternalTerm } from '@/lib/brand-studio/enhancer/schema';
 import { filmSheetCacheKey } from '@/lib/brand-studio/film-sheet/lifecycle';
 import { readyAsset } from '@/lib/brand-studio/repo';
-import type { StudioDeps } from '@/lib/brand-studio/types';
+import type { StudioDeps, StudioJobParams } from '@/lib/brand-studio/types';
 import {
   type ContinuityPlan,
   type ContinuityPlanInput,
@@ -209,6 +209,7 @@ export async function planSceneContinuation(
     prompt: string;
     final_prompt: string | null;
     refs: StudioReference[] | null;
+    params?: StudioJobParams | null;
   } | null = null;
   let assetRow: {
     id: string;
@@ -247,8 +248,9 @@ export async function planSceneContinuation(
             prompt: string;
             final_prompt: string | null;
             refs: StudioReference[] | null;
+            params: StudioJobParams | null;
           }>(
-            `select id, prompt, final_prompt, refs
+            `select id, prompt, final_prompt, refs, params
                from brand_studio_jobs
               where organization_id = $1 and id = $2
               limit 1`,
@@ -295,8 +297,9 @@ export async function planSceneContinuation(
               prompt: string;
               final_prompt: string | null;
               refs: StudioReference[] | null;
+              params: StudioJobParams | null;
             }>(
-              `select id, prompt, final_prompt, refs
+              `select id, prompt, final_prompt, refs, params
                  from brand_studio_jobs
                 where organization_id = $1 and id = $2
                 limit 1`,
@@ -306,6 +309,9 @@ export async function planSceneContinuation(
       }
     }
   }
+
+  // A preset run (lib/brand-studio/workflows/presets): its sent text is never read back, only the short line it shows.
+  if (jobRow?.params?.preset) jobRow = { ...jobRow, final_prompt: null };
 
   const cachedSheet = pickCachedFilmSheet(assetRow?.film_sheets, input.locale);
   const filmSheetSummary = summarizeFilmSheet(cachedSheet, input.locale);

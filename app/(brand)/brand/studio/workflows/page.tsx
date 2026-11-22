@@ -11,7 +11,7 @@ import { createStudioMediaStore } from '@/lib/brand-studio/media-store';
 import { assetView, assetsOf, jobsOf, viewsOf } from '@/lib/brand-studio/repo';
 import { allowanceView, loadAllowance } from '@/lib/brand-studio/usage';
 import { studioShowroomVisible, studioV2Visible } from '@/lib/brand-studio/visibility';
-import { listOrgPlaybooks, listOrgWorkflows, STARTER_WORKFLOWS } from '@/lib/brand-studio/workflows';
+import { listOrgPlaybooks, listOrgWorkflows, STARTER_WORKFLOWS, toRecentRunSummaries } from '@/lib/brand-studio/workflows';
 import type { RecentRunSummaryWire } from '@/lib/brand-studio/workflows/contracts';
 import { scopedHref } from '@/lib/brands/workspace/selection';
 import { brandStudioV2Open } from '@/lib/flags';
@@ -96,22 +96,8 @@ export default async function StudioWorkflowsPage({
       })),
   );
 
-  const recentRuns: RecentRunSummaryWire[] = jobViews
-    .filter((j) => j.kind === 'image' || j.kind === 'video' || j.kind === 'video_remix')
-    .slice(0, 12)
-    .map((j) => ({
-      jobId: j.id,
-      kind: j.kind,
-      model: j.model,
-      aspect: j.aspect,
-      resolution: j.resolution,
-      seconds: j.seconds,
-      audio: j.audio,
-      prompt: j.prompt,
-      referenceRoles: j.references.map((r) => r.role ?? 'media'),
-      thumbUrl: j.outputs[0]?.thumbUrl ?? (j.outputs[0]?.kind === 'image' ? j.outputs[0]?.url : null) ?? null,
-      createdAt: j.createdAt,
-    }));
+  // The same list the hub state builds (never a preset run: it cannot be saved as a workflow).
+  const recentRuns: RecentRunSummaryWire[] = toRecentRunSummaries(jobViews);
 
   const canCreate = !access.staff && (choice.role === 'owner' || choice.role === 'editor');
   const mcpOrigin = ctx.requestOrigin

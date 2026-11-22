@@ -236,6 +236,8 @@ export interface StudioJobParams {
    * `<outputId>:<locale>`: what the clip shows, read once per output and reused on every turn.
    */
   clipSheets?: Record<string, FilmSheet>;
+  /** A run whose text is assembled server-side from lib/brand-studio/workflows/presets; never shown. */
+  preset?: { id: string; vars: Record<string, string> };
 }
 
 /** A provider (or worker) result waiting to be stored, per output slot. */

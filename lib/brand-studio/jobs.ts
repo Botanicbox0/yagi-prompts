@@ -36,6 +36,7 @@ import { loadAllowance, reserveAllowance } from './usage';
 import { projectForNewJob, studioProjectsReady } from './job-projects';
 import { failure, guarded } from './outcome';
 import { createMusicJob } from './sound/music-jobs';
+import { renderPresetPrompt, type StudioJobPreset } from './workflows/presets';
 
 const localeOf = (viewer: Viewer): 'ko' | 'en' => (viewer.locale === 'en' ? 'en' : 'ko');
 
@@ -136,7 +137,14 @@ function reviseInput(v: Extract<StudioJobCreate, { kind: 'video_revise' }>, dial
   return { ...rest, dialogue: parsed.data };
 }
 
-export async function createStudioJob(deps: StudioDeps, viewer: Viewer, raw: unknown): Promise<StudioJobCreated | StudioFailure> {
+/**
+ * `internal` is set by server code only (a starter workflow, lib/brand-studio/workflows/service.ts) and is never
+ * read from `raw`: the request schema has no preset, so no API or MCP caller can set one.
+ */
+export async function createStudioJob(deps: StudioDeps, viewer: Viewer, raw: unknown, internal?: { preset?: StudioJobPreset }): Promise<StudioJobCreated | StudioFailure> {
+  // A preset (lib/brand-studio/workflows/presets) rides only on a plain picture run, and only a known one.
+  const preset = internal?.preset ?? null;
+  if (preset && ((raw as { kind?: unknown } | null)?.kind !== 'image' || renderPresetPrompt(preset) === null)) return failure('invalid');
   // Music (docs/BRAND-SOUND-STUDIO.md §7.4): same table and money rules, its own request shape and gates.
   if (raw && typeof raw === 'object' && (raw as { kind?: unknown }).kind === 'music') return createMusicJob(deps, viewer, raw);
   const parsed = StudioJobCreateSchema.safeParse(raw);
@@ -168,6 +176,8 @@ export async function createStudioJob(deps: StudioDeps, viewer: Viewer, raw: unk
         : v.kind === 'video_revise'
           ? await planRevision(sql, v.organizationId, reviseInput(v, deps.env.reviseV2 === true), deps.media, locale)
           : await planJob(sql, v.organizationId, v, deps.media, locale, { regionV2: deps.env.regionV2 });
+      // A preset run: its text is assembled at prepare time from the server-only original, never by the enhancer.
+      if (preset) Object.assign(plan, { enhance: false, params: { ...plan.params, preset: { id: preset.id, vars: { ...preset.vars } } } });
       if ((await openJobCount(sql, v.organizationId)) >= STUDIO_LIMITS.openJobsPerOrganization) throw new StudioDenied('too_many_running');
       const verdict = await reserveAllowance(sql, v.organizationId, plan.estimateKrw, deps.env, deps.now?.() ?? new Date());
       if (!verdict.ok) throw new StudioDenied(verdict.code);

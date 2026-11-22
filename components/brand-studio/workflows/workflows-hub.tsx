@@ -1,7 +1,12 @@
 'use client';
 
-import { useMemo, useState } from 'react';
-import type { StudioAllowanceView, StudioAssetView, StudioOutputView } from '@/lib/brand-studio/contracts';
+import { useMemo, useRef, useState } from 'react';
+import {
+  STUDIO_UPLOAD_MIMES,
+  type StudioAllowanceView,
+  type StudioAssetView,
+  type StudioOutputView,
+} from '@/lib/brand-studio/contracts';
 import { creditsLeft, formatCredits } from '@/lib/brand-studio/credits';
 import type { McpTokenWire } from '@/lib/brand-studio/mcp/clients';
 import {
@@ -15,6 +20,7 @@ import {
 } from '@/lib/brand-studio/workflows/contracts';
 import { estimateRecipeCredits } from '@/lib/brand-studio/workflows/starters';
 import type { StudioWorkflowsCopy } from '@/messages/studio-workflows';
+import { createStudioApi, isFailure, measureInBrowser, uploadKind, uploadProblem } from '../api';
 import { McpConnectModal } from './mcp-connect-modal';
 import styles from './workflows.module.css';
 
@@ -51,6 +57,168 @@ function parseRefValue(val: string): { assetId?: string; outputId?: string } | n
   if (val.startsWith('asset:')) return { assetId: val.slice('asset:'.length) };
   if (val.startsWith('output:')) return { outputId: val.slice('output:'.length) };
   return null;
+}
+
+type PictureSlotKey = 'image1' | 'image2';
+type RefChoice = { assetId?: string; outputId?: string };
+
+/**
+ * A built-in starter whose step runs a server-side preset (`video-character-sheet`). Its runner takes two
+ * pictures, a name and a folder only: no free text, no output packs, no model (docs/STUDIO-PRO-SUITE-V4.md).
+ * A team, saved or AI-built copy runs as an ordinary workflow (the server ignores its preset too).
+ */
+export function isLockedWorkflow(wf: Pick<WorkflowWire, 'starter' | 'recipe'>): boolean {
+  return wf.starter && wf.recipe.steps.some((s) => Boolean(s.preset));
+}
+
+/** A locked workflow's run inputs: both pictures, the typed name and folder. Nothing when a picture is missing. */
+export function lockedRunInputs(
+  pictures: Record<PictureSlotKey, string>,
+  subject: string,
+  folderName: string,
+):
+  | { ok: false }
+  | { ok: true; inputs: { image1Ref: RefChoice; image2Ref: RefChoice; subject?: string; folderName?: string } } {
+  const image1Ref = parseRefValue(pictures.image1);
+  const image2Ref = parseRefValue(pictures.image2);
+  if (!image1Ref || !image2Ref) return { ok: false };
+  const name = subject.trim();
+  const folder = folderName.trim();
+  return {
+    ok: true,
+    inputs: { image1Ref, image2Ref, ...(name ? { subject: name } : {}), ...(folder ? { folderName: folder } : {}) },
+  };
+}
+
+/** The folder name a locked workflow's run uses when the folder field is empty; shown as that field's placeholder. */
+export function lockedDefaultFolder(
+  recipe: Pick<WorkflowWire['recipe'], 'defaultFolderPattern' | 'defaultFolderPatternEn'> | undefined,
+  subject: string,
+  locale: string,
+): string {
+  const name = subject.trim().replace(/\s+/g, ' ');
+  const pattern = (locale === 'en' && recipe?.defaultFolderPatternEn && !/[가-힣]/.test(name) ? recipe.defaultFolderPatternEn : recipe?.defaultFolderPattern) ?? '';
+  const filled = name ? pattern.replace(/\{subject\}/g, name) : pattern.replace(/\s*·\s*\{subject\}/g, '').replace(/\{subject\}/g, '');
+  return filled.trim().slice(0, 60);
+}
+
+interface PictureChoice {
+  value: string;
+  label: string;
+  thumbUrl: string | null;
+}
+
+/** One picture of a locked workflow: label, hint, the current pick as a thumbnail, the picker and an upload. */
+function PictureSlot(props: {
+  slot: PictureSlotKey;
+  label: string;
+  hint: string;
+  value: string;
+  choices: readonly PictureChoice[];
+  copy: StudioWorkflowsCopy['runner'];
+  uploading: boolean;
+  uploadDisabled: boolean;
+  notice: string | null;
+  onPick(value: string): void;
+  onFile(file: File | null): void;
+}) {
+  const { slot, label, hint, value, choices, copy, uploading, uploadDisabled, notice, onPick, onFile } = props;
+  const fileRef = useRef<HTMLInputElement>(null);
+  const pickerId = `wf-${slot}-picker`;
+  const hintId = `wf-${slot}-hint`;
+  const chosen = choices.find((c) => c.value === value) ?? null;
+  return (
+    <div className={styles.field} data-workflow-slot={slot}>
+      <label className={styles.fieldLabel} htmlFor={pickerId}>
+        {label}
+      </label>
+      {hint && (
+        <p id={hintId} className={styles.slotHint}>
+          {hint}
+        </p>
+      )}
+      <div className={styles.slotRow}>
+        <div className={styles.slotThumb}>
+          {chosen?.thumbUrl && <img src={chosen.thumbUrl} alt={chosen.label} className={styles.slotThumbImg} />}
+        </div>
+        <div className={styles.slotControls}>
+          <select
+            id={pickerId}
+            className={styles.selectInput}
+            value={value}
+            aria-describedby={hint ? hintId : undefined}
+            onChange={(e) => onPick(e.target.value)}
+          >
+            <option value="">{copy.pickPicture}</option>
+            {choices.map((c) => (
+              <option key={c.value} value={c.value}>
+                {c.label}
+              </option>
+            ))}
+          </select>
+          <button
+            type="button"
+            className={`${styles.secondaryBtn} ${styles.slotUpload}`}
+            data-workflow-upload={slot}
+            disabled={uploadDisabled}
+            aria-busy={uploading || undefined}
+            onClick={() => fileRef.current?.click()}
+          >
+            {uploading ? copy.uploading : copy.uploadButton}
+          </button>
+          <input
+            ref={fileRef}
+            type="file"
+            accept={STUDIO_UPLOAD_MIMES.image.join(',')}
+            hidden
+            tabIndex={-1}
+            onChange={(e) => {
+              const file = e.target.files?.[0] ?? null;
+              // The same file can be picked again after a failure.
+              e.target.value = '';
+              onFile(file);
+            }}
+          />
+        </div>
+      </div>
+      {notice && (
+        <p className={styles.inlineNotice} role="alert">
+          {notice}
+        </p>
+      )}
+    </div>
+  );
+}
+
+/** Why the sheet is built this way: a quiet drawing of the three panels and the reasons, one per row. */
+function WhyBlock({ title, rows }: { title: string; rows: ReadonlyArray<{ title: string; body: string }> }) {
+  return (
+    <section className={styles.whyBlock} data-workflow-why aria-labelledby="wf-why-title">
+      <div className={styles.sheetSchematic} data-workflow-sheet-schematic aria-hidden="true">
+        <span className={styles.schematicPanel}>
+          <span className={styles.schematicHead} />
+          <span className={styles.schematicShoulders} />
+        </span>
+        <span className={styles.schematicPanel}>
+          <span className={styles.schematicFigure} />
+        </span>
+        <span className={styles.schematicPanel}>
+          <span className={styles.schematicFigure} />
+        </span>
+      </div>
+      <h3 id="wf-why-title" className={styles.whyTitle}>
+        {title}
+      </h3>
+      <ul className={styles.whyList}>
+        {rows.map((row) => (
+          <li key={row.title} className={styles.whyRow}>
+            <strong className={styles.whyRowTitle}>{row.title}</strong>
+            <span className={styles.whyRowBody}>{row.body}</span>
+          </li>
+        ))}
+      </ul>
+    </section>
+  );
 }
 
 export function WorkflowsHub({
@@ -96,6 +264,14 @@ export function WorkflowsHub({
   const [folderInput, setFolderInput] = useState('');
   const [runningWorkflow, setRunningWorkflow] = useState(false);
   const [lastRunResult, setLastRunResult] = useState<WorkflowRunResult | null>(null);
+
+  // Locked workflow (a starter with a preset step): its own two pictures, uploads made here, and its lines.
+  const [pictures, setPictures] = useState<Record<PictureSlotKey, string>>({ image1: '', image2: '' });
+  const [uploadedImages, setUploadedImages] = useState<StudioAssetView[]>([]);
+  const [uploadingSlot, setUploadingSlot] = useState<PictureSlotKey | null>(null);
+  const [slotNotice, setSlotNotice] = useState<{ slot: PictureSlotKey; line: string } | null>(null);
+  const [missingShown, setMissingShown] = useState(false);
+  const studioApi = useMemo(() => createStudioApi({ organizationId }), [organizationId]);
 
   // Modals
   const [mcpModalOpen, setMcpModalOpen] = useState(false);
@@ -231,6 +407,13 @@ export function WorkflowsHub({
 
   async function handleRunWorkflow() {
     if (!activeWorkflow || !canCreate || runningWorkflow) return;
+    // A locked workflow sends its two pictures, the name and the folder only, and waits for both pictures.
+    const lockedRun = isLockedWorkflow(activeWorkflow) ? lockedRunInputs(pictures, subjectInput, folderInput) : null;
+    if (lockedRun && !lockedRun.ok) {
+      setMissingShown(true);
+      return;
+    }
+    setMissingShown(false);
     setRunningWorkflow(true);
     setBannerError(null);
     setLastRunResult(null);
@@ -239,7 +422,7 @@ export function WorkflowsHub({
       const { ok, json } = await postWorkflowOp('run', {
         requestId: makeClientReqId('run'),
         workflowId: activeWorkflow.id,
-        inputs: {
+        inputs: lockedRun?.ok ? lockedRun.inputs : {
           image1Ref: parseRefValue(image1Selection),
           video1Ref: parseRefValue(video1Selection),
           subject: subjectInput.trim() || undefined,
@@ -259,6 +442,31 @@ export function WorkflowsHub({
       setBannerError(copy.errors.failed);
     } finally {
       setRunningWorkflow(false);
+    }
+  }
+
+  /** A locked workflow's "파일 올리기": the studio's library upload, then the new picture is picked in that slot. */
+  async function handlePictureUpload(slot: PictureSlotKey, file: File | null) {
+    if (!file || !canCreate || uploadingSlot) return;
+    setSlotNotice(null);
+    if (uploadKind(file.type) !== 'image' || uploadProblem(file)) {
+      setSlotNotice({ slot, line: copy.runner.uploadFailed });
+      return;
+    }
+    setUploadingSlot(slot);
+    try {
+      const result = await studioApi.upload(file, { measure: measureInBrowser });
+      if (isFailure(result)) {
+        setSlotNotice({ slot, line: result.code === 'forbidden' ? copy.errors.forbidden : copy.runner.uploadFailed });
+        return;
+      }
+      const saved = result.asset;
+      setUploadedImages((prev) => [saved, ...prev.filter((a) => a.id !== saved.id)]);
+      setPictures((prev) => ({ ...prev, [slot]: `asset:${saved.id}` }));
+    } catch {
+      setSlotNotice({ slot, line: copy.runner.uploadFailed });
+    } finally {
+      setUploadingSlot(null);
     }
   }
 
@@ -519,6 +727,37 @@ export function WorkflowsHub({
 
   const activePackSlot = activeWorkflow?.recipe.slots.find((s) => s.key === 'outputs' && s.kind === 'multiselect');
   const activeNeedsVideoRef = Boolean(activeWorkflow?.recipe.slots.some((s) => s.key === 'video1'));
+
+  // Locked workflow: its picture slots and name field come from the recipe (ko/en pairs in starters.ts).
+  const locked = activeWorkflow ? isLockedWorkflow(activeWorkflow) : false;
+  const lockedSlots = locked
+    ? (activeWorkflow?.recipe.slots ?? []).filter(
+        (s): s is typeof s & { key: PictureSlotKey } => s.kind === 'image_ref' && (s.key === 'image1' || s.key === 'image2'),
+      )
+    : [];
+  const lockedSubjectSlot = locked ? activeWorkflow?.recipe.slots.find((s) => s.key === 'subject' && s.kind === 'text') : undefined;
+  const lockedWhyTitle = activeWorkflow
+    ? (locale === 'en' && activeWorkflow.recipe.whyTitleEn ? activeWorkflow.recipe.whyTitleEn : activeWorkflow.recipe.whyTitle) ?? ''
+    : '';
+  const lockedWhyRows = (activeWorkflow?.recipe.why ?? []).map((row) => ({
+    title: locale === 'en' && row.titleEn ? row.titleEn : row.title,
+    body: locale === 'en' && row.bodyEn ? row.bodyEn : row.body,
+  }));
+  // The folder the run files under when the field is left empty (the server's rule, workflows/service.ts):
+  // the recipe's pattern with the typed name, or the pattern's base when no name was typed.
+  const lockedFolderDefault = locked ? lockedDefaultFolder(activeWorkflow?.recipe, subjectInput, locale) : '';
+  const picturesMissing = locked && (!pictures.image1 || !pictures.image2);
+  const pictureChoices = useMemo<PictureChoice[]>(() => {
+    const choices: PictureChoice[] = [];
+    const seen = new Set<string>();
+    for (const a of [...uploadedImages, ...initialImageAssets]) {
+      if (seen.has(a.id)) continue;
+      seen.add(a.id);
+      choices.push({ value: `asset:${a.id}`, label: a.name, thumbUrl: a.thumbUrl ?? a.url });
+    }
+    for (const o of initialImageOutputs) choices.push({ value: `output:${o.id}`, label: o.label, thumbUrl: o.thumbUrl ?? o.url });
+    return choices;
+  }, [uploadedImages, initialImageAssets, initialImageOutputs]);
 
   return (
     <div className={styles.page} data-workflows-hub>
@@ -788,6 +1027,67 @@ export function WorkflowsHub({
                   <p className={styles.runnerGuide}>{localizedGuide(activeWorkflow)}</p>
                 )}
 
+                {/* Locked workflow: why block, the two pictures, the name and the folder; nothing else to set. */}
+                {locked && (
+                  <>
+                    {lockedWhyRows.length > 0 && <WhyBlock title={lockedWhyTitle} rows={lockedWhyRows} />}
+                    <div className={styles.fieldStack}>
+                      {lockedSlots.map((slot) => (
+                        <PictureSlot
+                          key={slot.key}
+                          slot={slot.key}
+                          label={locale === 'en' && slot.labelEn ? slot.labelEn : slot.label}
+                          hint={(locale === 'en' && slot.hintEn ? slot.hintEn : slot.hint) ?? ''}
+                          value={pictures[slot.key]}
+                          choices={pictureChoices}
+                          copy={copy.runner}
+                          uploading={uploadingSlot === slot.key}
+                          uploadDisabled={!canCreate || uploadingSlot !== null}
+                          notice={slotNotice?.slot === slot.key ? slotNotice.line : null}
+                          onPick={(value) => setPictures((prev) => ({ ...prev, [slot.key]: value }))}
+                          onFile={(file) => void handlePictureUpload(slot.key, file)}
+                        />
+                      ))}
+
+                      <div className={styles.field}>
+                        <label className={styles.fieldLabel} htmlFor="wf-subject-input">
+                          {(locale === 'en' && lockedSubjectSlot?.labelEn ? lockedSubjectSlot.labelEn : lockedSubjectSlot?.label) ??
+                            copy.runner.characterNameLabel}
+                        </label>
+                        <input
+                          id="wf-subject-input"
+                          type="text"
+                          className={styles.textInput}
+                          value={subjectInput}
+                          onChange={(e) => setSubjectInput(e.target.value)}
+                          placeholder={
+                            (locale === 'en' && lockedSubjectSlot?.placeholderEn
+                              ? lockedSubjectSlot.placeholderEn
+                              : lockedSubjectSlot?.placeholder) ?? copy.runner.characterNamePlaceholder
+                          }
+                          maxLength={80}
+                        />
+                      </div>
+
+                      <div className={styles.field}>
+                        <label className={styles.fieldLabel} htmlFor="wf-folder-input">
+                          {copy.runner.folderLabel}
+                        </label>
+                        <input
+                          id="wf-folder-input"
+                          type="text"
+                          className={styles.textInput}
+                          value={folderInput}
+                          onChange={(e) => setFolderInput(e.target.value)}
+                          placeholder={lockedFolderDefault || copy.runner.folderPlaceholder}
+                          maxLength={60}
+                        />
+                      </div>
+                    </div>
+                  </>
+                )}
+
+                {!locked && (<>
                 <div>
                   <p className={styles.sectionLabel}>{copy.runner.stepsHeading}</p>
                   <ol className={styles.pipelineList}>
@@ -925,6 +1225,7 @@ export function WorkflowsHub({
                     />
                   </div>
                 </div>
+                </>)}
 
                 <div className={styles.runnerFooter}>
                   <div className={styles.estimateBar}>
@@ -941,6 +1242,9 @@ export function WorkflowsHub({
                       type="button"
                       data-workflow-run-cta
                       className={styles.primaryCta}
+                      // A locked workflow waits for both pictures; pressing it early says what is missing.
+                      aria-disabled={picturesMissing || undefined}
+                      aria-describedby={picturesMissing && missingShown ? 'wf-missing-pictures' : undefined}
                       disabled={runningWorkflow || runnerJobCount === 0}
                       onClick={handleRunWorkflow}
                     >
@@ -948,6 +1252,12 @@ export function WorkflowsHub({
                     </button>
                   ) : (
                     <p className={styles.resultBody}>{copy.runner.readOnlyHint}</p>
+                  )}
+
+                  {picturesMissing && missingShown && (
+                    <p id="wf-missing-pictures" className={styles.inlineNotice} role="alert" data-workflow-missing-pictures>
+                      {copy.runner.missingPictures}
+                    </p>
                   )}
 
                   {lastRunResult && lastRunResult.workflowId === activeWorkflow.id && (
@@ -958,6 +1268,11 @@ export function WorkflowsHub({
                           .replace('{count}', String(lastRunResult.jobs.length))
                           .replace('{folder}', lastRunResult.folder?.name ?? activeWorkflow.title)}
                       </p>
+                      {locked && (
+                        <p className={styles.resultBody} data-workflow-after-run>
+                          {copy.runner.afterRun}
+                        </p>
+                      )}
                       {lastRunResult.consistency?.checked && (
                         <p className={styles.metaNums}>
                           {(lastRunResult.consistency.retried

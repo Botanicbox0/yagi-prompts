@@ -77,7 +77,7 @@ export const MCP_TOOL_DEFINITIONS = [
   },
   {
     name: 'twings_list_workflows',
-    description: 'List built-in starter workflows (including Character Sheet Maker) and custom workflows saved by your team.',
+    description: 'List built-in starter workflows (including Character Sheet Maker and Character Sheet for Video) and custom workflows saved by your team, with the inputs each one takes.',
     inputSchema: {
       type: 'object',
       properties: {
@@ -125,17 +125,20 @@ export const MCP_TOOL_DEFINITIONS = [
   {
     name: 'twings_run_workflow',
     description:
-      'Execute Character Sheet Maker (`character-sheet-maker`) or any team workflow, creating real studio generation jobs and organizing results into a shared folder.',
+      'Execute Character Sheet Maker (`character-sheet-maker`), Character Sheet for Video (`video-character-sheet`, needs two pictures: a person photo as Image 1 and an outfit photo as Image 2) or any team workflow, creating real studio generation jobs and organizing results into a shared folder.',
     inputSchema: {
       type: 'object',
       required: ['workflowId'],
       properties: {
         workflowId: {
           type: 'string',
-          description: 'Starter slug (`character-sheet-maker`, `product-packshot-sheet`, `reference-video-ad-pack`) or team workflow UUID.',
+          description:
+            'Starter slug (`character-sheet-maker`, `video-character-sheet`, `product-packshot-sheet`, `reference-video-ad-pack`) or team workflow UUID. `video-character-sheet` needs both Image 1 and Image 2.',
         },
-        imageAssetId: { type: 'string', description: 'Optional reference image asset UUID (@image1).' },
+        imageAssetId: { type: 'string', description: 'Optional reference image asset UUID (@image1). Image 1: person photo for `video-character-sheet`.' },
         imageOutputId: { type: 'string', description: 'Optional prior generated output UUID (@image1).' },
+        image2AssetId: { type: 'string', description: 'Image 2: outfit photo for `video-character-sheet` (library image asset UUID).' },
+        image2OutputId: { type: 'string', description: 'Image 2: outfit photo for `video-character-sheet` (prior generated output UUID).' },
         videoAssetId: { type: 'string', description: 'Optional reference video asset UUID (@video1).' },
         subject: { type: 'string', description: 'Character, model, or product name.' },
         prompt: { type: 'string', description: 'Styling, wardrobe, lighting, or scene direction.' },
@@ -372,6 +375,12 @@ async function callMcpTool(
         typeof args.videoAssetId === 'string' && args.videoAssetId.trim()
           ? { assetId: args.videoAssetId.trim() }
           : null;
+      const image2Ref =
+        typeof args.image2AssetId === 'string' && args.image2AssetId.trim()
+          ? { assetId: args.image2AssetId.trim() }
+          : typeof args.image2OutputId === 'string' && args.image2OutputId.trim()
+            ? { outputId: args.image2OutputId.trim() }
+            : null;
 
       const res = await runWorkflow(deps, viewer, {
         organizationId: orgId,
@@ -379,6 +388,7 @@ async function callMcpTool(
         workflowId,
         inputs: {
           image1Ref,
+          image2Ref,
           video1Ref,
           subject: typeof args.subject === 'string' ? args.subject : undefined,
           prompt: typeof args.prompt === 'string' ? args.prompt : '',
