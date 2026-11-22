@@ -156,14 +156,6 @@ describe('B2: sessions are let go when their source is done, and no more than fo
   });
 });
 
-describe('the export uses these paths', () => {
-  it('every picture through PicturePaths; each frame marked done after its encode; everything let go when the pass ends', async () => {
-    const { readFileSync } = await import('node:fs');
-    const { join } = await import('node:path');
-    const film = readFileSync(join(process.cwd(), 'components/brand-studio/editor-v2/export-film.ts'), 'utf8');
-    const pass = film.slice(film.indexOf('async function videoPass('));
-    expect(pass).toMatch(/new PicturePaths<Picture, PlannedFrame>\(plan,/);
-    expect(pass.indexOf('paths.done(entry.frame)')).toBeGreaterThan(pass.indexOf('made.encode(frame'));
-    expect(pass).toMatch(/\} finally \{[\s\S]*paths\.closeAll\(\);/);
-  });
-});
+// The export's video pass takes every picture through these paths, marks a frame done after its encode and lets go
+// of everything when the loop ends: frame-loop.ts `encodeFromPaths`, tested as behaviour in frame-loop.test.ts
+// (spec H, F8).

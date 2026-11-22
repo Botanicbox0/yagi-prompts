@@ -62,9 +62,10 @@ import { soundTrackOf } from '@/lib/brand-studio/editor-v2/media-probe';
 import { DEFAULT_REFRAME, type Reframe } from '@/lib/brand-studio/editor-v2/model';
 import { sampleBytes } from '@/lib/brand-studio/editor-v2/sample-bytes';
 import type { Rotation, VideoIndex } from '@/lib/brand-studio/editor-v2/sample-index';
-import { SHARED_WAIT_MS, waitShared } from '@/lib/brand-studio/editor-v2/watched-read';
-import { CodecReclaimed, ReclaimedTooOften, isReclaim, runWithRestarts, whenVisible } from '@/lib/brand-studio/editor-v2/export-run';
+import { ReadCancelled, SHARED_WAIT_MS, STALL_MS, readStream, sharedWaits, totalLimitMs, waitShared, watchRead } from '@/lib/brand-studio/editor-v2/watched-read';
+import { CodecReclaimed, ReclaimedTooOften, isReclaim, restarter, whenVisible } from '@/lib/brand-studio/editor-v2/export-run';
 import { PicturePaths, type DecoderSession, type SourcePath } from '@/lib/brand-studio/editor-v2/picture-paths';
+import { encodeFromPaths, handOver, type PictureSource } from '@/lib/brand-studio/editor-v2/frame-loop';
 import { exportIndexReads, footageBytes, readFootage, readPictureIndex, type IndexRead } from './footage-facts';
 import { PictureDecoder, decoderConfig, decoderSupports } from './frame-decoder';
 import { screenTimer } from './screen-refresh';
@@ -136,7 +137,8 @@ export interface ExportFilmResult {
  */
 export type ExportWarning = { kind: 'sound'; clip: string } | { kind: 'soundPosition'; clip: string } | LastFrameWarning;
 
-export type ExportStopReason = 'empty' | 'unsupported' | 'load' | 'frame' | 'encode' | 'sound' | 'memory' | 'cancelled';
+/** `hidden`: the browser took the encoder back more often than the export may start again (spec H, F3). */
+export type ExportStopReason = 'empty' | 'unsupported' | 'load' | 'frame' | 'encode' | 'sound' | 'memory' | 'hidden' | 'cancelled';
 
 /** Why an export stopped. `frame` (film frame) and `clip` (cut label) say where, when it was a picture. */
 export class ExportStop extends Error {
@@ -581,30 +583,53 @@ export function scheduleCutSound(
 
 /**
  * Reads one of the film's own media files, or asks only its size (`HEAD`). Any other address is refused
- * before a request is made.
+ * before a request is made. A whole read ends after 15 s without a byte or after its size's time at the
+ * slowest connection given time for (watched-read.ts `totalLimitMs`; the sound limit when the server does not
+ * say the size), failing as any unreadable sound source does (`ExportStop('sound')`); cancelling ends it as a
+ * cancel, in the request and while the body comes (spec H, F5).
  */
-function mediaReader(allowed: ReadonlySet<string>, signal?: AbortSignal) {
-  const request = async (url: string, method: 'GET' | 'HEAD'): Promise<Response> => {
+export function mediaReader(allowed: ReadonlySet<string>, exportSignal?: AbortSignal) {
+  const request = async (url: string, method: 'GET' | 'HEAD', signal: AbortSignal | undefined = exportSignal): Promise<Response> => {
     if (!allowed.has(url)) throw new ExportStop('sound', `refused to read a file that is not part of the film: ${url}`);
     let response: Response;
     try {
       response = await fetch(corsMediaUrl(url), { method, credentials: 'same-origin', signal });
     } catch (error) {
-      if (signal?.aborted) throw cancelled();
+      if (exportSignal?.aborted) throw cancelled();
       throw new ExportStop('sound', `could not read ${url}: ${error instanceof Error ? error.message : String(error)}`);
     }
     if (!response.ok) throw new ExportStop('sound', `could not read ${url}: HTTP ${response.status}`);
     return response;
   };
+  /** Whatever stopped a read, as the export says it: the cancel, an unreadable sound source, or the stop it was. */
+  const failed = (url: string, error: unknown): Error => {
+    if (exportSignal?.aborted || error instanceof ReadCancelled) return cancelled();
+    if (error instanceof ExportStop) return error;
+    return new ExportStop('sound', `could not read ${url}: ${error instanceof Error ? error.message : String(error)}`);
+  };
   return {
-    read: async (url: string): Promise<ArrayBuffer> => (await request(url, 'GET')).arrayBuffer(),
+    read: async (url: string): Promise<ArrayBuffer> => {
+      const watch = watchRead({ stallMs: STALL_MS, totalMs: 0 }, exportSignal);
+      try {
+        const response = await watch.guard(request(url, 'GET', watch.signal));
+        watch.alive();
+        const length = Number(response.headers.get('content-length'));
+        watch.limitTotal(totalLimitMs(Number.isFinite(length) && length > 0 ? length : SOUND_BYTES_LIMIT));
+        const bytes = response.body ? await readStream(response.body, watch) : new Uint8Array(await watch.guard(response.arrayBuffer()));
+        return bytes.buffer.byteLength === bytes.length ? (bytes.buffer as ArrayBuffer) : (bytes.slice().buffer as ArrayBuffer);
+      } catch (error) {
+        throw failed(url, error);
+      } finally {
+        watch.done();
+      }
+    },
     /** The file's length from its headers; `null` when the server does not say (or will not answer `HEAD`). */
     size: async (url: string): Promise<number | null> => {
       try {
         const length = Number((await request(url, 'HEAD')).headers.get('content-length'));
         return Number.isFinite(length) && length > 0 ? length : null;
       } catch (error) {
-        if (signal?.aborted) throw cancelled();
+        if (exportSignal?.aborted) throw cancelled();
         if (error instanceof ExportStop && error.message.startsWith('refused')) throw error;
         return null;
       }
@@ -649,6 +674,8 @@ async function mixSound(
     const track = soundTrackOf(view);
     const lead = soundLead(await timingOfFile(view));
     const decoded = await context.decodeAudioData(bytes).catch(() => null);
+    // Decoding does not hear the cancel: asked right after (spec H, F5).
+    throwIfAborted(signal);
     if (!decoded && track !== 'no') warnings.push({ kind: 'sound', clip: labelOf(url) });
     // Its sound is in the file but where it sits under the picture could not be read (WebM, a broken file).
     else if (decoded && !lead.known) warnings.push({ kind: 'soundPosition', clip: labelOf(url) });
@@ -660,8 +687,12 @@ async function mixSound(
   const decodeSoundFile = async (url: string, label: string) => {
     const bytes = await read(url);
     try {
-      return await context.decodeAudioData(bytes);
-    } catch {
+      const buffer = await context.decodeAudioData(bytes);
+      throwIfAborted(signal);
+      return buffer;
+    } catch (error) {
+      throwIfAborted(signal);
+      if (error instanceof ExportStop) throw error;
       throw new ExportStop('sound', `could not decode ${label}`, { clip: label });
     }
   };
@@ -739,12 +770,11 @@ async function encodeAac(rendered: AudioBuffer, signal?: AbortSignal): Promise<{
         timestamp: Math.round((offset / rendered.sampleRate) * 1_000_000),
         data: planar,
       });
+      // Closed whatever encode() does (spec G, A0).
       try {
-        encoder.encode(data);
+        handOver(data, (given) => encoder.encode(given));
       } catch (error) {
         throw stopped() ?? new ExportStop('sound', `sound could not be written: ${describe(error)}`);
-      } finally {
-        data.close();
       }
       if (encoder.encodeQueueSize > 64) await dequeued(encoder);
     }
@@ -786,27 +816,37 @@ function yieldToPage(): Promise<void> {
  */
 type SourceChoice = { path: 'seek'; reason: string } | { path: 'decoder'; index: VideoIndex; config: VideoDecoderConfig };
 
-async function sourceChoice(
-  srcUrl: string,
-  override: ExportPathOverride,
-  cutRates: readonly number[],
-  signal?: AbortSignal,
-  readIndex: (srcUrl: string) => Promise<IndexRead> = readPictureIndex,
-): Promise<SourceChoice> {
+/**
+ * The shared reads as one export waits for them (spec G B1, spec H F6): until cancel or `SHARED_WAIT_MS`, never
+ * aborted, and each file's facts and index waited for ONCE in the export (a read that timed out is not waited for
+ * again when the path is chosen). The sheet's question (`plannedPath`) reads without them, as before.
+ */
+interface ExportWaits {
+  facts(srcUrl: string): Promise<Awaited<ReturnType<typeof readFootage>> | null | 'timeout'>;
+  index(srcUrl: string): Promise<IndexRead | null | 'timeout'>;
+}
+
+function exportWaits(signal: AbortSignal | undefined): ExportWaits {
+  const readIndex = exportIndexReads();
+  return {
+    facts: sharedWaits((url) => readFootage(url).catch(() => null), signal, SHARED_WAIT_MS, 'timeout' as const, cancelled),
+    index: sharedWaits((url) => readIndex(url).catch(() => null), signal, SHARED_WAIT_MS, 'timeout' as const, cancelled),
+  };
+}
+
+async function sourceChoice(srcUrl: string, override: ExportPathOverride, cutRates: readonly number[], waits?: ExportWaits): Promise<SourceChoice> {
   const hasDecoder = typeof VideoDecoder !== 'undefined' && typeof EncodedVideoChunk !== 'undefined';
   const seek = (input: Partial<Parameters<typeof choosePath>[0]>) =>
     ({ path: 'seek' as const, reason: choosePath({ override, hasDecoder, indexFailure: null, configSupported: null, ...input }).reason ?? 'seek' });
   if (override === 'seek' || !hasDecoder) return seek({});
-  // In the export, the shared reads are waited for until cancel or a limit, never aborted (spec G, B1); the
-  // sheet's question (`plannedPath`) waits as before.
-  const shared = <T,>(work: Promise<T>): Promise<T | 'timeout'> => (signal ? waitShared(work, signal, SHARED_WAIT_MS, 'timeout' as const, cancelled) : work);
   // The clip's frame facts first: when they could not be read the editor numbered it by playback.
-  const facts = await shared(readFootage(srcUrl).catch(() => null));
+  const facts = await (waits ? waits.facts(srcUrl) : readFootage(srcUrl).catch(() => null));
   if (facts === 'timeout') return seek({ factsFailure: 'timeout' });
   const factsFailure = !facts ? 'unreadable' : facts.answer.ok ? null : facts.answer.reason;
   if (factsFailure || !facts?.answer.ok || !facts.answer.timing.video) return seek({ factsFailure: factsFailure ?? 'no-video' });
-  const answer = await shared(readIndex(srcUrl).catch(() => ({ ok: false as const, reason: 'unreadable' as const })));
+  const answer = await (waits ? waits.index(srcUrl) : readPictureIndex(srcUrl).catch(() => null));
   if (answer === 'timeout') return seek({ indexFailure: 'timeout' });
+  if (!answer) return seek({ indexFailure: 'unreadable' });
   if (!answer.ok) return seek({ indexFailure: answer.reason });
   // H.264 and HEVC only: the decoder path was not measured on other codecs (spec G, B3).
   if (!codecMeasured(answer.index.config.entry)) return seek({ codecMeasured: false });
@@ -871,9 +911,12 @@ export async function plannedPath(srcUrl: string, override: ExportPathOverride, 
 /** An error's message, for the console. */
 const describe = (error: unknown) => (error instanceof Error ? error.message : String(error));
 
-/** Reclaimed after the last restart: the export stops as an encoding failure that says so (spec G, A2). */
-function givenUp(error: unknown): never {
-  if (error instanceof ReclaimedTooOften) throw new ExportStop('encode', error.message);
+/**
+ * Reclaimed after the last restart: the export stops with its own reason, so the sheet can say what happened and
+ * what to do (keep the window on screen), for the pictures and the sound alike (spec H, F3).
+ */
+export function givenUp(error: unknown): never {
+  if (error instanceof ReclaimedTooOften) throw new ExportStop('hidden', error.message);
   throw error;
 }
 
@@ -897,11 +940,11 @@ export async function exportFilm(options: ExportFilmOptions): Promise<ExportFilm
   const cutUrls = [...new Set(sequence.clips.map((clip) => clip.srcUrl))];
   // Each file's index read once for this export, a network failure too (spec G, B9); waited for until cancel or
   // a limit, never aborted: the editor shares these reads (B1).
-  const readIndex = exportIndexReads();
-  const indexes = override === 'seek' ? [] : await Promise.all(cutUrls.map((url) => waitShared(readIndex(url).catch(() => null), signal, SHARED_WAIT_MS, null, cancelled)));
+  const waits = exportWaits(signal);
+  const indexes = override === 'seek' ? [] : await Promise.all(cutUrls.map((url) => waits.index(url)));
   const noSoundTrack = new Set(cutUrls.filter((_, i) => {
     const answer = indexes[i];
-    return !!answer?.ok && answer.index.sound === 'no';
+    return !!answer && answer !== 'timeout' && answer.ok && answer.index.sound === 'no';
   }));
   // Everything the sound mix reads whole into this tab, added up before the first frame: above the limit
   // the export does not start (review round 1, item 10).
@@ -914,7 +957,7 @@ export async function exportFilm(options: ExportFilmOptions): Promise<ExportFilm
   // encoder left idle long enough in a hidden page is taken back by the browser (spec G, A1/A4).
   const choices = new Map(
     await Promise.all(
-      cutUrls.map(async (url) => [url, await sourceChoice(url, override, plan.filter((entry) => entry.srcUrl === url).map((entry) => entry.sourceFps), signal, readIndex)] as const),
+      cutUrls.map(async (url) => [url, await sourceChoice(url, override, plan.filter((entry) => entry.srcUrl === url).map((entry) => entry.sourceFps), waits)] as const),
     ),
   );
   if (document.fonts?.ready) await document.fonts.ready;
@@ -924,25 +967,29 @@ export async function exportFilm(options: ExportFilmOptions): Promise<ExportFilm
   }
 
   // The browser takes back an encoder that sat idle about 90 s in a hidden page (spec G, A1): the attempt then
-  // starts again from frame 0 once the page is on screen again, at most MAX_RESTARTS times (A2). The sheet's
-  // count goes back to 0 and it says why (`restarts` in every progress report after the first restart).
+  // starts again once the page is on screen again (A2), at most MAX_RESTARTS times for the whole export,
+  // pictures and sound together (spec H, F4). The sheet's count goes back to 0 and it says why (`restarts` in
+  // every progress report after the first restart).
   let restarts = 0;
   const report = (progress: ExportProgress) => onProgress?.(restarts > 0 ? { ...progress, restarts } : progress);
-  const restarted = (phase: ExportProgress['phase'], total: number) => () => {
-    restarts += 1;
-    report({ phase, done: 0, total });
-  };
-  const waitVisible = () => whenVisible(document, signal, cancelled);
+  const restarting = restarter({
+    waitVisible: () => whenVisible(document, signal, cancelled),
+    aborted: () => !!signal?.aborted,
+    announce: (phase, count) => {
+      restarts = count;
+      report({ phase, done: 0, total: phase === 'video' ? frames : 1 });
+    },
+  });
   const pass: VideoPass = { sequence, extras, reframe, framing, burnCaptions, override, signal, plan, choices, codec, width, height, fps, anchor, overlayImages, report };
-  const video = await runWithRestarts(() => videoPass(pass), waitVisible, { onRestart: restarted('video', frames) }).catch(givenUp);
+  const video = await restarting.run('video', () => videoPass(pass)).catch(givenUp);
 
   const { rendered, warnings } = await mixSound(sequence, extras, anchor, reader, signal, (done, total) => report({ phase: 'audio', done, total }), noSoundTrack);
   // The rendered sound is still in hand: only its encoding starts again (spec G, A2).
-  const audio = await runWithRestarts(() => encodeAac(rendered, signal), waitVisible, { onRestart: restarted('audio', 1) }).catch(givenUp);
+  const audio = await restarting.run('audio', () => encodeAac(rendered, signal)).catch(givenUp);
 
   throwIfAborted(signal);
   report({ phase: 'writing', done: 0, total: 1 });
-  const bytes = muxAvc1ToMp4({ width, height, fps, videoSamples: video.result.samples, avcDecoderConfigRecord: video.result.avcConfig, audio: audio.result });
+  const bytes = muxAvc1ToMp4({ width, height, fps, videoSamples: video.samples, avcDecoderConfigRecord: video.avcConfig, audio });
   report({ phase: 'writing', done: 1, total: 1 });
   return {
     blob: new Blob([bytes.buffer as ArrayBuffer], { type: 'video/mp4' }),
@@ -955,9 +1002,9 @@ export async function exportFilm(options: ExportFilmOptions): Promise<ExportFilm
     durationSec: frames / fps,
     elapsedMs: Math.round(performance.now() - started),
     notIncluded: notIncluded({ sequence, extras }),
-    warnings: [...lastFrameWarnings(video.result.filled), ...warnings],
-    paths: video.result.paths,
-    restarts,
+    warnings: [...lastFrameWarnings(video.filled), ...warnings],
+    paths: video.paths,
+    restarts: restarting.used,
   };
 }
 
@@ -1074,48 +1121,49 @@ async function videoPass(pass: VideoPass): Promise<{ samples: EncodedVideoSample
       return null;
     };
 
-    for (const entry of plan) {
-      throwIfAborted(signal);
-      const before = stopped(entry.frame);
-      if (before) throw before;
-      const label = labels.get(entry.clipId) ?? entry.clipId;
-      const shown = await paths.picture(entry, label, signal).catch((error: unknown) => {
-        throwIfAborted(signal);
-        throw error;
-      });
-      pathNow = shown.path;
-      // The picture may have taken long (the seek path in a hidden window): the encoder is asked again (spec G, A2).
-      const after = stopped(entry.frame);
-      if (after) throw after;
-      // Filled frames are counted the same way on both paths: per cut, frames and the distinct pictures asked for.
-      if (shown.past) noteFilled(filled, entry.clipId, label, entry.sourceFrame);
-      if (framing === 'current') drawCurrentFraming(ctx, shown.picture, width, height);
-      else drawFramed(ctx, shown.picture, width, height, reframe[entry.clipId] ?? DEFAULT_REFRAME);
-      if (graded && extras) {
-        const index = indexOf.get(entry.clipId) ?? 0;
-        applyProjectColorGradeFrame(ctx, width, height, extras, storedCutFor(extras, sequence.clips[index]!, index));
-      }
-      drawImageOverlays(ctx, imageOverlaysAt(extras, entry.frame, anchor), overlayImages, width, height);
-      if (burnCaptions) drawCaptionsOverlay(ctx, captionsAt(sequence, entry.frame), width, height);
-
-      const frame = new VideoFrame(canvas, { timestamp: timestampUs(entry.frame, fps), duration: frameDurationUs(entry.frame, fps) });
-      // Closed whatever encode() does: a frame left to the garbage collector is a warning (spec G, A0).
-      try {
-        made.encode(frame, { keyFrame: isKeyFrame(entry.frame, fps) });
-      } catch (error) {
-        throw stopped(entry.frame) ?? new ExportStop('encode', `the video encoder refused film frame ${entry.frame}: ${describe(error)}`, { frame: entry.frame });
-      } finally {
-        frame.close();
-      }
-      // A source whose last film frame this was lets go of its decoder, frame and bytes now (spec G, B2).
-      paths.done(entry.frame);
-      while (made.encodeQueueSize > 6 && !stopped(entry.frame)) await dequeued(made);
-      report({ phase: 'video', done: entry.frame + 1, total: frames, path: shown.path });
-      if (performance.now() - lastYield > YIELD_EVERY_MS) {
-        await yieldToPage();
-        lastYield = performance.now();
-      }
-    }
+    // The frame loop (lib/brand-studio/editor-v2/frame-loop.ts): every picture through the paths, the encoder asked
+    // before each picture, after it arrives and after it fails (a picture that failed while the encoder was taken
+    // back restarts, spec H F1); a frame marked done after its encode, every source let go when the loop ends.
+    const shownPictures: PictureSource<PlannedFrame, { picture: Picture; path: ExportPath; past: boolean; label: string }> = {
+      picture: async (entry) => {
+        const label = labels.get(entry.clipId) ?? entry.clipId;
+        return { ...(await paths.picture(entry, label, signal)), label };
+      },
+      done: (frame) => paths.done(frame),
+      closeAll: () => paths.closeAll(),
+    };
+    await encodeFromPaths(plan, shownPictures, {
+      checkCancel: () => throwIfAborted(signal),
+      stopped,
+      encode: (entry, shown) => {
+        pathNow = shown.path;
+        // Filled frames are counted the same way on both paths: per cut, frames and the distinct pictures asked for.
+        if (shown.past) noteFilled(filled, entry.clipId, shown.label, entry.sourceFrame);
+        if (framing === 'current') drawCurrentFraming(ctx, shown.picture, width, height);
+        else drawFramed(ctx, shown.picture, width, height, reframe[entry.clipId] ?? DEFAULT_REFRAME);
+        if (graded && extras) {
+          const index = indexOf.get(entry.clipId) ?? 0;
+          applyProjectColorGradeFrame(ctx, width, height, extras, storedCutFor(extras, sequence.clips[index]!, index));
+        }
+        drawImageOverlays(ctx, imageOverlaysAt(extras, entry.frame, anchor), overlayImages, width, height);
+        if (burnCaptions) drawCaptionsOverlay(ctx, captionsAt(sequence, entry.frame), width, height);
+        const frame = new VideoFrame(canvas, { timestamp: timestampUs(entry.frame, fps), duration: frameDurationUs(entry.frame, fps) });
+        // Closed whatever encode() does (spec G, A0).
+        try {
+          handOver(frame, (given) => made.encode(given, { keyFrame: isKeyFrame(entry.frame, fps) }));
+        } catch (error) {
+          throw stopped(entry.frame) ?? new ExportStop('encode', `the video encoder refused film frame ${entry.frame}: ${describe(error)}`, { frame: entry.frame });
+        }
+      },
+      after: async (entry, shown) => {
+        while (made.encodeQueueSize > 6 && !stopped(entry.frame)) await dequeued(made);
+        report({ phase: 'video', done: entry.frame + 1, total: frames, path: shown.path });
+        if (performance.now() - lastYield > YIELD_EVERY_MS) {
+          await yieldToPage();
+          lastYield = performance.now();
+        }
+      },
+    });
     try {
       await made.flush();
     } catch (error) {

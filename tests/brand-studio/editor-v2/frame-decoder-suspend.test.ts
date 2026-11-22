@@ -35,4 +35,22 @@ describe('a session let go comes back on its next use', () => {
     expect(counter.open).toBe(0);
     s.close();
   });
+
+  it('spec H, F2: let go near the end of a long segment, the new decoder is fed only from the last sync sample before the picture', async () => {
+    // 300 samples, a sync sample every 48 (a key frame every 2 s at 24 fps), one long segment.
+    const index = makeIndex(300, 48);
+    const s = await session(index);
+    const wanted = Array.from({ length: 300 }, (_, i) => i);
+    for (let picture = 0; picture <= 250; picture += 1) expect(pictureOf(await s.picture(0, wanted, picture))).toBe(picture);
+    s.suspend();
+    expect(pictureOf(await s.picture(0, wanted, 251))).toBe(251);
+    const again = FakeDecoder.made[1]!;
+    // Sync samples at 0, 48, … 240, 288: from 240, not from 0.
+    expect(again.decoded[0]).toBe(us(240 * STEP));
+    // From 240 to 251, and at most a decoder queue (6) more fed ahead before 251 came out: not 252 from 0.
+    expect(again.decoded.length).toBeLessThanOrEqual(251 - 240 + 1 + 6);
+    expect(pictureOf(await s.picture(0, wanted, 299))).toBe(299);
+    s.close();
+    expect(counter.open).toBe(0);
+  });
 });

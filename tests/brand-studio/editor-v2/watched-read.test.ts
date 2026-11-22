@@ -1,7 +1,8 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { RUN_LIMITS, ReadCancelled, ReadTimedOut, readStream, waitShared, watchRead } from '@/lib/brand-studio/editor-v2/watched-read';
+import { ReadCancelled, STALL_MS, totalLimitMs, ReadTimedOut, readStream, sharedWaits, waitShared, watchRead } from '@/lib/brand-studio/editor-v2/watched-read';
 
 /** Spec G, B1: every network wait of the export ends: on cancel at once, on a stall or after its total. */
+const LIMITS = { stallMs: 15_000, totalMs: 45_000 };
 describe('a watched read', () => {
   beforeEach(() => vi.useFakeTimers());
   afterEach(() => vi.useRealTimers());
@@ -23,12 +24,15 @@ describe('a watched read', () => {
     return { stream, cancelled: () => cancelled };
   }
 
-  it('the limits are 15 s without bytes and 45 s in all', () => {
-    expect(RUN_LIMITS).toEqual({ stallMs: 15_000, totalMs: 45_000 });
+  it('the limits: 15 s without a byte; in all, 45 s plus the bytes at 32 KiB/s (spec H, F2)', () => {
+    expect(STALL_MS).toBe(15_000);
+    expect(totalLimitMs(0)).toBe(45_000);
+    expect(totalLimitMs(8 * 1024 * 1024)).toBe(45_000 + 256_000);
+    expect(totalLimitMs(64 * 1024 * 1024)).toBe(45_000 + 2_048_000);
   });
 
   it('a body that stops sending fails after the stall limit, its request aborted and its body cancelled', async () => {
-    const watch = watchRead(RUN_LIMITS);
+    const watch = watchRead(LIMITS);
     const { stream, cancelled } = body([10, 10]);
     const read = readStream(stream, watch);
     const outcome = read.catch((error: unknown) => error);
@@ -43,7 +47,7 @@ describe('a watched read', () => {
   });
 
   it('bytes that keep coming slowly still end at the total limit', async () => {
-    const watch = watchRead(RUN_LIMITS);
+    const watch = watchRead(LIMITS);
     let pulls = 0;
     const stream = new ReadableStream<Uint8Array>({
       pull: (controller) =>
@@ -65,7 +69,7 @@ describe('a watched read', () => {
 
   it('cancelling ends the read at once, even when the request itself never answers', async () => {
     const controller = new AbortController();
-    const watch = watchRead(RUN_LIMITS, controller.signal);
+    const watch = watchRead(LIMITS, controller.signal);
     const never = new Promise<Response>(() => undefined);
     const outcome = watch.guard(never).catch((error: unknown) => error);
     controller.abort();
@@ -74,7 +78,7 @@ describe('a watched read', () => {
   });
 
   it('a read that finishes leaves no timer behind', async () => {
-    const watch = watchRead(RUN_LIMITS);
+    const watch = watchRead(LIMITS);
     const { stream } = body([4, 4], true);
     const bytes = await readStream(stream, watch);
     watch.done();
@@ -98,5 +102,37 @@ describe('a watched read', () => {
     // The shared read itself goes on and answers whoever asks next.
     settle('the file');
     await expect(waitShared(shared, undefined, 45_000, 'timed out', cancelled)).resolves.toBe('the file');
+  });
+});
+
+describe('spec H, F6: a shared read is waited for once per export', () => {
+  beforeEach(() => vi.useFakeTimers());
+  afterEach(() => vi.useRealTimers());
+
+  it('a read that timed out is not waited for again in the same export; other files wait in parallel; a new export waits again', async () => {
+    const never = () => new Promise<string>(() => undefined);
+    const cancelled = () => new ReadCancelled();
+    const waits = sharedWaits(never, undefined, 45_000, 'timed out' as const, cancelled);
+    const first = waits('/a.mp4');
+    const other = waits('/b.mp4');
+    await vi.advanceTimersByTimeAsync(45_000);
+    await expect(first).resolves.toBe('timed out');
+    await expect(other).resolves.toBe('timed out');
+    let again: string | null = null;
+    void waits('/a.mp4').then((value) => (again = value));
+    await vi.advanceTimersByTimeAsync(0);
+    expect(again).toBe('timed out');
+    let fresh: string | null = null;
+    void sharedWaits(never, undefined, 45_000, 'timed out' as const, cancelled)('/a.mp4').then((value) => (fresh = value));
+    await vi.advanceTimersByTimeAsync(1_000);
+    expect(fresh).toBeNull();
+  });
+
+  it('each file is read once per export', async () => {
+    let reads = 0;
+    const waits = sharedWaits(async (key: string) => (reads += 1, key), undefined, 45_000, null, () => new ReadCancelled());
+    await waits('/a.mp4');
+    await waits('/a.mp4');
+    expect(reads).toBe(1);
   });
 });

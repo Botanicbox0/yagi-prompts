@@ -1,6 +1,6 @@
 'use client';
 
-import { LIVE, nextRefreshState, screenStep, silentTooLong, type RefreshState } from '@/lib/brand-studio/editor-v2/refresh';
+import { LIVE, nextRefreshState, screenStep, silentTooLong, visibleStep, type RefreshState } from '@/lib/brand-studio/editor-v2/refresh';
 
 /**
  * Editing studio v2 — is the screen refreshing live (spec E addendum, C2)? One `requestAnimationFrame`
@@ -84,6 +84,8 @@ export function refreshReduced(): boolean {
 
 /** The least wall-clock time a screen-time limit lasts on a visible page before it ends anyway. */
 export const SCREEN_WALL_CEILING_MIN_MS = 60_000;
+/** The most one wall tick (every 500 ms) adds to the ceiling's count (spec H, F1). */
+const WALL_STEP_CAP_MS = 1000;
 /** The wall-clock ceiling of a screen-time limit, as a multiple of the limit. */
 export const SCREEN_WALL_CEILING_FACTOR = 15;
 
@@ -126,7 +128,8 @@ export function screenTimer(limitMs: number, onExpire: () => void): () => void {
   };
   const wallTimer = window.setInterval(() => {
     const now = performance.now();
-    if (!document.hidden) wall += now - lastWall;
+    // At most a second per tick: the first tick after a hidden spell does not count the spell (spec H, F1).
+    wall += visibleStep(now - lastWall, document.hidden, WALL_STEP_CAP_MS);
     lastWall = now;
     if (!done && wall > ceiling) expire();
   }, 500);

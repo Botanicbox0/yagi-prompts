@@ -38,8 +38,18 @@ export class ReclaimedTooOften extends Error {
   }
 }
 
-/** Restarts after a reclaim, before the export gives up. */
+/** Restarts after a reclaim, before the export gives up: one budget for the whole export (spec H, F4). */
 export const MAX_RESTARTS = 3;
+
+/** The restarts an export may still make, shared by its picture pass and its sound encoding (spec H, F4). */
+export interface RestartBudget {
+  used: number;
+  readonly max: number;
+}
+
+export function restartBudget(max = MAX_RESTARTS): RestartBudget {
+  return { used: 0, max };
+}
 
 /**
  * What a codec's `error` callback gets when the browser reclaims it: a `DOMException` named
@@ -51,26 +61,44 @@ export function isReclaim(error: unknown): boolean {
 }
 
 /**
- * Runs `attempt` (given how many restarts came before it); when it ends with `CodecReclaimed`, calls
- * `onRestart`, waits for `waitVisible` and runs it again from the start. `restarts`: how many times it was
- * started again.
+ * Runs `attempt`; when it ends with `CodecReclaimed`, takes one restart from `budget` (the export's one budget
+ * for pictures and sound together, spec H F4; a budget of its own when none is given), calls `onRestart`
+ * unless the export was already cancelled (`aborted`: no "starting again" line after a cancel, F6), waits for
+ * `waitVisible` and runs it again from the start. `restarts`: how many times THIS run started again.
  */
 export async function runWithRestarts<T>(
   attempt: (restarts: number) => Promise<T>,
   waitVisible: () => Promise<void>,
-  options: { max?: number; onRestart?: (restarts: number, codec: 'video' | 'audio') => void } = {},
+  options: { max?: number; budget?: RestartBudget; aborted?: () => boolean; onRestart?: (restarts: number, codec: 'video' | 'audio') => void } = {},
 ): Promise<{ result: T; restarts: number }> {
-  const max = options.max ?? MAX_RESTARTS;
+  const budget = options.budget ?? restartBudget(options.max ?? MAX_RESTARTS);
   for (let restarts = 0; ; restarts += 1) {
     try {
       return { result: await attempt(restarts), restarts };
     } catch (error) {
       if (!(error instanceof CodecReclaimed)) throw error;
-      if (restarts >= max) throw new ReclaimedTooOften(restarts + 1, error.codec);
-      options.onRestart?.(restarts + 1, error.codec);
+      if (budget.used >= budget.max) throw new ReclaimedTooOften(budget.used + 1, error.codec);
+      budget.used += 1;
+      if (!options.aborted?.()) options.onRestart?.(budget.used, error.codec);
       await waitVisible();
     }
   }
+}
+
+/**
+ * The export's restart rules in one place (spec H, F4): ONE budget for the picture pass and the sound encoding
+ * together; `announce` (the sheet's line) is told which part starts again, except after a cancel. `used` is the
+ * export's `restarts`.
+ */
+export function restarter(options: { waitVisible: () => Promise<void>; aborted: () => boolean; announce: (phase: 'video' | 'audio', restarts: number) => void; max?: number }) {
+  const budget = restartBudget(options.max);
+  return {
+    get used() {
+      return budget.used;
+    },
+    run: <T,>(phase: 'video' | 'audio', attempt: () => Promise<T>): Promise<T> =>
+      runWithRestarts(attempt, options.waitVisible, { budget, aborted: options.aborted, onRestart: (restarts) => options.announce(phase, restarts) }).then((done) => done.result),
+  };
 }
 
 /** The page's visibility, as `document` gives it (a fake in tests). */

@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import type { SampleBytes } from '@/lib/brand-studio/editor-v2/sample-bytes';
 import { ReadTimedOut } from '@/lib/brand-studio/editor-v2/watched-read';
-import { FakeDecoder, bytesOk, counter, makeIndex, session, tick, useFakeDecoder } from './fake-decoder';
+import { FakeDecoder, bytesOk, counter, makeIndex, pictureOf, session, tick, useFakeDecoder } from './fake-decoder';
 
 /**
  * Spec G, B1: a picture request ends at once when the export is cancelled, whatever it waits for; a run whose
@@ -45,7 +45,9 @@ describe('cancelling ends a picture request at once, in every wait', () => {
     const controller = new AbortController();
     await s.picture(0, [3], 3, controller.signal);
     expect(signals.length).toBeGreaterThan(0);
-    expect(signals.every((signal) => signal === controller.signal)).toBe(true);
+    expect(signals.some((signal) => signal?.aborted)).toBe(false);
+    controller.abort();
+    expect(signals.every((signal) => signal?.aborted)).toBe(true);
     s.close();
   });
 });
@@ -59,13 +61,21 @@ describe('every wait has an end', () => {
     s.close();
   });
 
-  it('a picture that does not come in 45 s is a decode failure, whatever it waits for (slow bytes, then a silent decoder)', async () => {
+  it('spec H, F2: no fixed total for a picture: bytes that take 60 s (inside their own read limits) still give the picture', async () => {
+    vi.useFakeTimers();
+    const slow: SampleBytes = { read: (run) => new Promise((resolve) => setTimeout(() => resolve(new Uint8Array(run.end - run.start)), 60_000)), stats: bytesOk.stats };
+    const s = await session(makeIndex(12), slow);
+    const frame = s.picture(0, [5], 5);
+    await vi.advanceTimersByTimeAsync(61_000);
+    expect(pictureOf(await frame)).toBe(5);
+    s.close();
+  });
+
+  it('a decoder that gives nothing for 20 s ends the request (its own stall guard)', async () => {
     vi.useFakeTimers();
     FakeDecoder.mode = 'never';
-    const slow: SampleBytes = { read: (run) => new Promise((resolve) => setTimeout(() => resolve(new Uint8Array(run.end - run.start)), 30_000)), stats: bytesOk.stats };
-    const s = await session(makeIndex(12), slow);
-    const { DecodeFailure, PICTURE_LIMIT_MS } = await import('@/components/brand-studio/editor-v2/frame-decoder');
-    expect(PICTURE_LIMIT_MS).toBe(45_000);
+    const s = await session(makeIndex(12));
+    const { DecodeFailure } = await import('@/components/brand-studio/editor-v2/frame-decoder');
     let settled = false;
     const asked = s
       .picture(0, [5], 5)
@@ -73,12 +83,10 @@ describe('every wait has an end', () => {
       .finally(() => {
         settled = true;
       });
-    await vi.advanceTimersByTimeAsync(44_000);
+    await vi.advanceTimersByTimeAsync(19_000);
     expect(settled).toBe(false);
-    await vi.advanceTimersByTimeAsync(1_500);
-    const error = await asked;
-    expect(error).toBeInstanceOf(DecodeFailure);
-    expect((error as Error).message).toMatch(/45 s/);
+    await vi.advanceTimersByTimeAsync(2_000);
+    expect(await asked).toBeInstanceOf(DecodeFailure);
     s.close();
   });
 });

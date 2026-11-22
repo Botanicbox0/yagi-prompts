@@ -33,13 +33,16 @@ export function screenStep(gapMs: number): number {
  * The most one tick of a visible-time limit (every 100 ms) may count. A hidden page's timers barely run, so the
  * first tick after it is shown again comes long after the one before: counting that whole gap counted the
  * hidden time as time on screen (measured, spec G A2: a load limit of 30 s failed at once after 110 s hidden).
+ * Measured again (spec H F1, Chromium 149, a minimised window of the script's own browser): a 100 ms interval
+ * runs once a second while hidden (gaps 987–1013 ms over 60 s); past five minutes hidden it ran once in up to
+ * 52 s, and the first tick after the window was shown came 26 ms later and spanned 46.6 s.
  */
 export const VISIBLE_STEP_CAP_MS = 250;
 
-/** How much time on screen one tick adds, `elapsedMs` after the previous one. */
-export function visibleStep(elapsedMs: number, hidden: boolean): number {
+/** How much time on screen one tick adds, `elapsedMs` after the previous one; at most `capMs` (twice its period or so). */
+export function visibleStep(elapsedMs: number, hidden: boolean, capMs = VISIBLE_STEP_CAP_MS): number {
   if (hidden || !Number.isFinite(elapsedMs) || elapsedMs <= 0) return 0;
-  return Math.min(elapsedMs, VISIBLE_STEP_CAP_MS);
+  return Math.min(elapsedMs, capMs);
 }
 
 export interface RefreshState {

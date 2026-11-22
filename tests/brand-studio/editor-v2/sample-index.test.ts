@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { timingOfFile } from '@/lib/brand-studio/editor-v2/container';
-import { av1Codec, avcCodec, gatherIndexBoxes, hevcCodec, readSampleEntry, readSampleIndex, rotationOf, stampUs, vp9Codec, type IndexBoxes } from '@/lib/brand-studio/editor-v2/sample-index';
+import { av1Codec, avcCodec, gatherIndexBoxes, hevcCodec, readSampleEntry, readSampleIndex, rotationOf, spsChroma, stampUs, vp9Codec, type IndexBoxes } from '@/lib/brand-studio/editor-v2/sample-index';
 import {
   IDENTITY,
   NON_SYNC,
@@ -259,6 +259,7 @@ describe('only plain 8-bit SDR footage is decoded (review 1, item 1): the rest i
   /** An hvcC record with a stated luma bit depth (byte 17) and chroma bit depth (byte 18). */
   const hvcCDepth = (luma: number, chroma: number) => {
     const record = hvcC(0x02, 0x20000000, [0x90, 0, 0, 0, 0, 0], 120);
+    record[8 + 16] = 0xfc | 1; // chromaFormat 4:2:0
     record[8 + 17] = 0xf8 | (luma - 8);
     record[8 + 18] = 0xf8 | (chroma - 8);
     return record;
@@ -272,6 +273,26 @@ describe('only plain 8-bit SDR footage is decoded (review 1, item 1): the rest i
     expect(read.ok && read.config.bitDepth).toBe(10);
     const main = readSampleEntry(stsd(visualEntry('hvc1', 1920, 1080, hvcCDepth(8, 8))));
     expect(main.ok && main.config.bitDepth).toBe(8);
+  });
+
+  it('spec H, F7: the chroma format is read: implied 4:2:0 for Baseline/Main/Extended, the High tail, else the SPS; hvcC chromaFormat', () => {
+    const baseline = readSampleEntry(stsd(visualEntry('avc1', 640, 360, avcC(66, 0xc0, 0x1e))));
+    expect(baseline.ok && baseline.config.chroma).toBe(1);
+    const high = readSampleEntry(stsd(visualEntry('avc1', 640, 360, avcCTail(100, 8))));
+    expect(high.ok && high.config.chroma).toBe(1);
+    // High with no tail: the SPS says (profile 100, level 31, sps_id 0, chroma_format_idc 3 = 4:4:4).
+    const sps444 = Uint8Array.of(0x67, 100, 0, 31, 0b1_00100_00);
+    const noTail = box('avcC', Uint8Array.of(1, 100, 0, 31, 0xff, 0xe1, 0, sps444.length), sps444, Uint8Array.of(1, 0, 2, 0x68, 0xce));
+    const read444 = readSampleEntry(stsd(visualEntry('avc1', 640, 360, noTail)));
+    expect(read444.ok && read444.config.chroma).toBe(3);
+    // An emulation prevention byte (00 00 03) is taken out before reading.
+    expect(spsChroma(Uint8Array.of(0x67, 100, 0, 0, 3, 0b1_010_0000))).toBe(1);
+    // Nothing readable: not known.
+    const opaque = box('avcC', Uint8Array.of(1, 100, 0, 31, 0xff, 0xe0, 0));
+    const unknown = readSampleEntry(stsd(visualEntry('avc1', 640, 360, opaque)));
+    expect(unknown.ok && unknown.config.chroma).toBeNull();
+    const main10 = readSampleEntry(stsd(visualEntry('hvc1', 1920, 1080, hvcCDepth(10, 10))));
+    expect(main10.ok && main10.config.chroma).toBe(1);
   });
 
   it('spec G, A0: the profile is read (hvcC general_profile_idc, avcC profile_idc)', () => {

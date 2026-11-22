@@ -156,20 +156,29 @@ PATCHES = [('red', 'FF0000', 20, 30), ('green', '00FF00', 140, 30), ('blue', '00
            ('black', '000000', 20, 150), ('grey-25', '404040', 140, 150), ('grey-50', '808080', 260, 150), ('grey-75', 'C0C0C0', 380, 150), ('white', 'FFFFFF', 500, 150)]
 
 
-def patched(path, width, height, ten_bit, tagged, frames=120, hevc=None):
-    """Patches and frame numbers, made in RGB and converted with the BT.709 matrix to limited range; HEVC Main 10
-    (`ten_bit`), else H.264 High 8-bit (or HEVC Main 8-bit with `hevc`); `tagged`: colr nclx 1/1/1 limited and the
-    same in the stream, else nothing said."""
+def patched(path, width, height, ten_bit, tagged, frames=120, hevc=None, profile=None, full=False):
+    """Patches and frame numbers, made in RGB and converted to limited range (full range with `full`, stated in
+    the stream); HEVC Main 10 (`ten_bit`), else H.264 High 8-bit (or HEVC Main 8-bit with `hevc`; another H.264
+    `profile`: baseline, main). `tagged`: True or '709' = BT.709 matrix, colr nclx 1/1/1 and the same in the stream;
+    '601' = BT.601 matrix and SMPTE 170M in the stream and the box; False = BT.709 matrix, nothing said."""
     if os.path.exists(path):
         return path
     hevc = ten_bit if hevc is None else hevc
     s = width / 640
     boxes = ','.join(f'drawbox=x={round(x * s)}:y={round(y * s)}:w={round(100 * s)}:h={round(90 * s)}:color=0x{c}:t=fill' for _, c, x, y in PATCHES)
-    tags = 'setparams=color_primaries=bt709:color_trc=bt709:colorspace=bt709:range=tv' if tagged else 'setparams=colorspace=unknown:color_primaries=unknown:color_trc=unknown'
+    matrix = 'bt601' if tagged == '601' else 'bt709'
+    rng = 'pc' if full else 'tv'
+    if tagged == '601':
+        tags = f'setparams=color_primaries=smpte170m:color_trc=smpte170m:colorspace=smpte170m:range={rng}'
+    elif tagged:
+        tags = f'setparams=color_primaries=bt709:color_trc=bt709:colorspace=bt709:range={rng}'
+    else:
+        tags = 'setparams=colorspace=unknown:color_primaries=unknown:color_trc=unknown' + (':range=pc' if full else '')
     pix = 'yuv420p10le' if ten_bit else 'yuv420p'
-    vf = f'format=rgb24,{boxes},{squares(s)},scale=out_color_matrix=bt709:out_range=tv,format={pix},{tags}'
-    codec = ['-c:v', 'libx265', '-tag:v', 'hvc1', '-x265-params', 'log-level=error:bframes=0:keyint=24'] if hevc else ['-c:v', 'libx264', '-bf', '0', '-g', '24']
-    run(['ffmpeg', '-v', 'error', '-y', '-f', 'lavfi', '-i', f'color=c=0x303030:s={width}x{height}:r=24', '-vf', vf, '-frames:v', str(frames), *codec, '-pix_fmt', pix, path])
+    vf = f'format=rgb24,{boxes},{squares(s)},scale=out_color_matrix={matrix}:out_range={rng},format={pix},{tags}'
+    x265 = 'log-level=error:bframes=0:keyint=24' + (':range=full' if full else '')
+    codec = ['-c:v', 'libx265', '-tag:v', 'hvc1', '-x265-params', x265] if hevc else ['-c:v', 'libx264', '-bf', '0', '-g', '24', *(['-profile:v', profile] if profile else [])]
+    run(['ffmpeg', '-v', 'error', '-y', '-f', 'lavfi', '-i', f'color=c=0x303030:s={width}x{height}:r=24', '-vf', vf, '-frames:v', str(frames), *codec, '-pix_fmt', pix, *(['-color_range', 'pc'] if full else []), path])
     return path
 
 
@@ -241,6 +250,70 @@ def tenbit_media(folder):
         if not os.path.exists(path):
             run(['ffmpeg', '-v', 'error', '-y', '-i', untagged, '-c', 'copy', *tags, '-movflags', '+write_colr', path])
         files[key] = (path, 1920, 1080)
+    return files
+
+
+COLOUR_TAGS = {
+    '709': ['-color_primaries', 'bt709', '-color_trc', 'bt709', '-colorspace', 'bt709', '-color_range', 'tv'],
+    '709full': ['-color_primaries', 'bt709', '-color_trc', 'bt709', '-colorspace', 'bt709', '-color_range', 'pc'],
+    '601': ['-color_primaries', 'smpte170m', '-color_trc', 'smpte170m', '-colorspace', 'smpte170m', '-color_range', 'tv'],
+    'none': ['-color_primaries', 'unknown', '-color_trc', 'unknown', '-colorspace', 'unknown'],
+}
+
+
+def rebox(source, path, box):
+    """The bitstream copied as it is; the container's colr box written as `box` says (709, 709full, 601 or none). A `.mov`
+    path gets QuickTime's `nclc` box."""
+    if not os.path.exists(path):
+        run(['ffmpeg', '-v', 'error', '-y', '-i', source, '-c', 'copy', *COLOUR_TAGS[box], *(['-movflags', '+write_colr'] if box != 'none' else []), path])
+    return path
+
+
+def colr_of(path):
+    """The colr box as written: its type and codes, or None."""
+    data = open(path, 'rb').read()
+    at = data.find(b'colr')
+    if at < 0:
+        return None
+    kind = data[at + 4:at + 8].decode('latin-1')
+    codes = [int.from_bytes(data[at + 8 + 2 * i:at + 10 + 2 * i], 'big') for i in range(3)]
+    return f'{kind} {codes[0]}/{codes[1]}/{codes[2]}' + (f' full {data[at + 14] >> 7}' if kind == 'nclx' else '')
+
+
+def colour_media(folder):
+    """Spec H, F7: (a) the colr box of type nclc alone; (b) the stream and the box saying different things; (c) H.264
+    Constrained Baseline and Main. Key → (path, width, height, the matrix the picture was made with)."""
+    os.makedirs(folder, exist_ok=True)
+    m = lambda name: os.path.join(folder, name)
+    files = {}
+    h540 = patched(m('h8-540-untagged.mp4'), 960, 540, False, False)
+    h1080 = patched(m('h8-1080-untagged.mp4'), 1920, 1080, False, False)
+    files['h8-540-nclc709'] = (rebox(h540, m('h8-540-nclc709.mov'), '709'), 960, 540, 'bt709')
+    files['h8-1080-nclc601'] = (rebox(h1080, m('h8-1080-nclc601.mov'), '601'), 1920, 1080, 'bt709')
+    for name, ten in (('h8', False), ('m10', True)):
+        s601_1080 = patched(m(f'{name}-1080-s601.mp4'), 1920, 1080, ten, '601')
+        s709_540 = patched(m(f'{name}-540-s709.mp4'), 960, 540, ten, '709')
+        files[f'{name}-1080-s601-b709'] = (rebox(s601_1080, m(f'{name}-1080-s601-b709.mp4'), '709'), 1920, 1080, 'bt601')
+        files[f'{name}-1080-s601-nobox'] = (rebox(s601_1080, m(f'{name}-1080-s601-nobox.mp4'), 'none'), 1920, 1080, 'bt601')
+        files[f'{name}-540-s709-b601'] = (rebox(s709_540, m(f'{name}-540-s709-b601.mp4'), '601'), 960, 540, 'bt709')
+    for profile in ('baseline', 'main'):
+        untagged = patched(m(f'h8{profile}-540-untagged.mp4'), 960, 540, False, False, profile=profile)
+        files[f'h8{profile}-540-untagged'] = (untagged, 960, 540, 'bt709')
+        files[f'h8{profile}-540-colr709'] = (rebox(untagged, m(f'h8{profile}-540-colr709.mp4'), '709'), 960, 540, 'bt709')
+    # Spec H round 2: 8-bit 4:2:0 full range. Constrained Baseline and Main, and HEVC Main, with full range in the
+    # stream and the box; H.264 High with full range in the stream only (no box: what phone recordings often are);
+    # and the reverse, the box saying full over a limited stream. The matrix entry carries the range the picture was
+    # made in (for the ffmpeg reference column only).
+    for rows, width in ((1080, 1920), (540, 960)):
+        for profile in ('baseline', 'main'):
+            source = patched(m(f'h8{profile}-{rows}-sfull.mp4'), width, rows, False, True, profile=profile, full=True)
+            files[f'h8{profile}-{rows}-full'] = (rebox(source, m(f'h8{profile}-{rows}-full.mp4'), '709full'), width, rows, 'bt709:pc')
+        source = patched(m(f'hevc8-{rows}-sfull.mp4'), width, rows, False, True, hevc=True, full=True)
+        files[f'hevc8-{rows}-full'] = (rebox(source, m(f'hevc8-{rows}-full.mp4'), '709full'), width, rows, 'bt709:pc')
+        source = patched(m(f'h8-{rows}-sfull.mp4'), width, rows, False, True, full=True)
+        files[f'h8-{rows}-sfull-nobox'] = (rebox(source, m(f'h8-{rows}-sfull-nobox.mp4'), 'none'), width, rows, 'bt709:pc')
+        source = patched(m(f'h8-{rows}-s709.mp4'), width, rows, False, '709')
+        files[f'h8-{rows}-slimited-bfull'] = (rebox(source, m(f'h8-{rows}-slimited-bfull.mp4'), '709full'), width, rows, 'bt709')
     return files
 
 
@@ -403,14 +476,16 @@ DONE_INFO = """() => {
 }"""
 
 
-def editor_url(path=''):
-    return f'{BASE}/brand/studio/editor?organizationId={ORG}' + (f'&exportPath={path}' if path else '')
+def editor_url(path='', download=True):
+    # `exportDownload=off` (spec H, F9): the finished file does not download by itself; for runs that read the
+    # file from the page's own blob and never from the download folder.
+    return f'{BASE}/brand/studio/editor?organizationId={ORG}' + (f'&exportPath={path}' if path else '') + ('' if download else '&exportDownload=off')
 
 
-def open_film(page, film, path=''):
+def open_film(page, film, path='', download=True):
     page.goto(BASE + '/brand/library', wait_until='domcontentloaded', timeout=300000) if page.url == 'about:blank' else None
     page.evaluate('([key, value]) => localStorage.setItem(key, value)', [KEY, json.dumps(film)])
-    page.goto(editor_url(path), wait_until='domcontentloaded', timeout=300000)
+    page.goto(editor_url(path, download), wait_until='domcontentloaded', timeout=300000)
     page.wait_for_selector('[data-studio-editor-v2][data-editor-status=ready]', timeout=300000)
     page.wait_for_timeout(600)
     return page.evaluate(STATE)
@@ -717,6 +792,57 @@ def part_tenbit(page, context, ids):
                 check(f'tenbit {key}: same picture on both paths (mean |difference| under 2 of 255 per channel, no shift over 1)', max(mad) < 2 and max(abs(x) for x in bias) < 1, f'{mad} {bias}')
         rows.append(row)
     with open(os.path.join(OUT, 'tenbit.json'), 'w') as f:
+        json.dump(rows, f, indent=1)
+    return rows
+
+
+def part_colour(page, context, ids):
+    """Spec H, F7: the colour cases never measured before (a: nclc box alone; b: the stream and the box disagree;
+    c: H.264 Constrained Baseline and Main). Each exported on the path the product picks and by seeking; frame
+    numbers and pixels per patch compared. A source the gate keeps on seek is listed with its reason."""
+    media = colour_media(os.path.join(MEDIA, 'colour'))
+    measure(f'GPU (WebGL renderer): {page.evaluate(GPU)}')
+    only = [k for k in os.environ.get('EDITOR_COLOUR_ONLY', '').split(',') if k]
+    rows = []
+    for key, (path, width, height, matrix) in media.items():
+        if only and key not in only:
+            continue
+        if key not in ids:
+            ids[key] = upload(context, f'decoder-check {key}.mp4', path, width, height, 5)
+        film = stored_film([(ids[key], key, 5, 0, 5)])
+        outcomes = {}
+        info = None
+        for mode in ('', 'seek'):
+            open_film(page, film, mode)
+            page.evaluate(DECODER_INFO)
+            outcomes[mode or 'auto'] = export_driven(page, f'colour-{key}-{mode or "auto"}')
+            path_line(f'{key} ({mode or "auto"})', outcomes[mode or 'auto'])
+            if not mode:
+                info = {'decoder': page.evaluate('() => window.__decInfo'), 'support': page.evaluate(DECODER_SUPPORT)}
+        auto, seek = outcomes['auto'], outcomes['seek']
+        reason = auto['paths'][0]['reason'] if auto['paths'] else None
+        measure(f'{key}: box {colr_of(path)}; auto path {auto["path"]} ({reason})')
+        if info and info['decoder'] and info['decoder']['configs']:
+            measure(f'{key}: decoder configured {json.dumps(info["decoder"]["configs"][:1])}; first frames {json.dumps(info["decoder"]["frames"][:1])}; isConfigSupported {json.dumps(info["support"])}')
+        expected = list(range(120))
+        for name, o in outcomes.items():
+            got = decode_numbers(o['file'], 1920, 1080, (0, 0, 1920, 1080)) if o['file'] else []
+            wrong = [(i, n, e) for i, (n, e) in enumerate(zip(got, expected)) if n != e]
+            check(f'colour {key} ({name} → {o["path"]}): every frame shows the picture it should', len(got) == 120 and not wrong, f'{len(got)} frames, {len(wrong)} wrong {wrong[:3]}')
+        row = {'key': key, 'box': colr_of(path), 'auto_path': auto['path'], 'reason': reason}
+        if auto['file'] and seek['file']:
+            mad, bias, frames = pixel_difference(auto['file'], seek['file'], 1920, 1080)
+            made, _, made_range = matrix.partition(':')
+            stats, _ = patch_stats([auto['file'], seek['file'], (path, f'scale=1920:1080:in_color_matrix={made}:in_range={made_range or "tv"}:flags=bicubic,format=rgb24')])
+            worst = max(max(st['max']) for st in stats.values())
+            row.update({'mad': mad, 'bias': bias, 'largest_patch_difference': worst, 'patches': stats})
+            measure(f'{key}: {auto["path"]} vs seek over {frames} frames: mean |difference| {mad}, mean signed {bias}, largest |difference| on a patch {worst}')
+            for name, st in stats.items():
+                measure(f'{key}   {name:9s} auto {st["means"][0]}  seek {st["means"][1]}  ffmpeg({matrix}) {st["means"][2]}  mean |d| {st["mad"]}  max |d| {st["max"]}')
+            if auto['path'] == 'decoder':
+                check(f'colour {key}: the decoder path draws what the seek path draws (0 on every patch)', worst == 0, f'largest {worst}, mean {mad}')
+        rows.append(row)
+    with open(os.path.join(OUT, 'colour.json'), 'w') as f:
         json.dump(rows, f, indent=1)
     return rows
 
@@ -1243,6 +1369,8 @@ def main():
                 part_sources(page, context, media, holder)
             if 'tenbit' in PARTS:
                 part_tenbit(page, context, holder)
+            if 'colour' in PARTS:
+                part_colour(page, context, holder)
             if 'fallback' in PARTS:
                 part_fallback(browser, media, holder)
             if 'error' in PARTS:

@@ -1,5 +1,3 @@
-import { readFileSync } from 'node:fs';
-import { join } from 'node:path';
 import { createElement as h } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { afterEach, describe, expect, it, vi } from 'vitest';
@@ -12,32 +10,19 @@ import { studioEditorEn, studioEditorKo } from '@/messages/studio-editor';
  * the export starts again from frame 0 once the page is visible again. The sheet's count goes back to 0, it
  * says why in one line, and the proof reads how many times (`data-editor-export-restarts`).
  */
-const film = readFileSync(join(process.cwd(), 'components/brand-studio/editor-v2/export-film.ts'), 'utf8');
 
-describe('the export asks its encoder after the picture arrives and before encode()', () => {
-  const pass = film.slice(film.indexOf('async function videoPass('));
-  it('a taken-back encoder is checked after each picture and before encode(); encode() throwing is turned into that answer', () => {
-    const picture = pass.indexOf('await paths.picture(entry, label, signal)');
-    const check = pass.indexOf('const after = stopped(entry.frame);');
-    const encode = pass.indexOf('made.encode(frame');
-    expect(picture).toBeGreaterThan(0);
-    expect(check).toBeGreaterThan(picture);
-    expect(encode).toBeGreaterThan(check);
-    expect(pass).toMatch(/catch \(error\) \{\s*throw stopped\(entry\.frame\) \?\? new ExportStop\('encode'/);
-    expect(pass).toMatch(/isReclaim\(failure\) \? new CodecReclaimed\('video'\)/);
-  });
-
-  it('the whole pass is run again on a reclaim (from frame 0, after the page is visible); the sound encode alone again on its own', () => {
-    const run = film.slice(film.indexOf('export async function exportFilm('));
-    expect(run).toMatch(/runWithRestarts\(\(\) => videoPass\(pass\), waitVisible/);
-    expect(run).toMatch(/runWithRestarts\(\(\) => encodeAac\(rendered, signal\), waitVisible/);
-    expect(run).toMatch(/whenVisible\(document, signal, cancelled\)/);
-    expect(film).toMatch(/isReclaim\(failure\) \? new CodecReclaimed\('audio'\)/);
-  });
-});
+// The restart rules are tested on the loop (frame-loop.test.ts) and the restarter (export-run.test.ts) themselves.
 
 describe('the sheet after a restart', () => {
-  const running = (restarts: number): ExportJob => ({ status: 'running', progress: { phase: 'video', done: 0, total: 315 }, frames: 315, fps: 24, slow: false, restarts });
+  const running = (restarts: number, restartedPhase: 'video' | 'audio' | null = restarts > 0 ? 'video' : null): ExportJob => ({
+    status: 'running',
+    progress: restartedPhase === 'audio' ? { phase: 'audio', done: 0, total: 1 } : { phase: 'video', done: 0, total: 315 },
+    frames: 315,
+    fps: 24,
+    slow: false,
+    restarts,
+    restartedPhase,
+  });
 
   it('one line saying why, the count from 0, and the number of restarts as data', () => {
     const html = renderToStaticMarkup(h(ExportStatus, { job: running(1), copy: studioEditorKo.export }));
@@ -45,6 +30,23 @@ describe('the sheet after a restart', () => {
     expect(html).toContain(studioEditorKo.export.restarted);
     expect(html).toContain('data-editor-export-restarts="1"');
     expect(html).toContain('data-editor-export-progress="0/315"');
+  });
+
+  it('spec H, F3: the sound written again says so, not "from the beginning"', () => {
+    const html = renderToStaticMarkup(h(ExportStatus, { job: running(1, 'audio'), copy: studioEditorKo.export }));
+    expect(html).toContain('data-editor-export-restarted="audio"');
+    expect(html).toContain(studioEditorKo.export.restartedSound);
+    expect(html).not.toContain(studioEditorKo.export.restarted);
+  });
+
+  it('spec H, F3: given up after the restarts: its own line, what happened and what to do', () => {
+    const failed: ExportJob = { status: 'failed', reason: 'hidden', frame: null, clip: null, bytes: null, message: 'reclaimed 4 times', fps: 24 };
+    for (const copy of [studioEditorKo.export, studioEditorEn.export]) {
+      const html = renderToStaticMarkup(h(ExportStatus, { job: failed, copy }));
+      expect(html).toContain('data-editor-export-failed="hidden"');
+      expect(html).toContain(copy.failed.hidden);
+      expect(copy.failed.hidden).not.toBe(copy.failed.encode);
+    }
   });
 
   it('no restart: no line', () => {
@@ -58,8 +60,16 @@ describe('the sheet after a restart', () => {
     expect(renderToStaticMarkup(h(ExportStatus, { job: done, copy: studioEditorKo.export }))).toContain('data-editor-export-restarts="2"');
   });
 
-  it('both languages have the line, with no internal words', () => {
-    for (const line of [studioEditorKo.export.restarted, studioEditorEn.export.restarted]) {
+  it('both languages have the lines, with no internal words, true for a covered, minimised or background window', () => {
+    for (const line of [
+      studioEditorKo.export.restarted,
+      studioEditorEn.export.restarted,
+      studioEditorKo.export.restartedSound,
+      studioEditorEn.export.restartedSound,
+      studioEditorKo.export.failed.hidden,
+      studioEditorEn.export.failed.hidden,
+    ]) {
+      expect(line).not.toMatch(/가려져|covered/i);
       expect(line.length).toBeGreaterThan(10);
       expect(line).not.toMatch(/codec|encod|decod|webcodecs|코덱|인코더|디코더/i);
     }
@@ -92,7 +102,31 @@ describe('the job shows a restart at once', () => {
     if (now.status !== 'running') return;
     expect(now.progress.done).toBe(0);
     expect(now.restarts).toBe(1);
+    expect(now.restartedPhase).toBe('video');
+    // The sound written again later: the line says so.
+    report!({ phase: 'audio', done: 0, total: 1, restarts: 2 } as never);
+    const later = job.exportJobSnapshot();
+    expect(later.status === 'running' && later.restartedPhase).toBe('audio');
     job.cancelExport();
     vi.unstubAllGlobals();
+  });
+});
+
+describe('spec H, F3: the export gives up with its own reason', () => {
+  it('ReclaimedTooOften becomes ExportStop("hidden"), for pictures and sound alike', async () => {
+    const { givenUp, ExportStop } = await import('@/components/brand-studio/editor-v2/export-film');
+    const { ReclaimedTooOften } = await import('@/lib/brand-studio/editor-v2/export-run');
+    for (const codec of ['video', 'audio'] as const) {
+      let thrown: unknown = null;
+      try {
+        givenUp(new ReclaimedTooOften(4, codec));
+      } catch (error) {
+        thrown = error;
+      }
+      expect(thrown).toBeInstanceOf(ExportStop);
+      expect((thrown as InstanceType<typeof ExportStop>).reason).toBe('hidden');
+    }
+    const other = new Error('something else');
+    expect(() => givenUp(other)).toThrow(other);
   });
 });

@@ -109,7 +109,7 @@ describe('screenTimer: the export’s wait for a picture does not run out in a c
 });
 
 describe('the export sheet says it while it is true', () => {
-  const running = (slow: boolean): ExportJob => ({ status: 'running', progress: { phase: 'video', done: 12, total: 48 }, frames: 48, fps: 24, slow, restarts: 0 });
+  const running = (slow: boolean): ExportJob => ({ status: 'running', progress: { phase: 'video', done: 12, total: 48 }, frames: 48, fps: 24, slow, restarts: 0, restartedPhase: null });
 
   it('a slow screen: one line saying why, and how to speed it up', () => {
     const html = renderToStaticMarkup(h(ExportStatus, { job: running(true), copy: studioEditorKo.export }));
@@ -229,6 +229,23 @@ describe('the refresh watcher stops, and no wait outlasts a visible page (review
     expect(long).toBe(false);
     step(2_000, null);
     expect(long).toBe(true);
+  });
+
+  it('spec H, F1: the first wall tick after a long hidden spell does not count the spell (measured: 46.6 s in one tick after 5.5 min hidden)', async () => {
+    const { screenTimer } = await import('@/components/brand-studio/editor-v2/screen-refresh');
+    (globalThis.document as { hidden: boolean }).hidden = true;
+    let expired = false;
+    screenTimer(4000, () => (expired = true));
+    step(300_000, null);
+    // Past five minutes hidden the browser runs the interval about once a minute: none for the last 46.5 s, and the
+    // first tick after the page is shown comes 26 ms later.
+    for (const interval of intervals.values()) interval.next = now + 46_568;
+    now += 46_542;
+    (globalThis.document as { hidden: boolean }).hidden = false;
+    step(30_000, null);
+    expect(expired).toBe(false);
+    step(31_500, null);
+    expect(expired).toBe(true);
   });
 
   it('hidden: neither the screen time nor the ceiling counts (switching tabs never fails an export)', async () => {
