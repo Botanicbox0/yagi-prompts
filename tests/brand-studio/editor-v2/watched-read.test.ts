@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { ReadCancelled, STALL_MS, totalLimitMs, ReadTimedOut, readStream, sharedWaits, waitShared, watchRead } from '@/lib/brand-studio/editor-v2/watched-read';
+import { ReadCancelled, STALL_MS, totalLimitMs, ReadTimedOut, eitherSignal, readStream, sharedWaits, waitShared, watchRead } from '@/lib/brand-studio/editor-v2/watched-read';
+import { abortListeners } from './abort-listeners';
 
 /** Spec G, B1: every network wait of the export ends: on cancel at once, on a stall or after its total. */
 const LIMITS = { stallMs: 15_000, totalMs: 45_000 };
@@ -134,5 +135,50 @@ describe('spec H, F6: a shared read is waited for once per export', () => {
     await waits('/a.mp4');
     await waits('/a.mp4');
     expect(reads).toBe(1);
+  });
+});
+
+describe('spec I, G4: the edges of a watched read', () => {
+  afterEach(() => vi.useRealTimers());
+
+  it('a total longer than a timer can hold (2^31 − 1 ms) is held to that, not fired at once', async () => {
+    const watch = watchRead({ stallMs: 0, totalMs: 0 });
+    let ended: unknown = null;
+    watch.guard(new Promise(() => undefined)).catch((error: unknown) => (ended = error));
+    watch.limitTotal(2 ** 31 + 60_000);
+    await new Promise((resolve) => setTimeout(resolve, 50));
+    expect(ended).toBeNull();
+    watch.done();
+  });
+
+  it('NaN or an infinite total uses the base limit (45 s), not "at once" or "never"', async () => {
+    vi.useFakeTimers();
+    for (const bad of [Number.NaN, Number.POSITIVE_INFINITY]) {
+      const watch = watchRead({ stallMs: 0, totalMs: 0 });
+      let ended: unknown = null;
+      watch.guard(new Promise(() => undefined)).catch((error: unknown) => (ended = error));
+      watch.limitTotal(bad);
+      await vi.advanceTimersByTimeAsync(totalLimitMs(0) - 1_000);
+      expect(ended, String(bad)).toBeNull();
+      await vi.advanceTimersByTimeAsync(2_000);
+      expect(ended, String(bad)).toBeInstanceOf(ReadTimedOut);
+    }
+  });
+
+  it('eitherSignal lets go of its listeners: after 50 reads the export’s signal holds none', () => {
+    const exportCancel = new AbortController();
+    const count = abortListeners(exportCancel.signal);
+    for (let i = 0; i < 50; i += 1) {
+      const owner = new AbortController();
+      const both = eitherSignal(exportCancel.signal, owner.signal);
+      expect(both.signal.aborted).toBe(false);
+      both.release();
+    }
+    expect(count()).toBe(0);
+    // Still one signal: either side aborts it.
+    const owner = new AbortController();
+    const both = eitherSignal(exportCancel.signal, owner.signal);
+    exportCancel.abort();
+    expect(both.signal.aborted).toBe(true);
   });
 });
