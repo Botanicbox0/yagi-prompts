@@ -20,10 +20,11 @@ import { advanceStudioJobsWith } from '@/lib/brand-studio/engine';
 import { createStudioJob, FREE_INTEL_LIMITS, takeFreeIntelSlot } from '@/lib/brand-studio/jobs';
 import { normalizeLegacyStudioModelId, studioModelOrLegacy } from '@/lib/brand-studio/models';
 import { failure, guarded } from '@/lib/brand-studio/outcome';
-import { jobsByIds, jobsOf, readyAsset, readyOutput, tagsOf, viewsOf } from '@/lib/brand-studio/repo';
+import { jobsByIds, jobsOf, openJobCount, readyAsset, readyOutput, tagsOf, viewsOf } from '@/lib/brand-studio/repo';
 import type { OutputRow, StudioDeps } from '@/lib/brand-studio/types';
 import { allowanceView, loadAllowance } from '@/lib/brand-studio/usage';
-import { buildWorkflowWithAi } from './ai-builder';
+import { imageRunKrw } from '@/lib/brand-studio/usage-rate';
+import { buildWorkflowWithAi, withoutStepPresets } from './ai-builder';
 import { verifyCharacterSheetConsistency, type ConsistencyCandidateSheet } from './consistency';
 import {
   isWorkflowOperation,
@@ -107,10 +108,16 @@ function slugifyTitle(title: string, fallback = 'team-workflow'): string {
   return ascii || fallback;
 }
 
+/** True when a step of the recipe names a server-side preset: only a built-in starter may (starters.ts). */
+function namesPreset(recipe: WorkflowRecipe): boolean {
+  return recipe.steps.some((step) => step.preset !== undefined);
+}
+
 function parseStoredRecipe(raw: unknown): WorkflowRecipe {
   const obj = typeof raw === 'string' ? JSON.parse(raw) : raw;
   const parsed = WorkflowRecipeSchema.safeParse(obj);
-  if (parsed.success) return parsed.data;
+  // A stored row is a team's own recipe: a `preset` that reached it by any path is never read back.
+  if (parsed.success) return withoutStepPresets(parsed.data);
   return {
     version: 1,
     guide: '',
@@ -329,6 +336,8 @@ export async function createOrgWorkflow(
   const parsed = WorkflowCreateSchema.safeParse(raw);
   if (!parsed.success) return failure('invalid');
   const v = parsed.data;
+  // Web hub, API and MCP alike: a team's recipe cannot name a server-side preset. Nothing is stored.
+  if (namesPreset(v.recipe)) return failure('invalid');
   return guarded(() =>
     deps.sql.transaction(async (sql) => {
       const seat = await studioSeat(sql, viewer.userId, v.organizationId, { requireSelfStudio: true });
@@ -373,6 +382,8 @@ export async function updateOrgWorkflow(
   const parsed = WorkflowUpdateSchema.safeParse(raw);
   if (!parsed.success) return failure('invalid');
   const v = parsed.data;
+  // The same rule as `createOrgWorkflow`: refused before anything is read or changed.
+  if (v.recipe && namesPreset(v.recipe)) return failure('invalid');
   return guarded(() =>
     deps.sql.transaction(async (sql) => {
       const seat = await studioSeat(sql, viewer.userId, v.organizationId, { requireSelfStudio: true });
@@ -634,7 +645,8 @@ export async function buildAndSaveWorkflowWithAi(
             compiled.title,
             compiled.summary,
             compiled.category,
-            JSON.stringify(compiled.recipe),
+            // Model output is not trusted: no step is saved with a `preset` (and the build never fails over one).
+            JSON.stringify(withoutStepPresets(compiled.recipe)),
             seat.userId,
             v.requestId,
           ],
@@ -907,18 +919,46 @@ function presetReferences(step: WorkflowStep, refs: Readonly<Record<string, Stud
   return out;
 }
 
+/** A step's job request id (the same scheme for every step, so a repeated run finds the job it made). */
+function stepRequestId(requestId: string, ordinal: number, stepId: string): string {
+  return `${requestId}_s${ordinal}_${stepId}`.replace(/[^A-Za-z0-9_-]/g, '_').slice(0, 80);
+}
+
+/** What the planner reserves for a preset step (plan.ts `imageRunKrw`: one picture per reference, the step's shape and quality). */
+function presetStepKrw(step: WorkflowStep, references: number): number {
+  return imageRunKrw({ model: step.model, resolution: step.resolution, references, count: 1, quality: step.quality ?? null, aspect: step.aspect });
+}
+
 /**
- * The two guards the studio puts on a free reading (lib/brand-studio/jobs.ts `previewStudioPrompt`,
- * `analyzeStudioFilm`): no open monthly allowance fails the run with the code job creation would give
- * (`allowance_closed`) before any call; a used-up per-organization window (`FREE_INTEL_LIMITS.analyzePerMinute`,
- * key `sheet:<organizationId>`) skips the reading and the run goes on with the fallbacks.
+ * Cheap read-only checks before the free reading of the two pictures, in this order:
+ * 1. the same request again (every preset step's job already exists for this member): no reading at all, and
+ *    `createStudioJob` hands back the job it made, untouched;
+ * 2. too many open runs (`openJobCount` at `STUDIO_LIMITS.openJobsPerOrganization`) → `too_many_running`;
+ * 3. the allowance: none open → `allowance_closed`; this month's spend plus what the steps reserve over the cap →
+ *    `allowance_exhausted` (the sum `reserveAllowance` makes).
+ * Then, and only then, a slot of the per-organization window (`FREE_INTEL_LIMITS.analyzePerMinute`, key
+ * `sheet:<organizationId>`); a used-up window skips the reading and the run goes on with the fallbacks.
+ * Early exits only, no lock held and nothing reserved: `createStudioJob` keeps every check of its own and its
+ * locked reservation, so a race after these checks still ends there, with the same codes.
  */
-async function presetReadingGate(deps: StudioDeps, organizationId: string): Promise<{ read: boolean } | StudioFailure> {
+async function presetReadingGate(
+  deps: StudioDeps,
+  input: { organizationId: string; userId: string; requestIds: readonly string[]; estimateKrw: number },
+): Promise<{ read: boolean; replay: boolean } | StudioFailure> {
   const now = deps.now?.() ?? new Date();
   return guarded(async () => {
-    const allowance = await loadAllowance(deps.sql, organizationId, deps.env, now);
+    const made = (
+      await deps.sql.query<{ request_id: string }>(
+        'select request_id from brand_studio_jobs where organization_id = $1 and created_by = $2 and request_id = any($3::text[])',
+        [input.organizationId, input.userId, [...input.requestIds]],
+      )
+    ).rows;
+    if (input.requestIds.length > 0 && input.requestIds.every((id) => made.some((row) => row.request_id === id))) return { read: false, replay: true };
+    if ((await openJobCount(deps.sql, input.organizationId)) >= STUDIO_LIMITS.openJobsPerOrganization) throw new StudioDenied('too_many_running');
+    const allowance = await loadAllowance(deps.sql, input.organizationId, deps.env, now);
     if (allowance.capKrw <= 0) throw new StudioDenied('allowance_closed');
-    return { read: takeFreeIntelSlot(`sheet:${organizationId}`, FREE_INTEL_LIMITS.analyzePerMinute, now.getTime()) };
+    if (allowance.usedKrw + Math.max(0, input.estimateKrw) > allowance.capKrw) throw new StudioDenied('allowance_exhausted');
+    return { read: takeFreeIntelSlot(`sheet:${input.organizationId}`, FREE_INTEL_LIMITS.analyzePerMinute, now.getTime()), replay: false };
   });
 }
 
@@ -1047,16 +1087,26 @@ export async function runWorkflow(
         ? new Set(packSlot.options.filter((o) => o.defaultSelected !== false).map((o) => o.id))
         : null;
 
-  // Preset steps (a built-in starter only), checked before anything is made: every picture they use, an open
-  // allowance, then one reading of the two pictures for the text's four descriptions.
-  const presetSteps = recipe.steps.filter(
-    (s) => !s.onlyWhenNoImageRef && !(s.packId && selectedPacks && !selectedPacks.has(s.packId)) && honoursPreset(workflow, s),
-  );
+  // Main pipeline steps (e.g. 16:9 turnaround, 4-expression sheet, wardrobe detail sheet).
+  const activeSteps = recipe.steps.filter((s) => {
+    if (s.onlyWhenNoImageRef) return false;
+    if (s.packId && selectedPacks && !selectedPacks.has(s.packId)) return false;
+    return true;
+  });
+
+  // Preset steps (a built-in starter only), checked before anything is made: every picture they use, then the
+  // cheap checks of `presetReadingGate`, then one reading of the two pictures for the text's four descriptions.
+  const presetSteps = activeSteps.filter((s) => honoursPreset(workflow, s));
   const presetSlotRefs: Readonly<Record<string, StudioReference | null>> = { image1: initialImageRef, image2: initialImage2Ref };
   let presetVars: Record<string, string> = {};
   if (presetSteps.length > 0) {
     if (presetSteps.some((s) => presetReferences(s, presetSlotRefs) === null)) return failure('reference_missing');
-    const gate = await presetReadingGate(deps, v.organizationId);
+    const gate = await presetReadingGate(deps, {
+      organizationId: v.organizationId,
+      userId: seat.userId,
+      requestIds: presetSteps.map((s) => stepRequestId(v.requestId, activeSteps.indexOf(s) + 1, s.id)),
+      estimateKrw: presetSteps.reduce((sum, s) => sum + presetStepKrw(s, presetReferences(s, presetSlotRefs)?.length ?? 0), 0),
+    });
     if ('ok' in gate) return gate;
     if (presetSteps.some((s) => s.preset === VIDEO_CHARACTER_SHEET_PRESET_ID)) {
       const reading = gate.read
@@ -1068,7 +1118,7 @@ export async function runWorkflow(
             deps.intelDeps,
           )
         : { vars: { ...SHEET_VAR_FALLBACK }, source: 'fallback' as const };
-      deps.log?.('studio_sheet_reading', { source: reading.source, skipped: !gate.read });
+      deps.log?.('studio_sheet_reading', { source: reading.source, skipped: !gate.read, ...(gate.replay ? { replay: true } : {}) });
       presetVars = { ...reading.vars };
     }
   }
@@ -1119,12 +1169,6 @@ export async function runWorkflow(
     }
   }
 
-  // Main pipeline steps (e.g. 16:9 turnaround, 4-expression sheet, wardrobe detail sheet).
-  const activeSteps = recipe.steps.filter((s) => {
-    if (s.onlyWhenNoImageRef) return false;
-    if (s.packId && selectedPacks && !selectedPacks.has(s.packId)) return false;
-    return true;
-  });
   if (activeSteps.length === 0) return failure('invalid');
 
   for (const [idx, step] of activeSteps.entries()) {
@@ -1133,7 +1177,7 @@ export async function runWorkflow(
       // from the server-side original when the job is prepared. No step template, no team guides, no enhancer.
       const title = viewer.locale === 'en' ? (workflow.titleEn ?? workflow.title) : workflow.title;
       const visibleLine = (subject ? `${title} · ${subject}` : title).slice(0, Math.min(200, STUDIO_LIMITS.promptMax)).trim();
-      const presetReqId = `${v.requestId}_s${idx + 1}_${step.id}`.replace(/[^A-Za-z0-9_-]/g, '_').slice(0, 80);
+      const presetReqId = stepRequestId(v.requestId, idx + 1, step.id);
       const created = await createStudioJob(
         deps,
         viewer,

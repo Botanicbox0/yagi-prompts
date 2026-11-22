@@ -27,6 +27,7 @@ import {
   STARTER_WORKFLOWS,
   WORKFLOW_CATEGORIES,
   WorkflowRecipeSchema,
+  withoutStepPresets,
   type WorkflowCategory,
 } from '@/lib/brand-studio/workflows';
 
@@ -325,6 +326,8 @@ async function callMcpTool(
             ...(medium === 'video' ? { seconds: typeof s.seconds === 'number' ? s.seconds : 5, audio: 'ambient' as const } : { count: 1 }),
             promptTemplate: typeof s.promptTemplate === 'string' && s.promptTemplate.trim() ? s.promptTemplate.trim() : '{prompt}',
             useReferenceSlots: ['image1'],
+            // Passed on, never dropped quietly: the schema or `createOrgWorkflow` answers a step `preset` with `invalid`.
+            ...('preset' in s ? { preset: s.preset } : {}),
           };
         });
         const parsedRecipe = WorkflowRecipeSchema.safeParse({
@@ -681,7 +684,8 @@ async function handleSingleRpc(
               {
                 uri,
                 mimeType: 'application/json',
-                text: JSON.stringify(wf, null, 2),
+                // Everything the hub knows except a step's `preset` (which server-side text a starter sends).
+                text: JSON.stringify({ ...wf, recipe: withoutStepPresets(wf.recipe) }, null, 2),
               },
             ],
           },

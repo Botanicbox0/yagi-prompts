@@ -11,6 +11,7 @@
  * the three words `the charcoal t-shirt` became `{{IMAGE1_WARDROBE}}`, so the sentence names what the person
  * in Image 1 actually wears. With `image1Wardrobe: 'the charcoal t-shirt'` the sentence is the original.
  */
+import 'server-only';
 
 export const VIDEO_CHARACTER_SHEET_PRESET_ID = 'video-character-sheet';
 
@@ -125,13 +126,64 @@ const MEDIA_MENTION = /(?:image|img|figure|video|audio|panel|이미지|사진|�
 const URL_MENTION = /https?:\/\//i;
 const INSTRUCTION_LIKE = /\b(?:ignore|disregard|instructions?|system prompt)\b/i;
 
+/*
+ * Text inside the photographs (a sign, a caption, a sticker) is picture content, never an instruction. A value is a
+ * list of noun phrases, so a piece of it that reads as a command is refused (the value falls back on its own).
+ */
+
+/** Verbs that almost never start a garment noun phrase: a piece starting with one is a command. */
+export const SHEET_COMMAND_VERBS = ['add', 'write', 'replace', 'render', 'include', 'remove', 'insert', 'generate', 'create', 'delete', 'erase', 'display', 'type'] as const;
+/**
+ * Verbs that also start real garment phrases ("change purse", "print scarf", "set of rings", "overlay skirt",
+ * "draw cord waistband"): a command only when what follows says so (see `readsAsCommand`). `overlay` and `draw`
+ * sit here rather than with the verbs above because "overlay skirt" and "draw cord" are garment words.
+ */
+export const SHEET_AMBIGUOUS_VERBS = ['change', 'show', 'use', 'make', 'put', 'place', 'print', 'paint', 'set', 'cover', 'turn', 'apply', 'swap', 'label', 'overlay', 'draw'] as const;
+/** After an ambiguous verb, a determiner or pronoun, or a word about lettering or the scene, makes it a command. */
+const COMMAND_OBJECTS = new Set([
+  'the', 'a', 'an', 'all', 'any', 'every', 'this', 'that', 'these', 'those', 'it', 'its', 'them', 'your',
+  'text', 'word', 'words', 'letter', 'letters', 'caption', 'slogan', 'logo', 'watermark', 'title', 'background', 'backdrop', 'sheet', 'panel',
+]);
+/** Words after which a new piece starts ("navy coat and then add …", "please render …"). */
+const PIECE_STARTERS = new Set(['please', 'then', 'also', 'and', 'but']);
+const COMMAND_VERB = new RegExp(`^[^\\p{L}\\p{N}]*(?:${SHEET_COMMAND_VERBS.join('|')})\\s`, 'iu');
+const AMBIGUOUS_VERB = new RegExp(`^[^\\p{L}\\p{N}]*(?:${SHEET_AMBIGUOUS_VERBS.join('|')})\\s`, 'iu');
+const QUOTED = /["“”„‟«»「」『』]|‘[^’]*’|(?:^|\s)'[^']+'(?=\s|$)/u;
+const ONTO_THE = /\s(?:on|onto|across|over|into)\s+the\s/i;
+const bareWord = (token: string): string => token.toLowerCase().replace(/^[^\p{L}\p{N}]+|[^\p{L}\p{N}]+$/gu, '');
+
+/** One piece (from its first word on) read as a command. */
+function pieceIsCommand(piece: string): boolean {
+  if (COMMAND_VERB.test(piece)) return true;
+  if (!AMBIGUOUS_VERB.test(piece)) return false;
+  const next = bareWord(piece.trim().split(/\s+/)[1] ?? '');
+  return COMMAND_OBJECTS.has(next) || QUOTED.test(piece) || ONTO_THE.test(` ${piece} `);
+}
+
+/**
+ * True when any piece of the value reads as a command: the value is cut at `,` `;` and sentence ends, and a new
+ * piece also starts after `please`, `then`, `also`, `and`, `but`. A hyphenated or longer word ("draw-string",
+ * "added", "typewriter") is not the verb. A quoted word on its own is fine (a garment's print is part of it).
+ */
+export function readsAsCommand(value: string): boolean {
+  for (const segment of value.split(/[,;]|[.!?](?=\s|$)/)) {
+    const words = segment.trim().split(/\s+/).filter(Boolean);
+    for (let start = 0; start < words.length; start += 1) {
+      if (start > 0 && !PIECE_STARTERS.has(bareWord(words[start - 1]!))) continue;
+      if (pieceIsCommand(words.slice(start).join(' '))) return true;
+    }
+  }
+  return false;
+}
+
 /** The template supplies the punctuation after each value. */
 const stripTail = (s: string): string => s.replace(/[\s.,;:]+$/u, '').trim();
 
 /**
  * One value as it may enter the text: a single clean line, or null (the caller falls back). Whitespace and line
  * breaks collapse to single spaces; control and format characters, braces and backticks go; trailing `. , ; :`
- * go. Refused: a non-string, an empty value, a numbered media or panel mention, a link, instruction-like words.
+ * go. Refused: a non-string, an empty value, a numbered media or panel mention, a link, instruction-like words,
+ * a piece that reads as a command (`readsAsCommand`).
  * A value over its maximum is cut at the last comma or space at or before the maximum, never inside a word.
  */
 export function sanitizeSheetVar(key: keyof SheetVars, raw: unknown): string | null {
@@ -145,6 +197,7 @@ export function sanitizeSheetVar(key: keyof SheetVars, raw: unknown): string | n
   value = stripTail(value);
   if (!value) return null;
   if (MEDIA_MENTION.test(value) || URL_MENTION.test(value) || INSTRUCTION_LIKE.test(value)) return null;
+  if (readsAsCommand(value)) return null;
   const max = SHEET_VAR_MAX[key];
   if (value.length > max) {
     const head = value.slice(0, max + 1);
