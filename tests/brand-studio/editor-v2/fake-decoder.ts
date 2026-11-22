@@ -41,11 +41,15 @@ export class FakeDecoder {
   static drop = new Set<number>();
   /** The most chunks ever waiting in any decoder's queue. */
   static mostQueued = 0;
+  /** Flushes rejected by a reset or close (spec I, G5: the real decoder rejects them with an AbortError). */
+  static abortedFlushes = 0;
   state: 'unconfigured' | 'configured' | 'closed' = 'unconfigured';
   decoded: number[] = [];
   private queue: number[] = [];
   private buffer: number[] = [];
-  private flushing: Array<() => void> = [];
+  private flushing: Array<{ resolve: () => void; reject: (error: unknown) => void }> = [];
+  /** Flushes whose work is done and whose promise settles in the next task. */
+  private settling: Array<{ resolve: () => void; reject: (error: unknown) => void }> = [];
   private listeners: Array<() => void> = [];
   /** Bumped by reset and close: work scheduled before belongs to an earlier configuration. */
   private generation = 0;
@@ -72,17 +76,24 @@ export class FakeDecoder {
   }
   flush(): Promise<void> {
     if (FakeDecoder.mode === 'never') return new Promise(() => undefined);
-    return new Promise((resolve) => {
-      this.flushing.push(resolve);
+    return new Promise((resolve, reject) => {
+      this.flushing.push({ resolve, reject });
       this.work();
     });
   }
+  /** As the real one: queued work goes, and every flush not yet settled is rejected with an AbortError. */
   reset() {
     this.generation += 1;
     this.queue = [];
     this.buffer = [];
+    const pending = [...this.flushing, ...this.settling];
     this.flushing = [];
+    this.settling = [];
     this.working = false;
+    for (const flush of pending) {
+      FakeDecoder.abortedFlushes += 1;
+      flush.reject(new DOMException('Aborted due to reset.', 'AbortError'));
+    }
   }
   close() {
     this.reset();
@@ -118,8 +129,11 @@ export class FakeDecoder {
       if (this.flushing.length > 0) {
         for (const left of this.buffer.splice(0)) this.emit(left);
         const settle = this.flushing.splice(0);
+        this.settling.push(...settle);
         setTimeout(() => {
-          if (generation === this.generation) for (const resolve of settle) resolve();
+          if (generation !== this.generation) return;
+          this.settling = this.settling.filter((flush) => !settle.includes(flush));
+          for (const flush of settle) flush.resolve();
         }, 0);
       }
     }, 0);
@@ -189,6 +203,7 @@ export function useFakeDecoder() {
     FakeDecoder.reorder = 0;
     FakeDecoder.drop = new Set();
     FakeDecoder.mostQueued = 0;
+    FakeDecoder.abortedFlushes = 0;
     vi.stubGlobal('VideoDecoder', FakeDecoder);
     vi.stubGlobal(
       'EncodedVideoChunk',

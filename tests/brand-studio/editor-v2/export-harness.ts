@@ -32,6 +32,8 @@ export interface HarnessOptions {
   reclaimVideoAfter?: number[];
   /** The k-th sound encoder made is taken back after this many blocks; missing: never. */
   reclaimAudioAfter?: number[];
+  /** The bytes a `GET` answers per address (the sound read). Default 100 zero bytes. */
+  getBody?: (url: string) => Uint8Array;
 }
 
 export const made = { videoEncoders: 0, audioEncoders: 0, videoFrames: 0, audioData: 0, factsReads: new Map<string, number>(), heads: [] as string[] };
@@ -194,7 +196,9 @@ class FakeOfflineAudioContext {
     readonly length: number,
     readonly sampleRate: number,
   ) {}
-  decodeAudioData(): Promise<AudioBuffer> {
+  /** As the browser's: the bytes are handed over (the buffer is detached), and these ones are not sound. */
+  decodeAudioData(bytes: ArrayBuffer): Promise<AudioBuffer> {
+    structuredClone(bytes, { transfer: [bytes] });
     return Promise.reject(new Error('not sound'));
   }
   createBufferSource() {
@@ -319,7 +323,8 @@ export async function loadExport(options: HarnessOptions) {
       if (length === 'never') return new Promise(() => undefined);
       return new Response(null, { status: 200, headers: length === null ? {} : { 'content-length': String(length) } });
     }
-    return new Response(new Uint8Array(100), { status: 200, headers: { 'content-length': '100' } });
+    const body = options.getBody ? options.getBody(plain) : new Uint8Array(100);
+    return new Response(body.slice().buffer as ArrayBuffer, { status: 200, headers: { 'content-length': String(body.length) } });
   });
   return import('@/components/brand-studio/editor-v2/export-film');
 }
