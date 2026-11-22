@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { timingOfFile } from '@/lib/brand-studio/editor-v2/container';
-import { av1Codec, avcCodec, gatherIndexBoxes, hevcCodec, readSampleEntry, readSampleIndex, rotationOf, spsChroma, stampUs, vp9Codec, type IndexBoxes } from '@/lib/brand-studio/editor-v2/sample-index';
+import { av1Codec, avcCodec, gatherIndexBoxes, hevcCodec, readSampleEntry, readSampleIndex, readSps, rotationOf, spsChroma, stampUs, vp9Codec, type IndexBoxes } from '@/lib/brand-studio/editor-v2/sample-index';
 import {
   IDENTITY,
   NON_SYNC,
@@ -483,5 +483,86 @@ describe('spec G, B4–B6: fragments read by their own rules', () => {
     // One entry is still read.
     const single = concat(ftyp('iso5'), moov({ tracks: [{ handler: 'vide', timescale: 12288, durations: [], entry }], fragmented: { defaultDuration: { 1: 512 } } }));
     expect((await indexOf(concat(single, fragment(size + 8), mdat(1200)))).ok).toBe(true);
+  });
+});
+
+/**
+ * Spec I, G6: interlaced H.264 was never measured on the decoder path, so it is read: `frame_mbs_only_flag` from
+ * the first sequence parameter set in `avcC` (the walk passes chroma_format_idc, the bit depths, the scaling lists,
+ * log2_max_frame_num, the picture order count fields, max_num_ref_frames, the gaps flag and the two size fields).
+ * The ffmpeg bytes: `ffmpeg -f lavfi -i testsrc2=size=320x240:rate=25:duration=0.4 -c:v libx264 -pix_fmt yuv420p
+ * -profile:v <main|high|baseline> -bf <0|2> [-flags +ildct+ilme -x264opts interlaced=1]`, the SPS taken from the
+ * file's avcC (ffprobe field_order: progressive / tt). x264 writes `cqm=jvt` scaling lists into the PPS, not the
+ * SPS, so the SPS with scaling lists and the picture order count type 1 are made by hand (checked with an
+ * independent walk, scratch `fixes3/sps_parse.py`).
+ */
+describe('spec I, G6: progressive or interlaced, from the SPS', () => {
+  const hex = (value: string) => Uint8Array.from(value.match(/../g)!.map((b) => parseInt(b, 16)));
+  const FFMPEG: Array<[string, string, 0 | 1]> = [
+    ['Main progressive', '674d400dd90141fb011000000300100000030320f142a480', 1],
+    ['Main interlaced', '674d4015f202821f97011000000300100000030321f142a480', 0],
+    ['High progressive', '6764000dacb20283f60220000003002000000641e28549', 1],
+    ['High interlaced', '67640015ace405043f2e0220000003002000000643e28549', 0],
+    ['High progressive, B-frames (picture order count type 0)', '6764000dacd94141fb011000000300100000030320f1429960', 1],
+    ['High interlaced, B-frames', '67640015acd941410fcb808800000300080000030190f8a14cb0', 0],
+    ['Constrained Baseline progressive', '6742c00dd90141fb011000000300100000030320f142a480', 1],
+  ];
+  const BY_HAND: Array<[string, string, 0 | 1]> = [
+    ['High with scaling lists (4x4, a default one, 8x8), progressive', '67640028ad98c6318c6318c6318c6342214d34d34d34d34d34d34d34d34d34d34d34d34d34d34d34d36ca03c011380', 1],
+    ['High with scaling lists, interlaced', '67640028ad98c6318c6318c6318c6342214d34d34d34d34d34d34d34d34d34d34d34d34d34d34d34d36ca03c0226', 0],
+    ['Main, picture order count type 1, interlaced', '674d0028d0a88990a03c0226', 0],
+    ['Main, picture order count type 1, progressive', '674d0028d0a88990a03c011380', 1],
+  ];
+
+  for (const [name, bytes, flag] of [...FFMPEG, ...BY_HAND]) {
+    it(`${name}: frame_mbs_only_flag ${flag}`, () => {
+      expect(readSps(hex(bytes))).toEqual({ chroma: 1, frameMbsOnly: flag });
+    });
+  }
+
+  it('a truncated SPS is not read: cut short of the flag it answers null, never a wrong flag', () => {
+    for (const [, bytes, flag] of [...FFMPEG, ...BY_HAND]) {
+      const whole = hex(bytes);
+      let first: number | null = null;
+      for (let length = 1; length <= whole.length; length += 1) {
+        const read = readSps(whole.subarray(0, length)).frameMbsOnly;
+        expect(read === null || read === flag, `${bytes} cut at ${length}`).toBe(true);
+        if (read !== null && first === null) first = length;
+      }
+      // The flag comes after the sizes: no SPS of these answers within its first six bytes.
+      expect(first, bytes).toBeGreaterThan(6);
+      for (let length = 1; length < first!; length += 1) expect(readSps(whole.subarray(0, length)).frameMbsOnly).toBeNull();
+    }
+  });
+
+  it('an odd SPS is not read: chroma_format_idc past 3, a number of more than 31 leading zeros', () => {
+    // High, sps_id 0, chroma_format_idc 4 (ue 00101).
+    expect(readSps(Uint8Array.of(0x67, 100, 0, 40, 0b1_00101_00, 0xff, 0xff)).frameMbsOnly).toBeNull();
+    expect(readSps(Uint8Array.of(0x67, 77, 0, 40, 0, 0, 0, 0, 0, 0x80)).frameMbsOnly).toBeNull();
+  });
+
+  const avcCWith = (sps: Uint8Array | null, profile = sps ? sps[1]! : 77) =>
+    box('avcC', Uint8Array.of(1, profile, 0, 40, 0xff, sps ? 0xe1 : 0xe0), ...(sps ? [Uint8Array.of(0, sps.length), sps] : []), Uint8Array.of(1, 0, 2, 0x68, 0xce));
+  const entry = (type: string, record: Uint8Array) => readSampleEntry(concat(Uint8Array.of(0, 0, 0, 0), u32(1), visualEntry(type, 320, 240, record)));
+
+  it('the sample entry carries it: progressive true / false from the SPS; avc3 with no SPS in the record: not read', () => {
+    const progressive = entry('avc1', avcCWith(hex(FFMPEG[0]![1])));
+    expect(progressive.ok && progressive.config.progressive).toBe(true);
+    const interlaced = entry('avc1', avcCWith(hex(FFMPEG[1]![1])));
+    expect(interlaced.ok && interlaced.config.progressive).toBe(false);
+    const inBand = entry('avc3', avcCWith(null));
+    expect(inBand.ok && inBand.config.progressive).toBeNull();
+  });
+
+  it('HEVC: interlaced and not progressive (general_progressive_source_flag 0, general_interlaced_source_flag 1) is false; anything else true', () => {
+    const hevc = (first: number) => entry('hvc1', hvcC(0x01, 0x60000000, [first, 0, 0, 0, 0, 0], 93));
+    const value = (first: number) => {
+      const read = hevc(first);
+      return read.ok ? read.config.progressive : 'refused';
+    };
+    expect(value(0b0100_0000)).toBe(false);
+    expect(value(0b1000_0000)).toBe(true);
+    expect(value(0b1100_0000)).toBe(true);
+    expect(value(0b0000_0000)).toBe(true);
   });
 });

@@ -325,16 +325,19 @@ export function colourAdmitted(config: {
   bitDepth: number | null;
   chroma: number | null;
   constraintFlags?: number | null;
+  progressive: boolean | null;
   sdr: boolean;
   colour: { primaries: number; transfer: number; matrix: number; fullRange: boolean } | null;
 }): boolean {
   if (!config.sdr || config.chroma !== 1) return false;
   if (config.entry === 'avc1' || config.entry === 'avc3') {
-    if (config.bitDepth !== 8) return false;
+    // Interlaced H.264 was never measured: only an SPS read as frames is taken (spec I, G6).
+    if (config.bitDepth !== 8 || config.progressive !== true) return false;
     if (config.profile === 66) return ((config.constraintFlags ?? 0) & 0x40) !== 0;
     return config.profile === 77 || config.profile === 100;
   }
   if (config.entry === 'hvc1' || config.entry === 'hev1') {
+    if (config.progressive === false) return false;
     if (config.profile === 1) return config.bitDepth === 8;
     const bt709 = !!config.colour && config.colour.primaries === 1 && config.colour.transfer === 1 && config.colour.matrix === 1 && !config.colour.fullRange;
     return config.profile === 2 && config.bitDepth === 10 && bt709;

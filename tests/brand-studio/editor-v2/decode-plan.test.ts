@@ -270,8 +270,8 @@ describe('which path, and what the sheet says', () => {
 });
 
 describe('spec G, A0: the footage whose colour the decoder path was measured on, and only that, goes there', () => {
-  const avc = { entry: 'avc1', profile: 100, chroma: 1, bitDepth: 8, sdr: true, colour: null } as const;
-  const main10 = { entry: 'hvc1', profile: 2, chroma: 1, bitDepth: 10, sdr: true, colour: { primaries: 1, transfer: 1, matrix: 1, fullRange: false } } as const;
+  const avc = { entry: 'avc1', profile: 100, chroma: 1, bitDepth: 8, progressive: true, sdr: true, colour: null } as const;
+  const main10 = { entry: 'hvc1', profile: 2, chroma: 1, bitDepth: 10, progressive: true, sdr: true, colour: { primaries: 1, transfer: 1, matrix: 1, fullRange: false } } as const;
 
   it('8-bit that says nothing or says SDR: as before', () => {
     expect(colourAdmitted(avc)).toBe(true);
@@ -303,9 +303,27 @@ describe('spec G, A0: the footage whose colour the decoder path was measured on,
   });
 });
 
+describe('spec I, G6: what was not measured is seeked: interlaced, or not known to be progressive', () => {
+  const avc = { entry: 'avc1', profile: 100, chroma: 1, constraintFlags: 0, bitDepth: 8, progressive: true, sdr: true, colour: null } as const;
+  it('H.264 is taken only when the SPS was read and says frames (frame_mbs_only_flag 1)', () => {
+    expect(colourAdmitted(avc)).toBe(true);
+    expect(colourAdmitted({ ...avc, progressive: false })).toBe(false);
+    expect(colourAdmitted({ ...avc, progressive: null })).toBe(false);
+    // avc3 Baseline / Main with no SPS in the record: 4:2:0 by the profile, but interlace cannot be told.
+    expect(colourAdmitted({ ...avc, entry: 'avc3', profile: 77, progressive: null })).toBe(false);
+    expect(colourAdmitted({ ...avc, entry: 'avc3', profile: 77 })).toBe(true);
+  });
+  it('HEVC is seeked only when it says interlaced and not progressive; the measured Main and Main 10 stay', () => {
+    const hevc = { ...avc, entry: 'hvc1', profile: 1 } as const;
+    expect(colourAdmitted(hevc)).toBe(true);
+    expect(colourAdmitted({ ...hevc, progressive: false })).toBe(false);
+    expect(colourAdmitted({ ...hevc, profile: 2, bitDepth: 10, colour: { primaries: 1, transfer: 1, matrix: 1, fullRange: false } })).toBe(true);
+  });
+});
+
 describe('spec H round 2: 8-bit full range is taken where it was measured equal', () => {
   const full = { primaries: 1, transfer: 1, matrix: 1, fullRange: true };
-  const avc = { entry: 'avc1', profile: 100, chroma: 1, constraintFlags: 0, bitDepth: 8, sdr: true, colour: full } as const;
+  const avc = { entry: 'avc1', profile: 100, chroma: 1, constraintFlags: 0, bitDepth: 8, progressive: true, sdr: true, colour: full } as const;
 
   it('H.264 Constrained Baseline, Main and High, HEVC Main, with the box saying full range (1080 and 540 rows, 0 on every patch)', () => {
     expect(colourAdmitted({ ...avc, profile: 66, constraintFlags: 0xc0 })).toBe(true);
@@ -322,8 +340,8 @@ describe('spec H round 2: 8-bit full range is taken where it was measured equal'
 });
 
 describe('spec H, F7: the gate says exactly what was measured', () => {
-  const avc = { entry: 'avc1', profile: 100, chroma: 1, constraintFlags: 0, bitDepth: 8, sdr: true, colour: null } as const;
-  const hevc = { entry: 'hvc1', profile: 1, chroma: 1, bitDepth: 8, sdr: true, colour: null } as const;
+  const avc = { entry: 'avc1', profile: 100, chroma: 1, constraintFlags: 0, bitDepth: 8, progressive: true, sdr: true, colour: null } as const;
+  const hevc = { entry: 'hvc1', profile: 1, chroma: 1, bitDepth: 8, progressive: true, sdr: true, colour: null } as const;
 
   it('H.264 8-bit 4:2:0: Constrained Baseline (66 + constraint_set1), Main (77) and High (100) only; not Extended (88, never measured), not High 10/4:2:2/4:4:4', () => {
     expect(colourAdmitted({ ...avc, profile: 66, constraintFlags: 0xc0 })).toBe(true);

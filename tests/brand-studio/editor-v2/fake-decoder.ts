@@ -155,7 +155,7 @@ export function makeIndex(count: number, gop = count, bframes = false): VideoInd
   }
   const pictures = Array.from({ length: count }, (_, i) => i).sort((a, b) => cts[a]! - cts[b]!);
   return {
-    config: { entry: 'avc1', codec: 'avc1.64001e', description: null, codedWidth: 64, codedHeight: 36, pixelAspect: [1, 1], colour: null, profile: 100, bitDepth: 8, chroma: 1, constraintFlags: 0, sdr: true },
+    config: { entry: 'avc1', codec: 'avc1.64001e', description: null, codedWidth: 64, codedHeight: 36, pixelAspect: [1, 1], colour: null, profile: 100, bitDepth: 8, chroma: 1, constraintFlags: 0, progressive: true, sdr: true },
     rotation: 0,
     timescale: TS,
     offsets: Array.from({ length: count }, (_, i) => i * 10),
