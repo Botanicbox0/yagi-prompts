@@ -192,3 +192,68 @@ describe('spec G, B1: a run read ends on cancel, on a stall and after its total 
     expect(totalLimitMs(size)).toBe(45_000 + 256_000);
   });
 });
+
+/**
+ * Spec I, check: a server that ignores Range sends the whole file, read once and kept. When that one read ends
+ * by abort (the session let go: suspend, group change, reclaim) or by time (a stall, the total), it is forgotten
+ * and the next read asks again; before, the rejected read stayed and every later read of the source failed. A
+ * file too large to hold stays the answer.
+ */
+describe('a whole-file read that did not finish', () => {
+  const withLength = (name: string) => (name === 'content-length' ? String(FILE.length) : null);
+  /** The first answer sends a little of the whole file and then nothing; later answers are the whole file. */
+  function hangsFirst() {
+    let calls = 0;
+    const request = async (start: number, end: number): Promise<RangeAnswer> => {
+      calls += 1;
+      if (calls === 1) {
+        const body = new ReadableStream<Uint8Array>({ start: (controller) => controller.enqueue(FILE.slice(0, 1000)) });
+        return { status: 200, body, arrayBuffer: async () => new ArrayBuffer(0), headers: { get: withLength } };
+      }
+      return server(false)(start, end);
+    };
+    return { request, calls: () => calls };
+  }
+
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  it('aborted: the next read asks again and gets the file', async () => {
+    const { request, calls } = hangsFirst();
+    const reader = sampleBytes(request, 1 << 20);
+    const letGo = new AbortController();
+    const first = reader.read({ start: 0, end: 10 }, letGo.signal).catch((error: unknown) => error);
+    await new Promise((resolve) => setTimeout(resolve, 10));
+    letGo.abort();
+    expect(await first).toBeInstanceOf(ReadCancelled);
+    expect(await reader.read({ start: 100, end: 400 })).toEqual(FILE.slice(100, 400));
+    expect(calls()).toBe(2);
+  });
+
+  it('timed out (no byte for 15 s): the next read asks again and gets the file', async () => {
+    vi.useFakeTimers();
+    const { request, calls } = hangsFirst();
+    const reader = sampleBytes(request, 1 << 20);
+    const first = reader.read({ start: 0, end: 10 }).catch((error: unknown) => error);
+    await vi.advanceTimersByTimeAsync(16_000);
+    expect(await first).toBeInstanceOf(ReadTimedOut);
+    const again = reader.read({ start: 100, end: 400 });
+    await vi.advanceTimersByTimeAsync(10);
+    expect(await again).toEqual(FILE.slice(100, 400));
+    expect(calls()).toBe(2);
+  });
+
+  it('too large to hold: that stays the answer, no second request', async () => {
+    let calls = 0;
+    const tooLarge = async (): Promise<RangeAnswer> => {
+      calls += 1;
+      const body = new ReadableStream<Uint8Array>({ pull: (controller) => controller.enqueue(new Uint8Array(4000)) });
+      return { status: 200, body, arrayBuffer: async () => new ArrayBuffer(0), headers: { get: () => null } };
+    };
+    const reader = sampleBytes(tooLarge, 10_000);
+    await expect(reader.read({ start: 0, end: 10 })).rejects.toBeInstanceOf(WholeFileTooLarge);
+    await expect(reader.read({ start: 0, end: 10 })).rejects.toBeInstanceOf(WholeFileTooLarge);
+    expect(calls).toBe(1);
+  });
+});
