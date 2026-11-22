@@ -156,11 +156,12 @@ PATCHES = [('red', 'FF0000', 20, 30), ('green', '00FF00', 140, 30), ('blue', '00
            ('black', '000000', 20, 150), ('grey-25', '404040', 140, 150), ('grey-50', '808080', 260, 150), ('grey-75', 'C0C0C0', 380, 150), ('white', 'FFFFFF', 500, 150)]
 
 
-def patched(path, width, height, ten_bit, tagged, frames=120, hevc=None, profile=None, full=False):
+def patched(path, width, height, ten_bit, tagged, frames=120, hevc=None, profile=None, full=False, interlaced=False):
     """Patches and frame numbers, made in RGB and converted to limited range (full range with `full`, stated in
     the stream); HEVC Main 10 (`ten_bit`), else H.264 High 8-bit (or HEVC Main 8-bit with `hevc`; another H.264
     `profile`: baseline, main). `tagged`: True or '709' = BT.709 matrix, colr nclx 1/1/1 and the same in the stream;
-    '601' = BT.601 matrix and SMPTE 170M in the stream and the box; False = BT.709 matrix, nothing said."""
+    '601' = BT.601 matrix and SMPTE 170M in the stream and the box; False = BT.709 matrix, nothing said.
+    `interlaced`: H.264 coded as fields (x264 interlaced, frame_mbs_only_flag 0)."""
     if os.path.exists(path):
         return path
     hevc = ten_bit if hevc is None else hevc
@@ -177,7 +178,7 @@ def patched(path, width, height, ten_bit, tagged, frames=120, hevc=None, profile
     pix = 'yuv420p10le' if ten_bit else 'yuv420p'
     vf = f'format=rgb24,{boxes},{squares(s)},scale=out_color_matrix={matrix}:out_range={rng},format={pix},{tags}'
     x265 = 'log-level=error:bframes=0:keyint=24' + (':range=full' if full else '')
-    codec = ['-c:v', 'libx265', '-tag:v', 'hvc1', '-x265-params', x265] if hevc else ['-c:v', 'libx264', '-bf', '0', '-g', '24', *(['-profile:v', profile] if profile else [])]
+    codec = ['-c:v', 'libx265', '-tag:v', 'hvc1', '-x265-params', x265] if hevc else ['-c:v', 'libx264', '-bf', '0', '-g', '24', *(['-profile:v', profile] if profile else []), *(['-flags', '+ildct+ilme', '-x264opts', 'interlaced=1'] if interlaced else [])]
     run(['ffmpeg', '-v', 'error', '-y', '-f', 'lavfi', '-i', f'color=c=0x303030:s={width}x{height}:r=24', '-vf', vf, '-frames:v', str(frames), *codec, '-pix_fmt', pix, *(['-color_range', 'pc'] if full else []), path])
     return path
 
@@ -314,6 +315,8 @@ def colour_media(folder):
         files[f'h8-{rows}-sfull-nobox'] = (rebox(source, m(f'h8-{rows}-sfull-nobox.mp4'), 'none'), width, rows, 'bt709:pc')
         source = patched(m(f'h8-{rows}-s709.mp4'), width, rows, False, '709')
         files[f'h8-{rows}-slimited-bfull'] = (rebox(source, m(f'h8-{rows}-slimited-bfull.mp4'), '709full'), width, rows, 'bt709')
+    # Spec I, G6: interlaced H.264 (never measured on the decoder path): the gate must seek it, reason colour.
+    files['h8-1080-interlaced'] = (patched(m('h8-1080-interlaced.mp4'), 1920, 1080, False, True, interlaced=True), 1920, 1080, 'bt709')
     return files
 
 
@@ -829,6 +832,8 @@ def part_colour(page, context, ids):
             got = decode_numbers(o['file'], 1920, 1080, (0, 0, 1920, 1080)) if o['file'] else []
             wrong = [(i, n, e) for i, (n, e) in enumerate(zip(got, expected)) if n != e]
             check(f'colour {key} ({name} → {o["path"]}): every frame shows the picture it should', len(got) == 120 and not wrong, f'{len(got)} frames, {len(wrong)} wrong {wrong[:3]}')
+        if 'interlaced' in key:
+            check(f'colour {key}: interlaced H.264 is seeked by the gate (reason colour)', auto['path'] == 'seek' and reason == 'colour', f'{auto["path"]} ({reason})')
         row = {'key': key, 'box': colr_of(path), 'auto_path': auto['path'], 'reason': reason}
         if auto['file'] and seek['file']:
             mad, bias, frames = pixel_difference(auto['file'], seek['file'], 1920, 1080)

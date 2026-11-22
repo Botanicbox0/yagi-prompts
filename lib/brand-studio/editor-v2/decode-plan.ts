@@ -300,6 +300,9 @@ export function decoderColourSpace(config: { codedHeight: number; colour: { prim
  *   Constrained Baseline, Main and HEVC Main with full range in the stream and the box, H.264 High with full
  *   range in the stream only (no box: what phone recordings often are), and the box saying full over a
  *   limited stream. All equal on both paths;
+ * - the pictures stored as frames (sample-index.ts `progressive`; spec I, G6): every measured file was. H.264:
+ *   the first SPS in `avcC` read and frame_mbs_only_flag 1 (no SPS in the record, as `avc3` may, or one that
+ *   cannot be read: seeked). HEVC: seeked only when `hvcC` says interlaced and not progressive;
  * - H.264, 8 bits: Constrained Baseline (profile_idc 66 with constraint_set1), Main (77) and High (100).
  *   Measured: High in spec F and G; Constrained Baseline and Main untagged and `colr`-only on 2026-11-22
  *   (spec H, F7). Not Extended (88) or Baseline without constraint_set1: never measured;
@@ -314,7 +317,8 @@ export function decoderColourSpace(config: { codedHeight: number; colour: { prim
  * over a full-range stream with no box, and full over a limited stream, its frames came out in the stream's
  * range (2026-11-22, round 2).
  *
- * Not taken: anything else, among it 10-bit footage whose container says nothing (the stream itself may say
+ * Not taken: anything else, among it interlaced H.264 and H.264 not known to be frames, HEVC stated as
+ * interlaced only, 10-bit footage whose container says nothing (the stream itself may say
  * HLG or PQ), 10-bit footage in full range or tagged BT.601, BT.2020 at any depth, PQ, HLG, an ICC profile,
  * H.264 High 10 / 4:2:2 / 4:4:4, HEVC Main 10 at 8 bits, HEVC range extensions, 12 bits, 4:2:2, 4:4:4 and
  * monochrome.
@@ -325,16 +329,19 @@ export function colourAdmitted(config: {
   bitDepth: number | null;
   chroma: number | null;
   constraintFlags?: number | null;
+  progressive: boolean | null;
   sdr: boolean;
   colour: { primaries: number; transfer: number; matrix: number; fullRange: boolean } | null;
 }): boolean {
   if (!config.sdr || config.chroma !== 1) return false;
   if (config.entry === 'avc1' || config.entry === 'avc3') {
-    if (config.bitDepth !== 8) return false;
+    // Interlaced H.264 was never measured: only an SPS read as frames is taken (spec I, G6).
+    if (config.bitDepth !== 8 || config.progressive !== true) return false;
     if (config.profile === 66) return ((config.constraintFlags ?? 0) & 0x40) !== 0;
     return config.profile === 77 || config.profile === 100;
   }
   if (config.entry === 'hvc1' || config.entry === 'hev1') {
+    if (config.progressive === false) return false;
     if (config.profile === 1) return config.bitDepth === 8;
     const bt709 = !!config.colour && config.colour.primaries === 1 && config.colour.transfer === 1 && config.colour.matrix === 1 && !config.colour.fullRange;
     return config.profile === 2 && config.bitDepth === 10 && bt709;

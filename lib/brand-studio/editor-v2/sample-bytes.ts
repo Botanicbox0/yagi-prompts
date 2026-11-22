@@ -120,13 +120,18 @@ export function sampleBytes(request: RangeFetch, wholeLimit = WHOLE_FILE_LIMIT, 
           mode = 'whole';
           // The whole file instead of the run: its length's time (stated, else the most it may be).
           watch.limitTotal(totalLimitMs(Number.isFinite(length) && length > 0 ? length : wholeLimit));
-          whole = readBody(answer, watch, wholeLimit, () => new WholeFileTooLarge(null)).then((bytes) => {
+          const reading = readBody(answer, watch, wholeLimit, () => new WholeFileTooLarge(null)).then((bytes) => {
             received += bytes.length;
             fileSize = bytes.length;
             return bytes;
           });
-          whole.catch(() => undefined);
-          return cut(await whole, run, 0);
+          whole = reading;
+          // A whole read that ended by abort (the session let go of it) or by time is forgotten: the next read asks
+          // again (spec I). A file too large to hold stays the answer.
+          reading.catch((error: unknown) => {
+            if (!(error instanceof WholeFileTooLarge) && whole === reading) whole = null;
+          });
+          return cut(await reading, run, 0);
         }
         void answer.body?.cancel().catch(() => undefined);
         throw new RangeRefused(answer.status);

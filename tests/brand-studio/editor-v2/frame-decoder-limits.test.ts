@@ -38,16 +38,22 @@ describe('cancelling ends a picture request at once, in every wait', () => {
     s.close();
   });
 
-  it('the export’s cancel reaches the byte reads', async () => {
-    const signals: Array<AbortSignal | undefined> = [];
-    const watching: SampleBytes = { read: (run, signal) => (signals.push(signal), bytesOk.read(run)), stats: bytesOk.stats };
-    const s = await session(makeIndex(12), watching);
+  it('the export’s cancel reaches the byte reads still under way (spec I, G4: a read that ended holds nothing)', async () => {
+    // Every sample its own run, 2 MB apart: the run after picture 3's is read ahead and never answered.
+    const index = makeIndex(12);
+    const spread = { ...index, offsets: index.offsets.map((_, i) => i * 2_000_000) };
+    const underWay: Array<AbortSignal | undefined> = [];
+    const watching: SampleBytes = {
+      read: (run, signal) => (run.start > 3 * 2_000_000 ? (underWay.push(signal), new Promise<Uint8Array>(() => undefined)) : bytesOk.read(run)),
+      stats: bytesOk.stats,
+    };
+    const s = await session(spread, watching);
     const controller = new AbortController();
-    await s.picture(0, [3], 3, controller.signal);
-    expect(signals.length).toBeGreaterThan(0);
-    expect(signals.some((signal) => signal?.aborted)).toBe(false);
+    await s.picture(0, [3, 4], 3, controller.signal);
+    expect(underWay.length).toBeGreaterThan(0);
+    expect(underWay.some((signal) => signal?.aborted)).toBe(false);
     controller.abort();
-    expect(signals.every((signal) => signal?.aborted)).toBe(true);
+    expect(underWay.every((signal) => signal?.aborted)).toBe(true);
     s.close();
   });
 });

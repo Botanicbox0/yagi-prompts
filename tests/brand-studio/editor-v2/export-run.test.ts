@@ -150,17 +150,37 @@ describe('spec H, F6: no restart is announced after a cancel', () => {
         throw new CodecReclaimed('video');
       },
       () => whenVisible(doc, controller.signal, () => new Cancelled()),
-      { onRestart: (n) => announced.push(n), aborted: () => controller.signal.aborted },
+      { onRestart: (n) => announced.push(n), aborted: () => controller.signal.aborted, cancelled: () => new Cancelled() },
     );
     await expect(outcome).rejects.toBeInstanceOf(Cancelled);
     expect(announced).toEqual([]);
   });
 });
 
+describe('spec I, G3: a cancel after the budget is spent is a cancel', () => {
+  it('three restarts used, then the person cancels and that attempt ends reclaimed: the export’s cancel, not "gave up"', async () => {
+    let cancelledNow = false;
+    const announced: Array<[string, number]> = [];
+    const restarting = restarter({
+      waitVisible: async () => undefined,
+      aborted: () => cancelledNow,
+      cancelled: () => new Cancelled(),
+      announce: (phase, n) => announced.push([phase, n]),
+    });
+    let video = 0;
+    await expect(restarting.run('video', async () => (++video <= MAX_RESTARTS ? Promise.reject(new CodecReclaimed('video')) : 'pictures'))).resolves.toBe('pictures');
+    expect(restarting.used).toBe(MAX_RESTARTS);
+    cancelledNow = true;
+    await expect(restarting.run('audio', async () => Promise.reject(new CodecReclaimed('audio')))).rejects.toBeInstanceOf(Cancelled);
+    expect(announced).toHaveLength(MAX_RESTARTS);
+    expect(restarting.used).toBe(MAX_RESTARTS);
+  });
+});
+
 describe('spec H, F4: the export’s restarter (what export-film.ts uses)', () => {
   it('one budget across the pictures and the sound; each restart announced with its part; used is the export’s count', async () => {
     const announced: Array<[string, number]> = [];
-    const restarting = restarter({ waitVisible: async () => undefined, aborted: () => false, announce: (phase, n) => announced.push([phase, n]) });
+    const restarting = restarter({ waitVisible: async () => undefined, aborted: () => false, cancelled: () => new Cancelled(), announce: (phase, n) => announced.push([phase, n]) });
     let video = 0;
     await expect(restarting.run('video', async () => (++video <= 2 ? Promise.reject(new CodecReclaimed('video')) : 'pictures'))).resolves.toBe('pictures');
     await expect(restarting.run('audio', async () => Promise.reject(new CodecReclaimed('audio')))).rejects.toMatchObject({ name: 'ReclaimedTooOften', reclaims: 4 });

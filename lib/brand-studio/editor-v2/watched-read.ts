@@ -39,6 +39,9 @@ export function totalLimitMs(bytes: number): number {
  */
 export const SHARED_WAIT_MS = 45_000;
 
+/** The longest delay a timer holds (2^31 − 1 ms, about 24.8 days); a longer one fires at once. */
+const MAX_TIMER_MS = 2 ** 31 - 1;
+
 /** The read stalled or took too long. */
 export class ReadTimedOut extends Error {
   readonly kind: 'stall' | 'total';
@@ -96,10 +99,13 @@ export function watchRead(limits: ReadLimits, signal?: AbortSignal): Watch {
   };
   const cancelled = () => end(new ReadCancelled());
   const started = Date.now();
-  const limitTotal = (totalMs: number) => {
+  const limitTotal = (asked: number) => {
+    // NaN or an infinite total takes the base limit; a total longer than a timer holds is held to that
+    // (spec I, G4): either would otherwise fire at once.
+    const totalMs = Number.isFinite(asked) ? asked : totalLimitMs(0);
     if (over || totalMs <= 0) return;
     if (total !== null) clearTimeout(total);
-    total = setTimeout(() => end(new ReadTimedOut('total', totalMs)), Math.max(0, totalMs - (Date.now() - started)));
+    total = setTimeout(() => end(new ReadTimedOut('total', totalMs)), Math.min(MAX_TIMER_MS, Math.max(0, totalMs - (Date.now() - started))));
   };
   const restartStall = () => {
     if (over || limits.stallMs <= 0) return;
@@ -124,8 +130,17 @@ export function watchRead(limits: ReadLimits, signal?: AbortSignal): Watch {
   };
 }
 
-/** A body read as a stream, the watch told of every piece; past `limit` bytes `tooLarge` is thrown and the body cancelled. */
-export async function readStream(body: ReadableStream<Uint8Array>, watch: Pick<Watch, 'alive' | 'guard'>, limit = Infinity, tooLarge: () => Error = () => new Error('too large')): Promise<Uint8Array> {
+/**
+ * A body read as a stream, the watch told of every piece; past `limit` bytes `tooLarge` is thrown and the body
+ * cancelled. `received` hears the running total after every piece (a total limit that grows with it, spec I G2).
+ */
+export async function readStream(
+  body: ReadableStream<Uint8Array>,
+  watch: Pick<Watch, 'alive' | 'guard'>,
+  limit = Infinity,
+  tooLarge: () => Error = () => new Error('too large'),
+  received?: (total: number) => void,
+): Promise<Uint8Array> {
   const reader = body.getReader();
   const pieces: Uint8Array[] = [];
   let total = 0;
@@ -137,6 +152,7 @@ export async function readStream(body: ReadableStream<Uint8Array>, watch: Pick<W
       watch.alive();
       total += value.length;
       if (total > limit) throw tooLarge();
+      received?.(total);
       pieces.push(value);
     }
   } catch (error) {
@@ -192,15 +208,26 @@ export function sharedWaits<T, U>(read: (key: string) => Promise<T>, signal: Abo
   };
 }
 
-/** A signal aborted when either is (the export's cancel, or the owner letting go of a read ahead). */
-export function eitherSignal(a: AbortSignal | undefined, b: AbortSignal): AbortSignal {
-  if (!a) return b;
+/**
+ * A signal aborted when either is (the export's cancel, or the owner letting go of a read ahead). `release()`
+ * takes its listeners off both when the read is over (spec I, G4): the export's signal lives through every read
+ * of the export and would otherwise keep one listener per read.
+ */
+export function eitherSignal(a: AbortSignal | undefined, b: AbortSignal): { signal: AbortSignal; release(): void } {
+  if (!a) return { signal: b, release: () => undefined };
   const both = new AbortController();
-  const abort = () => both.abort();
-  if (a.aborted || b.aborted) abort();
+  const release = () => {
+    a.removeEventListener('abort', abort);
+    b.removeEventListener('abort', abort);
+  };
+  function abort() {
+    release();
+    both.abort();
+  }
+  if (a.aborted || b.aborted) both.abort();
   else {
     a.addEventListener('abort', abort, { once: true });
     b.addEventListener('abort', abort, { once: true });
   }
-  return both.signal;
+  return { signal: both.signal, release };
 }

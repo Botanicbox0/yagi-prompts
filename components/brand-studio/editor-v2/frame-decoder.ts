@@ -338,9 +338,10 @@ export class PictureDecoder {
   private fetchRun(i: number): Promise<Uint8Array> {
     let pending = this.fetched.get(i);
     if (!pending) {
-      pending = this.bytes.read(this.runs[i]!, eitherSignal(this.signal, this.reading.signal));
-      // A read ahead that fails is reported when it is needed, not before.
-      pending.catch(() => undefined);
+      const either = eitherSignal(this.signal, this.reading.signal);
+      pending = this.bytes.read(this.runs[i]!, either.signal);
+      // A read ahead that fails is reported when it is needed, not before; either way its listeners go.
+      pending.then(either.release, either.release);
       this.fetched.set(i, pending);
     }
     return pending;

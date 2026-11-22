@@ -1,10 +1,9 @@
-import { readFileSync } from 'node:fs';
-import { join } from 'node:path';
-import { describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { SOUND_BYTES_LIMIT, soundBytesCheck, soundReads } from '@/lib/brand-studio/editor-v2/export-plan';
 import { soundTrackOf } from '@/lib/brand-studio/editor-v2/media-probe';
 import type { FrameClip, FrameSequence } from '@/lib/brand-studio/editor-v2/frames';
 import type { ComposerProject } from '@/lib/brand-studio/compose/timeline';
+import { clip as harnessClip, film, loadExport, made, settle, unloadExport } from './export-harness';
 
 /**
  * Review round 1, item 10: the export must not make a clip silent without a word, and must not let a
@@ -92,15 +91,35 @@ describe('the sources the export reads for sound, and their size', () => {
   });
 });
 
+/**
+ * Spec I, G5 (were source-text checks): the real export (./export-harness.ts) checks the sizes before anything
+ * is made, and looks at a file's bytes for a sound track before decoding hands them over.
+ */
 describe('the exporter uses them', () => {
-  const source = readFileSync(join(process.cwd(), 'components/brand-studio/editor-v2/export-film.ts'), 'utf8');
+  afterEach(() => unloadExport());
+  const URL_A = '/media/a.mp4';
 
-  it('checks the sizes before the first frame, and inspects the bytes before decoding them', () => {
-    const run = source.slice(source.indexOf('export async function exportFilm('));
-    expect(run.indexOf('soundBytesCheck(')).toBeGreaterThan(-1);
-    expect(run.indexOf('soundBytesCheck(')).toBeLessThan(run.indexOf("restarting.run('video'"));
-    const mix = source.slice(source.indexOf('async function mixSound('), source.indexOf('async function encodeAac('));
-    expect(mix.indexOf('soundTrackOf(')).toBeGreaterThan(-1);
-    expect(mix.indexOf('soundTrackOf(')).toBeLessThan(mix.indexOf('decodeAudioData('));
+  it('a sound source the server says is larger than the limit: the export stops (memory) before any encoder is made', async () => {
+    vi.useFakeTimers();
+    const { exportFilm } = await loadExport({ clips: { [URL_A]: { facts: { fps: 24, frames: 24 }, index: 'refused' } }, headLength: () => SOUND_BYTES_LIMIT + 1 });
+    const outcome = await settle(exportFilm({ sequence: film([harnessClip('a', URL_A, 12)]) }));
+    expect(outcome.error).toMatchObject({ reason: 'memory' });
+    expect(made.heads).toEqual([URL_A]);
+    expect(made.videoEncoders).toBe(0);
+    expect(made.audioEncoders).toBe(0);
+  });
+
+  it('the bytes are looked at before decoding takes them: no sound track is silent without a word; a sound track that cannot be decoded is named', async () => {
+    for (const [handlers, warned] of [
+      [['vide'], false],
+      [['vide', 'soun'], true],
+    ] as const) {
+      vi.useFakeTimers();
+      const { exportFilm } = await loadExport({ clips: { [URL_A]: { facts: { fps: 24, frames: 24 }, index: 'refused' } }, getBody: () => mp4(...handlers) });
+      const outcome = await settle(exportFilm({ sequence: film([harnessClip('a', URL_A, 12)]) }));
+      expect(outcome.error).toBeUndefined();
+      expect(outcome.value!.warnings.some((w) => w.kind === 'sound' && w.clip === 'a'), handlers.join('+')).toBe(warned);
+      unloadExport();
+    }
   });
 });

@@ -62,7 +62,7 @@ import { soundTrackOf } from '@/lib/brand-studio/editor-v2/media-probe';
 import { DEFAULT_REFRAME, type Reframe } from '@/lib/brand-studio/editor-v2/model';
 import { sampleBytes } from '@/lib/brand-studio/editor-v2/sample-bytes';
 import type { Rotation, VideoIndex } from '@/lib/brand-studio/editor-v2/sample-index';
-import { ReadCancelled, SHARED_WAIT_MS, STALL_MS, readStream, sharedWaits, totalLimitMs, waitShared, watchRead } from '@/lib/brand-studio/editor-v2/watched-read';
+import { ReadCancelled, SHARED_WAIT_MS, STALL_MS, readStream, sharedWaits, totalLimitMs, watchRead } from '@/lib/brand-studio/editor-v2/watched-read';
 import { CodecReclaimed, ReclaimedTooOften, isReclaim, restarter, whenVisible } from '@/lib/brand-studio/editor-v2/export-run';
 import { PicturePaths, type DecoderSession, type SourcePath } from '@/lib/brand-studio/editor-v2/picture-paths';
 import { encodeFromPaths, handOver, type PictureSource } from '@/lib/brand-studio/editor-v2/frame-loop';
@@ -300,7 +300,12 @@ function seekAndConfirm(
   });
 }
 
-async function openSource(url: string, fps: number, label: string, host: HTMLElement, signal?: AbortSignal): Promise<Source> {
+/**
+ * Opens a footage on the seek path. Its frame facts come from the export's own wait (`facts`, `exportWaits`):
+ * a file whose facts timed out when its path was chosen is not waited for again here, nor on a restart
+ * (spec I, G1); it is then shown without its own picture count.
+ */
+async function openSource(url: string, fps: number, label: string, host: HTMLElement, facts: ExportWaits['facts'], signal?: AbortSignal): Promise<Source> {
   const video = document.createElement('video');
   video.crossOrigin = 'anonymous';
   video.muted = true;
@@ -338,8 +343,8 @@ async function openSource(url: string, fps: number, label: string, host: HTMLEle
   // The first frame's presentation time: most files start at 0, some do not.
   const first = await seekAndConfirm(video, 0.5 / fps, () => true, signal);
   if (!first.ok || first.last === null) throw new ExportStop('frame', `first frame of ${label} could not be confirmed`, { frame: 0, clip: label });
-  const read = await waitShared(readFootage(url).catch(() => null), signal, SHARED_WAIT_MS, null, cancelled);
-  const frames = read?.answer.ok && read.answer.timing.video ? read.answer.timing.video.frames : null;
+  const read = await facts(url);
+  const frames = read && read !== 'timeout' && read.answer.ok && read.answer.timing.video ? read.answer.timing.video.frames : null;
   return { url, video, fps, firstSec: first.last, shown: 0, frames };
 }
 
@@ -581,14 +586,25 @@ export function scheduleCutSound(
   return placed;
 }
 
+/** How long the size request (`HEAD`) is waited for before the size counts as unknown (spec I, G2). */
+const HEAD_WAIT_MS = 10_000;
+
 /**
  * Reads one of the film's own media files, or asks only its size (`HEAD`). Any other address is refused
  * before a request is made. A whole read ends after 15 s without a byte or after its size's time at the
- * slowest connection given time for (watched-read.ts `totalLimitMs`; the sound limit when the server does not
- * say the size), failing as any unreadable sound source does (`ExportStop('sound')`); cancelling ends it as a
- * cancel, in the request and while the body comes (spec H, F5).
+ * slowest connection given time for (watched-read.ts `totalLimitMs`), failing as any unreadable sound source
+ * does (`ExportStop('sound')`); cancelling ends it as a cancel, in the request and while the body comes (spec H,
+ * F5). When the server does not state the length, the time grows with what has come (spec I, G2): 45 s + the
+ * bytes received ÷ 32 KiB/s, counted from the start of the read, so the connection must keep 32 KiB/s on average
+ * after the first 45 s. What the reads hold together may not pass `soundLimit` (the sound limit; tests give a
+ * smaller one): a file whose size was unknown to the weight check stops the export (`memory`) when it would.
+ *
+ * The size request gives up after 10 s without an answer: the size is then unknown, as for a server that does
+ * not answer `HEAD`. The weight check is a guard before the first frame, an unknown size is a case it already
+ * takes (it counts it as unknown and goes on), and the read itself is bounded as above.
  */
-export function mediaReader(allowed: ReadonlySet<string>, exportSignal?: AbortSignal) {
+export function mediaReader(allowed: ReadonlySet<string>, exportSignal?: AbortSignal, soundLimit = SOUND_BYTES_LIMIT) {
+  let held = 0;
   const request = async (url: string, method: 'GET' | 'HEAD', signal: AbortSignal | undefined = exportSignal): Promise<Response> => {
     if (!allowed.has(url)) throw new ExportStop('sound', `refused to read a file that is not part of the film: ${url}`);
     let response: Response;
@@ -614,8 +630,14 @@ export function mediaReader(allowed: ReadonlySet<string>, exportSignal?: AbortSi
         const response = await watch.guard(request(url, 'GET', watch.signal));
         watch.alive();
         const length = Number(response.headers.get('content-length'));
-        watch.limitTotal(totalLimitMs(Number.isFinite(length) && length > 0 ? length : SOUND_BYTES_LIMIT));
-        const bytes = response.body ? await readStream(response.body, watch) : new Uint8Array(await watch.guard(response.arrayBuffer()));
+        const stated = Number.isFinite(length) && length > 0;
+        watch.limitTotal(totalLimitMs(stated ? length : 0));
+        const room = soundLimit - held;
+        const tooMuch = () => new ExportStop('memory', `reading ${url} would pass the sound limit (${soundLimit} bytes)`, { bytes: held });
+        const grows = stated ? undefined : (received: number) => watch.limitTotal(totalLimitMs(received));
+        const bytes = response.body ? await readStream(response.body, watch, room, tooMuch, grows) : new Uint8Array(await watch.guard(response.arrayBuffer()));
+        if (bytes.length > room) throw tooMuch();
+        held += bytes.length;
         return bytes.buffer.byteLength === bytes.length ? (bytes.buffer as ArrayBuffer) : (bytes.slice().buffer as ArrayBuffer);
       } catch (error) {
         throw failed(url, error);
@@ -625,13 +647,16 @@ export function mediaReader(allowed: ReadonlySet<string>, exportSignal?: AbortSi
     },
     /** The file's length from its headers; `null` when the server does not say (or will not answer `HEAD`). */
     size: async (url: string): Promise<number | null> => {
+      const watch = watchRead({ stallMs: 0, totalMs: HEAD_WAIT_MS }, exportSignal);
       try {
-        const length = Number((await request(url, 'HEAD')).headers.get('content-length'));
+        const length = Number((await watch.guard(request(url, 'HEAD', watch.signal))).headers.get('content-length'));
         return Number.isFinite(length) && length > 0 ? length : null;
       } catch (error) {
-        if (exportSignal?.aborted) throw cancelled();
+        if (exportSignal?.aborted || error instanceof ReadCancelled) throw cancelled();
         if (error instanceof ExportStop && error.message.startsWith('refused')) throw error;
         return null;
+      } finally {
+        watch.done();
       }
     },
   };
@@ -975,12 +1000,13 @@ export async function exportFilm(options: ExportFilmOptions): Promise<ExportFilm
   const restarting = restarter({
     waitVisible: () => whenVisible(document, signal, cancelled),
     aborted: () => !!signal?.aborted,
+    cancelled,
     announce: (phase, count) => {
       restarts = count;
       report({ phase, done: 0, total: phase === 'video' ? frames : 1 });
     },
   });
-  const pass: VideoPass = { sequence, extras, reframe, framing, burnCaptions, override, signal, plan, choices, codec, width, height, fps, anchor, overlayImages, report };
+  const pass: VideoPass = { sequence, extras, reframe, framing, burnCaptions, override, signal, plan, choices, waits, codec, width, height, fps, anchor, overlayImages, report };
   const video = await restarting.run('video', () => videoPass(pass)).catch(givenUp);
 
   const { rendered, warnings } = await mixSound(sequence, extras, anchor, reader, signal, (done, total) => report({ phase: 'audio', done, total }), noSoundTrack);
@@ -1018,6 +1044,8 @@ interface VideoPass {
   signal: AbortSignal | undefined;
   plan: readonly PlannedFrame[];
   choices: ReadonlyMap<string, SourceChoice>;
+  /** The export's shared waits: a seeked footage's frame facts are taken from here (spec I, G1). */
+  waits: ExportWaits;
   codec: string;
   width: number;
   height: number;
@@ -1034,7 +1062,7 @@ interface VideoPass {
  * and before `encode()`, so no raw "closed codec" error escapes.
  */
 async function videoPass(pass: VideoPass): Promise<{ samples: EncodedVideoSample[]; avcConfig: Uint8Array | null; paths: SourcePath[]; filled: FilledCuts }> {
-  const { sequence, extras, reframe, framing, burnCaptions, override, signal, plan, choices, codec, width, height, fps, anchor, overlayImages, report } = pass;
+  const { sequence, extras, reframe, framing, burnCaptions, override, signal, plan, choices, waits, codec, width, height, fps, anchor, overlayImages, report } = pass;
   const frames = plan.length;
   const labels = new Map(sequence.clips.map((clip) => [clip.id, clip.label] as const));
   const indexOf = new Map(sequence.clips.map((clip, index) => [clip.id, index] as const));
@@ -1065,7 +1093,7 @@ async function videoPass(pass: VideoPass): Promise<{ samples: EncodedVideoSample
       if (pathNow !== 'seek') report({ phase: 'video', done: entry.frame, total: frames, path: 'seek' });
       let source = seekSources.get(entry.srcUrl);
       if (!source) {
-        source = await openSource(entry.srcUrl, entry.sourceFps, label, host, signal);
+        source = await openSource(entry.srcUrl, entry.sourceFps, label, host, waits.facts, signal);
         seekSources.set(entry.srcUrl, source);
       }
       // Consecutive frames on the same source frame (a slowed cut) reuse the picture: no second seek.

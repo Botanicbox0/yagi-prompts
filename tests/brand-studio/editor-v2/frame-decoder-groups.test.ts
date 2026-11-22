@@ -70,3 +70,19 @@ describe('spec H, F8: with a decoder that works in tasks and has a real queue', 
     s.close();
   });
 });
+
+describe('spec I, G5: a flush the reset rejects belongs to the old segment', () => {
+  it('a group change while the last flush is still settling: the flush is rejected (AbortError) and ignored, the new group decodes', async () => {
+    // Two pictures held back by the decoder, so the end of the first group needs a flush to give them out.
+    FakeDecoder.reorder = 2;
+    const s = await session(makeIndex(24, 12));
+    const first = [0, 1, 2, 3];
+    for (const picture of first) expect(pictureOf(await s.picture(0, first, picture))).toBe(picture);
+    // The flush's work is done, its promise settles in the next task: the next group starts now.
+    expect(pictureOf(await s.picture(1, [16, 17], 16))).toBe(16);
+    expect(FakeDecoder.abortedFlushes).toBeGreaterThan(0);
+    expect(pictureOf(await s.picture(1, [16, 17], 17))).toBe(17);
+    s.close();
+    expect(counter.open).toBe(0);
+  });
+});

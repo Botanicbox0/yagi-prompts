@@ -67,6 +67,13 @@ export interface CodecConfig {
   /** The `avcC` constraint flags byte (constraint_set0 is 0x80, constraint_set1 0x40); `null` for other codecs. */
   constraintFlags: number | null;
   /**
+   * Whether the pictures are stored as frames (spec I, G6). H.264: the first SPS's frame_mbs_only_flag (`null`:
+   * no SPS in the record, as `avc3` may, or not readable). HEVC: `false` only when `hvcC` says interlaced and not
+   * progressive source (general_interlaced_source_flag 1, general_progressive_source_flag 0), else `true`.
+   * Other codecs: `null`.
+   */
+  progressive: boolean | null;
+  /**
    * Plain SDR by what the file states (`colr`, or `vpcC` for VP9): BT.709 / BT.601 / unspecified primaries and
    * matrix, BT.709 / BT.601 / unspecified transfer, and no ICC profile; no statement at all counts as SDR.
    * The decoder path's colour rule was measured on such footage only (spec F review 1, item 1).
@@ -110,12 +117,23 @@ export function avcBitDepth(avcC: Uint8Array): number | null {
 /** H.264 profiles whose sequence parameter set carries chroma_format_idc (ITU-T H.264 §7.3.2.1.1). */
 const AVC_CHROMA_PROFILES = new Set([100, 110, 122, 244, 44, 83, 86, 118, 128, 138, 139, 134, 135]);
 
+/** What the walk of an H.264 sequence parameter set reads (`readSps`). */
+export interface SpsFacts {
+  /** chroma_format_idc (1 when the profile does not carry it); `null` when not read. */
+  chroma: number | null;
+  /** frame_mbs_only_flag: 1 every picture is a frame, 0 it may be coded as fields (interlaced); `null` when not read. */
+  frameMbsOnly: 0 | 1 | null;
+}
+
 /**
- * chroma_format_idc from an H.264 sequence parameter set NAL unit (header byte included): emulation prevention
- * bytes are taken out, then profile_idc, the constraint byte, level_idc and seq_parameter_set_id are passed.
- * Profiles that do not carry it are 4:2:0 by the standard. `null` when the unit is too short to say.
+ * Walks an H.264 sequence parameter set NAL unit (header byte included; ITU-T H.264 7.3.2.1.1), emulation
+ * prevention bytes taken out: profile_idc, the constraint byte, level_idc, seq_parameter_set_id; for the profiles
+ * that carry them chroma_format_idc, the bit depths, the transform bypass flag and the scaling lists; then
+ * log2_max_frame_num, the picture order count fields (types 0, 1, 2), max_num_ref_frames, the gaps flag, the
+ * width and height in macroblocks, and frame_mbs_only_flag (spec I, G6). Anything short, odd or out of range
+ * answers `null` for what it could not reach.
  */
-export function spsChroma(nal: Uint8Array): number | null {
+export function readSps(nal: Uint8Array): SpsFacts {
   const bytes: number[] = [];
   for (let i = 1, zeros = 0; i < nal.length; i += 1) {
     const value = nal[i]!;
@@ -126,16 +144,16 @@ export function spsChroma(nal: Uint8Array): number | null {
     zeros = value === 0 ? zeros + 1 : 0;
     bytes.push(value);
   }
-  if (bytes.length < 4) return null;
-  if (!AVC_CHROMA_PROFILES.has(bytes[0]!)) return 1;
+  if (bytes.length < 4) return { chroma: null, frameMbsOnly: null };
+  const profile = bytes[0]!;
   let bit = 24;
-  const readBit = () => {
+  const readBit = (): number | null => {
     if (bit >= bytes.length * 8) return null;
     const value = (bytes[bit >> 3]! >> (7 - (bit & 7))) & 1;
     bit += 1;
     return value;
   };
-  const ue = () => {
+  const ue = (): number | null => {
     let zeros = 0;
     for (;;) {
       const next = readBit();
@@ -151,9 +169,83 @@ export function spsChroma(nal: Uint8Array): number | null {
     }
     return 2 ** zeros - 1 + value;
   };
-  if (ue() === null) return null;
-  const chroma = ue();
-  return chroma !== null && chroma <= 3 ? chroma : null;
+  const se = (): number | null => {
+    const k = ue();
+    return k === null ? null : k % 2 ? (k + 1) / 2 : -k / 2;
+  };
+  /** scaling_list(): deltas until the next scale is 0 or the list is full. */
+  const scalingList = (size: number): boolean => {
+    let last = 8;
+    let next = 8;
+    for (let j = 0; j < size; j += 1) {
+      if (next !== 0) {
+        const delta = se();
+        if (delta === null) return false;
+        next = (last + delta + 256) % 256;
+      }
+      last = next === 0 ? last : next;
+    }
+    return true;
+  };
+  const unread = (chroma: number | null): SpsFacts => ({ chroma, frameMbsOnly: null });
+
+  if (ue() === null) return unread(null);
+  let chroma = 1;
+  if (AVC_CHROMA_PROFILES.has(profile)) {
+    const stated = ue();
+    if (stated === null || stated > 3) return unread(null);
+    chroma = stated;
+    if (chroma === 3 && readBit() === null) return unread(chroma);
+    if (ue() === null || ue() === null || readBit() === null) return unread(chroma);
+    const matrices = readBit();
+    if (matrices === null) return unread(chroma);
+    if (matrices) {
+      for (let i = 0; i < (chroma !== 3 ? 8 : 12); i += 1) {
+        const present = readBit();
+        if (present === null) return unread(chroma);
+        if (present && !scalingList(i < 6 ? 16 : 64)) return unread(chroma);
+      }
+    }
+  }
+  if (ue() === null) return unread(chroma);
+  const order = ue();
+  if (order === 0) {
+    if (ue() === null) return unread(chroma);
+  } else if (order === 1) {
+    if (readBit() === null || se() === null || se() === null) return unread(chroma);
+    const cycle = ue();
+    if (cycle === null || cycle > 255) return unread(chroma);
+    for (let i = 0; i < cycle; i += 1) if (se() === null) return unread(chroma);
+  } else if (order !== 2) return unread(chroma);
+  if (ue() === null || readBit() === null || ue() === null || ue() === null) return unread(chroma);
+  const flag = readBit();
+  return { chroma, frameMbsOnly: flag === null ? null : (flag as 0 | 1) };
+}
+
+/**
+ * chroma_format_idc from an H.264 sequence parameter set NAL unit (`readSps`). Profiles that do not carry it are
+ * 4:2:0 by the standard. `null` when the unit is too short to say.
+ */
+export function spsChroma(nal: Uint8Array): number | null {
+  return readSps(nal).chroma;
+}
+
+/** The first sequence parameter set in an `avcC` record, or `null` (none, as `avc3` may carry them in band). */
+function firstSpsOf(avcC: Uint8Array): Uint8Array | null {
+  if (avcC.length < 8 || (avcC[5]! & 0x1f) === 0) return null;
+  const length = u16(avcC, 6);
+  return 8 + length <= avcC.length ? avcC.subarray(8, 8 + length) : null;
+}
+
+/**
+ * Whether an `avcC` record's pictures are frames: `true` when its first sequence parameter set says
+ * frame_mbs_only_flag 1, `false` when 0 (it may be interlaced), `null` when there is none or it cannot be read
+ * (spec I, G6).
+ */
+export function avcProgressive(avcC: Uint8Array): boolean | null {
+  const sps = firstSpsOf(avcC);
+  const flag = sps ? readSps(sps).frameMbsOnly : null;
+  return flag === null ? null : flag === 1;
 }
 
 /**
@@ -382,6 +474,7 @@ export function readSampleEntry(stsd: Uint8Array | null): EntryAnswer {
   let profile: number | null = null;
   let chroma: number | null = null;
   let constraintFlags: number | null = null;
+  let progressive: boolean | null = null;
   let sdr = true;
   if (entry.type === 'avc1' || entry.type === 'avc3') {
     const avcC = body(find('avcC'));
@@ -391,6 +484,7 @@ export function readSampleEntry(stsd: Uint8Array | null): EntryAnswer {
     profile = avcC && avcC.length >= 2 ? avcC[1]! : null;
     constraintFlags = avcC && avcC.length >= 3 ? avcC[2]! : null;
     chroma = avcC ? avcChroma(avcC) : null;
+    progressive = avcC ? avcProgressive(avcC) : null;
   } else if (entry.type === 'hvc1' || entry.type === 'hev1') {
     const hvcC = body(find('hvcC'));
     codec = hvcC ? hevcCodec(entry.type, hvcC) : null;
@@ -400,6 +494,8 @@ export function readSampleEntry(stsd: Uint8Array | null): EntryAnswer {
     if (hvcC && hvcC.length >= 19) bitDepth = Math.max((hvcC[17]! & 0x07) + 8, (hvcC[18]! & 0x07) + 8);
     // chromaFormat: the low two bits of byte 16.
     if (hvcC && hvcC.length >= 17) chroma = hvcC[16]! & 0x03;
+    // The first two of the general constraint flags (byte 6): progressive_source, interlaced_source.
+    if (hvcC && hvcC.length >= 7) progressive = !((hvcC[6]! & 0x40) !== 0 && (hvcC[6]! & 0x80) === 0);
   } else if (entry.type === 'vp09') {
     const vpcC = body(find('vpcC'));
     codec = vpcC ? vp9Codec(vpcC) : null;
@@ -448,7 +544,7 @@ export function readSampleEntry(stsd: Uint8Array | null): EntryAnswer {
       if (!sdrCodes(colour.primaries, colour.transfer, colour.matrix)) sdr = false;
     }
   }
-  return { ok: true, config: { entry: entry.type, codec, description, codedWidth: width, codedHeight: height, pixelAspect, colour, profile, bitDepth, chroma, constraintFlags, sdr } };
+  return { ok: true, config: { entry: entry.type, codec, description, codedWidth: width, codedHeight: height, pixelAspect, colour, profile, bitDepth, chroma, constraintFlags, progressive, sdr } };
 }
 
 // ── The display matrix ─────────────────────────────────────────────────────────────────────────
