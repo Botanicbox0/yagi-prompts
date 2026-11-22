@@ -586,14 +586,25 @@ export function scheduleCutSound(
   return placed;
 }
 
+/** How long the size request (`HEAD`) is waited for before the size counts as unknown (spec I, G2). */
+const HEAD_WAIT_MS = 10_000;
+
 /**
  * Reads one of the film's own media files, or asks only its size (`HEAD`). Any other address is refused
  * before a request is made. A whole read ends after 15 s without a byte or after its size's time at the
- * slowest connection given time for (watched-read.ts `totalLimitMs`; the sound limit when the server does not
- * say the size), failing as any unreadable sound source does (`ExportStop('sound')`); cancelling ends it as a
- * cancel, in the request and while the body comes (spec H, F5).
+ * slowest connection given time for (watched-read.ts `totalLimitMs`), failing as any unreadable sound source
+ * does (`ExportStop('sound')`); cancelling ends it as a cancel, in the request and while the body comes (spec H,
+ * F5). When the server does not state the length, the time grows with what has come (spec I, G2): 45 s + the
+ * bytes received ÷ 32 KiB/s, counted from the start of the read, so the connection must keep 32 KiB/s on average
+ * after the first 45 s. What the reads hold together may not pass `soundLimit` (the sound limit; tests give a
+ * smaller one): a file whose size was unknown to the weight check stops the export (`memory`) when it would.
+ *
+ * The size request gives up after 10 s without an answer: the size is then unknown, as for a server that does
+ * not answer `HEAD`. The weight check is a guard before the first frame, an unknown size is a case it already
+ * takes (it counts it as unknown and goes on), and the read itself is bounded as above.
  */
-export function mediaReader(allowed: ReadonlySet<string>, exportSignal?: AbortSignal) {
+export function mediaReader(allowed: ReadonlySet<string>, exportSignal?: AbortSignal, soundLimit = SOUND_BYTES_LIMIT) {
+  let held = 0;
   const request = async (url: string, method: 'GET' | 'HEAD', signal: AbortSignal | undefined = exportSignal): Promise<Response> => {
     if (!allowed.has(url)) throw new ExportStop('sound', `refused to read a file that is not part of the film: ${url}`);
     let response: Response;
@@ -619,8 +630,14 @@ export function mediaReader(allowed: ReadonlySet<string>, exportSignal?: AbortSi
         const response = await watch.guard(request(url, 'GET', watch.signal));
         watch.alive();
         const length = Number(response.headers.get('content-length'));
-        watch.limitTotal(totalLimitMs(Number.isFinite(length) && length > 0 ? length : SOUND_BYTES_LIMIT));
-        const bytes = response.body ? await readStream(response.body, watch) : new Uint8Array(await watch.guard(response.arrayBuffer()));
+        const stated = Number.isFinite(length) && length > 0;
+        watch.limitTotal(totalLimitMs(stated ? length : 0));
+        const room = soundLimit - held;
+        const tooMuch = () => new ExportStop('memory', `reading ${url} would pass the sound limit (${soundLimit} bytes)`, { bytes: held });
+        const grows = stated ? undefined : (received: number) => watch.limitTotal(totalLimitMs(received));
+        const bytes = response.body ? await readStream(response.body, watch, room, tooMuch, grows) : new Uint8Array(await watch.guard(response.arrayBuffer()));
+        if (bytes.length > room) throw tooMuch();
+        held += bytes.length;
         return bytes.buffer.byteLength === bytes.length ? (bytes.buffer as ArrayBuffer) : (bytes.slice().buffer as ArrayBuffer);
       } catch (error) {
         throw failed(url, error);
@@ -630,13 +647,16 @@ export function mediaReader(allowed: ReadonlySet<string>, exportSignal?: AbortSi
     },
     /** The file's length from its headers; `null` when the server does not say (or will not answer `HEAD`). */
     size: async (url: string): Promise<number | null> => {
+      const watch = watchRead({ stallMs: 0, totalMs: HEAD_WAIT_MS }, exportSignal);
       try {
-        const length = Number((await request(url, 'HEAD')).headers.get('content-length'));
+        const length = Number((await watch.guard(request(url, 'HEAD', watch.signal))).headers.get('content-length'));
         return Number.isFinite(length) && length > 0 ? length : null;
       } catch (error) {
-        if (exportSignal?.aborted) throw cancelled();
+        if (exportSignal?.aborted || error instanceof ReadCancelled) throw cancelled();
         if (error instanceof ExportStop && error.message.startsWith('refused')) throw error;
         return null;
+      } finally {
+        watch.done();
       }
     },
   };

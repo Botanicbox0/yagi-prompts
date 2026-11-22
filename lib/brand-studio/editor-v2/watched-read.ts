@@ -130,8 +130,17 @@ export function watchRead(limits: ReadLimits, signal?: AbortSignal): Watch {
   };
 }
 
-/** A body read as a stream, the watch told of every piece; past `limit` bytes `tooLarge` is thrown and the body cancelled. */
-export async function readStream(body: ReadableStream<Uint8Array>, watch: Pick<Watch, 'alive' | 'guard'>, limit = Infinity, tooLarge: () => Error = () => new Error('too large')): Promise<Uint8Array> {
+/**
+ * A body read as a stream, the watch told of every piece; past `limit` bytes `tooLarge` is thrown and the body
+ * cancelled. `received` hears the running total after every piece (a total limit that grows with it, spec I G2).
+ */
+export async function readStream(
+  body: ReadableStream<Uint8Array>,
+  watch: Pick<Watch, 'alive' | 'guard'>,
+  limit = Infinity,
+  tooLarge: () => Error = () => new Error('too large'),
+  received?: (total: number) => void,
+): Promise<Uint8Array> {
   const reader = body.getReader();
   const pieces: Uint8Array[] = [];
   let total = 0;
@@ -143,6 +152,7 @@ export async function readStream(body: ReadableStream<Uint8Array>, watch: Pick<W
       watch.alive();
       total += value.length;
       if (total > limit) throw tooLarge();
+      received?.(total);
       pieces.push(value);
     }
   } catch (error) {
