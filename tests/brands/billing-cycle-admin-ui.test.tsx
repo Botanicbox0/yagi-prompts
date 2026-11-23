@@ -43,12 +43,33 @@ const NOW = new Date('2026-11-20T01:00:00Z');
 let h: AdminHarness;
 let sql: SqlRunner;
 
-async function renderOrg(id: string): Promise<string> {
+async function renderOrg(id: string, searchParams: Record<string, string> = {}): Promise<string> {
   const OrgDetailPage = (await import('@/app/(admin)/admin/brand-workspace/organizations/[id]/page')).default;
   return new Response(
-    (await prerender(await OrgDetailPage({ params: Promise.resolve({ id }), searchParams: Promise.resolve({}) }), { signal: AbortSignal.timeout(5000) }))
-      .prelude,
+    (
+      await prerender(await OrgDetailPage({ params: Promise.resolve({ id }), searchParams: Promise.resolve(searchParams) }), {
+        signal: AbortSignal.timeout(5000),
+      })
+    ).prelude,
   ).text();
+}
+
+async function renderOrgList(): Promise<string> {
+  const OrgListPage = (await import('@/app/(admin)/admin/brand-workspace/page')).default;
+  return new Response(
+    (await prerender(await OrgListPage({ searchParams: Promise.resolve({}) }), { signal: AbortSignal.timeout(5000) })).prelude,
+  ).text();
+}
+
+async function seedGrant(organizationId: string, validMonth: string, createdAt: string, revoked = false): Promise<string> {
+  const row = (
+    await sql.query<{ id: string }>(
+      `insert into brand_allowance_grants (organization_id, amount_krw, valid_month, reason, created_by, created_at, revoked_at, revoked_by)
+       values ($1, 10000, $2, 'fixture', $3, $4::timestamptz, $5::timestamptz, $6) returning id::text as id`,
+      [organizationId, validMonth, ADMIN_VIEWER.userId, createdAt, revoked ? createdAt : null, revoked ? ADMIN_VIEWER.userId : null],
+    )
+  ).rows[0]!;
+  return row.id;
 }
 
 async function renderConsole(): Promise<string> {
@@ -83,6 +104,9 @@ function slice(html: string, marker: string, open: string, close: string): strin
 const draftForm = (html: string) => slice(html, 'value="brandBilling.invoice.draft"', '<form', '</form>');
 const planCycleBlock = (html: string) => slice(html, 'data-plan-cycle=', '<div', '</div>');
 const invoiceRow = (html: string, id: string) => slice(html, `data-invoice-row="${id}"`, '<tr', '</tr>');
+const grantRow = (html: string, id: string) => slice(html, `data-grant-row="${id}"`, '<tr', '</tr>');
+const grantForm = (html: string) => slice(html, 'value="brandBilling.grant.create"', '<form', '</form>');
+const grantCycleCell = (row: string) => slice(row, 'data-grant-cycle=', '<span', '</span>');
 const billingRow = (html: string, id: string) => slice(html, `data-billing-invoice-row="${id}"`, '<tr', '</tr>');
 function uninvoicedCycles(html: string): string {
   const at = html.indexOf('data-uninvoiced-cycles');
@@ -206,6 +230,103 @@ describe('admin organization page: billing cycle', () => {
     } finally {
       await db.close();
     }
+  });
+});
+
+describe('admin organization page: extra grants on a plan cycle', () => {
+  it('each grant shows its cycle: this one, an earlier one, or none before the plan start', async () => {
+    const id = await makeOrg(sql, 'Cycle fixture grants');
+    await seedPlan(sql, id, '2026-10-17');
+    // KST days: 11-18 (this cycle), 10-20 (the first cycle), 10-05 (before the plan start).
+    const current = await seedGrant(id, '2026-11', '2026-11-18T03:00:00Z');
+    const earlier = await seedGrant(id, '2026-10', '2026-10-20T03:00:00Z');
+    const beforePlan = await seedGrant(id, '2026-10', '2026-10-05T03:00:00Z');
+    // A November grant made in October starts on 11-01, which still falls in the 10-17 cycle.
+    const monthStart = await seedGrant(id, '2026-11', '2026-10-25T03:00:00Z');
+    const revoked = await seedGrant(id, '2026-11', '2026-11-19T03:00:00Z', true);
+    const html = await renderOrg(id);
+
+    expect(grantCycleCell(grantRow(html, current))).toContain('이번 주기 끝(12월 16일)까지');
+    expect(grantCycleCell(grantRow(html, earlier))).toContain('10월 17일 ~ 11월 16일 주기, 11월 16일까지');
+    expect(grantCycleCell(grantRow(html, beforePlan))).toContain('플랜 시작 전 지급 — 주기에 포함되지 않음');
+    expect(grantCycleCell(grantRow(html, monthStart))).toContain('10월 17일 ~ 11월 16일 주기, 11월 16일까지');
+    expect(grantCycleCell(grantRow(html, revoked))).toContain('—');
+    expect(grantCycleCell(grantRow(html, revoked))).not.toContain('주기');
+  });
+
+  it('grant form: each month option says which cycle the grant joins and until when', async () => {
+    const id = await makeOrg(sql, 'Cycle fixture grant form');
+    await seedPlan(sql, id, '2026-11-01');
+    const form = grantForm(await renderOrg(id));
+    // This month starts today (11-20, cycle 11-01 ~ 11-30); next month starts on 12-01, the next cycle.
+    expect(form).toMatch(/<option value="2026-11"[^>]*>2026-11 · 이번 주기 끝\(11월 30일\)까지<\/option>/);
+    expect(form).toMatch(/<option value="2026-12"[^>]*>2026-12 · 12월 1일 ~ 12월 31일 주기, 12월 31일까지<\/option>/);
+    expect(slice(form, 'data-grant-cycle-hint=', '<span', '</span>')).toContain('그 주기 마지막 날까지 씁니다');
+  });
+
+  it('no paid plan: grant form and list stay on the calendar month', async () => {
+    const id = await makeOrg(sql, 'Cycle fixture grant no plan');
+    const grant = await seedGrant(id, '2026-11', '2026-11-18T03:00:00Z');
+    const html = await renderOrg(id);
+    const form = grantForm(html);
+    expect(form).toMatch(/<option value="2026-11"[^>]*>2026-11<\/option>/);
+    expect(form).toMatch(/<option value="2026-12"[^>]*>2026-12<\/option>/);
+    expect(form).not.toContain('data-grant-cycle-hint');
+    expect(grantRow(html, grant)).not.toContain('data-grant-cycle');
+  });
+
+  it('moving the start day under an invoiced cycle: the banner says to void the cycle invoice first', async () => {
+    const id = await makeOrg(sql, 'Cycle fixture start move');
+    await seedPlan(sql, id, '2026-11-17');
+    const drafted = await draftBrandInvoice({ sql, now: () => new Date(NOW) }, ADMIN_VIEWER, { organizationId: id, cycle: 'current' });
+    if (!drafted.ok) throw new Error(drafted.code);
+    const outcome = await h.run('brandBilling.planAndAllowance.set', {
+      organizationId: id,
+      expectedRevision: 1,
+      planId: 'b2b_29',
+      billingMode: 'invoice',
+      startedOn: '2026-11-10',
+      endsOn: '',
+      planNote: '',
+      allowanceMode: 'plan_default',
+      allowanceNote: '',
+    });
+    expect(outcome.ok).toBe(false);
+    if (outcome.ok) return;
+    expect(outcome.detail).toContain('cycle_already_invoiced');
+    const html = await renderOrg(id, { err: outcome.code, detail: outcome.detail ?? '' });
+    expect(html).toContain('이 주기의 청구서를 먼저 취소하세요 (주기 중간 재시작은 다음 단계의 플랜 변경 기능)');
+    expect(html).not.toContain('동일 기간 청구서가 이미 있거나 동시 수정 충돌이 발생했습니다');
+  });
+
+  it('the plan-only form (brandEngine.plan) gives the same reason for a blocked start-day move', async () => {
+    const id = await makeOrg(sql, 'Cycle fixture start move engine form');
+    await seedPlan(sql, id, '2026-11-17');
+    const drafted = await draftBrandInvoice({ sql, now: () => new Date(NOW) }, ADMIN_VIEWER, { organizationId: id, cycle: 'current' });
+    if (!drafted.ok) throw new Error(drafted.code);
+    const outcome = await h.run('brandEngine.plan', {
+      organizationId: id,
+      expectedRevision: 1,
+      planId: 'b2b_29',
+      billingMode: 'invoice',
+      startedOn: '2026-11-10',
+      endsOn: '',
+      note: '',
+    });
+    expect(outcome.ok).toBe(false);
+    if (outcome.ok) return;
+    expect(outcome.detail).toContain('cycle_already_invoiced');
+  });
+});
+
+describe('admin organization list: usage basis', () => {
+  it('says the usage sort and the 80% filter count by calendar month', async () => {
+    await makeOrg(sql, 'Cycle fixture list');
+    const html = await renderOrgList();
+    expect(html).toContain('data-brand-org-matrix');
+    expect(slice(html, 'data-org-list-usage-basis=', '<p', '</p>')).toContain(
+      '사용량 정렬과 80% 필터는 달력 월 기준입니다(플랜 조직의 표시 숫자는 이번 결제 주기 기준).',
+    );
   });
 });
 

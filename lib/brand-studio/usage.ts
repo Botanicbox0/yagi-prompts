@@ -13,7 +13,7 @@
  */
 import { z } from 'zod';
 import type { Viewer } from '@/lib/auth/identity';
-import type { SqlRunner } from '@/lib/db/sql-runner';
+import { sqlCacheRoot, type SqlRunner } from '@/lib/db/sql-runner';
 import {
   BRAND_PLAN_GRACE_DAYS_DEFAULT,
   kstDayOf,
@@ -21,7 +21,7 @@ import {
   PAID_BRAND_PLAN_IDS,
   planActiveWithGrace,
 } from '@/lib/brands/billing/math';
-import { cycleContaining, cycleStartAt, cycleWindow, type BillingCycle } from '@/lib/brands/billing/cycle';
+import { cycleContaining, cycleWindow, type BillingCycle } from '@/lib/brands/billing/cycle';
 import { hasColumn, loadAllowanceSchemaState } from '@/lib/brands/billing/schema-guard';
 import type { StudioAllowanceView } from './contracts';
 import { STUDIO_CREDIT_KRW } from './credits';
@@ -70,11 +70,6 @@ export interface StudioAllowance {
    * exclusive (= the next billing day); `startAt` / `endAt` are the UTC instants at KST midnight.
    */
   cycle?: { anchor: string; index: number; start: string; end: string; startAt: string; endAt: string };
-  /**
-   * Present only when `source` is `plan`: what is left of the grants valid today once plan credits are taken first
-   * (the plan cycle and the grants' calendar month need not line up). The trial carry reads it.
-   */
-  grantsLeftKrw?: number;
 }
 
 /**
@@ -99,103 +94,56 @@ export async function loadAllowanceWindow(
 }
 
 /**
- * A plan organization's usage on its cycle, plan credits first (B1c). The grants valid today are calendar-month (or
- * date-range) grants, so a cycle that straddles a month end meets two months of grants. Counting "cycle usage against
- * plan + this month's grants" alone would let a month's grant be spent in two cycles, and charge the previous month's
- * grant use to this month's grants. So:
- *   - usage that overflowed the plan before this month began (paid from last month's grants) is not charged again;
- *   - usage of this month that fell in the previous cycle and overflowed that cycle's plan is charged to this month's grants.
- * Returns the usage to set against `plan cap + grants` and what is left of the grants.
+ * Date-range grant columns (0186). A positive probe is cached for the database root's lifetime by `hasColumn`; a
+ * negative one for 60 s here, so a plan organization's load does not probe on every call before 0186 is applied.
  */
-async function planCycleUsage(
-  sql: SqlRunner,
-  organizationId: string,
-  input: {
-    anchor: string;
-    cycle: BillingCycle;
-    monthStart: Date;
-    planCapKrw: number;
-    /** The `valid_month` grants of this month (the folded query's sum). */
-    monthGrantsKrw: number;
-    /** 0186 present: also read the date-range grants (`valid_from` / `valid_until`) in the same statement. */
-    rangeGrants: { today: string; month: string } | null;
-  },
-): Promise<{ usedKrw: number; grantsKrw: number; grantsLeftKrw: number }> {
-  const { start: cs, end: ce } = cycleWindow(input.cycle);
-  const previous = input.cycle.index > 0 ? cycleWindow({ start: cycleStartAt(input.anchor, input.cycle.index - 1), end: input.cycle.start }) : null;
-  const ps = previous ? previous.start : cs;
-  const ranged = input.rangeGrants
-    ? `,
-              (select coalesce(sum(amount_krw) filter (where valid_from <= $6::date and valid_until >= $6::date), 0)::bigint
-                 from brand_allowance_grants where organization_id = $1 and revoked_at is null) as in_range,
-              (select coalesce(sum(amount_krw) filter (where valid_from is not null and valid_month = $7), 0)::bigint
-                 from brand_allowance_grants where organization_id = $1 and revoked_at is null) as ranged_this_month`
-    : '';
-  const params: unknown[] = [organizationId, cs.toISOString(), ce.toISOString(), input.monthStart.toISOString(), ps.toISOString()];
-  if (input.rangeGrants) params.push(input.rangeGrants.today, input.rangeGrants.month);
-  const row = (
-    await sql.query<{
-      used: string | number;
-      used_before_month: string | number;
-      prev_used: string | number;
-      prev_before_month: string | number;
-      in_range?: string | number;
-      ranged_this_month?: string | number;
-    }>(
-      `select coalesce(sum(u) filter (where created_at >= $2 and created_at < $3), 0)::bigint as used,
-              coalesce(sum(u) filter (where created_at >= $2 and created_at < $4), 0)::bigint as used_before_month,
-              coalesce(sum(u) filter (where created_at >= $5 and created_at < $2), 0)::bigint as prev_used,
-              coalesce(sum(u) filter (where created_at >= $5 and created_at < $4), 0)::bigint as prev_before_month${ranged}
-         from (select ${jobUsageKrwSql()} as u, created_at from brand_studio_jobs
-                where organization_id = $1 and status not in ('failed','canceled') and created_at >= $5 and created_at < $3) j`,
-      params,
-    )
-  ).rows[0];
-  // A grant counts one way only: a date-range grant while today is in its range, never also by its month.
-  const G = Math.max(0, input.monthGrantsKrw - Number(row?.ranged_this_month ?? 0) + Number(row?.in_range ?? 0));
-  return {
-    ...planLedger({
-      planCapKrw: input.planCapKrw,
-      grantsKrw: G,
-      cycleUsedKrw: Number(row?.used ?? 0),
-      cycleUsedBeforeMonthKrw: Number(row?.used_before_month ?? 0),
-      previousCycleUsedKrw: Number(row?.prev_used ?? 0),
-      previousCycleUsedBeforeMonthKrw: Number(row?.prev_before_month ?? 0),
-      cycleStartsBeforeMonth: cs.getTime() < input.monthStart.getTime(),
-      hasPreviousCycle: previous !== null,
-    }),
-    grantsKrw: G,
-  };
+const RANGE_COLUMNS_MISSING = new WeakMap<object, number>();
+const RANGE_NEGATIVE_TTL_MS = 60_000;
+
+async function rangeGrantColumnsReady(sql: SqlRunner): Promise<boolean> {
+  const root = sqlCacheRoot(sql);
+  const missingSince = RANGE_COLUMNS_MISSING.get(root);
+  if (missingSince !== undefined && Date.now() - missingSince < RANGE_NEGATIVE_TTL_MS) return false;
+  const ok = await hasColumn(sql, 'brand_allowance_grants', 'valid_from');
+  if (ok) RANGE_COLUMNS_MISSING.delete(root);
+  else RANGE_COLUMNS_MISSING.set(root, Date.now());
+  return ok;
+}
+
+/** A grant's effective start day as SQL (KST date): `valid_from`, else the later of its creation day and its month's 1st. */
+export function grantEffectiveStartSql(rangeColumns: boolean): string {
+  const monthly = "greatest(((created_at at time zone 'UTC') + interval '9 hours')::date, (valid_month || '-01')::date)";
+  return rangeColumns ? `coalesce(valid_from, ${monthly})` : monthly;
 }
 
 /**
- * Plan credits first, then the grants valid today (pure; B1c). Returns the usage to set against `plan cap + grants` and
- * what is left of the grants.
+ * A plan organization's one window (B1c): its usage inside the current cycle and the grants ATTACHED to that cycle — a
+ * grant belongs to the one cycle that contains its effective start day (`grantEffectiveStartSql`), so nothing is
+ * counted in two cycles and a cycle always starts from the full plan cap. A grant whose start day is before the plan
+ * start belongs to no cycle (the range runs from the cycle start, which is never before the anchor). One statement.
  */
-export function planLedger(i: {
-  planCapKrw: number;
-  grantsKrw: number;
-  cycleUsedKrw: number;
-  cycleUsedBeforeMonthKrw: number;
-  previousCycleUsedKrw: number;
-  previousCycleUsedBeforeMonthKrw: number;
-  cycleStartsBeforeMonth: boolean;
-  hasPreviousCycle: boolean;
-}): { usedKrw: number; grantsLeftKrw: number } {
-  const P = Math.max(0, i.planCapKrw);
-  const U = i.cycleUsedKrw;
-  // Cycle began last month: its overflow before this month was paid from last month's grants.
-  const overflowBeforeMonth = i.cycleStartsBeforeMonth ? Math.max(0, i.cycleUsedBeforeMonthKrw - P) : 0;
-  // Cycle began this month: the previous cycle's overflow on this month's days was paid from this month's grants.
-  const prevOverflowInMonth =
-    !i.cycleStartsBeforeMonth && i.hasPreviousCycle
-      ? Math.max(0, i.previousCycleUsedKrw - P) - Math.max(0, i.previousCycleUsedBeforeMonthKrw - P)
-      : 0;
-  const grantsUsed = Math.max(0, U - P) - overflowBeforeMonth + prevOverflowInMonth;
-  return {
-    usedKrw: Math.max(0, U - overflowBeforeMonth + prevOverflowInMonth),
-    grantsLeftKrw: Math.max(0, i.grantsKrw - grantsUsed),
-  };
+async function planCycleTotals(
+  sql: SqlRunner,
+  organizationId: string,
+  input: { cycle: BillingCycle; withGrants: boolean; rangeColumns: boolean },
+): Promise<{ usedKrw: number; grantsKrw: number }> {
+  const { start, end } = cycleWindow(input.cycle);
+  const eff = grantEffectiveStartSql(input.rangeColumns);
+  const grants = input.withGrants
+    ? `,
+              (select coalesce(sum(amount_krw), 0)::bigint from brand_allowance_grants
+                where organization_id = $1 and revoked_at is null and ${eff} >= $4::date and ${eff} < $5::date) as attached`
+    : '';
+  const row = (
+    await sql.query<{ used: string | number; attached?: string | number }>(
+      `select (select coalesce(sum(${jobUsageKrwSql()}), 0)::bigint from brand_studio_jobs
+                where organization_id = $1 and status not in ('failed','canceled') and created_at >= $2 and created_at < $3) as used${grants}`,
+      input.withGrants
+        ? [organizationId, start.toISOString(), end.toISOString(), input.cycle.start, input.cycle.end]
+        : [organizationId, start.toISOString(), end.toISOString()],
+    )
+  ).rows[0];
+  return { usedKrw: Number(row?.used ?? 0), grantsKrw: Math.max(0, Number(row?.attached ?? 0)) };
 }
 
 export async function usedKrwIn(sql: SqlRunner, organizationId: string, window: { start: Date; end: Date }): Promise<number> {
@@ -393,28 +341,22 @@ export async function loadAllowance(
     };
   }
 
-  // Plan organizations (B1c): the allowance runs on the plan cycle. Grants keep their own validity: a `valid_month`
-  // grant counts while today is in that month, a date-range grant (0186, nothing writes one yet) while today is in its
-  // range. Plan credits are taken first, then the grants valid today: remaining = (cap − used), with `usedKrw` the usage
-  // set against this cycle's plan credits and today's grants (planLedger).
+  // Plan organizations (B1c): ONE window, the current cycle. Used = usage inside it; cap = full plan cap + the grants
+  // attached to it. Nothing from an earlier cycle or month is added or subtracted.
   const planCap = Math.max(0, baseCapKrw);
-  const rangeReady = schema.hasGrants && (await hasColumn(sql, 'brand_allowance_grants', 'valid_from'));
-  const usage = await planCycleUsage(sql, organizationId, {
-    anchor: planStartedOn,
+  const totals = await planCycleTotals(sql, organizationId, {
     cycle: planCycle,
-    monthStart: window.start,
-    planCapKrw: planCap,
-    monthGrantsKrw: extraKrw,
-    rangeGrants: rangeReady ? { today, month } : null,
+    withGrants: schema.hasGrants,
+    rangeColumns: schema.hasGrants && (await rangeGrantColumnsReady(sql)),
   });
-  extraKrw = usage.grantsKrw;
+  extraKrw = totals.grantsKrw;
   const cycleAt = cycleWindow(planCycle);
   return {
     capKrw: planCap + extraKrw,
     baseCapKrw: planCap,
     extraKrw,
     source,
-    usedKrw: usage.usedKrw,
+    usedKrw: totals.usedKrw,
     resetsAt: cycleAt.end.toISOString(),
     preferredLane,
     configured: true,
@@ -426,7 +368,6 @@ export async function loadAllowance(
       startAt: cycleAt.start.toISOString(),
       endAt: cycleAt.end.toISOString(),
     },
-    grantsLeftKrw: usage.grantsLeftKrw,
   };
 }
 

@@ -14,7 +14,8 @@ import {
   type PaidBrandPlanId,
 } from '@/lib/brands/billing/math';
 import { hasColumn, hasTable, hasTables, loadSubscriptionSchemaReady } from '@/lib/brands/billing/schema-guard';
-import { cycleContaining } from '@/lib/brands/billing/cycle';
+import { cycleContaining, cycleStartAt } from '@/lib/brands/billing/cycle';
+import { monthRange } from '@/lib/brands/billing/cycle-invoices';
 import type {
   BrandBillingProfile,
   BrandDiscountCode,
@@ -53,8 +54,8 @@ export interface UninvoicedActiveOrg {
 }
 
 /**
- * B1c: a plan organization whose CURRENT billing cycle (one month from the plan start day) has no non-void invoice for
- * that cycle. Calendar-month invoices do not count: they cover a month, not a cycle.
+ * B1c: a cycle of a plan organization (from the plan start up to the current one, the latest 12) that no non-void
+ * subscription invoice covers any day of (a cycle invoice covers its cycle, a calendar-month invoice its month).
  */
 export interface UninvoicedCycle {
   organizationId: string;
@@ -343,9 +344,15 @@ export async function loadBrandBillingOverview(
   const uninvoicedActiveOrgs: UninvoicedActiveOrg[] = [];
   const uninvoicedCycles: UninvoicedCycle[] = [];
   const cyclesAvailable = hasInvoices && (await hasColumn(sql, 'brand_invoices', 'cycle_start'));
-  const invoicedCycles = new Set<string>();
+  // Days each organization's non-void subscription invoices cover: a cycle row its cycle, a calendar-month row its month.
+  // Non-subscription invoices (credit packs, adjustments: `kind` set) cover no days.
+  const coveredByOrg = new Map<string, Array<{ start: string; end: string }>>();
   for (const inv of effectiveInvoices) {
-    if (inv.status !== 'void' && inv.cycleStart) invoicedCycles.add(`${inv.organizationId}|${inv.cycleStart}`);
+    if (inv.status === 'void' || inv.kind) continue;
+    const range = inv.cycleStart && inv.cycleEnd ? { start: inv.cycleStart, end: inv.cycleEnd } : monthRange(inv.period);
+    const list = coveredByOrg.get(inv.organizationId) ?? [];
+    list.push(range);
+    coveredByOrg.set(inv.organizationId, list);
   }
   const followingCounts: Record<PaidBrandPlanId, number> = {
     b2b_29: 0,
@@ -367,8 +374,13 @@ export async function loadBrandBillingOverview(
       followingCounts[planId] += 1;
     }
     if (cyclesAvailable && status.active) {
-      const cycle = cycleContaining(startedOn, todayKst);
-      if (cycle && !invoicedCycles.has(`${String(row.organization_id)}|${cycle.start}`)) {
+      // Every cycle from the plan start to the current one (the latest 12) that no subscription invoice covers any day of.
+      const current = cycleContaining(startedOn, todayKst);
+      const covered = coveredByOrg.get(String(row.organization_id)) ?? [];
+      for (let index = Math.max(0, (current?.index ?? -1) - 11); current && index <= current.index; index++) {
+        const cycle = { start: cycleStartAt(startedOn, index), end: cycleStartAt(startedOn, index + 1) };
+        if (endsOn && cycle.start >= endsOn) break;
+        if (covered.some((r) => r.start < cycle.end && cycle.start < r.end)) continue;
         uninvoicedCycles.push({
           organizationId: String(row.organization_id),
           organizationName: String(row.name),

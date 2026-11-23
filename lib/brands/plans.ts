@@ -6,6 +6,8 @@ import { isMissingTable } from './entitlements';
 import { brandBillingAutoIssueOpen } from '@/lib/flags';
 import { loadSubscriptionSchemaReady } from './billing/schema-guard';
 import { syncPlanDefaultSnapshot } from './billing/snapshot';
+import { CYCLE_ALREADY_INVOICED, startDayMoveBlocked } from './billing/cycle-invoices';
+import { kstDayOf } from './billing/math';
 
 /**
  * B2B plans for brand.twings.app (docs/BRAND-PRODUCT.md §6). Founder decision (2026-11-12): three
@@ -173,6 +175,14 @@ export async function upsertPlanAssignmentInTx(
       (existing.endsOn ?? null) !== (params.endsOn ?? null);
     if (changesManagedFields) return { ok: false, code: 'conflict', field: SUBSCRIPTION_MANAGED_PLAN };
   }
+  // B1c: an admin moving the start day moves the billing cycle; refused while a subscription invoice covers today or later.
+  if (
+    current &&
+    params.actor.kind === 'admin' &&
+    (await startDayMoveBlocked(sql, params.organizationId, params.startedOn, kstDayOf(params.now ?? new Date())))
+  ) {
+    return { ok: false, code: 'conflict', field: CYCLE_ALREADY_INVOICED };
+  }
   const next = revision + 1;
   const actorId = params.actor.kind === 'admin' ? params.actor.userId : null;
   await sql.query(
@@ -289,7 +299,7 @@ export async function subscriptionManagesPlan(sql: SqlRunner, organizationId: st
 
 /** Set or replace an organization's plan (admin only), with the same revision rule as the policy. */
 export async function setPlanAssignment(
-  deps: { sql: SqlRunner },
+  deps: { sql: SqlRunner; now?: () => Date },
   viewer: Viewer,
   input: unknown,
 ): Promise<BrandOutcome<{ id: string; revision: number }>> {
@@ -313,6 +323,7 @@ export async function setPlanAssignment(
       actor: { kind: 'admin', userId: viewer.userId! },
       recordActorKind: false,
       refuseWhenSubscriptionManaged: true,
+      now: deps.now?.(),
     });
   });
 }

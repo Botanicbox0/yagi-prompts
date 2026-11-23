@@ -2,6 +2,7 @@ import { randomUUID } from 'node:crypto';
 import { PGlite } from '@electric-sql/pglite';
 import { NextRequest } from 'next/server';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { insertLegacyDraft } from '@/tests/brands/helpers/legacy-invoice';
 import type { Viewer } from '@/lib/auth/identity';
 import { loadAllowance } from '@/lib/brand-studio/usage';
 import { studioEnv } from '@/lib/brand-studio/env';
@@ -979,11 +980,9 @@ describe('B1a brand subscriptions integration & route (§8.2–§8.11)', () => {
       note: 'expired',
       expectedRevision: 0,
     });
-    const manualNovDraft = await draftBrandInvoice({ sql: f.sql, now: () => nov01 }, admin(), {
-      organizationId: org2.id,
-      period: '2026-11',
-      planId: 'b2b_29',
-    });
+    // B1c fix round: org2's manual plan ended Oct 10, so a November cycle is not drafted by the admin path any more; the
+    // manual November invoice is written as the calendar-month row the admin path used to write.
+    const manualNovDraft = await insertLegacyDraft(f.sql, { organizationId: org2.id, period: '2026-11', planId: 'b2b_29', actorId: f.ids.admin });
     expect(manualNovDraft.ok).toBe(true);
     const refusedDup = await startSubscriptionCompat({ sql: f.sql, now: () => nov01 }, admin(), {
       organizationId: org2.id,
