@@ -330,7 +330,21 @@ export interface DirectorRewriteInput {
   /** Native video audio preference (`ambient` = natural voice/foley only; `bgm` = Hydrogen scene-matched score). */
   audioMode?: PersonalAudioMode;
   bgmMood?: PersonalBgmMood | null;
+  /**
+   * The customer's own note, as typed (often Korean). Stage 2 translates it and applies it to every shot it
+   * concerns (docs/PERSONAL-STUDIO.md §4 #4) instead of the note being pinned to an invented shot 1.
+   */
+  userNoteRaw?: string | null;
 }
+
+/**
+ * Neutral wording for the person in an identity prompt when the photo check gave none (docs/PERSONAL-STUDIO.md §4 #3).
+ * No gender, age or ethnicity is assumed.
+ */
+export const DEFAULT_SUBJECT_DESCRIPTOR_EN = 'the person' as const;
+
+/** Optional photo-check field: a short neutral description of the person; anything missing or too long becomes the default. */
+const subjectDescriptorField = z.string().trim().max(60).catch(DEFAULT_SUBJECT_DESCRIPTOR_EN);
 
 export const personalDirectorSpecSchema = z.object({
   userMessage: z.string().trim().max(1000).nullable().optional(),
@@ -401,6 +415,7 @@ export const rawPhotoInspectionSchema = z.object({
     ),
   faceWidthRatio: z.number().min(0).max(1),
   extractedHairDescription: z.string().trim().max(400).nullable(),
+  subjectDescriptorEn: subjectDescriptorField,
   userMessageKo: z.string().trim().min(2).max(500),
   userMessageEn: z.string().trim().min(2).max(500),
   cleanupPromptEn: z.string().trim().max(1000).nullable()
@@ -474,6 +489,7 @@ export const rawOpticalIdentityMasterSchema = z.object({
       z.array(z.enum(PHOTO_ISSUE_CODES)).max(8)
     ),
   requiresMasterSynthesis: z.boolean(),
+  subjectDescriptorEn: subjectDescriptorField,
   extractedIdentityLockEn: z.string().trim().min(10).max(600),
   extractedHairLockEn: z.string().trim().min(10).max(400),
   opticalMasterPromptEn: z.string().trim().min(10).max(1600)
