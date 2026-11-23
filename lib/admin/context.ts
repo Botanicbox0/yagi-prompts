@@ -2,6 +2,9 @@ import type { Viewer } from '@/lib/auth/identity';
 import type { SqlRunner } from '@/lib/db/sql-runner';
 import type { StorageDriver } from '@/lib/storage';
 import type { Mailer } from '@/lib/notify/mailer';
+import type { TossGateway } from '@/lib/billing/toss-gateway';
+import type { TossServiceDeps } from '@/lib/billing/toss-service';
+import type { RenderStore } from '@/lib/renders/store';
 
 /**
  * PLAN §3.8 — everything an admin mutation needs, injected.
@@ -57,6 +60,16 @@ export interface AdminContext {
    * task inline and records it.
    */
   defer?: (task: () => Promise<void>) => void;
+  /**
+   * Optional Toss payment seam for tests (`billing.payment.recheck`): when absent, the operation
+   * reads `getTossGateway()`, `getRenderStore()`, `createRenderJob` and the system clock.
+   */
+  toss?: {
+    gateway?: TossGateway | null;
+    store?: RenderStore;
+    createRender?: TossServiceDeps['createRender'];
+    now?: () => Date;
+  };
 }
 
 export interface AdminMail {
@@ -87,7 +100,10 @@ export type AdminSuccessCode =
   | 'verified'
   | 'paid'
   /** 2026-09-13 — the weekly drop's mail went out (or is going out, after the redirect). */
-  | 'announced';
+  | 'announced'
+  /** P1 — admin payment re-check against Toss (`billing.payment.recheck`). */
+  | 'paymentRechecked'
+  | 'paymentUnchanged';
 
 export type AdminErrorCode =
   | 'forbidden'
@@ -148,6 +164,9 @@ export type AdminErrorCode =
   | 'brandNotActive'
   | 'brandConsentRequired'
   | 'brandNotShared'
+  | 'paymentWrongEnvironment'
+  | 'paymentCooldown'
+  | 'paymentUnavailable'
   | 'unknown';
 
 export interface AdminSuccess {

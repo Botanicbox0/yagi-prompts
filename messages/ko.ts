@@ -5617,6 +5617,8 @@ export const ko: Dictionary = {
     okRejected: '반려했습니다. 제출자는 내 계정에서 사유를 확인합니다.',
     okUnpublished: '게시를 내렸습니다. 목록에서 제외됩니다.',
     okAnnounced: '알림을 보내고 있습니다. 구독자 수에 따라 몇 분 걸립니다.',
+    okPaymentRechecked: '결제사 상태를 확인해 반영했습니다.',
+    okPaymentUnchanged: '결제사 상태를 확인했습니다. 변경 사항이 없습니다.',
     okSelected: '선정했습니다. 크리에이터의 캠페인 현황에 바로 반영됩니다.',
     okDeclined: '지원을 정중히 거절했습니다.',
     okVerified: '게시물을 확인했습니다. 7일 홀드가 시작됐고, 종료 후 정산 대기열에 올라옵니다.',
@@ -5899,6 +5901,9 @@ export const ko: Dictionary = {
     errSlotsFull: '선정 슬롯이 모두 찼습니다. 슬롯을 늘리거나 다른 선정을 해제하세요.',
     errNotReleasable: '아직 홀드 기간입니다. 상세의 시각 이후에 정산할 수 있습니다.',
     errMetricsRequired: '조회수 기반 정산은 7일차 조회수가 먼저 입력되어야 합니다.',
+    errPaymentWrongEnvironment: '현재 배포와 다른 환경의 결제는 다시 확인할 수 없습니다.',
+    errPaymentCooldown: '이 결제는 방금 확인했습니다. 60초 뒤에 다시 시도하세요.',
+    errPaymentUnavailable: '결제사 상태를 불러오지 못했습니다. 잠시 뒤 다시 시도하세요.',
     detailLabel: '상세',
   },
 };

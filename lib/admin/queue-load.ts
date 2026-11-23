@@ -12,10 +12,13 @@ import { loadRiskQueueSummary } from "@/lib/campaigns/risk/admin";
 import { countSocialQueue } from "@/lib/influencers/admin";
 import { platformReady } from "@/lib/creator-platform/service";
 import { creatorApplicationCount } from "@/lib/creator-platform/onboarding";
-import { countManualTossPayments } from "@/lib/billing/toss-service";
 import { countDeletionQueue, deletionReady } from "@/lib/account/deletion";
 import { campaignWorkCounts } from "./workflow";
-import { countRecentRenderFailures } from "./render-board";
+import {
+  countManualPayments,
+  countRecentRenderFailures,
+  defaultPaymentEnvironment,
+} from "./render-board";
 import type { AdminQueueCounts } from "./queues";
 
 /**
@@ -47,17 +50,23 @@ async function countRows(sql: SqlRunner, statement: string): Promise<number> {
  * Count every queue at once. Each source fails on its own: one missing table turns its queue into
  * "could not count", never the whole page into an error.
  */
-export async function loadAdminQueues(sql: SqlRunner, viewer: Viewer, now: Date = new Date()): Promise<AdminQueueLoad> {
+export async function loadAdminQueues(
+  sql: SqlRunner,
+  viewer: Viewer,
+  now: Date = new Date(),
+  env: Record<string, string | undefined> = process.env,
+): Promise<AdminQueueLoad> {
   const campaignWork = (async () => {
     const campaigns = await loadAllCampaigns(sql);
     const counts = await loadCampaignCounts(sql, campaigns.map((row) => row.id));
     return campaignWorkCounts(counts.values());
   })().catch(() => null);
   const creatorTables = platformReady(sql).catch(() => false);
+  const paymentEnv = defaultPaymentEnvironment(env);
 
   const [paymentsManual, renderFailures, accountDeletions, risk, feedback, studio, inquiries, work, payouts, socialAccounts, creatorApplications, formats, templates] =
     await Promise.all([
-      counted(() => countManualTossPayments(sql)),
+      counted(() => countManualPayments(sql, paymentEnv)),
       counted(() => countRecentRenderFailures(sql, now)),
       // Before 0064 the table is missing: "could not count", never a zero.
       counted(async () => {

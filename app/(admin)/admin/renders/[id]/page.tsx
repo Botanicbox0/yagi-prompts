@@ -4,8 +4,9 @@ import { getSqlRunner } from "@/lib/db/connect";
 import { getDictionary } from "@/lib/i18n/dictionaries";
 import { getLocaleFromHeaders } from "@/lib/i18n/server";
 import { interpolate } from "@/lib/i18n/format";
-import { AdminShell, BUTTON, BUTTON_PRIMARY, ConfirmCheck, Field, INPUT, OpForm } from "@/components/admin/chrome";
+import { AdminShell, BUTTON, BUTTON_PRIMARY, ConfirmCheck, Field, INPUT, OpForm, OutcomeBanner } from "@/components/admin/chrome";
 import { AdminPageHeader, FactList, StatusPill, Timeline } from "@/components/admin/patterns";
+import { getTossGateway } from "@/lib/billing/toss-gateway";
 import {
   canResendRenderNotice,
   canRetryRender,
@@ -22,14 +23,37 @@ import { formatAdminTime, formatKrw, formatUsd, shortId } from "@/lib/admin/form
  */
 export const dynamic = "force-dynamic";
 
-export default async function RenderDetailPage({ params }: { params: Promise<{ id: string }> }) {
+function oneParam(params: Record<string, string | string[] | undefined>, key: string): string | undefined {
+  const value = params[key];
+  return typeof value === "string" ? value : undefined;
+}
+
+export default async function RenderDetailPage({
+  params,
+  searchParams,
+}: {
+  params: Promise<{ id: string }>;
+  searchParams?: Promise<Record<string, string | string[] | undefined>>;
+}) {
   // The layout's check is not enough on its own: a client navigation request can ask for this page
   // segment alone, and then the layout does not run. Every admin page verifies the admin itself.
   await requireAdmin();
-  const [{ id }, locale, sql] = await Promise.all([params, getLocaleFromHeaders(), getSqlRunner()]);
+  const [{ id }, locale, sql, query] = await Promise.all([
+    params,
+    getLocaleFromHeaders(),
+    getSqlRunner(),
+    searchParams ? searchParams : Promise.resolve({}),
+  ]);
   if (sql === null) notFound();
   const job = await loadRenderDetail(sql, id);
   if (job === null) notFound();
+
+  let gatewayKind: string | null = null;
+  try {
+    gatewayKind = getTossGateway()?.kind ?? null;
+  } catch {
+    gatewayKind = null;
+  }
 
   const dict = getDictionary(locale);
   const a = dict.admin;
@@ -71,6 +95,13 @@ export default async function RenderDetailPage({ params }: { params: Promise<{ i
             ) : null}
           </div>
         }
+      />
+
+      <OutcomeBanner
+        dict={a}
+        ok={oneParam(query, "ok")}
+        err={oneParam(query, "err")}
+        detail={oneParam(query, "detail")}
       />
 
       {canRetry ? (
@@ -243,6 +274,14 @@ export default async function RenderDetailPage({ params }: { params: Promise<{ i
         ) : (
           <p className="admin-empty">{r.noPayment}</p>
         )}
+        {job.payment && gatewayKind !== null && job.payment.environment === gatewayKind ? (
+          <OpForm op="billing.payment.recheck" back={`/admin/renders/${job.id}`} className="mt-4">
+            <input type="hidden" name="paymentId" value={job.payment.id} />
+            <button type="submit" className={BUTTON} data-payment-recheck={job.payment.id}>
+              {c.payments.recheckButton}
+            </button>
+          </OpForm>
+        ) : null}
       </section>
 
       {job.feedbackStatus ? (

@@ -5651,6 +5651,8 @@ export const en = {
     okPaid: 'Recorded as paid.',
     okUnpublished: 'Unpublished — it is off the listing.',
     okAnnounced: 'Sending the alert. It takes a few minutes, depending on the list.',
+    okPaymentRechecked: 'Checked with the payment provider and updated.',
+    okPaymentUnchanged: 'Checked with the payment provider — no change.',
 
     // --- §13.2/F prompts CMS -------------------------------------------------
     promptsHeading: 'Templates',
@@ -5934,6 +5936,9 @@ export const en = {
     errSlotsFull: 'Every slot is taken. Raise the slot count or release a selection.',
     errNotReleasable: 'The hold has not ended. The detail shows when it does.',
     errMetricsRequired: 'A view-based payout needs the seven-day view count first.',
+    errPaymentWrongEnvironment: 'Cannot re-check a payment from another environment.',
+    errPaymentCooldown: 'This payment was just checked. Wait 60 seconds and try again.',
+    errPaymentUnavailable: 'Could not reach the payment provider. Try again in a moment.',
     errUnknown: 'Something went wrong.',
     detailLabel: 'Detail',
   },

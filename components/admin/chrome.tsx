@@ -208,6 +208,8 @@ const SUCCESS_KEYS = {
   verified: "okVerified",
   paid: "okPaid",
   announced: "okAnnounced",
+  paymentRechecked: "okPaymentRechecked",
+  paymentUnchanged: "okPaymentUnchanged",
 } as const;
 
 const ERROR_KEYS = {
@@ -241,6 +243,9 @@ const ERROR_KEYS = {
   brandNotActive: "errBrandNotActive",
   brandConsentRequired: "errBrandConsentRequired",
   brandNotShared: "errBrandNotShared",
+  paymentWrongEnvironment: "errPaymentWrongEnvironment",
+  paymentCooldown: "errPaymentCooldown",
+  paymentUnavailable: "errPaymentUnavailable",
   unknown: "errUnknown",
 } as const;
 
@@ -271,6 +276,10 @@ export function OutcomeBanner({
     ? dict[errorKey as keyof AdminDict]
     : dict[successKey as keyof AdminDict];
 
+  const showDetail = Boolean(
+    detail && (failed || ok === "paymentRechecked" || ok === "paymentUnchanged"),
+  );
+
   return (
     <div
       role="status"
@@ -279,7 +288,7 @@ export function OutcomeBanner({
     >
       <p className="admin-outcome-title font-medium">{String(message)}</p>
       {/* The database's sentence matters when something failed; a slug under "Created." is noise (2026-09-11). */}
-      {failed && detail && (
+      {showDetail && (
         <p className="admin-outcome-detail mt-1.5 font-mono text-[12px] break-words opacity-75">
           {dict.detailLabel}: {detail}
         </p>
