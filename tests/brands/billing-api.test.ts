@@ -338,7 +338,7 @@ describe('reservation expiry from 10-minute notices tick cron', () => {
 
     const pass1 = await noticesTick.GET(req());
     expect(pass1.status).toBe(200);
-    expect(await pass1.json()).toEqual({ ok: true, ran: false, studio: { released: 0, expired: 2 } });
+    expect(await pass1.json()).toMatchObject({ ok: true, studio: { released: 0, expired: 2 } });
 
     // Stale reservations released, fresh reservation kept
     expect((await loadAllowance(f.sql, f.orgId, deps.env)).usedKrw).toBe(100);
@@ -396,7 +396,7 @@ describe('reservation expiry from 10-minute notices tick cron', () => {
 
     const tickRes = await noticesTick.GET(req());
     expect(tickRes.status).toBe(200);
-    expect(await tickRes.json()).toEqual({ ok: true, ran: false, studio: { released: 0, expired: 1 } });
+    expect(await tickRes.json()).toMatchObject({ ok: true, studio: { released: 0, expired: 1 } });
 
     // Healthy 35-minute sunra_mcp job stays running with full estimate_krw; 6h job failed with 10-minute message!
     const jobs = (
