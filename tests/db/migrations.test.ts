@@ -102,6 +102,8 @@ describe('migrations apply on a fresh database (PLAN §6)', () => {
       'brand_studio_reviews',
       'brand_studio_video_projects',
       'brand_studio_workflows',
+      'brand_subscription_events',
+      'brand_subscriptions',
       'brand_support_messages',
       // 2026-09-23 — secondary usage (docs/SECONDARY-USAGE.md): inquiry case → studio scope, creator
       // compensation and consent (studio-only) → brand quote → payment → grants, plus history/outcomes.

@@ -11,7 +11,9 @@ export type BrandBillingFailureCode =
   | 'conflict'
   | 'unavailable'
   | 'rate_limited'
-  | 'code_unavailable';
+  | 'code_unavailable'
+  | 'disabled'
+  | 'not_available_yet';
 
 export type BrandBillingOutcome<T = Record<string, unknown>> =
   | ({ ok: true } & T)
@@ -86,7 +88,14 @@ export interface BrandBillingProfile {
 }
 
 export type BrandInvoiceStatus = 'draft' | 'issued' | 'paid' | 'void';
-export type BrandInvoiceEventAction = 'drafted' | 'edited' | 'issued' | 'paid' | 'voided';
+export type BrandInvoiceEventAction =
+  | 'drafted'
+  | 'edited'
+  | 'issued'
+  | 'paid'
+  | 'voided'
+  | 'tax_invoice_recorded'
+  | 'adopted';
 
 export interface BrandInvoice {
   id: string;

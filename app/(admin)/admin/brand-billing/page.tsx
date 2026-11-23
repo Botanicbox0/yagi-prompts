@@ -12,6 +12,7 @@ import {
 } from '@/lib/admin/brand-billing-console';
 import { formatAdminTime, formatCount, formatKrw } from '@/lib/admin/format';
 import { interpolate } from '@/lib/i18n/format';
+import { kstDayOf } from '@/lib/brands/billing/math';
 import {
   AdminShell,
   BUTTON,
@@ -63,17 +64,28 @@ export default async function BrandBillingOverviewPage(props?: { searchParams?: 
 
   const period = billingPeriodParam(params);
   const env = studioEnv();
-  const data = sql ? await loadBrandBillingOverview(sql, viewer, { period, env }) : null;
+  const now = new Date();
+  const todayKst = kstDayOf(now);
+  const data = sql ? await loadBrandBillingOverview(sql, viewer, { period, env, now }) : null;
   const backUrl = `/admin/brand-billing?period=${encodeURIComponent(period)}`;
+
+  const okCode = one(params, 'ok');
+  const rawDetail = one(params, 'detail');
+  const preparedPlanCapMatch = okCode === 'prepared' && rawDetail ? /^(b2b_(?:29|49|69))=(\d+|unset)\b/.exec(rawDetail) : null;
+  const preparedPlanId = preparedPlanCapMatch?.[1];
+  const preparedCapValue = preparedPlanCapMatch?.[2];
+  // Review round 2, item 9: the clear confirm sends back the digest of the previewed affected organizations.
+  const preparedClearDigest =
+    preparedCapValue === 'unset' ? /digest=([0-9a-f]{16})\b/.exec(rawDetail ?? '')?.[1] : undefined;
 
   return (
     <AdminShell dict={dict.admin} locale={locale} active="brandBilling">
       <div data-brand-billing-overview>
         <OutcomeBanner
-          dict={dict.admin}
-          ok={one(params, 'ok')}
+          dict={{ ...dict.admin, okPrepared: bb.planDefaultPreviewedBanner }}
+          ok={okCode}
           err={one(params, 'err')}
-          detail={formatBillingOutcomeDetail(one(params, 'detail'), locale)}
+          detail={formatBillingOutcomeDetail(rawDetail, locale)}
           showDetailForOk
         />
 
@@ -379,8 +391,15 @@ export default async function BrandBillingOverviewPage(props?: { searchParams?: 
                             min={1000}
                             max={100_000_000}
                             step={1000}
-                            defaultValue={row.monthlyCapKrw ?? ''}
-                            placeholder={bb.unsetValue}
+                            required
+                            defaultValue={
+                              preparedPlanId === row.planId && preparedCapValue !== undefined && preparedCapValue !== 'unset'
+                                ? preparedCapValue
+                                : row.monthlyCapKrw !== null
+                                  ? String(row.monthlyCapKrw)
+                                  : ''
+                            }
+                            placeholder={row.monthlyCapKrw == null ? bb.unsetValue : undefined}
                             className={INPUT}
                           />
                         </label>
@@ -398,11 +417,131 @@ export default async function BrandBillingOverviewPage(props?: { searchParams?: 
                           </button>
                         </div>
                       </OpForm>
+                      <OpForm
+                        op="brandBilling.planDefault.set"
+                        back={`${backUrl}#plan-defaults`}
+                        className="mt-2.5 flex flex-wrap items-center justify-between gap-2 border-t border-hairline pt-2.5 text-xs"
+                      >
+                        <input type="hidden" name="planId" value={row.planId} />
+                        <input type="hidden" name="clearDefault" value="1" />
+                        {preparedPlanId === row.planId && preparedClearDigest && (
+                          <input type="hidden" name="previewDigest" value={preparedClearDigest} />
+                        )}
+                        <input type="hidden" name="note" value={row.note} />
+                        <label className="flex items-center gap-1.5">
+                          <input type="checkbox" name="confirm" value="true" />
+                          <span>{bb.clearConfirmLabel}</span>
+                        </label>
+                        <button type="submit" className={BUTTON}>
+                          {bb.clearDefaultButton}
+                        </button>
+                      </OpForm>
                     </div>
                   ))}
                 </div>
               )}
             </Panel>
+
+            {data.taxInvoicePanel?.enabled && (
+              <Panel
+                title={interpolate(bb.taxInvoicesHeading, { period: data.period })}
+                id="tax-invoices"
+                action={
+                  data.taxInvoicePanel.schemaReady ? (
+                    <span className="text-xs font-mono opacity-75">
+                      {formatCount(data.taxInvoicePanel.pending.length, locale)}
+                    </span>
+                  ) : undefined
+                }
+              >
+                {!data.taxInvoicePanel.schemaReady ? (
+                  <p className="admin-notice" data-tax-invoices-unmigrated>
+                    {od.billing.subscriptionUnconfigured}
+                  </p>
+                ) : (
+                  <>
+                    <p className="admin-field-hint mb-3">{bb.taxInvoicesHint}</p>
+                    <AdminTable
+                      caption={interpolate(bb.taxInvoicesHeading, { period: data.period })}
+                      columns={[
+                        { key: 'org', label: ol.columns.org },
+                        { key: 'profile', label: od.billing.profileHeading },
+                        { key: 'supply', label: od.billing.invoiceCols.supply, numeric: true },
+                        { key: 'vat', label: od.billing.invoiceCols.vat, numeric: true },
+                        { key: 'total', label: od.billing.invoiceCols.total, numeric: true },
+                        { key: 'status', label: od.billing.invoiceCols.status },
+                        { key: 'action', label: od.billing.invoiceCols.actions },
+                      ]}
+                      rows={data.taxInvoicePanel.pending.map((row) => ({
+                        key: row.invoiceId,
+                        data: { 'data-pending-tax-invoice-row': row.invoiceId },
+                        cells: {
+                          org: (
+                            <a
+                              className="font-semibold text-accent hover:underline"
+                              href={`/admin/brand-workspace/organizations/${row.organizationId}#billing-invoices`}
+                            >
+                              {row.organizationName}
+                            </a>
+                          ),
+                          profile: row.billingProfile ? (
+                            <div className="text-xs space-y-0.5">
+                              <div className="font-medium">
+                                {row.billingProfile.companyLegalName || '—'} ({row.billingProfile.businessRegNo || '—'})
+                              </div>
+                              <div className="opacity-75">
+                                {row.billingProfile.representativeName || '—'} · {row.billingProfile.taxInvoiceEmail || '—'}
+                              </div>
+                            </div>
+                          ) : (
+                            <span className="text-xs opacity-75">{bb.taxInvoiceOrgProfileMissing}</span>
+                          ),
+                          supply: formatKrw(row.supplyKrw, locale),
+                          vat: formatKrw(row.vatKrw, locale),
+                          total: <strong>{formatKrw(row.totalKrw, locale)}</strong>,
+                          status: (
+                            <StatusPill tone={row.status === 'paid' ? 'done' : 'action'}>
+                              {od.billing.invoiceStatuses[row.status]}
+                            </StatusPill>
+                          ),
+                          action: (
+                            <OpForm
+                              op="brandBilling.invoice.recordTaxInvoice"
+                              back={`${backUrl}#tax-invoices`}
+                              className="flex flex-wrap items-center gap-1.5"
+                            >
+                              <input type="hidden" name="invoiceId" value={row.invoiceId} />
+                              <input type="hidden" name="stay" value="1" />
+                              <input
+                                name="issuedOn"
+                                type="date"
+                                defaultValue={todayKst}
+                                required
+                                title={od.billing.taxInvoiceIssuedOnLabel}
+                                className={INPUT}
+                                style={{ width: 140 }}
+                              />
+                              <input
+                                name="ref"
+                                placeholder={od.billing.taxInvoiceRefLabel}
+                                required
+                                maxLength={120}
+                                className={INPUT}
+                                style={{ width: 170 }}
+                              />
+                              <button type="submit" className={BUTTON_PRIMARY}>
+                                {od.billing.taxInvoiceSubmit}
+                              </button>
+                            </OpForm>
+                          ),
+                        },
+                      }))}
+                      empty={interpolate(bb.taxInvoicesEmpty, { period: data.period })}
+                    />
+                  </>
+                )}
+              </Panel>
+            )}
           </>
         )}
       </div>

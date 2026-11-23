@@ -1,0 +1,82 @@
+{
+ "note": "Recorded from origin/main (aaf4fbcf) lib/brand-studio/usage.ts + lib/brands/billing/schema-guard.ts for an organization with an explicit override row (is_override = true, preferred_lane sunra_mcp, cap 777000) and a paid plan assignment; SQL whitespace collapsed, UUIDs replaced by <uuid>.",
+ "load": {
+  "capKrw": 777000,
+  "baseCapKrw": 777000,
+  "extraKrw": 0,
+  "source": "override",
+  "usedKrw": 0,
+  "resetsAt": "2026-11-30T15:00:00.000Z",
+  "preferredLane": "sunra_mcp",
+  "configured": true
+ },
+ "loadLog": [
+  {
+   "text": "select to_regclass('public.brand_studio_allowances') is not null as allowances, exists ( select 1 from pg_attribute where attrelid = to_regclass('public.brand_studio_allowances') and attname = 'is_override' and not attisdropped ) as override_col, to_regclass('public.brand_plan_assignments') is not null as plans, to_regclass('public.brand_plan_allowance_defaults') is not null as plan_defaults, to_regclass('public.brand_allowance_grants') is not null as grants",
+   "params": []
+  },
+  {
+   "text": "select a.monthly_cap_krw as allow_cap_krw, a.preferred_lane as allow_preferred_lane, a.is_override as allow_is_override, p.plan_id as plan_id, p.started_on::text as plan_started_on, p.ends_on::text as plan_ends_on, d.monthly_cap_krw as plan_default_cap_krw, coalesce(( select sum(g.amount_krw) from brand_allowance_grants g where g.organization_id = org.organization_id and g.revoked_at is null and g.valid_month = $2 ), 0)::bigint as extra_krw from (select cast($1 as uuid) as organization_id) org left join brand_studio_allowances a on a.organization_id = org.organization_id left join brand_plan_assignments p on p.organization_id = org.organization_id left join brand_plan_allowance_defaults d on d.plan_id = p.plan_id",
+   "params": [
+    "<uuid>",
+    "2026-11"
+   ]
+  },
+  {
+   "text": "select coalesce(sum(ceil(coalesce(usage_krw, estimate_krw) / 10.0) * 10), 0)::bigint as used from brand_studio_jobs where organization_id = $1 and status not in ('failed','canceled') and created_at >= $2 and created_at < $3",
+   "params": [
+    "<uuid>",
+    "2026-10-31T15:00:00.000Z",
+    "2026-11-30T15:00:00.000Z"
+   ]
+  }
+ ],
+ "reserve": {
+  "ok": true,
+  "allowance": {
+   "capKrw": 777000,
+   "baseCapKrw": 777000,
+   "extraKrw": 0,
+   "source": "override",
+   "usedKrw": 0,
+   "resetsAt": "2026-11-30T15:00:00.000Z",
+   "preferredLane": "sunra_mcp",
+   "configured": true
+  }
+ },
+ "reserveLog": [
+  {
+   "text": "begin",
+   "params": []
+  },
+  {
+   "text": "select id from brand_organizations where id = $1 for update",
+   "params": [
+    "<uuid>"
+   ]
+  },
+  {
+   "text": "select to_regclass('public.brand_studio_allowances') is not null as allowances, exists ( select 1 from pg_attribute where attrelid = to_regclass('public.brand_studio_allowances') and attname = 'is_override' and not attisdropped ) as override_col, to_regclass('public.brand_plan_assignments') is not null as plans, to_regclass('public.brand_plan_allowance_defaults') is not null as plan_defaults, to_regclass('public.brand_allowance_grants') is not null as grants",
+   "params": []
+  },
+  {
+   "text": "select a.monthly_cap_krw as allow_cap_krw, a.preferred_lane as allow_preferred_lane, a.is_override as allow_is_override, p.plan_id as plan_id, p.started_on::text as plan_started_on, p.ends_on::text as plan_ends_on, d.monthly_cap_krw as plan_default_cap_krw, coalesce(( select sum(g.amount_krw) from brand_allowance_grants g where g.organization_id = org.organization_id and g.revoked_at is null and g.valid_month = $2 ), 0)::bigint as extra_krw from (select cast($1 as uuid) as organization_id) org left join brand_studio_allowances a on a.organization_id = org.organization_id left join brand_plan_assignments p on p.organization_id = org.organization_id left join brand_plan_allowance_defaults d on d.plan_id = p.plan_id",
+   "params": [
+    "<uuid>",
+    "2026-11"
+   ]
+  },
+  {
+   "text": "select coalesce(sum(ceil(coalesce(usage_krw, estimate_krw) / 10.0) * 10), 0)::bigint as used from brand_studio_jobs where organization_id = $1 and status not in ('failed','canceled') and created_at >= $2 and created_at < $3",
+   "params": [
+    "<uuid>",
+    "2026-10-31T15:00:00.000Z",
+    "2026-11-30T15:00:00.000Z"
+   ]
+  },
+  {
+   "text": "commit",
+   "params": []
+  }
+ ]
+}

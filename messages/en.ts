@@ -5971,6 +5971,8 @@ export const en = {
     errPaymentWrongEnvironment: 'Cannot re-check a payment from another environment.',
     errPaymentCooldown: 'This payment was just checked. Wait 60 seconds and try again.',
     errPaymentUnavailable: 'Could not reach the payment provider. Try again in a moment.',
+    errDisabled: 'This feature flag is currently disabled.',
+    errNotAvailableYet: 'This action is not available yet in the current phase.',
     errUnknown: 'Something went wrong.',
     detailLabel: 'Detail',
   },

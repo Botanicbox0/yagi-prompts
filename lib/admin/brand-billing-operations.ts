@@ -20,7 +20,8 @@ import {
 } from '@/lib/brands/billing';
 import { BRAND_PLAN_GRACE_DAYS_DEFAULT } from '@/lib/brands/billing/math';
 import { syncPlanDefaultSnapshot } from '@/lib/brands/billing/snapshot';
-import { loadPlanAssignment } from '@/lib/brands/plans';
+import { loadPlanAssignment, subscriptionManagesPlan, SUBSCRIPTION_MANAGED_PLAN } from '@/lib/brands/plans';
+import { previewDigest } from '@/lib/brands/subscriptions/service';
 import { isDbAdmin, UUID_RE } from './brand-ops-guard';
 import { fail, ok, type AdminContext, type AdminOutcome } from './context';
 import { brandFailure } from './brand-workspace-operations';
@@ -67,32 +68,81 @@ const planDefaultSet: AdminOperation<{
   monthlyCapKrw: number | null;
   note: string;
   confirm: boolean;
+  clearDefault?: true;
+  previewDigest?: string;
 }> = {
   parse(form) {
-    const cap = optIntField(form, 'monthlyCapKrw');
-    if (!cap.ok) return cap;
+    const clearDefault = form.has('clearDefault') && boolAll(form, 'clearDefault');
+    if (clearDefault) {
+      const digest = f.str(form, 'previewDigest');
+      return {
+        ok: true,
+        value: {
+          planId: f.str(form, 'planId'),
+          monthlyCapKrw: null,
+          note: f.text(form, 'note'),
+          confirm: form.has('confirm') ? boolAll(form, 'confirm') : false,
+          clearDefault: true,
+          ...(digest ? { previewDigest: digest } : {}),
+        },
+      };
+    }
+    const cap = intField(form, 'monthlyCapKrw');
+    if (!cap.ok) return { ok: false, detail: 'monthlyCapKrw' };
     return {
       ok: true,
       value: {
         planId: f.str(form, 'planId'),
-        monthlyCapKrw: cap.value ?? null,
+        monthlyCapKrw: cap.value,
         note: f.text(form, 'note'),
         confirm: form.has('confirm') ? boolAll(form, 'confirm') : false,
       },
     };
   },
   async run(ctx: AdminContext, input) {
-    const result = await setPlanAllowanceDefault({ sql: ctx.sql, env: studioEnv() }, ctx.viewer, input);
+    const serviceInput = { planId: input.planId, monthlyCapKrw: input.monthlyCapKrw, note: input.note, confirm: input.confirm };
+    // Review round 2, item 9: clearing a default is bound to the preview the admin saw (affected organizations
+    // and their caps). The confirm must carry the step-1 digest; it is recomputed from current data first.
+    if (input.clearDefault && input.confirm) {
+      if (!input.previewDigest) return fail('invalid', 'preview_required');
+      const current = await setPlanAllowanceDefault({ sql: ctx.sql, env: studioEnv() }, ctx.viewer, {
+        ...serviceInput,
+        confirm: false,
+      });
+      if (!current.ok) return billingFailure(current);
+      if (current.applied || planDefaultPreviewDigest(current) !== input.previewDigest) {
+        return fail('invalid', 'preview_stale');
+      }
+    }
+    const result = await setPlanAllowanceDefault({ sql: ctx.sql, env: studioEnv() }, ctx.viewer, serviceInput);
     if (!result.ok) return billingFailure(result);
     if (!result.applied) {
       const names = result.affectedOrganizations.map((o) => `${o.name}:${o.beforeCapKrw}->${o.afterCapKrw}`).join(',');
+      const capToken = result.monthlyCapKrw === null ? 'unset' : String(result.monthlyCapKrw);
+      const digestToken = input.clearDefault ? ` · digest=${planDefaultPreviewDigest(result)}` : '';
       return ok('prepared', {
-        detail: `${result.affectedCount}${names ? ` (${names})` : ''}`,
+        detail: `${result.planId}=${capToken} · ${result.affectedCount}${names ? ` (${names})` : ''}${digestToken}`,
       });
     }
     return ok('saved', { detail: String(result.affectedCount) });
   },
 };
+
+/** Digest of a plan-default preview: the plan, the new cap and every affected organization's before/after. */
+function planDefaultPreviewDigest(preview: {
+  planId: string;
+  monthlyCapKrw: number | null;
+  affectedOrganizations: Array<{ organizationId: string; beforeCapKrw: number; afterCapKrw: number }>;
+}): string {
+  return previewDigest({
+    planId: preview.planId,
+    monthlyCapKrw: preview.monthlyCapKrw,
+    affected: preview.affectedOrganizations
+      .map((o) => `${o.organizationId}:${o.beforeCapKrw}->${o.afterCapKrw}`)
+      .sort()
+      .join(','),
+  });
+}
 
 interface PlanAndAllowanceInput {
   organizationId: string;
@@ -267,6 +317,19 @@ const planAndAllowanceSet: AdminOperation<PlanAndAllowanceInput> = {
         return ok('saved', { to: organizationPath(input.organizationId), detail: 'no_change' });
       }
       return saveAllowanceWithoutPlanChange();
+    }
+
+    // Review round 2, item 5: while a non-ended subscription owns the plan assignment (flag on, 0182 applied),
+    // plan id / billing mode / start / end change only through the subscription screen. Allowance-only
+    // changes keep working. Flag off: no query.
+    const planFieldsChanged =
+      existingPlan === null ||
+      input.planId !== existingPlan.planId ||
+      input.billingMode !== existingPlan.billingMode ||
+      input.startedOn !== existingPlan.startedOn ||
+      (input.endsOn ?? null) !== (existingPlan.endsOn ?? null);
+    if (planFieldsChanged && (await subscriptionManagesPlan(ctx.sql, input.organizationId))) {
+      return fail('brandConflict', `conflict:${SUBSCRIPTION_MANAGED_PLAN}`);
     }
 
     const planUnchanged =
@@ -551,7 +614,10 @@ const invoiceMarkPaid: AdminOperation<{ invoiceId: string; paidAt?: string; paid
   async run(ctx: AdminContext, input) {
     const result = await markBrandInvoicePaid({ sql: ctx.sql }, ctx.viewer, input);
     if (!result.ok) return billingFailure(result);
-    return ok('paid', { to: organizationPath(result.invoice.organizationId) });
+    return ok('paid', {
+      to: organizationPath(result.invoice.organizationId),
+      ...(result.reconcileDeferred ? { detail: 'subscription_reconcile_deferred' } : {}),
+    });
   },
 };
 
@@ -568,7 +634,10 @@ const invoiceVoid: AdminOperation<{ invoiceId: string; reason: string }> = {
   async run(ctx: AdminContext, input) {
     const result = await voidBrandInvoice({ sql: ctx.sql }, ctx.viewer, input);
     if (!result.ok) return billingFailure(result);
-    return ok('saved', { to: organizationPath(result.invoice.organizationId) });
+    return ok('saved', {
+      to: organizationPath(result.invoice.organizationId),
+      ...(result.reconcileDeferred ? { detail: 'subscription_reconcile_deferred' } : {}),
+    });
   },
 };
 

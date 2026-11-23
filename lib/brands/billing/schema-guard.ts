@@ -13,6 +13,7 @@ import { sqlCacheRoot, type SqlRunner } from '@/lib/db/sql-runner';
 const POSITIVE_TABLES = new WeakMap<object, Set<string>>();
 const POSITIVE_COLUMNS = new WeakMap<object, Set<string>>();
 const ALLOWANCE_STATE_CACHE = new WeakMap<object, AllowanceSchemaState>();
+const SUBSCRIPTION_READY_CACHE = new WeakMap<object, true>();
 
 function positiveTableSet(sql: SqlRunner): Set<string> {
   const root = sqlCacheRoot(sql);
@@ -145,4 +146,71 @@ export async function loadAllowanceSchemaState(sql: SqlRunner): Promise<Allowanc
     ALLOWANCE_STATE_CACHE.set(root, state);
   }
   return state;
+}
+
+const REQUIRED_SUBSCRIPTION_TABLES = [
+  'brand_subscriptions',
+  'brand_subscription_events',
+  'brand_invoices',
+  'brand_invoice_events',
+  'brand_plan_assignments',
+  'brand_plan_events',
+  'brand_billing_profiles',
+] as const;
+
+const REQUIRED_SUBSCRIPTION_COLUMNS: ReadonlyArray<readonly [string, string]> = [
+  ['brand_subscriptions', 'epoch'],
+  ['brand_subscriptions', 'last_reconciled_at'],
+  ['brand_subscriptions', 'pending_plan_effective_period'],
+  ['brand_subscriptions', 'reconcile_failures'],
+  ['brand_subscriptions', 'last_reconcile_error'],
+  ['brand_invoices', 'kind'],
+  ['brand_invoices', 'covers_months'],
+  ['brand_invoices', 'due_on'],
+  ['brand_invoices', 'collection_method'],
+  ['brand_invoices', 'tax_invoice_issued_on'],
+  ['brand_invoices', 'tax_invoice_ref'],
+  ['brand_invoices', 'created_via'],
+  ['brand_invoices', 'issued_via'],
+  ['brand_invoices', 'subscription_epoch'],
+  ['brand_invoice_events', 'actor_kind'],
+  ['brand_plan_events', 'actor_kind'],
+];
+
+/**
+ * Probes whether migration `0182` (brand subscriptions tables and invoice/event columns) is live.
+ * Positive `true` is cached per DB root; `false` is never cached so applying migrations live takes effect immediately.
+ */
+export async function loadSubscriptionSchemaReady(sql: SqlRunner): Promise<boolean> {
+  const root = sqlCacheRoot(sql);
+  if (SUBSCRIPTION_READY_CACHE.get(root) === true) return true;
+
+  const tablesOk = await hasTables(sql, REQUIRED_SUBSCRIPTION_TABLES);
+  if (!tablesOk) return false;
+
+  const colPairs = REQUIRED_SUBSCRIPTION_COLUMNS.map(([table, column]) => `${table}.${column}`);
+  const cSet = positiveColumnSet(sql);
+  const missingCols = REQUIRED_SUBSCRIPTION_COLUMNS.filter(([table, column]) => !cSet.has(`${table}.${column}`));
+  if (missingCols.length > 0) {
+    const tablesArg = missingCols.map(([t]) => t);
+    const colsArg = missingCols.map(([, c]) => c);
+    const { rows } = await sql.query<{ key: string }>(
+      `select req.tbl || '.' || req.col as key
+         from unnest($1::text[], $2::text[]) as req(tbl, col)
+         join pg_attribute a
+           on a.attrelid = to_regclass('public.' || req.tbl)
+          and a.attname = req.col
+          and not a.attisdropped`,
+      [tablesArg, colsArg],
+    );
+    for (const r of rows) {
+      cSet.add(String(r.key));
+    }
+  }
+
+  const ready = colPairs.every((key) => cSet.has(key));
+  if (ready) {
+    SUBSCRIPTION_READY_CACHE.set(root, true);
+  }
+  return ready;
 }

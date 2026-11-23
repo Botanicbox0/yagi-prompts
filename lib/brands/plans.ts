@@ -3,6 +3,8 @@ import type { Viewer } from '@/lib/auth/identity';
 import type { SqlRunner } from '@/lib/db/sql-runner';
 import type { BrandOutcome } from './workspace/types';
 import { isMissingTable } from './entitlements';
+import { brandBillingAutoIssueOpen } from '@/lib/flags';
+import { loadSubscriptionSchemaReady } from './billing/schema-guard';
 import { syncPlanDefaultSnapshot } from './billing/snapshot';
 
 /**
@@ -117,6 +119,174 @@ export function planActiveOn(plan: Pick<BrandPlanAssignment, 'startedOn' | 'ends
   return plan !== null && plan.startedOn <= today && (plan.endsOn === null || today < plan.endsOn);
 }
 
+export type PlanWriteActor = { kind: 'admin'; userId: string } | { kind: 'system' };
+
+/**
+ * Shared internal writer for `brand_plan_assignments` + `brand_plan_events` + `syncPlanDefaultSnapshot`.
+ * Both `setPlanAssignment` (admin wrapper) and the subscription service (admin & system) call this
+ * inside a transaction so plan writes, event logging, and allowance snapshots stay in one place.
+ */
+export async function upsertPlanAssignmentInTx(
+  sql: SqlRunner,
+  params: {
+    organizationId: string;
+    planId: BrandPlanId;
+    billingMode: BrandBillingMode;
+    startedOn: string;
+    endsOn: string | null;
+    seats: number | null;
+    note: string;
+    expectedRevision?: number;
+    actor: PlanWriteActor;
+    recordActorKind?: boolean;
+    /** Subscription paths lock the organization `for no key update` (see `lockOrganizationForSubscription`). */
+    organizationLock?: 'update' | 'no key update';
+    /** Item 5: refuse plan id / billing mode / dates changes while a non-ended subscription owns the row. */
+    refuseWhenSubscriptionManaged?: boolean;
+    now?: Date;
+    graceDays?: number;
+  },
+): Promise<BrandOutcome<{ id: string; revision: number }>> {
+  const orgLockSql =
+    params.organizationLock === 'no key update'
+      ? 'select id from brand_organizations where id = $1 for no key update'
+      : 'select id from brand_organizations where id = $1 for update';
+  if (!(await sql.query(orgLockSql, [params.organizationId])).rows[0]) {
+    return { ok: false, code: 'not_found' };
+  }
+  const current = (
+    await sql.query<{ revision: number }>('select revision from brand_plan_assignments where organization_id = $1 for update', [
+      params.organizationId,
+    ])
+  ).rows[0];
+  const revision = current ? Number(current.revision) : 0;
+  if (params.expectedRevision !== undefined && revision !== params.expectedRevision) {
+    return { ok: false, code: 'conflict' };
+  }
+  if (params.refuseWhenSubscriptionManaged && (await subscriptionManagesPlan(sql, params.organizationId))) {
+    const existing = await loadPlanAssignment(sql, params.organizationId);
+    const changesManagedFields =
+      existing === null ||
+      existing.planId !== params.planId ||
+      existing.billingMode !== params.billingMode ||
+      existing.startedOn !== params.startedOn ||
+      (existing.endsOn ?? null) !== (params.endsOn ?? null);
+    if (changesManagedFields) return { ok: false, code: 'conflict', field: SUBSCRIPTION_MANAGED_PLAN };
+  }
+  const next = revision + 1;
+  const actorId = params.actor.kind === 'admin' ? params.actor.userId : null;
+  await sql.query(
+    `insert into brand_plan_assignments (organization_id, plan_id, billing_mode, started_on, ends_on, seats, note, revision, updated_by, updated_at)
+       values ($1, $2, $3, $4::date, $5::date, $6, $7, $8, $9, now())
+     on conflict (organization_id) do update
+       set plan_id = excluded.plan_id, billing_mode = excluded.billing_mode, started_on = excluded.started_on, ends_on = excluded.ends_on,
+           seats = excluded.seats, note = excluded.note, revision = excluded.revision, updated_by = excluded.updated_by, updated_at = now()`,
+    [params.organizationId, params.planId, params.billingMode, params.startedOn, params.endsOn, params.seats, params.note, next, actorId],
+  );
+  if (params.recordActorKind) {
+    await sql.query(
+      'insert into brand_plan_events (organization_id, plan_id, billing_mode, started_on, ends_on, seats, note, actor_id, actor_kind) values ($1, $2, $3, $4::date, $5::date, $6, $7, $8, $9)',
+      [
+        params.organizationId,
+        params.planId,
+        params.billingMode,
+        params.startedOn,
+        params.endsOn,
+        params.seats,
+        params.note,
+        actorId,
+        params.actor.kind,
+      ],
+    );
+  } else {
+    await sql.query(
+      'insert into brand_plan_events (organization_id, plan_id, billing_mode, started_on, ends_on, seats, note, actor_id) values ($1, $2, $3, $4::date, $5::date, $6, $7, $8)',
+      [params.organizationId, params.planId, params.billingMode, params.startedOn, params.endsOn, params.seats, params.note, actorId],
+    );
+  }
+  await syncPlanDefaultSnapshot(sql, params.organizationId, actorId, {
+    ...(params.now ? { now: params.now } : {}),
+    ...(params.graceDays !== undefined ? { graceDays: params.graceDays } : {}),
+  });
+  return { ok: true, id: params.organizationId, revision: next };
+}
+
+/** Remove an organization's plan assignment when a subscription ends, recording `brand_plan_events` and syncing snapshot. */
+export async function clearPlanAssignmentInTx(
+  sql: SqlRunner,
+  params: {
+    organizationId: string;
+    note: string;
+    actor: PlanWriteActor;
+    recordActorKind?: boolean;
+    now?: Date;
+    graceDays?: number;
+  },
+): Promise<{ cleared: boolean }> {
+  const existing = (
+    await sql.query<PlanRow>(
+      'select plan_id, billing_mode, started_on::text as started_on, ends_on::text as ends_on, seats, note, revision, updated_at from brand_plan_assignments where organization_id = $1 for update',
+      [params.organizationId],
+    )
+  ).rows[0];
+  if (!existing) return { cleared: false };
+  const actorId = params.actor.kind === 'admin' ? params.actor.userId : null;
+  await sql.query('delete from brand_plan_assignments where organization_id = $1', [params.organizationId]);
+  if (params.recordActorKind) {
+    await sql.query(
+      'insert into brand_plan_events (organization_id, plan_id, billing_mode, started_on, ends_on, seats, note, actor_id, actor_kind) values ($1, $2, $3, $4::date, $5::date, $6, $7, $8, $9)',
+      [
+        params.organizationId,
+        existing.plan_id,
+        existing.billing_mode,
+        existing.started_on,
+        existing.ends_on,
+        existing.seats,
+        params.note,
+        actorId,
+        params.actor.kind,
+      ],
+    );
+  } else {
+    await sql.query(
+      'insert into brand_plan_events (organization_id, plan_id, billing_mode, started_on, ends_on, seats, note, actor_id) values ($1, $2, $3, $4::date, $5::date, $6, $7, $8)',
+      [
+        params.organizationId,
+        existing.plan_id,
+        existing.billing_mode,
+        existing.started_on,
+        existing.ends_on,
+        existing.seats,
+        params.note,
+        actorId,
+      ],
+    );
+  }
+  await syncPlanDefaultSnapshot(sql, params.organizationId, actorId, {
+    ...(params.now ? { now: params.now } : {}),
+    ...(params.graceDays !== undefined ? { graceDays: params.graceDays } : {}),
+  });
+  return { cleared: true };
+}
+
+/** Refusal marker (`field`) when an admin tries to change a plan a subscription owns (review round 2, item 5). */
+export const SUBSCRIPTION_MANAGED_PLAN = 'subscription_managed' as const;
+
+/**
+ * Whether a non-ended subscription owns this organization's plan assignment. Only with
+ * `BRAND_BILLING_AUTO_ISSUE=on` and migration 0182 applied; otherwise no query runs (flag-off parity).
+ */
+export async function subscriptionManagesPlan(sql: SqlRunner, organizationId: string): Promise<boolean> {
+  if (!brandBillingAutoIssueOpen()) return false;
+  if (!(await loadSubscriptionSchemaReady(sql))) return false;
+  const row = (
+    await sql.query("select 1 from brand_subscriptions where organization_id = $1 and status <> 'ended' limit 1", [
+      organizationId,
+    ])
+  ).rows[0];
+  return Boolean(row);
+}
+
 /** Set or replace an organization's plan (admin only), with the same revision rule as the policy. */
 export async function setPlanAssignment(
   deps: { sql: SqlRunner },
@@ -131,27 +301,18 @@ export async function setPlanAssignment(
     const profile = (await sql.query<{ is_admin: boolean }>('select is_admin from profiles where id = $1 for key share', [viewer.userId])).rows[0];
     if (!profile) return { ok: false as const, code: 'sign_in_required' as const };
     if (profile.is_admin !== true) return { ok: false as const, code: 'forbidden' as const };
-    if (!(await sql.query('select id from brand_organizations where id = $1 for update', [v.organizationId])).rows[0])
-      return { ok: false as const, code: 'not_found' as const };
-    const current = (
-      await sql.query<{ revision: number }>('select revision from brand_plan_assignments where organization_id = $1 for update', [v.organizationId])
-    ).rows[0];
-    const revision = current ? Number(current.revision) : 0;
-    if (revision !== v.expectedRevision) return { ok: false as const, code: 'conflict' as const };
-    const next = revision + 1;
-    await sql.query(
-      `insert into brand_plan_assignments (organization_id, plan_id, billing_mode, started_on, ends_on, seats, note, revision, updated_by, updated_at)
-         values ($1, $2, $3, $4::date, $5::date, $6, $7, $8, $9, now())
-       on conflict (organization_id) do update
-         set plan_id = excluded.plan_id, billing_mode = excluded.billing_mode, started_on = excluded.started_on, ends_on = excluded.ends_on,
-             seats = excluded.seats, note = excluded.note, revision = excluded.revision, updated_by = excluded.updated_by, updated_at = now()`,
-      [v.organizationId, v.planId, v.billingMode, v.startedOn, v.endsOn, v.seats, v.note, next, viewer.userId],
-    );
-    await sql.query(
-      'insert into brand_plan_events (organization_id, plan_id, billing_mode, started_on, ends_on, seats, note, actor_id) values ($1, $2, $3, $4::date, $5::date, $6, $7, $8)',
-      [v.organizationId, v.planId, v.billingMode, v.startedOn, v.endsOn, v.seats, v.note, viewer.userId],
-    );
-    await syncPlanDefaultSnapshot(sql, v.organizationId, viewer.userId);
-    return { ok: true as const, id: v.organizationId, revision: next };
+    return upsertPlanAssignmentInTx(sql, {
+      organizationId: v.organizationId,
+      planId: v.planId,
+      billingMode: v.billingMode,
+      startedOn: v.startedOn,
+      endsOn: v.endsOn,
+      seats: v.seats,
+      note: v.note,
+      expectedRevision: v.expectedRevision,
+      actor: { kind: 'admin', userId: viewer.userId! },
+      recordActorKind: false,
+      refuseWhenSubscriptionManaged: true,
+    });
   });
 }
