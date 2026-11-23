@@ -161,7 +161,7 @@ describe('legal documents', () => {
     }
     expect(businessRows('ko').map(([, value]) => value)).toContain('야기워크숍 주식회사');
     expect(businessRows('ko').map(([, value]) => value)).toContain('서울특별시 영등포구 양평로 110, 5층 씨06호(양평동4가)');
-    expect(businessRows('en').map(([, value]) => value)).toContain('5F C06, 110, Yangpyeong-ro, Yeongdeungpo-gu, Seoul, 07208, Republic of Korea');
+    expect(businessRows('en').map(([, value]) => value)).toContain('5F C06, 110, Yangpyeong-ro, Yeongdeungpo-gu, Seoul, 07206, Republic of Korea');
     // The 양천구 and 구로구 offices are struck through on the certificate — dead addresses must not survive here.
     for (const dead of ['양천구', '목동서로', '디지털로', 'Guro-gu', 'Yangcheon']) {
       expect(businessRows('ko').flat().join(' '), dead).not.toContain(dead);
@@ -189,7 +189,7 @@ describe('legal documents', () => {
       expect(text).not.toContain('Guro-gu');
     }
     expect(businessFooterLines('ko').join(' ')).toContain('서울특별시 영등포구 양평로 110, 5층 씨06호(양평동4가)');
-    expect(businessFooterLines('en').join(' ')).toContain('5F C06, 110, Yangpyeong-ro, Yeongdeungpo-gu, Seoul, 07208, Republic of Korea');
+    expect(businessFooterLines('en').join(' ')).toContain('5F C06, 110, Yangpyeong-ro, Yeongdeungpo-gu, Seoul, 07206, Republic of Korea');
     expect(businessFooterLines('ko')[0]).toContain('야기워크숍 주식회사');
     expect(businessFooterLines('en')[0]).toContain('YAGI WORKSHOP Inc.');
   });

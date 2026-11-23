@@ -52,8 +52,10 @@ export const BUSINESS = {
   /** 통신판매업신고증 제 2026-서울구로-1618 호 (구로구청, 신고 2026-09-10). */
   mailOrderNumber: '2026-서울구로-1618',
   address: '서울특별시 영등포구 양평로 110, 5층 씨06호(양평동4가)',
-  /** Same line as the English address filed with D&B and the app stores (unit and postal code included). */
-  addressEn: '5F C06, 110, Yangpyeong-ro, Yeongdeungpo-gu, Seoul, 07208, Republic of Korea',
+  /** English address line (unit and postal code included). Postal code 07206 is the road-address value for
+   * 양평로 110 (checked 2026-11-23); the line filed earlier with D&B and the app stores said 07208 and must be
+   * corrected there so the three match. */
+  addressEn: '5F C06, 110, Yangpyeong-ro, Yeongdeungpo-gu, Seoul, 07206, Republic of Korea',
   phone: '010-6599-4020',
   phoneEn: '+82 10-6599-4020',
   email: 'hello@yagiworkshop.xyz',
