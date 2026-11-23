@@ -4,6 +4,7 @@
  * secrets are compared in constant time by `secretMatches`).
  */
 import { timingSafeEqual } from 'node:crypto';
+import { BRAND_PLAN_GRACE_DAYS_DEFAULT } from '@/lib/brands/billing/math';
 import {
   brandStudioEditAssistOpen,
   brandStudioMusicGenerationOpen,
@@ -23,6 +24,7 @@ export interface StudioEnv {
   provider: 'live' | 'fake';
   defaultLane: StudioLane;
   defaultMonthlyKrw: number;
+  planGraceDays: number;
   caps: Record<StudioLane, number>;
   /** True when the API lane can submit (a Sunra key is configured, or the fake provider is on). */
   apiConfigured: boolean;
@@ -63,6 +65,10 @@ function httpsOrigin(value: string | undefined): string | null {
   }
 }
 
+export function planGraceDaysFromEnv(env: StudioEnvSource = process.env): number {
+  return whole(env.BRAND_PLAN_GRACE_DAYS, BRAND_PLAN_GRACE_DAYS_DEFAULT, 365);
+}
+
 /**
  * `BRAND_STUDIO_PROVIDER`: `fake` or `live`. Unset means `live`, except in local mode
  * (`PLAYBOOK_MODE=local`) where an unset value means `fake` so a laptop never spends by accident.
@@ -79,6 +85,7 @@ export function studioEnv(env: StudioEnvSource = process.env): StudioEnv {
     provider,
     defaultLane,
     defaultMonthlyKrw: whole(env.BRAND_STUDIO_DEFAULT_MONTHLY_KRW, 0, 100_000_000),
+    planGraceDays: planGraceDaysFromEnv(env),
     caps: {
       sunra_api: whole(env.BRAND_STUDIO_API_CONCURRENCY, 20, 200),
       sunra_mcp: whole(env.BRAND_STUDIO_MCP_CONCURRENCY, 20, 200),

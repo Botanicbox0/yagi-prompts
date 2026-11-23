@@ -1,5 +1,7 @@
 import { timingSafeEqual } from 'node:crypto';
 import { NextResponse } from 'next/server';
+import { expireStaleStudioReservations } from '@/lib/brand-studio/engine';
+import { pruneExpiredDiscountCodeAttempts } from '@/lib/brands/billing';
 import { getSqlRunner } from '@/lib/db/connect';
 import { roomNoticesOpen, runLiveRoomNoticePass } from '@/lib/brand-rooms/notices';
 import { runLiveTeamNoticeDeliveryPass, syncSlackSupportReplies } from '@/lib/brands/team-notice-outbox';
@@ -12,6 +14,8 @@ import { purgeExpiredConsumerTranscripts } from '@/lib/support/concierge-service
  *   2. durable internal team Slack notices (`runLiveTeamNoticeDeliveryPass`, retries + backoff up to 8 attempts)
  *   3. Slack thread reply sync (`syncSlackSupportReplies`, bot transport only, 7-day round-robin + cursor)
  *   4. consumer privacy transcript purge (`purgeExpiredConsumerTranscripts`, 365-day retention)
+ *   0. (always first, cheap) studio reservation expiry (`expireStaleStudioReservations`: stale leases, queued > 24 h,
+ *      running/finishing > 6 h) and discount-code attempt pruning, so stale jobs do not block customers near their cap
  *
  * Each pass runs inside its own try/catch so a failure in one pass never blocks any other pass.
  * Stops claiming new work once the overall budget (`TICK_BUDGET_MS`, well under `maxDuration = 60`)
@@ -37,6 +41,30 @@ async function tick(request: Request): Promise<NextResponse> {
   const deadlineAtMs = Date.now() + TICK_BUDGET_MS;
   let passesAttempted = 0;
   let passesFailed = 0;
+
+  // --- Pass 0 (isolated, always first, cheap): studio reservation expiry + discount-code attempt pruning ---
+  let studioPass: { ok: boolean; released?: number; expired?: number } = { ok: true };
+  let studio: { released: number; expired: number } | null = null;
+  passesAttempted += 1;
+  try {
+    studio = await expireStaleStudioReservations(sql);
+    studioPass = { ok: true, released: studio.released, expired: studio.expired };
+  } catch (error) {
+    passesFailed += 1;
+    studioPass = { ok: false };
+    console.warn(
+      '[brand-studio] reservation_expiry_failed',
+      JSON.stringify({ message: error instanceof Error ? error.message.slice(0, 200) : 'unknown' }),
+    );
+  }
+  try {
+    await pruneExpiredDiscountCodeAttempts(sql);
+  } catch (error) {
+    console.warn(
+      '[brand-billing] attempts_prune_failed',
+      JSON.stringify({ message: error instanceof Error ? error.message.slice(0, 200) : 'unknown' }),
+    );
+  }
 
   // --- Pass 1 (isolated): Project room notices ---
   let roomPass: { enabled: boolean; ok: boolean; ran?: boolean; mails?: number; sent?: number; expired?: number } = {
@@ -153,14 +181,12 @@ async function tick(request: Request): Promise<NextResponse> {
     }
   }
 
-  // --- Pass 5 (reserved independent pass slot): Reservation expiry pass (future branch merge) ---
-
   if (passesAttempted > 0 && passesFailed === passesAttempted) {
     return NextResponse.json(
       {
         ok: false,
         code: 'pass_failed',
-        passes: { rooms: roomPass, teamNotices: teamPass, replySync: replySyncPass, retention: retentionPass },
+        passes: { studio: studioPass, rooms: roomPass, teamNotices: teamPass, replySync: replySyncPass, retention: retentionPass },
       },
       { status: 503, headers: HEADERS },
     );
@@ -173,7 +199,8 @@ async function tick(request: Request): Promise<NextResponse> {
       ) ||
       Boolean(replySync && replySync.synced > 0) ||
       retentionPass.purged > 0 ||
-      scrubbedNotices > 0;
+      scrubbedNotices > 0 ||
+      Boolean(studio && (studio.released > 0 || studio.expired > 0));
     if (!didOtherWork) {
       return NextResponse.json({ ok: true, ran: false }, { headers: HEADERS });
     }
@@ -183,12 +210,13 @@ async function tick(request: Request): Promise<NextResponse> {
     {
       ok: true,
       ...(roomReport ?? {}),
-      passes: { rooms: roomPass, teamNotices: teamPass, replySync: replySyncPass, retention: retentionPass },
+      passes: { studio: studioPass, rooms: roomPass, teamNotices: teamPass, replySync: replySyncPass, retention: retentionPass },
       teamNotices,
       replySync: replySync
         ? { checked: replySync.checked, synced: replySync.synced, errors: replySync.errors.length }
         : null,
       retention: retentionPass,
+      ...(studio ? { studio } : {}),
     },
     { headers: HEADERS },
   );

@@ -28,6 +28,7 @@ import { adminConsoleKo } from './admin-console';
 import { campaignHubKo } from './campaign-hub';
 import { brandHomeKo } from './brand-home';
 import { supportConciergeKo } from './support-concierge';
+import { brandBillingKo } from './brand-billing';
 
 /**
  * PLAN §3.9 — manual bilingual authoring in v1; the type keeps the two dictionaries in step.
@@ -89,6 +90,7 @@ export const ko: Dictionary = {
   adminConsole: adminConsoleKo,
   brandHome: brandHomeKo,
   supportConcierge: supportConciergeKo,
+  brandBilling: brandBillingKo,
   landingMedia: {
     nav: '랜딩 이미지',
     heading: '랜딩 이미지',

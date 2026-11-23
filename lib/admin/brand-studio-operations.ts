@@ -13,7 +13,7 @@ import * as f from './form';
 
 interface AllowanceInput {
   organizationId: string;
-  monthlyCapKrw: number;
+  monthlyCapKrw?: number;
   preferredLane: string | null;
   note: string;
 }
@@ -23,12 +23,21 @@ const organizationPath = (id: string) => `/admin/brand-workspace/organizations/$
 const allowanceSet: AdminOperation<AllowanceInput> = {
   parse(form) {
     const raw = f.str(form, 'monthlyCapKrw').replace(/[,\s]/g, '');
-    const cap = Number(raw);
-    if (raw === '' || !Number.isInteger(cap) || cap < 0) return { ok: false, detail: 'monthlyCapKrw must be a whole number of won' };
+    let cap: number | undefined;
+    if (raw !== '') {
+      const parsedCap = Number(raw);
+      if (!Number.isInteger(parsedCap) || parsedCap < 0) return { ok: false, detail: 'monthlyCapKrw must be a whole number of won' };
+      cap = parsedCap;
+    }
     const lane = f.str(form, 'preferredLane');
     return {
       ok: true,
-      value: { organizationId: f.str(form, 'organizationId'), monthlyCapKrw: cap, preferredLane: lane === '' ? null : lane, note: f.text(form, 'note') },
+      value: {
+        organizationId: f.str(form, 'organizationId'),
+        ...(cap !== undefined ? { monthlyCapKrw: cap } : {}),
+        preferredLane: lane === '' ? null : lane,
+        note: f.text(form, 'note'),
+      },
     };
   },
   async run(ctx: AdminContext, input) {

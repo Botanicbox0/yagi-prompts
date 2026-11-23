@@ -57,8 +57,19 @@ export interface PoolLike {
  * implementation (the app's connect factory, the notification worker, the Stripe retry sweep) so
  * there is exactly one place that can get it wrong.
  */
+const CACHE_ROOTS = new WeakMap<SqlRunner, object>();
+
+/**
+ * Shared identity token for schema/metadata caches: maps both a pool runner and every pinned `tx`
+ * spawned from it to one token, while keeping distinct PGlite test instances isolated.
+ */
+export function sqlCacheRoot(sql: SqlRunner): object {
+  return CACHE_ROOTS.get(sql) ?? sql;
+}
+
 export function makePooledRunner(pool: PoolLike): SqlRunner {
-  return {
+  const root = {};
+  const runner: SqlRunner = {
     async query<T = Record<string, unknown>>(text: string, params: unknown[] = []) {
       const result = await pool.query(text, params);
       return { rows: result.rows as T[] };
@@ -73,6 +84,7 @@ export function makePooledRunner(pool: PoolLike): SqlRunner {
         // Already inside one; nesting reuses it rather than opening a savepoint.
         transaction: (inner) => inner(tx),
       };
+      CACHE_ROOTS.set(tx, root);
       try {
         await client.query('BEGIN');
         const result = await fn(tx);
@@ -90,20 +102,27 @@ export function makePooledRunner(pool: PoolLike): SqlRunner {
       }
     },
   };
+  CACHE_ROOTS.set(runner, root);
+  return runner;
 }
 
 export function makeSingleConnectionRunner(query: SqlRunner['query']): SqlRunner {
-  return { query, transaction: singleConnectionTransaction({ query }) };
+  const root = {};
+  const runner: SqlRunner = { query, transaction: singleConnectionTransaction({ query }, root) };
+  CACHE_ROOTS.set(runner, root);
+  return runner;
 }
 
 export function singleConnectionTransaction(
   runner: Pick<SqlRunner, 'query'>,
+  cacheRoot?: object,
 ): <T>(fn: (tx: SqlRunner) => Promise<T>) => Promise<T> {
   const tx: SqlRunner = {
     query: (text, params) => runner.query(text, params),
     // A nested domain reuses this connection without prematurely committing the outer write.
     transaction: (fn) => fn(tx),
   };
+  if (cacheRoot) CACHE_ROOTS.set(tx, cacheRoot);
   let tail: Promise<void> = Promise.resolve();
   return async <T>(fn: (tx: SqlRunner) => Promise<T>): Promise<T> => {
     let unlock!: () => void;

@@ -28,6 +28,7 @@ import { adminConsoleEn } from './admin-console';
 import { campaignHubEn } from './campaign-hub';
 import { brandHomeEn } from './brand-home';
 import { supportConciergeEn } from './support-concierge';
+import { brandBillingEn } from './brand-billing';
 /**
  * docs/PLATFORM-2.0.md §14.1 — the names live in this one object (founder decision 2026-10-24). Every
  * other string is composed from it, so a rename edits these values only. Users get no role name:
@@ -80,6 +81,7 @@ export const en = {
   adminConsole: adminConsoleEn,
   brandHome: brandHomeEn,
   supportConcierge: supportConciergeEn,
+  brandBilling: brandBillingEn,
   landingMedia: {
     nav: 'Landing images',
     heading: 'Landing images',

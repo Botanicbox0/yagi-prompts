@@ -122,6 +122,34 @@ values ('deb648e9-c2df-43d4-b2a7-7f9eff8180d9', array['generative_media','sound'
 - 약관: 제4조①②("정기결제 아님, 충전식 없음")와 충돌 → B2B 별지(청약철회 적용 제외 조건, 중도 해지, 미사용 크레딧 환불, 할인 환수)가 필요하다. 약관규제법은 B2B에도 적용되므로 "해지 불가"는 무효 위험. 문안은 대표·법무.
 - 장부: `brand_subscriptions`·`brand_subscription_periods`·`brand_credit_ledger`·`brand_invoices`(초안은 `repo-billing-b2b.md` §3). 크레딧 단위는 현행 "1크레딧 = 순수입 10원"(PLATFORM-2.0 §19.2, 2026-11-02)으로 통일하고 B2B 원장은 분리한다.
 
+### 6.4 B2B 과금 코어 (서버 · 원장 구현, 마이그레이션 `0176` / `0177`)
+- **월 사용 한도 결정 우선순위 (`loadAllowance`)**:
+  1. `brand_studio_allowances`에 명시적 덮어쓰기(`is_override = true`)가 있으면 그 `monthly_cap_krw`를 쓴다(기존 행은 마이그레이션에서 전부 `true`로 표시해 현재 조직 동작을 그대로 유지).
+  2. 그렇지 않으면 유료 플랜(`b2b_29`·`b2b_49`·`b2b_69` — `project_only`는 플랜 기본값 대상에서 제외) 중 활성 배정(`brand_plan_assignments`의 오늘 KST 기준 유효 또는 `ends_on` 종료 후 유예 일수 `BRAND_PLAN_GRACE_DAYS` 기본 7일 이내)의 플랜 기본 한도(`brand_plan_allowance_defaults`)를 쓴다. 플랜 기본값이 비어 있으면 다음 단계로 넘어간다.
+     - **롤백 안전 스냅샷과 한계**: 플랜 기본값을 따르는 조직(`is_override = false` 또는 기존 한도 행 없음)은 `setPlanAllowanceDefault`, 구형 `setPlanAssignment`, 신형 `setPlanAndAllowance` 호출 시 `brand_studio_allowances.monthly_cap_krw`에 당시 플랜 기본값 스냅샷(`is_override = false`)을 함께 생성·갱신한다. 기존 관리자 스튜디오 한도 패널은 `"플랜 기본값을 따름 (N원)"`을 표시하며, 선호 경로만 바꾸면 폼 숨김 필드가 아니라 트랜잭션 내 DB 상태(`is_override`·활성 플랜 기본값)를 기준으로 모드를 유지한다(월 한도를 바꾸면 명시적 덮어쓰기로 전환). 단, `0176` 이전 구버전 코드는 `ends_on`/유예 기간 만료 판정이나 `brand_allowance_grants` 일회성 추가 크레딧 합산을 수행하지 못하며 마지막으로 동기화된 `monthly_cap_krw` 스냅샷만 읽는다.
+     - **플랜 기본값 일괄 변경 2단계 확정 (`brandBilling.planDefault.set`)**: 한 플랜의 기본값을 바꾸면 개별 덮어쓰기가 없는 다수 조직의 유효 한도가 한꺼번에 바뀐다. `confirm: true` 없이 호출하면 영향받는 조직 수·이름과 변경 전후 한도만 반환하고 저장하지 않으며, `confirm: true`로 확정할 때 적용하고 `brand_plan_allowance_default_events` 감사 행에 영향 조직 수를 기록한다.
+  3. 둘 다 없으면 환경 기본값(`BRAND_STUDIO_DEFAULT_MONTHLY_KRW`, 운영 기본 0 = 생성 닫힘)을 쓴다.
+  4. 마지막으로 현재 KST 월에 유효한 미회수 일회성 추가 크레딧(`brand_allowance_grants`)을 더하며, 화면 설명을 위해 `source`(`'override' | 'plan' | 'default'`), `baseCapKrw`, `extraKrw`를 함께 돌려준다. 관리자 오퍼레이션 `brandBilling.planAndAllowance.set`으로 플랜과 한도 모드를 한 번에 저장한다. 스키마 프로브는 프로세스 단위로 양(+)의 결과만 캐시해 `loadAllowance`의 조회를 2회 수준으로 유지한다.
+- **조직별 할인 (`brand_discounts` · `brand_discount_codes`)**:
+  - 청구서 발행 **횟수(N회, 1–36 또는 무기한)** 기준의 월 이용료 할인이다. 크레딧 단가, 실행 견적, 월 사용 한도는 바꾸지 않는다. 0원 청구서(예: `project_only`)는 할인 횟수를 차감하지 않는다.
+  - 조직당 활성 할인은 최대 1개(새 할인을 부여하면 기존 활성 할인은 종료 기록 후 대체).
+  - 청구서가 `issued`로 발행될 때 `invoices_used`가 1 증가하고 N에 도달하면 자동 종료되며, 발행된 청구서를 `void`하면 1회가 반환된다.
+  - 할인 코드(`brand_discount_codes`, 직접 입력 10–24자 · 자동 생성 시 혼동 문자를 제외한 31자 알파벳 12자리 이상)는 조직 소유자/관리자만 등록한다. 특정 고객사가 정해진 코드는 생성 시 `organization_id`로 1:1 전용 바인딩을 권장한다. 조직당 10분 5회 + 사용자(계정)당 전체 조직 합산 1시간 10회 시도 제한(`brand_discount_code_attempts`), 코드 유무와 무관한 동일 수의 SQL 조회 경로, 그리고 `code_unavailable` 단일 실패(동일 상태·본문)로 코드 존재 유추를 막는다. 기존 활성 할인보다 높은 할인율 코드만 기존 할인을 종료하고 교체한다.
+- **청구서 원장 (`brand_invoices` · `brand_invoice_events` · `brand_billing_profiles`)**:
+  - 기록 및 오프라인 세금계산서·계좌이체 관리용 원장이다. 상태 전이는 `draft → issued → paid`와 `draft | issued → void`만 허용하며 모든 변경을 `brand_invoice_events`에 실행자(`actor_id`)와 함께 기록한다.
+  - 계산 규칙(`invoiceAmounts`): 정상(`manualAmounts=false`) 초안·수정에서는 정가·일할 일수·할인율(%)과 메모만 편집하고 공급가액·부가세·합계는 항상 `invoiceAmounts`(일할 후 할인, 부가세 별도 상수 `BRAND_PLAN_PRICES_VAT_EXCLUSIVE = true` 기준 10% 버림)로 산정하며 플랜 변경 시 새 플랜 정가를 다시 제안한다. 예외적으로 직접 금액을 적으려면 `manualAmounts: true`와 사유(`manualReason`)가 필요하며(`total = supply + vat` 강제), 발행(`issue`) 시 금액 정합성을 다시 검증한다.
+  - 미납·연체(발행 후 14일 초과 미입금)는 관리자 조회 전용(`overdueOnly`)이며 스튜디오 생성 기능을 자동으로 막지 않는다.
+  - 조직 청구 프로필(`brand_billing_profiles`)은 10자리 사업자등록번호 국세청 체크섬을 검증하며, 조직 소유자/관리자(`GET /api/brand-billing`, `PUT /api/brand-billing/profile`, `POST /api/brand-billing/redeem`)도 본인 조직 것만 열람·수정한다(샌드박스 조직 404, 비관리 멤버 403, `paidMethod`·`voidReason`·관리자 `memo` 비노출).
+- **일회성 추가 크레딧 (`brand_allowance_grants`)**: 반드시 하나의 KST 달(`valid_month`, 현재 또는 다음 KST 월만 허용)에만 1회성으로 유효한 양수 KRW 한도를 추가·회수한다(다른 달 누적 지급 없음).
+- **예약 만료 10분 스윕**: 기존 10분 주기 크론(`/api/brand-rooms/notices/tick`)이 `expireStaleStudioReservations`와 1일 초과 `brand_discount_code_attempts` 배치 정리를 함께 멱등 실행한다. 10분 패스는 **① 10분 초과 작업 리스 해제, ② `held`/`queued` 24시간 초과 및 `running`/`finishing` 6시간 초과만** 만료 처리하며, 일시적 네트워크 끊김으로 정상 실행 중인 계정 레인(`sunra_mcp`) 작업이 잘리지 않도록 30분 유휴 계정 레인 판정은 일일 스윕(`sweepStudio`)에만 둔다.
+- **대표 확인·결정 대기 (임의로 확정하지 않음)**:
+  1. 플랜(`b2b_29`·`b2b_49`·`b2b_69`·`project_only`)별 기본 제공 월 크레딧/한도 금액 (현재 기본값: 미설정 → 환경 기본값으로 폴백).
+  2. 플랜 종료일(`ends_on`) 경과 후 생성 유예 일수 (현재 기본값: `BRAND_PLAN_GRACE_DAYS = 7`일).
+  3. 플랜 정가가 부가세 별도인지 포함인지 여부 (현재 기본값: `BRAND_PLAN_PRICES_VAT_EXCLUSIVE = true` 부가세 별도).
+  4. 첫 달 시작일 기준 일할 계산 기본 적용 여부 (현재 기본값: 초안에 일할 계산을 제안하되 편집 가능).
+  5. B2B 별지 약관 문안 (해지·환불·할인 환수 기준).
+  6. 고객 노출 과금 화면 문구 (`messages/brand-billing.ts`의 `customer` 블록 — 대표 확인 대기).
+
 ## 7. AI 모델 — Argon의 자리 (D4)
 
 공식 문서 확인(`argon-sound-assembly.md`): `gemini-4-argon`은 텍스트·이미지·영상·오디오·PDF **입력**, 텍스트 **출력**, 오디오·이미지 생성·Live API **미지원**. 즉 대표의 "사운드 조립" = **듣고 보고 고르고 배치하고 판정**하는 일이고, 소리 자체는 다른 엔진이 만든다.

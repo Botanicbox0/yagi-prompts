@@ -225,6 +225,10 @@ export function brandRouteAllowed(pathname: string, method: string): boolean {
   if (pathname === '/api/brand-workspace/studio') return method === 'POST';
   // Secondary-usage payment (docs/SECONDARY-USAGE.md): create/confirm by POST, status by GET.
   if (pathname === '/api/brand-workspace/usage') return read || method === 'POST';
+  // Brand B2B billing (docs/BRAND-PRODUCT.md §6.4): owner/admin read-only JSON, profile edit, code redemption.
+  if (pathname === '/api/brand-billing') return read;
+  if (pathname === '/api/brand-billing/profile') return method === 'PUT';
+  if (pathname === '/api/brand-billing/redeem') return method === 'POST';
   if (/^\/api\/brand-workspace\/attachments\/[^/]+$/.test(pathname)) return read || method === 'POST';
   if (/^\/api\/brand-workspace\/organizations\/[^/]+\/logo$/.test(pathname)) return read || method === 'POST';
   if (/^\/api\/brand-workspace\/shortlist\/[a-f0-9-]+\/avatar$/.test(pathname)) return read;

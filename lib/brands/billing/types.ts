@@ -1,0 +1,209 @@
+import type { BrandBillingMode, BrandPlanId } from '../plans';
+import type { StudioLane } from '@/lib/brand-studio/models';
+import type { AllowanceSource } from '@/lib/brand-studio/usage';
+import type { PaidBrandPlanId } from './math';
+
+export type BrandBillingFailureCode =
+  | 'sign_in_required'
+  | 'forbidden'
+  | 'not_found'
+  | 'invalid'
+  | 'conflict'
+  | 'unavailable'
+  | 'rate_limited'
+  | 'code_unavailable';
+
+export type BrandBillingOutcome<T = Record<string, unknown>> =
+  | ({ ok: true } & T)
+  | { ok: false; code: BrandBillingFailureCode; field?: string; detail?: string };
+
+export interface BrandPlanAllowanceDefault {
+  planId: PaidBrandPlanId;
+  monthlyCapKrw: number | null;
+  affectedOrgCount: number;
+  note: string;
+  updatedBy: string | null;
+  updatedAt: string;
+}
+
+export interface BrandPlanDefaultAffectedOrg {
+  organizationId: string;
+  name: string;
+  beforeCapKrw: number;
+  afterCapKrw: number;
+}
+
+export type BrandDiscountStatus = 'active' | 'ended';
+export type BrandDiscountSource = 'admin' | 'code';
+
+export interface BrandDiscount {
+  id: string;
+  organizationId: string;
+  percent: number;
+  invoicesTotal: number | null;
+  invoicesUsed: number;
+  invoicesRemaining: number | null;
+  status: BrandDiscountStatus;
+  memo: string;
+  source: BrandDiscountSource;
+  codeId: string | null;
+  createdBy: string | null;
+  createdAt: string;
+  endedAt: string | null;
+  endedBy: string | null;
+  endReason: string;
+}
+
+export interface BrandDiscountCode {
+  id: string;
+  code: string;
+  percent: number;
+  invoicesTotal: number | null;
+  maxRedemptions: number | null;
+  redeemedCount: number;
+  validUntil: string | null;
+  organizationId: string | null;
+  memo: string;
+  disabled: boolean;
+  disabledBy: string | null;
+  disabledAt: string | null;
+  createdBy: string | null;
+  createdAt: string;
+}
+
+export interface BrandBillingProfile {
+  organizationId: string;
+  companyLegalName: string;
+  businessRegNo: string;
+  representativeName: string;
+  businessAddress: string;
+  taxInvoiceEmail: string;
+  contactName: string;
+  contactPhone: string;
+  memo: string;
+  updatedBy: string | null;
+  updatedAt: string | null;
+}
+
+export type BrandInvoiceStatus = 'draft' | 'issued' | 'paid' | 'void';
+export type BrandInvoiceEventAction = 'drafted' | 'edited' | 'issued' | 'paid' | 'voided';
+
+export interface BrandInvoice {
+  id: string;
+  organizationId: string;
+  period: string;
+  planId: BrandPlanId;
+  baseListKrw: number;
+  listKrw: number;
+  proratedDays: number | null;
+  periodDays: number | null;
+  discountId: string | null;
+  discountPercent: number;
+  discountKrw: number;
+  supplyKrw: number;
+  vatKrw: number;
+  totalKrw: number;
+  manualAmounts: boolean;
+  manualReason: string;
+  status: BrandInvoiceStatus;
+  overdue: boolean;
+  issuedAt: string | null;
+  issuedBy: string | null;
+  paidAt: string | null;
+  paidBy: string | null;
+  paidMethod: string;
+  voidedAt: string | null;
+  voidedBy: string | null;
+  voidReason: string;
+  memo: string;
+  createdBy: string | null;
+  createdAt: string;
+  updatedBy: string | null;
+  updatedAt: string;
+}
+
+export interface BrandInvoiceEvent {
+  id: string;
+  invoiceId: string;
+  organizationId: string;
+  action: BrandInvoiceEventAction;
+  fromStatus: BrandInvoiceStatus | null;
+  toStatus: BrandInvoiceStatus;
+  snapshot: Record<string, unknown>;
+  note: string;
+  actorId: string | null;
+  createdAt: string;
+}
+
+export interface BrandAllowanceGrant {
+  id: string;
+  organizationId: string;
+  amountKrw: number;
+  validMonth: string;
+  reason: string;
+  activeNow: boolean;
+  createdBy: string | null;
+  createdAt: string;
+  revokedAt: string | null;
+  revokedBy: string | null;
+}
+
+export interface CustomerBrandBillingView {
+  organizationId: string;
+  plan: {
+    id: BrandPlanId;
+    name: string;
+    monthlyListKrw: number;
+    billingMode: BrandBillingMode;
+    startedOn: string;
+    endsOn: string | null;
+    active: boolean;
+    inGrace: boolean;
+    seats: number | null;
+  } | null;
+  allowance: {
+    capKrw: number;
+    baseCapKrw: number;
+    extraKrw: number;
+    usedKrw: number;
+    capCredits: number;
+    baseCapCredits: number;
+    extraCredits: number;
+    usedCredits: number;
+    remainingCredits: number;
+    source: AllowanceSource;
+    resetsOn: string;
+    resetsAt: string;
+    preferredLane?: StudioLane | null;
+  };
+  activeDiscount: {
+    id: string;
+    percent: number;
+    invoicesTotal: number | null;
+    invoicesUsed: number;
+    invoicesRemaining: number | null;
+    openEnded: boolean;
+    source: BrandDiscountSource;
+  } | null;
+  invoices: Array<{
+    id: string;
+    period: string;
+    planId: BrandPlanId;
+    planName: string;
+    baseListKrw: number;
+    listKrw: number;
+    proratedDays: number | null;
+    periodDays: number | null;
+    discountPercent: number;
+    discountKrw: number;
+    supplyKrw: number;
+    vatKrw: number;
+    totalKrw: number;
+    status: Exclude<BrandInvoiceStatus, 'draft'>;
+    overdue: boolean;
+    issuedAt: string | null;
+    paidAt: string | null;
+    voidedAt: string | null;
+  }>;
+  billingProfile: Omit<BrandBillingProfile, 'memo' | 'updatedBy'> | null;
+}
