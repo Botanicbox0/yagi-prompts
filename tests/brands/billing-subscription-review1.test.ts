@@ -327,12 +327,13 @@ describe('B1a review round 1 — integration gaps', () => {
       invoiceId: started.firstInvoiceId,
       paidMethod: 'transfer',
     });
-    expect(paid).toEqual({ ok: true, invoice: expect.objectContaining({ status: 'paid' }), reconcileDeferred: true });
+    // B1a-2 review, item 3: when the whole post-commit reconcile throws, access certainly was not updated.
+    expect(paid).toEqual({ ok: true, invoice: expect.objectContaining({ status: 'paid' }), reconcileDeferred: true, accessNotUpdated: true });
     const voided = await voidBrandInvoice({ sql: failing.sql, now: at('2026-11-03T02:00:00Z') }, admin(), {
       invoiceId: extra.invoice.id,
       reason: 'not needed',
     });
-    expect(voided).toEqual({ ok: true, invoice: expect.objectContaining({ status: 'void' }), reconcileDeferred: true });
+    expect(voided).toEqual({ ok: true, invoice: expect.objectContaining({ status: 'void' }), reconcileDeferred: true, accessNotUpdated: true });
 
     const rows = (
       await f.sql.query<{ id: string; status: string }>('select id::text as id, status from brand_invoices where organization_id = $1', [f.orgId])

@@ -886,6 +886,7 @@ export const adminConsoleEn = {
     unavailable: "Billing tables (0176) are not migrated yet.",
     taxInvoicesHeading: "Tax invoices to issue for {period}",
     taxInvoicesHint: "Issued or paid transfer invoices for the selected period that do not yet have a recorded Hometax tax invoice.",
+    subscriptionAttention: "Subscriptions to look at — suspended: {suspended} · pending, waiting for a reissue: {reissue}",
     taxInvoicesEmpty: "No pending tax invoices for {period}.",
     taxInvoiceOrgProfileMissing: "Billing profile incomplete",
     codes: {
@@ -1851,6 +1852,7 @@ export const adminConsoleKo: typeof adminConsoleEn = {
     unavailable: "과금 테이블(0176)이 아직 적용되지 않았습니다.",
     taxInvoicesHeading: "{period} 발행할 세금계산서",
     taxInvoicesHint: "조회 월의 발행됨·입금 완료 계좌이체 청구서 중 홈택스 세금계산서 발행일이 기록되지 않은 목록입니다.",
+    subscriptionAttention: "확인이 필요한 구독 — 이용 정지 {suspended}곳 · 다시 발행이 필요한 대기 {reissue}곳",
     taxInvoicesEmpty: "{period} 기간의 세금계산서 발행 대기 건이 없습니다.",
     taxInvoiceOrgProfileMissing: "세금계산서 정보 미완성",
     codes: {

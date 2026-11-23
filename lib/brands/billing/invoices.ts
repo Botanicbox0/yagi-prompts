@@ -38,10 +38,16 @@ export interface SubscriptionInvoiceWriteMeta {
   subscriptionEpoch?: number | null;
 }
 
+/** What the post-commit reconcile reports back: a failed step, and whether it cost the customer access. */
+export interface PostCommitReconcileReport {
+  failed: boolean;
+  accessAffected: boolean;
+}
+
 type PaidVoidPostCommitHook = (
   sql: SqlRunner,
   params: { organizationId: string; actor: InvoiceActor; now: Date },
-) => Promise<void>;
+) => Promise<PostCommitReconcileReport | void>;
 
 let subscriptionReconcileHook: PaidVoidPostCommitHook | null = null;
 
@@ -60,26 +66,29 @@ async function maybeReconcileSubscriptionAfterCommit(
   organizationId: string,
   adminId: string,
   nowDate: Date,
-): Promise<boolean> {
-  if (!brandBillingAutoIssueOpen(env)) return false;
+): Promise<{ deferred: boolean; accessNotUpdated: boolean }> {
+  if (!brandBillingAutoIssueOpen(env)) return { deferred: false, accessNotUpdated: false };
   try {
     if (!subscriptionReconcileHook) {
       await import('../subscriptions/service');
     }
     if (subscriptionReconcileHook) {
-      await subscriptionReconcileHook(sql, {
+      const report = await subscriptionReconcileHook(sql, {
         organizationId,
         actor: { kind: 'admin', userId: adminId },
         now: nowDate,
       });
+      // B1a-2, item 3: a step that failed inside the reconcile is reported to the admin, too.
+      if (report && report.failed) return { deferred: true, accessNotUpdated: report.accessAffected };
     }
-    return false;
+    return { deferred: false, accessNotUpdated: false };
   } catch (error) {
     console.warn(
       '[brand-billing] post_invoice_reconcile_deferred',
       JSON.stringify({ message: error instanceof Error ? error.message.slice(0, 200) : 'unknown' }),
     );
-    return true;
+    // B1a-2 review, item 3: the whole reconcile failed, so access certainly was not updated.
+    return { deferred: true, accessNotUpdated: true };
   }
 }
 
@@ -1205,7 +1214,7 @@ export async function issueBrandInvoice(
   deps: { sql: SqlRunner; now?: () => Date; env?: Record<string, string | undefined> },
   viewer: Viewer,
   input: unknown,
-): Promise<BrandBillingOutcome<{ invoice: BrandInvoice; reconcileDeferred?: boolean }>> {
+): Promise<BrandBillingOutcome<{ invoice: BrandInvoice; reconcileDeferred?: boolean; accessNotUpdated?: boolean }>> {
   const parsed = IssueInvoiceInput.safeParse(input);
   if (!parsed.success) {
     return { ok: false, code: 'invalid', field: (parsed.error.issues[0]?.path ?? []).map(String).join('.') };
@@ -1265,7 +1274,7 @@ export async function markBrandInvoicePaid(
   deps: { sql: SqlRunner; now?: () => Date; env?: Record<string, string | undefined> },
   viewer: Viewer,
   input: unknown,
-): Promise<BrandBillingOutcome<{ invoice: BrandInvoice; reconcileDeferred?: boolean }>> {
+): Promise<BrandBillingOutcome<{ invoice: BrandInvoice; reconcileDeferred?: boolean; accessNotUpdated?: boolean }>> {
   const parsed = MarkPaidInput.safeParse(input);
   if (!parsed.success) {
     return { ok: false, code: 'invalid', field: (parsed.error.issues[0]?.path ?? []).map(String).join('.') };
@@ -1344,7 +1353,7 @@ export async function markBrandInvoicePaid(
 
   if (!txResult.ok) return txResult;
 
-  const reconcileDeferred = await maybeReconcileSubscriptionAfterCommit(
+  const postCommit = await maybeReconcileSubscriptionAfterCommit(
     deps.sql,
     deps.env,
     txResult.organizationId,
@@ -1354,7 +1363,8 @@ export async function markBrandInvoicePaid(
   return {
     ok: true as const,
     invoice: txResult.invoice,
-    ...(reconcileDeferred ? { reconcileDeferred: true } : {}),
+    ...(postCommit.deferred ? { reconcileDeferred: true } : {}),
+    ...(postCommit.accessNotUpdated ? { accessNotUpdated: true } : {}),
   };
 }
 
@@ -1462,7 +1472,7 @@ export async function voidBrandInvoice(
   deps: { sql: SqlRunner; now?: () => Date; env?: Record<string, string | undefined> },
   viewer: Viewer,
   input: unknown,
-): Promise<BrandBillingOutcome<{ invoice: BrandInvoice; reconcileDeferred?: boolean }>> {
+): Promise<BrandBillingOutcome<{ invoice: BrandInvoice; reconcileDeferred?: boolean; accessNotUpdated?: boolean }>> {
   const parsed = VoidInvoiceInput.safeParse(input);
   if (!parsed.success) {
     return { ok: false, code: 'invalid', field: (parsed.error.issues[0]?.path ?? []).map(String).join('.') };
@@ -1488,7 +1498,7 @@ export async function voidBrandInvoice(
 
   if (!txResult.ok) return txResult;
 
-  const reconcileDeferred = await maybeReconcileSubscriptionAfterCommit(
+  const postCommit = await maybeReconcileSubscriptionAfterCommit(
     deps.sql,
     deps.env,
     txResult.organizationId,
@@ -1498,7 +1508,8 @@ export async function voidBrandInvoice(
   return {
     ok: true as const,
     invoice: txResult.invoice,
-    ...(reconcileDeferred ? { reconcileDeferred: true } : {}),
+    ...(postCommit.deferred ? { reconcileDeferred: true } : {}),
+    ...(postCommit.accessNotUpdated ? { accessNotUpdated: true } : {}),
   };
 }
 

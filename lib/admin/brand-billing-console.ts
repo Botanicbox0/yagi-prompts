@@ -1,4 +1,5 @@
 import type { Viewer } from '@/lib/auth/identity';
+import { subscriptionAttentionCounts } from '@/lib/brands/subscriptions/notices';
 import { studioEnv, type StudioEnv } from '@/lib/brand-studio/env';
 import { listBrandDiscountCodes, listBrandInvoices, loadPlanAllowanceDefaults } from '@/lib/brands/billing';
 import {
@@ -79,6 +80,8 @@ export interface TaxInvoicePanelState {
   enabled: boolean;
   schemaReady: boolean;
   pending: PendingTaxInvoiceRow[];
+  /** B1a-2, item 5: suspended subscriptions and pending ones waiting for a reissue (counts only). */
+  attention?: { suspended: number; pendingReissue: number };
 }
 
 export interface BrandBillingOverviewData {
@@ -370,10 +373,12 @@ export async function loadBrandBillingOverview(
     };
   });
 
+  const attention = autoIssueEnabled && subSchemaReady ? await subscriptionAttentionCounts(sql) : undefined;
   const taxInvoicePanel: TaxInvoicePanelState | null = autoIssueEnabled
     ? {
         enabled: true,
         schemaReady: subSchemaReady,
+        ...(attention ? { attention } : {}),
         pending: pendingTaxRes.rows.map((r) => ({
           invoiceId: String(r.id),
           organizationId: String(r.organization_id),
@@ -519,7 +524,12 @@ export function formatBillingOutcomeDetail(detail: string | undefined, locale: '
           period_already_invoiced: '시작 월 또는 그 이후 달에 취소되지 않은 정기 청구서가 이미 있어 구독을 시작할 수 없습니다. 그 청구서를 먼저 정리하세요',
           manual_plan_active: '유효한 수동 플랜(유예 기간 포함)이 있어 구독을 시작할 수 없습니다. 기존 플랜 설정에서 수동 플랜을 먼저 끝내세요',
           preview_mismatch: '미리보기한 값(플랜·시작일·우선 개방)과 확정 제출 값이 일치하지 않습니다. 다시 미리보기 후 제출하세요',
-          subscription_reconcile_deferred: '입금/취소 기록은 저장되었으며, 구독 상태는 다음 정산 배치에서 자동 반영됩니다',
+          subscription_reconcile_deferred:
+            '입금(또는 취소) 기록은 저장했습니다. 구독 상태는 반영하지 못했습니다. "재계산"을 누르거나 다음 정산 배치를 기다려 주세요',
+          subscription_void_not_updated:
+            '취소 기록은 저장했습니다. 구독 상태는 반영하지 못했습니다. "재계산"을 누르거나 다음 정산 배치를 기다려 주세요',
+          subscription_access_not_updated:
+            '입금 기록은 저장했습니다. 구독 상태와 이용 기간은 반영하지 못해 고객이 지금 이용하지 못할 수 있습니다. "재계산"을 누르거나 다음 정산 배치를 기다려 주세요',
           reissue_current_period_only: '취소된 청구서 재발행은 이번 달(KST) 기간만 허용됩니다',
           period_not_admin_voided: '해당 기간은 관리자가 취소한 청구서 재발행 대상이 아닙니다',
           subscription_not_reissuable: '종료되었거나 해지 예약된 구독은 청구서를 재발행할 수 없습니다',
@@ -568,7 +578,12 @@ export function formatBillingOutcomeDetail(detail: string | undefined, locale: '
           period_already_invoiced: 'A non-void subscription invoice already exists for the start period or a later one; settle it first',
           manual_plan_active: 'A manual plan is still active (grace included); end it in the plan settings before starting a subscription',
           preview_mismatch: 'Submitted values differ from the previewed values; run preview again before confirming',
-          subscription_reconcile_deferred: 'Invoice change was saved; subscription state will update on the next scheduled run',
+          subscription_reconcile_deferred:
+            'The payment (or void) is recorded. The subscription state could not be updated; press "Reconcile now" or wait for the next scheduled run',
+          subscription_void_not_updated:
+            'The cancellation is recorded. The subscription state could not be updated; press "Reconcile now" or wait for the next scheduled run',
+          subscription_access_not_updated:
+            'The payment is recorded. The subscription state and access period could not be updated, so the customer may have no access now; press "Reconcile now" or wait for the next scheduled run',
           reissue_current_period_only: 'Only the current KST period can be reissued',
           period_not_admin_voided: 'Selected period is not awaiting reissue from an admin void',
           subscription_not_reissuable: 'Ended or cancel-scheduled subscriptions cannot reissue invoices',
@@ -621,6 +636,8 @@ const SUBSCRIPTION_DETAIL_TOKENS = [
   'preview_required',
   'confirmCheck',
   'subscription_reconcile_deferred',
+  'subscription_access_not_updated',
+  'subscription_void_not_updated',
   'reissue_current_period_only',
   'period_not_admin_voided',
   'subscription_not_reissuable',
