@@ -406,9 +406,9 @@ describe('unapproved workspace upload gate (500 MB & 50 files)', () => {
 
     // Refusing a message send that carries more attachments than remaining file allowance (49 -> 59).
     if (!c49.result.ok || !('attachment' in c49.result)) return;
-    const baseKey = c49.result.attachment.key;
+    const firstStored = c49.result.attachment.key;
     const tenAttachments = Array.from({ length: 10 }, (_, idx) => ({
-      key: `${baseKey.slice(0, -4)}-${idx}.png`.replace(/-/g, '0').slice(0, baseKey.length),
+      key: `${firstStored.slice(0, -4)}-${idx}.png`.replace(/-/g, '0').slice(0, firstStored.length),
       name: `att-${idx}.png`,
       size: 1024,
       width: 32,
