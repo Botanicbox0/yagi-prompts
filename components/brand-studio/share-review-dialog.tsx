@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useId, useRef, useState } from "react";
 import { createPortal } from "react-dom";
+import { studioShareDialogEn, studioShareDialogKo } from "@/messages/studio-share-dialog";
 
 export const OPEN_SHARE_REVIEW_EVENT = "twings:open-share-review";
 
@@ -110,75 +111,6 @@ export interface ShareReviewDialogProps {
 }
 
 const EXPIRY_OPTIONS = [7, 14, 30] as const;
-
-const COPY = {
-  ko: {
-    heading: "검수 · 외부 공유 · 대화방 연결",
-    close: "닫기",
-    pieceFallback: "스튜디오 작업물",
-    titleLabel: "검수 제목",
-    shareHeading: "무로그인 공유 링크 발급 (/s/...)",
-    shareSub: "계정이 없는 외부 담당자도 링크 하나로 재생하고 피드백을 남길 수 있습니다.",
-    allowComments: "타임코드·화면 그리기 코멘트 허용",
-    allowDownload: "다운로드 허용",
-    expiryLabel: "만료 기간",
-    daysUnit: (d: number) => `${d}일`,
-    passwordLabel: "비밀번호 (선택)",
-    passwordPlaceholder: "비워두면 비밀번호 없음 (4~64자)",
-    mintCta: "공유 링크 발급",
-    minting: "발급 중…",
-    copyBtn: "링크 복사",
-    copiedBtn: "복사됨",
-    openShareTab: "새 창으로 열기",
-    activeLinksCount: (n: number) => `활성 공유 링크 ${n}개`,
-    reviewHeading: "정밀 검수 화면 열기",
-    reviewSub: "타임코드 구간 코멘트, 화면 위 펜·화살표 그리기, 버전 나란히 비교(A/B)로 검토합니다.",
-    openReviewCta: "정밀 검수 화면 열기 →",
-    openingReview: "여는 중…",
-    chatHeading: "고객사 · 팀 대화방으로 보내기",
-    chatSub: "프로젝트 대화방에 시안 카드를 올리고 바로 대화를 이어갑니다.",
-    roomSelectLabel: "연결할 프로젝트 룸",
-    defaultRoomOption: "스튜디오 공유 · 검수함 (자동 연결)",
-    notePlaceholder: "함께 전달할 메모 (선택 — 예: 00:04 제품 클로즈업 톤 확인 부탁드립니다)",
-    sendChatCta: "대화방으로 보내고 열기 →",
-    sendingChat: "보내는 중…",
-    errorPasswordShort: "비밀번호는 4자 이상 입력해 주세요.",
-    errorGeneric: "요청을 처리하지 못했습니다. 잠시 후 다시 시도해 주세요.",
-  },
-  en: {
-    heading: "Review, Share Link & Client Chat",
-    close: "Close",
-    pieceFallback: "Studio deliverable",
-    titleLabel: "Review title",
-    shareHeading: "No-login share link (/s/...)",
-    shareSub: "External stakeholders can play and leave frame-accurate feedback without signing in.",
-    allowComments: "Allow timecode & frame drawing comments",
-    allowDownload: "Allow file download",
-    expiryLabel: "Expires in",
-    daysUnit: (d: number) => `${d}d`,
-    passwordLabel: "Passphrase (optional)",
-    passwordPlaceholder: "Leave blank for open link (4–64 chars)",
-    mintCta: "Create share link",
-    minting: "Creating…",
-    copyBtn: "Copy link",
-    copiedBtn: "Copied",
-    openShareTab: "Open link",
-    activeLinksCount: (n: number) => `${n} active share link${n === 1 ? "" : "s"}`,
-    reviewHeading: "Open precision review stage",
-    reviewSub: "Timecode range notes, pen & arrow frame markup, and synchronized A/B version compare.",
-    openReviewCta: "Open review stage →",
-    openingReview: "Opening…",
-    chatHeading: "Send to client & team conversation",
-    chatSub: "Post this deliverable card to a project room and jump straight into chat.",
-    roomSelectLabel: "Project room",
-    defaultRoomOption: "Studio Share & Review Inbox (auto)",
-    notePlaceholder: "Optional note (e.g. Please check the packshot lighting at 00:04)",
-    sendChatCta: "Post & open chat →",
-    sendingChat: "Sending…",
-    errorPasswordShort: "Passphrase must be at least 4 characters.",
-    errorGeneric: "Could not complete this request right now. Please try again.",
-  },
-} as const;
 
 async function postBridge(operation: string, input: Record<string, unknown>): Promise<Record<string, unknown>> {
   const res = await fetch("/api/brand-studio/share-bridge", {
@@ -478,7 +410,7 @@ const DIALOG_STYLES = `
 `;
 
 export function ShareReviewDialog({ target, locale = "ko", onClose, onNavigate }: ShareReviewDialogProps) {
-  const c = COPY[locale];
+  const c = locale === "en" ? studioShareDialogEn : studioShareDialogKo;
   const headingId = useId();
   const [pieceTitle, setPieceTitle] = useState(() => target.title?.trim() || c.pieceFallback);
   const [allowComments, setAllowComments] = useState(true);
@@ -690,7 +622,13 @@ export function ShareReviewDialog({ target, locale = "ko", onClose, onNavigate }
         <section className="srd-card" data-share-bridge-link-section>
           <div className="srd-card-head">
             <h3 className="srd-card-title">{c.shareHeading}</h3>
-            {activeShareCount > 0 && <span className="srd-badge">{c.activeLinksCount(activeShareCount)}</span>}
+            {activeShareCount > 0 && (
+              <span className="srd-badge">
+                {activeShareCount === 1
+                  ? c.activeLinksOne
+                  : c.activeLinksCount.replace("{count}", String(activeShareCount))}
+              </span>
+            )}
           </div>
           <p className="srd-sub">{c.shareSub}</p>
 
@@ -727,7 +665,7 @@ export function ShareReviewDialog({ target, locale = "ko", onClose, onNavigate }
                   onClick={() => setExpiresInDays(days)}
                   data-share-bridge-expiry={days}
                 >
-                  {c.daysUnit(days)}
+                  {c.daysUnit.replace("{days}", String(days))}
                 </button>
               ))}
             </div>

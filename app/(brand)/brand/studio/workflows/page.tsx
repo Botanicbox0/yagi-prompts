@@ -13,6 +13,7 @@ import { allowanceView, loadAllowance } from '@/lib/brand-studio/usage';
 import { studioShowroomVisible, studioV2Visible } from '@/lib/brand-studio/visibility';
 import { listOrgPlaybooks, listOrgWorkflows, STARTER_WORKFLOWS, toRecentRunSummaries } from '@/lib/brand-studio/workflows';
 import type { RecentRunSummaryWire } from '@/lib/brand-studio/workflows/contracts';
+import { featureDenied } from '@/lib/brands/features';
 import { scopedHref } from '@/lib/brands/workspace/selection';
 import { brandStudioV2Open } from '@/lib/flags';
 
@@ -72,6 +73,7 @@ export default async function StudioWorkflowsPage({
   const { deps, viewer } = ctx;
   const media = createStudioMediaStore();
   const env = studioEnv();
+  const agentAccessAllowed = !featureDenied(choice.denied, 'agent_access');
 
   const [rawAssets, rawJobs, allowance, customWorkflows, playbooks, tokensRes] = await Promise.all([
     assetsOf(deps.sql, choice.id, 160),
@@ -79,7 +81,7 @@ export default async function StudioWorkflowsPage({
     loadAllowance(deps.sql, choice.id, env),
     listOrgWorkflows(deps.sql, choice.id),
     listOrgPlaybooks(deps.sql, choice.id),
-    listMcpTokens(deps.sql, viewer, choice.id).catch(() => null),
+    agentAccessAllowed ? listMcpTokens(deps.sql, viewer, choice.id).catch(() => null) : Promise.resolve(null),
   ]);
 
   const allAssets = rawAssets.map((a) => assetView(a, media));
@@ -111,6 +113,7 @@ export default async function StudioWorkflowsPage({
       organizationId={choice.id}
       locale={locale}
       canCreate={canCreate}
+      agentAccessAllowed={agentAccessAllowed}
       mcpOrigin={mcpOrigin}
       copy={dict.studioWorkflows}
       imageStudioHref={scopedHref('/brand/studio', choice)}

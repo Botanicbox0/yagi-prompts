@@ -7,6 +7,7 @@
  * Client-safe: zod, types and pure helpers only (no env, no db).
  */
 import { z } from 'zod';
+import type { UploadLimitReason } from '@/lib/brands/upload-limits-format';
 import type { StoryboardFrameView, StoryboardView } from '@/components/brand-rooms/seams';
 
 /* ---------------------------------------------------------------- vocab */
@@ -265,6 +266,7 @@ export interface StoryboardVersionItem {
 export interface StoryboardFailure {
   ok: false;
   code: StoryboardErrorCode;
+  reason?: UploadLimitReason;
 }
 
 export interface StoryboardList {

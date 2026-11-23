@@ -7,6 +7,7 @@ import { CampaignList } from "@/components/brand-workspace/campaign-list";
 import { brandScope, selectedAccess } from "@/components/brand-workspace/scope";
 import { BrandUnavailable } from "@/components/brand-workspace/brand-unavailable";
 import { poolVisible, scopedHref, sectionVisibility } from "@/lib/brands/workspace/selection";
+import { resolveFirstRunLanding } from "@/lib/brands/workspace/first-run-landing";
 import { StaffNotice, adminOrganizationHref } from "@/components/brand-workspace/staff-notice";
 import { CAMPAIGN_LIST_ANCHOR } from "@/components/brand-studio/doors";
 import { brandRoomsOpen, brandStudioV2Open } from "@/lib/flags";
@@ -126,7 +127,7 @@ export default async function BrandHome({
             operation="organization.create"
             b={b}
             submit={b.createOrganization}
-            redirectTo="/brand/projects/new"
+            redirectTo={resolveFirstRunLanding(brandStudioV2Open())}
           >
             <label>
               {b.organization}

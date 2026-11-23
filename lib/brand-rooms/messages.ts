@@ -18,6 +18,13 @@ import { randomBytes } from 'node:crypto';
 import type { Viewer } from '@/lib/auth/identity';
 import type { SqlRunner } from '@/lib/db/sql-runner';
 import { interpolate } from '@/lib/i18n/format';
+import type { UploadLimitReason } from '@/lib/brands/upload-limits-format';
+import {
+  completePendingRoomUpload,
+  consumePendingRoomUploadKeys,
+  isOrganizationUploadApproved,
+  reservePendingRoomUpload,
+} from '@/lib/brands/upload-gate';
 import { STAGING_BUCKET, type StorageDriver } from '@/lib/storage';
 import { featureDenied, isSandboxedClientOrganization } from '@/lib/brands/features';
 import { loadFeaturePolicies } from '@/lib/brands/entitlements';
@@ -95,13 +102,17 @@ export interface RoomNotice {
 }
 
 export class MessageDenied extends Error {
-  constructor(readonly code: RoomErrorCode) {
+  constructor(
+    readonly code: RoomErrorCode,
+    readonly reason?: UploadLimitReason,
+  ) {
     super(code);
     this.name = 'MessageDenied';
   }
 }
 
-const failure = (code: RoomErrorCode): RoomFailure => ({ ok: false, code });
+const failure = (code: RoomErrorCode, reason?: UploadLimitReason): RoomFailure =>
+  reason ? { ok: false, code, reason } : { ok: false, code };
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 /** Run `fn`; a refusal becomes its code, a unique-key race becomes `conflict`. Anything else propagates. */
@@ -109,7 +120,7 @@ async function guard<T>(fn: () => Promise<T>): Promise<T | RoomFailure> {
   try {
     return await fn();
   } catch (error) {
-    if (error instanceof MessageDenied) return failure(error.code);
+    if (error instanceof MessageDenied) return failure(error.code, error.reason);
     if (error instanceof RoomDenied) return failure(error.code);
     if ((error as { code?: string } | null)?.code === '23505') return failure('conflict');
     throw error;
@@ -797,6 +808,48 @@ async function insertMessage(sql: SqlRunner, media: StudioMediaStore, reader: Re
     width: a.width ?? null,
     height: a.height ?? null,
   }));
+  let gatedSend = false;
+  if (
+    attachments.length > 0 &&
+    !(await isRoomStaffActor(sql, reader, by.role)) &&
+    !(await isOrganizationUploadApproved(sql, reader.organizationId))
+  ) {
+    gatedSend = true;
+    await sql.query('select id from brand_organizations where id = $1 for update', [reader.organizationId]);
+    const existingRows = (
+      await sql.query<{ attachments: unknown }>(
+        `select m.attachments
+           from brand_room_messages m
+           left join profiles p on p.id = m.author_id
+          where m.organization_id = $1
+            and m.deleted_at is null
+            and m.author_role = 'brand'
+            and coalesce(p.is_admin, false) = false
+            and jsonb_typeof(m.attachments) = 'array'
+            and jsonb_array_length(m.attachments) > 0`,
+        [reader.organizationId],
+      )
+    ).rows;
+    const existingKeys = new Set<string>();
+    for (const row of existingRows) {
+      for (const item of storedAttachments(row.attachments)) existingKeys.add(item.key);
+    }
+    const newKeys: string[] = [];
+    const seenIncoming = new Set<string>();
+    let newBytes = 0;
+    for (const a of attachments) {
+      if (existingKeys.has(a.key) || seenIncoming.has(a.key)) continue;
+      seenIncoming.add(a.key);
+      newKeys.push(a.key);
+      newBytes += a.size;
+    }
+    if (newKeys.length > 0) {
+      const quota = await checkStorageQuotaForUpload(sql, reader.organizationId, newBytes, undefined, newKeys.length, {
+        excludePendingRoomKeys: newKeys,
+      });
+      if (!quota.allowed) throw new MessageDenied('storage_quota_exceeded', quota.reason);
+    }
+  }
   const id = (
     await sql.query<{ id: string }>(
       `insert into brand_room_messages (organization_id, project_id, channel, parent_id, author_id, author_role, kind, body, ref, ref_key,
@@ -823,6 +876,9 @@ async function insertMessage(sql: SqlRunner, media: StudioMediaStore, reader: Re
   if (attachments.length > 0) {
     const totalBytes = attachments.reduce((sum, a) => sum + a.size, 0);
     await adjustOrganizationStorageBytes(sql, reader.organizationId, totalBytes);
+    if (gatedSend) {
+      await consumePendingRoomUploadKeys(sql, reader.organizationId, attachments.map((a) => a.key));
+    }
   }
   return { message: await oneView(sql, media, reader, String(id)), created: true };
 }
@@ -957,18 +1013,34 @@ export function roomFileVerdict(bytes: Uint8Array, declared: string): { ok: true
   }
 }
 
+async function isRoomStaffActor(sql: SqlRunner, reader: Reader, role?: 'brand' | 'studio'): Promise<boolean> {
+  if (reader.team || role === 'studio') return true;
+  const row = (await sql.query<{ is_admin: boolean }>('select is_admin from profiles where id = $1', [reader.viewerId])).rows[0];
+  return row?.is_admin === true;
+}
+
 async function reserveUpload(sql: SqlRunner, deps: RoomMessageDeps, reader: Reader, raw: unknown): Promise<RoomUploadReserved> {
   const parsed = AttachmentReserveSchema.safeParse(raw);
   if (!parsed.success) throw new MessageDenied('invalid');
   if (!reader.canTalk) throw new MessageDenied('forbidden');
   if (parsed.data.size > ROOM_LIMITS.attachmentBytesMax) throw new MessageDenied('file_too_large');
   if (!deps.staging) throw new MessageDenied('provider_unavailable');
-  const quota = await checkStorageQuotaForUpload(sql, reader.organizationId, parsed.data.size);
-  if (!quota.allowed) throw new MessageDenied('storage_quota_exceeded');
+  const isStaff = await isRoomStaffActor(sql, reader);
+  let gated = false;
+  if (!isStaff) {
+    gated = !(await isOrganizationUploadApproved(sql, reader.organizationId));
+    if (gated) await sql.query('select id from brand_organizations where id = $1 for update', [reader.organizationId]);
+    const quota = await checkStorageQuotaForUpload(sql, reader.organizationId, parsed.data.size, undefined, 1);
+    if (!quota.allowed) throw new MessageDenied('storage_quota_exceeded', quota.reason);
+  }
   const stagingKey = stagingKeyFor(reader.organizationId, reader.viewerId);
   const url = await deps.staging.signedUploadUrl(stagingKey, parsed.data.mime);
-  if (url) return { ok: true, stagingKey, url, direct: true };
+  if (url) {
+    if (gated) await reservePendingRoomUpload(sql, reader.organizationId, { key: stagingKey, sizeBytes: parsed.data.size });
+    return { ok: true, stagingKey, url, direct: true };
+  }
   if (deps.staging.servesSignedUrls) throw new MessageDenied('failed');
+  if (gated) await reservePendingRoomUpload(sql, reader.organizationId, { key: stagingKey, sizeBytes: parsed.data.size });
   const params = new URLSearchParams({
     organizationId: reader.organizationId,
     projectId: reader.channel,
@@ -993,8 +1065,21 @@ async function completeUpload(sql: SqlRunner, deps: RoomMessageDeps, reader: Rea
   if (bytes.byteLength !== parsed.data.size) throw new MessageDenied(bytes.byteLength > ROOM_LIMITS.attachmentBytesMax ? 'file_too_large' : 'invalid');
   const verdict = roomFileVerdict(bytes, parsed.data.mime);
   if (!verdict.ok) throw new MessageDenied(verdict.code);
-  const quota = await checkStorageQuotaForUpload(sql, reader.organizationId, bytes.byteLength);
-  if (!quota.allowed) throw new MessageDenied('storage_quota_exceeded');
+  const isStaff = await isRoomStaffActor(sql, reader);
+  let gated = false;
+  if (!isStaff) {
+    gated = !(await isOrganizationUploadApproved(sql, reader.organizationId));
+    if (gated) await sql.query('select id from brand_organizations where id = $1 for update', [reader.organizationId]);
+    const quota = await checkStorageQuotaForUpload(
+      sql,
+      reader.organizationId,
+      bytes.byteLength,
+      undefined,
+      1,
+      gated ? { excludePendingRoomKeys: [parsed.data.stagingKey] } : undefined,
+    );
+    if (!quota.allowed) throw new MessageDenied('storage_quota_exceeded', quota.reason);
+  }
   let width: number | null = null;
   let height: number | null = null;
   const kind = attachmentKindOf(verdict.mime);
@@ -1008,6 +1093,13 @@ async function completeUpload(sql: SqlRunner, deps: RoomMessageDeps, reader: Rea
     height = info?.height ?? null;
   }
   const { key } = await deps.media.put(bytes, verdict.mime);
+  if (gated) {
+    await completePendingRoomUpload(sql, reader.organizationId, {
+      stagingKey: parsed.data.stagingKey,
+      completedKey: key,
+      sizeBytes: bytes.byteLength,
+    });
+  }
   if (deps.staging.releaseStaging) {
     await deps.staging.releaseStaging(parsed.data.stagingKey).catch(() => undefined);
   } else if (deps.purgeStagingKey) {

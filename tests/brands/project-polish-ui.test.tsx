@@ -13,6 +13,7 @@ vi.mock("next/navigation", () => ({
   useSearchParams: () => new URLSearchParams(nav.query),
 }));
 import { ProjectDetail } from "@/components/brand-workspace/project-detail";
+import { buildProjectPrototypeLayer } from "@/components/brand-workspace/project-prototype-layer";
 import { DecisionFields } from "@/components/brand-workspace/decision-fields";
 import { YagiStudioLockup } from "@/components/brand/yagi-mark";
 import { ServiceGuide } from "@/components/brand-workspace/service-guide";
@@ -112,7 +113,7 @@ describe("campaign page", () => {
     expect(changes).not.toContain('name="confirmed"');
   });
 
-  it("renders the YAGI STUDIO lockup, Aesthetic Brief Engine (#brief), and Frame.io Review Stage (#review) while keeping campaign tracking intact", () => {
+  it("keeps prototype panels off by default on ProjectDetail and restores them only when BRAND_WORKSPACE_PROTOTYPE_LAYER=on", async () => {
     const b = getDictionary("ko").brandWorkspace;
     const lockup = renderToStaticMarkup(<YagiStudioLockup size={22} subtitle="by YAGI" />);
     expect(lockup).toContain("data-yagi-studio-lockup");
@@ -120,18 +121,33 @@ describe("campaign page", () => {
     expect(lockup).toContain("YAGI");
     expect(lockup).toContain("STUDIO");
 
+    // Default off: prototype widgets absent; real project direction card and tracking tabs stay intact.
     const html = renderToStaticMarkup(<ProjectDetail project={project} b={b} locale="ko" />);
-    expect(html).toContain("data-aesthetic-engine");
-    expect(html).toContain("data-brief-intake");
+    expect(html).not.toContain("data-aesthetic-engine");
+    expect(html).not.toContain("data-brief-intake");
+    expect(html).not.toContain("data-handoff");
+    expect(html).not.toContain("data-review-stage");
+    expect(html).not.toContain("data-stakeholder-share-bar");
     expect(html).toContain("data-project-direction-card");
-    expect(html).toContain("data-handoff");
     expect(html).toContain('data-track="creator"');
-    expect(html).toContain('data-mood-dna="atelier-editorial"');
-    expect(html).toContain("data-review-stage");
-    expect(html).toContain("data-stakeholder-share-bar");
     expect(html).toContain('id="performance"');
     expect(html).toContain('id="reports"');
     expect(html).toContain('id="contracts"');
+
+    // Explicit flag on: restores the prototype panels cleanly.
+    vi.stubEnv("BRAND_WORKSPACE_PROTOTYPE_LAYER", "on");
+    try {
+      const layer = await buildProjectPrototypeLayer({ project, locale: "ko", generativeMediaAllowed: true });
+      const onHtml = renderToStaticMarkup(<ProjectDetail project={project} b={b} locale="ko" prototypeLayer={layer} />);
+      expect(onHtml).toContain("data-aesthetic-engine");
+      expect(onHtml).toContain("data-brief-intake");
+      expect(onHtml).toContain("data-handoff");
+      expect(onHtml).toContain('data-mood-dna="atelier-editorial"');
+      expect(onHtml).toContain("data-review-stage");
+      expect(onHtml).toContain("data-stakeholder-share-bar");
+    } finally {
+      vi.unstubAllEnvs();
+    }
 
     const studioProjectHtml = renderToStaticMarkup(<ProjectDetail project={{ ...project, productionMode: "studio" }} b={b} locale="ko" />);
     expect(studioProjectHtml).toContain('data-track="studio"');
@@ -141,7 +157,7 @@ describe("campaign page", () => {
     expect(guideHtml).toContain("YAGI PRODUCTION");
     expect(guideHtml).toContain("CREATOR CAMPAIGN");
 
-    // When generativeMediaAllowed is false (e.g. Morphic), no AI brief concierge, aesthetic engine, handoff, or studio track appears.
+    // When generativeMediaAllowed is false (e.g. Morphic), no AI brief concierge, aesthetic engine, handoff, direction card, or studio track appears.
     const deniedProjectHtml = renderToStaticMarkup(
       <ProjectDetail
         project={{ ...project, productionMode: "studio" }}

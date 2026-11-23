@@ -213,14 +213,17 @@ export function brandStudioEditorV2Orgs(env: Record<string, string | undefined> 
 
 /**
  * Whether `/brand/studio/compose` opens the new editor for this organization: only with
- * `BRAND_STUDIO_EDITOR_V2=on` AND the organization listed in `BRAND_STUDIO_EDITOR_V2_ORGS`.
+ * `BRAND_STUDIO_EDITOR_V2=on` AND the organization listed in `BRAND_STUDIO_EDITOR_V2_ORGS`
+ * (or `BRAND_STUDIO_EDITOR_V2_ORGS` contains `all` or `*`).
  */
 export function brandStudioEditorV2DefaultFor(
   organizationId: string | null | undefined,
   env: Record<string, string | undefined> = process.env,
 ): boolean {
   if (!brandStudioEditorV2Open(env) || !organizationId) return false;
-  return brandStudioEditorV2Orgs(env).includes(organizationId);
+  const orgs = brandStudioEditorV2Orgs(env);
+  if (orgs.some((entry) => entry === '*' || entry.toLowerCase() === 'all')) return true;
+  return orgs.includes(organizationId);
 }
 
 /**
@@ -318,4 +321,21 @@ export function brandRoomNotifyOpen(env: NodeJS.ProcessEnv = process.env): boole
  */
 export function brandRoomInvitesOpen(env: NodeJS.ProcessEnv = process.env): boolean {
   return env.BRAND_ROOM_INVITES === 'on' && brandRoomsOpen(env);
+}
+
+/**
+ * Prototype layer on `/brand/projects/[id]` (`HumanHandoff`, `BriefConcierge`, `AestheticEngine`,
+ * `ReviewStage`) and preview links to demo/sample routes. Default OFF: open only when the server
+ * environment says exactly `BRAND_WORKSPACE_PROTOTYPE_LAYER=on`.
+ */
+export function brandWorkspacePrototypeLayerOpen(env: Record<string, string | undefined> = process.env): boolean {
+  return env.BRAND_WORKSPACE_PROTOTYPE_LAYER === 'on';
+}
+
+/**
+ * Workspace team invitation e-mails (`invitation.create`). Default OFF: on only when the server
+ * environment says exactly `BRAND_ORG_INVITE_EMAIL=on`. Off preserves link-only copy behavior.
+ */
+export function brandOrgInviteEmailOpen(env: Record<string, string | undefined> = process.env): boolean {
+  return env.BRAND_ORG_INVITE_EMAIL === 'on';
 }

@@ -17,6 +17,8 @@ import { jobsOf, viewsOf } from '@/lib/brand-studio/repo';
 import { allowanceView, loadAllowance } from '@/lib/brand-studio/usage';
 import { featureDenied, isSandboxedClientOrganization } from '@/lib/brands/features';
 import { brandHomeVisible, homeDoorPictures, homeLayout, homeResults, teamHomeProjects } from '@/lib/brands/workspace/home';
+import { loadFirstRunChecklistState } from '@/lib/brands/workspace/home-checklist';
+import { homeChecklistDismissCookieName, readChecklistDismissedFromCookie } from '@/lib/brands/workspace/home-checklist-cookie';
 import { loadBrandWorkspace } from '@/lib/brands/workspace/service';
 import { scopedHref } from '@/lib/brands/workspace/selection';
 import { brandRoomsOpen, brandSoundStudioOpen, brandStudioV2Open } from '@/lib/flags';
@@ -145,6 +147,7 @@ export default async function BrandWorkspaceHome({
     );
   }
 
+  const readOnly = choice.role === 'viewer' || access.staff;
   const media = createStudioMediaStore();
   // Every read is scoped to the brand the guard above resolved for this account.
   const [allowance, jobs, summary, workspace] = await Promise.all([
@@ -155,6 +158,15 @@ export default async function BrandWorkspaceHome({
     rooms ? loadRoomSummary({ sql }, viewer, choice.id).catch(() => null) : Promise.resolve(null),
     loadBrandWorkspace({ sql, verifiedEmail }, viewer, { organizationId: choice.id }).catch(() => ({ organizations: [], projects: [] })),
   ]);
+  const checklistCookie = (await cookies()).get(homeChecklistDismissCookieName(choice.id))?.value;
+  const checklistDismissed = readChecklistDismissedFromCookie(choice.id, checklistCookie);
+  const checklist =
+    readOnly || checklistDismissed
+      ? null
+      : await loadFirstRunChecklistState(sql, choice.id, {
+          capKrw: allowance?.capKrw ?? 0,
+          logoUrl: choice.logoUrl,
+        }).catch(() => null);
   const reviews: RoomAlertItem[] = summary && summary.ok ? (summary.alerts ?? []) : [];
   const activeProjects = workspace.projects.filter((p) => p.status === 'active').length;
   const studioLocale = locale === 'en' ? 'en' : 'ko';
@@ -172,9 +184,10 @@ export default async function BrandWorkspaceHome({
       results={homeResults(jobs, choice.id)}
       activeProjects={activeProjects}
       // A viewer and the TWINGS team view cannot create here: no prompt bar. Only a viewer gets the note.
-      readOnly={choice.role === 'viewer' || access.staff}
+      readOnly={readOnly}
       viewerNote={choice.role === 'viewer'}
       notice={access.staff ? <StaffNotice b={b} manageHref={viewer.isAdmin ? adminOrganizationHref(choice.id, brandHost) : null} /> : null}
+      checklist={checklist}
       copy={{
         home: dict.brandHome,
         shell: dict.studioShell,
@@ -184,6 +197,8 @@ export default async function BrandWorkspaceHome({
         inbox: dict.roomsChat.inbox,
         prompt: { label: dock.label, placeholder: { image: dock.placeholder, video: dock.placeholderVideo } },
         activeStatus: b.status.active,
+        closedRequestDraft: dock.closedRequestDraft,
+        closedRequestOrgFallback: dock.closedRequestOrgFallback,
       }}
     />
   );

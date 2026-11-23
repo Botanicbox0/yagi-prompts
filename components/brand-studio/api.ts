@@ -53,6 +53,7 @@ import {
   type StudioReviseTalk,
   type StudioState,
 } from "@/lib/brand-studio/contracts";
+import { isUnapprovedUploadReason, type UploadLimitReason } from "@/lib/brands/upload-limits-format";
 import { newRequestId } from "./copy";
 
 export const STUDIO_ENDPOINT = "/api/brand-studio";
@@ -86,8 +87,8 @@ export const OPERATIONS_COVERED: Exact<keyof StudioOps, StudioOperation> = true;
 
 export type ApiResult<T> = T | StudioFailure;
 
-export function failed(code: StudioErrorCode): StudioFailure {
-  return { ok: false, code };
+export function failed(code: StudioErrorCode, reason?: UploadLimitReason): StudioFailure {
+  return reason ? { ok: false, code, reason } : { ok: false, code };
 }
 
 export function isFailure<T>(value: ApiResult<T>): value is StudioFailure {
@@ -115,7 +116,8 @@ async function read<T>(response: Response): Promise<ApiResult<T>> {
   const record = body && typeof body === "object" ? (body as Record<string, unknown>) : null;
   if (response.ok && record?.ok === true) return record as T;
   const code = record?.code;
-  if (typeof code === "string" && (STUDIO_ERROR_CODES as readonly string[]).includes(code)) return failed(code as StudioErrorCode);
+  const reason = isUnapprovedUploadReason(record?.reason) ? record.reason : undefined;
+  if (typeof code === "string" && (STUDIO_ERROR_CODES as readonly string[]).includes(code)) return failed(code as StudioErrorCode, reason);
   return failed(STATUS_CODES[response.status] ?? "failed");
 }
 

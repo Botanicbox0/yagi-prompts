@@ -9,6 +9,8 @@ import type { BrandWorkspaceChoice, BrandWorkspaceScope } from './selection';
 import { hasStaffReadAccess } from './staff';
 import { DEFAULT_SANDBOX_DENIED, isSandboxedClientOrganization, loadFeaturePolicies, normalizeDenied } from '../entitlements';
 import { adjustOrganizationStorageBytes, checkStorageQuotaForUpload } from '../storage-quota';
+import { isOrganizationUploadApproved } from '../upload-gate';
+import type { UploadLimitReason } from '../upload-limits-format';
 import { UNKNOWN_POST_PRESENTATION } from './performance';
 import {
   BrandHttpsUrlSchema, BrandOrganizationSchema, BrandProjectSchema, BrandProjectStatusSchema, BrandContentSchema,
@@ -54,12 +56,13 @@ export interface BrandWorkspaceDeps {
   roomLanding?: boolean;
 }
 type Row = Record<string, unknown>;
-class Denied extends Error { constructor(readonly code: BrandFailureCode) { super(code); } }
+class Denied extends Error { constructor(readonly code: BrandFailureCode, readonly reason?: UploadLimitReason) { super(code); } }
 const uuid = (value: unknown): value is string => z.string().uuid().safeParse(value).success;
 const stamp = (v: unknown): string => v instanceof Date ? v.toISOString() : String(v);
 const day = (v: unknown): string | null => v == null ? null : stamp(v).slice(0, 10);
 const nullableNumber = (v: unknown): number | null => v == null ? null : Number(v);
-const fail = (code: BrandFailureCode) => ({ ok: false as const, code });
+const fail = (code: BrandFailureCode, reason?: UploadLimitReason) =>
+  reason ? ({ ok: false as const, code, reason }) : ({ ok: false as const, code });
 
 async function profile(sql: SqlRunner, userId: string, write = false): Promise<Row> {
   const row = (await sql.query(`select id,is_admin,email from profiles where id=$1 ${write ? 'for update' : 'for share'}`, [userId])).rows[0];
@@ -135,7 +138,7 @@ async function mutation<S extends z.ZodType, T>(deps: Pick<BrandWorkspaceDeps, '
       return { ok: true as const, ...await perform(sql, viewer.userId!, parsed.data) };
     });
   } catch (error) {
-    if (error instanceof Denied) return fail(error.code);
+    if (error instanceof Denied) return fail(error.code, error.reason);
     if ((error as { code?: string }).code === '23505') return fail('conflict');
     throw error;
   }
@@ -739,8 +742,8 @@ export async function reserveBrandAttachment(deps: BrandWorkspaceDeps, viewer: V
     const count = (await sql.query<{ n: number }>('select count(*)::int as n from brand_attachments where project_id=$1', [p.id])).rows[0]!.n;
     if (count >= 100) throw new Denied('rate_limited');
     if (!isStudio) {
-      const quota = await checkStorageQuotaForUpload(sql, String(p.organization_id), v.sizeBytes);
-      if (!quota.allowed) throw new Denied('storage_quota_exceeded');
+      const quota = await checkStorageQuotaForUpload(sql, String(p.organization_id), v.sizeBytes, undefined, 1);
+      if (!quota.allowed) throw new Denied('storage_quota_exceeded', quota.reason);
     }
     const id = randomUUID(), storageKey = `brands/${p.organization_id}/${p.id}/${id}`;
     await sql.query('insert into brand_attachments(id,organization_id,project_id,name,mime,size_bytes,storage_key,created_by,request_id,access_scope) values($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)', [id, p.organization_id, p.id, v.name, v.mime, v.sizeBytes, storageKey, userId, v.requestId,v.purpose]);
@@ -1146,6 +1149,25 @@ export async function storeBrandOrganizationLogo(deps: { sql: SqlRunner; storage
       return { id: String(old.id), revision: Number(org.logo_revision) };
     }
     if (Number(org.logo_revision) !== v.expectedRevision) throw new Denied('conflict');
+    if ((await profile(sql, userId)).is_admin !== true && !(await isOrganizationUploadApproved(sql, String(org.id)))) {
+      let incomingBytes = v.bytes.byteLength;
+      if (org.logo_id != null) {
+        const oldLogo = (
+          await sql.query<{ bytes: number; is_admin: boolean | null }>(
+            `select coalesce(l.size_bytes, 0)::int as bytes, p.is_admin
+               from brand_organization_logos l
+               left join profiles p on p.id = l.created_by
+              where l.id = $1`,
+            [org.logo_id],
+          )
+        ).rows[0];
+        if (oldLogo && oldLogo.is_admin !== true) {
+          incomingBytes = Math.max(0, v.bytes.byteLength - Number(oldLogo.bytes));
+        }
+      }
+      const quota = await checkStorageQuotaForUpload(sql, String(org.id), incomingBytes, undefined, org.logo_id != null ? 0 : 1);
+      if (!quota.allowed) throw new Denied('storage_quota_exceeded', quota.reason);
+    }
     if (!deps.storage) throw new Denied('storage_unavailable');
     const id = randomUUID(), storageKey = `brands/${org.id}/logos/${id}`;
     await deps.storage.putStaging(storageKey, v.bytes, mime);

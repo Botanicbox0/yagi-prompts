@@ -14,15 +14,8 @@ import type { RoomAlertItem } from '@/components/brand-rooms/seams';
 import { roomHref } from '@/components/brand-rooms/room/visibility';
 import { clock } from '@/components/brand-studio/rail/text';
 import { RAIL_ICON } from '@/components/brand-workspace/rail-model';
-import {
-  HOME_DOOR_EXAMPLES,
-  HOME_STARTERS,
-  type HomeDoorKey,
-  type HomeLayout,
-  type HomeResult,
-  type HomeTeamKey,
-  type HomeToolKey,
-} from '@/lib/brands/workspace/home';
+import { HOME_DOOR_EXAMPLES, HOME_STARTERS, type HomeDoorKey, type HomeLayout, type HomeResult, type HomeTeamKey, type HomeToolKey } from '@/lib/brands/workspace/home';
+import type { FirstRunChecklistState } from '@/lib/brands/workspace/home-checklist';
 import { scopedHref } from '@/lib/brands/workspace/selection';
 import { interpolate } from '@/lib/i18n/format';
 import type { BrandHomeCopy } from '@/messages/brand-home';
@@ -30,6 +23,7 @@ import type { RoomsChatCopy } from '@/messages/rooms-chat';
 import type { RoomsShellCopy } from '@/messages/rooms-shell';
 import type { StudioShellCopy } from '@/messages/studio-shell';
 import type { RailSummary } from '../rail-activity';
+import { FirstRunChecklist } from './first-run-checklist';
 import { HomeCredits } from './home-credits';
 import { HomePrompt, HomeStarterButton, type HomePromptCopy } from './home-actions';
 import s from './home.module.css';
@@ -66,6 +60,8 @@ export interface WorkspaceHomeProps {
   viewerNote?: boolean;
   /** The TWINGS team view's own notice, rendered by the page. */
   notice?: ReactNode;
+  /** First-run onboarding checklist state derived from existing tables (C1 Item 2). */
+  checklist?: FirstRunChecklistState | null;
   copy: {
     home: BrandHomeCopy;
     shell: StudioShellCopy;
@@ -76,6 +72,8 @@ export interface WorkspaceHomeProps {
     inbox: RoomsChatCopy['inbox'];
     prompt: Pick<HomePromptCopy, 'label' | 'placeholder'>;
     activeStatus: string;
+    closedRequestDraft?: string;
+    closedRequestOrgFallback?: string;
   };
 }
 
@@ -155,6 +153,17 @@ export function WorkspaceHome(props: WorkspaceHomeProps) {
           copy={{ ...copy.prompt, medium: h.prompt.medium, mediumLabel: `${h.prompt.medium.image} / ${h.prompt.medium.video}`, button: h.prompt.button, hint: h.prompt.hint }}
         />
       )}
+
+      {!props.readOnly && props.checklist?.show ? (
+        <FirstRunChecklist
+          organizationId={organizationId}
+          organizationName={props.organizationName}
+          checklist={props.checklist}
+          copy={h.checklist}
+          closedRequestDraft={copy.closedRequestDraft}
+          closedRequestOrgFallback={copy.closedRequestOrgFallback}
+        />
+      ) : null}
 
       <section className={s.tools} aria-labelledby="workspace-home-make" data-home-tools>
         <p id="workspace-home-make" className={s.label}>

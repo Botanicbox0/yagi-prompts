@@ -13,7 +13,7 @@ import { assetView, assetsOf, jobsOf, viewsOf } from '@/lib/brand-studio/repo';
 import { allowanceView, loadAllowance } from '@/lib/brand-studio/usage';
 import { studioShowroomVisible, studioV2Visible } from '@/lib/brand-studio/visibility';
 import { scopedHref } from '@/lib/brands/workspace/selection';
-import { brandStudioEditorV2DefaultFor, brandStudioEditorV2Open, brandStudioV2Open } from '@/lib/flags';
+import { brandStudioEditorV2DefaultFor, brandStudioEditorV2Open, brandStudioV2Open, brandWorkspacePrototypeLayerOpen } from '@/lib/flags';
 
 /**
  * `/brand/studio/compose` — simple video composer (`docs/BRAND-VIDEO-COMPOSE-D.md`, Founder Decisions 3 & 5a).
@@ -150,7 +150,7 @@ export default async function StudioComposePage({
       canCreate={canCreate}
       copy={copy}
       videoStudioHref={scopedHref('/brand/studio/video', choice)}
-      editorV2Href={brandStudioEditorV2Open() ? scopedHref(opensEditorV2 ? '/brand/studio/editor' : '/brand/studio/editor?sample=1', choice) : null}
+      editorV2Href={opensEditorV2 ? scopedHref('/brand/studio/editor', choice) : brandStudioEditorV2Open() && brandWorkspacePrototypeLayerOpen() ? scopedHref('/brand/studio/editor?sample=1', choice) : null}
       initialAllowance={allowanceView(allowance)}
       initialAssets={assets}
       initialVideoOutputs={videoOutputs}

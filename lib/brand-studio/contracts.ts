@@ -9,6 +9,7 @@
  */
 import { z } from 'zod';
 import type { StudioStorageQuotaView } from '@/lib/brands/storage-quota-format';
+import type { UploadLimitReason } from '@/lib/brands/upload-limits-format';
 import { STUDIO_IMAGE_BACKGROUNDS, STUDIO_IMAGE_QUALITIES, type StudioImageQuality } from './models';
 import { LYRIC_STRUCTURES } from './sound/lyrics';
 import type { LyricsModel } from './sound/lyrics-model';
@@ -700,6 +701,7 @@ export type StudioOperation = (typeof STUDIO_OPERATIONS)[number];
 export interface StudioFailure {
   ok: false;
   code: StudioErrorCode;
+  reason?: UploadLimitReason;
 }
 
 /** A library entry as the panel shows it. */

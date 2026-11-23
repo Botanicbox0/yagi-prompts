@@ -5,6 +5,7 @@
  */
 import type { Dictionary } from "@/lib/i18n/dictionaries";
 import type { StudioErrorCode } from "@/lib/brand-studio/contracts";
+import { isUnapprovedUploadReason, type UploadLimitReason } from "@/lib/brands/upload-limits-format";
 import { formatCredits } from "@/lib/brand-studio/credits";
 
 export type StudioCopy = Dictionary["brandStudio"];
@@ -19,6 +20,14 @@ export function fill(template: string, values: Record<string, string | number>):
 export function errorLine(copy: StudioCopy, code: string | null | undefined): string {
   const errors = copy.errors as Record<StudioErrorCode, string>;
   return (code && Object.hasOwn(errors, code) ? errors[code as StudioErrorCode] : undefined) ?? errors.failed;
+}
+
+/** Upload error copy that surfaces the pre-approval 500 MB / 50-file reason when present. */
+export function studioUploadErrorLine(copy: StudioCopy, code: string | null | undefined, reason?: UploadLimitReason | null): string {
+  if (code === "storage_quota_exceeded" && isUnapprovedUploadReason(reason)) {
+    return reason === "unapproved_file_limit" ? copy.unapprovedUpload.fileLimitExceeded : copy.unapprovedUpload.quotaExceeded;
+  }
+  return errorLine(copy, code);
 }
 
 /** "15 크레딧" / "15 credits": a credit count in a sentence of the dictionary (`{n}` is the number). */

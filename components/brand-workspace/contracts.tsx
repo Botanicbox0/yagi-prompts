@@ -1,4 +1,5 @@
 import { randomUUID } from "node:crypto";
+import { BRAND_ATTACHMENT_LIMITS } from "@/lib/brands/workspace/schemas";
 import type { BrandProjectDetail } from "@/lib/brands/workspace/types";
 import type { BrandCopy } from "./action-form";
 import { BrandUpload } from "./upload";
@@ -92,7 +93,7 @@ export function CampaignContracts({
         <details className="bw-contract-add">
           <summary>{c.saveContract}</summary>
           <div className="bw-grid">
-            <BrandUpload projectId={p.id} b={b} studio purpose="contract" />
+            <BrandUpload projectId={p.id} b={b} studio purpose="contract" limits={BRAND_ATTACHMENT_LIMITS} />
             {!!p.contractUploads?.length && (
               <ManagedForm
                 op="brandWorkspace.contract"

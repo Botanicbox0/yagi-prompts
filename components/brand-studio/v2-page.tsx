@@ -72,7 +72,7 @@ export async function brandStudioV2(input: StudioV2Input): Promise<ReactElement>
         {/* The credits line and the phone's library button are placed here by the studio (studio-app.tsx). */}
         <div className="bs-head-slot" data-studio-head-slot />
       </header>
-      <StudioApp organizationId={choice.id} locale={locale} copy={copy} mode="image" libraryCopy={dict.studioLibrary} {...(brandStudioProjectsOpen() ? { projectsCopy: dict.studioVideo.workspace.projects } : {})} layersCopy={dict.studioLayers} />
+      <StudioApp organizationId={choice.id} organizationName={choice.name} locale={locale} copy={copy} mode="image" libraryCopy={dict.studioLibrary} {...(brandStudioProjectsOpen() ? { projectsCopy: dict.studioVideo.workspace.projects } : {})} layersCopy={dict.studioLayers} />
     </div>
   );
 }

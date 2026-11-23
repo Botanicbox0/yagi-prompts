@@ -11,12 +11,16 @@
  */
 import type { SqlRunner } from '@/lib/db/sql-runner';
 import { assertBrandFeature, BrandFeatureDenied, isSandboxedClientOrganization } from '@/lib/brands/entitlements';
+import type { UploadLimitReason } from '@/lib/brands/upload-limits-format';
 import type { StudioErrorCode } from './contracts';
 
 export type StudioRole = 'owner' | 'editor' | 'viewer' | 'guest';
 
 export class StudioDenied extends Error {
-  constructor(readonly code: StudioErrorCode) {
+  constructor(
+    readonly code: StudioErrorCode,
+    readonly reason?: UploadLimitReason,
+  ) {
     super(code);
     this.name = 'StudioDenied';
   }
@@ -36,7 +40,7 @@ export async function studioSeat(
   sql: SqlRunner,
   userId: string | null | undefined,
   organizationId: string,
-  options?: { requireSelfStudio?: boolean },
+  options?: { requireSelfStudio?: boolean; requireAgentAccess?: boolean },
 ): Promise<StudioSeat> {
   if (!userId || !UUID.test(userId)) throw new StudioDenied('sign_in_required');
   if (!UUID.test(organizationId)) throw new StudioDenied('not_found');
@@ -66,6 +70,7 @@ export async function studioSeat(
   try {
     await assertBrandFeature(sql, organizationId, 'generative_media');
     if (options?.requireSelfStudio) await assertBrandFeature(sql, organizationId, 'self_studio');
+    if (options?.requireAgentAccess) await assertBrandFeature(sql, organizationId, 'agent_access');
   } catch (error) {
     if (error instanceof BrandFeatureDenied) throw new StudioDenied('feature_unavailable');
     throw error;

@@ -34,8 +34,9 @@ import type { VideoProjectDetail, VideoProjectStatus, VideoProjectSummary } from
 import type { Dictionary } from "@/lib/i18n/dictionaries";
 import type { StudioVideoCopy } from "@/messages/studio-video";
 import { createStudioApi, isFailure, measureInBrowser, uploadProblem, type StudioApi } from "../api";
+import { ClosedAllowanceBanner } from "../closed-allowance-banner";
 import { EXAMPLES, jobsFor } from "../board";
-import { errorLine, fill as interpolate, type StudioCopy, type StudioLocale } from "../copy";
+import { errorLine, fill as interpolate, studioUploadErrorLine, type StudioCopy, type StudioLocale } from "../copy";
 import { AllowanceLine, Dock } from "../dock";
 import {
   DRAFT_RESOLUTION,
@@ -76,6 +77,7 @@ import { validateVideoEditDurationSeconds } from "./workspace-model";
 
 export interface VideoStudioWorkspaceProps {
   organizationId: string;
+  organizationName?: string | null;
   locale: StudioLocale;
   copy: StudioCopy;
   libraryCopy: Dictionary["studioLibrary"];
@@ -190,6 +192,7 @@ function useTabBarHeight() {
 
 export function VideoStudioWorkspace({
   organizationId,
+  organizationName,
   locale,
   copy,
   libraryCopy,
@@ -893,9 +896,9 @@ export function VideoStudioWorkspace({
       await Promise.all(
         files.map(async (file) => {
           const problem = uploadProblem(file);
-          if (problem) return say(errorLine(copy, problem));
+          if (problem) return say(studioUploadErrorLine(copy, problem));
           const result = await studio.upload(file);
-          if (isFailure(result)) return say(errorLine(copy, result.code));
+          if (isFailure(result)) return say(studioUploadErrorLine(copy, result.code, result.reason));
           if (attach) dock.attach(trayItemFromAsset(result.asset));
         }),
       );
@@ -1013,7 +1016,7 @@ export function VideoStudioWorkspace({
     async (file: File): Promise<StudioAssetView | null> => {
       const problem = uploadProblem(file);
       if (problem) {
-        dock.setMessage(errorLine(copy, problem));
+        dock.setMessage(studioUploadErrorLine(copy, problem));
         return null;
       }
       const measured = await measureInBrowser(file, "video").catch(() => ({ seconds: undefined }));
@@ -1034,7 +1037,7 @@ export function VideoStudioWorkspace({
       }
       const res = await studio.upload(file);
       if (isFailure(res)) {
-        dock.setMessage(errorLine(copy, res.code));
+        dock.setMessage(studioUploadErrorLine(copy, res.code, res.reason));
         return null;
       }
       return res.asset;
@@ -1660,13 +1663,7 @@ export function VideoStudioWorkspace({
         )}
 
         {state && canCreate && !dockOpen && (
-          <section className="bs-closed" data-studio-allowance-closed>
-            <h2>{copy.dock.closedTitle}</h2>
-            <p>{copy.dock.closedBody}</p>
-            <button type="button" className="bs-btn" data-variant="solid" data-size="md" onClick={openSupport}>
-              {copy.dock.closedAction}
-            </button>
-          </section>
+          <ClosedAllowanceBanner organizationId={organizationId} organizationName={organizationName} dockCopy={copy.dock} />
         )}
         {state && !canCreate && (
           <p className="bs-readonly" data-studio-read-only>

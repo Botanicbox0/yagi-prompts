@@ -11,11 +11,12 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type DragEvent } from "react";
 import { interpolate } from "@/lib/i18n/format";
 import { STORYBOARD_LIMITS, type StoryboardBoardView, type StoryboardErrorCode, type StoryboardFrameDetail } from "@/lib/brand-rooms/storyboard-contracts";
+import type { UploadLimitReason } from "@/lib/brands/upload-limits-format";
 import { pictureProblem } from "./api";
 import { applyParagraphs, cutsFromFiles, cutsFromFrames, isDirty, moveCut, type DraftCut } from "./editor-model";
 import { ConfirmDialog, cutLabel, type StoryboardCopy } from "./views";
 
-export type WriteResult = { ok: true } | { ok: false; code: StoryboardErrorCode };
+export type WriteResult = { ok: true } | { ok: false; code: StoryboardErrorCode; reason?: UploadLimitReason };
 
 export interface StoryboardWriter {
   /** Save the whole working copy. `progress` reports uploaded pictures. */
@@ -49,7 +50,7 @@ export function StoryboardEditor({
   const [busy, setBusy] = useState<Busy>(null);
   const [progress, setProgress] = useState<{ done: number; total: number } | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
-  const [error, setError] = useState<StoryboardErrorCode | null>(null);
+  const [error, setError] = useState<{ code: StoryboardErrorCode; reason?: UploadLimitReason } | null>(null);
   const [pasteOpen, setPasteOpen] = useState(false);
   const [pasteText, setPasteText] = useState("");
   const [dropActive, setDropActive] = useState(false);
@@ -126,7 +127,7 @@ export function StoryboardEditor({
     setProgress(null);
     setBusy(null);
     if (!result.ok) {
-      setError(result.code);
+      setError({ code: result.code, reason: result.reason });
       return false;
     }
     setSaved(true);
@@ -144,7 +145,7 @@ export function StoryboardEditor({
     setBusy(null);
     setConfirmShare(false);
     if (!result.ok) {
-      setError(result.code);
+      setError({ code: result.code, reason: result.reason });
       return;
     }
     onShared();
@@ -337,7 +338,19 @@ export function StoryboardEditor({
 
       <div className="brs-editor-foot" data-storyboard-editor-foot>
         <p className="brs-status" role="status" aria-live="polite">
-          {error ? <span className="brs-error">{copy.errors[error]}</span> : notice ? <span>{notice}</span> : status}
+          {error ? (
+            <span className="brs-error">
+              {error.code === "storage_quota_exceeded" && error.reason === "unapproved_file_limit"
+                ? copy.errors.unapprovedUploadFiles
+                : error.code === "storage_quota_exceeded" && error.reason === "unapproved_quota"
+                  ? copy.errors.unapprovedUploadQuota
+                  : copy.errors[error.code]}
+            </span>
+          ) : notice ? (
+            <span>{notice}</span>
+          ) : (
+            status
+          )}
         </p>
         <div className="brs-editor-actions">
           {onDone ? (

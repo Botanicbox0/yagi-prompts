@@ -88,8 +88,9 @@ describe('the working editor links to the v2 prototype only while the flag is on
 
   it('the page hands over the address only when the flag function says so, after the studio guard', () => {
     const page = readFileSync(join(root, 'app/(brand)/brand/studio/compose/page.tsx'), 'utf8');
+    expect(page).toContain('brandStudioEditorV2Open()');
     expect(page).toContain(
-      "editorV2Href={brandStudioEditorV2Open() ? scopedHref(opensEditorV2 ? '/brand/studio/editor' : '/brand/studio/editor?sample=1', choice) : null}",
+      "opensEditorV2 ? scopedHref('/brand/studio/editor', choice) : brandStudioEditorV2Open() && brandWorkspacePrototypeLayerOpen() ? scopedHref('/brand/studio/editor?sample=1', choice) : null",
     );
     expect(page.indexOf('studioRouteOrShowroom(')).toBeGreaterThan(-1);
     expect(page.indexOf('studioRouteOrShowroom(params.organizationId)')).toBeLessThan(page.indexOf('editorV2Href='));

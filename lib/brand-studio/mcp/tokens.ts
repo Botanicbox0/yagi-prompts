@@ -100,7 +100,7 @@ export async function listMcpTokens(
   if (!UUID.test(organizationId)) return failure('not_found');
   return guarded(() =>
     sql.transaction(async (tx) => {
-      const seat = await studioSeat(tx, viewer.userId, organizationId, { requireSelfStudio: true });
+      const seat = await studioSeat(tx, viewer.userId, organizationId, { requireSelfStudio: true, requireAgentAccess: true });
       const reg = (await tx.query<{ t: string | null }>("select to_regclass('public.brand_studio_mcp_tokens')::text as t")).rows[0];
       if (!reg?.t) {
         return {
@@ -142,7 +142,7 @@ export async function mintMcpToken(
 
   return guarded(() =>
     sql.transaction(async (tx) => {
-      const seat = await studioSeat(tx, viewer.userId, v.organizationId, { requireSelfStudio: true });
+      const seat = await studioSeat(tx, viewer.userId, v.organizationId, { requireSelfStudio: true, requireAgentAccess: true });
       requireCreate(seat);
       const { rawToken, tokenPrefix, tokenHash } = generateRawMcpToken();
       const row = (
@@ -172,7 +172,7 @@ export async function revokeMcpToken(
   const v = parsed.data;
   return guarded(() =>
     sql.transaction(async (tx) => {
-      const seat = await studioSeat(tx, viewer.userId, v.organizationId, { requireSelfStudio: true });
+      const seat = await studioSeat(tx, viewer.userId, v.organizationId, { requireSelfStudio: true, requireAgentAccess: true });
       requireCreate(seat);
       const row = (
         await tx.query<McpTokenRow>('select * from brand_studio_mcp_tokens where id = $1 and organization_id = $2', [
@@ -246,7 +246,7 @@ export async function authenticateMcpToken(sql: SqlRunner, rawToken: string | nu
 
   try {
     const seat = await sql.transaction(async (tx) => {
-      const verified = await studioSeat(tx, row.user_id, row.organization_id, { requireSelfStudio: true });
+      const verified = await studioSeat(tx, row.user_id, row.organization_id, { requireSelfStudio: true, requireAgentAccess: true });
       requireCreate(verified);
       await tx.query('update brand_studio_mcp_tokens set last_used_at = now() where id = $1', [row.id]);
       return verified;

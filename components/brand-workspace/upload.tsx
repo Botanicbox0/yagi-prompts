@@ -1,38 +1,55 @@
 "use client";
 import { useRef, useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
+import {
+  isUnapprovedUploadReason,
+  type UploadLimitReason,
+} from "@/lib/brands/upload-limits-format";
 import type { BrandCopy } from "./action-form";
 /** Why an upload stopped: the person cancelled, the campaign's file limit or storage quota was reached, or it failed. */
 export type UploadStop = "aborted" | "rate_limited" | "storage_quota_exceeded" | "failed";
-export function uploadStopNotice(stop: UploadStop, b: BrandCopy): { notice: string; failed: boolean } {
+export function uploadStopNotice(
+  stop: UploadStop,
+  b: BrandCopy,
+  reason?: UploadLimitReason | null,
+): { notice: string; failed: boolean } {
   if (stop === "aborted") return { notice: "", failed: false };
   if (stop === "rate_limited") return { notice: b.errors.rateLimited, failed: true };
-  if (stop === "storage_quota_exceeded") return { notice: b.errors.storageQuotaExceeded, failed: true };
+  if (stop === "storage_quota_exceeded") {
+    if (reason === "unapproved_file_limit") return { notice: b.errors.unapprovedUploadFiles, failed: true };
+    if (reason === "unapproved_quota") return { notice: b.errors.unapprovedUploadQuota, failed: true };
+    return { notice: b.errors.storageQuotaExceeded, failed: true };
+  }
   return { notice: b.uploadFailed, failed: true };
+}
+class UploadStopError extends Error {
+  reason?: UploadLimitReason;
+  constructor(stop: UploadStop, reason?: UploadLimitReason) {
+    super(stop);
+    this.reason = reason;
+  }
 }
 const stopOf = (error: unknown): UploadStop =>
   error instanceof Error && (error.message === "aborted" || error.message === "rate_limited" || error.message === "storage_quota_exceeded")
     ? error.message
     : "failed";
-const CAPS: Record<string, number> = {
-  "image/jpeg": 15 * 1024 * 1024,
-  "image/png": 15 * 1024 * 1024,
-  "image/webp": 15 * 1024 * 1024,
-  "video/mp4": 50000000,
-  "video/webm": 50000000,
-  "application/pdf": 20 * 1024 * 1024,
-};
+const reasonOf = (error: unknown): UploadLimitReason | undefined =>
+  error instanceof UploadStopError ? error.reason : undefined;
+const ACCEPTED_MIMES = ["image/jpeg", "image/png", "image/webp", "video/mp4", "video/webm", "application/pdf"] as const;
 
 export function BrandUpload({
   projectId,
   b,
   studio = false,
   purpose = "workspace",
+  limits,
 }: {
   projectId: string;
   b: BrandCopy;
   studio?: boolean;
   purpose?: "workspace" | "contract";
+  /** Server-supplied format byte caps (`BRAND_ATTACHMENT_LIMITS` from `lib/brands/workspace/schemas.ts`). */
+  limits?: Readonly<Record<string, number>>;
 }) {
   const endpoint = studio
     ? "/api/admin/brand-workspace"
@@ -55,8 +72,10 @@ export function BrandUpload({
   } | null>(null);
   async function upload() {
     if (busy || !file) return;
-    const cap = CAPS[file.type];
-    if ((purpose === "contract" && file.type !== "application/pdf") || !cap || file.size <= 0 || file.size > cap) {
+    const supportedMimes: readonly string[] = limits ? Object.keys(limits) : ACCEPTED_MIMES;
+    const supported = supportedMimes.includes(file.type);
+    const cap = limits?.[file.type];
+    if ((purpose === "contract" && file.type !== "application/pdf") || !supported || file.size <= 0 || (cap !== undefined && file.size > cap)) {
       setFailed(true);
       setNotice(b.badFile);
       return;
@@ -102,13 +121,14 @@ export function BrandUpload({
         });
         const target = await response.json();
         if (!response.ok || !target.ok) {
-          throw Error(
-            target?.code === "rate_limited"
-              ? "rate_limited"
-              : target?.code === "storage_quota_exceeded"
-                ? "storage_quota_exceeded"
-                : "upload",
-          );
+          if (target?.code === "rate_limited") throw new UploadStopError("rate_limited");
+          if (target?.code === "storage_quota_exceeded") {
+            throw new UploadStopError(
+              "storage_quota_exceeded",
+              isUnapprovedUploadReason(target?.reason) ? target.reason : undefined,
+            );
+          }
+          throw Error("upload");
         }
         attempt.id = target.id;
         await new Promise<void>((resolve, reject) => {
@@ -152,7 +172,7 @@ export function BrandUpload({
       reservation.current = null;
       router.refresh();
     } catch (error) {
-      const stop = uploadStopNotice(stopOf(error), b);
+      const stop = uploadStopNotice(stopOf(error), b, reasonOf(error));
       setFailed(stop.failed);
       setNotice(stop.notice);
     } finally {
@@ -167,7 +187,7 @@ export function BrandUpload({
         <input
           ref={fileInput}
           type="file"
-          accept={purpose === "contract" ? "application/pdf" : Object.keys(CAPS).join(",")}
+          accept={purpose === "contract" ? "application/pdf" : (limits ? Object.keys(limits) : ACCEPTED_MIMES).join(",")}
           disabled={!ready||busy}
           onChange={(e) => {
             setFile(e.target.files?.[0] ?? null);

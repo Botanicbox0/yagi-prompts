@@ -6,6 +6,7 @@
  * address when `direct`, otherwise POST the bytes to the local gateway -> `frame.complete`.
  */
 import type { z } from "zod";
+import { isUnapprovedUploadReason, type UploadLimitReason } from "@/lib/brands/upload-limits-format";
 import {
   STORYBOARD_ERROR_CODES,
   STORYBOARD_LIMITS,
@@ -54,7 +55,8 @@ export const OPERATIONS_COVERED: Exact<keyof StoryboardOps, StoryboardOperation>
 
 export type ApiResult<T> = T | StoryboardFailure;
 
-export const failed = (code: StoryboardErrorCode): StoryboardFailure => ({ ok: false, code });
+export const failed = (code: StoryboardErrorCode, reason?: UploadLimitReason): StoryboardFailure =>
+  reason ? { ok: false, code, reason } : { ok: false, code };
 
 export function isFailure<T>(value: ApiResult<T>): value is StoryboardFailure {
   return (value as { ok?: unknown }).ok === false;
@@ -81,7 +83,8 @@ async function read<T>(response: Response): Promise<ApiResult<T>> {
   const record = body && typeof body === "object" ? (body as Record<string, unknown>) : null;
   if (response.ok && record?.ok === true) return record as T;
   const code = record?.code;
-  if (typeof code === "string" && (STORYBOARD_ERROR_CODES as readonly string[]).includes(code)) return failed(code as StoryboardErrorCode);
+  const reason = isUnapprovedUploadReason(record?.reason) ? record.reason : undefined;
+  if (typeof code === "string" && (STORYBOARD_ERROR_CODES as readonly string[]).includes(code)) return failed(code as StoryboardErrorCode, reason);
   return failed(STATUS_CODES[response.status] ?? "failed");
 }
 

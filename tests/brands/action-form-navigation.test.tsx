@@ -17,6 +17,20 @@ describe('workspace creation navigation',()=>{
   expect(mocks.assign).toHaveBeenCalledExactlyOnceWith('/brand/projects/new');
   expect(mocks.refresh).not.toHaveBeenCalled();expect(mocks.push).not.toHaveBeenCalled();
  });
+
+ it('navigates new workspace creation straight to /brand/home when Studio v2 is open (S9)',async()=>{
+  const NativeFormData=FormData;
+  vi.stubGlobal('FormData',class extends NativeFormData{constructor(){super();this.set('name','Atelier Monet');}});
+  vi.stubGlobal('fetch',vi.fn().mockResolvedValue({ok:true,json:async()=>({ok:true,id:'org-new'})}));
+  vi.stubGlobal('location',{assign:mocks.assign,origin:'http://localhost:4792'});
+  const {resolveFirstRunLanding}=await import('@/lib/brands/workspace/first-run-landing');
+  const target=resolveFirstRunLanding(true);
+  expect(target).toBe('/brand/home');
+  expect(resolveFirstRunLanding(false)).toBe('/brand');
+  const form=ActionForm({operation:'organization.create',b:getDictionary('ko').brandWorkspace,submit:'워크스페이스 만들기',redirectTo:target});
+  await form.props.onSubmit({preventDefault:vi.fn(),currentTarget:{querySelectorAll:()=>[]}});
+  expect(mocks.assign).toHaveBeenCalledExactlyOnceWith('/brand/home');
+ });
 });
 
 it('admin creation navigates once without refreshing stale organization data',async()=>{

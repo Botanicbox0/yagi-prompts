@@ -26,8 +26,9 @@ import { randomUUID } from 'node:crypto';
 import type { z } from 'zod';
 import type { Viewer } from '@/lib/auth/identity';
 import type { SqlRunner } from '@/lib/db/sql-runner';
-import { STAGING_BUCKET } from '@/lib/storage';
 import { featureDenied, isSandboxedClientOrganization } from '@/lib/brands/features';
+import type { UploadLimitReason } from '@/lib/brands/upload-limits-format';
+import { STAGING_BUCKET } from '@/lib/storage';
 import { loadFeaturePolicies } from '@/lib/brands/entitlements';
 import {
   adjustOrganizationStorageBytes,
@@ -99,20 +100,24 @@ export const STORYBOARD_LOCAL_UPLOAD_ROUTE = '/api/brand-rooms/storyboards/uploa
 export const INGEST_LOCAL_UPLOAD_ROUTE = '/api/brand-rooms/ingest';
 
 export class StoryboardDenied extends Error {
-  constructor(readonly code: StoryboardErrorCode) {
+  constructor(
+    readonly code: StoryboardErrorCode,
+    readonly reason?: UploadLimitReason,
+  ) {
     super(code);
     this.name = 'StoryboardDenied';
   }
 }
 
-const failure = (code: StoryboardErrorCode): StoryboardFailure => ({ ok: false, code });
+const failure = (code: StoryboardErrorCode, reason?: UploadLimitReason): StoryboardFailure =>
+  reason ? { ok: false, code, reason } : { ok: false, code };
 
 /** Run `fn`; a refusal becomes its code, a unique-key race becomes `conflict`. Anything else propagates. */
 async function guard<T>(fn: () => Promise<T>): Promise<T | StoryboardFailure> {
   try {
     return await fn();
   } catch (error) {
-    if (error instanceof StoryboardDenied) return failure(error.code);
+    if (error instanceof StoryboardDenied) return failure(error.code, error.reason);
     if (error instanceof RoomDenied) return failure(error.code);
     if ((error as { code?: string } | null)?.code === '23505') return failure('conflict');
     throw error;
@@ -558,8 +563,11 @@ async function reserveFrame(
   if (input.sizeBytes > STORYBOARD_LIMITS.imageBytesMax) throw new StoryboardDenied('file_too_large');
   if (!(STORYBOARD_UPLOAD_MIMES as readonly string[]).includes(input.mime)) throw new StoryboardDenied('unsupported_file');
   if (actor.role === 'brand') {
-    const quota = await checkStorageQuotaForUpload(sql, board.organization_id, input.sizeBytes);
-    if (!quota.allowed) throw new StoryboardDenied('storage_quota_exceeded');
+    const isAdmin = (await sql.query<{ is_admin: boolean }>('select is_admin from profiles where id = $1', [actor.userId])).rows[0]?.is_admin === true;
+    if (!isAdmin) {
+      const quota = await checkStorageQuotaForUpload(sql, board.organization_id, input.sizeBytes, undefined, 1);
+      if (!quota.allowed) throw new StoryboardDenied('storage_quota_exceeded', quota.reason);
+    }
   }
   await sql.query(
     `delete from brand_storyboard_frames where storyboard_id = $1 and status = 'pending' and created_at < now() - make_interval(hours => $2)`,
@@ -644,8 +652,11 @@ async function addFromStudio(
     throw new StoryboardDenied('not_found');
   }
   if (actor.role === 'brand') {
-    const quota = await checkStorageQuotaForUpload(sql, board.organization_id, bytes.byteLength);
-    if (!quota.allowed) throw new StoryboardDenied('storage_quota_exceeded');
+    const isAdmin = (await sql.query<{ is_admin: boolean }>('select is_admin from profiles where id = $1', [actor.userId])).rows[0]?.is_admin === true;
+    if (!isAdmin) {
+      const quota = await checkStorageQuotaForUpload(sql, board.organization_id, bytes.byteLength, undefined, 0);
+      if (!quota.allowed) throw new StoryboardDenied('storage_quota_exceeded', quota.reason);
+    }
   }
   const picture = await storePicture(deps.media, bytes, null, stored);
   const inserted = await insertReadyFrame(

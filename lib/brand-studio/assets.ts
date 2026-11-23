@@ -72,8 +72,11 @@ export async function reserveStudioAsset(deps: StudioDeps, viewer: Viewer, raw: 
         return { id: prior.id, key: prior.storage_key, pending: prior.status === 'pending' && !prior.deleted_at };
       }
       if ((await liveAssetCount(sql, v.organizationId)) >= STUDIO_LIMITS.assetsPerOrganization) throw new StudioDenied('asset_limit');
-      const quota = await checkStorageQuotaForUpload(sql, v.organizationId, v.sizeBytes);
-      if (!quota.allowed) throw new StudioDenied('storage_quota_exceeded');
+      const isStudio = (await sql.query<{ is_admin: boolean }>('select is_admin from profiles where id = $1', [viewer.userId])).rows[0]?.is_admin === true;
+      if (!isStudio) {
+        const quota = await checkStorageQuotaForUpload(sql, v.organizationId, v.sizeBytes, undefined, 1);
+        if (!quota.allowed) throw new StudioDenied('storage_quota_exceeded', quota.reason);
+      }
       const id = randomUUID();
       const key = `brand-studio/${v.organizationId}/${id}`;
       await sql.query(

@@ -2,6 +2,13 @@
  * Project room copy, slice S (docs/BRAND-ROOMS.md §10). Wired into the dictionaries as `roomsStoryboard`.
  * Both languages live here so one owner edits one file. Korean is a draft until the wording pass.
  */
+import { STORYBOARD_LIMITS } from '@/lib/brand-rooms/storyboard-contracts';
+import {
+  formatLimitMb,
+  UNAPPROVED_UPLOAD_MAX_FILES,
+  UNAPPROVED_UPLOAD_QUOTA_BYTES,
+} from '@/lib/brands/upload-limits-format';
+
 export const roomsStoryboardEn = {
   region: "Storyboard",
   loading: "Loading…",
@@ -105,7 +112,7 @@ export const roomsStoryboardEn = {
     label: "Edit storyboard",
     title: "Title",
     addPictures: "Add pictures",
-    drop: "Drop pictures here. They become shots in file-name order. JPG, PNG or WebP, up to 25 MB each.",
+    drop: `Drop pictures here. They become shots in file-name order. JPG, PNG or WebP, up to ${formatLimitMb(STORYBOARD_LIMITS.imageBytesMax)} MB each.`,
     dropActive: "Drop to add",
     pasteText: "Paste text",
     pasteHint: "Each paragraph, split by a blank line, becomes the description of the next shot.",
@@ -133,7 +140,7 @@ export const roomsStoryboardEn = {
     done: "Done",
     empty: "Add pictures to start. Each picture is one shot.",
     tooMany: "A storyboard holds up to {max} shots.",
-    badFile: "{name}: only JPG, PNG or WebP up to 25 MB.",
+    badFile: `{name}: only JPG, PNG or WebP up to ${formatLimitMb(STORYBOARD_LIMITS.imageBytesMax)} MB.`,
     leave: "You have unsaved changes.",
   },
   errors: {
@@ -144,10 +151,12 @@ export const roomsStoryboardEn = {
     conflict: "It changed somewhere else. Reload and try again.",
     not_editable: "A shared storyboard changes only in a new version.",
     empty: "Add at least one shot before sharing.",
-    limit_reached: "That is the limit: 200 shots per storyboard, 50 storyboards per project.",
+    limit_reached: `That is the limit: ${STORYBOARD_LIMITS.framesPerBoard} shots per storyboard, ${STORYBOARD_LIMITS.boardsPerProject} storyboards per project.`,
     storage_quota_exceeded: "Your organization storage is full. Delete unused files in Assets to upload new shots.",
+    unapprovedUploadQuota: `Before your plan is confirmed, uploads are limited to ${formatLimitMb(UNAPPROVED_UPLOAD_QUOTA_BYTES)} MB and ${UNAPPROVED_UPLOAD_MAX_FILES} files. Delete unused files or ask the YAGI team in chat.`,
+    unapprovedUploadFiles: `Before your plan is confirmed, you can upload up to ${UNAPPROVED_UPLOAD_MAX_FILES} files (${formatLimitMb(UNAPPROVED_UPLOAD_QUOTA_BYTES)} MB). Delete unused files or ask the YAGI team in chat.`,
     unsupported_file: "Only JPG, PNG or WebP pictures.",
-    file_too_large: "Pictures can be up to 25 MB.",
+    file_too_large: `Pictures can be up to ${formatLimitMb(STORYBOARD_LIMITS.imageBytesMax)} MB.`,
     provider_unavailable: "Please try again in a moment.",
     failed: "Something went wrong. Please try again.",
   },
@@ -292,7 +301,7 @@ export const roomsStoryboardKo: typeof roomsStoryboardEn = {
     label: "스토리보드 편집",
     title: "제목",
     addPictures: "사진 추가",
-    drop: "사진을 끌어다 놓으면 파일 이름 순서대로 컷이 돼요. jpg, png, webp, 한 장에 25MB까지.",
+    drop: `사진을 끌어다 놓으면 파일 이름 순서대로 컷이 돼요. jpg, png, webp, 한 장에 ${formatLimitMb(STORYBOARD_LIMITS.imageBytesMax)} MB까지.`,
     dropActive: "놓으면 추가돼요",
     pasteText: "글 붙여 넣기",
     pasteHint: "빈 줄로 나눈 문단이 순서대로 각 컷의 설명이 돼요.",
@@ -320,7 +329,7 @@ export const roomsStoryboardKo: typeof roomsStoryboardEn = {
     done: "편집 마치기",
     empty: "사진을 추가해 시작하세요. 사진 한 장이 컷 하나예요.",
     tooMany: "컷은 {max}개까지 넣을 수 있어요.",
-    badFile: "{name}: jpg, png, webp 사진만 25MB까지 올릴 수 있어요.",
+    badFile: `{name}: jpg, png, webp 사진만 ${formatLimitMb(STORYBOARD_LIMITS.imageBytesMax)} MB까지 올릴 수 있어요.`,
     leave: "저장하지 않은 변경이 있어요.",
   },
   errors: {
@@ -331,10 +340,12 @@ export const roomsStoryboardKo: typeof roomsStoryboardEn = {
     conflict: "다른 곳에서 바뀌었어요. 새로 고친 뒤 다시 해 주세요.",
     not_editable: "공유한 스토리보드는 새 버전에서 고칠 수 있어요.",
     empty: "컷이 하나 이상 있어야 공유할 수 있어요.",
-    limit_reached: "더 넣을 수 없어요. 컷은 스토리보드당 200개, 스토리보드는 프로젝트당 50개까지예요.",
+    limit_reached: `더 넣을 수 없어요. 컷은 스토리보드당 ${STORYBOARD_LIMITS.framesPerBoard}개, 스토리보드는 프로젝트당 ${STORYBOARD_LIMITS.boardsPerProject}개까지예요.`,
     storage_quota_exceeded: "조직 저장 한도가 가득 찼어요. 에셋에서 안 쓰는 파일을 지우면 새 컷을 올릴 수 있어요.",
+    unapprovedUploadQuota: `플랜 확정 전에는 총 ${formatLimitMb(UNAPPROVED_UPLOAD_QUOTA_BYTES)} MB, 최대 ${UNAPPROVED_UPLOAD_MAX_FILES}개까지 올릴 수 있어요. 안 쓰는 파일을 지우거나 대화창에서 야기 팀에 문의해 주세요.`,
+    unapprovedUploadFiles: `플랜 확정 전에는 최대 ${UNAPPROVED_UPLOAD_MAX_FILES}개(${formatLimitMb(UNAPPROVED_UPLOAD_QUOTA_BYTES)} MB)까지 올릴 수 있어요. 안 쓰는 파일을 지우거나 대화창에서 야기 팀에 문의해 주세요.`,
     unsupported_file: "jpg, png, webp 사진만 올릴 수 있어요.",
-    file_too_large: "사진은 25MB까지 올릴 수 있어요.",
+    file_too_large: `사진은 ${formatLimitMb(STORYBOARD_LIMITS.imageBytesMax)} MB까지 올릴 수 있어요.`,
     provider_unavailable: "잠시 뒤 다시 시도해 주세요.",
     failed: "문제가 생겼어요. 다시 시도해 주세요.",
   },

@@ -189,3 +189,13 @@ values ('deb648e9-c2df-43d4-b2a7-7f9eff8180d9', array['generative_media','sound'
 ## 14. 조사 파일
 
 `research/brand-product-2026-11-03/`: `repo-brand-surface.md`(브랜드 표면·권한 훅), `repo-engines-pipeline.md`(엔진·큐·원가), `repo-billing-b2b.md`(결제·장부·약관), `knowhow-corpus.md`(노하우 61항목), `scenario-skills-borrow.md`(차용 패턴), `sota-platforms.md`(플랫폼 비교), `sota-models-pricing.md`(모델·단가·라이선스), `argon-sound-assembly.md`(Argon 설계·비용·테스트), `b2b-pricing-plans.md`(플랜 제안·마진), `repo-legibility.md`(가독화 감사·ARCHITECTURE 초안).
+
+## 15. 런칭 첫 실행 · 미승인 업로드 게이트 · 운영 플래그
+
+- **워크스페이스 첫 실행**: 워크스페이스 생성(`organization.create`) 후 `BRAND_STUDIO_V2=on`이면 `/brand/home`으로 이동한다. `/brand/home`에는 생성 후 30일 이내·미완료 워크스페이스에만 4단계 시작 가이드(`status = 'active'` 팀원 초대 · 로고/제품 사진 · 이용 상태 · 첫 이미지)가 표시되며, 닫기 상태는 조직별 쿠키(`yagi_brand_home_checklist_dismissed_<orgId>`)로 서버에서 읽어 플리커 없이 유지한다. 스튜디오 미승인 상태(`capKrw = 0`)에서는 `이용 신청` 버튼이 회사명·희망 제작 내용이 미리 채워진 편집 가능한 요청서로 `SupportDrawer`를 연다(미승인·이용 가능 2상태만 표시).
+- **미승인 워크스페이스 업로드 게이트**: `UPLOAD_GATE_APPLIES_FROM`(`2026-11-24T00:00:00+09:00`) 이후 생성된 신규 자가 가입 조직 중 ① `capKrw > 0`, ② 이력이 존재하는 플랜(`brand_plan_assignments`/`brand_plan_events`), ③ 팀 제작/전달 레코드(`studio_managed`·스태프 생성 프로젝트/계약/스토리보드/룸 메시지/전달물/콘텐츠 버전), ④ 어드민 스토리지 오버라이드(`brand_storage_quotas.quota_bytes`) 중 **하나도 해당하지 않는 경우**에만 비관리자 멤버 업로드분과 대기 중인 룸 첨부 예약을 합산해 **500 MB · 50개**(`UNAPPROVED_UPLOAD_QUOTA_BYTES`, `UNAPPROVED_UPLOAD_MAX_FILES`)로 제한한다. 팀원(어드민) 업로드는 차단·합산에서 제외되며, 기존 로고 교체는 파일 수를 +1하지 않는다. 오류 문구는 하드코딩 대신 live 상수(`STUDIO_LIMITS`, `BRAND_ATTACHMENT_LIMITS`, `ROOM_LIMITS`, `STORYBOARD_LIMITS`)와 미승인 한도를 읽어 생성한다.
+- **관련 플래그 및 기본값**:
+  - `BRAND_WORKSPACE_PROTOTYPE_LAYER`: 기본 **off** (`'on'`일 때만 프로젝트 화면의 프로토타입 모듈과 `/s/` 공유 데모를 로드; **off**여도 실제 납품 영상 `activeContent.mediaUrl`과 DB 메시지/결정 기반 타임코드 핀을 `RealReviewPlayer`로 인라인 재생).
+  - `BRAND_ORG_INVITE_EMAIL`: 기본 **off** (`'on'`일 때 `invitation.create`가 기존 트랜잭션 메일러로 타임아웃·예외 격리 발송, 링크 복사는 항상 유지).
+  - `BRAND_STUDIO_EDITOR_V2_ORGS`: `all` 또는 `*` 지정 시 전체 브랜드 허용(기존 comma-separated UUID 목록과 함께 동작).
+  - `agent_access` MCP 차단: `assertBrandFeature(..., 'agent_access')` 및 워크플로 허브(`agentAccessAllowed`)에서 MCP 토큰 발급·OAuth·인증·목록·폐기를 모두 차단.

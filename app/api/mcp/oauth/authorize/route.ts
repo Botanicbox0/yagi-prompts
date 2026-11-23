@@ -89,7 +89,7 @@ async function eligibleSeatsForUser(
 ): Promise<{ status: 'ok'; seats: StudioSeat[] } | { status: 'forbidden' } | { status: 'not_found' }> {
   if (explicitOrgId) {
     try {
-      const seat = await studioSeat(sql, userId, explicitOrgId, { requireSelfStudio: true });
+      const seat = await studioSeat(sql, userId, explicitOrgId, { requireSelfStudio: true, requireAgentAccess: true });
       requireCreate(seat);
       return { status: 'ok', seats: [seat] };
     } catch (error) {
@@ -110,7 +110,7 @@ async function eligibleSeatsForUser(
   let sawForbidden = false;
   for (const m of memberships) {
     try {
-      const seat = await studioSeat(sql, userId, m.organization_id, { requireSelfStudio: true });
+      const seat = await studioSeat(sql, userId, m.organization_id, { requireSelfStudio: true, requireAgentAccess: true });
       if (seat.canCreate) seats.push(seat);
       else sawForbidden = true;
     } catch (error) {

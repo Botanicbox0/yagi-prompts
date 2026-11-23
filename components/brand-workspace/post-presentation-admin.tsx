@@ -1,5 +1,5 @@
 import type { BrandAttachment, BrandPost } from "@/lib/brands/workspace/types";
-import { BRAND_COVER_MIMES } from "@/lib/brands/workspace/schemas";
+import { BRAND_ATTACHMENT_LIMITS, BRAND_COVER_MIMES } from "@/lib/brands/workspace/schemas";
 import { postPresentation, postShortId } from "@/lib/brands/workspace/performance";
 import type { BrandCopy } from "./action-form";
 import { ManagedForm } from "./managed-form";
@@ -21,7 +21,7 @@ export function PostPresentationAdmin({ projectId, posts, attachments, b }: { pr
       <p className="bw-note">{t.hint}</p>
       <p className="bw-note" data-thumbnail-publication-rule>{t.publicationRule}</p>
       <p className="bw-muted">{t.uploadHint} {t.reportNote}</p>
-      <BrandUpload projectId={projectId} b={b} studio />
+      <BrandUpload projectId={projectId} b={b} studio limits={BRAND_ATTACHMENT_LIMITS} />
       {posts.length === 0 ? <p className="bw-muted">{b.noPosts}</p> : (
         <div className="bw-presentation-list">
           {posts.map((post, index) => {

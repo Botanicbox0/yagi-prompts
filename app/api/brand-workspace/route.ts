@@ -58,7 +58,9 @@ import {
 } from "@/lib/brands/concierge-slack";
 import { IntakeBriefSchema } from "@/lib/brands/workspace/intake-brief";
 import { enqueueNotices } from "@/lib/brand-rooms/notices";
-import { brandRoomInvitesOpen } from "@/lib/flags";
+import { brandOrgInviteEmailOpen, brandRoomInvitesOpen } from "@/lib/flags";
+import { getMailer } from "@/lib/notify/service";
+import { deliverOrgInviteEmail } from "@/lib/brands/workspace/invite-mail";
 export const dynamic = "force-dynamic";
 /**
  * A staff note that must never hold up or fail the client's request: after the response where the
@@ -164,9 +166,29 @@ export async function POST(request: NextRequest) {
       case "message.send":
         result = await sendBrandMessage({ sql }, viewer, input, "client");
         break;
-      case "invitation.create":
-        result = await createBrandInvitation({ sql }, viewer, input);
+      case "invitation.create": {
+        const created = await createBrandInvitation({ sql }, viewer, input);
+        if (created.ok && brandOrgInviteEmailOpen()) {
+          const role = input.role === "viewer" ? "viewer" : "editor";
+          const email = typeof input.email === "string" ? input.email.trim().toLowerCase() : "";
+          const organizationId = typeof input.organizationId === "string" ? input.organizationId : "";
+          const mailState = await deliverOrgInviteEmail({
+            sql,
+            mailer: getMailer(),
+            inviteId: created.id,
+            organizationId,
+            inviterUserId: viewer.userId,
+            email,
+            role,
+            token: created.token,
+            locale: viewer.locale === "en" ? "en" : "ko",
+          });
+          result = { ...created, mailState };
+        } else {
+          result = created;
+        }
         break;
+      }
       case "invitation.accept": {
         const verifiedEmail = await getVerifiedEmail(viewer.userId);
         // docs/BRAND-ROOMS-FEEDBACK.md §12: with invitations on, a project invitation binds to the account
