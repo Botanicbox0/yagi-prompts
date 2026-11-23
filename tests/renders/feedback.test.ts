@@ -100,7 +100,7 @@ describe('render feedback', () => {
     expect(sent[0]?.to).toBe('hello@yagiworkshop.xyz');
     expect(sent[0]?.subject).toContain(result.templateTitle);
     expect(sent[0]?.text).toContain(OWNER.email!);
-    expect(sent[0]?.text).toContain('https://twings.app/admin/inquiries');
+    expect(sent[0]?.text).toContain('https://admin.twings.app/admin/inquiries');
     expect(sent[0]?.html).toContain('&lt;b&gt;');
     expect(sent[0]?.idempotencyKey).toBe(`render-feedback:${result.feedback.id}:${result.feedback.updatedAt}`);
     expect(await notifyRenderFeedback({ mailer: null, siteUrl: 'https://twings.app', siteName: 'TWINGS' }, result.feedback, { templateTitle: 'x', email: null })).toBeNull();

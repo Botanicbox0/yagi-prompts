@@ -10,11 +10,15 @@
 export type AdminQueueKey =
   | "paymentsManual"
   | "renderFailures"
+  | "brandStudioLaneStale"
+  | "brandStudioFailures"
   | "accountDeletions"
   | "risk"
   | "feedback"
   | "supportDeliveryFailed"
   | "supportAwaitingReply"
+  | "brandOverdueInvoices"
+  | "brandWaitingForPlan"
   | "studio"
   | "inquiries"
   | "posts"
@@ -42,12 +46,16 @@ export const ADMIN_QUEUES: readonly AdminQueueDefinition[] = [
   // A customer paid and the automatic refund or fulfilment gave up (docs/PLATFORM-2.0.md §2.2-4).
   { key: "paymentsManual", group: "customers", href: "/admin/payments" },
   { key: "renderFailures", group: "customers", href: "/admin/renders?status=failed" },
+  { key: "brandStudioLaneStale", group: "brands", href: "/admin/brand-studio" },
+  { key: "brandStudioFailures", group: "brands", href: "/admin/brand-studio" },
   // The privacy policy promises deletion within 7 days: a request something holds, or a cleanup that did not finish.
   { key: "accountDeletions", group: "customers", href: "/admin/account-deletions" },
   { key: "risk", group: "safety", href: "/admin/risk" },
   { key: "feedback", group: "customers", href: "/admin/inquiries?kind=feedback&status=new" },
   { key: "supportDeliveryFailed", group: "customers", href: "/admin/inquiries?kind=team&deliveryStatus=failed" },
   { key: "supportAwaitingReply", group: "customers", href: "/admin/inquiries?kind=team&awaiting=1" },
+  { key: "brandOverdueInvoices", group: "brands", href: "/admin/brand-billing#overdue" },
+  { key: "brandWaitingForPlan", group: "brands", href: "/admin/brand-workspace?filter=waiting_plan" },
   { key: "studio", group: "brands", href: "/admin/brand-workspace#studio-inbox" },
   { key: "inquiries", group: "brands", href: "/admin/inquiries?kind=brand&status=new" },
   { key: "posts", group: "campaigns", href: "/admin/campaigns" },

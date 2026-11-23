@@ -275,10 +275,16 @@ PR #76의 `identity_selfies`를 그대로 확장한다(새 테이블 없음).
 - 작가 배분 벤치마크: Notion 템플릿 92%−$0.40, Figma 85%, ArtStation 92~95%, Envato 50%, Adobe Stock 33~35%, Civitai 작가가 가격 책정, YouTube 55/45. 디지털 템플릿 마켓은 **85~92%**가 흔하다 — 단, 이들은 원가가 0인 파일 판매다. 우리는 건당 엔진 원가가 있으므로 "매출의 N%"가 아니라 §8.3처럼 **로열티 가산**이 맞다.
 
 ## 10. 관리자 (admin.twings.app) — 위 변화를 운영할 수 있게
-- 홈을 **대기열 중심**으로: 작가 지원 N · 포맷 검수 N(테스트 렌더 버튼·결과 비교) · 인플루언서 수동 인증 N · 브랜드 캠페인 승인 N · 정산 대기 N · 결과물 피드백 N.
+- 홈을 **대기열 중심**으로: 작가 지원 N · 포맷 검수 N(테스트 렌더 버튼·결과 비교) · 인플루언서 수동 인증 N · 브랜드 캠페인 승인 N · 정산 대기 N · 결과물 피드백 N, plus B2B 브랜드 운영 카운터(`brandStudioLaneStale` 계정 레인 지연 · `brandStudioFailures` 24h 실패 · `brandOverdueInvoices` 14일+ 연체 청구서 · `brandWaitingForPlan` 플랜 배정 대기).
 - 없는 화면 추가: **렌더 보드**(작업·상태·비용·실패 사유·재시도·메일 재발송 — TEMPLATES-IA §10 6번), **사용자 보기**(역할·자격·연동 계정·셀카 수·주문 수, PII 최소).
+- **B2B 브랜드·과금·스튜디오 운영 콘솔**:
+  - `/admin/brand-workspace`: SQL 단일 집계 조직 매트릭스(플랜 상태·유예, 월 한도/추가 크레딧·사용량, 활성 할인, 연체/미수 청구서, 7일 실패, 필터·정렬·검색·25행 페이지네이션).
+  - `/admin/brand-workspace/organizations/[id]`: 플랜/한도 통합 저장(`brandBilling.planAndAllowance.set`), 세금계산서 정보·할인·추가 크레딧·월별 청구서 발행/입금확인/무효화, 최근 50건 스튜디오 작업(상태 필터·반환액), 통합 타임라인, 조직별 수신함 필터 링크(`/admin/inquiries?org=...`).
+  - `/admin/brand-billing` · `/admin/brand-billing/codes`: 월별 상태 합계·연체·미청구 활성 조직 원클릭 초안·유료 플랜 기본 한도 2단계 미리보기/적용, 프로모션 코드 발급·사용 이력·비활성화.
+  - `/admin/brand-studio`: 1시간 실패율·24시간 실패, 레인 큐/대기 경과 시간/`sunra_mcp` 워커 하트비트(지연 시 적색 경고), 전 조직 7일 실패 작업 보드.
+  - **10분 운영 경보**(`/api/brand-rooms/notices/tick` `opsAlerts` 패스): 30분 내 스튜디오 실패 ≥ 5건 & ≥ 50% 또는 대기 작업 존재 시 `sunra_mcp` 하트비트 15분 이상 지연이면 종류별 60분 쿨다운으로 카운트만 포함한 `ops_alert`(`0180`/`0181`)를 Slack 아웃박스에 적재(고객사명·조직 ID·PII 미포함). 모든 관리자 알림·링크는 `adminUrl()`/`admin.twings.app` 정규 주소를 사용한다.
 - 정산 내보내기 CSV(작가별·월별).
-- 전부 `lib/admin/operations.ts` 레지스트리 + `/admin/do`. 새 오퍼레이션: `social.verify|revoke`, `campaign.audience`, `platform.review`(테스트 렌더), `payout.export`.
+- 전부 `lib/admin/operations.ts` 레지스트리 + `/admin/do`. 새 오퍼레이션: `social.verify|revoke`, `campaign.audience`, `platform.review`(테스트 렌더), `payout.export`, `brandBilling.*`.
 
 ## 11. MCP는 도움이 되나 (대표 질문)
 - MCP는 "에이전트가 도구를 부르는 규격"이다. 작가가 브라우저 폼에 프롬프트를 붙여 넣는 일을 줄여주지는 않는다.

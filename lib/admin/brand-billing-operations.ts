@@ -1,4 +1,6 @@
 import { studioEnv } from '@/lib/brand-studio/env';
+import { STUDIO_LANES, type StudioLane } from '@/lib/brand-studio/models';
+import { loadAllowanceRow, setStudioAllowance } from '@/lib/brand-studio/usage';
 import {
   createBrandDiscountCode,
   disableBrandDiscountCode,
@@ -7,6 +9,7 @@ import {
   grantBrandDiscount,
   grantExtraAllowance,
   issueBrandInvoice,
+  loadActiveBrandDiscount,
   markBrandInvoicePaid,
   revokeExtraAllowance,
   saveBrandBillingProfileAdmin,
@@ -15,6 +18,10 @@ import {
   updateDraftBrandInvoice,
   voidBrandInvoice,
 } from '@/lib/brands/billing';
+import { BRAND_PLAN_GRACE_DAYS_DEFAULT } from '@/lib/brands/billing/math';
+import { syncPlanDefaultSnapshot } from '@/lib/brands/billing/snapshot';
+import { loadPlanAssignment } from '@/lib/brands/plans';
+import { isDbAdmin, UUID_RE } from './brand-ops-guard';
 import { fail, ok, type AdminContext, type AdminOutcome } from './context';
 import { brandFailure } from './brand-workspace-operations';
 import * as f from './form';
@@ -30,6 +37,13 @@ function billingFailure(result: { code: string; field?: string; detail?: string 
     return fail(base.code, `${result.code}:${result.detail}`);
   }
   return brandFailure(result.code);
+}
+
+function boolAll(form: FormData, name: string): boolean {
+  return form.getAll(name).some((value) => {
+    const normalized = typeof value === 'string' ? value.trim().toLowerCase() : '';
+    return normalized === '1' || normalized === 'true' || normalized === 'on';
+  });
 }
 
 function intField(form: FormData, name: string): { ok: true; value: number } | { ok: false; detail: string } {
@@ -63,7 +77,7 @@ const planDefaultSet: AdminOperation<{
         planId: f.str(form, 'planId'),
         monthlyCapKrw: cap.value ?? null,
         note: f.text(form, 'note'),
-        confirm: form.has('confirm') ? f.bool(form, 'confirm') : false,
+        confirm: form.has('confirm') ? boolAll(form, 'confirm') : false,
       },
     };
   },
@@ -125,13 +139,169 @@ const planAndAllowanceSet: AdminOperation<PlanAndAllowanceInput> = {
     };
   },
   async run(ctx: AdminContext, input) {
-    const result = await setPlanAndAllowance({ sql: ctx.sql }, ctx.viewer, input);
+    if (!UUID_RE.test(input.organizationId)) return fail('invalid', 'organizationId');
+    if (!ctx.viewer.userId || !UUID_RE.test(ctx.viewer.userId)) return brandFailure('sign_in_required');
+    if (!(await isDbAdmin(ctx.sql, ctx.viewer))) return brandFailure('forbidden');
+
+    if (input.allowanceMode !== 'plan_default' && input.allowanceMode !== 'override') {
+      return fail('invalid', 'allowanceMode');
+    }
+    const targetMode: 'plan_default' | 'override' = input.allowanceMode;
+    if (
+      input.preferredLane !== undefined &&
+      input.preferredLane !== null &&
+      !(STUDIO_LANES as readonly string[]).includes(input.preferredLane)
+    ) {
+      return fail('invalid', 'preferredLane');
+    }
+    if (input.allowanceNote.length > 500) {
+      return fail('invalid', 'allowanceNote');
+    }
+
+    const [existingPlan, existingAllowance] = await Promise.all([
+      loadPlanAssignment(ctx.sql, input.organizationId).catch(() => null),
+      loadAllowanceRow(ctx.sql, input.organizationId).catch(() => null),
+    ]);
+
+    const currentMode: 'plan_default' | 'override' = existingAllowance
+      ? existingAllowance.isOverride === false
+        ? 'plan_default'
+        : 'override'
+      : 'plan_default';
+    const targetLane = (
+      input.preferredLane !== undefined ? input.preferredLane : (existingAllowance?.preferredLane ?? null)
+    ) as StudioLane | null;
+    const existingLane = existingAllowance?.preferredLane ?? null;
+    const allowanceUnchanged =
+      targetMode === 'override'
+        ? existingAllowance !== null &&
+          currentMode === 'override' &&
+          input.monthlyCapKrw !== null &&
+          existingAllowance.monthlyCapKrw === input.monthlyCapKrw &&
+          targetLane === existingLane &&
+          input.allowanceNote.trim() === existingAllowance.note.trim()
+        : currentMode === 'plan_default' &&
+          targetLane === existingLane &&
+          input.allowanceNote.trim() === (existingAllowance?.note ?? '').trim();
+
+    async function saveAllowanceWithoutPlanChange(): Promise<AdminOutcome> {
+      if (targetMode === 'override') {
+        if (input.monthlyCapKrw === null || input.monthlyCapKrw < 0 || input.monthlyCapKrw > 100_000_000) {
+          return fail('invalid', 'monthlyCapKrw');
+        }
+        const allowRes = await setStudioAllowance({ sql: ctx.sql }, ctx.viewer, {
+          organizationId: input.organizationId,
+          monthlyCapKrw: input.monthlyCapKrw,
+          preferredLane: targetLane,
+          note: input.allowanceNote,
+          forceOverride: true,
+        });
+        if (!allowRes.ok) return billingFailure(allowRes);
+        return ok('saved', { to: organizationPath(input.organizationId) });
+      }
+
+      const actorId = ctx.viewer.userId!;
+      const txOutcome = await ctx.sql.transaction(async (txSql): Promise<AdminOutcome> => {
+        const prof = (
+          await txSql.query<{ is_admin: boolean }>('select is_admin from profiles where id = $1 for key share', [
+            actorId,
+          ])
+        ).rows[0];
+        if (!prof) return brandFailure('sign_in_required');
+        if (prof.is_admin !== true) return brandFailure('forbidden');
+
+        const orgExists = (
+          await txSql.query('select id from brand_organizations where id = $1 for update', [input.organizationId])
+        ).rows[0];
+        if (!orgExists) return brandFailure('not_found');
+
+        await syncPlanDefaultSnapshot(txSql, input.organizationId, actorId, {
+          graceDays: studioEnv().planGraceDays ?? BRAND_PLAN_GRACE_DAYS_DEFAULT,
+        });
+
+        const hasIsOverride =
+          (
+            await txSql.query(
+              `select 1 from information_schema.columns
+                where table_schema = 'public'
+                  and table_name = 'brand_studio_allowances'
+                  and column_name = 'is_override'`,
+            )
+          ).rows.length > 0;
+
+        if (hasIsOverride) {
+          await txSql.query(
+            `insert into brand_studio_allowances (organization_id, monthly_cap_krw, is_override, preferred_lane, note, updated_by)
+             values ($1, 0, false, $2, $3, $4)
+             on conflict (organization_id) do update
+               set is_override = false,
+                   preferred_lane = excluded.preferred_lane,
+                   note = excluded.note,
+                   updated_by = excluded.updated_by,
+                   updated_at = now()`,
+            [input.organizationId, targetLane, input.allowanceNote, actorId],
+          );
+        } else {
+          await txSql.query(
+            `insert into brand_studio_allowances (organization_id, monthly_cap_krw, preferred_lane, note, updated_by)
+             values ($1, 0, $2, $3, $4)
+             on conflict (organization_id) do update
+               set preferred_lane = excluded.preferred_lane,
+                   note = excluded.note,
+                   updated_by = excluded.updated_by,
+                   updated_at = now()`,
+            [input.organizationId, targetLane, input.allowanceNote, actorId],
+          );
+        }
+
+        return ok('saved', { to: organizationPath(input.organizationId) });
+      });
+      return txOutcome;
+    }
+
+    // Allowance-only path when organization has no plan selected (planId === '').
+    if (input.planId === '') {
+      if (existingPlan !== null) return fail('invalid', 'planId');
+      if (input.expectedRevision !== 0) return brandFailure('conflict');
+      if (allowanceUnchanged) {
+        return ok('saved', { to: organizationPath(input.organizationId), detail: 'no_change' });
+      }
+      return saveAllowanceWithoutPlanChange();
+    }
+
+    const planUnchanged =
+      existingPlan !== null &&
+      input.planId === existingPlan.planId &&
+      input.billingMode === existingPlan.billingMode &&
+      input.startedOn === existingPlan.startedOn &&
+      (input.endsOn ?? null) === (existingPlan.endsOn ?? null) &&
+      (input.seats ?? null) === (existingPlan.seats ?? null) &&
+      input.planNote.trim() === (existingPlan.note ?? '').trim();
+
+    if (planUnchanged) {
+      if (input.expectedRevision !== existingPlan.revision) return brandFailure('conflict');
+      if (allowanceUnchanged) {
+        return ok('saved', { to: organizationPath(input.organizationId), detail: 'no_change' });
+      }
+      return saveAllowanceWithoutPlanChange();
+    }
+
+    const result = await setPlanAndAllowance({ sql: ctx.sql }, ctx.viewer, {
+      ...input,
+      monthlyCapKrw: targetMode === 'override' ? input.monthlyCapKrw : null,
+    });
     if (!result.ok) return billingFailure(result);
     return ok('saved', { to: organizationPath(input.organizationId) });
   },
 };
 
-const discountGrant: AdminOperation<{ organizationId: string; percent: number; invoicesTotal: number | null; memo: string }> = {
+const discountGrant: AdminOperation<{
+  organizationId: string;
+  percent: number;
+  invoicesTotal: number | null;
+  memo: string;
+  confirmReplace: boolean;
+}> = {
   parse(form) {
     const pct = intField(form, 'percent');
     if (!pct.ok) return pct;
@@ -144,11 +314,22 @@ const discountGrant: AdminOperation<{ organizationId: string; percent: number; i
         percent: pct.value,
         invoicesTotal: total.value ?? null,
         memo: f.text(form, 'memo'),
+        confirmReplace: boolAll(form, 'confirmReplace'),
       },
     };
   },
   async run(ctx: AdminContext, input) {
-    const result = await grantBrandDiscount({ sql: ctx.sql }, ctx.viewer, input);
+    if (!UUID_RE.test(input.organizationId)) return fail('invalid', 'organizationId');
+    if (!input.confirmReplace) {
+      const existingActive = await loadActiveBrandDiscount(ctx.sql, input.organizationId).catch(() => null);
+      if (existingActive) return fail('invalid', 'confirmReplace');
+    }
+    const result = await grantBrandDiscount({ sql: ctx.sql }, ctx.viewer, {
+      organizationId: input.organizationId,
+      percent: input.percent,
+      invoicesTotal: input.invoicesTotal,
+      memo: input.memo,
+    });
     if (!result.ok) return billingFailure(result);
     return ok('saved', { to: organizationPath(result.discount.organizationId) });
   },
@@ -183,6 +364,14 @@ interface CodeCreateInput {
   memo: string;
 }
 
+function normalizeValidUntilInput(raw: string): string | null {
+  const trimmed = raw.trim();
+  if (trimmed === '') return null;
+  if (/^\d{4}-\d{2}-\d{2}$/.test(trimmed)) return `${trimmed}T23:59:59+09:00`;
+  if (/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/.test(trimmed)) return `${trimmed}:00+09:00`;
+  return trimmed;
+}
+
 const discountCodeCreate: AdminOperation<CodeCreateInput> = {
   parse(form) {
     const pct = intField(form, 'percent');
@@ -191,7 +380,7 @@ const discountCodeCreate: AdminOperation<CodeCreateInput> = {
     if (!total.ok) return total;
     const maxR = optIntField(form, 'maxRedemptions');
     if (!maxR.ok) return maxR;
-    const validUntil = f.str(form, 'validUntil');
+    const validUntil = normalizeValidUntilInput(f.str(form, 'validUntil'));
     const orgId = f.str(form, 'organizationId');
     const codeRaw = f.str(form, 'code');
     return {
@@ -201,7 +390,7 @@ const discountCodeCreate: AdminOperation<CodeCreateInput> = {
         percent: pct.value,
         invoicesTotal: total.value ?? null,
         maxRedemptions: maxR.value === undefined ? 1 : maxR.value,
-        validUntil: validUntil === '' ? null : validUntil,
+        validUntil,
         organizationId: orgId === '' ? null : orgId,
         memo: f.text(form, 'memo'),
       },
@@ -261,17 +450,14 @@ const invoiceDraft: AdminOperation<Record<string, unknown>> = {
       organizationId: f.str(form, 'organizationId'),
       period: f.str(form, 'period'),
       memo: f.text(form, 'memo'),
+      stay: form.has('stay') ? boolAll(form, 'stay') : false,
     };
     const planId = f.str(form, 'planId');
     if (planId) input.planId = planId;
-    if (form.has('applyActiveDiscount')) input.applyActiveDiscount = f.bool(form, 'applyActiveDiscount');
-    if (form.has('manualAmounts')) input.manualAmounts = f.bool(form, 'manualAmounts');
+    if (form.has('applyActiveDiscount')) input.applyActiveDiscount = boolAll(form, 'applyActiveDiscount');
+    if (form.has('manualAmounts')) input.manualAmounts = boolAll(form, 'manualAmounts');
     if (form.has('manualReason')) input.manualReason = f.text(form, 'manualReason');
-    if (form.has('prorate')) {
-      const p = f.str(form, 'prorate');
-      if (p === 'false' || p === '0') input.prorate = false;
-      else if (p === 'true' || p === '1') input.prorate = true;
-    }
+    if (form.has('prorate')) input.prorate = boolAll(form, 'prorate');
     const usedDays = optIntField(form, 'proratedDays');
     const totalDays = optIntField(form, 'periodDays');
     if (!usedDays.ok) return usedDays;
@@ -287,11 +473,12 @@ const invoiceDraft: AdminOperation<Record<string, unknown>> = {
     return { ok: true, value: input };
   },
   async run(ctx: AdminContext, input) {
-    const result = await draftBrandInvoice({ sql: ctx.sql }, ctx.viewer, input);
+    const { stay, ...payload } = input;
+    const result = await draftBrandInvoice({ sql: ctx.sql }, ctx.viewer, payload);
     if (!result.ok) return billingFailure(result);
     return ok('created', {
       detail: result.invoice.id,
-      to: organizationPath(result.invoice.organizationId),
+      ...(stay ? {} : { to: organizationPath(result.invoice.organizationId) }),
     });
   },
 };
@@ -303,7 +490,7 @@ const invoiceUpdateDraft: AdminOperation<Record<string, unknown>> = {
     };
     const planId = f.str(form, 'planId');
     if (planId) input.planId = planId;
-    if (form.has('manualAmounts')) input.manualAmounts = f.bool(form, 'manualAmounts');
+    if (form.has('manualAmounts')) input.manualAmounts = boolAll(form, 'manualAmounts');
     if (form.has('manualReason')) input.manualReason = f.text(form, 'manualReason');
     if (form.has('discountId')) {
       const d = f.str(form, 'discountId');

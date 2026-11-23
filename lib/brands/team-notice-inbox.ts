@@ -46,6 +46,8 @@ export interface TeamNoticeInboxData {
   runtimeConfig: TeamNoticeConfig;
 }
 
+const UUID_SIMPLE_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
 const iso = (v: Date | string): string =>
   v instanceof Date ? v.toISOString() : new Date(String(v)).toISOString();
 
@@ -59,6 +61,7 @@ export async function loadTeamNoticeInbox(
     noticeKind?: 'all' | TeamNoticeKind;
     deliveryStatus?: 'all' | 'sent' | 'pending' | 'failed' | 'skipped';
     awaitingOnly?: boolean;
+    organizationId?: string | null;
     query?: string;
     page?: number;
     pageSize?: number;
@@ -87,6 +90,11 @@ export async function loadTeamNoticeInbox(
 
   const conditions: string[] = [];
   const params: unknown[] = [];
+
+  if (options?.organizationId && UUID_SIMPLE_RE.test(options.organizationId)) {
+    params.push(options.organizationId);
+    conditions.push(`d.organization_id = $${params.length}::uuid`);
+  }
 
   if (options?.noticeKind && options.noticeKind !== 'all') {
     params.push(options.noticeKind);

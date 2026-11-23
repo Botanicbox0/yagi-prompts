@@ -3,6 +3,7 @@ import type { SqlRunner } from '@/lib/db/sql-runner';
 import type { Viewer } from '@/lib/auth/identity';
 import type { Mailer, SendOutcome } from '@/lib/notify/mailer';
 import { BUSINESS } from '@/lib/legal/documents';
+import { adminUrl } from '@/lib/seo/site-url';
 import { loadOwnRender } from './service';
 
 /**
@@ -188,8 +189,7 @@ export async function notifyRenderFeedback(
   context: { templateTitle: string; email: string | null },
 ): Promise<SendOutcome | null> {
   if (deps.mailer === null) return null;
-  const origin = deps.siteUrl.replace(/\/+$/, '');
-  const inbox = `${origin}/admin/inquiries`;
+  const inbox = adminUrl('/admin/inquiries');
   const lines: Array<[string, string]> = [
     ['Template', context.templateTitle],
     ['Render', feedback.renderId],

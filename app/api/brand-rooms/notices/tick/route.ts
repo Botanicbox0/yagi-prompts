@@ -1,6 +1,7 @@
 import { timingSafeEqual } from 'node:crypto';
 import { NextResponse } from 'next/server';
 import { expireStaleStudioReservations } from '@/lib/brand-studio/engine';
+import { runBrandStudioOpsAlertPass } from '@/lib/admin/brand-studio-ops';
 import { pruneExpiredDiscountCodeAttempts } from '@/lib/brands/billing';
 import { getSqlRunner } from '@/lib/db/connect';
 import { roomNoticesOpen, runLiveRoomNoticePass } from '@/lib/brand-rooms/notices';
@@ -64,6 +65,27 @@ async function tick(request: Request): Promise<NextResponse> {
       '[brand-billing] attempts_prune_failed',
       JSON.stringify({ message: error instanceof Error ? error.message.slice(0, 200) : 'unknown' }),
     );
+  }
+
+  // --- Pass 0b (isolated, cheap): studio mass-failure & stale-lane ops alerts ---
+  let opsAlertPass: { ok: boolean; enqueued?: number; kindAllowed?: boolean } = { ok: true, enqueued: 0 };
+  if (Date.now() < deadlineAtMs) {
+    passesAttempted += 1;
+    try {
+      const alertResult = await runBrandStudioOpsAlertPass(sql);
+      opsAlertPass = {
+        ok: true,
+        enqueued: alertResult.enqueued.length,
+        kindAllowed: alertResult.kindAllowed,
+      };
+    } catch (error) {
+      passesFailed += 1;
+      opsAlertPass = { ok: false };
+      console.warn(
+        '[brand-studio] ops_alert_pass_failed',
+        JSON.stringify({ message: error instanceof Error ? error.message.slice(0, 200) : 'unknown' }),
+      );
+    }
   }
 
   // --- Pass 1 (isolated): Project room notices ---
@@ -186,7 +208,14 @@ async function tick(request: Request): Promise<NextResponse> {
       {
         ok: false,
         code: 'pass_failed',
-        passes: { studio: studioPass, rooms: roomPass, teamNotices: teamPass, replySync: replySyncPass, retention: retentionPass },
+        passes: {
+          studio: studioPass,
+          opsAlerts: opsAlertPass,
+          rooms: roomPass,
+          teamNotices: teamPass,
+          replySync: replySyncPass,
+          retention: retentionPass,
+        },
       },
       { status: 503, headers: HEADERS },
     );
@@ -200,7 +229,8 @@ async function tick(request: Request): Promise<NextResponse> {
       Boolean(replySync && replySync.synced > 0) ||
       retentionPass.purged > 0 ||
       scrubbedNotices > 0 ||
-      Boolean(studio && (studio.released > 0 || studio.expired > 0));
+      Boolean(studio && (studio.released > 0 || studio.expired > 0)) ||
+      (opsAlertPass.enqueued ?? 0) > 0;
     if (!didOtherWork) {
       return NextResponse.json({ ok: true, ran: false }, { headers: HEADERS });
     }
@@ -210,7 +240,14 @@ async function tick(request: Request): Promise<NextResponse> {
     {
       ok: true,
       ...(roomReport ?? {}),
-      passes: { studio: studioPass, rooms: roomPass, teamNotices: teamPass, replySync: replySyncPass, retention: retentionPass },
+      passes: {
+        studio: studioPass,
+        opsAlerts: opsAlertPass,
+        rooms: roomPass,
+        teamNotices: teamPass,
+        replySync: replySyncPass,
+        retention: retentionPass,
+      },
       teamNotices,
       replySync: replySync
         ? { checked: replySync.checked, synced: replySync.synced, errors: replySync.errors.length }

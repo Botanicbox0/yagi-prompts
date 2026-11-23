@@ -108,6 +108,7 @@ operation for a superuser, and it is not something app code can do — that is t
 | 2026-11-20 | `0172_core_brand_studio_sound` · `0173_glue_brand_studio_sound` | 사운드 스튜디오 작업과 결과(`docs/BRAND-SOUND-STUDIO.md` §7.2): `brand_studio_jobs.kind`에 `music`·`sound_effect`, `brand_studio_outputs.kind`에 `audio`, `brand_studio_outputs.waveform` jsonb(null 허용). 새 표·새 정책 없음(glue는 두 표의 RLS·권한 재확인). 적용 후 확인: 두 검사 제약의 값, `waveform` 열 존재. 번호는 core 0100이 `0100_glue_rls`와 겹쳐(한 번호 공간, `tests/db/migrations.test.ts`) 다음 빈 번호를 썼다 | #286/#287 |
 | 2026-11-23 | `0176_core_brand_billing` · `0177_glue_brand_billing` | B2B 과금 기반(`docs/BRAND-PRODUCT.md`): `brand_studio_allowances.is_override`(기존 행 전부 true), 플랜 기본 한도, 고객사별 할인·할인 코드·시도 기록, 청구 정보, 청구서·이벤트, 추가 크레딧. 새 테이블 9개는 RLS 강제·정책 0개·`service_role` 권한만. 한 트랜잭션으로 적용했다. |
 | 2026-11-23 | `0178_core_support_delivery` · `0179_glue_support_delivery` | 고객 문의·팀 알림 전달 대기열(`team_notice_deliveries`), 개인 상담 스레드(`consumer_support_messages`), Slack 답글 동기화 원장(`support_synced_replies`). 새 테이블만 추가했고 RLS 강제·정책 0개·`service_role` 최소 권한이다. `docs/BRAND-INQUIRY-DELIVERY.md` |
+| 2026-11-23 | `0180_core_ops_alert_kind` · `0181_glue_ops_alert_kind` | 팀 알림 종류에 `ops_alert`(스튜디오 대량 실패·작업기 지연 알림)를 추가했다. `team_notice_deliveries`의 종류 검사만 바꾼다. |
 
 미적용: 0029/0115(옛 portrait 비교, 폐지 경로). 0063(prom-queen 비율)은 원장에 없지만 운영 데이터에는 이미 반영돼 있다.
 
@@ -115,4 +116,5 @@ operation for a superuser, and it is not something app code can do — that is t
 
 - `0097_core_brand_room_guest_invites` · `0170_glue_brand_room_guest_invites` — 프로젝트 룸 초대 공유(`docs/BRAND-ROOMS-FEEDBACK.md` §12). `brand_invites`에 `accepted_email`·`mail_state`·`mail_sent_at`·`target_kind`·`target_id`, 범위 제약을 "프로젝트 초대는 뷰어"로 넓힘(브랜드 소유자·편집자도 발행), 대기 초대 인덱스, service_role에 새 세 열의 update 권한. 새 테이블 없음. `BRAND_ROOM_INVITES=on` 전에 한 트랜잭션으로 적용하고, 적용 뒤 `brand_invites` RLS on+forced·정책 0개·anon·authenticated 권한 없음을 확인한다. core 0095·0096과 glue 0168·0169는 다른 브랜치가 쓰고 있다.
 
-다음 번호: core와 glue는 한 번호 공간이다(`tests/db/migrations.test.ts` "unique migration version"). `0176`~`0179`까지 사용되었으므로 다음은 core·glue 모두 `0180`부터다(core `0092`·`0095`, `0174`·`0175`는 다른 PR/브랜치가 쓴다).
+
+다음 번호: core와 glue는 한 번호 공간이다(`tests/db/migrations.test.ts` "unique migration version"). `0176`~`0181`까지 사용되었으므로 다음은 core·glue 모두 `0182`부터다(core `0092`·`0095`, `0174`·`0175`는 다른 PR/브랜치가 쓴다).

@@ -90,5 +90,8 @@ describe('USD/KRW > 1,400원 threshold guard and founder email alert', () => {
     });
     expect(email.to).toBe('founder@yagiworkshop.xyz');
     expect(email.html).toContain('1,420.00원');
+    expect(email.html).toContain('https://admin.twings.app/admin');
+    expect(email.text).toContain('https://admin.twings.app/admin');
+    expect(email.unsubscribeUrl).toBe('https://admin.twings.app/admin');
   });
 });

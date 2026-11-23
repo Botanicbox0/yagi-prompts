@@ -1,6 +1,7 @@
 import type { SqlRunner } from '@/lib/db/sql-runner';
 import type { Mailer, SendOutcome } from '@/lib/notify/mailer';
 import { BUSINESS } from '@/lib/legal/documents';
+import { adminUrl } from '@/lib/seo/site-url';
 import { brandInquiryEmails } from './email';
 import { countBrandInquiriesByEmailSince, insertBrandInquiry, loadBrandInquiryByRequestId, type BrandInquiry } from './repo';
 import { BRAND_INQUIRIES_PER_DAY, BrandInquiryInput } from './schemas';
@@ -89,13 +90,13 @@ export interface NotifyBrandInquiryResult {
 
 function mails(deps: NotifyBrandInquiryDeps, inquiry: BrandInquiry) {
   const origin = deps.siteUrl.replace(/\/+$/, '');
-  return { origin, emails: brandInquiryEmails({ inquiry, siteName: deps.siteName, siteUrl: origin, adminUrl: `${origin}/admin/inquiries` }) };
+  return { origin, emails: brandInquiryEmails({ inquiry, siteName: deps.siteName, siteUrl: origin, adminUrl: adminUrl('/admin/inquiries') }) };
 }
 
 const failed = (error: unknown): SendOutcome => ({ ok: false, retryable: false, error: error instanceof Error ? error.message : String(error) });
 
 async function sendStudioAlert(deps: NotifyBrandInquiryDeps & { mailer: Mailer }, inquiry: BrandInquiry): Promise<SendOutcome> {
-  const { origin, emails } = mails(deps, inquiry);
+  const { emails } = mails(deps, inquiry);
   return deps.mailer
     .send({
       to: deps.studioEmail ?? BUSINESS.email,
@@ -103,7 +104,7 @@ async function sendStudioAlert(deps: NotifyBrandInquiryDeps & { mailer: Mailer }
       html: emails.studio.html,
       text: emails.studio.text,
       idempotencyKey: `brand-inquiry:${inquiry.id}:studio`,
-      unsubscribeUrl: `${origin}/admin/campaigns`,
+      unsubscribeUrl: adminUrl('/admin/campaigns'),
     })
     .catch(failed);
 }

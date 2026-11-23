@@ -2,6 +2,7 @@ import { readBoundedResponse } from './transport';
 import { randomUUID } from 'node:crypto';
 import { z } from 'zod';
 import type { SqlRunner } from '@/lib/db/sql-runner';
+import { adminUrl } from '@/lib/seo/site-url';
 import { campaignRiskMessages } from '@/messages/campaign-risk';
 export type SlackRiskConfig =
   | { status: 'disabled' | 'unconfigured' }
@@ -116,7 +117,7 @@ export function createRiskSlackSender(
       return { state: 'failed', code: 'invalid_id' };
     return send({
       client_msg_id: id,
-      text: `TWINGS risk_review_required ${id}\nhttps://admin.twings.app/admin/risk?flag=${flagId}#flag-${flagId}`,
+      text: `TWINGS risk_review_required ${id}\n${adminUrl(`/admin/risk?flag=${flagId}#flag-${flagId}`)}`,
     });
   };
 }
@@ -130,7 +131,7 @@ export function createRiskSlackConnectionTestSender(
   const send = createPrivateRiskSlackSender(token, fetcher, timeoutMs);
   return () =>
     send({
-      text: `${campaignRiskMessages[locale].slackConnectionMessage}\nhttps://admin.twings.app/admin/risk`,
+      text: `${campaignRiskMessages[locale].slackConnectionMessage}\n${adminUrl('/admin/risk')}`,
     });
 }
 /** Durable claim before outbound I/O. A crashed send is uncertain, never blindly reclaimed. */

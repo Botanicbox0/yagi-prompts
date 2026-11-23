@@ -1,7 +1,7 @@
 import { BUSINESS } from '@/lib/legal/documents';
 import type { EmailMessage, Mailer, SendOutcome } from '@/lib/notify/mailer';
 import { getMailer } from '@/lib/notify/service';
-import { siteUrl } from '@/lib/seo/site-url';
+import { adminUrl } from '@/lib/seo/site-url';
 import { COST_ASSUMPTIONS } from './cost-model';
 import { FOUNDER_CREDIT_PLANS, NET_SHARE, quoteVideoResolutionTiers } from './template-price';
 
@@ -131,7 +131,7 @@ export function buildFxThresholdAlertEmail(args: {
 }): EmailMessage {
   const { summary } = args;
   const to = args.toEmail?.trim() || process.env.FOUNDER_ALERT_EMAIL?.trim() || BUSINESS.email;
-  const origin = (args.originUrl ?? siteUrl()).replace(/\/+$/, '');
+  const adminDashboardUrl = adminUrl('/admin');
   const rateStr = summary.liveKrwPerUsd.toLocaleString('en-US', {
     minimumFractionDigits: 2,
     maximumFractionDigits: 2
@@ -174,7 +174,7 @@ export function buildFxThresholdAlertEmail(args: {
     `<h1 style="margin:0 0 14px;font-size:20px;line-height:1.35">USD/KRW 환율이 1,400원을 넘어 ${escapeHtml(rateStr)}원을 기록했습니다.</h1>`,
     '<p style="margin:0 0 14px;font-size:15px;line-height:1.6">TWINGS 원화 가격표 설계 기준(1,400원)을 초과하여 현재 환율 기준 영상 생성 원가 및 순마진 현황을 알려드립니다.</p>',
     `<table style="border-collapse:collapse;margin-top:16px;width:100%">${htmlRows}</table>`,
-    `<p style="margin:28px 0 0"><a href="${escapeHtml(`${origin}/admin`)}" style="display:inline-block;background:#111;color:#fff;text-decoration:none;border-radius:999px;padding:12px 22px;font-size:14px;font-weight:600">관리자 대시보드 열기</a></p>`,
+    `<p style="margin:28px 0 0"><a href="${escapeHtml(adminDashboardUrl)}" style="display:inline-block;background:#111;color:#fff;text-decoration:none;border-radius:999px;padding:12px 22px;font-size:14px;font-weight:600">관리자 대시보드 열기</a></p>`,
     `<p style="margin:28px 0 0;font-size:12px;color:#a1a1aa;line-height:1.5">TWINGS · 일일 환율 임계치(1,400원) 자동 감시 알림 (${escapeHtml(summary.observedDateUtc)})</p>`,
     '</div></body></html>'
   ].join('');
@@ -186,7 +186,7 @@ export function buildFxThresholdAlertEmail(args: {
     '',
     ...rows.map(([k, v]) => `· ${k}: ${v}`),
     '',
-    `관리자 대시보드: ${origin}/admin`
+    `관리자 대시보드: ${adminDashboardUrl}`
   ].join('\n');
 
   return {
@@ -195,7 +195,7 @@ export function buildFxThresholdAlertEmail(args: {
     html,
     text,
     idempotencyKey: `fx-alert-krw-1400:${summary.observedDateUtc}`,
-    unsubscribeUrl: `${origin}/admin`
+    unsubscribeUrl: adminDashboardUrl
   };
 }
 

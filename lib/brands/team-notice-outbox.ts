@@ -14,6 +14,7 @@ export const TEAM_NOTICE_KINDS = [
   'org_created',
   'allowance_request',
   'plan_request',
+  'ops_alert',
 ] as const;
 
 export type TeamNoticeKind = (typeof TEAM_NOTICE_KINDS)[number];
@@ -38,6 +39,7 @@ export const TEAM_NOTICE_KIND_LABELS: Record<TeamNoticeKind, string> = {
   org_created: '신규 브랜드 가입',
   allowance_request: '스튜디오 한도 요청',
   plan_request: 'B2B 플랜 요청',
+  ops_alert: '운영 경보',
 };
 
 const BILLING_PLAN_QUESTION_LABEL = 'B2B 플랜 문의';
@@ -215,6 +217,8 @@ export function formatTeamNoticeSlackText(input: {
     const ref = flatLine(input.noticeReference ?? 'notice', 16);
     const who = slackSafe(flatLine(input.actorDisplayName || 'TWINGS 회원', 80));
     lines.push(`• *문의 번호:* \`#${slackSafe(ref)}\` (${who})`);
+  } else if (input.kind === 'ops_alert') {
+    lines.push('• *유형:* 시스템 운영 경보');
   } else {
     const who = slackSafe(flatLine(input.actorDisplayName || '브랜드 담당자', 80));
     lines.push(`• *작성자:* ${who}`);
@@ -260,6 +264,33 @@ export interface EnqueueTeamNoticeResult {
   available: boolean;
   enqueued: boolean;
   id: string | null;
+}
+
+/**
+ * Checks whether `team_notice_deliveries` exists and permits `kind = 'ops_alert'` (0180 applied).
+ * Returns false quietly on pre-0178 or pre-0180 schemas so alert callers can skip without throwing.
+ */
+export async function opsAlertKindAllowed(sql: SqlRunner): Promise<boolean> {
+  if (!(await tableExists(sql, 'team_notice_deliveries'))) return false;
+  try {
+    const { rows } = await sql.query<{ def: string }>(
+      `select pg_get_constraintdef(con.oid) as def
+         from pg_constraint con
+        where con.conrelid = to_regclass('public.team_notice_deliveries')
+          and con.contype = 'c'
+          and exists (
+            select 1
+              from pg_attribute a
+             where a.attrelid = con.conrelid
+               and a.attnum = any (con.conkey)
+               and a.attname = 'kind'
+          )`,
+    );
+    if (rows.length === 0) return true;
+    return rows.every((row) => String(row.def ?? '').includes("'ops_alert'"));
+  } catch {
+    return false;
+  }
 }
 
 /**
