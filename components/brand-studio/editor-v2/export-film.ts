@@ -57,6 +57,7 @@ import { cutAnchor, effectStartSec, type CutAnchor } from '@/lib/brand-studio/ed
 import { choosePath, codecMeasured, colourAdmitted, cutRatesMatch, decodeGroups, pictureFor, pictureTimes, type ExportPath, type ExportPathOverride } from '@/lib/brand-studio/editor-v2/decode-plan';
 import { CURRENT_EXPORT_BACKGROUND, currentExportFrame } from '@/lib/brand-studio/editor-v2/framing';
 import { totalFrames, type FrameSequence } from '@/lib/brand-studio/editor-v2/frames';
+import { curveTotalFrames, resampleCurvedAudio, resampleCurvedAudioAsync } from '@/lib/brand-studio/editor-v2/speed-curve';
 import { timingOfFile } from '@/lib/brand-studio/editor-v2/container';
 import { soundTrackOf } from '@/lib/brand-studio/editor-v2/media-probe';
 import { DEFAULT_REFRAME, type Reframe } from '@/lib/brand-studio/editor-v2/model';
@@ -547,7 +548,9 @@ function dequeued(encoder: VideoEncoder | AudioEncoder): Promise<void> {
 // ── Sound ──────────────────────────────────────────────────────────────────────────────────────
 
 /** The audio graph calls the cut scheduling needs (an `OfflineAudioContext` in the browser, a fake in tests). */
-export type SoundGraph = Pick<BaseAudioContext, 'createBufferSource' | 'createGain' | 'destination'>;
+export type SoundGraph = Pick<BaseAudioContext, 'createBufferSource' | 'createGain' | 'destination'> & {
+  createBuffer?: BaseAudioContext['createBuffer'];
+};
 
 /**
  * Places every cut's sound in the mix: a buffer source at the cut's speed, started on the cut's first
@@ -555,6 +558,81 @@ export type SoundGraph = Pick<BaseAudioContext, 'createBufferSource' | 'createGa
  * file further on (the picture track's start minus the sound track's, `soundLead`). Returns how many cuts
  * were placed.
  */
+function placeResampledCurveBuffer(
+  graph: SoundGraph,
+  buffer: AudioBuffer,
+  sampleRate: number,
+  startSample: number,
+  endSample: number,
+  gainValue: number,
+  resampled: readonly Float32Array[],
+): number {
+  const channelCount = Math.max(1, buffer.numberOfChannels);
+  const len = endSample - startSample;
+  const outBuffer = graph.createBuffer!(channelCount, len, sampleRate);
+  for (let c = 0; c < channelCount; c += 1) {
+    outBuffer.getChannelData(c).set(resampled[c]!);
+  }
+  const source = graph.createBufferSource();
+  source.buffer = outBuffer;
+  source.playbackRate.value = 1;
+  const gain = graph.createGain();
+  gain.gain.value = gainValue;
+  source.connect(gain);
+  gain.connect(graph.destination);
+  source.start(startSample / sampleRate, 0);
+  source.stop((endSample - 0.5) / sampleRate);
+  return 1;
+}
+
+function placeConstantCutSegment(
+  graph: SoundGraph,
+  plan: AudioPlan,
+  buffer: AudioBuffer,
+  segment: AudioPlan['segments'][number],
+  shiftSec: number,
+  leadSec: number,
+): number {
+  const window = soundWindow(segment, plan.totalSamples, plan.sampleRate, shiftSec);
+  // Read where the file's own timing puts the sound under this picture (spec E, item B1).
+  const span = window ? placeSound(window, leadSec, segment.rate, plan.sampleRate) : null;
+  if (!span) return 0;
+  const source = graph.createBufferSource();
+  source.buffer = buffer;
+  source.playbackRate.value = segment.rate;
+  const gain = graph.createGain();
+  gain.gain.value = segment.gain;
+  source.connect(gain);
+  gain.connect(graph.destination);
+  source.start(span.startSample / plan.sampleRate, span.offsetSec);
+  // Half a sample before the boundary: the next cut's first sample is never this cut's.
+  source.stop((span.endSample - 0.5) / plan.sampleRate);
+  return 1;
+}
+
+function curveResampleArgs(
+  plan: AudioPlan,
+  buffer: AudioBuffer,
+  segment: AudioPlan['segments'][number],
+  shiftSec: number,
+  leadSec: number,
+) {
+  const shiftSamples = Math.round(shiftSec * plan.sampleRate);
+  const rawStart = segment.startSample + shiftSamples;
+  const startSample = Math.max(0, rawStart);
+  const endSample = Math.min(plan.totalSamples, rawStart + segment.sampleCount);
+  const len = endSample - startSample;
+  if (len <= 0) return null;
+  const fps = segment.fps ?? 30;
+  const skippedSamples = Math.max(0, startSample - rawStart);
+  const startFrameOffset = (skippedSamples / plan.sampleRate) * fps;
+  const leadProbe = placeSound({ startSample: 0, endSample: 1, sourceOffsetSec: 10 }, leadSec, 1, plan.sampleRate);
+  const leadShiftSec = leadProbe ? leadProbe.offsetSec - 10 : -leadSec;
+  const channelCount = Math.max(1, buffer.numberOfChannels);
+  const channels = Array.from({ length: channelCount }, (_, c) => buffer.getChannelData(c));
+  return { startSample, endSample, len, fps, startFrameOffset, leadShiftSec, channels };
+}
+
 export function scheduleCutSound(
   graph: SoundGraph,
   plan: AudioPlan,
@@ -567,21 +645,72 @@ export function scheduleCutSound(
     if (segment.gain <= 0) continue;
     const buffer = buffers.get(segment.srcUrl);
     if (!buffer) continue;
-    const window = soundWindow(segment, plan.totalSamples, plan.sampleRate, shiftSecOf(segment.clipId));
-    // Read where the file's own timing puts the sound under this picture (spec E, item B1).
-    const span = window ? placeSound(window, leadSecOf(segment.srcUrl), segment.rate, plan.sampleRate) : null;
-    if (!span) continue;
-    const source = graph.createBufferSource();
-    source.buffer = buffer;
-    source.playbackRate.value = segment.rate;
-    const gain = graph.createGain();
-    gain.gain.value = segment.gain;
-    source.connect(gain);
-    gain.connect(graph.destination);
-    source.start(span.startSample / plan.sampleRate, span.offsetSec);
-    // Half a sample before the boundary: the next cut's first sample is never this cut's.
-    source.stop((span.endSample - 0.5) / plan.sampleRate);
-    placed += 1;
+    const shiftSec = shiftSecOf(segment.clipId);
+    const leadSec = leadSecOf(segment.srcUrl);
+
+    if (segment.curve && typeof graph.createBuffer === 'function') {
+      const args = curveResampleArgs(plan, buffer, segment, shiftSec, leadSec);
+      if (!args) continue;
+      const resampled = resampleCurvedAudio(
+        args.channels,
+        buffer.sampleRate,
+        segment.sourceOffsetSec,
+        segment.curve,
+        args.fps,
+        args.startFrameOffset,
+        segment.frameCount ?? curveTotalFrames(segment.curve),
+        plan.sampleRate,
+        args.len,
+        args.leadShiftSec,
+      );
+      placed += placeResampledCurveBuffer(graph, buffer, plan.sampleRate, args.startSample, args.endSample, segment.gain, resampled);
+      continue;
+    }
+
+    placed += placeConstantCutSegment(graph, plan, buffer, segment, shiftSec, leadSec);
+  }
+  return placed;
+}
+
+/** Async cut sound scheduler used by live film exports so curved resampling yields between chunks. */
+export async function scheduleCutSoundAsync(
+  graph: SoundGraph,
+  plan: AudioPlan,
+  buffers: ReadonlyMap<string, AudioBuffer | null>,
+  shiftSecOf: (clipId: string) => number = () => 0,
+  leadSecOf: (srcUrl: string) => number = () => 0,
+  signal?: AbortSignal,
+): Promise<number> {
+  let placed = 0;
+  for (const segment of plan.segments) {
+    if (signal?.aborted) throw cancelled();
+    if (segment.gain <= 0) continue;
+    const buffer = buffers.get(segment.srcUrl);
+    if (!buffer) continue;
+    const shiftSec = shiftSecOf(segment.clipId);
+    const leadSec = leadSecOf(segment.srcUrl);
+
+    if (segment.curve && typeof graph.createBuffer === 'function') {
+      const args = curveResampleArgs(plan, buffer, segment, shiftSec, leadSec);
+      if (!args) continue;
+      const resampled = await resampleCurvedAudioAsync(
+        args.channels,
+        buffer.sampleRate,
+        segment.sourceOffsetSec,
+        segment.curve,
+        args.fps,
+        args.startFrameOffset,
+        segment.frameCount ?? curveTotalFrames(segment.curve),
+        plan.sampleRate,
+        args.len,
+        args.leadShiftSec,
+        { signal },
+      );
+      placed += placeResampledCurveBuffer(graph, buffer, plan.sampleRate, args.startSample, args.endSample, segment.gain, resampled);
+      continue;
+    }
+
+    placed += placeConstantCutSegment(graph, plan, buffer, segment, shiftSec, leadSec);
   }
   return placed;
 }
@@ -722,7 +851,7 @@ async function mixSound(
     }
   };
 
-  scheduleCutSound(context, plan, buffers, (clipId) => soundShiftSec(extras, clipId), (url) => leads.get(url) ?? 0);
+  await scheduleCutSoundAsync(context, plan, buffers, (clipId) => soundShiftSec(extras, clipId), (url) => leads.get(url) ?? 0, signal);
 
   // Music and effects, by the current exporter's rules: music loops from its in-point for the whole film.
   if (bgm) {

@@ -34,7 +34,8 @@ import {
 } from '@/lib/brand-studio/editor-v2/model';
 import { EditorIcon } from './icons';
 import { FilmContentsList } from './film-contents-list';
-import { ASPECT_KEYS, SPEEDS, type EditorApi } from './use-editor';
+import { ASPECT_KEYS, type EditorApi } from './use-editor';
+import { SpeedPanel } from './speed-panel';
 import styles from './editor-v2.module.css';
 
 // ── Small shared controls ──────────────────────────────────────────────────────────────────────
@@ -552,7 +553,6 @@ function CutPanel({ api }: { api: EditorApi }) {
       const material = materialBySrc(clip.srcUrl);
       const dims = COMPOSE_DIMENSIONS[sequence.aspect];
       const outFrame = clipFrameAt(clip, clip.frames - 1, fps).mediaFrame + 1;
-      const speedKey = `${clip.speedNum}/${clip.speedDen}`;
       const canSlide = !!material && material.ratio > dims.width / dims.height + 0.01 && reframe.fit === 'fill';
       const rateUnknown = api.real && !!api.unknownRates[clip.srcUrl];
       return (
@@ -577,14 +577,17 @@ function CutPanel({ api }: { api: EditorApi }) {
             )}
           </Section>
           <Section title={c.clip.speed}>
-            <Seg
-              label={c.clip.speed}
-              value={speedKey}
-              options={SPEEDS.map((speed) => ({ value: `${speed.num}/${speed.den}`, label: speed.label, disabled: api.readOnly }))}
-              onChange={(value) => {
-                const speed = SPEEDS.find((entry) => `${entry.num}/${entry.den}` === value);
-                if (speed) api.setSpeed(span.index, speed.num, speed.den);
-              }}
+            <SpeedPanel
+              clip={clip}
+              clipIndex={span.index}
+              clipStart={span.start}
+              playhead={api.playhead}
+              fps={fps}
+              readOnly={api.readOnly}
+              copy={api.copy}
+              onSetConstant={api.setConstantSpeed}
+              onSetCurve={api.setSpeedCurve}
+              onReset={api.resetSpeed}
             />
           </Section>
           {/* Framing is not stored or exported yet, so a real film does not offer it (V7). */}

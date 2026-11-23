@@ -60,7 +60,8 @@ export function EditorV2({ copy, currentEditorHref, initialWorkspace, exportPath
       if (!action) return;
       const tag = target?.tagName;
       if ((tag === 'BUTTON' || tag === 'A' || tag === 'SUMMARY') && (event.code === 'Space' || event.code === 'Enter')) return;
-      if ((tag === 'INPUT' || target?.getAttribute('role') === 'slider') && /^(Arrow|Home|End)/.test(event.code)) return;
+      if (target?.hasAttribute('data-curve-point') && /^(Arrow|Home|End|Backspace|Delete)/.test(event.code)) return;
+      if ((tag === 'INPUT' || target?.getAttribute('role') === 'slider') && /^(Arrow|Home|End|PageUp|PageDown)/.test(event.code)) return;
       event.preventDefault();
       editor.runAction(action);
     };

@@ -837,3 +837,26 @@
 - 사운드 스튜디오의 데이터 모양은 그쪽 설계(PR #278)가 정해지면 §6.3을 맞춘다. 엔진과 이용 조건이 대표 결정 대기라 지금은 계약만 적었다.
 - 레일을 두 모드(직접 만들기 / 야기 팀과)로 나누는 작업이 다른 세션에서 진행 중이다. 편집 스튜디오는 "직접 만들기"에 속하고, 이 PR은 레일에서 `/brand/studio/editor`를 편집 스튜디오 항목으로 인식하게 하는 두 줄만 고쳤다.
 - 참고 편집기는 화면을 눌러 본 것이 전부다. 그 문구, 에셋, 코드는 어디에도 쓰지 않았다.
+
+---
+
+## 자유 배속(0.10×–10.00×) · 컷별 속도 곡선 (Speed Curve, `claude/editor-v2-speed-curve`)
+
+- **단일 사상 · 재생 규칙(`lib/brand-studio/editor-v2/speed-curve.ts`, `frames.ts`, `preview.tsx`)**:
+  - 정지·스크러빙·필름스트립 썸네일·비디오 내보내기(`videoPlan`)는 모두 `clipFrameAt`으로 소스 프레임을 찾는다.
+  - 실시간 재생 루프(`preview.tsx`)는 곡선 컷에 대해 `curveSpeedAt`으로 `<video>.playbackRate`를 프레임마다 갱신하고 `curveTimeAt`으로 타임라인 커서를 계산한다.
+- **자유 고정 배속 (`0.10×–10.00×`, `0.01` 단위)**:
+  - 백분율 정수 `[10, 1000] / 100`을 기약분수 `speedNum / speedDen`으로 저장해 기존 4배속(`1/2`, `1/1`, `3/2`, `2/1`)과 동일한 정수 유리수 산술을 유지한다.
+  - 연속 배속 변경 시 `mediaSpan` 유리수 원본 길이를 유지해 슬라이더 왕복 조작에도 끝점(out-point) 반올림 누적이 생기지 않는다.
+- **컷별 속도 곡선 (윈도우 모델 · 2–8개 제어점, 확장 경계 최대 10개)**:
+  - 정규화 미디어 구간 `[0, 1]` 위 제어점의 **느린 정도(slowness) $w(u) = 1 / v(u)$**를 **단조 3차 에르미트 보간(Fritsch–Carlson PCHIP)**으로 이음해 오버슈트나 역행 없이 `[min, max] ⊆ [0.10, 10.00]` 안에 머문다. 평탄 곡선은 `isFlatCurve`로 유리수 고정 배속과 동일한 길이 반올림을 쓴다.
+  - 경과 타임라인 프레임 $\tau(u)$를 4차식으로 해석 적분하고 보호된 브래킷 뉴턴법(`curveInverseAt`)으로 역함수 $u(t)$를 푼다.
+  - **분할(`splitWindowedCurve`) · 트림(`trimWindowedCurveEdge`) 규칙**: 컷은 원본 도메인 `[startMedia, startMedia + spanMedia]` 위 곡선(`w0` 시작 바깥·`w1` 끝 바깥은 끝점 속도 평탄 연장)을 유지한 채 활성 윈도우 `[winStartMedia, winEndMedia]`만 이동·분할한다. 따라서 앞/뒤 어느 끝을 줄였다가 다시 늘리거나(및 늘렸다 줄이거나), 컷을 나눈 뒤 다시 늘려도 기존 곡선 형태·길이(`clip.frames === curveTotalFrames`)·프레임 매핑이 손실 없이 원상 복귀된다.
+  - **점 편집 국소성 및 개수 제한**: 곡선 편집(`setClipSpeedCurve`)을 수행하면 활성 윈도우 전체(`[0, 1]`)로 재표현한 뒤, 1개 제어점을 옮길 때 해당 점과 양옆 인접 점(`{i-1, i, i+1}`)의 PCHIP 기울기만 갱신해 `u_{i-2}` 이전·`u_{i+2}` 이후 구간(및 건드리지 않은 평탄 확장 구간)의 소스 프레임·프레임당 보폭과 비편집 구간 길이를 그대로 유지한다. 트림 경계점이 포함되면 내부 제어점은 최대 10개까지 유지·표시되며, UI 점 추가는 `< 8`개일 때만 허용하고 상한 도달 시 안내 문구를 띄운다.
+  - **1× 미만 구간**: 새 프레임을 보간 합성하지 않고 **직전 원본 프레임(`Math.floor`)**을 반복한다(UI에 평문 안내 표시).
+- **소리 동기 · 피치 (`export-plan.ts`, `export-film.ts`, `preview.tsx`)**:
+  - 고정 배속(`0.10×–10.00×`) 내보내기는 `AudioBufferSourceNode.playbackRate`로 재생한다. 미리보기 `<video>`는 내보내기와 음정을 맞추기 위해 `preservesPitch = false`(및 `mozPreservesPitch`·`webkitPreservesPitch`)를 적용한다. 일부 브라우저는 `0.25×–4×` 바깥 구간에서 미리보기 오디오를 자동 음소거하지만 내보낸 MP4 오디오는 전 구간(`0.10×–10.00×`) 정상 출력된다.
+  - 속도 곡선 컷은 `AudioSegment.curve`로 전달해 `resampleCurvedAudio` / `resampleCurvedAudioAsync`(내보내기 중 청크 단위 이벤트 루프 양보)가 단조 전진 스텝(monotone stepper)으로 각 출력 샘플(48kHz)의 미디어 시각을 뽑는다. `> 1.05×` 감속·압축(decimation) 구간은 Hann-windowed sinc 저역통과 프리필터(`fc = 0.42 / stepRatio`)로 에일리어싱을 억제하고, 타임라인 길이가 곡선 원시 길이보다 반올림되어 길 때는 끝 `4 ms`를 코사인 페이드아웃해 클릭 노이즈 없이 그림과 길이를 맞춘다.
+- **기존 편집기 및 XML 한계 (`stored.ts`)**:
+  - `stored.ts`(`FrameV2Block.speedCurve`·`mediaSpan`): 기존 편집기 `ComposeClip.playbackRate` 클램프(`[0.25, 4]`)와 `mirror` 정합성을 유지하며, 저장본의 곡선 길이·푸티지 경계·기울기가 어긋나면 로드 시 결정적으로 보정하거나 `1×`로 안전 복구한다.
+  - 편집 스튜디오 v2는 아직 별도 데스크톱 편집기용 XML 내보내기 버튼을 제공하지 않는다. 기존 편집기(`compose/nle-export.ts`)의 `buildFcp7Xml`·`exportProjectNleBundleZip`은 `main` 동작 그대로 유지되며, 저장 포맷을 통해 기존 편집기에서 XML을 내보낼 경우 초 단위 저장값 기준(배속 `[0.25, 4]` 클램프, 곡선은 평균 배속 고정·세부 `graphdict` 키프레임 미지원)으로 출력된다.

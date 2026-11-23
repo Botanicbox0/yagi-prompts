@@ -38,6 +38,16 @@ import { DEFAULT_FILM_FPS, snapFilmFps, sourceFramesOf } from './fps';
 
 export { captionsOnFrames } from './cut-anchor';
 import { clipMaxFrames, mediaFramesOf, type FrameClip, type FrameSequence } from './frames';
+import {
+  cloneSpeedCurve,
+  curveAverageSpeed,
+  curveEndMedia,
+  curveRawDurationFrames,
+  curveStartMedia,
+  curveTotalFrames,
+  isValidSpeedCurve,
+  type SpeedCurve,
+} from './speed-curve';
 
 /** The seconds a clip carried when v2 wrote its block, after the current editor's normalisation. */
 export interface FrameV2Mirror {
@@ -55,6 +65,8 @@ export interface FrameV2Block {
   frames: number;
   speedNum: number;
   speedDen: number;
+  mediaSpan?: { num: number; den: number };
+  speedCurve?: SpeedCurve;
   /** Always measured: a block is never written from a guessed rate (review round 1, item 3). */
   sourceFps: number;
   sourceFrames: number;
@@ -126,7 +138,7 @@ export interface StoredFilm {
   tentative: boolean;
 }
 
-type FrameFields = Pick<FrameClip, 'inFrame' | 'phase' | 'frames' | 'speedNum' | 'speedDen'>;
+type FrameFields = Pick<FrameClip, 'inFrame' | 'phase' | 'frames' | 'speedNum' | 'speedDen' | 'speedCurve' | 'mediaSpan'>;
 type SourceFields = Pick<FrameClip, 'sourceFps' | 'sourceFrames'>;
 
 const isInt = (value: unknown, min: number): value is number => typeof value === 'number' && Number.isInteger(value) && value >= min;
@@ -141,12 +153,16 @@ const gcd = (a: number, b: number): number => (b === 0 ? Math.abs(a) : gcd(b, a 
 export function frameBlockOf(clip: ComposeClip): FrameV2Block | null {
   const block = (clip as StoredClip).frameV2 as (Partial<FrameV2Block> & { rateGuessed?: unknown }) | undefined;
   if (!block || typeof block !== 'object' || block.rateGuessed !== undefined) return null;
-  const { fps, inFrame, phase, frames, speedNum, speedDen, sourceFps, sourceFrames, mirror } = block;
+  const { fps, inFrame, phase, frames, speedNum, speedDen, sourceFps, sourceFrames, mirror, speedCurve, mediaSpan } = block;
   // It describes this clip's file, at this length: anything else is other footage (review round 1, item 4).
   if (block.srcUrl !== clip.srcUrl || block.durationSec !== clip.durationSec) return null;
   if (!isInt(fps, 1) || !isInt(inFrame, 0) || !isInt(phase, 0) || !isInt(frames, 1) || !isInt(speedNum, 1) || !isInt(speedDen, 1)) return null;
   if (phase >= speedDen || !isNum(sourceFps) || sourceFps <= 0 || !isInt(sourceFrames, 1)) return null;
   if (!mirror || typeof mirror !== 'object' || !isNum(mirror.trimStartSec) || !isNum(mirror.trimEndSec) || !isNum(mirror.playbackRate)) return null;
+  if (mediaSpan !== undefined && (!mediaSpan || typeof mediaSpan !== 'object' || !isInt(mediaSpan.num, 1) || !isInt(mediaSpan.den, 1))) {
+    return null;
+  }
+  if (speedCurve !== undefined && !isValidSpeedCurve(speedCurve)) return null;
   return block as FrameV2Block;
 }
 
@@ -162,6 +178,11 @@ function mirrorHolds(clip: ComposeClip, block: FrameV2Block): boolean {
 function exactBlock(clip: ComposeClip, fps: number): FrameV2Block | null {
   const block = frameBlockOf(clip);
   return block && block.fps === fps && mirrorHolds(clip, block) ? block : null;
+}
+
+/** v2 staleness check: returns the `FrameV2Block` only when it is valid and untouched by the legacy editor. */
+export function currentFrameBlockOf(clip: ComposeClip, fps: number): FrameV2Block | null {
+  return exactBlock(clip, fps);
 }
 
 /**
@@ -210,10 +231,62 @@ function speedFraction(rate: number): [number, number] {
  */
 function withinFootage(clip: SourceFields & FrameFields, fps: number): SourceFields & FrameFields {
   const media = mediaFramesOf(clip, fps);
+  if (clip.speedCurve) {
+    const rawStart = curveStartMedia(clip.speedCurve);
+    const rawEnd = curveEndMedia(clip.speedCurve);
+    const winStart = Math.min(Math.max(0, rawStart), Math.max(0, media - 1e-4));
+    const winEnd = Math.min(media, Math.max(winStart, rawEnd));
+    const startMedia = Math.min(Math.max(0, clip.speedCurve.startMedia), Math.max(0, media - 1e-4));
+    const spanMedia = Math.min(clip.speedCurve.spanMedia, Math.max(0, media - startMedia));
+
+    const domainEnd = startMedia + spanMedia;
+    const srcDomain =
+      clip.speedCurve.sourceDomain &&
+      clip.speedCurve.sourceDomain.startMedia >= 0 &&
+      clip.speedCurve.sourceDomain.startMedia + clip.speedCurve.sourceDomain.spanMedia <= media + 1e-4 &&
+      Math.abs(winStart - rawStart) <= 1e-6 &&
+      Math.abs(winEnd - rawEnd) <= 1e-6
+        ? clip.speedCurve.sourceDomain
+        : undefined;
+    const candidate: SpeedCurve = {
+      startMedia,
+      spanMedia,
+      ...(srcDomain ? { sourceDomain: srcDomain } : {}),
+      ...(Math.abs(winStart - startMedia) > 1e-9 ? { winStartMedia: winStart } : {}),
+      ...(Math.abs(winEnd - domainEnd) > 1e-9 ? { winEndMedia: winEnd } : {}),
+      points: clip.speedCurve.points,
+    };
+
+    const validCandidate = isValidSpeedCurve(candidate) && curveRawDurationFrames(candidate) >= 0.5 - 1e-6;
+    if (rawStart >= media - 1e-4 || winEnd - winStart <= 1e-4 || spanMedia <= 1e-4 || !validCandidate) {
+      const fallbackIn = Math.min(Math.max(0, Math.floor(rawStart + 1e-9)), Math.max(0, media - 1));
+      const fallbackFrames = clamp(Math.round(rawEnd - rawStart), 1, Math.max(1, media - fallbackIn));
+      return { sourceFps: clip.sourceFps, sourceFrames: clip.sourceFrames, inFrame: fallbackIn, phase: 0, frames: fallbackFrames, speedNum: 1, speedDen: 1 };
+    }
+
+    const clampedCurve = cloneSpeedCurve(candidate);
+    if (curveRawDurationFrames(clampedCurve) < 0.5 - 1e-6) {
+      const fallbackIn = Math.min(Math.max(0, Math.floor(rawStart + 1e-9)), Math.max(0, media - 1));
+      const fallbackFrames = clamp(Math.round(rawEnd - rawStart), 1, Math.max(1, media - fallbackIn));
+      return { sourceFps: clip.sourceFps, sourceFrames: clip.sourceFrames, inFrame: fallbackIn, phase: 0, frames: fallbackFrames, speedNum: 1, speedDen: 1 };
+    }
+    const inFrame = Math.min(Math.max(0, Math.floor(curveStartMedia(clampedCurve) + 1e-9)), Math.max(0, media - 1));
+    const frames = clamp(curveTotalFrames(clampedCurve), 1, clipMaxFrames({ ...clip, inFrame, phase: 0, speedNum: 1, speedDen: 1, speedCurve: clampedCurve } as FrameClip, fps));
+    return { sourceFps: clip.sourceFps, sourceFrames: clip.sourceFrames, inFrame, phase: 0, frames, speedNum: 1, speedDen: 1, speedCurve: clampedCurve };
+  }
   const inFrame = Math.min(clip.inFrame, Math.max(0, media - 1));
   const phase = inFrame === clip.inFrame ? clip.phase : 0;
   const shape = { ...clip, inFrame, phase } as FrameClip;
-  return { ...clip, inFrame, phase, frames: Math.max(1, Math.min(clip.frames, clipMaxFrames(shape, fps))) };
+  const { mediaSpan, ...rest } = clip;
+  const maxAllowed = clipMaxFrames(shape, fps);
+  const clampedFrames = Math.max(1, Math.min(clip.frames, maxAllowed));
+  return {
+    ...rest,
+    inFrame,
+    phase,
+    frames: clampedFrames,
+    ...(mediaSpan && mediaSpan.num / mediaSpan.den <= media + 1e-4 ? { mediaSpan } : {}),
+  };
 }
 
 /** A cut rebuilt from the seconds the current editor keeps: every position to the nearest frame. */
@@ -255,11 +328,101 @@ type StoredKind = 'exact' | 'corrected' | 'derived';
 function framesOfStored(clip: ComposeClip, fps: number, source: SourceFields): { kind: StoredKind; frames: FrameFields } {
   const block = exactBlock(clip, fps);
   if (block) {
-    const { inFrame, phase, frames, speedNum, speedDen } = block;
-    if (source.sourceFrames === block.sourceFrames) return { kind: 'exact', frames: { inFrame, phase, frames, speedNum, speedDen } };
-    if (sameRate(source.sourceFps, block.sourceFps)) {
-      const kept = withinFootage({ sourceFps: block.sourceFps, sourceFrames: source.sourceFrames, inFrame, phase, frames, speedNum, speedDen }, fps);
-      return { kind: 'corrected', frames: { inFrame: kept.inFrame, phase: kept.phase, frames: kept.frames, speedNum, speedDen } };
+    const { inFrame, phase, frames, speedNum, speedDen, speedCurve, mediaSpan } = block;
+    if (speedCurve) {
+      const media = mediaFramesOf(source, fps);
+      const startM = curveStartMedia(speedCurve);
+      const endM = curveEndMedia(speedCurve);
+      const expectedIn = Math.max(0, Math.floor(startM + 1e-9));
+      const expectedFrames = curveTotalFrames(speedCurve);
+      const validAgainstSource =
+        source.sourceFrames === block.sourceFrames &&
+        startM >= -1e-6 &&
+        endM <= media + 1e-4 &&
+        frames === expectedFrames &&
+        inFrame === expectedIn &&
+        curveRawDurationFrames(speedCurve) >= 0.5 - 1e-6;
+
+      if (validAgainstSource) {
+        return {
+          kind: 'exact',
+          frames: {
+            inFrame,
+            phase,
+            frames,
+            speedNum,
+            speedDen,
+            speedCurve: cloneSpeedCurve(speedCurve),
+            ...(mediaSpan ? { mediaSpan: { ...mediaSpan } } : {}),
+          },
+        };
+      }
+      if (sameRate(source.sourceFps, block.sourceFps)) {
+        const kept = withinFootage(
+          {
+            sourceFps: block.sourceFps,
+            sourceFrames: source.sourceFrames,
+            inFrame,
+            phase: 0,
+            frames,
+            speedNum: 1,
+            speedDen: 1,
+            speedCurve,
+          },
+          fps,
+        );
+        return {
+          kind: 'corrected',
+          frames: {
+            inFrame: kept.inFrame,
+            phase: kept.phase,
+            frames: kept.frames,
+            speedNum: kept.speedNum,
+            speedDen: kept.speedDen,
+            ...(kept.speedCurve ? { speedCurve: cloneSpeedCurve(kept.speedCurve) } : {}),
+          },
+        };
+      }
+    } else {
+      if (source.sourceFrames === block.sourceFrames) {
+        return {
+          kind: 'exact',
+          frames: {
+            inFrame,
+            phase,
+            frames,
+            speedNum,
+            speedDen,
+            ...(mediaSpan ? { mediaSpan: { ...mediaSpan } } : {}),
+          },
+        };
+      }
+      if (sameRate(source.sourceFps, block.sourceFps)) {
+        const kept = withinFootage(
+          {
+            sourceFps: block.sourceFps,
+            sourceFrames: source.sourceFrames,
+            inFrame,
+            phase,
+            frames,
+            speedNum,
+            speedDen,
+            ...(mediaSpan ? { mediaSpan } : {}),
+          },
+          fps,
+        );
+        return {
+          kind: 'corrected',
+          frames: {
+            inFrame: kept.inFrame,
+            phase: kept.phase,
+            frames: kept.frames,
+            speedNum,
+            speedDen,
+            ...(kept.mediaSpan ? { mediaSpan: { ...kept.mediaSpan } } : {}),
+          },
+        };
+      }
     }
   }
   return { kind: 'derived', frames: deriveFrames(clip, fps, source) };
@@ -328,16 +491,81 @@ export interface ToStoredOptions {
 
 /** The seconds a cut covers on its footage, on the film's frame grid. */
 function secondsOf(clip: FrameClip, fps: number): Pick<ComposeClip, 'trimStartSec' | 'trimEndSec' | 'playbackRate'> {
-  const rate = clip.speedNum / clip.speedDen;
+  const rawRate = clip.speedCurve ? curveAverageSpeed(clip.speedCurve) : clip.speedNum / clip.speedDen;
+  const legacyRate = Math.min(4, Math.max(0.25, Math.round(rawRate * 100) / 100));
+  const playbackRate = Math.abs(legacyRate - 1) < 0.01 ? undefined : legacyRate;
+  if (clip.speedCurve) {
+    return {
+      trimStartSec: curveStartMedia(clip.speedCurve) / fps,
+      trimEndSec: curveEndMedia(clip.speedCurve) / fps,
+      playbackRate,
+    };
+  }
+  const startMedia = clip.inFrame + clip.phase / clip.speedDen;
+  const endMedia = clip.mediaSpan
+    ? startMedia + clip.mediaSpan.num / clip.mediaSpan.den
+    : clip.inFrame + (clip.phase + clip.frames * clip.speedNum) / clip.speedDen;
   return {
-    trimStartSec: (clip.inFrame + clip.phase / clip.speedDen) / fps,
-    trimEndSec: (clip.inFrame + (clip.phase + clip.frames * clip.speedNum) / clip.speedDen) / fps,
-    playbackRate: rate === 1 ? undefined : rate,
+    trimStartSec: startMedia / fps,
+    trimEndSec: endMedia / fps,
+    playbackRate,
   };
 }
 
+function samePointArrays(a: SpeedCurve['points'], b: SpeedCurve['points']): boolean {
+  if (a.length !== b.length) return false;
+  for (let i = 0; i < a.length; i += 1) {
+    if (
+      a[i]!.pos !== b[i]!.pos ||
+      a[i]!.speed !== b[i]!.speed ||
+      a[i]!.slope !== b[i]!.slope ||
+      a[i]!.slopeRight !== b[i]!.slopeRight
+    ) {
+      return false;
+    }
+  }
+  return true;
+}
+
+function sameCurve(a?: SpeedCurve, b?: SpeedCurve): boolean {
+  if (!a && !b) return true;
+  if (!a || !b) return false;
+  if (
+    a.startMedia !== b.startMedia ||
+    a.spanMedia !== b.spanMedia ||
+    curveStartMedia(a) !== curveStartMedia(b) ||
+    curveEndMedia(a) !== curveEndMedia(b) ||
+    !samePointArrays(a.points, b.points)
+  ) {
+    return false;
+  }
+  if ((a.sourceDomain === undefined) !== (b.sourceDomain === undefined)) return false;
+  if (a.sourceDomain && b.sourceDomain) {
+    if (
+      a.sourceDomain.startMedia !== b.sourceDomain.startMedia ||
+      a.sourceDomain.spanMedia !== b.sourceDomain.spanMedia ||
+      !samePointArrays(a.sourceDomain.points, b.sourceDomain.points)
+    ) {
+      return false;
+    }
+  }
+  return true;
+}
+
+function sameSpan(a?: { num: number; den: number }, b?: { num: number; den: number }): boolean {
+  if (!a && !b) return true;
+  if (!a || !b) return false;
+  return a.num === b.num && a.den === b.den;
+}
+
 const sameFrames = (a: FrameFields, b: FrameFields) =>
-  a.inFrame === b.inFrame && a.phase === b.phase && a.frames === b.frames && a.speedNum === b.speedNum && a.speedDen === b.speedDen;
+  a.inFrame === b.inFrame &&
+  a.phase === b.phase &&
+  a.frames === b.frames &&
+  a.speedNum === b.speedNum &&
+  a.speedDen === b.speedDen &&
+  sameSpan(a.mediaSpan, b.mediaSpan) &&
+  sameCurve(a.speedCurve, b.speedCurve);
 
 /** A stored clip for a cut that has no stored origin: the stream route names its footage. */
 function freshClip(clip: FrameClip): ComposeClip {
@@ -400,6 +628,8 @@ function storedClipOf(
     frames: clip.frames,
     speedNum: clip.speedNum,
     speedDen: clip.speedDen,
+    ...(clip.mediaSpan ? { mediaSpan: { ...clip.mediaSpan } } : {}),
+    ...(clip.speedCurve ? { speedCurve: cloneSpeedCurve(clip.speedCurve) } : {}),
     sourceFps: clip.sourceFps,
     sourceFrames: clip.sourceFrames,
     srcUrl: written.srcUrl,

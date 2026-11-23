@@ -8,6 +8,7 @@ import { COMPOSE_DIMENSIONS, activeColorGradeForFrame, toColorGradeSpec } from '
 import { imageOverlaysAt, storedCutFor } from '@/lib/brand-studio/editor-v2/export-plan';
 import { CURRENT_EXPORT_BACKGROUND, currentExportFrame } from '@/lib/brand-studio/editor-v2/framing';
 import { formatTimecode, frameStateAt, spansOf, totalFrames } from '@/lib/brand-studio/editor-v2/frames';
+import { curveSpeedAt, curveStartMedia, curveTimeAt, curveTotalSpanMedia } from '@/lib/brand-studio/editor-v2/speed-curve';
 import { DEFAULT_REFRAME, gradeMatrix, isNeutral } from '@/lib/brand-studio/editor-v2/model';
 import { formatBinding } from '@/lib/brand-studio/editor-v2/shortcuts';
 import { EditorIcon } from './icons';
@@ -16,6 +17,17 @@ import styles from './editor-v2.module.css';
 
 const ASPECT_CSS = { '16:9': '16 / 9', '9:16': '9 / 16', '1:1': '1 / 1', '4:5': '4 / 5' } as const;
 const ASPECT_RATIO = { '16:9': 16 / 9, '9:16': 9 / 16, '1:1': 1, '4:5': 4 / 5 } as const;
+
+export function disablePitchPreservation(video: HTMLVideoElement): void {
+  const media = video as HTMLVideoElement & {
+    preservesPitch?: boolean;
+    mozPreservesPitch?: boolean;
+    webkitPreservesPitch?: boolean;
+  };
+  if ('preservesPitch' in media) media.preservesPitch = false;
+  if ('mozPreservesPitch' in media) media.mozPreservesPitch = false;
+  if ('webkitPreservesPitch' in media) media.webkitPreservesPitch = false;
+}
 
 /** How far the platform's own interface reaches into a vertical frame (percent of the frame). */
 const SAFE_ZONES = {
@@ -129,8 +141,26 @@ export function Preview({ api }: { api: EditorApi }) {
           video.currentTime = seekTo;
           seekTo = null;
         }
+      } else if (playing.speedCurve) {
+        const mediaPos = video.currentTime * current.fps + 1e-6;
+        const startMedia = curveStartMedia(playing.speedCurve);
+        const totalSpan = curveTotalSpanMedia(playing.speedCurve);
+        const u = (mediaPos - startMedia) / Math.max(1e-6, totalSpan);
+        if (u >= 1 || video.ended) {
+          cursor = span.end;
+        } else {
+          const clampedU = Math.max(0, u);
+          const instSpeed = curveSpeedAt(playing.speedCurve, clampedU);
+          disablePitchPreservation(video);
+          video.playbackRate = Math.max(0.0625, Math.min(16, instSpeed * rate));
+          if (video.paused) void video.play().catch(() => undefined);
+          const offset = Math.floor(curveTimeAt(playing.speedCurve, clampedU));
+          if (offset >= playing.frames) cursor = span.end;
+          else if (offset >= 0) cursor = Math.max(cursor, span.start + offset);
+        }
       } else {
-        video.playbackRate = Math.min(16, (playing.speedNum / playing.speedDen) * rate);
+        disablePitchPreservation(video);
+        video.playbackRate = Math.max(0.0625, Math.min(16, (playing.speedNum / playing.speedDen) * rate));
         if (video.paused) void video.play().catch(() => undefined);
         // The film-grid frame the video is on, then back through the cut's speed to a timeline frame.
         const mediaFrame = Math.floor(video.currentTime * current.fps + 1e-6);
