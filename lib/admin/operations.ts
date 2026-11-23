@@ -23,6 +23,7 @@ import { SOCIAL_OPERATIONS } from './social-operations';
 import { LANDING_MEDIA_OPERATIONS } from './landing-media-operations';
 import { RENDER_OPERATIONS } from './render-operations';
 import { PAYOUT_OPERATIONS } from './payout-operations';
+import { BILLING_PAYMENT_OPERATIONS } from './billing-payment-operations';
 
 export type { BlockDraftInput };
 
@@ -82,6 +83,7 @@ export const ADMIN_OPERATIONS = {
   ...LANDING_MEDIA_OPERATIONS,
   ...RENDER_OPERATIONS,
   ...PAYOUT_OPERATIONS,
+  ...BILLING_PAYMENT_OPERATIONS,
   // docs/RUNBOOK-deletion.md — the account deletion queue: delete now, mark done by hand, close.
   ...ACCOUNT_DELETION_OPERATIONS,
 };

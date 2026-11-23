@@ -1,5 +1,6 @@
 import type { SqlRunner } from "@/lib/db/sql-runner";
 import type { RenderStatus } from "@/lib/renders/repo";
+import { tossKeyKind } from "@/lib/flags";
 
 /**
  * The render board and the payment check (docs/ADMIN.md §7.1–7.2). READ-ONLY: every statement is a
@@ -79,8 +80,12 @@ export interface RenderBoard {
   summary: RenderBoardSummary;
 }
 
+export type PaymentEnvironment = "live" | "test" | "fake";
+export type PaymentEnvironmentBucket = "live" | "test";
+
 export interface RenderPayment {
   id: string;
+  environment: PaymentEnvironment;
   status: string;
   failureCode: string | null;
   amountKrw: number;
@@ -109,6 +114,7 @@ export interface RenderDetail extends RenderBoardRow {
 export interface ManualPayment {
   id: string;
   userId: string | null;
+  environment: PaymentEnvironment;
   orderName: string;
   templateSlug: string | null;
   amountKrw: number;
@@ -276,7 +282,7 @@ export async function loadRenderDetail(sql: SqlRunner, id: string): Promise<Rend
             j.claimed_at, j.updated_at,
             to_jsonb(j) ->> 'finishing_at' as finishing_at,
             to_jsonb(j) ->> 'cost_source' as cost_source,
-            p.id as payment_id, p.amount_krw as payment_amount, p.approved_at as payment_approved_at,
+            p.id as payment_id, p.environment as payment_environment, p.amount_krw as payment_amount, p.approved_at as payment_approved_at,
             p.refunded_at as payment_refunded_at,
             to_jsonb(p) ->> 'refund_attempts' as payment_refund_attempts,
             to_jsonb(p) ->> 'fulfil_attempts' as payment_fulfil_attempts,
@@ -304,6 +310,7 @@ export async function loadRenderDetail(sql: SqlRunner, id: string): Promise<Rend
         ? null
         : {
             id: String(raw.payment_id),
+            environment: (raw.payment_environment as PaymentEnvironment | null) ?? "test",
             status: String(raw.payment_status),
             failureCode: (raw.payment_failure as string | null) ?? null,
             amountKrw: Number(raw.payment_amount ?? 0),
@@ -327,28 +334,93 @@ export async function countRecentRenderFailures(sql: SqlRunner, now: Date = new 
   return Number(rows[0]?.n ?? 0);
 }
 
+const MANUAL_PAYMENT_WHERE = `p.payment_type = 'NORMAL' and (
+  (p.status = 'refund_pending' and p.failure_code in ('refund_manual', 'partial_balance')) or
+  (p.status = 'paid' and p.failure_code = 'fulfil_manual'))`;
+
+/**
+ * Which environment the deployment belongs to (`live` vs `test` — where `test` groups test keys and
+ * local fake orders together). Reads the active Toss widget keys first, falling back to `VERCEL_ENV`.
+ */
+export function defaultPaymentEnvironment(
+  env: Record<string, string | undefined> = process.env,
+): PaymentEnvironmentBucket {
+  const keys = tossKeyKind(env);
+  if (keys === "live") return "live";
+  if (keys === "test") return "test";
+  return env.VERCEL_ENV === "production" ? "live" : "test";
+}
+
+export function paymentChecksFilter(
+  params: Record<string, string | string[] | undefined>,
+  env: Record<string, string | undefined> = process.env,
+): { environment: PaymentEnvironmentBucket; defaultEnvironment: PaymentEnvironmentBucket } {
+  const defaultEnvironment = defaultPaymentEnvironment(env);
+  const raw = params.env;
+  const value = typeof raw === "string" ? raw : undefined;
+  return {
+    environment: value === "live" || value === "test" ? value : defaultEnvironment,
+    defaultEnvironment,
+  };
+}
+
+function environmentSqlFilter(bucket?: PaymentEnvironmentBucket): string {
+  if (bucket === "live") return "and p.environment = 'live'";
+  if (bucket === "test") return "and p.environment in ('test', 'fake')";
+  return "";
+}
+
+export async function countManualPayments(
+  sql: SqlRunner,
+  environment: PaymentEnvironmentBucket = defaultPaymentEnvironment(),
+): Promise<number> {
+  const { rows } = await sql.query<{ n: number | string }>(
+    `select count(*)::int as n from billing_payments p
+      where ${MANUAL_PAYMENT_WHERE} ${environmentSqlFilter(environment)}`,
+  );
+  return Number(rows[0]?.n ?? 0);
+}
+
+export async function countManualPaymentsByEnvironment(
+  sql: SqlRunner,
+): Promise<Record<PaymentEnvironmentBucket, number>> {
+  const { rows } = await sql.query<{ live: number | string; test: number | string }>(
+    `select
+       count(*) filter (where p.environment = 'live')::int as live,
+       count(*) filter (where p.environment in ('test', 'fake'))::int as test
+      from billing_payments p
+     where ${MANUAL_PAYMENT_WHERE}`,
+  );
+  return {
+    live: Number(rows[0]?.live ?? 0),
+    test: Number(rows[0]?.test ?? 0),
+  };
+}
+
 /**
  * Toss single payments an operator holds now (docs/PLATFORM-2.0.md §2.2-4): a refund or a fulfilment
- * that stopped retrying after its cap, or a partial-cancel balance. The same rule as
- * `countManualTossPayments`, listed oldest first.
+ * that stopped retrying after its cap, or a partial-cancel balance. Scoped to an environment bucket
+ * when supplied so live and test/fake rows stay separated.
  */
-export async function loadManualPayments(sql: SqlRunner): Promise<ManualPayment[]> {
+export async function loadManualPayments(
+  sql: SqlRunner,
+  environment?: PaymentEnvironmentBucket,
+): Promise<ManualPayment[]> {
   const { rows } = await sql.query<RawRow>(
-    `select p.id, p.user_id, p.order_name, p.template_slug, p.amount_krw, p.status, p.failure_code,
+    `select p.id, p.user_id, p.environment, p.order_name, p.template_slug, p.amount_krw, p.status, p.failure_code,
             to_jsonb(p) ->> 'refund_attempts' as refund_attempts,
             to_jsonb(p) ->> 'fulfil_attempts' as fulfil_attempts,
             p.render_id, j.status as render_status, p.created_at, p.approved_at, p.updated_at
        from billing_payments p
        left join render_jobs j on j.id = p.render_id
-      where p.payment_type = 'NORMAL' and (
-        (p.status = 'refund_pending' and p.failure_code in ('refund_manual', 'partial_balance')) or
-        (p.status = 'paid' and p.failure_code = 'fulfil_manual'))
+      where ${MANUAL_PAYMENT_WHERE} ${environmentSqlFilter(environment)}
       order by p.updated_at asc, p.id asc
       limit 200`,
   );
   return rows.map((raw) => ({
     id: String(raw.id),
     userId: (raw.user_id as string | null) ?? null,
+    environment: (raw.environment as PaymentEnvironment | null) ?? "test",
     orderName: String(raw.order_name),
     templateSlug: (raw.template_slug as string | null) ?? null,
     amountKrw: Number(raw.amount_krw ?? 0),
