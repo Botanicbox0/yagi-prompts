@@ -339,3 +339,17 @@ export function brandWorkspacePrototypeLayerOpen(env: Record<string, string | un
 export function brandOrgInviteEmailOpen(env: Record<string, string | undefined> = process.env): boolean {
   return env.BRAND_ORG_INVITE_EMAIL === 'on';
 }
+
+/**
+ * docs/BRAND-RECURRING-BILLING.md §12, §14 (B1a) — brand subscription core: monthly auto-invoicing
+ * (D-7 draft, M-01 issue), manual transfer deposit confirmation, subscription lifecycle reconciliation,
+ * and admin subscription/tax-invoice controls. Default OFF: open only when the server environment says
+ * exactly `BRAND_BILLING_AUTO_ISSUE=on`.
+ *
+ * When enabling it the operator also sets `BRAND_PLAN_GRACE_DAYS=14` (founder decision: due date + 14 days).
+ * With a grace below 1 access ends on the due date itself; the job then reports `graceDaysBelowOne: true` and
+ * the admin subscription card shows a warning.
+ */
+export function brandBillingAutoIssueOpen(env: Record<string, string | undefined> = process.env): boolean {
+  return env.BRAND_BILLING_AUTO_ISSUE === 'on';
+}

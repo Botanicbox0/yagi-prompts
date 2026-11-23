@@ -15,7 +15,14 @@ import { BRAND_FEATURES } from '@/lib/brands/features';
 import { loadFeaturePolicy } from '@/lib/brands/entitlements';
 import { listLooks, listMemory, loadBrandIdentity, twingsDefaultIdentity } from '@/lib/brands/identity/service';
 import { BRAND_BILLING_MODES, BRAND_PLAN_IDS, BRAND_PLANS, loadPlanAssignment } from '@/lib/brands/plans';
-import { kstDayOf, kstMonthOf, nextKstMonthOf, planActiveWithGrace } from '@/lib/brands/billing/math';
+import {
+  kstDayOf,
+  kstMonthOf,
+  nextKstMonthOf,
+  PAID_BRAND_PLAN_IDS,
+  planActiveWithGrace,
+} from '@/lib/brands/billing/math';
+import { isSandboxedClientOrganization } from '@/lib/brands/features';
 import { MICRO_ROI_MODES } from '@/lib/brands/finish/micro-roi';
 import { BRAND_LOOK_PRESET_IDS } from '@/lib/brands/finish/color-grading';
 import { resolveCategoryExperienceProfile } from '@/lib/brands/category-experience';
@@ -126,7 +133,26 @@ export default async function StudioOrganization({
   const graceDays = env.planGraceDays ?? 7;
   const planStatus = planActiveWithGrace(plan, todayKst, graceDays);
 
-  const formattedDetail = formatBillingOutcomeDetail(one(queryParams, 'detail'), locale === 'en' ? 'en' : 'ko');
+  const rawOk = one(queryParams, 'ok');
+  const rawDetail = one(queryParams, 'detail');
+  const startPreviewMatch =
+    rawOk === 'prepared' && rawDetail
+      ? /^(b2b_(?:29|49|69))\|(\d{4}-\d{2}-\d{2})\|early=(0|1)\b/.exec(rawDetail)
+      : null;
+  const startPreviewPlan = startPreviewMatch?.[1];
+  const startPreviewDate = startPreviewMatch?.[2];
+  const startPreviewEarly = startPreviewMatch?.[3] === '1';
+  const isReissuePreview = rawOk === 'prepared' && Boolean(rawDetail?.startsWith('reissue='));
+  // Review round 2, item 9: step 2 sends back the digest the preview returned.
+  const previewDigestToken = rawOk === 'prepared' ? /digest=([0-9a-f]{16})\b/.exec(rawDetail ?? '')?.[1] : undefined;
+  const startPreviewDigest = startPreviewMatch ? previewDigestToken : undefined;
+  // Round 3, item 1: the start preview warns about a first-invoice payment window under 3 days.
+  const startShortWindow = Boolean(startPreviewMatch && rawDetail?.includes('short_window=1'));
+  const reissuePreviewDigest = isReissuePreview ? previewDigestToken : undefined;
+  // Round 4, B9: the reissue preview carries the same short-payment-window warning as the start preview.
+  const reissueShortWindow = Boolean(isReissuePreview && rawDetail?.includes('short_window=1'));
+
+  const formattedDetail = formatBillingOutcomeDetail(rawDetail, locale === 'en' ? 'en' : 'ko');
   const defaultAllowanceMode = detailOps?.allowanceRow
     ? detailOps.allowanceRow.isOverride === false
       ? 'plan_default'
@@ -141,6 +167,11 @@ export default async function StudioOrganization({
     st === 'succeeded' ? 'done' : st === 'failed' ? 'fail' : st === 'canceled' || st === 'held' ? 'hold' : 'progress';
   const invoiceStatusTone = (st: string, overdue: boolean) =>
     st === 'paid' ? 'done' : overdue ? 'fail' : st === 'issued' ? 'action' : st === 'void' ? 'hold' : 'progress';
+  const subPanel = detailOps?.subscriptionPanel ?? null;
+  const sub = subPanel?.subscription ?? null;
+  const isSandboxedOrg = isSandboxedClientOrganization(org);
+  const subStatusTone = (st: string) =>
+    st === 'active' ? 'done' : st === 'past_due' ? 'action' : st === 'suspended' ? 'fail' : 'hold';
 
   return (
     <AdminShell dict={dict.admin} locale={locale} active="brandWorkspace">
@@ -164,8 +195,13 @@ export default async function StudioOrganization({
       />
 
       <OutcomeBanner
-        dict={dict.admin}
-        ok={one(queryParams, 'ok')}
+        dict={{
+          ...dict.admin,
+          okPrepared: isReissuePreview
+            ? od.billing.subscriptionReissuePreviewedBanner
+            : od.billing.subscriptionPreviewedBanner,
+        }}
+        ok={rawOk}
         err={one(queryParams, 'err')}
         detail={formattedDetail}
         showDetailForOk
@@ -789,147 +825,481 @@ export default async function StudioOrganization({
                   { key: 'vat', label: od.billing.invoiceCols.vat, numeric: true },
                   { key: 'total', label: od.billing.invoiceCols.total, numeric: true },
                   { key: 'status', label: od.billing.invoiceCols.status },
+                  ...(subPanel?.enabled && subPanel.schemaReady
+                    ? [{ key: 'tax', label: od.billing.taxInvoiceLabel }]
+                    : []),
                   { key: 'actions', label: od.billing.invoiceCols.actions },
                 ]}
-                rows={detailOps.invoices.map((inv) => ({
-                  key: inv.id,
-                  data: { 'data-invoice-row': inv.id, 'data-invoice-status': inv.status },
-                  cells: {
-                    period: (
-                      <span className="admin-nowrap">
-                        {inv.period}
-                        {inv.manualAmounts && <span className="admin-cell-sub">{od.billing.manualFlag}</span>}
-                      </span>
-                    ),
-                    plan: b.planNames[inv.planId],
-                    list: (
-                      <span className="admin-nowrap">
-                        {formatKrw(inv.listKrw, locale)}
-                        {inv.baseListKrw !== inv.listKrw && (
-                          <span className="admin-cell-sub">{formatKrw(inv.baseListKrw, locale)}</span>
-                        )}
-                      </span>
-                    ),
-                    proration:
-                      inv.proratedDays != null && inv.periodDays != null
-                        ? `${inv.proratedDays}/${inv.periodDays}d`
-                        : '—',
-                    discount: (
-                      <span className="admin-nowrap">
-                        {inv.discountKrw > 0 ? `-${formatKrw(inv.discountKrw, locale)}` : '0'}
-                        {inv.discountPercent > 0 && <span className="admin-cell-sub">{inv.discountPercent}%</span>}
-                      </span>
-                    ),
-                    supply: formatKrw(inv.supplyKrw, locale),
-                    vat: formatKrw(inv.vatKrw, locale),
-                    total: <strong>{formatKrw(inv.totalKrw, locale)}</strong>,
-                    status: (
-                      <span className="inline-flex flex-col gap-1">
-                        <StatusPill tone={invoiceStatusTone(inv.status, inv.overdue)}>
-                          {od.billing.invoiceStatuses[inv.status]}
-                          {inv.overdue ? ` · ${od.billing.overdueBadge}` : ''}
-                        </StatusPill>
-                        {inv.memo && <span className="admin-cell-sub">{inv.memo}</span>}
-                      </span>
-                    ),
-                    actions: (
-                      <div className="flex flex-col gap-1.5 text-xs" style={{ minWidth: 220 }}>
-                        {inv.status === 'draft' && (
-                          <details>
-                            <summary className="cursor-pointer font-medium text-accent">{od.billing.editDraftToggle}</summary>
-                            <OpForm op="brandBilling.invoice.updateDraft" back={`${backUrl}#billing-invoices`} className="mt-2 grid gap-1.5">
-                              <input type="hidden" name="invoiceId" value={inv.id} />
-                              <select name="planId" defaultValue={inv.planId} className={INPUT}>
-                                {BRAND_PLAN_IDS.map((pid) => (
-                                  <option key={pid} value={pid}>
-                                    {b.planNames[pid]}
-                                  </option>
-                                ))}
-                              </select>
-                              <div className="grid grid-cols-2 gap-1.5">
-                                <input name="baseListKrw" type="number" min={0} defaultValue={inv.baseListKrw} title={od.billing.baseListKrw} className={INPUT} />
-                                <input name="discountPercent" type="number" min={0} max={100} defaultValue={inv.discountPercent} title={od.billing.discountPercentEdit} className={INPUT} />
-                              </div>
-                              <div className="grid grid-cols-2 gap-1.5">
-                                <input name="proratedDays" type="number" min={1} max={31} defaultValue={inv.proratedDays ?? ''} placeholder={od.billing.proratedDays} className={INPUT} />
-                                <input name="periodDays" type="number" min={28} max={31} defaultValue={inv.periodDays ?? ''} placeholder={od.billing.periodDays} className={INPUT} />
-                              </div>
-                              <label className="flex items-center gap-1.5">
-                                <input type="hidden" name="manualAmounts" value="0" />
-                                <input type="checkbox" name="manualAmounts" value="1" defaultChecked={inv.manualAmounts} />
-                                <span>{od.billing.manualAmountsCheck}</span>
-                              </label>
-                              <input name="manualReason" defaultValue={inv.manualReason} placeholder={od.billing.manualReasonLabel} className={INPUT} />
-                              <div className="grid grid-cols-3 gap-1">
-                                <input name="supplyKrw" type="number" min={0} placeholder={od.billing.supplyKrw} className={INPUT} />
-                                <input name="vatKrw" type="number" min={0} placeholder={od.billing.vatKrw} className={INPUT} />
-                                <input name="totalKrw" type="number" min={0} placeholder={od.billing.invoiceCols.total} className={INPUT} />
-                              </div>
-                              <input name="memo" defaultValue={inv.memo} placeholder={od.billing.draftMemo} className={INPUT} />
-                              <button type="submit" className={BUTTON}>
-                                {od.billing.saveDraft}
-                              </button>
-                            </OpForm>
-                          </details>
-                        )}
-                        {inv.status === 'draft' && (
-                          <details>
-                            <summary className="cursor-pointer font-medium text-accent">{od.billing.issueToggle}</summary>
-                            <OpForm op="brandBilling.invoice.issue" back={`${backUrl}#billing-invoices`} className="mt-2 grid gap-1.5">
-                              <input type="hidden" name="invoiceId" value={inv.id} />
-                              <input name="memo" defaultValue={inv.memo} placeholder={od.billing.draftMemo} className={INPUT} />
-                              <ConfirmCheck label={od.billing.confirmIssue} />
-                              <button type="submit" className={BUTTON_PRIMARY}>
-                                {od.billing.issueSubmit}
-                              </button>
-                            </OpForm>
-                          </details>
-                        )}
-                        {inv.status === 'issued' && (
-                          <details>
-                            <summary className="cursor-pointer font-medium text-accent">{od.billing.markPaidToggle}</summary>
-                            <OpForm op="brandBilling.invoice.markPaid" back={`${backUrl}#billing-invoices`} className="mt-2 grid gap-1.5">
-                              <input type="hidden" name="invoiceId" value={inv.id} />
-                              <input name="paidMethod" placeholder={od.billing.paidMethodLabel} required className={INPUT} />
-                              <input name="paidAt" type="date" title={od.billing.paidAtLabel} className={INPUT} />
-                              <input name="memo" defaultValue={inv.memo} placeholder={od.billing.draftMemo} className={INPUT} />
-                              <button type="submit" className={BUTTON_PRIMARY}>
-                                {od.billing.markPaidSubmit}
-                              </button>
-                            </OpForm>
-                          </details>
-                        )}
-                        {(inv.status === 'draft' || inv.status === 'issued') && (
-                          <details>
-                            <summary className="cursor-pointer opacity-75">{od.billing.voidToggle}</summary>
-                            <OpForm op="brandBilling.invoice.void" back={`${backUrl}#billing-invoices`} className="mt-2 grid gap-1.5">
-                              <input type="hidden" name="invoiceId" value={inv.id} />
-                              <input name="reason" placeholder={od.billing.voidReasonLabel} required className={INPUT} />
-                              <ConfirmCheck label={od.billing.confirmVoid} />
-                              <button type="submit" className={BUTTON}>
-                                {od.billing.voidSubmit}
-                              </button>
-                            </OpForm>
-                          </details>
-                        )}
-                        {inv.status === 'paid' && inv.paidAt && (
-                          <span className="admin-cell-sub">
-                            {formatAdminTime(inv.paidAt, locale)}
-                            {inv.paidMethod ? ` · ${inv.paidMethod}` : ''}
-                          </span>
-                        )}
-                        {inv.status === 'void' && inv.voidReason && (
-                          <span className="admin-cell-sub">{inv.voidReason}</span>
-                        )}
-                      </div>
-                    ),
-                  },
-                }))}
+                rows={detailOps.invoices.map((inv) => {
+                  const meta = subPanel?.invoiceMeta[inv.id];
+                  const canRecordTax =
+                    subPanel?.enabled &&
+                    subPanel.schemaReady &&
+                    (inv.status === 'issued' || inv.status === 'paid') &&
+                    (meta?.collectionMethod == null || meta.collectionMethod === 'transfer');
+                  return {
+                    key: inv.id,
+                    data: { 'data-invoice-row': inv.id, 'data-invoice-status': inv.status },
+                    cells: {
+                      period: (
+                        <span className="admin-nowrap">
+                          {inv.period}
+                          {subPanel?.enabled && subPanel.schemaReady && meta?.kind && (
+                            <span className="admin-cell-sub">
+                              {od.billing.invoiceKinds[meta.kind] ?? meta.kind}
+                            </span>
+                          )}
+                          {inv.manualAmounts && <span className="admin-cell-sub">{od.billing.manualFlag}</span>}
+                        </span>
+                      ),
+                      plan: b.planNames[inv.planId],
+                      list: (
+                        <span className="admin-nowrap">
+                          {formatKrw(inv.listKrw, locale)}
+                          {inv.baseListKrw !== inv.listKrw && (
+                            <span className="admin-cell-sub">{formatKrw(inv.baseListKrw, locale)}</span>
+                          )}
+                        </span>
+                      ),
+                      proration:
+                        inv.proratedDays != null && inv.periodDays != null
+                          ? `${inv.proratedDays}/${inv.periodDays}d`
+                          : '—',
+                      discount: (
+                        <span className="admin-nowrap">
+                          {inv.discountKrw > 0 ? `-${formatKrw(inv.discountKrw, locale)}` : '0'}
+                          {inv.discountPercent > 0 && <span className="admin-cell-sub">{inv.discountPercent}%</span>}
+                        </span>
+                      ),
+                      supply: formatKrw(inv.supplyKrw, locale),
+                      vat: formatKrw(inv.vatKrw, locale),
+                      total: <strong>{formatKrw(inv.totalKrw, locale)}</strong>,
+                      status: (
+                        <span className="inline-flex flex-col gap-1">
+                          <StatusPill tone={invoiceStatusTone(inv.status, inv.overdue)}>
+                            {od.billing.invoiceStatuses[inv.status]}
+                            {inv.overdue ? ` · ${od.billing.overdueBadge}` : ''}
+                          </StatusPill>
+                          {subPanel?.enabled && subPanel.schemaReady && meta?.dueOn && (
+                            <span className="admin-cell-sub">
+                              {od.billing.invoiceDueOn}: {meta.dueOn}
+                            </span>
+                          )}
+                          {inv.memo && <span className="admin-cell-sub">{inv.memo}</span>}
+                        </span>
+                      ),
+                      ...(subPanel?.enabled && subPanel.schemaReady
+                        ? {
+                            tax: meta?.taxInvoiceIssuedOn ? (
+                              <span className="text-xs">
+                                <div>{meta.taxInvoiceIssuedOn}</div>
+                                {meta.taxInvoiceRef && <span className="admin-cell-sub">{meta.taxInvoiceRef}</span>}
+                              </span>
+                            ) : (
+                              <span className="text-xs opacity-70">{od.billing.taxInvoiceUnissued}</span>
+                            ),
+                          }
+                        : {}),
+                      actions: (
+                        <div className="flex flex-col gap-1.5 text-xs" style={{ minWidth: 220 }}>
+                          {inv.status === 'draft' && (
+                            <details>
+                              <summary className="cursor-pointer font-medium text-accent">{od.billing.editDraftToggle}</summary>
+                              <OpForm op="brandBilling.invoice.updateDraft" back={`${backUrl}#billing-invoices`} className="mt-2 grid gap-1.5">
+                                <input type="hidden" name="invoiceId" value={inv.id} />
+                                <select name="planId" defaultValue={inv.planId} className={INPUT}>
+                                  {BRAND_PLAN_IDS.map((pid) => (
+                                    <option key={pid} value={pid}>
+                                      {b.planNames[pid]}
+                                    </option>
+                                  ))}
+                                </select>
+                                <div className="grid grid-cols-2 gap-1.5">
+                                  <input name="baseListKrw" type="number" min={0} defaultValue={inv.baseListKrw} title={od.billing.baseListKrw} className={INPUT} />
+                                  <input name="discountPercent" type="number" min={0} max={100} defaultValue={inv.discountPercent} title={od.billing.discountPercentEdit} className={INPUT} />
+                                </div>
+                                <div className="grid grid-cols-2 gap-1.5">
+                                  <input name="proratedDays" type="number" min={1} max={31} defaultValue={inv.proratedDays ?? ''} placeholder={od.billing.proratedDays} className={INPUT} />
+                                  <input name="periodDays" type="number" min={28} max={31} defaultValue={inv.periodDays ?? ''} placeholder={od.billing.periodDays} className={INPUT} />
+                                </div>
+                                <label className="flex items-center gap-1.5">
+                                  <input type="hidden" name="manualAmounts" value="0" />
+                                  <input type="checkbox" name="manualAmounts" value="1" defaultChecked={inv.manualAmounts} />
+                                  <span>{od.billing.manualAmountsCheck}</span>
+                                </label>
+                                <input name="manualReason" defaultValue={inv.manualReason} placeholder={od.billing.manualReasonLabel} className={INPUT} />
+                                <div className="grid grid-cols-3 gap-1">
+                                  <input name="supplyKrw" type="number" min={0} placeholder={od.billing.supplyKrw} className={INPUT} />
+                                  <input name="vatKrw" type="number" min={0} placeholder={od.billing.vatKrw} className={INPUT} />
+                                  <input name="totalKrw" type="number" min={0} placeholder={od.billing.invoiceCols.total} className={INPUT} />
+                                </div>
+                                <input name="memo" defaultValue={inv.memo} placeholder={od.billing.draftMemo} className={INPUT} />
+                                <button type="submit" className={BUTTON}>
+                                  {od.billing.saveDraft}
+                                </button>
+                              </OpForm>
+                            </details>
+                          )}
+                          {inv.status === 'draft' && (
+                            <details>
+                              <summary className="cursor-pointer font-medium text-accent">{od.billing.issueToggle}</summary>
+                              <OpForm op="brandBilling.invoice.issue" back={`${backUrl}#billing-invoices`} className="mt-2 grid gap-1.5">
+                                <input type="hidden" name="invoiceId" value={inv.id} />
+                                <input name="memo" defaultValue={inv.memo} placeholder={od.billing.draftMemo} className={INPUT} />
+                                <ConfirmCheck label={od.billing.confirmIssue} />
+                                <button type="submit" className={BUTTON_PRIMARY}>
+                                  {od.billing.issueSubmit}
+                                </button>
+                              </OpForm>
+                            </details>
+                          )}
+                          {inv.status === 'issued' && (
+                            <details>
+                              <summary className="cursor-pointer font-medium text-accent">{od.billing.markPaidToggle}</summary>
+                              <OpForm op="brandBilling.invoice.markPaid" back={`${backUrl}#billing-invoices`} className="mt-2 grid gap-1.5">
+                                <input type="hidden" name="invoiceId" value={inv.id} />
+                                <input name="paidMethod" placeholder={od.billing.paidMethodLabel} required className={INPUT} />
+                                <input name="paidAt" type="date" title={od.billing.paidAtLabel} className={INPUT} />
+                                <input name="memo" defaultValue={inv.memo} placeholder={od.billing.draftMemo} className={INPUT} />
+                                <button type="submit" className={BUTTON_PRIMARY}>
+                                  {od.billing.markPaidSubmit}
+                                </button>
+                              </OpForm>
+                            </details>
+                          )}
+                          {(inv.status === 'draft' || inv.status === 'issued') && (
+                            <details>
+                              <summary className="cursor-pointer opacity-75">{od.billing.voidToggle}</summary>
+                              <OpForm op="brandBilling.invoice.void" back={`${backUrl}#billing-invoices`} className="mt-2 grid gap-1.5">
+                                <input type="hidden" name="invoiceId" value={inv.id} />
+                                <input name="reason" placeholder={od.billing.voidReasonLabel} required className={INPUT} />
+                                <ConfirmCheck label={od.billing.confirmVoid} />
+                                <button type="submit" className={BUTTON}>
+                                  {od.billing.voidSubmit}
+                                </button>
+                              </OpForm>
+                            </details>
+                          )}
+                          {canRecordTax && (
+                            <details>
+                              <summary className="cursor-pointer font-medium text-accent">{od.billing.taxInvoiceToggle}</summary>
+                              <OpForm op="brandBilling.invoice.recordTaxInvoice" back={`${backUrl}#billing-invoices`} className="mt-2 grid gap-1.5">
+                                <input type="hidden" name="invoiceId" value={inv.id} />
+                                <input
+                                  name="issuedOn"
+                                  type="date"
+                                  defaultValue={meta?.taxInvoiceIssuedOn ?? todayKst}
+                                  required
+                                  title={od.billing.taxInvoiceIssuedOnLabel}
+                                  className={INPUT}
+                                />
+                                <input
+                                  name="ref"
+                                  defaultValue={meta?.taxInvoiceRef ?? ''}
+                                  placeholder={od.billing.taxInvoiceRefLabel}
+                                  required
+                                  maxLength={120}
+                                  className={INPUT}
+                                />
+                                <button type="submit" className={BUTTON}>
+                                  {od.billing.taxInvoiceSubmit}
+                                </button>
+                              </OpForm>
+                            </details>
+                          )}
+                          {inv.status === 'paid' && inv.paidAt && (
+                            <span className="admin-cell-sub">
+                              {formatAdminTime(inv.paidAt, locale)}
+                              {inv.paidMethod ? ` · ${inv.paidMethod}` : ''}
+                            </span>
+                          )}
+                          {inv.status === 'void' && inv.voidReason && (
+                            <span className="admin-cell-sub">{inv.voidReason}</span>
+                          )}
+                          {inv.status === 'void' && meta?.taxInvoiceIssuedOn && (
+                            <span className="admin-cell-sub" data-void-needs-corrective-tax-invoice>
+                              {od.billing.invoiceVoidNeedsCorrection}
+                            </span>
+                          )}
+                          {inv.status === 'void' &&
+                            subPanel?.facts?.waivedPeriods.includes(inv.period) &&
+                            inv.period < subPanel.facts.currentPeriod && (
+                              <span className="admin-cell-sub" data-waived-period>
+                                {od.billing.subscriptionWaivedPastLabel}
+                              </span>
+                            )}
+                        </div>
+                      ),
+                    },
+                  };
+                })}
                 empty={od.billing.noInvoices}
               />
             </>
           )}
         </Panel>
+
+        {subPanel?.enabled && (
+          <Panel title={od.billing.subscriptionHeading} id="billing-subscription">
+            {!subPanel.schemaReady ? (
+              <p className="admin-notice" data-org-subscription-unmigrated>
+                {od.billing.subscriptionUnconfigured}
+              </p>
+            ) : (
+              <div className="grid gap-4" data-org-subscription>
+                {sub ? (
+                  <>
+                    <div className="grid gap-2 sm:grid-cols-3 text-xs rounded border border-hairline p-3">
+                      <div>
+                        <span className="opacity-70 block">{od.billing.subscriptionPlan}</span>
+                        <strong>{b.planNames[sub.planId]}</strong>{' '}
+                        <StatusPill tone={subStatusTone(sub.status)}>
+                          {od.billing.subscriptionStatuses[sub.status]}
+                        </StatusPill>
+                        {sub.pendingPlanId && (
+                          <div className="mt-1 text-xs opacity-85">
+                            {od.billing.subscriptionPendingDowngrade}: <strong>{b.planNames[sub.pendingPlanId]}</strong>
+                          </div>
+                        )}
+                      </div>
+                      <div>
+                        <span className="opacity-70 block">{od.billing.subscriptionStartedOn}</span>
+                        <div>
+                          {sub.startedOn} · {od.billing.subscriptionCollectionTransfer}
+                        </div>
+                        <div className="opacity-80">
+                          {od.billing.subscriptionEndsOn}: {subPanel.endsOn ?? '—'}
+                        </div>
+                        {sub.activatedBeforePayment && (
+                          <div className="opacity-80">{od.billing.subscriptionActivatedEarly}</div>
+                        )}
+                      </div>
+                      <div>
+                        <span className="opacity-70 block">
+                          {od.billing.subscriptionNextDraft} / {od.billing.subscriptionNextIssue}
+                        </span>
+                        <div>
+                          {subPanel.calendar.nextDraftOpenDay} / {subPanel.calendar.nextIssueDay}
+                        </div>
+                        {subPanel.oldestUnpaid && (
+                          <div className="opacity-85">
+                            {od.billing.subscriptionOldestUnpaid}: {subPanel.oldestUnpaid.period} (
+                            {subPanel.oldestUnpaid.dueOn ?? '—'}, {formatKrw(subPanel.oldestUnpaid.totalKrw, locale)})
+                          </div>
+                        )}
+                        {sub.cancelAtPeriodEnd && (
+                          <div className="mt-1">
+                            <StatusPill tone="action">{od.billing.subscriptionCancelScheduled}</StatusPill>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+
+                    {sub.reconcileFailures > 0 && (
+                      <p className="admin-notice" data-subscription-reconcile-failures>
+                        {interpolate(od.billing.subscriptionReconcileFailures, {
+                          count: String(sub.reconcileFailures),
+                          code: sub.lastReconcileError ?? '—',
+                        })}
+                      </p>
+                    )}
+                    {subPanel.facts && subPanel.facts.blockedByOlderEpoch.length > 0 && (
+                      <p className="admin-notice" data-subscription-older-epoch>
+                        {interpolate(od.billing.subscriptionBlockedByOlderEpoch, {
+                          list: subPanel.facts.blockedByOlderEpoch.join(', '),
+                        })}
+                      </p>
+                    )}
+                    {subPanel.facts && sub.status !== 'ended' && subPanel.facts.graceDays < 1 && (
+                      <p className="admin-notice" data-subscription-grace-warning>
+                        {od.billing.subscriptionGraceZeroWarning}
+                      </p>
+                    )}
+                    {subPanel.facts &&
+                      sub.status !== 'ended' &&
+                      (subPanel.facts.needsReissue || subPanel.facts.currentPeriodWaived) && (
+                        <div
+                          className="rounded border border-hairline p-3 text-xs grid gap-2.5"
+                          data-voided-period-alert
+                          {...(subPanel.facts.needsReissue ? { 'data-needs-reissue': '' } : {})}
+                        >
+                          <p className="font-semibold">
+                            {subPanel.facts.needsReissue
+                              ? od.billing.subscriptionNeedsReissueAlert
+                              : od.billing.subscriptionWaivedCurrentAlert}
+                          </p>
+                          {!sub.cancelAtPeriodEnd && (
+                            <OpForm
+                              op="brandSubscription.reissuePeriod"
+                              back={`${backUrl}#billing-subscription`}
+                              className="flex flex-wrap items-center gap-3"
+                            >
+                              <input type="hidden" name="organizationId" value={id} />
+                              <input type="hidden" name="period" value={subPanel.facts.currentPeriod} />
+                              {reissuePreviewDigest && (
+                                <input type="hidden" name="previewDigest" value={reissuePreviewDigest} />
+                              )}
+                              {reissueShortWindow && (
+                                <p className="admin-notice w-full" data-reissue-short-window>
+                                  {od.billing.subscriptionShortWindowWarning}
+                                </p>
+                              )}
+                              <label className="flex items-center gap-1.5">
+                                <input type="checkbox" name="confirm" value="1" />
+                                <span>
+                                  {interpolate(od.billing.subscriptionReissueConfirm, {
+                                    period: subPanel.facts.currentPeriod,
+                                  })}
+                                </span>
+                              </label>
+                              <button type="submit" className={BUTTON_PRIMARY}>
+                                {od.billing.subscriptionReissueSubmit}
+                              </button>
+                            </OpForm>
+                          )}
+                        </div>
+                      )}
+
+                    {sub.status !== 'ended' && (
+                      <div className="flex flex-wrap items-end gap-4">
+                        {!sub.cancelAtPeriodEnd && (
+                          <OpForm op="brandSubscription.scheduleDowngrade" back={`${backUrl}#billing-subscription`} className="flex flex-wrap items-end gap-2">
+                            <input type="hidden" name="organizationId" value={id} />
+                            <label className="text-xs">
+                              <span className="font-semibold block mb-1">{od.billing.subscriptionScheduleDowngrade}</span>
+                              <select name="planId" defaultValue={sub.pendingPlanId ?? 'b2b_29'} className={INPUT}>
+                                {PAID_BRAND_PLAN_IDS.filter((pid) => pid !== sub.planId).map((pid) => (
+                                  <option key={pid} value={pid}>
+                                    {b.planNames[pid]} · {formatKrw(BRAND_PLANS[pid].monthlyKrw, locale)}
+                                  </option>
+                                ))}
+                              </select>
+                            </label>
+                            <button type="submit" className={BUTTON}>
+                              {od.billing.subscriptionScheduleDowngradeSubmit}
+                            </button>
+                          </OpForm>
+                        )}
+
+                        {sub.pendingPlanId && (
+                          <OpForm op="brandSubscription.clearPendingPlan" back={`${backUrl}#billing-subscription`}>
+                            <input type="hidden" name="organizationId" value={id} />
+                            <button type="submit" className={BUTTON}>
+                              {od.billing.subscriptionClearPendingPlan}
+                            </button>
+                          </OpForm>
+                        )}
+
+                        {!sub.cancelAtPeriodEnd ? (
+                          <OpForm op="brandSubscription.cancel" back={`${backUrl}#billing-subscription`} className="flex flex-wrap items-center gap-2">
+                            <input type="hidden" name="organizationId" value={id} />
+                            <ConfirmCheck
+                              label={
+                                subPanel.facts?.nothingPaid
+                                  ? od.billing.subscriptionCancelConfirmUnpaid
+                                  : od.billing.subscriptionCancelConfirm
+                              }
+                            />
+                            <button type="submit" className={BUTTON}>
+                              {od.billing.subscriptionCancelSubmit}
+                            </button>
+                          </OpForm>
+                        ) : (
+                          <OpForm op="brandSubscription.undoCancel" back={`${backUrl}#billing-subscription`}>
+                            <input type="hidden" name="organizationId" value={id} />
+                            <button type="submit" className={BUTTON}>
+                              {od.billing.subscriptionUndoCancelSubmit}
+                            </button>
+                          </OpForm>
+                        )}
+
+                        <OpForm op="brandSubscription.reconcile" back={`${backUrl}#billing-subscription`}>
+                          <input type="hidden" name="organizationId" value={id} />
+                          <button type="submit" className={BUTTON_PRIMARY}>
+                            {od.billing.subscriptionReconcileSubmit}
+                          </button>
+                        </OpForm>
+                      </div>
+                    )}
+                  </>
+                ) : (
+                  <p className="admin-field-hint">{od.billing.subscriptionNone}</p>
+                )}
+
+                {(!sub || sub.status === 'ended') && !isSandboxedOrg && (
+                  <OpForm op="brandSubscription.start" back={`${backUrl}#billing-subscription`} className="grid gap-3 border-t border-hairline pt-3">
+                    <h3 className="text-xs font-semibold">{od.billing.subscriptionStartHeading}</h3>
+                    <p className="admin-field-hint" data-subscription-start-note>
+                      {od.billing.subscriptionStartNote}
+                    </p>
+                    {startShortWindow && (
+                      <p className="admin-notice" data-subscription-short-window>
+                        {od.billing.subscriptionShortWindowWarning}
+                      </p>
+                    )}
+                    <input type="hidden" name="organizationId" value={id} />
+                    <input type="hidden" name="collectionMethod" value="transfer" />
+                    {startPreviewMatch && (
+                      <>
+                        <input type="hidden" name="previewPlanId" value={startPreviewPlan} />
+                        <input type="hidden" name="previewStartedOn" value={startPreviewDate} />
+                        <input
+                          type="hidden"
+                          name="previewActivateBeforePayment"
+                          value={startPreviewEarly ? '1' : '0'}
+                        />
+                        {startPreviewDigest && <input type="hidden" name="previewDigest" value={startPreviewDigest} />}
+                      </>
+                    )}
+                    <div className="grid gap-3 sm:grid-cols-3">
+                      <label className="text-xs">
+                        <span className="font-semibold block mb-1">{od.billing.subscriptionStartPlan}</span>
+                        <select name="planId" defaultValue={startPreviewPlan ?? 'b2b_29'} className={INPUT}>
+                          {PAID_BRAND_PLAN_IDS.map((pid) => (
+                            <option key={pid} value={pid}>
+                              {b.planNames[pid]} · {formatKrw(BRAND_PLANS[pid].monthlyKrw, locale)}
+                            </option>
+                          ))}
+                        </select>
+                      </label>
+                      <label className="text-xs">
+                        <span className="font-semibold block mb-1">{od.billing.subscriptionStartDate}</span>
+                        <input
+                          name="startedOn"
+                          type="date"
+                          defaultValue={startPreviewDate ?? todayKst}
+                          required
+                          className={INPUT}
+                        />
+                      </label>
+                      <div className="text-xs flex flex-col gap-1.5 justify-end">
+                        <label className="flex items-center gap-1.5">
+                          <input
+                            type="checkbox"
+                            name="activateBeforePayment"
+                            value="1"
+                            defaultChecked={startPreviewEarly}
+                          />
+                          <span>{od.billing.subscriptionActivateEarly}</span>
+                        </label>
+                        <label className="flex items-center gap-1.5">
+                          <input type="checkbox" name="confirm" value="1" />
+                          <span>{od.billing.subscriptionConfirmEarly}</span>
+                        </label>
+                      </div>
+                    </div>
+                    <ConfirmCheck label={od.billing.confirmIssue} />
+                    <div>
+                      <button type="submit" className={BUTTON_PRIMARY}>
+                        {od.billing.subscriptionStartSubmit}
+                      </button>
+                    </div>
+                  </OpForm>
+                )}
+              </div>
+            )}
+          </Panel>
+        )}
       </section>
 
       <div id="brand-members" className="bw-grid-wide mt-6">

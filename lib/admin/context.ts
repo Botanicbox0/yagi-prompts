@@ -167,6 +167,8 @@ export type AdminErrorCode =
   | 'paymentWrongEnvironment'
   | 'paymentCooldown'
   | 'paymentUnavailable'
+  | 'disabled'
+  | 'not_available_yet'
   | 'unknown';
 
 export interface AdminSuccess {

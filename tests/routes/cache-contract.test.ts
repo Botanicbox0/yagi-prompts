@@ -736,6 +736,8 @@ describe('render queue (docs/TEMPLATES-IA.md §8)', () => {
       // Project room notices (docs/BRAND-ROOMS-FEEDBACK.md §2.2): every 10 minutes, which needs Vercel Pro
       // (docs/SCALE-RISKS-2026-11.md R-02). The bundled mail's 10-minute wait is measured on this tick.
       { path: '/api/brand-rooms/notices/tick', schedule: '*/10 * * * *' },
+      // Brand B2B recurring billing (docs/BRAND-RECURRING-BILLING.md §14, B1a): hourly.
+      { path: '/api/brand-billing/tick', schedule: '0 * * * *' },
     ]);
   });
 

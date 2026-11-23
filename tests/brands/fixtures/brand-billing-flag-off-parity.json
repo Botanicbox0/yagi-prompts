@@ -1,0 +1,1314 @@
+{
+ "note": "Recorded from origin/main (aaf4fbcf) lib/brands/billing/invoices.ts and lib/brands/plans.ts with BRAND_BILLING_AUTO_ISSUE off; SQL whitespace collapsed, UUIDs replaced by <uuid>. The flag-off parity test replays the same scenario against the current code on the post-0182 and the pre-0182 schema and must match exactly.",
+ "ops": [
+  {
+   "op": "setPlan",
+   "log": [
+    {
+     "text": "begin",
+     "params": []
+    },
+    {
+     "text": "select is_admin from profiles where id = $1 for key share",
+     "params": [
+      "<uuid>"
+     ]
+    },
+    {
+     "text": "select id from brand_organizations where id = $1 for update",
+     "params": [
+      "<uuid>"
+     ]
+    },
+    {
+     "text": "select revision from brand_plan_assignments where organization_id = $1 for update",
+     "params": [
+      "<uuid>"
+     ]
+    },
+    {
+     "text": "insert into brand_plan_assignments (organization_id, plan_id, billing_mode, started_on, ends_on, seats, note, revision, updated_by, updated_at) values ($1, $2, $3, $4::date, $5::date, $6, $7, $8, $9, now()) on conflict (organization_id) do update set plan_id = excluded.plan_id, billing_mode = excluded.billing_mode, started_on = excluded.started_on, ends_on = excluded.ends_on, seats = excluded.seats, note = excluded.note, revision = excluded.revision, updated_by = excluded.updated_by, updated_at = now()",
+     "params": [
+      "<uuid>",
+      "b2b_29",
+      "invoice",
+      "2026-11-05",
+      null,
+      null,
+      "x",
+      1,
+      "<uuid>"
+     ]
+    },
+    {
+     "text": "insert into brand_plan_events (organization_id, plan_id, billing_mode, started_on, ends_on, seats, note, actor_id) values ($1, $2, $3, $4::date, $5::date, $6, $7, $8)",
+     "params": [
+      "<uuid>",
+      "b2b_29",
+      "invoice",
+      "2026-11-05",
+      null,
+      null,
+      "x",
+      "<uuid>"
+     ]
+    },
+    {
+     "text": "select to_regclass('public.brand_studio_allowances') is not null as allowances, exists ( select 1 from pg_attribute where attrelid = to_regclass('public.brand_studio_allowances') and attname = 'is_override' and not attisdropped ) as override_col, to_regclass('public.brand_plan_assignments') is not null as plans, to_regclass('public.brand_plan_allowance_defaults') is not null as plan_defaults, to_regclass('public.brand_allowance_grants') is not null as grants",
+     "params": []
+    },
+    {
+     "text": "select is_override from brand_studio_allowances where organization_id = $1 for update",
+     "params": [
+      "<uuid>"
+     ]
+    },
+    {
+     "text": "select p.plan_id, p.started_on::text as started_on, p.ends_on::text as ends_on, d.monthly_cap_krw as default_cap from brand_plan_assignments p left join brand_plan_allowance_defaults d on d.plan_id = p.plan_id where p.organization_id = $1",
+     "params": [
+      "<uuid>"
+     ]
+    },
+    {
+     "text": "commit",
+     "params": []
+    }
+   ],
+   "result": {
+    "ok": true,
+    "id": "<uuid>",
+    "revision": 1
+   }
+  },
+  {
+   "op": "draft",
+   "log": [
+    {
+     "text": "begin",
+     "params": []
+    },
+    {
+     "text": "select is_admin from profiles where id = $1 for key share",
+     "params": [
+      "<uuid>"
+     ]
+    },
+    {
+     "text": "select t.name from unnest($1::text[]) as t(name) where to_regclass($2 || t.name) is not null",
+     "params": [
+      [
+       "brand_invoices",
+       "brand_invoice_events"
+      ],
+      "public."
+     ]
+    },
+    {
+     "text": "select id from brand_organizations where id = $1 for update",
+     "params": [
+      "<uuid>"
+     ]
+    },
+    {
+     "text": "select 1 from brand_invoices where organization_id = $1 and period = $2 and status <> 'void' limit 1",
+     "params": [
+      "<uuid>",
+      "2026-11"
+     ]
+    },
+    {
+     "text": "select plan_id, billing_mode, started_on::text as started_on, ends_on::text as ends_on, seats, note, revision, updated_at from brand_plan_assignments where organization_id = $1",
+     "params": [
+      "<uuid>"
+     ]
+    },
+    {
+     "text": "select to_regclass($1) is not null as ok",
+     "params": [
+      "public.brand_discounts"
+     ]
+    },
+    {
+     "text": "select id, percent, invoices_total, invoices_used from brand_discounts where organization_id = $1 and status = 'active' for share",
+     "params": [
+      "<uuid>"
+     ]
+    },
+    {
+     "text": "insert into brand_invoices ( id, organization_id, period, plan_id, base_list_krw, list_krw, prorated_days, period_days, discount_id, discount_percent, discount_krw, supply_krw, vat_krw, total_krw, manual_amounts, manual_reason, status, memo, created_by, created_at, updated_by, updated_at ) values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, 'draft', $17, $18, $19::timestamptz, $18, $19::timestamptz) returning *",
+     "params": [
+      "<uuid>",
+      "<uuid>",
+      "2026-11",
+      "b2b_29",
+      290000,
+      251333,
+      26,
+      30,
+      "<uuid>",
+      20,
+      50266,
+      201067,
+      20106,
+      221173,
+      false,
+      "",
+      "",
+      "<uuid>",
+      "2026-11-10T01:00:00.000Z"
+     ]
+    },
+    {
+     "text": "insert into brand_invoice_events ( invoice_id, organization_id, action, from_status, to_status, snapshot, note, actor_id, created_at ) values ($1, $2, $3, $4, $5, $6::jsonb, $7, $8, $9::timestamptz)",
+     "params": [
+      "<uuid>",
+      "<uuid>",
+      "drafted",
+      null,
+      "draft",
+      "{\"period\":\"2026-11\",\"planId\":\"b2b_29\",\"baseListKrw\":290000,\"listKrw\":251333,\"proratedDays\":26,\"periodDays\":30,\"discountId\":\"<uuid>\",\"discountPercent\":20,\"discountKrw\":50266,\"supplyKrw\":201067,\"vatKrw\":20106,\"totalKrw\":221173,\"manualAmounts\":false,\"manualReason\":\"\",\"status\":\"draft\"}",
+      "",
+      "<uuid>",
+      "2026-11-10T01:00:00.000Z"
+     ]
+    },
+    {
+     "text": "commit",
+     "params": []
+    }
+   ],
+   "result": {
+    "ok": true,
+    "invoice": {
+     "id": "<uuid>",
+     "organizationId": "<uuid>",
+     "period": "2026-11",
+     "planId": "b2b_29",
+     "baseListKrw": 290000,
+     "listKrw": 251333,
+     "proratedDays": 26,
+     "periodDays": 30,
+     "discountId": "<uuid>",
+     "discountPercent": 20,
+     "discountKrw": 50266,
+     "supplyKrw": 201067,
+     "vatKrw": 20106,
+     "totalKrw": 221173,
+     "manualAmounts": false,
+     "manualReason": "",
+     "status": "draft",
+     "overdue": false,
+     "issuedAt": null,
+     "issuedBy": null,
+     "paidAt": null,
+     "paidBy": null,
+     "paidMethod": "",
+     "voidedAt": null,
+     "voidedBy": null,
+     "voidReason": "",
+     "memo": "",
+     "createdBy": "<uuid>",
+     "createdAt": "2026-11-10T01:00:00.000Z",
+     "updatedBy": "<uuid>",
+     "updatedAt": "2026-11-10T01:00:00.000Z"
+    }
+   }
+  },
+  {
+   "op": "updateDraft",
+   "log": [
+    {
+     "text": "begin",
+     "params": []
+    },
+    {
+     "text": "select is_admin from profiles where id = $1 for key share",
+     "params": [
+      "<uuid>"
+     ]
+    },
+    {
+     "text": "select t.name from unnest($1::text[]) as t(name) where to_regclass($2 || t.name) is not null",
+     "params": [
+      [
+       "brand_invoices",
+       "brand_invoice_events"
+      ],
+      "public."
+     ]
+    },
+    {
+     "text": "select * from brand_invoices where id = $1 for update",
+     "params": [
+      "<uuid>"
+     ]
+    },
+    {
+     "text": "select organization_id from brand_discounts where id = $1",
+     "params": [
+      "<uuid>"
+     ]
+    },
+    {
+     "text": "update brand_invoices set plan_id = $2, base_list_krw = $3, list_krw = $4, prorated_days = $5, period_days = $6, discount_id = $7, discount_percent = $8, discount_krw = $9, supply_krw = $10, vat_krw = $11, total_krw = $12, manual_amounts = $13, manual_reason = $14, memo = $15, updated_by = $16, updated_at = $17::timestamptz where id = $1 and status = 'draft' returning *",
+     "params": [
+      "<uuid>",
+      "b2b_29",
+      290000,
+      251333,
+      26,
+      30,
+      "<uuid>",
+      20,
+      50266,
+      201067,
+      20106,
+      221173,
+      false,
+      "",
+      "edited",
+      "<uuid>",
+      "2026-11-10T01:00:00.000Z"
+     ]
+    },
+    {
+     "text": "insert into brand_invoice_events ( invoice_id, organization_id, action, from_status, to_status, snapshot, note, actor_id, created_at ) values ($1, $2, $3, $4, $5, $6::jsonb, $7, $8, $9::timestamptz)",
+     "params": [
+      "<uuid>",
+      "<uuid>",
+      "edited",
+      "draft",
+      "draft",
+      "{\"period\":\"2026-11\",\"planId\":\"b2b_29\",\"baseListKrw\":290000,\"listKrw\":251333,\"proratedDays\":26,\"periodDays\":30,\"discountId\":\"<uuid>\",\"discountPercent\":20,\"discountKrw\":50266,\"supplyKrw\":201067,\"vatKrw\":20106,\"totalKrw\":221173,\"manualAmounts\":false,\"manualReason\":\"\",\"status\":\"draft\"}",
+      "edited",
+      "<uuid>",
+      "2026-11-10T01:00:00.000Z"
+     ]
+    },
+    {
+     "text": "commit",
+     "params": []
+    }
+   ],
+   "result": {
+    "ok": true,
+    "invoice": {
+     "id": "<uuid>",
+     "organizationId": "<uuid>",
+     "period": "2026-11",
+     "planId": "b2b_29",
+     "baseListKrw": 290000,
+     "listKrw": 251333,
+     "proratedDays": 26,
+     "periodDays": 30,
+     "discountId": "<uuid>",
+     "discountPercent": 20,
+     "discountKrw": 50266,
+     "supplyKrw": 201067,
+     "vatKrw": 20106,
+     "totalKrw": 221173,
+     "manualAmounts": false,
+     "manualReason": "",
+     "status": "draft",
+     "overdue": false,
+     "issuedAt": null,
+     "issuedBy": null,
+     "paidAt": null,
+     "paidBy": null,
+     "paidMethod": "",
+     "voidedAt": null,
+     "voidedBy": null,
+     "voidReason": "",
+     "memo": "edited",
+     "createdBy": "<uuid>",
+     "createdAt": "2026-11-10T01:00:00.000Z",
+     "updatedBy": "<uuid>",
+     "updatedAt": "2026-11-10T01:00:00.000Z"
+    }
+   }
+  },
+  {
+   "op": "issue",
+   "log": [
+    {
+     "text": "begin",
+     "params": []
+    },
+    {
+     "text": "select is_admin from profiles where id = $1 for key share",
+     "params": [
+      "<uuid>"
+     ]
+    },
+    {
+     "text": "select t.name from unnest($1::text[]) as t(name) where to_regclass($2 || t.name) is not null",
+     "params": [
+      [
+       "brand_invoices",
+       "brand_invoice_events"
+      ],
+      "public."
+     ]
+    },
+    {
+     "text": "select * from brand_invoices where id = $1 for update",
+     "params": [
+      "<uuid>"
+     ]
+    },
+    {
+     "text": "update brand_invoices set status = 'issued', issued_at = $2::timestamptz, issued_by = $3, memo = $4, updated_by = $3, updated_at = $2::timestamptz where id = $1 and status = 'draft' returning *",
+     "params": [
+      "<uuid>",
+      "2026-11-10T01:00:00.000Z",
+      "<uuid>",
+      "edited"
+     ]
+    },
+    {
+     "text": "update brand_discounts set invoices_used = invoices_used + 1, status = case when invoices_total is not null and invoices_used + 1 >= invoices_total then 'ended' else 'active' end, ended_at = case when invoices_total is not null and invoices_used + 1 >= invoices_total then $2::timestamptz else ended_at end, ended_by = case when invoices_total is not null and invoices_used + 1 >= invoices_total then $3 else ended_by end, end_reason = case when invoices_total is not null and invoices_used + 1 >= invoices_total then 'exhausted' else end_reason end where id = $1 and ($4::uuid is null or organization_id = $4) and status = 'active' and (invoices_total is null or invoices_used < invoices_total) returning id, invoices_used, invoices_total, status, end_reason",
+     "params": [
+      "<uuid>",
+      "2026-11-10T01:00:00.000Z",
+      "<uuid>",
+      "<uuid>"
+     ]
+    },
+    {
+     "text": "insert into brand_invoice_events ( invoice_id, organization_id, action, from_status, to_status, snapshot, note, actor_id, created_at ) values ($1, $2, $3, $4, $5, $6::jsonb, $7, $8, $9::timestamptz)",
+     "params": [
+      "<uuid>",
+      "<uuid>",
+      "issued",
+      "draft",
+      "issued",
+      "{\"period\":\"2026-11\",\"planId\":\"b2b_29\",\"baseListKrw\":290000,\"listKrw\":251333,\"proratedDays\":26,\"periodDays\":30,\"discountId\":\"<uuid>\",\"discountPercent\":20,\"discountKrw\":50266,\"supplyKrw\":201067,\"vatKrw\":20106,\"totalKrw\":221173,\"manualAmounts\":false,\"manualReason\":\"\",\"status\":\"issued\"}",
+      "edited",
+      "<uuid>",
+      "2026-11-10T01:00:00.000Z"
+     ]
+    },
+    {
+     "text": "commit",
+     "params": []
+    }
+   ],
+   "result": {
+    "ok": true,
+    "invoice": {
+     "id": "<uuid>",
+     "organizationId": "<uuid>",
+     "period": "2026-11",
+     "planId": "b2b_29",
+     "baseListKrw": 290000,
+     "listKrw": 251333,
+     "proratedDays": 26,
+     "periodDays": 30,
+     "discountId": "<uuid>",
+     "discountPercent": 20,
+     "discountKrw": 50266,
+     "supplyKrw": 201067,
+     "vatKrw": 20106,
+     "totalKrw": 221173,
+     "manualAmounts": false,
+     "manualReason": "",
+     "status": "issued",
+     "overdue": false,
+     "issuedAt": "2026-11-10T01:00:00.000Z",
+     "issuedBy": "<uuid>",
+     "paidAt": null,
+     "paidBy": null,
+     "paidMethod": "",
+     "voidedAt": null,
+     "voidedBy": null,
+     "voidReason": "",
+     "memo": "edited",
+     "createdBy": "<uuid>",
+     "createdAt": "2026-11-10T01:00:00.000Z",
+     "updatedBy": "<uuid>",
+     "updatedAt": "2026-11-10T01:00:00.000Z"
+    }
+   }
+  },
+  {
+   "op": "markPaid",
+   "log": [
+    {
+     "text": "begin",
+     "params": []
+    },
+    {
+     "text": "select is_admin from profiles where id = $1 for key share",
+     "params": [
+      "<uuid>"
+     ]
+    },
+    {
+     "text": "select t.name from unnest($1::text[]) as t(name) where to_regclass($2 || t.name) is not null",
+     "params": [
+      [
+       "brand_invoices",
+       "brand_invoice_events"
+      ],
+      "public."
+     ]
+    },
+    {
+     "text": "select * from brand_invoices where id = $1 for update",
+     "params": [
+      "<uuid>"
+     ]
+    },
+    {
+     "text": "update brand_invoices set status = 'paid', paid_at = $2::timestamptz, paid_by = $3, paid_method = $4, memo = $5, updated_by = $3, updated_at = $6::timestamptz where id = $1 returning *",
+     "params": [
+      "<uuid>",
+      "2026-11-10T01:00:00.000Z",
+      "<uuid>",
+      "wire",
+      "edited",
+      "2026-11-10T01:00:00.000Z"
+     ]
+    },
+    {
+     "text": "insert into brand_invoice_events ( invoice_id, organization_id, action, from_status, to_status, snapshot, note, actor_id, created_at ) values ($1, $2, $3, $4, $5, $6::jsonb, $7, $8, $9::timestamptz)",
+     "params": [
+      "<uuid>",
+      "<uuid>",
+      "paid",
+      "issued",
+      "paid",
+      "{\"period\":\"2026-11\",\"planId\":\"b2b_29\",\"baseListKrw\":290000,\"listKrw\":251333,\"proratedDays\":26,\"periodDays\":30,\"discountId\":\"<uuid>\",\"discountPercent\":20,\"discountKrw\":50266,\"supplyKrw\":201067,\"vatKrw\":20106,\"totalKrw\":221173,\"manualAmounts\":false,\"manualReason\":\"\",\"status\":\"paid\",\"paidAt\":\"2026-11-10T01:00:00.000Z\",\"paidMethod\":\"wire\"}",
+      "wire",
+      "<uuid>",
+      "2026-11-10T01:00:00.000Z"
+     ]
+    },
+    {
+     "text": "commit",
+     "params": []
+    }
+   ],
+   "result": {
+    "ok": true,
+    "invoice": {
+     "id": "<uuid>",
+     "organizationId": "<uuid>",
+     "period": "2026-11",
+     "planId": "b2b_29",
+     "baseListKrw": 290000,
+     "listKrw": 251333,
+     "proratedDays": 26,
+     "periodDays": 30,
+     "discountId": "<uuid>",
+     "discountPercent": 20,
+     "discountKrw": 50266,
+     "supplyKrw": 201067,
+     "vatKrw": 20106,
+     "totalKrw": 221173,
+     "manualAmounts": false,
+     "manualReason": "",
+     "status": "paid",
+     "overdue": false,
+     "issuedAt": "2026-11-10T01:00:00.000Z",
+     "issuedBy": "<uuid>",
+     "paidAt": "2026-11-10T01:00:00.000Z",
+     "paidBy": "<uuid>",
+     "paidMethod": "wire",
+     "voidedAt": null,
+     "voidedBy": null,
+     "voidReason": "",
+     "memo": "edited",
+     "createdBy": "<uuid>",
+     "createdAt": "2026-11-10T01:00:00.000Z",
+     "updatedBy": "<uuid>",
+     "updatedAt": "2026-11-10T01:00:00.000Z"
+    }
+   }
+  },
+  {
+   "op": "markPaidAgain",
+   "log": [
+    {
+     "text": "begin",
+     "params": []
+    },
+    {
+     "text": "select is_admin from profiles where id = $1 for key share",
+     "params": [
+      "<uuid>"
+     ]
+    },
+    {
+     "text": "select t.name from unnest($1::text[]) as t(name) where to_regclass($2 || t.name) is not null",
+     "params": [
+      [
+       "brand_invoices",
+       "brand_invoice_events"
+      ],
+      "public."
+     ]
+    },
+    {
+     "text": "select * from brand_invoices where id = $1 for update",
+     "params": [
+      "<uuid>"
+     ]
+    },
+    {
+     "text": "commit",
+     "params": []
+    }
+   ],
+   "result": {
+    "ok": false,
+    "code": "conflict"
+   }
+  },
+  {
+   "op": "draft2",
+   "log": [
+    {
+     "text": "begin",
+     "params": []
+    },
+    {
+     "text": "select is_admin from profiles where id = $1 for key share",
+     "params": [
+      "<uuid>"
+     ]
+    },
+    {
+     "text": "select t.name from unnest($1::text[]) as t(name) where to_regclass($2 || t.name) is not null",
+     "params": [
+      [
+       "brand_invoices",
+       "brand_invoice_events"
+      ],
+      "public."
+     ]
+    },
+    {
+     "text": "select id from brand_organizations where id = $1 for update",
+     "params": [
+      "<uuid>"
+     ]
+    },
+    {
+     "text": "select 1 from brand_invoices where organization_id = $1 and period = $2 and status <> 'void' limit 1",
+     "params": [
+      "<uuid>",
+      "2026-12"
+     ]
+    },
+    {
+     "text": "select plan_id, billing_mode, started_on::text as started_on, ends_on::text as ends_on, seats, note, revision, updated_at from brand_plan_assignments where organization_id = $1",
+     "params": [
+      "<uuid>"
+     ]
+    },
+    {
+     "text": "select to_regclass($1) is not null as ok",
+     "params": [
+      "public.brand_discounts"
+     ]
+    },
+    {
+     "text": "select id, percent, invoices_total, invoices_used from brand_discounts where organization_id = $1 and status = 'active' for share",
+     "params": [
+      "<uuid>"
+     ]
+    },
+    {
+     "text": "insert into brand_invoices ( id, organization_id, period, plan_id, base_list_krw, list_krw, prorated_days, period_days, discount_id, discount_percent, discount_krw, supply_krw, vat_krw, total_krw, manual_amounts, manual_reason, status, memo, created_by, created_at, updated_by, updated_at ) values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, 'draft', $17, $18, $19::timestamptz, $18, $19::timestamptz) returning *",
+     "params": [
+      "<uuid>",
+      "<uuid>",
+      "2026-12",
+      "b2b_49",
+      490000,
+      490000,
+      null,
+      null,
+      "<uuid>",
+      20,
+      98000,
+      392000,
+      39200,
+      431200,
+      false,
+      "",
+      "",
+      "<uuid>",
+      "2026-11-10T01:00:00.000Z"
+     ]
+    },
+    {
+     "text": "insert into brand_invoice_events ( invoice_id, organization_id, action, from_status, to_status, snapshot, note, actor_id, created_at ) values ($1, $2, $3, $4, $5, $6::jsonb, $7, $8, $9::timestamptz)",
+     "params": [
+      "<uuid>",
+      "<uuid>",
+      "drafted",
+      null,
+      "draft",
+      "{\"period\":\"2026-12\",\"planId\":\"b2b_49\",\"baseListKrw\":490000,\"listKrw\":490000,\"proratedDays\":null,\"periodDays\":null,\"discountId\":\"<uuid>\",\"discountPercent\":20,\"discountKrw\":98000,\"supplyKrw\":392000,\"vatKrw\":39200,\"totalKrw\":431200,\"manualAmounts\":false,\"manualReason\":\"\",\"status\":\"draft\"}",
+      "",
+      "<uuid>",
+      "2026-11-10T01:00:00.000Z"
+     ]
+    },
+    {
+     "text": "commit",
+     "params": []
+    }
+   ],
+   "result": {
+    "ok": true,
+    "invoice": {
+     "id": "<uuid>",
+     "organizationId": "<uuid>",
+     "period": "2026-12",
+     "planId": "b2b_49",
+     "baseListKrw": 490000,
+     "listKrw": 490000,
+     "proratedDays": null,
+     "periodDays": null,
+     "discountId": "<uuid>",
+     "discountPercent": 20,
+     "discountKrw": 98000,
+     "supplyKrw": 392000,
+     "vatKrw": 39200,
+     "totalKrw": 431200,
+     "manualAmounts": false,
+     "manualReason": "",
+     "status": "draft",
+     "overdue": false,
+     "issuedAt": null,
+     "issuedBy": null,
+     "paidAt": null,
+     "paidBy": null,
+     "paidMethod": "",
+     "voidedAt": null,
+     "voidedBy": null,
+     "voidReason": "",
+     "memo": "",
+     "createdBy": "<uuid>",
+     "createdAt": "2026-11-10T01:00:00.000Z",
+     "updatedBy": "<uuid>",
+     "updatedAt": "2026-11-10T01:00:00.000Z"
+    }
+   }
+  },
+  {
+   "op": "issue2",
+   "log": [
+    {
+     "text": "begin",
+     "params": []
+    },
+    {
+     "text": "select is_admin from profiles where id = $1 for key share",
+     "params": [
+      "<uuid>"
+     ]
+    },
+    {
+     "text": "select t.name from unnest($1::text[]) as t(name) where to_regclass($2 || t.name) is not null",
+     "params": [
+      [
+       "brand_invoices",
+       "brand_invoice_events"
+      ],
+      "public."
+     ]
+    },
+    {
+     "text": "select * from brand_invoices where id = $1 for update",
+     "params": [
+      "<uuid>"
+     ]
+    },
+    {
+     "text": "update brand_invoices set status = 'issued', issued_at = $2::timestamptz, issued_by = $3, memo = $4, updated_by = $3, updated_at = $2::timestamptz where id = $1 and status = 'draft' returning *",
+     "params": [
+      "<uuid>",
+      "2026-11-10T01:00:00.000Z",
+      "<uuid>",
+      ""
+     ]
+    },
+    {
+     "text": "update brand_discounts set invoices_used = invoices_used + 1, status = case when invoices_total is not null and invoices_used + 1 >= invoices_total then 'ended' else 'active' end, ended_at = case when invoices_total is not null and invoices_used + 1 >= invoices_total then $2::timestamptz else ended_at end, ended_by = case when invoices_total is not null and invoices_used + 1 >= invoices_total then $3 else ended_by end, end_reason = case when invoices_total is not null and invoices_used + 1 >= invoices_total then 'exhausted' else end_reason end where id = $1 and ($4::uuid is null or organization_id = $4) and status = 'active' and (invoices_total is null or invoices_used < invoices_total) returning id, invoices_used, invoices_total, status, end_reason",
+     "params": [
+      "<uuid>",
+      "2026-11-10T01:00:00.000Z",
+      "<uuid>",
+      "<uuid>"
+     ]
+    },
+    {
+     "text": "insert into brand_invoice_events ( invoice_id, organization_id, action, from_status, to_status, snapshot, note, actor_id, created_at ) values ($1, $2, $3, $4, $5, $6::jsonb, $7, $8, $9::timestamptz)",
+     "params": [
+      "<uuid>",
+      "<uuid>",
+      "issued",
+      "draft",
+      "issued",
+      "{\"period\":\"2026-12\",\"planId\":\"b2b_49\",\"baseListKrw\":490000,\"listKrw\":490000,\"proratedDays\":null,\"periodDays\":null,\"discountId\":\"<uuid>\",\"discountPercent\":20,\"discountKrw\":98000,\"supplyKrw\":392000,\"vatKrw\":39200,\"totalKrw\":431200,\"manualAmounts\":false,\"manualReason\":\"\",\"status\":\"issued\"}",
+      "",
+      "<uuid>",
+      "2026-11-10T01:00:00.000Z"
+     ]
+    },
+    {
+     "text": "commit",
+     "params": []
+    }
+   ],
+   "result": {
+    "ok": true,
+    "invoice": {
+     "id": "<uuid>",
+     "organizationId": "<uuid>",
+     "period": "2026-12",
+     "planId": "b2b_49",
+     "baseListKrw": 490000,
+     "listKrw": 490000,
+     "proratedDays": null,
+     "periodDays": null,
+     "discountId": "<uuid>",
+     "discountPercent": 20,
+     "discountKrw": 98000,
+     "supplyKrw": 392000,
+     "vatKrw": 39200,
+     "totalKrw": 431200,
+     "manualAmounts": false,
+     "manualReason": "",
+     "status": "issued",
+     "overdue": false,
+     "issuedAt": "2026-11-10T01:00:00.000Z",
+     "issuedBy": "<uuid>",
+     "paidAt": null,
+     "paidBy": null,
+     "paidMethod": "",
+     "voidedAt": null,
+     "voidedBy": null,
+     "voidReason": "",
+     "memo": "",
+     "createdBy": "<uuid>",
+     "createdAt": "2026-11-10T01:00:00.000Z",
+     "updatedBy": "<uuid>",
+     "updatedAt": "2026-11-10T01:00:00.000Z"
+    }
+   }
+  },
+  {
+   "op": "voidIssued",
+   "log": [
+    {
+     "text": "begin",
+     "params": []
+    },
+    {
+     "text": "select is_admin from profiles where id = $1 for key share",
+     "params": [
+      "<uuid>"
+     ]
+    },
+    {
+     "text": "select t.name from unnest($1::text[]) as t(name) where to_regclass($2 || t.name) is not null",
+     "params": [
+      [
+       "brand_invoices",
+       "brand_invoice_events"
+      ],
+      "public."
+     ]
+    },
+    {
+     "text": "select * from brand_invoices where id = $1 for update",
+     "params": [
+      "<uuid>"
+     ]
+    },
+    {
+     "text": "update brand_invoices set status = 'void', voided_at = $2::timestamptz, voided_by = $3, void_reason = $4, updated_by = $3, updated_at = $2::timestamptz where id = $1 and status = $5 returning *",
+     "params": [
+      "<uuid>",
+      "2026-11-10T01:00:00.000Z",
+      "<uuid>",
+      "wrong",
+      "issued"
+     ]
+    },
+    {
+     "text": "select id, organization_id, status, end_reason, invoices_total, invoices_used from brand_discounts where id = $1 for update",
+     "params": [
+      "<uuid>"
+     ]
+    },
+    {
+     "text": "select 1 from brand_discounts where organization_id = $1 and status = 'active' and id <> $2 limit 1",
+     "params": [
+      "<uuid>",
+      "<uuid>"
+     ]
+    },
+    {
+     "text": "update brand_discounts set invoices_used = $2, status = 'active', ended_at = null, ended_by = null, end_reason = '' where id = $1 and invoices_used > 0",
+     "params": [
+      "<uuid>",
+      1
+     ]
+    },
+    {
+     "text": "insert into brand_invoice_events ( invoice_id, organization_id, action, from_status, to_status, snapshot, note, actor_id, created_at ) values ($1, $2, $3, $4, $5, $6::jsonb, $7, $8, $9::timestamptz)",
+     "params": [
+      "<uuid>",
+      "<uuid>",
+      "voided",
+      "issued",
+      "void",
+      "{\"period\":\"2026-12\",\"planId\":\"b2b_49\",\"baseListKrw\":490000,\"listKrw\":490000,\"proratedDays\":null,\"periodDays\":null,\"discountId\":\"<uuid>\",\"discountPercent\":20,\"discountKrw\":98000,\"supplyKrw\":392000,\"vatKrw\":39200,\"totalKrw\":431200,\"manualAmounts\":false,\"manualReason\":\"\",\"status\":\"void\"}",
+      "wrong",
+      "<uuid>",
+      "2026-11-10T01:00:00.000Z"
+     ]
+    },
+    {
+     "text": "commit",
+     "params": []
+    }
+   ],
+   "result": {
+    "ok": true,
+    "invoice": {
+     "id": "<uuid>",
+     "organizationId": "<uuid>",
+     "period": "2026-12",
+     "planId": "b2b_49",
+     "baseListKrw": 490000,
+     "listKrw": 490000,
+     "proratedDays": null,
+     "periodDays": null,
+     "discountId": "<uuid>",
+     "discountPercent": 20,
+     "discountKrw": 98000,
+     "supplyKrw": 392000,
+     "vatKrw": 39200,
+     "totalKrw": 431200,
+     "manualAmounts": false,
+     "manualReason": "",
+     "status": "void",
+     "overdue": false,
+     "issuedAt": "2026-11-10T01:00:00.000Z",
+     "issuedBy": "<uuid>",
+     "paidAt": null,
+     "paidBy": null,
+     "paidMethod": "",
+     "voidedAt": "2026-11-10T01:00:00.000Z",
+     "voidedBy": "<uuid>",
+     "voidReason": "wrong",
+     "memo": "",
+     "createdBy": "<uuid>",
+     "createdAt": "2026-11-10T01:00:00.000Z",
+     "updatedBy": "<uuid>",
+     "updatedAt": "2026-11-10T01:00:00.000Z"
+    }
+   }
+  },
+  {
+   "op": "draftManual",
+   "log": [
+    {
+     "text": "begin",
+     "params": []
+    },
+    {
+     "text": "select is_admin from profiles where id = $1 for key share",
+     "params": [
+      "<uuid>"
+     ]
+    },
+    {
+     "text": "select t.name from unnest($1::text[]) as t(name) where to_regclass($2 || t.name) is not null",
+     "params": [
+      [
+       "brand_invoices",
+       "brand_invoice_events"
+      ],
+      "public."
+     ]
+    },
+    {
+     "text": "select id from brand_organizations where id = $1 for update",
+     "params": [
+      "<uuid>"
+     ]
+    },
+    {
+     "text": "select 1 from brand_invoices where organization_id = $1 and period = $2 and status <> 'void' limit 1",
+     "params": [
+      "<uuid>",
+      "2027-01"
+     ]
+    },
+    {
+     "text": "select plan_id, billing_mode, started_on::text as started_on, ends_on::text as ends_on, seats, note, revision, updated_at from brand_plan_assignments where organization_id = $1",
+     "params": [
+      "<uuid>"
+     ]
+    },
+    {
+     "text": "select to_regclass($1) is not null as ok",
+     "params": [
+      "public.brand_discounts"
+     ]
+    },
+    {
+     "text": "select id, percent, invoices_total, invoices_used from brand_discounts where organization_id = $1 and status = 'active' for share",
+     "params": [
+      "<uuid>"
+     ]
+    },
+    {
+     "text": "insert into brand_invoices ( id, organization_id, period, plan_id, base_list_krw, list_krw, prorated_days, period_days, discount_id, discount_percent, discount_krw, supply_krw, vat_krw, total_krw, manual_amounts, manual_reason, status, memo, created_by, created_at, updated_by, updated_at ) values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, 'draft', $17, $18, $19::timestamptz, $18, $19::timestamptz) returning *",
+     "params": [
+      "<uuid>",
+      "<uuid>",
+      "2027-01",
+      "b2b_29",
+      290000,
+      290000,
+      null,
+      null,
+      "<uuid>",
+      20,
+      58000,
+      200000,
+      20000,
+      220000,
+      true,
+      "negotiated",
+      "",
+      "<uuid>",
+      "2026-11-10T01:00:00.000Z"
+     ]
+    },
+    {
+     "text": "insert into brand_invoice_events ( invoice_id, organization_id, action, from_status, to_status, snapshot, note, actor_id, created_at ) values ($1, $2, $3, $4, $5, $6::jsonb, $7, $8, $9::timestamptz)",
+     "params": [
+      "<uuid>",
+      "<uuid>",
+      "drafted",
+      null,
+      "draft",
+      "{\"period\":\"2027-01\",\"planId\":\"b2b_29\",\"baseListKrw\":290000,\"listKrw\":290000,\"proratedDays\":null,\"periodDays\":null,\"discountId\":\"<uuid>\",\"discountPercent\":20,\"discountKrw\":58000,\"supplyKrw\":200000,\"vatKrw\":20000,\"totalKrw\":220000,\"manualAmounts\":true,\"manualReason\":\"negotiated\",\"status\":\"draft\"}",
+      "",
+      "<uuid>",
+      "2026-11-10T01:00:00.000Z"
+     ]
+    },
+    {
+     "text": "commit",
+     "params": []
+    }
+   ],
+   "result": {
+    "ok": true,
+    "invoice": {
+     "id": "<uuid>",
+     "organizationId": "<uuid>",
+     "period": "2027-01",
+     "planId": "b2b_29",
+     "baseListKrw": 290000,
+     "listKrw": 290000,
+     "proratedDays": null,
+     "periodDays": null,
+     "discountId": "<uuid>",
+     "discountPercent": 20,
+     "discountKrw": 58000,
+     "supplyKrw": 200000,
+     "vatKrw": 20000,
+     "totalKrw": 220000,
+     "manualAmounts": true,
+     "manualReason": "negotiated",
+     "status": "draft",
+     "overdue": false,
+     "issuedAt": null,
+     "issuedBy": null,
+     "paidAt": null,
+     "paidBy": null,
+     "paidMethod": "",
+     "voidedAt": null,
+     "voidedBy": null,
+     "voidReason": "",
+     "memo": "",
+     "createdBy": "<uuid>",
+     "createdAt": "2026-11-10T01:00:00.000Z",
+     "updatedBy": "<uuid>",
+     "updatedAt": "2026-11-10T01:00:00.000Z"
+    }
+   }
+  },
+  {
+   "op": "voidDraft",
+   "log": [
+    {
+     "text": "begin",
+     "params": []
+    },
+    {
+     "text": "select is_admin from profiles where id = $1 for key share",
+     "params": [
+      "<uuid>"
+     ]
+    },
+    {
+     "text": "select t.name from unnest($1::text[]) as t(name) where to_regclass($2 || t.name) is not null",
+     "params": [
+      [
+       "brand_invoices",
+       "brand_invoice_events"
+      ],
+      "public."
+     ]
+    },
+    {
+     "text": "select * from brand_invoices where id = $1 for update",
+     "params": [
+      "<uuid>"
+     ]
+    },
+    {
+     "text": "update brand_invoices set status = 'void', voided_at = $2::timestamptz, voided_by = $3, void_reason = $4, updated_by = $3, updated_at = $2::timestamptz where id = $1 and status = $5 returning *",
+     "params": [
+      "<uuid>",
+      "2026-11-10T01:00:00.000Z",
+      "<uuid>",
+      "drop",
+      "draft"
+     ]
+    },
+    {
+     "text": "insert into brand_invoice_events ( invoice_id, organization_id, action, from_status, to_status, snapshot, note, actor_id, created_at ) values ($1, $2, $3, $4, $5, $6::jsonb, $7, $8, $9::timestamptz)",
+     "params": [
+      "<uuid>",
+      "<uuid>",
+      "voided",
+      "draft",
+      "void",
+      "{\"period\":\"2027-01\",\"planId\":\"b2b_29\",\"baseListKrw\":290000,\"listKrw\":290000,\"proratedDays\":null,\"periodDays\":null,\"discountId\":\"<uuid>\",\"discountPercent\":20,\"discountKrw\":58000,\"supplyKrw\":200000,\"vatKrw\":20000,\"totalKrw\":220000,\"manualAmounts\":true,\"manualReason\":\"negotiated\",\"status\":\"void\"}",
+      "drop",
+      "<uuid>",
+      "2026-11-10T01:00:00.000Z"
+     ]
+    },
+    {
+     "text": "commit",
+     "params": []
+    }
+   ],
+   "result": {
+    "ok": true,
+    "invoice": {
+     "id": "<uuid>",
+     "organizationId": "<uuid>",
+     "period": "2027-01",
+     "planId": "b2b_29",
+     "baseListKrw": 290000,
+     "listKrw": 290000,
+     "proratedDays": null,
+     "periodDays": null,
+     "discountId": "<uuid>",
+     "discountPercent": 20,
+     "discountKrw": 58000,
+     "supplyKrw": 200000,
+     "vatKrw": 20000,
+     "totalKrw": 220000,
+     "manualAmounts": true,
+     "manualReason": "negotiated",
+     "status": "void",
+     "overdue": false,
+     "issuedAt": null,
+     "issuedBy": null,
+     "paidAt": null,
+     "paidBy": null,
+     "paidMethod": "",
+     "voidedAt": "2026-11-10T01:00:00.000Z",
+     "voidedBy": "<uuid>",
+     "voidReason": "drop",
+     "memo": "",
+     "createdBy": "<uuid>",
+     "createdAt": "2026-11-10T01:00:00.000Z",
+     "updatedBy": "<uuid>",
+     "updatedAt": "2026-11-10T01:00:00.000Z"
+    }
+   }
+  },
+  {
+   "op": "draftConflict",
+   "log": [
+    {
+     "text": "begin",
+     "params": []
+    },
+    {
+     "text": "select is_admin from profiles where id = $1 for key share",
+     "params": [
+      "<uuid>"
+     ]
+    },
+    {
+     "text": "select t.name from unnest($1::text[]) as t(name) where to_regclass($2 || t.name) is not null",
+     "params": [
+      [
+       "brand_invoices",
+       "brand_invoice_events"
+      ],
+      "public."
+     ]
+    },
+    {
+     "text": "select id from brand_organizations where id = $1 for update",
+     "params": [
+      "<uuid>"
+     ]
+    },
+    {
+     "text": "select 1 from brand_invoices where organization_id = $1 and period = $2 and status <> 'void' limit 1",
+     "params": [
+      "<uuid>",
+      "2026-11"
+     ]
+    },
+    {
+     "text": "commit",
+     "params": []
+    }
+   ],
+   "result": {
+    "ok": false,
+    "code": "conflict"
+   }
+  },
+  {
+   "op": "list",
+   "log": [
+    {
+     "text": "select to_regclass($1) is not null as ok",
+     "params": [
+      "public.brand_invoices"
+     ]
+    },
+    {
+     "text": "select * from brand_invoices where organization_id = $1 order by period desc, created_at desc, id desc",
+     "params": [
+      "<uuid>"
+     ]
+    }
+   ],
+   "result": [
+    {
+     "id": "<uuid>",
+     "organizationId": "<uuid>",
+     "period": "2027-01",
+     "planId": "b2b_29",
+     "baseListKrw": 290000,
+     "listKrw": 290000,
+     "proratedDays": null,
+     "periodDays": null,
+     "discountId": "<uuid>",
+     "discountPercent": 20,
+     "discountKrw": 58000,
+     "supplyKrw": 200000,
+     "vatKrw": 20000,
+     "totalKrw": 220000,
+     "manualAmounts": true,
+     "manualReason": "negotiated",
+     "status": "void",
+     "overdue": false,
+     "issuedAt": null,
+     "issuedBy": null,
+     "paidAt": null,
+     "paidBy": null,
+     "paidMethod": "",
+     "voidedAt": "2026-11-10T01:00:00.000Z",
+     "voidedBy": "<uuid>",
+     "voidReason": "drop",
+     "memo": "",
+     "createdBy": "<uuid>",
+     "createdAt": "2026-11-10T01:00:00.000Z",
+     "updatedBy": "<uuid>",
+     "updatedAt": "2026-11-10T01:00:00.000Z"
+    },
+    {
+     "id": "<uuid>",
+     "organizationId": "<uuid>",
+     "period": "2026-12",
+     "planId": "b2b_49",
+     "baseListKrw": 490000,
+     "listKrw": 490000,
+     "proratedDays": null,
+     "periodDays": null,
+     "discountId": "<uuid>",
+     "discountPercent": 20,
+     "discountKrw": 98000,
+     "supplyKrw": 392000,
+     "vatKrw": 39200,
+     "totalKrw": 431200,
+     "manualAmounts": false,
+     "manualReason": "",
+     "status": "void",
+     "overdue": false,
+     "issuedAt": "2026-11-10T01:00:00.000Z",
+     "issuedBy": "<uuid>",
+     "paidAt": null,
+     "paidBy": null,
+     "paidMethod": "",
+     "voidedAt": "2026-11-10T01:00:00.000Z",
+     "voidedBy": "<uuid>",
+     "voidReason": "wrong",
+     "memo": "",
+     "createdBy": "<uuid>",
+     "createdAt": "2026-11-10T01:00:00.000Z",
+     "updatedBy": "<uuid>",
+     "updatedAt": "2026-11-10T01:00:00.000Z"
+    },
+    {
+     "id": "<uuid>",
+     "organizationId": "<uuid>",
+     "period": "2026-11",
+     "planId": "b2b_29",
+     "baseListKrw": 290000,
+     "listKrw": 251333,
+     "proratedDays": 26,
+     "periodDays": 30,
+     "discountId": "<uuid>",
+     "discountPercent": 20,
+     "discountKrw": 50266,
+     "supplyKrw": 201067,
+     "vatKrw": 20106,
+     "totalKrw": 221173,
+     "manualAmounts": false,
+     "manualReason": "",
+     "status": "paid",
+     "overdue": false,
+     "issuedAt": "2026-11-10T01:00:00.000Z",
+     "issuedBy": "<uuid>",
+     "paidAt": "2026-11-10T01:00:00.000Z",
+     "paidBy": "<uuid>",
+     "paidMethod": "wire",
+     "voidedAt": null,
+     "voidedBy": null,
+     "voidReason": "",
+     "memo": "edited",
+     "createdBy": "<uuid>",
+     "createdAt": "2026-11-10T01:00:00.000Z",
+     "updatedBy": "<uuid>",
+     "updatedAt": "2026-11-10T01:00:00.000Z"
+    }
+   ]
+  }
+ ]
+}

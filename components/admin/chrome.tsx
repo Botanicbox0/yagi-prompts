@@ -246,6 +246,8 @@ const ERROR_KEYS = {
   paymentWrongEnvironment: "errPaymentWrongEnvironment",
   paymentCooldown: "errPaymentCooldown",
   paymentUnavailable: "errPaymentUnavailable",
+  disabled: "errDisabled",
+  not_available_yet: "errNotAvailableYet",
   unknown: "errUnknown",
 } as const;
 

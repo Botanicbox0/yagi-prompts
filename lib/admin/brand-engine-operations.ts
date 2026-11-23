@@ -4,14 +4,14 @@ import {
   draftFromTwingsDefaults,
   saveBrandIdentity,
 } from '@/lib/brands/identity/service';
-import { setPlanAssignment } from '@/lib/brands/plans';
+import { setPlanAssignment, SUBSCRIPTION_MANAGED_PLAN } from '@/lib/brands/plans';
 import {
   adminReconcileOrganizationStorage,
   BYTES_PER_GB,
   setOrganizationStorageQuota,
 } from '@/lib/brands/storage-quota';
 import type { AdminOperation } from './operations';
-import { ok, type AdminContext } from './context';
+import { fail, ok, type AdminContext } from './context';
 import { brandFailure } from './brand-workspace-operations';
 import * as f from './form';
 
@@ -96,6 +96,10 @@ const plan: AdminOperation<PlanInput> = {
   },
   async run(ctx: AdminContext, input) {
     const result = await setPlanAssignment({ sql: ctx.sql }, ctx.viewer, input);
+    // Review round 2, item 5: a subscription owns this plan (only possible with BRAND_BILLING_AUTO_ISSUE=on).
+    if (!result.ok && result.field === SUBSCRIPTION_MANAGED_PLAN) {
+      return fail('brandConflict', `conflict:${SUBSCRIPTION_MANAGED_PLAN}`);
+    }
     if (!result.ok) return brandFailure(result.code);
     return ok('saved', { to: organizationPath(input.organizationId) });
   },

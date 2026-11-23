@@ -15,13 +15,28 @@ import {
   loadBrandBillingProfile,
   loadPlanAllowanceDefault,
 } from '@/lib/brands/billing';
-import { hasTable, hasTables } from '@/lib/brands/billing/schema-guard';
+import { hasTable, hasTables, loadSubscriptionSchemaReady } from '@/lib/brands/billing/schema-guard';
 import type {
   BrandAllowanceGrant,
   BrandBillingProfile,
   BrandDiscount,
   BrandInvoice,
 } from '@/lib/brands/billing/types';
+import {
+  hasCompleteTaxInvoiceProfile,
+  isInvoiceOverdueWithDueOn,
+  listBrandSubscriptionEvents,
+  loadBrandSubscription,
+  loadExtendedInvoiceMetaByOrg,
+  loadSubscriptionPanelFacts,
+  subscriptionCalendarForDay,
+  type BrandSubscription,
+  type ExtendedInvoiceMeta,
+  type SubscriptionCalendar,
+  type SubscriptionPanelFacts,
+} from '@/lib/brands/subscriptions';
+import { kstDayOf } from '@/lib/brands/billing/math';
+import { brandBillingAutoIssueOpen } from '@/lib/flags';
 import { loadPlanAssignment } from '@/lib/brands/plans';
 import type { SqlRunner } from '@/lib/db/sql-runner';
 import { isDbAdmin, iso, UUID_RE } from './brand-ops-guard';
@@ -53,7 +68,15 @@ export interface OrgStudioJobRow {
   errorDetail: string | null;
 }
 
-export type OrgHistoryCategory = 'plan' | 'invoice' | 'discount' | 'grant' | 'audit' | 'policy' | 'storage';
+export type OrgHistoryCategory =
+  | 'plan'
+  | 'invoice'
+  | 'discount'
+  | 'grant'
+  | 'audit'
+  | 'policy'
+  | 'storage'
+  | 'subscription';
 
 export interface OrgHistoryItem {
   id: string;
@@ -63,6 +86,24 @@ export interface OrgHistoryItem {
   detail: string;
   actorId: string | null;
   actorName: string | null;
+}
+
+export interface OrgSubscriptionPanelState {
+  enabled: boolean;
+  schemaReady: boolean;
+  subscription: BrandSubscription | null;
+  calendar: SubscriptionCalendar;
+  oldestUnpaid: {
+    id: string;
+    period: string;
+    dueOn: string | null;
+    totalKrw: number;
+    overdue: boolean;
+  } | null;
+  endsOn: string | null;
+  profileReadyForTransfer: boolean;
+  facts: SubscriptionPanelFacts | null;
+  invoiceMeta: Record<string, ExtendedInvoiceMeta>;
 }
 
 export interface BrandOrgDetailOps {
@@ -75,6 +116,7 @@ export interface BrandOrgDetailOps {
   grants: BrandAllowanceGrant[];
   billingProfile: BrandBillingProfile | null;
   invoices: BrandInvoice[];
+  subscriptionPanel: OrgSubscriptionPanelState | null;
   studioJobsAvailable: boolean;
   studioJobs: OrgStudioJobRow[];
   history: OrgHistoryItem[];
@@ -105,6 +147,7 @@ export async function loadBrandOrgDetailOps(
   const now = options.now ?? new Date();
   const env = options.env ?? studioEnv();
   const jobStatus = options.jobStatus ?? 'all';
+  const autoIssueEnabled = brandBillingAutoIssueOpen();
 
   const [
     billingAvailable,
@@ -118,6 +161,7 @@ export async function loadBrandOrgDetailOps(
     hasPolicyEvents,
     hasStorageEvents,
     plan,
+    subscriptionSchemaReady,
   ] = await Promise.all([
     hasTables(sql, ['brand_invoices', 'brand_discounts', 'brand_billing_profiles', 'brand_allowance_grants']),
     hasTable(sql, 'brand_studio_jobs'),
@@ -130,6 +174,7 @@ export async function loadBrandOrgDetailOps(
     hasTable(sql, 'brand_feature_policy_events'),
     hasTable(sql, 'brand_storage_quota_events'),
     loadPlanAssignment(sql, organizationId).catch(() => null),
+    autoIssueEnabled ? loadSubscriptionSchemaReady(sql).catch(() => false) : Promise.resolve(false),
   ]);
 
   const [
@@ -140,7 +185,10 @@ export async function loadBrandOrgDetailOps(
     discounts,
     grants,
     billingProfile,
-    invoices,
+    rawInvoices,
+    subscription,
+    subscriptionEvents,
+    invoiceMetaMap,
   ] = await Promise.all([
     hasStudioJobs
       ? loadAllowance(sql, organizationId, env, now).catch(() => null)
@@ -152,7 +200,32 @@ export async function loadBrandOrgDetailOps(
     listExtraAllowanceGrants(sql, organizationId, now).catch(() => []),
     loadBrandBillingProfile(sql, organizationId).catch(() => null),
     listBrandInvoices(sql, { organizationId, now }).catch(() => []),
+    autoIssueEnabled && subscriptionSchemaReady
+      ? loadBrandSubscription(sql, organizationId).catch(() => null)
+      : Promise.resolve(null),
+    autoIssueEnabled && subscriptionSchemaReady
+      ? listBrandSubscriptionEvents(sql, organizationId).catch(() => [])
+      : Promise.resolve([]),
+    autoIssueEnabled && subscriptionSchemaReady
+      ? loadExtendedInvoiceMetaByOrg(sql, organizationId).catch(() => new Map<string, ExtendedInvoiceMeta>())
+      : Promise.resolve(new Map<string, ExtendedInvoiceMeta>()),
   ]);
+
+  const todayKst = kstDayOf(now);
+  const invoices =
+    autoIssueEnabled && subscriptionSchemaReady
+      ? rawInvoices.map((inv) => {
+          const meta = invoiceMetaMap.get(inv.id);
+          return {
+            ...inv,
+            overdue: isInvoiceOverdueWithDueOn(
+              { status: inv.status, issuedAt: inv.issuedAt, dueOn: meta?.dueOn ?? null },
+              todayKst,
+              now,
+            ),
+          };
+        })
+      : rawInvoices;
 
   let studioJobs: OrgStudioJobRow[] = [];
   if (hasStudioJobs) {
@@ -439,6 +512,25 @@ export async function loadBrandOrgDetailOps(
     });
   }
 
+  for (const ev of subscriptionEvents) {
+    rawHistory.push({
+      id: `sub:${ev.id}`,
+      at: ev.createdAt,
+      category: 'subscription',
+      title: `${ev.action} (${ev.actorKind})`,
+      detail: typeof ev.snapshot.planId === 'string'
+        ? [
+            ev.snapshot.planId,
+            typeof ev.snapshot.status === 'string' ? ev.snapshot.status : null,
+            typeof ev.snapshot.reason === 'string' ? ev.snapshot.reason : null,
+          ]
+            .filter(Boolean)
+            .join(' · ')
+        : '',
+      actorId: ev.actor,
+    });
+  }
+
   rawHistory.sort((a, b) => b.at.localeCompare(a.at));
   const sliced = rawHistory.slice(0, 100);
 
@@ -460,8 +552,75 @@ export async function loadBrandOrgDetailOps(
 
   const history: OrgHistoryItem[] = sliced.map((item) => ({
     ...item,
-    actorName: item.actorId ? (actorNames.get(item.actorId) ?? item.actorId.slice(0, 8)) : null,
+    actorName: item.actorId
+      ? (actorNames.get(item.actorId) ?? item.actorId.slice(0, 8))
+      : item.category === 'subscription'
+        ? 'system'
+        : null,
   }));
+
+  let subscriptionPanel: OrgSubscriptionPanelState | null = null;
+  if (autoIssueEnabled) {
+    const calendar = subscriptionCalendarForDay(todayKst, subscription?.collectionMethod ?? 'transfer');
+    if (!subscriptionSchemaReady) {
+      subscriptionPanel = {
+        enabled: true,
+        schemaReady: false,
+        subscription: null,
+        calendar,
+        oldestUnpaid: null,
+        endsOn: plan?.endsOn ?? null,
+        profileReadyForTransfer: false,
+        facts: null,
+        invoiceMeta: {},
+      };
+    } else {
+      const facts = subscription
+        ? await loadSubscriptionPanelFacts(sql, subscription, now, env.planGraceDays ?? 7).catch(() => null)
+        : null;
+      // A1: only the current subscription epoch counts; older manual invoices are not this subscription's debt.
+      const unpaidSubOrAdj = invoices
+        .filter((inv) => {
+          const meta = invoiceMetaMap.get(inv.id);
+          const kind = meta?.kind ?? 'subscription';
+          return (
+            subscription !== null &&
+            meta?.subscriptionEpoch === subscription.epoch &&
+            inv.status === 'issued' &&
+            (kind === 'subscription' || kind === 'adjustment')
+          );
+        })
+        .sort((a, b) => {
+          const dueA = invoiceMetaMap.get(a.id)?.dueOn ?? a.period;
+          const dueB = invoiceMetaMap.get(b.id)?.dueOn ?? b.period;
+          return dueA.localeCompare(dueB);
+        });
+      const oldest = unpaidSubOrAdj[0] ?? null;
+      const invoiceMetaRecord: Record<string, ExtendedInvoiceMeta> = {};
+      for (const [k, val] of invoiceMetaMap.entries()) {
+        invoiceMetaRecord[k] = val;
+      }
+      subscriptionPanel = {
+        enabled: true,
+        schemaReady: true,
+        subscription,
+        calendar,
+        oldestUnpaid: oldest
+          ? {
+              id: oldest.id,
+              period: oldest.period,
+              dueOn: invoiceMetaMap.get(oldest.id)?.dueOn ?? null,
+              totalKrw: oldest.totalKrw,
+              overdue: oldest.overdue,
+            }
+          : null,
+        endsOn: plan?.endsOn ?? null,
+        profileReadyForTransfer: hasCompleteTaxInvoiceProfile(billingProfile),
+        facts,
+        invoiceMeta: invoiceMetaRecord,
+      };
+    }
+  }
 
   return {
     billingAvailable,
@@ -473,6 +632,7 @@ export async function loadBrandOrgDetailOps(
     grants,
     billingProfile,
     invoices,
+    subscriptionPanel,
     studioJobsAvailable: hasStudioJobs,
     studioJobs,
     history,

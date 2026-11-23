@@ -5936,6 +5936,8 @@ export const ko: Dictionary = {
     errPaymentWrongEnvironment: '현재 배포와 다른 환경의 결제는 다시 확인할 수 없습니다.',
     errPaymentCooldown: '이 결제는 방금 확인했습니다. 60초 뒤에 다시 시도하세요.',
     errPaymentUnavailable: '결제사 상태를 불러오지 못했습니다. 잠시 뒤 다시 시도하세요.',
+    errDisabled: '기능 플래그가 꺼져 있어 실행할 수 없습니다.',
+    errNotAvailableYet: '현재 단계에서는 지원되지 않는 기능입니다.',
     detailLabel: '상세',
   },
 };
