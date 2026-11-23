@@ -9,6 +9,7 @@ import {
   runHeuristicDirectorTurn,
   toClientDirectorTurnResponse,
 } from '@/lib/template-director/flash-director';
+import { takeDirectorTurnSlot } from '@/lib/template-director/rate-limit';
 import {
   DIRECTOR_EDITABLE_SLOTS,
   PERSONAL_AUDIO_MODES,
@@ -35,6 +36,17 @@ function json(body: unknown, status: number): NextResponse {
 export async function POST(request: Request): Promise<NextResponse> {
   const viewer = await getViewer();
   if (!viewer.userId) return json({ ok: false, code: 'sign_in_required' }, 401);
+
+  // docs/PERSONAL-STUDIO.md §3.1 — every turn may call the Stage-1 model; admins are not limited.
+  if (!viewer.isAdmin) {
+    const slot = takeDirectorTurnSlot(viewer.userId);
+    if (!slot.ok) {
+      return NextResponse.json(
+        { ok: false, code: 'rate_limited' },
+        { status: 429, headers: { ...HEADERS, 'Retry-After': String(slot.retryAfterSec) } },
+      );
+    }
+  }
 
   const sql = await getSqlRunner();
   if (!sql) return json({ ok: false, code: 'unavailable' }, 503);
