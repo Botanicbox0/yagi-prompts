@@ -3,6 +3,7 @@ import type { Viewer } from '@/lib/auth/identity';
 import type { SqlRunner } from '@/lib/db/sql-runner';
 import type { BrandOutcome } from './workspace/types';
 import { isMissingTable } from './entitlements';
+import { syncPlanDefaultSnapshot } from './billing/snapshot';
 
 /**
  * B2B plans for brand.twings.app (docs/BRAND-PRODUCT.md §6). Founder decision (2026-11-12): three
@@ -127,7 +128,7 @@ export async function setPlanAssignment(
   if (!parsed.success) return { ok: false, code: 'invalid', field: (parsed.error.issues[0]?.path ?? []).map(String).join('.') };
   const v = parsed.data;
   return deps.sql.transaction(async (sql) => {
-    const profile = (await sql.query<{ is_admin: boolean }>('select is_admin from profiles where id = $1 for share', [viewer.userId])).rows[0];
+    const profile = (await sql.query<{ is_admin: boolean }>('select is_admin from profiles where id = $1 for key share', [viewer.userId])).rows[0];
     if (!profile) return { ok: false as const, code: 'sign_in_required' as const };
     if (profile.is_admin !== true) return { ok: false as const, code: 'forbidden' as const };
     if (!(await sql.query('select id from brand_organizations where id = $1 for update', [v.organizationId])).rows[0])
@@ -150,6 +151,7 @@ export async function setPlanAssignment(
       'insert into brand_plan_events (organization_id, plan_id, billing_mode, started_on, ends_on, seats, note, actor_id) values ($1, $2, $3, $4::date, $5::date, $6, $7, $8)',
       [v.organizationId, v.planId, v.billingMode, v.startedOn, v.endsOn, v.seats, v.note, viewer.userId],
     );
+    await syncPlanDefaultSnapshot(sql, v.organizationId, viewer.userId);
     return { ok: true as const, id: v.organizationId, revision: next };
   });
 }

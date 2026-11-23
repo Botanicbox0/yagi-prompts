@@ -13,6 +13,8 @@
  * Everything that can wait returns: nothing here sleeps.
  */
 import { STUDIO_JOB_OPEN_STATUSES } from './contracts';
+import { hasTables } from '@/lib/brands/billing/schema-guard';
+import type { SqlRunner } from '@/lib/db/sql-runner';
 import { planBlockRetry } from './block-retry';
 import { failJob, finishJob } from './finish';
 import { claimJobs, releaseJob, saveJob, tokenOf, failPendingOutputs } from './job-store';
@@ -270,14 +272,70 @@ export async function advanceStudioJobsWith(deps: StudioDeps, options: { jobIds?
   return { advanced: jobs.length };
 }
 
+async function releaseStaleStudioLeases(sql: SqlRunner, nowIso: string): Promise<number> {
+  return (
+    await sql.query(
+      "update brand_studio_jobs set claimed_at = null where claimed_at < $1::timestamptz - interval '10 minutes' returning id",
+      [nowIso],
+    )
+  ).rows.length;
+}
+
+async function expireStaleJobRows(
+  sql: SqlRunner,
+  options: { nowIso: string; includeAccountLaneIdle: boolean; mcpUp: boolean; errorDetail: string },
+): Promise<number> {
+  const expiredRows = (
+    await sql.query<{ id: string }>(
+      `update brand_studio_jobs set status = 'failed', error_code = 'provider_unavailable', error_detail = $3,
+              usage_krw = 0, finished_at = $2::timestamptz
+        where claimed_at is null and (
+              (status in ('held','queued') and created_at < $2::timestamptz - interval '24 hours')
+           or (status in ('running','finishing') and coalesce(started_at, created_at) < $2::timestamptz - interval '6 hours')
+           or ($4::boolean = true and status = 'running' and lane = 'sunra_mcp' and $1::boolean = false and coalesce(started_at, created_at) < $2::timestamptz - interval '30 minutes'))
+        returning id`,
+      [options.mcpUp, options.nowIso, options.errorDetail, options.includeAccountLaneIdle],
+    )
+  ).rows;
+  for (const row of expiredRows) await failPendingOutputs(sql, row.id);
+  return expiredRows.length;
+}
+
+/**
+ * Idempotent reservation expiry pass for the 10-minute notices cron (deploy-order safe):
+ * frees leases older than 10 minutes and expires ONLY queued jobs > 24 h and running/finishing
+ * jobs > 6 h (releasing reserved allowance with `usage_krw = 0`). The 30-minute idle account-lane
+ * heuristic stays strictly in the daily sweep (`sweepStudio`) so transient heartbeat gaps never kill
+ * a healthy running account-lane video job.
+ */
+export async function expireStaleStudioReservations(
+  sql: SqlRunner,
+  now: Date = new Date(),
+): Promise<{ released: number; expired: number }> {
+  if (!(await hasTables(sql, ['brand_studio_jobs', 'brand_studio_outputs']))) {
+    return { released: 0, expired: 0 };
+  }
+  const nowIso = now.toISOString();
+  const released = await releaseStaleStudioLeases(sql, nowIso);
+  const expired = await expireStaleJobRows(sql, {
+    nowIso,
+    includeAccountLaneIdle: false,
+    mcpUp: true,
+    errorDetail: 'expired by the 10-minute reservation sweep',
+  });
+  return { released, expired };
+}
+
 /**
  * The daily sweep (brand-side cron): free leases left by a crashed invocation, move work off a
  * silent account lane, expire what can no longer finish, then advance what is left.
  */
 export async function sweepStudio(deps: StudioDeps): Promise<{ released: number; rerouted: number; expired: number; advanced: number }> {
   const sql = deps.sql;
-  const released = (await sql.query("update brand_studio_jobs set claimed_at = null where claimed_at < now() - interval '10 minutes' returning id")).rows.length;
-  const mcpUp = heartbeatFresh((await loadLaneHeartbeats(sql)).sunra_mcp, nowOf(deps));
+  const now = nowOf(deps);
+  const nowIso = now.toISOString();
+  const released = await releaseStaleStudioLeases(sql, nowIso);
+  const mcpUp = heartbeatFresh((await loadLaneHeartbeats(sql)).sunra_mcp, now);
   const rerouted = mcpUp
     ? 0
     : (
@@ -286,22 +344,15 @@ export async function sweepStudio(deps: StudioDeps): Promise<{ released: number;
             where lane = 'sunra_mcp' and status = 'queued' and kind <> 'video_final' and claimed_at is null returning id`,
         )
       ).rows.length;
-  const expiredRows = (
-    await sql.query<{ id: string; work: JobRow['work'] }>(
-      `update brand_studio_jobs set status = 'failed', error_code = 'provider_unavailable', error_detail = 'expired by the daily sweep',
-              usage_krw = 0, finished_at = now()
-        where claimed_at is null and (
-              (status in ('held','queued') and created_at < now() - interval '24 hours')
-           or (status in ('running','finishing') and coalesce(started_at, created_at) < now() - interval '6 hours')
-           or (status = 'running' and lane = 'sunra_mcp' and $1::boolean = false and coalesce(started_at, created_at) < now() - interval '30 minutes'))
-        returning id, work`,
-      [mcpUp],
-    )
-  ).rows;
-  for (const row of expiredRows) await failPendingOutputs(sql, row.id);
+  const expired = await expireStaleJobRows(sql, {
+    nowIso,
+    includeAccountLaneIdle: true,
+    mcpUp,
+    errorDetail: 'expired by the daily sweep',
+  });
   // Uploads reserved but never completed hold a library slot; after a day they let it go.
   await sql.query("delete from brand_studio_assets where status = 'pending' and deleted_at is null and created_at < now() - interval '1 day'");
   // Kept small: this rides the brand-side daily cron (60 s); polls and the webhook do the real work.
   const { advanced } = await advanceStudioJobsWith(deps, { limit: 5 });
-  return { released, rerouted, expired: expiredRows.length, advanced };
+  return { released, rerouted, expired, advanced };
 }

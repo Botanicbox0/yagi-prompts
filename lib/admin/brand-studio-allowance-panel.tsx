@@ -18,6 +18,8 @@ const COPY = {
     title: '스튜디오 사용 한도',
     hint: '브랜드 스튜디오(이미지·영상 생성)의 월 사용 한도(원)와 실행 경로. 0이면 생성이 닫힌다. 결제가 아니라 월 한도 차감이다.',
     current: (cap: string, used: string, resets: string) => `이번 달 ${used}원 사용 / 한도 ${cap}원 · ${resets} 초기화`,
+    followingPlan: (planCap: string) => `플랜 기본값을 따름 (${planCap}원)`,
+    overrideHint: '현재 플랜 기본값을 따르고 있습니다. 선호 경로만 바꾸면 모드가 유지되며, 월 한도 값을 바꿔 저장하면 조직별 개별 한도(덮어쓰기)로 전환됩니다.',
     none: (fallback: string) => `설정 없음 — 기본값 ${fallback}원 적용`,
     cap: '월 한도(원)',
     lane: '선호 경로',
@@ -31,6 +33,8 @@ const COPY = {
     title: 'Studio allowance',
     hint: 'Monthly usage allowance (KRW) and execution lane for the brand studio (image and video generation). 0 closes generation. A limit, not a charge.',
     current: (cap: string, used: string, resets: string) => `${used} KRW used this month of ${cap} KRW · resets ${resets}`,
+    followingPlan: (planCap: string) => `Following plan default (${planCap} KRW)`,
+    overrideHint: 'Currently following the plan default. Changing only the lane preserves this mode; changing the monthly allowance switches this organization to an explicit override.',
     none: (fallback: string) => `Not set — the default of ${fallback} KRW applies`,
     cap: 'Monthly allowance (KRW)',
     lane: 'Preferred lane',
@@ -64,22 +68,28 @@ export async function BrandStudioAllowancePanel({
   } catch {
     usage = null;
   }
+  const followingPlan = Boolean(usage && (usage.source === 'plan' || (row !== null && row.isOverride === false)));
+  const displayedPlanCap = usage ? usage.baseCapKrw : (row?.monthlyCapKrw ?? 0);
+  const defaultInputCap = followingPlan ? displayedPlanCap : (row?.monthlyCapKrw ?? 0);
   return (
     <section id="brand-studio-allowance" className="bw-panel" data-brand-studio-allowance={usage ? usage.capKrw : 'unavailable'}>
       <h2>{c.title}</h2>
       <p className="bw-muted">{c.hint}</p>
-      <p data-brand-studio-allowance-state={row ? 'set' : 'default'}>
+      <p data-brand-studio-allowance-state={followingPlan ? 'plan' : row ? 'set' : 'default'}>
         {!usage
           ? c.unavailable
-          : row
-            ? c.current(krw.format(usage.capKrw), krw.format(usage.usedKrw), usage.resetsAt.slice(0, 10))
-            : c.none(krw.format(env.defaultMonthlyKrw))}
+          : followingPlan
+            ? `${c.followingPlan(krw.format(displayedPlanCap))} · ${c.current(krw.format(usage.capKrw), krw.format(usage.usedKrw), usage.resetsAt.slice(0, 10))}`
+            : row
+              ? c.current(krw.format(usage.capKrw), krw.format(usage.usedKrw), usage.resetsAt.slice(0, 10))
+              : c.none(krw.format(env.defaultMonthlyKrw))}
       </p>
+      {followingPlan && <p className="bw-muted">{c.overrideHint}</p>}
       <ManagedForm op="brand_studio.allowance.set" b={b} submit={c.save}>
         <input type="hidden" name="organizationId" value={organizationId} />
         <label>
           {c.cap}
-          <input name="monthlyCapKrw" type="number" min={0} max={100_000_000} step={1000} defaultValue={row?.monthlyCapKrw ?? 0} required />
+          <input name="monthlyCapKrw" type="number" min={0} max={100_000_000} step={1000} defaultValue={defaultInputCap} required />
         </label>
         <label>
           {c.lane}

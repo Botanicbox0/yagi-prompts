@@ -9,6 +9,7 @@ import { BRAND_OPERATIONS } from './brand-operations';
 import { BRAND_WORKSPACE_OPERATIONS } from './brand-workspace-operations';
 import { BRAND_USAGE_OPERATIONS } from './brand-usage-operations';
 import { BRAND_ENGINE_OPERATIONS } from './brand-engine-operations';
+import { BRAND_BILLING_OPERATIONS } from './brand-billing-operations';
 import { BRAND_STUDIO_OPERATIONS } from './brand-studio-operations';
 import { BRAND_STUDIO_REVIEW_OPERATIONS } from './brand-studio-review-operations';
 import { BRAND_ROOM_MESSAGE_OPERATIONS } from './brand-room-message-operations';
@@ -65,6 +66,8 @@ export const ADMIN_OPERATIONS = {
   ...BRAND_PRODUCTION_OPERATIONS,
   // docs/BRAND-PRODUCT.md — per-brand feature policy (deny-list) and B2B plan assignment.
   ...BRAND_ENGINE_OPERATIONS,
+  // docs/BRAND-PRODUCT.md §6.4 — B2B billing core (plan allowance defaults, discounts, invoices, extra credits).
+  ...BRAND_BILLING_OPERATIONS,
   // docs/BRAND-STUDIO-V2.md §9 — the studio v2 monthly allowance and preferred lane per organization.
   ...BRAND_STUDIO_OPERATIONS,
   // docs/BRAND-STUDIO-V3.md §7 — the review space, team side: reply, resolve, status, open a review.
