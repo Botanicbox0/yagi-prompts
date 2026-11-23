@@ -129,6 +129,11 @@ export interface BrandInvoice {
   createdAt: string;
   updatedBy: string | null;
   updatedAt: string;
+  /** B1c: the billing cycle a cycle invoice covers (KST days, end exclusive); absent on calendar-month invoices. */
+  cycleStart?: string;
+  cycleEnd?: string;
+  /** 0182: present only on a non-subscription invoice (adjustment, prepay, credit pack), which covers no days. */
+  kind?: string;
 }
 
 export interface BrandInvoiceEvent {

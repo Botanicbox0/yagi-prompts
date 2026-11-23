@@ -11,7 +11,7 @@
  */
 import { STUDIO_CREDIT_KRW } from '@/lib/brand-studio/credits';
 import { STUDIO_USAGE_FACTORS } from '@/lib/brand-studio/usage-rate';
-import { BRAND_INVOICE_VAT_PERCENT, invoiceAmounts, proposeProration, type PaidBrandPlanId } from './math';
+import { BRAND_INVOICE_VAT_PERCENT, type PaidBrandPlanId } from './math';
 
 /** Credits each paid plan gives per month (decided 2026-11-23). Stored in production as credits x 10 KRW. */
 export const BRAND_PLAN_CREDITS: Readonly<Record<PaidBrandPlanId, number>> = {
@@ -64,43 +64,6 @@ export function planCapKrwFromCredits(plan: PaidBrandPlanId): number {
 export function cardFeeKrw(priceKrw: number): number {
   if (!Number.isFinite(priceKrw) || priceKrw <= 0) return 0;
   return Math.ceil(priceKrw * (1 + BRAND_INVOICE_VAT_PERCENT / 100) * BRAND_CARD_FEE_RATE - 1e-6);
-}
-
-export interface PlanCapProration {
-  /** The plan's full monthly cap (KRW). */
-  fullKrw: number;
-  /** Days of the month the plan covers, start day included (`proposeProration`'s `usedDays`). */
-  days: number;
-  /** Days in the month. */
-  periodDays: number;
-}
-
-/**
- * A plan's cap for one KST month (§6.4 "첫 달", B1b): a plan that starts after the 1st of `month` gives that month's
- * credits in the same proportion as the money its invoice asks for. The day counts are `proposeProration`'s and the
- * proportion is the invoice's own prorated list amount (`invoiceAmounts`): cap x prorated list / list, rounded down to
- * whole credits. Rounding through the invoice amount keeps the credit ratio at or below the money ratio on every day
- * (the plain day ratio rounded to credits can be a fraction of a won above it, e.g. day 30 of a 30-day month), and is at
- * most one credit below `floor10(cap x days / month days)`.
- *
- * Started on the 1st, in an earlier month, or later than `month` (the caller only asks for an active plan): the full cap.
- * Integer math, multiply before dividing.
- */
-export function planCapForMonth(input: {
-  planId: PaidBrandPlanId;
-  fullCapKrw: number;
-  /** `brand_plan_assignments.started_on`, `YYYY-MM-DD`. */
-  startedOn: string;
-  /** The KST month of the allowance, `YYYY-MM`. */
-  month: string;
-}): { capKrw: number; proration: PlanCapProration | null } {
-  const full = Math.max(0, Math.floor(input.fullCapKrw));
-  const prorate = proposeProration(input.startedOn, input.month);
-  if (!prorate || full === 0) return { capKrw: full, proration: null };
-  const list = BRAND_PLAN_LIST_KRW[input.planId];
-  const proratedList = invoiceAmounts({ listKrw: list, prorate }).listKrw;
-  const capKrw = Math.floor((full * proratedList) / (list * STUDIO_CREDIT_KRW)) * STUDIO_CREDIT_KRW;
-  return { capKrw, proration: { fullKrw: full, days: prorate.usedDays, periodDays: prorate.totalDays } };
 }
 
 /**

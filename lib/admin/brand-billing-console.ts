@@ -13,7 +13,9 @@ import {
   planActiveWithGrace,
   type PaidBrandPlanId,
 } from '@/lib/brands/billing/math';
-import { hasTable, hasTables, loadSubscriptionSchemaReady } from '@/lib/brands/billing/schema-guard';
+import { hasColumn, hasTable, hasTables, loadSubscriptionSchemaReady } from '@/lib/brands/billing/schema-guard';
+import { cycleContaining, cycleStartAt } from '@/lib/brands/billing/cycle';
+import { monthRange } from '@/lib/brands/billing/cycle-invoices';
 import type {
   BrandBillingProfile,
   BrandDiscountCode,
@@ -49,6 +51,20 @@ export interface UninvoicedActiveOrg {
   inGrace: boolean;
   activeDiscountPercent: number | null;
   monthlyListKrw: number;
+}
+
+/**
+ * B1c: a cycle of a plan organization (from the plan start up to the current one, the latest 12) that no non-void
+ * subscription invoice covers any day of (a cycle invoice covers its cycle, a calendar-month invoice its month).
+ */
+export interface UninvoicedCycle {
+  organizationId: string;
+  organizationName: string;
+  planId: PaidBrandPlanId;
+  startedOn: string;
+  /** KST days, end exclusive (= the next billing day). */
+  cycleStart: string;
+  cycleEnd: string;
 }
 
 export interface PlanDefaultRowView {
@@ -96,6 +112,9 @@ export interface BrandBillingOverviewData {
   uninvoicedActiveOrgs: UninvoicedActiveOrg[];
   planDefaults: PlanDefaultRowView[];
   taxInvoicePanel: TaxInvoicePanelState | null;
+  /** B1c: current cycles without an invoice; empty until migration 0186 is applied. */
+  uninvoicedCycles: UninvoicedCycle[];
+  cyclesAvailable: boolean;
 }
 
 export interface DiscountCodeRedemptionDetail {
@@ -186,6 +205,8 @@ export async function loadBrandBillingOverview(
         followingOrgCount: 0,
       })),
       taxInvoicePanel: autoIssueEnabled ? { enabled: true, schemaReady: subSchemaReady, pending: [] } : null,
+      uninvoicedCycles: [],
+      cyclesAvailable: false,
     };
   }
 
@@ -244,12 +265,10 @@ export async function loadBrandBillingOverview(
              from brand_invoices i
              join brand_organizations o on o.id = i.organization_id
              left join brand_billing_profiles p on p.organization_id = i.organization_id
-            where i.period = $1
-              and i.status in ('issued', 'paid')
+            where i.status in ('issued', 'paid')
               and (i.collection_method is null or i.collection_method = 'transfer')
               and i.tax_invoice_issued_on is null
-            order by o.name asc, i.created_at asc`,
-          [period],
+            order by i.issued_at asc nulls last, i.created_at asc, i.id asc`,
         )
       : Promise.resolve({ rows: [] }),
   ]);
@@ -323,6 +342,18 @@ export async function loadBrandBillingOverview(
   };
 
   const uninvoicedActiveOrgs: UninvoicedActiveOrg[] = [];
+  const uninvoicedCycles: UninvoicedCycle[] = [];
+  const cyclesAvailable = hasInvoices && (await hasColumn(sql, 'brand_invoices', 'cycle_start'));
+  // Days each organization's non-void subscription invoices cover: a cycle row its cycle, a calendar-month row its month.
+  // Non-subscription invoices (credit packs, adjustments: `kind` set) cover no days.
+  const coveredByOrg = new Map<string, Array<{ start: string; end: string }>>();
+  for (const inv of effectiveInvoices) {
+    if (inv.status === 'void' || inv.kind) continue;
+    const range = inv.cycleStart && inv.cycleEnd ? { start: inv.cycleStart, end: inv.cycleEnd } : monthRange(inv.period);
+    const list = coveredByOrg.get(inv.organizationId) ?? [];
+    list.push(range);
+    coveredByOrg.set(inv.organizationId, list);
+  }
   const followingCounts: Record<PaidBrandPlanId, number> = {
     b2b_29: 0,
     b2b_49: 0,
@@ -341,6 +372,24 @@ export async function loadBrandBillingOverview(
     const status = planActiveWithGrace({ startedOn, endsOn }, todayKst, graceDays);
     if (status.active && row.is_override !== true) {
       followingCounts[planId] += 1;
+    }
+    if (cyclesAvailable && status.active) {
+      // Every cycle from the plan start to the current one (the latest 12) that no subscription invoice covers any day of.
+      const current = cycleContaining(startedOn, todayKst);
+      const covered = coveredByOrg.get(String(row.organization_id)) ?? [];
+      for (let index = Math.max(0, (current?.index ?? -1) - 11); current && index <= current.index; index++) {
+        const cycle = { start: cycleStartAt(startedOn, index), end: cycleStartAt(startedOn, index + 1) };
+        if (endsOn && cycle.start >= endsOn) break;
+        if (covered.some((r) => r.start < cycle.end && cycle.start < r.end)) continue;
+        uninvoicedCycles.push({
+          organizationId: String(row.organization_id),
+          organizationName: String(row.name),
+          planId,
+          startedOn,
+          cycleStart: cycle.start,
+          cycleEnd: cycle.end,
+        });
+      }
     }
     const coveredInPeriod = startedOn <= periodLastDay && (endsOn === null || endsOn > periodStart);
     const orgId = String(row.organization_id);
@@ -415,6 +464,8 @@ export async function loadBrandBillingOverview(
     uninvoicedActiveOrgs,
     planDefaults,
     taxInvoicePanel,
+    uninvoicedCycles,
+    cyclesAvailable,
   };
 }
 

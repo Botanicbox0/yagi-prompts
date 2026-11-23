@@ -197,6 +197,9 @@ export default async function StudioBrands(props?: { searchParams?: Promise<Sear
                     )}
                   </form>
                 </div>
+                <p className="admin-field-hint mb-3" data-org-list-usage-basis>
+                  {ol.usageBasisNote}
+                </p>
 
                 <AdminTable
                   caption={c.brandEngine.matrixHeading}

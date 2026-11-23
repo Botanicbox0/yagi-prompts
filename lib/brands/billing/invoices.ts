@@ -4,7 +4,7 @@ import type { Viewer } from '@/lib/auth/identity';
 import type { SqlRunner } from '@/lib/db/sql-runner';
 import { brandBillingAutoIssueOpen } from '@/lib/flags';
 import { isSandboxedClientOrganization } from '../features';
-import { BRAND_PLAN_IDS, BRAND_PLANS, loadPlanAssignment, type BrandPlanId } from '../plans';
+import { BRAND_PLAN_IDS, BRAND_PLANS, loadPlanAssignment, type BrandPlanAssignment, type BrandPlanId } from '../plans';
 import { BrandBillingDenied, requireBrandBillingSeat, requireDbAdmin } from './access';
 import {
   BRAND_INVOICE_OVERDUE_DAYS,
@@ -15,9 +15,12 @@ import {
   isValidKoreanBusinessRegNo,
   isValidYearMonth,
   normalizeBusinessRegNo,
+  PAID_BRAND_PLAN_IDS,
   proposeProration,
 } from './math';
-import { hasTable, hasTables, loadSubscriptionSchemaReady } from './schema-guard';
+import { cycleContaining, cycleStartAt, type BillingCycle } from './cycle';
+import { monthRange, subscriptionInvoiceOverlaps } from './cycle-invoices';
+import { hasColumn, hasTable, hasTables, loadSubscriptionSchemaReady } from './schema-guard';
 import type {
   BrandBillingFailureCode,
   BrandBillingOutcome,
@@ -326,7 +329,17 @@ type InvoiceRow = {
   created_at: unknown;
   updated_by: string | null;
   updated_at: unknown;
+  /** 0182; absent before it. */
+  kind?: unknown;
+  /** 0186 (B1c); absent before it, null on calendar-month rows. */
+  cycle_start?: unknown;
+  cycle_end?: unknown;
 };
+
+/** A `date` column as `YYYY-MM-DD` (PGlite and pg return a Date at UTC midnight or a string). */
+function dayOf(v: unknown): string {
+  return v instanceof Date ? v.toISOString().slice(0, 10) : String(v).slice(0, 10);
+}
 
 function mapInvoice(row: InvoiceRow, now: Date = new Date()): BrandInvoice {
   const status = row.status as BrandInvoiceStatus;
@@ -363,6 +376,9 @@ function mapInvoice(row: InvoiceRow, now: Date = new Date()): BrandInvoice {
     createdAt: stamp(row.created_at) ?? new Date(0).toISOString(),
     updatedBy: row.updated_by ? String(row.updated_by) : null,
     updatedAt: stamp(row.updated_at) ?? new Date(0).toISOString(),
+    // B1c: only on cycle rows, so a calendar-month invoice reads exactly as before.
+    ...(row.cycle_start != null && row.cycle_end != null ? { cycleStart: dayOf(row.cycle_start), cycleEnd: dayOf(row.cycle_end) } : {}),
+    ...(typeof row.kind === 'string' && row.kind !== 'subscription' ? { kind: row.kind } : {}),
   };
 }
 
@@ -383,6 +399,7 @@ function invoiceSnapshot(row: InvoiceRow): Record<string, unknown> {
     manualAmounts: Boolean(row.manual_amounts),
     manualReason: String(row.manual_reason ?? ''),
     status: row.status,
+    ...(row.cycle_start != null && row.cycle_end != null ? { cycleStart: dayOf(row.cycle_start), cycleEnd: dayOf(row.cycle_end) } : {}),
   };
 }
 
@@ -481,7 +498,12 @@ const ProrateObj = z
 
 const DraftInvoiceInput = z.object({
   organizationId: UUID,
-  period: YearMonth,
+  /** A calendar month (organizations without a plan); for a plan organization, the cycle that starts in it (B1c). */
+  period: YearMonth.optional(),
+  /** B1c: a plan organization's draft covers one billing cycle: this one or the next... */
+  cycle: z.enum(['current', 'next']).optional(),
+  /** ...or the cycle starting on this KST day (a real cycle start, not before the current cycle). */
+  cycleStart: z.string().refine(isValidCalendarDay, 'invalid calendar day').optional(),
   planId: z.enum(BRAND_PLAN_IDS).optional(),
   prorate: z.union([z.boolean(), ProrateObj]).nullable().optional(),
   applyActiveDiscount: z.boolean().default(true),
@@ -522,87 +544,49 @@ export async function draftBrandInvoiceInTx(
     return { ok: false, code: 'not_found' };
   }
 
+  // B1c: a draft that names a cycle is a cycle draft (paid plan organizations only).
+  if (!subscriptionMeta && (v.cycle !== undefined || v.cycleStart !== undefined)) {
+    return draftCycleInvoiceInTx(sql, actorId, v, nowDate, null);
+  }
+
   const targetKind = subscriptionMeta?.kind ?? 'subscription';
-  const conflict = (
-    subscriptionMeta
-      ? await sql.query(
-          "select 1 from brand_invoices where organization_id = $1 and period = $2 and status <> 'void' and kind = $3 limit 1",
-          [v.organizationId, v.period, targetKind],
-        )
-      : await sql.query(
-          "select 1 from brand_invoices where organization_id = $1 and period = $2 and status <> 'void' limit 1",
-          [v.organizationId, v.period],
-        )
-  ).rows[0];
-  if (conflict) return { ok: false, code: 'conflict' };
+  if (targetKind !== 'subscription') {
+    // A non-subscription invoice (adjustment, prepay, credit pack) covers no days: one per kind and month, as before.
+    const conflict = (
+      await sql.query(
+        "select 1 from brand_invoices where organization_id = $1 and period = $2 and status <> 'void' and kind = $3 limit 1",
+        [v.organizationId, v.period, targetKind],
+      )
+    ).rows[0];
+    if (conflict) return { ok: false, code: 'conflict' };
+  }
 
   const assignment = await loadPlanAssignment(sql, v.organizationId);
+  // B1c: a paid plan organization's admin draft covers one billing cycle; a month asked for is the cycle starting in it.
+  if (
+    !subscriptionMeta &&
+    assignment &&
+    (PAID_BRAND_PLAN_IDS as readonly string[]).includes(assignment.planId) &&
+    (await hasColumn(sql, 'brand_invoices', 'cycle_start'))
+  ) {
+    return draftCycleInvoiceInTx(sql, actorId, v, nowDate, assignment);
+  }
+  // B1c fix round: a subscription invoice (admin or engine) never overlaps another non-void subscription invoice in time;
+  // a calendar-month invoice covers its month, a cycle invoice its cycle.
+  if (targetKind === 'subscription' && (await subscriptionInvoiceOverlaps(sql, v.organizationId, monthRange(v.period!)))) {
+    return { ok: false, code: 'conflict' };
+  }
   const planId = v.planId ?? assignment?.planId;
   if (!planId) return { ok: false, code: 'invalid', field: 'planId' };
-
-  const activeDiscount =
-    v.applyActiveDiscount && (await hasTable(sql, 'brand_discounts'))
-      ? (
-          await sql.query<{
-            id: string;
-            percent: number;
-            invoices_total: number | null;
-            invoices_used: number;
-          }>(
-            "select id, percent, invoices_total, invoices_used from brand_discounts where organization_id = $1 and status = 'active' for share",
-            [v.organizationId],
-          )
-        ).rows[0] ?? null
-      : null;
-
-  const usableDiscount =
-    activeDiscount &&
-    (activeDiscount.invoices_total === null ||
-      Number(activeDiscount.invoices_used) < Number(activeDiscount.invoices_total))
-      ? activeDiscount
-      : null;
-
   const prorateInput =
     v.prorate === false || v.prorate === null
       ? null
       : typeof v.prorate === 'object'
         ? v.prorate
-        : proposeProration(assignment?.startedOn ?? null, v.period);
-
-  const baseListKrw = v.baseListKrw ?? BRAND_PLANS[planId].monthlyKrw;
-  const zeroBase = baseListKrw === 0;
-  const discountPercent = zeroBase
-    ? 0
-    : (v.discountPercent ?? (usableDiscount ? Number(usableDiscount.percent) : 0));
-  const discountId =
-    zeroBase || (v.discountPercent !== undefined && v.discountPercent === 0)
-      ? null
-      : usableDiscount && (v.discountPercent === undefined || v.discountPercent === Number(usableDiscount.percent))
-        ? String(usableDiscount.id)
-        : null;
-
-  const calculated = invoiceAmounts({
-    listKrw: baseListKrw,
-    discountPct: discountPercent,
-    prorate: prorateInput,
-  });
-
-  const listKrw = v.manualAmounts ? (v.listKrw ?? calculated.listKrw) : calculated.listKrw;
-  const discountKrw = v.manualAmounts
-    ? (v.discountKrw ?? Math.floor((listKrw * discountPercent) / 100))
-    : calculated.discountKrw;
-  if (discountKrw > listKrw) return { ok: false, code: 'invalid', field: 'discountKrw' };
-
-  const supplyKrw = v.manualAmounts ? (v.supplyKrw ?? Math.max(0, listKrw - discountKrw)) : calculated.supplyKrw;
-  const vatKrw = v.manualAmounts
-    ? (v.vatKrw ?? invoiceAmounts({ listKrw: supplyKrw, discountPct: 0 }).vatKrw)
-    : calculated.vatKrw;
-  const totalKrw = supplyKrw + vatKrw;
-  if (v.manualAmounts && v.totalKrw !== undefined && v.totalKrw !== totalKrw) {
-    return { ok: false, code: 'invalid', field: 'totalKrw' };
-  }
-
-  const manualReason = v.manualAmounts ? v.manualReason : '';
+        : proposeProration(assignment?.startedOn ?? null, v.period!);
+  const amounts = await draftAmounts(sql, v, planId, prorateInput);
+  if (!amounts.ok) return amounts;
+  const { baseListKrw, listKrw, discountId, discountPercent, discountKrw, supplyKrw, vatKrw, totalKrw, calculated, manualReason } = amounts;
   const id = randomUUID();
   const inserted = subscriptionMeta
     ? (
@@ -692,6 +676,196 @@ export async function draftBrandInvoiceInTx(
   return { ok: true, invoice: mapInvoice(inserted, nowDate) };
 }
 
+type DraftAmounts = {
+  ok: true;
+  baseListKrw: number;
+  listKrw: number;
+  discountId: string | null;
+  discountPercent: number;
+  discountKrw: number;
+  supplyKrw: number;
+  vatKrw: number;
+  totalKrw: number;
+  calculated: ReturnType<typeof invoiceAmounts>;
+  manualReason: string;
+};
+
+/** The amounts of a new draft: the active discount (read `for share`), the plan's list price, VAT; manual amounts kept. */
+async function draftAmounts(
+  sql: SqlRunner,
+  v: ValidatedDraftInvoiceInput,
+  planId: BrandPlanId,
+  prorateInput: { usedDays: number; totalDays: number } | null,
+): Promise<DraftAmounts | { ok: false; code: 'invalid'; field: string }> {
+  const activeDiscount =
+    v.applyActiveDiscount && (await hasTable(sql, 'brand_discounts'))
+      ? (
+          await sql.query<{
+            id: string;
+            percent: number;
+            invoices_total: number | null;
+            invoices_used: number;
+          }>(
+            "select id, percent, invoices_total, invoices_used from brand_discounts where organization_id = $1 and status = 'active' for share",
+            [v.organizationId],
+          )
+        ).rows[0] ?? null
+      : null;
+
+  const usableDiscount =
+    activeDiscount &&
+    (activeDiscount.invoices_total === null ||
+      Number(activeDiscount.invoices_used) < Number(activeDiscount.invoices_total))
+      ? activeDiscount
+      : null;
+
+  const baseListKrw = v.baseListKrw ?? BRAND_PLANS[planId].monthlyKrw;
+  const zeroBase = baseListKrw === 0;
+  const discountPercent = zeroBase
+    ? 0
+    : (v.discountPercent ?? (usableDiscount ? Number(usableDiscount.percent) : 0));
+  const discountId =
+    zeroBase || (v.discountPercent !== undefined && v.discountPercent === 0)
+      ? null
+      : usableDiscount && (v.discountPercent === undefined || v.discountPercent === Number(usableDiscount.percent))
+        ? String(usableDiscount.id)
+        : null;
+
+  const calculated = invoiceAmounts({
+    listKrw: baseListKrw,
+    discountPct: discountPercent,
+    prorate: prorateInput,
+  });
+
+  const listKrw = v.manualAmounts ? (v.listKrw ?? calculated.listKrw) : calculated.listKrw;
+  const discountKrw = v.manualAmounts
+    ? (v.discountKrw ?? Math.floor((listKrw * discountPercent) / 100))
+    : calculated.discountKrw;
+  if (discountKrw > listKrw) return { ok: false, code: 'invalid', field: 'discountKrw' };
+
+  const supplyKrw = v.manualAmounts ? (v.supplyKrw ?? Math.max(0, listKrw - discountKrw)) : calculated.supplyKrw;
+  const vatKrw = v.manualAmounts
+    ? (v.vatKrw ?? invoiceAmounts({ listKrw: supplyKrw, discountPct: 0 }).vatKrw)
+    : calculated.vatKrw;
+  const totalKrw = supplyKrw + vatKrw;
+  if (v.manualAmounts && v.totalKrw !== undefined && v.totalKrw !== totalKrw) {
+    return { ok: false, code: 'invalid', field: 'totalKrw' };
+  }
+
+  const manualReason = v.manualAmounts ? v.manualReason : '';
+  return { ok: true, baseListKrw, listKrw, discountId, discountPercent, discountKrw, supplyKrw, vatKrw, totalKrw, calculated, manualReason };
+}
+
+/**
+ * Which cycle of the plan anchor a draft asks for (B1c): `cycle: 'current' | 'next'`, an exact `cycleStart`, or a
+ * `period` (the cycle that starts in that month). Any cycle of the anchor, past ones included (a missed cycle must be
+ * billable; overlaps are refused by the caller); before the plan starts, the current cycle is the first one.
+ */
+export function resolveDraftCycle(
+  anchor: string,
+  todayKst: string,
+  ask: { cycle?: 'current' | 'next'; cycleStart?: string; period?: string },
+): { ok: true; cycle: BillingCycle } | { ok: false; field: 'cycle' | 'cycleStart' | 'period' } {
+  const current = cycleContaining(anchor, todayKst) ?? { index: 0, start: anchor, end: cycleStartAt(anchor, 1) };
+  const at = (index: number): BillingCycle => ({ index, start: cycleStartAt(anchor, index), end: cycleStartAt(anchor, index + 1) });
+  if (ask.cycle === 'current') return { ok: true, cycle: current };
+  if (ask.cycle === 'next') return { ok: true, cycle: at(current.index + 1) };
+  if (ask.cycleStart !== undefined) {
+    const c = ask.cycleStart >= anchor ? cycleContaining(anchor, ask.cycleStart) : null;
+    if (!c || c.start !== ask.cycleStart) return { ok: false, field: 'cycleStart' };
+    return { ok: true, cycle: c };
+  }
+  if (ask.period !== undefined) {
+    const index = (Number(ask.period.slice(0, 4)) - Number(anchor.slice(0, 4))) * 12 + (Number(ask.period.slice(5, 7)) - Number(anchor.slice(5, 7)));
+    if (index < 0) return { ok: false, field: 'period' };
+    return { ok: true, cycle: at(index) };
+  }
+  return { ok: false, field: 'cycle' };
+}
+
+/**
+ * An admin draft for ONE billing cycle of a paid plan (B1c, docs/BRAND-RECURRING-BILLING.md §5.8): the full monthly
+ * price (never prorated), discount and VAT as for any draft, `cycle_start` / `cycle_end` stored, `period` = the month the
+ * cycle starts in. One non-void subscription invoice per (organization, cycle).
+ */
+async function draftCycleInvoiceInTx(
+  sql: SqlRunner,
+  actorId: string | null,
+  v: ValidatedDraftInvoiceInput,
+  nowDate: Date,
+  known: BrandPlanAssignment | null,
+): Promise<BrandBillingOutcome<{ invoice: BrandInvoice }>> {
+  const nowIso = nowDate.toISOString();
+  if (!(await hasColumn(sql, 'brand_invoices', 'cycle_start'))) return { ok: false, code: 'unavailable' };
+  const assignment = known ?? (await loadPlanAssignment(sql, v.organizationId));
+  if (!assignment || !(PAID_BRAND_PLAN_IDS as readonly string[]).includes(assignment.planId)) {
+    return { ok: false, code: 'invalid', field: 'cycle' };
+  }
+  const resolved = resolveDraftCycle(assignment.startedOn, kstDayOf(nowDate), v);
+  if (!resolved.ok) return { ok: false, code: 'invalid', field: resolved.field };
+  const { cycle } = resolved;
+  // A cycle that starts on or after the plan's end is not billed.
+  if (assignment.endsOn && cycle.start >= assignment.endsOn) {
+    return { ok: false, code: 'invalid', field: v.cycleStart !== undefined ? 'cycleStart' : v.cycle !== undefined ? 'cycle' : 'period' };
+  }
+  // No overlap in time with any non-void subscription invoice (cycle or calendar month).
+  if (await subscriptionInvoiceOverlaps(sql, v.organizationId, { start: cycle.start, end: cycle.end })) {
+    return { ok: false, code: 'conflict' };
+  }
+
+  const planId = v.planId ?? assignment.planId;
+  // No proration anywhere on a cycle: every cycle is the full monthly price.
+  const amounts = await draftAmounts(sql, v, planId, null);
+  if (!amounts.ok) return amounts;
+  const id = randomUUID();
+  const period = cycle.start.slice(0, 7);
+  const inserted = (
+    await sql.query<InvoiceRow>(
+      `insert into brand_invoices (
+         id, organization_id, period, plan_id, base_list_krw, list_krw, prorated_days, period_days,
+         discount_id, discount_percent, discount_krw, supply_krw, vat_krw, total_krw,
+         manual_amounts, manual_reason, status, memo, created_by, created_at, updated_by, updated_at,
+         cycle_start, cycle_end
+       ) values ($1, $2, $3, $4, $5, $6, null, null, $7, $8, $9, $10, $11, $12, $13, $14, 'draft', $15, $16, $17::timestamptz, $16, $17::timestamptz,
+                 $18::date, $19::date)
+       returning *`,
+      [
+        id,
+        v.organizationId,
+        period,
+        planId,
+        amounts.baseListKrw,
+        amounts.listKrw,
+        amounts.discountId,
+        amounts.discountPercent,
+        amounts.discountKrw,
+        amounts.supplyKrw,
+        amounts.vatKrw,
+        amounts.totalKrw,
+        v.manualAmounts,
+        amounts.manualReason,
+        v.memo,
+        actorId,
+        nowIso,
+        cycle.start,
+        cycle.end,
+      ],
+    )
+  ).rows[0]!;
+  await appendInvoiceEvent(sql, {
+    invoiceId: id,
+    organizationId: v.organizationId,
+    action: 'drafted',
+    fromStatus: null,
+    toStatus: 'draft',
+    snapshot: invoiceSnapshot(inserted),
+    note: v.memo,
+    actorId,
+    createdAt: nowIso,
+  });
+  return { ok: true, invoice: mapInvoice(inserted, nowDate) };
+}
+
 /**
  * Draft a monthly invoice for `(organizationId, period)` (admin only).
  * Amounts are derived via `invoiceAmounts` unless `manualAmounts: true` is passed with a non-empty `manualReason`.
@@ -711,6 +885,9 @@ export async function draftBrandInvoice(
   }
   if (v.manualAmounts && v.manualReason.trim().length === 0) {
     return { ok: false, code: 'invalid', field: 'manualReason' };
+  }
+  if (v.period === undefined && v.cycle === undefined && v.cycleStart === undefined) {
+    return { ok: false, code: 'invalid', field: 'period' };
   }
   const nowDate = deps.now?.() ?? new Date();
 
@@ -773,6 +950,8 @@ export async function updateDraftBrandInvoiceInTx(
   const row = (await sql.query<InvoiceRow>('select * from brand_invoices where id = $1 for update', [v.invoiceId])).rows[0];
   if (!row) return { ok: false, code: 'not_found' };
   if (row.status !== 'draft') return { ok: false, code: 'conflict' };
+  // B1c: a cycle invoice is never prorated.
+  if (row.cycle_start != null && v.proratedDays != null) return { ok: false, code: 'invalid', field: 'proratedDays' };
 
   const manualAmounts = v.manualAmounts ?? Boolean(row.manual_amounts);
   const hasManualAmountField =

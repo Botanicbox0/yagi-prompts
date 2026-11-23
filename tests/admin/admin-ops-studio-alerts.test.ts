@@ -275,7 +275,8 @@ describe('brand studio ops, home queue counters & 10-minute ops alerts', () => {
       startedOn: '2026-10-01',
       expectedRevision: 0,
     });
-    const inv = await draftBrandInvoice({ sql, now: () => now }, ADMIN_VIEWER, {
+    // B1c: a plan organization drafts by billing cycle and never a cycle before the current one, so a past month is drafted while it was current.
+    const inv = await draftBrandInvoice({ sql, now: () => new Date('2026-10-15T01:00:00Z') }, ADMIN_VIEWER, {
       organizationId: orgA,
       period: '2026-10',
       prorate: false,

@@ -12,7 +12,7 @@ import {
 } from '@/lib/admin/brand-billing-console';
 import { formatAdminTime, formatCount, formatKrw } from '@/lib/admin/format';
 import { interpolate } from '@/lib/i18n/format';
-import { kstDayOf } from '@/lib/brands/billing/math';
+import { addCalendarDays, kstDayOf } from '@/lib/brands/billing/math';
 import {
   AdminShell,
   BUTTON,
@@ -47,6 +47,30 @@ function invoiceTone(status: BrandInvoiceStatus, overdue: boolean): 'done' | 'ac
   return 'hold';
 }
 
+/** "11월 17일" / "Nov 17" for a KST `YYYY-MM-DD`, formatted as a UTC calendar day so nothing shifts a day. */
+function dayLabel(day: string, locale: string, withYear = false): string {
+  const [y, m, d] = day.split('-').map(Number) as [number, number, number];
+  return new Intl.DateTimeFormat(locale === 'en' ? 'en-US' : 'ko-KR', {
+    timeZone: 'UTC',
+    month: 'short',
+    day: 'numeric',
+    ...(withYear ? { year: 'numeric' as const } : {}),
+  }).format(Date.UTC(y, m - 1, d));
+}
+
+/**
+ * A billing cycle `[start, end)` as its first and last day (B1c). The year shows only for a cycle that starts in
+ * another year than today, and on the last day only when it falls in a different year from the start.
+ */
+function cycleLabels(start: string, end: string, locale: string, todayKst: string): { start: string; last: string } {
+  const last = addCalendarDays(end, -1);
+  const startYear = start.slice(0, 4) !== todayKst.slice(0, 4);
+  return {
+    start: dayLabel(start, locale, startYear),
+    last: dayLabel(last, locale, startYear && last.slice(0, 4) !== start.slice(0, 4)),
+  };
+}
+
 export default async function BrandBillingOverviewPage(props?: { searchParams?: Promise<SearchParams> }) {
   const [viewer, sql, locale, params] = await Promise.all([
     requireAdmin(),
@@ -68,6 +92,20 @@ export default async function BrandBillingOverviewPage(props?: { searchParams?: 
   const todayKst = kstDayOf(now);
   const data = sql ? await loadBrandBillingOverview(sql, viewer, { period, env, now }) : null;
   const backUrl = `/admin/brand-billing?period=${encodeURIComponent(period)}`;
+  const cycleText = (start: string, end: string) => cycleLabels(start, end, locale, todayKst);
+  // B1c: a cycle invoice shows its cycle (start ~ last day); a month invoice keeps its `period`.
+  const invoicePeriod = (inv: { period: string; cycleStart?: string; cycleEnd?: string }) =>
+    inv.cycleStart && inv.cycleEnd ? (
+      <span
+        className="admin-nowrap"
+        data-invoice-cycle={inv.cycleStart}
+        title={`${inv.cycleStart} ~ ${addCalendarDays(inv.cycleEnd, -1)}`}
+      >
+        {interpolate(od.billing.cycleRange, cycleText(inv.cycleStart, inv.cycleEnd))}
+      </span>
+    ) : (
+      inv.period
+    );
 
   const okCode = one(params, 'ok');
   const rawDetail = one(params, 'detail');
@@ -130,6 +168,9 @@ export default async function BrandBillingOverviewPage(props?: { searchParams?: 
           <>
             <section className="admin-section" data-billing-period-summary>
               <h2>{interpolate(bb.summaryHeading, { period: data.period })}</h2>
+              <p className="admin-field-hint mb-3" data-period-cycle-note>
+                {bb.summaryCycleNote}
+              </p>
               <MetricStrip
                 label={interpolate(bb.summaryHeading, { period: data.period })}
                 items={[
@@ -170,6 +211,7 @@ export default async function BrandBillingOverviewPage(props?: { searchParams?: 
                 caption={interpolate(bb.periodListHeading, { period: data.period })}
                 columns={[
                   { key: 'org', label: ol.columns.org },
+                  { key: 'period', label: od.billing.invoiceCols.period },
                   { key: 'plan', label: od.billing.invoiceCols.plan },
                   { key: 'list', label: od.billing.invoiceCols.list, numeric: true },
                   { key: 'discount', label: od.billing.invoiceCols.discount, numeric: true },
@@ -190,6 +232,7 @@ export default async function BrandBillingOverviewPage(props?: { searchParams?: 
                         {inv.organizationName}
                       </a>
                     ),
+                    period: invoicePeriod(inv),
                     plan: (
                       <span className="admin-nowrap">
                         {b.planNames[inv.planId]}
@@ -247,7 +290,7 @@ export default async function BrandBillingOverviewPage(props?: { searchParams?: 
                         {inv.organizationName}
                       </a>
                     ),
-                    period: inv.period,
+                    period: invoicePeriod(inv),
                     plan: b.planNames[inv.planId],
                     total: <strong>{formatKrw(inv.totalKrw, locale)}</strong>,
                     age: (
@@ -282,6 +325,64 @@ export default async function BrandBillingOverviewPage(props?: { searchParams?: 
                 }))}
                 empty={bb.overdueEmpty}
               />
+            </Panel>
+
+            <Panel
+              title={bb.uninvoicedCyclesHeading}
+              id="uninvoiced-cycles"
+              action={
+                data.cyclesAvailable ? (
+                  <span className="text-xs font-mono opacity-75">{formatCount(data.uninvoicedCycles.length, locale)}</span>
+                ) : undefined
+              }
+            >
+              <div data-uninvoiced-cycles>
+                {!data.cyclesAvailable ? (
+                  <p className="admin-notice" data-uninvoiced-cycles-unmigrated>
+                    {bb.cyclesUnmigrated}
+                  </p>
+                ) : (
+                  <>
+                    <p className="admin-field-hint mb-3">{bb.uninvoicedCyclesHint}</p>
+                    <AdminTable
+                      caption={bb.uninvoicedCyclesHeading}
+                      columns={[
+                        { key: 'org', label: ol.columns.org },
+                        { key: 'plan', label: od.billing.invoiceCols.plan },
+                        { key: 'cycle', label: bb.cycleCol },
+                        { key: 'next', label: bb.nextBillingCol },
+                      ]}
+                      rows={data.uninvoicedCycles.map((row) => ({
+                        key: `${row.organizationId}|${row.cycleStart}`,
+                        data: { 'data-uninvoiced-cycle-row': row.organizationId, 'data-cycle-start': row.cycleStart },
+                        cells: {
+                          org: (
+                            <a
+                              className="font-semibold text-accent hover:underline"
+                              href={`/admin/brand-workspace/organizations/${row.organizationId}#billing-invoices`}
+                            >
+                              {row.organizationName}
+                            </a>
+                          ),
+                          plan: (
+                            <span className="admin-nowrap">
+                              {b.planNames[row.planId]}
+                              <span className="admin-cell-sub">{`${od.billing.startedOn} ${row.startedOn}`}</span>
+                            </span>
+                          ),
+                          cycle: (
+                            <span className="admin-nowrap">
+                              {interpolate(od.billing.cycleRange, cycleText(row.cycleStart, row.cycleEnd))}
+                            </span>
+                          ),
+                          next: <span className="admin-nowrap">{dayLabel(row.cycleEnd, locale)}</span>,
+                        },
+                      }))}
+                      empty={bb.uninvoicedCyclesEmpty}
+                    />
+                  </>
+                )}
+              </div>
             </Panel>
 
             <Panel
@@ -444,7 +545,7 @@ export default async function BrandBillingOverviewPage(props?: { searchParams?: 
 
             {data.taxInvoicePanel?.enabled && (
               <Panel
-                title={interpolate(bb.taxInvoicesHeading, { period: data.period })}
+                title={bb.taxInvoicesHeading}
                 id="tax-invoices"
                 action={
                   data.taxInvoicePanel.schemaReady ? (
@@ -475,9 +576,10 @@ export default async function BrandBillingOverviewPage(props?: { searchParams?: 
                     )}
                     <p className="admin-field-hint mb-3">{bb.taxInvoicesHint}</p>
                     <AdminTable
-                      caption={interpolate(bb.taxInvoicesHeading, { period: data.period })}
+                      caption={bb.taxInvoicesHeading}
                       columns={[
                         { key: 'org', label: ol.columns.org },
+                        { key: 'period', label: od.billing.invoiceCols.period },
                         { key: 'profile', label: od.billing.profileHeading },
                         { key: 'supply', label: od.billing.invoiceCols.supply, numeric: true },
                         { key: 'vat', label: od.billing.invoiceCols.vat, numeric: true },
@@ -497,6 +599,7 @@ export default async function BrandBillingOverviewPage(props?: { searchParams?: 
                               {row.organizationName}
                             </a>
                           ),
+                          period: row.period,
                           profile: row.billingProfile ? (
                             <div className="text-xs space-y-0.5">
                               <div className="font-medium">
@@ -549,7 +652,7 @@ export default async function BrandBillingOverviewPage(props?: { searchParams?: 
                           ),
                         },
                       }))}
-                      empty={interpolate(bb.taxInvoicesEmpty, { period: data.period })}
+                      empty={bb.taxInvoicesEmpty}
                     />
                   </>
                 )}

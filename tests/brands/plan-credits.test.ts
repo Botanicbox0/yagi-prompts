@@ -98,6 +98,17 @@ describe('plan credits leave the decided card margin (§6.6-2)', () => {
     });
   }
 
+  it('B1c: over any N consecutive cycles (full price, full credits, no proration, no rollover) the card margin stays >= 10%', () => {
+    for (const plan of PAID_BRAND_PLAN_IDS) {
+      for (let n = 1; n <= 24; n++) {
+        const price = n * BRAND_PLAN_LIST_KRW[plan];
+        const fees = n * cardFeeKrw(BRAND_PLAN_LIST_KRW[plan]);
+        const worstCost = n * BRAND_PLAN_CREDITS[plan] * worstCostKrwPerCredit();
+        expect((price - fees - worstCost) / price, `${plan} x${n}: ${RECOMPUTE}`).toBeGreaterThanOrEqual(BRAND_MARGIN_FLOOR);
+      }
+    }
+  });
+
   it('a higher plan never makes a credit dearer (10.74 -> 10.65 -> 10.62 KRW)', () => {
     const perCredit = PAID_BRAND_PLAN_IDS.map((plan) => BRAND_PLAN_LIST_KRW[plan] / BRAND_PLAN_CREDITS[plan]);
     expect(perCredit.map((v) => Math.round(v * 100) / 100)).toEqual([10.74, 10.65, 10.62]);

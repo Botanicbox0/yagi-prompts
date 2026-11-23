@@ -19,6 +19,7 @@ import {
 import { brandWorkspaceApprovalOpen } from '@/lib/flags';
 import { hasTable, loadAllowanceSchemaState } from './schema-guard';
 import { syncPlanDefaultSnapshot } from './snapshot';
+import { CYCLE_ALREADY_INVOICED, startDayMoveBlocked } from './cycle-invoices';
 import { loadWorkspaceApprovalSchemaReady } from './workspace-approval-schema';
 import type {
   BrandAllowanceGrant,
@@ -259,7 +260,7 @@ const PlanAndAllowanceInput = z
  * (`plan_default` vs explicit `override`) in one admin operation so operators never drift out of sync.
  */
 export async function setPlanAndAllowance(
-  deps: { sql: SqlRunner },
+  deps: { sql: SqlRunner; now?: () => Date },
   viewer: Viewer,
   input: unknown,
 ): Promise<BrandBillingOutcome<{ id: string; revision: number }>> {
@@ -287,6 +288,10 @@ export async function setPlanAndAllowance(
       ).rows[0];
       const revision = current ? Number(current.revision) : 0;
       if (revision !== v.expectedRevision) return { ok: false as const, code: 'conflict' as const };
+      // B1c: moving the start day moves the billing cycle; refused while a subscription invoice covers today or later.
+      if (current && (await startDayMoveBlocked(sql, v.organizationId, v.startedOn, kstDayOf(deps.now?.() ?? new Date())))) {
+        return { ok: false as const, code: 'conflict' as const, detail: CYCLE_ALREADY_INVOICED };
+      }
       const next = revision + 1;
 
       await sql.query(

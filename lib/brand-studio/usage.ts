@@ -13,16 +13,15 @@
  */
 import { z } from 'zod';
 import type { Viewer } from '@/lib/auth/identity';
-import type { SqlRunner } from '@/lib/db/sql-runner';
+import { sqlCacheRoot, type SqlRunner } from '@/lib/db/sql-runner';
 import {
   BRAND_PLAN_GRACE_DAYS_DEFAULT,
   kstDayOf,
   kstMonthOf,
   PAID_BRAND_PLAN_IDS,
   planActiveWithGrace,
-  type PaidBrandPlanId,
 } from '@/lib/brands/billing/math';
-import { planCapForMonth, type PlanCapProration } from '@/lib/brands/billing/plan-credits';
+import { cycleContaining, cycleWindow, type BillingCycle } from '@/lib/brands/billing/cycle';
 import { hasColumn, loadAllowanceSchemaState } from '@/lib/brands/billing/schema-guard';
 import type { StudioAllowanceView } from './contracts';
 import { STUDIO_CREDIT_KRW } from './credits';
@@ -66,10 +65,85 @@ export interface StudioAllowance {
   /** False when no explicit override or plan default applies and the env default is used. */
   configured: boolean;
   /**
-   * Present only when `source` is `plan` and the plan started after the 1st of this KST month: `baseCapKrw` is then that
-   * month's share of the plan's full cap (`planCapForMonth`). Admin display only.
+   * Present only when `source` is `plan` (B1c): the billing cycle the allowance runs on (one month from the plan
+   * start day, lib/brands/billing/cycle.ts). `usedKrw` and `resetsAt` then belong to this cycle. KST dates, `end`
+   * exclusive (= the next billing day); `startAt` / `endAt` are the UTC instants at KST midnight.
    */
-  planProration?: PlanCapProration;
+  cycle?: { anchor: string; index: number; start: string; end: string; startAt: string; endAt: string };
+}
+
+/**
+ * The window an organization's allowance runs on: its plan cycle when the allowance comes from a plan, else the KST
+ * calendar month (overrides, the env default, organizations without a plan). The ONE place every screen and job takes
+ * "this period's usage" from, so the numbers agree with what `reserveAllowance` enforces.
+ */
+export function allowanceWindow(allowance: Pick<StudioAllowance, 'cycle'>, now: Date): { kind: 'cycle' | 'month'; start: Date; end: Date } {
+  if (allowance.cycle) return { kind: 'cycle', start: new Date(allowance.cycle.startAt), end: new Date(allowance.cycle.endAt) };
+  return { kind: 'month', ...studioMonthWindow(now) };
+}
+
+/** `loadAllowance` and its window in one call, for readers that only need the window. */
+export async function loadAllowanceWindow(
+  sql: SqlRunner,
+  organizationId: string,
+  env: { defaultMonthlyKrw: number; planGraceDays?: number },
+  now: Date = new Date(),
+): Promise<{ allowance: StudioAllowance; window: { kind: 'cycle' | 'month'; start: Date; end: Date } }> {
+  const allowance = await loadAllowance(sql, organizationId, env, now);
+  return { allowance, window: allowanceWindow(allowance, now) };
+}
+
+/**
+ * Date-range grant columns (0186). A positive probe is cached for the database root's lifetime by `hasColumn`; a
+ * negative one for 60 s here, so a plan organization's load does not probe on every call before 0186 is applied.
+ */
+const RANGE_COLUMNS_MISSING = new WeakMap<object, number>();
+const RANGE_NEGATIVE_TTL_MS = 60_000;
+
+async function rangeGrantColumnsReady(sql: SqlRunner): Promise<boolean> {
+  const root = sqlCacheRoot(sql);
+  const missingSince = RANGE_COLUMNS_MISSING.get(root);
+  if (missingSince !== undefined && Date.now() - missingSince < RANGE_NEGATIVE_TTL_MS) return false;
+  const ok = await hasColumn(sql, 'brand_allowance_grants', 'valid_from');
+  if (ok) RANGE_COLUMNS_MISSING.delete(root);
+  else RANGE_COLUMNS_MISSING.set(root, Date.now());
+  return ok;
+}
+
+/** A grant's effective start day as SQL (KST date): `valid_from`, else the later of its creation day and its month's 1st. */
+export function grantEffectiveStartSql(rangeColumns: boolean): string {
+  const monthly = "greatest(((created_at at time zone 'UTC') + interval '9 hours')::date, (valid_month || '-01')::date)";
+  return rangeColumns ? `coalesce(valid_from, ${monthly})` : monthly;
+}
+
+/**
+ * A plan organization's one window (B1c): its usage inside the current cycle and the grants ATTACHED to that cycle — a
+ * grant belongs to the one cycle that contains its effective start day (`grantEffectiveStartSql`), so nothing is
+ * counted in two cycles and a cycle always starts from the full plan cap. A grant whose start day is before the plan
+ * start belongs to no cycle (the range runs from the cycle start, which is never before the anchor). One statement.
+ */
+async function planCycleTotals(
+  sql: SqlRunner,
+  organizationId: string,
+  input: { cycle: BillingCycle; withGrants: boolean; rangeColumns: boolean },
+): Promise<{ usedKrw: number; grantsKrw: number }> {
+  const { start, end } = cycleWindow(input.cycle);
+  const eff = grantEffectiveStartSql(input.rangeColumns);
+  const grants = input.withGrants
+    ? `,
+              (select coalesce(sum(amount_krw), 0)::bigint from brand_allowance_grants
+                where organization_id = $1 and revoked_at is null and ${eff} >= $4::date and ${eff} < $5::date) as attached`
+    : '';
+  const row = (
+    await sql.query<{ used: string | number; attached?: string | number }>(
+      `select (select coalesce(sum(${jobUsageKrwSql()}), 0)::bigint from brand_studio_jobs
+                where organization_id = $1 and status not in ('failed','canceled') and created_at >= $2 and created_at < $3) as used${grants}`,
+      input.withGrants
+        ? [organizationId, start.toISOString(), end.toISOString(), input.cycle.start, input.cycle.end]
+        : [organizationId, start.toISOString(), end.toISOString()],
+    )
+  ).rows[0];
+  return { usedKrw: Number(row?.used ?? 0), grantsKrw: Math.max(0, Number(row?.attached ?? 0)) };
 }
 
 export async function usedKrwIn(sql: SqlRunner, organizationId: string, window: { start: Date; end: Date }): Promise<number> {
@@ -228,7 +302,7 @@ export async function loadAllowance(
   const preferredLane = lane && (STUDIO_LANES as readonly string[]).includes(lane) ? (lane as StudioLane) : null;
   let source: AllowanceSource = 'default';
   let baseCapKrw = env.defaultMonthlyKrw;
-  let planProration: PlanCapProration | null = null;
+  let planCycle: BillingCycle | null = null;
 
   if (isOverride && rowCap !== null) {
     source = 'override';
@@ -246,23 +320,54 @@ export async function loadAllowance(
     );
     if (active) {
       source = 'plan';
-      // First month (B1b): a plan that started after the 1st of this month gives credits in the invoice's proportion.
-      const planMonth = planCapForMonth({ planId: planId as PaidBrandPlanId, fullCapKrw: planDefaultCap, startedOn: planStartedOn, month });
-      baseCapKrw = planMonth.capKrw;
-      planProration = planMonth.proration;
+      // B1c: the full plan cap every cycle (no first-month proration); the cycle runs from the plan start day and
+      // simply continues through the grace days after `ends_on`.
+      baseCapKrw = planDefaultCap;
+      planCycle = cycleContaining(planStartedOn, today);
     }
   }
 
+  if (source !== 'plan' || !planCycle || !planStartedOn) {
+    // Overrides, the env default, no plan: the KST calendar month, exactly as before B1c.
+    return {
+      capKrw: Math.max(0, baseCapKrw) + extraKrw,
+      baseCapKrw: Math.max(0, baseCapKrw),
+      extraKrw,
+      source,
+      usedKrw: await usedKrwIn(sql, organizationId, window),
+      resetsAt: window.end.toISOString(),
+      preferredLane,
+      configured: isOverride || source === 'plan',
+    };
+  }
+
+  // Plan organizations (B1c): ONE window, the current cycle. Used = usage inside it; cap = full plan cap + the grants
+  // attached to it. Nothing from an earlier cycle or month is added or subtracted.
+  const planCap = Math.max(0, baseCapKrw);
+  const totals = await planCycleTotals(sql, organizationId, {
+    cycle: planCycle,
+    withGrants: schema.hasGrants,
+    rangeColumns: schema.hasGrants && (await rangeGrantColumnsReady(sql)),
+  });
+  extraKrw = totals.grantsKrw;
+  const cycleAt = cycleWindow(planCycle);
   return {
-    capKrw: Math.max(0, baseCapKrw) + extraKrw,
-    baseCapKrw: Math.max(0, baseCapKrw),
+    capKrw: planCap + extraKrw,
+    baseCapKrw: planCap,
     extraKrw,
     source,
-    usedKrw: await usedKrwIn(sql, organizationId, window),
-    resetsAt: window.end.toISOString(),
+    usedKrw: totals.usedKrw,
+    resetsAt: cycleAt.end.toISOString(),
     preferredLane,
-    configured: isOverride || source === 'plan',
-    ...(planProration ? { planProration } : {}),
+    configured: true,
+    cycle: {
+      anchor: planStartedOn,
+      index: planCycle.index,
+      start: planCycle.start,
+      end: planCycle.end,
+      startAt: cycleAt.start.toISOString(),
+      endAt: cycleAt.end.toISOString(),
+    },
   };
 }
 

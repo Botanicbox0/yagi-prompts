@@ -1,7 +1,8 @@
 /**
- * Credits each member used this month (docs/BRAND-STUDIO-V3.md §3, the team page).
+ * Credits each member used in the organization's current allowance window (docs/BRAND-STUDIO-V3.md §3, the team page).
  *
- * Same month and same filter as the allowance (./usage.ts `usedKrwIn`): the Asia/Seoul calendar month,
+ * Same window and same filter as the allowance: pass the window `allowanceWindow` (./usage.ts) gives for the organization
+ * (its plan cycle, B1c, or the Asia/Seoul calendar month); without one, the calendar month as before,
  * each job counted in whole credits (`jobUsageKrwSql`), failed and canceled jobs excluded. Grouped by the job's
  * `created_by`; a job whose author's profile is gone groups under `userId: null`.
  *
@@ -20,8 +21,13 @@ export interface MemberUsageRow {
   runs: number;
 }
 
-export async function memberUsage(sql: SqlRunner, organizationId: string, now: Date = new Date()): Promise<MemberUsageRow[]> {
-  const window = studioMonthWindow(now);
+export async function memberUsage(
+  sql: SqlRunner,
+  organizationId: string,
+  now: Date = new Date(),
+  allowanceWindow: { start: Date; end: Date } = studioMonthWindow(now),
+): Promise<MemberUsageRow[]> {
+  const window = allowanceWindow;
   const rows = (
     await sql.query<{ user_id: string | null; email: string | null; display_name: string | null; used: string | number; runs: string | number }>(
       `select j.created_by as user_id, p.email, p.display_name,

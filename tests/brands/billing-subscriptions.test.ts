@@ -2,6 +2,7 @@ import { randomUUID } from 'node:crypto';
 import { PGlite } from '@electric-sql/pglite';
 import { NextRequest } from 'next/server';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { insertLegacyDraft } from '@/tests/brands/helpers/legacy-invoice';
 import type { Viewer } from '@/lib/auth/identity';
 import { loadAllowance } from '@/lib/brand-studio/usage';
 import { studioEnv } from '@/lib/brand-studio/env';
@@ -210,8 +211,8 @@ describe('B1a brand subscriptions integration & route (§8.2–§8.11)', () => {
     });
     expect(await loadBrandSubscription(f.sql, f.orgId)).toMatchObject({ status: 'active' });
     expect(await loadPlanAssignment(f.sql, f.orgId)).toMatchObject({ planId: 'b2b_29', endsOn: '2026-12-01' });
-    // Started 2026-11-10: the first month's credits follow the invoice's 21/30 days (B1b first-month proration).
-    expect((await loadAllowance(f.sql, f.orgId, studioEnv(), t0)).capKrw).toBe(189_000);
+    // B1c (changed on purpose): the full plan cap on every cycle; the B1b first-month proration (189,000 here) is gone.
+    expect((await loadAllowance(f.sql, f.orgId, studioEnv(), t0)).capKrw).toBe(270_000);
 
     // Second org with activateBeforePayment + confirm: true -> plan access open immediately with ends_on = due_on
     const owner2 = randomUUID();
@@ -233,7 +234,8 @@ describe('B1a brand subscriptions integration & route (§8.2–§8.11)', () => {
     expect(started2).toMatchObject({ ok: true, applied: true });
     expect(await loadBrandSubscription(f.sql, org2Res.id)).toMatchObject({ status: 'pending', activatedBeforePayment: true });
     expect(await loadPlanAssignment(f.sql, org2Res.id)).toMatchObject({ planId: 'b2b_49', endsOn: '2026-11-24' });
-    expect((await loadAllowance(f.sql, org2Res.id, studioEnv(), t0)).capKrw).toBe(322_000);
+    // B1c: full cap (was 322,000 under the B1b first-month proration).
+    expect((await loadAllowance(f.sql, org2Res.id, studioEnv(), t0)).capKrw).toBe(460_000);
   });
 
   it('§8.5 Unpaid flow: ends_on = oldest due_on, past_due, suspended after grace, no new invoice while suspended, resume prorated on pay', async () => {
@@ -978,11 +980,9 @@ describe('B1a brand subscriptions integration & route (§8.2–§8.11)', () => {
       note: 'expired',
       expectedRevision: 0,
     });
-    const manualNovDraft = await draftBrandInvoice({ sql: f.sql, now: () => nov01 }, admin(), {
-      organizationId: org2.id,
-      period: '2026-11',
-      planId: 'b2b_29',
-    });
+    // B1c fix round: org2's manual plan ended Oct 10, so a November cycle is not drafted by the admin path any more; the
+    // manual November invoice is written as the calendar-month row the admin path used to write.
+    const manualNovDraft = await insertLegacyDraft(f.sql, { organizationId: org2.id, period: '2026-11', planId: 'b2b_29', actorId: f.ids.admin });
     expect(manualNovDraft.ok).toBe(true);
     const refusedDup = await startSubscriptionCompat({ sql: f.sql, now: () => nov01 }, admin(), {
       organizationId: org2.id,

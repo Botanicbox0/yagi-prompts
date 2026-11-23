@@ -102,6 +102,8 @@ export type TrialCarryResult =
       revoked: number;
       /** From a month before the previous one (the job did not run in time): never carried. */
       expired: number;
+      /** The organization's allowance comes from a plan (B1c): its grants belong to one cycle, nothing is carried. */
+      planOrganization: number;
       /** Already evaluated or carried by an overlapping run between the listing and the lock. */
       skipped: number;
       errors: number;
@@ -348,9 +350,11 @@ function usableThrough(original: BrandTrialGrant | null, carried: BrandTrialGran
 /**
  * The monthly carry (hourly job, `BRAND_WORKSPACE_APPROVAL` only). Each ORIGINAL trial grant is evaluated exactly once,
  * after its month has ended, and stamped `trial_carry_checked_at` in the same transaction whatever the outcome:
- * - from the previous KST month, not revoked: remainder = max(0, min(trial, cap − used)), cap and used being
- *   `loadAllowance` at the last instant of that month; a remainder of at least one credit becomes ONE grant for the
- *   current month (`kind='trial'`, `carried_from` = the original), rounded down to whole credits; less is "nothing left";
+ * - from the previous KST month, not revoked: remainder = max(0, min(trial, cap − used)), read from `loadAllowance` at the
+ *   last instant of that month; a remainder of at least one credit becomes ONE grant for the current month
+ *   (`kind='trial'`, `carried_from` = the original), rounded down to whole credits; less is "nothing left";
+ * - the organization's allowance comes from a plan at that instant (B1c): not carried — a plan organization's grant
+ *   belongs to one billing cycle and lasts until that cycle ends;
  * - revoked: not carried; from an earlier month (the job did not run in time): expired, not carried.
  * Evaluating once is what makes a later change of the cap (an override, a new default, a plan) unable to turn "nothing
  * left" into a second trial, and keeps the job from re-locking the same organizations every hour.
@@ -393,6 +397,7 @@ export async function carryTrialGrants(deps: {
     nothingLeft: 0,
     revoked: 0,
     expired: 0,
+    planOrganization: 0,
     skipped: 0,
     errors: 0,
   };
@@ -462,7 +467,14 @@ export async function carryTrialGrants(deps: {
             return 'expired' as const;
           }
           const allowance = await loadAllowance(tx, candidate.organization_id, studio, lastInstant);
+          // B1c: a plan organization's grants belong to one billing cycle and last until it ends; there is no month-end carry.
+          if (allowance.source === 'plan') {
+            await stampChecked();
+            return 'plan' as const;
+          }
           const trialKrw = Number(original.amount_krw);
+          // Calendar month (override, default): plan credits first, so what is left of the cap at the month's end is what is
+          // left of the grants, at most the trial.
           const remainder = Math.max(0, Math.min(trialKrw, allowance.capKrw - allowance.usedKrw));
           const amountKrw = Math.floor(remainder / STUDIO_CREDIT_KRW) * STUDIO_CREDIT_KRW;
           if (amountKrw < STUDIO_CREDIT_KRW) {
@@ -487,6 +499,8 @@ export async function carryTrialGrants(deps: {
           result.revoked += 1;
         } else if (outcome === 'expired') {
           result.expired += 1;
+        } else if (outcome === 'plan') {
+          result.planOrganization += 1;
         } else {
           result.skipped += 1;
         }

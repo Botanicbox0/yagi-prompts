@@ -22,6 +22,8 @@ const routeMocks = vi.hoisted(() => ({ sql: null as SqlRunner | null }));
 vi.mock('@/lib/db/connect', () => ({ getSqlRunner: async () => routeMocks.sql }));
 const tickRoute = await import('@/app/api/brand-billing/tick/route');
 
+/** B1c: the plan organization's allowance reads (its cycle); every other operation must stay byte-identical. */
+const B1C_PLAN_ORG_OPS = new Set(['loadPlan', 'uploadPlan']);
 type RouteOp = { op: string; status: number; body: unknown; log: unknown };
 const fixture = JSON.parse(
   readFileSync(join(process.cwd(), 'tests', 'brands', 'fixtures', 'brand-workspace-approval-flag-off-parity.json'), 'utf8'),
@@ -51,6 +53,31 @@ describe('BRAND_WORKSPACE_APPROVAL off: exact origin/main parity', () => {
           const actual = await flagOffParityScenario(db);
           expect(actual.map((o) => o.op)).toEqual(fixture.ops.map((o) => o.op));
           for (const [i, op] of fixture.ops.entries()) {
+            if (B1C_PLAN_ORG_OPS.has(op.op)) {
+              // B1c, on purpose: a plan organization's allowance runs on its billing cycle (other statements). Its plan
+              // started on the 1st here, so the cycle is the calendar month and the numbers are the same as before; the
+              // result only gains the cycle and the grants' remainder.
+              if (op.op === 'loadPlan') {
+                // B1c fix round: a plan organization's grant belongs to the cycle containing its effective start day (the
+                // later of its creation day and its month's 1st). The scenario's grant is created on the real clock, so the
+                // expected extra follows its stored creation day.
+                const { cycle, capKrw, extraKrw, ...rest } = actual[i]!.result as Record<string, unknown>;
+                const { capKrw: _c, extraKrw: _e, ...expectedRest } = op.result as Record<string, unknown>;
+                expect(rest, `${op.op}: result`).toEqual(expectedRest);
+                expect(cycle).toMatchObject({ start: '2026-11-01', end: '2026-12-01' });
+                const created = (
+                  await db.query<{ day: string }>(
+                    "select (((created_at at time zone 'UTC') + interval '9 hours')::date)::text as day from brand_allowance_grants where amount_krw = 30000",
+                  )
+                ).rows.map((r) => r.day);
+                const attached = created.filter((d) => (d < '2026-11-01' ? '2026-11-01' : d) < '2026-12-01').length * 30_000;
+                expect(extraKrw).toBe(attached);
+                expect(capKrw).toBe(270_000 + attached);
+              } else {
+                expect(actual[i]!.result, `${op.op}: result`).toEqual(op.result);
+              }
+              continue;
+            }
             expect(actual[i]!.log, `${op.op}: SQL and parameters`).toEqual(op.log);
             expect(actual[i]!.result, `${op.op}: full result`).toEqual(op.result);
           }

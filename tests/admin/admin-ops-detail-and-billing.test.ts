@@ -256,7 +256,8 @@ describe('brand org detail, billing console, operations, migrations & page gates
       });
     }
 
-    const octOverdue = await draftBrandInvoice({ sql, now: () => now }, ADMIN_VIEWER, {
+    // B1c: a plan organization drafts by billing cycle and never a cycle before the current one, so a past month is drafted while it was current.
+    const octOverdue = await draftBrandInvoice({ sql, now: () => new Date('2026-10-15T01:00:00Z') }, ADMIN_VIEWER, {
       organizationId: orgPaid,
       period: '2026-10',
       prorate: false,

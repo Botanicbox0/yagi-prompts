@@ -112,8 +112,9 @@ describe('invoices ledger, proration proposal, state machine & overdue filter', 
 
     const draftTime = new Date('2026-10-31T00:00:00Z');
     const editTime = new Date('2026-10-31T01:00:00Z');
-    // Plan started 2026-11-16 -> 15 used days out of 30 days in 2026-11
-    // floor(290000 * 15 / 30) = 145000; 40% off = 58000; supply = 87000; vat = 8700; total = 95700
+    // B1c (changed on purpose): the plan started 2026-11-16, so "2026-11" is the cycle Nov 16 → Dec 16 at the FULL price
+    // (it used to be 15/30 days prorated: list 145,000, total 95,700). 290,000; 40% off = 116,000; supply 174,000;
+    // VAT 17,400; total 191,400.
     const d1 = await draftBrandInvoice({ sql: f.sql, now: () => draftTime }, admin(), {
       organizationId: f.orgId,
       period: '2026-11',
@@ -124,15 +125,17 @@ describe('invoices ledger, proration proposal, state machine & overdue filter', 
     expect(d1.invoice).toMatchObject({
       planId: 'b2b_29',
       baseListKrw: 290_000,
-      listKrw: 145_000,
-      proratedDays: 15,
-      periodDays: 30,
+      listKrw: 290_000,
+      proratedDays: null,
+      periodDays: null,
       discountPercent: 40,
-      discountKrw: 58_000,
-      supplyKrw: 87_000,
-      vatKrw: 8_700,
-      totalKrw: 95_700,
+      discountKrw: 116_000,
+      supplyKrw: 174_000,
+      vatKrw: 17_400,
+      totalKrw: 191_400,
       status: 'draft',
+      cycleStart: '2026-11-16',
+      cycleEnd: '2026-12-16',
     });
 
     // Duplicate non-void invoice for same (org, period) refused

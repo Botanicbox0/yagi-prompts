@@ -2,7 +2,7 @@ import type { Viewer } from '@/lib/auth/identity';
 import type { StudioEnv } from '@/lib/brand-studio/env';
 import { STUDIO_CREDIT_KRW } from '@/lib/brand-studio/credits';
 import type { AllowanceSource } from '@/lib/brand-studio/usage';
-import { studioMonthWindow } from '@/lib/brand-studio/usage';
+import { loadAllowance, studioMonthWindow } from '@/lib/brand-studio/usage';
 import {
   BRAND_INVOICE_OVERDUE_DAYS,
   BRAND_PLAN_GRACE_DAYS_DEFAULT,
@@ -537,6 +537,20 @@ export async function loadBrandOrgList(
       projectCount: Number(r.project_count ?? 0),
     };
   });
+
+  // B1c: a plan organization's allowance runs on its billing cycle, not the calendar month the aggregate above uses.
+  // Its shown numbers come from `loadAllowance` itself (what `reserveAllowance` enforces), one call per plan row on this
+  // page. The SQL sort and the "near the cap" filter still read calendar-month usage for those rows.
+  for (const row of rows) {
+    if (row.allowanceSource !== 'plan') continue;
+    const a = await loadAllowance(sql, row.id, { defaultMonthlyKrw: envDefaultMonthlyKrw, planGraceDays: graceDays }, now);
+    if (a.source !== 'plan') continue;
+    row.usedKrw = a.usedKrw;
+    row.baseCapKrw = a.baseCapKrw;
+    row.extraKrw = a.extraKrw;
+    row.capKrw = a.capKrw;
+    row.usagePercent = a.capKrw > 0 ? Math.round((a.usedKrw / a.capKrw) * 100) : null;
+  }
 
   const totalPages = Math.max(1, Math.ceil(total / BRAND_ORG_PAGE_SIZE));
   return {
