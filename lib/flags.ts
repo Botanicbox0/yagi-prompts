@@ -292,6 +292,16 @@ export function petTemplatesOpen(env: Record<string, string | undefined> = proce
 }
 
 /**
+ * docs/PERSONAL-STUDIO.md §2.3, §9 — the personal edit sheet (P1a). Default OFF: open only when the server
+ * environment says exactly `TWINGS_PERSONAL_EDIT_SHEET=on`. Off means today's director exactly: the
+ * `/api/template-director` route ignores a `sheet` field and answers the chips shape, and the compiler ignores a
+ * stored `directorSpec.sheet` and builds from the chips written alongside it.
+ */
+export function personalEditSheetOpen(env: Record<string, string | undefined> = process.env): boolean {
+  return env.TWINGS_PERSONAL_EDIT_SHEET === 'on';
+}
+
+/**
  * docs/BRAND-ROOMS.md — project rooms (messages, storyboards and deliverable review with the YAGI
  * team). Default OFF: open only when the server environment says exactly `BRAND_ROOMS=on`. Off means
  * no room page, no messages item in the rail and every `/api/brand-rooms/*` answers 404.

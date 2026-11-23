@@ -7,18 +7,33 @@
  *
  * Client-safe: zod and plain functions only (the screen keeps the sheet between turns, the server
  * re-checks it on every turn and when the version is made).
+ *
+ * The kind-agnostic part (block limits, text item, text helpers) lives in `lib/revision/sheet-core.ts`,
+ * shared with the personal template edit sheet; it is re-exported here under the same names.
  */
 import { z } from 'zod';
+import {
+  SHEET_BLOCK_LIMITS,
+  SheetTextItemSchema,
+  changesDiffer as coreChangesDiffer,
+  emptySheet as emptyCoreSheet,
+  hasChange as coreHasChange,
+  normSheetText as norm,
+  onlyRemoved as coreOnlyRemoved,
+  sheetRequest as coreSheetRequest,
+  sheetTextKey as key,
+  uniqueSheetTexts as uniqueTexts,
+  withoutLast as coreWithoutLast,
+} from '@/lib/revision/sheet-core';
+
+export { samePoint } from '@/lib/revision/sheet-core';
 
 /** What kind of change an item is. `look` is painted into the clip; anything else makes the clip again. */
 export const SHEET_ITEM_KINDS = ['look', 'motion', 'framing', 'length'] as const;
 export type SheetItemKind = (typeof SHEET_ITEM_KINDS)[number];
 
 export const SHEET_LIMITS = {
-  itemMax: 120,
-  changeMax: 6,
-  keepMax: 6,
-  excludeMax: 4,
+  ...SHEET_BLOCK_LIMITS,
   /** Questions one conversation may ask in all (contract §3: at most three). */
   questionsMax: 3,
   questionMax: 160,
@@ -32,7 +47,7 @@ export const SHEET_LIMITS = {
   transcriptMax: 40,
 } as const;
 
-const Item = z.string().trim().min(1).max(SHEET_LIMITS.itemMax);
+const Item = SheetTextItemSchema;
 
 export const SheetChangeSchema = z.object({
   text: Item,
@@ -83,9 +98,21 @@ export const ReviseDialogueRecordSchema = z.object({
 });
 export type ReviseDialogueRecord = z.infer<typeof ReviseDialogueRecordSchema>;
 
-export const emptySheet = (): ReviseSheet => ({ change: [], keep: [], exclude: [] });
+export const emptySheet: () => ReviseSheet = emptyCoreSheet;
 
-export const hasChange = (sheet: Pick<ReviseSheet, 'change'> | null | undefined): boolean => Boolean(sheet?.change.length);
+export const hasChange: (sheet: Pick<ReviseSheet, 'change'> | null | undefined) => boolean = coreHasChange;
+
+/** The request a version is stored with (`job.prompt`, shown on the version card): the changes, one per line. */
+export const sheetRequest: (sheet: Pick<ReviseSheet, 'change'>) => string = coreSheetRequest;
+
+/** Whether every change of `next` is one of `standing`'s (by text): a sheet that only lost items. */
+export const onlyRemoved: (standing: ReviseSheet, next: ReviseSheet) => boolean = coreOnlyRemoved;
+
+/** The sheet without its last change (a withdrawal the reading did not express as a smaller sheet). */
+export const withoutLast: (sheet: ReviseSheet) => ReviseSheet = coreWithoutLast;
+
+/** Whether the change list differs between two sheets (by text, order aside). */
+export const changesDiffer: (a: Pick<ReviseSheet, 'change'>, b: Pick<ReviseSheet, 'change'>) => boolean = coreChangesDiffer;
 
 /**
  * How a sheet is made: only `look` changes are painted into the clip (`edit`); a change of motion,
@@ -100,26 +127,6 @@ export function wayOfSheet(sheet: Pick<ReviseSheet, 'change'>): 'edit' | 'reshoo
 export function lengthOfSheet(sheet: Pick<ReviseSheet, 'change'>): number | null {
   const item = [...sheet.change].reverse().find((c) => c.kind === 'length' && typeof c.seconds === 'number');
   return item?.seconds ?? null;
-}
-
-/** The request a version is stored with (`job.prompt`, shown on the version card): the changes, one per line. */
-export function sheetRequest(sheet: Pick<ReviseSheet, 'change'>): string {
-  return sheet.change.map((c) => c.text).join('\n');
-}
-
-const norm = (s: string) => s.replace(/\s+/g, ' ').trim();
-const key = (s: string) => norm(s).toLowerCase();
-
-function uniqueTexts(items: readonly unknown[], max: number): string[] {
-  const out: string[] = [];
-  for (const raw of items) {
-    if (typeof raw !== 'string') continue;
-    const text = norm(raw).slice(0, SHEET_LIMITS.itemMax).trim();
-    if (!text || out.some((o) => key(o) === key(text))) continue;
-    out.push(text);
-    if (out.length >= max) break;
-  }
-  return out;
 }
 
 /** Any sheet-shaped value as a valid sheet: trimmed, de-duplicated, within the limits; bad items are dropped. */
@@ -157,34 +164,10 @@ export function cleanSheet(raw: unknown): ReviseSheet {
   };
 }
 
-/** Whether every change of `next` is one of `standing`'s (by text): a sheet that only lost items. */
-export function onlyRemoved(standing: ReviseSheet, next: ReviseSheet): boolean {
-  const had = new Set(standing.change.map((c) => key(c.text)));
-  return next.change.length < standing.change.length && next.change.every((c) => had.has(key(c.text)));
-}
-
-/** The sheet without its last change (a withdrawal the reading did not express as a smaller sheet). */
-export function withoutLast(sheet: ReviseSheet): ReviseSheet {
-  return { ...sheet, change: sheet.change.slice(0, -1) };
-}
-
 /** The question still waiting for an answer: the last one asked, when it was neither answered nor skipped. */
 export function openQuestion(questions: readonly ReviseQuestion[]): number | null {
   const last = questions.length - 1;
   if (last < 0) return null;
   const q = questions[last]!;
   return q.answer === null && !q.skipped ? last : null;
-}
-
-/** Whether the change list differs between two sheets (by text, order aside). */
-export function changesDiffer(a: Pick<ReviseSheet, 'change'>, b: Pick<ReviseSheet, 'change'>): boolean {
-  const ka = new Set(a.change.map((c) => key(c.text)));
-  const kb = new Set(b.change.map((c) => key(c.text)));
-  return ka.size !== kb.size || [...ka].some((k) => !kb.has(k));
-}
-
-/** Whether two question points are the same point (case, spacing and punctuation aside). */
-export function samePoint(a: string, b: string): boolean {
-  const k = (s: string) => s.toLowerCase().replace(/[^\p{L}\p{N}]+/gu, ' ').trim();
-  return k(a) === k(b);
 }
