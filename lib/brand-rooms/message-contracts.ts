@@ -8,6 +8,7 @@
  * Client-safe: zod, types and pure helpers only (no env, no db).
  */
 import { z } from 'zod';
+import type { UploadLimitReason } from '@/lib/brands/upload-limits-format';
 import type { RoomEventKind, RoomRef } from './events';
 
 export type { RoomEventKind, RoomRef };
@@ -385,6 +386,7 @@ export interface RoomPerson {
 export interface RoomFailure {
   ok: false;
   code: RoomErrorCode;
+  reason?: UploadLimitReason;
 }
 
 export interface RoomStreamPage {

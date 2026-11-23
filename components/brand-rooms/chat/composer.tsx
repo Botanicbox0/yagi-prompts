@@ -36,7 +36,7 @@ interface Suggestion {
 
 const TEAM_ID = "__team__";
 
-export function errorText(copy: RoomsChatCopy, code: Fail["code"]): string {
+export function errorText(copy: RoomsChatCopy, code: Fail["code"], reason?: Fail["reason"]): string {
   switch (code) {
     case "rate_limited":
     case "forbidden":
@@ -47,6 +47,10 @@ export function errorText(copy: RoomsChatCopy, code: Fail["code"]): string {
     case "unsupported_file":
     case "offline":
       return copy.errors[code];
+    case "storage_quota_exceeded":
+      if (reason === "unapproved_file_limit") return copy.errors.unapprovedUploadFiles;
+      if (reason === "unapproved_quota") return copy.errors.unapprovedUploadQuota;
+      return copy.errors.storage_quota_exceeded;
     default:
       return copy.errors.actionFailed;
   }
@@ -138,7 +142,17 @@ export function Composer({
         setFiles((current) => [...current, { id, name: file.name, size: file.size, progress: 0, status: "uploading" }]);
         void upload(file, mime, (ratio) => setFiles((current) => current.map((f) => (f.id === id ? { ...f, progress: ratio } : f)))).then((result) => {
           setFiles((current) => current.map((f) => (f.id === id ? (result.ok ? { ...f, progress: 1, status: "ready", attachment: result.attachment } : { ...f, status: "error" }) : f)));
-          if (!result.ok) setNotice(result.code === "file_too_large" ? interpolate(copy.composer.tooLarge, { name: file.name }) : result.code === "unsupported_file" ? interpolate(copy.composer.unsupported, { name: file.name }) : interpolate(copy.composer.uploadFailed, { name: file.name }));
+          if (!result.ok) {
+            setNotice(
+              result.code === "file_too_large"
+                ? interpolate(copy.composer.tooLarge, { name: file.name })
+                : result.code === "unsupported_file"
+                  ? interpolate(copy.composer.unsupported, { name: file.name })
+                  : result.code === "storage_quota_exceeded"
+                    ? errorText(copy, result.code, result.reason)
+                    : interpolate(copy.composer.uploadFailed, { name: file.name }),
+            );
+          }
         });
       }
     },

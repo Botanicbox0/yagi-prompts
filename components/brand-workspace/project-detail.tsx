@@ -21,12 +21,11 @@ import { campaignTimeline } from '@/lib/brands/workspace/timeline';
 import { CampaignTimelineView } from './campaign-sections';
 import { CampaignTermsSummary } from './campaign-terms-summary';
 import { SecondaryUsage } from './secondary-usage';
-import { AestheticEngine } from './aesthetic-engine';
-import { ReviewStage } from './review-stage';
-import { BriefConcierge } from './brief-concierge';
-import { HumanHandoff } from './human-handoff';
+import type { ProjectPrototypeSlots } from './project-prototype-layer';
+import { RealReviewPlayer } from './real-review-player';
 import { AmbientBleed } from './ambient-bleed';
 import { IntakeBriefSummary } from './intake-brief-summary';
+import { BRAND_ATTACHMENT_LIMITS } from '@/lib/brands/workspace/schemas';
 import type { BrandUsageView } from "@/lib/brands/usage/types";
 import type { ReactNode } from "react";
 
@@ -118,6 +117,7 @@ export function ProjectDetail({
   formatTitle = null,
   staffTools = null,
   roomEntry = null,
+  prototypeLayer = null,
 }: {
   project: BrandProjectDetail;
   b: BrandCopy;
@@ -151,6 +151,8 @@ export function ProjectDetail({
    * null keeps the header exactly as before.
    */
   roomEntry?: ReactNode;
+  /** Server-rendered prototype panels (`BRAND_WORKSPACE_PROTOTYPE_LAYER=on`); null/omitted by default. */
+  prototypeLayer?: ProjectPrototypeSlots | null;
 }) {
   // `role: "studio"` outside /admin is the TWINGS team's read-only view: it is not the customer's seat.
   const staffView = !studio && p.role === "studio";
@@ -252,14 +254,7 @@ export function ProjectDetail({
           </div>
         </div>
       )}
-      {generativeMediaAllowed && (
-        <HumanHandoff
-          organizationId={p.organizationId}
-          projectId={p.id}
-          locale={locale}
-          refCount={Math.max(p.referenceLinks.length, 3)}
-        />
-      )}
+      {generativeMediaAllowed && prototypeLayer?.handoff}
       <ProjectTabs b={b} pendingReviews={p.status === "active" ? p.contents.filter(c => c.version === newest.get(c.slotKey) && c.decision === "pending").length : 0} comments={p.messages.length} usage={usage !== null} campaign={applicants !== null} shortlist={shortlist ? shortlistCount : 0}>
       <section id="performance" className="bw-panel">
         <CampaignTimelineView timeline={campaignTimeline(p)} b={b} />
@@ -379,15 +374,8 @@ export function ProjectDetail({
             )}
             {generativeMediaAllowed && (
               <>
-                <BriefConcierge
-                  brandName={p.organizationName}
-                  projectTitle={p.title}
-                  objective={p.objective}
-                  organizationId={p.organizationId}
-                  projectId={p.id}
-                  locale={locale}
-                />
-                <AestheticEngine locale={locale} referenceLinks={p.referenceLinks} />
+                {prototypeLayer?.brief}
+                {prototypeLayer?.aesthetic}
                 {!studio && (
                   <div
                     className="bw-note bw-row"
@@ -423,15 +411,16 @@ export function ProjectDetail({
           <section id="review" className="bw-panel">
             <h2>{b.review}</h2>
             <p className="bw-muted">{b.approvalNotice}</p>
-            <ReviewStage
-              projectId={p.id}
-              contents={p.contents}
-              messages={p.messages}
-              decisions={p.decisions}
-              locale={locale}
-              generativeMediaAllowed={generativeMediaAllowed}
-              productionMode={p.productionMode}
-            />
+            {prototypeLayer?.review ?? (
+              p.contents.length > 0 ? (
+                <RealReviewPlayer
+                  contents={p.contents}
+                  messages={p.messages}
+                  decisions={p.decisions}
+                  locale={locale}
+                />
+              ) : null
+            )}
             {p.contents.length === 0 ? (
               <p className="bw-note">{b.noContent}</p>
             ) : (
@@ -625,7 +614,7 @@ export function ProjectDetail({
                 </li>
               ))}
             </ul>
-            {writable && <BrandUpload projectId={p.id} b={b} />}
+            {writable && <BrandUpload projectId={p.id} b={b} limits={BRAND_ATTACHMENT_LIMITS} />}
           </section>
         </div>
       </div>

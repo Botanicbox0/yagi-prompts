@@ -186,7 +186,13 @@ export function ActionForm({
         }
         return;
       }
-      setNotice(successNotice ?? b.saved);
+      setNotice(
+        operation === "invitation.create" && result.mailState === "sent"
+          ? b.inviteMailSent
+          : operation === "invitation.create" && (result.mailState === "failed" || result.mailState === "skipped")
+            ? b.inviteMailFailed
+            : (successNotice ?? b.saved),
+      );
       request.current = null;
       onSuccess?.();
       if (operation === "invitation.create" && result.token)

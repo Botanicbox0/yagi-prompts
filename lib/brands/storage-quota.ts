@@ -19,6 +19,14 @@ import type { Viewer } from '@/lib/auth/identity';
 import type { SqlRunner } from '@/lib/db/sql-runner';
 import type { BrandOutcome } from './workspace/types';
 import {
+  isOrganizationUploadApproved,
+  loadMemberUploadUsage,
+  readPendingRoomUploads,
+  UNAPPROVED_UPLOAD_MAX_FILES,
+  UNAPPROVED_UPLOAD_QUOTA_BYTES,
+  type UploadLimitReason,
+} from './upload-gate';
+import {
   BYTES_PER_GB,
   EMPTY_STORAGE_BREAKDOWN,
   PROPOSED_PLAN_STORAGE_QUOTAS,
@@ -247,10 +255,20 @@ export async function calculateOrganizationStorageBreakdown(
   return { totalBytes, breakdown };
 }
 
-function buildSummary(organizationId: string, tier: StorageQuotaTier, row: QuotaRow | null, fallback?: { totalBytes: number; breakdown: StorageBreakdown }): OrganizationStorageSummary {
+function buildSummary(
+  organizationId: string,
+  tier: StorageQuotaTier,
+  row: QuotaRow | null,
+  fallback?: { totalBytes: number; breakdown: StorageBreakdown },
+  approved = true,
+): OrganizationStorageSummary {
   const defaults = PROPOSED_PLAN_STORAGE_QUOTAS[tier];
   const overrideQuotaBytes = row?.quota_bytes == null ? null : Math.max(0, Math.round(Number(row.quota_bytes)));
-  const effectiveQuotaBytes = overrideQuotaBytes ?? defaults.defaultQuotaBytes;
+  const approvedQuotaBytes = overrideQuotaBytes ?? defaults.defaultQuotaBytes;
+  const effectiveQuotaBytes =
+    approved || overrideQuotaBytes !== null
+      ? approvedQuotaBytes
+      : Math.min(approvedQuotaBytes, UNAPPROVED_UPLOAD_QUOTA_BYTES);
   const overrideRetentionDays = row?.retention_days == null ? null : Number(row.retention_days);
   const retentionDays = overrideRetentionDays ?? defaults.defaultRetentionDays;
   const usedBytes = fallback ? fallback.totalBytes : toSafeBytes(row?.used_bytes);
@@ -258,6 +276,7 @@ function buildSummary(organizationId: string, tier: StorageQuotaTier, row: Quota
   const view = toStudioStorageQuotaView({ usedBytes, effectiveQuotaBytes, retentionDays });
   return {
     ...view,
+    ...(approved ? {} : { uploadApproved: false, maxFiles: UNAPPROVED_UPLOAD_MAX_FILES }),
     organizationId,
     tier,
     planDefaultQuotaBytes: defaults.defaultQuotaBytes,
@@ -274,18 +293,24 @@ function buildSummary(organizationId: string, tier: StorageQuotaTier, row: Quota
 
 /** Recompute deduplicated bytes from live tables and persist into `brand_storage_quotas` (if table exists). */
 export async function reconcileOrganizationStorage(sql: SqlRunner, organizationId: string, now?: Date): Promise<OrganizationStorageSummary> {
-  const [tier, calc, hasQuotaTable] = await Promise.all([
+  const [tier, calc, hasQuotaTable, approved] = await Promise.all([
     resolveOrganizationStorageTier(sql, organizationId, now),
     calculateOrganizationStorageBreakdown(sql, organizationId),
     tableExists(sql, 'brand_storage_quotas'),
+    isOrganizationUploadApproved(sql, organizationId, now),
   ]);
   if (!hasQuotaTable || !UUID.safeParse(organizationId).success) {
-    return buildSummary(organizationId, tier, null, calc);
+    return buildSummary(organizationId, tier, null, calc, approved);
   }
   const orgExists = (await sql.query('select 1 from brand_organizations where id = $1', [organizationId])).rows[0];
   if (!orgExists) {
-    return buildSummary(organizationId, tier, null, calc);
+    return buildSummary(organizationId, tier, null, calc, approved);
   }
+  const existing = (
+    await sql.query<Pick<QuotaRow, 'breakdown'>>('select breakdown from brand_storage_quotas where organization_id = $1', [organizationId])
+  ).rows[0];
+  const pendingRoom = readPendingRoomUploads(existing?.breakdown);
+  const breakdownPayload = pendingRoom.length > 0 ? { ...calc.breakdown, _pendingRoomUploads: pendingRoom } : calc.breakdown;
   const upserted = (
     await sql.query<QuotaRow>(
       `insert into brand_storage_quotas (organization_id, used_bytes, breakdown, reconciled_at, updated_at)
@@ -296,32 +321,34 @@ export async function reconcileOrganizationStorage(sql: SqlRunner, organizationI
              reconciled_at = now(),
              updated_at = now()
        returning *`,
-      [organizationId, calc.totalBytes, JSON.stringify(calc.breakdown)],
+      [organizationId, calc.totalBytes, JSON.stringify(breakdownPayload)],
     )
   ).rows[0]!;
-  return buildSummary(organizationId, tier, upserted);
+  return buildSummary(organizationId, tier, upserted, undefined, approved);
 }
 
 /** Fast O(1) summary read; initializes via `reconcileOrganizationStorage` on first touch or pre-0086 fallback. */
 export async function loadOrganizationStorageSummary(sql: SqlRunner, organizationId: string, now?: Date): Promise<OrganizationStorageSummary> {
   if (!UUID.safeParse(organizationId).success) {
-    return buildSummary(organizationId, 'unassigned', null, { totalBytes: 0, breakdown: { ...EMPTY_STORAGE_BREAKDOWN } });
+    return buildSummary(organizationId, 'unassigned', null, { totalBytes: 0, breakdown: { ...EMPTY_STORAGE_BREAKDOWN } }, false);
   }
   if (!(await tableExists(sql, 'brand_storage_quotas'))) {
-    const [tier, calc] = await Promise.all([
+    const [tier, calc, approved] = await Promise.all([
       resolveOrganizationStorageTier(sql, organizationId, now),
       calculateOrganizationStorageBreakdown(sql, organizationId),
+      isOrganizationUploadApproved(sql, organizationId, now),
     ]);
-    return buildSummary(organizationId, tier, null, calc);
+    return buildSummary(organizationId, tier, null, calc, approved);
   }
-  const [tier, row] = await Promise.all([
+  const [tier, row, approved] = await Promise.all([
     resolveOrganizationStorageTier(sql, organizationId, now),
     sql.query<QuotaRow>('select * from brand_storage_quotas where organization_id = $1', [organizationId]).then((r) => r.rows[0] ?? null),
+    isOrganizationUploadApproved(sql, organizationId, now),
   ]);
   if (!row || row.reconciled_at === null) {
     return reconcileOrganizationStorage(sql, organizationId, now);
   }
-  return buildSummary(organizationId, tier, row);
+  return buildSummary(organizationId, tier, row, undefined, approved);
 }
 
 /** Atomic delta update on `used_bytes` for fast-path uploads and generations (clamped at 0). */
@@ -340,18 +367,43 @@ export async function adjustOrganizationStorageBytes(sql: SqlRunner, organizatio
 }
 
 /**
- * Gate for customer file uploads (`asset.reserve`, room `attachment.reserve` / `complete`, storyboard `frame.reserve` / `add`).
- * Fast-paths when cached `used_bytes + incomingBytes <= effectiveQuotaBytes`; otherwise runs a live deduplicated
- * reconcile before refusing so stale counters or expired pending reservations never falsely block an upload.
+ * Gate for customer file uploads (`asset.reserve`, room `attachment.reserve` / `complete`,
+ * storyboard `frame.reserve` / `add`, project `attachment.reserve`, org logo upload).
+ *
+ * Unapproved workspaces (capKrw === 0 and no active plan) are bounded by
+ * `UNAPPROVED_UPLOAD_QUOTA_BYTES` (500 MB) and `UNAPPROVED_UPLOAD_MAX_FILES` (50 files).
+ * Approved workspaces keep plan/override quotas unchanged.
  */
 export async function checkStorageQuotaForUpload(
   sql: SqlRunner,
   organizationId: string,
   incomingBytes: number,
   now?: Date,
-): Promise<{ allowed: true; summary: OrganizationStorageSummary } | { allowed: false; code: 'storage_quota_exceeded'; summary: OrganizationStorageSummary }> {
+  incomingFiles = 1,
+  options?: { excludePendingRoomKeys?: readonly string[] },
+): Promise<
+  | { allowed: true; summary: OrganizationStorageSummary }
+  | { allowed: false; code: 'storage_quota_exceeded'; reason?: UploadLimitReason; summary: OrganizationStorageSummary }
+> {
   const add = Math.max(0, Math.round(incomingBytes));
-  const summary = await loadOrganizationStorageSummary(sql, organizationId, now);
+  const filesToAdd = Math.max(0, Math.round(incomingFiles));
+  const [approved, summary] = await Promise.all([
+    isOrganizationUploadApproved(sql, organizationId, now),
+    loadOrganizationStorageSummary(sql, organizationId, now),
+  ]);
+  if (!approved) {
+    const memberUsage = await loadMemberUploadUsage(sql, organizationId, {
+      excludePendingRoomKeys: options?.excludePendingRoomKeys,
+      now,
+    });
+    if (filesToAdd > 0 && memberUsage.fileCount + filesToAdd > UNAPPROVED_UPLOAD_MAX_FILES) {
+      return { allowed: false, code: 'storage_quota_exceeded', reason: 'unapproved_file_limit', summary };
+    }
+    if (add > 0 && memberUsage.usedBytes + add > UNAPPROVED_UPLOAD_QUOTA_BYTES) {
+      return { allowed: false, code: 'storage_quota_exceeded', reason: 'unapproved_quota', summary };
+    }
+    return { allowed: true, summary };
+  }
   if (add === 0) return { allowed: true, summary };
   if (summary.effectiveQuotaBytes > 0 && summary.usedBytes + add <= summary.effectiveQuotaBytes) {
     return { allowed: true, summary };
@@ -404,6 +456,8 @@ export async function setOrganizationStorageQuota(
     const nextRevision = revision + 1;
     const prevQuota = current?.quota_bytes == null ? null : Number(current.quota_bytes);
     const prevRetention = current?.retention_days == null ? null : Number(current.retention_days);
+    const pendingRoom = readPendingRoomUploads(current?.breakdown);
+    const breakdownPayload = pendingRoom.length > 0 ? { ...calc.breakdown, _pendingRoomUploads: pendingRoom } : calc.breakdown;
 
     await sql.query(
       `insert into brand_storage_quotas (
@@ -419,7 +473,7 @@ export async function setOrganizationStorageQuota(
              revision = excluded.revision,
              updated_by = excluded.updated_by,
              updated_at = now()`,
-      [v.organizationId, v.quotaBytes, calc.totalBytes, JSON.stringify(calc.breakdown), v.retentionDays, v.note, nextRevision, viewer.userId],
+      [v.organizationId, v.quotaBytes, calc.totalBytes, JSON.stringify(breakdownPayload), v.retentionDays, v.note, nextRevision, viewer.userId],
     );
 
     await sql.query(

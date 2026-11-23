@@ -2,6 +2,7 @@ import { campaignListReturnPath } from "@/lib/brands/workspace/navigation";
 import { notFound } from "next/navigation";
 import { brandContext } from "@/components/brand-workspace/context";
 import { ProjectDetail } from "@/components/brand-workspace/project-detail";
+import { buildProjectPrototypeLayer } from "@/components/brand-workspace/project-prototype-layer";
 import { CampaignApplicants, CampaignPayments } from "@/components/brand-workspace/campaign-sections";
 import { loadBrandProject } from "@/lib/brands/workspace/service";
 import { loadBrandUsage } from "@/lib/brands/usage/service";
@@ -76,6 +77,7 @@ export default async function BrandProject({
   const deps = member ? fundingDeps(sql) : null;
   const requested = project.campaignTerms?.format.kind === "template" ? await loadPromptBySlug(sql, project.campaignTerms.format.slug).catch(() => null) : null;
   const formatTitle = requested ? (locale === "ko" && requested.titleKo ? requested.titleKo : requested.title) : null;
+  const prototypeLayer = await buildProjectPrototypeLayer({ project, locale, generativeMediaAllowed });
   // `studio` here is the TWINGS team's read-only view (never the customer's seat): no approve, upload or comment.
   return (
     <ProjectDetail
@@ -84,6 +86,7 @@ export default async function BrandProject({
       b={b}
       locale={locale}
       generativeMediaAllowed={generativeMediaAllowed}
+      prototypeLayer={prototypeLayer}
       usage={usage}
       formatTitle={formatTitle}
       {...(roomEntry ? { roomEntry } : {})}

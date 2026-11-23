@@ -13,8 +13,9 @@ import type { StudioAssetView, StudioJobView, StudioOutputView, StudioState } fr
 import { REGION_V2_MODEL, regionV2Models, type StudioMedium } from "@/lib/brand-studio/models";
 import type { Dictionary } from "@/lib/i18n/dictionaries";
 import { isFailure, uploadProblem, type StudioApi } from "./api";
+import { ClosedAllowanceBanner } from "./closed-allowance-banner";
 import { EXAMPLES, jobsFor } from "./board";
-import { errorLine, newRequestId, type StudioCopy, type StudioLocale } from "./copy";
+import { errorLine, newRequestId, studioUploadErrorLine, type StudioCopy, type StudioLocale } from "./copy";
 import { AllowanceLine, Dock } from "./dock";
 import { DRAFT_RESOLUTION, dockCredits, regionEditInput, regionEditModel, regionEditModels, remixActive, remixFit, withMedium, type EnhancePreviewInput } from "./dock-model";
 import { Explainer } from "./explainer";
@@ -43,6 +44,7 @@ const LayerEditor = dynamic(() => import("./layers"), { ssr: false });
  */
 export interface StudioAppProps {
   organizationId: string;
+  organizationName?: string | null;
   locale: StudioLocale;
   /** `dict.brandStudio`. */
   copy: StudioCopy;
@@ -63,11 +65,6 @@ export interface StudioAppProps {
   initialState?: StudioState | null;
   /** Tests inject a client; the screen otherwise talks to `/api/brand-studio`. */
   api?: StudioApi;
-}
-
-/** The workspace's live support drawer (components/brand-workspace/support.tsx). */
-function openSupport() {
-  document.querySelector<HTMLButtonElement>("[data-concierge-launcher]")?.click();
 }
 
 /** The explainer's "첫 문장 쓰기" fires this on `window`; the screen focuses the prompt. */
@@ -205,7 +202,7 @@ export function recentPictures(jobs: readonly StudioJobView[], assets: readonly 
   return out;
 }
 
-export function StudioApp({ organizationId, locale, copy, mode, libraryCopy, layersCopy, videoCopy, projectsCopy, initialState = null, api }: StudioAppProps) {
+export function StudioApp({ organizationId, organizationName, locale, copy, mode, libraryCopy, layersCopy, videoCopy, projectsCopy, initialState = null, api }: StudioAppProps) {
   // The project new pictures go into. Null (no project) is the default and an ordinary state.
   const [projectChoice, setProjectChoice] = useState<string | null>(null);
   const studio = useStudio({ organizationId, initialState, api, projectId: mode === "image" ? projectChoice : null });
@@ -580,9 +577,9 @@ export function StudioApp({ organizationId, locale, copy, mode, libraryCopy, lay
       await Promise.all(
         files.map(async (file) => {
           const problem = uploadProblem(file);
-          if (problem) return say(errorLine(copy, problem));
+          if (problem) return say(studioUploadErrorLine(copy, problem));
           const result = await studio.upload(file);
-          if (isFailure(result)) return say(errorLine(copy, result.code));
+          if (isFailure(result)) return say(studioUploadErrorLine(copy, result.code, result.reason));
           if (attach) dock.attach(trayItemFromAsset(result.asset));
         }),
       );
@@ -617,11 +614,11 @@ export function StudioApp({ organizationId, locale, copy, mode, libraryCopy, lay
       for (const file of files) {
         const problem = uploadProblem(file);
         if (problem || !file.type.startsWith("image/")) {
-          setStatus(errorLine(copy, problem ?? "unsupported_file"));
+          setStatus(studioUploadErrorLine(copy, problem ?? "unsupported_file"));
           continue;
         }
         const result = await studio.upload(file);
-        if (isFailure(result)) setStatus(errorLine(copy, result.code));
+        if (isFailure(result)) setStatus(studioUploadErrorLine(copy, result.code, result.reason));
         else added.push(trayItemFromAsset(result.asset));
       }
       return added;
@@ -939,13 +936,7 @@ export function StudioApp({ organizationId, locale, copy, mode, libraryCopy, lay
           />
         )}
         {state && canCreate && !dockOpen && (
-          <section className="bs-closed" data-studio-allowance-closed>
-            <h2>{copy.dock.closedTitle}</h2>
-            <p>{copy.dock.closedBody}</p>
-            <button type="button" className="bs-btn" data-variant="solid" data-size="md" onClick={openSupport}>
-              {copy.dock.closedAction}
-            </button>
-          </section>
+          <ClosedAllowanceBanner organizationId={organizationId} organizationName={organizationName} dockCopy={copy.dock} />
         )}
         {state && !canCreate && (
           <p className="bs-readonly" data-studio-read-only>
@@ -1071,7 +1062,7 @@ export function StudioApp({ organizationId, locale, copy, mode, libraryCopy, lay
                         const file = await dataUrlToPngFile(editorState.base.url, "blank-canvas.png");
                         const uploaded = await studio.upload(file);
                         if (isFailure(uploaded)) {
-                          return { ok: false, message: errorLine(copy, uploaded.code) };
+                          return { ok: false, message: studioUploadErrorLine(copy, uploaded.code, uploaded.reason) };
                         }
                         blankUploadedAssetRef.current[effectiveSource.assetId] = uploaded.asset.id;
                         effectiveSource = { assetId: uploaded.asset.id };

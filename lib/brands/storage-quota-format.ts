@@ -99,6 +99,10 @@ export interface StudioStorageQuotaView {
   /** True when `state === 'exceeded'` (new uploads are refused; reads, downloads, decisions, and deletes remain open). */
   uploadBlocked: boolean;
   retentionDays: number | null;
+  /** False while the workspace has no allowance (capKrw > 0) and no active plan assignment. */
+  uploadApproved?: boolean;
+  /** Pre-approval file count limit (undefined/null when approved). */
+  maxFiles?: number | null;
 }
 
 export function storageQuotaStateOf(usedBytes: number, effectiveQuotaBytes: number): StorageQuotaState {

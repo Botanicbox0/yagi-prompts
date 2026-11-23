@@ -1,4 +1,11 @@
 import type { Dictionary } from './en';
+import { STUDIO_LIMITS } from '@/lib/brand-studio/contracts';
+import {
+  BRAND_ATTACHMENT_DISPLAY_LIMITS,
+  formatLimitMb,
+  UNAPPROVED_UPLOAD_MAX_FILES,
+  UNAPPROVED_UPLOAD_QUOTA_BYTES,
+} from '@/lib/brands/upload-limits-format';
 import { adminWorkflowKo } from './admin-workflow';
 import { roomsChatKo } from './rooms-chat';
 import { roomsStoryboardKo } from './rooms-storyboard';
@@ -16,6 +23,7 @@ import { studioComposeKo } from './studio-compose';
 import { studioSoundKo } from './studio-sound';
 import { studioEditorKo } from './studio-editor';
 import { studioWorkflowsKo } from './studio-workflows';
+import { studioShareDialogKo } from './studio-share-dialog';
 import { adminConsoleKo } from './admin-console';
 import { campaignHubKo } from './campaign-hub';
 import { brandHomeKo } from './brand-home';
@@ -1855,9 +1863,11 @@ export const ko: Dictionary = {
       draftNote: '480p 초안을 먼저 만들어요. 마음에 들면 1080p로 완성하세요.',
       usage: '이번 달 크레딧',
       resets: '{date}에 다시 채워져요',
-      closedTitle: '아직 사용 한도가 정해지지 않았어요',
-      closedBody: '요청하시면 팀의 월 사용 한도를 정해 드려요. 그동안 에셋은 미리 올려 둘 수 있어요.',
-      closedAction: '사용 한도 요청하기',
+      closedTitle: '아직 이용 한도가 활성화되지 않았어요',
+      closedBody: '크레딧은 이미지나 영상을 만들 때 사용해요. 플랜이 확정되면 바로 제작할 수 있어요. 아래에서 이용 신청을 해주시면 워크스페이스 채팅으로 안내해 드릴게요.',
+      closedAction: '이용 신청',
+      closedRequestOrgFallback: '우리 브랜드',
+      closedRequestDraft: '브랜드명: {organization}\n스튜디오 이용을 신청합니다.\n제작하고 싶은 콘텐츠: (예: 제품 사진, 숏폼 영상, 예상 촬영량 등)',
       readOnly: '결과와 에셋은 볼 수 있어요. 만들기는 관리자와 편집자만 할 수 있어요.',
       emptyPrompt: '무엇을 만들지 먼저 적어 주세요.',
       needChange: '영상에서 무엇을 바꿀지 적어 주세요.',
@@ -2185,10 +2195,10 @@ export const ko: Dictionary = {
       allowance_closed: '아직 사용 한도가 정해지지 않았어요.',
       allowance_exhausted: '이번 달 한도를 넘어서 만들 수 없어요.',
       too_many_running: '진행 중인 작업이 많아요. 하나가 끝나면 다시 해 주세요.',
-      asset_limit: '에셋 한도가 가득 찼어요. 안 쓰는 에셋을 지워 주세요.',
+      asset_limit: `에셋 보관 한도(${STUDIO_LIMITS.assetsPerOrganization}개)를 모두 썼어요. 안 쓰는 에셋을 지운 뒤 다시 올려 주세요.`,
       storage_quota_exceeded: '조직 저장 한도가 가득 찼어요. 열람과 내려받기는 그대로 쓸 수 있고, 안 쓰는 파일을 지우면 바로 새 파일을 올릴 수 있어요.',
       unsupported_file: '올릴 수 없는 파일 형식이에요.',
-      file_too_large: '파일이 너무 커요.',
+      file_too_large: `파일 크기 제한을 넘었어요. 이미지는 ${formatLimitMb(STUDIO_LIMITS.imageBytesMax)} MB, 영상은 ${formatLimitMb(STUDIO_LIMITS.videoBytesMax)} MB, 오디오는 ${formatLimitMb(STUDIO_LIMITS.audioBytesMax)} MB까지 올릴 수 있어요.`,
       reference_missing: '참조 중 하나를 찾을 수 없어요. 다시 넣어 주세요.',
       provider_rejected: '이 내용은 만들 수 없었어요. 문장이나 참조를 바꿔 다시 해 주세요.',
       provider_unavailable: '지금은 잠시 만들 수 없어요. 조금 뒤에 다시 해 주세요.',
@@ -2196,6 +2206,11 @@ export const ko: Dictionary = {
       model_unavailable: '고른 모델 중 지금 쓸 수 없는 모델이 있어요. 모델을 다시 골라 주세요.',
       failed: '이미지를 생성하지 못했어요. 다시 시도해 주세요.',
     },
+    unapprovedUpload: {
+      quotaExceeded: `플랜 확정 전에는 총 ${formatLimitMb(UNAPPROVED_UPLOAD_QUOTA_BYTES)} MB, 최대 ${UNAPPROVED_UPLOAD_MAX_FILES}개까지 올릴 수 있어요. 안 쓰는 파일을 지우거나 대화창에서 야기 팀에 문의해 주세요.`,
+      fileLimitExceeded: `플랜 확정 전에는 최대 ${UNAPPROVED_UPLOAD_MAX_FILES}개(${formatLimitMb(UNAPPROVED_UPLOAD_QUOTA_BYTES)} MB)까지 올릴 수 있어요. 안 쓰는 파일을 지우거나 대화창에서 야기 팀에 문의해 주세요.`,
+    },
+    shareDialog: studioShareDialogKo,
   },
   brandWorkspace: {
     languageApply: '언어 변경',
@@ -2660,6 +2675,8 @@ export const ko: Dictionary = {
     errors: {
       rateLimited: '요청이 많습니다. 잠시 후 다시 시도해 주세요.',
       storageQuotaExceeded: '조직 저장 공간 한도가 가득 찼습니다. 사용하지 않는 파일을 정리한 뒤 다시 시도해 주세요.',
+      unapprovedUploadQuota: `플랜 확정 전에는 총 ${formatLimitMb(UNAPPROVED_UPLOAD_QUOTA_BYTES)} MB, 최대 ${UNAPPROVED_UPLOAD_MAX_FILES}개까지 올릴 수 있어요. 안 쓰는 파일을 정리한 뒤 다시 시도해 주세요.`,
+      unapprovedUploadFiles: `플랜 확정 전에는 최대 ${UNAPPROVED_UPLOAD_MAX_FILES}개(${formatLimitMb(UNAPPROVED_UPLOAD_QUOTA_BYTES)} MB)까지 올릴 수 있어요. 안 쓰는 파일을 정리한 뒤 다시 시도해 주세요.`,
       adminInvalid: '저장하지 못했습니다. 필수 항목과 입력 형식을 확인해 주세요.',
       adminDenied: '이 작업을 할 수 없거나 대상을 찾을 수 없습니다. 새로고침해 현재 상태를 확인해 주세요.',
       studioRateLimited: '짧은 시간에 너무 많이 바꿨어요. 10분 뒤에 다시 해 주세요.',
@@ -2835,7 +2852,7 @@ export const ko: Dictionary = {
       allCampaigns: '전체 캠페인', searchCampaigns: '브랜드 또는 캠페인 검색', noCampaignMatch: '조건에 맞는 캠페인이 없습니다.',
       queueHint: '신규 의뢰를 확인하고 진행 중인 캠페인의 제작·게시·리포트를 관리하세요.',
       joinTitle: '브랜드 캠페인을 한곳에서', joinBody: '처음 로그인하면 계정이 만들어집니다. 브랜드 공간을 만들고 캠페인을 의뢰하거나, 초대받은 계정으로 진행 상황을 확인하세요.',
-      setupTitle: '캠페인을 시작하는 세 단계', setupOne: '브랜드 공간 만들기', setupTwo: '목표와 예산으로 의뢰하기', setupThree: '제작물 승인하고 성과 확인하기',
+      setupTitle: '시작을 위한 세 단계', setupOne: '브랜드 워크스페이스 만들기', setupTwo: '팀원 초대 및 로고·제품 사진 업로드', setupThree: '스튜디오에서 제작하거나 야기 팀과 함께 작업하기',
       reportBasis: '게시일 기준 기간 · 집계 시각은 게시물별 표시', csvTitle: '콘텐츠 제목', csvId: '번호', csvUrl: '게시물 링크',
       metaTitle: 'Instagram 자동 집계 준비', metaNote: '현재는 스튜디오 확인 또는 크리에이터 제공 자료를 집계합니다. 자동 집계는 해당 계정의 연결·동의와 Meta 권한 승인 후 제공됩니다.',
       publishedUnknown: '게시일 미확인', csvViewsApproximate: '조회수 근사치', csvYes: '예', csvNo: '아니오',
@@ -3029,12 +3046,12 @@ export const ko: Dictionary = {
     "denied": "이 워크스페이스에 접근할 수 없습니다.",
     "loading": "워크스페이스를 불러오는 중…",
     "upload": "파일 첨부",
-    "uploadHint": "이미지 15MiB, PDF 20MiB, 영상 50MB까지 첨부할 수 있습니다. 더 큰 영상은 참고 링크로 보내주세요. 이 워크스페이스와 스튜디오만 접근할 수 있습니다.",
+    "uploadHint": `이미지 ${formatLimitMb(BRAND_ATTACHMENT_DISPLAY_LIMITS['image/jpeg'])} MB, PDF ${formatLimitMb(BRAND_ATTACHMENT_DISPLAY_LIMITS['application/pdf'])} MB, 영상 ${formatLimitMb(BRAND_ATTACHMENT_DISPLAY_LIMITS['video/mp4'])} MB까지 첨부할 수 있어요. 더 큰 영상은 참고 링크로 보내주세요. 이 워크스페이스와 스튜디오만 접근할 수 있어요.`,
     "uploading": "업로드 중 {percent}%",
     "cancelUpload": "업로드 취소",
     "uploadDone": "파일을 첨부했습니다.",
     "uploadFailed": "파일을 첨부하지 못했습니다. 선택한 파일은 유지되니 다시 시도해 주세요.",
-    "badFile": "용량 제한 안의 JPEG·PNG·WebP·MP4·WebM·PDF 파일을 선택해 주세요.",
+    "badFile": `JPEG·PNG·WebP 이미지는 ${formatLimitMb(BRAND_ATTACHMENT_DISPLAY_LIMITS['image/jpeg'])} MB, PDF는 ${formatLimitMb(BRAND_ATTACHMENT_DISPLAY_LIMITS['application/pdf'])} MB, MP4·WebM 영상은 ${formatLimitMb(BRAND_ATTACHMENT_DISPLAY_LIMITS['video/mp4'])} MB까지 올릴 수 있어요.`,
     "download": "다운로드",
     "posts": "게시된 콘텐츠",
     "views": "조회수",
@@ -3071,6 +3088,17 @@ export const ko: Dictionary = {
     "createInvite": "초대 링크 만들기",
     "inviteExpiry": "링크는 7일 뒤 만료되며, 초대받은 이메일 계정만 수락할 수 있습니다.",
     "inviteReady": "함께 일할 팀원에게 이 초대 링크를 전달해 주세요.",
+    "inviteMailSent": "초대 메일을 보냈습니다. 아래 링크를 복사해 직접 전달하실 수도 있어요.",
+    "inviteMailFailed": "초대 링크는 생성되었으나 메일 발송에 실패했습니다. 아래 링크를 복사해 직접 전달해 주세요.",
+    "inviteMail": {
+      "subject": "{inviter}님이 {organization} 워크스페이스로 초대했습니다.",
+      "heading": "{organization} 워크스페이스 초대",
+      "body": "{inviter}님이 {organization} 워크스페이스에 {role} 권한으로 초대했습니다. 아래 버튼을 클릭해 참여해 주세요.",
+      "expiry": "초대 링크는 {date}까지 유효합니다.",
+      "personal": "초대받은 이메일 계정으로 로그인한 후 수락해 주세요.",
+      "button": "초대 수락하기",
+      "why": "{inviter}님이 {organization} 워크스페이스의 팀 협업을 위해 보내신 안내 메일입니다.",
+    },
     "acceptInvite": "초대 수락",
     "inviteTitle": "브랜드 워크스페이스에 참여",
     "inviteInvalid": "만료되었거나 이미 사용했거나 다른 계정의 초대입니다.",
@@ -3110,7 +3138,7 @@ export const ko: Dictionary = {
     "privateBoundary": "캠페인 내용과 제작물, 결과를 공유하는 공간입니다. 크리에이터 지급액과 내부 비용은 포함하지 않습니다.",
     "viewProject": "캠페인 열기",
     "viewTeam": "팀 관리",
-    "needOrganization": "첫 의뢰를 보내려면 워크스페이스를 만들어 주세요.",
+    "needOrganization": "먼저 브랜드 워크스페이스를 만들어 주세요.",
     "inviteToken": "초대 링크",
     "copy": "링크 복사",
     "copied": "링크를 복사했습니다.",

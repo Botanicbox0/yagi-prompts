@@ -28,6 +28,7 @@ export interface WorkflowsHubProps {
   organizationId: string;
   locale: 'ko' | 'en';
   canCreate: boolean;
+  agentAccessAllowed?: boolean;
   mcpOrigin?: string;
   copy: StudioWorkflowsCopy;
   imageStudioHref: string;
@@ -225,6 +226,7 @@ export function WorkflowsHub({
   organizationId,
   locale,
   canCreate,
+  agentAccessAllowed = true,
   mcpOrigin,
   copy,
   imageStudioHref,
@@ -793,14 +795,16 @@ export function WorkflowsHub({
                 </button>
               </>
             )}
-            <button
-              type="button"
-              data-mcp-connect-open
-              className={styles.darkBtn}
-              onClick={() => setMcpModalOpen(true)}
-            >
-              {copy.header.connectMcp}
-            </button>
+            {agentAccessAllowed && (
+              <button
+                type="button"
+                data-mcp-connect-open
+                className={styles.darkBtn}
+                onClick={() => setMcpModalOpen(true)}
+              >
+                {copy.header.connectMcp}
+              </button>
+            )}
           </div>
         </header>
 
@@ -812,13 +816,15 @@ export function WorkflowsHub({
               <h2 className={styles.builderHeading}>{copy.builder.heading}</h2>
               <p className={styles.builderLead}>{copy.builder.lead}</p>
             </div>
-            <button
-              type="button"
-              className={styles.secondaryBtn}
-              onClick={() => setMcpModalOpen(true)}
-            >
-              {copy.header.connectMcp}
-            </button>
+            {agentAccessAllowed && (
+              <button
+                type="button"
+                className={styles.secondaryBtn}
+                onClick={() => setMcpModalOpen(true)}
+              >
+                {copy.header.connectMcp}
+              </button>
+            )}
           </div>
 
           <form className={styles.builderForm} onSubmit={handleBuildWithAi}>
@@ -1738,17 +1744,19 @@ export function WorkflowsHub({
       )}
 
       {/* Modal 4: Multi-Client MCP 1-2-3 Connect Modal */}
-      <McpConnectModal
-        open={mcpModalOpen}
-        onClose={() => setMcpModalOpen(false)}
-        organizationId={organizationId}
-        canCreate={canCreate}
-        locale={locale}
-        mcpOrigin={mcpOrigin}
-        copy={copy.mcp}
-        errorCopy={copy.errors}
-        initialTokens={initialMcpTokens}
-      />
+      {agentAccessAllowed && (
+        <McpConnectModal
+          open={mcpModalOpen}
+          onClose={() => setMcpModalOpen(false)}
+          organizationId={organizationId}
+          canCreate={canCreate}
+          locale={locale}
+          mcpOrigin={mcpOrigin}
+          copy={copy.mcp}
+          errorCopy={copy.errors}
+          initialTokens={initialMcpTokens}
+        />
+      )}
     </div>
   );
 }

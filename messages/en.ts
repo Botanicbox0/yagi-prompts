@@ -1,4 +1,11 @@
 /** PLAN §3.9 — UI strings as dictionary modules. `en` is the shape; `ko` must match it. */
+import { STUDIO_LIMITS } from '@/lib/brand-studio/contracts';
+import {
+  BRAND_ATTACHMENT_DISPLAY_LIMITS,
+  formatLimitMb,
+  UNAPPROVED_UPLOAD_MAX_FILES,
+  UNAPPROVED_UPLOAD_QUOTA_BYTES,
+} from '@/lib/brands/upload-limits-format';
 import { adminWorkflowEn } from './admin-workflow';
 import { roomsChatEn } from './rooms-chat';
 import { roomsStoryboardEn } from './rooms-storyboard';
@@ -16,6 +23,7 @@ import { studioComposeEn } from './studio-compose';
 import { studioSoundEn } from './studio-sound';
 import { studioEditorEn } from './studio-editor';
 import { studioWorkflowsEn } from './studio-workflows';
+import { studioShareDialogEn } from './studio-share-dialog';
 import { adminConsoleEn } from './admin-console';
 import { campaignHubEn } from './campaign-hub';
 import { brandHomeEn } from './brand-home';
@@ -1844,9 +1852,11 @@ export const en = {
       draftNote: 'A 480p draft comes first. If you like it, finish it at 1080p.',
       usage: 'Credits this month',
       resets: 'Refills on {date}',
-      closedTitle: 'Your usage limit has not been set yet',
-      closedBody: 'Ask us and we will set a monthly limit for your team. Assets can be uploaded meanwhile.',
-      closedAction: 'Ask for a usage limit',
+      closedTitle: 'Studio access is not active yet',
+      closedBody: 'Credits are used when creating images or videos. Once your plan is confirmed, you can start right away. Request access below and our team will follow up in your workspace chat.',
+      closedAction: 'Request access',
+      closedRequestOrgFallback: 'Our brand',
+      closedRequestDraft: 'Brand: {organization}\nRequesting studio access.\nWhat we plan to make: (e.g. product photos, short-form videos, expected volume)',
       readOnly: 'You can look through results and assets. Owners and editors can create.',
       emptyPrompt: 'Write what to make first.',
       needChange: 'Write what should change in the video.',
@@ -2173,10 +2183,10 @@ export const en = {
       allowance_closed: 'Your usage limit has not been set yet.',
       allowance_exhausted: 'This run would go over this month’s limit.',
       too_many_running: 'Too many runs are open. Try again when one finishes.',
-      asset_limit: 'Your assets are full. Delete assets you no longer use.',
+      asset_limit: `Your asset limit (${STUDIO_LIMITS.assetsPerOrganization} assets) is full. Delete assets you no longer use and try again.`,
       storage_quota_exceeded: 'Your organization storage is full. Viewing and downloads stay open — delete unused files to upload new ones right away.',
       unsupported_file: 'This file type cannot be uploaded.',
-      file_too_large: 'This file is too large.',
+      file_too_large: `This file exceeds the size limit. You can upload up to ${formatLimitMb(STUDIO_LIMITS.imageBytesMax)} MB for images, ${formatLimitMb(STUDIO_LIMITS.videoBytesMax)} MB for video, and ${formatLimitMb(STUDIO_LIMITS.audioBytesMax)} MB for audio.`,
       reference_missing: 'A reference is missing or was deleted. Add it again.',
       provider_rejected: 'This could not be made. Change the words or references and try again.',
       provider_unavailable: 'We cannot make this right now. Please try again shortly.',
@@ -2184,6 +2194,11 @@ export const en = {
       model_unavailable: 'One of the models you picked is no longer offered. Pick your models again.',
       failed: 'It did not work this time. Please try again.',
     },
+    unapprovedUpload: {
+      quotaExceeded: `Before your plan is confirmed, uploads are limited to ${formatLimitMb(UNAPPROVED_UPLOAD_QUOTA_BYTES)} MB and ${UNAPPROVED_UPLOAD_MAX_FILES} files. Delete unused files or ask the YAGI team in chat.`,
+      fileLimitExceeded: `Before your plan is confirmed, you can upload up to ${UNAPPROVED_UPLOAD_MAX_FILES} files (${formatLimitMb(UNAPPROVED_UPLOAD_QUOTA_BYTES)} MB). Delete unused files or ask the YAGI team in chat.`,
+    },
+    shareDialog: studioShareDialogEn,
   },
   brandWorkspace: {
     languageApply: 'Change language',
@@ -2648,6 +2663,8 @@ export const en = {
     errors: {
       rateLimited: 'Too many requests. Please try again shortly.',
       storageQuotaExceeded: 'Organization storage is full. Remove unused files and try again.',
+      unapprovedUploadQuota: `Before your plan is confirmed, uploads are limited to ${formatLimitMb(UNAPPROVED_UPLOAD_QUOTA_BYTES)} MB and ${UNAPPROVED_UPLOAD_MAX_FILES} files. Remove unused files and try again.`,
+      unapprovedUploadFiles: `Before your plan is confirmed, you can upload up to ${UNAPPROVED_UPLOAD_MAX_FILES} files (${formatLimitMb(UNAPPROVED_UPLOAD_QUOTA_BYTES)} MB). Remove unused files and try again.`,
       adminInvalid: 'This couldn’t be saved. Check the required fields and formats.',
       adminDenied: 'This action isn’t available or the item no longer exists. Refresh to see the current state.',
       studioRateLimited: 'Too many changes in a short time. Try again in 10 minutes.',
@@ -2823,7 +2840,7 @@ export const en = {
       allCampaigns: 'All campaigns', searchCampaigns: 'Search brands or campaigns', noCampaignMatch: 'No campaigns match these filters.',
       queueHint: 'Review new requests and manage production, posting and reports for active campaigns.',
       joinTitle: 'Your campaigns, in one place', joinBody: 'Your first sign-in creates an account. Set up a brand workspace to request a campaign, or sign in with your invited account to follow its progress.',
-      setupTitle: 'Start in three steps', setupOne: 'Create your brand workspace', setupTwo: 'Share your goals and budget', setupThree: 'Approve content and follow results',
+      setupTitle: 'Three steps to get started', setupOne: 'Create a brand workspace', setupTwo: 'Invite teammates and upload your logo and product photos', setupThree: 'Create in Studio or collaborate with the YAGI team',
       reportBasis: 'Period based on post publication dates · Measurement times shown per post', csvTitle: 'Content title', csvId: 'No.', csvUrl: 'Post URL',
       metaTitle: 'Preparing Instagram sync', metaNote: 'Results currently come from studio reviews or creator-provided evidence. Automatic updates require account connection, consent and Meta permission approval.',
       publishedUnknown: 'Publish date not confirmed', csvViewsApproximate: 'Views approximate', csvYes: 'Yes', csvNo: 'No',
@@ -3017,12 +3034,12 @@ export const en = {
     "denied": "You do not have access to this workspace.",
     "loading": "Loading workspace…",
     "upload": "Attach a file",
-    "uploadHint": "Images up to 15 MiB, PDFs up to 20 MiB, videos up to 50 MB. Share larger videos with a reference link. Files are private to this workspace and the studio.",
+    "uploadHint": `Images up to ${formatLimitMb(BRAND_ATTACHMENT_DISPLAY_LIMITS['image/jpeg'])} MB, PDFs up to ${formatLimitMb(BRAND_ATTACHMENT_DISPLAY_LIMITS['application/pdf'])} MB, videos up to ${formatLimitMb(BRAND_ATTACHMENT_DISPLAY_LIMITS['video/mp4'])} MB. Share larger videos with a reference link. Files are private to this workspace and the studio.`,
     "uploading": "Uploading {percent}%",
     "cancelUpload": "Cancel upload",
     "uploadDone": "File attached.",
     "uploadFailed": "The file could not be attached. Your selection is kept so you can retry.",
-    "badFile": "Choose a supported JPEG, PNG, WebP, MP4, WebM or PDF within the size limit.",
+    "badFile": `Choose a supported JPEG, PNG or WebP image (up to ${formatLimitMb(BRAND_ATTACHMENT_DISPLAY_LIMITS['image/jpeg'])} MB), PDF (up to ${formatLimitMb(BRAND_ATTACHMENT_DISPLAY_LIMITS['application/pdf'])} MB), or MP4/WebM video (up to ${formatLimitMb(BRAND_ATTACHMENT_DISPLAY_LIMITS['video/mp4'])} MB).`,
     "download": "Download",
     "posts": "Published posts",
     "views": "Views",
@@ -3059,6 +3076,17 @@ export const en = {
     "createInvite": "Create invitation link",
     "inviteExpiry": "This link expires after 7 days and can be accepted only by the invited email account.",
     "inviteReady": "Share this invitation link with the intended teammate.",
+    "inviteMailSent": "Invitation email sent. You can also copy the link below to share directly.",
+    "inviteMailFailed": "Invitation link created, but the email could not be sent. Please copy and share the link below.",
+    "inviteMail": {
+      "subject": "{inviter} invited you to the {organization} workspace.",
+      "heading": "Invitation to {organization} workspace",
+      "body": "{inviter} invited you to join the {organization} workspace as {role}. Click the button below to join.",
+      "expiry": "This invitation link is valid until {date}.",
+      "personal": "Please sign in with the invited email account before accepting.",
+      "button": "Accept invitation",
+      "why": "Sent by {inviter} to invite you to collaborate in the {organization} workspace.",
+    },
     "acceptInvite": "Accept invitation",
     "inviteTitle": "Join a brand workspace",
     "inviteInvalid": "This invitation is expired, already used, or belongs to another account.",
@@ -3098,7 +3126,7 @@ export const en = {
     "privateBoundary": "Share campaign details, content and results here. Creator payouts and internal costs are kept separate.",
     "viewProject": "Open campaign",
     "viewTeam": "Manage team",
-    "needOrganization": "Create a workspace to send your first brief.",
+    "needOrganization": "Create your brand workspace first.",
     "inviteToken": "Invitation link",
     "copy": "Copy link",
     "copied": "Link copied.",

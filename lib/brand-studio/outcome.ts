@@ -1,15 +1,17 @@
 import { createHash } from 'node:crypto';
+import type { UploadLimitReason } from '@/lib/brands/upload-limits-format';
 import type { StudioErrorCode, StudioFailure } from './contracts';
 import { StudioDenied } from './access';
 
-export const failure = (code: StudioErrorCode): StudioFailure => ({ ok: false, code });
+export const failure = (code: StudioErrorCode, reason?: UploadLimitReason): StudioFailure =>
+  reason ? { ok: false, code, reason } : { ok: false, code };
 
 /** Run `fn`; a `StudioDenied` becomes its code, a unique-key race becomes `conflict`. Anything else propagates. */
 export async function guarded<T>(fn: () => Promise<T>): Promise<T | StudioFailure> {
   try {
     return await fn();
   } catch (error) {
-    if (error instanceof StudioDenied) return failure(error.code);
+    if (error instanceof StudioDenied) return failure(error.code, error.reason);
     if ((error as { code?: string } | null)?.code === '23505') return failure('conflict');
     throw error;
   }

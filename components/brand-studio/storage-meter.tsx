@@ -1,5 +1,6 @@
 import type { Dictionary } from '@/lib/i18n/dictionaries';
 import { formatStorageBytes, type StudioStorageQuotaView } from '@/lib/brands/storage-quota-format';
+import { UNAPPROVED_UPLOAD_MAX_FILES } from '@/lib/brands/upload-limits-format';
 import { fill } from './copy';
 import s from './storage-meter.module.css';
 
@@ -108,6 +109,15 @@ export function StorageMeterCard({ storage, copy, locale, assetsHref = null, com
             </a>
           )}
         </div>
+      )}
+
+      {storage.uploadApproved === false && (
+        <p className={s.retention} data-storage-unapproved>
+          {fill(copy.unapprovedNotice, {
+            quota: formatStorageBytes(storage.effectiveQuotaBytes, locale),
+            maxFiles: storage.maxFiles ?? UNAPPROVED_UPLOAD_MAX_FILES,
+          })}
+        </p>
       )}
 
       {storage.retentionDays !== null && (

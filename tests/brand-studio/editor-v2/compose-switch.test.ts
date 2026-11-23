@@ -113,6 +113,17 @@ describe('brandStudioEditorV2DefaultFor', () => {
       }
     }
   });
+
+  it('"all" or "*" opens it for every organization while BRAND_STUDIO_EDITOR_V2=on', async () => {
+    const { brandStudioEditorV2DefaultFor } = await vi.importActual<typeof import('@/lib/flags')>('@/lib/flags');
+    for (const list of ['all', '*', ' ALL ', `${OTHER}, all`, ` *, ${OTHER}`]) {
+      expect(brandStudioEditorV2DefaultFor(ORG, { BRAND_STUDIO_EDITOR_V2: 'on', BRAND_STUDIO_EDITOR_V2_ORGS: list }), list).toBe(true);
+      expect(brandStudioEditorV2DefaultFor(OTHER, { BRAND_STUDIO_EDITOR_V2: 'on', BRAND_STUDIO_EDITOR_V2_ORGS: list }), list).toBe(true);
+      expect(brandStudioEditorV2DefaultFor('', { BRAND_STUDIO_EDITOR_V2: 'on', BRAND_STUDIO_EDITOR_V2_ORGS: list }), list).toBe(false);
+      expect(brandStudioEditorV2DefaultFor(null, { BRAND_STUDIO_EDITOR_V2: 'on', BRAND_STUDIO_EDITOR_V2_ORGS: list }), list).toBe(false);
+      expect(brandStudioEditorV2DefaultFor(ORG, { BRAND_STUDIO_EDITOR_V2: 'off', BRAND_STUDIO_EDITOR_V2_ORGS: list }), list).toBe(false);
+    }
+  });
 });
 
 type ComposerElement = ReactElement<{ copy: { previewV2: { link: string; tag: string; note: string; back: string; backNote: string } }; editorV2Href: string | null; organizationId: string }>;
@@ -221,13 +232,21 @@ describe('/brand/studio/compose with the switch', () => {
     }
   });
 
-  it('an organization not on the list stays in the current editor, its link reads “try the new one”', async () => {
+  it('an organization not on the list stays in the current editor with no sample film link by default', async () => {
     vi.stubEnv('BRAND_STUDIO_EDITOR_V2_ORGS', OTHER);
     const Page = await loadPage();
     const element = (await Page(params({ organizationId: ORG, clip: `a:${ASSET}` }))) as ComposerElement;
     expect(mocks.redirect).not.toHaveBeenCalled();
     expect(element.props.copy).toBe(dict.studioCompose);
-    // Its link goes to the sample film: the new editor opens an organization's own film only when listed.
+    expect(element.props.editorV2Href).toBeNull();
+  });
+
+  it('an organization not on the list sees the sample film link only when BRAND_WORKSPACE_PROTOTYPE_LAYER=on', async () => {
+    vi.stubEnv('BRAND_STUDIO_EDITOR_V2_ORGS', OTHER);
+    vi.stubEnv('BRAND_WORKSPACE_PROTOTYPE_LAYER', 'on');
+    const Page = await loadPage();
+    const element = (await Page(params({ organizationId: ORG, clip: `a:${ASSET}` }))) as ComposerElement;
+    expect(mocks.redirect).not.toHaveBeenCalled();
     expect(element.props.editorV2Href).toBe(`/brand/studio/editor?sample=1&organizationId=${ORG}`);
     expect(element.props.editorV2Href).not.toContain('classic');
     expect(element.props.copy.previewV2).toMatchObject({
@@ -235,6 +254,16 @@ describe('/brand/studio/compose with the switch', () => {
       tag: '구조 시안',
       note: dict.studioEditor.notice.body,
     });
+  });
+
+  it('BRAND_STUDIO_EDITOR_V2_ORGS=all (or *) redirects listed non-sandboxed orgs to v2 and keeps 404 for sandboxed guard', async () => {
+    vi.stubEnv('BRAND_STUDIO_EDITOR_V2_ORGS', 'all');
+    expect(await redirected({ organizationId: ORG })).toEqual({ path: '/brand/studio/editor', query: { organizationId: ORG } });
+    mocks.studioRouteOrShowroom.mockImplementationOnce(async () => {
+      mocks.calls.push('guard');
+      throw new Error('NEXT_NOT_FOUND');
+    });
+    await expect(loadPage().then((P) => P(params({ organizationId: ORG })))).rejects.toThrow('NEXT_NOT_FOUND');
   });
 
   it('flag off: no redirect even when listed, and no link at all', async () => {
@@ -298,9 +327,9 @@ describe('the switch in the source', () => {
   it('the new editor’s way back always carries classic=1; the current editor’s link never does', () => {
     expect(editor).toContain("scopedHref('/brand/studio/compose?classic=1', choice)");
     expect(editor).not.toMatch(/scopedHref\('\/brand\/studio\/compose'/);
-    expect(compose).toContain(
-      "editorV2Href={brandStudioEditorV2Open() ? scopedHref(opensEditorV2 ? '/brand/studio/editor' : '/brand/studio/editor?sample=1', choice) : null}",
-    );
+    expect(compose).toContain('brandStudioEditorV2Open()');
+    expect(compose).toContain("scopedHref('/brand/studio/editor', choice)");
+    expect(compose).toContain('brandWorkspacePrototypeLayerOpen()');
     expect(compose.match(/classic/g)?.length ?? 0).toBeGreaterThan(0);
     expect(compose).not.toMatch(/\/brand\/studio\/editor[^'"`]*classic/);
   });

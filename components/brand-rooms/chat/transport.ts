@@ -18,8 +18,9 @@ import {
   type RoomStreamPage,
   type RoomThreadPage,
 } from "@/lib/brand-rooms/message-contracts";
+import { isUnapprovedUploadReason, type UploadLimitReason } from "@/lib/brands/upload-limits-format";
 
-export type Fail = { ok: false; code: RoomErrorCode | "offline" };
+export type Fail = { ok: false; code: RoomErrorCode | "offline"; reason?: UploadLimitReason };
 export type LoadResult = RoomStreamPage | RoomThreadPage | RoomRefPage | Fail;
 
 export interface SendDraft {
@@ -53,8 +54,10 @@ export interface ChatTransport {
 }
 
 const failOf = (body: unknown): Fail => {
-  const code = (body as { code?: unknown } | null)?.code;
-  return { ok: false, code: isRoomErrorCode(code) ? code : "failed" };
+  const obj = body as { code?: unknown; reason?: unknown } | null;
+  const code = obj?.code;
+  const reason = isUnapprovedUploadReason(obj?.reason) ? obj.reason : undefined;
+  return { ok: false, code: isRoomErrorCode(code) ? code : "failed", ...(reason ? { reason } : {}) };
 };
 
 async function getJson(url: string): Promise<unknown> {

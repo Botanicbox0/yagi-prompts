@@ -50,6 +50,36 @@ export const brandHomeEn = {
     image: 'Open image result',
     video: 'Open video result',
   },
+  checklist: {
+    title: 'Getting started',
+    subtitle: 'Finish these basics to start creating images and videos.',
+    dismiss: 'Close',
+    doneLabel: 'Done',
+    invite: {
+      title: 'Invite a teammate',
+      body: 'Bring the teammates you collaborate with into this workspace.',
+      action: 'Invite team',
+    },
+    assets: {
+      title: 'Upload logo & product photos',
+      body: 'Keep your brand logo and product photos ready for Studio and your team.',
+      logoAction: 'Brand settings',
+      uploadAction: 'Upload photos',
+    },
+    usage: {
+      title: 'Studio access',
+      pendingStatus: 'Not active',
+      pendingBody: 'Available once your plan is confirmed. Submit a request below and our team will reply in workspace chat.',
+      pendingAction: 'Request access',
+      readyStatus: 'Ready',
+      readyBody: 'Studio creation and full uploads are available.',
+    },
+    firstImage: {
+      title: 'Make your first image',
+      body: 'Open Studio and generate your first brand image.',
+      action: 'Open Studio',
+    },
+  },
 };
 
 export const brandHomeKo: typeof brandHomeEn = {
@@ -88,6 +118,36 @@ export const brandHomeKo: typeof brandHomeEn = {
   result: {
     image: '이미지 결과 열기',
     video: '영상 결과 열기',
+  },
+  checklist: {
+    title: '시작 가이드',
+    subtitle: '기본 설정을 마치면 바로 이미지와 영상을 만들 수 있어요.',
+    dismiss: '닫기',
+    doneLabel: '완료',
+    invite: {
+      title: '팀원 초대하기',
+      body: '함께 작업할 팀원을 워크스페이스로 초대해 보세요.',
+      action: '팀원 초대',
+    },
+    assets: {
+      title: '로고와 제품 사진 올리기',
+      body: '브랜드 로고와 제품 사진을 미리 올려 두면 스튜디오에서 바로 활용할 수 있어요.',
+      logoAction: '로고 설정',
+      uploadAction: '사진 올리기',
+    },
+    usage: {
+      title: '스튜디오 이용',
+      pendingStatus: '이용 전',
+      pendingBody: '플랜 확정 후 이용할 수 있어요. 신청하시면 담당 팀이 워크스페이스 채팅으로 안내해 드려요.',
+      pendingAction: '이용 신청',
+      readyStatus: '이용 가능',
+      readyBody: '스튜디오 제작과 전체 업로드 기능을 모두 이용할 수 있어요.',
+    },
+    firstImage: {
+      title: '첫 이미지 만들기',
+      body: '스튜디오에서 브랜드의 첫 이미지를 제작해 보세요.',
+      action: '스튜디오 열기',
+    },
   },
 };
 

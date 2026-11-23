@@ -37,7 +37,7 @@ import { ProjectPickDialog } from "./asset-hub-project";
 import { HubDetail, HubLinkTile, HubTile } from "./asset-hub-tile";
 import { listedJobs } from "./store";
 import s from "./asset-hub.module.css";
-import { errorLine, type StudioCopy } from "./copy";
+import { errorLine, studioUploadErrorLine, type StudioCopy } from "./copy";
 import { AssetDialog } from "./rail/asset-dialog";
 import { FoldersTab } from "./rail/folders-tab";
 import { RailIcon } from "./rail/icons";
@@ -194,20 +194,21 @@ export function BrandAssetHub({
     async (files: File[]) => {
       setNotice(null);
       if (uploadBlocked) {
-        setNotice(errorLine(studioCopy, "storage_quota_exceeded"));
+        const reason = state?.storage?.uploadApproved === false ? "unapproved_quota" : undefined;
+        setNotice(studioUploadErrorLine(studioCopy, "storage_quota_exceeded", reason));
         return;
       }
       for (const file of files) {
         const problem = uploadProblem(file);
         if (problem) {
-          setNotice(errorLine(studioCopy, problem));
+          setNotice(studioUploadErrorLine(studioCopy, problem));
           continue;
         }
         const res = await studio.upload(file);
-        if (isFailure(res)) setNotice(errorLine(studioCopy, res.code));
+        if (isFailure(res)) setNotice(studioUploadErrorLine(studioCopy, res.code, res.reason));
       }
     },
-    [studio, studioCopy, uploadBlocked],
+    [state?.storage?.uploadApproved, studio, studioCopy, uploadBlocked],
   );
 
   const onDrop = (event: DragEvent<HTMLDivElement>) => {

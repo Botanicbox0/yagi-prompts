@@ -74,7 +74,7 @@ export async function POST(request: NextRequest, context: Context) {
       ...(declared ? { mime: declared } : {}),
     });
     if (result.ok) return json(result);
-    return json(result, result.code === "conflict" ? 409 : result.code === "not_found" ? 404 : result.code === "forbidden" ? 403 : result.code === "storage_unavailable" ? 503 : 400);
+    return json(result, result.code === "conflict" ? 409 : result.code === "not_found" ? 404 : result.code === "forbidden" ? 403 : result.code === "storage_quota_exceeded" ? 413 : result.code === "storage_unavailable" ? 503 : 400);
   } catch {
     return json({ ok: false, code: "storage_unavailable" }, 503);
   }

@@ -121,6 +121,7 @@ export default async function StudioVideoPage({
       </header>
       <VideoStudioWorkspace
         organizationId={choice.id}
+        organizationName={choice.name}
         locale={locale}
         copy={dict.brandStudio}
         libraryCopy={dict.studioLibrary}

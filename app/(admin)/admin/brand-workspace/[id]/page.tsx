@@ -8,6 +8,7 @@ import { getSqlRunner } from "@/lib/db/connect";
 import { getLocaleFromHeaders } from "@/lib/i18n/server";
 import { getDictionary } from "@/lib/i18n/dictionaries";
 import { loadStudioProject } from "@/lib/brands/workspace/service";
+import { BRAND_ATTACHMENT_LIMITS } from "@/lib/brands/workspace/schemas";
 import { AdminShell, ConfirmCheck, OpForm, OutcomeBanner } from "@/components/admin/chrome";
 import {
   AdminPageHeader,
@@ -17,6 +18,7 @@ import {
 import { BrandStatusForms, brandRefusals } from "@/components/admin/brand-status";
 import type { AdminOperationName } from "@/lib/admin/operations";
 import { ProjectDetail } from "@/components/brand-workspace/project-detail";
+import { buildProjectPrototypeLayer } from "@/components/brand-workspace/project-prototype-layer";
 import { BrandUpload } from "@/components/brand-workspace/upload";
 import { CollectionConsole } from "@/components/brand-workspace/collection-console";
 import { PostPresentationAdmin } from "@/components/brand-workspace/post-presentation-admin";
@@ -266,6 +268,7 @@ export default async function StudioBrandProject({
 
       <div id="project-preview">
         <ProjectDetail backHref={listReturn} project={p} b={b} locale={locale} studio
+          prototypeLayer={await buildProjectPrototypeLayer({ project: p, locale, generativeMediaAllowed: true })}
           shortlistCount={sharedShortlist.length}
           shortlist={sharedShortlist.length > 0 ? <CampaignShortlist candidates={sharedShortlist} canPick={false} copy={b.shortlist} locale={locale} /> : null}
           studioReply={
@@ -279,7 +282,7 @@ export default async function StudioBrandProject({
       </div>
       <section id="files-shortlist" className="bw-panel">
         <h2>{b.files}</h2>
-        <BrandUpload projectId={id} b={b} studio />
+        <BrandUpload projectId={id} b={b} studio limits={BRAND_ATTACHMENT_LIMITS} />
       </section>
       <ShortlistAdmin projectId={p.id} view={shortlist} back={`${formBack}#shortlist-admin`} copy={b.shortlistAdmin} locale={locale} />
       <section className="bw-panel" data-cover-settings>

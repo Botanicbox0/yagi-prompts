@@ -14,6 +14,7 @@ import type {
 } from "@/lib/brands/workspace/types";
 import type { BrandCopy } from "./action-form";
 import { formatBrandTimestamp } from "./format";
+import { OPEN_BRAND_SUPPORT_EVENT, resolveSupportOpenDetail } from "./support-trigger";
 
 function toBrandHandle(name: string): string {
   const slug = name
@@ -111,6 +112,36 @@ export function SupportDrawer({
       document.removeEventListener("visibilitychange", onVisible);
     };
   }, [isOpen, organizationId, refresh]);
+
+  const openWith = useCallback(
+    (targetOrgId: string, nextDraft: string | null) => {
+      setOrg(targetOrgId);
+      if (nextDraft !== null) setDraft(nextDraft);
+      setIsOpen(true);
+      if (dialog.current && !dialog.current.open) {
+        dialog.current.show();
+      }
+      setBusy(true);
+      setNotice("");
+      void refresh(targetOrgId, false).finally(() => setBusy(false));
+      if (nextDraft !== null) {
+        requestAnimationFrame(() => textareaRef.current?.focus());
+      }
+    },
+    [refresh],
+  );
+
+  useEffect(() => {
+    if (!organizations.length || typeof window === "undefined") return;
+    const onOpen = (event: Event) => {
+      event.preventDefault();
+      const detail = event instanceof CustomEvent ? event.detail : null;
+      const resolved = resolveSupportOpenDetail(detail, organizations, organizationId);
+      openWith(resolved.organizationId, resolved.draft);
+    };
+    window.addEventListener(OPEN_BRAND_SUPPORT_EVENT, onOpen);
+    return () => window.removeEventListener(OPEN_BRAND_SUPPORT_EVENT, onOpen);
+  }, [openWith, organizationId, organizations]);
 
   if (!organizations.length) return null;
 

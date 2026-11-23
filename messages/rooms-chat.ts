@@ -4,6 +4,12 @@
  *
  * The customer never reads an internal tool's name here: the team is "야기 팀", notices are "전달됐어요".
  */
+import { ROOM_LIMITS } from '@/lib/brand-rooms/message-contracts';
+import {
+  formatLimitMb,
+  UNAPPROVED_UPLOAD_MAX_FILES,
+  UNAPPROVED_UPLOAD_QUOTA_BYTES,
+} from '@/lib/brands/upload-limits-format';
 import { studioReviewEn, studioReviewKo } from './studio-review';
 
 export const roomsChatEn = {
@@ -73,7 +79,7 @@ export const roomsChatEn = {
     removeFile: 'Remove {name}',
     dropHere: 'Drop files to attach them',
     tooMany: 'Up to {count} files in one message',
-    tooLarge: '{name} is over 25 MB',
+    tooLarge: `{name} is over ${formatLimitMb(ROOM_LIMITS.attachmentBytesMax)} MB`,
     unsupported: "{name} can't be attached. Images, video, PDF and office files work.",
     uploadFailed: "{name} didn't upload. Try again.",
     waitUploads: 'Send once the files finish uploading',
@@ -132,7 +138,9 @@ export const roomsChatEn = {
     invalid: "That can't be sent as it is.",
     conflict: 'Something just changed. Try again.',
     storage_quota_exceeded: 'Your organization storage is full. Delete unused files in Assets to attach new ones.',
-    file_too_large: 'The file is over 25 MB.',
+    unapprovedUploadQuota: `Before your plan is confirmed, uploads are limited to ${formatLimitMb(UNAPPROVED_UPLOAD_QUOTA_BYTES)} MB and ${UNAPPROVED_UPLOAD_MAX_FILES} files. Delete unused files or ask the YAGI team in chat.`,
+    unapprovedUploadFiles: `Before your plan is confirmed, you can upload up to ${UNAPPROVED_UPLOAD_MAX_FILES} files (${formatLimitMb(UNAPPROVED_UPLOAD_QUOTA_BYTES)} MB). Delete unused files or ask the YAGI team in chat.`,
+    file_too_large: `The file is over ${formatLimitMb(ROOM_LIMITS.attachmentBytesMax)} MB.`,
     unsupported_file: "That file type can't be sent.",
     offline: 'The connection dropped. Try again.',
   },
@@ -223,7 +231,7 @@ export const roomsChatKo: typeof roomsChatEn = {
     removeFile: '{name} 빼기',
     dropHere: '여기에 놓으면 첨부돼요',
     tooMany: '한 번에 {count}개까지 보낼 수 있어요',
-    tooLarge: '{name}: 25MB가 넘어요',
+    tooLarge: `{name}: 파일 크기가 ${formatLimitMb(ROOM_LIMITS.attachmentBytesMax)} MB를 넘었어요.`,
     unsupported: '{name}: 보낼 수 없는 형식이에요. 이미지, 영상, PDF, 문서 파일을 보낼 수 있어요.',
     uploadFailed: '{name}: 올리지 못했어요. 다시 시도해 주세요.',
     waitUploads: '파일이 다 올라가면 보낼 수 있어요',
@@ -282,7 +290,9 @@ export const roomsChatKo: typeof roomsChatEn = {
     invalid: '이대로는 보낼 수 없어요.',
     conflict: '방금 바뀐 게 있어요. 다시 시도해 주세요.',
     storage_quota_exceeded: '조직 저장 한도가 가득 찼어요. 에셋에서 안 쓰는 파일을 지우면 새 파일을 첨부할 수 있어요.',
-    file_too_large: '파일이 25MB를 넘어요.',
+    unapprovedUploadQuota: `플랜 확정 전에는 총 ${formatLimitMb(UNAPPROVED_UPLOAD_QUOTA_BYTES)} MB, 최대 ${UNAPPROVED_UPLOAD_MAX_FILES}개까지 올릴 수 있어요. 안 쓰는 파일을 지우거나 대화창에서 야기 팀에 문의해 주세요.`,
+    unapprovedUploadFiles: `플랜 확정 전에는 최대 ${UNAPPROVED_UPLOAD_MAX_FILES}개(${formatLimitMb(UNAPPROVED_UPLOAD_QUOTA_BYTES)} MB)까지 올릴 수 있어요. 안 쓰는 파일을 지우거나 대화창에서 야기 팀에 문의해 주세요.`,
+    file_too_large: `파일 크기가 ${formatLimitMb(ROOM_LIMITS.attachmentBytesMax)} MB를 넘었어요.`,
     unsupported_file: '보낼 수 없는 파일 형식이에요.',
     offline: '연결이 잠시 끊겼어요. 다시 시도해 주세요.',
   },
