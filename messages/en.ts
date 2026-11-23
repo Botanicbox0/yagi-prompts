@@ -4653,7 +4653,7 @@ export const en = {
     pastDue: 'The next payment could not be completed. Check your current period and subscription status.',
     manage: 'Manage my plan',
     account: 'Back to my account',
-    testMode: 'Admin test payment · No live subscription is activated',
+    testMode: 'Test payment · No live subscription is activated',
     liveQaMode: 'Admin live payment check · Your registered card will be charged real fees.',
     enrollTitle: 'Start your monthly plan',
     enrollBody: 'Choose templates featuring your own face and use your monthly allowance.',
