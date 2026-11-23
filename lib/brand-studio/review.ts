@@ -17,10 +17,13 @@
  * this module writes is the internal team notice (`ReviewNotice`), which the route hands to the team
  * notifier after the answer has gone out and which never reaches a customer.
  */
+import { randomUUID } from 'node:crypto';
 import { z } from 'zod';
 import type { Viewer } from '@/lib/auth/identity';
 import type { SqlRunner } from '@/lib/db/sql-runner';
+import { adminUrl } from '@/lib/seo/site-url';
 import { featureDenied, isSandboxedClientOrganization } from '@/lib/brands/features';
+import { enqueueTeamNotice } from '@/lib/brands/team-notice-outbox';
 import { loadFeaturePolicies } from '@/lib/brands/entitlements';
 import { adjustOrganizationStorageBytes } from '@/lib/brands/storage-quota';
 import { RoomDenied, requireEdit, requireRoomProject, roomSeat, seatInProject, type RoomSeat } from '@/lib/brand-rooms/access';
@@ -78,6 +81,7 @@ export interface ReviewNotice {
   organizationId: string;
   userId: string;
   messageId: string;
+  deliverySourceId?: string;
   body: string;
 }
 
@@ -654,19 +658,24 @@ function commentNotice(organizationId: string, userId: string, review: ReviewRow
   };
 }
 
-/** The internal line the team reads (never shown to a customer). */
-export function reviewNoticeBody(
-  review: { id: string; title: string },
+/** Raw unescaped preview for `team_notice_deliveries` so the outbox escapes once and appends one admin link (F10). */
+export function reviewNoticePreview(
+  review: { title: string },
   event: { kind: 'comment'; body: string; atMs: number | null; spot: boolean; reply: boolean } | { kind: 'status'; status: ReviewStatus },
 ): string {
   const head =
     event.kind === 'comment'
       ? `[리뷰 ${event.reply ? '답글' : '의견'}] ${review.title}${event.atMs != null ? ` · ${formatTimecode(event.atMs)}` : ''}${event.spot ? ' · 화면 위치 표시' : ''}`
       : `[리뷰 상태] ${review.title} → ${STATUS_WORDS[event.status]}`;
-  const lines = [head];
-  if (event.kind === 'comment') lines.push(event.body.slice(0, 1200));
-  lines.push(`관리자 화면: ${reviewAdminPath(review.id)}`);
-  return lines.join('\n');
+  return event.kind === 'comment' ? [head, event.body.slice(0, 1200)].join('\n') : head;
+}
+
+/** The internal line the team reads (never shown to a customer). */
+export function reviewNoticeBody(
+  review: { id: string; title: string },
+  event: { kind: 'comment'; body: string; atMs: number | null; spot: boolean; reply: boolean } | { kind: 'status'; status: ReviewStatus },
+): string {
+  return `${reviewNoticePreview(review, event)}\n관리자 화면: ${adminUrl(reviewAdminPath(review.id))}`;
 }
 
 /* --------------------------------------------------------------- brand reads */
@@ -758,7 +767,18 @@ export async function runReviewOperation(deps: ReviewDeps, viewer: Viewer, opera
           const review = await reviewRow(sql, parsed.data.reviewId, organizationId, true);
           if (!review) throw new ReviewDenied('not_found');
           if (await moveStatus(sql, review, parsed.data.status, userId)) {
-            notice = { organizationId, userId, messageId: review.id, body: reviewNoticeBody(review, { kind: 'status', status: parsed.data.status }) };
+            const body = reviewNoticeBody(review, { kind: 'status', status: parsed.data.status });
+            const deliverySourceId = randomUUID();
+            notice = { organizationId, userId, messageId: review.id, deliverySourceId, body };
+            await enqueueTeamNotice(sql, 'review_comment', {
+              organizationId,
+              sourceTable: 'brand_studio_reviews',
+              sourceId: deliverySourceId,
+              actorUserId: userId,
+              surface: 'studio_review',
+              preview: reviewNoticePreview(review, { kind: 'status', status: parsed.data.status }),
+              adminPath: reviewAdminPath(review.id),
+            });
             event = statusEvent(review, parsed.data.status, userId, 'brand');
           }
           return { ok: true as const } satisfies ReviewDone;
@@ -787,6 +807,23 @@ export async function runReviewOperation(deps: ReviewDeps, viewer: Viewer, opera
           if (Number(recent) >= REVIEW_LIMITS.commentsPerMinute) throw new ReviewDenied('rate_limited');
           const comment = await insertComment(sql, review, parsed.data, { userId, role: 'brand' });
           notice = commentNotice(organizationId, userId, review, comment);
+          if (notice) {
+            await enqueueTeamNotice(sql, 'review_comment', {
+              organizationId,
+              sourceTable: 'brand_studio_review_comments',
+              sourceId: comment.id,
+              actorUserId: userId,
+              surface: 'studio_review',
+              preview: reviewNoticePreview(review, {
+                kind: 'comment',
+                body: comment.body,
+                atMs: comment.atMs,
+                spot: comment.x != null,
+                reply: comment.parentId != null,
+              }),
+              adminPath: reviewAdminPath(review.id),
+            });
+          }
           return { ok: true as const, comment } satisfies ReviewCommentAdded;
         }
         case 'comment.resolve': {
@@ -1210,7 +1247,18 @@ export async function runRoomReviewOperation(deps: ReviewDeps, viewer: Viewer, o
           if (!parsed.success) throw new ReviewDenied('invalid');
           const review = await roomReview(sql, parsed.data.reviewId, organizationId, projectId, true);
           if (await moveStatus(sql, review, parsed.data.status, userId)) {
-            notice = { organizationId, userId, messageId: review.id, body: reviewNoticeBody(review, { kind: 'status', status: parsed.data.status }) };
+            const body = reviewNoticeBody(review, { kind: 'status', status: parsed.data.status });
+            const deliverySourceId = randomUUID();
+            notice = { organizationId, userId, messageId: review.id, deliverySourceId, body };
+            await enqueueTeamNotice(sql, 'review_comment', {
+              organizationId,
+              sourceTable: 'brand_studio_reviews',
+              sourceId: deliverySourceId,
+              actorUserId: userId,
+              surface: 'room_review',
+              preview: reviewNoticePreview(review, { kind: 'status', status: parsed.data.status }),
+              adminPath: reviewAdminPath(review.id),
+            });
             event = statusEvent(review, parsed.data.status, userId, 'brand');
           }
           return { ok: true as const } satisfies ReviewDone;
@@ -1229,6 +1277,23 @@ export async function runRoomReviewOperation(deps: ReviewDeps, viewer: Viewer, o
           if (Number(recent) >= REVIEW_LIMITS.commentsPerMinute) throw new ReviewDenied('rate_limited');
           const comment = await insertComment(sql, review, parsed.data, { userId, role: 'brand' });
           notice = commentNotice(organizationId, userId, review, comment);
+          if (notice) {
+            await enqueueTeamNotice(sql, 'review_comment', {
+              organizationId,
+              sourceTable: 'brand_studio_review_comments',
+              sourceId: comment.id,
+              actorUserId: userId,
+              surface: 'room_review',
+              preview: reviewNoticePreview(review, {
+                kind: 'comment',
+                body: comment.body,
+                atMs: comment.atMs,
+                spot: comment.x != null,
+                reply: comment.parentId != null,
+              }),
+              adminPath: reviewAdminPath(review.id),
+            });
+          }
           event = commentEvent(review, comment, userId, 'brand');
           return { ok: true as const, comment } satisfies ReviewCommentAdded;
         }

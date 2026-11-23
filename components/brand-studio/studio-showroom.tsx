@@ -75,7 +75,7 @@ export function StudioShowroom({
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           operation: 'support.send',
-          input: { organizationId, body, requestId: requestRef.current.id },
+          input: { organizationId, body, surface: 'studio_showroom', requestId: requestRef.current.id },
         }),
       });
       const json = (await res.json()) as { ok?: boolean };

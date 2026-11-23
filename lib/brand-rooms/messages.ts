@@ -26,7 +26,9 @@ import {
   reservePendingRoomUpload,
 } from '@/lib/brands/upload-gate';
 import { STAGING_BUCKET, type StorageDriver } from '@/lib/storage';
+import { adminUrl } from '@/lib/seo/site-url';
 import { featureDenied, isSandboxedClientOrganization } from '@/lib/brands/features';
+import { enqueueTeamNotice } from '@/lib/brands/team-notice-outbox';
 import { loadFeaturePolicies } from '@/lib/brands/entitlements';
 import {
   adjustOrganizationStorageBytes,
@@ -1138,16 +1140,22 @@ export function roomAdminPath(organizationId: string, channel?: string | null): 
 }
 
 /** The internal line the team reads (never shown to a customer). */
-export function roomNoticeBody(
-  where: { organizationId: string; channel: string; title: string | null },
+export function roomNoticePreview(
+  where: { title: string | null },
   message: Pick<RoomMessage, 'body' | 'parentId' | 'mentionsTeam' | 'attachments'>,
 ): string {
   const head = `[프로젝트 룸] ${where.title ?? '일반 문의'}${message.parentId ? ' · 스레드 답글' : ''}${message.mentionsTeam ? ' · 야기 팀 호출' : ''}`;
   const lines = [head];
   if (message.body) lines.push(message.body.slice(0, 1200));
   if (message.attachments.length) lines.push(`첨부 ${message.attachments.length}개: ${message.attachments.map((a) => a.name).join(', ').slice(0, 300)}`);
-  lines.push(`관리자 화면: ${roomAdminPath(where.organizationId, where.channel)}`);
   return lines.join('\n');
+}
+
+export function roomNoticeBody(
+  where: { organizationId: string; channel: string; title: string | null },
+  message: Pick<RoomMessage, 'body' | 'parentId' | 'mentionsTeam' | 'attachments'>,
+): string {
+  return `${roomNoticePreview(where, message)}\n관리자 화면: ${adminUrl(roomAdminPath(where.organizationId, where.channel))}`;
 }
 
 /* ------------------------------------------------------------ brand writes */
@@ -1182,7 +1190,17 @@ export async function runRoomOperation(deps: RoomMessageDeps, viewer: Viewer, op
         case 'message.send': {
           const { message, created } = await insertMessage(sql, deps.media, reader, input, { role: 'brand', rateLimited: true });
           if (created) {
-            notice = { organizationId, userId: seat.userId, messageId: message.id, body: roomNoticeBody(reader, message) };
+            const noticeBody = roomNoticeBody(reader, message);
+            notice = { organizationId, userId: seat.userId, messageId: message.id, body: noticeBody };
+            await enqueueTeamNotice(sql, 'room_message', {
+              organizationId,
+              sourceTable: 'brand_room_messages',
+              sourceId: message.id,
+              actorUserId: seat.userId,
+              surface: reader.projectId ? 'project_room' : 'general_room',
+              preview: roomNoticePreview(reader, message),
+              adminPath: roomAdminPath(organizationId, reader.channel),
+            });
             // Colleagues this line names hear about it (./notices.ts; best effort, never fails the send).
             await enqueueNotices(sql, { type: 'message', organizationId, projectId: reader.projectId, messageId: message.id, actorId: seat.userId, actorRole: 'brand', mentions: message.mentions });
           }

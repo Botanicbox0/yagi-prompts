@@ -41,7 +41,9 @@ import { dropUnreferencedStudioKeys } from '@/lib/brand-studio/physical-cleanup'
 import type { StudioStaging } from '@/lib/brand-studio/types';
 import { canTalkIn, RoomDenied, requireEdit, requireRoomProject, roomSeat, type RoomSeat } from './access';
 import { postRoomEvent, type RoomEventInput, type RoomEventKind } from './events';
-import { storyboardDecisionNotice, type RoomTeamNotice, type RoomTeamNotify } from './team-notice';
+import { storyboardDecisionNotice, storyboardDecisionPreview, type RoomTeamNotice, type RoomTeamNotify } from './team-notice';
+import { storyboardAdminHref } from './storyboard-contracts';
+import { enqueueTeamNotice } from '@/lib/brands/team-notice-outbox';
 import {
   BoardCreateSchema,
   BoardRefSchema,
@@ -856,11 +858,23 @@ export async function runStoryboardOperation(deps: StoryboardDeps, viewer: Viewe
           if (event) events.push(eventFor(row, event, actor));
           // The team hears about a decision on its board (docs/BRAND-ROOMS-FEEDBACK.md §3); a reopen is not one.
           if (event && (v.status === 'approved' || v.status === 'changes_requested')) {
-            teamNotice = storyboardDecisionNotice({
+            const boardInfo = { id: String(row.id), title: String(row.title), version: Number(row.version) };
+            const baseNotice = storyboardDecisionNotice({
               organizationId: String(row.organization_id),
               userId: gate.userId,
-              board: { id: String(row.id), title: String(row.title), version: Number(row.version) },
+              board: boardInfo,
               status: v.status,
+            });
+            const deliverySourceId = randomUUID();
+            teamNotice = { ...baseNotice, deliverySourceId };
+            await enqueueTeamNotice(sql, 'storyboard_approval', {
+              organizationId: String(row.organization_id),
+              sourceTable: 'brand_storyboards',
+              sourceId: deliverySourceId,
+              actorUserId: gate.userId,
+              surface: 'storyboard',
+              preview: storyboardDecisionPreview({ board: boardInfo, status: v.status }),
+              adminPath: storyboardAdminHref(String(row.id)),
             });
           }
           return savedBoard(sql, deps.media, row.id);

@@ -17,6 +17,7 @@ import {
 import type { BrandOutcome } from "@/lib/brands/workspace/types";
 import { importShortlist, removeShortlistCandidate, saveShortlistCriteria, setShortlistShared, triageShortlist } from "@/lib/brands/shortlist/service";
 import { SHORTLIST_IMPORT_MAX_BODY } from "@/lib/brands/shortlist/schema";
+import { mirrorAdminReplyToSlackThread } from "@/lib/brands/team-notice-outbox";
 import type { AdminOperation } from "./operations";
 import { fail, ok, type AdminContext } from "./context";
 import * as f from "./form";
@@ -325,7 +326,17 @@ export const BRAND_WORKSPACE_OPERATIONS = {
  'brandWorkspace.cover': managedOperation((ctx,v)=>setBrandProjectCover(ctx,ctx.viewer,v)),
   "brandWorkspace.externalPosts": externalPosts,
   "brandWorkspace.postPresentation": postPresentation,
- 'brandWorkspace.support': managedOperation((ctx,v)=>sendBrandSupport(ctx,ctx.viewer,v,'studio'),'home'),
+ 'brandWorkspace.support': managedOperation(async (ctx, v) => {
+   const r = await sendBrandSupport(ctx, ctx.viewer, v, 'studio');
+   if (r.ok && typeof v.organizationId === 'string' && typeof v.body === 'string') {
+     await mirrorAdminReplyToSlackThread(ctx.sql, {
+       targetType: 'brand',
+       organizationId: v.organizationId,
+       body: v.body,
+     }).catch(() => undefined);
+   }
+   return r;
+ }, 'home'),
  'brandWorkspace.revokeInvite': managedOperation((ctx,v)=>revokeStudioInvitation(ctx,ctx.viewer,v),'home'),
  'brandWorkspace.organization': managedOperation((ctx,v)=>createStudioOrganization(ctx,ctx.viewer,v),'home'),
  'brandWorkspace.createProject': managedOperation((ctx,v)=>createStudioProject(ctx,ctx.viewer,v)),

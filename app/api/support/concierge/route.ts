@@ -1,14 +1,18 @@
-import { NextRequest, NextResponse } from 'next/server';
+import { NextRequest, NextResponse, after } from 'next/server';
 import { getSessionUser } from '@/lib/supabase/auth-client';
 import { getViewer } from '@/lib/auth/viewer';
 import { getSqlRunner } from '@/lib/db/connect';
 import { displayNameOf, loadCreatorProfile } from '@/lib/creators/profile';
+import { runLiveTeamNoticeDeliveryPass, syncSlackSupportReplies } from '@/lib/brands/team-notice-outbox';
+import { conciergeUserScopeKey } from '@/lib/support/concierge-scope';
 import { resolveRequestUrl, resolveSurface, sameOriginMutation } from '@/lib/routing/surfaces';
 import {
+  loadConsumerSupportThread,
+  recordConsumerEscalation,
+  sendDirectConsumerEscalationFallback,
+} from '@/lib/support/concierge-service';
+import {
   answerPersonalConciergeQuery,
-  fetchSlackPersonalConciergeReplies,
-  notifySlackPersonalConcierge,
-  personalSlackHandle,
   type ConciergeLocale,
   type ConciergeTranscriptTurn,
   type EscalationReason,
@@ -27,10 +31,26 @@ function json(data: unknown, status = 200) {
   return NextResponse.json(data, { status, headers: HEADERS });
 }
 
-async function resolveAuthenticatedMember(): Promise<{
+async function afterResponse(task: () => Promise<unknown>): Promise<void> {
+  const run = async () => {
+    try {
+      await task();
+    } catch {
+      // best effort
+    }
+  };
+  try {
+    after(run);
+  } catch {
+    await run();
+  }
+}
+
+async function resolveAuthenticatedMember(
+  sql: Awaited<ReturnType<typeof getSqlRunner>>,
+): Promise<{
   userId: string;
   displayName: string | null;
-  email: string | null;
 } | null> {
   const user = await getSessionUser();
   let devId: string | null = null;
@@ -48,48 +68,54 @@ async function resolveAuthenticatedMember(): Promise<{
     displayNameOf(user?.user_metadata?.full_name) ??
     displayNameOf(user?.user_metadata?.name) ??
     null;
-  let email = typeof user?.email === 'string' ? user.email : null;
 
-  try {
-    const sql = await getSqlRunner();
-    if (sql) {
+  if (sql) {
+    try {
       const profile = await loadCreatorProfile(sql, userId);
       if (profile?.displayName) displayName = profile.displayName;
-      if (!email) {
-        const row = (
-          await sql.query<{ email?: string }>('select email from profiles where id=$1', [userId])
-        ).rows[0];
-        if (row?.email) email = String(row.email);
-      }
+    } catch {
+      // Keep session metadata if DB lookup is unavailable
     }
-  } catch {
-    // Keep session metadata if DB lookup is unavailable
   }
 
-  return { userId, displayName, email };
+  return { userId, displayName };
 }
 
 export async function GET(request: NextRequest) {
   if (resolveSurface(new URL(request.url), request.headers) !== 'consumer') {
     return json({ ok: false, code: 'not_found' }, 404);
   }
-  const member = await resolveAuthenticatedMember();
+  const sql = await getSqlRunner().catch(() => null);
+  const member = await resolveAuthenticatedMember(sql);
   if (!member) {
     return json({ ok: false, signedIn: false, code: 'sign_in_required' }, 401);
   }
+  const locale: ConciergeLocale = request.nextUrl.searchParams.get('locale') === 'en' ? 'en' : 'ko';
 
-  const replies = await fetchSlackPersonalConciergeReplies({
-    userId: member.userId,
-    displayName: member.displayName,
-    email: member.email,
-  });
+  let snapshot: Awaited<ReturnType<typeof loadConsumerSupportThread>> = {
+    hasEscalation: false,
+    replies: [],
+    thread: [],
+    latestStaffReplyAt: null,
+  };
+  if (sql) {
+    try {
+      await syncSlackSupportReplies(sql, { userId: member.userId });
+      snapshot = await loadConsumerSupportThread(sql, member.userId, locale);
+    } catch {
+      // Keep GET safe even if DB read fails momentarily
+    }
+  }
 
   return json({
     ok: true,
     signedIn: true,
+    userKey: conciergeUserScopeKey(member.userId),
     displayName: member.displayName,
-    handle: personalSlackHandle(member.displayName, member.email, member.userId),
-    replies,
+    replies: snapshot.replies,
+    hasEscalation: snapshot.hasEscalation,
+    thread: snapshot.thread,
+    latestStaffReplyAt: snapshot.latestStaffReplyAt,
   });
 }
 
@@ -124,15 +150,15 @@ export async function POST(request: NextRequest) {
   }
 
   if (operation === 'escalate') {
-    // Human escalation strictly requires login
-    const member = await resolveAuthenticatedMember();
+    const sql = await getSqlRunner().catch(() => null);
+    const member = await resolveAuthenticatedMember(sql);
     if (!member) {
-      return json({ ok: false, code: 'sign_in_required' }, 401);
+      return json({ ok: false, stored: false, code: 'sign_in_required' }, 401);
     }
 
     const message = typeof body.message === 'string' ? body.message.trim().slice(0, 2000) : '';
     if (!message) {
-      return json({ ok: false, code: 'empty_message' }, 400);
+      return json({ ok: false, stored: false, code: 'empty_message' }, 400);
     }
 
     const rawReason = body.reason;
@@ -168,20 +194,67 @@ export async function POST(request: NextRequest) {
         text: item.text.slice(0, 400),
       }));
 
-    const slackOutcome = await notifySlackPersonalConcierge({
+    const requestId = typeof body.requestId === 'string' ? body.requestId : undefined;
+
+    if (!sql) {
+      return json({ ok: false, stored: false, code: 'storage_unavailable' }, 503);
+    }
+
+    const stored = await recordConsumerEscalation(sql, {
       userId: member.userId,
       displayName: member.displayName,
-      email: member.email,
       reason,
       message,
       pagePath,
       transcript,
+      requestId,
     });
+
+    if (!stored.ok) {
+      const status =
+        stored.code === 'rate_limited'
+          ? 429
+          : stored.code === 'sign_in_required'
+            ? 401
+            : 400;
+      return json({ ok: false, stored: false, code: stored.code }, status);
+    }
+
+    if (!stored.available) {
+      // Deploy-order safety before 0178: try safe production-gated direct send; never fake success if unsent.
+      const fallback = await sendDirectConsumerEscalationFallback({
+        userId: member.userId,
+        displayName: member.displayName,
+        message,
+        pagePath,
+      });
+      if (!fallback.sent) {
+        return json({ ok: false, stored: false, code: 'delivery_unavailable' }, 503);
+      }
+      return json({
+        ok: true,
+        stored: false,
+        delivered: true,
+        ...(fallback.duplicate ? { duplicate: true } : {}),
+        userKey: conciergeUserScopeKey(member.userId),
+        displayName: member.displayName,
+      });
+    }
+
+    await afterResponse(() =>
+      runLiveTeamNoticeDeliveryPass(sql, {
+        deliveryId: stored.deliveryId ?? undefined,
+        sourceKind: 'concierge_escalation',
+        sourceId: stored.id,
+      }),
+    );
 
     return json({
       ok: true,
-      slackSent: slackOutcome.sent,
-      handle: personalSlackHandle(member.displayName, member.email, member.userId),
+      stored: true,
+      id: stored.id,
+      deliveryStatus: 'pending',
+      userKey: conciergeUserScopeKey(member.userId),
       displayName: member.displayName,
     });
   }

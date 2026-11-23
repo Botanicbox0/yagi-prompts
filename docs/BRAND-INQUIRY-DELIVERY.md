@@ -66,3 +66,59 @@ Incoming webhook은 발송 응답에 Slack 메시지 timestamp나 중복 방지 
 0126 적용 후 `has_table_privilege`로 service_role의 SELECT·INSERT·UPDATE가 true, DELETE·TRUNCATE·REFERENCES·TRIGGER가 false이고 anon/authenticated의 모든 테이블 권한이 false인지 확인한다. 권한 회귀 테스트는 테이블 생성 전에 `ALTER DEFAULT PRIVILEGES ... GRANT ALL`을 설정해 실제 Supabase 기본 권한 상황을 재현하고, 서버 역할로 조회·삽입·갱신 성공 및 DELETE·TRUNCATE 거절을 확인한다.
 
 운영 장부 점검은 문의 원문·연락처 없이 `brand_inquiry_deliveries`의 `inquiry_id`, `status`, `attempts`, `next_attempt_at`, `last_error_code`, `sent_at`으로 한다. 문의 admin 화면에서도 발송 상태를 확인할 수 있다.
+
+---
+
+# 팀 알림 · 실시간 문의 통합 Outbox (`0178` · `0179`)
+
+기존 마케팅 문의 폼(`0041` · `brand_inquiry_deliveries`) 정책은 그대로 유지하고, 브랜드 워크스페이스·프로젝트 룸·개인 AI 상담원의 모든 고객 이벤트를 유실 없이 Slack과 관리자 문의함으로 전달하기 위해 `team_notice_deliveries` 및 `consumer_support_messages`를 추가했다(`0178_core_support_delivery.sql`, `0179_glue_support_delivery.sql`).
+
+## 이중 전송 모드 (Bot · Webhook Amendment)
+
+런타임 설정 해석(`resolveTeamNoticeConfig`)은 환경에 따라 아래 순서로 동작하며, 채널 자동 검색(`conversations.list`)·자동 생성·하드코딩 채널 폴백을 절대 수행하지 않는다.
+
+1. Kill switch: `SLACK_BRAND_CONCIERGE_ENABLED=off`이면 `skipped` (`disabled`).
+2. Production gate: `VERCEL_ENV === 'production'`가 아니면 `skipped` (`non_production`). 단, 관리자 연결 점검(`support.slack.connectionTest`)은 명시적 `force` 플래그가 있을 때만 비프로덕션 테스트를 허용하며 감사 로그(`forcedByActorId`, `vercelEnv`, `nodeEnv`, `environmentCheck`)를 남긴다.
+3. `bot` 모드 (양방향): 유효한 봇 토큰(`SLACK_BRAND_CONCIERGE_BOT_TOKEN` 또는 `SLACK_BOT_TOKEN`, `xoxb-` 접두사) **및** 유효한 채널 ID(`SLACK_BRAND_CONCIERGE_CHANNEL_ID`, `/^[CG][A-Z0-9]{8,}$/`)가 **모두** 설정되면 `chat.postMessage`로 전송하고 `slack_channel`·`slack_ts`를 저장한다. 이후 7일 이내 스레드의 팀원 답글을 고객 화면으로 동기화한다.
+4. `webhook` 모드 (단방향 폴백): 봇 설정이 불완전해도 `SLACK_TEAM_NOTICE_WEBHOOK_URL`이 있거나, `SLACK_BRAND_INQUIRIES_ENABLED=on` 상태에서 `SLACK_BRAND_INQUIRIES_WEBHOOK_URL`이 유효(`https://hooks.slack.com/services/...`)하면 웹훅으로 발송(`transport = 'webhook'`, `slack_ts = null`)한다. 이 경우 관리자 화면에서 `support.reply`로 답변한다.
+5. 위 조건을 모두 만족하지 못하면 진단 코드(`missing_channel_id`, `invalid_token`, `misconfigured_webhook`, `unconfigured` 등)를 보고하되, **비프로덕션·비활성·미설정 환경에서도 `team_notice_deliveries` 행은 `skipped`로 소각하지 않고 `pending`(`attempts` 증가 없음) 상태로 보존한다.** `/admin/inquiries`에서는 `data-support-sender-banner` 배너로 중단 사유와 대기 건수를 표시한다.
+
+## 대상 이벤트(`kind`) 10종 및 Slack 전송 범위
+
+모든 고객 쓰기 경로는 고객 레코드와 같은 DB 트랜잭션 안에서 `enqueueTeamNotice(sql, kind, input)`를 호출해 `(kind, source_id)` 유니크 제약으로 중복 없이 적재한다. (재오픈 후 반복되는 스토리보드·리뷰 결정은 `randomUUID()` 기반 `deliverySourceId`로 별도 알림을 남긴다.) DB에는 원문 미리보기를 이중 이스케이프 없이 저장하고 Slack payload 직렬화 단계(`team-notice-outbox`)에서만 `slackSafe`와 단일 `관리자 화면:` 링크를 조립하며, **이메일·전화번호·내부 사용자 ID 접두사는 Slack으로 전송하지 않는다.** 관리자 링크는 `adminUrl()`이 생성한 `https://admin.twings.app/...` 절대 URL만 사용한다.
+
+| `kind` | 출처 테이블 | Slack 전송 필드 (`slackSafe` 단일 이스케이프) | 관리자 링크 |
+|---|---|---|---|
+| `support_message` | `brand_support_messages` | 조직명, 작성자 표시 이름, 경로(`surface`), 본문 미리보기 | `https://admin.twings.app/admin/brand-workspace/organizations/<id>#support` |
+| `concierge_escalation` | `consumer_support_messages` | 불투명 문의 번호(`#<id[:8]>`), 페이지 경로, 문의 요약 (이메일·userId 미포함) | `https://admin.twings.app/admin/inquiries?kind=team&noticeKind=concierge_escalation#notice-<id>` |
+| `project_request` | `brand_projects` | 조직명, 작성자 표시 이름, 트랙/납품 희망일/예산/제목 요약 | `https://admin.twings.app/admin/brand-rooms/<orgId>?channel=<projectId>` |
+| `room_message` | `brand_room_messages` | 조직명, 작성자 표시 이름, 룸 메시지 미리보기 | `https://admin.twings.app/admin/brand-rooms/<orgId>?channel=<channel>` |
+| `storyboard_approval` | `brand_storyboards` | 조직명, 작성자 표시 이름, 스토리보드 상태 변경(승인·수정 요청) 요약 | `https://admin.twings.app/admin/brand-rooms/storyboards/<id>` |
+| `review_comment` | `brand_studio_reviews` / `_comments` | 조직명, 작성자 표시 이름, 리뷰 의견·상태 변경 요약 (`team` 비공개 메모 제외) | `https://admin.twings.app/admin/brand-studio/reviews/<id>` |
+| `share_guest_note` | `brand_studio_review_comments` | 조직명, 게스트 표시 이름(이메일 없음), 공유 링크 의견 | `https://admin.twings.app/admin/brand-rooms/<orgId>/<projectId>?review=<reviewId>&t=<ms>` |
+| `org_created` | `brand_organizations` | 신규 조직명, 생성 회원 표시 이름 | `https://admin.twings.app/admin/brand-workspace/organizations/<id>` |
+| `allowance_request` | 확장 예약 (`enqueueTeamNotice`) | 조직명, 요청자 표시 이름, 요청 내용 | `https://admin.twings.app/admin/brand-workspace/organizations/<id>` |
+| `plan_request` | 확장 예약 (`enqueueTeamNotice`) | 조직명, 요청자 표시 이름, 요청 내용 | `https://admin.twings.app/admin/brand-workspace/organizations/<id>` |
+
+## 재시도, 답글 동기화, 보존 기간, 운영 재처리
+
+- **At-least-once 전달 · 재시도 표기 (`0041` 정책 불변)**: 요청 직후 `after()`에서 `runLiveTeamNoticeDeliveryPass`를 1회 시도하고, `vercel.json`의 10분 cron(`GET|POST /api/brand-rooms/notices/tick`)이 미처리/재시도 행을 `FOR UPDATE SKIP LOCKED`로 점유해 지수 백오프(`60s -> 120s -> 300s -> 600s -> 1200s -> 2400s -> 3600s`, `Retry-After` 존중)로 최대 **8회** 시도한 뒤 `failed`로 전환한다. 5분 넘게 멈춘 `sending` 점유는 `claim_expired`로 복구하며, `attempts > 1`인 재시도 발송 헤더에는 ` (재전송)`을 붙인다. (마케팅 폼 `0041` 정책은 변경하지 않는다.)
+- **예산 제한 · 패스 격리 (`/api/brand-rooms/notices/tick`)**: `maxDuration = 60` 아래 `TICK_BUDGET_MS = 45_000` 데드라인을 `rooms` · `teamNotices` · `replySync` · `retention` 4개 독립 `try/catch` 패스(추후 예약 만료 패스 슬롯 예약)로 공유하며, 한 패스 오류가 다른 패스를 막지 않고 모든 실행 패스가 실패한 경우에만 `503`을 반환한다.
+- **Slack 스레드 답글 동기화 (`syncSlackSupportReplies`)**: 최근 7일 이내 `transport = 'bot'` 스레드를 `reply_synced_at ASC NULLS FIRST, sent_at DESC, id DESC` 라운드 로빈 순서로 처리하며 `conversations.replies`를 `limit = 100` 커서 페이지네이션(`oldest = reply_sync_cursor`)과 숫자 기반 `slack_ts` 비교로 끝까지 읽는다. 시스템 동기화 작성자(`resolveSystemSyncAuthorId`: `SLACK_SYNC_SYSTEM_USER_ID` 또는 최초 `is_admin = true`)와 Slack `ts` 기반 결정적 `request_id` + `support_synced_replies` 원장으로 중복을 막고, 동기화된 답글은 `sendBrandSupport`의 시간당 30회 제한에서 제외한다.
+- **개인정보 삭제 · 보존 기간 (정본 표)**:
+  - `consumer_support_messages.transcript`: **365일(`CONSUMER_TRANSCRIPT_RETENTION_DAYS = 365`) 보관** 후 tick `retention` 패스가 `'[]'`로 영구 소각 (`service_role`에는 최소 컬럼 권한 `UPDATE (transcript)`만 부여).
+  - `team_notice_deliveries` (`kind = 'concierge_escalation'`): 아웃박스 `preview`에는 **첫 문의 한 건의 짧은 요약만 저장**하며 다중 턴 AI 대화 발췌를 복사하지 않는다. **365일 경과 시 `purgeExpiredConsumerTranscripts`가 `preview`와 `actor_label`을 빈 문자열로 소각**하고, **회원 탈퇴(`deleteAccountNow`) 시 즉시 `preview = ''`·`actor_label = ''`·`actor_user_id = null`로 스크럽**한 뒤 감사 메타데이터(`id`, `kind`, `status`, `attempts`, `sent_at`)만 남긴다.
+  - `consumer_support_messages` 스레드 본문(`body`): 상담 스레드 표시를 위해 유지되며 고객 탈퇴 시 `user_id ON DELETE CASCADE`로 삭제된다. 반면 **`created_by`는 `ON DELETE SET NULL`**이므로 담당 직원 계정이 삭제되어도 고객에게 보이는 스튜디오 답변은 사라지지 않는다.
+- **테스트 네트워크 안전 가드**: `team-notice-outbox`, `concierge-slack`, `concierge-service`의 모든 Slack 발송/조회 진입점은 `resolveSlackFetcher`를 거쳐 `VITEST` 또는 `NODE_ENV=test` 실행 시 명시적으로 주입된 `options.fetcher`가 없으면 `VERCEL_ENV=production` 여부와 무관하게 실제 `fetch`를 호출하지 않는다.
+- **관리자 콘솔 운영 (`/admin/inquiries`)**:
+  - `loadTeamNoticeInbox`는 SQL `WHERE`/`LIMIT`/`OFFSET`(페이지당 50건)으로 `noticeKind`, `deliveryStatus`, `awaiting=1`, 이스케이프된 `ILIKE` 검색과 페이지네이션을 처리하며 스레드별 `bot_sync`/`admin_only` 배지를 표시한다.
+  - 등록된 운영 액션: `support.delivery.retry`(단건 또는 `scope=all_failed` · `scope=all`), `support.slack.connectionTest`(프로덕션 전용·5분 쿨다운·`force` 감사 로그), `support.reply`(대상 `deliveryId` 소유권 검증 후 답변 저장 및 `bot` 스레드 미러링).
+
+## 필요 환경변수 이름 (값 비움, `.env.example` 참조)
+
+- `SLACK_BRAND_INQUIRIES_ENABLED`, `SLACK_BRAND_INQUIRIES_WEBHOOK_URL` (`0041` 마케팅 문의 및 `webhook` 폴백)
+- `SLACK_BRAND_CONCIERGE_ENABLED`, `SLACK_BRAND_CONCIERGE_BOT_TOKEN`, `SLACK_BOT_TOKEN`, `SLACK_BRAND_CONCIERGE_CHANNEL_ID`, `SLACK_TEAM_NOTICE_WEBHOOK_URL`, `SLACK_SYNC_SYSTEM_USER_ID` (`0178` 통합 알림·동기화)
+
+## 확인 명령 (0178/0179)
+
+`npx vitest run tests/brands/team-notice-outbox.test.ts tests/brands/support-routes-and-inbox.test.tsx tests/brands/concierge-slack.test.ts tests/brands/support-delivery-privileges.test.ts tests/brands/project-request-alert.test.ts tests/brand-rooms/notices/tick-route.test.ts tests/brand-rooms/team-alerts.test.ts tests/brand-studio/review/service.test.ts tests/support/personal-concierge.test.tsx tests/i18n/dictionary.test.ts tests/db/migrations.test.ts tests/account/deletion.test.ts tests/admin/auth.test.ts`

@@ -125,7 +125,7 @@ function tellTheTeam(sql: SqlRunner, notice: RoomNotice | null): void {
   if (!notice) return;
   after(async () => {
     try {
-      await notifySlackBrandConcierge(sql, notice);
+      await notifySlackBrandConcierge(sql, { ...notice, kind: 'room_message' });
     } catch (error) {
       studioLog('share_bridge_notice_failed', { message: error instanceof Error ? error.message.slice(0, 200) : 'unknown' });
     }

@@ -1,17 +1,21 @@
+import { randomUUID } from 'node:crypto';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it } from 'vitest';
+import { freshDb, runner } from '@/tests/helpers/pglite';
+import { seedProfile } from '@/tests/helpers/billing';
 import { TwingsAiConcierge } from '@/components/support/twings-ai-concierge';
 import {
   answerPersonalConciergeQuery,
-  fetchSlackPersonalConciergeReplies,
-  formatPersonalSupportSlackMessage,
   getPersonalConciergeFaqs,
-  notifySlackPersonalConcierge,
-  parsePersonalSupportSlackReply,
-  personalSlackHandle,
 } from '@/lib/support/personal-concierge';
+import {
+  loadConsumerSupportReplies,
+  recordConsumerEscalation,
+  sendConsumerSupportReply,
+} from '@/lib/support/concierge-service';
+import { runTeamNoticeDeliveryPass, syncSlackSupportReplies } from '@/lib/brands/team-notice-outbox';
 
-describe('TWINGS Personal AI Concierge & Slack Human Escalation', () => {
+describe('TWINGS Personal AI Concierge & Durable Escalation', () => {
   it('renders the floating circular TWINGS logo launcher at bottom-right when closed', () => {
     const html = renderToStaticMarkup(<TwingsAiConcierge locale="ko" defaultOpen={false} />);
     expect(html).toContain('data-twings-ai-concierge-launcher');
@@ -19,21 +23,28 @@ describe('TWINGS Personal AI Concierge & Slack Human Escalation', () => {
     expect(html).not.toContain('data-twings-ai-concierge-dialog');
   });
 
-  it('renders the ChannelTalk/Sendbird-style dialog with circular TWINGS mark and FAQ list when opened', () => {
-    const html = renderToStaticMarkup(
-      <TwingsAiConcierge locale="ko" defaultOpen={true} initialSignedIn={false} />,
+  it('renders the dialog with circular TWINGS mark and FAQ list, never naming Slack or webhooks', () => {
+    for (const signedIn of [false, true]) {
+      const html = renderToStaticMarkup(
+        <TwingsAiConcierge locale="ko" defaultOpen={true} initialSignedIn={signedIn} />,
+      );
+      expect(html).toContain('data-twings-ai-concierge-dialog');
+      expect(html).toContain('data-concierge-logo-circle');
+      expect(html).toContain('TWINGS AI 상담센터');
+      expect(html).toContain('data-concierge-faq-list');
+      expect(html).toContain('data-concierge-faq-item="selfie-guide"');
+      expect(html).toContain('data-concierge-faq-item="template-modify"');
+      expect(html).toContain('data-concierge-faq-item="selective-5shot"');
+      expect(html).toContain('data-concierge-faq-item="maker-revenue"');
+      expect(html).toContain('data-concierge-faq-item="campaign-reward"');
+      expect(html).toContain('data-concierge-request-human');
+      expect(html).not.toMatch(/Slack|슬랙|webhook|웹훅/i);
+    }
+
+    const enHtml = renderToStaticMarkup(
+      <TwingsAiConcierge locale="en" defaultOpen={true} initialSignedIn={true} />,
     );
-    expect(html).toContain('data-twings-ai-concierge-dialog');
-    expect(html).toContain('data-concierge-logo-circle');
-    expect(html).toContain('TWINGS AI 상담센터');
-    expect(html).toContain('data-concierge-faq-list');
-    expect(html).toContain('data-concierge-faq-item="selfie-guide"');
-    expect(html).toContain('data-concierge-faq-item="template-modify"');
-    expect(html).toContain('data-concierge-faq-item="selective-5shot"');
-    expect(html).toContain('data-concierge-faq-item="maker-revenue"');
-    expect(html).toContain('data-concierge-faq-item="campaign-reward"');
-    expect(html).toContain('data-concierge-request-human');
-    expect(html).not.toMatch(/Slack|슬랙/i);
+    expect(enHtml).not.toMatch(/Slack|슬랙|webhook|웹훅/i);
   });
 
   it('answers known TWINGS FAQ questions directly without escalating', () => {
@@ -85,126 +96,94 @@ describe('TWINGS Personal AI Concierge & Slack Human Escalation', () => {
     expect(unknownReq.escalationReason).toBe('ai_unanswered');
   });
 
-  it('formats outbound Slack escalation messages and parses inbound thread or @handle replies', async () => {
-    const userId = '11111111-2222-4333-8444-555555555555';
-    const handle = personalSlackHandle('김트윙', 'twings.user@example.com', userId);
-    expect(handle).toBe('@김트윙');
+  it('stores consumer escalations transactionally, omits email from Slack, and syncs bot thread replies', async () => {
+    const db = await freshDb();
+    const sql = runner(db);
+    try {
+      const userId = randomUUID();
+      const adminId = randomUUID();
+      await seedProfile(sql, { id: userId, email: 'private-consumer@example.test', isAdmin: false });
+      await sql.query("update profiles set display_name = 'Sample Member' where id = $1", [userId]);
+      await seedProfile(sql, { id: adminId, email: 'admin@example.test', isAdmin: true });
 
-    const outbound = formatPersonalSupportSlackMessage({
-      userId,
-      displayName: '김트윙',
-      email: 'twings.user@example.com',
-      reason: 'ai_unanswered',
-      message: '제가 방금 올린 영상에 커스텀 로고를 넣을 수 있는지 궁금합니다.',
-      pagePath: '/ko/direct',
-      transcript: [
-        { role: 'user', text: '커스텀 로고 삽입 문의' },
-        { role: 'ai', text: '담당 팀원에게 연결해 드립니다.' },
-      ],
-    });
-
-    expect(outbound).toContain('[twings.app AI 상담센터 · 실시간 상담원 연결]');
-    expect(outbound).toContain('김트윙');
-    expect(outbound).toContain('twings.user@example.com');
-    expect(outbound).toContain(`[twings-user:${userId}]`);
-
-    // Thread reply under the parent escalation message
-    expect(
-      parsePersonalSupportSlackReply(
-        '안녕하세요 김트윙님! 담당 PD입니다. 로고 삽입 방법 안내드리겠습니다.',
+      const stored = await recordConsumerEscalation(sql, {
         userId,
-        handle,
-        outbound,
-      ),
-    ).toBe('안녕하세요 김트윙님! 담당 PD입니다. 로고 삽입 방법 안내드리겠습니다.');
+        reason: 'ai_unanswered',
+        message: '커스텀 로고 <!channel> 문의드립니다.',
+        pagePath: '/ko/direct',
+        transcript: [{ role: 'user', text: '커스텀 로고 문의' }],
+        requestId: randomUUID(),
+      });
+      expect(stored).toMatchObject({ ok: true, available: true, duplicate: false });
+      if (!stored.ok || !stored.available) throw new Error('expected stored');
 
-    // Direct @handle reply in channel
-    expect(
-      parsePersonalSupportSlackReply(
-        '@김트윙 확인 완료되어 크레딧 복구해 드렸습니다!',
-        userId,
-        handle,
-        null,
-      ),
-    ).toBe('확인 완료되어 크레딧 복구해 드렸습니다!');
+      let postedText = '';
+      const fakeFetcher: typeof fetch = async (url, init) => {
+        const u = String(url);
+        if (u.includes('chat.postMessage')) {
+          const parsed = JSON.parse(String(init?.body)) as { text: string };
+          postedText = parsed.text;
+          return new Response(
+            JSON.stringify({ ok: true, channel: 'C0123456789', ts: '1793800000.000100' }),
+            { status: 200 },
+          );
+        }
+        if (u.includes('conversations.replies')) {
+          return new Response(
+            JSON.stringify({
+              ok: true,
+              messages: [
+                { ts: '1793800000.000100', thread_ts: '1793800000.000100', text: postedText },
+                { ts: '1793800010.000200', thread_ts: '1793800000.000100', bot_id: 'B1', text: 'ignore bot' },
+                {
+                  ts: '1793800015.000300',
+                  thread_ts: '1793800000.000100',
+                  text: '<@U999> 담당 팀에서 답변드립니다. 지금 정상 처리되었습니다.',
+                },
+              ],
+            }),
+            { status: 200 },
+          );
+        }
+        return new Response(JSON.stringify({ ok: false }), { status: 500 });
+      };
 
-    // Outbound message itself is never mistaken for a reply
-    expect(parsePersonalSupportSlackReply(outbound, userId, handle, null)).toBeNull();
+      const env = {
+        VERCEL_ENV: 'production',
+        SLACK_BRAND_CONCIERGE_BOT_TOKEN: 'xoxb-test-token',
+        SLACK_BRAND_CONCIERGE_CHANNEL_ID: 'C0123456789',
+      };
 
-    // End-to-end mock Slack send & thread poll
-    const fakeFetcher: typeof fetch = async (url) => {
-      const u = String(url);
-      if (u.includes('conversations.list')) {
-        return new Response(
-          JSON.stringify({
-            ok: true,
-            channels: [{ id: 'C0TWINGSSUP', name: 'twings-support', is_archived: false }],
-          }),
-          { status: 200 },
-        );
-      }
-      if (u.includes('chat.postMessage')) {
-        return new Response(JSON.stringify({ ok: true, ts: '1793800000.000100' }), {
-          status: 200,
-        });
-      }
-      if (u.includes('conversations.history')) {
-        return new Response(
-          JSON.stringify({
-            ok: true,
-            messages: [
-              {
-                ts: '1793800000.000100',
-                text: outbound,
-                reply_count: 1,
-              },
-            ],
-          }),
-          { status: 200 },
-        );
-      }
-      if (u.includes('conversations.replies')) {
-        return new Response(
-          JSON.stringify({
-            ok: true,
-            messages: [
-              { ts: '1793800000.000100', text: outbound },
-              {
-                ts: '1793800015.000200',
-                text: '슬랙에서 바로 답변드립니다! 지금 정상 처리되었습니다.',
-              },
-            ],
-          }),
-          { status: 200 },
-        );
-      }
-      return new Response(JSON.stringify({ ok: false }), { status: 500 });
-    };
+      const pass = await runTeamNoticeDeliveryPass({ sql, env, fetcher: fakeFetcher });
+      expect(pass.sent).toBe(1);
+      expect(postedText).toContain('TWINGS · 고객 상담 요청');
+      expect(postedText).toContain('&lt;!channel&gt;');
+      expect(postedText).not.toContain('private-consumer@example.test');
+      expect(postedText).toContain('https://admin.twings.app/admin/inquiries');
 
-    const env = {
-      VITEST: 'true',
-      SLACK_PERSONAL_SUPPORT_FORCE_TEST: 'on',
-      SLACK_BOT_TOKEN: 'xoxb-test-token',
-    };
+      const sync1 = await syncSlackSupportReplies(sql, { userId, env, fetcher: fakeFetcher, force: true });
+      expect(sync1).toMatchObject({ available: true, skipped: false, checked: 1, synced: 1, errors: [] });
 
-    const sent = await notifySlackPersonalConcierge(
-      {
-        userId,
-        displayName: '김트윙',
-        email: 'twings.user@example.com',
-        reason: 'user_requested_human',
-        message: '상담원 연결 부탁드립니다.',
-      },
-      { env, fetcher: fakeFetcher },
-    );
-    expect(sent.sent).toBe(true);
-    expect(sent.channelId).toBe('C0TWINGSSUP');
+      // Idempotent repeat poll inserts nothing new
+      const sync2 = await syncSlackSupportReplies(sql, { userId, env, fetcher: fakeFetcher, force: true });
+      expect(sync2.synced).toBe(0);
 
-    const replies = await fetchSlackPersonalConciergeReplies(
-      { userId, displayName: '김트윙', email: 'twings.user@example.com' },
-      { env, fetcher: fakeFetcher },
-    );
-    expect(replies).toHaveLength(1);
-    expect(replies[0]?.body).toBe('슬랙에서 바로 답변드립니다! 지금 정상 처리되었습니다.');
+      // Admin reply also saves cleanly
+      expect(
+        await sendConsumerSupportReply(
+          sql,
+          { userId: adminId, isAdmin: true, tier: 'admin', email: 'admin@example.test', locale: 'ko' },
+          { userId, body: '추가 안내드립니다.' },
+        ),
+      ).toMatchObject({ ok: true });
+
+      const replies = await loadConsumerSupportReplies(sql, userId, 'ko');
+      expect(replies.map((r) => r.body)).toEqual([
+        '담당 팀에서 답변드립니다. 지금 정상 처리되었습니다.',
+        '추가 안내드립니다.',
+      ]);
+    } finally {
+      await db.close();
+    }
   });
 });

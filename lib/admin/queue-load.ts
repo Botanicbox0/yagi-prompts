@@ -13,6 +13,7 @@ import { countSocialQueue } from "@/lib/influencers/admin";
 import { platformReady } from "@/lib/creator-platform/service";
 import { creatorApplicationCount } from "@/lib/creator-platform/onboarding";
 import { countDeletionQueue, deletionReady } from "@/lib/account/deletion";
+import { tableExists } from "@/lib/brands/team-notice-outbox";
 import { campaignWorkCounts } from "./workflow";
 import {
   countManualPayments,
@@ -64,7 +65,7 @@ export async function loadAdminQueues(
   const creatorTables = platformReady(sql).catch(() => false);
   const paymentEnv = defaultPaymentEnvironment(env);
 
-  const [paymentsManual, renderFailures, accountDeletions, risk, feedback, studio, inquiries, work, payouts, socialAccounts, creatorApplications, formats, templates] =
+  const [paymentsManual, renderFailures, accountDeletions, risk, feedback, supportDeliveryFailed, supportAwaitingReply, studio, inquiries, work, payouts, socialAccounts, creatorApplications, formats, templates] =
     await Promise.all([
       counted(() => countManualPayments(sql, paymentEnv)),
       counted(() => countRecentRenderFailures(sql, now)),
@@ -75,6 +76,31 @@ export async function loadAdminQueues(
       }),
       loadRiskQueueSummary(sql, viewer, now).catch(() => null),
       counted(() => countRenderFeedback(sql, "new")),
+      counted(async () => {
+        if (!(await tableExists(sql, "team_notice_deliveries"))) throw new Error("team notice outbox unavailable");
+        return countRows(sql, "select count(*)::int as n from team_notice_deliveries where status = 'failed'");
+      }),
+      counted(async () => {
+        const brandWaiting = await countRows(
+          sql,
+          `select count(*)::int as n
+             from (select distinct on (organization_id) organization_id, author_role
+                     from brand_support_messages
+                    order by organization_id, created_at desc, id desc) latest
+            where latest.author_role = 'brand'`,
+        );
+        const consumerWaiting = (await tableExists(sql, "consumer_support_messages"))
+          ? await countRows(
+              sql,
+              `select count(*)::int as n
+                 from (select distinct on (user_id) user_id, author_role
+                         from consumer_support_messages
+                        order by user_id, created_at desc, id desc) latest
+                where latest.author_role = 'customer'`,
+            )
+          : 0;
+        return brandWaiting + consumerWaiting;
+      }),
       counted(async () => {
         const inbox = await loadStudioInbox({ sql }, viewer);
         if (inbox === null) throw new Error("studio inbox unavailable");
@@ -100,6 +126,8 @@ export async function loadAdminQueues(
       accountDeletions,
       risk: risk === null ? null : risk.ready ? risk.open : null,
       feedback,
+      supportDeliveryFailed,
+      supportAwaitingReply,
       studio,
       inquiries,
       posts: work?.posts ?? null,

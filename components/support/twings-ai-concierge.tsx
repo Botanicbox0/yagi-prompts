@@ -19,8 +19,9 @@ import {
   type ConciergeLocale,
   type EscalationReason,
   type PersonalConciergeFaqItem,
-  type PersonalSupportSlackReply,
+  type PersonalSupportReply,
 } from '@/lib/support/personal-concierge';
+import { supportConciergeEn, supportConciergeKo } from '@/messages/support-concierge';
 
 interface ChatBubble {
   id: string;
@@ -34,20 +35,70 @@ interface ChatBubble {
   createdAt: string;
 }
 
+export function isEscalationAcceptedResponse(
+  responseOk: boolean,
+  payload: { ok?: boolean; stored?: boolean; delivered?: boolean },
+): boolean {
+  return Boolean(responseOk && payload.ok && (payload.stored === true || payload.delivered === true));
+}
+
+export const conciergeEscalatedStorageKey = (userKey: string): string =>
+  `twings-concierge-escalated:${userKey}`;
+
+export const conciergeSeenAtStorageKey = (userKey: string): string =>
+  `twings-concierge-seen-at:${userKey}`;
+
+export function shouldFetchConciergeOnEffect(params: {
+  signedIn: boolean;
+  isBrandSurface: boolean;
+  isOpen: boolean;
+  userKey: string | null;
+  getItem?: (key: string) => string | null;
+}): boolean {
+  if (!params.signedIn || params.isBrandSurface) return false;
+  if (params.isOpen) return true;
+  if (!params.userKey) return false;
+  try {
+    const read =
+      params.getItem ??
+      (typeof window !== 'undefined' ? (k: string) => window.localStorage.getItem(k) : null);
+    return read ? read(conciergeEscalatedStorageKey(params.userKey)) === '1' : false;
+  } catch {
+    return false;
+  }
+}
+
+function readConciergeUidCookie(): string | null {
+  if (typeof document === 'undefined' || !document.cookie) return null;
+  for (const part of document.cookie.split(';')) {
+    const trimmed = part.trim();
+    if (trimmed.startsWith('twings_concierge_uid=')) {
+      const value = trimmed.slice('twings_concierge_uid='.length).trim();
+      return value ? decodeURIComponent(value) : null;
+    }
+  }
+  return null;
+}
+
 export function TwingsAiConcierge({
   locale = 'ko',
   defaultOpen = false,
   initialSignedIn,
   initialDisplayName,
+  initialUnreadCount = 0,
+  initialUserKey,
 }: {
   locale?: string;
   defaultOpen?: boolean;
   /** Optional override for unit tests; in browser uses live `/api/account/session`. */
   initialSignedIn?: boolean;
   initialDisplayName?: string | null;
+  initialUnreadCount?: number;
+  initialUserKey?: string | null;
 }) {
   const resolvedLocale: ConciergeLocale = locale === 'en' ? 'en' : 'ko';
   const isKo = resolvedLocale === 'ko';
+  const copy = isKo ? supportConciergeKo : supportConciergeEn;
   const pathname = usePathname() ?? `/${resolvedLocale}`;
 
   // Hide on brand landing/workspace pages so it never overlaps with the B2B brand concierge
@@ -60,20 +111,27 @@ export function TwingsAiConcierge({
   const [isOpen, setIsOpen] = useState(defaultOpen);
   const [showAllFaqs, setShowAllFaqs] = useState(true);
   const [humanModeRequested, setHumanModeRequested] = useState(false);
+  const [hasOpenEscalation, setHasOpenEscalation] = useState(false);
   const [escalationReason, setEscalationReason] =
     useState<EscalationReason>('user_requested_human');
   const [inputText, setInputText] = useState('');
   const [humanMessageDraft, setHumanMessageDraft] = useState('');
-  const [sendingSlack, setSendingSlack] = useState(false);
-  const [slackNotice, setSlackNotice] = useState<string | null>(null);
-  const [slackReplies, setSlackReplies] = useState<PersonalSupportSlackReply[]>([]);
+  const [sendingInquiry, setSendingInquiry] = useState(false);
+  const [escalationNotice, setEscalationNotice] = useState<string | null>(null);
+  const [staffReplies, setStaffReplies] = useState<PersonalSupportReply[]>([]);
+  const [persistedThread, setPersistedThread] = useState<ChatBubble[]>([]);
+  const [unreadCount, setUnreadCount] = useState(initialUnreadCount);
   const [bubbles, setBubbles] = useState<ChatBubble[]>([]);
+  const [resolvedUserKey, setResolvedUserKey] = useState<string | null>(initialUserKey ?? null);
 
   const titleId = useId();
   const scrollRef = useRef<HTMLDivElement>(null);
+  const escalationAttempt = useRef<{ fingerprint: string; id: string } | null>(null);
   const liveSession = useCreatorSession(!isBrandSurface && initialSignedIn === undefined);
 
   const signedIn = initialSignedIn ?? liveSession.signedIn;
+  const activeUserKey =
+    initialUserKey ?? resolvedUserKey ?? (signedIn ? readConciergeUidCookie() : null);
   const displayName =
     initialDisplayName !== undefined
       ? initialDisplayName
@@ -89,13 +147,13 @@ export function TwingsAiConcierge({
     if (scrollRef.current) {
       scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
     }
-  }, [bubbles.length, slackReplies.length, humanModeRequested, isOpen]);
+  }, [bubbles.length, persistedThread.length, staffReplies.length, humanModeRequested, isOpen]);
 
-  // Poll live Slack replies when the user is signed in and has escalated to a human agent
-  const pollSlackReplies = useCallback(async () => {
-    if (!signedIn || !isOpen || !humanModeRequested) return;
+  // Hydrate consumer threads only when opened OR when THIS user has a remembered escalation in localStorage
+  const syncSupportThread = useCallback(async () => {
+    if (!signedIn || isBrandSurface) return;
     try {
-      const response = await fetch('/api/support/concierge', {
+      const response = await fetch(`/api/support/concierge?locale=${resolvedLocale}`, {
         method: 'GET',
         credentials: 'same-origin',
         cache: 'no-store',
@@ -103,24 +161,107 @@ export function TwingsAiConcierge({
       if (!response.ok) return;
       const data = (await response.json()) as {
         ok?: boolean;
-        replies?: PersonalSupportSlackReply[];
+        userKey?: string;
+        replies?: PersonalSupportReply[];
+        hasEscalation?: boolean;
+        latestStaffReplyAt?: string | null;
+        thread?: Array<{
+          id: string;
+          role: 'user' | 'human_agent';
+          authorLabel: string;
+          text: string;
+          createdAt: string;
+        }>;
       };
-      if (data.ok && Array.isArray(data.replies)) {
-        setSlackReplies(data.replies);
+      if (!data.ok) return;
+      if (data.userKey) {
+        setResolvedUserKey(data.userKey);
+      }
+      const storageKeyUser = data.userKey ?? activeUserKey;
+      const replies = Array.isArray(data.replies) ? data.replies : [];
+      setStaffReplies(replies);
+      setHasOpenEscalation(Boolean(data.hasEscalation));
+      if (Array.isArray(data.thread)) {
+        setPersistedThread(
+          data.thread.map((m) => ({
+            id: m.id,
+            role: m.role,
+            authorLabel: m.authorLabel,
+            text: m.text,
+            createdAt: m.createdAt,
+          })),
+        );
+      }
+      if (typeof window !== 'undefined' && storageKeyUser) {
+        const seenKey = conciergeSeenAtStorageKey(storageKeyUser);
+        const escalatedKey = conciergeEscalatedStorageKey(storageKeyUser);
+        if (isOpen) {
+          setUnreadCount(0);
+          try {
+            if (data.latestStaffReplyAt) {
+              window.localStorage.setItem(seenKey, data.latestStaffReplyAt);
+            }
+            if (!data.hasEscalation || data.latestStaffReplyAt) {
+              window.localStorage.removeItem(escalatedKey);
+            }
+          } catch {
+            // ignore storage errors
+          }
+        } else {
+          if (!data.hasEscalation) {
+            try {
+              window.localStorage.removeItem(escalatedKey);
+            } catch {
+              // ignore storage errors
+            }
+          } else if (replies.length > 0) {
+            let seenAt = '';
+            try {
+              seenAt = window.localStorage.getItem(seenKey) ?? '';
+            } catch {
+              seenAt = '';
+            }
+            const unseen = seenAt ? replies.filter((r) => r.createdAt > seenAt).length : replies.length;
+            setUnreadCount(unseen);
+            if (unseen === 0) {
+              try {
+                window.localStorage.removeItem(escalatedKey);
+              } catch {
+                // ignore storage errors
+              }
+            }
+          }
+        }
+      } else if (isOpen) {
+        setUnreadCount(0);
       }
     } catch {
       // Ignore transient polling error
     }
-  }, [signedIn, isOpen, humanModeRequested]);
+  }, [signedIn, isBrandSurface, isOpen, resolvedLocale, activeUserKey]);
 
   useEffect(() => {
-    if (!signedIn || !isOpen || !humanModeRequested) return;
-    void pollSlackReplies();
+    if (
+      !shouldFetchConciergeOnEffect({
+        signedIn,
+        isBrandSurface,
+        isOpen,
+        userKey: activeUserKey,
+      })
+    ) {
+      return;
+    }
+    void syncSupportThread();
+  }, [signedIn, isBrandSurface, isOpen, activeUserKey, syncSupportThread]);
+
+  useEffect(() => {
+    if (!signedIn || isBrandSurface || !isOpen) return;
+    if (!humanModeRequested && !hasOpenEscalation) return;
     const timer = setInterval(() => {
-      void pollSlackReplies();
+      void syncSupportThread();
     }, 4000);
     return () => clearInterval(timer);
-  }, [signedIn, isOpen, humanModeRequested, pollSlackReplies]);
+  }, [signedIn, isBrandSurface, isOpen, humanModeRequested, hasOpenEscalation, syncSupportThread]);
 
   if (isBrandSurface) return null;
 
@@ -200,17 +341,22 @@ export function TwingsAiConcierge({
   function activateHumanEscalation(reason: EscalationReason = 'user_requested_human') {
     setHumanModeRequested(true);
     setEscalationReason(reason);
-    setSlackNotice(null);
+    setEscalationNotice(null);
   }
 
-  async function handleSendToSlack(e: FormEvent<HTMLFormElement>) {
+  async function handleSubmitEscalation(e: FormEvent<HTMLFormElement>) {
     e.preventDefault();
     if (!signedIn) return;
     const message = humanMessageDraft.trim() || inputText.trim();
-    if (!message || sendingSlack) return;
+    if (!message || sendingInquiry) return;
 
-    setSendingSlack(true);
-    setSlackNotice(null);
+    const fingerprint = `${escalationReason}:${message}`;
+    if (escalationAttempt.current?.fingerprint !== fingerprint) {
+      escalationAttempt.current = { fingerprint, id: crypto.randomUUID() };
+    }
+
+    setSendingInquiry(true);
+    setEscalationNotice(null);
 
     try {
       const transcript = bubbles.slice(-6).map((b) => ({
@@ -229,62 +375,76 @@ export function TwingsAiConcierge({
           message,
           pagePath: pathname,
           transcript,
+          requestId: escalationAttempt.current.id,
         }),
       });
 
       const payload = (await response.json()) as {
         ok?: boolean;
+        stored?: boolean;
+        delivered?: boolean;
+        userKey?: string;
         code?: string;
-        handle?: string;
       };
 
       if (response.status === 401 || payload.code === 'sign_in_required') {
-        setSlackNotice(
-          isKo
-            ? '상담원과 연결하려면 먼저 로그인해 주세요.'
-            : 'Please sign in first to connect with a human agent.',
-        );
+        setEscalationNotice(copy.signInRequired);
         return;
       }
 
-      if (!response.ok || !payload.ok) {
-        setSlackNotice(
-          isKo
-            ? '메시지 전송 중 일시적인 오류가 발생했습니다. 잠시 후 다시 시도해 주세요.'
-            : 'Could not send your message right now. Please try again in a moment.',
-        );
+      if (response.status === 429 || payload.code === 'rate_limited') {
+        setEscalationNotice(copy.rateLimited);
         return;
       }
 
+      if (!isEscalationAcceptedResponse(response.ok, payload)) {
+        setEscalationNotice(copy.saveFailed);
+        return;
+      }
+
+      escalationAttempt.current = null;
+      setHasOpenEscalation(true);
+      const storageKeyUser = payload.userKey ?? activeUserKey;
+      if (payload.userKey) {
+        setResolvedUserKey(payload.userKey);
+      }
+      if (storageKeyUser && typeof window !== 'undefined') {
+        try {
+          window.localStorage.setItem(conciergeEscalatedStorageKey(storageKeyUser), '1');
+        } catch {
+          // ignore storage errors
+        }
+      }
       const nowIso = new Date().toISOString();
+      if (payload.stored) {
+        void syncSupportThread();
+      }
       setBubbles((prev) => [
         ...prev,
+        ...(payload.stored
+          ? []
+          : [
+              {
+                id: `u-support-${Date.now()}`,
+                role: 'user' as const,
+                authorLabel: displayName || (isKo ? '회원' : 'Member'),
+                text: message,
+                createdAt: nowIso,
+              },
+            ]),
         {
-          id: `u-slack-${Date.now()}`,
-          role: 'user',
-          authorLabel: displayName || (isKo ? '회원' : 'Member'),
-          text: message,
-          createdAt: nowIso,
-        },
-        {
-          id: `sys-slack-${Date.now() + 1}`,
+          id: `sys-support-${Date.now() + 1}`,
           role: 'human_agent',
-          authorLabel: isKo ? '1:1 상담원 연결 완료' : 'Connected to Support Specialist',
-          text: isKo
-            ? '담당 상담원에게 문의가 접수되었습니다. 상담원이 답변을 작성하면 이 채팅창에 실시간으로 표시됩니다.'
-            : 'Your message has been delivered to our support specialist. Replies will appear live right here.',
+          authorLabel: copy.receivedAuthor,
+          text: copy.receivedBody,
           createdAt: nowIso,
         },
       ]);
       setHumanMessageDraft('');
     } catch {
-      setSlackNotice(
-        isKo
-          ? '네트워크 상태를 확인한 뒤 다시 시도해 주세요.'
-          : 'Please check your connection and try again.',
-      );
+      setEscalationNotice(copy.networkError);
     } finally {
-      setSendingSlack(false);
+      setSendingInquiry(false);
     }
   }
 
@@ -345,7 +505,16 @@ export function TwingsAiConcierge({
 
             <button
               type="button"
-              onClick={() => setIsOpen(false)}
+              onClick={() => {
+                setIsOpen(false);
+                if (activeUserKey && (staffReplies.length > 0 || !hasOpenEscalation) && typeof window !== 'undefined') {
+                  try {
+                    window.localStorage.removeItem(conciergeEscalatedStorageKey(activeUserKey));
+                  } catch {
+                    // ignore storage errors
+                  }
+                }
+              }}
               aria-label={isKo ? '상담센터 닫기' : 'Close support center'}
               className="flex size-8 items-center justify-center rounded-full bg-white text-sm font-semibold text-[#52525B] transition-colors hover:bg-[#E4E4E7] hover:text-[#09090B]"
             >
@@ -450,24 +619,45 @@ export function TwingsAiConcierge({
               </article>
             ))}
 
-            {/* Inbound Slack Replies from Human Team */}
-            {slackReplies.map((reply) => (
+            {/* Persisted Escalation Thread (restored across reloads, F8) */}
+            {persistedThread.map((item) => (
               <article
-                key={reply.id}
-                data-concierge-bubble="slack_reply"
-                className="flex flex-col items-start"
+                key={item.id}
+                data-concierge-bubble={item.role === 'human_agent' ? 'staff_reply' : 'user'}
+                className={`flex flex-col ${item.role === 'user' ? 'items-end' : 'items-start'}`}
               >
                 <span className="mb-1 px-1 text-[0.6875rem] font-semibold text-[#09090B]">
-                  {reply.authorLabel}
+                  {item.authorLabel}
                 </span>
-                <div className="max-w-[88%] rounded-[16px] bg-[#F4F4F5] px-3.5 py-2.5 text-xs leading-relaxed text-[#09090B]">
-                  <p>{reply.body}</p>
+                <div
+                  className={`max-w-[88%] rounded-[16px] px-3.5 py-2.5 text-xs leading-relaxed ${
+                    item.role === 'user' ? 'bg-[#09090B] text-white' : 'bg-[#F4F4F5] text-[#09090B]'
+                  }`}
+                >
+                  <p>{item.text}</p>
                 </div>
               </article>
             ))}
 
+            {/* Inbound Replies fallback when thread snapshot is absent */}
+            {persistedThread.length === 0 &&
+              staffReplies.map((reply) => (
+                <article
+                  key={reply.id}
+                  data-concierge-bubble="staff_reply"
+                  className="flex flex-col items-start"
+                >
+                  <span className="mb-1 px-1 text-[0.6875rem] font-semibold text-[#09090B]">
+                    {reply.authorLabel}
+                  </span>
+                  <div className="max-w-[88%] rounded-[16px] bg-[#F4F4F5] px-3.5 py-2.5 text-xs leading-relaxed text-[#09090B]">
+                    <p>{reply.body}</p>
+                  </div>
+                </article>
+              ))}
+
             {/* Human Escalation Box (Triggered when AI cannot answer OR user clicks "사람과 대화하기") */}
-            {humanModeRequested && (
+            {(humanModeRequested || hasOpenEscalation) && (
               <div
                 data-concierge-escalation-panel
                 className="rounded-[18px] bg-[#F4F4F5] p-3.5"
@@ -506,8 +696,8 @@ export function TwingsAiConcierge({
                 ) : (
                   /* Signed-in Human Escalation Form */
                   <form
-                    onSubmit={handleSendToSlack}
-                    data-concierge-slack-form
+                    onSubmit={handleSubmitEscalation}
+                    data-concierge-handoff-form
                     className="mt-2.5 space-y-2.5"
                   >
                     <p className="text-xs leading-relaxed text-[#71717A]">
@@ -526,24 +716,18 @@ export function TwingsAiConcierge({
                       }
                       className="w-full rounded-[12px] bg-white px-3 py-2 text-xs text-[#09090B] placeholder:text-[#A1A1AA] focus:outline-2 focus:outline-[#09090B]"
                     />
-                    {slackNotice && (
+                    {escalationNotice && (
                       <p role="alert" className="text-[0.6875rem] font-medium text-[#09090B]">
-                        {slackNotice}
+                        {escalationNotice}
                       </p>
                     )}
                     <button
                       type="submit"
-                      disabled={sendingSlack || !humanMessageDraft.trim()}
-                      data-concierge-slack-submit
+                      disabled={sendingInquiry || !humanMessageDraft.trim()}
+                      data-concierge-handoff-submit
                       className="inline-flex min-h-9 w-full items-center justify-center rounded-full bg-[#09090B] px-4 py-2 text-xs font-semibold text-white transition-colors hover:bg-[#27272A] disabled:opacity-50"
                     >
-                      {sendingSlack
-                        ? isKo
-                          ? '상담원에게 전송 중...'
-                          : 'Sending to specialist...'
-                        : isKo
-                          ? '담당 상담원에게 바로 보내기 →'
-                          : 'Send to Support Specialist →'}
+                      {sendingInquiry ? copy.sendingLabel : copy.submitLabel}
                     </button>
                   </form>
                 )}
@@ -603,7 +787,19 @@ export function TwingsAiConcierge({
       {/* Floating Circular TWINGS Logo Launcher (ChannelTalk / Sendbird style) */}
       <button
         type="button"
-        onClick={() => setIsOpen((prev) => !prev)}
+        onClick={() => {
+          setIsOpen((prev) => {
+            const next = !prev;
+            if (!next && activeUserKey && (staffReplies.length > 0 || !hasOpenEscalation) && typeof window !== 'undefined') {
+              try {
+                window.localStorage.removeItem(conciergeEscalatedStorageKey(activeUserKey));
+              } catch {
+                // ignore storage errors
+              }
+            }
+            return next;
+          });
+        }}
         aria-expanded={isOpen}
         aria-label={isKo ? 'TWINGS AI 상담센터 열기' : 'Open TWINGS AI Support Center'}
         data-twings-ai-concierge-launcher
@@ -616,6 +812,13 @@ export function TwingsAiConcierge({
         >
           AI
         </span>
+        {!isOpen && unreadCount > 0 && (
+          <span
+            data-concierge-unread-dot
+            aria-label={isKo ? '새 답변 알림' : 'New reply'}
+            className="absolute -bottom-0.5 -right-0.5 size-3 rounded-full border-2 border-white bg-[#2563EB]"
+          />
+        )}
       </button>
     </div>
   );

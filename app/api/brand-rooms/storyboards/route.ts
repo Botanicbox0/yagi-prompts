@@ -39,7 +39,11 @@ async function deps(sql: NonNullable<Awaited<ReturnType<typeof getSqlRunner>>>):
     notify: (notice) =>
       after(async () => {
         try {
-          await notifySlackBrandConcierge(sql, notice);
+          await notifySlackBrandConcierge(sql, {
+            ...notice,
+            kind: 'storyboard_approval',
+            messageId: notice.deliverySourceId ?? notice.messageId,
+          });
         } catch (error) {
           log('storyboard_notice_failed', { message: error instanceof Error ? error.message.slice(0, 200) : 'unknown' });
         }

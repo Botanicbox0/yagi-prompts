@@ -1,3 +1,4 @@
+import { adminUrl } from '@/lib/seo/site-url';
 import type { InquiryType } from './schemas';
 
 /** Pure transport seam; credentials are read only by the server-only runtime module. */
@@ -31,7 +32,7 @@ export interface SlackInquirySender {
   send(input: { inquiryId: string; inquiryType: InquiryType }): Promise<SlackInquiryOutcome>;
 }
 
-const ADMIN_URL = 'https://admin.twings.app/admin/inquiries';
+const ADMIN_URL = adminUrl('/admin/inquiries');
 export const SLACK_INQUIRY_TIMEOUT_MS = 5_000;
 
 /** Incoming webhooks provide no idempotency acknowledgement. Never retry an ambiguous send. */

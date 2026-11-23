@@ -47,6 +47,32 @@ export function brandSiteUrl(env: NodeJS.ProcessEnv = process.env): string {
   return host === 'twings.app' || host.endsWith('.twings.app') ? BRAND_ORIGIN : site;
 }
 
+/** The admin console's canonical origin in production (`admin.twings.app`). */
+export const ADMIN_ORIGIN = 'https://admin.twings.app';
+
+/**
+ * Resolves an admin path (or already-qualified admin URL) to an absolute `https://admin.twings.app/...` URL.
+ * Team notifications (Slack / admin alerts) always use this helper so admin links never point to consumer
+ * or localhost origins inconsistently.
+ */
+export function adminUrl(path: string): string {
+  const trimmed = path.trim();
+  if (!trimmed) return ADMIN_ORIGIN;
+  if (trimmed === ADMIN_ORIGIN || trimmed.startsWith(`${ADMIN_ORIGIN}/`)) return trimmed;
+  if (/^https?:\/\//i.test(trimmed)) {
+    try {
+      const parsed = new URL(trimmed);
+      if (parsed.pathname.startsWith('/admin')) {
+        return `${ADMIN_ORIGIN}${parsed.pathname}${parsed.search}${parsed.hash}`;
+      }
+      return trimmed;
+    } catch {
+      return `${ADMIN_ORIGIN}/admin/inquiries`;
+    }
+  }
+  return `${ADMIN_ORIGIN}${trimmed.startsWith('/') ? trimmed : `/${trimmed}`}`;
+}
+
 /** `absoluteUrl('/en/pricing')` → `https://…/en/pricing`. Already-absolute input is returned as is. */
 export function absoluteUrl(path: string, env: NodeJS.ProcessEnv = process.env): string {
   if (/^https?:\/\//.test(path)) return path;

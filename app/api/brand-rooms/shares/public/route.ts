@@ -56,7 +56,7 @@ function log(event: string, detail: Record<string, unknown> = {}): void {
 function tellTheTeam(sql: ShareDeps['sql'], notice: RoomTeamNotice): void {
   after(async () => {
     try {
-      await notifySlackBrandConcierge(sql, notice);
+      await notifySlackBrandConcierge(sql, { ...notice, kind: 'share_guest_note' });
     } catch (error) {
       log('guest_note_notice_failed', { message: error instanceof Error ? error.message.slice(0, 200) : 'unknown' });
     }

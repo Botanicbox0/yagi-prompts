@@ -4,6 +4,7 @@
  * brand's approval or change request on a storyboard. The service builds the notice after its write; the
  * route sends it after the answer (`after()`), best effort. Never shown to a customer or a guest.
  */
+import { adminUrl } from '@/lib/seo/site-url';
 import { formatTimecode } from '@/lib/brand-studio/review-contracts';
 import { reviewAdminPath } from '@/lib/brand-studio/review';
 import { roomDeskPath } from './message-contracts';
@@ -15,6 +16,8 @@ export interface RoomTeamNotice {
   userId: string | null;
   /** The note or the board (the Slack line's `[msg:]` tag). */
   messageId: string;
+  /** Optional deterministic outbox source_id when distinct from `messageId` (e.g. status transitions). */
+  deliverySourceId?: string;
   body: string;
   /** Who wrote it when there is no profile row to read (a guest). Already safe for Slack. */
   sender?: { label: string; role: string } | null;
@@ -41,7 +44,11 @@ export function guestNoteNotice(input: {
 }): RoomTeamNotice {
   const { review, comment } = input;
   const head = `[공유 링크 ${comment.reply ? '답글' : '의견'}] ${slackSafe(review.title)}${comment.atMs != null ? ` · ${formatTimecode(comment.atMs)}` : ''}${comment.spot ? ' · 화면 위치 표시' : ''}`;
-  const where = input.projectId ? roomDeskPath(input.organizationId, input.projectId, { review: review.id, t: comment.atMs }) : reviewAdminPath(review.id);
+  const where = adminUrl(
+    input.projectId
+      ? roomDeskPath(input.organizationId, input.projectId, { review: review.id, t: comment.atMs })
+      : reviewAdminPath(review.id),
+  );
   return {
     organizationId: input.organizationId,
     userId: null,
@@ -49,6 +56,16 @@ export function guestNoteNotice(input: {
     body: [head, slackSafe(comment.body.slice(0, 1200)), `관리자 화면: ${where}`].join('\n'),
     sender: { label: slackSafe(input.guestName.slice(0, 60)), role: '공유 링크 외부인' },
   };
+}
+
+/** Raw unescaped preview for `team_notice_deliveries` so the outbox escapes once and appends one admin link (F10). */
+export function guestNotePreview(input: {
+  review: { title: string };
+  comment: { body: string; atMs: number | null; spot: boolean; reply: boolean };
+}): string {
+  const { review, comment } = input;
+  const head = `[공유 링크 ${comment.reply ? '답글' : '의견'}] ${review.title}${comment.atMs != null ? ` · ${formatTimecode(comment.atMs)}` : ''}${comment.spot ? ' · 화면 위치 표시' : ''}`;
+  return [head, comment.body.slice(0, 1200)].join('\n');
 }
 
 const DECISION_WORDS = { approved: '승인', changes_requested: '수정 요청' } as const;
@@ -64,6 +81,17 @@ export function storyboardDecisionNotice(input: {
     organizationId: input.organizationId,
     userId: input.userId,
     messageId: input.board.id,
-    body: [`[스토리보드 ${DECISION_WORDS[input.status]}] ${input.board.title} · v${input.board.version}`, `관리자 화면: ${storyboardAdminHref(input.board.id)}`].join('\n'),
+    body: [
+      `[스토리보드 ${DECISION_WORDS[input.status]}] ${slackSafe(input.board.title)} · v${input.board.version}`,
+      `관리자 화면: ${adminUrl(storyboardAdminHref(input.board.id))}`,
+    ].join('\n'),
   };
+}
+
+/** Raw unescaped preview for `team_notice_deliveries` (F10: no double escape, no duplicate admin link). */
+export function storyboardDecisionPreview(input: {
+  board: { title: string; version: number };
+  status: keyof typeof DECISION_WORDS;
+}): string {
+  return `[스토리보드 ${DECISION_WORDS[input.status]}] ${input.board.title} · v${input.board.version}`;
 }

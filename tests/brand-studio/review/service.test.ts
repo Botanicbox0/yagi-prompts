@@ -190,7 +190,7 @@ describe('status and removal', () => {
     const reviewId = await openReview();
     const asked = await op(viewerOf(f.ids.editor), 'review.status', { organizationId: f.orgId, reviewId, status: 'changes_requested' });
     expect(asked.result).toEqual({ ok: true });
-    expect(asked.notice!.body).toBe(`[리뷰 상태] Spring film v1 → 수정 요청\n관리자 화면: /admin/brand-studio/reviews/${reviewId}`);
+    expect(asked.notice!.body).toBe(`[리뷰 상태] Spring film v1 → 수정 요청\n관리자 화면: https://admin.twings.app/admin/brand-studio/reviews/${reviewId}`);
     const same = await op(viewerOf(f.ids.editor), 'review.status', { organizationId: f.orgId, reviewId, status: 'changes_requested' });
     expect(same).toEqual({ result: { ok: true }, notice: null });
     expect((await op(owner(), 'review.status', { organizationId: f.orgId, reviewId, status: 'done' })).result).toEqual({ ok: false, code: 'invalid' });
