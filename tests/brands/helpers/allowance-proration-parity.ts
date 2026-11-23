@@ -67,7 +67,8 @@ export async function prorationParityScenario(db: PGlite): Promise<ParityOp[]> {
       );
     }
     if (c.grantKrw) {
-      await base.query("insert into brand_allowance_grants (organization_id, amount_krw, valid_month, reason) values ($1, $2, '2026-11', 'fixture')", [orgId, c.grantKrw]);
+      // A fixed creation time (B1c fix round): a plan organization's grant belongs to the cycle of its effective start day.
+      await base.query("insert into brand_allowance_grants (organization_id, amount_krw, valid_month, reason, created_at) values ($1, $2, '2026-11', 'fixture', '2026-11-05T01:00:00Z')", [orgId, c.grantKrw]);
     }
     await run(`${c.name}:load`, (sql) => loadAllowance(sql, orgId, PRORATION_STUDIO_ENV, PRORATION_NOW));
     await run(`${c.name}:reserve`, (sql) => sql.transaction((tx) => reserveAllowance(tx, orgId, 5_000, PRORATION_STUDIO_ENV, PRORATION_NOW)));

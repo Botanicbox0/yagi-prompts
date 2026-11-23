@@ -1,10 +1,10 @@
 import { randomUUID } from 'node:crypto';
 import { prerender } from 'react-dom/static';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { insertLegacyDraft } from '@/tests/brands/helpers/legacy-invoice';
 import { formatBillingOutcomeDetail } from '@/lib/admin/brand-billing-console';
 import {
   draftBrandInvoice,
-  draftBrandInvoiceInTx,
   issueBrandInvoice,
   issueBrandInvoiceInTx,
   listBrandInvoices,
@@ -188,10 +188,11 @@ describe('B1a review round 4 — A: the job owns subscription drafts', () => {
     // An organization without a subscription: unchanged.
     const other = await makeOrg('No Subscription Fixture');
     expect(await draftBrandInvoice({ sql, now: at('2026-11-20T01:00:00Z') }, ADMIN_VIEWER, { organizationId: other, period: '2026-12', planId: 'b2b_69' })).toMatchObject({ ok: true });
-    // Flag off: origin/main behaviour.
+    // Flag off. B1c fix round (changed on purpose): the admin draft is per billing cycle and a cycle starting on or after
+    // the plan's end (here the subscription's paid-through day) is not drafted, so February is refused.
     vi.stubEnv('BRAND_BILLING_AUTO_ISSUE', 'off');
     const offDraft = await draftBrandInvoice({ sql, now: at('2026-11-20T01:00:00Z') }, ADMIN_VIEWER, { organizationId: orgId, period: '2027-02', planId: 'b2b_69' });
-    expect(offDraft).toMatchObject({ ok: true });
+    expect(offDraft).toMatchObject({ ok: false, code: 'invalid', field: 'period' });
   });
 
   it('A2/A3: amount changes on the job\'s draft are refused, a memo edit is kept and the job still issues it; hand-issue and void of a system draft', async () => {
@@ -239,8 +240,11 @@ describe('B1a review round 4 — A: the job owns subscription drafts', () => {
     const orgId = await makeOrg('Flag Off Fixture');
     const s = await startPaid(orgId);
     vi.stubEnv('BRAND_BILLING_AUTO_ISSUE', 'off');
-    const dec = await draftBrandInvoice({ sql, now: at('2026-11-20T01:00:00Z') }, ADMIN_VIEWER, { organizationId: orgId, period: '2026-12', planId: 'b2b_69' });
-    const jan = await draftBrandInvoice({ sql, now: at('2026-11-20T01:00:00Z') }, ADMIN_VIEWER, { organizationId: orgId, period: '2027-01', planId: 'b2b_69' });
+    // B1c fix round: a plan organization's admin draft covers a billing cycle and never one starting on or after the plan end
+    // (here the subscription's paid-through day), so this flag-off leftover is written as the calendar-month row the admin
+    // path used to write.
+    const dec = await insertLegacyDraft(sql, { organizationId: orgId, period: '2026-12', planId: 'b2b_69', actorId: ADMIN_VIEWER.userId! });
+    const jan = await insertLegacyDraft(sql, { organizationId: orgId, period: '2027-01', planId: 'b2b_69', actorId: ADMIN_VIEWER.userId! });
     if (!dec.ok || !jan.ok) throw new Error('draft failed');
     await issueBrandInvoice({ sql, now: at('2026-11-20T02:00:00Z') }, ADMIN_VIEWER, { invoiceId: jan.invoice.id });
     expect(await invoiceRow(jan.invoice.id)).toMatchObject({ status: 'issued', subscription_epoch: null, due_on: null });
@@ -471,19 +475,24 @@ describe('B1a review round 4 — B: remaining findings', () => {
       confirm: true,
     });
     if (!s.ok || !s.applied) throw new Error('start failed');
-    // Four stale system drafts of earlier months in this epoch (the job voids each one as its own step).
-    await sql.transaction(async (tx) => {
-      for (const period of ['2026-07', '2026-08', '2026-09', '2026-10']) {
-        const r = await draftBrandInvoiceInTx(
-          tx,
-          { kind: 'system' },
-          { organizationId: orgId, period, planId: 'b2b_69', prorate: false, applyActiveDiscount: false, manualAmounts: false, manualReason: '', memo: '' },
-          new Date('2026-11-02T01:00:00Z'),
-          { kind: 'subscription', coversMonths: 1, dueOn: null, collectionMethod: 'transfer', subscriptionEpoch: s.subscription.epoch },
-        );
-        if (!r.ok) throw new Error(r.code);
-      }
-    });
+    // Four stale system drafts of earlier months in this epoch (the job voids each one as its own step). B1c-2: written
+    // straight into the ledger — the engine's write path no longer creates a cycle-less invoice while another invoice
+    // (here the early-access cycle Nov 1 – Dec 1) covers the coming cycle (B1c no-overlap rule).
+    for (const period of ['2026-07', '2026-08', '2026-09', '2026-10']) {
+      const id = randomUUID();
+      await sql.query(
+        `insert into brand_invoices (id, organization_id, period, plan_id, base_list_krw, list_krw, discount_percent, discount_krw,
+            supply_krw, vat_krw, total_krw, status, created_at, updated_at, kind, covers_months, collection_method, created_via, subscription_epoch)
+         values ($1, $2, $3, 'b2b_69', 690000, 690000, 0, 0, 690000, 69000, 759000, 'draft', '2026-11-02T01:00:00Z', '2026-11-02T01:00:00Z',
+                 'subscription', 1, 'transfer', 'system', $4)`,
+        [id, orgId, period, s.subscription.epoch],
+      );
+      await sql.query(
+        `insert into brand_invoice_events (invoice_id, organization_id, action, from_status, to_status, snapshot, note, actor_id, actor_kind)
+         values ($1, $2, 'drafted', null, 'draft', '{}'::jsonb, '', null, 'system')`,
+        [id, orgId],
+      );
+    }
     vi.stubEnv('BRAND_BILLING_AUTO_ISSUE', 'off');
     await markBrandInvoicePaid({ sql, now: at('2026-11-10T01:00:00Z') }, ADMIN_VIEWER, { invoiceId: s.firstInvoiceId, paidMethod: 'transfer' });
     vi.stubEnv('BRAND_BILLING_AUTO_ISSUE', 'on');

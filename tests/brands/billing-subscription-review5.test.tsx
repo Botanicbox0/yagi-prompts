@@ -1,6 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import { prerender } from 'react-dom/static';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { insertLegacyDraft } from '@/tests/brands/helpers/legacy-invoice';
 import { formatBillingOutcomeDetail } from '@/lib/admin/brand-billing-console';
 import {
   draftBrandInvoice,
@@ -265,8 +266,10 @@ describe('B1a review round 5 — A: the job is the only issuer', () => {
       ).toMatchObject({ ok: false, code: 'conflict', detail: 'subscription_owns_period' });
     }
     vi.stubEnv('BRAND_BILLING_AUTO_ISSUE', 'off');
-    const left = await draftBrandInvoice({ sql, now: at('2026-11-20T01:00:00Z') }, ADMIN_VIEWER, { organizationId: orgId, period: '2027-02', planId: 'b2b_69' });
-    if (!left.ok) throw new Error(left.code);
+    // B1c fix round: a plan organization's admin draft covers a billing cycle and never one starting on or after the plan end
+    // (here the subscription's paid-through day), so this flag-off leftover is written as the calendar-month row the admin
+    // path used to write.
+    const left = await insertLegacyDraft(sql, { organizationId: orgId, period: '2027-02', planId: 'b2b_69', actorId: ADMIN_VIEWER.userId! });
     vi.stubEnv('BRAND_BILLING_AUTO_ISSUE', 'on');
     expect(await invoiceRow(left.invoice.id)).toMatchObject({ subscription_epoch: null });
     expect(
@@ -281,8 +284,10 @@ describe('B1a review round 5 — A: the job is the only issuer', () => {
     });
     // Flag off: origin/main behaviour (an admin issues by hand).
     vi.stubEnv('BRAND_BILLING_AUTO_ISSUE', 'off');
-    const offDraft = await draftBrandInvoice({ sql, now: at('2026-11-21T01:00:00Z') }, ADMIN_VIEWER, { organizationId: orgId, period: '2027-04', planId: 'b2b_69' });
-    if (!offDraft.ok) throw new Error(offDraft.code);
+    // B1c fix round: a plan organization's admin draft covers a billing cycle and never one starting on or after the plan end
+    // (here the subscription's paid-through day), so this flag-off leftover is written as the calendar-month row the admin
+    // path used to write.
+    const offDraft = await insertLegacyDraft(sql, { organizationId: orgId, period: '2027-04', planId: 'b2b_69', actorId: ADMIN_VIEWER.userId! });
     expect(await issueBrandInvoice({ sql, now: at('2026-11-21T02:00:00Z') }, ADMIN_VIEWER, { invoiceId: offDraft.invoice.id })).toMatchObject({ ok: true });
   });
 

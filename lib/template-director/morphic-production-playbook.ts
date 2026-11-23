@@ -230,7 +230,7 @@ export const MORPHIC_MODIFICATION_PLAYBOOK: readonly ModificationExecutionPatter
     sampleRequestEn:
       'Ignore the wide sleeve volume from my selfie and keep my shoulders, collarbones, and arms slender and graceful.',
     compilerRuleEn:
-      'Apply tight head-and-neck crop authority on @Image 1; strip original wide sleeves/blouse volume and enforce an overall petite, slender, graceful actress physique with slim toned arms and delicate collarbones.'
+      'Apply tight head-and-neck crop authority on @Image 1; strip original wide sleeves/blouse volume and enforce an overall petite, slender, graceful physique with slim toned arms and delicate collarbones.'
   },
   {
     id: 'makeup_daily_clean_deblush',

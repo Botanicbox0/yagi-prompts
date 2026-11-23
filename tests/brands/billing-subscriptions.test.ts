@@ -2,6 +2,7 @@ import { randomUUID } from 'node:crypto';
 import { PGlite } from '@electric-sql/pglite';
 import { NextRequest } from 'next/server';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { insertLegacyDraft } from '@/tests/brands/helpers/legacy-invoice';
 import type { Viewer } from '@/lib/auth/identity';
 import { loadAllowance } from '@/lib/brand-studio/usage';
 import { studioEnv } from '@/lib/brand-studio/env';
@@ -235,8 +236,9 @@ describe('B1a brand subscriptions integration & route (§8.2–§8.11)', () => {
     expect(started2).toMatchObject({ ok: true, applied: true });
     expect(await loadBrandSubscription(f.sql, org2Res.id)).toMatchObject({ status: 'pending', activatedBeforePayment: true });
     expect(await loadPlanAssignment(f.sql, org2Res.id)).toMatchObject({ planId: 'b2b_49', endsOn: '2026-11-24' });
-    // B1c: full cap (was 322,000 under the B1b first-month proration).
-    expect((await loadAllowance(f.sql, org2Res.id, studioEnv(), t0)).capKrw).toBe(460_000);
+    // B1c: full cycle, no first-month proration (was 322,000 under B1b). B1c-2, unpaid 50% cap: early access with the
+    // cycle-0 invoice issued and unpaid → half the plan part (460,000 → 230,000) until it is paid.
+    expect((await loadAllowance(f.sql, org2Res.id, studioEnv(), t0)).capKrw).toBe(230_000);
   });
 
   it('§8.5 Unpaid flow: ends_on = oldest due_on, past_due, suspended after grace, no new invoice while suspended, resume prorated on pay', async () => {
@@ -258,11 +260,12 @@ describe('B1a brand subscriptions integration & route (§8.2–§8.11)', () => {
     expect(await loadPlanAssignment(f.sql, f.orgId)).toMatchObject({ endsOn: '2026-12-15' });
     const decInv = (await listBrandInvoices(f.sql, { organizationId: f.orgId, now: dec01 })).find((i) => i.period === '2026-12')!;
 
-    // Dec 16 -> past_due, allowance STILL active within 14-day grace
+    // Dec 16 -> past_due, allowance STILL active within 14-day grace — B1c-2, unpaid 50% cap: the current cycle's
+    // invoice is issued and unpaid, so the plan part is half (270,000 → 135,000).
     const dec16 = new Date('2026-12-16T01:00:00Z');
     await runBrandSubscriptionTick({ sql: f.sql, now: () => dec16 });
     expect(await loadBrandSubscription(f.sql, f.orgId)).toMatchObject({ status: 'past_due' });
-    expect((await loadAllowance(f.sql, f.orgId, studioEnv(), dec16)).capKrw).toBe(270_000);
+    expect((await loadAllowance(f.sql, f.orgId, studioEnv(), dec16)).capKrw).toBe(135_000);
 
     // Dec 30 (15 days after due_on 2026-12-15, grace=14) -> suspended, allowance drops to 0, no 2027-01 draft
     const dec30 = new Date('2026-12-30T01:00:00Z');
@@ -292,6 +295,9 @@ describe('B1a brand subscriptions integration & route (§8.2–§8.11)', () => {
       cycleEnd: '2027-02-05',
     });
     expect(await loadPlanAssignment(f.sql, f.orgId)).toMatchObject({ endsOn: '2027-01-19' });
+    // B1c-2, unpaid 50% cap: the restart cycle's invoice is issued and unpaid → half until it is paid.
+    expect((await loadAllowance(f.sql, f.orgId, studioEnv(), jan05)).capKrw).toBe(135_000);
+    await markBrandInvoicePaid({ sql: f.sql, now: () => jan05 }, admin(), { invoiceId: (janInv as { id: string }).id, paidMethod: 'transfer' });
     expect((await loadAllowance(f.sql, f.orgId, studioEnv(), jan05)).capKrw).toBe(270_000);
   });
 
@@ -983,11 +989,9 @@ describe('B1a brand subscriptions integration & route (§8.2–§8.11)', () => {
       note: 'expired',
       expectedRevision: 0,
     });
-    const manualNovDraft = await draftBrandInvoice({ sql: f.sql, now: () => nov01 }, admin(), {
-      organizationId: org2.id,
-      period: '2026-11',
-      planId: 'b2b_29',
-    });
+    // B1c fix round: org2's manual plan ended Oct 10, so a November cycle is not drafted by the admin path any more; the
+    // manual November invoice is written as the calendar-month row the admin path used to write.
+    const manualNovDraft = await insertLegacyDraft(f.sql, { organizationId: org2.id, period: '2026-11', planId: 'b2b_29', actorId: f.ids.admin });
     expect(manualNovDraft.ok).toBe(true);
     const refusedDup = await startSubscriptionCompat({ sql: f.sql, now: () => nov01 }, admin(), {
       organizationId: org2.id,

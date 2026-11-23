@@ -559,6 +559,8 @@ export const adminConsoleEn = {
   brandOrgList: {
     searchPlaceholder: "Search organization name",
     sortLabel: "Sort",
+    usageBasisNote:
+      "The usage sort and the 80% filter use calendar-month usage (for plan organizations the number shown is this billing cycle).",
     filters: {
       all: "All",
       no_plan: "No plan",
@@ -680,6 +682,16 @@ export const adminConsoleEn = {
       cycleRange: "{start} – {last}",
       startedOnCycleHint:
         "The start date is the billing cycle day: every cycle starts on this day of the month, and changing it moves the cycle.",
+      startedOnLockedHint: "While a non-void invoice covers today or later, the start date cannot be moved.",
+      cycleAlreadyInvoiced:
+        "An invoice already covers this cycle, so the start date cannot move. Void this cycle's invoice first (restarting mid-cycle comes with plan changes in the next phase)",
+      grantCycleCol: "Cycle",
+      grantUntilThisCycleEnd: "Until the end of this cycle ({last})",
+      grantUntilCycle: "Cycle {start} – {last}, until {last}",
+      grantBeforePlan: "Granted before the plan start — in no cycle",
+      grantFormBeforePlan: "Before the plan start — in no cycle",
+      grantFormCycleHint:
+        "On a paid plan a grant joins the billing cycle its start day falls in (this month: today; next month: its 1st) and lasts until that cycle's last day.",
       monthlyCapKrw: "Override monthly cap (KRW)",
       preferredLane: "Preferred lane",
       laneDefault: "Default",
@@ -1573,6 +1585,7 @@ export const adminConsoleKo: typeof adminConsoleEn = {
   brandOrgList: {
     searchPlaceholder: "조직 이름 검색",
     sortLabel: "정렬",
+    usageBasisNote: "사용량 정렬과 80% 필터는 달력 월 기준입니다(플랜 조직의 표시 숫자는 이번 결제 주기 기준).",
     filters: {
       all: "전체",
       no_plan: "플랜 없음",
@@ -1693,6 +1706,16 @@ export const adminConsoleKo: typeof adminConsoleEn = {
       cycleCreditsUsed: "이번 주기 사용 {used} / {cap}크레딧",
       cycleRange: "{start} ~ {last}",
       startedOnCycleHint: "시작일이 청구 주기의 기준일입니다. 매달 이 날 새 주기가 시작되고, 시작일을 바꾸면 주기도 함께 옮겨집니다.",
+      startedOnLockedHint: "취소되지 않은 청구서가 오늘 이후를 덮고 있으면 시작일을 옮길 수 없습니다.",
+      cycleAlreadyInvoiced:
+        "이 주기에 이미 청구서가 있어 시작일을 옮길 수 없습니다. 이 주기의 청구서를 먼저 취소하세요 (주기 중간 재시작은 다음 단계의 플랜 변경 기능)",
+      grantCycleCol: "적용 주기",
+      grantUntilThisCycleEnd: "이번 주기 끝({last})까지",
+      grantUntilCycle: "{start} ~ {last} 주기, {last}까지",
+      grantBeforePlan: "플랜 시작 전 지급 — 주기에 포함되지 않음",
+      grantFormBeforePlan: "플랜 시작 전 — 주기에 포함되지 않음",
+      grantFormCycleHint:
+        "유료 플랜 조직의 추가 크레딧은 시작일(이번 달은 오늘, 다음 달은 1일)이 든 결제 주기에 붙고, 그 주기 마지막 날까지 씁니다.",
       monthlyCapKrw: "개별 월 한도(원)",
       preferredLane: "선호 실행 경로",
       laneDefault: "기본값 따름",

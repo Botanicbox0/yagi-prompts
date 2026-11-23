@@ -45,6 +45,11 @@ import { studioFixture, viewerOf, type StudioFixture } from '@/tests/brand-studi
 
 type Logged = { text: string; params: unknown[] };
 
+/** B1c fix round: the no-overlap check that replaced origin/main's same-period check on subscription drafts. */
+const OVERLAP_CHECK = /^select 1 from brand_invoices where organization_id = \$1 and status <> 'void'( and kind = 'subscription')? and /;
+const ORIGIN_PERIOD_CHECK = "select 1 from brand_invoices where organization_id = $1 and period = $2 and status <> 'void' limit 1";
+const isInvoiceColumnProbe = (q: Logged) => q.text.includes('pg_attribute') && q.params[0] === 'public.brand_invoices';
+
 /** A runner over the same database that records every statement (whitespace collapsed) and can fail some. */
 function recorder(db: PGlite, failWhen?: (text: string) => boolean): { sql: SqlRunner; log: Logged[] } {
   const log: Logged[] = [];
@@ -132,6 +137,20 @@ describe('B1a review round 1 — integration gaps', () => {
         const actual = await invoiceFlagOffScenario(db);
         expect(actual.map((o) => o.op)).toEqual(expected.ops.map((o) => o.op));
         for (const [i, op] of expected.ops.entries()) {
+          if (op.op.startsWith('draft')) {
+            // B1c fix round, on purpose: a subscription draft is refused when ANY non-void subscription invoice overlaps its
+            // days (checked after the plan is read), instead of origin/main's "same period" check. Every other statement and
+            // every result are still origin/main's.
+            const log = actual[i]!.log as Logged[];
+            const overlaps = log.filter((q) => OVERLAP_CHECK.test(q.text));
+            expect(overlaps, `${op.op}: one overlap check`).toHaveLength(1);
+            expect(actual[i]!.result, `${op.op}: full result`).toEqual(op.result);
+            if (op.op === 'draftConflict') continue; // refused later now (after the plan read), same answer
+            const mine = log.filter((q) => !OVERLAP_CHECK.test(q.text) && !isInvoiceColumnProbe(q));
+            const theirs = (op.log as Logged[]).filter((q) => q.text !== ORIGIN_PERIOD_CHECK);
+            expect(mine, `${op.op}: SQL and parameters besides the check`).toEqual(theirs);
+            continue;
+          }
           expect(actual[i]!.log, `${op.op}: SQL and parameters`).toEqual(op.log);
           expect(actual[i]!.result, `${op.op}: full result`).toEqual(op.result);
         }
@@ -169,7 +188,10 @@ describe('B1a review round 1 — integration gaps', () => {
 
     const forbidden =
       /brand_subscriptions|brand_subscription_events|subscription_epoch|last_reconciled_at|tax_invoice_issued_on|tax_invoice_ref|created_via|issued_via|covers_months|\bdue_on\b|actor_kind|collection_method|pending_plan_effective_period|\bkind\s*=/;
-    const leaks = r.log.filter((q) => forbidden.test(q.text) || q.params.some((p) => typeof p === 'string' && /^brand_subscription/.test(p)));
+    // B1c fix round: the no-overlap check on subscription drafts names `kind = 'subscription'` on purpose (flag off too).
+    const leaks = r.log.filter(
+      (q) => !OVERLAP_CHECK.test(q.text) && (forbidden.test(q.text) || q.params.some((p) => typeof p === 'string' && /^brand_subscription/.test(p))),
+    );
     expect(leaks.map((q) => q.text)).toEqual([]);
     // The subscription row was never touched by flag-off code.
     expect(await loadBrandSubscription(f.sql, f.orgId)).toMatchObject({ status: 'pending', revision: 1 });

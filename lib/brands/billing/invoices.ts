@@ -19,6 +19,7 @@ import {
   proposeProration,
 } from './math';
 import { cycleContaining, cycleStartAt, type BillingCycle } from './cycle';
+import { monthRange, subscriptionInvoiceOverlaps } from './cycle-invoices';
 import { hasColumn, hasTable, hasTables, loadSubscriptionSchemaReady } from './schema-guard';
 import type {
   BrandBillingFailureCode,
@@ -331,6 +332,8 @@ type InvoiceRow = {
   created_at: unknown;
   updated_by: string | null;
   updated_at: unknown;
+  /** 0182; absent before it. */
+  kind?: unknown;
   /** 0186 (B1c); absent before it, null on calendar-month rows. */
   cycle_start?: unknown;
   cycle_end?: unknown;
@@ -378,6 +381,7 @@ function mapInvoice(row: InvoiceRow, now: Date = new Date()): BrandInvoice {
     updatedAt: stamp(row.updated_at) ?? new Date(0).toISOString(),
     // B1c: only on cycle rows, so a calendar-month invoice reads exactly as before.
     ...(row.cycle_start != null && row.cycle_end != null ? { cycleStart: dayOf(row.cycle_start), cycleEnd: dayOf(row.cycle_end) } : {}),
+    ...(typeof row.kind === 'string' && row.kind !== 'subscription' ? { kind: row.kind } : {}),
   };
 }
 
@@ -522,6 +526,22 @@ export type ValidatedDraftInvoiceInput = z.infer<typeof DraftInvoiceInput>;
 export type ValidatedUpdateDraftInvoiceInput = z.infer<typeof UpdateDraftInvoiceInput>;
 export type ValidatedIssueInvoiceInput = z.infer<typeof IssueInvoiceInput>;
 
+/**
+ * The days a new subscription draft will cover, for the no-overlap check (B1c fix round × B1c-2):
+ * - the engine's cycle draft: its cycle `[cycle_start, cycle_end)`;
+ * - the engine's first invoice without early access (no cycle yet; the cycle starts on its paid day): one cycle from
+ *   today, so an earlier subscription's cycle that ended before today does not block a new start in the same month;
+ * - an admin calendar-month draft (organizations without a plan): its month.
+ */
+function subscriptionDraftRange(period: string, meta: SubscriptionInvoiceWriteMeta | undefined, nowDate: Date): { start: string; end: string } {
+  if (meta?.cycleStart && meta.cycleEnd) return { start: meta.cycleStart, end: meta.cycleEnd };
+  if (meta) {
+    const today = kstDayOf(nowDate);
+    return { start: today, end: cycleStartAt(today, 1) };
+  }
+  return monthRange(period);
+}
+
 export async function draftBrandInvoiceInTx(
   sql: SqlRunner,
   actor: InvoiceActor,
@@ -549,31 +569,19 @@ export async function draftBrandInvoiceInTx(
   }
 
   const targetKind = subscriptionMeta?.kind ?? 'subscription';
-  const conflict = (
-    subscriptionMeta
-      ? subscriptionMeta.cycleStart && subscriptionMeta.cycleEnd
-        ? // B1c-2: one non-void subscription invoice per cycle, and cycles never overlap.
-          await sql.query(
-            `select 1 from brand_invoices
-              where organization_id = $1 and status <> 'void' and kind = $4
-                and cycle_start < $3::date and cycle_end > $2::date
-              limit 1`,
-            [v.organizationId, subscriptionMeta.cycleStart, subscriptionMeta.cycleEnd, targetKind],
-          )
-        : await sql.query(
-            "select 1 from brand_invoices where organization_id = $1 and period = $2 and status <> 'void' and kind = $3 and cycle_start is null limit 1",
-            [v.organizationId, v.period, targetKind],
-          )
-      : await sql.query(
-          "select 1 from brand_invoices where organization_id = $1 and period = $2 and status <> 'void' limit 1",
-          [v.organizationId, v.period],
-        )
-  ).rows[0];
-  if (conflict) return { ok: false, code: 'conflict' };
+  if (targetKind !== 'subscription') {
+    // A non-subscription invoice (adjustment, prepay, credit pack) covers no days: one per kind and month, as before.
+    const conflict = (
+      await sql.query(
+        "select 1 from brand_invoices where organization_id = $1 and period = $2 and status <> 'void' and kind = $3 limit 1",
+        [v.organizationId, v.period, targetKind],
+      )
+    ).rows[0];
+    if (conflict) return { ok: false, code: 'conflict' };
+  }
 
   const assignment = await loadPlanAssignment(sql, v.organizationId);
   // B1c: a paid plan organization's admin draft covers one billing cycle; a month asked for is the cycle starting in it.
-  // Only looked at for an organization with a paid plan, so a draft for one without a plan runs exactly as before.
   if (
     !subscriptionMeta &&
     assignment &&
@@ -581,6 +589,11 @@ export async function draftBrandInvoiceInTx(
     (await hasColumn(sql, 'brand_invoices', 'cycle_start'))
   ) {
     return draftCycleInvoiceInTx(sql, actorId, v, nowDate, assignment);
+  }
+  // B1c fix round: a subscription invoice (admin or engine) never overlaps another non-void subscription invoice in time;
+  // a calendar-month invoice covers its month, a cycle invoice its cycle.
+  if (targetKind === 'subscription' && (await subscriptionInvoiceOverlaps(sql, v.organizationId, subscriptionDraftRange(v.period!, subscriptionMeta, nowDate)))) {
+    return { ok: false, code: 'conflict' };
   }
   const planId = v.planId ?? assignment?.planId;
   if (!planId) return { ok: false, code: 'invalid', field: 'planId' };
@@ -766,8 +779,8 @@ async function draftAmounts(
 
 /**
  * Which cycle of the plan anchor a draft asks for (B1c): `cycle: 'current' | 'next'`, an exact `cycleStart`, or a
- * `period` (the cycle that starts in that month). Never one before the current cycle; before the plan starts, the
- * current cycle is the first one.
+ * `period` (the cycle that starts in that month). Any cycle of the anchor, past ones included (a missed cycle must be
+ * billable; overlaps are refused by the caller); before the plan starts, the current cycle is the first one.
  */
 export function resolveDraftCycle(
   anchor: string,
@@ -780,12 +793,12 @@ export function resolveDraftCycle(
   if (ask.cycle === 'next') return { ok: true, cycle: at(current.index + 1) };
   if (ask.cycleStart !== undefined) {
     const c = ask.cycleStart >= anchor ? cycleContaining(anchor, ask.cycleStart) : null;
-    if (!c || c.start !== ask.cycleStart || c.index < current.index) return { ok: false, field: 'cycleStart' };
+    if (!c || c.start !== ask.cycleStart) return { ok: false, field: 'cycleStart' };
     return { ok: true, cycle: c };
   }
   if (ask.period !== undefined) {
     const index = (Number(ask.period.slice(0, 4)) - Number(anchor.slice(0, 4))) * 12 + (Number(ask.period.slice(5, 7)) - Number(anchor.slice(5, 7)));
-    if (index < 0 || index < current.index) return { ok: false, field: 'period' };
+    if (index < 0) return { ok: false, field: 'period' };
     return { ok: true, cycle: at(index) };
   }
   return { ok: false, field: 'cycle' };
@@ -812,14 +825,14 @@ async function draftCycleInvoiceInTx(
   const resolved = resolveDraftCycle(assignment.startedOn, kstDayOf(nowDate), v);
   if (!resolved.ok) return { ok: false, code: 'invalid', field: resolved.field };
   const { cycle } = resolved;
-  // Only this path writes `cycle_start`, so the cycle alone identifies a subscription invoice here.
-  const conflict = (
-    await sql.query(
-      "select 1 from brand_invoices where organization_id = $1 and cycle_start = $2::date and status <> 'void' limit 1",
-      [v.organizationId, cycle.start],
-    )
-  ).rows[0];
-  if (conflict) return { ok: false, code: 'conflict' };
+  // A cycle that starts on or after the plan's end is not billed.
+  if (assignment.endsOn && cycle.start >= assignment.endsOn) {
+    return { ok: false, code: 'invalid', field: v.cycleStart !== undefined ? 'cycleStart' : v.cycle !== undefined ? 'cycle' : 'period' };
+  }
+  // No overlap in time with any non-void subscription invoice (cycle or calendar month).
+  if (await subscriptionInvoiceOverlaps(sql, v.organizationId, { start: cycle.start, end: cycle.end })) {
+    return { ok: false, code: 'conflict' };
+  }
 
   const planId = v.planId ?? assignment.planId;
   // No proration anywhere on a cycle: every cycle is the full monthly price.

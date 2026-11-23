@@ -100,6 +100,10 @@ const plan: AdminOperation<PlanInput> = {
     if (!result.ok && result.field === SUBSCRIPTION_MANAGED_PLAN) {
       return fail('brandConflict', `conflict:${SUBSCRIPTION_MANAGED_PLAN}`);
     }
+    // B1c: moving the start day under an invoiced cycle (void that invoice first).
+    if (!result.ok && result.field === 'cycle_already_invoiced') {
+      return fail('brandConflict', 'conflict:cycle_already_invoiced');
+    }
     if (!result.ok) return brandFailure(result.code);
     return ok('saved', { to: organizationPath(input.organizationId) });
   },

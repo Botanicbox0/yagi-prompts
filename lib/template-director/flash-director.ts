@@ -1,5 +1,6 @@
 import {
   BANNED_AI_BUZZWORDS,
+  BANNED_EQUIPMENT_BRANDS,
   BANNED_PINK_MAKEUP_TERMS,
   SKIN_MATTE_CONTRACT_A10
 } from '@/lib/brands/briefs/compiler';
@@ -11,6 +12,7 @@ import {
 } from './morphic-production-playbook';
 import {
   DEFAULT_EDITORIAL_TEMPLATE_BASELINE,
+  DEFAULT_SUBJECT_DESCRIPTOR_EN,
   DUAL_IDENTITY_CANDIDATE_ENGINES,
   GEMINI_DIRECTOR_DEFAULT_BASE_URL,
   GEMINI_DIRECTOR_DEFAULT_MODEL,
@@ -126,7 +128,7 @@ export const AMERICANO_SKIN_CONTRACT =
   'Render a matte-to-natural living skin finish with a very low specular-to-diffuse ratio; skin highlights stay below clipping and never form glossy white bands or shiny hotspots on the forehead, nose bridge, or cheeks, showing locally varied living skin with subtle chromatic warmth shifts across cheeks and nose and restrained natural micro-relief without beauty-filter plastic blur, porcelain gradients, or harsh aging shadows.';
 
 export const ANATOMICAL_DE_FILTER_CONTRACT =
-  'SURGICAL IN-PLACE IDENTITY LOCK: Edit the first attached image IN PLACE while keeping 98% of the person in Image 1 100% recognizable and untouched in core facial identity, exact eye shape, double-eyelid crease, inter-canthal distance, nasal bridge and tip width, philtrum length, mouth corners, exact hairstyle (preserve original part and bangs without replacing with generic 5:5 curtain bangs), and bright, clean, youthful Korean skin luminance (never age the skin, never add harsh pores or dark under-eye shadows, never re-render into a generic studio mugshot), while normalizing any 2D beauty-app liquify distortions (artificially pinched V-line jawline, over-inflated or over-lined lips) back to anatomically natural 3D camera lens proportions (85mm f/2.0 portrait perspective, soft oval-egg contour) wearing a clean minimalist matte black crew-neck top (never bare passport-photo shoulders).';
+  'SURGICAL IN-PLACE IDENTITY LOCK: Edit the first attached image IN PLACE while keeping 98% of the person in Image 1 100% recognizable and untouched in core facial identity, exact eye shape, double-eyelid crease, inter-canthal distance, nasal bridge and tip width, philtrum length, mouth corners, exact hairstyle (preserve original part and bangs without replacing with generic 5:5 curtain bangs), and the skin tone and luminance of Image 1 (never age the skin, never add harsh pores or dark under-eye shadows, never re-render into a generic studio mugshot), while normalizing any 2D beauty-app liquify distortions (artificially pinched V-line jawline, over-inflated or over-lined lips) back to anatomically natural 3D camera lens proportions (85mm f/2.0 portrait perspective, their natural facial contour) wearing a clean minimalist matte black crew-neck top (never bare passport-photo shoulders).';
 
 function stripBannedPlasticTokens(text: string): string {
   return text
@@ -139,22 +141,53 @@ function stripBannedPlasticTokens(text: string): string {
     .trim();
 }
 
+/** Words that name an ethnicity or nationality; a descriptor carrying one is replaced by the neutral default. */
+const SUBJECT_DESCRIPTOR_ORIGIN_WORDS =
+  /\b(?:korean|asian|caucasian|white|black|brown|african|chinese|japanese|european|latina|latino|latinx|hispanic|indian|american|arab|ethnic|ethnicity|nationality|race)\b/i;
+
+/**
+ * docs/PERSONAL-STUDIO.md §4 #3 — the photo check describes the person as visible ("a man in his thirties");
+ * nothing is assumed. Only ASCII letters, digits, spaces, hyphens and apostrophes survive; anything empty, too
+ * long, or naming an ethnicity or nationality becomes "the person".
+ */
+export function sanitizeSubjectDescriptorEn(raw: string | null | undefined): string {
+  if (typeof raw !== 'string') return DEFAULT_SUBJECT_DESCRIPTOR_EN;
+  const cleaned = raw
+    .normalize('NFKC')
+    .replace(/[^A-Za-z0-9 '-]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+  if (
+    !cleaned ||
+    cleaned.length > 60 ||
+    !/[A-Za-z]/.test(cleaned) ||
+    cleaned.split(' ').length > 10 ||
+    SUBJECT_DESCRIPTOR_ORIGIN_WORDS.test(cleaned)
+  ) {
+    return DEFAULT_SUBJECT_DESCRIPTOR_EN;
+  }
+  return cleaned;
+}
+
 export function compileModelSpecificIdentityPrompt(
   engine: ModelSpecificImageEngine,
   spec: {
     extractedIdentityLockEn: string;
     extractedHairLockEn: string;
     rawSurgicalPromptEn: string;
+    /** Neutral description from the photo check; defaults to "the person". */
+    subjectDescriptorEn?: string | null;
   }
 ): string {
   const identityLock = stripBannedPlasticTokens(spec.extractedIdentityLockEn);
   const hairLock = stripBannedPlasticTokens(spec.extractedHairLockEn);
   const surgicalDelta = stripBannedPlasticTokens(spec.rawSurgicalPromptEn);
+  const subject = sanitizeSubjectDescriptorEn(spec.subjectDescriptorEn);
 
   if (engine === 'seedream-5.5') {
     // Official ByteDance Seedream 5.5 Formula: 4-Part Cohesive Natural-Language Prose
-    const part1RefRole = `Reference Image 1 provides the young Korean female subject's exact facial identity, distinctive features (${identityLock}), exact hairstyle (${hairLock}), clothing, and ambient lighting—preserve 95% of Reference Image 1's real facial bone structure, eye spacing, nose bridge contour, lip shape, and personal charm so she remains 100% unmistakably the exact same person.`;
-    const part2SceneProse = `An in-place refined vertical 3:4 medium bust-up portrait of the exact same young Korean woman from Reference Image 1, keeping her original hairstyle (${hairLock}) and natural styling, while gently relaxing any harsh, tense, or intimidating facial tension into a calm, effortlessly chic, approachable expression with softly closed or naturally relaxed lips and removing any hand touching the cheek or dangling earphone wire. ${surgicalDelta}`;
+    const part1RefRole = `Reference Image 1 provides the subject's exact facial identity, distinctive features (${identityLock}), exact hairstyle (${hairLock}), clothing, and ambient lighting—preserve 95% of Reference Image 1's real facial bone structure, eye spacing, nose bridge contour, lip shape, and personal charm so they remain unmistakably the same person.`;
+    const part2SceneProse = `An in-place refined vertical 3:4 medium bust-up portrait of ${subject}, the exact same person from Reference Image 1, keeping their original hairstyle (${hairLock}) and natural styling, while gently relaxing any harsh, tense, or intimidating facial tension into a calm, effortlessly chic, approachable expression with softly closed or naturally relaxed lips and removing any hand touching the cheek or dangling earphone wire. ${surgicalDelta}`;
     const part3OpticsSkin = `Maintain the natural diffused daylight and soft tonal roll-off (#F4EFEA highlight roll-off, #262528 shadow floor) of an 85mm f/2.0 portrait lens. ${AMERICANO_SKIN_CONTRACT}`;
     const part4CleanFrame =
       'High-end editorial portrait master reference frame, completely clean composition with no earphone cords, no hands covering the jawline, no text, no logos, and no watermarks.';
@@ -165,7 +198,7 @@ export function compileModelSpecificIdentityPrompt(
     // Official OpenAI GPT Image 2.5 Formula: 5-Tier Creative Brief Hierarchy
     return [
       '1. Deliverable & Framing: A high-end editorial bust-up portrait in vertical 3:4 format.',
-      `2. Reference Authority (Identity Lock): Use Reference Image 1 strictly for the female subject's facial identity (${identityLock}) and exact hairstyle (${hairLock}). Ignore any tilted selfie angle, hand on face, earphone cord, or cluttered background.`,
+      `2. Reference Authority (Identity Lock): Use Reference Image 1 strictly for the facial identity of ${subject} (${identityLock}) and their exact hairstyle (${hairLock}). Ignore any tilted selfie angle, hand on face, earphone cord, or cluttered background.`,
       `3. Subject, Pose & Garment Construction: Eye-level frontal bust-up posture with calm, soft approachable eyes and relaxed closed lips, wearing a minimalist matte black crew-neck top. ${surgicalDelta}`,
       '4. Environment & Spatial Planes: Softly out-of-focus neutral daylight architectural background with clean negative space around the crown and shoulders.',
       `5. Lighting, Color Palette (#HEX) & Optical Rendering + Exclusions: Soft diffused daylight key (#F4EFEA highlights, #262528 shadow floor), 85mm f/2.0 optical compression. ${AMERICANO_SKIN_CONTRACT} No earphone cords, no hands near face, no text, no watermarks, no logos.`
@@ -175,7 +208,7 @@ export function compileModelSpecificIdentityPrompt(
   // Official Google Gemini Nano Banana 2.1 Formula: ALL-CAPS Section-Label & LOCK Architecture
   return [
     'ULTRA HIGH-END EDITORIAL PORTRAIT — vertical 3:4.',
-    `IDENTITY LOCK: Keep the exact facial identity of the young Korean woman in Reference Image 1 (${identityLock}) and exact hairstyle (${hairLock}). ${ANATOMICAL_DE_FILTER_CONTRACT}`,
+    `IDENTITY LOCK: Keep the exact facial identity of ${subject} in Reference Image 1 (${identityLock}) and their exact hairstyle (${hairLock}). ${ANATOMICAL_DE_FILTER_CONTRACT}`,
     'COMPOSITION LOCK: Eye-level vertical 3:4 bust-up portrait framing full head, hair, and symmetrical upper shoulders.',
     `POSE LOCK: Calm, relaxed, approachable eye-level gaze with gently closed lips (never fierce or tense). ${surgicalDelta}`,
     'OUTFIT & PROPS: Clean minimalist matte black crew-neck top; zero handheld props, zero earphone cords, zero hands touching face.',
@@ -207,7 +240,8 @@ export { resolveTemplateBaseline };
 export function routePhotoCleanup(
   issues: readonly PhotoIssueCode[],
   cleanupPromptEn: string | null,
-  extractedHairDescription: string | null = null
+  extractedHairDescription: string | null = null,
+  subjectDescriptorEn: string | null = null
 ): RecommendedPhotoCleanup {
   const hasOcclusion = issues.some((code) => OCCLUSION_ISSUES.has(code));
   const hasRetouch = issues.some((code) => RETOUCH_ISSUES.has(code));
@@ -223,7 +257,8 @@ export function routePhotoCleanup(
         'exact eye shape, double-eyelid crease, inter-canthal distance, nose bridge and tip width, philtrum length, and natural lip contour from Reference Image 1',
       extractedHairLockEn:
         extractedHairDescription?.trim() || 'exact hairstyle, parting, and bangs from Reference Image 1',
-      rawSurgicalPromptEn
+      rawSurgicalPromptEn,
+      subjectDescriptorEn: sanitizeSubjectDescriptorEn(subjectDescriptorEn)
     };
     return {
       mode,
@@ -281,6 +316,195 @@ function escapeRegExp(literal: string): string {
   return literal.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
 
+/**
+ * docs/PERSONAL-STUDIO.md §4 #1 — the personal skin rule. The brand brief's a10 contract asks for
+ * "visible pores", which the personal side forbids (playbook law 5: zero aging pore exaggeration), so the
+ * personal compiler keeps its own sentence. `SKIN_MATTE_CONTRACT_A10` stays as is for the brand compiler.
+ */
+export const PERSONAL_SKIN_CONTRACT_EN =
+  'Natural skin texture faithful to @Image 1, with zero plastic, waxy or silicone beauty-filter glare.' as const;
+export const PERSONAL_SKIN_CONTRACT_COUPLE_EN =
+  "Natural skin texture faithful to each person's own photo, with zero plastic, waxy or silicone beauty-filter glare." as const;
+/** Shared by both variants; its presence means a personal skin contract is already in the prompt. */
+const PERSONAL_SKIN_CONTRACT_MARKER = 'with zero plastic, waxy or silicone beauty-filter glare';
+
+export function personalSkinContractEn(cast: 'solo' | 'couple' | 'pet' = 'solo'): string {
+  return cast === 'couple' ? PERSONAL_SKIN_CONTRACT_COUPLE_EN : PERSONAL_SKIN_CONTRACT_EN;
+}
+
+function appendPersonalSkinContract(text: string, cast: 'solo' | 'couple' | 'pet'): string {
+  if (text.includes(PERSONAL_SKIN_CONTRACT_MARKER)) return text;
+  return `${text}\n\n${personalSkinContractEn(cast)}`;
+}
+
+function flexibleWhitespaceSource(literal: string): string {
+  return escapeRegExp(literal).replace(/ +/g, '\\s+');
+}
+
+const LEGACY_A10_CONTRACT_REGEX = new RegExp(flexibleWhitespaceSource(SKIN_MATTE_CONTRACT_A10.trim()), 'g');
+const LEGACY_A10_PORES_SENTENCE_REGEX = new RegExp(
+  flexibleWhitespaceSource('Natural matte skin texture with visible pores and subtle micro-relief.'),
+  'gi'
+);
+
+/** Older stored prompts carry the a10 contract; drop it and reword any remaining "visible pores". */
+function stripLegacySkinContract(text: string): string {
+  return text
+    .replace(LEGACY_A10_CONTRACT_REGEX, '')
+    .replace(LEGACY_A10_PORES_SENTENCE_REGEX, '')
+    .replace(/\bvisible\s+(?:skin\s+)?pores\b/gi, 'natural skin texture');
+}
+
+/** Letter-by-letter case-insensitive source, so one regex can mix case-sensitive and insensitive names. */
+function anyCase(word: string): string {
+  return word
+    .split('')
+    .map((ch) => {
+      if (/[a-z]/i.test(ch)) return `[${ch.toLowerCase()}${ch.toUpperCase()}]`;
+      if (/\s/.test(ch)) return '[ \\t]+';
+      return escapeRegExp(ch);
+    })
+    .join('');
+}
+
+/**
+ * docs/PERSONAL-STUDIO.md §4 #6 — camera, lens, lighting and film-stock makers. The brand compiler's a12 list plus
+ * the cinema names it lacks. Generation providers refuse or drift on them; the prompt describes the look instead.
+ */
+export const PERSONAL_BANNED_EQUIPMENT_BRANDS = [
+  ...BANNED_EQUIPMENT_BRANDS,
+  'kodak',
+  'panavision',
+  'zeiss',
+  'cooke',
+  'red digital'
+] as const;
+
+/**
+ * Names that are also ordinary words only count with the maker's capitals: "Canon" (not "canon event"),
+ * "Phase One" (not "phase one of the walk"), "RED Digital Cinema" / "RED Komodo" (not "a red digital clock").
+ */
+function equipmentBrandSource(brand: string): string {
+  switch (brand) {
+    case 'canon':
+      return '(?:Canon|CANON)';
+    case 'phase one':
+      return '(?:Phase[ \\t]+One|PHASE[ \\t]+ONE)';
+    case 'red digital':
+      return '(?:RED[ \\t]+(?:[Dd]igital|DIGITAL)(?:[ \\t]+(?:[Cc]inema|CINEMA))?|[Rr]ed[ \\t]+[Dd]igital[ \\t]+[Cc]inema|RED(?=[ \\t]+(?:Komodo|V-Raptor|Raptor|Monstro|Helium|Dragon)\\b))';
+    default:
+      return anyCase(brand);
+  }
+}
+
+const EQUIPMENT_BRAND_SOURCE = `\\b(${PERSONAL_BANNED_EQUIPMENT_BRANDS.map(equipmentBrandSource).join('|')})\\b`;
+
+/** Model names that follow a maker ("Alexa 35", "Master Prime", "S4/i", "FX3", "Summilux-C"). */
+const MODEL_CHARS = '(?:[\\w/+-]|\\.(?=\\w))*';
+const EQUIPMENT_MODEL_TOKEN_SOURCE = `(?:\\d${MODEL_CHARS}|[A-Z]${MODEL_CHARS}\\d${MODEL_CHARS}|[A-Z]{2,}${MODEL_CHARS}|(?:Alexa|Venice|Mini|Komodo|V-Raptor|Raptor|Monstro|Helium|Millennium|Master|Ultra|Supreme|Signature|Summilux|Summicron|Noctilux|Speed|Panchro|Classic|Optimo|Varotal)(?:-[A-Za-z0-9]+)?)(?![\\w-])`;
+const EQUIPMENT_MODEL_TOKENS = `(?:[ \\t]+${EQUIPMENT_MODEL_TOKEN_SOURCE}){0,3}?`;
+const EQUIPMENT_MODEL_TOKENS_GREEDY = `(?:[ \\t]+${EQUIPMENT_MODEL_TOKEN_SOURCE}){0,3}`;
+
+const FILM_STOCK_NAME_SOURCE = [
+  `(?:${anyCase('kodak')}[ \\t]+${anyCase('vision')}[ \\t]?3|${anyCase('vision')}3)(?:[ \\t]+\\d{2,4}[ \\t]?[TDtd](?![\\w-]))?`,
+  `${anyCase('kodak')}[ \\t]+(?:\\d{4}|${['ektachrome', 'ektar', 'portra', 'kodachrome', 'tri-x', 'double-x', 'gold', 'colorplus', 'ultramax'].map(anyCase).join('|')})(?:[ \\t]+\\d{2,4}[TDtd]?)?`,
+  `(?:${['portra', 'ektachrome', 'ektar', 'kodachrome', 'tri-x', 'cinestill'].map(anyCase).join('|')})(?:[ \\t]+\\d{2,4}[TDtd]?)?`,
+  `(?:${anyCase('fuji')}(?:${anyCase('film')})?[ \\t]+)?(?:${['eterna', 'velvia', 'provia', 'superia'].map(anyCase).join('|')})(?:[ \\t]+(?:${anyCase('vivid')}[ \\t]+)?\\d{2,4}[TDtd]?)?`,
+  `${anyCase('ilford')}(?:[ \\t]+(?:HP5|FP4|XP2|${anyCase('delta')})(?:[ \\t]*(?:${anyCase('plus')}|\\+))?(?:[ \\t]+\\d{2,4})?)?`
+].join('|');
+
+/** "35mm Kodak Vision3 500T film stock" → one generic phrase, swallowing the words around the name. */
+const FILM_STOCK_REGEX = new RegExp(
+  `(?:35[ \\t]?mm[ \\t]+)?\\b(?:${FILM_STOCK_NAME_SOURCE})(?![\\w-])(?:[ \\t]+(?:${anyCase('motion')}[ -]${anyCase('picture')}[ \\t]+)?(?:${anyCase('print')}[ \\t]+)?(?:${anyCase('film')}[ \\t]+)?(?:${anyCase('stock')}|${anyCase('film')}|${anyCase('negative')}|${anyCase('emulsion')})\\b)?`,
+  'g'
+);
+const FILM_STOCK_PHRASE_EN = '35mm motion-picture film stock';
+
+const LENS_WORD_SOURCE = `(?:${['lenses', 'lens', 'primes', 'prime', 'glass', 'optics', 'anamorphics', 'anamorphic', 'zooms', 'zoom'].map(anyCase).join('|')})`;
+const LIGHT_WORD_SOURCE = `(?:${['strobes', 'strobe', 'flashes', 'flash', 'monolights', 'monolight', 'lighting', 'lights', 'light', 'heads', 'head', 'softboxes', 'softbox', 'packs', 'pack'].map(anyCase).join('|')})`;
+const CAMERA_WORD_SOURCE = `(?:${['cameras', 'camera', 'bodies', 'body'].map(anyCase).join('|')})`;
+
+const LENS_BRAND_REGEX = new RegExp(
+  `${EQUIPMENT_BRAND_SOURCE}${EQUIPMENT_MODEL_TOKENS}[ \\t]+(${LENS_WORD_SOURCE})\\b`,
+  'g'
+);
+const LIGHT_BRAND_REGEX = new RegExp(
+  `${EQUIPMENT_BRAND_SOURCE}${EQUIPMENT_MODEL_TOKENS}[ \\t]+(${LIGHT_WORD_SOURCE})\\b`,
+  'g'
+);
+const CAMERA_CONTEXT_BRAND_REGEX = new RegExp(
+  `\\b(${['shot', 'filmed', 'captured', 'recorded', 'photographed'].map(anyCase).join('|')})[ \\t]+(${anyCase('on')}|${anyCase('with')})[ \\t]+(?:(?:an?|AN?|An?)[ \\t]+)?${EQUIPMENT_BRAND_SOURCE}${EQUIPMENT_MODEL_TOKENS_GREEDY}(?:[ \\t]+(?:${anyCase('cinema')}[ \\t]+)?${CAMERA_WORD_SOURCE}\\b)?`,
+  'g'
+);
+const CAMERA_BRAND_REGEX = new RegExp(
+  `${EQUIPMENT_BRAND_SOURCE}${EQUIPMENT_MODEL_TOKENS}[ \\t]+(?:${anyCase('cinema')}[ \\t]+)?(${CAMERA_WORD_SOURCE})\\b`,
+  'g'
+);
+const BARE_BRAND_REGEX = new RegExp(`${EQUIPMENT_BRAND_SOURCE}(?:'s)?${EQUIPMENT_MODEL_TOKENS_GREEDY}`, 'g');
+
+/**
+ * Rewrites equipment and film-stock names into plain description: a film stock becomes
+ * "35mm motion-picture film stock", a lens/light/camera maker becomes "cinema lenses" / "studio strobes" /
+ * "a cinema camera", and any other maker name is dropped (the caller tidies the sentence).
+ */
+function scrubEquipmentBrands(text: string): string {
+  return text
+    .replace(FILM_STOCK_REGEX, FILM_STOCK_PHRASE_EN)
+    .replace(LENS_BRAND_REGEX, (_m, _brand: string, lensWord: string) => `cinema ${lensWord.toLowerCase()}`)
+    .replace(LIGHT_BRAND_REGEX, (_m, _brand: string, lightWord: string) => `studio ${lightWord.toLowerCase()}`)
+    .replace(CAMERA_CONTEXT_BRAND_REGEX, (_m, verb: string, prep: string, brand: string) =>
+      /^kodak$/i.test(brand) ? `${verb} ${prep} ${FILM_STOCK_PHRASE_EN}` : `${verb} ${prep} a cinema camera`
+    )
+    .replace(CAMERA_BRAND_REGEX, (_m, _brand: string, cameraWord: string) => `cinema ${cameraWord.toLowerCase()}`)
+    .replace(BARE_BRAND_REGEX, '');
+}
+
+/**
+ * Maker names still present in a personal prompt (empty after `sanitizeRewrittenPrompt`). Film-stock names report
+ * as "film stock: <name>". Film, character and other IP names are out of scope here.
+ */
+export function auditPersonalPrompt(text: string): string[] {
+  const hits = new Set<string>();
+  for (const brand of PERSONAL_BANNED_EQUIPMENT_BRANDS) {
+    if (new RegExp(`\\b(?:${equipmentBrandSource(brand)})\\b`).test(text)) hits.add(brand);
+  }
+  for (const match of text.matchAll(new RegExp(`\\b(?:${FILM_STOCK_NAME_SOURCE})(?![\\w-])`, 'g'))) {
+    hits.add(`film stock: ${match[0].toLowerCase().replace(/\s+/g, ' ')}`);
+  }
+  return [...hits];
+}
+
+/**
+ * docs/PERSONAL-STUDIO.md §4 #5 — a banned word goes together with one hyphen joining it to its neighbour
+ * ("Hollywood-CGI appearance" → "Hollywood appearance", "porcelain-ivory skin" → "ivory skin").
+ */
+function stripBannedBuzzwords(text: string): string {
+  let out = text;
+  for (const buzz of BANNED_AI_BUZZWORDS) {
+    const word = flexibleWhitespaceSource(buzz);
+    out = out.replace(new RegExp(`-\\b${word}\\b|\\b${word}\\b-?`, 'gi'), '');
+  }
+  return out;
+}
+
+/** Cleans up after removals: no dangling hyphen, doubled space, space before punctuation or empty brackets. */
+function tidyPromptText(text: string): string {
+  let out = text;
+  for (let pass = 0; pass < 2; pass += 1) {
+    out = out
+      .replace(/\([ \t]*[,;:]?[ \t]*\)/g, '')
+      .replace(/\([ \t]+/g, '(')
+      .replace(/(\w)-(?=[ \t]*(?:[,.;:!?)\n]|$))/g, '$1')
+      .replace(/(\w)-[ \t]+(?=[a-z])/g, '$1 ')
+      .replace(/[ \t]+([,.;:!?)])(?!\d)/g, '$1')
+      .replace(/,(?:[ \t]*,)+/g, ',')
+      .replace(/[ \t]{2,}/g, ' ')
+      .replace(/[ \t]+\n/g, '\n')
+      .replace(/\n{3,}/g, '\n\n');
+  }
+  return out.trim();
+}
+
 export function sanitizeRewrittenPrompt(
   rawPrompt: string,
   hasPersonSlot: boolean,
@@ -292,16 +516,15 @@ export function sanitizeRewrittenPrompt(
 ): string {
   const opts = typeof castOrOptions === 'string' ? { cast: castOrOptions } : castOrOptions;
   const cast = opts.cast ?? 'solo';
-  let cleaned = rawPrompt.trim();
-  for (const buzz of BANNED_AI_BUZZWORDS) {
-    cleaned = cleaned.replace(new RegExp(`\\b${escapeRegExp(buzz)}\\b`, 'gi'), '');
-  }
+  let cleaned = stripLegacySkinContract(rawPrompt.trim());
+  cleaned = scrubEquipmentBrands(cleaned);
+  cleaned = stripBannedBuzzwords(cleaned);
   for (const pink of BANNED_PINK_MAKEUP_TERMS) {
     cleaned = cleaned.replace(new RegExp(escapeRegExp(pink), 'gi'), 'natural lip colour');
   }
-  cleaned = cleaned.replace(/[ \t]{2,}/g, ' ');
-  if (hasPersonSlot && !cleaned.includes('Natural matte skin texture with visible pores')) {
-    cleaned = `${cleaned}\n\n${SKIN_MATTE_CONTRACT_A10}`;
+  cleaned = tidyPromptText(cleaned);
+  if (hasPersonSlot) {
+    cleaned = appendPersonalSkinContract(cleaned, cast);
   }
   return enforcePersonalMorphicGuardrails(cleaned, {
     hasPersonSlot,
@@ -337,15 +560,16 @@ export function verifyRewrittenPrompt(
  */
 const STAGE2_VIDEO_CREATOR_DOCTRINE = [
   'You are the internal Stage 2 Seedance 2.5 Film Director Rewriter.',
-  'Apply the structuredIntent edits (outfitOverrideEn, makeupOverrideEn, hairOverrideEn, propOverrideEn, shotEdits, strictExclusionsEn) onto the basePrompt while strictly preserving:',
+  'Apply the structuredIntent edits (outfitOverrideEn, makeupOverrideEn, hairOverrideEn, propOverrideEn, shotEdits, strictExclusionsEn) and the customer note (userNoteRaw) onto the basePrompt while strictly preserving:',
   '1. Reference Authority & Strict Lock: @Image 1 supplies ONLY facial identity and the target hairstyle. Ignore original background, casual top, wide blouse/puff sleeves, handheld objects, cups, bottles, angel wings, eyeglasses/sunglasses on head, or props from @Image 1. Keep naturally slender shoulders, collarbones, and slim upper arms.',
   '2. Additional Reference Binding (Neck-Down Isolation): When @Image 2 (outfit/look) or @Image 3 (prop/product) is present in referenceSlots, bind it explicitly in Reference authority and across every Timeline shot. @Image 2 supplies ONLY the neck-down garment, silhouette, and footwear (NEVER copy face, hairstyle, skin tone, or background from @Image 2; forbid floating clothing cutouts or white studio backdrops).',
   '3. Makeup & Complexion Override: When makeupOverrideEn is present (e.g. keeping the user photo natural daily makeup instead of heavy 1990s retro smoky/plum makeup), replace the basePrompt makeup instructions accordingly while keeping skin warm and natural (zero pink blush/pink eyeshadow, zero random moles, beauty marks, or blemishes on face/neck per TWINGS IDENTITY.md).',
   '4. Dynamic Multi-Shot Hairstyle Synchronization: Synchronize the target hairstyle (whether sleek tied low-bun, chin-length bob, or long straight hair with bangs) across ALL timeline shots so tied hair never unties mid-video.',
-  '5. Candid Micro-Acting & Lower-Face Lock: Keep lip motion calm and understated; forbid wide toothy grins, shouting, or stiff passport-photo staring straight into the camera lens. Every shot transition must remain an instantaneous editorial hard cut.',
-  `6. SKIN_MATTE_CONTRACT: Preserve "${SKIN_MATTE_CONTRACT_A10}".`,
+  '5. Candid Micro-Acting & Lower-Face Lock: Keep lip motion calm and understated; forbid wide toothy grins, shouting, or stiff passport-photo staring straight into the camera lens. Preserve every shot boundary\'s edit exactly as written in basePrompt (hard cut, match cut, continuous take, camera move); never turn a continuous take into cuts and never add cuts.',
+  `6. PERSONAL SKIN CONTRACT: Preserve "${PERSONAL_SKIN_CONTRACT_EN}" (for two people: "${PERSONAL_SKIN_CONTRACT_COUPLE_EN}"); never add pores, freckles, moles, blemishes or aging texture that are not in the photo.`,
   '7. AUDIO CONTRACT: Check `audioMode` in the input JSON. When `audioMode === "ambient"` (default), enforce the Strict No-BGM Personal Audio Rule (ambient sound & natural speech/foley only, zero BGM). When `audioMode === "bgm"`, honor `audioDirective` for cohesive scene-matched background music balanced beneath dialogue and foley.',
-  '8. Preserve the original camera focal length, chiaroscuro shadow floor, and unbroken single-bed audio rules.'
+  '8. Preserve the original camera focal length, chiaroscuro shadow floor, and unbroken single-bed audio rules.',
+  '9. CUSTOMER NOTE & LANGUAGE: userNoteRaw and the structuredIntent override fields may be in Korean or another language. Translate them into precise English visual direction and apply them to every shot they concern: replace the conflicting wardrobe, prop, makeup or hair wording in each of those shots and add every replaced item to [Exclusions]. Never copy their non-English text into the prompt (dialogue already written in basePrompt stays exactly as written).'
 ].join('\n');
 
 interface GeminiCandidateResponse {
@@ -422,7 +646,8 @@ export function createFlashTemplateDirector(
         'Ideal Bust-Up framing has faceWidthRatio between 0.30 and 0.42 with visible neck and symmetrical shoulders.',
         'Check for hand_occlusion, prop_occlusion (cups, bottles, phones, wings), hair_occlusion, tight_crop, wide_sleeve_silhouette_risk (wide puff/blouse sleeves that could make upper arms look thick in sleeveless dresses), wide_angle_distortion (<30cm 24mm barrel distortion), over_retouched_contour (2D liquify pinched V-line jaw, artificially inflated lips, plastic poreless beauty-app blur), heavy_filter, low_resolution, or motion_blur.',
         'When over_retouched_contour or heavy_filter is present, set status to needs_cleanup and gently explain that 2D beauty-app contour/lip retouching can look unnatural in 3D motion, offering natural optical camera proportion & skin texture normalization.',
-        'Extract an accurate English hairstyle and facial structure description (extractedHairDescription) and provide polite Korean/English guidance.'
+        'Extract an accurate English hairstyle and facial structure description (extractedHairDescription) and provide polite Korean/English guidance.',
+        `Return subjectDescriptorEn: a neutral 2–6 word description of the person as visible, e.g. "a man in his thirties"; use "${DEFAULT_SUBJECT_DESCRIPTOR_EN}" if unsure; never guess ethnicity or nationality.`
       ].join('\n');
 
       const parts: Array<Record<string, unknown>> = [
@@ -459,7 +684,8 @@ export function createFlashTemplateDirector(
         recommendedCleanup: routePhotoCleanup(
           raw.issues,
           raw.cleanupPromptEn,
-          raw.extractedHairDescription
+          raw.extractedHairDescription,
+          raw.subjectDescriptorEn
         )
       };
     },
@@ -547,6 +773,7 @@ export function createFlashTemplateDirector(
             audioMode: input.audioMode ?? 'ambient',
             bgmMood: input.bgmMood ?? null,
             audioDirective: audioRule,
+            userNoteRaw: input.userNoteRaw?.trim() ? input.userNoteRaw.trim().slice(0, 1000) : null,
           })
         }
       ];
@@ -595,7 +822,8 @@ export function createFlashTemplateDirector(
         '3. structureAnchorIndex: 0-based index of the photo with the most accurate natural facial proportions. NEVER select a 24mm ultra-close wide-angle unretouched selfie (<30cm from lens where barrel distortion enlarges the nose) as structureAnchorIndex.',
         '4. styleAnchorRotationClockwiseDegrees: 0 | 90 | 180 | 270 clockwise rotation needed if the selected styleAnchor photo is lying sideways.',
         '5. bustupCropBoxNormalized: [ymin, xmin, ymax, xmax] (0..1000) framing a clean 3:4 bust-up portrait on the upright styleAnchor photo.',
-        '6. Compose opticalMasterPromptEn for in-place surgical editing (when needed), preserving 98% of the original facial identity, eye shape, nose width, philtrum, and bright youthful Korean skin luminance without aging pores.'
+        '6. Compose opticalMasterPromptEn for in-place surgical editing (when needed), preserving 98% of the original facial identity, eye shape, nose width, philtrum, and the person\'s own skin tone and luminance without aging pores.',
+        `7. subjectDescriptorEn: a neutral 2–6 word description of the person as visible, e.g. "a man in his thirties"; use "${DEFAULT_SUBJECT_DESCRIPTOR_EN}" if unsure; never guess ethnicity or nationality.`
       ].join('\n');
 
       const cappedPhotos = input.photos.slice(0, 8);
@@ -637,32 +865,22 @@ export function createFlashTemplateDirector(
       const fallbackEngine: ModelSpecificImageEngine =
         primaryEngine === 'seedream-5.5' ? 'nano-banana-2.1' : 'seedream-5.5';
 
-      const compiledPrimaryPrompt = compileModelSpecificIdentityPrompt(primaryEngine, {
+      const identitySpec = {
         extractedIdentityLockEn: raw.extractedIdentityLockEn,
         extractedHairLockEn: raw.extractedHairLockEn,
-        rawSurgicalPromptEn: raw.opticalMasterPromptEn
-      });
-      const compiledFallbackPrompt = compileModelSpecificIdentityPrompt(fallbackEngine, {
-        extractedIdentityLockEn: raw.extractedIdentityLockEn,
-        extractedHairLockEn: raw.extractedHairLockEn,
-        rawSurgicalPromptEn: raw.opticalMasterPromptEn
-      });
+        rawSurgicalPromptEn: raw.opticalMasterPromptEn,
+        subjectDescriptorEn: sanitizeSubjectDescriptorEn(raw.subjectDescriptorEn)
+      };
+      const compiledPrimaryPrompt = compileModelSpecificIdentityPrompt(primaryEngine, identitySpec);
+      const compiledFallbackPrompt = compileModelSpecificIdentityPrompt(fallbackEngine, identitySpec);
       const compiledSeedreamPrompt =
         primaryEngine === 'seedream-5.5'
           ? compiledPrimaryPrompt
-          : compileModelSpecificIdentityPrompt('seedream-5.5', {
-              extractedIdentityLockEn: raw.extractedIdentityLockEn,
-              extractedHairLockEn: raw.extractedHairLockEn,
-              rawSurgicalPromptEn: raw.opticalMasterPromptEn
-            });
+          : compileModelSpecificIdentityPrompt('seedream-5.5', identitySpec);
       const compiledNanoBananaPrompt =
         primaryEngine === 'nano-banana-2.1'
           ? compiledPrimaryPrompt
-          : compileModelSpecificIdentityPrompt('nano-banana-2.1', {
-              extractedIdentityLockEn: raw.extractedIdentityLockEn,
-              extractedHairLockEn: raw.extractedHairLockEn,
-              rawSurgicalPromptEn: raw.opticalMasterPromptEn
-            });
+          : compileModelSpecificIdentityPrompt('nano-banana-2.1', identitySpec);
 
       return {
         strategy,
@@ -818,12 +1036,14 @@ export function runHeuristicDirectorTurn(
     }
   }
 
+  // docs/PERSONAL-STUDIO.md §4 #4: no shot index is invented here. The raw note travels as the spec's
+  // `userMessage` and Stage 2 decides which shots it concerns.
   const intent: DirectorEditIntent = {
     hairOverrideEn: chips.find((c) => c.slot === 'hair')?.summaryKo ?? null,
     makeupOverrideEn: chips.find((c) => c.slot === 'makeup')?.summaryKo ?? null,
     outfitOverrideEn: chips.find((c) => c.slot === 'outfit')?.summaryKo ?? null,
     propOverrideEn: chips.find((c) => c.slot === 'prop')?.summaryKo ?? null,
-    shotEdits: normalized ? [{ shotIndex: 1, actionEn: `Apply user styling note calmly: ${normalized.slice(0, 240)}` }] : [],
+    shotEdits: [],
     strictExclusionsEn: [],
   };
 
@@ -842,6 +1062,10 @@ export function runHeuristicDirectorTurn(
     structuredIntent: intent,
   };
 }
+
+/** Heads the deterministic compiler's customization block and states that it wins over the template wording. */
+export const USER_CUSTOMIZATION_HEADER_EN =
+  'User customization (applies to every shot it concerns; where it conflicts with the wardrobe, prop, makeup or hair wording above, this customization wins):' as const;
 
 /**
  * Deterministic prompt compiler used offline or as resilient fallback for Stage 2 Director rewrites.
@@ -875,20 +1099,22 @@ export function applyDeterministicDirectorSpec(input: {
     );
   }
 
+  // docs/PERSONAL-STUDIO.md §4 #4: one block, after the template, that says it wins over the template's
+  // wardrobe/prop/makeup/hair wording in every shot it concerns. "Shot N:" only for an index the Stage 1 model gave.
   const intent = spec?.structuredIntent ?? null;
-  if (intent?.outfitOverrideEn) parts.push(`Wardrobe preference: ${intent.outfitOverrideEn}`);
-  if (intent?.makeupOverrideEn) parts.push(`Makeup preference: ${intent.makeupOverrideEn}`);
-  if (intent?.hairOverrideEn) parts.push(`Hairstyle preference: ${intent.hairOverrideEn}`);
-  if (intent?.propOverrideEn) parts.push(`Prop preference: ${intent.propOverrideEn}`);
+  const items: string[] = [];
+  if (intent?.outfitOverrideEn) items.push(`- Wardrobe: ${intent.outfitOverrideEn}`);
+  if (intent?.makeupOverrideEn) items.push(`- Makeup: ${intent.makeupOverrideEn}`);
+  if (intent?.hairOverrideEn) items.push(`- Hair: ${intent.hairOverrideEn}`);
+  if (intent?.propOverrideEn) items.push(`- Prop: ${intent.propOverrideEn}`);
   if (intent?.shotEdits?.length) {
-    parts.push(intent.shotEdits.map((e) => `Shot ${e.shotIndex}: ${e.actionEn}`).join(' '));
+    for (const edit of intent.shotEdits) items.push(`- Shot ${edit.shotIndex}: ${edit.actionEn}`);
   } else if (spec?.userMessage?.trim()) {
-    parts.push(`User customization note (keep camera choreography & facial identity locked): ${spec.userMessage.trim()}`);
+    items.push(`- Note (keep camera choreography and facial identity locked): ${spec.userMessage.trim()}`);
   } else if (spec?.summaryChips?.length) {
-    parts.push(
-      `User selected slot adjustments: ${spec.summaryChips.map((c) => `${c.slot}=${c.summaryKo}`).join('; ')}`
-    );
+    items.push(`- Selected adjustments: ${spec.summaryChips.map((c) => `${c.slot}=${c.summaryKo}`).join('; ')}`);
   }
+  if (items.length > 0) parts.push([USER_CUSTOMIZATION_HEADER_EN, ...items].join('\n'));
 
   const combined = parts.join('\n\n');
   const hasPerson = input.hasPersonSlot ?? input.cast !== 'pet';
@@ -901,16 +1127,44 @@ export function applyDeterministicDirectorSpec(input: {
     });
   }
 
-  return hasPerson && !combined.includes('Natural matte skin texture with visible pores')
-    ? `${combined}\n\n${SKIN_MATTE_CONTRACT_A10}`
-    : combined;
+  return hasPerson ? appendPersonalSkinContract(combined, input.cast ?? 'solo') : combined;
+}
+
+export type DirectorCompilePath = 'unchanged' | 'rewrite' | 'deterministic' | 'deterministic_fallback';
+
+export interface DirectorCompileResult {
+  prompt: string;
+  /** Which way the prompt was built; `deterministic_fallback` = the Gemini rewrite failed twice. */
+  path: DirectorCompilePath;
+}
+
+export const DIRECTOR_REWRITE_MAX_ATTEMPTS = 2 as const;
+export const DIRECTOR_REWRITE_FALLBACK_LOG_TAG = '[template-director] stage2_rewrite_fallback' as const;
+
+/**
+ * A log-safe code for a rewrite error: our own `snake_case:codes` as is, otherwise the error's name and its
+ * `code` (e.g. ECONNRESET). Never the message of a parse error, which can quote model output or the prompt.
+ */
+function rewriteErrorCode(error: unknown): string {
+  if (!(error instanceof Error)) return 'unknown_error';
+  const message = error.message.trim();
+  if (/^[a-z0-9_:.-]{1,120}$/i.test(message)) return message;
+  const parts = [error.name || 'Error'];
+  const codeOf = (value: unknown): string | null => {
+    const code = (value as { code?: unknown } | null | undefined)?.code;
+    return typeof code === 'string' && /^[A-Z0-9_]{1,40}$/.test(code) ? code : null;
+  };
+  const code = codeOf(error) ?? codeOf((error as { cause?: unknown }).cause);
+  if (code) parts.push(code);
+  return parts.join(':');
 }
 
 /**
- * Compiles a customer's template customization using `gemini-4-hydrogen` when configured,
- * falling back cleanly to `applyDeterministicDirectorSpec` in local/offline environments or on transient API error.
+ * Compiles a customer's template customization using `gemini-4-hydrogen` when configured, and reports the path.
+ * The rewrite is tried twice; after that the deterministic compiler builds the prompt and the path says
+ * `deterministic_fallback` so the caller can record it (docs/PERSONAL-STUDIO.md §4 #4).
  */
-export async function compileDirectorPrompt(
+export async function compileDirectorPromptDetailed(
   input: {
     basePrompt: string;
     medium: 'image' | 'video';
@@ -923,7 +1177,7 @@ export async function compileDirectorPrompt(
     referenceSlots?: readonly DirectorRewriteInput['referenceSlots'][number][];
   },
   deps: { env?: Record<string, string | undefined>; fetch?: typeof fetch } = {}
-): Promise<string> {
+): Promise<DirectorCompileResult> {
   const spec = input.directorSpec ?? null;
   const hasCustomization = Boolean(
     spec?.userMessage?.trim() ||
@@ -934,51 +1188,70 @@ export async function compileDirectorPrompt(
       input.hasPropRef ||
       input.hasSceneRef
   );
-  if (!hasCustomization) return input.basePrompt;
+  if (!hasCustomization) return { prompt: input.basePrompt, path: 'unchanged' };
 
   const config = directorConfigFromEnv(deps.env ?? process.env);
-  if (config && input.medium === 'video') {
-    try {
-      const director = createFlashTemplateDirector(config, { fetch: deps.fetch });
-      const intent: DirectorEditIntent = spec?.structuredIntent ?? {
-        hairOverrideEn: spec?.summaryChips?.find((c) => c.slot === 'hair')?.summaryKo ?? null,
-        makeupOverrideEn: spec?.summaryChips?.find((c) => c.slot === 'makeup')?.summaryKo ?? null,
-        outfitOverrideEn: spec?.summaryChips?.find((c) => c.slot === 'outfit')?.summaryKo ?? null,
-        propOverrideEn: spec?.summaryChips?.find((c) => c.slot === 'prop')?.summaryKo ?? null,
-        shotEdits: spec?.userMessage?.trim()
-          ? [{ shotIndex: 1, actionEn: spec.userMessage.trim().slice(0, 480) }]
-          : [],
-        strictExclusionsEn: [],
-      };
-      type RewriteSlot = {
-        index: number;
-        slotName: string;
-        role: 'person' | 'pet' | 'partner' | 'look' | 'product' | 'scene';
-      };
-      const slots: RewriteSlot[] = input.referenceSlots
-        ? input.referenceSlots.filter((s): s is RewriteSlot => s.role !== 'mask')
-        : [{ index: 1, slotName: 'selfie', role: 'person' }];
-      if (input.hasOutfitRef && !slots.some((s) => s.slotName === 'look_ref')) {
-        slots.push({ index: slots.length + 1, slotName: 'look_ref', role: 'look' });
-      }
-      if (input.hasPropRef && !slots.some((s) => s.slotName === 'prop_ref')) {
-        slots.push({ index: slots.length + 1, slotName: 'prop_ref', role: 'product' });
-      }
-      if (input.hasSceneRef && !slots.some((s) => s.slotName === 'scene_ref')) {
-        slots.push({ index: slots.length + 1, slotName: 'scene_ref', role: 'scene' });
-      }
-      const rewritten = await director.rewritePrompt({
-        basePrompt: input.basePrompt,
-        structuredIntent: intent,
-        referenceSlots: slots,
-        audioMode: spec?.audioMode ?? 'ambient',
-        bgmMood: spec?.bgmMood ?? null,
-      });
-      return unwrapServerOnlyPrompt(rewritten.compiledPrompt);
-    } catch {
-      // Resilient fallback keeps paid render generation moving even if optional LLM refinement errors transiently.
-    }
+  if (!config || input.medium !== 'video') {
+    return { prompt: applyDeterministicDirectorSpec(input), path: 'deterministic' };
   }
 
-  return applyDeterministicDirectorSpec(input);
+  const director = createFlashTemplateDirector(config, { fetch: deps.fetch });
+  const intent: DirectorEditIntent = spec?.structuredIntent ?? {
+    hairOverrideEn: spec?.summaryChips?.find((c) => c.slot === 'hair')?.summaryKo ?? null,
+    makeupOverrideEn: spec?.summaryChips?.find((c) => c.slot === 'makeup')?.summaryKo ?? null,
+    outfitOverrideEn: spec?.summaryChips?.find((c) => c.slot === 'outfit')?.summaryKo ?? null,
+    propOverrideEn: spec?.summaryChips?.find((c) => c.slot === 'prop')?.summaryKo ?? null,
+    shotEdits: [],
+    strictExclusionsEn: [],
+  };
+  type RewriteSlot = {
+    index: number;
+    slotName: string;
+    role: 'person' | 'pet' | 'partner' | 'look' | 'product' | 'scene';
+  };
+  const slots: RewriteSlot[] = input.referenceSlots
+    ? input.referenceSlots.filter((s): s is RewriteSlot => s.role !== 'mask')
+    : [{ index: 1, slotName: 'selfie', role: 'person' }];
+  if (input.hasOutfitRef && !slots.some((s) => s.slotName === 'look_ref')) {
+    slots.push({ index: slots.length + 1, slotName: 'look_ref', role: 'look' });
+  }
+  if (input.hasPropRef && !slots.some((s) => s.slotName === 'prop_ref')) {
+    slots.push({ index: slots.length + 1, slotName: 'prop_ref', role: 'product' });
+  }
+  if (input.hasSceneRef && !slots.some((s) => s.slotName === 'scene_ref')) {
+    slots.push({ index: slots.length + 1, slotName: 'scene_ref', role: 'scene' });
+  }
+  const rewriteInput: DirectorRewriteInput = {
+    basePrompt: input.basePrompt,
+    structuredIntent: intent,
+    referenceSlots: slots,
+    audioMode: spec?.audioMode ?? 'ambient',
+    bgmMood: spec?.bgmMood ?? null,
+    userNoteRaw: spec?.userMessage?.trim() || null,
+  };
+
+  let lastError: unknown = null;
+  for (let attempt = 1; attempt <= DIRECTOR_REWRITE_MAX_ATTEMPTS; attempt += 1) {
+    try {
+      const rewritten = await director.rewritePrompt(rewriteInput);
+      return { prompt: unwrapServerOnlyPrompt(rewritten.compiledPrompt), path: 'rewrite' };
+    } catch (error) {
+      lastError = error;
+    }
+  }
+  console.warn(
+    `${DIRECTOR_REWRITE_FALLBACK_LOG_TAG} attempts=${DIRECTOR_REWRITE_MAX_ATTEMPTS} error=${rewriteErrorCode(lastError)}`
+  );
+  return { prompt: applyDeterministicDirectorSpec(input), path: 'deterministic_fallback' };
+}
+
+/**
+ * Compiles a customer's template customization and returns only the prompt (same signature as before; the render
+ * service calls this). `compileDirectorPromptDetailed` also reports which path built it.
+ */
+export async function compileDirectorPrompt(
+  input: Parameters<typeof compileDirectorPromptDetailed>[0],
+  deps: Parameters<typeof compileDirectorPromptDetailed>[1] = {}
+): Promise<string> {
+  return (await compileDirectorPromptDetailed(input, deps)).prompt;
 }

@@ -226,39 +226,38 @@ describe('carryTrialGrants', () => {
     expect(await checkedAt(carried.id)).toBeNull(); // the carried grant is never a candidate
   });
 
-  it('plan credits are consumed first: what is left of the cap is what is left of the trial, at most the trial', async () => {
+  it('base credits are consumed first on the calendar month (env default); plan organizations are not carried (B1c fix round)', async () => {
+    // B1c fix round: this test used plan organizations (B1b: carry = what is left of the cap). A plan organization's grant now
+    // belongs to one billing cycle and is never carried; the "base credits first" rule is kept for calendar-month
+    // organizations, here on an env default of 270,000.
+    await approve('2026-11-10T01:00:00Z');
+    await used(f.orgId, 271_000, '2026-11-20T01:00:00Z');
+    const light = await newOrg('Light user');
+    await approve('2026-11-10T01:00:00Z', light);
+    await used(light, 100_000, '2026-11-20T01:00:00Z');
+    const planned = await newOrg('Plan user');
     await f.sql.query("insert into brand_plan_allowance_defaults (plan_id, monthly_cap_krw) values ('b2b_29', 270000)");
     await f.sql.query(
       "insert into brand_plan_assignments (organization_id, plan_id, billing_mode, started_on, ends_on, revision) values ($1, 'b2b_29', 'invoice', '2026-11-01', null, 1)",
-      [f.orgId],
+      [planned],
     );
-    await approve('2026-11-10T01:00:00Z');
-    await used(f.orgId, 271_000, '2026-11-20T01:00:00Z');
-    expect(await carry('2026-12-01T00:00:00Z')).toMatchObject({ carried: 1, carriedKrw: 3_000 });
-
-    const light = await newOrg('Light user');
-    await f.sql.query(
-      "insert into brand_plan_assignments (organization_id, plan_id, billing_mode, started_on, ends_on, revision) values ($1, 'b2b_29', 'invoice', '2026-11-01', null, 1)",
-      [light],
-    );
-    await approve('2026-11-10T01:00:00Z', light);
-    await used(light, 100_000, '2026-11-20T01:00:00Z');
-    expect(await carry('2026-12-01T00:30:00Z')).toMatchObject({ carried: 1, carriedKrw: TRIAL_KRW });
+    await approve('2026-11-10T01:00:00Z', planned);
+    const res = await carryTrialGrants({ sql: f.sql, now: at('2026-12-01T00:00:00Z'), studio: { defaultMonthlyKrw: 270_000, planGraceDays: 14 } });
+    expect(res).toMatchObject({ checked: 3, carried: 2, carriedKrw: 3_000 + TRIAL_KRW, planOrganization: 1 });
   });
 
-  it('B1c: a plan organization whose cycle straddles the month end carries what is left of the trial, not of the cycle', async () => {
+  it('B1c fix round: a plan organization never has its trial carried (its grants belong to one cycle); the original is marked checked', async () => {
     await f.sql.query("insert into brand_plan_allowance_defaults (plan_id, monthly_cap_krw) values ('b2b_29', 270000)");
     await f.sql.query(
       "insert into brand_plan_assignments (organization_id, plan_id, billing_mode, started_on, ends_on, revision) values ($1, 'b2b_29', 'invoice', '2026-10-17', null, 1)",
       [f.orgId],
     );
-    await approve('2026-11-05T01:00:00Z');
-    await used(f.orgId, 270_000, '2026-10-20T01:00:00Z'); // the Oct 17 cycle's plan credits, in October
-    await used(f.orgId, 2_000, '2026-11-06T01:00:00Z'); // same cycle, plan spent: 2,000 of the November trial
-    await used(f.orgId, 100_000, '2026-11-20T01:00:00Z'); // the Nov 17 cycle: plan credits again
-    // At the end of November the Nov 17 cycle still has 170,000 plan credits, which do not expire with the month;
-    // the trial has 2,000 left.
-    expect(await carry('2026-12-01T00:00:00Z')).toMatchObject({ carried: 1, carriedKrw: 2_000 });
+    const approved = await approve('2026-11-05T01:00:00Z');
+    if (!approved.ok) throw new Error(approved.code);
+    expect(await carry('2026-12-01T00:00:00Z')).toMatchObject({ checked: 1, carried: 0, planOrganization: 1 });
+    expect(await checkedAt(approved.trialGrant!.id)).toBe('2026-12-01T00:00:00.000Z');
+    expect(await trialRows(f.orgId)).toHaveLength(1);
+    expect(await carry('2026-12-01T01:00:00Z')).toMatchObject({ checked: 0 });
   });
 
   it('two overlapping runs carry once; later runs carry nothing; a carried grant is never carried again; older originals have expired', async () => {
@@ -575,6 +574,7 @@ describe('hourly route /api/brand-billing/tick with the approval flag', () => {
         nothingLeft: 0,
         revoked: 0,
         expired: 0,
+        planOrganization: 0,
         skipped: 0,
         errors: 0,
       },

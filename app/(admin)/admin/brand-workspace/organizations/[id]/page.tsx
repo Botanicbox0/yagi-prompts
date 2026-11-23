@@ -182,6 +182,22 @@ export default async function StudioOrganization({
   );
   const allowanceCycle = detailOps?.allowance?.cycle ?? null;
   const cycleText = (start: string, end: string) => cycleLabels(start, end, locale, todayKst);
+  // B1c: on a paid plan an extra grant belongs to the cycle that contains its effective start day (the later of its
+  // KST creation day and the 1st of its month) and lasts until that cycle's last day; before the plan start, no cycle.
+  const paidPlan = plan && (PAID_BRAND_PLAN_IDS as readonly string[]).includes(plan.planId) ? plan : null;
+  const grantCycleLabel = (effectiveStart: string, beforePlan: string): string => {
+    const c = paidPlan ? cycleContaining(paidPlan.startedOn, effectiveStart) : null;
+    if (!c) return beforePlan;
+    const days = cycleText(c.start, c.end);
+    return planCycleStarted && c.start === planCycleStarted.start
+      ? interpolate(od.billing.grantUntilThisCycleEnd, { last: days.last })
+      : interpolate(od.billing.grantUntilCycle, days);
+  };
+  const grantEffectiveStart = (validMonth: string, createdAt: string): string => {
+    const created = kstDayOf(new Date(createdAt));
+    const monthStart = `${validMonth}-01`;
+    return created > monthStart ? created : monthStart;
+  };
 
   const rawOk = one(queryParams, 'ok');
   const rawDetail = one(queryParams, 'detail');
@@ -203,6 +219,11 @@ export default async function StudioOrganization({
   const reissueShortWindow = Boolean(isReissuePreview && rawDetail?.includes('short_window=1'));
 
   const formattedDetail = formatBillingOutcomeDetail(rawDetail, locale === 'en' ? 'en' : 'ko');
+  // B1c: moving the start day under an invoiced cycle is refused with `cycle_already_invoiced`; the shared formatter
+  // would show its generic "conflict" line, so this page names the reason and the way out.
+  const outcomeDetail = rawDetail?.includes('cycle_already_invoiced')
+    ? `${od.billing.cycleAlreadyInvoiced} (${rawDetail})`
+    : formattedDetail;
   const defaultAllowanceMode = detailOps?.allowanceRow
     ? detailOps.allowanceRow.isOverride === false
       ? 'plan_default'
@@ -253,7 +274,7 @@ export default async function StudioOrganization({
         }}
         ok={rawOk}
         err={one(queryParams, 'err')}
-        detail={formattedDetail}
+        detail={outcomeDetail}
         showDetailForOk
       />
 
@@ -612,6 +633,7 @@ export default async function StudioOrganization({
                   />
                   <span className="admin-field-hint mt-1 block" data-started-on-cycle-hint>
                     {od.billing.startedOnCycleHint}
+                    {plan && <span className="block">{od.billing.startedOnLockedHint}</span>}
                     {planCycleNow && (
                       <span className="block" data-started-on-cycle={planCycleNow.start}>
                         {interpolate(
@@ -800,9 +822,28 @@ export default async function StudioOrganization({
                 <label className="text-xs">
                   <span className="font-semibold block mb-1">{od.billing.extraMonth}</span>
                   <select name="validMonth" defaultValue={currentMonth} className={INPUT}>
-                    <option value={currentMonth}>{currentMonth}</option>
-                    <option value={nextMonth}>{nextMonth}</option>
+                    {paidPlan ? (
+                      <>
+                        {/* B1c: this month starts today; next month starts on its 1st. */}
+                        <option value={currentMonth} data-grant-option-cycle>
+                          {`${currentMonth} · ${grantCycleLabel(todayKst, od.billing.grantFormBeforePlan)}`}
+                        </option>
+                        <option value={nextMonth} data-grant-option-cycle>
+                          {`${nextMonth} · ${grantCycleLabel(`${nextMonth}-01`, od.billing.grantFormBeforePlan)}`}
+                        </option>
+                      </>
+                    ) : (
+                      <>
+                        <option value={currentMonth}>{currentMonth}</option>
+                        <option value={nextMonth}>{nextMonth}</option>
+                      </>
+                    )}
                   </select>
+                  {paidPlan && (
+                    <span className="admin-field-hint mt-1 block" data-grant-cycle-hint>
+                      {od.billing.grantFormCycleHint}
+                    </span>
+                  )}
                 </label>
               </div>
               <label className="text-xs">
@@ -821,6 +862,7 @@ export default async function StudioOrganization({
                 caption={od.billing.extraCreditsHeading}
                 columns={[
                   { key: 'month', label: od.billing.extraMonth },
+                  ...(paidPlan ? [{ key: 'cycle', label: od.billing.grantCycleCol }] : []),
                   { key: 'amount', label: od.billing.extraAmount, numeric: true },
                   { key: 'state', label: od.billing.invoiceCols.status },
                   { key: 'reason', label: od.billing.extraReason },
@@ -831,6 +873,14 @@ export default async function StudioOrganization({
                   data: { 'data-grant-row': g.id },
                   cells: {
                     month: g.validMonth,
+                    // B1c: revoked grants never count, so they show no cycle.
+                    cycle: paidPlan ? (
+                      <span className="admin-nowrap" data-grant-cycle>
+                        {g.revokedAt
+                          ? '—'
+                          : grantCycleLabel(grantEffectiveStart(g.validMonth, g.createdAt), od.billing.grantBeforePlan)}
+                      </span>
+                    ) : null,
                     amount: formatKrw(g.amountKrw, locale),
                     state: (
                       <StatusPill tone={g.revokedAt ? 'hold' : g.activeNow ? 'done' : 'progress'}>

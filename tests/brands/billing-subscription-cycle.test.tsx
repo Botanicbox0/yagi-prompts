@@ -417,3 +417,65 @@ describe('B1c-2 — billing cycles from the plan start day (real service)', () =
     expect((await cycleInvoices(orgId)).filter((i) => i.cycle_start === '2027-02-17' && i.status !== 'void')).toHaveLength(1);
   });
 });
+
+/** Insert a non-void subscription invoice straight into the ledger (cycle row, or calendar-month row when `cycle` is null). */
+async function insertSubscriptionRow(orgId: string, period: string, status: 'issued' | 'paid', cycle: [string, string] | null, epoch: number | null = null) {
+  return (
+    await sql.query<{ id: string }>(
+      `insert into brand_invoices (id, organization_id, period, plan_id, base_list_krw, list_krw, discount_percent, discount_krw, supply_krw, vat_krw, total_krw,
+                                   status, issued_at, paid_at, created_at, updated_at, kind, subscription_epoch, cycle_start, cycle_end)
+       values (gen_random_uuid(), $1, $2, 'b2b_69', 690000, 690000, 0, 0, 690000, 69000, 759000, $3, '2026-10-01T01:00:00Z',
+               case when $3 = 'paid' then '2026-10-01T02:00:00Z'::timestamptz else null end, '2026-10-01T01:00:00Z', '2026-10-01T01:00:00Z', 'subscription', $4, $5::date, $6::date)
+       returning id::text as id`,
+      [orgId, period, status, epoch, cycle?.[0] ?? null, cycle?.[1] ?? null],
+    )
+  ).rows[0]!.id;
+}
+
+/** The engine's own draft write (what the job's `draft` step calls). */
+function engineDraft(orgId: string, period: string, nowIso: string, cycle: [string, string] | null) {
+  return sql.transaction((tx) =>
+    draftBrandInvoiceInTx(
+      tx,
+      { kind: 'system' },
+      { organizationId: orgId, period, planId: 'b2b_69', prorate: false, applyActiveDiscount: true, manualAmounts: false, manualReason: '', memo: '' },
+      new Date(nowIso),
+      { kind: 'subscription', coversMonths: 1, dueOn: null, collectionMethod: 'transfer', subscriptionEpoch: 1, cycleStart: cycle?.[0] ?? null, cycleEnd: cycle?.[1] ?? null },
+    ),
+  );
+}
+
+describe('B1c-2 × B1c-1: the engine never drafts an invoice that overlaps a non-void subscription invoice', () => {
+  it('a cycle draft is checked over its own cycle: a calendar-month row of a LATER month inside the cycle blocks it', async () => {
+    const orgId = await makeOrg('Overlap Legacy Month Fixture');
+    await insertSubscriptionRow(orgId, '2027-01', 'issued', null);
+    expect(await engineDraft(orgId, '2026-12', '2026-12-10T01:00:00Z', ['2026-12-17', '2027-01-17'])).toEqual({ ok: false, code: 'conflict' });
+    // The cycle ending on the 1st of that month touches it but does not overlap.
+    expect(await engineDraft(orgId, '2026-12', '2026-11-24T01:00:00Z', ['2026-11-30', '2026-12-31'])).toMatchObject({ ok: true });
+  });
+
+  it('a cycle draft is blocked by an overlapping cycle row (dates, not months) and allowed right after it', async () => {
+    const orgId = await makeOrg('Overlap Cycle Row Fixture');
+    await insertSubscriptionRow(orgId, '2026-11', 'paid', ['2026-11-25', '2026-12-25']);
+    expect(await engineDraft(orgId, '2026-12', '2026-12-10T01:00:00Z', ['2026-12-17', '2027-01-17'])).toEqual({ ok: false, code: 'conflict' });
+    expect(await engineDraft(orgId, '2026-12', '2026-12-18T01:00:00Z', ['2026-12-25', '2027-01-25'])).toMatchObject({ ok: true });
+  });
+
+  it('a first invoice without a cycle is checked over one cycle from today: blocked by a row covering those days', async () => {
+    const orgId = await makeOrg('Overlap First Invoice Fixture');
+    await insertSubscriptionRow(orgId, '2026-12', 'issued', null);
+    expect(await engineDraft(orgId, '2026-11', '2026-11-25T01:00:00Z', null)).toEqual({ ok: false, code: 'conflict' });
+  });
+
+  it('a new subscription can start later in the month an earlier one ended (the earlier cycle does not reach the new days)', async () => {
+    const orgId = await makeOrg('Restart Same Month Fixture');
+    await paidFrom(orgId, '2026-10-20');
+    await cancelSubscription({ sql, now: at('2026-11-10T01:00:00Z') }, ADMIN_VIEWER, { organizationId: orgId });
+    await tick('2026-11-20T01:00:00Z');
+    expect(await loadBrandSubscription(sql, orgId)).toMatchObject({ status: 'ended' });
+    const again = await startUnpaid(orgId, '2026-11-25');
+    expect(await inv(again.firstInvoiceId)).toMatchObject({ status: 'issued', cycle_start: null, due_on: '2026-12-09' });
+    await markBrandInvoicePaid({ sql, now: at('2026-11-26T03:00:00Z') }, ADMIN_VIEWER, { invoiceId: again.firstInvoiceId, paidMethod: 'transfer', paidAt: '2026-11-26' });
+    expect(await inv(again.firstInvoiceId)).toMatchObject({ status: 'paid', cycle_start: '2026-11-26', cycle_end: '2026-12-26' });
+  });
+});
