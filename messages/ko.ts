@@ -4635,7 +4635,7 @@ export const ko: Dictionary = {
     pastDue: '다음 결제를 완료하지 못했습니다. 현재 이용기간과 구독 상태를 확인해 주세요.',
     manage: '구독 관리하기',
     account: '내 계정으로',
-    testMode: '관리자 테스트 결제 · 실제 구독은 시작되지 않습니다',
+    testMode: '테스트 결제 · 실제 구독은 시작되지 않습니다',
     liveQaMode: '관리자 실결제 확인 · 등록한 카드로 실제 요금이 결제됩니다.',
     enrollTitle: '월 구독 시작하기',
     enrollBody: '마음에 드는 템플릿을 고르고 월 이용량 안에서 내 얼굴로 만드세요.',

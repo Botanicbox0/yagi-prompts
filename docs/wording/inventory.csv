@@ -50704,7 +50704,7 @@ components/billing/subscription-status.tsx:114 [static]","/account
 /billing/subscription/[id]
 /billing/subscription/return","ui-or-metadata; visibility depends on route/state","rule-triage; context-review-pending","3","3","3","3","3","3","no-low-score; not-an-approval","","review-pending","","","규칙상 경고 없음. 3점은 수동 검토 전 중립값이며 적합 판정이 아니다.","",""
 "creatorSubscription.termsTitle","월 구독 약관","Monthly subscription terms","creatorSubscription","source-reference","app/(app)/billing/subscription/terms/page.tsx:15 [static]","/billing/subscription/terms","ui-or-metadata; visibility depends on route/state","rule-triage; context-review-pending","3","3","3","3","3","3","no-low-score; not-an-approval","","review-pending","","","규칙상 경고 없음. 3점은 수동 검토 전 중립값이며 적합 판정이 아니다.","",""
-"creatorSubscription.testMode","관리자 테스트 결제 · 실제 구독은 시작되지 않습니다","Admin test payment · No live subscription is activated","creatorSubscription","source-reference","components/billing/subscription-checkout.tsx:51 [static]
+"creatorSubscription.testMode","테스트 결제 · 실제 구독은 시작되지 않습니다","Test payment · No live subscription is activated","creatorSubscription","source-reference","components/billing/subscription-checkout.tsx:51 [static]
 components/billing/subscription-checkout.tsx:104 [static]
 components/billing/subscription-status.tsx:93 [static]","/account
 /billing/subscription
