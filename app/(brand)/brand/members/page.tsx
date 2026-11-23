@@ -11,7 +11,7 @@ import { MemberUsageSection } from "@/components/brand-workspace/rail-usage";
 import { brandStudioV2Open } from "@/lib/flags";
 import { studioV2Visible } from "@/lib/brand-studio/visibility";
 import { studioEnv } from "@/lib/brand-studio/env";
-import { allowanceView, loadAllowance } from "@/lib/brand-studio/usage";
+import { allowanceView, allowanceWindow, loadAllowance } from "@/lib/brand-studio/usage";
 import { memberUsage } from "@/lib/brand-studio/member-usage";
 import type { SqlRunner } from "@/lib/db/sql-runner";
 
@@ -26,7 +26,7 @@ async function teamCreditUsage(sql: SqlRunner, choice: { id: string; name: strin
     const now = new Date();
     const allowance = await loadAllowance(sql, choice.id, studioEnv(), now);
     if (!(allowance.capKrw > 0)) return null;
-    return { allowance: allowanceView(allowance), rows: await memberUsage(sql, choice.id, now) };
+    return { allowance: allowanceView(allowance), rows: await memberUsage(sql, choice.id, now, allowanceWindow(allowance, now)) };
   } catch (error) {
     console.warn("[brand-members] credit usage unavailable", error instanceof Error ? error.message.slice(0, 160) : "unknown");
     return null;

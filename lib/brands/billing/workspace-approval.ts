@@ -348,8 +348,9 @@ function usableThrough(original: BrandTrialGrant | null, carried: BrandTrialGran
 /**
  * The monthly carry (hourly job, `BRAND_WORKSPACE_APPROVAL` only). Each ORIGINAL trial grant is evaluated exactly once,
  * after its month has ended, and stamped `trial_carry_checked_at` in the same transaction whatever the outcome:
- * - from the previous KST month, not revoked: remainder = max(0, min(trial, cap − used)), cap and used being
- *   `loadAllowance` at the last instant of that month; a remainder of at least one credit becomes ONE grant for the
+ * - from the previous KST month, not revoked: remainder = max(0, min(trial, what is left of the grants)), read from
+ *   `loadAllowance` at the last instant of that month (`cap − used` on the calendar month; `grantsLeftKrw` for a plan
+ *   organization, whose cycle need not end with the month); a remainder of at least one credit becomes ONE grant for the
  *   current month (`kind='trial'`, `carried_from` = the original), rounded down to whole credits; less is "nothing left";
  * - revoked: not carried; from an earlier month (the job did not run in time): expired, not carried.
  * Evaluating once is what makes a later change of the cap (an override, a new default, a plan) unable to turn "nothing
@@ -463,7 +464,11 @@ export async function carryTrialGrants(deps: {
           }
           const allowance = await loadAllowance(tx, candidate.organization_id, studio, lastInstant);
           const trialKrw = Number(original.amount_krw);
-          const remainder = Math.max(0, Math.min(trialKrw, allowance.capKrw - allowance.usedKrw));
+          // Plan credits are taken first. On the calendar month (override, default) what is left of the cap at the month's
+          // end is what is left of the grants. A plan organization's cycle need not end with the month, and the plan credits
+          // left in it do not expire then, so it is the grants' own remainder (`grantsLeftKrw`, B1c).
+          const left = allowance.grantsLeftKrw ?? allowance.capKrw - allowance.usedKrw;
+          const remainder = Math.max(0, Math.min(trialKrw, left));
           const amountKrw = Math.floor(remainder / STUDIO_CREDIT_KRW) * STUDIO_CREDIT_KRW;
           if (amountKrw < STUDIO_CREDIT_KRW) {
             await stampChecked();

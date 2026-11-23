@@ -246,6 +246,21 @@ describe('carryTrialGrants', () => {
     expect(await carry('2026-12-01T00:30:00Z')).toMatchObject({ carried: 1, carriedKrw: TRIAL_KRW });
   });
 
+  it('B1c: a plan organization whose cycle straddles the month end carries what is left of the trial, not of the cycle', async () => {
+    await f.sql.query("insert into brand_plan_allowance_defaults (plan_id, monthly_cap_krw) values ('b2b_29', 270000)");
+    await f.sql.query(
+      "insert into brand_plan_assignments (organization_id, plan_id, billing_mode, started_on, ends_on, revision) values ($1, 'b2b_29', 'invoice', '2026-10-17', null, 1)",
+      [f.orgId],
+    );
+    await approve('2026-11-05T01:00:00Z');
+    await used(f.orgId, 270_000, '2026-10-20T01:00:00Z'); // the Oct 17 cycle's plan credits, in October
+    await used(f.orgId, 2_000, '2026-11-06T01:00:00Z'); // same cycle, plan spent: 2,000 of the November trial
+    await used(f.orgId, 100_000, '2026-11-20T01:00:00Z'); // the Nov 17 cycle: plan credits again
+    // At the end of November the Nov 17 cycle still has 170,000 plan credits, which do not expire with the month;
+    // the trial has 2,000 left.
+    expect(await carry('2026-12-01T00:00:00Z')).toMatchObject({ carried: 1, carriedKrw: 2_000 });
+  });
+
   it('two overlapping runs carry once; later runs carry nothing; a carried grant is never carried again; older originals have expired', async () => {
     await approve('2026-10-10T01:00:00Z'); // October: carried into November, expired by December
     const runs = await Promise.all([carry('2026-11-01T01:00:00Z'), carry('2026-11-01T01:00:00Z')]);

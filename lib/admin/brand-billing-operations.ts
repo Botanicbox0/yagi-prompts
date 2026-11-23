@@ -509,9 +509,11 @@ const profileSet: AdminOperation<Record<string, string>> = {
 
 const invoiceDraft: AdminOperation<Record<string, unknown>> = {
   parse(form) {
+    // B1c: a paid plan organization's form posts `cycle` (current | next) instead of a month.
+    const cycle = f.str(form, 'cycle');
     const input: Record<string, unknown> = {
       organizationId: f.str(form, 'organizationId'),
-      period: f.str(form, 'period'),
+      ...(cycle ? { cycle } : { period: f.str(form, 'period') }),
       memo: f.text(form, 'memo'),
       stay: form.has('stay') ? boolAll(form, 'stay') : false,
     };

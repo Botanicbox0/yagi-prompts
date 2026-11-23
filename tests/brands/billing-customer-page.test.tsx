@@ -162,7 +162,8 @@ describe('customer billing page state & components', () => {
       organizationId: f.orgId,
       planId: 'b2b_49',
       monthlyCapKrw: 100_000,
-      startedOn: '2026-11-01',
+      // B1c: from October, so the October invoice below is a cycle of this plan.
+      startedOn: '2026-10-01',
       expectedRevision: 0,
       allowanceMode: 'override',
       planNote: 'Launch assign',
@@ -223,7 +224,8 @@ describe('customer billing page state & components', () => {
       });
     }
 
-    const d3 = await draftBrandInvoice({ sql: f.sql, now: () => now }, adminViewer, {
+    // B1c: drafted while October's cycle was current (the plan starts in October here, see the assignment above).
+    const d3 = await draftBrandInvoice({ sql: f.sql, now: () => new Date('2026-10-15T01:00:00Z') }, adminViewer, {
       organizationId: f.orgId,
       period: '2026-10',
     });

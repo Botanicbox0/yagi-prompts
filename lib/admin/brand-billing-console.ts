@@ -13,7 +13,8 @@ import {
   planActiveWithGrace,
   type PaidBrandPlanId,
 } from '@/lib/brands/billing/math';
-import { hasTable, hasTables, loadSubscriptionSchemaReady } from '@/lib/brands/billing/schema-guard';
+import { hasColumn, hasTable, hasTables, loadSubscriptionSchemaReady } from '@/lib/brands/billing/schema-guard';
+import { cycleContaining } from '@/lib/brands/billing/cycle';
 import type {
   BrandBillingProfile,
   BrandDiscountCode,
@@ -49,6 +50,20 @@ export interface UninvoicedActiveOrg {
   inGrace: boolean;
   activeDiscountPercent: number | null;
   monthlyListKrw: number;
+}
+
+/**
+ * B1c: a plan organization whose CURRENT billing cycle (one month from the plan start day) has no non-void invoice for
+ * that cycle. Calendar-month invoices do not count: they cover a month, not a cycle.
+ */
+export interface UninvoicedCycle {
+  organizationId: string;
+  organizationName: string;
+  planId: PaidBrandPlanId;
+  startedOn: string;
+  /** KST days, end exclusive (= the next billing day). */
+  cycleStart: string;
+  cycleEnd: string;
 }
 
 export interface PlanDefaultRowView {
@@ -96,6 +111,9 @@ export interface BrandBillingOverviewData {
   uninvoicedActiveOrgs: UninvoicedActiveOrg[];
   planDefaults: PlanDefaultRowView[];
   taxInvoicePanel: TaxInvoicePanelState | null;
+  /** B1c: current cycles without an invoice; empty until migration 0186 is applied. */
+  uninvoicedCycles: UninvoicedCycle[];
+  cyclesAvailable: boolean;
 }
 
 export interface DiscountCodeRedemptionDetail {
@@ -186,6 +204,8 @@ export async function loadBrandBillingOverview(
         followingOrgCount: 0,
       })),
       taxInvoicePanel: autoIssueEnabled ? { enabled: true, schemaReady: subSchemaReady, pending: [] } : null,
+      uninvoicedCycles: [],
+      cyclesAvailable: false,
     };
   }
 
@@ -244,12 +264,10 @@ export async function loadBrandBillingOverview(
              from brand_invoices i
              join brand_organizations o on o.id = i.organization_id
              left join brand_billing_profiles p on p.organization_id = i.organization_id
-            where i.period = $1
-              and i.status in ('issued', 'paid')
+            where i.status in ('issued', 'paid')
               and (i.collection_method is null or i.collection_method = 'transfer')
               and i.tax_invoice_issued_on is null
-            order by o.name asc, i.created_at asc`,
-          [period],
+            order by i.issued_at asc nulls last, i.created_at asc, i.id asc`,
         )
       : Promise.resolve({ rows: [] }),
   ]);
@@ -323,6 +341,12 @@ export async function loadBrandBillingOverview(
   };
 
   const uninvoicedActiveOrgs: UninvoicedActiveOrg[] = [];
+  const uninvoicedCycles: UninvoicedCycle[] = [];
+  const cyclesAvailable = hasInvoices && (await hasColumn(sql, 'brand_invoices', 'cycle_start'));
+  const invoicedCycles = new Set<string>();
+  for (const inv of effectiveInvoices) {
+    if (inv.status !== 'void' && inv.cycleStart) invoicedCycles.add(`${inv.organizationId}|${inv.cycleStart}`);
+  }
   const followingCounts: Record<PaidBrandPlanId, number> = {
     b2b_29: 0,
     b2b_49: 0,
@@ -341,6 +365,19 @@ export async function loadBrandBillingOverview(
     const status = planActiveWithGrace({ startedOn, endsOn }, todayKst, graceDays);
     if (status.active && row.is_override !== true) {
       followingCounts[planId] += 1;
+    }
+    if (cyclesAvailable && status.active) {
+      const cycle = cycleContaining(startedOn, todayKst);
+      if (cycle && !invoicedCycles.has(`${String(row.organization_id)}|${cycle.start}`)) {
+        uninvoicedCycles.push({
+          organizationId: String(row.organization_id),
+          organizationName: String(row.name),
+          planId,
+          startedOn,
+          cycleStart: cycle.start,
+          cycleEnd: cycle.end,
+        });
+      }
     }
     const coveredInPeriod = startedOn <= periodLastDay && (endsOn === null || endsOn > periodStart);
     const orgId = String(row.organization_id);
@@ -415,6 +452,8 @@ export async function loadBrandBillingOverview(
     uninvoicedActiveOrgs,
     planDefaults,
     taxInvoicePanel,
+    uninvoicedCycles,
+    cyclesAvailable,
   };
 }
 

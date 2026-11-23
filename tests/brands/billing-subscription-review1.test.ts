@@ -32,6 +32,7 @@ import { makeSingleConnectionRunner, type SqlRunner } from '@/lib/db/sql-runner'
 import { ADMIN_VIEWER, adminHarness } from '@/tests/helpers/admin';
 import { seedProfile } from '@/tests/helpers/billing';
 import { startConfirmed, startSubscriptionCompat } from '@/tests/brands/helpers/subscription-confirm';
+import { invoiceFlagOffScenario } from '@/tests/brands/helpers/invoice-flag-off-parity';
 import { freshDb, runner } from '@/tests/helpers/pglite';
 import { studioFixture, viewerOf, type StudioFixture } from '@/tests/brand-studio/server/helpers';
 
@@ -118,79 +119,17 @@ afterEach(async () => {
   await f.db.close();
 });
 
-/** The flag-off scenario recorded from origin/main into `fixtures/brand-billing-flag-off-parity.json`. */
-async function flagOffScenario(db: PGlite) {
-  const base = runner(db);
-  const adminId = randomUUID();
-  const ownerId = randomUUID();
-  await seedProfile(base, { id: adminId, isAdmin: true, email: 'parity-admin@fixture.invalid' });
-  await seedProfile(base, { id: ownerId, email: 'parity-owner@fixture.invalid' });
-  const viewer = { userId: adminId, isAdmin: true, tier: 'pro', email: 'parity-admin@fixture.invalid', locale: 'ko' } as Viewer;
-  const orgId = randomUUID();
-  await base.query('insert into brand_organizations (id, name, created_by, request_id) values ($1, $2, $3, $4)', [
-    orgId,
-    'Parity Fixture',
-    ownerId,
-    randomUUID(),
-  ]);
-  const now = at('2026-11-10T01:00:00Z');
-  const out: Array<{ op: string; log: unknown; result: unknown }> = [];
-  const run = async <R,>(op: string, fn: (sql: SqlRunner) => Promise<R>): Promise<R> => {
-    const r = recorder(db);
-    const result = await fn(r.sql);
-    out.push({ op, log: normalizeIds(r.log), result: normalizeIds(result) });
-    return result;
-  };
-  await run('setPlan', (sql) =>
-    setPlanAssignment({ sql }, viewer, {
-      organizationId: orgId,
-      planId: 'b2b_29',
-      billingMode: 'invoice',
-      startedOn: '2026-11-05',
-      endsOn: null,
-      seats: null,
-      note: 'x',
-      expectedRevision: 0,
-    }),
-  );
-  await base.query(
-    "insert into brand_discounts (organization_id, percent, invoices_total, status, created_by) values ($1, 20, 2, 'active', $2)",
-    [orgId, adminId],
-  );
-  const id = (r: { ok: boolean }) => (r as unknown as { invoice: { id: string } }).invoice.id;
-  const d1 = await run('draft', (sql) => draftBrandInvoice({ sql, now }, viewer, { organizationId: orgId, period: '2026-11' }));
-  await run('updateDraft', (sql) => updateDraftBrandInvoice({ sql, now }, viewer, { invoiceId: id(d1), memo: 'edited' }));
-  await run('issue', (sql) => issueBrandInvoice({ sql, now }, viewer, { invoiceId: id(d1) }));
-  await run('markPaid', (sql) => markBrandInvoicePaid({ sql, now }, viewer, { invoiceId: id(d1), paidMethod: 'wire' }));
-  await run('markPaidAgain', (sql) => markBrandInvoicePaid({ sql, now }, viewer, { invoiceId: id(d1), paidMethod: 'wire' }));
-  const d2 = await run('draft2', (sql) =>
-    draftBrandInvoice({ sql, now }, viewer, { organizationId: orgId, period: '2026-12', planId: 'b2b_49' }),
-  );
-  await run('issue2', (sql) => issueBrandInvoice({ sql, now }, viewer, { invoiceId: id(d2) }));
-  await run('voidIssued', (sql) => voidBrandInvoice({ sql, now }, viewer, { invoiceId: id(d2), reason: 'wrong' }));
-  const d3 = await run('draftManual', (sql) =>
-    draftBrandInvoice({ sql, now }, viewer, {
-      organizationId: orgId,
-      period: '2027-01',
-      manualAmounts: true,
-      manualReason: 'negotiated',
-      supplyKrw: 200000,
-    }),
-  );
-  await run('voidDraft', (sql) => voidBrandInvoice({ sql, now }, viewer, { invoiceId: id(d3), reason: 'drop' }));
-  await run('draftConflict', (sql) => draftBrandInvoice({ sql, now }, viewer, { organizationId: orgId, period: '2026-11' }));
-  await run('list', (sql) => listBrandInvoices(sql, { organizationId: orgId, now: now() }));
-  return out;
-}
-
 describe('B1a review round 1 — integration gaps', () => {
   it('C6: with the flag off, draft/updateDraft/issue/markPaid/void/setPlan/list run exactly origin/main SQL and return the same results, before and after 0182', async () => {
     vi.stubEnv('BRAND_BILLING_AUTO_ISSUE', 'off');
-    const expected = fixture<{ ops: Array<{ op: string; log: unknown; result: unknown }> }>('brand-billing-flag-off-parity.json');
+    // B1c: the invoices of this scenario belong to an organization without a plan (the path B1c leaves unchanged); a paid
+    // plan organization drafts per billing cycle since B1c (tests/brands/billing-cycle-invoices.test.ts). Re-recorded from
+    // origin/main 14d21d56 (tests/brands/helpers/invoice-flag-off-parity.ts).
+    const expected = fixture<{ ops: Array<{ op: string; log: unknown; result: unknown }> }>('brand-billing-flag-off-legacy-parity.json');
     for (const make of [freshDb, pre0182Db]) {
       const db = await make();
       try {
-        const actual = await flagOffScenario(db);
+        const actual = await invoiceFlagOffScenario(db);
         expect(actual.map((o) => o.op)).toEqual(expected.ops.map((o) => o.op));
         for (const [i, op] of expected.ops.entries()) {
           expect(actual[i]!.log, `${op.op}: SQL and parameters`).toEqual(op.log);

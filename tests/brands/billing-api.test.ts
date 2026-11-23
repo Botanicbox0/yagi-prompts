@@ -175,10 +175,11 @@ describe('customer billing API (/api/brand-billing*)', () => {
     if (invB.ok) await issueBrandInvoice({ sql: f.sql }, admin(), { invoiceId: invB.invoice.id });
 
     // Seed org A
+    // B1c: the plan starts in September so the September and October invoices below are cycles of it.
     await setPlanAssignment({ sql: f.sql }, admin(), {
       organizationId: f.orgId,
       planId: 'b2b_29',
-      startedOn: '2026-11-01',
+      startedOn: '2026-09-01',
       expectedRevision: 0,
     });
     await setPlanAllowanceDefault({ sql: f.sql }, admin(), { planId: 'b2b_29', monthlyCapKrw: 100_000, confirm: true });
@@ -198,12 +199,12 @@ describe('customer billing API (/api/brand-billing*)', () => {
     // Draft invoice on org A should NOT appear in customer API; paid + void invoices omit paidMethod/voidReason (S7)
     const currentMonth = new Date(Date.now() + 9 * 3_600_000).toISOString().slice(0, 7);
     await draftBrandInvoice({ sql: f.sql }, admin(), { organizationId: f.orgId, period: currentMonth });
-    const paidA = await draftBrandInvoice({ sql: f.sql }, admin(), { organizationId: f.orgId, period: '2026-10' });
+    const paidA = await draftBrandInvoice({ sql: f.sql, now: () => new Date('2026-10-15T01:00:00Z') }, admin(), { organizationId: f.orgId, period: '2026-10' });
     if (paidA.ok) {
       await issueBrandInvoice({ sql: f.sql }, admin(), { invoiceId: paidA.invoice.id });
       await markBrandInvoicePaid({ sql: f.sql }, admin(), { invoiceId: paidA.invoice.id, paidMethod: 'SECRET_PAID_METHOD_NOTE' });
     }
-    const voidA = await draftBrandInvoice({ sql: f.sql }, admin(), { organizationId: f.orgId, period: '2026-09' });
+    const voidA = await draftBrandInvoice({ sql: f.sql, now: () => new Date('2026-09-15T01:00:00Z') }, admin(), { organizationId: f.orgId, period: '2026-09' });
     if (voidA.ok) {
       await issueBrandInvoice({ sql: f.sql }, admin(), { invoiceId: voidA.invoice.id });
       await voidBrandInvoice({ sql: f.sql }, admin(), { invoiceId: voidA.invoice.id, reason: 'SECRET_INTERNAL_VOID_REASON' });

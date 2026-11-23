@@ -200,9 +200,10 @@ describe('loadBrandOrgList', () => {
     });
 
     // Invoices: Org A issued & backdated 16 days ago -> consumes 1 discount use + becomes overdue
+    // B1c: orgA's plan starts 2026-11-01, so its invoice is for the current cycle (a month before the plan is refused).
     const invA = await draftBrandInvoice({ sql, now: () => now }, admin, {
       organizationId: orgA,
-      period: '2026-10',
+      period: '2026-11',
       prorate: false,
     });
     expect(invA.ok).toBe(true);
@@ -400,11 +401,12 @@ describe('loadBrandOrgList', () => {
       ids.ownerB,
       'viewer',
     ]);
+    // B1c: the plan starts in September so September to November are three billing cycles of it.
     await setPlanAssignment({ sql }, admin, {
       organizationId: orgFan,
       planId: 'b2b_69',
       billingMode: 'invoice',
-      startedOn: '2026-11-01',
+      startedOn: '2026-09-01',
       expectedRevision: 0,
     });
     await sql.query(
@@ -437,7 +439,8 @@ describe('loadBrandOrgList', () => {
       );
     }
     for (const period of ['2026-09', '2026-10', '2026-11']) {
-      const dr = await draftBrandInvoice({ sql, now: () => now }, admin, {
+      // B1c: each month's cycle is drafted while it is current (past cycles are refused).
+      const dr = await draftBrandInvoice({ sql, now: () => new Date(`${period}-15T01:00:00Z`) }, admin, {
         organizationId: orgFan,
         period,
         prorate: false,

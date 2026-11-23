@@ -132,24 +132,4 @@ describe('admin organization page: workspace approval card', () => {
       await db.close();
     }
   });
-
-  it('the plan-allowance panel states a first-month proration', async () => {
-    const id = await makeOrg(sql, 'Card fixture proration');
-    const today = kstDayOf(new Date());
-    const month = today.slice(0, 7);
-    await sql.query("insert into brand_plan_allowance_defaults (plan_id, monthly_cap_krw) values ('b2b_29', 270000)");
-    await sql.query(
-      "insert into brand_plan_assignments (organization_id, plan_id, billing_mode, started_on, ends_on, revision) values ($1, 'b2b_29', 'invoice', $2, null, 1)",
-      [id, today],
-    );
-    const html = await renderOrg(id);
-    const day = Number(today.slice(8, 10));
-    if (day === 1) {
-      expect(html).not.toContain('data-plan-proration');
-    } else {
-      const periodDays = daysInYearMonth(month);
-      expect(html).toContain('data-plan-proration');
-      expect(html).toContain(`이번 달은 시작일 기준 ${periodDays - day + 1}/${periodDays}일 한도`);
-    }
-  });
 });

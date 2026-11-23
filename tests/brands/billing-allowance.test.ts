@@ -531,7 +531,8 @@ describe('migration safety & deploy-order resilience', () => {
     const first = await loadAllowance(f.sql, f.orgId, deps.env);
     expect(first.capKrw).toBe(100_000);
     const coldCount = spy.mock.calls.length;
-    expect(coldCount).toBeLessThanOrEqual(3);
+    // B1c: a plan organization also probes the 0186 grant range columns once per database root (cold only).
+    expect(coldCount).toBeLessThanOrEqual(4);
 
     spy.mockClear();
     const second = await loadAllowance(f.sql, f.orgId, deps.env);

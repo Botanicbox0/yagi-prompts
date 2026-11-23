@@ -38,9 +38,6 @@ export const PRORATION_CASES: ProrationCase[] = [
   { name: 'defaultWithGrant', grantKrw: 10_000 },
 ];
 
-/** Cases whose returned plan cap first-month proration is allowed to change (the plan started after the 1st). */
-export const PRORATED_CASES = new Set(['planMidMonth', 'planMidMonthGrant', 'planToday']);
-
 export async function prorationParityScenario(db: PGlite): Promise<ParityOp[]> {
   const base = runner(db);
   const ownerId = randomUUID();

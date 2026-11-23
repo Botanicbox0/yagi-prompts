@@ -20,9 +20,8 @@ import {
   kstMonthOf,
   PAID_BRAND_PLAN_IDS,
   planActiveWithGrace,
-  type PaidBrandPlanId,
 } from '@/lib/brands/billing/math';
-import { planCapForMonth, type PlanCapProration } from '@/lib/brands/billing/plan-credits';
+import { cycleContaining, cycleStartAt, cycleWindow, type BillingCycle } from '@/lib/brands/billing/cycle';
 import { hasColumn, loadAllowanceSchemaState } from '@/lib/brands/billing/schema-guard';
 import type { StudioAllowanceView } from './contracts';
 import { STUDIO_CREDIT_KRW } from './credits';
@@ -66,10 +65,137 @@ export interface StudioAllowance {
   /** False when no explicit override or plan default applies and the env default is used. */
   configured: boolean;
   /**
-   * Present only when `source` is `plan` and the plan started after the 1st of this KST month: `baseCapKrw` is then that
-   * month's share of the plan's full cap (`planCapForMonth`). Admin display only.
+   * Present only when `source` is `plan` (B1c): the billing cycle the allowance runs on (one month from the plan
+   * start day, lib/brands/billing/cycle.ts). `usedKrw` and `resetsAt` then belong to this cycle. KST dates, `end`
+   * exclusive (= the next billing day); `startAt` / `endAt` are the UTC instants at KST midnight.
    */
-  planProration?: PlanCapProration;
+  cycle?: { anchor: string; index: number; start: string; end: string; startAt: string; endAt: string };
+  /**
+   * Present only when `source` is `plan`: what is left of the grants valid today once plan credits are taken first
+   * (the plan cycle and the grants' calendar month need not line up). The trial carry reads it.
+   */
+  grantsLeftKrw?: number;
+}
+
+/**
+ * The window an organization's allowance runs on: its plan cycle when the allowance comes from a plan, else the KST
+ * calendar month (overrides, the env default, organizations without a plan). The ONE place every screen and job takes
+ * "this period's usage" from, so the numbers agree with what `reserveAllowance` enforces.
+ */
+export function allowanceWindow(allowance: Pick<StudioAllowance, 'cycle'>, now: Date): { kind: 'cycle' | 'month'; start: Date; end: Date } {
+  if (allowance.cycle) return { kind: 'cycle', start: new Date(allowance.cycle.startAt), end: new Date(allowance.cycle.endAt) };
+  return { kind: 'month', ...studioMonthWindow(now) };
+}
+
+/** `loadAllowance` and its window in one call, for readers that only need the window. */
+export async function loadAllowanceWindow(
+  sql: SqlRunner,
+  organizationId: string,
+  env: { defaultMonthlyKrw: number; planGraceDays?: number },
+  now: Date = new Date(),
+): Promise<{ allowance: StudioAllowance; window: { kind: 'cycle' | 'month'; start: Date; end: Date } }> {
+  const allowance = await loadAllowance(sql, organizationId, env, now);
+  return { allowance, window: allowanceWindow(allowance, now) };
+}
+
+/**
+ * A plan organization's usage on its cycle, plan credits first (B1c). The grants valid today are calendar-month (or
+ * date-range) grants, so a cycle that straddles a month end meets two months of grants. Counting "cycle usage against
+ * plan + this month's grants" alone would let a month's grant be spent in two cycles, and charge the previous month's
+ * grant use to this month's grants. So:
+ *   - usage that overflowed the plan before this month began (paid from last month's grants) is not charged again;
+ *   - usage of this month that fell in the previous cycle and overflowed that cycle's plan is charged to this month's grants.
+ * Returns the usage to set against `plan cap + grants` and what is left of the grants.
+ */
+async function planCycleUsage(
+  sql: SqlRunner,
+  organizationId: string,
+  input: {
+    anchor: string;
+    cycle: BillingCycle;
+    monthStart: Date;
+    planCapKrw: number;
+    /** The `valid_month` grants of this month (the folded query's sum). */
+    monthGrantsKrw: number;
+    /** 0186 present: also read the date-range grants (`valid_from` / `valid_until`) in the same statement. */
+    rangeGrants: { today: string; month: string } | null;
+  },
+): Promise<{ usedKrw: number; grantsKrw: number; grantsLeftKrw: number }> {
+  const { start: cs, end: ce } = cycleWindow(input.cycle);
+  const previous = input.cycle.index > 0 ? cycleWindow({ start: cycleStartAt(input.anchor, input.cycle.index - 1), end: input.cycle.start }) : null;
+  const ps = previous ? previous.start : cs;
+  const ranged = input.rangeGrants
+    ? `,
+              (select coalesce(sum(amount_krw) filter (where valid_from <= $6::date and valid_until >= $6::date), 0)::bigint
+                 from brand_allowance_grants where organization_id = $1 and revoked_at is null) as in_range,
+              (select coalesce(sum(amount_krw) filter (where valid_from is not null and valid_month = $7), 0)::bigint
+                 from brand_allowance_grants where organization_id = $1 and revoked_at is null) as ranged_this_month`
+    : '';
+  const params: unknown[] = [organizationId, cs.toISOString(), ce.toISOString(), input.monthStart.toISOString(), ps.toISOString()];
+  if (input.rangeGrants) params.push(input.rangeGrants.today, input.rangeGrants.month);
+  const row = (
+    await sql.query<{
+      used: string | number;
+      used_before_month: string | number;
+      prev_used: string | number;
+      prev_before_month: string | number;
+      in_range?: string | number;
+      ranged_this_month?: string | number;
+    }>(
+      `select coalesce(sum(u) filter (where created_at >= $2 and created_at < $3), 0)::bigint as used,
+              coalesce(sum(u) filter (where created_at >= $2 and created_at < $4), 0)::bigint as used_before_month,
+              coalesce(sum(u) filter (where created_at >= $5 and created_at < $2), 0)::bigint as prev_used,
+              coalesce(sum(u) filter (where created_at >= $5 and created_at < $4), 0)::bigint as prev_before_month${ranged}
+         from (select ${jobUsageKrwSql()} as u, created_at from brand_studio_jobs
+                where organization_id = $1 and status not in ('failed','canceled') and created_at >= $5 and created_at < $3) j`,
+      params,
+    )
+  ).rows[0];
+  // A grant counts one way only: a date-range grant while today is in its range, never also by its month.
+  const G = Math.max(0, input.monthGrantsKrw - Number(row?.ranged_this_month ?? 0) + Number(row?.in_range ?? 0));
+  return {
+    ...planLedger({
+      planCapKrw: input.planCapKrw,
+      grantsKrw: G,
+      cycleUsedKrw: Number(row?.used ?? 0),
+      cycleUsedBeforeMonthKrw: Number(row?.used_before_month ?? 0),
+      previousCycleUsedKrw: Number(row?.prev_used ?? 0),
+      previousCycleUsedBeforeMonthKrw: Number(row?.prev_before_month ?? 0),
+      cycleStartsBeforeMonth: cs.getTime() < input.monthStart.getTime(),
+      hasPreviousCycle: previous !== null,
+    }),
+    grantsKrw: G,
+  };
+}
+
+/**
+ * Plan credits first, then the grants valid today (pure; B1c). Returns the usage to set against `plan cap + grants` and
+ * what is left of the grants.
+ */
+export function planLedger(i: {
+  planCapKrw: number;
+  grantsKrw: number;
+  cycleUsedKrw: number;
+  cycleUsedBeforeMonthKrw: number;
+  previousCycleUsedKrw: number;
+  previousCycleUsedBeforeMonthKrw: number;
+  cycleStartsBeforeMonth: boolean;
+  hasPreviousCycle: boolean;
+}): { usedKrw: number; grantsLeftKrw: number } {
+  const P = Math.max(0, i.planCapKrw);
+  const U = i.cycleUsedKrw;
+  // Cycle began last month: its overflow before this month was paid from last month's grants.
+  const overflowBeforeMonth = i.cycleStartsBeforeMonth ? Math.max(0, i.cycleUsedBeforeMonthKrw - P) : 0;
+  // Cycle began this month: the previous cycle's overflow on this month's days was paid from this month's grants.
+  const prevOverflowInMonth =
+    !i.cycleStartsBeforeMonth && i.hasPreviousCycle
+      ? Math.max(0, i.previousCycleUsedKrw - P) - Math.max(0, i.previousCycleUsedBeforeMonthKrw - P)
+      : 0;
+  const grantsUsed = Math.max(0, U - P) - overflowBeforeMonth + prevOverflowInMonth;
+  return {
+    usedKrw: Math.max(0, U - overflowBeforeMonth + prevOverflowInMonth),
+    grantsLeftKrw: Math.max(0, i.grantsKrw - grantsUsed),
+  };
 }
 
 export async function usedKrwIn(sql: SqlRunner, organizationId: string, window: { start: Date; end: Date }): Promise<number> {
@@ -228,7 +354,7 @@ export async function loadAllowance(
   const preferredLane = lane && (STUDIO_LANES as readonly string[]).includes(lane) ? (lane as StudioLane) : null;
   let source: AllowanceSource = 'default';
   let baseCapKrw = env.defaultMonthlyKrw;
-  let planProration: PlanCapProration | null = null;
+  let planCycle: BillingCycle | null = null;
 
   if (isOverride && rowCap !== null) {
     source = 'override';
@@ -246,23 +372,61 @@ export async function loadAllowance(
     );
     if (active) {
       source = 'plan';
-      // First month (B1b): a plan that started after the 1st of this month gives credits in the invoice's proportion.
-      const planMonth = planCapForMonth({ planId: planId as PaidBrandPlanId, fullCapKrw: planDefaultCap, startedOn: planStartedOn, month });
-      baseCapKrw = planMonth.capKrw;
-      planProration = planMonth.proration;
+      // B1c: the full plan cap every cycle (no first-month proration); the cycle runs from the plan start day and
+      // simply continues through the grace days after `ends_on`.
+      baseCapKrw = planDefaultCap;
+      planCycle = cycleContaining(planStartedOn, today);
     }
   }
 
+  if (source !== 'plan' || !planCycle || !planStartedOn) {
+    // Overrides, the env default, no plan: the KST calendar month, exactly as before B1c.
+    return {
+      capKrw: Math.max(0, baseCapKrw) + extraKrw,
+      baseCapKrw: Math.max(0, baseCapKrw),
+      extraKrw,
+      source,
+      usedKrw: await usedKrwIn(sql, organizationId, window),
+      resetsAt: window.end.toISOString(),
+      preferredLane,
+      configured: isOverride || source === 'plan',
+    };
+  }
+
+  // Plan organizations (B1c): the allowance runs on the plan cycle. Grants keep their own validity: a `valid_month`
+  // grant counts while today is in that month, a date-range grant (0186, nothing writes one yet) while today is in its
+  // range. Plan credits are taken first, then the grants valid today: remaining = (cap − used), with `usedKrw` the usage
+  // set against this cycle's plan credits and today's grants (planLedger).
+  const planCap = Math.max(0, baseCapKrw);
+  const rangeReady = schema.hasGrants && (await hasColumn(sql, 'brand_allowance_grants', 'valid_from'));
+  const usage = await planCycleUsage(sql, organizationId, {
+    anchor: planStartedOn,
+    cycle: planCycle,
+    monthStart: window.start,
+    planCapKrw: planCap,
+    monthGrantsKrw: extraKrw,
+    rangeGrants: rangeReady ? { today, month } : null,
+  });
+  extraKrw = usage.grantsKrw;
+  const cycleAt = cycleWindow(planCycle);
   return {
-    capKrw: Math.max(0, baseCapKrw) + extraKrw,
-    baseCapKrw: Math.max(0, baseCapKrw),
+    capKrw: planCap + extraKrw,
+    baseCapKrw: planCap,
     extraKrw,
     source,
-    usedKrw: await usedKrwIn(sql, organizationId, window),
-    resetsAt: window.end.toISOString(),
+    usedKrw: usage.usedKrw,
+    resetsAt: cycleAt.end.toISOString(),
     preferredLane,
-    configured: isOverride || source === 'plan',
-    ...(planProration ? { planProration } : {}),
+    configured: true,
+    cycle: {
+      anchor: planStartedOn,
+      index: planCycle.index,
+      start: planCycle.start,
+      end: planCycle.end,
+      startAt: cycleAt.start.toISOString(),
+      endAt: cycleAt.end.toISOString(),
+    },
+    grantsLeftKrw: usage.grantsLeftKrw,
   };
 }
 
